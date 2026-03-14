@@ -1,0 +1,820 @@
+<div class="screen" id="s-liga-clas">
+<button class="back-btn" onclick="go('s-liga')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Liga EA Sports · Clasificación</h2></div>
+<style>
+.clas-wrap{padding:0 0 32px;}
+.clas-scroll-outer{position:relative;}
+.clas-hdr-scroll{overflow:hidden;position:sticky;top:44px;z-index:20;}
+.clas-scroll{overflow-x:auto;padding-top:6px;}
+.clas-table{width:100%;display:flex;flex-direction:column;gap:0;min-width:500px;}
+.clas-hdr,.clas-row{display:grid;grid-template-columns:minmax(120px,1.4fr) 36px 28px 24px 24px 24px 28px 28px 30px 24px 24px 32px 34px 72px;gap:2px;align-items:center;}
+.clas-hdr{padding:8px 6px 8px 0;background:linear-gradient(90deg,#082a14,#0f5a28);border-bottom:2px solid rgba(240,192,64,.4);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.62);font-weight:700;text-align:center;}
+.clas-hdr-team{position:sticky;left:0;z-index:21;background:linear-gradient(90deg,#082a14,#0f5a28);padding:8px 6px;text-align:left;color:rgba(255,255,255,.9);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;font-weight:700;}
+.clas-row{padding:6px 6px 6px 0;border-bottom:1px solid rgba(255,255,255,.05);transition:background .12s;border-left:3px solid transparent;}
+.clas-row:hover{filter:brightness(1.15);}
+.clas-row.zone-ucl{background:rgba(49,111,255,.13);border-left-color:#3160ff;}
+.clas-row.zone-uel{background:rgba(255,130,20,.13);border-left-color:#ff8214;}
+.clas-row.zone-conf{background:rgba(60,200,120,.10);border-left-color:#3cc878;}
+.clas-row.zone-desc{background:rgba(224,60,60,.13);border-left-color:#e03c3c;}
+/* Sticky team cell */
+.clas-team-cell{position:sticky;left:0;z-index:5;display:flex;align-items:center;gap:4px;padding:0 4px;}
+.clas-row.zone-ucl .clas-team-cell{background:#091224;}
+.clas-row.zone-uel .clas-team-cell{background:#130d05;}
+.clas-row.zone-conf .clas-team-cell{background:#071510;}
+.clas-row.zone-desc .clas-team-cell{background:#130606;}
+.clas-row:not([class*="zone-"]) .clas-team-cell{background:#080a0f;}
+.clas-pos-n{font-family:"Bebas Neue",sans-serif;font-size:15px;color:rgba(255,255,255,.45);min-width:16px;text-align:center;flex-shrink:0;}
+.zone-ucl .clas-pos-n{color:#7fb2ff;}
+.zone-uel .clas-pos-n{color:#ffb066;}
+.zone-conf .clas-pos-n{color:#50d898;}
+.zone-desc .clas-pos-n{color:#ff7070;}
+.clas-team-name{font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.clas-pct{font-family:"Bebas Neue",sans-serif;font-size:14px;color:#c0a0ff;text-align:center;}
+.clas-pts{font-family:"Bebas Neue",sans-serif;font-size:18px;color:#f0c040;text-align:center;font-weight:700;}
+.clas-pj,.clas-val,.clas-mvp{font-family:"Bebas Neue",sans-serif;font-size:15px;color:rgba(255,255,255,.78);text-align:center;}
+.clas-val.gf{color:#80d0ff;}
+.clas-val.gc{color:#ff9090;}
+.clas-val.dg.pos{color:#4fc86a;}
+.clas-val.dg.neg{color:#ff7070;}
+.clas-val.dg.zer{color:rgba(255,255,255,.45);}
+.clas-val.ta{color:#f0c040;}
+.clas-val.tr{color:#e05050;}
+.clas-form{display:flex;align-items:center;gap:5px;justify-content:flex-start;min-height:18px;overflow:hidden;}
+.clas-dot{width:12px;height:12px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(255,255,255,.10) inset;}
+.clas-dot.win{background:#34c759;}
+.clas-dot.draw{background:#8a8f98;}
+.clas-dot.loss{background:#ff4d4f;}
+.clas-dot.pending{background:rgba(255,255,255,.18);}
+.clas-empty{padding:28px 0;text-align:center;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.3);}
+.clas-legend{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px 10px 4px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:0.5px;color:rgba(255,255,255,.65);}
+.clas-legend-item{display:flex;align-items:center;gap:4px;}
+</style>
+<div class="clas-wrap">
+<div id="clas-liga-content">
+<div class="clas-empty">Calculando clasificación...</div>
+</div>
+</div>
+<script>
+(function(){
+  var LIGA_TEAMS = [
+    'Albacete BP','Athatic__TEMP__', 'Athletic Club','Atlético Madrid','Celta de Vigo','Córdoba CF','Deportivo Alavés','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia CF','Villarreal'
+  ].filter(function(t){ return t !== 'Athatic__TEMP__'; }).sort(function(a,b){ return a.localeCompare(b,'es'); });
+
+  var LIGA_EXTRAS = {};
+  window.LIGA_EXTRAS = LIGA_EXTRAS;
+
+  // Almacén directo de resultados simulados por jornada
+  var LIGA_J1_RESULTS = [];
+  window.LIGA_J1_RESULTS = LIGA_J1_RESULTS;
+
+  // Registra resultado de un partido y actualiza clasificación en tiempo real
+  window.registrarResultadoLiga = function(matchKey, teamA, teamB, ga, gb, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, penWinner){
+    // Guardar resultado directo (sin depender del calendario DOM)
+    // Si ya existe este matchKey, actualizarlo; si no, añadirlo
+    var existing = -1;
+    for(var i=0;i<LIGA_J1_RESULTS.length;i++){
+      if(LIGA_J1_RESULTS[i].key===matchKey){existing=i;break;}
+    }
+    var result = {key:matchKey, home:teamA, away:teamB, gh:ga, ga_:gb, ta_h:ta_a, tr_h:tr_a, ta_a_:ta_b, tr_a_:tr_b, mvp_h:mvp_a, mvp_a:mvp_b, penWinner:penWinner||null};
+    if(existing>=0)LIGA_J1_RESULTS[existing]=result; else LIGA_J1_RESULTS.push(result);
+    // También actualizar LIGA_EXTRAS (TA, TR, MVP)
+    function addEx(t,ta,tr,mvp){
+      if(!LIGA_EXTRAS[t])LIGA_EXTRAS[t]={};
+      LIGA_EXTRAS[t].ta=(Number(LIGA_EXTRAS[t].ta)||0)+ta;
+      LIGA_EXTRAS[t].tr=(Number(LIGA_EXTRAS[t].tr)||0)+tr;
+      LIGA_EXTRAS[t].mvp=(Number(LIGA_EXTRAS[t].mvp)||0)+mvp;
+    }
+    // Reset extras for ALL teams before recalculating to avoid double-counting on re-simulations
+    Object.keys(LIGA_EXTRAS).forEach(function(t){ LIGA_EXTRAS[t]={ta:0,tr:0,mvp:0}; });
+    // Recalculate extras from all stored results
+    LIGA_J1_RESULTS.forEach(function(r){
+      if(!LIGA_EXTRAS[r.home])LIGA_EXTRAS[r.home]={ta:0,tr:0,mvp:0};
+      if(!LIGA_EXTRAS[r.away])LIGA_EXTRAS[r.away]={ta:0,tr:0,mvp:0};
+      LIGA_EXTRAS[r.home].ta=(LIGA_EXTRAS[r.home].ta||0)+r.ta_h;
+      LIGA_EXTRAS[r.home].tr=(LIGA_EXTRAS[r.home].tr||0)+r.tr_h;
+      LIGA_EXTRAS[r.home].mvp=(LIGA_EXTRAS[r.home].mvp||0)+r.mvp_h;
+      LIGA_EXTRAS[r.away].ta=(LIGA_EXTRAS[r.away].ta||0)+r.ta_a_;
+      LIGA_EXTRAS[r.away].tr=(LIGA_EXTRAS[r.away].tr||0)+r.tr_a_;
+      LIGA_EXTRAS[r.away].mvp=(LIGA_EXTRAS[r.away].mvp||0)+r.mvp_a;
+    });
+    if(typeof buildLigaClas==='function')buildLigaClas();
+  };
+
+  function ensureTeam(store, name){
+    if(!name || name === 'Por definir') return null;
+    name = String(name).trim();
+    if(!store[name]){
+      store[name] = {name:name, pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, ta:0, tr:0, mvp:0, form:[]};
+    }
+    return store[name];
+  }
+
+  function parseScore(scoreText){
+    if(!scoreText) return null;
+    var clean = String(scoreText).replace(/–/g,'-').replace(/\s+/g,'');
+    var m = clean.match(/^(\d+)-(\d+)$/);
+    if(!m) return null;
+    return {home:parseInt(m[1],10), away:parseInt(m[2],10)};
+  }
+
+  function addForm(team, result){
+    team.form.push(result);
+    if(team.form.length > 5) team.form = team.form.slice(team.form.length - 5);
+  }
+
+  function getExtrasForTeam(name){
+    var ex = LIGA_EXTRAS[name] || {};
+    return {
+      ta: Number(ex.ta || 0),
+      tr: Number(ex.tr || 0),
+      mvp: Number(ex.mvp || 0)
+    };
+  }
+
+  function collectStandings(){
+    var teams = {};
+    LIGA_TEAMS.forEach(function(name){ ensureTeam(teams, name); });
+
+    // Leer resultados directos del almacén (simulados en esta sesión)
+    var j1SimPairs = {};
+    LIGA_J1_RESULTS.forEach(function(r){
+      j1SimPairs[r.home+'·'+r.away] = true;
+      var home = ensureTeam(teams, r.home);
+      var away = ensureTeam(teams, r.away);
+      if(!home || !away) return;
+      home.pj++; away.pj++;
+      home.gf += r.gh; home.gc += r.ga_;
+      away.gf += r.ga_; away.gc += r.gh;
+      if(r.penWinner){
+        // Victoria en penaltis: 3pts ganador, 0pts perdedor
+        if(r.penWinner==='a'){
+          home.v++; home.pts += 3; away.p++;
+          addForm(home,'W'); addForm(away,'L');
+        }else{
+          away.v++; away.pts += 3; home.p++;
+          addForm(home,'L'); addForm(away,'W');
+        }
+      }else if(r.gh > r.ga_){
+        home.v++; home.pts += 3; away.p++;
+        addForm(home,'W'); addForm(away,'L');
+      }else if(r.gh < r.ga_){
+        away.v++; away.pts += 3; home.p++;
+        addForm(home,'L'); addForm(away,'W');
+      }else{
+        home.e++; away.e++; home.pts++; away.pts++;
+        addForm(home,'D'); addForm(away,'D');
+      }
+    });
+
+    // Leer del calendario DOM (jornadas 2-38, y J1 solo si no está ya en el almacén)
+    for(var j=1;j<=38;j++){
+      var round = document.getElementById('l-j' + j);
+      if(!round) continue;
+      var rows = round.querySelectorAll('.mrow');
+      rows.forEach(function(row){
+        var homeEl = row.querySelector('.mn:not(.r)');
+        var awayEl = row.querySelector('.mn.r');
+        var scoreEl = row.querySelector('.ms');
+        if(!homeEl || !awayEl || !scoreEl || scoreEl.classList.contains('p')) return;
+        var homeName = homeEl.textContent.trim();
+        var awayName = awayEl.textContent.trim();
+        // Si ya fue procesado desde el almacén directo, omitir para no duplicar
+        if(j===1 && j1SimPairs[homeName+'·'+awayName]) return;
+        var home = ensureTeam(teams, homeName);
+        var away = ensureTeam(teams, awayName);
+        var score = parseScore(scoreEl.textContent);
+        if(!home || !away || !score) return;
+        home.pj++; away.pj++;
+        home.gf += score.home; home.gc += score.away;
+        away.gf += score.away; away.gc += score.home;
+        if(score.home > score.away){
+          home.v++; home.pts += 3; away.p++;
+          addForm(home,'W'); addForm(away,'L');
+        }else if(score.home < score.away){
+          away.v++; away.pts += 3; home.p++;
+          addForm(home,'L'); addForm(away,'W');
+        }else{
+          home.e++; away.e++; home.pts++; away.pts++;
+          addForm(home,'D'); addForm(away,'D');
+        }
+      });
+    }
+
+    Object.keys(teams).forEach(function(name){
+      var team = teams[name];
+      team.dg = team.gf - team.gc;
+      var extras = getExtrasForTeam(name);
+      team.ta = extras.ta;
+      team.tr = extras.tr;
+      team.mvp = extras.mvp;
+    });
+
+    return Object.keys(teams).map(function(name){ return teams[name]; }).sort(function(a,b){
+      if(b.pts !== a.pts) return b.pts - a.pts;
+      if(b.dg !== a.dg) return b.dg - a.dg;
+      if(b.gf !== a.gf) return b.gf - a.gf;
+      return a.name.localeCompare(b.name,'es');
+    });
+  }
+
+  function formHtml(form){
+    var last = form.slice(-5);
+    if(!last.length){
+      return '<span class="clas-dot pending" title="Sin resultados"></span>';
+    }
+    return last.map(function(r){
+      if(r === 'W') return '<span class="clas-dot win" title="Victoria"></span>';
+      if(r === 'D') return '<span class="clas-dot draw" title="Empate"></span>';
+      return '<span class="clas-dot loss" title="Derrota"></span>';
+    }).join('');
+  }
+
+  function rowZoneClass(pos){
+    if(pos >= 1 && pos <= 4) return 'zone-ucl';
+    if(pos === 5 || pos === 6) return 'zone-uel';
+    if(pos === 7 || pos === 8) return 'zone-conf';
+    if(pos >= 17) return 'zone-desc';
+    return '';
+  }
+
+  var TEAM_DATA = {
+    'Albacete BP':      {abbr:'ALB', bg:'#8b0000', fg:'#fff200'},
+    'Athletic Club':    {abbr:'ATH', bg:'#cc1010', fg:'#ffffff'},
+    'Atlético Madrid':  {abbr:'ATM', bg:'#c50f1f', fg:'#ffffff'},
+    'Celta de Vigo':    {abbr:'CEL', bg:'#6fc6e2', fg:'#003da5'},
+    'Córdoba CF':       {abbr:'COR', bg:'#2a7e43', fg:'#ffffff'},
+    'Deportivo Alavés': {abbr:'ALA', bg:'#003da5', fg:'#ffffff'},
+    'Elche CF':         {abbr:'ELC', bg:'#006633', fg:'#ffffff'},
+    'Espanyol':         {abbr:'ESP', bg:'#003da5', fg:'#ffffff'},
+    'FC Barcelona':     {abbr:'BAR', bg:'#a50044', fg:'#edbb00'},
+    'Getafe CF':        {abbr:'GET', bg:'#003da5', fg:'#ffffff'},
+    'Girona FC':        {abbr:'GIR', bg:'#c8102e', fg:'#ffffff'},
+    'Mallorca':         {abbr:'MAL', bg:'#c8102e', fg:'#ffcc00'},
+    'Osasuna':          {abbr:'OSA', bg:'#c8102e', fg:'#ffffff'},
+    'Rayo Vallecano':   {abbr:'RAY', bg:'#e8000d', fg:'#ffffff'},
+    'Real Betis':       {abbr:'BET', bg:'#00a650', fg:'#ffd700'},
+    'Real Madrid':      {abbr:'RMA', bg:'#003087', fg:'#f0c040'},
+    'Real Sociedad':    {abbr:'RSO', bg:'#003f8a', fg:'#d0dcf4'},
+    'Sevilla':          {abbr:'SEV', bg:'#c60b1e', fg:'#ffffff'},
+    'Valencia CF':      {abbr:'VAL', bg:'#ef7d00', fg:'#ffffff'},
+    'Villarreal':       {abbr:'VIL', bg:'#ffd700', fg:'#1a1a1a'}
+  };
+
+  var SHORT_NAMES = {
+    'Albacete BP':      'Albacete',
+    'Atlético Madrid':  'Atl Madrid',
+    'Celta de Vigo':    'Celta',
+    'Córdoba CF':       'Córdoba',
+    'Deportivo Alavés': 'Alavés',
+    'Elche CF':         'Elche',
+    'Rayo Vallecano':   'Rayo',
+    'Valencia CF':      'Valencia'
+  };
+
+  function buildLigaClas(){
+    var list = collectStandings();
+    var el = document.getElementById('clas-liga-content');
+    if(!el) return;
+
+  var html = ''
+      + '<div class="clas-legend">'
+      +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Champions</span>'
+      +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 E.League</span>'
+      +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3cc878"></span>🟢 Conference</span>'
+      +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso</span>'
+      + '</div>'
+      + '<div class="clas-scroll-outer">'
+      +   '<div class="clas-hdr-scroll" id="clas-hdr-scroll">'
+      +     '<div class="clas-table">'
+      +       '<div class="clas-hdr">'
+      +         '<span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span><span>Últ. 5</span>'
+      +       '</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="clas-scroll" id="clas-body-scroll">'
+      +     '<div class="clas-table">';
+
+    list.forEach(function(team, idx){
+      var pos = idx + 1;
+      var zone = rowZoneClass(pos);
+      var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
+      html += ''
+        + '<div class="clas-row ' + zone + '">'
+        +   '<div class="clas-team-cell">'
+        +     '<span class="clas-pos-n">' + pos + '</span>'
+        +     '<span class="clas-team-name">' + (SHORT_NAMES[team.name] || team.name) + '</span>'
+        +   '</div>'
+        +   '<div class="clas-pts">' + team.pts + '</div>'
+        +   '<div class="clas-pj">' + team.pj + '</div>'
+        +   '<div class="clas-val">' + team.v + '</div>'
+        +   '<div class="clas-val">' + team.e + '</div>'
+        +   '<div class="clas-val">' + team.p + '</div>'
+        +   '<div class="clas-val gf">' + team.gf + '</div>'
+        +   '<div class="clas-val gc">' + team.gc + '</div>'
+        +   '<div class="' + dgClass + '">' + (team.dg > 0 ? '+' : '') + team.dg + '</div>'
+        +   '<div class="clas-val ta">' + team.ta + '</div>'
+        +   '<div class="clas-val tr">' + team.tr + '</div>'
+        +   '<div class="clas-mvp">' + team.mvp + '</div>'
+        +   '<div class="clas-pct">' + (team.pj > 0 ? Math.round((team.v / team.pj) * 100) : 0) + '%</div>'
+        +   '<div class="clas-form">' + formHtml(team.form) + '</div>'
+        + '</div>';
+    });
+
+    html += '    </div>'   // clas-table
+      +   '</div>'         // clas-scroll
+      + '</div>';          // clas-scroll-outer
+
+    el.innerHTML = html;
+
+    // Sincronizar scroll horizontal header <-> body
+    var hdrScroll = document.getElementById('clas-hdr-scroll');
+    var bodyScroll = document.getElementById('clas-body-scroll');
+    if(hdrScroll && bodyScroll){
+      bodyScroll.addEventListener('scroll', function(){ hdrScroll.scrollLeft = bodyScroll.scrollLeft; });
+    }
+  }
+
+  window.buildLigaClas = buildLigaClas;
+  document.addEventListener('DOMContentLoaded', buildLigaClas);
+
+  var leagueObserverBound = false;
+  function bindLeagueObserver(){
+    if(leagueObserverBound || typeof MutationObserver === 'undefined') return;
+    var root = document.getElementById('s-liga-cal');
+    if(!root) return;
+    var observer = new MutationObserver(function(){ buildLigaClas(); });
+    observer.observe(root, {childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class']});
+    leagueObserverBound = true;
+  }
+  bindLeagueObserver();
+})();
+</script>
+<script>
+(function(){
+  var SCREEN_TEAM_FALLBACK = {
+    's-athletic': 'Athletic Club',
+    's-betis': 'Real Betis',
+    's-sociedad': 'Real Sociedad',
+    's-madrid': 'Real Madrid',
+    's-barca': 'FC Barcelona',
+    's-atletico': 'Atlético Madrid',
+    's-albacete': 'Albacete BP',
+    's-villarreal': 'Villarreal CF',
+    's-sevilla': 'Sevilla FC',
+    's-espanyol': 'Espanyol',
+    's-getafe': 'Getafe CF',
+    'celta-screen': 'RC Celta',
+    'osasuna-screen': 'CA Osasuna',
+    'alaves-screen': 'Deportivo Alavés',
+    'girona-screen': 'Girona FC',
+    'oviedo-screen': 'Real Oviedo',
+    'levante-screen': 'Levante UD',
+    'mallorca-screen': 'RCD Mallorca',
+    'elche-screen': 'Elche CF',
+    'valencia-screen': 'Valencia CF',
+    'rayo-screen': 'Rayo Vallecano'
+  };
+
+  var TEAM_ALIASES = {
+    'real madrid':'Real Madrid',
+    'fc barcelona':'FC Barcelona',
+    'barcelona':'FC Barcelona',
+    'athletic club':'Athletic Club',
+    'real betis':'Real Betis',
+    'betis':'Real Betis',
+    'real sociedad':'Real Sociedad',
+    'atletico madrid':'Atlético Madrid',
+    'atlético madrid':'Atlético Madrid',
+    'albacete bp':'Albacete BP',
+    'villarreal':'Villarreal CF',
+    'villarreal cf':'Villarreal CF',
+    'sevilla':'Sevilla FC',
+    'sevilla fc':'Sevilla FC',
+    'espanyol':'Espanyol',
+    'getafe':'Getafe CF',
+    'getafe cf':'Getafe CF',
+    'rc celta':'RC Celta',
+    'celta de vigo':'RC Celta',
+    'celta':'RC Celta',
+    'ca osasuna':'CA Osasuna',
+    'osasuna':'CA Osasuna',
+    'deportivo alaves':'Deportivo Alavés',
+    'deportivo alavés':'Deportivo Alavés',
+    'd alaves':'Deportivo Alavés',
+    'd alavés':'Deportivo Alavés',
+    'girona':'Girona FC',
+    'girona fc':'Girona FC',
+    'real oviedo':'Real Oviedo',
+    'r oviedo':'Real Oviedo',
+    'levante ud':'Levante UD',
+    'rcd mallorca':'RCD Mallorca',
+    'mallorca':'RCD Mallorca',
+    'elche':'Elche CF',
+    'elche cf':'Elche CF',
+    'valencia':'Valencia CF',
+    'valencia cf':'Valencia CF',
+    'rayo vallecano':'Rayo Vallecano'
+  };
+
+  var STAT_CLASS_MAP = {
+    'gol': 'ps-gol',
+    'yel': 'ps-yel',
+    'red': 'ps-red',
+    'mvp': 'ps-mvp',
+    'pen-prov': 'ps-pen-prov',
+    'pen-parado': 'ps-pen-parado',
+    'pen-gol': 'ps-pen-gol',
+    'falta-gol': 'ps-falta-gol',
+    'propia': 'ps-propia',
+    'pen-fallado': 'ps-pen-fallado'
+  };
+
+  var LIGA_STAT_CATEGORIES = [
+    { key:'goles-total', title:'Goleadores',            icon:'⚽️', top:6 },
+    { key:'yel',         title:'Tarjetas amarillas',    icon:'🟨', top:6 },
+    { key:'red',         title:'Tarjetas rojas',        icon:'🟥', top:6 },
+    { key:'pen-prov',    title:'Penaltis provocados',   icon:'🤦‍♂️', top:6 },
+    { key:'pen-gol',     title:'Goles de penalti',      icon:'🥅', top:6 },
+    { key:'pen-fallado', title:'Penaltis fallados',     icon:'❌️', top:6 },
+    { key:'pen-parado',  title:'Penaltis parados',      icon:'🖐', top:6 },
+    { key:'falta-gol',   title:'Goles de falta',        icon:'🎯', top:6 },
+    { key:'propia',      title:'Autogoles',             icon:'🚫', top:6 },
+    { key:'mvp',         title:'MVP',                   icon:'⭐️', top:6 }
+  ];
+
+  function normalizeText(str){
+    return String(str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  function canonicalTeamName(name){
+    var key = normalizeText(name);
+    return TEAM_ALIASES[key] || String(name || '').trim();
+  }
+
+  function ensureExtraStatSpans(){
+    document.querySelectorAll('.plant-row').forEach(function(row){
+      ['ps-pen-fallado'].forEach(function(cls){
+        if(row.querySelector('.' + cls)) return;
+        var span = document.createElement('span');
+        span.className = cls;
+        span.hidden = true;
+        span.setAttribute('data-global', '0');
+        span.setAttribute('data-liga', '0');
+        span.setAttribute('data-copa', '0');
+        span.setAttribute('data-ucl', '0');
+        span.setAttribute('data-uecl', '0');
+        span.setAttribute('data-europa', '0');
+        span.setAttribute('data-super', '0');
+        row.appendChild(span);
+      });
+    });
+  }
+
+  function getPlantillaScreens(){
+    ensureExtraStatSpans();
+    var out = [];
+    document.querySelectorAll('.screen[id]').forEach(function(screen){
+      var rows = screen.querySelectorAll('.plant-row');
+      if(!rows.length) return;
+      var team = SCREEN_TEAM_FALLBACK[screen.id] || '';
+      if(!team){
+        var h2 = screen.querySelector('.sec-hdr h2');
+        if(h2) team = h2.textContent.trim();
+      }
+      team = canonicalTeamName(team);
+      out.push({ id: screen.id, team: team, rows: rows });
+    });
+    return out;
+  }
+
+  function getRosterIndex(){
+    var idx = {};
+    getPlantillaScreens().forEach(function(screen){
+      Array.prototype.forEach.call(screen.rows, function(row){
+        var nameEl = row.querySelector('.plant-name');
+        if(!nameEl) return;
+        var key = canonicalTeamName(screen.team) + '::' + normalizeText(nameEl.textContent);
+        idx[key] = row;
+      });
+    });
+    return idx;
+  }
+
+  function ensureStatSpan(row, key){
+    var cls = STAT_CLASS_MAP[key];
+    if(!cls) return null;
+    var span = row.querySelector('.' + cls);
+    if(!span){
+      span = document.createElement('span');
+      span.className = cls;
+      span.hidden = true;
+      span.setAttribute('data-global', '0');
+      span.setAttribute('data-liga', '0');
+      row.appendChild(span);
+    }
+    return span;
+  }
+
+  function setLigaStat(row, key, amount){
+    amount = Number(amount || 0);
+    if(!amount) return;
+    var span = ensureStatSpan(row, key);
+    if(!span) return;
+    var liga = Number(span.getAttribute('data-liga') || 0);
+    span.setAttribute('data-liga', String(liga + amount));
+
+    if(key === 'pen-gol' || key === 'pen-fallado'){
+      var penSpan = ensureStatSpan(row, 'pen-gol');
+      var tirado = Number(penSpan.getAttribute('data-tirado') || 0);
+      penSpan.setAttribute('data-tirado', String(tirado + amount));
+    }
+    if(key === 'pen-parado'){
+      var stopSpan = ensureStatSpan(row, 'pen-parado');
+      var faced = Number(stopSpan.getAttribute('data-tirado') || 0);
+      stopSpan.setAttribute('data-tirado', String(faced + amount));
+    }
+  }
+
+  function resetLigaPlayerStats(){
+    ensureExtraStatSpans();
+    document.querySelectorAll('.plant-row').forEach(function(row){
+      Object.keys(STAT_CLASS_MAP).forEach(function(key){
+        var span = row.querySelector('.' + STAT_CLASS_MAP[key]);
+        if(span) span.setAttribute('data-liga', '0');
+      });
+      var penGoal = row.querySelector('.ps-pen-gol');
+      var penStop = row.querySelector('.ps-pen-parado');
+      if(penGoal) penGoal.setAttribute('data-tirado', '0');
+      if(penStop) penStop.setAttribute('data-tirado', '0');
+    });
+  }
+
+  var LIGA_PLAYER_MATCH_STORE = window.LIGA_PLAYER_MATCH_STORE || {};
+  window.LIGA_PLAYER_MATCH_STORE = LIGA_PLAYER_MATCH_STORE;
+
+  function applyEventToRoster(roster, teamName, playerName, type, ico){
+    teamName = canonicalTeamName(teamName);
+    playerName = String(playerName || '').replace(/^\s*\d+\.?\s*/, '').trim();
+    if(!teamName || !playerName) return;
+    var row = roster[teamName + '::' + normalizeText(playerName)];
+    if(!row) return;
+
+    if(type === 'gol') setLigaStat(row, 'gol', 1);
+    else if(type === 'falta-gol') setLigaStat(row, 'falta-gol', 1);
+    else if(type === 'pen-gol') setLigaStat(row, 'pen-gol', 1);
+    else if(type === 'pen-fallo') setLigaStat(row, 'pen-fallado', 1);
+    else if(type === 'pen-parado') setLigaStat(row, 'pen-parado', 1);
+    else if(type === 'pen-prov') setLigaStat(row, 'pen-prov', 1);
+    else if(type === 'propia') setLigaStat(row, 'propia', 1);
+    else if(type === 'mvp') setLigaStat(row, 'mvp', 1);
+    else if(type === 'card'){
+      if(ico === '🟨') setLigaStat(row, 'yel', 1);
+      else if(ico === '🟥') setLigaStat(row, 'red', 1);
+      else if(ico === '🟨🟥'){
+        setLigaStat(row, 'yel', 1);
+        setLigaStat(row, 'red', 1);
+      }
+    }
+  }
+
+  function rebuildLigaPlayerStats(){
+    resetLigaPlayerStats();
+    var roster = getRosterIndex();
+    var processedMatches = {};
+
+    function normalizeIcon(ico){
+      return String(ico || '').replace(/️/g, '').trim();
+    }
+
+    function parseEventTypeFromIcon(ico){
+      ico = normalizeIcon(ico);
+      if(ico === '⚽' || ico === '⚽️') return 'gol';
+      if(ico === '🟨' || ico === '🟥' || ico === '🟨🟥') return 'card';
+      if(ico === '🤦' || ico === '🤦‍♂' || ico === '🤦‍♂️') return 'pen-prov';
+      if(ico === '🥅') return 'pen-gol';
+      if(ico === '❌' || ico === '❌️') return 'pen-fallo';
+      if(ico === '🖐') return 'pen-parado';
+      if(ico === '🎯') return 'falta-gol';
+      if(ico === '🚫') return 'propia';
+      if(ico === '⭐' || ico === '⭐️') return 'mvp';
+      return null;
+    }
+
+    function applyStoredMatch(matchKey, data){
+      if(!data || processedMatches[matchKey]) return;
+      processedMatches[matchKey] = true;
+      (data.evts || []).forEach(function(ev){
+        var ico = normalizeIcon(ev && ev.ico);
+        var type = ev && ev.type ? ev.type : parseEventTypeFromIcon(ico);
+        if(type === 'amarilla' || type === 'roja' || type === 'd-amarilla') type = 'card';
+        if(type === 'pen-fallado') type = 'pen-fallo';
+        if(!type) type = parseEventTypeFromIcon(ico);
+        if(!type) return;
+
+        var playerName = '';
+        if(Array.isArray(ev && ev.player)) playerName = ev.player[1] || ev.player[0] || '';
+        else playerName = (ev && (ev.name || ev.playerName || ev.jugador)) || '';
+        playerName = String(playerName || '').replace(/^\s*\d+\.?\s*/, '').trim();
+        if(!playerName) return;
+
+        var teamName = canonicalTeamName((ev && (ev.realTeam || ev.teamName || ev.team_label)) || '');
+        if(!teamName){
+          if(ev && ev.team === 'a') teamName = canonicalTeamName(data.teamA || '');
+          else if(ev && ev.team === 'b') teamName = canonicalTeamName(data.teamB || '');
+          else teamName = canonicalTeamName(ev && ev.team || '');
+        }
+        if(!teamName) return;
+        applyEventToRoster(roster, teamName, playerName, type, ico);
+      });
+
+      if(data.mvpName && data.mvpTeam){
+        applyEventToRoster(roster, data.mvpTeam, data.mvpName, 'mvp', '⭐');
+      }
+    }
+
+    Object.keys(LIGA_PLAYER_MATCH_STORE).forEach(function(matchKey){
+      applyStoredMatch(matchKey, LIGA_PLAYER_MATCH_STORE[matchKey]);
+    });
+
+    document.querySelectorAll('[id^="ml-acta-list-j"]').forEach(function(list){
+      var wrap = list.closest('.match-live-wrap');
+      var matchKey = '';
+      if(wrap && wrap.id) matchKey = wrap.id.replace(/^mlw-/, '');
+      if(matchKey && processedMatches[matchKey]) return;
+
+      var teamA = '';
+      var teamB = '';
+      if(matchKey){
+        var aEl = document.getElementById('ml-team-a-' + matchKey);
+        var bEl = document.getElementById('ml-team-b-' + matchKey);
+        if(aEl) teamA = canonicalTeamName(aEl.textContent.trim());
+        if(bEl) teamB = canonicalTeamName(bEl.textContent.trim());
+      }
+
+      list.querySelectorAll('.ml-evt-item').forEach(function(item){
+        var icoEl = item.querySelector('.ml-evt-ico');
+        var nameEl = item.querySelector('.ml-evt-name');
+        var teamEl = item.querySelector('.ml-evt-team');
+        if(!icoEl || !nameEl) return;
+
+        var ico = normalizeIcon(icoEl.textContent);
+        var type = parseEventTypeFromIcon(ico);
+        if(!type) return;
+
+        var playerName = String(nameEl.textContent || '')
+          .replace(/^\s*\d+\.?\s*/, '')
+          .replace(/\s*\(\d+⚽\)\s*$/, '')
+          .trim();
+
+        var teamName = canonicalTeamName(teamEl ? teamEl.textContent.trim() : '');
+        if(!teamName){
+          var keyA = teamA + '::' + normalizeText(playerName);
+          var keyB = teamB + '::' + normalizeText(playerName);
+          if(teamA && roster[keyA]) teamName = teamA;
+          else if(teamB && roster[keyB]) teamName = teamB;
+        }
+
+        if(!teamName) return;
+        applyEventToRoster(roster, teamName, playerName, type, ico);
+      });
+    });
+
+    buildLigaStatsDashboard();
+  }
+
+  window.registrarLigaPlayerStats = function(matchKey, teamA, teamB, evts, mvpName, mvpTeam){
+    LIGA_PLAYER_MATCH_STORE[matchKey] = {
+      teamA: canonicalTeamName(teamA),
+      teamB: canonicalTeamName(teamB),
+      evts: (evts || []).map(function(ev){
+        var copy = {};
+        Object.keys(ev || {}).forEach(function(k){ copy[k] = ev[k]; });
+        copy.realTeam = canonicalTeamName(ev && ev.team === 'a' ? teamA : ev && ev.team === 'b' ? teamB : (ev && ev.realTeam) || '');
+        return copy;
+      }),
+      mvpName: mvpName || '',
+      mvpTeam: canonicalTeamName(mvpTeam || '')
+    };
+    rebuildLigaPlayerStats();
+  };
+
+  function getLigaStatFromRow(row, key){
+    function valueFor(statKey){
+      var cls = STAT_CLASS_MAP[statKey];
+      var statEl = cls ? row.querySelector('.' + cls) : null;
+      return statEl ? Number(statEl.getAttribute('data-liga') || 0) : 0;
+    }
+    if(key === 'goles-total'){
+      return valueFor('gol') + valueFor('pen-gol') + valueFor('falta-gol');
+    }
+    return valueFor(key);
+  }
+
+  function collectLigaPlayerStats(){
+    var players = [];
+    getPlantillaScreens().forEach(function(screen){
+      Array.prototype.forEach.call(screen.rows, function(row){
+        var nameEl = row.querySelector('.plant-name');
+        if(!nameEl) return;
+        var stats = {};
+        LIGA_STAT_CATEGORIES.forEach(function(cat){
+          stats[cat.key] = getLigaStatFromRow(row, cat.key);
+        });
+        players.push({
+          team: canonicalTeamName(screen.team),
+          name: nameEl.textContent.trim(),
+          stats: stats
+        });
+      });
+    });
+    return players;
+  }
+
+  function topPlayersByStat(players, key, limit){
+    return players
+      .map(function(p){
+        return { name: p.name, team: p.team, value: Number(p.stats[key] || 0) };
+      })
+      .filter(function(p){ return p.value > 0; })
+      .sort(function(a,b){
+        if(b.value !== a.value) return b.value - a.value;
+        if(a.team !== b.team) return a.team.localeCompare(b.team, 'es');
+        return a.name.localeCompare(b.name, 'es');
+      })
+      .slice(0, limit);
+  }
+
+  function buildLigaStatsDashboard(){
+    var root = document.getElementById('liga-stats-dashboard');
+    if(!root) return;
+    var players = collectLigaPlayerStats();
+    var html = '';
+
+    function escapeHtml(str){
+      return String(str == null ? '' : str)
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;')
+        .replace(/'/g,'&#39;');
+    }
+
+    function renderRows(rows, startIndex){
+      return rows.map(function(item, idx){
+        return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (startIndex + idx) + '</div><div class="liga-stat-player"><div class="liga-stat-name">' + escapeHtml(item.name) + '</div><div class="liga-stat-team">' + escapeHtml(item.team) + '</div></div><div class="liga-stat-value">' + item.value + '</div></div>';
+      }).join('');
+    }
+
+    LIGA_STAT_CATEGORIES.forEach(function(cat){
+      var allRows = topPlayersByStat(players, cat.key, 9999);
+      var top = allRows.slice(0, 6);
+      var rest = allRows.slice(6);
+      html += '<div class="liga-stat-card"><div class="liga-stat-head"><div class="liga-stat-ico">' + cat.icon + '</div><div class="liga-stat-title">' + cat.title + '</div></div><div class="liga-stat-body">';
+      if(!allRows.length){
+        html += '<div class="liga-stat-empty">Sin datos todavía</div>';
+      } else {
+        html += renderRows(top, 1);
+        if(rest.length){
+          html += '<details class="liga-stat-more"><summary>Ver todos (' + allRows.length + ')</summary><div class="liga-stat-more-list">' + renderRows(rest, 7) + '</div></details>';
+        }
+      }
+      html += '</div></div>';
+    });
+    root.innerHTML = html;
+  }
+
+  window.buildLigaStatsDashboard = buildLigaStatsDashboard;
+  document.addEventListener('DOMContentLoaded', function(){
+    ensureExtraStatSpans();
+    buildLigaStatsDashboard();
+  });
+
+  var ligaStatsObserverBound = false;
+  function bindLigaStatsObserver(){
+    if(ligaStatsObserverBound || typeof MutationObserver === 'undefined') return;
+    var targets = [document.getElementById('s-liga-cal')].concat(
+      getPlantillaScreens().map(function(x){ return document.getElementById(x.id); })
+    ).filter(Boolean);
+
+    if(!targets.length) return;
+
+    var observer = new MutationObserver(function(){
+      buildLigaStatsDashboard();
+    });
+
+    targets.forEach(function(t){
+      observer.observe(t, { childList:true, subtree:true, characterData:true, attributes:true });
+    });
+    ligaStatsObserverBound = true;
+  }
+
+  bindLigaStatsObserver();
+})();
+</script>
+</div>

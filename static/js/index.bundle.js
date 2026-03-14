@@ -975,7 +975,7 @@ window.mlEndMatch_j1m1=function(winner){if(_matchFinished)return;if(!winner&&_sc
     });
     return;
   }
-clearInterval(_timerInterval);_timerRunning=false;_matchFinished=true;var penWinner=null;if(winner==='a'||winner==='b'){if(_sc.a===_sc.b)penWinner=winner;}if(!winner){if(_sc.a>_sc.b)winner='a';else if(_sc.b>_sc.a)winner='b';else winner='draw';}var btn=document.getElementById('ml-btn-end-j1m1');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var etBtn=document.getElementById('ml-btn-et-j1m1');if(etBtn){etBtn.disabled=true;etBtn.style.opacity='0.35';}var penBtn=document.getElementById('ml-btn-pen-j1m1');if(penBtn){penBtn.disabled=true;penBtn.style.opacity='0.35';}var _ta_a=_events.filter(function(e){return e.team==='a'&&e.type==='amarilla';}).length;var _tr_a=_events.filter(function(e){return e.team==='a'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _ta_b=_events.filter(function(e){return e.team==='b'&&e.type==='amarilla';}).length;var _tr_b=_events.filter(function(e){return e.team==='b'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _mvp_a=_events.filter(function(e){return e.team==='a'&&e.type==='mvp';}).length;var _mvp_b=_events.filter(function(e){return e.team==='b'&&e.type==='mvp';}).length;if(typeof window.registrarResultadoLiga==='function')window.registrarResultadoLiga('j1m1',TEAM_A_NAME,TEAM_B_NAME,_sc.a,_sc.b,_ta_a,_tr_a,_ta_b,_tr_b,_mvp_a,_mvp_b,penWinner); if(typeof window.registrarLigaPlayerStats==='function')window.registrarLigaPlayerStats('j1m1',TEAM_A_NAME,TEAM_B_NAME,_events.map(function(ev){return {type:(ev.type==='amarilla'||ev.type==='roja'||ev.type==='d-amarilla')?'card':ev.type,ico:ev.ico,team:ev.team,player:[ev.num,ev.name]};}),(_events.find(function(e){return e.type==='mvp';})||{}).name||'',(_events.find(function(e){return e.type==='mvp';})||{}).team==='a'?TEAM_A_NAME:((_events.find(function(e){return e.type==='mvp';})||{}).team==='b'?TEAM_B_NAME:'')); _renderTimer_j1m1(); if(typeof window.procesarSancionesPostPartido==='function')window.procesarSancionesPostPartido(_events,'a',TEAM_A_NAME,'liga');};
+clearInterval(_timerInterval);_timerRunning=false;_matchFinished=true;var penWinner=null;if(winner==='a'||winner==='b'){if(_sc.a===_sc.b)penWinner=winner;}if(!winner){if(_sc.a>_sc.b)winner='a';else if(_sc.b>_sc.a)winner='b';else winner='draw';}var btn=document.getElementById('ml-btn-end-j1m1');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var etBtn=document.getElementById('ml-btn-et-j1m1');if(etBtn){etBtn.disabled=true;etBtn.style.opacity='0.35';}var penBtn=document.getElementById('ml-btn-pen-j1m1');if(penBtn){penBtn.disabled=true;penBtn.style.opacity='0.35';}var _ta_a=_events.filter(function(e){return e.team==='a'&&e.type==='amarilla';}).length;var _tr_a=_events.filter(function(e){return e.team==='a'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _ta_b=_events.filter(function(e){return e.team==='b'&&e.type==='amarilla';}).length;var _tr_b=_events.filter(function(e){return e.team==='b'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _mvp_a=_events.filter(function(e){return e.team==='a'&&e.type==='mvp';}).length;var _mvp_b=_events.filter(function(e){return e.team==='b'&&e.type==='mvp';}).length;if(typeof window.registrarResultadoLiga==='function')window.registrarResultadoLiga('j1m1',TEAM_A_NAME,TEAM_B_NAME,_sc.a,_sc.b,_ta_a,_tr_a,_ta_b,_tr_b,_mvp_a,_mvp_b,penWinner); if(typeof window.registrarLigaPlayerStats==='function')window.registrarLigaPlayerStats('j1m1',TEAM_A_NAME,TEAM_B_NAME,_events.map(function(ev){return {type:(ev.type==='amarilla'||ev.type==='roja'||ev.type==='d-amarilla')?'card':ev.type,ico:ev.ico,team:ev.team,player:[ev.num,ev.name]};}),(_events.find(function(e){return e.type==='mvp';})||{}).name||'',(_events.find(function(e){return e.type==='mvp';})||{}).team==='a'?TEAM_A_NAME:((_events.find(function(e){return e.type==='mvp';})||{}).team==='b'?TEAM_B_NAME:'')); _renderTimer_j1m1(); if(typeof window._generarLesionHumano==='function')window._generarLesionHumano(TEAM_A_NAME,TEAM_B_NAME); if(typeof window.procesarSancionesPostPartido==='function')window.procesarSancionesPostPartido(_events,'a',TEAM_A_NAME,'liga');};
 function _checkPenalties_j1m1(){if(_sc.a===_sc.b){_addMarker_j1m1("— EMPATE AL 120' —");var pp=document.getElementById("ml-pen-panel-j1m1");if(pp)pp.classList.add("show");var addBtn=document.getElementById("ml-add-btn-j1m1");if(addBtn){addBtn.disabled=true;addBtn.style.opacity="0.35";}}else{mlEndMatch_j1m1();}};window.mlConfirmPen_j1m1=function(){var pa=parseInt(document.getElementById("ml-pen-a-j1m1").value)||0;var pb=parseInt(document.getElementById("ml-pen-b-j1m1").value)||0;if(pa===pb){alert("⚠️ Los penaltis no pueden terminar en empate. Introduce un resultado válido.");return;}var penWinner=pa>pb?"a":"b";var psEl=document.getElementById("pen-score-j1m1");if(psEl){psEl.textContent=pa+"–"+pb;psEl.classList.add("show");}var pp=document.getElementById("ml-pen-panel-j1m1");if(pp)pp.classList.remove("show");mlEndMatch_j1m1(penWinner);};
 window.mlShowEvOv_j1m1=function(){document.getElementById("ml-ev-overlay-j1m1").classList.add("show");};window.mlHideEvOv_j1m1=function(){document.getElementById("ml-ev-overlay-j1m1").classList.remove("show");};window.mlEvPick_j1m1=function(label,type){document.getElementById("ml-ev-overlay-j1m1").classList.remove("show");mlShowTP_j1m1(label,type);};window.mlShowTP_j1m1=function(label,type){_pendingEvt={label:label,type:type};document.getElementById("ml-tp-ov-evt-j1m1").textContent=label;document.getElementById("ml-tp-overlay-j1m1").classList.add("show");};window.mlHideTP_j1m1=function(){document.getElementById("ml-tp-overlay-j1m1").classList.remove("show");_pendingEvt=null;};window.mlTPSelect_j1m1=function(team){document.getElementById("ml-tp-overlay-j1m1").classList.remove("show");mlDirectPick_j1m1(_pendingEvt.label,_pendingEvt.type,team);};window.mlTogglePanel_j1m1=function(){mlShowEvOv_j1m1();};
 var _sqA_j1m1=[];var _sqB_j1m1=[];(function(){  var regA=window.sqFromRegistryFull('Real Madrid');  var regB=window.sqFromRegistryFull('FC Barcelona');  function toOverlayFmt(sq){    if(!sq||!sq.length)return [];    var out=[];    var posLabels={P:'🧤 PORTEROS',D:'🛡 DEFENSAS',M:'⚙️ MEDIOS',F:'⚡ DELANTEROS'};    var curPos=null;    sq.forEach(function(p){      if(p[2]!==curPos){curPos=p[2];out.push({h:posLabels[curPos]||curPos});}       out.push([p[0],p[1]]);    });    return out;  }  if(regA){var fmt=toOverlayFmt(regA);fmt.forEach(function(p){_sqA_j1m1.push(p);});}  if(regB){var fmt2=toOverlayFmt(regB);fmt2.forEach(function(p){_sqB_j1m1.push(p);});}})();window._sqA_j1m1=_sqA_j1m1;window._sqB_j1m1=_sqB_j1m1;window.mlShowPl_j1m1=function(){var ov=document.getElementById("ml-pl-overlay-j1m1");var e=_pendingEvt;var sq=(e.team==="a")?(_sqA_j1m1):(_sqB_j1m1);var tname=(e.team==="a")?TEAM_A_NAME:TEAM_B_NAME;document.getElementById("ml-pl-ov-evt-j1m1").textContent=e.label;document.getElementById("ml-pl-ov-team-j1m1").textContent=tname;var list=document.getElementById("ml-pl-ov-list-j1m1");list.innerHTML=sq.map(function(p){if(p.h)return '<div class="ml-pl-ov-sec">'+p.h+'</div>';return '<button class="ml-pl-ov-btn" onclick="mlPlConfirm_j1m1(\''+p[0]+'\',\''+p[1].replace(/\'/g,"\\'")+ '\')">'+'<span class="ml-pl-ov-num">'+p[0]+'</span>'+'<span class="ml-pl-ov-name">'+p[1]+'</span>'+'</button>';}).join("");ov.classList.add("show");};window.mlHidePl_j1m1=function(){document.getElementById("ml-pl-overlay-j1m1").classList.remove("show");};window.mlPlConfirm_j1m1=function(num,name){document.getElementById("ml-pl-overlay-j1m1").classList.remove("show");if(!_pendingEvt)return;var e=_pendingEvt;var min=_currentMin_j1m1();if(e.type==="d-amarilla"){var hasYellow=_events.some(function(ev){return ev.type==="amarilla"&&ev.team===e.team&&ev.num===num;});if(!hasYellow){_pendingEvt=null;return;}}var scoringTypes=["gol","propia","pen-gol","falta-gol"];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==="propia")?(e.team==="a"?"b":"a"):e.team;_sc[st]++;document.getElementById("sc-j1m1-a").textContent=_sc.a;document.getElementById("sc-j1m1-b").textContent=_sc.b;}if((e.type==="d-amarilla"||e.type==="roja")&&(e.type!=="roja"||_events.filter(function(ev){return(ev.type==="roja"||ev.type==="d-amarilla")&&ev.team===e.team;}).length===0)){_rojas=_rojas||{};_rojas[e.team]=(_rojas[e.team]||0)+1;}var icons={gol:"⚽",propia:"🚫","pen-gol":"🥅","pen-fallo":"❌","pen-prov":"🤦","pen-parado":"🖐","falta-gol":"🎯",amarilla:"🟨","d-amarilla":"🟨🟥",roja:"🟥",mvp:"⭐"};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||"•",id:Date.now()});_renderActa_j1m1();  _pendingEvt=null;};window.mlDirectPick_j1m1=function(label,type,team){_pendingEvt={label:label,type:type,team:team};mlShowPl_j1m1();};
@@ -1017,7 +1017,7 @@ window.mlEndMatch_j1m2=function(winner){if(_matchFinished)return;if(!winner&&_sc
     });
     return;
   }
-clearInterval(_timerInterval);_timerRunning=false;_matchFinished=true;var penWinner=null;if(winner==='a'||winner==='b'){if(_sc.a===_sc.b)penWinner=winner;}if(!winner){if(_sc.a>_sc.b)winner='a';else if(_sc.b>_sc.a)winner='b';else winner='draw';}var btn=document.getElementById('ml-btn-end-j1m2');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var etBtn=document.getElementById('ml-btn-et-j1m2');if(etBtn){etBtn.disabled=true;etBtn.style.opacity='0.35';}var penBtn=document.getElementById('ml-btn-pen-j1m2');if(penBtn){penBtn.disabled=true;penBtn.style.opacity='0.35';}var _ta_a=_events.filter(function(e){return e.team==='a'&&e.type==='amarilla';}).length;var _tr_a=_events.filter(function(e){return e.team==='a'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _ta_b=_events.filter(function(e){return e.team==='b'&&e.type==='amarilla';}).length;var _tr_b=_events.filter(function(e){return e.team==='b'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _mvp_a=_events.filter(function(e){return e.team==='a'&&e.type==='mvp';}).length;var _mvp_b=_events.filter(function(e){return e.team==='b'&&e.type==='mvp';}).length;if(typeof window.registrarResultadoLiga==='function')window.registrarResultadoLiga('j1m2',TEAM_A_NAME,TEAM_B_NAME,_sc.a,_sc.b,_ta_a,_tr_a,_ta_b,_tr_b,_mvp_a,_mvp_b,penWinner); if(typeof window.registrarLigaPlayerStats==='function')window.registrarLigaPlayerStats('j1m2',TEAM_A_NAME,TEAM_B_NAME,_events.map(function(ev){return {type:(ev.type==='amarilla'||ev.type==='roja'||ev.type==='d-amarilla')?'card':ev.type,ico:ev.ico,team:ev.team,player:[ev.num,ev.name]};}),(_events.find(function(e){return e.type==='mvp';})||{}).name||'',(_events.find(function(e){return e.type==='mvp';})||{}).team==='a'?TEAM_A_NAME:((_events.find(function(e){return e.type==='mvp';})||{}).team==='b'?TEAM_B_NAME:'')); _renderTimer_j1m2(); if(typeof window.procesarSancionesPostPartido==='function')window.procesarSancionesPostPartido(_events,'a',TEAM_A_NAME,'liga');};
+clearInterval(_timerInterval);_timerRunning=false;_matchFinished=true;var penWinner=null;if(winner==='a'||winner==='b'){if(_sc.a===_sc.b)penWinner=winner;}if(!winner){if(_sc.a>_sc.b)winner='a';else if(_sc.b>_sc.a)winner='b';else winner='draw';}var btn=document.getElementById('ml-btn-end-j1m2');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var etBtn=document.getElementById('ml-btn-et-j1m2');if(etBtn){etBtn.disabled=true;etBtn.style.opacity='0.35';}var penBtn=document.getElementById('ml-btn-pen-j1m2');if(penBtn){penBtn.disabled=true;penBtn.style.opacity='0.35';}var _ta_a=_events.filter(function(e){return e.team==='a'&&e.type==='amarilla';}).length;var _tr_a=_events.filter(function(e){return e.team==='a'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _ta_b=_events.filter(function(e){return e.team==='b'&&e.type==='amarilla';}).length;var _tr_b=_events.filter(function(e){return e.team==='b'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _mvp_a=_events.filter(function(e){return e.team==='a'&&e.type==='mvp';}).length;var _mvp_b=_events.filter(function(e){return e.team==='b'&&e.type==='mvp';}).length;if(typeof window.registrarResultadoLiga==='function')window.registrarResultadoLiga('j1m2',TEAM_A_NAME,TEAM_B_NAME,_sc.a,_sc.b,_ta_a,_tr_a,_ta_b,_tr_b,_mvp_a,_mvp_b,penWinner); if(typeof window.registrarLigaPlayerStats==='function')window.registrarLigaPlayerStats('j1m2',TEAM_A_NAME,TEAM_B_NAME,_events.map(function(ev){return {type:(ev.type==='amarilla'||ev.type==='roja'||ev.type==='d-amarilla')?'card':ev.type,ico:ev.ico,team:ev.team,player:[ev.num,ev.name]};}),(_events.find(function(e){return e.type==='mvp';})||{}).name||'',(_events.find(function(e){return e.type==='mvp';})||{}).team==='a'?TEAM_A_NAME:((_events.find(function(e){return e.type==='mvp';})||{}).team==='b'?TEAM_B_NAME:'')); _renderTimer_j1m2(); if(typeof window._generarLesionHumano==='function')window._generarLesionHumano(TEAM_A_NAME,TEAM_B_NAME); if(typeof window.procesarSancionesPostPartido==='function')window.procesarSancionesPostPartido(_events,'a',TEAM_A_NAME,'liga');};
 function _checkPenalties_j1m2(){if(_sc.a===_sc.b){_addMarker_j1m2("— EMPATE AL 120' —");var pp=document.getElementById("ml-pen-panel-j1m2");if(pp)pp.classList.add("show");var addBtn=document.getElementById("ml-add-btn-j1m2");if(addBtn){addBtn.disabled=true;addBtn.style.opacity="0.35";}}else{mlEndMatch_j1m2();}};window.mlConfirmPen_j1m2=function(){var pa=parseInt(document.getElementById("ml-pen-a-j1m2").value)||0;var pb=parseInt(document.getElementById("ml-pen-b-j1m2").value)||0;if(pa===pb){alert("⚠️ Los penaltis no pueden terminar en empate. Introduce un resultado válido.");return;}var penWinner=pa>pb?"a":"b";var psEl=document.getElementById("pen-score-j1m2");if(psEl){psEl.textContent=pa+"–"+pb;psEl.classList.add("show");}var pp=document.getElementById("ml-pen-panel-j1m2");if(pp)pp.classList.remove("show");mlEndMatch_j1m2(penWinner);};
 window.mlShowEvOv_j1m2=function(){document.getElementById("ml-ev-overlay-j1m2").classList.add("show");};window.mlHideEvOv_j1m2=function(){document.getElementById("ml-ev-overlay-j1m2").classList.remove("show");};window.mlEvPick_j1m2=function(label,type){document.getElementById("ml-ev-overlay-j1m2").classList.remove("show");mlShowTP_j1m2(label,type);};window.mlShowTP_j1m2=function(label,type){_pendingEvt={label:label,type:type};document.getElementById("ml-tp-ov-evt-j1m2").textContent=label;document.getElementById("ml-tp-overlay-j1m2").classList.add("show");};window.mlHideTP_j1m2=function(){document.getElementById("ml-tp-overlay-j1m2").classList.remove("show");_pendingEvt=null;};window.mlTPSelect_j1m2=function(team){document.getElementById("ml-tp-overlay-j1m2").classList.remove("show");mlDirectPick_j1m2(_pendingEvt.label,_pendingEvt.type,team);};window.mlTogglePanel_j1m2=function(){mlShowEvOv_j1m2();};
 var _sqA_j1m2=[];var _sqB_j1m2=[];(function(){  var regA=window.sqFromRegistryFull('Athletic Club');  var regB=window.sqFromRegistryFull('Real Betis');  function toOverlayFmt(sq){    if(!sq||!sq.length)return [];    var out=[];    var posLabels={P:'🧤 PORTEROS',D:'🛡 DEFENSAS',M:'⚙️ MEDIOS',F:'⚡ DELANTEROS'};    var curPos=null;    sq.forEach(function(p){      if(p[2]!==curPos){curPos=p[2];out.push({h:posLabels[curPos]||curPos});}       out.push([p[0],p[1]]);    });    return out;  }  if(regA){var fmt=toOverlayFmt(regA);fmt.forEach(function(p){_sqA_j1m2.push(p);});}  if(regB){var fmt2=toOverlayFmt(regB);fmt2.forEach(function(p){_sqB_j1m2.push(p);});}})();window._sqA_j1m2=_sqA_j1m2;window._sqB_j1m2=_sqB_j1m2;window.mlShowPl_j1m2=function(){var ov=document.getElementById("ml-pl-overlay-j1m2");var e=_pendingEvt;var sq=(e.team==="a")?(_sqA_j1m2):(_sqB_j1m2);var tname=(e.team==="a")?TEAM_A_NAME:TEAM_B_NAME;document.getElementById("ml-pl-ov-evt-j1m2").textContent=e.label;document.getElementById("ml-pl-ov-team-j1m2").textContent=tname;var list=document.getElementById("ml-pl-ov-list-j1m2");list.innerHTML=sq.map(function(p){if(p.h)return '<div class="ml-pl-ov-sec">'+p.h+'</div>';return '<button class="ml-pl-ov-btn" onclick="mlPlConfirm_j1m2(\''+p[0]+'\',\''+p[1].replace(/\'/g,"\\'")+ '\')">'+'<span class="ml-pl-ov-num">'+p[0]+'</span>'+'<span class="ml-pl-ov-name">'+p[1]+'</span>'+'</button>';}).join("");ov.classList.add("show");};window.mlHidePl_j1m2=function(){document.getElementById("ml-pl-overlay-j1m2").classList.remove("show");};window.mlPlConfirm_j1m2=function(num,name){document.getElementById("ml-pl-overlay-j1m2").classList.remove("show");if(!_pendingEvt)return;var e=_pendingEvt;var min=_currentMin_j1m2();if(e.type==="d-amarilla"){var hasYellow=_events.some(function(ev){return ev.type==="amarilla"&&ev.team===e.team&&ev.num===num;});if(!hasYellow){_pendingEvt=null;return;}}var scoringTypes=["gol","propia","pen-gol","falta-gol"];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==="propia")?(e.team==="a"?"b":"a"):e.team;_sc[st]++;document.getElementById("sc-j1m2-a").textContent=_sc.a;document.getElementById("sc-j1m2-b").textContent=_sc.b;}if((e.type==="d-amarilla"||e.type==="roja")&&(e.type!=="roja"||_events.filter(function(ev){return(ev.type==="roja"||ev.type==="d-amarilla")&&ev.team===e.team;}).length===0)){_rojas=_rojas||{};_rojas[e.team]=(_rojas[e.team]||0)+1;}var icons={gol:"⚽",propia:"🚫","pen-gol":"🥅","pen-fallo":"❌","pen-prov":"🤦","pen-parado":"🖐","falta-gol":"🎯",amarilla:"🟨","d-amarilla":"🟨🟥",roja:"🟥",mvp:"⭐"};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||"•",id:Date.now()});_renderActa_j1m2();  _pendingEvt=null;};window.mlDirectPick_j1m2=function(label,type,team){_pendingEvt={label:label,type:type,team:team};mlShowPl_j1m2();};
@@ -1053,7 +1053,7 @@ window.mlEndMatch_j1m3=function(){if(_matchFinished)return;
     });
     return;
   }
-  clearInterval(_timerInterval);_timerRunning=false;_matchFinished=true;var winner;if(_sc.a>_sc.b)winner='a';else if(_sc.b>_sc.a)winner='b';else winner='draw';var btn=document.getElementById('ml-btn-end-j1m3');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var _ta_a=_events.filter(function(e){return e.team==='a'&&e.type==='amarilla';}).length;var _tr_a=_events.filter(function(e){return e.team==='a'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _ta_b=_events.filter(function(e){return e.team==='b'&&e.type==='amarilla';}).length;var _tr_b=_events.filter(function(e){return e.team==='b'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _mvp_a=_events.filter(function(e){return e.team==='a'&&e.type==='mvp';}).length;var _mvp_b=_events.filter(function(e){return e.team==='b'&&e.type==='mvp';}).length;if(typeof window.registrarResultadoLiga==='function')window.registrarResultadoLiga('j1m3',TEAM_A_NAME,TEAM_B_NAME,_sc.a,_sc.b,_ta_a,_tr_a,_ta_b,_tr_b,_mvp_a,_mvp_b); if(typeof window.registrarLigaPlayerStats==='function')window.registrarLigaPlayerStats('j1m3',TEAM_A_NAME,TEAM_B_NAME,_events.map(function(ev){return {type:(ev.type==='amarilla'||ev.type==='roja'||ev.type==='d-amarilla')?'card':ev.type,ico:ev.ico,team:ev.team,player:[ev.num,ev.name]};}),(_events.find(function(e){return e.type==='mvp';})||{}).name||'',(_events.find(function(e){return e.type==='mvp';})||{}).team==='a'?TEAM_A_NAME:((_events.find(function(e){return e.type==='mvp';})||{}).team==='b'?TEAM_B_NAME:'')); _renderTimer_j1m3(); if(typeof window.procesarSancionesPostPartido==='function')window.procesarSancionesPostPartido(_events,'a',TEAM_A_NAME,'liga');};
+  clearInterval(_timerInterval);_timerRunning=false;_matchFinished=true;var winner;if(_sc.a>_sc.b)winner='a';else if(_sc.b>_sc.a)winner='b';else winner='draw';var btn=document.getElementById('ml-btn-end-j1m3');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var _ta_a=_events.filter(function(e){return e.team==='a'&&e.type==='amarilla';}).length;var _tr_a=_events.filter(function(e){return e.team==='a'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _ta_b=_events.filter(function(e){return e.team==='b'&&e.type==='amarilla';}).length;var _tr_b=_events.filter(function(e){return e.team==='b'&&(e.type==='roja'||e.type==='d-amarilla');}).length;var _mvp_a=_events.filter(function(e){return e.team==='a'&&e.type==='mvp';}).length;var _mvp_b=_events.filter(function(e){return e.team==='b'&&e.type==='mvp';}).length;if(typeof window.registrarResultadoLiga==='function')window.registrarResultadoLiga('j1m3',TEAM_A_NAME,TEAM_B_NAME,_sc.a,_sc.b,_ta_a,_tr_a,_ta_b,_tr_b,_mvp_a,_mvp_b); if(typeof window.registrarLigaPlayerStats==='function')window.registrarLigaPlayerStats('j1m3',TEAM_A_NAME,TEAM_B_NAME,_events.map(function(ev){return {type:(ev.type==='amarilla'||ev.type==='roja'||ev.type==='d-amarilla')?'card':ev.type,ico:ev.ico,team:ev.team,player:[ev.num,ev.name]};}),(_events.find(function(e){return e.type==='mvp';})||{}).name||'',(_events.find(function(e){return e.type==='mvp';})||{}).team==='a'?TEAM_A_NAME:((_events.find(function(e){return e.type==='mvp';})||{}).team==='b'?TEAM_B_NAME:'')); _renderTimer_j1m3(); if(typeof window._generarLesionHumano==='function')window._generarLesionHumano(TEAM_A_NAME,TEAM_B_NAME); if(typeof window.procesarSancionesPostPartido==='function')window.procesarSancionesPostPartido(_events,'a',TEAM_A_NAME,'liga');};
 window.mlShowEvOv_j1m3=function(){document.getElementById("ml-ev-overlay-j1m3").classList.add("show");};window.mlHideEvOv_j1m3=function(){document.getElementById("ml-ev-overlay-j1m3").classList.remove("show");};window.mlEvPick_j1m3=function(label,type){document.getElementById("ml-ev-overlay-j1m3").classList.remove("show");mlShowTP_j1m3(label,type);};window.mlShowTP_j1m3=function(label,type){_pendingEvt={label:label,type:type};document.getElementById("ml-tp-ov-evt-j1m3").textContent=label;document.getElementById("ml-tp-overlay-j1m3").classList.add("show");};window.mlHideTP_j1m3=function(){document.getElementById("ml-tp-overlay-j1m3").classList.remove("show");_pendingEvt=null;};window.mlTPSelect_j1m3=function(team){document.getElementById("ml-tp-overlay-j1m3").classList.remove("show");mlDirectPick_j1m3(_pendingEvt.label,_pendingEvt.type,team);};window.mlTogglePanel_j1m3=function(){mlShowEvOv_j1m3();};
 var _sqA_j1m3=[];var _sqB_j1m3=[];(function(){  var regA=window.sqFromRegistryFull('Real Sociedad');  var regB=window.sqFromRegistryFull('Rayo Vallecano');  function toOverlayFmt(sq){    if(!sq||!sq.length)return [];    var out=[];    var posLabels={P:'🧤 PORTEROS',D:'🛡 DEFENSAS',M:'⚙️ MEDIOS',F:'⚡ DELANTEROS'};    var curPos=null;    sq.forEach(function(p){      if(p[2]!==curPos){curPos=p[2];out.push({h:posLabels[curPos]||curPos});}       out.push([p[0],p[1]]);    });    return out;  }  if(regA){var fmt=toOverlayFmt(regA);fmt.forEach(function(p){_sqA_j1m3.push(p);});}  if(regB){var fmt2=toOverlayFmt(regB);fmt2.forEach(function(p){_sqB_j1m3.push(p);});}})();window._sqA_j1m3=_sqA_j1m3;window._sqB_j1m3=_sqB_j1m3;window.mlShowPl_j1m3=function(){var ov=document.getElementById("ml-pl-overlay-j1m3");var e=_pendingEvt;var sq=(e.team==="a")?(_sqA_j1m3):(_sqB_j1m3);var tname=(e.team==="a")?TEAM_A_NAME:TEAM_B_NAME;document.getElementById("ml-pl-ov-evt-j1m3").textContent=e.label;document.getElementById("ml-pl-ov-team-j1m3").textContent=tname;var list=document.getElementById("ml-pl-ov-list-j1m3");list.innerHTML=sq.map(function(p){if(p.h)return '<div class="ml-pl-ov-sec">'+p.h+'</div>';return '<button class="ml-pl-ov-btn" onclick="mlPlConfirm_j1m3(\''+p[0]+'\',\''+p[1].replace(/\'/g,"\\'")+ '\')">'+'<span class="ml-pl-ov-num">'+p[0]+'</span>'+'<span class="ml-pl-ov-name">'+p[1]+'</span>'+'</button>';}).join("");ov.classList.add("show");};window.mlHidePl_j1m3=function(){document.getElementById("ml-pl-overlay-j1m3").classList.remove("show");};window.mlPlConfirm_j1m3=function(num,name){document.getElementById("ml-pl-overlay-j1m3").classList.remove("show");if(!_pendingEvt)return;var e=_pendingEvt;var min=_currentMin_j1m3();if(e.type==="d-amarilla"){var hasYellow=_events.some(function(ev){return ev.type==="amarilla"&&ev.team===e.team&&ev.num===num;});if(!hasYellow){_pendingEvt=null;return;}}var scoringTypes=["gol","propia","pen-gol","falta-gol"];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==="propia")?(e.team==="a"?"b":"a"):e.team;_sc[st]++;document.getElementById("sc-j1m3-a").textContent=_sc.a;document.getElementById("sc-j1m3-b").textContent=_sc.b;}if((e.type==="d-amarilla"||e.type==="roja")&&(e.type!=="roja"||_events.filter(function(ev){return(ev.type==="roja"||ev.type==="d-amarilla")&&ev.team===e.team;}).length===0)){_rojas=_rojas||{};_rojas[e.team]=(_rojas[e.team]||0)+1;}var icons={gol:"⚽",propia:"🚫","pen-gol":"🥅","pen-fallo":"❌","pen-prov":"🤦","pen-parado":"🖐","falta-gol":"🎯",amarilla:"🟨","d-amarilla":"🟨🟥",roja:"🟥",mvp:"⭐"};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||"•",id:Date.now()});_renderActa_j1m3();  _pendingEvt=null;};window.mlDirectPick_j1m3=function(label,type,team){_pendingEvt={label:label,type:type,team:team};mlShowPl_j1m3();};
 window.mlCloseModal_j1m3=function(){document.getElementById('ml-modal-j1m3').classList.remove('show');_pendingEvt=null;};
@@ -2321,6 +2321,17 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       evts.push({min:gMin,ico:'⚽',team:gt,player:gp,type:'gol'});
     }
 
+    // ── LESIONES EN PARTIDO IA vs IA ────────────────────────────────
+    if (typeof window.generarLesionesPartido === 'function') {
+      var _lesionesIA = window.generarLesionesPartido(TEAM_A, TEAM_B, activeA, activeB, benA, benB, ft90);
+      _lesionesIA.forEach(function(les) {
+        if (typeof window.aplicarLesionEnSimulacion === 'function') {
+          var evLes = window.aplicarLesionEnSimulacion(les, activeA, activeB);
+          evts.push(evLes);
+        }
+      });
+    }
+
     // ── EFECTO ROJA: reduce goles del equipo sancionado tras la roja ─
     if(redCardTeam){
       evts.sort(function(a,b){return a.min-b.min;});
@@ -2431,12 +2442,32 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
 
     function renderEvtEl(ev){
       if(ev.type==='ht'||ev.type==='sub')return;
+      // Lesión grave: STOP en timer
+      if(ev.type==='lesion'&&ev.grave){
+        var _btnTimer=document.getElementById(cfg.btnId);
+        if(_btnTimer){_btnTimer.textContent='🛑 STOP';_btnTimer.classList.add('grave-stop');}
+        setTimeout(function(){
+          var _btnT2=document.getElementById(cfg.btnId);
+          if(_btnT2){_btnT2.classList.remove('grave-stop');}
+        },4000);
+      }
       var d=document.createElement('div'); d.className='ml-evt-item';
       d.setAttribute('data-team', ev.team);
       d.setAttribute('data-type', ev.type);
       var teamName=ev.team==='a'?TEAM_A:TEAM_B;
       var _iaFalloExtra='';
       if(ev.type==='pen-parado'){var _iaContrario=ev.team==='a'?'b':'a';var _iaFallado=evts.find(function(e){return e.type==='pen-fallo'&&e.team===_iaContrario&&e.min===ev.min;});if(_iaFallado){_iaFalloExtra='<span class="ml-evt-pen-fallo">❌ '+_iaFallado.player[1]+'</span>';}}
+      // Lesión: mostrar grado y partidos de baja
+      if(ev.type==='lesion'){
+        var _lColor=ev.grave?'#ff4444':(ev.tipo&&ev.tipo.grado===2?'#ff8c00':'#ffd700');
+        d.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"
+          +'<span class="ml-evt-ico">🩹</span>'
+          +'<span class="ml-evt-name" style="color:'+_lColor+'">'+ev.player[1]
+          +'<span style="font-size:10px;color:rgba(255,255,255,0.5);margin-left:6px;">'+ev.gradoNombre+' · '+ev.partidos+'P</span></span>'
+          +'<span class="ml-evt-team">'+teamName+'</span>';
+        list.appendChild(d);
+        return;
+      }
       d.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"
         +'<span class="ml-evt-ico">'+ev.ico+'</span>'
         +'<span class="ml-evt-name">'+ev.player[1]+'</span>'
@@ -4720,3 +4751,380 @@ window.go = function(screenId) {
 console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET Sub activado ✓');
 
 })();
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   SISTEMA DE LESIONES — Motor completo
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  // ── STORE global ──────────────────────────────────────────────────
+  window.LESION_STORE = window.LESION_STORE || {};
+  // Estructura: { 'NombreJugador': { equipo, grado, partidos, descripcion, timestamp } }
+
+  // ── Tipos de lesión ───────────────────────────────────────────────
+  var LESION_TIPOS = [
+    { grado:1, nombre:'Leve',     emoji:'🟡', prob:0.42,
+      ejemplos:['Sobrecarga muscular','Contusión leve','Molestias musculares'],
+      minPartidos:1, maxPartidos:2 },
+    { grado:2, nombre:'Moderada', emoji:'🟠', prob:0.55,
+      ejemplos:['Rotura fibrilar','Esguince de tobillo Grado II','Distensión isquiotibial'],
+      minPartidos:2, maxPartidos:5 },
+    { grado:3, nombre:'Grave',    emoji:'🔴', prob:0.03,
+      ejemplos:['Rotura LCA','Fractura tibia/peroné','Rotura de menisco'],
+      minPartidos:6, maxPartidos:24 }
+  ];
+
+  // Probabilidad base de lesión por partido por equipo: ~6%
+  // Sube a ~9% si el equipo juega en competición europea
+  var PROB_LESION_BASE = 0.06;
+  var PROB_LESION_EURO = 0.09; // fatiga acumulada
+
+  var EQUIPOS_EUROPEOS = [
+    'Real Madrid','FC Barcelona','Atlético Madrid','Real Sociedad','Athletic Club',
+    'Villarreal CF','Real Betis','Sevilla FC','Girona FC'
+  ];
+
+  function tieneEuropa(teamName) {
+    return EQUIPOS_EUROPEOS.indexOf(teamName) !== -1;
+  }
+
+  function sortearGrado() {
+    var r = Math.random();
+    if (r < 0.42) return LESION_TIPOS[0]; // Leve
+    if (r < 0.97) return LESION_TIPOS[1]; // Moderada
+    return LESION_TIPOS[2];               // Grave
+  }
+
+  function sortearPartidos(tipo) {
+    var min = tipo.minPartidos;
+    var max = tipo.maxPartidos;
+    return min + Math.floor(Math.random() * (max - min + 1));
+  }
+
+  function sortearEjemplo(tipo) {
+    return tipo.ejemplos[Math.floor(Math.random() * tipo.ejemplos.length)];
+  }
+
+  // ── Registrar lesión en BAJA_STORE + LESION_STORE ─────────────────
+  function registrarLesion(nombreJugador, equipoNombre, partidos, tipo) {
+    // BAJA_STORE: partidos en todas las competiciones = partidos totales
+    window.BAJA_STORE[nombreJugador] = {
+      tipo: 'lesion',
+      liga:   partidos,
+      copa:   partidos,
+      europa: partidos
+    };
+    // LESION_STORE: detalle
+    window.LESION_STORE[nombreJugador] = {
+      equipo:      equipoNombre,
+      grado:       tipo.grado,
+      gradoNombre: tipo.nombre,
+      gradoEmoji:  tipo.emoji,
+      descripcion: sortearEjemplo(tipo),
+      partidos:    partidos,
+      timestamp:   Date.now()
+    };
+    // Actualizar visual en plantilla
+    _actualizarPlantillaLesion(nombreJugador, partidos, tipo);
+  }
+
+  function _actualizarPlantillaLesion(nombre, partidos, tipo) {
+    document.querySelectorAll('.plant-row[data-player="' + nombre.replace(/"/g,'&quot;') + '"]').forEach(function(row) {
+      row.classList.remove('baja-lesion','baja-sancion','baja-expulsion');
+      row.classList.add('baja-lesion');
+      var btn = row.querySelector('.plant-baja-btn');
+      if (btn) {
+        btn.textContent = '🩹';
+        btn.className = 'plant-baja-btn lesion';
+        btn.title = tipo.gradoNombre + ' · ' + partidos + ' partidos';
+      }
+      var badge = row.querySelector('.plant-baja-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'plant-baja-badge';
+        var nameEl = row.querySelector('.plant-name');
+        if (nameEl) nameEl.appendChild(badge);
+      }
+      badge.textContent = tipo.emoji + ' +' + partidos;
+      badge.style.display = 'inline';
+      badge.style.color = tipo.grado === 3 ? '#ff4444' : tipo.grado === 2 ? '#ff8c00' : '#ffd700';
+    });
+    if (typeof window._refreshSancionInjList === 'function') window._refreshSancionInjList();
+  }
+
+  // ── Motor de lesiones para IA vs IA ───────────────────────────────
+  // Llamado desde mlSimEngine al generar eventos
+  window.generarLesionesPartido = function(TEAM_A, TEAM_B, activeA, activeB, benA, benB, ft90) {
+    var lesiones = [];
+
+    function intentarLesion(equipo, teamName, active, ben, subIdx) {
+      var probBase = tieneEuropa(teamName) ? PROB_LESION_EURO : PROB_LESION_BASE;
+      if (Math.random() > probBase) return null;
+
+      // Solo jugadores de campo titulares activos no ya lesionados
+      var candidatos = active.filter(function(p) {
+        return p[2] !== 'P' && !window.BAJA_STORE[p[1]];
+      });
+      if (!candidatos.length) return null;
+
+      var lesionado = candidatos[Math.floor(Math.random() * candidatos.length)];
+      var tipo = sortearGrado();
+      var partidos = sortearPartidos(tipo);
+      var minLesion = 5 + Math.floor(Math.random() * (ft90 - 10));
+
+      // Sustituto: el mejor disponible del banquillo
+      var sustituto = null;
+      for (var i = subIdx; i < ben.length; i++) {
+        if (!window.BAJA_STORE[ben[i][1]]) { sustituto = ben[i]; break; }
+      }
+
+      return {
+        equipo: equipo, teamName: teamName,
+        jugador: lesionado, sustituto: sustituto,
+        tipo: tipo, partidos: partidos, min: minLesion
+      };
+    }
+
+    var lesA = intentarLesion('a', TEAM_A, activeA, benA, 0);
+    var lesB = intentarLesion('b', TEAM_B, activeB, benB, 0);
+    if (lesA) lesiones.push(lesA);
+    if (lesB) lesiones.push(lesB);
+    return lesiones;
+  };
+
+  // ── Aplicar lesión en el simulador ─────────────────────────────────
+  // Devuelve evento para insertar en evts[]
+  window.aplicarLesionEnSimulacion = function(lesion, activeA, activeB) {
+    var active = lesion.equipo === 'a' ? activeA : activeB;
+
+    // Quitar al lesionado del campo
+    var idx = active.indexOf(lesion.jugador);
+    if (idx >= 0) active.splice(idx, 1);
+
+    // Añadir sustituto si hay
+    if (lesion.sustituto) active.push(lesion.sustituto);
+
+    // Registrar en BAJA_STORE
+    registrarLesion(lesion.jugador[1], lesion.teamName, lesion.partidos, lesion.tipo);
+
+    // Crear evento para el acta (SIN sustitución visible)
+    return {
+      min: lesion.min,
+      ico: '🩹',
+      team: lesion.equipo,
+      player: lesion.jugador,
+      type: 'lesion',
+      gradoNombre: lesion.tipo.nombre,
+      gradoEmoji: lesion.tipo.emoji,
+      partidos: lesion.partidos,
+      grave: lesion.tipo.grado === 3
+    };
+  };
+
+  // ── Overlay de lesiones post-partido (HvH / IA vs H) ──────────────
+  window.LESIONES_PARTIDO_ACTUAL = [];
+
+  window.showLesionPostOverlay = function(lesiones, onConfirm) {
+    var el = document.getElementById('lesion-post-overlay');
+    if (!el) {
+      // Crear el overlay si no existe en el HTML
+      el = document.createElement('div');
+      el.id = 'lesion-post-overlay';
+      el.className = 'lesion-post-ov';
+      el.innerHTML = _buildLesionOverlayHTML();
+      document.body.appendChild(el);
+    }
+
+    // Rellenar contenido
+    var listEl = document.getElementById('lpost-list');
+    var subEl  = document.getElementById('lpost-sub');
+    var iconEl = document.getElementById('lpost-icon');
+
+    if (!lesiones || !lesiones.length) {
+      if (onConfirm) onConfirm();
+      return;
+    }
+
+    window._lesionPostCallback = onConfirm || null;
+
+    var hayGrave = lesiones.some(function(l) { return l.grado === 3 || (l.tipo && l.tipo.grado === 3); });
+    iconEl.textContent = hayGrave ? '🔴' : '🩹';
+    subEl.textContent  = lesiones.length === 1 ? 'UN JUGADOR LESIONADO' : lesiones.length + ' JUGADORES LESIONADOS';
+
+    listEl.innerHTML = lesiones.map(function(l) {
+      var grado   = l.grado || (l.tipo && l.tipo.grado) || 1;
+      var gradoNm = l.gradoNombre || (l.tipo && l.tipo.nombre) || 'Leve';
+      var gradoEm = l.gradoEmoji  || (l.tipo && l.tipo.emoji) || '🟡';
+      var nombre  = l.jugador ? l.jugador[1] : (l.nombre || '');
+      var equipo  = l.teamName || l.equipo || '';
+      var desc    = l.descripcion || (l.tipo && sortearEjemplo(l.tipo)) || '';
+      var parts   = l.partidos || 1;
+      var colorGrado = grado === 3 ? '#ff4444' : grado === 2 ? '#ff8c00' : '#ffd700';
+      return '<div class="lpost-card">'
+        + '<div class="lpost-card-badge" style="background:' + colorGrado + '22;color:' + colorGrado + ';border-color:' + colorGrado + '44">' + gradoEm + ' LESIÓN ' + gradoNm.toUpperCase() + '</div>'
+        + '<div class="lpost-card-body">'
+        + '<div class="lpost-card-name">' + nombre + '</div>'
+        + '<div class="lpost-card-team">' + equipo + '</div>'
+        + '<div class="lpost-card-desc">' + desc + '</div>'
+        + '</div>'
+        + '<div class="lpost-card-partidos">'
+        + '<div class="lpost-partidos-num" style="color:' + colorGrado + '">' + parts + '</div>'
+        + '<div class="lpost-partidos-lbl">PARTIDO' + (parts > 1 ? 'S' : '') + '</div>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+
+    el.classList.add('show');
+    window.scrollTo(0, 0);
+  };
+
+  window._lesionPostConfirm = function() {
+    var el = document.getElementById('lesion-post-overlay');
+    if (el) el.classList.remove('show');
+    if (window._lesionPostCallback) { window._lesionPostCallback(); window._lesionPostCallback = null; }
+  };
+
+  function _buildLesionOverlayHTML() {
+    return '<div class="lpost-inner">'
+      + '<div class="lpost-icons"><span id="lpost-icon">🩹</span></div>'
+      + '<div class="lpost-title">PARTE MÉDICO</div>'
+      + '<div class="lpost-sub" id="lpost-sub">JUGADORES LESIONADOS</div>'
+      + '<div class="lpost-list" id="lpost-list"></div>'
+      + '<button class="lpost-btn" onclick="window._lesionPostConfirm()">✓ ENTENDIDO</button>'
+      + '</div>';
+  }
+
+  // ── CSS inline para el overlay ────────────────────────────────────
+  var _lesionStyle = document.createElement('style');
+  _lesionStyle.textContent = [
+    '.lesion-post-ov{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.92);',
+    'overflow-y:auto;padding:20px 16px 40px;}',
+    '.lesion-post-ov.show{display:flex;flex-direction:column;align-items:center;}',
+    '.lpost-inner{width:100%;max-width:420px;display:flex;flex-direction:column;align-items:center;gap:8px;}',
+    '.lpost-icons{font-size:48px;margin-bottom:4px;filter:drop-shadow(0 0 12px rgba(255,100,100,0.6));}',
+    '.lpost-title{font-family:Oswald,sans-serif;font-size:26px;font-weight:700;letter-spacing:4px;',
+    'color:#fff;text-transform:uppercase;margin-bottom:2px;}',
+    '.lpost-sub{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,0.5);',
+    'text-transform:uppercase;margin-bottom:12px;}',
+    '.lpost-list{width:100%;display:flex;flex-direction:column;gap:10px;margin-bottom:20px;}',
+    '.lpost-card{width:100%;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);',
+    'border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;}',
+    '.lpost-card-badge{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;padding:3px 8px;',
+    'border-radius:4px;border:1px solid;text-align:center;white-space:nowrap;flex-shrink:0;}',
+    '.lpost-card-body{flex:1;min-width:0;}',
+    '.lpost-card-name{font-family:Oswald,sans-serif;font-size:15px;font-weight:600;color:#fff;}',
+    '.lpost-card-team{font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:3px;}',
+    '.lpost-card-desc{font-size:12px;color:rgba(255,255,255,0.6);font-style:italic;}',
+    '.lpost-card-partidos{display:flex;flex-direction:column;align-items:center;flex-shrink:0;min-width:40px;}',
+    '.lpost-partidos-num{font-family:Oswald,sans-serif;font-size:28px;font-weight:700;line-height:1;}',
+    '.lpost-partidos-lbl{font-family:Oswald,sans-serif;font-size:8px;letter-spacing:1px;color:rgba(255,255,255,0.4);}',
+    '.lpost-btn{width:100%;max-width:340px;padding:16px;background:#e03c3c;border:none;border-radius:10px;',
+    'color:#fff;font-family:Oswald,sans-serif;font-size:16px;font-weight:700;letter-spacing:3px;',
+    'cursor:pointer;text-transform:uppercase;}',
+    '.lpost-btn:active{opacity:0.8;}',
+    // Grave: animación STOP en timer
+    '.ml-timer.grave-stop{animation:grave-pulse 0.8s ease-in-out infinite;color:#ff4444 !important;}',
+    '@keyframes grave-pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}'
+  ].join('');
+  document.head.appendChild(_lesionStyle);
+
+  // ── Conectar con procesarSancionesPostPartido ─────────────────────
+  // Después de sanciones → mostrar lesiones si las hay
+  var _origProcesarSanciones = window.procesarSancionesPostPartido;
+  window.procesarSancionesPostPartido = function(events, humanTeam, teamName, compKey) {
+    var sanciones = window.calcularSancionesPartido(events, humanTeam, teamName, compKey);
+    // Lesiones registradas en este partido (HvH / IA vs H)
+    var lesiones = window.LESIONES_PARTIDO_ACTUAL || [];
+    window.LESIONES_PARTIDO_ACTUAL = []; // reset para el siguiente partido
+
+    if (sanciones && sanciones.length) {
+      // Primero sanciones, luego lesiones
+      window.showSancionPostOverlay(sanciones, compKey, function() {
+        if (lesiones.length) {
+          window.showLesionPostOverlay(lesiones, null);
+        }
+      });
+    } else if (lesiones.length) {
+      // Solo lesiones
+      window.showLesionPostOverlay(lesiones, null);
+    }
+    // Si nada, no mostrar nada (no llamar al original)
+  };
+
+  // ── Actualizar _refreshSancionInjList con LESION_STORE ────────────
+  var _origRefresh = window._refreshSancionInjList;
+  window._refreshSancionInjList = function() {
+    var listInj = document.getElementById('sancion-ov-list-inj');
+    if (!listInj) return;
+    var lesiones = Object.keys(window.LESION_STORE);
+    if (!lesiones.length) {
+      listInj.innerHTML = '<div class="sancion-empty">🚑 Sin lesionados</div>';
+      return;
+    }
+    listInj.innerHTML = lesiones.map(function(nombre) {
+      var l = window.LESION_STORE[nombre];
+      var colorGrado = l.grado === 3 ? '#ff4444' : l.grado === 2 ? '#ff8c00' : '#ffd700';
+      var p = window.BAJA_STORE[nombre] || {};
+      var partsTxt = '';
+      if (p.liga > 0) partsTxt += '<span style="margin-right:8px">🇪🇸 ' + p.liga + 'P</span>';
+      if (p.copa > 0) partsTxt += '<span style="margin-right:8px">🏆 ' + p.copa + 'P</span>';
+      if (p.europa > 0) partsTxt += '<span>🌍 ' + p.europa + 'P</span>';
+      return '<div class="sancion-card">'
+        + '<div class="sancion-card-icon">🩹</div>'
+        + '<div class="sancion-card-info">'
+        + '<div class="sancion-card-name">' + nombre + '</div>'
+        + '<div class="sancion-card-team">' + l.equipo + '</div>'
+        + '<div class="sancion-card-reason" style="color:' + colorGrado + '">' + l.gradoEmoji + ' ' + l.gradoNombre + ' — ' + l.descripcion + '</div>'
+        + (partsTxt ? '<div style="font-family:Oswald,sans-serif;font-size:11px;color:#f0c040;margin-top:3px;letter-spacing:1px;">' + partsTxt + '</div>' : '')
+        + '</div>'
+        + '<div class="sancion-card-partidos"><span class="sancion-card-pnum" style="color:' + colorGrado + '">' + (p.liga || 0) + '</span><span class="sancion-card-plbl">PARTIDOS</span></div>'
+        + '</div>';
+    }).join('');
+    var warnEl = document.getElementById('sancion-ov-warn');
+    if (warnEl) warnEl.style.display = 'block';
+  };
+
+  // ── Generar lesión para partidos HvH / IA vs H ──────────────────
+  // Se llama al terminar el partido, genera 0 o 1 lesión por equipo
+  // y las guarda en LESIONES_PARTIDO_ACTUAL para mostrar en el overlay
+  window._generarLesionHumano = function(teamA, teamB) {
+    window.LESIONES_PARTIDO_ACTUAL = [];
+    [teamA, teamB].forEach(function(teamName, idx) {
+      var probBase = tieneEuropa(teamName) ? PROB_LESION_EURO : PROB_LESION_BASE;
+      if (Math.random() > probBase) return;
+      // Buscar jugadores del equipo en la plantilla DOM
+      var reg = window.SQUAD_REGISTRY && window.SQUAD_REGISTRY[teamName];
+      if (!reg) return;
+      var disponibles = reg.filter(function(p) {
+        return !p.h && !window.BAJA_STORE[p[1]];
+      });
+      if (!disponibles.length) return;
+      var lesionado = disponibles[Math.floor(Math.random() * disponibles.length)];
+      var tipo = sortearGrado();
+      var partidos = sortearPartidos(tipo);
+      registrarLesion(lesionado[1], teamName, partidos, tipo);
+      window.LESIONES_PARTIDO_ACTUAL.push({
+        jugador: [lesionado[0], lesionado[1]],
+        teamName: teamName,
+        tipo: tipo,
+        grado: tipo.grado,
+        gradoNombre: tipo.nombre,
+        gradoEmoji: tipo.emoji,
+        descripcion: sortearEjemplo(tipo),
+        partidos: partidos
+      });
+    });
+  };
+
+  window.LESION_STORE_UTILS = {
+    registrar: registrarLesion,
+    sortearGrado: sortearGrado,
+    sortearPartidos: sortearPartidos,
+    sortearEjemplo: sortearEjemplo,
+    tiposLesion: LESION_TIPOS
+  };
+
+  console.log('[eFootball] Sistema de Lesiones activado ✓');
+})();
+

@@ -5157,3 +5157,96 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   console.log('[eFootball] Sistema de Lesiones activado ✓');
 })();
 
+
+
+/* ══ FIX SCROLL — Restaurar posición tras añadir evento ══════════════
+   Cuando se confirma un jugador en el picker overlay, el DOM cambia
+   y el navegador pierde la posición de scroll. Este bloque guarda la
+   posición antes de abrir el overlay y la restaura al cerrarlo.
+   ══════════════════════════════════════════════════════════════════ */
+(function(){
+  var _savedScrollY = 0;
+
+  // Guardar scroll al abrir cualquier overlay de selección de jugador
+  var _origShowPl = {};
+  ['j1m1','j1m2','j1m3'].forEach(function(mid) {
+    var showFnName = 'mlShowPl_' + mid;
+    var hideFnName = 'mlHidePl_' + mid;
+    var confirmFnName = 'mlPlConfirm_' + mid;
+
+    // Parchear mlShowPl para guardar scroll
+    (function(fn) {
+      window[showFnName] = function() {
+        _savedScrollY = window.scrollY || window.pageYOffset || 0;
+        if (fn) fn.apply(this, arguments);
+      };
+    })(window[showFnName]);
+
+    // Parchear mlHidePl para restaurar scroll
+    (function(fn) {
+      window[hideFnName] = function() {
+        if (fn) fn.apply(this, arguments);
+        setTimeout(function() {
+          window.scrollTo({ top: _savedScrollY, behavior: 'instant' });
+        }, 0);
+      };
+    })(window[hideFnName]);
+
+    // Parchear mlPlConfirm para restaurar scroll tras confirmar
+    (function(fn) {
+      window[confirmFnName] = function(num, name) {
+        if (fn) fn.apply(this, arguments);
+        setTimeout(function() {
+          window.scrollTo({ top: _savedScrollY, behavior: 'instant' });
+        }, 30);
+      };
+    })(window[confirmFnName]);
+  });
+
+  // También aplicar a los overlays de selección de equipo (mlTPOverlay)
+  var _origTPSelect = {};
+  ['j1m1','j1m2','j1m3'].forEach(function(mid) {
+    var showTPName = 'mlShowTP_' + mid;
+    var hideTPName = 'mlHideTP_' + mid;
+
+    (function(fn) {
+      window[showTPName] = function() {
+        _savedScrollY = window.scrollY || window.pageYOffset || 0;
+        if (fn) fn.apply(this, arguments);
+      };
+    })(window[showTPName]);
+
+    (function(fn) {
+      window[hideTPName] = function() {
+        if (fn) fn.apply(this, arguments);
+        setTimeout(function() {
+          window.scrollTo({ top: _savedScrollY, behavior: 'instant' });
+        }, 0);
+      };
+    })(window[hideTPName]);
+  });
+
+  // También guardar scroll al abrir el overlay de eventos (mlShowEvOv)
+  ['j1m1','j1m2','j1m3'].forEach(function(mid) {
+    var showEvName = 'mlShowEvOv_' + mid;
+    var hideEvName = 'mlHideEvOv_' + mid;
+
+    (function(fn) {
+      window[showEvName] = function() {
+        _savedScrollY = window.scrollY || window.pageYOffset || 0;
+        if (fn) fn.apply(this, arguments);
+      };
+    })(window[showEvName]);
+
+    (function(fn) {
+      window[hideEvName] = function() {
+        if (fn) fn.apply(this, arguments);
+        setTimeout(function() {
+          window.scrollTo({ top: _savedScrollY, behavior: 'instant' });
+        }, 0);
+      };
+    })(window[hideEvName]);
+  });
+
+  console.log('[eFootball] Fix scroll overlay activado ✓');
+})();

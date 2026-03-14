@@ -3784,8 +3784,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     // Separar sanciones por tipo
     var san = sanciones.filter(function(s){ return s.tipo === 'amarilla' || !s.tipo; });
     var exp = sanciones.filter(function(s){ return s.tipo === 'roja' || s.tipo === 'd-amarilla'; });
-    // Lesionados: no hay sistema aún, siempre vacío por ahora
-    var inj = [];
+
 
     function renderCard(s, ico) {
       var partidos = s.partidos ? s.partidos : null;
@@ -3803,11 +3802,41 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       return '<div class="sancion-empty">' + txt + '</div>';
     }
 
+    // Lesionados desde LESION_STORE
+    var injList = window.LESION_STORE ? Object.keys(window.LESION_STORE) : [];
+
     listYel.innerHTML = san.length ? san.map(function(s){ return renderCard(s,'🟨'); }).join('') : renderEmpty('✅ Sin sancionados');
     listRed.innerHTML = exp.length ? exp.map(function(s){ return renderCard(s,'🟥'); }).join('') : renderEmpty('✅ Sin expulsados');
-    listInj.innerHTML = renderEmpty('🚑 Sin lesionados');
 
-    var hayBajas = san.length || exp.length || inj.length;
+    if (injList.length) {
+      listInj.innerHTML = injList.map(function(nombre) {
+        var l = window.LESION_STORE[nombre];
+        var p = window.BAJA_STORE && window.BAJA_STORE[nombre] ? window.BAJA_STORE[nombre] : {};
+        var colorGrado = l.grado === 3 ? '#ff4444' : l.grado === 2 ? '#ff8c00' : '#ffd700';
+        var partsTxt = '';
+        if (p.liga > 0)   partsTxt += '<span style="margin-right:8px">🇪🇸 ' + p.liga + 'P</span>';
+        if (p.copa > 0)   partsTxt += '<span style="margin-right:8px">🏆 ' + p.copa + 'P</span>';
+        if (p.europa > 0) partsTxt += '<span>🌍 ' + p.europa + 'P</span>';
+        return '<div class="sancion-card">'
+          + '<div class="sancion-card-icon">🩹</div>'
+          + '<div class="sancion-card-info">'
+          + '<div class="sancion-card-name">' + nombre + '</div>'
+          + '<div class="sancion-card-team">' + l.equipo + '</div>'
+          + '<div class="sancion-card-reason" style="color:' + colorGrado + '">' + l.gradoEmoji + ' ' + l.gradoNombre + ' — ' + l.descripcion + '</div>'
+          + (partsTxt ? '<div style="font-family:Oswald,sans-serif;font-size:11px;color:#f0c040;margin-top:3px;">' + partsTxt + '</div>' : '')
+          + '</div>'
+          + '</div>';
+      }).join('');
+    } else {
+      listInj.innerHTML = renderEmpty('🚑 Sin lesionados');
+    }
+
+    var hayBajas = san.length || exp.length || injList.length;
+    // ── SOLO mostrar el overlay si hay algo que informar ──────────
+    if (!hayBajas) {
+      if (onConfirm) onConfirm();
+      return;
+    }
     if (warnEl) warnEl.style.display = hayBajas ? 'block' : 'none';
 
     document.getElementById('sancion-overlay').classList.add('show');

@@ -2139,7 +2139,10 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       if(cntB>0) rB=Math.round(sumB/cntB);
     }
     // probA = probabilidad de que marque equipo A en cada evento de gol
-    var probA = rA / (rA + rB);
+    // ── VENTAJA LOCAL: equipo A es siempre el local (bonus pequeño ~3%) ──
+    var _localBonus = 0.03; // bonus discreto de localía
+    var _baseA = rA / (rA + rB);
+    var probA = Math.min(0.82, _baseA + _localBonus * (1 - _baseA));
     function rndSq(sq){
       var hasW=sq.some(function(p){return p[3]!==undefined;});
       if(!hasW) return sq[Math.floor(Math.random()*sq.length)];
@@ -2150,15 +2153,32 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     }
     // Usa activeA/activeB (jugadores en campo en ese momento)
     function rndActive(team){return team==='a'?activeA:activeB;}
+    // Peso de gol por posición (basado en estadísticas LaLiga)
+    function _posGoalWeight(pos, poder) {
+      var base;
+      if (pos === 'P') base = 0.001;       // Portero: 0.1%
+      else if (pos === 'D') base = 0.075;   // Defensa: 5-10% → media 7.5%
+      else if (pos === 'M') base = 0.175;   // Medio: 15-20% → media 17.5%
+      else base = 0.70;                      // Delantero: 65-75% → media 70%
+      // Boost por poder del jugador (normalizado: poder 70=base, 90=+15%)
+      var poderBoost = ((poder || 70) - 70) / 20 * 0.15;
+      return Math.max(0.001, base + poderBoost);
+    }
     function rndSqNonGK(sq){
       var active=sq===sqA?activeA:(sq===sqB?activeB:sq);
       if(!active||!active.length) return ['0','Jugador','M',70];
       var f=active.filter(function(p){return p[2]!=='P';});
       if(!f.length)f=active;
-      var tot=f.reduce(function(s,p){return s+(p[3]||30);},0);
+      // Usar peso combinado: poder × peso_posición
+      var tot=f.reduce(function(s,p){
+        return s + (p[3]||70) * _posGoalWeight(p[2], p[3]);
+      },0);
       if(!tot)return f[Math.floor(Math.random()*f.length)];
       var r=Math.random()*tot;var c=0;
-      for(var wi=0;wi<f.length;wi++){c+=(f[wi][3]||30);if(r<c)return f[wi];}
+      for(var wi=0;wi<f.length;wi++){
+        c+=(f[wi][3]||70)*_posGoalWeight(f[wi][2],f[wi][3]);
+        if(r<c)return f[wi];
+      }
       return f[f.length-1];
     }
     function rndGK(sq){
@@ -2310,13 +2330,39 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       evts.push({min:rndMin(),ico:'🚫',team:agt,player:agp,type:'propia'});
     }
 
-    // ── GOLES NORMALES (0-5) ─────────────────────────────────────────
+    // ── GOLES NORMALES con distribución Poisson por jugador ─────────
+    // Prob múltiples goles mismo jugador (LaLiga stats):
+    // 1 gol: 12% | 2 goles: 1.5% | 3: 0.2% | 4: 0.01% | 5+: 0.001%
     var _maxGoals = (rA >= 88 || rB >= 88) ? 7 : (rA >= 84 || rB >= 84) ? 6 : 5;
     var numGoals=Math.floor(Math.random()*(_maxGoals+1));
+    var _goalScorers = {}; // tracking goles por jugador
     for(var i=0;i<numGoals;i++){
       var gt=rndTeam(); var gsq=gt==='a'?sqA:sqB;
       var gMin=rndMin(); applySubsUpTo(gMin);
-      var gp=rndSqNonGK(gsq);
+      // Elegir goleador: puede repetir con prob decreciente (Poisson)
+      var gp;
+      // ¿Hay ya un goleador de este equipo que pueda repetir?
+      var prevScorers = Object.keys(_goalScorers).filter(function(k){ return _goalScorers[k].team===gt; });
+      var reusePlayer = false;
+      if (prevScorers.length) {
+        var topScorer = prevScorers.reduce(function(a,b){ return _goalScorers[a].count > _goalScorers[b].count ? a : b; });
+        var prevCount = _goalScorers[topScorer].count;
+        // Prob de doblete: 1.5% | hat-trick: 0.2% | póker: 0.01% | repóker: 0.001%
+        var reuseProb = prevCount === 1 ? 0.015 : prevCount === 2 ? 0.002 : prevCount === 3 ? 0.0001 : prevCount >= 4 ? 0.00001 : 0;
+        // Boost por poder del jugador
+        var scorer = _goalScorers[topScorer].player;
+        var poderBonus = ((scorer[3]||70) - 70) / 20 * 0.005;
+        reuseProb += poderBonus;
+        if (Math.random() < reuseProb) {
+          gp = scorer;
+          reusePlayer = true;
+        }
+      }
+      if (!reusePlayer) gp = rndSqNonGK(gsq);
+      // Registrar goleador
+      var gpKey = gt + '::' + gp[1];
+      if (!_goalScorers[gpKey]) _goalScorers[gpKey] = { player: gp, team: gt, count: 0 };
+      _goalScorers[gpKey].count++;
       if(gt==='a')sa++;else sb++;
       evts.push({min:gMin,ico:'⚽',team:gt,player:gp,type:'gol'});
     }
@@ -2423,22 +2469,28 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     var mvpGoalStr=mvpGoalCount>1?' ('+mvpGoalCount+'⚽)':'';
 
     // ── LIVE TICKER ───────────────────────────────────────────────────
-    var msPerMinFH=15000/ht45;
-    var msPerMinSH=15000/(ft90-45);
+    // Si ambos equipos ≥79 → 45s por parte (campo activo), sino 15s
+    var _campoMode = (rA >= 79 && rB >= 79);
+    var _halfDuration = _campoMode ? 45000 : 15000;
+    var _tickTotal = _campoMode ? 90 : 30;
+    var _tickMs = _campoMode ? 3000 : 1000;
+    var msPerMinFH = _halfDuration / ht45;
+    var msPerMinSH = _halfDuration / (ft90-45);
     list.innerHTML='';
 
     var _tick=0;
     var _tickInterval=setInterval(function(){
       _tick++;
-      if(_tick<=15){
-        var dm=Math.round(_tick*ht45/15); if(dm>ht45)dm=ht45;
-        btn.textContent=(_tick<15?dm:ht45+'+'+extraA)+"'";
-      } else if(_tick<=30){
-        var t2=_tick-15; var dm2=45+Math.round(t2*(ft90-45)/15); if(dm2>ft90)dm2=ft90;
+      var _half = Math.floor(_tickTotal / 3);
+      if(_tick<=_half){
+        var dm=Math.round(_tick*ht45/_half); if(dm>ht45)dm=ht45;
+        btn.textContent=(_tick<_half?dm:ht45+'+'+extraA)+"'";
+      } else if(_tick<=_tickTotal){
+        var t2=_tick-_half; var dm2=45+Math.round(t2*(ft90-45)/_half); if(dm2>ft90)dm2=ft90;
         btn.textContent=(dm2<=90?dm2:'90+'+extraB)+"'";
       }
-      if(_tick>=30)clearInterval(_tickInterval);
-    },1000);
+      if(_tick>=_tickTotal)clearInterval(_tickInterval);
+    },_tickMs);
 
     function renderEvtEl(ev){
       if(ev.type==='ht'||ev.type==='sub')return;
@@ -2478,10 +2530,10 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
 
     evts.forEach(function(ev){
       var ms;
-      if(ev.type==='ht'){ms=15000;}
+      if(ev.type==='ht'){ms=_halfDuration;}
       else if(ev.min<=ht45){ms=Math.round(ev.min*msPerMinFH);}
-      else{ms=15000+Math.round((ev.min-45)*msPerMinSH);}
-      ms=Math.min(ms,29500);
+      else{ms=_halfDuration+Math.round((ev.min-45)*msPerMinSH);}
+      ms=Math.min(ms,_halfDuration*2-500);
       setTimeout(function(){renderEvtEl(ev);},ms);
       if(ev.type==='gol'||ev.type==='falta-gol'||ev.type==='pen-gol'||ev.type==='propia'){
         setTimeout(function(){
@@ -2505,7 +2557,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     // Descanso
     setTimeout(function(){
       btn.textContent=ht45+"'+"; btn.className='ml-timer';
-    },15000);
+    },_halfDuration);
 
     // Tiempo reglamentario
     setTimeout(function(){
@@ -2543,7 +2595,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
         window.registrarLigaPlayerStats(matchKey,TEAM_A,TEAM_B,evts,mvpName,mvpTeam);
       list.appendChild(r);
       if(typeof cfg.onEnd==='function') cfg.onEnd(sa,sb,evts,mvpName,mvpTeam);
-    },30000);
+    },_halfDuration*2);
   };
 
 })();
@@ -5249,4 +5301,683 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   });
 
   console.log('[eFootball] Fix scroll overlay activado ✓');
+})();
+
+
+/* ══ PODER DE EQUIPO — Valor visible junto al escudo ════════════════
+   Muestra el poder/valor del equipo (sobre 100) discretamente
+   junto al nombre del equipo en marcadores y calendario.
+   ══════════════════════════════════════════════════════════════════ */
+(function(){
+
+  // Normalizar rating a escala 0-100
+  // Ratings van de ~68 (Albacete) a ~87 (Atlético)
+  function normalizarPoder(rating) {
+    var MIN_R = 68, MAX_R = 87;
+    var val = Math.round(((rating - MIN_R) / (MAX_R - MIN_R)) * 100);
+    return Math.max(1, Math.min(100, val));
+  }
+
+  function getPoderEquipo(teamName) {
+    var aliases = window.TEAM_ALIASES || {};
+    var resolved = aliases[(teamName||'').trim().toLowerCase()] || teamName;
+    var r = window.TEAM_RATINGS && (window.TEAM_RATINGS[resolved] || window.TEAM_RATINGS[teamName]);
+    if (!r) return null;
+    return normalizarPoder(r);
+  }
+
+  // Color discreto según poder
+  function poderColor(val) {
+    if (val >= 80) return 'rgba(240,192,64,0.75)';    // oro
+    if (val >= 60) return 'rgba(180,220,255,0.65)';   // azul claro
+    if (val >= 40) return 'rgba(160,160,160,0.60)';   // gris
+    return 'rgba(255,140,100,0.55)';                   // naranja suave
+  }
+
+  // CSS para el badge de poder
+  var _style = document.createElement('style');
+  _style.textContent = [
+    '.team-poder-badge{',
+    '  display:inline-block;',
+    '  font-family:Oswald,sans-serif;',
+    '  font-size:10px;',
+    '  font-weight:600;',
+    '  letter-spacing:0.5px;',
+    '  padding:1px 5px;',
+    '  border-radius:4px;',
+    '  background:rgba(255,255,255,0.07);',
+    '  border:1px solid rgba(255,255,255,0.12);',
+    '  margin-left:5px;',
+    '  vertical-align:middle;',
+    '  line-height:1.4;',
+    '  opacity:0.8;',
+    '  pointer-events:none;',
+    '}',
+    // En el marcador del partido (ml-header)
+    '.ml-team-name .team-poder-badge{font-size:9px;padding:1px 4px;}',
+    // En el calendario (.mn = nombre equipo en mrow)
+    '.mn .team-poder-badge{font-size:9px;padding:1px 4px;margin-left:4px;opacity:0.7;}'
+  ].join('');
+  document.head.appendChild(_style);
+
+  // Inyectar badge en un elemento de texto que contiene el nombre del equipo
+  function inyectarBadge(el, teamName) {
+    if (!el || el.querySelector('.team-poder-badge')) return;
+    var poder = getPoderEquipo(teamName);
+    if (!poder) return;
+    var badge = document.createElement('span');
+    badge.className = 'team-poder-badge';
+    badge.textContent = poder;
+    badge.style.color = poderColor(poder);
+    badge.title = teamName + ' — Poder: ' + poder + '/100';
+    el.appendChild(badge);
+  }
+
+  // 2. Calendario — nombres en filas .mrow
+  function inyectarEnCalendario() {
+    document.querySelectorAll('.mrow .mn').forEach(function(el) {
+      var txt = el.textContent.replace(/\d+$/, '').trim();
+      if (!txt || txt === 'Por definir') return;
+      // Solo añadir si no tiene ya badge
+      if (el.querySelector('.team-poder-badge')) return;
+      var poder = getPoderEquipo(txt);
+      if (!poder) return;
+      var badge = document.createElement('span');
+      badge.className = 'team-poder-badge';
+      badge.textContent = poder;
+      badge.style.color = poderColor(poder);
+      badge.title = txt + ' · Poder ' + poder + '/100';
+      el.appendChild(badge);
+    });
+  }
+
+  // Ejecutar al cargar y cuando se navega
+  function inyectarTodo() {
+    inyectarEnCalendario();
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(inyectarTodo, 200);
+  });
+
+  // Re-inyectar al cambiar de pantalla
+  var _origGoPoder = window.go;
+  window.go = function(id) {
+    if (_origGoPoder) _origGoPoder.apply(this, arguments);
+    setTimeout(inyectarTodo, 250);
+  };
+
+  // Observer para el calendario (se actualiza dinámicamente)
+  if (typeof MutationObserver !== 'undefined') {
+    var _obs = new MutationObserver(function() {
+      setTimeout(inyectarEnCalendario, 100);
+    });
+    document.addEventListener('DOMContentLoaded', function() {
+      var cal = document.getElementById('s-liga-cal');
+      if (cal) _obs.observe(cal, { childList:true, subtree:true });
+    });
+  }
+
+  console.log('[eFootball] Poder de equipos activado ✓');
+})();
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   CAMPO DE CHAPAS — Visualización táctica en tiempo real
+   Aparece en partidos IA vs IA cuando ambos equipos tienen rating ≥ 79
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  // ── Colores de equipos ────────────────────────────────────────────
+  var CAMPO_TEAM_COLORS = {
+    'Real Madrid':      { bg:'#ffffff', fg:'#003087', border:'#d4af37' },
+    'FC Barcelona':     { bg:'#a50044', fg:'#edbb00', border:'#003da5' },
+    'Atlético Madrid':  { bg:'#c50f1f', fg:'#ffffff', border:'#ffffff' },
+    'Athletic Club':    { bg:'#cc1010', fg:'#ffffff', border:'#000000' },
+    'Real Betis':       { bg:'#00a650', fg:'#ffffff', border:'#ffd700' },
+    'Real Sociedad':    { bg:'#003f8a', fg:'#d0dcf4', border:'#d0dcf4' },
+    'Sevilla FC':       { bg:'#ffffff', fg:'#c60b1e', border:'#c60b1e' },
+    'Villarreal CF':    { bg:'#ffd700', fg:'#1a1a1a', border:'#1a1a1a' },
+    'Celta de Vigo':    { bg:'#6fc6e2', fg:'#003da5', border:'#003da5' },
+    'Girona FC':        { bg:'#c8102e', fg:'#ffffff', border:'#ffffff' },
+    'Osasuna':          { bg:'#c8102e', fg:'#ffffff', border:'#000000' },
+    'Deportivo Alavés': { bg:'#003da5', fg:'#ffffff', border:'#ffffff' },
+    'Mallorca':         { bg:'#c8102e', fg:'#ffcc00', border:'#000000' },
+    'Rayo Vallecano':   { bg:'#ffffff', fg:'#e8000d', border:'#e8000d' },
+    'Valencia CF':      { bg:'#ffffff', fg:'#ef7d00', border:'#000000' },
+    'Espanyol':         { bg:'#003da5', fg:'#ffffff', border:'#ffffff' },
+    'Getafe CF':        { bg:'#003da5', fg:'#ffffff', border:'#a0a0a0' },
+    'Elche CF':         { bg:'#006633', fg:'#ffffff', border:'#ffffff' },
+    'Córdoba CF':       { bg:'#2a7e43', fg:'#ffffff', border:'#ffffff' },
+    'Albacete BP':      { bg:'#8b0000', fg:'#fff200', border:'#fff200' },
+    'Levante UD':       { bg:'#c8102e', fg:'#0057a8', border:'#0057a8' },
+    'Real Oviedo':      { bg:'#003da5', fg:'#ffffff', border:'#ffffff' },
+    'Sevilla':          { bg:'#ffffff', fg:'#c60b1e', border:'#c60b1e' },
+    'Villarreal':       { bg:'#ffd700', fg:'#1a1a1a', border:'#1a1a1a' },
+  };
+
+  function getTeamColors(name) {
+    var aliases = window.TEAM_ALIASES || {};
+    var resolved = aliases[(name||'').trim().toLowerCase()] || name;
+    return CAMPO_TEAM_COLORS[resolved] || CAMPO_TEAM_COLORS[name] || { bg:'#888', fg:'#fff', border:'#fff' };
+  }
+
+  // ── Formaciones 4-3-3 ────────────────────────────────────────────
+  // Posiciones normalizadas [x%, y%] — campo horizontal, equipo A ataca →
+  var FORMATION_A = [
+    // Portero
+    [8, 50],
+    // Defensas (4)
+    [22, 20], [22, 40], [22, 60], [22, 80],
+    // Medios (3)
+    [42, 25], [42, 50], [42, 75],
+    // Delanteros (3)
+    [65, 20], [65, 50], [65, 80]
+  ];
+  var FORMATION_B = [
+    // Portero
+    [92, 50],
+    // Defensas (4)
+    [78, 20], [78, 40], [78, 60], [78, 80],
+    // Medios (3)
+    [58, 25], [58, 50], [58, 75],
+    // Delanteros (3)
+    [35, 20], [35, 50], [35, 80]
+  ];
+
+  // ── Crear canvas del campo ────────────────────────────────────────
+  function createCampoElement(matchKey, teamA, teamB) {
+    var wrap = document.createElement('div');
+    wrap.id = 'campo-wrap-' + matchKey;
+    wrap.className = 'campo-wrap';
+    wrap.innerHTML =
+      '<div class="campo-header">'
+      + '<span class="campo-lbl">⚽ CAMPO EN VIVO</span>'
+      + '</div>'
+      + '<div class="campo-field" id="campo-field-' + matchKey + '">'
+      + '<canvas id="campo-canvas-' + matchKey + '" class="campo-canvas"></canvas>'
+      + '</div>';
+    return wrap;
+  }
+
+  // ── Dibujar campo ────────────────────────────────────────────────
+  function drawField(ctx, W, H) {
+    // Fondo verde
+    ctx.fillStyle = '#2d7a2d';
+    ctx.fillRect(0, 0, W, H);
+
+    // Líneas del campo
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
+
+    // Borde
+    ctx.strokeRect(8, 8, W-16, H-16);
+
+    // Línea central
+    ctx.beginPath();
+    ctx.moveTo(W/2, 8);
+    ctx.lineTo(W/2, H-8);
+    ctx.stroke();
+
+    // Círculo central
+    ctx.beginPath();
+    ctx.arc(W/2, H/2, H*0.12, 0, Math.PI*2);
+    ctx.stroke();
+
+    // Punto central
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath();
+    ctx.arc(W/2, H/2, 3, 0, Math.PI*2);
+    ctx.fill();
+
+    // Área grande izquierda
+    var aW = W*0.12, aH = H*0.44;
+    ctx.strokeRect(8, H/2 - aH/2, aW, aH);
+
+    // Área pequeña izquierda
+    var saW = W*0.05, saH = H*0.22;
+    ctx.strokeRect(8, H/2 - saH/2, saW, saH);
+
+    // Área grande derecha
+    ctx.strokeRect(W-8-aW, H/2 - aH/2, aW, aH);
+
+    // Área pequeña derecha
+    ctx.strokeRect(W-8-saW, H/2 - saH/2, saW, saH);
+
+    // Punto de penalti izquierdo
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(W*0.13, H/2, 2.5, 0, Math.PI*2);
+    ctx.fill();
+
+    // Punto de penalti derecho
+    ctx.beginPath();
+    ctx.arc(W*0.87, H/2, 2.5, 0, Math.PI*2);
+    ctx.fill();
+
+    // Franjas de césped (decorativas)
+    for (var s = 0; s < 8; s++) {
+      if (s % 2 === 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.08)';
+        ctx.fillRect(8 + s * (W-16)/8, 8, (W-16)/8, H-16);
+      }
+    }
+  }
+
+  // ── Estado de las chapas ─────────────────────────────────────────
+  var _campoStates = {};
+
+  function initCampoState(matchKey, teamA, teamB) {
+    var colA = getTeamColors(teamA);
+    var colB = getTeamColors(teamB);
+
+    var players = [];
+    // Equipo A (11 jugadores)
+    for (var i = 0; i < 11; i++) {
+      players.push({
+        team: 'a', idx: i,
+        x: FORMATION_A[i][0], y: FORMATION_A[i][1],
+        tx: FORMATION_A[i][0], ty: FORMATION_A[i][1], // target
+        bg: colA.bg, fg: colA.fg, border: colA.border,
+        num: i + 1, highlighted: false, expelled: false
+      });
+    }
+    // Equipo B (11 jugadores)
+    for (var j = 0; j < 11; j++) {
+      players.push({
+        team: 'b', idx: j,
+        x: FORMATION_B[j][0], y: FORMATION_B[j][1],
+        tx: FORMATION_B[j][0], ty: FORMATION_B[j][1],
+        bg: colB.bg, fg: colB.fg, border: colB.border,
+        num: j + 1, highlighted: false, expelled: false
+      });
+    }
+
+    // Balón
+    var ball = { x: 50, y: 50, tx: 50, ty: 50, visible: true };
+
+    _campoStates[matchKey] = {
+      players: players,
+      ball: ball,
+      teamA: teamA,
+      teamB: teamB,
+      animFrame: null,
+      lastEvent: null,
+      phase: 'idle' // idle | attack-a | attack-b | goal-a | goal-b
+    };
+    return _campoStates[matchKey];
+  }
+
+  // ── Animación suave de chapas ────────────────────────────────────
+  function animateCampo(matchKey) {
+    var state = _campoStates[matchKey];
+    if (!state) return;
+    var canvas = document.getElementById('campo-canvas-' + matchKey);
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var W = canvas.width, H = canvas.height;
+
+    // Mover chapas hacia target (lerp)
+    state.players.forEach(function(p) {
+      if (p.expelled) return;
+      p.x += (p.tx - p.x) * 0.08;
+      p.y += (p.ty - p.y) * 0.08;
+    });
+    // Mover balón
+    state.ball.x += (state.ball.tx - state.ball.x) * 0.10;
+    state.ball.y += (state.ball.ty - state.ball.y) * 0.10;
+
+    // Movimiento aleatorio sutil (breathing)
+    if (Math.random() < 0.02) {
+      randomMicroMove(state);
+    }
+
+    drawField(ctx, W, H);
+    drawPlayers(ctx, W, H, state);
+    drawBall(ctx, W, H, state.ball);
+
+    state.animFrame = requestAnimationFrame(function() { animateCampo(matchKey); });
+  }
+
+  function randomMicroMove(state) {
+    state.players.forEach(function(p) {
+      if (p.expelled) return;
+      var base = p.team === 'a' ? FORMATION_A[p.idx] : FORMATION_B[p.idx];
+      p.tx = base[0] + (Math.random() - 0.5) * 6;
+      p.ty = base[1] + (Math.random() - 0.5) * 6;
+      // Mantener en campo
+      p.tx = Math.max(5, Math.min(95, p.tx));
+      p.ty = Math.max(5, Math.min(95, p.ty));
+    });
+  }
+
+  function drawPlayers(ctx, W, H, state) {
+    state.players.forEach(function(p) {
+      if (p.expelled) return;
+      var px = p.x / 100 * W;
+      var py = p.y / 100 * H;
+      var r = Math.min(W, H) * 0.038;
+
+      // Sombra
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetY = 2;
+
+      // Círculo principal
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, Math.PI*2);
+      ctx.fillStyle = p.bg;
+      ctx.fill();
+
+      // Borde
+      ctx.strokeStyle = p.highlighted ? '#ffff00' : p.border;
+      ctx.lineWidth = p.highlighted ? 3 : 1.5;
+      ctx.stroke();
+      ctx.restore();
+
+      // Número
+      ctx.font = 'bold ' + Math.round(r * 0.85) + 'px Oswald,sans-serif';
+      ctx.fillStyle = p.fg;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(p.num, px, py + 0.5);
+    });
+  }
+
+  function drawBall(ctx, W, H, ball) {
+    if (!ball.visible) return;
+    var bx = ball.x / 100 * W;
+    var by = ball.y / 100 * H;
+    var br = Math.min(W, H) * 0.022;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    ctx.arc(bx, by, br, 0, Math.PI*2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Manchas del balón
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(bx - br*0.25, by - br*0.25, br*0.28, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Reaccionar a eventos del acta ────────────────────────────────
+  function procesarEventoCampo(matchKey, evType, evTeam, evMin) {
+    var state = _campoStates[matchKey];
+    if (!state) return;
+
+    if (evType === 'gol' || evType === 'pen-gol' || evType === 'falta-gol') {
+      reactionGol(state, evTeam);
+    } else if (evType === 'pen-parado') {
+      reactionPenParado(state, evTeam);
+    } else if (evType === 'card' || evType === 'roja' || evType === 'd-amarilla') {
+      reactionTarjeta(state, evTeam, evType);
+    } else if (evType === 'pen-prov') {
+      reactionPenalti(state, evTeam);
+    } else {
+      // Movimiento genérico de ataque
+      reactionAtaque(state, evTeam);
+    }
+  }
+
+  function reactionGol(state, team) {
+    // Atacantes del equipo que marca se juntan en el centro
+    var isA = team === 'a';
+    state.players.forEach(function(p) {
+      if (p.expelled) return;
+      if (p.team === team && p.idx >= 8) { // delanteros
+        p.tx = isA ? 50 + Math.random()*10 : 50 - Math.random()*10;
+        p.ty = 45 + Math.random()*10;
+        p.highlighted = true;
+        setTimeout(function() { p.highlighted = false; }, 3000);
+      }
+    });
+    // Balón va a la portería
+    state.ball.tx = isA ? 95 : 5;
+    state.ball.ty = 50;
+    setTimeout(function() {
+      // Vuelta al centro
+      state.ball.tx = 50; state.ball.ty = 50;
+      resetFormations(state);
+    }, 4000);
+  }
+
+  function reactionPenParado(state, gkTeam) {
+    // GK se desplaza al poste
+    var gk = state.players.find(function(p) { return p.team === gkTeam && p.idx === 0; });
+    if (gk) {
+      gk.tx = gkTeam === 'a' ? 5 : 95;
+      gk.ty = 35 + Math.random() * 30;
+      gk.highlighted = true;
+      setTimeout(function() { gk.highlighted = false; resetFormations(state); }, 3500);
+    }
+    // Balón rebota
+    state.ball.tx = gkTeam === 'a' ? 15 : 85;
+    state.ball.ty = 50;
+  }
+
+  function reactionTarjeta(state, team, type) {
+    if (type === 'roja' || type === 'd-amarilla') {
+      // Buscar un jugador del equipo para expulsar (no el portero)
+      var candidates = state.players.filter(function(p) {
+        return p.team === team && p.idx > 0 && !p.expelled;
+      });
+      if (candidates.length) {
+        var expelled = candidates[Math.floor(Math.random() * candidates.length)];
+        expelled.expelled = true;
+        expelled.tx = expelled.team === 'a' ? -5 : 105;
+      }
+    } else {
+      // Amarilla: jugador se detiene
+      reactionAtaque(state, team === 'a' ? 'b' : 'a');
+    }
+  }
+
+  function reactionPenalti(state, foulTeam) {
+    // Rival va al punto de penalti
+    var shootTeam = foulTeam === 'a' ? 'b' : 'a';
+    var striker = state.players.find(function(p) { return p.team === shootTeam && p.idx >= 8; });
+    if (striker) {
+      striker.tx = foulTeam === 'a' ? 13 : 87;
+      striker.ty = 50;
+    }
+    state.ball.tx = foulTeam === 'a' ? 13 : 87;
+    state.ball.ty = 50;
+  }
+
+  function reactionAtaque(state, team) {
+    var isA = team === 'a';
+    // Medios y delanteros avanzan
+    state.players.forEach(function(p) {
+      if (p.expelled) return;
+      if (p.team === team && p.idx >= 4) {
+        var base = isA ? FORMATION_A[p.idx] : FORMATION_B[p.idx];
+        var advance = isA ? 8 : -8;
+        p.tx = Math.max(5, Math.min(95, base[0] + advance));
+        p.ty = base[1] + (Math.random()-0.5)*8;
+      }
+    });
+    // Balón avanza
+    state.ball.tx = isA ? state.ball.x + 15 : state.ball.x - 15;
+    state.ball.tx = Math.max(5, Math.min(95, state.ball.tx));
+    setTimeout(resetFormations.bind(null, state), 3000);
+  }
+
+  function resetFormations(state) {
+    state.players.forEach(function(p) {
+      if (p.expelled) return;
+      var base = p.team === 'a' ? FORMATION_A[p.idx] : FORMATION_B[p.idx];
+      p.tx = base[0]; p.ty = base[1];
+    });
+  }
+
+  // ── CSS ──────────────────────────────────────────────────────────
+  var _campoStyle = document.createElement('style');
+  _campoStyle.textContent = [
+    '.campo-wrap{',
+    '  margin-top:12px;',
+    '  background:rgba(0,0,0,0.25);',
+    '  border:1px solid rgba(255,255,255,0.08);',
+    '  border-radius:10px;',
+    '  overflow:hidden;',
+    '}',
+    '.campo-header{',
+    '  padding:6px 12px;',
+    '  background:rgba(255,255,255,0.04);',
+    '  border-bottom:1px solid rgba(255,255,255,0.07);',
+    '  display:flex;align-items:center;gap:6px;',
+    '}',
+    '.campo-lbl{',
+    '  font-family:Oswald,sans-serif;',
+    '  font-size:10px;letter-spacing:2px;',
+    '  color:rgba(255,255,255,0.5);',
+    '  text-transform:uppercase;',
+    '}',
+    '.campo-field{',
+    '  padding:8px;',
+    '  display:flex;justify-content:center;',
+    '}',
+    '.campo-canvas{',
+    '  width:100%;',
+    '  max-width:440px;',
+    '  height:auto;',
+    '  border-radius:6px;',
+    '  display:block;',
+    '}'
+  ].join('');
+  document.head.appendChild(_campoStyle);
+
+  // ── Hook en mlSimEngine ──────────────────────────────────────────
+  // Detectar partidos ≥79 e inyectar el campo
+  var _origSimEngine = window.mlSimEngine;
+  window.mlSimEngine = function(cfg) {
+    var TEAM_A = (cfg.teamA || '').trim();
+    var TEAM_B = (cfg.teamB || '').trim();
+
+    // Resolver aliases
+    var aliases = window.TEAM_ALIASES || {};
+    var resolvedA = aliases[TEAM_A.toLowerCase()] || TEAM_A;
+    var resolvedB = aliases[TEAM_B.toLowerCase()] || TEAM_B;
+
+    var rA = window.TEAM_RATINGS && (window.TEAM_RATINGS[resolvedA] || window.TEAM_RATINGS[TEAM_A]) || 0;
+    var rB = window.TEAM_RATINGS && (window.TEAM_RATINGS[resolvedB] || window.TEAM_RATINGS[TEAM_B]) || 0;
+
+    var usarCampo = rA >= 79 && rB >= 79;
+
+    if (usarCampo) {
+      // Cambiar velocidad: 45s por parte (total ~90s)
+      var cfgMod = {};
+      Object.keys(cfg).forEach(function(k){ cfgMod[k] = cfg[k]; });
+      cfgMod._usarCampo = true;
+      cfgMod._teamAResolved = resolvedA;
+      cfgMod._teamBResolved = resolvedB;
+
+      // Inyectar canvas ANTES de simular
+      setTimeout(function() {
+        var listEl = document.getElementById(cfg.listId);
+        if (!listEl) return;
+        var matchWrap = listEl.closest('.match-live-wrap') || listEl.parentElement;
+        if (!matchWrap) return;
+
+        // Buscar o crear contenedor del campo
+        var existing = document.getElementById('campo-wrap-' + cfg.matchKey);
+        if (existing) existing.remove();
+
+        var campoEl = createCampoElement(cfg.matchKey, resolvedA, resolvedB);
+
+        // Insertar ENTRE el marcador y el acta
+        // El acta tiene id="acta-body-MATCHKEY" o está justo antes de ml-acta-list
+        var actaBody = matchWrap.querySelector('[id^="acta-body-"]') ||
+                       matchWrap.querySelector('[id^="acta-toggle-"]') ||
+                       document.getElementById(cfg.listId);
+        if (actaBody) {
+          // Insertar antes del bloque del acta
+          var actaParent = actaBody.parentElement || matchWrap;
+          actaParent.insertBefore(campoEl, actaBody);
+        } else {
+          matchWrap.appendChild(campoEl);
+        }
+
+        // Inicializar canvas con tamaño correcto
+        var canvas = document.getElementById('campo-canvas-' + cfg.matchKey);
+        if (canvas) {
+          canvas.width = 440;
+          canvas.height = 280;
+          var state = initCampoState(cfg.matchKey, resolvedA, resolvedB);
+          animateCampo(cfg.matchKey);
+        }
+
+        // Observar el acta para reaccionar a eventos
+        var actaList = document.getElementById(cfg.listId);
+        if (actaList) {
+          var _obs = new MutationObserver(function(mutations) {
+            mutations.forEach(function(m) {
+              m.addedNodes.forEach(function(node) {
+                if (!node.classList || !node.classList.contains('ml-evt-item')) return;
+                var type = node.getAttribute('data-type') || '';
+                var team = node.getAttribute('data-team') || 'a';
+                procesarEventoCampo(cfg.matchKey, type, team, 0);
+              });
+            });
+          });
+          _obs.observe(actaList, { childList: true });
+        }
+      }, 200);
+    }
+
+    // Llamar al engine original (con velocidad aumentada si procede)
+    if (usarCampo) {
+      // Guardar velocidades originales y aumentar a 45s por parte
+      var origNS = window._CAMPO_NORMAL_SPEED_ORIG || 1000;
+      var origES = window._CAMPO_ET_SPEED_ORIG || 233;
+      // 45s por parte = cada minuto dura 45000/45 = 1000ms → ya es 1000
+      // Para 45s queremos que 45 mins pasen en 45s: speed=1000 está bien
+      // Pero necesitamos que el ticker de 30 ticks (cada 1s) dure 90s
+      // El ticker actual usa 1000ms/tick, 30 ticks = 30s total
+      // Para 90s necesitamos 3000ms/tick → multiplicamos ×3
+      window._CAMPO_ACTIVE = true;
+      window._CAMPO_MATCH_KEY = cfg.matchKey;
+    }
+
+    return _origSimEngine ? _origSimEngine.apply(this, arguments) : undefined;
+  };
+
+  // ── Parchar el ticker de animación del simulador para 45s por parte ──
+  // El ticker original usa setInterval de 1000ms con 30 ticks = 30s
+  // Para 45s por parte queremos 45000ms / 15 ticks = 3000ms/tick
+  var _origSetInterval = window.setInterval;
+  // Parcheamos dentro de mlSimEngine extendiendo el cfg
+  // La forma más limpia: extender el onEnd para limpiar el campo
+  var _origGoCampo = window.go;
+  window.go = function(id) {
+    if (_origGoCampo) _origGoCampo.apply(this, arguments);
+    // Limpiar animaciones de campos al cambiar de pantalla
+    Object.keys(_campoStates).forEach(function(key) {
+      var s = _campoStates[key];
+      if (s && s.animFrame) {
+        cancelAnimationFrame(s.animFrame);
+        s.animFrame = null;
+      }
+    });
+    // Re-arrancar si volvemos a la misma pantalla
+    setTimeout(function() {
+      Object.keys(_campoStates).forEach(function(key) {
+        var canvas = document.getElementById('campo-canvas-' + key);
+        if (canvas && canvas.closest('.screen.active')) {
+          animateCampo(key);
+        }
+      });
+    }, 100);
+  };
+
+  console.log('[eFootball] Campo de chapas activado ✓');
 })();

@@ -2144,7 +2144,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     }
     // probA = probabilidad de que marque equipo A en cada evento de gol
     // ── VENTAJA LOCAL: equipo A es siempre el local (bonus pequeño ~3%) ──
-    var _localBonus = 0.03; // bonus discreto de localía
+    var _localBonus = 0.05; // bonus discreto de localía (mejor refleja ventaja local)
     var _baseA = rA / (rA + rB);
     var probA = Math.min(0.82, _baseA + _localBonus * (1 - _baseA));
     function rndSq(sq){
@@ -2334,14 +2334,45 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       evts.push({min:rndMin(),ico:'🚫',team:agt,player:agp,type:'propia'});
     }
 
-    // ── GOLES NORMALES con distribución Poisson por jugador ─────────
-    // Prob múltiples goles mismo jugador (LaLiga stats):
-    // 1 gol: 12% | 2 goles: 1.5% | 3: 0.2% | 4: 0.01% | 5+: 0.001%
+    // ── GOLES NORMALES con influencia real del rating ───────────────
+    // Antes solo se repartían los goles con probA; ahora también cambia
+    // la CANTIDAD esperada de goles de cada equipo según nivel.
+    function _clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+    function _poisson(lambda){
+      lambda = Math.max(0.05, lambda || 0.05);
+      var L = Math.exp(-lambda), k = 0, p = 1;
+      do { k++; p *= Math.random(); } while (p > L && k < 12);
+      return k - 1;
+    }
+    function _avgOutfieldPower(sq){
+      var pool=(sq||[]).filter(function(p){ return p && p[2] !== 'P'; });
+      if(!pool.length) return 70;
+      var sum=pool.reduce(function(acc,p){ return acc + (p[3] || 70); }, 0);
+      return sum / pool.length;
+    }
+    var _powA = _avgOutfieldPower(activeA.length ? activeA : sqA);
+    var _powB = _avgOutfieldPower(activeB.length ? activeB : sqB);
+    var _strengthA = rA + ((_powA - 75) * 0.35) + 1.5; // bonus local
+    var _strengthB = rB + ((_powB - 75) * 0.35);
+    var _shareA = _clamp(_strengthA / Math.max(1, (_strengthA + _strengthB)), 0.22, 0.78);
+    var _baseTotalGoals = 1.7 + (((rA + rB) / 2) - 74) * 0.05;
+    var _gapBoost = Math.abs(rA - rB) * 0.035;
+    var _expectedA = _clamp(_baseTotalGoals * _shareA + Math.max(0, rA - rB) * 0.018 + 0.10, 0.15, 3.8);
+    var _expectedB = _clamp(_baseTotalGoals * (1 - _shareA) + Math.max(0, rB - rA) * 0.018, 0.10, 3.3);
+    if (Math.abs(rA - rB) >= 8) {
+      if (rA > rB) _expectedA += _gapBoost * 0.35;
+      else _expectedB += _gapBoost * 0.35;
+    }
     var _maxGoals = (rA >= 88 || rB >= 88) ? 7 : (rA >= 84 || rB >= 84) ? 6 : 5;
-    var numGoals=Math.floor(Math.random()*(_maxGoals+1));
+    var goalsA = Math.min(_maxGoals, _poisson(_expectedA));
+    var goalsB = Math.min(_maxGoals, _poisson(_expectedB));
+    var _normalGoalTeams = [];
+    for (var ga = 0; ga < goalsA; ga++) _normalGoalTeams.push('a');
+    for (var gb = 0; gb < goalsB; gb++) _normalGoalTeams.push('b');
+    _normalGoalTeams.sort(function(){ return Math.random() - 0.5; });
     var _goalScorers = {}; // tracking goles por jugador
-    for(var i=0;i<numGoals;i++){
-      var gt=rndTeam(); var gsq=gt==='a'?sqA:sqB;
+    for(var i=0;i<_normalGoalTeams.length;i++){
+      var gt=_normalGoalTeams[i]; var gsq=gt==='a'?sqA:sqB;
       var gMin=rndMin(); applySubsUpTo(gMin);
       // Elegir goleador: puede repetir con prob decreciente (Poisson)
       var gp;
@@ -5145,19 +5176,6 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     'color:#fff;font-family:Oswald,sans-serif;font-size:16px;font-weight:700;letter-spacing:3px;',
     'cursor:pointer;text-transform:uppercase;}',
     '.lpost-btn:active{opacity:0.8;}',
-    '@media (max-width:768px){',
-    '.lesion-post-ov{padding:12px 10px 28px !important;align-items:stretch !important;}',
-    '.lesion-post-ov.show{display:flex !important;flex-direction:column !important;align-items:stretch !important;}',
-    '.lpost-inner{max-width:none !important;width:100% !important;gap:6px !important;}',
-    '.lpost-list{width:100% !important;max-width:none !important;gap:8px !important;}',
-    '.lpost-card{padding:12px !important;gap:10px !important;align-items:flex-start !important;flex-wrap:wrap !important;}',
-    '.lpost-card-badge{width:100% !important;white-space:normal !important;font-size:8px !important;letter-spacing:1px !important;}',
-    '.lpost-card-body{width:calc(100% - 56px) !important;min-width:0 !important;}',
-    '.lpost-card-name{font-size:14px !important;line-height:1.15 !important;word-break:break-word !important;}',
-    '.lpost-card-team,.lpost-card-desc{word-break:break-word !important;}',
-    '.lpost-card-partidos{margin-left:auto !important;min-width:36px !important;}',
-    '.lpost-btn{max-width:none !important;width:100% !important;}',
-    '}',
     // Grave: animación STOP en timer
     '.ml-timer.grave-stop{animation:grave-pulse 0.8s ease-in-out infinite;color:#ff4444 !important;}',
     '@keyframes grave-pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}'
@@ -5360,115 +5378,132 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
 /* ══ PODER DE EQUIPO — Valor visible junto al escudo ════════════════
    Muestra el poder/valor del equipo (sobre 100) discretamente
-   junto al nombre del equipo en marcadores y calendario.
+   junto al nombre del equipo en marcadores, previas y calendario,
+   sin contaminar textContent (usa data-attributes + ::after).
    ══════════════════════════════════════════════════════════════════ */
 (function(){
 
-  // Normalizar rating a escala 0-100
-  // Ratings van de ~68 (Albacete) a ~87 (Atlético)
-  function normalizarPoder(rating) {
-    var MIN_R = 68, MAX_R = 87;
-    var val = Math.round(((rating - MIN_R) / (MAX_R - MIN_R)) * 100);
-    return Math.max(1, Math.min(100, val));
-  }
-
   function getPoderEquipo(teamName) {
     var aliases = window.TEAM_ALIASES || {};
-    var resolved = aliases[(teamName||'').trim().toLowerCase()] || teamName;
-    var r = window.TEAM_RATINGS && (window.TEAM_RATINGS[resolved] || window.TEAM_RATINGS[teamName]);
+    var clean = (teamName || '').replace(/\s+\d+\s*\/\s*100$/,'').trim();
+    var resolved = aliases[clean.toLowerCase()] || clean;
+    var r = window.TEAM_RATINGS && (window.TEAM_RATINGS[resolved] || window.TEAM_RATINGS[clean]);
     if (!r) return null;
-    return normalizarPoder(r);
+    return Math.max(1, Math.min(100, Math.round(r)));
   }
 
-  // Color discreto según poder
-  function poderColor(val) {
-    if (val >= 80) return 'rgba(240,192,64,0.75)';    // oro
-    if (val >= 60) return 'rgba(180,220,255,0.65)';   // azul claro
-    if (val >= 40) return 'rgba(160,160,160,0.60)';   // gris
-    return 'rgba(255,140,100,0.55)';                   // naranja suave
+  function poderTone(val) {
+    if (val >= 84) return 'elite';
+    if (val >= 79) return 'alto';
+    if (val >= 74) return 'medio';
+    return 'base';
   }
 
-  // CSS para el badge de poder
   var _style = document.createElement('style');
   _style.textContent = [
-    '.team-poder-badge{',
-    '  display:inline-block;',
+    '[data-team-power]{position:relative;}',
+    '[data-team-power]::after{',
+    '  content:attr(data-team-power);',
+    '  display:inline-flex;',
+    '  align-items:center;',
+    '  justify-content:center;',
+    '  min-width:22px;',
+    '  margin-left:6px;',
+    '  padding:1px 6px;',
+    '  border-radius:999px;',
     '  font-family:Oswald,sans-serif;',
     '  font-size:10px;',
-    '  font-weight:600;',
-    '  letter-spacing:0.5px;',
-    '  padding:1px 5px;',
-    '  border-radius:4px;',
-    '  background:rgba(255,255,255,0.07);',
-    '  border:1px solid rgba(255,255,255,0.12);',
-    '  margin-left:5px;',
+    '  font-weight:700;',
+    '  letter-spacing:.35px;',
+    '  line-height:1.35;',
     '  vertical-align:middle;',
-    '  line-height:1.4;',
-    '  opacity:0.8;',
-    '  pointer-events:none;',
+    '  background:rgba(255,255,255,.07);',
+    '  border:1px solid rgba(255,255,255,.12);',
+    '  color:rgba(255,255,255,.82);',
+    '  box-sizing:border-box;',
     '}',
-    // En el marcador del partido (ml-header)
-    '.ml-team-name .team-poder-badge{font-size:9px;padding:1px 4px;}',
-    // En el calendario (.mn = nombre equipo en mrow)
-    '.mn .team-poder-badge{font-size:9px;padding:1px 4px;margin-left:4px;opacity:0.7;}'
+    '[data-team-power-tone="elite"]::after{color:rgba(255,215,130,.92);}',
+    '[data-team-power-tone="alto"]::after{color:rgba(193,229,255,.88);}',
+    '[data-team-power-tone="medio"]::after{color:rgba(222,222,222,.82);}',
+    '[data-team-power-tone="base"]::after{color:rgba(255,182,151,.78);}',
+    '.ml-team-name[data-team-power]::after{font-size:9px;padding:1px 5px;margin-left:5px;}',
+    '.mn[data-team-power]::after{font-size:9px;padding:1px 5px;margin-left:4px;opacity:.78;}',
+    '@media (max-width:768px){',
+    '  [data-team-power]::after{font-size:9px;padding:1px 5px;min-width:20px;margin-left:4px;}',
+    '}'
   ].join('');
   document.head.appendChild(_style);
 
-  // Inyectar badge en un elemento de texto que contiene el nombre del equipo
-  function inyectarBadge(el, teamName) {
-    if (!el || el.querySelector('.team-poder-badge')) return;
-    var poder = getPoderEquipo(teamName);
-    if (!poder) return;
-    var badge = document.createElement('span');
-    badge.className = 'team-poder-badge';
-    badge.textContent = poder;
-    badge.style.color = poderColor(poder);
-    badge.title = teamName + ' — Poder: ' + poder + '/100';
-    el.appendChild(badge);
+  function cleanVisibleTeamName(el) {
+    if (!el) return '';
+    var txt = (el.getAttribute('data-team-name') || el.textContent || '').trim();
+    txt = txt.replace(/\s+\d+\s*\/\s*100$/,'').trim();
+    return txt;
   }
 
-  // 2. Calendario — nombres en filas .mrow
-  function inyectarEnCalendario() {
+  function decorateTeamEl(el, explicitName) {
+    if (!el) return;
+    var teamName = (explicitName || cleanVisibleTeamName(el) || '').trim();
+    if (!teamName || teamName === 'Por definir') return;
+    var poder = getPoderEquipo(teamName);
+    if (!poder) return;
+    el.setAttribute('data-team-name', teamName);
+    el.setAttribute('data-team-power', String(poder));
+    el.setAttribute('data-team-power-tone', poderTone(poder));
+    el.title = teamName + ' · Poder ' + poder + '/100';
+  }
+
+  function injectCalendarPower() {
     document.querySelectorAll('.mrow .mn').forEach(function(el) {
-      var txt = el.textContent.replace(/\d+$/, '').trim();
-      if (!txt || txt === 'Por definir') return;
-      // Solo añadir si no tiene ya badge
-      if (el.querySelector('.team-poder-badge')) return;
-      var poder = getPoderEquipo(txt);
-      if (!poder) return;
-      var badge = document.createElement('span');
-      badge.className = 'team-poder-badge';
-      badge.textContent = poder;
-      badge.style.color = poderColor(poder);
-      badge.title = txt + ' · Poder ' + poder + '/100';
-      el.appendChild(badge);
+      decorateTeamEl(el);
+      var oldBadge = el.querySelector('.team-poder-badge');
+      if (oldBadge) oldBadge.remove();
     });
   }
 
-  // Ejecutar al cargar y cuando se navega
-  function inyectarTodo() {
-    inyectarEnCalendario();
+  function injectLiveHeaderPower() {
+    document.querySelectorAll('.ml-header').forEach(function(header) {
+      var names = header.querySelectorAll('.ml-team-name');
+      if (names[0]) decorateTeamEl(names[0]);
+      if (names[1]) decorateTeamEl(names[1]);
+    });
   }
 
+  function injectGenericPower() {
+    document.querySelectorAll('[data-team-a],[data-team-b]').forEach(function(box) {
+      var aName = box.getAttribute('data-team-a');
+      var bName = box.getAttribute('data-team-b');
+      var names = box.querySelectorAll('.ml-team-name,.mn,.team-name');
+      if (names[0] && aName) decorateTeamEl(names[0], aName);
+      if (names[1] && bName) decorateTeamEl(names[1], bName);
+    });
+  }
+
+  function injectAllTeamPower() {
+    injectCalendarPower();
+    injectLiveHeaderPower();
+    injectGenericPower();
+  }
+
+  window.getPoderEquipoVisible = getPoderEquipo;
+  window.injectAllTeamPower = injectAllTeamPower;
+
   document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(inyectarTodo, 200);
+    setTimeout(injectAllTeamPower, 180);
   });
 
-  // Re-inyectar al cambiar de pantalla
   var _origGoPoder = window.go;
   window.go = function(id) {
     if (_origGoPoder) _origGoPoder.apply(this, arguments);
-    setTimeout(inyectarTodo, 250);
+    setTimeout(injectAllTeamPower, 180);
   };
 
-  // Observer para el calendario (se actualiza dinámicamente)
   if (typeof MutationObserver !== 'undefined') {
     var _obs = new MutationObserver(function() {
-      setTimeout(inyectarEnCalendario, 100);
+      setTimeout(injectAllTeamPower, 60);
     });
     document.addEventListener('DOMContentLoaded', function() {
-      var cal = document.getElementById('s-liga-cal');
-      if (cal) _obs.observe(cal, { childList:true, subtree:true });
+      _obs.observe(document.body, { childList:true, subtree:true });
     });
   }
 

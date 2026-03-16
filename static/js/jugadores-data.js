@@ -1,0 +1,24 @@
+const JUGADORES_DATA = {
+    "Real Madrid": ["Kylian Mbappé", "Vinicius Júnior", "Rodrygo", "Jude Bellingham", "Federico Valverde"],
+    "FC Barcelona": ["Robert Lewandowski", "Lamine Yamal", "Raphinha", "Pedri", "Gavi"],
+    "Atletico Madrid": ["Julián Alvarez", "Antoine Griezmann", "Alexander Sørloth", "Marcos Llorente"],
+    "Athletic Club": ["Nico Williams", "Iñaki Williams", "Gorka Guruzeta", "Oihan Sancet"],
+    "Villarreal": ["Gerard Moreno", "Ayoze Pérez", "Nicolas Pépé"],
+    "Betis": ["Cucho Hernández", "Isco", "Giovani Lo Celso", "Abde"],
+    "Osasuna": ["Ante Budimir", "Bryan Zaragoza", "Aimar Oroz"],
+    "Real Sociedad": ["Mikel Oyarzabal", "Takefusa Kubo", "Brais Méndez"],
+    "Girona": ["Cristhian Stuani", "Bryan Gil", "Viktor Tsygankov"],
+    "Rayo Vallecano": ["James Rodríguez", "Isi Palazón", "Sergio Camello"],
+    "Espanyol": ["Javi Puado", "Alejo Véliz", "Cardona"],
+    "Celta": ["Iago Aspas", "Borja Iglesias", "Williot Swedberg"],
+    "Mallorca": ["Vedat Muriqi", "Abdon Prats", "Cyle Larin"],
+    "Valencia": ["Hugo Duro", "Diego López", "Pepelu"],
+    "Sevilla": ["Isaac Romero", "Lukebakio", "Suso"],
+    "Getafe": ["Borja Mayoral", "Carles Pérez", "Uche"],
+    "Deportivo Alavés": ["Toni Martínez", "Kike García", "Carlos Vicente"],
+    "Elche": ["Sory Kaba", "Oscar Plano", "Nico Castro"],
+    "Real Oviedo": ["Alemao", "Santi Cazorla", "Ilyas Chaira"],
+    "Levante": ["José Luis Morales", "Carlos Álvarez", "Brugué"]
+};
+
+window.JUGADORES_DATA = JUGADORES_DATA;

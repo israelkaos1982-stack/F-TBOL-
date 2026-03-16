@@ -1,6 +1,5 @@
-// data-teams.js
 window.TEAM_RATINGS = {
-    // --- 1ª DIVISIÓN ---
+    // --- PRIMERA DIVISIÓN ---
     "Barcelona": { media: 85, color: "#004d98" },
     "Real Madrid": { media: 85, color: "#ffffff" },
     "Atlético Madrid": { media: 83, color: "#cb3524" },
@@ -22,7 +21,7 @@ window.TEAM_RATINGS = {
     "Levante UD": { media: 73, color: "#004d98" },
     "Real Oviedo": { media: 73, color: "#004a99" },
 
-    // --- 2ª DIVISIÓN ---
+    // --- SEGUNDA DIVISIÓN (Tus datos literales) ---
     "Real Racing Club": { media: 74, color: "#006b3e" },
     "Deportivo La Coruña": { media: 72, color: "#005ca9" },
     "Almería": { media: 72, color: "#e41b13" },

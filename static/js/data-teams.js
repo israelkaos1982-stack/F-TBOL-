@@ -1,26 +1,48 @@
-const CONFIG_EQUIPOS = {
-    "FC Barcelona": { media: 85, color: "#004d98" },
+// data-teams.js
+window.TEAM_RATINGS = {
+    // --- 1ª DIVISIÓN ---
+    "Barcelona": { media: 85, color: "#004d98" },
     "Real Madrid": { media: 85, color: "#ffffff" },
-    "Atletico Madrid": { media: 83, color: "#cb3524" },
-    "Athletic Club": { media: 79, color: "#ff0000" },
+    "Atlético Madrid": { media: 83, color: "#cb3524" },
     "Villarreal": { media: 80, color: "#ffe200" },
-    "Betis": { media: 79, color: "#0bb363" },
-    "Osasuna": { media: 77, color: "#9e0b1c" },
+    "Real Betis": { media: 79, color: "#0bb363" },
+    "Celta Vigo": { media: 76, color: "#87adcf" },
     "Real Sociedad": { media: 79, color: "#0067b1" },
-    "Girona": { media: 77, color: "#e2001a" },
-    "Rayo Vallecano": { media: 77, color: "#ffffff" },
     "Espanyol": { media: 76, color: "#0088ce" },
-    "Celta": { media: 76, color: "#87adcf" },
-    "Mallorca": { media: 76, color: "#e30613" },
-    "Valencia": { media: 76, color: "#ffffff" },
-    "Sevilla": { media: 75, color: "#ffffff" },
     "Getafe": { media: 75, color: "#00539b" },
+    "Athletic Club": { media: 79, color: "#ff0000" },
+    "Osasuna": { media: 77, color: "#9e0b1c" },
+    "Girona FC": { media: 77, color: "#e2001a" },
+    "Valencia": { media: 76, color: "#ffffff" },
+    "Rayo Vallecano": { media: 77, color: "#ffffff" },
+    "Sevilla": { media: 75, color: "#ffffff" },
+    "Mallorca": { media: 76, color: "#e30613" },
     "Deportivo Alavés": { media: 74, color: "#005ca9" },
     "Elche": { media: 74, color: "#ffffff" },
+    "Levante UD": { media: 73, color: "#004d98" },
     "Real Oviedo": { media: 73, color: "#004a99" },
-    "Levante": { media: 72, color: "#004d98" }
-};
 
-// Exportar para que otros archivos JS lo usen
-if (typeof module !== 'undefined') {
-    module.exports = CONFIG_EQUIPOS;
+    // --- 2ª DIVISIÓN ---
+    "Real Racing Club": { media: 74, color: "#006b3e" },
+    "Deportivo La Coruña": { media: 72, color: "#005ca9" },
+    "Almería": { media: 72, color: "#e41b13" },
+    "Málaga": { media: 72, color: "#009bd8" },
+    "CD Castellón": { media: 71, color: "#000000" },
+    "Las Palmas": { media: 71, color: "#ffe200" },
+    "Burgos Club de Fútbol": { media: 70, color: "#ffffff" },
+    "Sporting Gijón": { media: 70, color: "#ff0000" },
+    "AD Ceuta": { media: 69, color: "#ffffff" },
+    "Eibar": { media: 69, color: "#83012b" },
+    "Córdoba": { media: 68, color: "#ffffff" },
+    "Real Sociedad B U21": { media: 68, color: "#0067b1" },
+    "FC Andorra": { media: 68, color: "#ffcc00" },
+    "Cádiz": { media: 67, color: "#ffe200" },
+    "Granada": { media: 67, color: "#a61b2e" },
+    "Albacete Balompié": { media: 67, color: "#ffffff" },
+    "Real Valladolid": { media: 67, color: "#6d2d91" },
+    "Leganés": { media: 66, color: "#005ca9" },
+    "Huesca": { media: 66, color: "#005ca9" },
+    "Real Zaragoza": { media: 65, color: "#005ca9" },
+    "Cultural Leonesa": { media: 64, color: "#ffffff" },
+    "Mirandés": { media: 64, color: "#ff0000" }
+};

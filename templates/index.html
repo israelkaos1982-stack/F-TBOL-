@@ -1,14 +1,40 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>eFootball 6.0</title>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;600;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/index.bundle.css') }}?v=3.1">
-</head>
+    <meta charset="UTF-8">
+    <title>eFootball 6.0</title>
+    </head>
 <body>
-  {% include 'partials/misc_body.html' %}
-  <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=3.1"></script>
+
+    <script>
+        // PEGA AQUÍ EL CÓDIGO DE JUGADORES
+        const JUGADORES_DATA = {
+            "Real Madrid": ["Kylian Mbappé", "Vinicius Júnior", "Rodrygo", "Jude Bellingham", "Federico Valverde"],
+            "FC Barcelona": ["Robert Lewandowski", "Lamine Yamal", "Raphinha", "Pedri", "Gavi"],
+            "Atletico Madrid": ["Julián Alvarez", "Antoine Griezmann", "Alexander Sørloth", "Marcos Llorente"],
+            "Athletic Club": ["Nico Williams", "Iñaki Williams", "Gorka Guruzeta", "Oihan Sancet"],
+            "Villarreal": ["Gerard Moreno", "Ayoze Pérez", "Nicolas Pépé"],
+            "Betis": ["Cucho Hernández", "Isco", "Giovani Lo Celso", "Abde"],
+            "Osasuna": ["Ante Budimir", "Bryan Zaragoza", "Aimar Oroz"],
+            "Real Sociedad": ["Mikel Oyarzabal", "Takefusa Kubo", "Brais Méndez"],
+            "Girona": ["Cristhian Stuani", "Bryan Gil", "Viktor Tsygankov"],
+            "Rayo Vallecano": ["James Rodríguez", "Isi Palazón", "Sergio Camello"],
+            "Espanyol": ["Javi Puado", "Alejo Véliz", "Cardona"],
+            "Celta": ["Iago Aspas", "Borja Iglesias", "Williot Swedberg"],
+            "Mallorca": ["Vedat Muriqi", "Abdon Prats", "Cyle Larin"],
+            "Valencia": ["Hugo Duro", "Diego López", "Pepelu"],
+            "Sevilla": ["Isaac Romero", "Lukebakio", "Suso"],
+            "Getafe": ["Borja Mayoral", "Carles Pérez", "Uche"],
+            "Deportivo Alavés": ["Toni Martínez", "Kike García", "Carlos Vicente"],
+            "Elche": ["Sory Kaba", "Oscar Plano", "Nico Castro"],
+            "Real Oviedo": ["Alemao", "Santi Cazorla", "Ilyas Chaira"],
+            "Levante": ["José Luis Morales", "Carlos Álvarez", "Brugué"]
+        };
+        window.JUGADORES_DATA = JUGADORES_DATA;
+    </script>
+
+    <script src="{{ url_for('static', filename='js/data-teams.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/match-engine.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/index.bundle.js') }}"></script>
 </body>
 </html>

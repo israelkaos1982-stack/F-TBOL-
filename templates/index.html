@@ -2,91 +2,86 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Simulador Liga eFootball | Barajas de Poder</title>
+    <title>eFootball - Simulador de Poder Real</title>
     <style>
-        :root { --bg: #0f0f1a; --card: #1a1a2e; --accent: #ff0055; }
-        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 20px; }
+        :root { --main-bg: #0b0e11; --panel: #15191c; --accent: #00ff88; }
+        body { background: var(--main-bg); color: #fff; font-family: 'Inter', sans-serif; margin: 0; }
         
-        .container { max-width: 900px; margin: 0 auto; }
+        .layout { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
         
-        /* Cabecera Estilo Twitch/eSports */
-        .match-setup { 
-            background: var(--card); border-radius: 15px; padding: 25px; 
-            display: flex; justify-content: space-around; align-items: center;
-            border: 1px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        /* Cabecera con los Escudos y Poderes */
+        .match-header { 
+            background: var(--panel); padding: 20px; display: flex; 
+            justify-content: center; align-items: center; gap: 50px;
+            border-bottom: 2px solid #222;
         }
 
-        .team-select { text-align: center; width: 35%; }
-        .team-select select { 
-            width: 100%; padding: 12px; background: #252545; color: white; 
-            border: 1px solid #444; border-radius: 8px; font-weight: bold;
-        }
-
-        .vs-badge { font-style: italic; font-weight: 900; color: #555; font-size: 1.5rem; }
-
-        /* Marcador Principal */
-        .live-score { 
-            text-align: center; margin: 30px 0; background: linear-gradient(180deg, #111, #000);
-            padding: 30px; border-radius: 20px; border: 2px solid #222;
-        }
-        #ml-timer-j1m1 { font-family: monospace; font-size: 2rem; color: #ffcc00; margin-bottom: 10px; }
-        .score-nums { font-size: 5rem; font-weight: 900; display: flex; justify-content: center; gap: 40px; }
-
-        /* Botón de Simulación */
-        .btn-simular { 
-            display: block; width: 100%; max-width: 300px; margin: 20px auto;
-            padding: 15px; background: #00ff88; color: #000; border: none; 
-            border-radius: 50px; font-weight: 900; text-transform: uppercase;
-            cursor: pointer; transition: 0.3s;
-        }
-        .btn-simular:hover { transform: scale(1.05); background: #00cc6e; }
-
-        /* Acta del Partido */
-        .acta { background: #050505; border-radius: 15px; padding: 20px; border: 1px solid #333; min-height: 300px; }
-        .acta h3 { border-bottom: 2px solid #222; padding-bottom: 10px; color: #666; font-size: 0.9rem; text-transform: uppercase; }
+        .team-box { text-align: center; width: 250px; }
         
-        .evento { 
-            display: flex; align-items: center; padding: 12px; border-bottom: 1px solid #111;
-            animation: fadeIn 0.5s ease;
+        /* El "Escudo" o Círculo de Poder */
+        .power-shield {
+            width: 80px; height: 80px; border-radius: 50%; 
+            border: 4px solid var(--accent); margin: 0 auto 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem; font-weight: 900; background: #000;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
         }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        /* Colores de las Cartas de Posición (Reglamento) */
-        .badge-pos { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; margin-right: 15px; }
-        .POR { background: #ffcc00; color: black; }
-        .DEF { background: #00ccff; color: black; }
-        .MED { background: #cc33ff; color: white; }
-        .DEL { background: #ff3333; color: white; }
+        .team-name { font-size: 1.2rem; font-weight: bold; text-transform: uppercase; }
+
+        /* Marcador */
+        .score-section { text-align: center; padding: 40px; }
+        .clock { font-size: 1.5rem; color: #ffcc00; font-family: monospace; margin-bottom: 10px; }
+        .numbers { font-size: 6rem; font-weight: 900; line-height: 1; }
+
+        /* Acta Estilo Carta */
+        .acta-scroll {
+            max-width: 600px; margin: 0 auto; height: 300px; 
+            overflow-y: auto; background: #000; border: 1px solid #333;
+            border-radius: 10px; padding: 15px;
+        }
+        .gol-card { 
+            padding: 15px; margin-bottom: 10px; border-radius: 5px; 
+            background: #1a1a1a; display: flex; justify-content: space-between;
+            border-left: 5px solid var(--accent);
+        }
+
+        .btn-play {
+            padding: 15px 40px; background: var(--accent); color: #000;
+            border: none; border-radius: 5px; font-weight: bold; cursor: pointer;
+            display: block; margin: 20px auto;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="match-setup">
-        <div class="team-select">
-            <h4 id="name-L">LOCAL</h4>
-            <select id="select-local" onchange="actualizarColores()"></select>
+<div class="layout">
+    <div class="match-header">
+        <div class="team-box">
+            <div id="shield-L" class="power-shield">--</div>
+            <select id="select-local" onchange="actualizarEscudos()"></select>
+            <div id="display-name-L" class="team-name">Local</div>
         </div>
-        <div class="vs-badge">VS</div>
-        <div class="team-select">
-            <h4 id="name-V">VISITANTE</h4>
-            <select id="select-visitante" onchange="actualizarColores()"></select>
-        </div>
-    </div>
 
-    <div class="live-score">
-        <div id="ml-timer-j1m1">00:00</div>
-        <div class="score-nums">
-            <span id="goles-L">0</span>
-            <span id="goles-V">0</span>
+        <div style="font-size: 2rem; font-weight: 900; color: #333;">VS</div>
+
+        <div class="team-box">
+            <div id="shield-V" class="power-shield">--</div>
+            <select id="select-visitante" onchange="actualizarEscudos()"></select>
+            <div id="display-name-V" class="team-name">Visitante</div>
         </div>
     </div>
 
-    <button class="btn-simular" onclick="comenzarPartido()">⚽ SIMULAR PODER</button>
+    <div class="score-section">
+        <div id="ml-timer-j1m1" class="clock">00:00</div>
+        <div class="numbers">
+            <span id="goles-L">0</span>:<span id="goles-V">0</span>
+        </div>
+        
+        <button class="btn-play" onclick="arrancarMotor()">SIMULAR PARTIDO</button>
 
-    <div class="acta">
-        <h3>■ ACTA DEL PARTIDO</h3>
-        <div id="ml-acta-list-j1m1"></div>
+        <div class="acta-scroll" id="ml-acta-list-j1m1">
+            </div>
     </div>
 </div>
 
@@ -96,8 +91,8 @@
 <script src="static/js/match-engine.js"></script>
 
 <script>
-    // 1. Cargamos tus datos de "data-teams.js" en los selectores
-    const EQUIPOS_DATA = {
+    // TU BASE DE DATOS REAL (LA QUE MANDA)
+    const BASE_PODER = {
         "FC Barcelona": { media: 85, color: "#004d98" },
         "Real Madrid": { media: 85, color: "#ffffff" },
         "Atletico Madrid": { media: 83, color: "#cb3524" },
@@ -120,62 +115,72 @@
         "Levante": { media: 72, color: "#004d98" }
     };
 
-    function poblarSelects() {
+    function inicializar() {
         const selL = document.getElementById('select-local');
         const selV = document.getElementById('select-visitante');
-        Object.keys(EQUIPOS_DATA).forEach(eq => {
-            selL.add(new Option(`${eq} (${EQUIPOS_DATA[eq].media})`, eq));
-            selV.add(new Option(`${eq} (${EQUIPOS_DATA[eq].media})`, eq));
+        
+        Object.keys(BASE_PODER).forEach(nombre => {
+            // Creamos la opción solo con el nombre limpio
+            selL.add(new Option(nombre, nombre));
+            selV.add(new Option(nombre, nombre));
         });
+
         selV.selectedIndex = 1;
-        actualizarColores();
+        actualizarEscudos();
     }
 
-    function actualizarColores() {
-        const l = document.getElementById('select-local').value;
-        const v = document.getElementById('select-visitante').value;
-        document.getElementById('name-L').style.color = EQUIPOS_DATA[l].color;
-        document.getElementById('name-V').style.color = EQUIPOS_DATA[v].color;
+    function actualizarEscudos() {
+        const loc = document.getElementById('select-local').value;
+        const vis = document.getElementById('select-visitante').value;
+
+        // Forzamos el poder de TU lista al escudo
+        document.getElementById('shield-L').innerText = BASE_PODER[loc].media;
+        document.getElementById('shield-V').innerText = BASE_PODER[vis].media;
+        
+        // Ponemos el nombre limpio debajo
+        document.getElementById('display-name-L').innerText = loc;
+        document.getElementById('display-name-V').innerText = vis;
+
+        // Color del escudo
+        document.getElementById('shield-L').style.borderColor = BASE_PODER[loc].color;
+        document.getElementById('shield-V').style.borderColor = BASE_PODER[vis].color;
     }
 
-    let loop = null;
+    let partidoLoop = null;
 
-    function comenzarPartido() {
-        if(loop) clearInterval(loop);
-        const l = document.getElementById('select-local').value;
-        const v = document.getElementById('select-visitante').value;
+    function arrancarMotor() {
+        if(partidoLoop) clearInterval(partidoLoop);
         
-        // El motor ahora usa tus medias EXACTAS del código
-        const partido = new MatchEngine(l, v, EQUIPOS_DATA[l].media, EQUIPOS_DATA[v].media);
-        
+        const loc = document.getElementById('select-local').value;
+        const vis = document.getElementById('select-visitante').value;
+
+        // Creamos motor con las medias de BASE_PODER
+        const engine = new MatchEngine(loc, vis, BASE_PODER[loc].media, BASE_PODER[vis].media);
+
         document.getElementById('ml-acta-list-j1m1').innerHTML = '';
-        
-        loop = setInterval(() => {
-            const ev = partido.simularMinuto();
-            document.getElementById('ml-timer-j1m1').innerText = (partido.minuto < 10 ? '0' : '') + partido.minuto + ":00";
+
+        partidoLoop = setInterval(() => {
+            const evento = engine.simularMinuto();
             
-            if(ev) {
-                document.getElementById('goles-L').innerText = partido.golesL;
-                document.getElementById('goles-V').innerText = partido.golesV;
+            // Reloj
+            document.getElementById('ml-timer-j1m1').innerText = (engine.minuto < 10 ? '0' : '') + engine.minuto + ":00";
+
+            if(evento) {
+                document.getElementById('goles-L').innerText = engine.golesL;
+                document.getElementById('goles-V').innerText = engine.golesV;
                 
-                // Pintamos el evento con su Carta de Poder
                 const acta = document.getElementById('ml-acta-list-j1m1');
-                const div = document.createElement('div');
-                div.className = 'evento';
-                // La posición viene del motor (POR, DEF, MED, DEL)
-                const pos = ev.pos || "DEL"; 
-                div.innerHTML = `<span class="badge-pos ${pos}">${pos}</span> <b>${ev.jugador}</b> metió gol para el ${ev.equipo}`;
-                acta.prepend(div);
+                const card = document.createElement('div');
+                card.className = 'gol-card';
+                card.innerHTML = `<span><b>${evento.jugador}</b></span> <span>${evento.minuto}' ⚽</span>`;
+                acta.prepend(card);
             }
 
-            if(partido.terminado) {
-                clearInterval(loop);
-                alert("Partido Finalizado. MVP: " + partido.calcularMVP());
-            }
-        }, 80);
+            if(engine.terminado) clearInterval(partidoLoop);
+        }, 100);
     }
 
-    poblarSelects();
+    inicializar();
 </script>
 
 </body>

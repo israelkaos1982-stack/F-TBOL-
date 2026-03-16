@@ -24,4 +24,3 @@ const CONFIG_EQUIPOS = {
 // Exportar para que otros archivos JS lo usen
 if (typeof module !== 'undefined') {
     module.exports = CONFIG_EQUIPOS;
-}

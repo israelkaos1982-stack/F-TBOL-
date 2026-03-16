@@ -1,122 +1,49 @@
-/**
- * LIGA EFOOTBALL - MOTOR DE PARTIDO DEFINITIVO
- * Conectado con SQUAD_REGISTRY de index.bundle.js
- */
 
-class MatchEngine {
-    constructor(local, visitante, mediaLocal, mediaVisitante) {
-        this.local = local;
-        this.visitante = visitante;
-        this.mediaLocal = mediaLocal;
-        this.mediaVisitante = mediaVisitante;
-        
-        this.golesL = 0;
-        this.golesV = 0;
-        this.minuto = 0;
-        this.eventos = [];
-        this.terminado = false;
-    }
+🃏 BARAJAS DE PODER: REGLAMENTO COMPLETO
+Este documento contiene todas las mecánicas, probabilidades y cálculos necesarios para simular el motor de goles de un partido.
+🏃 1. CARTAS DE POSICIÓN | Probabilidad de Gol Base
+La posición define la eficacia natural de un jugador frente a la portería.
+🧤 CARTA DE LOS PORTEROS
+Poder Especial: "El Muro"
+Probabilidad Base: 0.001%
+Descripción: Un milagro futbolístico. Ocurre tan raramente que da la vuelta al mundo.
+Modificador: Su escudo de poder individual aumenta esta probabilidad mínimamente.
+🛡️ CARTA DE LOS DEFENSAS
+Poder Especial: "Cabezazo Letal"
+Probabilidad Base: 5% - 10% (Media: 7.5%)
+Descripción: Peligro real en córners o faltas laterales.
+Modificador: El valor de su poder individual se suma a la base.
+⚙️ CARTA DE LOS CENTROCAMPISTAS
+Poder Especial: "Llegada desde segunda línea"
+Probabilidad Base: 15% - 20% (Media: 17.5%)
+Descripción: Sorprenden llegando desde atrás o definiendo tras un último pase.
+Modificador: El valor de su poder individual se suma a la base.
+🚀 CARTA DE LOS DELANTEROS
+Poder Especial: "Instinto Asesino"
+Probabilidad Base: 65% - 75% (Media: 70%)
+Descripción: Viven para marcar. Son los máximos candidatos al gol.
+Modificador: El valor de su poder individual se suma a la base.
+🏠 2. CARTA DE LA FORTALEZA | El Factor Local
+Jugar en casa otorga un plus de moral y confianza que inclina la balanza.
+Efecto: Aumenta en un +8% el VALOR-PODER de TODOS los jugadores del equipo local.
+Cálculo: (Probabilidad Base + Poder Individual) × 1.08.
+🎲 3. CARTA DE LOS MILAGROS | Goles del Mismo Jugador
+Cuando un jugador marca, su confianza aumenta, pero la dificultad de repetir la hazaña también.
+Goles ActualesSiguiente HitoProb. respecto al gol anterior0 → 1🐣 1er Gol100% (Cálculo Base)1 → 2🐔🐔 Doblete35% - 40% (Usar 37% como media)2 → 3🦅🦅🦅 Hat-Trick20% - 25% (Usar 22% como media)3 → 4🐐🐐🐐🐐 Póker10% - 15% (Usar 12% como media)4 → 5🤯 Manita5% - 8% (Usar 6% como media)📊 4. TABLA DE REFERENCIA RÁPIDA (Probabilidad Final de 1er Gol)
+Para agilizar el juego, aquí tienes las probabilidades finales de marcar el primer gol siendo LOCAL, según el nivel de la carta del jugador.
+Nivel de Poder🧤 Portero🛡️ Defensa⚙️ Medio🚀 DelanteroPoder 60 (Promedio)0.65%8.2%19.0%76.2%Poder 75 (Estrella)0.81%8.3%19.1%76.4%Poder 90 (Leyenda)0.97%8.5%19.3%76.6%⚙️ 5. CÓMO FUNCIONA EL MOTOR DEL JUEGO (PASO A PASO)
+Elección: Se elige al jugador que realiza la acción de gol.
+Cálculo Base: Se toma su Probabilidad por posición y se le suma su poder (ej: Delantero 70% + Poder 85 = 70.85%).
+Localía: Si es local, se aplica el +8% al resultado anterior.
+Tirada: Se comprueba si hay gol.
+Efecto Multigol: Si ya marcó, se multiplica su probabilidad del 1er gol por el factor de la "Carta de los Milagros".
+💡 Ejemplo Práctico:
+Jugador: Vinícius Jr. (Delantero, Local, Poder 85).
+1er Gol: (70% + 0.85) x 1.08 = 76.5%.
+Doblete: 76.5% x 0.37 = 28.3%.
+Hat-Trick: 76.5% x 0.22 = 16.8%.
+Póker: 76.5% x 0.12 = 9.2%.
 
-    // Simula lo que ocurre en cada minuto de juego
-    simularMinuto() {
-        if (this.minuto >= 90) {
-            this.terminado = true;
-            return null;
-        }
+QUIERO QUE ME HAGAS EL CODIGO DE ESTO, PERO CADA CODIGO ENTERO EDITANDOLO ENTERO, PORQUE SI ME LO DÁS POR PARTE NO VOY A SABER DONDE AÑADIRLO O INSERTARLO
 
-        this.minuto++;
-        let eventoM = null;
-
-        // Probabilidades equilibradas (Factor 1.1 para ventaja de campo)
-        const probGolL = (this.mediaLocal * 1.1) / (this.mediaLocal + this.mediaVisitante) / 28;
-        const probGolV = (this.mediaVisitante) / (this.mediaLocal + this.mediaVisitante) / 28;
-
-        const azar = Math.random();
-
-        // 1. ¿Gol del equipo Local?
-        if (azar < probGolL) {
-            this.golesL++;
-            eventoM = {
-                minuto: this.minuto,
-                tipo: 'gol',
-                equipo: this.local,
-                jugador: this.obtenerJugador(this.local, true) // Buscamos goleador (delanteros/medios)
-            };
-            this.eventos.push(eventoM);
-        } 
-        // 2. ¿Gol del equipo Visitante?
-        else if (azar < probGolL + probGolV) {
-            this.golesV++;
-            eventoM = {
-                minuto: this.minuto,
-                tipo: 'gol',
-                equipo: this.visitante,
-                jugador: this.obtenerJugador(this.visitante, true)
-            };
-            this.eventos.push(eventoM);
-        }
-        // 3. ¿Tarjeta amarilla? (Probabilidad de 4% por minuto)
-        else if (Math.random() < 0.04) {
-            const equipoCard = Math.random() > 0.5 ? this.local : this.visitante;
-            eventoM = {
-                minuto: this.minuto,
-                tipo: 'tarjeta_amarilla',
-                equipo: equipoCard,
-                jugador: this.obtenerJugador(equipoCard, false) // Cualquier jugador puede recibir tarjeta
-            };
-            this.eventos.push(eventoM);
-        }
-
-        return eventoM;
-    }
-
-    /**
-     * EXTRAE JUGADORES DE LA BASE DE DATOS DEL BUNDLE (SQUAD_REGISTRY)
-     * @param {string} equipo - Nombre del equipo
-     * @param {boolean} soloAtacantes - Si es true, prioriza goleadores
-     */
-    obtenerJugador(equipo, soloAtacantes = false) {
-        // Resolvemos el alias por si el nombre viene simplificado
-        const aliases = window.TEAM_ALIASES || {};
-        const nombreReal = aliases[equipo.toLowerCase()] || equipo;
-        
-        // Accedemos a la base de datos del Bundle
-        const registro = window.SQUAD_REGISTRY ? window.SQUAD_REGISTRY[nombreReal] : null;
-
-        if (registro) {
-            // Filtramos solo los datos de jugadores (los que son un Array [dorsal, nombre, media])
-            let lista = registro.filter(p => Array.isArray(p));
-            
-            // Si buscamos un goleador, intentamos que no sea el portero (posición 0-3 del registro aprox)
-            if (soloAtacantes && lista.length > 5) {
-                // Quitamos a los porteros para que no marquen gol cada dos por tres
-                lista = lista.slice(3); 
-            }
-
-            const elegido = lista[Math.floor(Math.random() * lista.length)];
-            return elegido[1]; // Retornamos el NOMBRE (Ej: "Mbappé")
-        }
-
-        // Plan B: Si no encuentra el registro, usa la lista corta antigua
-        if (window.JUGADORES_DATA && window.JUGADORES_DATA[equipo]) {
-            const plantilla = window.JUGADORES_DATA[equipo];
-            return plantilla[Math.floor(Math.random() * plantilla.length)];
-        }
-
-        return "Jugador";
-    }
-
-    // Calcula el MVP basado en el rendimiento (goles)
-    calcularMVP() {
-        const goles = this.eventos.filter(e => e.tipo === 'gol');
-        if (goles.length > 0) {
-            // El último en marcar suele llevarse los focos
-            return goles[goles.length - 1].jugador;
-        }
-        // Si hay empate a cero, el portero o defensa del equipo local es MVP
-        return this.obtenerJugador(this.local, false);
-    }
-}
-
-// Exportación global para que index.bundle.js lo vea
-window.MatchEngine = MatchEngine;
+ESTO DONDE IRIA?

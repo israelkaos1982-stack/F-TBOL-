@@ -1,45 +1,74 @@
+/* ================================================================
+   MATCH ENGINE: BARAJAS DE PODER (REGLAMENTO COMPLETO)
+   Versión: 1.2 - Final Blindada
+   ================================================================
+*/
 
-🃏 BARAJAS DE PODER: REGLAMENTO COMPLETO
-Este documento contiene todas las mecánicas, probabilidades y cálculos necesarios para simular el motor de goles de un partido.
-🏃 1. CARTAS DE POSICIÓN | Probabilidad de Gol Base
-La posición define la eficacia natural de un jugador frente a la portería.
-🧤 CARTA DE LOS PORTEROS
-Poder Especial: "El Muro"
-Probabilidad Base: 0.001%
-Descripción: Un milagro futbolístico. Ocurre tan raramente que da la vuelta al mundo.
-Modificador: Su escudo de poder individual aumenta esta probabilidad mínimamente.
-🛡️ CARTA DE LOS DEFENSAS
-Poder Especial: "Cabezazo Letal"
-Probabilidad Base: 5% - 10% (Media: 7.5%)
-Descripción: Peligro real en córners o faltas laterales.
-Modificador: El valor de su poder individual se suma a la base.
-⚙️ CARTA DE LOS CENTROCAMPISTAS
-Poder Especial: "Llegada desde segunda línea"
-Probabilidad Base: 15% - 20% (Media: 17.5%)
-Descripción: Sorprenden llegando desde atrás o definiendo tras un último pase.
-Modificador: El valor de su poder individual se suma a la base.
-🚀 CARTA DE LOS DELANTEROS
-Poder Especial: "Instinto Asesino"
-Probabilidad Base: 65% - 75% (Media: 70%)
-Descripción: Viven para marcar. Son los máximos candidatos al gol.
-Modificador: El valor de su poder individual se suma a la base.
-🏠 2. CARTA DE LA FORTALEZA | El Factor Local
-Jugar en casa otorga un plus de moral y confianza que inclina la balanza.
-Efecto: Aumenta en un +8% el VALOR-PODER de TODOS los jugadores del equipo local.
-Cálculo: (Probabilidad Base + Poder Individual) × 1.08.
-🎲 3. CARTA DE LOS MILAGROS | Goles del Mismo Jugador
-Cuando un jugador marca, su confianza aumenta, pero la dificultad de repetir la hazaña también.
-Goles ActualesSiguiente HitoProb. respecto al gol anterior0 → 1🐣 1er Gol100% (Cálculo Base)1 → 2🐔🐔 Doblete35% - 40% (Usar 37% como media)2 → 3🦅🦅🦅 Hat-Trick20% - 25% (Usar 22% como media)3 → 4🐐🐐🐐🐐 Póker10% - 15% (Usar 12% como media)4 → 5🤯 Manita5% - 8% (Usar 6% como media)📊 4. TABLA DE REFERENCIA RÁPIDA (Probabilidad Final de 1er Gol)
-Para agilizar el juego, aquí tienes las probabilidades finales de marcar el primer gol siendo LOCAL, según el nivel de la carta del jugador.
-Nivel de Poder🧤 Portero🛡️ Defensa⚙️ Medio🚀 DelanteroPoder 60 (Promedio)0.65%8.2%19.0%76.2%Poder 75 (Estrella)0.81%8.3%19.1%76.4%Poder 90 (Leyenda)0.97%8.5%19.3%76.6%⚙️ 5. CÓMO FUNCIONA EL MOTOR DEL JUEGO (PASO A PASO)
-Elección: Se elige al jugador que realiza la acción de gol.
-Cálculo Base: Se toma su Probabilidad por posición y se le suma su poder (ej: Delantero 70% + Poder 85 = 70.85%).
-Localía: Si es local, se aplica el +8% al resultado anterior.
-Tirada: Se comprueba si hay gol.
-Efecto Multigol: Si ya marcó, se multiplica su probabilidad del 1er gol por el factor de la "Carta de los Milagros".
-💡 Ejemplo Práctico:
-Jugador: Vinícius Jr. (Delantero, Local, Poder 85).
-1er Gol: (70% + 0.85) x 1.08 = 76.5%.
-Doblete: 76.5% x 0.37 = 28.3%.
-Hat-Trick: 76.5% x 0.22 = 16.8%.
-Póker: 76.5% x 0.12 = 9.2%.
+(function() {
+    // 1. PROBABILIDADES BASE POR POSICIÓN (REGLAMENTO)
+    const BASE_PROB = {
+        'P': 0.001, // Porteros (El Muro)
+        'D': 7.5,   // Defensas (Cabezazo Letal)
+        'M': 17.5,  // Medios (Llegada)
+        'F': 70.0   // Delanteros (Instinto Asesino)
+    };
+
+    // 2. CARTA DE LOS MILAGROS (Factores de reducción para Multigol)
+    const MIRACLE_FACTORS = {
+        2: 0.37, // Doblete (37%)
+        3: 0.22, // Hat-Trick (22%)
+        4: 0.12, // Póker (12%)
+        5: 0.06  // Manita (6%)
+    };
+
+    /**
+     * CALCULA LA PROBABILIDAD DE GOL (MATEMÁTICA EXACTA)
+     */
+    window.calculateGoalProbability = function(pos, power, isLocal, goalsAlreadyScored) {
+        // PASO 1: Elección de Probabilidad Base según posición
+        let probBase = BASE_PROB[pos] || 17.5;
+
+        // PASO 2: Cálculo Base (Probabilidad Base + Poder Individual)
+        // Convertimos a número por si acaso llega como texto
+        let pwr = parseFloat(power) || 0;
+        let calculationBase = probBase + (pwr / 100);
+
+        // PASO 3: Factor Localía (Carta de la Fortaleza)
+        let finalFirstGoalProb = calculationBase;
+        if (isLocal) {
+            finalFirstGoalProb = calculationBase * 1.08;
+        }
+
+        // PASO 4: Efecto Multigol (Carta de los Milagros)
+        let result = finalFirstGoalProb;
+        let nextGoalNumber = (parseInt(goalsAlreadyScored) || 0) + 1;
+
+        if (nextGoalNumber > 1) {
+            // Si es más de 5 goles, aplicamos un factor mínimo del 2%
+            let miracleFactor = MIRACLE_FACTORS[nextGoalNumber] || 0.02; 
+            result = finalFirstGoalProb * miracleFactor;
+        }
+
+        return parseFloat(result.toFixed(2));
+    };
+
+    /**
+     * TIRADA DE DADOS
+     */
+    window.checkIfItIsGoal = function(probability) {
+        let roll = Math.random() * 100; 
+        return roll <= probability;
+    };
+
+    /**
+     * INICIALIZADOR DE SELECTORES (Válido para cualquier país/liga)
+     */
+    window.initMatchSelectors = function(teamAName, teamBName) {
+        const getOptions = (name) => {
+            let squad = window.SQUAD_REGISTRY[name] || [];
+            if (squad.length === 0) return '<option value="">Equipo no encontrado</option>';
+            
+            return squad
+                .filter(p => !p.h) 
+                .map(p => {
+                    // p

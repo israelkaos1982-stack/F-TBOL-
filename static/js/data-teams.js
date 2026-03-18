@@ -45,3 +45,47 @@ window.TEAM_RATINGS = {
     "Cultural Leonesa": { media: 64, color: "#ffffff" },
     "Mirandés": { media: 64, color: "#ff0000" }
 };
+
+// --- PRIMERA RFEF - GRUPO 1 ---
+"Tenerife": { media: 65, color: "#ffffff" }, // Basado en su liderato destacado
+"Celta Fortuna": { media: 63, color: "#87adcf" },
+"Bilbao Ath.": { media: 62, color: "#ff0000" },
+"Barakaldo": { media: 62, color: "#ffff00" },
+"Pontevedra": { media: 62, color: "#6e1116" },
+"Zamora CF": { media: 61, color: "#ff0000" },
+"RM Castilla": { media: 62, color: "#ffffff" },
+"CD Lugo": { media: 61, color: "#ff0000" },
+"Racing Ferrol": { media: 61, color: "#006b3e" },
+"Ponferradina": { media: 61, color: "#005ca9" },
+"AD Mérida": { media: 60, color: "#ffffff" },
+"Unionistas CF": { media: 60, color: "#000000" },
+"Arenas de Getxo": { media: 59, color: "#ff0000" },
+"Real Avilés Industrial": { media: 59, color: "#005ca9" },
+"Ourense CF": { media: 59, color: "#005ca9" },
+"CD Guadalajara": { media: 58, color: "#6d2d91" },
+"CF Talavera": { media: 58, color: "#005ca9" },
+"CP Cacereño": { media: 58, color: "#006b3e" },
+"Arenteiro": { media: 57, color: "#006b3e" },
+"Osasuna Promesas": { media: 57, color: "#9e0b1c" },
+
+// --- PRIMERA RFEF - GRUPO 2 ---
+"CE Sabadell": { media: 64, color: "#005ca9" },
+"Atlético Madrileño": { media: 63, color: "#cb3524" },
+"CE Europa": { media: 63, color: "#000000" },
+"Eldense": { media: 63, color: "#005ca9" },
+"CD Teruel": { media: 61, color: "#ff0000" },
+"Villarreal B": { media: 61, color: "#ffe200" },
+"Antequera CF": { media: 61, color: "#ffffff" },
+"Hércules": { media: 61, color: "#005ca9" },
+"FC Cartagena": { media: 61, color: "#000000" },
+"UD Ibiza": { media: 60, color: "#009bd8" },
+"Algeciras CF": { media: 60, color: "#ff0000" },
+"Alcorcón": { media: 60, color: "#ffe200" },
+"Juventud Torremolinos": { media: 59, color: "#009bd8" },
+"SD Tarazona": { media: 59, color: "#ff0000" },
+"Gimnàstic Tarragona": { media: 59, color: "#ff0000" },
+"Real Murcia": { media: 59, color: "#ff0000" },
+"At. Sanluqueño": { media: 58, color: "#006b3e" },
+"Marbella FC": { media: 57, color: "#ffffff" },
+"Betis Deportivo": { media: 57, color: "#0bb363" },
+"Sevilla At.": { media: 56, color: "#ffffff" }

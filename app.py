@@ -1,15 +1,13 @@
-from flask import Flask, render_template, redirect, url_for, request, jsonify
+from flask import Flask, render_template, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 import random
 import os
 
-# --- IMPORTANTE: Importamos datos y lógica externa ---
 from jugadores_data import jugadores_por_equipo
 from logica_liga import calcular_tabla, obtener_resultados_ia
 
 app = Flask(__name__)
 
-# Configuración de base de datos
 basedir = os.path.abspath(os.path.dirname(__file__))
 instance_dir = os.path.join(basedir, "instance")
 os.makedirs(instance_dir, exist_ok=True)
@@ -19,127 +17,201 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
-# --- CONFIGURACIÓN DE LIGA ---
+# --- CONFIG ---
 equipos_humanos = ["Real Madrid", "FC Barcelona", "Athletic Club", "Real Sociedad", "Betis"]
 
-equipos_primera = [
-    "FC Barcelona", "Real Madrid", "Atletico Madrid", "Villarreal", "Betis", 
-    "Celta", "Real Sociedad", "Espanyol", "Getafe", "Athletic Club", 
-    "Osasuna", "Girona", "Valencia", "Rayo Vallecano", "Sevilla", 
-    "Mallorca", "Deportivo Alavés", "Elche", "Levante", "Real Oviedo"
-]
-
-# Sacamos la lista de nombres de equipos del diccionario importado
+equipos_primera = list(jugadores_por_equipo.keys())
 equipos = list(jugadores_por_equipo.keys())
 
 # --- MODELOS ---
 class Partido(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    jornada = db.Column(db.Integer, nullable=False)
-    local = db.Column(db.String(100), nullable=False)
-    visitante = db.Column(db.String(100), nullable=False)
-    goles_local = db.Column(db.Integer, nullable=False)
-    goles_visitante = db.Column(db.Integer, nullable=False)
-    mvp = db.Column(db.String(100), nullable=True)
+    jornada = db.Column(db.Integer)
+    local = db.Column(db.String(100))
+    visitante = db.Column(db.String(100))
+    goles_local = db.Column(db.Integer)
+    goles_visitante = db.Column(db.Integer)
+    mvp = db.Column(db.String(100))
 
 class Evento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    partido_id = db.Column(db.Integer, db.ForeignKey("partido.id"), nullable=False)
-    tipo = db.Column(db.String(50), nullable=False)
-    equipo = db.Column(db.String(100), nullable=False)
-    jugador = db.Column(db.String(100), nullable=False)
+    partido_id = db.Column(db.Integer)
+    tipo = db.Column(db.String(50))
+    equipo = db.Column(db.String(100))
+    jugador = db.Column(db.String(100))
 
-# --- LÓGICA DE MOTOR ---
-def elegir_jugador(equipo):
-    if equipo in jugadores_por_equipo:
-        return random.choice(jugadores_por_equipo[equipo])
-    return "Jugador Genérico"
+# --- PROBABILIDADES ---
+BASE = {
+    "portero": 0.001,
+    "defensa": 7.5,
+    "medio": 17.5,
+    "delantero": 70
+}
 
-def generar_calendario(lista_equipos):
-    temp_list = lista_equipos[:]
-    if len(temp_list) % 2 != 0: temp_list.append("DESCANSA")
-    n = len(temp_list)
+MULTIGOL = [1, 0.37, 0.22, 0.12, 0.06]
+BONUS_LOCAL = 1.08
+
+# --- FUNCIONES MOTOR ---
+
+def calcular_prob(perfil, local=False, goles_previos=0):
+    base = BASE.get(perfil["posicion"], 10)
+    prob = base + (perfil["poder"] / 100)
+
+    if local:
+        prob *= BONUS_LOCAL
+
+    prob *= MULTIGOL[min(goles_previos, 4)]
+    return prob
+
+
+def elegir_goleador(equipo, local=False, conteo=None):
+    if conteo is None:
+        conteo = {}
+
+    jugadores = jugadores_por_equipo[equipo]
+    pesos = []
+
+    for j in jugadores:
+        goles_previos = conteo.get(j["nombre"], 0)
+        p = calcular_prob(j, local, goles_previos)
+        pesos.append(max(p, 0.001))
+
+    elegido = random.choices(jugadores, weights=pesos, k=1)[0]
+    return elegido["nombre"]
+
+
+def simular_goles(equipo, local=False):
+    jugadores = jugadores_por_equipo[equipo]
+
+    media = sum([calcular_prob(j, local) for j in jugadores]) / len(jugadores)
+
+    if media < 15:
+        pesos = [45, 35, 15, 4, 1]
+    elif media < 25:
+        pesos = [30, 35, 22, 9, 4]
+    elif media < 40:
+        pesos = [20, 30, 25, 15, 10]
+    else:
+        pesos = [10, 25, 30, 20, 15]
+
+    return random.choices([0,1,2,3,4], weights=pesos, k=1)[0]
+
+
+def elegir_mvp(local, visitante, gl, gv, conteo_local, conteo_visitante):
+    candidatos = []
+
+    for j, g in conteo_local.items():
+        candidatos.append((j, g, local))
+    for j, g in conteo_visitante.items():
+        candidatos.append((j, g, visitante))
+
+    if candidatos:
+        candidatos.sort(key=lambda x: x[1], reverse=True)
+        return candidatos[0][0]
+
+    return random.choice(jugadores_por_equipo[local])["nombre"]
+
+
+# --- CALENDARIO ---
+def generar_calendario(lista):
+    temp = lista[:]
+    if len(temp) % 2 != 0:
+        temp.append("DESCANSA")
+
+    n = len(temp)
     jornadas = []
-    for j in range(n - 1):
-        p = []
+
+    for _ in range(n - 1):
+        jornada = []
         for i in range(n // 2):
-            local, visitante = temp_list[i], temp_list[n - 1 - i]
-            if local != "DESCANSA" and visitante != "DESCANSA":
-                p.append((local, visitante))
-        jornadas.append(p)
-        temp_list.insert(1, temp_list.pop())
-    
-    vuelta = []
-    for j in jornadas:
-        vuelta.append([(v, l) for l, v in j])
+            l, v = temp[i], temp[n-1-i]
+            if l != "DESCANSA" and v != "DESCANSA":
+                jornada.append((l, v))
+        jornadas.append(jornada)
+        temp.insert(1, temp.pop())
+
+    vuelta = [[(v,l) for l,v in j] for j in jornadas]
     return jornadas + vuelta
 
 calendario = generar_calendario(equipos)
 
-def simular_y_guardar_partido(jornada_num, local, visitante):
-    if Partido.query.filter_by(local=local, visitante=visitante).first(): return
-    
-    gl, gv = random.randint(0, 4), random.randint(0, 4)
+# --- SIMULACIÓN ---
+def simular_y_guardar(jornada, local, visitante):
+    if Partido.query.filter_by(local=local, visitante=visitante).first():
+        return
+
+    gl = simular_goles(local, True)
+    gv = simular_goles(visitante, False)
+
+    conteo_local = {}
+    conteo_visitante = {}
     eventos = []
-    
-    for _ in range(gl): eventos.append({"tipo": "gol", "equipo": local, "jugador": elegir_jugador(local)})
-    for _ in range(gv): eventos.append({"tipo": "gol", "equipo": visitante, "jugador": elegir_jugador(visitante)})
-    
-    mvp = elegir_jugador(local if gl >= gv else visitante)
-    
-    partido = Partido(jornada=jornada_num, local=local, visitante=visitante, goles_local=gl, goles_visitante=gv, mvp=mvp)
-    db.session.add(partido)
+
+    for _ in range(gl):
+        g = elegir_goleador(local, True, conteo_local)
+        conteo_local[g] = conteo_local.get(g, 0) + 1
+        eventos.append((local, g))
+
+    for _ in range(gv):
+        g = elegir_goleador(visitante, False, conteo_visitante)
+        conteo_visitante[g] = conteo_visitante.get(g, 0) + 1
+        eventos.append((visitante, g))
+
+    mvp = elegir_mvp(local, visitante, gl, gv, conteo_local, conteo_visitante)
+
+    p = Partido(
+        jornada=jornada,
+        local=local,
+        visitante=visitante,
+        goles_local=gl,
+        goles_visitante=gv,
+        mvp=mvp
+    )
+    db.session.add(p)
     db.session.commit()
-    
-    for ev in eventos:
-        db.session.add(Evento(partido_id=partido.id, tipo=ev["tipo"], equipo=ev["equipo"], jugador=ev["jugador"]))
+
+    for eq, jug in eventos:
+        db.session.add(Evento(
+            partido_id=p.id,
+            tipo="gol",
+            equipo=eq,
+            jugador=jug
+        ))
     db.session.commit()
+
 
 # --- RUTAS ---
 @app.route("/")
-def inicio(): 
+def inicio():
     return render_template("index.html")
 
 @app.route("/calendario")
-def ver_calendario():
-    # 1. Simulación automática de IA vs IA
-    for idx, jornada in enumerate(calendario, 1):
-        for loc, vis in jornada:
-            if loc in equipos_primera and vis in equipos_primera:
-                if loc not in equipos_humanos and vis not in equipos_humanos:
-                    simular_y_guardar_partido(idx, loc, vis)
+def calendario_view():
+    for i, jornada in enumerate(calendario, 1):
+        for l, v in jornada:
+            if l not in equipos_humanos and v not in equipos_humanos:
+                simular_y_guardar(i, l, v)
 
-    # 2. Filtrar solo partidos de Humanos para la vista
-    cal_visible = [[p for p in j if p[0] in equipos_humanos or p[1] in equipos_humanos] for j in calendario]
-    
-    # 3. Obtener resultados para pintar en el HTML
     partidos = Partido.query.all()
     res = {f"{p.local}-{p.visitante}": p for p in partidos}
-    
-    return render_template("calendario.html", jornadas=cal_visible, resultados=res, humanos=equipos_humanos)
+
+    return render_template("calendario.html", jornadas=calendario, resultados=res)
 
 @app.route("/clasificacion")
-def ver_clasificacion():
-    # Traemos todos los partidos de la base de datos
-    todos_los_partidos = Partido.query.all()
-    
-    # Usamos las funciones de logica_liga.py
-    tabla = calcular_tabla(equipos_primera, todos_los_partidos)
-    jornadas_ia = obtener_resultados_ia(todos_los_partidos, equipos_primera, equipos_humanos)
-    
-    return render_template("clasificacion.html", 
-                           tabla=tabla, 
-                           jornadas_ia=jornadas_ia, 
-                           humanos=equipos_humanos)
+def clasificacion():
+    partidos = Partido.query.all()
+    tabla = calcular_tabla(equipos_primera, partidos)
+
+    return render_template("clasificacion.html", tabla=tabla)
 
 @app.route("/reiniciar")
 def reiniciar():
     Evento.query.delete()
     Partido.query.delete()
     db.session.commit()
-    return redirect(url_for("ver_calendario"))
+    return redirect(url_for("calendario_view"))
 
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True)

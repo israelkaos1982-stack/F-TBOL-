@@ -968,7 +968,7 @@ window.mlEndMatch_j1m1=function(winner){if(_matchFinished)return;if(!winner&&_sc
     var sqA_=_sqA_j1m1;
     var sqB_=_sqB_j1m1;
     window.showMvpForce('j1m1','Real Madrid','FC Barcelona',sqA_,sqB_,_sc.a,_sc.b,function(team,num,name){
-      var icons={gol:'⚽',propia:'🚫','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐','falta-gol':'🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',mvp:'⭐'};
+      var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',mvp:'⭐'};
       _events.push({min:90,label:'MVP del Partido',type:'mvp',team:team,num:num,name:name,ico:'⭐',id:Date.now()});
       _renderActa_j1m1();
       window.mlEndMatch_j1m1(winner);
@@ -1010,7 +1010,7 @@ window.mlEndMatch_j1m2=function(winner){if(_matchFinished)return;if(!winner&&_sc
     var sqA_=_sqA_j1m2;
     var sqB_=_sqB_j1m2;
     window.showMvpForce('j1m2','Athletic Club','Real Betis',sqA_,sqB_,_sc.a,_sc.b,function(team,num,name){
-      var icons={gol:'⚽',propia:'🚫','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐','falta-gol':'🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',mvp:'⭐'};
+      var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',mvp:'⭐'};
       _events.push({min:90,label:'MVP del Partido',type:'mvp',team:team,num:num,name:name,ico:'⭐',id:Date.now()});
       _renderActa_j1m2();
       window.mlEndMatch_j1m2(winner);
@@ -1546,12 +1546,12 @@ window.mlSimulate_j1m10=function(){
     { key:'goles-total', title:'Goleadores',            icon:'⚽️', top:6 },
     { key:'yel',         title:'Tarjetas amarillas',    icon:'🟨', top:6 },
     { key:'red',         title:'Tarjetas rojas',        icon:'🟥', top:6 },
-    { key:'pen-prov',    title:'Penaltis provocados',   icon:'🤦‍♂️', top:6 },
-    { key:'pen-gol',     title:'Goles de penalti',      icon:'🥅', top:6 },
-    { key:'pen-fallado', title:'Penaltis fallados',     icon:'❌️', top:6 },
-    { key:'pen-parado',  title:'Penaltis parados',      icon:'🖐', top:6 },
-    { key:'falta-gol',   title:'Goles de falta',        icon:'🎯', top:6 },
-    { key:'propia',      title:'Autogoles',             icon:'🚫', top:6 },
+    { key:'pen-prov',    title:'Penaltis provocados',   icon:'🤦‍♂️🥅', top:6 },
+    { key:'pen-gol',     title:'Goles de penalti',      icon:'⚽🥅', top:6 },
+    { key:'pen-fallado', title:'Penaltis fallados',     icon:'❌️🥅', top:6 },
+    { key:'pen-parado',  title:'Penaltis parados',      icon:'🖐🥅', top:6 },
+    { key:'falta-gol',   title:'Goles de falta',        icon:'⚽🎯', top:6 },
+    { key:'propia',      title:'Autogoles',             icon:'⚽🚫', top:6 },
     { key:'mvp',         title:'MVP',                   icon:'⭐️', top:6 }
   ];
 
@@ -1711,12 +1711,12 @@ window.mlSimulate_j1m10=function(){
       ico = normalizeIcon(ico);
       if(ico === '⚽' || ico === '⚽️') return 'gol';
       if(ico === '🟨' || ico === '🟥' || ico === '🟨🟥') return 'card';
-      if(ico === '🤦' || ico === '🤦‍♂' || ico === '🤦‍♂️') return 'pen-prov';
-      if(ico === '🥅') return 'pen-gol';
-      if(ico === '❌' || ico === '❌️') return 'pen-fallo';
-      if(ico === '🖐') return 'pen-parado';
-      if(ico === '🎯') return 'falta-gol';
-      if(ico === '🚫') return 'propia';
+      if(ico === '🤦🥅' || ico === '🤦‍♂🥅' || ico === '🤦‍♂️🥅') return 'pen-prov';
+      if(ico === '⚽🥅') return 'pen-gol';
+      if(ico === '❌🥅' || ico === '❌️🥅') return 'pen-fallo';
+      if(ico === '🖐🥅') return 'pen-parado';
+      if(ico === '⚽🎯') return 'falta-gol';
+      if(ico === '⚽🚫') return 'propia';
       if(ico === '⭐' || ico === '⭐️') return 'mvp';
       return null;
     }
@@ -2051,18 +2051,18 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
      🤦  Penalti provocado        → 30% de los partidos
          └ 🟨 al que provoca      → 65% de esas veces
          └ 🟥 al que provoca      → 10% de esas veces
-         └ 🥅 Gol del penalti     → 70% de los penaltis tirados
-         └ 🖐 Parado por portero  → 20% de los penaltis fallados
-         └ ❌ Fallado             → 10% de los penaltis fallados
-     🎯  Gol de falta             →  8% de los partidos
-     🚫  Autogol                  →  8% de los partidos
+         └ ⚽🥅 Gol del penalti     → 70% de los penaltis tirados
+         └ 🖐🥅 Parado por portero  → 20% de los penaltis fallados
+         └ ⚽❌ Fallado             → 10% de los penaltis fallados
+     ⚽🎯  Gol de falta             →  8% de los partidos
+     ⚽🚫  Autogol                  →  8% de los partidos
 
      ── PUNTUACIÓN MVP ──────────────────────────────────────────────
      ⚽  Gol normal        → 3 pts
-     🎯  Gol de falta      → 4 pts
-     🥅  Penalti gol       → 2 pts
-     🖐  Penalti parado    → 3 pts
-     🚫  Autogol           → -1 pt (penaliza al que lo mete)
+     ⚽🎯  Gol de falta      → 4 pts
+     ⚽🥅  Penalti gol       → 2 pts
+     🖐🥅  Penalti parado    → 3 pts
+     ⚽🚫  Autogol           → -1 pt (penaliza al que lo mete)
      🏆  Gol decisivo      → +2 pts extra
      Hat-trick o más: se muestra en acta → Mbappé (3⚽)
      Sin goles/paradas: MVP aleatorio de campo del equipo ganador.
@@ -2302,21 +2302,21 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
           if(!redCardTeam){redCardTeam=foul_t;redCardMin=pen_min;}
         }
       }
-      evts.push({min:pen_min,ico:'🤦',team:foul_t,player:foul_p,type:'pen-prov'});
+      evts.push({min:pen_min,ico:'🤦🥅',team:foul_t,player:foul_p,type:'pen-prov'});
       // Resultado del penalti: equipo RIVAL (prov_t) tira
       var pen_kick_min = rndMinAfter(pen_min);
       var pr=Math.random();
       if(pr<0.70){
-        // 🥅 Gol — suma al equipo que tira (prov_t)
+        // ⚽🥅 Gol — suma al equipo que tira (prov_t)
         if(prov_t==='a')sa++;else sb++;
-        evts.push({min:pen_kick_min,ico:'🥅',team:prov_t,player:kick_p,type:'pen-gol'});
+        evts.push({min:pen_kick_min,ico:'⚽🥅',team:prov_t,player:kick_p,type:'pen-gol'});
       } else if(pr<0.90){
-        // 🖐 Parado por portero del equipo que cometió la falta (foul_t)
+        // 🖐🥅 Parado por portero del equipo que cometió la falta (foul_t)
         var gk=rndGK(foul_t==='a'?sqA:sqB);
-        evts.push({min:pen_kick_min,ico:'🖐',team:foul_t,player:gk,type:'pen-parado'});
+        evts.push({min:pen_kick_min,ico:'🖐🥅',team:foul_t,player:gk,type:'pen-parado'});
       } else {
-        // ❌ Fuera/poste — lo tira el equipo rival (prov_t)
-        evts.push({min:pen_kick_min,ico:'❌',team:prov_t,player:kick_p,type:'pen-fallo'});
+        // ❌🥅 Fuera/poste — lo tira el equipo rival (prov_t)
+        evts.push({min:pen_kick_min,ico:'❌🥅',team:prov_t,player:kick_p,type:'pen-fallo'});
       }
     }
 
@@ -2324,14 +2324,14 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     if(Math.random()<0.08){
       var fgt=rndTeam(); var fgsq=fgt==='a'?sqA:sqB; var fgp=rndSqNonGK(fgsq);
       if(fgt==='a')sa++;else sb++;
-      evts.push({min:rndMin(),ico:'🎯',team:fgt,player:fgp,type:'falta-gol'});
+      evts.push({min:rndMin(),ico:'⚽🎯',team:fgt,player:fgp,type:'falta-gol'});
     }
 
     // ── AUTOGOL (8%) ─────────────────────────────────────────────────
     if(Math.random()<0.08){
       var agt=rndTeam(); var agsq=agt==='a'?sqA:sqB; var agp=rndSqNonGK(agsq);
       if(agt==='a')sb++;else sa++;
-      evts.push({min:rndMin(),ico:'🚫',team:agt,player:agp,type:'propia'});
+      evts.push({min:rndMin(),ico:'⚽🚫',team:agt,player:agp,type:'propia'});
     }
 
     // ── GOLES NORMALES con influencia real del rating ───────────────
@@ -2438,7 +2438,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
 
     // ── MVP ───────────────────────────────────────────────────────────
     // Sistema de puntuación:
-    //   ⚽ gol=3 | 🎯 falta-gol=4 | 🥅 pen-gol=2 | 🖐 pen-parado=3 | 🚫 propia=-1
+    //   ⚽ gol=3 | ⚽🎯 falta-gol=4 | ⚽🥅 pen-gol=2 | 🖐🥅 pen-parado=3 | ⚽🚫 propia=-1
     //   🏆 gol decisivo +2 extra
     var mvpName='', mvpTeam='';
     var mvpScores={}, mvpTeams={}, mvpGoals={};
@@ -2791,12 +2791,12 @@ const ICON_MAP = {
 "⚽":"gol",
 "🟨":"amarilla",
 "🟥":"roja",
-"🤦‍♂️":"pen-prov",
-"🥅":"pen-gol",
-"❌":"pen-fallado",
-"🖐":"pen-parado",
-"🎯":"falta-gol",
-"🚫":"autogol",
+"🤦‍♂️🥅":"pen-prov",
+"⚽🥅":"pen-gol",
+"❌🥅":"pen-fallado",
+"🖐🥅":"pen-parado",
+"⚽🎯":"falta-gol",
+"⚽🚫":"autogol",
 "⭐":"mvp"
 };
 
@@ -3011,12 +3011,12 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if(type) return type;
     if(ico === '⚽') return 'gol';
     if(ico === '🟨' || ico === '🟥' || ico === '🟨🟥') return 'card';
-    if(ico === '🤦' || ico === '🤦‍♂' || ico === '🤦‍♂️') return 'pen-prov';
-    if(ico === '🥅') return 'pen-gol';
-    if(ico === '❌') return 'pen-fallado';
-    if(ico === '🖐') return 'pen-parado';
-    if(ico === '🎯') return 'falta-gol';
-    if(ico === '🚫') return 'propia';
+    if(ico === '🤦🥅' || ico === '🤦‍♂🥅' || ico === '🤦‍♂️🥅') return 'pen-prov';
+    if(ico === '⚽🥅') return 'pen-gol';
+    if(ico === '⚽❌') return 'pen-fallado';
+    if(ico === '🖐🥅') return 'pen-parado';
+    if(ico === '⚽🎯') return 'falta-gol';
+    if(ico === '⚽🚫') return 'propia';
     if(ico === '⭐') return 'mvp';
     return '';
   }
@@ -3289,8 +3289,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   var _editState = { mid: null, evId: null };
 
   var ICONS = {
-    gol:'⚽', propia:'🚫', 'pen-gol':'🥅', 'pen-fallo':'❌',
-    'pen-prov':'🤦', 'pen-parado':'🖐', 'falta-gol':'🎯',
+    gol:'⚽', propia:'⚽🚫', 'pen-gol':'⚽🥅', 'pen-fallo':'❌🥅',
+    'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅', 'falta-gol':'⚽🎯',
     amarilla:'🟨', 'd-amarilla':'🟨🟥', roja:'🟥', mvp:'⭐'
   };
   var SCORING = ['gol','propia','pen-gol','falta-gol'];
@@ -4739,7 +4739,7 @@ window.applyETSub = function(activeA, activeB, benA, benB, subIdxA, subIdxB) {
 var _styleOverlay = document.createElement('style');
 _styleOverlay.textContent =
   '.ml-pl-ov-btn.jugador-baja { opacity:.4; text-decoration:line-through; pointer-events:none; cursor:not-allowed; }'
-  + '.ml-pl-ov-btn.jugador-baja::after { content:" 🚫"; font-size:10px; }';
+  + '.ml-pl-ov-btn.jugador-baja::after { content:" ⚽🚫"; font-size:10px; }';
 document.head.appendChild(_styleOverlay);
 
 // Parchar mlShowPl_* para marcar bajas en overlay de jugadores

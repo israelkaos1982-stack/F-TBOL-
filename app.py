@@ -2,8 +2,10 @@ from flask import Flask, render_template, redirect, url_for, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import random
 import os
-# IMPORTANTE: Importamos el diccionario desde tu otro archivo
+
+# --- IMPORTANTE: Importamos datos y lógica externa ---
 from jugadores_data import jugadores_por_equipo
+from logica_liga import calcular_tabla, obtener_resultados_ia
 
 app = Flask(__name__)
 
@@ -67,7 +69,6 @@ def generar_calendario(lista_equipos):
         jornadas.append(p)
         temp_list.insert(1, temp_list.pop())
     
-    # Añadimos la vuelta
     vuelta = []
     for j in jornadas:
         vuelta.append([(v, l) for l, v in j])
@@ -78,11 +79,9 @@ calendario = generar_calendario(equipos)
 def simular_y_guardar_partido(jornada_num, local, visitante):
     if Partido.query.filter_by(local=local, visitante=visitante).first(): return
     
-    # Simulación rápida de goles
     gl, gv = random.randint(0, 4), random.randint(0, 4)
     eventos = []
     
-    # Generar algunos eventos básicos para la IA
     for _ in range(gl): eventos.append({"tipo": "gol", "equipo": local, "jugador": elegir_jugador(local)})
     for _ in range(gv): eventos.append({"tipo": "gol", "equipo": visitante, "jugador": elegir_jugador(visitante)})
     
@@ -98,11 +97,12 @@ def simular_y_guardar_partido(jornada_num, local, visitante):
 
 # --- RUTAS ---
 @app.route("/")
-def inicio(): return render_template("index.html")
+def inicio(): 
+    return render_template("index.html")
 
 @app.route("/calendario")
 def ver_calendario():
-    # 1. Simulación invisible de IA vs IA de Primera
+    # 1. Simulación automática de IA vs IA
     for idx, jornada in enumerate(calendario, 1):
         for loc, vis in jornada:
             if loc in equipos_primera and vis in equipos_primera:
@@ -120,8 +120,17 @@ def ver_calendario():
 
 @app.route("/clasificacion")
 def ver_clasificacion():
-    # Aquí irá tu lógica de puntos (3 victoria, 1 empate)
-    return render_template("clasificacion.html")
+    # Traemos todos los partidos de la base de datos
+    todos_los_partidos = Partido.query.all()
+    
+    # Usamos las funciones de logica_liga.py
+    tabla = calcular_tabla(equipos_primera, todos_los_partidos)
+    jornadas_ia = obtener_resultados_ia(todos_los_partidos, equipos_primera, equipos_humanos)
+    
+    return render_template("clasificacion.html", 
+                           tabla=tabla, 
+                           jornadas_ia=jornadas_ia, 
+                           humanos=equipos_humanos)
 
 @app.route("/reiniciar")
 def reiniciar():

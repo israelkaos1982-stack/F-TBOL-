@@ -4992,3 +4992,403 @@
 </div>
 </div>
 
+
+
+<script>
+(function(){
+  var SEGUNDA_STATE_KEY = 'ef_segunda_state_v2';
+  var SEGUNDA_TEAMS_KEY = 'ef_segunda_custom_teams_v1';
+  var PRIMERA_STATE_KEY = 'ef_primf_state_v2';
+  var TRANSITION_KEY = 'ef_primf_transition_v1';
+
+  var DEFAULT_SEGUNDA_TEAMS = [
+    {name:'Real Racing Club', short:'Racing', media:74},
+    {name:'RC Deportivo', short:'Depor', media:72},
+    {name:'UD Almería', short:'Almería', media:72},
+    {name:'Málaga CF', short:'Málaga', media:72},
+    {name:'CD Castellón', short:'Castellón', media:71},
+    {name:'UD Las Palmas', short:'Las Palmas', media:71},
+    {name:'Burgos CF', short:'Burgos', media:70},
+    {name:'Real Sporting de Gijón', short:'Sporting', media:70},
+    {name:'Ceuta', short:'Ceuta', media:69},
+    {name:'SD Eibar', short:'Eibar', media:69},
+    {name:'Córdoba CF', short:'Córdoba', media:68},
+    {name:'Real Sociedad B', short:'R. Sociedad B', media:68},
+    {name:'FC Andorra', short:'Andorra', media:68},
+    {name:'Cádiz CF', short:'Cádiz', media:67},
+    {name:'Granada', short:'Granada', media:67},
+    {name:'Albacete BP', short:'Albacete', media:67},
+    {name:'Real Valladolid', short:'Valladolid', media:67},
+    {name:'Leganés', short:'Leganés', media:66},
+    {name:'Huesca', short:'Huesca', media:66},
+    {name:'Real Zaragoza', short:'Zaragoza', media:65},
+    {name:'Cultural Leonesa', short:'Cultural', media:64},
+    {name:'Mirandés', short:'Mirandés', media:64}
+  ];
+
+  var DEFAULT_PRIMERA_G1 = [
+    {name:'Ponferradina', short:'Ponferradina', media:64},
+    {name:'Gimnàstic Tarragona', short:'Nàstic', media:64},
+    {name:'Barça Atlètic', short:'Barça Atlètic', media:63},
+    {name:'Celta Fortuna', short:'Celta Fortuna', media:63},
+    {name:'CD Arenteiro', short:'Arenteiro', media:62},
+    {name:'CD Lugo', short:'Lugo', media:62},
+    {name:'Unionistas CF', short:'Unionistas', media:62},
+    {name:'Real Unión', short:'Real Unión', media:61},
+    {name:'Sestao River', short:'Sestao', media:61},
+    {name:'Zamora CF', short:'Zamora', media:61},
+    {name:'Ourense CF', short:'Ourense', media:60},
+    {name:'Tarazona', short:'Tarazona', media:60},
+    {name:'Osasuna Promesas', short:'Osasuna B', media:60},
+    {name:'Bilbao Athletic', short:'Bilbao Athletic', media:60},
+    {name:'Amorebieta', short:'Amorebieta', media:60},
+    {name:'Gimnástica Segoviana', short:'Segoviana', media:59},
+    {name:'SD Logroñés', short:'SD Logroñés', media:59},
+    {name:'Barakaldo CF', short:'Barakaldo', media:59},
+    {name:'Salamanca CF UDS', short:'Salamanca UDS', media:58},
+    {name:'Rayo Cantabria', short:'Rayo Cantabria', media:58}
+  ];
+
+  var DEFAULT_PRIMERA_G2 = [
+    {name:'Real Murcia', short:'Murcia', media:64},
+    {name:'UD Ibiza', short:'Ibiza', media:64},
+    {name:'AD Ceuta B', short:'Ceuta B', media:63},
+    {name:'Antequera CF', short:'Antequera', media:63},
+    {name:'Hércules CF', short:'Hércules', media:63},
+    {name:'Mérida AD', short:'Mérida', media:62},
+    {name:'Algeciras CF', short:'Algeciras', media:62},
+    {name:'Marbella FC', short:'Marbella', media:62},
+    {name:'Atlético Sanluqueño', short:'Sanluqueño', media:61},
+    {name:'CF Intercity', short:'Intercity', media:61},
+    {name:'Sevilla Atlético', short:'Sevilla At.', media:61},
+    {name:'Betis Deportivo', short:'Betis Dep.', media:61},
+    {name:'Alcoyano', short:'Alcoyano', media:60},
+    {name:'Yeclano Deportivo', short:'Yeclano', media:60},
+    {name:'Villarreal B', short:'Villarreal B', media:60},
+    {name:'Atlético Baleares', short:'At. Baleares', media:60},
+    {name:'Recreativo de Huelva', short:'Recreativo', media:59},
+    {name:'Fuenlabrada', short:'Fuenlabrada', media:59},
+    {name:'AD Alcorcón', short:'Alcorcón', media:59},
+    {name:'Linares Deportivo', short:'Linares', media:58}
+  ];
+
+  var STATS_CATS = [
+    {key:'goles-total', title:'Goleadores', icon:'⚽'},
+    {key:'mvp', title:'MVP', icon:'⭐'},
+    {key:'yel', title:'Tarjetas amarillas', icon:'🟨'},
+    {key:'red', title:'Tarjetas rojas', icon:'🟥'},
+    {key:'pen-fallado', title:'Penaltis fallados', icon:'❌'},
+    {key:'propia', title:'Autogoles', icon:'🥴'},
+    {key:'pen-prov', title:'Penaltis provocados', icon:'🎯'},
+    {key:'pen-parado', title:'Penaltis parados', icon:'🧤'},
+    {key:'pen-gol', title:'Goles de penalti', icon:'⚪'},
+    {key:'falta-gol', title:'Goles a balón parado', icon:'🎯'}
+  ];
+
+  function esc(str){return String(str==null?'':str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+  function deepCopy(obj){return JSON.parse(JSON.stringify(obj));}
+  function randInt(min,max){return Math.floor(Math.random()*(max-min+1))+min;}
+  function choice(arr){return arr[Math.floor(Math.random()*arr.length)];}
+  function clamp(n,min,max){return Math.max(min,Math.min(max,n));}
+  function loadJSON(key,fallback){try{var raw=localStorage.getItem(key); return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}
+  function saveJSON(key,val){localStorage.setItem(key,JSON.stringify(val));}
+
+  function getSegundaTeams(){return loadJSON(SEGUNDA_TEAMS_KEY, deepCopy(DEFAULT_SEGUNDA_TEAMS));}
+  function setSegundaTeams(teams){saveJSON(SEGUNDA_TEAMS_KEY, teams);}
+  function getPrimeraTeams(){return loadJSON(PRIMERA_STATE_KEY + '_teams', {g1:deepCopy(DEFAULT_PRIMERA_G1), g2:deepCopy(DEFAULT_PRIMERA_G2)});}
+  function setPrimeraTeams(data){saveJSON(PRIMERA_STATE_KEY + '_teams', data);}
+  function getPrimeraState(){return loadJSON(PRIMERA_STATE_KEY, {g1:{table:[],players:[]}, g2:{table:[],players:[]}});}
+  function setPrimeraState(data){saveJSON(PRIMERA_STATE_KEY, data);}
+  function loadSegundaState(){return loadJSON(SEGUNDA_STATE_KEY, {table:[],players:[]});}
+  function saveSegundaState(data){saveJSON(SEGUNDA_STATE_KEY, data);}
+
+  function buildRoster(team){
+    var base = team.media || 60;
+    function mk(prefix,count,shift){var arr=[]; for(var i=1;i<=count;i++){arr.push([team.short+' '+prefix+' '+i, clamp(base+shift+randInt(-3,3),48,90)]);} return arr;}
+    return {porteros:mk('POR',2,-4), defensas:mk('DEF',7,-2), medios:mk('MED',7,0), delanteros:mk('DEL',6,2)};
+  }
+
+  function incPlayerStat(map, team, name, key, val){
+    var id = team+'__'+name;
+    if(!map[id]) map[id] = {name:name, team:team, 'goles-total':0, yel:0, red:0, mvp:0, 'pen-gol':0, 'pen-prov':0, 'pen-parado':0, 'falta-gol':0, propia:0, 'pen-fallado':0};
+    map[id][key] = (map[id][key]||0) + (val||1);
+  }
+
+  function resultDot(r){return '<span class="form-dot '+(r==='V'?'win':(r==='E'?'draw':'loss'))+'">'+r+'</span>';}
+  function formHtml(form){form=form||[]; return form.slice(-5).map(resultDot).join('') || '<span class="clas-form-empty">—</span>'}
+  function topPlayersBy(players,key){return (players||[]).map(function(p){return {name:p.name,team:p.team,value:Number(p[key]||0)}}).filter(function(p){return p.value>0}).sort(function(a,b){if(b.value!==a.value)return b.value-a.value; if(a.team!==b.team)return a.team.localeCompare(b.team,'es'); return a.name.localeCompare(b.name,'es')})}
+
+  function createTableTemplate(teams){
+    return teams.map(function(t){return {name:t.name, short:t.short||t.name, media:t.media||60, pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, ta:0, tr:0, mvp:0, form:[]};});
+  }
+
+  function pickPlayer(roster, group){
+    if(group && roster[group] && roster[group].length) return choice(roster[group])[0];
+    var all = [].concat(roster.porteros, roster.defensas, roster.medios, roster.delanteros);
+    return choice(all)[0];
+  }
+
+  function weightedScorer(roster){
+    var bag=[];
+    roster.porteros.forEach(function(p){for(var i=0;i<1;i++) bag.push({group:'porteros',name:p[0]});});
+    roster.defensas.forEach(function(p){for(var i=0;i<4;i++) bag.push({group:'defensas',name:p[0]});});
+    roster.medios.forEach(function(p){for(var i=0;i<10;i++) bag.push({group:'medios',name:p[0]});});
+    roster.delanteros.forEach(function(p){for(var i=0;i<22;i++) bag.push({group:'delanteros',name:p[0]});});
+    return choice(bag);
+  }
+
+  function simulateGoals(home, away){
+    var diff = (home.media - away.media) / 6;
+    var homeBase = 1.25 + diff + 0.25;
+    var awayBase = 1.05 - diff;
+    function sample(base){
+      var r = Math.random();
+      if(base < 0.75) return r<0.45?0:r<0.78?1:r<0.93?2:r<0.98?3:4;
+      if(base < 1.25) return r<0.30?0:r<0.65?1:r<0.87?2:r<0.96?3:4;
+      if(base < 1.75) return r<0.18?0:r<0.50?1:r<0.78?2:r<0.93?3:r<0.98?4:5;
+      return r<0.10?0:r<0.35?1:r<0.65?2:r<0.86?3:r<0.96?4:5;
+    }
+    return [sample(homeBase), sample(awayBase)];
+  }
+
+  function playMatch(a,b,playerStats,rosters){
+    var glgv = simulateGoals(a,b), gl=glgv[0], gv=glgv[1];
+    a.pj++; b.pj++; a.gf+=gl; a.gc+=gv; b.gf+=gv; b.gc+=gl;
+    a.ta += randInt(0,4); b.ta += randInt(0,4);
+    if(Math.random()<0.10) a.tr += 1;
+    if(Math.random()<0.10) b.tr += 1;
+    if(gl>gv){a.v++; b.p++; a.pts+=3; a.form.push('V'); b.form.push('D');}
+    else if(gv>gl){b.v++; a.p++; b.pts+=3; b.form.push('V'); a.form.push('D');}
+    else {a.e++; b.e++; a.pts++; b.pts++; a.form.push('E'); b.form.push('E');}
+
+    var homeRoster=rosters[a.name], awayRoster=rosters[b.name];
+    function addEvents(teamName, oppName, roster, goals){
+      for(var i=0;i<goals;i++){
+        var scorer = weightedScorer(roster);
+        var roll = Math.random();
+        if(roll<0.10){incPlayerStat(playerStats, teamName, scorer.name, 'pen-gol', 1); incPlayerStat(playerStats, teamName, scorer.name, 'pen-prov', 1); incPlayerStat(playerStats, teamName, scorer.name, 'goles-total', 1);}
+        else if(roll<0.16){incPlayerStat(playerStats, teamName, scorer.name, 'falta-gol', 1); incPlayerStat(playerStats, teamName, scorer.name, 'goles-total', 1);}
+        else if(roll<0.20){var own = pickPlayer(rosters[oppName], 'defensas'); incPlayerStat(playerStats, oppName, own, 'propia', 1); incPlayerStat(playerStats, teamName, scorer.name, 'goles-total', 1);}
+        else {incPlayerStat(playerStats, teamName, scorer.name, 'goles-total', 1);}
+      }
+      if(Math.random()<0.15) incPlayerStat(playerStats, teamName, pickPlayer(roster,'delanteros'), 'pen-fallado', 1);
+      if(Math.random()<0.12) incPlayerStat(playerStats, teamName, pickPlayer(roster,'porteros'), 'pen-parado', 1);
+      if(Math.random()<0.55) incPlayerStat(playerStats, teamName, pickPlayer(roster,'medios'), 'yel', randInt(0,1));
+      if(Math.random()<0.18) incPlayerStat(playerStats, teamName, pickPlayer(roster,'defensas'), 'red', 1);
+    }
+    addEvents(a.name,b.name,homeRoster,gl);
+    addEvents(b.name,a.name,awayRoster,gv);
+    var mvpTeam = gl>gv ? a : (gv>gl ? b : (Math.random()<0.5?a:b));
+    mvpTeam.mvp += 1;
+    incPlayerStat(playerStats, mvpTeam.name, pickPlayer(rosters[mvpTeam.name], Math.random()<0.55?'delanteros':'medios'), 'mvp', 1);
+  }
+
+  function simulateLeague(teams){
+    var table = createTableTemplate(teams);
+    var teamMap = {};
+    var rosters = {};
+    table.forEach(function(t){teamMap[t.name]=t; rosters[t.name]=buildRoster(t);});
+    var playerStats = {};
+    for(var i=0;i<table.length;i++){
+      for(var j=i+1;j<table.length;j++){
+        playMatch(teamMap[table[i].name], teamMap[table[j].name], playerStats, rosters);
+        playMatch(teamMap[table[j].name], teamMap[table[i].name], playerStats, rosters);
+      }
+    }
+    table.forEach(function(t){t.dg=t.gf-t.gc; t.form=t.form.slice(-5);});
+    table.sort(function(a,b){if(b.pts!==a.pts)return b.pts-a.pts; if(b.dg!==a.dg)return b.dg-a.dg; if(b.gf!==a.gf)return b.gf-a.gf; if((b.media||0)!==(a.media||0)) return (b.media||0)-(a.media||0); return a.name.localeCompare(b.name,'es')});
+    return {table:table, players:Object.keys(playerStats).map(function(k){return playerStats[k]})};
+  }
+
+  function rowZoneClassSegunda(pos, total){
+    if(pos<=2) return 'clas-zone-asc';
+    if(pos<=6) return 'clas-zone-play';
+    if(pos>total-4) return 'clas-zone-down';
+    return '';
+  }
+  function rowZoneClassPrimera(pos){
+    if(pos===1) return 'clas-zone-asc';
+    if(pos<=5) return 'clas-zone-play';
+    return '';
+  }
+
+  function renderTable(rootId, table, legendHtml, zoneFn, emptyText){
+    var root = document.getElementById(rootId); if(!root) return;
+    if(!table || !table.length){root.innerHTML='<div class="clas-empty">'+emptyText+'</div>'; return;}
+    var html=(legendHtml||'')+'<div class="clas-scroll-outer"><div class="clas-hdr-scroll"><div class="clas-table"><div class="clas-hdr"><span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span><span>Últ. 5</span></div></div></div><div class="clas-scroll"><div class="clas-table">';
+    table.forEach(function(team,idx){var pos=idx+1; var dgClass='clas-val dg '+(team.dg>0?'pos':(team.dg<0?'neg':'zer')); html+='<div class="clas-row '+(zoneFn?zoneFn(pos,table.length):'')+'"><div class="clas-team-cell"><span class="clas-pos-n">'+pos+'</span><span class="clas-team-name">'+esc(team.short||team.name)+'</span></div><div class="clas-pts">'+team.pts+'</div><div class="clas-pj">'+team.pj+'</div><div class="clas-val">'+team.v+'</div><div class="clas-val">'+team.e+'</div><div class="clas-val">'+team.p+'</div><div class="clas-val gf">'+team.gf+'</div><div class="clas-val gc">'+team.gc+'</div><div class="'+dgClass+'">'+(team.dg>0?'+':'')+team.dg+'</div><div class="clas-val ta">'+team.ta+'</div><div class="clas-val tr">'+team.tr+'</div><div class="clas-mvp">'+team.mvp+'</div><div class="clas-pct">'+(team.pj?Math.round((team.v/team.pj)*100):0)+'%</div><div class="clas-form">'+formHtml(team.form)+'</div></div>';});
+    html+='</div></div></div>';
+    root.innerHTML=html;
+  }
+
+  function renderStats(rootId, players, emptyText){
+    var root=document.getElementById(rootId); if(!root) return;
+    if(!players || !players.length){root.innerHTML='<div class="liga-stat-empty">'+emptyText+'</div>'; return;}
+    function rows(items,start){return items.map(function(item,idx){return '<div class="liga-stat-row"><div class="liga-stat-rank">'+(start+idx)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+esc(item.name)+'</div><div class="liga-stat-team">'+esc(item.team)+'</div></div><div class="liga-stat-value">'+item.value+'</div></div>'}).join('')}
+    var html='';
+    STATS_CATS.forEach(function(cat){var all=topPlayersBy(players,cat.key); var top=all.slice(0,6), rest=all.slice(6); html+='<div class="liga-stat-card"><div class="liga-stat-head"><div class="liga-stat-ico">'+cat.icon+'</div><div class="liga-stat-title">'+cat.title+'</div></div><div class="liga-stat-body">'; if(!all.length){html+='<div class="liga-stat-empty">Sin datos todavía</div>';} else {html+=rows(top,1); if(rest.length){html+='<details class="liga-stat-more"><summary>Ver todos ('+all.length+')</summary><div class="liga-stat-more-list">'+rows(rest,7)+'</div></details>';}} html+='</div></div>';});
+    root.innerHTML=html;
+  }
+
+  function renderSegunda(){
+    var st=loadSegundaState();
+    var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Ascenso directo</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 Playoff</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso a Primera Federación</span></div>';
+    renderTable('clas-segunda-content', st.table, legend, rowZoneClassSegunda, 'Pulsa <b>Simular liga</b> para generar la clasificación de Segunda.');
+    renderStats('segunda-stats-dashboard', st.players, 'Simula la liga para rellenar todas las estadísticas.');
+  }
+
+  function renderPrimera(){
+    var st=getPrimeraState();
+    var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Ascenso directo</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 Playoff de ascenso</span></div>';
+    renderTable('clas-primf-g1-content', st.g1.table, legend, rowZoneClassPrimera, 'Pulsa <b>Simular grupo</b> para generar la clasificación del Grupo 1.');
+    renderTable('clas-primf-g2-content', st.g2.table, legend, rowZoneClassPrimera, 'Pulsa <b>Simular grupo</b> para generar la clasificación del Grupo 2.');
+    renderStats('primf-g1-stats-dashboard', st.g1.players, 'Simula el grupo para rellenar las estadísticas.');
+    renderStats('primf-g2-stats-dashboard', st.g2.players, 'Simula el grupo para rellenar las estadísticas.');
+    renderMovement();
+  }
+
+  function playoffWinner(groupTable){
+    var pool=(groupTable||[]).slice(1,5);
+    if(!pool.length) return null;
+    var bag=[];
+    pool.forEach(function(t,idx){
+      var weight = Math.max(1, (t.pts||0) + (t.media||0) + (5-idx)*3);
+      for(var i=0;i<weight;i++) bag.push(t);
+    });
+    return deepCopy(choice(bag));
+  }
+
+  function buildMovementPreview(){
+    var segunda=loadSegundaState();
+    var primera=getPrimeraState();
+    if(!(segunda.table||[]).length || !(primera.g1.table||[]).length || !(primera.g2.table||[]).length) return null;
+    var relegated=(segunda.table||[]).slice(-4).map(deepCopy);
+    var g1Direct=deepCopy(primera.g1.table[0]);
+    var g2Direct=deepCopy(primera.g2.table[0]);
+    var g1Play=playoffWinner(primera.g1.table);
+    var g2Play=playoffWinner(primera.g2.table);
+    return {
+      relegated: relegated,
+      promoted: [g1Direct, g1Play, g2Direct, g2Play].filter(Boolean),
+      direct:[g1Direct,g2Direct].filter(Boolean),
+      playoff:[g1Play,g2Play].filter(Boolean)
+    };
+  }
+
+  function renderMovement(){
+    var root=document.getElementById('primf-mov-content'); if(!root) return;
+    var preview = loadJSON(TRANSITION_KEY, null) || buildMovementPreview();
+    if(!preview){root.innerHTML='<div class="clas-empty">Necesitas simular <b>Liga Hypermotion</b> y los dos grupos de <b>Primera Federación</b> para calcular ascensos y descensos.</div>'; return;}
+    function list(items,title,emoji){return '<div class="liga-stat-card"><div class="liga-stat-head"><div class="liga-stat-ico">'+emoji+'</div><div class="liga-stat-title">'+title+'</div></div><div class="liga-stat-body">'+items.map(function(t,idx){return '<div class="liga-stat-row"><div class="liga-stat-rank">'+(idx+1)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+esc(t.short||t.name)+'</div><div class="liga-stat-team">Media '+(t.media||'-')+'</div></div><div class="liga-stat-value">'+(t.pts!=null?t.pts:'')+'</div></div>';}).join('')+'</div></div>'}
+    var html='<div class="liga-stats-wrap">'+list(preview.direct,'Ascenso directo a Hypermotion','🔵')+list(preview.playoff,'Ganadores del playoff','🟠')+list(preview.relegated,'Descenso desde Hypermotion','🔴')+'</div>';
+    html+='<div class="mini" style="margin-top:12px">Al aplicar movimientos se prepara una <b>temporada nueva</b>: suben 4 a Hypermotion y bajan 4 a Primera Federación (2 a cada grupo).</div>';
+    root.innerHTML=html;
+  }
+
+  function normalizeTeam(team, delta){return {name:team.name, short:team.short||team.name, media:clamp((team.media||60)+(delta||0),56,80)};}
+
+  function applyMovements(){
+    var preview = buildMovementPreview();
+    if(!preview) return;
+    saveJSON(TRANSITION_KEY, preview);
+    var segundaTeams = getSegundaTeams();
+    var primeraTeams = getPrimeraTeams();
+    var relegatedNames = {}; preview.relegated.forEach(function(t){relegatedNames[t.name]=true;});
+    var promotedNames = {}; preview.promoted.forEach(function(t){promotedNames[t.name]=true;});
+    var g1Prom = {}; [preview.direct[0], preview.playoff[0]].filter(Boolean).forEach(function(t){g1Prom[t.name]=true;});
+    var g2Prom = {}; [preview.direct[1], preview.playoff[1]].filter(Boolean).forEach(function(t){g2Prom[t.name]=true;});
+
+    var newSegunda = segundaTeams.filter(function(t){return !relegatedNames[t.name];}).map(function(t){return normalizeTeam(t,0);});
+    preview.promoted.forEach(function(t){newSegunda.push(normalizeTeam(t,2));});
+
+    var newG1 = primeraTeams.g1.filter(function(t){return !g1Prom[t.name];}).map(function(t){return normalizeTeam(t,0);});
+    var newG2 = primeraTeams.g2.filter(function(t){return !g2Prom[t.name];}).map(function(t){return normalizeTeam(t,0);});
+    newG1.push(normalizeTeam(preview.relegated[0],-2));
+    newG1.push(normalizeTeam(preview.relegated[1],-2));
+    newG2.push(normalizeTeam(preview.relegated[2],-2));
+    newG2.push(normalizeTeam(preview.relegated[3],-2));
+
+    setSegundaTeams(newSegunda);
+    setPrimeraTeams({g1:newG1, g2:newG2});
+    saveSegundaState({table:[],players:[]});
+    setPrimeraState({g1:{table:[],players:[]}, g2:{table:[],players:[]}});
+    renderSegunda(); renderPrimera();
+    var root=document.getElementById('primf-mov-content');
+    if(root){root.insertAdjacentHTML('afterbegin','<div class="clas-empty" style="margin-bottom:12px;background:rgba(35,90,35,.35);border-color:rgba(110,255,110,.3)">✅ Movimientos aplicados. Ya tienes preparada la <b>nueva temporada</b> con ascensos y descensos entre Hypermotion y Primera Federación.</div>');}
+  }
+
+  function ensurePrimeraCard(){
+    var esp=document.getElementById('s-espana'); if(!esp) return;
+    var list=esp.querySelector('.submenu-list'); if(!list || document.getElementById('primf-card')) return;
+    var card=document.createElement('div');
+    card.className='submenu-card sc-liga-card';
+    card.id='primf-card';
+    card.setAttribute('onclick',"go('s-primf')");
+    card.innerHTML='<span class="sc-emoji">🏁</span><span class="sc-label">Primera Federación</span><span class="sc-arr">▶</span>';
+    var second=list.querySelector("[onclick=\"go('s-segunda')\"]");
+    if(second && second.nextSibling) list.insertBefore(card, second.nextSibling); else list.appendChild(card);
+  }
+
+  function ensurePrimeraScreens(){
+    if(document.getElementById('s-primf')) return;
+    var html=''
+    +'<div class="screen" id="s-primf">'
+    +'<button class="back-btn" onclick="go(\'s-espana\')">◀ Volver</button>'
+    +'<div class="sec-hdr"><span class="sec-emoji">🏁</span><h2>Primera Federación</h2></div>'
+    +'<div class="submenu-list">'
+    +'<div class="submenu-card sc-sub-verde2" onclick="go(\'s-primf-g1\')"><span class="sc-emoji">①</span><span class="sc-label">Grupo 1 · Clasificación</span><span class="sc-arr">▶</span></div>'
+    +'<div class="submenu-card sc-sub-verde3" onclick="go(\'s-primf-g2\')"><span class="sc-emoji">②</span><span class="sc-label">Grupo 2 · Clasificación</span><span class="sc-arr">▶</span></div>'
+    +'<div class="submenu-card" style="background:linear-gradient(135deg,#20304b,#2f4f8a,#436bc0,#2f4f8a,#20304b);border-color:#5f86dd" onclick="go(\'s-primf-mov\')"><span class="sc-emoji">🔁</span><span class="sc-label">Ascensos y descensos</span><span class="sc-arr">▶</span></div>'
+    +'</div></div>'
+    +'<div class="screen" id="s-primf-g1">'
+    +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
+    +'<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Primera Federación · Grupo 1</h2></div>'
+    +'<div class="segunda-actions" style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin:0 0 12px 0;flex-wrap:wrap;">'
+    +'<button class="btn-simular-liga" onclick="simularPrimeraGrupo(1)">🎲 Simular grupo</button>'
+    +'<button class="btn-simular-liga" style="background:linear-gradient(180deg,#3b0d0d,#711919)" onclick="reiniciarPrimeraGrupo(1)">🗑 Reiniciar grupo</button>'
+    +'</div><div id="clas-primf-g1-content"></div><div class="liga-stats-wrap" id="primf-g1-stats-dashboard" style="margin-top:18px"></div></div>'
+    +'<div class="screen" id="s-primf-g2">'
+    +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
+    +'<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Primera Federación · Grupo 2</h2></div>'
+    +'<div class="segunda-actions" style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin:0 0 12px 0;flex-wrap:wrap;">'
+    +'<button class="btn-simular-liga" onclick="simularPrimeraGrupo(2)">🎲 Simular grupo</button>'
+    +'<button class="btn-simular-liga" style="background:linear-gradient(180deg,#3b0d0d,#711919)" onclick="reiniciarPrimeraGrupo(2)">🗑 Reiniciar grupo</button>'
+    +'</div><div id="clas-primf-g2-content"></div><div class="liga-stats-wrap" id="primf-g2-stats-dashboard" style="margin-top:18px"></div></div>'
+    +'<div class="screen" id="s-primf-mov">'
+    +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
+    +'<div class="sec-hdr"><span class="sec-emoji">🔁</span><h2>Ascensos y descensos</h2></div>'
+    +'<div class="segunda-actions" style="display:flex;gap:10px;justify-content:flex-end;align-items:center;margin:0 0 12px 0;flex-wrap:wrap;">'
+    +'<button class="btn-simular-liga" onclick="simularLigaSegundaMenu()">🎲 Simular Hypermotion</button>'
+    +'<button class="btn-simular-liga" onclick="simularPrimeraGrupo(1)">🎲 Simular G1</button>'
+    +'<button class="btn-simular-liga" onclick="simularPrimeraGrupo(2)">🎲 Simular G2</button>'
+    +'<button class="btn-simular-liga" style="background:linear-gradient(180deg,#0d3b24,#0f6a3f)" onclick="applyPrimeraMovements()">✅ Aplicar movimientos</button>'
+    +'</div><div id="primf-mov-content"></div></div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+
+  function ensureSecondMovementButton(){
+    var screen=document.getElementById('s-segunda-clas'); if(!screen) return;
+    var actions=screen.querySelector('.segunda-actions'); if(!actions || actions.querySelector('.btn-primf-mov')) return;
+    var btn=document.createElement('button');
+    btn.className='btn-simular-liga btn-primf-mov';
+    btn.style.background='linear-gradient(180deg,#1e315f,#3558a8)';
+    btn.innerHTML='🔁 Ascensos/descensos';
+    btn.onclick=function(){ if(typeof go==='function') go('s-primf-mov'); };
+    actions.appendChild(btn);
+  }
+
+  window.simularLigaSegundaMenu=function(){ saveSegundaState(simulateLeague(getSegundaTeams())); renderSegunda(); renderMovement(); if(typeof go==='function') go('s-segunda-clas'); };
+  window.reiniciarLigaSegundaMenu=function(){ saveSegundaState({table:[],players:[]}); localStorage.removeItem(TRANSITION_KEY); renderSegunda(); renderMovement(); };
+  window.simularPrimeraGrupo=function(n){ var teams=getPrimeraTeams(), state=getPrimeraState(); if(n===1){state.g1=simulateLeague(teams.g1); saveJSON(TRANSITION_KEY, null); if(typeof go==='function') go('s-primf-g1');} else {state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null); if(typeof go==='function') go('s-primf-g2');} setPrimeraState(state); renderPrimera(); };
+  window.reiniciarPrimeraGrupo=function(n){ var state=getPrimeraState(); if(n===1) state.g1={table:[],players:[]}; else state.g2={table:[],players:[]}; setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
+  window.applyPrimeraMovements=function(){ applyMovements(); };
+
+  document.addEventListener('DOMContentLoaded', function(){
+    ensurePrimeraCard();
+    ensurePrimeraScreens();
+    ensureSecondMovementButton();
+    renderSegunda();
+    renderPrimera();
+  });
+})();
+</script>

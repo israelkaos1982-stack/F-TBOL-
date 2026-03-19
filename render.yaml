@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: f-tbol
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/instance
+      sizeGB: 1

@@ -1523,6 +1523,13 @@
 </div>
 </div>
 
+<div id="ia-res-section" style="margin-top:24px;padding:0 4px 20px;">
+<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.4);padding:0 0 8px;">PARTIDOS IA vs IA</div>
+<div class="jlist" id="ia-res-list">
+<div style="padding:12px;color:#555;font-size:13px;">Simula los partidos para ver los resultados IA</div>
+</div>
+</div>
+
 
 </div>
 <div class="screen" id="s-liga-stats">
@@ -5389,6 +5396,130 @@
     ensureSecondMovementButton();
     renderSegunda();
     renderPrimera();
+  });
+})();
+</script>
+
+<!-- IA vs IA: ocultar del calendario y mostrar bajo clasificación -->
+<style>
+/* Ocultar partidos IA vs IA del calendario principal (solo jornada 1 los tiene) */
+#s-calendario .match-live-wrap:not(.hvh):not(.hvia) { display: none !important; }
+</style>
+<script>
+(function(){
+  var HUMANOS = ['Real Madrid','FC Barcelona','Athletic Club','Real Sociedad','Real Betis'];
+
+  function esHumano(equipo) {
+    return HUMANOS.indexOf(equipo) !== -1;
+  }
+
+  function buildIAresults() {
+    var container = document.getElementById('ia-res-list');
+    if (!container) return;
+
+    var html = '';
+
+    for (var j = 1; j <= 38; j++) {
+      var matches = [];
+
+      // Jornada 1: leer de LIGA_J1_RESULTS (almacén directo de simulaciones)
+      if (j === 1) {
+        var j1ya = {};
+        (window.LIGA_J1_RESULTS || []).forEach(function(r) {
+          if (!esHumano(r.home) && !esHumano(r.away)) {
+            var scored = (r.gh !== undefined && r.ga_ !== undefined);
+            matches.push({ home: r.home, away: r.away, gh: scored ? r.gh : null, ga: scored ? r.ga_ : null });
+          }
+          j1ya[r.home + '·' + r.away] = true;
+        });
+        // Complementar con el DOM de l-j1 por si hay resultados guardados de sesiones previas
+        var round1 = document.getElementById('l-j1');
+        if (round1) {
+          round1.querySelectorAll('.mrow').forEach(function(row) {
+            var homeEl = row.querySelector('.mn:not(.r)');
+            var awayEl = row.querySelector('.mn.r');
+            var scoreEl = row.querySelector('.ms');
+            if (!homeEl || !awayEl) return;
+            var home = homeEl.textContent.trim();
+            var away = awayEl.textContent.trim();
+            if (home === 'Por definir' || away === 'Por definir') return;
+            if (esHumano(home) || esHumano(away)) return;
+            if (j1ya[home + '·' + away]) return;
+            var scored = scoreEl && !scoreEl.classList.contains('p');
+            var gh = null, ga = null;
+            if (scored) {
+              var txt = scoreEl.textContent.replace('–', '-').trim();
+              var m = txt.match(/^(\d+)-(\d+)$/);
+              if (m) { gh = parseInt(m[1]); ga = parseInt(m[2]); }
+            }
+            matches.push({ home: home, away: away, gh: gh, ga: ga });
+          });
+        }
+      } else {
+        // Jornadas 2-38: leer del DOM de l-j{N}
+        var round = document.getElementById('l-j' + j);
+        if (!round) continue;
+        round.querySelectorAll('.mrow').forEach(function(row) {
+          var homeEl = row.querySelector('.mn:not(.r)');
+          var awayEl = row.querySelector('.mn.r');
+          var scoreEl = row.querySelector('.ms');
+          if (!homeEl || !awayEl) return;
+          var home = homeEl.textContent.trim();
+          var away = awayEl.textContent.trim();
+          if (home === 'Por definir' || away === 'Por definir') return;
+          if (esHumano(home) || esHumano(away)) return;
+          var scored = scoreEl && !scoreEl.classList.contains('p');
+          var gh = null, ga = null;
+          if (scored) {
+            var txt2 = scoreEl.textContent.replace('–', '-').trim();
+            var m2 = txt2.match(/^(\d+)-(\d+)$/);
+            if (m2) { gh = parseInt(m2[1]); ga = parseInt(m2[2]); }
+          }
+          matches.push({ home: home, away: away, gh: gh, ga: ga });
+        });
+      }
+
+      if (matches.length === 0) continue;
+
+      var blockId = 'ia-j' + j;
+      html += '<div class="jblock">';
+      html += '<button class="jbtn c-liga" onclick="tog(\'' + blockId + '\')" style="background:#1a1a2e;border-left:3px solid #444;">';
+      html += '<div class="pdot">▶</div>🤖 <b>Jornada</b> ' + j + '</button>';
+      html += '<div class="jmatches" id="' + blockId + '">';
+      matches.forEach(function(m) {
+        html += '<div class="mrow">';
+        html += '<div class="mn">' + m.home + '</div>';
+        if (m.gh !== null) {
+          html += '<div class="ms">' + m.gh + '–' + m.ga + '</div>';
+        } else {
+          html += '<div class="ms p">vs</div>';
+        }
+        html += '<div class="mn r">' + m.away + '</div>';
+        html += '</div>';
+      });
+      html += '</div></div>';
+    }
+
+    container.innerHTML = html || '<div style="padding:12px;color:#555;font-size:13px;">Sin resultados IA aún</div>';
+  }
+
+  window.buildIAresults = buildIAresults;
+
+  // Rebuilder: actualizar sección IA cada vez que se abra la clasificación
+  document.addEventListener('DOMContentLoaded', function() {
+    // Interceptar go() para refrescar cuando se abre s-liga-clas
+    var _goOrig = window.go;
+    window.go = function(id) {
+      if (_goOrig) _goOrig(id);
+      if (id === 's-liga-clas') setTimeout(buildIAresults, 150);
+    };
+    // También refrescar cuando se registre un resultado de liga
+    var _regOrig = window.registrarResultadoLiga;
+    window.registrarResultadoLiga = function() {
+      if (_regOrig) _regOrig.apply(window, arguments);
+      var clas = document.getElementById('s-liga-clas');
+      if (clas && clas.classList.contains('active')) setTimeout(buildIAresults, 200);
+    };
   });
 })();
 </script>

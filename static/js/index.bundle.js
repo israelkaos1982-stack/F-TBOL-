@@ -5241,6 +5241,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   // ── Generar lesión para partidos HvH / IA vs H ──────────────────
   // Se llama al terminar el partido, genera 0 o 1 lesión por equipo
   // y las guarda en LESIONES_PARTIDO_ACTUAL para mostrar en el overlay
+  var _EQUIPOS_HUMANOS = ['Real Madrid','FC Barcelona','Athletic Club','Real Sociedad','Real Betis'];
+
   window._generarLesionHumano = function(teamA, teamB) {
     window.LESIONES_PARTIDO_ACTUAL = [];
     [teamA, teamB].forEach(function(teamName, idx) {
@@ -5256,17 +5258,21 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       var lesionado = disponibles[Math.floor(Math.random() * disponibles.length)];
       var tipo = sortearGrado();
       var partidos = sortearPartidos(tipo);
+      // Registrar siempre (actualiza estado del equipo IA también)
       registrarLesion(lesionado[1], teamName, partidos, tipo);
-      window.LESIONES_PARTIDO_ACTUAL.push({
-        jugador: [lesionado[0], lesionado[1]],
-        teamName: teamName,
-        tipo: tipo,
-        grado: tipo.grado,
-        gradoNombre: tipo.nombre,
-        gradoEmoji: tipo.emoji,
-        descripcion: sortearEjemplo(tipo),
-        partidos: partidos
-      });
+      // Solo mostrar overlay para equipos humanos
+      if (_EQUIPOS_HUMANOS.indexOf(teamName) !== -1) {
+        window.LESIONES_PARTIDO_ACTUAL.push({
+          jugador: [lesionado[0], lesionado[1]],
+          teamName: teamName,
+          tipo: tipo,
+          grado: tipo.grado,
+          gradoNombre: tipo.nombre,
+          gradoEmoji: tipo.emoji,
+          descripcion: sortearEjemplo(tipo),
+          partidos: partidos
+        });
+      }
     });
   };
 

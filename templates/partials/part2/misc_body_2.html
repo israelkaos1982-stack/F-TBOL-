@@ -1638,9 +1638,9 @@
     if(pos>total-4) return 'clas-zone-down';
     return '';
   }
-  function rowZoneClassPrimera(pos){
-    if(pos===1) return 'clas-zone-asc';
-    if(pos<=5) return 'clas-zone-play';
+  function rowZoneClassPrimera(pos,total){
+    if(pos<=2) return 'clas-zone-asc';
+    if(pos>=(total-2)) return 'clas-zone-down';
     return '';
   }
 
@@ -1671,7 +1671,7 @@
 
   function renderPrimera(){
     var st=getPrimeraState();
-    var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Ascenso directo</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 Playoff de ascenso</span></div>';
+    var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#9c3cdc"></span>🟣 Ascenso a Hypermotion</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso a 2ª Federación</span></div>';
     renderTable('clas-primf-g1-content', st.g1.table, legend, rowZoneClassPrimera, 'Pulsa <b>Simular grupo</b> para generar la clasificación del Grupo 1.');
     renderTable('clas-primf-g2-content', st.g2.table, legend, rowZoneClassPrimera, 'Pulsa <b>Simular grupo</b> para generar la clasificación del Grupo 2.');
     renderStats('primf-g1-stats-dashboard', st.g1.players, 'Simula el grupo para rellenar las estadísticas.');
@@ -1878,6 +1878,11 @@
 #s-calendario .match-live-wrap:not(.hvh):not(.hvia) { display: none !important; }
 /* Botón jugar en mrow */
 .mrow .ms.p { cursor: pointer; color: #ccff00; font-weight: bold; }
+/* Zonas clasificación Primera Federación */
+.clas-row.clas-zone-asc { background: rgba(156,60,220,.18); border-left: 3px solid #9c3cdc; }
+.clas-row.clas-zone-asc .clas-team-cell { background: rgba(100,20,160,.25); }
+.clas-row.clas-zone-down { background: rgba(224,60,60,.15); border-left: 3px solid #e03c3c; }
+.clas-row.clas-zone-down .clas-team-cell { background: rgba(130,20,20,.25); }
 </style>
 <script>
 (function () {

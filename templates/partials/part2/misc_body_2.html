@@ -1971,6 +1971,35 @@
   }
 
   /* ── RELLENAR cal-l{N} (s-calendario) ───────────── */
+  function buildMatchCard(j, home, away, isHvH) {
+    var h = home.replace(/'/g, "\\'");
+    var a = away.replace(/'/g, "\\'");
+    var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[home]) || '';
+    var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[away]) || '';
+    var ratA = rA ? '<div class="ml-team-rat" style="background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:1px 7px;font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#fff;">' + rA + '</div>' : '';
+    var ratB = rB ? '<div class="ml-team-rat" style="background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:1px 7px;font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#fff;">' + rB + '</div>' : '';
+    var etBtn = isHvH
+      ? '<button onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')" style="flex:1;padding:7px 4px;border-radius:5px;border:1px solid rgba(100,160,255,.3);background:rgba(60,100,200,.15);color:#6ab0ff;font-size:10px;font-weight:700;font-family:Oswald,sans-serif;letter-spacing:1px;cursor:pointer;">&#x23F1; PR\xd3RROGA</button>'
+      : '';
+    return '<div class="match-live-wrap ' + (isHvH ? 'hvh' : 'hvia') + '">'
+      + '<div class="ml-venue-bar"><span class="ml-venue-ico">&#x1F3DF;&#xFE0F;</span><span class="ml-venue-name">eFootball Stadium</span><span class="ml-venue-sep">|</span><span class="ml-venue-weather"><span class="ml-sun">&#x2600;&#xFE0F;</span> Soleado &middot; Verano</span></div>'
+      + '<div class="ml-header">'
+        + '<div class="ml-team"><div class="ml-team-name">' + home.toUpperCase() + '</div>' + ratA + '</div>'
+        + '<div class="ml-score-wrap">'
+          + '<div class="ml-scoreboard" style="font-family:\'Bebas Neue\',sans-serif;font-size:28px;font-weight:900;color:#fff;background:rgba(0,0,0,.65);border-radius:6px;padding:5px 14px;letter-spacing:3px;min-width:80px;text-align:center;">0-0</div>'
+          + '<button class="ml-timer" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')">&#x25B6; 0\'</button>'
+        + '</div>'
+        + '<div class="ml-team"><div class="ml-team-name">' + away.toUpperCase() + '</div>' + ratB + '</div>'
+      + '</div>'
+      + '<div style="padding:0 8px 6px;"><button class="ml-add-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')">&#xFF0B; A\xd1ADIR EVENTO</button></div>'
+      + '<div style="display:flex;gap:6px;padding:0 8px 8px;">'
+        + etBtn
+        + '<button onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')" style="flex:1;padding:7px 4px;border-radius:5px;border:1px solid rgba(255,80,80,.3);background:rgba(180,30,30,.2);color:#ff8080;font-size:10px;font-weight:700;font-family:Oswald,sans-serif;letter-spacing:1px;cursor:pointer;">&#x1F3C1; FINALIZAR</button>'
+      + '</div>'
+      + '<div class="ml-acta" style="border-top:1px solid rgba(255,255,255,.07);"><button class="ml-acta-toggle" onclick="(function(b){b.style.display=b.style.display===\'none\'?\'block\':\'none\';})(this.nextElementSibling)" style="width:100%;background:none;border:none;cursor:pointer;padding:8px 10px;font-family:Oswald,sans-serif;font-size:10px;color:#888;letter-spacing:1px;text-align:left;">&#x1F4CB; ACTA DEL PARTIDO &#x25BE;</button><div style="display:none;padding:4px 8px;"><div style="padding:6px;color:#555;font-size:10px;text-align:center;">Sin eventos a\xfan</div></div></div>'
+      + '</div>';
+  }
+
   function populateCalendar() {
     var results = loadResults();
     SCHEDULE.forEach(function (jornada, idx) {
@@ -1978,27 +2007,27 @@
       if (j === 1) return; /* jornada 1 ya tiene widgets interactivos */
       var calDiv = document.getElementById('cal-l' + j);
       if (!calDiv) return;
-      var humanMatches = jornada.filter(function (m) {
-        return esHumano(m[0]) || esHumano(m[1]);
-      });
       calDiv.innerHTML = '';
-      humanMatches.forEach(function (m) {
+      jornada.forEach(function (m) {
+        var isHA = esHumano(m[0]);
+        var isHB = esHumano(m[1]);
+        if (!isHA && !isHB) return; /* AI vs AI: no mostrar en calendario */
+        var isHvH = isHA && isHB;
         var res = results[rKey(j, m[0], m[1])];
-        var scoreHtml;
         if (res) {
-          scoreHtml = '<div class="ms">' + res.gh + '\u2013' + res.ga + '</div>';
+          /* Partido jugado: fila de resultado */
+          var row = document.createElement('div');
+          row.className = 'mrow';
+          row.innerHTML = '<div class="mn">' + m[0] + '</div>'
+            + '<div class="ms">' + res.gh + '\u2013' + res.ga + '</div>'
+            + '<div class="mn r">' + m[1] + '</div>';
+          calDiv.appendChild(row);
         } else {
-          var h = m[0].replace(/'/g, "\\'");
-          var a = m[1].replace(/'/g, "\\'");
-          scoreHtml = '<div class="ms p" onclick="window.abrirResultadoLiga('
-            + j + ',\'' + h + '\',\'' + a + '\')">▶ Jugar</div>';
+          /* Partido pendiente: tarjeta completa */
+          var card = document.createElement('div');
+          card.innerHTML = buildMatchCard(j, m[0], m[1], isHvH);
+          calDiv.appendChild(card.firstChild);
         }
-        var row = document.createElement('div');
-        row.className = 'mrow';
-        row.innerHTML = '<div class="mn">' + m[0] + '</div>'
-          + scoreHtml
-          + '<div class="mn r">' + m[1] + '</div>';
-        calDiv.appendChild(row);
       });
     });
   }
@@ -2167,8 +2196,8 @@
     var results = loadResults();
     results[rKey(j, home, away)] = { gh: gh, ga: ga };
     saveResults(results);
-    actualizarDom('l-j'   + j, home, away, gh, ga);
-    actualizarDom('cal-l' + j, home, away, gh, ga);
+    actualizarDom('l-j' + j, home, away, gh, ga);
+    populateCalendar(); /* re-renderiza tarjetas del calendario */
     if (typeof window.buildLigaClas   === 'function') window.buildLigaClas();
     if (typeof window.buildIAresults  === 'function') window.buildIAresults();
   }

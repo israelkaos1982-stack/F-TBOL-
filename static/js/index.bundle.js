@@ -1410,6 +1410,63 @@ window.mlSimulate_j1m10=function(){
     'Villarreal':       {abbr:'VIL', bg:'#ffd700', fg:'#1a1a1a'}
   };
 
+  // Team logo URLs — Wikimedia Commons Special:FilePath (no CORS issues for img tags, auto-redirects)
+  var _WC = 'https://commons.wikimedia.org/wiki/Special:FilePath/';
+  var _WE = 'https://en.wikipedia.org/wiki/Special:FilePath/';
+  window.TEAM_LOGOS = {
+    // ── La Liga 1ª ──────────────────────────────────────────
+    'Real Madrid':        _WE  + 'Real_Madrid_CF.svg',
+    'FC Barcelona':       _WC  + 'FC_Barcelona_%28crest%29.svg',
+    'Athletic Club':      _WC  + 'Athletic_Club_logo.svg',
+    'Real Betis':         _WC  + 'Real_Betis_logo.svg',
+    'Real Sociedad':      _WC  + 'Real_Sociedad_logo.svg',
+    'Atlético Madrid':    _WC  + 'Atletico_de_Madrid_2017_logo.svg',
+    'Villarreal':         _WC  + 'Villarreal_CF_logo-en.svg',
+    'Sevilla':            _WC  + 'Sevilla_FC_logo.svg',
+    'Valencia CF':        _WC  + 'Valenciacf.svg',
+    'Girona FC':          _WC  + 'Girona_FC.svg',
+    'Rayo Vallecano':     _WC  + 'Rayo_Vallecano_logo.svg',
+    'Getafe CF':          _WC  + 'Getafe_CF_logo.svg',
+    'Mallorca':           _WC  + 'RCD_Mallorca_logo.svg',
+    'Osasuna':            _WC  + 'CA_Osasuna_logo.svg',
+    'Espanyol':           _WC  + 'RCD_Espanyol.svg',
+    'Celta de Vigo':      _WC  + 'RC_Celta_de_Vigo_logo.svg',
+    'Deportivo Alavés':   _WC  + 'Deportivo_Alav%C3%A9s_logo_%282020%29.svg',
+    'Elche CF':           _WC  + 'Elche_CF.svg',
+    'Córdoba CF':         _WC  + 'C%C3%B3rdoba_CF_escudo.svg',
+    'Albacete BP':        _WC  + 'Albacete_Balom%C3%ADe_escudo.svg',
+    // ── Liga Hypermotion (2ª) ───────────────────────────────
+    'Real Racing Club':   _WC  + 'Racing_de_Santander.svg',
+    'RC Deportivo':       _WC  + 'RC_Deportivo_de_La_Coru%C3%B1a_logo.svg',
+    'UD Almería':         _WC  + 'UD_Almer%C3%ADa.svg',
+    'Málaga CF':          _WC  + 'M%C3%A1laga_CF.svg',
+    'CD Castellón':       _WC  + 'CD_Castell%C3%B3n.svg',
+    'UD Las Palmas':      _WC  + 'UD_Las_Palmas.svg',
+    'Burgos CF':          _WC  + 'Burgos_CF_Escudo.svg',
+    'Real Sporting de Gijón': _WC + 'Real_Sporting_de_Gij%C3%B3n_logo.svg',
+    'Ceuta':              _WC  + 'AD_Ceuta_FC.svg',
+    'SD Eibar':           _WC  + 'SD_Eibar_logo.svg',
+    'Real Sociedad B':    _WC  + 'Real_Sociedad_logo.svg',
+    'FC Andorra':         _WC  + 'FC_Andorra_escudo.svg',
+    'Cádiz CF':           _WC  + 'C%C3%A1diz_CF.svg',
+    'Granada':            _WC  + 'Granada_CF.svg',
+    'Real Valladolid':    _WC  + 'Real_Valladolid_logo.svg',
+    'Leganés':            _WC  + 'CD_Legan%C3%A9s.svg',
+    'Huesca':             _WC  + 'SD_Huesca.svg',
+    'Real Zaragoza':      _WC  + 'Real_Zaragoza.svg',
+    'Cultural Leonesa':   _WC  + 'Cultural_Leonesa_logo.svg',
+    'Mirandés':           _WC  + 'CD_Miran%C3%A9s.svg',
+    // ── Primera Federación ──────────────────────────────────
+    'Ponferradina':       _WC  + 'SD_Ponferradina.svg',
+    'CD Lugo':            _WC  + 'CD_Lugo_escudo.svg',
+    'Real Unión':         _WC  + 'Real_Union_Club_de_Irun.svg',
+    'Real Murcia':        _WC  + 'Real_Murcia_logo.svg',
+    'Hércules CF':        _WC  + 'H%C3%A9rcules_CF.svg',
+    'Recreativo de Huelva': _WC + 'Recreativo_de_Huelva.svg',
+    'Mérida AD':          _WC  + 'M%C3%A9rida_AD.svg',
+    'Algeciras CF':       _WC  + 'Algeciras_CF.svg',
+  };
+
   var SHORT_NAMES = {
     'Albacete BP':      'Albacete',
     'Atlético Madrid':  'Atl Madrid',
@@ -1448,10 +1505,13 @@ window.mlSimulate_j1m10=function(){
       var pos = idx + 1;
       var zone = rowZoneClass(pos);
       var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
+      var logoUrl = window.TEAM_LOGOS ? (window.TEAM_LOGOS[team.name] || '') : '';
+      var logoHtml = logoUrl ? '<img class="clas-team-logo" src="' + logoUrl + '" onerror="this.style.display=\'none\'" alt=""/>' : '';
       html += ''
         + '<div class="clas-row ' + zone + '">'
         +   '<div class="clas-team-cell">'
         +     '<span class="clas-pos-n">' + pos + '</span>'
+        +     logoHtml
         +     '<span class="clas-team-name">' + (SHORT_NAMES[team.name] || team.name) + '</span>'
         +   '</div>'
         +   '<div class="clas-pts">' + team.pts + '</div>'

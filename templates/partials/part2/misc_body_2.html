@@ -1975,8 +1975,12 @@
   var _mlStates = {};
   function _mlSt(mk) {
     if (!_mlStates[mk]) {
-      _mlStates[mk] = {timerSec:0,timerRunning:false,timerInterval:null,etDone:false,finished:false,
+      _mlStates[mk] = {timerSec:0,timerRunning:false,timerInterval:null,etDone:false,htDone:false,et1Done:false,finished:false,
                        sc:{a:0,b:0},events:[],pendingEvt:null,j:0,home:'',away:'',isHvH:false};
+      // Register per-match delete function so _saveEditModal can find it
+      (function(k){
+        window['mlDelEvt_'+k] = function(id) { _mlDelEvtGen(k, id); };
+      })(mk);
     }
     return _mlStates[mk];
   }
@@ -2002,7 +2006,7 @@
     var etStyle = isHvH ? '' : ' style="display:none"';
     var emk = mk.replace(/'/g,"\\'");
     return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'">'
-      +'<div class="ml-venue-bar"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">eFootball Stadium</span><span class="ml-venue-sep">|</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado · Verano</span></div>'
+      +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">eFootball Stadium</span><span class="ml-venue-sep">|</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado · Verano</span></div>'
       +'<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px 2px;gap:6px;">'
         +_buildTwitchBtn(mk)
         +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
@@ -2087,13 +2091,31 @@
   }
   function _mlStartIntervalGen(mk) {
     var st = _mlSt(mk);
-    var spd = st.etDone ? 233 : 1000;
     st.timerInterval = setInterval(function(){
-      st.timerSec++;
+      st.timerSec += 5;
       var max = st.etDone ? 7200 : 5400;
-      if (st.timerSec>=max) { st.timerSec=max; clearInterval(st.timerInterval); st.timerRunning=false; }
+      // Half-time marker
+      if (!st.htDone && st.timerSec >= 2700) {
+        st.htDone = true;
+        var list = document.getElementById('ml-acta-list-'+mk);
+        if (list) { var m = document.createElement('div'); m.className='ml-ht'; m.textContent='— DESCANSO (45 min) —'; list.appendChild(m); }
+      }
+      // ET half-time marker at 105'
+      if (st.etDone && !st.et1Done && st.timerSec >= 6300) {
+        st.et1Done = true;
+        var list2 = document.getElementById('ml-acta-list-'+mk);
+        if (list2) { var m2 = document.createElement('div'); m2.className='ml-ht'; m2.textContent='— DESCANSO PRÓRROGA (105 min) —'; list2.appendChild(m2); }
+      }
+      if (st.timerSec >= max) {
+        st.timerSec = max; clearInterval(st.timerInterval); st.timerRunning = false;
+        // Auto-check penalties at end of ET
+        if (st.etDone) {
+          if (st.sc.a === st.sc.b) { window.mlShowPenPanelGen(mk); }
+          else { window.mlEndMatchGen(mk); }
+        }
+      }
       _mlRenderTimerGen(mk);
-    }, spd);
+    }, 1000);
   }
   window.mlTimerClickGen = function(mk) {
     var st = _mlSt(mk);
@@ -2167,6 +2189,20 @@
       var b=document.getElementById(pfx+mk); if(b){b.disabled=true;b.style.opacity='0.35';}
     });
     guardarResultado(st.j, st.home, st.away, st.sc.a, st.sc.b);
+    // Register stats for classification + player tables
+    var evts=st.events;
+    var mvpEvt=evts.find(function(e){return e.type==='mvp';});
+    var mvpName=mvpEvt?mvpEvt.name:'';
+    var mvpTeam=mvpEvt?(mvpEvt.team==='a'?st.home:st.away):'';
+    var ta_a=evts.filter(function(e){return e.team==='a'&&e.type==='amarilla';}).length;
+    var tr_a=evts.filter(function(e){return e.team==='a'&&(e.type==='roja'||e.type==='d-amarilla');}).length;
+    var ta_b=evts.filter(function(e){return e.team==='b'&&e.type==='amarilla';}).length;
+    var tr_b=evts.filter(function(e){return e.team==='b'&&(e.type==='roja'||e.type==='d-amarilla');}).length;
+    var mvp_a=mvpTeam===st.home?1:0; var mvp_b=mvpTeam===st.away?1:0;
+    if (typeof window.registrarResultadoLiga==='function')
+      window.registrarResultadoLiga(mk, st.home, st.away, st.sc.a, st.sc.b, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, winner==='pen'?winner:null);
+    if (typeof window.registrarLigaPlayerStats==='function')
+      window.registrarLigaPlayerStats(mk, st.home, st.away, evts, mvpName, mvpTeam);
   }
 
   /* ── SELECCIÓN DE EVENTOS GENÉRICA (overlays globales) ── */
@@ -2218,6 +2254,23 @@
     if (plList) plList.innerHTML=html||'<div style="color:#555;padding:10px;text-align:center;">Sin jugadores</div>';
     if (plOv) plOv.classList.add('show');
   };
+  // Generic per-match event delete (also registered as window['mlDelEvt_'+mk])
+  function _mlDelEvtGen(mk, id) {
+    var st=_mlSt(mk);
+    var ev=st.events.find(function(e){return e.id===id;});
+    if (!ev) return;
+    var scoringTypes=['gol','propia','pen-gol','falta-gol'];
+    if (scoringTypes.indexOf(ev.type)!==-1) {
+      var scTeam=(ev.type==='propia')?(ev.team==='a'?'b':'a'):ev.team;
+      st.sc[scTeam]=Math.max(0,st.sc[scTeam]-1);
+      var scA=document.getElementById('sc-'+mk+'-a'); if(scA)scA.textContent=st.sc.a;
+      var scB=document.getElementById('sc-'+mk+'-b'); if(scB)scB.textContent=st.sc.b;
+    }
+    st.events=st.events.filter(function(e){return e.id!==id;});
+    var row=document.querySelector('#ml-acta-list-'+mk+' .ml-evt-item[data-id="'+id+'"]');
+    if(row)row.remove();
+  }
+
   window.genPlConfirm = function(mk, team, num, name) {
     var plOv=document.getElementById('gen-pl-ov'); if(plOv)plOv.classList.remove('show');
     if (!_genPendingEvt) return;
@@ -2236,10 +2289,27 @@
     var list=document.getElementById('ml-acta-list-'+mk);
     if(list){
       var emp=list.querySelector('.ml-acta-empty'); if(emp)emp.remove();
-      var li=document.createElement('div');
-      li.style.cssText='display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:11px;border-bottom:1px solid rgba(255,255,255,.06);';
-      li.innerHTML='<span style="color:#aaa;min-width:22px;">'+min+"'</span>"+'<span>'+ico+'</span>'+'<span style="color:#ddd;">'+name+'</span>'+'<span style="color:#aaa;font-size:10px;margin-left:auto;">'+(team==='a'?st.home:st.away)+'</span>';
-      list.appendChild(li);
+      var teamLabel=team==='a'?st.home:st.away;
+      var emk=mk.replace(/'/g,"\\'");
+      var row=document.createElement('div');
+      row.className='ml-evt-item';
+      row.setAttribute('data-team',team);
+      row.setAttribute('data-type',evt.type);
+      row.setAttribute('data-id',id);
+      row.innerHTML='<span class="ml-evt-min">'+min+"'</span>"
+        +'<span class="ml-evt-ico">'+ico+'</span>'
+        +'<span class="ml-evt-name">'+num+'. '+name+'</span>'
+        +'<span class="ml-evt-team">'+teamLabel+'</span>'
+        +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\','+id+')" title="Editar">✏️</button>'
+        +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\']('+id+')">✕</button>';
+      // Insert in sorted minute order
+      var items=list.querySelectorAll('.ml-evt-item');
+      var inserted=false;
+      for(var i=0;i<items.length;i++){
+        var m=parseInt((items[i].querySelector('.ml-evt-min')||{}).textContent||'999');
+        if(min<m){list.insertBefore(row,items[i]);inserted=true;break;}
+      }
+      if(!inserted)list.appendChild(row);
     }
   };
   window.genEvClose = function() {

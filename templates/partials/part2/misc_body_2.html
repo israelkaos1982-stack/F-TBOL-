@@ -1934,25 +1934,25 @@
       var j     = idx + 1;
       var round = document.getElementById('l-j' + j);
       if (!round) return;
-      var rows  = round.querySelectorAll('.mrow');
-      jornada.forEach(function (match, i) {
-        var row = rows[i];
-        if (!row) return;
-        var homeEl  = row.querySelector('.mn:not(.r)');
-        var awayEl  = row.querySelector('.mn.r');
-        var scoreEl = row.querySelector('.ms');
-        if (homeEl) homeEl.textContent = match[0];
-        if (awayEl) awayEl.textContent = match[1];
-        if (j > 1 && scoreEl) {
-          var res = results[rKey(j, match[0], match[1])];
-          if (res) {
-            scoreEl.textContent = res.gh + '\u2013' + res.ga;
-            scoreEl.classList.remove('p');
-          }
+      /* Eliminar filas existentes; reconstruir solo con partidos humanos */
+      var oldRows = round.querySelectorAll('.mrow');
+      for (var ri = 0; ri < oldRows.length; ri++) oldRows[ri].parentNode.removeChild(oldRows[ri]);
+      var humanMatches = jornada.filter(function (m) { return esHumano(m[0]) || esHumano(m[1]); });
+      humanMatches.forEach(function (m) {
+        var res = results[rKey(j, m[0], m[1])];
+        var scoreHtml;
+        if (res) {
+          scoreHtml = '<div class="ms">' + res.gh + '\u2013' + res.ga + '</div>';
+        } else {
+          var h = m[0].replace(/'/g, "\\'");
+          var a = m[1].replace(/'/g, "\\'");
+          scoreHtml = '<div class="ms p" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')">&#9654; Jugar</div>';
         }
+        var row = document.createElement('div');
+        row.className = 'mrow';
+        row.innerHTML = '<div class="mn">' + m[0] + '</div>' + scoreHtml + '<div class="mn r">' + m[1] + '</div>';
+        round.appendChild(row);
       });
-      /* botón simular IA para jornadas 2-38 */
-      if (j > 1) addSimBtn(j, round);
     });
   }
 
@@ -2119,6 +2119,7 @@
       var results = loadResults();
       results[rKey(1, teamA, teamB)] = { gh: goalsA, ga: goalsB };
       saveResults(results);
+      actualizarDom('l-j1', teamA, teamB, goalsA, goalsB);
       if (typeof window.buildIAresults === 'function') setTimeout(window.buildIAresults, 200);
     };
   }
@@ -2151,14 +2152,13 @@
     var results = loadResults();
 
     for (var j = 1; j <= 38; j++) {
-      var matches   = [];
-      var pendingJ1 = [];
+      var matches = [];
+      var pending = [];
 
       if (j === 1) {
         var j1done = {};
         (window.LIGA_J1_RESULTS || []).forEach(function (r) {
           if (!esHumano(r.home) && !esHumano(r.away)) {
-            var acta = (window._matchEventsRegistry || {})['j1m' + (Object.keys(j1done).length + 4)];
             matches.push({ home: r.home, away: r.away, gh: r.gh, ga: r.ga_ });
           }
           j1done[r.home + '\xB7' + r.away] = true;
@@ -2170,28 +2170,32 @@
           if (j1done[mk]) return;
           var res = results[rKey(1, m[0], m[1])];
           if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga }); }
-          else { pendingJ1.push({ home: m[0], away: m[1], fn: _J1_IA_MAP[mk] || '' }); }
+          else { pending.push({ home: m[0], away: m[1], fn: _J1_IA_MAP[mk] || '' }); }
         });
       } else {
         SCHEDULE[j - 1].forEach(function (m) {
           if (esHumano(m[0]) || esHumano(m[1])) return;
           var res = results[rKey(j, m[0], m[1])];
-          if (res) matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga });
+          if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga }); }
+          else { pending.push({ home: m[0], away: m[1], fn: '' }); }
         });
       }
 
-      if (!matches.length && !pendingJ1.length) continue;
-      var bid = 'ia-j' + j;
-      var pendingCount = pendingJ1.length;
-      var simBtn = (j === 1 && pendingCount > 0)
-        ? ' <button onclick="window.simularJ1IA();setTimeout(window.buildIAresults,1200);"'
-          + ' style="margin-left:8px;padding:2px 8px;background:#ccff00;color:#000;border:none;border-radius:3px;font-size:11px;cursor:pointer;font-weight:bold;">&#129302; SIMULAR TODO J1</button>'
-        : '';
+      var bid          = 'ia-j' + j;
+      var pendingCount = pending.length;
+      var simBtn = '';
+      if (j === 1 && pendingCount > 0) {
+        simBtn = ' <button onclick="window.simularJ1IA();setTimeout(window.buildIAresults,1200);"'
+          + ' style="margin-left:8px;padding:2px 8px;background:#ccff00;color:#000;border:none;border-radius:3px;font-size:11px;cursor:pointer;font-weight:bold;">&#129302; SIMULAR TODO J1</button>';
+      } else if (j > 1 && pendingCount > 0) {
+        simBtn = ' <button onclick="window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);"'
+          + ' style="margin-left:8px;padding:2px 8px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:3px;font-size:11px;cursor:pointer;">&#129302; SIM</button>';
+      }
       html += '<div class="jblock"><button class="jbtn c-liga" onclick="tog(\'' + bid + '\')"'
         + ' style="background:#1a1a2e;border-left:3px solid #2a4a6a;">'
         + '<div class="pdot">&#9654;</div>&#129302; <b>Jornada ' + j + '</b>'
         + ' <span style="color:#6ab0d8;font-size:11px;">' + matches.length + ' resultados'
-        + (pendingCount ? ' · ' + pendingCount + ' pendientes' : '') + '</span>'
+        + (pendingCount ? ' \xb7 ' + pendingCount + ' pendientes' : '') + '</span>'
         + simBtn
         + '</button><div class="jmatches" id="' + bid + '">';
       matches.forEach(function (m) {
@@ -2199,18 +2203,19 @@
           + '<div class="ms">' + m.gh + '\u2013' + m.ga + '</div>'
           + '<div class="mn r">' + m.away + '</div></div>';
       });
-      pendingJ1.forEach(function (m) {
+      pending.forEach(function (m) {
         var simF = m.fn ? 'window.simularJ1IAMatch(\'' + m.fn + '\');setTimeout(window.buildIAresults,400);' : '';
         html += '<div class="mrow" style="opacity:0.5"><div class="mn">' + m.home + '</div>'
           + '<div class="ms">'
-          + (simF ? '<button onclick="' + simF + '" style="padding:2px 6px;background:#333;color:#ccff00;border:1px solid #555;border-radius:3px;font-size:10px;cursor:pointer;">&#9654; SIM</button>' : '?–?')
+          + (simF ? '<button onclick="' + simF + '" style="padding:2px 6px;background:#333;color:#ccff00;border:1px solid #555;border-radius:3px;font-size:10px;cursor:pointer;">&#9654; SIM</button>'
+                  : '<span style="color:#3a3a3a;font-size:11px;">vs</span>')
           + '</div>'
           + '<div class="mn r">' + m.away + '</div></div>';
       });
       html += '</div></div>';
     }
     container.innerHTML = html
-      || '<div style="padding:12px;color:#555;font-size:13px;">Simula las jornadas IA para ver resultados</div>';
+      || '<div style="padding:12px;color:#555;font-size:13px;">Sin resultados IA a\xfan</div>';
   };
 
   /* ── INIT ─────────────────────────────────────────── */

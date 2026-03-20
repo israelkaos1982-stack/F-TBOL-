@@ -2555,6 +2555,43 @@
     return { gh: goles(p), ga: goles(1 - p) };
   }
 
+  function genMatchEvents(teamA, teamB, goalsA, goalsB) {
+    var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
+    var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
+    var outA = sqA.filter(function(p){ return p[2] !== 'P'; });
+    var outB = sqB.filter(function(p){ return p[2] !== 'P'; });
+    if (!outA.length) outA = [['','Jugador A','F',76]];
+    if (!outB.length) outB = [['','Jugador B','F',76]];
+    var events = [];
+    var totalGoals = goalsA + goalsB;
+    var goalMins = [];
+    for (var i = 0; i < totalGoals; i++) goalMins.push(Math.floor(Math.random() * 88) + 2);
+    goalMins.sort(function(a,b){ return a-b; });
+    var assign = [];
+    for (var ga = 0; ga < goalsA; ga++) assign.push('a');
+    for (var gb = 0; gb < goalsB; gb++) assign.push('b');
+    for (var s = assign.length - 1; s > 0; s--) { var t = Math.floor(Math.random()*(s+1)); var tmp=assign[s]; assign[s]=assign[t]; assign[t]=tmp; }
+    assign.forEach(function(team, idx) {
+      var sq = team === 'a' ? outA : outB;
+      var pl = sq[Math.floor(Math.random()*sq.length)];
+      events.push({ type:'gol', min:goalMins[idx], player:pl[1]||'?', team:team });
+    });
+    var numCards = Math.floor(Math.random() * 3);
+    for (var c = 0; c < numCards; c++) {
+      var ct = Math.random() < 0.5 ? 'a' : 'b';
+      var csq = ct === 'a' ? outA : outB;
+      var cp = csq[Math.floor(Math.random()*csq.length)];
+      events.push({ type:'amarilla', min:Math.floor(Math.random()*80)+5, player:cp[1]||'?', team:ct });
+    }
+    events.sort(function(a,b){ return a.min - b.min; });
+    var mvpScore = {}, mvpTeams2 = {};
+    events.forEach(function(e){ if(e.type==='gol'){ mvpScore[e.player]=(mvpScore[e.player]||0)+3; mvpTeams2[e.player]=e.team==='a'?teamA:teamB; } });
+    var mvp='', mvpTeamName='', best=0;
+    Object.keys(mvpScore).forEach(function(p){ if(mvpScore[p]>best){ best=mvpScore[p]; mvp=p; mvpTeamName=mvpTeams2[p]; } });
+    if (!mvp) { var ms = goalsA >= goalsB ? outA : outB; var mp = ms[Math.floor(Math.random()*ms.length)]; mvp = mp?mp[1]:'?'; mvpTeamName = goalsA >= goalsB ? teamA : teamB; }
+    return { events:events, mvp:mvp, mvpTeam:mvpTeamName };
+  }
+
   window.simularJornadaIA = function (j) {
     if (!SCHEDULE[j - 1]) return;
     var results = loadResults();
@@ -2565,7 +2602,8 @@
       if (results[key]) return; /* ya simulado */
       var rat = window.TEAM_RATINGS || {};
       var r   = simSimple(rat[m[0]] || 76, rat[m[1]] || 76);
-      results[key] = { gh: r.gh, ga: r.ga };
+      var evtData = genMatchEvents(m[0], m[1], r.gh, r.ga);
+      results[key] = { gh: r.gh, ga: r.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
       actualizarDom('l-j' + j, m[0], m[1], r.gh, r.ga);
       dirty = true;
     });
@@ -2649,6 +2687,46 @@
     'Celta de Vigo·Deportivo Alavés': 'mlSimulate_j1m10'
   };
 
+  /* ── ESCUDOS IA (J2-38) ─────────────────────────── */
+  var IA_SHIELD = {
+    'Sevilla':          ['#ffffff','#CC0000','SFC','#CC0000'],
+    'Sevilla FC':       ['#ffffff','#CC0000','SFC','#CC0000'],
+    'Villarreal':       ['#FFD700','#003087','VCF','#003087'],
+    'Mallorca':         ['#EE1C25','#000000','RCD','#ffffff'],
+    'Valencia CF':      ['#ffffff','#000000','VCF','#CC0000'],
+    'Espanyol':         ['#003087','#ffffff','ESP','#ffffff'],
+    'Albacete BP':      ['#FFD700','#000000','ABP','#000000'],
+    'Celta de Vigo':    ['#6FBAD4','#ffffff','RCV','#ffffff'],
+    'Deportivo Alavés': ['#003087','#ffffff','DEP','#ffffff'],
+    'Osasuna':          ['#CC0000','#000080','CAN','#ffffff'],
+    'Getafe CF':        ['#003087','#ffffff','GCF','#ffffff'],
+    'Córdoba CF':       ['#006400','#ffffff','CCF','#ffffff'],
+    'Girona FC':        ['#CC0000','#ffffff','GFC','#ffffff'],
+    'Elche CF':         ['#008000','#ffffff','ECF','#ffffff'],
+    'Atlético Madrid':  ['#CC0000','#ffffff','ATM','#ffffff'],
+    'Rayo Vallecano':   ['#ffffff','#CC0000','RAY','#CC0000'],
+    'Real Madrid':      ['#ffffff','#d4af37','RMA','#d4af37'],
+    'FC Barcelona':     ['#A50044','#004D99','FCB','#ffffff'],
+    'Athletic Club':    ['#CC0000','#ffffff','ATH','#ffffff'],
+    'Real Sociedad':    ['#003087','#ffffff','RSO','#ffffff'],
+    'Real Betis':       ['#00A550','#ffffff','RBT','#ffffff']
+  };
+  function iaShieldSVG(team) {
+    var d = IA_SHIELD[team] || ['#333333','#aaaaaa',(team||'?').substring(0,3).toUpperCase(),'#ffffff'];
+    return '<svg width="32" height="38" viewbox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">'
+      + '<path d="M50 4 L88 14 L88 74 Q88 104 50 114 Q12 104 12 74 L12 14 Z" fill="'+d[0]+'" stroke="'+d[1]+'" stroke-width="2.5"/>'
+      + '<text fill="'+d[3]+'" font-family="Arial" font-size="11" font-weight="bold" text-anchor="middle" x="50" y="62">'+d[2]+'</text>'
+      + '</svg>';
+  }
+  window.iaActaTog = function(id) {
+    var b = document.getElementById('ia-acta-' + id);
+    var a = document.getElementById('ia-arr-' + id);
+    if (!b) return;
+    var open = b.style.display !== 'none';
+    b.style.display = open ? 'none' : 'block';
+    if (a) a.textContent = open ? '\u25bc' : '\u25b2';
+  };
+
   window.buildIAresults = function () {
     var container = document.getElementById('ia-res-list');
     if (!container) return;
@@ -2667,20 +2745,19 @@
           }
           j1done[r.home + '\xB7' + r.away] = true;
         });
-        /* completar con localStorage si hubo recarga */
         SCHEDULE[0].forEach(function (m) {
           if (esHumano(m[0]) || esHumano(m[1])) return;
           var mk = m[0] + '\xB7' + m[1];
           if (j1done[mk]) return;
           var res = results[rKey(1, m[0], m[1])];
-          if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga }); }
+          if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga, events: res.events, mvp: res.mvp, mvpTeam: res.mvpTeam }); }
           else { pending.push({ home: m[0], away: m[1], fn: _J1_IA_MAP[mk] || '' }); }
         });
       } else {
         SCHEDULE[j - 1].forEach(function (m) {
           if (esHumano(m[0]) || esHumano(m[1])) return;
           var res = results[rKey(j, m[0], m[1])];
-          if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga }); }
+          if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga, events: res.events, mvp: res.mvp, mvpTeam: res.mvpTeam }); }
           else { pending.push({ home: m[0], away: m[1], fn: '' }); }
         });
       }
@@ -2695,27 +2772,79 @@
         simBtn = ' <button onclick="window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);"'
           + ' style="margin-left:8px;padding:2px 8px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:3px;font-size:11px;cursor:pointer;">&#129302; SIM</button>';
       }
+
+      /* ── Jornada header ── */
       html += '<div class="jblock"><button class="jbtn c-liga" onclick="tog(\'' + bid + '\')"'
         + ' style="background:#1a1a2e;border-left:3px solid #2a4a6a;">'
         + '<div class="pdot">&#9654;</div>&#129302; <b>Jornada ' + j + '</b>'
         + ' <span style="color:#6ab0d8;font-size:11px;">' + matches.length + ' resultados'
         + (pendingCount ? ' \xb7 ' + pendingCount + ' pendientes' : '') + '</span>'
         + simBtn
-        + '</button><div class="jmatches" id="' + bid + '">';
-      matches.forEach(function (m) {
-        html += '<div class="mrow"><div class="mn">' + m.home + '</div>'
-          + '<div class="ms">' + m.gh + '\u2013' + m.ga + '</div>'
-          + '<div class="mn r">' + m.away + '</div></div>';
-      });
-      pending.forEach(function (m) {
-        var simF = m.fn ? 'window.simularJ1IAMatch(\'' + m.fn + '\');setTimeout(window.buildIAresults,400);' : '';
-        html += '<div class="mrow" style="opacity:0.5"><div class="mn">' + m.home + '</div>'
-          + '<div class="ms">'
-          + (simF ? '<button onclick="' + simF + '" style="padding:2px 6px;background:#333;color:#ccff00;border:1px solid #555;border-radius:3px;font-size:10px;cursor:pointer;">&#9654; SIM</button>'
-                  : '<span style="color:#3a3a3a;font-size:11px;">vs</span>')
+        + '</button><div class="jmatches" id="' + bid + '" style="padding:8px;">';
+
+      /* ── Completed matches → full card (Photos 2-3-4 format) ── */
+      matches.forEach(function (m, idx) {
+        var cid = 'ij' + j + 'm' + idx;
+        var evHtml = '';
+        if (m.events && m.events.length) {
+          m.events.forEach(function(ev) {
+            var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'amarilla' ? '&#129000;' : '&#129004;';
+            evHtml += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.04);">'
+              + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
+              + '<span style="font-size:14px;">' + ico + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;color:#fff;flex:1;">' + ev.player + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team === 'a' ? m.home : m.away) + '</span>'
+              + '</div>';
+          });
+          if (m.mvp) {
+            evHtml += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid rgba(240,192,64,.2);">'
+              + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#f0c040;min-width:26px;">FIN</span>'
+              + '<span style="font-size:14px;">&#11088;</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#f0c040;flex:1;">' + m.mvp + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (m.mvpTeam || '') + '</span>'
+              + '</div>';
+          }
+        } else {
+          evHtml = '<div style="padding:10px 12px;color:#555;font-size:11px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1px;">SIN ACTA DISPONIBLE</div>';
+        }
+        html += '<div class="match-live-wrap" style="margin-bottom:8px;">'
+          + '<div class="ml-header">'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + m.home + '</div></div>'
+          + '<div class="ml-score-wrap">'
+          + '<div class="ml-score state-finished"><span>' + m.gh + '</span>\u2013<span>' + m.ga + '</span></div>'
+          + '<div class="ml-timer finished" style="cursor:default;">&#127937; FIN</div>'
           + '</div>'
-          + '<div class="mn r">' + m.away + '</div></div>';
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + m.away + '</div></div>'
+          + '</div>'
+          + '<div class="ml-acta" data-ia="1">'
+          + '<button class="ml-acta-toggle" onclick="window.iaActaTog(\'' + cid + '\')">'
+          + '<span class="acta-ia-lbl">&#128203; ACTA DEL PARTIDO</span>'
+          + '<span class="acta-arr" id="ia-arr-' + cid + '">&#9660;</span>'
+          + '</button>'
+          + '<div class="ml-acta-body" id="ia-acta-' + cid + '" style="display:none;">'
+          + '<div class="ml-evlist">' + evHtml + '</div>'
+          + '</div>'
+          + '</div>'
+          + '</div>';
       });
+
+      /* ── Pending matches → pre-match card ── */
+      pending.forEach(function (m) {
+        var simF = m.fn
+          ? 'window.simularJ1IAMatch(\'' + m.fn + '\');setTimeout(window.buildIAresults,400);'
+          : 'window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);';
+        html += '<div class="match-live-wrap" style="margin-bottom:8px;opacity:0.75;">'
+          + '<div class="ml-header">'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + m.home + '</div></div>'
+          + '<div class="ml-score-wrap">'
+          + '<div class="ml-score state-pending"><span>0</span>\u2013<span>0</span></div>'
+          + '<button class="ml-timer" onclick="' + simF.replace(/"/g,'&quot;') + '">&#9654; SIMULAR</button>'
+          + '</div>'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + m.away + '</div></div>'
+          + '</div>'
+          + '</div>';
+      });
+
       html += '</div></div>';
     }
     container.innerHTML = html

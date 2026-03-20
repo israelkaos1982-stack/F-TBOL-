@@ -2659,7 +2659,8 @@
     window.registrarResultadoLiga = function (matchKey, teamA, teamB, goalsA, goalsB) {
       if (_orig) _orig.apply(window, arguments);
       var results = loadResults();
-      results[rKey(1, teamA, teamB)] = { gh: goalsA, ga: goalsB };
+      var evtData1 = genMatchEvents(teamA, teamB, goalsA, goalsB);
+      results[rKey(1, teamA, teamB)] = { gh: goalsA, ga: goalsB, events: evtData1.events, mvp: evtData1.mvp, mvpTeam: evtData1.mvpTeam };
       saveResults(results);
       actualizarDom('l-j1', teamA, teamB, goalsA, goalsB);
       if (typeof window.buildIAresults === 'function') setTimeout(window.buildIAresults, 200);
@@ -2741,7 +2742,11 @@
         var j1done = {};
         (window.LIGA_J1_RESULTS || []).forEach(function (r) {
           if (!esHumano(r.home) && !esHumano(r.away)) {
-            matches.push({ home: r.home, away: r.away, gh: r.gh, ga: r.ga_ });
+            var lsRes = results[rKey(1, r.home, r.away)];
+            matches.push({ home: r.home, away: r.away, gh: r.gh, ga: r.ga_,
+                           events: lsRes ? lsRes.events : null,
+                           mvp: lsRes ? lsRes.mvp : null,
+                           mvpTeam: lsRes ? lsRes.mvpTeam : null });
           }
           j1done[r.home + '\xB7' + r.away] = true;
         });

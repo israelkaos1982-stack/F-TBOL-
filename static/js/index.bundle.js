@@ -1485,6 +1485,7 @@ window.mlSimulate_j1m10=function(){
   }
 
   window.buildLigaClas = buildLigaClas;
+  window.collectStandings = collectStandings;
   document.addEventListener('DOMContentLoaded', buildLigaClas);
 
   var leagueObserverBound = false;
@@ -6075,5 +6076,230 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   };
 
   console.log('[eFootball] Campo de chapas activado ✓');
+})();
+
+/* ============================================================
+   AUTO-EVAL OBJECTIVES ENGINE
+   ============================================================ */
+(function(){
+
+  // Generic team objective counter (mirrors athObjCount logic)
+  function teamObjCount(cfg) {
+    var container = document.getElementById(cfg.containerId);
+    if (!container) return;
+    var items = container.querySelectorAll('.obj-item');
+    var total = items.length;
+    var done = 0;
+    items.forEach(function(lbl) {
+      var cb = lbl.querySelector('input[type=checkbox]');
+      if (cb && cb.checked) { done++; lbl.classList.add('done'); }
+      else { lbl.classList.remove('done'); }
+    });
+    var countEl = document.getElementById(cfg.countId);
+    if (countEl) countEl.textContent = done + ' / ' + total;
+    var PTS_POR_OBJ = 0.40, MONEY_POR_OBJ = 40, MAX_PTS = 7.00, MAX_MONEY = 750;
+    var pts = parseFloat((done * PTS_POR_OBJ).toFixed(2));
+    var money = done * MONEY_POR_OBJ;
+    var pctPts = Math.min(100, (pts / MAX_PTS) * 100);
+    var pctMoney = Math.min(100, (money / MAX_MONEY) * 100);
+    var superadoPts = pts >= MAX_PTS, superadoMoney = money >= MAX_MONEY;
+    var ptsEl = document.getElementById(cfg.ptsValId);
+    var moneyEl = document.getElementById(cfg.moneyValId);
+    if (ptsEl) { ptsEl.textContent = pts.toFixed(2); ptsEl.classList.remove('pulse'); void ptsEl.offsetWidth; ptsEl.classList.add('pulse'); ptsEl.classList.toggle('superado', superadoPts); }
+    if (moneyEl) { moneyEl.textContent = money; moneyEl.classList.remove('pulse'); void moneyEl.offsetWidth; moneyEl.classList.add('pulse'); moneyEl.classList.toggle('superado', superadoMoney); }
+    var tPts = document.getElementById(cfg.ptsTgtId), tMoney = document.getElementById(cfg.moneyTgtId);
+    if (tPts) tPts.classList.toggle('superado', superadoPts);
+    if (tMoney) tMoney.classList.toggle('superado', superadoMoney);
+    var barPts = document.getElementById(cfg.barPtsId), barMoney = document.getElementById(cfg.barMoneyId);
+    if (barPts) { barPts.style.width = pctPts + '%'; barPts.classList.toggle('superado', superadoPts); }
+    if (barMoney) { barMoney.style.width = pctMoney + '%'; barMoney.classList.toggle('superado', superadoMoney); }
+    if (superadoPts && superadoMoney) {
+      setTimeout(function() { if (typeof lanzarFuegos === 'function') lanzarFuegos(3000); }, 300);
+    }
+  }
+
+  window.betObjCount = function() {
+    teamObjCount({ containerId:'bet-obj', countId:'bet-obj-prog', ptsValId:'bet-pts-val', moneyValId:'bet-money-val', ptsTgtId:'bet-pts-target', moneyTgtId:'bet-money-target', barPtsId:'bet-bar-pts', barMoneyId:'bet-bar-money' });
+  };
+  window.socObjCount = function() {
+    teamObjCount({ containerId:'soc-obj', countId:'soc-obj-prog', ptsValId:'soc-pts-val', moneyValId:'soc-money-val', ptsTgtId:'soc-pts-target', moneyTgtId:'soc-money-target', barPtsId:'soc-bar-pts', barMoneyId:'soc-bar-money' });
+  };
+  window.madObjCount = function() {
+    teamObjCount({ containerId:'mad-obj', countId:'mad-obj-prog', ptsValId:'mad-pts-val', moneyValId:'mad-money-val', ptsTgtId:'mad-pts-target', moneyTgtId:'mad-money-target', barPtsId:'mad-bar-pts', barMoneyId:'mad-bar-money' });
+  };
+  window.barObjCount = function() {
+    teamObjCount({ containerId:'bar-obj', countId:'bar-obj-prog', ptsValId:'bar-pts-val', moneyValId:'bar-money-val', ptsTgtId:'bar-pts-target', moneyTgtId:'bar-money-target', barPtsId:'bar-bar-pts', barMoneyId:'bar-bar-money' });
+  };
+
+  // Auto-evaluate objectives with data-auto attribute
+  function autoEvalObjetivos(teamName, containerId, countFn) {
+    var standings = window.collectStandings ? window.collectStandings() : [];
+    var teamRow = null, teamPos = null;
+    standings.forEach(function(row, i) {
+      if (row.name === teamName) { teamRow = row; teamPos = i + 1; }
+    });
+
+    var container = document.getElementById(containerId);
+    if (!container) return;
+
+    var autoCbs = container.querySelectorAll('input[data-auto]');
+    autoCbs.forEach(function(cb) {
+      var key = cb.getAttribute('data-auto');
+      var shouldCheck = false;
+
+      if (key.startsWith('liga-pos-')) {
+        var N = parseInt(key.split('-')[2]);
+        shouldCheck = teamPos !== null && teamPos <= N;
+
+      } else if (key.startsWith('liga-imbatido-')) {
+        var N = parseInt(key.split('-')[2]);
+        var form = teamRow ? (teamRow.form || []) : [];
+        var consecutive = 0;
+        for (var i = form.length - 1; i >= 0; i--) {
+          if (form[i] === 'V' || form[i] === 'E') consecutive++;
+          else break;
+        }
+        // Update counter display
+        var lbl0 = cb.closest('.obj-item');
+        if (lbl0) { var ctr = lbl0.querySelector('.obj-counter'); if (ctr) { var mx = ctr.querySelector('.obj-counter-max'); if (mx) { var mxH = mx.outerHTML; ctr.innerHTML = consecutive + mxH; } } }
+        shouldCheck = teamRow !== null && consecutive >= N;
+
+      } else if (key.startsWith('liga-pct-')) {
+        var N = parseInt(key.split('-')[2]);
+        var pct = teamRow && teamRow.pj > 0 ? Math.round((teamRow.v / teamRow.pj) * 100) : 0;
+        var lbl0 = cb.closest('.obj-item');
+        if (lbl0) { var ctr = lbl0.querySelector('.obj-counter'); if (ctr) { var mx = ctr.querySelector('.obj-counter-max'); if (mx) { var mxH = mx.outerHTML; ctr.innerHTML = pct + '%' + mxH; } } }
+        shouldCheck = teamRow !== null && pct >= N;
+
+      } else if (key.startsWith('liga-delante-')) {
+        var rivalName = key.replace('liga-delante-', '');
+        var rivalPos = null;
+        standings.forEach(function(row, i) { if (row.name === rivalName) rivalPos = i + 1; });
+        shouldCheck = teamPos !== null && rivalPos !== null && teamPos < rivalPos;
+
+      } else if (key.startsWith('liga-gf-')) {
+        var N = parseInt(key.split('-')[2]);
+        var gf = teamRow ? (teamRow.gf || 0) : 0;
+        var lbl0 = cb.closest('.obj-item');
+        if (lbl0) { var ctr = lbl0.querySelector('.obj-counter'); if (ctr) { var mx = ctr.querySelector('.obj-counter-max'); if (mx) { var mxH = mx.outerHTML; ctr.innerHTML = gf + mxH; } } }
+        shouldCheck = teamRow !== null && gf >= N;
+
+      } else if (key.startsWith('liga-dg-')) {
+        var N = parseInt(key.split('-')[2]);
+        var dg = teamRow ? (teamRow.dg || 0) : 0;
+        var lbl0 = cb.closest('.obj-item');
+        if (lbl0) { var ctr = lbl0.querySelector('.obj-counter'); if (ctr) { var mx = ctr.querySelector('.obj-counter-max'); if (mx) { var mxH = mx.outerHTML; ctr.innerHTML = (dg >= 0 ? '+' : '') + dg + mxH; } } }
+        shouldCheck = teamRow !== null && dg >= N;
+
+      } else if (key.startsWith('liga-max-goles-')) {
+        var N = parseInt(key.split('-').pop());
+        var maxG = 0;
+        (window.LIGA_J1_RESULTS || []).forEach(function(r) {
+          if (r.home === teamName) maxG = Math.max(maxG, parseInt(r.gh) || 0);
+          if (r.away === teamName) maxG = Math.max(maxG, parseInt(r['ga_']) || 0);
+        });
+        var lbl0 = cb.closest('.obj-item');
+        if (lbl0) { var ctr = lbl0.querySelector('.obj-counter'); if (ctr) { var mx = ctr.querySelector('.obj-counter-max'); if (mx) { var mxH = mx.outerHTML; ctr.innerHTML = maxG + mxH; } } }
+        shouldCheck = maxG >= N;
+
+      } else if (key.startsWith('liga-wins-casa-')) {
+        var N = parseInt(key.split('-').pop());
+        var homeWins = 0;
+        (window.LIGA_J1_RESULTS || []).forEach(function(r) {
+          if (r.home === teamName && (parseInt(r.gh) || 0) > (parseInt(r['ga_']) || 0)) homeWins++;
+        });
+        var lbl0 = cb.closest('.obj-item');
+        if (lbl0) { var ctr = lbl0.querySelector('.obj-counter'); if (ctr) { var mx = ctr.querySelector('.obj-counter-max'); if (mx) { var mxH = mx.outerHTML; ctr.innerHTML = homeWins + mxH; } } }
+        shouldCheck = homeWins >= N;
+
+      } else if (key === 'global-penalti-falta') {
+        var screen = container.closest('.screen');
+        if (screen) {
+          var total = 0;
+          screen.querySelectorAll('.ps-pen-gol, .ps-falta-gol').forEach(function(el) {
+            ['liga','copa','europa','uecl','global'].forEach(function(comp) {
+              total += parseInt(el.getAttribute('data-' + comp) || '0');
+            });
+          });
+          var lbl0 = cb.closest('.obj-item');
+          if (lbl0) { var ctr = lbl0.querySelector('.obj-counter'); if (ctr) { var mx = ctr.querySelector('.obj-counter-max'); if (mx) { var mxH = mx.outerHTML; ctr.innerHTML = total + mxH; } } }
+          shouldCheck = total > 0;
+        } else { return; }
+
+      } else if (key.startsWith('derby-wins-')) {
+        var N = parseInt(key.split('-').pop());
+        var screen = container.closest('.screen');
+        if (screen) {
+          var wins = screen.querySelectorAll('.derby-match-row.derby-v').length;
+          var lbl0 = cb.closest('.obj-item');
+          if (lbl0) { var ctr = lbl0.querySelector('.obj-counter'); if (ctr) { var mx = ctr.querySelector('.obj-counter-max'); if (mx) { var mxH = mx.outerHTML; ctr.innerHTML = wins + mxH; } } }
+          shouldCheck = wins >= N;
+        } else { return; }
+
+      } else if (key.startsWith('derby-imbatido-')) {
+        var N = parseInt(key.split('-').pop());
+        var screen = container.closest('.screen');
+        if (screen) {
+          var rows = Array.from(screen.querySelectorAll('.derby-match-row')).reverse();
+          var consecutive = 0;
+          for (var i = 0; i < rows.length; i++) {
+            if (rows[i].classList.contains('derby-p')) break;
+            consecutive++;
+          }
+          var lbl0 = cb.closest('.obj-item');
+          if (lbl0) { var ctr = lbl0.querySelector('.obj-counter'); if (ctr) { var mx = ctr.querySelector('.obj-counter-max'); if (mx) { var mxH = mx.outerHTML; ctr.innerHTML = consecutive + mxH; } } }
+          shouldCheck = consecutive >= N;
+        } else { return; }
+
+      } else if (key.startsWith('derby-goles-')) {
+        var N = parseInt(key.split('-').pop());
+        var screen = container.closest('.screen');
+        if (screen) {
+          var maxDG = 0;
+          screen.querySelectorAll('.derby-match-row .derby-score').forEach(function(s) {
+            var parts = s.textContent.trim().split('-');
+            maxDG = Math.max(maxDG, parseInt(parts[0]) || 0);
+          });
+          var lbl0 = cb.closest('.obj-item');
+          if (lbl0) { var ctr = lbl0.querySelector('.obj-counter'); if (ctr) { var mx = ctr.querySelector('.obj-counter-max'); if (mx) { var mxH = mx.outerHTML; ctr.innerHTML = maxDG + mxH; } } }
+          shouldCheck = maxDG >= N;
+        } else { return; }
+
+      } else if (key === 'derby-mas-goleador' || key === 'derby-menos-goleado') {
+        return; // requires cross-team comparison, leave manual
+      }
+
+      cb.checked = shouldCheck;
+      var lbl = cb.closest('.obj-item');
+      if (lbl) lbl.classList.toggle('done', shouldCheck);
+    });
+
+    if (typeof countFn === 'function') countFn();
+  }
+
+  // Auto-eval all 5 human teams
+  window.autoEvalAllTeams = function() {
+    autoEvalObjetivos('Athletic Club', 'ath-obj-club', function(){ if(typeof athObjCount==='function') athObjCount(); });
+    autoEvalObjetivos('Real Betis', 'bet-obj', window.betObjCount);
+    autoEvalObjetivos('Real Sociedad', 'soc-obj', window.socObjCount);
+    autoEvalObjetivos('Real Madrid', 'mad-obj', window.madObjCount);
+    autoEvalObjetivos('FC Barcelona', 'bar-obj', window.barObjCount);
+  };
+
+  // Hook into buildLigaClas
+  if (window.buildLigaClas) {
+    var _orig = window.buildLigaClas;
+    window.buildLigaClas = function() {
+      _orig.apply(this, arguments);
+      setTimeout(window.autoEvalAllTeams, 50);
+    };
+  }
+
+  // Run on DOMContentLoaded
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(window.autoEvalAllTeams, 500);
+  });
+
+  console.log('[eFootball] Auto-eval objetivos activado ✓');
 })();
 

@@ -1638,9 +1638,9 @@
     if(pos>total-4) return 'clas-zone-down';
     return '';
   }
-  function rowZoneClassPrimera(pos){
-    if(pos===1) return 'clas-zone-asc';
-    if(pos<=5) return 'clas-zone-play';
+  function rowZoneClassPrimera(pos,total){
+    if(pos<=2) return 'clas-zone-asc';
+    if(pos>=(total-2)) return 'clas-zone-down';
     return '';
   }
 
@@ -1671,7 +1671,7 @@
 
   function renderPrimera(){
     var st=getPrimeraState();
-    var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Ascenso directo</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 Playoff de ascenso</span></div>';
+    var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#9c3cdc"></span>🟣 Ascenso a Hypermotion</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso a 2ª Federación</span></div>';
     renderTable('clas-primf-g1-content', st.g1.table, legend, rowZoneClassPrimera, 'Pulsa <b>Simular grupo</b> para generar la clasificación del Grupo 1.');
     renderTable('clas-primf-g2-content', st.g2.table, legend, rowZoneClassPrimera, 'Pulsa <b>Simular grupo</b> para generar la clasificación del Grupo 2.');
     renderStats('primf-g1-stats-dashboard', st.g1.players, 'Simula el grupo para rellenar las estadísticas.');
@@ -1783,7 +1783,7 @@
     var card=document.createElement('div');
     card.className='submenu-card sc-liga-card';
     card.id='primf-card';
-    card.setAttribute('onclick',"go('s-primf')");
+    card.setAttribute('onclick',"go('s-primf-clas')");
     card.innerHTML='<span class="sc-emoji">🏁</span><span class="sc-label">Primera Federación</span><span class="sc-arr">▶</span>';
     var second=list.querySelector("[onclick=\"go('s-segunda')\"]");
     if(second && second.nextSibling) list.insertBefore(card, second.nextSibling); else list.appendChild(card);
@@ -1803,17 +1803,12 @@
     +'</div></div>'
     /* ── Clasificación combinada (Grupo 1 + 2) ── */
     +'<div class="screen" id="s-primf-clas">'
-    +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
-    +'<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Primera Federación · Clasificación</h2></div>'
-    +'<div style="margin-bottom:12px;padding:10px 14px;background:rgba(255,255,255,.04);border-radius:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;border:1px solid rgba(255,255,255,.08);" onclick="go(\'s-primf-stats\')">'
-    +'<span style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;color:rgba(255,255,255,.5);">📈 ESTADÍSTICAS</span>'
-    +'<span style="font-size:11px;color:#ccff00;">Ver todo ▶</span>'
-    +'</div>'
+    +'<button class="back-btn" onclick="go(\'s-espana\')">◀ Volver</button>'
+    +'<div class="sec-hdr"><span class="sec-emoji">🏁</span><h2>Primera Federación</h2></div>'
     +'<div class="segunda-actions" style="display:flex;gap:8px;justify-content:flex-end;align-items:center;margin:0 0 16px 0;flex-wrap:wrap;">'
-    +'<button class="btn-simular-liga" onclick="simularPrimeraGrupo(1)">🎲 Simular G1</button>'
-    +'<button class="btn-simular-liga" style="background:linear-gradient(180deg,#3b0d0d,#711919)" onclick="reiniciarPrimeraGrupo(1)">🗑 Reiniciar G1</button>'
-    +'<button class="btn-simular-liga" onclick="simularPrimeraGrupo(2)">🎲 Simular G2</button>'
-    +'<button class="btn-simular-liga" style="background:linear-gradient(180deg,#3b0d0d,#711919)" onclick="reiniciarPrimeraGrupo(2)">🗑 Reiniciar G2</button>'
+    +'<button class="btn-simular-liga" onclick="simularAmbosPrimera()">🎲 Simular</button>'
+    +'<button class="btn-simular-liga" style="background:linear-gradient(180deg,#3b0d0d,#711919)" onclick="reiniciarAmbosPrimera()">🔄 Reiniciar liga</button>'
+    +'<button class="btn-simular-liga" style="background:linear-gradient(180deg,#1a2e1a,#2d5a2d)" onclick="go(\'s-primf-stats\')">📊 Estadísticas</button>'
     +'</div>'
     +'<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.45);padding:0 0 6px;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.08);">① GRUPO 1</div>'
     +'<div id="clas-primf-g1-content"></div>'
@@ -1822,7 +1817,7 @@
     +'</div>'
     /* ── Estadísticas ── */
     +'<div class="screen" id="s-primf-stats">'
-    +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
+    +'<button class="back-btn" onclick="go(\'s-primf-clas\')">◀ Volver</button>'
     +'<div class="sec-hdr"><span class="sec-emoji">📈</span><h2>Primera Federación · Estadísticas</h2></div>'
     +'<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.45);padding:0 0 6px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08);">① GRUPO 1</div>'
     +'<div class="liga-stats-wrap" id="primf-g1-stats-dashboard" style="margin-bottom:24px"></div>'
@@ -1831,7 +1826,7 @@
     +'</div>'
     /* ── Ascensos y descensos (mejorado) ── */
     +'<div class="screen" id="s-primf-mov">'
-    +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
+    +'<button class="back-btn" onclick="go(\'s-primf-clas\')">◀ Volver</button>'
     +'<div class="sec-hdr"><span class="sec-emoji">🔁</span><h2>Ascensos y descensos</h2></div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;">'
     +'<button class="btn-simular-liga" onclick="simularLigaSegundaMenu()">🎲 Simular Hypermotion</button>'
@@ -1860,6 +1855,8 @@
   window.reiniciarLigaSegundaMenu=function(){ saveSegundaState({table:[],players:[]}); localStorage.removeItem(TRANSITION_KEY); renderSegunda(); renderMovement(); };
   window.simularPrimeraGrupo=function(n){ var teams=getPrimeraTeams(), state=getPrimeraState(); if(n===1){state.g1=simulateLeague(teams.g1); saveJSON(TRANSITION_KEY, null);} else {state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null);} setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };
   window.reiniciarPrimeraGrupo=function(n){ var state=getPrimeraState(); if(n===1) state.g1={table:[],players:[]}; else state.g2={table:[],players:[]}; setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
+  window.simularAmbosPrimera=function(){ var teams=getPrimeraTeams(), state=getPrimeraState(); state.g1=simulateLeague(teams.g1); state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null); setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };
+  window.reiniciarAmbosPrimera=function(){ var state=getPrimeraState(); state.g1={table:[],players:[]}; state.g2={table:[],players:[]}; setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
   window.applyPrimeraMovements=function(){ applyMovements(); };
 
   document.addEventListener('DOMContentLoaded', function(){
@@ -1881,6 +1878,11 @@
 #s-calendario .match-live-wrap:not(.hvh):not(.hvia) { display: none !important; }
 /* Botón jugar en mrow */
 .mrow .ms.p { cursor: pointer; color: #ccff00; font-weight: bold; }
+/* Zonas clasificación Primera Federación */
+.clas-row.clas-zone-asc { background: rgba(156,60,220,.18); border-left: 3px solid #9c3cdc; }
+.clas-row.clas-zone-asc .clas-team-cell { background: rgba(100,20,160,.25); }
+.clas-row.clas-zone-down { background: rgba(224,60,60,.15); border-left: 3px solid #e03c3c; }
+.clas-row.clas-zone-down .clas-team-cell { background: rgba(130,20,20,.25); }
 </style>
 <script>
 (function () {

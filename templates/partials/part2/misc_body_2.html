@@ -1971,53 +1971,555 @@
   }
 
   /* ── RELLENAR cal-l{N} (s-calendario) ───────────── */
+  /* ── ESTADO POR PARTIDO GENÉRICO ─────────────────────── */
+  var _mlStates = {};
+  function _mlSt(mk) {
+    if (!_mlStates[mk]) {
+      _mlStates[mk] = {timerSec:0,timerRunning:false,timerInterval:null,etDone:false,htDone:false,et1Done:false,finished:false,
+                       sc:{a:0,b:0},events:[],pendingEvt:null,j:0,home:'',away:'',isHvH:false};
+      // Register per-match delete function so _saveEditModal can find it
+      (function(k){
+        window['mlDelEvt_'+k] = function(id) { _mlDelEvtGen(k, id); };
+      })(mk);
+    }
+    return _mlStates[mk];
+  }
+
+  function _buildTwitchBtn(mk) {
+    var chs = ['kaotiko8219','Serraxxxx','budygamer1981','toni_ayuso','vk54in2'];
+    var drop = chs.map(function(c){
+      return '<a href="https://twitch.tv/'+c+'" target="_blank" style="display:block;padding:7px 12px;color:#a97fff;font-size:11px;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.06);">📺 '+c+'</a>';
+    }).join('');
+    return '<div style="position:relative;">'
+      +'<button onclick="(function(d){d.style.display=d.style.display===\'none\'?\'block\':\'none\';})(document.getElementById(\'tw-drop-'+mk+'\'))" style="background:rgba(100,60,180,.3);border:1px solid rgba(140,80,220,.35);color:#c8a0ff;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;font-family:Oswald,sans-serif;letter-spacing:1px;cursor:pointer;">📺 TWITCH</button>'
+      +'<div id="tw-drop-'+mk+'" style="display:none;position:absolute;top:100%;left:0;min-width:160px;background:rgba(10,5,20,.98);border:1px solid rgba(140,80,220,.3);border-radius:6px;z-index:200;overflow:hidden;">'
+      +drop+'</div></div>';
+  }
+
+  function buildMatchCard(j, home, away, isHvH, mk) {
+    var hu = home.toUpperCase();
+    var au = away.toUpperCase();
+    var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[home]) || '';
+    var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[away]) || '';
+    var ratA = rA ? '<div class="ml-team-rat" style="background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:1px 7px;font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#fff;">'+rA+'</div>' : '';
+    var ratB = rB ? '<div class="ml-team-rat" style="background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:1px 7px;font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#fff;">'+rB+'</div>' : '';
+    var etStyle = isHvH ? '' : ' style="display:none"';
+    var emk = mk.replace(/'/g,"\\'");
+    return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'">'
+      +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">eFootball Stadium</span><span class="ml-venue-sep">|</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado · Verano</span></div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px 2px;gap:6px;">'
+        +_buildTwitchBtn(mk)
+        +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
+        +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
+      +'</div>'
+      +'<div class="ml-header">'
+        +'<div class="ml-team"><div class="ml-team-name">'+hu+'</div>'+ratA+'</div>'
+        +'<div class="ml-score-wrap">'
+          +'<div class="ml-score"><span id="sc-'+mk+'-a">0</span>–<span id="sc-'+mk+'-b">0</span></div>'
+          +'<div class="ml-pen-score" id="pen-score-'+mk+'" style="display:none;">⚽ 0–0 (pen.)</div>'
+        +'</div>'
+        +'<div class="ml-team"><div class="ml-team-name">'+au+'</div>'+ratB+'</div>'
+      +'</div>'
+      +'<div class="ml-pen-panel" id="ml-pen-panel-'+mk+'">'
+        +'<div class="ml-pen-title">⚽ TANDA DE PENALTIS</div>'
+        +'<div class="ml-pen-row"><div class="ml-pen-team">'+hu+'</div>'
+        +'<input class="ml-pen-input" id="ml-pen-a-'+mk+'" type="number" min="0" max="20" value="0"/>'
+        +'<span class="ml-pen-vs">–</span>'
+        +'<input class="ml-pen-input" id="ml-pen-b-'+mk+'" type="number" min="0" max="20" value="0"/>'
+        +'<div class="ml-pen-team">'+au+'</div></div>'
+        +'<button class="ml-pen-confirm" onclick="mlConfirmPenGen(\''+emk+'\')">✓ CONFIRMAR RESULTADO PENALTIS</button>'
+      +'</div>'
+      +'<div class="ml-divider"></div>'
+      +'<div class="ml-add-bar"><button class="ml-add-btn" id="ml-add-btn-'+mk+'" style="visibility:hidden;" onclick="mlTogglePanelGen(\''+emk+'\')">＋ AÑADIR EVENTO</button></div>'
+      +'<div class="ml-match-actions" id="ml-actions-bar-'+mk+'" style="visibility:hidden;">'
+        +'<button id="ml-btn-et-'+mk+'" onclick="mlActivateETGen(\''+emk+'\')"'+etStyle+'>⏱ PRÓRROGA</button>'
+        +'<button id="ml-btn-pen-'+mk+'" onclick="mlShowPenPanelGen(\''+emk+'\')" style="display:none;">⚽ PENALTIS</button>'
+        +'<button id="ml-btn-end-'+mk+'" onclick="mlEndMatchGen(\''+emk+'\')">🏁 FINALIZAR</button>'
+      +'</div>'
+      +'<div class="ml-acta">'
+        +'<button class="ml-acta-toggle" id="acta-toggle-'+mk+'" onclick="actaTog(\''+emk+'\')">'
+          +'<span>📋 ACTA DEL PARTIDO</span><span class="acta-arr">▼</span>'
+        +'</button>'
+        +'<div class="ml-acta-body" id="acta-body-'+mk+'">'
+          +'<div id="ml-acta-list-'+mk+'"><div class="ml-acta-empty">Sin eventos registrados</div></div>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }
+
   function populateCalendar() {
     var results = loadResults();
     SCHEDULE.forEach(function (jornada, idx) {
-      var j      = idx + 1;
-      if (j === 1) return; /* jornada 1 ya tiene widgets interactivos */
+      var j = idx + 1;
+      if (j === 1) return;
       var calDiv = document.getElementById('cal-l' + j);
       if (!calDiv) return;
-      var humanMatches = jornada.filter(function (m) {
-        return esHumano(m[0]) || esHumano(m[1]);
-      });
       calDiv.innerHTML = '';
-      humanMatches.forEach(function (m) {
+      jornada.forEach(function (m, mi) {
+        var isHA = esHumano(m[0]), isHB = esHumano(m[1]);
+        if (!isHA && !isHB) return;
+        var isHvH = isHA && isHB;
         var res = results[rKey(j, m[0], m[1])];
-        var scoreHtml;
         if (res) {
-          scoreHtml = '<div class="ms">' + res.gh + '\u2013' + res.ga + '</div>';
+          var row = document.createElement('div');
+          row.className = 'mrow';
+          row.innerHTML = '<div class="mn">'+m[0]+'</div><div class="ms">'+res.gh+'\u2013'+res.ga+'</div><div class="mn r">'+m[1]+'</div>';
+          calDiv.appendChild(row);
         } else {
-          var h = m[0].replace(/'/g, "\\'");
-          var a = m[1].replace(/'/g, "\\'");
-          scoreHtml = '<div class="ms p" onclick="window.abrirResultadoLiga('
-            + j + ',\'' + h + '\',\'' + a + '\')">▶ Jugar</div>';
+          var mk = 'lj'+j+'m'+mi;
+          var st = _mlSt(mk);
+          st.j = j; st.home = m[0]; st.away = m[1]; st.isHvH = isHvH;
+          var card = document.createElement('div');
+          card.innerHTML = buildMatchCard(j, m[0], m[1], isHvH, mk);
+          calDiv.appendChild(card.firstChild);
         }
-        var row = document.createElement('div');
-        row.className = 'mrow';
-        row.innerHTML = '<div class="mn">' + m[0] + '</div>'
-          + scoreHtml
-          + '<div class="mn r">' + m[1] + '</div>';
-        calDiv.appendChild(row);
       });
     });
   }
 
-  /* ── ENTRADA RESULTADO HUMANO ────────────────────── */
+  /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 2-38) ──── */
+  function _mlRenderTimerGen(mk) {
+    var st = _mlSt(mk);
+    var btn = document.getElementById('ml-timer-'+mk);
+    if (!btn) return;
+    var min = Math.floor(st.timerSec/60);
+    if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
+    var max = st.etDone ? 7200 : 5400;
+    var lbl = st.timerRunning ? '⏸ ' : (st.timerSec>=max ? '🔁 ' : '▶ ');
+    btn.textContent = lbl+min+"'";
+    btn.className = 'ml-timer'+(st.timerRunning?' running':'');
+  }
+  function _mlStartIntervalGen(mk) {
+    var st = _mlSt(mk);
+    st.timerInterval = setInterval(function(){
+      st.timerSec += 5;
+      var max = st.etDone ? 7200 : 5400;
+      // Half-time marker
+      if (!st.htDone && st.timerSec >= 2700) {
+        st.htDone = true;
+        var list = document.getElementById('ml-acta-list-'+mk);
+        if (list) { var m = document.createElement('div'); m.className='ml-ht'; m.textContent='— DESCANSO (45 min) —'; list.appendChild(m); }
+      }
+      // ET half-time marker at 105'
+      if (st.etDone && !st.et1Done && st.timerSec >= 6300) {
+        st.et1Done = true;
+        var list2 = document.getElementById('ml-acta-list-'+mk);
+        if (list2) { var m2 = document.createElement('div'); m2.className='ml-ht'; m2.textContent='— DESCANSO PRÓRROGA (105 min) —'; list2.appendChild(m2); }
+      }
+      if (st.timerSec >= max) {
+        st.timerSec = max; clearInterval(st.timerInterval); st.timerRunning = false;
+        // Auto-check penalties at end of ET
+        if (st.etDone) {
+          if (st.sc.a === st.sc.b) { window.mlShowPenPanelGen(mk); }
+          else { window.mlEndMatchGen(mk); }
+        }
+      }
+      _mlRenderTimerGen(mk);
+    }, 1000);
+  }
+  window.mlTimerClickGen = function(mk) {
+    var st = _mlSt(mk);
+    if (st.finished) return;
+    if (st.timerRunning) { clearInterval(st.timerInterval); st.timerRunning=false; _mlRenderTimerGen(mk); }
+    else { st.timerRunning=true; _mlStartIntervalGen(mk); }
+  };
+  window.mlActivateETGen = function(mk) {
+    var st = _mlSt(mk);
+    if (st.etDone||st.finished) return;
+    st.etDone=true;
+    if (st.timerRunning) { clearInterval(st.timerInterval); st.timerRunning=false; }
+    if (st.timerSec<5400) st.timerSec=5400;
+    var list=document.getElementById('ml-acta-list-'+mk);
+    if (list) { var m=document.createElement('div'); m.className='ml-ht'; m.textContent='— PRÓRROGA —'; list.appendChild(m); }
+    var btn=document.getElementById('ml-btn-et-'+mk); if(btn){btn.disabled=true;btn.style.opacity='0.35';}
+    var penBtn=document.getElementById('ml-btn-pen-'+mk); if(penBtn)penBtn.style.display='';
+    _mlRenderTimerGen(mk);
+  };
+  window.mlTogglePanelGen = function(mk) {
+    var st=_mlSt(mk); if(st.finished) return;
+    _genActiveMk = mk;
+    var ov=document.getElementById('gen-ev-ov');
+    if (ov) ov.classList.add('show');
+  };
+  window.mlShowPenPanelGen = function(mk) {
+    var pp=document.getElementById('ml-pen-panel-'+mk); if(pp)pp.classList.add('show');
+    var penBtn=document.getElementById('ml-btn-pen-'+mk); if(penBtn){penBtn.disabled=true;penBtn.style.opacity='0.35';}
+    var addBtn=document.getElementById('ml-add-btn-'+mk); if(addBtn){addBtn.disabled=true;addBtn.style.opacity='0.35';}
+  };
+  window.mlConfirmPenGen = function(mk) {
+    var st=_mlSt(mk);
+    var pa=parseInt(document.getElementById('ml-pen-a-'+mk).value)||0;
+    var pb=parseInt(document.getElementById('ml-pen-b-'+mk).value)||0;
+    if (pa===pb) { alert('⚠️ Los penaltis no pueden terminar en empate. Introduce un resultado válido.'); return; }
+    var pp=document.getElementById('ml-pen-panel-'+mk); if(pp)pp.classList.remove('show');
+    var psEl=document.getElementById('pen-score-'+mk);
+    if (psEl) { psEl.textContent='⚽ '+pa+'–'+pb+' (pen.)'; psEl.style.display=''; }
+    var penWinner = pa>pb ? 'a' : 'b';
+    st.events.push({type:'pen-result',label:'Penaltis',team:penWinner,pa:pa,pb:pb,id:Date.now()});
+    _mlFinishMatchGen(mk, penWinner);
+  };
+  window.mlEndMatchGen = function(mk, winner) {
+    var st=_mlSt(mk);
+    if (st.finished) return;
+    if (!winner && st.sc.a===st.sc.b && st.isHvH) {
+      if (!st.etDone) { alert('⚠️ El partido está empatado. Debes ir a PRÓRROGA y luego a PENALTIS.'); return; }
+      window.mlShowPenPanelGen(mk); return;
+    }
+    if (st.isHvH) {
+      var hasMvp=st.events.some(function(e){return e.type==='mvp';});
+      if (!hasMvp) {
+        var sqA=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.home])||[];
+        var sqB=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.away])||[];
+        _genActiveMk=mk;
+        window.showMvpForceGen(mk, st.home, st.away, sqA, sqB, st.sc.a, st.sc.b, function(team,num,name){
+          var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+          st.events.push({min:90,label:'MVP del Partido',type:'mvp',team:team,num:num,name:name,ico:'⭐',id:Date.now()});
+          _mlFinishMatchGen(mk, winner);
+        });
+        return;
+      }
+    }
+    _mlFinishMatchGen(mk, winner);
+  };
+  function _mlFinishMatchGen(mk, winner) {
+    var st=_mlSt(mk);
+    st.finished=true; clearInterval(st.timerInterval); st.timerRunning=false;
+    _mlRenderTimerGen(mk);
+    ['ml-btn-end-','ml-btn-et-','ml-add-btn-'].forEach(function(pfx){
+      var b=document.getElementById(pfx+mk); if(b){b.disabled=true;b.style.opacity='0.35';}
+    });
+    guardarResultado(st.j, st.home, st.away, st.sc.a, st.sc.b);
+    // Register stats for classification + player tables
+    var evts=st.events;
+    var mvpEvt=evts.find(function(e){return e.type==='mvp';});
+    var mvpName=mvpEvt?mvpEvt.name:'';
+    var mvpTeam=mvpEvt?(mvpEvt.team==='a'?st.home:st.away):'';
+    var ta_a=evts.filter(function(e){return e.team==='a'&&e.type==='amarilla';}).length;
+    var tr_a=evts.filter(function(e){return e.team==='a'&&(e.type==='roja'||e.type==='d-amarilla');}).length;
+    var ta_b=evts.filter(function(e){return e.team==='b'&&e.type==='amarilla';}).length;
+    var tr_b=evts.filter(function(e){return e.team==='b'&&(e.type==='roja'||e.type==='d-amarilla');}).length;
+    var mvp_a=mvpTeam===st.home?1:0; var mvp_b=mvpTeam===st.away?1:0;
+    if (typeof window.registrarResultadoLiga==='function')
+      window.registrarResultadoLiga(mk, st.home, st.away, st.sc.a, st.sc.b, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, winner==='pen'?winner:null);
+    if (typeof window.registrarLigaPlayerStats==='function')
+      window.registrarLigaPlayerStats(mk, st.home, st.away, evts, mvpName, mvpTeam);
+  }
+
+  /* ── SELECCIÓN DE EVENTOS GENÉRICA (overlays globales) ── */
+  var _genActiveMk = null;
+  var _genPendingEvt = null;
+
+  window.genEvPick = function(label, type) {
+    _genPendingEvt = {label:label, type:type};
+    var ov=document.getElementById('gen-ev-ov'); if(ov)ov.classList.remove('show');
+    var tpOv=document.getElementById('gen-tp-ov');
+    var tpEvt=document.getElementById('gen-tp-evt');
+    var tpBtnA=document.getElementById('gen-tp-btn-a');
+    var tpBtnB=document.getElementById('gen-tp-btn-b');
+    if (!_genActiveMk) return;
+    var st=_mlSt(_genActiveMk);
+    if (tpEvt) tpEvt.textContent = label.toUpperCase();
+    if (tpBtnA) tpBtnA.textContent = st.home;
+    if (tpBtnB) tpBtnB.textContent = st.away;
+    if (tpOv) tpOv.classList.add('show');
+  };
+  window.genTpSelect = function(team) {
+    var tpOv=document.getElementById('gen-tp-ov'); if(tpOv)tpOv.classList.remove('show');
+    if (!_genActiveMk||!_genPendingEvt) return;
+    var mk=_genActiveMk; var evt=_genPendingEvt;
+    evt.team=team;
+    var st=_mlSt(mk);
+    var teamName=team==='a'?st.home:st.away;
+    var plOv=document.getElementById('gen-pl-ov');
+    var plEvt=document.getElementById('gen-pl-evt');
+    var plTeam=document.getElementById('gen-pl-team');
+    var plList=document.getElementById('gen-pl-list');
+    if (plEvt) plEvt.textContent=evt.label.toUpperCase();
+    if (plTeam) plTeam.textContent=teamName.toUpperCase();
+    var sq=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[teamName])||[];
+    var html='';
+    if (sq.length>0) {
+      sq.forEach(function(p){
+        if(p.h){html+='<div class="ml-pl-ov-sec">'+p.h+'</div>';return;}
+        var n=String(p[0]),nm=String(p[1]).replace(/'/g,"\\'");
+        html+='<button class="ml-pl-ov-btn" onclick="genPlConfirm(\''+mk.replace(/'/g,"\\'")+'\',\''+team+'\',\''+n+'\',\''+nm+'\')"><span class="ml-pl-ov-num">'+p[0]+'</span><span class="ml-pl-ov-name">'+p[1]+'</span></button>';
+      });
+    } else {
+      var jd=window.JUGADORES_DATA&&window.JUGADORES_DATA[teamName];
+      if(jd) jd.forEach(function(nm,i){
+        nm=String(nm); var nme=nm.replace(/'/g,"\\'");
+        html+='<button class="ml-pl-ov-btn" onclick="genPlConfirm(\''+mk.replace(/'/g,"\\'")+'\',\''+team+'\','+(i+1)+',\''+nme+'\')"><span class="ml-pl-ov-num">'+(i+1)+'</span><span class="ml-pl-ov-name">'+nm+'</span></button>';
+      });
+    }
+    if (plList) plList.innerHTML=html||'<div style="color:#555;padding:10px;text-align:center;">Sin jugadores</div>';
+    if (plOv) plOv.classList.add('show');
+  };
+  // Generic per-match event delete (also registered as window['mlDelEvt_'+mk])
+  function _mlDelEvtGen(mk, id) {
+    var st=_mlSt(mk);
+    var ev=st.events.find(function(e){return e.id===id;});
+    if (!ev) return;
+    var scoringTypes=['gol','propia','pen-gol','falta-gol'];
+    if (scoringTypes.indexOf(ev.type)!==-1) {
+      var scTeam=(ev.type==='propia')?(ev.team==='a'?'b':'a'):ev.team;
+      st.sc[scTeam]=Math.max(0,st.sc[scTeam]-1);
+      var scA=document.getElementById('sc-'+mk+'-a'); if(scA)scA.textContent=st.sc.a;
+      var scB=document.getElementById('sc-'+mk+'-b'); if(scB)scB.textContent=st.sc.b;
+    }
+    st.events=st.events.filter(function(e){return e.id!==id;});
+    var row=document.querySelector('#ml-acta-list-'+mk+' .ml-evt-item[data-id="'+id+'"]');
+    if(row)row.remove();
+  }
+
+  window.genPlConfirm = function(mk, team, num, name) {
+    var plOv=document.getElementById('gen-pl-ov'); if(plOv)plOv.classList.remove('show');
+    if (!_genPendingEvt) return;
+    var evt=_genPendingEvt; _genPendingEvt=null;
+    var st=_mlSt(mk);
+    var min=Math.min(st.etDone?120:90,Math.floor(st.timerSec/60));
+    var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+    var ico=icos[evt.type]||'📋';
+    var goalTypes=['gol','falta-gol','pen-gol'];
+    if(goalTypes.indexOf(evt.type)!==-1){st.sc[team]++;}
+    else if(evt.type==='propia'){st.sc[team==='a'?'b':'a']++;}
+    var scA=document.getElementById('sc-'+mk+'-a'); if(scA)scA.textContent=st.sc.a;
+    var scB=document.getElementById('sc-'+mk+'-b'); if(scB)scB.textContent=st.sc.b;
+    var id=Date.now();
+    st.events.push({type:evt.type,label:evt.label,team:team,num:num,name:name,min:min,ico:ico,id:id});
+    var list=document.getElementById('ml-acta-list-'+mk);
+    if(list){
+      var emp=list.querySelector('.ml-acta-empty'); if(emp)emp.remove();
+      var teamLabel=team==='a'?st.home:st.away;
+      var emk=mk.replace(/'/g,"\\'");
+      var row=document.createElement('div');
+      row.className='ml-evt-item';
+      row.setAttribute('data-team',team);
+      row.setAttribute('data-type',evt.type);
+      row.setAttribute('data-id',id);
+      row.innerHTML='<span class="ml-evt-min">'+min+"'</span>"
+        +'<span class="ml-evt-ico">'+ico+'</span>'
+        +'<span class="ml-evt-name">'+num+'. '+name+'</span>'
+        +'<span class="ml-evt-team">'+teamLabel+'</span>'
+        +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\','+id+')" title="Editar">✏️</button>'
+        +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\']('+id+')">✕</button>';
+      // Insert in sorted minute order
+      var items=list.querySelectorAll('.ml-evt-item');
+      var inserted=false;
+      for(var i=0;i<items.length;i++){
+        var m=parseInt((items[i].querySelector('.ml-evt-min')||{}).textContent||'999');
+        if(min<m){list.insertBefore(row,items[i]);inserted=true;break;}
+      }
+      if(!inserted)list.appendChild(row);
+    }
+  };
+  window.genEvClose = function() {
+    var ov=document.getElementById('gen-ev-ov'); if(ov)ov.classList.remove('show');
+    var tpOv=document.getElementById('gen-tp-ov'); if(tpOv)tpOv.classList.remove('show');
+    var plOv=document.getElementById('gen-pl-ov'); if(plOv)plOv.classList.remove('show');
+    _genPendingEvt=null;
+  };
+
+  /* ── MVP OBLIGATORIO GENÉRICO ───────────────────────── */
+  var _genMvpCallback = null;
+  window.showMvpForceGen = function(mk, teamA, teamB, sqA, sqB, scoreA, scoreB, onConfirm) {
+    _genMvpCallback = onConfirm;
+    var ov=document.getElementById('gen-mvp-ov');
+    var sc=document.getElementById('gen-mvp-score');
+    var hdrA=document.getElementById('gen-mvp-hdr-a');
+    var hdrB=document.getElementById('gen-mvp-hdr-b');
+    var listA=document.getElementById('gen-mvp-list-a');
+    var listB=document.getElementById('gen-mvp-list-b');
+    if(sc) sc.textContent=scoreA+' – '+scoreB;
+    if(hdrA) hdrA.textContent=teamA.toUpperCase();
+    if(hdrB) hdrB.textContent=teamB.toUpperCase();
+    function renderMvpList(el, sq, team) {
+      if(!el) return;
+      var html='';
+      sq.forEach(function(p){
+        if(p.h){html+='<div class="mvp-pl-sec">'+p.h+'</div>';return;}
+        var nm=String(p[1]).replace(/"/g,'&quot;');
+        html+='<button class="mvp-pl-btn" data-mid="'+mk+'" data-team="'+team+'" data-num="'+p[0]+'" data-name="'+nm+'" onclick="genMvpConfirm(this)"><span class="mvp-pl-num">'+p[0]+'</span><span class="mvp-pl-name">'+p[1]+'</span></button>';
+      });
+      el.innerHTML=html;
+    }
+    renderMvpList(listA, sqA, 'a');
+    renderMvpList(listB, sqB, 'b');
+    if(ov) ov.classList.add('show');
+  };
+  window.genMvpConfirm = function(btn) {
+    var team=btn.getAttribute('data-team');
+    var num=btn.getAttribute('data-num');
+    var name=btn.getAttribute('data-name');
+    var ov=document.getElementById('gen-mvp-ov'); if(ov)ov.classList.remove('show');
+    if (_genMvpCallback) { _genMvpCallback(team,num,name); _genMvpCallback=null; }
+  };
+
+  /* ── ENTRADA RESULTADO HUMANO (modal interactivo) ── */
+  var _gm = { j:0, home:'', away:'', sc:{a:0,b:0}, events:[], etDone:false, finished:false,
+              timerSec:0, timerRunning:false, timerInterval:null, pendingEvt:null, isHvH:false };
+  var GM_MAX_NORMAL = 5400; /* 90 min */
+  var GM_MAX_ET     = 7200; /* 120 min */
+  var GM_TICK       = 300;  /* 5 seg real = 5 min juego */
+
+  function gmRenderTimer() {
+    var btn = document.getElementById('gm-timer');
+    if (!btn) return;
+    var min = Math.floor(_gm.timerSec / 60);
+    if (_gm.finished) { btn.textContent = '🏁 FIN'; btn.className = 'ml-timer finished'; return; }
+    var max = _gm.etDone ? GM_MAX_ET : GM_MAX_NORMAL;
+    var lbl = _gm.timerRunning ? '⏸ ' : (_gm.timerSec >= max ? '🔁 ' : '▶ ');
+    btn.textContent = lbl + min + "'";
+    btn.className = 'ml-timer' + (_gm.timerRunning ? ' running' : '');
+  }
+
+  function gmStartTimer() {
+    _gm.timerRunning = true;
+    _gm.timerInterval = setInterval(function () {
+      _gm.timerSec += 5;
+      var max = _gm.etDone ? GM_MAX_ET : GM_MAX_NORMAL;
+      if (_gm.timerSec >= max) { _gm.timerSec = max; clearInterval(_gm.timerInterval); _gm.timerRunning = false; }
+      gmRenderTimer();
+    }, GM_TICK);
+  }
+
+  window.gmTimerClick = function () {
+    if (_gm.finished) return;
+    if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; gmRenderTimer(); }
+    else { gmStartTimer(); }
+  };
+
+  window.gmShowEvents = function () {
+    if (_gm.finished) return;
+    document.getElementById('gm-event-panel').style.display = '';
+    document.getElementById('gm-team-pick').style.display = 'none';
+    document.getElementById('gm-add-btn').classList.add('open');
+  };
+
+  window.gmHideEvents = function () {
+    document.getElementById('gm-event-panel').style.display = 'none';
+    document.getElementById('gm-team-pick').style.display = 'none';
+    document.getElementById('gm-add-btn').classList.remove('open');
+    _gm.pendingEvt = null;
+  };
+
+  window.gmPickEvent = function (label, type) {
+    _gm.pendingEvt = { label: label, type: type };
+    document.getElementById('gm-event-panel').style.display = 'none';
+    /* si el evento no necesita equipo (lesión) → pick equipo igualmente */
+    document.getElementById('gm-tp-title').textContent = label;
+    document.getElementById('gm-tp-btn-a').textContent = _gm.home;
+    document.getElementById('gm-tp-btn-b').textContent = _gm.away;
+    document.getElementById('gm-team-pick').style.display = '';
+  };
+
+  window.gmPickTeam = function (team) {
+    if (!_gm.pendingEvt) return;
+    var evt = _gm.pendingEvt;
+    _gm.pendingEvt = null;
+    document.getElementById('gm-team-pick').style.display = 'none';
+    document.getElementById('gm-add-btn').classList.remove('open');
+
+    var min = Math.floor(_gm.timerSec / 60);
+    var ico = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽', 'pen-gol':'🥅⚽',
+                'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅',
+                amarilla:'🟨', 'damarilla':'🟨🟥', roja:'🟥', mvp:'⭐', lesion:'🩹' }[evt.type] || '📋';
+    var teamName = team === 'a' ? _gm.home : _gm.away;
+    _gm.events.push({ type: evt.type, label: evt.label, team: team, min: min });
+
+    /* actualizar marcador */
+    var goalTypes = ['gol','falta-gol','pen-gol'];
+    if (goalTypes.indexOf(evt.type) !== -1) {
+      _gm.sc[team]++;
+    } else if (evt.type === 'propia') { /* autogol → suma al contrario */
+      _gm.sc[team === 'a' ? 'b' : 'a']++;
+    }
+    document.getElementById('gm-score').textContent = _gm.sc.a + '-' + _gm.sc.b;
+
+    /* añadir al acta */
+    var li = document.createElement('div');
+    li.className = 'ml-acta-item';
+    li.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:11px;border-bottom:1px solid rgba(255,255,255,.06);';
+    li.innerHTML = '<span style="color:#aaa;min-width:22px;">' + min + "'</span>"
+      + '<span>' + ico + '</span>'
+      + '<span style="color:#ddd;">' + evt.label + '</span>'
+      + '<span style="color:#aaa;font-size:10px;margin-left:auto;">' + teamName + '</span>';
+    var list = document.getElementById('gm-acta-list');
+    list.appendChild(li);
+    var empty = list.querySelector('.ml-acta-empty');
+    if (empty) empty.remove();
+  };
+
+  window.gmActivateET = function () {
+    if (_gm.etDone || _gm.finished) return;
+    _gm.etDone = true;
+    if (_gm.timerSec < GM_MAX_NORMAL) _gm.timerSec = GM_MAX_NORMAL;
+    var marker = document.createElement('div');
+    marker.style.cssText = 'text-align:center;color:#aaa;font-size:10px;padding:4px;border-bottom:1px solid rgba(255,255,255,.06);';
+    marker.textContent = '— PRÓRROGA —';
+    document.getElementById('gm-acta-list').appendChild(marker);
+    var etBtn = document.getElementById('gm-btn-et');
+    if (etBtn) { etBtn.disabled = true; etBtn.style.opacity = '0.35'; }
+    gmRenderTimer();
+  };
+
+  window.gmEndMatch = function () {
+    if (_gm.finished) return;
+    _gm.finished = true;
+    clearInterval(_gm.timerInterval);
+    _gm.timerRunning = false;
+    gmRenderTimer();
+    var endBtn = document.getElementById('gm-btn-end');
+    if (endBtn) { endBtn.disabled = true; endBtn.style.opacity = '0.35'; }
+    var etBtn = document.getElementById('gm-btn-et');
+    if (etBtn) { etBtn.disabled = true; etBtn.style.opacity = '0.35'; }
+    var addBtn = document.getElementById('gm-add-btn');
+    if (addBtn) { addBtn.disabled = true; }
+    document.getElementById('gm-event-panel').style.display = 'none';
+    document.getElementById('gm-team-pick').style.display = 'none';
+    guardarResultado(_gm.j, _gm.home, _gm.away, _gm.sc.a, _gm.sc.b);
+    /* cerrar modal tras breve pausa */
+    setTimeout(function () { document.getElementById('gm-modal').style.display = 'none'; }, 1200);
+  };
+
+  window.gmClose = function () {
+    clearInterval(_gm.timerInterval);
+    document.getElementById('gm-modal').style.display = 'none';
+  };
+
+  function gmOpen(j, home, away, isHvH) {
+    _gm.j = j; _gm.home = home; _gm.away = away; _gm.sc = {a:0,b:0};
+    _gm.events = []; _gm.etDone = false; _gm.finished = false;
+    _gm.timerSec = 0; _gm.timerRunning = false; _gm.isHvH = isHvH; _gm.pendingEvt = null;
+    clearInterval(_gm.timerInterval);
+    document.getElementById('gm-team-a-name').textContent = home;
+    document.getElementById('gm-team-b-name').textContent = away;
+    document.getElementById('gm-score').textContent = '0-0';
+    document.getElementById('gm-acta-list').innerHTML = '<div class="ml-acta-empty" style="padding:8px;color:#555;font-size:11px;text-align:center;">Sin eventos aún</div>';
+    document.getElementById('gm-event-panel').style.display = 'none';
+    document.getElementById('gm-team-pick').style.display = 'none';
+    var etBtn = document.getElementById('gm-btn-et');
+    if (etBtn) { etBtn.style.display = isHvH ? '' : 'none'; etBtn.disabled = false; etBtn.style.opacity = '1'; }
+    var endBtn = document.getElementById('gm-btn-end');
+    if (endBtn) { endBtn.disabled = false; endBtn.style.opacity = '1'; }
+    var addBtn = document.getElementById('gm-add-btn');
+    if (addBtn) { addBtn.disabled = false; addBtn.classList.remove('open'); }
+    var jBadge = document.getElementById('gm-jornada-badge');
+    if (jBadge) jBadge.textContent = 'Liga · Jornada ' + j;
+    gmRenderTimer();
+    document.getElementById('gm-modal').style.display = '';
+  }
+
   window.abrirResultadoLiga = function (j, home, away) {
-    var gh = prompt('\u26BD Goles de ' + home + ':');
-    if (gh === null) return;
-    var ga = prompt('\u26BD Goles de ' + away + ':');
-    if (ga === null) return;
-    guardarResultado(j, home, away, Math.max(0, parseInt(gh) || 0), Math.max(0, parseInt(ga) || 0));
+    var isHvH = esHumano(home) && esHumano(away);
+    gmOpen(j, home, away, isHvH);
   };
 
   function guardarResultado(j, home, away, gh, ga) {
     var results = loadResults();
     results[rKey(j, home, away)] = { gh: gh, ga: ga };
     saveResults(results);
-    actualizarDom('l-j'   + j, home, away, gh, ga);
-    actualizarDom('cal-l' + j, home, away, gh, ga);
+    actualizarDom('l-j' + j, home, away, gh, ga);
+    populateCalendar(); /* re-renderiza tarjetas del calendario */
     if (typeof window.buildLigaClas   === 'function') window.buildLigaClas();
     if (typeof window.buildIAresults  === 'function') window.buildIAresults();
   }
@@ -2053,6 +2555,43 @@
     return { gh: goles(p), ga: goles(1 - p) };
   }
 
+  function genMatchEvents(teamA, teamB, goalsA, goalsB) {
+    var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
+    var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
+    var outA = sqA.filter(function(p){ return p[2] !== 'P'; });
+    var outB = sqB.filter(function(p){ return p[2] !== 'P'; });
+    if (!outA.length) outA = [['','Jugador A','F',76]];
+    if (!outB.length) outB = [['','Jugador B','F',76]];
+    var events = [];
+    var totalGoals = goalsA + goalsB;
+    var goalMins = [];
+    for (var i = 0; i < totalGoals; i++) goalMins.push(Math.floor(Math.random() * 88) + 2);
+    goalMins.sort(function(a,b){ return a-b; });
+    var assign = [];
+    for (var ga = 0; ga < goalsA; ga++) assign.push('a');
+    for (var gb = 0; gb < goalsB; gb++) assign.push('b');
+    for (var s = assign.length - 1; s > 0; s--) { var t = Math.floor(Math.random()*(s+1)); var tmp=assign[s]; assign[s]=assign[t]; assign[t]=tmp; }
+    assign.forEach(function(team, idx) {
+      var sq = team === 'a' ? outA : outB;
+      var pl = sq[Math.floor(Math.random()*sq.length)];
+      events.push({ type:'gol', min:goalMins[idx], player:pl[1]||'?', team:team });
+    });
+    var numCards = Math.floor(Math.random() * 3);
+    for (var c = 0; c < numCards; c++) {
+      var ct = Math.random() < 0.5 ? 'a' : 'b';
+      var csq = ct === 'a' ? outA : outB;
+      var cp = csq[Math.floor(Math.random()*csq.length)];
+      events.push({ type:'amarilla', min:Math.floor(Math.random()*80)+5, player:cp[1]||'?', team:ct });
+    }
+    events.sort(function(a,b){ return a.min - b.min; });
+    var mvpScore = {}, mvpTeams2 = {};
+    events.forEach(function(e){ if(e.type==='gol'){ mvpScore[e.player]=(mvpScore[e.player]||0)+3; mvpTeams2[e.player]=e.team==='a'?teamA:teamB; } });
+    var mvp='', mvpTeamName='', best=0;
+    Object.keys(mvpScore).forEach(function(p){ if(mvpScore[p]>best){ best=mvpScore[p]; mvp=p; mvpTeamName=mvpTeams2[p]; } });
+    if (!mvp) { var ms = goalsA >= goalsB ? outA : outB; var mp = ms[Math.floor(Math.random()*ms.length)]; mvp = mp?mp[1]:'?'; mvpTeamName = goalsA >= goalsB ? teamA : teamB; }
+    return { events:events, mvp:mvp, mvpTeam:mvpTeamName };
+  }
+
   window.simularJornadaIA = function (j) {
     if (!SCHEDULE[j - 1]) return;
     var results = loadResults();
@@ -2063,7 +2602,8 @@
       if (results[key]) return; /* ya simulado */
       var rat = window.TEAM_RATINGS || {};
       var r   = simSimple(rat[m[0]] || 76, rat[m[1]] || 76);
-      results[key] = { gh: r.gh, ga: r.ga };
+      var evtData = genMatchEvents(m[0], m[1], r.gh, r.ga);
+      results[key] = { gh: r.gh, ga: r.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
       actualizarDom('l-j' + j, m[0], m[1], r.gh, r.ga);
       dirty = true;
     });
@@ -2076,7 +2616,7 @@
 
   /* botón "Simular TODAS las jornadas IA" */
   window.simularTodasJornadasIA = function () {
-    for (var j = 2; j <= 38; j++) window.simularJornadaIA(j);
+    for (var j = 1; j <= 38; j++) window.simularJornadaIA(j);
   };
 
   /* ── SIMULAR J1 IA con mlSimEngine ─────────────────── */
@@ -2119,7 +2659,8 @@
     window.registrarResultadoLiga = function (matchKey, teamA, teamB, goalsA, goalsB) {
       if (_orig) _orig.apply(window, arguments);
       var results = loadResults();
-      results[rKey(1, teamA, teamB)] = { gh: goalsA, ga: goalsB };
+      var evtData1 = genMatchEvents(teamA, teamB, goalsA, goalsB);
+      results[rKey(1, teamA, teamB)] = { gh: goalsA, ga: goalsB, events: evtData1.events, mvp: evtData1.mvp, mvpTeam: evtData1.mvpTeam };
       saveResults(results);
       actualizarDom('l-j1', teamA, teamB, goalsA, goalsB);
       if (typeof window.buildIAresults === 'function') setTimeout(window.buildIAresults, 200);
@@ -2147,6 +2688,46 @@
     'Celta de Vigo·Deportivo Alavés': 'mlSimulate_j1m10'
   };
 
+  /* ── ESCUDOS IA (J2-38) ─────────────────────────── */
+  var IA_SHIELD = {
+    'Sevilla':          ['#ffffff','#CC0000','SFC','#CC0000'],
+    'Sevilla FC':       ['#ffffff','#CC0000','SFC','#CC0000'],
+    'Villarreal':       ['#FFD700','#003087','VCF','#003087'],
+    'Mallorca':         ['#EE1C25','#000000','RCD','#ffffff'],
+    'Valencia CF':      ['#ffffff','#000000','VCF','#CC0000'],
+    'Espanyol':         ['#003087','#ffffff','ESP','#ffffff'],
+    'Albacete BP':      ['#FFD700','#000000','ABP','#000000'],
+    'Celta de Vigo':    ['#6FBAD4','#ffffff','RCV','#ffffff'],
+    'Deportivo Alavés': ['#003087','#ffffff','DEP','#ffffff'],
+    'Osasuna':          ['#CC0000','#000080','CAN','#ffffff'],
+    'Getafe CF':        ['#003087','#ffffff','GCF','#ffffff'],
+    'Córdoba CF':       ['#006400','#ffffff','CCF','#ffffff'],
+    'Girona FC':        ['#CC0000','#ffffff','GFC','#ffffff'],
+    'Elche CF':         ['#008000','#ffffff','ECF','#ffffff'],
+    'Atlético Madrid':  ['#CC0000','#ffffff','ATM','#ffffff'],
+    'Rayo Vallecano':   ['#ffffff','#CC0000','RAY','#CC0000'],
+    'Real Madrid':      ['#ffffff','#d4af37','RMA','#d4af37'],
+    'FC Barcelona':     ['#A50044','#004D99','FCB','#ffffff'],
+    'Athletic Club':    ['#CC0000','#ffffff','ATH','#ffffff'],
+    'Real Sociedad':    ['#003087','#ffffff','RSO','#ffffff'],
+    'Real Betis':       ['#00A550','#ffffff','RBT','#ffffff']
+  };
+  function iaShieldSVG(team) {
+    var d = IA_SHIELD[team] || ['#333333','#aaaaaa',(team||'?').substring(0,3).toUpperCase(),'#ffffff'];
+    return '<svg width="32" height="38" viewbox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">'
+      + '<path d="M50 4 L88 14 L88 74 Q88 104 50 114 Q12 104 12 74 L12 14 Z" fill="'+d[0]+'" stroke="'+d[1]+'" stroke-width="2.5"/>'
+      + '<text fill="'+d[3]+'" font-family="Arial" font-size="11" font-weight="bold" text-anchor="middle" x="50" y="62">'+d[2]+'</text>'
+      + '</svg>';
+  }
+  window.iaActaTog = function(id) {
+    var b = document.getElementById('ia-acta-' + id);
+    var a = document.getElementById('ia-arr-' + id);
+    if (!b) return;
+    var open = b.style.display !== 'none';
+    b.style.display = open ? 'none' : 'block';
+    if (a) a.textContent = open ? '\u25bc' : '\u25b2';
+  };
+
   window.buildIAresults = function () {
     var container = document.getElementById('ia-res-list');
     if (!container) return;
@@ -2161,24 +2742,27 @@
         var j1done = {};
         (window.LIGA_J1_RESULTS || []).forEach(function (r) {
           if (!esHumano(r.home) && !esHumano(r.away)) {
-            matches.push({ home: r.home, away: r.away, gh: r.gh, ga: r.ga_ });
+            var lsRes = results[rKey(1, r.home, r.away)];
+            matches.push({ home: r.home, away: r.away, gh: r.gh, ga: r.ga_,
+                           events: lsRes ? lsRes.events : null,
+                           mvp: lsRes ? lsRes.mvp : null,
+                           mvpTeam: lsRes ? lsRes.mvpTeam : null });
           }
           j1done[r.home + '\xB7' + r.away] = true;
         });
-        /* completar con localStorage si hubo recarga */
         SCHEDULE[0].forEach(function (m) {
           if (esHumano(m[0]) || esHumano(m[1])) return;
           var mk = m[0] + '\xB7' + m[1];
           if (j1done[mk]) return;
           var res = results[rKey(1, m[0], m[1])];
-          if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga }); }
-          else { pending.push({ home: m[0], away: m[1], fn: _J1_IA_MAP[mk] || '' }); }
+          if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga, events: res.events, mvp: res.mvp, mvpTeam: res.mvpTeam }); }
+          else { pending.push({ home: m[0], away: m[1], fn: '' }); }
         });
       } else {
         SCHEDULE[j - 1].forEach(function (m) {
           if (esHumano(m[0]) || esHumano(m[1])) return;
           var res = results[rKey(j, m[0], m[1])];
-          if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga }); }
+          if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga, events: res.events, mvp: res.mvp, mvpTeam: res.mvpTeam }); }
           else { pending.push({ home: m[0], away: m[1], fn: '' }); }
         });
       }
@@ -2186,34 +2770,83 @@
       var bid          = 'ia-j' + j;
       var pendingCount = pending.length;
       var simBtn = '';
-      if (j === 1 && pendingCount > 0) {
-        simBtn = ' <button onclick="window.simularJ1IA();setTimeout(window.buildIAresults,1200);"'
-          + ' style="margin-left:8px;padding:2px 8px;background:#ccff00;color:#000;border:none;border-radius:3px;font-size:11px;cursor:pointer;font-weight:bold;">&#129302; SIMULAR TODO J1</button>';
-      } else if (j > 1 && pendingCount > 0) {
+      if (pendingCount > 0) {
         simBtn = ' <button onclick="window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);"'
           + ' style="margin-left:8px;padding:2px 8px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:3px;font-size:11px;cursor:pointer;">&#129302; SIM</button>';
       }
+
+      /* ── Jornada header ── */
       html += '<div class="jblock"><button class="jbtn c-liga" onclick="tog(\'' + bid + '\')"'
         + ' style="background:#1a1a2e;border-left:3px solid #2a4a6a;">'
         + '<div class="pdot">&#9654;</div>&#129302; <b>Jornada ' + j + '</b>'
         + ' <span style="color:#6ab0d8;font-size:11px;">' + matches.length + ' resultados'
         + (pendingCount ? ' \xb7 ' + pendingCount + ' pendientes' : '') + '</span>'
         + simBtn
-        + '</button><div class="jmatches" id="' + bid + '">';
-      matches.forEach(function (m) {
-        html += '<div class="mrow"><div class="mn">' + m.home + '</div>'
-          + '<div class="ms">' + m.gh + '\u2013' + m.ga + '</div>'
-          + '<div class="mn r">' + m.away + '</div></div>';
-      });
-      pending.forEach(function (m) {
-        var simF = m.fn ? 'window.simularJ1IAMatch(\'' + m.fn + '\');setTimeout(window.buildIAresults,400);' : '';
-        html += '<div class="mrow" style="opacity:0.5"><div class="mn">' + m.home + '</div>'
-          + '<div class="ms">'
-          + (simF ? '<button onclick="' + simF + '" style="padding:2px 6px;background:#333;color:#ccff00;border:1px solid #555;border-radius:3px;font-size:10px;cursor:pointer;">&#9654; SIM</button>'
-                  : '<span style="color:#3a3a3a;font-size:11px;">vs</span>')
+        + '</button><div class="jmatches" id="' + bid + '" style="padding:8px;">';
+
+      /* ── Completed matches → full card (Photos 2-3-4 format) ── */
+      matches.forEach(function (m, idx) {
+        var cid = 'ij' + j + 'm' + idx;
+        var evHtml = '';
+        if (m.events && m.events.length) {
+          m.events.forEach(function(ev) {
+            var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'amarilla' ? '&#129000;' : '&#129004;';
+            evHtml += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.04);">'
+              + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
+              + '<span style="font-size:14px;">' + ico + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;color:#fff;flex:1;">' + ev.player + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team === 'a' ? m.home : m.away) + '</span>'
+              + '</div>';
+          });
+          if (m.mvp) {
+            evHtml += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid rgba(240,192,64,.2);">'
+              + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#f0c040;min-width:26px;">FIN</span>'
+              + '<span style="font-size:14px;">&#11088;</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#f0c040;flex:1;">' + m.mvp + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (m.mvpTeam || '') + '</span>'
+              + '</div>';
+          }
+        } else {
+          evHtml = '<div style="padding:10px 12px;color:#555;font-size:11px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1px;">SIN ACTA DISPONIBLE</div>';
+        }
+        html += '<div class="match-live-wrap" style="margin-bottom:8px;">'
+          + '<div class="ml-header">'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + m.home + '</div></div>'
+          + '<div class="ml-score-wrap">'
+          + '<div class="ml-score state-finished"><span>' + m.gh + '</span>\u2013<span>' + m.ga + '</span></div>'
+          + '<div class="ml-timer finished" style="cursor:default;">&#127937; FIN</div>'
           + '</div>'
-          + '<div class="mn r">' + m.away + '</div></div>';
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + m.away + '</div></div>'
+          + '</div>'
+          + '<div class="ml-acta" data-ia="1">'
+          + '<button class="ml-acta-toggle" onclick="window.iaActaTog(\'' + cid + '\')">'
+          + '<span class="acta-ia-lbl">&#128203; ACTA DEL PARTIDO</span>'
+          + '<span class="acta-arr" id="ia-arr-' + cid + '">&#9660;</span>'
+          + '</button>'
+          + '<div class="ml-acta-body" id="ia-acta-' + cid + '" style="display:none;">'
+          + '<div class="ml-evlist">' + evHtml + '</div>'
+          + '</div>'
+          + '</div>'
+          + '</div>';
       });
+
+      /* ── Pending matches → pre-match card ── */
+      pending.forEach(function (m) {
+        var simF = m.fn
+          ? 'window.simularJ1IAMatch(\'' + m.fn + '\');setTimeout(window.buildIAresults,400);'
+          : 'window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);';
+        html += '<div class="match-live-wrap" style="margin-bottom:8px;opacity:0.75;">'
+          + '<div class="ml-header">'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + m.home + '</div></div>'
+          + '<div class="ml-score-wrap">'
+          + '<div class="ml-score state-pending"><span>0</span>\u2013<span>0</span></div>'
+          + '<button class="ml-timer" onclick="' + simF.replace(/"/g,'&quot;') + '">&#9654; SIMULAR</button>'
+          + '</div>'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + m.away + '</div></div>'
+          + '</div>'
+          + '</div>';
+      });
+
       html += '</div></div>';
     }
     container.innerHTML = html
@@ -2235,3 +2868,266 @@
 
 })();
 </script>
+
+<!-- ══════════════════════════════════════════════════
+     MODAL PARTIDO GENÉRICO (jornadas 2-38)
+     ══════════════════════════════════════════════════ -->
+<style>
+#gm-modal {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,.88);
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  overflow-y: auto; padding: 12px 0 40px;
+}
+#gm-inner {
+  background: linear-gradient(160deg,#1a0a30 0%,#0d1520 100%);
+  border: 1px solid rgba(180,60,255,.25);
+  border-radius: 10px; width: 100%; max-width: 480px; overflow: hidden;
+}
+#gm-venue {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 10px 5px; background: rgba(90,0,140,.35);
+  border-bottom: 1px solid rgba(180,60,255,.2); font-size: 10px; color: #ccc;
+}
+#gm-teams-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 8px 8px; gap: 4px;
+}
+.gm-team { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+.gm-team-name { font-family: "Oswald", sans-serif; font-size: 11px; font-weight: 700;
+  letter-spacing: .5px; color: #fff; text-align: center; }
+.gm-score-center { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#gm-score {
+  font-family: "Oswald", sans-serif; font-size: 30px; font-weight: 900;
+  color: #fff; background: rgba(0,0,0,.6); border-radius: 6px;
+  padding: 4px 12px; letter-spacing: 2px; min-width: 80px; text-align: center;
+}
+#gm-event-panel {
+  background: rgba(0,0,0,.92); padding: 10px 8px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+#gm-ev-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; margin-bottom: 8px;
+}
+.gm-card {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding: 8px 4px; border-radius: 8px; cursor: pointer;
+  background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
+  transition: background .15s;
+}
+.gm-card:active { background: rgba(255,255,255,.18); }
+.gm-card-ico { font-size: 22px; }
+.gm-card-lbl { font-size: 10px; font-weight: 700; color: #ccc; text-align: center; }
+.gm-card.c-gol { border-color: rgba(50,200,80,.3); }
+.gm-card.c-gol .gm-card-lbl { color: #3eda60; }
+.gm-card.c-pen { border-color: rgba(80,140,255,.3); }
+.gm-card.c-pen .gm-card-lbl { color: #6ab0ff; }
+.gm-card.c-yel { border-color: rgba(255,200,0,.3); }
+.gm-card.c-yel .gm-card-lbl { color: #ffc800; }
+.gm-card.c-red { border-color: rgba(220,40,40,.35); }
+.gm-card.c-red .gm-card-lbl { color: #e04040; }
+.gm-card.c-mvp { border-color: rgba(255,180,0,.3); }
+.gm-card.c-mvp .gm-card-lbl { color: #ffb800; }
+#gm-team-pick {
+  background: rgba(0,0,0,.92); padding: 10px 16px;
+  border-top: 1px solid rgba(255,255,255,.08); text-align: center;
+}
+#gm-tp-title { font-size: 12px; font-weight: 700; color: #ddd; margin-bottom: 8px; letter-spacing: 1px; }
+.gm-tp-row { display: flex; gap: 8px; }
+.gm-tp-btn {
+  flex: 1; padding: 8px 4px; border-radius: 6px; border: 1px solid rgba(255,255,255,.2);
+  background: rgba(255,255,255,.07); color: #fff; font-size: 11px; font-weight: 700;
+  font-family: "Oswald",sans-serif; letter-spacing: .5px; cursor: pointer;
+}
+.gm-tp-btn:active { background: rgba(255,255,255,.2); }
+#gm-acta-section { border-top: 1px solid rgba(255,255,255,.08); }
+#gm-acta-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; cursor: pointer; font-size: 10px; color: #aaa; letter-spacing: 1px;
+}
+#gm-acta-body { padding: 0 0 4px; }
+</style>
+
+<div id="gm-modal" style="display:none;">
+  <div id="gm-inner">
+    <!-- Venue bar -->
+    <div id="gm-venue">
+      <span>🏟️ eFootball Stadium · ☀️ Soleado</span>
+      <span id="gm-jornada-badge" style="font-weight:700;color:#c8a0ff;">Liga</span>
+    </div>
+
+    <!-- Teams + score -->
+    <div id="gm-teams-row">
+      <div class="gm-team">
+        <div class="gm-team-name" id="gm-team-a-name">EQUIPO A</div>
+      </div>
+      <div class="gm-score-center">
+        <div id="gm-score">0-0</div>
+        <button class="ml-timer" id="gm-timer" onclick="window.gmTimerClick()">▶ 0'</button>
+      </div>
+      <div class="gm-team">
+        <div class="gm-team-name" id="gm-team-b-name">EQUIPO B</div>
+      </div>
+    </div>
+
+    <!-- Add event button -->
+    <div style="padding:0 8px 6px;">
+      <button class="ml-add-btn" id="gm-add-btn" onclick="window.gmShowEvents()">＋ AÑADIR EVENTO</button>
+    </div>
+
+    <!-- Action buttons -->
+    <div style="padding:0 8px 8px;display:flex;gap:6px;">
+      <button id="gm-btn-et" onclick="window.gmActivateET()"
+        style="flex:1;padding:7px 4px;border-radius:5px;border:1px solid rgba(100,160,255,.3);
+               background:rgba(60,100,200,.15);color:#6ab0ff;font-size:10px;font-weight:700;
+               font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">
+        ⏱ PRÓRROGA
+      </button>
+      <button id="gm-btn-end" onclick="window.gmEndMatch()"
+        style="flex:1;padding:7px 4px;border-radius:5px;border:1px solid rgba(255,80,80,.3);
+               background:rgba(180,30,30,.2);color:#ff8080;font-size:10px;font-weight:700;
+               font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">
+        🏁 FINALIZAR
+      </button>
+    </div>
+
+    <!-- Event panel -->
+    <div id="gm-event-panel" style="display:none;">
+      <div id="gm-ev-grid">
+        <div class="gm-card c-gol" onclick="window.gmPickEvent('Gol','gol')">
+          <span class="gm-card-ico">⚽</span><span class="gm-card-lbl">Gol</span>
+        </div>
+        <div class="gm-card c-gol" onclick="window.gmPickEvent('Autogol','propia')">
+          <span class="gm-card-ico">⚽🚫</span><span class="gm-card-lbl">Autogol</span>
+        </div>
+        <div class="gm-card c-gol" onclick="window.gmPickEvent('Gol de Falta','falta-gol')">
+          <span class="gm-card-ico">⚽🎯</span><span class="gm-card-lbl">Gol de Falta</span>
+        </div>
+        <div class="gm-card c-pen" onclick="window.gmPickEvent('Penalti Gol','pen-gol')">
+          <span class="gm-card-ico">⚽🥅</span><span class="gm-card-lbl">Penalti Gol</span>
+        </div>
+        <div class="gm-card c-pen" onclick="window.gmPickEvent('Penalti Fallado','pen-fallo')">
+          <span class="gm-card-ico">❌🥅</span><span class="gm-card-lbl">Penalti Fallado</span>
+        </div>
+        <div class="gm-card c-pen" onclick="window.gmPickEvent('Pen. Provocado','pen-prov')">
+          <span class="gm-card-ico">🤦🥅</span><span class="gm-card-lbl">Pen. Provocado</span>
+        </div>
+        <div class="gm-card c-pen" onclick="window.gmPickEvent('Penalti Parado','pen-parado')">
+          <span class="gm-card-ico">🖐🥅</span><span class="gm-card-lbl">Penalti Parado</span>
+        </div>
+        <div class="gm-card c-yel" onclick="window.gmPickEvent('Tarjeta Amarilla','amarilla')">
+          <span class="gm-card-ico">🟨</span><span class="gm-card-lbl">Tarjeta Amarilla</span>
+        </div>
+        <div class="gm-card c-yel" onclick="window.gmPickEvent('Doble Amarilla','damarilla')">
+          <span class="gm-card-ico">🟨🟥</span><span class="gm-card-lbl">Doble Amarilla</span>
+        </div>
+        <div class="gm-card c-red" onclick="window.gmPickEvent('Roja Directa','roja')">
+          <span class="gm-card-ico">🟥</span><span class="gm-card-lbl">Roja Directa</span>
+        </div>
+        <div class="gm-card c-mvp" onclick="window.gmPickEvent('MVP del Partido','mvp')">
+          <span class="gm-card-ico">⭐</span><span class="gm-card-lbl">MVP del Partido</span>
+        </div>
+        <div class="gm-card" onclick="window.gmPickEvent('Lesión','lesion')">
+          <span class="gm-card-ico">🩹</span><span class="gm-card-lbl">Lesión</span>
+        </div>
+      </div>
+      <button onclick="window.gmHideEvents()"
+        style="width:100%;padding:7px;border-radius:5px;border:1px solid rgba(255,255,255,.15);
+               background:rgba(255,255,255,.06);color:#aaa;font-size:10px;cursor:pointer;">
+        ✕ Cancelar
+      </button>
+    </div>
+
+    <!-- Team picker -->
+    <div id="gm-team-pick" style="display:none;">
+      <div id="gm-tp-title">GOL</div>
+      <div class="gm-tp-row">
+        <button class="gm-tp-btn" id="gm-tp-btn-a" onclick="window.gmPickTeam('a')">EQUIPO A</button>
+        <button class="gm-tp-btn" id="gm-tp-btn-b" onclick="window.gmPickTeam('b')">EQUIPO B</button>
+      </div>
+      <button onclick="window.gmHideEvents()"
+        style="width:100%;margin-top:6px;padding:6px;border-radius:5px;border:1px solid rgba(255,255,255,.12);
+               background:rgba(255,255,255,.04);color:#888;font-size:10px;cursor:pointer;">
+        ✕ Cancelar
+      </button>
+    </div>
+
+    <!-- Acta -->
+    <div id="gm-acta-section">
+      <div id="gm-acta-toggle" onclick="(function(){var b=document.getElementById('gm-acta-body');b.style.display=b.style.display==='none'?'':'none';})()">
+        <span>📋 ACTA DEL PARTIDO</span><span>▼</span>
+      </div>
+      <div id="gm-acta-body">
+        <div id="gm-acta-list">
+          <div class="ml-acta-empty" style="padding:8px;color:#555;font-size:11px;text-align:center;">Sin eventos aún</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Close -->
+    <div style="padding:8px;">
+      <button onclick="window.gmClose()"
+        style="width:100%;padding:8px;border-radius:5px;border:1px solid rgba(255,255,255,.12);
+               background:rgba(255,255,255,.04);color:#888;font-size:10px;font-weight:700;
+               font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">
+        ✕ Cancelar partido
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ OVERLAYS GLOBALES PARTIDOS GENÉRICOS (jornadas 2-38) ══ -->
+
+<!-- Paso 1: Elegir tipo de evento -->
+<div class="ml-ev-overlay" id="gen-ev-ov">
+  <div class="ml-ev-ov-title">AÑADIR EVENTO</div>
+  <div class="ml-ev-ov-grid">
+    <div class="ml-ev-ov-card c-gol" onclick="genEvPick('Gol','gol')"><span class="ml-ev-ov-ico">⚽</span><span class="ml-ev-ov-lbl">Gol</span></div>
+    <div class="ml-ev-ov-card c-gol" onclick="genEvPick('Autogol','propia')"><span class="ml-ev-ov-ico">🚫</span><span class="ml-ev-ov-lbl">Autogol</span></div>
+    <div class="ml-ev-ov-card c-gol" onclick="genEvPick('Gol de Falta','falta-gol')"><span class="ml-ev-ov-ico">🎯</span><span class="ml-ev-ov-lbl">Gol de Falta</span></div>
+    <div class="ml-ev-ov-card c-pen" onclick="genEvPick('Penalti Gol','pen-gol')"><span class="ml-ev-ov-ico">🥅</span><span class="ml-ev-ov-lbl">Penalti Gol</span></div>
+    <div class="ml-ev-ov-card c-pen" onclick="genEvPick('Penalti Fallado','pen-fallo')"><span class="ml-ev-ov-ico">❌</span><span class="ml-ev-ov-lbl">Penalti Fallado</span></div>
+    <div class="ml-ev-ov-card c-pen" onclick="genEvPick('Pen. Provocado','pen-prov')"><span class="ml-ev-ov-ico">🤦</span><span class="ml-ev-ov-lbl">Pen. Provocado</span></div>
+    <div class="ml-ev-ov-card c-pen" onclick="genEvPick('Penalti Parado','pen-parado')"><span class="ml-ev-ov-ico">🖐</span><span class="ml-ev-ov-lbl">Penalti Parado</span></div>
+    <div class="ml-ev-ov-card c-yel" onclick="genEvPick('Tarjeta Amarilla','amarilla')"><span class="ml-ev-ov-ico">🟨</span><span class="ml-ev-ov-lbl">Tarjeta Amarilla</span></div>
+    <div class="ml-ev-ov-card c-yel" onclick="genEvPick('Doble Amarilla','d-amarilla')"><span class="ml-ev-ov-ico">🟨🟥</span><span class="ml-ev-ov-lbl">Doble Amarilla</span></div>
+    <div class="ml-ev-ov-card c-red" onclick="genEvPick('Roja Directa','roja')"><span class="ml-ev-ov-ico">🟥</span><span class="ml-ev-ov-lbl">Roja Directa</span></div>
+    <div class="ml-ev-ov-card c-mvp" onclick="genEvPick('MVP del Partido','mvp')"><span class="ml-ev-ov-ico">⭐</span><span class="ml-ev-ov-lbl">MVP del Partido</span></div>
+    <div class="ml-ev-ov-card" onclick="genEvPick('Lesión','lesion')"><span class="ml-ev-ov-ico">🩹</span><span class="ml-ev-ov-lbl">Lesión</span></div>
+  </div>
+  <button class="ml-ev-ov-close" onclick="genEvClose()">✕ Cancelar</button>
+</div>
+
+<!-- Paso 2: Elegir equipo -->
+<div class="ml-tp-overlay" id="gen-tp-ov">
+  <div class="ml-tp-ov-title">SELECCIONA EQUIPO</div>
+  <div class="ml-tp-ov-evt" id="gen-tp-evt">GOL</div>
+  <div class="ml-tp-ov-teams">
+    <button class="ml-tp-ov-card" id="gen-tp-btn-a" onclick="genTpSelect('a')" style="cursor:pointer;padding:14px 20px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;font-family:Oswald,sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;">EQUIPO A</button>
+    <button class="ml-tp-ov-card" id="gen-tp-btn-b" onclick="genTpSelect('b')" style="cursor:pointer;padding:14px 20px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;font-family:Oswald,sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;">EQUIPO B</button>
+  </div>
+  <button class="ml-tp-ov-close" onclick="genEvClose()">✕ Cancelar</button>
+</div>
+
+<!-- Paso 3: Elegir jugador -->
+<div class="ml-pl-overlay" id="gen-pl-ov">
+  <div class="ml-pl-ov-evt" id="gen-pl-evt">GOL</div>
+  <div class="ml-pl-ov-team" id="gen-pl-team">EQUIPO</div>
+  <div class="ml-pl-ov-list" id="gen-pl-list"></div>
+  <button class="ml-pl-ov-close" onclick="genEvClose()">✕ Cancelar</button>
+</div>
+
+<!-- MVP obligatorio genérico -->
+<div class="mvp-force-overlay" id="gen-mvp-ov">
+  <div class="mvp-force-header">
+    <div class="mvp-force-star">⭐</div>
+    <div class="mvp-force-title">MVP DEL PARTIDO</div>
+    <div class="mvp-force-sub">ELIGE AL MEJOR JUGADOR ANTES DE CERRAR</div>
+    <div class="mvp-force-score" id="gen-mvp-score">0 – 0</div>
+  </div>
+  <div class="mvp-force-warn">⚠️ No se ha elegido MVP. Es obligatorio para cerrar el partido.</div>
+  <div class="mvp-force-teams">
+    <div><div class="mvp-force-team-hdr" id="gen-mvp-hdr-a">EQUIPO A</div><div class="mvp-pl-list" id="gen-mvp-list-a"></div></div>
+    <div><div class="mvp-force-team-hdr" id="gen-mvp-hdr-b">EQUIPO B</div><div class="mvp-pl-list" id="gen-mvp-list-b"></div></div>
+  </div>
+</div>

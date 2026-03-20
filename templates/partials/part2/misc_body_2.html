@@ -2616,7 +2616,7 @@
 
   /* botón "Simular TODAS las jornadas IA" */
   window.simularTodasJornadasIA = function () {
-    for (var j = 2; j <= 38; j++) window.simularJornadaIA(j);
+    for (var j = 1; j <= 38; j++) window.simularJornadaIA(j);
   };
 
   /* ── SIMULAR J1 IA con mlSimEngine ─────────────────── */
@@ -2756,7 +2756,7 @@
           if (j1done[mk]) return;
           var res = results[rKey(1, m[0], m[1])];
           if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga, events: res.events, mvp: res.mvp, mvpTeam: res.mvpTeam }); }
-          else { pending.push({ home: m[0], away: m[1], fn: _J1_IA_MAP[mk] || '' }); }
+          else { pending.push({ home: m[0], away: m[1], fn: '' }); }
         });
       } else {
         SCHEDULE[j - 1].forEach(function (m) {
@@ -2770,10 +2770,7 @@
       var bid          = 'ia-j' + j;
       var pendingCount = pending.length;
       var simBtn = '';
-      if (j === 1 && pendingCount > 0) {
-        simBtn = ' <button onclick="window.simularJ1IA();setTimeout(window.buildIAresults,1200);"'
-          + ' style="margin-left:8px;padding:2px 8px;background:#ccff00;color:#000;border:none;border-radius:3px;font-size:11px;cursor:pointer;font-weight:bold;">&#129302; SIMULAR TODO J1</button>';
-      } else if (j > 1 && pendingCount > 0) {
+      if (pendingCount > 0) {
         simBtn = ' <button onclick="window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);"'
           + ' style="margin-left:8px;padding:2px 8px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:3px;font-size:11px;cursor:pointer;">&#129302; SIM</button>';
       }

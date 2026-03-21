@@ -2706,6 +2706,38 @@
     return { gh: goles(p), ga: goles(1 - p) };
   }
 
+  /* ── Diccionario de 30 lesiones por severidad ── */
+  var _LESION_DICT = {
+    leve: {
+      ico: '🩹', partidos: [1, 2],
+      lista: ['Sobrecarga muscular en el isquiotibial','Contusión en el cuádriceps','Esguince de tobillo Grado I',
+              'Calambre persistente (gemelo)','Elongación en el aductor','Herida inciso-contusa (corte en ceja)',
+              'Traumatismo craneal leve','Lumbalgia aguda','Sobrecarga en el tendón rotuliano','Ampollas severas por roce']
+    },
+    moderada: {
+      ico: '💉', partidos: [2, 3, 4],
+      lista: ['Microrrotura de fibras (1 cm)','Esguince de tobillo Grado II','Fascitis plantar aguda',
+              'Edema óseo en el peroné','Contractura severa con rotura parcial','Fractura de huesos propios (nariz)',
+              'Lesión en el menisco interno (leve)','Pubalgia incipiente','Distensión del ligamento lateral','Bursitis en la rodilla']
+    },
+    grave: {
+      ico: '🚑', partidos: [5, 6, 7, 8, 9, 10],
+      lista: ['Rotura fibrilar Grado III (Desgarro)','Fisura en el metatarsiano','Esguince cervical severo',
+              'Hernia discal con reposo obligado','Rotura parcial del ligamento lateral externo','Luxación de hombro completa',
+              'Fractura de costilla sin desplazar','Tendinitis crónica en el tendón de Aquiles','Rotura de fibras en el recto anterior','Desgarro profundo en el sóleo']
+    }
+  };
+
+  /* Elegir lesión aleatoria y devolver { ico, descripcion, partidos, grado } */
+  function _sortearLesion() {
+    var r = Math.random();
+    var grado = r < 0.55 ? 'leve' : r < 0.85 ? 'moderada' : 'grave';
+    var cat = _LESION_DICT[grado];
+    var desc = cat.lista[Math.floor(Math.random() * cat.lista.length)];
+    var pts = cat.partidos[Math.floor(Math.random() * cat.partidos.length)];
+    return { ico: cat.ico, descripcion: desc, partidos: pts, grado: grado };
+  }
+
   /* ── genMatchEventsEnhanced: goals + yellows + reds + injuries ── */
   function genMatchEventsEnhanced(teamA, teamB, goalsA, goalsB) {
     var base = genMatchEvents(teamA, teamB, goalsA, goalsB);
@@ -2729,12 +2761,14 @@
       evts.push({ type:'amarilla', min:m1, player:dp[1]||'?', team:dt });
       evts.push({ type:'roja', min:Math.min(m2,90), player:dp[1]||'?', team:dt, dbl:true });
     }
-    /* Injuries: 6% chance per team */
+    /* Injuries: ~5% per team (leve 55%, moderada 30%, grave 15%) */
     ['a','b'].forEach(function(side) {
-      if (Math.random() < 0.06) {
+      if (Math.random() < 0.05) {
         var sq = side==='a' ? outA : outB;
         var ip = rndSq(sq);
-        evts.push({ type:'lesion', min:rndMin(), player:ip[1]||'?', team:side });
+        var les = _sortearLesion();
+        evts.push({ type:'lesion', min:rndMin(), player:ip[1]||'?', team:side,
+                    lesIco: les.ico, lesDesc: les.descripcion, lesPartidos: les.partidos, lesGrado: les.grado });
       }
     });
     evts.sort(function(a,b){ return a.min - b.min; });
@@ -2772,7 +2806,8 @@
       /* Fire events that have reached curMin */
       while (evtIdx < evts.length && evts[evtIdx].min <= curMin) {
         var ev = evts[evtIdx]; evtIdx++;
-        var ico = ev.type === 'gol' ? '⚽' : ev.type === 'roja' ? '🟥' : ev.type === 'amarilla' ? '🟨' : ev.type === 'lesion' ? '🩹' : '•';
+        var ico = ev.type === 'gol' ? '⚽' : ev.type === 'roja' ? '🟥' : ev.type === 'amarilla' ? '🟨'
+                : ev.type === 'lesion' ? (ev.lesIco || '🩹') : '•';
         if (ev.dbl) ico = '🟨🟥';
         if (ev.type === 'gol') {
           if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
@@ -2781,9 +2816,12 @@
         if (actaEl) {
           var row = document.createElement('div');
           row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);';
+          var lesExtra = (ev.type === 'lesion' && ev.lesDesc)
+            ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + ' ptdos)</span>'
+            : '';
           row.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
             + '<span style="font-size:14px;">' + ico + '</span>'
-            + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + ev.player + '</span>'
+            + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + ev.player + lesExtra + '</span>'
             + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team==='a' ? home : away) + '</span>';
           actaEl.appendChild(row);
         }
@@ -2805,6 +2843,17 @@
             + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (evtData.mvpTeam||'') + '</span>';
           actaEl.appendChild(mvpRow);
         }
+        /* Register injuries in BAJA_STORE (all competitions) */
+        evtData.events.forEach(function(ev) {
+          if (ev.type !== 'lesion' || !ev.player || ev.player === '?' || !ev.lesPartidos) return;
+          window.BAJA_STORE = window.BAJA_STORE || {};
+          window.BAJA_STORE[ev.player] = {
+            tipo: 'lesion',
+            liga:   ev.lesPartidos,
+            copa:   ev.lesPartidos,
+            europa: ev.lesPartidos
+          };
+        });
         /* Save result */
         var results = loadResults();
         var key = rKey(j, home, away);

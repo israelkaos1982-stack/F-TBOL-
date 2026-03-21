@@ -2706,6 +2706,124 @@
     return { gh: goles(p), ga: goles(1 - p) };
   }
 
+  /* ── genMatchEventsEnhanced: goals + yellows + reds + injuries ── */
+  function genMatchEventsEnhanced(teamA, teamB, goalsA, goalsB) {
+    var base = genMatchEvents(teamA, teamB, goalsA, goalsB);
+    var evts = base.events;
+    var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
+    var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
+    var outA = sqA.filter(function(p){ return p[2] !== 'P'; });
+    var outB = sqB.filter(function(p){ return p[2] !== 'P'; });
+    if (!outA.length) outA = [['','Jugador A','F',76]];
+    if (!outB.length) outB = [['','Jugador B','F',76]];
+    function rndSq(sq) { return sq[Math.floor(Math.random()*sq.length)]; }
+    function rndMin() { return Math.floor(Math.random()*88)+2; }
+    /* Red cards: 8% direct red, 5% double yellow */
+    var roll = Math.random();
+    if (roll < 0.08) {
+      var rt = Math.random()<0.5?'a':'b'; var rp = rndSq(rt==='a'?outA:outB);
+      evts.push({ type:'roja', min:rndMin(), player:rp[1]||'?', team:rt });
+    } else if (roll < 0.13) {
+      var dt = Math.random()<0.5?'a':'b'; var dp = rndSq(dt==='a'?outA:outB);
+      var m1 = 5+Math.floor(Math.random()*40); var m2 = m1+5+Math.floor(Math.random()*30);
+      evts.push({ type:'amarilla', min:m1, player:dp[1]||'?', team:dt });
+      evts.push({ type:'roja', min:Math.min(m2,90), player:dp[1]||'?', team:dt, dbl:true });
+    }
+    /* Injuries: 6% chance per team */
+    ['a','b'].forEach(function(side) {
+      if (Math.random() < 0.06) {
+        var sq = side==='a' ? outA : outB;
+        var ip = rndSq(sq);
+        evts.push({ type:'lesion', min:rndMin(), player:ip[1]||'?', team:side });
+      }
+    });
+    evts.sort(function(a,b){ return a.min - b.min; });
+    return { events:evts, mvp:base.mvp, mvpTeam:base.mvpTeam };
+  }
+
+  /* ── iaSimLive: cronómetro 30s en vivo por partido IA vs IA ── */
+  window.iaSimLive = function(mk, home, away, j, j1fn) {
+    var btn   = document.getElementById('ia-sim-btn-' + mk);
+    var scAEl = document.getElementById('ia-sc-' + mk + '-a');
+    var scBEl = document.getElementById('ia-sc-' + mk + '-b');
+    var actaEl = document.getElementById('ia-acta-' + mk);
+    if (!btn) return;
+    /* Bloquear doble click */
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ 0\'';
+    btn.style.background = '#0d2a0d';
+    btn.style.color = '#4aff4a';
+
+    var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[home]) || 75;
+    var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[away]) || 75;
+    var r  = (typeof simSimple === 'function') ? simSimple(rA, rB) : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+    var evtData = genMatchEventsEnhanced(home, away, r.gh, r.ga);
+    var evts    = evtData.events; /* already sorted by min */
+
+    if (scAEl) scAEl.textContent = '0';
+    if (scBEl) scBEl.textContent = '0';
+    if (actaEl) actaEl.style.display = 'block';
+
+    var scA = 0, scB = 0, evtIdx = 0, curMin = 0;
+
+    var interval = setInterval(function() {
+      curMin = Math.min(curMin + 3, 90);
+      /* Fire events that have reached curMin */
+      while (evtIdx < evts.length && evts[evtIdx].min <= curMin) {
+        var ev = evts[evtIdx]; evtIdx++;
+        var ico = ev.type === 'gol' ? '⚽' : ev.type === 'roja' ? '🟥' : ev.type === 'amarilla' ? '🟨' : ev.type === 'lesion' ? '🩹' : '•';
+        if (ev.dbl) ico = '🟨🟥';
+        if (ev.type === 'gol') {
+          if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
+          else                 { scB++; if (scBEl) scBEl.textContent = scB; }
+        }
+        if (actaEl) {
+          var row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);';
+          row.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
+            + '<span style="font-size:14px;">' + ico + '</span>'
+            + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + ev.player + '</span>'
+            + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team==='a' ? home : away) + '</span>';
+          actaEl.appendChild(row);
+        }
+      }
+      /* Update timer label */
+      btn.textContent = curMin >= 90 ? '🏁 FIN' : '⏳ ' + curMin + '\'';
+
+      if (curMin >= 90) {
+        clearInterval(interval);
+        btn.style.background = '#0d0d3a';
+        btn.style.color = '#4a8aff';
+        /* MVP row */
+        if (actaEl && evtData.mvp) {
+          var mvpRow = document.createElement('div');
+          mvpRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-top:1px solid rgba(240,192,64,.25);';
+          mvpRow.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#f0c040;min-width:26px;">FIN</span>'
+            + '<span style="font-size:14px;">⭐</span>'
+            + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#f0c040;flex:1;">' + evtData.mvp + '</span>'
+            + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (evtData.mvpTeam||'') + '</span>';
+          actaEl.appendChild(mvpRow);
+        }
+        /* Save result */
+        var results = loadResults();
+        var key = rKey(j, home, away);
+        results[key] = { gh: scA, ga: scB, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
+        saveResults(results);
+        actualizarDom('l-j' + j, home, away, scA, scB);
+        if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
+        /* Rebuild list but keep jornada open */
+        setTimeout(function() {
+          var openId = 'ia-j' + j;
+          if (typeof window.buildIAresults === 'function') {
+            window._iaKeepOpen = openId;
+            window.buildIAresults();
+          }
+        }, 600);
+      }
+    }, 1000); /* 1 real second = 3 game minutes → 30 sec for full 90' */
+  };
+
   function genMatchEvents(teamA, teamB, goalsA, goalsB) {
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
@@ -2753,7 +2871,7 @@
       if (results[key]) return; /* ya simulado */
       var rat = window.TEAM_RATINGS || {};
       var r   = simSimple(rat[m[0]] || 76, rat[m[1]] || 76);
-      var evtData = genMatchEvents(m[0], m[1], r.gh, r.ga);
+      var evtData = genMatchEventsEnhanced(m[0], m[1], r.gh, r.ga);
       results[key] = { gh: r.gh, ga: r.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
       actualizarDom('l-j' + j, m[0], m[1], r.gh, r.ga);
       dirty = true;
@@ -2761,7 +2879,10 @@
     if (dirty) {
       saveResults(results);
       if (typeof window.buildLigaClas  === 'function') window.buildLigaClas();
-      if (typeof window.buildIAresults === 'function') window.buildIAresults();
+      if (typeof window.buildIAresults === 'function') {
+        window._iaKeepOpen = 'ia-j' + j;
+        window.buildIAresults();
+      }
     }
   };
 
@@ -2981,95 +3102,34 @@
           + '</div>';
       });
 
-      /* ── Pending matches → poder/valor analysis card ── */
+      /* ── Pending matches → clean card + live ▶ SIMULAR ── */
       pending.forEach(function (m) {
-        var simF = m.fn
-          ? 'window.simularJ1IAMatch(\'' + m.fn + '\');setTimeout(window.buildIAresults,400);'
-          : 'window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);';
+        var rA  = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.home]) || 75;
+        var rB  = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.away]) || 75;
+        var mk  = 'iapnd-j' + j + '-' + m.home.replace(/\s/g,'') + '-' + m.away.replace(/\s/g,'');
+        var emk = mk.replace(/'/g,"\\'");
+        var clickFn = m.fn
+          ? 'window.iaSimLive(\'' + emk + '\',\'' + m.home.replace(/'/g,"\\'") + '\',\'' + m.away.replace(/'/g,"\\'") + '\',' + j + ',\'' + m.fn + '\')'
+          : 'window.iaSimLive(\'' + emk + '\',\'' + m.home.replace(/'/g,"\\'") + '\',\'' + m.away.replace(/'/g,"\\'") + '\',' + j + ')';
 
-        /* Team ratings & strength */
-        var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.home]) || 75;
-        var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.away]) || 75;
-        var strA = rA + 1.5; // home bonus
-        var strB = rB;
-        var total = strA + strB;
-        var shareA = Math.min(0.78, Math.max(0.22, strA / total));
-        var pctA = Math.round(shareA * 100);
-        var pctB = 100 - pctA;
-
-        /* Win probability bars */
-        var drawPct  = Math.round(Math.min(30, Math.max(15, 25 - Math.abs(pctA - 50) * 0.3)));
-        var winAPct  = Math.round((100 - drawPct) * shareA);
-        var winBPct  = 100 - drawPct - winAPct;
-
-        /* Expected goals → P(score ≥1) */
-        var baseTG   = 1.7 + ((rA + rB) / 2 - 74) * 0.05;
-        var expA     = Math.min(3.8, Math.max(0.15, baseTG * shareA + Math.max(0, rA - rB) * 0.018 + 0.10));
-        var expB     = Math.min(3.3, Math.max(0.10, baseTG * (1 - shareA) + Math.max(0, rB - rA) * 0.018));
-        var probGolA = Math.round((1 - Math.exp(-expA)) * 100);
-        var probGolB = Math.round((1 - Math.exp(-expB)) * 100);
-
-        /* Top 2 scorers per team (by poder, non-GK) */
-        function topScorers(teamName) {
-          if (typeof window.sqFromRegistryFull !== 'function') return [];
-          var sq = window.sqFromRegistryFull(teamName);
-          return sq.filter(function(p){ return p[2] !== 'P'; })
-                   .sort(function(a,b){ return (b[3]||70)-(a[3]||70); })
-                   .slice(0, 2);
-        }
-        var scorersA = topScorers(m.home);
-        var scorersB = topScorers(m.away);
-        function scorerRow(p, color) {
-          var pwr = p[3] || 70;
-          var barW = Math.round((pwr - 60) / 30 * 100); // 60→0%, 90→100%
-          return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;">'
-            + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.5);min-width:16px;text-align:right;">' + p[0] + '</span>'
-            + '<span style="font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + p[1] + '</span>'
-            + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:12px;color:' + color + ';min-width:22px;text-align:right;">' + pwr + '</span>'
-            + '</div>';
-        }
-
-        html += '<div class="match-live-wrap" style="margin-bottom:10px;">'
-          /* Header */
+        html += '<div class="match-live-wrap" id="iapnd-' + mk + '" style="margin-bottom:10px;">'
           + '<div class="ml-header">'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + m.home + '</div>'
-          + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:12px;color:#6ab0d8;margin-top:2px;">⭐ ' + rA + ' 🏠</div></div>'
-          + '<div class="ml-score-wrap"><div class="ml-score state-pending"><span>–</span></div></div>'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + m.away + '</div>'
-          + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:12px;color:#a0c8d8;margin-top:2px;">⭐ ' + rB + '</div></div>'
+          + '<div class="ml-team">'
+          +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
+          +   '<div class="ml-team-name">' + m.home + '</div>'
+          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;margin-top:2px;letter-spacing:1px;">★ ' + rA + ' 🏠</div>'
           + '</div>'
-
-          /* Win probability bar */
-          + '<div style="padding:8px 12px 4px;">'
-          + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.35);margin-bottom:4px;">PROBABILIDAD DE VICTORIA</div>'
-          + '<div style="display:flex;height:10px;border-radius:5px;overflow:hidden;gap:1px;">'
-          + '<div style="flex:' + winAPct + ';background:#2a6a2a;"></div>'
-          + '<div style="flex:' + drawPct + ';background:#5a5a1a;"></div>'
-          + '<div style="flex:' + winBPct + ';background:#2a3a6a;"></div>'
+          + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;">'
+          +   '<div class="ml-score"><span id="ia-sc-' + mk + '-a">–</span>&ndash;<span id="ia-sc-' + mk + '-b">–</span></div>'
+          +   '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>'
           + '</div>'
-          + '<div style="display:flex;justify-content:space-between;margin-top:3px;">'
-          + '<span style="font-family:Rajdhani,sans-serif;font-size:10px;color:#6ab06a;">' + winAPct + '% Local</span>'
-          + '<span style="font-family:Rajdhani,sans-serif;font-size:10px;color:#a0a04a;">' + drawPct + '% Empate</span>'
-          + '<span style="font-family:Rajdhani,sans-serif;font-size:10px;color:#6a8ab0;">' + winBPct + '% Visitante</span>'
-          + '</div></div>'
-
-          /* P(gol) */
-          + '<div style="display:flex;justify-content:space-between;padding:4px 12px 6px;">'
-          + '<span style="font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);">⚽ Prob. gol local: <b style="color:#ccff00;">' + probGolA + '%</b></span>'
-          + '<span style="font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);">⚽ Prob. gol visit.: <b style="color:#ccff00;">' + probGolB + '%</b></span>'
-          + '</div>'
-
-          /* Top scorers two columns */
-          + '<div style="display:flex;gap:8px;padding:0 12px 8px;">'
-          + '<div style="flex:1;border:1px solid rgba(106,176,216,.2);border-radius:4px;padding:6px 8px;">'
-          + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.2px;color:#6ab0d8;margin-bottom:4px;">🏠 GOLEADORES LOCAL</div>'
-          + (scorersA.length ? scorersA.map(function(p){ return scorerRow(p,'#6ab0d8'); }).join('') : '<div style="color:rgba(255,255,255,.3);font-size:11px;">—</div>')
-          + '</div>'
-          + '<div style="flex:1;border:1px solid rgba(160,200,216,.2);border-radius:4px;padding:6px 8px;">'
-          + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.2px;color:#a0c8d8;margin-bottom:4px;">✈ GOLEADORES VISIT.</div>'
-          + (scorersB.length ? scorersB.map(function(p){ return scorerRow(p,'#a0c8d8'); }).join('') : '<div style="color:rgba(255,255,255,.3);font-size:11px;">—</div>')
+          + '<div class="ml-team">'
+          +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div>'
+          +   '<div class="ml-team-name">' + m.away + '</div>'
+          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#a0c8d8;margin-top:2px;letter-spacing:1px;">★ ' + rB + '</div>'
           + '</div>'
           + '</div>'
+          + '<div id="ia-acta-' + mk + '" style="display:none;border-top:1px solid rgba(255,255,255,.07);"></div>'
           + '</div>';
       });
 
@@ -3077,6 +3137,12 @@
     }
     container.innerHTML = html
       || '<div style="padding:12px;color:#555;font-size:13px;">Sin resultados IA a\xfan</div>';
+    /* Restore open jornada after rebuild (prevents collapsing on simulation end) */
+    if (window._iaKeepOpen) {
+      var keepEl = document.getElementById(window._iaKeepOpen);
+      if (keepEl) { keepEl.classList.add('open'); }
+      window._iaKeepOpen = null;
+    }
   };
 
   /* ── INIT ─────────────────────────────────────────── */

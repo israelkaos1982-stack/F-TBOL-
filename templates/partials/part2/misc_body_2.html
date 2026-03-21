@@ -1561,8 +1561,69 @@
   function randInt(min,max){return Math.floor(Math.random()*(max-min+1))+min;}
   function choice(arr){return arr[Math.floor(Math.random()*arr.length)];}
   function clamp(n,min,max){return Math.max(min,Math.min(max,n));}
-  function loadJSON(key,fallback){try{var raw=localStorage.getItem(key); return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}
-  function saveJSON(key,val){localStorage.setItem(key,JSON.stringify(val));}
+  const SHARED_STATE_ENDPOINT = '/api/state';
+  let __sharedStateCache = null;
+  let __sharedStateLoaded = false;
+
+  function deepClone(v){
+    return JSON.parse(JSON.stringify(v));
+  }
+
+  async function fetchSharedState(){
+    try{
+      const res = await fetch(SHARED_STATE_ENDPOINT, { cache: 'no-store' });
+      const data = await res.json();
+      if(data && data.ok && data.state){
+        __sharedStateCache = data.state;
+      }else{
+        __sharedStateCache = {};
+      }
+    }catch(e){
+      console.error('Error cargando estado compartido:', e);
+      __sharedStateCache = {};
+    }
+    __sharedStateLoaded = true;
+    return __sharedStateCache;
+  }
+
+  async function persistSharedState(){
+    try{
+      await fetch(SHARED_STATE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: __sharedStateCache || {} })
+      });
+    }catch(e){
+      console.error('Error guardando estado compartido:', e);
+    }
+  }
+
+  function getSharedRoot(){
+    if(!__sharedStateCache) __sharedStateCache = {};
+    return __sharedStateCache;
+  }
+
+  function getByKey(key, fallback){
+    const root = getSharedRoot();
+    if(root[key] === undefined){
+      return deepClone(fallback);
+    }
+    return deepClone(root[key]);
+  }
+
+  function setByKey(key, val){
+    const root = getSharedRoot();
+    root[key] = deepClone(val);
+    persistSharedState();
+  }
+
+  function loadJSON(key,fallback){
+    return getByKey(key, fallback);
+  }
+
+  function saveJSON(key,val){
+    setByKey(key, val);
+  }
 
   function getSegundaTeams(){return loadJSON(SEGUNDA_TEAMS_KEY, deepCopy(DEFAULT_SEGUNDA_TEAMS));}
   function setSegundaTeams(teams){saveJSON(SEGUNDA_TEAMS_KEY, teams);}
@@ -1890,11 +1951,11 @@
   }
 
   window.simularLigaSegundaMenu=function(){ saveSegundaState(simulateLeague(getSegundaTeams())); renderSegunda(); renderMovement(); if(typeof go==='function') go('s-segunda-clas'); };
-  window.reiniciarLigaSegundaMenu=function(){ saveSegundaState({table:[],players:[]}); localStorage.removeItem(TRANSITION_KEY); renderSegunda(); renderMovement(); };
+  window.reiniciarLigaSegundaMenu=function(){ saveSegundaState({table:[],players:[]}); saveJSON(TRANSITION_KEY, null); renderSegunda(); renderMovement(); };
   window.simularPrimeraGrupo=function(n){ var teams=getPrimeraTeams(), state=getPrimeraState(); if(n===1){state.g1=simulateLeague(teams.g1); saveJSON(TRANSITION_KEY, null);} else {state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null);} setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };
-  window.reiniciarPrimeraGrupo=function(n){ var state=getPrimeraState(); if(n===1) state.g1={table:[],players:[]}; else state.g2={table:[],players:[]}; setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
+  window.reiniciarPrimeraGrupo=function(n){ var state=getPrimeraState(); if(n===1) state.g1={table:[],players:[]}; else state.g2={table:[],players:[]}; setPrimeraState(state); saveJSON(TRANSITION_KEY, null); renderPrimera(); };
   window.simularAmbosPrimera=function(){ var teams=getPrimeraTeams(), state=getPrimeraState(); state.g1=simulateLeague(teams.g1); state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null); setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };
-  window.reiniciarAmbosPrimera=function(){ var state=getPrimeraState(); state.g1={table:[],players:[]}; state.g2={table:[],players:[]}; setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
+  window.reiniciarAmbosPrimera=function(){ var state=getPrimeraState(); state.g1={table:[],players:[]}; state.g2={table:[],players:[]}; setPrimeraState(state); saveJSON(TRANSITION_KEY, null); renderPrimera(); };
   window.applyPrimeraMovements=function(){ applyMovements(); };
 
   document.addEventListener('DOMContentLoaded', function(){
@@ -1938,7 +1999,7 @@
 
   window.reiniciarLigaEA = function() {
     if (!confirm('¿Reiniciar todos los resultados de Liga EA Sports? Se borrará el historial de partidos IA.')) return;
-    try { localStorage.removeItem(LS_KEY); } catch(e){}
+    saveJSON(LS_KEY, {});
     if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
     if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
     if (typeof window.buildIAresults === 'function') window.buildIAresults();
@@ -1966,10 +2027,10 @@
 
   /* ── PERSISTENCIA ────────────────────────────────── */
   function loadResults() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { return {}; }
+    return getByKey(LS_KEY, {});
   }
   function saveResults(r) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(r)); } catch (e) {}
+    setByKey(LS_KEY, r || {});
   }
   function rKey(j, h, a) { return j + '|' + h + '|' + a; }
 

@@ -1816,15 +1816,9 @@
   }
 
   function ensurePrimeraCard(){
-    var esp=document.getElementById('s-espana'); if(!esp) return;
-    var list=esp.querySelector('.submenu-list'); if(!list || document.getElementById('primf-card')) return;
-    var card=document.createElement('div');
-    card.className='submenu-card sc-liga-card';
-    card.id='primf-card';
-    card.setAttribute('onclick',"go('s-primf-clas')");
-    card.innerHTML='<img class="sc-comp-img" src="https://commons.wikimedia.org/wiki/Special:FilePath/Primera_Federaci%C3%B3n.svg" onerror="this.outerHTML=\'<span class=\\"sc-emoji\\">🏁</span>\'" alt="1ªFed"/><span class="sc-label">Primera Federación</span><span class="sc-arr">▶</span>';
-    var second=list.querySelector("[onclick=\"go('s-segunda-clas')\"]") || list.querySelector("[onclick=\"go('s-segunda')\"]");
-    if(second && second.nextSibling) list.insertBefore(card, second.nextSibling); else list.appendChild(card);
+    /* La tarjeta de Primera Federación ahora es estática en el HTML (primf-card).
+       Esta función solo garantiza que la pantalla de primera se haya creado. */
+    ensurePrimeraScreens();
   }
 
   function ensurePrimeraScreens(){

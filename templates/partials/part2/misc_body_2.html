@@ -1693,11 +1693,12 @@
 
   function renderStats(rootId, players, emptyText){
     var root=document.getElementById(rootId); if(!root) return;
-    if(!players || !players.length){root.innerHTML='<div class="liga-stat-empty">'+emptyText+'</div>'; return;}
-    function rows(items,start){return items.map(function(item,idx){return '<div class="liga-stat-row"><div class="liga-stat-rank">'+(start+idx)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+esc(item.name)+'</div><div class="liga-stat-team">'+esc(item.team)+'</div></div><div class="liga-stat-value">'+item.value+'</div></div>'}).join('')}
-    var html='';
-    STATS_CATS.forEach(function(cat){var all=topPlayersBy(players,cat.key); var top=all.slice(0,6), rest=all.slice(6); html+='<div class="liga-stat-card"><div class="liga-stat-head"><div class="liga-stat-ico">'+cat.icon+'</div><div class="liga-stat-title">'+cat.title+'</div></div><div class="liga-stat-body">'; if(!all.length){html+='<div class="liga-stat-empty">Sin datos todavía</div>';} else {html+=rows(top,1); if(rest.length){html+='<details class="liga-stat-more"><summary>Ver todos ('+all.length+')</summary><div class="liga-stat-more-list">'+rows(rest,7)+'</div></details>';}} html+='</div></div>';});
-    root.innerHTML=html;
+    if(!players || !players.length){root.innerHTML='<div class="liga-stat-empty" style="font-size:11px;padding:8px;opacity:.5;">'+emptyText+'</div>'; return;}
+    function renderRowsCompact(items){return items.map(function(item,idx){return '<div class="liga-stat-row" style="padding:5px 6px;"><div class="liga-stat-rank">'+(idx+1)+'</div><div class="liga-stat-player"><div class="liga-stat-name" style="font-size:12px;">'+esc(item.name)+'</div><div class="liga-stat-team" style="font-size:10px;">'+esc(item.team)+'</div></div><div class="liga-stat-value">'+item.value+'</div></div>'}).join('')}
+    var COMPACT=[{key:'goles-total',title:'Goleadores',icon:'⚽'},{key:'mvp',title:'MVP',icon:'⭐'},{key:'yel',title:'Amarillas',icon:'🟨'}];
+    var html='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">';
+    COMPACT.forEach(function(cat){var top=topPlayersBy(players,cat.key).slice(0,3); html+='<div class="liga-stat-card" style="border-radius:8px;"><div class="liga-stat-head" style="padding:7px 10px;"><div class="liga-stat-ico" style="font-size:14px;">'+cat.icon+'</div><div class="liga-stat-title" style="font-size:11px;">'+cat.title+'</div></div><div class="liga-stat-body" style="padding:4px 6px 6px;">'; if(!top.length){html+='<div class="liga-stat-empty" style="font-size:10px;">-</div>'}else{html+=renderRowsCompact(top)} html+='</div></div>';});
+    html+='</div>'; root.innerHTML=html;
   }
 
   function renderSegunda(){
@@ -2619,6 +2620,7 @@
   function genMatchEvents(teamA, teamB, goalsA, goalsB) {
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
+    // Exclude goalkeepers from scoring
     var outA = sqA.filter(function(p){ return p[2] !== 'P'; });
     var outB = sqB.filter(function(p){ return p[2] !== 'P'; });
     if (!outA.length) outA = [['','Jugador A','F',76]];
@@ -2632,18 +2634,57 @@
     for (var ga = 0; ga < goalsA; ga++) assign.push('a');
     for (var gb = 0; gb < goalsB; gb++) assign.push('b');
     for (var s = assign.length - 1; s > 0; s--) { var t = Math.floor(Math.random()*(s+1)); var tmp=assign[s]; assign[s]=assign[t]; assign[t]=tmp; }
+
+    // Weighted scorer selection using calculateGoalProbability + MIRACLE_FACTORS
+    var goalsPerPlayer = {};
+    function selectScorer(squad, isLocal) {
+      var weights = squad.map(function(p) {
+        var scored = goalsPerPlayer[p[1]] || 0;
+        if (typeof window.calculateGoalProbability === 'function') {
+          return window.calculateGoalProbability(p[2], p[3], isLocal, scored);
+        }
+        var base = {'P':0.001,'D':7.5,'M':17.5,'F':70.0}[p[2]] || 17.5;
+        if (scored === 0) return base;
+        var mf = [0.37, 0.22, 0.12, 0.06][scored - 1] || 0.02;
+        return base * mf;
+      });
+      var total = weights.reduce(function(a,b){ return a+b; }, 0);
+      if (total <= 0) return squad[Math.floor(Math.random()*squad.length)];
+      var r = Math.random() * total, cum = 0;
+      for (var i = 0; i < squad.length; i++) { cum += weights[i]; if (r <= cum) return squad[i]; }
+      return squad[squad.length - 1];
+    }
+
     assign.forEach(function(team, idx) {
       var sq = team === 'a' ? outA : outB;
-      var pl = sq[Math.floor(Math.random()*sq.length)];
+      var pl = selectScorer(sq, team === 'a');
+      goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
       events.push({ type:'gol', min:goalMins[idx], player:pl[1]||'?', team:team });
     });
-    var numCards = Math.floor(Math.random() * 3);
-    for (var c = 0; c < numCards; c++) {
+
+    // Yellow cards (2-4 per match); second yellow on same player becomes red
+    var numYellow = Math.floor(Math.random() * 3) + 2;
+    var yellowsReceived = {};
+    for (var c = 0; c < numYellow; c++) {
       var ct = Math.random() < 0.5 ? 'a' : 'b';
       var csq = ct === 'a' ? outA : outB;
       var cp = csq[Math.floor(Math.random()*csq.length)];
-      events.push({ type:'amarilla', min:Math.floor(Math.random()*80)+5, player:cp[1]||'?', team:ct });
+      var cmin = Math.floor(Math.random()*80)+5;
+      if (yellowsReceived[cp[1]]) {
+        events.push({ type:'roja', min:cmin, player:cp[1]||'?', team:ct, reason:'2TA' });
+      } else {
+        events.push({ type:'amarilla', min:cmin, player:cp[1]||'?', team:ct });
+        yellowsReceived[cp[1]] = true;
+      }
     }
+    // Direct red card (~15% probability per match)
+    if (Math.random() < 0.15) {
+      var rt = Math.random() < 0.5 ? 'a' : 'b';
+      var rsq = rt === 'a' ? outA : outB;
+      var rp = rsq[Math.floor(Math.random()*rsq.length)];
+      events.push({ type:'roja', min:Math.floor(Math.random()*80)+10, player:rp[1]||'?', team:rt, reason:'directa' });
+    }
+
     events.sort(function(a,b){ return a.min - b.min; });
     var mvpScore = {}, mvpTeams2 = {};
     events.forEach(function(e){ if(e.type==='gol'){ mvpScore[e.player]=(mvpScore[e.player]||0)+3; mvpTeams2[e.player]=e.team==='a'?teamA:teamB; } });

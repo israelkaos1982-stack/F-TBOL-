@@ -1823,35 +1823,36 @@
   /* Stats tracking ─────────────────────────────── */
   function buildCopaStats(st){
     var players={};
-    function addGoals(matchArr,field,isDouble){
-      (matchArr||[]).forEach(function(m){
+    function incStat(map,team,key,val){
+      if(!val&&val!==0) return;
+      if(!map[team]) map[team]={team:team,goles:0,concedidos:0,partidos:0,limpios:0};
+      map[team][key]=(map[team][key]||0)+val;
+    }
+    function addRound(arr,isDouble){
+      (arr||[]).forEach(function(m){
         if(!m.r) return;
         var r=m.r;
         if(isDouble){
-          /* double leg: just track goal totals */
-          var aGoals=r.totA,bGoals=r.totB;
-          incStat(players,m.h.n,'goles',bGoals);
-          incStat(players,m.a.n,'goles',aGoals);
+          incStat(players,m.h.n,'goles',r.totA); incStat(players,m.a.n,'goles',r.totB);
+          incStat(players,m.h.n,'concedidos',r.totB); incStat(players,m.a.n,'concedidos',r.totA);
+          incStat(players,m.h.n,'partidos',2); incStat(players,m.a.n,'partidos',2);
+          if(!r.totB) incStat(players,m.h.n,'limpios',1);
+          if(!r.totA) incStat(players,m.a.n,'limpios',1);
         } else {
-          incStat(players,m.h.n,'goles',r.ga);
-          incStat(players,m.a.n,'goles',r.gb);
+          incStat(players,m.h.n,'goles',r.ga); incStat(players,m.a.n,'goles',r.gb);
+          incStat(players,m.h.n,'concedidos',r.gb); incStat(players,m.a.n,'concedidos',r.ga);
+          incStat(players,m.h.n,'partidos',1); incStat(players,m.a.n,'partidos',1);
+          if(!r.gb) incStat(players,m.h.n,'limpios',1);
+          if(!r.ga) incStat(players,m.a.n,'limpios',1);
         }
       });
     }
-    function incStat(map,team,key,val){
-      if(!val) return;
-      if(!map[team]) map[team]={team:team,goles:0};
-      map[team][key]=(map[team][key]||0)+val;
-    }
-    addGoals(st.r1,'r',false);
-    addGoals(st.r2,'r',false);
-    addGoals(st.r16,'r',false);
-    addGoals(st.r8,'r',true);
-    addGoals(st.r4,'r',true);
-    addGoals(st.r2f,'r',true);
+    addRound(st.r1,false); addRound(st.r2,false); addRound(st.r16,false);
+    addRound(st.r8,true); addRound(st.r4,true); addRound(st.r2f,true);
     if(st.final&&st.final.r){
-      incStat(players,st.final.h.n,'goles',st.final.r.ga);
-      incStat(players,st.final.a.n,'goles',st.final.r.gb);
+      incStat(players,st.final.h.n,'goles',st.final.r.ga); incStat(players,st.final.a.n,'goles',st.final.r.gb);
+      incStat(players,st.final.h.n,'concedidos',st.final.r.gb); incStat(players,st.final.a.n,'concedidos',st.final.r.ga);
+      incStat(players,st.final.h.n,'partidos',1); incStat(players,st.final.a.n,'partidos',1);
     }
     return Object.values ? Object.values(players) : Object.keys(players).map(function(k){return players[k];});
   }
@@ -1900,29 +1901,58 @@
   }
 
   /* Stats panel ─────────────────────────────────── */
+  var _copaStatTab='pichichi';
+  window._copaTabSwitch=function(tab){_copaStatTab=tab;var st=loadSt();if(st)renderCopaStats(st);};
+  function _copaHumanIco(name){
+    var m={"Real Madrid":"✏️","FC Barcelona":"👿","Athletic Club":"💡","Real Sociedad":"🔨","Real Betis":"🐭"};
+    return (isHuman(name)&&m[name])?'<span style="font-size:10px;margin-right:2px;">'+m[name]+'</span>':'';
+  }
   function renderCopaStats(st){
     var wrap=document.getElementById('copa-stats-dashboard'); if(!wrap) return;
     var players=buildCopaStats(st);
     if(!players.length){wrap.style.display='none';return;}
     wrap.style.display='';
-    var top=players.sort(function(a,b){return (b.goles||0)-(a.goles||0);}).slice(0,3);
-    var html='<div class="compact-stats-grid">';
-    html+='<div class="liga-stat-card" data-cat="goles-total"><div class="liga-stat-head"><div class="liga-stat-ico">⚽</div><div class="liga-stat-title">Goleadores Copa</div></div><div class="liga-stat-body">';
-    if(!top.length) html+='<div class="liga-stat-empty">Sin datos</div>';
-    else top.forEach(function(p,i){
-      html+='<div class="liga-stat-row"><div class="liga-stat-rank">'+(i+1)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+esc(p.team)+'</div></div><div class="liga-stat-value">'+(p.goles||0)+'</div></div>';
+    var tabs=[{id:'pichichi',ico:'⚽',lbl:'Pichichi'},{id:'zamora',ico:'🧤',lbl:'Zamora'},{id:'partidos',ico:'🏟️',lbl:'Partidos'},{id:'campeon',ico:'🏆',lbl:'Campeón'}];
+    var html='<div style="display:flex;gap:3px;padding:6px 6px 0;flex-wrap:wrap;">';
+    tabs.forEach(function(t){
+      var act=_copaStatTab===t.id;
+      html+='<button onclick="window._copaTabSwitch(\"'+t.id+'\")" style="flex:1;min-width:58px;padding:5px 3px;border:none;border-radius:7px 7px 0 0;cursor:pointer;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.7px;'+(act?'background:rgba(240,192,64,.18);color:#f0c040;border-bottom:2px solid #f0c040;':'background:rgba(255,255,255,.06);color:rgba(255,255,255,.45);')+'">'+t.ico+' '+t.lbl+'</button>';
     });
-    html+='</div></div>';
-
-    /* Champion banner if finished */
-    if(st.phase>=14 && st.final && st.final.r){
-      html+='<div class="liga-stat-card" data-cat="mvp"><div class="liga-stat-head"><div class="liga-stat-ico">🏆</div><div class="liga-stat-title">Campeón</div></div><div class="liga-stat-body"><div style="padding:14px 8px;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:22px;color:#f0c040;letter-spacing:2px;text-shadow:0 0 20px rgba(240,192,64,.7);">'+esc(st.final.r.w)+'</div></div></div>';
+    html+='</div><div class="compact-stats-grid" style="margin-top:0;border-top:1px solid rgba(255,255,255,.08);">';
+    var sorted;
+    if(_copaStatTab==='pichichi'){
+      sorted=players.slice().sort(function(a,b){return (b.goles||0)-(a.goles||0);});
+      html+='<div class="liga-stat-card" data-cat="goles-total"><div class="liga-stat-head"><div class="liga-stat-ico">⚽</div><div class="liga-stat-title">Máx. Goleadores</div></div><div class="liga-stat-body">';
+      if(!sorted.length)html+='<div class="liga-stat-empty">Sin datos</div>';
+      else sorted.slice(0,5).forEach(function(p,i){html+='<div class="liga-stat-row"><div class="liga-stat-rank">'+(i+1)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+_copaHumanIco(p.team)+esc(p.team)+'</div></div><div class="liga-stat-value">'+(p.goles||0)+'</div></div>';});
+      html+='</div></div>';
+    } else if(_copaStatTab==='zamora'){
+      sorted=players.filter(function(p){return (p.partidos||0)>0;}).slice().sort(function(a,b){return ((a.concedidos||0)/(a.partidos||1))-((b.concedidos||0)/(b.partidos||1));});
+      html+='<div class="liga-stat-card" data-cat="zamora"><div class="liga-stat-head"><div class="liga-stat-ico">🧤</div><div class="liga-stat-title">Trofeo Zamora</div></div><div class="liga-stat-body">';
+      if(!sorted.length)html+='<div class="liga-stat-empty">Sin datos</div>';
+      else sorted.slice(0,5).forEach(function(p,i){var ratio=((p.concedidos||0)/(p.partidos||1)).toFixed(2);html+='<div class="liga-stat-row"><div class="liga-stat-rank">'+(i+1)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+_copaHumanIco(p.team)+esc(p.team)+'</div><div class="liga-stat-sub">'+(p.limpios||0)+' P0</div></div><div class="liga-stat-value">'+ratio+'</div></div>';});
+      html+='</div></div>';
+    } else if(_copaStatTab==='partidos'){
+      sorted=players.slice().sort(function(a,b){return (b.partidos||0)-(a.partidos||0);});
+      html+='<div class="liga-stat-card" data-cat="partidos"><div class="liga-stat-head"><div class="liga-stat-ico">🏟️</div><div class="liga-stat-title">Partidos Jugados</div></div><div class="liga-stat-body">';
+      if(!sorted.length)html+='<div class="liga-stat-empty">Sin datos</div>';
+      else sorted.slice(0,5).forEach(function(p,i){html+='<div class="liga-stat-row"><div class="liga-stat-rank">'+(i+1)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+_copaHumanIco(p.team)+esc(p.team)+'</div></div><div class="liga-stat-value">'+(p.partidos||0)+'</div></div>';});
+      html+='</div></div>';
+    } else {
+      html+='<div class="liga-stat-card" data-cat="mvp"><div class="liga-stat-head"><div class="liga-stat-ico">🏆</div><div class="liga-stat-title">Campeón de Copa</div></div><div class="liga-stat-body">';
+      if(st.phase>=12&&st.final&&st.final.r&&st.final.r.w){
+        var ch=st.final.r.w;
+        html+='<div style="padding:16px 8px;text-align:center;"><div style="font-size:34px;margin-bottom:8px;">🏆</div><div style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#f0c040;letter-spacing:2px;text-shadow:0 0 20px rgba(240,192,64,.7);">'+_copaHumanIco(ch)+esc(ch)+'</div><div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.35);margin-top:5px;letter-spacing:2px;">CAMPEÓN</div>'+(st.final.r?'<div style="font-size:18px;font-weight:700;color:rgba(255,255,255,.65);margin-top:6px;">'+st.final.r.ga+' – '+st.final.r.gb+'</div>':'')+'</div>';
+      } else {
+        html+='<div class="liga-stat-empty">Copa en curso</div>';
+      }
+      html+='</div></div>';
     }
     html+='</div>';
     wrap.innerHTML=html;
   }
 
-  /* Status bar ─────────────────────────────────── */
+    /* Status bar ─────────────────────────────────── */
   var PHASE_LABELS=['Copa no iniciada','Ronda 1 — Sorteo listo','Ronda 1 — Completada','Ronda 2 — Completada','Dieciseisavos — Completados','Octavos — Ida completada','Octavos — Completados','Cuartos — Ida completada','Cuartos — Completados','Semis — Ida completada','Semis — Completadas','Semis — Vuelta completada','Final completada — ¡Campeón!'];
   function updateStatusBar(phase){
     var el=document.getElementById('copa-status-bar'); if(!el) return;

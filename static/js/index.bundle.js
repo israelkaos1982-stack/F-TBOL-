@@ -6363,3 +6363,293 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   console.log('[eFootball] Auto-eval objetivos activado ✓');
 })();
 
+
+
+/* script block ea sports persistence fix */
+(function(){
+  var LS_KEY = 'ef_liga38_v2';
+  var TEAM_ORDER = [
+    'Albacete BP','Athletic Club','Atlético Madrid','Celta de Vigo','Córdoba CF','Deportivo Alavés','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia CF','Villarreal'
+  ];
+  var SHORT_NAMES = {
+    'Albacete BP':'Albacete',
+    'Atlético Madrid':'Atl Madrid',
+    'Celta de Vigo':'Celta',
+    'Córdoba CF':'Córdoba',
+    'Deportivo Alavés':'Alavés',
+    'Elche CF':'Elche',
+    'Rayo Vallecano':'Rayo',
+    'Valencia CF':'Valencia'
+  };
+  var TEAM_ALIAS = {
+    'sevilla fc':'Sevilla','sevilla':'Sevilla',
+    'villarreal cf':'Villarreal','villarreal':'Villarreal',
+    'rc celta':'Celta de Vigo','celta':'Celta de Vigo','celta de vigo':'Celta de Vigo',
+    'ca osasuna':'Osasuna','osasuna':'Osasuna',
+    'mallorca':'Mallorca','rcd mallorca':'Mallorca',
+    'getafe':'Getafe CF','getafe cf':'Getafe CF',
+    'girona':'Girona FC','girona fc':'Girona FC',
+    'elche':'Elche CF','elche cf':'Elche CF',
+    'deportivo alaves':'Deportivo Alavés','deportivo alavés':'Deportivo Alavés',
+    'alaves':'Deportivo Alavés','alavés':'Deportivo Alavés',
+    'valencia':'Valencia CF','valencia cf':'Valencia CF',
+    'rayo':'Rayo Vallecano','rayo vallecano':'Rayo Vallecano',
+    'betis':'Real Betis','real betis':'Real Betis',
+    'real madrid':'Real Madrid','fc barcelona':'FC Barcelona','barcelona':'FC Barcelona',
+    'athletic club':'Athletic Club',
+    'atletico madrid':'Atlético Madrid','atlético madrid':'Atlético Madrid',
+    'albacete bp':'Albacete BP','albacete':'Albacete BP'
+  };
+
+  function normalizeText(str){
+    return String(str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+  function canonicalTeamName(name){
+    var clean = String(name || '').trim();
+    var key = normalizeText(clean);
+    return TEAM_ALIAS[key] || clean;
+  }
+  function parseSavedResults(){
+    try {
+      var data = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+      return data && typeof data === 'object' ? data : {};
+    } catch(e){
+      return {};
+    }
+  }
+  function ensureTeam(store, name){
+    name = canonicalTeamName(name);
+    if(!name || name === 'Por definir') return null;
+    if(!store[name]){
+      store[name] = {name:name, pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, ta:0, tr:0, mvp:0, formLog:[]};
+    }
+    return store[name];
+  }
+  function addForm(team, jornada, result){
+    team.formLog.push({j:jornada, r:result});
+  }
+  function applyMatch(teams, jornada, homeName, awayName, gh, ga, penWinner, extra){
+    var home = ensureTeam(teams, homeName), away = ensureTeam(teams, awayName);
+    if(!home || !away) return;
+    gh = Number(gh || 0); ga = Number(ga || 0);
+    home.pj++; away.pj++;
+    home.gf += gh; home.gc += ga;
+    away.gf += ga; away.gc += gh;
+    if(extra){
+      home.ta += Number(extra.homeTA || 0);
+      home.tr += Number(extra.homeTR || 0);
+      away.ta += Number(extra.awayTA || 0);
+      away.tr += Number(extra.awayTR || 0);
+      home.mvp += Number(extra.homeMVP || 0);
+      away.mvp += Number(extra.awayMVP || 0);
+    }
+    if(penWinner){
+      if(penWinner === 'a'){
+        home.v++; home.pts += 3; away.p++;
+        addForm(home, jornada, 'W'); addForm(away, jornada, 'L');
+      } else {
+        away.v++; away.pts += 3; home.p++;
+        addForm(home, jornada, 'L'); addForm(away, jornada, 'W');
+      }
+    } else if(gh > ga){
+      home.v++; home.pts += 3; away.p++;
+      addForm(home, jornada, 'W'); addForm(away, jornada, 'L');
+    } else if(gh < ga){
+      away.v++; away.pts += 3; home.p++;
+      addForm(home, jornada, 'L'); addForm(away, jornada, 'W');
+    } else {
+      home.e++; away.e++; home.pts++; away.pts++;
+      addForm(home, jornada, 'D'); addForm(away, jornada, 'D');
+    }
+  }
+  function parseResultKey(key){
+    var m = String(key || '').match(/^(\d+)\|([^|]+)\|(.+)$/);
+    if(!m) return null;
+    return {jornada: parseInt(m[1],10), home: canonicalTeamName(m[2]), away: canonicalTeamName(m[3])};
+  }
+  function countEventExtras(home, away, data){
+    var out = {homeTA:0,homeTR:0,awayTA:0,awayTR:0,homeMVP:0,awayMVP:0};
+    var evts = (data && data.events) || [];
+    evts.forEach(function(ev){
+      var side = ev && ev.team;
+      if(side !== 'a' && side !== 'b'){
+        var t = canonicalTeamName((ev && (ev.realTeam || ev.teamName || ev.team_label || ev.team)) || '');
+        if(t === home) side = 'a';
+        else if(t === away) side = 'b';
+      }
+      if(side !== 'a' && side !== 'b') return;
+      var type = String((ev && ev.type) || '').trim().toLowerCase();
+      var target = side === 'a' ? 'home' : 'away';
+      if(type === 'amarilla') out[target+'TA'] += 1;
+      else if(type === 'roja') out[target+'TR'] += 1;
+      else if(type === 'd-amarilla'){ out[target+'TA'] += 1; out[target+'TR'] += 1; }
+    });
+    var mvpTeam = canonicalTeamName(data && data.mvpTeam || '');
+    if(mvpTeam === home) out.homeMVP += 1;
+    else if(mvpTeam === away) out.awayMVP += 1;
+    return out;
+  }
+  function getSavedLigaTable(){
+    var teams = {};
+    TEAM_ORDER.forEach(function(name){ ensureTeam(teams, name); });
+    var results = parseSavedResults();
+    Object.keys(results).forEach(function(key){
+      var meta = parseResultKey(key);
+      var data = results[key] || {};
+      if(!meta || typeof data !== 'object') return;
+      if(data.gh == null || data.ga == null) return;
+      var extra = countEventExtras(meta.home, meta.away, data);
+      applyMatch(teams, meta.jornada, meta.home, meta.away, data.gh, data.ga, data.penWinner || null, extra);
+    });
+    return Object.keys(teams).map(function(name){
+      var team = teams[name];
+      team.dg = team.gf - team.gc;
+      team.formLog.sort(function(a,b){ return a.j - b.j; });
+      team.form = team.formLog.slice(-5).map(function(x){ return x.r; });
+      delete team.formLog;
+      return team;
+    }).sort(function(a,b){
+      if(b.pts !== a.pts) return b.pts - a.pts;
+      if(b.dg !== a.dg) return b.dg - a.dg;
+      if(b.gf !== a.gf) return b.gf - a.gf;
+      return a.name.localeCompare(b.name,'es');
+    });
+  }
+  function formHtml(form){
+    var last = (form || []).slice(-5);
+    if(!last.length) return '<span class="clas-dot pending" title="Sin resultados"></span>';
+    return last.map(function(r){
+      if(r === 'W') return '<span class="clas-dot win" title="Victoria"></span>';
+      if(r === 'D') return '<span class="clas-dot draw" title="Empate"></span>';
+      return '<span class="clas-dot loss" title="Derrota"></span>';
+    }).join('');
+  }
+  function rowZoneClass(pos){
+    if(pos >= 1 && pos <= 4) return 'zone-ucl';
+    if(pos === 5 || pos === 6) return 'zone-uel';
+    if(pos === 7 || pos === 8) return 'zone-conf';
+    if(pos >= 17) return 'zone-desc';
+    return '';
+  }
+  function renderSavedLigaClas(){
+    var list = getSavedLigaTable();
+    var el = document.getElementById('clas-liga-content');
+    if(!el) return;
+    var html = ''
+      + '<div class="clas-legend">'
+      +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Champions</span>'
+      +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 E.League</span>'
+      +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3cc878"></span>🟢 Conference</span>'
+      +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso</span>'
+      + '</div>'
+      + '<div class="clas-scroll-outer">'
+      +   '<div class="clas-hdr-scroll" id="clas-hdr-scroll">'
+      +     '<div class="clas-table">'
+      +       '<div class="clas-hdr">'
+      +         '<span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span><span>Últ. 5</span>'
+      +       '</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="clas-scroll" id="clas-body-scroll">'
+      +     '<div class="clas-table">';
+    list.forEach(function(team, idx){
+      var pos = idx + 1;
+      var zone = rowZoneClass(pos);
+      var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
+      html += ''
+        + '<div class="clas-row ' + zone + '">'
+        +   '<div class="clas-team-cell">'
+        +     '<span class="clas-pos-n">' + pos + '</span>'
+        +     '<span class="clas-team-name">' + (SHORT_NAMES[team.name] || team.name) + '</span>'
+        +   '</div>'
+        +   '<div class="clas-pts">' + team.pts + '</div>'
+        +   '<div class="clas-pj">' + team.pj + '</div>'
+        +   '<div class="clas-val">' + team.v + '</div>'
+        +   '<div class="clas-val">' + team.e + '</div>'
+        +   '<div class="clas-val">' + team.p + '</div>'
+        +   '<div class="clas-val gf">' + team.gf + '</div>'
+        +   '<div class="clas-val gc">' + team.gc + '</div>'
+        +   '<div class="' + dgClass + '">' + (team.dg > 0 ? '+' : '') + team.dg + '</div>'
+        +   '<div class="clas-val ta">' + team.ta + '</div>'
+        +   '<div class="clas-val tr">' + team.tr + '</div>'
+        +   '<div class="clas-mvp">' + team.mvp + '</div>'
+        +   '<div class="clas-pct">' + (team.pj > 0 ? Math.round((team.v / team.pj) * 100) : 0) + '%</div>'
+        +   '<div class="clas-form">' + formHtml(team.form) + '</div>'
+        + '</div>';
+    });
+    html += '    </div></div></div>';
+    el.innerHTML = html;
+    var hdrScroll = document.getElementById('clas-hdr-scroll');
+    var bodyScroll = document.getElementById('clas-body-scroll');
+    if(hdrScroll && bodyScroll){
+      bodyScroll.addEventListener('scroll', function(){ hdrScroll.scrollLeft = bodyScroll.scrollLeft; });
+    }
+    if(typeof window.autoEvalAllTeams === 'function') setTimeout(window.autoEvalAllTeams, 50);
+  }
+
+  window.buildLigaClas = renderSavedLigaClas;
+  window.collectStandings = getSavedLigaTable;
+
+  function hydrateStoreFromSavedResults(){
+    var results = parseSavedResults();
+    var store = window.LIGA_PLAYER_MATCH_STORE = window.LIGA_PLAYER_MATCH_STORE || {};
+    Object.keys(results).forEach(function(key){
+      var meta = parseResultKey(key);
+      var data = results[key] || {};
+      if(!meta || !data || !Array.isArray(data.events)) return;
+      store[key] = {
+        teamA: meta.home,
+        teamB: meta.away,
+        evts: data.events.map(function(ev){
+          var copy = {};
+          Object.keys(ev || {}).forEach(function(k){ copy[k] = ev[k]; });
+          if(!copy.realTeam){
+            if(copy.team === 'a') copy.realTeam = meta.home;
+            else if(copy.team === 'b') copy.realTeam = meta.away;
+          }
+          return copy;
+        }),
+        mvpName: data.mvp || '',
+        mvpTeam: canonicalTeamName(data.mvpTeam || '')
+      };
+    });
+  }
+  var _origRebuildFixed = window.rebuildLigaPlayerStatsFixed;
+  if(typeof _origRebuildFixed === 'function'){
+    window.rebuildLigaPlayerStatsFixed = function(){
+      hydrateStoreFromSavedResults();
+      return _origRebuildFixed.apply(this, arguments);
+    };
+  }
+  var _origBuildIAresults = window.buildIAresults;
+  if(typeof _origBuildIAresults === 'function'){
+    window.buildIAresults = function(){
+      var out = _origBuildIAresults.apply(this, arguments);
+      if(typeof window.buildLigaClas === 'function') window.buildLigaClas();
+      if(typeof window.rebuildLigaPlayerStatsFixed === 'function') setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+      return out;
+    };
+  }
+  var _origSimAll = window.simularTodasJornadasIA;
+  if(typeof _origSimAll === 'function'){
+    window.simularTodasJornadasIA = function(){
+      var out = _origSimAll.apply(this, arguments);
+      if(typeof window.buildLigaClas === 'function') window.buildLigaClas();
+      if(typeof window.rebuildLigaPlayerStatsFixed === 'function') setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+      if(typeof window.buildLigaStatsDashboard === 'function') setTimeout(window.buildLigaStatsDashboard, 0);
+      return out;
+    };
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      if(typeof window.buildLigaClas === 'function') window.buildLigaClas();
+      if(typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
+    }, 100);
+  });
+})();

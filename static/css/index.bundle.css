@@ -1609,17 +1609,49 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 .human-prefix{display:inline-block;font-size:13px;margin-right:4px;vertical-align:middle;line-height:1;filter:drop-shadow(0 0 4px rgba(255,255,255,.3));animation:humanPulse 3s ease-in-out infinite;}
 @keyframes humanPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.18);}}
 
-/* ── GLASSMORPHISM STATS CARDS ───────────────────────── */
-.liga-stat-card{background:linear-gradient(135deg,rgba(255,255,255,.055) 0%,rgba(255,255,255,.02) 100%);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:10px 14px;transition:all .22s;}
-.liga-stat-card:hover{background:linear-gradient(135deg,rgba(255,255,255,.09) 0%,rgba(255,255,255,.04) 100%);border-color:rgba(255,255,255,.16);box-shadow:0 4px 20px rgba(0,0,0,.35);}
-.liga-stat-card .liga-stat-val{font-family:'Bebas Neue',sans-serif;font-size:28px;background:linear-gradient(180deg,#fff 0%,rgba(255,255,255,.7) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-shadow:none;}
-.liga-stat-card .liga-stat-lbl{font-family:'Oswald',sans-serif;font-size:9px;letter-spacing:2.5px;color:rgba(255,255,255,.4);text-transform:uppercase;}
+/* ── STAT CARD COLOR THEMES BY CATEGORY ─────────────── */
+.liga-stat-card[data-cat="goles-total"],.liga-stat-card[data-cat="pen-gol"],.liga-stat-card[data-cat="falta-gol"]{border-color:rgba(240,192,64,.3);}
+.liga-stat-card[data-cat="goles-total"] .liga-stat-head,.liga-stat-card[data-cat="pen-gol"] .liga-stat-head,.liga-stat-card[data-cat="falta-gol"] .liga-stat-head{background:linear-gradient(90deg,rgba(130,80,0,.45),rgba(200,120,0,.15),rgba(130,80,0,.1));}
+.liga-stat-card[data-cat="goles-total"] .liga-stat-title,.liga-stat-card[data-cat="pen-gol"] .liga-stat-title,.liga-stat-card[data-cat="falta-gol"] .liga-stat-title{color:#f0c040;text-shadow:0 0 14px rgba(240,192,64,.55);}
+.liga-stat-card[data-cat="mvp"]{border-color:rgba(180,80,255,.3);}
+.liga-stat-card[data-cat="mvp"] .liga-stat-head{background:linear-gradient(90deg,rgba(80,0,150,.45),rgba(130,40,220,.15),rgba(80,0,150,.1));}
+.liga-stat-card[data-cat="mvp"] .liga-stat-title{color:#c87aff;text-shadow:0 0 14px rgba(180,80,255,.55);}
+.liga-stat-card[data-cat="yel"]{border-color:rgba(240,200,32,.3);}
+.liga-stat-card[data-cat="yel"] .liga-stat-head{background:linear-gradient(90deg,rgba(120,90,0,.45),rgba(200,160,0,.15),rgba(120,90,0,.1));}
+.liga-stat-card[data-cat="yel"] .liga-stat-title{color:#f0c820;text-shadow:0 0 14px rgba(240,200,32,.55);}
+.liga-stat-card[data-cat="red"]{border-color:rgba(220,60,60,.3);}
+.liga-stat-card[data-cat="red"] .liga-stat-head{background:linear-gradient(90deg,rgba(130,0,0,.45),rgba(220,40,40,.15),rgba(130,0,0,.1));}
+.liga-stat-card[data-cat="red"] .liga-stat-title{color:#ff6060;text-shadow:0 0 14px rgba(220,60,60,.55);}
+.liga-stat-card[data-cat="pen-prov"],.liga-stat-card[data-cat="pen-parado"],.liga-stat-card[data-cat="pen-fallado"]{border-color:rgba(60,180,255,.3);}
+.liga-stat-card[data-cat="pen-prov"] .liga-stat-head,.liga-stat-card[data-cat="pen-parado"] .liga-stat-head,.liga-stat-card[data-cat="pen-fallado"] .liga-stat-head{background:linear-gradient(90deg,rgba(0,70,150,.45),rgba(30,130,220,.15),rgba(0,70,150,.1));}
+.liga-stat-card[data-cat="pen-prov"] .liga-stat-title,.liga-stat-card[data-cat="pen-parado"] .liga-stat-title,.liga-stat-card[data-cat="pen-fallado"] .liga-stat-title{color:#60c8ff;text-shadow:0 0 14px rgba(60,180,255,.55);}
+.liga-stat-card[data-cat="propia"]{border-color:rgba(255,100,20,.3);}
+.liga-stat-card[data-cat="propia"] .liga-stat-head{background:linear-gradient(90deg,rgba(120,40,0,.45),rgba(200,80,10,.15),rgba(120,40,0,.1));}
+.liga-stat-card[data-cat="propia"] .liga-stat-title{color:#ff8840;text-shadow:0 0 14px rgba(255,100,20,.55);}
+/* rank color by position */
+.liga-stat-row:nth-child(1) .liga-stat-rank{color:#f0c040;text-shadow:0 0 12px rgba(240,192,64,.6);}
+.liga-stat-row:nth-child(2) .liga-stat-rank{color:#c0c0c0;text-shadow:0 0 10px rgba(200,200,200,.4);}
+.liga-stat-row:nth-child(3) .liga-stat-rank{color:#cd7f32;text-shadow:0 0 10px rgba(200,120,50,.4);}
+/* compact stats grid wrapper */
+.compact-stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;padding:0 4px;}
+
+/* ── UNIFIED ACTION BUTTON ICONS (equal weight/size) ─── */
+.btn-action-ico{display:inline-flex;align-items:center;justify-content:center;font-size:15px;width:18px;height:18px;flex-shrink:0;}
+.btn-action-sim .btn-action-ico{animation:ico-unified 2s ease-in-out infinite;}
+.btn-action-rst .btn-action-ico{animation:ico-spin-unified 3s linear infinite;}
+.btn-action-stats .btn-action-ico{animation:ico-unified 2.5s ease-in-out infinite;}
+@keyframes ico-unified{0%,100%{transform:scale(1);}50%{transform:scale(1.3);}}
+@keyframes ico-spin-unified{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 
 /* ── MENU ICON ANIMATIONS (videogame feel) ───────────── */
 .mc-emoji{transition:transform .2s;}
 .submenu-card:hover .sc-emoji{animation:iconFloat .6s ease-in-out;}
 .sc-comp-img{transition:transform .25s,filter .25s;}
 .submenu-card:hover .sc-comp-img{transform:scale(1.08);filter:drop-shadow(0 0 8px rgba(255,255,255,.25));}
+
+/* ── COMPETITION LOGOS IN JORNADA BUTTONS ────────────── */
+.jbtn-ico{width:18px;height:18px;object-fit:contain;flex-shrink:0;vertical-align:middle;margin-right:4px;filter:brightness(1.1);}
+.jbtn{display:flex;align-items:center;gap:4px;}
 
 /* ── PRIMERA FEDERACIÓN CARD ICON ────────────────────── */
 .sc-primf-ico{font-size:28px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6));display:inline-block;animation:iconPulse 2.8s ease-in-out infinite;}

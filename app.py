@@ -1,7 +1,9 @@
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import random
 import os
+import json
+from datetime import datetime, timezone
 
 from jugadores_data import jugadores_por_equipo
 from logica_liga import calcular_tabla, obtener_resultados_ia
@@ -40,6 +42,12 @@ class Evento(db.Model):
     equipo = db.Column(db.String(100))
     jugador = db.Column(db.String(100))
 
+class GlobalState(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    clave = db.Column(db.String(100), unique=True, nullable=False)
+    valor_json = db.Column(db.Text, nullable=False, default="{}")
+    updated_at = db.Column(db.String(50), nullable=True)
+
 # --- PROBABILIDADES ---
 BASE = {
     "portero": 0.001,
@@ -51,8 +59,75 @@ BASE = {
 MULTIGOL = [1, 0.37, 0.22, 0.12, 0.06]
 BONUS_LOCAL = 1.08
 
-# --- FUNCIONES MOTOR ---
+# --- ESTADO GLOBAL COMPARTIDO ---
+GLOBAL_STATE_KEY = "global_state"
 
+DEFAULT_GLOBAL_STATE = {
+    "liga_results": {},
+    "segunda_state": {"table": [], "players": []},
+    "segunda_teams": [],
+    "primera_state": {
+        "g1": {"table": [], "players": []},
+        "g2": {"table": [], "players": []}
+    },
+    "primera_teams": {
+        "g1": [],
+        "g2": []
+    },
+    "transition_preview": None,
+    "segunda_simple_state": {}
+}
+
+def utc_now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+def merge_dict(base, incoming):
+    if not isinstance(base, dict):
+        return incoming
+    if not isinstance(incoming, dict):
+        return base
+
+    result = dict(base)
+    for k, v in incoming.items():
+        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+            result[k] = merge_dict(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+def get_or_create_global_state():
+    row = GlobalState.query.filter_by(clave=GLOBAL_STATE_KEY).first()
+    if not row:
+        row = GlobalState(
+            clave=GLOBAL_STATE_KEY,
+            valor_json=json.dumps(DEFAULT_GLOBAL_STATE, ensure_ascii=False),
+            updated_at=utc_now_iso()
+        )
+        db.session.add(row)
+        db.session.commit()
+    return row
+
+def load_global_state():
+    row = get_or_create_global_state()
+    try:
+        data = json.loads(row.valor_json or "{}")
+    except Exception:
+        data = {}
+
+    if not isinstance(data, dict):
+        data = {}
+
+    return merge_dict(DEFAULT_GLOBAL_STATE, data)
+
+def save_global_state(new_state):
+    row = get_or_create_global_state()
+    merged = merge_dict(DEFAULT_GLOBAL_STATE, new_state if isinstance(new_state, dict) else {})
+    row.valor_json = json.dumps(merged, ensure_ascii=False)
+    row.updated_at = utc_now_iso()
+    db.session.commit()
+    return merged
+
+# --- FUNCIONES MOTOR ---
 def calcular_prob(perfil, local=False, goles_previos=0):
     base = BASE.get(perfil["posicion"], 10)
     prob = base + (perfil["poder"] / 100)
@@ -62,7 +137,6 @@ def calcular_prob(perfil, local=False, goles_previos=0):
 
     prob *= MULTIGOL[min(goles_previos, 4)]
     return prob
-
 
 def elegir_goleador(equipo, local=False, conteo=None):
     if conteo is None:
@@ -79,7 +153,6 @@ def elegir_goleador(equipo, local=False, conteo=None):
     elegido = random.choices(jugadores, weights=pesos, k=1)[0]
     return elegido["nombre"]
 
-
 def simular_goles(equipo, local=False):
     jugadores = jugadores_por_equipo[equipo]
 
@@ -94,8 +167,7 @@ def simular_goles(equipo, local=False):
     else:
         pesos = [10, 25, 30, 20, 15]
 
-    return random.choices([0,1,2,3,4], weights=pesos, k=1)[0]
-
+    return random.choices([0, 1, 2, 3, 4], weights=pesos, k=1)[0]
 
 def elegir_mvp(local, visitante, gl, gv, conteo_local, conteo_visitante):
     candidatos = []
@@ -111,7 +183,6 @@ def elegir_mvp(local, visitante, gl, gv, conteo_local, conteo_visitante):
 
     return random.choice(jugadores_por_equipo[local])["nombre"]
 
-
 # --- CALENDARIO ---
 def generar_calendario(lista):
     temp = lista[:]
@@ -124,13 +195,13 @@ def generar_calendario(lista):
     for _ in range(n - 1):
         jornada = []
         for i in range(n // 2):
-            l, v = temp[i], temp[n-1-i]
+            l, v = temp[i], temp[n - 1 - i]
             if l != "DESCANSA" and v != "DESCANSA":
                 jornada.append((l, v))
         jornadas.append(jornada)
         temp.insert(1, temp.pop())
 
-    vuelta = [[(v,l) for l,v in j] for j in jornadas]
+    vuelta = [[(v, l) for l, v in j] for j in jornadas]
     return jornadas + vuelta
 
 calendario = generar_calendario(equipos)
@@ -179,6 +250,28 @@ def simular_y_guardar(jornada, local, visitante):
         ))
     db.session.commit()
 
+# --- API ESTADO COMPARTIDO ---
+@app.route("/api/state", methods=["GET"])
+def api_get_state():
+    data = load_global_state()
+    return jsonify({
+        "ok": True,
+        "state": data
+    })
+
+@app.route("/api/state", methods=["POST"])
+def api_save_state():
+    payload = request.get_json(silent=True) or {}
+    incoming_state = payload.get("state", payload)
+
+    if not isinstance(incoming_state, dict):
+        return jsonify({"ok": False, "error": "Estado no válido"}), 400
+
+    saved = save_global_state(incoming_state)
+    return jsonify({
+        "ok": True,
+        "state": saved
+    })
 
 # --- RUTAS ---
 @app.route("/")
@@ -208,11 +301,13 @@ def clasificacion():
 def reiniciar():
     Evento.query.delete()
     Partido.query.delete()
+    save_global_state(DEFAULT_GLOBAL_STATE)
     db.session.commit()
     return redirect(url_for("calendario_view"))
 
 with app.app_context():
     db.create_all()
+    get_or_create_global_state()
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

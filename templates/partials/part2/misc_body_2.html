@@ -2117,10 +2117,17 @@
   }
 
   /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 2-38) ──── */
-  /* Timer speed: ~30 seconds real time = 90 game minutes
-     5400 game-seconds / 5 per tick = 1080 ticks, 30000ms / 1080 ≈ 28ms/tick */
-  var _ML_TICK_MS = 28;
+  /* Timer speeds per match type (5-second ticks, 1080 ticks = 90 game min):
+     AI vs AI  : 30s real  → 30000/1080 ≈  28ms/tick
+     HvIA      : 12m real  → 720000/1080 ≈ 667ms/tick
+     HvH 90min : 17m real  → 1020000/1080 ≈ 944ms/tick
+     HvH ET    : 5m real for 30 game min → 300000/360 ≈ 833ms/tick */
   var _ML_TICK_SEC = 5;
+  function _mlTickMs(st) {
+    if (st.isHvH) return st.etDone ? 833 : 944;
+    var humanInvolved = typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away));
+    return humanInvolved ? 667 : 28;
+  }
 
   function _mlAddActaRow(mk, min, ico, name, num, teamLabel, type, id) {
     var list = document.getElementById('ml-acta-list-'+mk);
@@ -2259,7 +2266,7 @@
         }
       }
       _mlRenderTimerGen(mk);
-    }, _ML_TICK_MS);
+    }, _mlTickMs(st));
   }
   window.mlTimerClickGen = function(mk) {
     var st = _mlSt(mk);

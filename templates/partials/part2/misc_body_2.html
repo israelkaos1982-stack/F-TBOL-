@@ -1936,15 +1936,23 @@
   var HUMANOS = ['Real Madrid','FC Barcelona','Athletic Club','Real Sociedad','Real Betis'];
   var HUMAN_ICONS = {'Athletic Club':'💡','Real Betis':'🐭','Real Sociedad':'🔨','Real Madrid':'✏️','FC Barcelona':'👿'};
   function humanIcon(name){ return HUMAN_ICONS[name] ? HUMAN_ICONS[name]+'\u00a0' : ''; }
+  window.humanIcon = humanIcon;
   var LS_KEY  = 'ef_liga38_v2';
 
   window.reiniciarLigaEA = function() {
-    if (!confirm('¿Reiniciar todos los resultados de Liga EA Sports? Se borrará el historial de partidos IA.')) return;
+    if (!confirm('¿Reiniciar todos los resultados de Liga EA Sports? Se borrará el historial de las 38 jornadas.')) return;
     try { localStorage.removeItem(LS_KEY); } catch(e){}
     if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
+    // Clear team card/MVP aggregates
+    var _ex = window.LIGA_EXTRAS;
+    if (_ex) Object.keys(_ex).forEach(function(k){ delete _ex[k]; });
+    // Clear player match event store
+    var _pm = window.LIGA_PLAYER_MATCH_STORE;
+    if (_pm) Object.keys(_pm).forEach(function(k){ delete _pm[k]; });
     if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
     if (typeof window.buildIAresults === 'function') window.buildIAresults();
     if (typeof window.populateLigaCal === 'function') window.populateLigaCal();
+    if (typeof window.rebuildLigaPlayerStats === 'function') window.rebuildLigaPlayerStats();
   };
 
   /* ── GENERADOR CALENDARIO BERGER ─────────────────── */
@@ -2001,7 +2009,7 @@
         }
         var row = document.createElement('div');
         row.className = 'mrow';
-        row.innerHTML = '<div class="mn">' + humanIcon(m[0]) + m[0] + '</div>' + scoreHtml + '<div class="mn r">' + humanIcon(m[1]) + m[1] + '</div>';
+        row.innerHTML = '<div class="mn" data-team="'+m[0]+'">' + humanIcon(m[0]) + m[0] + '</div>' + scoreHtml + '<div class="mn r" data-team="'+m[1]+'">' + humanIcon(m[1]) + m[1] + '</div>';
         round.appendChild(row);
       });
     });
@@ -2583,7 +2591,9 @@
       var aEl = row.querySelector('.mn.r');
       var sEl = row.querySelector('.ms');
       if (!hEl || !aEl || !sEl) return;
-      if (hEl.textContent.trim() === home && aEl.textContent.trim() === away) {
+      var hName = hEl.dataset.team || hEl.textContent.trim();
+      var aName = aEl.dataset.team || aEl.textContent.trim();
+      if (hName === home && aName === away) {
         sEl.textContent = gh + '\u2013' + ga;
         sEl.className   = 'ms';
       }

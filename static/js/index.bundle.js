@@ -1477,6 +1477,13 @@ window.mlSimulate_j1m10=function(){
     'Rayo Vallecano':   'Rayo',
     'Valencia CF':      'Valencia'
   };
+  var HUMAN_TEAMS = {
+    'Athletic Club': '💡',
+    'Real Betis':    '🐭',
+    'Real Sociedad': '🔨',
+    'Real Madrid':   '✏️',
+    'FC Barcelona':  '👿'
+  };
 
   function buildLigaClas(){
     var list = collectStandings();
@@ -1512,7 +1519,7 @@ window.mlSimulate_j1m10=function(){
         +   '<div class="clas-team-cell">'
         +     '<span class="clas-pos-n">' + pos + '</span>'
         +     logoHtml
-        +     '<span class="clas-team-name">' + (SHORT_NAMES[team.name] || team.name) + '</span>'
+        +     '<span class="clas-team-name">' + (HUMAN_TEAMS[team.name] ? '<span class="human-prefix">' + HUMAN_TEAMS[team.name] + '</span>' : '') + (SHORT_NAMES[team.name] || team.name) + '</span>'
         +   '</div>'
         +   '<div class="clas-pts">' + team.pts + '</div>'
         +   '<div class="clas-pj">' + team.pj + '</div>'
@@ -6381,6 +6388,13 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     'Rayo Vallecano':'Rayo',
     'Valencia CF':'Valencia'
   };
+  var HUMAN_TEAMS = {
+    'Athletic Club': '💡',
+    'Real Betis':    '🐭',
+    'Real Sociedad': '🔨',
+    'Real Madrid':   '✏️',
+    'FC Barcelona':  '👿'
+  };
   var TEAM_ALIAS = {
     'sevilla fc':'Sevilla','sevilla':'Sevilla',
     'villarreal cf':'Villarreal','villarreal':'Villarreal',
@@ -6566,7 +6580,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         + '<div class="clas-row ' + zone + '">'
         +   '<div class="clas-team-cell">'
         +     '<span class="clas-pos-n">' + pos + '</span>'
-        +     '<span class="clas-team-name">' + (SHORT_NAMES[team.name] || team.name) + '</span>'
+        +     '<span class="clas-team-name">' + (HUMAN_TEAMS[team.name] ? '<span class="human-prefix">' + HUMAN_TEAMS[team.name] + '</span>' : '') + (SHORT_NAMES[team.name] || team.name) + '</span>'
         +   '</div>'
         +   '<div class="clas-pts">' + team.pts + '</div>'
         +   '<div class="clas-pj">' + team.pj + '</div>'
@@ -6646,6 +6660,16 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       return out;
     };
   }
+  window.reiniciarLigaEA = function(){
+    if(!confirm('⚠️ ¿Reiniciar Liga EA Sports?\nSe eliminarán todos los resultados guardados y la clasificación volverá al estado inicial.')) return;
+    try { localStorage.removeItem(LS_KEY); } catch(e){}
+    window.LIGA_J1_RESULTS = [];
+    window.LIGA_PLAYER_MATCH_STORE = {};
+    if(typeof window.buildLigaClas === 'function') window.buildLigaClas();
+    if(typeof window.buildLigaStatsDashboard === 'function') window.buildLigaStatsDashboard();
+    if(typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
+  };
+
   document.addEventListener('DOMContentLoaded', function(){
     setTimeout(function(){
       if(typeof window.buildLigaClas === 'function') window.buildLigaClas();

@@ -2620,12 +2620,45 @@
   function genMatchEvents(teamA, teamB, goalsA, goalsB) {
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
-    // Exclude goalkeepers from scoring
-    var outA = sqA.filter(function(p){ return p[2] !== 'P'; });
-    var outB = sqB.filter(function(p){ return p[2] !== 'P'; });
-    if (!outA.length) outA = [['','Jugador A','F',76]];
-    if (!outB.length) outB = [['','Jugador B','F',76]];
+
+    // Split into titulares (active) and suplentes (bench) — p[4] field
+    var activeA = sqA.filter(function(p){ return p[4] === 'titular'; });
+    var activeB = sqB.filter(function(p){ return p[4] === 'titular'; });
+    var benA    = sqA.filter(function(p){ return p[4] === 'suplente'; });
+    var benB    = sqB.filter(function(p){ return p[4] === 'suplente'; });
+    if (!activeA.length) activeA = sqA.slice();
+    if (!activeB.length) activeB = sqB.slice();
+
+    // Outfield scorers (no GK). Built from active so injuries affect who can score
+    function getOutfield(active) { return active.filter(function(p){ return p[2] !== 'P'; }); }
+    var outA = getOutfield(activeA);
+    var outB = getOutfield(activeB);
+    if (!outA.length) outA = [['','Jugador A','F',76,'titular']];
+    if (!outB.length) outB = [['','Jugador B','F',76,'titular']];
+
     var events = [];
+
+    // ── LESIONES: ~6% por equipo via motor oficial ─────────────────
+    if (typeof window.generarLesionesPartido === 'function') {
+      var lesiones = window.generarLesionesPartido(teamA, teamB, activeA, activeB, benA, benB, 90);
+      lesiones.forEach(function(les) {
+        if (typeof window.aplicarLesionEnSimulacion === 'function') {
+          var evLes = window.aplicarLesionEnSimulacion(les, activeA, activeB);
+          if (evLes) {
+            // Normalise player field to name string (injury event uses full array)
+            var lesName = Array.isArray(evLes.player) ? (evLes.player[1] || '?') : (evLes.player || '?');
+            events.push({ type:'lesion', min:evLes.min, player:lesName, team:evLes.team,
+                          gradoNombre:evLes.gradoNombre, gradoEmoji:evLes.gradoEmoji,
+                          partidos:evLes.partidos, grave:evLes.grave });
+          }
+        }
+      });
+      // Refresh outfield after injury substitutions
+      outA = getOutfield(activeA); if (!outA.length) outA = [['','Jugador A','F',76,'titular']];
+      outB = getOutfield(activeB); if (!outB.length) outB = [['','Jugador B','F',76,'titular']];
+    }
+
+    // ── GOLES: minutoss aleatorios + selección ponderada ───────────
     var totalGoals = goalsA + goalsB;
     var goalMins = [];
     for (var i = 0; i < totalGoals; i++) goalMins.push(Math.floor(Math.random() * 88) + 2);
@@ -2635,7 +2668,7 @@
     for (var gb = 0; gb < goalsB; gb++) assign.push('b');
     for (var s = assign.length - 1; s > 0; s--) { var t = Math.floor(Math.random()*(s+1)); var tmp=assign[s]; assign[s]=assign[t]; assign[t]=tmp; }
 
-    // Weighted scorer selection using calculateGoalProbability + MIRACLE_FACTORS
+    // Weighted selection via calculateGoalProbability + MIRACLE_FACTORS
     var goalsPerPlayer = {};
     function selectScorer(squad, isLocal) {
       var weights = squad.map(function(p) {
@@ -2645,8 +2678,7 @@
         }
         var base = {'P':0.001,'D':7.5,'M':17.5,'F':70.0}[p[2]] || 17.5;
         if (scored === 0) return base;
-        var mf = [0.37, 0.22, 0.12, 0.06][scored - 1] || 0.02;
-        return base * mf;
+        return base * ([0.37, 0.22, 0.12, 0.06][scored - 1] || 0.02);
       });
       var total = weights.reduce(function(a,b){ return a+b; }, 0);
       if (total <= 0) return squad[Math.floor(Math.random()*squad.length)];
@@ -2662,7 +2694,7 @@
       events.push({ type:'gol', min:goalMins[idx], player:pl[1]||'?', team:team });
     });
 
-    // Yellow cards (2-4 per match); second yellow on same player becomes red
+    // ── TARJETAS: 2-4 amarillas; 2ª al mismo jugador → roja ────────
     var numYellow = Math.floor(Math.random() * 3) + 2;
     var yellowsReceived = {};
     for (var c = 0; c < numYellow; c++) {
@@ -2677,7 +2709,7 @@
         yellowsReceived[cp[1]] = true;
       }
     }
-    // Direct red card (~15% probability per match)
+    // Roja directa (~15% por partido)
     if (Math.random() < 0.15) {
       var rt = Math.random() < 0.5 ? 'a' : 'b';
       var rsq = rt === 'a' ? outA : outB;

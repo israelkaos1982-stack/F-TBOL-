@@ -1686,7 +1686,7 @@
     var root = document.getElementById(rootId); if(!root) return;
     if(!table || !table.length){root.innerHTML='<div class="clas-empty">'+emptyText+'</div>'; return;}
     var html=(legendHtml||'')+'<div class="clas-scroll-outer"><div class="clas-hdr-scroll"><div class="clas-table"><div class="clas-hdr"><span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span><span>Últ. 5</span></div></div></div><div class="clas-scroll"><div class="clas-table">';
-    table.forEach(function(team,idx){var pos=idx+1; var dgClass='clas-val dg '+(team.dg>0?'pos':(team.dg<0?'neg':'zer')); var _logos=window.TEAM_LOGOS||{}; var _lu=_logos[team.name]||''; var _li=_lu?'<img class="clas-team-logo" src="'+_lu+'" onerror="this.style.display=\'none\'" alt=""/>':''; html+='<div class="clas-row '+(zoneFn?zoneFn(pos,table.length):'')+'"><div class="clas-team-cell"><span class="clas-pos-n">'+pos+'</span>'+_li+'<span class="clas-team-name">'+esc(team.short||team.name)+'</span></div><div class="clas-pts">'+team.pts+'</div><div class="clas-pj">'+team.pj+'</div><div class="clas-val">'+team.v+'</div><div class="clas-val">'+team.e+'</div><div class="clas-val">'+team.p+'</div><div class="clas-val gf">'+team.gf+'</div><div class="clas-val gc">'+team.gc+'</div><div class="'+dgClass+'">'+(team.dg>0?'+':'')+team.dg+'</div><div class="clas-val ta">'+team.ta+'</div><div class="clas-val tr">'+team.tr+'</div><div class="clas-mvp">'+team.mvp+'</div><div class="clas-pct">'+(team.pj?Math.round((team.v/team.pj)*100):0)+'%</div><div class="clas-form">'+formHtml(team.form)+'</div></div>';});
+    table.forEach(function(team,idx){var pos=idx+1; var dgClass='clas-val dg '+(team.dg>0?'pos':(team.dg<0?'neg':'zer')); var _logos=window.TEAM_LOGOS||{}; var _lu=_logos[team.name]||''; var _li=_lu?'<img class="clas-team-logo" src="'+_lu+'" onerror="this.style.display=\'none\'" alt=""/>':''; html+='<div class="clas-row '+(zoneFn?zoneFn(pos,table.length):'')+'"><div class="clas-team-cell"><span class="clas-pos-n">'+pos+'</span>'+_li+'<span class="clas-team-name">'+humanIcon(team.name)+esc(team.short||team.name)+'</span></div><div class="clas-pts">'+team.pts+'</div><div class="clas-pj">'+team.pj+'</div><div class="clas-val">'+team.v+'</div><div class="clas-val">'+team.e+'</div><div class="clas-val">'+team.p+'</div><div class="clas-val gf">'+team.gf+'</div><div class="clas-val gc">'+team.gc+'</div><div class="'+dgClass+'">'+(team.dg>0?'+':'')+team.dg+'</div><div class="clas-val ta">'+team.ta+'</div><div class="clas-val tr">'+team.tr+'</div><div class="clas-mvp">'+team.mvp+'</div><div class="clas-pct">'+(team.pj?Math.round((team.v/team.pj)*100):0)+'%</div><div class="clas-form">'+formHtml(team.form)+'</div></div>';});
     html+='</div></div></div>';
     root.innerHTML=html;
   }
@@ -1934,6 +1934,8 @@
     'Elche CF','Atlético Madrid','Rayo Vallecano','Real Betis','FC Barcelona'
   ];
   var HUMANOS = ['Real Madrid','FC Barcelona','Athletic Club','Real Sociedad','Real Betis'];
+  var HUMAN_ICONS = {'Athletic Club':'💡','Real Betis':'🐭','Real Sociedad':'🔨','Real Madrid':'✏️','FC Barcelona':'👿'};
+  function humanIcon(name){ return HUMAN_ICONS[name] ? HUMAN_ICONS[name]+'\u00a0' : ''; }
   var LS_KEY  = 'ef_liga38_v2';
 
   window.reiniciarLigaEA = function() {
@@ -1999,7 +2001,7 @@
         }
         var row = document.createElement('div');
         row.className = 'mrow';
-        row.innerHTML = '<div class="mn">' + m[0] + '</div>' + scoreHtml + '<div class="mn r">' + m[1] + '</div>';
+        row.innerHTML = '<div class="mn">' + humanIcon(m[0]) + m[0] + '</div>' + scoreHtml + '<div class="mn r">' + humanIcon(m[1]) + m[1] + '</div>';
         round.appendChild(row);
       });
     });
@@ -2046,6 +2048,8 @@
   function buildMatchCard(j, home, away, isHvH, mk) {
     var hu = home.toUpperCase();
     var au = away.toUpperCase();
+    var hiH = humanIcon(home);
+    var hiA = humanIcon(away);
     var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[home]) || '';
     var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[away]) || '';
     var ratA = rA ? '<div class="ml-team-rat" style="background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:1px 7px;font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#fff;">'+rA+'</div>' : '';
@@ -2060,20 +2064,20 @@
         +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
       +'</div>'
       +'<div class="ml-header">'
-        +'<div class="ml-team"><div class="ml-team-name">'+hu+'</div>'+ratA+'</div>'
+        +'<div class="ml-team"><div class="ml-team-name">'+hiH+hu+'</div>'+ratA+'</div>'
         +'<div class="ml-score-wrap">'
           +'<div class="ml-score"><span id="sc-'+mk+'-a">0</span>–<span id="sc-'+mk+'-b">0</span></div>'
           +'<div class="ml-pen-score" id="pen-score-'+mk+'" style="display:none;">⚽ 0–0 (pen.)</div>'
         +'</div>'
-        +'<div class="ml-team"><div class="ml-team-name">'+au+'</div>'+ratB+'</div>'
+        +'<div class="ml-team"><div class="ml-team-name">'+hiA+au+'</div>'+ratB+'</div>'
       +'</div>'
       +'<div class="ml-pen-panel" id="ml-pen-panel-'+mk+'">'
         +'<div class="ml-pen-title">⚽ TANDA DE PENALTIS</div>'
-        +'<div class="ml-pen-row"><div class="ml-pen-team">'+hu+'</div>'
+        +'<div class="ml-pen-row"><div class="ml-pen-team">'+hiH+hu+'</div>'
         +'<input class="ml-pen-input" id="ml-pen-a-'+mk+'" type="number" min="0" max="20" value="0"/>'
         +'<span class="ml-pen-vs">–</span>'
         +'<input class="ml-pen-input" id="ml-pen-b-'+mk+'" type="number" min="0" max="20" value="0"/>'
-        +'<div class="ml-pen-team">'+au+'</div></div>'
+        +'<div class="ml-pen-team">'+hiA+au+'</div></div>'
         +'<button class="ml-pen-confirm" onclick="mlConfirmPenGen(\''+emk+'\')">✓ CONFIRMAR RESULTADO PENALTIS</button>'
       +'</div>'
       +'<div class="ml-divider"></div>'
@@ -2858,12 +2862,12 @@
         }
         html += '<div class="match-live-wrap" style="margin-bottom:8px;">'
           + '<div class="ml-header">'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + m.home + '</div></div>'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + humanIcon(m.home) + m.home + '</div></div>'
           + '<div class="ml-score-wrap">'
           + '<div class="ml-score state-finished"><span>' + m.gh + '</span>\u2013<span>' + m.ga + '</span></div>'
           + '<div class="ml-timer finished" style="cursor:default;">&#127937; FIN</div>'
           + '</div>'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + m.away + '</div></div>'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + humanIcon(m.away) + m.away + '</div></div>'
           + '</div>'
           + '<div class="ml-acta" data-ia="1">'
           + '<button class="ml-acta-toggle" onclick="window.iaActaTog(\'' + cid + '\')">'
@@ -2884,12 +2888,12 @@
           : 'window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);';
         html += '<div class="match-live-wrap" style="margin-bottom:8px;opacity:0.75;">'
           + '<div class="ml-header">'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + m.home + '</div></div>'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + humanIcon(m.home) + m.home + '</div></div>'
           + '<div class="ml-score-wrap">'
           + '<div class="ml-score state-pending"><span>0</span>\u2013<span>0</span></div>'
           + '<button class="ml-timer" onclick="' + simF.replace(/"/g,'&quot;') + '">&#9654; SIMULAR</button>'
           + '</div>'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + m.away + '</div></div>'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + humanIcon(m.away) + m.away + '</div></div>'
           + '</div>'
           + '</div>';
       });

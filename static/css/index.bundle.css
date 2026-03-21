@@ -546,29 +546,32 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 
 /* style block 9 */
 
-  .liga-stats-wrap{padding:0 18px 28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;}
+  .liga-stats-wrap{padding:0 12px 28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;}
   /* ── VIDEOGAME STATS CARDS ─────────────────── */
-  .liga-stat-card{background:linear-gradient(145deg,#070e1b 0%,#0a1422 50%,#060c16 100%);border:1px solid rgba(0,180,255,.22);border-radius:12px;overflow:hidden;box-shadow:0 0 30px rgba(0,100,200,.08),0 6px 32px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05);position:relative;}
-  .liga-stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,180,255,.45),rgba(80,220,255,.8),rgba(0,180,255,.45),transparent);}
-  .liga-stat-head{display:flex;align-items:center;gap:10px;padding:11px 14px;background:linear-gradient(90deg,rgba(0,50,130,.4),rgba(0,110,200,.15),rgba(0,50,130,.1));border-bottom:1px solid rgba(0,180,255,.2);}
-  .liga-stat-ico{font-size:20px;line-height:1;display:inline-block;animation:liga-ico-float 2.2s ease-in-out infinite;}
-  .liga-stat-title{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#00d4ff;text-shadow:0 0 14px rgba(0,200,255,.55);text-transform:uppercase;}
-  .liga-stat-body{padding:6px 8px 8px;}
-  .liga-stat-row{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:9px 8px;border-bottom:1px solid rgba(0,180,255,.06);}
+  .liga-stat-card{background:linear-gradient(145deg,#040c18 0%,#071422 45%,#030a14 100%);border:1px solid rgba(0,180,255,.32);border-radius:14px;overflow:hidden;box-shadow:0 0 28px rgba(0,100,200,.1),0 8px 36px rgba(0,0,0,.85),inset 0 1px 0 rgba(255,255,255,.08);position:relative;animation:stat-card-pulse 4s ease-in-out infinite;}
+  @keyframes stat-card-pulse{0%,100%{box-shadow:0 0 28px rgba(0,100,200,.1),0 8px 36px rgba(0,0,0,.85);}50%{box-shadow:0 0 55px rgba(0,160,255,.25),0 8px 36px rgba(0,0,0,.85);}}
+  .liga-stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(0,180,255,.7),rgba(140,235,255,1),rgba(0,180,255,.7),transparent);animation:stat-shimmer 2.5s ease-in-out infinite;z-index:1;}
+  @keyframes stat-shimmer{0%,100%{opacity:.45;}50%{opacity:1;}}
+  .liga-stat-card::after{content:'';position:absolute;bottom:0;right:0;width:28px;height:28px;border-bottom:2px solid rgba(0,200,255,.38);border-right:2px solid rgba(0,200,255,.38);border-radius:0 0 14px 0;pointer-events:none;}
+  .liga-stat-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(90deg,rgba(0,50,130,.55),rgba(0,120,220,.2),rgba(0,50,130,.12));border-bottom:1px solid rgba(0,180,255,.28);}
+  .liga-stat-ico{font-size:22px;line-height:1;display:inline-block;animation:liga-ico-float 2s ease-in-out infinite;}
+  .liga-stat-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2.8px;color:#10dcff;text-shadow:0 0 20px rgba(0,220,255,.8),0 0 6px rgba(0,200,255,.4);text-transform:uppercase;}
+  .liga-stat-body{padding:6px 8px 10px;background:repeating-linear-gradient(0deg,transparent,transparent 23px,rgba(0,180,255,.022) 23px,rgba(0,180,255,.022) 24px);}
+  .liga-stat-row{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:9px 8px;border-bottom:1px solid rgba(0,180,255,.07);}
   .liga-stat-row:last-child{border-bottom:none;}
-  .liga-stat-row:hover{background:rgba(0,180,255,.05);}
-  .liga-stat-rank{font-family:'Bebas Neue',sans-serif;font-size:20px;color:rgba(0,210,255,.9);text-align:center;text-shadow:0 0 10px rgba(0,200,255,.45);}
+  .liga-stat-row:hover{background:rgba(0,180,255,.08);}
+  .liga-stat-rank{font-family:'Bebas Neue',sans-serif;font-size:22px;color:rgba(0,210,255,.85);text-align:center;text-shadow:0 0 12px rgba(0,200,255,.5);}
   .liga-stat-player{min-width:0;display:flex;flex-direction:column;gap:2px;}
   .liga-stat-name{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .liga-stat-team{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.4px;color:rgba(255,255,255,.4);text-transform:uppercase;}
-  .liga-stat-value{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#f0c040;min-width:34px;text-align:right;letter-spacing:1px;text-shadow:0 0 12px rgba(240,192,64,.4);}
-  .liga-stat-empty{padding:16px 10px;text-align:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.25);}
+  .liga-stat-value{font-family:'Bebas Neue',sans-serif;font-size:30px;color:#f0c040;min-width:36px;text-align:right;letter-spacing:1px;text-shadow:0 0 20px rgba(240,192,64,.7),0 0 6px rgba(240,192,64,.35);}
+  .liga-stat-empty{padding:20px 10px;text-align:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.2);}
   .liga-stat-more{margin-top:8px;border-top:1px solid rgba(0,180,255,.1);}
   .liga-stat-more summary{list-style:none;cursor:pointer;padding:10px 8px 4px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.8px;color:rgba(0,200,255,.7);text-transform:uppercase;}
   .liga-stat-more summary::-webkit-details-marker{display:none;}
   .liga-stat-more-list{margin-top:4px;border-top:1px solid rgba(0,180,255,.06);}
   .liga-stat-more .liga-stat-row{padding-top:8px;padding-bottom:8px;}
-  @keyframes liga-ico-float{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-4px) scale(1.12);}}
+  @keyframes liga-ico-float{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-5px) scale(1.2);}}
   /* ── UNIFIED ACTION BUTTONS ─────────────────── */
   .btn-action-bar{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin:0 0 14px;padding:8px 12px;background:rgba(255,255,255,.025);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.06);border-radius:10px;}
   .btn-action,.btn-simular-liga{display:inline-flex;align-items:center;gap:6px;padding:7px 15px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);color:rgba(255,255,255,.7);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;letter-spacing:.6px;cursor:pointer;transition:all .22s;outline:none;box-shadow:0 2px 8px rgba(0,0,0,.25);}
@@ -1638,10 +1641,9 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 /* ── UNIFIED ACTION BUTTON ICONS (equal weight/size) ─── */
 .btn-action-ico{display:inline-flex;align-items:center;justify-content:center;font-size:15px;width:18px;height:18px;flex-shrink:0;}
 .btn-action-sim .btn-action-ico{animation:ico-unified 2s ease-in-out infinite;}
-.btn-action-rst .btn-action-ico{animation:ico-spin-unified 3s linear infinite;}
-.btn-action-stats .btn-action-ico{animation:ico-unified 2.5s ease-in-out infinite;}
-@keyframes ico-unified{0%,100%{transform:scale(1);}50%{transform:scale(1.3);}}
-@keyframes ico-spin-unified{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.btn-action-rst .btn-action-ico{animation:ico-unified 2s ease-in-out infinite;}
+.btn-action-stats .btn-action-ico{animation:ico-unified 2s ease-in-out infinite;}
+@keyframes ico-unified{0%,100%{transform:scale(1) translateY(0);}50%{transform:scale(1.3) translateY(-2px);}}
 
 /* ── MENU ICON ANIMATIONS (videogame feel) ───────────── */
 .mc-emoji{transition:transform .2s;}

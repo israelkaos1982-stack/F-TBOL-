@@ -1696,7 +1696,7 @@
     if(!players || !players.length){root.innerHTML='<div class="liga-stat-empty">'+emptyText+'</div>'; return;}
     function rows(items,start){return items.map(function(item,idx){return '<div class="liga-stat-row"><div class="liga-stat-rank">'+(start+idx)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+esc(item.name)+'</div><div class="liga-stat-team">'+esc(item.team)+'</div></div><div class="liga-stat-value">'+item.value+'</div></div>'}).join('')}
     var html='';
-    STATS_CATS.forEach(function(cat){var all=topPlayersBy(players,cat.key); var top=all.slice(0,6), rest=all.slice(6); html+='<div class="liga-stat-card"><div class="liga-stat-head"><div class="liga-stat-ico">'+cat.icon+'</div><div class="liga-stat-title">'+cat.title+'</div></div><div class="liga-stat-body">'; if(!all.length){html+='<div class="liga-stat-empty">Sin datos todavía</div>';} else {html+=rows(top,1); if(rest.length){html+='<details class="liga-stat-more"><summary>Ver todos ('+all.length+')</summary><div class="liga-stat-more-list">'+rows(rest,7)+'</div></details>';}} html+='</div></div>';});
+    STATS_CATS.forEach(function(cat){var all=topPlayersBy(players,cat.key); var top=all.slice(0,6), rest=all.slice(6); html+='<div class="liga-stat-card" data-cat="'+cat.key+'"><div class="liga-stat-head"><div class="liga-stat-ico">'+cat.icon+'</div><div class="liga-stat-title">'+cat.title+'</div></div><div class="liga-stat-body">'; if(!all.length){html+='<div class="liga-stat-empty">Sin datos todavía</div>';} else {html+=rows(top,1); if(rest.length){html+='<details class="liga-stat-more"><summary>Ver todos ('+all.length+')</summary><div class="liga-stat-more-list">'+rows(rest,7)+'</div></details>';}} html+='</div></div>';});
     root.innerHTML=html;
   }
 
@@ -1827,7 +1827,7 @@
     /* ── Menú principal ─────────────────── */
     +'<div class="screen" id="s-primf">'
     +'<button class="back-btn" onclick="go(\'s-espana\')">◀ Volver</button>'
-    +'<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
+    +'<div class="sec-hdr"><img class="sec-ico" src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
     +'<div class="submenu-list">'
     +'<div class="submenu-card sc-sub-verde2" onclick="go(\'s-primf-clas\')"><span class="sc-emoji">📋</span><span class="sc-label">Clasificación · Grupo 1 y 2</span><span class="sc-arr">▶</span></div>'
     +'<div class="submenu-card sc-sub-verde3" onclick="go(\'s-primf-stats\')"><span class="sc-emoji">📈</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span></div>'
@@ -1836,7 +1836,7 @@
     /* ── Clasificación combinada (Grupo 1 + 2) ── */
     +'<div class="screen" id="s-primf-clas">'
     +'<button class="back-btn" onclick="go(\'s-espana\')">◀ Volver</button>'
-    +'<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
+    +'<div class="sec-hdr"><img class="sec-ico" src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
     +'<div class="btn-action-bar">'
     +'<button class="btn-action btn-action-sim" onclick="simularAmbosPrimera()"><span class="btn-action-ico">🎮</span>Simular</button>'
     +'<button class="btn-action btn-action-rst" onclick="reiniciarAmbosPrimera()"><span class="btn-action-ico">♻️</span>Reiniciar</button>'
@@ -2048,16 +2048,14 @@
     var emk = mk.replace(/'/g,"\\'");
     return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'">'
       +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">eFootball Stadium</span><span class="ml-venue-sep">|</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado · Verano</span></div>'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px 2px;gap:6px;">'
-        +_buildTwitchBtn(mk)
-        +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
-        +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
-      +'</div>'
       +'<div class="ml-header">'
         +'<div class="ml-team"><div class="ml-team-name">'+hu+'</div>'+ratA+'</div>'
         +'<div class="ml-score-wrap">'
+          +_buildTwitchBtn(mk)
           +'<div class="ml-score"><span id="sc-'+mk+'-a">0</span>–<span id="sc-'+mk+'-b">0</span></div>'
           +'<div class="ml-pen-score" id="pen-score-'+mk+'" style="display:none;">⚽ 0–0 (pen.)</div>'
+          +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
+          +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
         +'</div>'
         +'<div class="ml-team"><div class="ml-team-name">'+au+'</div>'+ratB+'</div>'
       +'</div>'
@@ -2119,27 +2117,139 @@
   }
 
   /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 2-38) ──── */
+  /* Timer speeds per match type (5-second ticks, 1080 ticks = 90 game min):
+     AI vs AI  : 30s real  → 30000/1080 ≈  28ms/tick
+     HvIA      : 12m real  → 720000/1080 ≈ 667ms/tick
+     HvH 90min : 17m real  → 1020000/1080 ≈ 944ms/tick
+     HvH ET    : 5m real for 30 game min → 300000/360 ≈ 833ms/tick */
+  var _ML_TICK_SEC = 5;
+  function _mlTickMs(st) {
+    if (st.isHvH) return st.etDone ? 833 : 944;
+    var humanInvolved = typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away));
+    return humanInvolved ? 667 : 28;
+  }
+
+  function _mlAddActaRow(mk, min, ico, name, num, teamLabel, type, id) {
+    var list = document.getElementById('ml-acta-list-'+mk);
+    if (!list) return;
+    var emp = list.querySelector('.ml-acta-empty'); if (emp) emp.remove();
+    var row = document.createElement('div');
+    row.className = 'ml-evt-item';
+    row.setAttribute('data-team', teamLabel);
+    row.setAttribute('data-type', type);
+    row.setAttribute('data-id', id);
+    row.innerHTML = '<span class="ml-evt-min">'+min+"'</span>"
+      +'<span class="ml-evt-ico">'+ico+'</span>'
+      +'<span class="ml-evt-name">'+(num?num+'. ':'')+name+'</span>'
+      +'<span class="ml-evt-team">'+teamLabel+'</span>';
+    var items = list.querySelectorAll('.ml-evt-item');
+    var inserted = false;
+    for (var i=0; i<items.length; i++) {
+      var em = parseInt((items[i].querySelector('.ml-evt-min')||{}).textContent||'999');
+      if (min < em) { list.insertBefore(row, items[i]); inserted=true; break; }
+    }
+    if (!inserted) list.appendChild(row);
+  }
+
   function _mlRenderTimerGen(mk) {
     var st = _mlSt(mk);
     var btn = document.getElementById('ml-timer-'+mk);
     if (!btn) return;
-    var min = Math.floor(st.timerSec/60);
+    var rawSec = st.timerSec;
+    var stoppageAdded = st.stoppageSec || 0;
+    var normalMax = st.etDone ? 7200 : 5400;
+    var fullMax = normalMax + stoppageAdded * 60;
+    var min = Math.floor(rawSec/60);
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
-    var max = st.etDone ? 7200 : 5400;
-    var lbl = st.timerRunning ? '⏸ ' : (st.timerSec>=max ? '🔁 ' : '▶ ');
-    btn.textContent = lbl+min+"'";
+    var lbl = st.timerRunning ? '⏸ ' : (rawSec>=fullMax ? '🔁 ' : '▶ ');
+    // Show stoppage minutes like 90+2'
+    var baseMax = st.etDone ? 120 : 90;
+    var display = min > baseMax ? baseMax+'+'+(min-baseMax)+"'" : min+"'";
+    btn.textContent = lbl+display;
     btn.className = 'ml-timer'+(st.timerRunning?' running':'');
   }
+
+  function _mlFirePendingEvents(mk, curMin) {
+    var st = _mlSt(mk);
+    if (!st.pendingAIEvents || !st.pendingAIEvents.length) return;
+    var toFire = [];
+    var remaining = [];
+    st.pendingAIEvents.forEach(function(ev) {
+      if (curMin >= ev.min) toFire.push(ev);
+      else remaining.push(ev);
+    });
+    st.pendingAIEvents = remaining;
+    toFire.forEach(function(ev) {
+      var goalTypes = ['gol','falta-gol','pen-gol'];
+      if (goalTypes.indexOf(ev.type) !== -1) { st.sc[ev.team]++; }
+      else if (ev.type === 'propia') { st.sc[ev.team==='a'?'b':'a']++; }
+      var scA = document.getElementById('sc-'+mk+'-a'); if(scA) scA.textContent = st.sc.a;
+      var scB = document.getElementById('sc-'+mk+'-b'); if(scB) scB.textContent = st.sc.b;
+      var evId = Date.now()+Math.random()*9999|0;
+      ev.id = evId;
+      st.events.push(ev);
+      var tName = ev.team==='a' ? st.home : st.away;
+      _mlAddActaRow(mk, ev.min, ev.ico, ev.name, ev.num, tName, ev.type, evId);
+    });
+  }
+
+  function _mlPreGenAIEvents(mk) {
+    var st = _mlSt(mk);
+    if (st.isHvH || st.aiEventsGenerated) return;
+    st.aiEventsGenerated = true;
+    var humanA = typeof esHumano === 'function' && esHumano(st.home);
+    var aiTeam = humanA ? 'b' : 'a';
+    var aiTeamName = humanA ? st.away : st.home;
+    var rat = window.TEAM_RATINGS || {};
+    var humRat = rat[humanA ? st.home : st.away] || 76;
+    var aiRat = rat[aiTeamName] || 76;
+    var r = typeof simSimple === 'function' ? simSimple(humanA ? humRat : aiRat, humanA ? aiRat : humRat) : {gh:1,ga:1};
+    var aiGoals = humanA ? r.ga : r.gh;
+    var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(aiTeamName)) || [];
+    var out = sq.filter(function(p){ return p[2] !== 'P'; });
+    if (!out.length) out = [['','Jugador IA','F',76]];
+    st.pendingAIEvents = [];
+    var mins = [];
+    for (var i=0; i<aiGoals; i++) mins.push(Math.floor(Math.random()*88)+2);
+    mins.sort(function(a,b){return a-b;});
+    mins.forEach(function(min) {
+      var pl = out[Math.floor(Math.random()*out.length)];
+      st.pendingAIEvents.push({type:'gol',min:min,team:aiTeam,num:pl[0]||'',name:pl[1]||'IA',ico:'⚽'});
+    });
+    var numCards = Math.floor(Math.random()*3);
+    for (var c=0; c<numCards; c++) {
+      var cp = out[Math.floor(Math.random()*out.length)];
+      st.pendingAIEvents.push({type:'amarilla',min:Math.floor(Math.random()*80)+5,team:aiTeam,num:cp[0]||'',name:cp[1]||'IA',ico:'🟨'});
+    }
+    st.pendingAIEvents.sort(function(a,b){return a.min-b.min;});
+  }
+
   function _mlStartIntervalGen(mk) {
     var st = _mlSt(mk);
+    // Pre-generate AI events for HvIA matches
+    _mlPreGenAIEvents(mk);
+    // Determine stoppage time upfront if normal time
+    if (!st.stoppageSec && !st.etDone) {
+      st.stoppageSec = Math.floor(Math.random()*8)+1; // 1-8 extra minutes
+    }
     st.timerInterval = setInterval(function(){
-      st.timerSec += 5;
-      var max = st.etDone ? 7200 : 5400;
-      // Half-time marker
+      st.timerSec += _ML_TICK_SEC;
+      var curMin = Math.floor(st.timerSec/60);
+      var normalMax = st.etDone ? 7200 : 5400;
+      var stoppageMax = normalMax + (st.stoppageSec||0)*60;
+      // Fire pending AI events
+      _mlFirePendingEvents(mk, curMin);
+      // Half-time marker at 45'
       if (!st.htDone && st.timerSec >= 2700) {
         st.htDone = true;
         var list = document.getElementById('ml-acta-list-'+mk);
         if (list) { var m = document.createElement('div'); m.className='ml-ht'; m.textContent='— DESCANSO (45 min) —'; list.appendChild(m); }
+      }
+      // Stoppage time marker at 90'
+      if (!st.etDone && !st.stoppageMarked && st.timerSec >= 5400) {
+        st.stoppageMarked = true;
+        var listSt = document.getElementById('ml-acta-list-'+mk);
+        if (listSt) { var ms = document.createElement('div'); ms.className='ml-ht'; ms.textContent='⏱ +'+st.stoppageSec+"' Tiempo de descuento"; listSt.appendChild(ms); }
       }
       // ET half-time marker at 105'
       if (st.etDone && !st.et1Done && st.timerSec >= 6300) {
@@ -2147,8 +2257,8 @@
         var list2 = document.getElementById('ml-acta-list-'+mk);
         if (list2) { var m2 = document.createElement('div'); m2.className='ml-ht'; m2.textContent='— DESCANSO PRÓRROGA (105 min) —'; list2.appendChild(m2); }
       }
-      if (st.timerSec >= max) {
-        st.timerSec = max; clearInterval(st.timerInterval); st.timerRunning = false;
+      if (st.timerSec >= stoppageMax) {
+        st.timerSec = stoppageMax; clearInterval(st.timerInterval); st.timerRunning = false;
         // Auto-check penalties at end of ET
         if (st.etDone) {
           if (st.sc.a === st.sc.b) { window.mlShowPenPanelGen(mk); }
@@ -2156,7 +2266,7 @@
         }
       }
       _mlRenderTimerGen(mk);
-    }, 1000);
+    }, _mlTickMs(st));
   }
   window.mlTimerClickGen = function(mk) {
     var st = _mlSt(mk);

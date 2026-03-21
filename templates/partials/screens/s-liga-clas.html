@@ -176,8 +176,8 @@
         var awayEl = row.querySelector('.mn.r');
         var scoreEl = row.querySelector('.ms');
         if(!homeEl || !awayEl || !scoreEl || scoreEl.classList.contains('p')) return;
-        var homeName = homeEl.textContent.trim();
-        var awayName = awayEl.textContent.trim();
+        var homeName = (homeEl.dataset.team || homeEl.textContent).trim();
+        var awayName = (awayEl.dataset.team || awayEl.textContent).trim();
         // Si ya fue procesado desde el almacén directo, omitir para no duplicar
         if(j===1 && j1SimPairs[homeName+'·'+awayName]) return;
         var home = ensureTeam(teams, homeName);
@@ -200,13 +200,34 @@
       });
     }
 
+    // Add IA match cards/MVP from localStorage events (IA-vs-IA only, to avoid double-count with LIGA_EXTRAS)
+    try {
+      var _lsRes = JSON.parse(localStorage.getItem('ef_liga38_v2') || '{}');
+      var _humanos = window.HUMANOS || [];
+      Object.keys(_lsRes).forEach(function(key){
+        var res = _lsRes[key];
+        if(!res || !res.events) return;
+        var parts = key.split('|');
+        if(parts.length < 3) return;
+        var ht = parts[1], at = parts[2];
+        if(_humanos.indexOf(ht) !== -1 || _humanos.indexOf(at) !== -1) return;
+        var hTeam = teams[ht], aTeam = teams[at];
+        if(!hTeam || !aTeam) return;
+        res.events.forEach(function(ev){
+          if(ev.type === 'amarilla'){ if(ev.team === 'a') hTeam.ta++; else aTeam.ta++; }
+          if(ev.type === 'roja'){ if(ev.team === 'a') hTeam.tr++; else aTeam.tr++; }
+        });
+        if(res.mvp && res.mvpTeam && teams[res.mvpTeam]) teams[res.mvpTeam].mvp++;
+      });
+    } catch(e){}
+
     Object.keys(teams).forEach(function(name){
       var team = teams[name];
       team.dg = team.gf - team.gc;
       var extras = getExtrasForTeam(name);
-      team.ta = extras.ta;
-      team.tr = extras.tr;
-      team.mvp = extras.mvp;
+      team.ta += extras.ta;
+      team.tr += extras.tr;
+      team.mvp += extras.mvp;
     });
 
     return Object.keys(teams).map(function(name){ return teams[name]; }).sort(function(a,b){
@@ -302,7 +323,7 @@
         + '<div class="clas-row ' + zone + '">'
         +   '<div class="clas-team-cell">'
         +     '<span class="clas-pos-n">' + pos + '</span>'
-        +     '<span class="clas-team-name">' + (SHORT_NAMES[team.name] || team.name) + '</span>'
+        +     '<span class="clas-team-name">' + (typeof humanIcon==='function'?humanIcon(team.name):'') + (SHORT_NAMES[team.name] || team.name) + '</span>'
         +   '</div>'
         +   '<div class="clas-pts">' + team.pts + '</div>'
         +   '<div class="clas-pj">' + team.pj + '</div>'
@@ -335,6 +356,7 @@
   }
 
   window.buildLigaClas = buildLigaClas;
+  window.rebuildLigaPlayerStats = rebuildLigaPlayerStats;
   document.addEventListener('DOMContentLoaded', buildLigaClas);
 
   var leagueObserverBound = false;

@@ -1822,8 +1822,8 @@
     card.className='submenu-card sc-liga-card';
     card.id='primf-card';
     card.setAttribute('onclick',"go('s-primf-clas')");
-    card.innerHTML='<span class="sc-emoji">🏁</span><span class="sc-label">Primera Federación</span><span class="sc-arr">▶</span>';
-    var second=list.querySelector("[onclick=\"go('s-segunda')\"]");
+    card.innerHTML='<img class="sc-comp-img" src="https://commons.wikimedia.org/wiki/Special:FilePath/Primera_Federaci%C3%B3n.svg" onerror="this.outerHTML=\'<span class=\\"sc-emoji\\">🏁</span>\'" alt="1ªFed"/><span class="sc-label">Primera Federación</span><span class="sc-arr">▶</span>';
+    var second=list.querySelector("[onclick=\"go('s-segunda-clas')\"]") || list.querySelector("[onclick=\"go('s-segunda')\"]");
     if(second && second.nextSibling) list.insertBefore(card, second.nextSibling); else list.appendChild(card);
   }
 
@@ -1935,6 +1935,15 @@
   ];
   var HUMANOS = ['Real Madrid','FC Barcelona','Athletic Club','Real Sociedad','Real Betis'];
   var LS_KEY  = 'ef_liga38_v2';
+
+  window.reiniciarLigaEA = function() {
+    if (!confirm('¿Reiniciar todos los resultados de Liga EA Sports? Se borrará el historial de partidos IA.')) return;
+    try { localStorage.removeItem(LS_KEY); } catch(e){}
+    if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
+    if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
+    if (typeof window.buildIAresults === 'function') window.buildIAresults();
+    if (typeof window.populateLigaCal === 'function') window.populateLigaCal();
+  };
 
   /* ── GENERADOR CALENDARIO BERGER ─────────────────── */
   function generarCalendario() {
@@ -2761,8 +2770,8 @@
     var b = document.getElementById('ia-acta-' + id);
     var a = document.getElementById('ia-arr-' + id);
     if (!b) return;
-    var open = b.style.display !== 'none';
-    b.style.display = open ? 'none' : 'block';
+    var open = b.classList.contains('open');
+    b.classList.toggle('open', !open);
     if (a) a.textContent = open ? '\u25bc' : '\u25b2';
   };
 
@@ -2861,7 +2870,7 @@
           + '<span class="acta-ia-lbl">&#128203; ACTA DEL PARTIDO</span>'
           + '<span class="acta-arr" id="ia-arr-' + cid + '">&#9660;</span>'
           + '</button>'
-          + '<div class="ml-acta-body" id="ia-acta-' + cid + '" style="display:none;">'
+          + '<div class="ml-acta-body" id="ia-acta-' + cid + '">'
           + '<div class="ml-evlist">' + evHtml + '</div>'
           + '</div>'
           + '</div>'

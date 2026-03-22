@@ -1686,7 +1686,7 @@
     var root = document.getElementById(rootId); if(!root) return;
     if(!table || !table.length){root.innerHTML='<div class="clas-empty">'+emptyText+'</div>'; return;}
     var html=(legendHtml||'')+'<div class="clas-scroll-outer"><div class="clas-hdr-scroll"><div class="clas-table"><div class="clas-hdr"><span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span><span>Últ. 5</span></div></div></div><div class="clas-scroll"><div class="clas-table">';
-    table.forEach(function(team,idx){var pos=idx+1; var dgClass='clas-val dg '+(team.dg>0?'pos':(team.dg<0?'neg':'zer')); var _logos=window.TEAM_LOGOS||{}; var _lu=_logos[team.name]||''; var _li=_lu?'<img class="clas-team-logo" src="'+_lu+'" onerror="this.style.display=\'none\'" alt=""/>':''; html+='<div class="clas-row '+(zoneFn?zoneFn(pos,table.length):'')+'"><div class="clas-team-cell"><span class="clas-pos-n">'+pos+'</span>'+_li+'<span class="clas-team-name">'+esc(team.short||team.name)+'</span></div><div class="clas-pts">'+team.pts+'</div><div class="clas-pj">'+team.pj+'</div><div class="clas-val">'+team.v+'</div><div class="clas-val">'+team.e+'</div><div class="clas-val">'+team.p+'</div><div class="clas-val gf">'+team.gf+'</div><div class="clas-val gc">'+team.gc+'</div><div class="'+dgClass+'">'+(team.dg>0?'+':'')+team.dg+'</div><div class="clas-val ta">'+team.ta+'</div><div class="clas-val tr">'+team.tr+'</div><div class="clas-mvp">'+team.mvp+'</div><div class="clas-pct">'+(team.pj?Math.round((team.v/team.pj)*100):0)+'%</div><div class="clas-form">'+formHtml(team.form)+'</div></div>';});
+    table.forEach(function(team,idx){var pos=idx+1; var dgClass='clas-val dg '+(team.dg>0?'pos':(team.dg<0?'neg':'zer')); var _logos=window.TEAM_LOGOS||{}; var _lu=_logos[team.name]||''; var _li=_lu?'<img class="clas-team-logo" src="'+_lu+'" onerror="this.style.display=\'none\'" alt=""/>':''; html+='<div class="clas-row '+(zoneFn?zoneFn(pos,table.length):'')+'"><div class="clas-team-cell"><span class="clas-pos-n">'+pos+'</span>'+_li+'<span class="clas-team-name">'+humanIcon(team.name)+esc(team.short||team.name)+'</span></div><div class="clas-pts">'+team.pts+'</div><div class="clas-pj">'+team.pj+'</div><div class="clas-val">'+team.v+'</div><div class="clas-val">'+team.e+'</div><div class="clas-val">'+team.p+'</div><div class="clas-val gf">'+team.gf+'</div><div class="clas-val gc">'+team.gc+'</div><div class="'+dgClass+'">'+(team.dg>0?'+':'')+team.dg+'</div><div class="clas-val ta">'+team.ta+'</div><div class="clas-val tr">'+team.tr+'</div><div class="clas-mvp">'+team.mvp+'</div><div class="clas-pct">'+(team.pj?Math.round((team.v/team.pj)*100):0)+'%</div><div class="clas-form">'+formHtml(team.form)+'</div></div>';});
     html+='</div></div></div>';
     root.innerHTML=html;
   }
@@ -1928,15 +1928,25 @@
     'Elche CF','Atlético Madrid','Rayo Vallecano','Real Betis','FC Barcelona'
   ];
   var HUMANOS = ['Real Madrid','FC Barcelona','Athletic Club','Real Sociedad','Real Betis'];
+  var HUMAN_ICONS = {'Athletic Club':'💡','Real Betis':'🐭','Real Sociedad':'🔨','Real Madrid':'✏️','FC Barcelona':'👿'};
+  function humanIcon(name){ return HUMAN_ICONS[name] ? HUMAN_ICONS[name]+'\u00a0' : ''; }
+  window.humanIcon = humanIcon;
   var LS_KEY  = 'ef_liga38_v2';
 
   window.reiniciarLigaEA = function() {
     if (!confirm('¿Reiniciar todos los resultados de Liga EA Sports? Se borrará el historial de partidos IA.')) return;
     try { localStorage.removeItem(LS_KEY); } catch(e){}
     if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
+    // Clear team card/MVP aggregates
+    var _ex = window.LIGA_EXTRAS;
+    if (_ex) Object.keys(_ex).forEach(function(k){ delete _ex[k]; });
+    // Clear player match event store
+    var _pm = window.LIGA_PLAYER_MATCH_STORE;
+    if (_pm) Object.keys(_pm).forEach(function(k){ delete _pm[k]; });
     if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
     if (typeof window.buildIAresults === 'function') window.buildIAresults();
     if (typeof window.populateLigaCal === 'function') window.populateLigaCal();
+    if (typeof window.rebuildLigaPlayerStats === 'function') window.rebuildLigaPlayerStats();
   };
 
   /* ── GENERADOR CALENDARIO BERGER ─────────────────── */
@@ -1993,7 +2003,7 @@
         }
         var row = document.createElement('div');
         row.className = 'mrow';
-        row.innerHTML = '<div class="mn">' + m[0] + '</div>' + scoreHtml + '<div class="mn r">' + m[1] + '</div>';
+        row.innerHTML = '<div class="mn" data-team="'+m[0]+'">' + humanIcon(m[0]) + m[0] + '</div>' + scoreHtml + '<div class="mn r" data-team="'+m[1]+'">' + humanIcon(m[1]) + m[1] + '</div>';
         round.appendChild(row);
       });
     });
@@ -2040,6 +2050,8 @@
   function buildMatchCard(j, home, away, isHvH, mk) {
     var hu = home.toUpperCase();
     var au = away.toUpperCase();
+    var hiH = humanIcon(home);
+    var hiA = humanIcon(away);
     var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[home]) || '';
     var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[away]) || '';
     var ratA = rA ? '<div class="ml-team-rat" style="background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:1px 7px;font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#fff;">'+rA+'</div>' : '';
@@ -2049,7 +2061,7 @@
     return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'">'
       +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">eFootball Stadium</span><span class="ml-venue-sep">|</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado · Verano</span></div>'
       +'<div class="ml-header">'
-        +'<div class="ml-team"><div class="ml-team-name">'+hu+'</div>'+ratA+'</div>'
+        +'<div class="ml-team"><div class="ml-team-name">'+hiH+hu+'</div>'+ratA+'</div>'
         +'<div class="ml-score-wrap">'
           +_buildTwitchBtn(mk)
           +'<div class="ml-score"><span id="sc-'+mk+'-a">0</span>–<span id="sc-'+mk+'-b">0</span></div>'
@@ -2057,15 +2069,15 @@
           +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
           +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
         +'</div>'
-        +'<div class="ml-team"><div class="ml-team-name">'+au+'</div>'+ratB+'</div>'
+        +'<div class="ml-team"><div class="ml-team-name">'+hiA+au+'</div>'+ratB+'</div>'
       +'</div>'
       +'<div class="ml-pen-panel" id="ml-pen-panel-'+mk+'">'
         +'<div class="ml-pen-title">⚽ TANDA DE PENALTIS</div>'
-        +'<div class="ml-pen-row"><div class="ml-pen-team">'+hu+'</div>'
+        +'<div class="ml-pen-row"><div class="ml-pen-team">'+hiH+hu+'</div>'
         +'<input class="ml-pen-input" id="ml-pen-a-'+mk+'" type="number" min="0" max="20" value="0"/>'
         +'<span class="ml-pen-vs">–</span>'
         +'<input class="ml-pen-input" id="ml-pen-b-'+mk+'" type="number" min="0" max="20" value="0"/>'
-        +'<div class="ml-pen-team">'+au+'</div></div>'
+        +'<div class="ml-pen-team">'+hiA+au+'</div></div>'
         +'<button class="ml-pen-confirm" onclick="mlConfirmPenGen(\''+emk+'\')">✓ CONFIRMAR RESULTADO PENALTIS</button>'
       +'</div>'
       +'<div class="ml-divider"></div>'
@@ -2683,7 +2695,9 @@
       var aEl = row.querySelector('.mn.r');
       var sEl = row.querySelector('.ms');
       if (!hEl || !aEl || !sEl) return;
-      if (hEl.textContent.trim() === home && aEl.textContent.trim() === away) {
+      var hName = hEl.dataset.team || hEl.textContent.trim();
+      var aName = aEl.dataset.team || aEl.textContent.trim();
+      if (hName === home && aName === away) {
         sEl.textContent = gh + '\u2013' + ga;
         sEl.className   = 'ms';
       }
@@ -2890,11 +2904,45 @@
   function genMatchEvents(teamA, teamB, goalsA, goalsB) {
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
-    var outA = sqA.filter(function(p){ return p[2] !== 'P'; });
-    var outB = sqB.filter(function(p){ return p[2] !== 'P'; });
-    if (!outA.length) outA = [['','Jugador A','F',76]];
-    if (!outB.length) outB = [['','Jugador B','F',76]];
+
+    // Split into titulares (active) and suplentes (bench) — p[4] field
+    var activeA = sqA.filter(function(p){ return p[4] === 'titular'; });
+    var activeB = sqB.filter(function(p){ return p[4] === 'titular'; });
+    var benA    = sqA.filter(function(p){ return p[4] === 'suplente'; });
+    var benB    = sqB.filter(function(p){ return p[4] === 'suplente'; });
+    if (!activeA.length) activeA = sqA.slice();
+    if (!activeB.length) activeB = sqB.slice();
+
+    // Outfield scorers (no GK). Built from active so injuries affect who can score
+    function getOutfield(active) { return active.filter(function(p){ return p[2] !== 'P'; }); }
+    var outA = getOutfield(activeA);
+    var outB = getOutfield(activeB);
+    if (!outA.length) outA = [['','Jugador A','F',76,'titular']];
+    if (!outB.length) outB = [['','Jugador B','F',76,'titular']];
+
     var events = [];
+
+    // ── LESIONES: ~6% por equipo via motor oficial ─────────────────
+    if (typeof window.generarLesionesPartido === 'function') {
+      var lesiones = window.generarLesionesPartido(teamA, teamB, activeA, activeB, benA, benB, 90);
+      lesiones.forEach(function(les) {
+        if (typeof window.aplicarLesionEnSimulacion === 'function') {
+          var evLes = window.aplicarLesionEnSimulacion(les, activeA, activeB);
+          if (evLes) {
+            // Normalise player field to name string (injury event uses full array)
+            var lesName = Array.isArray(evLes.player) ? (evLes.player[1] || '?') : (evLes.player || '?');
+            events.push({ type:'lesion', min:evLes.min, player:lesName, team:evLes.team,
+                          gradoNombre:evLes.gradoNombre, gradoEmoji:evLes.gradoEmoji,
+                          partidos:evLes.partidos, grave:evLes.grave });
+          }
+        }
+      });
+      // Refresh outfield after injury substitutions
+      outA = getOutfield(activeA); if (!outA.length) outA = [['','Jugador A','F',76,'titular']];
+      outB = getOutfield(activeB); if (!outB.length) outB = [['','Jugador B','F',76,'titular']];
+    }
+
+    // ── GOLES: minutoss aleatorios + selección ponderada ───────────
     var totalGoals = goalsA + goalsB;
     var goalMins = [];
     for (var i = 0; i < totalGoals; i++) goalMins.push(Math.floor(Math.random() * 88) + 2);
@@ -2903,18 +2951,55 @@
     for (var ga = 0; ga < goalsA; ga++) assign.push('a');
     for (var gb = 0; gb < goalsB; gb++) assign.push('b');
     for (var s = assign.length - 1; s > 0; s--) { var t = Math.floor(Math.random()*(s+1)); var tmp=assign[s]; assign[s]=assign[t]; assign[t]=tmp; }
+
+    // Weighted selection via calculateGoalProbability + MIRACLE_FACTORS
+    var goalsPerPlayer = {};
+    function selectScorer(squad, isLocal) {
+      var weights = squad.map(function(p) {
+        var scored = goalsPerPlayer[p[1]] || 0;
+        if (typeof window.calculateGoalProbability === 'function') {
+          return window.calculateGoalProbability(p[2], p[3], isLocal, scored);
+        }
+        var base = {'P':0.001,'D':7.5,'M':17.5,'F':70.0}[p[2]] || 17.5;
+        if (scored === 0) return base;
+        return base * ([0.37, 0.22, 0.12, 0.06][scored - 1] || 0.02);
+      });
+      var total = weights.reduce(function(a,b){ return a+b; }, 0);
+      if (total <= 0) return squad[Math.floor(Math.random()*squad.length)];
+      var r = Math.random() * total, cum = 0;
+      for (var i = 0; i < squad.length; i++) { cum += weights[i]; if (r <= cum) return squad[i]; }
+      return squad[squad.length - 1];
+    }
+
     assign.forEach(function(team, idx) {
       var sq = team === 'a' ? outA : outB;
       var pl = _weightedPick(sq); // PODER-VALOR: selección ponderada por poder y posición (j1-j38)
       events.push({ type:'gol', min:goalMins[idx], player:pl[1]||'?', team:team });
     });
-    var numCards = Math.floor(Math.random() * 3);
-    for (var c = 0; c < numCards; c++) {
+
+    // ── TARJETAS: 2-4 amarillas; 2ª al mismo jugador → roja ────────
+    var numYellow = Math.floor(Math.random() * 3) + 2;
+    var yellowsReceived = {};
+    for (var c = 0; c < numYellow; c++) {
       var ct = Math.random() < 0.5 ? 'a' : 'b';
       var csq = ct === 'a' ? outA : outB;
       var cp = csq[Math.floor(Math.random()*csq.length)];
-      events.push({ type:'amarilla', min:Math.floor(Math.random()*80)+5, player:cp[1]||'?', team:ct });
+      var cmin = Math.floor(Math.random()*80)+5;
+      if (yellowsReceived[cp[1]]) {
+        events.push({ type:'roja', min:cmin, player:cp[1]||'?', team:ct, reason:'2TA' });
+      } else {
+        events.push({ type:'amarilla', min:cmin, player:cp[1]||'?', team:ct });
+        yellowsReceived[cp[1]] = true;
+      }
     }
+    // Roja directa (~15% por partido)
+    if (Math.random() < 0.15) {
+      var rt = Math.random() < 0.5 ? 'a' : 'b';
+      var rsq = rt === 'a' ? outA : outB;
+      var rp = rsq[Math.floor(Math.random()*rsq.length)];
+      events.push({ type:'roja', min:Math.floor(Math.random()*80)+10, player:rp[1]||'?', team:rt, reason:'directa' });
+    }
+
     events.sort(function(a,b){ return a.min - b.min; });
     var mvpScore = {}, mvpTeams2 = {};
     events.forEach(function(e){ if(e.type==='gol'){ mvpScore[e.player]=(mvpScore[e.player]||0)+3; mvpTeams2[e.player]=e.team==='a'?teamA:teamB; } });
@@ -3146,12 +3231,12 @@
         }
         html += '<div class="match-live-wrap" style="margin-bottom:8px;">'
           + '<div class="ml-header">'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + m.home + '</div></div>'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + humanIcon(m.home) + m.home + '</div></div>'
           + '<div class="ml-score-wrap">'
           + '<div class="ml-score state-finished"><span>' + m.gh + '</span>\u2013<span>' + m.ga + '</span></div>'
           + '<div class="ml-timer finished" style="cursor:default;">&#127937; FIN</div>'
           + '</div>'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + m.away + '</div></div>'
+          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + humanIcon(m.away) + m.away + '</div></div>'
           + '</div>'
           + '<div class="ml-acta" data-ia="1">'
           + '<button class="ml-acta-toggle" onclick="window.iaActaTog(\'' + cid + '\')">'

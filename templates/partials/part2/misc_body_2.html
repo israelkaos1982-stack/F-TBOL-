@@ -2213,7 +2213,7 @@
     for (var i=0; i<aiGoals; i++) mins.push(Math.floor(Math.random()*88)+2);
     mins.sort(function(a,b){return a-b;});
     mins.forEach(function(min) {
-      var pl = out[Math.floor(Math.random()*out.length)];
+      var pl = _weightedPick(out); // PODER-VALOR: goleador IA ponderado por poder y posición
       st.pendingAIEvents.push({type:'gol',min:min,team:aiTeam,num:pl[0]||'',name:pl[1]||'IA',ico:'⚽'});
     });
     var numCards = Math.floor(Math.random()*3);
@@ -2873,6 +2873,20 @@
     }, 1000); /* 1 real second = 3 game minutes → 30 sec for full 90' */
   };
 
+  /* ── PODER-VALOR: peso de gol por posición y poder individual ── */
+  function _poderPosWeight(pos, poder) {
+    var base = pos==='P'?0.001:pos==='D'?0.075:pos==='M'?0.175:0.70;
+    var boost = ((poder||70)-70)/20*0.15;
+    return Math.max(0.001, base+boost);
+  }
+  function _weightedPick(sq) {
+    var tot = sq.reduce(function(s,p){ return s+(p[3]||70)*_poderPosWeight(p[2],p[3]); },0);
+    if (!tot) return sq[Math.floor(Math.random()*sq.length)];
+    var r=Math.random()*tot, c=0;
+    for (var i=0;i<sq.length;i++){ c+=(sq[i][3]||70)*_poderPosWeight(sq[i][2],sq[i][3]); if(r<c)return sq[i]; }
+    return sq[sq.length-1];
+  }
+
   function genMatchEvents(teamA, teamB, goalsA, goalsB) {
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
@@ -2891,7 +2905,7 @@
     for (var s = assign.length - 1; s > 0; s--) { var t = Math.floor(Math.random()*(s+1)); var tmp=assign[s]; assign[s]=assign[t]; assign[t]=tmp; }
     assign.forEach(function(team, idx) {
       var sq = team === 'a' ? outA : outB;
-      var pl = sq[Math.floor(Math.random()*sq.length)];
+      var pl = _weightedPick(sq); // PODER-VALOR: selección ponderada por poder y posición (j1-j38)
       events.push({ type:'gol', min:goalMins[idx], player:pl[1]||'?', team:team });
     });
     var numCards = Math.floor(Math.random() * 3);

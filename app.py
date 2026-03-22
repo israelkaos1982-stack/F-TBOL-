@@ -206,6 +206,222 @@ def generar_calendario(lista):
 
 calendario = generar_calendario(equipos)
 
+# --- COPA DEL REY ---
+COPA_SEEDING = {
+    "r1":  ["Albacete BP", "Levante UD", "Real Oviedo", "Deportivo Alavés"],
+    "r2_direct":  ["Elche CF", "Córdoba CF", "Getafe CF", "Sevilla FC", "Mallorca", "Valencia CF"],
+    "r16_direct": ["Celta de Vigo", "Espanyol", "Rayo Vallecano", "Osasuna", "Girona FC",
+                   "Athletic Club", "Real Betis", "Real Sociedad", "Villarreal CF",
+                   "Atlético Madrid", "Real Madrid", "FC Barcelona"]
+}
+
+def copa_sim_partido(local, visitante, two_leg=False):
+    gl = simular_goles(local, True)
+    gv = simular_goles(visitante, False)
+    conteo_l, conteo_v = {}, {}
+    for _ in range(gl):
+        g = elegir_goleador(local, True, conteo_l)
+        conteo_l[g] = conteo_l.get(g, 0) + 1
+    for _ in range(gv):
+        g = elegir_goleador(visitante, False, conteo_v)
+        conteo_v[g] = conteo_v.get(g, 0) + 1
+    mvp = elegir_mvp(local, visitante, gl, gv, conteo_l, conteo_v)
+    et_gl, et_gv, pen_winner, winner = 0, 0, None, None
+    if not two_leg and gl == gv:
+        et_gl = random.choices([0, 1, 2], weights=[55, 35, 10])[0]
+        et_gv = random.choices([0, 1, 2], weights=[55, 35, 10])[0]
+        total_l = gl + et_gl
+        total_v = gv + et_gv
+        if total_l > total_v:
+            winner = local
+        elif total_v > total_l:
+            winner = visitante
+        else:
+            pen_winner = random.choice([local, visitante])
+            winner = pen_winner
+    elif not two_leg:
+        winner = local if gl > gv else visitante
+    return {"gl": gl, "gv": gv, "et_gl": et_gl, "et_gv": et_gv,
+            "pen_winner": pen_winner, "winner": winner, "mvp": mvp, "jugado": True}
+
+@app.route("/api/copa/state", methods=["GET"])
+def copa_get_state():
+    data = load_global_state()
+    return jsonify({"ok": True, "copa": data.get("copa_state") or {}})
+
+@app.route("/api/copa/sorteo", methods=["POST"])
+def copa_sorteo():
+    payload = request.get_json(silent=True) or {}
+    ronda = payload.get("ronda")
+    data = load_global_state()
+    copa = data.get("copa_state") or {"fase": "r1", "sorteo": {}, "resultados": {}, "clasificados": {}}
+    sorteo = copa.get("sorteo", {})
+    clasificados = copa.get("clasificados", {})
+    if ronda == "r1":
+        teams = COPA_SEEDING["r1"][:]
+        random.shuffle(teams)
+    elif ronda == "r2":
+        teams = clasificados.get("r1", []) + COPA_SEEDING["r2_direct"][:]
+        random.shuffle(teams)
+    elif ronda == "r16":
+        teams = clasificados.get("r2", []) + COPA_SEEDING["r16_direct"][:]
+        random.shuffle(teams)
+    elif ronda in ("oct", "cua"):
+        prev = {"oct": "r16", "cua": "oct"}[ronda]
+        teams = clasificados.get(prev, [])[:]
+        random.shuffle(teams)
+    elif ronda == "fin":
+        teams = clasificados.get("cua", [])
+        if len(teams) < 2:
+            return jsonify({"ok": False, "error": "No hay 2 finalistas"}), 400
+    else:
+        return jsonify({"ok": False, "error": "Ronda inválida"}), 400
+    if len(teams) % 2 != 0:
+        return jsonify({"ok": False, "error": f"Número impar de equipos ({len(teams)})"}), 400
+    matches = [{"l": teams[i], "v": teams[i+1]} for i in range(0, len(teams), 2)]
+    sorteo[ronda] = matches
+    copa["sorteo"] = sorteo
+    copa["fase"] = ronda
+    data["copa_state"] = copa
+    save_global_state(data)
+    return jsonify({"ok": True, "matches": matches, "copa": copa})
+
+@app.route("/api/copa/simular_ia", methods=["POST"])
+def copa_simular_ia():
+    payload = request.get_json(silent=True) or {}
+    ronda = payload.get("ronda")
+    idx = int(payload.get("idx", 0))
+    es_vuelta = payload.get("es_vuelta", False)
+    data = load_global_state()
+    copa = data.get("copa_state") or {"sorteo": {}, "resultados": {}, "clasificados": {}}
+    sorteo_ronda = copa.get("sorteo", {}).get(ronda, [])
+    if idx >= len(sorteo_ronda):
+        return jsonify({"ok": False, "error": "Partido no encontrado"}), 400
+    match = sorteo_ronda[idx]
+    local, visitante = match["l"], match["v"]
+    resultados = copa.get("resultados", {})
+    two_leg = ronda in ("oct", "cua")
+    if two_leg:
+        key_ida = ronda + "_ida"
+        key_vta = ronda + "_vta"
+        if not es_vuelta:
+            res = copa_sim_partido(local, visitante, two_leg=True)
+            if key_ida not in resultados:
+                resultados[key_ida] = [None] * len(sorteo_ronda)
+            resultados[key_ida][idx] = res
+        else:
+            res = copa_sim_partido(visitante, local, two_leg=True)
+            if key_vta not in resultados:
+                resultados[key_vta] = [None] * len(sorteo_ronda)
+            resultados[key_vta][idx] = res
+            ida = (resultados.get(key_ida) or [None]*len(sorteo_ronda))[idx] or {}
+            total_l = ida.get("gl", 0) + res["gv"]
+            total_v = ida.get("gv", 0) + res["gl"]
+            if total_l > total_v:
+                winner = local
+            elif total_v > total_l:
+                winner = visitante
+            else:
+                winner = random.choice([local, visitante])
+                resultados[key_vta][idx]["pen_winner"] = winner
+            resultados[key_vta][idx]["winner"] = winner
+    else:
+        res = copa_sim_partido(local, visitante, two_leg=False)
+        if ronda not in resultados:
+            resultados[ronda] = [None] * len(sorteo_ronda)
+        resultados[ronda][idx] = res
+    copa["resultados"] = resultados
+    data["copa_state"] = copa
+    save_global_state(data)
+    return jsonify({"ok": True, "copa": copa})
+
+@app.route("/api/copa/guardar_resultado", methods=["POST"])
+def copa_guardar_resultado():
+    payload = request.get_json(silent=True) or {}
+    ronda = payload.get("ronda")
+    idx = int(payload.get("idx", 0))
+    es_vuelta = payload.get("es_vuelta", False)
+    gl = int(payload.get("gl", 0))
+    gv = int(payload.get("gv", 0))
+    et_gl = int(payload.get("et_gl", 0))
+    et_gv = int(payload.get("et_gv", 0))
+    pen_winner = payload.get("pen_winner")
+    mvp = payload.get("mvp", "")
+    data = load_global_state()
+    copa = data.get("copa_state") or {"sorteo": {}, "resultados": {}, "clasificados": {}}
+    sorteo_ronda = copa.get("sorteo", {}).get(ronda, [])
+    match = sorteo_ronda[idx] if idx < len(sorteo_ronda) else {}
+    local_orig, visit_orig = match.get("l", ""), match.get("v", "")
+    resultados = copa.get("resultados", {})
+    two_leg = ronda in ("oct", "cua")
+    res = {"gl": gl, "gv": gv, "et_gl": et_gl, "et_gv": et_gv,
+           "pen_winner": pen_winner, "mvp": mvp, "jugado": True}
+    if two_leg:
+        key = ronda + ("_vta" if es_vuelta else "_ida")
+        if key not in resultados:
+            resultados[key] = [None] * len(sorteo_ronda)
+        resultados[key][idx] = res
+        if es_vuelta:
+            key_ida = ronda + "_ida"
+            ida = (resultados.get(key_ida) or [None]*len(sorteo_ronda))[idx] or {}
+            total_l = ida.get("gl", 0) + gv
+            total_v = ida.get("gv", 0) + gl
+            if total_l > total_v:
+                winner = local_orig
+            elif total_v > total_l:
+                winner = visit_orig
+            else:
+                winner = pen_winner or local_orig
+            resultados[key][idx]["winner"] = winner
+    else:
+        total_l = gl + et_gl
+        total_v = gv + et_gv
+        if total_l > total_v:
+            winner = local_orig if not es_vuelta else visit_orig
+        elif total_v > total_l:
+            winner = visit_orig if not es_vuelta else local_orig
+        else:
+            winner = pen_winner or local_orig
+        res["winner"] = winner
+        if ronda not in resultados:
+            resultados[ronda] = [None] * len(sorteo_ronda)
+        resultados[ronda][idx] = res
+    copa["resultados"] = resultados
+    data["copa_state"] = copa
+    save_global_state(data)
+    return jsonify({"ok": True, "copa": copa})
+
+@app.route("/api/copa/clasificar", methods=["POST"])
+def copa_clasificar():
+    payload = request.get_json(silent=True) or {}
+    ronda = payload.get("ronda")
+    data = load_global_state()
+    copa = data.get("copa_state") or {"sorteo": {}, "resultados": {}, "clasificados": {}}
+    resultados = copa.get("resultados", {})
+    clasificados = copa.get("clasificados", {})
+    two_leg = ronda in ("oct", "cua")
+    if two_leg:
+        res_list = resultados.get(ronda + "_vta", [])
+    else:
+        res_list = resultados.get(ronda, [])
+    winners = [r.get("winner") for r in (res_list or []) if r and r.get("winner")]
+    clasificados[ronda] = winners
+    if ronda == "fin" and winners:
+        clasificados["campeon"] = winners[0]
+    copa["clasificados"] = clasificados
+    next_phase = {"r1": "r2", "r2": "r16", "r16": "oct", "oct": "cua", "cua": "fin", "fin": "campeon"}
+    copa["fase"] = next_phase.get(ronda, copa.get("fase", "r1"))
+    data["copa_state"] = copa
+    save_global_state(data)
+    return jsonify({"ok": True, "clasificados": winners, "copa": copa})
+
+@app.route("/api/copa/reiniciar", methods=["POST"])
+def copa_reiniciar():
+    data = load_global_state()
+    data["copa_state"] = {"fase": "r1", "sorteo": {}, "resultados": {}, "clasificados": {}}
+    save_global_state(data)
+    return jsonify({"ok": True})
+
 # --- SIMULACIÓN ---
 def simular_y_guardar(jornada, local, visitante):
     if Partido.query.filter_by(local=local, visitante=visitante).first():

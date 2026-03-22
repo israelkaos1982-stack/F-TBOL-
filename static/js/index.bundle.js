@@ -1560,9 +1560,9 @@ window.mlSimulate_j1m10=function(){
     'Valencia CF':      'Valencia'
   };
   var HUMAN_TEAMS = {
-    'Athletic Club': '💡',
-    'Real Betis':    '🐭',
-    'Real Sociedad': '🔨',
+    'Bayern Munich': '💡',
+    'Arsenal':       '🐭',
+    'Sporting CP':   '🔨',
     'Real Madrid':   '✏️',
     'FC Barcelona':  '👿'
   };
@@ -1654,9 +1654,9 @@ window.mlSimulate_j1m10=function(){
 
 (function(){
   var SCREEN_TEAM_FALLBACK = {
-    's-athletic': 'Athletic Club',
-    's-betis': 'Real Betis',
-    's-sociedad': 'Real Sociedad',
+    's-munich': 'Bayern Munich',
+    's-arsenal': 'Arsenal',
+    's-sporting': 'Sporting CP',
     's-madrid': 'Real Madrid',
     's-barca': 'FC Barcelona',
     's-atletico': 'Atlético Madrid',
@@ -2146,10 +2146,10 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
   var LIGA_TEAMS_EQ = [
     {name:"Real Madrid",     ico:"⚪",  screen:"s-madrid"},
     {name:"FC Barcelona",    ico:"🔵",  screen:"s-barca"},
-    {name:"Athletic Club",   ico:"🔴",  screen:"s-athletic"},
+    {name:"Athletic Club",   ico:"🔴",  screen:null},
     {name:"Atlético Madrid", ico:"🔴",  screen:"s-atletico"},
-    {name:"Real Betis",      ico:"🟢",  screen:"s-betis"},
-    {name:"Real Sociedad",   ico:"🔵",  screen:"s-sociedad"},
+    {name:"Real Betis",      ico:"🟢",  screen:null},
+    {name:"Real Sociedad",   ico:"🔵",  screen:null},
     {name:"Sevilla FC",      ico:"⚪",  screen:"s-sevilla"},
     {name:"Villarreal CF",   ico:"🟡",  screen:"s-villarreal"},
     {name:"Getafe CF",       ico:"🔵",  screen:"s-getafe"},
@@ -2159,11 +2159,11 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     {name:"Mallorca",        ico:"🔴",  screen:"mallorca-screen"},
     {name:"Girona FC",       ico:"🔴",  screen:"girona-screen"},
     {name:"Espanyol",        ico:"🔵",  screen:"s-espanyol"},
-    {name:"Arsenal",         ico:"🔴",  screen:null},
+    {name:"Arsenal",         ico:"🔴",  screen:"s-arsenal"},
     {name:"Rayo Vallecano",  ico:"⚪",  screen:"rayo-screen"},
     {name:"Elche CF",        ico:"🟢",  screen:"elche-screen"},
-    {name:"Bayern Munich",   ico:"🔴",  screen:null},
-    {name:"Sporting CP",     ico:"🟢",  screen:null}
+    {name:"Bayern Munich",   ico:"🔴",  screen:"s-munich"},
+    {name:"Sporting CP",     ico:"🟢",  screen:"s-sporting"}
   ];
 
   var grid = document.getElementById('equipos-grid');
@@ -3062,9 +3062,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   };
 
   var SCREEN_TEAM_FALLBACK = {
-    's-athletic': 'Athletic Club',
-    's-betis': 'Real Betis',
-    's-sociedad': 'Real Sociedad',
+    's-munich': 'Bayern Munich',
+    's-arsenal': 'Arsenal',
+    's-sporting': 'Sporting CP',
     's-madrid': 'Real Madrid',
     's-barca': 'FC Barcelona',
     's-atletico': 'Atlético Madrid',
@@ -3316,7 +3316,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var res = _origGo2.apply(this, arguments);
       if(id === 's-liga-stats') setTimeout(rebuildLigaPlayerStatsFixed, 0);
       // Also refresh visible plant stats when visiting any team screen
-      var teamScreens = ['s-madrid','s-barca','s-athletic','s-atletico','s-betis','s-sociedad',
+      var teamScreens = ['s-madrid','s-barca','s-munich','s-atletico','s-arsenal','s-sporting',
         's-sevilla','s-villarreal','s-getafe','s-espanyol','s-albacete',
         'celta-screen','osasuna-screen','alaves-screen','girona-screen',
         'oviedo-screen','levante-screen','mallorca-screen','elche-screen','valencia-screen','rayo-screen'];
@@ -6487,9 +6487,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     'Valencia CF':'Valencia'
   };
   var HUMAN_TEAMS = {
-    'Athletic Club': '💡',
-    'Real Betis':    '🐭',
-    'Real Sociedad': '🔨',
+    'Bayern Munich': '💡',
+    'Arsenal':       '🐭',
+    'Sporting CP':   '🔨',
     'Real Madrid':   '✏️',
     'FC Barcelona':  '👿'
   };

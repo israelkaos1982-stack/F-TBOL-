@@ -4,7 +4,7 @@
    ================================================================ */
 (function () {
 
-  var HUMAN_TEAMS = ['Real Madrid', 'FC Barcelona', 'Athletic Club', 'Real Sociedad', 'Real Betis'];
+  var HUMAN_TEAMS = ['Real Madrid', 'FC Barcelona', 'Bayern Munich', 'Arsenal', 'Sporting CP'];
 
   var ROUND_LABEL = {
     r1:  '1ª Ronda',

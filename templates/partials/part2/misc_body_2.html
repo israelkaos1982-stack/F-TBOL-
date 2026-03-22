@@ -1561,69 +1561,8 @@
   function randInt(min,max){return Math.floor(Math.random()*(max-min+1))+min;}
   function choice(arr){return arr[Math.floor(Math.random()*arr.length)];}
   function clamp(n,min,max){return Math.max(min,Math.min(max,n));}
-  const SHARED_STATE_ENDPOINT = '/api/state';
-  let __sharedStateCache = null;
-  let __sharedStateLoaded = false;
-
-  function deepClone(v){
-    return JSON.parse(JSON.stringify(v));
-  }
-
-  async function fetchSharedState(){
-    try{
-      const res = await fetch(SHARED_STATE_ENDPOINT, { cache: 'no-store' });
-      const data = await res.json();
-      if(data && data.ok && data.state){
-        __sharedStateCache = data.state;
-      }else{
-        __sharedStateCache = {};
-      }
-    }catch(e){
-      console.error('Error cargando estado compartido:', e);
-      __sharedStateCache = {};
-    }
-    __sharedStateLoaded = true;
-    return __sharedStateCache;
-  }
-
-  async function persistSharedState(){
-    try{
-      await fetch(SHARED_STATE_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state: __sharedStateCache || {} })
-      });
-    }catch(e){
-      console.error('Error guardando estado compartido:', e);
-    }
-  }
-
-  function getSharedRoot(){
-    if(!__sharedStateCache) __sharedStateCache = {};
-    return __sharedStateCache;
-  }
-
-  function getByKey(key, fallback){
-    const root = getSharedRoot();
-    if(root[key] === undefined){
-      return deepClone(fallback);
-    }
-    return deepClone(root[key]);
-  }
-
-  function setByKey(key, val){
-    const root = getSharedRoot();
-    root[key] = deepClone(val);
-    persistSharedState();
-  }
-
-  function loadJSON(key,fallback){
-    return getByKey(key, fallback);
-  }
-
-  function saveJSON(key,val){
-    setByKey(key, val);
-  }
+  function loadJSON(key,fallback){try{var raw=localStorage.getItem(key); return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}
+  function saveJSON(key,val){localStorage.setItem(key,JSON.stringify(val));}
 
   function getSegundaTeams(){return loadJSON(SEGUNDA_TEAMS_KEY, deepCopy(DEFAULT_SEGUNDA_TEAMS));}
   function setSegundaTeams(teams){saveJSON(SEGUNDA_TEAMS_KEY, teams);}
@@ -1754,12 +1693,11 @@
 
   function renderStats(rootId, players, emptyText){
     var root=document.getElementById(rootId); if(!root) return;
-    if(!players || !players.length){root.innerHTML='<div class="liga-stat-empty" style="font-size:11px;padding:8px;opacity:.5;">'+emptyText+'</div>'; return;}
-    function renderRowsCompact(items){return items.map(function(item,idx){return '<div class="liga-stat-row" style="padding:5px 6px;"><div class="liga-stat-rank">'+(idx+1)+'</div><div class="liga-stat-player"><div class="liga-stat-name" style="font-size:12px;">'+esc(item.name)+'</div><div class="liga-stat-team" style="font-size:10px;">'+esc(item.team)+'</div></div><div class="liga-stat-value">'+item.value+'</div></div>'}).join('')}
-    var COMPACT=[{key:'goles-total',title:'Goleadores',icon:'⚽'},{key:'mvp',title:'MVP',icon:'⭐'},{key:'yel',title:'Amarillas',icon:'🟨'}];
-    var html='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">';
-    COMPACT.forEach(function(cat){var top=topPlayersBy(players,cat.key).slice(0,3); html+='<div class="liga-stat-card" style="border-radius:8px;"><div class="liga-stat-head" style="padding:7px 10px;"><div class="liga-stat-ico" style="font-size:14px;">'+cat.icon+'</div><div class="liga-stat-title" style="font-size:11px;">'+cat.title+'</div></div><div class="liga-stat-body" style="padding:4px 6px 6px;">'; if(!top.length){html+='<div class="liga-stat-empty" style="font-size:10px;">-</div>'}else{html+=renderRowsCompact(top)} html+='</div></div>';});
-    html+='</div>'; root.innerHTML=html;
+    if(!players || !players.length){root.innerHTML='<div class="liga-stat-empty">'+emptyText+'</div>'; return;}
+    function rows(items,start){return items.map(function(item,idx){return '<div class="liga-stat-row"><div class="liga-stat-rank">'+(start+idx)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+esc(item.name)+'</div><div class="liga-stat-team">'+esc(item.team)+'</div></div><div class="liga-stat-value">'+item.value+'</div></div>'}).join('')}
+    var html='';
+    STATS_CATS.forEach(function(cat){var all=topPlayersBy(players,cat.key); var top=all.slice(0,6), rest=all.slice(6); html+='<div class="liga-stat-card" data-cat="'+cat.key+'"><div class="liga-stat-head"><div class="liga-stat-ico">'+cat.icon+'</div><div class="liga-stat-title">'+cat.title+'</div></div><div class="liga-stat-body">'; if(!all.length){html+='<div class="liga-stat-empty">Sin datos todavía</div>';} else {html+=rows(top,1); if(rest.length){html+='<details class="liga-stat-more"><summary>Ver todos ('+all.length+')</summary><div class="liga-stat-more-list">'+rows(rest,7)+'</div></details>';}} html+='</div></div>';});
+    root.innerHTML=html;
   }
 
   function renderSegunda(){
@@ -1878,15 +1816,9 @@
   }
 
   function ensurePrimeraCard(){
-    var esp=document.getElementById('s-espana'); if(!esp) return;
-    var list=esp.querySelector('.submenu-list'); if(!list || document.getElementById('primf-card')) return;
-    var card=document.createElement('div');
-    card.className='submenu-card sc-liga-card';
-    card.id='primf-card';
-    card.setAttribute('onclick',"go('s-primf-clas')");
-    card.innerHTML='<img class="sc-comp-img" src="https://commons.wikimedia.org/wiki/Special:FilePath/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><span class="sc-label">Primera Federación</span><span class="sc-arr">▶</span>';
-    var second=list.querySelector("[onclick=\"go('s-segunda-clas')\"]") || list.querySelector("[onclick=\"go('s-segunda')\"]");
-    if(second && second.nextSibling) list.insertBefore(card, second.nextSibling); else list.appendChild(card);
+    /* La tarjeta de Primera Federación ahora es estática en el HTML (primf-card).
+       Esta función solo garantiza que la pantalla de primera se haya creado. */
+    ensurePrimeraScreens();
   }
 
   function ensurePrimeraScreens(){
@@ -1895,7 +1827,7 @@
     /* ── Menú principal ─────────────────── */
     +'<div class="screen" id="s-primf">'
     +'<button class="back-btn" onclick="go(\'s-espana\')">◀ Volver</button>'
-    +'<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
+    +'<div class="sec-hdr"><img class="sec-ico" src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
     +'<div class="submenu-list">'
     +'<div class="submenu-card sc-sub-verde2" onclick="go(\'s-primf-clas\')"><span class="sc-emoji">📋</span><span class="sc-label">Clasificación · Grupo 1 y 2</span><span class="sc-arr">▶</span></div>'
     +'<div class="submenu-card sc-sub-verde3" onclick="go(\'s-primf-stats\')"><span class="sc-emoji">📈</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span></div>'
@@ -1904,7 +1836,7 @@
     /* ── Clasificación combinada (Grupo 1 + 2) ── */
     +'<div class="screen" id="s-primf-clas">'
     +'<button class="back-btn" onclick="go(\'s-espana\')">◀ Volver</button>'
-    +'<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
+    +'<div class="sec-hdr"><img class="sec-ico" src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
     +'<div class="btn-action-bar">'
     +'<button class="btn-action btn-action-sim" onclick="simularAmbosPrimera()"><span class="btn-action-ico">🎮</span>Simular</button>'
     +'<button class="btn-action btn-action-rst" onclick="reiniciarAmbosPrimera()"><span class="btn-action-ico">♻️</span>Reiniciar</button>'
@@ -1952,11 +1884,11 @@
   }
 
   window.simularLigaSegundaMenu=function(){ saveSegundaState(simulateLeague(getSegundaTeams())); renderSegunda(); renderMovement(); if(typeof go==='function') go('s-segunda-clas'); };
-  window.reiniciarLigaSegundaMenu=function(){ saveSegundaState({table:[],players:[]}); saveJSON(TRANSITION_KEY, null); renderSegunda(); renderMovement(); };
+  window.reiniciarLigaSegundaMenu=function(){ saveSegundaState({table:[],players:[]}); localStorage.removeItem(TRANSITION_KEY); renderSegunda(); renderMovement(); };
   window.simularPrimeraGrupo=function(n){ var teams=getPrimeraTeams(), state=getPrimeraState(); if(n===1){state.g1=simulateLeague(teams.g1); saveJSON(TRANSITION_KEY, null);} else {state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null);} setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };
-  window.reiniciarPrimeraGrupo=function(n){ var state=getPrimeraState(); if(n===1) state.g1={table:[],players:[]}; else state.g2={table:[],players:[]}; setPrimeraState(state); saveJSON(TRANSITION_KEY, null); renderPrimera(); };
+  window.reiniciarPrimeraGrupo=function(n){ var state=getPrimeraState(); if(n===1) state.g1={table:[],players:[]}; else state.g2={table:[],players:[]}; setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
   window.simularAmbosPrimera=function(){ var teams=getPrimeraTeams(), state=getPrimeraState(); state.g1=simulateLeague(teams.g1); state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null); setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };
-  window.reiniciarAmbosPrimera=function(){ var state=getPrimeraState(); state.g1={table:[],players:[]}; state.g2={table:[],players:[]}; setPrimeraState(state); saveJSON(TRANSITION_KEY, null); renderPrimera(); };
+  window.reiniciarAmbosPrimera=function(){ var state=getPrimeraState(); state.g1={table:[],players:[]}; state.g2={table:[],players:[]}; setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
   window.applyPrimeraMovements=function(){ applyMovements(); };
 
   document.addEventListener('DOMContentLoaded', function(){
@@ -2002,7 +1934,7 @@
   var LS_KEY  = 'ef_liga38_v2';
 
   window.reiniciarLigaEA = function() {
-    if (!confirm('¿Reiniciar todos los resultados de Liga EA Sports? Se borrará el historial de las 38 jornadas.')) return;
+    if (!confirm('¿Reiniciar todos los resultados de Liga EA Sports? Se borrará el historial de partidos IA.')) return;
     try { localStorage.removeItem(LS_KEY); } catch(e){}
     if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
     // Clear team card/MVP aggregates
@@ -2038,10 +1970,10 @@
 
   /* ── PERSISTENCIA ────────────────────────────────── */
   function loadResults() {
-    return getByKey(LS_KEY, {});
+    try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { return {}; }
   }
   function saveResults(r) {
-    setByKey(LS_KEY, r || {});
+    try { localStorage.setItem(LS_KEY, JSON.stringify(r)); } catch (e) {}
   }
   function rKey(j, h, a) { return j + '|' + h + '|' + a; }
 
@@ -2128,16 +2060,14 @@
     var emk = mk.replace(/'/g,"\\'");
     return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'">'
       +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">eFootball Stadium</span><span class="ml-venue-sep">|</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado · Verano</span></div>'
-      +'<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px 2px;gap:6px;">'
-        +_buildTwitchBtn(mk)
-        +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
-        +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
-      +'</div>'
       +'<div class="ml-header">'
         +'<div class="ml-team"><div class="ml-team-name">'+hiH+hu+'</div>'+ratA+'</div>'
         +'<div class="ml-score-wrap">'
+          +_buildTwitchBtn(mk)
           +'<div class="ml-score"><span id="sc-'+mk+'-a">0</span>–<span id="sc-'+mk+'-b">0</span></div>'
           +'<div class="ml-pen-score" id="pen-score-'+mk+'" style="display:none;">⚽ 0–0 (pen.)</div>'
+          +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
+          +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
         +'</div>'
         +'<div class="ml-team"><div class="ml-team-name">'+hiA+au+'</div>'+ratB+'</div>'
       +'</div>'
@@ -2199,27 +2129,139 @@
   }
 
   /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 2-38) ──── */
+  /* Timer speeds per match type (5-second ticks, 1080 ticks = 90 game min):
+     AI vs AI  : 30s real  → 30000/1080 ≈  28ms/tick
+     HvIA      : 12m real  → 720000/1080 ≈ 667ms/tick
+     HvH 90min : 17m real  → 1020000/1080 ≈ 944ms/tick
+     HvH ET    : 5m real for 30 game min → 300000/360 ≈ 833ms/tick */
+  var _ML_TICK_SEC = 5;
+  function _mlTickMs(st) {
+    if (st.isHvH) return st.etDone ? 833 : 944;
+    var humanInvolved = typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away));
+    return humanInvolved ? 667 : 28;
+  }
+
+  function _mlAddActaRow(mk, min, ico, name, num, teamLabel, type, id) {
+    var list = document.getElementById('ml-acta-list-'+mk);
+    if (!list) return;
+    var emp = list.querySelector('.ml-acta-empty'); if (emp) emp.remove();
+    var row = document.createElement('div');
+    row.className = 'ml-evt-item';
+    row.setAttribute('data-team', teamLabel);
+    row.setAttribute('data-type', type);
+    row.setAttribute('data-id', id);
+    row.innerHTML = '<span class="ml-evt-min">'+min+"'</span>"
+      +'<span class="ml-evt-ico">'+ico+'</span>'
+      +'<span class="ml-evt-name">'+(num?num+'. ':'')+name+'</span>'
+      +'<span class="ml-evt-team">'+teamLabel+'</span>';
+    var items = list.querySelectorAll('.ml-evt-item');
+    var inserted = false;
+    for (var i=0; i<items.length; i++) {
+      var em = parseInt((items[i].querySelector('.ml-evt-min')||{}).textContent||'999');
+      if (min < em) { list.insertBefore(row, items[i]); inserted=true; break; }
+    }
+    if (!inserted) list.appendChild(row);
+  }
+
   function _mlRenderTimerGen(mk) {
     var st = _mlSt(mk);
     var btn = document.getElementById('ml-timer-'+mk);
     if (!btn) return;
-    var min = Math.floor(st.timerSec/60);
+    var rawSec = st.timerSec;
+    var stoppageAdded = st.stoppageSec || 0;
+    var normalMax = st.etDone ? 7200 : 5400;
+    var fullMax = normalMax + stoppageAdded * 60;
+    var min = Math.floor(rawSec/60);
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
-    var max = st.etDone ? 7200 : 5400;
-    var lbl = st.timerRunning ? '⏸ ' : (st.timerSec>=max ? '🔁 ' : '▶ ');
-    btn.textContent = lbl+min+"'";
+    var lbl = st.timerRunning ? '⏸ ' : (rawSec>=fullMax ? '🔁 ' : '▶ ');
+    // Show stoppage minutes like 90+2'
+    var baseMax = st.etDone ? 120 : 90;
+    var display = min > baseMax ? baseMax+'+'+(min-baseMax)+"'" : min+"'";
+    btn.textContent = lbl+display;
     btn.className = 'ml-timer'+(st.timerRunning?' running':'');
   }
+
+  function _mlFirePendingEvents(mk, curMin) {
+    var st = _mlSt(mk);
+    if (!st.pendingAIEvents || !st.pendingAIEvents.length) return;
+    var toFire = [];
+    var remaining = [];
+    st.pendingAIEvents.forEach(function(ev) {
+      if (curMin >= ev.min) toFire.push(ev);
+      else remaining.push(ev);
+    });
+    st.pendingAIEvents = remaining;
+    toFire.forEach(function(ev) {
+      var goalTypes = ['gol','falta-gol','pen-gol'];
+      if (goalTypes.indexOf(ev.type) !== -1) { st.sc[ev.team]++; }
+      else if (ev.type === 'propia') { st.sc[ev.team==='a'?'b':'a']++; }
+      var scA = document.getElementById('sc-'+mk+'-a'); if(scA) scA.textContent = st.sc.a;
+      var scB = document.getElementById('sc-'+mk+'-b'); if(scB) scB.textContent = st.sc.b;
+      var evId = Date.now()+Math.random()*9999|0;
+      ev.id = evId;
+      st.events.push(ev);
+      var tName = ev.team==='a' ? st.home : st.away;
+      _mlAddActaRow(mk, ev.min, ev.ico, ev.name, ev.num, tName, ev.type, evId);
+    });
+  }
+
+  function _mlPreGenAIEvents(mk) {
+    var st = _mlSt(mk);
+    if (st.isHvH || st.aiEventsGenerated) return;
+    st.aiEventsGenerated = true;
+    var humanA = typeof esHumano === 'function' && esHumano(st.home);
+    var aiTeam = humanA ? 'b' : 'a';
+    var aiTeamName = humanA ? st.away : st.home;
+    var rat = window.TEAM_RATINGS || {};
+    var humRat = rat[humanA ? st.home : st.away] || 76;
+    var aiRat = rat[aiTeamName] || 76;
+    var r = typeof simSimple === 'function' ? simSimple(humanA ? humRat : aiRat, humanA ? aiRat : humRat) : {gh:1,ga:1};
+    var aiGoals = humanA ? r.ga : r.gh;
+    var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(aiTeamName)) || [];
+    var out = sq.filter(function(p){ return p[2] !== 'P'; });
+    if (!out.length) out = [['','Jugador IA','F',76]];
+    st.pendingAIEvents = [];
+    var mins = [];
+    for (var i=0; i<aiGoals; i++) mins.push(Math.floor(Math.random()*88)+2);
+    mins.sort(function(a,b){return a-b;});
+    mins.forEach(function(min) {
+      var pl = _weightedPick(out); // PODER-VALOR: goleador IA ponderado por poder y posición
+      st.pendingAIEvents.push({type:'gol',min:min,team:aiTeam,num:pl[0]||'',name:pl[1]||'IA',ico:'⚽'});
+    });
+    var numCards = Math.floor(Math.random()*3);
+    for (var c=0; c<numCards; c++) {
+      var cp = out[Math.floor(Math.random()*out.length)];
+      st.pendingAIEvents.push({type:'amarilla',min:Math.floor(Math.random()*80)+5,team:aiTeam,num:cp[0]||'',name:cp[1]||'IA',ico:'🟨'});
+    }
+    st.pendingAIEvents.sort(function(a,b){return a.min-b.min;});
+  }
+
   function _mlStartIntervalGen(mk) {
     var st = _mlSt(mk);
+    // Pre-generate AI events for HvIA matches
+    _mlPreGenAIEvents(mk);
+    // Determine stoppage time upfront if normal time
+    if (!st.stoppageSec && !st.etDone) {
+      st.stoppageSec = Math.floor(Math.random()*8)+1; // 1-8 extra minutes
+    }
     st.timerInterval = setInterval(function(){
-      st.timerSec += 5;
-      var max = st.etDone ? 7200 : 5400;
-      // Half-time marker
+      st.timerSec += _ML_TICK_SEC;
+      var curMin = Math.floor(st.timerSec/60);
+      var normalMax = st.etDone ? 7200 : 5400;
+      var stoppageMax = normalMax + (st.stoppageSec||0)*60;
+      // Fire pending AI events
+      _mlFirePendingEvents(mk, curMin);
+      // Half-time marker at 45'
       if (!st.htDone && st.timerSec >= 2700) {
         st.htDone = true;
         var list = document.getElementById('ml-acta-list-'+mk);
         if (list) { var m = document.createElement('div'); m.className='ml-ht'; m.textContent='— DESCANSO (45 min) —'; list.appendChild(m); }
+      }
+      // Stoppage time marker at 90'
+      if (!st.etDone && !st.stoppageMarked && st.timerSec >= 5400) {
+        st.stoppageMarked = true;
+        var listSt = document.getElementById('ml-acta-list-'+mk);
+        if (listSt) { var ms = document.createElement('div'); ms.className='ml-ht'; ms.textContent='⏱ +'+st.stoppageSec+"' Tiempo de descuento"; listSt.appendChild(ms); }
       }
       // ET half-time marker at 105'
       if (st.etDone && !st.et1Done && st.timerSec >= 6300) {
@@ -2227,8 +2269,8 @@
         var list2 = document.getElementById('ml-acta-list-'+mk);
         if (list2) { var m2 = document.createElement('div'); m2.className='ml-ht'; m2.textContent='— DESCANSO PRÓRROGA (105 min) —'; list2.appendChild(m2); }
       }
-      if (st.timerSec >= max) {
-        st.timerSec = max; clearInterval(st.timerInterval); st.timerRunning = false;
+      if (st.timerSec >= stoppageMax) {
+        st.timerSec = stoppageMax; clearInterval(st.timerInterval); st.timerRunning = false;
         // Auto-check penalties at end of ET
         if (st.etDone) {
           if (st.sc.a === st.sc.b) { window.mlShowPenPanelGen(mk); }
@@ -2236,7 +2278,7 @@
         }
       }
       _mlRenderTimerGen(mk);
-    }, 1000);
+    }, _mlTickMs(st));
   }
   window.mlTimerClickGen = function(mk) {
     var st = _mlSt(mk);
@@ -2678,6 +2720,187 @@
     return { gh: goles(p), ga: goles(1 - p) };
   }
 
+  /* ── Diccionario de 30 lesiones por severidad ── */
+  var _LESION_DICT = {
+    leve: {
+      ico: '🩹', partidos: [1, 2],
+      lista: ['Sobrecarga muscular en el isquiotibial','Contusión en el cuádriceps','Esguince de tobillo Grado I',
+              'Calambre persistente (gemelo)','Elongación en el aductor','Herida inciso-contusa (corte en ceja)',
+              'Traumatismo craneal leve','Lumbalgia aguda','Sobrecarga en el tendón rotuliano','Ampollas severas por roce']
+    },
+    moderada: {
+      ico: '💉', partidos: [2, 3, 4],
+      lista: ['Microrrotura de fibras (1 cm)','Esguince de tobillo Grado II','Fascitis plantar aguda',
+              'Edema óseo en el peroné','Contractura severa con rotura parcial','Fractura de huesos propios (nariz)',
+              'Lesión en el menisco interno (leve)','Pubalgia incipiente','Distensión del ligamento lateral','Bursitis en la rodilla']
+    },
+    grave: {
+      ico: '🚑', partidos: [5, 6, 7, 8, 9, 10],
+      lista: ['Rotura fibrilar Grado III (Desgarro)','Fisura en el metatarsiano','Esguince cervical severo',
+              'Hernia discal con reposo obligado','Rotura parcial del ligamento lateral externo','Luxación de hombro completa',
+              'Fractura de costilla sin desplazar','Tendinitis crónica en el tendón de Aquiles','Rotura de fibras en el recto anterior','Desgarro profundo en el sóleo']
+    }
+  };
+
+  /* Elegir lesión aleatoria y devolver { ico, descripcion, partidos, grado } */
+  function _sortearLesion() {
+    var r = Math.random();
+    var grado = r < 0.55 ? 'leve' : r < 0.85 ? 'moderada' : 'grave';
+    var cat = _LESION_DICT[grado];
+    var desc = cat.lista[Math.floor(Math.random() * cat.lista.length)];
+    var pts = cat.partidos[Math.floor(Math.random() * cat.partidos.length)];
+    return { ico: cat.ico, descripcion: desc, partidos: pts, grado: grado };
+  }
+
+  /* ── genMatchEventsEnhanced: goals + yellows + reds + injuries ── */
+  function genMatchEventsEnhanced(teamA, teamB, goalsA, goalsB) {
+    var base = genMatchEvents(teamA, teamB, goalsA, goalsB);
+    var evts = base.events;
+    var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
+    var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
+    var outA = sqA.filter(function(p){ return p[2] !== 'P'; });
+    var outB = sqB.filter(function(p){ return p[2] !== 'P'; });
+    if (!outA.length) outA = [['','Jugador A','F',76]];
+    if (!outB.length) outB = [['','Jugador B','F',76]];
+    function rndSq(sq) { return sq[Math.floor(Math.random()*sq.length)]; }
+    function rndMin() { return Math.floor(Math.random()*88)+2; }
+    /* Red cards: 8% direct red, 5% double yellow */
+    var roll = Math.random();
+    if (roll < 0.08) {
+      var rt = Math.random()<0.5?'a':'b'; var rp = rndSq(rt==='a'?outA:outB);
+      evts.push({ type:'roja', min:rndMin(), player:rp[1]||'?', team:rt });
+    } else if (roll < 0.13) {
+      var dt = Math.random()<0.5?'a':'b'; var dp = rndSq(dt==='a'?outA:outB);
+      var m1 = 5+Math.floor(Math.random()*40); var m2 = m1+5+Math.floor(Math.random()*30);
+      evts.push({ type:'amarilla', min:m1, player:dp[1]||'?', team:dt });
+      evts.push({ type:'roja', min:Math.min(m2,90), player:dp[1]||'?', team:dt, dbl:true });
+    }
+    /* Injuries: ~5% per team (leve 55%, moderada 30%, grave 15%) */
+    ['a','b'].forEach(function(side) {
+      if (Math.random() < 0.05) {
+        var sq = side==='a' ? outA : outB;
+        var ip = rndSq(sq);
+        var les = _sortearLesion();
+        evts.push({ type:'lesion', min:rndMin(), player:ip[1]||'?', team:side,
+                    lesIco: les.ico, lesDesc: les.descripcion, lesPartidos: les.partidos, lesGrado: les.grado });
+      }
+    });
+    evts.sort(function(a,b){ return a.min - b.min; });
+    return { events:evts, mvp:base.mvp, mvpTeam:base.mvpTeam };
+  }
+
+  /* ── iaSimLive: cronómetro 30s en vivo por partido IA vs IA ── */
+  window.iaSimLive = function(mk, home, away, j, j1fn) {
+    var btn   = document.getElementById('ia-sim-btn-' + mk);
+    var scAEl = document.getElementById('ia-sc-' + mk + '-a');
+    var scBEl = document.getElementById('ia-sc-' + mk + '-b');
+    var actaEl = document.getElementById('ia-acta-' + mk);
+    if (!btn) return;
+    /* Bloquear doble click */
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ 0\'';
+    btn.style.background = '#0d2a0d';
+    btn.style.color = '#4aff4a';
+
+    var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[home]) || 75;
+    var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[away]) || 75;
+    var r  = (typeof simSimple === 'function') ? simSimple(rA, rB) : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+    var evtData = genMatchEventsEnhanced(home, away, r.gh, r.ga);
+    var evts    = evtData.events; /* already sorted by min */
+
+    if (scAEl) scAEl.textContent = '0';
+    if (scBEl) scBEl.textContent = '0';
+    if (actaEl) actaEl.style.display = 'block';
+
+    var scA = 0, scB = 0, evtIdx = 0, curMin = 0;
+
+    var interval = setInterval(function() {
+      curMin = Math.min(curMin + 3, 90);
+      /* Fire events that have reached curMin */
+      while (evtIdx < evts.length && evts[evtIdx].min <= curMin) {
+        var ev = evts[evtIdx]; evtIdx++;
+        var ico = ev.type === 'gol' ? '⚽' : ev.type === 'roja' ? '🟥' : ev.type === 'amarilla' ? '🟨'
+                : ev.type === 'lesion' ? (ev.lesIco || '🩹') : '•';
+        if (ev.dbl) ico = '🟨🟥';
+        if (ev.type === 'gol') {
+          if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
+          else                 { scB++; if (scBEl) scBEl.textContent = scB; }
+        }
+        if (actaEl) {
+          var row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);';
+          var lesExtra = (ev.type === 'lesion' && ev.lesDesc)
+            ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + ' ptdos)</span>'
+            : '';
+          row.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
+            + '<span style="font-size:14px;">' + ico + '</span>'
+            + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + ev.player + lesExtra + '</span>'
+            + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team==='a' ? home : away) + '</span>';
+          actaEl.appendChild(row);
+        }
+      }
+      /* Update timer label */
+      btn.textContent = curMin >= 90 ? '🏁 FIN' : '⏳ ' + curMin + '\'';
+
+      if (curMin >= 90) {
+        clearInterval(interval);
+        btn.style.background = '#0d0d3a';
+        btn.style.color = '#4a8aff';
+        /* MVP row */
+        if (actaEl && evtData.mvp) {
+          var mvpRow = document.createElement('div');
+          mvpRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-top:1px solid rgba(240,192,64,.25);';
+          mvpRow.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#f0c040;min-width:26px;">FIN</span>'
+            + '<span style="font-size:14px;">⭐</span>'
+            + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#f0c040;flex:1;">' + evtData.mvp + '</span>'
+            + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (evtData.mvpTeam||'') + '</span>';
+          actaEl.appendChild(mvpRow);
+        }
+        /* Register injuries in BAJA_STORE (all competitions) */
+        evtData.events.forEach(function(ev) {
+          if (ev.type !== 'lesion' || !ev.player || ev.player === '?' || !ev.lesPartidos) return;
+          window.BAJA_STORE = window.BAJA_STORE || {};
+          window.BAJA_STORE[ev.player] = {
+            tipo: 'lesion',
+            liga:   ev.lesPartidos,
+            copa:   ev.lesPartidos,
+            europa: ev.lesPartidos
+          };
+        });
+        /* Save result */
+        var results = loadResults();
+        var key = rKey(j, home, away);
+        results[key] = { gh: scA, ga: scB, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
+        saveResults(results);
+        actualizarDom('l-j' + j, home, away, scA, scB);
+        if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
+        /* Rebuild list but keep jornada open */
+        setTimeout(function() {
+          var openId = 'ia-j' + j;
+          if (typeof window.buildIAresults === 'function') {
+            window._iaKeepOpen = openId;
+            window.buildIAresults();
+          }
+        }, 600);
+      }
+    }, 1000); /* 1 real second = 3 game minutes → 30 sec for full 90' */
+  };
+
+  /* ── PODER-VALOR: peso de gol por posición y poder individual ── */
+  function _poderPosWeight(pos, poder) {
+    var base = pos==='P'?0.001:pos==='D'?0.075:pos==='M'?0.175:0.70;
+    var boost = ((poder||70)-70)/20*0.15;
+    return Math.max(0.001, base+boost);
+  }
+  function _weightedPick(sq) {
+    var tot = sq.reduce(function(s,p){ return s+(p[3]||70)*_poderPosWeight(p[2],p[3]); },0);
+    if (!tot) return sq[Math.floor(Math.random()*sq.length)];
+    var r=Math.random()*tot, c=0;
+    for (var i=0;i<sq.length;i++){ c+=(sq[i][3]||70)*_poderPosWeight(sq[i][2],sq[i][3]); if(r<c)return sq[i]; }
+    return sq[sq.length-1];
+  }
+
   function genMatchEvents(teamA, teamB, goalsA, goalsB) {
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
@@ -2750,8 +2973,7 @@
 
     assign.forEach(function(team, idx) {
       var sq = team === 'a' ? outA : outB;
-      var pl = selectScorer(sq, team === 'a');
-      goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
+      var pl = _weightedPick(sq); // PODER-VALOR: selección ponderada por poder y posición (j1-j38)
       events.push({ type:'gol', min:goalMins[idx], player:pl[1]||'?', team:team });
     });
 
@@ -2797,7 +3019,7 @@
       if (results[key]) return; /* ya simulado */
       var rat = window.TEAM_RATINGS || {};
       var r   = simSimple(rat[m[0]] || 76, rat[m[1]] || 76);
-      var evtData = genMatchEvents(m[0], m[1], r.gh, r.ga);
+      var evtData = genMatchEventsEnhanced(m[0], m[1], r.gh, r.ga);
       results[key] = { gh: r.gh, ga: r.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
       actualizarDom('l-j' + j, m[0], m[1], r.gh, r.ga);
       dirty = true;
@@ -2805,7 +3027,10 @@
     if (dirty) {
       saveResults(results);
       if (typeof window.buildLigaClas  === 'function') window.buildLigaClas();
-      if (typeof window.buildIAresults === 'function') window.buildIAresults();
+      if (typeof window.buildIAresults === 'function') {
+        window._iaKeepOpen = 'ia-j' + j;
+        window.buildIAresults();
+      }
     }
   };
 
@@ -2964,20 +3189,20 @@
 
       var bid          = 'ia-j' + j;
       var pendingCount = pending.length;
-      var simBtn = '';
-      if (pendingCount > 0) {
-        simBtn = ' <button onclick="window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);"'
-          + ' style="margin-left:8px;padding:2px 8px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:3px;font-size:11px;cursor:pointer;">&#129302; SIM</button>';
-      }
 
-      /* ── Jornada header ── */
+      /* ── Jornada header (sin contadores ni SIM) ── */
       html += '<div class="jblock"><button class="jbtn c-liga" onclick="tog(\'' + bid + '\')"'
         + ' style="background:#1a1a2e;border-left:3px solid #2a4a6a;">'
         + '<div class="pdot">&#9654;</div>&#129302; <b>Jornada ' + j + '</b>'
-        + ' <span style="color:#6ab0d8;font-size:11px;">' + matches.length + ' resultados'
-        + (pendingCount ? ' \xb7 ' + pendingCount + ' pendientes' : '') + '</span>'
-        + simBtn
         + '</button><div class="jmatches" id="' + bid + '" style="padding:8px;">';
+
+      /* ── SIM button inside dropdown (only if pending) ── */
+      if (pendingCount > 0) {
+        html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">'
+          + '<button onclick="window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);"'
+          + ' style="padding:5px 14px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:4px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;">&#129302; SIM J' + j + '</button>'
+          + '</div>';
+      }
 
       /* ── Completed matches → full card (Photos 2-3-4 format) ── */
       matches.forEach(function (m, idx) {
@@ -3025,20 +3250,34 @@
           + '</div>';
       });
 
-      /* ── Pending matches → pre-match card ── */
+      /* ── Pending matches → clean card + live ▶ SIMULAR ── */
       pending.forEach(function (m) {
-        var simF = m.fn
-          ? 'window.simularJ1IAMatch(\'' + m.fn + '\');setTimeout(window.buildIAresults,400);'
-          : 'window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);';
-        html += '<div class="match-live-wrap" style="margin-bottom:8px;opacity:0.75;">'
+        var rA  = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.home]) || 75;
+        var rB  = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.away]) || 75;
+        var mk  = 'iapnd-j' + j + '-' + m.home.replace(/\s/g,'') + '-' + m.away.replace(/\s/g,'');
+        var emk = mk.replace(/'/g,"\\'");
+        var clickFn = m.fn
+          ? 'window.iaSimLive(\'' + emk + '\',\'' + m.home.replace(/'/g,"\\'") + '\',\'' + m.away.replace(/'/g,"\\'") + '\',' + j + ',\'' + m.fn + '\')'
+          : 'window.iaSimLive(\'' + emk + '\',\'' + m.home.replace(/'/g,"\\'") + '\',\'' + m.away.replace(/'/g,"\\'") + '\',' + j + ')';
+
+        html += '<div class="match-live-wrap" id="iapnd-' + mk + '" style="margin-bottom:10px;">'
           + '<div class="ml-header">'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + humanIcon(m.home) + m.home + '</div></div>'
-          + '<div class="ml-score-wrap">'
-          + '<div class="ml-score state-pending"><span>0</span>\u2013<span>0</span></div>'
-          + '<button class="ml-timer" onclick="' + simF.replace(/"/g,'&quot;') + '">&#9654; SIMULAR</button>'
+          + '<div class="ml-team">'
+          +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
+          +   '<div class="ml-team-name">' + m.home + '</div>'
+          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;margin-top:2px;letter-spacing:1px;">★ ' + rA + ' 🏠</div>'
           + '</div>'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + humanIcon(m.away) + m.away + '</div></div>'
+          + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;">'
+          +   '<div class="ml-score"><span id="ia-sc-' + mk + '-a">–</span>&ndash;<span id="ia-sc-' + mk + '-b">–</span></div>'
+          +   '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>'
           + '</div>'
+          + '<div class="ml-team">'
+          +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div>'
+          +   '<div class="ml-team-name">' + m.away + '</div>'
+          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#a0c8d8;margin-top:2px;letter-spacing:1px;">★ ' + rB + '</div>'
+          + '</div>'
+          + '</div>'
+          + '<div id="ia-acta-' + mk + '" style="display:none;border-top:1px solid rgba(255,255,255,.07);"></div>'
           + '</div>';
       });
 
@@ -3046,6 +3285,12 @@
     }
     container.innerHTML = html
       || '<div style="padding:12px;color:#555;font-size:13px;">Sin resultados IA a\xfan</div>';
+    /* Restore open jornada after rebuild (prevents collapsing on simulation end) */
+    if (window._iaKeepOpen) {
+      var keepEl = document.getElementById(window._iaKeepOpen);
+      if (keepEl) { keepEl.classList.add('open'); }
+      window._iaKeepOpen = null;
+    }
   };
 
   /* ── INIT ─────────────────────────────────────────── */

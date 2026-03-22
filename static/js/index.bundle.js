@@ -72,10 +72,10 @@ window.TEAM_RATINGS={
   'Getafe CF':75,
   'Celta de Vigo':76,
   'Espanyol':76,
-  'Deportivo Alavés':74,
+  'Bayern Munich':90,
+  'Arsenal':84,
+  'Sporting CP':82,
   'Elche CF':74,
-  'Córdoba CF':74,
-  'Albacete BP':68,
   'Levante UD':73,
   'Real Oviedo':73,
 };
@@ -820,6 +820,80 @@ window.SQUAD_REGISTRY={
     ['21','A. Cruz',73],
     ['18','D. Casado',72],
   ],
+  'Bayern Munich':[
+    {h:'🧤 PORTEROS'},
+    ['1','Neuer',89],
+    ['26','Ulreich',76],
+    ['33','Peretz',72],
+    {h:'🛡 DEFENSAS'},
+    ['5','Kim Min-jae',87],
+    ['2','Upamecano',86],
+    ['19','Davies',84],
+    ['42','Guerreiro',82],
+    ['25','Dier',80],
+    ['20','Laimer',78],
+    ['40','Boey',77],
+    {h:'⚙️ MEDIOS'},
+    ['6','Kimmich',89],
+    ['10','Musiala',88],
+    ['14','Goretzka',82],
+    ['7','Gnabry',82],
+    ['38','Pavlović',79],
+    ['39','Ibrahimović',75],
+    {h:'⚡ DELANTEROS'},
+    ['9','Kane',91],
+    ['25','Müller',82],
+    ['11','Sané',87],
+    ['42','Tel',79],
+  ],
+  'Arsenal':[
+    {h:'🧤 PORTEROS'},
+    ['22','Raya',84],
+    ['13','Neto',75],
+    {h:'🛡 DEFENSAS'},
+    ['12','Saliba',86],
+    ['6','Gabriel',85],
+    ['2','White',83],
+    ['3','Calafiori',82],
+    ['4','Timber',82],
+    ['35','Zinchenko',79],
+    ['26','Kiwior',76],
+    {h:'⚙️ MEDIOS'},
+    ['8','Ødegaard',88],
+    ['41','Rice',86],
+    ['5','Partey',83],
+    ['29','Havertz',82],
+    ['19','Trossard',82],
+    ['11','Martinelli',83],
+    {h:'⚡ DELANTEROS'},
+    ['7','Saka',89],
+    ['9','Jesus',82],
+    ['30','Nketiah',78],
+    ['14','Malen',79],
+  ],
+  'Sporting CP':[
+    {h:'🧤 PORTEROS'},
+    ['1','Rui Patrício',82],
+    ['99','Israel',78],
+    {h:'🛡 DEFENSAS'},
+    ['4','Gonçalo Inácio',81],
+    ['24','Diomande',80],
+    ['26','St. Juste',79],
+    ['22','Fresneda',77],
+    ['5','Debast',76],
+    ['18','Esgaio',75],
+    {h:'⚙️ MEDIOS'},
+    ['6','Hjulmand',81],
+    ['8','Pedro Gonçalves',82],
+    ['17','Nuno Santos',78],
+    ['23','Seba',77],
+    ['20','Conrad',75],
+    {h:'⚡ DELANTEROS'},
+    ['9','Gyökeres',90],
+    ['11','Trincão',83],
+    ['28','Geny Catamo',77],
+    ['7','Paulinho',76],
+  ],
 }
 // ═══ ALIASES GLOBALES DE EQUIPOS ═══
 window.TEAM_ALIASES = {
@@ -864,6 +938,15 @@ window.TEAM_ALIASES = {
   'valencia cf':'Valencia CF',
   'rayo vallecano':'Rayo Vallecano',
   'rayo':'Rayo Vallecano',
+  'arsenal':'Arsenal',
+  'arsenal fc':'Arsenal',
+  'bayern munich':'Bayern Munich',
+  'fc bayern munich':'Bayern Munich',
+  'fc bayern':'Bayern Munich',
+  'bayern':'Bayern Munich',
+  'sporting cp':'Sporting CP',
+  'sporting de portugal':'Sporting CP',
+  'sporting':'Sporting CP',
   'córdoba cf':'Córdoba CF',
   'cordoba cf':'Córdoba CF',
   'cordoba':'Córdoba CF',
@@ -1131,9 +1214,9 @@ window.mlSimulate_j1m7=function(){
   window.mlSimEngine({
     matchKey:'j1m7',
     teamA:'Valencia CF',
-    teamB:'Córdoba CF',
+    teamB:'Arsenal',
     sqA:window.sqFromRegistry('Valencia CF'),
-    sqB:window.sqFromRegistry('Córdoba CF'),
+    sqB:window.sqFromRegistry('Arsenal'),
     btnId:'ml-timer-j1m7',
     listId:'ml-acta-list-j1m7',
     scAId:'sc-j1m7-a',
@@ -1170,9 +1253,9 @@ window.mlSimulate_j1m9=function(){
   if(_simDone)return;_simDone=true;
   window.mlSimEngine({
     matchKey:'j1m9',
-    teamA:'Albacete BP',
+    teamA:'Bayern Munich',
     teamB:'Osasuna',
-    sqA:window.sqFromRegistry('Albacete BP'),
+    sqA:window.sqFromRegistry('Bayern Munich'),
     sqB:window.sqFromRegistry('Osasuna'),
     btnId:'ml-timer-j1m9',
     listId:'ml-acta-list-j1m9',
@@ -1191,9 +1274,9 @@ window.mlSimulate_j1m10=function(){
   window.mlSimEngine({
     matchKey:'j1m10',
     teamA:'Celta de Vigo',
-    teamB:'Deportivo Alavés',
+    teamB:'Sporting CP',
     sqA:window.sqFromRegistry('Celta de Vigo'),
-    sqB:window.sqFromRegistry('Deportivo Alavés'),
+    sqB:window.sqFromRegistry('Sporting CP'),
     btnId:'ml-timer-j1m10',
     listId:'ml-acta-list-j1m10',
     scAId:'sc-j1m10-a',
@@ -1207,7 +1290,7 @@ window.mlSimulate_j1m10=function(){
 
 (function(){
   var LIGA_TEAMS = [
-    'Albacete BP','Athatic__TEMP__', 'Athletic Club','Atlético Madrid','Celta de Vigo','Córdoba CF','Deportivo Alavés','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia CF','Villarreal'
+    'Arsenal','Athatic__TEMP__', 'Athletic Club','Atlético Madrid','Bayern Munich','Celta de Vigo','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Sporting CP','Valencia CF','Villarreal'
   ].filter(function(t){ return t !== 'Athatic__TEMP__'; }).sort(function(a,b){ return a.localeCompare(b,'es'); });
 
   var LIGA_EXTRAS = {};
@@ -1388,12 +1471,11 @@ window.mlSimulate_j1m10=function(){
   }
 
   var TEAM_DATA = {
-    'Albacete BP':      {abbr:'ALB', bg:'#8b0000', fg:'#fff200'},
+    'Arsenal':          {abbr:'ARS', bg:'#ef0107', fg:'#ffffff'},
     'Athletic Club':    {abbr:'ATH', bg:'#cc1010', fg:'#ffffff'},
     'Atlético Madrid':  {abbr:'ATM', bg:'#c50f1f', fg:'#ffffff'},
+    'Bayern Munich':    {abbr:'FCB', bg:'#dc052d', fg:'#ffffff'},
     'Celta de Vigo':    {abbr:'CEL', bg:'#6fc6e2', fg:'#003da5'},
-    'Córdoba CF':       {abbr:'COR', bg:'#2a7e43', fg:'#ffffff'},
-    'Deportivo Alavés': {abbr:'ALA', bg:'#003da5', fg:'#ffffff'},
     'Elche CF':         {abbr:'ELC', bg:'#006633', fg:'#ffffff'},
     'Espanyol':         {abbr:'ESP', bg:'#003da5', fg:'#ffffff'},
     'FC Barcelona':     {abbr:'BAR', bg:'#a50044', fg:'#edbb00'},
@@ -1406,6 +1488,7 @@ window.mlSimulate_j1m10=function(){
     'Real Madrid':      {abbr:'RMA', bg:'#003087', fg:'#f0c040'},
     'Real Sociedad':    {abbr:'RSO', bg:'#003f8a', fg:'#d0dcf4'},
     'Sevilla':          {abbr:'SEV', bg:'#c60b1e', fg:'#ffffff'},
+    'Sporting CP':      {abbr:'SCP', bg:'#006600', fg:'#ffce00'},
     'Valencia CF':      {abbr:'VAL', bg:'#ef7d00', fg:'#ffffff'},
     'Villarreal':       {abbr:'VIL', bg:'#ffd700', fg:'#1a1a1a'}
   };
@@ -1431,10 +1514,10 @@ window.mlSimulate_j1m10=function(){
     'Osasuna':            _WC  + 'CA_Osasuna_logo.svg',
     'Espanyol':           _WC  + 'RCD_Espanyol.svg',
     'Celta de Vigo':      _WC  + 'RC_Celta_de_Vigo_logo.svg',
-    'Deportivo Alavés':   _WC  + 'Deportivo_Alav%C3%A9s_logo_%282020%29.svg',
+    'Bayern Munich':      _WC  + 'FC_Bayern_M%C3%BCnchen_logo.svg',
+    'Arsenal':            _WC  + 'Arsenal_FC.svg',
+    'Sporting CP':        _WC  + 'Sporting_CP_logo.svg',
     'Elche CF':           _WC  + 'Elche_CF.svg',
-    'Córdoba CF':         _WC  + 'C%C3%B3rdoba_CF_escudo.svg',
-    'Albacete BP':        _WC  + 'Albacete_Balom%C3%ADe_escudo.svg',
     // ── Liga Hypermotion (2ª) ───────────────────────────────
     'Real Racing Club':   _WC  + 'Racing_de_Santander.svg',
     'RC Deportivo':       _WC  + 'RC_Deportivo_de_La_Coru%C3%B1a_logo.svg',
@@ -1468,13 +1551,12 @@ window.mlSimulate_j1m10=function(){
   };
 
   var SHORT_NAMES = {
-    'Albacete BP':      'Albacete',
+    'Bayern Munich':    'Bayern',
     'Atlético Madrid':  'Atl Madrid',
     'Celta de Vigo':    'Celta',
-    'Córdoba CF':       'Córdoba',
-    'Deportivo Alavés': 'Alavés',
     'Elche CF':         'Elche',
     'Rayo Vallecano':   'Rayo',
+    'Sporting CP':      'Sporting',
     'Valencia CF':      'Valencia'
   };
   var HUMAN_TEAMS = {
@@ -2077,13 +2159,11 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     {name:"Mallorca",        ico:"🔴",  screen:"mallorca-screen"},
     {name:"Girona FC",       ico:"🔴",  screen:"girona-screen"},
     {name:"Espanyol",        ico:"🔵",  screen:"s-espanyol"},
-    {name:"Deportivo Alavés",ico:"🔵",  screen:"alaves-screen"},
+    {name:"Arsenal",         ico:"🔴",  screen:null},
     {name:"Rayo Vallecano",  ico:"⚪",  screen:"rayo-screen"},
-    {name:"Levante UD",      ico:"🔴",  screen:"levante-screen"},
     {name:"Elche CF",        ico:"🟢",  screen:"elche-screen"},
-    {name:"Córdoba CF",      ico:"🔴",  screen:null},
-    {name:"Real Oviedo",     ico:"🔵",  screen:"oviedo-screen"},
-    {name:"Albacete BP",     ico:"🟡",  screen:"s-albacete"}
+    {name:"Bayern Munich",   ico:"🔴",  screen:null},
+    {name:"Sporting CP",     ico:"🟢",  screen:null}
   ];
 
   var grid = document.getElementById('equipos-grid');
@@ -6395,16 +6475,15 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 (function(){
   var LS_KEY = 'ef_liga38_v2';
   var TEAM_ORDER = [
-    'Albacete BP','Athletic Club','Atlético Madrid','Celta de Vigo','Córdoba CF','Deportivo Alavés','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia CF','Villarreal'
+    'Arsenal','Athletic Club','Atlético Madrid','Bayern Munich','Celta de Vigo','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Sporting CP','Valencia CF','Villarreal'
   ];
   var SHORT_NAMES = {
-    'Albacete BP':'Albacete',
+    'Bayern Munich':'Bayern',
     'Atlético Madrid':'Atl Madrid',
     'Celta de Vigo':'Celta',
-    'Córdoba CF':'Córdoba',
-    'Deportivo Alavés':'Alavés',
     'Elche CF':'Elche',
     'Rayo Vallecano':'Rayo',
+    'Sporting CP':'Sporting',
     'Valencia CF':'Valencia'
   };
   var HUMAN_TEAMS = {
@@ -6431,7 +6510,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     'real madrid':'Real Madrid','fc barcelona':'FC Barcelona','barcelona':'FC Barcelona',
     'athletic club':'Athletic Club',
     'atletico madrid':'Atlético Madrid','atlético madrid':'Atlético Madrid',
-    'albacete bp':'Albacete BP','albacete':'Albacete BP'
+    'arsenal':'Arsenal','arsenal fc':'Arsenal',
+    'bayern munich':'Bayern Munich','fc bayern munich':'Bayern Munich','fc bayern':'Bayern Munich','bayern':'Bayern Munich',
+    'sporting cp':'Sporting CP','sporting de portugal':'Sporting CP','sporting':'Sporting CP'
   };
 
   function normalizeText(str){

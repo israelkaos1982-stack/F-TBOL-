@@ -2698,6 +2698,22 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
         window.registrarLigaPlayerStats(matchKey,TEAM_A,TEAM_B,evts,mvpName,mvpTeam);
       list.appendChild(r);
       if(typeof cfg.onEnd==='function') cfg.onEnd(sa,sb,evts,mvpName,mvpTeam);
+      // Mostrar overlay de lesiones post-partido IA
+      var _lesEvts = evts.filter(function(ev){ return ev.type === 'lesion'; });
+      if(_lesEvts.length && typeof window.showLesionPostOverlay === 'function'){
+        var _lesData = _lesEvts.map(function(ev){
+          return {
+            nombre: ev.player ? ev.player[1] : '',
+            equipo: ev.team === 'a' ? TEAM_A : TEAM_B,
+            grado: ev.grado || 1,
+            gradoNombre: ev.gradoNombre || 'Leve',
+            gradoEmoji: ev.gradoEmoji || '🟡',
+            descripcion: ev.descripcion || '',
+            partidos: ev.partidos || 1
+          };
+        });
+        setTimeout(function(){ window.showLesionPostOverlay(_lesData, null); }, 800);
+      }
     },_halfDuration*2);
   };
 
@@ -5130,15 +5146,18 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     registrarLesion(lesion.jugador[1], lesion.teamName, lesion.partidos, lesion.tipo);
 
     // Crear evento para el acta (SIN sustitución visible)
+    var _lesDesc = (window.LESION_STORE && window.LESION_STORE[lesion.jugador[1]]) ? window.LESION_STORE[lesion.jugador[1]].descripcion : '';
     return {
       min: lesion.min,
       ico: '🩹',
       team: lesion.equipo,
       player: lesion.jugador,
       type: 'lesion',
+      grado: lesion.tipo.grado,
       gradoNombre: lesion.tipo.nombre,
       gradoEmoji: lesion.tipo.emoji,
       partidos: lesion.partidos,
+      descripcion: _lesDesc,
       grave: lesion.tipo.grado === 3
     };
   };

@@ -2800,6 +2800,8 @@
     if (btn.disabled) return;
     btn.disabled = true;
     btn.textContent = '⏳ 0\'';
+    /* Contador de simulaciones activas */
+    window._iaRunningCount = (window._iaRunningCount || 0) + 1;
     btn.style.background = '#0d2a0d';
     btn.style.color = '#4aff4a';
 
@@ -2858,6 +2860,7 @@
           actaEl.appendChild(mvpRow);
         }
         /* Register injuries in BAJA_STORE (all competitions) */
+        var lesionesPost = [];
         evtData.events.forEach(function(ev) {
           if (ev.type !== 'lesion' || !ev.player || ev.player === '?' || !ev.lesPartidos) return;
           window.BAJA_STORE = window.BAJA_STORE || {};
@@ -2867,6 +2870,15 @@
             copa:   ev.lesPartidos,
             europa: ev.lesPartidos
           };
+          lesionesPost.push({
+            nombre: ev.player,
+            equipo: ev.team === 'a' ? home : away,
+            grado: ev.lesGrado || 1,
+            gradoNombre: ev.lesGrado === 3 ? 'Grave' : ev.lesGrado === 2 ? 'Moderada' : 'Leve',
+            gradoEmoji: ev.lesGrado === 3 ? '🔴' : ev.lesGrado === 2 ? '🟠' : '🟡',
+            descripcion: ev.lesDesc || '',
+            partidos: ev.lesPartidos
+          });
         });
         /* Save result */
         var results = loadResults();
@@ -2875,11 +2887,15 @@
         saveResults(results);
         actualizarDom('l-j' + j, home, away, scA, scB);
         if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
-        /* Rebuild list but keep jornada open */
+        /* Mostrar overlay de lesiones si las hay */
+        if (lesionesPost.length && typeof window.showLesionPostOverlay === 'function') {
+          window.showLesionPostOverlay(lesionesPost, null);
+        }
+        /* Decrementar contador y reconstruir solo si no hay otras simulaciones activas */
+        window._iaRunningCount = Math.max(0, (window._iaRunningCount || 1) - 1);
         setTimeout(function() {
-          var openId = 'ia-j' + j;
-          if (typeof window.buildIAresults === 'function') {
-            window._iaKeepOpen = openId;
+          if (!window._iaRunningCount && typeof window.buildIAresults === 'function') {
+            window._iaKeepOpen = 'ia-j' + j;
             window.buildIAresults();
           }
         }, 600);
@@ -3210,11 +3226,16 @@
         var evHtml = '';
         if (m.events && m.events.length) {
           m.events.forEach(function(ev) {
-            var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'amarilla' ? '&#129000;' : '&#129004;';
+            if (ev.type === 'mvp') return;
+            var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'amarilla' ? '&#129000;' : ev.type === 'lesion' ? '&#129657;' : '&#129004;';
+            var lesColor = ev.type === 'lesion' ? (ev.lesGrado === 3 ? '#ff4444' : ev.lesGrado === 2 ? '#ff8c00' : '#ffd700') : '#fff';
+            var lesExtra = (ev.type === 'lesion' && ev.lesDesc)
+              ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + 'P)</span>'
+              : '';
             evHtml += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.04);">'
               + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
               + '<span style="font-size:14px;">' + ico + '</span>'
-              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;color:#fff;flex:1;">' + ev.player + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;color:' + lesColor + ';flex:1;">' + ev.player + lesExtra + '</span>'
               + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team === 'a' ? m.home : m.away) + '</span>'
               + '</div>';
           });

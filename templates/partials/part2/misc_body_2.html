@@ -2135,6 +2135,10 @@
     'Elche CF','Atlético Madrid','Rayo Vallecano','Real Betis','FC Barcelona'
   ];
   var HUMANOS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Sporting CP'];
+  var FEATURED_TEAMS = [
+    'Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Sporting CP',
+    'Athletic Club','Real Betis','Sevilla','Atlético Madrid'
+  ];
   var HUMAN_ICONS = {'Bayern Munich':'💡','Arsenal':'🐭','Sporting CP':'🔨','Real Madrid':'✏️','FC Barcelona':'👿'};
   function humanIcon(name){ return HUMAN_ICONS[name] ? HUMAN_ICONS[name]+'\u00a0' : ''; }
   window.humanIcon = humanIcon;
@@ -2200,7 +2204,8 @@
     var aliases = window.TEAM_ALIASES || {};
     var canonical = aliases[clean.toLowerCase()] || clean;
 
-    var candidates = HUMANOS
+    var candidates = FEATURED_TEAMS
+      .concat(HUMANOS)
       .concat(Object.keys(window.TEAM_LOGOS || {}))
       .concat(Object.keys(window.TEAM_RATINGS || {}));
 
@@ -2214,7 +2219,8 @@
   }
 
   function esHumano(t) { return HUMANOS.indexOf(normalizarNombreEquipo(t)) !== -1; }
-  function esPartidoDestacado(local, visitante) { return esHumano(local) && esHumano(visitante); }
+  function esEquipoDestacado(t) { return FEATURED_TEAMS.indexOf(normalizarNombreEquipo(t)) !== -1; }
+  function esPartidoDestacado(local, visitante) { return esEquipoDestacado(local) && esEquipoDestacado(visitante); }
   function getLogoEquipo(teamName) {
     var normalized = normalizarNombreEquipo(teamName);
     if (typeof window.getTeamLogoUrl === 'function') return window.getTeamLogoUrl(normalized || teamName);
@@ -2235,7 +2241,7 @@
       /* Eliminar filas existentes; reconstruir solo con partidos humanos */
       var oldRows = round.querySelectorAll('.mrow');
       for (var ri = 0; ri < oldRows.length; ri++) oldRows[ri].parentNode.removeChild(oldRows[ri]);
-      var humanMatches = jornada.filter(function (m) { return esHumano(m[0]) || esHumano(m[1]); });
+      var humanMatches = jornada.filter(function (m) { return esEquipoDestacado(m[0]) || esEquipoDestacado(m[1]); });
       humanMatches.forEach(function (m) {
         var res = results[rKey(j, m[0], m[1])];
         var scoreHtml;
@@ -2356,7 +2362,7 @@
       if (!calDiv) return;
       calDiv.innerHTML = '';
       jornada.forEach(function (m, mi) {
-        var isHA = esHumano(m[0]), isHB = esHumano(m[1]);
+        var isHA = esEquipoDestacado(m[0]), isHB = esEquipoDestacado(m[1]);
         if (!isHA && !isHB) return;
         var isHvH = esPartidoDestacado(m[0], m[1]);
         var res = results[rKey(j, m[0], m[1])];
@@ -2421,7 +2427,7 @@
       var home = extraerNombreCalendario(teams[0]);
       var away = extraerNombreCalendario(teams[1]);
       var hvh = esPartidoDestacado(home, away);
-      var destacado = hvh || esHumano(home) || esHumano(away);
+      var destacado = hvh || esEquipoDestacado(home) || esEquipoDestacado(away);
       card.classList.toggle('hvh', hvh);
       card.classList.toggle('hvia', destacado && !hvh);
       asegurarEscudoCalendario(teams[0], home);

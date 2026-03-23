@@ -1579,6 +1579,19 @@ window.mlSimulate_j1m10=function(){
     'Algeciras CF':       _WC  + 'Algeciras_CF.svg',
   };
 
+  window.getTeamLogoUrl = function(name){
+    var aliases = window.TEAM_ALIASES || {};
+    var clean = String(name || '').trim();
+    var canonical = aliases[clean.toLowerCase()] || clean;
+    var logos = window.TEAM_LOGOS || {};
+    if (logos[canonical]) return logos[canonical];
+    if (logos[clean]) return logos[clean];
+    var ratings = window.TEAM_RATINGS || {};
+    var meta = ratings[canonical] || ratings[clean];
+    if (meta && typeof meta === 'object' && meta.shield) return meta.shield;
+    return '';
+  };
+
   var SHORT_NAMES = {
     'Bayern Munich':    'Bayern',
     'Atlético Madrid':  'Atl Madrid',
@@ -1623,7 +1636,7 @@ window.mlSimulate_j1m10=function(){
       var pos = idx + 1;
       var zone = rowZoneClass(pos);
       var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
-      var logoUrl = window.TEAM_LOGOS ? (window.TEAM_LOGOS[team.name] || '') : '';
+      var logoUrl = window.getTeamLogoUrl ? window.getTeamLogoUrl(team.name) : (window.TEAM_LOGOS ? (window.TEAM_LOGOS[team.name] || '') : '');
       var logoHtml = logoUrl ? '<img class="clas-team-logo" src="' + logoUrl + '" onerror="this.style.display=\'none\'" alt=""/>' : '';
       html += ''
         + '<div class="clas-row ' + zone + '">'
@@ -2202,7 +2215,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     if(t.screen){
       card.style.borderColor = 'rgba(240,192,64,.2)';
     }
-    var logo = (window.TEAM_LOGOS && window.TEAM_LOGOS[t.name]) || '';
+    var logo = window.getTeamLogoUrl ? window.getTeamLogoUrl(t.name) : ((window.TEAM_LOGOS && window.TEAM_LOGOS[t.name]) || '');
     var rating = window.TEAM_RATINGS && window.TEAM_RATINGS[t.name];
     card.innerHTML = (logo ? '<img class="eq-ov-logo" src="'+logo+'" alt="'+t.name+'" onerror="this.style.display=\'none\'">' : '<span class="eq-ov-ico">'+t.ico+'</span>')
       + '<span class="eq-ov-name">'+t.name+(rating?'<br><span class="eq-ov-rating">★ '+rating+'</span>':'')+(t.screen?'<br><span style="font-size:9px;color:rgba(240,192,64,.6);letter-spacing:2px;">VER PLANTILLA ▶</span>':'')+'</span>';

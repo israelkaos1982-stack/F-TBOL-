@@ -1983,9 +1983,10 @@
   };
 
   /* ── GENERADOR CALENDARIO BERGER ─────────────────── */
-  function generarCalendario() {
-    var n    = TEAMS.length;
-    var temp = TEAMS.slice();
+  function generarCalendario(teamList) {
+    var teams = Array.isArray(teamList) && teamList.length ? teamList.slice() : TEAMS.slice();
+    var n    = teams.length;
+    var temp = teams.slice();
     var ida  = [];
     for (var r = 0; r < n - 1; r++) {
       var j = [];
@@ -1998,7 +1999,14 @@
     });
     return ida.concat(vuelta);
   }
-  var SCHEDULE = generarCalendario();
+  window.generateLigaScheduleFromTeams = generarCalendario;
+  window.generateLigaScheduleFromCurrentTable = function(teamList) {
+    if (Array.isArray(teamList) && teamList.length) return generarCalendario(teamList);
+    var currentTable = (typeof window.collectStandings === 'function' ? window.collectStandings() : []) || [];
+    var names = currentTable.map(function(team){ return team && team.name ? team.name : ''; }).filter(Boolean);
+    return generarCalendario(names.length ? names : TEAMS);
+  };
+  var SCHEDULE = generarCalendario(TEAMS);
   window.LIGA_SCHEDULE = SCHEDULE;
 
   /* ── PERSISTENCIA ────────────────────────────────── */
@@ -2012,6 +2020,19 @@
 
   /* ── HELPERS ─────────────────────────────────────── */
   function esHumano(t) { return HUMANOS.indexOf(t) !== -1; }
+  function esPartidoDestacado(local, visitante) { return esHumano(local) && esHumano(visitante); }
+  function getLogoEquipo(teamName) {
+    if (typeof window.getTeamLogoUrl === 'function') return window.getTeamLogoUrl(teamName);
+    var logos = window.TEAM_LOGOS || {};
+    if (logos[teamName]) return logos[teamName];
+    var aliases = window.TEAM_ALIASES || {};
+    var clean = String(teamName || '').trim();
+    var canonical = aliases[clean.toLowerCase()] || clean;
+    if (logos[canonical]) return logos[canonical];
+    var ratings = window.TEAM_RATINGS || {};
+    var meta = ratings[canonical] || ratings[clean];
+    return meta && typeof meta === 'object' && meta.shield ? meta.shield : '';
+  }
 
   /* ── RELLENAR l-j{N} (s-liga-cal) ───────────────── */
   function populateLigaCal() {
@@ -2085,9 +2106,8 @@
     var au = away.toUpperCase();
     var hiH = humanIcon(home);
     var hiA = humanIcon(away);
-    var logos = window.TEAM_LOGOS || {};
-    var lA = logos[home] || '';
-    var lB = logos[away] || '';
+    var lA = getLogoEquipo(home) || '';
+    var lB = getLogoEquipo(away) || '';
     var shieldA = lA ? '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+lA+'" alt="'+home+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>' : '';
     var shieldB = lB ? '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+lB+'" alt="'+away+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>' : '';
     var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[home]) || '';
@@ -2147,7 +2167,7 @@
       jornada.forEach(function (m, mi) {
         var isHA = esHumano(m[0]), isHB = esHumano(m[1]);
         if (!isHA && !isHB) return;
-        var isHvH = isHA && isHB;
+        var isHvH = esPartidoDestacado(m[0], m[1]);
         var res = results[rKey(j, m[0], m[1])];
         if (res) {
           var row = document.createElement('div');
@@ -2163,6 +2183,57 @@
           calDiv.appendChild(card.firstChild);
         }
       });
+    });
+  }
+
+  function extraerNombreCalendario(teamEl) {
+    if (!teamEl) return '';
+    var nameEl = teamEl.querySelector('.ml-team-name');
+    var raw = nameEl ? nameEl.textContent : teamEl.textContent;
+    return String(raw || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+  }
+
+  function asegurarEscudoCalendario(teamEl, teamName) {
+    if (!teamEl || !teamName) return;
+    var logo = getLogoEquipo(teamName);
+    if (!logo) return;
+    var wrap = teamEl.querySelector('.ml-shield-wrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'ml-shield-wrap';
+      var ref = teamEl.querySelector('.ml-team-name') || teamEl.firstChild;
+      teamEl.insertBefore(wrap, ref);
+    }
+    var img = wrap.querySelector('img');
+    if (!img) {
+      img = document.createElement('img');
+      img.className = 'ml-team-svg';
+      img.style.width = '44px';
+      img.style.height = '44px';
+      img.style.objectFit = 'contain';
+      img.onerror = function(){ this.style.display = 'none'; };
+      wrap.innerHTML = '';
+      wrap.appendChild(img);
+    }
+    img.src = logo;
+    img.alt = teamName;
+    img.style.display = '';
+  }
+
+  function refreshMainCalendarCards() {
+    var root = document.getElementById('s-calendario');
+    if (!root) return;
+    root.querySelectorAll('.match-live-wrap').forEach(function(card){
+      var teams = card.querySelectorAll('.ml-team');
+      if (teams.length < 2) return;
+      var home = extraerNombreCalendario(teams[0]);
+      var away = extraerNombreCalendario(teams[1]);
+      var hvh = esPartidoDestacado(home, away);
+      var destacado = hvh || esHumano(home) || esHumano(away);
+      card.classList.toggle('hvh', hvh);
+      card.classList.toggle('hvia', destacado && !hvh);
+      asegurarEscudoCalendario(teams[0], home);
+      asegurarEscudoCalendario(teams[1], away);
     });
   }
 
@@ -2723,6 +2794,7 @@
     saveResults(results);
     actualizarDom('l-j' + j, home, away, gh, ga);
     populateCalendar(); /* re-renderiza tarjetas del calendario */
+    refreshMainCalendarCards();
     if (typeof window.buildLigaClas   === 'function') window.buildLigaClas();
     if (typeof window.buildIAresults  === 'function') window.buildIAresults();
   }
@@ -3374,13 +3446,17 @@
     restoreJ1();
     populateLigaCal();
     populateCalendar();
+    refreshMainCalendarCards();
     patchRegistrar();
     patchGo();
     setTimeout(function () {
+      refreshMainCalendarCards();
       if (typeof window.buildLigaClas  === 'function') window.buildLigaClas();
       window.buildIAresults();
     }, 200);
   });
+
+  window.refreshMainCalendarCards = refreshMainCalendarCards;
 
 })();
 </script>

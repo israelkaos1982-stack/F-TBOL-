@@ -16,6 +16,14 @@ window.TEAM_RATINGS = {
         media: 79, color: "#006600", 
         shield: "/static/img/escudos-main/portugal_sporting-cp.football-logos.cc.svg" 
     },
+    "PSG": {
+        media: 84, color: "#0b1d48",
+        shield: "/static/img/escudos-1/france_paris-saint-germain.svg"
+    },
+    "Paris Saint-Germain": {
+        media: 84, color: "#0b1d48",
+        shield: "/static/img/escudos-1/france_paris-saint-germain.svg"
+    },
     "FC Barcelona": { 
         media: 85, color: "#004d98", 
         shield: "/static/img/escudos-main/spain_barcelona.football-logos.cc.svg"

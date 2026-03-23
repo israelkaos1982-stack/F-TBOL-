@@ -1593,6 +1593,8 @@ window.mlSimulate_j1m10=function(){
     'Bayern Munich':      '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
     'Arsenal':            '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
     'Sporting CP':        '/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
+    'PSG':                '/static/img/escudos-1/france_paris-saint-germain.svg',
+    'Paris Saint-Germain':'/static/img/escudos-1/france_paris-saint-germain.svg',
     'Elche CF':           _WC  + 'Elche_CF.svg',
     // ── Liga Hypermotion (2ª) ───────────────────────────────
     'Real Racing Club':   _WC  + 'Racing_de_Santander.svg',
@@ -5528,7 +5530,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   // ── Generar lesión para partidos HvH / IA vs H ──────────────────
   // Se llama al terminar el partido, genera 0 o 1 lesión por equipo
   // y las guarda en LESIONES_PARTIDO_ACTUAL para mostrar en el overlay
-  var _EQUIPOS_HUMANOS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Sporting CP'];
+  var _EQUIPOS_HUMANOS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Sporting CP','PSG'];
 
   window._generarLesionHumano = function(teamA, teamB) {
     window.LESIONES_PARTIDO_ACTUAL = [];

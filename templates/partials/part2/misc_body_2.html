@@ -1496,50 +1496,55 @@
   ];
 
   var DEFAULT_PRIMERA_G1 = [
-    {name:'Ponferradina', short:'Ponferradina', media:64},
+    {name:'Real Madrid Castilla', short:'RM Castilla', media:67},
+    {name:'Ponferradina', short:'Ponferradina', media:66},
+    {name:'Cultural Leonesa', short:'Cultural', media:66},
+    {name:'CD Lugo', short:'Lugo', media:65},
+    {name:'Celta Fortuna', short:'Celta Fortuna', media:65},
+    {name:'Racing Ferrol', short:'Racing Ferrol', media:65},
     {name:'Gimnàstic Tarragona', short:'Nàstic', media:64},
-    {name:'Barça Atlètic', short:'Barça Atlètic', media:63},
-    {name:'Celta Fortuna', short:'Celta Fortuna', media:63},
-    {name:'CD Arenteiro', short:'Arenteiro', media:62},
-    {name:'CD Lugo', short:'Lugo', media:62},
-    {name:'Unionistas CF', short:'Unionistas', media:62},
-    {name:'Real Unión', short:'Real Unión', media:61},
-    {name:'Sestao River', short:'Sestao', media:61},
-    {name:'Zamora CF', short:'Zamora', media:61},
-    {name:'Ourense CF', short:'Ourense', media:60},
-    {name:'Tarazona', short:'Tarazona', media:60},
-    {name:'Osasuna Promesas', short:'Osasuna B', media:60},
-    {name:'Bilbao Athletic', short:'Bilbao Athletic', media:60},
-    {name:'Amorebieta', short:'Amorebieta', media:60},
-    {name:'Gimnástica Segoviana', short:'Segoviana', media:59},
-    {name:'SD Logroñés', short:'SD Logroñés', media:59},
-    {name:'Barakaldo CF', short:'Barakaldo', media:59},
-    {name:'Mirandés', short:'Mirandés', media:64},
-    {name:'Cultural Leonesa', short:'Cultural', media:64}
+    {name:'Osasuna Promesas', short:'Osasuna B', media:63},
+    {name:'Bilbao Ath.', short:'Bilbao Ath.', media:62},
+    {name:'Unionistas CF', short:'Unionistas', media:61},
+    {name:'AD Mérida', short:'Mérida', media:60},
+    {name:'Barakaldo', short:'Barakaldo', media:59},
+    {name:'Arenteiro', short:'Arenteiro', media:58},
+    {name:'Zamora CF', short:'Zamora', media:57},
+    {name:'Ourense CF', short:'Ourense', media:56},
+    {name:'CF Talavera', short:'Talavera', media:55},
+    {name:'CD Guadalajara', short:'Guadalajara', media:54},
+    {name:'CP Cacereño', short:'Cacereño', media:53},
+    {name:'Arenas de Getxo', short:'Arenas', media:51},
+    {name:'Real Avilés Industrial', short:'Avilés', media:50}
   ];
 
   var DEFAULT_PRIMERA_G2 = [
-    {name:'Real Murcia', short:'Murcia', media:64},
-    {name:'UD Ibiza', short:'Ibiza', media:64},
-    {name:'AD Ceuta B', short:'Ceuta B', media:63},
-    {name:'Antequera CF', short:'Antequera', media:63},
-    {name:'Hércules CF', short:'Hércules', media:63},
-    {name:'Mérida AD', short:'Mérida', media:62},
-    {name:'Algeciras CF', short:'Algeciras', media:62},
-    {name:'Marbella FC', short:'Marbella', media:62},
-    {name:'Atlético Sanluqueño', short:'Sanluqueño', media:61},
-    {name:'CF Intercity', short:'Intercity', media:61},
-    {name:'Sevilla Atlético', short:'Sevilla At.', media:61},
-    {name:'Betis Deportivo', short:'Betis Dep.', media:61},
-    {name:'Alcoyano', short:'Alcoyano', media:60},
-    {name:'Yeclano Deportivo', short:'Yeclano', media:60},
-    {name:'Villarreal B', short:'Villarreal B', media:60},
-    {name:'Atlético Baleares', short:'At. Baleares', media:60},
-    {name:'Recreativo de Huelva', short:'Recreativo', media:59},
-    {name:'Fuenlabrada', short:'Fuenlabrada', media:59},
-    {name:'AD Alcorcón', short:'Alcorcón', media:59},
-    {name:'Real Zaragoza', short:'Zaragoza', media:65}
+    {name:'UD Ibiza', short:'Ibiza', media:67},
+    {name:'Real Murcia', short:'Murcia', media:66},
+    {name:'Eldense', short:'Eldense', media:66},
+    {name:'Hércules CF', short:'Hércules', media:65},
+    {name:'AD Alcorcón', short:'Alcorcón', media:65},
+    {name:'FC Cartagena', short:'Cartagena', media:64},
+    {name:'Villarreal B', short:'Villarreal B', media:64},
+    {name:'Marbella FC', short:'Marbella', media:63},
+    {name:'CE Sabadell', short:'Sabadell', media:62},
+    {name:'Betis Deportivo', short:'Betis Dep.', media:62},
+    {name:'Antequera CF', short:'Antequera', media:61},
+    {name:'Sevilla At.', short:'Sevilla At.', media:60},
+    {name:'Algeciras CF', short:'Algeciras', media:59},
+    {name:'Atlético Madrileño', short:'At. Madrileño', media:58},
+    {name:'At. Sanluqueño', short:'Sanluqueño', media:57},
+    {name:'CE Europa', short:'Europa', media:56},
+    {name:'SD Tarazona', short:'Tarazona', media:55},
+    {name:'CD Teruel', short:'Teruel', media:54},
+    {name:'Juventud Torremolinos', short:'Torremolinos', media:52},
+    {name:'Estepona', short:'Estepona', media:50}
   ];
+
+  var PRIMERA_DEFAULT_NAMES = {
+    g1: DEFAULT_PRIMERA_G1.map(function(t){ return t.name; }),
+    g2: DEFAULT_PRIMERA_G2.map(function(t){ return t.name; })
+  };
 
   var STATS_CATS = [
     {key:'goles-total', title:'Goleadores', icon:'⚽'},
@@ -1564,9 +1569,34 @@
 
   function getSegundaTeams(){return loadJSON(SEGUNDA_TEAMS_KEY, deepCopy(DEFAULT_SEGUNDA_TEAMS));}
   function setSegundaTeams(teams){saveJSON(SEGUNDA_TEAMS_KEY, teams);}
-  function getPrimeraTeams(){return loadJSON(PRIMERA_STATE_KEY + '_teams', {g1:deepCopy(DEFAULT_PRIMERA_G1), g2:deepCopy(DEFAULT_PRIMERA_G2)});}
-  function setPrimeraTeams(data){saveJSON(PRIMERA_STATE_KEY + '_teams', data);}
-  function getPrimeraState(){return loadJSON(PRIMERA_STATE_KEY, {g1:{table:[],players:[]}, g2:{table:[],players:[]}});}
+  function sameTeamSet(list, expected){
+    if(!Array.isArray(list) || list.length !== expected.length) return false;
+    var seen = Object.create(null);
+    list.forEach(function(name){seen[String(name)] = (seen[String(name)]||0)+1;});
+    return expected.every(function(name){return seen[name] === 1;});
+  }
+  function normalizePrimeraTeams(data){
+    var safe = data && data.g1 && data.g2 ? data : {};
+    var g1 = Array.isArray(safe.g1) ? safe.g1 : [];
+    var g2 = Array.isArray(safe.g2) ? safe.g2 : [];
+    var valid = sameTeamSet(g1.map(function(t){return t && t.name;}), PRIMERA_DEFAULT_NAMES.g1)
+      && sameTeamSet(g2.map(function(t){return t && t.name;}), PRIMERA_DEFAULT_NAMES.g2);
+    if(valid) return safe;
+    return {g1:deepCopy(DEFAULT_PRIMERA_G1), g2:deepCopy(DEFAULT_PRIMERA_G2)};
+  }
+  function getPrimeraTeams(){
+    var normalized = normalizePrimeraTeams(loadJSON(PRIMERA_STATE_KEY + '_teams', null));
+    saveJSON(PRIMERA_STATE_KEY + '_teams', normalized);
+    return normalized;
+  }
+  function setPrimeraTeams(data){saveJSON(PRIMERA_STATE_KEY + '_teams', normalizePrimeraTeams(data));}
+  function getPrimeraState(){
+    var state = loadJSON(PRIMERA_STATE_KEY, {g1:{table:[],players:[]}, g2:{table:[],players:[]}});
+    var teams = getPrimeraTeams();
+    if(!sameTeamSet((state.g1 && state.g1.table || []).map(function(t){return t && t.name;}), teams.g1.map(function(t){return t.name;}))) state.g1 = {table:[],players:[]};
+    if(!sameTeamSet((state.g2 && state.g2.table || []).map(function(t){return t && t.name;}), teams.g2.map(function(t){return t.name;}))) state.g2 = {table:[],players:[]};
+    return state;
+  }
   function setPrimeraState(data){saveJSON(PRIMERA_STATE_KEY, data);}
   function loadSegundaState(){return loadJSON(SEGUNDA_STATE_KEY, {table:[],players:[]});}
   function saveSegundaState(data){saveJSON(SEGUNDA_STATE_KEY, data);}
@@ -1860,7 +1890,7 @@
     /* ── Menú principal ─────────────────── */
     +'<div class="screen" id="s-primf">'
     +'<button class="back-btn" onclick="go(\'s-espana\')">◀ Volver</button>'
-    +'<div class="sec-hdr"><img class="sec-ico" src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
+    +'<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_primera-federacion.football-logos.cc.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
     +'<div class="submenu-list">'
     +'<div class="submenu-card sc-liga-primf sc-brand-shell" onclick="go(\'s-primf-clas\')"><span class="sc-emoji">📋</span><span class="sc-label">Clasificación · Grupo 1 y 2</span><span class="sc-arr">▶</span></div>'
     +'<div class="submenu-card sc-liga-primf sc-brand-shell" onclick="go(\'s-primf-stats\')"><span class="sc-emoji">📈</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span></div>'
@@ -1869,7 +1899,7 @@
     /* ── Clasificación combinada (Grupo 1 + 2) ── */
     +'<div class="screen" id="s-primf-clas">'
     +'<button class="back-btn" onclick="go(\'s-espana\')">◀ Volver</button>'
-    +'<div class="sec-hdr"><img class="sec-ico" src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Primera_Federaci%C3%B3n.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
+    +'<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_primera-federacion.football-logos.cc.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
     +'<div class="btn-action-bar">'
     +'<button class="btn-action btn-action-sim" onclick="simularAmbosPrimera()"><span class="btn-action-ico">🎮</span>Simular</button>'
     +'<button class="btn-action btn-action-rst" onclick="reiniciarAmbosPrimera()"><span class="btn-action-ico">♻️</span>Reiniciar</button>'

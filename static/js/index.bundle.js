@@ -1581,7 +1581,9 @@ window.mlSimulate_j1m10=function(){
     'Real Sociedad':      _WC  + 'Real_Sociedad_logo.svg',
     'Atlético Madrid':    _WC  + 'Atletico_de_Madrid_2017_logo.svg',
     'Villarreal':         _WC  + 'Villarreal_CF_logo-en.svg',
+    'Villarreal CF':      _WC  + 'Villarreal_CF_logo-en.svg',
     'Sevilla':            _WC  + 'Sevilla_FC_logo.svg',
+    'Sevilla FC':         _WC  + 'Sevilla_FC_logo.svg',
     'Valencia CF':        _WC  + 'Valenciacf.svg',
     'Girona FC':          _WC  + 'Girona_FC.svg',
     'Rayo Vallecano':     _WC  + 'Rayo_Vallecano_logo.svg',
@@ -1607,13 +1609,16 @@ window.mlSimulate_j1m10=function(){
     'Real Sporting de Gijón': _WC + 'Real_Sporting_de_Gij%C3%B3n_logo.svg',
     'Ceuta':              _WC  + 'AD_Ceuta_FC.svg',
     'SD Eibar':           _WC  + 'SD_Eibar_logo.svg',
+    'Córdoba CF':         _WC  + 'C%C3%B3rdoba_CF.svg',
     'Real Sociedad B':    _WC  + 'Real_Sociedad_logo.svg',
     'FC Andorra':         _WC  + 'FC_Andorra_escudo.svg',
     'Cádiz CF':           _WC  + 'C%C3%A1diz_CF.svg',
     'Granada':            _WC  + 'Granada_CF.svg',
+    'Albacete BP':        _WC  + 'Albacete_Balompi%C3%A9_escudo.svg',
     'Real Valladolid':    _WC  + 'Real_Valladolid_logo.svg',
     'Leganés':            _WC  + 'CD_Legan%C3%A9s.svg',
     'Huesca':             _WC  + 'SD_Huesca.svg',
+    'Deportivo Alavés':   _WC  + 'Deportivo_Alav%C3%A9s_logo_%282020%29.svg',
     'Real Zaragoza':      _WC  + 'Real_Zaragoza.svg',
     'Cultural Leonesa':   _WC  + 'Cultural_Leonesa_logo.svg',
     'Mirandés':           _WC  + 'CD_Miran%C3%A9s.svg',
@@ -1621,9 +1626,13 @@ window.mlSimulate_j1m10=function(){
     'Real Madrid Castilla': _WE  + 'Real_Madrid_CF.svg',
     'Ponferradina':       _WC  + 'SD_Ponferradina.svg',
     'CD Lugo':            _WC  + 'CD_Lugo_escudo.svg',
+    'Celta Fortuna':      '/static/img/escudos-1/spain_celta.football-logos.cc.svg',
     'Cultural Leonesa':   _WC  + 'Cultural_Leonesa_logo.svg',
     'Racing Ferrol':      '/static/img/escudos-3/spain_racing-club-ferrol.football-logos.cc.svg',
     'Gimnàstic Tarragona': '/static/img/escudos-3/spain_gimnastic-de-tarragona.football-logos.cc.svg',
+    'Osasuna Promesas':   '/static/img/escudos-1/spain_osasuna.football-logos.cc.svg',
+    'Bilbao Ath.':        '/static/img/escudos-1/spain_athletic-club.football-logos.cc.svg',
+    'Unionistas CF':      '/static/img/escudos-3/spain_unionistas-de-salamanca.football-logos.cc.svg',
     'AD Mérida':          '/static/img/escudos-3/spain_ad-merida.football-logos.cc.svg',
     'Barakaldo':          '/static/img/escudos-3/spain_barakaldo.football-logos.cc.svg',
     'Arenteiro':          '/static/img/escudos-2/spain_cd-arenteiro.football-logos.cc.svg',
@@ -1641,14 +1650,21 @@ window.mlSimulate_j1m10=function(){
     'Hércules CF':        _WC  + 'H%C3%A9rcules_CF.svg',
     'AD Alcorcón':        '/static/img/escudos-3/spain_alcorcon.football-logos.cc.svg',
     'FC Cartagena':       '/static/img/escudos-2/spain_fc-cartagena.football-logos.cc.svg',
+    'Villarreal B':       '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
     'Marbella FC':        '/static/img/escudos-2/spain_ud-marbella.football-logos.cc.svg',
     'CE Sabadell':        '/static/img/escudos-3/spain_sabadell.football-logos.cc.svg',
+    'Betis Deportivo':    '/static/img/escudos-1/spain_real-betis.football-logos.cc.svg',
     'Antequera CF':       '/static/img/escudos-3/spain_antequera.football-logos.cc.svg',
+    'Sevilla At.':        '/static/img/escudos-1/sevilla-fc.svg',
+    'Sevilla Atlético':   '/static/img/escudos-1/sevilla-fc.svg',
     'Algeciras CF':       '/static/img/escudos-3/spain_algeciras.football-logos.cc.svg',
+    'Atlético Madrileño': '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+    'At. Sanluqueño':     '/static/img/escudos-3/spain_atletico-sanluqueno.football-logos.cc.svg',
     'CE Europa':          '/static/img/escudos-3/spain_ce-europa.football-logos.cc.svg',
     'SD Tarazona':        '/static/img/escudos-2/spain_tarazona.football-logos.cc.svg',
     'CD Teruel':          '/static/img/escudos-3/spain_teruel.football-logos.cc.svg',
     'Juventud Torremolinos': '/static/img/escudos-2/spain_juventud-torremolinos.football-logos.cc.svg',
+    'Estepona':           '/static/img/escudos-fallback/estepona.svg',
     'Recreativo de Huelva': _WC + 'Recreativo_de_Huelva.svg',
     'Mérida AD':          _WC  + 'M%C3%A9rida_AD.svg',
     'Algeciras CF':       _WC  + 'Algeciras_CF.svg',
@@ -1665,6 +1681,34 @@ window.mlSimulate_j1m10=function(){
     var meta = ratings[canonical] || ratings[clean];
     if (meta && typeof meta === 'object' && meta.shield) return meta.shield;
     return '';
+  };
+
+  function getTeamBadgeLabel(name){
+    return String(name || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9 ]+/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map(function(part){ return part.charAt(0).toUpperCase(); })
+      .join('') || 'CLB';
+  }
+
+  window.getTeamBadgeHtml = function(name){
+    var logoUrl = window.getTeamLogoUrl ? window.getTeamLogoUrl(name) : '';
+    var safeName = String(name || '').trim();
+    var fallbackName = safeName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    if (logoUrl) {
+      return '<img class="clas-team-logo" src="' + logoUrl + '" onerror="this.outerHTML=window.getTeamBadgeHtml(\'' + fallbackName + '\')" alt="Escudo de ' + safeName.replace(/"/g, '&quot;') + '"/>';
+    }
+    var aliases = window.TEAM_ALIASES || {};
+    var ratings = window.TEAM_RATINGS || {};
+    var canonical = aliases[safeName.toLowerCase()] || safeName;
+    var meta = ratings[canonical] || ratings[safeName] || {};
+    var bg = (meta && meta.color) || '#24324a';
+    return '<span class="clas-team-logo clas-team-logo-fallback" role="img" aria-label="Escudo de ' + safeName.replace(/"/g, '&quot;') + '" style="background:' + bg + ';">' + getTeamBadgeLabel(safeName) + '</span>';
   };
 
   var SHORT_NAMES = {
@@ -1711,8 +1755,7 @@ window.mlSimulate_j1m10=function(){
       var pos = idx + 1;
       var zone = rowZoneClass(pos);
       var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
-      var logoUrl = window.getTeamLogoUrl ? window.getTeamLogoUrl(team.name) : (window.TEAM_LOGOS ? (window.TEAM_LOGOS[team.name] || '') : '');
-      var logoHtml = logoUrl ? '<img class="clas-team-logo" src="' + logoUrl + '" onerror="this.style.display=\'none\'" alt=""/>' : '';
+      var logoHtml = window.getTeamBadgeHtml ? window.getTeamBadgeHtml(team.name) : '';
       html += ''
         + '<div class="clas-row ' + zone + '">'
         +   '<div class="clas-team-cell">'

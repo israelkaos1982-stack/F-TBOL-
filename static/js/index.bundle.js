@@ -6899,3 +6899,222 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     }, 100);
   });
 })();
+
+
+/* script block router */
+(function(){
+  var ROUTE_EXPLICIT = {
+    's-home': '/',
+    's-calendario': '/calendario',
+    's-espana': '/espana',
+    's-liga': '/espana/liga-ea-sports',
+    's-liga-cal': '/espana/liga-ea-sports/calendario',
+    's-liga-clas': '/espana/liga-ea-sports/clasificacion',
+    's-liga-stats': '/espana/liga-ea-sports/estadisticas',
+    's-segunda': '/espana/liga-hypermotion',
+    's-segunda-clas': '/espana/liga-hypermotion/clasificacion',
+    's-segunda-stats': '/espana/liga-hypermotion/estadisticas',
+    's-primf': '/espana/primera-federacion',
+    's-primf-clas': '/espana/primera-federacion/clasificacion',
+    's-primf-stats': '/espana/primera-federacion/estadisticas',
+    's-primf-mov': '/espana/primera-federacion/ascensos-y-descensos',
+    's-copa': '/espana/copa-del-rey',
+    's-copa-cuadro': '/espana/copa-del-rey/cuadro',
+    's-supercopa': '/espana/supercopa',
+    's-competiciones': '/competiciones',
+    's-champions': '/competiciones/champions',
+    's-ucl-previa': '/competiciones/champions/previa',
+    's-ucl-grupos': '/competiciones/champions/grupos',
+    's-ucl-playoffs': '/competiciones/champions/playoffs',
+    's-uel': '/competiciones/europa-league',
+    's-uel-previa': '/competiciones/europa-league/previa',
+    's-uel-grupos': '/competiciones/europa-league/grupos',
+    's-uel-playoffs': '/competiciones/europa-league/playoffs',
+    's-uecl': '/competiciones/conference-league',
+    's-uecl-previa': '/competiciones/conference-league/previa',
+    's-uecl-grupos': '/competiciones/conference-league/grupos',
+    's-uecl-playoffs': '/competiciones/conference-league/playoffs',
+    's-usc': '/competiciones/supercopa-europa',
+    's-intercontinental': '/competiciones/intercontinental',
+    's-superliga': '/competiciones/superliga',
+    's-superliga-cal': '/competiciones/superliga/calendario',
+    's-superliga-clas': '/competiciones/superliga/clasificacion',
+    's-superliga-stats': '/competiciones/superliga/estadisticas',
+    's-selecciones': '/selecciones',
+    's-sel-cal': '/selecciones/calendario',
+    's-sel-clas': '/selecciones/clasificacion',
+    's-sel-stats': '/selecciones/estadisticas',
+    's-ligas': '/ligas'
+  };
+  var routerState = { initialized: false, screenToPath: {}, pathToScreen: {}, backTarget: {}, activeScreenId: null };
+  var originalGo = typeof window.go === 'function' ? window.go : function(id){
+    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+    var el = document.getElementById(id);
+    if(el){ el.classList.add('active'); window.scrollTo(0,0); }
+  };
+
+  function normalizePath(path){
+    var clean = String(path || '/').split('?')[0].split('#')[0];
+    if(!clean) clean = '/';
+    clean = clean.replace(/\/+/g, '/');
+    if(clean.length > 1 && clean.endsWith('/')) clean = clean.slice(0, -1);
+    return clean || '/';
+  }
+
+  function slugify(value){
+    return String(value || '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/&/g, ' y ')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'seccion';
+  }
+
+  function getScreens(){
+    return Array.prototype.slice.call(document.querySelectorAll('.screen[id]'));
+  }
+
+  function detectBackTarget(screenEl){
+    var btn = screenEl ? screenEl.querySelector('.back-btn[onclick*="go("]') : null;
+    if(!btn) return 's-home';
+    var raw = btn.getAttribute('onclick') || '';
+    var match = raw.match(/go\('([^']+)'\)/);
+    return match ? match[1] : 's-home';
+  }
+
+  function detectLabel(screenEl, screenId){
+    if(!screenEl) return screenId.replace(/^s-/, '');
+    var titleEl = screenEl.querySelector('.sec-hdr h2, .sec-hdr .sc-label, h1, h2, .ml-team-name');
+    if(titleEl && titleEl.textContent.trim()) return titleEl.textContent.trim();
+    return screenId.replace(/^s-/, '').replace(/-/g, ' ');
+  }
+
+  function rebuildRoutes(){
+    var usedPaths = {};
+    routerState.screenToPath = {};
+    routerState.pathToScreen = {};
+    routerState.backTarget = routerState.backTarget || {};
+
+    getScreens().forEach(function(screenEl){
+      var id = screenEl.id;
+      routerState.backTarget[id] = detectBackTarget(screenEl);
+    });
+
+    function uniquePath(screenId, candidate){
+      var path = normalizePath(candidate);
+      if(!usedPaths[path] || usedPaths[path] === screenId) return path;
+      var suffix = slugify(screenId.replace(/^s-/, ''));
+      var next = path === '/' ? '/' + suffix : path + '-' + suffix;
+      var i = 2;
+      while(usedPaths[next] && usedPaths[next] !== screenId){
+        next = (path === '/' ? '/' + suffix : path + '-' + suffix) + '-' + i;
+        i += 1;
+      }
+      return next;
+    }
+
+    function computePath(screenId, trail){
+      if(routerState.screenToPath[screenId]) return routerState.screenToPath[screenId];
+      if(ROUTE_EXPLICIT[screenId]){
+        var explicitPath = uniquePath(screenId, ROUTE_EXPLICIT[screenId]);
+        usedPaths[explicitPath] = screenId;
+        routerState.screenToPath[screenId] = explicitPath;
+        routerState.pathToScreen[explicitPath] = screenId;
+        return explicitPath;
+      }
+      trail = trail || {};
+      if(trail[screenId]) return '/';
+      trail[screenId] = true;
+      var screenEl = document.getElementById(screenId);
+      var parentId = routerState.backTarget[screenId] || 's-home';
+      if(parentId === screenId) parentId = 's-home';
+      var base = parentId ? computePath(parentId, trail) : '/';
+      var label = detectLabel(screenEl, screenId);
+      var slug = slugify(label);
+      var candidate = (base === '/' ? '' : base) + '/' + slug;
+      var path = uniquePath(screenId, candidate);
+      usedPaths[path] = screenId;
+      routerState.screenToPath[screenId] = path;
+      routerState.pathToScreen[path] = screenId;
+      return path;
+    }
+
+    Object.keys(ROUTE_EXPLICIT).forEach(function(screenId){ computePath(screenId, {}); });
+    getScreens().forEach(function(screenEl){ computePath(screenEl.id, {}); });
+    routerState.initialized = true;
+  }
+
+  function resolveScreenId(path){
+    rebuildRoutes();
+    var normalized = normalizePath(path);
+    return routerState.pathToScreen[normalized] || 's-home';
+  }
+
+  function syncHistory(screenId, replace){
+    rebuildRoutes();
+    var targetPath = routerState.screenToPath[screenId] || '/';
+    var currentPath = normalizePath(window.location.pathname);
+    var state = { screenId: screenId };
+    if(replace || currentPath === targetPath){
+      window.history.replaceState(state, '', targetPath);
+      return;
+    }
+    window.history.pushState(state, '', targetPath);
+  }
+
+  function renderScreen(screenId, opts){
+    opts = opts || {};
+    rebuildRoutes();
+    routerState.activeScreenId = screenId;
+    originalGo(screenId);
+    if(opts.updateHistory !== false){
+      syncHistory(screenId, !!opts.replaceHistory);
+    }
+  }
+
+  function navigateWithRetry(screenId, opts, retriesLeft){
+    retriesLeft = typeof retriesLeft === 'number' ? retriesLeft : 8;
+    if(document.getElementById(screenId)){
+      renderScreen(screenId, opts);
+      return;
+    }
+    if(retriesLeft <= 0){
+      renderScreen('s-home', opts);
+      return;
+    }
+    window.setTimeout(function(){ navigateWithRetry(screenId, opts, retriesLeft - 1); }, 80);
+  }
+
+  window.go = function(screenId, opts){
+    navigateWithRetry(screenId, opts || {}, 8);
+  };
+
+  document.addEventListener('click', function(ev){
+    var backBtn = ev.target.closest('.back-btn');
+    if(!backBtn) return;
+    var screenEl = backBtn.closest('.screen[id]');
+    if(!screenEl) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if(typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+    rebuildRoutes();
+    var parentId = routerState.backTarget[screenEl.id] || 's-home';
+    window.go(parentId);
+  }, true);
+
+  window.addEventListener('popstate', function(ev){
+    var screenId = (ev.state && ev.state.screenId) || resolveScreenId(window.location.pathname);
+    navigateWithRetry(screenId, { updateHistory: false }, 8);
+  });
+
+  function bootRouter(){
+    var initialScreenId = resolveScreenId(window.location.pathname);
+    navigateWithRetry(initialScreenId, { updateHistory: true, replaceHistory: true }, 8);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', bootRouter, { once: true });
+  } else {
+    bootRouter();
+  }
+})();

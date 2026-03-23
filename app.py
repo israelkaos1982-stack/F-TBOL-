@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request, jsonify
+from flask import Flask, render_template, redirect, url_for, request, jsonify, abort
 from flask_sqlalchemy import SQLAlchemy
 import random
 import os
@@ -559,22 +559,11 @@ def inicio():
 
 @app.route("/calendario")
 def calendario_view():
-    for i, jornada in enumerate(calendario, 1):
-        for l, v in jornada:
-            if l not in equipos_humanos and v not in equipos_humanos:
-                simular_y_guardar(i, l, v)
-
-    partidos = Partido.query.all()
-    res = {f"{p.local}-{p.visitante}": p for p in partidos}
-
-    return render_template("calendario.html", jornadas=calendario, resultados=res)
+    return render_template("index.html")
 
 @app.route("/clasificacion")
 def clasificacion():
-    partidos = Partido.query.all()
-    tabla = calcular_tabla(equipos_primera, partidos)
-
-    return render_template("clasificacion.html", tabla=tabla)
+    return render_template("index.html")
 
 @app.route("/reiniciar")
 def reiniciar():
@@ -583,6 +572,12 @@ def reiniciar():
     save_global_state(DEFAULT_GLOBAL_STATE)
     db.session.commit()
     return redirect(url_for("calendario_view"))
+
+@app.route("/<path:path>")
+def spa_fallback(path):
+    if path.startswith("api/"):
+        abort(404)
+    return render_template("index.html")
 
 with app.app_context():
     db.create_all()

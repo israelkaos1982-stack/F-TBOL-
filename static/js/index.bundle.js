@@ -1121,7 +1121,7 @@ window.mlEndMatch_j1m2=function(winner){if(_matchFinished)return;if(!winner&&_sc
   if(!hasMvp){
     var sqA_=_sqA_j1m2;
     var sqB_=_sqB_j1m2;
-    window.showMvpForce('j1m2','Athletic Club','Real Betis',sqA_,sqB_,_sc.a,_sc.b,function(team,num,name){
+    window.showMvpForce('j1m2','Bayern Munich','Arsenal',sqA_,sqB_,_sc.a,_sc.b,function(team,num,name){
       var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
       _events.push({min:90,label:'MVP del Partido',type:'mvp',team:team,num:num,name:name,ico:'⭐',id:Date.now()});
       _renderActa_j1m2();
@@ -1156,9 +1156,9 @@ window.mlEndMatch_j1m3=function(){if(_matchFinished)return;
   // ── MVP obligatorio ──
   var hasMvp=_events.some(function(e){return e.type==='mvp';});
   if(!hasMvp){
-    var sqA_=window.SQUAD_REGISTRY['Real Sociedad']||_sqA_j1m3;
+    var sqA_=window.SQUAD_REGISTRY['Sporting CP']||_sqA_j1m3;
     var sqB_=window.SQUAD_REGISTRY['Rayo Vallecano']||_sqB_j1m3;
-    window.showMvpForce('j1m3','Real Sociedad','Rayo Vallecano',sqA_,sqB_,_sc.a,_sc.b,function(team,num,name){
+    window.showMvpForce('j1m3','Sporting CP','Rayo Vallecano',sqA_,sqB_,_sc.a,_sc.b,function(team,num,name){
       _events.push({min:90,label:'MVP del Partido',type:'mvp',team:team,num:num,name:name,ico:'⭐',id:Date.now()});
       _renderActa_j1m3();
       window.mlEndMatch_j1m3();
@@ -4745,9 +4745,9 @@ function syncSquadToScreen(screenId, teamName) {
 
 // Mapa screenId → teamName
 var SCREEN_SQUAD_MAP = {
-  's-athletic':      'Athletic Club',
-  's-betis':         'Real Betis',
-  's-sociedad':      'Real Sociedad',
+  's-munich':        'Bayern Munich',
+  's-arsenal':       'Arsenal',
+  's-sporting':      'Sporting CP',
   's-madrid':        'Real Madrid',
   's-barca':         'FC Barcelona',
   's-atletico':      'Atlético Madrid',

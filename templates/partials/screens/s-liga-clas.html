@@ -322,7 +322,7 @@
         + '<div class="clas-row ' + zone + '">'
         +   '<div class="clas-team-cell">'
         +     '<span class="clas-pos-n">' + pos + '</span>'
-        +     (typeof TEAM_CREST!=='undefined' && TEAM_CREST[team.name] ? TEAM_CREST[team.name] : (window.TEAM_LOGO_MAP && window.TEAM_LOGO_MAP[team.name] ? '<img src="' + window.TEAM_LOGO_MAP[team.name] + '" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;" onerror="this.style.display=\'none\'">' : ''))
+        +     ({'Bayern Munich':'/static/img/badges/bayern.svg','Arsenal':'/static/img/badges/arsenal.svg','Sporting CP':'/static/img/badges/sporting.svg'}[team.name] ? '<img src="'+({'Bayern Munich':'/static/img/badges/bayern.svg','Arsenal':'/static/img/badges/arsenal.svg','Sporting CP':'/static/img/badges/sporting.svg'}[team.name])+'" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;">' : (window.TEAM_LOGO_MAP && window.TEAM_LOGO_MAP[team.name] ? '<img src="' + window.TEAM_LOGO_MAP[team.name] + '" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;" onerror="this.style.display=\'none\'">' : ''))
         +     '<span class="clas-team-name">' + (typeof humanIcon==='function'?humanIcon(team.name):'') + (SHORT_NAMES[team.name] || team.name) + '</span>'
         +   '</div>'
         +   '<div class="clas-pts">' + team.pts + '</div>'

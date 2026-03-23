@@ -59,6 +59,23 @@ BASE = {
 MULTIGOL = [1, 0.37, 0.22, 0.12, 0.06]
 BONUS_LOCAL = 1.08
 
+TEAM_ALIASES = {
+    "sevilla fc": "Sevilla",
+    "villarreal cf": "Villarreal",
+    "valencia cf": "Valencia",
+    "getafe cf": "Getafe",
+    "elche cf": "Elche",
+    "córdoba cf": "Córdoba",
+    "levante ud": "Levante",
+    "villarreal": "Villarreal",
+    "sevilla": "Sevilla",
+    "valencia": "Valencia",
+    "getafe": "Getafe",
+    "elche": "Elche",
+    "córdoba": "Córdoba",
+    "levante": "Levante",
+}
+
 # --- ESTADO GLOBAL COMPARTIDO ---
 GLOBAL_STATE_KEY = "global_state"
 
@@ -138,11 +155,24 @@ def calcular_prob(perfil, local=False, goles_previos=0):
     prob *= MULTIGOL[min(goles_previos, 4)]
     return prob
 
+def resolve_team_name(team_name):
+    clean = (team_name or "").strip()
+    return TEAM_ALIASES.get(clean.lower(), clean)
+
+def get_team_power(team_name):
+    resolved = resolve_team_name(team_name)
+    squad = jugadores_por_equipo.get(resolved) or jugadores_por_equipo.get(team_name) or []
+    if squad:
+        powers = [int(j.get("poder", 70) or 70) for j in squad]
+        return max(1, min(100, round(sum(powers) / max(1, len(powers)))))
+    return 76
+
 def elegir_goleador(equipo, local=False, conteo=None):
     if conteo is None:
         conteo = {}
 
-    jugadores = jugadores_por_equipo[equipo]
+    resolved = resolve_team_name(equipo)
+    jugadores = jugadores_por_equipo[resolved]
     pesos = []
 
     for j in jugadores:
@@ -154,20 +184,44 @@ def elegir_goleador(equipo, local=False, conteo=None):
     return elegido["nombre"]
 
 def simular_goles(equipo, local=False):
-    jugadores = jugadores_por_equipo[equipo]
+    own_power = get_team_power(equipo)
+    opp_candidates = [name for name in jugadores_por_equipo.keys() if name != resolve_team_name(equipo)]
+    opp_power = sum(get_team_power(name) for name in opp_candidates[:6]) / max(1, min(len(opp_candidates), 6))
+    if not opp_candidates:
+        opp_power = 76
+    base_prob = own_power / max(1, (own_power + opp_power))
+    if local:
+        base_prob = min(0.82, base_prob + 0.05 * (1 - base_prob))
 
-    media = sum([calcular_prob(j, local) for j in jugadores]) / len(jugadores)
-
-    if media < 15:
-        pesos = [45, 35, 15, 4, 1]
-    elif media < 25:
-        pesos = [30, 35, 22, 9, 4]
-    elif media < 40:
-        pesos = [20, 30, 25, 15, 10]
+    if base_prob < 0.42:
+        pesos = [46, 33, 14, 5, 2, 0]
+    elif base_prob < 0.50:
+        pesos = [34, 33, 20, 9, 3, 1]
+    elif base_prob < 0.58:
+        pesos = [24, 32, 25, 13, 5, 1]
     else:
-        pesos = [10, 25, 30, 20, 15]
+        pesos = [16, 27, 28, 19, 8, 2]
 
-    return random.choices([0, 1, 2, 3, 4], weights=pesos, k=1)[0]
+    return random.choices([0, 1, 2, 3, 4, 5], weights=pesos, k=1)[0]
+
+def simular_marcador(local, visitante):
+    r_local = get_team_power(local)
+    r_visit = get_team_power(visitante)
+    base_local = r_local / max(1, (r_local + r_visit))
+    prob_local = min(0.82, base_local + 0.05 * (1 - base_local))
+
+    def sample(prob):
+        if prob < 0.42:
+            pesos = [46, 33, 14, 5, 2, 0]
+        elif prob < 0.50:
+            pesos = [34, 33, 20, 9, 3, 1]
+        elif prob < 0.58:
+            pesos = [24, 32, 25, 13, 5, 1]
+        else:
+            pesos = [16, 27, 28, 19, 8, 2]
+        return random.choices([0, 1, 2, 3, 4, 5], weights=pesos, k=1)[0]
+
+    return sample(prob_local), sample(1 - prob_local)
 
 def elegir_mvp(local, visitante, gl, gv, conteo_local, conteo_visitante):
     candidatos = []
@@ -181,7 +235,8 @@ def elegir_mvp(local, visitante, gl, gv, conteo_local, conteo_visitante):
         candidatos.sort(key=lambda x: x[1], reverse=True)
         return candidatos[0][0]
 
-    return random.choice(jugadores_por_equipo[local])["nombre"]
+    fallback_team = resolve_team_name(local)
+    return random.choice(jugadores_por_equipo[fallback_team])["nombre"]
 
 # --- CALENDARIO ---
 def generar_calendario(lista):
@@ -216,8 +271,7 @@ COPA_SEEDING = {
 }
 
 def copa_sim_partido(local, visitante, two_leg=False):
-    gl = simular_goles(local, True)
-    gv = simular_goles(visitante, False)
+    gl, gv = simular_marcador(local, visitante)
     conteo_l, conteo_v = {}, {}
     for _ in range(gl):
         g = elegir_goleador(local, True, conteo_l)

@@ -2308,14 +2308,17 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
 
     // ── helpers ──────────────────────────────────────────────────────
     // ── PODER BASADO EN RATINGS REALES ─────────────────────────────
-    var rA = window.TEAM_RATINGS ? (window.TEAM_RATINGS[TEAM_A] || 76) : 76;
-    var rB = window.TEAM_RATINGS ? (window.TEAM_RATINGS[TEAM_B] || 76) : 76;
+    var _teamAliases = window.TEAM_ALIASES || {};
+    var _resolvedA = _teamAliases[TEAM_A.toLowerCase()] || TEAM_A;
+    var _resolvedB = _teamAliases[TEAM_B.toLowerCase()] || TEAM_B;
+    var rA = window.TEAM_RATINGS ? (window.TEAM_RATINGS[_resolvedA] || window.TEAM_RATINGS[TEAM_A] || 76) : 76;
+    var rB = window.TEAM_RATINGS ? (window.TEAM_RATINGS[_resolvedB] || window.TEAM_RATINGS[TEAM_B] || 76) : 76;
     // También calcular poder medio de la plantilla si no hay rating global
-    if (!window.TEAM_RATINGS || !window.TEAM_RATINGS[TEAM_A]) {
+    if (!window.TEAM_RATINGS || (!window.TEAM_RATINGS[TEAM_A] && !window.TEAM_RATINGS[_resolvedA])) {
       var sumA=0,cntA=0; sqA.forEach(function(p){if(p[3]&&p[2]!=='P'){sumA+=p[3];cntA++;}});
       if(cntA>0) rA=Math.round(sumA/cntA);
     }
-    if (!window.TEAM_RATINGS || !window.TEAM_RATINGS[TEAM_B]) {
+    if (!window.TEAM_RATINGS || (!window.TEAM_RATINGS[TEAM_B] && !window.TEAM_RATINGS[_resolvedB])) {
       var sumB=0,cntB=0; sqB.forEach(function(p){if(p[3]&&p[2]!=='P'){sumB+=p[3];cntB++;}});
       if(cntB>0) rB=Math.round(sumB/cntB);
     }

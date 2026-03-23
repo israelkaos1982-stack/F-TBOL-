@@ -2161,7 +2161,7 @@
     });
   }
 
-  /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 2-38) ──── */
+  /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 1-38, Copa y Europa) ──── */
   /* Timer speeds per match type (5-second ticks, 1080 ticks = 90 game min):
      AI vs AI  : 30s real  → 30000/1080 ≈  28ms/tick
      HvIA      : 12m real  → 720000/1080 ≈ 667ms/tick
@@ -2257,8 +2257,10 @@
     var mins = [];
     for (var i=0; i<aiGoals; i++) mins.push(Math.floor(Math.random()*88)+2);
     mins.sort(function(a,b){return a-b;});
+    var goalsPerPlayer = {};
     mins.forEach(function(min) {
-      var pl = _weightedPick(out); // PODER-VALOR: goleador IA ponderado por poder y posición
+      var pl = _weightedScorerPick(out, !humanA, goalsPerPlayer) || out[0];
+      goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
       st.pendingAIEvents.push({type:'gol',min:min,team:aiTeam,num:pl[0]||'',name:pl[1]||'IA',ico:'⚽'});
     });
     var numCards = Math.floor(Math.random()*3);
@@ -2737,7 +2739,7 @@
     });
   }
 
-  /* ── SIMULACIÓN IA (jornadas 2-38) ──────────────── */
+  /* ── SIMULACIÓN IA (jornadas 1-38, Copa y Europa) ──────────────── */
   function simSimple(rA, rB) {
     var p = (rA + 4) / (rA + rB + 8);
     function goles(prob) {
@@ -2950,6 +2952,25 @@
     for (var i=0;i<sq.length;i++){ c+=(sq[i][3]||70)*_poderPosWeight(sq[i][2],sq[i][3]); if(r<c)return sq[i]; }
     return sq[sq.length-1];
   }
+  function _weightedScorerPick(sq, isLocal, goalsPerPlayer) {
+    if (!sq || !sq.length) return null;
+    var weights = sq.map(function(p) {
+      var scored = goalsPerPlayer && p ? (goalsPerPlayer[p[1]] || 0) : 0;
+      if (typeof window.calculateGoalProbability === 'function') {
+        return Math.max(0.001, window.calculateGoalProbability(p[2], p[3], isLocal, scored));
+      }
+      return Math.max(0.001, (p[3] || 70) * _poderPosWeight(p[2], p[3]));
+    });
+    var total = weights.reduce(function(sum, weight) { return sum + weight; }, 0);
+    if (total <= 0) return _weightedPick(sq);
+    var roll = Math.random() * total;
+    var acc = 0;
+    for (var i = 0; i < sq.length; i++) {
+      acc += weights[i];
+      if (roll <= acc) return sq[i];
+    }
+    return sq[sq.length - 1];
+  }
 
   function genMatchEvents(teamA, teamB, goalsA, goalsB) {
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
@@ -3002,28 +3023,13 @@
     for (var gb = 0; gb < goalsB; gb++) assign.push('b');
     for (var s = assign.length - 1; s > 0; s--) { var t = Math.floor(Math.random()*(s+1)); var tmp=assign[s]; assign[s]=assign[t]; assign[t]=tmp; }
 
-    // Weighted selection via calculateGoalProbability + MIRACLE_FACTORS
+    // Selección ponderada por poder en Liga (j1-j38), Copa y competiciones europeas
     var goalsPerPlayer = {};
-    function selectScorer(squad, isLocal) {
-      var weights = squad.map(function(p) {
-        var scored = goalsPerPlayer[p[1]] || 0;
-        if (typeof window.calculateGoalProbability === 'function') {
-          return window.calculateGoalProbability(p[2], p[3], isLocal, scored);
-        }
-        var base = {'P':0.001,'D':7.5,'M':17.5,'F':70.0}[p[2]] || 17.5;
-        if (scored === 0) return base;
-        return base * ([0.37, 0.22, 0.12, 0.06][scored - 1] || 0.02);
-      });
-      var total = weights.reduce(function(a,b){ return a+b; }, 0);
-      if (total <= 0) return squad[Math.floor(Math.random()*squad.length)];
-      var r = Math.random() * total, cum = 0;
-      for (var i = 0; i < squad.length; i++) { cum += weights[i]; if (r <= cum) return squad[i]; }
-      return squad[squad.length - 1];
-    }
 
     assign.forEach(function(team, idx) {
       var sq = team === 'a' ? outA : outB;
-      var pl = _weightedPick(sq); // PODER-VALOR: selección ponderada por poder y posición (j1-j38)
+      var pl = _weightedScorerPick(sq, team === 'a', goalsPerPlayer) || sq[0];
+      goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
       events.push({ type:'gol', min:goalMins[idx], player:pl[1]||'?', team:team });
     });
 

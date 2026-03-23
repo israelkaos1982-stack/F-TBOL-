@@ -1633,6 +1633,12 @@
     return teams.map(function(t){return {name:t.name, short:t.short||t.name, media:t.media||60, pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, ta:0, tr:0, mvp:0, form:[]};});
   }
 
+  function createInitialTable(teams){
+    return createTableTemplate(teams).sort(function(a,b){
+      return a.name.localeCompare(b.name,'es');
+    });
+  }
+
   function pickPlayer(roster, group){
     if(group && roster[group] && roster[group].length) return choice(roster[group])[0];
     var all = [].concat(roster.porteros, roster.defensas, roster.medios, roster.delanteros);
@@ -1756,27 +1762,29 @@
 
   function renderStats(rootId, players, emptyText){
     var root=document.getElementById(rootId); if(!root) return;
-    if(!players || !players.length){root.innerHTML='<div class="liga-stat-empty">'+emptyText+'</div>'; return;}
+    players = Array.isArray(players) ? players : [];
     function rows(items,start){return items.map(function(item,idx){return '<div class="liga-stat-row"><div class="liga-stat-rank">'+(start+idx)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+esc(item.name)+'</div><div class="liga-stat-team">'+esc(item.team)+'</div></div><div class="liga-stat-value">'+item.value+'</div></div>'}).join('')}
     var html='';
-    STATS_CATS.forEach(function(cat){var all=topPlayersBy(players,cat.key); var top=all.slice(0,6), rest=all.slice(6); html+='<div class="liga-stat-card" data-cat="'+cat.key+'"><div class="liga-stat-head"><div class="liga-stat-ico">'+cat.icon+'</div><div class="liga-stat-title">'+cat.title+'</div></div><div class="liga-stat-body">'; if(!all.length){html+='<div class="liga-stat-empty">Sin datos todavía</div>';} else {html+=rows(top,1); if(rest.length){html+='<details class="liga-stat-more"><summary>Ver todos ('+all.length+')</summary><div class="liga-stat-more-list">'+rows(rest,7)+'</div></details>';}} html+='</div></div>';});
+    STATS_CATS.forEach(function(cat){var all=topPlayersBy(players,cat.key); var top=all.slice(0,6), rest=all.slice(6); html+='<div class="liga-stat-card" data-cat="'+cat.key+'"><div class="liga-stat-head"><div class="liga-stat-ico">'+cat.icon+'</div><div class="liga-stat-title">'+cat.title+'</div></div><div class="liga-stat-body">'; if(!all.length){html+='<div class="liga-stat-empty">'+emptyText+'</div>';} else {html+=rows(top,1); if(rest.length){html+='<details class="liga-stat-more"><summary>Ver todos ('+all.length+')</summary><div class="liga-stat-more-list">'+rows(rest,7)+'</div></details>';}} html+='</div></div>';});
     root.innerHTML=html;
   }
 
   function renderSegunda(){
     var st=loadSegundaState();
+    var initialTable = createInitialTable(getSegundaTeams());
     var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#9c3cdc"></span>🟣 Ascenso a LaLiga</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso a Primera Federación</span></div>';
-    renderTable('clas-segunda-content', st.table, legend, rowZoneClassSegunda, 'Pulsa <b>Simular liga</b> para generar la clasificación de Segunda.');
-    renderStats('segunda-stats-dashboard', st.players, 'Simula la liga para rellenar todas las estadísticas.');
+    renderTable('clas-segunda-content', (st.table && st.table.length) ? st.table : initialTable, legend, rowZoneClassSegunda, 'No hay equipos cargados todavía.');
+    renderStats('segunda-stats-dashboard', st.players, 'Sin datos todavía');
   }
 
   function renderPrimera(){
     var st=getPrimeraState();
+    var teams = getPrimeraTeams();
     var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#9c3cdc"></span>🟣 Ascenso a Hypermotion</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso a 2ª Federación</span></div>';
-    renderTable('clas-primf-g1-content', st.g1.table, legend, rowZoneClassPrimera, 'Pulsa <b>Simular grupo</b> para generar la clasificación del Grupo 1.');
-    renderTable('clas-primf-g2-content', st.g2.table, legend, rowZoneClassPrimera, 'Pulsa <b>Simular grupo</b> para generar la clasificación del Grupo 2.');
-    renderStats('primf-g1-stats-dashboard', st.g1.players, 'Simula el grupo para rellenar las estadísticas.');
-    renderStats('primf-g2-stats-dashboard', st.g2.players, 'Simula el grupo para rellenar las estadísticas.');
+    renderTable('clas-primf-g1-content', (st.g1.table && st.g1.table.length) ? st.g1.table : createInitialTable(teams.g1), legend, rowZoneClassPrimera, 'No hay equipos cargados todavía.');
+    renderTable('clas-primf-g2-content', (st.g2.table && st.g2.table.length) ? st.g2.table : createInitialTable(teams.g2), legend, rowZoneClassPrimera, 'No hay equipos cargados todavía.');
+    renderStats('primf-g1-stats-dashboard', st.g1.players, 'Sin datos todavía');
+    renderStats('primf-g2-stats-dashboard', st.g2.players, 'Sin datos todavía');
     renderMovement();
   }
 
@@ -1892,13 +1900,13 @@
     +'<button class="back-btn" onclick="go(\'s-espana\')">◀ Volver</button>'
     +'<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_primera-federacion.football-logos.cc.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
     +'<div class="submenu-list">'
-    +'<div class="submenu-card sc-liga-primf sc-brand-shell" onclick="go(\'s-primf-clas\')"><span class="sc-emoji">📋</span><span class="sc-label">Clasificación · Grupo 1 y 2</span><span class="sc-arr">▶</span></div>'
-    +'<div class="submenu-card sc-liga-primf sc-brand-shell" onclick="go(\'s-primf-stats\')"><span class="sc-emoji">📈</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span></div>'
-    +'<div class="submenu-card sc-liga-primf sc-brand-shell" onclick="go(\'s-primf-mov\')"><span class="sc-emoji">🔁</span><span class="sc-label">Ascensos y descensos</span><span class="sc-arr">▶</span></div>'
+    +'<div class="submenu-card sc-spain-comp sc-liga-primf sc-brand-shell" onclick="go(\'s-primf-clas\')"><span class="sc-emoji">📋</span><span class="sc-label">Clasificación · Grupo 1 y 2</span><span class="sc-arr">▶</span></div>'
+    +'<div class="submenu-card sc-spain-comp sc-liga-primf sc-brand-shell" onclick="go(\'s-primf-stats\')"><span class="sc-emoji">📈</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span></div>'
+    +'<div class="submenu-card sc-spain-comp sc-liga-primf sc-brand-shell" onclick="go(\'s-primf-mov\')"><span class="sc-emoji">🔁</span><span class="sc-label">Ascensos y descensos</span><span class="sc-arr">▶</span></div>'
     +'</div></div>'
     /* ── Clasificación combinada (Grupo 1 + 2) ── */
     +'<div class="screen" id="s-primf-clas">'
-    +'<button class="back-btn" onclick="go(\'s-espana\')">◀ Volver</button>'
+    +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
     +'<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_primera-federacion.football-logos.cc.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
     +'<div class="btn-action-bar">'
     +'<button class="btn-action btn-action-sim" onclick="simularAmbosPrimera()"><span class="btn-action-ico">🎮</span>Simular</button>'
@@ -1912,8 +1920,8 @@
     +'</div>'
     /* ── Estadísticas ── */
     +'<div class="screen" id="s-primf-stats">'
-    +'<button class="back-btn" onclick="go(\'s-primf-clas\')">◀ Volver</button>'
-    +'<div class="sec-hdr"><span class="sec-emoji">📈</span><h2>Primera Federación · Estadísticas</h2></div>'
+    +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
+    +'<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_primera-federacion.football-logos.cc.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación · Estadísticas</h2></div>'
     +'<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.45);padding:0 0 6px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08);">① GRUPO 1</div>'
     +'<div class="liga-stats-wrap" id="primf-g1-stats-dashboard" style="margin-bottom:24px"></div>'
     +'<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.45);padding:0 0 6px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.08);">② GRUPO 2</div>'
@@ -1921,8 +1929,8 @@
     +'</div>'
     /* ── Ascensos y descensos (mejorado) ── */
     +'<div class="screen" id="s-primf-mov">'
-    +'<button class="back-btn" onclick="go(\'s-primf-clas\')">◀ Volver</button>'
-    +'<div class="sec-hdr"><span class="sec-emoji">🔁</span><h2>Ascensos y descensos</h2></div>'
+    +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
+    +'<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_primera-federacion.football-logos.cc.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Ascensos y descensos</h2></div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;">'
     +'<button class="btn-action btn-action-sim" onclick="simularLigaSegundaMenu()"><span class="btn-action-ico">🎮</span>Simular Hypermotion</button>'
     +'<button class="btn-action btn-action-sim" onclick="simularPrimeraGrupo(1)"><span class="btn-action-ico">🎮</span>Simular G1</button>'

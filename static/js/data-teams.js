@@ -1,13 +1,13 @@
 window.TEAM_RATINGS = {
     // --- PRIMERA DIVISIÓN ---
-    "Bayern Munich": { media: 90, color: "#dc052d" },
-    "FC Bayern Munich": { media: 90, color: "#dc052d" },
+    "Bayern Munich": { media: 85, color: "#dc052d" },
+    "FC Bayern Munich": { media: 85, color: "#dc052d" },
 
-    "Arsenal": { media: 84, color: "#ef0107" },
-    "Arsenal FC": { media: 84, color: "#ef0107" },
+    "Arsenal": { media: 85, color: "#ef0107" },
+    "Arsenal FC": { media: 85, color: "#ef0107" },
 
-    "Sporting CP": { media: 82, color: "#006600" },
-    "Sporting de Portugal": { media: 82, color: "#006600" },
+    "Sporting CP": { media: 79, color: "#006600" },
+    "Sporting de Portugal": { media: 79, color: "#006600" },
 
     "Barcelona": { media: 85, color: "#004d98" },
     "FC Barcelona": { media: 85, color: "#004d98" },

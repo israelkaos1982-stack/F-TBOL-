@@ -2049,18 +2049,35 @@
   function rKey(j, h, a) { return j + '|' + h + '|' + a; }
 
   /* ── HELPERS ─────────────────────────────────────── */
-  function esHumano(t) { return HUMANOS.indexOf(t) !== -1; }
+  function normalizarNombreEquipo(teamName) {
+    var clean = String(teamName || '').trim();
+    if (!clean) return '';
+
+    var aliases = window.TEAM_ALIASES || {};
+    var canonical = aliases[clean.toLowerCase()] || clean;
+
+    var candidates = HUMANOS
+      .concat(Object.keys(window.TEAM_LOGOS || {}))
+      .concat(Object.keys(window.TEAM_RATINGS || {}));
+
+    for (var i = 0; i < candidates.length; i++) {
+      if (String(candidates[i] || '').toLowerCase() === canonical.toLowerCase()) {
+        return candidates[i];
+      }
+    }
+
+    return canonical;
+  }
+
+  function esHumano(t) { return HUMANOS.indexOf(normalizarNombreEquipo(t)) !== -1; }
   function esPartidoDestacado(local, visitante) { return esHumano(local) && esHumano(visitante); }
   function getLogoEquipo(teamName) {
-    if (typeof window.getTeamLogoUrl === 'function') return window.getTeamLogoUrl(teamName);
+    var normalized = normalizarNombreEquipo(teamName);
+    if (typeof window.getTeamLogoUrl === 'function') return window.getTeamLogoUrl(normalized || teamName);
     var logos = window.TEAM_LOGOS || {};
-    if (logos[teamName]) return logos[teamName];
-    var aliases = window.TEAM_ALIASES || {};
-    var clean = String(teamName || '').trim();
-    var canonical = aliases[clean.toLowerCase()] || clean;
-    if (logos[canonical]) return logos[canonical];
+    if (logos[normalized]) return logos[normalized];
     var ratings = window.TEAM_RATINGS || {};
-    var meta = ratings[canonical] || ratings[clean];
+    var meta = ratings[normalized] || ratings[String(teamName || '').trim()];
     return meta && typeof meta === 'object' && meta.shield ? meta.shield : '';
   }
 
@@ -2220,7 +2237,8 @@
     if (!teamEl) return '';
     var nameEl = teamEl.querySelector('.ml-team-name');
     var raw = nameEl ? nameEl.textContent : teamEl.textContent;
-    return String(raw || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+    var clean = String(raw || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+    return normalizarNombreEquipo(clean);
   }
 
   function asegurarEscudoCalendario(teamEl, teamName) {

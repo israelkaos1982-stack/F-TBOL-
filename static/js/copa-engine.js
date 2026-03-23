@@ -665,39 +665,107 @@
     });
   }
 
+  function makePlaceholderList(label, total) {
+    var out = [];
+    for (var i = 0; i < total; i++) out.push(label + ' ' + (i + 1));
+    return out;
+  }
+
+  function getRoundAdvancers(copa, ronda, expected) {
+    var ties = getBracketRoundData(copa, ronda);
+    var out = [];
+    ties.forEach(function (tie, idx) {
+      out.push(tie.winner || ('Ganador ' + ROUND_LABEL[ronda] + ' ' + (idx + 1)));
+    });
+    while (out.length < expected) out.push('Ganador ' + ROUND_LABEL[ronda] + ' ' + (out.length + 1));
+    return out.slice(0, expected);
+  }
+
+  function buildPlaceholderParticipants(copa, ronda, slots) {
+    if (ronda === 'r1') return makePlaceholderList('Plaza Copa', slots * 2);
+    if (ronda === 'r2') return getRoundAdvancers(copa, 'r1', 2).concat(makePlaceholderList('Cabeza de serie R2', (slots * 2) - 2));
+    if (ronda === 'r16') return getRoundAdvancers(copa, 'r2', 4).concat(makePlaceholderList('Cabeza de serie Dieciseisavos', (slots * 2) - 4));
+    if (ronda === 'oct') return getRoundAdvancers(copa, 'r16', slots * 2);
+    if (ronda === 'cua') return getRoundAdvancers(copa, 'oct', slots * 2);
+    if (ronda === 'fin') return getRoundAdvancers(copa, 'cua', slots * 2);
+    return makePlaceholderList('Por definir', slots * 2);
+  }
+
+  function getNextRoundSlotLabel(ronda, idx) {
+    var next = NEXT_ROUND[ronda];
+    if (!next) return 'Campeón';
+    return ROUND_LABEL[next] + ' · cruce ' + (Math.floor(idx / 2) + 1);
+  }
+
+  function getBracketStageData(copa, meta) {
+    var ties = getBracketRoundData(copa, meta.key);
+    if (ties.length) return ties.slice(0, meta.slots);
+    var participants = buildPlaceholderParticipants(copa, meta.key, meta.slots);
+    var out = [];
+    for (var i = 0; i < meta.slots; i++) {
+      out.push({
+        home: participants[i * 2] || 'Por definir',
+        away: participants[(i * 2) + 1] || 'Por definir',
+        winner: '',
+        played: false,
+        status: meta.key === 'r1' ? 'Cuadro inicial' : 'Pendiente de sorteo',
+        detail: meta.key === 'fin'
+          ? 'La final se completará cuando se definan los dos finalistas.'
+          : 'El ganador avanzará a ' + getNextRoundSlotLabel(meta.key, i) + '.',
+        mvp: '',
+        neutral: meta.key === 'fin',
+        placeholder: true
+      });
+    }
+    return out;
+  }
+
   function renderBracket(copa) {
     var root = document.getElementById('copa-bracket-root');
     var summary = document.getElementById('copa-bracket-summary');
     if (!root) return;
     var roundMeta = [
-      { key: 'r1', label: '1ª Ronda', subtitle: '4 equipos · 2 partidos' },
-      { key: 'r2', label: '2ª Ronda', subtitle: '8 equipos · 4 partidos' },
-      { key: 'r16', label: 'Dieciseisavos', subtitle: '16 equipos · 8 partidos' },
-      { key: 'oct', label: 'Octavos', subtitle: '4 eliminatorias · ida y vuelta' },
-      { key: 'cua', label: 'Cuartos', subtitle: '2 eliminatorias · ida y vuelta' },
-      { key: 'fin', label: 'Final', subtitle: 'Partido único en campo neutral' }
+      { key: 'r1', label: '1ª Ronda', subtitle: 'Arranque del torneo', slots: 2, rowSpan: 4 },
+      { key: 'r2', label: '2ª Ronda', subtitle: 'Se suman nuevos equipos', slots: 4, rowSpan: 2 },
+      { key: 'r16', label: 'Dieciseisavos', subtitle: 'Cuadro principal', slots: 8, rowSpan: 1 },
+      { key: 'oct', label: 'Octavos', subtitle: 'Ida y vuelta', slots: 4, rowSpan: 2 },
+      { key: 'cua', label: 'Cuartos', subtitle: 'Ida y vuelta', slots: 2, rowSpan: 4 },
+      { key: 'fin', label: 'Final', subtitle: 'Partido único · sede neutral', slots: 1, rowSpan: 8 }
     ];
     var clasificados = (copa && copa.clasificados) || {};
     if (summary) {
       var champion = clasificados.campeon;
+      var completed = roundMeta.filter(function (meta) {
+        return isRoundComplete(meta.key, ((copa && copa.sorteo) || {})[meta.key] || [], (copa && copa.resultados) || {});
+      }).length;
       summary.innerHTML = champion
-        ? '<div class="copa-bracket-banner done">🏆 Campeón actual: <b>' + escapeHtml(champion) + '</b></div>'
-        : '<div class="copa-bracket-banner">🗂️ El cuadro se irá completando automáticamente a medida que avances ronda por ronda.</div>';
+        ? '<div class="copa-bracket-banner done">🏆 Campeón actual: <b>' + escapeHtml(champion) + '</b><span> · Cuadro completado</span></div>'
+        : '<div class="copa-bracket-banner">🗂️ El cuadro ya queda visible desde el inicio y se rellena automáticamente con clasificados, cruces y resultados conforme avanza la Copa.<span> · Rondas cerradas: ' + completed + '/' + roundMeta.length + '</span></div>';
     }
-    root.innerHTML = roundMeta.map(function (meta) {
-      var ties = getBracketRoundData(copa, meta.key);
+    root.innerHTML = '<div class="copa-bracket-board">' + roundMeta.map(function (meta, stageIdx) {
+      var ties = getBracketStageData(copa, meta);
       var clasif = clasificados[meta.key] || [];
-      var inner = ties.length ? ties.map(function (tie) {
+      var stageClass = 'copa-bracket-stage';
+      if (stageIdx === 0) stageClass += ' first';
+      if (stageIdx === roundMeta.length - 1) stageClass += ' last';
+      var inner = ties.length ? ties.map(function (tie, tieIdx) {
         var homeWin = tie.winner && canonicalTeam(tie.winner) === canonicalTeam(tie.home);
         var awayWin = tie.winner && canonicalTeam(tie.winner) === canonicalTeam(tie.away);
-        return '<div class="copa-bracket-card' + (tie.played ? ' played' : '') + '">'
+        var stageNote = tie.played
+          ? (tie.winner ? 'Clasifica: ' + tie.winner : 'Partido cerrado')
+          : (tie.placeholder ? getNextRoundSlotLabel(meta.key, tieIdx) : 'Pendiente');
+        var rowStart = (tieIdx * meta.rowSpan) + 1;
+        return '<div class="copa-bracket-slot" style="grid-row:' + rowStart + ' / span ' + meta.rowSpan + ';">'
+          + '<div class="copa-bracket-card' + (tie.played ? ' played' : '') + (tie.placeholder ? ' placeholder' : '') + '">'
           + '<div class="copa-bracket-teams">'
           + '<div class="copa-bracket-team' + (homeWin ? ' winner' : '') + (isHuman(tie.home, '') ? ' human' : '') + '"><span class="seed">●</span><span>' + escapeHtml(tie.home) + '</span></div>'
           + '<div class="copa-bracket-team' + (awayWin ? ' winner' : '') + (isHuman(tie.away, '') ? ' human' : '') + '"><span class="seed">●</span><span>' + escapeHtml(tie.away) + '</span></div>'
           + '</div>'
           + '<div class="copa-bracket-status">' + escapeHtml(tie.status + (tie.neutral ? ' · Neutral' : '')) + '</div>'
           + '<div class="copa-bracket-detail">' + escapeHtml(tie.detail) + '</div>'
+          + '<div class="copa-bracket-route">' + escapeHtml(stageNote) + '</div>'
           + (tie.mvp ? '<div class="copa-bracket-mvp">⭐ MVP: ' + escapeHtml(tie.mvp) + '</div>' : '')
+          + '</div>'
           + '</div>';
       }).join('') : '<div class="copa-bracket-empty">Pendiente de sorteo</div>';
       if (clasif.length) {
@@ -705,12 +773,12 @@
           return '<span class="copa-bracket-pill' + (isHuman(team, '') ? ' human' : '') + '">' + escapeHtml(team) + '</span>';
         }).join('') + '</div>';
       }
-      return '<div class="copa-bracket-round">'
+      return '<div class="' + stageClass + '">'
         + '<div class="copa-bracket-round-head"><div class="copa-bracket-round-title">' + escapeHtml(meta.label) + '</div>'
         + '<div class="copa-bracket-round-sub">' + escapeHtml(meta.subtitle) + '</div></div>'
-        + '<div class="copa-bracket-round-body">' + inner + '</div>'
+        + '<div class="copa-bracket-round-body"><div class="copa-bracket-lane">' + inner + '</div></div>'
         + '</div>';
-    }).join('');
+    }).join('') + '</div>';
   }
 
   function renderBlock(blockId, label, matches, results, ronda, esVuelta) {
@@ -930,17 +998,24 @@
       + '.copa-summary-banner{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.18);font-size:12px;color:#f6e0a0}'
       + '.copa-clasificados{margin:6px 0 12px;padding:8px 12px;border-radius:10px;background:rgba(255,215,120,.06);border:1px solid rgba(255,215,120,.12)}'
       + '.copa-bracket-wrap{padding:6px 18px 36px}'
-      + '.copa-bracket-banner{padding:12px 14px;border-radius:12px;background:rgba(255,215,120,.08);border:1px solid rgba(255,215,120,.18);color:#f6e0a0;font-size:12px;line-height:1.5;margin-bottom:14px}'
+      + '.copa-bracket-banner{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:rgba(255,215,120,.08);border:1px solid rgba(255,215,120,.18);color:#f6e0a0;font-size:12px;line-height:1.5;margin-bottom:14px}'
+      + '.copa-bracket-banner span{color:rgba(255,255,255,.62)}'
       + '.copa-bracket-banner.done{background:rgba(255,215,120,.14);box-shadow:0 10px 24px rgba(0,0,0,.18)}'
-      + '.copa-bracket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;align-items:start}'
-      + '.copa-bracket-round{background:linear-gradient(180deg,rgba(24,15,2,.98),rgba(11,11,14,.96));border:1px solid rgba(255,215,120,.14);border-radius:16px;overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.22)}'
+      + '.copa-bracket-grid{overflow-x:auto;padding-bottom:10px}'
+      + '.copa-bracket-board{display:flex;gap:18px;align-items:stretch;min-width:max-content;padding-right:8px}'
+      + '.copa-bracket-stage{width:248px;flex:0 0 248px;background:linear-gradient(180deg,rgba(24,15,2,.98),rgba(11,11,14,.96));border:1px solid rgba(255,215,120,.14);border-radius:16px;overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.22)}'
       + '.copa-bracket-round-head{padding:12px 14px;border-bottom:1px solid rgba(255,215,120,.1);background:linear-gradient(135deg,rgba(123,90,0,.55),rgba(15,15,18,.25))}'
       + '.copa-bracket-round-title{font-family:Oswald,sans-serif;font-size:15px;letter-spacing:1.6px;color:#f6d16f;text-transform:uppercase}'
       + '.copa-bracket-round-sub{font-size:11px;color:rgba(255,255,255,.52);margin-top:2px}'
       + '.copa-bracket-round-body{padding:12px}'
-      + '.copa-bracket-card{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:12px;padding:10px 10px 9px;margin-bottom:10px}'
+      + '.copa-bracket-lane{display:grid;grid-template-rows:repeat(8,minmax(74px,1fr));gap:10px;min-height:684px;position:relative}'
+      + '.copa-bracket-slot{display:flex;align-items:center;position:relative}'
+      + '.copa-bracket-stage:not(.first) .copa-bracket-slot::before{content:"";position:absolute;left:-19px;top:0;bottom:0;border-left:2px solid rgba(255,215,120,.14)}'
+      + '.copa-bracket-stage:not(.first) .copa-bracket-slot::after{content:"";position:absolute;left:-19px;top:50%;width:19px;border-top:2px solid rgba(255,215,120,.14)}'
+      + '.copa-bracket-stage:not(.last) .copa-bracket-card::after{content:"";position:absolute;right:-19px;top:50%;width:19px;border-top:2px solid rgba(255,215,120,.14)}'
+      + '.copa-bracket-card{position:relative;width:100%;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:12px;padding:10px 10px 9px}'
       + '.copa-bracket-card.played{border-color:rgba(255,215,120,.22);background:rgba(255,215,120,.05)}'
-      + '.copa-bracket-card:last-child{margin-bottom:0}'
+      + '.copa-bracket-card.placeholder{border-style:dashed;background:rgba(255,255,255,.02)}'
       + '.copa-bracket-teams{display:grid;gap:6px}'
       + '.copa-bracket-team{display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.78);font-weight:700}'
       + '.copa-bracket-team .seed{font-size:9px;color:rgba(255,255,255,.24)}'
@@ -949,11 +1024,13 @@
       + '.copa-bracket-team.winner .seed{color:#ffd76a}'
       + '.copa-bracket-status{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:rgba(255,255,255,.44);margin-top:10px}'
       + '.copa-bracket-detail{font-size:12px;color:rgba(255,255,255,.86);margin-top:4px;line-height:1.45}'
+      + '.copa-bracket-route{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:rgba(255,215,120,.82);line-height:1.35}'
       + '.copa-bracket-mvp{font-size:11px;color:#f2cd66;margin-top:6px}'
-      + '.copa-bracket-empty{border:1px dashed rgba(255,255,255,.12);border-radius:12px;padding:16px 12px;font-size:12px;text-align:center;color:rgba(255,255,255,.38)}'
-      + '.copa-bracket-qualified{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(255,255,255,.74);line-height:1.7}'
+      + '.copa-bracket-empty{border:1px dashed rgba(255,255,255,.12);border-radius:12px;padding:16px 12px;font-size:12px;text-align:center;color:rgba(255,255,255,.38);align-self:start}'
+      + '.copa-bracket-qualified{grid-column:1/-1;align-self:end;margin-top:2px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(255,255,255,.74);line-height:1.7}'
       + '.copa-bracket-pill{display:inline-flex;align-items:center;padding:2px 8px;margin:4px 6px 0 0;border-radius:999px;background:rgba(255,215,120,.12);border:1px solid rgba(255,215,120,.18);color:#f6d16f}'
-      + '.copa-bracket-pill.human{background:rgba(90,180,255,.12);border-color:rgba(90,180,255,.18);color:#9ad6ff}';
+      + '.copa-bracket-pill.human{background:rgba(90,180,255,.12);border-color:rgba(90,180,255,.18);color:#9ad6ff}'
+      + '@media (max-width:760px){.copa-bracket-wrap{padding-left:10px;padding-right:10px}.copa-bracket-stage{width:220px;flex-basis:220px}.copa-bracket-board{gap:14px}.copa-bracket-lane{min-height:620px;grid-template-rows:repeat(8,minmax(66px,1fr))}}';
     document.head.appendChild(style);
   }
 
@@ -974,6 +1051,7 @@
         + '</div>';
       container.innerHTML = html;
       syncCalendar(_copa);
+      renderBracket(_copa);
       return;
     }
 

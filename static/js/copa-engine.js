@@ -604,6 +604,115 @@
     return meta.join('');
   }
 
+  function getAggregateWinner(match, ida, vuelta) {
+    if (!match || !ida || !vuelta || !ida.jugado || !vuelta.jugado) return '';
+    if (vuelta.winner) return vuelta.winner;
+    var totalL = Number(ida.gl || 0) + Number(vuelta.gv || 0);
+    var totalV = Number(ida.gv || 0) + Number(vuelta.gl || 0);
+    if (totalL > totalV) return match.l;
+    if (totalV > totalL) return match.v;
+    return vuelta.pen_winner || '';
+  }
+
+  function getBracketRoundData(copa, ronda) {
+    var sorteo = (copa && copa.sorteo) || {};
+    var resultados = (copa && copa.resultados) || {};
+    var matches = sorteo[ronda] || [];
+    return matches.map(function (match, idx) {
+      if (TWO_LEG[ronda]) {
+        var ida = (resultados[ronda + '_ida'] || [])[idx] || null;
+        var vuelta = (resultados[ronda + '_vta'] || [])[idx] || null;
+        var winner = getAggregateWinner(match, ida, vuelta);
+        var status = !ida || !ida.jugado ? 'Ida pendiente' : (!vuelta || !vuelta.jugado ? 'Vuelta pendiente' : 'Eliminatoria cerrada');
+        var detail = 'Global pendiente';
+        if (ida && ida.jugado) detail = 'Ida: ' + match.l + ' ' + ida.gl + '–' + ida.gv + ' ' + match.v;
+        if (ida && ida.jugado && vuelta && vuelta.jugado) {
+          var aggL = Number(ida.gl || 0) + Number(vuelta.gv || 0);
+          var aggV = Number(ida.gv || 0) + Number(vuelta.gl || 0);
+          detail = 'Global: ' + match.l + ' ' + aggL + '–' + aggV + ' ' + match.v;
+          if (vuelta.pen_winner) detail += ' · PEN ' + vuelta.pen_winner;
+        }
+        return {
+          home: match.l,
+          away: match.v,
+          winner: winner,
+          played: !!(ida && ida.jugado && vuelta && vuelta.jugado),
+          status: status,
+          detail: detail,
+          mvp: (vuelta && vuelta.mvp) || (ida && ida.mvp) || '',
+          neutral: false
+        };
+      }
+      var res = (resultados[ronda] || [])[idx] || null;
+      var totalL = res ? Number(res.gl || 0) + Number(res.et_gl || 0) : 0;
+      var totalV = res ? Number(res.gv || 0) + Number(res.et_gv || 0) : 0;
+      var detailSingle = 'Partido pendiente';
+      if (res && res.jugado) {
+        detailSingle = match.l + ' ' + res.gl + '–' + res.gv + ' ' + match.v;
+        if ((res.et_gl || 0) || (res.et_gv || 0)) detailSingle += ' · ET ' + totalL + '–' + totalV;
+        if (res.pen_winner) detailSingle += ' · PEN ' + res.pen_winner;
+      }
+      return {
+        home: match.l,
+        away: match.v,
+        winner: res && res.winner || '',
+        played: !!(res && res.jugado),
+        status: res && res.jugado ? 'Partido jugado' : 'Pendiente',
+        detail: detailSingle,
+        mvp: res && res.mvp || '',
+        neutral: ronda === 'fin'
+      };
+    });
+  }
+
+  function renderBracket(copa) {
+    var root = document.getElementById('copa-bracket-root');
+    var summary = document.getElementById('copa-bracket-summary');
+    if (!root) return;
+    var roundMeta = [
+      { key: 'r1', label: '1ª Ronda', subtitle: '4 equipos · 2 partidos' },
+      { key: 'r2', label: '2ª Ronda', subtitle: '8 equipos · 4 partidos' },
+      { key: 'r16', label: 'Dieciseisavos', subtitle: '16 equipos · 8 partidos' },
+      { key: 'oct', label: 'Octavos', subtitle: '4 eliminatorias · ida y vuelta' },
+      { key: 'cua', label: 'Cuartos', subtitle: '2 eliminatorias · ida y vuelta' },
+      { key: 'fin', label: 'Final', subtitle: 'Partido único en campo neutral' }
+    ];
+    var clasificados = (copa && copa.clasificados) || {};
+    if (summary) {
+      var champion = clasificados.campeon;
+      summary.innerHTML = champion
+        ? '<div class="copa-bracket-banner done">🏆 Campeón actual: <b>' + escapeHtml(champion) + '</b></div>'
+        : '<div class="copa-bracket-banner">🗂️ El cuadro se irá completando automáticamente a medida que avances ronda por ronda.</div>';
+    }
+    root.innerHTML = roundMeta.map(function (meta) {
+      var ties = getBracketRoundData(copa, meta.key);
+      var clasif = clasificados[meta.key] || [];
+      var inner = ties.length ? ties.map(function (tie) {
+        var homeWin = tie.winner && canonicalTeam(tie.winner) === canonicalTeam(tie.home);
+        var awayWin = tie.winner && canonicalTeam(tie.winner) === canonicalTeam(tie.away);
+        return '<div class="copa-bracket-card' + (tie.played ? ' played' : '') + '">'
+          + '<div class="copa-bracket-teams">'
+          + '<div class="copa-bracket-team' + (homeWin ? ' winner' : '') + (isHuman(tie.home, '') ? ' human' : '') + '"><span class="seed">●</span><span>' + escapeHtml(tie.home) + '</span></div>'
+          + '<div class="copa-bracket-team' + (awayWin ? ' winner' : '') + (isHuman(tie.away, '') ? ' human' : '') + '"><span class="seed">●</span><span>' + escapeHtml(tie.away) + '</span></div>'
+          + '</div>'
+          + '<div class="copa-bracket-status">' + escapeHtml(tie.status + (tie.neutral ? ' · Neutral' : '')) + '</div>'
+          + '<div class="copa-bracket-detail">' + escapeHtml(tie.detail) + '</div>'
+          + (tie.mvp ? '<div class="copa-bracket-mvp">⭐ MVP: ' + escapeHtml(tie.mvp) + '</div>' : '')
+          + '</div>';
+      }).join('') : '<div class="copa-bracket-empty">Pendiente de sorteo</div>';
+      if (clasif.length) {
+        inner += '<div class="copa-bracket-qualified"><b>Clasificados:</b> ' + clasif.map(function (team) {
+          return '<span class="copa-bracket-pill' + (isHuman(team, '') ? ' human' : '') + '">' + escapeHtml(team) + '</span>';
+        }).join('') + '</div>';
+      }
+      return '<div class="copa-bracket-round">'
+        + '<div class="copa-bracket-round-head"><div class="copa-bracket-round-title">' + escapeHtml(meta.label) + '</div>'
+        + '<div class="copa-bracket-round-sub">' + escapeHtml(meta.subtitle) + '</div></div>'
+        + '<div class="copa-bracket-round-body">' + inner + '</div>'
+        + '</div>';
+    }).join('');
+  }
+
   function renderBlock(blockId, label, matches, results, ronda, esVuelta) {
     var inner = '';
     var hasResults = results && results.some(function (r) { return r && r.jugado; });
@@ -819,7 +928,32 @@
       + '.copa-live-mini{font-size:12px;color:#f0c040;margin-top:4px}'
       + '.copa-btn-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}'
       + '.copa-summary-banner{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.18);font-size:12px;color:#f6e0a0}'
-      + '.copa-clasificados{margin:6px 0 12px;padding:8px 12px;border-radius:10px;background:rgba(255,215,120,.06);border:1px solid rgba(255,215,120,.12)}';
+      + '.copa-clasificados{margin:6px 0 12px;padding:8px 12px;border-radius:10px;background:rgba(255,215,120,.06);border:1px solid rgba(255,215,120,.12)}'
+      + '.copa-bracket-wrap{padding:6px 18px 36px}'
+      + '.copa-bracket-banner{padding:12px 14px;border-radius:12px;background:rgba(255,215,120,.08);border:1px solid rgba(255,215,120,.18);color:#f6e0a0;font-size:12px;line-height:1.5;margin-bottom:14px}'
+      + '.copa-bracket-banner.done{background:rgba(255,215,120,.14);box-shadow:0 10px 24px rgba(0,0,0,.18)}'
+      + '.copa-bracket-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;align-items:start}'
+      + '.copa-bracket-round{background:linear-gradient(180deg,rgba(24,15,2,.98),rgba(11,11,14,.96));border:1px solid rgba(255,215,120,.14);border-radius:16px;overflow:hidden;box-shadow:0 10px 24px rgba(0,0,0,.22)}'
+      + '.copa-bracket-round-head{padding:12px 14px;border-bottom:1px solid rgba(255,215,120,.1);background:linear-gradient(135deg,rgba(123,90,0,.55),rgba(15,15,18,.25))}'
+      + '.copa-bracket-round-title{font-family:Oswald,sans-serif;font-size:15px;letter-spacing:1.6px;color:#f6d16f;text-transform:uppercase}'
+      + '.copa-bracket-round-sub{font-size:11px;color:rgba(255,255,255,.52);margin-top:2px}'
+      + '.copa-bracket-round-body{padding:12px}'
+      + '.copa-bracket-card{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);border-radius:12px;padding:10px 10px 9px;margin-bottom:10px}'
+      + '.copa-bracket-card.played{border-color:rgba(255,215,120,.22);background:rgba(255,215,120,.05)}'
+      + '.copa-bracket-card:last-child{margin-bottom:0}'
+      + '.copa-bracket-teams{display:grid;gap:6px}'
+      + '.copa-bracket-team{display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(255,255,255,.78);font-weight:700}'
+      + '.copa-bracket-team .seed{font-size:9px;color:rgba(255,255,255,.24)}'
+      + '.copa-bracket-team.winner{color:#ffd76a}'
+      + '.copa-bracket-team.human{color:#91d0ff}'
+      + '.copa-bracket-team.winner .seed{color:#ffd76a}'
+      + '.copa-bracket-status{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.8px;text-transform:uppercase;color:rgba(255,255,255,.44);margin-top:10px}'
+      + '.copa-bracket-detail{font-size:12px;color:rgba(255,255,255,.86);margin-top:4px;line-height:1.45}'
+      + '.copa-bracket-mvp{font-size:11px;color:#f2cd66;margin-top:6px}'
+      + '.copa-bracket-empty{border:1px dashed rgba(255,255,255,.12);border-radius:12px;padding:16px 12px;font-size:12px;text-align:center;color:rgba(255,255,255,.38)}'
+      + '.copa-bracket-qualified{margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(255,255,255,.74);line-height:1.7}'
+      + '.copa-bracket-pill{display:inline-flex;align-items:center;padding:2px 8px;margin:4px 6px 0 0;border-radius:999px;background:rgba(255,215,120,.12);border:1px solid rgba(255,215,120,.18);color:#f6d16f}'
+      + '.copa-bracket-pill.human{background:rgba(90,180,255,.12);border-color:rgba(90,180,255,.18);color:#9ad6ff}';
     document.head.appendChild(style);
   }
 
@@ -882,6 +1016,7 @@
     html += '<div class="copa-round-action" style="margin-top:18px;opacity:.6"><button class="copa-btn-reset" onclick="window.copaReiniciar()">🔄 Reiniciar Copa</button></div>';
     container.innerHTML = html;
     syncCalendar(_copa);
+    renderBracket(_copa);
   }
 
   window.copaSortear = function (ronda) {
@@ -1187,7 +1322,7 @@
     var origGo = window.go;
     window.go = function (screenId) {
       if (typeof origGo === 'function') origGo.apply(this, arguments);
-      if (screenId === 's-copa' || screenId === 's-calendario') init();
+      if (screenId === 's-copa' || screenId === 's-calendario' || screenId === 's-copa-cuadro') init();
     };
     init();
   });

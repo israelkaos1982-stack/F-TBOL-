@@ -19,6 +19,7 @@ window.TEAM_RATINGS = {
     "FC Barcelona": { 
         media: 85, color: "#004d98", 
         shield: "/static/img/escudos-main/spain_barcelona.football-logos.cc.svg"
+     },
 
     "Atlético Madrid": { media: 83, color: "#cb3524", shield: "/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg" },
     "Atletico Madrid": { media: 83, color: "#cb3524", shield: "/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg" },

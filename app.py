@@ -400,7 +400,13 @@ def copa_guardar_resultado():
     et_gl = int(payload.get("et_gl", 0))
     et_gv = int(payload.get("et_gv", 0))
     pen_winner = payload.get("pen_winner")
+    pen_score = payload.get("pen_score", "")
     mvp = payload.get("mvp", "")
+    events = payload.get("events") or []
+    injuries = payload.get("injuries") or []
+    summary = payload.get("summary", "")
+    team_a = payload.get("team_a", "")
+    team_b = payload.get("team_b", "")
     data = load_global_state()
     copa = data.get("copa_state") or {"sorteo": {}, "resultados": {}, "clasificados": {}}
     sorteo_ronda = copa.get("sorteo", {}).get(ronda, [])
@@ -409,7 +415,10 @@ def copa_guardar_resultado():
     resultados = copa.get("resultados", {})
     two_leg = ronda in ("oct", "cua")
     res = {"gl": gl, "gv": gv, "et_gl": et_gl, "et_gv": et_gv,
-           "pen_winner": pen_winner, "mvp": mvp, "jugado": True}
+           "pen_winner": pen_winner, "pen_score": pen_score, "mvp": mvp,
+           "events": events, "injuries": injuries, "summary": summary,
+           "team_a": team_a or local_orig, "team_b": team_b or visit_orig,
+           "jugado": True}
     if two_leg:
         key = ronda + ("_vta" if es_vuelta else "_ida")
         if key not in resultados:

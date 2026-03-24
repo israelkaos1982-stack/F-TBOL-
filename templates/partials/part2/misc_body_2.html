@@ -2231,33 +2231,64 @@
     return meta && typeof meta === 'object' && meta.shield ? meta.shield : '';
   }
 
+  function scoreHtmlForMatch(j, home, away, res) {
+    if (res) return '<div class="ms">' + res.gh + '\u2013' + res.ga + '</div>';
+    if (esHumano(home) || esHumano(away)) {
+      var h = home.replace(/'/g, "\\'");
+      var a = away.replace(/'/g, "\\'");
+      return '<div class="ms p" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')">&#9654; Jugar</div>';
+    }
+    return '<div class="ms p">vs</div>';
+  }
+
+  function rebuildRoundRows(round, j, jornada, results) {
+    if (!round) return;
+    var oldRows = round.querySelectorAll('.mrow');
+    for (var ri = 0; ri < oldRows.length; ri++) oldRows[ri].parentNode.removeChild(oldRows[ri]);
+    jornada.forEach(function (m) {
+      var home = m[0], away = m[1];
+      var res = results[rKey(j, home, away)];
+      var row = document.createElement('div');
+      row.className = 'mrow';
+      row.innerHTML = '<div class="mn" data-team="'+home+'">' + humanIcon(home) + home + '</div>'
+        + scoreHtmlForMatch(j, home, away, res)
+        + '<div class="mn r" data-team="'+away+'">' + humanIcon(away) + away + '</div>';
+      round.appendChild(row);
+    });
+  }
+
+  window.renderLigaClasCalendar = function () {
+    var root = document.getElementById('clas-liga-jornadas');
+    if (!root) return;
+    var results = loadResults();
+    var html = '';
+    SCHEDULE.forEach(function (jornada, idx) {
+      var j = idx + 1;
+      var jid = 'cl-j' + j;
+      html += '<div class="jblock">';
+      html += '<button class="jbtn c-liga" onclick="tog(\'' + jid + '\')"><div class="pdot">▶</div>⚽ <b>Liga EA Sports</b>&nbsp; Jornada ' + j + '</button>';
+      html += '<div class="jmatches" id="' + jid + '">';
+      jornada.forEach(function(m){
+        html += '<div class="mrow">';
+        html += '<div class="mn" data-team="' + m[0] + '">' + humanIcon(m[0]) + m[0] + '</div>';
+        html += scoreHtmlForMatch(j, m[0], m[1], results[rKey(j, m[0], m[1])]);
+        html += '<div class="mn r" data-team="' + m[1] + '">' + humanIcon(m[1]) + m[1] + '</div>';
+        html += '</div>';
+      });
+      html += '</div></div>';
+    });
+    root.innerHTML = html;
+  };
+
   /* ── RELLENAR l-j{N} (s-liga-cal) ───────────────── */
   function populateLigaCal() {
     var results = loadResults();
     SCHEDULE.forEach(function (jornada, idx) {
       var j     = idx + 1;
       var round = document.getElementById('l-j' + j);
-      if (!round) return;
-      /* Eliminar filas existentes; reconstruir solo con partidos humanos */
-      var oldRows = round.querySelectorAll('.mrow');
-      for (var ri = 0; ri < oldRows.length; ri++) oldRows[ri].parentNode.removeChild(oldRows[ri]);
-      var humanMatches = jornada.filter(function (m) { return esEquipoDestacado(m[0]) || esEquipoDestacado(m[1]); });
-      humanMatches.forEach(function (m) {
-        var res = results[rKey(j, m[0], m[1])];
-        var scoreHtml;
-        if (res) {
-          scoreHtml = '<div class="ms">' + res.gh + '\u2013' + res.ga + '</div>';
-        } else {
-          var h = m[0].replace(/'/g, "\\'");
-          var a = m[1].replace(/'/g, "\\'");
-          scoreHtml = '<div class="ms p" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')">&#9654; Jugar</div>';
-        }
-        var row = document.createElement('div');
-        row.className = 'mrow';
-        row.innerHTML = '<div class="mn" data-team="'+m[0]+'">' + humanIcon(m[0]) + m[0] + '</div>' + scoreHtml + '<div class="mn r" data-team="'+m[1]+'">' + humanIcon(m[1]) + m[1] + '</div>';
-        round.appendChild(row);
-      });
+      rebuildRoundRows(round, j, jornada, results);
     });
+    if (typeof window.renderLigaClasCalendar === 'function') window.renderLigaClasCalendar();
   }
 
   function addSimBtn(j, round) {
@@ -2991,6 +3022,7 @@
     results[rKey(j, home, away)] = { gh: gh, ga: ga };
     saveResults(results);
     actualizarDom('l-j' + j, home, away, gh, ga);
+    actualizarDom('cl-j' + j, home, away, gh, ga);
     populateCalendar(); /* re-renderiza tarjetas del calendario */
     refreshMainCalendarCards();
     if (typeof window.buildLigaClas   === 'function') window.buildLigaClas();
@@ -3373,6 +3405,7 @@
       var evtData = genMatchEventsEnhanced(m[0], m[1], r.gh, r.ga);
       results[key] = { gh: r.gh, ga: r.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
       actualizarDom('l-j' + j, m[0], m[1], r.gh, r.ga);
+      actualizarDom('cl-j' + j, m[0], m[1], r.gh, r.ga);
       dirty = true;
     });
     if (dirty) {
@@ -3434,6 +3467,8 @@
       results[rKey(1, teamA, teamB)] = { gh: goalsA, ga: goalsB, events: evtData1.events, mvp: evtData1.mvp, mvpTeam: evtData1.mvpTeam };
       saveResults(results);
       actualizarDom('l-j1', teamA, teamB, goalsA, goalsB);
+      actualizarDom('cl-j1', teamA, teamB, goalsA, goalsB);
+      if (typeof window.renderLigaClasCalendar === 'function') window.renderLigaClasCalendar();
       if (typeof window.buildIAresults === 'function') setTimeout(window.buildIAresults, 200);
     };
   }
@@ -3952,44 +3987,11 @@
   function loadResults(){ try { return JSON.parse(localStorage.getItem(RESULTS_KEY) || '{}'); } catch(e){ return {}; } }
   function rKey(j,h,a){ return j + '|' + h + '|' + a; }
 
-  function parseJ1Pending(){
-    var out = [];
-    var round = document.getElementById('cal-l1');
-    if (!round) return out;
-    round.querySelectorAll('.match-live-wrap').forEach(function(card){
-      var teams = card.querySelectorAll('.ml-team-name');
-      if (teams.length < 2) return;
-      var home = String(teams[0].textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
-      var away = String(teams[1].textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
-      if (home !== TEAM && away !== TEAM) return;
-      var wrapId = card.id || '';
-      var matchKey = wrapId.indexOf('mlw-') === 0 ? wrapId.slice(4) : '';
-      if (!matchKey) return;
-      var scoreA = card.querySelector('[id^="sc-"][id$="-a"]');
-      var scoreB = card.querySelector('[id^="sc-"][id$="-b"]');
-      var played = false;
-      if (scoreA && scoreB) played = !(String(scoreA.textContent).trim() === '0' && String(scoreB.textContent).trim() === '0');
-      var timer = card.querySelector('.ml-timer');
-      if (timer && /FIN/.test(timer.textContent || '')) played = true;
-      if (played) return;
-      out.push({
-        comp: 'Liga EA Sports',
-        round: 'J1',
-        home: home,
-        away: away,
-        matchKey: matchKey,
-        targetScreen: 's-calendario',
-        order: 1
-      });
-    });
-    return out;
-  }
-
   function buildLigaPending(){
     var schedule = window.LIGA_SCHEDULE || [];
     var results = loadResults();
     var list = [];
-    for (var ji = 1; ji < schedule.length; ji++) {
+    for (var ji = 0; ji < schedule.length; ji++) {
       var jornada = schedule[ji] || [];
       for (var mi = 0; mi < jornada.length; mi++) {
         var m = jornada[mi] || [];
@@ -4001,13 +4003,12 @@
           round: 'J' + (ji + 1),
           home: home,
           away: away,
-          matchKey: 'lj' + (ji + 1) + 'm' + mi,
-          targetScreen: 's-calendario',
+          targetScreen: 's-liga-clas',
           order: ji + 1
         });
       }
     }
-    return parseJ1Pending().concat(list).sort(function(a,b){ return a.order - b.order; });
+    return list.sort(function(a,b){ return a.order - b.order; });
   }
 
   function getOpp(team){ return team === TEAM ? null : team; }
@@ -4058,12 +4059,13 @@
     var play = document.getElementById('bayern-dashboard-play');
     if (play) {
       play.onclick = function(){
-        if (typeof window.go === 'function') window.go('s-calendario');
+        if (typeof window.go === 'function') window.go('s-liga-clas');
         setTimeout(function(){
-          var block = document.getElementById('cal-l' + item.round.replace('J',''));
+          var jornadaNum = Number(String(item.round || '').replace('J','')) || 1;
+          var block = document.getElementById('cl-j' + jornadaNum);
           if (block && !block.classList.contains('open')) block.classList.add('open');
-          if (typeof window.mlPreviaClick === 'function' && item.matchKey) {
-            try { window.mlPreviaClick(item.matchKey); } catch(e) {}
+          if (typeof window.abrirResultadoLiga === 'function') {
+            try { window.abrirResultadoLiga(jornadaNum, item.home, item.away); } catch(e) {}
           }
         }, 220);
       };
@@ -4089,7 +4091,7 @@
   if (typeof _origGo === 'function' && !_origGo.__bayernDashboardHooked) {
     var patched = function(id){
       var r = _origGo.apply(this, arguments);
-      if (id === 's-munich' || id === 's-calendario') setTimeout(refresh, 180);
+      if (id === 's-munich' || id === 's-liga-clas') setTimeout(refresh, 180);
       return r;
     };
     patched.__bayernDashboardHooked = true;

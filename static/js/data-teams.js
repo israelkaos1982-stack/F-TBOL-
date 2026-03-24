@@ -1,20 +1,20 @@
 window.TEAM_RATINGS = {
-    // --- CARPETA EXCLUSIVA: escudos-main (Para que el Menú nunca falle) ---
+    // --- EQUIPOS DESTACADOS ---
     "Bayern Munich": { 
         media: 85, color: "#dc052d", 
-        shield: "/static/img/escudos-main/germany_bayern-munchen.football-logos.cc.svg" 
+        shield: "/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" 
     },
     "Arsenal": { 
         media: 85, color: "#ef0107", 
-        shield: "/static/img/escudos-main/england_arsenal.football-logos.cc.svg" 
+        shield: "/static/img/escudos-1/england_arsenal.football-logos.cc.svg" 
     },
     "Real Madrid": { 
         media: 85, color: "#ffffff", 
-        shield: "/static/img/escudos-main/spain_real-madrid.football-logos.cc.svg" 
+        shield: "/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg" 
     },
     "Sporting CP": { 
         media: 79, color: "#006600", 
-        shield: "/static/img/escudos-main/portugal_sporting-cp.football-logos.cc.svg" 
+        shield: "/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg" 
     },
     "PSG": {
         media: 84, color: "#0b1d48",
@@ -26,7 +26,7 @@ window.TEAM_RATINGS = {
     },
     "FC Barcelona": { 
         media: 85, color: "#004d98", 
-        shield: "/static/img/escudos-main/spain_barcelona.football-logos.cc.svg"
+        shield: "/static/img/escudos-1/spain_barcelona.football-logos.cc.svg"
      },
 
     "Atlético Madrid": { media: 83, color: "#cb3524", shield: "/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg" },
@@ -49,6 +49,7 @@ window.TEAM_RATINGS = {
     "Getafe CF": { media: 75, color: "#00539b", shield: "/static/img/escudos-1/spain_getafe.football-logos.cc.svg" },
 
     "Athletic Club": { media: 79, color: "#ff0000", shield: "/static/img/escudos-1/spain_athletic-club.football-logos.cc.svg" },
+    "Athletic": { media: 79, color: "#ff0000", shield: "/static/img/escudos-1/spain_athletic-club.football-logos.cc.svg" },
 
     "Osasuna": { media: 77, color: "#9e0b1c", shield: "/static/img/escudos-1/spain_osasuna.football-logos.cc.svg" },
 
@@ -61,16 +62,17 @@ window.TEAM_RATINGS = {
     "Rayo Vallecano": { media: 77, color: "#ffffff", shield: "/static/img/escudos-1/spain_rayo-vallecano.football-logos.cc.svg" },
 
     "Sevilla": { media: 75, color: "#ffffff", shield: "/static/img/escudos-1/sevilla-fc.svg" },
+    "Sevilla FC": { media: 75, color: "#ffffff", shield: "/static/img/escudos-1/sevilla-fc.svg" },
 
     "Mallorca": { media: 76, color: "#e30613", shield: "/static/img/escudos-1/spain_mallorca.football-logos.cc.svg" },
 
-    "Deportivo Alavés": { media: 74, color: "#005ca9", shield: "/static/img/escudos-1/spain_deportivo-alaves.svg" },
+    "Deportivo Alavés": { media: 74, color: "#005ca9", shield: "https://commons.wikimedia.org/wiki/Special:FilePath/Deportivo_Alav%C3%A9s_logo_%282020%29.svg" },
 
     "Elche": { media: 74, color: "#ffffff", shield: "/static/img/escudos-1/spain_elche.football-logos.cc.svg" },
     "Elche CF": { media: 74, color: "#ffffff", shield: "/static/img/escudos-1/spain_elche.football-logos.cc.svg" },
 
-    "Levante UD": { media: 73, color: "#004d98", shield: "/static/img/escudos-1/spain_levante.football-logos.cc.svg" },
-    "Levante": { media: 73, color: "#004d98", shield: "/static/img/escudos-1/spain_levante.football-logos.cc.svg" },
+    "Levante UD": { media: 73, color: "#004d98", shield: "/static/img/escudos-2/spain_levante.football-logos.cc.svg" },
+    "Levante": { media: 73, color: "#004d98", shield: "/static/img/escudos-2/spain_levante.football-logos.cc.svg" },
 
     "Real Oviedo": { media: 73, color: "#004a99", shield: "/static/img/escudos-1/spain_oviedo.football-logos.cc.svg" },
 

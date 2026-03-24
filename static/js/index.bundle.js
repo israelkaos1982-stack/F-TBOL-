@@ -3009,19 +3009,14 @@ function mlPreviaClick(matchKey) {
       else if (jid.startsWith('cal-inter-'))compKey = 'inter';
     }
   }
-  // Determinar prórroga automática según reglas
-  // HvH: siempre hay prórroga y penaltis
-  // HvIA: Copa 1r/2r/dieciseisavos, USC, SC, Inter, Fases finales selecciones → sí
-  // HvIA: Liga y fase de grupos europeos → NO
-  var prorroga;
-  if (isHvH) {
-    prorroga = 'Sí';
-  } else {
-    var conProrroga = ['copa','copa-fin','sc','sc-final','usc','usc-fin','inter','inter-fin','ucl-fin','uel-fin','uecl-fin'];
-    prorroga = (conProrroga.indexOf(compKey) !== -1) ? 'Sí' : 'No';
-  }
-  // Duración según HvH o HvIA
-  var duracion = isHvH ? '10 min' : '8 min';
+  // Regla restaurada: partido destacado (dos equipos destacados)
+  // => 8 min + prórroga/penaltis; resto => 10 min sin prórroga.
+  var teamNames = wrap ? wrap.querySelectorAll('.ml-team-name') : [];
+  var homeName = teamNames[0] ? String(teamNames[0].textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim() : '';
+  var awayName = teamNames[1] ? String(teamNames[1].textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim() : '';
+  var destacado = (typeof window.esPartidoDestacado === 'function') ? window.esPartidoDestacado(homeName, awayName) : false;
+  var prorroga = destacado ? 'Sí' : 'No';
+  var duracion = destacado ? '8 min' : '10 min';
   // Mostrar cuestionario
   if (typeof window.showPrePartidoOverlay === 'function') {
     window.showPrePartidoOverlay(matchKey, compKey, prorroga, duracion, isHvH);
@@ -4480,17 +4475,19 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var items = [
       { id:'estadio',   ico:'🏟️',  lbl:'Estadio',          val:estadio },
       { id:'estacion',  ico:'🌞',  lbl:'Estación',          val:estacion },
-      { id:'tiempo',    ico:'☀️',  lbl:'Tiempo',            val:tiempo },
+      { id:'tiempo',    ico:'☀️',  lbl:'Clima',             val:tiempo },
       { id:'balon',     ico:'⚽️', lbl:'Balón',             val:balon },
+      { id:'compet',    ico:'🏆',  lbl:'Competición',       val:(compKey === 'liga' ? 'Liga EA Sports' : compKey) },
       { id:'nivel',     ico:'🎮',  lbl:'Nivel',             val:nivel },
-      { id:'formaT',    ico:'⬆️',  lbl:'Forma Tuya',        val:formaT },
-      { id:'formaR',    ico:'➡️',  lbl:'Forma Rival',       val:formaR },
-      { id:'duracion',  ico:'⏱️', lbl:'Duración',          val:duracion + (isHvH ? ' vs Humano' : ' vs IA') },
-      { id:'prorroga',  ico:'⏰️', lbl:'Prórroga y Penaltis', val:prorroga },
+      { id:'formaT',    ico:'⬆️',  lbl:'Forma del usuario', val:formaT },
+      { id:'formaR',    ico:'➡️',  lbl:'Forma del rival',   val:formaR },
+      { id:'duracion',  ico:'⏱️', lbl:'Duración base',      val:duracion },
+      { id:'prorroga',  ico:'⏰️', lbl:'Prórroga',           val:prorroga },
+      { id:'penaltis',  ico:'🥅',  lbl:'Penaltis',          val:prorroga },
       { id:'sust',      ico:'🔃',  lbl:'Sustituciones',     val:sust },
-      { id:'ventanas',  ico:'🚪',  lbl:'Ventanas',          val:ventanas },
+      { id:'ventanas',  ico:'🚪',  lbl:'Ventanas de sustitución', val:ventanas },
       { id:'cambioET',  ico:'➕',  lbl:'+1 cambio Prórroga', val:prorroga === 'Sí' ? 'Sí' : 'No aplica' },
-      { id:'balon2',    ico:'⚽️', lbl:'Balón',             val:balon }
+      { id:'balonInfo', ico:'⚽️', lbl:'Balón disponible',   val:'1 opción' }
     ];
     return items;
   }
@@ -4568,6 +4565,13 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   window._ppConfirm = function() {
     if (!_checkAllDone()) return;
+    if (window._ppManualContext && typeof window._abrirResultadoLigaDirect === 'function') {
+      document.getElementById('prepartido-overlay').classList.remove('show');
+      var manual = window._ppManualContext;
+      window._ppManualContext = null;
+      window._abrirResultadoLigaDirect(manual.j, manual.home, manual.away);
+      return;
+    }
     // Reveal venue-bar and ball (in case not yet revealed)
     if (_ppMatchKey) {
       if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {

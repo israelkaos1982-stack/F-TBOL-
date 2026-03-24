@@ -7247,12 +7247,15 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         return r.style.display !== 'none';
       });
       var oldEmpty = block.querySelector('.main-cal-empty');
-      if(oldEmpty) oldEmpty.remove();
       if(!visibleRows.length){
-        var empty = document.createElement('div');
-        empty.className = 'empty-ph main-cal-empty';
-        empty.textContent = 'SIN PARTIDOS DE NUESTROS EQUIPOS';
-        block.appendChild(empty);
+        if(!oldEmpty){
+          var empty = document.createElement('div');
+          empty.className = 'empty-ph main-cal-empty';
+          empty.textContent = 'SIN PARTIDOS DE NUESTROS EQUIPOS';
+          block.appendChild(empty);
+        }
+      } else if(oldEmpty){
+        oldEmpty.remove();
       }
     });
   }
@@ -7264,14 +7267,28 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     setTimeout(applyMainMenuCalendarLogic, 400);
   });
 
+  var _calendarObserverTimer = null;
+  function _queueMainMenuCalendarLogic(){
+    if(_calendarObserverTimer) return;
+    _calendarObserverTimer = window.setTimeout(function(){
+      _calendarObserverTimer = null;
+      applyMainMenuCalendarLogic();
+    }, 120);
+  }
+
   var _obs = new MutationObserver(function(){
-    applyMainMenuCalendarLogic();
+    _queueMainMenuCalendarLogic();
   });
-  if(document.body){
-    _obs.observe(document.body, {childList:true, subtree:true});
+
+  function _attachCalendarObserver(){
+    var screen = document.getElementById('s-calendario');
+    if(!screen) return;
+    _obs.observe(screen, {childList:true, subtree:true});
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _attachCalendarObserver, { once:true });
   } else {
-    document.addEventListener('DOMContentLoaded', function(){
-      _obs.observe(document.body, {childList:true, subtree:true});
-    });
+    _attachCalendarObserver();
   }
 })();

@@ -3921,3 +3921,166 @@
     <div><div class="mvp-force-team-hdr" id="gen-mvp-hdr-b">EQUIPO B</div><div class="mvp-pl-list" id="gen-mvp-list-b"></div></div>
   </div>
 </div>
+<script>
+(function(){
+  'use strict';
+
+  var TEAM = 'Bayern Munich';
+  var RESULTS_KEY = 'ef_liga38_v2';
+  var cursor = 0;
+
+  function esc(s){ return String(s||'').replace(/[&<>\"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]); }); }
+  function loadResults(){ try { return JSON.parse(localStorage.getItem(RESULTS_KEY) || '{}'); } catch(e){ return {}; } }
+  function rKey(j,h,a){ return j + '|' + h + '|' + a; }
+
+  function parseJ1Pending(){
+    var out = [];
+    var round = document.getElementById('cal-l1');
+    if (!round) return out;
+    round.querySelectorAll('.match-live-wrap').forEach(function(card){
+      var teams = card.querySelectorAll('.ml-team-name');
+      if (teams.length < 2) return;
+      var home = String(teams[0].textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+      var away = String(teams[1].textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+      if (home !== TEAM && away !== TEAM) return;
+      var wrapId = card.id || '';
+      var matchKey = wrapId.indexOf('mlw-') === 0 ? wrapId.slice(4) : '';
+      if (!matchKey) return;
+      var scoreA = card.querySelector('[id^="sc-"][id$="-a"]');
+      var scoreB = card.querySelector('[id^="sc-"][id$="-b"]');
+      var played = false;
+      if (scoreA && scoreB) played = !(String(scoreA.textContent).trim() === '0' && String(scoreB.textContent).trim() === '0');
+      var timer = card.querySelector('.ml-timer');
+      if (timer && /FIN/.test(timer.textContent || '')) played = true;
+      if (played) return;
+      out.push({
+        comp: 'Liga EA Sports',
+        round: 'J1',
+        home: home,
+        away: away,
+        matchKey: matchKey,
+        targetScreen: 's-calendario',
+        order: 1
+      });
+    });
+    return out;
+  }
+
+  function buildLigaPending(){
+    var schedule = window.LIGA_SCHEDULE || [];
+    var results = loadResults();
+    var list = [];
+    for (var ji = 1; ji < schedule.length; ji++) {
+      var jornada = schedule[ji] || [];
+      for (var mi = 0; mi < jornada.length; mi++) {
+        var m = jornada[mi] || [];
+        var home = m[0], away = m[1];
+        if (home !== TEAM && away !== TEAM) continue;
+        if (results[rKey(ji + 1, home, away)]) continue;
+        list.push({
+          comp: 'Liga EA Sports',
+          round: 'J' + (ji + 1),
+          home: home,
+          away: away,
+          matchKey: 'lj' + (ji + 1) + 'm' + mi,
+          targetScreen: 's-calendario',
+          order: ji + 1
+        });
+      }
+    }
+    return parseJ1Pending().concat(list).sort(function(a,b){ return a.order - b.order; });
+  }
+
+  function getOpp(team){ return team === TEAM ? null : team; }
+
+  function getLogo(name){
+    if (typeof window.getTeamLogoUrl === 'function') return window.getTeamLogoUrl(name);
+    var map = window.TEAM_LOGO_MAP || window.TEAM_LOGOS || {};
+    return map[name] || '';
+  }
+
+  function renderCard(){
+    var wrap = document.getElementById('bayern-next-card');
+    if (!wrap) return;
+    var prevBtn = document.getElementById('bayern-next-prev');
+    var nextBtn = document.getElementById('bayern-next-next');
+    var matches = buildLigaPending();
+    if (!matches.length) {
+      wrap.innerHTML = '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.6px;color:#f0c040;">SIN PARTIDOS PENDIENTES</div>'
+        + '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;margin-top:8px;">Todos los encuentros de Bayern están actualizados.</div>';
+      if (prevBtn) prevBtn.disabled = true;
+      if (nextBtn) nextBtn.disabled = true;
+      return;
+    }
+    if (cursor >= matches.length) cursor = 0;
+    if (cursor < 0) cursor = matches.length - 1;
+
+    var item = matches[cursor];
+    var opp = getOpp(item.home) || getOpp(item.away) || 'Rival';
+    var teamPower = (window.TEAM_RATINGS && window.TEAM_RATINGS[TEAM]) || 85;
+    var oppPower = (window.TEAM_RATINGS && window.TEAM_RATINGS[opp]) || '??';
+    var homeLogo = getLogo(item.home);
+    var awayLogo = getLogo(item.away);
+
+    wrap.innerHTML = ''
+      + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.6px;color:#f0c040;">PARTIDO PENDIENTE · ' + (cursor + 1) + '/' + matches.length + '</div>'
+      + '<div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:12px;color:rgba(255,255,255,.88);margin-top:6px;">🏆 ' + esc(item.comp) + ' · ' + esc(item.round) + '</div>'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:8px;">'
+      +   (homeLogo ? '<img alt="'+esc(item.home)+'" src="'+esc(homeLogo)+'" style="width:28px;height:28px;object-fit:contain;"/>' : '<span style="font-size:10px;">'+esc(item.home)+'</span>')
+      +   '<span style="font-family:\'Bebas Neue\',sans-serif;letter-spacing:1px;color:#fff;font-size:16px;">VS</span>'
+      +   (awayLogo ? '<img alt="'+esc(item.away)+'" src="'+esc(awayLogo)+'" style="width:28px;height:28px;object-fit:contain;"/>' : '<span style="font-size:10px;">'+esc(item.away)+'</span>')
+      + '</div>'
+      + '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;margin-top:6px;">Bayern (' + esc(teamPower) + ') vs ' + esc(opp) + ' (' + esc(oppPower) + ')</div>'
+      + '<button id="bayern-dashboard-play" style="margin-top:9px;width:100%;border:none;border-radius:6px;padding:8px 10px;font-family:Oswald,sans-serif;letter-spacing:1.2px;background:#f0c040;color:#200;cursor:pointer;">JUGAR</button>';
+
+    if (prevBtn) prevBtn.disabled = matches.length <= 1;
+    if (nextBtn) nextBtn.disabled = matches.length <= 1;
+
+    var play = document.getElementById('bayern-dashboard-play');
+    if (play) {
+      play.onclick = function(){
+        if (typeof window.go === 'function') window.go('s-calendario');
+        setTimeout(function(){
+          var block = document.getElementById('cal-l' + item.round.replace('J',''));
+          if (block && !block.classList.contains('open')) block.classList.add('open');
+          if (typeof window.mlPreviaClick === 'function' && item.matchKey) {
+            try { window.mlPreviaClick(item.matchKey); } catch(e) {}
+          }
+        }, 220);
+      };
+    }
+  }
+
+  function bindArrows(){
+    var prevBtn = document.getElementById('bayern-next-prev');
+    var nextBtn = document.getElementById('bayern-next-next');
+    if (prevBtn && !prevBtn.dataset.bound) {
+      prevBtn.dataset.bound = '1';
+      prevBtn.addEventListener('click', function(){ cursor--; renderCard(); });
+    }
+    if (nextBtn && !nextBtn.dataset.bound) {
+      nextBtn.dataset.bound = '1';
+      nextBtn.addEventListener('click', function(){ cursor++; renderCard(); });
+    }
+  }
+
+  function refresh(){ bindArrows(); renderCard(); }
+
+  var _origGo = window.go;
+  if (typeof _origGo === 'function' && !_origGo.__bayernDashboardHooked) {
+    var patched = function(id){
+      var r = _origGo.apply(this, arguments);
+      if (id === 's-munich' || id === 's-calendario') setTimeout(refresh, 180);
+      return r;
+    };
+    patched.__bayernDashboardHooked = true;
+    window.go = patched;
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    refresh();
+    window.addEventListener('storage', function(ev){ if (!ev || ev.key === RESULTS_KEY) refresh(); });
+    setInterval(refresh, 2500);
+  });
+})();
+</script>

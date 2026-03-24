@@ -48,10 +48,16 @@
 .clas-empty{padding:28px 0;text-align:center;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.3);}
 .clas-legend{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px 10px 4px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:0.5px;color:rgba(255,255,255,.65);}
 .clas-legend-item{display:flex;align-items:center;gap:4px;}
+.clas-jornadas-wrap{margin-top:14px;padding-top:12px;border-top:1px solid rgba(240,192,64,.22);}
+.clas-jornadas-title{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(240,192,64,.92);margin:0 0 10px;}
 </style>
 <div class="clas-wrap">
 <div id="clas-liga-content">
 <div class="clas-empty">Calculando clasificación...</div>
+</div>
+<div class="clas-jornadas-wrap">
+  <div class="clas-jornadas-title">JORNADAS · LIGA EA SPORTS</div>
+  <div id="clas-liga-jornadas"></div>
 </div>
 </div>
 <script>
@@ -367,6 +373,7 @@
     if(hdrScroll && bodyScroll){
       bodyScroll.addEventListener('scroll', function(){ hdrScroll.scrollLeft = bodyScroll.scrollLeft; });
     }
+    if(typeof window.renderLigaClasCalendar === 'function') window.renderLigaClasCalendar();
   }
 
   window.buildLigaClas = buildLigaClas;

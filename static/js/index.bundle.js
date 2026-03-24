@@ -977,35 +977,25 @@ window.TEAM_ALIASES = {
   'fc barcelona':'FC Barcelona',
   'barcelona':'FC Barcelona',
   'athletic club':'Athletic Club',
-  'athletic club de bilbao':'Athletic Club',
-  'athletic bilbao':'Athletic Club',
   'athletic':'Athletic Club',
   'real betis':'Real Betis',
   'betis':'Real Betis',
   'real sociedad':'Real Sociedad',
-  'real sociedad de futbol':'Real Sociedad',
-  'real sociedad de fútbol':'Real Sociedad',
   'sociedad':'Real Sociedad',
   'atletico madrid':'Atlético Madrid',
   'atlético madrid':'Atlético Madrid',
   'atletico':'Atlético Madrid',
   'atlético':'Atlético Madrid',
-  'atleti':'Atlético Madrid',
   'albacete bp':'Albacete BP',
   'albacete':'Albacete BP',
   'villarreal':'Villarreal CF',
   'villarreal cf':'Villarreal CF',
   'sevilla':'Sevilla FC',
   'sevilla fc':'Sevilla FC',
-  'sevilla futbol club':'Sevilla FC',
-  'sevilla fútbol club':'Sevilla FC',
   'espanyol':'Espanyol',
-  'rcd espanyol':'Espanyol',
   'getafe':'Getafe CF',
   'getafe cf':'Getafe CF',
   'rc celta':'Celta de Vigo',
-  'real club celta de vigo':'Celta de Vigo',
-  'real club celta de vigo sad':'Celta de Vigo',
   'celta de vigo':'Celta de Vigo',
   'celta':'Celta de Vigo',
   'ca osasuna':'Osasuna',
@@ -1585,32 +1575,29 @@ window.mlSimulate_j1m10=function(){
   window.TEAM_LOGOS = {
     // ── La Liga 1ª ──────────────────────────────────────────
     'Real Madrid':        _WE  + 'Real_Madrid_CF.svg',
-    'FC Barcelona':       '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
-    'Athletic Club':      '/static/img/escudos-1/spain_athletic-club.football-logos.cc.svg',
-    'Real Betis':         '/static/img/escudos-1/spain_real-betis.football-logos.cc.svg',
-    'Real Sociedad':      '/static/img/escudos-1/spain_real-sociedad.football-logos.cc.svg',
-    'Atlético Madrid':    '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
-    'Villarreal':         '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
-    'Villarreal CF':      '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
-    'Sevilla':            '/static/img/escudos-1/sevilla-fc.svg',
-    'Sevilla FC':         '/static/img/escudos-1/sevilla-fc.svg',
-    'Valencia CF':        '/static/img/escudos-1/spain_valencia.football-logos.cc.svg',
-    'Girona FC':          '/static/img/escudos-1/spain_girona.football-logos.cc.svg',
-    'Rayo Vallecano':     '/static/img/escudos-1/spain_rayo-vallecano.football-logos.cc.svg',
-    'Getafe CF':          '/static/img/escudos-1/spain_getafe.football-logos.cc.svg',
-    'Mallorca':           '/static/img/escudos-1/spain_mallorca.football-logos.cc.svg',
-    'Osasuna':            '/static/img/escudos-1/spain_osasuna.football-logos.cc.svg',
-    'Espanyol':           '/static/img/escudos-1/spain_espanyol.football-logos.cc.svg',
-    'Celta de Vigo':      '/static/img/escudos-1/spain_celta.football-logos.cc.svg',
-    'Deportivo Alavés':   _WC  + 'Deportivo_Alav%C3%A9s_logo_%282020%29.svg',
-    'Elche CF':           '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
-    'Levante UD':         '/static/img/escudos-2/spain_levante.football-logos.cc.svg',
-    'Real Oviedo':        '/static/img/escudos-1/spain_oviedo.football-logos.cc.svg',
+    'FC Barcelona':       _WC  + 'FC_Barcelona_%28crest%29.svg',
+    'Athletic Club':      _WC  + 'Athletic_Club_logo.svg',
+    'Real Betis':         _WC  + 'Real_Betis_logo.svg',
+    'Real Sociedad':      _WC  + 'Real_Sociedad_logo.svg',
+    'Atlético Madrid':    _WC  + 'Atletico_de_Madrid_2017_logo.svg',
+    'Villarreal':         _WC  + 'Villarreal_CF_logo-en.svg',
+    'Villarreal CF':      _WC  + 'Villarreal_CF_logo-en.svg',
+    'Sevilla':            _WC  + 'Sevilla_FC_logo.svg',
+    'Sevilla FC':         _WC  + 'Sevilla_FC_logo.svg',
+    'Valencia CF':        _WC  + 'Valenciacf.svg',
+    'Girona FC':          _WC  + 'Girona_FC.svg',
+    'Rayo Vallecano':     _WC  + 'Rayo_Vallecano_logo.svg',
+    'Getafe CF':          _WC  + 'Getafe_CF_logo.svg',
+    'Mallorca':           _WC  + 'RCD_Mallorca_logo.svg',
+    'Osasuna':            _WC  + 'CA_Osasuna_logo.svg',
+    'Espanyol':           _WC  + 'RCD_Espanyol.svg',
+    'Celta de Vigo':      _WC  + 'RC_Celta_de_Vigo_logo.svg',
     'Bayern Munich':      '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
     'Arsenal':            '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
     'Sporting CP':        '/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
     'PSG':                '/static/img/escudos-1/france_paris-saint-germain.svg',
     'Paris Saint-Germain':'/static/img/escudos-1/france_paris-saint-germain.svg',
+    'Elche CF':           _WC  + 'Elche_CF.svg',
     // ── Liga Hypermotion (2ª) ───────────────────────────────
     'Real Racing Club':   _WC  + 'Racing_de_Santander.svg',
     'RC Deportivo':       _WC  + 'RC_Deportivo_de_La_Coru%C3%B1a_logo.svg',
@@ -1683,55 +1670,15 @@ window.mlSimulate_j1m10=function(){
     'Algeciras CF':       _WC  + 'Algeciras_CF.svg',
   };
 
-  function normalizeTeamLookupKey(name){
-    return String(name || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9 ]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
-  }
-
-  window.resolveCanonicalTeamName = function(name){
+  window.getTeamLogoUrl = function(name){
     var aliases = window.TEAM_ALIASES || {};
     var clean = String(name || '').trim();
-    if (!clean) return '';
-    var direct = aliases[clean.toLowerCase()];
-    if (direct) return direct;
-    var normalizedKey = normalizeTeamLookupKey(clean);
-    var normalizedAlias = aliases[normalizedKey];
-    if (normalizedAlias) return normalizedAlias;
-    var simplified = normalizedKey
-      .replace(/\b(cf|fc|club|de|del|sad)\b/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (simplified && aliases[simplified]) return aliases[simplified];
-    return clean;
-  };
-
-  window.getTeamLogoUrl = function(name){
-    var clean = String(name || '').trim();
-    var canonical = window.resolveCanonicalTeamName ? window.resolveCanonicalTeamName(clean) : clean;
+    var canonical = aliases[clean.toLowerCase()] || clean;
     var logos = window.TEAM_LOGOS || {};
     if (logos[canonical]) return logos[canonical];
     if (logos[clean]) return logos[clean];
-    var logoKeys = Object.keys(logos);
-    var canonicalNorm = normalizeTeamLookupKey(canonical);
-    for (var i = 0; i < logoKeys.length; i++) {
-      if (normalizeTeamLookupKey(logoKeys[i]) === canonicalNorm) return logos[logoKeys[i]];
-    }
     var ratings = window.TEAM_RATINGS || {};
     var meta = ratings[canonical] || ratings[clean];
-    if (!meta) {
-      var ratingKeys = Object.keys(ratings);
-      for (var j = 0; j < ratingKeys.length; j++) {
-        if (normalizeTeamLookupKey(ratingKeys[j]) === canonicalNorm) {
-          meta = ratings[ratingKeys[j]];
-          break;
-        }
-      }
-    }
     if (meta && typeof meta === 'object' && meta.shield) return meta.shield;
     return '';
   };
@@ -7001,8 +6948,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 (function(){
   var ROUTE_EXPLICIT = {
     's-home': '/',
+    's-calendario': '/calendario',
     's-espana': '/espana',
     's-liga': '/espana/liga-ea-sports',
+    's-liga-cal': '/espana/liga-ea-sports/calendario',
     's-liga-clas': '/espana/liga-ea-sports/clasificacion',
     's-liga-stats': '/espana/liga-ea-sports/estadisticas',
     's-segunda': '/espana/liga-hypermotion',
@@ -7260,83 +7209,55 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       : '3px solid rgba(106,224,141,.85)';
   }
 
-  function _collectMainTeamRows(){
-    var sourceScreen = document.getElementById('s-calendario');
-    if(!sourceScreen) return [];
+  function applyMainMenuCalendarLogic(){
+    var screen = document.getElementById('s-calendario');
+    if(!screen) return;
 
-    var jornadas = [];
-    var blocks = sourceScreen.querySelectorAll('.jblock');
+    var blocks = screen.querySelectorAll('.jmatches');
     blocks.forEach(function(block){
-      var btn = block.querySelector('.jbtn');
-      var matches = block.querySelector('.jmatches');
-      if(!btn || !matches) return;
-
-      var label = (btn.textContent || '').replace(/\s+/g, ' ').trim();
-      var rows = [];
       var seen = {};
+      var rows = block.querySelectorAll('.mrow');
 
-      matches.querySelectorAll('.mrow').forEach(function(row){
+      rows.forEach(function(row){
         var homeEl = row.querySelector('.mn:not(.r)');
         var awayEl = row.querySelector('.mn.r');
-        var scoreEl = row.querySelector('.ms');
         if(!homeEl || !awayEl) return;
 
         var home = _normTeamName(homeEl.textContent);
         var away = _normTeamName(awayEl.textContent);
         var include = _isMainCalTeam(home) || _isMainCalTeam(away);
-        if(!include) return;
+
+        if(!include){
+          row.style.display = 'none';
+          return;
+        }
 
         var key = [home, away].sort().join('::');
-        if(seen[key]) return;
+        if(seen[key]){
+          row.style.display = 'none';
+          return;
+        }
         seen[key] = true;
 
-        rows.push({
-          home: homeEl.textContent.trim(),
-          away: awayEl.textContent.trim(),
-          score: scoreEl ? scoreEl.textContent.trim() : 'vs',
-          isMainVsMain: _isMainCalTeam(home) && _isMainCalTeam(away)
-        });
+        row.style.display = '';
+        _paintRow(row, _isMainCalTeam(home) && _isMainCalTeam(away));
       });
 
-      if(rows.length){
-        jornadas.push({ label: label, rows: rows });
+      var visibleRows = Array.from(block.querySelectorAll('.mrow')).filter(function(r){
+        return r.style.display !== 'none';
+      });
+      var oldEmpty = block.querySelector('.main-cal-empty');
+      if(!visibleRows.length){
+        if(!oldEmpty){
+          var empty = document.createElement('div');
+          empty.className = 'empty-ph main-cal-empty';
+          empty.textContent = 'SIN PARTIDOS DE NUESTROS EQUIPOS';
+          block.appendChild(empty);
+        }
+      } else if(oldEmpty){
+        oldEmpty.remove();
       }
     });
-
-    return jornadas;
-  }
-
-  function applyMainMenuCalendarLogic(){
-    var target = document.getElementById('nuestros-partidos-list');
-    if(!target) return;
-
-    var jornadas = _collectMainTeamRows();
-    if(!jornadas.length){
-      target.innerHTML = '<div class="empty-ph main-cal-empty">SIN PARTIDOS DE NUESTROS EQUIPOS</div>';
-      return;
-    }
-
-    var html = '';
-    jornadas.forEach(function(jornada, idx){
-      var jid = 'mis-j' + (idx + 1);
-      html += '<div class="jblock">';
-      html += '<button class="jbtn c-liga" onclick="tog(\'' + jid + '\')"><div class="pdot">▶</div>⚽ ' + jornada.label + '</button>';
-      html += '<div class="jmatches" id="' + jid + '">';
-
-      jornada.rows.forEach(function(match){
-        html += '<div class="mrow" style="' + (match.isMainVsMain
-          ? 'background:linear-gradient(90deg, rgba(84,32,120,.36), rgba(126,59,168,.36));border-left:3px solid rgba(186,113,255,.85);'
-          : 'background:linear-gradient(90deg, rgba(20,120,66,.30), rgba(41,162,93,.30));border-left:3px solid rgba(106,224,141,.85);') + '">';
-        html += '<div class="mn">' + match.home + '</div>';
-        html += '<div class="ms">' + match.score + '</div>';
-        html += '<div class="mn r">' + match.away + '</div>';
-        html += '</div>';
-      });
-
-      html += '</div></div>';
-    });
-
-    target.innerHTML = html;
   }
 
   window.applyMainMenuCalendarLogic = applyMainMenuCalendarLogic;
@@ -7360,8 +7281,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   });
 
   function _attachCalendarObserver(){
-    var sourceScreen = document.getElementById('s-calendario');
-    if(sourceScreen) _obs.observe(sourceScreen, {childList:true, subtree:true});
+    var screen = document.getElementById('s-calendario');
+    if(!screen) return;
+    _obs.observe(screen, {childList:true, subtree:true});
   }
 
   if(document.readyState === 'loading'){

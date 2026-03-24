@@ -2303,7 +2303,7 @@
     if (esHumano(home) || esHumano(away)) {
       var h = home.replace(/'/g, "\\'");
       var a = away.replace(/'/g, "\\'");
-      return '<div class="ms p previa" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')">📋 Previa</div>';
+      return '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')" style="font-size:11px;padding:3px 8px;">⚙️ Configurar</button>';
     }
     return '<div class="ms p">vs</div>';
   }
@@ -2928,7 +2928,7 @@
 
   /* ── ENTRADA RESULTADO HUMANO (modal interactivo) ── */
   var _gm = { j:0, home:'', away:'', sc:{a:0,b:0}, events:[], etDone:false, finished:false,
-              timerSec:0, timerRunning:false, timerInterval:null, pendingEvt:null, isHvH:false };
+              timerSec:0, timerRunning:false, timerInterval:null, pendingEvt:null, pendingTeam:null, isHvH:false };
   var GM_MAX_NORMAL = 5400; /* 90 min */
   var GM_MAX_ET     = 7200; /* 120 min */
   var GM_TICK       = 300;  /* 5 seg real = 5 min juego */
@@ -2970,8 +2970,11 @@
   window.gmHideEvents = function () {
     document.getElementById('gm-event-panel').style.display = 'none';
     document.getElementById('gm-team-pick').style.display = 'none';
+    var pp = document.getElementById('gm-player-pick');
+    if (pp) pp.style.display = 'none';
     document.getElementById('gm-add-btn').classList.remove('open');
     _gm.pendingEvt = null;
+    _gm.pendingTeam = null;
   };
 
   window.gmPickEvent = function (label, type) {
@@ -2984,19 +2987,54 @@
     document.getElementById('gm-team-pick').style.display = '';
   };
 
+  function _gmGetSquad(teamName) {
+    var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
+    if (!sq.length && typeof window.sqFromRegistryFull === 'function') {
+      sq = window.sqFromRegistryFull(teamName) || [];
+    }
+    if (!sq.length) return [['', 'Jugador 1'], ['', 'Jugador 2'], ['', 'Jugador 3']];
+    return sq;
+  }
+
+  function _gmRenderPlayerPick(team) {
+    var teamName = team === 'a' ? _gm.home : _gm.away;
+    var pick = document.getElementById('gm-player-pick');
+    var title = document.getElementById('gm-player-title');
+    var list = document.getElementById('gm-player-list');
+    if (!pick || !title || !list) return;
+    title.textContent = (_gm.pendingEvt ? _gm.pendingEvt.label : 'Evento') + ' · ' + teamName;
+    var sq = _gmGetSquad(teamName);
+    list.innerHTML = sq.map(function(p){
+      var num = String((p && p[0]) || '').trim();
+      var name = String((p && p[1]) || '').trim() || 'Jugador';
+      var nEsc = name.replace(/'/g, "\\'");
+      var numLbl = num ? (num + '. ') : '';
+      return '<button class="gm-player-btn" onclick="window.gmPickPlayer(\'' + team + '\',\'' + num.replace(/'/g, "\\'") + '\',\'' + nEsc + '\')">' + numLbl + name + '</button>';
+    }).join('');
+    pick.style.display = '';
+  }
+
   window.gmPickTeam = function (team) {
+    if (!_gm.pendingEvt) return;
+    _gm.pendingTeam = team;
+    document.getElementById('gm-team-pick').style.display = 'none';
+    _gmRenderPlayerPick(team);
+  };
+
+  window.gmPickPlayer = function (team, num, playerName) {
     if (!_gm.pendingEvt) return;
     var evt = _gm.pendingEvt;
     _gm.pendingEvt = null;
-    document.getElementById('gm-team-pick').style.display = 'none';
+    _gm.pendingTeam = null;
     document.getElementById('gm-add-btn').classList.remove('open');
-
+    var pp = document.getElementById('gm-player-pick');
+    if (pp) pp.style.display = 'none';
     var min = Math.floor(_gm.timerSec / 60);
     var ico = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽', 'pen-gol':'🥅⚽',
                 'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅',
                 amarilla:'🟨', 'damarilla':'🟨🟥', roja:'🟥', mvp:'⭐', lesion:'🩹' }[evt.type] || '📋';
     var teamName = team === 'a' ? _gm.home : _gm.away;
-    _gm.events.push({ type: evt.type, label: evt.label, team: team, min: min });
+    _gm.events.push({ type: evt.type, label: evt.label, team: team, min: min, num: num || '', player: playerName || '' });
 
     /* actualizar marcador */
     var goalTypes = ['gol','falta-gol','pen-gol'];
@@ -3011,9 +3049,10 @@
     var li = document.createElement('div');
     li.className = 'ml-acta-item';
     li.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:11px;border-bottom:1px solid rgba(255,255,255,.06);';
+    var pLabel = ((num && String(num).trim()) ? (num + '. ') : '') + (playerName || 'Jugador');
     li.innerHTML = '<span style="color:#aaa;min-width:22px;">' + min + "'</span>"
       + '<span>' + ico + '</span>'
-      + '<span style="color:#ddd;">' + evt.label + '</span>'
+      + '<span style="color:#ddd;">' + pLabel + ' · ' + evt.label + '</span>'
       + '<span style="color:#aaa;font-size:10px;margin-left:auto;">' + teamName + '</span>';
     var list = document.getElementById('gm-acta-list');
     list.appendChild(li);
@@ -3069,6 +3108,8 @@
     document.getElementById('gm-acta-list').innerHTML = '<div class="ml-acta-empty" style="padding:8px;color:#555;font-size:11px;text-align:center;">Sin eventos aún</div>';
     document.getElementById('gm-event-panel').style.display = 'none';
     document.getElementById('gm-team-pick').style.display = 'none';
+    var gmPP = document.getElementById('gm-player-pick');
+    if (gmPP) gmPP.style.display = 'none';
     var etBtn = document.getElementById('gm-btn-et');
     if (etBtn) { etBtn.style.display = isHvH ? '' : 'none'; etBtn.disabled = false; etBtn.style.opacity = '1'; }
     var endBtn = document.getElementById('gm-btn-end');
@@ -3727,11 +3768,17 @@
         var clickFn = m.fn
           ? 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ',\'' + m.fn + '\')'
           : 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ')';
+        var isDestacadoManual = isManual && esPartidoDestacado(m.home, m.away);
+        var cardStyle = isDestacadoManual
+          ? 'margin-bottom:10px;border:1px solid rgba(170,100,255,.6);box-shadow:0 0 0 1px rgba(170,100,255,.35) inset;background:linear-gradient(180deg,rgba(80,26,120,.28),rgba(20,12,35,.85));'
+          : isManual
+            ? 'margin-bottom:10px;border:1px solid rgba(60,210,120,.55);box-shadow:0 0 0 1px rgba(60,210,120,.25) inset;background:linear-gradient(180deg,rgba(18,68,35,.22),rgba(10,18,12,.85));'
+            : 'margin-bottom:10px;';
         var actionButton = isManual
-          ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">📋 PREVIA</button>'
+          ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">⚙️ CONFIGURAR</button>'
           : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';
 
-        html += '<div class="match-live-wrap" id="iapnd-' + mk + '" style="margin-bottom:10px;">'
+        html += '<div class="match-live-wrap" id="iapnd-' + mk + '" style="' + cardStyle + '">'
           + '<div class="ml-header">'
           + '<div class="ml-team">'
           +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
@@ -3855,6 +3902,14 @@
   font-family: "Oswald",sans-serif; letter-spacing: .5px; cursor: pointer;
 }
 .gm-tp-btn:active { background: rgba(255,255,255,.2); }
+#gm-player-title { font-size: 11px; font-weight: 700; color: #ddd; margin-bottom: 8px; letter-spacing: 1px; }
+#gm-player-list { display: flex; flex-direction: column; gap: 6px; max-height: 190px; overflow: auto; padding-right: 2px; }
+.gm-player-btn {
+  width: 100%; text-align: left; padding: 7px 9px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06);
+  color: #fff; font-size: 11px; cursor: pointer; font-family: 'Rajdhani', sans-serif; font-weight: 700;
+}
+.gm-player-btn:hover { background: rgba(50,140,255,.2); border-color: rgba(100,180,255,.5); }
 #gm-acta-section { border-top: 1px solid rgba(255,255,255,.08); }
 #gm-acta-toggle {
   display: flex; align-items: center; justify-content: space-between;
@@ -3960,6 +4015,17 @@
         <button class="gm-tp-btn" id="gm-tp-btn-a" onclick="window.gmPickTeam('a')">EQUIPO A</button>
         <button class="gm-tp-btn" id="gm-tp-btn-b" onclick="window.gmPickTeam('b')">EQUIPO B</button>
       </div>
+      <button onclick="window.gmHideEvents()"
+        style="width:100%;margin-top:6px;padding:6px;border-radius:5px;border:1px solid rgba(255,255,255,.12);
+               background:rgba(255,255,255,.04);color:#888;font-size:10px;cursor:pointer;">
+        ✕ Cancelar
+      </button>
+    </div>
+
+    <!-- Player picker -->
+    <div id="gm-player-pick" style="display:none;margin-top:8px;">
+      <div id="gm-player-title">SELECCIONA JUGADOR</div>
+      <div id="gm-player-list"></div>
       <button onclick="window.gmHideEvents()"
         style="width:100%;margin-top:6px;padding:6px;border-radius:5px;border:1px solid rgba(255,255,255,.12);
                background:rgba(255,255,255,.04);color:#888;font-size:10px;cursor:pointer;">

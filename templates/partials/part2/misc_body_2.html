@@ -3551,7 +3551,7 @@
     };
   }
 
-  /* ── SECCIÓN IA vs IA (bajo clasificación) ───────── */
+  /* ── SECCIÓN PARTIDOS (bajo clasificación) ───────── */
   /* Mapa team pair → mlSimulate function name (jornada 1 AI matches) */
   var _J1_IA_MAP = {
     'Sevilla·Atlético Madrid':    'mlSimulate_j1m4',
@@ -3625,17 +3625,14 @@
       if (j === 1) {
         var j1done = {};
         (window.LIGA_J1_RESULTS || []).forEach(function (r) {
-          if (!esHumano(r.home) && !esHumano(r.away)) {
-            var lsRes = results[rKey(1, r.home, r.away)];
-            matches.push({ home: r.home, away: r.away, gh: r.gh, ga: r.ga_,
-                           events: lsRes ? lsRes.events : null,
-                           mvp: lsRes ? lsRes.mvp : null,
-                           mvpTeam: lsRes ? lsRes.mvpTeam : null });
-          }
+          var lsRes = results[rKey(1, r.home, r.away)];
+          matches.push({ home: r.home, away: r.away, gh: r.gh, ga: r.ga_,
+                         events: lsRes ? lsRes.events : null,
+                         mvp: lsRes ? lsRes.mvp : null,
+                         mvpTeam: lsRes ? lsRes.mvpTeam : null });
           j1done[r.home + '\xB7' + r.away] = true;
         });
         SCHEDULE[0].forEach(function (m) {
-          if (esHumano(m[0]) || esHumano(m[1])) return;
           var mk = m[0] + '\xB7' + m[1];
           if (j1done[mk]) return;
           var res = results[rKey(1, m[0], m[1])];
@@ -3644,7 +3641,6 @@
         });
       } else {
         SCHEDULE[j - 1].forEach(function (m) {
-          if (esHumano(m[0]) || esHumano(m[1])) return;
           var res = results[rKey(j, m[0], m[1])];
           if (res) { matches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga, events: res.events, mvp: res.mvp, mvpTeam: res.mvpTeam }); }
           else { pending.push({ home: m[0], away: m[1], fn: '' }); }
@@ -3652,7 +3648,7 @@
       }
 
       var bid          = 'ia-j' + j;
-      var pendingCount = pending.length;
+      var pendingIAOnly = pending.filter(function (m) { return !esHumano(m.home) && !esHumano(m.away); }).length;
 
       /* ── Jornada header (sin contadores ni SIM) ── */
       html += '<div class="jblock"><button class="jbtn c-liga" onclick="tog(\'' + bid + '\')"'
@@ -3661,7 +3657,7 @@
         + '</button><div class="jmatches" id="' + bid + '" style="padding:8px;">';
 
       /* ── SIM button inside dropdown (only if pending) ── */
-      if (pendingCount > 0 && j !== 1) {
+      if (pendingIAOnly > 0 && j !== 1) {
         html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">'
           + '<button onclick="window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);"'
           + ' style="padding:5px 14px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:4px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;">&#129302; SIM J' + j + '</button>'
@@ -3725,9 +3721,15 @@
         var rB  = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.away]) || 75;
         var mk  = 'iapnd-j' + j + '-' + m.home.replace(/\s/g,'') + '-' + m.away.replace(/\s/g,'');
         var emk = mk.replace(/'/g,"\\'");
+        var isManual = esHumano(m.home) || esHumano(m.away);
+        var hEsc = m.home.replace(/'/g,"\\'");
+        var aEsc = m.away.replace(/'/g,"\\'");
         var clickFn = m.fn
-          ? 'window.iaSimLive(\'' + emk + '\',\'' + m.home.replace(/'/g,"\\'") + '\',\'' + m.away.replace(/'/g,"\\'") + '\',' + j + ',\'' + m.fn + '\')'
-          : 'window.iaSimLive(\'' + emk + '\',\'' + m.home.replace(/'/g,"\\'") + '\',\'' + m.away.replace(/'/g,"\\'") + '\',' + j + ')';
+          ? 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ',\'' + m.fn + '\')'
+          : 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ')';
+        var actionButton = isManual
+          ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">📋 PREVIA</button>'
+          : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';
 
         html += '<div class="match-live-wrap" id="iapnd-' + mk + '" style="margin-bottom:10px;">'
           + '<div class="ml-header">'
@@ -3738,7 +3740,7 @@
           + '</div>'
           + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;">'
           +   '<div class="ml-score"><span id="ia-sc-' + mk + '-a">–</span>&ndash;<span id="ia-sc-' + mk + '-b">–</span></div>'
-          +   '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>'
+          +   actionButton
           + '</div>'
           + '<div class="ml-team">'
           +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div>'
@@ -3753,7 +3755,7 @@
       html += '</div></div>';
     }
     container.innerHTML = html
-      || '<div style="padding:12px;color:#555;font-size:13px;">Sin resultados IA a\xfan</div>';
+      || '<div style="padding:12px;color:#555;font-size:13px;">Sin partidos disponibles a\xfan</div>';
     /* Restore open jornada after rebuild (prevents collapsing on simulation end) */
     if (window._iaKeepOpen) {
       var keepEl = document.getElementById(window._iaKeepOpen);

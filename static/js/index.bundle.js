@@ -1026,7 +1026,18 @@ window.TEAM_ALIASES = {
   'córdoba cf':'Córdoba CF',
   'cordoba cf':'Córdoba CF',
   'cordoba':'Córdoba CF',
-  'córdoba':'Córdoba CF'
+  'córdoba':'Córdoba CF',
+  'lugo':'CD Lugo',
+  'cd lugo':'CD Lugo',
+  'cultural leonesa':'Cultural Leonesa',
+  'hercules':'Hércules CF',
+  'hércules':'Hércules CF',
+  'algeciras':'Algeciras CF',
+  'algeciras cf':'Algeciras CF',
+  'murcia':'Real Murcia',
+  'real murcia':'Real Murcia',
+  'psg':'PSG',
+  'paris saint germain':'Paris Saint-Germain'
 };
 window.sqFromRegistry = function(teamName, opts) {
   // opts: { excluded: ['NombreJugador',...] }  ← lesionados/sancionados
@@ -1668,6 +1679,11 @@ window.mlSimulate_j1m10=function(){
     'Recreativo de Huelva': _WC + 'Recreativo_de_Huelva.svg',
     'Mérida AD':          _WC  + 'M%C3%A9rida_AD.svg',
     'Algeciras CF':       _WC  + 'Algeciras_CF.svg',
+    'Lugo':               '/static/img/escudos-2/spain_lugo.football-logos.cc.svg',
+    'Cultural Leonesa':   '/static/img/escudos-2/spain_cultural-leonesa.football-logos.cc.svg',
+    'Hércules':           '/static/img/escudos-3/spain_hercules.football-logos.cc.svg',
+    'Algeciras':          '/static/img/escudos-3/spain_algeciras.football-logos.cc.svg',
+    'Murcia':             '/static/img/escudos-3/spain_murcia.football-logos.cc.svg',
   };
 
   window.getTeamLogoUrl = function(name){

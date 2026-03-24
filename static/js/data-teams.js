@@ -2,19 +2,19 @@ window.TEAM_RATINGS = {
     // --- CARPETA EXCLUSIVA: escudos-main (Para que el Menú nunca falle) ---
     "Bayern Munich": { 
         media: 85, color: "#dc052d", 
-        shield: "/static/img/escudos-main/germany_bayern-munchen.football-logos.cc.svg" 
+        shield: "/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" 
     },
     "Arsenal": { 
         media: 85, color: "#ef0107", 
-        shield: "/static/img/escudos-main/england_arsenal.football-logos.cc.svg" 
+        shield: "/static/img/escudos-1/england_arsenal.football-logos.cc.svg" 
     },
     "Real Madrid": { 
         media: 85, color: "#ffffff", 
-        shield: "/static/img/escudos-main/spain_real-madrid.football-logos.cc.svg" 
+        shield: "/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg" 
     },
     "Sporting CP": { 
         media: 79, color: "#006600", 
-        shield: "/static/img/escudos-main/portugal_sporting-cp.football-logos.cc.svg" 
+        shield: "/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg" 
     },
     "PSG": {
         media: 84, color: "#0b1d48",
@@ -26,7 +26,7 @@ window.TEAM_RATINGS = {
     },
     "FC Barcelona": { 
         media: 85, color: "#004d98", 
-        shield: "/static/img/escudos-main/spain_barcelona.football-logos.cc.svg"
+        shield: "/static/img/escudos-1/spain_barcelona.football-logos.cc.svg"
      },
 
     "Atlético Madrid": { media: 83, color: "#cb3524", shield: "/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg" },

@@ -1563,9 +1563,6 @@
   <button class="btn-action btn-action-sim" onclick="window.simularLigaSegundaMenu && window.simularLigaSegundaMenu()"><span class="btn-action-ico">🎮</span>Simular</button>
   <button class="btn-action btn-action-rst" onclick="window.reiniciarLigaSegundaMenu && window.reiniciarLigaSegundaMenu()"><span class="btn-action-ico">♻️</span>Reiniciar</button>
 </div>
-<div class="liga-stats-wrap" id="segunda-stats-dashboard" style="margin-bottom:18px">
-<div class="liga-stat-empty">Simula la liga para rellenar las estadísticas.</div>
-</div>
 <div class="clas-wrap">
 <div id="clas-segunda-content">
 <div class="clas-empty">Pulsa <b>Simular</b> para generar la clasificación.</div>
@@ -1573,7 +1570,16 @@
 </div>
 </div>
 
-<!-- s-segunda-stats removed: stats embedded in s-segunda-clas -->
+</div>
+
+<div class="screen" id="s-segunda-stats">
+<button class="back-btn" onclick="go('s-segunda')">◀ Volver</button>
+<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_la-liga-2.football-logos.cc.svg" alt="Hypermotion"/><h2>Liga Hypermotion · Estadísticas</h2></div>
+<div class="liga-stats-wrap" id="segunda-stats-dashboard">
+<div class="liga-stat-empty">Simula la liga para rellenar las estadísticas.</div>
+</div>
+</div>
+
 
 <script>
 (function(){
@@ -3700,3 +3706,8 @@
 </div>
 </div>
 </div>
+
+<style>
+.home-top-btn{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:999;background:rgba(15,22,32,.95);border:1px solid rgba(240,192,64,.35);color:#fff;padding:7px 14px;border-radius:16px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer}.home-top-btn:hover{border-color:#f0c040;color:#f0c040}
+</style>
+<script>(function(){if(document.getElementById('home-top-btn'))return;var b=document.createElement('button');b.id='home-top-btn';b.className='home-top-btn';b.type='button';b.innerHTML='🏠 Inicio';b.onclick=function(){if(typeof go==='function')go('s-home');};document.addEventListener('DOMContentLoaded',function(){document.body.appendChild(b);});})();</script>

@@ -7161,3 +7161,117 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     bootRouter();
   }
 })();
+
+/* main menu calendar ownership filter (5 equipos principales) */
+(function(){
+  var MAIN_CAL_TEAMS = {
+    'Real Madrid': true,
+    'FC Barcelona': true,
+    'Bayern Munich': true,
+    'Arsenal': true,
+    'Sporting CP': true
+  };
+
+  var MAIN_CAL_ALIAS = {
+    'real madrid': 'Real Madrid',
+    'fc barcelona': 'FC Barcelona',
+    'barcelona': 'FC Barcelona',
+    'barca': 'FC Barcelona',
+    'bayern munich': 'Bayern Munich',
+    'fc bayern munich': 'Bayern Munich',
+    'bayern': 'Bayern Munich',
+    'arsenal': 'Arsenal',
+    'arsenal fc': 'Arsenal',
+    'sporting cp': 'Sporting CP',
+    'sporting': 'Sporting CP',
+    'sporting de portugal': 'Sporting CP'
+  };
+
+  function _normTeamName(name){
+    var raw = String(name || '').trim();
+    var key = raw
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    return MAIN_CAL_ALIAS[key] || raw;
+  }
+
+  function _isMainCalTeam(name){
+    return !!MAIN_CAL_TEAMS[_normTeamName(name)];
+  }
+
+  function _paintRow(row, isMainVsMain){
+    row.style.background = isMainVsMain
+      ? 'linear-gradient(90deg, rgba(84,32,120,.36), rgba(126,59,168,.36))'
+      : 'linear-gradient(90deg, rgba(20,120,66,.30), rgba(41,162,93,.30))';
+    row.style.borderLeft = isMainVsMain
+      ? '3px solid rgba(186,113,255,.85)'
+      : '3px solid rgba(106,224,141,.85)';
+  }
+
+  function applyMainMenuCalendarLogic(){
+    var screen = document.getElementById('s-calendario');
+    if(!screen) return;
+
+    var blocks = screen.querySelectorAll('.jmatches');
+    blocks.forEach(function(block){
+      var seen = {};
+      var rows = block.querySelectorAll('.mrow');
+
+      rows.forEach(function(row){
+        var homeEl = row.querySelector('.mn:not(.r)');
+        var awayEl = row.querySelector('.mn.r');
+        if(!homeEl || !awayEl) return;
+
+        var home = _normTeamName(homeEl.textContent);
+        var away = _normTeamName(awayEl.textContent);
+        var include = _isMainCalTeam(home) || _isMainCalTeam(away);
+
+        if(!include){
+          row.style.display = 'none';
+          return;
+        }
+
+        var key = [home, away].sort().join('::');
+        if(seen[key]){
+          row.style.display = 'none';
+          return;
+        }
+        seen[key] = true;
+
+        row.style.display = '';
+        _paintRow(row, _isMainCalTeam(home) && _isMainCalTeam(away));
+      });
+
+      var visibleRows = Array.from(block.querySelectorAll('.mrow')).filter(function(r){
+        return r.style.display !== 'none';
+      });
+      var oldEmpty = block.querySelector('.main-cal-empty');
+      if(oldEmpty) oldEmpty.remove();
+      if(!visibleRows.length){
+        var empty = document.createElement('div');
+        empty.className = 'empty-ph main-cal-empty';
+        empty.textContent = 'SIN PARTIDOS DE NUESTROS EQUIPOS';
+        block.appendChild(empty);
+      }
+    });
+  }
+
+  window.applyMainMenuCalendarLogic = applyMainMenuCalendarLogic;
+
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(applyMainMenuCalendarLogic, 0);
+    setTimeout(applyMainMenuCalendarLogic, 400);
+  });
+
+  var _obs = new MutationObserver(function(){
+    applyMainMenuCalendarLogic();
+  });
+  if(document.body){
+    _obs.observe(document.body, {childList:true, subtree:true});
+  } else {
+    document.addEventListener('DOMContentLoaded', function(){
+      _obs.observe(document.body, {childList:true, subtree:true});
+    });
+  }
+})();

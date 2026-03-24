@@ -2978,6 +2978,9 @@ function actaTog(matchKey) {
 
 // ── Botón PREVIA: cuestionario pre-partido → sanciones ──
 function mlPreviaClick(matchKey) {
+  if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {
+    window._mlEnsureLegacyPreMatchStructure(matchKey);
+  }
   var wrap = document.getElementById('mlw-' + matchKey);
   var compKey = 'liga';
   var isHvH = wrap && wrap.classList.contains('hvh');
@@ -3024,6 +3027,69 @@ function mlPreviaClick(matchKey) {
     window.showPrePartidoOverlay(matchKey, compKey, prorroga, duracion, isHvH);
   }
 }
+
+// ── Compatibilidad: restaurar flujo antiguo PREVIA → ajustes → partido ──
+(function() {
+  function _resolveWrap(matchKey) {
+    return document.getElementById('mlw-' + matchKey);
+  }
+
+  function _ensureIds(matchKey) {
+    var wrap = _resolveWrap(matchKey);
+    if (!wrap) return;
+    var venue = wrap.querySelector('.ml-venue-bar');
+    if (venue && !venue.id) venue.id = 'venue-bar-' + matchKey;
+    var ballWrap = wrap.querySelector('.ml-score-wrap');
+    if (ballWrap && !ballWrap.id) ballWrap.id = 'ball-wrap-' + matchKey;
+  }
+
+  function _setPreMatchStage(matchKey, unlocked) {
+    var wrap = _resolveWrap(matchKey);
+    if (!wrap) return;
+    _ensureIds(matchKey);
+    var timerBtn = document.getElementById('ml-timer-' + matchKey);
+    var addBtn = document.getElementById('ml-add-btn-' + matchKey);
+    var actBar = document.getElementById('ml-actions-bar-' + matchKey);
+    var previaBtn = document.getElementById('ml-previa-' + matchKey);
+    if (previaBtn) previaBtn.style.display = unlocked ? 'none' : '';
+    if (timerBtn) timerBtn.style.display = unlocked ? '' : 'none';
+    if (addBtn) addBtn.style.visibility = unlocked ? '' : 'hidden';
+    if (actBar) actBar.style.visibility = unlocked ? '' : 'hidden';
+    if (unlocked) wrap.setAttribute('data-prepartido-ready', '1');
+  }
+
+  window._mlEnsureLegacyPreMatchStructure = function(matchKey) {
+    var wrap = _resolveWrap(matchKey);
+    if (!wrap) return;
+    _ensureIds(matchKey);
+    var scoreWrap = wrap.querySelector('.ml-score-wrap');
+    var timerBtn = document.getElementById('ml-timer-' + matchKey);
+    if (scoreWrap && timerBtn && !document.getElementById('ml-previa-' + matchKey)) {
+      var previaBtn = document.createElement('button');
+      previaBtn.id = 'ml-previa-' + matchKey;
+      previaBtn.className = 'ml-previa-btn';
+      previaBtn.innerHTML = '📋 PREVIA';
+      previaBtn.onclick = function() { mlPreviaClick(matchKey); };
+      if (timerBtn.nextSibling) scoreWrap.insertBefore(previaBtn, timerBtn.nextSibling);
+      else scoreWrap.appendChild(previaBtn);
+    }
+    var unlocked = wrap.getAttribute('data-prepartido-ready') === '1';
+    _setPreMatchStage(matchKey, unlocked);
+  };
+
+  function _initAllPreviaButtons() {
+    document.querySelectorAll('.match-live-wrap.hvh[id^="mlw-"]').forEach(function(wrap) {
+      var matchKey = wrap.id.replace('mlw-', '');
+      window._mlEnsureLegacyPreMatchStructure(matchKey);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initAllPreviaButtons);
+  } else {
+    _initAllPreviaButtons();
+  }
+})();
 
 function _renderSancionBanner(matchKey, bodyEl) {
   var humanKeys = ['j1m1','j1m2','j1m3'];
@@ -4504,6 +4570,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (!_checkAllDone()) return;
     // Reveal venue-bar and ball (in case not yet revealed)
     if (_ppMatchKey) {
+      if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {
+        window._mlEnsureLegacyPreMatchStructure(_ppMatchKey);
+      }
       var vbar = document.getElementById('venue-bar-' + _ppMatchKey);
       var bwrap = document.getElementById('ball-wrap-' + _ppMatchKey);
       if (vbar) vbar.classList.remove('pre-hidden');
@@ -4523,10 +4592,18 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         if (addBtn) addBtn.style.visibility = '';
         var actBar = document.getElementById('ml-actions-bar-' + mk);
         if (actBar) actBar.style.visibility = '';
+        var wrap = document.getElementById('mlw-' + mk);
+        if (wrap) wrap.setAttribute('data-prepartido-ready', '1');
       });
     } else {
       var timerBtn = document.getElementById('ml-timer-' + mk);
       if (timerBtn) timerBtn.style.display = '';
+      var addBtn = document.getElementById('ml-add-btn-' + mk);
+      if (addBtn) addBtn.style.visibility = '';
+      var actBar = document.getElementById('ml-actions-bar-' + mk);
+      if (actBar) actBar.style.visibility = '';
+      var wrap = document.getElementById('mlw-' + mk);
+      if (wrap) wrap.setAttribute('data-prepartido-ready', '1');
     }
   };
 

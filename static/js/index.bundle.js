@@ -6926,10 +6926,32 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     };
   }
   window.reiniciarLigaEA = function(){
-    if(!confirm('⚠️ ¿Reiniciar Liga EA Sports?\nSe eliminarán todos los resultados guardados y la clasificación volverá al estado inicial.')) return;
+    if(!confirm('⚠️ ¿Reiniciar Liga EA Sports?\nSe eliminarán resultados, estado de jornadas y se generará una temporada nueva (38 jornadas).')) return;
     try { localStorage.removeItem(LS_KEY); } catch(e){}
+
     window.LIGA_J1_RESULTS = [];
     window.LIGA_PLAYER_MATCH_STORE = {};
+    if(window.LIGA_EXTRAS && typeof window.LIGA_EXTRAS === 'object'){
+      Object.keys(window.LIGA_EXTRAS).forEach(function(k){ delete window.LIGA_EXTRAS[k]; });
+    }
+
+    try {
+      var table = (typeof window.collectStandings === 'function' ? window.collectStandings() : []) || [];
+      var teamOrder = table.map(function(t){ return t && t.name ? t.name : ''; }).filter(Boolean);
+      if(!teamOrder.length) teamOrder = TEAM_ORDER.slice();
+      for(var i = teamOrder.length - 1; i > 0; i--){
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = teamOrder[i]; teamOrder[i] = teamOrder[j]; teamOrder[j] = tmp;
+      }
+      if(typeof window.generateLigaScheduleFromTeams === 'function' && typeof window.setLigaSchedule === 'function'){
+        window.setLigaSchedule(window.generateLigaScheduleFromTeams(teamOrder));
+      }
+    } catch(err){}
+
+    if(typeof window.populateLigaCal === 'function') window.populateLigaCal();
+    if(typeof window.populateCalendar === 'function') window.populateCalendar();
+    if(typeof window.renderLigaClasCalendar === 'function') window.renderLigaClasCalendar();
+    if(typeof window.buildIAresults === 'function') window.buildIAresults();
     if(typeof window.buildLigaClas === 'function') window.buildLigaClas();
     if(typeof window.buildLigaStatsDashboard === 'function') window.buildLigaStatsDashboard();
     if(typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();

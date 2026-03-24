@@ -6948,10 +6948,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 (function(){
   var ROUTE_EXPLICIT = {
     's-home': '/',
-    's-calendario': '/calendario',
     's-espana': '/espana',
     's-liga': '/espana/liga-ea-sports',
-    's-liga-cal': '/espana/liga-ea-sports/calendario',
     's-liga-clas': '/espana/liga-ea-sports/clasificacion',
     's-liga-stats': '/espana/liga-ea-sports/estadisticas',
     's-segunda': '/espana/liga-hypermotion',
@@ -7209,55 +7207,83 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       : '3px solid rgba(106,224,141,.85)';
   }
 
-  function applyMainMenuCalendarLogic(){
-    var screen = document.getElementById('s-calendario');
-    if(!screen) return;
+  function _collectMainTeamRows(){
+    var sourceScreen = document.getElementById('s-calendario');
+    if(!sourceScreen) return [];
 
-    var blocks = screen.querySelectorAll('.jmatches');
+    var jornadas = [];
+    var blocks = sourceScreen.querySelectorAll('.jblock');
     blocks.forEach(function(block){
-      var seen = {};
-      var rows = block.querySelectorAll('.mrow');
+      var btn = block.querySelector('.jbtn');
+      var matches = block.querySelector('.jmatches');
+      if(!btn || !matches) return;
 
-      rows.forEach(function(row){
+      var label = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+      var rows = [];
+      var seen = {};
+
+      matches.querySelectorAll('.mrow').forEach(function(row){
         var homeEl = row.querySelector('.mn:not(.r)');
         var awayEl = row.querySelector('.mn.r');
+        var scoreEl = row.querySelector('.ms');
         if(!homeEl || !awayEl) return;
 
         var home = _normTeamName(homeEl.textContent);
         var away = _normTeamName(awayEl.textContent);
         var include = _isMainCalTeam(home) || _isMainCalTeam(away);
-
-        if(!include){
-          row.style.display = 'none';
-          return;
-        }
+        if(!include) return;
 
         var key = [home, away].sort().join('::');
-        if(seen[key]){
-          row.style.display = 'none';
-          return;
-        }
+        if(seen[key]) return;
         seen[key] = true;
 
-        row.style.display = '';
-        _paintRow(row, _isMainCalTeam(home) && _isMainCalTeam(away));
+        rows.push({
+          home: homeEl.textContent.trim(),
+          away: awayEl.textContent.trim(),
+          score: scoreEl ? scoreEl.textContent.trim() : 'vs',
+          isMainVsMain: _isMainCalTeam(home) && _isMainCalTeam(away)
+        });
       });
 
-      var visibleRows = Array.from(block.querySelectorAll('.mrow')).filter(function(r){
-        return r.style.display !== 'none';
-      });
-      var oldEmpty = block.querySelector('.main-cal-empty');
-      if(!visibleRows.length){
-        if(!oldEmpty){
-          var empty = document.createElement('div');
-          empty.className = 'empty-ph main-cal-empty';
-          empty.textContent = 'SIN PARTIDOS DE NUESTROS EQUIPOS';
-          block.appendChild(empty);
-        }
-      } else if(oldEmpty){
-        oldEmpty.remove();
+      if(rows.length){
+        jornadas.push({ label: label, rows: rows });
       }
     });
+
+    return jornadas;
+  }
+
+  function applyMainMenuCalendarLogic(){
+    var target = document.getElementById('nuestros-partidos-list');
+    if(!target) return;
+
+    var jornadas = _collectMainTeamRows();
+    if(!jornadas.length){
+      target.innerHTML = '<div class="empty-ph main-cal-empty">SIN PARTIDOS DE NUESTROS EQUIPOS</div>';
+      return;
+    }
+
+    var html = '';
+    jornadas.forEach(function(jornada, idx){
+      var jid = 'mis-j' + (idx + 1);
+      html += '<div class="jblock">';
+      html += '<button class="jbtn c-liga" onclick="tog(\'' + jid + '\')"><div class="pdot">▶</div>⚽ ' + jornada.label + '</button>';
+      html += '<div class="jmatches" id="' + jid + '">';
+
+      jornada.rows.forEach(function(match){
+        html += '<div class="mrow" style="' + (match.isMainVsMain
+          ? 'background:linear-gradient(90deg, rgba(84,32,120,.36), rgba(126,59,168,.36));border-left:3px solid rgba(186,113,255,.85);'
+          : 'background:linear-gradient(90deg, rgba(20,120,66,.30), rgba(41,162,93,.30));border-left:3px solid rgba(106,224,141,.85);') + '">';
+        html += '<div class="mn">' + match.home + '</div>';
+        html += '<div class="ms">' + match.score + '</div>';
+        html += '<div class="mn r">' + match.away + '</div>';
+        html += '</div>';
+      });
+
+      html += '</div></div>';
+    });
+
+    target.innerHTML = html;
   }
 
   window.applyMainMenuCalendarLogic = applyMainMenuCalendarLogic;
@@ -7281,9 +7307,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   });
 
   function _attachCalendarObserver(){
-    var screen = document.getElementById('s-calendario');
-    if(!screen) return;
-    _obs.observe(screen, {childList:true, subtree:true});
+    var sourceScreen = document.getElementById('s-calendario');
+    if(sourceScreen) _obs.observe(sourceScreen, {childList:true, subtree:true});
   }
 
   if(document.readyState === 'loading'){

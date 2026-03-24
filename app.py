@@ -559,7 +559,7 @@ def inicio():
 
 @app.route("/calendario")
 def calendario_view():
-    return render_template("index.html")
+    return redirect("/espana/liga-ea-sports/clasificacion", code=302)
 
 @app.route("/clasificacion")
 def clasificacion():
@@ -571,7 +571,7 @@ def reiniciar():
     Partido.query.delete()
     save_global_state(DEFAULT_GLOBAL_STATE)
     db.session.commit()
-    return redirect(url_for("calendario_view"))
+    return redirect(url_for("clasificacion"))
 
 @app.route("/<path:path>")
 def spa_fallback(path):

@@ -2157,20 +2157,75 @@
   function humanIcon(name){ return HUMAN_ICONS[name] ? HUMAN_ICONS[name]+'\u00a0' : ''; }
   window.humanIcon = humanIcon;
   var LS_KEY  = 'ef_liga38_v2';
+  var LS_SCHEDULE_KEY = 'ef_liga38_schedule_v1';
+
+  function mezclarEquipos(names) {
+    var shuffled = (Array.isArray(names) ? names.slice() : []).filter(Boolean);
+    for (var i = shuffled.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+    }
+    return shuffled;
+  }
+
+  function leerOrdenEquiposActual() {
+    var currentTable = (typeof window.collectStandings === 'function' ? window.collectStandings() : []) || [];
+    var ordered = currentTable.map(function(team){ return team && team.name ? team.name : ''; }).filter(Boolean);
+    return ordered.length ? ordered : TEAMS.slice();
+  }
+
+  function loadSchedule() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(LS_SCHEDULE_KEY) || 'null');
+      if (!Array.isArray(raw) || raw.length !== 38) return null;
+      var valid = raw.every(function(round){
+        return Array.isArray(round) && round.length === 10 && round.every(function(match){
+          return Array.isArray(match) && match.length === 2 && match[0] && match[1];
+        });
+      });
+      return valid ? raw : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveSchedule(schedule) {
+    try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(schedule)); } catch (e) {}
+  }
+
+  function setLigaSchedule(schedule, persist) {
+    if (!Array.isArray(schedule) || schedule.length !== 38) return;
+    SCHEDULE = schedule;
+    window.LIGA_SCHEDULE = schedule;
+    if (persist !== false) saveSchedule(schedule);
+  }
+  window.setLigaSchedule = setLigaSchedule;
 
   window.reiniciarLigaEA = function() {
-    if (!confirm('¿Reiniciar todos los resultados de Liga EA Sports? Se borrará el historial de partidos IA.')) return;
+    if (!confirm('¿Reiniciar todos los resultados de Liga EA Sports? Se eliminarán resultados, clasificación y jornadas para generar una nueva temporada.')) return;
+
     try { localStorage.removeItem(LS_KEY); } catch(e){}
+
+    // Limpiar resultados/estados acumulados de jornada
     if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
-    // Clear team card/MVP aggregates
     var _ex = window.LIGA_EXTRAS;
     if (_ex) Object.keys(_ex).forEach(function(k){ delete _ex[k]; });
-    // Clear player match event store
     var _pm = window.LIGA_PLAYER_MATCH_STORE;
     if (_pm) Object.keys(_pm).forEach(function(k){ delete _pm[k]; });
+    Object.keys(_mlStates || {}).forEach(function(k){
+      if (_mlStates[k] && _mlStates[k].timerInterval) clearInterval(_mlStates[k].timerInterval);
+      delete _mlStates[k];
+    });
+
+    // Regenerar calendario completo de 38 jornadas (doble vuelta) usando el orden actual como base
+    var baseOrder = leerOrdenEquiposActual();
+    var randomOrder = mezclarEquipos(baseOrder);
+    setLigaSchedule(generarCalendario(randomOrder));
+
     if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
-    if (typeof window.buildIAresults === 'function') window.buildIAresults();
     if (typeof window.populateLigaCal === 'function') window.populateLigaCal();
+    if (typeof window.buildIAresults === 'function') window.buildIAresults();
+    if (typeof window.populateCalendar === 'function') window.populateCalendar();
     if (typeof window.rebuildLigaPlayerStats === 'function') window.rebuildLigaPlayerStats();
   };
 
@@ -2194,11 +2249,9 @@
   window.generateLigaScheduleFromTeams = generarCalendario;
   window.generateLigaScheduleFromCurrentTable = function(teamList) {
     if (Array.isArray(teamList) && teamList.length) return generarCalendario(teamList);
-    var currentTable = (typeof window.collectStandings === 'function' ? window.collectStandings() : []) || [];
-    var names = currentTable.map(function(team){ return team && team.name ? team.name : ''; }).filter(Boolean);
-    return generarCalendario(names.length ? names : TEAMS);
+    return generarCalendario(leerOrdenEquiposActual());
   };
-  var SCHEDULE = generarCalendario(TEAMS);
+  var SCHEDULE = loadSchedule() || generarCalendario(TEAMS);
   window.LIGA_SCHEDULE = SCHEDULE;
 
   /* ── PERSISTENCIA ────────────────────────────────── */
@@ -2304,6 +2357,7 @@
     });
     if (typeof window.renderLigaClasCalendar === 'function') window.renderLigaClasCalendar();
   }
+  window.populateLigaCal = populateLigaCal;
 
   function addSimBtn(j, round) {
     if (document.getElementById('sim-ia-j' + j)) return;
@@ -2427,6 +2481,7 @@
       });
     });
   }
+  window.populateCalendar = populateCalendar;
 
   function extraerNombreCalendario(teamEl) {
     if (!teamEl) return '';

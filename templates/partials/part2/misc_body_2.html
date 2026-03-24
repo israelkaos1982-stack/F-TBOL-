@@ -1545,7 +1545,7 @@
 <button class="pp-back-btn" onclick="document.getElementById('prepartido-overlay').classList.remove('show')">← VOLVER</button>
 <div class="pp-title-row">
 <span class="pp-icon">📋</span>
-<span class="pp-title">CONFIGURACIÓN DE PARTIDO</span>
+<span class="pp-title">CONFIG. PARTIDO</span>
 </div>
 </div>
 <div class="pp-list" id="pp-list"></div>
@@ -2303,7 +2303,7 @@
     if (esHumano(home) || esHumano(away)) {
       var h = home.replace(/'/g, "\\'");
       var a = away.replace(/'/g, "\\'");
-      return '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')" style="font-size:11px;padding:3px 8px;">📋 Previa</button>';
+      return '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')" style="font-size:11px;padding:3px 8px;">⚙️ Configurar</button>';
     }
     return '<div class="ms p">vs</div>';
   }
@@ -3122,21 +3122,9 @@
     document.getElementById('gm-modal').style.display = '';
   }
 
-  window._abrirResultadoLigaDirect = function (j, home, away) {
+  window.abrirResultadoLiga = function (j, home, away) {
     var isHvH = esHumano(home) && esHumano(away);
     gmOpen(j, home, away, isHvH);
-  };
-
-  window.abrirResultadoLiga = function (j, home, away) {
-    var isDestacado = esPartidoDestacado(home, away);
-    var duracion = isDestacado ? '8 min' : '10 min';
-    var prorroga = isDestacado ? 'Sí' : 'No';
-    if (typeof window.showPrePartidoOverlay === 'function') {
-      window._ppManualContext = { j: j, home: home, away: away };
-      window.showPrePartidoOverlay('manual-'+j+'-'+home+'-'+away, 'liga', prorroga, duracion, false);
-      return;
-    }
-    window._abrirResultadoLigaDirect(j, home, away);
   };
 
   function guardarResultado(j, home, away, gh, ga) {
@@ -3787,7 +3775,7 @@
             ? 'margin-bottom:10px;border:1px solid rgba(60,210,120,.55);box-shadow:0 0 0 1px rgba(60,210,120,.25) inset;background:linear-gradient(180deg,rgba(18,68,35,.22),rgba(10,18,12,.85));'
             : 'margin-bottom:10px;';
         var actionButton = isManual
-          ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">📋 PREVIA</button>'
+          ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">⚙️ CONFIGURAR</button>'
           : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';
 
         html += '<div class="match-live-wrap" id="iapnd-' + mk + '" style="' + cardStyle + '">'

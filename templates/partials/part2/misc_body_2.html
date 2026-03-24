@@ -2117,6 +2117,20 @@
 #s-calendario .match-live-wrap:not(.hvh):not(.hvia) { display: none !important; }
 /* Botón jugar en mrow */
 .mrow .ms.p { cursor: pointer; color: #ccff00; font-weight: bold; }
+.mrow .ms.p.previa {
+  color: #f2dcff;
+  background: linear-gradient(180deg, rgba(92, 30, 148, .95), rgba(123, 62, 187, .95));
+  border: 1px solid rgba(205, 158, 255, .85);
+  border-radius: 10px;
+  padding: 3px 10px;
+  box-shadow: 0 4px 12px rgba(86, 26, 141, .45);
+  font-family: Oswald, sans-serif;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+.mrow .ms.p.previa:hover {
+  filter: brightness(1.08);
+}
 /* Zonas clasificación Primera Federación */
 .clas-row.clas-zone-asc { background: rgba(156,60,220,.18); border-left: 3px solid #9c3cdc; }
 .clas-row.clas-zone-asc .clas-team-cell { background: rgba(100,20,160,.25); }
@@ -2236,7 +2250,7 @@
     if (esHumano(home) || esHumano(away)) {
       var h = home.replace(/'/g, "\\'");
       var a = away.replace(/'/g, "\\'");
-      return '<div class="ms p" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')">&#9654; Jugar</div>';
+      return '<div class="ms p previa" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')">📋 Previa</div>';
     }
     return '<div class="ms p">vs</div>';
   }

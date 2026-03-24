@@ -498,7 +498,7 @@
 <text fill="#003087" font-family="Arial Black,sans-serif" font-size="5" font-weight="900" text-anchor="middle" x="50" y="52">VILLARREAL</text>
 <path d="M50 4 L88 14 L88 74 Q88 104 50 114 Q12 104 12 74 L12 14 Z" fill="none" stroke="#003087" stroke-width="3"></path>
 <rect fill="rgba(0,0,0,0.8)" height="22" rx="3" width="48" x="26" y="78"></rect>
-<text fill="#f0c040" font-family="Arial Black,sans-serif" font-size="14" font-weight="900" text-anchor="middle" x="50" y="94">79</text>
+<text fill="#f0c040" font-family="Arial Black,sans-serif" font-size="14" font-weight="900" text-anchor="middle" x="50" y="94">80</text>
 </svg>
 <div style="display:flex;flex-direction:column;gap:2px;">
 <div style="display:flex;align-items:center;gap:6px;">
@@ -507,7 +507,7 @@
 </div>
 <div style="display:flex;align-items:center;gap:5px;margin-top:1px;justify-content:space-between;">
 <span style="font-size:13px;">🏟</span>
-<span style="font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;color:#FFD100;opacity:0.6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">ESTADIO DE LA CERÁMICA</span><span style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:#FFD100;opacity:0.85;white-space:nowrap;flex-shrink:0;"> · 79</span>
+<span style="font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;color:#FFD100;opacity:0.6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">ESTADIO DE LA CERÁMICA</span><span style="font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:#FFD100;opacity:0.85;white-space:nowrap;flex-shrink:0;"> · 80</span>
 </div>
 </div></div>
 
@@ -3125,7 +3125,15 @@
     if (scBEl) scBEl.textContent = '0';
     if (actaEl) actaEl.style.display = 'block';
 
+    var scoreWrapEl = scAEl ? scAEl.closest('.ml-score') : null;
+    if (scoreWrapEl) {
+      scoreWrapEl.classList.remove('state-finished');
+      scoreWrapEl.classList.add('state-playing');
+    }
+
     var scA = 0, scB = 0, evtIdx = 0, curMin = 0;
+    var halfAnnounced = false;
+    var TICK_MS = 1000; /* 15s por parte (3' por tick) */
 
     var interval = setInterval(function() {
       curMin = Math.min(curMin + 3, 90);
@@ -3139,6 +3147,13 @@
         if (ev.type === 'gol') {
           if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
           else                 { scB++; if (scBEl) scBEl.textContent = scB; }
+          if (scoreWrapEl) {
+            scoreWrapEl.classList.add('ia-goal-flash');
+            clearTimeout(scoreWrapEl._iaGoalTimer);
+            scoreWrapEl._iaGoalTimer = setTimeout(function(){
+              scoreWrapEl.classList.remove('ia-goal-flash');
+            }, 2000);
+          }
         }
         if (actaEl) {
           var row = document.createElement('div');
@@ -3160,6 +3175,10 @@
         clearInterval(interval);
         btn.style.background = '#0d0d3a';
         btn.style.color = '#4a8aff';
+        if (scoreWrapEl) {
+          scoreWrapEl.classList.remove('state-playing','ia-goal-flash');
+          scoreWrapEl.classList.add('state-finished');
+        }
         /* MVP row */
         if (actaEl && evtData.mvp) {
           var mvpRow = document.createElement('div');
@@ -3211,7 +3230,7 @@
           }
         }, 600);
       }
-    }, 1000); /* 1 real second = 3 game minutes → 30 sec for full 90' */
+    }, TICK_MS); /* 1 real second = 3 game minutes → 30 sec (15s + 15s) */
   };
 
   /* ── PODER-VALOR: peso de gol por posición y poder individual ── */
@@ -3538,7 +3557,7 @@
         + '</button><div class="jmatches" id="' + bid + '" style="padding:8px;">';
 
       /* ── SIM button inside dropdown (only if pending) ── */
-      if (pendingCount > 0) {
+      if (pendingCount > 0 && j !== 1) {
         html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">'
           + '<button onclick="window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);"'
           + ' style="padding:5px 14px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:4px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;">&#129302; SIM J' + j + '</button>'

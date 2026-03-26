@@ -2264,27 +2264,11 @@
   function rKey(j, h, a) { return j + '|' + h + '|' + a; }
 
   /* ── HELPERS ─────────────────────────────────────── */
-  var TEAM_CANONICAL_BY_KEY = null;
   var TEAM_NAME_CACHE = {};
   var TEAM_LOGO_CACHE = {};
-  var TEAM_LOGO_OVERRIDES = {
-    'fc barcelona': '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
-    'barcelona': '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
-    'barca': '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
-    'barça': '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
-    'arsenal': '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
-    'bayern de munich': '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
-    'bayern de múnich': '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
-    'bayern munich': '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
-    'villarreal': '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
-    'villarreal cf': '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
-    'elche': '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
-    'elche cf': '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
-    'real madrid': '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
-    'real madrid cf': '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
-    'sporting cp': '/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
-    'sporting de portugal': '/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg'
-  };
+  var BACKEND_ESCUDOS = window.BACKEND_ESCUDOS || {};
+  var BACKEND_ESCUDOS_ALIASES = window.BACKEND_ESCUDOS_ALIASES || {};
+  var BACKEND_ESCUDO_DEFAULT = window.BACKEND_ESCUDO_DEFAULT || '/static/img/escudos-fallback/estepona.svg';
 
   function normalizeTeamKey(name) {
     return String(name || '')
@@ -2296,32 +2280,12 @@
       .toLowerCase();
   }
 
-  function buildCanonicalLookup() {
-    if (TEAM_CANONICAL_BY_KEY) return TEAM_CANONICAL_BY_KEY;
-    TEAM_CANONICAL_BY_KEY = {};
-    var candidates = FEATURED_TEAMS
-      .concat(HUMANOS)
-      .concat(Object.keys(window.TEAM_LOGOS || {}))
-      .concat(Object.keys(window.TEAM_RATINGS || {}));
-    for (var i = 0; i < candidates.length; i++) {
-      var candidate = String(candidates[i] || '').trim();
-      if (!candidate) continue;
-      var key = normalizeTeamKey(candidate);
-      if (key && !TEAM_CANONICAL_BY_KEY[key]) TEAM_CANONICAL_BY_KEY[key] = candidate;
-    }
-    return TEAM_CANONICAL_BY_KEY;
-  }
-
   function normalizarNombreEquipo(teamName) {
     var clean = String(teamName || '').trim();
     if (!clean) return '';
     if (TEAM_NAME_CACHE[clean]) return TEAM_NAME_CACHE[clean];
-
-    var aliases = window.TEAM_ALIASES || {};
-    var key = normalizeTeamKey(clean);
-    var canonical = aliases[key] || aliases[clean.toLowerCase()] || clean;
-    var lookup = buildCanonicalLookup();
-    var resolved = lookup[normalizeTeamKey(canonical)] || canonical;
+    var canonical = BACKEND_ESCUDOS_ALIASES[clean] || clean;
+    var resolved = BACKEND_ESCUDOS[canonical] ? canonical : clean;
     TEAM_NAME_CACHE[clean] = resolved;
     return resolved;
   }
@@ -2334,16 +2298,7 @@
     if (!original) return '';
     if (TEAM_LOGO_CACHE[original]) return TEAM_LOGO_CACHE[original];
     var normalized = normalizarNombreEquipo(teamName);
-    var logo = '';
-    if (typeof window.getTeamLogoUrl === 'function') logo = window.getTeamLogoUrl(normalized || teamName);
-    var logos = window.TEAM_LOGOS || {};
-    if (!logo && logos[normalized]) logo = logos[normalized];
-    if (!logo) {
-      var ratings = window.TEAM_RATINGS || {};
-      var meta = ratings[normalized] || ratings[original];
-      logo = meta && typeof meta === 'object' && meta.shield ? meta.shield : '';
-    }
-    if (!logo) logo = TEAM_LOGO_OVERRIDES[normalizeTeamKey(original)] || '';
+    var logo = BACKEND_ESCUDOS[normalized] || BACKEND_ESCUDOS[original] || BACKEND_ESCUDO_DEFAULT;
     TEAM_LOGO_CACHE[original] = logo;
     return logo;
   }
@@ -2359,7 +2314,7 @@
     var normalizedName = normalizarNombreEquipo(teamName) || String(teamName || '').trim();
     var safeName = escapeHtml(normalizedName);
     var logo = getLogoEquipo(teamName);
-    var shield = logo ? '<img class="escudo-jornada" src="' + escapeHtml(logo) + '" alt="' + safeName + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\'"/>' : '';
+    var shield = '<img class="escudo-jornada" src="' + escapeHtml(logo) + '" alt="' + safeName + '" loading="lazy" decoding="async"/>';
     var text = '<span class="jornada-team-text">' + humanIcon(teamName) + safeName + '</span>';
     return isRight ? (text + shield) : (shield + text);
   }

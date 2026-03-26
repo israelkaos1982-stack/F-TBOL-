@@ -2264,38 +2264,88 @@
   function rKey(j, h, a) { return j + '|' + h + '|' + a; }
 
   /* ── HELPERS ─────────────────────────────────────── */
-  function normalizarNombreEquipo(teamName) {
-    var clean = String(teamName || '').trim();
-    if (!clean) return '';
+  var TEAM_CANONICAL_BY_KEY = null;
+  var TEAM_NAME_CACHE = {};
+  var TEAM_LOGO_CACHE = {};
+  var TEAM_LOGO_OVERRIDES = {
+    'fc barcelona': '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'barcelona': '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'barca': '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'barça': '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'arsenal': '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
+    'bayern de munich': '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
+    'bayern de múnich': '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
+    'bayern munich': '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
+    'villarreal': '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
+    'villarreal cf': '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
+    'elche': '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
+    'elche cf': '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
+    'real madrid': '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+    'real madrid cf': '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+    'sporting cp': '/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
+    'sporting de portugal': '/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg'
+  };
 
-    var aliases = window.TEAM_ALIASES || {};
-    var canonical = aliases[clean.toLowerCase()] || clean;
+  function normalizeTeamKey(name) {
+    return String(name || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
 
+  function buildCanonicalLookup() {
+    if (TEAM_CANONICAL_BY_KEY) return TEAM_CANONICAL_BY_KEY;
+    TEAM_CANONICAL_BY_KEY = {};
     var candidates = FEATURED_TEAMS
       .concat(HUMANOS)
       .concat(Object.keys(window.TEAM_LOGOS || {}))
       .concat(Object.keys(window.TEAM_RATINGS || {}));
-
     for (var i = 0; i < candidates.length; i++) {
-      if (String(candidates[i] || '').toLowerCase() === canonical.toLowerCase()) {
-        return candidates[i];
-      }
+      var candidate = String(candidates[i] || '').trim();
+      if (!candidate) continue;
+      var key = normalizeTeamKey(candidate);
+      if (key && !TEAM_CANONICAL_BY_KEY[key]) TEAM_CANONICAL_BY_KEY[key] = candidate;
     }
+    return TEAM_CANONICAL_BY_KEY;
+  }
 
-    return canonical;
+  function normalizarNombreEquipo(teamName) {
+    var clean = String(teamName || '').trim();
+    if (!clean) return '';
+    if (TEAM_NAME_CACHE[clean]) return TEAM_NAME_CACHE[clean];
+
+    var aliases = window.TEAM_ALIASES || {};
+    var key = normalizeTeamKey(clean);
+    var canonical = aliases[key] || aliases[clean.toLowerCase()] || clean;
+    var lookup = buildCanonicalLookup();
+    var resolved = lookup[normalizeTeamKey(canonical)] || canonical;
+    TEAM_NAME_CACHE[clean] = resolved;
+    return resolved;
   }
 
   function esHumano(t) { return HUMANOS.indexOf(normalizarNombreEquipo(t)) !== -1; }
   function esEquipoDestacado(t) { return FEATURED_TEAMS.indexOf(normalizarNombreEquipo(t)) !== -1; }
   function esPartidoDestacado(local, visitante) { return esEquipoDestacado(local) && esEquipoDestacado(visitante); }
   function getLogoEquipo(teamName) {
+    var original = String(teamName || '').trim();
+    if (!original) return '';
+    if (TEAM_LOGO_CACHE[original]) return TEAM_LOGO_CACHE[original];
     var normalized = normalizarNombreEquipo(teamName);
-    if (typeof window.getTeamLogoUrl === 'function') return window.getTeamLogoUrl(normalized || teamName);
+    var logo = '';
+    if (typeof window.getTeamLogoUrl === 'function') logo = window.getTeamLogoUrl(normalized || teamName);
     var logos = window.TEAM_LOGOS || {};
-    if (logos[normalized]) return logos[normalized];
-    var ratings = window.TEAM_RATINGS || {};
-    var meta = ratings[normalized] || ratings[String(teamName || '').trim()];
-    return meta && typeof meta === 'object' && meta.shield ? meta.shield : '';
+    if (!logo && logos[normalized]) logo = logos[normalized];
+    if (!logo) {
+      var ratings = window.TEAM_RATINGS || {};
+      var meta = ratings[normalized] || ratings[original];
+      logo = meta && typeof meta === 'object' && meta.shield ? meta.shield : '';
+    }
+    if (!logo) logo = TEAM_LOGO_OVERRIDES[normalizeTeamKey(original)] || '';
+    TEAM_LOGO_CACHE[original] = logo;
+    return logo;
   }
   function escapeHtml(str) {
     return String(str || '')
@@ -2306,11 +2356,12 @@
       .replace(/'/g, '&#39;');
   }
   function jornadaTeamHtml(teamName, isRight) {
-    var safeName = escapeHtml(teamName);
+    var normalizedName = normalizarNombreEquipo(teamName) || String(teamName || '').trim();
+    var safeName = escapeHtml(normalizedName);
     var logo = getLogoEquipo(teamName);
-    var shield = logo ? '<img class="clas-j-shield" src="' + escapeHtml(logo) + '" alt="' + safeName + '" onerror="this.style.display=\'none\'"/>' : '';
-    var text = '<span class="clas-j-team-name">' + humanIcon(teamName) + safeName + '</span>';
-    return '<div class="clas-j-team' + (isRight ? ' is-right' : '') + '">' + (isRight ? text + shield : shield + text) + '</div>';
+    var shield = logo ? '<img class="escudo-jornada" src="' + escapeHtml(logo) + '" alt="' + safeName + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\'"/>' : '';
+    var text = '<span class="jornada-team-text">' + humanIcon(teamName) + safeName + '</span>';
+    return isRight ? (text + shield) : (shield + text);
   }
 
   function scoreHtmlForMatch(j, home, away, res) {
@@ -2332,9 +2383,9 @@
       var res = results[rKey(j, home, away)];
       var row = document.createElement('div');
       row.className = 'mrow';
-      row.innerHTML = '<div class="mn" data-team="'+home+'">' + humanIcon(home) + home + '</div>'
+      row.innerHTML = '<div class="mn" data-team="' + escapeHtml(home) + '">' + jornadaTeamHtml(home, false) + '</div>'
         + scoreHtmlForMatch(j, home, away, res)
-        + '<div class="mn r" data-team="'+away+'">' + humanIcon(away) + away + '</div>';
+        + '<div class="mn r" data-team="' + escapeHtml(away) + '">' + jornadaTeamHtml(away, true) + '</div>';
       round.appendChild(row);
     });
   }
@@ -2483,7 +2534,9 @@
         if (res) {
           var row = document.createElement('div');
           row.className = 'mrow';
-          row.innerHTML = '<div class="mn">'+m[0]+'</div><div class="ms">'+res.gh+'\u2013'+res.ga+'</div><div class="mn r">'+m[1]+'</div>';
+          row.innerHTML = '<div class="mn" data-team="' + escapeHtml(m[0]) + '">' + jornadaTeamHtml(m[0], false) + '</div>'
+            + '<div class="ms">' + res.gh + '\u2013' + res.ga + '</div>'
+            + '<div class="mn r" data-team="' + escapeHtml(m[1]) + '">' + jornadaTeamHtml(m[1], true) + '</div>';
           calDiv.appendChild(row);
         } else {
           var mk = 'lj'+j+'m'+mi;

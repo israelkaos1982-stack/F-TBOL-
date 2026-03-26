@@ -1755,12 +1755,10 @@ window.mlSimulate_j1m10=function(){
       var pos = idx + 1;
       var zone = rowZoneClass(pos);
       var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
-      var logoHtml = window.getTeamBadgeHtml ? window.getTeamBadgeHtml(team.name) : '';
       html += ''
         + '<div class="clas-row ' + zone + '">'
         +   '<div class="clas-team-cell">'
         +     '<span class="clas-pos-n">' + pos + '</span>'
-        +     logoHtml
         +     '<span class="clas-team-name">' + (HUMAN_TEAMS[team.name] ? '<span class="human-prefix">' + HUMAN_TEAMS[team.name] + '</span>' : '') + (SHORT_NAMES[team.name] || team.name) + '</span>'
         +   '</div>'
         +   '<div class="clas-pts">' + team.pts + '</div>'

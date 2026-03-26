@@ -1823,8 +1823,8 @@ window.mlSimulate_j1m10=function(){
   var HUMAN_TEAMS = {
     'Bayern Munich': '💡',
     'Arsenal':       '🐭',
-    'Sporting CP':   '🔨',
-    'Real Madrid':   '✏️',
+    'Sporting CP':   '✏️',
+    'Real Madrid':   '🔨',
     'FC Barcelona':  '👿'
   };
 
@@ -6829,8 +6829,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   var HUMAN_TEAMS = {
     'Bayern Munich': '💡',
     'Arsenal':       '🐭',
-    'Sporting CP':   '🔨',
-    'Real Madrid':   '✏️',
+    'Sporting CP':   '✏️',
+    'Real Madrid':   '🔨',
     'FC Barcelona':  '👿'
   };
   var TEAM_ALIAS = {

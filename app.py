@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 import random
 import os
 import json
+import unicodedata
 from datetime import datetime, timezone
 
 from jugadores_data import jugadores_por_equipo
@@ -75,6 +76,52 @@ TEAM_ALIASES = {
     "córdoba": "Córdoba",
     "levante": "Levante",
 }
+
+ALIASES_ESCUDOS_RAW = {
+    "FC Barcelona": "Barcelona",
+    "Barça": "Barcelona",
+    "Bayern Munich": "Bayern de Múnich",
+    "Atletico de Madrid": "Atlético de Madrid",
+    "Sporting CP": "Sporting de Portugal",
+}
+
+ESCUDOS = {
+    "Real Madrid": "/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg",
+    "Barcelona": "/static/img/escudos-1/spain_barcelona.football-logos.cc.svg",
+    "Arsenal": "/static/img/escudos-1/england_arsenal.football-logos.cc.svg",
+    "Bayern de Múnich": "/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg",
+    "Villarreal": "/static/img/escudos-1/spain_villarreal.football-logos.cc.svg",
+    "Elche": "/static/img/escudos-1/spain_elche.football-logos.cc.svg",
+    "Sporting de Portugal": "/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg",
+    "Atlético de Madrid": "/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg",
+}
+
+ESCUDO_DEFAULT = "/static/img/escudos-fallback/estepona.svg"
+
+
+def normalize_team_key(nombre):
+    clean = str(nombre or "").strip().lower()
+    normalized = unicodedata.normalize("NFD", clean)
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
+ALIASES_ESCUDOS = {
+    normalize_team_key(alias): canonical
+    for alias, canonical in ALIASES_ESCUDOS_RAW.items()
+}
+
+
+def obtener_escudo(nombre):
+    clean = str(nombre or "").strip()
+    if not clean:
+        return ESCUDO_DEFAULT
+    canonical = ALIASES_ESCUDOS.get(normalize_team_key(clean), clean)
+    return ESCUDOS.get(canonical, ESCUDO_DEFAULT)
+
+
+def build_escudos_resueltos():
+    teams = set(jugadores_por_equipo.keys()) | set(equipos_humanos) | set(ESCUDOS.keys())
+    return {team: obtener_escudo(team) for team in sorted(teams)}
 
 # --- ESTADO GLOBAL COMPARTIDO ---
 GLOBAL_STATE_KEY = "global_state"
@@ -551,6 +598,15 @@ def api_save_state():
         "ok": True,
         "state": saved
     })
+
+
+@app.context_processor
+def inject_shield_data():
+    return {
+        "escudos_resueltos": build_escudos_resueltos(),
+        "escudos_aliases": ALIASES_ESCUDOS_RAW,
+        "escudo_default": ESCUDO_DEFAULT,
+    }
 
 # --- RUTAS ---
 @app.route("/")

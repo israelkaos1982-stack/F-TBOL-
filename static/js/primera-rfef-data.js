@@ -1,13 +1,13 @@
 /* ================================================================
    PRIMERA RFEF ↔ EFOOTBALL ALIAS SYSTEM
-   Versión: 1.0
+   Versión: 1.1
    ================================================================
    Lógica:
    - Vista Humano vs 1ª RFEF: muestra el alias eFootball del rival
-     en el panel de Copa (chp-local / chp-visit)
+     entre paréntesis en el panel de Copa (chp-local / chp-visit)
    - Vista IA vs IA: sin cambios (nombres reales en el acta)
-   - Pantallazo de Lesión (equipo humano): muestra instrucción
-     "Cambio en eFootball: [B-team alias]"
+   - Pantallazo de Lesión (equipo humano): muestra el equipo eFootball
+     que debe usar el usuario al gestionar la lesión
    ================================================================ */
 
 (function () {
@@ -20,24 +20,28 @@
     'Alcorcón':               'Lee Man',
     'Algeciras CF':           'Yokohama F. Marinos',
     'Algeciras':              'Yokohama F. Marinos',
+    'SD Amorebieta':          'Machida Zelvia',
     'Amorebieta':             'Machida Zelvia',
     'Arenas de Getxo':        'Cebu FC',
     'Arenas Club':            'Cebu FC',
+    'Athletic Club B':        'Al Kuwait SC',
     'Bilbao Ath.':            'Kaya FC-Iloilo',
-    'Athletic Club B':        'Kaya FC-Iloilo',
-    'Bilbao Athletic':        'Kaya FC-Iloilo',
+    'Atlético Madrid B':      'Ravshan Kulob',
     'Atlético Madrileño':     'Ravshan Kulob',
     'Real Avilés Industrial': 'Pakhtakor Tashkent',
     'Avilés':                 'Pakhtakor Tashkent',
     'Barakaldo':              'Jeonbuk Hyundai',
     'Barakaldo CF':           'Jeonbuk Hyundai',
+    'Bilbao Athletic':        'Kaya FC-Iloilo',
     'Celta Fortuna':          'Sydney FC',
     'Cultural Leonesa':       'Seoul E-Land',
     'CE Europa':              'Altyn Asyr Asgabat',
     'Europa':                 'Altyn Asyr Asgabat',
+    'CF Fuenlabrada':         'Montedio Yamagata',
     'Fuenlabrada':            'Montedio Yamagata',
-    'Hércules':               'Al-Shorta',
     'Hércules CF':            'Al-Shorta',
+    'Hércules':               'Al-Shorta',
+    'CF Intercity':           'Tochigi SC',
     'Intercity':              'Tochigi SC',
     'Linares Deportivo':      'Yokohama FC',
     'CD Lugo':                'Gwangju FC',
@@ -45,20 +49,24 @@
     'AD Mérida':              'Al-Taawoun',
     'Mérida AD':              'Al-Taawoun',
     'Mérida':                 'Al-Taawoun',
-    'Nástic':                 'Muangthong United',
     'Gimnàstic Tarragona':    'Muangthong United',
+    'Nástic':                 'Muangthong United',
+    'SD Ponferradina':        'Kawasaki Frontale',
     'Ponferradina':           'Kawasaki Frontale',
-    'Pontevedra':             'Zhejiang FC',
     'Pontevedra CF':          'Zhejiang FC',
+    'Pontevedra':             'Zhejiang FC',
     'Rayo Cantabria':         'Brisbane Roar',
-    'RM Castilla':            'Al Ain',
     'Real Madrid Castilla':   'Al Ain',
+    'RM Castilla':            'Al Ain',
+    'Real Murcia CF':         'Al Rayyan',
     'Real Murcia':            'Al Rayyan',
     'Real Unión':             'Oita Trinita',
+    'Real Unión Club':        'Oita Trinita',
     'Salamanca UDS':          'Chiangrai United',
     'UD Logroñés':            'Sangju Sangmu',
     'SD Logroñés':            'Sangju Sangmu',
     'Sestao River':           'Bangkok United',
+    'Sestao River Club':      'Bangkok United',
     'CF Talavera':            'Port FC',
     'Talavera':               'Port FC',
     'SD Tarazona':            'Shandong Taishan',
@@ -70,45 +78,58 @@
     'Unionistas':             'Central Coast Mariners',
 
     // ── Sudamérica ──────────────────────────────────────────────────
+    'CD Alcoyano':            'Confiança',
     'Alcoyano':               'Confiança',
     'Antequera CF':           'CRB',
     'Antequera':              'CRB',
+    'CD Arenteiro':           'América Mineiro',
     'Arenteiro':              'América Mineiro',
     'At. Baleares':           'CSA',
+    'Atlético Baleares':      'CSA',
     'CE Sabadell':            'AB Remo',
     'Sabadell':               'AB Remo',
+    'Barça Atlètic':          'Ferroviária (Araraquara)',
     'Barça Atlétic':          'Ferroviária (Araraquara)',
     'Betis Deportivo':        'Chapecoense',
+    'Betis Deportivo Balompié': 'Chapecoense',
     'CP Cacereño':            'Coritiba',
     'Cacereño':               'Coritiba',
     'FC Cartagena':           'Criciúma EC',
     'Cartagena':              'Criciúma EC',
+    'AD Ceuta B':             'Ponte Preta',
     'Ceuta B':                'Ponte Preta',
-    'AD Ceuta':               'Ponte Preta',
+    'CD Eldense':             'Botafogo SP',
     'Eldense':                'Botafogo SP',
     'Gimnástica Segoviana':   'Ituano FC',
     'G. Segoviana':           'Ituano FC',
     'CD Guadalajara':         'Volta Redonda',
     'Guadalajara':            'Volta Redonda',
     'Juventud Torremolinos':  'Paysandu',
+    'Juventud Torremolinos CF': 'Paysandu',
     'Marbella FC':            'Operário Ferroviário',
     'Marbella':               'Operário Ferroviário',
+    'CD Mirandés':            'Sport Recife',
     'Mirandés':               'Sport Recife',
     'CD Numancia':            'Vila Nova',
     'Numancia':               'Vila Nova',
+    'Osasuna B':              'Athletic Club (Minas)',
     'Osasuna Promesas':       'Athletic Club (Minas)',
     'Ourense CF':             'Amazonas FC',
     'Ourense':                'Amazonas FC',
+    'Racing Club de Ferrol':  'Goiás EC',
     'Racing Ferrol':          'Goiás EC',
     'Real Zaragoza':          'Santos FC',
+    'Real Zaragoza Deportivo Aragón': 'Santos FC',
     'Recreativo de Huelva':   'Avaí FC',
     'Recreativo Huelva':      'Avaí FC',
+    'Atlético Sanluqueño':    'Juventude',
     'At. Sanluqueño':         'Juventude',
     'Sanluqueño':             'Juventude',
-    'SD Huesca':              'San Lorenzo',
-    'Huesca':                 'San Lorenzo',
-    'Sevilla At.':            'Cuiabá VA',
+    'SD Huesca':              'San Lorenzo / Ituano',
+    'Huesca':                 'San Lorenzo / Ituano',
     'Sevilla Atlético':       'Cuiabá VA',
+    'Sevilla At.':            'Cuiabá VA',
+    'CD Tenerife':            'Athletico Paranaense',
     'Tenerife':               'Athletico Paranaense',
     'Villarreal B':           'Novorizontino',
     'Yeclano Deportivo':      'Ferroviária',
@@ -119,10 +140,13 @@
 
   // ── Mapping: equipo humano (La Liga) → B-team alias en eFootball ──
   var BTEAM = {
-    'Real Madrid':   'Al Ain',
-    'FC Barcelona':  'Ferroviária (Araraquara)',
-    'Athletic Club': 'Kaya FC-Iloilo',
-    'Real Betis':    'Chapecoense'
+    'Real Madrid':      'Al Ain',
+    'FC Barcelona':     'Ferroviária (Araraquara)',
+    'Athletic Club':    'Bilbao Athletic',
+    'Real Betis':       'Betis Deportivo',
+    'Atlético Madrid':  'Atlético Madrid B',
+    'CA Osasuna':       'Osasuna B',
+    'Sevilla FC':       'Sevilla Atlético'
     // Real Sociedad no tiene B en 1ª RFEF en el mapeado actual
   };
 
@@ -208,7 +232,7 @@
           if (bAlias && card && !card.querySelector('.lpost-efootball-hint')) {
             var hint = document.createElement('div');
             hint.className = 'lpost-efootball-hint';
-            hint.innerHTML = '🎮 Cambio en eFootball: <em>' + bAlias + '</em>';
+            hint.innerHTML = '🎮 Debes realizar el cambio en tu estrategia de eFootball dentro del equipo: <em>' + bAlias + '</em>.';
             var body = card.querySelector('.lpost-card-body');
             if (body) body.appendChild(hint);
           }

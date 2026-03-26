@@ -5,13 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>eFootball 6.0</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;600;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/index.bundle.css') }}?v=3.3">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/index.bundle.css') }}?v=3.6">
+  <style>
+    #s-home .menu-grid{gap:15px!important;}
+    #s-home .menu-card,
+    #s-home .menu-card.full,
+    #s-home #home-live-card,
+    #s-home .mc-derbys,
+    #s-home .mc-sel,
+    #s-home .mc-comp,
+    #s-home .mc-ligas,
+    #s-home .equipo-card{
+      height:80px!important;
+      min-height:80px!important;
+      max-height:80px!important;
+      overflow:hidden!important;
+      position:relative!important;
+      box-sizing:border-box!important;
+    }
+  </style>
+  <script>
+    window.BACKEND_ESCUDOS = {{ escudos_resueltos | tojson }};
+    window.BACKEND_ESCUDOS_ALIASES = {{ escudos_aliases | tojson }};
+    window.BACKEND_ESCUDO_DEFAULT = {{ escudo_default | tojson }};
+  </script>
 </head>
 <body>
   {% include 'partials/misc_body_1.html' %}
   {% include 'partials/part2/misc_body_2.html' %}
-  <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=3.3"></script>
+  <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=3.6"></script>
   <script src="{{ url_for('static', filename='js/copa-engine.js') }}?v=1.0"></script>
-  <script src="{{ url_for('static', filename='js/primera-rfef-data.js') }}?v=1.0"></script>
+  <script src="{{ url_for('static', filename='js/primera-rfef-data.js') }}?v=1.1"></script>
 </body>
 </html>

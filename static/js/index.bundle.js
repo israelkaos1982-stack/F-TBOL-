@@ -974,8 +974,11 @@ window.SQUAD_REGISTRY={
 // ═══ ALIASES GLOBALES DE EQUIPOS ═══
 window.TEAM_ALIASES = {
   'real madrid':'Real Madrid',
+  'real madrid cf':'Real Madrid',
   'fc barcelona':'FC Barcelona',
   'barcelona':'FC Barcelona',
+  'barca':'FC Barcelona',
+  'barça':'FC Barcelona',
   'athletic club':'Athletic Club',
   'athletic':'Athletic Club',
   'real betis':'Real Betis',
@@ -1019,11 +1022,15 @@ window.TEAM_ALIASES = {
   'arsenal':'Arsenal',
   'arsenal fc':'Arsenal',
   'bayern munich':'Bayern Munich',
+  'bayern de munich':'Bayern Munich',
+  'bayern de múnich':'Bayern Munich',
   'fc bayern munich':'Bayern Munich',
   'fc bayern':'Bayern Munich',
   'bayern':'Bayern Munich',
   'sporting cp':'Sporting CP',
   'sporting de portugal':'Sporting CP',
+  'sporting lisboa':'Sporting CP',
+  'sporting de lisboa':'Sporting CP',
   'sporting':'Sporting CP',
   'córdoba cf':'Córdoba CF',
   'cordoba cf':'Córdoba CF',
@@ -1146,6 +1153,72 @@ function _removeEmpty_j1m1(){var emp=document.querySelector('#ml-acta-list-j1m1 
 window.mlConfirmEvt_j1m1=function(){if(!_pendingEvt)return;var sel=document.getElementById('ml-modal-sel-j1m1');var parts=sel.value.split('|');var num=parts[0],name=parts[1];var e=_pendingEvt;var min=_currentMin_j1m1();var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==='propia')?(e.team==='a'?'b':'a'):e.team;_sc[st]++;document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;}var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||'•',id:Date.now()});_renderActa_j1m1();  mlCloseModal_j1m1();};
 function _renderActa_j1m1(){var list=document.getElementById('ml-acta-list-j1m1');var sorted=_events.slice().sort(function(a,b){return a.min-b.min;});list.innerHTML='';if(sorted.length===0){list.innerHTML='<div class="ml-acta-empty">Sin eventos registrados</div>';return;}sorted.forEach(function(ev){var row=document.createElement('div');row.className='ml-evt-item';row.setAttribute('data-team',ev.team);row.setAttribute('data-type',ev.type);var tl=(ev.team==='a')?TEAM_A_NAME:TEAM_B_NAME;var _penFalloExtra='';if(ev.type==='pen-parado'){var _contrario=ev.team==='a'?'b':'a';var _fallado=sorted.find(function(e){return e.type==='pen-fallo'&&e.team===_contrario&&e.min===ev.min;});if(_fallado){_penFalloExtra='<span class="ml-evt-pen-fallo">❌ '+_fallado.num+'. '+_fallado.name+'</span>';}}row.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"+'<span class="ml-evt-ico">'+ev.ico+'</span>'+'<span class="ml-evt-name">'+ev.num+'. '+ev.name+'</span>'+_penFalloExtra+'<span class="ml-evt-team">'+tl+'</span>'+'<button class="ml-evt-edit" onclick="window._openEditModal(\'j1m1\','+ev.id+')" title="Editar">✏️</button>'+'<button class="ml-evt-del" onclick="mlDelEvt_j1m1('+ev.id+')">✕</button>';list.appendChild(row);});};
 window.mlDelEvt_j1m1=function(id){var ev=_events.find(function(e){return e.id===id;});if(!ev)return;var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(ev.type)!==-1){var st=(ev.type==='propia')?(ev.team==='a'?'b':'a'):ev.team;_sc[st]=Math.max(0,_sc[st]-1);document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;}_events=_events.filter(function(e){return e.id!==id;});_renderActa_j1m1();};
+})();
+
+/* ══ ESCUDOS EN JORNADAS — tamaño unificado + aliases sólidos ═══════ */
+(function(){
+  function getCleanTeamName(el){
+    if(!el) return '';
+    var txt = (el.getAttribute('data-team-name') || el.textContent || '').trim();
+    return txt.replace(/\s+\d+\s*\/\s*100$/,'').trim();
+  }
+
+  function upsertShield(el){
+    if(!el) return;
+    var teamName = getCleanTeamName(el);
+    if(!teamName || teamName === 'Por definir') return;
+    var logoUrl = window.getTeamLogoUrl ? window.getTeamLogoUrl(teamName) : '';
+    if(!logoUrl) return;
+
+    var textEl = el.querySelector('.jornada-team-text');
+    if(!textEl){
+      textEl = document.createElement('span');
+      textEl.className = 'jornada-team-text';
+    }
+    textEl.textContent = teamName;
+
+    var logoEl = el.querySelector('img.escudo-jornada');
+    if(!logoEl){
+      logoEl = document.createElement('img');
+      logoEl.className = 'escudo-jornada';
+      logoEl.loading = 'lazy';
+      logoEl.decoding = 'async';
+    }
+    logoEl.src = logoUrl;
+    logoEl.alt = 'Escudo de ' + teamName;
+    logoEl.onerror = function(){ this.style.display = 'none'; };
+    logoEl.style.display = '';
+
+    el.setAttribute('data-team-name', teamName);
+    el.textContent = '';
+    el.appendChild(logoEl);
+    el.appendChild(textEl);
+  }
+
+  function injectJornadaShields(){
+    document.querySelectorAll('.mrow .mn').forEach(upsertShield);
+  }
+
+  window.injectJornadaShields = injectJornadaShields;
+
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(injectJornadaShields, 120);
+  });
+
+  var _origGoShields = window.go;
+  window.go = function(id){
+    if(_origGoShields) _origGoShields.apply(this, arguments);
+    setTimeout(injectJornadaShields, 120);
+  };
+
+  if (typeof MutationObserver !== 'undefined') {
+    var obs = new MutationObserver(function(){
+      setTimeout(injectJornadaShields, 40);
+    });
+    document.addEventListener('DOMContentLoaded', function(){
+      obs.observe(document.body, { childList:true, subtree:true });
+    });
+  }
 })();
 
 /* script block 3 */
@@ -1575,12 +1648,16 @@ window.mlSimulate_j1m10=function(){
   window.TEAM_LOGOS = {
     // ── La Liga 1ª ──────────────────────────────────────────
     'Real Madrid':        '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+    'Real Madrid CF':     '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
     'FC Barcelona':       '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'Barcelona':          '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'Barça':              '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
     'Athletic Club':      '/static/img/escudos-1/spain_athletic-club.football-logos.cc.svg',
     'Real Betis':         '/static/img/escudos-1/spain_real-betis.football-logos.cc.svg',
     'Real Sociedad':      '/static/img/escudos-1/spain_real-sociedad.football-logos.cc.svg',
     'Atlético Madrid':    '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
     'Atlético de Madrid': '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+    'Atletico de Madrid': '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
     'Villarreal':         '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
     'Villarreal CF':      '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
     'Sevilla':            '/static/img/escudos-1/sevilla-fc.svg',
@@ -1588,17 +1665,21 @@ window.mlSimulate_j1m10=function(){
     'Valencia CF':        '/static/img/escudos-1/spain_valencia.football-logos.cc.svg',
     'Girona FC':          '/static/img/escudos-1/spain_girona.football-logos.cc.svg',
     'Rayo Vallecano':     '/static/img/escudos-1/spain_rayo-vallecano.football-logos.cc.svg',
+    'Rayo':               '/static/img/escudos-1/spain_rayo-vallecano.football-logos.cc.svg',
     'Getafe CF':          '/static/img/escudos-1/spain_getafe.football-logos.cc.svg',
     'Mallorca':           '/static/img/escudos-1/spain_mallorca.football-logos.cc.svg',
     'Osasuna':            '/static/img/escudos-1/spain_osasuna.football-logos.cc.svg',
     'Espanyol':           '/static/img/escudos-1/spain_espanyol.football-logos.cc.svg',
     'Celta de Vigo':      '/static/img/escudos-1/spain_celta.football-logos.cc.svg',
     'Bayern Munich':      '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
+    'Bayern de Múnich':   '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
     'Arsenal':            '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
     'Sporting CP':        '/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
+    'Sporting de Portugal':'/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
     'PSG':                '/static/img/escudos-1/france_paris-saint-germain.svg',
     'Paris Saint-Germain':'/static/img/escudos-1/france_paris-saint-germain.svg',
     'Elche CF':           '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
+    'Elche':              '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
     // ── Liga Hypermotion (2ª) ───────────────────────────────
     'Real Racing Club':   '/static/img/escudos-2/spain_racing.football-logos.cc.svg',
     'RC Deportivo':       '/static/img/escudos-2/spain_deportivo-la-coruna.football-logos.cc.svg',

@@ -1891,7 +1891,7 @@
     var root = document.getElementById(rootId); if(!root) return;
     if(!table || !table.length){root.innerHTML='<div class="clas-empty">'+emptyText+'</div>'; return;}
     var html=(legendHtml||'')+'<div class="clas-scroll-outer"><div class="clas-hdr-scroll"><div class="clas-table"><div class="clas-hdr"><span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span><span>Últ. 5</span></div></div></div><div class="clas-scroll"><div class="clas-table">';
-    table.forEach(function(team,idx){var pos=idx+1; var dgClass='clas-val dg '+(team.dg>0?'pos':(team.dg<0?'neg':'zer')); var _li=window.getTeamBadgeHtml?window.getTeamBadgeHtml(team.name):''; html+='<div class="clas-row '+(zoneFn?zoneFn(pos,table.length):'')+'"><div class="clas-team-cell"><span class="clas-pos-n">'+pos+'</span>'+_li+'<span class="clas-team-name">'+humanIcon(team.name)+esc(team.short||team.name)+'</span></div><div class="clas-pts">'+team.pts+'</div><div class="clas-pj">'+team.pj+'</div><div class="clas-val">'+team.v+'</div><div class="clas-val">'+team.e+'</div><div class="clas-val">'+team.p+'</div><div class="clas-val gf">'+team.gf+'</div><div class="clas-val gc">'+team.gc+'</div><div class="'+dgClass+'">'+(team.dg>0?'+':'')+team.dg+'</div><div class="clas-val ta">'+team.ta+'</div><div class="clas-val tr">'+team.tr+'</div><div class="clas-mvp">'+team.mvp+'</div><div class="clas-pct">'+(team.pj?Math.round((team.v/team.pj)*100):0)+'%</div><div class="clas-form">'+formHtml(team.form)+'</div></div>';});
+    table.forEach(function(team,idx){var pos=idx+1; var dgClass='clas-val dg '+(team.dg>0?'pos':(team.dg<0?'neg':'zer')); html+='<div class="clas-row '+(zoneFn?zoneFn(pos,table.length):'')+'"><div class="clas-team-cell"><span class="clas-pos-n">'+pos+'</span><span class="clas-team-name">'+humanIcon(team.name)+esc(team.short||team.name)+'</span></div><div class="clas-pts">'+team.pts+'</div><div class="clas-pj">'+team.pj+'</div><div class="clas-val">'+team.v+'</div><div class="clas-val">'+team.e+'</div><div class="clas-val">'+team.p+'</div><div class="clas-val gf">'+team.gf+'</div><div class="clas-val gc">'+team.gc+'</div><div class="'+dgClass+'">'+(team.dg>0?'+':'')+team.dg+'</div><div class="clas-val ta">'+team.ta+'</div><div class="clas-val tr">'+team.tr+'</div><div class="clas-mvp">'+team.mvp+'</div><div class="clas-pct">'+(team.pj?Math.round((team.v/team.pj)*100):0)+'%</div><div class="clas-form">'+formHtml(team.form)+'</div></div>';});
     html+='</div></div></div>';
     root.innerHTML=html;
   }
@@ -2264,38 +2264,59 @@
   function rKey(j, h, a) { return j + '|' + h + '|' + a; }
 
   /* ── HELPERS ─────────────────────────────────────── */
+  var TEAM_NAME_CACHE = {};
+  var TEAM_LOGO_CACHE = {};
+  var BACKEND_ESCUDOS = window.BACKEND_ESCUDOS || {};
+  var BACKEND_ESCUDOS_ALIASES = window.BACKEND_ESCUDOS_ALIASES || {};
+  var BACKEND_ESCUDO_DEFAULT = window.BACKEND_ESCUDO_DEFAULT || '/static/img/escudos-fallback/estepona.svg';
+
+  function normalizeTeamKey(name) {
+    return String(name || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
   function normalizarNombreEquipo(teamName) {
     var clean = String(teamName || '').trim();
     if (!clean) return '';
-
-    var aliases = window.TEAM_ALIASES || {};
-    var canonical = aliases[clean.toLowerCase()] || clean;
-
-    var candidates = FEATURED_TEAMS
-      .concat(HUMANOS)
-      .concat(Object.keys(window.TEAM_LOGOS || {}))
-      .concat(Object.keys(window.TEAM_RATINGS || {}));
-
-    for (var i = 0; i < candidates.length; i++) {
-      if (String(candidates[i] || '').toLowerCase() === canonical.toLowerCase()) {
-        return candidates[i];
-      }
-    }
-
-    return canonical;
+    if (TEAM_NAME_CACHE[clean]) return TEAM_NAME_CACHE[clean];
+    var canonical = BACKEND_ESCUDOS_ALIASES[clean] || clean;
+    var resolved = BACKEND_ESCUDOS[canonical] ? canonical : clean;
+    TEAM_NAME_CACHE[clean] = resolved;
+    return resolved;
   }
 
   function esHumano(t) { return HUMANOS.indexOf(normalizarNombreEquipo(t)) !== -1; }
   function esEquipoDestacado(t) { return FEATURED_TEAMS.indexOf(normalizarNombreEquipo(t)) !== -1; }
   function esPartidoDestacado(local, visitante) { return esEquipoDestacado(local) && esEquipoDestacado(visitante); }
   function getLogoEquipo(teamName) {
+    var original = String(teamName || '').trim();
+    if (!original) return '';
+    if (TEAM_LOGO_CACHE[original]) return TEAM_LOGO_CACHE[original];
     var normalized = normalizarNombreEquipo(teamName);
-    if (typeof window.getTeamLogoUrl === 'function') return window.getTeamLogoUrl(normalized || teamName);
-    var logos = window.TEAM_LOGOS || {};
-    if (logos[normalized]) return logos[normalized];
-    var ratings = window.TEAM_RATINGS || {};
-    var meta = ratings[normalized] || ratings[String(teamName || '').trim()];
-    return meta && typeof meta === 'object' && meta.shield ? meta.shield : '';
+    var logo = BACKEND_ESCUDOS[normalized] || BACKEND_ESCUDOS[original] || BACKEND_ESCUDO_DEFAULT;
+    TEAM_LOGO_CACHE[original] = logo;
+    return logo;
+  }
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+  function jornadaTeamHtml(teamName, isRight) {
+    var normalizedName = normalizarNombreEquipo(teamName) || String(teamName || '').trim();
+    var safeName = escapeHtml(normalizedName);
+    var logo = getLogoEquipo(teamName);
+    var shield = '<img class="escudo-jornada" src="' + escapeHtml(logo) + '" alt="' + safeName + '" loading="lazy" decoding="async"/>';
+    var text = '<span class="jornada-team-text">' + humanIcon(teamName) + safeName + '</span>';
+    return isRight ? (text + shield) : (shield + text);
   }
 
   function scoreHtmlForMatch(j, home, away, res) {
@@ -2317,9 +2338,9 @@
       var res = results[rKey(j, home, away)];
       var row = document.createElement('div');
       row.className = 'mrow';
-      row.innerHTML = '<div class="mn" data-team="'+home+'">' + humanIcon(home) + home + '</div>'
+      row.innerHTML = '<div class="mn" data-team="' + escapeHtml(home) + '">' + jornadaTeamHtml(home, false) + '</div>'
         + scoreHtmlForMatch(j, home, away, res)
-        + '<div class="mn r" data-team="'+away+'">' + humanIcon(away) + away + '</div>';
+        + '<div class="mn r" data-team="' + escapeHtml(away) + '">' + jornadaTeamHtml(away, true) + '</div>';
       round.appendChild(row);
     });
   }
@@ -2337,9 +2358,9 @@
       html += '<div class="jmatches" id="' + jid + '">';
       jornada.forEach(function(m){
         html += '<div class="mrow">';
-        html += '<div class="mn" data-team="' + m[0] + '">' + humanIcon(m[0]) + m[0] + '</div>';
+        html += '<div class="mn" data-team="' + escapeHtml(m[0]) + '">' + jornadaTeamHtml(m[0], false) + '</div>';
         html += scoreHtmlForMatch(j, m[0], m[1], results[rKey(j, m[0], m[1])]);
-        html += '<div class="mn r" data-team="' + m[1] + '">' + humanIcon(m[1]) + m[1] + '</div>';
+        html += '<div class="mn r" data-team="' + escapeHtml(m[1]) + '">' + jornadaTeamHtml(m[1], true) + '</div>';
         html += '</div>';
       });
       html += '</div></div>';
@@ -2468,7 +2489,9 @@
         if (res) {
           var row = document.createElement('div');
           row.className = 'mrow';
-          row.innerHTML = '<div class="mn">'+m[0]+'</div><div class="ms">'+res.gh+'\u2013'+res.ga+'</div><div class="mn r">'+m[1]+'</div>';
+          row.innerHTML = '<div class="mn" data-team="' + escapeHtml(m[0]) + '">' + jornadaTeamHtml(m[0], false) + '</div>'
+            + '<div class="ms">' + res.gh + '\u2013' + res.ga + '</div>'
+            + '<div class="mn r" data-team="' + escapeHtml(m[1]) + '">' + jornadaTeamHtml(m[1], true) + '</div>';
           calDiv.appendChild(row);
         } else {
           var mk = 'lj'+j+'m'+mi;
@@ -3629,14 +3652,25 @@
     'Real Betis':       ['#00A550','#ffffff','RBT','#ffffff']
   };
   function iaShieldSVG(team) {
-    if (team === 'Bayern Munich') {
-      return '<img alt="FC Bayern München" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:auto;height:100%;"/>';
+    var clean = String(team || '').trim();
+    var logo = '';
+    if (typeof window.getTeamLogoUrl === 'function') {
+      logo = window.getTeamLogoUrl(clean);
     }
-    if (team === 'Arsenal') {
-      return '<img alt="Arsenal FC" src="/static/img/escudos-1/england_arsenal.football-logos.cc.svg" style="width:auto;height:100%;"/>';
+    if (!logo) {
+      var aliases = window.TEAM_ALIASES || {};
+      var canonical = aliases[clean.toLowerCase()] || clean;
+      var logos = window.TEAM_LOGOS || {};
+      if (logos[canonical]) logo = logos[canonical];
+      if (!logo && logos[clean]) logo = logos[clean];
+      if (!logo) {
+        var ratings = window.TEAM_RATINGS || {};
+        var meta = ratings[canonical] || ratings[clean];
+        if (meta && typeof meta === 'object' && meta.shield) logo = meta.shield;
+      }
     }
-    if (team === 'Sporting CP') {
-      return '<img alt="Sporting CP" src="/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg" style="width:auto;height:100%;"/>';
+    if (logo) {
+      return '<img alt="' + clean.replace(/"/g, '&quot;') + '" src="' + logo.replace(/"/g, '&quot;') + '" style="width:auto;height:100%;object-fit:contain;"/>';
     }
     var d = IA_SHIELD[team] || ['#333333','#aaaaaa',(team||'?').substring(0,3).toUpperCase(),'#ffffff'];
     return '<svg width="32" height="38" viewbox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">'

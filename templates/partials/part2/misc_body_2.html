@@ -2297,6 +2297,21 @@
     var meta = ratings[normalized] || ratings[String(teamName || '').trim()];
     return meta && typeof meta === 'object' && meta.shield ? meta.shield : '';
   }
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+  function jornadaTeamHtml(teamName, isRight) {
+    var safeName = escapeHtml(teamName);
+    var logo = getLogoEquipo(teamName);
+    var shield = logo ? '<img class="clas-j-shield" src="' + escapeHtml(logo) + '" alt="' + safeName + '" onerror="this.style.display=\'none\'"/>' : '';
+    var text = '<span class="clas-j-team-name">' + humanIcon(teamName) + safeName + '</span>';
+    return '<div class="clas-j-team' + (isRight ? ' is-right' : '') + '">' + (isRight ? text + shield : shield + text) + '</div>';
+  }
 
   function scoreHtmlForMatch(j, home, away, res) {
     if (res) return '<div class="ms">' + res.gh + '\u2013' + res.ga + '</div>';
@@ -2337,9 +2352,9 @@
       html += '<div class="jmatches" id="' + jid + '">';
       jornada.forEach(function(m){
         html += '<div class="mrow">';
-        html += '<div class="mn" data-team="' + m[0] + '">' + humanIcon(m[0]) + m[0] + '</div>';
+        html += '<div class="mn" data-team="' + escapeHtml(m[0]) + '">' + jornadaTeamHtml(m[0], false) + '</div>';
         html += scoreHtmlForMatch(j, m[0], m[1], results[rKey(j, m[0], m[1])]);
-        html += '<div class="mn r" data-team="' + m[1] + '">' + humanIcon(m[1]) + m[1] + '</div>';
+        html += '<div class="mn r" data-team="' + escapeHtml(m[1]) + '">' + jornadaTeamHtml(m[1], true) + '</div>';
         html += '</div>';
       });
       html += '</div></div>';

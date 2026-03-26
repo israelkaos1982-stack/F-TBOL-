@@ -984,6 +984,8 @@ window.TEAM_ALIASES = {
   'sociedad':'Real Sociedad',
   'atletico madrid':'Atlético Madrid',
   'atlético madrid':'Atlético Madrid',
+  'atletico de madrid':'Atlético Madrid',
+  'atlético de madrid':'Atlético Madrid',
   'atletico':'Atlético Madrid',
   'atlético':'Atlético Madrid',
   'albacete bp':'Albacete BP',
@@ -1569,65 +1571,64 @@ window.mlSimulate_j1m10=function(){
     'Villarreal':       {abbr:'VIL', bg:'#ffd700', fg:'#1a1a1a'}
   };
 
-  // Team logo URLs — Wikimedia Commons Special:FilePath (no CORS issues for img tags, auto-redirects)
-  var _WC = 'https://commons.wikimedia.org/wiki/Special:FilePath/';
-  var _WE = 'https://en.wikipedia.org/wiki/Special:FilePath/';
+  // Team logo URLs — rutas locales explícitas (evita fallos por nombres/tildes/espacios)
   window.TEAM_LOGOS = {
     // ── La Liga 1ª ──────────────────────────────────────────
-    'Real Madrid':        _WE  + 'Real_Madrid_CF.svg',
-    'FC Barcelona':       _WC  + 'FC_Barcelona_%28crest%29.svg',
-    'Athletic Club':      _WC  + 'Athletic_Club_logo.svg',
-    'Real Betis':         _WC  + 'Real_Betis_logo.svg',
-    'Real Sociedad':      _WC  + 'Real_Sociedad_logo.svg',
-    'Atlético Madrid':    _WC  + 'Atletico_de_Madrid_2017_logo.svg',
-    'Villarreal':         _WC  + 'Villarreal_CF_logo-en.svg',
-    'Villarreal CF':      _WC  + 'Villarreal_CF_logo-en.svg',
-    'Sevilla':            _WC  + 'Sevilla_FC_logo.svg',
-    'Sevilla FC':         _WC  + 'Sevilla_FC_logo.svg',
-    'Valencia CF':        _WC  + 'Valenciacf.svg',
-    'Girona FC':          _WC  + 'Girona_FC.svg',
-    'Rayo Vallecano':     _WC  + 'Rayo_Vallecano_logo.svg',
-    'Getafe CF':          _WC  + 'Getafe_CF_logo.svg',
-    'Mallorca':           _WC  + 'RCD_Mallorca_logo.svg',
-    'Osasuna':            _WC  + 'CA_Osasuna_logo.svg',
-    'Espanyol':           _WC  + 'RCD_Espanyol.svg',
-    'Celta de Vigo':      _WC  + 'RC_Celta_de_Vigo_logo.svg',
+    'Real Madrid':        '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+    'FC Barcelona':       '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'Athletic Club':      '/static/img/escudos-1/spain_athletic-club.football-logos.cc.svg',
+    'Real Betis':         '/static/img/escudos-1/spain_real-betis.football-logos.cc.svg',
+    'Real Sociedad':      '/static/img/escudos-1/spain_real-sociedad.football-logos.cc.svg',
+    'Atlético Madrid':    '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+    'Atlético de Madrid': '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+    'Villarreal':         '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
+    'Villarreal CF':      '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
+    'Sevilla':            '/static/img/escudos-1/sevilla-fc.svg',
+    'Sevilla FC':         '/static/img/escudos-1/sevilla-fc.svg',
+    'Valencia CF':        '/static/img/escudos-1/spain_valencia.football-logos.cc.svg',
+    'Girona FC':          '/static/img/escudos-1/spain_girona.football-logos.cc.svg',
+    'Rayo Vallecano':     '/static/img/escudos-1/spain_rayo-vallecano.football-logos.cc.svg',
+    'Getafe CF':          '/static/img/escudos-1/spain_getafe.football-logos.cc.svg',
+    'Mallorca':           '/static/img/escudos-1/spain_mallorca.football-logos.cc.svg',
+    'Osasuna':            '/static/img/escudos-1/spain_osasuna.football-logos.cc.svg',
+    'Espanyol':           '/static/img/escudos-1/spain_espanyol.football-logos.cc.svg',
+    'Celta de Vigo':      '/static/img/escudos-1/spain_celta.football-logos.cc.svg',
     'Bayern Munich':      '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
     'Arsenal':            '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
     'Sporting CP':        '/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
     'PSG':                '/static/img/escudos-1/france_paris-saint-germain.svg',
     'Paris Saint-Germain':'/static/img/escudos-1/france_paris-saint-germain.svg',
-    'Elche CF':           _WC  + 'Elche_CF.svg',
+    'Elche CF':           '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
     // ── Liga Hypermotion (2ª) ───────────────────────────────
-    'Real Racing Club':   _WC  + 'Racing_de_Santander.svg',
-    'RC Deportivo':       _WC  + 'RC_Deportivo_de_La_Coru%C3%B1a_logo.svg',
-    'UD Almería':         _WC  + 'UD_Almer%C3%ADa.svg',
-    'Málaga CF':          _WC  + 'M%C3%A1laga_CF.svg',
-    'CD Castellón':       _WC  + 'CD_Castell%C3%B3n.svg',
-    'UD Las Palmas':      _WC  + 'UD_Las_Palmas.svg',
-    'Burgos CF':          _WC  + 'Burgos_CF_Escudo.svg',
-    'Real Sporting de Gijón': _WC + 'Real_Sporting_de_Gij%C3%B3n_logo.svg',
-    'Ceuta':              _WC  + 'AD_Ceuta_FC.svg',
-    'SD Eibar':           _WC  + 'SD_Eibar_logo.svg',
-    'Córdoba CF':         _WC  + 'C%C3%B3rdoba_CF.svg',
-    'Real Sociedad B':    _WC  + 'Real_Sociedad_logo.svg',
-    'FC Andorra':         _WC  + 'FC_Andorra_escudo.svg',
-    'Cádiz CF':           _WC  + 'C%C3%A1diz_CF.svg',
-    'Granada':            _WC  + 'Granada_CF.svg',
-    'Albacete BP':        _WC  + 'Albacete_Balompi%C3%A9_escudo.svg',
-    'Real Valladolid':    _WC  + 'Real_Valladolid_logo.svg',
-    'Leganés':            _WC  + 'CD_Legan%C3%A9s.svg',
-    'Huesca':             _WC  + 'SD_Huesca.svg',
-    'Deportivo Alavés':   _WC  + 'Deportivo_Alav%C3%A9s_logo_%282020%29.svg',
-    'Real Zaragoza':      _WC  + 'Real_Zaragoza.svg',
-    'Cultural Leonesa':   _WC  + 'Cultural_Leonesa_logo.svg',
-    'Mirandés':           _WC  + 'CD_Miran%C3%A9s.svg',
+    'Real Racing Club':   '/static/img/escudos-2/spain_racing.football-logos.cc.svg',
+    'RC Deportivo':       '/static/img/escudos-2/spain_deportivo-la-coruna.football-logos.cc.svg',
+    'UD Almería':         '/static/img/escudos-2/spain_almeria.football-logos.cc.svg',
+    'Málaga CF':          '/static/img/escudos-2/spain_malaga.football-logos.cc.svg',
+    'CD Castellón':       '/static/img/escudos-2/spain_castellon.football-logos.cc.svg',
+    'UD Las Palmas':      '/static/img/escudos-2/spain_las-palmas.football-logos.cc.svg',
+    'Burgos CF':          '/static/img/escudos-2/spain_burgos.football-logos.cc.svg',
+    'Real Sporting de Gijón': '/static/img/escudos-2/spain_sporting-gijon.football-logos.cc.svg',
+    'Ceuta':              '/static/img/escudos-2/spain_ceuta.football-logos.cc.svg',
+    'SD Eibar':           '/static/img/escudos-2/spain_eibar.football-logos.cc.svg',
+    'Córdoba CF':         'https://commons.wikimedia.org/wiki/Special:FilePath/C%C3%B3rdoba_CF.svg',
+    'Real Sociedad B':    '/static/img/escudos-1/spain_real-sociedad.football-logos.cc.svg',
+    'FC Andorra':         '/static/img/escudos-2/spain_fc-andorra.football-logos.cc.svg',
+    'Cádiz CF':           '/static/img/escudos-2/spain_cadiz.football-logos.cc.svg',
+    'Granada':            '/static/img/escudos-2/spain_granada.football-logos.cc.svg',
+    'Albacete BP':        '/static/img/escudos-2/spain_albacete.football-logos.cc.svg',
+    'Real Valladolid':    '/static/img/escudos-2/spain_valladolid.football-logos.cc.svg',
+    'Leganés':            '/static/img/escudos-2/spain_leganes.football-logos.cc.svg',
+    'Huesca':             '/static/img/escudos-2/spain_huesca.football-logos.cc.svg',
+    'Deportivo Alavés':   'https://commons.wikimedia.org/wiki/Special:FilePath/Deportivo_Alav%C3%A9s_logo_%282020%29.svg',
+    'Real Zaragoza':      '/static/img/escudos-2/spain_zaragoza.football-logos.cc.svg',
+    'Cultural Leonesa':   '/static/img/escudos-2/spain_cultural-leonesa.football-logos.cc.svg',
+    'Mirandés':           '/static/img/escudos-3/spain_mirandes.football-logos.cc.svg',
     // ── Primera Federación ──────────────────────────────────
-    'Real Madrid Castilla': _WE  + 'Real_Madrid_CF.svg',
-    'Ponferradina':       _WC  + 'SD_Ponferradina.svg',
-    'CD Lugo':            _WC  + 'CD_Lugo_escudo.svg',
+    'Real Madrid Castilla': '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+    'Ponferradina':       '/static/img/escudos-3/spain_ponferradina.football-logos.cc.svg',
+    'CD Lugo':            '/static/img/escudos-2/spain_lugo.football-logos.cc.svg',
     'Celta Fortuna':      '/static/img/escudos-1/spain_celta.football-logos.cc.svg',
-    'Cultural Leonesa':   _WC  + 'Cultural_Leonesa_logo.svg',
+    'Cultural Leonesa':   '/static/img/escudos-2/spain_cultural-leonesa.football-logos.cc.svg',
     'Racing Ferrol':      '/static/img/escudos-3/spain_racing-club-ferrol.football-logos.cc.svg',
     'Gimnàstic Tarragona': '/static/img/escudos-3/spain_gimnastic-de-tarragona.football-logos.cc.svg',
     'Osasuna Promesas':   '/static/img/escudos-1/spain_osasuna.football-logos.cc.svg',
@@ -1643,11 +1644,11 @@ window.mlSimulate_j1m10=function(){
     'CP Cacereño':        '/static/img/escudos-3/spain_cacereno.football-logos.cc.svg',
     'Arenas de Getxo':    '/static/img/escudos-3/spain_arenas-club.football-logos.cc.svg',
     'Real Avilés Industrial': '/static/img/escudos-3/spain_real-aviles-industrial.football-logos.cc.svg',
-    'Real Unión':         _WC  + 'Real_Union_Club_de_Irun.svg',
+    'Real Unión':         '/static/img/escudos-3/spain_real-union.football-logos.cc.svg',
     'UD Ibiza':           '/static/img/escudos-2/spain_ud-ibiza.football-logos.cc.svg',
-    'Real Murcia':        _WC  + 'Real_Murcia_logo.svg',
+    'Real Murcia':        '/static/img/escudos-3/spain_murcia.football-logos.cc.svg',
     'Eldense':            '/static/img/escudos-3/spain_eldense.football-logos.cc.svg',
-    'Hércules CF':        _WC  + 'H%C3%A9rcules_CF.svg',
+    'Hércules CF':        '/static/img/escudos-3/spain_hercules.football-logos.cc.svg',
     'AD Alcorcón':        '/static/img/escudos-3/spain_alcorcon.football-logos.cc.svg',
     'FC Cartagena':       '/static/img/escudos-2/spain_fc-cartagena.football-logos.cc.svg',
     'Villarreal B':       '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
@@ -1665,18 +1666,36 @@ window.mlSimulate_j1m10=function(){
     'CD Teruel':          '/static/img/escudos-3/spain_teruel.football-logos.cc.svg',
     'Juventud Torremolinos': '/static/img/escudos-2/spain_juventud-torremolinos.football-logos.cc.svg',
     'Estepona':           '/static/img/escudos-fallback/estepona.svg',
-    'Recreativo de Huelva': _WC + 'Recreativo_de_Huelva.svg',
-    'Mérida AD':          _WC  + 'M%C3%A9rida_AD.svg',
-    'Algeciras CF':       _WC  + 'Algeciras_CF.svg',
+    'Recreativo de Huelva': 'https://commons.wikimedia.org/wiki/Special:FilePath/Recreativo_de_Huelva.svg',
+    'Mérida AD':          '/static/img/escudos-3/spain_ad-merida.football-logos.cc.svg',
+    'Algeciras CF':       '/static/img/escudos-3/spain_algeciras.football-logos.cc.svg',
   };
+
+  function normalizeTeamKey(name){
+    return String(name || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  var TEAM_LOGOS_NORMALIZED = {};
+  Object.keys(window.TEAM_LOGOS || {}).forEach(function(teamName){
+    TEAM_LOGOS_NORMALIZED[normalizeTeamKey(teamName)] = window.TEAM_LOGOS[teamName];
+  });
 
   window.getTeamLogoUrl = function(name){
     var aliases = window.TEAM_ALIASES || {};
     var clean = String(name || '').trim();
-    var canonical = aliases[clean.toLowerCase()] || clean;
+    var normalizedClean = normalizeTeamKey(clean);
+    var canonical = aliases[normalizedClean] || aliases[clean.toLowerCase()] || clean;
     var logos = window.TEAM_LOGOS || {};
     if (logos[canonical]) return logos[canonical];
     if (logos[clean]) return logos[clean];
+    if (TEAM_LOGOS_NORMALIZED[normalizeTeamKey(canonical)]) return TEAM_LOGOS_NORMALIZED[normalizeTeamKey(canonical)];
+    if (TEAM_LOGOS_NORMALIZED[normalizedClean]) return TEAM_LOGOS_NORMALIZED[normalizedClean];
     var ratings = window.TEAM_RATINGS || {};
     var meta = ratings[canonical] || ratings[clean];
     if (meta && typeof meta === 'object' && meta.shield) return meta.shield;

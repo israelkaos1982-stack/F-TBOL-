@@ -3644,14 +3644,25 @@
     'Real Betis':       ['#00A550','#ffffff','RBT','#ffffff']
   };
   function iaShieldSVG(team) {
-    if (team === 'Bayern Munich') {
-      return '<img alt="FC Bayern München" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:auto;height:100%;"/>';
+    var clean = String(team || '').trim();
+    var logo = '';
+    if (typeof window.getTeamLogoUrl === 'function') {
+      logo = window.getTeamLogoUrl(clean);
     }
-    if (team === 'Arsenal') {
-      return '<img alt="Arsenal FC" src="/static/img/escudos-1/england_arsenal.football-logos.cc.svg" style="width:auto;height:100%;"/>';
+    if (!logo) {
+      var aliases = window.TEAM_ALIASES || {};
+      var canonical = aliases[clean.toLowerCase()] || clean;
+      var logos = window.TEAM_LOGOS || {};
+      if (logos[canonical]) logo = logos[canonical];
+      if (!logo && logos[clean]) logo = logos[clean];
+      if (!logo) {
+        var ratings = window.TEAM_RATINGS || {};
+        var meta = ratings[canonical] || ratings[clean];
+        if (meta && typeof meta === 'object' && meta.shield) logo = meta.shield;
+      }
     }
-    if (team === 'Sporting CP') {
-      return '<img alt="Sporting CP" src="/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg" style="width:auto;height:100%;"/>';
+    if (logo) {
+      return '<img alt="' + clean.replace(/"/g, '&quot;') + '" src="' + logo.replace(/"/g, '&quot;') + '" style="width:auto;height:100%;object-fit:contain;"/>';
     }
     var d = IA_SHIELD[team] || ['#333333','#aaaaaa',(team||'?').substring(0,3).toUpperCase(),'#ffffff'];
     return '<svg width="32" height="38" viewbox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">'

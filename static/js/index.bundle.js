@@ -3074,7 +3074,7 @@ function actaTog(matchKey) {
   toggle.classList.toggle('open', !open);
 }
 
-// ── Botón PREVIA: cuestionario pre-partido → sanciones ──
+// ── Botón CONFIGURACIÓN: cuestionario pre-partido → sanciones ──
 function mlPreviaClick(matchKey) {
   if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {
     window._mlEnsureLegacyPreMatchStructure(matchKey);
@@ -3126,7 +3126,7 @@ function mlPreviaClick(matchKey) {
   }
 }
 
-// ── Compatibilidad: restaurar flujo antiguo PREVIA → ajustes → partido ──
+// ── Compatibilidad: restaurar flujo antiguo CONFIGURACIÓN → ajustes → partido ──
 (function() {
   function _resolveWrap(matchKey) {
     return document.getElementById('mlw-' + matchKey);
@@ -3150,7 +3150,10 @@ function mlPreviaClick(matchKey) {
     var actBar = document.getElementById('ml-actions-bar-' + matchKey);
     var previaBtn = document.getElementById('ml-previa-' + matchKey);
     if (previaBtn) previaBtn.style.display = unlocked ? 'none' : '';
-    if (timerBtn) timerBtn.style.display = unlocked ? '' : 'none';
+    if (timerBtn) {
+      timerBtn.style.display = unlocked ? '' : 'none';
+      timerBtn.disabled = !unlocked;
+    }
     if (addBtn) addBtn.style.visibility = unlocked ? '' : 'hidden';
     if (actBar) actBar.style.visibility = unlocked ? '' : 'hidden';
     if (unlocked) wrap.setAttribute('data-prepartido-ready', '1');
@@ -3166,7 +3169,7 @@ function mlPreviaClick(matchKey) {
       var previaBtn = document.createElement('button');
       previaBtn.id = 'ml-previa-' + matchKey;
       previaBtn.className = 'ml-previa-btn';
-      previaBtn.innerHTML = '📋 PREVIA';
+      previaBtn.innerHTML = '⚙️ CONFIGURACIÓN';
       previaBtn.onclick = function() { mlPreviaClick(matchKey); };
       if (timerBtn.nextSibling) scoreWrap.insertBefore(previaBtn, timerBtn.nextSibling);
       else scoreWrap.appendChild(previaBtn);
@@ -4675,7 +4678,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var bwrap = document.getElementById('ball-wrap-' + _ppMatchKey);
       if (vbar) vbar.classList.remove('pre-hidden');
       if (bwrap) bwrap.classList.remove('pre-hidden');
-      // Ocultar botón PREVIA, dejar solo el timer
+      // Ocultar botón de configuración, dejar solo el timer
       var previaBtn = document.getElementById('ml-previa-' + _ppMatchKey);
       if (previaBtn) previaBtn.style.display = 'none';
     }
@@ -4685,7 +4688,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (typeof window.showSancionOverlay === 'function') {
       window.showSancionOverlay(_ppCompKey, null, function() {
         var timerBtn = document.getElementById('ml-timer-' + mk);
-        if (timerBtn) timerBtn.style.display = '';
+        if (timerBtn) { timerBtn.style.display = ''; timerBtn.disabled = false; }
         var addBtn = document.getElementById('ml-add-btn-' + mk);
         if (addBtn) addBtn.style.visibility = '';
         var actBar = document.getElementById('ml-actions-bar-' + mk);
@@ -4695,7 +4698,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       });
     } else {
       var timerBtn = document.getElementById('ml-timer-' + mk);
-      if (timerBtn) timerBtn.style.display = '';
+      if (timerBtn) { timerBtn.style.display = ''; timerBtn.disabled = false; }
       var addBtn = document.getElementById('ml-add-btn-' + mk);
       if (addBtn) addBtn.style.visibility = '';
       var actBar = document.getElementById('ml-actions-bar-' + mk);

@@ -2865,8 +2865,8 @@
     var simCtx = (typeof _simIAvsIAWithContext === 'function')
       ? _simIAvsIAWithContext(home, away, j, 'ia-live')
       : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
-    var r  = { gh: simCtx.gh, ga: simCtx.ga };
-    var evtData = genMatchEventsEnhanced(home, away, r.gh, r.ga);
+    var simScore = { gh: simCtx.gh, ga: simCtx.ga };
+    var evtData = genMatchEventsEnhanced(home, away, simScore.gh, simScore.ga);
     var evts    = evtData.events; /* already sorted by min */
 
     if (scAEl) scAEl.textContent = '0';
@@ -3093,12 +3093,12 @@
       if (esHumano(m[0]) || esHumano(m[1])) return;
       var key = rKey(j, m[0], m[1]);
       if (results[key]) return; /* ya simulado */
-      var r = (typeof _simIAvsIAWithContext === 'function')
+      var simScore = (typeof _simIAvsIAWithContext === 'function')
         ? _simIAvsIAWithContext(m[0], m[1], j, 'ia-batch')
         : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
-      var evtData = genMatchEventsEnhanced(m[0], m[1], r.gh, r.ga);
-      results[key] = { gh: r.gh, ga: r.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
-      actualizarDom('l-j' + j, m[0], m[1], r.gh, r.ga);
+      var evtData = genMatchEventsEnhanced(m[0], m[1], simScore.gh, simScore.ga);
+      results[key] = { gh: simScore.gh, ga: simScore.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
+      actualizarDom('l-j' + j, m[0], m[1], simScore.gh, simScore.ga);
       dirty = true;
     });
     if (dirty) {
@@ -3349,8 +3349,8 @@
               homeEff: { rating: ((window.TEAM_RATINGS && window.TEAM_RATINGS[m.home]) || 75), bonusPct: 0 },
               awayEff: { rating: ((window.TEAM_RATINGS && window.TEAM_RATINGS[m.away]) || 75), bonusPct: 0 }
             };
-        var rA  = Math.round(viewCtx.homeEff.rating);
-        var rB  = Math.round(viewCtx.awayEff.rating);
+        var effHomeRating = Math.round(viewCtx.homeEff.rating);
+        var effAwayRating = Math.round(viewCtx.awayEff.rating);
         var homeBonusPct = Math.round((viewCtx.homeEff.bonusPct || 0) * 1000) / 10;
         var mk  = 'iapnd-j' + j + '-' + m.home.replace(/\s/g,'') + '-' + m.away.replace(/\s/g,'');
         var emk = mk.replace(/'/g,"\\'");
@@ -3363,7 +3363,7 @@
           + '<div class="ml-team">'
           +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
           +   '<div class="ml-team-name">' + m.home + '</div>'
-          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;margin-top:2px;letter-spacing:1px;">★ ' + rA + ' 🏠 (+' + homeBonusPct + '%)</div>'
+          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;margin-top:2px;letter-spacing:1px;">★ ' + effHomeRating + ' 🏠 (+' + homeBonusPct + '%)</div>'
           + '</div>'
           + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;">'
           +   '<div class="ml-score"><span id="ia-sc-' + mk + '-a">–</span>&ndash;<span id="ia-sc-' + mk + '-b">–</span></div>'
@@ -3372,7 +3372,7 @@
           + '<div class="ml-team">'
           +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div>'
           +   '<div class="ml-team-name">' + m.away + '</div>'
-          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#a0c8d8;margin-top:2px;letter-spacing:1px;">★ ' + rB + '</div>'
+          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#a0c8d8;margin-top:2px;letter-spacing:1px;">★ ' + effAwayRating + '</div>'
           + '</div>'
           + '</div>'
           + '<div id="ia-acta-' + mk + '" style="display:none;border-top:1px solid rgba(255,255,255,.07);"></div>'

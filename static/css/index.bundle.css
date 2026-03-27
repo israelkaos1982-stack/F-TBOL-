@@ -165,7 +165,16 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 .ml-sun{display:inline-block;animation:sunPulse 2s ease-in-out infinite;}@keyframes sunPulse{0%,100%{transform:scale(1) rotate(0deg);filter:brightness(1);}50%{transform:scale(1.22) rotate(18deg);filter:brightness(1.35);}}
 .match-live-wrap.hvh .ml-venue-bar{background:rgba(90,0,140,.35);border-bottom-color:rgba(180,60,255,.2);}
 .match-live-wrap.hvia .ml-venue-bar{background:rgba(0,80,0,.3);border-bottom-color:rgba(60,200,60,.15);}
-.ml-team-svg{width:32px;height:38px;flex-shrink:0;position:relative;z-index:2;}
+.ml-team-svg{
+  width:32px !important;
+  height:32px !important;
+  max-width:32px !important;
+  max-height:32px !important;
+  flex-shrink:0;
+  position:relative;
+  z-index:2;
+  object-fit:contain !important;
+}
 .ml-score{font-family:"Bebas Neue",sans-serif;font-size:30px;letter-spacing:2px;line-height:1;color:#aaa;text-shadow:none;background:linear-gradient(180deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,.7) 100%);border:1px solid rgba(160,160,160,.25);border-radius:8px;padding:4px 12px;min-width:82px;text-align:center;box-shadow:none;}
 .ml-score span{color:#aaa;}
 .ml-pen-score{font-family:"Bebas Neue",sans-serif;font-size:16px;color:#64b4ff;letter-spacing:2px;line-height:1;display:none;}
@@ -1742,6 +1751,17 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 .mrow .mn{display:flex;align-items:center;gap:6px;min-width:0;}
 .mrow .mn.r{justify-content:flex-end;}
 .mrow .jornada-team-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.mrow .escudo-jornada{width:40px;height:40px;object-fit:contain;display:inline-block;vertical-align:middle;margin-right:8px;flex-shrink:0;}
+.mrow .escudo-jornada{width:40px;height:40px;max-width:40px;max-height:40px;object-fit:contain;display:inline-block;vertical-align:middle;margin-right:8px;flex-shrink:0;}
 .mrow .mn.r .escudo-jornada{order:2;}
 .mrow .mn.r .escudo-jornada{margin-right:0;margin-left:8px;}
+/* Fallback defensivo: cualquier escudo inline (img/svg) dentro de filas de jornada */
+.mrow .mn > img,
+.mrow .mn > svg{
+  width:40px !important;
+  height:40px !important;
+  max-width:40px !important;
+  max-height:40px !important;
+  object-fit:contain !important;
+  flex-shrink:0;
+  display:inline-block;
+}

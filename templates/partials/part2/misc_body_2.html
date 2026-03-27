@@ -3353,8 +3353,8 @@
     var simCtx = (typeof _simIAvsIAWithContext === 'function')
       ? _simIAvsIAWithContext(home, away, j)
       : _fallbackIAvsIAScore(home, away);
-    var r  = { gh: simCtx.gh, ga: simCtx.ga };
-    var evtData = genMatchEventsEnhanced(home, away, r.gh, r.ga);
+    var simScore = { gh: simCtx.gh, ga: simCtx.ga };
+    var evtData = genMatchEventsEnhanced(home, away, simScore.gh, simScore.ga);
     var evts    = evtData.events; /* already sorted by min */
 
     if (scAEl) scAEl.textContent = '0';

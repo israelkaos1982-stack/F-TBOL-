@@ -2008,26 +2008,27 @@
     return weight ? total / weight : 75;
   }
 
-  function _effectiveIARating(teamName, isHome, j, oppName, modeTag) {
+  function _effectiveIARating(teamName, isHome, j, oppName) {
     var rat = window.TEAM_RATINGS || {};
     var base = Number(rat[teamName]);
     if (!isFinite(base)) base = 75;
     var squad = _avgSquadPower(teamName);
     var blended = base * 0.62 + squad * 0.38;
     if (!isHome) return { rating: blended, bonusPct: 0 };
-    var seed = _seed01([modeTag || 'ia', j || 0, teamName || '', oppName || ''].join('|'));
+    /* Keep home bonus stable per fixture/jornada so cards/live/batch stay consistent */
+    var seed = _seed01(['ia', j || 0, teamName || '', oppName || ''].join('|'));
     var bonusPct = _IA_HOME_BONUS_MIN + ((_IA_HOME_BONUS_MAX - _IA_HOME_BONUS_MIN) * seed);
     return { rating: blended * (1 + bonusPct), bonusPct: bonusPct };
   }
 
-  function _iaContextRatings(home, away, j, modeTag) {
-    var homeEff = _effectiveIARating(home, true, j, away, modeTag);
-    var awayEff = _effectiveIARating(away, false, j, home, modeTag);
+  function _iaContextRatings(home, away, j) {
+    var homeEff = _effectiveIARating(home, true, j, away);
+    var awayEff = _effectiveIARating(away, false, j, home);
     return { homeEff: homeEff, awayEff: awayEff };
   }
 
-  function _simIAvsIAWithContext(home, away, j, modeTag) {
-    var ctx = _iaContextRatings(home, away, j, modeTag);
+  function _simIAvsIAWithContext(home, away, j) {
+    var ctx = _iaContextRatings(home, away, j);
     var score;
     if (typeof simSimple === 'function') {
       score = simSimple(ctx.homeEff.rating, ctx.awayEff.rating);
@@ -2863,7 +2864,7 @@
     btn.style.color = '#4aff4a';
 
     var simCtx = (typeof _simIAvsIAWithContext === 'function')
-      ? _simIAvsIAWithContext(home, away, j, 'ia-live')
+      ? _simIAvsIAWithContext(home, away, j)
       : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
     var simScore = { gh: simCtx.gh, ga: simCtx.ga };
     var evtData = genMatchEventsEnhanced(home, away, simScore.gh, simScore.ga);
@@ -3094,7 +3095,7 @@
       var key = rKey(j, m[0], m[1]);
       if (results[key]) return; /* ya simulado */
       var simScore = (typeof _simIAvsIAWithContext === 'function')
-        ? _simIAvsIAWithContext(m[0], m[1], j, 'ia-batch')
+        ? _simIAvsIAWithContext(m[0], m[1], j)
         : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
       var evtData = genMatchEventsEnhanced(m[0], m[1], simScore.gh, simScore.ga);
       results[key] = { gh: simScore.gh, ga: simScore.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
@@ -3344,7 +3345,7 @@
       /* ── Pending matches → clean card + live ▶ SIMULAR ── */
       pending.forEach(function (m) {
         var viewCtx = (typeof _iaContextRatings === 'function')
-          ? _iaContextRatings(m.home, m.away, j, 'ia-card')
+          ? _iaContextRatings(m.home, m.away, j)
           : {
               homeEff: { rating: ((window.TEAM_RATINGS && window.TEAM_RATINGS[m.home]) || 75), bonusPct: 0 },
               awayEff: { rating: ((window.TEAM_RATINGS && window.TEAM_RATINGS[m.away]) || 75), bonusPct: 0 }

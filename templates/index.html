@@ -3,15 +3,74 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>eFootball 6.0</title>
+  <title>eFootball ✓</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;600;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/index.bundle.css') }}?v=3.3">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/index.bundle.css') }}?v=3.8">
+  <style>
+    /* ── HOME: todas las cards exactamente 80px, gap 15px ── */
+    #s-home .menu-grid{gap:15px!important;}
+    #s-home .menu-card,
+    #s-home .menu-card.full,
+    #s-home #home-live-card,
+    #s-home .mc-derbys,
+    #s-home .mc-espana,
+    #s-home .mc-comp,
+    #s-home .mc-ligas,
+    #s-home .mc-sel,
+    #s-home .equipo-card,
+    #s-home .mc-athletic,
+    #s-home .mc-betis,
+    #s-home .mc-sociedad,
+    #s-home .mc-madrid,
+    #s-home .mc-barca{
+      height:80px!important;
+      min-height:80px!important;
+      max-height:80px!important;
+      overflow:hidden!important;
+      position:relative!important;
+      box-sizing:border-box!important;
+    }
+    /* ── ESCUDOS JORNADA: fuerza tamaño 28px ── */
+    img.escudo-jornada{width:28px!important;height:28px!important;max-width:28px!important;max-height:28px!important;object-fit:contain!important;flex-shrink:0!important;}
+    /* ── SHIELDS MATCH SIMULATOR: max tamaño ── */
+    .ml-shield-wrap img{max-width:44px!important;max-height:44px!important;}
+  </style>
+  <script>
+    window.BACKEND_ESCUDOS = {{ escudos_resueltos | tojson }};
+    window.BACKEND_ESCUDOS_ALIASES = {{ escudos_aliases | tojson }};
+    window.BACKEND_ESCUDO_DEFAULT = {{ escudo_default | tojson }};
+  </script>
 </head>
 <body>
   {% include 'partials/misc_body_1.html' %}
-  {% include 'partials/part2/misc_body_2.html' %}
-  <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=3.3"></script>
+  <script>
+    {% include 'partials/part2/misc_body_2.html' %}
+  </script>
+  <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=3.8"></script>
   <script src="{{ url_for('static', filename='js/copa-engine.js') }}?v=1.0"></script>
-  <script src="{{ url_for('static', filename='js/primera-rfef-data.js') }}?v=1.0"></script>
+  <script src="{{ url_for('static', filename='js/primera-rfef-data.js') }}?v=1.1"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      /* Nuclear override: fuerza 80px en TODOS los cards del home */
+      var sels = [
+        '#s-home .menu-card',
+        '#s-home .equipo-card',
+        '#s-home .mc-athletic',
+        '#s-home .mc-betis',
+        '#s-home .mc-sociedad',
+        '#s-home .mc-madrid',
+        '#s-home .mc-barca'
+      ];
+      var props = ['height','min-height','max-height'];
+      sels.forEach(function(s){
+        document.querySelectorAll(s).forEach(function(el){
+          props.forEach(function(p){ el.style.setProperty(p,'80px','important'); });
+          el.style.setProperty('overflow','hidden','important');
+          el.style.setProperty('position','relative','important');
+          el.style.setProperty('box-sizing','border-box','important');
+        });
+      });
+    });
+  </script>
 </body>
 </html>

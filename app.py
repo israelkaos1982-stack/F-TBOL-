@@ -1,8 +1,9 @@
-from flask import Flask, render_template, redirect, url_for, request, jsonify
+from flask import Flask, render_template, redirect, url_for, request, jsonify, abort
 from flask_sqlalchemy import SQLAlchemy
 import random
 import os
 import json
+import unicodedata
 from datetime import datetime, timezone
 
 from jugadores_data import jugadores_por_equipo
@@ -20,7 +21,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 # --- CONFIG ---
-equipos_humanos = ["Real Madrid", "FC Barcelona", "Athletic Club", "Real Sociedad", "Betis"]
+equipos_humanos = ["Real Madrid", "FC Barcelona", "Bayern Munich", "Arsenal", "Sporting CP"]
 
 equipos_primera = list(jugadores_por_equipo.keys())
 equipos = list(jugadores_por_equipo.keys())
@@ -58,6 +59,69 @@ BASE = {
 
 MULTIGOL = [1, 0.37, 0.22, 0.12, 0.06]
 BONUS_LOCAL = 1.08
+
+TEAM_ALIASES = {
+    "sevilla fc": "Sevilla",
+    "villarreal cf": "Villarreal",
+    "valencia cf": "Valencia",
+    "getafe cf": "Getafe",
+    "elche cf": "Elche",
+    "córdoba cf": "Córdoba",
+    "levante ud": "Levante",
+    "villarreal": "Villarreal",
+    "sevilla": "Sevilla",
+    "valencia": "Valencia",
+    "getafe": "Getafe",
+    "elche": "Elche",
+    "córdoba": "Córdoba",
+    "levante": "Levante",
+}
+
+ALIASES_ESCUDOS_RAW = {
+    "FC Barcelona": "Barcelona",
+    "Barça": "Barcelona",
+    "Bayern Munich": "Bayern de Múnich",
+    "Atletico de Madrid": "Atlético de Madrid",
+    "Sporting CP": "Sporting de Portugal",
+}
+
+ESCUDOS = {
+    "Real Madrid": "/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg",
+    "Barcelona": "/static/img/escudos-1/spain_barcelona.football-logos.cc.svg",
+    "Arsenal": "/static/img/escudos-1/england_arsenal.football-logos.cc.svg",
+    "Bayern de Múnich": "/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg",
+    "Villarreal": "/static/img/escudos-1/spain_villarreal.football-logos.cc.svg",
+    "Elche": "/static/img/escudos-1/spain_elche.football-logos.cc.svg",
+    "Sporting de Portugal": "/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg",
+    "Atlético de Madrid": "/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg",
+}
+
+ESCUDO_DEFAULT = "/static/img/escudos-fallback/estepona.svg"
+
+
+def normalize_team_key(nombre):
+    clean = str(nombre or "").strip().lower()
+    normalized = unicodedata.normalize("NFD", clean)
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
+ALIASES_ESCUDOS = {
+    normalize_team_key(alias): canonical
+    for alias, canonical in ALIASES_ESCUDOS_RAW.items()
+}
+
+
+def obtener_escudo(nombre):
+    clean = str(nombre or "").strip()
+    if not clean:
+        return ESCUDO_DEFAULT
+    canonical = ALIASES_ESCUDOS.get(normalize_team_key(clean), clean)
+    return ESCUDOS.get(canonical, ESCUDO_DEFAULT)
+
+
+def build_escudos_resueltos():
+    teams = set(jugadores_por_equipo.keys()) | set(equipos_humanos) | set(ESCUDOS.keys())
+    return {team: obtener_escudo(team) for team in sorted(teams)}
 
 # --- ESTADO GLOBAL COMPARTIDO ---
 GLOBAL_STATE_KEY = "global_state"
@@ -138,11 +202,24 @@ def calcular_prob(perfil, local=False, goles_previos=0):
     prob *= MULTIGOL[min(goles_previos, 4)]
     return prob
 
+def resolve_team_name(team_name):
+    clean = (team_name or "").strip()
+    return TEAM_ALIASES.get(clean.lower(), clean)
+
+def get_team_power(team_name):
+    resolved = resolve_team_name(team_name)
+    squad = jugadores_por_equipo.get(resolved) or jugadores_por_equipo.get(team_name) or []
+    if squad:
+        powers = [int(j.get("poder", 70) or 70) for j in squad]
+        return max(1, min(100, round(sum(powers) / max(1, len(powers)))))
+    return 76
+
 def elegir_goleador(equipo, local=False, conteo=None):
     if conteo is None:
         conteo = {}
 
-    jugadores = jugadores_por_equipo[equipo]
+    resolved = resolve_team_name(equipo)
+    jugadores = jugadores_por_equipo[resolved]
     pesos = []
 
     for j in jugadores:
@@ -154,20 +231,44 @@ def elegir_goleador(equipo, local=False, conteo=None):
     return elegido["nombre"]
 
 def simular_goles(equipo, local=False):
-    jugadores = jugadores_por_equipo[equipo]
+    own_power = get_team_power(equipo)
+    opp_candidates = [name for name in jugadores_por_equipo.keys() if name != resolve_team_name(equipo)]
+    opp_power = sum(get_team_power(name) for name in opp_candidates[:6]) / max(1, min(len(opp_candidates), 6))
+    if not opp_candidates:
+        opp_power = 76
+    base_prob = own_power / max(1, (own_power + opp_power))
+    if local:
+        base_prob = min(0.82, base_prob + 0.05 * (1 - base_prob))
 
-    media = sum([calcular_prob(j, local) for j in jugadores]) / len(jugadores)
-
-    if media < 15:
-        pesos = [45, 35, 15, 4, 1]
-    elif media < 25:
-        pesos = [30, 35, 22, 9, 4]
-    elif media < 40:
-        pesos = [20, 30, 25, 15, 10]
+    if base_prob < 0.42:
+        pesos = [46, 33, 14, 5, 2, 0]
+    elif base_prob < 0.50:
+        pesos = [34, 33, 20, 9, 3, 1]
+    elif base_prob < 0.58:
+        pesos = [24, 32, 25, 13, 5, 1]
     else:
-        pesos = [10, 25, 30, 20, 15]
+        pesos = [16, 27, 28, 19, 8, 2]
 
-    return random.choices([0, 1, 2, 3, 4], weights=pesos, k=1)[0]
+    return random.choices([0, 1, 2, 3, 4, 5], weights=pesos, k=1)[0]
+
+def simular_marcador(local, visitante):
+    r_local = get_team_power(local)
+    r_visit = get_team_power(visitante)
+    base_local = r_local / max(1, (r_local + r_visit))
+    prob_local = min(0.82, base_local + 0.05 * (1 - base_local))
+
+    def sample(prob):
+        if prob < 0.42:
+            pesos = [46, 33, 14, 5, 2, 0]
+        elif prob < 0.50:
+            pesos = [34, 33, 20, 9, 3, 1]
+        elif prob < 0.58:
+            pesos = [24, 32, 25, 13, 5, 1]
+        else:
+            pesos = [16, 27, 28, 19, 8, 2]
+        return random.choices([0, 1, 2, 3, 4, 5], weights=pesos, k=1)[0]
+
+    return sample(prob_local), sample(1 - prob_local)
 
 def elegir_mvp(local, visitante, gl, gv, conteo_local, conteo_visitante):
     candidatos = []
@@ -181,7 +282,8 @@ def elegir_mvp(local, visitante, gl, gv, conteo_local, conteo_visitante):
         candidatos.sort(key=lambda x: x[1], reverse=True)
         return candidatos[0][0]
 
-    return random.choice(jugadores_por_equipo[local])["nombre"]
+    fallback_team = resolve_team_name(local)
+    return random.choice(jugadores_por_equipo[fallback_team])["nombre"]
 
 # --- CALENDARIO ---
 def generar_calendario(lista):
@@ -216,8 +318,7 @@ COPA_SEEDING = {
 }
 
 def copa_sim_partido(local, visitante, two_leg=False):
-    gl = simular_goles(local, True)
-    gv = simular_goles(visitante, False)
+    gl, gv = simular_marcador(local, visitante)
     conteo_l, conteo_v = {}, {}
     for _ in range(gl):
         g = elegir_goleador(local, True, conteo_l)
@@ -346,7 +447,13 @@ def copa_guardar_resultado():
     et_gl = int(payload.get("et_gl", 0))
     et_gv = int(payload.get("et_gv", 0))
     pen_winner = payload.get("pen_winner")
+    pen_score = payload.get("pen_score", "")
     mvp = payload.get("mvp", "")
+    events = payload.get("events") or []
+    injuries = payload.get("injuries") or []
+    summary = payload.get("summary", "")
+    team_a = payload.get("team_a", "")
+    team_b = payload.get("team_b", "")
     data = load_global_state()
     copa = data.get("copa_state") or {"sorteo": {}, "resultados": {}, "clasificados": {}}
     sorteo_ronda = copa.get("sorteo", {}).get(ronda, [])
@@ -355,7 +462,10 @@ def copa_guardar_resultado():
     resultados = copa.get("resultados", {})
     two_leg = ronda in ("oct", "cua")
     res = {"gl": gl, "gv": gv, "et_gl": et_gl, "et_gv": et_gv,
-           "pen_winner": pen_winner, "mvp": mvp, "jugado": True}
+           "pen_winner": pen_winner, "pen_score": pen_score, "mvp": mvp,
+           "events": events, "injuries": injuries, "summary": summary,
+           "team_a": team_a or local_orig, "team_b": team_b or visit_orig,
+           "jugado": True}
     if two_leg:
         key = ronda + ("_vta" if es_vuelta else "_ida")
         if key not in resultados:
@@ -489,6 +599,15 @@ def api_save_state():
         "state": saved
     })
 
+
+@app.context_processor
+def inject_shield_data():
+    return {
+        "escudos_resueltos": build_escudos_resueltos(),
+        "escudos_aliases": ALIASES_ESCUDOS_RAW,
+        "escudo_default": ESCUDO_DEFAULT,
+    }
+
 # --- RUTAS ---
 @app.route("/")
 def inicio():
@@ -496,22 +615,11 @@ def inicio():
 
 @app.route("/calendario")
 def calendario_view():
-    for i, jornada in enumerate(calendario, 1):
-        for l, v in jornada:
-            if l not in equipos_humanos and v not in equipos_humanos:
-                simular_y_guardar(i, l, v)
-
-    partidos = Partido.query.all()
-    res = {f"{p.local}-{p.visitante}": p for p in partidos}
-
-    return render_template("calendario.html", jornadas=calendario, resultados=res)
+    return redirect("/espana/liga-ea-sports/clasificacion", code=302)
 
 @app.route("/clasificacion")
 def clasificacion():
-    partidos = Partido.query.all()
-    tabla = calcular_tabla(equipos_primera, partidos)
-
-    return render_template("clasificacion.html", tabla=tabla)
+    return render_template("index.html")
 
 @app.route("/reiniciar")
 def reiniciar():
@@ -519,7 +627,13 @@ def reiniciar():
     Partido.query.delete()
     save_global_state(DEFAULT_GLOBAL_STATE)
     db.session.commit()
-    return redirect(url_for("calendario_view"))
+    return redirect(url_for("clasificacion"))
+
+@app.route("/<path:path>")
+def spa_fallback(path):
+    if path.startswith("api/"):
+        abort(404)
+    return render_template("index.html")
 
 with app.app_context():
     db.create_all()

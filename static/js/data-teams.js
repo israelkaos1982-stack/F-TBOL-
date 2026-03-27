@@ -1,63 +1,78 @@
 window.TEAM_RATINGS = {
-    // --- PRIMERA DIVISIÓN ---
-    "Bayern Munich": { media: 90, color: "#dc052d" },
-    "FC Bayern Munich": { media: 90, color: "#dc052d" },
+    // --- CARPETA EXCLUSIVA: escudos-main (Para que el Menú nunca falle) ---
+    "Bayern Munich": { 
+        media: 85, color: "#dc052d", 
+        shield: "/static/img/escudos-main/germany_bayern-munchen.football-logos.cc.svg" 
+    },
+    "Arsenal": { 
+        media: 85, color: "#ef0107", 
+        shield: "/static/img/escudos-main/england_arsenal.football-logos.cc.svg" 
+    },
+    "Real Madrid": { 
+        media: 85, color: "#ffffff", 
+        shield: "/static/img/escudos-main/spain_real-madrid.football-logos.cc.svg" 
+    },
+    "Sporting CP": { 
+        media: 79, color: "#006600", 
+        shield: "/static/img/escudos-main/portugal_sporting-cp.football-logos.cc.svg" 
+    },
+    "PSG": {
+        media: 84, color: "#0b1d48",
+        shield: "/static/img/escudos-1/france_paris-saint-germain.svg"
+    },
+    "Paris Saint-Germain": {
+        media: 84, color: "#0b1d48",
+        shield: "/static/img/escudos-1/france_paris-saint-germain.svg"
+    },
+    "FC Barcelona": { 
+        media: 85, color: "#004d98", 
+        shield: "/static/img/escudos-main/spain_barcelona.football-logos.cc.svg"
+     },
 
-    "Arsenal": { media: 84, color: "#ef0107" },
-    "Arsenal FC": { media: 84, color: "#ef0107" },
+    "Atlético Madrid": { media: 83, color: "#cb3524", shield: "/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg" },
+    "Atletico Madrid": { media: 83, color: "#cb3524", shield: "/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg" },
 
-    "Sporting CP": { media: 82, color: "#006600" },
-    "Sporting de Portugal": { media: 82, color: "#006600" },
+    "Villarreal": { media: 80, color: "#ffe200", shield: "/static/img/escudos-1/spain_villarreal.football-logos.cc.svg" },
 
-    "Barcelona": { media: 85, color: "#004d98" },
-    "FC Barcelona": { media: 85, color: "#004d98" },
+    "Real Betis": { media: 79, color: "#0bb363", shield: "/static/img/escudos-1/spain_real-betis.football-logos.cc.svg" },
+    "Betis": { media: 79, color: "#0bb363", shield: "/static/img/escudos-1/spain_real-betis.football-logos.cc.svg" },
 
-    "Real Madrid": { media: 85, color: "#ffffff" },
+    "Celta Vigo": { media: 76, color: "#87adcf", shield: "/static/img/escudos-1/spain_celta.football-logos.cc.svg" },
+    "Celta de Vigo": { media: 76, color: "#87adcf", shield: "/static/img/escudos-1/spain_celta.football-logos.cc.svg" },
+    "Celta": { media: 76, color: "#87adcf", shield: "/static/img/escudos-1/spain_celta.football-logos.cc.svg" },
 
-    "Atlético Madrid": { media: 83, color: "#cb3524" },
-    "Atletico Madrid": { media: 83, color: "#cb3524" },
+    "Real Sociedad": { media: 79, color: "#0067b1", shield: "/static/img/escudos-1/spain_real-sociedad.football-logos.cc.svg" },
 
-    "Villarreal": { media: 80, color: "#ffe200" },
+    "Espanyol": { media: 76, color: "#0088ce", shield: "/static/img/escudos-1/spain_espanyol.football-logos.cc.svg" },
 
-    "Real Betis": { media: 79, color: "#0bb363" },
-    "Betis": { media: 79, color: "#0bb363" },
+    "Getafe": { media: 75, color: "#00539b", shield: "/static/img/escudos-1/spain_getafe.football-logos.cc.svg" },
+    "Getafe CF": { media: 75, color: "#00539b", shield: "/static/img/escudos-1/spain_getafe.football-logos.cc.svg" },
 
-    "Celta Vigo": { media: 76, color: "#87adcf" },
-    "Celta de Vigo": { media: 76, color: "#87adcf" },
-    "Celta": { media: 76, color: "#87adcf" },
+    "Athletic Club": { media: 79, color: "#ff0000", shield: "/static/img/escudos-1/spain_athletic-club.football-logos.cc.svg" },
 
-    "Real Sociedad": { media: 79, color: "#0067b1" },
+    "Osasuna": { media: 77, color: "#9e0b1c", shield: "/static/img/escudos-1/spain_osasuna.football-logos.cc.svg" },
 
-    "Espanyol": { media: 76, color: "#0088ce" },
+    "Girona FC": { media: 77, color: "#e2001a", shield: "/static/img/escudos-1/spain_girona.football-logos.cc.svg" },
+    "Girona": { media: 77, color: "#e2001a", shield: "/static/img/escudos-1/spain_girona.football-logos.cc.svg" },
 
-    "Getafe": { media: 75, color: "#00539b" },
-    "Getafe CF": { media: 75, color: "#00539b" },
+    "Valencia": { media: 76, color: "#ffffff", shield: "/static/img/escudos-1/spain_valencia.football-logos.cc.svg" },
+    "Valencia CF": { media: 76, color: "#ffffff", shield: "/static/img/escudos-1/spain_valencia.football-logos.cc.svg" },
 
-    "Athletic Club": { media: 79, color: "#ff0000" },
+    "Rayo Vallecano": { media: 77, color: "#ffffff", shield: "/static/img/escudos-1/spain_rayo-vallecano.football-logos.cc.svg" },
 
-    "Osasuna": { media: 77, color: "#9e0b1c" },
+    "Sevilla": { media: 75, color: "#ffffff", shield: "/static/img/escudos-1/sevilla-fc.svg" },
 
-    "Girona FC": { media: 77, color: "#e2001a" },
-    "Girona": { media: 77, color: "#e2001a" },
+    "Mallorca": { media: 76, color: "#e30613", shield: "/static/img/escudos-1/spain_mallorca.football-logos.cc.svg" },
 
-    "Valencia": { media: 76, color: "#ffffff" },
-    "Valencia CF": { media: 76, color: "#ffffff" },
+    "Deportivo Alavés": { media: 74, color: "#005ca9", shield: "/static/img/escudos-1/spain_deportivo-alaves.svg" },
 
-    "Rayo Vallecano": { media: 77, color: "#ffffff" },
+    "Elche": { media: 74, color: "#ffffff", shield: "/static/img/escudos-1/spain_elche.football-logos.cc.svg" },
+    "Elche CF": { media: 74, color: "#ffffff", shield: "/static/img/escudos-1/spain_elche.football-logos.cc.svg" },
 
-    "Sevilla": { media: 75, color: "#ffffff" },
+    "Levante UD": { media: 73, color: "#004d98", shield: "/static/img/escudos-1/spain_levante.football-logos.cc.svg" },
+    "Levante": { media: 73, color: "#004d98", shield: "/static/img/escudos-1/spain_levante.football-logos.cc.svg" },
 
-    "Mallorca": { media: 76, color: "#e30613" },
-
-    "Deportivo Alavés": { media: 74, color: "#005ca9" },
-
-    "Elche": { media: 74, color: "#ffffff" },
-    "Elche CF": { media: 74, color: "#ffffff" },
-
-    "Levante UD": { media: 73, color: "#004d98" },
-    "Levante": { media: 73, color: "#004d98" },
-
-    "Real Oviedo": { media: 73, color: "#004a99" },
+    "Real Oviedo": { media: 73, color: "#004a99", shield: "/static/img/escudos-1/spain_oviedo.football-logos.cc.svg" },
 
     // --- SEGUNDA DIVISIÓN ---
     "Real Racing Club": { media: 74, color: "#006b3e" },
@@ -84,48 +99,57 @@ window.TEAM_RATINGS = {
     "Mirandés": { media: 64, color: "#ff0000" },
 
     // --- PRIMERA RFEF - GRUPO 1 ---
-    "Tenerife": { media: 65, color: "#ffffff" },
-    "Celta Fortuna": { media: 63, color: "#87adcf" },
+    "Real Madrid Castilla": { media: 67, color: "#ffffff" },
+    "RM Castilla": { media: 67, color: "#ffffff" },
+    "Ponferradina": { media: 66, color: "#005ca9", shield: "/static/img/escudos-3/spain_ponferradina.football-logos.cc.svg" },
+    "Cultural Leonesa": { media: 66, color: "#ffffff", shield: "/static/img/escudos-2/spain_cultural-leonesa.football-logos.cc.svg" },
+    "CD Lugo": { media: 65, color: "#ff0000", shield: "/static/img/escudos-2/spain_lugo.football-logos.cc.svg" },
+    "Celta Fortuna": { media: 65, color: "#87adcf" },
+    "Racing Ferrol": { media: 65, color: "#006b3e", shield: "/static/img/escudos-3/spain_racing-club-ferrol.football-logos.cc.svg" },
+    "Gimnàstic Tarragona": { media: 64, color: "#ff0000", shield: "/static/img/escudos-3/spain_gimnastic-de-tarragona.football-logos.cc.svg" },
+    "Osasuna Promesas": { media: 63, color: "#9e0b1c" },
     "Bilbao Ath.": { media: 62, color: "#ff0000" },
-    "Barakaldo": { media: 62, color: "#ffff00" },
-    "Pontevedra": { media: 62, color: "#6e1116" },
-    "Zamora CF": { media: 61, color: "#ff0000" },
-    "RM Castilla": { media: 62, color: "#ffffff" },
-    "CD Lugo": { media: 61, color: "#ff0000" },
-    "Racing Ferrol": { media: 61, color: "#006b3e" },
-    "Ponferradina": { media: 61, color: "#005ca9" },
-    "AD Mérida": { media: 60, color: "#ffffff" },
-    "Unionistas CF": { media: 60, color: "#000000" },
-    "Arenas de Getxo": { media: 59, color: "#ff0000" },
-    "Real Avilés Industrial": { media: 59, color: "#005ca9" },
-    "Ourense CF": { media: 59, color: "#005ca9" },
-    "CD Guadalajara": { media: 58, color: "#6d2d91" },
-    "CF Talavera": { media: 58, color: "#005ca9" },
-    "CP Cacereño": { media: 58, color: "#006b3e" },
-    "Arenteiro": { media: 57, color: "#006b3e" },
-    "Osasuna Promesas": { media: 57, color: "#9e0b1c" },
+    "Unionistas CF": { media: 61, color: "#000000", shield: "/static/img/escudos-3/spain_unionistas-de-salamanca.football-logos.cc.svg" },
+    "AD Mérida": { media: 60, color: "#ffffff", shield: "/static/img/escudos-3/spain_ad-merida.football-logos.cc.svg" },
+    "Mérida AD": { media: 60, color: "#ffffff", shield: "/static/img/escudos-3/spain_ad-merida.football-logos.cc.svg" },
+    "Barakaldo": { media: 59, color: "#ffff00", shield: "/static/img/escudos-3/spain_barakaldo.football-logos.cc.svg" },
+    "Barakaldo CF": { media: 59, color: "#ffff00", shield: "/static/img/escudos-3/spain_barakaldo.football-logos.cc.svg" },
+    "Arenteiro": { media: 58, color: "#006b3e", shield: "/static/img/escudos-2/spain_cd-arenteiro.football-logos.cc.svg" },
+    "CD Arenteiro": { media: 58, color: "#006b3e", shield: "/static/img/escudos-2/spain_cd-arenteiro.football-logos.cc.svg" },
+    "Zamora CF": { media: 57, color: "#ff0000", shield: "/static/img/escudos-3/spain_zamora.football-logos.cc.svg" },
+    "Ourense CF": { media: 56, color: "#005ca9", shield: "/static/img/escudos-3/spain_ourense-cf.football-logos.cc.svg" },
+    "CF Talavera": { media: 55, color: "#005ca9", shield: "/static/img/escudos-3/spain_cf-talavera-de-la-reina.football-logos.cc.svg" },
+    "CD Guadalajara": { media: 54, color: "#6d2d91", shield: "/static/img/escudos-3/spain_cd-guadalajara.football-logos.cc.svg" },
+    "CP Cacereño": { media: 53, color: "#006b3e", shield: "/static/img/escudos-3/spain_cacereno.football-logos.cc.svg" },
+    "Arenas de Getxo": { media: 51, color: "#ff0000", shield: "/static/img/escudos-3/spain_arenas-club.football-logos.cc.svg" },
+    "Real Avilés Industrial": { media: 50, color: "#005ca9", shield: "/static/img/escudos-3/spain_real-aviles-industrial.football-logos.cc.svg" },
 
     // --- PRIMERA RFEF - GRUPO 2 ---
-    "CE Sabadell": { media: 64, color: "#005ca9" },
-    "Atlético Madrileño": { media: 63, color: "#cb3524" },
-    "CE Europa": { media: 63, color: "#000000" },
-    "Eldense": { media: 63, color: "#005ca9" },
-    "CD Teruel": { media: 61, color: "#ff0000" },
-    "Villarreal B": { media: 61, color: "#ffe200" },
-    "Antequera CF": { media: 61, color: "#ffffff" },
-    "Hércules": { media: 61, color: "#005ca9" },
-    "FC Cartagena": { media: 61, color: "#000000" },
-    "UD Ibiza": { media: 60, color: "#009bd8" },
-    "Algeciras CF": { media: 60, color: "#ff0000" },
-    "Alcorcón": { media: 60, color: "#ffe200" },
-    "Juventud Torremolinos": { media: 59, color: "#009bd8" },
-    "SD Tarazona": { media: 59, color: "#ff0000" },
-    "Gimnàstic Tarragona": { media: 59, color: "#ff0000" },
-    "Real Murcia": { media: 59, color: "#ff0000" },
-    "At. Sanluqueño": { media: 58, color: "#006b3e" },
-    "Marbella FC": { media: 57, color: "#ffffff" },
-    "Betis Deportivo": { media: 57, color: "#0bb363" },
-    "Sevilla At.": { media: 56, color: "#ffffff" },
+    "UD Ibiza": { media: 67, color: "#009bd8", shield: "/static/img/escudos-2/spain_ud-ibiza.football-logos.cc.svg" },
+    "Real Murcia": { media: 66, color: "#ff0000", shield: "/static/img/escudos-3/spain_murcia.football-logos.cc.svg" },
+    "Eldense": { media: 66, color: "#005ca9", shield: "/static/img/escudos-3/spain_eldense.football-logos.cc.svg" },
+    "Hércules": { media: 65, color: "#005ca9", shield: "/static/img/escudos-3/spain_hercules.football-logos.cc.svg" },
+    "Hércules CF": { media: 65, color: "#005ca9", shield: "/static/img/escudos-3/spain_hercules.football-logos.cc.svg" },
+    "AD Alcorcón": { media: 65, color: "#ffe200", shield: "/static/img/escudos-3/spain_alcorcon.football-logos.cc.svg" },
+    "Alcorcón": { media: 65, color: "#ffe200", shield: "/static/img/escudos-3/spain_alcorcon.football-logos.cc.svg" },
+    "FC Cartagena": { media: 64, color: "#000000", shield: "/static/img/escudos-2/spain_fc-cartagena.football-logos.cc.svg" },
+    "Villarreal B": { media: 64, color: "#ffe200" },
+    "Marbella FC": { media: 63, color: "#ffffff", shield: "/static/img/escudos-2/spain_ud-marbella.football-logos.cc.svg" },
+    "CE Sabadell": { media: 62, color: "#005ca9", shield: "/static/img/escudos-3/spain_sabadell.football-logos.cc.svg" },
+    "Betis Deportivo": { media: 62, color: "#0bb363" },
+    "Antequera CF": { media: 61, color: "#ffffff", shield: "/static/img/escudos-3/spain_antequera.football-logos.cc.svg" },
+    "Sevilla At.": { media: 60, color: "#ffffff" },
+    "Sevilla Atlético": { media: 60, color: "#ffffff" },
+    "Algeciras CF": { media: 59, color: "#ff0000", shield: "/static/img/escudos-3/spain_algeciras.football-logos.cc.svg" },
+    "Atlético Madrileño": { media: 58, color: "#cb3524" },
+    "At. Sanluqueño": { media: 57, color: "#006b3e", shield: "/static/img/escudos-3/spain_atletico-sanluqueno.football-logos.cc.svg" },
+    "Atlético Sanluqueño": { media: 57, color: "#006b3e", shield: "/static/img/escudos-3/spain_atletico-sanluqueno.football-logos.cc.svg" },
+    "CE Europa": { media: 56, color: "#000000", shield: "/static/img/escudos-3/spain_ce-europa.football-logos.cc.svg" },
+    "SD Tarazona": { media: 55, color: "#ff0000", shield: "/static/img/escudos-2/spain_tarazona.football-logos.cc.svg" },
+    "Tarazona": { media: 55, color: "#ff0000", shield: "/static/img/escudos-2/spain_tarazona.football-logos.cc.svg" },
+    "CD Teruel": { media: 54, color: "#ff0000", shield: "/static/img/escudos-3/spain_teruel.football-logos.cc.svg" },
+    "Juventud Torremolinos": { media: 52, color: "#009bd8", shield: "/static/img/escudos-2/spain_juventud-torremolinos.football-logos.cc.svg" },
+    "Estepona": { media: 50, color: "#ff0000" },
 
     // --- SEGUNDA FEDERACIÓN ---
     "Pontevedra CF": { media: 55, color: "#6e1116" },

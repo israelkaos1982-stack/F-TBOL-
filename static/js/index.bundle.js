@@ -974,8 +974,11 @@ window.SQUAD_REGISTRY={
 // ═══ ALIASES GLOBALES DE EQUIPOS ═══
 window.TEAM_ALIASES = {
   'real madrid':'Real Madrid',
+  'real madrid cf':'Real Madrid',
   'fc barcelona':'FC Barcelona',
   'barcelona':'FC Barcelona',
+  'barca':'FC Barcelona',
+  'barça':'FC Barcelona',
   'athletic club':'Athletic Club',
   'athletic':'Athletic Club',
   'real betis':'Real Betis',
@@ -984,6 +987,8 @@ window.TEAM_ALIASES = {
   'sociedad':'Real Sociedad',
   'atletico madrid':'Atlético Madrid',
   'atlético madrid':'Atlético Madrid',
+  'atletico de madrid':'Atlético Madrid',
+  'atlético de madrid':'Atlético Madrid',
   'atletico':'Atlético Madrid',
   'atlético':'Atlético Madrid',
   'albacete bp':'Albacete BP',
@@ -1017,11 +1022,15 @@ window.TEAM_ALIASES = {
   'arsenal':'Arsenal',
   'arsenal fc':'Arsenal',
   'bayern munich':'Bayern Munich',
+  'bayern de munich':'Bayern Munich',
+  'bayern de múnich':'Bayern Munich',
   'fc bayern munich':'Bayern Munich',
   'fc bayern':'Bayern Munich',
   'bayern':'Bayern Munich',
   'sporting cp':'Sporting CP',
   'sporting de portugal':'Sporting CP',
+  'sporting lisboa':'Sporting CP',
+  'sporting de lisboa':'Sporting CP',
   'sporting':'Sporting CP',
   'córdoba cf':'Córdoba CF',
   'cordoba cf':'Córdoba CF',
@@ -1144,6 +1153,72 @@ function _removeEmpty_j1m1(){var emp=document.querySelector('#ml-acta-list-j1m1 
 window.mlConfirmEvt_j1m1=function(){if(!_pendingEvt)return;var sel=document.getElementById('ml-modal-sel-j1m1');var parts=sel.value.split('|');var num=parts[0],name=parts[1];var e=_pendingEvt;var min=_currentMin_j1m1();var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==='propia')?(e.team==='a'?'b':'a'):e.team;_sc[st]++;document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;}var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||'•',id:Date.now()});_renderActa_j1m1();  mlCloseModal_j1m1();};
 function _renderActa_j1m1(){var list=document.getElementById('ml-acta-list-j1m1');var sorted=_events.slice().sort(function(a,b){return a.min-b.min;});list.innerHTML='';if(sorted.length===0){list.innerHTML='<div class="ml-acta-empty">Sin eventos registrados</div>';return;}sorted.forEach(function(ev){var row=document.createElement('div');row.className='ml-evt-item';row.setAttribute('data-team',ev.team);row.setAttribute('data-type',ev.type);var tl=(ev.team==='a')?TEAM_A_NAME:TEAM_B_NAME;var _penFalloExtra='';if(ev.type==='pen-parado'){var _contrario=ev.team==='a'?'b':'a';var _fallado=sorted.find(function(e){return e.type==='pen-fallo'&&e.team===_contrario&&e.min===ev.min;});if(_fallado){_penFalloExtra='<span class="ml-evt-pen-fallo">❌ '+_fallado.num+'. '+_fallado.name+'</span>';}}row.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"+'<span class="ml-evt-ico">'+ev.ico+'</span>'+'<span class="ml-evt-name">'+ev.num+'. '+ev.name+'</span>'+_penFalloExtra+'<span class="ml-evt-team">'+tl+'</span>'+'<button class="ml-evt-edit" onclick="window._openEditModal(\'j1m1\','+ev.id+')" title="Editar">✏️</button>'+'<button class="ml-evt-del" onclick="mlDelEvt_j1m1('+ev.id+')">✕</button>';list.appendChild(row);});};
 window.mlDelEvt_j1m1=function(id){var ev=_events.find(function(e){return e.id===id;});if(!ev)return;var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(ev.type)!==-1){var st=(ev.type==='propia')?(ev.team==='a'?'b':'a'):ev.team;_sc[st]=Math.max(0,_sc[st]-1);document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;}_events=_events.filter(function(e){return e.id!==id;});_renderActa_j1m1();};
+})();
+
+/* ══ ESCUDOS EN JORNADAS — tamaño unificado + aliases sólidos ═══════ */
+(function(){
+  function getCleanTeamName(el){
+    if(!el) return '';
+    var txt = (el.getAttribute('data-team-name') || el.textContent || '').trim();
+    return txt.replace(/\s+\d+\s*\/\s*100$/,'').trim();
+  }
+
+  function upsertShield(el){
+    if(!el) return;
+    var teamName = getCleanTeamName(el);
+    if(!teamName || teamName === 'Por definir') return;
+    var logoUrl = window.getTeamLogoUrl ? window.getTeamLogoUrl(teamName) : '';
+    if(!logoUrl) return;
+
+    var textEl = el.querySelector('.jornada-team-text');
+    if(!textEl){
+      textEl = document.createElement('span');
+      textEl.className = 'jornada-team-text';
+    }
+    textEl.textContent = teamName;
+
+    var logoEl = el.querySelector('img.escudo-jornada');
+    if(!logoEl){
+      logoEl = document.createElement('img');
+      logoEl.className = 'escudo-jornada';
+      logoEl.loading = 'lazy';
+      logoEl.decoding = 'async';
+    }
+    logoEl.src = logoUrl;
+    logoEl.alt = 'Escudo de ' + teamName;
+    logoEl.onerror = function(){ this.style.display = 'none'; };
+    logoEl.style.display = '';
+
+    el.setAttribute('data-team-name', teamName);
+    el.textContent = '';
+    el.appendChild(logoEl);
+    el.appendChild(textEl);
+  }
+
+  function injectJornadaShields(){
+    document.querySelectorAll('.mrow .mn').forEach(upsertShield);
+  }
+
+  window.injectJornadaShields = injectJornadaShields;
+
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(injectJornadaShields, 120);
+  });
+
+  var _origGoShields = window.go;
+  window.go = function(id){
+    if(_origGoShields) _origGoShields.apply(this, arguments);
+    setTimeout(injectJornadaShields, 120);
+  };
+
+  if (typeof MutationObserver !== 'undefined') {
+    var obs = new MutationObserver(function(){
+      setTimeout(injectJornadaShields, 40);
+    });
+    document.addEventListener('DOMContentLoaded', function(){
+      obs.observe(document.body, { childList:true, subtree:true });
+    });
+  }
 })();
 
 /* script block 3 */
@@ -1569,65 +1644,72 @@ window.mlSimulate_j1m10=function(){
     'Villarreal':       {abbr:'VIL', bg:'#ffd700', fg:'#1a1a1a'}
   };
 
-  // Team logo URLs — Wikimedia Commons Special:FilePath (no CORS issues for img tags, auto-redirects)
-  var _WC = 'https://commons.wikimedia.org/wiki/Special:FilePath/';
-  var _WE = 'https://en.wikipedia.org/wiki/Special:FilePath/';
+  // Team logo URLs — rutas locales explícitas (evita fallos por nombres/tildes/espacios)
   window.TEAM_LOGOS = {
     // ── La Liga 1ª ──────────────────────────────────────────
-    'Real Madrid':        _WE  + 'Real_Madrid_CF.svg',
-    'FC Barcelona':       _WC  + 'FC_Barcelona_%28crest%29.svg',
-    'Athletic Club':      _WC  + 'Athletic_Club_logo.svg',
-    'Real Betis':         _WC  + 'Real_Betis_logo.svg',
-    'Real Sociedad':      _WC  + 'Real_Sociedad_logo.svg',
-    'Atlético Madrid':    _WC  + 'Atletico_de_Madrid_2017_logo.svg',
-    'Villarreal':         _WC  + 'Villarreal_CF_logo-en.svg',
-    'Villarreal CF':      _WC  + 'Villarreal_CF_logo-en.svg',
-    'Sevilla':            _WC  + 'Sevilla_FC_logo.svg',
-    'Sevilla FC':         _WC  + 'Sevilla_FC_logo.svg',
-    'Valencia CF':        _WC  + 'Valenciacf.svg',
-    'Girona FC':          _WC  + 'Girona_FC.svg',
-    'Rayo Vallecano':     _WC  + 'Rayo_Vallecano_logo.svg',
-    'Getafe CF':          _WC  + 'Getafe_CF_logo.svg',
-    'Mallorca':           _WC  + 'RCD_Mallorca_logo.svg',
-    'Osasuna':            _WC  + 'CA_Osasuna_logo.svg',
-    'Espanyol':           _WC  + 'RCD_Espanyol.svg',
-    'Celta de Vigo':      _WC  + 'RC_Celta_de_Vigo_logo.svg',
+    'Real Madrid':        '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+    'Real Madrid CF':     '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+    'FC Barcelona':       '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'Barcelona':          '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'Barça':              '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'Athletic Club':      '/static/img/escudos-1/spain_athletic-club.football-logos.cc.svg',
+    'Real Betis':         '/static/img/escudos-1/spain_real-betis.football-logos.cc.svg',
+    'Real Sociedad':      '/static/img/escudos-1/spain_real-sociedad.football-logos.cc.svg',
+    'Atlético Madrid':    '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+    'Atlético de Madrid': '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+    'Atletico de Madrid': '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+    'Villarreal':         '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
+    'Villarreal CF':      '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
+    'Sevilla':            '/static/img/escudos-1/sevilla-fc.svg',
+    'Sevilla FC':         '/static/img/escudos-1/sevilla-fc.svg',
+    'Valencia CF':        '/static/img/escudos-1/spain_valencia.football-logos.cc.svg',
+    'Girona FC':          '/static/img/escudos-1/spain_girona.football-logos.cc.svg',
+    'Rayo Vallecano':     '/static/img/escudos-1/spain_rayo-vallecano.football-logos.cc.svg',
+    'Rayo':               '/static/img/escudos-1/spain_rayo-vallecano.football-logos.cc.svg',
+    'Getafe CF':          '/static/img/escudos-1/spain_getafe.football-logos.cc.svg',
+    'Mallorca':           '/static/img/escudos-1/spain_mallorca.football-logos.cc.svg',
+    'Osasuna':            '/static/img/escudos-1/spain_osasuna.football-logos.cc.svg',
+    'Espanyol':           '/static/img/escudos-1/spain_espanyol.football-logos.cc.svg',
+    'Celta de Vigo':      '/static/img/escudos-1/spain_celta.football-logos.cc.svg',
     'Bayern Munich':      '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
+    'Bayern de Múnich':   '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
     'Arsenal':            '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
     'Sporting CP':        '/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
+    'Sporting de Portugal':'/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
     'PSG':                '/static/img/escudos-1/france_paris-saint-germain.svg',
     'Paris Saint-Germain':'/static/img/escudos-1/france_paris-saint-germain.svg',
-    'Elche CF':           _WC  + 'Elche_CF.svg',
+    'Elche CF':           '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
+    'Elche':              '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
     // ── Liga Hypermotion (2ª) ───────────────────────────────
-    'Real Racing Club':   _WC  + 'Racing_de_Santander.svg',
-    'RC Deportivo':       _WC  + 'RC_Deportivo_de_La_Coru%C3%B1a_logo.svg',
-    'UD Almería':         _WC  + 'UD_Almer%C3%ADa.svg',
-    'Málaga CF':          _WC  + 'M%C3%A1laga_CF.svg',
-    'CD Castellón':       _WC  + 'CD_Castell%C3%B3n.svg',
-    'UD Las Palmas':      _WC  + 'UD_Las_Palmas.svg',
-    'Burgos CF':          _WC  + 'Burgos_CF_Escudo.svg',
-    'Real Sporting de Gijón': _WC + 'Real_Sporting_de_Gij%C3%B3n_logo.svg',
-    'Ceuta':              _WC  + 'AD_Ceuta_FC.svg',
-    'SD Eibar':           _WC  + 'SD_Eibar_logo.svg',
-    'Córdoba CF':         _WC  + 'C%C3%B3rdoba_CF.svg',
-    'Real Sociedad B':    _WC  + 'Real_Sociedad_logo.svg',
-    'FC Andorra':         _WC  + 'FC_Andorra_escudo.svg',
-    'Cádiz CF':           _WC  + 'C%C3%A1diz_CF.svg',
-    'Granada':            _WC  + 'Granada_CF.svg',
-    'Albacete BP':        _WC  + 'Albacete_Balompi%C3%A9_escudo.svg',
-    'Real Valladolid':    _WC  + 'Real_Valladolid_logo.svg',
-    'Leganés':            _WC  + 'CD_Legan%C3%A9s.svg',
-    'Huesca':             _WC  + 'SD_Huesca.svg',
-    'Deportivo Alavés':   _WC  + 'Deportivo_Alav%C3%A9s_logo_%282020%29.svg',
-    'Real Zaragoza':      _WC  + 'Real_Zaragoza.svg',
-    'Cultural Leonesa':   _WC  + 'Cultural_Leonesa_logo.svg',
-    'Mirandés':           _WC  + 'CD_Miran%C3%A9s.svg',
+    'Real Racing Club':   '/static/img/escudos-2/spain_racing.football-logos.cc.svg',
+    'RC Deportivo':       '/static/img/escudos-2/spain_deportivo-la-coruna.football-logos.cc.svg',
+    'UD Almería':         '/static/img/escudos-2/spain_almeria.football-logos.cc.svg',
+    'Málaga CF':          '/static/img/escudos-2/spain_malaga.football-logos.cc.svg',
+    'CD Castellón':       '/static/img/escudos-2/spain_castellon.football-logos.cc.svg',
+    'UD Las Palmas':      '/static/img/escudos-2/spain_las-palmas.football-logos.cc.svg',
+    'Burgos CF':          '/static/img/escudos-2/spain_burgos.football-logos.cc.svg',
+    'Real Sporting de Gijón': '/static/img/escudos-2/spain_sporting-gijon.football-logos.cc.svg',
+    'Ceuta':              '/static/img/escudos-2/spain_ceuta.football-logos.cc.svg',
+    'SD Eibar':           '/static/img/escudos-2/spain_eibar.football-logos.cc.svg',
+    'Córdoba CF':         'https://commons.wikimedia.org/wiki/Special:FilePath/C%C3%B3rdoba_CF.svg',
+    'Real Sociedad B':    '/static/img/escudos-1/spain_real-sociedad.football-logos.cc.svg',
+    'FC Andorra':         '/static/img/escudos-2/spain_fc-andorra.football-logos.cc.svg',
+    'Cádiz CF':           '/static/img/escudos-2/spain_cadiz.football-logos.cc.svg',
+    'Granada':            '/static/img/escudos-2/spain_granada.football-logos.cc.svg',
+    'Albacete BP':        '/static/img/escudos-2/spain_albacete.football-logos.cc.svg',
+    'Real Valladolid':    '/static/img/escudos-2/spain_valladolid.football-logos.cc.svg',
+    'Leganés':            '/static/img/escudos-2/spain_leganes.football-logos.cc.svg',
+    'Huesca':             '/static/img/escudos-2/spain_huesca.football-logos.cc.svg',
+    'Deportivo Alavés':   'https://commons.wikimedia.org/wiki/Special:FilePath/Deportivo_Alav%C3%A9s_logo_%282020%29.svg',
+    'Real Zaragoza':      '/static/img/escudos-2/spain_zaragoza.football-logos.cc.svg',
+    'Cultural Leonesa':   '/static/img/escudos-2/spain_cultural-leonesa.football-logos.cc.svg',
+    'Mirandés':           '/static/img/escudos-3/spain_mirandes.football-logos.cc.svg',
     // ── Primera Federación ──────────────────────────────────
-    'Real Madrid Castilla': _WE  + 'Real_Madrid_CF.svg',
-    'Ponferradina':       _WC  + 'SD_Ponferradina.svg',
-    'CD Lugo':            _WC  + 'CD_Lugo_escudo.svg',
+    'Real Madrid Castilla': '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+    'Ponferradina':       '/static/img/escudos-3/spain_ponferradina.football-logos.cc.svg',
+    'CD Lugo':            '/static/img/escudos-2/spain_lugo.football-logos.cc.svg',
     'Celta Fortuna':      '/static/img/escudos-1/spain_celta.football-logos.cc.svg',
-    'Cultural Leonesa':   _WC  + 'Cultural_Leonesa_logo.svg',
+    'Cultural Leonesa':   '/static/img/escudos-2/spain_cultural-leonesa.football-logos.cc.svg',
     'Racing Ferrol':      '/static/img/escudos-3/spain_racing-club-ferrol.football-logos.cc.svg',
     'Gimnàstic Tarragona': '/static/img/escudos-3/spain_gimnastic-de-tarragona.football-logos.cc.svg',
     'Osasuna Promesas':   '/static/img/escudos-1/spain_osasuna.football-logos.cc.svg',
@@ -1643,11 +1725,11 @@ window.mlSimulate_j1m10=function(){
     'CP Cacereño':        '/static/img/escudos-3/spain_cacereno.football-logos.cc.svg',
     'Arenas de Getxo':    '/static/img/escudos-3/spain_arenas-club.football-logos.cc.svg',
     'Real Avilés Industrial': '/static/img/escudos-3/spain_real-aviles-industrial.football-logos.cc.svg',
-    'Real Unión':         _WC  + 'Real_Union_Club_de_Irun.svg',
+    'Real Unión':         '/static/img/escudos-3/spain_real-union.football-logos.cc.svg',
     'UD Ibiza':           '/static/img/escudos-2/spain_ud-ibiza.football-logos.cc.svg',
-    'Real Murcia':        _WC  + 'Real_Murcia_logo.svg',
+    'Real Murcia':        '/static/img/escudos-3/spain_murcia.football-logos.cc.svg',
     'Eldense':            '/static/img/escudos-3/spain_eldense.football-logos.cc.svg',
-    'Hércules CF':        _WC  + 'H%C3%A9rcules_CF.svg',
+    'Hércules CF':        '/static/img/escudos-3/spain_hercules.football-logos.cc.svg',
     'AD Alcorcón':        '/static/img/escudos-3/spain_alcorcon.football-logos.cc.svg',
     'FC Cartagena':       '/static/img/escudos-2/spain_fc-cartagena.football-logos.cc.svg',
     'Villarreal B':       '/static/img/escudos-1/spain_villarreal.football-logos.cc.svg',
@@ -1665,18 +1747,36 @@ window.mlSimulate_j1m10=function(){
     'CD Teruel':          '/static/img/escudos-3/spain_teruel.football-logos.cc.svg',
     'Juventud Torremolinos': '/static/img/escudos-2/spain_juventud-torremolinos.football-logos.cc.svg',
     'Estepona':           '/static/img/escudos-fallback/estepona.svg',
-    'Recreativo de Huelva': _WC + 'Recreativo_de_Huelva.svg',
-    'Mérida AD':          _WC  + 'M%C3%A9rida_AD.svg',
-    'Algeciras CF':       _WC  + 'Algeciras_CF.svg',
+    'Recreativo de Huelva': 'https://commons.wikimedia.org/wiki/Special:FilePath/Recreativo_de_Huelva.svg',
+    'Mérida AD':          '/static/img/escudos-3/spain_ad-merida.football-logos.cc.svg',
+    'Algeciras CF':       '/static/img/escudos-3/spain_algeciras.football-logos.cc.svg',
   };
+
+  function normalizeTeamKey(name){
+    return String(name || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\w\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  var TEAM_LOGOS_NORMALIZED = {};
+  Object.keys(window.TEAM_LOGOS || {}).forEach(function(teamName){
+    TEAM_LOGOS_NORMALIZED[normalizeTeamKey(teamName)] = window.TEAM_LOGOS[teamName];
+  });
 
   window.getTeamLogoUrl = function(name){
     var aliases = window.TEAM_ALIASES || {};
     var clean = String(name || '').trim();
-    var canonical = aliases[clean.toLowerCase()] || clean;
+    var normalizedClean = normalizeTeamKey(clean);
+    var canonical = aliases[normalizedClean] || aliases[clean.toLowerCase()] || clean;
     var logos = window.TEAM_LOGOS || {};
     if (logos[canonical]) return logos[canonical];
     if (logos[clean]) return logos[clean];
+    if (TEAM_LOGOS_NORMALIZED[normalizeTeamKey(canonical)]) return TEAM_LOGOS_NORMALIZED[normalizeTeamKey(canonical)];
+    if (TEAM_LOGOS_NORMALIZED[normalizedClean]) return TEAM_LOGOS_NORMALIZED[normalizedClean];
     var ratings = window.TEAM_RATINGS || {};
     var meta = ratings[canonical] || ratings[clean];
     if (meta && typeof meta === 'object' && meta.shield) return meta.shield;
@@ -1723,8 +1823,8 @@ window.mlSimulate_j1m10=function(){
   var HUMAN_TEAMS = {
     'Bayern Munich': '💡',
     'Arsenal':       '🐭',
-    'Sporting CP':   '🔨',
-    'Real Madrid':   '✏️',
+    'Sporting CP':   '✏️',
+    'Real Madrid':   '🔨',
     'FC Barcelona':  '👿'
   };
 
@@ -1755,12 +1855,10 @@ window.mlSimulate_j1m10=function(){
       var pos = idx + 1;
       var zone = rowZoneClass(pos);
       var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
-      var logoHtml = window.getTeamBadgeHtml ? window.getTeamBadgeHtml(team.name) : '';
       html += ''
         + '<div class="clas-row ' + zone + '">'
         +   '<div class="clas-team-cell">'
         +     '<span class="clas-pos-n">' + pos + '</span>'
-        +     logoHtml
         +     '<span class="clas-team-name">' + (HUMAN_TEAMS[team.name] ? '<span class="human-prefix">' + HUMAN_TEAMS[team.name] + '</span>' : '') + (SHORT_NAMES[team.name] || team.name) + '</span>'
         +   '</div>'
         +   '<div class="clas-pts">' + team.pts + '</div>'
@@ -2976,8 +3074,11 @@ function actaTog(matchKey) {
   toggle.classList.toggle('open', !open);
 }
 
-// ── Botón PREVIA: cuestionario pre-partido → sanciones ──
+// ── Botón CONFIGURACIÓN: cuestionario pre-partido → sanciones ──
 function mlPreviaClick(matchKey) {
+  if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {
+    window._mlEnsureLegacyPreMatchStructure(matchKey);
+  }
   var wrap = document.getElementById('mlw-' + matchKey);
   var compKey = 'liga';
   var isHvH = wrap && wrap.classList.contains('hvh');
@@ -3024,6 +3125,72 @@ function mlPreviaClick(matchKey) {
     window.showPrePartidoOverlay(matchKey, compKey, prorroga, duracion, isHvH);
   }
 }
+
+// ── Compatibilidad: restaurar flujo antiguo CONFIGURACIÓN → ajustes → partido ──
+(function() {
+  function _resolveWrap(matchKey) {
+    return document.getElementById('mlw-' + matchKey);
+  }
+
+  function _ensureIds(matchKey) {
+    var wrap = _resolveWrap(matchKey);
+    if (!wrap) return;
+    var venue = wrap.querySelector('.ml-venue-bar');
+    if (venue && !venue.id) venue.id = 'venue-bar-' + matchKey;
+    var ballWrap = wrap.querySelector('.ml-score-wrap');
+    if (ballWrap && !ballWrap.id) ballWrap.id = 'ball-wrap-' + matchKey;
+  }
+
+  function _setPreMatchStage(matchKey, unlocked) {
+    var wrap = _resolveWrap(matchKey);
+    if (!wrap) return;
+    _ensureIds(matchKey);
+    var timerBtn = document.getElementById('ml-timer-' + matchKey);
+    var addBtn = document.getElementById('ml-add-btn-' + matchKey);
+    var actBar = document.getElementById('ml-actions-bar-' + matchKey);
+    var previaBtn = document.getElementById('ml-previa-' + matchKey);
+    if (previaBtn) previaBtn.style.display = unlocked ? 'none' : '';
+    if (timerBtn) {
+      timerBtn.style.display = unlocked ? '' : 'none';
+      timerBtn.disabled = !unlocked;
+    }
+    if (addBtn) addBtn.style.visibility = unlocked ? '' : 'hidden';
+    if (actBar) actBar.style.visibility = unlocked ? '' : 'hidden';
+    if (unlocked) wrap.setAttribute('data-prepartido-ready', '1');
+  }
+
+  window._mlEnsureLegacyPreMatchStructure = function(matchKey) {
+    var wrap = _resolveWrap(matchKey);
+    if (!wrap) return;
+    _ensureIds(matchKey);
+    var scoreWrap = wrap.querySelector('.ml-score-wrap');
+    var timerBtn = document.getElementById('ml-timer-' + matchKey);
+    if (scoreWrap && timerBtn && !document.getElementById('ml-previa-' + matchKey)) {
+      var previaBtn = document.createElement('button');
+      previaBtn.id = 'ml-previa-' + matchKey;
+      previaBtn.className = 'ml-previa-btn';
+      previaBtn.innerHTML = '⚙️ CONFIGURACIÓN';
+      previaBtn.onclick = function() { mlPreviaClick(matchKey); };
+      if (timerBtn.nextSibling) scoreWrap.insertBefore(previaBtn, timerBtn.nextSibling);
+      else scoreWrap.appendChild(previaBtn);
+    }
+    var unlocked = wrap.getAttribute('data-prepartido-ready') === '1';
+    _setPreMatchStage(matchKey, unlocked);
+  };
+
+  function _initAllPreviaButtons() {
+    document.querySelectorAll('.match-live-wrap.hvh[id^="mlw-"]').forEach(function(wrap) {
+      var matchKey = wrap.id.replace('mlw-', '');
+      window._mlEnsureLegacyPreMatchStructure(matchKey);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initAllPreviaButtons);
+  } else {
+    _initAllPreviaButtons();
+  }
+})();
 
 function _renderSancionBanner(matchKey, bodyEl) {
   var humanKeys = ['j1m1','j1m2','j1m3'];
@@ -4504,11 +4671,14 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (!_checkAllDone()) return;
     // Reveal venue-bar and ball (in case not yet revealed)
     if (_ppMatchKey) {
+      if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {
+        window._mlEnsureLegacyPreMatchStructure(_ppMatchKey);
+      }
       var vbar = document.getElementById('venue-bar-' + _ppMatchKey);
       var bwrap = document.getElementById('ball-wrap-' + _ppMatchKey);
       if (vbar) vbar.classList.remove('pre-hidden');
       if (bwrap) bwrap.classList.remove('pre-hidden');
-      // Ocultar botón PREVIA, dejar solo el timer
+      // Ocultar botón de configuración, dejar solo el timer
       var previaBtn = document.getElementById('ml-previa-' + _ppMatchKey);
       if (previaBtn) previaBtn.style.display = 'none';
     }
@@ -4518,15 +4688,23 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (typeof window.showSancionOverlay === 'function') {
       window.showSancionOverlay(_ppCompKey, null, function() {
         var timerBtn = document.getElementById('ml-timer-' + mk);
-        if (timerBtn) timerBtn.style.display = '';
+        if (timerBtn) { timerBtn.style.display = ''; timerBtn.disabled = false; }
         var addBtn = document.getElementById('ml-add-btn-' + mk);
         if (addBtn) addBtn.style.visibility = '';
         var actBar = document.getElementById('ml-actions-bar-' + mk);
         if (actBar) actBar.style.visibility = '';
+        var wrap = document.getElementById('mlw-' + mk);
+        if (wrap) wrap.setAttribute('data-prepartido-ready', '1');
       });
     } else {
       var timerBtn = document.getElementById('ml-timer-' + mk);
-      if (timerBtn) timerBtn.style.display = '';
+      if (timerBtn) { timerBtn.style.display = ''; timerBtn.disabled = false; }
+      var addBtn = document.getElementById('ml-add-btn-' + mk);
+      if (addBtn) addBtn.style.visibility = '';
+      var actBar = document.getElementById('ml-actions-bar-' + mk);
+      if (actBar) actBar.style.visibility = '';
+      var wrap = document.getElementById('mlw-' + mk);
+      if (wrap) wrap.setAttribute('data-prepartido-ready', '1');
     }
   };
 
@@ -6654,8 +6832,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   var HUMAN_TEAMS = {
     'Bayern Munich': '💡',
     'Arsenal':       '🐭',
-    'Sporting CP':   '🔨',
-    'Real Madrid':   '✏️',
+    'Sporting CP':   '✏️',
+    'Real Madrid':   '🔨',
     'FC Barcelona':  '👿'
   };
   var TEAM_ALIAS = {
@@ -6926,10 +7104,32 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     };
   }
   window.reiniciarLigaEA = function(){
-    if(!confirm('⚠️ ¿Reiniciar Liga EA Sports?\nSe eliminarán todos los resultados guardados y la clasificación volverá al estado inicial.')) return;
+    if(!confirm('⚠️ ¿Reiniciar Liga EA Sports?\nSe eliminarán resultados, estado de jornadas y se generará una temporada nueva (38 jornadas).')) return;
     try { localStorage.removeItem(LS_KEY); } catch(e){}
+
     window.LIGA_J1_RESULTS = [];
     window.LIGA_PLAYER_MATCH_STORE = {};
+    if(window.LIGA_EXTRAS && typeof window.LIGA_EXTRAS === 'object'){
+      Object.keys(window.LIGA_EXTRAS).forEach(function(k){ delete window.LIGA_EXTRAS[k]; });
+    }
+
+    try {
+      var table = (typeof window.collectStandings === 'function' ? window.collectStandings() : []) || [];
+      var teamOrder = table.map(function(t){ return t && t.name ? t.name : ''; }).filter(Boolean);
+      if(!teamOrder.length) teamOrder = TEAM_ORDER.slice();
+      for(var i = teamOrder.length - 1; i > 0; i--){
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = teamOrder[i]; teamOrder[i] = teamOrder[j]; teamOrder[j] = tmp;
+      }
+      if(typeof window.generateLigaScheduleFromTeams === 'function' && typeof window.setLigaSchedule === 'function'){
+        window.setLigaSchedule(window.generateLigaScheduleFromTeams(teamOrder));
+      }
+    } catch(err){}
+
+    if(typeof window.populateLigaCal === 'function') window.populateLigaCal();
+    if(typeof window.populateCalendar === 'function') window.populateCalendar();
+    if(typeof window.renderLigaClasCalendar === 'function') window.renderLigaClasCalendar();
+    if(typeof window.buildIAresults === 'function') window.buildIAresults();
     if(typeof window.buildLigaClas === 'function') window.buildLigaClas();
     if(typeof window.buildLigaStatsDashboard === 'function') window.buildLigaStatsDashboard();
     if(typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();

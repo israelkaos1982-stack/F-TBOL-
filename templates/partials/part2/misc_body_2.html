@@ -2438,6 +2438,54 @@
     root.innerHTML = html;
   };
 
+  /* ── ABRIR JORNADA EN PANTALLA DEDICADA ───────────── */
+  window.openLigaJornada = function (j) {
+    var titleEl = document.getElementById('liga-jornada-title');
+    var bodyEl  = document.getElementById('liga-jornada-body');
+    if (!titleEl || !bodyEl) return;
+    titleEl.textContent = 'Jornada ' + j;
+
+    var jornada = SCHEDULE[j - 1];
+    if (!jornada) return;
+    var results = loadResults();
+
+    var humanMatches = jornada.filter(function (m) { return esHumano(m[0]) || esHumano(m[1]); });
+    var iaMatches    = jornada.filter(function (m) { return !esHumano(m[0]) && !esHumano(m[1]); });
+
+    var html = '';
+
+    /* ── Partidos jugables (humanos primero) ── */
+    if (humanMatches.length) {
+      html += '<div style="padding:6px 12px 4px;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(60,210,120,.75);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid rgba(60,210,120,.15);margin-bottom:4px;">▶ Partidos Jugables</div>';
+      humanMatches.forEach(function (m) {
+        var res = results[rKey(j, m[0], m[1])];
+        html += '<div class="mrow">';
+        html += '<div class="mn" data-team="' + escapeHtml(m[0]) + '">' + jornadaTeamHtml(m[0], false) + '</div>';
+        html += scoreHtmlForMatch(j, m[0], m[1], res);
+        html += '<div class="mn r" data-team="' + escapeHtml(m[1]) + '">' + jornadaTeamHtml(m[1], true) + '</div>';
+        html += '</div>';
+      });
+    }
+
+    /* ── Separador ── */
+    if (humanMatches.length && iaMatches.length) {
+      html += '<div style="border-top:1px solid rgba(255,255,255,.1);margin:10px 0 4px;padding:4px 12px 0;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.3);letter-spacing:1.5px;text-transform:uppercase;">🤖 IA vs IA</div>';
+    }
+
+    /* ── Partidos IA vs IA ── */
+    iaMatches.forEach(function (m) {
+      var res = results[rKey(j, m[0], m[1])];
+      html += '<div class="mrow">';
+      html += '<div class="mn" data-team="' + escapeHtml(m[0]) + '">' + jornadaTeamHtml(m[0], false) + '</div>';
+      html += scoreHtmlForMatch(j, m[0], m[1], res);
+      html += '<div class="mn r" data-team="' + escapeHtml(m[1]) + '">' + jornadaTeamHtml(m[1], true) + '</div>';
+      html += '</div>';
+    });
+
+    bodyEl.innerHTML = html;
+    if (typeof go === 'function') go('s-liga-jornada');
+  };
+
   /* ── RELLENAR l-j{N} (s-liga-cal) ───────────────── */
   function populateLigaCal() {
     var results = loadResults();

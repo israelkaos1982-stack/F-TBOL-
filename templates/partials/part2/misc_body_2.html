@@ -2314,7 +2314,7 @@
     var normalizedName = normalizarNombreEquipo(teamName) || String(teamName || '').trim();
     var safeName = escapeHtml(normalizedName);
     var logo = getLogoEquipo(teamName);
-    var shield = '<img class="escudo-jornada" src="' + escapeHtml(logo) + '" alt="' + safeName + '" loading="lazy" decoding="async"/>';
+    var shield = '<img class="escudo-jornada" src="' + escapeHtml(logo) + '" alt="' + safeName + '" style="width:28px;height:28px;object-fit:contain;flex-shrink:0;" loading="lazy" decoding="async"/>';
     var text = '<span class="jornada-team-text">' + humanIcon(teamName) + safeName + '</span>';
     return isRight ? (text + shield) : (shield + text);
   }
@@ -3670,7 +3670,7 @@
       }
     }
     if (logo) {
-      return '<img alt="' + clean.replace(/"/g, '&quot;') + '" src="' + logo.replace(/"/g, '&quot;') + '" style="width:auto;height:100%;object-fit:contain;"/>';
+      return '<img alt="' + clean.replace(/"/g, '&quot;') + '" src="' + logo.replace(/"/g, '&quot;') + '" style="width:44px;height:44px;object-fit:contain;"/>';
     }
     var d = IA_SHIELD[team] || ['#333333','#aaaaaa',(team||'?').substring(0,3).toUpperCase(),'#ffffff'];
     return '<svg width="32" height="38" viewbox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">'

@@ -4990,10 +4990,14 @@ function syncSquadToScreen(screenId, teamName) {
   // Buscar el contenedor de la plantilla en este screen
   var screen = document.getElementById(screenId);
   if (!screen) return;
-  var plantBody = screen.querySelector('.ent-body[id$="-plantilla"], .ent-body[id*="plantilla"]');
+  var plantBody = screen.querySelector('.ent-body[id$="-plantilla"], .ent-body[id*="plantilla"], .ent-body[class*="body-plantilla"]');
   if (!plantBody) {
-    // Fallback: cualquier div que contenga plant-row
-    plantBody = screen.querySelector('[class*="body-plantilla"], [class*="plant"]');
+    // Fallback seguro para pantallas dedicadas tipo "s-xxx-plantilla"
+    // (evitar capturar contenedores genéricos como ".ath-box-plantilla").
+    var secHdr = screen.querySelector('.sec-hdr');
+    if (secHdr && secHdr.nextElementSibling && secHdr.nextElementSibling.tagName === 'DIV') {
+      plantBody = secHdr.nextElementSibling;
+    }
   }
   if (!plantBody) return;
 

@@ -3093,7 +3093,9 @@
       if (esHumano(m[0]) || esHumano(m[1])) return;
       var key = rKey(j, m[0], m[1]);
       if (results[key]) return; /* ya simulado */
-      var r = _simIAvsIAWithContext(m[0], m[1], j, 'ia-batch');
+      var r = (typeof _simIAvsIAWithContext === 'function')
+        ? _simIAvsIAWithContext(m[0], m[1], j, 'ia-batch')
+        : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
       var evtData = genMatchEventsEnhanced(m[0], m[1], r.gh, r.ga);
       results[key] = { gh: r.gh, ga: r.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
       actualizarDom('l-j' + j, m[0], m[1], r.gh, r.ga);
@@ -3341,7 +3343,12 @@
 
       /* ── Pending matches → clean card + live ▶ SIMULAR ── */
       pending.forEach(function (m) {
-        var viewCtx = _iaContextRatings(m.home, m.away, j, 'ia-card');
+        var viewCtx = (typeof _iaContextRatings === 'function')
+          ? _iaContextRatings(m.home, m.away, j, 'ia-card')
+          : {
+              homeEff: { rating: ((window.TEAM_RATINGS && window.TEAM_RATINGS[m.home]) || 75), bonusPct: 0 },
+              awayEff: { rating: ((window.TEAM_RATINGS && window.TEAM_RATINGS[m.away]) || 75), bonusPct: 0 }
+            };
         var rA  = Math.round(viewCtx.homeEff.rating);
         var rB  = Math.round(viewCtx.awayEff.rating);
         var homeBonusPct = Math.round((viewCtx.homeEff.bonusPct || 0) * 1000) / 10;

@@ -1977,6 +1977,65 @@
 
   /* ── HELPERS ─────────────────────────────────────── */
   function esHumano(t) { return HUMANOS.indexOf(t) !== -1; }
+  var _IA_HOME_BONUS_MIN = 0.15;
+  var _IA_HOME_BONUS_MAX = 0.20;
+
+  function _seed01(str) {
+    var s = String(str || '');
+    var h = 2166136261;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return ((h >>> 0) % 10000) / 10000;
+  }
+
+  function _avgSquadPower(teamName) {
+    var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
+    if (!sq.length) return 75;
+    var titulares = sq.filter(function(p){ return p && p[4] === 'titular'; });
+    var src = titulares.length ? titulares : sq;
+    var total = 0, weight = 0;
+    src.forEach(function(p) {
+      if (!p) return;
+      var pos = p[2] || 'M';
+      var val = Number(p[3]);
+      if (!isFinite(val)) val = 70;
+      var w = pos === 'P' ? 0.65 : pos === 'D' ? 0.95 : pos === 'M' ? 1.00 : 1.08;
+      total += val * w;
+      weight += w;
+    });
+    return weight ? total / weight : 75;
+  }
+
+  function _effectiveIARating(teamName, isHome, j, oppName, modeTag) {
+    var rat = window.TEAM_RATINGS || {};
+    var base = Number(rat[teamName]);
+    if (!isFinite(base)) base = 75;
+    var squad = _avgSquadPower(teamName);
+    var blended = base * 0.62 + squad * 0.38;
+    if (!isHome) return { rating: blended, bonusPct: 0 };
+    var seed = _seed01([modeTag || 'ia', j || 0, teamName || '', oppName || ''].join('|'));
+    var bonusPct = _IA_HOME_BONUS_MIN + ((_IA_HOME_BONUS_MAX - _IA_HOME_BONUS_MIN) * seed);
+    return { rating: blended * (1 + bonusPct), bonusPct: bonusPct };
+  }
+
+  function _iaContextRatings(home, away, j, modeTag) {
+    var homeEff = _effectiveIARating(home, true, j, away, modeTag);
+    var awayEff = _effectiveIARating(away, false, j, home, modeTag);
+    return { homeEff: homeEff, awayEff: awayEff };
+  }
+
+  function _simIAvsIAWithContext(home, away, j, modeTag) {
+    var ctx = _iaContextRatings(home, away, j, modeTag);
+    var score;
+    if (typeof simSimple === 'function') {
+      score = simSimple(ctx.homeEff.rating, ctx.awayEff.rating);
+    } else {
+      score = { gh: Math.floor(Math.random() * 4), ga: Math.floor(Math.random() * 4) };
+    }
+    return { gh: score.gh, ga: score.ga, homeEff: ctx.homeEff, awayEff: ctx.awayEff };
+  }
 
   /* ── RELLENAR l-j{N} (s-liga-cal) ───────────────── */
   function populateLigaCal() {
@@ -2803,9 +2862,10 @@
     btn.style.background = '#0d2a0d';
     btn.style.color = '#4aff4a';
 
-    var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[home]) || 75;
-    var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[away]) || 75;
-    var r  = (typeof simSimple === 'function') ? simSimple(rA, rB) : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+    var simCtx = (typeof _simIAvsIAWithContext === 'function')
+      ? _simIAvsIAWithContext(home, away, j, 'ia-live')
+      : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+    var r  = { gh: simCtx.gh, ga: simCtx.ga };
     var evtData = genMatchEventsEnhanced(home, away, r.gh, r.ga);
     var evts    = evtData.events; /* already sorted by min */
 
@@ -3033,8 +3093,7 @@
       if (esHumano(m[0]) || esHumano(m[1])) return;
       var key = rKey(j, m[0], m[1]);
       if (results[key]) return; /* ya simulado */
-      var rat = window.TEAM_RATINGS || {};
-      var r   = simSimple(rat[m[0]] || 76, rat[m[1]] || 76);
+      var r = _simIAvsIAWithContext(m[0], m[1], j, 'ia-batch');
       var evtData = genMatchEventsEnhanced(m[0], m[1], r.gh, r.ga);
       results[key] = { gh: r.gh, ga: r.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
       actualizarDom('l-j' + j, m[0], m[1], r.gh, r.ga);
@@ -3282,8 +3341,10 @@
 
       /* ── Pending matches → clean card + live ▶ SIMULAR ── */
       pending.forEach(function (m) {
-        var rA  = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.home]) || 75;
-        var rB  = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.away]) || 75;
+        var viewCtx = _iaContextRatings(m.home, m.away, j, 'ia-card');
+        var rA  = Math.round(viewCtx.homeEff.rating);
+        var rB  = Math.round(viewCtx.awayEff.rating);
+        var homeBonusPct = Math.round((viewCtx.homeEff.bonusPct || 0) * 1000) / 10;
         var mk  = 'iapnd-j' + j + '-' + m.home.replace(/\s/g,'') + '-' + m.away.replace(/\s/g,'');
         var emk = mk.replace(/'/g,"\\'");
         var clickFn = m.fn
@@ -3295,7 +3356,7 @@
           + '<div class="ml-team">'
           +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
           +   '<div class="ml-team-name">' + m.home + '</div>'
-          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;margin-top:2px;letter-spacing:1px;">★ ' + rA + ' 🏠</div>'
+          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;margin-top:2px;letter-spacing:1px;">★ ' + rA + ' 🏠 (+' + homeBonusPct + '%)</div>'
           + '</div>'
           + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;">'
           +   '<div class="ml-score"><span id="ia-sc-' + mk + '-a">–</span>&ndash;<span id="ia-sc-' + mk + '-b">–</span></div>'

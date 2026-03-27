@@ -2027,6 +2027,19 @@
     return { homeEff: homeEff, awayEff: awayEff };
   }
 
+  function _legacyIARating(teamName, fallback) {
+    var rat = window.TEAM_RATINGS || {};
+    var val = Number(rat[teamName]);
+    return isFinite(val) ? val : (fallback || 75);
+  }
+
+  function _fallbackIAvsIAScore(home, away) {
+    if (typeof simSimple === 'function') {
+      return simSimple(_legacyIARating(home, 75), _legacyIARating(away, 75));
+    }
+    return { gh: Math.floor(Math.random() * 4), ga: Math.floor(Math.random() * 4) };
+  }
+
   function _simIAvsIAWithContext(home, away, j) {
     var ctx = _iaContextRatings(home, away, j);
     var score;
@@ -2865,7 +2878,7 @@
 
     var simCtx = (typeof _simIAvsIAWithContext === 'function')
       ? _simIAvsIAWithContext(home, away, j)
-      : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+      : _fallbackIAvsIAScore(home, away);
     var simScore = { gh: simCtx.gh, ga: simCtx.ga };
     var evtData = genMatchEventsEnhanced(home, away, simScore.gh, simScore.ga);
     var evts    = evtData.events; /* already sorted by min */
@@ -3096,7 +3109,7 @@
       if (results[key]) return; /* ya simulado */
       var simScore = (typeof _simIAvsIAWithContext === 'function')
         ? _simIAvsIAWithContext(m[0], m[1], j)
-        : { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+        : _fallbackIAvsIAScore(m[0], m[1]);
       var evtData = genMatchEventsEnhanced(m[0], m[1], simScore.gh, simScore.ga);
       results[key] = { gh: simScore.gh, ga: simScore.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
       actualizarDom('l-j' + j, m[0], m[1], simScore.gh, simScore.ga);

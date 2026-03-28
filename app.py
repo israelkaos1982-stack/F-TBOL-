@@ -230,12 +230,15 @@ def elegir_goleador(equipo, local=False, conteo=None):
     elegido = random.choices(jugadores, weights=pesos, k=1)[0]
     return elegido["nombre"]
 
-def simular_goles(equipo, local=False):
+def simular_goles(equipo, local=False, oponente=None):
     own_power = get_team_power(equipo)
-    opp_candidates = [name for name in jugadores_por_equipo.keys() if name != resolve_team_name(equipo)]
-    opp_power = sum(get_team_power(name) for name in opp_candidates[:6]) / max(1, min(len(opp_candidates), 6))
-    if not opp_candidates:
-        opp_power = 76
+    if oponente:
+        opp_power = get_team_power(oponente)
+    else:
+        opp_candidates = [name for name in jugadores_por_equipo.keys() if name != resolve_team_name(equipo)]
+        opp_power = sum(get_team_power(name) for name in opp_candidates[:6]) / max(1, min(len(opp_candidates), 6))
+        if not opp_candidates:
+            opp_power = 76
     base_prob = own_power / max(1, (own_power + opp_power))
     if local:
         base_prob = min(0.82, base_prob + 0.05 * (1 - base_prob))
@@ -537,8 +540,8 @@ def simular_y_guardar(jornada, local, visitante):
     if Partido.query.filter_by(local=local, visitante=visitante).first():
         return
 
-    gl = simular_goles(local, True)
-    gv = simular_goles(visitante, False)
+    gl = simular_goles(local, True, oponente=visitante)
+    gv = simular_goles(visitante, False, oponente=local)
 
     conteo_local = {}
     conteo_visitante = {}

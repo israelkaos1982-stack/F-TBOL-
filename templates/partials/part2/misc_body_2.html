@@ -2459,7 +2459,7 @@
 
     /* ── Partidos jugables (humanos primero) ── */
     if (humanMatches.length) {
-      html += '<div style="padding:6px 12px 4px;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(60,210,120,.75);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid rgba(60,210,120,.15);margin-bottom:4px;">▶ Partidos Jugables</div>';
+      html += '<div style="padding:6px 12px 4px;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(60,210,120,.75);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid rgba(60,210,120,.15);margin-bottom:4px;">👤 Partidos Humanos</div>';
       humanMatches.forEach(function (m) {
         var res = results[rKey(j, m[0], m[1])];
         html += '<div class="mrow">';
@@ -2472,7 +2472,7 @@
 
     /* ── Separador ── */
     if (humanMatches.length && iaMatches.length) {
-      html += '<div style="border-top:1px solid rgba(255,255,255,.1);margin:10px 0 4px;padding:4px 12px 0;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.3);letter-spacing:1.5px;text-transform:uppercase;">🤖 IA vs IA</div>';
+      html += '<div style="border-top:1px solid rgba(255,255,255,.1);margin:10px 0 4px;padding:4px 12px 0;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.3);letter-spacing:1.5px;text-transform:uppercase;">IA vs IA</div>';
     }
 
     /* ── Partidos IA vs IA ── */
@@ -2546,26 +2546,41 @@
     var hiA = humanIcon(away);
     var lA = getLogoEquipo(home) || '';
     var lB = getLogoEquipo(away) || '';
-    var shieldA = lA ? '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+lA+'" alt="'+home+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>' : '';
-    var shieldB = lB ? '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+lB+'" alt="'+away+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>' : '';
     var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[home]) || '';
     var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[away]) || '';
-    var ratA = rA ? '<div class="ml-team-rat" style="background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:1px 7px;font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#fff;">★ '+rA+'</div>' : '';
-    var ratB = rB ? '<div class="ml-team-rat" style="background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:1px 7px;font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#fff;">★ '+rB+'</div>' : '';
+    var homeRatDisplay = rA ? Math.round(rA * 1.1) : '';
+    var awayRatDisplay = rB ? rB : '';
+    /* team color gradient */
+    var tcA = (window.getTeamColors && window.getTeamColors(home)) || {bg:'#1a2a4a'};
+    var tcB = (window.getTeamColors && window.getTeamColors(away)) || {bg:'#1a2a4a'};
+    var gradStyle = 'background:linear-gradient(to right,'+tcA.bg+'2e 0%,transparent 44%,transparent 56%,'+tcB.bg+'2e 100%);position:relative;overflow:hidden;';
+    /* faded bg shields */
+    var bgShA = lA ? '<img src="'+lA+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
+    var bgShB = lB ? '<img src="'+lB+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
+    /* shield + power badge groups */
+    var ratBadgeA = homeRatDisplay ? '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#f0c040;letter-spacing:.5px;margin-top:2px;">★ '+homeRatDisplay+'</div>' : '';
+    var ratBadgeB = awayRatDisplay ? '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#aaa;letter-spacing:.5px;margin-top:2px;">★ '+awayRatDisplay+'</div>' : '';
+    var shieldA = '<div style="display:flex;flex-direction:column;align-items:center;z-index:1;position:relative;">'
+      + (lA ? '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+lA+'" alt="'+home+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>' : '')
+      + ratBadgeA + '</div>';
+    var shieldB = '<div style="display:flex;flex-direction:column;align-items:center;z-index:1;position:relative;">'
+      + (lB ? '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+lB+'" alt="'+away+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>' : '')
+      + ratBadgeB + '</div>';
     var etStyle = isHvH ? '' : ' style="display:none"';
     var emk = mk.replace(/'/g,"\\'");
-    return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'">'
+    return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'" style="'+gradStyle+'">'
+      +bgShA+bgShB
       +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">eFootball Stadium</span><span class="ml-venue-sep">|</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado · Verano</span></div>'
       +'<div class="ml-header">'
-        +'<div class="ml-team">'+shieldA+'<div class="ml-team-name">'+hiH+hu+'</div>'+ratA+'</div>'
-        +'<div class="ml-score-wrap">'
+        +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldA+'<div class="ml-team-name">'+hiH+hu+'</div></div>'
+        +'<div class="ml-score-wrap" style="z-index:1;">'
           +_buildTwitchBtn(mk)
           +'<div class="ml-score"><span id="sc-'+mk+'-a">0</span>–<span id="sc-'+mk+'-b">0</span></div>'
           +'<div class="ml-pen-score" id="pen-score-'+mk+'" style="display:none;">⚽ 0–0 (pen.)</div>'
           +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
           +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
         +'</div>'
-        +'<div class="ml-team">'+shieldB+'<div class="ml-team-name">'+hiA+au+'</div>'+ratB+'</div>'
+        +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldB+'<div class="ml-team-name">'+hiA+au+'</div></div>'
       +'</div>'
       +'<div class="ml-pen-panel" id="ml-pen-panel-'+mk+'">'
         +'<div class="ml-pen-title">⚽ TANDA DE PENALTIS</div>'
@@ -3913,7 +3928,7 @@
     if (iaPending.length > 0 && j !== 1) {
       html += '<div style="display:flex;justify-content:flex-end;margin:0 0 10px;padding:0 4px;">'
         + '<button onclick="window.simularJornadaIA(' + j + ');setTimeout(function(){ if(typeof window.buildIAresults===\'function\') window.buildIAresults(); },400);"'
-        + ' style="padding:5px 16px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:6px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:1px;">🤖 SIM J' + j + '</button>'
+        + ' style="padding:5px 16px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:6px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:1px;">SIM J' + j + '</button>'
         + '</div>';
     }
 
@@ -3922,7 +3937,7 @@
     var hasIA    = iaMatches.length + iaPending.length > 0;
 
     if (hasHuman) {
-      html += '<div style="padding:5px 10px 4px;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(60,210,120,.8);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid rgba(60,210,120,.15);margin-bottom:6px;">▶ Partidos Jugables</div>';
+      html += '<div style="padding:5px 10px 4px;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(60,210,120,.8);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid rgba(60,210,120,.15);margin-bottom:6px;">👤 Partidos Humanos</div>';
     }
 
     /* completed human */
@@ -3938,7 +3953,7 @@
 
     /* ── Separador IA vs IA ── */
     if (hasHuman && hasIA) {
-      html += '<div style="border-top:1px solid rgba(255,255,255,.1);margin:10px 0 6px;padding:5px 10px 0;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.3);letter-spacing:1.5px;text-transform:uppercase;">🤖 IA vs IA</div>';
+      html += '<div style="border-top:1px solid rgba(255,255,255,.1);margin:10px 0 6px;padding:5px 10px 0;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.3);letter-spacing:1.5px;text-transform:uppercase;">IA vs IA</div>';
     }
 
     /* completed IA */
@@ -4026,15 +4041,31 @@
     var actionButton = isManual
       ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">⚙️ CONFIGURAR</button>'
       : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';
-    return '<div class="match-live-wrap" id="iapnd-' + mk + '" style="' + cardStyle + '">'
+    /* dual gradient background */
+    var tcH = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};
+    var tcAw = (window.getTeamColors && window.getTeamColors(m.away)) || {bg:'#1a2a4a'};
+    var cardStyleNoBg = cardStyle.replace(/background:[^;]+;/g, '');
+    var gradAdd = 'background:linear-gradient(to right,'+tcH.bg+'2e 0%,transparent 44%,transparent 56%,'+tcAw.bg+'2e 100%);';
+    var lH = getLogoEquipo(m.home) || '';
+    var lAw2 = getLogoEquipo(m.away) || '';
+    var bgShH = lH ? '<img src="'+lH+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
+    var bgShA2 = lAw2 ? '<img src="'+lAw2+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
+    return '<div class="match-live-wrap" id="iapnd-' + mk + '" style="position:relative;overflow:hidden;' + gradAdd + cardStyleNoBg + '">'
+      + bgShH + bgShA2
       + '<div class="ml-header">'
-      + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + m.home + '</div>'
-      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;margin-top:2px;letter-spacing:1px;">★ ' + effHomeRating + ' 🏠 (+' + homeBonusPct + '%)</div></div>'
-      + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;">'
+      + '<div class="ml-team" style="z-index:1;position:relative;">'
+      + '<div style="display:flex;flex-direction:column;align-items:center;"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
+      + '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#f0c040;letter-spacing:.5px;margin-top:2px;">★ ' + effHomeRating + '</div></div>'
+      + '<div class="ml-team-name">' + m.home + '</div>'
+      + '</div>'
+      + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;z-index:1;">'
       + '<div class="ml-score"><span id="ia-sc-' + mk + '-a">–</span>&ndash;<span id="ia-sc-' + mk + '-b">–</span></div>'
       + actionButton + '</div>'
-      + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + m.away + '</div>'
-      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#a0c8d8;margin-top:2px;letter-spacing:1px;">★ ' + effAwayRating + '</div></div>'
+      + '<div class="ml-team" style="z-index:1;position:relative;">'
+      + '<div style="display:flex;flex-direction:column;align-items:center;"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div>'
+      + '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#aaa;letter-spacing:.5px;margin-top:2px;">★ ' + effAwayRating + '</div></div>'
+      + '<div class="ml-team-name">' + m.away + '</div>'
+      + '</div>'
       + '</div>'
       + '<div id="ia-acta-' + mk + '" style="display:none;border-top:1px solid rgba(255,255,255,.07);"></div>'
       + '</div>';

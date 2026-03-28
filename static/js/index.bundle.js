@@ -6072,6 +6072,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var resolved = aliases[(name||'').trim().toLowerCase()] || name;
     return CAMPO_TEAM_COLORS[resolved] || CAMPO_TEAM_COLORS[name] || { bg:'#888', fg:'#fff', border:'#fff' };
   }
+  window.getTeamColors = getTeamColors;
 
   // ── Formaciones 4-3-3 ────────────────────────────────────────────
   // Posiciones normalizadas [x%, y%] — campo horizontal, equipo A ataca →

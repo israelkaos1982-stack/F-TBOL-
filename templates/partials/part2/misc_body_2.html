@@ -2446,7 +2446,7 @@
     var titleEl = document.getElementById('liga-jornada-title');
     var bodyEl  = document.getElementById('liga-jornada-body');
     if (!titleEl || !bodyEl) return;
-    titleEl.textContent = 'Jornada ' + j;
+    titleEl.textContent = 'Jornada ' + j + ' de Liga EA Sports';
 
     var jornada = SCHEDULE[j - 1];
     if (!jornada) return;
@@ -2554,9 +2554,12 @@
     var tcA = (window.getTeamColors && window.getTeamColors(home)) || {bg:'#1a2a4a'};
     var tcB = (window.getTeamColors && window.getTeamColors(away)) || {bg:'#1a2a4a'};
     var gradStyle = 'background:linear-gradient(to right,'+tcA.bg+'2e 0%,transparent 44%,transparent 56%,'+tcB.bg+'2e 100%);position:relative;overflow:hidden;';
-    /* faded bg shields */
-    var bgShA = lA ? '<img src="'+lA+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
-    var bgShB = lB ? '<img src="'+lB+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
+    /* faded bg shields — HvH both, Human vs IA only human side */
+    var isHomeHuman = esHumano(home), isAwayHuman = esHumano(away);
+    var showShA = isHvH || isHomeHuman;
+    var showShB = isHvH || isAwayHuman;
+    var bgShA = (showShA && lA) ? '<img src="'+lA+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
+    var bgShB = (showShB && lB) ? '<img src="'+lB+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
     /* shield + power badge groups */
     var ratBadgeA = homeRatDisplay ? '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#f0c040;letter-spacing:.5px;margin-top:2px;">★ '+homeRatDisplay+'</div>' : '';
     var ratBadgeB = awayRatDisplay ? '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#aaa;letter-spacing:.5px;margin-top:2px;">★ '+awayRatDisplay+'</div>' : '';
@@ -3887,7 +3890,7 @@
     var titleEl = document.getElementById('ia-jornada-title');
     var bodyEl  = document.getElementById('ia-jornada-body');
     if (!titleEl || !bodyEl) return;
-    titleEl.textContent = 'Jornada ' + j;
+    titleEl.textContent = 'Jornada ' + j + ' de Liga EA Sports';
 
     /* Build matches/pending for this jornada */
     var results = loadResults();
@@ -3998,18 +4001,14 @@
     return h;
   }
   function _iaCompletedCard(m, cid, evHtml) {
-    var isHumanCard = esEquipoDestacado(m.home) || esEquipoDestacado(m.away);
-    var wrapStyle = 'margin-bottom:8px;';
-    var bgShH = '', bgShAw = '';
-    if (isHumanCard) {
-      var tcH2 = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};
-      var tcA2 = (window.getTeamColors && window.getTeamColors(m.away)) || {bg:'#1a2a4a'};
-      wrapStyle = 'margin-bottom:8px;position:relative;overflow:hidden;background:linear-gradient(to right,'+tcH2.bg+'2e 0%,transparent 44%,transparent 56%,'+tcA2.bg+'2e 100%);';
-      var lH2 = getLogoEquipo(m.home) || '';
-      var lA2 = getLogoEquipo(m.away) || '';
-      bgShH = lH2 ? '<img src="'+lH2+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
-      bgShAw = lA2 ? '<img src="'+lA2+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
-    }
+    var cHomeHuman = esHumano(m.home), cAwayHuman = esHumano(m.away);
+    var tcH2 = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};
+    var tcA2 = (window.getTeamColors && window.getTeamColors(m.away)) || {bg:'#1a2a4a'};
+    var wrapStyle = 'margin-bottom:8px;position:relative;overflow:hidden;background:linear-gradient(to right,'+tcH2.bg+'2e 0%,transparent 44%,transparent 56%,'+tcA2.bg+'2e 100%);';
+    var lH2 = cHomeHuman ? (getLogoEquipo(m.home) || '') : '';
+    var lA2 = cAwayHuman ? (getLogoEquipo(m.away) || '') : '';
+    var bgShH = lH2 ? '<img src="'+lH2+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
+    var bgShAw = lA2 ? '<img src="'+lA2+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
     return '<div class="match-live-wrap" style="' + wrapStyle + '">'
       + bgShH + bgShAw
       + '<div class="ml-header">'
@@ -4054,16 +4053,17 @@
     var actionButton = isManual
       ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">📋 PREVIA</button>'
       : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';
-    /* dual gradient background — only for human matches */
+    /* dual gradient — always; faded shields — human side(s) only */
     var tcH = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};
     var tcAw = (window.getTeamColors && window.getTeamColors(m.away)) || {bg:'#1a2a4a'};
-    var lH = isManual ? (getLogoEquipo(m.home) || '') : '';
-    var lAw2 = isManual ? (getLogoEquipo(m.away) || '') : '';
+    var isHomeHuman2 = esHumano(m.home), isAwayHuman2 = esHumano(m.away);
+    var lH = (isHomeHuman2 || isDestacadoManual) ? (getLogoEquipo(m.home) || '') : '';
+    var lAw2 = (isAwayHuman2 || isDestacadoManual) ? (getLogoEquipo(m.away) || '') : '';
     var bgShH = lH ? '<img src="'+lH+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
     var bgShA2 = lAw2 ? '<img src="'+lAw2+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
-    var cardStyleNoBg = isManual ? cardStyle.replace(/background:[^;]+;/g, '') : cardStyle;
-    var gradAdd = isManual ? 'background:linear-gradient(to right,'+tcH.bg+'2e 0%,transparent 44%,transparent 56%,'+tcAw.bg+'2e 100%);' : '';
-    var wrapStyle = isManual ? 'position:relative;overflow:hidden;' + gradAdd + cardStyleNoBg : cardStyle;
+    var cardStyleNoBg = cardStyle.replace(/background:[^;]+;/g, '');
+    var gradAdd = 'background:linear-gradient(to right,'+tcH.bg+'2e 0%,transparent 44%,transparent 56%,'+tcAw.bg+'2e 100%);';
+    var wrapStyle = 'position:relative;overflow:hidden;' + gradAdd + cardStyleNoBg;
     return '<div class="match-live-wrap" id="iapnd-' + mk + '" style="' + wrapStyle + '">'
       + bgShH + bgShA2
       + '<div class="ml-header">'

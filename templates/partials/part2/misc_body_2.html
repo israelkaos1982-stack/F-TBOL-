@@ -3509,7 +3509,6 @@
         window._iaRunningCount = Math.max(0, (window._iaRunningCount || 1) - 1);
         setTimeout(function() {
           if (!window._iaRunningCount && typeof window.buildIAresults === 'function') {
-            window._iaKeepOpen = 'ia-j' + j;
             window.buildIAresults();
           }
         }, 600);
@@ -3664,10 +3663,7 @@
     if (dirty) {
       saveResults(results);
       if (typeof window.buildLigaClas  === 'function') window.buildLigaClas();
-      if (typeof window.buildIAresults === 'function') {
-        window._iaKeepOpen = 'ia-j' + j;
-        window.buildIAresults();
-      }
+      if (typeof window.buildIAresults === 'function') window.buildIAresults();
     }
   };
 
@@ -3842,135 +3838,204 @@
         });
       }
 
-      var bid          = 'ia-j' + j;
-      var pendingIAOnly = pending.filter(function (m) { return !esHumano(m.home) && !esHumano(m.away); }).length;
-
-      /* ── Jornada header (sin contadores ni SIM) ── */
-      html += '<div class="jblock"><button class="jbtn c-liga" onclick="tog(\'' + bid + '\')"'
+      var done  = matches.length;
+      var total = matches.length + pending.length;
+      var allIA  = done === total;
+      var statusLabel = allIA
+        ? '<span style="margin-left:auto;font-size:11px;color:rgba(60,210,120,.6);">&#10003; ' + done + '/' + total + '</span>'
+        : (done > 0
+          ? '<span style="margin-left:auto;font-size:11px;color:#f0c040;">&#9203; ' + done + '/' + total + '</span>'
+          : '<span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/' + total + '</span>');
+      html += '<div class="jblock"><button class="jbtn c-liga" onclick="window.openIAJornada(' + j + ')"'
         + ' style="background:#1a1a2e;border-left:3px solid #2a4a6a;">'
         + '<div class="pdot">&#9654;</div>&#129302; <b>Jornada ' + j + '</b>'
-        + '</button><div class="jmatches" id="' + bid + '" style="padding:8px;">';
-
-      /* ── SIM button inside dropdown (only if pending) ── */
-      if (pendingIAOnly > 0 && j !== 1) {
-        html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">'
-          + '<button onclick="window.simularJornadaIA(' + j + ');setTimeout(window.buildIAresults,400);"'
-          + ' style="padding:5px 14px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:4px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:600;">&#129302; SIM J' + j + '</button>'
-          + '</div>';
-      }
-
-      /* ── Completed matches → full card (Photos 2-3-4 format) ── */
-      matches.forEach(function (m, idx) {
-        var cid = 'ij' + j + 'm' + idx;
-        var evHtml = '';
-        if (m.events && m.events.length) {
-          m.events.forEach(function(ev) {
-            if (ev.type === 'mvp') return;
-            var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'amarilla' ? '&#129000;' : ev.type === 'lesion' ? '&#129657;' : '&#129004;';
-            var lesColor = ev.type === 'lesion' ? (ev.lesGrado === 3 ? '#ff4444' : ev.lesGrado === 2 ? '#ff8c00' : '#ffd700') : '#fff';
-            var lesExtra = (ev.type === 'lesion' && ev.lesDesc)
-              ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + 'P)</span>'
-              : '';
-            evHtml += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.04);">'
-              + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
-              + '<span style="font-size:14px;">' + ico + '</span>'
-              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;color:' + lesColor + ';flex:1;">' + ev.player + lesExtra + '</span>'
-              + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team === 'a' ? m.home : m.away) + '</span>'
-              + '</div>';
-          });
-          if (m.mvp) {
-            evHtml += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid rgba(240,192,64,.2);">'
-              + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#f0c040;min-width:26px;">FIN</span>'
-              + '<span style="font-size:14px;">&#11088;</span>'
-              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#f0c040;flex:1;">' + m.mvp + '</span>'
-              + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (m.mvpTeam || '') + '</span>'
-              + '</div>';
-          }
-        } else {
-          evHtml = '<div style="padding:10px 12px;color:#555;font-size:11px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1px;">SIN ACTA DISPONIBLE</div>';
-        }
-        html += '<div class="match-live-wrap" style="margin-bottom:8px;">'
-          + '<div class="ml-header">'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + humanIcon(m.home) + m.home + '</div></div>'
-          + '<div class="ml-score-wrap">'
-          + '<div class="ml-score state-finished"><span>' + m.gh + '</span>\u2013<span>' + m.ga + '</span></div>'
-          + '<div class="ml-timer finished" style="cursor:default;">&#127937; FIN</div>'
-          + '</div>'
-          + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + humanIcon(m.away) + m.away + '</div></div>'
-          + '</div>'
-          + '<div class="ml-acta" data-ia="1">'
-          + '<button class="ml-acta-toggle" onclick="window.iaActaTog(\'' + cid + '\')">'
-          + '<span class="acta-ia-lbl">&#128203; ACTA DEL PARTIDO</span>'
-          + '<span class="acta-arr" id="ia-arr-' + cid + '">&#9660;</span>'
-          + '</button>'
-          + '<div class="ml-acta-body" id="ia-acta-' + cid + '">'
-          + '<div class="ml-evlist">' + evHtml + '</div>'
-          + '</div>'
-          + '</div>'
-          + '</div>';
-      });
-
-      /* ── Pending matches → clean card + live ▶ SIMULAR ── */
-      pending.forEach(function (m) {
-        var viewCtx = (typeof _iaContextRatings === 'function')
-          ? _iaContextRatings(m.home, m.away, j)
-          : {
-              homeEff: { rating: ((window.TEAM_RATINGS && window.TEAM_RATINGS[m.home]) || 75), bonusPct: 0 },
-              awayEff: { rating: ((window.TEAM_RATINGS && window.TEAM_RATINGS[m.away]) || 75), bonusPct: 0 }
-            };
-        var effHomeRating = Math.round(viewCtx.homeEff.rating);
-        var effAwayRating = Math.round(viewCtx.awayEff.rating);
-        var homeBonusPct = Math.round((viewCtx.homeEff.bonusPct || 0) * 1000) / 10;
-        var mk  = 'iapnd-j' + j + '-' + m.home.replace(/\s/g,'') + '-' + m.away.replace(/\s/g,'');
-        var emk = mk.replace(/'/g,"\\'");
-        var isManual = esHumano(m.home) || esHumano(m.away);
-        var hEsc = m.home.replace(/'/g,"\\'");
-        var aEsc = m.away.replace(/'/g,"\\'");
-        var clickFn = m.fn
-          ? 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ',\'' + m.fn + '\')'
-          : 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ')';
-        var isDestacadoManual = isManual && esPartidoDestacado(m.home, m.away);
-        var cardStyle = isDestacadoManual
-          ? 'margin-bottom:10px;border:1px solid rgba(170,100,255,.6);box-shadow:0 0 0 1px rgba(170,100,255,.35) inset;background:linear-gradient(180deg,rgba(80,26,120,.28),rgba(20,12,35,.85));'
-          : isManual
-            ? 'margin-bottom:10px;border:1px solid rgba(60,210,120,.55);box-shadow:0 0 0 1px rgba(60,210,120,.25) inset;background:linear-gradient(180deg,rgba(18,68,35,.22),rgba(10,18,12,.85));'
-            : 'margin-bottom:10px;';
-        var actionButton = isManual
-          ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">⚙️ CONFIGURAR</button>'
-          : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';
-
-        html += '<div class="match-live-wrap" id="iapnd-' + mk + '" style="' + cardStyle + '">'
-          + '<div class="ml-header">'
-          + '<div class="ml-team">'
-          +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
-          +   '<div class="ml-team-name">' + m.home + '</div>'
-          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;margin-top:2px;letter-spacing:1px;">★ ' + effHomeRating + ' 🏠 (+' + homeBonusPct + '%)</div>'
-          + '</div>'
-          + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;">'
-          +   '<div class="ml-score"><span id="ia-sc-' + mk + '-a">–</span>&ndash;<span id="ia-sc-' + mk + '-b">–</span></div>'
-          +   actionButton
-          + '</div>'
-          + '<div class="ml-team">'
-          +   '<div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div>'
-          +   '<div class="ml-team-name">' + m.away + '</div>'
-          +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#a0c8d8;margin-top:2px;letter-spacing:1px;">★ ' + effAwayRating + '</div>'
-          + '</div>'
-          + '</div>'
-          + '<div id="ia-acta-' + mk + '" style="display:none;border-top:1px solid rgba(255,255,255,.07);"></div>'
-          + '</div>';
-      });
-
-      html += '</div></div>';
+        + statusLabel
+        + '</button></div>';
     }
     container.innerHTML = html
       || '<div style="padding:12px;color:#555;font-size:13px;">Sin partidos disponibles a\xfan</div>';
-    /* Restore open jornada after rebuild (prevents collapsing on simulation end) */
-    if (window._iaKeepOpen) {
-      var keepEl = document.getElementById(window._iaKeepOpen);
-      if (keepEl) { keepEl.classList.add('open'); }
-      window._iaKeepOpen = null;
+    /* Refresh jornada screen if currently open */
+    if (window._currentIAJornada && typeof window.openIAJornada === 'function') {
+      var iaScr = document.getElementById('s-liga-ia-jornada');
+      if (iaScr && iaScr.classList.contains('active')) {
+        window.openIAJornada(window._currentIAJornada);
+      }
     }
   };
+
+  /* ── ABRIR JORNADA IA EN PANTALLA DEDICADA ─────────── */
+  window.openIAJornada = function (j) {
+    window._currentIAJornada = j;
+    var titleEl = document.getElementById('ia-jornada-title');
+    var bodyEl  = document.getElementById('ia-jornada-body');
+    if (!titleEl || !bodyEl) return;
+    titleEl.textContent = 'Jornada ' + j;
+
+    /* Build matches/pending for this jornada */
+    var results = loadResults();
+    var allMatches = [], allPending = [];
+    if (j === 1) {
+      var j1done = {};
+      (window.LIGA_J1_RESULTS || []).forEach(function (r) {
+        var lsRes = results[rKey(1, r.home, r.away)];
+        allMatches.push({ home: r.home, away: r.away, gh: r.gh, ga: r.ga_,
+                         events: lsRes ? lsRes.events : null,
+                         mvp: lsRes ? lsRes.mvp : null,
+                         mvpTeam: lsRes ? lsRes.mvpTeam : null });
+        j1done[r.home + '\xB7' + r.away] = true;
+      });
+      SCHEDULE[0].forEach(function (m) {
+        if (j1done[m[0] + '\xB7' + m[1]]) return;
+        var res = results[rKey(1, m[0], m[1])];
+        if (res) allMatches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga, events: res.events, mvp: res.mvp, mvpTeam: res.mvpTeam });
+        else allPending.push({ home: m[0], away: m[1], fn: '' });
+      });
+    } else {
+      SCHEDULE[j - 1].forEach(function (m) {
+        var res = results[rKey(j, m[0], m[1])];
+        if (res) allMatches.push({ home: m[0], away: m[1], gh: res.gh, ga: res.ga, events: res.events, mvp: res.mvp, mvpTeam: res.mvpTeam });
+        else allPending.push({ home: m[0], away: m[1], fn: '' });
+      });
+    }
+
+    /* Split human vs IA */
+    var humanMatches = allMatches.filter(function(m){ return esHumano(m.home) || esHumano(m.away); });
+    var iaMatches    = allMatches.filter(function(m){ return !esHumano(m.home) && !esHumano(m.away); });
+    var humanPending = allPending.filter(function(m){ return esHumano(m.home) || esHumano(m.away); });
+    var iaPending    = allPending.filter(function(m){ return !esHumano(m.home) && !esHumano(m.away); });
+
+    var html = '';
+
+    /* SIM batch button (only if IA pending and j !== 1) */
+    if (iaPending.length > 0 && j !== 1) {
+      html += '<div style="display:flex;justify-content:flex-end;margin:0 0 10px;padding:0 4px;">'
+        + '<button onclick="window.simularJornadaIA(' + j + ');setTimeout(function(){ if(typeof window.buildIAresults===\'function\') window.buildIAresults(); },400);"'
+        + ' style="padding:5px 16px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:6px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:1px;">🤖 SIM J' + j + '</button>'
+        + '</div>';
+    }
+
+    /* ── Partidos Jugables (humanos) ── */
+    var hasHuman = humanMatches.length + humanPending.length > 0;
+    var hasIA    = iaMatches.length + iaPending.length > 0;
+
+    if (hasHuman) {
+      html += '<div style="padding:5px 10px 4px;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(60,210,120,.8);letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid rgba(60,210,120,.15);margin-bottom:6px;">▶ Partidos Jugables</div>';
+    }
+
+    /* completed human */
+    humanMatches.forEach(function(m, idx) {
+      var cid = 'ij' + j + 'hm' + idx;
+      var evHtml = _iaEventsHtml(m);
+      html += _iaCompletedCard(m, cid, evHtml);
+    });
+    /* pending human */
+    humanPending.forEach(function(m) {
+      html += _iaPendingCard(m, j);
+    });
+
+    /* ── Separador IA vs IA ── */
+    if (hasHuman && hasIA) {
+      html += '<div style="border-top:1px solid rgba(255,255,255,.1);margin:10px 0 6px;padding:5px 10px 0;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.3);letter-spacing:1.5px;text-transform:uppercase;">🤖 IA vs IA</div>';
+    }
+
+    /* completed IA */
+    iaMatches.forEach(function(m, idx) {
+      var cid = 'ij' + j + 'ia' + idx;
+      var evHtml = _iaEventsHtml(m);
+      html += _iaCompletedCard(m, cid, evHtml);
+    });
+    /* pending IA */
+    iaPending.forEach(function(m) {
+      html += _iaPendingCard(m, j);
+    });
+
+    bodyEl.innerHTML = html || '<div style="padding:12px;color:#555;font-size:13px;text-align:center;">Sin partidos en esta jornada.</div>';
+    if (typeof go === 'function') go('s-liga-ia-jornada');
+  };
+
+  /* ── Helpers para openIAJornada ─────────────────────── */
+  function _iaEventsHtml(m) {
+    if (!m.events || !m.events.length) return '<div style="padding:10px 12px;color:#555;font-size:11px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1px;">SIN ACTA DISPONIBLE</div>';
+    var h = '';
+    m.events.forEach(function(ev) {
+      if (ev.type === 'mvp') return;
+      var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'amarilla' ? '&#129000;' : ev.type === 'lesion' ? '&#129657;' : '&#129004;';
+      var lesColor = ev.type === 'lesion' ? (ev.lesGrado === 3 ? '#ff4444' : ev.lesGrado === 2 ? '#ff8c00' : '#ffd700') : '#fff';
+      var lesExtra = (ev.type === 'lesion' && ev.lesDesc) ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + 'P)</span>' : '';
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.04);">'
+        + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
+        + '<span style="font-size:14px;">' + ico + '</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;color:' + lesColor + ';flex:1;">' + ev.player + lesExtra + '</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team === 'a' ? m.home : m.away) + '</span>'
+        + '</div>';
+    });
+    if (m.mvp) {
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid rgba(240,192,64,.2);">'
+        + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#f0c040;min-width:26px;">FIN</span>'
+        + '<span style="font-size:14px;">&#11088;</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#f0c040;flex:1;">' + m.mvp + '</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (m.mvpTeam || '') + '</span>'
+        + '</div>';
+    }
+    return h;
+  }
+  function _iaCompletedCard(m, cid, evHtml) {
+    return '<div class="match-live-wrap" style="margin-bottom:8px;">'
+      + '<div class="ml-header">'
+      + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + humanIcon(m.home) + m.home + '</div></div>'
+      + '<div class="ml-score-wrap">'
+      + '<div class="ml-score state-finished"><span>' + m.gh + '</span>\u2013<span>' + m.ga + '</span></div>'
+      + '<div class="ml-timer finished" style="cursor:default;">&#127937; FIN</div>'
+      + '</div>'
+      + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + humanIcon(m.away) + m.away + '</div></div>'
+      + '</div>'
+      + '<div class="ml-acta" data-ia="1">'
+      + '<button class="ml-acta-toggle" onclick="window.iaActaTog(\'' + cid + '\')">'
+      + '<span class="acta-ia-lbl">&#128203; ACTA DEL PARTIDO</span>'
+      + '<span class="acta-arr" id="ia-arr-' + cid + '">&#9660;</span>'
+      + '</button>'
+      + '<div class="ml-acta-body" id="ia-acta-' + cid + '"><div class="ml-evlist">' + evHtml + '</div></div>'
+      + '</div>'
+      + '</div>';
+  }
+  function _iaPendingCard(m, j) {
+    var viewCtx = (typeof _iaContextRatings === 'function')
+      ? _iaContextRatings(m.home, m.away, j)
+      : { homeEff: { rating: ((window.TEAM_RATINGS && window.TEAM_RATINGS[m.home]) || 75), bonusPct: 0 },
+          awayEff: { rating: ((window.TEAM_RATINGS && window.TEAM_RATINGS[m.away]) || 75), bonusPct: 0 } };
+    var effHomeRating = Math.round(viewCtx.homeEff.rating);
+    var effAwayRating = Math.round(viewCtx.awayEff.rating);
+    var homeBonusPct  = Math.round((viewCtx.homeEff.bonusPct || 0) * 1000) / 10;
+    var mk   = 'iapnd-j' + j + '-' + m.home.replace(/\s/g,'') + '-' + m.away.replace(/\s/g,'');
+    var emk  = mk.replace(/'/g,"\\'");
+    var hEsc = m.home.replace(/'/g,"\\'");
+    var aEsc = m.away.replace(/'/g,"\\'");
+    var isManual = esHumano(m.home) || esHumano(m.away);
+    var isDestacadoManual = isManual && esPartidoDestacado(m.home, m.away);
+    var cardStyle = isDestacadoManual
+      ? 'margin-bottom:10px;border:1px solid rgba(170,100,255,.6);box-shadow:0 0 0 1px rgba(170,100,255,.35) inset;background:linear-gradient(180deg,rgba(80,26,120,.28),rgba(20,12,35,.85));'
+      : isManual
+        ? 'margin-bottom:10px;border:1px solid rgba(60,210,120,.55);box-shadow:0 0 0 1px rgba(60,210,120,.25) inset;background:linear-gradient(180deg,rgba(18,68,35,.22),rgba(10,18,12,.85));'
+        : 'margin-bottom:10px;';
+    var clickFn = m.fn
+      ? 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ',\'' + m.fn + '\')'
+      : 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ')';
+    var actionButton = isManual
+      ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">⚙️ CONFIGURAR</button>'
+      : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';
+    return '<div class="match-live-wrap" id="iapnd-' + mk + '" style="' + cardStyle + '">'
+      + '<div class="ml-header">'
+      + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + m.home + '</div>'
+      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;margin-top:2px;letter-spacing:1px;">★ ' + effHomeRating + ' 🏠 (+' + homeBonusPct + '%)</div></div>'
+      + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;">'
+      + '<div class="ml-score"><span id="ia-sc-' + mk + '-a">–</span>&ndash;<span id="ia-sc-' + mk + '-b">–</span></div>'
+      + actionButton + '</div>'
+      + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + m.away + '</div>'
+      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#a0c8d8;margin-top:2px;letter-spacing:1px;">★ ' + effAwayRating + '</div></div>'
+      + '</div>'
+      + '<div id="ia-acta-' + mk + '" style="display:none;border-top:1px solid rgba(255,255,255,.07);"></div>'
+      + '</div>';
+  }
 
   /* ── INIT ─────────────────────────────────────────── */
   document.addEventListener('DOMContentLoaded', function () {

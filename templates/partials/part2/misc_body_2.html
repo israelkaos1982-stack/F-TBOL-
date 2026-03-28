@@ -2293,7 +2293,7 @@
     return resolved;
   }
 
-  function esHumano(t) { return HUMANOS.indexOf(normalizarNombreEquipo(t)) !== -1; }
+  function esHumano(t) { return HUMANOS.indexOf(t) !== -1 || HUMANOS.indexOf(normalizarNombreEquipo(t)) !== -1; }
   var _IA_HOME_BONUS_MIN = 0.15;
   var _IA_HOME_BONUS_MAX = 0.20;
 
@@ -4052,7 +4052,7 @@
       ? 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ',\'' + m.fn + '\')'
       : 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ')';
     var actionButton = isManual
-      ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">⚙️ CONFIGURAR</button>'
+      ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">📋 PREVIA</button>'
       : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';
     /* dual gradient background — only for human matches */
     var tcH = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};

@@ -3520,6 +3520,9 @@
         var key = rKey(j, home, away);
         results[key] = { gh: scA, ga: scB, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
         saveResults(results);
+        if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
+          window.registrarLigaPlayerStats(key, home, away, evtData.events, evtData.mvp, evtData.mvpTeam);
+        }
         actualizarDom('l-j' + j, home, away, scA, scB);
         if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
         /* Mostrar overlay de lesiones si las hay */
@@ -3529,8 +3532,9 @@
         /* Decrementar contador y reconstruir solo si no hay otras simulaciones activas */
         window._iaRunningCount = Math.max(0, (window._iaRunningCount || 1) - 1);
         setTimeout(function() {
-          if (!window._iaRunningCount && typeof window.buildIAresults === 'function') {
-            window.buildIAresults();
+          if (!window._iaRunningCount) {
+            if (typeof window.buildIAresults === 'function') window.buildIAresults();
+            if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
           }
         }, 600);
       }
@@ -3677,6 +3681,9 @@
         : _fallbackIAvsIAScore(m[0], m[1]);
       var evtData = genMatchEventsEnhanced(m[0], m[1], simScore.gh, simScore.ga);
       results[key] = { gh: simScore.gh, ga: simScore.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
+      if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
+        window.registrarLigaPlayerStats(key, m[0], m[1], evtData.events, evtData.mvp, evtData.mvpTeam);
+      }
       actualizarDom('l-j' + j, m[0], m[1], simScore.gh, simScore.ga);
       actualizarDom('cl-j' + j, m[0], m[1], simScore.gh, simScore.ga);
       dirty = true;
@@ -3685,6 +3692,7 @@
       saveResults(results);
       if (typeof window.buildLigaClas  === 'function') window.buildLigaClas();
       if (typeof window.buildIAresults === 'function') window.buildIAresults();
+      if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
     }
   };
 

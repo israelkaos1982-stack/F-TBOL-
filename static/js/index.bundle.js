@@ -1441,7 +1441,7 @@ window.mlSimulate_j1m10=function(){
 
 (function(){
   var LIGA_TEAMS = [
-    'Arsenal','Athatic__TEMP__', 'Athletic Club','Atlético Madrid','Bayern Munich','Celta de Vigo','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Sporting CP','Valencia CF','Villarreal'
+    'Arsenal','Athatic__TEMP__', 'Athletic Club','Atlético Madrid','Bayern Munich','Celta de Vigo','Deportivo Alavés','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia CF','Villarreal'
   ].filter(function(t){ return t !== 'Athatic__TEMP__'; }).sort(function(a,b){ return a.localeCompare(b,'es'); });
 
   var LIGA_EXTRAS = {};
@@ -2421,7 +2421,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     {name:"Rayo Vallecano",  ico:"⚪",  screen:"rayo-screen"},
     {name:"Elche CF",        ico:"🟢",  screen:"elche-screen"},
     {name:"Bayern Munich",   ico:"🔴",  screen:"s-munich"},
-    {name:"Sporting CP",     ico:"🟢",  screen:"s-sporting"}
+    {name:"Deportivo Alavés",ico:"🔵",  screen:"alaves-screen"}
   ];
 
   var grid = document.getElementById('equipos-grid');
@@ -5755,7 +5755,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   // ── Generar lesión para partidos HvH / IA vs H ──────────────────
   // Se llama al terminar el partido, genera 0 o 1 lesión por equipo
   // y las guarda en LESIONES_PARTIDO_ACTUAL para mostrar en el overlay
-  var _EQUIPOS_HUMANOS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Sporting CP','PSG'];
+  var _EQUIPOS_HUMANOS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid','PSG'];
 
   window._generarLesionHumano = function(teamA, teamB) {
     window.LESIONES_PARTIDO_ACTUAL = [];
@@ -6820,25 +6820,25 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
 /* script block ea sports persistence fix */
 (function(){
-  var LS_KEY = 'ef_liga38_v2';
+  var LS_KEY = 'ef_liga38_v4';
   var TEAM_ORDER = [
-    'Arsenal','Athletic Club','Atlético Madrid','Bayern Munich','Celta de Vigo','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Sporting CP','Valencia CF','Villarreal'
+    'Arsenal','Athletic Club','Atlético Madrid','Bayern Munich','Celta de Vigo','Deportivo Alavés','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia CF','Villarreal'
   ];
   var SHORT_NAMES = {
     'Bayern Munich':'Bayern',
     'Atlético Madrid':'Atl Madrid',
     'Celta de Vigo':'Celta',
+    'Deportivo Alavés':'Alavés',
     'Elche CF':'Elche',
     'Rayo Vallecano':'Rayo',
-    'Sporting CP':'Sporting',
     'Valencia CF':'Valencia'
   };
   var HUMAN_TEAMS = {
-    'Bayern Munich': '💡',
-    'Arsenal':       '🐭',
-    'Sporting CP':   '✏️',
-    'Real Madrid':   '🔨',
-    'FC Barcelona':  '👿'
+    'Bayern Munich':    '💡',
+    'Arsenal':          '🐭',
+    'Atlético Madrid':  '✏️',
+    'Real Madrid':      '🔨',
+    'FC Barcelona':     '👿'
   };
   var TEAM_ALIAS = {
     'sevilla fc':'Sevilla','sevilla':'Sevilla',
@@ -7373,7 +7373,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     'FC Barcelona': true,
     'Bayern Munich': true,
     'Arsenal': true,
-    'Sporting CP': true
+    'Atlético Madrid': true
   };
 
   var MAIN_CAL_ALIAS = {
@@ -7386,9 +7386,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     'bayern': 'Bayern Munich',
     'arsenal': 'Arsenal',
     'arsenal fc': 'Arsenal',
-    'sporting cp': 'Sporting CP',
-    'sporting': 'Sporting CP',
-    'sporting de portugal': 'Sporting CP'
+    'atletico madrid': 'Atlético Madrid',
+    'atletico': 'Atlético Madrid',
+    'at. madrid': 'Atlético Madrid'
   };
 
   function _normTeamName(name){

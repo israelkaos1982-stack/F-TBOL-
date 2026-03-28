@@ -1615,8 +1615,9 @@ window.mlSimulate_j1m10=function(){
 
   function rowZoneClass(pos){
     if(pos >= 1 && pos <= 4) return 'zone-ucl';
-    if(pos === 5 || pos === 6) return 'zone-uel';
-    if(pos === 7 || pos === 8) return 'zone-conf';
+    if(pos === 5) return 'zone-ucl-prev';
+    if(pos === 6 || pos === 7) return 'zone-uel';
+    if(pos === 8) return 'zone-conf';
     if(pos >= 17) return 'zone-desc';
     return '';
   }
@@ -1836,6 +1837,7 @@ window.mlSimulate_j1m10=function(){
   var html = ''
       + '<div class="clas-legend">'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Champions</span>'
+      +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#a855f7"></span>🟣 Previa Ch.</span>'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 E.League</span>'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3cc878"></span>🟢 Conference</span>'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso</span>'
@@ -6993,8 +6995,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   }
   function rowZoneClass(pos){
     if(pos >= 1 && pos <= 4) return 'zone-ucl';
-    if(pos === 5 || pos === 6) return 'zone-uel';
-    if(pos === 7 || pos === 8) return 'zone-conf';
+    if(pos === 5) return 'zone-ucl-prev';
+    if(pos === 6 || pos === 7) return 'zone-uel';
+    if(pos === 8) return 'zone-conf';
     if(pos >= 17) return 'zone-desc';
     return '';
   }
@@ -7005,6 +7008,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var html = ''
       + '<div class="clas-legend">'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Champions</span>'
+      +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#a855f7"></span>🟣 Previa Ch.</span>'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 E.League</span>'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3cc878"></span>🟢 Conference</span>'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso</span>'

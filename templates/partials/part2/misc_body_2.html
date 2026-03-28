@@ -2371,7 +2371,9 @@
     if (!original) return '';
     if (TEAM_LOGO_CACHE[original]) return TEAM_LOGO_CACHE[original];
     var normalized = normalizarNombreEquipo(teamName);
-    var logo = BACKEND_ESCUDOS[normalized] || BACKEND_ESCUDOS[original] || BACKEND_ESCUDO_DEFAULT;
+    var logo = BACKEND_ESCUDOS[normalized] || BACKEND_ESCUDOS[original];
+    if (!logo) { var tl = window.TEAM_LOGOS || {}; logo = tl[original] || tl[normalized]; }
+    if (!logo) logo = BACKEND_ESCUDO_DEFAULT;
     TEAM_LOGO_CACHE[original] = logo;
     return logo;
   }
@@ -2560,15 +2562,13 @@
     var showShB = isHvH || isAwayHuman;
     var bgShA = (showShA && lA) ? '<img src="'+lA+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
     var bgShB = (showShB && lB) ? '<img src="'+lB+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
-    /* shield + power badge groups */
-    var ratBadgeA = homeRatDisplay ? '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#f0c040;letter-spacing:.5px;margin-top:2px;">★ '+homeRatDisplay+'</div>' : '';
-    var ratBadgeB = awayRatDisplay ? '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#aaa;letter-spacing:.5px;margin-top:2px;">★ '+awayRatDisplay+'</div>' : '';
+    /* shield groups (no power badge — hidden per design spec) */
     var shieldA = '<div style="display:flex;flex-direction:column;align-items:center;z-index:1;position:relative;">'
       + (lA ? '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+lA+'" alt="'+home+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>' : '')
-      + ratBadgeA + '</div>';
+      + '</div>';
     var shieldB = '<div style="display:flex;flex-direction:column;align-items:center;z-index:1;position:relative;">'
       + (lB ? '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+lB+'" alt="'+away+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>' : '')
-      + ratBadgeB + '</div>';
+      + '</div>';
     var etStyle = isHvH ? '' : ' style="display:none"';
     var emk = mk.replace(/'/g,"\\'");
     return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'" style="'+gradStyle+'">'
@@ -4057,29 +4057,27 @@
     var tcH = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};
     var tcAw = (window.getTeamColors && window.getTeamColors(m.away)) || {bg:'#1a2a4a'};
     var isHomeHuman2 = esHumano(m.home), isAwayHuman2 = esHumano(m.away);
-    var lH = (isHomeHuman2 || isDestacadoManual) ? (getLogoEquipo(m.home) || '') : '';
-    var lAw2 = (isAwayHuman2 || isDestacadoManual) ? (getLogoEquipo(m.away) || '') : '';
+    var isHvH2 = isHomeHuman2 && isAwayHuman2;
+    var lH = isHomeHuman2 ? (getLogoEquipo(m.home) || '') : '';
+    var lAw2 = isAwayHuman2 ? (getLogoEquipo(m.away) || '') : '';
     var bgShH = lH ? '<img src="'+lH+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
     var bgShA2 = lAw2 ? '<img src="'+lAw2+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
-    var cardStyleNoBg = cardStyle.replace(/background:[^;]+;/g, '');
     var gradAdd = 'background:linear-gradient(to right,'+tcH.bg+'2e 0%,transparent 44%,transparent 56%,'+tcAw.bg+'2e 100%);';
-    var wrapStyle = 'position:relative;overflow:hidden;' + gradAdd + cardStyleNoBg;
+    var cardStyleClean = cardStyle.replace(/background:[^;]+;/g,'').replace(/border:[^;]+;/g,'').replace(/box-shadow:[^;]+;/g,'');
+    var hvhBorder = isHvH2 ? 'border:1px solid rgba(255,90,170,.75);box-shadow:0 0 14px rgba(255,80,160,.3),inset 0 0 0 1px rgba(255,90,170,.2);' : '';
+    var wrapStyle = 'position:relative;overflow:hidden;' + gradAdd + cardStyleClean + hvhBorder;
     return '<div class="match-live-wrap" id="iapnd-' + mk + '" style="' + wrapStyle + '">'
       + bgShH + bgShA2
       + '<div class="ml-header">'
       + '<div class="ml-team" style="z-index:1;position:relative;">'
-      + '<div style="display:flex;flex-direction:column;align-items:center;"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
-      + (isManual ? '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#f0c040;letter-spacing:.5px;margin-top:2px;">★ ' + effHomeRating + '</div>' : '')
-      + '</div>'
+      + '<div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
       + '<div class="ml-team-name">' + m.home + '</div>'
       + '</div>'
       + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;z-index:1;">'
       + '<div class="ml-score"><span id="ia-sc-' + mk + '-a">–</span>&ndash;<span id="ia-sc-' + mk + '-b">–</span></div>'
       + actionButton + '</div>'
       + '<div class="ml-team" style="z-index:1;position:relative;">'
-      + '<div style="display:flex;flex-direction:column;align-items:center;"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div>'
-      + (isManual ? '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#aaa;letter-spacing:.5px;margin-top:2px;">★ ' + effAwayRating + '</div>' : '')
-      + '</div>'
+      + '<div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div>'
       + '<div class="ml-team-name">' + m.away + '</div>'
       + '</div>'
       + '</div>'

@@ -3998,14 +3998,27 @@
     return h;
   }
   function _iaCompletedCard(m, cid, evHtml) {
-    return '<div class="match-live-wrap" style="margin-bottom:8px;">'
+    var isHumanCard = esEquipoDestacado(m.home) || esEquipoDestacado(m.away);
+    var wrapStyle = 'margin-bottom:8px;';
+    var bgShH = '', bgShAw = '';
+    if (isHumanCard) {
+      var tcH2 = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};
+      var tcA2 = (window.getTeamColors && window.getTeamColors(m.away)) || {bg:'#1a2a4a'};
+      wrapStyle = 'margin-bottom:8px;position:relative;overflow:hidden;background:linear-gradient(to right,'+tcH2.bg+'2e 0%,transparent 44%,transparent 56%,'+tcA2.bg+'2e 100%);';
+      var lH2 = getLogoEquipo(m.home) || '';
+      var lA2 = getLogoEquipo(m.away) || '';
+      bgShH = lH2 ? '<img src="'+lH2+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
+      bgShAw = lA2 ? '<img src="'+lA2+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
+    }
+    return '<div class="match-live-wrap" style="' + wrapStyle + '">'
+      + bgShH + bgShAw
       + '<div class="ml-header">'
-      + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + humanIcon(m.home) + m.home + '</div></div>'
-      + '<div class="ml-score-wrap">'
+      + '<div class="ml-team" style="z-index:1;position:relative;"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + humanIcon(m.home) + m.home + '</div></div>'
+      + '<div class="ml-score-wrap" style="z-index:1;">'
       + '<div class="ml-score state-finished"><span>' + m.gh + '</span>\u2013<span>' + m.ga + '</span></div>'
       + '<div class="ml-timer finished" style="cursor:default;">&#127937; FIN</div>'
       + '</div>'
-      + '<div class="ml-team"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + humanIcon(m.away) + m.away + '</div></div>'
+      + '<div class="ml-team" style="z-index:1;position:relative;"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + humanIcon(m.away) + m.away + '</div></div>'
       + '</div>'
       + '<div class="ml-acta" data-ia="1">'
       + '<button class="ml-acta-toggle" onclick="window.iaActaTog(\'' + cid + '\')">'
@@ -4041,21 +4054,23 @@
     var actionButton = isManual
       ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">⚙️ CONFIGURAR</button>'
       : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';
-    /* dual gradient background */
+    /* dual gradient background — only for human matches */
     var tcH = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};
     var tcAw = (window.getTeamColors && window.getTeamColors(m.away)) || {bg:'#1a2a4a'};
-    var cardStyleNoBg = cardStyle.replace(/background:[^;]+;/g, '');
-    var gradAdd = 'background:linear-gradient(to right,'+tcH.bg+'2e 0%,transparent 44%,transparent 56%,'+tcAw.bg+'2e 100%);';
-    var lH = getLogoEquipo(m.home) || '';
-    var lAw2 = getLogoEquipo(m.away) || '';
+    var lH = isManual ? (getLogoEquipo(m.home) || '') : '';
+    var lAw2 = isManual ? (getLogoEquipo(m.away) || '') : '';
     var bgShH = lH ? '<img src="'+lH+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
     var bgShA2 = lAw2 ? '<img src="'+lAw2+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
-    return '<div class="match-live-wrap" id="iapnd-' + mk + '" style="position:relative;overflow:hidden;' + gradAdd + cardStyleNoBg + '">'
+    var cardStyleNoBg = isManual ? cardStyle.replace(/background:[^;]+;/g, '') : cardStyle;
+    var gradAdd = isManual ? 'background:linear-gradient(to right,'+tcH.bg+'2e 0%,transparent 44%,transparent 56%,'+tcAw.bg+'2e 100%);' : '';
+    var wrapStyle = isManual ? 'position:relative;overflow:hidden;' + gradAdd + cardStyleNoBg : cardStyle;
+    return '<div class="match-live-wrap" id="iapnd-' + mk + '" style="' + wrapStyle + '">'
       + bgShH + bgShA2
       + '<div class="ml-header">'
       + '<div class="ml-team" style="z-index:1;position:relative;">'
       + '<div style="display:flex;flex-direction:column;align-items:center;"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
-      + '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#f0c040;letter-spacing:.5px;margin-top:2px;">★ ' + effHomeRating + '</div></div>'
+      + (isManual ? '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#f0c040;letter-spacing:.5px;margin-top:2px;">★ ' + effHomeRating + '</div>' : '')
+      + '</div>'
       + '<div class="ml-team-name">' + m.home + '</div>'
       + '</div>'
       + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;z-index:1;">'
@@ -4063,7 +4078,8 @@
       + actionButton + '</div>'
       + '<div class="ml-team" style="z-index:1;position:relative;">'
       + '<div style="display:flex;flex-direction:column;align-items:center;"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div>'
-      + '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#aaa;letter-spacing:.5px;margin-top:2px;">★ ' + effAwayRating + '</div></div>'
+      + (isManual ? '<div style="background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:11px;color:#aaa;letter-spacing:.5px;margin-top:2px;">★ ' + effAwayRating + '</div>' : '')
+      + '</div>'
       + '<div class="ml-team-name">' + m.away + '</div>'
       + '</div>'
       + '</div>'

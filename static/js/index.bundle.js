@@ -61,8 +61,8 @@ window.TEAM_RATINGS={
   'Atlético Madrid':83,
   'Real Sociedad':79,
   'Real Betis':79,
-  'Sevilla FC':75,
-  'Villarreal CF':80,
+  'Sevilla FC':75,'Sevilla':75,
+  'Villarreal CF':80,'Villarreal':80,
   'Athletic Club':79,
   'Girona FC':77,
   'Osasuna':77,
@@ -3641,7 +3641,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   // No se envuelve registrarLigaPlayerStats para evitar doble reconstrucción al editar MVP
 
   document.addEventListener('DOMContentLoaded', function(){
-    setTimeout(rebuildLigaPlayerStatsFixed, 50);
+    setTimeout(function(){ (window.rebuildLigaPlayerStatsFixed || rebuildLigaPlayerStatsFixed)(); }, 150);
   });
 
   var _origGo2 = window.go;

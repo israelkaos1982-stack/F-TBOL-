@@ -2294,8 +2294,8 @@
   }
 
   function esHumano(t) { return HUMANOS.indexOf(t) !== -1 || HUMANOS.indexOf(normalizarNombreEquipo(t)) !== -1; }
-  var _IA_HOME_BONUS_MIN = 0.15;
-  var _IA_HOME_BONUS_MAX = 0.20;
+  var _IA_HOME_BONUS_MIN = 0.05;
+  var _IA_HOME_BONUS_MAX = 0.08;
 
   function _seed01(str) {
     var s = String(str || '');
@@ -3320,7 +3320,10 @@
 
   /* ── SIMULACIÓN IA (jornadas 1-38, Copa y Europa) ──────────────── */
   function simSimple(rA, rB) {
-    var p = (rA + 4) / (rA + rB + 8);
+    /* Use squared ratings so the 74-85 range creates meaningful differences:
+       e.g. Real Madrid (85) vs Alavés (74): 85²/(85²+74²) = 0.569 (>0.56 → high scoring mode)
+       vs Athletic (79) vs Espanyol (76): 79²/(79²+76²) = 0.519 (balanced match) */
+    var p = (rA * rA) / (rA * rA + rB * rB);
     function goles(prob) {
       var r = Math.random();
       if (prob > 0.56) {

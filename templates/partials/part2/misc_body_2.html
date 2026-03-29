@@ -1690,11 +1690,14 @@
 <button class="pp-back-btn" onclick="document.getElementById('prepartido-overlay').classList.remove('show')">← VOLVER</button>
 <div class="pp-title-row">
 <span class="pp-icon">📋</span>
-<span class="pp-title">CONFIG. PARTIDO</span>
+<span class="pp-title">PANTALLA DE PREVIA</span>
 </div>
 </div>
-<div class="pp-list" id="pp-list"></div>
-<button class="pp-confirm-btn" disabled="" id="pp-confirm-btn" onclick="window._ppConfirm()">✓ LISTO · CONTINUAR</button>
+<div class="pp-env" id="pp-env"></div>
+<div class="pp-vs" id="pp-vs"></div>
+<div class="pp-alerts" id="pp-alerts"></div>
+<div class="pp-list pp-list-h" id="pp-list"></div>
+<button class="pp-confirm-btn" disabled="" id="pp-confirm-btn" onclick="window._ppConfirm()">🎮 CONFIRMAR CONFIGURACIÓN</button>
 </div>
 </div>
 
@@ -2877,6 +2880,41 @@
     if (!inserted) list.appendChild(row);
   }
 
+
+  function _mlPlayUiTone(kind) {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = window.__mlAudioCtx || (window.__mlAudioCtx = new Ctx());
+      var o = ctx.createOscillator();
+      var g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      var t = ctx.currentTime;
+      if (kind === 'click') { o.frequency.setValueAtTime(1100, t); g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05); o.start(t); o.stop(t + 0.05); return; }
+      if (kind === 'start') { o.frequency.setValueAtTime(680, t); g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9); o.start(t); o.stop(t + 0.9); return; }
+      if (kind === 'final') {
+        [0,0.28,0.56].forEach(function(d,i){
+          var oo=ctx.createOscillator(), gg=ctx.createGain(); oo.connect(gg); gg.connect(ctx.destination);
+          var tt=t+d; oo.frequency.setValueAtTime(i===2?620:820, tt); gg.gain.setValueAtTime(0.07, tt); gg.gain.exponentialRampToValueAtTime(0.0001, tt + (i===2?0.6:0.18)); oo.start(tt); oo.stop(tt + (i===2?0.6:0.18));
+        });
+      }
+    } catch(_) {}
+  }
+
+  function _mlShowEventFlash(text, cssClass) {
+    var ov = document.getElementById('ml-event-fx-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'ml-event-fx-overlay';
+      ov.innerHTML = '<div id="ml-event-fx-text"></div>';
+      document.body.appendChild(ov);
+    }
+    var tx = document.getElementById('ml-event-fx-text');
+    if (tx) tx.textContent = text;
+    ov.className = 'show ' + (cssClass || 'goal');
+    setTimeout(function(){ ov.className = ''; }, 5000);
+  }
+
   function _mlRenderTimerGen(mk) {
     var st = _mlSt(mk);
     var btn = document.getElementById('ml-timer-'+mk);
@@ -2916,6 +2954,8 @@
       st.events.push(ev);
       var tName = ev.team==='a' ? st.home : st.away;
       _mlAddActaRow(mk, ev.min, ev.ico, ev.name, ev.num, tName, ev.type, evId);
+      if (ev.type === 'gol' || ev.type === 'falta-gol' || ev.type === 'pen-gol' || ev.type === 'propia') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
+      if (ev.type === 'roja' || ev.type === 'd-amarilla') _mlShowEventFlash('EXPULSIÓN','red');
     });
   }
 
@@ -3000,7 +3040,7 @@
     var st = _mlSt(mk);
     if (st.finished) return;
     if (st.timerRunning) { clearInterval(st.timerInterval); st.timerRunning=false; _mlRenderTimerGen(mk); }
-    else { st.timerRunning=true; _mlStartIntervalGen(mk); }
+    else { if (!st.kickoffDone) { st.kickoffDone = true; _mlPlayUiTone('start'); } st.timerRunning=true; _mlStartIntervalGen(mk); }
   };
   window.mlActivateETGen = function(mk) {
     var st = _mlSt(mk);
@@ -3058,6 +3098,7 @@
         return;
       }
     }
+    _mlPlayUiTone('final');
     _mlFinishMatchGen(mk, winner);
   };
   function _mlFinishMatchGen(mk, winner) {
@@ -3165,6 +3206,8 @@
     var scB=document.getElementById('sc-'+mk+'-b'); if(scB)scB.textContent=st.sc.b;
     var id=Date.now();
     st.events.push({type:evt.type,label:evt.label,team:team,num:num,name:name,min:min,ico:ico,id:id});
+    if (evt.type === 'gol' || evt.type === 'falta-gol' || evt.type === 'pen-gol' || evt.type === 'propia') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
+    if (evt.type === 'roja' || evt.type === 'd-amarilla') _mlShowEventFlash('EXPULSIÓN','red');
     var list=document.getElementById('ml-acta-list-'+mk);
     if(list){
       var emp=list.querySelector('.ml-acta-empty'); if(emp)emp.remove();

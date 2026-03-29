@@ -1934,12 +1934,15 @@ window.mlSimulate_j1m10=function(){
     'mallorca-screen': 'Mallorca',
     'elche-screen': 'Elche CF',
     'valencia-screen': 'Valencia CF',
-    'rayo-screen': 'Rayo Vallecano'
+    'rayo-screen': 'Rayo Vallecano',
+    'athletic-screen': 'Athletic Club',
+    'betis-screen': 'Real Betis',
+    'sociedad-screen': 'Real Sociedad'
   };
 
-  
 
-  var STAT_CLASS_MAP = {
+
+var STAT_CLASS_MAP = {
     'gol': 'ps-gol',
     'yel': 'ps-yel',
     'red': 'ps-red',
@@ -2406,10 +2409,10 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
   var LIGA_TEAMS_EQ = [
     {name:"Real Madrid",     ico:"⚪",  screen:"s-madrid"},
     {name:"FC Barcelona",    ico:"🔵",  screen:"s-barca"},
-    {name:"Athletic Club",   ico:"🔴",  screen:null},
+    {name:"Athletic Club",   ico:"🔴",  screen:"athletic-screen"},
     {name:"Atlético Madrid", ico:"🔴",  screen:"s-atletico"},
-    {name:"Real Betis",      ico:"🟢",  screen:null},
-    {name:"Real Sociedad",   ico:"🔵",  screen:null},
+    {name:"Real Betis",      ico:"🟢",  screen:"betis-screen"},
+    {name:"Real Sociedad",   ico:"🔵",  screen:"sociedad-screen"},
     {name:"Sevilla FC",      ico:"⚪",  screen:"s-sevilla"},
     {name:"Villarreal CF",   ico:"🟡",  screen:"s-villarreal"},
     {name:"Getafe CF",       ico:"🔵",  screen:"s-getafe"},
@@ -3416,7 +3419,10 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     'mallorca-screen': 'Mallorca',
     'elche-screen': 'Elche CF',
     'valencia-screen': 'Valencia CF',
-    'rayo-screen': 'Rayo Vallecano'
+    'rayo-screen': 'Rayo Vallecano',
+    'athletic-screen': 'Athletic Club',
+    'betis-screen': 'Real Betis',
+    'sociedad-screen': 'Real Sociedad'
   };
 
   var STAT_CLASS_MAP = {
@@ -5082,7 +5088,10 @@ var SCREEN_SQUAD_MAP = {
   'mallorca-screen': 'Mallorca',
   'elche-screen':    'Elche CF',
   'valencia-screen': 'Valencia CF',
-  'rayo-screen':     'Rayo Vallecano'
+  'rayo-screen':     'Rayo Vallecano',
+  'athletic-screen': 'Athletic Club',
+  'betis-screen':    'Real Betis',
+  'sociedad-screen': 'Real Sociedad'
 };
 
 // Sincronizar al abrir cada pantalla de equipo

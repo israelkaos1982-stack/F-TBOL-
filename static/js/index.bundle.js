@@ -3942,6 +3942,12 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var listYel = document.getElementById('sancion-ov-list-yel');
     var listRed = document.getElementById('sancion-ov-list-red');
     var listInj = document.getElementById('sancion-ov-list-inj');
+    var envEl   = document.getElementById('sancion-ov-env');
+    var teamAEl = document.getElementById('sancion-ov-team-a');
+    var teamBEl = document.getElementById('sancion-ov-team-b');
+    var shieldA = document.getElementById('sancion-ov-shield-a');
+    var shieldB = document.getElementById('sancion-ov-shield-b');
+    var valEl   = document.getElementById('sancion-ov-validation');
     if (!listYel) { if (onConfirm) onConfirm(); return; }
 
     // Añadir jornada/ronda al label de competición
@@ -3965,6 +3971,71 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
     if (compLbl) compLbl.textContent = compLabel;
     window._sancionCallback = onConfirm || null;
+
+    var mk = window._ppMatchKey || null;
+    if (mk) {
+      var venueBar = document.getElementById('venue-bar-' + mk);
+      var estadio = 'Estadio por definir';
+      var tiempo = 'Soleado';
+      var estacion = 'Verano';
+      if (venueBar) {
+        var venueName = venueBar.querySelector('.ml-venue-name');
+        var weatherEl = venueBar.querySelector('.ml-venue-weather');
+        if (venueName && venueName.textContent) estadio = venueName.textContent.trim();
+        if (weatherEl && weatherEl.textContent) {
+          var wtxt = weatherEl.textContent.replace(/\s+/g, ' ').trim();
+          var noEmoji = wtxt.replace(/[\u2600-\u27FF\uFE0F]|\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDFFF]/g, '').trim();
+          var wparts = noEmoji.split('\u00B7');
+          if (wparts.length >= 2) {
+            tiempo = wparts[0].trim() || tiempo;
+            estacion = wparts[1].trim() || estacion;
+          }
+        }
+      }
+      if (envEl) envEl.textContent = '🏟️ ' + estadio + ' — ❄️ Estación: ' + estacion + ' — 🌦️ Clima: ' + tiempo;
+
+      var wrap = document.getElementById('mlw-' + mk);
+      if (wrap) {
+        var teams = wrap.querySelectorAll('.ml-team');
+        if (teams && teams.length >= 2) {
+          var aName = teams[0].querySelector('.ml-team-name');
+          var bName = teams[1].querySelector('.ml-team-name');
+          var aImg  = teams[0].querySelector('.ml-team-svg, img');
+          var bImg  = teams[1].querySelector('.ml-team-svg, img');
+          if (teamAEl && aName) teamAEl.textContent = aName.textContent.trim();
+          if (teamBEl && bName) teamBEl.textContent = bName.textContent.trim();
+          if (shieldA && aImg && aImg.src) shieldA.src = aImg.src;
+          if (shieldB && bImg && bImg.src) shieldB.src = bImg.src;
+        }
+      }
+
+      var ballName = 'Ligue 1';
+      var bwrap = document.getElementById('ball-wrap-' + mk);
+      if (bwrap) {
+        var bn = bwrap.querySelector('.ml-ball-name');
+        if (bn && bn.textContent) ballName = bn.textContent.trim();
+      }
+      var isHvH = false;
+      var mkWrap = document.getElementById('mlw-' + mk);
+      if (mkWrap) isHvH = mkWrap.classList.contains('hvh');
+      var duration = isHvH ? '10 min' : '8 min';
+      var rivalState = isHvH ? 'Rival Estado ➡️ ✅' : 'Rival Estado 🤖 ✅';
+      if (valEl) {
+        valEl.innerHTML =
+          '<div class="sancion-val-item"><div class="sancion-val-label">Dificultad</div><div class="sancion-val-value">Nivel CRACK ✅</div></div>' +
+          '<div class="sancion-val-item"><div class="sancion-val-label">Forma 🏠</div><div class="sancion-val-value">Tu Estado ⬆️ ✅</div></div>' +
+          '<div class="sancion-val-item"><div class="sancion-val-label">Forma 🚀</div><div class="sancion-val-value">' + rivalState + '</div></div>' +
+          '<div class="sancion-val-item"><div class="sancion-val-label">Tiempo</div><div class="sancion-val-value">' + duration + ' ✅</div></div>' +
+          '<div class="sancion-val-item"><div class="sancion-val-label">Balón</div><div class="sancion-val-value">' + ballName + ' ✅</div></div>';
+      }
+    } else {
+      if (envEl) envEl.textContent = '🏟️ Estadio por definir — ❄️ Estación: Verano — 🌦️ Clima: Soleado';
+      if (teamAEl) teamAEl.textContent = 'EQUIPO A';
+      if (teamBEl) teamBEl.textContent = 'EQUIPO B';
+      if (shieldA) shieldA.removeAttribute('src');
+      if (shieldB) shieldB.removeAttribute('src');
+      if (valEl) valEl.innerHTML = '';
+    }
 
     // Separar sanciones por tipo
     var san = sanciones.filter(function(s){ return s.tipo === 'amarilla' || !s.tipo; });
@@ -4017,12 +4088,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
 
     var hayBajas = san.length || exp.length || injList.length;
-    // ── SOLO mostrar el overlay si hay algo que informar ──────────
-    if (!hayBajas) {
-      if (onConfirm) onConfirm();
-      return;
+    if (warnEl) {
+      if (hayBajas) {
+        warnEl.style.display = 'block';
+        warnEl.textContent = '⚠️ Estos jugadores NO pueden participar en este partido.';
+      } else {
+        warnEl.style.display = 'block';
+        warnEl.textContent = '✅ Sin bajas críticas: configuración validada y lista para confirmar.';
+      }
     }
-    if (warnEl) warnEl.style.display = hayBajas ? 'block' : 'none';
 
     document.getElementById('sancion-overlay').classList.add('show');
     window.scrollTo(0, 0);
@@ -6362,4 +6436,3 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   console.log('[eFootball] Auto-eval objetivos activado ✓');
 })();
-

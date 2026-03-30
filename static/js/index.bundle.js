@@ -4672,7 +4672,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   window._ppToggle = function(id) {
     _ppChecked[id] = !_ppChecked[id];
     _ppClickSfx();
-    _renderPreviaMeta(_ppMatchKey, false);
+    if (_ppMatchKey) _renderPreviaMeta(_ppMatchKey, false);
     _renderList(_ppItems);
     _updateBtn();
     // If all done, reveal venue-bar and ball immediately
@@ -4706,7 +4706,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     _renderPreviaMeta(matchKey, isHvH);
     _renderList(_ppItems);
     _updateBtn();
-    document.getElementById('prepartido-overlay').classList.add('show');
+    var ppOv = document.getElementById('prepartido-overlay');
+    if (ppOv) ppOv.classList.add('show');
     window.scrollTo(0, 0);
   };
 
@@ -4725,7 +4726,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var previaBtn = document.getElementById('ml-previa-' + _ppMatchKey);
       if (previaBtn) previaBtn.style.display = 'none';
     }
-    document.getElementById('prepartido-overlay').classList.remove('show');
+    var ppOvClose = document.getElementById('prepartido-overlay');
+    if (ppOvClose) ppOvClose.classList.remove('show');
     // Mostrar overlay de sancionados; al confirmar, revelar el timer
     var mk = _ppMatchKey;
     if (typeof window.showSancionOverlay === 'function') {

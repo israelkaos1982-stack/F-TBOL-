@@ -4546,6 +4546,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 (function(){
 
   // ── PRE-PARTIDO OVERLAY ──────────────────────────────────────────
+  // === PREVIA custom block (conflict-safe) ===
   var _ppMatchKey = null;
   var _ppCompKey  = null;
   var _ppChecked  = {};
@@ -4753,6 +4754,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
   };
 
+  // === /PREVIA custom block ===
 })();
 
 

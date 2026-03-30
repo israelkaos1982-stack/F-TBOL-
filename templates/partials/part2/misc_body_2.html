@@ -1690,11 +1690,14 @@
 <button class="pp-back-btn" onclick="document.getElementById('prepartido-overlay').classList.remove('show')">← VOLVER</button>
 <div class="pp-title-row">
 <span class="pp-icon">📋</span>
-<span class="pp-title">CONFIG. PARTIDO</span>
+<span class="pp-title">PANTALLA DE PREVIA</span>
 </div>
 </div>
-<div class="pp-list" id="pp-list"></div>
-<button class="pp-confirm-btn" disabled="" id="pp-confirm-btn" onclick="window._ppConfirm()">✓ LISTO · CONTINUAR</button>
+<div class="pp-env" id="pp-env"></div>
+<div class="pp-vs" id="pp-vs"></div>
+<div class="pp-alerts" id="pp-alerts"></div>
+<div class="pp-list pp-list-h" id="pp-list"></div>
+<button class="pp-confirm-btn" disabled="" id="pp-confirm-btn" onclick="window._ppConfirm()">🎮 CONFIRMAR CONFIGURACIÓN</button>
 </div>
 </div>
 
@@ -2726,7 +2729,8 @@
           +'<div class="ml-score"><span id="sc-'+mk+'-a">0</span>–<span id="sc-'+mk+'-b">0</span></div>'
           +'<div class="ml-pen-score" id="pen-score-'+mk+'" style="display:none;">⚽ 0–0 (pen.)</div>'
           +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
-          +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
+          +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶️ INICIAR</button>'
+          +'<div class="ml-final-blink" id="ml-final-'+mk+'" style="display:none;">FINAL</div>'
         +'</div>'
         +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldB+'<div class="ml-team-name">'+hiA+au+'</div></div>'
       +'</div>'
@@ -2877,6 +2881,97 @@
     if (!inserted) list.appendChild(row);
   }
 
+
+  function _mlPlayUiTone(kind) {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = window.__mlAudioCtx || (window.__mlAudioCtx = new Ctx());
+      var o = ctx.createOscillator();
+      var g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      var t = ctx.currentTime;
+      if (kind === 'click') { o.frequency.setValueAtTime(1100, t); g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05); o.start(t); o.stop(t + 0.05); return; }
+      if (kind === 'start') { o.frequency.setValueAtTime(680, t); g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9); o.start(t); o.stop(t + 0.9); return; }
+      if (kind === 'goal') { o.frequency.setValueAtTime(420, t); g.gain.setValueAtTime(0.09, t); o.frequency.linearRampToValueAtTime(760, t+0.35); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2); o.start(t); o.stop(t + 1.2); return; }
+      if (kind === 'red') { o.frequency.setValueAtTime(220, t); g.gain.setValueAtTime(0.08, t); o.frequency.linearRampToValueAtTime(140, t+0.5); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8); o.start(t); o.stop(t + 0.8); return; }
+      if (kind === 'injury') { o.frequency.setValueAtTime(160, t); g.gain.setValueAtTime(0.06, t); o.frequency.linearRampToValueAtTime(120, t+0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.0); o.start(t); o.stop(t + 1.0); return; }
+      if (kind === 'final') {
+        [0,0.28,0.56].forEach(function(d,i){
+          var oo=ctx.createOscillator(), gg=ctx.createGain(); oo.connect(gg); gg.connect(ctx.destination);
+          var tt=t+d; oo.frequency.setValueAtTime(i===2?620:820, tt); gg.gain.setValueAtTime(0.07, tt); gg.gain.exponentialRampToValueAtTime(0.0001, tt + (i===2?0.6:0.18)); oo.start(tt); oo.stop(tt + (i===2?0.6:0.18));
+        });
+      }
+    } catch(_) {}
+  }
+
+  function _mlShowEventFlash(text, cssClass) {
+    var ov = document.getElementById('ml-event-fx-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'ml-event-fx-overlay';
+      ov.innerHTML = '<div id="ml-event-fx-text"></div>';
+      document.body.appendChild(ov);
+    }
+    var tx = document.getElementById('ml-event-fx-text');
+    if (tx) tx.textContent = text;
+    ov.className = 'show ' + (cssClass || 'goal');
+    setTimeout(function(){ ov.className = ''; }, 5000);
+  }
+
+
+  function _mlPickHumanInjury(st) {
+    var homeHuman = typeof esHumano === 'function' && esHumano(st.home);
+    var awayHuman = typeof esHumano === 'function' && esHumano(st.away);
+    if (!homeHuman && !awayHuman) return null;
+    var team = homeHuman && awayHuman ? (Math.random()<0.5 ? st.home : st.away) : (homeHuman ? st.home : st.away);
+    var sq = (window.SQUAD_REGISTRY && window.SQUAD_REGISTRY[team]) || [];
+    var players = sq.filter(function(p){ return p && !p.h; }).sort(function(a,b){ return (b[3]||0) - (a[3]||0); }).slice(0,18);
+    if (!players.length) return null;
+    var pick = players[Math.floor(Math.random()*players.length)];
+    var sev = [{g:1,ico:'🩹',lbl:'Leve',p:1+Math.floor(Math.random()*2)},{g:2,ico:'💉',lbl:'Media',p:3+Math.floor(Math.random()*3)},{g:3,ico:'🚑',lbl:'Grave',p:6+Math.floor(Math.random()*4)}][Math.floor(Math.random()*3)];
+    return {team:team,num:pick[0]||'',name:pick[1]||'Jugador',sev:sev};
+  }
+
+  function _mlShowInjuryBlocker(mk, data, onDone) {
+    var ov = document.getElementById('ml-injury-overlay');
+    if (!ov) {
+      ov = document.createElement('div'); ov.id='ml-injury-overlay';
+      ov.innerHTML = '<div class="ml-injury-card"><div id="ml-injury-shield"></div><div class="ml-injury-title">¡¡¡ JUGADOR LESIONADO !!!</div><div id="ml-injury-desc"></div><button id="ml-injury-ok">🔄 JUGADOR SUSTITUIDO</button></div>';
+      document.body.appendChild(ov);
+    }
+    var logo = (typeof getLogoEquipo==='function' && getLogoEquipo(data.team)) || '';
+    var sh = document.getElementById('ml-injury-shield'); if (sh) sh.innerHTML = logo ? '<img src="'+logo+'" alt="'+data.team+'"/>' : '🚑';
+    var ds = document.getElementById('ml-injury-desc'); if (ds) ds.innerHTML = data.sev.ico + ' ' + data.name + ' · ' + data.sev.p + ' partidos de baja';
+    ov.classList.add('show');
+    _mlPlayUiTone('injury');
+    var ok = document.getElementById('ml-injury-ok');
+    if (ok) ok.onclick = function(){ ov.classList.remove('show'); if (typeof onDone==='function') onDone(); };
+  }
+
+  function _mlMaybeTriggerHumanInjury(mk, curMin) {
+    var st = _mlSt(mk);
+    if (st.injuryDone || curMin < 1 || curMin > 75) return;
+    if (!(typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away)))) return;
+    if (Math.random() > 0.00008) return;
+    var inj = _mlPickHumanInjury(st);
+    if (!inj) return;
+    st.injuryDone = true;
+    var id = Date.now();
+    var teamCode = inj.team === st.home ? 'a' : 'b';
+    var min = Math.max(1, Math.floor(st.timerSec/60));
+    st.events.push({type:'lesion',label:'Lesión',team:teamCode,num:inj.num,name:inj.name,min:min,ico:inj.sev.ico,id:id});
+    _mlAddActaRow(mk, min, inj.sev.ico, inj.name, inj.num, inj.team, 'lesion', id);
+    window.LESION_STORE = window.LESION_STORE || {};
+    window.BAJA_STORE = window.BAJA_STORE || {};
+    window.LESION_STORE[inj.name] = { equipo: inj.team, grado: inj.sev.g, gradoNombre: inj.sev.lbl, gradoEmoji: inj.sev.ico, descripcion: 'Lesión en partido', partidos: inj.sev.p };
+    window.BAJA_STORE[inj.name] = { tipo:'lesion', liga: inj.sev.p, copa: 0, europa: 0 };
+    var wasRunning = st.timerRunning;
+    if (wasRunning) { clearInterval(st.timerInterval); st.timerRunning = false; _mlRenderTimerGen(mk); }
+    _mlShowEventFlash('¡¡¡ JUGADOR LESIONADO !!!','red');
+    _mlShowInjuryBlocker(mk, inj, function(){ if (wasRunning && !st.finished) { st.timerRunning = true; _mlStartIntervalGen(mk); } });
+  }
+
   function _mlRenderTimerGen(mk) {
     var st = _mlSt(mk);
     var btn = document.getElementById('ml-timer-'+mk);
@@ -2886,7 +2981,10 @@
     var normalMax = st.etDone ? 7200 : 5400;
     var fullMax = normalMax + stoppageAdded * 60;
     var min = Math.floor(rawSec/60);
-    if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
+    var finalBadge = document.getElementById('ml-final-'+mk);
+    if (st.finished) { btn.style.display='none'; if (finalBadge) finalBadge.style.display=''; return; }
+    if (st.timeUp) { btn.style.display='none'; if (finalBadge) finalBadge.style.display=''; return; }
+    btn.style.display='';
     var lbl = st.timerRunning ? '⏸ ' : (rawSec>=fullMax ? '🔁 ' : '▶ ');
     // Show stoppage minutes like 90+2'
     var baseMax = st.etDone ? 120 : 90;
@@ -2916,6 +3014,8 @@
       st.events.push(ev);
       var tName = ev.team==='a' ? st.home : st.away;
       _mlAddActaRow(mk, ev.min, ev.ico, ev.name, ev.num, tName, ev.type, evId);
+      if (ev.type === 'gol' || ev.type === 'falta-gol' || ev.type === 'pen-gol' || ev.type === 'propia') { _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal'); _mlPlayUiTone('goal'); }
+      if (ev.type === 'roja' || ev.type === 'd-amarilla') { _mlShowEventFlash('EXPULSIÓN','red'); _mlPlayUiTone('red'); }
     });
   }
 
@@ -2958,7 +3058,7 @@
     _mlPreGenAIEvents(mk);
     // Determine stoppage time upfront if normal time
     if (!st.stoppageSec && !st.etDone) {
-      st.stoppageSec = Math.floor(Math.random()*8)+1; // 1-8 extra minutes
+      st.stoppageSec = Math.floor(Math.random()*6)+1; // 1-6 extra minutes
     }
     st.timerInterval = setInterval(function(){
       st.timerSec += _ML_TICK_SEC;
@@ -2967,6 +3067,7 @@
       var stoppageMax = normalMax + (st.stoppageSec||0)*60;
       // Fire pending AI events
       _mlFirePendingEvents(mk, curMin);
+      _mlMaybeTriggerHumanInjury(mk, curMin);
       // Half-time marker at 45'
       if (!st.htDone && st.timerSec >= 2700) {
         st.htDone = true;
@@ -2986,7 +3087,7 @@
         if (list2) { var m2 = document.createElement('div'); m2.className='ml-ht'; m2.textContent='— DESCANSO PRÓRROGA (105 min) —'; list2.appendChild(m2); }
       }
       if (st.timerSec >= stoppageMax) {
-        st.timerSec = stoppageMax; clearInterval(st.timerInterval); st.timerRunning = false;
+        st.timerSec = stoppageMax; st.timeUp = true; clearInterval(st.timerInterval); st.timerRunning = false;
         // Auto-check penalties at end of ET
         if (st.etDone) {
           if (st.sc.a === st.sc.b) { window.mlShowPenPanelGen(mk); }
@@ -3000,7 +3101,7 @@
     var st = _mlSt(mk);
     if (st.finished) return;
     if (st.timerRunning) { clearInterval(st.timerInterval); st.timerRunning=false; _mlRenderTimerGen(mk); }
-    else { st.timerRunning=true; _mlStartIntervalGen(mk); }
+    else { if (!st.kickoffDone) { st.kickoffDone = true; _mlPlayUiTone('start'); } var fb=document.getElementById('ml-final-'+mk); if(fb) fb.style.display='none'; st.timeUp=false; st.timerRunning=true; _mlStartIntervalGen(mk); }
   };
   window.mlActivateETGen = function(mk) {
     var st = _mlSt(mk);
@@ -3051,13 +3152,14 @@
         var sqB=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.away])||[];
         _genActiveMk=mk;
         window.showMvpForceGen(mk, st.home, st.away, sqA, sqB, st.sc.a, st.sc.b, function(team,num,name){
-          var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+          var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐','clean-sheet':'🧤'};
           st.events.push({min:90,label:'MVP del Partido',type:'mvp',team:team,num:num,name:name,ico:'⭐',id:Date.now()});
           _mlFinishMatchGen(mk, winner);
         });
         return;
       }
     }
+    _mlPlayUiTone('final');
     _mlFinishMatchGen(mk, winner);
   };
   function _mlFinishMatchGen(mk, winner) {
@@ -3156,7 +3258,7 @@
     var evt=_genPendingEvt; _genPendingEvt=null;
     var st=_mlSt(mk);
     var min=Math.min(st.etDone?120:90,Math.floor(st.timerSec/60));
-    var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+    var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐','clean-sheet':'🧤'};
     var ico=icos[evt.type]||'📋';
     var goalTypes=['gol','falta-gol','pen-gol'];
     if(goalTypes.indexOf(evt.type)!==-1){st.sc[team]++;}
@@ -3165,6 +3267,8 @@
     var scB=document.getElementById('sc-'+mk+'-b'); if(scB)scB.textContent=st.sc.b;
     var id=Date.now();
     st.events.push({type:evt.type,label:evt.label,team:team,num:num,name:name,min:min,ico:ico,id:id});
+    if (evt.type === 'gol' || evt.type === 'falta-gol' || evt.type === 'pen-gol' || evt.type === 'propia') { _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal'); _mlPlayUiTone('goal'); }
+    if (evt.type === 'roja' || evt.type === 'd-amarilla') { _mlShowEventFlash('EXPULSIÓN','red'); _mlPlayUiTone('red'); }
     var list=document.getElementById('ml-acta-list-'+mk);
     if(list){
       var emp=list.querySelector('.ml-acta-empty'); if(emp)emp.remove();
@@ -4506,7 +4610,7 @@
     <div class="ml-ev-ov-card c-yel" onclick="genEvPick('Tarjeta Amarilla','amarilla')"><span class="ml-ev-ov-ico">🟨</span><span class="ml-ev-ov-lbl">Tarjeta Amarilla</span></div>
     <div class="ml-ev-ov-card c-yel" onclick="genEvPick('Doble Amarilla','d-amarilla')"><span class="ml-ev-ov-ico">🟨🟥</span><span class="ml-ev-ov-lbl">Doble Amarilla</span></div>
     <div class="ml-ev-ov-card c-red" onclick="genEvPick('Roja Directa','roja')"><span class="ml-ev-ov-ico">🟥</span><span class="ml-ev-ov-lbl">Roja Directa</span></div>
-    <div class="ml-ev-ov-card c-mvp" onclick="genEvPick('MVP del Partido','mvp')"><span class="ml-ev-ov-ico">⭐</span><span class="ml-ev-ov-lbl">MVP del Partido</span></div>
+    <div class="ml-ev-ov-card c-mvp" onclick="genEvPick('Portería Imbatida','clean-sheet')"><span class="ml-ev-ov-ico">🧤</span><span class="ml-ev-ov-lbl">Portería Imbatida</span></div>
     <div class="ml-ev-ov-card" onclick="genEvPick('Lesión','lesion')"><span class="ml-ev-ov-ico">🩹</span><span class="ml-ev-ov-lbl">Lesión</span></div>
   </div>
   <button class="ml-ev-ov-close" onclick="genEvClose()">✕ Cancelar</button>

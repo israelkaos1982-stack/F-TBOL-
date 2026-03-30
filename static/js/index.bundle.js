@@ -4587,21 +4587,53 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
 
     var items = [
-      { id:'estadio',   ico:'🏟️',  lbl:'Estadio',          val:estadio },
-      { id:'estacion',  ico:'🌞',  lbl:'Estación',          val:estacion },
-      { id:'tiempo',    ico:'☀️',  lbl:'Tiempo',            val:tiempo },
-      { id:'balon',     ico:'⚽️', lbl:'Balón',             val:balon },
-      { id:'nivel',     ico:'🎮',  lbl:'Nivel',             val:nivel },
-      { id:'formaT',    ico:'⬆️',  lbl:'Forma Tuya',        val:formaT },
-      { id:'formaR',    ico:'➡️',  lbl:'Forma Rival',       val:formaR },
-      { id:'duracion',  ico:'⏱️', lbl:'Duración',          val:duracion + (isHvH ? ' vs Humano' : ' vs IA') },
-      { id:'prorroga',  ico:'⏰️', lbl:'Prórroga y Penaltis', val:prorroga },
-      { id:'sust',      ico:'🔃',  lbl:'Sustituciones',     val:sust },
-      { id:'ventanas',  ico:'🚪',  lbl:'Ventanas',          val:ventanas },
-      { id:'cambioET',  ico:'➕',  lbl:'+1 cambio Prórroga', val:prorroga === 'Sí' ? 'Sí' : 'No aplica' },
-      { id:'balon2',    ico:'⚽️', lbl:'Balón',             val:balon }
+      { id:'nivel',   ico:'🎮', lbl:'Nivel CRACK',   val:nivel },
+      { id:'formaT',  ico:'⬆️', lbl:'Tu Forma',      val:formaT },
+      { id:'formaR',  ico:'➡️', lbl:'Rival Forma',   val:formaR },
+      { id:'duracion',ico:'⏱️', lbl:'Duración',      val:duracion + (isHvH ? ' (H)' : ' (IA)') },
+      { id:'balon',   ico:'⚽️', lbl:'Balón',         val:balon }
     ];
     return items;
+  }
+
+  function _ppClickSfx() { try { var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return; var ctx=window.__ppAudio||(window.__ppAudio=new Ctx()); var o=ctx.createOscillator(); var g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); var t=ctx.currentTime; o.frequency.setValueAtTime(1180,t); g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.05); o.start(t); o.stop(t+0.05);} catch(_){} }
+
+  function _renderPreviaMeta(matchKey, isHvH) {
+    var wrap = document.getElementById('mlw-' + matchKey);
+    if (!wrap) return;
+    var home = ((wrap.querySelectorAll('.ml-team-name')[0]||{}).textContent||'LOCAL').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+    var away = ((wrap.querySelectorAll('.ml-team-name')[1]||{}).textContent||'VISITANTE').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+    var vbar = document.getElementById('venue-bar-' + matchKey);
+    var estadio='eFootball Stadium', clima='Soleado', temporada='Verano';
+    if (vbar) {
+      var nm=vbar.querySelector('.ml-venue-name'); if(nm) estadio = nm.textContent.trim();
+      var wt=vbar.querySelector('.ml-venue-weather');
+      if (wt) { var txt=wt.textContent.replace(/\s+/g,' ').trim(); var parts=txt.split('·'); if(parts[0]) clima=parts[0].replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g,'').trim()||clima; if(parts[1]) temporada=parts[1].replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]/g,'').trim()||temporada; }
+    }
+    var seasonIco = /invierno/i.test(temporada) ? '🌚' : '🌝';
+    var climaIco = /lluv/i.test(clima) ? '🌧️' : (/nieve/i.test(clima) ? '❄️' : '☀️');
+    var env = document.getElementById('pp-env');
+    if (env) env.innerHTML = '🏟️ <b>Estadio:</b> '+estadio+' · '+seasonIco+' <b>Temporada:</b> '+temporada+' · '+climaIco+' <b>Clima:</b> '+clima;
+    var vs = document.getElementById('pp-vs');
+    if (vs) {
+      var lA=(typeof getLogoEquipo==='function'&&getLogoEquipo(home))||''; var lB=(typeof getLogoEquipo==='function'&&getLogoEquipo(away))||'';
+      vs.innerHTML = '<img src="'+lA+'" alt="'+home+'"/><div class="pp-vs-mid">'+home.toUpperCase()+' VS '+away.toUpperCase()+'</div><img src="'+lB+'" alt="'+away+'"/>';
+    }
+    var alerts = document.getElementById('pp-alerts');
+    if (alerts) {
+      var bajas = window.BAJA_STORE || {};
+      var lesion = window.LESION_STORE || {};
+      function listBy(tipo, ico, title) {
+        var rows = Object.keys(bajas).filter(function(n){ return (bajas[n]&&bajas[n].tipo)===tipo; }).slice(0,6);
+        if (!rows.length) return '<div class="pp-alert-row">'+ico+' <b>'+title+':</b> Sin registros</div>';
+        return '<div class="pp-alert-row">'+ico+' <b>'+title+':</b> '+rows.map(function(n){ var b=bajas[n]||{}; var rest=(b.liga||0)+(b.copa||0)+(b.europa||0); return n+' ('+rest+'P)'; }).join(' · ')+'</div>';
+      }
+      var lesionRows = Object.keys(lesion).slice(0,6);
+      var lesionHtml = lesionRows.length
+        ? '<div class="pp-alert-row">🚑 <b>JUGADORES LESIONADOS:</b> '+lesionRows.map(function(n){ var l=lesion[n]||{}; return (l.gradoEmoji||'🩹')+' '+n+' ('+(l.partidos||1)+'P)'; }).join(' · ')+'</div>'
+        : '<div class="pp-alert-row">🚑 <b>JUGADORES LESIONADOS:</b> Sin registros</div>';
+      alerts.innerHTML = listBy('sancion','🟨','SANCIONADOS') + listBy('expulsion','🟥','EXPULSADOS') + lesionHtml;
+    }
   }
 
   function _renderList(items) {
@@ -4634,11 +4666,13 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (!btn) return;
     var done = _checkAllDone();
     btn.disabled = !done;
-    btn.textContent = done ? '✅ LISTO · CONTINUAR' : '🔳 MARCA TODOS LOS AJUSTES';
+    btn.textContent = done ? '🎮 CONFIRMAR CONFIGURACIÓN' : '🔒 COMPLETA LAS 5 CASILLAS';
   }
 
   window._ppToggle = function(id) {
     _ppChecked[id] = !_ppChecked[id];
+    _ppClickSfx();
+    _renderPreviaMeta(_ppMatchKey, false);
     _renderList(_ppItems);
     _updateBtn();
     // If all done, reveal venue-bar and ball immediately
@@ -4669,6 +4703,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var sub = document.getElementById('pp-subtitle');
     if (sub) sub.textContent = (COMP_LABELS[compKey] || compKey).toUpperCase();
 
+    _renderPreviaMeta(matchKey, isHvH);
     _renderList(_ppItems);
     _updateBtn();
     document.getElementById('prepartido-overlay').classList.add('show');

@@ -4088,12 +4088,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
 
     var hayBajas = san.length || exp.length || injList.length;
-    // ── SOLO mostrar el overlay si hay algo que informar ──────────
-    if (!hayBajas) {
-      if (onConfirm) onConfirm();
-      return;
+    if (warnEl) {
+      if (hayBajas) {
+        warnEl.style.display = 'block';
+        warnEl.textContent = '⚠️ Estos jugadores NO pueden participar en este partido.';
+      } else {
+        warnEl.style.display = 'block';
+        warnEl.textContent = '✅ Sin bajas críticas: configuración validada y lista para confirmar.';
+      }
     }
-    if (warnEl) warnEl.style.display = hayBajas ? 'block' : 'none';
 
     document.getElementById('sancion-overlay').classList.add('show');
     window.scrollTo(0, 0);

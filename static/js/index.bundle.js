@@ -4545,57 +4545,62 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
 (function(){
 
-  // ── PRE-PARTIDO OVERLAY ──────────────────────────────────────────
-  // === PREVIA custom block (conflict-safe) ===
-  var _ppMatchKey = null;
-  var _ppCompKey  = null;
-  var _ppChecked  = {};
-  var _ppItems    = [];
+// ── PRE-PARTIDO OVERLAY ──────────────────────────────────────────
+// === PREVIA custom block (conflict-safe) ===
+var _ppMatchKey = null;
+var _ppCompKey  = null;
+var _ppChecked  = {};
+var _ppItems    = [];
 
-  function _buildItems(matchKey, compKey, prorroga, duracion, isHvH) {
-    // Fixed items for Liga Jornada 1
-    var estadio  = 'eFootball Stadium';
-    var estacion = 'Verano';
-    var tiempo   = 'Soleado';
-    var balon    = "Ligue 1 McDonald's";
-    var nivel    = 'Crack';
-    var formaT   = 'Excelente';
-    var formaR   = 'Normal';
-    var sust     = '6';
-    var ventanas = '6';
+function _buildItems(matchKey, compKey, prorroga, duracion, isHvH) {
 
-    // Get real values from venue-bar if possible
-    var vbar = document.getElementById('venue-bar-' + matchKey);
-    if (vbar) {
-      var nm = vbar.querySelector('.ml-venue-name');
-      var wt = vbar.querySelector('.ml-venue-weather');
-      if (nm) estadio = nm.textContent.trim();
-      if (wt) {
-        var wtext = wt.textContent.replace(/\s+/g,' ').trim();
-        // format: "☀️ Soleado · Verano"
-        var parts = wtext.replace(/[\u2600-\u27FF\uFE0F]|\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDFFF]/g,'').trim().split('\u00B7');
-        if (parts.length >= 2) {
-          tiempo   = parts[0].trim();
-          estacion = parts[1].trim();
-        }
-      }
+  // Fixed default values
+  var estadio  = 'eFootball Stadium';
+  var estacion = 'Verano';
+  var tiempo   = 'Soleado';
+  var balon    = "Ligue 1 McDonald's";
+  var nivel    = 'Crack';
+  var formaT   = 'Excelente';
+  var formaR   = 'Normal';
+  var sust     = '6';
+  var ventanas = '6';
+
+  // Try to read real data from venue bar
+  var vbar = document.getElementById('venue-bar-' + matchKey);
+  if (vbar) {
+    var nm = vbar.querySelector('.ml-venue-name');
+    var wt = vbar.querySelector('.ml-venue-weather');
+
+    if (nm) estadio = nm.textContent.trim();
+    if (wt) {
+      // Aquí puedes procesar "wt" si lo necesitas
     }
-    // Ball name
-    var bwrap = document.getElementById('ball-wrap-' + matchKey);
-    if (bwrap) {
-      var bn = bwrap.querySelector('.ml-ball-name');
-      if (bn) balon = bn.textContent.trim();
-    }
-
-    var items = [
-      { id:'nivel',   ico:'🎮', lbl:'Nivel CRACK',   val:nivel },
-      { id:'formaT',  ico:'⬆️', lbl:'Tu Forma',      val:formaT },
-      { id:'formaR',  ico:'➡️', lbl:'Rival Forma',   val:formaR },
-      { id:'duracion',ico:'⏱️', lbl:'Duración',      val:duracion + (isHvH ? ' (H)' : ' (IA)') },
-      { id:'balon',   ico:'⚽️', lbl:'Balón',         val:balon }
-    ];
-    return items;
   }
+
+  // All items (corregido y sin duplicados)
+  var items = [
+    { id:'estadio',   ico:'🏟️', lbl:'Estadio',             val:estadio },
+    { id:'estacion',  ico:'🌞', lbl:'Estación',             val:estacion },
+    { id:'tiempo',    ico:'☀️', lbl:'Tiempo',               val:tiempo },
+
+    { id:'balon',     ico:'⚽️', lbl:'Balón',                val:balon },
+
+    { id:'nivel',     ico:'🎮', lbl:'Nivel',                val:nivel },
+
+    { id:'formaT',    ico:'⬆️', lbl:'Forma Tuya',           val:formaT },
+    { id:'formaR',    ico:'➡️', lbl:'Forma Rival',          val:formaR },
+
+    { id:'duracion',  ico:'⏱️', lbl:'Duración',             val:duracion + (isHvH ? ' vs Humano' : ' vs IA') },
+
+    { id:'prorroga',  ico:'⏰️', lbl:'Prórroga y Penaltis',  val:prorroga },
+    { id:'cambioET',  ico:'➕', lbl:'+1 cambio Prórroga',    val:prorroga === 'Sí' ? 'Sí' : 'No aplica' },
+
+    { id:'sust',      ico:'🔃', lbl:'Sustituciones',         val:sust },
+    { id:'ventanas',  ico:'🚪', lbl:'Ventanas',              val:ventanas }
+  ];
+
+  return items;
+}
 
   function _ppClickSfx() { try { var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return; var ctx=window.__ppAudio||(window.__ppAudio=new Ctx()); var o=ctx.createOscillator(); var g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); var t=ctx.currentTime; o.frequency.setValueAtTime(1180,t); g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.05); o.start(t); o.stop(t+0.05);} catch(_){} }
 

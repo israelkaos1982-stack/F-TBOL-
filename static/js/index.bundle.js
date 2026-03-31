@@ -3362,14 +3362,30 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   var TEAM_ALIASES = {
     'real madrid':'Real Madrid',
+    'real madrid cf':'Real Madrid',
     'fc barcelona':'FC Barcelona',
     'barcelona':'FC Barcelona',
+    'barca':'FC Barcelona',
+    'barça':'FC Barcelona',
     'athletic club':'Athletic Club',
     'real betis':'Real Betis',
     'betis':'Real Betis',
     'real sociedad':'Real Sociedad',
     'atletico madrid':'Atlético Madrid',
     'atlético madrid':'Atlético Madrid',
+    'atletico de madrid':'Atlético Madrid',
+    'atlético de madrid':'Atlético Madrid',
+    'arsenal':'Arsenal',
+    'arsenal fc':'Arsenal',
+    'bayern munich':'Bayern Munich',
+    'bayern de munich':'Bayern Munich',
+    'bayern de múnich':'Bayern Munich',
+    'fc bayern':'Bayern Munich',
+    'fc bayern munich':'Bayern Munich',
+    'sporting cp':'Sporting CP',
+    'sporting de portugal':'Sporting CP',
+    'sporting lisboa':'Sporting CP',
+    'sporting de lisboa':'Sporting CP',
     'albacete bp':'Albacete BP',
     'villarreal':'Villarreal CF',
     'villarreal cf':'Villarreal CF',
@@ -3440,7 +3456,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   function canonicalTeamName(name){
     var key = norm(name);
-    return (window.TEAM_ALIASES||{})[key] || String(name || '').trim();
+    var aliases = Object.assign({}, TEAM_ALIASES, window.TEAM_ALIASES || {});
+    return aliases[key] || String(name || '').trim();
   }
 
   function ensureSpan(row, cls){

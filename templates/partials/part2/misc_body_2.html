@@ -2309,6 +2309,61 @@
   window.humanIcon = humanIcon;
   var LS_KEY  = 'ef_liga38_v4';
   var LS_SCHEDULE_KEY = 'ef_liga38_schedule_v2';
+  var sharedLigaResultsCache = null;
+  var sharedLigaScheduleCache = null;
+
+  function isValidLigaSchedule(schedule) {
+    if (!Array.isArray(schedule) || schedule.length !== 38) return false;
+    return schedule.every(function(round) {
+      return Array.isArray(round) && round.length === 10 && round.every(function(match) {
+        return Array.isArray(match) && match.length === 2 && match[0] && match[1];
+      });
+    });
+  }
+
+  function persistSharedLigaState(patch) {
+    if (!patch || typeof patch !== 'object') return Promise.resolve(false);
+    return fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    }).then(function(res) {
+      return res.ok;
+    }).catch(function() {
+      return false;
+    });
+  }
+
+  function refreshLigaViewsAfterSync() {
+    if (typeof window.populateLigaCal === 'function') window.populateLigaCal();
+    if (typeof window.populateCalendar === 'function') window.populateCalendar();
+    if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
+    if (typeof window.buildIAresults === 'function') window.buildIAresults();
+    if (typeof window.refreshMainCalendarCards === 'function') window.refreshMainCalendarCards();
+  }
+
+  function hydrateLigaStateFromBackend() {
+    return fetch('/api/state')
+      .then(function(res) { return res.ok ? res.json() : null; })
+      .then(function(payload) {
+        var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : null;
+        if (!state) return;
+
+        if (state.liga_results && typeof state.liga_results === 'object') {
+          sharedLigaResultsCache = state.liga_results;
+          try { localStorage.setItem(LS_KEY, JSON.stringify(sharedLigaResultsCache)); } catch (e) {}
+        }
+
+        if (isValidLigaSchedule(state.liga_schedule)) {
+          sharedLigaScheduleCache = state.liga_schedule;
+          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(sharedLigaScheduleCache)); } catch (e) {}
+          if (typeof window.setLigaSchedule === 'function') window.setLigaSchedule(sharedLigaScheduleCache, false);
+        }
+
+        refreshLigaViewsAfterSync();
+      })
+      .catch(function(){});
+  }
 
   function mezclarEquipos(names) {
     var shuffled = (Array.isArray(names) ? names.slice() : []).filter(Boolean);
@@ -2326,22 +2381,20 @@
   }
 
   function loadSchedule() {
+    if (isValidLigaSchedule(sharedLigaScheduleCache)) return sharedLigaScheduleCache;
     try {
       var raw = JSON.parse(localStorage.getItem(LS_SCHEDULE_KEY) || 'null');
-      if (!Array.isArray(raw) || raw.length !== 38) return null;
-      var valid = raw.every(function(round){
-        return Array.isArray(round) && round.length === 10 && round.every(function(match){
-          return Array.isArray(match) && match.length === 2 && match[0] && match[1];
-        });
-      });
-      return valid ? raw : null;
+      return isValidLigaSchedule(raw) ? raw : null;
     } catch (e) {
       return null;
     }
   }
 
   function saveSchedule(schedule) {
+    if (!isValidLigaSchedule(schedule)) return;
+    sharedLigaScheduleCache = schedule;
     try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(schedule)); } catch (e) {}
+    persistSharedLigaState({ liga_schedule: schedule });
   }
 
   function setLigaSchedule(schedule, persist) {
@@ -2356,6 +2409,8 @@
     if (!confirm('¿Reiniciar todos los resultados de Liga EA Sports? Se eliminarán resultados, clasificación y jornadas para generar una nueva temporada.')) return;
 
     try { localStorage.removeItem(LS_KEY); } catch(e){}
+    sharedLigaResultsCache = {};
+    saveResults({});
 
     // Limpiar resultados/estados acumulados de jornada
     if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
@@ -2404,13 +2459,23 @@
   };
   var SCHEDULE = loadSchedule() || generarCalendario(TEAMS);
   window.LIGA_SCHEDULE = SCHEDULE;
+  hydrateLigaStateFromBackend();
 
   /* ── PERSISTENCIA ────────────────────────────────── */
   function loadResults() {
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { return {}; }
+    if (sharedLigaResultsCache && typeof sharedLigaResultsCache === 'object') return sharedLigaResultsCache;
+    try {
+      var raw = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+      sharedLigaResultsCache = (raw && typeof raw === 'object') ? raw : {};
+    } catch (e) {
+      sharedLigaResultsCache = {};
+    }
+    return sharedLigaResultsCache;
   }
   function saveResults(r) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(r)); } catch (e) {}
+    sharedLigaResultsCache = (r && typeof r === 'object') ? r : {};
+    try { localStorage.setItem(LS_KEY, JSON.stringify(sharedLigaResultsCache)); } catch (e) {}
+    persistSharedLigaState({ liga_results: sharedLigaResultsCache });
   }
   function rKey(j, h, a) { return j + '|' + h + '|' + a; }
 

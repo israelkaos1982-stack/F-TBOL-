@@ -3490,6 +3490,12 @@
 
   window.gmEndMatch = function () {
     if (_gm.finished) return;
+    var mvpExists = _gm.events.some(function(e){ return e && e.type === 'mvp'; });
+    if (!mvpExists) {
+      alert('⭐ Debes elegir MVP antes de finalizar el acta.');
+      window.gmPickEvent('MVP del Partido','mvp');
+      return;
+    }
     _gm.finished = true;
     clearInterval(_gm.timerInterval);
     _gm.timerRunning = false;
@@ -3503,13 +3509,39 @@
     document.getElementById('gm-event-panel').style.display = 'none';
     document.getElementById('gm-team-pick').style.display = 'none';
     guardarResultado(_gm.j, _gm.home, _gm.away, _gm.sc.a, _gm.sc.b);
-    /* cerrar modal tras breve pausa */
-    setTimeout(function () { document.getElementById('gm-modal').style.display = 'none'; }, 1200);
+    setTimeout(function () {
+      document.getElementById('gm-modal').style.display = 'none';
+      window.gmShowPost();
+    }, 420);
   };
 
   window.gmClose = function () {
     clearInterval(_gm.timerInterval);
     document.getElementById('gm-modal').style.display = 'none';
+  };
+
+  window.gmShowPost = function(){
+    var goles = _gm.events.filter(function(e){ return e && ['gol','falta-gol','pen-gol','propia'].indexOf(e.type)!==-1; }).length;
+    var tarjetas = _gm.events.filter(function(e){ return e && ['amarilla','damarilla','roja'].indexOf(e.type)!==-1; }).length;
+    var lesiones = _gm.events.filter(function(e){ return e && e.type==='lesion'; }).length;
+    var mvp = _gm.events.find(function(e){ return e && e.type==='mvp'; });
+    var mvpLabel = '⭐ MVP: ' + (mvp ? (((mvp.num||'').trim()?mvp.num+'. ':'') + (mvp.player||'Jugador')) : '—');
+    var gEl=document.getElementById('gm-st-goles'); if(gEl) gEl.textContent=String(goles);
+    var tEl=document.getElementById('gm-st-tarjetas'); if(tEl) tEl.textContent=String(tarjetas);
+    var lEl=document.getElementById('gm-st-lesiones'); if(lEl) lEl.textContent=String(lesiones);
+    var mEl=document.getElementById('gm-post-mvp'); if(mEl) mEl.textContent=mvpLabel;
+    var ov=document.getElementById('gm-post-ov'); if(ov) ov.classList.add('show');
+  };
+
+  window.gmClosePost = function(){
+    var ov=document.getElementById('gm-post-ov'); if(ov) ov.classList.remove('show');
+  };
+
+  window.gmShareWhatsApp = function(){
+    var msg = '¡Mira el resultado de mi partido: '
+      + _gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away + '!';
+    var url = 'https://wa.me/?text=' + encodeURIComponent(msg);
+    try { window.open(url, '_blank'); } catch(e) {}
   };
 
   function gmOpen(j, home, away, isHvH) {
@@ -3533,6 +3565,8 @@
     if (addBtn) { addBtn.disabled = false; addBtn.classList.remove('open'); }
     var jBadge = document.getElementById('gm-jornada-badge');
     if (jBadge) jBadge.textContent = 'Liga · Jornada ' + j;
+    var postOv = document.getElementById('gm-post-ov');
+    if (postOv) postOv.classList.remove('show');
     gmRenderTimer();
     document.getElementById('gm-modal').style.display = '';
   }
@@ -4457,6 +4491,18 @@
   padding: 8px 10px; cursor: pointer; font-size: 10px; color: #aaa; letter-spacing: 1px;
 }
 #gm-acta-body { padding: 0 0 4px; }
+#gm-post-ov{position:fixed;inset:0;z-index:10010;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:16px;}
+#gm-post-ov.show{display:flex;}
+#gm-post-card{width:100%;max-width:420px;border-radius:12px;border:1px solid rgba(61,255,113,.35);background:linear-gradient(170deg,#07140c,#0f1f18);padding:14px;box-shadow:0 0 26px rgba(61,255,113,.18);}
+.gm-post-title{font-family:'Bebas Neue',sans-serif;font-size:30px;letter-spacing:3px;color:#f0c040;text-align:center;margin-bottom:10px;}
+.gm-post-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.gm-post-stat{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 4px;text-align:center;}
+.gm-post-stat b{display:block;font-family:'Bebas Neue',sans-serif;font-size:24px;color:#fff;letter-spacing:1px;}
+.gm-post-stat span{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.6);}
+#gm-post-mvp{width:100%;margin-bottom:10px;border-radius:8px;border:1px solid rgba(240,192,64,.35);background:rgba(240,192,64,.09);padding:10px;color:#f7d576;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.2px;text-align:center;}
+#gm-wa-btn{width:100%;border:none;border-radius:8px;padding:11px 10px;margin-bottom:8px;font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;letter-spacing:1.6px;color:#001c09;background:linear-gradient(90deg,#19ff7f,#4dff96,#1aff82);box-shadow:0 0 16px rgba(45,255,130,.75),0 0 36px rgba(45,255,130,.35);cursor:pointer;animation:gmWaGlow 1.35s ease-in-out infinite;}
+@keyframes gmWaGlow{0%,100%{filter:brightness(1);}50%{filter:brightness(1.18);}}
+#gm-post-close{width:100%;border-radius:8px;border:1px solid rgba(255,255,255,.16);padding:8px;background:rgba(255,255,255,.06);color:#bbb;font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;}
 </style>
 
 <div id="gm-modal" style="display:none;">
@@ -4595,6 +4641,20 @@
         ✕ Cancelar partido
       </button>
     </div>
+  </div>
+</div>
+
+<div id="gm-post-ov">
+  <div id="gm-post-card">
+    <div class="gm-post-title">FINAL</div>
+    <div class="gm-post-stats">
+      <div class="gm-post-stat"><b id="gm-st-goles">0</b><span>GOLES</span></div>
+      <div class="gm-post-stat"><b id="gm-st-tarjetas">0</b><span>TARJETAS</span></div>
+      <div class="gm-post-stat"><b id="gm-st-lesiones">0</b><span>LESIONES</span></div>
+    </div>
+    <div id="gm-post-mvp">⭐ MVP: —</div>
+    <button id="gm-wa-btn" onclick="window.gmShareWhatsApp()">🟢 WHATSAPP · COMPARTIR RESULTADO</button>
+    <button id="gm-post-close" onclick="window.gmClosePost()">CERRAR</button>
   </div>
 </div>
 

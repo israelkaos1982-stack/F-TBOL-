@@ -2612,7 +2612,7 @@
     if (esHumano(home) || esHumano(away)) {
       var h = home.replace(/'/g, "\\'");
       var a = away.replace(/'/g, "\\'");
-      return '<div class="ms p previa" onclick="window.abrirResultadoLiga(' + j + ',\'' + h + '\',\'' + a + '\')">📋 Previa</div>';
+      return '<div class="ms p previa" onclick="window._openMatchWithPrevia(' + j + ',\'' + h + '\',\'' + a + '\')">📋 Previa</div>';
     }
     return '<div class="ms p">vs</div>';
   }
@@ -4511,7 +4511,7 @@
       ? 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ',\'' + m.fn + '\')'
       : 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ')';
     var actionButton = isManual
-      ? '<button class="ml-previa-btn" onclick="window.abrirResultadoLiga(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">📋 PREVIA</button>'
+      ? '<button class="ml-previa-btn" onclick="window._openMatchWithPrevia(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">📋 PREVIA</button>'
       : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';
     /* dual gradient — always; faded shields — human side(s) only */
     var tcH = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};

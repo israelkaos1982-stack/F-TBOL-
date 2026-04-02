@@ -1803,3 +1803,184 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 .pp-list.pp-list-h .pp-item{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:84px;text-align:center}
 .pp-list.pp-list-h .pp-item-val{font-size:11px}
 @media(max-width:900px){.pp-list.pp-list-h{display:flex;flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:6px;-webkit-overflow-scrolling:touch;}.pp-list.pp-list-h .pp-item{min-width:80px;flex-shrink:0;}}
+
+/* ══ MANUAL MAESTRO v2.0 — Estilos de efectos y overlays ══════════════ */
+
+/* Twitch selector en pantalla de previa */
+.pp-twitch-sel {
+  background: rgba(8,16,30,.82);
+  border: 1px solid rgba(191,148,255,.25);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+}
+.pp-twitch-lbl {
+  font-family: Oswald, sans-serif;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: rgba(191,148,255,.75);
+  margin-bottom: 6px;
+}
+.pp-twitch-sel select:focus { outline: none; border-color: rgba(191,148,255,.6); }
+
+/* Env lines en previa */
+.pp-env-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: Oswald, sans-serif;
+  font-size: 12px;
+  color: rgba(255,255,255,.85);
+  letter-spacing: 0.5px;
+  padding: 2px 0;
+}
+.pp-env-line span { font-size: 15px; }
+.pp-env-line b { font-weight: 600; }
+
+/* Flash overlay — Gol / Expulsión */
+#mm-event-flash {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+  align-items: center;
+  justify-content: center;
+  animation: mmFlashBg 5s ease forwards;
+}
+#mm-event-flash.show { display: flex; }
+
+#mm-event-flash.mm-flash-gol  { background: radial-gradient(ellipse, rgba(255,210,0,.55) 0%, rgba(0,0,0,.72) 80%); }
+#mm-event-flash.mm-flash-roja { background: radial-gradient(ellipse, rgba(220,0,0,.55) 0%, rgba(0,0,0,.72) 80%); }
+
+@keyframes mmFlashBg {
+  0%   { opacity: 0; }
+  6%   { opacity: 1; }
+  75%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+#mm-flash-inner {
+  text-align: center;
+  padding: 20px 28px;
+  animation: mmFlashPulse .42s ease-in-out infinite;
+}
+
+@keyframes mmFlashPulse {
+  0%,100% { transform: scale(1); }
+  50%     { transform: scale(1.07); }
+}
+
+#mm-flash-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(38px, 10vw, 72px);
+  letter-spacing: 6px;
+  line-height: 1;
+}
+.mm-flash-gol  #mm-flash-title { color: #ffdd00; text-shadow: 0 0 40px rgba(255,220,0,.9), 0 0 80px rgba(255,160,0,.6); }
+.mm-flash-roja #mm-flash-title { color: #ff3333; text-shadow: 0 0 40px rgba(255,0,0,.9),   0 0 80px rgba(200,0,0,.6); }
+
+#mm-flash-sub {
+  font-family: Oswald, sans-serif;
+  font-size: 20px;
+  letter-spacing: 2px;
+  color: #ffffff;
+  margin-top: 8px;
+  text-shadow: 0 2px 8px rgba(0,0,0,.8);
+}
+#mm-flash-team {
+  font-family: Oswald, sans-serif;
+  font-size: 14px;
+  letter-spacing: 3px;
+  color: rgba(255,255,255,.65);
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+
+/* Lesión en vivo overlay */
+#mm-lesion-live {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  background: rgba(0,0,0,.88);
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+  padding: 24px;
+}
+#mm-lesion-live.show { display: flex; }
+
+#mm-les-shield-wrap {
+  animation: mmShieldPulse 0.55s ease-in-out infinite;
+}
+@keyframes mmShieldPulse {
+  0%   { transform: rotate(-5deg) scale(1.05); }
+  25%  { transform: rotate(5deg) scale(0.97); }
+  50%  { transform: rotate(-4deg) scale(1.04); }
+  75%  { transform: rotate(4deg) scale(0.98); }
+  100% { transform: rotate(-5deg) scale(1.05); }
+}
+
+#mm-les-shield { font-size: 80px; display: block; }
+#mm-les-shield img { width: 90px; height: 90px; object-fit: contain; }
+
+#mm-les-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(28px, 8vw, 52px);
+  letter-spacing: 4px;
+  color: #ff4444;
+  text-shadow: 0 0 30px rgba(255,68,68,.8);
+  animation: mmLesTitleBlink .6s ease-in-out infinite;
+}
+@keyframes mmLesTitleBlink {
+  0%,100% { opacity: 1; }
+  50%     { opacity: .35; }
+}
+
+.mm-les-player {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 26px;
+  letter-spacing: 3px;
+  color: #fff;
+}
+.mm-les-team {
+  font-family: Oswald, sans-serif;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,.55);
+  text-transform: uppercase;
+}
+.mm-les-grado {
+  font-family: Oswald, sans-serif;
+  font-size: 15px;
+  letter-spacing: 2px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+.mm-les-partidos {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+#mm-les-btn {
+  margin-top: 14px;
+  background: linear-gradient(135deg, #1a8c4e, #0f5c32);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 30px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 20px;
+  letter-spacing: 3px;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(26,140,78,.5);
+  transition: transform .15s, box-shadow .15s;
+}
+#mm-les-btn:active { transform: scale(0.96); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+

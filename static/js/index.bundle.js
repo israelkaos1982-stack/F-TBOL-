@@ -5527,10 +5527,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       minPartidos:1, maxPartidos:2 },
     { grado:2, nombre:'Moderada', emoji:'🟠', prob:0.55,
       ejemplos:['Rotura fibrilar','Esguince de tobillo Grado II','Distensión isquiotibial'],
-      minPartidos:2, maxPartidos:5 },
+      minPartidos:3, maxPartidos:5 },
     { grado:3, nombre:'Grave',    emoji:'🔴', prob:0.03,
       ejemplos:['Rotura LCA','Fractura tibia/peroné','Rotura de menisco'],
-      minPartidos:6, maxPartidos:24 }
+      minPartidos:6, maxPartidos:12 }
   ];
 
   // Probabilidad base de lesión por partido por equipo: ~6%
@@ -7592,4 +7592,472 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   } else {
     _attachCalendarObserver();
   }
+})();
+
+
+/* ══════════════════════════════════════════════════════════════════════
+   MANUAL MAESTRO v2.0 — Sistema de Partidos eFootball
+   Fases 0-4: Sincronización, Previa, Partido, Final, Post-partido
+   ══════════════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  /* ── 1. TWITCH SELECTOR ───────────────────────────────────────────── */
+  window._ppSelectedTwitch = window._ppSelectedTwitch || '';
+
+  window._ppTwitchChange = function(val) {
+    window._ppSelectedTwitch = val;
+    var sel = document.getElementById('pp-twitch-select');
+    if (sel) sel.value = val;
+  };
+
+  /* ── 2. SOUND ENGINE (Web Audio API) ─────────────────────────────── */
+  var _mmAudioCtx = null;
+  function _mmCtx() {
+    if (!_mmAudioCtx) {
+      var C = window.AudioContext || window.webkitAudioContext;
+      if (C) { try { _mmAudioCtx = new C(); } catch(e) {} }
+    }
+    return _mmAudioCtx;
+  }
+
+  function _mmWhistle(long, delay) {
+    setTimeout(function() {
+      try {
+        var ctx = _mmCtx(); if (!ctx) return;
+        var o = ctx.createOscillator();
+        var g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        var t = ctx.currentTime;
+        var dur = long ? 0.85 : 0.22;
+        o.type = 'square';
+        o.frequency.setValueAtTime(2800, t);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(0.15, t + 0.012);
+        g.gain.setValueAtTime(0.15, t + dur - 0.04);
+        g.gain.linearRampToValueAtTime(0, t + dur);
+        o.start(t); o.stop(t + dur);
+      } catch(e) {}
+    }, delay || 0);
+  }
+
+  function _mmWhistleStart()  { _mmWhistle(true, 80); }
+  function _mmWhistleFinal()  { _mmWhistle(false, 0); _mmWhistle(false, 450); _mmWhistle(true, 900); }
+
+  function _mmNoise(dur, freq, vol, delay) {
+    setTimeout(function() {
+      try {
+        var ctx = _mmCtx(); if (!ctx) return;
+        var sr = ctx.sampleRate;
+        var buf = ctx.createBuffer(1, sr * dur, sr);
+        var d = buf.getChannelData(0);
+        for (var i = 0; i < d.length; i++) {
+          var env = i < sr * 0.08 ? i / (sr * 0.08) :
+                    i > sr * (dur - 0.3) ? Math.max(0, 1 - (i - sr * (dur - 0.3)) / (sr * 0.3)) : 1;
+          d[i] = (Math.random() * 2 - 1) * env * vol;
+        }
+        var src = ctx.createBufferSource();
+        src.buffer = buf;
+        var flt = ctx.createBiquadFilter();
+        flt.type = 'bandpass';
+        flt.frequency.value = freq;
+        flt.Q.value = 0.6;
+        src.connect(flt); flt.connect(ctx.destination);
+        src.start();
+      } catch(e) {}
+    }, delay || 0);
+  }
+
+  function _mmSoundGoal()   { _mmNoise(2.8, 900,  0.28, 0);   }
+  function _mmSoundRoja()   { _mmNoise(2.0, 350,  0.22, 0);   }
+  function _mmSoundLesion() { _mmNoise(3.5, 320,  0.10, 0);   }
+
+  /* ── 3. EVENT FLASH OVERLAY ──────────────────────────────────────── */
+  function _mmEnsureFlash() {
+    if (document.getElementById('mm-event-flash')) return;
+    var el = document.createElement('div');
+    el.id = 'mm-event-flash';
+    el.innerHTML = '<div id="mm-flash-inner"><div id="mm-flash-title"></div><div id="mm-flash-sub"></div><div id="mm-flash-team"></div></div>';
+    document.body.appendChild(el);
+  }
+
+  function _mmFlash(type, teamName, playerName) {
+    _mmEnsureFlash();
+    var el = document.getElementById('mm-event-flash');
+    var title = document.getElementById('mm-flash-title');
+    var sub   = document.getElementById('mm-flash-sub');
+    var team  = document.getElementById('mm-flash-team');
+    if (!el) return;
+
+    el.className = 'mm-event-flash mm-flash-' + type + ' show';
+    if (type === 'gol') {
+      title.textContent = '⚽ ¡¡¡ GOOOOOL !!!';
+      _mmSoundGoal();
+    } else {
+      title.textContent = '🟥 ¡¡¡ EXPULSIÓN !!!';
+      _mmSoundRoja();
+    }
+    sub.textContent  = playerName || '';
+    team.textContent = teamName   || '';
+
+    clearTimeout(el._mmTimer);
+    el._mmTimer = setTimeout(function() { el.classList.remove('show'); }, 5000);
+  }
+
+  window.mmShowFlash = _mmFlash;
+
+  /* ── 4. LESIÓN EN VIVO (solo partidos humanos) ───────────────────── */
+  function _mmEnsureLesionLive() {
+    if (document.getElementById('mm-lesion-live')) return;
+    var el = document.createElement('div');
+    el.id = 'mm-lesion-live';
+    el.innerHTML =
+      '<div id="mm-les-shield-wrap"><div id="mm-les-shield">🛡️</div></div>'
+      + '<div id="mm-les-title">¡¡¡ JUGADOR LESIONADO !!!</div>'
+      + '<div id="mm-les-info"></div>'
+      + '<button id="mm-les-btn" onclick="window.mmLesionConfirm()">🔄 JUGADOR SUSTITUIDO</button>';
+    document.body.appendChild(el);
+  }
+
+  window.mmShowLesionLive = function(playerName, teamName, gradoNombre, gradoEmoji, partidos, logoUrl) {
+    _mmEnsureLesionLive();
+    _mmSoundLesion();
+
+    var shield = document.getElementById('mm-les-shield');
+    if (shield) {
+      shield.innerHTML = logoUrl
+        ? '<img src="' + logoUrl + '" alt="' + (teamName || '') + '" style="width:90px;height:90px;object-fit:contain;">'
+        : '🛡️';
+    }
+
+    var gradoColor = gradoNombre === 'Grave' ? '#ff4444' : gradoNombre === 'Moderada' ? '#ff8c00' : '#ffd700';
+    var info = document.getElementById('mm-les-info');
+    if (info) {
+      info.innerHTML =
+        '<div class="mm-les-player">' + (playerName || '') + '</div>'
+        + '<div class="mm-les-team">' + (teamName || '') + '</div>'
+        + '<div class="mm-les-grado" style="color:' + gradoColor + '">' + (gradoEmoji || '🩹') + ' Lesión ' + (gradoNombre || 'Leve') + '</div>'
+        + '<div class="mm-les-partidos"><span style="font-family:\'Bebas Neue\',sans-serif;font-size:42px;color:' + gradoColor + '">' + (partidos || 1) + '</span>'
+        + '<span style="font-size:13px;color:rgba(255,255,255,.6);margin-left:6px">PARTIDO' + ((partidos || 1) > 1 ? 'S' : '') + ' DE BAJA</span></div>';
+    }
+
+    var el = document.getElementById('mm-lesion-live');
+    if (el) el.classList.add('show');
+    window.scrollTo(0, 0);
+  };
+
+  window.mmLesionConfirm = function() {
+    var el = document.getElementById('mm-lesion-live');
+    if (el) el.classList.remove('show');
+    if (window._mmLesionCallback) { window._mmLesionCallback(); window._mmLesionCallback = null; }
+  };
+
+  /* ── 5. OBSERVADOR DE ACTAS — detecta eventos en partidos humanos ── */
+  var HM_KEYS = ['j1m1', 'j1m2', 'j1m3'];
+  var _mmObserved = {};
+
+  function _mmTeamName(matchKey, team) {
+    var wrap = document.getElementById('mlw-' + matchKey);
+    if (!wrap) return '';
+    var els = wrap.querySelectorAll('.ml-team-name');
+    var idx = team === 'a' ? 0 : 1;
+    return els[idx] ? (els[idx].textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim() : '';
+  }
+
+  function _mmObserveActa(mk) {
+    if (_mmObserved[mk]) return;
+    var listEl = document.getElementById('ml-acta-list-' + mk);
+    if (!listEl) return;
+    _mmObserved[mk] = true;
+
+    var lastCount = 0;
+    var obs = new MutationObserver(function() {
+      var items = listEl.querySelectorAll('.ml-evt-item');
+      if (items.length <= lastCount) { lastCount = items.length; return; }
+      var newItems = Array.prototype.slice.call(items, lastCount);
+      lastCount = items.length;
+
+      newItems.forEach(function(item) {
+        var type    = item.getAttribute('data-type') || '';
+        var teamAtr = item.getAttribute('data-team') || 'a';
+        var teamName = _mmTeamName(mk, teamAtr);
+        var playerEl = item.querySelector('.ml-evt-name');
+        var playerName = playerEl ? (playerEl.textContent || '').replace(/^\d+\.\s*/, '').trim() : '';
+
+        var goalTypes = ['gol', 'propia', 'pen-gol', 'falta-gol'];
+        var redTypes  = ['roja', 'd-amarilla'];
+
+        if (goalTypes.indexOf(type) !== -1) {
+          _mmFlash('gol', teamName, playerName);
+        } else if (redTypes.indexOf(type) !== -1) {
+          _mmFlash('roja', teamName, playerName);
+        } else if (type === 'lesion') {
+          var les = window.LESION_STORE && window.LESION_STORE[playerName];
+          var grado  = les ? les.gradoNombre : 'Leve';
+          var emoji  = les ? les.gradoEmoji  : '🩹';
+          var parts  = les ? les.partidos    : 1;
+          var logo   = (typeof window.getLogoEquipo === 'function') ? window.getLogoEquipo(teamName) : '';
+          window.mmShowLesionLive(playerName, teamName, grado, emoji, parts, logo || '');
+        }
+      });
+    });
+    obs.observe(listEl, { childList: true, subtree: true });
+  }
+
+  /* ── 6. SILBATOS — inicio y final ────────────────────────────────── */
+  function _mmPatchTimerStart(mk) {
+    var fn = 'mlTimerClick_' + mk;
+    var orig = window[fn];
+    if (!orig || orig._mmWhistlePatched) return;
+    window[fn] = function() {
+      var btn = document.getElementById('ml-timer-' + mk);
+      // Play start whistle only on first press (when button shows ▶ and 0')
+      if (btn && !btn.getAttribute('data-mm-ever-started')) {
+        var txt = btn.textContent || '';
+        var isStart = txt.indexOf('▶') !== -1 && (txt.indexOf("0'") !== -1 || txt.indexOf('0 ') !== -1 || txt === '▶ 0\'');
+        if (isStart) {
+          btn.setAttribute('data-mm-ever-started', '1');
+          _mmWhistleStart();
+        }
+      }
+      return orig.apply(this, arguments);
+    };
+    window[fn]._mmWhistlePatched = true;
+  }
+
+  function _mmPatchEndMatch(mk) {
+    var fn = 'mlEndMatch_' + mk;
+    var orig = window[fn];
+    if (!orig || orig._mmWhistlePatched) return;
+    window[fn] = function() {
+      _mmWhistleFinal();
+      return orig.apply(this, arguments);
+    };
+    window[fn]._mmWhistlePatched = true;
+  }
+
+  /* ── 7. CLIMA DINÁMICO SEGÚN CALENDARIO ─────────────────────────── */
+  function _mmGetClimate(month) {
+    if (month >= 11 || month <= 1)  return { season: '🌚 Invierno', weathers: ['🌧️ Lluvia', '❄️ Nieve', '☁️ Nublado'] };
+    if (month >= 2  && month <= 4)  return { season: '🌸 Primavera', weathers: ['☀️ Soleado', '🌦️ Lluvia ligera', '☁️ Nublado'] };
+    if (month >= 5  && month <= 8)  return { season: '🌝 Verano', weathers: ['☀️ Soleado', '🌡️ Calor extremo', '☁️ Parcialmente nublado'] };
+    return { season: '🍂 Otoño', weathers: ['🌧️ Lluvia', '☁️ Nublado', '☀️ Soleado'] };
+  }
+
+  var MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var COMP_LABELS_MM = {
+    'liga':'Liga EA Sports','copa':'Copa del Rey','copa-fin':'Copa del Rey · Final',
+    'sc':'Supercopa de España','sc-final':'Supercopa · Final',
+    'usc':'UEFA Super Cup','usc-fin':'UEFA Super Cup · Final',
+    'ucl':'Champions League','ucl-fin':'Champions League · Final',
+    'uel':'Europa League','uel-fin':'Europa League · Final',
+    'uecl':'Conference League','uecl-fin':'Conference League · Final',
+    'superliga':'Superliga','inter':'Copa Intercontinental','inter-fin':'Intercontinental · Final'
+  };
+
+  function _mmInjectEnv(compKey) {
+    var envEl = document.getElementById('pp-env');
+    if (!envEl) return;
+    var month   = new Date().getMonth() + 1; // use real calendar month
+    var sc      = _mmGetClimate(month);
+    var weather = sc.weathers[Math.floor(Math.random() * sc.weathers.length)];
+    var day     = Math.floor(Math.random() * 28) + 1;
+    var compLabel = COMP_LABELS_MM[compKey] || compKey || 'Liga';
+
+    envEl.innerHTML =
+      '<div class="pp-env-line"><span>🏟️</span><b>eFootball Stadium</b></div>'
+      + '<div class="pp-env-line"><span>🗓️</span><b>' + day + ' de ' + MONTHS_ES[month - 1] + '</b>'
+      + '<span style="margin:0 6px;opacity:.4">|</span><span>🏆</span><b>' + compLabel + '</b></div>'
+      + '<div class="pp-env-line"><span>' + sc.season.split(' ')[0] + '</span><b>' + sc.season.replace(/^.\s/, '') + '</b>'
+      + '<span style="margin:0 6px;opacity:.4">·</span><b>' + weather + '</b></div>';
+
+    // Restore Twitch selector state
+    var sel = document.getElementById('pp-twitch-select');
+    if (sel && window._ppSelectedTwitch) sel.value = window._ppSelectedTwitch;
+  }
+
+  // Wrap showPrePartidoOverlay to inject climate
+  var _mmPrevShowPre = window.showPrePartidoOverlay;
+  if (typeof _mmPrevShowPre === 'function') {
+    window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
+      _mmPrevShowPre.apply(this, arguments);
+      setTimeout(function() { _mmInjectEnv(compKey); }, 60);
+    };
+  } else {
+    // Retry until available
+    var _mmClimateCheck = setInterval(function() {
+      if (typeof window.showPrePartidoOverlay !== 'function') return;
+      clearInterval(_mmClimateCheck);
+      var _prev = window.showPrePartidoOverlay;
+      window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
+        _prev.apply(this, arguments);
+        setTimeout(function() { _mmInjectEnv(compKey); }, 60);
+      };
+    }, 200);
+  }
+
+  /* ── 8. FUEGOS ARTIFICIALES CON COLORES DEL EQUIPO GANADOR ────────── */
+  var TEAM_COLORS_MM = {
+    'Real Madrid':     ['#ffffff', '#c8a415', '#004d98', '#f0c040'],
+    'FC Barcelona':    ['#a50044', '#004d98', '#edbb00', '#ffffff'],
+    'Athletic Club':   ['#cc0000', '#ffffff', '#cc0000', '#f5f5f5'],
+    'Atlético Madrid': ['#c60b1e', '#0033a0', '#c60b1e', '#ffffff'],
+    'Real Betis':      ['#00954c', '#ffffff', '#f1c400', '#00954c'],
+    'Real Sociedad':   ['#0067b1', '#ffffff', '#0067b1', '#e8e8e8'],
+    'Sevilla FC':      ['#d71920', '#ffffff', '#d71920', '#f5f5f5'],
+    'Villarreal CF':   ['#ffdd00', '#005da1', '#ffdd00', '#ffffff'],
+    'Bayern Munich':   ['#dc052d', '#ffffff', '#0e6db4', '#dc052d'],
+    'Arsenal':         ['#db0007', '#ffffff', '#9c824a', '#db0007'],
+    'Deportivo Alavés':['#1a6fa3', '#ffffff', '#1a6fa3', '#f0c040'],
+    'Rayo Vallecano':  ['#ff0000', '#ffffff', '#ff0000', '#ffff00'],
+  };
+
+  var _mmMvpWinnerTeam = '';
+
+  var _mmOrigConfirmMvp = window.confirmMvpForce;
+  window.confirmMvpForce = function(btn) {
+    var team = btn.getAttribute('data-team');
+    var mid  = btn.getAttribute('data-mid');
+    if (mid) {
+      var wrap = document.getElementById('mlw-' + mid);
+      if (wrap) {
+        var idx = team === 'a' ? 0 : 1;
+        var nameEls = wrap.querySelectorAll('.ml-team-name');
+        _mmMvpWinnerTeam = nameEls[idx]
+          ? (nameEls[idx].textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim()
+          : '';
+      }
+    }
+    if (_mmOrigConfirmMvp) _mmOrigConfirmMvp.apply(this, arguments);
+  };
+
+  // Wrap lanzarFuegos to use team colors when MVP is confirmed
+  var _mmOrigLanzarFuegos = (typeof lanzarFuegos === 'function') ? lanzarFuegos : null;
+  if (_mmOrigLanzarFuegos) {
+    // We cannot reassign a non-window function by name, but we can use window trick
+    window._mmLanzarFuegosEquipo = function(duracion, teamNameOverride) {
+      var teamName = teamNameOverride || _mmMvpWinnerTeam || '';
+      var colors = TEAM_COLORS_MM[teamName] || ['#f0c040','#4fc86a','#ff6060','#60b0ff','#ff80ff','#ffffff','#ffaa20'];
+      var _origBurst = window.fwCreateBurst || fwCreateBurst;
+      // Temporarily override fwCreateBurst (it's a global function)
+      var _savedBurst = fwCreateBurst;
+      // Since we can't reassign `fwCreateBurst` directly (it's a named function declaration),
+      // we'll add a wrapper via a flag on fwParticles array
+      window._mmTeamColors = colors;
+      window._mmUseTeamColors = true;
+      _mmOrigLanzarFuegos(duracion || 4000);
+      setTimeout(function() { window._mmUseTeamColors = false; window._mmTeamColors = null; _mmMvpWinnerTeam = ''; }, (duracion || 4000) + 500);
+    };
+  }
+
+  /* Override fwCreateBurst to support team colors when _mmUseTeamColors is true */
+  /* We do this by wrapping lanzarFuegos at a higher level using the celebracion-overlay */
+  /* For MVP fireworks, hook into the overlay display */
+  var _mmPostMvpHooked = false;
+  function _mmHookMvpFireworks() {
+    if (_mmPostMvpHooked) return;
+    var celebEl = document.getElementById('celebracion-overlay');
+    if (!celebEl) return;
+    _mmPostMvpHooked = true;
+
+    var obs = new MutationObserver(function() {
+      if (celebEl.style.display === 'flex') {
+        // fireworks started — restart with team colors
+        var teamName = _mmMvpWinnerTeam;
+        var colors = TEAM_COLORS_MM[teamName];
+        if (!colors) return; // use default colors
+        // Re-inject colored particles by adding bursts
+        var canvas = document.getElementById('fireworks-canvas');
+        if (!canvas) return;
+        var ctx2 = canvas.getContext('2d');
+        if (!ctx2) return;
+        // Add extra burst with team colors every 250ms for 3s
+        var burstCount = 0;
+        var burstTimer = setInterval(function() {
+          if (burstCount++ > 16 || celebEl.style.display !== 'flex') { clearInterval(burstTimer); return; }
+          var w = canvas.width || window.innerWidth;
+          var h = canvas.height || window.innerHeight;
+          var x = 0.15 * w + Math.random() * 0.7 * w;
+          var y = 0.1  * h + Math.random() * 0.5 * h;
+          for (var i = 0; i < 45; i++) {
+            var angle = (Math.PI * 2 / 45) * i + Math.random() * 0.3;
+            var speed = 2 + Math.random() * 4;
+            fwParticles.push({ x:x, y:y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, alpha:1, size:2.5+Math.random()*3, color:colors[Math.floor(Math.random()*colors.length)], decay:0.01+Math.random()*0.012 });
+          }
+        }, 250);
+      }
+    });
+    obs.observe(celebEl, { attributes: true, attributeFilter: ['style'] });
+  }
+
+  /* ── 9. WHATSAPP CON CANAL TWITCH ────────────────────────────────── */
+  function _mmTwitchSuffix() {
+    var t = window._ppSelectedTwitch;
+    return t ? ' — Visto en el Twitch de ' + t : '';
+  }
+
+  // Override gmShareWhatsApp
+  var _mmOrigGmShare = window.gmShareWhatsApp;
+  window.gmShareWhatsApp = function() {
+    var _gm = window._gm;
+    if (!_gm) { if (_mmOrigGmShare) _mmOrigGmShare.apply(this, arguments); return; }
+    var mvpEvt = (_gm.events || []).find(function(e) { return e.type === 'mvp'; });
+    var mvpLabel = mvpEvt ? ' ⭐ MVP: ' + mvpEvt.name : '';
+    var suffix = _mmTwitchSuffix();
+    var msg = '¡Mira el resultado de mi partido: '
+      + (_gm.home || '') + ' ' + (_gm.sc ? _gm.sc.a : 0) + ' - ' + (_gm.sc ? _gm.sc.b : 0) + ' ' + (_gm.away || '') + '!'
+      + mvpLabel + suffix;
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank'); } catch(e) {}
+  };
+
+  // Intercept clicks on WA buttons that use window.open (ml-post-wa-btn)
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('#ml-post-wa-btn, .ml-post-wa-btn, [data-wa-share]');
+    if (!btn) return;
+    // Check if there's a suffix to add — we do so by wrapping window.open temporarily
+    var suffix = _mmTwitchSuffix();
+    if (!suffix) return;
+    var _origOpen = window.open;
+    window.open = function(url, target) {
+      window.open = _origOpen;
+      if (url && url.indexOf('wa.me') !== -1 && url.indexOf(encodeURIComponent(suffix)) === -1) {
+        url = url + encodeURIComponent(suffix);
+      }
+      return _origOpen.call(this, url, target);
+    };
+    // Let original handler run; window.open will be intercepted
+  }, true);
+
+  /* ── INIT ─────────────────────────────────────────────────────────── */
+  function _mmInit() {
+    _mmEnsureFlash();
+    _mmEnsureLesionLive();
+
+    HM_KEYS.forEach(function(mk) {
+      _mmObserveActa(mk);
+      _mmPatchTimerStart(mk);
+      _mmPatchEndMatch(mk);
+    });
+
+    _mmHookMvpFireworks();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _mmInit);
+  } else {
+    _mmInit();
+  }
+
+  // Retry patch if functions not yet defined
+  setTimeout(function() {
+    HM_KEYS.forEach(function(mk) {
+      _mmObserveActa(mk);
+      _mmPatchTimerStart(mk);
+      _mmPatchEndMatch(mk);
+    });
+    _mmHookMvpFireworks();
+  }, 800);
+
+  console.log('[ManualMaestro v2.0] Sistema completo activado ✓');
+
 })();

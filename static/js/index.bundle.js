@@ -4631,7 +4631,18 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (env) env.innerHTML = '🏟️ <b>eFootball Stadium</b> &nbsp;·&nbsp; 🌝 Verano &nbsp;·&nbsp; ☀️ Soleado';
     var vs = document.getElementById('pp-vs');
     if (vs) {
-      var lA=(typeof getLogoEquipo==='function'&&getLogoEquipo(home))||''; var lB=(typeof getLogoEquipo==='function'&&getLogoEquipo(away))||'';
+      // Try DOM first (match wrap has real logos incl. base64), then API fallbacks
+      var _svgImgs = wrap ? wrap.querySelectorAll('.ml-team-svg') : [];
+      function _pickLogo(img, name) {
+        if (img && img.src && img.src.indexOf('estepona') === -1 && img.src.length > 10) return img.src;
+        var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
+        if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1) return byAlt.src;
+        var tlu = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
+        if (tlu) return tlu;
+        return (typeof getLogoEquipo === 'function') ? getLogoEquipo(name) : '';
+      }
+      var lA = _pickLogo(_svgImgs[0], home);
+      var lB = _pickLogo(_svgImgs[1], away);
       var imgA = lA ? '<img src="'+lA+'" alt="'+home+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
       var imgB = lB ? '<img src="'+lB+'" alt="'+away+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
       vs.innerHTML = '<div style="text-align:center;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+home.toUpperCase()+'</div></div>'
@@ -7602,6 +7613,17 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 (function() {
   'use strict';
 
+  /* ── 0. EXPORT esHumano GLOBAL (fallback si no está en window) ────── */
+  if (typeof window.esHumano !== 'function') {
+    var _mmHUMANOS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+    window.esHumano = function(t) {
+      var s = String(t || '').trim();
+      return _mmHUMANOS.some(function(h) {
+        return h.toLowerCase() === s.toLowerCase();
+      });
+    };
+  }
+
   /* ── 1. TWITCH SELECTOR ───────────────────────────────────────────── */
   window._ppSelectedTwitch = window._ppSelectedTwitch || '';
 
@@ -7838,10 +7860,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   /* ── 7. CLIMA DINÁMICO SEGÚN CALENDARIO ─────────────────────────── */
   function _mmGetClimate(month) {
-    if (month >= 11 || month <= 1)  return { season: '🌚 Invierno', weathers: ['🌧️ Lluvia', '❄️ Nieve', '☁️ Nublado'] };
-    if (month >= 2  && month <= 4)  return { season: '🌸 Primavera', weathers: ['☀️ Soleado', '🌦️ Lluvia ligera', '☁️ Nublado'] };
-    if (month >= 5  && month <= 8)  return { season: '🌝 Verano', weathers: ['☀️ Soleado', '🌡️ Calor extremo', '☁️ Parcialmente nublado'] };
-    return { season: '🍂 Otoño', weathers: ['🌧️ Lluvia', '☁️ Nublado', '☀️ Soleado'] };
+    if (month >= 5 && month <= 9) return { season: '🌝 Verano', weathers: ['☀️ Soleado', '🌡️ Calor extremo', '☁️ Parcialmente nublado'] };
+    return { season: '🌚 Invierno', weathers: ['🌧️ Lluvia', '❄️ Nieve', '☁️ Nublado'] };
   }
 
   var MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -7871,9 +7891,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       + '<div class="pp-env-line"><span>' + sc.season.split(' ')[0] + '</span><b>' + sc.season.replace(/^.\s/, '') + '</b>'
       + '<span style="margin:0 6px;opacity:.4">·</span><b>' + weather + '</b></div>';
 
-    // Restore Twitch selector state
+    // Reset Twitch selector for each new match
+    window._ppSelectedTwitch = '';
     var sel = document.getElementById('pp-twitch-select');
-    if (sel && window._ppSelectedTwitch) sel.value = window._ppSelectedTwitch;
+    if (sel) sel.value = '';
   }
 
   // Wrap showPrePartidoOverlay to inject climate

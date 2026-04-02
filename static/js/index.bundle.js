@@ -4759,6 +4759,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         if (actBar) actBar.style.visibility = '';
         var wrap = document.getElementById('mlw-' + mk);
         if (wrap) wrap.setAttribute('data-prepartido-ready', '1');
+        // Callback personalizado (ej. abrir partido del calendario)
+        if (window._ppCustomCallback) { var fn=window._ppCustomCallback; window._ppCustomCallback=null; fn(); }
       });
     } else {
       var timerBtn = document.getElementById('ml-timer-' + mk);
@@ -4769,6 +4771,31 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       if (actBar) actBar.style.visibility = '';
       var wrap = document.getElementById('mlw-' + mk);
       if (wrap) wrap.setAttribute('data-prepartido-ready', '1');
+      if (window._ppCustomCallback) { var fn2=window._ppCustomCallback; window._ppCustomCallback=null; fn2(); }
+    }
+  };
+
+  /* Abrir partido del calendario pasando primero por la PANTALLA DE PREVIA */
+  window._openMatchWithPrevia = function(j, home, away) {
+    var isHvH = (typeof esHumano === 'function') && esHumano(home) && esHumano(away);
+    var duracion = isHvH ? '10 min' : '8 min';
+    window._ppCustomCallback = function() {
+      if (typeof window.abrirResultadoLiga === 'function') {
+        window.abrirResultadoLiga(j, home, away);
+      }
+    };
+    if (typeof window.showPrePartidoOverlay === 'function') {
+      window.showPrePartidoOverlay('cal-match', 'liga', isHvH ? 'Sí' : 'No', duracion, isHvH);
+      /* Actualizar escudos con los equipos reales */
+      var vs = document.getElementById('pp-vs');
+      if (vs && typeof getLogoEquipo === 'function') {
+        var lA = getLogoEquipo(home)||'', lB = getLogoEquipo(away)||'';
+        var imgA = lA ? '<img src="'+lA+'" alt="'+home+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
+        var imgB = lB ? '<img src="'+lB+'" alt="'+away+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
+        vs.innerHTML = '<div style="text-align:center;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+home.toUpperCase()+'</div></div>'
+          + '<div class="pp-vs-mid" style="padding:0 8px;">VS</div>'
+          + '<div style="text-align:center;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+away.toUpperCase()+'</div></div>';
+      }
     }
   };
 

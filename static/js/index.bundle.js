@@ -4806,7 +4806,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
     };
     if (typeof window.showPrePartidoOverlay === 'function') {
-      window.showPrePartidoOverlay('cal-match', 'liga', isHvH ? 'Sí' : 'No', duracion, isHvH);
+      window.showPrePartidoOverlay('lj' + j + 'm0', 'liga', isHvH ? 'Sí' : 'No', duracion, isHvH);
     }
   };
 
@@ -7875,20 +7875,67 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     'superliga':'Superliga','inter':'Copa Intercontinental','inter-fin':'Intercontinental · Final'
   };
 
-  function _mmInjectEnv(compKey) {
+
+  /* ── Calendar date helpers ───────────────────────────────────────── */
+  var _MONTH_ABBR_ES = {Ene:1,Feb:2,Mar:3,Abr:4,May:5,Jun:6,Jul:7,Ago:8,Sep:9,Oct:10,Nov:11,Dic:12};
+  function _mmAgDateMap() {
+    var map = {};
+    document.querySelectorAll('.ag-r').forEach(function(row) {
+      var d = row.querySelector('.ag-date');
+      var l = row.querySelector('.ag-lbl');
+      if (d && l) {
+        var key = l.textContent.trim().split(' · ')[0].trim();
+        map[key] = d.textContent.trim();
+      }
+    });
+    return map;
+  }
+  function _mmCalLabel(matchKey, compKey) {
+    var m = String(matchKey || '').match(/^lj(\d+)m/);
+    var j = m ? parseInt(m[1]) : (String(matchKey || '').match(/^j1m/) ? 1 : 0);
+    if (j > 0 && (!compKey || compKey === 'liga')) return 'Liga — J' + j;
+    var MAP = {
+      'copa':'Copa del Rey — 1/128','copa-fin':'Final Copa del Rey',
+      'inter':'Intercontinental — Cuartos','inter-fin':'Intercontinental — FINAL 🏆',
+      'ucl-fin':'Final Europa 🏆','uel-fin':'Final Europa 🏆',
+      'usc':'Supercopa de Europa','usc-fin':'Supercopa de Europa'
+    };
+    return MAP[compKey] || null;
+  }
+  function _mmParseCalDate(s) {
+    var p = String(s || '').trim().split(' ');
+    return { day: parseInt(p[0]) || 0, month: _MONTH_ABBR_ES[p[1]] || 0 };
+  }
+
+  function _mmInjectEnv(compKey, matchKey) {
     var envEl = document.getElementById('pp-env');
     if (!envEl) return;
-    var month   = new Date().getMonth() + 1; // use real calendar month
-    var sc      = _mmGetClimate(month);
+
+    var month, dayNum;
+    var dateMap = _mmAgDateMap();
+    var label = _mmCalLabel(matchKey || '', compKey || '');
+    var calStr = label ? (dateMap[label] || null) : null;
+    if (calStr) {
+      var parsed = _mmParseCalDate(calStr);
+      month = parsed.month || (new Date().getMonth() + 1);
+      dayNum = parsed.day || new Date().getDate();
+    } else {
+      month  = new Date().getMonth() + 1;
+      dayNum = new Date().getDate();
+    }
+
+    var sc = _mmGetClimate(month);
     var weather = sc.weathers[Math.floor(Math.random() * sc.weathers.length)];
-    var day     = Math.floor(Math.random() * 28) + 1;
     var compLabel = COMP_LABELS_MM[compKey] || compKey || 'Liga';
+    var sParts = sc.season.split(' ');
+    var sEmoji = sParts[0];
+    var sName  = sParts.slice(1).join(' ');
 
     envEl.innerHTML =
       '<div class="pp-env-line"><span>🏟️</span><b>eFootball Stadium</b></div>'
-      + '<div class="pp-env-line"><span>🗓️</span><b>' + day + ' de ' + MONTHS_ES[month - 1] + '</b>'
+      + '<div class="pp-env-line"><span>🗓️</span><b>' + dayNum + ' de ' + MONTHS_ES[month - 1] + '</b>'
       + '<span style="margin:0 6px;opacity:.4">|</span><span>🏆</span><b>' + compLabel + '</b></div>'
-      + '<div class="pp-env-line"><span>' + sc.season.split(' ')[0] + '</span><b>' + sc.season.replace(/^.\s/, '') + '</b>'
+      + '<div class="pp-env-line"><span>' + sEmoji + '</span><b>' + sName + '</b>'
       + '<span style="margin:0 6px;opacity:.4">·</span><b>' + weather + '</b></div>';
 
     // Reset Twitch selector for each new match
@@ -7897,12 +7944,12 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     if (sel) sel.value = '';
   }
 
-  // Wrap showPrePartidoOverlay to inject climate
+  // Wrap showPrePartidoOverlay to inject climate + calendar date
   var _mmPrevShowPre = window.showPrePartidoOverlay;
   if (typeof _mmPrevShowPre === 'function') {
     window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
       _mmPrevShowPre.apply(this, arguments);
-      setTimeout(function() { _mmInjectEnv(compKey); }, 60);
+      setTimeout(function() { _mmInjectEnv(compKey, matchKey); }, 60);
     };
   } else {
     // Retry until available
@@ -7912,7 +7959,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       var _prev = window.showPrePartidoOverlay;
       window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
         _prev.apply(this, arguments);
-        setTimeout(function() { _mmInjectEnv(compKey); }, 60);
+        setTimeout(function() { _mmInjectEnv(compKey, matchKey); }, 60);
       };
     }, 200);
   }

@@ -5254,3 +5254,100 @@
 <div class="ag-r ag-sel" style="border-bottom:none;"><span class="ag-date">20 Jul</span><span class="ag-ico">🌍</span><span class="ag-lbl" style="color:#f0c040;font-weight:700;">GRAN FINAL SELECCIONES 🏆</span><span class="ag-wx">☀️</span></div>
 
 </div>
+
+<script>
+/* ── FECHAS EN CABECERAS DE JORNADA (lee del calendario 📅, se actualiza si cambia) ── */
+(function(){
+  'use strict';
+
+  /* Cal-ID → etiqueta en .ag-lbl */
+  var CAL_MAP = {
+    'cal-sc-s':       'Supercopa — Semis',
+    'cal-sc-f':       'Supercopa — Final',
+    'cal-usc-s':      'UEFA Supercup — Semis',
+    'cal-usc-f':      'Supercopa de Europa',
+    'cal-copa-1r':    'Copa del Rey — 1/128',
+    'cal-copa-2r':    'Copa del Rey — 1/32',
+    'cal-copa-16':    'Copa del Rey — Dieciseisavos',
+    'cal-copa-oct':   'Copa del Rey — Octavos Ida',
+    'cal-copa-qt':    'Copa del Rey — Cuartos Ida',
+    'cal-copa-sf':    'Copa del Rey — Semis Ida',
+    'cal-copa-fin':   'Final Copa del Rey',
+    'cal-inter-q':    'Intercontinental — Cuartos',
+    'cal-inter-s':    'Intercontinental — Semis',
+    'cal-inter-f':    'Intercontinental — FINAL 🏆',
+    'cal-eu-rep-i':   'Europa — Repesca Ida',
+    'cal-eu-rep-v':   'Europa — Repesca Vuelta',
+    'cal-eu-oct-i':   'Europa — Octavos Ida',
+    'cal-eu-oct-v':   'Europa — Octavos Vuelta',
+    'cal-eu-qt-i':    'Europa — Cuartos Ida',
+    'cal-eu-qt-v':    'Europa — Cuartos Vuelta',
+    'cal-eu-sf-i':    'Europa — Semis Ida',
+    'cal-eu-sf-v':    'Europa — Semis Vuelta',
+    'cal-eu-fin':     'Final Europa 🏆'
+  };
+  /* Liga J1-J38 */
+  for (var n = 1; n <= 38; n++) CAL_MAP['cal-l' + n] = 'Liga — J' + n;
+  /* Europa grupos J1-J8 */
+  for (var g = 1; g <= 8; g++) CAL_MAP['cal-eu' + g] = 'Europa — Grupo J' + g;
+  /* Road Mundial J1-J5 */
+  for (var r = 1; r <= 5; r++) CAL_MAP['cal-rm' + r] = 'Road Mundial — J' + r;
+
+  function buildDateMap() {
+    var map = {};
+    document.querySelectorAll('.ag-r').forEach(function(row) {
+      var d = row.querySelector('.ag-date');
+      var l = row.querySelector('.ag-lbl');
+      if (d && l) {
+        var key = l.textContent.trim().split(' · ')[0].trim();
+        if (!map[key]) map[key] = d.textContent.trim();
+      }
+    });
+    return map;
+  }
+
+  function injectJbtnDates() {
+    var dateMap = buildDateMap();
+    document.querySelectorAll('.jbtn[onclick]').forEach(function(btn) {
+      var oc = btn.getAttribute('onclick') || '';
+      var m = oc.match(/tog\(['"]([\w-]+)['"]\)/);
+      if (!m) return;
+      var calId = m[1];
+      var label = CAL_MAP[calId];
+      var date  = label ? dateMap[label] : null;
+      if (!date) return;
+      var badge = btn.querySelector('.jbtn-cal-date');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'jbtn-cal-date';
+        /* ensure flex layout so badge floats right */
+        if (!btn.style.display) btn.style.display = 'flex';
+        btn.style.alignItems = 'center';
+        btn.appendChild(badge);
+      }
+      badge.textContent = '📅 ' + date;
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(injectJbtnDates, 250);
+  });
+  /* Also refresh whenever the user edits the calendar */
+  window._refreshJbtnDates = injectJbtnDates;
+  /* Re-inject on MutationObserver if .ag-date changes */
+  document.addEventListener('DOMContentLoaded', function() {
+    var agenda = document.getElementById('s-agenda');
+    if (!agenda) return;
+    var mo = new MutationObserver(function() { injectJbtnDates(); });
+    mo.observe(agenda, { childList: true, subtree: true, characterData: true });
+  });
+})();
+</script>
+<style>
+.jbtn-cal-date {
+  margin-left: auto; font-family: Oswald, sans-serif; font-size: 10px;
+  letter-spacing: 1px; color: rgba(255,255,255,.55);
+  background: rgba(255,255,255,.08); padding: 2px 7px; border-radius: 4px;
+  flex-shrink: 0; white-space: nowrap;
+}
+</style>

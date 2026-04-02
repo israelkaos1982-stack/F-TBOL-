@@ -4621,14 +4621,40 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var home = ((wrap.querySelectorAll('.ml-team-name')[0]||{}).textContent||'LOCAL').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
     var away = ((wrap.querySelectorAll('.ml-team-name')[1]||{}).textContent||'VISITANTE').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
     var env = document.getElementById('pp-env');
-    if (env) env.innerHTML = '🏟️ <b>Estadio:</b> eFootball Stadium · 🌝 <b>Temporada:</b> Verano · ☀️ <b>Clima:</b> Soleado';
+    if (env) env.innerHTML = '🏟️ <b>eFootball Stadium</b> &nbsp;·&nbsp; 🌝 Verano &nbsp;·&nbsp; ☀️ Soleado';
     var vs = document.getElementById('pp-vs');
     if (vs) {
       var lA=(typeof getLogoEquipo==='function'&&getLogoEquipo(home))||''; var lB=(typeof getLogoEquipo==='function'&&getLogoEquipo(away))||'';
-      vs.innerHTML = '<img src="'+lA+'" alt="'+home+'"/><div class="pp-vs-mid">'+home.toUpperCase()+' VS '+away.toUpperCase()+'</div><img src="'+lB+'" alt="'+away+'"/>';
+      var imgA = lA ? '<img src="'+lA+'" alt="'+home+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
+      var imgB = lB ? '<img src="'+lB+'" alt="'+away+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
+      vs.innerHTML = '<div style="text-align:center;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+home.toUpperCase()+'</div></div>'
+        + '<div class="pp-vs-mid" style="padding:0 8px;">VS</div>'
+        + '<div style="text-align:center;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+away.toUpperCase()+'</div></div>';
     }
     var alerts = document.getElementById('pp-alerts');
-    if (alerts) alerts.innerHTML = '🟨 SANCIONADOS · revisa overlay disciplinario<br>🟥 EXPULSADOS · se muestran con partidos restantes<br>🚑 LESIONADOS · baja médica activa';
+    if (alerts) {
+      var alertsHtml = '';
+      var bajas = window.BAJA_STORE || {};
+      var lesionesStore = window.LESION_STORE || {};
+      var sancionados = Object.keys(bajas).filter(function(n){ var b=bajas[n]; return b && (b.tipo||b)==='sancion'; });
+      var expulsados   = Object.keys(bajas).filter(function(n){ var b=bajas[n]; return b && (b.tipo||b)==='expulsion'; });
+      var lesionados   = Object.keys(lesionesStore);
+      sancionados.forEach(function(n) {
+        var b=bajas[n]; var pts=(b&&b.liga)?b.liga+'P Liga':'';
+        alertsHtml += '<div class="pp-alert-row pp-alert-yel">🟨 SANCIONADO: '+n+(pts?' · '+pts:'')+'</div>';
+      });
+      expulsados.forEach(function(n) {
+        var b=bajas[n]; var pts=(b&&b.liga)?b.liga+' partido(s) restante(s)':'';
+        alertsHtml += '<div class="pp-alert-row pp-alert-red">🟥 EXPULSADO: '+n+(pts?' · '+pts:'')+'</div>';
+      });
+      lesionados.forEach(function(n) {
+        var l=lesionesStore[n]; var ico=l.grado===3?'🚑':l.grado===2?'💉':'🩹';
+        var b=bajas[n]; var pts=(b&&b.liga)?b.liga+'P baja':'';
+        alertsHtml += '<div class="pp-alert-row pp-alert-inj">'+ico+' LESIONADO: '+n+' — '+(l.descripcion||'')+(pts?' · '+pts:'')+'</div>';
+      });
+      if (!alertsHtml) alertsHtml = '<div class="pp-alert-row pp-alert-ok">✅ Plantilla al 100% — Sin bajas ni sanciones</div>';
+      alerts.innerHTML = alertsHtml;
+    }
   }
 
   function _renderList(items) {

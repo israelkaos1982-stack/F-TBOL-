@@ -2962,6 +2962,32 @@
           var oo=ctx.createOscillator(), gg=ctx.createGain(); oo.connect(gg); gg.connect(ctx.destination);
           var tt=t+d; oo.frequency.setValueAtTime(i===2?620:820, tt); gg.gain.setValueAtTime(0.07, tt); gg.gain.exponentialRampToValueAtTime(0.0001, tt + (i===2?0.6:0.18)); oo.start(tt); oo.stop(tt + (i===2?0.6:0.18));
         });
+        return;
+      }
+      if (kind === 'goal') {
+        /* Fanfare ascendente — simula rugido del estadio */
+        [[0,523,0.14],[0.12,659,0.14],[0.22,784,0.2],[0.32,1047,0.35]].forEach(function(n){
+          var oo=ctx.createOscillator(), gg=ctx.createGain(); oo.connect(gg); gg.connect(ctx.destination);
+          var tt=t+n[0]; oo.frequency.setValueAtTime(n[1],tt); gg.gain.setValueAtTime(0.1,tt); gg.gain.exponentialRampToValueAtTime(0.0001,tt+n[2]); oo.start(tt); oo.stop(tt+n[2]);
+        });
+        /* Vibración grave de fondo */
+        var ob=ctx.createOscillator(), gb=ctx.createGain(); ob.connect(gb); gb.connect(ctx.destination);
+        ob.type='sine'; ob.frequency.setValueAtTime(80,t); gb.gain.setValueAtTime(0.06,t); gb.gain.exponentialRampToValueAtTime(0.0001,t+1.2); ob.start(t); ob.stop(t+1.2);
+        return;
+      }
+      if (kind === 'red') {
+        /* Tensión — dos notas graves con sawtooh */
+        [[0,180],[0.18,140]].forEach(function(n){
+          var oo=ctx.createOscillator(), gg=ctx.createGain(); oo.connect(gg); gg.connect(ctx.destination);
+          oo.type='sawtooth'; var tt=t+n[0]; oo.frequency.setValueAtTime(n[1],tt); gg.gain.setValueAtTime(0.07,tt); gg.gain.exponentialRampToValueAtTime(0.0001,tt+0.5); oo.start(tt); oo.stop(tt+0.5);
+        });
+        return;
+      }
+      if (kind === 'injury') {
+        /* Público asustado — oscilación descendente */
+        var oi=ctx.createOscillator(), gi=ctx.createGain(); oi.connect(gi); gi.connect(ctx.destination);
+        oi.type='sine'; oi.frequency.setValueAtTime(440,t); oi.frequency.exponentialRampToValueAtTime(220,t+0.8); gi.gain.setValueAtTime(0.07,t); gi.gain.exponentialRampToValueAtTime(0.0001,t+0.8); oi.start(t); oi.stop(t+0.8);
+        return;
       }
     } catch(_) {}
   }
@@ -2977,6 +3003,8 @@
     var tx = document.getElementById('ml-event-fx-text');
     if (tx) tx.textContent = text;
     ov.className = 'show ' + (cssClass || 'goal');
+    if (cssClass === 'goal') _mlPlayUiTone('goal');
+    if (cssClass === 'red')  _mlPlayUiTone('red');
     setTimeout(function(){ ov.className = ''; }, 5000);
   }
 
@@ -3057,6 +3085,72 @@
     st.pendingAIEvents.sort(function(a,b){return a.min-b.min;});
   }
 
+  /* ── LESIÓN EN VIVO (equipo humano) ──────────────────────── */
+  function _mlTriggerHumanInjury(mk) {
+    var st = _mlSt(mk);
+    var teamName = st.injuryTeam === 'a' ? st.home : st.away;
+    /* Elegir jugador del Top 18 por valor/poder */
+    var sq = (window.SQUAD_REGISTRY && window.SQUAD_REGISTRY[teamName]) || [];
+    var field = sq.filter(function(p){ return !p.h && p[2] !== 'P'; });
+    field.sort(function(a,b){ return (b[3]||70)-(a[3]||70); });
+    var candidates = field.slice(0, 18);
+    var alreadyInj = Object.keys(window.BAJA_STORE||{});
+    var available = candidates.filter(function(p){ return alreadyInj.indexOf(p[1]) === -1; });
+    var target = available.length ? available[Math.floor(Math.random()*available.length)] : candidates[0];
+    if (!target) { /* No hay candidatos, reanudar sin lesión */
+      if (!st.finished) { st.timerRunning = true; _mlStartIntervalGen(mk); }
+      return;
+    }
+    /* Elegir gravedad aleatoria */
+    var grades = ['leve','moderada','grave'];
+    var grade = grades[Math.floor(Math.random()*grades.length)];
+    var DICT = {
+      leve:     { ico:'🩹', grado:1, partidos:1, lista:['Sobrecarga muscular','Contusión en el cuádriceps','Esguince de tobillo Grado I','Calambre persistente','Elongación en el aductor'] },
+      moderada: { ico:'💉', grado:2, partidos:3, lista:['Microrrotura de fibras','Esguince de tobillo Grado II','Fascitis plantar aguda','Edema óseo en el peroné','Contractura severa con rotura parcial'] },
+      grave:    { ico:'🚑', grado:3, partidos:7, lista:['Rotura fibrilar Grado III','Fisura en el metatarsiano','Rotura parcial del ligamento lateral externo','Luxación de hombro completa','Desgarro profundo en el sóleo'] }
+    };
+    var d = DICT[grade];
+    var desc = d.lista[Math.floor(Math.random()*d.lista.length)];
+    var playerName = target[1];
+    /* Registrar en BAJA_STORE y LESION_STORE */
+    window.BAJA_STORE = window.BAJA_STORE || {};
+    window.BAJA_STORE[playerName] = { tipo:'lesion', liga:d.partidos, copa:d.partidos, europa:d.partidos };
+    window.LESION_STORE = window.LESION_STORE || {};
+    window.LESION_STORE[playerName] = { equipo:teamName, grado:d.grado, gradoEmoji:d.ico, gradoNombre:grade, descripcion:desc };
+    /* Añadir evento al acta */
+    var min = Math.floor(st.timerSec/60);
+    var id = Date.now();
+    st.events.push({type:'lesion',label:'Lesión',team:st.injuryTeam,num:target[0]||'',name:playerName,min:min,ico:'🩹',id:id});
+    _mlAddActaRow(mk, min, '🩹', playerName, target[0]||'', teamName, 'lesion', id);
+    /* Reproducir sonido de público asustado */
+    _mlPlayUiTone('injury');
+    /* Obtener logo del equipo para el overlay */
+    var logoSrc = (typeof getLogoEquipo === 'function' && getLogoEquipo(teamName)) || '';
+    var shieldHtml = logoSrc ? '<img src="'+logoSrc+'" alt="'+teamName+'" style="width:80px;height:80px;object-fit:contain;">' : '<span>🛡️</span>';
+    var ov = document.getElementById('ml-injury-ov');
+    if (ov) {
+      var shieldEl = document.getElementById('ml-injury-shield');
+      if (shieldEl) shieldEl.innerHTML = shieldHtml;
+      var plEl = document.getElementById('ml-injury-player');
+      if (plEl) plEl.textContent = d.ico + ' ' + playerName.toUpperCase();
+      var descEl = document.getElementById('ml-injury-desc');
+      if (descEl) descEl.textContent = desc + ' · Baja: ' + d.partidos + ' partido(s)';
+      ov.setAttribute('data-mk', mk);
+      ov.classList.add('show');
+    }
+  }
+
+  window._mlDismissInjury = function() {
+    var ov = document.getElementById('ml-injury-ov');
+    if (!ov) return;
+    var mk = ov.getAttribute('data-mk');
+    ov.classList.remove('show');
+    if (mk) {
+      var st = _mlSt(mk);
+      if (!st.finished) { st.timerRunning = true; _mlStartIntervalGen(mk); }
+    }
+  };
+
   function _mlStartIntervalGen(mk) {
     var st = _mlSt(mk);
     // Pre-generate AI events for HvIA matches
@@ -3072,6 +3166,13 @@
       var stoppageMax = normalMax + (st.stoppageSec||0)*60;
       // Fire pending AI events
       _mlFirePendingEvents(mk, curMin);
+      /* Disparar lesión programada para el equipo humano */
+      if (st.injuryScheduled && !st.injuryFired && curMin >= st.injuryMin) {
+        st.injuryFired = true;
+        clearInterval(st.timerInterval); st.timerRunning = false;
+        _mlRenderTimerGen(mk);
+        _mlTriggerHumanInjury(mk);
+      }
       // Half-time marker at 45'
       if (!st.htDone && st.timerSec >= 2700) {
         st.htDone = true;
@@ -3105,7 +3206,24 @@
     var st = _mlSt(mk);
     if (st.finished) return;
     if (st.timerRunning) { clearInterval(st.timerInterval); st.timerRunning=false; _mlRenderTimerGen(mk); }
-    else { if (!st.kickoffDone) { st.kickoffDone = true; _mlPlayUiTone('start'); } st.timerRunning=true; _mlStartIntervalGen(mk); }
+    else {
+      if (!st.kickoffDone) {
+        st.kickoffDone = true; _mlPlayUiTone('start');
+        /* Pre-generar lesión aleatoria para el equipo humano (5-10%, min 1-75) */
+        if (!st.injuryScheduled && typeof esHumano === 'function') {
+          var humA = esHumano(st.home), humB = esHumano(st.away);
+          if (humA || humB) {
+            var prob = 0.05 + Math.random() * 0.05;
+            if (Math.random() < prob) {
+              st.injuryScheduled = true;
+              st.injuryMin = Math.floor(Math.random() * 74) + 1;
+              st.injuryTeam = humA ? 'a' : 'b';
+            }
+          }
+        }
+      }
+      st.timerRunning=true; _mlStartIntervalGen(mk);
+    }
   };
   window.mlActivateETGen = function(mk) {
     var st = _mlSt(mk);
@@ -3188,6 +3306,47 @@
       window.registrarResultadoLiga(mk, st.home, st.away, st.sc.a, st.sc.b, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, winner==='pen'?winner:null);
     if (typeof window.registrarLigaPlayerStats==='function')
       window.registrarLigaPlayerStats(mk, st.home, st.away, evts, mvpName, mvpTeam);
+    /* Mostrar overlay FINAL → luego post-partido con WhatsApp */
+    _mlShowFinalThenPost(mk);
+  }
+
+  function _mlShowFinalThenPost(mk) {
+    var finalOv = document.getElementById('ml-final-ov');
+    if (finalOv) {
+      finalOv.classList.add('show');
+      setTimeout(function() {
+        finalOv.classList.remove('show');
+        _mlOpenPostMatch(mk);
+      }, 3000);
+    } else {
+      _mlOpenPostMatch(mk);
+    }
+  }
+
+  function _mlOpenPostMatch(mk) {
+    var st = _mlSt(mk);
+    var ov = document.getElementById('ml-post-ov');
+    if (!ov) return;
+    var evts = st.events;
+    var goles = st.sc.a + st.sc.b;
+    var tarjetas = evts.filter(function(e){ return e.type==='amarilla'||e.type==='roja'||e.type==='d-amarilla'; }).length;
+    var lesiones = evts.filter(function(e){ return e.type==='lesion'; }).length;
+    var mvpEvt = evts.find(function(e){ return e.type==='mvp'; });
+    var mvpLabel = mvpEvt ? '⭐ MVP: ' + mvpEvt.name : '⭐ MVP: —';
+    var scoreEl = document.getElementById('ml-post-score');
+    if (scoreEl) scoreEl.textContent = st.home + '  ' + st.sc.a + ' – ' + st.sc.b + '  ' + st.away;
+    var golesEl = document.getElementById('ml-post-goles');   if (golesEl)   golesEl.textContent   = goles;
+    var tarjEl  = document.getElementById('ml-post-tarjetas'); if (tarjEl)   tarjEl.textContent    = tarjetas;
+    var lesEl   = document.getElementById('ml-post-lesiones'); if (lesEl)    lesEl.textContent     = lesiones;
+    var mvpEl   = document.getElementById('ml-post-mvp');     if (mvpEl)    mvpEl.textContent     = mvpLabel;
+    var waBtn   = document.getElementById('ml-post-wa-btn');
+    if (waBtn) {
+      waBtn.onclick = function() {
+        var msg = '¡Mira el resultado de mi partido: ' + st.home + ' ' + st.sc.a + ' - ' + st.sc.b + ' ' + st.away + '!';
+        try { window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank'); } catch(_){}
+      };
+    }
+    ov.classList.add('show');
   }
 
   /* ── SELECCIÓN DE EVENTOS GENÉRICA (overlays globales) ── */
@@ -3262,7 +3421,7 @@
     var evt=_genPendingEvt; _genPendingEvt=null;
     var st=_mlSt(mk);
     var min=Math.min(st.etDone?120:90,Math.floor(st.timerSec/60));
-    var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+    var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',porteria:'🧤'};
     var ico=icos[evt.type]||'📋';
     var goalTypes=['gol','falta-gol','pen-gol'];
     if(goalTypes.indexOf(evt.type)!==-1){st.sc[team]++;}
@@ -4587,6 +4746,9 @@
         <div class="gm-card" onclick="window.gmPickEvent('Lesión','lesion')">
           <span class="gm-card-ico">🩹</span><span class="gm-card-lbl">Lesión</span>
         </div>
+        <div class="gm-card c-mvp" onclick="window.gmPickEvent('Portería Imbatida','porteria')">
+          <span class="gm-card-ico">🧤</span><span class="gm-card-lbl">P. Imbatida</span>
+        </div>
       </div>
       <button onclick="window.gmHideEvents()"
         style="width:100%;padding:7px;border-radius:5px;border:1px solid rgba(255,255,255,.15);
@@ -4644,6 +4806,77 @@
   </div>
 </div>
 
+<!-- ══ OVERLAY LESIÓN EN VIVO (equipo humano) ════════════════ -->
+<div id="ml-injury-ov" class="ml-injury-ov">
+  <div class="ml-injury-box">
+    <div class="ml-injury-shield" id="ml-injury-shield">🛡️</div>
+    <div class="ml-injury-title">¡¡¡ JUGADOR LESIONADO !!!</div>
+    <div class="ml-injury-player" id="ml-injury-player"></div>
+    <div class="ml-injury-desc" id="ml-injury-desc"></div>
+    <button class="ml-injury-btn" onclick="window._mlDismissInjury()">🔄 JUGADOR SUSTITUIDO</button>
+  </div>
+</div>
+
+<!-- ══ OVERLAY FINAL (3 segundos, luego post-partido) ═══════ -->
+<div id="ml-final-ov" class="ml-final-ov">
+  <div class="ml-final-text">FINAL</div>
+</div>
+
+<!-- ══ POST-PARTIDO GENÉRICO (jornadas 2-38 y Europa) ═══════ -->
+<div id="ml-post-ov" class="ml-post-ov">
+  <div class="ml-post-card">
+    <div class="ml-post-title">FINAL DEL PARTIDO</div>
+    <div class="ml-post-score" id="ml-post-score"></div>
+    <div class="ml-post-stats">
+      <div class="ml-post-stat"><b id="ml-post-goles">0</b><span>GOLES</span></div>
+      <div class="ml-post-stat"><b id="ml-post-tarjetas">0</b><span>TARJETAS</span></div>
+      <div class="ml-post-stat"><b id="ml-post-lesiones">0</b><span>LESIONES</span></div>
+    </div>
+    <div id="ml-post-mvp"></div>
+    <button id="ml-post-wa-btn" class="ml-post-wa-btn">🟢 WHATSAPP · COMPARTIR RESULTADO</button>
+    <button class="ml-post-close" onclick="document.getElementById('ml-post-ov').classList.remove('show')">CERRAR</button>
+  </div>
+</div>
+
+<style>
+/* ── Lesión en vivo ────────────────────────────────────────── */
+.ml-injury-ov{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:99998;display:none;align-items:center;justify-content:center;padding:20px;}
+.ml-injury-ov.show{display:flex;}
+.ml-injury-box{text-align:center;padding:30px 24px;max-width:360px;width:100%;}
+.ml-injury-shield{font-size:80px;line-height:1;margin-bottom:20px;animation:mlInjuryShake 0.45s ease-in-out infinite;}
+.ml-injury-shield img{width:90px;height:90px;object-fit:contain;animation:mlInjuryShake 0.45s ease-in-out infinite;}
+@keyframes mlInjuryShake{0%,100%{transform:rotate(-8deg) scale(1.08)}50%{transform:rotate(8deg) scale(1.12)}}
+.ml-injury-title{font-family:'Bebas Neue',sans-serif;font-size:34px;letter-spacing:3px;color:#ff4444;animation:ppBlink 0.45s linear infinite;margin:0 0 18px;}
+.ml-injury-player{font-family:'Oswald',sans-serif;font-size:20px;letter-spacing:1px;color:#fff;margin-bottom:8px;font-weight:700;}
+.ml-injury-desc{font-family:'Rajdhani',sans-serif;font-size:14px;color:rgba(255,255,255,.65);margin-bottom:24px;line-height:1.4;}
+.ml-injury-btn{background:linear-gradient(90deg,#1a4a1a,#2a8a2a,#1a4a1a);border:1px solid rgba(80,200,80,.5);color:#fff;font-family:'Oswald',sans-serif;font-size:16px;letter-spacing:2px;padding:14px 20px;border-radius:8px;cursor:pointer;width:100%;transition:filter .15s;}
+.ml-injury-btn:hover{filter:brightness(1.2);}
+/* ── FINAL overlay ─────────────────────────────────────────── */
+.ml-final-ov{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:99999;display:none;align-items:center;justify-content:center;}
+.ml-final-ov.show{display:flex;}
+.ml-final-text{font-family:'Bebas Neue',sans-serif;font-size:90px;letter-spacing:10px;animation:mlFinalBlink 0.5s linear infinite;background:linear-gradient(90deg,#f0c040,#fff,#f0c040);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+@keyframes mlFinalBlink{0%,100%{opacity:1}50%{opacity:.25}}
+/* ── Post-partido genérico ─────────────────────────────────── */
+.ml-post-ov{position:fixed;inset:0;z-index:10009;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:16px;}
+.ml-post-ov.show{display:flex;}
+.ml-post-card{width:100%;max-width:420px;border-radius:12px;border:1px solid rgba(61,255,113,.35);background:linear-gradient(170deg,#07140c,#0f1f18);padding:16px;box-shadow:0 0 26px rgba(61,255,113,.18);}
+.ml-post-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:3px;color:#f0c040;text-align:center;margin-bottom:6px;}
+.ml-post-score{font-family:'Oswald',sans-serif;font-size:16px;letter-spacing:1px;color:#fff;text-align:center;margin-bottom:12px;padding:8px;background:rgba(255,255,255,.05);border-radius:6px;}
+.ml-post-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.ml-post-stat{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 4px;text-align:center;}
+.ml-post-stat b{display:block;font-family:'Bebas Neue',sans-serif;font-size:24px;color:#fff;}
+.ml-post-stat span{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.6);}
+#ml-post-mvp{width:100%;margin-bottom:10px;border-radius:8px;border:1px solid rgba(240,192,64,.35);background:rgba(240,192,64,.09);padding:10px;color:#f7d576;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.2px;text-align:center;}
+.ml-post-wa-btn{width:100%;border:none;border-radius:8px;padding:12px 10px;margin-bottom:8px;font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;letter-spacing:1.6px;color:#001c09;background:linear-gradient(90deg,#19ff7f,#4dff96,#1aff82);box-shadow:0 0 16px rgba(45,255,130,.75),0 0 36px rgba(45,255,130,.35);cursor:pointer;animation:gmWaGlow 1.35s ease-in-out infinite;}
+.ml-post-close{width:100%;border-radius:8px;border:1px solid rgba(255,255,255,.16);padding:8px;background:rgba(255,255,255,.06);color:#bbb;font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;}
+/* ── Alert rows en pre-partido ─────────────────────────────── */
+.pp-alert-row{font-family:'Rajdhani',sans-serif;font-size:13px;line-height:1.4;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+.pp-alert-yel{color:#ffd700;}
+.pp-alert-red{color:#ff5555;}
+.pp-alert-inj{color:#ff9944;}
+.pp-alert-ok{color:#4dff96;font-style:italic;}
+</style>
+
 <div id="gm-post-ov">
   <div id="gm-post-card">
     <div class="gm-post-title">FINAL</div>
@@ -4676,6 +4909,7 @@
     <div class="ml-ev-ov-card c-red" onclick="genEvPick('Roja Directa','roja')"><span class="ml-ev-ov-ico">🟥</span><span class="ml-ev-ov-lbl">Roja Directa</span></div>
     <div class="ml-ev-ov-card c-mvp" onclick="genEvPick('MVP del Partido','mvp')"><span class="ml-ev-ov-ico">⭐</span><span class="ml-ev-ov-lbl">MVP del Partido</span></div>
     <div class="ml-ev-ov-card" onclick="genEvPick('Lesión','lesion')"><span class="ml-ev-ov-ico">🩹</span><span class="ml-ev-ov-lbl">Lesión</span></div>
+    <div class="ml-ev-ov-card c-mvp" onclick="genEvPick('Portería Imbatida','porteria')"><span class="ml-ev-ov-ico">🧤</span><span class="ml-ev-ov-lbl">P. Imbatida</span></div>
   </div>
   <button class="ml-ev-ov-close" onclick="genEvClose()">✕ Cancelar</button>
 </div>

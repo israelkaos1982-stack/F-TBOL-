@@ -4616,10 +4616,17 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   function _ppClickSfx() { try { var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return; var ctx=window.__ppAudio||(window.__ppAudio=new Ctx()); var o=ctx.createOscillator(); var g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); var t=ctx.currentTime; o.frequency.setValueAtTime(1180,t); g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.05); o.start(t); o.stop(t+0.05);} catch(_){} }
 
   function _renderPreviaMeta(matchKey, isHvH) {
+    var home, away;
     var wrap = document.getElementById('mlw-' + matchKey);
-    if (!wrap) return;
-    var home = ((wrap.querySelectorAll('.ml-team-name')[0]||{}).textContent||'LOCAL').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
-    var away = ((wrap.querySelectorAll('.ml-team-name')[1]||{}).textContent||'VISITANTE').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+    if (wrap) {
+      home = ((wrap.querySelectorAll('.ml-team-name')[0]||{}).textContent||'LOCAL').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+      away = ((wrap.querySelectorAll('.ml-team-name')[1]||{}).textContent||'VISITANTE').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+    } else if (window._ppPreviaTeams) {
+      home = window._ppPreviaTeams.home || 'LOCAL';
+      away = window._ppPreviaTeams.away || 'VISITANTE';
+    } else {
+      return;
+    }
     var env = document.getElementById('pp-env');
     if (env) env.innerHTML = '🏟️ <b>eFootball Stadium</b> &nbsp;·&nbsp; 🌝 Verano &nbsp;·&nbsp; ☀️ Soleado';
     var vs = document.getElementById('pp-vs');
@@ -4779,23 +4786,16 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   window._openMatchWithPrevia = function(j, home, away) {
     var isHvH = (typeof esHumano === 'function') && esHumano(home) && esHumano(away);
     var duracion = isHvH ? '10 min' : '8 min';
+    /* Guardar equipos para que _renderPreviaMeta los use */
+    window._ppPreviaTeams = { home: home, away: away };
     window._ppCustomCallback = function() {
+      window._ppPreviaTeams = null;
       if (typeof window.abrirResultadoLiga === 'function') {
         window.abrirResultadoLiga(j, home, away);
       }
     };
     if (typeof window.showPrePartidoOverlay === 'function') {
       window.showPrePartidoOverlay('cal-match', 'liga', isHvH ? 'Sí' : 'No', duracion, isHvH);
-      /* Actualizar escudos con los equipos reales */
-      var vs = document.getElementById('pp-vs');
-      if (vs && typeof getLogoEquipo === 'function') {
-        var lA = getLogoEquipo(home)||'', lB = getLogoEquipo(away)||'';
-        var imgA = lA ? '<img src="'+lA+'" alt="'+home+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
-        var imgB = lB ? '<img src="'+lB+'" alt="'+away+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
-        vs.innerHTML = '<div style="text-align:center;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+home.toUpperCase()+'</div></div>'
-          + '<div class="pp-vs-mid" style="padding:0 8px;">VS</div>'
-          + '<div style="text-align:center;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+away.toUpperCase()+'</div></div>';
-      }
     }
   };
 

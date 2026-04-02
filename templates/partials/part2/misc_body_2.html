@@ -3531,7 +3531,7 @@
   window.gmTimerClick = function () {
     if (_gm.finished) return;
     if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; gmRenderTimer(); }
-    else { gmStartTimer(); }
+    else { if (!_gm.kickoffDone) { _gm.kickoffDone = true; _mlPlayUiTone('start'); } gmStartTimer(); }
   };
 
   window.gmShowEvents = function () {
@@ -3618,6 +3618,16 @@
       _gm.sc[team === 'a' ? 'b' : 'a']++;
     }
     document.getElementById('gm-score').textContent = _gm.sc.a + '-' + _gm.sc.b;
+
+    /* Flash visual + sonido */
+    var goalTypes2 = ['gol','falta-gol','pen-gol'];
+    if (goalTypes2.indexOf(evt.type) !== -1 || evt.type === 'propia') {
+      _mlShowEventFlash('¡¡¡ GOOOOOL !!!', 'goal');
+    } else if (evt.type === 'roja' || evt.type === 'damarilla') {
+      _mlShowEventFlash('EXPULSIÓN', 'red');
+    } else if (evt.type === 'lesion') {
+      _mlPlayUiTone('injury');
+    }
 
     /* añadir al acta */
     var li = document.createElement('div');
@@ -3708,8 +3718,16 @@
     _gm.events = []; _gm.etDone = false; _gm.finished = false;
     _gm.timerSec = 0; _gm.timerRunning = false; _gm.isHvH = isHvH; _gm.pendingEvt = null;
     clearInterval(_gm.timerInterval);
-    document.getElementById('gm-team-a-name').textContent = home;
-    document.getElementById('gm-team-b-name').textContent = away;
+    _gm.kickoffDone = false;
+    /* Escudos + nombres en la pantalla de partido */
+    var lA = (typeof getLogoEquipo === 'function' && getLogoEquipo(home)) || '';
+    var lB = (typeof getLogoEquipo === 'function' && getLogoEquipo(away)) || '';
+    var shA = lA ? '<img src="'+lA+'" style="width:50px;height:50px;object-fit:contain;display:block;margin:0 auto 4px;">' : '';
+    var shB = lB ? '<img src="'+lB+'" style="width:50px;height:50px;object-fit:contain;display:block;margin:0 auto 4px;">' : '';
+    var elA = document.getElementById('gm-team-a-name');
+    var elB = document.getElementById('gm-team-b-name');
+    if (elA) elA.innerHTML = shA + '<span>' + home + '</span>';
+    if (elB) elB.innerHTML = shB + '<span>' + away + '</span>';
     document.getElementById('gm-score').textContent = '0-0';
     document.getElementById('gm-acta-list').innerHTML = '<div class="ml-acta-empty" style="padding:8px;color:#555;font-size:11px;text-align:center;">Sin eventos aún</div>';
     document.getElementById('gm-event-panel').style.display = 'none';

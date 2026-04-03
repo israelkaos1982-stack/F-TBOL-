@@ -2795,9 +2795,10 @@
       + '</div>';
     var etStyle = isHvH ? '' : ' style="display:none"';
     var emk = mk.replace(/'/g,"\\'");
+    var _homeStadium = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || 'eFootball Stadium') : 'eFootball Stadium';
     return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'" style="'+gradStyle+'">'
       +bgShA+bgShB
-      +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">eFootball Stadium</span><span class="ml-venue-sep">|</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado · Verano</span></div>'
+      +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">'+_homeStadium+'</span><span class="ml-venue-sep">|</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado · Verano</span></div>'
       +'<div class="ml-header">'
         +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldA+'<div class="ml-team-name">'+hiH+hu+'</div></div>'
         +'<div class="ml-score-wrap" style="z-index:1;">'

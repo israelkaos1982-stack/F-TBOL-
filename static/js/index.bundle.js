@@ -126,6 +126,132 @@ window.TEAM_RATINGS={
   'Juventud Torremolinos':52,
   'Estepona':50,
 };
+// ═══ ESTADIOS POR EQUIPO (eFootball 2026) ═══
+window.TEAM_STADIUMS = {
+  // --- EQUIPOS HUMANOS ---
+  'Real Madrid':            'EFOOTBALL STADIUM',
+  'FC Barcelona':           'CAMP NOU',
+  'Bayern Munich':          'NEW BALANCE ARENA',
+  'Arsenal':                'EMIRATES STADIUM',
+  'Sporting CP':            'STADIO ORIONE',
+  // --- LA LIGA ---
+  'Atlético Madrid':        'STADIO ORIONE',
+  'Atletico Madrid':        'STADIO ORIONE',
+  'Real Sociedad':          'SAITAMA STADIUM 2002',
+  'Real Betis':             'MORUMBIS',
+  'Betis':                  'MORUMBIS',
+  'Sevilla FC':             'ROSE PARK STADIUM',
+  'Sevilla':                'ROSE PARK STADIUM',
+  'Rayo Vallecano':         'SPORTS PARK',
+  'Villarreal CF':          'ESTADIO DEL NUEVO TRIUNFO',
+  'Villarreal':             'ESTADIO DEL NUEVO TRIUNFO',
+  'Elche CF':               'ESTADIO DEL MARTINGAL',
+  'Elche':                  'ESTADIO DEL MARTINGAL',
+  'Mallorca':               'ESTADIO AKRON',
+  'Valencia CF':            'SAN SIRO',
+  'Valencia':               'SAN SIRO',
+  'Girona FC':              'ESTADIO URBANO CALDEIRA',
+  'Girona':                 'ESTADIO URBANO CALDEIRA',
+  'Espanyol':               'ESTADIO DEL NUEVO TRIUNFO',
+  'Getafe CF':              'COLISEO DE LOS DEPORTES',
+  'Getafe':                 'COLISEO DE LOS DEPORTES',
+  'Córdoba CF':             'ESTADIO DEL MARTINGAL',
+  'Córdoba':                'ESTADIO DEL MARTINGAL',
+  'Celta de Vigo':          'ESTADIO OLÍMPICO',
+  'Celta Vigo':             'ESTADIO OLÍMPICO',
+  'Celta':                  'ESTADIO OLÍMPICO',
+  'Athletic Club':          'SIGNAL IDUNA PARK',
+  'Deportivo Alavés':       'BURG STADION',
+  'Osasuna':                'BURG STADION',
+  // --- SEGUNDA DIVISIÓN ---
+  'Albacete Balompié':      'ESTADIO BANORTE',
+  'Real Racing Club':       'BURG STADION',
+  'Almería':                'ESTADIO AKRON',
+  'Deportivo La Coruña':    'STADIO ORIONE',
+  'Málaga CF':              'SAITAMA STADIUM 2002',
+  'Málaga':                 'SAITAMA STADIUM 2002',
+  'Burgos Club de Fútbol':  'SPORTS PARK',
+  'Eibar':                  'ESTADIO URBANO CALDEIRA',
+  'Huesca':                 'SPORTS PARK',
+  'Las Palmas':             'ESTADIO OLÍMPICO UNIVERSITARIO',
+  'Leganés':                'COLISEO DE LOS DEPORTES',
+  'Levante UD':             'ESTADIO DEL NUEVO TRIUNFO',
+  'Levante':                'ESTADIO DEL NUEVO TRIUNFO',
+  'Real Oviedo':            'BURG STADION',
+  'Sporting Gijón':         'ROSE PARK STADIUM',
+  'Real Valladolid':        'ESTADIO DEL MARTINGAL',
+  'AD Ceuta':               'ESTADIO BANORTE',
+  'Real Sociedad B U21':    'SPORTS PARK',
+  'FC Andorra':             'SPORTS PARK',
+  'Cádiz CF':               'ESTADIO DEL MARTINGAL',
+  'Cádiz':                  'ESTADIO DEL MARTINGAL',
+  'Granada':                'ROSE PARK STADIUM',
+  'Cultural Leonesa':       'ESTADIO DEL MARTINGAL',
+  'Mirandés':               'ESTADIO URBANO CALDEIRA',
+  'Real Zaragoza':          'OLD TRAFFORD',
+  'CD Castellón':           'ESTADIO DEL MARTINGAL',
+  // --- PRIMERA RFEF ---
+  'Real Madrid Castilla':   'EFOOTBALL STADIUM',
+  'RM Castilla':            'EFOOTBALL STADIUM',
+  'Ponferradina':           'BURG STADION',
+  'CD Lugo':                'BURG STADION',
+  'Celta Fortuna':          'SPORTS PARK',
+  'Racing Ferrol':          'ESTADIO DEL NUEVO TRIUNFO',
+  'Gimnàstic Tarragona':    'ROSE PARK STADIUM',
+  'Osasuna Promesas':       'SPORTS PARK',
+  'Bilbao Ath.':            'SPORTS PARK',
+  'Bilbao Athletic':        'SPORTS PARK',
+  'Unionistas CF':          'SPORTS PARK',
+  'AD Mérida':              'ESTADIO OLÍMPICO',
+  'Mérida AD':              'ESTADIO OLÍMPICO',
+  'Barakaldo':              'BURG STADION',
+  'Barakaldo CF':           'BURG STADION',
+  'Arenteiro':              'ESTADIO URBANO CALDEIRA',
+  'CD Arenteiro':           'ESTADIO URBANO CALDEIRA',
+  'Zamora CF':              'ESTADIO BANORTE',
+  'Ourense CF':             'ESTADIO BANORTE',
+  'CF Talavera':            'ESTADIO BANORTE',
+  'CD Guadalajara':         'ESTADIO BANORTE',
+  'Guadalajara':            'ESTADIO BANORTE',
+  'CP Cacereño':            'ESTADIO DEL MARTINGAL',
+  'Arenas de Getxo':        'SPORTS PARK',
+  'Real Avilés Industrial': 'ESTADIO OLÍMPICO UNIVERSITARIO',
+  // --- PRIMERA RFEF GRUPO 2 ---
+  'UD Ibiza':               'ESTADIO AKRON',
+  'Real Murcia':            'STADIO ORIONE',
+  'Eldense':                'ESTADIO DEL NUEVO TRIUNFO',
+  'Hércules CF':            'MORUMBIS',
+  'Hércules':               'MORUMBIS',
+  'AD Alcorcón':            'BURG STADION',
+  'Alcorcón':               'BURG STADION',
+  'FC Cartagena':           'ESTADIO DEL MARTINGAL',
+  'Villarreal B':           'ESTADIO DEL NUEVO TRIUNFO',
+  'Marbella FC':            'ESTADIO AKRON',
+  'CE Sabadell':            'ESTADIO DEL MARTINGAL',
+  'Betis Deportivo':        'ESTADIO DEL MARTINGAL',
+  'Antequera CF':           'ESTADIO BANORTE',
+  'Sevilla At.':            'ESTADIO DEL MARTINGAL',
+  'Sevilla Atlético':       'ESTADIO DEL MARTINGAL',
+  'Algeciras CF':           'STADIO ORIONE',
+  'Atlético Madrileño':     'SPORTS PARK',
+  'At. Sanluqueño':         'ESTADIO URBANO CALDEIRA',
+  'Atlético Sanluqueño':    'ESTADIO URBANO CALDEIRA',
+  'CE Europa':              'ESTADIO URBANO CALDEIRA',
+  'SD Tarazona':            'SPORTS PARK',
+  'Tarazona':               'SPORTS PARK',
+  'CD Teruel':              'SPORTS PARK',
+  'Juventud Torremolinos':  'ESTADIO BANORTE',
+  'Estepona':               'ESTADIO BANORTE',
+  // --- EUROPEOS / INTERNACIONALES ---
+  'PSG':                    'PARC DES PRINCES',
+  'Paris Saint-Germain':    'PARC DES PRINCES',
+};
+
+window.getTeamStadium = function(name) {
+  if (!name || !window.TEAM_STADIUMS) return '';
+  return window.TEAM_STADIUMS[name] || window.TEAM_STADIUMS[name.trim()] || '';
+};
+
 window.SQUAD_REGISTRY={
   'Real Madrid':[
     {h:'🧤 PORTEROS'},
@@ -4570,7 +4696,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   function _buildItems(matchKey, compKey, prorroga, duracion, isHvH) {
     // Fixed items for Liga Jornada 1
-    var estadio  = 'eFootball Stadium';
+    var estadio  = 'eFootball Stadium'; // fallback — overwritten below from venue-bar or TEAM_STADIUMS
     var estacion = 'Verano';
     var tiempo   = 'Soleado';
     var balon    = "Ligue 1 McDonald's";
@@ -4628,7 +4754,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       return;
     }
     var env = document.getElementById('pp-env');
-    if (env) env.innerHTML = '🏟️ <b>eFootball Stadium</b> &nbsp;·&nbsp; 🌝 Verano &nbsp;·&nbsp; ☀️ Soleado';
+    var _ppStadium = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || 'eFootball Stadium') : 'eFootball Stadium';
+    if (env) env.innerHTML = '🏟️ <b>' + _ppStadium + '</b> &nbsp;·&nbsp; 🌝 Verano &nbsp;·&nbsp; ☀️ Soleado';
     var vs = document.getElementById('pp-vs');
     if (vs) {
       // Try DOM first (match wrap has real logos incl. base64), then API fallbacks

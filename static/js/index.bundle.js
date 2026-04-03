@@ -3093,23 +3093,33 @@ function mlPreviaClick(matchKey) {
     if (jm && jm.id) {
       var jid = jm.id;
       window._ppBlockId = jid;
-      if (jid === 'cal-copa-fin')          compKey = 'copa-fin';
-      else if (jid === 'sc-final')         compKey = 'sc-final';
-      else if (jid === 'cal-usc-f')        compKey = 'usc-fin';
-      else if (jid === 'ucl-fin')          compKey = 'ucl-fin';
-      else if (jid === 'uel-fin')          compKey = 'uel-fin';
-      else if (jid === 'uecl-fin')         compKey = 'uecl-fin';
-      else if (jid === 'cal-inter-f')      compKey = 'inter-fin';
-      else if (jid === 'sc-semis')         compKey = 'sc';
-      else if (jid.startsWith('cal-sc-'))  compKey = 'sc';
-      else if (jid.startsWith('cal-usc-')) compKey = 'usc';
-      else if (jid.startsWith('cal-copa-'))compKey = 'copa';
-      else if (jid.startsWith('cal-l'))    compKey = 'liga';
-      else if (jid.startsWith('ucl-'))     compKey = 'ucl';
-      else if (jid.startsWith('uel-'))     compKey = 'uel';
-      else if (jid.startsWith('uecl-'))    compKey = 'uecl';
-      else if (jid.startsWith('cal-sl'))   compKey = 'superliga';
-      else if (jid.startsWith('cal-inter-'))compKey = 'inter';
+      if (jid === 'cal-copa-fin')              compKey = 'copa-fin';
+      else if (jid === 'sc-final')             compKey = 'sc-final';
+      else if (jid === 'cal-usc-f')            compKey = 'usc-fin';
+      else if (jid === 'ucl-fin')              compKey = 'ucl-fin';
+      else if (jid === 'uel-fin')              compKey = 'uel-fin';
+      else if (jid === 'uecl-fin')             compKey = 'uecl-fin';
+      else if (jid === 'cal-inter-f')          compKey = 'inter-fin';
+      else if (jid === 'cal-rec-fin')          compKey = 'recopa-fin';
+      else if (jid === 'cal-eu-fin')           compKey = 'eur-fin';
+      else if (jid === 'sc-semis')             compKey = 'sc';
+      else if (jid.startsWith('cal-sc-'))      compKey = 'sc';
+      else if (jid.startsWith('cal-usc-'))     compKey = 'usc';
+      else if (jid.startsWith('cal-copa-'))    compKey = 'copa';
+      else if (jid.startsWith('cal-l'))        compKey = 'liga';
+      else if (jid.startsWith('cl-j'))         compKey = 'liga';
+      else if (jid.startsWith('ucl-'))         compKey = 'ucl';
+      else if (jid.startsWith('cal-ucl-'))     compKey = 'ucl';
+      else if (jid.startsWith('uel-'))         compKey = 'uel';
+      else if (jid.startsWith('uecl-'))        compKey = 'uecl';
+      else if (jid.startsWith('cal-sl'))       compKey = 'superliga';
+      else if (jid.startsWith('cal-inter-'))   compKey = 'inter';
+      else if (jid.startsWith('cal-rec-'))     compKey = 'recopa';
+      else if (jid.startsWith('cal-eu-g'))     compKey = 'eur-grupo';
+      else if (jid.startsWith('cal-eu-'))      compKey = 'eur-ko';
+      else if (jid.startsWith('cal-ams'))      compKey = 'amistoso';
+      else if (jid.startsWith('cal-sel'))      compKey = 'sel';
+      else if (jid.startsWith('cal-mf-'))      compKey = 'sel-fin';
     }
   }
   // Determinar prórroga automática según reglas
@@ -3120,7 +3130,7 @@ function mlPreviaClick(matchKey) {
   if (isHvH) {
     prorroga = 'Sí';
   } else {
-    var conProrroga = ['copa','copa-fin','sc','sc-final','usc','usc-fin','inter','inter-fin','ucl-fin','uel-fin','uecl-fin'];
+    var conProrroga = ['copa','copa-fin','sc','sc-final','usc','usc-fin','inter','inter-fin','ucl-fin','uel-fin','uecl-fin','recopa','recopa-fin','eur-ko','eur-fin','sel','sel-fin'];
     prorroga = (conProrroga.indexOf(compKey) !== -1) ? 'Sí' : 'No';
   }
   // Duración según HvH o HvIA
@@ -4596,11 +4606,45 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         }
       }
     }
-    // Ball name
+    // Ball name por competición
+    var COMP_BALL = {
+      'liga':       "Ligue 1 McDonald's Official Match Ball",
+      'copa':       "TSUBASA J PRO",
+      'copa-fin':   "TSUBASA J PRO",
+      'sc':         "Ligue 1 McDonald's",
+      'sc-final':   "Ligue 1 McDonald's",
+      'usc':        "eFootball Contact 26",
+      'usc-fin':    "eFootball Contact 26",
+      'ucl':        "PARADISE Morado",
+      'ucl-fin':    "PARADISE Morado",
+      'uel':        "Resmi Maç Topudur",
+      'uel-fin':    "Resmi Maç Topudur",
+      'uecl':       "The Brillant Super USL v25",
+      'uecl-fin':   "The Brillant Super USL v25",
+      'inter':      "Derbystar Globall 2025/26",
+      'inter-fin':  "Derbystar Globall 2025/26",
+      'recopa':     "PARADISE Azul",
+      'recopa-fin': "PARADISE Azul",
+      'eur-grupo':  "PARADISE Morado",
+      'eur-ko':     "PARADISE Morado",
+      'eur-fin':    "PARADISE Morado",
+      'sel':        "NIKE CONTROL CBF",
+      'sel-fin':    "NIKE CONTROL CBF",
+      'amistoso':   "eFootballM Origin",
+      'superliga':  "PARADISE Morado"
+    };
+    if (COMP_BALL[compKey]) {
+      balon = COMP_BALL[compKey];
+    }
+    // Liga en nieve → balón especial
+    if (compKey === 'liga' && tiempo && tiempo.toLowerCase().indexOf('nieve') !== -1) {
+      balon = "eFootball MAX VIS 26";
+    }
+    // Fallback: leer del DOM si existe un balón personalizado
     var bwrap = document.getElementById('ball-wrap-' + matchKey);
     if (bwrap) {
       var bn = bwrap.querySelector('.ml-ball-name');
-      if (bn) balon = bn.textContent.trim();
+      if (bn && bn.textContent.trim()) balon = bn.textContent.trim();
     }
 
     var items = [

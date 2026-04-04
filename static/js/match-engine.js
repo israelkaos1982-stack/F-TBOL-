@@ -11,11 +11,15 @@
 
     // 2. MATEMÁTICA DEL GOL
     window.calculateGoalProbability = function(pos, power, isLocal, goalsAlreadyScored) {
+        // Porteros casi nunca marcan: probabilidad fija 0.001 ignorando su poder de portería
+        if (pos === 'P') return 0.001;
+
         let probBase = BASE_PROB[pos] || 17.5;
         let pwr = parseFloat(power) || 0;
         let calculationBase = probBase + (pwr / 100);
-        
-        let finalFirstGoalProb = isLocal ? (calculationBase * 1.08) : calculationBase;
+
+        // Ventaja local: +10% sobre el valor base
+        let finalFirstGoalProb = isLocal ? (calculationBase * 1.10) : calculationBase;
 
         let result = finalFirstGoalProb;
         let nextGoalNumber = (parseInt(goalsAlreadyScored) || 0) + 1;

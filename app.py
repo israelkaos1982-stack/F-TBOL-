@@ -58,7 +58,7 @@ BASE = {
 }
 
 MULTIGOL = [1, 0.37, 0.22, 0.12, 0.06]
-BONUS_LOCAL = 1.08
+BONUS_LOCAL = 1.10
 
 TEAM_ALIASES = {
     "sevilla fc": "Sevilla",
@@ -193,6 +193,10 @@ def save_global_state(new_state):
 
 # --- FUNCIONES MOTOR ---
 def calcular_prob(perfil, local=False, goles_previos=0):
+    # Porteros casi nunca marcan: peso fijo 0.001 ignorando su poder de portería
+    if perfil["posicion"] == "portero":
+        return 0.001
+
     base = BASE.get(perfil["posicion"], 10)
     prob = base + (perfil["poder"] / 100)
 
@@ -231,7 +235,8 @@ def elegir_goleador(equipo, local=False, conteo=None):
     return elegido["nombre"]
 
 def simular_goles(equipo, local=False, oponente=None):
-    own_power = get_team_power(equipo)
+    # Aplicar ventaja local directamente al poder del equipo (+10%)
+    own_power = get_team_power(equipo) * (1.10 if local else 1.0)
     if oponente:
         opp_power = get_team_power(oponente)
     else:
@@ -240,8 +245,6 @@ def simular_goles(equipo, local=False, oponente=None):
         if not opp_candidates:
             opp_power = 76
     base_prob = own_power / max(1, (own_power + opp_power))
-    if local:
-        base_prob = min(0.82, base_prob + 0.05 * (1 - base_prob))
 
     if base_prob < 0.42:
         pesos = [46, 33, 14, 5, 2, 0]
@@ -255,10 +258,11 @@ def simular_goles(equipo, local=False, oponente=None):
     return random.choices([0, 1, 2, 3, 4, 5], weights=pesos, k=1)[0]
 
 def simular_marcador(local, visitante):
-    r_local = get_team_power(local)
+    # PowerLocal = MediaEquipo * 1.10 (ventaja de localía del 10%)
+    r_local = get_team_power(local) * 1.10
     r_visit = get_team_power(visitante)
     base_local = r_local / max(1, (r_local + r_visit))
-    prob_local = min(0.82, base_local + 0.05 * (1 - base_local))
+    prob_local = min(0.82, base_local)
 
     def sample(prob):
         if prob < 0.42:
@@ -536,6 +540,19 @@ def copa_reiniciar():
     return jsonify({"ok": True})
 
 # --- SIMULACIÓN ---
+def _elegir_jugador_campo(equipo, es_local=False):
+    """Elige un jugador de campo aleatorio (no portero) ponderado por poder."""
+    resolved = resolve_team_name(equipo)
+    jugadores = jugadores_por_equipo.get(resolved, [])
+    campo = [j for j in jugadores if j.get("posicion") != "portero"]
+    if not campo:
+        campo = jugadores
+    if not campo:
+        return "Jugador"
+    pesos = [max(1, int(j.get("poder", 70) or 70)) for j in campo]
+    return random.choices(campo, weights=pesos, k=1)[0]["nombre"]
+
+
 def simular_y_guardar(jornada, local, visitante):
     if Partido.query.filter_by(local=local, visitante=visitante).first():
         return
@@ -550,12 +567,49 @@ def simular_y_guardar(jornada, local, visitante):
     for _ in range(gl):
         g = elegir_goleador(local, True, conteo_local)
         conteo_local[g] = conteo_local.get(g, 0) + 1
-        eventos.append((local, g))
+        eventos.append(("gol", local, g))
 
     for _ in range(gv):
         g = elegir_goleador(visitante, False, conteo_visitante)
         conteo_visitante[g] = conteo_visitante.get(g, 0) + 1
-        eventos.append((visitante, g))
+        eventos.append(("gol", visitante, g))
+
+    # --- PENALTI (8% por partido) ---
+    if random.random() < 0.08:
+        pen_equipo = random.choice([local, visitante])
+        pen_es_local = (pen_equipo == local)
+        pen_jugador = _elegir_jugador_campo(pen_equipo, pen_es_local)
+        tipo_pen = "pen-gol" if random.random() < 0.75 else "pen-fallo"
+        eventos.append((tipo_pen, pen_equipo, pen_jugador))
+        # El defensor que comete la falta pertenece al equipo contrario
+        foul_equipo = visitante if pen_es_local else local
+        foul_jugador = _elegir_jugador_campo(foul_equipo)
+        eventos.append(("pen-prov", foul_equipo, foul_jugador))
+        if tipo_pen == "pen-gol":
+            gk_equipo = foul_equipo
+            gk_team = resolve_team_name(gk_equipo)
+            gks = [j for j in jugadores_por_equipo.get(gk_team, []) if j.get("posicion") == "portero"]
+            if gks:
+                eventos.append(("pen-parado" if random.random() < 0.08 else "pen-prov", gk_equipo, gks[0]["nombre"]))
+
+    # --- GOL DE FALTA (5% por partido) ---
+    if random.random() < 0.05:
+        fk_equipo = random.choice([local, visitante])
+        fk_jugador = _elegir_jugador_campo(fk_equipo, fk_equipo == local)
+        eventos.append(("falta-gol", fk_equipo, fk_jugador))
+
+    # --- AUTOGOL (1% por partido) ---
+    if random.random() < 0.01:
+        og_equipo = random.choice([local, visitante])
+        og_jugador = _elegir_jugador_campo(og_equipo, og_equipo == local)
+        eventos.append(("propia", og_equipo, og_jugador))
+
+    # --- TARJETAS AMARILLAS (2-4 por partido) ---
+    num_amarillas = random.choices([2, 3, 4], weights=[40, 40, 20])[0]
+    for _ in range(num_amarillas):
+        am_equipo = random.choice([local, visitante])
+        am_jugador = _elegir_jugador_campo(am_equipo, am_equipo == local)
+        eventos.append(("amarilla", am_equipo, am_jugador))
 
     mvp = elegir_mvp(local, visitante, gl, gv, conteo_local, conteo_visitante)
 
@@ -570,10 +624,10 @@ def simular_y_guardar(jornada, local, visitante):
     db.session.add(p)
     db.session.commit()
 
-    for eq, jug in eventos:
+    for tipo, eq, jug in eventos:
         db.session.add(Evento(
             partido_id=p.id,
-            tipo="gol",
+            tipo=tipo,
             equipo=eq,
             jugador=jug
         ))

@@ -3520,34 +3520,57 @@
 
   /* ── ENTRADA RESULTADO HUMANO (modal interactivo) ── */
   var _gm = { j:0, home:'', away:'', sc:{a:0,b:0}, events:[], etDone:false, finished:false,
-              timerSec:0, timerRunning:false, timerInterval:null, pendingEvt:null, pendingTeam:null, isHvH:false };
-  var GM_MAX_NORMAL = 5400; /* 90 min */
-  var GM_MAX_ET     = 7200; /* 120 min */
-  var GM_TICK       = 300;  /* 5 seg real = 5 min juego */
+              timerSec:0, timerRunning:false, timerInterval:null, pendingEvt:null, pendingTeam:null, isHvH:false,
+              htDone:false, inDescanso:false, stDone:false };
+  var GM_MAX_NORMAL   = 5400; /* 90 min */
+  var GM_MAX_ET       = 7200; /* 120 min */
+  var GM_MAX_STOPPAGE = 5820; /* 90+7 min */
+  var GM_TICK_HVH     = 1000; /* HvH: 1 min juego = 12s reales → 18 min totales */
+  var GM_TICK_HVIA    = 778;  /* HvIA: 1 min juego ≈ 9.33s reales → 14 min totales */
 
   function gmRenderTimer() {
     var btn = document.getElementById('gm-timer');
     if (!btn) return;
     var min = Math.floor(_gm.timerSec / 60);
     if (_gm.finished) { btn.textContent = '🏁 FIN'; btn.className = 'ml-timer finished'; return; }
-    var max = _gm.etDone ? GM_MAX_ET : GM_MAX_NORMAL;
+    if (_gm.inDescanso) { btn.textContent = '⏸ DESCANSO'; btn.className = 'ml-timer running'; return; }
+    var max = _gm.etDone ? GM_MAX_ET : (_gm.stDone ? GM_MAX_STOPPAGE : GM_MAX_NORMAL);
     var lbl = _gm.timerRunning ? '⏸ ' : (_gm.timerSec >= max ? '🔁 ' : '▶ ');
-    btn.textContent = lbl + min + "'";
+    var baseMax = _gm.etDone ? 120 : 90;
+    var display = min > baseMax ? baseMax + '+' + (min - baseMax) + "'" : min + "'";
+    btn.textContent = lbl + display;
     btn.className = 'ml-timer' + (_gm.timerRunning ? ' running' : '');
   }
 
   function gmStartTimer() {
+    var tickMs = _gm.isHvH ? GM_TICK_HVH : GM_TICK_HVIA;
     _gm.timerRunning = true;
     _gm.timerInterval = setInterval(function () {
       _gm.timerSec += 5;
-      var max = _gm.etDone ? GM_MAX_ET : GM_MAX_NORMAL;
+      var max = _gm.etDone ? GM_MAX_ET : (_gm.stDone ? GM_MAX_STOPPAGE : GM_MAX_NORMAL);
+      /* Descanso automático en el 45:00 */
+      if (!_gm.htDone && _gm.timerSec >= 2700) {
+        _gm.htDone = true;
+        clearInterval(_gm.timerInterval); _gm.timerRunning = false; _gm.inDescanso = true;
+        var list = document.getElementById('gm-acta-list');
+        if (list) { var m = document.createElement('div'); m.className = 'ml-ht'; m.textContent = '— DESCANSO (45 min) —'; list.appendChild(m); }
+        gmRenderTimer();
+        setTimeout(function () { if (!_gm.finished) { _gm.inDescanso = false; _gm.timerRunning = true; gmStartTimer(); } }, 45000);
+        return;
+      }
+      /* Tiempo de descuento al llegar al 90:00 */
+      if (!_gm.etDone && !_gm.stDone && _gm.timerSec >= GM_MAX_NORMAL) {
+        _gm.stDone = true;
+        var listSt = document.getElementById('gm-acta-list');
+        if (listSt) { var ms = document.createElement('div'); ms.className = 'ml-ht'; ms.textContent = '— TIEMPO DE DESCUENTO (90+1 a 90+7) —'; listSt.appendChild(ms); }
+      }
       if (_gm.timerSec >= max) { _gm.timerSec = max; clearInterval(_gm.timerInterval); _gm.timerRunning = false; }
       gmRenderTimer();
-    }, GM_TICK);
+    }, tickMs);
   }
 
   window.gmTimerClick = function () {
-    if (_gm.finished) return;
+    if (_gm.finished || _gm.inDescanso) return;
     if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; gmRenderTimer(); }
     else { if (!_gm.kickoffDone) { _gm.kickoffDone = true; _mlPlayUiTone('start'); } gmStartTimer(); }
   };
@@ -3744,6 +3767,7 @@
     _gm.j = j; _gm.home = home; _gm.away = away; _gm.sc = {a:0,b:0};
     _gm.events = []; _gm.etDone = false; _gm.finished = false;
     _gm.timerSec = 0; _gm.timerRunning = false; _gm.isHvH = isHvH; _gm.pendingEvt = null;
+    _gm.htDone = false; _gm.inDescanso = false; _gm.stDone = false;
     clearInterval(_gm.timerInterval);
     _gm.kickoffDone = false;
     /* Escudos + nombres en la pantalla de partido */

@@ -3975,6 +3975,27 @@
     document.getElementById('gm-event-panel').style.display = 'none';
     document.getElementById('gm-team-pick').style.display = 'none';
     guardarResultado(_gm.j, _gm.home, _gm.away, _gm.sc.a, _gm.sc.b);
+
+    /* Rellenar acta de la tarjeta genérica (ml-acta-list-{mk}) con los eventos del gm */
+    var _icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
+                   'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',
+                   roja:'🟥',lesion:'🩹',mvp:'⭐'};
+    Object.keys(_mlStates).forEach(function(mk){
+      var st = _mlStates[mk];
+      if (st.j === _gm.j && st.home === _gm.home && st.away === _gm.away) {
+        var list = document.getElementById('ml-acta-list-'+mk);
+        if (list) {
+          list.innerHTML = '';
+          _gm.events.forEach(function(ev){
+            if (!ev) return;
+            var tName = ev.team === 'a' ? _gm.home : _gm.away;
+            var ico = _icoMap[ev.type] || '📋';
+            _mlAddActaRow(mk, ev.min, ico, ev.player || 'Jugador', ev.num || '', tName, ev.type, Date.now()+Math.random());
+          });
+        }
+      }
+    });
+
     setTimeout(function () {
       document.getElementById('gm-modal').style.display = 'none';
       window.gmShowPost();
@@ -5048,14 +5069,14 @@
     <!-- Action buttons -->
     <div style="padding:0 8px 8px;display:flex;gap:6px;">
       <button id="gm-btn-et" onclick="window.gmActivateET()"
-        style="flex:1;padding:7px 4px;border-radius:5px;border:1px solid rgba(100,160,255,.3);
-               background:rgba(60,100,200,.15);color:#6ab0ff;font-size:10px;font-weight:700;
+        style="flex:1;padding:10px 4px;border-radius:6px;border:1px solid rgba(100,160,255,.3);
+               background:rgba(60,100,200,.15);color:#6ab0ff;font-size:14px;font-weight:700;
                font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">
         ⏱ PRÓRROGA
       </button>
       <button id="gm-btn-end" onclick="window.gmEndMatch()"
-        style="flex:1;padding:7px 4px;border-radius:5px;border:1px solid rgba(255,80,80,.3);
-               background:rgba(180,30,30,.2);color:#ff8080;font-size:10px;font-weight:700;
+        style="flex:1;padding:10px 4px;border-radius:6px;border:1px solid rgba(255,80,80,.3);
+               background:rgba(180,30,30,.2);color:#ff8080;font-size:14px;font-weight:700;
                font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">
         🏁 FINALIZAR
       </button>

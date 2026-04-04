@@ -3544,8 +3544,20 @@
     if (!_genActiveMk) return;
     var st=_mlSt(_genActiveMk);
     if (tpEvt) tpEvt.textContent = label.toUpperCase();
-    if (tpBtnA) tpBtnA.textContent = st.home;
-    if (tpBtnB) tpBtnB.textContent = st.away;
+    function _genLogoUrl(name) {
+      var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
+      if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1) return byAlt.src;
+      var tlu = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
+      if (tlu) return tlu;
+      return (typeof getLogoEquipo === 'function' && getLogoEquipo(name)) || '';
+    }
+    [['a', st.home, tpBtnA], ['b', st.away, tpBtnB]].forEach(function(t) {
+      var btn = t[2]; var name = t[1];
+      if (!btn) return;
+      var logo = _genLogoUrl(name);
+      btn.innerHTML = (logo ? '<img src="'+logo+'" style="width:56px;height:56px;object-fit:contain;display:block;margin:0 auto 6px;" onerror="this.style.display=\'none\'">' : '')
+                    + '<span>' + name + '</span>';
+    });
     if (tpOv) tpOv.classList.add('show');
   };
   window.genTpSelect = function(team) {
@@ -3786,8 +3798,24 @@
     document.getElementById('gm-event-panel').style.display = 'none';
     var pp2 = document.getElementById('gm-player-pick'); if (pp2) pp2.style.display = 'none';
     document.getElementById('gm-tp-title').textContent = label;
-    document.getElementById('gm-tp-btn-a').textContent = _gm.home;
-    document.getElementById('gm-tp-btn-b').textContent = _gm.away;
+
+    /* Escudos en los botones de equipo */
+    function _gmLogoUrl(name) {
+      var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
+      if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1) return byAlt.src;
+      var tlu = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
+      if (tlu) return tlu;
+      return (typeof getLogoEquipo === 'function' && getLogoEquipo(name)) || '';
+    }
+    ['a','b'].forEach(function(side) {
+      var name = side === 'a' ? _gm.home : _gm.away;
+      var btn  = document.getElementById('gm-tp-btn-' + side);
+      if (!btn) return;
+      var logo = _gmLogoUrl(name);
+      btn.innerHTML = (logo ? '<img src="'+logo+'" style="width:60px;height:60px;object-fit:contain;display:block;margin:0 auto 6px;" onerror="this.style.display=\'none\'">' : '')
+                    + '<span>' + name + '</span>';
+    });
+
     document.getElementById('gm-team-pick').style.display = 'flex';
   };
 

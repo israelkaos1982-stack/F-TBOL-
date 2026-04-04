@@ -2745,6 +2745,7 @@
   function _mlSt(mk) {
     if (!_mlStates[mk]) {
       _mlStates[mk] = {timerSec:0,timerRunning:false,timerInterval:null,etDone:false,htDone:false,et1Done:false,finished:false,
+                       inDescanso:false,stDone:false,
                        sc:{a:0,b:0},events:[],pendingEvt:null,j:0,home:'',away:'',isHvH:false};
       // Register per-match delete function so _saveEditModal can find it
       (function(k){
@@ -2924,15 +2925,15 @@
 
   /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 1-38, Copa y Europa) ──── */
   /* Timer speeds per match type (5-second ticks, 1080 ticks = 90 game min):
-     AI vs AI  : 30s real  → 30000/1080 ≈  28ms/tick
-     HvIA      : 12m real  → 720000/1080 ≈ 667ms/tick
-     HvH 90min : 17m real  → 1020000/1080 ≈ 944ms/tick
+     AI vs AI  : 30s real  → 30000/1080  ≈   28ms/tick
+     HvIA      : 14m real  → 840000/1080 ≈  778ms/tick  (1 min juego ≈ 9.33s reales)
+     HvH 90min : 18m real  → 1080000/1080 = 1000ms/tick  (1 min juego = 12s reales)
      HvH ET    : 5m real for 30 game min → 300000/360 ≈ 833ms/tick */
   var _ML_TICK_SEC = 5;
   function _mlTickMs(st) {
-    if (st.isHvH) return st.etDone ? 833 : 944;
+    if (st.isHvH) return st.etDone ? 833 : 1000;
     var humanInvolved = typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away));
-    return humanInvolved ? 667 : 28;
+    return humanInvolved ? 778 : 28;
   }
 
   function _mlAddActaRow(mk, min, ico, name, num, teamLabel, type, id) {
@@ -3030,6 +3031,7 @@
     var fullMax = normalMax + stoppageAdded * 60;
     var min = Math.floor(rawSec/60);
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
+    if (st.inDescanso) { btn.textContent='⏸ DESCANSO'; btn.className='ml-timer running'; return; }
     var lbl = st.timerRunning ? '⏸ ' : (rawSec>=fullMax ? '🔁 ' : '▶ ');
     // Show stoppage minutes like 90+2'
     var baseMax = st.etDone ? 120 : 90;
@@ -3167,9 +3169,9 @@
     var st = _mlSt(mk);
     // Pre-generate AI events for HvIA matches
     _mlPreGenAIEvents(mk);
-    // Determine stoppage time upfront if normal time
+    // Stoppage time: fijo en 7 minutos de juego extra (90+1 a 90+7)
     if (!st.stoppageSec && !st.etDone) {
-      st.stoppageSec = Math.floor(Math.random()*8)+1; // 1-8 extra minutes
+      st.stoppageSec = 7;
     }
     st.timerInterval = setInterval(function(){
       st.timerSec += _ML_TICK_SEC;
@@ -3185,17 +3187,21 @@
         _mlRenderTimerGen(mk);
         _mlTriggerHumanInjury(mk);
       }
-      // Half-time marker at 45'
+      // Half-time pause at 45': detener 45 segundos reales y reanudar automáticamente
       if (!st.htDone && st.timerSec >= 2700) {
         st.htDone = true;
+        clearInterval(st.timerInterval); st.timerRunning = false; st.inDescanso = true;
         var list = document.getElementById('ml-acta-list-'+mk);
         if (list) { var m = document.createElement('div'); m.className='ml-ht'; m.textContent='— DESCANSO (45 min) —'; list.appendChild(m); }
+        _mlRenderTimerGen(mk);
+        setTimeout(function(){ if (!st.finished) { st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk); } }, 45000);
+        return;
       }
       // Stoppage time marker at 90'
       if (!st.etDone && !st.stoppageMarked && st.timerSec >= 5400) {
         st.stoppageMarked = true;
         var listSt = document.getElementById('ml-acta-list-'+mk);
-        if (listSt) { var ms = document.createElement('div'); ms.className='ml-ht'; ms.textContent='⏱ +'+st.stoppageSec+"' Tiempo de descuento"; listSt.appendChild(ms); }
+        if (listSt) { var mst = document.createElement('div'); mst.className='ml-ht'; mst.textContent='— TIEMPO DE DESCUENTO (90+1 a 90+'+st.stoppageSec+"') —"; listSt.appendChild(mst); }
       }
       // ET half-time marker at 105'
       if (st.etDone && !st.et1Done && st.timerSec >= 6300) {
@@ -3216,7 +3222,7 @@
   }
   window.mlTimerClickGen = function(mk) {
     var st = _mlSt(mk);
-    if (st.finished) return;
+    if (st.finished || st.inDescanso) return;
     if (st.timerRunning) { clearInterval(st.timerInterval); st.timerRunning=false; _mlRenderTimerGen(mk); }
     else {
       if (!st.kickoffDone) {

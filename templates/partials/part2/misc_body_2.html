@@ -1708,6 +1708,10 @@
 </div>
 <div class="pp-alerts" id="pp-alerts"></div>
 <div class="pp-list pp-list-h" id="pp-list"></div>
+<button class="pp-wa-btn" onclick="window._ppShareWA()">
+  <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>
+  Compartir Partido en WhatsApp
+</button>
 <button class="pp-confirm-btn" disabled="" id="pp-confirm-btn" onclick="window._ppConfirm()">🎮 CONFIRMAR CONFIGURACIÓN</button>
 </div>
 </div>
@@ -3192,7 +3196,14 @@
         st.htDone = true;
         clearInterval(st.timerInterval); st.timerRunning = false; st.inDescanso = true;
         var list = document.getElementById('ml-acta-list-'+mk);
-        if (list) { var m = document.createElement('div'); m.className='ml-ht'; m.textContent='— DESCANSO (45 min) —'; list.appendChild(m); }
+        if (list) {
+          var m = document.createElement('div'); m.className='ml-ht'; m.textContent='— DESCANSO (45 min) —'; list.appendChild(m);
+          var _waWrap = document.createElement('div'); _waWrap.className='ml-ht-wa-wrap';
+          _waWrap.innerHTML='<button class="ml-ht-wa-btn" onclick="window._mlShareHalfTime(\''+mk.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'
+            +'<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
+            +' Compartir descanso</button>';
+          list.appendChild(_waWrap);
+        }
         _mlRenderTimerGen(mk);
         setTimeout(function(){ if (!st.finished) { st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk); } }, 20000);
         return;
@@ -3453,6 +3464,72 @@
     ov.classList.add('show');
   }
 
+  /* ── COMPARTIR EN WHATSAPP — funciones globales ───────────── */
+  // Compartir desde la pantalla de PREVIA (antes de empezar el partido)
+  window._ppShareWA = function() {
+    var home = '', away = '', jornada = 0;
+    if (window._ppPreviaTeams) {
+      home = window._ppPreviaTeams.home || '';
+      away = window._ppPreviaTeams.away || '';
+    } else if (window._ppMatchKey) {
+      var stPP = _mlSt(window._ppMatchKey);
+      if (stPP) { home = stPP.home; away = stPP.away; jornada = stPP.j; }
+    }
+    if (!home && !away) {
+      var pvs = document.getElementById('pp-vs');
+      if (pvs) {
+        var innerDivs = pvs.querySelectorAll('div > div');
+        if (innerDivs.length >= 2) { home = innerDivs[0].textContent.trim(); away = innerDivs[innerDivs.length-1].textContent.trim(); }
+      }
+    }
+    if (!jornada && window._ppMatchKey) {
+      var jm = String(window._ppMatchKey).match(/(?:lj|j)(\d+)/);
+      if (jm) jornada = parseInt(jm[1]);
+    }
+    var lines = [];
+    if (jornada) lines.push('🏆 Jornada ' + jornada);
+    lines.push('⚽ ' + home + ' vs ' + away);
+    lines.push('');
+    lines.push('¡Estamos a punto de jugar!');
+    var twitch = window._ppSelectedTwitch;
+    if (twitch) lines.push('📺 En directo: https://twitch.tv/' + twitch);
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
+  };
+
+  // Compartir marcador en el DESCANSO (45 min) de partidos genéricos
+  window._mlShareHalfTime = function(mk) {
+    var st = _mlSt(mk);
+    if (!st) return;
+    var gIco = {gol:'⚽', propia:'🚫', 'falta-gol':'🎯', 'pen-gol':'🥅'};
+    var lines = [];
+    lines.push('\u23f8 DESCANSO — Jornada ' + st.j);
+    lines.push(st.home + '  ' + st.sc.a + ' \u2013 ' + st.sc.b + '  ' + st.away);
+    var goalEvts = st.events.filter(function(e){ return gIco[e.type]; });
+    if (goalEvts.length) {
+      lines.push('');
+      goalEvts.forEach(function(e){
+        lines.push(gIco[e.type] + ' ' + e.min + '\' ' + (e.name||'') + ' (' + (e.team==='a'?st.home:st.away) + ')');
+      });
+    }
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
+  };
+
+  // Compartir marcador en el DESCANSO del modo espectador (gm)
+  window._gmShareHalfTime = function() {
+    var gIco = {gol:'⚽', propia:'🚫', 'falta-gol':'🎯', 'pen-gol':'🥅'};
+    var lines = [];
+    lines.push('\u23f8 DESCANSO — Jornada ' + (_gm.j||''));
+    lines.push(_gm.home + '  ' + _gm.sc.a + ' \u2013 ' + _gm.sc.b + '  ' + _gm.away);
+    var goalEvts = (_gm.events||[]).filter(function(e){ return gIco[e.type]; });
+    if (goalEvts.length) {
+      lines.push('');
+      goalEvts.forEach(function(e){
+        lines.push(gIco[e.type] + ' ' + e.min + '\' ' + (e.player||e.name||'') + ' (' + (e.team==='a'?_gm.home:_gm.away) + ')');
+      });
+    }
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
+  };
+
   /* ── SELECCIÓN DE EVENTOS GENÉRICA (overlays globales) ── */
   var _genActiveMk = null;
   var _genPendingEvt = null;
@@ -3657,7 +3734,14 @@
         _gm.htDone = true;
         clearInterval(_gm.timerInterval); _gm.timerRunning = false; _gm.inDescanso = true;
         var list = document.getElementById('gm-acta-list');
-        if (list) { var m = document.createElement('div'); m.className = 'ml-ht'; m.textContent = '— DESCANSO (45 min) —'; list.appendChild(m); }
+        if (list) {
+          var m = document.createElement('div'); m.className = 'ml-ht'; m.textContent = '— DESCANSO (45 min) —'; list.appendChild(m);
+          var _gmWaWrap = document.createElement('div'); _gmWaWrap.className = 'ml-ht-wa-wrap';
+          _gmWaWrap.innerHTML = '<button class="ml-ht-wa-btn" onclick="window._gmShareHalfTime()">'
+            +'<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
+            +' Compartir descanso</button>';
+          list.appendChild(_gmWaWrap);
+        }
         gmRenderTimer();
         setTimeout(function () { if (!_gm.finished) { _gm.inDescanso = false; _gm.timerRunning = true; gmStartTimer(); } }, 20000);
         return;
@@ -5192,6 +5276,13 @@
 .pp-alert-red{color:#ff5555;}
 .pp-alert-inj{color:#ff9944;}
 .pp-alert-ok{color:#4dff96;font-style:italic;}
+/* ── Botón compartir en la PREVIA ─────────────────────────── */
+.pp-wa-btn{width:100%;border:none;border-radius:50px;padding:11px 10px;margin-bottom:8px;font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;color:#fff;background:linear-gradient(135deg,#0d6e5e,#128C7E 40%,#25D366 70%,#128C7E);box-shadow:0 3px 14px rgba(37,211,102,.3);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:filter .15s;}
+.pp-wa-btn:hover{filter:brightness(1.12);}
+/* ── Botón compartir en el DESCANSO ───────────────────────── */
+.ml-ht-wa-wrap{text-align:center;padding:5px 0 7px;}
+.ml-ht-wa-btn{background:linear-gradient(135deg,#0d6e5e,#128C7E 40%,#25D366);border:none;border-radius:50px;color:#fff;font-family:'Oswald',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.3px;padding:6px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 10px rgba(37,211,102,.28);transition:filter .15s;}
+.ml-ht-wa-btn:hover{filter:brightness(1.12);}
 </style>
 
 <div id="gm-post-ov">

@@ -2476,14 +2476,14 @@ var STAT_CLASS_MAP = {
 
 
 /* script block 14 */
-function go(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); var el = document.getElementById(id); if (el) { el.classList.add('active'); window.scrollTo(0,0); } } function entTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); if (!body) return; var isOpen = body.classList.contains('open'); body.classList.toggle('open'); if (arr) arr.classList.toggle('open', !isOpen); } function subTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); if (!body) return; body.classList.toggle('open'); if (arr) arr.classList.toggle('open'); } function derbyTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); var btn = document.getElementById(id + '-btn'); if (!body) return; body.classList.toggle('open'); if (arr) arr.classList.toggle('open'); if (btn) btn.classList.toggle('open'); } var athPrevSuperado = false; function athObjCount() { var items = document.querySelectorAll('#ath-obj-club .obj-item'); var total = items.length; var done = 0; items.forEach(function(lbl) { var cb = lbl.querySelector('input[type=checkbox]'); if (cb && cb.checked) { done++; lbl.classList.add('done'); } else { lbl.classList.remove('done'); } }); var countEl = document.getElementById('ath-obj-count'); if (countEl) countEl.textContent = done + ' / ' + total; var PTS_POR_OBJ = 0.40; var MONEY_POR_OBJ = 40; var MAX_PTS = 8.50; var MAX_MONEY = 850; var pts = parseFloat((done * PTS_POR_OBJ).toFixed(2)); var money = done * MONEY_POR_OBJ; var pctPts = Math.min(100, (pts / MAX_PTS) * 100); var pctMoney = Math.min(100, (money / MAX_MONEY) * 100); var superadoPts = pts >= MAX_PTS; var superadoMoney = money >= MAX_MONEY; var superadoAmbos = superadoPts && superadoMoney; var ptsEl = document.getElementById('ath-pts-val'); var moneyEl = document.getElementById('ath-money-val'); if (ptsEl) { ptsEl.textContent = pts.toFixed(2); ptsEl.classList.remove('pulse'); void ptsEl.offsetWidth; ptsEl.classList.add('pulse'); ptsEl.classList.toggle('superado', superadoPts); } if (moneyEl) { moneyEl.textContent = money; moneyEl.classList.remove('pulse'); void moneyEl.offsetWidth; moneyEl.classList.add('pulse'); moneyEl.classList.toggle('superado', superadoMoney); } var tPts = document.getElementById('ath-pts-target'); var tMoney = document.getElementById('ath-money-target'); if (tPts) tPts.classList.toggle('superado', superadoPts); if (tMoney) tMoney.classList.toggle('superado', superadoMoney); var barPts = document.getElementById('ath-bar-pts'); var barMoney = document.getElementById('ath-bar-money'); if (barPts) { barPts.style.width = pctPts + '%'; barPts.classList.toggle('superado', superadoPts); } if (barMoney) { barMoney.style.width = pctMoney + '%'; barMoney.classList.toggle('superado', superadoMoney); } if (superadoAmbos) { if (!athPrevSuperado) { athPrevSuperado = true; setTimeout(function() { if (typeof lanzarFuegos === 'function') lanzarFuegos(3500); }, 300); } else { setTimeout(function() { if (typeof lanzarFuegos === 'function') lanzarFuegos(2500); }, 150); } } else { athPrevSuperado = false; } } var athPlantComp = 'global'; function athSetComp(comp) { athPlantComp = comp; document.querySelectorAll('.plant-filter-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.comp === comp); }); document.querySelectorAll('.plant-row').forEach(function(row) { var tipos = row.classList.contains('por') ? ['gol','yel','red','mvp','poder','pen-parado','pen-prov','pen-gol','falta-gol','propia'] : ['gol','yel','red','mvp','poder','pen-gol','pen-prov','pen-parado','falta-gol','propia']; var cols = row.querySelectorAll('.plant-stat'); tipos.forEach(function(tipo, i) { var el = row.querySelector('.ps-' + tipo); if (!el || !cols[i]) return; var v = parseInt(el.getAttribute('data-' + comp) || el.getAttribute('data-global') || '0'); cols[i].textContent = v; cols[i].className = 'plant-stat' + (v > 0 ? (' ' + tipo) : ' zero'); if (el) el.setAttribute('data-' + comp, v); }); var anyActive = Array.from(row.querySelectorAll('.plant-stat')).some(function(c){ return !c.classList.contains('zero'); }); row.classList.toggle('has-stat', anyActive); }); } function tog(id) { var el = document.getElementById(id); if (!el) return; if (id === 'comp-box') { var isOpen = el.style.display !== 'none' && el.style.display !== ''; el.style.display = isOpen ? 'none' : 'block'; var arr = document.getElementById('comp-arr'); if (arr) arr.style.transform = isOpen ? '' : 'rotate(180deg)'; } else { el.classList.toggle('open'); } }
+function go(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); var el = document.getElementById(id); if (el) { el.classList.add('active'); window.scrollTo(0,0); } } function entTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); if (!body) return; var isOpen = body.classList.contains('open'); body.classList.toggle('open'); if (arr) arr.classList.toggle('open', !isOpen); } function subTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); if (!body) return; body.classList.toggle('open'); if (arr) arr.classList.toggle('open'); } function derbyTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); var btn = document.getElementById(id + '-btn'); if (!body) return; body.classList.toggle('open'); if (arr) arr.classList.toggle('open'); if (btn) btn.classList.toggle('open'); } var athPrevSuperado = false; function athObjCount() { var items = document.querySelectorAll('#ath-obj-club .obj-item'); var total = items.length; var done = 0; items.forEach(function(lbl) { var cb = lbl.querySelector('input[type=checkbox]'); if (cb && cb.checked) { done++; lbl.classList.add('done'); } else { lbl.classList.remove('done'); } }); var countEl = document.getElementById('ath-obj-count'); if (countEl) countEl.textContent = done + ' / ' + total; var PTS_POR_OBJ = 0.40; var MONEY_POR_OBJ = 40; var MAX_PTS = 8.50; var MAX_MONEY = 850; var pts = parseFloat((done * PTS_POR_OBJ).toFixed(2)); var money = done * MONEY_POR_OBJ; var pctPts = Math.min(100, (pts / MAX_PTS) * 100); var pctMoney = Math.min(100, (money / MAX_MONEY) * 100); var superadoPts = pts >= MAX_PTS; var superadoMoney = money >= MAX_MONEY; var superadoAmbos = superadoPts && superadoMoney; var ptsEl = document.getElementById('ath-pts-val'); var moneyEl = document.getElementById('ath-money-val'); if (ptsEl) { ptsEl.textContent = pts.toFixed(2); ptsEl.classList.remove('pulse'); void ptsEl.offsetWidth; ptsEl.classList.add('pulse'); ptsEl.classList.toggle('superado', superadoPts); } if (moneyEl) { moneyEl.textContent = money; moneyEl.classList.remove('pulse'); void moneyEl.offsetWidth; moneyEl.classList.add('pulse'); moneyEl.classList.toggle('superado', superadoMoney); } var tPts = document.getElementById('ath-pts-target'); var tMoney = document.getElementById('ath-money-target'); if (tPts) tPts.classList.toggle('superado', superadoPts); if (tMoney) tMoney.classList.toggle('superado', superadoMoney); var barPts = document.getElementById('ath-bar-pts'); var barMoney = document.getElementById('ath-bar-money'); if (barPts) { barPts.style.width = pctPts + '%'; barPts.classList.toggle('superado', superadoPts); } if (barMoney) { barMoney.style.width = pctMoney + '%'; barMoney.classList.toggle('superado', superadoMoney); } if (superadoAmbos) { if (!athPrevSuperado) { athPrevSuperado = true; setTimeout(function() { if (typeof lanzarFuegos === 'function') lanzarFuegos(3500); }, 300); } else { setTimeout(function() { if (typeof lanzarFuegos === 'function') lanzarFuegos(2500); }, 150); } } else { athPrevSuperado = false; } } var athPlantComp = 'global'; function athSetComp(comp) { athPlantComp = comp; document.querySelectorAll('.plant-filter-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.comp === comp); }); document.querySelectorAll('.plant-row').forEach(function(row) { var tipos = row.classList.contains('por') ? ['cs','yel','red','mvp','poder','pen-parado','pen-prov','pen-gol','falta-gol','propia'] : ['gol','yel','red','mvp','poder','pen-gol','pen-prov','pen-parado','falta-gol','propia']; var cols = row.querySelectorAll('.plant-stat'); tipos.forEach(function(tipo, i) { var el = row.querySelector('.ps-' + tipo); if (!el || !cols[i]) return; var v = parseInt(el.getAttribute('data-' + comp) || el.getAttribute('data-global') || '0'); cols[i].textContent = v; cols[i].className = 'plant-stat' + (v > 0 ? (' ' + tipo) : ' zero'); if (el) el.setAttribute('data-' + comp, v); }); var anyActive = Array.from(row.querySelectorAll('.plant-stat')).some(function(c){ return !c.classList.contains('zero'); }); row.classList.toggle('has-stat', anyActive); }); } function tog(id) { var el = document.getElementById(id); if (!el) return; if (id === 'comp-box') { var isOpen = el.style.display !== 'none' && el.style.display !== ''; el.style.display = isOpen ? 'none' : 'block'; var arr = document.getElementById('comp-arr'); if (arr) arr.style.transform = isOpen ? '' : 'rotate(180deg)'; } else { el.classList.toggle('open'); } }
 
 /* script block 15 */
 
 var atmPrevSuperado = false;
 function atmSetComp(comp) {
   document.querySelectorAll('#s-atletico .plant-row').forEach(function(row){
-    var tipos = row.classList.contains('por') ? ['gol','yel','red','mvp','poder','pen-parado','pen-prov','pen-gol','falta-gol','propia'] : ['gol','yel','red','mvp','poder','pen-gol','pen-prov','pen-parado','falta-gol','propia'];
+    var tipos = row.classList.contains('por') ? ['cs','yel','red','mvp','poder','pen-parado','pen-prov','pen-gol','falta-gol','propia'] : ['gol','yel','red','mvp','poder','pen-gol','pen-prov','pen-parado','falta-gol','propia'];
     tipos.forEach(function(tipo){
       var el = row.querySelector('.ps-'+tipo);
       if(!el) return;
@@ -3578,6 +3578,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   };
 
   var STAT_CLASS_MAP = {
+    'cs': 'ps-cs',
     'gol': 'ps-gol',
     'yel': 'ps-yel',
     'red': 'ps-red',
@@ -3712,6 +3713,48 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
   }
 
+
+  function scoreFromEvents(data){
+    var scoreA = 0;
+    var scoreB = 0;
+    (data && data.evts || []).forEach(function(ev){
+      var t = parseType(ev);
+      var team = ev && ev.team;
+      if(t !== 'gol' && t !== 'pen-gol' && t !== 'falta-gol' && t !== 'propia') return;
+      if(team !== 'a' && team !== 'b') return;
+      var scoringTeam = (t === 'propia') ? (team === 'a' ? 'b' : 'a') : team;
+      if(scoringTeam === 'a') scoreA += 1;
+      else if(scoringTeam === 'b') scoreB += 1;
+    });
+    return {a: scoreA, b: scoreB};
+  }
+
+  function firstGoalkeeperRow(teamName){
+    var team = canonicalTeamName(teamName);
+    if(!team) return null;
+    var found = null;
+    document.querySelectorAll('.screen[id]').forEach(function(screen){
+      if(found) return;
+      var st = canonicalTeamName(SCREEN_TEAM_FALLBACK[screen.id] || ((screen.querySelector('.sec-hdr h2')||{}).textContent || ''));
+      if(st !== team) return;
+      found = screen.querySelector('.plant-row.por');
+    });
+    return found;
+  }
+
+  function applyCleanSheetFromMatch(data){
+    if(!data) return;
+    var sc = scoreFromEvents(data);
+    if(sc.b === 0){
+      var gkA = firstGoalkeeperRow(data.teamA);
+      if(gkA) inc(gkA, 'cs', 1);
+    }
+    if(sc.a === 0){
+      var gkB = firstGoalkeeperRow(data.teamB);
+      if(gkB) inc(gkB, 'cs', 1);
+    }
+  }
+
   function extractDomFallbackEvents(){
     var out = [];
     document.querySelectorAll('[id^="ml-acta-list-j"] .ml-evt-item').forEach(function(item){
@@ -3757,6 +3800,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         var teamName = canonicalTeamName(ev && (ev.realTeam || ev.teamName || ev.team_label || (ev.team === 'a' ? data.teamA : ev.team === 'b' ? data.teamB : ev.team)) || '');
         applyEvent(index, teamName, ev);
       });
+      applyCleanSheetFromMatch(data);
       // MVP ya viene dentro de data.evts — NO aplicar de nuevo para evitar doble conteo
     });
 
@@ -3776,7 +3820,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     document.querySelectorAll('.plant-row').forEach(function(row) {
       var isPor = row.classList.contains('por');
       var tipos = isPor
-        ? ['gol','yel','red','mvp','poder','pen-parado','pen-prov','pen-gol','falta-gol','propia']
+        ? ['cs','yel','red','mvp','poder','pen-parado','pen-prov','pen-gol','falta-gol','propia']
         : ['gol','yel','red','mvp','poder','pen-gol','pen-prov','pen-parado','falta-gol','propia'];
       var cols = row.querySelectorAll('.plant-stat');
       tipos.forEach(function(tipo, i) {
@@ -5234,7 +5278,7 @@ function makePlantRow(num, nombre, posClass, poder) {
     + '<span class="plant-name">' + nombre
       + (badgeTxt ? ' <span class="plant-baja-badge">' + badgeTxt + '</span>' : '<span class="plant-baja-badge" style="display:none"></span>')
     + '</span>'
-    + span('ps-gol','0')
+    + span((posClass === 'por' ? 'ps-cs' : 'ps-gol'),'0')
     + span('ps-yel','0')
     + span('ps-red','0')
     + span('ps-mvp','0')
@@ -5289,7 +5333,8 @@ function syncSquadToScreen(screenId, teamName) {
       curPos = posMap[e.h] || 'med';
       if (curPos !== prevPos) {
         html += makePosHdr(curPos, screen);
-        html += '<div class="pos-mini-hdr ' + curPos + '"><span>#</span><span>Jugador</span><span>⚽</span><span>🟨</span><span>🟥</span><span>⭐</span><span>🛡</span></div>';
+        var statIcon = (curPos === 'por') ? '🧤' : '⚽';
+        html += '<div class="pos-mini-hdr ' + curPos + '"><span>#</span><span>Jugador</span><span>' + statIcon + '</span><span>🟨</span><span>🟥</span><span>⭐</span><span>🛡️</span></div>';
         prevPos = curPos;
       }
     } else {

@@ -3346,24 +3346,110 @@
     var ov = document.getElementById('ml-post-ov');
     if (!ov) return;
     var evts = st.events;
-    var goles = st.sc.a + st.sc.b;
-    var tarjetas = evts.filter(function(e){ return e.type==='amarilla'||e.type==='roja'||e.type==='d-amarilla'; }).length;
-    var lesiones = evts.filter(function(e){ return e.type==='lesion'; }).length;
     var mvpEvt = evts.find(function(e){ return e.type==='mvp'; });
-    var mvpLabel = mvpEvt ? '⭐ MVP: ' + mvpEvt.name : '⭐ MVP: —';
-    var scoreEl = document.getElementById('ml-post-score');
-    if (scoreEl) scoreEl.textContent = st.home + '  ' + st.sc.a + ' – ' + st.sc.b + '  ' + st.away;
-    var golesEl = document.getElementById('ml-post-goles');   if (golesEl)   golesEl.textContent   = goles;
-    var tarjEl  = document.getElementById('ml-post-tarjetas'); if (tarjEl)   tarjEl.textContent    = tarjetas;
-    var lesEl   = document.getElementById('ml-post-lesiones'); if (lesEl)    lesEl.textContent     = lesiones;
-    var mvpEl   = document.getElementById('ml-post-mvp');     if (mvpEl)    mvpEl.textContent     = mvpLabel;
-    var waBtn   = document.getElementById('ml-post-wa-btn');
+
+    // Jornada
+    var jorEl = document.getElementById('ml-post-jornada');
+    if (jorEl) jorEl.textContent = 'Jornada ' + st.j;
+
+    // Scores
+    var scA = document.getElementById('ml-post-sc-a');
+    var scB = document.getElementById('ml-post-sc-b');
+    if (scA) scA.textContent = st.sc.a;
+    if (scB) scB.textContent = st.sc.b;
+
+    // Team names
+    var nmA = document.getElementById('ml-post-name-a');
+    var nmB = document.getElementById('ml-post-name-b');
+    if (nmA) nmA.textContent = st.home;
+    if (nmB) nmB.textContent = st.away;
+
+    // Team shields
+    var shA = document.getElementById('ml-post-shield-a');
+    var shB = document.getElementById('ml-post-shield-b');
+    if (shA) { var lA = typeof getLogoEquipo==='function' ? getLogoEquipo(st.home) : ''; shA.src=lA||''; shA.style.display=lA?'':'none'; }
+    if (shB) { var lB = typeof getLogoEquipo==='function' ? getLogoEquipo(st.away) : ''; shB.src=lB||''; shB.style.display=lB?'':'none'; }
+
+    // Penalty row (if penalties were played)
+    var penRow = document.getElementById('ml-post-pen-row');
+    if (penRow) {
+      var penSc = document.getElementById('pen-score-'+mk);
+      var penText = penSc ? penSc.textContent.trim() : '';
+      penRow.textContent = penText;
+      penRow.style.display = penText ? '' : 'none';
+    }
+
+    // Acta events preview
+    var actaEl = document.getElementById('ml-post-acta');
+    if (actaEl) {
+      var goalIcoMap = {gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅'};
+      var cardIcoMap = {amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥'};
+      var shown = evts.filter(function(e){
+        return goalIcoMap[e.type]||cardIcoMap[e.type]||e.type==='lesion'||e.type==='porteria';
+      });
+      if (!shown.length) {
+        actaEl.innerHTML = '<div class="ml-post-acta-empty">Sin eventos registrados</div>';
+      } else {
+        actaEl.innerHTML = shown.map(function(e){
+          var tName = e.team==='a' ? st.home : st.away;
+          var short = tName.length>13 ? tName.substring(0,11)+'\u2026' : tName;
+          return '<div class="ml-post-acta-row">'
+            +'<span class="ml-post-acta-min">'+e.min+'\'</span>'
+            +'<span class="ml-post-acta-ico">'+(e.ico||'')+'</span>'
+            +'<span class="ml-post-acta-info"><b>'+escapeHtml(e.name||e.label||'')+'</b>'
+            +' <span class="ml-post-acta-team">'+escapeHtml(short)+'</span></span>'
+            +'</div>';
+        }).join('');
+      }
+    }
+
+    // MVP row
+    var mvpEl = document.getElementById('ml-post-mvp');
+    if (mvpEl) {
+      if (mvpEvt) {
+        var mvpTN = mvpEvt.team==='a' ? st.home : st.away;
+        mvpEl.innerHTML = '⭐ <b>MVP:</b> '+escapeHtml(mvpEvt.name)+' <span style="opacity:.6;font-size:10px;">('+escapeHtml(mvpTN)+')</span>';
+        mvpEl.style.display = '';
+      } else {
+        mvpEl.style.display = 'none';
+      }
+    }
+
+    // WhatsApp button — rich message
+    var waBtn = document.getElementById('ml-post-wa-btn');
     if (waBtn) {
       waBtn.onclick = function() {
-        var msg = '¡Mira el resultado de mi partido: ' + st.home + ' ' + st.sc.a + ' - ' + st.sc.b + ' ' + st.away + '!';
-        try { window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank'); } catch(_){}
+        var gIco = {gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅'};
+        var cIco = {amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥'};
+        var lines = [];
+        lines.push('🏆 Jornada ' + st.j);
+        lines.push(st.home + '  ' + st.sc.a + ' \u2013 ' + st.sc.b + '  ' + st.away);
+        var goalEvts = evts.filter(function(e){ return gIco[e.type]; });
+        var cardEvts = evts.filter(function(e){ return cIco[e.type]; });
+        if (goalEvts.length) {
+          lines.push('');
+          goalEvts.forEach(function(e){
+            var tn = e.team==='a'?st.home:st.away;
+            lines.push(gIco[e.type]+' '+e.min+'\' '+e.name+' ('+tn+')');
+          });
+        }
+        if (cardEvts.length) {
+          lines.push('');
+          cardEvts.forEach(function(e){
+            var tn = e.team==='a'?st.home:st.away;
+            lines.push(cIco[e.type]+' '+e.min+'\' '+e.name+' ('+tn+')');
+          });
+        }
+        if (mvpEvt) {
+          var mtn = mvpEvt.team==='a'?st.home:st.away;
+          lines.push('');
+          lines.push('\u2b50 MVP: '+mvpEvt.name+' ('+mtn+')');
+        }
+        var msg = lines.join('\n');
+        try { window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank'); } catch(_){}
       };
     }
+
     ov.classList.add('show');
   }
 
@@ -4928,16 +5014,40 @@
 <!-- ══ POST-PARTIDO GENÉRICO (jornadas 2-38 y Europa) ═══════ -->
 <div id="ml-post-ov" class="ml-post-ov">
   <div class="ml-post-card">
-    <div class="ml-post-title">FINAL DEL PARTIDO</div>
-    <div class="ml-post-score" id="ml-post-score"></div>
-    <div class="ml-post-stats">
-      <div class="ml-post-stat"><b id="ml-post-goles">0</b><span>GOLES</span></div>
-      <div class="ml-post-stat"><b id="ml-post-tarjetas">0</b><span>TARJETAS</span></div>
-      <div class="ml-post-stat"><b id="ml-post-lesiones">0</b><span>LESIONES</span></div>
+    <!-- Cabecera -->
+    <div class="ml-post-header">
+      <div class="ml-post-trophy">🏆</div>
+      <div class="ml-post-title">¡Partido Finalizado!</div>
+      <div class="ml-post-jornada" id="ml-post-jornada">Jornada —</div>
     </div>
-    <div id="ml-post-mvp"></div>
-    <button id="ml-post-wa-btn" class="ml-post-wa-btn">🟢 WHATSAPP · COMPARTIR RESULTADO</button>
-    <button class="ml-post-close" onclick="document.getElementById('ml-post-ov').classList.remove('show')">CERRAR</button>
+    <!-- Marcador con escudos -->
+    <div class="ml-post-scoreboard">
+      <div class="ml-post-team-side">
+        <img id="ml-post-shield-a" class="ml-post-shield" src="" alt="" onerror="this.style.display='none'"/>
+        <span id="ml-post-name-a" class="ml-post-team-name"></span>
+      </div>
+      <div class="ml-post-score-box">
+        <span id="ml-post-sc-a" class="ml-post-sc-num">0</span>
+        <span class="ml-post-sc-dash">–</span>
+        <span id="ml-post-sc-b" class="ml-post-sc-num">0</span>
+      </div>
+      <div class="ml-post-team-side">
+        <img id="ml-post-shield-b" class="ml-post-shield" src="" alt="" onerror="this.style.display='none'"/>
+        <span id="ml-post-name-b" class="ml-post-team-name"></span>
+      </div>
+    </div>
+    <div id="ml-post-pen-row" class="ml-post-pen-row" style="display:none;"></div>
+    <!-- Acta de eventos -->
+    <div class="ml-post-acta" id="ml-post-acta"></div>
+    <!-- MVP -->
+    <div id="ml-post-mvp" class="ml-post-mvp-row" style="display:none;"></div>
+    <!-- Botón WhatsApp elegante -->
+    <button id="ml-post-wa-btn" class="ml-post-wa-btn">
+      <svg class="ml-post-wa-ico" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>
+      Compartir Resultado en WhatsApp
+    </button>
+    <!-- Cerrar -->
+    <button class="ml-post-close" onclick="document.getElementById('ml-post-ov').classList.remove('show')">Cerrar</button>
   </div>
 </div>
 
@@ -4962,16 +5072,43 @@
 /* ── Post-partido genérico ─────────────────────────────────── */
 .ml-post-ov{position:fixed;inset:0;z-index:10009;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:16px;}
 .ml-post-ov.show{display:flex;}
-.ml-post-card{width:100%;max-width:420px;border-radius:12px;border:1px solid rgba(61,255,113,.35);background:linear-gradient(170deg,#07140c,#0f1f18);padding:16px;box-shadow:0 0 26px rgba(61,255,113,.18);}
-.ml-post-title{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:3px;color:#f0c040;text-align:center;margin-bottom:6px;}
-.ml-post-score{font-family:'Oswald',sans-serif;font-size:16px;letter-spacing:1px;color:#fff;text-align:center;margin-bottom:12px;padding:8px;background:rgba(255,255,255,.05);border-radius:6px;}
-.ml-post-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
-.ml-post-stat{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 4px;text-align:center;}
-.ml-post-stat b{display:block;font-family:'Bebas Neue',sans-serif;font-size:24px;color:#fff;}
-.ml-post-stat span{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.6);}
-#ml-post-mvp{width:100%;margin-bottom:10px;border-radius:8px;border:1px solid rgba(240,192,64,.35);background:rgba(240,192,64,.09);padding:10px;color:#f7d576;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.2px;text-align:center;}
-.ml-post-wa-btn{width:100%;border:none;border-radius:8px;padding:12px 10px;margin-bottom:8px;font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;letter-spacing:1.6px;color:#001c09;background:linear-gradient(90deg,#19ff7f,#4dff96,#1aff82);box-shadow:0 0 16px rgba(45,255,130,.75),0 0 36px rgba(45,255,130,.35);cursor:pointer;animation:gmWaGlow 1.35s ease-in-out infinite;}
-.ml-post-close{width:100%;border-radius:8px;border:1px solid rgba(255,255,255,.16);padding:8px;background:rgba(255,255,255,.06);color:#bbb;font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;}
+.ml-post-card{width:100%;max-width:400px;border-radius:20px;border:1px solid rgba(61,255,113,.28);background:linear-gradient(170deg,#07140c,#0f1f18);padding:20px 16px 14px;box-shadow:0 0 40px rgba(61,255,113,.13),0 8px 32px rgba(0,0,0,.6);}
+/* Cabecera */
+.ml-post-header{text-align:center;margin-bottom:14px;}
+.ml-post-trophy{font-size:36px;line-height:1;margin-bottom:4px;}
+.ml-post-title{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:3px;color:#f0c040;}
+.ml-post-jornada{font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.45);margin-top:2px;text-transform:uppercase;}
+/* Marcador */
+.ml-post-scoreboard{display:flex;align-items:center;justify-content:space-between;gap:6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 8px;margin-bottom:10px;}
+.ml-post-team-side{display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;min-width:0;}
+.ml-post-shield{width:42px;height:42px;object-fit:contain;}
+.ml-post-team-name{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:.5px;color:rgba(255,255,255,.8);text-align:center;word-break:break-word;line-height:1.2;}
+.ml-post-score-box{display:flex;align-items:center;gap:4px;flex-shrink:0;}
+.ml-post-sc-num{font-family:'Bebas Neue',sans-serif;font-size:52px;color:#fff;line-height:1;}
+.ml-post-sc-dash{font-family:'Bebas Neue',sans-serif;font-size:32px;color:rgba(255,255,255,.3);}
+.ml-post-pen-row{font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.5);text-align:center;margin:-4px 0 8px;padding:4px;background:rgba(255,255,255,.04);border-radius:6px;}
+/* Acta */
+.ml-post-acta{max-height:128px;overflow-y:auto;margin-bottom:10px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);padding:6px 8px;}
+.ml-post-acta::-webkit-scrollbar{width:3px;}
+.ml-post-acta::-webkit-scrollbar-thumb{background:rgba(61,255,113,.3);border-radius:3px;}
+.ml-post-acta-row{display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.05);}
+.ml-post-acta-row:last-child{border-bottom:none;}
+.ml-post-acta-min{font-family:'Oswald',sans-serif;font-size:10px;color:rgba(255,255,255,.4);min-width:24px;text-align:right;flex-shrink:0;}
+.ml-post-acta-ico{font-size:13px;flex-shrink:0;}
+.ml-post-acta-info{font-family:'Rajdhani',sans-serif;font-size:12px;color:#fff;line-height:1.3;min-width:0;}
+.ml-post-acta-info b{font-weight:700;}
+.ml-post-acta-team{font-size:10px;color:rgba(255,255,255,.4);margin-left:3px;}
+.ml-post-acta-empty{font-family:'Rajdhani',sans-serif;font-size:12px;color:rgba(255,255,255,.3);text-align:center;padding:8px 0;font-style:italic;}
+/* MVP */
+.ml-post-mvp-row{width:100%;margin-bottom:10px;border-radius:8px;border:1px solid rgba(240,192,64,.3);background:rgba(240,192,64,.08);padding:8px 10px;color:#f7d576;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1px;text-align:center;}
+/* Botón WhatsApp (cápsula, verde esmeralda premium) */
+.ml-post-wa-btn{width:100%;border:none;border-radius:50px;padding:14px 10px;margin-bottom:8px;font-family:'Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:1.6px;color:#fff;background:linear-gradient(135deg,#0d6e5e,#128C7E 40%,#25D366 70%,#128C7E);box-shadow:0 4px 22px rgba(37,211,102,.4),0 0 30px rgba(37,211,102,.15);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:filter .15s,transform .1s;}
+.ml-post-wa-btn:hover{filter:brightness(1.13);transform:translateY(-1px);}
+.ml-post-wa-btn:active{transform:translateY(0);filter:brightness(.95);}
+.ml-post-wa-ico{width:20px;height:20px;flex-shrink:0;}
+/* Cerrar */
+.ml-post-close{width:100%;border-radius:8px;border:1px solid rgba(255,255,255,.1);padding:8px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.38);font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;transition:color .15s,background .15s;}
+.ml-post-close:hover{color:rgba(255,255,255,.75);background:rgba(255,255,255,.08);}
 /* ── Alert rows en pre-partido ─────────────────────────────── */
 .pp-alert-row{font-family:'Rajdhani',sans-serif;font-size:13px;line-height:1.4;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);}
 .pp-alert-yel{color:#ffd700;}

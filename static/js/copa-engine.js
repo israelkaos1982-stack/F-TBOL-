@@ -437,7 +437,7 @@
       return k - 1;
     }
 
-    var strengthA = ratingA + 1.8;
+    var strengthA = ratingA * 1.10; // bonus local del 10%
     var strengthB = ratingB;
     var shareA = Math.max(0.22, Math.min(0.78, strengthA / Math.max(1, strengthA + strengthB)));
     var baseTotal = 1.75 + (((ratingA + ratingB) / 2) - 74) * 0.05;

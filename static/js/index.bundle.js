@@ -2685,10 +2685,9 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       if(cntB>0) rB=Math.round(sumB/cntB);
     }
     // probA = probabilidad de que marque equipo A en cada evento de gol
-    // ── VENTAJA LOCAL: equipo A es siempre el local (bonus pequeño ~3%) ──
-    var _localBonus = 0.05; // bonus discreto de localía (mejor refleja ventaja local)
-    var _baseA = rA / (rA + rB);
-    var probA = Math.min(0.82, _baseA + _localBonus * (1 - _baseA));
+    // ── VENTAJA LOCAL: equipo A es siempre el local (+10% sobre su poder) ──
+    var _baseA = (rA * 1.10) / ((rA * 1.10) + rB);
+    var probA = Math.min(0.82, _baseA);
     function rndSq(sq){
       var hasW=sq.some(function(p){return p[3]!==undefined;});
       if(!hasW) return sq[Math.floor(Math.random()*sq.length)];
@@ -2894,7 +2893,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     }
     var _powA = _avgOutfieldPower(activeA.length ? activeA : sqA);
     var _powB = _avgOutfieldPower(activeB.length ? activeB : sqB);
-    var _strengthA = rA + ((_powA - 75) * 0.35) + 1.5; // bonus local
+    var _strengthA = (rA * 1.10) + ((_powA - 75) * 0.35); // bonus local 10%
     var _strengthB = rB + ((_powB - 75) * 0.35);
     var _shareA = _clamp(_strengthA / Math.max(1, (_strengthA + _strengthB)), 0.22, 0.78);
     var _baseTotalGoals = 1.7 + (((rA + rB) / 2) - 74) * 0.05;

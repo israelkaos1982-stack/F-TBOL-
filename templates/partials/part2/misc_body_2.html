@@ -1978,11 +1978,11 @@
   }
 
   function simulateGoals(home, away){
-    var rA = getTeamSimulationPower(home);
+    // PowerLocal = MediaEquipo * 1.10 (ventaja de localía del 10%)
+    var rA = getTeamSimulationPower(home) * 1.10;
     var rB = getTeamSimulationPower(away);
-    var localBonus = 0.05;
     var baseA = rA / Math.max(1, (rA + rB));
-    var probA = Math.min(0.82, baseA + localBonus * (1 - baseA));
+    var probA = Math.min(0.82, baseA);
     function sample(prob){
       var r = Math.random();
       if(prob < 0.42) return r<0.46?0:r<0.79?1:r<0.93?2:r<0.985?3:4;
@@ -2522,8 +2522,8 @@
   }
 
   function esHumano(t) { return HUMANOS.indexOf(t) !== -1 || HUMANOS.indexOf(normalizarNombreEquipo(t)) !== -1; }
-  var _IA_HOME_BONUS_MIN = 0.05;
-  var _IA_HOME_BONUS_MAX = 0.08;
+  var _IA_HOME_BONUS_MIN = 0.10;
+  var _IA_HOME_BONUS_MAX = 0.12;
 
   function _seed01(str) {
     var s = String(str || '');
@@ -4159,7 +4159,7 @@
     return { ico: cat.ico, descripcion: desc, partidos: pts, grado: grado };
   }
 
-  /* ── genMatchEventsEnhanced: goals + yellows + reds + injuries ── */
+  /* ── genMatchEventsEnhanced: goals + yellows + reds + penalties + fouls + og + injuries ── */
   function genMatchEventsEnhanced(teamA, teamB, goalsA, goalsB) {
     var base = genMatchEvents(teamA, teamB, goalsA, goalsB);
     var evts = base.events;
@@ -4167,10 +4167,57 @@
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
     var outA = sqA.filter(function(p){ return p[2] !== 'P'; });
     var outB = sqB.filter(function(p){ return p[2] !== 'P'; });
+    var gkA  = sqA.filter(function(p){ return p[2] === 'P'; });
+    var gkB  = sqB.filter(function(p){ return p[2] === 'P'; });
     if (!outA.length) outA = [['','Jugador A','F',76]];
     if (!outB.length) outB = [['','Jugador B','F',76]];
+    if (!gkA.length) gkA = [['1','Portero A','P',76]];
+    if (!gkB.length) gkB = [['1','Portero B','P',76]];
     function rndSq(sq) { return sq[Math.floor(Math.random()*sq.length)]; }
     function rndMin() { return Math.floor(Math.random()*88)+2; }
+
+    /* ── PENALTI (8% por partido) ── */
+    if (Math.random() < 0.08) {
+      var penTeam   = Math.random() < 0.5 ? 'a' : 'b';    // equipo que RECIBE y tira
+      var foulTeam  = penTeam === 'a' ? 'b' : 'a';         // equipo que COMETE la falta
+      var penKicker = rndSq(penTeam === 'a' ? outA : outB);
+      var foulDef   = rndSq(foulTeam === 'a' ? outA : outB);
+      var penGk     = rndSq(foulTeam === 'a' ? gkA : gkB);
+      var penMin    = rndMin();
+      // Tarjeta al que comete la falta (65% amarilla)
+      if (Math.random() < 0.65) {
+        evts.push({ type:'amarilla', ico:'🟨', min:penMin, player:foulDef[1]||'?', team:foulTeam });
+      }
+      evts.push({ type:'pen-prov', ico:'🤦🥅', min:penMin, player:foulDef[1]||'?', team:foulTeam });
+      var penRoll = Math.random();
+      var penKickMin = Math.min(penMin + 1 + Math.floor(Math.random()*2), 90);
+      if (penRoll < 0.70) {
+        // Gol de penalti
+        evts.push({ type:'pen-gol', ico:'⚽🥅', min:penKickMin, player:penKicker[1]||'?', team:penTeam });
+      } else if (penRoll < 0.90) {
+        // Parado por el portero
+        evts.push({ type:'pen-parado', ico:'🖐🥅', min:penKickMin, player:penGk[1]||'?', team:foulTeam });
+      } else {
+        // Fallado
+        evts.push({ type:'pen-fallo', ico:'❌🥅', min:penKickMin, player:penKicker[1]||'?', team:penTeam });
+      }
+    }
+
+    /* ── GOL DE FALTA (8% por partido) ── */
+    if (Math.random() < 0.08) {
+      var fkTeam = Math.random() < 0.5 ? 'a' : 'b';
+      var fkP    = rndSq(fkTeam === 'a' ? outA : outB);
+      evts.push({ type:'falta-gol', ico:'⚽🎯', min:rndMin(), player:fkP[1]||'?', team:fkTeam });
+    }
+
+    /* ── AUTOGOL (5% por partido) ── */
+    if (Math.random() < 0.05) {
+      var ogTeam = Math.random() < 0.5 ? 'a' : 'b';
+      var ogP    = rndSq(ogTeam === 'a' ? outA : outB);
+      evts.push({ type:'propia', ico:'⚽🚫', min:rndMin(), player:ogP[1]||'?', team:ogTeam });
+    }
+
+    /* ── ROJAS / DOBLE AMARILLA adicionales ── */
     /* Red cards: 8% direct red, 5% double yellow */
     var roll = Math.random();
     if (roll < 0.08) {
@@ -4182,6 +4229,8 @@
       evts.push({ type:'amarilla', ico:'🟨', min:m1, player:dp[1]||'?', team:dt });
       evts.push({ type:'roja', ico:'🟨🟥', min:Math.min(m2,90), player:dp[1]||'?', team:dt, dbl:true });
     }
+
+    /* ── LESIONES ── */
     /* Injuries: ~5% per team (leve 55%, moderada 30%, grave 15%) */
     ['a','b'].forEach(function(side) {
       if (Math.random() < 0.05) {

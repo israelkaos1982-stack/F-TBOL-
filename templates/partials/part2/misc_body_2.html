@@ -3484,14 +3484,32 @@
     var plList=document.getElementById('gen-pl-list');
     if (plEvt) plEvt.textContent=evt.label.toUpperCase();
     if (plTeam) plTeam.textContent=teamName.toUpperCase();
-    var sq=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[teamName])||[];
+    var sq=(typeof window.sqFromRegistryFull==='function'&&window.sqFromRegistryFull(teamName))||[];
+    if(!sq.length) sq=(typeof window.sqFromRegistry==='function'&&window.sqFromRegistry(teamName))||[];
     var html='';
+    var _genPosOrder=['P','D','M','F'];
+    var _genPosLabels={'P':'PORTEROS','D':'DEFENSAS','M':'MEDIOS','F':'DELANTEROS'};
     if (sq.length>0) {
-      sq.forEach(function(p){
-        if(p.h){html+='<div class="ml-pl-ov-sec">'+p.h+'</div>';return;}
-        var n=String(p[0]),nm=String(p[1]).replace(/'/g,"\\'");
-        html+='<button class="ml-pl-ov-btn" onclick="genPlConfirm(\''+mk.replace(/'/g,"\\'")+'\',\''+team+'\',\''+n+'\',\''+nm+'\')"><span class="ml-pl-ov-num">'+p[0]+'</span><span class="ml-pl-ov-name">'+p[1]+'</span></button>';
-      });
+      /* Group by position if no .h headers present */
+      var hasHdr=sq.some(function(p){return p&&p.h;});
+      if(hasHdr){
+        sq.forEach(function(p){
+          if(p.h){html+='<div class="ml-pl-ov-sec">'+p.h+'</div>';return;}
+          var n=String(p[0]),nm=String(p[1]).replace(/'/g,"\\'");
+          html+='<button class="ml-pl-ov-btn" onclick="genPlConfirm(\''+mk.replace(/'/g,"\\'")+'\',\''+team+'\',\''+n+'\',\''+nm+'\')"><span class="ml-pl-ov-num">'+p[0]+'</span><span class="ml-pl-ov-name">'+p[1]+'</span></button>';
+        });
+      } else {
+        var grps={};
+        sq.forEach(function(p){if(!p||p.h)return;var pos=String(p[2]||'F');if(!grps[pos])grps[pos]=[];grps[pos].push(p);});
+        _genPosOrder.forEach(function(pos){
+          var players=grps[pos];if(!players||!players.length)return;
+          html+='<div class="ml-pl-ov-sec">'+(_genPosLabels[pos]||pos)+'</div>';
+          players.forEach(function(p){
+            var n=String(p[0]),nm=String(p[1]).replace(/'/g,"\\'");
+            html+='<button class="ml-pl-ov-btn" onclick="genPlConfirm(\''+mk.replace(/'/g,"\\'")+'\',\''+team+'\',\''+n+'\',\''+nm+'\')"><span class="ml-pl-ov-num">'+p[0]+'</span><span class="ml-pl-ov-name">'+p[1]+'</span></button>';
+          });
+        });
+      }
     } else {
       var jd=window.JUGADORES_DATA&&window.JUGADORES_DATA[teamName];
       if(jd) jd.forEach(function(nm,i){
@@ -3690,10 +3708,8 @@
   };
 
   function _gmGetSquad(teamName) {
-    var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
-    if (!sq.length && typeof window.sqFromRegistryFull === 'function') {
-      sq = window.sqFromRegistryFull(teamName) || [];
-    }
+    var sq = (typeof window.sqFromRegistryFull === 'function' && window.sqFromRegistryFull(teamName)) || [];
+    if (!sq.length) sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
     if (!sq.length) return [['', 'Jugador 1'], ['', 'Jugador 2'], ['', 'Jugador 3']];
     return sq;
   }
@@ -3711,7 +3727,7 @@
       var backBtn = document.createElement('button');
       backBtn.className = 'gm-back-btn';
       backBtn.innerHTML = '&#8592;';
-      backBtn.style.cssText = 'background:none;border:none;color:#f0c040;font-size:22px;cursor:pointer;padding:0 8px 0 0;line-height:1;';
+      backBtn.style.cssText = 'background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.5);border-radius:8px;color:#f0c040;font-size:26px;cursor:pointer;padding:4px 14px 6px;line-height:1;flex-shrink:0;';
       backBtn.onclick = function() {
         pick.style.display = 'none';
         document.getElementById('gm-team-pick').style.display = 'flex';
@@ -3724,8 +3740,8 @@
 
     /* Check if squad already has position headers (.h entries) */
     var hasHeaders = sq.some(function(p) { return p && p.h; });
-    var posOrder = ['POR','DEF','MED','DEL'];
-    var posLabels = {'POR':'PORTEROS','DEF':'DEFENSAS','MED':'CENTROCAMPISTAS','DEL':'DELANTEROS'};
+    var posOrder = ['P','D','M','F'];
+    var posLabels = {'P':'PORTEROS','D':'DEFENSAS','M':'MEDIOS','F':'DELANTEROS'};
 
     var html = '';
     if (hasHeaders) {
@@ -3747,7 +3763,7 @@
       var groups = {};
       sq.forEach(function(p) {
         if (!p || p.h) return;
-        var pos = String((p && p[2]) || 'DEL').toUpperCase();
+        var pos = String((p && p[2]) || 'F').toUpperCase();
         if (!groups[pos]) groups[pos] = [];
         groups[pos].push(p);
       });
@@ -3829,13 +3845,12 @@
 
     /* añadir al acta */
     var li = document.createElement('div');
-    li.className = 'ml-acta-item';
-    li.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:11px;border-bottom:1px solid rgba(255,255,255,.06);';
+    li.className = 'ml-evt-item';
     var pLabel = ((num && String(num).trim()) ? (num + '. ') : '') + (playerName || 'Jugador');
-    li.innerHTML = '<span style="color:#aaa;min-width:22px;">' + min + "'</span>"
-      + '<span>' + ico + '</span>'
-      + '<span style="color:#ddd;">' + pLabel + ' · ' + evt.label + '</span>'
-      + '<span style="color:#aaa;font-size:10px;margin-left:auto;">' + teamName + '</span>';
+    li.innerHTML = '<span class="ml-evt-min">' + min + "'</span>"
+      + '<span class="ml-evt-ico">' + ico + '</span>'
+      + '<span class="ml-evt-name">' + pLabel + ' · ' + evt.label + '</span>'
+      + '<span class="ml-evt-team">' + teamName + '</span>';
     var list = document.getElementById('gm-acta-list');
     list.appendChild(li);
     var empty = list.querySelector('.ml-acta-empty');
@@ -4886,9 +4901,9 @@
 }
 #gm-player-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; }
 .gm-pos-header {
-  font-family: "Oswald", sans-serif; font-size: 10px; letter-spacing: 3px;
-  color: rgba(255,255,255,.3); padding: 12px 2px 4px; text-transform: uppercase;
-  border-bottom: 1px solid rgba(255,255,255,.07); margin-bottom: 2px;
+  font-family: "Oswald", sans-serif; font-size: 12px; letter-spacing: 3px;
+  color: rgba(240,192,64,.75); padding: 12px 2px 4px; text-transform: uppercase;
+  border-bottom: 1px solid rgba(255,255,255,.1); margin-bottom: 2px; font-weight: 600;
 }
 .gm-player-btn {
   width: 100%; display: flex; align-items: center; gap: 12px;
@@ -5228,8 +5243,10 @@
 
 <!-- Paso 3: Elegir jugador -->
 <div class="ml-pl-overlay" id="gen-pl-ov">
-  <div class="ml-pl-ov-evt" id="gen-pl-evt">GOL</div>
-  <div class="ml-pl-ov-team" id="gen-pl-team">EQUIPO</div>
+  <div class="ml-pl-ov-header">
+    <button class="ml-pl-ov-back" onclick="document.getElementById('gen-pl-ov').classList.remove('show');document.getElementById('gen-tp-ov').classList.add('show');">&#8592;</button>
+    <div><div class="ml-pl-ov-evt" id="gen-pl-evt">GOL</div><div class="ml-pl-ov-team" id="gen-pl-team">EQUIPO</div></div>
+  </div>
   <div class="ml-pl-ov-list" id="gen-pl-list"></div>
   <button class="ml-pl-ov-close" onclick="genEvClose()">✕ Cancelar</button>
 </div>

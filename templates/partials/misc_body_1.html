@@ -2524,6 +2524,24 @@
 
 <div class="screen" id="s-munich">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+<style>
+  #s-munich .ath-med-item .ath-marc-val{color:#49f3df;text-shadow:0 0 12px rgba(73,243,223,.45);}
+  #s-munich .ath-med-item .ath-marc-target{color:rgba(73,243,223,.8);}
+  #s-munich .ath-med-item .ath-marc-label{color:rgba(180,255,247,.96);}
+  #s-munich #ath-med-icon{cursor:pointer;user-select:none;}
+  #ath-med-ov{position:fixed;inset:0;background:rgba(5,10,14,.86);z-index:99990;display:none;align-items:center;justify-content:center;padding:16px;}
+  #ath-med-ov.show{display:flex;}
+  .ath-med-box{width:min(460px,95vw);max-height:82vh;overflow:auto;background:linear-gradient(180deg,#10232a,#0a1419);border:1px solid rgba(73,243,223,.35);border-radius:12px;padding:14px;box-shadow:0 0 24px rgba(0,0,0,.45);}
+  .ath-med-title{font-family:Oswald,sans-serif;color:#49f3df;letter-spacing:1.8px;font-size:18px;margin:0 0 10px;}
+  .ath-med-help{font-family:Rajdhani,sans-serif;color:rgba(230,255,250,.85);font-size:13px;line-height:1.35;margin:0 0 10px;}
+  .ath-med-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+  .ath-med-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid rgba(73,243,223,.2);border-radius:8px;background:rgba(73,243,223,.06);}
+  .ath-med-row b{color:#e7fffb;}
+  .ath-med-row span{color:rgba(210,250,244,.84);font-family:Rajdhani,sans-serif;}
+  .ath-med-actions{display:flex;gap:8px;justify-content:flex-end;}
+  .ath-med-btn{border:1px solid rgba(73,243,223,.35);background:rgba(73,243,223,.12);color:#dffff9;font-family:Oswald,sans-serif;letter-spacing:1px;padding:8px 12px;border-radius:8px;cursor:pointer;}
+  .ath-med-btn.danger{border-color:rgba(255,110,110,.45);background:rgba(255,80,80,.14);color:#ffd4d4;}
+</style>
 <div class="sec-hdr"><img alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
 <div style="display:flex;align-items:center;gap:6px;">
@@ -2549,6 +2567,12 @@
 <span class="ath-marc-val" id="ath-money-val">0</span>
 <span class="ath-marc-target" id="ath-money-target">OBJETIVO: 1300 €</span>
 </div>
+<div class="ath-marc-sep"></div>
+<div class="ath-marc-item ath-med-item">
+<span class="ath-marc-label">MÉDICO <span id="ath-med-icon" class="ath-hud-icon" title="Abrir menú de tratamiento rápido">💊</span></span>
+<span class="ath-marc-val" id="ath-med-val">00 PI</span>
+<span class="ath-marc-target" id="ath-med-target">1 PI = 1 partido de lesión</span>
+</div>
 </div>
 <div class="ath-marc-divider"></div>
 <div style="display:flex;gap:10px;padding:8px 14px 12px;align-items:center;">
@@ -2561,6 +2585,17 @@
 <div class="ath-marc-bar" id="ath-bar-money"></div>
 </div>
 </div>
+</div>
+<div id="ath-med-ov" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="ath-med-box">
+    <h3 class="ath-med-title">💉 MENÚ DE TRATAMIENTO RÁPIDO</h3>
+    <p class="ath-med-help" id="ath-med-ov-help">Sin lesionados disponibles.</p>
+    <div class="ath-med-list" id="ath-med-ov-list"></div>
+    <div class="ath-med-actions">
+      <button class="ath-med-btn danger" onclick="document.getElementById('ath-med-ov').classList.remove('show')">Cancelar</button>
+      <button class="ath-med-btn" onclick="window.athApplyMedicalTreatment && window.athApplyMedicalTreatment()">Confirmar inyección</button>
+    </div>
+  </div>
 </div>
 <div class="ent-section" style="border:1px solid rgba(240,192,64,.3);background:linear-gradient(180deg,#1a0408 0%,#100205 100%);overflow:hidden;box-shadow:0 0 18px rgba(220,5,45,.15);">
 <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px 9px;border-bottom:1px solid rgba(255,255,255,.08);">

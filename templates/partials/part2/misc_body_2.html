@@ -2299,6 +2299,13 @@
 .mrow .ms.p.previa:hover {
   filter: brightness(1.08);
 }
+
+.ml-score-wrap{position:relative;}
+.ml-score.goal-live{position:relative;overflow:hidden;}
+.ml-score.goal-live .ml-goal-inline{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;font-weight:900;color:#ccff00;text-shadow:0 0 10px #ccff00,0 0 20px rgba(204,255,0,.8);animation:mlGoalBlink .5s infinite alternate;background:rgba(12,18,10,.92);z-index:2;}
+@keyframes mlGoalBlink{from{opacity:1;}to{opacity:.55;}}
+.ml-audio-toggle{position:fixed;right:14px;bottom:14px;z-index:12000;border:1px solid rgba(240,192,64,.5);background:rgba(8,10,15,.92);color:#f0c040;border-radius:8px;padding:8px 11px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;}
+.ml-audio-toggle.is-muted{color:#ff8f8f;border-color:rgba(255,120,120,.6);}
 /* Zonas clasificación Primera Federación */
 .clas-row.clas-zone-asc { background: rgba(156,60,220,.18); border-left: 3px solid #9c3cdc; }
 .clas-row.clas-zone-asc .clas-team-cell { background: rgba(100,20,160,.25); }
@@ -2965,7 +2972,79 @@
   }
 
 
+  window.__mlSoundEnabled = window.__mlSoundEnabled !== false;
+  window.__mlAudioUnlocked = window.__mlAudioUnlocked || false;
+
+  function _mlEnsureAudioUnlock() {
+    if (window.__mlAudioUnlockHooked) return;
+    window.__mlAudioUnlockHooked = true;
+    function unlockNow(){
+      window.__mlAudioUnlocked = true;
+      var ctx = window.__mlAudioCtx;
+      if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
+      document.removeEventListener('click', unlockNow, true);
+      document.removeEventListener('keydown', unlockNow, true);
+      document.removeEventListener('touchstart', unlockNow, true);
+    }
+    document.addEventListener('click', unlockNow, true);
+    document.addEventListener('keydown', unlockNow, true);
+    document.addEventListener('touchstart', unlockNow, true);
+  }
+
+  function _mlEnsureMuteButton() {
+    if (document.getElementById('ml-audio-toggle')) return;
+    var btn = document.createElement('button');
+    btn.id = 'ml-audio-toggle';
+    btn.className = 'ml-audio-toggle';
+    btn.type = 'button';
+    var paint = function(){
+      var on = window.__mlSoundEnabled !== false;
+      btn.textContent = on ? '🔊 SONIDO ON' : '🔇 MUTE';
+      btn.classList.toggle('is-muted', !on);
+    };
+    btn.addEventListener('click', function(){
+      window.__mlSoundEnabled = !(window.__mlSoundEnabled !== false);
+      if (window.__mlSoundEnabled) {
+        window.__mlAudioUnlocked = true;
+        var ctx = window.__mlAudioCtx;
+        if (ctx && ctx.state === 'suspended' && typeof ctx.resume === 'function') ctx.resume();
+      }
+      paint();
+    });
+    paint();
+    document.body.appendChild(btn);
+  }
+
+  function _mlFlashGoalInScore(mk, nextA, nextB, delayMs) {
+    delayMs = delayMs || 3000;
+    var score = document.querySelector('#mlw-' + mk + ' .ml-score');
+    var scA = document.getElementById('sc-' + mk + '-a');
+    var scB = document.getElementById('sc-' + mk + '-b');
+    if (!score || !scA || !scB) {
+      if (scA) scA.textContent = nextA;
+      if (scB) scB.textContent = nextB;
+      return;
+    }
+    var existing = score.querySelector('.ml-goal-inline');
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+    var badge = document.createElement('span');
+    badge.className = 'ml-goal-inline';
+    badge.textContent = '¡GOL!';
+    score.classList.add('goal-live');
+    score.appendChild(badge);
+    setTimeout(function(){
+      scA.textContent = nextA;
+      scB.textContent = nextB;
+      score.classList.remove('goal-live');
+      if (badge.parentNode) badge.parentNode.removeChild(badge);
+    }, delayMs);
+  }
+
+  _mlEnsureAudioUnlock();
+
   function _mlPlayUiTone(kind) {
+    if (window.__mlSoundEnabled === false) return;
+    if (!window.__mlAudioUnlocked) return;
     try {
       var Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
@@ -3058,16 +3137,20 @@
     st.pendingAIEvents = remaining;
     toFire.forEach(function(ev) {
       var goalTypes = ['gol','falta-gol','pen-gol'];
+      var isGoalEvt = goalTypes.indexOf(ev.type) !== -1 || ev.type === 'propia';
       if (goalTypes.indexOf(ev.type) !== -1) { st.sc[ev.team]++; }
       else if (ev.type === 'propia') { st.sc[ev.team==='a'?'b':'a']++; }
-      var scA = document.getElementById('sc-'+mk+'-a'); if(scA) scA.textContent = st.sc.a;
-      var scB = document.getElementById('sc-'+mk+'-b'); if(scB) scB.textContent = st.sc.b;
+      if (isGoalEvt) _mlFlashGoalInScore(mk, st.sc.a, st.sc.b, 3000);
+      else {
+        var scA = document.getElementById('sc-'+mk+'-a'); if(scA) scA.textContent = st.sc.a;
+        var scB = document.getElementById('sc-'+mk+'-b'); if(scB) scB.textContent = st.sc.b;
+      }
       var evId = Date.now()+Math.random()*9999|0;
       ev.id = evId;
       st.events.push(ev);
       var tName = ev.team==='a' ? st.home : st.away;
       _mlAddActaRow(mk, ev.min, ev.ico, ev.name, ev.num, tName, ev.type, evId);
-      if (ev.type === 'gol' || ev.type === 'falta-gol' || ev.type === 'pen-gol' || ev.type === 'propia') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
+      if (ev.type === 'gol' || ev.type === 'falta-gol' || ev.type === 'pen-gol' || ev.type === 'propia') _mlPlayUiTone('goal');
       if (ev.type === 'roja' || ev.type === 'd-amarilla') _mlShowEventFlash('EXPULSIÓN','red');
     });
   }
@@ -3748,7 +3831,7 @@
     var scB=document.getElementById('sc-'+mk+'-b'); if(scB)scB.textContent=st.sc.b;
     var id=Date.now();
     st.events.push({type:evt.type,label:evt.label,team:team,num:num,name:name,min:min,ico:ico,id:id});
-    if (evt.type === 'gol' || evt.type === 'falta-gol' || evt.type === 'pen-gol' || evt.type === 'propia') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
+    if (evt.type === 'gol' || evt.type === 'falta-gol' || evt.type === 'pen-gol' || evt.type === 'propia') { _mlFlashGoalInScore(mk, st.sc.a, st.sc.b, 3000); _mlPlayUiTone('goal'); }
     if (evt.type === 'roja' || evt.type === 'd-amarilla') _mlShowEventFlash('EXPULSIÓN','red');
     var list=document.getElementById('ml-acta-list-'+mk);
     if(list){
@@ -4055,7 +4138,7 @@
     /* Flash visual + sonido */
     var goalTypes2 = ['gol','falta-gol','pen-gol'];
     if (goalTypes2.indexOf(evt.type) !== -1 || evt.type === 'propia') {
-      _mlShowEventFlash('¡¡¡ GOOOOOL !!!', 'goal');
+      _mlPlayUiTone('goal');
     } else if (evt.type === 'roja' || evt.type === 'damarilla') {
       _mlShowEventFlash('EXPULSIÓN', 'red');
     } else if (evt.type === 'lesion') {
@@ -4427,18 +4510,10 @@
                 : ev.type === 'lesion' ? (ev.lesIco || '🩹') : '•';
         if (ev.dbl) ico = '🟨🟥';
         if (ev.type === 'gol') {
-          if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
-          else                 { scB++; if (scBEl) scBEl.textContent = scB; }
-          (function(){
-            var _gf=document.createElement('div');
-            _gf.style.cssText='position:fixed;inset:0;z-index:9998;pointer-events:none;display:flex;align-items:center;justify-content:center;';
-            var _gt=document.createElement('div');
-            _gt.style.cssText='font-family:\'Bebas Neue\',sans-serif;font-size:52px;font-weight:900;color:#ffcc00;letter-spacing:6px;text-shadow:0 0 30px rgba(255,200,0,.95),0 0 60px rgba(255,160,0,.7),0 2px 4px rgba(0,0,0,.8);animation:goooolBlink .35s ease-in-out infinite;';
-            _gt.textContent='GOOOOL';
-            _gf.appendChild(_gt);
-            document.body.appendChild(_gf);
-            setTimeout(function(){if(_gf.parentNode)_gf.parentNode.removeChild(_gf);},2200);
-          })();
+          if (ev.team === 'a') { scA++; }
+          else                 { scB++; }
+          _mlFlashGoalInScore(mk, scA, scB, 3000);
+          _mlPlayUiTone('goal');
         }
         if (actaEl) {
           var row = document.createElement('div');
@@ -5075,6 +5150,7 @@
 
   /* ── INIT ─────────────────────────────────────────── */
   document.addEventListener('DOMContentLoaded', function () {
+    _mlEnsureMuteButton();
     restoreJ1();
     populateLigaCal();
     populateCalendar();

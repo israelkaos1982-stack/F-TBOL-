@@ -726,6 +726,7 @@ window.SQUAD_REGISTRY={
   ],
   'Girona FC':[
     {h:'🧤 PORTEROS'},
+    ['31','ter Stegen',85],
     ['13','Gazzaniga',78],
     ['1','R. Blanco',73],
     ['25','J. Carlos',71],
@@ -757,7 +758,6 @@ window.SQUAD_REGISTRY={
     {h:'⚡ DELANTEROS'},
     ['9','Vanat',77],
     ['17','Stuani',76],
-    ['31','ter Stegen',85],
   ],
   'Real Oviedo':[
     {h:'🧤 PORTEROS'},

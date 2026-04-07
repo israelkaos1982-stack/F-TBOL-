@@ -465,7 +465,7 @@
     cardEvts.forEach(function (ev) {
       if (ev.type === 'roja' || ev.type === 'd-amarilla') {
         var expMap = ev.team === 'a' ? expelledA : expelledB;
-        if (expMap[ev.player[1]] === undefined || ev.min < expMap[ev.player[1]]) {
+        if (expMap[ev.player[1]] === undefined) {
           expMap[ev.player[1]] = ev.min;
         }
       }

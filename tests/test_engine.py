@@ -217,11 +217,11 @@ class TestSimularMarcador:
     def test_stronger_home_team_wins_more_often(self):
         """Real Madrid (home) vs a weak team — local should win majority."""
         random.seed(99)
-        home_wins = sum(
-            1 for _ in range(200)
-            if simular_marcador("Real Madrid", "Equipo Debil")[0] >
-               simular_marcador("Real Madrid", "Equipo Debil")[1]
-        )
+        home_wins = 0
+        for _ in range(200):
+            gl, gv = simular_marcador("Real Madrid", "Equipo Debil")
+            if gl > gv:
+                home_wins += 1
         # Home side of a strong team should win at least 40% of the time
         assert home_wins >= 40
 

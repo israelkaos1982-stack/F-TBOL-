@@ -218,7 +218,8 @@ class TestSimularYGuardar:
 
         with app_module.app.app_context():
             app_module.db.create_all()
-            random.seed(12345)
+        random.seed(12345)
+        with app_module.app.app_context():
             for i in range(n):
                 # Use unique match identifiers to bypass the deduplication guard
                 fake_local = f"{local}_{i}"

@@ -319,8 +319,9 @@
     var events = [];
     ['a', 'b'].forEach(function (team) {
       var active = team === 'a' ? activeA : activeB;
+      var yellowPlayer = null;
       if (Math.random() < 0.42) {
-        var yellowPlayer = pickWeightedPlayer(active);
+        yellowPlayer = pickWeightedPlayer(active);
         if (yellowPlayer) {
           events.push({ min: 8 + Math.floor(Math.random() * Math.max(10, ft90 - 12)), ico: '🟨', team: team, player: yellowPlayer, type: 'amarilla' });
           if (Math.random() < 0.08) {
@@ -328,8 +329,11 @@
           }
         }
       }
+      // Only generate a direct red for a player who has not already received any card,
+      // since an expelled player cannot receive further cards (real football rules).
       if (Math.random() < 0.06) {
-        var redPlayer = pickWeightedPlayer(active);
+        var excludeFromRed = yellowPlayer ? [yellowPlayer[1]] : [];
+        var redPlayer = pickWeightedPlayer(active, { exclude: excludeFromRed });
         if (redPlayer) {
           events.push({ min: 18 + Math.floor(Math.random() * Math.max(12, ft90 - 20)), ico: '🟥', team: team, player: redPlayer, type: 'roja' });
         }

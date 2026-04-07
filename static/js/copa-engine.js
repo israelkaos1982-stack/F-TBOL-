@@ -452,24 +452,43 @@
     for (var gb = 0; gb < gv; gb++) goalsOrder.push('b');
     goalsOrder.sort(function () { return Math.random() - 0.5; });
 
+    // Generate card events first so expelled players can be excluded from scoring
+    var cardEvts = maybeCardEvents(activeA, activeB, ft90);
+    cardEvts.forEach(function (ev) {
+      ev.realTeam = ev.team === 'a' ? local : visitante;
+      evts.push(ev);
+    });
+
+    // Build expelled player maps: { playerName -> expulsionMinute }
+    var expelledA = {};
+    var expelledB = {};
+    cardEvts.forEach(function (ev) {
+      if (ev.type === 'roja' || ev.type === 'd-amarilla') {
+        var expMap = ev.team === 'a' ? expelledA : expelledB;
+        if (expMap[ev.player[1]] === undefined || ev.min < expMap[ev.player[1]]) {
+          expMap[ev.player[1]] = ev.min;
+        }
+      }
+    });
+
     goalsOrder.forEach(function (team) {
       var min = 4 + Math.floor(Math.random() * 84);
       var active = team === 'a' ? activeA : activeB;
-      var scorer = pickWeightedPlayer(active);
+      var expelledMap = team === 'a' ? expelledA : expelledB;
+      // Exclude players who were expelled before or at this minute
+      var excludeExpelled = Object.keys(expelledMap).filter(function (name) {
+        return expelledMap[name] <= min;
+      });
+      var scorer = pickWeightedPlayer(active, { exclude: excludeExpelled });
       if (!scorer) return;
       var typeRoll = Math.random();
       var type = typeRoll < 0.08 ? 'falta-gol' : (typeRoll < 0.17 ? 'pen-gol' : 'gol');
       var ico = type === 'falta-gol' ? '⚽🎯' : type === 'pen-gol' ? '⚽🥅' : '⚽';
       evts.push({ min: min, ico: ico, team: team, player: scorer, type: type, realTeam: team === 'a' ? local : visitante });
       if (type === 'pen-gol' && Math.random() < 0.72) {
-        var prov = pickWeightedPlayer(active, { exclude: [scorer[1]] }) || scorer;
+        var prov = pickWeightedPlayer(active, { exclude: excludeExpelled.concat([scorer[1]]) }) || scorer;
         evts.push({ min: min, ico: '🤦🥅', team: team, player: prov, type: 'pen-prov', realTeam: team === 'a' ? local : visitante });
       }
-    });
-
-    maybeCardEvents(activeA, activeB, ft90).forEach(function (ev) {
-      ev.realTeam = ev.team === 'a' ? local : visitante;
-      evts.push(ev);
     });
 
     var lesiones = [];
@@ -493,12 +512,16 @@
       et_gl = etA;
       et_gv = etB;
       for (var ea = 0; ea < etA; ea++) {
-        var pA = pickWeightedPlayer(activeA);
-        if (pA) evts.push({ min: 92 + Math.floor(Math.random() * 14), ico: '⚽', team: 'a', player: pA, type: 'gol', realTeam: local });
+        var etMinA = 92 + Math.floor(Math.random() * 14);
+        var excludeEtA = Object.keys(expelledA).filter(function (name) { return expelledA[name] <= etMinA; });
+        var pA = pickWeightedPlayer(activeA, { exclude: excludeEtA });
+        if (pA) evts.push({ min: etMinA, ico: '⚽', team: 'a', player: pA, type: 'gol', realTeam: local });
       }
       for (var eb = 0; eb < etB; eb++) {
-        var pB = pickWeightedPlayer(activeB);
-        if (pB) evts.push({ min: 92 + Math.floor(Math.random() * 14), ico: '⚽', team: 'b', player: pB, type: 'gol', realTeam: visitante });
+        var etMinB = 92 + Math.floor(Math.random() * 14);
+        var excludeEtB = Object.keys(expelledB).filter(function (name) { return expelledB[name] <= etMinB; });
+        var pB = pickWeightedPlayer(activeB, { exclude: excludeEtB });
+        if (pB) evts.push({ min: etMinB, ico: '⚽', team: 'b', player: pB, type: 'gol', realTeam: visitante });
       }
       if (gl + et_gl === gv + et_gv) {
         shootout = simulatePenaltyShootout(local, visitante);

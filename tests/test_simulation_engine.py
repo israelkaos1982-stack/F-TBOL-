@@ -33,20 +33,20 @@ class TestModificadorExpulsion:
     """Verify dynamic probability modifiers match the architecture document."""
 
     def test_critico_0_to_30(self):
-        # 00'-30' → 40% reduction → multiplier 0.60
+        # [0, 30) → 40% reduction → multiplier 0.60
         assert _modificador_expulsion(0) == pytest.approx(0.60)
         assert _modificador_expulsion(15) == pytest.approx(0.60)
-        assert _modificador_expulsion(30) == pytest.approx(0.60)
+        assert _modificador_expulsion(29) == pytest.approx(0.60)
 
-    def test_grave_31_to_70(self):
-        # 31'-70' → 30% reduction → multiplier 0.70
-        assert _modificador_expulsion(31) == pytest.approx(0.70)
+    def test_grave_30_to_70(self):
+        # [30, 70) → 30% reduction → multiplier 0.70
+        assert _modificador_expulsion(30) == pytest.approx(0.70)
         assert _modificador_expulsion(50) == pytest.approx(0.70)
-        assert _modificador_expulsion(70) == pytest.approx(0.70)
+        assert _modificador_expulsion(69) == pytest.approx(0.70)
 
-    def test_defensivo_71_to_90(self):
-        # 71'-90' → 20% reduction → multiplier 0.80
-        assert _modificador_expulsion(71) == pytest.approx(0.80)
+    def test_defensivo_70_to_90(self):
+        # [70, 90] → 20% reduction → multiplier 0.80
+        assert _modificador_expulsion(70) == pytest.approx(0.80)
         assert _modificador_expulsion(85) == pytest.approx(0.80)
         assert _modificador_expulsion(90) == pytest.approx(0.80)
 
@@ -77,7 +77,8 @@ class TestScoreIntegrity:
         assert p.goles_visitante >= 0
 
     def test_own_goal_counts_for_opponent_not_scorer(self, ctx):
-        """Run many simulations and verify all partidos have non-negative goal counts."""
+        """Run many simulations and verify that own goal events are generated
+        without errors and all match goal counts remain non-negative."""
         random.seed(777)
         teams = list(app_module.jugadores_por_equipo.keys())
         for i in range(50):

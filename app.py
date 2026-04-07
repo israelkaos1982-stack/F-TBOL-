@@ -60,6 +60,12 @@ BASE = {
 }
 
 MULTIGOL = [1, 0.37, 0.22, 0.12, 0.06]
+
+# Penalti: pesos de la fórmula probabilística (Módulo 2)
+PENALTY_BASE_WEIGHT = 0.85        # peso del atributo lanzador vs portero
+PENALTY_RANDOM_FACTOR = 0.15      # factor de azar máximo
+PENALTY_SAVE_PROBABILITY = 0.60   # prob. de parada efectiva cuando falla el penalti
+PENALTY_FOUL_CARD_PROBABILITY = 0.30  # prob. de tarjeta al defensor que provoca el penalti
 BONUS_LOCAL = 1.10
 
 TEAM_ALIASES = {
@@ -562,14 +568,14 @@ def _elegir_jugador_campo(equipo, es_local=False):
 def _modificador_expulsion(minuto):
     """Devuelve el modificador de probabilidad de goles para el equipo con 10 jugadores.
 
-    Basado en el Módulo 4 del documento de arquitectura:
-    00-30' (Crítico):  reducción del 40% en la fluidez ofensiva.
-    30-70' (Grave):    reducción del 30%.
-    70-90' (Defensivo): reducción del 20%.
+    Basado en el Módulo 4 del documento de arquitectura (rangos semiabiertos [start, end)):
+    [00, 30) Crítico:   reducción del 40% → multiplicador 0.60.
+    [30, 70) Grave:     reducción del 30% → multiplicador 0.70.
+    [70, 90] Defensivo: reducción del 20% → multiplicador 0.80.
     """
-    if minuto <= 30:
+    if minuto < 30:
         return 0.60   # 40% de reducción
-    elif minuto <= 70:
+    elif minuto < 70:
         return 0.70   # 30% de reducción
     else:
         return 0.80   # 20% de reducción
@@ -713,7 +719,7 @@ def simular_y_guardar(jornada, local, visitante):
             foul_jugador = _jugador_disponible(foul_equipo)
             if _check_status(foul_jugador):
                 m_foul = _minuto_unico(pen_minuto)
-                if random.random() < 0.30:   # 30% de probabilidad de tarjeta al defensor
+                if random.random() < PENALTY_FOUL_CARD_PROBABILITY:
                     _procesar_tarjeta(foul_equipo, foul_jugador, m_foul)
                 else:
                     acta.append((m_foul, "pen-prov", foul_equipo, foul_jugador))
@@ -729,20 +735,20 @@ def simular_y_guardar(jornada, local, visitante):
                 80
             )
             # Probabilidad de gol: lanzador vs portero, con factor azar
-            prob_gol_pen = (pen_poder / (pen_poder + gk_poder)) * 0.85 + random.uniform(0, 0.15)
+            prob_gol_pen = (pen_poder / (pen_poder + gk_poder)) * PENALTY_BASE_WEIGHT + random.uniform(0, PENALTY_RANDOM_FACTOR)
             if prob_gol_pen > 0.50:
+                # Penalti convertido → el portero no para (no se añade pen-parado)
                 acta.append((_minuto_unico(pen_minuto), "pen-gol", pen_equipo, pen_jugador))
                 if pen_equipo == local:
                     goles_acta_local += 1
                 else:
                     goles_acta_visit += 1
-                if gks:
-                    acta.append((_minuto_unico(pen_minuto), "pen-parado", foul_equipo, gks[0]["nombre"]))
             else:
-                tipo_fallo = "pen-parado" if gks and random.random() < 0.60 else "pen-fallo"
-                acta.append((_minuto_unico(pen_minuto), tipo_fallo, pen_equipo, pen_jugador))
-                if gks and tipo_fallo == "pen-parado":
+                # Penalti fallado: parada efectiva o fuera
+                if gks and random.random() < PENALTY_SAVE_PROBABILITY:
                     acta.append((_minuto_unico(pen_minuto), "pen-parado", foul_equipo, gks[0]["nombre"]))
+                else:
+                    acta.append((_minuto_unico(pen_minuto), "pen-fallo", pen_equipo, pen_jugador))
 
     # ================================================================
     # Gol de falta (5% por partido)
@@ -794,18 +800,15 @@ def simular_y_guardar(jornada, local, visitante):
 
     # ================================================================
     # Módulo 4: Aplicar modificadores dinámicos si hubo expulsiones.
-    # Si algún equipo tuvo expulsados, re-calculamos una parte de los goles.
+    # El modificador reduce la probabilidad de que el equipo mermado
+    # mantenga sus goles (aproximación estocástica de la ventaja numérica).
     # ================================================================
-    if mod_local < 1.0 or mod_visit < 1.0:
-        # Recalcular goles adicionales que se intentarían con el equipo mermado
-        # (los goles ya anotados antes de la roja se mantienen; solo se limitan los futuros)
-        if mod_local < 1.0 and goles_acta_local > 0:
-            # Penalización: con probabilidad (1 - mod_local) eliminar un gol
-            if random.random() > mod_local and goles_acta_local > 0:
-                goles_acta_local = max(0, goles_acta_local - 1)
-        if mod_visit < 1.0 and goles_acta_visit > 0:
-            if random.random() > mod_visit and goles_acta_visit > 0:
-                goles_acta_visit = max(0, goles_acta_visit - 1)
+    if mod_local < 1.0 and goles_acta_local > 0:
+        if random.random() > mod_local:
+            goles_acta_local = max(0, goles_acta_local - 1)
+    if mod_visit < 1.0 and goles_acta_visit > 0:
+        if random.random() > mod_visit:
+            goles_acta_visit = max(0, goles_acta_visit - 1)
 
     # ================================================================
     # Módulo 5 + 6: Ordenar acta cronológicamente y calcular premios finales

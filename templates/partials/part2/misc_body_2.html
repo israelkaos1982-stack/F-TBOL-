@@ -4595,7 +4595,39 @@
       outB = getOutfield(activeB); if (!outB.length) outB = [['','Jugador B','F',76,'titular']];
     }
 
+    // ── TARJETAS: 2-4 amarillas; 2ª al mismo jugador → roja ────────
+    // Se generan ANTES que los goles para poder excluir expulsados del marcador
+    var expelledA = {}; // nombre → minuto de expulsión
+    var expelledB = {};
+    var numYellow = Math.floor(Math.random() * 3) + 2;
+    var yellowsReceived = {};
+    for (var c = 0; c < numYellow; c++) {
+      var ct = Math.random() < 0.5 ? 'a' : 'b';
+      var csq = ct === 'a' ? outA : outB;
+      var cp = csq[Math.floor(Math.random()*csq.length)];
+      var cmin = Math.floor(Math.random()*80)+5;
+      if (yellowsReceived[cp[1]]) {
+        events.push({ type:'roja', ico:'🟥', min:cmin, player:cp[1]||'?', team:ct, reason:'2TA' });
+        var expMapY = ct === 'a' ? expelledA : expelledB;
+        if (expMapY[cp[1]] === undefined) expMapY[cp[1]] = cmin;
+      } else {
+        events.push({ type:'amarilla', ico:'🟨', min:cmin, player:cp[1]||'?', team:ct });
+        yellowsReceived[cp[1]] = true;
+      }
+    }
+    // Roja directa (~15% por partido)
+    if (Math.random() < 0.15) {
+      var rt = Math.random() < 0.5 ? 'a' : 'b';
+      var rsq = rt === 'a' ? outA : outB;
+      var rp = rsq[Math.floor(Math.random()*rsq.length)];
+      var rmin = Math.floor(Math.random()*80)+10;
+      events.push({ type:'roja', ico:'🟥', min:rmin, player:rp[1]||'?', team:rt, reason:'directa' });
+      var expMapR = rt === 'a' ? expelledA : expelledB;
+      if (expMapR[rp[1]] === undefined) expMapR[rp[1]] = rmin;
+    }
+
     // ── GOLES: minutoss aleatorios + selección ponderada ───────────
+    // Los jugadores expulsados antes del minuto del gol quedan excluidos
     var totalGoals = goalsA + goalsB;
     var goalMins = [];
     for (var i = 0; i < totalGoals; i++) goalMins.push(Math.floor(Math.random() * 88) + 2);
@@ -4609,41 +4641,35 @@
     var goalsPerPlayer = {};
 
     assign.forEach(function(team, idx) {
+      var min = goalMins[idx];
+      var expMap = team === 'a' ? expelledA : expelledB;
       var sq = team === 'a' ? outA : outB;
-      var pl = _weightedScorerPick(sq, team === 'a', goalsPerPlayer) || sq[0];
+      // Excluir jugadores que ya fueron expulsados antes del minuto del gol
+      var eligible = sq.filter(function(p){ return expMap[p[1]] === undefined || expMap[p[1]] > min; });
+      if (!eligible.length) eligible = sq;
+      var pl = _weightedScorerPick(eligible, team === 'a', goalsPerPlayer) || eligible[0] || sq[0];
       goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
-      events.push({ type:'gol', min:goalMins[idx], player:pl[1]||'?', team:team });
+      events.push({ type:'gol', min:min, player:pl[1]||'?', team:team });
     });
-
-    // ── TARJETAS: 2-4 amarillas; 2ª al mismo jugador → roja ────────
-    var numYellow = Math.floor(Math.random() * 3) + 2;
-    var yellowsReceived = {};
-    for (var c = 0; c < numYellow; c++) {
-      var ct = Math.random() < 0.5 ? 'a' : 'b';
-      var csq = ct === 'a' ? outA : outB;
-      var cp = csq[Math.floor(Math.random()*csq.length)];
-      var cmin = Math.floor(Math.random()*80)+5;
-      if (yellowsReceived[cp[1]]) {
-        events.push({ type:'roja', ico:'🟥', min:cmin, player:cp[1]||'?', team:ct, reason:'2TA' });
-      } else {
-        events.push({ type:'amarilla', ico:'🟨', min:cmin, player:cp[1]||'?', team:ct });
-        yellowsReceived[cp[1]] = true;
-      }
-    }
-    // Roja directa (~15% por partido)
-    if (Math.random() < 0.15) {
-      var rt = Math.random() < 0.5 ? 'a' : 'b';
-      var rsq = rt === 'a' ? outA : outB;
-      var rp = rsq[Math.floor(Math.random()*rsq.length)];
-      events.push({ type:'roja', ico:'🟥', min:Math.floor(Math.random()*80)+10, player:rp[1]||'?', team:rt, reason:'directa' });
-    }
 
     events.sort(function(a,b){ return a.min - b.min; });
     var mvpScore = {}, mvpTeams2 = {};
-    events.forEach(function(e){ if(e.type==='gol'){ mvpScore[e.player]=(mvpScore[e.player]||0)+3; mvpTeams2[e.player]=e.team==='a'?teamA:teamB; } });
+    // Los expulsados no pueden ser MVP aunque hayan marcado antes de su expulsión,
+    // pero sí pueden si ya habían marcado y la expulsión fue posterior al gol;
+    // en cualquier caso, no pueden recibir el MVP si terminaron expulsados.
+    var expelledAll = {};
+    Object.keys(expelledA).forEach(function(n){ expelledAll[n] = true; });
+    Object.keys(expelledB).forEach(function(n){ expelledAll[n] = true; });
+    events.forEach(function(e){ if(e.type==='gol' && !expelledAll[e.player]){ mvpScore[e.player]=(mvpScore[e.player]||0)+3; mvpTeams2[e.player]=e.team==='a'?teamA:teamB; } });
     var mvp='', mvpTeamName='', best=0;
     Object.keys(mvpScore).forEach(function(p){ if(mvpScore[p]>best){ best=mvpScore[p]; mvp=p; mvpTeamName=mvpTeams2[p]; } });
-    if (!mvp) { var ms = goalsA >= goalsB ? outA : outB; var mp = ms[Math.floor(Math.random()*ms.length)]; mvp = mp?mp[1]:'?'; mvpTeamName = goalsA >= goalsB ? teamA : teamB; }
+    if (!mvp) {
+      var ms = goalsA >= goalsB ? outA : outB;
+      var msEligible = ms.filter(function(p){ return !expelledAll[p[1]]; });
+      if (!msEligible.length) msEligible = ms;
+      var mp = msEligible[Math.floor(Math.random()*msEligible.length)];
+      mvp = mp?mp[1]:'?'; mvpTeamName = goalsA >= goalsB ? teamA : teamB;
+    }
     events.push({ type:'mvp', ico:'⭐', min:90, player:mvp, team:goalsA >= goalsB ? 'a' : 'b' });
     return { events:events, mvp:mvp, mvpTeam:mvpTeamName };
   }

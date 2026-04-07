@@ -364,13 +364,20 @@
     };
   }
 
-  function pickMvp(events, scoreA, scoreB, teamA, teamB, sqA, sqB) {
+  function pickMvp(events, scoreA, scoreB, teamA, teamB, sqA, sqB, expelledA, expelledB) {
+    var expA = expelledA || {};
+    var expB = expelledB || {};
+    var expelled = {};
+    Object.keys(expA).forEach(function (n) { expelled[n] = true; });
+    Object.keys(expB).forEach(function (n) { expelled[n] = true; });
     var scores = {};
     var teams = {};
     (events || []).forEach(function (e) {
       if (!e.player) return;
       var n = e.player[1];
       if (!n) return;
+      // An expelled player cannot be MVP
+      if (expelled[n]) return;
       var w = 0;
       if (e.type === 'gol') w = 3;
       else if (e.type === 'falta-gol') w = 4;
@@ -389,8 +396,10 @@
     if (!best) {
       var winner = scoreA > scoreB ? 'a' : (scoreB > scoreA ? 'b' : (Math.random() < 0.5 ? 'a' : 'b'));
       var sq = winner === 'a' ? sqA : sqB;
-      var pool = sq.filter(function (p) { return p[2] !== 'P'; });
-      best = (pool.length ? pickRandom(pool) : pickRandom(sq))[1];
+      var pool = sq.filter(function (p) { return p[2] !== 'P' && !expelled[p[1]]; });
+      if (!pool.length) pool = sq.filter(function (p) { return !expelled[p[1]]; });
+      if (!pool.length) pool = sq;
+      best = pickRandom(pool)[1];
       teams[best] = winner === 'a' ? teamA : teamB;
     }
     return { name: best, team: teams[best] || teamA };
@@ -530,7 +539,7 @@
     }
 
     evts.sort(function (a, b) { return a.min - b.min; });
-    var mvp = pickMvp(evts, gl + et_gl, gv + et_gv, local, visitante, activeA, activeB);
+    var mvp = pickMvp(evts, gl + et_gl, gv + et_gv, local, visitante, activeA, activeB, expelledA, expelledB);
     evts.push({ min: 120, ico: '⭐', team: mvp.team === local ? 'a' : 'b', player: ['', mvp.name], type: 'mvp', realTeam: mvp.team });
 
     return {

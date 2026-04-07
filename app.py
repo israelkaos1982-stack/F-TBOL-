@@ -616,7 +616,8 @@ def simular_y_guardar(jornada, local, visitante):
             if m not in minutos_usados:
                 minutos_usados.add(m)
                 return m
-        # fallback: permitir duplicado si no hay opción
+        # fallback: registrar el minuto base aunque se repita
+        minutos_usados.add(min_base)
         return min_base
 
     def _jugador_disponible(equipo, es_local=False):
@@ -629,7 +630,7 @@ def simular_y_guardar(jornada, local, visitante):
             campo = [j for j in jugadores if j["nombre"] not in expulsados]
         if not campo:
             # Todos expulsados (situación extrema): usa cualquiera
-            campo = jugadores_por_equipo.get(resolved, [{"nombre": "Jugador"}])
+            campo = jugadores_por_equipo.get(resolved, [{"nombre": "Jugador", "poder": 70}])
         pesos = [max(1, int(j.get("poder", 70) or 70)) for j in campo]
         return random.choices(campo, weights=pesos, k=1)[0]["nombre"]
 
@@ -734,8 +735,8 @@ def simular_y_guardar(jornada, local, visitante):
                     resolve_team_name(pen_equipo), []) if j["nombre"] == pen_jugador),
                 80
             )
-            # Probabilidad de gol: lanzador vs portero, con factor azar
-            prob_gol_pen = (pen_poder / (pen_poder + gk_poder)) * PENALTY_BASE_WEIGHT + random.uniform(0, PENALTY_RANDOM_FACTOR)
+            # Probabilidad de gol: lanzador vs portero, con factor azar (capped at 1.0)
+            prob_gol_pen = min(1.0, (pen_poder / (pen_poder + gk_poder)) * PENALTY_BASE_WEIGHT + random.uniform(0, PENALTY_RANDOM_FACTOR))
             if prob_gol_pen > 0.50:
                 # Penalti convertido → el portero no para (no se añade pen-parado)
                 acta.append((_minuto_unico(pen_minuto), "pen-gol", pen_equipo, pen_jugador))
@@ -801,14 +802,26 @@ def simular_y_guardar(jornada, local, visitante):
     # ================================================================
     # Módulo 4: Aplicar modificadores dinámicos si hubo expulsiones.
     # El modificador reduce la probabilidad de que el equipo mermado
-    # mantenga sus goles (aproximación estocástica de la ventaja numérica).
+    # mantenga todos sus goles. Cuando se descuenta un gol también se
+    # elimina el último evento de gol del equipo del acta para mantener
+    # consistencia entre el marcador y el registro de eventos.
     # ================================================================
+    def _descontar_gol_acta(equipo):
+        """Elimina el último evento de gol del equipo del acta y devuelve True si lo hizo."""
+        for i in range(len(acta) - 1, -1, -1):
+            if acta[i][1] == "gol" and acta[i][2] == equipo:
+                acta.pop(i)
+                return True
+        return False
+
     if mod_local < 1.0 and goles_acta_local > 0:
         if random.random() > mod_local:
-            goles_acta_local = max(0, goles_acta_local - 1)
+            if _descontar_gol_acta(local):
+                goles_acta_local -= 1
     if mod_visit < 1.0 and goles_acta_visit > 0:
         if random.random() > mod_visit:
-            goles_acta_visit = max(0, goles_acta_visit - 1)
+            if _descontar_gol_acta(visitante):
+                goles_acta_visit -= 1
 
     # ================================================================
     # Módulo 5 + 6: Ordenar acta cronológicamente y calcular premios finales
@@ -825,8 +838,8 @@ def simular_y_guardar(jornada, local, visitante):
 
     acta_filtrada = []
     for minuto, tipo, eq, jug in acta:
-        if jug in expulsion_minuto and minuto > expulsion_minuto[jug]:
-            continue   # evento posterior a la expulsión: descartado
+        if jug in expulsion_minuto and minuto >= expulsion_minuto[jug] and tipo not in ("roja", "doble-amarilla"):
+            continue   # evento en el minuto de expulsión o posterior: descartado
         acta_filtrada.append((minuto, tipo, eq, jug))
     acta = acta_filtrada
 

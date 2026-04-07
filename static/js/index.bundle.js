@@ -2709,10 +2709,20 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       var poderBoost = ((poder || 70) - 70) / 20 * 0.15;
       return Math.max(0.001, base + poderBoost);
     }
-    function rndSqNonGK(sq){
+    function rndSqNonGK(sq, atMin){
+      var team=sq===sqA?'a':(sq===sqB?'b':null);
       var active=sq===sqA?activeA:(sq===sqB?activeB:sq);
       if(!active||!active.length) return ['0','Jugador','M',70];
-      var f=active.filter(function(p){return p[2]!=='P';});
+      var f=active.filter(function(p){
+        if(p[2]==='P') return false;
+        if(team!==null && atMin!==undefined && isExpelledBefore(team,p[1],atMin)) return false;
+        return true;
+      });
+      if(!f.length)f=active.filter(function(p){
+        if(team!==null && atMin!==undefined && isExpelledBefore(team,p[1],atMin)) return false;
+        return true;
+      });
+      if(!f.length)f=active.filter(function(p){return p[2]!=='P';});
       if(!f.length)f=active;
       // Usar peso combinado: poder × peso_posición
       var tot=f.reduce(function(s,p){
@@ -2742,7 +2752,11 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
 
     var sa=0, sb=0, evts=[];
     var yellowLog={a:[],b:[]};
-    var expelledLog={a:[],b:[]};
+    var expelledLog={a:{},b:{}}; // { playerName -> expulsionMinute }
+    function isExpelledBefore(team, name, atMin) {
+      var m = expelledLog[team][name];
+      return m !== undefined && m <= atMin;
+    }
     var usedYellow=[];
     var redCardTeam=null, redCardMin=999;
 
@@ -2767,18 +2781,19 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       var rt=rndTeam(); var rsq=rt==='a'?sqA:sqB; var rp=rndSqNonGK(rsq);
       redCardMin=rndMin(); redCardTeam=rt;
       evts.push({min:redCardMin,ico:'🟥',team:rt,player:rp,type:'card'});
-      expelledLog[rt].push(rp[1]);
+      expelledLog[rt][rp[1]]=redCardMin;
       var rt2=rndTeam(); var rsq2=rt2==='a'?sqA:sqB; var rp2=rndSqNonGK(rsq2);
-      if(expelledLog[rt2].indexOf(rp2[1])===-1){
-        evts.push({min:rndMin(),ico:'🟥',team:rt2,player:rp2,type:'card'});
-        expelledLog[rt2].push(rp2[1]);
+      var rt2Min=rndMin();
+      if(expelledLog[rt2][rp2[1]]===undefined){
+        evts.push({min:rt2Min,ico:'🟥',team:rt2,player:rp2,type:'card'});
+        expelledLog[rt2][rp2[1]]=rt2Min;
       }
     } else if(cardRoll < 0.07){
       // 1 roja directa (5%)
       var rt=rndTeam(); var rsq=rt==='a'?sqA:sqB; var rp=rndSqNonGK(rsq);
       redCardMin=rndMin(); redCardTeam=rt;
       evts.push({min:redCardMin,ico:'🟥',team:rt,player:rp,type:'card'});
-      expelledLog[rt].push(rp[1]);
+      expelledLog[rt][rp[1]]=redCardMin;
     } else if(cardRoll < 0.12){
       // Doble amarilla (5%) — el jugador DEBE tener amarilla previa
       var daTeam=null, daPlayer=null;
@@ -2807,7 +2822,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
         if(daMin2>90)daMin2=90;
         evts.push({min:daMin2,ico:'🟨🟥',team:daTeam,player:daPlayer,type:'card'});
         yellowLog[daTeam].splice(yellowLog[daTeam].indexOf(daPlayer[1]),1);
-        expelledLog[daTeam].push(daPlayer[1]);
+        expelledLog[daTeam][daPlayer[1]]=daMin2;
         redCardTeam=daTeam; redCardMin=daMin2;
       }
     }
@@ -2819,17 +2834,17 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       var prov_t  = foul_t==='a'?'b':'a';   // equipo que RECIBE y TIRA
       var foul_sq = foul_t==='a'?sqA:sqB;
       var prov_sq = prov_t==='a'?sqA:sqB;
-      var foul_p  = rndSqNonGK(foul_sq);
-      var kick_p  = rndSqNonGK(prov_sq);
       var pen_min = rndMin();
+      var foul_p  = rndSqNonGK(foul_sq, pen_min);
+      var kick_p  = rndSqNonGK(prov_sq, pen_min);
       // Tarjeta al que comete la falta
       var r2=Math.random();
       if(r2<0.65){
-        if(expelledLog[foul_t].indexOf(foul_p[1])===-1){
+        if(expelledLog[foul_t][foul_p[1]]===undefined){
           if(yellowLog[foul_t].indexOf(foul_p[1])!==-1){
             evts.push({min:pen_min,ico:'🟨🟥',team:foul_t,player:foul_p,type:'card'});
             yellowLog[foul_t].splice(yellowLog[foul_t].indexOf(foul_p[1]),1);
-            expelledLog[foul_t].push(foul_p[1]);
+            expelledLog[foul_t][foul_p[1]]=pen_min;
             if(!redCardTeam){redCardTeam=foul_t;redCardMin=pen_min;}
           } else {
             evts.push({min:pen_min,ico:'🟨',team:foul_t,player:foul_p,type:'card'});
@@ -2837,9 +2852,9 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
           }
         }
       } else if(r2<0.75){
-        if(expelledLog[foul_t].indexOf(foul_p[1])===-1){
+        if(expelledLog[foul_t][foul_p[1]]===undefined){
           evts.push({min:pen_min,ico:'🟥',team:foul_t,player:foul_p,type:'card'});
-          expelledLog[foul_t].push(foul_p[1]);
+          expelledLog[foul_t][foul_p[1]]=pen_min;
           if(!redCardTeam){redCardTeam=foul_t;redCardMin=pen_min;}
         }
       }
@@ -2863,16 +2878,16 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
 
     // ── GOL DE FALTA (8%) ────────────────────────────────────────────
     if(Math.random()<0.08){
-      var fgt=rndTeam(); var fgsq=fgt==='a'?sqA:sqB; var fgp=rndSqNonGK(fgsq);
+      var fgt=rndTeam(); var fgsq=fgt==='a'?sqA:sqB; var fkMin=rndMin(); var fgp=rndSqNonGK(fgsq,fkMin);
       if(fgt==='a')sa++;else sb++;
-      evts.push({min:rndMin(),ico:'⚽🎯',team:fgt,player:fgp,type:'falta-gol'});
+      evts.push({min:fkMin,ico:'⚽🎯',team:fgt,player:fgp,type:'falta-gol'});
     }
 
     // ── AUTOGOL (8%) ─────────────────────────────────────────────────
     if(Math.random()<0.08){
-      var agt=rndTeam(); var agsq=agt==='a'?sqA:sqB; var agp=rndSqNonGK(agsq);
+      var agt=rndTeam(); var agsq=agt==='a'?sqA:sqB; var agMin=rndMin(); var agp=rndSqNonGK(agsq,agMin);
       if(agt==='a')sb++;else sa++;
-      evts.push({min:rndMin(),ico:'⚽🚫',team:agt,player:agp,type:'propia'});
+      evts.push({min:agMin,ico:'⚽🚫',team:agt,player:agp,type:'propia'});
     }
 
     // ── GOLES NORMALES con influencia real del rating ───────────────
@@ -2929,12 +2944,12 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
         var scorer = _goalScorers[topScorer].player;
         var poderBonus = ((scorer[3]||70) - 70) / 20 * 0.005;
         reuseProb += poderBonus;
-        if (Math.random() < reuseProb) {
+        if (Math.random() < reuseProb && !isExpelledBefore(gt, scorer[1], gMin)) {
           gp = scorer;
           reusePlayer = true;
         }
       }
-      if (!reusePlayer) gp = rndSqNonGK(gsq);
+      if (!reusePlayer) gp = rndSqNonGK(gsq, gMin);
       // Registrar goleador
       var gpKey = gt + '::' + gp[1];
       if (!_goalScorers[gpKey]) _goalScorers[gpKey] = { player: gp, team: gt, count: 0 };

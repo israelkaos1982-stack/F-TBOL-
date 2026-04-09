@@ -925,6 +925,55 @@ def calendario_view():
 def clasificacion():
     return render_template("index.html")
 
+@app.route("/estadisticas")
+def estadisticas():
+    from collections import Counter
+
+    eventos = Evento.query.all()
+
+    goles_counter = Counter()
+    amarillas_counter = Counter()
+    rojas_counter = Counter()
+    penaltis_marcados_counter = Counter()
+    penaltis_fallados_counter = Counter()
+    faltas_gol_counter = Counter()
+    autogoles_counter = Counter()
+
+    for ev in eventos:
+        tipo = ev.tipo or ""
+        jug = ev.jugador or "Desconocido"
+        if tipo in ("gol",):
+            goles_counter[jug] += 1
+        elif tipo in ("pen-gol",):
+            goles_counter[jug] += 1
+            penaltis_marcados_counter[jug] += 1
+        elif tipo in ("falta-gol",):
+            goles_counter[jug] += 1
+            faltas_gol_counter[jug] += 1
+        elif tipo in ("propia",):
+            autogoles_counter[jug] += 1
+        elif tipo in ("amarilla",):
+            amarillas_counter[jug] += 1
+        elif tipo in ("roja", "doble-amarilla"):
+            rojas_counter[jug] += 1
+        elif tipo in ("pen-fallo",):
+            penaltis_fallados_counter[jug] += 1
+
+    def top(counter):
+        return sorted(counter.items(), key=lambda x: x[1], reverse=True)
+
+    return render_template(
+        "estadisticas.html",
+        goles=top(goles_counter),
+        amarillas=top(amarillas_counter),
+        rojas=top(rojas_counter),
+        penaltis_marcados=top(penaltis_marcados_counter),
+        penaltis_fallados=top(penaltis_fallados_counter),
+        faltas_gol=top(faltas_gol_counter),
+        autogoles=top(autogoles_counter),
+    )
+
+
 @app.route("/reiniciar")
 def reiniciar():
     Evento.query.delete()

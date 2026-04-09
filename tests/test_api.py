@@ -56,6 +56,32 @@ class TestPageRoutes:
         rv = client.get("/api/nonexistent")
         assert rv.status_code == 404
 
+    def test_estadisticas_returns_200(self, client):
+        rv = client.get("/estadisticas")
+        assert rv.status_code == 200
+
+    def test_estadisticas_shows_all_sections(self, client):
+        rv = client.get("/estadisticas")
+        html = rv.data.decode("utf-8")
+        assert "Goleadores" in html
+        assert "Amarillas" in html
+        assert "Rojas" in html
+        assert "Penaltis marcados" in html
+        assert "Penaltis fallados" in html
+        assert "Goles de falta" in html
+        assert "Autogoles" in html
+
+    def test_estadisticas_empty_shows_no_data(self, client):
+        """When DB is empty, each section shows the no-data fallback."""
+        # Clear any data added by other tests
+        with app_module.app.app_context():
+            app_module.Evento.query.delete()
+            app_module.Partido.query.delete()
+            app_module.db.session.commit()
+        rv = client.get("/estadisticas")
+        html = rv.data.decode("utf-8")
+        assert "No hay datos todavía" in html
+
 
 # ---------------------------------------------------------------------------
 # /api/state  (GET / POST)

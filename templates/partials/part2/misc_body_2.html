@@ -4727,12 +4727,21 @@
         ? _simIAvsIAWithContext(m[0], m[1], j)
         : _fallbackIAvsIAScore(m[0], m[1]);
       var evtData = genMatchEventsEnhanced(m[0], m[1], simScore.gh, simScore.ga);
-      results[key] = { gh: simScore.gh, ga: simScore.ga, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
+      /* Recalculate actual score from all events (pen-gol, falta-gol, propia add/subtract goals) */
+      var actualGh = 0, actualGa = 0;
+      evtData.events.forEach(function(ev) {
+        if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
+          if (ev.team === 'a') actualGh++; else actualGa++;
+        } else if (ev.type === 'propia') {
+          if (ev.team === 'a') actualGa++; else actualGh++;
+        }
+      });
+      results[key] = { gh: actualGh, ga: actualGa, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
       if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
         window.registrarLigaPlayerStats(key, m[0], m[1], evtData.events, evtData.mvp, evtData.mvpTeam);
       }
-      actualizarDom('l-j' + j, m[0], m[1], simScore.gh, simScore.ga);
-      actualizarDom('cl-j' + j, m[0], m[1], simScore.gh, simScore.ga);
+      actualizarDom('l-j' + j, m[0], m[1], actualGh, actualGa);
+      actualizarDom('cl-j' + j, m[0], m[1], actualGh, actualGa);
       dirty = true;
     });
     if (dirty) {
@@ -4788,8 +4797,28 @@
     window.registrarResultadoLiga = function (matchKey, teamA, teamB, goalsA, goalsB) {
       if (_orig) _orig.apply(window, arguments);
       var results = loadResults();
-      var evtData1 = genMatchEvents(teamA, teamB, goalsA, goalsB);
-      results[rKey(1, teamA, teamB)] = { gh: goalsA, ga: goalsB, events: evtData1.events, mvp: evtData1.mvp, mvpTeam: evtData1.mvpTeam };
+      /* Prefer already-registered events (from live simulation via registrarLigaPlayerStats)
+         so that pen-gol/falta-gol/propia events are preserved instead of being regenerated
+         without set-piece events by genMatchEvents. */
+      var key = rKey(1, teamA, teamB);
+      var existingStore = window.LIGA_PLAYER_MATCH_STORE && window.LIGA_PLAYER_MATCH_STORE[matchKey];
+      var evtData1;
+      if (existingStore && existingStore.evts && existingStore.evts.length) {
+        /* Recalculate actual score from stored events */
+        var storedGh = 0, storedGa = 0;
+        existingStore.evts.forEach(function(ev) {
+          if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
+            if (ev.team === 'a') storedGh++; else storedGa++;
+          } else if (ev.type === 'propia') {
+            if (ev.team === 'a') storedGa++; else storedGh++;
+          }
+        });
+        evtData1 = { events: existingStore.evts, mvp: existingStore.mvpName || '', mvpTeam: existingStore.mvpTeam || '' };
+        results[key] = { gh: storedGh || goalsA, ga: storedGa || goalsB, events: evtData1.events, mvp: evtData1.mvp, mvpTeam: evtData1.mvpTeam };
+      } else {
+        evtData1 = genMatchEvents(teamA, teamB, goalsA, goalsB);
+        results[key] = { gh: goalsA, ga: goalsB, events: evtData1.events, mvp: evtData1.mvp, mvpTeam: evtData1.mvpTeam };
+      }
       saveResults(results);
       actualizarDom('l-j1', teamA, teamB, goalsA, goalsB);
       actualizarDom('cl-j1', teamA, teamB, goalsA, goalsB);

@@ -2760,6 +2760,8 @@
     }
     return _mlStates[mk];
   }
+  /* Expose state getter for external patches */
+  window._mlGetState = function(mk) { return _mlStates[mk] || null; };
 
   function _buildTwitchBtn(mk) {
     var chs = ['kaotiko8219','Serraxxxx','budygamer1981','toni_ayuso','vk54in2'];
@@ -2827,11 +2829,13 @@
         +'<button class="ml-pen-confirm" onclick="mlConfirmPenGen(\''+emk+'\')">✓ CONFIRMAR RESULTADO PENALTIS</button>'
       +'</div>'
       +'<div class="ml-divider"></div>'
-      +'<div class="ml-add-bar"><button class="ml-add-btn" id="ml-add-btn-'+mk+'" style="visibility:hidden;" onclick="mlTogglePanelGen(\''+emk+'\')">＋ AÑADIR EVENTO</button></div>'
       +'<div class="ml-match-actions" id="ml-actions-bar-'+mk+'" style="visibility:hidden;">'
         +'<button id="ml-btn-et-'+mk+'" onclick="mlActivateETGen(\''+emk+'\')"'+etStyle+'>⏱ PRÓRROGA</button>'
         +'<button id="ml-btn-pen-'+mk+'" onclick="mlShowPenPanelGen(\''+emk+'\')" style="display:none;">⚽ PENALTIS</button>'
-        +'<button id="ml-btn-end-'+mk+'" onclick="mlEndMatchGen(\''+emk+'\')">🏁 FINALIZAR</button>'
+      +'</div>'
+      +'<div class="ml-action-row" id="ml-action-row-'+mk+'" style="display:none;">'
+        +'<button class="ml-action-add" id="ml-add-btn-'+mk+'" onclick="mlTogglePanelGen(\''+emk+'\')">＋ AÑADIR EVENTO</button>'
+        +'<button class="ml-action-end" id="ml-btn-end-'+mk+'" onclick="mlEndMatchGen(\''+emk+'\')">🏁 FINALIZAR</button>'
       +'</div>'
       +'<div class="ml-acta">'
         +'<button class="ml-acta-toggle" id="acta-toggle-'+mk+'" onclick="actaTog(\''+emk+'\')">'
@@ -2951,10 +2955,12 @@
     row.setAttribute('data-team', teamLabel);
     row.setAttribute('data-type', type);
     row.setAttribute('data-id', id);
+    var emk = mk.replace(/'/g,"\\'");
     row.innerHTML = '<span class="ml-evt-min">'+min+"'</span>"
       +'<span class="ml-evt-ico">'+ico+'</span>'
       +'<span class="ml-evt-name">'+(num?num+'. ':'')+name+'</span>'
-      +'<span class="ml-evt-team">'+teamLabel+'</span>';
+      +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\','+id+')" title="Editar">🖍</button>'
+      +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\']('+id+')">✕</button>';
     var items = list.querySelectorAll('.ml-evt-item');
     var inserted = false;
     for (var i=0; i<items.length; i++) {
@@ -3441,6 +3447,19 @@
       window.registrarResultadoLiga(mk, st.home, st.away, st.sc.a, st.sc.b, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, winner==='pen'?winner:null);
     if (typeof window.registrarLigaPlayerStats==='function')
       window.registrarLigaPlayerStats(mk, st.home, st.away, evts, mvpName, mvpTeam);
+    /* Guardar eventos en localStorage para que openIAJornada los muestre */
+    try {
+      var _rk = rKey(st.j, st.home, st.away);
+      var _r2 = loadResults();
+      if (_r2[_rk]) {
+        _r2[_rk].events = evts.filter(function(e){return e.type!=='pen-result';}).map(function(e){
+          return {type:e.type, min:e.min, player:(e.num&&e.num!=='0'?e.num+'. ':'')+e.name, team:e.team};
+        });
+        _r2[_rk].mvp = mvpName;
+        _r2[_rk].mvpTeam = mvpTeam;
+        saveResults(_r2);
+      }
+    } catch(_e){}
     athApplyMedicalFromActa(st);
     /* Mostrar overlay FINAL → luego post-partido con WhatsApp */
     _mlShowFinalThenPost(mk);
@@ -3762,9 +3781,8 @@
       row.setAttribute('data-id',id);
       row.innerHTML='<span class="ml-evt-min">'+min+"'</span>"
         +'<span class="ml-evt-ico">'+ico+'</span>'
-        +'<span class="ml-evt-name">'+num+'. '+name+'</span>'
-        +'<span class="ml-evt-team">'+teamLabel+'</span>'
-        +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\','+id+')" title="Editar">✏️</button>'
+        +'<span class="ml-evt-name">'+(num&&num!=='0'?num+'. ':'')+name+'</span>'
+        +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\','+id+')" title="Editar">🖍</button>'
         +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\']('+id+')">✕</button>';
       // Insert in sorted minute order
       var items=list.querySelectorAll('.ml-evt-item');
@@ -4066,9 +4084,10 @@
     var li = document.createElement('div');
     li.className = 'ml-evt-item';
     var pLabel = ((num && String(num).trim()) ? (num + '. ') : '') + (playerName || 'Jugador');
+    var gmDisplayName = evt.type === 'mvp' ? ('MVP — ' + pLabel) : pLabel;
     li.innerHTML = '<span class="ml-evt-min">' + min + "'</span>"
       + '<span class="ml-evt-ico">' + ico + '</span>'
-      + '<span class="ml-evt-name">' + pLabel + ' · ' + evt.label + '</span>'
+      + '<span class="ml-evt-name">' + gmDisplayName + '</span>'
       + '<span class="ml-evt-team">' + teamName + '</span>';
     var list = document.getElementById('gm-acta-list');
     list.appendChild(li);
@@ -5518,10 +5537,21 @@
 .ml-venue-name{font-size:11.5px!important;max-width:32vw;}
 .ml-venue-weather{font-size:11.5px!important;}
 .ml-venue-ball{font-family:"Oswald",sans-serif;font-size:11.5px;font-weight:700;letter-spacing:1px;color:rgba(255,210,90,.9);white-space:nowrap;flex-shrink:1;overflow:hidden;text-overflow:ellipsis;max-width:38vw;}
+/* ── Botones acción partido ─────────────────────────────────── */
+.ml-action-row{display:none;gap:6px;padding:6px 10px 4px;}
+.ml-action-add,.ml-action-end{flex:1;border:none;border-radius:8px;padding:9px 6px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.2px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:filter .15s,opacity .15s;}
+.ml-action-add{background:linear-gradient(135deg,#1a3a6a,#1e4fa0);color:#a8d0ff;box-shadow:0 2px 8px rgba(30,79,160,.4);}
+.ml-action-end{background:linear-gradient(135deg,#6a1a1a,#b02020);color:#ffd0d0;box-shadow:0 2px 8px rgba(176,32,32,.4);}
+.ml-action-add:hover,.ml-action-end:hover{filter:brightness(1.15);}
+.ml-action-add:disabled,.ml-action-end:disabled{opacity:0.35;cursor:default;filter:none;}
+/* ── Eventos del acta ────────────────────────────────────────── */
+.ml-evt-item{padding-left:10px!important;}
+.ml-evt-team{display:none!important;}
 </style>
 <script>
-/* Inyectar nombre del balón en el venue bar tras confirmar previa */
+/* ── Parches post-bundle: balón, estadio, duración, Twitch, botones ── */
 (function(){
+  /* Ball name → venue bar */
   function _ppFillBall(mk) {
     if (!mk) return;
     var sp = document.getElementById('vball-'+mk);
@@ -5529,8 +5559,49 @@
     var bi = document.querySelector('#pp-list .pp-item[data-ppid="balon"] .pp-item-val');
     if (bi && bi.textContent.trim()) sp.textContent = '\u26bd\ufe0f ' + bi.textContent.trim();
   }
+  /* Stadium name → venue bar */
+  function _ppFillStadium(mk) {
+    if (!mk || typeof window.getTeamStadium !== 'function') return;
+    var vbarNm = document.querySelector('#venue-bar-'+mk+' .ml-venue-name');
+    if (!vbarNm) return;
+    var st = window._mlGetState && window._mlGetState(mk);
+    var homeTeam = st ? st.home : '';
+    if (!homeTeam) {
+      /* fallback: read from card DOM */
+      var wrap = document.getElementById('mlw-'+mk);
+      var el = wrap && wrap.querySelector('.ml-team-name');
+      homeTeam = el ? el.textContent.replace(/^[^\u0041-\uFFFF]+/, '').trim() : '';
+    }
+    var stad = homeTeam && window.getTeamStadium(homeTeam);
+    if (stad) vbarNm.textContent = stad;
+  }
+
   document.addEventListener('DOMContentLoaded', function(){
     setTimeout(function(){
+
+      /* ── Bug 1: Twitch select → abrir canal ── */
+      var _oTw = window._ppTwitchChange;
+      if (typeof _oTw === 'function' && !_oTw._twPatched) {
+        window._ppTwitchChange = function(val) {
+          _oTw.call(this, val);
+          if (val) {
+            try { window.open('https://twitch.tv/' + val, '_blank', 'noopener'); } catch(_){}
+          }
+        };
+        window._ppTwitchChange._twPatched = true;
+      }
+
+      /* ── Bug 2: Duración mostrada 8 min (IA) / 10 min (HvH) ── */
+      var _oSPP = window.showPrePartidoOverlay;
+      if (typeof _oSPP === 'function' && !_oSPP._durPatched) {
+        window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
+          var newDur = isHvH ? '10 min' : '8 min';
+          return _oSPP.call(this, matchKey, compKey, prorroga, newDur, isHvH);
+        };
+        window.showPrePartidoOverlay._durPatched = true;
+      }
+
+      /* ── Bug 3: Balón + Estadio + mostrar botones al confirmar previa ── */
       var _oT = window._ppToggle;
       if (typeof _oT === 'function' && !_oT._vballPatched) {
         window._ppToggle = function(id){ _oT.apply(this,arguments); _ppFillBall(window._ppMatchKey); };
@@ -5538,9 +5609,18 @@
       }
       var _oC = window._ppConfirm;
       if (typeof _oC === 'function' && !_oC._vballPatched) {
-        window._ppConfirm = function(){ _ppFillBall(window._ppMatchKey); _oC.apply(this,arguments); };
+        window._ppConfirm = function(){
+          var mk = window._ppMatchKey;
+          _ppFillBall(mk);
+          _ppFillStadium(mk);
+          _oC.apply(this, arguments);
+          /* Mostrar fila de botones iguales (ml-action-row) */
+          var row = mk && document.getElementById('ml-action-row-'+mk);
+          if (row) row.style.display = 'flex';
+        };
         window._ppConfirm._vballPatched = true;
       }
+
     }, 650);
   });
 })();

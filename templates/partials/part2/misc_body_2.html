@@ -4340,20 +4340,20 @@
       var penMin    = rndMin();
       // Tarjeta al que comete la falta (65% amarilla)
       if (Math.random() < 0.65) {
-        evts.push({ type:'amarilla', ico:'🟨', min:penMin, player:foulDef[1]||'?', team:foulTeam });
+        evts.push({ type:'amarilla', ico:'🟨', min:penMin, num:foulDef[0]||'', player:foulDef[1]||'?', team:foulTeam });
       }
-      evts.push({ type:'pen-prov', ico:'🤦🥅', min:penMin, player:foulDef[1]||'?', team:foulTeam });
+      evts.push({ type:'pen-prov', ico:'🤦🥅', min:penMin, num:foulDef[0]||'', player:foulDef[1]||'?', team:foulTeam });
       var penRoll = Math.random();
       var penKickMin = Math.min(penMin + 1 + Math.floor(Math.random()*2), 90);
       if (penRoll < 0.70) {
         // Gol de penalti
-        evts.push({ type:'pen-gol', ico:'⚽🥅', min:penKickMin, player:penKicker[1]||'?', team:penTeam });
+        evts.push({ type:'pen-gol', ico:'⚽🥅', min:penKickMin, num:penKicker[0]||'', player:penKicker[1]||'?', team:penTeam });
       } else if (penRoll < 0.90) {
         // Parado por el portero
-        evts.push({ type:'pen-parado', ico:'🖐🥅', min:penKickMin, player:penGk[1]||'?', team:foulTeam });
+        evts.push({ type:'pen-parado', ico:'🖐🥅', min:penKickMin, num:penGk[0]||'', player:penGk[1]||'?', team:foulTeam });
       } else {
         // Fallado
-        evts.push({ type:'pen-fallo', ico:'❌🥅', min:penKickMin, player:penKicker[1]||'?', team:penTeam });
+        evts.push({ type:'pen-fallo', ico:'❌🥅', min:penKickMin, num:penKicker[0]||'', player:penKicker[1]||'?', team:penTeam });
       }
     }
 
@@ -4361,14 +4361,14 @@
     if (Math.random() < 0.08) {
       var fkTeam = Math.random() < 0.5 ? 'a' : 'b';
       var fkP    = rndSq(fkTeam === 'a' ? outA : outB);
-      evts.push({ type:'falta-gol', ico:'⚽🎯', min:rndMin(), player:fkP[1]||'?', team:fkTeam });
+      evts.push({ type:'falta-gol', ico:'⚽🎯', min:rndMin(), num:fkP[0]||'', player:fkP[1]||'?', team:fkTeam });
     }
 
     /* ── AUTOGOL (5% por partido) ── */
     if (Math.random() < 0.05) {
       var ogTeam = Math.random() < 0.5 ? 'a' : 'b';
       var ogP    = rndSq(ogTeam === 'a' ? outA : outB);
-      evts.push({ type:'propia', ico:'⚽🚫', min:rndMin(), player:ogP[1]||'?', team:ogTeam });
+      evts.push({ type:'propia', ico:'⚽🚫', min:rndMin(), num:ogP[0]||'', player:ogP[1]||'?', team:ogTeam });
     }
 
     /* ── ROJAS / DOBLE AMARILLA adicionales ── */
@@ -4376,12 +4376,12 @@
     var roll = Math.random();
     if (roll < 0.08) {
       var rt = Math.random()<0.5?'a':'b'; var rp = rndSq(rt==='a'?outA:outB);
-      evts.push({ type:'roja', ico:'🟥', min:rndMin(), player:rp[1]||'?', team:rt });
+      evts.push({ type:'roja', ico:'🟥', min:rndMin(), num:rp[0]||'', player:rp[1]||'?', team:rt });
     } else if (roll < 0.13) {
       var dt = Math.random()<0.5?'a':'b'; var dp = rndSq(dt==='a'?outA:outB);
       var m1 = 5+Math.floor(Math.random()*40); var m2 = m1+5+Math.floor(Math.random()*30);
-      evts.push({ type:'amarilla', ico:'🟨', min:m1, player:dp[1]||'?', team:dt });
-      evts.push({ type:'roja', ico:'🟨🟥', min:Math.min(m2,90), player:dp[1]||'?', team:dt, dbl:true });
+      evts.push({ type:'amarilla', ico:'🟨', min:m1, num:dp[0]||'', player:dp[1]||'?', team:dt });
+      evts.push({ type:'roja', ico:'🟨🟥', min:Math.min(m2,90), num:dp[0]||'', player:dp[1]||'?', team:dt, dbl:true });
     }
 
     /* ── LESIONES ── */
@@ -4391,7 +4391,7 @@
         var sq = side==='a' ? outA : outB;
         var ip = rndSq(sq);
         var les = _sortearLesion();
-        evts.push({ type:'lesion', min:rndMin(), player:ip[1]||'?', team:side,
+        evts.push({ type:'lesion', min:rndMin(), num:ip[0]||'', player:ip[1]||'?', team:side,
                     lesIco: les.ico, lesDesc: les.descripcion, lesPartidos: les.partidos, lesGrado: les.grado });
       }
     });
@@ -4442,10 +4442,18 @@
       while (evtIdx < evts.length && evts[evtIdx].min <= curMin) {
         var ev = evts[evtIdx]; evtIdx++;
         if (ev.type === 'mvp') continue;
-        var ico = ev.type === 'gol' ? '⚽' : ev.type === 'roja' ? '🟥' : ev.type === 'amarilla' ? '🟨'
-                : ev.type === 'lesion' ? (ev.lesIco || '🩹') : '•';
+        var ico = ev.type === 'gol'        ? '⚽'
+                : ev.type === 'pen-gol'    ? '⚽🥅'
+                : ev.type === 'pen-prov'   ? '🤦🥅'
+                : ev.type === 'pen-parado' ? '🖐🥅'
+                : ev.type === 'pen-fallo'  ? '❌🥅'
+                : ev.type === 'falta-gol'  ? '⚽🎯'
+                : ev.type === 'propia'     ? '⚽🚫'
+                : ev.type === 'roja'       ? '🟥'
+                : ev.type === 'amarilla'   ? '🟨'
+                : ev.type === 'lesion'     ? (ev.lesIco || '🩹') : '•';
         if (ev.dbl) ico = '🟨🟥';
-        if (ev.type === 'gol') {
+        if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
           if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
           else                 { scB++; if (scBEl) scBEl.textContent = scB; }
           (function(){
@@ -4454,6 +4462,20 @@
             var _gt=document.createElement('div');
             _gt.style.cssText='font-family:\'Bebas Neue\',sans-serif;font-size:52px;font-weight:900;color:#ffcc00;letter-spacing:6px;text-shadow:0 0 30px rgba(255,200,0,.95),0 0 60px rgba(255,160,0,.7),0 2px 4px rgba(0,0,0,.8);animation:goooolBlink .35s ease-in-out infinite;';
             _gt.textContent='GOOOOL';
+            _gf.appendChild(_gt);
+            document.body.appendChild(_gf);
+            setTimeout(function(){if(_gf.parentNode)_gf.parentNode.removeChild(_gf);},2200);
+          })();
+        } else if (ev.type === 'propia') {
+          /* autogol: puntúa para el equipo CONTRARIO */
+          if (ev.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
+          else                 { scA++; if (scAEl) scAEl.textContent = scA; }
+          (function(){
+            var _gf=document.createElement('div');
+            _gf.style.cssText='position:fixed;inset:0;z-index:9998;pointer-events:none;display:flex;align-items:center;justify-content:center;';
+            var _gt=document.createElement('div');
+            _gt.style.cssText='font-family:\'Bebas Neue\',sans-serif;font-size:52px;font-weight:900;color:#ff6644;letter-spacing:6px;text-shadow:0 0 30px rgba(255,100,0,.95),0 0 60px rgba(255,60,0,.7),0 2px 4px rgba(0,0,0,.8);animation:goooolBlink .35s ease-in-out infinite;';
+            _gt.textContent='EN PROPIA';
             _gf.appendChild(_gt);
             document.body.appendChild(_gf);
             setTimeout(function(){if(_gf.parentNode)_gf.parentNode.removeChild(_gf);},2200);
@@ -4626,11 +4648,11 @@
       var cp = csq[Math.floor(Math.random()*csq.length)];
       var cmin = Math.floor(Math.random()*80)+5;
       if (yellowsReceived[cp[1]]) {
-        events.push({ type:'roja', ico:'🟥', min:cmin, player:cp[1]||'?', team:ct, reason:'2TA' });
+        events.push({ type:'roja', ico:'🟥', min:cmin, num:cp[0]||'', player:cp[1]||'?', team:ct, reason:'2TA' });
         var expMapY = ct === 'a' ? expelledA : expelledB;
         if (expMapY[cp[1]] === undefined) expMapY[cp[1]] = cmin;
       } else {
-        events.push({ type:'amarilla', ico:'🟨', min:cmin, player:cp[1]||'?', team:ct });
+        events.push({ type:'amarilla', ico:'🟨', min:cmin, num:cp[0]||'', player:cp[1]||'?', team:ct });
         yellowsReceived[cp[1]] = true;
       }
     }
@@ -4640,7 +4662,7 @@
       var rsq = rt === 'a' ? outA : outB;
       var rp = rsq[Math.floor(Math.random()*rsq.length)];
       var rmin = Math.floor(Math.random()*80)+10;
-      events.push({ type:'roja', ico:'🟥', min:rmin, player:rp[1]||'?', team:rt, reason:'directa' });
+      events.push({ type:'roja', ico:'🟥', min:rmin, num:rp[0]||'', player:rp[1]||'?', team:rt, reason:'directa' });
       var expMapR = rt === 'a' ? expelledA : expelledB;
       if (expMapR[rp[1]] === undefined) expMapR[rp[1]] = rmin;
     }
@@ -4668,7 +4690,7 @@
       if (!eligible.length) eligible = sq;
       var pl = _weightedScorerPick(eligible, team === 'a', goalsPerPlayer) || eligible[0] || sq[0];
       goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
-      events.push({ type:'gol', min:min, player:pl[1]||'?', team:team });
+      events.push({ type:'gol', min:min, num:pl[0]||'', player:pl[1]||'?', team:team });
     });
 
     events.sort(function(a,b){ return a.min - b.min; });

@@ -942,21 +942,21 @@ def estadisticas():
     for ev in eventos:
         tipo = ev.tipo or ""
         jug = ev.jugador or "Desconocido"
-        if tipo in ("gol",):
+        if tipo == "gol":
             goles_counter[jug] += 1
-        elif tipo in ("pen-gol",):
+        elif tipo == "pen-gol":
             goles_counter[jug] += 1
             penaltis_marcados_counter[jug] += 1
-        elif tipo in ("falta-gol",):
+        elif tipo == "falta-gol":
             goles_counter[jug] += 1
             faltas_gol_counter[jug] += 1
-        elif tipo in ("propia",):
+        elif tipo == "propia":
             autogoles_counter[jug] += 1
-        elif tipo in ("amarilla",):
+        elif tipo == "amarilla":
             amarillas_counter[jug] += 1
         elif tipo in ("roja", "doble-amarilla"):
             rojas_counter[jug] += 1
-        elif tipo in ("pen-fallo",):
+        elif tipo == "pen-fallo":
             penaltis_fallados_counter[jug] += 1
 
     def top(counter):

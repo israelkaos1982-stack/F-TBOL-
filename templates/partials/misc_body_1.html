@@ -138,6 +138,17 @@
 (function(){
   if(window.__BAYERN_HUB_READY) return;
   window.__BAYERN_HUB_READY = true;
+
+  // --- Configuration constants ---
+  var BUDGET_LIMIT = 1300;
+  var RATING_MAX = 9.10;
+  var INCIDENT_PROB = 0.05;       // 5% chance of incident per training day
+  var INCIDENT_GRAVE_THRESH = 0.015;  // < 1.5% → grave
+  var INCIDENT_MEDIA_THRESH = 0.030;  // < 3%   → media (else leve)
+  var MATCHDAY_FREQUENCY = 3;     // every N days is a matchday
+  var ROSTER = ['Neuer', 'Upamecano', 'De Ligt', 'Pavard', 'Davies', 'Kimmich',
+                'Goretzka', 'Müller', 'Gnabry', 'Sané', 'Kane'];
+
   var state = { day: 16, month: 'Julio', isMatchday: false, points: 8, injured: null, budgetSpent: 0, rating: 0 };
   var nextBtn = document.getElementById('hub-next-day-btn');
   var playBtn = document.getElementById('hub-play-btn');
@@ -147,24 +158,28 @@
   var matchEl = document.getElementById('hub-next-match');
   var injuryWarn = document.getElementById('hub-injury-warning');
 
+  function pickPlayer(){
+    return ROSTER[Math.floor(Math.random() * ROSTER.length)];
+  }
+
   function maybeIncident(){
     var roll = Math.random();
-    if(roll > 0.05) return;
-    var sev = roll < 0.015 ? 'grave' : (roll < 0.03 ? 'media' : 'leve');
+    if(roll > INCIDENT_PROB) return;
+    var sev = roll < INCIDENT_GRAVE_THRESH ? 'grave' : (roll < INCIDENT_MEDIA_THRESH ? 'media' : 'leve');
     var conf = {
-      leve: {days:2, pi:2, txt:'Sobrecarga'},
-      media:{days:4, pi:5, txt:'Esguince'},
-      grave:{days:6, pi:10, txt:'Rotura de ligamentos'}
+      leve: {days:2, pi:2, txt:'Sobrecarga / Contusión'},
+      media:{days:4, pi:5, txt:'Esguince / Rotura Fibrilar'},
+      grave:{days:6, pi:10, txt:'Rotura de Ligamentos / Fractura'}
     }[sev];
-    state.injured = { name: 'Neuer', days: conf.days, cost: conf.pi, txt: conf.txt };
+    state.injured = { name: pickPlayer(), days: conf.days, cost: conf.pi, txt: conf.txt };
     state.points = Math.max(0, state.points - conf.pi);
     medEl.classList.add('blink');
     alert('🚨 PARTE MÉDICO\n' + state.injured.name + ': ' + conf.txt + ' · baja ' + conf.days + ' partidos. Coste: ' + conf.pi + ' PI.');
   }
 
   function updateHud(){
-    budgetEl.textContent = String(state.budgetSpent).padStart(4,'0') + ' / 1300€';
-    ratingEl.textContent = state.rating.toFixed(2) + ' / 9.10€';
+    budgetEl.textContent = String(state.budgetSpent).padStart(4,'0') + ' / ' + BUDGET_LIMIT + '€';
+    ratingEl.textContent = state.rating.toFixed(2) + ' / ' + RATING_MAX.toFixed(2);
     var dayLabel = state.day + ' ' + state.month;
     matchEl.textContent = (state.isMatchday ? 'Matchday · Bayern vs Osasuna · ' : 'Entrenamiento · ') + dayLabel;
     if(state.injured){
@@ -183,7 +198,7 @@
     state.day += 1;
     state.points = Math.min(10, state.points + 1);
     if(state.injured){ state.injured.days -= 1; if(state.injured.days <= 0) state.injured = null; }
-    state.isMatchday = state.day % 3 === 0;
+    state.isMatchday = state.day % MATCHDAY_FREQUENCY === 0;
     maybeIncident();
     updateHud();
   });
@@ -194,7 +209,7 @@
       return;
     }
     state.isMatchday = false;
-    state.rating = Math.min(9.1, state.rating + 0.15);
+    state.rating = Math.min(RATING_MAX, state.rating + 0.15);
     updateHud();
     alert('Partido completado. Se desbloqueó el siguiente día.');
   });

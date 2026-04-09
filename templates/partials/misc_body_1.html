@@ -2524,6 +2524,24 @@
 
 <div class="screen" id="s-munich">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+<style>
+  #s-munich .ath-med-item .ath-marc-val{color:#49f3df;text-shadow:0 0 12px rgba(73,243,223,.45);}
+  #s-munich .ath-med-item .ath-marc-target{color:rgba(73,243,223,.8);}
+  #s-munich .ath-med-item .ath-marc-label{color:rgba(180,255,247,.96);}
+  #s-munich #ath-med-icon{cursor:pointer;user-select:none;}
+  #ath-med-ov{position:fixed;inset:0;background:rgba(5,10,14,.86);z-index:99990;display:none;align-items:center;justify-content:center;padding:16px;}
+  #ath-med-ov.show{display:flex;}
+  .ath-med-box{width:min(460px,95vw);max-height:82vh;overflow:auto;background:linear-gradient(180deg,#10232a,#0a1419);border:1px solid rgba(73,243,223,.35);border-radius:12px;padding:14px;box-shadow:0 0 24px rgba(0,0,0,.45);}
+  .ath-med-title{font-family:Oswald,sans-serif;color:#49f3df;letter-spacing:1.8px;font-size:18px;margin:0 0 10px;}
+  .ath-med-help{font-family:Rajdhani,sans-serif;color:rgba(230,255,250,.85);font-size:13px;line-height:1.35;margin:0 0 10px;}
+  .ath-med-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}
+  .ath-med-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid rgba(73,243,223,.2);border-radius:8px;background:rgba(73,243,223,.06);}
+  .ath-med-row b{color:#e7fffb;}
+  .ath-med-row span{color:rgba(210,250,244,.84);font-family:Rajdhani,sans-serif;}
+  .ath-med-actions{display:flex;gap:8px;justify-content:flex-end;}
+  .ath-med-btn{border:1px solid rgba(73,243,223,.35);background:rgba(73,243,223,.12);color:#dffff9;font-family:Oswald,sans-serif;letter-spacing:1px;padding:8px 12px;border-radius:8px;cursor:pointer;}
+  .ath-med-btn.danger{border-color:rgba(255,110,110,.45);background:rgba(255,80,80,.14);color:#ffd4d4;}
+</style>
 <div class="sec-hdr"><img alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
 <div style="display:flex;align-items:center;gap:6px;">
@@ -2539,15 +2557,21 @@
 <div class="ath-marcador" style="position:sticky;top:0;z-index:100;">
 <div class="ath-marc-row">
 <div class="ath-marc-item">
-<span class="ath-marc-label">VALORACIÓN</span>
+<span class="ath-marc-label">VALORACIÓN <span id="ath-rank-icon" class="ath-hud-icon">💼</span></span>
 <span class="ath-marc-val" id="ath-pts-val">0.00</span>
-<span class="ath-marc-target" id="ath-pts-target">OBJETIVO: 8.50 pts</span>
+<span class="ath-marc-target" id="ath-pts-target">OBJETIVO: 9.10 pts</span>
 </div>
 <div class="ath-marc-sep"></div>
 <div class="ath-marc-item">
-<span class="ath-marc-label">PRESUPUESTO</span>
+<span class="ath-marc-label">PRESUPUESTO <span id="ath-money-icon" class="ath-hud-icon">💶</span></span>
 <span class="ath-marc-val" id="ath-money-val">0</span>
-<span class="ath-marc-target" id="ath-money-target">OBJETIVO: 850 M€</span>
+<span class="ath-marc-target" id="ath-money-target">OBJETIVO: 1300 €</span>
+</div>
+<div class="ath-marc-sep"></div>
+<div class="ath-marc-item ath-med-item">
+<span class="ath-marc-label">MÉDICO <span id="ath-med-icon" class="ath-hud-icon" title="Abrir menú de tratamiento rápido">💊</span></span>
+<span class="ath-marc-val" id="ath-med-val">00 PI</span>
+<span class="ath-marc-target" id="ath-med-target">1 PI = 1 partido de lesión</span>
 </div>
 </div>
 <div class="ath-marc-divider"></div>
@@ -2561,6 +2585,17 @@
 <div class="ath-marc-bar" id="ath-bar-money"></div>
 </div>
 </div>
+</div>
+<div id="ath-med-ov" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="ath-med-box">
+    <h3 class="ath-med-title">💉 MENÚ DE TRATAMIENTO RÁPIDO</h3>
+    <p class="ath-med-help" id="ath-med-ov-help">Sin lesionados disponibles.</p>
+    <div class="ath-med-list" id="ath-med-ov-list"></div>
+    <div class="ath-med-actions">
+      <button class="ath-med-btn danger" onclick="document.getElementById('ath-med-ov').classList.remove('show')">Cancelar</button>
+      <button class="ath-med-btn" onclick="window.athApplyMedicalTreatment && window.athApplyMedicalTreatment()">Confirmar inyección</button>
+    </div>
+  </div>
 </div>
 <div class="ent-section" style="border:1px solid rgba(240,192,64,.3);background:linear-gradient(180deg,#1a0408 0%,#100205 100%);overflow:hidden;box-shadow:0 0 18px rgba(220,5,45,.15);">
 <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px 9px;border-bottom:1px solid rgba(255,255,255,.08);">
@@ -2761,64 +2796,64 @@
 <div class="obj-sub-section">
 <button class="obj-sub-hdr" onclick="subTog('obj-liga')" style="color:#f08040;">🇪🇸 <span>LIGA</span> <span class="obj-sub-arr" id="obj-liga-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-liga">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="liga-pos-7"/> Entre los 7 primeros</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="liga-imbatido-7"/> 7 partidos imbatido <span class="obj-counter" id="oc-imbatido-liga">0<span class="obj-counter-max">/7</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Finalizar entre los 6 primeros</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Lograr 5 partidos imbatido <span class="obj-counter" id="oc-imbatido-liga">0<span class="obj-counter-max">/5</span></span></label>
 <label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 jugador entre los 10 máx. goleadores ⚽</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="liga-pct-53"/> 53% o más de rating <span class="obj-counter" id="oc-rating-liga">0%<span class="obj-counter-max">/53%</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="liga-delante-Real Sociedad"/> Quedar delante de R. Sociedad</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Mantener 48% o más de valoración global <span class="obj-counter" id="oc-rating-liga">0%<span class="obj-counter-max">/48%</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Terminar la liga por delante del VILLARREAL CF</label>
 </div>
 </div>
 <div class="obj-sub-section">
 <button class="obj-sub-hdr" onclick="subTog('obj-copa')" style="color:#f0c040;">🏆 <span>COPA DEL REY</span> <span class="obj-sub-arr" id="obj-copa-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-copa">
 <label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Llegar a Cuartos</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 6 o más ⚽ en 1 eliminatoria <span class="obj-counter" id="oc-goles-copa">0<span class="obj-counter-max">/6</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Clasificar y jugar la Final</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 5 o más ⚽ en 1 eliminatoria <span class="obj-counter" id="oc-goles-copa">0<span class="obj-counter-max">/5</span></span></label>
 </div>
 </div>
 <div class="obj-sub-section">
-<button class="obj-sub-hdr" onclick="subTog('obj-uecl')" style="color:#00c875;">🟢 <span>CONFERENCE LEAGUE</span> <span class="obj-sub-arr" id="obj-uecl-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-uecl')" style="color:#00c875;">🌍 <span>EUROPA</span> <span class="obj-sub-arr" id="obj-uecl-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-uecl">
 <label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Clasificar en top 8 grupo <span class="obj-counter" id="oc-pos-uecl">-<span class="obj-counter-max">/8</span></span></label>
 <label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Llegar a Cuartos</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 4 o más ⚽ en 1 partido <span class="obj-counter" id="oc-goles-uecl">0<span class="obj-counter-max">/4</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 jugador entre los 12 máx. goleadores ⚽</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Llegar a la Gran Final Europea</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 3 o más ⚽ en 1 partido europeo <span class="obj-counter" id="oc-goles-uecl">0<span class="obj-counter-max">/3</span></span></label>
 </div>
 </div>
 <div class="obj-sub-section">
 <button class="obj-sub-hdr" onclick="subTog('obj-derbys')" style="color:#b060f0;">⚡ <span>DERBYS</span> <span class="obj-sub-arr" id="obj-derbys-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-derbys">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="derby-wins-11"/> Ganar 11/20 partidos <span class="obj-counter" id="oc-ganar-derby">0<span class="obj-counter-max">/11</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="derby-imbatido-1"/> 1 Partido imbatido <span class="obj-counter" id="oc-imbatido-derby">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="derby-goles-4"/> 4 o más ⚽ en 1 partido <span class="obj-counter" id="oc-goles-derby">0<span class="obj-counter-max">/4</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="derby-mas-goleador"/> Equipo más goleador</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="derby-menos-goleado"/> Equipo menos goleado</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar 3 de 12 partidos contra humanos <span class="obj-counter" id="oc-ganar-derby">0<span class="obj-counter-max">/3</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Lograr 1 partido imbatido contra rival real <span class="obj-counter" id="oc-imbatido-derby">0<span class="obj-counter-max">/1</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 3 o más ⚽ en 1 duelo humano <span class="obj-counter" id="oc-goles-derby">0<span class="obj-counter-max">/3</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> No ser el equipo más goleado del grupo</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> No perder por más de 3 goles contra el líder</label>
 </div>
 </div>
 <div class="obj-sub-section">
 <button class="obj-sub-hdr" onclick="subTog('obj-global')" style="color:#e05050;">🔴 <span>GLOBALES CLUB</span> <span class="obj-sub-arr" id="obj-global-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-global">
 <label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar 1 Título <span class="obj-counter" id="oc-titulos">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="global-penalti-falta"/> Marcar 1 Penalti o Falta <span class="obj-counter" id="oc-penalti">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="liga-wins-casa-16"/> Ganar 16 Partidos Casa <span class="obj-counter" id="oc-casa">0<span class="obj-counter-max">/16</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 5⚽ en 2 Partidos <span class="obj-counter" id="oc-5goles2">0<span class="obj-counter-max">/5</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="liga-max-goles-6"/> Marcar 6⚽ en 1 Partido <span class="obj-counter" id="oc-6goles1">0<span class="obj-counter-max">/6</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar 12 partidos en casa <span class="obj-counter" id="oc-casa">0<span class="obj-counter-max">/12</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 1 Penalti o Falta <span class="obj-counter" id="oc-penalti">0<span class="obj-counter-max">/1</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 5⚽ en 2 partidos <span class="obj-counter" id="oc-5goles2">0<span class="obj-counter-max">/5</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 6⚽ en 1 partido <span class="obj-counter" id="oc-6goles1">0<span class="obj-counter-max">/6</span></span></label>
 <label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 2 Hattricks <span class="obj-counter" id="oc-hattrick-gl">1<span class="obj-counter-max">/2</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 77 o menos media 1⚽ <span class="obj-counter" id="oc-media-gol">-<span class="obj-counter-max">/77</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="liga-dg-35"/> Diferencia de Goles +35 <span class="obj-counter" id="oc-dif-goles">0<span class="obj-counter-max">/+35</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox" data-auto="liga-gf-40"/> Equipo entre 40+⚽ global <span class="obj-counter" id="oc-40goles">0<span class="obj-counter-max">/40</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Equipo entre 45+ 🏌️ global <span class="obj-counter" id="oc-45asist">0<span class="obj-counter-max">/45</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 Jugador entre los 30+⚽ <span class="obj-counter" id="oc-30gol-jug">0<span class="obj-counter-max">/30</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 Jugador entre los 35+ 🏌️ <span class="obj-counter" id="oc-35asist-jug">0<span class="obj-counter-max">/35</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Diferencia de Goles +20 <span class="obj-counter" id="oc-dif-goles">+0<span class="obj-counter-max">/+20</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 jugador entre los 20 nominados al Balón de Oro</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 jugador entre los 20 máx. goleadores europeos</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Tener un jugador con 10+ MVP en la temporada <span class="obj-counter" id="oc-mvp-temp">0<span class="obj-counter-max">/10</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Mantener a los 26 jugadores con moral Alta o superior</label>
 </div>
 </div>
 <div class="obj-sub-section" style="border:none;">
 <button class="obj-sub-hdr" onclick="subTog('obj-sel')" style="color:#4090f0;">🌍 <span>SELECCIÓN</span> <span class="obj-sub-arr" id="obj-sel-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-sel">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Clasificar Francia Mundial</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 1 Hattrick <span class="obj-counter" id="oc-hattrick-sel">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 4 o más ⚽ en 1 partido <span class="obj-counter" id="oc-4goles-sel">0<span class="obj-counter-max">/4</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Equipo entre los 10 máx ⚽ <span class="obj-counter" id="oc-top10-sel">-<span class="obj-counter-max">/10</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Equipo entre los 14 máx 🏌️ <span class="obj-counter" id="oc-top14-sel">-<span class="obj-counter-max">/14</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Clasificar a Francia directamente al Mundial 2026</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar la Copa del Mundo</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 1 Hattrick internacional <span class="obj-counter" id="oc-hattrick-sel">0<span class="obj-counter-max">/1</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Estar en el Top 10 de equipos goleadores del Mundial <span class="obj-counter" id="oc-top10-sel">-<span class="obj-counter-max">/10</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Tener al MVP del Mundial en tu plantilla</label>
 </div>
 </div>
 </div>

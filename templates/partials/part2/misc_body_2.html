@@ -831,6 +831,8 @@
 <canvas id="fireworks-canvas"></canvas>
 <div class="celebracion-overlay" id="celebracion-overlay">
 <div class="celebracion-txt" id="celebracion-txt">🏆 OBJETIVO CONSEGUIDO 🏆</div>
+<div class="celebracion-detalle" id="celebracion-detalle"></div>
+<div class="celebracion-coin-rain" id="celebracion-coin-rain"></div>
 </div>
 
 <div id="goto-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">⬆️</div>
@@ -868,7 +870,7 @@
 </div>
 </div>
 </div>
-<div class="ml-pl-overlay" id="ml-pl-overlay-j1m1"><div class="ml-pl-ov-evt" id="ml-pl-ov-evt-j1m1">GOL</div><div class="ml-pl-ov-team" id="ml-pl-ov-team-j1m1">EQUIPO</div><div class="ml-pl-ov-list" id="ml-pl-ov-list-j1m1"></div><button class="ml-pl-ov-close" onclick="mlHidePl_j1m1()">✕ Cancelar</button></div>
+<div class="ml-pl-overlay" id="ml-pl-overlay-j1m1"><div class="ml-pl-ov-header"><button class="ml-pl-ov-back" onclick="document.getElementById('ml-pl-overlay-j1m1').classList.remove('show');document.getElementById('ml-tp-overlay-j1m1').classList.add('show');">&#8592;</button><div><div class="ml-pl-ov-evt" id="ml-pl-ov-evt-j1m1">GOL</div><div class="ml-pl-ov-team" id="ml-pl-ov-team-j1m1">EQUIPO</div></div></div><div class="ml-pl-ov-list" id="ml-pl-ov-list-j1m1"></div><button class="ml-pl-ov-close" onclick="mlHidePl_j1m1()">✕ Cancelar</button></div>
 <div class="mvp-force-overlay" id="mvp-ov-j1m2">
 <div class="mvp-force-header">
 <div class="mvp-force-star">⭐</div>
@@ -888,7 +890,7 @@
 </div>
 </div>
 </div>
-<div class="ml-pl-overlay" id="ml-pl-overlay-j1m2"><div class="ml-pl-ov-evt" id="ml-pl-ov-evt-j1m2">GOL</div><div class="ml-pl-ov-team" id="ml-pl-ov-team-j1m2">EQUIPO</div><div class="ml-pl-ov-list" id="ml-pl-ov-list-j1m2"></div><button class="ml-pl-ov-close" onclick="mlHidePl_j1m2()">✕ Cancelar</button></div>
+<div class="ml-pl-overlay" id="ml-pl-overlay-j1m2"><div class="ml-pl-ov-header"><button class="ml-pl-ov-back" onclick="document.getElementById('ml-pl-overlay-j1m2').classList.remove('show');document.getElementById('ml-tp-overlay-j1m2').classList.add('show');">&#8592;</button><div><div class="ml-pl-ov-evt" id="ml-pl-ov-evt-j1m2">GOL</div><div class="ml-pl-ov-team" id="ml-pl-ov-team-j1m2">EQUIPO</div></div></div><div class="ml-pl-ov-list" id="ml-pl-ov-list-j1m2"></div><button class="ml-pl-ov-close" onclick="mlHidePl_j1m2()">✕ Cancelar</button></div>
 <div class="mvp-force-overlay" id="mvp-ov-j1m3">
 <div class="mvp-force-header">
 <div class="mvp-force-star">⭐</div>
@@ -908,7 +910,7 @@
 </div>
 </div>
 </div>
-<div class="ml-pl-overlay" id="ml-pl-overlay-j1m3"><div class="ml-pl-ov-evt" id="ml-pl-ov-evt-j1m3">GOL</div><div class="ml-pl-ov-team" id="ml-pl-ov-team-j1m3">EQUIPO</div><div class="ml-pl-ov-list" id="ml-pl-ov-list-j1m3"></div><button class="ml-pl-ov-close" onclick="mlHidePl_j1m3()">✕ Cancelar</button></div>
+<div class="ml-pl-overlay" id="ml-pl-overlay-j1m3"><div class="ml-pl-ov-header"><button class="ml-pl-ov-back" onclick="document.getElementById('ml-pl-overlay-j1m3').classList.remove('show');document.getElementById('ml-tp-overlay-j1m3').classList.add('show');">&#8592;</button><div><div class="ml-pl-ov-evt" id="ml-pl-ov-evt-j1m3">GOL</div><div class="ml-pl-ov-team" id="ml-pl-ov-team-j1m3">EQUIPO</div></div></div><div class="ml-pl-ov-list" id="ml-pl-ov-list-j1m3"></div><button class="ml-pl-ov-close" onclick="mlHidePl_j1m3()">✕ Cancelar</button></div>
 <script>/* doc */</script>
 
 <div id="equipos-overlay">
@@ -1978,11 +1980,11 @@
   }
 
   function simulateGoals(home, away){
-    var rA = getTeamSimulationPower(home);
+    // PowerLocal = MediaEquipo * 1.10 (ventaja de localía del 10%)
+    var rA = getTeamSimulationPower(home) * 1.10;
     var rB = getTeamSimulationPower(away);
-    var localBonus = 0.05;
     var baseA = rA / Math.max(1, (rA + rB));
-    var probA = Math.min(0.82, baseA + localBonus * (1 - baseA));
+    var probA = Math.min(0.82, baseA);
     function sample(prob){
       var r = Math.random();
       if(prob < 0.42) return r<0.46?0:r<0.79?1:r<0.93?2:r<0.985?3:4;
@@ -2522,8 +2524,8 @@
   }
 
   function esHumano(t) { return HUMANOS.indexOf(t) !== -1 || HUMANOS.indexOf(normalizarNombreEquipo(t)) !== -1; }
-  var _IA_HOME_BONUS_MIN = 0.05;
-  var _IA_HOME_BONUS_MAX = 0.08;
+  var _IA_HOME_BONUS_MIN = 0.10;
+  var _IA_HOME_BONUS_MAX = 0.12;
 
   function _seed01(str) {
     var s = String(str || '');
@@ -2934,14 +2936,14 @@
   /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 1-38, Copa y Europa) ──── */
   /* Timer speeds per match type (5-second ticks, 1080 ticks = 90 game min):
      AI vs AI  : 30s real  → 30000/1080  ≈   28ms/tick
-     HvIA      : 14m real  → 840000/1080 ≈  778ms/tick  (1 min juego ≈ 9.33s reales)
-     HvH 90min : 18m real  → 1080000/1080 = 1000ms/tick  (1 min juego = 12s reales)
+     HvIA      : 12m real  → 720000/1080 ≈  667ms/tick  (1 min juego = 8s reales)
+     HvH 90min : 16m real  → 960000/1080 ≈  889ms/tick  (1 min juego ≈ 10.67s reales)
      HvH ET    : 5m real for 30 game min → 300000/360 ≈ 833ms/tick */
   var _ML_TICK_SEC = 5;
   function _mlTickMs(st) {
-    if (st.isHvH) return st.etDone ? 833 : 1000;
+    if (st.isHvH) return st.etDone ? 833 : 889;
     var humanInvolved = typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away));
-    return humanInvolved ? 778 : 28;
+    return humanInvolved ? 667 : 28;
   }
 
   function _mlAddActaRow(mk, min, ico, name, num, teamLabel, type, id) {
@@ -3211,7 +3213,7 @@
           list.appendChild(_waWrap);
         }
         _mlRenderTimerGen(mk);
-        setTimeout(function(){ if (!st.finished) { st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk); } }, 45000);
+        setTimeout(function(){ if (!st.finished) { st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk); } }, 20000);
         return;
       }
       // Stoppage time marker at 90'
@@ -3295,6 +3297,110 @@
     st.events.push({type:'pen-result',label:'Penaltis',team:penWinner,pa:pa,pb:pb,id:Date.now()});
     _mlFinishMatchGen(mk, penWinner);
   };
+
+  var ATH_MED_KEY = 'athMedicalPI';
+  function athGetMedicalPI() {
+    try { return Math.max(0, parseInt(localStorage.getItem(ATH_MED_KEY) || '0', 10) || 0); }
+    catch(e){ return window.__ATH_MED_PI || 0; }
+  }
+  function athSetMedicalPI(v) {
+    var n = Math.max(0, parseInt(v, 10) || 0);
+    window.__ATH_MED_PI = n;
+    try { localStorage.setItem(ATH_MED_KEY, String(n)); } catch(e){}
+    var el = document.getElementById('ath-med-val');
+    if (el) {
+      el.textContent = String(n).padStart(2,'0') + ' PI';
+      el.classList.remove('pulse');
+      void el.offsetWidth;
+      el.classList.add('pulse');
+    }
+  }
+  function athIsHumanTeam(name) {
+    if (typeof window.esHumano === 'function') return !!window.esHumano(name);
+    return ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'].indexOf(name) !== -1;
+  }
+  function athCardsToPI(yellow, red, rivalIsHuman) {
+    return (yellow * (rivalIsHuman ? 1 : 3)) + (red * (rivalIsHuman ? 3 : 6));
+  }
+  function athAddMedicalPI(points) {
+    var p = parseInt(points, 10) || 0;
+    if (p <= 0) return;
+    athSetMedicalPI(athGetMedicalPI() + p);
+  }
+  function athApplyMedicalFromActa(st) {
+    if (!st || (st.home !== 'Bayern Munich' && st.away !== 'Bayern Munich')) return;
+    var bayernSide = st.home === 'Bayern Munich' ? 'a' : 'b';
+    var rivalSide  = bayernSide === 'a' ? 'b' : 'a';
+    var rivalName  = rivalSide === 'a' ? st.home : st.away;
+    var yellow = st.events.filter(function(e){ return e.team === rivalSide && e.type === 'amarilla'; }).length;
+    var red = st.events.filter(function(e){ return e.team === rivalSide && (e.type === 'roja' || e.type === 'd-amarilla'); }).length;
+    athAddMedicalPI(athCardsToPI(yellow, red, athIsHumanTeam(rivalName)));
+  }
+  function athGetInjuredList() {
+    var store = window.BAJA_STORE || {};
+    return Object.keys(store).filter(function(name){
+      var it = store[name];
+      if (!it || it.tipo !== 'lesion') return false;
+      return (parseInt(it.liga||0,10) + parseInt(it.copa||0,10) + parseInt(it.europa||0,10)) > 0;
+    }).map(function(name){
+      var it = store[name] || {};
+      var remain = Math.max(parseInt(it.liga||0,10)||0, parseInt(it.copa||0,10)||0, parseInt(it.europa||0,10)||0);
+      return { name:name, remain:remain };
+    });
+  }
+  window.athOpenMedicalMenu = function() {
+    var ov = document.getElementById('ath-med-ov');
+    var list = document.getElementById('ath-med-ov-list');
+    var help = document.getElementById('ath-med-ov-help');
+    if (!ov || !list || !help) return;
+    var injured = athGetInjuredList();
+    if (!injured.length) {
+      help.textContent = 'No hay lesionados en la plantilla de 26.';
+      list.innerHTML = '';
+      ov.classList.add('show');
+      return;
+    }
+    help.textContent = 'Selecciona jugadores: se consumen PI equivalentes a los partidos restantes de lesión.';
+    list.innerHTML = injured.map(function(p){
+      return '<label class="ath-med-row">'
+        + '<span><b>🩹 ' + p.name + '</b><br><small>Lesión restante: ' + p.remain + ' partido(s)</small></span>'
+        + '<input type="checkbox" class="ath-med-chk" data-player="' + p.name.replace(/"/g,'&quot;') + '" data-cost="' + p.remain + '"/>'
+        + '</label>';
+    }).join('');
+    ov.classList.add('show');
+  };
+  window.athApplyMedicalTreatment = function() {
+    var chks = Array.from(document.querySelectorAll('#ath-med-ov .ath-med-chk:checked'));
+    if (!chks.length) return;
+    var need = chks.reduce(function(acc,c){ return acc + (parseInt(c.getAttribute('data-cost')||'0',10)||0); }, 0);
+    var cur = athGetMedicalPI();
+    if (cur < need) {
+      var el = document.getElementById('ath-med-val');
+      if (el) {
+        el.style.color = '#ff6262';
+        setTimeout(function(){ el.style.color = ''; }, 900);
+      }
+      alert('PI insuficientes. Necesitas ' + need + ' PI y tienes ' + cur + ' PI.');
+      return;
+    }
+    if (!window.BAJA_STORE) return;
+    chks.forEach(function(c){
+      var name = c.getAttribute('data-player');
+      var it = window.BAJA_STORE[name];
+      if (!it) return;
+      it.liga = 0; it.copa = 0; it.europa = 0;
+    });
+    athSetMedicalPI(cur - need);
+    try { if (typeof window._renderSancionOverlayList === 'function') window._renderSancionOverlayList(); } catch(e){}
+    document.getElementById('ath-med-ov').classList.remove('show');
+  };
+
+  setTimeout(function(){
+    athSetMedicalPI(athGetMedicalPI());
+    var medBtn = document.getElementById('ath-med-icon');
+    if (medBtn) medBtn.addEventListener('click', function(ev){ ev.stopPropagation(); window.athOpenMedicalMenu(); });
+  }, 30);
+
   window.mlEndMatchGen = function(mk, winner) {
     var st=_mlSt(mk);
     if (st.finished) return;
@@ -3354,6 +3460,7 @@
         saveResults(_r2);
       }
     } catch(_e){}
+    athApplyMedicalFromActa(st);
     /* Mostrar overlay FINAL → luego post-partido con WhatsApp */
     _mlShowFinalThenPost(mk);
   }
@@ -3563,8 +3670,20 @@
     if (!_genActiveMk) return;
     var st=_mlSt(_genActiveMk);
     if (tpEvt) tpEvt.textContent = label.toUpperCase();
-    if (tpBtnA) tpBtnA.textContent = st.home;
-    if (tpBtnB) tpBtnB.textContent = st.away;
+    function _genLogoUrl(name) {
+      var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
+      if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1) return byAlt.src;
+      var tlu = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
+      if (tlu) return tlu;
+      return (typeof getLogoEquipo === 'function' && getLogoEquipo(name)) || '';
+    }
+    [['a', st.home, tpBtnA], ['b', st.away, tpBtnB]].forEach(function(t) {
+      var btn = t[2]; var name = t[1];
+      if (!btn) return;
+      var logo = _genLogoUrl(name);
+      btn.innerHTML = (logo ? '<img src="'+logo+'" style="width:56px;height:56px;object-fit:contain;display:block;margin:0 auto 6px;" onerror="this.style.display=\'none\'">' : '')
+                    + '<span>' + name + '</span>';
+    });
     if (tpOv) tpOv.classList.add('show');
   };
   window.genTpSelect = function(team) {
@@ -3580,14 +3699,32 @@
     var plList=document.getElementById('gen-pl-list');
     if (plEvt) plEvt.textContent=evt.label.toUpperCase();
     if (plTeam) plTeam.textContent=teamName.toUpperCase();
-    var sq=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[teamName])||[];
+    var sq=(typeof window.sqFromRegistryFull==='function'&&window.sqFromRegistryFull(teamName))||[];
+    if(!sq.length) sq=(typeof window.sqFromRegistry==='function'&&window.sqFromRegistry(teamName))||[];
     var html='';
+    var _genPosOrder=['P','D','M','F'];
+    var _genPosLabels={'P':'PORTEROS','D':'DEFENSAS','M':'MEDIOS','F':'DELANTEROS'};
     if (sq.length>0) {
-      sq.forEach(function(p){
-        if(p.h){html+='<div class="ml-pl-ov-sec">'+p.h+'</div>';return;}
-        var n=String(p[0]),nm=String(p[1]).replace(/'/g,"\\'");
-        html+='<button class="ml-pl-ov-btn" onclick="genPlConfirm(\''+mk.replace(/'/g,"\\'")+'\',\''+team+'\',\''+n+'\',\''+nm+'\')"><span class="ml-pl-ov-num">'+p[0]+'</span><span class="ml-pl-ov-name">'+p[1]+'</span></button>';
-      });
+      /* Group by position if no .h headers present */
+      var hasHdr=sq.some(function(p){return p&&p.h;});
+      if(hasHdr){
+        sq.forEach(function(p){
+          if(p.h){html+='<div class="ml-pl-ov-sec">'+p.h+'</div>';return;}
+          var n=String(p[0]),nm=String(p[1]).replace(/'/g,"\\'");
+          html+='<button class="ml-pl-ov-btn" onclick="genPlConfirm(\''+mk.replace(/'/g,"\\'")+'\',\''+team+'\',\''+n+'\',\''+nm+'\')"><span class="ml-pl-ov-num">'+p[0]+'</span><span class="ml-pl-ov-name">'+p[1]+'</span></button>';
+        });
+      } else {
+        var grps={};
+        sq.forEach(function(p){if(!p||p.h)return;var pos=String(p[2]||'F');if(!grps[pos])grps[pos]=[];grps[pos].push(p);});
+        _genPosOrder.forEach(function(pos){
+          var players=grps[pos];if(!players||!players.length)return;
+          html+='<div class="ml-pl-ov-sec">'+(_genPosLabels[pos]||pos)+'</div>';
+          players.forEach(function(p){
+            var n=String(p[0]),nm=String(p[1]).replace(/'/g,"\\'");
+            html+='<button class="ml-pl-ov-btn" onclick="genPlConfirm(\''+mk.replace(/'/g,"\\'")+'\',\''+team+'\',\''+n+'\',\''+nm+'\')"><span class="ml-pl-ov-num">'+p[0]+'</span><span class="ml-pl-ov-name">'+p[1]+'</span></button>';
+          });
+        });
+      }
     } else {
       var jd=window.JUGADORES_DATA&&window.JUGADORES_DATA[teamName];
       if(jd) jd.forEach(function(nm,i){
@@ -3706,8 +3843,8 @@
   var GM_MAX_NORMAL   = 5400; /* 90 min */
   var GM_MAX_ET       = 7200; /* 120 min */
   var GM_MAX_STOPPAGE = 5820; /* 90+7 min */
-  var GM_TICK_HVH     = 1000; /* HvH: 1 min juego = 12s reales → 18 min totales */
-  var GM_TICK_HVIA    = 778;  /* HvIA: 1 min juego ≈ 9.33s reales → 14 min totales */
+  var GM_TICK_HVH     = 889;  /* HvH: 1 min juego ≈ 10.67s reales → 16 min totales */
+  var GM_TICK_HVIA    = 667;  /* HvIA: 1 min juego = 8s reales → 12 min totales */
 
   function gmRenderTimer() {
     var btn = document.getElementById('gm-timer');
@@ -3743,7 +3880,7 @@
           list.appendChild(_gmWaWrap);
         }
         gmRenderTimer();
-        setTimeout(function () { if (!_gm.finished) { _gm.inDescanso = false; _gm.timerRunning = true; gmStartTimer(); } }, 45000);
+        setTimeout(function () { if (!_gm.finished) { _gm.inDescanso = false; _gm.timerRunning = true; gmStartTimer(); } }, 20000);
         return;
       }
       /* Tiempo de descuento al llegar al 90:00 */
@@ -3786,16 +3923,30 @@
     document.getElementById('gm-event-panel').style.display = 'none';
     var pp2 = document.getElementById('gm-player-pick'); if (pp2) pp2.style.display = 'none';
     document.getElementById('gm-tp-title').textContent = label;
-    document.getElementById('gm-tp-btn-a').textContent = _gm.home;
-    document.getElementById('gm-tp-btn-b').textContent = _gm.away;
+
+    /* Escudos en los botones de equipo */
+    function _gmLogoUrl(name) {
+      var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
+      if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1) return byAlt.src;
+      var tlu = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
+      if (tlu) return tlu;
+      return (typeof getLogoEquipo === 'function' && getLogoEquipo(name)) || '';
+    }
+    ['a','b'].forEach(function(side) {
+      var name = side === 'a' ? _gm.home : _gm.away;
+      var btn  = document.getElementById('gm-tp-btn-' + side);
+      if (!btn) return;
+      var logo = _gmLogoUrl(name);
+      btn.innerHTML = (logo ? '<img src="'+logo+'" style="width:60px;height:60px;object-fit:contain;display:block;margin:0 auto 6px;" onerror="this.style.display=\'none\'">' : '')
+                    + '<span>' + name + '</span>';
+    });
+
     document.getElementById('gm-team-pick').style.display = 'flex';
   };
 
   function _gmGetSquad(teamName) {
-    var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
-    if (!sq.length && typeof window.sqFromRegistryFull === 'function') {
-      sq = window.sqFromRegistryFull(teamName) || [];
-    }
+    var sq = (typeof window.sqFromRegistryFull === 'function' && window.sqFromRegistryFull(teamName)) || [];
+    if (!sq.length) sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
     if (!sq.length) return [['', 'Jugador 1'], ['', 'Jugador 2'], ['', 'Jugador 3']];
     return sq;
   }
@@ -3806,22 +3957,84 @@
     var title = document.getElementById('gm-player-title');
     var list = document.getElementById('gm-player-list');
     if (!pick || !title || !list) return;
+
+    /* Back button injected before title if not already present */
+    var titleWrap = title.parentNode;
+    if (titleWrap && !titleWrap.querySelector('.gm-back-btn')) {
+      var backBtn = document.createElement('button');
+      backBtn.className = 'gm-back-btn';
+      backBtn.innerHTML = '&#8592;';
+      backBtn.style.cssText = 'background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.5);border-radius:8px;color:#f0c040;font-size:26px;cursor:pointer;padding:4px 14px 6px;line-height:1;flex-shrink:0;';
+      backBtn.onclick = function() {
+        pick.style.display = 'none';
+        document.getElementById('gm-team-pick').style.display = 'flex';
+      };
+      titleWrap.insertBefore(backBtn, title);
+    }
+
     title.textContent = (_gm.pendingEvt ? _gm.pendingEvt.label : 'Evento') + ' · ' + teamName;
     var sq = _gmGetSquad(teamName);
+
+    /* Check if squad already has position headers (.h entries) */
+    var hasHeaders = sq.some(function(p) { return p && p.h; });
+    var posOrder = ['P','D','M','F'];
+    var posLabels = {'P':'PORTEROS','D':'DEFENSAS','M':'MEDIOS','F':'DELANTEROS'};
+
     var html = '';
-    sq.forEach(function(p) {
-      if (p && p.h) {
-        html += '<div class="gm-pos-header">' + p.h + '</div>';
-        return;
-      }
-      var num = String((p && p[0]) || '').trim();
-      var name = String((p && p[1]) || '').trim() || 'Jugador';
-      var nEsc = name.replace(/'/g, "\\'");
-      html += '<button class="gm-player-btn" onclick="window.gmPickPlayer(\'' + team + '\',\'' + num.replace(/'/g, "\\'") + '\',\'' + nEsc + '\')">'
-        + (num ? '<span class="gm-pl-num">' + num + '</span>' : '')
-        + '<span class="gm-pl-name">' + name + '</span>'
-        + '</button>';
-    });
+    if (hasHeaders) {
+      sq.forEach(function(p) {
+        if (p && p.h) {
+          html += '<div class="gm-pos-header">' + p.h + '</div>';
+          return;
+        }
+        var num = String((p && p[0]) || '').trim();
+        var name = String((p && p[1]) || '').trim() || 'Jugador';
+        var nEsc = name.replace(/'/g, "\\'");
+        html += '<button class="gm-player-btn" onclick="window.gmPickPlayer(\'' + team + '\',\'' + num.replace(/'/g, "\\'") + '\',\'' + nEsc + '\')">'
+          + (num ? '<span class="gm-pl-num">' + num + '</span>' : '')
+          + '<span class="gm-pl-name">' + name + '</span>'
+          + '</button>';
+      });
+    } else {
+      /* Group by position field (index 2) */
+      var groups = {};
+      sq.forEach(function(p) {
+        if (!p || p.h) return;
+        var pos = String((p && p[2]) || 'F').toUpperCase();
+        if (!groups[pos]) groups[pos] = [];
+        groups[pos].push(p);
+      });
+      posOrder.forEach(function(pos) {
+        var players = groups[pos];
+        if (!players || players.length === 0) return;
+        html += '<div class="gm-pos-header">' + (posLabels[pos] || pos) + '</div>';
+        players.forEach(function(p) {
+          var num = String((p && p[0]) || '').trim();
+          var name = String((p && p[1]) || '').trim() || 'Jugador';
+          var nEsc = name.replace(/'/g, "\\'");
+          html += '<button class="gm-player-btn" onclick="window.gmPickPlayer(\'' + team + '\',\'' + num.replace(/'/g, "\\'") + '\',\'' + nEsc + '\')">'
+            + (num ? '<span class="gm-pl-num">' + num + '</span>' : '')
+            + '<span class="gm-pl-name">' + name + '</span>'
+            + '</button>';
+        });
+      });
+      /* Any position not in posOrder */
+      Object.keys(groups).forEach(function(pos) {
+        if (posOrder.indexOf(pos) !== -1) return;
+        var players = groups[pos];
+        html += '<div class="gm-pos-header">' + pos + '</div>';
+        players.forEach(function(p) {
+          var num = String((p && p[0]) || '').trim();
+          var name = String((p && p[1]) || '').trim() || 'Jugador';
+          var nEsc = name.replace(/'/g, "\\'");
+          html += '<button class="gm-player-btn" onclick="window.gmPickPlayer(\'' + team + '\',\'' + num.replace(/'/g, "\\'") + '\',\'' + nEsc + '\')">'
+            + (num ? '<span class="gm-pl-num">' + num + '</span>' : '')
+            + '<span class="gm-pl-name">' + name + '</span>'
+            + '</button>';
+        });
+      });
+    }
+
     list.innerHTML = html || '<div style="color:#555;padding:10px;text-align:center;">Sin jugadores</div>';
     pick.style.display = 'flex';
   }
@@ -3869,14 +4082,13 @@
 
     /* añadir al acta */
     var li = document.createElement('div');
-    li.className = 'ml-acta-item';
-    li.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:11px;border-bottom:1px solid rgba(255,255,255,.06);';
+    li.className = 'ml-evt-item';
     var pLabel = ((num && String(num).trim()) ? (num + '. ') : '') + (playerName || 'Jugador');
     var gmDisplayName = evt.type === 'mvp' ? ('MVP — ' + pLabel) : pLabel;
-    li.innerHTML = '<span style="color:#aaa;min-width:22px;padding-left:4px;">' + min + "'</span>"
-      + '<span>' + ico + '</span>'
-      + '<span style="color:#ddd;flex:1;">' + gmDisplayName + '</span>'
-      + '<span style="color:#aaa;font-size:10px;">' + teamName + '</span>';
+    li.innerHTML = '<span class="ml-evt-min">' + min + "'</span>"
+      + '<span class="ml-evt-ico">' + ico + '</span>'
+      + '<span class="ml-evt-name">' + gmDisplayName + '</span>'
+      + '<span class="ml-evt-team">' + teamName + '</span>';
     var list = document.getElementById('gm-acta-list');
     list.appendChild(li);
     var empty = list.querySelector('.ml-acta-empty');
@@ -3917,6 +4129,27 @@
     document.getElementById('gm-event-panel').style.display = 'none';
     document.getElementById('gm-team-pick').style.display = 'none';
     guardarResultado(_gm.j, _gm.home, _gm.away, _gm.sc.a, _gm.sc.b);
+
+    /* Rellenar acta de la tarjeta genérica (ml-acta-list-{mk}) con los eventos del gm */
+    var _icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
+                   'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',
+                   roja:'🟥',lesion:'🩹',mvp:'⭐'};
+    Object.keys(_mlStates).forEach(function(mk){
+      var st = _mlStates[mk];
+      if (st.j === _gm.j && st.home === _gm.home && st.away === _gm.away) {
+        var list = document.getElementById('ml-acta-list-'+mk);
+        if (list) {
+          list.innerHTML = '';
+          _gm.events.forEach(function(ev){
+            if (!ev) return;
+            var tName = ev.team === 'a' ? _gm.home : _gm.away;
+            var ico = _icoMap[ev.type] || '📋';
+            _mlAddActaRow(mk, ev.min, ico, ev.player || 'Jugador', ev.num || '', tName, ev.type, Date.now()+Math.random());
+          });
+        }
+      }
+    });
+
     setTimeout(function () {
       document.getElementById('gm-modal').style.display = 'none';
       window.gmShowPost();
@@ -3958,7 +4191,7 @@
     _gm.timerSec = 0; _gm.timerRunning = false; _gm.isHvH = isHvH; _gm.pendingEvt = null;
     _gm.htDone = false; _gm.inDescanso = false; _gm.stDone = false;
     clearInterval(_gm.timerInterval);
-    _gm.kickoffDone = false;
+    _gm.kickoffDone = false; _gm.htDone = false; _gm.inDescanso = false; _gm.stDone = false;
     /* Escudos + nombres en la pantalla de partido */
     function _gmLogo(name) {
       var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
@@ -4080,7 +4313,7 @@
     return { ico: cat.ico, descripcion: desc, partidos: pts, grado: grado };
   }
 
-  /* ── genMatchEventsEnhanced: goals + yellows + reds + injuries ── */
+  /* ── genMatchEventsEnhanced: goals + yellows + reds + penalties + fouls + og + injuries ── */
   function genMatchEventsEnhanced(teamA, teamB, goalsA, goalsB) {
     var base = genMatchEvents(teamA, teamB, goalsA, goalsB);
     var evts = base.events;
@@ -4088,10 +4321,57 @@
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
     var outA = sqA.filter(function(p){ return p[2] !== 'P'; });
     var outB = sqB.filter(function(p){ return p[2] !== 'P'; });
+    var gkA  = sqA.filter(function(p){ return p[2] === 'P'; });
+    var gkB  = sqB.filter(function(p){ return p[2] === 'P'; });
     if (!outA.length) outA = [['','Jugador A','F',76]];
     if (!outB.length) outB = [['','Jugador B','F',76]];
+    if (!gkA.length) gkA = [['1','Portero A','P',76]];
+    if (!gkB.length) gkB = [['1','Portero B','P',76]];
     function rndSq(sq) { return sq[Math.floor(Math.random()*sq.length)]; }
     function rndMin() { return Math.floor(Math.random()*88)+2; }
+
+    /* ── PENALTI (8% por partido) ── */
+    if (Math.random() < 0.08) {
+      var penTeam   = Math.random() < 0.5 ? 'a' : 'b';    // equipo que RECIBE y tira
+      var foulTeam  = penTeam === 'a' ? 'b' : 'a';         // equipo que COMETE la falta
+      var penKicker = rndSq(penTeam === 'a' ? outA : outB);
+      var foulDef   = rndSq(foulTeam === 'a' ? outA : outB);
+      var penGk     = rndSq(foulTeam === 'a' ? gkA : gkB);
+      var penMin    = rndMin();
+      // Tarjeta al que comete la falta (65% amarilla)
+      if (Math.random() < 0.65) {
+        evts.push({ type:'amarilla', ico:'🟨', min:penMin, player:foulDef[1]||'?', team:foulTeam });
+      }
+      evts.push({ type:'pen-prov', ico:'🤦🥅', min:penMin, player:foulDef[1]||'?', team:foulTeam });
+      var penRoll = Math.random();
+      var penKickMin = Math.min(penMin + 1 + Math.floor(Math.random()*2), 90);
+      if (penRoll < 0.70) {
+        // Gol de penalti
+        evts.push({ type:'pen-gol', ico:'⚽🥅', min:penKickMin, player:penKicker[1]||'?', team:penTeam });
+      } else if (penRoll < 0.90) {
+        // Parado por el portero
+        evts.push({ type:'pen-parado', ico:'🖐🥅', min:penKickMin, player:penGk[1]||'?', team:foulTeam });
+      } else {
+        // Fallado
+        evts.push({ type:'pen-fallo', ico:'❌🥅', min:penKickMin, player:penKicker[1]||'?', team:penTeam });
+      }
+    }
+
+    /* ── GOL DE FALTA (8% por partido) ── */
+    if (Math.random() < 0.08) {
+      var fkTeam = Math.random() < 0.5 ? 'a' : 'b';
+      var fkP    = rndSq(fkTeam === 'a' ? outA : outB);
+      evts.push({ type:'falta-gol', ico:'⚽🎯', min:rndMin(), player:fkP[1]||'?', team:fkTeam });
+    }
+
+    /* ── AUTOGOL (5% por partido) ── */
+    if (Math.random() < 0.05) {
+      var ogTeam = Math.random() < 0.5 ? 'a' : 'b';
+      var ogP    = rndSq(ogTeam === 'a' ? outA : outB);
+      evts.push({ type:'propia', ico:'⚽🚫', min:rndMin(), player:ogP[1]||'?', team:ogTeam });
+    }
+
+    /* ── ROJAS / DOBLE AMARILLA adicionales ── */
     /* Red cards: 8% direct red, 5% double yellow */
     var roll = Math.random();
     if (roll < 0.08) {
@@ -4103,6 +4383,8 @@
       evts.push({ type:'amarilla', ico:'🟨', min:m1, player:dp[1]||'?', team:dt });
       evts.push({ type:'roja', ico:'🟨🟥', min:Math.min(m2,90), player:dp[1]||'?', team:dt, dbl:true });
     }
+
+    /* ── LESIONES ── */
     /* Injuries: ~5% per team (leve 55%, moderada 30%, grave 15%) */
     ['a','b'].forEach(function(side) {
       if (Math.random() < 0.05) {
@@ -4332,7 +4614,39 @@
       outB = getOutfield(activeB); if (!outB.length) outB = [['','Jugador B','F',76,'titular']];
     }
 
+    // ── TARJETAS: 2-4 amarillas; 2ª al mismo jugador → roja ────────
+    // Se generan ANTES que los goles para poder excluir expulsados del marcador
+    var expelledA = {}; // nombre → minuto de expulsión
+    var expelledB = {};
+    var numYellow = Math.floor(Math.random() * 3) + 2;
+    var yellowsReceived = {};
+    for (var c = 0; c < numYellow; c++) {
+      var ct = Math.random() < 0.5 ? 'a' : 'b';
+      var csq = ct === 'a' ? outA : outB;
+      var cp = csq[Math.floor(Math.random()*csq.length)];
+      var cmin = Math.floor(Math.random()*80)+5;
+      if (yellowsReceived[cp[1]]) {
+        events.push({ type:'roja', ico:'🟥', min:cmin, player:cp[1]||'?', team:ct, reason:'2TA' });
+        var expMapY = ct === 'a' ? expelledA : expelledB;
+        if (expMapY[cp[1]] === undefined) expMapY[cp[1]] = cmin;
+      } else {
+        events.push({ type:'amarilla', ico:'🟨', min:cmin, player:cp[1]||'?', team:ct });
+        yellowsReceived[cp[1]] = true;
+      }
+    }
+    // Roja directa (~15% por partido)
+    if (Math.random() < 0.15) {
+      var rt = Math.random() < 0.5 ? 'a' : 'b';
+      var rsq = rt === 'a' ? outA : outB;
+      var rp = rsq[Math.floor(Math.random()*rsq.length)];
+      var rmin = Math.floor(Math.random()*80)+10;
+      events.push({ type:'roja', ico:'🟥', min:rmin, player:rp[1]||'?', team:rt, reason:'directa' });
+      var expMapR = rt === 'a' ? expelledA : expelledB;
+      if (expMapR[rp[1]] === undefined) expMapR[rp[1]] = rmin;
+    }
+
     // ── GOLES: minutoss aleatorios + selección ponderada ───────────
+    // Los jugadores expulsados antes del minuto del gol quedan excluidos
     var totalGoals = goalsA + goalsB;
     var goalMins = [];
     for (var i = 0; i < totalGoals; i++) goalMins.push(Math.floor(Math.random() * 88) + 2);
@@ -4346,41 +4660,35 @@
     var goalsPerPlayer = {};
 
     assign.forEach(function(team, idx) {
+      var min = goalMins[idx];
+      var expMap = team === 'a' ? expelledA : expelledB;
       var sq = team === 'a' ? outA : outB;
-      var pl = _weightedScorerPick(sq, team === 'a', goalsPerPlayer) || sq[0];
+      // Excluir jugadores que ya fueron expulsados antes del minuto del gol
+      var eligible = sq.filter(function(p){ return expMap[p[1]] === undefined || expMap[p[1]] > min; });
+      if (!eligible.length) eligible = sq;
+      var pl = _weightedScorerPick(eligible, team === 'a', goalsPerPlayer) || eligible[0] || sq[0];
       goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
-      events.push({ type:'gol', min:goalMins[idx], player:pl[1]||'?', team:team });
+      events.push({ type:'gol', min:min, player:pl[1]||'?', team:team });
     });
-
-    // ── TARJETAS: 2-4 amarillas; 2ª al mismo jugador → roja ────────
-    var numYellow = Math.floor(Math.random() * 3) + 2;
-    var yellowsReceived = {};
-    for (var c = 0; c < numYellow; c++) {
-      var ct = Math.random() < 0.5 ? 'a' : 'b';
-      var csq = ct === 'a' ? outA : outB;
-      var cp = csq[Math.floor(Math.random()*csq.length)];
-      var cmin = Math.floor(Math.random()*80)+5;
-      if (yellowsReceived[cp[1]]) {
-        events.push({ type:'roja', ico:'🟥', min:cmin, player:cp[1]||'?', team:ct, reason:'2TA' });
-      } else {
-        events.push({ type:'amarilla', ico:'🟨', min:cmin, player:cp[1]||'?', team:ct });
-        yellowsReceived[cp[1]] = true;
-      }
-    }
-    // Roja directa (~15% por partido)
-    if (Math.random() < 0.15) {
-      var rt = Math.random() < 0.5 ? 'a' : 'b';
-      var rsq = rt === 'a' ? outA : outB;
-      var rp = rsq[Math.floor(Math.random()*rsq.length)];
-      events.push({ type:'roja', ico:'🟥', min:Math.floor(Math.random()*80)+10, player:rp[1]||'?', team:rt, reason:'directa' });
-    }
 
     events.sort(function(a,b){ return a.min - b.min; });
     var mvpScore = {}, mvpTeams2 = {};
-    events.forEach(function(e){ if(e.type==='gol'){ mvpScore[e.player]=(mvpScore[e.player]||0)+3; mvpTeams2[e.player]=e.team==='a'?teamA:teamB; } });
+    // Los expulsados no pueden ser MVP aunque hayan marcado antes de su expulsión,
+    // pero sí pueden si ya habían marcado y la expulsión fue posterior al gol;
+    // en cualquier caso, no pueden recibir el MVP si terminaron expulsados.
+    var expelledAll = {};
+    Object.keys(expelledA).forEach(function(n){ expelledAll[n] = true; });
+    Object.keys(expelledB).forEach(function(n){ expelledAll[n] = true; });
+    events.forEach(function(e){ if(e.type==='gol' && !expelledAll[e.player]){ mvpScore[e.player]=(mvpScore[e.player]||0)+3; mvpTeams2[e.player]=e.team==='a'?teamA:teamB; } });
     var mvp='', mvpTeamName='', best=0;
     Object.keys(mvpScore).forEach(function(p){ if(mvpScore[p]>best){ best=mvpScore[p]; mvp=p; mvpTeamName=mvpTeams2[p]; } });
-    if (!mvp) { var ms = goalsA >= goalsB ? outA : outB; var mp = ms[Math.floor(Math.random()*ms.length)]; mvp = mp?mp[1]:'?'; mvpTeamName = goalsA >= goalsB ? teamA : teamB; }
+    if (!mvp) {
+      var ms = goalsA >= goalsB ? outA : outB;
+      var msEligible = ms.filter(function(p){ return !expelledAll[p[1]]; });
+      if (!msEligible.length) msEligible = ms;
+      var mp = msEligible[Math.floor(Math.random()*msEligible.length)];
+      mvp = mp?mp[1]:'?'; mvpTeamName = goalsA >= goalsB ? teamA : teamB;
+    }
     events.push({ type:'mvp', ico:'⭐', min:90, player:mvp, team:goalsA >= goalsB ? 'a' : 'b' });
     return { events:events, mvp:mvp, mvpTeam:mvpTeamName };
   }
@@ -4927,19 +5235,19 @@
 }
 #gm-player-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; }
 .gm-pos-header {
-  font-family: "Oswald", sans-serif; font-size: 10px; letter-spacing: 3px;
-  color: rgba(255,255,255,.3); padding: 12px 2px 4px; text-transform: uppercase;
-  border-bottom: 1px solid rgba(255,255,255,.07); margin-bottom: 2px;
+  font-family: "Oswald", sans-serif; font-size: 12px; letter-spacing: 3px;
+  color: rgba(240,192,64,.75); padding: 12px 2px 4px; text-transform: uppercase;
+  border-bottom: 1px solid rgba(255,255,255,.1); margin-bottom: 2px; font-weight: 600;
 }
 .gm-player-btn {
   width: 100%; display: flex; align-items: center; gap: 12px;
-  padding: 12px 14px; border-radius: 10px;
+  padding: 12px 14px; min-height: 50px; border-radius: 10px;
   border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.05);
   cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
 .gm-player-btn:active { background: rgba(240,192,64,.15); border-color: rgba(240,192,64,.4); }
-.gm-pl-num { font-family: "Bebas Neue",sans-serif; font-size: 20px; color: #f0c040; min-width: 28px; text-align: right; }
-.gm-pl-name { font-family: "Oswald",sans-serif; font-size: 16px; font-weight: 600; letter-spacing: .5px; color: #fff; }
+.gm-pl-num { font-family: "Bebas Neue",sans-serif; font-size: 22px; color: #f0c040; min-width: 32px; text-align: right; }
+.gm-pl-name { font-family: "Oswald",sans-serif; font-size: 18px; font-weight: 700; letter-spacing: .5px; color: #fff; }
 #gm-acta-section { border-top: 1px solid rgba(255,255,255,.08); }
 #gm-acta-toggle {
   display: flex; align-items: center; justify-content: space-between;
@@ -4990,14 +5298,14 @@
     <!-- Action buttons -->
     <div style="padding:0 8px 8px;display:flex;gap:6px;">
       <button id="gm-btn-et" onclick="window.gmActivateET()"
-        style="flex:1;padding:7px 4px;border-radius:5px;border:1px solid rgba(100,160,255,.3);
-               background:rgba(60,100,200,.15);color:#6ab0ff;font-size:10px;font-weight:700;
+        style="flex:1;padding:10px 4px;border-radius:6px;border:1px solid rgba(100,160,255,.3);
+               background:rgba(60,100,200,.15);color:#6ab0ff;font-size:14px;font-weight:700;
                font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">
         ⏱ PRÓRROGA
       </button>
       <button id="gm-btn-end" onclick="window.gmEndMatch()"
-        style="flex:1;padding:7px 4px;border-radius:5px;border:1px solid rgba(255,80,80,.3);
-               background:rgba(180,30,30,.2);color:#ff8080;font-size:10px;font-weight:700;
+        style="flex:1;padding:10px 4px;border-radius:6px;border:1px solid rgba(255,80,80,.3);
+               background:rgba(180,30,30,.2);color:#ff8080;font-size:14px;font-weight:700;
                font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">
         🏁 FINALIZAR
       </button>
@@ -5367,8 +5675,10 @@
 
 <!-- Paso 3: Elegir jugador -->
 <div class="ml-pl-overlay" id="gen-pl-ov">
-  <div class="ml-pl-ov-evt" id="gen-pl-evt">GOL</div>
-  <div class="ml-pl-ov-team" id="gen-pl-team">EQUIPO</div>
+  <div class="ml-pl-ov-header">
+    <button class="ml-pl-ov-back" onclick="document.getElementById('gen-pl-ov').classList.remove('show');document.getElementById('gen-tp-ov').classList.add('show');">&#8592;</button>
+    <div><div class="ml-pl-ov-evt" id="gen-pl-evt">GOL</div><div class="ml-pl-ov-team" id="gen-pl-team">EQUIPO</div></div>
+  </div>
   <div class="ml-pl-ov-list" id="gen-pl-list"></div>
   <button class="ml-pl-ov-close" onclick="genEvClose()">✕ Cancelar</button>
 </div>

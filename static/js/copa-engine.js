@@ -319,8 +319,9 @@
     var events = [];
     ['a', 'b'].forEach(function (team) {
       var active = team === 'a' ? activeA : activeB;
+      var yellowPlayer = null;
       if (Math.random() < 0.42) {
-        var yellowPlayer = pickWeightedPlayer(active);
+        yellowPlayer = pickWeightedPlayer(active);
         if (yellowPlayer) {
           events.push({ min: 8 + Math.floor(Math.random() * Math.max(10, ft90 - 12)), ico: '🟨', team: team, player: yellowPlayer, type: 'amarilla' });
           if (Math.random() < 0.08) {
@@ -328,8 +329,11 @@
           }
         }
       }
+      // Only generate a direct red for a player who has not already received any card,
+      // since an expelled player cannot receive further cards (real football rules).
       if (Math.random() < 0.06) {
-        var redPlayer = pickWeightedPlayer(active);
+        var excludeFromRed = yellowPlayer ? [yellowPlayer[1]] : [];
+        var redPlayer = pickWeightedPlayer(active, { exclude: excludeFromRed });
         if (redPlayer) {
           events.push({ min: 18 + Math.floor(Math.random() * Math.max(12, ft90 - 20)), ico: '🟥', team: team, player: redPlayer, type: 'roja' });
         }
@@ -364,13 +368,20 @@
     };
   }
 
-  function pickMvp(events, scoreA, scoreB, teamA, teamB, sqA, sqB) {
+  function pickMvp(events, scoreA, scoreB, teamA, teamB, sqA, sqB, expelledA, expelledB) {
+    var expA = expelledA || {};
+    var expB = expelledB || {};
+    var expelled = {};
+    Object.keys(expA).forEach(function (n) { expelled[n] = true; });
+    Object.keys(expB).forEach(function (n) { expelled[n] = true; });
     var scores = {};
     var teams = {};
     (events || []).forEach(function (e) {
       if (!e.player) return;
       var n = e.player[1];
       if (!n) return;
+      // An expelled player cannot be MVP
+      if (expelled[n]) return;
       var w = 0;
       if (e.type === 'gol') w = 3;
       else if (e.type === 'falta-gol') w = 4;
@@ -389,8 +400,10 @@
     if (!best) {
       var winner = scoreA > scoreB ? 'a' : (scoreB > scoreA ? 'b' : (Math.random() < 0.5 ? 'a' : 'b'));
       var sq = winner === 'a' ? sqA : sqB;
-      var pool = sq.filter(function (p) { return p[2] !== 'P'; });
-      best = (pool.length ? pickRandom(pool) : pickRandom(sq))[1];
+      var pool = sq.filter(function (p) { return p[2] !== 'P' && !expelled[p[1]]; });
+      if (!pool.length) pool = sq.filter(function (p) { return !expelled[p[1]]; });
+      if (!pool.length) pool = sq;
+      best = pickRandom(pool)[1];
       teams[best] = winner === 'a' ? teamA : teamB;
     }
     return { name: best, team: teams[best] || teamA };
@@ -437,7 +450,7 @@
       return k - 1;
     }
 
-    var strengthA = ratingA + 1.8;
+    var strengthA = ratingA * 1.10; // bonus local del 10%
     var strengthB = ratingB;
     var shareA = Math.max(0.22, Math.min(0.78, strengthA / Math.max(1, strengthA + strengthB)));
     var baseTotal = 1.75 + (((ratingA + ratingB) / 2) - 74) * 0.05;
@@ -452,24 +465,43 @@
     for (var gb = 0; gb < gv; gb++) goalsOrder.push('b');
     goalsOrder.sort(function () { return Math.random() - 0.5; });
 
+    // Generate card events first so expelled players can be excluded from scoring
+    var cardEvts = maybeCardEvents(activeA, activeB, ft90);
+    cardEvts.forEach(function (ev) {
+      ev.realTeam = ev.team === 'a' ? local : visitante;
+      evts.push(ev);
+    });
+
+    // Build expelled player maps: { playerName -> expulsionMinute }
+    var expelledA = {};
+    var expelledB = {};
+    cardEvts.forEach(function (ev) {
+      if (ev.type === 'roja' || ev.type === 'd-amarilla') {
+        var expMap = ev.team === 'a' ? expelledA : expelledB;
+        if (expMap[ev.player[1]] === undefined) {
+          expMap[ev.player[1]] = ev.min;
+        }
+      }
+    });
+
     goalsOrder.forEach(function (team) {
       var min = 4 + Math.floor(Math.random() * 84);
       var active = team === 'a' ? activeA : activeB;
-      var scorer = pickWeightedPlayer(active);
+      var expelledMap = team === 'a' ? expelledA : expelledB;
+      // Exclude players who were expelled before or at this minute
+      var excludeExpelled = Object.keys(expelledMap).filter(function (name) {
+        return expelledMap[name] <= min;
+      });
+      var scorer = pickWeightedPlayer(active, { exclude: excludeExpelled });
       if (!scorer) return;
       var typeRoll = Math.random();
       var type = typeRoll < 0.08 ? 'falta-gol' : (typeRoll < 0.17 ? 'pen-gol' : 'gol');
       var ico = type === 'falta-gol' ? '⚽🎯' : type === 'pen-gol' ? '⚽🥅' : '⚽';
       evts.push({ min: min, ico: ico, team: team, player: scorer, type: type, realTeam: team === 'a' ? local : visitante });
       if (type === 'pen-gol' && Math.random() < 0.72) {
-        var prov = pickWeightedPlayer(active, { exclude: [scorer[1]] }) || scorer;
+        var prov = pickWeightedPlayer(active, { exclude: excludeExpelled.concat([scorer[1]]) }) || scorer;
         evts.push({ min: min, ico: '🤦🥅', team: team, player: prov, type: 'pen-prov', realTeam: team === 'a' ? local : visitante });
       }
-    });
-
-    maybeCardEvents(activeA, activeB, ft90).forEach(function (ev) {
-      ev.realTeam = ev.team === 'a' ? local : visitante;
-      evts.push(ev);
     });
 
     var lesiones = [];
@@ -493,12 +525,16 @@
       et_gl = etA;
       et_gv = etB;
       for (var ea = 0; ea < etA; ea++) {
-        var pA = pickWeightedPlayer(activeA);
-        if (pA) evts.push({ min: 92 + Math.floor(Math.random() * 14), ico: '⚽', team: 'a', player: pA, type: 'gol', realTeam: local });
+        var etMinA = 92 + Math.floor(Math.random() * 14);
+        var excludeEtA = Object.keys(expelledA).filter(function (name) { return expelledA[name] <= etMinA; });
+        var pA = pickWeightedPlayer(activeA, { exclude: excludeEtA });
+        if (pA) evts.push({ min: etMinA, ico: '⚽', team: 'a', player: pA, type: 'gol', realTeam: local });
       }
       for (var eb = 0; eb < etB; eb++) {
-        var pB = pickWeightedPlayer(activeB);
-        if (pB) evts.push({ min: 92 + Math.floor(Math.random() * 14), ico: '⚽', team: 'b', player: pB, type: 'gol', realTeam: visitante });
+        var etMinB = 92 + Math.floor(Math.random() * 14);
+        var excludeEtB = Object.keys(expelledB).filter(function (name) { return expelledB[name] <= etMinB; });
+        var pB = pickWeightedPlayer(activeB, { exclude: excludeEtB });
+        if (pB) evts.push({ min: etMinB, ico: '⚽', team: 'b', player: pB, type: 'gol', realTeam: visitante });
       }
       if (gl + et_gl === gv + et_gv) {
         shootout = simulatePenaltyShootout(local, visitante);
@@ -507,7 +543,7 @@
     }
 
     evts.sort(function (a, b) { return a.min - b.min; });
-    var mvp = pickMvp(evts, gl + et_gl, gv + et_gv, local, visitante, activeA, activeB);
+    var mvp = pickMvp(evts, gl + et_gl, gv + et_gv, local, visitante, activeA, activeB, expelledA, expelledB);
     evts.push({ min: 120, ico: '⭐', team: mvp.team === local ? 'a' : 'b', player: ['', mvp.name], type: 'mvp', realTeam: mvp.team });
 
     return {

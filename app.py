@@ -35,6 +35,7 @@ class Partido(db.Model):
     goles_local = db.Column(db.Integer)
     goles_visitante = db.Column(db.Integer)
     mvp = db.Column(db.String(100))
+    porteria_imbatida = db.Column(db.String(100), nullable=True)
 
 class Evento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -42,6 +43,7 @@ class Evento(db.Model):
     tipo = db.Column(db.String(50))
     equipo = db.Column(db.String(100))
     jugador = db.Column(db.String(100))
+    minuto = db.Column(db.Integer, nullable=True)
 
 class GlobalState(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -58,7 +60,13 @@ BASE = {
 }
 
 MULTIGOL = [1, 0.37, 0.22, 0.12, 0.06]
-BONUS_LOCAL = 1.08
+
+# Penalti: pesos de la fórmula probabilística (Módulo 2)
+PENALTY_BASE_WEIGHT = 0.85        # peso del atributo lanzador vs portero
+PENALTY_RANDOM_FACTOR = 0.15      # factor de azar máximo
+PENALTY_SAVE_PROBABILITY = 0.60   # prob. de parada efectiva cuando falla el penalti
+PENALTY_FOUL_CARD_PROBABILITY = 0.30  # prob. de tarjeta al defensor que provoca el penalti
+BONUS_LOCAL = 1.10
 
 TEAM_ALIASES = {
     "sevilla fc": "Sevilla",
@@ -193,6 +201,10 @@ def save_global_state(new_state):
 
 # --- FUNCIONES MOTOR ---
 def calcular_prob(perfil, local=False, goles_previos=0):
+    # Porteros casi nunca marcan: peso fijo 0.001 ignorando su poder de portería
+    if perfil["posicion"] == "portero":
+        return 0.001
+
     base = BASE.get(perfil["posicion"], 10)
     prob = base + (perfil["poder"] / 100)
 
@@ -231,7 +243,8 @@ def elegir_goleador(equipo, local=False, conteo=None):
     return elegido["nombre"]
 
 def simular_goles(equipo, local=False, oponente=None):
-    own_power = get_team_power(equipo)
+    # Aplicar ventaja local directamente al poder del equipo (+10%)
+    own_power = get_team_power(equipo) * (1.10 if local else 1.0)
     if oponente:
         opp_power = get_team_power(oponente)
     else:
@@ -240,8 +253,6 @@ def simular_goles(equipo, local=False, oponente=None):
         if not opp_candidates:
             opp_power = 76
     base_prob = own_power / max(1, (own_power + opp_power))
-    if local:
-        base_prob = min(0.82, base_prob + 0.05 * (1 - base_prob))
 
     if base_prob < 0.42:
         pesos = [46, 33, 14, 5, 2, 0]
@@ -255,10 +266,11 @@ def simular_goles(equipo, local=False, oponente=None):
     return random.choices([0, 1, 2, 3, 4, 5], weights=pesos, k=1)[0]
 
 def simular_marcador(local, visitante):
-    r_local = get_team_power(local)
+    # PowerLocal = MediaEquipo * 1.10 (ventaja de localía del 10%)
+    r_local = get_team_power(local) * 1.10
     r_visit = get_team_power(visitante)
     base_local = r_local / max(1, (r_local + r_visit))
-    prob_local = min(0.82, base_local + 0.05 * (1 - base_local))
+    prob_local = min(0.82, base_local)
 
     def sample(prob):
         if prob < 0.42:
@@ -536,48 +548,337 @@ def copa_reiniciar():
     return jsonify({"ok": True})
 
 # --- SIMULACIÓN ---
+def _elegir_jugador_campo(equipo, es_local=False):
+    """Elige un jugador de campo aleatorio (no portero) ponderado por poder."""
+    resolved = resolve_team_name(equipo)
+    jugadores = jugadores_por_equipo.get(resolved, [])
+    campo = [j for j in jugadores if j.get("posicion") != "portero"]
+    if not campo:
+        campo = jugadores
+    if not campo:
+        return "Jugador"
+    pesos = [max(1, int(j.get("poder", 70) or 70)) for j in campo]
+    return random.choices(campo, weights=pesos, k=1)[0]["nombre"]
+
+
+
+# --- MÓDULO DE DISCIPLINA: Modificador de probabilidad tras tarjeta roja ---
+
+# Impacto según el minuto de la expulsión (Módulo 4)
+def _modificador_expulsion(minuto):
+    """Devuelve el modificador de probabilidad de goles para el equipo con 10 jugadores.
+
+    Basado en el Módulo 4 del documento de arquitectura (rangos semiabiertos [start, end)):
+    [00, 30) Crítico:   reducción del 40% → multiplicador 0.60.
+    [30, 70) Grave:     reducción del 30% → multiplicador 0.70.
+    [70, 90] Defensivo: reducción del 20% → multiplicador 0.80.
+    """
+    if minuto < 30:
+        return 0.60   # 40% de reducción
+    elif minuto < 70:
+        return 0.70   # 30% de reducción
+    else:
+        return 0.80   # 20% de reducción
+
+
 def simular_y_guardar(jornada, local, visitante):
+    """Motor de simulación IA vs IA (Módulo 6 del documento de arquitectura).
+
+    Implementa:
+    - Módulo 1: Gol estándar, falta, penalti, autogol → Score +1 con equipo correcto.
+    - Módulo 2: Flujo de penalti: provocado → probabilidad lanzador vs portero → resultado.
+    - Módulo 3: Filtro de expulsiones con bloqueo de ID del jugador (amarilla → doble → roja).
+    - Módulo 4: Probabilidades dinámicas tras expulsión según minuto.
+    - Módulo 5: Acta cronológica con minuto asignado a cada evento.
+    """
     if Partido.query.filter_by(local=local, visitante=visitante).first():
         return
 
-    gl = simular_goles(local, True, oponente=visitante)
-    gv = simular_goles(visitante, False, oponente=local)
+    # ---- Estado interno del partido ----
+    # tarjetas: {jugador_nombre: count_amarillas}
+    tarjetas = {}
+    # expulsados: set de nombres bloqueados
+    expulsados = set()
+    # modificador de goles para el equipo con 10 hombres (1.0 = sin penalización)
+    mod_local = 1.0
+    mod_visit = 1.0
+
+    # Acta cronológica: lista de (minuto, tipo, equipo, jugador)
+    acta = []
+
+    # ---- Minutos usados para garantizar unicidad cronológica ----
+    minutos_usados = set()
+
+    def _minuto_unico(min_base, rango=3):
+        """Genera un minuto único dentro de [min_base, min_base+rango]."""
+        for delta in range(rango + 1):
+            m = min(90, min_base + delta)
+            if m not in minutos_usados:
+                minutos_usados.add(m)
+                return m
+        # fallback: registrar el minuto base aunque se repita
+        minutos_usados.add(min_base)
+        return min_base
+
+    def _jugador_disponible(equipo, es_local=False):
+        """Elige un jugador de campo que NO esté expulsado."""
+        resolved = resolve_team_name(equipo)
+        jugadores = jugadores_por_equipo.get(resolved, [])
+        campo = [j for j in jugadores
+                 if j.get("posicion") != "portero" and j["nombre"] not in expulsados]
+        if not campo:
+            campo = [j for j in jugadores if j["nombre"] not in expulsados]
+        if not campo:
+            # Todos expulsados (situación extrema): usa cualquiera
+            campo = jugadores_por_equipo.get(resolved, [{"nombre": "Jugador", "poder": 70}])
+        pesos = [max(1, int(j.get("poder", 70) or 70)) for j in campo]
+        return random.choices(campo, weights=pesos, k=1)[0]["nombre"]
+
+    def _check_status(jugador_nombre):
+        """Devuelve False si el jugador está expulsado (Check_Status del Módulo 6)."""
+        return jugador_nombre not in expulsados
+
+    def _procesar_tarjeta(equipo, jugador, minuto, tipo_inicial="amarilla"):
+        """Módulo 3: lógica de disciplina con bloqueo de ID tras expulsión."""
+        nonlocal mod_local, mod_visit
+
+        if not _check_status(jugador):
+            return  # ID bloqueado: abortar
+
+        if tipo_inicial == "roja":
+            expulsados.add(jugador)
+            acta.append((minuto, "roja", equipo, jugador))
+        else:
+            # Tarjeta amarilla
+            tarjetas[jugador] = tarjetas.get(jugador, 0) + 1
+            if tarjetas[jugador] >= 2:
+                # Doble amarilla → expulsión
+                acta.append((minuto, "doble-amarilla", equipo, jugador))
+                expulsados.add(jugador)
+            else:
+                acta.append((minuto, "amarilla", equipo, jugador))
+                return  # Solo amarilla, sin expulsión
+
+        # El jugador queda expulsado: actualizar modificadores (Módulo 4)
+        mod = _modificador_expulsion(minuto)
+        if equipo == local:
+            mod_local = min(mod_local, mod)
+        else:
+            mod_visit = min(mod_visit, mod)
+
+    # ================================================================
+    # Módulo 1+4: Simular goles con modificador dinámico
+    # ================================================================
+    gl_base = simular_goles(local, True, oponente=visitante)
+    gv_base = simular_goles(visitante, False, oponente=local)
+
+    # Los modificadores se aplican después de generar las rojas (lógica secuencial).
+    # En la práctica la expulsión ocurre durante el partido, por lo que re-simulamos
+    # sólo si hubo rojas en la fase de tarjetas, usando los modificadores resultantes.
+    # Para preservar la lógica de flujo, primero registramos todos los eventos de
+    # goles/penaltis/faltas con su minuto, y luego las tarjetas.
+
+    # ---- Asignar minutos a goles ----
+    # Distribuimos los goles del local a lo largo de 90 minutos
+    minutos_goles_local = sorted(random.sample(range(1, 91), min(gl_base, 90)))
+    minutos_goles_visit = sorted(random.sample(range(1, 91), min(gv_base, 90)))
 
     conteo_local = {}
     conteo_visitante = {}
-    eventos = []
+    goles_acta_local = 0
+    goles_acta_visit = 0
 
-    for _ in range(gl):
+    for minuto in minutos_goles_local:
         g = elegir_goleador(local, True, conteo_local)
         conteo_local[g] = conteo_local.get(g, 0) + 1
-        eventos.append((local, g))
+        m = _minuto_unico(minuto)
+        acta.append((m, "gol", local, g))
+        goles_acta_local += 1
 
-    for _ in range(gv):
+    for minuto in minutos_goles_visit:
         g = elegir_goleador(visitante, False, conteo_visitante)
         conteo_visitante[g] = conteo_visitante.get(g, 0) + 1
-        eventos.append((visitante, g))
+        m = _minuto_unico(minuto)
+        acta.append((m, "gol", visitante, g))
+        goles_acta_visit += 1
 
-    mvp = elegir_mvp(local, visitante, gl, gv, conteo_local, conteo_visitante)
+    # ================================================================
+    # Módulo 2: Flujo de penalti (Activación → Resolución → Resultado)
+    # ================================================================
+    if random.random() < 0.08:
+        pen_minuto = _minuto_unico(random.randint(10, 85))
+        pen_equipo = random.choice([local, visitante])
+        pen_es_local = (pen_equipo == local)
+        foul_equipo = visitante if pen_es_local else local
 
+        # Activación: pen-prov (el jugador atacante que provoca la pena máxima)
+        pen_jugador = _jugador_disponible(pen_equipo, pen_es_local)
+        if _check_status(pen_jugador):
+            acta.append((pen_minuto, "pen-prov", pen_equipo, pen_jugador))
+
+            # El defensor que comete la falta puede recibir tarjeta
+            foul_jugador = _jugador_disponible(foul_equipo)
+            if _check_status(foul_jugador):
+                m_foul = _minuto_unico(pen_minuto)
+                if random.random() < PENALTY_FOUL_CARD_PROBABILITY:
+                    _procesar_tarjeta(foul_equipo, foul_jugador, m_foul)
+                else:
+                    acta.append((m_foul, "pen-prov", foul_equipo, foul_jugador))
+
+            # Resolución: atributo del lanzador vs reflejos del portero + azar
+            resolved_foul = resolve_team_name(foul_equipo)
+            gks = [j for j in jugadores_por_equipo.get(resolved_foul, [])
+                   if j.get("posicion") == "portero"]
+            gk_poder = gks[0].get("poder", 80) if gks else 80
+            pen_poder = next(
+                (j.get("poder", 80) for j in jugadores_por_equipo.get(
+                    resolve_team_name(pen_equipo), []) if j["nombre"] == pen_jugador),
+                80
+            )
+            # Probabilidad de gol: lanzador vs portero, con factor azar (capped at 1.0)
+            prob_gol_pen = min(1.0, (pen_poder / (pen_poder + gk_poder)) * PENALTY_BASE_WEIGHT + random.uniform(0, PENALTY_RANDOM_FACTOR))
+            if prob_gol_pen > 0.50:
+                # Penalti convertido → el portero no para (no se añade pen-parado)
+                acta.append((_minuto_unico(pen_minuto), "pen-gol", pen_equipo, pen_jugador))
+                if pen_equipo == local:
+                    goles_acta_local += 1
+                else:
+                    goles_acta_visit += 1
+            else:
+                # Penalti fallado: parada efectiva o fuera
+                if gks and random.random() < PENALTY_SAVE_PROBABILITY:
+                    acta.append((_minuto_unico(pen_minuto), "pen-parado", foul_equipo, gks[0]["nombre"]))
+                else:
+                    acta.append((_minuto_unico(pen_minuto), "pen-fallo", pen_equipo, pen_jugador))
+
+    # ================================================================
+    # Gol de falta (5% por partido)
+    # ================================================================
+    if random.random() < 0.05:
+        fk_minuto = _minuto_unico(random.randint(5, 88))
+        fk_equipo = random.choice([local, visitante])
+        fk_jugador = _jugador_disponible(fk_equipo, fk_equipo == local)
+        if _check_status(fk_jugador):
+            acta.append((fk_minuto, "falta-gol", fk_equipo, fk_jugador))
+            if fk_equipo == local:
+                goles_acta_local += 1
+            else:
+                goles_acta_visit += 1
+
+    # ================================================================
+    # Módulo 1: Autogol (1% por partido) → suma al equipo CONTRARIO
+    # ================================================================
+    if random.random() < 0.01:
+        og_minuto = _minuto_unico(random.randint(5, 88))
+        og_equipo = random.choice([local, visitante])
+        og_jugador = _jugador_disponible(og_equipo, og_equipo == local)
+        if _check_status(og_jugador):
+            acta.append((og_minuto, "propia", og_equipo, og_jugador))
+            # El autogol suma al equipo contrario
+            if og_equipo == local:
+                goles_acta_visit += 1
+            else:
+                goles_acta_local += 1
+
+    # ================================================================
+    # Módulo 3: Tarjetas (2-4 por partido) con lógica de doble amarilla
+    # ================================================================
+    num_amarillas = random.choices([2, 3, 4], weights=[40, 40, 20])[0]
+    for _ in range(num_amarillas):
+        am_minuto = _minuto_unico(random.randint(5, 89))
+        am_equipo = random.choice([local, visitante])
+        am_jugador = _jugador_disponible(am_equipo, am_equipo == local)
+        if _check_status(am_jugador):
+            _procesar_tarjeta(am_equipo, am_jugador, am_minuto)
+
+    # Roja directa (3% por partido)
+    if random.random() < 0.03:
+        roja_minuto = _minuto_unico(random.randint(5, 89))
+        roja_equipo = random.choice([local, visitante])
+        roja_jugador = _jugador_disponible(roja_equipo, roja_equipo == local)
+        if _check_status(roja_jugador):
+            _procesar_tarjeta(roja_equipo, roja_jugador, roja_minuto, tipo_inicial="roja")
+
+    # ================================================================
+    # Módulo 4: Aplicar modificadores dinámicos si hubo expulsiones.
+    # El modificador reduce la probabilidad de que el equipo mermado
+    # mantenga todos sus goles. Cuando se descuenta un gol también se
+    # elimina el último evento de gol del equipo del acta para mantener
+    # consistencia entre el marcador y el registro de eventos.
+    # ================================================================
+    def _descontar_gol_acta(equipo):
+        """Elimina el último evento de gol del equipo del acta y devuelve True si lo hizo."""
+        for i in range(len(acta) - 1, -1, -1):
+            if acta[i][1] == "gol" and acta[i][2] == equipo:
+                acta.pop(i)
+                return True
+        return False
+
+    if mod_local < 1.0 and goles_acta_local > 0:
+        if random.random() > mod_local:
+            if _descontar_gol_acta(local):
+                goles_acta_local -= 1
+    if mod_visit < 1.0 and goles_acta_visit > 0:
+        if random.random() > mod_visit:
+            if _descontar_gol_acta(visitante):
+                goles_acta_visit -= 1
+
+    # ================================================================
+    # Módulo 5 + 6: Ordenar acta cronológicamente y calcular premios finales
+    # ================================================================
+    acta.sort(key=lambda x: x[0])
+
+    # Post-proceso: garantizar consistencia cronológica de expulsiones.
+    # Si un evento de expulsión tiene un minuto menor que un evento previo
+    # del mismo jugador, eliminamos los eventos anteriores incoherentes.
+    expulsion_minuto = {}  # jugador → minuto de expulsión
+    for minuto, tipo, eq, jug in acta:
+        if tipo in ("roja", "doble-amarilla"):
+            expulsion_minuto[jug] = minuto
+
+    acta_filtrada = []
+    for minuto, tipo, eq, jug in acta:
+        if jug in expulsion_minuto and minuto >= expulsion_minuto[jug] and tipo not in ("roja", "doble-amarilla"):
+            continue   # evento en el minuto de expulsión o posterior: descartado
+        acta_filtrada.append((minuto, tipo, eq, jug))
+    acta = acta_filtrada
+
+    # MVP: jugador con más goles; si empate, el primero de la lista
+    mvp = elegir_mvp(local, visitante, goles_acta_local, goles_acta_visit,
+                     conteo_local, conteo_visitante)
+
+    # Portería imbatida: equipo cuyo portero no recibió goles
+    porteria_imbatida = None
+    if goles_acta_visit == 0:
+        porteria_imbatida = local
+    elif goles_acta_local == 0:
+        porteria_imbatida = visitante
+
+    # ================================================================
+    # Persistencia en BD
+    # ================================================================
     p = Partido(
         jornada=jornada,
         local=local,
         visitante=visitante,
-        goles_local=gl,
-        goles_visitante=gv,
-        mvp=mvp
+        goles_local=goles_acta_local,
+        goles_visitante=goles_acta_visit,
+        mvp=mvp,
+        porteria_imbatida=porteria_imbatida,
     )
     db.session.add(p)
     db.session.commit()
 
-    for eq, jug in eventos:
+    for minuto, tipo, eq, jug in acta:
         db.session.add(Evento(
             partido_id=p.id,
-            tipo="gol",
+            tipo=tipo,
             equipo=eq,
-            jugador=jug
+            jugador=jug,
+            minuto=minuto,
         ))
     db.session.commit()
+
 
 # --- API ESTADO COMPARTIDO ---
 @app.route("/api/state", methods=["GET"])

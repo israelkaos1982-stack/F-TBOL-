@@ -40,6 +40,13 @@
     .nav-row .back-btn{margin:0!important;position:static!important;top:auto!important;z-index:auto!important;}
     .home-icon-btn{display:flex!important;align-items:center!important;justify-content:center!important;padding:7px 10px;text-decoration:none;font-size:15px;background:transparent;border:1px solid rgba(240,192,64,.22);border-radius:4px;color:rgba(255,255,255,.45);cursor:pointer;transition:all .16s;line-height:1;}
     .home-icon-btn:hover{color:var(--gold,#f0c040);border-color:var(--gold,#f0c040);}
+    /* ── BLOQUEO ABSOLUTO overlay central de gol ── */
+    #mm-event-flash,#mm-event-flash.show,#mm-event-flash.mm-flash-gol,
+    #mm-event-flash.mm-flash-roja,#mm-event-flash.mm-flash-gol.show,
+    #mm-event-flash.mm-flash-roja.show{
+      display:none!important;visibility:hidden!important;
+      opacity:0!important;pointer-events:none!important;
+    }
   </style>
   <script>
     window.BACKEND_ESCUDOS = {{ escudos_resueltos | tojson }};
@@ -52,7 +59,75 @@
   {% include 'partials/misc_body_1.html' %}
   {% include 'partials/part2/misc_body_2.html' %}
   <script src="{{ url_for('static', filename='js/goal-notification-improved.js') }}?v=2.0"></script>
-  <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=4.0"></script>
+  <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=4.1"></script>
+  <script>
+  /* ── PARCHE INLINE: bloquea el overlay central de gol ──────────────────
+     Corre inmediatamente después del bundle, sin depender de archivos
+     externos cacheados. Es la última línea de defensa. */
+  (function(){
+    /* 1. Ocultar el elemento si ya existe */
+    function hideOverlay(){
+      var el=document.getElementById('mm-event-flash');
+      if(!el)return;
+      el.style.setProperty('display','none','important');
+      el.style.setProperty('visibility','hidden','important');
+      el.style.setProperty('opacity','0','important');
+      el.classList.remove('show','mm-flash-gol','mm-flash-roja');
+    }
+
+    /* 2. Parchear window.mmShowFlash para goles */
+    var _origFlash = window.mmShowFlash;
+    window.mmShowFlash = function(type, teamName, playerName){
+      if(type === 'gol'){
+        /* Delegar al sistema mejorado si está disponible */
+        if(window.goalNotificationImproved){
+          /* Buscar el partido por nombre de equipo */
+          var matches=document.querySelectorAll('[id^="mlw-"]');
+          var matchId=null, team='a';
+          for(var i=0;i<matches.length;i++){
+            var names=matches[i].querySelectorAll('.ml-team-name');
+            for(var j=0;j<names.length;j++){
+              if(names[j].textContent.includes(teamName)){
+                matchId=matches[i].id.replace('mlw-','');
+                team=(j===1)?'b':'a';
+                break;
+              }
+            }
+            if(matchId)break;
+          }
+          if(matchId) window.goalNotificationImproved.show(matchId,team,playerName||'');
+        }
+        hideOverlay();
+        return; /* NUNCA mostrar el overlay central */
+      }
+      /* Para otros tipos (roja) usar el comportamiento original */
+      if(_origFlash) _origFlash(type,teamName,playerName);
+    };
+
+    /* 3. MutationObserver sobre el elemento para bloquear cualquier
+          intento de mostrar el overlay (incluso si viene de código privado) */
+    function watchOverlay(){
+      var el=document.getElementById('mm-event-flash');
+      if(!el||el._blocked)return;
+      el._blocked=true;
+      hideOverlay();
+      new MutationObserver(function(){hideOverlay();})
+        .observe(el,{attributes:true,attributeFilter:['class','style']});
+    }
+    /* Observar body para cuando el elemento se cree dinámicamente */
+    new MutationObserver(function(ms){
+      ms.forEach(function(m){
+        m.addedNodes.forEach(function(n){
+          if(n.id==='mm-event-flash'){hideOverlay();watchOverlay();}
+        });
+      });
+      watchOverlay();
+    }).observe(document.body,{childList:true});
+
+    watchOverlay();
+    setInterval(hideOverlay,150);
+  })();
+  </script>
   <script src="{{ url_for('static', filename='js/goal-notification-patch.js') }}?v=2.1"></script>
   <script src="{{ url_for('static', filename='js/copa-engine.js') }}?v=1.0"></script>
   <script src="{{ url_for('static', filename='js/primera-rfef-data.js') }}?v=1.1"></script>

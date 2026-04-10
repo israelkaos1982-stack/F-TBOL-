@@ -7936,6 +7936,18 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   }
 
   function _mmFlash(type, teamName, playerName) {
+    // Goals are handled exclusively by goal-notification-improved.js
+    // The overlay is never shown for goals – only red cards use it.
+    if (type === 'gol') {
+      if (typeof window.goalNotificationImproved !== 'undefined') {
+        // If the improved system is loaded, let it handle sound too.
+        // (Sound is already triggered by the caller via window.mmShowFlash path)
+      } else {
+        _mmSoundGoal();
+      }
+      return;
+    }
+
     _mmEnsureFlash();
     var el = document.getElementById('mm-event-flash');
     var title = document.getElementById('mm-flash-title');
@@ -7944,13 +7956,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     if (!el) return;
 
     el.className = 'mm-event-flash mm-flash-' + type + ' show';
-    if (type === 'gol') {
-      title.textContent = '⚽ ¡¡¡ GOOOOOL !!!';
-      _mmSoundGoal();
-    } else {
-      title.textContent = '🟥 ¡¡¡ EXPULSIÓN !!!';
-      _mmSoundRoja();
-    }
+    title.textContent = '🟥 ¡¡¡ EXPULSIÓN !!!';
+    _mmSoundRoja();
     sub.textContent  = playerName || '';
     team.textContent = teamName   || '';
 

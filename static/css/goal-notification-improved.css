@@ -5,11 +5,18 @@
  * No central overlay – each match shows its own "¡GOL!" notification.
  */
 
-/* ── Nuclear override: hide the original central flash overlay at all times ── */
-#mm-event-flash {
+/* ── Nuclear override: hide the original central flash overlay at ALL times ──
+   Cover every possible class combination so no specificity battle is lost.   */
+#mm-event-flash,
+#mm-event-flash.show,
+#mm-event-flash.mm-flash-gol,
+#mm-event-flash.mm-flash-roja,
+#mm-event-flash.mm-flash-gol.show,
+#mm-event-flash.mm-flash-roja.show {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
+  opacity: 0 !important;
 }
 
 /* ── Ensure scoreboard is positioned relative ────────────────────────────── */

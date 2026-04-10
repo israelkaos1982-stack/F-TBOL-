@@ -8042,7 +8042,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         var redTypes  = ['roja', 'd-amarilla'];
 
         if (goalTypes.indexOf(type) !== -1) {
-          _mmFlash('gol', teamName, playerName);
+          window.mmShowFlash('gol', teamName, playerName);
         } else if (redTypes.indexOf(type) !== -1) {
           _mmFlash('roja', teamName, playerName);
         } else if (type === 'lesion') {

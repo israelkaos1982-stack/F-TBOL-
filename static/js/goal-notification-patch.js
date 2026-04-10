@@ -120,25 +120,52 @@
     };
 
     // ── Suppress the central flash overlay ───────────────────────────────
-    function forceHideOverlay() {
-      const el = document.getElementById('mm-event-flash');
+    function forceHideEl(el) {
       if (!el) return;
-      // Correct way to set !important via JavaScript
-      el.style.setProperty('display',          'none',   'important');
-      el.style.setProperty('visibility',       'hidden', 'important');
-      el.style.setProperty('pointer-events',   'none',   'important');
+      el.style.setProperty('display',        'none',   'important');
+      el.style.setProperty('visibility',     'hidden', 'important');
+      el.style.setProperty('pointer-events', 'none',   'important');
+      el.style.setProperty('opacity',        '0',      'important');
       el.classList.remove('show', 'mm-flash-gol', 'mm-flash-roja');
     }
 
-    // Apply immediately and keep watching in case index.bundle recreates it
-    forceHideOverlay();
+    // Attach a MutationObserver directly on the overlay element so any
+    // class or style mutation (added by _mmFlash internals) is countered
+    // within the same microtask tick.
+    let overlayElObs = null;
+    function attachOverlayObserver() {
+      const el = document.getElementById('mm-event-flash');
+      if (!el || el._gnPatched) return;
+      el._gnPatched = true;
+      forceHideEl(el);
+      overlayElObs = new MutationObserver(function() { forceHideEl(el); });
+      overlayElObs.observe(el, {
+        attributes: true,
+        attributeFilter: ['class', 'style']
+      });
+    }
 
-    // Watch for the element to be added/modified and re-hide it
-    const overlayObs = new MutationObserver(forceHideOverlay);
-    overlayObs.observe(document.body, { childList: true, subtree: false, attributes: true });
+    // Watch body for the element being created (it's created lazily by _mmEnsureFlash)
+    const bodyOverlayObs = new MutationObserver(function(mutations) {
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (node.id === 'mm-event-flash') { forceHideEl(node); attachOverlayObserver(); }
+        }
+      }
+      attachOverlayObserver(); // also check if already present
+    });
+    bodyOverlayObs.observe(document.body, { childList: true });
 
-    // Belt-and-suspenders interval (250 ms) to catch any inline-style overrides
-    setInterval(forceHideOverlay, 250);
+    // Apply immediately (in case element already exists)
+    attachOverlayObserver();
+
+    // Belt-and-suspenders: 200 ms interval as last resort
+    setInterval(function() {
+      const el = document.getElementById('mm-event-flash');
+      if (el && (el.classList.contains('show') || el.style.display !== 'none')) {
+        forceHideEl(el);
+      }
+    }, 200);
 
     // Begin tracking events in the match acta lists
     observeActaEvents();

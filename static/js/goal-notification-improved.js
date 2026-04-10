@@ -15,71 +15,105 @@
    */
   function initAudioContext() {
     if (audioContext) return;
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.warn('Web Audio API not supported:', e);
+    }
   }
 
   /**
    * Play goal sound using Web Audio API
-   * Creates a "goal horn" effect with multiple harmonics
+   * Creates a "goal horn" effect with crowd noise for maximum impact
    */
   function playGoalSound() {
     if (audioMuted || !audioContext) return;
 
     try {
-      initAudioContext();
+      // Resume context if suspended (browser autoplay policy)
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
 
       const now = audioContext.currentTime;
-      const masterGain = audioContext.createGain();
-      masterGain.connect(audioContext.destination);
-      masterGain.gain.setValueAtTime(0.25, now);
 
-      // First note: Deep horn
-      const osc1 = audioContext.createOscillator();
-      const gain1 = audioContext.createGain();
-      osc1.type = 'sine';
-      osc1.connect(gain1);
-      gain1.connect(masterGain);
+      // ── GOAL HORN ──────────────────────────────────────────────────────
+      const hornGain = audioContext.createGain();
+      hornGain.connect(audioContext.destination);
+      hornGain.gain.setValueAtTime(0, now);
+      hornGain.gain.linearRampToValueAtTime(0.28, now + 0.04);
+      hornGain.gain.setValueAtTime(0.28, now + 0.9);
+      hornGain.gain.linearRampToValueAtTime(0, now + 1.4);
 
-      osc1.frequency.setValueAtTime(150, now);
-      osc1.frequency.exponentialRampToValueAtTime(300, now + 0.2);
-      gain1.gain.setValueAtTime(0.4, now);
-      gain1.gain.exponentialRampToValueAtTime(0.3, now + 0.2);
+      // Primary horn – square wave (brass-like timbre)
+      const horn1 = audioContext.createOscillator();
+      horn1.type = 'square';
+      horn1.frequency.setValueAtTime(440, now);
+      horn1.frequency.linearRampToValueAtTime(880, now + 0.08);
+      horn1.frequency.setValueAtTime(880, now + 0.9);
+      horn1.frequency.linearRampToValueAtTime(660, now + 1.4);
+      horn1.connect(hornGain);
+      horn1.start(now);
+      horn1.stop(now + 1.5);
 
-      // Second note: Mid horn
-      const osc2 = audioContext.createOscillator();
-      const gain2 = audioContext.createGain();
-      osc2.type = 'sine';
-      osc2.connect(gain2);
-      gain2.connect(masterGain);
+      // Second harmonic – sawtooth
+      const horn2Gain = audioContext.createGain();
+      horn2Gain.gain.setValueAtTime(0.10, now);
+      horn2Gain.gain.setValueAtTime(0.10, now + 0.9);
+      horn2Gain.gain.linearRampToValueAtTime(0, now + 1.2);
+      horn2Gain.connect(audioContext.destination);
 
-      osc2.frequency.setValueAtTime(300, now + 0.05);
-      osc2.frequency.exponentialRampToValueAtTime(600, now + 0.25);
-      gain2.gain.setValueAtTime(0.3, now + 0.05);
-      gain2.gain.exponentialRampToValueAtTime(0.2, now + 0.25);
+      const horn2 = audioContext.createOscillator();
+      horn2.type = 'sawtooth';
+      horn2.frequency.setValueAtTime(880, now);
+      horn2.frequency.linearRampToValueAtTime(1760, now + 0.08);
+      horn2.connect(horn2Gain);
+      horn2.start(now);
+      horn2.stop(now + 1.3);
 
-      // Third note: High horn
-      const osc3 = audioContext.createOscillator();
-      const gain3 = audioContext.createGain();
-      osc3.type = 'sawtooth';
-      osc3.connect(gain3);
-      gain3.connect(masterGain);
+      // Sub-bass thump at the hit
+      const subGain = audioContext.createGain();
+      subGain.gain.setValueAtTime(0.35, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      subGain.connect(audioContext.destination);
 
-      osc3.frequency.setValueAtTime(600, now + 0.1);
-      osc3.frequency.exponentialRampToValueAtTime(1200, now + 0.3);
-      gain3.gain.setValueAtTime(0.2, now + 0.1);
-      gain3.gain.exponentialRampToValueAtTime(0.1, now + 0.3);
+      const sub = audioContext.createOscillator();
+      sub.type = 'sine';
+      sub.frequency.setValueAtTime(80, now);
+      sub.frequency.exponentialRampToValueAtTime(40, now + 0.25);
+      sub.connect(subGain);
+      sub.start(now);
+      sub.stop(now + 0.28);
 
-      // Master envelope
-      masterGain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+      // ── CROWD CHEER (filtered noise burst) ────────────────────────────
+      const crowdDur = 2.2;
+      const sr = audioContext.sampleRate;
+      const crowdBuf = audioContext.createBuffer(1, Math.ceil(sr * crowdDur), sr);
+      const crowdData = crowdBuf.getChannelData(0);
+      for (let i = 0; i < crowdData.length; i++) {
+        crowdData[i] = Math.random() * 2 - 1;
+      }
 
-      osc1.start(now);
-      osc1.stop(now + 0.3);
+      const crowdSrc = audioContext.createBufferSource();
+      crowdSrc.buffer = crowdBuf;
 
-      osc2.start(now + 0.05);
-      osc2.stop(now + 0.3);
+      const crowdFilter = audioContext.createBiquadFilter();
+      crowdFilter.type = 'bandpass';
+      crowdFilter.frequency.value = 1100;
+      crowdFilter.Q.value = 0.45;
 
-      osc3.start(now + 0.1);
-      osc3.stop(now + 0.35);
+      const crowdGain = audioContext.createGain();
+      crowdGain.gain.setValueAtTime(0, now + 0.08);
+      crowdGain.gain.linearRampToValueAtTime(0.18, now + 0.45);
+      crowdGain.gain.setValueAtTime(0.18, now + 1.6);
+      crowdGain.gain.linearRampToValueAtTime(0, now + crowdDur);
+
+      crowdSrc.connect(crowdFilter);
+      crowdFilter.connect(crowdGain);
+      crowdGain.connect(audioContext.destination);
+      crowdSrc.start(now + 0.08);
+      crowdSrc.stop(now + crowdDur + 0.1);
+
     } catch (e) {
       console.warn('Audio playback error:', e);
     }
@@ -88,32 +122,46 @@
   /**
    * Show goal animation within the match scoreboard
    *
-   * @param {string} matchId - Match identifier (e.g., "j1m1")
-   * @param {string} team - Team that scored ("a" or "b")
+   * @param {string} matchId    - Match identifier (e.g., "j1m1")
+   * @param {string} team       - Team that scored ("a" or "b")
+   * @param {string} [playerName] - Name of the goal scorer (optional)
    */
-  function showGoalNotification(matchId, team) {
-    // Get the score element for this match
+  function showGoalNotification(matchId, team, playerName) {
+    // Locate the scoreboard container for this match
     const scoreEl = document.querySelector(`#mlw-${matchId} .ml-score`);
     if (!scoreEl) return;
 
-    // Create goal flash element if it doesn't exist
+    // Also flash the whole scoreboard wrap for visual punch
+    const wrapEl = document.querySelector(`#mlw-${matchId} .ml-score-wrap`);
+    if (wrapEl) {
+      wrapEl.classList.remove('score-goal-flash');
+      void wrapEl.offsetWidth;
+      wrapEl.classList.add('score-goal-flash');
+      setTimeout(() => wrapEl.classList.remove('score-goal-flash'), 3000);
+    }
+
+    // Build / reuse the goal flash element
     let goalFlash = scoreEl.querySelector('.goal-flash-anim');
     if (!goalFlash) {
       goalFlash = document.createElement('div');
       goalFlash.className = 'goal-flash-anim';
-      goalFlash.innerHTML = '<span class="goal-text">¡GOL!</span>';
       scoreEl.appendChild(goalFlash);
     }
 
-    // Reset animation by removing and re-adding class
+    // Build inner HTML: "¡GOL!" + optional player name
+    const playerHtml = playerName
+      ? `<span class="goal-player">⚽ ${playerName}</span>`
+      : '';
+    goalFlash.innerHTML = `<span class="goal-text">¡GOL!</span>${playerHtml}`;
+
+    // Restart animation
     goalFlash.classList.remove('active');
-    void goalFlash.offsetWidth; // Trigger reflow to restart animation
+    void goalFlash.offsetWidth; // force reflow
     goalFlash.classList.add('active');
 
-    // Remove animation class after 3 seconds
-    setTimeout(() => {
-      goalFlash.classList.remove('active');
-    }, 3000);
+    // Auto-remove after 3 s
+    clearTimeout(goalFlash._gTimer);
+    goalFlash._gTimer = setTimeout(() => goalFlash.classList.remove('active'), 3000);
 
     // Play sound effect
     playGoalSound();
@@ -128,7 +176,7 @@
     if (btn) {
       btn.setAttribute('data-muted', audioMuted);
       btn.textContent = audioMuted ? '🔇' : '🔊';
-      btn.title = audioMuted ? 'Sonido desactivado' : 'Sonido activado';
+      btn.title = audioMuted ? 'Sonido desactivado – clic para activar' : 'Sonido activado – clic para silenciar';
     }
     return audioMuted;
   }
@@ -144,38 +192,33 @@
    * Initialize mute button in the UI
    */
   function initMuteButton() {
-    // Check if button already exists
     if (document.getElementById('audio-mute-btn')) return;
 
-    // Create mute button
     const btn = document.createElement('button');
     btn.id = 'audio-mute-btn';
     btn.className = 'audio-mute-button';
     btn.textContent = '🔊';
-    btn.title = 'Sonido activado';
+    btn.title = 'Sonido activado – clic para silenciar';
     btn.setAttribute('data-muted', 'false');
-    btn.setAttribute('aria-label', 'Toggle match sound');
+    btn.setAttribute('aria-label', 'Activar o silenciar sonido de goles');
     btn.onclick = function(e) {
       e.stopPropagation();
+      // First click also initialises AudioContext (satisfies browser autoplay)
+      initAudioContext();
       toggleAudioMute();
     };
 
-    // Insert button in a strategic location
-    // Try to place it near the match controls
-    const container = document.body;
-    if (container) {
-      container.appendChild(btn);
-    }
+    document.body.appendChild(btn);
   }
 
-  // Expose functions globally
+  // ── Public API ────────────────────────────────────────────────────────────
   window.goalNotificationImproved = {
-    show: showGoalNotification,
-    playSound: playGoalSound,
+    show:       showGoalNotification,
+    playSound:  playGoalSound,
     toggleMute: toggleAudioMute,
-    isMuted: isAudioMuted,
-    initMute: initMuteButton,
-    initAudio: initAudioContext
+    isMuted:    isAudioMuted,
+    initMute:   initMuteButton,
+    initAudio:  initAudioContext
   };
 
   // Initialize when DOM is ready
@@ -185,7 +228,7 @@
     initMuteButton();
   }
 
-  // Allow audio context to be initialized on first user interaction
-  document.addEventListener('click', initAudioContext, { once: true });
+  // Initialise AudioContext on first user interaction (browser autoplay policy)
+  document.addEventListener('click',      initAudioContext, { once: true });
   document.addEventListener('touchstart', initAudioContext, { once: true });
 })();

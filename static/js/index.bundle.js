@@ -7693,7 +7693,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   });
 
   function bootRouter(){
-    var initialScreenId = resolveScreenId(window.location.pathname);
+    var pathname = normalizePath(window.location.pathname);
+    // Explicitly handle root path to ensure s-home is shown
+    var initialScreenId = pathname === '/' ? 's-home' : resolveScreenId(pathname);
     navigateWithRetry(initialScreenId, { updateHistory: true, replaceHistory: true }, 8);
   }
 

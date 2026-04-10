@@ -7612,7 +7612,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       trail[screenId] = true;
       var screenEl = document.getElementById(screenId);
       var parentId = routerState.backTarget[screenId] || 's-espana';
-      if(parentId === screenId) parentId = 's-home';
+      if(parentId === screenId) parentId = 's-espana';
       var base = parentId ? computePath(parentId, trail) : '/';
       var label = detectLabel(screenEl, screenId);
       var slug = slugify(label);

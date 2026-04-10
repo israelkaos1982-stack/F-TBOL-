@@ -7489,9 +7489,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 /* script block router */
 (function(){
   var ROUTE_EXPLICIT = {
-    's-home': '/bayern',
+    's-home': '/',
     's-calendario': '/calendario',
-    's-espana': '/',
+    's-espana': '/espana',
     's-liga': '/espana/liga-ea-sports',
     's-liga-cal': '/espana/liga-ea-sports/calendario',
     's-liga-clas': '/espana/liga-ea-sports/clasificacion',
@@ -7561,10 +7561,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   function detectBackTarget(screenEl){
     var btn = screenEl ? screenEl.querySelector('.back-btn[onclick*="go("]') : null;
-    if(!btn) return 's-espana';
+    if(!btn) return 's-home';
     var raw = btn.getAttribute('onclick') || '';
     var match = raw.match(/go\('([^']+)'\)/);
-    return match ? match[1] : 's-espana';
+    return match ? match[1] : 's-home';
   }
 
   function detectLabel(screenEl, screenId){
@@ -7611,8 +7611,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       if(trail[screenId]) return '/';
       trail[screenId] = true;
       var screenEl = document.getElementById(screenId);
-      var parentId = routerState.backTarget[screenId] || 's-espana';
-      if(parentId === screenId) parentId = 's-espana';
+      var parentId = routerState.backTarget[screenId] || 's-home';
+      if(parentId === screenId) parentId = 's-home';
       var base = parentId ? computePath(parentId, trail) : '/';
       var label = detectLabel(screenEl, screenId);
       var slug = slugify(label);
@@ -7632,7 +7632,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   function resolveScreenId(path){
     rebuildRoutes();
     var normalized = normalizePath(path);
-    return routerState.pathToScreen[normalized] || 's-espana';
+    return routerState.pathToScreen[normalized] || 's-home';
   }
 
   function syncHistory(screenId, replace){
@@ -7664,7 +7664,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       return;
     }
     if(retriesLeft <= 0){
-      renderScreen('s-espana', opts);
+      renderScreen('s-home', opts);
       return;
     }
     window.setTimeout(function(){ navigateWithRetry(screenId, opts, retriesLeft - 1); }, 80);

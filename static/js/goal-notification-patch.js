@@ -1,144 +1,149 @@
 /**
  * GOAL NOTIFICATION PATCH
  *
- * This script patches the original _mmFlash function to use the improved
- * goal notification system instead of the central overlay.
+ * Intercepts the original window.mmShowFlash (central overlay) and reroutes
+ * goal events to the improved per-match notification system.
  *
  * Load this AFTER index.bundle.js
  */
 
 (function() {
-  // Track the last match that had an event
+  // Track the last match/team that had an event (fallback when team lookup fails)
   let lastEventMatch = null;
-  let lastEventTeam = null;
+  let lastEventTeam  = null;
 
-  // Wait for the improved goal notification system to be available
-  let maxRetries = 50;
+  // Retry until goalNotificationImproved is available
   let retryCount = 0;
+  const MAX_RETRIES = 50;
 
   function waitForImprovedSystem() {
-    if (window.goalNotificationImproved && typeof window.goalNotificationImproved.show === 'function') {
-      // Patch the original _mmFlash function
+    if (window.goalNotificationImproved &&
+        typeof window.goalNotificationImproved.show === 'function') {
       patchGoalFlash();
       return;
     }
-
-    if (retryCount < maxRetries) {
+    if (retryCount < MAX_RETRIES) {
       retryCount++;
       setTimeout(waitForImprovedSystem, 100);
     }
   }
 
+  /**
+   * Find the match element and ID that contains a team with the given name.
+   * Returns { match, matchId } or null.
+   */
   function findMatchFromTeamName(teamName) {
-    // Search through all matches to find the one with this team
+    if (!teamName) return null;
     const matches = document.querySelectorAll('[id^="mlw-"]');
     for (const match of matches) {
-      const teamNames = match.querySelectorAll('.ml-team-name');
-      for (const team of teamNames) {
-        if (team.textContent.includes(teamName)) {
-          const matchId = match.id.replace('mlw-', '');
-          return { match, matchId };
+      const teamNameEls = match.querySelectorAll('.ml-team-name');
+      for (const el of teamNameEls) {
+        if (el.textContent.trim().includes(teamName.trim())) {
+          return { match, matchId: match.id.replace('mlw-', '') };
         }
       }
     }
     return null;
   }
 
+  /**
+   * Determine which slot ("a" or "b") a team occupies in a match element.
+   */
+  function resolveTeamSlot(matchEl, teamName) {
+    const teamEls = matchEl.querySelectorAll('.ml-team-name');
+    if (teamEls.length >= 2 &&
+        teamEls[1].textContent.trim().includes(teamName.trim())) {
+      return 'b';
+    }
+    return 'a';
+  }
+
+  /**
+   * Observe match event-log lists for mutations so we can track which match
+   * and team were last active (used as fallback if team-name lookup fails).
+   */
   function observeActaEvents() {
-    // Observe all match acta lists for new events
-    const actaLists = document.querySelectorAll('[id^="ml-acta-list-"]');
+    const observed = new Set();
 
-    actaLists.forEach(function(listEl) {
-      // Extract match ID from acta list ID
+    function attachObserver(listEl) {
+      if (observed.has(listEl.id)) return;
+      observed.add(listEl.id);
+
       const matchId = listEl.id.replace('ml-acta-list-', '');
-
-      // Set up observer for this list
       const obs = new MutationObserver(function() {
         const items = listEl.querySelectorAll('.ml-evt-item');
-        if (items.length > 0) {
-          const lastItem = items[items.length - 1];
-          const type = lastItem.getAttribute('data-type');
-          const teamAttr = lastItem.getAttribute('data-team');
-
-          // Update tracking
-          lastEventMatch = matchId;
-          lastEventTeam = teamAttr;
-
-          // If it's a goal type, we'll catch it in the _mmFlash patch
-        }
+        if (!items.length) return;
+        const last = items[items.length - 1];
+        lastEventMatch = matchId;
+        lastEventTeam  = last.getAttribute('data-team') || 'a';
       });
-
       obs.observe(listEl, { childList: true });
-    });
-  }
-
-  function patchGoalFlash() {
-    // Store original function if it exists
-    const originalMmFlash = window.mmShowFlash || function() {};
-
-    // New implementation that uses the improved notification system
-    window.mmShowFlash = function(type, teamName, playerName) {
-      if (type === 'gol') {
-        // Try to find the match by team name
-        let matchId = null;
-        let team = 'a';
-
-        const result = findMatchFromTeamName(teamName);
-        if (result) {
-          matchId = result.matchId;
-          // Determine team by checking which team in the match has this name
-          const match = result.match;
-          const teams = match.querySelectorAll('.ml-team-name');
-          if (teams.length >= 2) {
-            if (teams[1].textContent.includes(teamName)) {
-              team = 'b';
-            }
-          }
-        } else if (lastEventMatch) {
-          // Fall back to last match with event
-          matchId = lastEventMatch;
-          team = lastEventTeam || 'a';
-        }
-
-        if (matchId) {
-          // Show the improved goal notification
-          window.goalNotificationImproved.show(matchId, team);
-        }
-      }
-
-      // Don't call the original _mmFlash to avoid central overlay
-    };
-
-    // Hide the central flash overlay completely
-    const flashEl = document.getElementById('mm-event-flash');
-    if (flashEl) {
-      flashEl.style.display = 'none !important';
-      flashEl.classList.remove('show', 'mm-flash-gol', 'mm-flash-roja');
     }
 
-    // Ensure it stays hidden
-    const hideOverlay = function() {
-      const el = document.getElementById('mm-event-flash');
-      if (el && (el.style.display !== 'none' || el.classList.contains('show'))) {
-        el.style.display = 'none !important';
-        el.classList.remove('show', 'mm-flash-gol', 'mm-flash-roja');
-      }
-    };
+    // Attach to any existing lists
+    document.querySelectorAll('[id^="ml-acta-list-"]').forEach(attachObserver);
 
-    setInterval(hideOverlay, 250);
-
-    // Start observing acta events
-    observeActaEvents();
-
-    // Re-observe new lists that might be created dynamically
-    const checkNewLists = setInterval(function() {
-      const existingListIds = new Set();
-      document.querySelectorAll('[id^="ml-acta-list-"]').forEach(function(el) {
-        existingListIds.add(el.id);
-      });
-    }, 1000);
+    // Watch for dynamically added lists
+    const bodyObs = new MutationObserver(function() {
+      document.querySelectorAll('[id^="ml-acta-list-"]').forEach(attachObserver);
+    });
+    bodyObs.observe(document.body, { childList: true, subtree: true });
   }
 
-  // Start waiting for the improved system
+  /**
+   * Replace window.mmShowFlash with our improved version and permanently
+   * suppress the original central overlay element.
+   */
+  function patchGoalFlash() {
+    // Replace the global flash function
+    window.mmShowFlash = function(type, teamName, playerName) {
+      if (type !== 'gol') return; // only intercept goals; ignore red cards etc.
+
+      let matchId = null;
+      let team    = 'a';
+
+      // Primary lookup: find match by team name in the DOM
+      const result = findMatchFromTeamName(teamName);
+      if (result) {
+        matchId = result.matchId;
+        team    = resolveTeamSlot(result.match, teamName);
+      } else if (lastEventMatch) {
+        // Fallback: use the last match that had a tracked event
+        matchId = lastEventMatch;
+        team    = lastEventTeam || 'a';
+      }
+
+      if (matchId) {
+        window.goalNotificationImproved.show(matchId, team, playerName || '');
+      }
+      // Intentionally do NOT call the original _mmFlash to prevent central overlay
+    };
+
+    // ── Suppress the central flash overlay ───────────────────────────────
+    function forceHideOverlay() {
+      const el = document.getElementById('mm-event-flash');
+      if (!el) return;
+      // Correct way to set !important via JavaScript
+      el.style.setProperty('display',          'none',   'important');
+      el.style.setProperty('visibility',       'hidden', 'important');
+      el.style.setProperty('pointer-events',   'none',   'important');
+      el.classList.remove('show', 'mm-flash-gol', 'mm-flash-roja');
+    }
+
+    // Apply immediately and keep watching in case index.bundle recreates it
+    forceHideOverlay();
+
+    // Watch for the element to be added/modified and re-hide it
+    const overlayObs = new MutationObserver(forceHideOverlay);
+    overlayObs.observe(document.body, { childList: true, subtree: false, attributes: true });
+
+    // Belt-and-suspenders interval (250 ms) to catch any inline-style overrides
+    setInterval(forceHideOverlay, 250);
+
+    // Begin tracking events in the match acta lists
+    observeActaEvents();
+  }
+
+  // Kick off the patching process
   waitForImprovedSystem();
 })();

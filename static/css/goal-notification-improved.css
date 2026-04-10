@@ -1,10 +1,38 @@
 /**
  * IMPROVED GOAL NOTIFICATION STYLES
  *
- * Local goal animations displayed within match scoreboards
+ * Local goal animations displayed within each match scoreboard.
+ * No central overlay – each match shows its own "¡GOL!" notification.
  */
 
-/* Goal flash animation within scoreboard */
+/* ── Nuclear override: hide the original central flash overlay at all times ── */
+#mm-event-flash {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* ── Ensure scoreboard is positioned relative ────────────────────────────── */
+.ml-score {
+  position: relative;
+  overflow: visible; /* let the flash expand beyond the score element */
+}
+
+/* ── Scoreboard-wrap background flash on goal ─────────────────────────────── */
+@keyframes scoreWrapFlash {
+  0%   { box-shadow: none; }
+  12%  { box-shadow: 0 0 0 3px #ffdd00, 0 0 24px 8px rgba(255, 200, 0, 0.6); }
+  30%  { box-shadow: 0 0 0 2px rgba(255, 220, 0, 0.7), 0 0 18px 4px rgba(255, 160, 0, 0.4); }
+  85%  { box-shadow: 0 0 0 1px rgba(255, 200, 0, 0.3), 0 0 10px 2px rgba(255, 160, 0, 0.2); }
+  100% { box-shadow: none; }
+}
+
+.ml-score-wrap.score-goal-flash {
+  animation: scoreWrapFlash 3s ease-out forwards;
+  border-radius: 4px;
+}
+
+/* ── Goal flash container ────────────────────────────────────────────────── */
 .goal-flash-anim {
   position: absolute;
   top: 50%;
@@ -12,7 +40,12 @@
   transform: translate(-50%, -50%);
   opacity: 0;
   pointer-events: none;
-  z-index: 100;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .goal-flash-anim.active {
@@ -22,61 +55,79 @@
 @keyframes goalFlashKeyframes {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(0.3);
+    transform: translate(-50%, -50%) scale(0.2);
   }
-  15% {
+  12% {
     opacity: 1;
-    transform: translate(-50%, -50%) scale(1.2);
+    transform: translate(-50%, -50%) scale(1.35);
+  }
+  22% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.95);
   }
   30% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  38% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
-  85% {
+  82% {
     opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(1.1);
+    transform: translate(-50%, -50%) scale(1.08);
   }
 }
 
-/* Goal text styling */
+/* ── "¡GOL!" text ────────────────────────────────────────────────────────── */
 .goal-flash-anim .goal-text {
   display: inline-block;
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 36px;
+  font-family: 'Bebas Neue', 'Oswald', sans-serif;
+  font-size: 40px;
   font-weight: 900;
-  letter-spacing: 3px;
+  letter-spacing: 4px;
+  line-height: 1;
   color: #ffff00;
   text-shadow:
-    0 0 10px rgba(255, 255, 0, 0.8),
-    0 0 20px rgba(255, 200, 0, 0.6),
-    0 0 30px rgba(255, 100, 0, 0.4),
-    2px 2px 4px rgba(0, 0, 0, 0.8);
+    0 0 8px  rgba(255, 255,   0, 0.9),
+    0 0 18px rgba(255, 200,   0, 0.7),
+    0 0 32px rgba(255, 100,   0, 0.5),
+    2px 2px 5px rgba(0, 0, 0, 0.85);
   animation: goalTextGlow 3s ease-out forwards;
-  white-space: nowrap;
 }
 
 @keyframes goalTextGlow {
-  0% {
-    filter: drop-shadow(0 0 2px #ffff00);
-  }
-  15% {
-    filter: drop-shadow(0 0 20px #ffff00) drop-shadow(0 0 40px #ff8800);
-  }
-  30% {
-    filter: drop-shadow(0 0 15px #ffff00) drop-shadow(0 0 30px #ffaa00);
-  }
-  85% {
-    filter: drop-shadow(0 0 10px #ffff00) drop-shadow(0 0 20px #ff8800);
-  }
-  100% {
-    filter: drop-shadow(0 0 5px #ffff00);
-  }
+  0%   { filter: drop-shadow(0 0 2px #ffff00); }
+  12%  { filter: drop-shadow(0 0 24px #ffff00) drop-shadow(0 0 48px #ff8800); }
+  30%  { filter: drop-shadow(0 0 16px #ffff00) drop-shadow(0 0 32px #ffaa00); }
+  82%  { filter: drop-shadow(0 0 10px #ffff00) drop-shadow(0 0 22px #ff8800); }
+  100% { filter: drop-shadow(0 0 4px #ffff00); }
 }
 
-/* Mute button styling */
+/* ── Player-name tag below "¡GOL!" ──────────────────────────────────────── */
+.goal-flash-anim .goal-player {
+  display: inline-block;
+  font-family: 'Oswald', 'Rajdhani', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 210, 0, 0.55);
+  border-radius: 3px;
+  padding: 1px 7px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Mute button ─────────────────────────────────────────────────────────── */
 .audio-mute-button {
   position: fixed;
   top: 16px;
@@ -85,42 +136,38 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.62);
   border: 1.5px solid rgba(240, 192, 64, 0.5);
   color: #fff;
-  font-size: 24px;
+  font-size: 22px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background 0.18s, border-color 0.18s, transform 0.12s, box-shadow 0.18s;
   backdrop-filter: blur(8px);
   -webkit-tap-highlight-color: transparent;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  user-select: none;
 }
 
 .audio-mute-button:hover {
-  background: rgba(0, 0, 0, 0.75);
-  border-color: rgba(240, 192, 64, 0.8);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
-  transform: scale(1.05);
+  background: rgba(0, 0, 0, 0.78);
+  border-color: rgba(240, 192, 64, 0.9);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  transform: scale(1.08);
 }
 
 .audio-mute-button:active {
-  transform: scale(0.95);
+  transform: scale(0.93);
 }
 
 .audio-mute-button[data-muted="true"] {
   opacity: 0.6;
-  border-color: rgba(200, 100, 100, 0.5);
+  border-color: rgba(200, 80, 80, 0.55);
 }
 
 .audio-mute-button[data-muted="true"]:hover {
-  opacity: 0.8;
-  border-color: rgba(200, 100, 100, 0.8);
-}
-
-/* Ensure scoreboard is positioned relative for absolute positioning of goal flash */
-.ml-score {
-  position: relative;
+  opacity: 0.85;
+  border-color: rgba(220, 100, 100, 0.85);
 }

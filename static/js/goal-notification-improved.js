@@ -188,45 +188,14 @@
     return audioMuted;
   }
 
-  /**
-   * Initialize mute button in the UI
-   */
-  function initMuteButton() {
-    if (document.getElementById('audio-mute-btn')) return;
-
-    const btn = document.createElement('button');
-    btn.id = 'audio-mute-btn';
-    btn.className = 'audio-mute-button';
-    btn.textContent = '🔊';
-    btn.title = 'Sonido activado – clic para silenciar';
-    btn.setAttribute('data-muted', 'false');
-    btn.setAttribute('aria-label', 'Activar o silenciar sonido de goles');
-    btn.onclick = function(e) {
-      e.stopPropagation();
-      // First click also initialises AudioContext (satisfies browser autoplay)
-      initAudioContext();
-      toggleAudioMute();
-    };
-
-    document.body.appendChild(btn);
-  }
-
   // ── Public API ────────────────────────────────────────────────────────────
   window.goalNotificationImproved = {
     show:       showGoalNotification,
     playSound:  playGoalSound,
     toggleMute: toggleAudioMute,
     isMuted:    isAudioMuted,
-    initMute:   initMuteButton,
     initAudio:  initAudioContext
   };
-
-  // Initialize when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initMuteButton);
-  } else {
-    initMuteButton();
-  }
 
   // Initialise AudioContext on first user interaction (browser autoplay policy)
   document.addEventListener('click',      initAudioContext, { once: true });

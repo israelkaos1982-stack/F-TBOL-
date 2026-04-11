@@ -6652,6 +6652,272 @@
   padding: 30px 20px;
 }
 </style>
+<script>
+/* ══════════════════════════════════════════════════
+   PARTIDOS LIVE — hub de partidos en directo
+   Muestra partidos HvH y HvIA con state-playing
+   ══════════════════════════════════════════════════ */
+(function(){
+
+/* ── inyectar CSS ── */
+if (!document.getElementById('live-hub-css')) {
+  var _ls = document.createElement('style');
+  _ls.id = 'live-hub-css';
+  _ls.textContent =
+    '@keyframes liveGlow{0%,100%{box-shadow:0 0 6px 2px rgba(255,60,60,.45)}50%{box-shadow:0 0 18px 6px rgba(255,60,60,.9)}}' +
+    '.live-comp-hdr{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.5);text-transform:uppercase;padding:14px 4px 6px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:6px;}' +
+    '.live-card{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,80,80,.35);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:background .18s;animation:liveGlow 1.5s ease-in-out infinite;}' +
+    '.live-card:hover{background:rgba(255,80,80,.12);}' +
+    '.live-card-teams{flex:1;display:flex;flex-direction:column;gap:4px;}' +
+    '.live-card-row{display:flex;align-items:center;gap:7px;font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;color:#fff;}' +
+    '.live-card-logo{width:22px;height:22px;object-fit:contain;flex-shrink:0;}' +
+    '.live-card-score{font-family:Oswald,sans-serif;font-size:22px;font-weight:700;color:#ff4444;min-width:36px;text-align:center;letter-spacing:1px;}' +
+    '.live-card-min{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,120,120,.8);font-weight:700;min-width:32px;text-align:right;}' +
+    '.live-badge{font-size:9px;font-family:Oswald,sans-serif;letter-spacing:1px;padding:1px 5px;border-radius:3px;font-weight:700;}' +
+    '.live-badge-hvh{background:rgba(80,200,120,.2);color:#50c878;border:1px solid rgba(80,200,120,.4);}' +
+    '.live-badge-hvia{background:rgba(80,160,255,.2);color:#50a0ff;border:1px solid rgba(80,160,255,.4);}' +
+    '.live-empty{text-align:center;color:rgba(255,255,255,.35);font-family:Rajdhani,sans-serif;font-size:15px;padding:40px 0;letter-spacing:1px;}';
+  document.head.appendChild(_ls);
+}
+
+/* ── mapa de competiciones por prefijo de cal-ID ── */
+var COMP_MAP = {
+  'cal-l':   { name:'Liga EA Sports',       ico:'⚽', color:'#e8173c' },
+  'cal-l2':  { name:'Liga Hypermotion',     ico:'⚽', color:'#0066ff' },
+  'cal-pf':  { name:'Primera Federación',   ico:'⚽', color:'#147828' },
+  'cal-copa':{ name:'Copa del Rey',         ico:'🏆', color:'#c04800' },
+  'cal-scp': { name:'Supercopa de España',  ico:'🏅', color:'#9900ee' },
+  'cal-cl':  { name:'Champions League',     ico:'⭐', color:'#003087' },
+  'cal-el':  { name:'Europa League',        ico:'🟠', color:'#f56000' },
+  'cal-ecl': { name:'Conference League',    ico:'🟢', color:'#00843d' },
+  'cal-na':  { name:'Nations League',       ico:'🌐', color:'#0050a0' },
+  'cal-mu':  { name:'Mundial',              ico:'🌍', color:'#c8a000' },
+  'cal-mf':  { name:'Mundial',              ico:'🌍', color:'#c8a000' },
+};
+
+function getCompInfo(wrap) {
+  var el = wrap;
+  while (el && el.parentElement) {
+    el = el.parentElement;
+    if (el.id && el.id.indexOf('cal-') === 0) {
+      var id = el.id;
+      /* try longest match first */
+      var keys = Object.keys(COMP_MAP).sort(function(a,b){ return b.length - a.length; });
+      for (var i = 0; i < keys.length; i++) {
+        if (id.indexOf(keys[i]) === 0) return COMP_MAP[keys[i]];
+      }
+      return { name: id.replace('cal-','').toUpperCase(), ico:'⚽', color:'#888' };
+    }
+  }
+  return { name:'Partido', ico:'⚽', color:'#888' };
+}
+
+function getTeamNames(wrap) {
+  var els = wrap.querySelectorAll('.ml-team-name');
+  var home = els[0] ? els[0].textContent.trim() : '?';
+  var away = els[1] ? els[1].textContent.trim() : '?';
+  return { home: home, away: away };
+}
+
+function getLiveScore(mid) {
+  /* Human Liga matches use sc-{mid}-a / sc-{mid}-b */
+  var eA = document.getElementById('sc-' + mid + '-a');
+  var eB = document.getElementById('sc-' + mid + '-b');
+  if (eA && eB) return { a: eA.textContent.trim(), b: eB.textContent.trim() };
+  /* IA Liga matches use ia-sc-{mk}-a / ia-sc-{mk}-b (mk = matchKey) */
+  var eA2 = document.getElementById('ia-sc-' + mid + '-a');
+  var eB2 = document.getElementById('ia-sc-' + mid + '-b');
+  if (eA2 && eB2) return { a: eA2.textContent.trim(), b: eB2.textContent.trim() };
+  return { a:'0', b:'0' };
+}
+
+function getLiveMinute(mid) {
+  var btn = document.getElementById('ml-timer-' + mid);
+  if (!btn) return '';
+  var t = btn.textContent.trim();
+  /* strip icon prefix: ▶ 23' / ⏸ 45' / 📺 VAR / ⏳ 60' */
+  t = t.replace(/^[▶⏸📺⏳🏁]\s*/,'').replace(/^VAR/,'VAR');
+  return t;
+}
+
+function getLogoForTeam(teamName) {
+  if (typeof getLogoEquipo === 'function') return getLogoEquipo(teamName);
+  return '';
+}
+
+function buildLiveCard(wrap) {
+  var mid = wrap.id ? wrap.id.replace('match-live-','').replace('mlw-','') : '';
+  var isHvH = wrap.classList.contains('hvh');
+  var isHvIA = wrap.classList.contains('hvia');
+  var teams = getTeamNames(wrap);
+  var score = getLiveScore(mid);
+  var min   = getLiveMinute(mid);
+  var logoA = getLogoForTeam(teams.home);
+  var logoB = getLogoForTeam(teams.away);
+
+  var card = document.createElement('div');
+  card.className = 'live-card';
+  card.setAttribute('data-mid', mid);
+
+  /* badge */
+  var badge = document.createElement('span');
+  badge.className = 'live-badge ' + (isHvH ? 'live-badge-hvh' : 'live-badge-hvia');
+  badge.textContent = isHvH ? 'PvP' : 'HvIA';
+  card.appendChild(badge);
+
+  /* teams + score */
+  var teamsDiv = document.createElement('div');
+  teamsDiv.className = 'live-card-teams';
+
+  function makeRow(teamName, logoUrl) {
+    var row = document.createElement('div');
+    row.className = 'live-card-row';
+    if (logoUrl) {
+      var img = document.createElement('img');
+      img.src = logoUrl; img.className = 'live-card-logo'; img.alt = '';
+      row.appendChild(img);
+    }
+    var nm = document.createElement('span');
+    nm.textContent = teamName;
+    row.appendChild(nm);
+    return row;
+  }
+
+  teamsDiv.appendChild(makeRow(teams.home, logoA));
+  teamsDiv.appendChild(makeRow(teams.away, logoB));
+  card.appendChild(teamsDiv);
+
+  /* score */
+  var scoreDiv = document.createElement('div');
+  scoreDiv.className = 'live-card-score';
+  scoreDiv.textContent = score.a + '-' + score.b;
+  card.appendChild(scoreDiv);
+
+  /* minute */
+  var minDiv = document.createElement('div');
+  minDiv.className = 'live-card-min';
+  minDiv.textContent = min;
+  card.appendChild(minDiv);
+
+  /* click → navigate to match screen or scroll to match wrap */
+  card.addEventListener('click', function() {
+    wrap.scrollIntoView({ behavior:'smooth', block:'center' });
+    /* if there's a back button, navigate to the screen containing the match */
+    var screenEl = wrap;
+    while (screenEl && !screenEl.classList.contains('screen')) {
+      screenEl = screenEl.parentElement;
+    }
+    if (screenEl && screenEl.id && typeof go === 'function') go(screenEl.id);
+  });
+
+  return card;
+}
+
+function buildLiveScreen() {
+  var list = document.getElementById('live-matches-list');
+  if (!list) return;
+
+  /* find all live human matches */
+  var wraps = document.querySelectorAll('.match-live-wrap.hvh, .match-live-wrap.hvia');
+  var liveWraps = [];
+  wraps.forEach(function(w) {
+    var scoreEl = w.querySelector('.ml-score');
+    if (scoreEl && scoreEl.classList.contains('state-playing')) {
+      liveWraps.push(w);
+    }
+  });
+
+  /* update count badge */
+  var countEl = document.getElementById('live-match-count');
+  if (countEl) {
+    countEl.textContent = liveWraps.length > 0 ? liveWraps.length + ' en directo' : '';
+  }
+
+  /* update home card animation state */
+  if (typeof window.__LIVE_MATCH_COUNT !== 'undefined') {
+    window.__LIVE_MATCH_COUNT = liveWraps.length;
+  }
+
+  /* clear list */
+  list.innerHTML = '';
+
+  if (liveWraps.length === 0) {
+    var empty = document.createElement('div');
+    empty.className = 'live-empty';
+    empty.textContent = 'No hay partidos en directo ahora mismo';
+    list.appendChild(empty);
+    return;
+  }
+
+  /* group by competition */
+  var groups = {};
+  var groupOrder = [];
+  liveWraps.forEach(function(w) {
+    var ci = getCompInfo(w);
+    var key = ci.name;
+    if (!groups[key]) { groups[key] = { ci: ci, wraps: [] }; groupOrder.push(key); }
+    groups[key].wraps.push(w);
+  });
+
+  groupOrder.forEach(function(key) {
+    var g = groups[key];
+    /* competition header */
+    var hdr = document.createElement('div');
+    hdr.className = 'live-comp-hdr';
+    hdr.textContent = g.ci.ico + '  ' + g.ci.name;
+    hdr.style.color = g.ci.color;
+    list.appendChild(hdr);
+
+    g.wraps.forEach(function(w) {
+      list.appendChild(buildLiveCard(w));
+    });
+  });
+}
+
+/* ── override goLiveMatches ── */
+var _livePolling = null;
+window.goLiveMatches = function() {
+  buildLiveScreen();
+  if (typeof go === 'function') go('s-live');
+  /* start 3s poll while screen is visible */
+  if (_livePolling) clearInterval(_livePolling);
+  _livePolling = setInterval(function() {
+    var liveScreen = document.getElementById('s-live');
+    if (!liveScreen || !liveScreen.classList.contains('active')) {
+      clearInterval(_livePolling);
+      _livePolling = null;
+      return;
+    }
+    buildLiveScreen();
+  }, 3000);
+};
+
+/* ── background 5s poll to keep home card live-active state ── */
+(function startBgPoll() {
+  setInterval(function() {
+    var wraps = document.querySelectorAll('.match-live-wrap.hvh, .match-live-wrap.hvia');
+    var count = 0;
+    wraps.forEach(function(w) {
+      var scoreEl = w.querySelector('.ml-score');
+      if (scoreEl && scoreEl.classList.contains('state-playing')) count++;
+    });
+    window.__LIVE_MATCH_COUNT = count;
+    /* animate home LIVE button if matches active */
+    var homeCard = document.querySelector('.home-live-card, [onclick*="goLiveMatches"]');
+    if (homeCard) {
+      if (count > 0) {
+        homeCard.style.animation = 'homeLivePulse 1.1s ease-in-out infinite';
+        homeCard.style.borderColor = 'rgba(255,60,60,.8)';
+      } else {
+        homeCard.style.animation = '';
+        homeCard.style.borderColor = '';
+      }
+    }
+  }, 5000);
+})();
+
+})();
+</script>
 
 <!-- ══ MODAL CONFIRMACIÓN APLAZAR PARTIDO ════════════════ -->
 <div id="gm-aplazar-modal" style="display:none;">

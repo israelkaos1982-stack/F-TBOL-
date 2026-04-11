@@ -249,6 +249,7 @@
   var medEl = document.getElementById('hud-medical-pill');
   var matchEl = document.getElementById('hub-next-match');
   var injuryWarn = document.getElementById('hub-injury-warning');
+  if (!nextBtn || !playBtn) return;
 
   function pickPlayer(){
     return ROSTER[Math.floor(Math.random() * ROSTER.length)];
@@ -2743,174 +2744,39 @@
     </div>
   </div>
 </div>
-<div class="ent-section" style="border:1px solid rgba(240,192,64,.3);background:linear-gradient(180deg,#1a0408 0%,#100205 100%);overflow:hidden;box-shadow:0 0 18px rgba(220,5,45,.15);">
-<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px 9px;border-bottom:1px solid rgba(255,255,255,.08);">
-<span style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;color:#f0c040;font-style:italic;">📅 PARTIDO PENDIENTE</span>
-
-</div>
-<div id="bayern-dashboard-next" style="padding:12px 10px 14px;display:flex;flex-direction:column;gap:8px;">
-  <div id="bayern-next-card" style="border:1px solid rgba(240,192,64,.3);border-radius:12px;background:linear-gradient(145deg,rgba(30,4,12,.9),rgba(18,2,6,.95));padding:12px 14px;box-shadow:0 0 20px rgba(220,5,45,.2),inset 0 1px 0 rgba(255,255,255,.06);"></div>
-  <div id="bayern-next-upcoming" style="display:flex;gap:8px;"></div>
-</div>
-</div>
-
-<div class="ent-section ath-box-titulos">
-<button class="ent-header ath-hdr-titulos" onclick="go('s-munich-trofeos')" style="cursor:pointer;"><i class="ico">🏆</i><span>Vitrina de Trofeos</span>
-<span class="ath-badge-total">2</span>
-<span style="margin-left:auto;color:rgba(255,255,255,.4);font-size:12px;">▶</span>
-</button>
-
-</div>
-<div class="ent-section ath-box-derbys">
-<button class="ent-header ath-hdr-derbys" onclick="entTog('ath-derbys')"><i class="ico">📋</i><span>Histórico Derbys</span>
-<span class="ent-arr" id="ath-derbys-arr">▼</span>
-</button>
-<div class="ent-body ath-body-derbys" id="ath-derbys">
-<div class="derby-stats-hdr">
-<span class="derby-stats-hdr-lbl">TEMP</span>
-<span class="derby-stats-hdr-lbl">PJ</span>
-<span class="derby-stats-hdr-lbl">PG</span>
-<span class="derby-stats-hdr-lbl">PE</span>
-<span class="derby-stats-hdr-lbl">PP</span>
-<span class="derby-stats-hdr-lbl">G+</span>
-<span class="derby-stats-hdr-lbl">G-</span>
-<span class="derby-stats-hdr-lbl">+-</span>
-<span class="derby-stats-hdr-lbl">%</span>
-<span class="derby-stats-hdr-lbl"></span>
-</div>
-<div class="derby-stats-row global-row">
-<span class="derby-stats-temp">TOTAL</span>
-<span class="derby-stats-val">29</span>
-<span class="derby-stats-val" style="color:#4fc86a;">6</span>
-<span class="derby-stats-val">7</span>
-<span class="derby-stats-val" style="color:#e05050;">16</span>
-<span class="derby-stats-val" style="color:#80d0ff;">35</span>
-<span class="derby-stats-val" style="color:#ff9090;">73</span>
-<span class="derby-stats-val" style="color:#f0c040;">-38</span>
-<span class="derby-stats-val" style="color:#c0a0ff;">21%</span>
-<span></span>
-</div>
-<div class="derby-temp-block">
-<button class="derby-temp-btn open" id="dt-3132-btn" onclick="derbyTog('dt-3132')">
-<span class="derby-temp-name">31-32</span>
-<span class="derby-temp-sv">5</span>
-<span class="derby-temp-sv" style="color:#4fc86a;">0</span>
-<span class="derby-temp-sv">0</span>
-<span class="derby-temp-sv" style="color:#e05050;">5</span>
-<span class="derby-temp-sv" style="color:#80d0ff;">1</span>
-<span class="derby-temp-sv" style="color:#ff9090;">19</span>
-<span class="derby-temp-sv" style="color:#f0c040;">-18</span>
-<span class="derby-temp-sv" style="color:#c0a0ff;">0%</span>
-<span class="derby-temp-arr open" id="dt-3132-arr">▲</span>
-</button>
-<div class="derby-temp-body open" id="dt-3132">
-<div class="derby-comp-lbl">🏆 COPA DEL REY</div>
-<div class="derby-match-row derby-pend"><span class="derby-score"></span><span class="derby-comp">—</span><span class="derby-rival-m" style="color:rgba(255,255,255,.3)">Por jugar</span><span class="derby-res"></span></div>
-<div class="derby-comp-lbl">🇪🇸 LIGA</div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-7</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🔵 SUPERLIGA (B Munich)</div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-5</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Arsenal</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Arsenal</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Man City 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Man City 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">PSG</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">PSG</span><span class="derby-res">—</span></div>
-<div class="derby-comp-lbl">🌍 SELECCION (Francia)</div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Italia 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-5</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Austria</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Inglaterra 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Noruega</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">España</span><span class="derby-res">—</span></div>
-</div>
-</div>
-<div class="derby-temp-block">
-<button class="derby-temp-btn" id="dt-3031-btn" onclick="derbyTog('dt-3031')">
-<span class="derby-temp-name">30-31</span>
-<span class="derby-temp-sv">17</span>
-<span class="derby-temp-sv" style="color:#4fc86a;">4</span>
-<span class="derby-temp-sv">7</span>
-<span class="derby-temp-sv" style="color:#e05050;">6</span>
-<span class="derby-temp-sv" style="color:#80d0ff;">24</span>
-<span class="derby-temp-sv" style="color:#ff9090;">39</span>
-<span class="derby-temp-sv" style="color:#f0c040;">-15</span>
-<span class="derby-temp-sv" style="color:#c0a0ff;">24%</span>
-<span class="derby-temp-arr" id="dt-3031-arr">▼</span>
-</button>
-<div class="derby-temp-body" id="dt-3031">
-<div class="derby-comp-lbl">🏆 COPA DEL REY</div>
-<div class="derby-match-row derby-g"><span class="derby-score">4-0</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🇪🇸 LIGA</div>
-<div class="derby-match-row derby-e"><span class="derby-score">2-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">2-2</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">1-1</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">2-0</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">0-0</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">3-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Atl Madrid</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-7</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Atl Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">3-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🌍 SELECCION (Egipto)</div>
-<div class="derby-match-row derby-e"><span class="derby-score">1-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Camerún 😈</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-4</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Nigeria</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Senegal 🔧</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">3-8</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Costa Marfil</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">2-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Nigeria</span><span class="derby-res derby-res-g">G</span></div>
-</div>
-</div>
-<div class="derby-temp-block">
-<button class="derby-temp-btn" id="dt-2930-btn" onclick="derbyTog('dt-2930')">
-<span class="derby-temp-name">29-30</span>
-<span class="derby-temp-sv">7</span>
-<span class="derby-temp-sv" style="color:#4fc86a;">2</span>
-<span class="derby-temp-sv">0</span>
-<span class="derby-temp-sv" style="color:#e05050;">5</span>
-<span class="derby-temp-sv" style="color:#80d0ff;">10</span>
-<span class="derby-temp-sv" style="color:#ff9090;">15</span>
-<span class="derby-temp-sv" style="color:#f0c040;">-5</span>
-<span class="derby-temp-sv" style="color:#c0a0ff;">29%</span>
-<span class="derby-temp-arr" id="dt-2930-arr">▼</span>
-</button>
-<div class="derby-temp-body" id="dt-2930">
-<div class="derby-comp-lbl">🏆 SUPERCOPA ESPAÑA</div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🇪🇸 LIGA</div>
-<div class="derby-match-row derby-g"><span class="derby-score">3-2</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">5-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Villarreal</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Villarreal</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-</div>
-</div>
-</div>
-</div>
-<div class="ent-section ath-box-obj">
-<button class="ent-header ath-hdr-obj" onclick="go('s-munich-objetivos')" style="cursor:pointer;"><i class="ico">🎯</i><span style="white-space:nowrap">Objetivos del Club</span>
-<span class="ath-obj-progreso" id="ath-obj-count">0 / 33</span>
-<span style="margin-left:auto;color:rgba(255,255,255,.4);font-size:12px;">▶</span>
-</button>
-
-</div>
-<div class="ent-section ath-box-plantilla">
-<button class="ent-header ath-hdr-plantilla" onclick="go('s-munich-plantilla')" style="cursor:pointer;"><i class="ico">👕</i><span>Plantilla</span>
-<span style="margin-left:auto;margin-right:8px;font-family:Oswald,sans-serif;font-size:11px;font-style:normal;color:rgba(255,255,255,.3);letter-spacing:1px;">31 jugadores</span>
-<span style="margin-left:auto;color:rgba(255,255,255,.4);font-size:12px;">▶</span>
-</button>
-
-</div>
+<section class="hub-main-grid">
+  <button class="hub-card" onclick="go('s-munich-trofeos')">
+    <span class="hub-title">🏆 Vitrina de Trofeos</span>
+    <span class="hub-sub">2 títulos oficiales</span>
+    <div class="hub-trophy-logos">
+      <img src="https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg" alt="FIFA Club World Cup">
+      <img src="/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg" alt="Supercopa de España">
+    </div>
+  </button>
+  <button class="hub-card" onclick="go('s-munich-derbys')">
+    <span class="hub-title">👤 Histórico Derbys</span>
+    <span class="hub-sub">Récord: 6G – 7E – 16P · 21% Win</span>
+  </button>
+  <button class="hub-card" onclick="go('s-munich-objetivos')">
+    <span class="hub-title">🎯 Objetivos del Club</span>
+    <span class="hub-sub">Progreso: <span id="munich-obj-count">0 / 33</span></span>
+  </button>
+  <button class="hub-card" onclick="go('s-munich-plantilla')">
+    <span class="hub-title">👕 Plantilla</span>
+    <span class="hub-sub">31 jugadores · gestión completa</span>
+  </button>
+</section>
+<section class="hub-match-engine">
+  <div class="hub-fixture">
+    <p class="fixture-label">Próximo partido</p>
+    <p class="fixture-value" id="munich-next-match">Entrenamiento · 16 Julio</p>
+    <p class="fixture-injury" id="munich-injury-warning"></p>
+  </div>
+  <div class="hub-actions">
+    <button class="btn-play" id="munich-play-btn">⚽ JUGAR PARTIDO</button>
+    <button class="btn-next" id="munich-next-day-btn">➡️ SIGUIENTE DÍA</button>
+  </div>
+</section>
 </div>
 </div>
 
@@ -2922,8 +2788,8 @@
 <div style="text-align:center;padding:10px 0 4px;">
 <span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.35);">TEMPORADA 31–32</span>
 </div>
-<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><span style="font-size:44px;line-height:1;">🌍</span><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">MUNDIAL DE CLUBES</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">Competición Internacional</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
-<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><span style="font-size:44px;line-height:1;">⭐</span><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">SUPERCOPA DE ESPAÑA</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">Competición Nacional</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
+<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><img src="https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg" alt="FIFA Club World Cup" style="width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;"><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">MUNDIAL DE CLUBES</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">FIFA Club World Cup</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
+<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><img src="/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg" alt="Supercopa de España" style="width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;"><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">SUPERCOPA DE ESPAÑA</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">RFEF – Competición Nacional</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
 <div style="text-align:center;padding:14px 0 0;">
 <span style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:6px;color:rgba(240,192,64,.5);">TOTAL: 2</span>
 </div>
@@ -3047,6 +2913,227 @@
 <div class="plant-row del"><span class="plant-num">31</span><span class="plant-name">Alejandro Rego</span><span class="plant-stat zero"><span class="ps-gol" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-yel" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-red" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-mvp" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat poder zero">71</span><span class="plant-stat zero frac"><span class="ps-pen-gol" data-copa="0" data-global="0" data-liga="0" data-super="0" data-tirado="0" data-uecl="0" hidden=""></span>0/0</span><span class="plant-stat zero"><span class="ps-pen-prov" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-pen-parado" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-falta-gol" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-propia" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span></div>
 </div>
 </div>
+
+<div class="screen" id="s-munich-derbys">
+<button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">👤</span><h2>Histórico Derbys</h2></div>
+<div style="padding:4px 14px 40px;">
+<div class="ent-body ath-body-derbys" id="ath-derbys-full" style="padding:0;">
+<div class="derby-stats-hdr">
+<span class="derby-stats-hdr-lbl">TEMP</span>
+<span class="derby-stats-hdr-lbl">PJ</span>
+<span class="derby-stats-hdr-lbl">PG</span>
+<span class="derby-stats-hdr-lbl">PE</span>
+<span class="derby-stats-hdr-lbl">PP</span>
+<span class="derby-stats-hdr-lbl">G+</span>
+<span class="derby-stats-hdr-lbl">G-</span>
+<span class="derby-stats-hdr-lbl">+-</span>
+<span class="derby-stats-hdr-lbl">%</span>
+<span class="derby-stats-hdr-lbl"></span>
+</div>
+<div class="derby-stats-row global-row">
+<span class="derby-stats-temp">TOTAL</span>
+<span class="derby-stats-val">29</span>
+<span class="derby-stats-val" style="color:#4fc86a;">6</span>
+<span class="derby-stats-val">7</span>
+<span class="derby-stats-val" style="color:#e05050;">16</span>
+<span class="derby-stats-val" style="color:#80d0ff;">35</span>
+<span class="derby-stats-val" style="color:#ff9090;">73</span>
+<span class="derby-stats-val" style="color:#f0c040;">-38</span>
+<span class="derby-stats-val" style="color:#c0a0ff;">21%</span>
+<span></span>
+</div>
+<div class="derby-temp-block">
+<button class="derby-temp-btn open" id="ddf-3132-btn" onclick="derbyTog('ddf-3132')">
+<span class="derby-temp-name">31-32</span>
+<span class="derby-temp-sv">5</span>
+<span class="derby-temp-sv" style="color:#4fc86a;">0</span>
+<span class="derby-temp-sv">0</span>
+<span class="derby-temp-sv" style="color:#e05050;">5</span>
+<span class="derby-temp-sv" style="color:#80d0ff;">1</span>
+<span class="derby-temp-sv" style="color:#ff9090;">19</span>
+<span class="derby-temp-sv" style="color:#f0c040;">-18</span>
+<span class="derby-temp-sv" style="color:#c0a0ff;">0%</span>
+<span class="derby-temp-arr open" id="ddf-3132-arr">▲</span>
+</button>
+<div class="derby-temp-body open" id="ddf-3132">
+<div class="derby-comp-lbl">🏆 COPA DEL REY</div>
+<div class="derby-match-row derby-pend"><span class="derby-score"></span><span class="derby-comp">—</span><span class="derby-rival-m" style="color:rgba(255,255,255,.3)">Por jugar</span><span class="derby-res"></span></div>
+<div class="derby-comp-lbl">🇪🇸 LIGA</div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-7</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-comp-lbl">🔵 SUPERLIGA (B Munich)</div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-5</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Arsenal</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Arsenal</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Man City 🔧</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Man City 🔧</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">PSG</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">PSG</span><span class="derby-res">—</span></div>
+<div class="derby-comp-lbl">🌍 SELECCION (Francia)</div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Italia 😈</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-5</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Austria</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Inglaterra 🔧</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Noruega</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">España</span><span class="derby-res">—</span></div>
+</div>
+</div>
+<div class="derby-temp-block">
+<button class="derby-temp-btn" id="ddf-3031-btn" onclick="derbyTog('ddf-3031')">
+<span class="derby-temp-name">30-31</span>
+<span class="derby-temp-sv">17</span>
+<span class="derby-temp-sv" style="color:#4fc86a;">4</span>
+<span class="derby-temp-sv">7</span>
+<span class="derby-temp-sv" style="color:#e05050;">6</span>
+<span class="derby-temp-sv" style="color:#80d0ff;">24</span>
+<span class="derby-temp-sv" style="color:#ff9090;">39</span>
+<span class="derby-temp-sv" style="color:#f0c040;">-15</span>
+<span class="derby-temp-sv" style="color:#c0a0ff;">24%</span>
+<span class="derby-temp-arr" id="ddf-3031-arr">▼</span>
+</button>
+<div class="derby-temp-body" id="ddf-3031">
+<div class="derby-comp-lbl">🏆 COPA DEL REY</div>
+<div class="derby-match-row derby-g"><span class="derby-score">4-0</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-g">G</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-comp-lbl">🇪🇸 LIGA</div>
+<div class="derby-match-row derby-e"><span class="derby-score">2-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-e"><span class="derby-score">2-2</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-e"><span class="derby-score">1-1</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-g"><span class="derby-score">2-0</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-g">G</span></div>
+<div class="derby-match-row derby-e"><span class="derby-score">0-0</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-e"><span class="derby-score">3-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Atl Madrid</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-7</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Atl Madrid</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-g"><span class="derby-score">3-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-g">G</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-comp-lbl">🌍 SELECCION (Egipto)</div>
+<div class="derby-match-row derby-e"><span class="derby-score">1-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Camerún 😈</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-4</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Nigeria</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Senegal 🔧</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">3-8</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Costa Marfil</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-g"><span class="derby-score">2-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Nigeria</span><span class="derby-res derby-res-g">G</span></div>
+</div>
+</div>
+<div class="derby-temp-block">
+<button class="derby-temp-btn" id="ddf-2930-btn" onclick="derbyTog('ddf-2930')">
+<span class="derby-temp-name">29-30</span>
+<span class="derby-temp-sv">7</span>
+<span class="derby-temp-sv" style="color:#4fc86a;">2</span>
+<span class="derby-temp-sv">0</span>
+<span class="derby-temp-sv" style="color:#e05050;">5</span>
+<span class="derby-temp-sv" style="color:#80d0ff;">10</span>
+<span class="derby-temp-sv" style="color:#ff9090;">15</span>
+<span class="derby-temp-sv" style="color:#f0c040;">-5</span>
+<span class="derby-temp-sv" style="color:#c0a0ff;">29%</span>
+<span class="derby-temp-arr" id="ddf-2930-arr">▼</span>
+</button>
+<div class="derby-temp-body" id="ddf-2930">
+<div class="derby-comp-lbl">🏆 SUPERCOPA ESPAÑA</div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-comp-lbl">🇪🇸 LIGA</div>
+<div class="derby-match-row derby-g"><span class="derby-score">3-2</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-g">G</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-g"><span class="derby-score">5-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Villarreal</span><span class="derby-res derby-res-g">G</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Villarreal</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+(function(){
+  if (window.__MUNICH_STRI_READY) return;
+  window.__MUNICH_STRI_READY = true;
+
+  var BUDGET_LIMIT = 1300;
+  var RATING_MAX = 9.10;
+  var INCIDENT_PROB = 0.05;
+  var INCIDENT_GRAVE_THRESH = 0.015;
+  var INCIDENT_MEDIA_THRESH = 0.030;
+  var MATCHDAY_FREQUENCY = 3;
+  var MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  var state = { day: 16, month: 'Julio', isMatchday: false, pi: 8, injured: null, budgetSpent: 0, rating: 0 };
+
+  function getEl(id) { return document.getElementById(id); }
+
+  function updateHud() {
+    var budgetEl = getEl('ath-money-val');
+    var ratingEl = getEl('ath-pts-val');
+    var medEl    = getEl('ath-med-val');
+    var barPts   = getEl('ath-bar-pts');
+    var barMoney = getEl('ath-bar-money');
+    var matchEl  = getEl('munich-next-match');
+    var warnEl   = getEl('munich-injury-warning');
+    var medIcon  = getEl('ath-med-icon');
+
+    if (budgetEl) budgetEl.textContent = String(state.budgetSpent).padStart(4, '0') + ' / ' + BUDGET_LIMIT + '\u20ac';
+    if (ratingEl) ratingEl.textContent = state.rating.toFixed(2);
+    if (medEl)    medEl.textContent = state.pi + ' PI';
+    if (barPts)   barPts.style.width = Math.min(100, (state.rating / RATING_MAX) * 100) + '%';
+    if (barMoney) barMoney.style.width = Math.min(100, (state.budgetSpent / BUDGET_LIMIT) * 100) + '%';
+
+    var dayLabel = state.day + ' ' + state.month;
+    if (matchEl) matchEl.textContent = (state.isMatchday ? '⚽ Matchday · Bayern vs Osasuna · ' : 'Entrenamiento · ') + dayLabel;
+
+    if (state.injured) {
+      if (warnEl)  warnEl.textContent = '\u26a0\ufe0f BAJA CONFIRMADA: ' + state.injured.name + ' (' + state.injured.days + ' partidos)';
+      if (medIcon) medIcon.classList.add('blink');
+    } else {
+      if (warnEl)  warnEl.textContent = '';
+      if (medIcon) medIcon.classList.remove('blink');
+    }
+  }
+
+  function maybeIncident() {
+    var roll = Math.random();
+    if (roll > INCIDENT_PROB) return;
+    var sev = roll < INCIDENT_GRAVE_THRESH ? 'grave' : (roll < INCIDENT_MEDIA_THRESH ? 'media' : 'leve');
+    var conf = {
+      leve:  { days: 2, pi: 2,  txt: 'Sobrecarga / Contusi\u00f3n' },
+      media: { days: 4, pi: 5,  txt: 'Esguince / Rotura Fibrilar' },
+      grave: { days: 6, pi: 10, txt: 'Rotura de Ligamentos / Fractura' }
+    }[sev];
+    var roster = ['Neuer','Upamecano','De Ligt','Pavard','Davies','Kimmich','Goretzka','M\u00fcller','Gnabry','San\u00e9','Kane'];
+    state.injured = { name: roster[Math.floor(Math.random() * roster.length)], days: conf.days, cost: conf.pi, txt: conf.txt };
+    state.pi = Math.max(0, state.pi - conf.pi);
+    alert('\ud83d\udea8 PARTE M\u00c9DICO\n' + state.injured.name + ': ' + conf.txt + ' \u00b7 baja ' + conf.days + ' partidos. Coste: ' + conf.pi + ' PI.');
+  }
+
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.id === 'munich-next-day-btn') {
+      if (state.isMatchday) { alert('Debes jugar o simular el partido antes de avanzar.'); return; }
+      state.day += 1;
+      state.pi = Math.min(10, state.pi + 1);
+      if (state.injured) { state.injured.days -= 1; if (state.injured.days <= 0) state.injured = null; }
+      state.isMatchday = state.day % MATCHDAY_FREQUENCY === 0;
+      maybeIncident();
+      updateHud();
+    }
+    if (e.target && e.target.id === 'munich-play-btn') {
+      if (!state.isMatchday) { alert('Hoy no hay partido oficial. Usa \u27a1\ufe0f SIGUIENTE D\u00cdA.'); return; }
+      state.isMatchday = false;
+      state.rating = Math.min(RATING_MAX, state.rating + 0.15);
+      updateHud();
+      alert('Partido completado. Se desbloqu\u00f3 el siguiente d\u00eda.');
+    }
+  });
+
+  updateHud();
+})();
+</script>
 
 <div class="screen" id="s-arsenal">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>

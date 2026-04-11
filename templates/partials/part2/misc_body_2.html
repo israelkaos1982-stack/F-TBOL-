@@ -3973,6 +3973,7 @@
     if (_gm.finished || _gm.inDescanso) return;
     if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; gmRenderTimer(); }
     else { if (!_gm.kickoffDone) { _gm.kickoffDone = true; _mlPlayUiTone('start'); } gmStartTimer(); }
+    gmUpdateAplazarBtn();
   };
 
   window.gmShowEvents = function () {
@@ -4236,6 +4237,107 @@
     document.getElementById('gm-modal').style.display = 'none';
   };
 
+  window.gmVolver = function () {
+    document.getElementById('gm-modal').style.display = 'none';
+  };
+
+  function gmUpdateAplazarBtn() {
+    var row = document.getElementById('gm-aplazar-row');
+    if (!row) return;
+    var show = _gm.kickoffDone && !_gm.timerRunning && !_gm.finished && !_gm.inDescanso;
+    row.style.display = show ? '' : 'none';
+  }
+
+  window.gmAplazarConfirm = function () {
+    var min = Math.floor(_gm.timerSec / 60);
+    var el = document.getElementById('gm-aplazar-modal');
+    document.getElementById('gm-aplazar-modal-teams').textContent = _gm.home + ' vs ' + _gm.away;
+    document.getElementById('gm-aplazar-modal-sc').textContent = _gm.sc.a + '-' + _gm.sc.b;
+    document.getElementById('gm-aplazar-modal-min').textContent = min + "'";
+    if (el) el.style.display = 'flex';
+  };
+
+  window.gmAplazarCancel = function () {
+    var el = document.getElementById('gm-aplazar-modal');
+    if (el) el.style.display = 'none';
+  };
+
+  window.gmAplazar = function () {
+    clearInterval(_gm.timerInterval);
+    _gm.timerRunning = false;
+    var aplazados = JSON.parse(localStorage.getItem('partidos_aplazados') || '[]');
+    aplazados.push({
+      j: _gm.j, home: _gm.home, away: _gm.away,
+      sc: { a: _gm.sc.a, b: _gm.sc.b },
+      timerSec: _gm.timerSec,
+      events: _gm.events.slice(),
+      htDone: _gm.htDone, stDone: _gm.stDone, etDone: _gm.etDone,
+      isHvH: _gm.isHvH, savedAt: Date.now()
+    });
+    localStorage.setItem('partidos_aplazados', JSON.stringify(aplazados));
+    var aplazarEl = document.getElementById('gm-aplazar-modal');
+    if (aplazarEl) aplazarEl.style.display = 'none';
+    document.getElementById('gm-modal').style.display = 'none';
+    if (typeof window.gmRenderPendientes === 'function') window.gmRenderPendientes();
+  };
+
+  window.gmReanudar = function (idx) {
+    var aplazados = JSON.parse(localStorage.getItem('partidos_aplazados') || '[]');
+    var saved = aplazados[idx];
+    if (!saved) return;
+    aplazados.splice(idx, 1);
+    localStorage.setItem('partidos_aplazados', JSON.stringify(aplazados));
+    gmOpen(saved.j, saved.home, saved.away, saved.isHvH || false);
+    _gm.sc = saved.sc || { a: 0, b: 0 };
+    _gm.timerSec = saved.timerSec || 0;
+    _gm.events = saved.events || [];
+    _gm.htDone = saved.htDone || false;
+    _gm.stDone = saved.stDone || false;
+    _gm.etDone = saved.etDone || false;
+    _gm.kickoffDone = true;
+    document.getElementById('gm-score').textContent = _gm.sc.a + '-' + _gm.sc.b;
+    var actaList = document.getElementById('gm-acta-list');
+    if (actaList && _gm.events.length) {
+      var _icoMap2 = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽', 'pen-gol':'🥅⚽',
+                       'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅',
+                       amarilla:'🟨', damarilla:'🟨🟥', roja:'🟥', lesion:'🩹', mvp:'⭐' };
+      actaList.innerHTML = '';
+      _gm.events.forEach(function (ev) {
+        if (!ev) return;
+        var tName = ev.team === 'a' ? _gm.home : _gm.away;
+        var ico = _icoMap2[ev.type] || '📋';
+        var div = document.createElement('div');
+        div.className = 'ml-acta-row';
+        div.innerHTML = ico + ' ' + (ev.min || 0) + "' - " + (ev.player || '') + ' (' + tName + ')';
+        actaList.appendChild(div);
+      });
+    }
+    gmRenderTimer();
+    gmUpdateAplazarBtn();
+    if (typeof window.gmRenderPendientes === 'function') window.gmRenderPendientes();
+  };
+
+  window.gmRenderPendientes = function () {
+    var container = document.getElementById('gm-pendientes-list');
+    if (!container) return;
+    var aplazados = JSON.parse(localStorage.getItem('partidos_aplazados') || '[]');
+    if (!aplazados.length) {
+      container.innerHTML = '<p class="gm-pend-empty">Sin partidos aplazados</p>';
+      return;
+    }
+    container.innerHTML = aplazados.map(function (p, i) {
+      var min = Math.floor((p.timerSec || 0) / 60);
+      return '<div class="gm-pend-card">'
+        + '<div class="gm-pend-teams">' + p.home + ' <span class="gm-pend-vs">vs</span> ' + p.away + '</div>'
+        + '<div class="gm-pend-info">'
+        + '<span class="gm-pend-sc">⚽ ' + p.sc.a + ' – ' + p.sc.b + '</span>'
+        + '<span class="gm-pend-min">⏱ ' + min + "'</span>"
+        + '</div>'
+        + '<button class="gm-pend-btn" onclick="window.gmReanudar(' + i + ');if(typeof go===\'function\')go(\'s-home\');">▶ REANUDAR</button>'
+        + '</div>';
+    }).join('');
+  };
+
   window.gmShowPost = function(){
     var goles = _gm.events.filter(function(e){ return e && ['gol','falta-gol','pen-gol','propia'].indexOf(e.type)!==-1; }).length;
     var tarjetas = _gm.events.filter(function(e){ return e && ['amarilla','damarilla','roja'].indexOf(e.type)!==-1; }).length;
@@ -4299,6 +4401,8 @@
     if (jBadge) jBadge.textContent = 'Liga · Jornada ' + j;
     var postOv = document.getElementById('gm-post-ov');
     if (postOv) postOv.classList.remove('show');
+    var aplazarRow = document.getElementById('gm-aplazar-row');
+    if (aplazarRow) aplazarRow.style.display = 'none';
     gmRenderTimer();
     document.getElementById('gm-modal').style.display = '';
   }
@@ -5520,13 +5624,23 @@
       </div>
     </div>
 
-    <!-- Close -->
+    <!-- Aplazar (solo visible cuando el partido está en pausa) -->
+    <div id="gm-aplazar-row" style="padding:0 8px 8px;display:none;">
+      <button onclick="window.gmAplazarConfirm()"
+        style="width:100%;padding:10px;border-radius:6px;border:1px solid rgba(255,160,0,.4);
+               background:rgba(180,80,0,.2);color:#ffa040;font-size:11px;font-weight:700;
+               font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">
+        ⏸ APLAZAR PARTIDO
+      </button>
+    </div>
+
+    <!-- Volver (sin cancelar ni resetear el partido) -->
     <div style="padding:8px;">
-      <button onclick="window.gmClose()"
+      <button onclick="window.gmVolver()"
         style="width:100%;padding:8px;border-radius:5px;border:1px solid rgba(255,255,255,.12);
                background:rgba(255,255,255,.04);color:#888;font-size:10px;font-weight:700;
                font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">
-        ✕ Cancelar partido
+        ◀ Volver
       </button>
     </div>
   </div>
@@ -6221,4 +6335,128 @@
   background: rgba(255,255,255,.08); padding: 2px 7px; border-radius: 4px;
   flex-shrink: 0; white-space: nowrap;
 }
+
+/* ── APLAZAR MODAL ─────────────────────────────────────── */
+#gm-aplazar-modal {
+  position: fixed; inset: 0; z-index: 10025;
+  background: rgba(0,0,0,.87);
+  align-items: center; justify-content: center; padding: 16px;
+}
+#gm-aplazar-box {
+  width: 100%; max-width: 340px;
+  border-radius: 12px; border: 1px solid rgba(255,160,0,.4);
+  background: linear-gradient(170deg,#1a0e00,#1f1200);
+  padding: 20px;
+}
+.gm-aplazar-title {
+  font-family: 'Bebas Neue', sans-serif; font-size: 22px;
+  letter-spacing: 2px; color: #ffa040;
+  text-align: center; margin-bottom: 8px;
+}
+.gm-aplazar-teams {
+  font-family: 'Oswald', sans-serif; font-size: 12px;
+  color: rgba(255,255,255,.7); text-align: center; margin-bottom: 4px;
+}
+.gm-aplazar-stats {
+  display: flex; justify-content: center; gap: 16px;
+  margin: 12px 0;
+  font-family: 'Oswald', sans-serif; font-size: 13px; color: #fff;
+}
+.gm-aplazar-desc {
+  font-family: 'Oswald', sans-serif; font-size: 11px;
+  color: rgba(255,255,255,.5); text-align: center; margin-bottom: 16px;
+}
+.gm-aplazar-btns { display: flex; gap: 8px; }
+.gm-aplazar-btn-cancel {
+  flex: 1; padding: 10px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06);
+  color: #aaa; font-family: 'Oswald', sans-serif; font-size: 11px;
+  letter-spacing: 1px; cursor: pointer;
+}
+.gm-aplazar-btn-ok {
+  flex: 2; padding: 10px; border-radius: 6px;
+  border: 1px solid rgba(255,160,0,.5); background: rgba(180,80,0,.3);
+  color: #ffa040; font-family: 'Oswald', sans-serif; font-size: 11px;
+  font-weight: 700; letter-spacing: 1px; cursor: pointer;
+}
+
+/* ── PANTALLA PARTIDOS PENDIENTES ──────────────────────── */
+#s-pendientes { padding: 0 0 80px; }
+.gm-pend-hdr {
+  font-family: 'Bebas Neue', sans-serif; font-size: 24px;
+  letter-spacing: 3px; color: #ffa040;
+  text-align: center; padding: 14px 8px 10px;
+}
+#gm-pendientes-list { padding: 0 10px; }
+.gm-pend-card {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,160,0,.25);
+  border-radius: 10px; padding: 12px; margin-bottom: 10px;
+}
+.gm-pend-teams {
+  font-family: 'Oswald', sans-serif; font-size: 15px;
+  font-weight: 700; color: #fff; letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.gm-pend-vs { color: rgba(255,255,255,.45); font-weight: 400; }
+.gm-pend-info {
+  display: flex; gap: 14px;
+  font-family: 'Oswald', sans-serif; font-size: 12px;
+  color: rgba(255,255,255,.65); margin-bottom: 10px;
+}
+.gm-pend-sc, .gm-pend-min { letter-spacing: .5px; }
+.gm-pend-btn {
+  width: 100%; padding: 10px; border-radius: 6px;
+  border: 1px solid rgba(61,255,113,.35);
+  background: rgba(20,100,50,.3); color: #3dff71;
+  font-family: 'Oswald', sans-serif; font-size: 12px;
+  font-weight: 700; letter-spacing: 1.5px; cursor: pointer;
+}
+.gm-pend-empty {
+  text-align: center; color: rgba(255,255,255,.4);
+  font-family: 'Oswald', sans-serif; letter-spacing: 1px;
+  padding: 30px 20px;
+}
 </style>
+
+<!-- ══ MODAL CONFIRMACIÓN APLAZAR PARTIDO ════════════════ -->
+<div id="gm-aplazar-modal" style="display:none;">
+  <div id="gm-aplazar-box">
+    <div class="gm-aplazar-title">⏸ APLAZAR PARTIDO</div>
+    <div class="gm-aplazar-teams" id="gm-aplazar-modal-teams">Local vs Visitante</div>
+    <div class="gm-aplazar-stats">
+      <span>Marcador: <b id="gm-aplazar-modal-sc">0-0</b></span>
+      <span>Minuto: <b id="gm-aplazar-modal-min">0'</b></span>
+    </div>
+    <div class="gm-aplazar-desc">El marcador y el minuto actuales se guardarán. Podrás reanudar este partido en cualquier momento desde "Partidos Pendientes".</div>
+    <div class="gm-aplazar-btns">
+      <button class="gm-aplazar-btn-cancel" onclick="window.gmAplazarCancel()">✕ Cancelar</button>
+      <button class="gm-aplazar-btn-ok" onclick="window.gmAplazar()">✅ CONFIRMAR APLAZAMIENTO</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PANTALLA: PARTIDOS PENDIENTES ═════════════════════ -->
+<div class="screen" id="s-pendientes">
+  <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+  <div class="gm-pend-hdr">⏸ PARTIDOS APLAZADOS</div>
+  <div id="gm-pendientes-list">
+    <p class="gm-pend-empty">Sin partidos aplazados</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  document.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.gmRenderPendientes === 'function') window.gmRenderPendientes();
+  });
+  /* Refresh the pendientes list whenever the screen becomes active */
+  var _origGoPend = window.go;
+  window.go = function (id) {
+    if (_origGoPend) _origGoPend(id);
+    if (id === 's-pendientes' && typeof window.gmRenderPendientes === 'function') {
+      setTimeout(window.gmRenderPendientes, 50);
+    }
+  };
+})();
+</script>

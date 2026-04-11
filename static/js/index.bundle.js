@@ -2276,7 +2276,7 @@ var STAT_CLASS_MAP = {
 
         var playerName = '';
         if(Array.isArray(ev && ev.player)) playerName = ev.player[1] || ev.player[0] || '';
-        else playerName = (ev && (ev.name || ev.playerName || ev.jugador)) || '';
+        else playerName = (ev && (ev.name || ev.playerName || ev.jugador || ev.player)) || '';
         playerName = String(playerName || '').replace(/^\s*\d+\.?\s*/, '').trim();
         if(!playerName) return;
 
@@ -3224,10 +3224,13 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       var _tr_b=evts.filter(function(e){return e.team==='b'&&(e.ico==='🟥'||e.ico==='🟨🟥');}).length;
       var _mvp_a=mvpTeam===TEAM_A?1:0;
       var _mvp_b=mvpTeam===TEAM_B?1:0;
-      if(typeof window.registrarResultadoLiga==='function')
-        window.registrarResultadoLiga(matchKey,TEAM_A,TEAM_B,sa,sb,_ta_a,_tr_a,_ta_b,_tr_b,_mvp_a,_mvp_b);
+      // registrarLigaPlayerStats MUST be called first so that patchRegistrar can use the
+      // already-stored events (with pen-gol, falta-gol, propia) instead of falling back
+      // to genMatchEvents which lacks those set-piece event types.
       if(typeof window.registrarLigaPlayerStats==='function')
         window.registrarLigaPlayerStats(matchKey,TEAM_A,TEAM_B,evts,mvpName,mvpTeam);
+      if(typeof window.registrarResultadoLiga==='function')
+        window.registrarResultadoLiga(matchKey,TEAM_A,TEAM_B,sa,sb,_ta_a,_tr_a,_ta_b,_tr_b,_mvp_a,_mvp_b);
       list.appendChild(r);
       if(typeof cfg.onEnd==='function') cfg.onEnd(sa,sb,evts,mvpName,mvpTeam);
       // Mostrar overlay de lesiones post-partido IA

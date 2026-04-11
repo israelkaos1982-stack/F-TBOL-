@@ -2992,6 +2992,11 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
 
     evts.sort(function(a,b){return a.min-b.min;});
 
+    // ── VAR: etiquetar eventos según probabilidad ─────────────────
+    if(window.mlVARSystem&&typeof window.mlVARSystem.tagEvents==='function'){
+      window.mlVARSystem.tagEvents(evts);
+    }
+
     // ── MVP ───────────────────────────────────────────────────────────
     // Sistema de puntuación:
     //   ⚽ gol=3 | ⚽🎯 falta-gol=4 | ⚽🥅 pen-gol=2 | 🖐🥅 pen-parado=3 | ⚽🚫 propia=-1
@@ -3111,9 +3116,13 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
         list.appendChild(d);
         return;
       }
+      var _varLabel='';
+      if(ev.var&&window.mlVARSystem&&typeof window.mlVARSystem.varLogSuffix==='function'){
+        _varLabel='<span class="ml-evt-var">'+window.mlVARSystem.varLogSuffix(ev.type)+'</span>';
+      }
       d.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"
         +'<span class="ml-evt-ico">'+ev.ico+'</span>'
-        +'<span class="ml-evt-name">'+ev.player[1]+'</span>'
+        +'<span class="ml-evt-name">'+ev.player[1]+_varLabel+'</span>'
         +_iaFalloExtra
         +'<span class="ml-evt-team">'+teamName+'</span>';
       list.appendChild(d);
@@ -3125,24 +3134,54 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       else if(ev.min<=ht45){ms=Math.round(ev.min*msPerMinFH);}
       else{ms=_halfDuration+Math.round((ev.min-45)*msPerMinSH);}
       ms=Math.min(ms,_halfDuration*2-500);
-      setTimeout(function(){renderEvtEl(ev);},ms);
-      if(ev.type==='gol'||ev.type==='falta-gol'||ev.type==='pen-gol'||ev.type==='propia'){
-        setTimeout(function(){
-          var scAEl=document.getElementById(cfg.scAId);
-          var scBEl=document.getElementById(cfg.scBId);
-          if(scAEl) scAEl.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='a'&&e.min<=ev.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='b'&&e.min<=ev.min;}).length;
-          if(scBEl) scBEl.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='b'&&e.min<=ev.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='a'&&e.min<=ev.min;}).length;
-          var gf=document.getElementById(cfg.gfId);
-          if(gf){gf.classList.add('show');if(typeof triggerShootingBall==='function')triggerShootingBall(gf,(ev.type==='propia'?(ev.team==='a'?'b':'a'):ev.team));setTimeout(function(){gf.classList.remove('show');},3000);}
-          if(window.goalNotificationImproved){var _gnt=ev.type==='propia'?(ev.team==='a'?'b':'a'):ev.team;var _gnp=ev.player?ev.player[1]:'';window.goalNotificationImproved.show(cfg.matchKey,_gnt,_gnp);}
-        },ms+50);
-      }
-      if(ev.ico==='🟥'||ev.ico==='🟨🟥'){
-        (function(evCopy,msDelay){
+      var _isGoalType=ev.type==='gol'||ev.type==='falta-gol'||ev.type==='pen-gol'||ev.type==='propia';
+      var _isCardType=ev.ico==='🟨'||ev.ico==='🟥'||ev.ico==='🟨🟥';
+      var _isPenProv=ev.type==='pen-prov';
+      if(ev.var&&(_isGoalType||_isCardType||_isPenProv)){
+        (function(evSnap,msDelay,isGoal){
           setTimeout(function(){
-            
-          }, msDelay+80);
-        })(ev, ms);
+            var _scAEl=document.getElementById(cfg.scAId);
+            var _scoreEl=_scAEl?_scAEl.closest('.ml-score'):null;
+            var _timerEl=document.getElementById(cfg.btnId);
+            function _doUpdate(){
+              renderEvtEl(evSnap);
+              if(isGoal){
+                var _sA=document.getElementById(cfg.scAId);
+                var _sB=document.getElementById(cfg.scBId);
+                if(_sA)_sA.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='a'&&e.min<=evSnap.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='b'&&e.min<=evSnap.min;}).length;
+                if(_sB)_sB.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='b'&&e.min<=evSnap.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='a'&&e.min<=evSnap.min;}).length;
+                var gf=document.getElementById(cfg.gfId);
+                if(gf){gf.classList.add('show');if(typeof triggerShootingBall==='function')triggerShootingBall(gf,(evSnap.type==='propia'?(evSnap.team==='a'?'b':'a'):evSnap.team));setTimeout(function(){gf.classList.remove('show');},3000);}
+                if(window.goalNotificationImproved){var _gnt=evSnap.type==='propia'?(evSnap.team==='a'?'b':'a'):evSnap.team;var _gnp=evSnap.player?evSnap.player[1]:'';window.goalNotificationImproved.show(cfg.matchKey,_gnt,_gnp);}
+              }
+            }
+            if(_scoreEl){
+              var _origHTML=_scoreEl.innerHTML;
+              _scoreEl.innerHTML='<span class="ml-var-text">📺 VAR</span>';
+              if(_timerEl)_timerEl.classList.add('ml-var-reviewing');
+              setTimeout(function(){
+                _scoreEl.innerHTML=_origHTML;
+                if(_timerEl)_timerEl.classList.remove('ml-var-reviewing');
+                _doUpdate();
+              },3000);
+            } else {
+              _doUpdate();
+            }
+          },msDelay);
+        })(ev,ms,_isGoalType);
+      } else {
+        setTimeout(function(){renderEvtEl(ev);},ms);
+        if(_isGoalType){
+          setTimeout(function(){
+            var scAEl=document.getElementById(cfg.scAId);
+            var scBEl=document.getElementById(cfg.scBId);
+            if(scAEl) scAEl.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='a'&&e.min<=ev.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='b'&&e.min<=ev.min;}).length;
+            if(scBEl) scBEl.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='b'&&e.min<=ev.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='a'&&e.min<=ev.min;}).length;
+            var gf=document.getElementById(cfg.gfId);
+            if(gf){gf.classList.add('show');if(typeof triggerShootingBall==='function')triggerShootingBall(gf,(ev.type==='propia'?(ev.team==='a'?'b':'a'):ev.team));setTimeout(function(){gf.classList.remove('show');},3000);}
+            if(window.goalNotificationImproved){var _gnt=ev.type==='propia'?(ev.team==='a'?'b':'a'):ev.team;var _gnp=ev.player?ev.player[1]:'';window.goalNotificationImproved.show(cfg.matchKey,_gnt,_gnp);}
+          },ms+50);
+        }
       }
     });
 

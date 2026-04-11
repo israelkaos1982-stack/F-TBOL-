@@ -4891,8 +4891,17 @@
         evtData1 = { events: existingStore.evts, mvp: existingStore.mvpName || '', mvpTeam: existingStore.mvpTeam || '' };
         results[key] = { gh: storedGh || goalsA, ga: storedGa || goalsB, events: evtData1.events, mvp: evtData1.mvp, mvpTeam: evtData1.mvpTeam };
       } else {
-        evtData1 = genMatchEvents(teamA, teamB, goalsA, goalsB);
-        results[key] = { gh: goalsA, ga: goalsB, events: evtData1.events, mvp: evtData1.mvp, mvpTeam: evtData1.mvpTeam };
+        evtData1 = genMatchEventsEnhanced(teamA, teamB, goalsA, goalsB);
+        /* Recalculate score to include any pen-gol/falta-gol/propia added by Enhanced */
+        var fallbackGh = 0, fallbackGa = 0;
+        evtData1.events.forEach(function(ev) {
+          if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
+            if (ev.team === 'a') fallbackGh++; else fallbackGa++;
+          } else if (ev.type === 'propia') {
+            if (ev.team === 'a') fallbackGa++; else fallbackGh++;
+          }
+        });
+        results[key] = { gh: fallbackGh || goalsA, ga: fallbackGa || goalsB, events: evtData1.events, mvp: evtData1.mvp, mvpTeam: evtData1.mvpTeam };
       }
       saveResults(results);
       actualizarDom('l-j1', teamA, teamB, goalsA, goalsB);

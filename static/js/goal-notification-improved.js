@@ -175,8 +175,16 @@
     const btn = document.getElementById('audio-mute-btn');
     if (btn) {
       btn.setAttribute('data-muted', audioMuted);
-      btn.textContent = audioMuted ? '🔇' : '🔊';
-      btn.title = audioMuted ? 'Sonido desactivado – clic para activar' : 'Sonido activado – clic para silenciar';
+      btn.setAttribute('aria-pressed', audioMuted ? 'true' : 'false');
+      if (audioMuted) {
+        btn.textContent = '🔇';
+        btn.setAttribute('aria-label', 'Sonido desactivado – clic para activar');
+        btn.title = 'Sonido desactivado – clic para activar';
+      } else {
+        btn.textContent = '🔊';
+        btn.setAttribute('aria-label', 'Sonido activado – clic para silenciar');
+        btn.title = 'Sonido activado – clic para silenciar';
+      }
     }
     return audioMuted;
   }
@@ -200,4 +208,20 @@
   // Initialise AudioContext on first user interaction (browser autoplay policy)
   document.addEventListener('click',      initAudioContext, { once: true });
   document.addEventListener('touchstart', initAudioContext, { once: true });
+
+  // Wire up the mute button once the DOM is ready
+  function attachMuteBtn() {
+    const btn = document.getElementById('audio-mute-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleAudioMute();
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attachMuteBtn);
+  } else {
+    attachMuteBtn();
+  }
 })();

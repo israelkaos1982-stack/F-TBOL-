@@ -115,6 +115,44 @@
   100% { filter: drop-shadow(0 0 4px #ffff00); }
 }
 
+/* ── Audio mute button (fixed, bottom-right) ────────────────────────────── */
+#audio-mute-btn {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 9999;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 210, 0, 0.45);
+  background: rgba(10, 10, 20, 0.82);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  transition: border-color 0.18s, background 0.18s, transform 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#audio-mute-btn:hover {
+  border-color: rgba(255, 210, 0, 0.85);
+  background: rgba(20, 20, 36, 0.95);
+  transform: scale(1.08);
+}
+
+#audio-mute-btn:active {
+  transform: scale(0.94);
+}
+
+#audio-mute-btn[data-muted="true"] {
+  border-color: rgba(255, 80, 80, 0.5);
+  opacity: 0.72;
+}
+
 /* ── Player-name tag below "¡GOL!" ──────────────────────────────────────── */
 .goal-flash-anim .goal-player {
   display: inline-block;

@@ -127,6 +127,16 @@
 <span class="mc-emoji" style="font-size:28px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.7));display:inline-block;">🌐</span><span class="mc-label" style="color:#fff!important;text-shadow:1px 1px 3px #000,0 0 10px rgba(0,0,0,.8);">SELECCIONES</span>
 </div>
 </div>
+<div style="grid-column:span 2; border-top:1px solid rgba(255,160,0,.2); margin:4px 0; padding-top:10px;">
+<div style="font-family:Oswald,sans-serif;font-size:14px;font-weight:800;letter-spacing:3.6px;color:#ffa040;text-shadow:0 0 16px rgba(255,160,0,.45);padding:0 4px 8px;">⏸ PARTIDOS APLAZADOS</div>
+</div>
+<div class="menu-card full" onclick="go('s-pendientes')" style="background:linear-gradient(135deg,#1a0e00 0%,#2e1800 50%,#1a0e00 100%);border:1px solid rgba(255,160,0,.3)!important;box-shadow:0 0 18px rgba(255,100,0,.18) inset;height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;grid-column:span 2;">
+<div class="mc-main-overlay"></div>
+<div class="mc-main-content">
+<span class="mc-emoji" style="font-size:28px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.7));display:inline-block;">⏸</span><span class="mc-label" style="color:#ffa040!important;text-shadow:1px 1px 3px #000,0 0 10px rgba(255,100,0,.6);">PARTIDOS APLAZADOS</span>
+</div>
+</div>
+
 <div style="grid-column:span 2; border-top:1px solid rgba(240,192,64,.2); margin:4px 0; padding-top:10px;">
 <div style="font-family:Oswald,sans-serif;font-size:14px;font-weight:800;letter-spacing:3.6px;color:#ffe7a6;text-shadow:0 0 16px rgba(240,192,64,.55);padding:0 4px 8px;">👤 EQUIPOS</div>
 </div>
@@ -182,9 +192,14 @@
 </div>
 
 <div class="screen" id="s-bayern-objetivos">
-  <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+  <script>/* redirect alias */ if(document.getElementById('s-bayern-objetivos') && document.getElementById('s-münchen-objetivos') === null){ document.addEventListener('DOMContentLoaded', function(){ var alias = document.getElementById('s-bayern-objetivos'); if(alias && alias.classList.contains('active')){ if(typeof go === 'function') go('s-munich-objetivos'); } }); }</script>
+  <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
   <div class="sec-hdr"><span class="sec-emoji">🎯</span><h2>Objetivos del Club</h2></div>
-  <div class="hub-screen-card">Seguimiento activo de <b>33</b> misiones con filtros por completado y pendiente (avance actual: <b>2/33</b>).</div>
+  <div class="hub-screen-card" style="text-align:center;padding:20px;">
+    <div style="font-size:32px;margin-bottom:8px;">🎯</div>
+    <p style="margin:0 0 12px;color:#fff;">Los Objetivos del Club se gestionan desde el panel de Bayern Munich.</p>
+    <button onclick="go('s-munich-objetivos')" style="background:linear-gradient(145deg,#dc052d,#8e001c);border:none;color:#fff;font-family:Oswald,sans-serif;font-size:14px;letter-spacing:1.5px;padding:10px 20px;border-radius:8px;cursor:pointer;">📋 Ver Panel Maestro (33 Misiones)</button>
+  </div>
 </div>
 
 <div class="screen" id="s-bayern-plantilla">
@@ -249,6 +264,7 @@
   var medEl = document.getElementById('hud-medical-pill');
   var matchEl = document.getElementById('hub-next-match');
   var injuryWarn = document.getElementById('hub-injury-warning');
+  if (!nextBtn || !playBtn) return;
 
   function pickPlayer(){
     return ROSTER[Math.floor(Math.random() * ROSTER.length)];
@@ -357,7 +373,7 @@
 <button class="ml-add-btn" id="ml-add-btn-j1m1" onclick="mlTogglePanel_j1m1()" style="visibility:hidden">＋ AÑADIR EVENTO</button>
 </div>
 <div class="ml-event-panel" id="ml-event-panel-j1m1">
-<div class="ml-grid"><div class="ml-card c-gol" onclick="mlShowTP_j1m1('Gol','gol')"><span class="ml-card-ico">⚽</span><span class="ml-card-lbl">Gol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m1('Autogol','propia')"><span class="ml-card-ico">⚽🚫</span><span class="ml-card-lbl">Autogol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m1('Gol de Falta','falta-gol')"><span class="ml-card-ico">⚽🎯</span><span class="ml-card-lbl">Gol de Falta</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m1('Penalti Gol','pen-gol')"><span class="ml-card-ico">⚽🥅</span><span class="ml-card-lbl">Penalti Gol</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m1('Penalti Fallado','pen-fallo')"><span class="ml-card-ico">❌🥅</span><span class="ml-card-lbl">Penalti Fallado</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m1('Pen. Provocado','pen-prov')"><span class="ml-card-ico">🤦🥅</span><span class="ml-card-lbl">Pen. Provocado</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m1('Penalti Parado','pen-parado')"><span class="ml-card-ico">🖐🥅</span><span class="ml-card-lbl">Penalti Parado</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m1('Tarjeta Amarilla','amarilla')"><span class="ml-card-ico">🟨</span><span class="ml-card-lbl">Tarjeta Amarilla</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m1('Doble Amarilla','d-amarilla')"><span class="ml-card-ico">🟨🟥</span><span class="ml-card-lbl">Doble Amarilla</span></div><div class="ml-card c-red" onclick="mlShowTP_j1m1('Roja Directa','roja')"><span class="ml-card-ico">🟥</span><span class="ml-card-lbl">Roja Directa</span></div><div class="ml-card c-mvp" onclick="mlShowTP_j1m1('MVP del Partido','mvp')"><span class="ml-card-ico">⭐</span><span class="ml-card-lbl">MVP del Partido</span></div><div class="ml-card" onclick="mlShowTP_j1m1('Lesión','lesion')" style="background:#1a1a1a;border:1px solid #444;"><span class="ml-card-ico">🩹</span><span class="ml-card-lbl">Lesión</span></div></div>
+<div class="ml-grid"><div class="ml-card c-gol" onclick="mlShowTP_j1m1('Gol','gol')"><span class="ml-card-ico">⚽</span><span class="ml-card-lbl">Gol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m1('Autogol','propia')"><span class="ml-card-ico">⚽🚫</span><span class="ml-card-lbl">Autogol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m1('Gol de Falta','falta-gol')"><span class="ml-card-ico">⚽🎯</span><span class="ml-card-lbl">Gol de Falta</span></div><div class="ml-card c-pen" onclick="mlHideEvOv_j1m1();window.mlPenWizStart('j1m1')"><span class="ml-card-ico">🥅</span><span class="ml-card-lbl">Penalti</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m1('Tarjeta Amarilla','amarilla')"><span class="ml-card-ico">🟨</span><span class="ml-card-lbl">Tarjeta Amarilla</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m1('Doble Amarilla','d-amarilla')"><span class="ml-card-ico">🟨🟥</span><span class="ml-card-lbl">Doble Amarilla</span></div><div class="ml-card c-red" onclick="mlShowTP_j1m1('Roja Directa','roja')"><span class="ml-card-ico">🟥</span><span class="ml-card-lbl">Roja Directa</span></div><div class="ml-card c-mvp" onclick="mlShowTP_j1m1('MVP del Partido','mvp')"><span class="ml-card-ico">⭐</span><span class="ml-card-lbl">MVP del Partido</span></div><div class="ml-card" onclick="mlShowTP_j1m1('Lesión','lesion')" style="background:#1a1a1a;border:1px solid #444;"><span class="ml-card-ico">🩹</span><span class="ml-card-lbl">Lesión</span></div></div>
 <div class="ml-inline-modal" id="ml-modal-j1m1">
 <div class="ml-modal-title" id="ml-modal-title-j1m1">SELECCIONAR JUGADOR</div>
 <select id="ml-modal-sel-j1m1"></select>
@@ -367,9 +383,7 @@
 </div>
 </div>
 </div>
-<div class="ml-match-actions" id="ml-actions-bar-j1m1" style="visibility:hidden">
-<button id="ml-btn-et-j1m1" onclick="mlActivateET_j1m1()">⏱ PRÓRROGA</button>
-<button id="ml-btn-pen-j1m1" onclick="mlShowPenPanel_j1m1()" style="display:none">⚽ PENALTIS</button>
+<div class="ml-match-actions ml-match-actions-single" id="ml-actions-bar-j1m1" style="visibility:hidden">
 <button id="ml-btn-end-j1m1" onclick="mlEndMatch_j1m1()">🏁 FINALIZAR</button>
 </div>
 <div class="ml-acta"><button class="ml-acta-toggle" id="acta-toggle-j1m1" onclick="actaTog('j1m1')"><span class="acta-ia-lbl">📋 ACTA DEL PARTIDO</span><span class="acta-arr">▼</span></button><div class="ml-acta-body" id="acta-body-j1m1"><div id="ml-acta-list-j1m1"><div class="ml-acta-empty">Sin eventos registrados</div></div></div>
@@ -408,7 +422,7 @@
 <button class="ml-add-btn" id="ml-add-btn-j1m2" onclick="mlTogglePanel_j1m2()" style="visibility:hidden">＋ AÑADIR EVENTO</button>
 </div>
 <div class="ml-event-panel" id="ml-event-panel-j1m2">
-<div class="ml-grid"><div class="ml-card c-gol" onclick="mlShowTP_j1m2('Gol','gol')"><span class="ml-card-ico">⚽</span><span class="ml-card-lbl">Gol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m2('Autogol','propia')"><span class="ml-card-ico">⚽🚫</span><span class="ml-card-lbl">Autogol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m2('Gol de Falta','falta-gol')"><span class="ml-card-ico">⚽🎯</span><span class="ml-card-lbl">Gol de Falta</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m2('Penalti Gol','pen-gol')"><span class="ml-card-ico">⚽🥅</span><span class="ml-card-lbl">Penalti Gol</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m2('Penalti Fallado','pen-fallo')"><span class="ml-card-ico">❌🥅</span><span class="ml-card-lbl">Penalti Fallado</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m2('Pen. Provocado','pen-prov')"><span class="ml-card-ico">🤦🥅</span><span class="ml-card-lbl">Pen. Provocado</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m2('Penalti Parado','pen-parado')"><span class="ml-card-ico">🖐🥅</span><span class="ml-card-lbl">Penalti Parado</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m2('Tarjeta Amarilla','amarilla')"><span class="ml-card-ico">🟨</span><span class="ml-card-lbl">Tarjeta Amarilla</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m2('Doble Amarilla','d-amarilla')"><span class="ml-card-ico">🟨🟥</span><span class="ml-card-lbl">Doble Amarilla</span></div><div class="ml-card c-red" onclick="mlShowTP_j1m2('Roja Directa','roja')"><span class="ml-card-ico">🟥</span><span class="ml-card-lbl">Roja Directa</span></div><div class="ml-card c-mvp" onclick="mlShowTP_j1m2('MVP del Partido','mvp')"><span class="ml-card-ico">⭐</span><span class="ml-card-lbl">MVP del Partido</span></div><div class="ml-card" onclick="mlShowTP_j1m2('Lesión','lesion')" style="background:#1a1a1a;border:1px solid #444;"><span class="ml-card-ico">🩹</span><span class="ml-card-lbl">Lesión</span></div></div>
+<div class="ml-grid"><div class="ml-card c-gol" onclick="mlShowTP_j1m2('Gol','gol')"><span class="ml-card-ico">⚽</span><span class="ml-card-lbl">Gol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m2('Autogol','propia')"><span class="ml-card-ico">⚽🚫</span><span class="ml-card-lbl">Autogol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m2('Gol de Falta','falta-gol')"><span class="ml-card-ico">⚽🎯</span><span class="ml-card-lbl">Gol de Falta</span></div><div class="ml-card c-pen" onclick="mlHideEvOv_j1m2();window.mlPenWizStart('j1m2')"><span class="ml-card-ico">🥅</span><span class="ml-card-lbl">Penalti</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m2('Tarjeta Amarilla','amarilla')"><span class="ml-card-ico">🟨</span><span class="ml-card-lbl">Tarjeta Amarilla</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m2('Doble Amarilla','d-amarilla')"><span class="ml-card-ico">🟨🟥</span><span class="ml-card-lbl">Doble Amarilla</span></div><div class="ml-card c-red" onclick="mlShowTP_j1m2('Roja Directa','roja')"><span class="ml-card-ico">🟥</span><span class="ml-card-lbl">Roja Directa</span></div><div class="ml-card c-mvp" onclick="mlShowTP_j1m2('MVP del Partido','mvp')"><span class="ml-card-ico">⭐</span><span class="ml-card-lbl">MVP del Partido</span></div><div class="ml-card" onclick="mlShowTP_j1m2('Lesión','lesion')" style="background:#1a1a1a;border:1px solid #444;"><span class="ml-card-ico">🩹</span><span class="ml-card-lbl">Lesión</span></div></div>
 <div class="ml-inline-modal" id="ml-modal-j1m2">
 <div class="ml-modal-title" id="ml-modal-title-j1m2">SELECCIONAR JUGADOR</div>
 <select id="ml-modal-sel-j1m2"></select>
@@ -418,9 +432,7 @@
 </div>
 </div>
 </div>
-<div class="ml-match-actions" id="ml-actions-bar-j1m2" style="visibility:hidden">
-<button id="ml-btn-et-j1m2" onclick="mlActivateET_j1m2()">⏱ PRÓRROGA</button>
-<button id="ml-btn-pen-j1m2" onclick="mlShowPenPanel_j1m2()" style="display:none">⚽ PENALTIS</button>
+<div class="ml-match-actions ml-match-actions-single" id="ml-actions-bar-j1m2" style="visibility:hidden">
 <button id="ml-btn-end-j1m2" onclick="mlEndMatch_j1m2()">🏁 FINALIZAR</button>
 </div>
 <div class="ml-acta"><button class="ml-acta-toggle" id="acta-toggle-j1m2" onclick="actaTog('j1m2')"><span class="acta-ia-lbl">📋 ACTA DEL PARTIDO</span><span class="acta-arr">▼</span></button><div class="ml-acta-body" id="acta-body-j1m2"><div id="ml-acta-list-j1m2"><div class="ml-acta-empty">Sin eventos registrados</div></div></div>
@@ -457,7 +469,7 @@
 <button class="ml-add-btn" id="ml-add-btn-j1m3" onclick="mlTogglePanel_j1m3()" style="visibility:hidden">＋ AÑADIR EVENTO</button>
 </div>
 <div class="ml-event-panel" id="ml-event-panel-j1m3">
-<div class="ml-grid"><div class="ml-card c-gol" onclick="mlShowTP_j1m3('Gol','gol')"><span class="ml-card-ico">⚽</span><span class="ml-card-lbl">Gol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m3('Autogol','propia')"><span class="ml-card-ico">⚽🚫</span><span class="ml-card-lbl">Autogol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m3('Gol de Falta','falta-gol')"><span class="ml-card-ico">⚽🎯</span><span class="ml-card-lbl">Gol de Falta</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m3('Penalti Gol','pen-gol')"><span class="ml-card-ico">⚽🥅</span><span class="ml-card-lbl">Penalti Gol</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m3('Penalti Fallado','pen-fallo')"><span class="ml-card-ico">❌🥅</span><span class="ml-card-lbl">Penalti Fallado</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m3('Pen. Provocado','pen-prov')"><span class="ml-card-ico">🤦🥅</span><span class="ml-card-lbl">Pen. Provocado</span></div><div class="ml-card c-pen" onclick="mlShowTP_j1m3('Penalti Parado','pen-parado')"><span class="ml-card-ico">🖐🥅</span><span class="ml-card-lbl">Penalti Parado</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m3('Tarjeta Amarilla','amarilla')"><span class="ml-card-ico">🟨</span><span class="ml-card-lbl">Tarjeta Amarilla</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m3('Doble Amarilla','d-amarilla')"><span class="ml-card-ico">🟨🟥</span><span class="ml-card-lbl">Doble Amarilla</span></div><div class="ml-card c-red" onclick="mlShowTP_j1m3('Roja Directa','roja')"><span class="ml-card-ico">🟥</span><span class="ml-card-lbl">Roja Directa</span></div><div class="ml-card c-mvp" onclick="mlShowTP_j1m3('MVP del Partido','mvp')"><span class="ml-card-ico">⭐</span><span class="ml-card-lbl">MVP del Partido</span></div><div class="ml-card" onclick="mlShowTP_j1m3('Lesión','lesion')" style="background:#1a1a1a;border:1px solid #444;"><span class="ml-card-ico">🩹</span><span class="ml-card-lbl">Lesión</span></div></div>
+<div class="ml-grid"><div class="ml-card c-gol" onclick="mlShowTP_j1m3('Gol','gol')"><span class="ml-card-ico">⚽</span><span class="ml-card-lbl">Gol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m3('Autogol','propia')"><span class="ml-card-ico">⚽🚫</span><span class="ml-card-lbl">Autogol</span></div><div class="ml-card c-gol" onclick="mlShowTP_j1m3('Gol de Falta','falta-gol')"><span class="ml-card-ico">⚽🎯</span><span class="ml-card-lbl">Gol de Falta</span></div><div class="ml-card c-pen" onclick="mlHideEvOv_j1m3();window.mlPenWizStart('j1m3')"><span class="ml-card-ico">🥅</span><span class="ml-card-lbl">Penalti</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m3('Tarjeta Amarilla','amarilla')"><span class="ml-card-ico">🟨</span><span class="ml-card-lbl">Tarjeta Amarilla</span></div><div class="ml-card c-yel" onclick="mlShowTP_j1m3('Doble Amarilla','d-amarilla')"><span class="ml-card-ico">🟨🟥</span><span class="ml-card-lbl">Doble Amarilla</span></div><div class="ml-card c-red" onclick="mlShowTP_j1m3('Roja Directa','roja')"><span class="ml-card-ico">🟥</span><span class="ml-card-lbl">Roja Directa</span></div><div class="ml-card c-mvp" onclick="mlShowTP_j1m3('MVP del Partido','mvp')"><span class="ml-card-ico">⭐</span><span class="ml-card-lbl">MVP del Partido</span></div><div class="ml-card" onclick="mlShowTP_j1m3('Lesión','lesion')" style="background:#1a1a1a;border:1px solid #444;"><span class="ml-card-ico">🩹</span><span class="ml-card-lbl">Lesión</span></div></div>
 <div class="ml-inline-modal" id="ml-modal-j1m3">
 <div class="ml-modal-title" id="ml-modal-title-j1m3">SELECCIONAR JUGADOR</div>
 <select id="ml-modal-sel-j1m3"></select>
@@ -2752,174 +2764,39 @@
     </div>
   </div>
 </div>
-<div class="ent-section" style="border:1px solid rgba(240,192,64,.3);background:linear-gradient(180deg,#1a0408 0%,#100205 100%);overflow:hidden;box-shadow:0 0 18px rgba(220,5,45,.15);">
-<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px 9px;border-bottom:1px solid rgba(255,255,255,.08);">
-<span style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;color:#f0c040;font-style:italic;">📅 PARTIDO PENDIENTE</span>
-
-</div>
-<div id="bayern-dashboard-next" style="padding:12px 10px 14px;display:flex;flex-direction:column;gap:8px;">
-  <div id="bayern-next-card" style="border:1px solid rgba(240,192,64,.3);border-radius:12px;background:linear-gradient(145deg,rgba(30,4,12,.9),rgba(18,2,6,.95));padding:12px 14px;box-shadow:0 0 20px rgba(220,5,45,.2),inset 0 1px 0 rgba(255,255,255,.06);"></div>
-  <div id="bayern-next-upcoming" style="display:flex;gap:8px;"></div>
-</div>
-</div>
-
-<div class="ent-section ath-box-titulos">
-<button class="ent-header ath-hdr-titulos" onclick="go('s-munich-trofeos')" style="cursor:pointer;"><i class="ico">🏆</i><span>Vitrina de Trofeos</span>
-<span class="ath-badge-total">2</span>
-<span style="margin-left:auto;color:rgba(255,255,255,.4);font-size:12px;">▶</span>
-</button>
-
-</div>
-<div class="ent-section ath-box-derbys">
-<button class="ent-header ath-hdr-derbys" onclick="entTog('ath-derbys')"><i class="ico">📋</i><span>Histórico Derbys</span>
-<span class="ent-arr" id="ath-derbys-arr">▼</span>
-</button>
-<div class="ent-body ath-body-derbys" id="ath-derbys">
-<div class="derby-stats-hdr">
-<span class="derby-stats-hdr-lbl">TEMP</span>
-<span class="derby-stats-hdr-lbl">PJ</span>
-<span class="derby-stats-hdr-lbl">PG</span>
-<span class="derby-stats-hdr-lbl">PE</span>
-<span class="derby-stats-hdr-lbl">PP</span>
-<span class="derby-stats-hdr-lbl">G+</span>
-<span class="derby-stats-hdr-lbl">G-</span>
-<span class="derby-stats-hdr-lbl">+-</span>
-<span class="derby-stats-hdr-lbl">%</span>
-<span class="derby-stats-hdr-lbl"></span>
-</div>
-<div class="derby-stats-row global-row">
-<span class="derby-stats-temp">TOTAL</span>
-<span class="derby-stats-val">29</span>
-<span class="derby-stats-val" style="color:#4fc86a;">6</span>
-<span class="derby-stats-val">7</span>
-<span class="derby-stats-val" style="color:#e05050;">16</span>
-<span class="derby-stats-val" style="color:#80d0ff;">35</span>
-<span class="derby-stats-val" style="color:#ff9090;">73</span>
-<span class="derby-stats-val" style="color:#f0c040;">-38</span>
-<span class="derby-stats-val" style="color:#c0a0ff;">21%</span>
-<span></span>
-</div>
-<div class="derby-temp-block">
-<button class="derby-temp-btn open" id="dt-3132-btn" onclick="derbyTog('dt-3132')">
-<span class="derby-temp-name">31-32</span>
-<span class="derby-temp-sv">5</span>
-<span class="derby-temp-sv" style="color:#4fc86a;">0</span>
-<span class="derby-temp-sv">0</span>
-<span class="derby-temp-sv" style="color:#e05050;">5</span>
-<span class="derby-temp-sv" style="color:#80d0ff;">1</span>
-<span class="derby-temp-sv" style="color:#ff9090;">19</span>
-<span class="derby-temp-sv" style="color:#f0c040;">-18</span>
-<span class="derby-temp-sv" style="color:#c0a0ff;">0%</span>
-<span class="derby-temp-arr open" id="dt-3132-arr">▲</span>
-</button>
-<div class="derby-temp-body open" id="dt-3132">
-<div class="derby-comp-lbl">🏆 COPA DEL REY</div>
-<div class="derby-match-row derby-pend"><span class="derby-score"></span><span class="derby-comp">—</span><span class="derby-rival-m" style="color:rgba(255,255,255,.3)">Por jugar</span><span class="derby-res"></span></div>
-<div class="derby-comp-lbl">🇪🇸 LIGA</div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-7</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🔵 SUPERLIGA (B Munich)</div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-5</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Arsenal</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Arsenal</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Man City 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Man City 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">PSG</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">PSG</span><span class="derby-res">—</span></div>
-<div class="derby-comp-lbl">🌍 SELECCION (Francia)</div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Italia 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-5</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Austria</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Inglaterra 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Noruega</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">España</span><span class="derby-res">—</span></div>
-</div>
-</div>
-<div class="derby-temp-block">
-<button class="derby-temp-btn" id="dt-3031-btn" onclick="derbyTog('dt-3031')">
-<span class="derby-temp-name">30-31</span>
-<span class="derby-temp-sv">17</span>
-<span class="derby-temp-sv" style="color:#4fc86a;">4</span>
-<span class="derby-temp-sv">7</span>
-<span class="derby-temp-sv" style="color:#e05050;">6</span>
-<span class="derby-temp-sv" style="color:#80d0ff;">24</span>
-<span class="derby-temp-sv" style="color:#ff9090;">39</span>
-<span class="derby-temp-sv" style="color:#f0c040;">-15</span>
-<span class="derby-temp-sv" style="color:#c0a0ff;">24%</span>
-<span class="derby-temp-arr" id="dt-3031-arr">▼</span>
-</button>
-<div class="derby-temp-body" id="dt-3031">
-<div class="derby-comp-lbl">🏆 COPA DEL REY</div>
-<div class="derby-match-row derby-g"><span class="derby-score">4-0</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🇪🇸 LIGA</div>
-<div class="derby-match-row derby-e"><span class="derby-score">2-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">2-2</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">1-1</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">2-0</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">0-0</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">3-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Atl Madrid</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-7</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Atl Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">3-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🌍 SELECCION (Egipto)</div>
-<div class="derby-match-row derby-e"><span class="derby-score">1-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Camerún 😈</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-4</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Nigeria</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Senegal 🔧</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">3-8</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Costa Marfil</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">2-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Nigeria</span><span class="derby-res derby-res-g">G</span></div>
-</div>
-</div>
-<div class="derby-temp-block">
-<button class="derby-temp-btn" id="dt-2930-btn" onclick="derbyTog('dt-2930')">
-<span class="derby-temp-name">29-30</span>
-<span class="derby-temp-sv">7</span>
-<span class="derby-temp-sv" style="color:#4fc86a;">2</span>
-<span class="derby-temp-sv">0</span>
-<span class="derby-temp-sv" style="color:#e05050;">5</span>
-<span class="derby-temp-sv" style="color:#80d0ff;">10</span>
-<span class="derby-temp-sv" style="color:#ff9090;">15</span>
-<span class="derby-temp-sv" style="color:#f0c040;">-5</span>
-<span class="derby-temp-sv" style="color:#c0a0ff;">29%</span>
-<span class="derby-temp-arr" id="dt-2930-arr">▼</span>
-</button>
-<div class="derby-temp-body" id="dt-2930">
-<div class="derby-comp-lbl">🏆 SUPERCOPA ESPAÑA</div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🇪🇸 LIGA</div>
-<div class="derby-match-row derby-g"><span class="derby-score">3-2</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">5-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Villarreal</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Villarreal</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-</div>
-</div>
-</div>
-</div>
-<div class="ent-section ath-box-obj">
-<button class="ent-header ath-hdr-obj" onclick="go('s-munich-objetivos')" style="cursor:pointer;"><i class="ico">🎯</i><span style="white-space:nowrap">Objetivos del Club</span>
-<span class="ath-obj-progreso" id="ath-obj-count">0 / 33</span>
-<span style="margin-left:auto;color:rgba(255,255,255,.4);font-size:12px;">▶</span>
-</button>
-
-</div>
-<div class="ent-section ath-box-plantilla">
-<button class="ent-header ath-hdr-plantilla" onclick="go('s-munich-plantilla')" style="cursor:pointer;"><i class="ico">👕</i><span>Plantilla</span>
-<span style="margin-left:auto;margin-right:8px;font-family:Oswald,sans-serif;font-size:11px;font-style:normal;color:rgba(255,255,255,.3);letter-spacing:1px;">31 jugadores</span>
-<span style="margin-left:auto;color:rgba(255,255,255,.4);font-size:12px;">▶</span>
-</button>
-
-</div>
+<section class="hub-main-grid">
+  <button class="hub-card" onclick="go('s-munich-trofeos')">
+    <span class="hub-title">🏆 Vitrina de Trofeos</span>
+    <span class="hub-sub">2 títulos oficiales</span>
+    <div class="hub-trophy-logos">
+      <img src="https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg" alt="FIFA Club World Cup">
+      <img src="/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg" alt="Supercopa de España">
+    </div>
+  </button>
+  <button class="hub-card" onclick="go('s-munich-derbys')">
+    <span class="hub-title">👤 Histórico Derbys</span>
+    <span class="hub-sub">Récord: 6G – 7E – 16P · 21% Win</span>
+  </button>
+  <button class="hub-card" onclick="go('s-munich-objetivos')">
+    <span class="hub-title">🎯 Objetivos del Club</span>
+    <span class="hub-sub">Progreso: <span id="munich-obj-count">0 / 33</span></span>
+  </button>
+  <button class="hub-card" onclick="go('s-munich-plantilla')">
+    <span class="hub-title">👕 Plantilla</span>
+    <span class="hub-sub">31 jugadores · gestión completa</span>
+  </button>
+</section>
+<section class="hub-match-engine">
+  <div class="hub-fixture">
+    <p class="fixture-label">Próximo partido</p>
+    <p class="fixture-value" id="munich-next-match">Entrenamiento · 16 Julio</p>
+    <p class="fixture-injury" id="munich-injury-warning"></p>
+  </div>
+  <div class="hub-actions">
+    <button class="btn-play" id="munich-play-btn">⚽ JUGAR PARTIDO</button>
+    <button class="btn-next" id="munich-next-day-btn">➡️ SIGUIENTE DÍA</button>
+  </div>
+</section>
 </div>
 </div>
 
@@ -2931,8 +2808,8 @@
 <div style="text-align:center;padding:10px 0 4px;">
 <span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.35);">TEMPORADA 31–32</span>
 </div>
-<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><span style="font-size:44px;line-height:1;">🌍</span><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">MUNDIAL DE CLUBES</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">Competición Internacional</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
-<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><span style="font-size:44px;line-height:1;">⭐</span><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">SUPERCOPA DE ESPAÑA</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">Competición Nacional</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
+<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><img src="https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg" alt="FIFA Club World Cup" style="width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;"><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">MUNDIAL DE CLUBES</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">FIFA Club World Cup</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
+<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><img src="/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg" alt="Supercopa de España" style="width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;"><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">SUPERCOPA DE ESPAÑA</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">RFEF – Competición Nacional</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
 <div style="text-align:center;padding:14px 0 0;">
 <span style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:6px;color:rgba(240,192,64,.5);">TOTAL: 2</span>
 </div>
@@ -2944,76 +2821,273 @@
 <div class="sec-hdr"><span class="sec-emoji">🎯</span><h2>Objetivos del Club</h2></div>
 <div style="padding:4px 14px 40px;">
 <div style="padding:8px 4px 14px;display:flex;align-items:center;justify-content:space-between;">
-<span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.4);">PROGRESO</span>
+<span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.5);">PROTOCOLO · MÁXIMA PRESIÓN · TOÑÍN</span>
 <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:#f0c040;" id="ath-obj-count">0 / 33</span>
 </div>
 <div class="ent-body ath-body-obj" id="ath-obj-club">
+
+<!-- PESTAÑA 1: LIGA Y COPA -->
 <div class="obj-sub-section">
-<button class="obj-sub-hdr" onclick="subTog('obj-liga')" style="color:#f08040;">🇪🇸 <span>LIGA</span> <span class="obj-sub-arr" id="obj-liga-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-liga')" style="color:#ff8c42;">🇪🇸 <span>LIGA EA SPORTS</span> <span class="obj-sub-arr" id="obj-liga-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-liga">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Finalizar entre los 6 primeros</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Lograr 5 partidos imbatido <span class="obj-counter" id="oc-imbatido-liga">0<span class="obj-counter-max">/5</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 jugador entre los 10 máx. goleadores ⚽</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Mantener 48% o más de valoración global <span class="obj-counter" id="oc-rating-liga">0%<span class="obj-counter-max">/48%</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Terminar la liga por delante del VILLARREAL CF</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🛡️ Élite · Finalizar entre los 6 primeros</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🧤 Muro · Lograr 5 partidos imbatido <span class="obj-counter" id="oc-imbatido-liga">0<span class="obj-counter-max">/5</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-imbatido-liga',-1,0,5,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-imbatido-liga',1,0,5,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🎯 Referente · 1 jugador entre los 10 máx. goleadores</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⭐ Rating · Mantener 48% o más de valoración global <span class="obj-counter" id="oc-rating-liga">0%<span class="obj-counter-max">/48%</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStepPct('oc-rating-liga',-1,0,100,48)">−</button><button class="oc-btn" onclick="athObjStepPct('oc-rating-liga',1,0,100,48)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⚔️ Duelo Directo · Terminar por delante del VILLARREAL CF</label>
 </div>
 </div>
+
 <div class="obj-sub-section">
 <button class="obj-sub-hdr" onclick="subTog('obj-copa')" style="color:#f0c040;">🏆 <span>COPA DEL REY</span> <span class="obj-sub-arr" id="obj-copa-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-copa">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Llegar a Cuartos</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Clasificar y jugar la Final</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 5 o más ⚽ en 1 eliminatoria <span class="obj-counter" id="oc-goles-copa">0<span class="obj-counter-max">/5</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🥉 Exigencia · Alcanzar los Cuartos de Final</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🥈 Gran Final · Clasificar y jugar la Final de Copa</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🔥 Eficacia · Marcar 5 o más ⚽ en 1 eliminatoria <span class="obj-counter" id="oc-goles-copa">0<span class="obj-counter-max">/5</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-goles-copa',-1,0,5,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-goles-copa',1,0,5,false)">+</button></span></label>
 </div>
 </div>
+
+<!-- PESTAÑA 2: EUROPA -->
 <div class="obj-sub-section">
-<button class="obj-sub-hdr" onclick="subTog('obj-uecl')" style="color:#00c875;">🌍 <span>EUROPA</span> <span class="obj-sub-arr" id="obj-uecl-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-uecl')" style="color:#00c875;">🌍 <span>EUROPA · ORGULLO BÁVARO</span> <span class="obj-sub-arr" id="obj-uecl-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-uecl">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Clasificar en top 8 grupo <span class="obj-counter" id="oc-pos-uecl">-<span class="obj-counter-max">/8</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Llegar a Cuartos</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Llegar a la Gran Final Europea</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 3 o más ⚽ en 1 partido europeo <span class="obj-counter" id="oc-goles-uecl">0<span class="obj-counter-max">/3</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 📊 Fase de Grupos · Clasificar en el Top 8 <span class="obj-counter" id="oc-pos-uecl">-<span class="obj-counter-max">/8</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🛡️ Fase KO · Alcanzar los Cuartos de Final</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🏆 Gloria · Llegar a la Gran Final Europea</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⚽ Vendaval · Marcar 3 o más ⚽ en 1 partido europeo <span class="obj-counter" id="oc-goles-uecl">0<span class="obj-counter-max">/3</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-goles-uecl',-1,0,3,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-goles-uecl',1,0,3,false)">+</button></span></label>
 </div>
 </div>
+
+<!-- PESTAÑA 3: DERBYS -->
 <div class="obj-sub-section">
-<button class="obj-sub-hdr" onclick="subTog('obj-derbys')" style="color:#b060f0;">⚡ <span>DERBYS</span> <span class="obj-sub-arr" id="obj-derbys-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-derbys')" style="color:#b060f0;">⚡ <span>DERBYS · TOÑÍN VS EL MUNDO</span> <span class="obj-sub-arr" id="obj-derbys-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-derbys">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar 3 de 12 partidos contra humanos <span class="obj-counter" id="oc-ganar-derby">0<span class="obj-counter-max">/3</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Lograr 1 partido imbatido contra rival real <span class="obj-counter" id="oc-imbatido-derby">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 3 o más ⚽ en 1 duelo humano <span class="obj-counter" id="oc-goles-derby">0<span class="obj-counter-max">/3</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> No ser el equipo más goleado del grupo</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> No perder por más de 3 goles contra el líder</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⚔️ Dominio · Ganar 3 de 12 partidos vs humanos <span class="obj-counter" id="oc-ganar-derby">0<span class="obj-counter-max">/3</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-ganar-derby',-1,0,3,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-ganar-derby',1,0,3,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🧤 Resistencia · 1 partido imbatido contra rival real <span class="obj-counter" id="oc-imbatido-derby">0<span class="obj-counter-max">/1</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-imbatido-derby',-1,0,1,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-imbatido-derby',1,0,1,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🥊 El Zarpazo · Marcar 3 o más ⚽ en 1 duelo humano <span class="obj-counter" id="oc-goles-derby">0<span class="obj-counter-max">/3</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-goles-derby',-1,0,3,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-goles-derby',1,0,3,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 📈 Pundonor · No ser el equipo más goleado del grupo</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🛡️ Estadística · No perder por más de 3 goles contra el líder</label>
 </div>
 </div>
+
+<!-- PESTAÑA 4: GLOBALES DEL CLUB -->
 <div class="obj-sub-section">
-<button class="obj-sub-hdr" onclick="subTog('obj-global')" style="color:#e05050;">🔴 <span>GLOBALES CLUB</span> <span class="obj-sub-arr" id="obj-global-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-global')" style="color:#ff4444;">🟢 <span>GLOBALES DEL CLUB · HITOS DE ÉLITE</span> <span class="obj-sub-arr" id="obj-global-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-global">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar 1 Título <span class="obj-counter" id="oc-titulos">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar 12 partidos en casa <span class="obj-counter" id="oc-casa">0<span class="obj-counter-max">/12</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 1 Penalti o Falta <span class="obj-counter" id="oc-penalti">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 5⚽ en 2 partidos <span class="obj-counter" id="oc-5goles2">0<span class="obj-counter-max">/5</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 6⚽ en 1 partido <span class="obj-counter" id="oc-6goles1">0<span class="obj-counter-max">/6</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 2 Hattricks <span class="obj-counter" id="oc-hattrick-gl">1<span class="obj-counter-max">/2</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Diferencia de Goles +20 <span class="obj-counter" id="oc-dif-goles">+0<span class="obj-counter-max">/+20</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 jugador entre los 20 nominados al Balón de Oro</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 jugador entre los 20 máx. goleadores europeos</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Tener un jugador con 10+ MVP en la temporada <span class="obj-counter" id="oc-mvp-temp">0<span class="obj-counter-max">/10</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Mantener a los 26 jugadores con moral Alta o superior</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🏆 Título · Ganar 1 Título oficial (Liga, Copa o Europa)</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🏠 Fortín · Ganar 12 partidos en casa <span class="obj-counter" id="oc-casa">0<span class="obj-counter-max">/12</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-casa',-1,0,12,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-casa',1,0,12,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🎯 Especialista · Marcar 1 gol de Penalti o Falta</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⚽ Racha Letal · Marcar 5⚽ en 2 partidos <span class="obj-counter" id="oc-5goles2">0<span class="obj-counter-max">/5</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-5goles2',-1,0,5,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-5goles2',1,0,5,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🔥 Goleada · Marcar 6⚽ en 1 solo partido <span class="obj-counter" id="oc-6goles1">0<span class="obj-counter-max">/6</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-6goles1',-1,0,6,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-6goles1',1,0,6,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🎩 Tripletes · Lograr 2 Hattricks <span class="obj-counter" id="oc-hattrick-gl">1<span class="obj-counter-max">/2</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-hattrick-gl',-1,0,2,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-hattrick-gl',1,0,2,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 📊 Diferencia · Diferencia de Goles +20 <span class="obj-counter" id="oc-dif-goles">+0<span class="obj-counter-max">/+20</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-dif-goles',-1,-99,99,true)">−</button><button class="oc-btn" onclick="athObjStep('oc-dif-goles',1,-99,99,true)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ✨ Balón de Oro · 1 jugador entre los 20 nominados</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 👟 Bota de Oro · 1 jugador entre los 20 máx. goleadores europeos</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🏆 MVP · 1 jugador con 10+ premios MVP en la temporada <span class="obj-counter" id="oc-mvp-temp">0<span class="obj-counter-max">/10</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 👕 Gestión · Mantener a los 26 jugadores con moral Alta o superior</label>
 </div>
 </div>
+
+<!-- PESTAÑA 5: SELECCIÓN -->
 <div class="obj-sub-section" style="border:none;">
-<button class="obj-sub-hdr" onclick="subTog('obj-sel')" style="color:#4090f0;">🌍 <span>SELECCIÓN</span> <span class="obj-sub-arr" id="obj-sel-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-sel')" style="color:#4090f0;">🇫🇷 <span>SELECCIÓN · DOMINIO ABSOLUTO</span> <span class="obj-sub-arr" id="obj-sel-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-sel">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Clasificar a Francia directamente al Mundial 2026</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar la Copa del Mundo</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 1 Hattrick internacional <span class="obj-counter" id="oc-hattrick-sel">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Estar en el Top 10 de equipos goleadores del Mundial <span class="obj-counter" id="oc-top10-sel">-<span class="obj-counter-max">/10</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Tener al MVP del Mundial en tu plantilla</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🌍 Mundial · Clasificar a Francia directamente para el Mundial 2026</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⭐ La Tercera · Ganar la Copa del Mundo</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🎩 Estrella · Marcar 1 Hattrick internacional <span class="obj-counter" id="oc-hattrick-sel">0<span class="obj-counter-max">/1</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-hattrick-sel',-1,0,1,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-hattrick-sel',1,0,1,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 📊 Ranking · Estar en el Top 10 goleadores del Mundial <span class="obj-counter" id="oc-top10-sel">-<span class="obj-counter-max">/10</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🥇 MVP Mundial · Tener al MVP del torneo en tu plantilla</label>
+</div>
+</div>
+
+</div><!-- end #ath-obj-club -->
+
+<!-- MVP TRACKER PANEL -->
+<div style="margin-top:10px;border-radius:10px;overflow:hidden;background:rgba(0,0,0,.3);">
+<button class="obj-sub-hdr" onclick="subTog('mvp-tracker-body')" style="color:#f0c040;width:100%;padding:11px 14px 9px;">⭐ <span>REGISTRO MVP POR JUGADOR</span> <span class="obj-sub-arr" id="mvp-tracker-body-arr">▼</span></button>
+<div class="obj-sub-body" id="mvp-tracker-body" style="padding:0 14px 12px;">
+<p style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);margin:0 0 8px;letter-spacing:.5px;">Auto-actualizado al cerrar cada partido. El jugador con más MVPs activa el objetivo 🏆 MVP.</p>
+<div id="mvp-tracker-log" style="display:flex;flex-direction:column;gap:4px;min-height:28px;"></div>
+<button onclick="athMvpReset()" style="margin-top:10px;background:rgba(197,15,31,.35);border:1px solid rgba(197,15,31,.5);color:#fff;border-radius:6px;padding:5px 12px;font-family:Rajdhani,sans-serif;font-size:12px;cursor:pointer;letter-spacing:.5px;">🗑 Reiniciar tracker MVP</button>
 </div>
 </div>
 </div>
 </div>
-</div>
+
+<style>
+.oc-btns{display:inline-flex;gap:2px;margin-left:4px;flex-shrink:0;}
+.oc-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:4px;width:20px;height:20px;font-size:13px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
+.oc-btn:active{background:rgba(255,255,255,.28);}
+.mvp-log-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;background:rgba(240,192,64,.07);border:1px solid rgba(240,192,64,.12);}
+.mvp-log-rank{font-family:'Bebas Neue',sans-serif;font-size:15px;color:#f0c040;min-width:18px;}
+.mvp-log-name{flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;font-weight:600;}
+.mvp-log-count{font-family:'Bebas Neue',sans-serif;font-size:16px;color:#f0c040;}
+.mvp-log-count.at-max{color:#4fc86a;}
+</style>
+
+<script>
+(function(){
+  var LS_OBJ = 'munich-obj-state-v3';
+  var LS_MVP = 'munich-mvp-tracker-v2';
+  var TEAM_NAME = 'Bayern Munich';
+
+  /* ── Counter IDs that store plain integers ── */
+  var INT_COUNTERS = ['oc-imbatido-liga','oc-goles-copa','oc-goles-uecl',
+    'oc-ganar-derby','oc-imbatido-derby','oc-goles-derby',
+    'oc-casa','oc-5goles2','oc-6goles1','oc-hattrick-gl','oc-hattrick-sel'];
+
+  /* ── Stepper for plain integer counters ── */
+  window.athObjStep = function(id, delta, min, max, isGoalDiff){
+    var el = document.getElementById(id);
+    if (!el) return;
+    var mx = el.querySelector('.obj-counter-max');
+    var raw = el.childNodes[0] ? el.childNodes[0].textContent.trim() : '0';
+    var cur = isGoalDiff ? parseInt(raw.replace('+',''), 10) : parseInt(raw, 10);
+    if (isNaN(cur)) cur = 0;
+    cur = Math.max(min, Math.min(max, cur + delta));
+    var fmt = isGoalDiff ? (cur >= 0 ? '+' + cur : String(cur)) : String(cur);
+    el.childNodes[0].textContent = fmt;
+    saveObjState();
+  };
+
+  /* ── Stepper for percentage counter ── */
+  window.athObjStepPct = function(id, delta, min, max, target){
+    var el = document.getElementById(id);
+    if (!el) return;
+    var raw = el.childNodes[0] ? el.childNodes[0].textContent.trim().replace('%','') : '0';
+    var cur = parseInt(raw, 10);
+    if (isNaN(cur)) cur = 0;
+    cur = Math.max(min, Math.min(max, cur + delta));
+    el.childNodes[0].textContent = cur + '%';
+    saveObjState();
+  };
+
+  /* ── MVP tracker localStorage helpers ── */
+  function getMVPTracker(){ try { return JSON.parse(localStorage.getItem(LS_MVP) || '{}'); } catch(e){ return {}; } }
+  function setMVPTracker(data){ try { localStorage.setItem(LS_MVP, JSON.stringify(data)); } catch(e){} }
+
+  function getTopMVPCount(){
+    var t = getMVPTracker(); var max = 0;
+    Object.keys(t).forEach(function(k){ if(t[k] > max) max = t[k]; });
+    return max;
+  }
+
+  function updateMVPCounter(){
+    var top = getTopMVPCount();
+    var el = document.getElementById('oc-mvp-temp');
+    if (el) {
+      var mx = el.querySelector('.obj-counter-max');
+      if (mx) el.childNodes[0].textContent = top;
+    }
+    renderMVPLog();
+  }
+
+  function renderMVPLog(){
+    var logEl = document.getElementById('mvp-tracker-log');
+    if (!logEl) return;
+    var t = getMVPTracker();
+    var entries = Object.keys(t).map(function(k){ return {name: k, count: t[k]}; });
+    entries.sort(function(a, b){ return b.count - a.count; });
+    if (!entries.length){
+      logEl.innerHTML = '<p style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.35);margin:0;">Sin datos. Los MVPs se registran automáticamente al cerrar cada partido.</p>';
+      return;
+    }
+    logEl.innerHTML = entries.map(function(e, i){
+      var atMax = e.count >= 10;
+      return '<div class="mvp-log-row">' +
+        '<span class="mvp-log-rank">' + (i === 0 ? '⭐' : (i + 1) + '.') + '</span>' +
+        '<span class="mvp-log-name">' + escMVP(e.name) + '</span>' +
+        '<span class="mvp-log-count' + (atMax ? ' at-max' : '') + '">' + e.count + '<span style="font-size:10px;opacity:.55;">/10</span></span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function escMVP(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* ── Reset MVP tracker ── */
+  window.athMvpReset = function(){
+    if (!confirm('¿Reiniciar el tracker de MVP? Esta acción no se puede deshacer.')) return;
+    setMVPTracker({});
+    updateMVPCounter();
+    saveObjState();
+  };
+
+  /* ── Hook into registrarLigaPlayerStats to auto-track MVPs ── */
+  function hookMVPTracking(){
+    var origFn = window.registrarLigaPlayerStats;
+    window.registrarLigaPlayerStats = function(matchKey, teamA, teamB, evts, mvpName, mvpTeam){
+      if (origFn) origFn.apply(this, arguments);
+      if (mvpName && mvpTeam === TEAM_NAME) {
+        var t = getMVPTracker();
+        t[mvpName] = (t[mvpName] || 0) + 1;
+        setMVPTracker(t);
+        updateMVPCounter();
+        saveObjState();
+      }
+    };
+  }
+
+  /* ── Persist checkbox state + counters to localStorage ── */
+  function saveObjState(){
+    try {
+      var data = { checks: {}, counters: {} };
+      document.querySelectorAll('#ath-obj-club .obj-item').forEach(function(lbl, i){
+        var cb = lbl.querySelector('input[type=checkbox]');
+        if (cb) data.checks[i] = cb.checked;
+      });
+      /* save counter text nodes */
+      var counterIds = INT_COUNTERS.concat(['oc-dif-goles','oc-rating-liga','oc-mvp-temp','oc-pos-uecl','oc-top10-sel']);
+      counterIds.forEach(function(id){
+        var el = document.getElementById(id);
+        if (el && el.childNodes[0]) data.counters[id] = el.childNodes[0].textContent.trim();
+      });
+      localStorage.setItem(LS_OBJ, JSON.stringify(data));
+    } catch(e){}
+  }
+
+  function loadObjState(){
+    try {
+      var raw = localStorage.getItem(LS_OBJ);
+      if (!raw) return;
+      var data = JSON.parse(raw);
+      if (data.checks){
+        document.querySelectorAll('#ath-obj-club .obj-item').forEach(function(lbl, i){
+          var cb = lbl.querySelector('input[type=checkbox]');
+          if (cb && data.checks[i] !== undefined){
+            cb.checked = !!data.checks[i];
+            lbl.classList.toggle('done', !!data.checks[i]);
+          }
+        });
+      }
+      if (data.counters){
+        Object.keys(data.counters).forEach(function(id){
+          var el = document.getElementById(id);
+          if (el && el.childNodes[0]) el.childNodes[0].textContent = data.counters[id];
+        });
+      }
+    } catch(e){}
+  }
+
+  /* ── Patch athObjCount to also persist state ── */
+  function patchAthObjCount(){
+    var orig = window.athObjCount;
+    window.athObjCount = function(){
+      if (orig) orig.apply(this, arguments);
+      saveObjState();
+    };
+  }
+
+  /* ── Init on DOMContentLoaded ── */
+  document.addEventListener('DOMContentLoaded', function(){
+    loadObjState();
+    updateMVPCounter();
+    patchAthObjCount();
+    hookMVPTracking();
+    /* Run initial count to sync the hub badge */
+    if (typeof window.athObjCount === 'function') window.athObjCount();
+  });
+})();
+</script>
 
 <div class="screen" id="s-munich-plantilla">
 <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
@@ -3056,6 +3130,227 @@
 <div class="plant-row del"><span class="plant-num">31</span><span class="plant-name">Alejandro Rego</span><span class="plant-stat zero"><span class="ps-gol" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-yel" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-red" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-mvp" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat poder zero">71</span><span class="plant-stat zero frac"><span class="ps-pen-gol" data-copa="0" data-global="0" data-liga="0" data-super="0" data-tirado="0" data-uecl="0" hidden=""></span>0/0</span><span class="plant-stat zero"><span class="ps-pen-prov" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-pen-parado" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-falta-gol" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span><span class="plant-stat zero"><span class="ps-propia" data-copa="0" data-global="0" data-liga="0" data-super="0" data-uecl="0" hidden=""></span>0</span></div>
 </div>
 </div>
+
+<div class="screen" id="s-munich-derbys">
+<button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">👤</span><h2>Histórico Derbys</h2></div>
+<div style="padding:4px 14px 40px;">
+<div class="ent-body ath-body-derbys" id="ath-derbys-full" style="padding:0;">
+<div class="derby-stats-hdr">
+<span class="derby-stats-hdr-lbl">TEMP</span>
+<span class="derby-stats-hdr-lbl">PJ</span>
+<span class="derby-stats-hdr-lbl">PG</span>
+<span class="derby-stats-hdr-lbl">PE</span>
+<span class="derby-stats-hdr-lbl">PP</span>
+<span class="derby-stats-hdr-lbl">G+</span>
+<span class="derby-stats-hdr-lbl">G-</span>
+<span class="derby-stats-hdr-lbl">+-</span>
+<span class="derby-stats-hdr-lbl">%</span>
+<span class="derby-stats-hdr-lbl"></span>
+</div>
+<div class="derby-stats-row global-row">
+<span class="derby-stats-temp">TOTAL</span>
+<span class="derby-stats-val">29</span>
+<span class="derby-stats-val" style="color:#4fc86a;">6</span>
+<span class="derby-stats-val">7</span>
+<span class="derby-stats-val" style="color:#e05050;">16</span>
+<span class="derby-stats-val" style="color:#80d0ff;">35</span>
+<span class="derby-stats-val" style="color:#ff9090;">73</span>
+<span class="derby-stats-val" style="color:#f0c040;">-38</span>
+<span class="derby-stats-val" style="color:#c0a0ff;">21%</span>
+<span></span>
+</div>
+<div class="derby-temp-block">
+<button class="derby-temp-btn open" id="ddf-3132-btn" onclick="derbyTog('ddf-3132')">
+<span class="derby-temp-name">31-32</span>
+<span class="derby-temp-sv">5</span>
+<span class="derby-temp-sv" style="color:#4fc86a;">0</span>
+<span class="derby-temp-sv">0</span>
+<span class="derby-temp-sv" style="color:#e05050;">5</span>
+<span class="derby-temp-sv" style="color:#80d0ff;">1</span>
+<span class="derby-temp-sv" style="color:#ff9090;">19</span>
+<span class="derby-temp-sv" style="color:#f0c040;">-18</span>
+<span class="derby-temp-sv" style="color:#c0a0ff;">0%</span>
+<span class="derby-temp-arr open" id="ddf-3132-arr">▲</span>
+</button>
+<div class="derby-temp-body open" id="ddf-3132">
+<div class="derby-comp-lbl">🏆 COPA DEL REY</div>
+<div class="derby-match-row derby-pend"><span class="derby-score"></span><span class="derby-comp">—</span><span class="derby-rival-m" style="color:rgba(255,255,255,.3)">Por jugar</span><span class="derby-res"></span></div>
+<div class="derby-comp-lbl">🇪🇸 LIGA</div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-7</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-comp-lbl">🔵 SUPERLIGA (B Munich)</div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-5</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Arsenal</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Arsenal</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Man City 🔧</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Man City 🔧</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">PSG</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">PSG</span><span class="derby-res">—</span></div>
+<div class="derby-comp-lbl">🌍 SELECCION (Francia)</div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Italia 😈</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-5</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Austria</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Inglaterra 🔧</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Noruega</span><span class="derby-res">—</span></div>
+<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">España</span><span class="derby-res">—</span></div>
+</div>
+</div>
+<div class="derby-temp-block">
+<button class="derby-temp-btn" id="ddf-3031-btn" onclick="derbyTog('ddf-3031')">
+<span class="derby-temp-name">30-31</span>
+<span class="derby-temp-sv">17</span>
+<span class="derby-temp-sv" style="color:#4fc86a;">4</span>
+<span class="derby-temp-sv">7</span>
+<span class="derby-temp-sv" style="color:#e05050;">6</span>
+<span class="derby-temp-sv" style="color:#80d0ff;">24</span>
+<span class="derby-temp-sv" style="color:#ff9090;">39</span>
+<span class="derby-temp-sv" style="color:#f0c040;">-15</span>
+<span class="derby-temp-sv" style="color:#c0a0ff;">24%</span>
+<span class="derby-temp-arr" id="ddf-3031-arr">▼</span>
+</button>
+<div class="derby-temp-body" id="ddf-3031">
+<div class="derby-comp-lbl">🏆 COPA DEL REY</div>
+<div class="derby-match-row derby-g"><span class="derby-score">4-0</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-g">G</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-comp-lbl">🇪🇸 LIGA</div>
+<div class="derby-match-row derby-e"><span class="derby-score">2-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-e"><span class="derby-score">2-2</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-e"><span class="derby-score">1-1</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-g"><span class="derby-score">2-0</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-g">G</span></div>
+<div class="derby-match-row derby-e"><span class="derby-score">0-0</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-e"><span class="derby-score">3-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Atl Madrid</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-7</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Atl Madrid</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-g"><span class="derby-score">3-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-g">G</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-comp-lbl">🌍 SELECCION (Egipto)</div>
+<div class="derby-match-row derby-e"><span class="derby-score">1-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Camerún 😈</span><span class="derby-res derby-res-e">E</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-4</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Nigeria</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Senegal 🔧</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">3-8</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Costa Marfil</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-g"><span class="derby-score">2-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Nigeria</span><span class="derby-res derby-res-g">G</span></div>
+</div>
+</div>
+<div class="derby-temp-block">
+<button class="derby-temp-btn" id="ddf-2930-btn" onclick="derbyTog('ddf-2930')">
+<span class="derby-temp-name">29-30</span>
+<span class="derby-temp-sv">7</span>
+<span class="derby-temp-sv" style="color:#4fc86a;">2</span>
+<span class="derby-temp-sv">0</span>
+<span class="derby-temp-sv" style="color:#e05050;">5</span>
+<span class="derby-temp-sv" style="color:#80d0ff;">10</span>
+<span class="derby-temp-sv" style="color:#ff9090;">15</span>
+<span class="derby-temp-sv" style="color:#f0c040;">-5</span>
+<span class="derby-temp-sv" style="color:#c0a0ff;">29%</span>
+<span class="derby-temp-arr" id="ddf-2930-arr">▼</span>
+</button>
+<div class="derby-temp-body" id="ddf-2930">
+<div class="derby-comp-lbl">🏆 SUPERCOPA ESPAÑA</div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-comp-lbl">🇪🇸 LIGA</div>
+<div class="derby-match-row derby-g"><span class="derby-score">3-2</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-g">G</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-g"><span class="derby-score">5-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Villarreal</span><span class="derby-res derby-res-g">G</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Villarreal</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">1-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
+<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+(function(){
+  if (window.__MUNICH_STRI_READY) return;
+  window.__MUNICH_STRI_READY = true;
+
+  var BUDGET_LIMIT = 1300;
+  var RATING_MAX = 9.10;
+  var INCIDENT_PROB = 0.05;
+  var INCIDENT_GRAVE_THRESH = 0.015;
+  var INCIDENT_MEDIA_THRESH = 0.030;
+  var MATCHDAY_FREQUENCY = 3;
+  var MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  var state = { day: 16, month: 'Julio', isMatchday: false, pi: 8, injured: null, budgetSpent: 0, rating: 0 };
+
+  function getEl(id) { return document.getElementById(id); }
+
+  function updateHud() {
+    var budgetEl = getEl('ath-money-val');
+    var ratingEl = getEl('ath-pts-val');
+    var medEl    = getEl('ath-med-val');
+    var barPts   = getEl('ath-bar-pts');
+    var barMoney = getEl('ath-bar-money');
+    var matchEl  = getEl('munich-next-match');
+    var warnEl   = getEl('munich-injury-warning');
+    var medIcon  = getEl('ath-med-icon');
+
+    if (budgetEl) budgetEl.textContent = String(state.budgetSpent).padStart(4, '0') + ' / ' + BUDGET_LIMIT + '\u20ac';
+    if (ratingEl) ratingEl.textContent = state.rating.toFixed(2);
+    if (medEl)    medEl.textContent = state.pi + ' PI';
+    if (barPts)   barPts.style.width = Math.min(100, (state.rating / RATING_MAX) * 100) + '%';
+    if (barMoney) barMoney.style.width = Math.min(100, (state.budgetSpent / BUDGET_LIMIT) * 100) + '%';
+
+    var dayLabel = state.day + ' ' + state.month;
+    if (matchEl) matchEl.textContent = (state.isMatchday ? '⚽ Matchday · Bayern vs Osasuna · ' : 'Entrenamiento · ') + dayLabel;
+
+    if (state.injured) {
+      if (warnEl)  warnEl.textContent = '\u26a0\ufe0f BAJA CONFIRMADA: ' + state.injured.name + ' (' + state.injured.days + ' partidos)';
+      if (medIcon) medIcon.classList.add('blink');
+    } else {
+      if (warnEl)  warnEl.textContent = '';
+      if (medIcon) medIcon.classList.remove('blink');
+    }
+  }
+
+  function maybeIncident() {
+    var roll = Math.random();
+    if (roll > INCIDENT_PROB) return;
+    var sev = roll < INCIDENT_GRAVE_THRESH ? 'grave' : (roll < INCIDENT_MEDIA_THRESH ? 'media' : 'leve');
+    var conf = {
+      leve:  { days: 2, pi: 2,  txt: 'Sobrecarga / Contusi\u00f3n' },
+      media: { days: 4, pi: 5,  txt: 'Esguince / Rotura Fibrilar' },
+      grave: { days: 6, pi: 10, txt: 'Rotura de Ligamentos / Fractura' }
+    }[sev];
+    var roster = ['Neuer','Upamecano','De Ligt','Pavard','Davies','Kimmich','Goretzka','M\u00fcller','Gnabry','San\u00e9','Kane'];
+    state.injured = { name: roster[Math.floor(Math.random() * roster.length)], days: conf.days, cost: conf.pi, txt: conf.txt };
+    state.pi = Math.max(0, state.pi - conf.pi);
+    alert('\ud83d\udea8 PARTE M\u00c9DICO\n' + state.injured.name + ': ' + conf.txt + ' \u00b7 baja ' + conf.days + ' partidos. Coste: ' + conf.pi + ' PI.');
+  }
+
+  document.addEventListener('click', function(e) {
+    if (e.target && e.target.id === 'munich-next-day-btn') {
+      if (state.isMatchday) { alert('Debes jugar o simular el partido antes de avanzar.'); return; }
+      state.day += 1;
+      state.pi = Math.min(10, state.pi + 1);
+      if (state.injured) { state.injured.days -= 1; if (state.injured.days <= 0) state.injured = null; }
+      state.isMatchday = state.day % MATCHDAY_FREQUENCY === 0;
+      maybeIncident();
+      updateHud();
+    }
+    if (e.target && e.target.id === 'munich-play-btn') {
+      if (!state.isMatchday) { alert('Hoy no hay partido oficial. Usa \u27a1\ufe0f SIGUIENTE D\u00cdA.'); return; }
+      state.isMatchday = false;
+      state.rating = Math.min(RATING_MAX, state.rating + 0.15);
+      updateHud();
+      alert('Partido completado. Se desbloqu\u00f3 el siguiente d\u00eda.');
+    }
+  });
+
+  updateHud();
+})();
+</script>
 
 <div class="screen" id="s-arsenal">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>

@@ -1254,7 +1254,7 @@ function _currentMin_j1m1(){return Math.min(_etDone?120:(_stDone?97:90),Math.flo
 function _addMarker_j1m1(txt){var list=document.getElementById('ml-acta-list-j1m1');var div=document.createElement('div');div.className='ml-ht';div.textContent=txt;list.appendChild(div);_removeEmpty_j1m1();};
 window.mlActivateET_j1m1=function(){if(_etDone||_matchFinished)return;_etDone=true;_etPhase=true;if(_timerRunning){clearInterval(_timerInterval);_startInterval_j1m1();}if(_timerSec<MAX_NORMAL)_timerSec=MAX_NORMAL;_addMarker_j1m1('— PRÓRROGA —');var btn=document.getElementById('ml-btn-et-j1m1');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var penBtn=document.getElementById('ml-btn-pen-j1m1');if(penBtn)penBtn.style.display='';_renderTimer_j1m1();};
 window.mlShowPenPanel_j1m1=function(){var pp=document.getElementById('ml-pen-panel-j1m1');if(pp)pp.classList.add('show');var penBtn=document.getElementById('ml-btn-pen-j1m1');if(penBtn){penBtn.disabled=true;penBtn.style.opacity='0.35';}var addBtn=document.getElementById('ml-add-btn-j1m1');if(addBtn){addBtn.disabled=true;addBtn.style.opacity='0.35';}};
-window.mlEndMatch_j1m1=function(winner){if(_matchFinished)return;if(!winner&&_sc.a===_sc.b){alert("⚠️ El partido está empatado. Debes ir a PRÓRROGA y luego a PENALTIS.");return;}
+window.mlEndMatch_j1m1=function(winner){if(_matchFinished)return;
   // ── MVP obligatorio ──
   var hasMvp=_events.some(function(e){return e.type==='mvp';});
   if(!hasMvp){
@@ -1278,6 +1278,7 @@ function _removeEmpty_j1m1(){var emp=document.querySelector('#ml-acta-list-j1m1 
 window.mlConfirmEvt_j1m1=function(){if(!_pendingEvt)return;var sel=document.getElementById('ml-modal-sel-j1m1');var parts=sel.value.split('|');var num=parts[0],name=parts[1];var e=_pendingEvt;var min=_currentMin_j1m1();var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==='propia')?(e.team==='a'?'b':'a'):e.team;_sc[st]++;document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;}var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||'•',id:Date.now()});_renderActa_j1m1();  mlCloseModal_j1m1();};
 function _renderActa_j1m1(){var list=document.getElementById('ml-acta-list-j1m1');var sorted=_events.slice().sort(function(a,b){return a.min-b.min;});list.innerHTML='';if(sorted.length===0){list.innerHTML='<div class="ml-acta-empty">Sin eventos registrados</div>';return;}sorted.forEach(function(ev){var row=document.createElement('div');row.className='ml-evt-item';row.setAttribute('data-team',ev.team);row.setAttribute('data-type',ev.type);var tl=(ev.team==='a')?TEAM_A_NAME:TEAM_B_NAME;var _penFalloExtra='';if(ev.type==='pen-parado'){var _contrario=ev.team==='a'?'b':'a';var _fallado=sorted.find(function(e){return e.type==='pen-fallo'&&e.team===_contrario&&e.min===ev.min;});if(_fallado){_penFalloExtra='<span class="ml-evt-pen-fallo">❌ '+_fallado.num+'. '+_fallado.name+'</span>';}}row.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"+'<span class="ml-evt-ico">'+ev.ico+'</span>'+'<span class="ml-evt-name">'+ev.num+'. '+ev.name+'</span>'+_penFalloExtra+'<span class="ml-evt-team">'+tl+'</span>'+'<button class="ml-evt-edit" onclick="window._openEditModal(\'j1m1\','+ev.id+')" title="Editar">✏️</button>'+'<button class="ml-evt-del" onclick="mlDelEvt_j1m1('+ev.id+')">✕</button>';list.appendChild(row);});};
 window.mlDelEvt_j1m1=function(id){var ev=_events.find(function(e){return e.id===id;});if(!ev)return;var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(ev.type)!==-1){var st=(ev.type==='propia')?(ev.team==='a'?'b':'a'):ev.team;_sc[st]=Math.max(0,_sc[st]-1);document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;}_events=_events.filter(function(e){return e.id!==id;});_renderActa_j1m1();};
+window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentMin_j1m1();_events.push({min:min,label:'Pen. Provocado',type:'pen-prov',team:wiz.attackTeam,num:wiz.provocador.num,name:wiz.provocador.name,ico:'🤦🥅',id:now});if(wiz.sancion&&wiz.infractor){var cardIco=wiz.sancion==='amarilla'?'🟨':'🟥';var cardLbl=wiz.sancion==='amarilla'?'Tarjeta Amarilla':'Roja Directa';_events.push({min:min,label:cardLbl,type:wiz.sancion,team:wiz.defendTeam,num:wiz.infractor.num,name:wiz.infractor.name,ico:cardIco,id:now+1});if(wiz.sancion==='roja'){_rojas=_rojas||{};_rojas[wiz.defendTeam]=(_rojas[wiz.defendTeam]||0)+1;}}if(wiz.resultado==='gol'){_sc[wiz.attackTeam]++;document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;_events.push({min:min,label:'Penalti Gol',type:'pen-gol',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'⚽🥅',id:now+2});}else{_events.push({min:min,label:'Penalti Fallado',type:'pen-fallo',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'❌🥅',id:now+2});if(wiz.falladoTipo==='parado'&&wiz.portero){_events.push({min:min,label:'Penalti Parado',type:'pen-parado',team:wiz.defendTeam,num:wiz.portero.num,name:wiz.portero.name,ico:'🖐🥅',id:now+3});}}  _renderActa_j1m1();};
 })();
 
 /* ══ ESCUDOS EN JORNADAS — tamaño unificado + aliases sólidos ═══════ */
@@ -1362,7 +1363,7 @@ function _currentMin_j1m2(){return Math.min(_etDone?120:(_stDone?97:90),Math.flo
 function _addMarker_j1m2(txt){var list=document.getElementById('ml-acta-list-j1m2');var div=document.createElement('div');div.className='ml-ht';div.textContent=txt;list.appendChild(div);_removeEmpty_j1m2();};
 window.mlActivateET_j1m2=function(){if(_etDone||_matchFinished)return;_etDone=true;_etPhase=true;if(_timerRunning){clearInterval(_timerInterval);_startInterval_j1m2();}if(_timerSec<MAX_NORMAL)_timerSec=MAX_NORMAL;_addMarker_j1m2('— PRÓRROGA —');var btn=document.getElementById('ml-btn-et-j1m2');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var penBtn=document.getElementById('ml-btn-pen-j1m2');if(penBtn)penBtn.style.display='';_renderTimer_j1m2();};
 window.mlShowPenPanel_j1m2=function(){var pp=document.getElementById('ml-pen-panel-j1m2');if(pp)pp.classList.add('show');var penBtn=document.getElementById('ml-btn-pen-j1m2');if(penBtn){penBtn.disabled=true;penBtn.style.opacity='0.35';}var addBtn=document.getElementById('ml-add-btn-j1m2');if(addBtn){addBtn.disabled=true;addBtn.style.opacity='0.35';}};
-window.mlEndMatch_j1m2=function(winner){if(_matchFinished)return;if(!winner&&_sc.a===_sc.b){alert("⚠️ El partido está empatado. Debes ir a PRÓRROGA y luego a PENALTIS.");return;}
+window.mlEndMatch_j1m2=function(winner){if(_matchFinished)return;
   // ── MVP obligatorio ──
   var hasMvp=_events.some(function(e){return e.type==='mvp';});
   if(!hasMvp){
@@ -1386,6 +1387,7 @@ function _removeEmpty_j1m2(){var emp=document.querySelector('#ml-acta-list-j1m2 
 window.mlConfirmEvt_j1m2=function(){if(!_pendingEvt)return;var sel=document.getElementById('ml-modal-sel-j1m2');var parts=sel.value.split('|');var num=parts[0],name=parts[1];var e=_pendingEvt;var min=_currentMin_j1m2();var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==='propia')?(e.team==='a'?'b':'a'):e.team;_sc[st]++;document.getElementById('sc-j1m2-a').textContent=_sc.a;document.getElementById('sc-j1m2-b').textContent=_sc.b;}var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||'•',id:Date.now()});_renderActa_j1m2();  mlCloseModal_j1m2();};
 function _renderActa_j1m2(){var list=document.getElementById('ml-acta-list-j1m2');var sorted=_events.slice().sort(function(a,b){return a.min-b.min;});list.innerHTML='';if(sorted.length===0){list.innerHTML='<div class="ml-acta-empty">Sin eventos registrados</div>';return;}sorted.forEach(function(ev){var row=document.createElement('div');row.className='ml-evt-item';row.setAttribute('data-team',ev.team);row.setAttribute('data-type',ev.type);var tl=(ev.team==='a')?TEAM_A_NAME:TEAM_B_NAME;var _penFalloExtra='';if(ev.type==='pen-parado'){var _contrario=ev.team==='a'?'b':'a';var _fallado=sorted.find(function(e){return e.type==='pen-fallo'&&e.team===_contrario&&e.min===ev.min;});if(_fallado){_penFalloExtra='<span class="ml-evt-pen-fallo">❌ '+_fallado.num+'. '+_fallado.name+'</span>';}}row.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"+'<span class="ml-evt-ico">'+ev.ico+'</span>'+'<span class="ml-evt-name">'+ev.num+'. '+ev.name+'</span>'+_penFalloExtra+'<span class="ml-evt-team">'+tl+'</span>'+'<button class="ml-evt-edit" onclick="window._openEditModal(\'j1m2\','+ev.id+')" title="Editar">✏️</button>'+'<button class="ml-evt-del" onclick="mlDelEvt_j1m2('+ev.id+')">✕</button>';list.appendChild(row);});};
 window.mlDelEvt_j1m2=function(id){var ev=_events.find(function(e){return e.id===id;});if(!ev)return;var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(ev.type)!==-1){var st=(ev.type==='propia')?(ev.team==='a'?'b':'a'):ev.team;_sc[st]=Math.max(0,_sc[st]-1);document.getElementById('sc-j1m2-a').textContent=_sc.a;document.getElementById('sc-j1m2-b').textContent=_sc.b;}_events=_events.filter(function(e){return e.id!==id;});_renderActa_j1m2();};
+window.mlPenWizardCommit_j1m2=function(wiz){var now=Date.now();var min=_currentMin_j1m2();_events.push({min:min,label:'Pen. Provocado',type:'pen-prov',team:wiz.attackTeam,num:wiz.provocador.num,name:wiz.provocador.name,ico:'🤦🥅',id:now});if(wiz.sancion&&wiz.infractor){var cardIco=wiz.sancion==='amarilla'?'🟨':'🟥';var cardLbl=wiz.sancion==='amarilla'?'Tarjeta Amarilla':'Roja Directa';_events.push({min:min,label:cardLbl,type:wiz.sancion,team:wiz.defendTeam,num:wiz.infractor.num,name:wiz.infractor.name,ico:cardIco,id:now+1});if(wiz.sancion==='roja'){_rojas=_rojas||{};_rojas[wiz.defendTeam]=(_rojas[wiz.defendTeam]||0)+1;}}if(wiz.resultado==='gol'){_sc[wiz.attackTeam]++;document.getElementById('sc-j1m2-a').textContent=_sc.a;document.getElementById('sc-j1m2-b').textContent=_sc.b;_events.push({min:min,label:'Penalti Gol',type:'pen-gol',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'⚽🥅',id:now+2});}else{_events.push({min:min,label:'Penalti Fallado',type:'pen-fallo',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'❌🥅',id:now+2});if(wiz.falladoTipo==='parado'&&wiz.portero){_events.push({min:min,label:'Penalti Parado',type:'pen-parado',team:wiz.defendTeam,num:wiz.portero.num,name:wiz.portero.name,ico:'🖐🥅',id:now+3});}}  _renderActa_j1m2();};
 })();
 
 /* script block 4 */
@@ -1420,6 +1422,7 @@ function _removeEmpty_j1m3(){var emp=document.querySelector('#ml-acta-list-j1m3 
 window.mlConfirmEvt_j1m3=function(){if(!_pendingEvt)return;var sel=document.getElementById('ml-modal-sel-j1m3');var parts=sel.value.split('|');var num=parts[0],name=parts[1];var e=_pendingEvt;var min=_currentMin_j1m3();var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==='propia')?(e.team==='a'?'b':'a'):e.team;_sc[st]++;document.getElementById('sc-j1m3-a').textContent=_sc.a;document.getElementById('sc-j1m3-b').textContent=_sc.b;}var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||'•',id:Date.now()});_renderActa_j1m3();  mlCloseModal_j1m3();};
 function _renderActa_j1m3(){var list=document.getElementById('ml-acta-list-j1m3');var sorted=_events.slice().sort(function(a,b){return a.min-b.min;});list.innerHTML='';if(sorted.length===0){list.innerHTML='<div class="ml-acta-empty">Sin eventos registrados</div>';return;}sorted.forEach(function(ev){var row=document.createElement('div');row.className='ml-evt-item';row.setAttribute('data-team',ev.team);row.setAttribute('data-type',ev.type);var tl=(ev.team==='a')?TEAM_A_NAME:TEAM_B_NAME;var _penFalloExtra='';if(ev.type==='pen-parado'){var _contrario=ev.team==='a'?'b':'a';var _fallado=sorted.find(function(e){return e.type==='pen-fallo'&&e.team===_contrario&&e.min===ev.min;});if(_fallado){_penFalloExtra='<span class="ml-evt-pen-fallo">❌ '+_fallado.num+'. '+_fallado.name+'</span>';}}row.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"+'<span class="ml-evt-ico">'+ev.ico+'</span>'+'<span class="ml-evt-name">'+ev.num+'. '+ev.name+'</span>'+_penFalloExtra+'<span class="ml-evt-team">'+tl+'</span>'+'<button class="ml-evt-edit" onclick="window._openEditModal(\'j1m3\','+ev.id+')" title="Editar">✏️</button>'+'<button class="ml-evt-del" onclick="mlDelEvt_j1m3('+ev.id+')">✕</button>';list.appendChild(row);});};
 window.mlDelEvt_j1m3=function(id){var ev=_events.find(function(e){return e.id===id;});if(!ev)return;var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(ev.type)!==-1){var st=(ev.type==='propia')?(ev.team==='a'?'b':'a'):ev.team;_sc[st]=Math.max(0,_sc[st]-1);document.getElementById('sc-j1m3-a').textContent=_sc.a;document.getElementById('sc-j1m3-b').textContent=_sc.b;}_events=_events.filter(function(e){return e.id!==id;});_renderActa_j1m3();};
+window.mlPenWizardCommit_j1m3=function(wiz){var now=Date.now();var min=_currentMin_j1m3();_events.push({min:min,label:'Pen. Provocado',type:'pen-prov',team:wiz.attackTeam,num:wiz.provocador.num,name:wiz.provocador.name,ico:'🤦🥅',id:now});if(wiz.sancion&&wiz.infractor){var cardIco=wiz.sancion==='amarilla'?'🟨':'🟥';var cardLbl=wiz.sancion==='amarilla'?'Tarjeta Amarilla':'Roja Directa';_events.push({min:min,label:cardLbl,type:wiz.sancion,team:wiz.defendTeam,num:wiz.infractor.num,name:wiz.infractor.name,ico:cardIco,id:now+1});if(wiz.sancion==='roja'){_rojas=_rojas||{};_rojas[wiz.defendTeam]=(_rojas[wiz.defendTeam]||0)+1;}}if(wiz.resultado==='gol'){_sc[wiz.attackTeam]++;document.getElementById('sc-j1m3-a').textContent=_sc.a;document.getElementById('sc-j1m3-b').textContent=_sc.b;_events.push({min:min,label:'Penalti Gol',type:'pen-gol',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'⚽🥅',id:now+2});}else{_events.push({min:min,label:'Penalti Fallado',type:'pen-fallo',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'❌🥅',id:now+2});if(wiz.falladoTipo==='parado'&&wiz.portero){_events.push({min:min,label:'Penalti Parado',type:'pen-parado',team:wiz.defendTeam,num:wiz.portero.num,name:wiz.portero.name,ico:'🖐🥅',id:now+3});}}  _renderActa_j1m3();};
 })();
 
 /* script block 5 */
@@ -2272,7 +2275,7 @@ var STAT_CLASS_MAP = {
 
         var playerName = '';
         if(Array.isArray(ev && ev.player)) playerName = ev.player[1] || ev.player[0] || '';
-        else playerName = (ev && (ev.name || ev.playerName || ev.jugador)) || '';
+        else playerName = (ev && (ev.name || ev.playerName || ev.jugador || ev.player)) || '';
         playerName = String(playerName || '').replace(/^\s*\d+\.?\s*/, '').trim();
         if(!playerName) return;
 
@@ -2475,7 +2478,7 @@ var STAT_CLASS_MAP = {
 
 
 /* script block 14 */
-function go(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); var el = document.getElementById(id); if (el) { el.classList.add('active'); window.scrollTo(0,0); } if (id === 's-munich' && typeof athCheckSeasonRewards === 'function') { athCheckSeasonRewards(); } } function entTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); if (!body) return; var isOpen = body.classList.contains('open'); body.classList.toggle('open'); if (arr) arr.classList.toggle('open', !isOpen); } function subTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); if (!body) return; body.classList.toggle('open'); if (arr) arr.classList.toggle('open'); } function derbyTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); var btn = document.getElementById(id + '-btn'); if (!body) return; body.classList.toggle('open'); if (arr) arr.classList.toggle('open'); if (btn) btn.classList.toggle('open'); } var athPrevSuperado = false; var athPrevDone = 0; var athSeasonRewardQueue = []; function athIsSeasonObjective(txt) { var t = (txt || '').toLowerCase(); return /liga|copa|champions|mundial|supercopa|gran final europea|título|titulo|balón de oro|balon de oro/.test(t); } function athQueueSeasonObjective(name) { if (!name) return; if (athSeasonRewardQueue.indexOf(name) === -1) athSeasonRewardQueue.push(name); } function athCheckSeasonRewards() { if (!athSeasonRewardQueue.length) return; var pending = athSeasonRewardQueue.slice(); athSeasonRewardQueue = []; setTimeout(function(){ athCelebrarObjetivo('MEGA CELEBRACIÓN DE TEMPORADA · ' + pending.length + ' OBJETIVOS', 5600, true); }, 220); } function athCelebrarObjetivo(nombre, duracion, mega) { var overlay = document.getElementById('celebracion-overlay'); var txt = document.getElementById('celebracion-txt'); var detalle = document.getElementById('celebracion-detalle'); if (txt) { txt.textContent = '¡OBJETIVO CUMPLIDO!'; txt.classList.remove('is-mega'); if (mega) txt.classList.add('is-mega'); } if (detalle) { detalle.textContent = nombre || 'GLORIA Y PROGRESO BÁVARO'; detalle.style.display = 'block'; } if (overlay) { overlay.classList.add('celebracion-bayern'); } var moneyIcon = document.getElementById('ath-money-icon'); var rankIcon = document.getElementById('ath-rank-icon'); var rankVal = parseFloat((document.getElementById('ath-pts-val') || {}).textContent || '0') || 0; if (rankIcon) { rankIcon.textContent = rankVal >= 9.10 ? '👑' : '💼'; rankIcon.classList.remove('pulse-rank'); void rankIcon.offsetWidth; rankIcon.classList.add('pulse-rank'); } if (moneyIcon) { moneyIcon.classList.remove('pulse-cash'); void moneyIcon.offsetWidth; moneyIcon.classList.add('pulse-cash'); } var coinRain = document.getElementById('celebracion-coin-rain'); if (coinRain) { coinRain.innerHTML = ''; for (var i = 0; i < 14; i++) { var c = document.createElement('span'); c.className = 'coin'; c.style.left = (6 + Math.random() * 88) + '%'; c.style.animationDelay = (Math.random() * 0.6).toFixed(2) + 's'; c.textContent = '🪙'; coinRain.appendChild(c); } } if (typeof lanzarFuegos === 'function') lanzarFuegos(duracion || 5000); setTimeout(function(){ if (overlay) overlay.classList.remove('celebracion-bayern'); if (moneyIcon) moneyIcon.classList.remove('pulse-cash'); if (rankIcon) rankIcon.classList.remove('pulse-rank'); }, (duracion || 5000) + 1400); } function athObjCount() { var items = document.querySelectorAll('#ath-obj-club .obj-item'); var total = items.length; var done = 0; var newlyDone = []; items.forEach(function(lbl) { var cb = lbl.querySelector('input[type=checkbox]'); if (cb && cb.checked) { done++; if (!lbl.classList.contains('done')) { newlyDone.push(lbl.textContent.replace(/\s+/g, ' ').trim()); } lbl.classList.add('done'); } else { lbl.classList.remove('done'); } }); var countEl = document.getElementById('ath-obj-count'); if (countEl) countEl.textContent = done + ' / ' + total; var PTS_POR_OBJ = 0.40; var MONEY_POR_OBJ = 60; var MAX_PTS = 9.10; var MAX_MONEY = 1300; var pts = parseFloat((done * PTS_POR_OBJ).toFixed(2)); var money = done * MONEY_POR_OBJ; var pctPts = Math.min(100, (pts / MAX_PTS) * 100); var pctMoney = Math.min(100, (money / MAX_MONEY) * 100); var superadoPts = pts >= MAX_PTS; var superadoMoney = money >= MAX_MONEY; var superadoAmbos = superadoPts && superadoMoney; var ptsEl = document.getElementById('ath-pts-val'); var moneyEl = document.getElementById('ath-money-val'); if (ptsEl) { ptsEl.textContent = pts.toFixed(2); ptsEl.classList.remove('pulse'); void ptsEl.offsetWidth; ptsEl.classList.add('pulse'); ptsEl.classList.toggle('superado', superadoPts); } if (moneyEl) { moneyEl.textContent = money; moneyEl.classList.remove('pulse'); void moneyEl.offsetWidth; moneyEl.classList.add('pulse'); moneyEl.classList.toggle('superado', superadoMoney); } var rankIcon = document.getElementById('ath-rank-icon'); if (rankIcon) rankIcon.textContent = superadoPts ? '👑' : '💼'; var tPts = document.getElementById('ath-pts-target'); var tMoney = document.getElementById('ath-money-target'); if (tPts) tPts.classList.toggle('superado', superadoPts); if (tMoney) tMoney.classList.toggle('superado', superadoMoney); var barPts = document.getElementById('ath-bar-pts'); var barMoney = document.getElementById('ath-bar-money'); if (barPts) { barPts.style.width = pctPts + '%'; barPts.classList.toggle('superado', superadoPts); } if (barMoney) { barMoney.style.width = pctMoney + '%'; barMoney.classList.toggle('superado', superadoMoney); } if (done > athPrevDone && newlyDone.length) { newlyDone.forEach(function(name, i){ if (athIsSeasonObjective(name)) { athQueueSeasonObjective(name); } else { setTimeout(function(){ athCelebrarObjetivo(name, 5000, false); }, i * 280); } }); } athPrevDone = done; if (superadoAmbos) { if (!athPrevSuperado) { athPrevSuperado = true; setTimeout(function() { athCelebrarObjetivo('RANGO LEYENDA ALCANZADO', 5200, true); }, 280); } } else { athPrevSuperado = false; } } var athPlantComp = 'global'; function athSetComp(comp) { athPlantComp = comp; document.querySelectorAll('.plant-filter-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.comp === comp); }); document.querySelectorAll('.plant-row').forEach(function(row) { var tipos = row.classList.contains('por') ? ['cs','yel','red','mvp','poder','pen-parado','pen-prov','pen-gol','falta-gol','propia'] : ['gol','yel','red','mvp','poder','pen-gol','pen-prov','pen-parado','falta-gol','propia']; var cols = row.querySelectorAll('.plant-stat'); tipos.forEach(function(tipo, i) { var el = row.querySelector('.ps-' + tipo); if (!el || !cols[i]) return; var v = parseInt(el.getAttribute('data-' + comp) || el.getAttribute('data-global') || '0'); cols[i].textContent = v; cols[i].className = 'plant-stat' + (v > 0 ? (' ' + tipo) : ' zero'); if (el) el.setAttribute('data-' + comp, v); }); var anyActive = Array.from(row.querySelectorAll('.plant-stat')).some(function(c){ return !c.classList.contains('zero'); }); row.classList.toggle('has-stat', anyActive); }); } function tog(id) { var el = document.getElementById(id); if (!el) return; if (id === 'comp-box') { var isOpen = el.style.display !== 'none' && el.style.display !== ''; el.style.display = isOpen ? 'none' : 'block'; var arr = document.getElementById('comp-arr'); if (arr) arr.style.transform = isOpen ? '' : 'rotate(180deg)'; } else { el.classList.toggle('open'); } }
+function go(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); var el = document.getElementById(id); if (el) { el.classList.add('active'); window.scrollTo(0,0); } if (id === 's-munich' && typeof athCheckSeasonRewards === 'function') { athCheckSeasonRewards(); } } function entTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); if (!body) return; var isOpen = body.classList.contains('open'); body.classList.toggle('open'); if (arr) arr.classList.toggle('open', !isOpen); } function subTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); if (!body) return; body.classList.toggle('open'); if (arr) arr.classList.toggle('open'); } function derbyTog(id) { var body = document.getElementById(id); var arr = document.getElementById(id + '-arr'); var btn = document.getElementById(id + '-btn'); if (!body) return; body.classList.toggle('open'); if (arr) arr.classList.toggle('open'); if (btn) btn.classList.toggle('open'); } var athPrevSuperado = false; var athPrevDone = 0; var athSeasonRewardQueue = []; function athIsSeasonObjective(txt) { var t = (txt || '').toLowerCase(); return /liga|copa|champions|mundial|supercopa|gran final europea|título|titulo|balón de oro|balon de oro/.test(t); } function athQueueSeasonObjective(name) { if (!name) return; if (athSeasonRewardQueue.indexOf(name) === -1) athSeasonRewardQueue.push(name); } function athCheckSeasonRewards() { if (!athSeasonRewardQueue.length) return; var pending = athSeasonRewardQueue.slice(); athSeasonRewardQueue = []; setTimeout(function(){ athCelebrarObjetivo('MEGA CELEBRACIÓN DE TEMPORADA · ' + pending.length + ' OBJETIVOS', 5600, true); }, 220); } function athCelebrarObjetivo(nombre, duracion, mega) { var overlay = document.getElementById('celebracion-overlay'); var txt = document.getElementById('celebracion-txt'); var detalle = document.getElementById('celebracion-detalle'); if (txt) { txt.textContent = '¡OBJETIVO CUMPLIDO!'; txt.classList.remove('is-mega'); if (mega) txt.classList.add('is-mega'); } if (detalle) { detalle.textContent = nombre || 'GLORIA Y PROGRESO BÁVARO'; detalle.style.display = 'block'; } if (overlay) { overlay.classList.add('celebracion-bayern'); } var moneyIcon = document.getElementById('ath-money-icon'); var rankIcon = document.getElementById('ath-rank-icon'); var rankVal = parseFloat((document.getElementById('ath-pts-val') || {}).textContent || '0') || 0; if (rankIcon) { rankIcon.textContent = rankVal >= 9.10 ? '👑' : '💼'; rankIcon.classList.remove('pulse-rank'); void rankIcon.offsetWidth; rankIcon.classList.add('pulse-rank'); } if (moneyIcon) { moneyIcon.classList.remove('pulse-cash'); void moneyIcon.offsetWidth; moneyIcon.classList.add('pulse-cash'); } var coinRain = document.getElementById('celebracion-coin-rain'); if (coinRain) { coinRain.innerHTML = ''; for (var i = 0; i < 14; i++) { var c = document.createElement('span'); c.className = 'coin'; c.style.left = (6 + Math.random() * 88) + '%'; c.style.animationDelay = (Math.random() * 0.6).toFixed(2) + 's'; c.textContent = '🪙'; coinRain.appendChild(c); } } if (typeof lanzarFuegos === 'function') { window._mmTeamColors = ['#dc052d','#ffffff','#f0c040','#dc052d']; window._mmUseTeamColors = true; lanzarFuegos(duracion || 5000); setTimeout(function(){ window._mmUseTeamColors = false; }, (duracion || 5000) + 500); } setTimeout(function(){ if (overlay) overlay.classList.remove('celebracion-bayern'); if (moneyIcon) moneyIcon.classList.remove('pulse-cash'); if (rankIcon) rankIcon.classList.remove('pulse-rank'); }, (duracion || 5000) + 1400); } function athObjCount() { var items = document.querySelectorAll('#ath-obj-club .obj-item'); var total = items.length; var done = 0; var newlyDone = []; items.forEach(function(lbl) { var cb = lbl.querySelector('input[type=checkbox]'); if (cb && cb.checked) { done++; if (!lbl.classList.contains('done')) { newlyDone.push(lbl.textContent.replace(/\s+/g, ' ').trim()); } lbl.classList.add('done'); } else { lbl.classList.remove('done'); } }); var countEl = document.getElementById('ath-obj-count'); if (countEl) countEl.textContent = done + ' / ' + total; var PTS_POR_OBJ = 0.40; var MONEY_POR_OBJ = 60; var MAX_PTS = 9.10; var MAX_MONEY = 1300; var pts = parseFloat((done * PTS_POR_OBJ).toFixed(2)); var money = done * MONEY_POR_OBJ; var pctPts = Math.min(100, (pts / MAX_PTS) * 100); var pctMoney = Math.min(100, (money / MAX_MONEY) * 100); var superadoPts = pts >= MAX_PTS; var superadoMoney = money >= MAX_MONEY; var superadoAmbos = superadoPts && superadoMoney; var ptsEl = document.getElementById('ath-pts-val'); var moneyEl = document.getElementById('ath-money-val'); if (ptsEl) { ptsEl.textContent = pts.toFixed(2); ptsEl.classList.remove('pulse'); void ptsEl.offsetWidth; ptsEl.classList.add('pulse'); ptsEl.classList.toggle('superado', superadoPts); } if (moneyEl) { moneyEl.textContent = money; moneyEl.classList.remove('pulse'); void moneyEl.offsetWidth; moneyEl.classList.add('pulse'); moneyEl.classList.toggle('superado', superadoMoney); } var rankIcon = document.getElementById('ath-rank-icon'); if (rankIcon) rankIcon.textContent = superadoPts ? '👑' : '💼'; var tPts = document.getElementById('ath-pts-target'); var tMoney = document.getElementById('ath-money-target'); if (tPts) tPts.classList.toggle('superado', superadoPts); if (tMoney) tMoney.classList.toggle('superado', superadoMoney); var barPts = document.getElementById('ath-bar-pts'); var barMoney = document.getElementById('ath-bar-money'); if (barPts) { barPts.style.width = pctPts + '%'; barPts.classList.toggle('superado', superadoPts); } if (barMoney) { barMoney.style.width = pctMoney + '%'; barMoney.classList.toggle('superado', superadoMoney); } if (done > athPrevDone && newlyDone.length) { newlyDone.forEach(function(name, i){ if (athIsSeasonObjective(name)) { athQueueSeasonObjective(name); } else { setTimeout(function(){ athCelebrarObjetivo(name, 5000, false); }, i * 280); } }); } athPrevDone = done; if (superadoAmbos) { if (!athPrevSuperado) { athPrevSuperado = true; setTimeout(function() { athCelebrarObjetivo('RANGO LEYENDA ALCANZADO', 5200, true); }, 280); } } else { athPrevSuperado = false; } } var athPlantComp = 'global'; function athSetComp(comp) { athPlantComp = comp; document.querySelectorAll('.plant-filter-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.comp === comp); }); document.querySelectorAll('.plant-row').forEach(function(row) { var tipos = row.classList.contains('por') ? ['cs','yel','red','mvp','poder','pen-parado','pen-prov','pen-gol','falta-gol','propia'] : ['gol','yel','red','mvp','poder','pen-gol','pen-prov','pen-parado','falta-gol','propia']; var cols = row.querySelectorAll('.plant-stat'); tipos.forEach(function(tipo, i) { var el = row.querySelector('.ps-' + tipo); if (!el || !cols[i]) return; var v = parseInt(el.getAttribute('data-' + comp) || el.getAttribute('data-global') || '0'); cols[i].textContent = v; cols[i].className = 'plant-stat' + (v > 0 ? (' ' + tipo) : ' zero'); if (el) el.setAttribute('data-' + comp, v); }); var anyActive = Array.from(row.querySelectorAll('.plant-stat')).some(function(c){ return !c.classList.contains('zero'); }); row.classList.toggle('has-stat', anyActive); }); } function tog(id) { var el = document.getElementById(id); if (!el) return; if (id === 'comp-box') { var isOpen = el.style.display !== 'none' && el.style.display !== ''; el.style.display = isOpen ? 'none' : 'block'; var arr = document.getElementById('comp-arr'); if (arr) arr.style.transform = isOpen ? '' : 'rotate(180deg)'; } else { el.classList.toggle('open'); } }
 
 /* script block 15 */
 
@@ -2498,7 +2501,7 @@ var atmPlantComp = 'global';
 
 
 /* script block 16 */
-var fwCanvas = document.getElementById('fireworks-canvas'); var fwCtx = fwCanvas ? fwCanvas.getContext('2d') : null; var fwParticles = []; var fwRunning = false; var fwTimer = null; function fwResize() { if (!fwCanvas) return; fwCanvas.width = window.innerWidth; fwCanvas.height = window.innerHeight; } window.addEventListener('resize', fwResize); function fwCreateBurst(x, y) { var colors = ['#f0c040','#4fc86a','#ff6060','#60b0ff','#ff80ff','#ffffff','#ffaa20']; for (var i = 0; i < 60; i++) { var angle = (Math.PI * 2 / 60) * i + Math.random() * 0.3; var speed = 2 + Math.random() * 5; fwParticles.push({ x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, alpha: 1, size: 2 + Math.random() * 3, color: colors[Math.floor(Math.random() * colors.length)], decay: 0.012 + Math.random() * 0.012 }); } } function fwLoop() { if (!fwRunning || !fwCtx) return; fwCtx.clearRect(0, 0, fwCanvas.width, fwCanvas.height); fwParticles = fwParticles.filter(function(p) { return p.alpha > 0.02; }); fwParticles.forEach(function(p) { p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.vx *= 0.99; p.alpha -= p.decay; fwCtx.save(); fwCtx.globalAlpha = Math.max(0, p.alpha); fwCtx.fillStyle = p.color; fwCtx.shadowBlur = 6; fwCtx.shadowColor = p.color; fwCtx.beginPath(); fwCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2); fwCtx.fill(); fwCtx.restore(); }); requestAnimationFrame(fwLoop); } var fwBurstInterval = null; function lanzarFuegos(duracion) { if (!fwCanvas || !fwCtx) return; fwResize(); fwCanvas.style.display = 'block'; var overlay = document.getElementById('celebracion-overlay'); if (overlay) { overlay.style.display = 'flex'; } fwRunning = true; fwParticles = []; fwLoop(); var w = fwCanvas.width; var h = fwCanvas.height; fwBurstInterval = setInterval(function() { var x = 0.15 * w + Math.random() * 0.7 * w; var y = 0.1 * h + Math.random() * 0.6 * h; fwCreateBurst(x, y); }, 220); setTimeout(function() { clearInterval(fwBurstInterval); fwRunning = false; setTimeout(function() { fwCanvas.style.display = 'none'; if (overlay) overlay.style.display = 'none'; }, 1200); }, duracion || 3000); }
+var fwCanvas = document.getElementById('fireworks-canvas'); var fwCtx = fwCanvas ? fwCanvas.getContext('2d') : null; var fwParticles = []; var fwRunning = false; var fwTimer = null; function fwResize() { if (!fwCanvas) return; fwCanvas.width = window.innerWidth; fwCanvas.height = window.innerHeight; } window.addEventListener('resize', fwResize); function fwCreateBurst(x, y) { var colors = (window._mmUseTeamColors && window._mmTeamColors) ? window._mmTeamColors : ['#f0c040','#4fc86a','#ff6060','#60b0ff','#ff80ff','#ffffff','#ffaa20']; for (var i = 0; i < 60; i++) { var angle = (Math.PI * 2 / 60) * i + Math.random() * 0.3; var speed = 2 + Math.random() * 5; fwParticles.push({ x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, alpha: 1, size: 2 + Math.random() * 3, color: colors[Math.floor(Math.random() * colors.length)], decay: 0.012 + Math.random() * 0.012 }); } } function fwLoop() { if (!fwRunning || !fwCtx) return; fwCtx.clearRect(0, 0, fwCanvas.width, fwCanvas.height); fwParticles = fwParticles.filter(function(p) { return p.alpha > 0.02; }); fwParticles.forEach(function(p) { p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.vx *= 0.99; p.alpha -= p.decay; fwCtx.save(); fwCtx.globalAlpha = Math.max(0, p.alpha); fwCtx.fillStyle = p.color; fwCtx.shadowBlur = 6; fwCtx.shadowColor = p.color; fwCtx.beginPath(); fwCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2); fwCtx.fill(); fwCtx.restore(); }); requestAnimationFrame(fwLoop); } var fwBurstInterval = null; function lanzarFuegos(duracion) { if (!fwCanvas || !fwCtx) return; fwResize(); fwCanvas.style.display = 'block'; var overlay = document.getElementById('celebracion-overlay'); if (overlay) { overlay.style.display = 'flex'; } fwRunning = true; fwParticles = []; fwLoop(); var w = fwCanvas.width; var h = fwCanvas.height; fwBurstInterval = setInterval(function() { var x = 0.15 * w + Math.random() * 0.7 * w; var y = 0.1 * h + Math.random() * 0.6 * h; fwCreateBurst(x, y); }, 220); setTimeout(function() { clearInterval(fwBurstInterval); fwRunning = false; setTimeout(function() { fwCanvas.style.display = 'none'; if (overlay) overlay.style.display = 'none'; }, 1200); }, duracion || 3000); }
 function triggerShootingBall(gf, team) {
   var ball = gf.querySelector('.ml-shooting-ball');
   if (!ball) return;
@@ -2991,6 +2994,11 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
 
     evts.sort(function(a,b){return a.min-b.min;});
 
+    // ── VAR: etiquetar eventos según probabilidad ─────────────────
+    if(window.mlVARSystem&&typeof window.mlVARSystem.tagEvents==='function'){
+      window.mlVARSystem.tagEvents(evts);
+    }
+
     // ── MVP ───────────────────────────────────────────────────────────
     // Sistema de puntuación:
     //   ⚽ gol=3 | ⚽🎯 falta-gol=4 | ⚽🥅 pen-gol=2 | 🖐🥅 pen-parado=3 | ⚽🚫 propia=-1
@@ -3110,9 +3118,13 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
         list.appendChild(d);
         return;
       }
+      var _varLabel='';
+      if(ev.var&&window.mlVARSystem&&typeof window.mlVARSystem.varLogSuffix==='function'){
+        _varLabel='<span class="ml-evt-var">'+window.mlVARSystem.varLogSuffix(ev.type)+'</span>';
+      }
       d.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"
         +'<span class="ml-evt-ico">'+ev.ico+'</span>'
-        +'<span class="ml-evt-name">'+ev.player[1]+'</span>'
+        +'<span class="ml-evt-name">'+ev.player[1]+_varLabel+'</span>'
         +_iaFalloExtra
         +'<span class="ml-evt-team">'+teamName+'</span>';
       list.appendChild(d);
@@ -3124,23 +3136,55 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       else if(ev.min<=ht45){ms=Math.round(ev.min*msPerMinFH);}
       else{ms=_halfDuration+Math.round((ev.min-45)*msPerMinSH);}
       ms=Math.min(ms,_halfDuration*2-500);
-      setTimeout(function(){renderEvtEl(ev);},ms);
-      if(ev.type==='gol'||ev.type==='falta-gol'||ev.type==='pen-gol'||ev.type==='propia'){
-        setTimeout(function(){
-          var scAEl=document.getElementById(cfg.scAId);
-          var scBEl=document.getElementById(cfg.scBId);
-          if(scAEl) scAEl.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='a'&&e.min<=ev.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='b'&&e.min<=ev.min;}).length;
-          if(scBEl) scBEl.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='b'&&e.min<=ev.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='a'&&e.min<=ev.min;}).length;
-          var gf=document.getElementById(cfg.gfId);
-          if(gf){gf.classList.add('show');if(typeof triggerShootingBall==='function')triggerShootingBall(gf,(ev.type==='propia'?(ev.team==='a'?'b':'a'):ev.team));setTimeout(function(){gf.classList.remove('show');},3000);}
-        },ms+50);
-      }
-      if(ev.ico==='🟥'||ev.ico==='🟨🟥'){
-        (function(evCopy,msDelay){
+      var _isGoalType=ev.type==='gol'||ev.type==='falta-gol'||ev.type==='pen-gol'||ev.type==='propia';
+      var _isCardType=ev.ico==='🟨'||ev.ico==='🟥'||ev.ico==='🟨🟥';
+      var _isPenProv=ev.type==='pen-prov';
+      if(ev.var&&(_isGoalType||_isCardType||_isPenProv)){
+        (function(evSnap,msDelay,isGoal){
           setTimeout(function(){
-            
-          }, msDelay+80);
-        })(ev, ms);
+            var _scAEl=document.getElementById(cfg.scAId);
+            var _scoreEl=_scAEl?_scAEl.closest('.ml-score'):null;
+            var _timerEl=document.getElementById(cfg.btnId);
+            function _doUpdate(){
+              renderEvtEl(evSnap);
+              if(isGoal){
+                var _sA=document.getElementById(cfg.scAId);
+                var _sB=document.getElementById(cfg.scBId);
+                if(_sA)_sA.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='a'&&e.min<=evSnap.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='b'&&e.min<=evSnap.min;}).length;
+                if(_sB)_sB.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='b'&&e.min<=evSnap.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='a'&&e.min<=evSnap.min;}).length;
+                var gf=document.getElementById(cfg.gfId);
+                if(gf){gf.classList.add('show');if(typeof triggerShootingBall==='function')triggerShootingBall(gf,(evSnap.type==='propia'?(evSnap.team==='a'?'b':'a'):evSnap.team));setTimeout(function(){gf.classList.remove('show');},3000);}
+                if(window.goalNotificationImproved){var _gnt=evSnap.type==='propia'?(evSnap.team==='a'?'b':'a'):evSnap.team;var _gnp=evSnap.player?evSnap.player[1]:'';window.goalNotificationImproved.show(cfg.matchKey,_gnt,_gnp);}
+              }
+            }
+            if(_scoreEl){
+              var _origHTML=_scoreEl.innerHTML;
+              var _varMs=(window.mlVARSystem&&window.mlVARSystem.REVIEW_MS)||3000;
+              _scoreEl.innerHTML='<span class="ml-var-text">📺 VAR</span>';
+              if(_timerEl)_timerEl.classList.add('ml-var-reviewing');
+              setTimeout(function(){
+                _scoreEl.innerHTML=_origHTML;
+                if(_timerEl)_timerEl.classList.remove('ml-var-reviewing');
+                _doUpdate();
+              },_varMs);
+            } else {
+              _doUpdate();
+            }
+          },msDelay);
+        })(ev,ms,_isGoalType);
+      } else {
+        setTimeout(function(){renderEvtEl(ev);},ms);
+        if(_isGoalType){
+          setTimeout(function(){
+            var scAEl=document.getElementById(cfg.scAId);
+            var scBEl=document.getElementById(cfg.scBId);
+            if(scAEl) scAEl.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='a'&&e.min<=ev.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='b'&&e.min<=ev.min;}).length;
+            if(scBEl) scBEl.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='b'&&e.min<=ev.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='a'&&e.min<=ev.min;}).length;
+            var gf=document.getElementById(cfg.gfId);
+            if(gf){gf.classList.add('show');if(typeof triggerShootingBall==='function')triggerShootingBall(gf,(ev.type==='propia'?(ev.team==='a'?'b':'a'):ev.team));setTimeout(function(){gf.classList.remove('show');},3000);}
+            if(window.goalNotificationImproved){var _gnt=ev.type==='propia'?(ev.team==='a'?'b':'a'):ev.team;var _gnp=ev.player?ev.player[1]:'';window.goalNotificationImproved.show(cfg.matchKey,_gnt,_gnp);}
+          },ms+50);
+        }
       }
     });
 
@@ -3179,10 +3223,13 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       var _tr_b=evts.filter(function(e){return e.team==='b'&&(e.ico==='🟥'||e.ico==='🟨🟥');}).length;
       var _mvp_a=mvpTeam===TEAM_A?1:0;
       var _mvp_b=mvpTeam===TEAM_B?1:0;
-      if(typeof window.registrarResultadoLiga==='function')
-        window.registrarResultadoLiga(matchKey,TEAM_A,TEAM_B,sa,sb,_ta_a,_tr_a,_ta_b,_tr_b,_mvp_a,_mvp_b);
+      // registrarLigaPlayerStats MUST be called first so that patchRegistrar can use the
+      // already-stored events (with pen-gol, falta-gol, propia) instead of falling back
+      // to genMatchEvents which lacks those set-piece event types.
       if(typeof window.registrarLigaPlayerStats==='function')
         window.registrarLigaPlayerStats(matchKey,TEAM_A,TEAM_B,evts,mvpName,mvpTeam);
+      if(typeof window.registrarResultadoLiga==='function')
+        window.registrarResultadoLiga(matchKey,TEAM_A,TEAM_B,sa,sb,_ta_a,_tr_a,_ta_b,_tr_b,_mvp_a,_mvp_b);
       list.appendChild(r);
       if(typeof cfg.onEnd==='function') cfg.onEnd(sa,sb,evts,mvpName,mvpTeam);
       // Mostrar overlay de lesiones post-partido IA
@@ -3262,11 +3309,12 @@ function mlPreviaClick(matchKey) {
     }
   }
   // Determinar prórroga automática según reglas
-  // HvH: siempre hay prórroga y penaltis
+  // HvH: siempre hay prórroga y penaltis, EXCEPTO en Liga/grupos/amistoso
   // HvIA: Copa 1r/2r/dieciseisavos, USC, SC, Inter, Fases finales selecciones → sí
   // HvIA: Liga y fase de grupos europeos → NO
   var prorroga;
-  if (isHvH) {
+  var sinProrrogaComp = ['liga', 'liga-2', 'amistoso', 'eur-grupo', 'superliga'];
+  if (isHvH && sinProrrogaComp.indexOf(compKey) === -1) {
     prorroga = 'Sí';
   } else {
     var conProrroga = ['copa','copa-fin','sc','sc-final','usc','usc-fin','inter','inter-fin','ucl-fin','uel-fin','uecl-fin','recopa','recopa-fin','eur-ko','eur-fin','sel','sel-fin'];
@@ -5034,7 +5082,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
     };
     if (typeof window.showPrePartidoOverlay === 'function') {
-      window.showPrePartidoOverlay('lj' + j + 'm0', 'liga', isHvH ? 'Sí' : 'No', duracion, isHvH);
+      window.showPrePartidoOverlay('lj' + j + 'm0', 'liga', 'No', duracion, isHvH);
     }
   };
 
@@ -8212,7 +8260,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     'Real Sociedad':   ['#0067b1', '#ffffff', '#0067b1', '#e8e8e8'],
     'Sevilla FC':      ['#d71920', '#ffffff', '#d71920', '#f5f5f5'],
     'Villarreal CF':   ['#ffdd00', '#005da1', '#ffdd00', '#ffffff'],
-    'Bayern Munich':   ['#dc052d', '#ffffff', '#0e6db4', '#dc052d'],
+    'Bayern Munich':   ['#dc052d', '#ffffff', '#f0c040', '#dc052d'],
     'Arsenal':         ['#db0007', '#ffffff', '#9c824a', '#db0007'],
     'Deportivo Alavés':['#1a6fa3', '#ffffff', '#1a6fa3', '#f0c040'],
     'Rayo Vallecano':  ['#ff0000', '#ffffff', '#ff0000', '#ffff00'],
@@ -8367,3 +8415,118 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   console.log('[ManualMaestro v2.0] Sistema completo activado ✓');
 
 })();
+
+/* ══ PENALTY WIZARD — flujo guiado paso a paso ══════════════════════════ */
+(function(){
+  var _wiz={matchId:null,attackTeam:null,defendTeam:null,provocador:null,sancion:null,infractor:null,tirador:null,resultado:null,falladoTipo:null,portero:null,stepHistory:[]};
+
+  function _plHtml(sq,cbName){return sq.map(function(p){if(p.h)return '<div class="ml-pl-ov-sec">'+p.h+'</div>';return '<button class="ml-pl-ov-btn" onclick="'+cbName+'(\''+p[0]+'\',\''+p[1].replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'+'<span class="ml-pl-ov-num">'+p[0]+'</span><span class="ml-pl-ov-name">'+p[1]+'</span></button>';}).join('');}
+
+  function _teamCardHtml(matchId,team){var nm=team==='a'?'ml-pwiz-teams-2a':'ml-pwiz-teams-2a';var sqA=window['_sqA_'+matchId]||[];var sqB=window['_sqB_'+matchId]||[];var tpEl=document.getElementById('ml-tp-overlay-'+matchId);var teamCardA='<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'a\')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.15);border-radius:14px;padding:24px 12px 20px;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:Oswald,sans-serif;font-size:18px;font-weight:700;letter-spacing:1px;color:#fff;text-align:center;">';var teamCardB='<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'b\')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.15);border-radius:14px;padding:24px 12px 20px;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:Oswald,sans-serif;font-size:18px;font-weight:700;letter-spacing:1px;color:#fff;text-align:center;">';if(tpEl){var imgs=tpEl.querySelectorAll('.ml-tp-ov-card');if(imgs[0]){teamCardA+=imgs[0].innerHTML+'</div>';}else{teamCardA+='A</div>';}if(imgs[1]){teamCardB+=imgs[1].innerHTML+'</div>';}else{teamCardB+='B</div>';}}else{teamCardA+='A</div>';teamCardB+='B</div>';}return teamCardA+teamCardB;}
+
+  function _showStep(step){document.querySelectorAll('.ml-pwiz-step').forEach(function(el){el.classList.remove('active');});var el=document.getElementById('ml-pwiz-'+step);if(el)el.classList.add('active');var backBtn=document.getElementById('ml-pwiz-back');if(backBtn)backBtn.style.visibility=_wiz.stepHistory.length>0?'visible':'hidden';}
+
+  function _goStep(step){var active=document.querySelector('.ml-pwiz-step.active');if(active)_wiz.stepHistory.push(active.id.replace('ml-pwiz-',''));_showStep(step);}
+
+  function _renderAndShow(step){
+    var matchId=_wiz.matchId;
+    var sqA=window['_sqA_'+matchId]||[];
+    var sqB=window['_sqB_'+matchId]||[];
+    var attackSq=_wiz.attackTeam==='a'?sqA:sqB;
+    var defendSq=_wiz.attackTeam==='a'?sqB:sqA;
+    if(step==='s2a'){
+      var teamsEl=document.getElementById('ml-pwiz-teams-2a');
+      if(teamsEl)teamsEl.innerHTML=_teamCardHtml(matchId);
+    }else if(step==='s2b'){
+      var tEl=document.getElementById('ml-pwiz-title-2b');
+      if(tEl)tEl.textContent='¿Quién provocó el penalti?';
+      var lEl=document.getElementById('ml-pwiz-pl-2b');
+      if(lEl)lEl.innerHTML=_plHtml(attackSq,'window.mlPenWizProvocador');
+    }else if(step==='s3b'){
+      var tEl3=document.getElementById('ml-pwiz-title-3b');
+      var cardIcoLbl=_wiz.sancion==='amarilla'?'🟨 ':'🟥 ';
+      if(tEl3)tEl3.textContent=cardIcoLbl+'¿Quién recibió la tarjeta?';
+      var lEl3=document.getElementById('ml-pwiz-pl-3b');
+      if(lEl3)lEl3.innerHTML=_plHtml(defendSq,'window.mlPenWizInfractor');
+    }else if(step==='s4'){
+      var tEl4=document.getElementById('ml-pwiz-title-4');
+      if(tEl4)tEl4.textContent='¿Quién tira el penalti?';
+      var lEl4=document.getElementById('ml-pwiz-pl-4');
+      if(lEl4)lEl4.innerHTML=_plHtml(attackSq,'window.mlPenWizTirador');
+    }else if(step==='s6b'){
+      var tEl6=document.getElementById('ml-pwiz-title-6b');
+      if(tEl6)tEl6.textContent='🖐 ¿Quién paró el penalti?';
+      var lEl6=document.getElementById('ml-pwiz-pl-6b');
+      if(lEl6)lEl6.innerHTML=_plHtml(defendSq,'window.mlPenWizPortero');
+    }
+    _showStep(step);
+  }
+
+  window.mlPenWizStart=function(matchId){
+    _wiz.matchId=matchId;_wiz.attackTeam=null;_wiz.defendTeam=null;_wiz.provocador=null;_wiz.sancion=null;_wiz.infractor=null;_wiz.tirador=null;_wiz.resultado=null;_wiz.falladoTipo=null;_wiz.portero=null;_wiz.stepHistory=[];
+    var ov=document.getElementById('ml-pen-wiz');if(ov)ov.classList.add('show');
+    _renderAndShow('s2a');
+  };
+
+  window.mlPenWizBack=function(){
+    if(_wiz.stepHistory.length===0)return;
+    var prev=_wiz.stepHistory.pop();
+    _showStep(prev);
+  };
+
+  window.mlPenWizTeam=function(team){
+    _wiz.attackTeam=team;_wiz.defendTeam=team==='a'?'b':'a';
+    _goStep('s2b');_renderAndShow('s2b');
+  };
+
+  window.mlPenWizProvocador=function(num,name){
+    _wiz.provocador={num:num,name:name};
+    _goStep('s3a');_renderAndShow('s3a');
+  };
+
+  window.mlPenWizSancion=function(tipo){
+    _wiz.sancion=tipo;
+    if(tipo){_goStep('s3b');_renderAndShow('s3b');}
+    else{_wiz.infractor=null;_goStep('s4');_renderAndShow('s4');}
+  };
+
+  window.mlPenWizInfractor=function(num,name){
+    _wiz.infractor={num:num,name:name};
+    _goStep('s4');_renderAndShow('s4');
+  };
+
+  window.mlPenWizTirador=function(num,name){
+    _wiz.tirador={num:num,name:name};
+    _goStep('s5');_renderAndShow('s5');
+  };
+
+  window.mlPenWizResult=function(tipo){
+    _wiz.resultado=tipo;
+    if(tipo==='gol'){_commit();}
+    else{_goStep('s6');_renderAndShow('s6');}
+  };
+
+  window.mlPenWizFallo=function(tipo){
+    _wiz.falladoTipo=tipo;
+    if(tipo==='parado'){_goStep('s6b');_renderAndShow('s6b');}
+    else{_wiz.portero=null;_commit();}
+  };
+
+  window.mlPenWizPortero=function(num,name){
+    _wiz.portero={num:num,name:name};
+    _commit();
+  };
+
+  window.mlPenWizCancel=function(){
+    var ov=document.getElementById('ml-pen-wiz');if(ov)ov.classList.remove('show');
+    _wiz.matchId=null;
+  };
+
+  function _commit(){
+    var ov=document.getElementById('ml-pen-wiz');if(ov)ov.classList.remove('show');
+    var fn=window['mlPenWizardCommit_'+_wiz.matchId];
+    if(typeof fn==='function')fn(_wiz);
+    _wiz.matchId=null;
+  }
+})();
+/* ════════════════════════════════════════════════════════════════════════ */

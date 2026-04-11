@@ -7060,3 +7060,291 @@ window.goLiveMatches = function() {
   font-family:'Oswald',sans-serif; letter-spacing:1.5px; cursor:pointer;
 }
 </style>
+
+<!-- ══ ADMIN SYSTEM: PIN AUTH + ENVIRONMENT ENGINE ══════════ -->
+<script>
+(function () {
+  /* ── PIN AUTH ─────────────────────────────────────────── */
+  var _PIN_KEY = '747';
+  var _pinBuffer = '';
+  var _adminUnlocked = false;
+
+  window.goAjustes = function () {
+    if (_adminUnlocked) {
+      if (typeof go === 'function') go('s-admin');
+      _adminRefreshEnvStatus();
+    } else {
+      _pinBuffer = '';
+      _pinRender();
+      var modal = document.getElementById('pin-modal');
+      if (modal) { modal.style.display = 'flex'; }
+      var err = document.getElementById('pin-err');
+      if (err) err.style.display = 'none';
+    }
+  };
+
+  window.pinKey = function (k) {
+    if (_pinBuffer.length >= 6) return;
+    _pinBuffer += k;
+    _pinRender();
+  };
+
+  window.pinDel = function () {
+    _pinBuffer = _pinBuffer.slice(0, -1);
+    _pinRender();
+  };
+
+  window.pinOk = function () {
+    if (_pinBuffer === _PIN_KEY) {
+      _adminUnlocked = true;
+      var modal = document.getElementById('pin-modal');
+      if (modal) modal.style.display = 'none';
+      _pinBuffer = '';
+      if (typeof go === 'function') go('s-admin');
+      _adminRefreshEnvStatus();
+    } else {
+      var err = document.getElementById('pin-err');
+      if (err) { err.style.display = 'block'; }
+      var disp = document.getElementById('pin-display');
+      if (disp) {
+        disp.style.color = '#ff5555';
+        setTimeout(function () {
+          _pinBuffer = '';
+          _pinRender();
+          disp.style.color = '#fff';
+          if (err) err.style.display = 'none';
+        }, 900);
+      }
+    }
+  };
+
+  window.closePinModal = function () {
+    _pinBuffer = '';
+    var modal = document.getElementById('pin-modal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  function _pinRender() {
+    var disp = document.getElementById('pin-display');
+    if (!disp) return;
+    var len = _pinBuffer.length;
+    disp.textContent = len === 0 ? '●●●' : '●'.repeat(len);
+  }
+
+  /* ── ENVIRONMENT ENGINE v3.0 ──────────────────────────── */
+  /*
+   * Rules (priority order):
+   *  1. Snow date array → SNOW + force ball eFootball_MAX_VIS_26
+   *  2. Match_Tag = "Final" → SOLEADO
+   *  3. Default → NIGHT
+   */
+  var _SNOW_DATES = [
+    '2026-01-10','2026-01-11','2026-01-12','2026-01-13','2026-01-14',
+    '2026-01-17','2026-01-18','2026-01-24','2026-01-25',
+    '2026-02-07','2026-02-08','2026-02-14'
+  ];
+  var _SNOW_BALL = 'eFootball_MAX_VIS_26';
+
+  window.adminGetEnvironment = function (opts) {
+    /* opts: { date: 'YYYY-MM-DD', tag: 'Final'|'' } */
+    opts = opts || {};
+    var date = opts.date || _todayISODate();
+    var tag  = (opts.tag || '').toLowerCase();
+    if (_SNOW_DATES.indexOf(date) !== -1) {
+      return { tod: 'SNOW', ball: _SNOW_BALL, snow: true };
+    }
+    if (tag === 'final') {
+      return { tod: 'SOLEADO', ball: null, snow: false };
+    }
+    return { tod: 'NIGHT', ball: null, snow: false };
+  };
+
+  function _todayISODate() {
+    var d = new Date();
+    var mo = ('0' + (d.getMonth() + 1)).slice(-2);
+    var da = ('0' + d.getDate()).slice(-2);
+    return d.getFullYear() + '-' + mo + '-' + da;
+  }
+
+  /* ── BALL DATABASE ────────────────────────────────────── */
+  window.BALL_DB = {
+    'liga':           { id: 'eFootball_Conext25_LaLiga',      name: 'Conext 25 LaLiga',       comp: 'Liga EA Sports' },
+    'segunda':        { id: 'eFootball_Derbystar_Brillant_S3', name: 'Derbystar Brillant S3',  comp: 'Segunda División' },
+    'copa':           { id: 'eFootball_Puma_King_Final26',     name: 'Puma King Final 26',     comp: 'Copa del Rey' },
+    'supercopa':      { id: 'eFootball_Adidas_Finale26',       name: 'Adidas Finale 26',       comp: 'Supercopa de España' },
+    'champions':      { id: 'eFootball_Adidas_Finale26',       name: 'Adidas Finale 26',       comp: 'UEFA Champions League' },
+    'uel':            { id: 'eFootball_Adidas_Europa26',       name: 'Adidas Europa 26',       comp: 'UEFA Europa League' },
+    'uecl':           { id: 'eFootball_Molten_UECL26',        name: 'Molten UECL 26',         comp: 'UEFA Conference League' },
+    'superliga':      { id: 'eFootball_Superliga_Ball26',      name: 'Superliga 26',           comp: 'Superliga' },
+    'intercontinental':{ id: 'eFootball_Adidas_Intercont26',  name: 'Adidas Intercont 26',    comp: 'Intercontinental' },
+    'usc':            { id: 'eFootball_Adidas_Finale26',       name: 'Adidas Finale 26',       comp: 'UEFA Super Cup' },
+    'selecciones':    { id: 'eFootball_Adidas_AlRihla26',      name: 'Adidas Al Rihla 26',     comp: 'Selecciones' },
+    'portugal':       { id: 'eFootball_Nike_Flight_Liga26',    name: 'Nike Flight Liga 26',    comp: 'Liga Portugal' },
+    'primf':          { id: 'eFootball_Nike_Premier26',        name: 'Nike Premier 26',        comp: 'Premier League' },
+    'snow':           { id: _SNOW_BALL,                        name: 'eFootball MAX VIS 26',   comp: '(Nieve)' }
+  };
+
+  window.adminGetBall = function (compKey, env) {
+    env = env || {};
+    if (env.ball) {
+      return window.BALL_DB['snow'] || { id: env.ball, name: env.ball, comp: '(Nieve)' };
+    }
+    return window.BALL_DB[compKey] || window.BALL_DB['liga'];
+  };
+
+  /* ── STADIUM DATABASE ─────────────────────────────────── */
+  window.STADIUM_DB = [
+    { id:'sta001', name:'Camp Nou',             city:'Barcelona',    cap:99354, country:'España',   tags:['elite','spain'],            clubs:['barca','fc-barcelona'] },
+    { id:'sta002', name:'Estadio Santiago Bernabéu', city:'Madrid', cap:81044, country:'España',   tags:['elite','spain'],            clubs:['real-madrid','madrid'] },
+    { id:'sta003', name:'Estadio Metropolitano', city:'Madrid',     cap:70460, country:'España',   tags:['elite','spain'],            clubs:['atletico','atletico-madrid'] },
+    { id:'sta004', name:'Estadio de La Cartuja', city:'Sevilla',    cap:57619, country:'España',   tags:['national','spain','final'], clubs:[] },
+    { id:'sta005', name:'Estadio San Mamés',     city:'Bilbao',     cap:53289, country:'España',   tags:['elite','spain'],            clubs:['athletic','athletic-bilbao'] },
+    { id:'sta006', name:'Estadio Ramón Sánchez-Pizjuán', city:'Sevilla', cap:42714, country:'España', tags:['spain'],               clubs:['sevilla','sevilla-fc'] },
+    { id:'sta007', name:'Estadio de la Cerámica', city:'Vila-real', cap:23500, country:'España',   tags:['spain'],                    clubs:['villarreal'] },
+    { id:'sta008', name:'Estadio Benito Villamarín', city:'Sevilla', cap:60721, country:'España',  tags:['elite','spain'],            clubs:['betis','real-betis'] },
+    { id:'sta009', name:'Estadio de Mestalla',   city:'Valencia',   cap:49430, country:'España',   tags:['spain'],                    clubs:['valencia'] },
+    { id:'sta010', name:'RCDE Stadium',          city:'Cornellà',   cap:40000, country:'España',   tags:['spain'],                    clubs:['espanyol','rcd-espanyol'] },
+    { id:'sta011', name:'Coliseum Alfonso Pérez', city:'Getafe',    cap:17700, country:'España',   tags:['spain'],                    clubs:['getafe','getafe-cf'] },
+    { id:'sta012', name:'Estadio de la Romareda', city:'Zaragoza',  cap:34596, country:'España',   tags:['spain'],                    clubs:['zaragoza','real-zaragoza'] },
+    { id:'sta013', name:'Estadio Carlos Belmonte', city:'Albacete', cap:17524, country:'España',   tags:['spain','second'],           clubs:['albacete','albacete-bp'] },
+    { id:'sta014', name:'Allianz Arena',         city:'Múnich',     cap:75024, country:'Alemania',  tags:['elite','germany'],          clubs:['munich','bayern','fc-baviera'] },
+    { id:'sta015', name:'Emirates Stadium',      city:'Londres',    cap:60704, country:'Inglaterra', tags:['elite','england'],         clubs:['arsenal'] },
+    { id:'sta016', name:'Parc des Princes',      city:'París',      cap:47929, country:'Francia',   tags:['elite','france'],           clubs:['psg','paris-sg','paris-saint-germain'] },
+    { id:'sta017', name:'Estádio José Alvalade', city:'Lisboa',     cap:50095, country:'Portugal',  tags:['elite','portugal'],         clubs:['sporting','sporting-cp'] },
+    { id:'sta018', name:'Estádio da Luz',        city:'Lisboa',     cap:65647, country:'Portugal',  tags:['elite','portugal'],         clubs:['benfica','sl-benfica'] },
+    { id:'sta019', name:'Estádio do Dragão',     city:'Oporto',     cap:50033, country:'Portugal',  tags:['elite','portugal'],         clubs:['porto','fc-porto'] },
+    { id:'sta020', name:'Johan Cruyff Arena',    city:'Ámsterdam',  cap:54990, country:'Países Bajos', tags:['elite','netherlands'],  clubs:['ajax'] },
+    { id:'sta021', name:'Signal Iduna Park',     city:'Dortmund',   cap:81365, country:'Alemania',  tags:['elite','germany'],          clubs:['dortmund','borussia-dortmund'] },
+    { id:'sta022', name:'Stamford Bridge',       city:'Londres',    cap:40343, country:'Inglaterra', tags:['england'],                 clubs:['chelsea'] },
+    { id:'sta023', name:'Old Trafford',          city:'Mánchester', cap:74140, country:'Inglaterra', tags:['elite','england'],         clubs:['man-utd','manchester-united'] },
+    { id:'sta024', name:'Etihad Stadium',        city:'Mánchester', cap:53400, country:'Inglaterra', tags:['elite','england'],         clubs:['man-city','manchester-city'] },
+    { id:'sta025', name:'Anfield',               city:'Liverpool',  cap:61015, country:'Inglaterra', tags:['elite','england'],         clubs:['liverpool'] },
+    { id:'sta026', name:'Juventus Stadium',      city:'Turín',      cap:41507, country:'Italia',     tags:['elite','italy'],           clubs:['juventus'] },
+    { id:'sta027', name:'San Siro',              city:'Milán',      cap:80018, country:'Italia',     tags:['elite','italy'],           clubs:['milan','inter','ac-milan','inter-milan'] },
+    { id:'sta028', name:'Estadio Olímpico de Roma', city:'Roma',    cap:70634, country:'Italia',     tags:['elite','italy','final'],   clubs:['roma','lazio'] },
+    { id:'sta029', name:'Estadio Rey Fahd',      city:'Riad',       cap:68252, country:'Arabia Saudí', tags:['neutral','final'],      clubs:[] },
+    { id:'sta030', name:'Estadio Olímpico de Wembley', city:'Londres', cap:90000, country:'Inglaterra', tags:['national','england','final'], clubs:[] }
+  ];
+
+  /* Level-1: exact club slug → stadium ID */
+  var _CLUB_STADIUM_MAP = (function () {
+    var m = {};
+    window.STADIUM_DB.forEach(function (st) {
+      st.clubs.forEach(function (slug) { m[slug] = st.id; });
+    });
+    return m;
+  }());
+
+  /* Level-2: country/tag heuristic */
+  function _stadiumByTag(tags) {
+    var matches = window.STADIUM_DB.filter(function (st) {
+      return tags.some(function (t) { return st.tags.indexOf(t) !== -1; });
+    });
+    return matches.length ? matches[Math.floor(Math.random() * matches.length)] : null;
+  }
+
+  /* Level-3: full rotation pool */
+  var _rotationIdx = 0;
+  function _stadiumRotation() {
+    var st = window.STADIUM_DB[_rotationIdx % window.STADIUM_DB.length];
+    _rotationIdx++;
+    return st;
+  }
+
+  window.adminGetStadium = function (clubSlug, opts) {
+    /* opts: { tags: ['spain','elite'] } */
+    opts = opts || {};
+    /* Level 1 */
+    if (clubSlug) {
+      var slug = (clubSlug + '').toLowerCase().replace(/\s+/g, '-');
+      var sid = _CLUB_STADIUM_MAP[slug];
+      if (sid) {
+        var found = window.STADIUM_DB.filter(function (s) { return s.id === sid; })[0];
+        if (found) return found;
+      }
+    }
+    /* Level 2 */
+    if (opts.tags && opts.tags.length) {
+      var byTag = _stadiumByTag(opts.tags);
+      if (byTag) return byTag;
+    }
+    /* Level 3 */
+    return _stadiumRotation();
+  };
+
+  /* ── ADMIN UI RENDERERS ───────────────────────────────── */
+  window.adminRenderStadiums = function () {
+    var container = document.getElementById('stadium-list');
+    if (!container) return;
+    var q = (document.getElementById('stadium-search') || {}).value || '';
+    q = q.toLowerCase().trim();
+    var filtered = window.STADIUM_DB.filter(function (s) {
+      if (!q) return true;
+      return (s.name + s.city + s.country + s.clubs.join(' ')).toLowerCase().indexOf(q) !== -1;
+    });
+    if (!filtered.length) {
+      container.innerHTML = '<p style="color:rgba(255,255,255,.35);font-family:Rajdhani,sans-serif;font-size:13px;padding:16px;">Sin resultados</p>';
+      return;
+    }
+    container.innerHTML = filtered.map(function (s) {
+      return '<div class="admin-stadium-row">'
+        + '<span class="admin-stadium-icon">🏟️</span>'
+        + '<div style="flex:1;">'
+        + '<div class="admin-stadium-name">' + s.name + '</div>'
+        + '<div class="admin-stadium-meta">' + s.city + ' · ' + s.country + ' · ' + s.cap.toLocaleString() + ' esp.</div>'
+        + (s.clubs.length ? '<div class="admin-stadium-meta" style="color:rgba(100,180,255,.6);">Clubs: ' + s.clubs.join(', ') + '</div>' : '')
+        + '</div>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.3);">' + s.id + '</span>'
+        + '</div>';
+    }).join('');
+  };
+
+  window.adminRenderBalls = function () {
+    var container = document.getElementById('balls-list');
+    if (!container) return;
+    var env = window.adminGetEnvironment();
+    var entries = Object.keys(window.BALL_DB).map(function (k) {
+      return { key: k, data: window.BALL_DB[k] };
+    });
+    container.innerHTML = '<div class="admin-env-panel" style="margin:0 0 12px;">'
+      + '<div class="admin-env-title">ENTORNO HOY</div>'
+      + '<div style="padding:8px 0 0;font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.7);">'
+      + '🌍 ' + env.tod + (env.snow ? ' · ❄️ Nieve activa · Balón: ' + env.ball : '')
+      + '</div></div>'
+      + entries.map(function (e) {
+        var active = env.snow && e.key === 'snow';
+        return '<div class="admin-ball-row' + (active ? ' admin-ball-active' : '') + '">'
+          + '<span style="font-size:20px;">⚽</span>'
+          + '<div style="flex:1;">'
+          + '<div class="admin-ball-comp">' + e.data.comp + '</div>'
+          + '<div class="admin-ball-id">' + e.data.id + '</div>'
+          + '</div>'
+          + (active ? '<span style="font-size:10px;color:#5fe08a;font-family:Rajdhani,sans-serif;">ACTIVO</span>' : '')
+          + '</div>';
+      }).join('');
+  };
+
+  function _adminRefreshEnvStatus() {
+    var el = document.getElementById('admin-env-status');
+    if (!el) return;
+    var env = window.adminGetEnvironment();
+    el.innerHTML = '<span class="admin-env-badge">🌙 ' + env.tod + '</span>'
+      + (env.snow ? '<span class="admin-env-badge">❄️ NIEVE</span><span class="admin-env-badge">⚽ MAX VIS 26</span>' : '');
+  }
+
+  /* hook into go() to render stadium/ball lists when entering those screens */
+  (function () {
+    var _prevGo = window.go;
+    window.go = function (id) {
+      if (_prevGo) _prevGo(id);
+      if (id === 's-admin') { _adminRefreshEnvStatus(); }
+      if (id === 's-admin-stadiums') { setTimeout(window.adminRenderStadiums, 30); }
+      if (id === 's-admin-balls')    { setTimeout(window.adminRenderBalls, 30); }
+    };
+  }());
+
+  document.addEventListener('DOMContentLoaded', function () {
+    _adminRefreshEnvStatus();
+  });
+}());
+</script>

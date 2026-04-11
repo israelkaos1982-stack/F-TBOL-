@@ -182,9 +182,14 @@
 </div>
 
 <div class="screen" id="s-bayern-objetivos">
-  <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+  <script>/* redirect alias */ if(document.getElementById('s-bayern-objetivos') && document.getElementById('s-münchen-objetivos') === null){ document.addEventListener('DOMContentLoaded', function(){ var alias = document.getElementById('s-bayern-objetivos'); if(alias && alias.classList.contains('active')){ if(typeof go === 'function') go('s-munich-objetivos'); } }); }</script>
+  <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
   <div class="sec-hdr"><span class="sec-emoji">🎯</span><h2>Objetivos del Club</h2></div>
-  <div class="hub-screen-card">Seguimiento activo de <b>33</b> misiones con filtros por completado y pendiente (avance actual: <b>2/33</b>).</div>
+  <div class="hub-screen-card" style="text-align:center;padding:20px;">
+    <div style="font-size:32px;margin-bottom:8px;">🎯</div>
+    <p style="margin:0 0 12px;color:#fff;">Los Objetivos del Club se gestionan desde el panel de Bayern Munich.</p>
+    <button onclick="go('s-munich-objetivos')" style="background:linear-gradient(145deg,#dc052d,#8e001c);border:none;color:#fff;font-family:Oswald,sans-serif;font-size:14px;letter-spacing:1.5px;padding:10px 20px;border-radius:8px;cursor:pointer;">📋 Ver Panel Maestro (33 Misiones)</button>
+  </div>
 </div>
 
 <div class="screen" id="s-bayern-plantilla">
@@ -2935,76 +2940,273 @@
 <div class="sec-hdr"><span class="sec-emoji">🎯</span><h2>Objetivos del Club</h2></div>
 <div style="padding:4px 14px 40px;">
 <div style="padding:8px 4px 14px;display:flex;align-items:center;justify-content:space-between;">
-<span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.4);">PROGRESO</span>
+<span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.5);">PROTOCOLO · MÁXIMA PRESIÓN · TOÑÍN</span>
 <span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:#f0c040;" id="ath-obj-count">0 / 33</span>
 </div>
 <div class="ent-body ath-body-obj" id="ath-obj-club">
+
+<!-- PESTAÑA 1: LIGA Y COPA -->
 <div class="obj-sub-section">
-<button class="obj-sub-hdr" onclick="subTog('obj-liga')" style="color:#f08040;">🇪🇸 <span>LIGA</span> <span class="obj-sub-arr" id="obj-liga-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-liga')" style="color:#ff8c42;">🇪🇸 <span>LIGA EA SPORTS</span> <span class="obj-sub-arr" id="obj-liga-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-liga">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Finalizar entre los 6 primeros</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Lograr 5 partidos imbatido <span class="obj-counter" id="oc-imbatido-liga">0<span class="obj-counter-max">/5</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 jugador entre los 10 máx. goleadores ⚽</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Mantener 48% o más de valoración global <span class="obj-counter" id="oc-rating-liga">0%<span class="obj-counter-max">/48%</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Terminar la liga por delante del VILLARREAL CF</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🛡️ Élite · Finalizar entre los 6 primeros</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🧤 Muro · Lograr 5 partidos imbatido <span class="obj-counter" id="oc-imbatido-liga">0<span class="obj-counter-max">/5</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-imbatido-liga',-1,0,5,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-imbatido-liga',1,0,5,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🎯 Referente · 1 jugador entre los 10 máx. goleadores</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⭐ Rating · Mantener 48% o más de valoración global <span class="obj-counter" id="oc-rating-liga">0%<span class="obj-counter-max">/48%</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStepPct('oc-rating-liga',-1,0,100,48)">−</button><button class="oc-btn" onclick="athObjStepPct('oc-rating-liga',1,0,100,48)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⚔️ Duelo Directo · Terminar por delante del VILLARREAL CF</label>
 </div>
 </div>
+
 <div class="obj-sub-section">
 <button class="obj-sub-hdr" onclick="subTog('obj-copa')" style="color:#f0c040;">🏆 <span>COPA DEL REY</span> <span class="obj-sub-arr" id="obj-copa-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-copa">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Llegar a Cuartos</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Clasificar y jugar la Final</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 5 o más ⚽ en 1 eliminatoria <span class="obj-counter" id="oc-goles-copa">0<span class="obj-counter-max">/5</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🥉 Exigencia · Alcanzar los Cuartos de Final</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🥈 Gran Final · Clasificar y jugar la Final de Copa</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🔥 Eficacia · Marcar 5 o más ⚽ en 1 eliminatoria <span class="obj-counter" id="oc-goles-copa">0<span class="obj-counter-max">/5</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-goles-copa',-1,0,5,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-goles-copa',1,0,5,false)">+</button></span></label>
 </div>
 </div>
+
+<!-- PESTAÑA 2: EUROPA -->
 <div class="obj-sub-section">
-<button class="obj-sub-hdr" onclick="subTog('obj-uecl')" style="color:#00c875;">🌍 <span>EUROPA</span> <span class="obj-sub-arr" id="obj-uecl-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-uecl')" style="color:#00c875;">🌍 <span>EUROPA · ORGULLO BÁVARO</span> <span class="obj-sub-arr" id="obj-uecl-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-uecl">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Clasificar en top 8 grupo <span class="obj-counter" id="oc-pos-uecl">-<span class="obj-counter-max">/8</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Llegar a Cuartos</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Llegar a la Gran Final Europea</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 3 o más ⚽ en 1 partido europeo <span class="obj-counter" id="oc-goles-uecl">0<span class="obj-counter-max">/3</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 📊 Fase de Grupos · Clasificar en el Top 8 <span class="obj-counter" id="oc-pos-uecl">-<span class="obj-counter-max">/8</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🛡️ Fase KO · Alcanzar los Cuartos de Final</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🏆 Gloria · Llegar a la Gran Final Europea</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⚽ Vendaval · Marcar 3 o más ⚽ en 1 partido europeo <span class="obj-counter" id="oc-goles-uecl">0<span class="obj-counter-max">/3</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-goles-uecl',-1,0,3,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-goles-uecl',1,0,3,false)">+</button></span></label>
 </div>
 </div>
+
+<!-- PESTAÑA 3: DERBYS -->
 <div class="obj-sub-section">
-<button class="obj-sub-hdr" onclick="subTog('obj-derbys')" style="color:#b060f0;">⚡ <span>DERBYS</span> <span class="obj-sub-arr" id="obj-derbys-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-derbys')" style="color:#b060f0;">⚡ <span>DERBYS · TOÑÍN VS EL MUNDO</span> <span class="obj-sub-arr" id="obj-derbys-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-derbys">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar 3 de 12 partidos contra humanos <span class="obj-counter" id="oc-ganar-derby">0<span class="obj-counter-max">/3</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Lograr 1 partido imbatido contra rival real <span class="obj-counter" id="oc-imbatido-derby">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 3 o más ⚽ en 1 duelo humano <span class="obj-counter" id="oc-goles-derby">0<span class="obj-counter-max">/3</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> No ser el equipo más goleado del grupo</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> No perder por más de 3 goles contra el líder</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⚔️ Dominio · Ganar 3 de 12 partidos vs humanos <span class="obj-counter" id="oc-ganar-derby">0<span class="obj-counter-max">/3</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-ganar-derby',-1,0,3,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-ganar-derby',1,0,3,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🧤 Resistencia · 1 partido imbatido contra rival real <span class="obj-counter" id="oc-imbatido-derby">0<span class="obj-counter-max">/1</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-imbatido-derby',-1,0,1,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-imbatido-derby',1,0,1,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🥊 El Zarpazo · Marcar 3 o más ⚽ en 1 duelo humano <span class="obj-counter" id="oc-goles-derby">0<span class="obj-counter-max">/3</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-goles-derby',-1,0,3,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-goles-derby',1,0,3,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 📈 Pundonor · No ser el equipo más goleado del grupo</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🛡️ Estadística · No perder por más de 3 goles contra el líder</label>
 </div>
 </div>
+
+<!-- PESTAÑA 4: GLOBALES DEL CLUB -->
 <div class="obj-sub-section">
-<button class="obj-sub-hdr" onclick="subTog('obj-global')" style="color:#e05050;">🔴 <span>GLOBALES CLUB</span> <span class="obj-sub-arr" id="obj-global-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-global')" style="color:#ff4444;">🟢 <span>GLOBALES DEL CLUB · HITOS DE ÉLITE</span> <span class="obj-sub-arr" id="obj-global-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-global">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar 1 Título <span class="obj-counter" id="oc-titulos">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar 12 partidos en casa <span class="obj-counter" id="oc-casa">0<span class="obj-counter-max">/12</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 1 Penalti o Falta <span class="obj-counter" id="oc-penalti">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 5⚽ en 2 partidos <span class="obj-counter" id="oc-5goles2">0<span class="obj-counter-max">/5</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 6⚽ en 1 partido <span class="obj-counter" id="oc-6goles1">0<span class="obj-counter-max">/6</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 2 Hattricks <span class="obj-counter" id="oc-hattrick-gl">1<span class="obj-counter-max">/2</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Diferencia de Goles +20 <span class="obj-counter" id="oc-dif-goles">+0<span class="obj-counter-max">/+20</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 jugador entre los 20 nominados al Balón de Oro</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 1 jugador entre los 20 máx. goleadores europeos</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Tener un jugador con 10+ MVP en la temporada <span class="obj-counter" id="oc-mvp-temp">0<span class="obj-counter-max">/10</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Mantener a los 26 jugadores con moral Alta o superior</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🏆 Título · Ganar 1 Título oficial (Liga, Copa o Europa)</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🏠 Fortín · Ganar 12 partidos en casa <span class="obj-counter" id="oc-casa">0<span class="obj-counter-max">/12</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-casa',-1,0,12,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-casa',1,0,12,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🎯 Especialista · Marcar 1 gol de Penalti o Falta</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⚽ Racha Letal · Marcar 5⚽ en 2 partidos <span class="obj-counter" id="oc-5goles2">0<span class="obj-counter-max">/5</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-5goles2',-1,0,5,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-5goles2',1,0,5,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🔥 Goleada · Marcar 6⚽ en 1 solo partido <span class="obj-counter" id="oc-6goles1">0<span class="obj-counter-max">/6</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-6goles1',-1,0,6,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-6goles1',1,0,6,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🎩 Tripletes · Lograr 2 Hattricks <span class="obj-counter" id="oc-hattrick-gl">1<span class="obj-counter-max">/2</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-hattrick-gl',-1,0,2,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-hattrick-gl',1,0,2,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 📊 Diferencia · Diferencia de Goles +20 <span class="obj-counter" id="oc-dif-goles">+0<span class="obj-counter-max">/+20</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-dif-goles',-1,-99,99,true)">−</button><button class="oc-btn" onclick="athObjStep('oc-dif-goles',1,-99,99,true)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ✨ Balón de Oro · 1 jugador entre los 20 nominados</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 👟 Bota de Oro · 1 jugador entre los 20 máx. goleadores europeos</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🏆 MVP · 1 jugador con 10+ premios MVP en la temporada <span class="obj-counter" id="oc-mvp-temp">0<span class="obj-counter-max">/10</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 👕 Gestión · Mantener a los 26 jugadores con moral Alta o superior</label>
 </div>
 </div>
+
+<!-- PESTAÑA 5: SELECCIÓN -->
 <div class="obj-sub-section" style="border:none;">
-<button class="obj-sub-hdr" onclick="subTog('obj-sel')" style="color:#4090f0;">🌍 <span>SELECCIÓN</span> <span class="obj-sub-arr" id="obj-sel-arr">▼</span></button>
+<button class="obj-sub-hdr" onclick="subTog('obj-sel')" style="color:#4090f0;">🇫🇷 <span>SELECCIÓN · DOMINIO ABSOLUTO</span> <span class="obj-sub-arr" id="obj-sel-arr">▼</span></button>
 <div class="obj-sub-body open" id="obj-sel">
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Clasificar a Francia directamente al Mundial 2026</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Ganar la Copa del Mundo</label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Marcar 1 Hattrick internacional <span class="obj-counter" id="oc-hattrick-sel">0<span class="obj-counter-max">/1</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Estar en el Top 10 de equipos goleadores del Mundial <span class="obj-counter" id="oc-top10-sel">-<span class="obj-counter-max">/10</span></span></label>
-<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> Tener al MVP del Mundial en tu plantilla</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🌍 Mundial · Clasificar a Francia directamente para el Mundial 2026</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ⭐ La Tercera · Ganar la Copa del Mundo</label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🎩 Estrella · Marcar 1 Hattrick internacional <span class="obj-counter" id="oc-hattrick-sel">0<span class="obj-counter-max">/1</span></span><span class="oc-btns"><button class="oc-btn" onclick="athObjStep('oc-hattrick-sel',-1,0,1,false)">−</button><button class="oc-btn" onclick="athObjStep('oc-hattrick-sel',1,0,1,false)">+</button></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 📊 Ranking · Estar en el Top 10 goleadores del Mundial <span class="obj-counter" id="oc-top10-sel">-<span class="obj-counter-max">/10</span></span></label>
+<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> 🥇 MVP Mundial · Tener al MVP del torneo en tu plantilla</label>
+</div>
+</div>
+
+</div><!-- end #ath-obj-club -->
+
+<!-- MVP TRACKER PANEL -->
+<div style="margin-top:10px;border-radius:10px;overflow:hidden;background:rgba(0,0,0,.3);">
+<button class="obj-sub-hdr" onclick="subTog('mvp-tracker-body')" style="color:#f0c040;width:100%;padding:11px 14px 9px;">⭐ <span>REGISTRO MVP POR JUGADOR</span> <span class="obj-sub-arr" id="mvp-tracker-body-arr">▼</span></button>
+<div class="obj-sub-body" id="mvp-tracker-body" style="padding:0 14px 12px;">
+<p style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);margin:0 0 8px;letter-spacing:.5px;">Auto-actualizado al cerrar cada partido. El jugador con más MVPs activa el objetivo 🏆 MVP.</p>
+<div id="mvp-tracker-log" style="display:flex;flex-direction:column;gap:4px;min-height:28px;"></div>
+<button onclick="athMvpReset()" style="margin-top:10px;background:rgba(197,15,31,.35);border:1px solid rgba(197,15,31,.5);color:#fff;border-radius:6px;padding:5px 12px;font-family:Rajdhani,sans-serif;font-size:12px;cursor:pointer;letter-spacing:.5px;">🗑 Reiniciar tracker MVP</button>
 </div>
 </div>
 </div>
 </div>
-</div>
+
+<style>
+.oc-btns{display:inline-flex;gap:2px;margin-left:4px;flex-shrink:0;}
+.oc-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:4px;width:20px;height:20px;font-size:13px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
+.oc-btn:active{background:rgba(255,255,255,.28);}
+.mvp-log-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;background:rgba(240,192,64,.07);border:1px solid rgba(240,192,64,.12);}
+.mvp-log-rank{font-family:'Bebas Neue',sans-serif;font-size:15px;color:#f0c040;min-width:18px;}
+.mvp-log-name{flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;font-weight:600;}
+.mvp-log-count{font-family:'Bebas Neue',sans-serif;font-size:16px;color:#f0c040;}
+.mvp-log-count.at-max{color:#4fc86a;}
+</style>
+
+<script>
+(function(){
+  var LS_OBJ = 'munich-obj-state-v3';
+  var LS_MVP = 'munich-mvp-tracker-v2';
+  var TEAM_NAME = 'Bayern Munich';
+
+  /* ── Counter IDs that store plain integers ── */
+  var INT_COUNTERS = ['oc-imbatido-liga','oc-goles-copa','oc-goles-uecl',
+    'oc-ganar-derby','oc-imbatido-derby','oc-goles-derby',
+    'oc-casa','oc-5goles2','oc-6goles1','oc-hattrick-gl','oc-hattrick-sel'];
+
+  /* ── Stepper for plain integer counters ── */
+  window.athObjStep = function(id, delta, min, max, isGoalDiff){
+    var el = document.getElementById(id);
+    if (!el) return;
+    var mx = el.querySelector('.obj-counter-max');
+    var raw = el.childNodes[0] ? el.childNodes[0].textContent.trim() : '0';
+    var cur = isGoalDiff ? parseInt(raw.replace('+',''), 10) : parseInt(raw, 10);
+    if (isNaN(cur)) cur = 0;
+    cur = Math.max(min, Math.min(max, cur + delta));
+    var fmt = isGoalDiff ? (cur >= 0 ? '+' + cur : String(cur)) : String(cur);
+    el.childNodes[0].textContent = fmt;
+    saveObjState();
+  };
+
+  /* ── Stepper for percentage counter ── */
+  window.athObjStepPct = function(id, delta, min, max, target){
+    var el = document.getElementById(id);
+    if (!el) return;
+    var raw = el.childNodes[0] ? el.childNodes[0].textContent.trim().replace('%','') : '0';
+    var cur = parseInt(raw, 10);
+    if (isNaN(cur)) cur = 0;
+    cur = Math.max(min, Math.min(max, cur + delta));
+    el.childNodes[0].textContent = cur + '%';
+    saveObjState();
+  };
+
+  /* ── MVP tracker localStorage helpers ── */
+  function getMVPTracker(){ try { return JSON.parse(localStorage.getItem(LS_MVP) || '{}'); } catch(e){ return {}; } }
+  function setMVPTracker(data){ try { localStorage.setItem(LS_MVP, JSON.stringify(data)); } catch(e){} }
+
+  function getTopMVPCount(){
+    var t = getMVPTracker(); var max = 0;
+    Object.keys(t).forEach(function(k){ if(t[k] > max) max = t[k]; });
+    return max;
+  }
+
+  function updateMVPCounter(){
+    var top = getTopMVPCount();
+    var el = document.getElementById('oc-mvp-temp');
+    if (el) {
+      var mx = el.querySelector('.obj-counter-max');
+      if (mx) el.childNodes[0].textContent = top;
+    }
+    renderMVPLog();
+  }
+
+  function renderMVPLog(){
+    var logEl = document.getElementById('mvp-tracker-log');
+    if (!logEl) return;
+    var t = getMVPTracker();
+    var entries = Object.keys(t).map(function(k){ return {name: k, count: t[k]}; });
+    entries.sort(function(a, b){ return b.count - a.count; });
+    if (!entries.length){
+      logEl.innerHTML = '<p style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.35);margin:0;">Sin datos. Los MVPs se registran automáticamente al cerrar cada partido.</p>';
+      return;
+    }
+    logEl.innerHTML = entries.map(function(e, i){
+      var atMax = e.count >= 10;
+      return '<div class="mvp-log-row">' +
+        '<span class="mvp-log-rank">' + (i === 0 ? '⭐' : (i + 1) + '.') + '</span>' +
+        '<span class="mvp-log-name">' + escMVP(e.name) + '</span>' +
+        '<span class="mvp-log-count' + (atMax ? ' at-max' : '') + '">' + e.count + '<span style="font-size:10px;opacity:.55;">/10</span></span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function escMVP(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* ── Reset MVP tracker ── */
+  window.athMvpReset = function(){
+    if (!confirm('¿Reiniciar el tracker de MVP? Esta acción no se puede deshacer.')) return;
+    setMVPTracker({});
+    updateMVPCounter();
+    saveObjState();
+  };
+
+  /* ── Hook into registrarLigaPlayerStats to auto-track MVPs ── */
+  function hookMVPTracking(){
+    var origFn = window.registrarLigaPlayerStats;
+    window.registrarLigaPlayerStats = function(matchKey, teamA, teamB, evts, mvpName, mvpTeam){
+      if (origFn) origFn.apply(this, arguments);
+      if (mvpName && mvpTeam === TEAM_NAME) {
+        var t = getMVPTracker();
+        t[mvpName] = (t[mvpName] || 0) + 1;
+        setMVPTracker(t);
+        updateMVPCounter();
+        saveObjState();
+      }
+    };
+  }
+
+  /* ── Persist checkbox state + counters to localStorage ── */
+  function saveObjState(){
+    try {
+      var data = { checks: {}, counters: {} };
+      document.querySelectorAll('#ath-obj-club .obj-item').forEach(function(lbl, i){
+        var cb = lbl.querySelector('input[type=checkbox]');
+        if (cb) data.checks[i] = cb.checked;
+      });
+      /* save counter text nodes */
+      var counterIds = INT_COUNTERS.concat(['oc-dif-goles','oc-rating-liga','oc-mvp-temp','oc-pos-uecl','oc-top10-sel']);
+      counterIds.forEach(function(id){
+        var el = document.getElementById(id);
+        if (el && el.childNodes[0]) data.counters[id] = el.childNodes[0].textContent.trim();
+      });
+      localStorage.setItem(LS_OBJ, JSON.stringify(data));
+    } catch(e){}
+  }
+
+  function loadObjState(){
+    try {
+      var raw = localStorage.getItem(LS_OBJ);
+      if (!raw) return;
+      var data = JSON.parse(raw);
+      if (data.checks){
+        document.querySelectorAll('#ath-obj-club .obj-item').forEach(function(lbl, i){
+          var cb = lbl.querySelector('input[type=checkbox]');
+          if (cb && data.checks[i] !== undefined){
+            cb.checked = !!data.checks[i];
+            lbl.classList.toggle('done', !!data.checks[i]);
+          }
+        });
+      }
+      if (data.counters){
+        Object.keys(data.counters).forEach(function(id){
+          var el = document.getElementById(id);
+          if (el && el.childNodes[0]) el.childNodes[0].textContent = data.counters[id];
+        });
+      }
+    } catch(e){}
+  }
+
+  /* ── Patch athObjCount to also persist state ── */
+  function patchAthObjCount(){
+    var orig = window.athObjCount;
+    window.athObjCount = function(){
+      if (orig) orig.apply(this, arguments);
+      saveObjState();
+    };
+  }
+
+  /* ── Init on DOMContentLoaded ── */
+  document.addEventListener('DOMContentLoaded', function(){
+    loadObjState();
+    updateMVPCounter();
+    patchAthObjCount();
+    hookMVPTracking();
+    /* Run initial count to sync the hub badge */
+    if (typeof window.athObjCount === 'function') window.athObjCount();
+  });
+})();
+</script>
 
 <div class="screen" id="s-munich-plantilla">
 <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>

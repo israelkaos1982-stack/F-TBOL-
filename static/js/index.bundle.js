@@ -8369,3 +8369,243 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   console.log('[ManualMaestro v2.0] Sistema completo activado ✓');
 
 })();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SISTEMA MÉDICO TOÑÍN · PUNTOS DE INYECCIÓN (PI)  v1.0
+   ─ Acumula PI de las tarjetas del rival en partidos del Bayern Munich.
+   ─ 1 PI = 1 partido de lesión reducido. Uso: icono 💊 del HUD.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  var LS_PI_KEY = 'tonin_pi_medico';
+
+  /* ── Persistencia ──────────────────────────────────────────────── */
+  function getPI() {
+    try { return Math.max(0, parseInt(localStorage.getItem(LS_PI_KEY) || '0') || 0); } catch (e) { return 0; }
+  }
+  function setPI(val) {
+    try { localStorage.setItem(LS_PI_KEY, String(Math.max(0, val | 0))); } catch (e) {}
+  }
+
+  /* ── HUD display ───────────────────────────────────────────────── */
+  function updatePIDisplay(val) {
+    var el = document.getElementById('ath-med-val');
+    if (!el) return;
+    var n = (val !== undefined) ? val : getPI();
+    el.textContent = (n < 10 ? '0' : '') + n + ' PI';
+  }
+
+  /* ── Animación: tarjetas → cápsulas que vuelan al HUD ─────────── */
+  function animateCardsToHUD(yellows, reds) {
+    var hudEl = document.getElementById('ath-med-icon');
+    if (!hudEl) return;
+    var rect = hudEl.getBoundingClientRect();
+    var tx = rect.left + rect.width / 2;
+    var ty = rect.top + rect.height / 2;
+    var total = yellows + reds;
+    for (var i = 0; i < total; i++) {
+      (function (idx) {
+        setTimeout(function () {
+          var cap = document.createElement('span');
+          cap.textContent = '💊';
+          cap.style.cssText = 'position:fixed;font-size:22px;z-index:99999;pointer-events:none;'
+            + 'left:' + (15 + Math.random() * (window.innerWidth - 40)) + 'px;'
+            + 'top:' + (window.innerHeight * 0.45 + Math.random() * 160) + 'px;'
+            + 'transition:left 0.75s ease-in,top 0.75s ease-in,font-size 0.75s,opacity 0.75s;';
+          document.body.appendChild(cap);
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              cap.style.left = tx + 'px';
+              cap.style.top = ty + 'px';
+              cap.style.fontSize = '8px';
+              cap.style.opacity = '0';
+            });
+          });
+          setTimeout(function () {
+            if (cap.parentNode) cap.parentNode.removeChild(cap);
+            if (idx === total - 1) {
+              var valEl = document.getElementById('ath-med-val');
+              if (valEl) { valEl.classList.remove('pulse'); void valEl.offsetWidth; valEl.classList.add('pulse'); }
+              hudEl.classList.remove('pulse'); void hudEl.offsetWidth; hudEl.classList.add('pulse');
+            }
+          }, 850);
+        }, idx * 140);
+      })(i);
+    }
+  }
+
+  /* ── Acumular PI al final de un partido del Bayern ─────────────── */
+  function acumularPI(matchKey, teamA, teamB, ta_a, tr_a, ta_b, tr_b) {
+    var bayernSide = null;
+    if (teamA === 'Bayern Munich') { bayernSide = 'a'; }
+    else if (teamB === 'Bayern Munich') { bayernSide = 'b'; }
+    if (!bayernSide) return;
+
+    var rivalYellows = bayernSide === 'a' ? (ta_b | 0) : (ta_a | 0);
+    var rivalReds    = bayernSide === 'a' ? (tr_b | 0) : (tr_a | 0);
+
+    var wrap  = document.getElementById('mlw-' + matchKey);
+    var isHvH = wrap ? wrap.classList.contains('hvh') : false;
+
+    var piYellow = isHvH ? 1 : 3;
+    var piRed    = isHvH ? 3 : 6;
+    var earned   = (rivalYellows * piYellow) + (rivalReds * piRed);
+    if (earned <= 0) return;
+
+    var newPI = getPI() + earned;
+    setPI(newPI);
+    updatePIDisplay(newPI);
+    animateCardsToHUD(rivalYellows, rivalReds);
+  }
+
+  /* ── Jugadores lesionados del Bayern ───────────────────────────── */
+  function getBayernInjured() {
+    var store = window.LESION_STORE || {};
+    return Object.keys(store).filter(function (name) {
+      var l = store[name];
+      return l && (!l.equipo || l.equipo === 'Bayern Munich');
+    }).map(function (name) {
+      var l = store[name];
+      return {
+        name:        name,
+        partidos:    l.partidos    || 1,
+        gradoNombre: l.gradoNombre || 'Leve',
+        gradoEmoji:  l.gradoEmoji  || '🩹'
+      };
+    });
+  }
+
+  /* ── Abrir menú de tratamiento ─────────────────────────────────── */
+  function openTreatmentMenu() {
+    var pi      = getPI();
+    var injured = getBayernInjured();
+    var needed  = injured.reduce(function (s, p) { return s + p.partidos; }, 0);
+
+    var ov      = document.getElementById('ath-med-ov');
+    var helpEl  = document.getElementById('ath-med-ov-help');
+    var listEl  = document.getElementById('ath-med-ov-list');
+    if (!ov) return;
+
+    if (!injured.length) {
+      if (helpEl) helpEl.textContent = '✅ Sin lesionados en el Bayern Munich.';
+      if (listEl) listEl.innerHTML = '';
+    } else {
+      var enough = pi >= needed;
+      if (helpEl) {
+        helpEl.innerHTML =
+          '<b>PI disponibles: <span style="color:#49f3df">' + pi + '</span></b>'
+          + '&nbsp;·&nbsp;Coste total: <b style="color:' + (enough ? '#49f3df' : '#ff6060') + '">'
+          + needed + ' PI</b>'
+          + (!enough ? '&nbsp;<span style="color:#ff6060">⚠️ Insuficientes</span>' : '');
+      }
+      if (listEl) {
+        listEl.innerHTML = injured.map(function (p) {
+          return '<div class="ath-med-row">'
+            + '<b>' + p.name + '</b>'
+            + '<span>' + p.gradoEmoji + ' ' + p.gradoNombre + ' · ' + p.partidos + ' partido' + (p.partidos !== 1 ? 's' : '') + '</span>'
+            + '<span style="color:#49f3df;font-weight:700;font-family:Oswald,sans-serif;">' + p.partidos + ' PI</span>'
+            + '</div>';
+        }).join('');
+      }
+    }
+    ov.classList.add('show');
+  }
+
+  /* ── Flash de curación en fila de plantilla ────────────────────── */
+  function healFlash(playerName) {
+    var safe = playerName.replace(/"/g, '&quot;');
+    document.querySelectorAll('.plant-row[data-player="' + safe + '"]').forEach(function (row) {
+      row.style.transition = 'background 0.3s';
+      row.style.background = 'rgba(73,243,223,0.28)';
+      setTimeout(function () { row.style.background = ''; }, 900);
+      row.classList.remove('baja-lesion', 'baja-sancion', 'baja-expulsion');
+      var btn = row.querySelector('.plant-baja-btn');
+      if (btn) {
+        var origClass = btn.className;
+        btn.textContent = '✅';
+        setTimeout(function () { btn.textContent = ''; btn.className = 'plant-baja-btn'; btn.title = ''; }, 900);
+      }
+      var badge = row.querySelector('.plant-baja-badge');
+      if (badge) { badge.style.display = 'none'; }
+    });
+  }
+
+  /* ── Confirmar inyección (consumir PI y sanar) ─────────────────── */
+  window.athApplyMedicalTreatment = function () {
+    var pi      = getPI();
+    var injured = getBayernInjured();
+    var needed  = injured.reduce(function (s, p) { return s + p.partidos; }, 0);
+    var ov      = document.getElementById('ath-med-ov');
+
+    if (!injured.length) {
+      if (ov) ov.classList.remove('show');
+      return;
+    }
+
+    if (pi < needed) {
+      /* Parpadeo rojo: sin PI suficientes */
+      var valEl = document.getElementById('ath-med-val');
+      if (valEl) {
+        var cnt = 0;
+        var blink = setInterval(function () {
+          valEl.style.color = cnt % 2 === 0 ? '#ff3333' : '';
+          if (++cnt >= 7) { clearInterval(blink); valEl.style.color = ''; }
+        }, 200);
+      }
+      if (ov) ov.classList.remove('show');
+      return;
+    }
+
+    /* Sanar a todos los jugadores */
+    injured.forEach(function (p) {
+      if (window.LESION_STORE) delete window.LESION_STORE[p.name];
+      if (window.BAJA_STORE)   delete window.BAJA_STORE[p.name];
+      healFlash(p.name);
+    });
+
+    setPI(pi - needed);
+    updatePIDisplay();
+
+    if (typeof window._refreshSancionInjList === 'function') window._refreshSancionInjList();
+
+    if (ov) ov.classList.remove('show');
+  };
+
+  /* ── Interceptar registrarResultadoLiga para capturar tarjetas ─── */
+  function hookRegistrarResultado() {
+    var orig = window.registrarResultadoLiga;
+    if (!orig || orig._piHooked) return;
+    window.registrarResultadoLiga = function (matchKey, teamA, teamB, ga, gb, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, penWinner) {
+      var result = orig.apply(this, arguments);
+      acumularPI(matchKey, teamA, teamB, ta_a, tr_a, ta_b, tr_b);
+      return result;
+    };
+    window.registrarResultadoLiga._piHooked = true;
+  }
+
+  /* ── Configurar clic en icono 💊 ───────────────────────────────── */
+  function setupMedIcon() {
+    var icon = document.getElementById('ath-med-icon');
+    if (!icon || icon._piSetup) return;
+    icon._piSetup = true;
+    icon.addEventListener('click', openTreatmentMenu);
+  }
+
+  /* ── Inicializar ───────────────────────────────────────────────── */
+  function init() {
+    updatePIDisplay();
+    setupMedIcon();
+    hookRegistrarResultado();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+  setTimeout(init, 600);
+  setTimeout(init, 2000);
+
+  console.log('[MédicoPI v1.0] Sistema de Puntos de Inyección activado ✓');
+})();

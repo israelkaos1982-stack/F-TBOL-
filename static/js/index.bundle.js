@@ -3157,13 +3157,14 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
             }
             if(_scoreEl){
               var _origHTML=_scoreEl.innerHTML;
+              var _varMs=(window.mlVARSystem&&window.mlVARSystem.REVIEW_MS)||3000;
               _scoreEl.innerHTML='<span class="ml-var-text">📺 VAR</span>';
               if(_timerEl)_timerEl.classList.add('ml-var-reviewing');
               setTimeout(function(){
                 _scoreEl.innerHTML=_origHTML;
                 if(_timerEl)_timerEl.classList.remove('ml-var-reviewing');
                 _doUpdate();
-              },3000);
+              },_varMs);
             } else {
               _doUpdate();
             }

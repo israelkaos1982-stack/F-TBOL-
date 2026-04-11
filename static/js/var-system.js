@@ -49,7 +49,14 @@
   document.head.appendChild(_style);
 
   /* ── API pública ─────────────────────────────────────────────── */
+  var VAR_REVIEW_MS = 3000;   /* duración de revisión: 3 segundos reales */
+  var VAR_PROB_GOAL = 1 / 3;  /* 33.3 %: goles y penaltis */
+  var VAR_PROB_CARD = 0.25;   /* 25 %: tarjetas */
+
   window.mlVARSystem = {
+    /** Duración de la revisión VAR en milisegundos (exportado para uso externo) */
+    REVIEW_MS: VAR_REVIEW_MS,
+
     /** Pone ev.var = true/false según probabilidades */
     tagEvents: function (evts) {
       evts.forEach(function (ev) {
@@ -59,13 +66,13 @@
           ev.type === 'propia' ||
           ev.type === 'pen-prov'
         ) {
-          ev.var = Math.random() < (1 / 3);
+          ev.var = Math.random() < VAR_PROB_GOAL;
         } else if (
           ev.ico === '🟨' ||
           ev.ico === '🟥' ||
           ev.ico === '🟨🟥'
         ) {
-          ev.var = Math.random() < 0.25;
+          ev.var = Math.random() < VAR_PROB_CARD;
         }
         /* pen-gol no se etiqueta por separado; ya cubierto por pen-prov */
       });

@@ -1249,7 +1249,7 @@ var TEAM_A_OPTS='<option value="1|Thibaut Courtois">1. Thibaut Courtois</option>
 var MAX_NORMAL=5400;var MAX_ET=7200;
 var NORMAL_SPEED_HVH=889;var NORMAL_SPEED_HVIA=667;var ET_SPEED=833;
 window.mlTimerClick_j1m1=function(){if(_matchFinished||_inDescanso)return;if(_timerRunning){clearInterval(_timerInterval);_timerRunning=false;_renderTimer_j1m1();}else{_timerRunning=true;_startInterval_j1m1();}};
-function _startInterval_j1m1(){var _w=document.getElementById('mlw-j1m1');var _hvh=_w&&_w.classList.contains('hvh');var NS=_hvh?NORMAL_SPEED_HVH:NORMAL_SPEED_HVIA;var spd=_etPhase?ET_SPEED:NS;var MAX_ST=5820;_timerInterval=setInterval(function(){_timerSec+=5;var maxSec=_etDone?MAX_ET:(_stDone?MAX_ST:MAX_NORMAL);if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m1("— DESCANSO (45 min) —");_renderTimer_j1m1();setTimeout(function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;_startInterval_j1m1();}},20000);return;}if(!_etDone&&!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m1("— TIEMPO DE DESCUENTO (90') —");}if(_etDone&&!_et1Done&&_timerSec>=6300){_et1Done=true;_addMarker_j1m1("— DESCANSO PRÓRROGA (105 min) —");}if(_timerSec>=maxSec){_timerSec=maxSec;clearInterval(_timerInterval);_timerRunning=false;if(_etDone){_checkPenalties_j1m1();}} _renderTimer_j1m1();},spd);};
+function _startInterval_j1m1(){var _w=document.getElementById('mlw-j1m1');var _hvh=_w&&_w.classList.contains('hvh');var NS=_hvh?NORMAL_SPEED_HVH:NORMAL_SPEED_HVIA;var spd=_etPhase?ET_SPEED:NS;var MAX_ST=5820;_timerInterval=setInterval(function(){_timerSec+=5;var maxSec=_etDone?MAX_ET:(_stDone?MAX_ST:MAX_NORMAL);if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m1("— DESCANSO (45 min) —");_renderTimer_j1m1();(typeof window._onHalftime==='function'?window._onHalftime('j1m1',function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;_startInterval_j1m1();}}):setTimeout(function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;_startInterval_j1m1();}},20000));return;}if(!_etDone&&!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m1("— TIEMPO DE DESCUENTO (90') —");}if(_etDone&&!_et1Done&&_timerSec>=6300){_et1Done=true;_addMarker_j1m1("— DESCANSO PRÓRROGA (105 min) —");}if(_timerSec>=maxSec){_timerSec=maxSec;clearInterval(_timerInterval);_timerRunning=false;if(_etDone){_checkPenalties_j1m1();}} _renderTimer_j1m1();},spd);};
 function _renderTimer_j1m1(){var btn=document.getElementById('ml-timer-j1m1');if(!btn)return;var totalMin=Math.floor(_timerSec/60);if(_matchFinished){btn.textContent='🏁 FIN';btn.className='ml-timer finished';if(window._setScoreState)window._setScoreState('j1m1','finished');return;}if(_inDescanso){btn.textContent='⏸ DESCANSO';btn.className='ml-timer running';if(window._setScoreState)window._setScoreState('j1m1','playing');return;}var isStop=!_etDone&&_timerSec>5400;var dispStr=isStop?('90+'+Math.ceil((_timerSec-5400)/60)+"'"):(totalMin+"'");var maxForLabel=_etDone?MAX_ET:(_stDone?5820:MAX_NORMAL);var label=_timerRunning?'⏸ ':(_timerSec>=maxForLabel?'🔁 ':'▶ ');btn.textContent=label+dispStr;btn.className='ml-timer'+(_timerRunning?' running':'');if(window._setScoreState)window._setScoreState('j1m1',_timerRunning?'playing':'pending');var _bl=document.getElementById('ball-j1m1');if(_bl){if(_timerRunning){_bl.classList.remove('spinning');_bl.classList.add('static');}else{_bl.classList.remove('static');_bl.classList.add('spinning');}}};
 function _currentMin_j1m1(){return Math.min(_etDone?120:(_stDone?97:90),Math.floor(_timerSec/60));};
 function _addMarker_j1m1(txt){var list=document.getElementById('ml-acta-list-j1m1');var div=document.createElement('div');div.className='ml-ht';div.textContent=txt;list.appendChild(div);_removeEmpty_j1m1();};
@@ -1357,7 +1357,7 @@ var TEAM_A_OPTS='<option value="1|Unai Simón">1. Unai Simón</option><option va
 var MAX_NORMAL=5400;var MAX_ET=7200;
 var NORMAL_SPEED_HVH=889;var NORMAL_SPEED_HVIA=667;var ET_SPEED=833;
 window.mlTimerClick_j1m2=function(){if(_matchFinished||_inDescanso)return;if(_timerRunning){clearInterval(_timerInterval);_timerRunning=false;_renderTimer_j1m2();}else{_timerRunning=true;_startInterval_j1m2();}};
-function _startInterval_j1m2(){var _w=document.getElementById('mlw-j1m2');var _hvh=_w&&_w.classList.contains('hvh');var NS=_hvh?NORMAL_SPEED_HVH:NORMAL_SPEED_HVIA;var spd=_etPhase?ET_SPEED:NS;var MAX_ST=5820;_timerInterval=setInterval(function(){_timerSec+=5;var maxSec=_etDone?MAX_ET:(_stDone?MAX_ST:MAX_NORMAL);if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m2("— DESCANSO (45 min) —");_renderTimer_j1m2();setTimeout(function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;_startInterval_j1m2();}},20000);return;}if(!_etDone&&!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m2("— TIEMPO DE DESCUENTO (90') —");}if(_etDone&&!_et1Done&&_timerSec>=6300){_et1Done=true;_addMarker_j1m2("— DESCANSO PRÓRROGA (105 min) —");}if(_timerSec>=maxSec){_timerSec=maxSec;clearInterval(_timerInterval);_timerRunning=false;if(_etDone){_checkPenalties_j1m2();}} _renderTimer_j1m2();},spd);};
+function _startInterval_j1m2(){var _w=document.getElementById('mlw-j1m2');var _hvh=_w&&_w.classList.contains('hvh');var NS=_hvh?NORMAL_SPEED_HVH:NORMAL_SPEED_HVIA;var spd=_etPhase?ET_SPEED:NS;var MAX_ST=5820;_timerInterval=setInterval(function(){_timerSec+=5;var maxSec=_etDone?MAX_ET:(_stDone?MAX_ST:MAX_NORMAL);if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m2("— DESCANSO (45 min) —");_renderTimer_j1m2();(typeof window._onHalftime==='function'?window._onHalftime('j1m2',function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;_startInterval_j1m2();}}):setTimeout(function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;_startInterval_j1m2();}},20000));return;}if(!_etDone&&!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m2("— TIEMPO DE DESCUENTO (90') —");}if(_etDone&&!_et1Done&&_timerSec>=6300){_et1Done=true;_addMarker_j1m2("— DESCANSO PRÓRROGA (105 min) —");}if(_timerSec>=maxSec){_timerSec=maxSec;clearInterval(_timerInterval);_timerRunning=false;if(_etDone){_checkPenalties_j1m2();}} _renderTimer_j1m2();},spd);};
 function _renderTimer_j1m2(){var btn=document.getElementById('ml-timer-j1m2');if(!btn)return;var totalMin=Math.floor(_timerSec/60);if(_matchFinished){btn.textContent='🏁 FIN';btn.className='ml-timer finished';if(window._setScoreState)window._setScoreState('j1m2','finished');return;}if(_inDescanso){btn.textContent='⏸ DESCANSO';btn.className='ml-timer running';if(window._setScoreState)window._setScoreState('j1m2','playing');return;}var isStop=!_etDone&&_timerSec>5400;var dispStr=isStop?('90+'+Math.ceil((_timerSec-5400)/60)+"'"):(totalMin+"'");var maxForLabel=_etDone?MAX_ET:(_stDone?5820:MAX_NORMAL);var label=_timerRunning?'⏸ ':(_timerSec>=maxForLabel?'🔁 ':'▶ ');btn.textContent=label+dispStr;btn.className='ml-timer'+(_timerRunning?' running':'');if(window._setScoreState)window._setScoreState('j1m2',_timerRunning?'playing':'pending');var _bl=document.getElementById('ball-j1m2');if(_bl){if(_timerRunning){_bl.classList.remove('spinning');_bl.classList.add('static');}else{_bl.classList.remove('static');_bl.classList.add('spinning');}}};
 function _currentMin_j1m2(){return Math.min(_etDone?120:(_stDone?97:90),Math.floor(_timerSec/60));};
 function _addMarker_j1m2(txt){var list=document.getElementById('ml-acta-list-j1m2');var div=document.createElement('div');div.className='ml-ht';div.textContent=txt;list.appendChild(div);_removeEmpty_j1m2();};
@@ -1396,7 +1396,7 @@ var _htDone=false;var _matchFinished=false;var _pendingEvt=null;var _stDone=fals
 var TEAM_A_NAME="Deportivo Alavés";var TEAM_B_NAME="Rayo Vallecano";
 var TEAM_A_OPTS='<option value="1|Sivera">1. Sivera</option><option value="13|R. Fernández">13. R. Fernández</option><option value="28|Swiderski">28. Swiderski</option><option value="23|Parada">23. Parada</option><option value="5|Garcés">5. Garcés</option><option value="24|Yusi">24. Yusi</option><option value="25|Mariano">25. Mariano</option><option value="22|Diabate">22. Diabate</option><option value="26|Koski">26. Koski</option><option value="2|Tenaglia">2. Tenaglia</option><option value="4|Pacheco">4. Pacheco</option><option value="3|Jonny">3. Jonny</option><option value="30|Mañas">30. Mañas</option><option value="29|Morcillo">29. Morcillo</option><option value="10|Aleñá">10. Aleñá</option><option value="14|D. Suárez">14. D. Suárez</option><option value="18|Guridi">18. Guridi</option><option value="19|Protesoni">19. Protesoni</option><option value="6|P. Ibáñez">6. P. Ibáñez</option><option value="27|Á. Pérez">27. Á. Pérez</option><option value="8|A. Blanco">8. A. Blanco</option><option value="15|Guevara">15. Guevara</option><option value="17|Rebbach">17. Rebbach</option><option value="31|Pinillos">31. Pinillos</option><option value="11|Calebe">11. Calebe</option><option value="9|Boyé">9. Boyé</option><option value="16|T. Martínez">16. T. Martínez</option>';var TEAM_B_OPTS='<option value="1|A. Batalla">1. A. Batalla</option><option value="13|D. Cárdenas">13. D. Cárdenas</option><option value="32|A. Molina">32. A. Molina</option><option value="10|Isi">10. Isi</option><option value="11|Á. García">11. Á. García</option><option value="9|D. Frutos">9. D. Frutos</option><option value="23|A. Ratiu">23. A. Ratiu</option><option value="4|F. Lejeune">4. F. Lejeune</option><option value="12|P. Chavarría">12. P. Chavarría</option><option value="8|P. Ciss">8. P. Ciss</option><option value="33|A. Mumín">33. A. Mumín</option><option value="15|Ó. Valentín">15. Ó. Valentín</option><option value="26|U. López">26. U. López</option><option value="6|L. Feline">6. L. Feline</option><option value="5|I. Balliu">5. I. Balliu</option><option value="18|P. Díaz">18. P. Díaz</option><option value="7|I. Akhomach">7. I. Akhomach</option><option value="3|N. Mendy">3. N. Mendy</option><option value="14|Alemão">14. Alemão</option><option value="17|P. Espino">17. P. Espino</option><option value="16|Gumbau">16. Gumbau</option><option value="25|S. Camello">25. S. Camello</option><option value="34|Ó. Trejo">34. Ó. Trejo</option><option value="24|R. Nteka">24. R. Nteka</option><option value="29|C. Martín">29. C. Martín</option><option value="19|J. Vertrouwd">19. J. Vertrouwd</option><option value="36|D. Méndez">36. D. Méndez</option><option value="35|S. Becerra">35. S. Becerra</option><option value="30|D. las Sías">30. D. las Sías</option>';
 var MAX_NORMAL=5400;var TICK_MS_HVH=889;var TICK_MS_HVIA=667;
-window.mlTimerClick_j1m3=function(){if(_matchFinished||_inDescanso)return;if(_timerRunning){clearInterval(_timerInterval);_timerRunning=false;_renderTimer_j1m3();}else{var _w=document.getElementById('mlw-j1m3');var _hvh=_w&&_w.classList.contains('hvh');var TICK_MS=_hvh?TICK_MS_HVH:TICK_MS_HVIA;var MAX_ST=5820;_timerRunning=true;_timerInterval=setInterval(function(){_timerSec+=5;if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m3("— DESCANSO (45 min) —");_renderTimer_j1m3();setTimeout(function(){if(!_matchFinished){_inDescanso=false;window.mlTimerClick_j1m3();}},20000);return;}if(!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m3("— TIEMPO DE DESCUENTO (90') —");}if(_timerSec>=(_stDone?MAX_ST:MAX_NORMAL)){_timerSec=(_stDone?MAX_ST:MAX_NORMAL);clearInterval(_timerInterval);_timerRunning=false;} _renderTimer_j1m3();},TICK_MS);}};
+window.mlTimerClick_j1m3=function(){if(_matchFinished||_inDescanso)return;if(_timerRunning){clearInterval(_timerInterval);_timerRunning=false;_renderTimer_j1m3();}else{var _w=document.getElementById('mlw-j1m3');var _hvh=_w&&_w.classList.contains('hvh');var TICK_MS=_hvh?TICK_MS_HVH:TICK_MS_HVIA;var MAX_ST=5820;_timerRunning=true;_timerInterval=setInterval(function(){_timerSec+=5;if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m3("— DESCANSO (45 min) —");_renderTimer_j1m3();(typeof window._onHalftime==='function'?window._onHalftime('j1m3',function(){if(!_matchFinished){_inDescanso=false;window.mlTimerClick_j1m3();}}):setTimeout(function(){if(!_matchFinished){_inDescanso=false;window.mlTimerClick_j1m3();}},20000));return;}if(!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m3("— TIEMPO DE DESCUENTO (90') —");}if(_timerSec>=(_stDone?MAX_ST:MAX_NORMAL)){_timerSec=(_stDone?MAX_ST:MAX_NORMAL);clearInterval(_timerInterval);_timerRunning=false;} _renderTimer_j1m3();},TICK_MS);}};
 function _renderTimer_j1m3(){var btn=document.getElementById('ml-timer-j1m3');if(!btn)return;var min=Math.floor(_timerSec/60);if(_matchFinished){btn.textContent='🏁 FIN';btn.className='ml-timer finished';if(window._setScoreState)window._setScoreState('j1m3','finished');return;}if(_inDescanso){btn.textContent='⏸ DESCANSO';btn.className='ml-timer running';if(window._setScoreState)window._setScoreState('j1m3','playing');return;}var isStop=_timerSec>5400;var dispStr=isStop?('90+'+Math.ceil((_timerSec-5400)/60)+"'"):(min+"'");var maxForLabel=_stDone?5820:MAX_NORMAL;var label=_timerRunning?'⏸ ':(_timerSec>=maxForLabel?'🔁 ':'▶ ');btn.textContent=label+dispStr;btn.className='ml-timer'+(_timerRunning?' running':'');if(window._setScoreState)window._setScoreState('j1m3',_timerRunning?'playing':'pending');var _bl=document.getElementById('ball-j1m3');if(_bl){if(_timerRunning){_bl.classList.remove('spinning');_bl.classList.add('static');}else{_bl.classList.remove('static');_bl.classList.add('spinning');}}};
 function _currentMin_j1m3(){return Math.min(_stDone?97:90,Math.floor(_timerSec/60));};
 function _addMarker_j1m3(txt){var list=document.getElementById('ml-acta-list-j1m3');var div=document.createElement('div');div.className='ml-ht';div.textContent=txt;list.appendChild(div);_removeEmpty_j1m3();};
@@ -8092,7 +8092,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var orig = window[fn];
     if (!orig || orig._mmWhistlePatched) return;
     window[fn] = function() {
-      _mmWhistleFinal();
+      if (!window._v3SuppressWhistle) _mmWhistleFinal();
       return orig.apply(this, arguments);
     };
     window[fn]._mmWhistlePatched = true;
@@ -8368,4 +8368,294 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   console.log('[ManualMaestro v2.0] Sistema completo activado ✓');
 
+})();
+
+/* ═══════════════════════════════════════════════════════════════
+   PROTOCOLO v3: DESCANSO OBLIGATORIO · FINALIZACIÓN · WHATSAPP
+   ─────────────────────────────────────────────────────────────── */
+(function () {
+  var HM = ['j1m1', 'j1m2', 'j1m3'];
+
+  /* ── 1. ESTILOS ─────────────────────────────────────────────── */
+  function _css() {
+    if (document.getElementById('v3-styles')) return;
+    var s = document.createElement('style');
+    s.id = 'v3-styles';
+    s.textContent =
+      '.v3-ov{position:fixed;inset:0;z-index:9990;background:#080811;display:flex;flex-direction:column;overflow-y:auto;}' +
+      '.v3-hdr{background:linear-gradient(135deg,#0d0d25,#1c1c40);padding:18px 12px;display:flex;align-items:center;justify-content:center;gap:16px;border-bottom:2px solid #2a2a5e;flex-shrink:0;}' +
+      '.v3-team{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:76px;}' +
+      '.v3-team img{width:52px;height:52px;object-fit:contain;}' +
+      '.v3-tname{font-size:10px;font-weight:700;color:#b0b0d8;text-align:center;letter-spacing:.5px;text-transform:uppercase;}' +
+      '.v3-scwrap{display:flex;flex-direction:column;align-items:center;gap:4px;}' +
+      '.v3-sc{font-family:"Bebas Neue",Arial,sans-serif;font-size:52px;font-weight:900;color:#fff;letter-spacing:3px;line-height:1;}' +
+      '.v3-lbl{font-size:10px;color:#6080e0;letter-spacing:2px;text-transform:uppercase;margin-top:2px;}' +
+      '.v3-body{padding:14px;flex:1;}' +
+      '.v3-sec{font-size:11px;font-weight:700;color:#6080e0;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;}' +
+      '.v3-alist .ml-evt-item{pointer-events:none!important;}' +
+      '.v3-alist .ml-evt-edit,.v3-alist .ml-evt-del{display:none!important;}' +
+      '.v3-foot{padding:14px;display:flex;flex-direction:column;gap:10px;border-top:1px solid #1a1a2e;flex-shrink:0;}' +
+      '.v3-wa{background:linear-gradient(135deg,#25d366,#128c7e);color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;width:100%;}' +
+      '.v3-wa:active{opacity:.85;}' +
+      '.v3-ok{background:#0e1e40;color:#6080c0;border:2px solid #1c2e58;border-radius:8px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;width:100%;opacity:.35;pointer-events:none;transition:.2s;}' +
+      '.v3-ok.on{opacity:1;pointer-events:all;background:linear-gradient(135deg,#1a3a8e,#2060d0);border-color:#60a0ff;color:#fff;}' +
+      '.v3-mvp{display:flex;align-items:center;gap:10px;background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;}' +
+      '.v3-mvp-i{font-size:26px;}' +
+      '.v3-mvp-ll{font-size:10px;color:#ffd700;letter-spacing:2px;text-transform:uppercase;}' +
+      '.v3-mvp-n{font-size:17px;font-weight:700;color:#fff;}';
+    document.head.appendChild(s);
+  }
+
+  /* ── 2. HELPERS ─────────────────────────────────────────────── */
+  function _teams(mk) {
+    var w = document.getElementById('mlw-' + mk);
+    if (!w) return { a: '', b: '' };
+    var els = w.querySelectorAll('.ml-team-name');
+    return {
+      a: (els[0] ? els[0].textContent : '').replace(/^[^A-Za-z\u00c0-\u017e]+/, '').trim(),
+      b: (els[1] ? els[1].textContent : '').replace(/^[^A-Za-z\u00c0-\u017e]+/, '').trim()
+    };
+  }
+  function _logos(mk) {
+    var w = document.getElementById('mlw-' + mk);
+    if (!w) return { a: '', b: '' };
+    var imgs = w.querySelectorAll('.ml-team-svg');
+    return { a: imgs[0] ? imgs[0].src : '', b: imgs[1] ? imgs[1].src : '' };
+  }
+  function _score(mk) {
+    return {
+      a: parseInt((document.getElementById('sc-' + mk + '-a') || {}).textContent) || 0,
+      b: parseInt((document.getElementById('sc-' + mk + '-b') || {}).textContent) || 0
+    };
+  }
+  function _events(mk) {
+    var list = document.getElementById('ml-acta-list-' + mk);
+    if (!list) return [];
+    var out = [];
+    list.querySelectorAll('.ml-evt-item').forEach(function (row) {
+      out.push({
+        min:  parseInt((row.querySelector('.ml-evt-min')  || {}).textContent) || 0,
+        ico:  ((row.querySelector('.ml-evt-ico')  || {}).textContent || '').trim(),
+        name: ((row.querySelector('.ml-evt-name') || {}).textContent || '').trim(),
+        team: ((row.querySelector('.ml-evt-team') || {}).textContent || '').trim(),
+        type:  row.getAttribute('data-type') || ''
+      });
+    });
+    return out;
+  }
+  function _compLabel(mk) {
+    var m = mk.match(/^j(\d+)m/);
+    if (m) return 'Liga EA Sports \u2014 Jornada ' + m[1];
+    var m2 = mk.match(/^lj(\d+)m/);
+    return m2 ? 'Liga EA Sports \u2014 Jornada ' + m2[1] : 'Liga EA Sports';
+  }
+  function _evHtml(list) {
+    if (!list.length) return '<div style="color:#555;text-align:center;padding:14px">Sin eventos</div>';
+    return list.map(function (e) {
+      return '<div class="ml-evt-item" data-type="' + e.type + '" data-team="">' +
+        '<span class="ml-evt-min">' + e.min + "\'</span>" +
+        '<span class="ml-evt-ico">' + e.ico + '</span>' +
+        '<span class="ml-evt-name">' + e.name + '</span>' +
+        '<span class="ml-evt-team">' + e.team + '</span></div>';
+    }).join('');
+  }
+  function _teamCol(name, logo) {
+    return '<div class="v3-team">' +
+      (logo ? '<img src="' + logo + '" alt="">' : '') +
+      '<div class="v3-tname">' + name + '</div></div>';
+  }
+  function _waText(mk, half) {
+    var t = _teams(mk), sc = _score(mk), evs = _events(mk);
+    var lines = [_compLabel(mk), '', t.a + ' ' + sc.a + ' - ' + sc.b + ' ' + t.b, '', 'ACTA DEL PARTIDO:'];
+    var list = evs.filter(function (e) { return e.type !== 'mvp'; });
+    if (half) list = list.filter(function (e) { return e.min <= 45; });
+    list.forEach(function (e) {
+      lines.push(e.min + "' " + e.ico + ' ' + e.name.replace(/^\d+\.\s*/, '') + ' (' + e.team + ')');
+    });
+    if (!half) {
+      var mvp = evs.find(function (e) { return e.type === 'mvp'; });
+      if (mvp) { lines.push(''); lines.push('\u2b50 MVP: ' + mvp.name.replace(/^\d+\.\s*/, '')); }
+    }
+    var sfx = window._ppSelectedTwitch ? '\n\u2014 Visto en el Twitch de ' + window._ppSelectedTwitch : '';
+    return lines.join('\n') + sfx;
+  }
+  function _wa(text) {
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); } catch (e) {}
+  }
+
+  /* ── 3. DESCANSO OVERLAY ────────────────────────────────────── */
+  var _htCb = {}, _htSh = {};
+  window._onHalftime = function (mk, cb) {
+    _htCb[mk] = cb; _htSh[mk] = false;
+    _css();
+    var t = _teams(mk), lg = _logos(mk), sc = _score(mk);
+    var ev1 = _events(mk).filter(function (e) { return e.min <= 45 && e.type !== 'mvp'; });
+    var old = document.getElementById('v3ht-' + mk); if (old) old.remove();
+    var d = document.createElement('div');
+    d.id = 'v3ht-' + mk; d.className = 'v3-ov';
+    d.innerHTML =
+      '<div class="v3-hdr">' + _teamCol(t.a, lg.a) +
+      '<div class="v3-scwrap"><div class="v3-sc">' + sc.a + ' - ' + sc.b + '</div>' +
+      '<div class="v3-lbl">\u23f8 DESCANSO (45\')</div></div>' +
+      _teamCol(t.b, lg.b) + '</div>' +
+      '<div class="v3-body"><div class="v3-sec">\ud83d\udccb Acta \u00b7 1\u00aa Parte</div>' +
+      '<div class="v3-alist">' + _evHtml(ev1) + '</div></div>' +
+      '<div class="v3-foot">' +
+      '<button class="v3-wa" onclick="window._htShare(\'' + mk + '\')">\ud83d\udfe2 Compartir descanso (WhatsApp)</button>' +
+      '<button class="v3-ok" id="v3ht-ok-' + mk + '" onclick="window._htGo(\'' + mk + '\')">\u25b6 Iniciar 2\u00aa Parte</button>' +
+      '</div>';
+    document.body.appendChild(d);
+    window.scrollTo(0, 0);
+  };
+  window._htShare = function (mk) {
+    _wa(_waText(mk, true));
+    _htSh[mk] = true;
+    var b = document.getElementById('v3ht-ok-' + mk);
+    if (b) b.classList.add('on');
+  };
+  window._htGo = function (mk) {
+    if (!_htSh[mk]) return;
+    var ov = document.getElementById('v3ht-' + mk); if (ov) ov.remove();
+    if (_htCb[mk]) { _htCb[mk](); delete _htCb[mk]; }
+  };
+
+  /* ── 4. FINAL OVERLAY ───────────────────────────────────────── */
+  var _finSh = {}, _finCb = {};
+  function _buildFin(mk, onDone) {
+    _css();
+    var old = document.getElementById('v3fin-' + mk); if (old) old.remove();
+    _finSh[mk] = false; _finCb[mk] = onDone;
+    var t = _teams(mk), lg = _logos(mk), sc = _score(mk);
+    var evs = _events(mk);
+    var mvp = evs.find(function (e) { return e.type === 'mvp'; });
+    var matchEvs = evs.filter(function (e) { return e.type !== 'mvp'; });
+    var mvpHtml = mvp
+      ? '<div class="v3-mvp"><div class="v3-mvp-i">\u2b50</div><div>' +
+        '<div class="v3-mvp-ll">MVP del Partido</div>' +
+        '<div class="v3-mvp-n">' + mvp.name.replace(/^\d+\.\s*/, '') + '</div>' +
+        '</div></div>' : '';
+    var d = document.createElement('div');
+    d.id = 'v3fin-' + mk; d.className = 'v3-ov';
+    d.innerHTML =
+      '<div class="v3-hdr">' + _teamCol(t.a, lg.a) +
+      '<div class="v3-scwrap"><div class="v3-sc">' + sc.a + ' - ' + sc.b + '</div>' +
+      '<div class="v3-lbl">\ud83c\udfc1 PARTIDO FINALIZADO</div></div>' +
+      _teamCol(t.b, lg.b) + '</div>' +
+      '<div class="v3-body">' + mvpHtml +
+      '<div class="v3-sec">\ud83d\udccb Acta Total</div>' +
+      '<div class="v3-alist">' + _evHtml(matchEvs) + '</div></div>' +
+      '<div class="v3-foot">' +
+      '<button class="v3-wa" onclick="window._finShare(\'' + mk + '\')">\ud83d\udfe2 Compartir Partido Finalizado (WhatsApp)</button>' +
+      '<button class="v3-ok" id="v3fin-ok-' + mk + '" onclick="window._finExit(\'' + mk + '\')">\ud83d\udea9 Volver al men\u00fa principal</button>' +
+      '</div>';
+    document.body.appendChild(d);
+    window.scrollTo(0, 0);
+  }
+  window._finShare = function (mk) {
+    _wa(_waText(mk, false));
+    _finSh[mk] = true;
+    var b = document.getElementById('v3fin-ok-' + mk);
+    if (b) b.classList.add('on');
+  };
+  window._finExit = function (mk) {
+    if (!_finSh[mk]) return;
+    var ov = document.getElementById('v3fin-' + mk); if (ov) ov.remove();
+    if (_finCb[mk]) { _finCb[mk](); delete _finCb[mk]; }
+  };
+
+  /* ── 5. PATCH mlEndMatch ────────────────────────────────────── */
+  function _patchEnd(mk) {
+    var orig = window['mlEndMatch_' + mk];
+    if (!orig || orig._v3ep) return;
+    window['mlEndMatch_' + mk] = function (winner) {
+      if (window['_v3fd_' + mk]) return;
+      var listEl = document.getElementById('ml-acta-list-' + mk);
+      var hasMvp = listEl && !!listEl.querySelector('[data-type="mvp"]');
+      if (!hasMvp) return orig.apply(this, arguments);
+      window['_v3fd_' + mk] = true;
+      var endBtn = document.getElementById('ml-btn-end-' + mk);
+      if (endBtn) { endBtn.disabled = true; endBtn.style.opacity = '0.35'; }
+      var _w = winner;
+      _buildFin(mk, function () {
+        window._v3SuppressWhistle = true;
+        orig.call(window, _w);
+        window._v3SuppressWhistle = false;
+      });
+    };
+    window['mlEndMatch_' + mk]._v3ep = true;
+  }
+
+  /* ── 6. TIMER PAUSE ON "+ AÑADIR EVENTO" ───────────────────── */
+  function _resumeTimer(mk) {
+    if (!window['_v3wr_' + mk]) return;
+    window['_v3wr_' + mk] = false;
+    var btn = document.getElementById('ml-timer-' + mk);
+    var txt = btn ? (btn.textContent || '') : '';
+    if (txt.indexOf('\u25b6') !== -1 && txt.indexOf('DESCANSO') === -1 && txt.indexOf('FIN') === -1) {
+      window['mlTimerClick_' + mk]();
+    }
+  }
+  function _patchToggle(mk) {
+    var orig = window['mlTogglePanel_' + mk];
+    if (!orig || orig._v3tp) return;
+    window['mlTogglePanel_' + mk] = function () {
+      var btn = document.getElementById('ml-timer-' + mk);
+      var txt = btn ? (btn.textContent || '') : '';
+      var running = txt.indexOf('\u23f8') !== -1 && txt.indexOf('DESCANSO') === -1;
+      window['_v3wr_' + mk] = running;
+      if (running) window['mlTimerClick_' + mk]();
+      return orig.apply(this, arguments);
+    };
+    window['mlTogglePanel_' + mk]._v3tp = true;
+  }
+  function _patchConfirm(mk) {
+    ['mlPlConfirm_', 'mlConfirmEvt_'].forEach(function (pfx) {
+      var fn = pfx + mk, orig = window[fn];
+      if (!orig || orig._v3cp) return;
+      window[fn] = function () {
+        var r = orig.apply(this, arguments);
+        _resumeTimer(mk);
+        setTimeout(function () {
+          var body = document.getElementById('acta-body-' + mk);
+          if (body) {
+            if (!body.classList.contains('open')) {
+              body.classList.add('open');
+              var tog = document.getElementById('acta-toggle-' + mk);
+              if (tog) tog.classList.add('open');
+            }
+            body.scrollTop = body.scrollHeight;
+          }
+        }, 60);
+        return r;
+      };
+      window[fn]._v3cp = true;
+    });
+  }
+  function _patchCancel(mk) {
+    ['mlHideEvOv_', 'mlHideTP_', 'mlHidePl_', 'mlCloseModal_'].forEach(function (pfx) {
+      var fn = pfx + mk, orig = window[fn];
+      if (!orig || orig._v3cc) return;
+      window[fn] = function () {
+        var r = orig.apply(this, arguments);
+        _resumeTimer(mk);
+        return r;
+      };
+      window[fn]._v3cc = true;
+    });
+  }
+
+  /* ── 7. INIT ─────────────────────────────────────────────────── */
+  function _init() {
+    HM.forEach(function (mk) {
+      _patchEnd(mk);
+      _patchToggle(mk);
+      _patchConfirm(mk);
+      _patchCancel(mk);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _init);
+  else _init();
+  setTimeout(_init, 700);
+  setTimeout(_init, 1800);
+  console.log('[Protocolo v3.0] Descanso \u00b7 Finalizaci\u00f3n \u00b7 WhatsApp \u2713');
 })();

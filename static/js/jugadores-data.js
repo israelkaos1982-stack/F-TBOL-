@@ -66,9 +66,9 @@ const JUGADORES_DATA = {
     ],
     "Valencia": [
         "Dimitrievski", "Agirrezabala",
-        "Gayà", "Copete", "Tárrega", "T. Correia", "U. Sadiq", "J. Vázquez", "Cömert", "Diakhaby",
-        "Pepelu", "Ugrinič", "D. López", "L. Beltrán", "Luis Rioja", "Javi Guerra", "G. Rodríguez", "Daniuma", "A. Almeida",
-        "Hugo Duro"
+        "Gayà", "Copete", "Tárrega", "T. Correia", "J. Vázquez", "Cömert", "Diakhaby",
+        "G. Rodríguez", "Javi Guerra", "A. Almeida", "Pepelu", "Santamaría", "Ugrinić",
+        "U. Sadiq", "Danjuma", "Hugo Duro", "Luis Rioja", "L. Beltrán", "D. López", "Ramazani", "Dani Raba"
     ],
     "Celta": [
         "Iván Villar", "Andrei Radu",

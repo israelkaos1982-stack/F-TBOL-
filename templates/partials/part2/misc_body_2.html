@@ -3388,6 +3388,41 @@
       _mlRenderTimerGen(mk);
     }, _mlTickMs(st));
   }
+  /* ── helpers LIVE state + aplazar btn for calendar matches ── */
+  function _mlSetLiveState(mk, state) {
+    var wrap = document.getElementById('mlw-' + mk);
+    if (!wrap) return;
+    var scoreEl = wrap.querySelector('.ml-score');
+    if (!scoreEl) return;
+    scoreEl.classList.remove('state-playing', 'state-finished');
+    if (state === 'playing')  scoreEl.classList.add('state-playing');
+    if (state === 'finished') scoreEl.classList.add('state-finished');
+  }
+  function _mlUpdateAplazarBtn(mk) {
+    var st = _mlSt(mk);
+    var wrap = document.getElementById('mlw-' + mk);
+    if (!wrap) return;
+    var row = wrap.querySelector('.ml-apl-row');
+    if (!row && st.kickoffDone && !st.finished) {
+      row = document.createElement('div');
+      row.className = 'ml-apl-row';
+      row.style.cssText = 'padding:0 0 8px;display:none;';
+      var btn = document.createElement('button');
+      btn.className = 'ml-apl-btn';
+      btn.textContent = '⏸ APLAZAR PARTIDO';
+      (function(k){ btn.onclick = function(){ window.mlAplazarConfirm(k); }; })(mk);
+      row.appendChild(btn);
+      var actRow = wrap.querySelector('.ml-action-row');
+      if (actRow) {
+        actRow.parentNode.insertBefore(row, actRow.nextSibling || actRow);
+      } else { wrap.appendChild(row); }
+    }
+    if (row) {
+      var show = st.kickoffDone && !st.timerRunning && !st.finished && !st.inDescanso;
+      row.style.display = show ? '' : 'none';
+    }
+  }
+
   window.mlTimerClickGen = function(mk) {
     var st = _mlSt(mk);
     if (st.finished || st.inDescanso) return;
@@ -3407,9 +3442,12 @@
             }
           }
         }
+        /* marcar como live para el hub LIVE */
+        _mlSetLiveState(mk, 'playing');
       }
       st.timerRunning=true; _mlStartIntervalGen(mk);
     }
+    _mlUpdateAplazarBtn(mk);
   };
   window.mlActivateETGen = function(mk) {
     var st = _mlSt(mk);
@@ -3583,6 +3621,9 @@
     var st=_mlSt(mk);
     st.finished=true; clearInterval(st.timerInterval); st.timerRunning=false;
     _mlRenderTimerGen(mk);
+    _mlSetLiveState(mk, 'finished');
+    var _aplRow = document.querySelector('#mlw-' + mk + ' .ml-apl-row');
+    if (_aplRow) _aplRow.style.display = 'none';
     ['ml-btn-end-','ml-btn-et-','ml-add-btn-'].forEach(function(pfx){
       var b=document.getElementById(pfx+mk); if(b){b.disabled=true;b.style.opacity='0.35';}
     });
@@ -3856,7 +3897,10 @@
     ov.classList.remove('show');
     if (mk) {
       var st = _mlSt(mk);
-      if (st && !st.finished) { st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk); }
+      if (st && !st.finished) {
+        st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk);
+        _mlUpdateAplazarBtn(mk);
+      }
     }
   };
 
@@ -4406,28 +4450,76 @@
     if (el) el.style.display = 'flex';
   };
 
+  var _aplazarMk = null; /* mk of calendar match pending aplazar confirmation */
+
   window.gmAplazarCancel = function () {
+    _aplazarMk = null;
     var el = document.getElementById('gm-aplazar-modal');
     if (el) el.style.display = 'none';
   };
 
+  /* Aplazar desde una tarjeta de partido del calendario */
+  window.mlAplazarConfirm = function (mk) {
+    var st = _mlSt(mk);
+    /* pausar si estaba corriendo */
+    if (st.timerRunning) {
+      clearInterval(st.timerInterval); st.timerRunning = false;
+      _mlRenderTimerGen(mk); _mlUpdateAplazarBtn(mk);
+    }
+    var modal = document.getElementById('gm-aplazar-modal');
+    if (!modal) return;
+    var min = Math.floor((st.timerSec || 0) / 60);
+    var te = document.getElementById('gm-aplazar-modal-teams');
+    var se = document.getElementById('gm-aplazar-modal-sc');
+    var me = document.getElementById('gm-aplazar-modal-min');
+    if (te) te.textContent = (st.home || '?') + ' vs ' + (st.away || '?');
+    if (se) se.textContent = (st.sc ? st.sc.a : 0) + '-' + (st.sc ? st.sc.b : 0);
+    if (me) me.textContent = min + "'";
+    _aplazarMk = mk;
+    modal.style.display = 'flex';
+  };
+
   window.gmAplazar = function () {
-    clearInterval(_gm.timerInterval);
-    _gm.timerRunning = false;
-    var aplazados = JSON.parse(localStorage.getItem('partidos_aplazados') || '[]');
-    aplazados.push({
-      j: _gm.j, home: _gm.home, away: _gm.away,
-      sc: { a: _gm.sc.a, b: _gm.sc.b },
-      timerSec: _gm.timerSec,
-      events: _gm.events.slice(),
-      htDone: _gm.htDone, stDone: _gm.stDone, etDone: _gm.etDone,
-      isHvH: _gm.isHvH, savedAt: Date.now()
-    });
-    localStorage.setItem('partidos_aplazados', JSON.stringify(aplazados));
-    var aplazarEl = document.getElementById('gm-aplazar-modal');
-    if (aplazarEl) aplazarEl.style.display = 'none';
-    document.getElementById('gm-modal').style.display = 'none';
-    if (typeof window.gmRenderPendientes === 'function') window.gmRenderPendientes();
+    var modal = document.getElementById('gm-aplazar-modal');
+    if (modal) modal.style.display = 'none';
+    if (_aplazarMk) {
+      /* ── Aplazar partido del calendario ── */
+      var mk = _aplazarMk; _aplazarMk = null;
+      var st = _mlSt(mk);
+      clearInterval(st.timerInterval); st.timerRunning = false;
+      var ap = JSON.parse(localStorage.getItem('partidos_aplazados') || '[]');
+      ap.push({
+        mk: mk, j: st.j || mk, home: st.home, away: st.away,
+        sc: { a: st.sc.a, b: st.sc.b },
+        timerSec: st.timerSec || 0,
+        events: (st.events || []).slice(),
+        htDone: st.htDone || false, stDone: st.stDone || false, etDone: st.etDone || false,
+        isHvH: st.isHvH || false, savedAt: Date.now()
+      });
+      localStorage.setItem('partidos_aplazados', JSON.stringify(ap));
+      _mlSetLiveState(mk, 'none');
+      var _aplRow = document.querySelector('#mlw-' + mk + ' .ml-apl-row');
+      if (_aplRow) _aplRow.style.display = 'none';
+      _mlRenderTimerGen(mk);
+      if (typeof window.gmRenderPendientes === 'function') window.gmRenderPendientes();
+    } else {
+      /* ── Aplazar partido del gm-modal ── */
+      clearInterval(_gm.timerInterval);
+      _gm.timerRunning = false;
+      var ap2 = JSON.parse(localStorage.getItem('partidos_aplazados') || '[]');
+      ap2.push({
+        j: _gm.j, home: _gm.home, away: _gm.away,
+        sc: { a: _gm.sc.a, b: _gm.sc.b },
+        timerSec: _gm.timerSec,
+        events: _gm.events.slice(),
+        htDone: _gm.htDone, stDone: _gm.stDone, etDone: _gm.etDone,
+        isHvH: _gm.isHvH, savedAt: Date.now()
+      });
+      localStorage.setItem('partidos_aplazados', JSON.stringify(ap2));
+      var gmModalEl = document.getElementById('gm-modal');
+      if (gmModalEl) gmModalEl.style.display = 'none';
+      if (typeof window.gmRenderPendientes === 'function') window.gmRenderPendientes();
+    }
   };
 
   window.gmReanudar = function (idx) {
@@ -6960,3 +7052,11 @@ window.goLiveMatches = function() {
   };
 })();
 </script>
+<style>
+.ml-apl-btn {
+  width:100%; padding:10px; border-radius:6px;
+  border:1px solid rgba(255,160,0,.4); background:rgba(180,80,0,.2);
+  color:#ffa040; font-size:11px; font-weight:700;
+  font-family:'Oswald',sans-serif; letter-spacing:1.5px; cursor:pointer;
+}
+</style>

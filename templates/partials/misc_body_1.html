@@ -8,7 +8,129 @@
 <div class="hdr-btns">
 <button id="eq-hdr-btn" onclick="document.getElementById('equipos-overlay').classList.add('show')" title="Ver equipos de la liga">👕</button>
 <button id="agenda-hdr-btn" onclick="go('s-agenda')" title="Agenda de la temporada">📅</button>
+<button id="ajustes-hdr-btn" onclick="goAjustes()" title="Ajustes">⚙️</button>
 </div>
+
+<!-- ══ PIN MODAL ═══════════════════════════════════════════ -->
+<div id="pin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;align-items:center;justify-content:center;">
+  <div id="pin-box" style="background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:28px 24px 20px;width:280px;max-width:90vw;text-align:center;box-shadow:0 0 40px rgba(0,0,0,.8);">
+    <div style="font-family:Oswald,sans-serif;font-size:16px;letter-spacing:3px;color:rgba(255,255,255,.7);margin-bottom:18px;">⚙ MODO ADMIN</div>
+    <div id="pin-display" style="font-family:'Courier New',monospace;font-size:28px;letter-spacing:8px;color:#fff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:10px 16px;margin-bottom:16px;min-height:52px;line-height:1.2;letter-spacing:12px;">●●●</div>
+    <div id="pin-err" style="display:none;color:#ff5555;font-size:11px;margin-bottom:10px;font-family:Rajdhani,sans-serif;letter-spacing:1px;">PIN INCORRECTO</div>
+    <div id="pin-numpad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+      <button class="pin-key" onclick="pinKey('1')">1</button>
+      <button class="pin-key" onclick="pinKey('2')">2</button>
+      <button class="pin-key" onclick="pinKey('3')">3</button>
+      <button class="pin-key" onclick="pinKey('4')">4</button>
+      <button class="pin-key" onclick="pinKey('5')">5</button>
+      <button class="pin-key" onclick="pinKey('6')">6</button>
+      <button class="pin-key" onclick="pinKey('7')">7</button>
+      <button class="pin-key" onclick="pinKey('8')">8</button>
+      <button class="pin-key" onclick="pinKey('9')">9</button>
+      <button class="pin-key pin-key-del" onclick="pinDel()">⌫</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key pin-key-ok" onclick="pinOk()">✓</button>
+    </div>
+    <button onclick="closePinModal()" style="background:none;border:none;color:rgba(255,255,255,.4);font-size:12px;font-family:Rajdhani,sans-serif;letter-spacing:1.5px;cursor:pointer;padding:4px 8px;">CANCELAR</button>
+  </div>
+</div>
+
+<!-- ══ PANTALLA ADMIN ════════════════════════════════════════ -->
+<div class="screen" id="s-admin">
+  <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">⚙️</span><h2>Panel Admin</h2></div>
+  <div id="admin-modules-grid" style="padding:0 0 32px;">
+    <div class="admin-module-card" onclick="go('s-admin-teams')">
+      <span class="admin-mod-icon">👕</span>
+      <div class="admin-mod-label">Team Manager</div>
+      <div class="admin-mod-desc">Editar equipos, escudos y colores</div>
+    </div>
+    <div class="admin-module-card" onclick="go('s-admin-calendar')">
+      <span class="admin-mod-icon">📅</span>
+      <div class="admin-mod-label">Calendar</div>
+      <div class="admin-mod-desc">Gestión del calendario de partidos</div>
+    </div>
+    <div class="admin-module-card" onclick="go('s-admin-stadiums')">
+      <span class="admin-mod-icon">🏟️</span>
+      <div class="admin-mod-label">Stadium Hub</div>
+      <div class="admin-mod-desc">Asignación de estadios por club</div>
+    </div>
+    <div class="admin-module-card" onclick="go('s-admin-balls')">
+      <span class="admin-mod-icon">⚽</span>
+      <div class="admin-mod-label">Ball Storage</div>
+      <div class="admin-mod-desc">Balón activo por competición</div>
+    </div>
+  </div>
+  <div class="admin-env-panel">
+    <div class="admin-env-title">🌍 ENTORNO ACTUAL</div>
+    <div id="admin-env-status" style="display:flex;gap:12px;flex-wrap:wrap;padding:12px 0 4px;"></div>
+  </div>
+</div>
+
+<!-- ══ PANTALLA ADMIN: TEAM MANAGER ═════════════════════════ -->
+<div class="screen" id="s-admin-teams">
+  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">👕</span><h2>Team Manager</h2></div>
+  <div style="padding:16px;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:.5px;">
+    Módulo en construcción. Aquí podrás editar los datos de los equipos de la temporada.
+  </div>
+</div>
+
+<!-- ══ PANTALLA ADMIN: CALENDAR ═════════════════════════════ -->
+<div class="screen" id="s-admin-calendar">
+  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">📅</span><h2>Calendar</h2></div>
+  <div style="padding:16px;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:.5px;">
+    Módulo en construcción. Aquí podrás gestionar el calendario de partidos.
+  </div>
+</div>
+
+<!-- ══ PANTALLA ADMIN: STADIUM HUB ══════════════════════════ -->
+<div class="screen" id="s-admin-stadiums">
+  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">🏟️</span><h2>Stadium Hub</h2></div>
+  <div style="padding:0 0 8px;">
+    <div class="admin-stadium-filter">
+      <input id="stadium-search" type="text" placeholder="🔍 Buscar estadio o club..." oninput="adminRenderStadiums()" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;padding:10px 14px;font-family:Rajdhani,sans-serif;font-size:13px;outline:none;"/>
+    </div>
+    <div id="stadium-list" style="padding:8px 0 24px;"></div>
+  </div>
+</div>
+
+<!-- ══ PANTALLA ADMIN: BALL STORAGE ══════════════════════════ -->
+<div class="screen" id="s-admin-balls">
+  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">⚽</span><h2>Ball Storage</h2></div>
+  <div id="balls-list" style="padding:8px 0 24px;"></div>
+</div>
+
+<style>
+#ajustes-hdr-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;opacity:.75;transition:opacity .2s;}
+#ajustes-hdr-btn:hover{opacity:1;}
+.pin-key{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;transition:background .15s;}
+.pin-key:active{background:rgba(255,255,255,.22);}
+.pin-key-del{color:#ff9060;}
+.pin-key-ok{background:rgba(30,180,80,.2);border-color:rgba(60,220,100,.35);color:#5fe08a;}
+.admin-module-card{display:flex;flex-direction:column;align-items:flex-start;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:18px 16px 14px;margin:0 0 12px;cursor:pointer;transition:background .2s,border-color .2s;}
+.admin-module-card:active{background:rgba(255,255,255,.1);}
+.admin-mod-icon{font-size:28px;margin-bottom:6px;}
+.admin-mod-label{font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;color:#fff;margin-bottom:3px;}
+.admin-mod-desc{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.45);letter-spacing:.5px;}
+.admin-env-panel{margin:8px 0 0;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:14px 16px;}
+.admin-env-title{font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2.5px;color:rgba(255,255,255,.5);margin-bottom:4px;}
+.admin-env-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.13);border-radius:999px;padding:4px 12px;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:600;letter-spacing:.8px;color:rgba(255,255,255,.8);}
+.admin-stadium-filter{padding:8px 0 4px;}
+.admin-stadium-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);}
+.admin-stadium-row:last-child{border-bottom:none;}
+.admin-stadium-icon{font-size:20px;flex-shrink:0;}
+.admin-stadium-name{font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;color:#fff;}
+.admin-stadium-meta{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.45);letter-spacing:.5px;}
+.admin-ball-row{display:flex;align-items:center;gap:12px;padding:12px 12px;border-bottom:1px solid rgba(255,255,255,.06);}
+.admin-ball-row:last-child{border-bottom:none;}
+.admin-ball-comp{font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.5px;color:rgba(255,255,255,.7);}
+.admin-ball-id{font-family:'Courier New',monospace;font-size:11px;color:rgba(100,200,255,.8);}
+.admin-ball-active{background:rgba(40,180,100,.12);border:1px solid rgba(60,220,120,.25);border-radius:8px;}
+</style>
 </div>
 <div class="menu-grid">
 <div class="menu-card full mc-live" id="home-live-card" onclick="goLiveMatches()">

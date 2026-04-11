@@ -8407,6 +8407,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   }
 
   /* ── 2. HELPERS ─────────────────────────────────────────────── */
+  function _esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
   function _teams(mk) {
     var w = document.getElementById('mlw-' + mk);
     if (!w) return { a: '', b: '' };
@@ -8452,17 +8455,17 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   function _evHtml(list) {
     if (!list.length) return '<div style="color:#555;text-align:center;padding:14px">Sin eventos</div>';
     return list.map(function (e) {
-      return '<div class="ml-evt-item" data-type="' + e.type + '" data-team="">' +
-        '<span class="ml-evt-min">' + e.min + "\'</span>" +
-        '<span class="ml-evt-ico">' + e.ico + '</span>' +
-        '<span class="ml-evt-name">' + e.name + '</span>' +
-        '<span class="ml-evt-team">' + e.team + '</span></div>';
+      return '<div class="ml-evt-item" data-type="' + _esc(e.type) + '" data-team="">' +
+        '<span class="ml-evt-min">' + _esc(e.min) + "\'</span>" +
+        '<span class="ml-evt-ico">' + _esc(e.ico) + '</span>' +
+        '<span class="ml-evt-name">' + _esc(e.name) + '</span>' +
+        '<span class="ml-evt-team">' + _esc(e.team) + '</span></div>';
     }).join('');
   }
   function _teamCol(name, logo) {
     return '<div class="v3-team">' +
-      (logo ? '<img src="' + logo + '" alt="">' : '') +
-      '<div class="v3-tname">' + name + '</div></div>';
+      (logo ? '<img src="' + _esc(logo) + '" alt="">' : '') +
+      '<div class="v3-tname">' + _esc(name) + '</div></div>';
   }
   function _waText(mk, half) {
     var t = _teams(mk), sc = _score(mk), evs = _events(mk);
@@ -8532,7 +8535,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var mvpHtml = mvp
       ? '<div class="v3-mvp"><div class="v3-mvp-i">\u2b50</div><div>' +
         '<div class="v3-mvp-ll">MVP del Partido</div>' +
-        '<div class="v3-mvp-n">' + mvp.name.replace(/^\d+\.\s*/, '') + '</div>' +
+        '<div class="v3-mvp-n">' + _esc(mvp.name.replace(/^\d+\.\s*/, '')) + '</div>' +
         '</div></div>' : '';
     var d = document.createElement('div');
     d.id = 'v3fin-' + mk; d.className = 'v3-ov';

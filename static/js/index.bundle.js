@@ -3264,12 +3264,13 @@ function mlPreviaClick(matchKey) {
     }
   }
   // Determinar prórroga automática según reglas
-  // HvH: siempre hay prórroga y penaltis
+  // HvH: prórroga solo en competiciones de eliminación directa (no liga ni grupos)
   // HvIA: Copa 1r/2r/dieciseisavos, USC, SC, Inter, Fases finales selecciones → sí
   // HvIA: Liga y fase de grupos europeos → NO
   var prorroga;
   if (isHvH) {
-    prorroga = 'Sí';
+    var hvhConProrroga = ['copa','copa-fin','sc','sc-final','usc','usc-fin','inter','inter-fin','ucl-fin','uel-fin','uecl-fin','recopa','recopa-fin','eur-ko','eur-fin','sel','sel-fin'];
+    prorroga = (hvhConProrroga.indexOf(compKey) !== -1) ? 'Sí' : 'No';
   } else {
     var conProrroga = ['copa','copa-fin','sc','sc-final','usc','usc-fin','inter','inter-fin','ucl-fin','uel-fin','uecl-fin','recopa','recopa-fin','eur-ko','eur-fin','sel','sel-fin'];
     prorroga = (conProrroga.indexOf(compKey) !== -1) ? 'Sí' : 'No';

@@ -8386,7 +8386,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   /* ── Estado por partido ─────────────────────────────────────────── */
   var _S = {};
   HM.forEach(function (mk) {
-    _S[mk] = { pausedByUs: false, descansoShared: false };
+    _S[mk] = { wasRunning: false, descansoShared: false };
   });
 
   /* ── CSS ─────────────────────────────────────────────────────────── */
@@ -8521,10 +8521,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         html += '<div class="ft-sep">— DESCANSO (45 min) —</div>';
       }
       html += '<div class="ft-er">'
-        + '<span class="ft-em">' + e.min + "'</span>"
-        + '<span class="ft-ei">' + e.ico + '</span>'
-        + '<span class="ft-en">' + e.num + '. ' + e.name + '</span>'
-        + '<span class="ft-et">' + (e.team === 'a' ? t.a : t.b) + '</span>'
+        + '<span class="ft-em">' + _eh(e.min) + "'</span>"
+        + '<span class="ft-ei">' + _eh(e.ico) + '</span>'
+        + '<span class="ft-en">' + _eh(e.num) + '. ' + _eh(e.name) + '</span>'
+        + '<span class="ft-et">' + _eh(e.team === 'a' ? t.a : t.b) + '</span>'
         + '</div>';
     });
     return html;
@@ -8534,7 +8534,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   function _esc(name) {
     var url = typeof window.getTeamLogoUrl === 'function' ? window.getTeamLogoUrl(name) : '';
     return url
-      ? '<img src="' + url + '" class="ft-logo" alt="' + name + '" onerror="this.style.display=\'none\'">'
+      ? '<img src="' + _eh(url) + '" class="ft-logo" alt="' + _eh(name) + '" onerror="this.style.display=\'none\'">'
       : '<span class="ft-logo-ph">⚽</span>';
   }
 
@@ -8558,6 +8558,16 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     return lines.join('\n');
   }
 
+  /* ── Escapa caracteres HTML para evitar XSS en innerHTML ─────────── */
+  function _eh(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   /* ── ¿Está el cronómetro realmente corriendo? (no DESCANSO, no FIN) */
   function _timerRunning(mk) {
     var btn = document.getElementById('ml-timer-' + mk);
@@ -8568,9 +8578,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       && txt.indexOf('FIN') === -1;
   }
 
-  /* Reanuda el cronómetro si lo pausamos nosotros */
+  /* Reanuda el cronómetro solo si estaba corriendo cuando abrimos el overlay */
   function _resumeIfNeeded(mk) {
-    if (_S[mk].pausedByUs) return;           // ya estaba parado antes, no tocar
+    if (!_S[mk].wasRunning) return;          // no estaba corriendo antes, no tocar
     if (_timerRunning(mk)) return;           // ya corre
     var btn = document.getElementById('ml-timer-' + mk);
     var txt = btn ? (btn.textContent || '') : '';
@@ -8647,7 +8657,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     ov.innerHTML = '<div class="ft-panel">'
       + '<div class="ft-hdr">' + _esc(t.a) + '<div class="ft-sc">' + sc.a + '-' + sc.b + '</div>' + _esc(t.b) + '</div>'
       + '<div class="ft-ttl">🏁 RESULTADO FINAL</div>'
-      + (mvp ? '<div class="ft-mvp">⭐ MVP: ' + mvp.name + '</div>' : '')
+      + (mvp ? '<div class="ft-mvp">⭐ MVP: ' + _eh(mvp.name) + '</div>' : '')
       + '<div class="ft-albl">📋 ACTA COMPLETA</div>'
       + '<div class="ft-evts">' + _evtsHtml(mk, false, t) + '</div>'
       + (isHvH ? '<div class="ft-hvh">👥 HvH: cualquier jugador puede compartir para cerrar</div>' : '')
@@ -8695,8 +8705,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var origTP = window[tpName];
     if (origTP && !origTP._ftTP) {
       window[tpName] = function () {
-        _S[mk].pausedByUs = !_timerRunning(mk); // ¿ya estaba parado?
-        if (_timerRunning(mk)) {
+        _S[mk].wasRunning = _timerRunning(mk); // ¿estaba corriendo?
+        if (_S[mk].wasRunning) {
           var tfn = window['mlTimerClick_' + mk];
           if (tfn) tfn(); // pausar
         }
@@ -8725,7 +8735,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     if (origPC && !origPC._ftPC) {
       window[pcName] = function () {
         var r = origPC.apply(this, arguments);
-        _S[mk].pausedByUs = false; // el evento se guardó, reanudar
+        _S[mk].wasRunning = true; // el evento se guardó: reanudar
         _resumeIfNeeded(mk);
         return r;
       };
@@ -8738,7 +8748,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     if (origCE && !origCE._ftCE) {
       window[ceName] = function () {
         var r = origCE.apply(this, arguments);
-        _S[mk].pausedByUs = false;
+        _S[mk].wasRunning = true;
         _resumeIfNeeded(mk);
         return r;
       };

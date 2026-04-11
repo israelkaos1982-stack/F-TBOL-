@@ -51,6 +51,8 @@
     .ml-goal-flash-inner,
     .ml-goal-flash.show .ml-goal-flash-inner{
       display:none!important;
+      visibility:hidden!important;
+      opacity:0!important;
     }
   </style>
   <script>
@@ -131,6 +133,16 @@
 
     watchOverlay();
     setInterval(hideOverlay,150);
+  })();
+  </script>
+  <script>
+  /* ── NUCLEAR: elimina físicamente cualquier .ml-goal-flash-inner del DOM ── */
+  (function(){
+    function purgeGooool(){
+      document.querySelectorAll('.ml-goal-flash-inner').forEach(function(el){el.remove();});
+    }
+    purgeGooool();
+    new MutationObserver(purgeGooool).observe(document.body,{childList:true,subtree:true});
   })();
   </script>
   <script src="{{ url_for('static', filename='js/goal-notification-patch.js') }}?v=2.1"></script>

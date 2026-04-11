@@ -4741,8 +4741,11 @@
     var s=document.createElement('style');
     s.id='var-anim-css';
     s.textContent='@keyframes varBlink{0%,100%{opacity:1}50%{opacity:.15}}'
+      +'@keyframes golFlash{0%{opacity:0;transform:scale(.7)}15%{opacity:1;transform:scale(1.08)}85%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.9)}}'
       +'.var-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);border-radius:inherit;pointer-events:none;}'
-      +'.var-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(15px,3vw,22px);font-weight:900;color:#f0c040;letter-spacing:3px;animation:varBlink .55s ease-in-out infinite;text-shadow:0 0 14px rgba(240,192,64,.9),0 0 28px rgba(240,192,64,.5);}';
+      +'.var-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(15px,3vw,22px);font-weight:900;color:#f0c040;letter-spacing:3px;animation:varBlink .55s ease-in-out infinite;text-shadow:0 0 14px rgba(240,192,64,.9),0 0 28px rgba(240,192,64,.5);}'
+      +'.gol-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(16px,3.5vw,26px);font-weight:900;color:#fff;letter-spacing:4px;animation:golFlash 1.6s ease forwards;text-shadow:0 0 16px rgba(255,220,0,.95),0 0 32px rgba(255,180,0,.6);}'
+      +'.propia-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(13px,2.8vw,20px);font-weight:900;color:#ff7755;letter-spacing:3px;animation:golFlash 1.6s ease forwards;text-shadow:0 0 14px rgba(255,100,0,.9);}';
     document.head.appendChild(s);
   })();
 
@@ -4863,10 +4866,24 @@
         if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
           if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
           else                 { scB++; if (scBEl) scBEl.textContent = scB; }
+          (function(){
+            if (!scoreWrapEl) return;
+            var _ov=document.createElement('div'); _ov.className='var-overlay';
+            var _tx=document.createElement('div'); _tx.className='gol-overlay-text';
+            _tx.textContent='⚽ GOL'; _ov.appendChild(_tx); scoreWrapEl.appendChild(_ov);
+            setTimeout(function(){if(_ov.parentNode)_ov.parentNode.removeChild(_ov);},1700);
+          })();
         } else if (ev.type === 'propia') {
           /* autogol: puntúa para el equipo CONTRARIO */
           if (ev.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
           else                 { scA++; if (scAEl) scAEl.textContent = scA; }
+          (function(){
+            if (!scoreWrapEl) return;
+            var _ov=document.createElement('div'); _ov.className='var-overlay';
+            var _tx=document.createElement('div'); _tx.className='propia-overlay-text';
+            _tx.textContent='⚽ EN PROPIA'; _ov.appendChild(_tx); scoreWrapEl.appendChild(_ov);
+            setTimeout(function(){if(_ov.parentNode)_ov.parentNode.removeChild(_ov);},1700);
+          })();
         }
         if (actaEl) {
           var row = document.createElement('div');

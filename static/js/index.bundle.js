@@ -8369,3 +8369,455 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   console.log('[ManualMaestro v2.0] Sistema completo activado ✓');
 
 })();
+
+/* ══════════════════════════════════════════════════════════════════════
+   PROTOCOLO SIMULACIÓN v2.0
+   - Sección 1A: Listener robusto para acta (refresco en 2ª parte)
+   - Sección 1B: Pausa/reanudación automática del cronómetro al añadir evento
+   - Sección 2:  Pantalla Descanso obligatoria con compartir WhatsApp
+   - Sección 3:  Pantalla Final obligatoria con compartir WhatsApp
+   - Sección 4:  Formato de mensaje WhatsApp
+   ══════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  var HM = ['j1m1', 'j1m2', 'j1m3'];
+
+  /* ── Estado por partido ─────────────────────────────────────────── */
+  var _S = {};
+  HM.forEach(function (mk) {
+    _S[mk] = { pausedByUs: false, descansoShared: false };
+  });
+
+  /* ── CSS ─────────────────────────────────────────────────────────── */
+  var _css = [
+    '.ft-ov{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.96);',
+    'overflow-y:auto;display:none;flex-direction:column;align-items:center;',
+    'padding:20px 14px 50px;}',
+    '.ft-ov.show{display:flex;}',
+    '.ft-panel{width:100%;max-width:400px;}',
+    '.ft-hdr{display:flex;align-items:center;justify-content:center;gap:10px;',
+    'margin-bottom:6px;}',
+    '.ft-logo{width:52px;height:52px;object-fit:contain;}',
+    '.ft-logo-ph{font-size:36px;line-height:52px;width:52px;text-align:center;}',
+    '.ft-sc{font-family:"Bebas Neue",sans-serif;font-size:56px;color:#f0c040;',
+    'letter-spacing:6px;line-height:1;}',
+    '.ft-ttl{font-family:"Oswald",sans-serif;font-size:12px;letter-spacing:3px;',
+    'color:rgba(255,255,255,.55);text-align:center;margin:6px 0 12px;}',
+    '.ft-mvp{font-family:"Rajdhani",sans-serif;font-size:17px;font-weight:700;',
+    'color:#f0c040;text-align:center;margin-bottom:10px;}',
+    '.ft-albl{font-family:"Oswald",sans-serif;font-size:10px;letter-spacing:2px;',
+    'color:rgba(255,255,255,.45);text-transform:uppercase;border-top:1px solid',
+    ' rgba(255,255,255,.1);padding-top:8px;margin-bottom:4px;}',
+    '.ft-evts{margin-bottom:14px;}',
+    '.ft-er{display:flex;align-items:center;gap:7px;padding:6px 3px;',
+    'border-bottom:1px solid rgba(255,255,255,.07);',
+    'font-family:"Rajdhani",sans-serif;font-size:13px;}',
+    '.ft-em{font-family:"Bebas Neue",sans-serif;font-size:13px;color:#f0c040;',
+    'min-width:26px;}',
+    '.ft-ei{font-size:14px;}',
+    '.ft-en{flex:1;color:#fff;font-weight:700;}',
+    '.ft-et{font-family:"Oswald",sans-serif;font-size:10px;letter-spacing:1px;',
+    'color:rgba(255,255,255,.5);}',
+    '.ft-sep{text-align:center;font-family:"Oswald",sans-serif;font-size:9px;',
+    'letter-spacing:3px;color:#f0c040;padding:3px;',
+    'background:rgba(240,192,64,.06);border-radius:3px;margin:2px 0;}',
+    '.ft-empty{text-align:center;font-family:"Oswald",sans-serif;font-size:11px;',
+    'letter-spacing:2px;color:rgba(255,255,255,.35);padding:8px 0;}',
+    '.ft-hvh{font-family:"Rajdhani",sans-serif;font-size:11px;',
+    'color:rgba(255,255,255,.35);text-align:center;margin-bottom:8px;}',
+    '.ft-wa{width:100%;padding:14px;background:#25d366;border:none;border-radius:8px;',
+    'color:#fff;font-family:"Oswald",sans-serif;font-size:15px;letter-spacing:2px;',
+    'cursor:pointer;margin-bottom:9px;transition:filter .15s;}',
+    '.ft-wa:active{filter:brightness(.82);}',
+    '.ft-go{width:100%;padding:11px;border:2px solid rgba(255,255,255,.2);',
+    'border-radius:8px;background:none;color:rgba(255,255,255,.4);',
+    'font-family:"Oswald",sans-serif;font-size:13px;letter-spacing:2px;',
+    'cursor:not-allowed;transition:border-color .2s,color .2s;}',
+    '.ft-go.unlocked{border-color:#f0c040;color:#f0c040;cursor:pointer;}'
+  ].join('');
+  var _styleEl = document.createElement('style');
+  _styleEl.textContent = _css;
+  document.head.appendChild(_styleEl);
+
+  /* ── Utilidades ─────────────────────────────────────────────────── */
+  function _teamNames(mk) {
+    var wrap = document.getElementById('mlw-' + mk);
+    if (!wrap) return { a: 'Local', b: 'Visitante' };
+    var els = wrap.querySelectorAll('.ml-team-name');
+    function clean(el) {
+      return el ? (el.textContent || '').replace(/\s+\d+\s*\/\s*100$/, '').trim() : '';
+    }
+    return { a: clean(els[0]) || 'Local', b: clean(els[1]) || 'Visitante' };
+  }
+
+  function _score(mk) {
+    return {
+      a: parseInt((document.getElementById('sc-' + mk + '-a') || { textContent: '0' }).textContent) || 0,
+      b: parseInt((document.getElementById('sc-' + mk + '-b') || { textContent: '0' }).textContent) || 0
+    };
+  }
+
+  function _compLabel(mk) {
+    var wrap = document.getElementById('mlw-' + mk);
+    if (!wrap) return 'Liga EA Sports';
+    var jm = wrap.closest('.jmatches');
+    var jid = jm ? jm.id : '';
+    if (!jid) return 'Liga EA Sports — J1';
+    var STATIC = {
+      'cal-copa-fin': 'Copa del Rey · Final',
+      'sc-final': 'Supercopa · Final',
+      'cal-usc-f': 'UEFA Super Cup · Final',
+      'ucl-fin': 'Champions League · Final',
+      'uel-fin': 'Europa League · Final',
+      'uecl-fin': 'Conference League · Final',
+      'cal-inter-f': 'Copa Intercontinental · Final',
+      'sc-semis': 'Supercopa · Semis'
+    };
+    if (STATIC[jid]) return STATIC[jid];
+    var m = jid.match(/^cal-l(\d+)/);
+    if (m) return 'Liga EA Sports — J' + m[1];
+    if (/^j\d+m/.test(jid)) return 'Liga EA Sports — J1';
+    if (jid.indexOf('cal-copa-') === 0) return 'Copa del Rey';
+    if (jid.indexOf('cal-sc-') === 0) return 'Supercopa de España';
+    if (jid.indexOf('cal-usc-') === 0) return 'UEFA Super Cup';
+    if (jid.indexOf('ucl-') === 0 || jid.indexOf('cal-ucl-') === 0) return 'Champions League';
+    if (jid.indexOf('uel-') === 0 || jid.indexOf('cal-uel-') === 0) return 'Europa League';
+    if (jid.indexOf('uecl-') === 0 || jid.indexOf('cal-uecl-') === 0) return 'Conference League';
+    if (jid.indexOf('cal-inter-') === 0) return 'Copa Intercontinental';
+    if (jid.indexOf('cal-sl') === 0 || jid.indexOf('cal-rm') === 0) return 'Superliga';
+    return 'Liga EA Sports';
+  }
+
+  /* Lee los eventos desde el DOM del acta (data-type, data-team, textos) */
+  function _eventsFromDom(mk) {
+    var list = document.getElementById('ml-acta-list-' + mk);
+    if (!list) return [];
+    var out = [];
+    list.querySelectorAll('.ml-evt-item').forEach(function (row) {
+      var min = parseInt((row.querySelector('.ml-evt-min') || {}).textContent || '0') || 0;
+      var ico = ((row.querySelector('.ml-evt-ico') || {}).textContent || '•').trim();
+      var nameText = ((row.querySelector('.ml-evt-name') || {}).textContent || '').trim();
+      var nm = nameText.match(/^(\d+)\.\s*(.*)/);
+      var num = nm ? nm[1] : '';
+      var name = nm ? nm[2].trim() : nameText;
+      var type = row.getAttribute('data-type') || '';
+      var team = row.getAttribute('data-team') || 'a';
+      out.push({ min: min, ico: ico, num: num, name: name, type: type, team: team });
+    });
+    return out.sort(function (a, b) { return a.min - b.min; });
+  }
+
+  /* Genera el HTML de lista de eventos para los overlays */
+  function _evtsHtml(mk, isHalf, t) {
+    var evts = _eventsFromDom(mk);
+    var show = isHalf ? evts.filter(function (e) { return e.min <= 45; }) : evts;
+    if (!show.length) return '<p class="ft-empty">Sin eventos registrados</p>';
+    var html = '';
+    var shownSep = false;
+    show.forEach(function (e) {
+      if (!isHalf && !shownSep && e.min > 45) {
+        shownSep = true;
+        html += '<div class="ft-sep">— DESCANSO (45 min) —</div>';
+      }
+      html += '<div class="ft-er">'
+        + '<span class="ft-em">' + e.min + "'</span>"
+        + '<span class="ft-ei">' + e.ico + '</span>'
+        + '<span class="ft-en">' + e.num + '. ' + e.name + '</span>'
+        + '<span class="ft-et">' + (e.team === 'a' ? t.a : t.b) + '</span>'
+        + '</div>';
+    });
+    return html;
+  }
+
+  /* Escudo HTML */
+  function _esc(name) {
+    var url = typeof window.getTeamLogoUrl === 'function' ? window.getTeamLogoUrl(name) : '';
+    return url
+      ? '<img src="' + url + '" class="ft-logo" alt="' + name + '" onerror="this.style.display=\'none\'">'
+      : '<span class="ft-logo-ph">⚽</span>';
+  }
+
+  /* Construye mensaje WhatsApp según formato del documento */
+  function _waMsg(mk, isHalf) {
+    var t = _teamNames(mk);
+    var sc = _score(mk);
+    var comp = _compLabel(mk);
+    var evts = _eventsFromDom(mk);
+    var filtered = isHalf
+      ? evts.filter(function (e) { return e.min <= 45 && e.type !== 'mvp'; })
+      : evts.filter(function (e) { return e.type !== 'mvp'; });
+    var mvp = !isHalf ? evts.find(function (e) { return e.type === 'mvp'; }) : null;
+    var lines = [comp, '', t.a + ' ' + sc.a + ' - ' + sc.b + ' ' + t.b, '', 'ACTA DEL PARTIDO:'];
+    filtered.forEach(function (e) {
+      lines.push(e.min + "' " + e.ico + ' ' + e.name + ' (' + (e.team === 'a' ? t.a : t.b) + ')');
+    });
+    if (mvp) { lines.push(''); lines.push('⭐ MVP: ' + mvp.name); }
+    var twitch = window._ppSelectedTwitch;
+    if (twitch) lines.push('— Visto en el Twitch de ' + twitch);
+    return lines.join('\n');
+  }
+
+  /* ── ¿Está el cronómetro realmente corriendo? (no DESCANSO, no FIN) */
+  function _timerRunning(mk) {
+    var btn = document.getElementById('ml-timer-' + mk);
+    if (!btn) return false;
+    var txt = btn.textContent || '';
+    return btn.classList.contains('running')
+      && txt.indexOf('DESCANSO') === -1
+      && txt.indexOf('FIN') === -1;
+  }
+
+  /* Reanuda el cronómetro si lo pausamos nosotros */
+  function _resumeIfNeeded(mk) {
+    if (_S[mk].pausedByUs) return;           // ya estaba parado antes, no tocar
+    if (_timerRunning(mk)) return;           // ya corre
+    var btn = document.getElementById('ml-timer-' + mk);
+    var txt = btn ? (btn.textContent || '') : '';
+    if (txt.indexOf('FIN') !== -1) return;   // partido terminado
+    if (txt.indexOf('DESCANSO') !== -1) return; // en descanso, lo retoma setTimeout
+    // no reanudar si el overlay de descanso o final están visibles
+    var dos = document.getElementById('ft-descanso-' + mk);
+    if (dos && dos.classList.contains('show')) return;
+    var fos = document.getElementById('ft-final-' + mk);
+    if (fos && fos.classList.contains('show')) return;
+    var fn = window['mlTimerClick_' + mk];
+    if (fn) fn();
+  }
+
+  /* ── Pantalla Descanso ───────────────────────────────────────────── */
+  function _showDescanso(mk) {
+    var t = _teamNames(mk);
+    var sc = _score(mk);
+    var isHvH = (function () {
+      var w = document.getElementById('mlw-' + mk);
+      return !!(w && w.classList.contains('hvh'));
+    }());
+    var id = 'ft-descanso-' + mk;
+    var ov = document.getElementById(id);
+    if (!ov) { ov = document.createElement('div'); ov.id = id; ov.className = 'ft-ov'; document.body.appendChild(ov); }
+    ov.innerHTML = '<div class="ft-panel">'
+      + '<div class="ft-hdr">' + _esc(t.a) + '<div class="ft-sc">' + sc.a + '-' + sc.b + '</div>' + _esc(t.b) + '</div>'
+      + '<div class="ft-ttl">⏸ DESCANSO — 45 MIN</div>'
+      + '<div class="ft-albl">📋 ACTA 1ª PARTE</div>'
+      + '<div class="ft-evts">' + _evtsHtml(mk, true, t) + '</div>'
+      + (isHvH ? '<div class="ft-hvh">👥 HvH: cualquier jugador puede compartir para desbloquear</div>' : '')
+      + '<button class="ft-wa" onclick="window._ftDS(\'' + mk + '\')">🟢 Compartir descanso</button>'
+      + '<button class="ft-go" id="ft-dc-' + mk + '" onclick="window._ftDR(\'' + mk + '\')" disabled>▶ INICIAR 2ª PARTE</button>'
+      + '</div>';
+    ov.classList.add('show');
+    window.scrollTo(0, 0);
+    _S[mk].descansoShared = false;
+  }
+
+  window._ftDS = function (mk) {
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(_waMsg(mk, true)), '_blank'); } catch (e) { }
+    _S[mk].descansoShared = true;
+    var btn = document.getElementById('ft-dc-' + mk);
+    if (btn) { btn.disabled = false; btn.classList.add('unlocked'); }
+  };
+
+  window._ftDR = function (mk) {
+    if (!_S[mk].descansoShared) return;
+    var ov = document.getElementById('ft-descanso-' + mk);
+    if (ov) ov.classList.remove('show');
+    // Si el cronómetro ya auto-reanudó (pasaron 20s) y lo pausamos: reanudar ahora
+    // Si aún está en DESCANSO (no pasaron 20s): el setTimeout de 20s lo reanudará solo
+    var btn = document.getElementById('ml-timer-' + mk);
+    var txt = btn ? (btn.textContent || '') : '';
+    if (txt.indexOf('DESCANSO') === -1 && txt.indexOf('FIN') === -1 && !_timerRunning(mk)) {
+      var fn = window['mlTimerClick_' + mk];
+      if (fn) fn();
+    }
+  };
+
+  /* ── Pantalla Final ──────────────────────────────────────────────── */
+  function _showFinal(mk) {
+    var t = _teamNames(mk);
+    var sc = _score(mk);
+    var evts = _eventsFromDom(mk);
+    var mvp = evts.find(function (e) { return e.type === 'mvp'; });
+    var isHvH = (function () {
+      var w = document.getElementById('mlw-' + mk);
+      return !!(w && w.classList.contains('hvh'));
+    }());
+    var id = 'ft-final-' + mk;
+    var ov = document.getElementById(id);
+    if (!ov) { ov = document.createElement('div'); ov.id = id; ov.className = 'ft-ov'; document.body.appendChild(ov); }
+    ov.innerHTML = '<div class="ft-panel">'
+      + '<div class="ft-hdr">' + _esc(t.a) + '<div class="ft-sc">' + sc.a + '-' + sc.b + '</div>' + _esc(t.b) + '</div>'
+      + '<div class="ft-ttl">🏁 RESULTADO FINAL</div>'
+      + (mvp ? '<div class="ft-mvp">⭐ MVP: ' + mvp.name + '</div>' : '')
+      + '<div class="ft-albl">📋 ACTA COMPLETA</div>'
+      + '<div class="ft-evts">' + _evtsHtml(mk, false, t) + '</div>'
+      + (isHvH ? '<div class="ft-hvh">👥 HvH: cualquier jugador puede compartir para cerrar</div>' : '')
+      + '<button class="ft-wa" onclick="window._ftFS(\'' + mk + '\')">🟢 Compartir Partido Finalizado</button>'
+      + '<button class="ft-go" id="ft-fn-' + mk + '" onclick="window._ftFE(\'' + mk + '\')" disabled>← VOLVER AL MENÚ</button>'
+      + '</div>';
+    ov.classList.add('show');
+    window.scrollTo(0, 0);
+    _S[mk].finalShared = false;
+  }
+
+  window._ftFS = function (mk) {
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(_waMsg(mk, false)), '_blank'); } catch (e) { }
+    _S[mk].finalShared = true;
+    var btn = document.getElementById('ft-fn-' + mk);
+    if (btn) { btn.disabled = false; btn.classList.add('unlocked'); }
+  };
+
+  window._ftFE = function (mk) {
+    if (!_S[mk].finalShared) return;
+    var ov = document.getElementById('ft-final-' + mk);
+    if (ov) ov.classList.remove('show');
+    if (typeof window.go === 'function') window.go('s-home');
+  };
+
+  /* ── Configuración por partido ───────────────────────────────────── */
+  function _setup(mk) {
+    /* 1A – Observer robusto: mantiene acta abierta cuando cambia el DOM */
+    var listEl = document.getElementById('ml-acta-list-' + mk);
+    var bodyEl = document.getElementById('acta-body-' + mk);
+    var togEl = document.getElementById('acta-toggle-' + mk);
+    if (listEl && bodyEl) {
+      var acObs = new MutationObserver(function () {
+        var hasItems = listEl.querySelector('.ml-evt-item');
+        if (hasItems && !bodyEl.classList.contains('open')) {
+          bodyEl.classList.add('open');
+          if (togEl) togEl.classList.add('open');
+        }
+      });
+      acObs.observe(listEl, { childList: true, subtree: true });
+    }
+
+    /* 1B – Patch mlTogglePanel: pausar cronómetro al abrir overlay de evento */
+    var tpName = 'mlTogglePanel_' + mk;
+    var origTP = window[tpName];
+    if (origTP && !origTP._ftTP) {
+      window[tpName] = function () {
+        _S[mk].pausedByUs = !_timerRunning(mk); // ¿ya estaba parado?
+        if (_timerRunning(mk)) {
+          var tfn = window['mlTimerClick_' + mk];
+          if (tfn) tfn(); // pausar
+        }
+        return origTP.apply(this, arguments);
+      };
+      window[tpName]._ftTP = true;
+    }
+
+    /* 1B – Patch funciones de cancelación: reanudar si pausamos nosotros */
+    ['mlHideEvOv_', 'mlHideTP_', 'mlHidePl_'].forEach(function (prefix) {
+      var fn = prefix + mk;
+      var orig = window[fn];
+      if (orig && !orig._ftH) {
+        window[fn] = function () {
+          var r = orig.apply(this, arguments);
+          _resumeIfNeeded(mk);
+          return r;
+        };
+        window[fn]._ftH = true;
+      }
+    });
+
+    /* 1B – Patch mlPlConfirm: reanudar tras confirmar evento (overlay de jugadores) */
+    var pcName = 'mlPlConfirm_' + mk;
+    var origPC = window[pcName];
+    if (origPC && !origPC._ftPC) {
+      window[pcName] = function () {
+        var r = origPC.apply(this, arguments);
+        _S[mk].pausedByUs = false; // el evento se guardó, reanudar
+        _resumeIfNeeded(mk);
+        return r;
+      };
+      window[pcName]._ftPC = true;
+    }
+
+    /* 1B – Patch mlConfirmEvt: reanudar tras confirmar evento (modal antiguo) */
+    var ceName = 'mlConfirmEvt_' + mk;
+    var origCE = window[ceName];
+    if (origCE && !origCE._ftCE) {
+      window[ceName] = function () {
+        var r = origCE.apply(this, arguments);
+        _S[mk].pausedByUs = false;
+        _resumeIfNeeded(mk);
+        return r;
+      };
+      window[ceName]._ftCE = true;
+    }
+
+    /* 2 – Observer en lista acta: detectar marcador DESCANSO → mostrar overlay */
+    if (listEl) {
+      var descObs = new MutationObserver(function (muts) {
+        muts.forEach(function (mut) {
+          mut.addedNodes.forEach(function (node) {
+            if (node.nodeType === 1
+              && node.classList && node.classList.contains('ml-ht')
+              && (node.textContent || '').indexOf('DESCANSO') !== -1) {
+              var dos = document.getElementById('ft-descanso-' + mk);
+              if (dos && dos.classList.contains('show')) return; // ya está
+              setTimeout(function () { _showDescanso(mk); }, 450);
+            }
+          });
+        });
+      });
+      descObs.observe(listEl, { childList: true });
+    }
+
+    /* 2 – Observer en botón de cronómetro: detectar auto-reanudación tras descanso
+       Si el overlay sigue visible y no se ha compartido aún → volver a pausar */
+    var timerBtn = document.getElementById('ml-timer-' + mk);
+    if (timerBtn) {
+      var prevTxt = timerBtn.textContent || '';
+      var tObs = new MutationObserver(function () {
+        var txt = timerBtn.textContent || '';
+        if (txt === prevTxt) return;
+        var wasDescanso = prevTxt.indexOf('DESCANSO') !== -1;
+        prevTxt = txt;
+        if (wasDescanso && txt.indexOf('DESCANSO') === -1 && txt.indexOf('FIN') === -1) {
+          var dos = document.getElementById('ft-descanso-' + mk);
+          if (dos && dos.classList.contains('show') && !_S[mk].descansoShared) {
+            var tfn = window['mlTimerClick_' + mk];
+            if (tfn) tfn(); // pausar de nuevo
+          }
+        }
+      });
+      tObs.observe(timerBtn, { childList: true, subtree: true, characterData: true });
+    }
+
+    /* 3 – Patch mlEndMatch: mostrar Pantalla Final cuando el partido termine */
+    var emName = 'mlEndMatch_' + mk;
+    var origEM = window[emName];
+    if (origEM && !origEM._ftEM) {
+      window[emName] = function (winner) {
+        var r = origEM.apply(this, arguments);
+        // Verificar si el partido terminó de verdad (timer = "🏁 FIN")
+        setTimeout(function () {
+          var tb = document.getElementById('ml-timer-' + mk);
+          if (tb && tb.classList.contains('finished')) {
+            var fos = document.getElementById('ft-final-' + mk);
+            if (!fos || !fos.classList.contains('show')) {
+              _showFinal(mk);
+            }
+          }
+        }, 700);
+        return r;
+      };
+      window[emName]._ftEM = true;
+    }
+  }
+
+  /* ── Init ────────────────────────────────────────────────────────── */
+  function _init() {
+    HM.forEach(function (mk) { _setup(mk); });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _init);
+  } else {
+    _init();
+  }
+  // Reintento para funciones que aún no estaban definidas al cargar
+  setTimeout(_init, 900);
+
+  console.log('[FTBol Protocolo v2.0] Descanso + Final + WhatsApp activado ✓');
+})();

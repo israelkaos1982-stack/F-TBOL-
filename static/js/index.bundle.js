@@ -3134,6 +3134,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
           if(scBEl) scBEl.textContent=evts.filter(function(e){return(e.type==='gol'||e.type==='falta-gol'||e.type==='pen-gol')&&e.team==='b'&&e.min<=ev.min;}).length+evts.filter(function(e){return e.type==='propia'&&e.team==='a'&&e.min<=ev.min;}).length;
           var gf=document.getElementById(cfg.gfId);
           if(gf){gf.classList.add('show');if(typeof triggerShootingBall==='function')triggerShootingBall(gf,(ev.type==='propia'?(ev.team==='a'?'b':'a'):ev.team));setTimeout(function(){gf.classList.remove('show');},3000);}
+          if(window.goalNotificationImproved){var _gnt=ev.type==='propia'?(ev.team==='a'?'b':'a'):ev.team;var _gnp=ev.player?ev.player[1]:'';window.goalNotificationImproved.show(cfg.matchKey,_gnt,_gnp);}
         },ms+50);
       }
       if(ev.ico==='🟥'||ev.ico==='🟨🟥'){

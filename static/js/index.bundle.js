@@ -1255,7 +1255,7 @@ function _currentMin_j1m1(){return Math.min(_etDone?120:(_stDone?97:90),Math.flo
 function _addMarker_j1m1(txt){var list=document.getElementById('ml-acta-list-j1m1');var div=document.createElement('div');div.className='ml-ht';div.textContent=txt;list.appendChild(div);_removeEmpty_j1m1();};
 window.mlActivateET_j1m1=function(){if(_etDone||_matchFinished)return;_etDone=true;_etPhase=true;if(_timerRunning){clearInterval(_timerInterval);_startInterval_j1m1();}if(_timerSec<MAX_NORMAL)_timerSec=MAX_NORMAL;_addMarker_j1m1('— PRÓRROGA —');var btn=document.getElementById('ml-btn-et-j1m1');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var penBtn=document.getElementById('ml-btn-pen-j1m1');if(penBtn)penBtn.style.display='';_renderTimer_j1m1();};
 window.mlShowPenPanel_j1m1=function(){var pp=document.getElementById('ml-pen-panel-j1m1');if(pp)pp.classList.add('show');var penBtn=document.getElementById('ml-btn-pen-j1m1');if(penBtn){penBtn.disabled=true;penBtn.style.opacity='0.35';}var addBtn=document.getElementById('ml-add-btn-j1m1');if(addBtn){addBtn.disabled=true;addBtn.style.opacity='0.35';}};
-window.mlEndMatch_j1m1=function(winner){if(_matchFinished)return;if(!winner&&_sc.a===_sc.b){alert("⚠️ El partido está empatado. Debes ir a PRÓRROGA y luego a PENALTIS.");return;}
+window.mlEndMatch_j1m1=function(winner){if(_matchFinished)return;
   // ── MVP obligatorio ──
   var hasMvp=_events.some(function(e){return e.type==='mvp';});
   if(!hasMvp){
@@ -1363,7 +1363,7 @@ function _currentMin_j1m2(){return Math.min(_etDone?120:(_stDone?97:90),Math.flo
 function _addMarker_j1m2(txt){var list=document.getElementById('ml-acta-list-j1m2');var div=document.createElement('div');div.className='ml-ht';div.textContent=txt;list.appendChild(div);_removeEmpty_j1m2();};
 window.mlActivateET_j1m2=function(){if(_etDone||_matchFinished)return;_etDone=true;_etPhase=true;if(_timerRunning){clearInterval(_timerInterval);_startInterval_j1m2();}if(_timerSec<MAX_NORMAL)_timerSec=MAX_NORMAL;_addMarker_j1m2('— PRÓRROGA —');var btn=document.getElementById('ml-btn-et-j1m2');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var penBtn=document.getElementById('ml-btn-pen-j1m2');if(penBtn)penBtn.style.display='';_renderTimer_j1m2();};
 window.mlShowPenPanel_j1m2=function(){var pp=document.getElementById('ml-pen-panel-j1m2');if(pp)pp.classList.add('show');var penBtn=document.getElementById('ml-btn-pen-j1m2');if(penBtn){penBtn.disabled=true;penBtn.style.opacity='0.35';}var addBtn=document.getElementById('ml-add-btn-j1m2');if(addBtn){addBtn.disabled=true;addBtn.style.opacity='0.35';}};
-window.mlEndMatch_j1m2=function(winner){if(_matchFinished)return;if(!winner&&_sc.a===_sc.b){alert("⚠️ El partido está empatado. Debes ir a PRÓRROGA y luego a PENALTIS.");return;}
+window.mlEndMatch_j1m2=function(winner){if(_matchFinished)return;
   // ── MVP obligatorio ──
   var hasMvp=_events.some(function(e){return e.type==='mvp';});
   if(!hasMvp){
@@ -3264,11 +3264,12 @@ function mlPreviaClick(matchKey) {
     }
   }
   // Determinar prórroga automática según reglas
-  // HvH: siempre hay prórroga y penaltis
+  // HvH: siempre hay prórroga y penaltis, EXCEPTO en Liga/grupos/amistoso
   // HvIA: Copa 1r/2r/dieciseisavos, USC, SC, Inter, Fases finales selecciones → sí
   // HvIA: Liga y fase de grupos europeos → NO
   var prorroga;
-  if (isHvH) {
+  var sinProrrogaComp = ['liga', 'liga-2', 'amistoso', 'eur-grupo', 'superliga'];
+  if (isHvH && sinProrrogaComp.indexOf(compKey) === -1) {
     prorroga = 'Sí';
   } else {
     var conProrroga = ['copa','copa-fin','sc','sc-final','usc','usc-fin','inter','inter-fin','ucl-fin','uel-fin','uecl-fin','recopa','recopa-fin','eur-ko','eur-fin','sel','sel-fin'];
@@ -5036,7 +5037,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
     };
     if (typeof window.showPrePartidoOverlay === 'function') {
-      window.showPrePartidoOverlay('lj' + j + 'm0', 'liga', isHvH ? 'Sí' : 'No', duracion, isHvH);
+      window.showPrePartidoOverlay('lj' + j + 'm0', 'liga', 'No', duracion, isHvH);
     }
   };
 

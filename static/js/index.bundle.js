@@ -4891,6 +4891,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   /* 6 variantes: 🎲 Al azar, ⬆️ Excelente, ↗️ Buena, ➡️ Normal, ↘️ Mala, ⬇️ Pésima */
   window._ppFormStates = { home: '🎲', away: '🎲' };
   window._ppFormAdminUnlocked = false;
+  window._ppDurationMin = null; /* override manual de duración */
   var FORM_VARIANTS = [
     { ico: '🎲', name: 'Al azar',   color: 'rgba(255,255,255,.85)' },
     { ico: '⬆️', name: 'Excelente', color: '#5aa9ff' },
@@ -4905,34 +4906,125 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   window._ppResetFormStates = function() {
     window._ppFormStates = { home: '🎲', away: '🎲' };
     window._ppFormAdminUnlocked = false;
+    window._ppDurationMin = null;
+  };
+
+  /* ── Modal de admin PIN dedicado (no depende del pG existente) ── */
+  function _ensureAdminModal() {
+    if (document.getElementById('pp-admin-modal')) return;
+    var m = document.createElement('div');
+    m.id = 'pp-admin-modal';
+    m.style.cssText = 'display:none;position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.92);align-items:center;justify-content:center;';
+    m.innerHTML =
+      '<div style="background:linear-gradient(160deg,#0d1117,#161b22);border:1px solid rgba(240,192,64,.4);border-radius:14px;padding:24px 20px;width:280px;max-width:90vw;text-align:center;box-shadow:0 0 40px rgba(0,0,0,.9);">'
+      + '<div id="pp-admin-title" style="font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;color:#f0c040;margin-bottom:16px;">🔒 MODO ADMIN</div>'
+      + '<div id="pp-admin-display" style="font-family:\'Courier New\',monospace;font-size:28px;letter-spacing:12px;color:#fff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:12px;margin-bottom:14px;min-height:52px;">●●●</div>'
+      + '<div id="pp-admin-err" style="display:none;color:#ff5555;font-size:11px;margin-bottom:10px;letter-spacing:1px;">PIN INCORRECTO</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;">'
+        + '<button class="pp-pk" data-k="1" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;">1</button>'
+        + '<button class="pp-pk" data-k="2" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;">2</button>'
+        + '<button class="pp-pk" data-k="3" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;">3</button>'
+        + '<button class="pp-pk" data-k="4" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;">4</button>'
+        + '<button class="pp-pk" data-k="5" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;">5</button>'
+        + '<button class="pp-pk" data-k="6" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;">6</button>'
+        + '<button class="pp-pk" data-k="7" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;">7</button>'
+        + '<button class="pp-pk" data-k="8" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;">8</button>'
+        + '<button class="pp-pk" data-k="9" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;">9</button>'
+        + '<button id="pp-pk-del" style="background:rgba(255,100,100,.1);border:1px solid rgba(255,100,100,.25);border-radius:8px;color:#ff9090;font-size:18px;padding:14px 0;cursor:pointer;">⌫</button>'
+        + '<button class="pp-pk" data-k="0" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;">0</button>'
+        + '<button id="pp-pk-ok" style="background:rgba(30,180,80,.2);border:1px solid rgba(60,220,100,.4);border-radius:8px;color:#5fe08a;font-size:18px;padding:14px 0;cursor:pointer;">✓</button>'
+      + '</div>'
+      + '<button id="pp-pk-cancel" style="background:none;border:none;color:rgba(255,255,255,.4);font-size:12px;font-family:Rajdhani,sans-serif;letter-spacing:1.5px;cursor:pointer;padding:6px 10px;">CANCELAR</button>'
+      + '</div>';
+    document.body.appendChild(m);
+    var buffer = '';
+    function render() {
+      var disp = document.getElementById('pp-admin-display');
+      if (disp) disp.textContent = buffer.length === 0 ? '●●●' : '●'.repeat(buffer.length);
+    }
+    m.querySelectorAll('.pp-pk').forEach(function(btn){
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (buffer.length >= 6) return;
+        buffer += btn.getAttribute('data-k');
+        render();
+      });
+    });
+    document.getElementById('pp-pk-del').addEventListener('click', function(e){
+      e.stopPropagation();
+      buffer = buffer.slice(0, -1);
+      render();
+    });
+    document.getElementById('pp-pk-ok').addEventListener('click', function(e){
+      e.stopPropagation();
+      if (buffer === '747') {
+        window._adm = true;
+        window._ppFormAdminUnlocked = true;
+        m.style.display = 'none';
+        buffer = ''; render();
+        var cb = window._ppAdminCb;
+        window._ppAdminCb = null;
+        if (typeof cb === 'function') setTimeout(cb, 50);
+      } else {
+        var err = document.getElementById('pp-admin-err');
+        if (err) err.style.display = 'block';
+        var disp = document.getElementById('pp-admin-display');
+        if (disp) disp.style.color = '#ff5555';
+        setTimeout(function(){
+          buffer = ''; render();
+          if (disp) disp.style.color = '#fff';
+          if (err) err.style.display = 'none';
+        }, 900);
+      }
+    });
+    document.getElementById('pp-pk-cancel').addEventListener('click', function(e){
+      e.stopPropagation();
+      buffer = ''; render();
+      m.style.display = 'none';
+      window._ppAdminCb = null;
+    });
+  }
+
+  /* Llamar con callback — pide PIN 747 (o ejecuta directo si ya unlocked) */
+  window._ppAdminGate = function(cb) {
+    if (window._adm === true || window._ppFormAdminUnlocked) {
+      window._ppFormAdminUnlocked = true;
+      if (typeof cb === 'function') cb();
+      return;
+    }
+    _ensureAdminModal();
+    var m = document.getElementById('pp-admin-modal');
+    if (!m) return;
+    window._ppAdminCb = cb;
+    m.style.display = 'flex';
   };
 
   /* Prompt PIN 747 antes de cambiar el estado de forma */
-  /* Usa el PIN modal existente (funciona en móvil) en lugar de prompt() */
   window._ppRequestFormAdmin = function(side) {
-    /* Si ya estamos en modo admin (global o local), abrir directo */
-    if (window._adm === true || window._ppFormAdminUnlocked) {
-      window._ppFormAdminUnlocked = true;
+    window._ppAdminGate(function() {
       window._ppOpenFormDropdown(side);
-      return;
-    }
-    /* Usar el sistema pG global que muestra el modal numérico */
-    if (typeof window.pG === 'function') {
-      window.pG(function() {
-        window._ppFormAdminUnlocked = true;
-        window._ppOpenFormDropdown(side);
-      });
-      return;
-    }
-    /* Fallback a prompt() si pG no está disponible */
-    var pin = prompt('🔒 Introduce código de administrador (747):');
-    if (pin === '747') {
-      window._adm = true;
-      window._ppFormAdminUnlocked = true;
-      window._ppOpenFormDropdown(side);
-    } else if (pin !== null) {
-      alert('❌ Código incorrecto');
-    }
+    });
+  };
+
+  /* Editar duración del partido */
+  window._ppEditDuration = function() {
+    window._ppAdminGate(function() {
+      var cur = window._ppDurationMin || (document.querySelector('.pp-item[data-ppid="duracion"] .pp-item-val') || {}).textContent || '';
+      var input = prompt('⏱️ Duración del partido (minutos, 1-30):', String(parseInt(cur) || 10));
+      if (input === null) return;
+      var mins = parseInt(input, 10);
+      if (isNaN(mins) || mins < 1 || mins > 30) { alert('❌ Valor no válido. Debe ser entre 1 y 30 minutos.'); return; }
+      window._ppDurationMin = mins;
+      /* Re-renderizar items */
+      var isHvH = false;
+      if (_ppMatchKey) {
+        var w = document.getElementById('mlw-' + _ppMatchKey);
+        isHvH = w && w.classList.contains('hvh');
+      }
+      _ppItems = _buildItems(_ppMatchKey, _ppCompKey, 'No', mins + ' min', isHvH);
+      _renderList(_ppItems);
+      _updateBtn();
+    });
   };
 
   /* Mostrar dropdown con las 6 variantes */
@@ -5119,8 +5211,13 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var bn = bwrap.querySelector('.ml-ball-name');
       if (bn && bn.textContent.trim()) balon = bn.textContent.trim();
     }
-    /* Duración según HvH/HvIA — 10 min HvH, 8 min HvIA */
-    var durLabel = isHvH ? '10 min' : '8 min';
+    /* Duración según HvH/HvIA — 10 min HvH, 8 min HvIA. Admin puede sobrescribir */
+    var durLabel;
+    if (window._ppDurationMin) {
+      durLabel = window._ppDurationMin + ' min';
+    } else {
+      durLabel = isHvH ? '10 min' : '8 min';
+    }
     var items = [
       { id:'duracion',ico:'⏱️', lbl:'Duración',      val:durLabel + (isHvH ? ' (H)' : ' (IA)') },
       { id:'balon',   ico:'⚽️', lbl:'Balón',         val:balon }
@@ -5183,11 +5280,26 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         var variant = null;
         for (var v = 0; v < variants.length; v++) { if (variants[v].ico === ico) { variant = variants[v]; break; } }
         if (!variant) variant = { color: 'rgba(255,255,255,.85)' };
-        return '<button id="pp-form-' + side + '" onclick="event.stopPropagation();window._ppRequestFormAdmin(\'' + side + '\')" title="Estado de forma (admin)" style="margin-top:8px;background:rgba(10,10,24,.6);border:2px solid ' + variant.color + ';border-radius:10px;padding:6px 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 10px ' + variant.color + '55;transition:all .2s;pointer-events:auto;position:relative;z-index:10;"><span style="font-size:22px;line-height:1;pointer-events:none;">' + ico + '</span></button>';
+        return '<button id="pp-form-' + side + '" type="button" title="Estado de forma (admin)" style="margin-top:8px;background:rgba(10,10,24,.6);border:2px solid ' + variant.color + ';border-radius:10px;padding:8px 18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 10px ' + variant.color + '55;transition:all .2s;pointer-events:auto;position:relative;z-index:10;font-size:22px;line-height:1;">' + ico + '</button>';
       }
       vs.innerHTML = '<div style="text-align:center;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+home.toUpperCase()+'</div>'+_levelHtml(home)+_formBtnHtml('home')+'</div>'
         + '<div class="pp-vs-mid" style="padding:0 8px;">VS</div>'
         + '<div style="text-align:center;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+away.toUpperCase()+'</div>'+_levelHtml(away)+_formBtnHtml('away')+'</div>';
+      /* Wire form buttons via addEventListener (more reliable on mobile than inline onclick) */
+      ['home','away'].forEach(function(side) {
+        var b = document.getElementById('pp-form-' + side);
+        if (!b) return;
+        b.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          window._ppRequestFormAdmin(side);
+        });
+        b.addEventListener('touchend', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          window._ppRequestFormAdmin(side);
+        }, { passive: false });
+      });
     }
     var alerts = document.getElementById('pp-alerts');
     if (alerts) {
@@ -5222,20 +5334,33 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (!list) return;
     list.innerHTML = items.map(function(item) {
       var checked = _ppChecked[item.id];
+      var editBtn = (item.id === 'duracion')
+        ? '<button class="pp-edit-btn" data-edit="duracion" style="background:rgba(240,192,64,.1);border:1px solid rgba(240,192,64,.35);border-radius:6px;padding:3px 8px;color:#f0c040;font-size:11px;cursor:pointer;margin:0 6px;">✏️ Editar</button>'
+        : '';
       return '<div class="pp-item' + (checked ? ' checked' : '') + '" data-ppid="' + item.id + '">'
         + '<span class="pp-item-lbl"><span class="pp-ico">' + item.ico + '</span>' + item.lbl + '</span>'
         + '<span class="pp-item-val">' + item.val + '</span>'
+        + editBtn
         + '<span class="pp-check">' + (checked ? '\u2705' : '\u{1F533}') + '</span>'
         + '</div>';
     }).join('');
     var divs = list.querySelectorAll('.pp-item');
     for (var i = 0; i < divs.length; i++) {
       (function(d) {
-        d.addEventListener('click', function() {
+        d.addEventListener('click', function(e) {
+          /* Si se clicó el botón de editar, ignorar el toggle */
+          if (e.target && e.target.closest && e.target.closest('[data-edit]')) return;
           window._ppToggle(d.getAttribute('data-ppid'));
         });
       })(divs[i]);
     }
+    /* Wire edit buttons */
+    list.querySelectorAll('[data-edit="duracion"]').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (typeof window._ppEditDuration === 'function') window._ppEditDuration();
+      });
+    });
   }
 
   function _checkAllDone() {

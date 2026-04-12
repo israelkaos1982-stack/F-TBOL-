@@ -8866,11 +8866,56 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
 /* ══ PENALTY WIZARD — flujo guiado paso a paso ══════════════════════════ */
 (function(){
-  var _wiz={matchId:null,attackTeam:null,defendTeam:null,provocador:null,sancion:null,infractor:null,tirador:null,resultado:null,falladoTipo:null,portero:null,stepHistory:[]};
+  var _wiz={matchId:null,attackTeam:null,defendTeam:null,provocador:null,sancion:null,infractor:null,tirador:null,resultado:null,falladoTipo:null,portero:null,stepHistory:[],minute:0};
 
   function _plHtml(sq,cbName){return sq.map(function(p){if(p.h)return '<div class="ml-pl-ov-sec">'+p.h+'</div>';return '<button class="ml-pl-ov-btn" onclick="'+cbName+'(\''+p[0]+'\',\''+p[1].replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'+'<span class="ml-pl-ov-num">'+p[0]+'</span><span class="ml-pl-ov-name">'+p[1]+'</span></button>';}).join('');}
 
-  function _teamCardHtml(matchId,team){var nm=team==='a'?'ml-pwiz-teams-2a':'ml-pwiz-teams-2a';var sqA=window['_sqA_'+matchId]||[];var sqB=window['_sqB_'+matchId]||[];var tpEl=document.getElementById('ml-tp-overlay-'+matchId);var teamCardA='<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'a\')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.15);border-radius:14px;padding:24px 12px 20px;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:Oswald,sans-serif;font-size:18px;font-weight:700;letter-spacing:1px;color:#fff;text-align:center;">';var teamCardB='<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'b\')" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.15);border-radius:14px;padding:24px 12px 20px;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:Oswald,sans-serif;font-size:18px;font-weight:700;letter-spacing:1px;color:#fff;text-align:center;">';if(tpEl){var imgs=tpEl.querySelectorAll('.ml-tp-ov-card');if(imgs[0]){teamCardA+=imgs[0].innerHTML+'</div>';}else{teamCardA+='A</div>';}if(imgs[1]){teamCardB+=imgs[1].innerHTML+'</div>';}else{teamCardB+='B</div>';}}else{teamCardA+='A</div>';teamCardB+='B</div>';}return teamCardA+teamCardB;}
+  /* Get squads for both teams — works with hardcoded AND dynamic match keys */
+  function _getSquads(matchId) {
+    var sqA = window['_sqA_'+matchId] || [];
+    var sqB = window['_sqB_'+matchId] || [];
+    /* Fallback: read from match state + SQUAD_REGISTRY for dynamic matches */
+    if ((!sqA.length || !sqB.length) && typeof window._calMlSt === 'function') {
+      var st = window._calMlSt(matchId);
+      if (st && st.home && st.away && window.SQUAD_REGISTRY) {
+        if (!sqA.length) sqA = window.SQUAD_REGISTRY[st.home] || [];
+        if (!sqB.length) sqB = window.SQUAD_REGISTRY[st.away] || [];
+      }
+    }
+    return { sqA: sqA, sqB: sqB };
+  }
+
+  /* Get team names for the wizard header */
+  function _getTeams(matchId) {
+    var home = '', away = '';
+    if (typeof window._calMlSt === 'function') {
+      var st = window._calMlSt(matchId);
+      if (st) { home = st.home; away = st.away; }
+    }
+    if (!home || !away) {
+      var wrap = document.getElementById('mlw-' + matchId);
+      if (wrap) {
+        var names = wrap.querySelectorAll('.ml-team-name');
+        if (names[0]) home = (names[0].textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+        if (names[1]) away = (names[1].textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+      }
+    }
+    return { home: home || 'LOCAL', away: away || 'VISITANTE' };
+  }
+
+  function _teamCardHtml(matchId,team){
+    var teams = _getTeams(matchId);
+    var lA = (typeof getLogoEquipo === 'function') ? getLogoEquipo(teams.home) : '';
+    var lB = (typeof getLogoEquipo === 'function') ? getLogoEquipo(teams.away) : '';
+    var cardStyle = 'flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.15);border-radius:14px;padding:24px 12px 20px;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:Oswald,sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;color:#fff;text-align:center;';
+    var teamCardA = '<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'a\')" style="'+cardStyle+'">'
+      + (lA ? '<img src="'+lA+'" alt="" style="width:60px;height:60px;object-fit:contain;"/>' : '🛡️')
+      + '<div>' + teams.home.toUpperCase() + '</div></div>';
+    var teamCardB = '<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'b\')" style="'+cardStyle+'">'
+      + (lB ? '<img src="'+lB+'" alt="" style="width:60px;height:60px;object-fit:contain;"/>' : '🛡️')
+      + '<div>' + teams.away.toUpperCase() + '</div></div>';
+    return teamCardA + teamCardB;
+  }
 
   function _showStep(step){document.querySelectorAll('.ml-pwiz-step').forEach(function(el){el.classList.remove('active');});var el=document.getElementById('ml-pwiz-'+step);if(el)el.classList.add('active');var backBtn=document.getElementById('ml-pwiz-back');if(backBtn)backBtn.style.visibility=_wiz.stepHistory.length>0?'visible':'hidden';}
 
@@ -8878,8 +8923,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   function _renderAndShow(step){
     var matchId=_wiz.matchId;
-    var sqA=window['_sqA_'+matchId]||[];
-    var sqB=window['_sqB_'+matchId]||[];
+    var squads = _getSquads(matchId);
+    var sqA = squads.sqA;
+    var sqB = squads.sqB;
     var attackSq=_wiz.attackTeam==='a'?sqA:sqB;
     var defendSq=_wiz.attackTeam==='a'?sqB:sqA;
     if(step==='s2a'){
@@ -8910,8 +8956,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     _showStep(step);
   }
 
-  window.mlPenWizStart=function(matchId){
-    _wiz.matchId=matchId;_wiz.attackTeam=null;_wiz.defendTeam=null;_wiz.provocador=null;_wiz.sancion=null;_wiz.infractor=null;_wiz.tirador=null;_wiz.resultado=null;_wiz.falladoTipo=null;_wiz.portero=null;_wiz.stepHistory=[];
+  window.mlPenWizStart=function(matchId, minute){
+    _wiz.matchId=matchId;_wiz.attackTeam=null;_wiz.defendTeam=null;_wiz.provocador=null;_wiz.sancion=null;_wiz.infractor=null;_wiz.tirador=null;_wiz.resultado=null;_wiz.falladoTipo=null;_wiz.portero=null;_wiz.stepHistory=[];_wiz.minute=minute||0;
     var ov=document.getElementById('ml-pen-wiz');if(ov)ov.classList.add('show');
     _renderAndShow('s2a');
   };
@@ -8973,7 +9019,11 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   function _commit(){
     var ov=document.getElementById('ml-pen-wiz');if(ov)ov.classList.remove('show');
     var fn=window['mlPenWizardCommit_'+_wiz.matchId];
-    if(typeof fn==='function')fn(_wiz);
+    if(typeof fn==='function') {
+      fn(_wiz);
+    } else if (typeof window.mlPenWizardCommitGen === 'function') {
+      window.mlPenWizardCommitGen(_wiz);
+    }
     _wiz.matchId=null;
   }
 })();

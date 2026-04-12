@@ -4910,7 +4910,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   /* Prompt PIN 747 antes de cambiar el estado de forma */
   /* Usa el PIN modal existente (funciona en móvil) en lugar de prompt() */
   window._ppRequestFormAdmin = function(side) {
-    if (window._ppFormAdminUnlocked) {
+    /* Si ya estamos en modo admin (global o local), abrir directo */
+    if (window._adm === true || window._ppFormAdminUnlocked) {
+      window._ppFormAdminUnlocked = true;
       window._ppOpenFormDropdown(side);
       return;
     }
@@ -4920,15 +4922,16 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         window._ppFormAdminUnlocked = true;
         window._ppOpenFormDropdown(side);
       });
-    } else {
-      /* Fallback a prompt() si pG no está disponible */
-      var pin = prompt('🔒 Introduce código de administrador para modificar el estado de forma:');
-      if (pin === '747') {
-        window._ppFormAdminUnlocked = true;
-        window._ppOpenFormDropdown(side);
-      } else if (pin !== null) {
-        alert('❌ Código incorrecto');
-      }
+      return;
+    }
+    /* Fallback a prompt() si pG no está disponible */
+    var pin = prompt('🔒 Introduce código de administrador (747):');
+    if (pin === '747') {
+      window._adm = true;
+      window._ppFormAdminUnlocked = true;
+      window._ppOpenFormDropdown(side);
+    } else if (pin !== null) {
+      alert('❌ Código incorrecto');
     }
   };
 
@@ -5158,6 +5161,21 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var lB = _pickLogo(_svgImgs[1], away);
       var imgA = lA ? '<img src="'+lA+'" alt="'+home+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
       var imgB = lB ? '<img src="'+lB+'" alt="'+away+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
+      /* Nivel por equipo: Crack / Leyenda / IA */
+      function _teamLevel(name) {
+        var normFn = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
+        var n = normFn(name);
+        if (normFn('Atlético Madrid') === n || normFn('Atletico Madrid') === n) return { lbl: '🏅 LEYENDA', color: '#ffbb33' };
+        if (normFn('Real Madrid') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff' };
+        if (normFn('FC Barcelona') === n || normFn('Barcelona') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff' };
+        if (normFn('Bayern Munich') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff' };
+        if (normFn('Arsenal') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff' };
+        return { lbl: '🤖 IA', color: 'rgba(255,255,255,.45)' };
+      }
+      function _levelHtml(name) {
+        var lvl = _teamLevel(name);
+        return '<div style="margin-top:4px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:' + lvl.color + ';">' + lvl.lbl + '</div>';
+      }
       /* Form state buttons — bajo cada escudo */
       function _formBtnHtml(side) {
         var ico = (window._ppFormStates && window._ppFormStates[side]) || '🎲';
@@ -5165,11 +5183,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         var variant = null;
         for (var v = 0; v < variants.length; v++) { if (variants[v].ico === ico) { variant = variants[v]; break; } }
         if (!variant) variant = { color: 'rgba(255,255,255,.85)' };
-        return '<button id="pp-form-' + side + '" onclick="window._ppRequestFormAdmin(\'' + side + '\')" title="Estado de forma (admin)" style="margin-top:8px;background:rgba(10,10,24,.6);border:2px solid ' + variant.color + ';border-radius:10px;padding:6px 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 10px ' + variant.color + '55;transition:all .2s;"><span style="font-size:22px;line-height:1;">' + ico + '</span></button>';
+        return '<button id="pp-form-' + side + '" onclick="event.stopPropagation();window._ppRequestFormAdmin(\'' + side + '\')" title="Estado de forma (admin)" style="margin-top:8px;background:rgba(10,10,24,.6);border:2px solid ' + variant.color + ';border-radius:10px;padding:6px 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 10px ' + variant.color + '55;transition:all .2s;pointer-events:auto;position:relative;z-index:10;"><span style="font-size:22px;line-height:1;pointer-events:none;">' + ico + '</span></button>';
       }
-      vs.innerHTML = '<div style="text-align:center;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+home.toUpperCase()+'</div>'+_formBtnHtml('home')+'</div>'
+      vs.innerHTML = '<div style="text-align:center;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+home.toUpperCase()+'</div>'+_levelHtml(home)+_formBtnHtml('home')+'</div>'
         + '<div class="pp-vs-mid" style="padding:0 8px;">VS</div>'
-        + '<div style="text-align:center;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+away.toUpperCase()+'</div>'+_formBtnHtml('away')+'</div>';
+        + '<div style="text-align:center;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+away.toUpperCase()+'</div>'+_levelHtml(away)+_formBtnHtml('away')+'</div>';
     }
     var alerts = document.getElementById('pp-alerts');
     if (alerts) {
@@ -5229,7 +5247,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (!btn) return;
     var done = _checkAllDone();
     btn.disabled = !done;
-    btn.textContent = done ? '🎮 CONFIRMAR CONFIGURACIÓN' : '🔒 COMPLETA LAS 5 CASILLAS';
+    btn.textContent = done ? '🎮 CONFIRMAR CONFIGURACIÓN' : '🔒 COMPLETA LAS CASILLAS';
   }
 
   window._ppToggle = function(id) {

@@ -2272,8 +2272,8 @@
     +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
     +'<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_primera-federacion.football-logos.cc.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
     +'<div class="btn-action-bar">'
-    +'<button class="btn-action btn-action-sim" onclick="window.requireAdmin(function(){simularAmbosPrimera()})"><span class="btn-action-ico">🎮</span>Simular</button>'
-    +'<button class="btn-action btn-action-rst" onclick="window.requireAdmin(function(){reiniciarAmbosPrimera()})"><span class="btn-action-ico">♻️</span>Reiniciar</button>'
+    +'<button data-pin-guard class="btn-action btn-action-sim" onclick="simularAmbosPrimera()"><span class="btn-action-ico">🎮</span>Simular</button>'
+    +'<button data-pin-guard class="btn-action btn-action-rst" onclick="reiniciarAmbosPrimera()"><span class="btn-action-ico">♻️</span>Reiniciar</button>'
     +'<button class="btn-action btn-action-stats" onclick="go(\'s-primf-stats\')"><span class="btn-action-ico">📊</span>Estadísticas</button>'
     +'</div>'
     +'<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.45);padding:0 0 6px;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.08);">① GRUPO 1</div>'
@@ -2295,10 +2295,10 @@
     +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
     +'<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_primera-federacion.football-logos.cc.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Ascensos y descensos</h2></div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 16px;">'
-    +'<button class="btn-action btn-action-sim" onclick="window.requireAdmin(function(){simularLigaSegundaMenu()})"><span class="btn-action-ico">🎮</span>Simular Hypermotion</button>'
-    +'<button class="btn-action btn-action-sim" onclick="window.requireAdmin(function(){simularPrimeraGrupo(1)})"><span class="btn-action-ico">🎮</span>Simular G1</button>'
-    +'<button class="btn-action btn-action-sim" onclick="window.requireAdmin(function(){simularPrimeraGrupo(2)})"><span class="btn-action-ico">🎮</span>Simular G2</button>'
-    +'<button class="btn-action btn-action-stats" onclick="window.requireAdmin(function(){applyPrimeraMovements()})"><span class="btn-action-ico">✅</span>Aplicar movimientos</button>'
+    +'<button data-pin-guard class="btn-action btn-action-sim" onclick="simularLigaSegundaMenu()"><span class="btn-action-ico">🎮</span>Simular Hypermotion</button>'
+    +'<button data-pin-guard class="btn-action btn-action-sim" onclick="simularPrimeraGrupo(1)"><span class="btn-action-ico">🎮</span>Simular G1</button>'
+    +'<button data-pin-guard class="btn-action btn-action-sim" onclick="simularPrimeraGrupo(2)"><span class="btn-action-ico">🎮</span>Simular G2</button>'
+    +'<button data-pin-guard class="btn-action btn-action-stats" onclick="applyPrimeraMovements()"><span class="btn-action-ico">✅</span>Aplicar movimientos</button>'
     +'</div><div id="primf-mov-content"></div></div>'
     /* ── Pantallas de grupo legacy (redirigen al combinado) ── */
     +'<div class="screen" id="s-primf-g1"><button class="back-btn" onclick="go(\'s-primf-clas\')">◀ Volver</button></div>'
@@ -7376,6 +7376,24 @@ window.goLiveMatches = function() {
       if (id === 's-admin-balls')    { setTimeout(window.adminRenderBalls, 30); }
     };
   }());
+
+  /* ── PIN GUARD: capture-phase listener intercepts [data-pin-guard] clicks ── */
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('[data-pin-guard]') : null;
+    if (!btn) return;
+    if (_adminUnlocked) return; /* already authenticated — let onclick fire */
+    e.stopPropagation();        /* prevent event reaching the button target */
+    /* Queue this button's onclick as the pending action */
+    _adminPendingAction = (function (b) {
+      return function () { if (typeof b.onclick === 'function') b.onclick.call(b); };
+    }(btn));
+    _pinBuffer = '';
+    _pinRender();
+    var modal = document.getElementById('pin-modal');
+    if (modal) { modal.style.display = 'flex'; }
+    var err = document.getElementById('pin-err');
+    if (err) err.style.display = 'none';
+  }, true); /* true = capture phase, fires BEFORE onclick */
 
   document.addEventListener('DOMContentLoaded', function () {
     _adminRefreshEnvStatus();

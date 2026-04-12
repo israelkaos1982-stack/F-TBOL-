@@ -2647,8 +2647,8 @@
   /* ── EXPULSIÓN IA: pre-roll de rojas y penalización de 30 PUNTOS ── */
   var _RED_CARD_FLAT_PENALTY = 30; /* 30 puntos planos por expulsión */
   function _rollRedCards() {
-    /* Máximo 1 roja por partido (~15% de probabilidad) */
-    if (Math.random() < 0.15) {
+    /* Máximo 1 roja por partido (~18% de probabilidad) */
+    if (Math.random() < 0.18) {
       var side = Math.random() < 0.5 ? 'home' : 'away';
       var min = Math.floor(Math.random() * 70) + 10;
       var reason = Math.random() < 0.6 ? 'directa' : '2TA';
@@ -2660,8 +2660,9 @@
     var count = 0;
     reds.forEach(function(r) { if (r.side === side) count++; });
     if (!count) return rating;
-    /* 30 puntos planos INSTANTÁNEOS por cada roja */
-    return Math.max(30, rating - (_RED_CARD_FLAT_PENALTY * count));
+    /* 30 puntos planos INSTANTÁNEOS por cada roja (mínimo 30) */
+    var adjusted = rating - (_RED_CARD_FLAT_PENALTY * count);
+    return Math.max(30, adjusted);
   }
 
   function _simIAvsIAWithContext(home, away, j) {
@@ -5313,7 +5314,9 @@
         /* ── VAR SEQUENCE ─────────────────────────────────────────────── */
         if (ev.var) {
           _varActive = true;
-          (function(capturedEv, capturedIco) {
+          /* 50/50: la mitad de las veces, el VAR anula el evento */
+          var _varConfirmed = Math.random() < 0.5;
+          (function(capturedEv, capturedIco, varConfirmed) {
             /* Show VAR overlay on the score area */
             var varOvl = document.createElement('div');
             varOvl.className = 'var-overlay';
@@ -5329,13 +5332,18 @@
             btn.textContent = '📺 VAR';
 
             setTimeout(function() {
-              /* Apply score update after VAR review */
-              if (capturedEv.type === 'gol' || capturedEv.type === 'pen-gol' || capturedEv.type === 'falta-gol') {
-                if (capturedEv.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
-                else                         { scB++; if (scBEl) scBEl.textContent = scB; }
-              } else if (capturedEv.type === 'propia') {
-                if (capturedEv.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
-                else                         { scA++; if (scAEl) scAEl.textContent = scA; }
+              /* Apply score update ONLY if VAR confirmed the event */
+              if (varConfirmed) {
+                if (capturedEv.type === 'gol' || capturedEv.type === 'pen-gol' || capturedEv.type === 'falta-gol') {
+                  if (capturedEv.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
+                  else                         { scB++; if (scBEl) scBEl.textContent = scB; }
+                } else if (capturedEv.type === 'propia') {
+                  if (capturedEv.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
+                  else                         { scA++; if (scAEl) scAEl.textContent = scA; }
+                }
+              } else {
+                /* VAR anuló el evento: marcar en el st.events para no contar en resultado final */
+                capturedEv._varAnulado = true;
               }
               /* Remove VAR overlay */
               if (varOvl.parentNode) varOvl.parentNode.removeChild(varOvl);
@@ -5343,26 +5351,37 @@
               /* Add acta row with VAR suffix */
               if (actaEl) {
                 var varSfx = '';
-                if (['gol','pen-gol','falta-gol','propia'].indexOf(capturedEv.type) !== -1)
-                  varSfx = ' <span style="font-size:10px;color:#f0c040;">(Confirmado por 📺 VAR)</span>';
-                else if (['pen-prov','pen-parado','pen-fallo'].indexOf(capturedEv.type) !== -1)
-                  varSfx = ' <span style="font-size:10px;color:#f0c040;">(Tras revisión 📺 VAR)</span>';
-                else if (['amarilla','roja'].indexOf(capturedEv.type) !== -1 || capturedEv.dbl)
-                  varSfx = ' <span style="font-size:10px;color:#f0c040;">(Validada por 📺 VAR)</span>';
+                if (varConfirmed) {
+                  if (['gol','pen-gol','falta-gol','propia'].indexOf(capturedEv.type) !== -1)
+                    varSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Confirmado por 📺 VAR)</span>';
+                  else if (['pen-prov','pen-parado','pen-fallo'].indexOf(capturedEv.type) !== -1)
+                    varSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Tras revisión 📺 VAR)</span>';
+                  else if (['amarilla','roja'].indexOf(capturedEv.type) !== -1 || capturedEv.dbl)
+                    varSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Validada por 📺 VAR)</span>';
+                } else {
+                  if (['gol','pen-gol','falta-gol','propia'].indexOf(capturedEv.type) !== -1)
+                    varSfx = ' <span style="font-size:10px;color:#ff5555;text-decoration:line-through;">(✗ ANULADO por 📺 VAR · fuera de juego)</span>';
+                  else if (['pen-prov','pen-parado','pen-fallo'].indexOf(capturedEv.type) !== -1)
+                    varSfx = ' <span style="font-size:10px;color:#ff5555;text-decoration:line-through;">(✗ ANULADO por 📺 VAR · no hay penalti)</span>';
+                  else if (['amarilla','roja'].indexOf(capturedEv.type) !== -1 || capturedEv.dbl)
+                    varSfx = ' <span style="font-size:10px;color:#ff5555;text-decoration:line-through;">(✗ ANULADA por 📺 VAR)</span>';
+                }
                 var lesExtraV = (capturedEv.type === 'lesion' && capturedEv.lesDesc)
                   ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + capturedEv.lesDesc + ' · ' + capturedEv.lesPartidos + ' ptdos)</span>'
                   : '';
                 var varRow = document.createElement('div');
-                varRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);background:rgba(240,192,64,.04);';
+                var bgColor = varConfirmed ? 'rgba(80,200,100,.06)' : 'rgba(255,80,80,.06)';
+                var textDecoration = varConfirmed ? '' : 'text-decoration:line-through;opacity:.6;';
+                varRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);background:' + bgColor + ';';
                 varRow.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + capturedEv.min + '\'</span>'
-                  + '<span style="font-size:14px;">' + capturedIco + '</span>'
-                  + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + capturedEv.player + lesExtraV + varSfx + '</span>'
+                  + '<span style="font-size:14px;' + textDecoration + '">' + capturedIco + '</span>'
+                  + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;' + textDecoration + '">' + capturedEv.player + lesExtraV + varSfx + '</span>'
                   + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (capturedEv.team === 'a' ? home : away) + '</span>';
                 actaEl.appendChild(varRow);
               }
               _varActive = false;
             }, 3000);
-          })(ev, ico);
+          })(ev, ico, _varConfirmed);
           break; /* Exit while loop – VAR is handling this event */
         }
         /* ── END VAR SEQUENCE ─────────────────────────────────────────── */
@@ -5578,6 +5597,8 @@
     }
 
     // Después: amarillas normales (2-4), excluyendo jugadores ya expulsados
+    // NO convertimos doble amarilla a roja aquí — todas las rojas vienen de simCtx.preReds
+    // para mantener sincronización con el marcador (que ya se calculó con la penalización)
     function _isExpelled(name) { return expelledA[name] !== undefined || expelledB[name] !== undefined; }
     var numYellow = Math.floor(Math.random() * 3) + 2;
     var yellowsReceived = {};
@@ -5585,21 +5606,12 @@
       var ct = Math.random() < 0.5 ? 'a' : 'b';
       var csq = ct === 'a' ? outA : outB;
       // Filtrar expulsados del pool de candidatos
-      var eligible = csq.filter(function(p){ return !_isExpelled(p[1]); });
+      var eligible = csq.filter(function(p){ return !_isExpelled(p[1]) && !yellowsReceived[p[1]]; });
       if (!eligible.length) continue;
       var cp = eligible[Math.floor(Math.random()*eligible.length)];
       var cmin = Math.floor(Math.random()*80)+5;
-      // Si ya tiene amarilla → doble amarilla (roja), pero solo si no hay roja ya en el partido
-      if (yellowsReceived[cp[1]] && !_redInjected) {
-        events.push({ type:'roja', ico:'🟨🟥', min:cmin, num:cp[0]||'', player:cp[1]||'?', team:ct, reason:'2TA' });
-        var expMapY = ct === 'a' ? expelledA : expelledB;
-        expMapY[cp[1]] = cmin;
-        _redInjected = true;
-      } else if (!yellowsReceived[cp[1]]) {
-        events.push({ type:'amarilla', ico:'🟨', min:cmin, num:cp[0]||'', player:cp[1]||'?', team:ct });
-        yellowsReceived[cp[1]] = true;
-      }
-      // Si ya tiene amarilla pero ya hay roja en el partido, simplemente no generar más tarjeta
+      events.push({ type:'amarilla', ico:'🟨', min:cmin, num:cp[0]||'', player:cp[1]||'?', team:ct });
+      yellowsReceived[cp[1]] = true;
     }
 
     // ── GOLES: minutoss aleatorios + selección ponderada ───────────

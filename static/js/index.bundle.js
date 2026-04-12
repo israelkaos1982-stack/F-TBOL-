@@ -5261,12 +5261,16 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   function _renderPreviaMeta(matchKey, isHvH) {
     var home, away;
     var wrap = document.getElementById('mlw-' + matchKey);
-    if (wrap) {
+    /* PRIORIDAD 1: equipos explícitos pasados vía _ppPreviaTeams
+       (para casos como el click en PREVIA desde la pantalla de resultados IA
+       donde el matchKey es genérico tipo 'lj2m0' y no corresponde al partido real) */
+    if (window._ppPreviaTeams && window._ppPreviaTeams.home && window._ppPreviaTeams.away) {
+      home = window._ppPreviaTeams.home;
+      away = window._ppPreviaTeams.away;
+    } else if (wrap) {
+      /* PRIORIDAD 2: leer del DOM (mlw-{matchKey}) */
       home = ((wrap.querySelectorAll('.ml-team-name')[0]||{}).textContent||'LOCAL').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
       away = ((wrap.querySelectorAll('.ml-team-name')[1]||{}).textContent||'VISITANTE').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
-    } else if (window._ppPreviaTeams) {
-      home = window._ppPreviaTeams.home || 'LOCAL';
-      away = window._ppPreviaTeams.away || 'VISITANTE';
     } else {
       return;
     }
@@ -8681,8 +8685,25 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var sEmoji = sParts[0];
     var sName  = sParts.slice(1).join(' ');
 
+    /* Estadio del equipo LOCAL — prioridad a _ppPreviaTeams si existe */
+    var homeTeamForStadium = '';
+    if (window._ppPreviaTeams && window._ppPreviaTeams.home) {
+      homeTeamForStadium = window._ppPreviaTeams.home;
+    } else if (matchKey) {
+      var wrapEnv = document.getElementById('mlw-' + matchKey);
+      if (wrapEnv) {
+        var nm = wrapEnv.querySelector('.ml-team-name');
+        if (nm) homeTeamForStadium = (nm.textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+      }
+    }
+    var stadiumName = 'eFootball Stadium';
+    if (typeof window.getTeamStadium === 'function') {
+      var s = window.getTeamStadium(homeTeamForStadium);
+      if (s) stadiumName = s;
+    }
+
     envEl.innerHTML =
-      '<div class="pp-env-line"><span>🏟️</span><b>eFootball Stadium</b></div>'
+      '<div class="pp-env-line"><span>🏟️</span><b>' + stadiumName + '</b></div>'
       + '<div class="pp-env-line"><span>🗓️</span><b>' + dayNum + ' de ' + MONTHS_ES[month - 1] + '</b>'
       + '<span style="margin:0 6px;opacity:.4">|</span><span>🏆</span><b>' + compLabel + '</b></div>'
       + '<div class="pp-env-line"><span>' + sEmoji + '</span><b>' + sName + '</b>'

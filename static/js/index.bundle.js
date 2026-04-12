@@ -4733,18 +4733,37 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
 
     var hayBajas = san.length || exp.length || injList.length;
-    // ── SOLO mostrar el overlay si hay algo que informar ──────────
-    if (!hayBajas) {
+    // En modo "previa-share" SIEMPRE mostramos el overlay (aunque no haya bajas),
+    // porque el botón de cerrar es el que dispara el WhatsApp.
+    var forceShow = !!window._ppForceSancionShareMode;
+    if (!hayBajas && !forceShow) {
       if (onConfirm) onConfirm();
       return;
     }
     if (warnEl) warnEl.style.display = hayBajas ? 'block' : 'none';
+
+    /* Cambiar el botón de confirmar al modo "Compartir Partido en WhatsApp" */
+    var okBtn = document.getElementById('sancion-ov-ok');
+    if (okBtn) {
+      if (forceShow) {
+        okBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17" style="vertical-align:middle;margin-right:8px;"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>Compartir Partido en WhatsApp';
+        okBtn.setAttribute('data-share-mode','1');
+      } else {
+        okBtn.textContent = '✓ ENTENDIDO';
+        okBtn.removeAttribute('data-share-mode');
+      }
+    }
 
     document.getElementById('sancion-overlay').classList.add('show');
     window.scrollTo(0, 0);
   };
 
   window._sancionConfirm = function() {
+    var okBtn = document.getElementById('sancion-ov-ok');
+    if (okBtn && okBtn.getAttribute('data-share-mode') === '1') {
+      try { if (typeof window._ppShareWA === 'function') window._ppShareWA(); } catch(_){}
+    }
+    window._ppForceSancionShareMode = false;
     document.getElementById('sancion-overlay').classList.remove('show');
     if (window._sancionCallback) { window._sancionCallback(); window._sancionCallback = null; }
   };
@@ -5250,7 +5269,6 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       durLabel = isHvH ? '10 min' : '8 min';
     }
     var items = [
-      { id:'duracion',ico:'⏱️', lbl:'Duración',      val:durLabel + (isHvH ? ' (H)' : ' (IA)') },
       { id:'balon',   ico:'⚽️', lbl:'Balón',         val:balon }
     ];
     return items;
@@ -5327,7 +5345,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var isHvHCenter = wrap && wrap.classList.contains('hvh');
       var durText = (window._ppDurationMin || (isHvHCenter ? 10 : 8)) + ' min';
       var durHtml = '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#f0c040;text-align:center;margin-top:10px;">DURACIÓN</div>'
-        + '<div id="pp-dur-center" onclick="window._ppEditDuration&&window._ppEditDuration()" style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#fff;text-align:center;cursor:pointer;text-decoration:underline dotted rgba(240,192,64,.4);margin-top:2px;">' + durText + '</div>';
+        + '<div id="pp-dur-center" onclick="window._ppEditDuration&&window._ppEditDuration()" style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#fff;text-align:center;cursor:pointer;margin-top:2px;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.35);border-radius:6px;padding:2px 10px;">' + durText + '<span style="font-size:13px;opacity:.8;">✏️</span></div>';
       var centerHtml = '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 6px;min-width:110px;">'
         + nivelHtml
         + '<div class="pp-vs-mid" style="padding:10px 0 0;font-size:28px;">VS</div>'
@@ -5385,13 +5403,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (!list) return;
     list.innerHTML = items.map(function(item) {
       var checked = _ppChecked[item.id];
-      var editBtn = (item.id === 'duracion')
-        ? '<button class="pp-edit-btn" data-edit="duracion" style="background:rgba(240,192,64,.1);border:1px solid rgba(240,192,64,.35);border-radius:6px;padding:3px 8px;color:#f0c040;font-size:11px;cursor:pointer;margin:0 6px;">✏️ Editar</button>'
-        : '';
+      var icoCls = 'pp-ico';
+      if (item.id === 'balon' && !checked) icoCls += ' pp-ball-bouncing';
       return '<div class="pp-item' + (checked ? ' checked' : '') + '" data-ppid="' + item.id + '">'
-        + '<span class="pp-item-lbl"><span class="pp-ico">' + item.ico + '</span>' + item.lbl + '</span>'
+        + '<span class="pp-item-lbl"><span class="' + icoCls + '">' + item.ico + '</span>' + item.lbl + '</span>'
         + '<span class="pp-item-val">' + item.val + '</span>'
-        + editBtn
         + '<span class="pp-check">' + (checked ? '\u2705' : '\u{1F533}') + '</span>'
         + '</div>';
     }).join('');
@@ -5422,24 +5438,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var btn = document.getElementById('pp-confirm-btn');
     if (!btn) return;
     var done = _checkAllDone();
-    btn.disabled = !done;
-    btn.textContent = done ? '🎮 CONFIRMAR CONFIGURACIÓN' : '🔒 COMPLETA LAS CASILLAS';
-    /* WhatsApp button: requiere Twitch + todas las casillas + estado forma definido */
+    var hasTwitch = !!(window._ppSelectedTwitch && window._ppSelectedTwitch.length);
+    var ok = done && hasTwitch;
+    btn.disabled = !ok;
+    if (ok) btn.textContent = '🎮 CONFIRMAR CONFIGURACIÓN';
+    else if (!done) btn.textContent = '🔒 MARCA EL BALÓN';
+    else btn.textContent = '🔒 SELECCIONA CANAL TWITCH';
+    /* Hide pre-confirm WhatsApp button (now lives in sancion overlay) */
     var waBtn = document.getElementById('pp-wa-btn');
-    var waLbl = document.getElementById('pp-wa-btn-label');
-    if (waBtn) {
-      var hasTwitch = !!(window._ppSelectedTwitch && window._ppSelectedTwitch.length);
-      var formOk = !!(window._ppFormStates && window._ppFormStates.home && window._ppFormStates.away);
-      var ok = done && hasTwitch && formOk;
-      waBtn.disabled = !ok;
-      waBtn.style.opacity = ok ? '' : '0.45';
-      if (waLbl) {
-        if (ok) waLbl.textContent = 'Compartir Partido en WhatsApp';
-        else if (!hasTwitch) waLbl.textContent = '🔒 Selecciona canal de Twitch';
-        else if (!done) waLbl.textContent = '🔒 Completa las casillas';
-        else waLbl.textContent = '🔒 Estado de forma pendiente';
-      }
-    }
+    if (waBtn) waBtn.style.display = 'none';
   }
   /* Expose to global so external handlers can refresh the unlock state */
   window._ppRefreshUnlock = _updateBtn;
@@ -5450,6 +5457,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     _renderPreviaMeta(_ppMatchKey, false);
     _renderList(_ppItems);
     _updateBtn();
+    // Mostrar/ocultar la línea horizontal de estación + clima en pp-env
+    var meteo = document.getElementById('pp-env-meteo');
+    if (meteo) meteo.style.display = _checkAllDone() ? 'inline' : 'none';
     // If all done, reveal venue-bar and ball immediately
     if (_checkAllDone() && _ppMatchKey) {
       var vbar = document.getElementById('venue-bar-' + _ppMatchKey);
@@ -5490,6 +5500,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   window._ppConfirm = function() {
     if (!_checkAllDone()) return;
+    /* Twitch obligatorio para avanzar */
+    if (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length) {
+      try { alert('⚠️ Debes seleccionar un Canal de Twitch antes de continuar.'); } catch(_){}
+      return;
+    }
     // Reveal venue-bar and ball (in case not yet revealed)
     if (_ppMatchKey) {
       if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {
@@ -5504,23 +5519,10 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       if (previaBtn) previaBtn.style.display = 'none';
     }
     document.getElementById('prepartido-overlay').classList.remove('show');
-    // Mostrar overlay de sancionados; al confirmar, revelar el timer
-    // Amistosos: saltar overlay de sanciones (no hay lesionados ni expulsados)
+    // Mostrar SIEMPRE el overlay obligatorio de bajas; al confirmar (= compartir
+    // por WhatsApp), revelar el timer.
     var mk = _ppMatchKey;
-    if (_ppCompKey !== 'amistoso' && typeof window.showSancionOverlay === 'function') {
-      window.showSancionOverlay(_ppCompKey, null, function() {
-        var timerBtn = document.getElementById('ml-timer-' + mk);
-        if (timerBtn) { timerBtn.style.display = ''; timerBtn.disabled = false; }
-        var addBtn = document.getElementById('ml-add-btn-' + mk);
-        if (addBtn) addBtn.style.visibility = '';
-        var actBar = document.getElementById('ml-actions-bar-' + mk);
-        if (actBar) actBar.style.visibility = '';
-        var wrap = document.getElementById('mlw-' + mk);
-        if (wrap) wrap.setAttribute('data-prepartido-ready', '1');
-        // Callback personalizado (ej. abrir partido del calendario)
-        if (window._ppCustomCallback) { var fn=window._ppCustomCallback; window._ppCustomCallback=null; fn(); }
-      });
-    } else {
+    function _afterShare() {
       var timerBtn = document.getElementById('ml-timer-' + mk);
       if (timerBtn) { timerBtn.style.display = ''; timerBtn.disabled = false; }
       var addBtn = document.getElementById('ml-add-btn-' + mk);
@@ -5529,7 +5531,20 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       if (actBar) actBar.style.visibility = '';
       var wrap = document.getElementById('mlw-' + mk);
       if (wrap) wrap.setAttribute('data-prepartido-ready', '1');
-      if (window._ppCustomCallback) { var fn2=window._ppCustomCallback; window._ppCustomCallback=null; fn2(); }
+      if (window._ppCustomCallback) { var fn=window._ppCustomCallback; window._ppCustomCallback=null; fn(); }
+    }
+    /* Marcar el overlay como "modo previa" para que sancion-ov-ok comparta WA */
+    window._ppForceSancionShareMode = true;
+    if (typeof window.showSancionOverlay === 'function') {
+      window.showSancionOverlay(_ppCompKey, null, _afterShare);
+      /* Si por cualquier motivo el overlay se omitió (sin bajas), forzar mostrarlo */
+      var ov = document.getElementById('sancion-overlay');
+      if (ov && !ov.classList.contains('show')) {
+        ov.classList.add('show');
+        window._sancionCallback = _afterShare;
+      }
+    } else {
+      _afterShare();
     }
   };
 
@@ -8703,11 +8718,13 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     }
 
     envEl.innerHTML =
-      '<div class="pp-env-line"><span>🏟️</span><b>' + stadiumName + '</b></div>'
+      '<div class="pp-env-line"><span>🏟️</span><b>' + stadiumName + '</b>'
+      + '<span id="pp-env-meteo" style="display:none;margin-left:8px;">'
+      + '<span style="opacity:.4">·</span> <span>' + sEmoji + '</span> <b>' + sName + '</b>'
+      + ' <span style="opacity:.4">·</span> <b>' + weather + '</b>'
+      + '</span></div>'
       + '<div class="pp-env-line"><span>🗓️</span><b>' + dayNum + ' de ' + MONTHS_ES[month - 1] + '</b>'
-      + '<span style="margin:0 6px;opacity:.4">|</span><span>🏆</span><b>' + compLabel + '</b></div>'
-      + '<div class="pp-env-line"><span>' + sEmoji + '</span><b>' + sName + '</b>'
-      + '<span style="margin:0 6px;opacity:.4">·</span><b>' + weather + '</b></div>';
+      + '<span style="margin:0 6px;opacity:.4">|</span><span>🏆</span><b>' + compLabel + '</b></div>';
 
     // Reset Twitch selector for each new match
     window._ppSelectedTwitch = '';
@@ -9063,5 +9080,48 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     }
     _wiz.matchId=null;
   }
+})();
+/* ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Persistencia de partido en LIVE: renombrar botón Volver ──
+   En cualquier pantalla que contenga un partido activo (HvH o IA-vs-Humano)
+   con el cronómetro corriendo o ya iniciado (data-prepartido-ready="1"),
+   renombramos el botón ".back-btn" para indicar que el partido sigue en
+   directo al volver al menú. Solo se acaba pulsando FINALIZAR o APLAZAR. */
+(function(){
+  function _hasActiveMatch(scope){
+    if (!scope) return false;
+    /* Cualquier match-live-wrap con prepartido-ready o timer running */
+    var any = scope.querySelectorAll('.match-live-wrap[data-prepartido-ready="1"], .match-live-wrap .ml-timer.running');
+    return any && any.length > 0;
+  }
+  function _refreshBackBtns(){
+    var screens = document.querySelectorAll('.screen');
+    screens.forEach(function(scr){
+      var live = _hasActiveMatch(scr);
+      var bb = scr.querySelector('.back-btn');
+      if (!bb) return;
+      if (live) {
+        if (!bb.hasAttribute('data-orig-text')) {
+          bb.setAttribute('data-orig-text', bb.textContent.trim());
+        }
+        bb.setAttribute('data-match-live', '1');
+        bb.textContent = '☰ Menú';
+        bb.title = 'El partido sigue en directo. Solo finaliza con FINALIZAR o APLAZAR.';
+      } else if (bb.hasAttribute('data-orig-text')) {
+        bb.removeAttribute('data-match-live');
+        bb.textContent = bb.getAttribute('data-orig-text');
+        bb.removeAttribute('data-orig-text');
+      }
+    });
+  }
+  /* Refrescar periódicamente y al cargar */
+  window._refreshLiveBackBtns = _refreshBackBtns;
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(_refreshBackBtns, 600); });
+  } else {
+    setTimeout(_refreshBackBtns, 600);
+  }
+  setInterval(_refreshBackBtns, 1500);
 })();
 /* ════════════════════════════════════════════════════════════════════════ */

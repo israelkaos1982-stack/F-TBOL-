@@ -2642,15 +2642,54 @@
     }
     return { gh: Math.floor(Math.random() * 4), ga: Math.floor(Math.random() * 4) };
   }
+  /* ── EXPULSIÓN IA: pre-roll de rojas y penalización del 30% ── */
+  var _RED_CARD_PENALTY = 0.30; /* 30% reducción por expulsión */
+  function _rollRedCards() {
+    var reds = [];
+    /* Amarillas (2-4) con posibilidad de doble amarilla → roja */
+    var numYellow = Math.floor(Math.random() * 3) + 2;
+    var yellows = {};
+    for (var c = 0; c < numYellow; c++) {
+      var ct = Math.random() < 0.5 ? 'home' : 'away';
+      var cmin = Math.floor(Math.random() * 80) + 5;
+      var key = ct + '-' + c;
+      if (yellows[ct]) {
+        reds.push({ side: ct, min: cmin, reason: '2TA' });
+        yellows[ct] = false;
+      } else {
+        yellows[ct] = true;
+      }
+    }
+    /* Roja directa (~15%) */
+    if (Math.random() < 0.15) {
+      var rt = Math.random() < 0.5 ? 'home' : 'away';
+      reds.push({ side: rt, min: Math.floor(Math.random() * 80) + 10, reason: 'directa' });
+    }
+    return reds;
+  }
+  function _applyRedCardPenalty(rating, reds, side) {
+    var penalty = 1;
+    reds.forEach(function(r) {
+      if (r.side !== side) return;
+      var remaining = Math.max(0, (90 - r.min) / 90);
+      penalty *= (1 - _RED_CARD_PENALTY * remaining);
+    });
+    return rating * penalty;
+  }
+
   function _simIAvsIAWithContext(home, away, j) {
     var ctx = _iaContextRatings(home, away, j);
+    /* Pre-roll red cards and adjust ratings BEFORE score generation */
+    var preReds = _rollRedCards();
+    var adjHome = _applyRedCardPenalty(ctx.homeEff.rating, preReds, 'home');
+    var adjAway = _applyRedCardPenalty(ctx.awayEff.rating, preReds, 'away');
     var score;
     if (typeof simSimple === 'function') {
-      score = simSimple(ctx.homeEff.rating, ctx.awayEff.rating);
+      score = simSimple(adjHome, adjAway);
     } else {
       score = { gh: Math.floor(Math.random() * 4), ga: Math.floor(Math.random() * 4) };
     }
-    return { gh: score.gh, ga: score.ga, homeEff: ctx.homeEff, awayEff: ctx.awayEff };
+    return { gh: score.gh, ga: score.ga, homeEff: ctx.homeEff, awayEff: ctx.awayEff, preReds: preReds };
   }
 
   function esEquipoDestacado(t) { return FEATURED_TEAMS.indexOf(normalizarNombreEquipo(t)) !== -1; }
@@ -4938,8 +4977,8 @@
   }
 
   /* ── genMatchEventsEnhanced: goals + yellows + reds + penalties + fouls + og + injuries ── */
-  function genMatchEventsEnhanced(teamA, teamB, goalsA, goalsB) {
-    var base = genMatchEvents(teamA, teamB, goalsA, goalsB);
+  function genMatchEventsEnhanced(teamA, teamB, goalsA, goalsB, simCtx) {
+    var base = genMatchEvents(teamA, teamB, goalsA, goalsB, simCtx);
     var evts = base.events;
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
@@ -5065,7 +5104,7 @@
       ? _simIAvsIAWithContext(home, away, j)
       : _fallbackIAvsIAScore(home, away);
     var simScore = { gh: simCtx.gh, ga: simCtx.ga };
-    var evtData = genMatchEventsEnhanced(home, away, simScore.gh, simScore.ga);
+    var evtData = genMatchEventsEnhanced(home, away, simScore.gh, simScore.ga, simCtx);
     var evts    = evtData.events; /* already sorted by min */
 
     if (scAEl) scAEl.textContent = '0';
@@ -5295,7 +5334,7 @@
     return sq[sq.length - 1];
   }
 
-  function genMatchEvents(teamA, teamB, goalsA, goalsB) {
+  function genMatchEvents(teamA, teamB, goalsA, goalsB, simCtx) {
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
 
@@ -5338,8 +5377,12 @@
 
     // ── TARJETAS: 2-4 amarillas; 2ª al mismo jugador → roja ────────
     // Se generan ANTES que los goles para poder excluir expulsados del marcador
+    // Si hay preReds de la simulación, usarlos para las rojas (ya afectaron al marcador)
     var expelledA = {}; // nombre → minuto de expulsión
     var expelledB = {};
+    var _preReds = (simCtx && simCtx.preReds) ? simCtx.preReds : null;
+    var _preRedUsed = {}; // track which pre-rolled reds we've injected
+
     var numYellow = Math.floor(Math.random() * 3) + 2;
     var yellowsReceived = {};
     for (var c = 0; c < numYellow; c++) {
@@ -5356,8 +5399,18 @@
         yellowsReceived[cp[1]] = true;
       }
     }
-    // Roja directa (~15% por partido)
-    if (Math.random() < 0.15) {
+    // Rojas: usar pre-rolled si disponibles (ya afectaron al rating del marcador),
+    // o generar aleatoriamente si no hay contexto de simulación
+    if (_preReds && _preReds.length) {
+      _preReds.forEach(function(pr) {
+        var rt = pr.side === 'home' ? 'a' : 'b';
+        var rsq = rt === 'a' ? outA : outB;
+        var rp = rsq[Math.floor(Math.random()*rsq.length)];
+        events.push({ type:'roja', ico:'🟥', min:pr.min, num:rp[0]||'', player:rp[1]||'?', team:rt, reason:pr.reason || 'directa' });
+        var expMapPR = rt === 'a' ? expelledA : expelledB;
+        if (expMapPR[rp[1]] === undefined) expMapPR[rp[1]] = pr.min;
+      });
+    } else if (Math.random() < 0.15) {
       var rt = Math.random() < 0.5 ? 'a' : 'b';
       var rsq = rt === 'a' ? outA : outB;
       var rp = rsq[Math.floor(Math.random()*rsq.length)];
@@ -5426,7 +5479,7 @@
       var simScore = (typeof _simIAvsIAWithContext === 'function')
         ? _simIAvsIAWithContext(m[0], m[1], j)
         : _fallbackIAvsIAScore(m[0], m[1]);
-      var evtData = genMatchEventsEnhanced(m[0], m[1], simScore.gh, simScore.ga);
+      var evtData = genMatchEventsEnhanced(m[0], m[1], simScore.gh, simScore.ga, simScore);
       /* Recalculate actual score from all events (pen-gol, falta-gol, propia add/subtract goals) */
       var actualGh = 0, actualGa = 0;
       evtData.events.forEach(function(ev) {

@@ -4516,7 +4516,7 @@
     /* añadir al acta */
     var li = document.createElement('div');
     li.className = 'ml-evt-item';
-    var pLabel = ((num && String(num).trim()) ? (num + '. ') : '') + (playerName || 'Jugador');
+    var pLabel = playerName || 'Jugador';
     var gmDisplayName = evt.type === 'mvp' ? ('MVP — ' + pLabel) : pLabel;
     li.innerHTML = '<span class="ml-evt-min">' + min + "'</span>"
       + '<span class="ml-evt-ico">' + ico + '</span>'
@@ -4524,7 +4524,8 @@
       + '<span class="ml-evt-team">' + teamName + '</span>';
     var list = document.getElementById('gm-acta-list');
     list.appendChild(li);
-    list.scrollTop = list.scrollHeight;
+    var modal = document.getElementById('gm-modal');
+    if (modal) modal.scrollTop = modal.scrollHeight;
     if (_gm.timerWasRunning && !_gm.finished && !_gm.inDescanso && _gm.kickoffDone) { gmStartTimer(); }
     _gm.timerWasRunning = false;
     var empty = list.querySelector('.ml-acta-empty');
@@ -5877,7 +5878,7 @@
   display: flex; flex-direction: column; overflow-y: auto;
 }
 #gm-inner {
-  display: flex; flex-direction: column; flex: 1; width: 100%; overflow: hidden;
+  display: flex; flex-direction: column; width: 100%; overflow: visible;
 }
 #gm-venue {
   display: flex; align-items: center; justify-content: space-between;
@@ -6349,7 +6350,7 @@
 .ml-action-add:disabled,.ml-action-end:disabled{opacity:0.35;cursor:default;filter:none;}
 /* ── Eventos del acta ────────────────────────────────────────── */
 .ml-evt-item{padding-left:10px!important;}
-.ml-evt-team{display:none!important;}
+.ml-evt-team{font-size:11px;color:rgba(255,255,255,.45);font-family:"Rajdhani",sans-serif;white-space:nowrap;}
 </style>
 <script>
 /* ── Parches post-bundle: balón, estadio, duración, Twitch, botones ── */

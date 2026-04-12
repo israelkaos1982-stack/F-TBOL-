@@ -2976,13 +2976,28 @@
   function _buildTwitchBtn(mk) {
     var chs = ['kaotiko8219','Serraxxxx','budygamer1981','toni_ayuso','vk54in2'];
     var drop = chs.map(function(c){
-      return '<a href="https://twitch.tv/'+c+'" target="_blank" style="display:block;padding:7px 12px;color:#a97fff;font-size:11px;font-weight:600;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.06);">📺 '+c+'</a>';
+      return '<div onclick="window._selectTwitchChannel(\''+c+'\',\''+mk+'\');event.stopPropagation();" style="display:block;padding:7px 12px;color:#a97fff;font-size:11px;font-weight:600;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.06);transition:background .15s;" onmousedown="this.style.background=\'rgba(140,80,220,.2)\'" onmouseup="this.style.background=\'\'">📺 '+c+'</div>';
     }).join('');
     return '<div style="position:relative;">'
-      +'<button onclick="(function(d){d.style.display=d.style.display===\'none\'?\'block\':\'none\';})(document.getElementById(\'tw-drop-'+mk+'\'))" style="background:rgba(100,60,180,.3);border:1px solid rgba(140,80,220,.35);color:#c8a0ff;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;font-family:Oswald,sans-serif;letter-spacing:1px;cursor:pointer;">📺 TWITCH</button>'
+      +'<button id="tw-btn-'+mk+'" onclick="(function(d){d.style.display=d.style.display===\'none\'?\'block\':\'none\';})(document.getElementById(\'tw-drop-'+mk+'\'))" style="background:rgba(100,60,180,.3);border:1px solid rgba(140,80,220,.35);color:#c8a0ff;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;font-family:Oswald,sans-serif;letter-spacing:1px;cursor:pointer;">📺 TWITCH</button>'
       +'<div id="tw-drop-'+mk+'" style="display:none;position:absolute;top:100%;left:0;min-width:160px;background:rgba(10,5,20,.98);border:1px solid rgba(140,80,220,.3);border-radius:6px;z-index:200;overflow:hidden;">'
       +drop+'</div></div>';
   }
+  window._selectTwitchChannel = function(channel, mk) {
+    window._ppSelectedTwitch = channel;
+    var drop = document.getElementById('tw-drop-' + mk);
+    if (drop) drop.style.display = 'none';
+    var btn = document.getElementById('tw-btn-' + mk);
+    if (btn) {
+      btn.textContent = '📺 ' + channel;
+      btn.style.background = 'rgba(80,180,80,.25)';
+      btn.style.borderColor = 'rgba(80,200,80,.5)';
+      btn.style.color = '#80ff80';
+    }
+    /* Sincronizar con el select de la previa si existe */
+    var sel = document.getElementById('pp-twitch-select');
+    if (sel) sel.value = channel;
+  };
 
   function buildMatchCard(j, home, away, isHvH, mk) {
     var hu = home.toUpperCase();

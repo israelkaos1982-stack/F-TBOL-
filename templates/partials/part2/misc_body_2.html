@@ -5895,15 +5895,19 @@
 
       var done  = matches.length;
       var total = matches.length + pending.length;
-      var allIA  = done === total;
+      var allIA  = done === total && total > 0;
       var statusLabel = allIA
         ? '<span style="margin-left:auto;font-size:11px;color:rgba(60,210,120,.6);">&#10003; ' + done + '/' + total + '</span>'
         : (done > 0
           ? '<span style="margin-left:auto;font-size:11px;color:#f0c040;">&#9203; ' + done + '/' + total + '</span>'
           : '<span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/' + total + '</span>');
+      /* Completada → estilo dorado atenuado; pendiente → rojo llamativo */
+      var btnStyle = allIA
+        ? 'background:linear-gradient(135deg,#0f0f0a,#1f1c0a,#2a2410,#1f1c0a,#0f0f0a);border-left:3px solid #6b5410;opacity:0.75;'
+        : 'background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#2a0005,#6a0010,#a00018,#6a0010,#2a0005);border-left:3px solid #ff2244;';
       html += '<div class="jblock"><button class="jbtn" onclick="window.openIAJornada(' + j + ')"'
-        + ' style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#2a0005,#6a0010,#a00018,#6a0010,#2a0005);border-left:3px solid #ff2244;">'
-        + '<img class="jbtn-ico" src="/static/img/logos/spain_la-liga.football-logos.cc.svg" alt="EA"> <b>Jornada ' + j + '</b>'
+        + ' style="' + btnStyle + '">'
+        + '<img class="jbtn-ico" src="/static/img/logos/spain_la-liga.football-logos.cc.svg" alt="EA"' + (allIA ? ' style="opacity:0.6"' : '') + '> <b' + (allIA ? ' style="color:rgba(255,255,255,0.55)"' : '') + '>Jornada ' + j + '</b>'
         + statusLabel
         + '</button></div>';
     }

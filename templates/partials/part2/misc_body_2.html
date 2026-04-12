@@ -2861,23 +2861,30 @@
               : ev.type === 'lesion'     ? (ev.lesIco || '🩹') : '•';
       if (ev.dbl) ico = '🟨🟥';
       var varSfx = '';
-      if (ev.var) {
+      var rowBg = '';
+      var nameColor = '#fff';
+      if (ev._varAnulado) {
+        /* ANULADA por VAR: texto en rojo, fondo rojizo, nombre atenuado, SIN tachado */
+        varSfx = ' <span style="font-size:10px;font-weight:700;color:#ff5555;letter-spacing:.5px;">⛔ ANULADA POR 📺 VAR</span>';
+        rowBg = 'background:rgba(255,80,80,.08);';
+        nameColor = 'rgba(255,255,255,.55)';
+      } else if (ev.var) {
         if (['gol','pen-gol','falta-gol','propia'].indexOf(ev.type) !== -1)
           varSfx = ' <span style="color:#f0c040;font-size:10px;">(Confirmado por 📺 VAR)</span>';
         else if (['pen-prov','pen-parado','pen-fallo'].indexOf(ev.type) !== -1)
           varSfx = ' <span style="color:#f0c040;font-size:10px;">(Tras revisión 📺 VAR)</span>';
         else if (['amarilla','roja'].indexOf(ev.type) !== -1 || ev.dbl)
           varSfx = ' <span style="color:#f0c040;font-size:10px;">(Validada por 📺 VAR)</span>';
+        rowBg = 'background:rgba(240,192,64,.04);';
       }
       var lesExtraM = (ev.type === 'lesion' && ev.lesDesc)
         ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);">(' + escapeHtml(ev.lesDesc) + ' · ' + ev.lesPartidos + ' ptdos)</span>'
         : '';
       var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);'
-        + (ev.var ? 'background:rgba(240,192,64,.04);' : '');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);' + rowBg;
       row.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
         + '<span style="font-size:14px;">' + ico + '</span>'
-        + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + escapeHtml(ev.player || '') + lesExtraM + varSfx + '</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:' + nameColor + ';flex:1;">' + escapeHtml(ev.player || '') + lesExtraM + varSfx + '</span>'
         + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + escapeHtml(ev.team === 'a' ? home : away) + '</span>';
       body.appendChild(row);
     });
@@ -5756,23 +5763,18 @@
                   else if (['amarilla','roja'].indexOf(capturedEv.type) !== -1 || capturedEv.dbl)
                     varSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Validada por 📺 VAR)</span>';
                 } else {
-                  if (['gol','pen-gol','falta-gol','propia'].indexOf(capturedEv.type) !== -1)
-                    varSfx = ' <span style="font-size:10px;color:#ff5555;text-decoration:line-through;">(✗ ANULADO por 📺 VAR · fuera de juego)</span>';
-                  else if (['pen-prov','pen-parado','pen-fallo'].indexOf(capturedEv.type) !== -1)
-                    varSfx = ' <span style="font-size:10px;color:#ff5555;text-decoration:line-through;">(✗ ANULADO por 📺 VAR · no hay penalti)</span>';
-                  else if (['amarilla','roja'].indexOf(capturedEv.type) !== -1 || capturedEv.dbl)
-                    varSfx = ' <span style="font-size:10px;color:#ff5555;text-decoration:line-through;">(✗ ANULADA por 📺 VAR)</span>';
+                  /* ANULADA: solo texto, SIN line-through */
+                  varSfx = ' <span style="font-size:10px;font-weight:700;color:#ff5555;letter-spacing:.5px;">⛔ ANULADA POR 📺 VAR</span>';
                 }
                 var lesExtraV = (capturedEv.type === 'lesion' && capturedEv.lesDesc)
                   ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + capturedEv.lesDesc + ' · ' + capturedEv.lesPartidos + ' ptdos)</span>'
                   : '';
                 var varRow = document.createElement('div');
-                var bgColor = varConfirmed ? 'rgba(80,200,100,.06)' : 'rgba(255,80,80,.06)';
-                var textDecoration = varConfirmed ? '' : 'text-decoration:line-through;opacity:.6;';
+                var bgColor = varConfirmed ? 'rgba(80,200,100,.06)' : 'rgba(255,80,80,.08)';
                 varRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);background:' + bgColor + ';';
                 varRow.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + capturedEv.min + '\'</span>'
-                  + '<span style="font-size:14px;' + textDecoration + '">' + capturedIco + '</span>'
-                  + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;' + textDecoration + '">' + capturedEv.player + lesExtraV + varSfx + '</span>'
+                  + '<span style="font-size:14px;">' + capturedIco + '</span>'
+                  + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + capturedEv.player + lesExtraV + varSfx + '</span>'
                   + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (capturedEv.team === 'a' ? home : away) + '</span>';
                 actaEl.appendChild(varRow);
               }
@@ -5860,13 +5862,16 @@
             partidos: ev.lesPartidos
           });
         });
-        /* Save result */
+        /* Save result. Conservamos los eventos anulados con _varAnulado=true para
+           que el acta los pueda mostrar como "ANULADA POR VAR", pero los excluimos
+           del cálculo de estadísticas (player stats, tarjetas, goleadores). */
         var results = loadResults();
         var key = rKey(j, home, away);
         results[key] = { gh: scA, ga: scB, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
         saveResults(results);
         if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
-          window.registrarLigaPlayerStats(key, home, away, evtData.events, evtData.mvp, evtData.mvpTeam);
+          var statsEvents = evtData.events.filter(function(e){ return !e._varAnulado; });
+          window.registrarLigaPlayerStats(key, home, away, statsEvents, evtData.mvp, evtData.mvpTeam);
         }
         actualizarDom('l-j' + j, home, away, scA, scB);
         if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
@@ -6432,10 +6437,20 @@
       var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'propia' ? '&#9917;&#128683;' : ev.type === 'falta-gol' ? '&#9917;&#127919;' : ev.type === 'pen-gol' ? '&#9917;&#129349;' : ev.type === 'pen-fallo' ? '&#10060;&#129349;' : ev.type === 'pen-prov' ? '&#129318;&#129349;' : ev.type === 'pen-parado' ? '&#128400;&#129349;' : ev.type === 'amarilla' ? '&#129000;' : ev.type === 'd-amarilla' ? '&#129000;&#128997;' : ev.type === 'roja' ? '&#128997;' : ev.type === 'lesion' ? '&#129657;' : '&#11088;';
       var lesColor = ev.type === 'lesion' ? (ev.lesGrado === 3 ? '#ff4444' : ev.lesGrado === 2 ? '#ff8c00' : '#ffd700') : '#fff';
       var lesExtra = (ev.type === 'lesion' && ev.lesDesc) ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + 'P)</span>' : '';
-      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.04);">'
+      /* Eventos anulados por VAR: mismo orden y jugador, pero con texto "ANULADA POR VAR" en rojo
+         (sin tachado), fondo rojizo tenue y nombre atenuado para que se distingan a simple vista. */
+      var varAnulSfx = '';
+      var rowBg = '';
+      var nameColor = lesColor;
+      if (ev._varAnulado) {
+        varAnulSfx = ' <span style="font-size:10px;font-weight:700;color:#ff5555;letter-spacing:.5px;">⛔ ANULADA POR &#128250; VAR</span>';
+        rowBg = 'background:rgba(255,80,80,.07);';
+        nameColor = 'rgba(255,255,255,.55)';
+      }
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid rgba(255,255,255,.04);' + rowBg + '">'
         + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
         + '<span style="font-size:14px;">' + ico + '</span>'
-        + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;color:' + lesColor + ';flex:1;">' + ev.player + lesExtra + '</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;color:' + nameColor + ';flex:1;">' + ev.player + lesExtra + varAnulSfx + '</span>'
         + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team === 'a' ? m.home : m.away) + '</span>'
         + '</div>';
     });

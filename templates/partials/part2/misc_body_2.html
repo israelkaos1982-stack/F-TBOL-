@@ -6659,9 +6659,7 @@
       if (typeof _oTw === 'function' && !_oTw._twPatched) {
         window._ppTwitchChange = function(val) {
           _oTw.call(this, val);
-          if (val) {
-            try { window.open('https://twitch.tv/' + val, '_blank', 'noopener'); } catch(_){}
-          }
+          /* No redirect — just save the selected channel */
         };
         window._ppTwitchChange._twPatched = true;
       }

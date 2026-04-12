@@ -4930,9 +4930,52 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var alertsHtml = '';
       var bajas = window.BAJA_STORE || {};
       var lesionesStore = window.LESION_STORE || {};
-      var sancionados = Object.keys(bajas).filter(function(n){ var b=bajas[n]; return b && (b.tipo||b)==='sancion'; });
-      var expulsados   = Object.keys(bajas).filter(function(n){ var b=bajas[n]; return b && (b.tipo||b)==='expulsion'; });
-      var lesionados   = Object.keys(lesionesStore);
+      var sancionStore = window.SANCION_STORE || {};
+      /* Normalize team names for comparison (uppercase from DOM vs canonical) */
+      function _normTeam(s) {
+        return String(s||'').trim().toLowerCase()
+          .replace(/\s+cf$|\s+fc$|\s+ud$/i,'')
+          .replace(/^real\s+/,'real ')
+          .replace(/^(fc|cf|ud)\s+/,'');
+      }
+      var normHome = _normTeam(home);
+      var normAway = _normTeam(away);
+      function _teamMatches(teamName) {
+        var nt = _normTeam(teamName);
+        return nt === normHome || nt === normAway
+          || nt.indexOf(normHome) !== -1 || normHome.indexOf(nt) !== -1
+          || nt.indexOf(normAway) !== -1 || normAway.indexOf(nt) !== -1;
+      }
+      function _belongsToMatch(playerName) {
+        /* Check LESION_STORE.equipo */
+        var les = lesionesStore[playerName];
+        if (les && les.equipo && _teamMatches(les.equipo)) return true;
+        /* Check SANCION_STORE across all comps */
+        for (var comp in sancionStore) {
+          if (!sancionStore.hasOwnProperty(comp)) continue;
+          var arr = sancionStore[comp] || [];
+          for (var i = 0; i < arr.length; i++) {
+            if (arr[i] && arr[i].name === playerName && _teamMatches(arr[i].team)) return true;
+          }
+        }
+        /* Check SQUAD_REGISTRY as fallback */
+        if (window.SQUAD_REGISTRY) {
+          var candidateTeams = Object.keys(window.SQUAD_REGISTRY).filter(_teamMatches);
+          for (var t = 0; t < candidateTeams.length; t++) {
+            var sq = window.SQUAD_REGISTRY[candidateTeams[t]] || [];
+            for (var p = 0; p < sq.length; p++) {
+              var pl = sq[p];
+              if (!pl || pl.h) continue;
+              if (Array.isArray(pl) && pl[1] === playerName) return true;
+              if (pl && pl.nombre === playerName) return true;
+            }
+          }
+        }
+        return false;
+      }
+      var sancionados = Object.keys(bajas).filter(function(n){ var b=bajas[n]; return b && (b.tipo||b)==='sancion' && _belongsToMatch(n); });
+      var expulsados   = Object.keys(bajas).filter(function(n){ var b=bajas[n]; return b && (b.tipo||b)==='expulsion' && _belongsToMatch(n); });
+      var lesionados   = Object.keys(lesionesStore).filter(function(n){ return _belongsToMatch(n); });
       sancionados.forEach(function(n) {
         var b=bajas[n]; var pts=(b&&b.liga)?b.liga+'P Liga':'';
         alertsHtml += '<div class="pp-alert-row pp-alert-yel">🟨 SANCIONADO: '+n+(pts?' · '+pts:'')+'</div>';

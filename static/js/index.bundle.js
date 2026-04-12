@@ -5012,7 +5012,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'ucl':'Champions League','ucl-fin':'Champions League · Final',
       'uel':'Europa League','uel-fin':'Europa League · Final',
       'uecl':'Conference League','uecl-fin':'Conference League · Final',
-      'superliga':'Superliga','inter':'Copa Intercontinental','inter-fin':'Intercontinental · Final'
+      'superliga':'Superliga','inter':'Copa Intercontinental','inter-fin':'Intercontinental · Final',
+      'amistoso':'Partido Amistoso'
     };
 
     var sub = document.getElementById('pp-subtitle');
@@ -5042,8 +5043,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
     document.getElementById('prepartido-overlay').classList.remove('show');
     // Mostrar overlay de sancionados; al confirmar, revelar el timer
+    // Amistosos: saltar overlay de sanciones (no hay lesionados ni expulsados)
     var mk = _ppMatchKey;
-    if (typeof window.showSancionOverlay === 'function') {
+    if (_ppCompKey !== 'amistoso' && typeof window.showSancionOverlay === 'function') {
       window.showSancionOverlay(_ppCompKey, null, function() {
         var timerBtn = document.getElementById('ml-timer-' + mk);
         if (timerBtn) { timerBtn.style.display = ''; timerBtn.disabled = false; }

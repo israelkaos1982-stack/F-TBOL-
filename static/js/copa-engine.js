@@ -450,22 +450,7 @@
       return k - 1;
     }
 
-    var strengthA = ratingA * 1.10; // bonus local del 10%
-    var strengthB = ratingB;
-    var shareA = Math.max(0.22, Math.min(0.78, strengthA / Math.max(1, strengthA + strengthB)));
-    var baseTotal = 1.75 + (((ratingA + ratingB) / 2) - 74) * 0.05;
-    var expectedA = Math.max(0.15, Math.min(3.8, baseTotal * shareA + Math.max(0, ratingA - ratingB) * 0.018 + 0.10));
-    var expectedB = Math.max(0.10, Math.min(3.3, baseTotal * (1 - shareA) + Math.max(0, ratingB - ratingA) * 0.018));
-    var maxGoals = (ratingA >= 88 || ratingB >= 88) ? 7 : (ratingA >= 84 || ratingB >= 84) ? 6 : 5;
-    var gl = Math.min(maxGoals, poisson(expectedA));
-    var gv = Math.min(maxGoals, poisson(expectedB));
-
-    var goalsOrder = [];
-    for (var ga = 0; ga < gl; ga++) goalsOrder.push('a');
-    for (var gb = 0; gb < gv; gb++) goalsOrder.push('b');
-    goalsOrder.sort(function () { return Math.random() - 0.5; });
-
-    // Generate card events first so expelled players can be excluded from scoring
+    // Generate card events FIRST so expelled players affect score calculation
     var cardEvts = maybeCardEvents(activeA, activeB, ft90);
     cardEvts.forEach(function (ev) {
       ev.realTeam = ev.team === 'a' ? local : visitante;
@@ -483,6 +468,35 @@
         }
       }
     });
+
+    /* ── EXPULSIÓN: penalizar 30% del rating por cada roja ── */
+    var RED_PENALTY = 0.30;
+    var adjRatingA = ratingA, adjRatingB = ratingB;
+    Object.keys(expelledA).forEach(function(name) {
+      var redMin = expelledA[name];
+      var remaining = Math.max(0, (90 - redMin) / 90);
+      adjRatingA *= (1 - RED_PENALTY * remaining);
+    });
+    Object.keys(expelledB).forEach(function(name) {
+      var redMin = expelledB[name];
+      var remaining = Math.max(0, (90 - redMin) / 90);
+      adjRatingB *= (1 - RED_PENALTY * remaining);
+    });
+
+    var strengthA = adjRatingA * 1.10; // bonus local del 10%
+    var strengthB = adjRatingB;
+    var shareA = Math.max(0.22, Math.min(0.78, strengthA / Math.max(1, strengthA + strengthB)));
+    var baseTotal = 1.75 + (((adjRatingA + adjRatingB) / 2) - 74) * 0.05;
+    var expectedA = Math.max(0.15, Math.min(3.8, baseTotal * shareA + Math.max(0, adjRatingA - adjRatingB) * 0.018 + 0.10));
+    var expectedB = Math.max(0.10, Math.min(3.3, baseTotal * (1 - shareA) + Math.max(0, adjRatingB - adjRatingA) * 0.018));
+    var maxGoals = (adjRatingA >= 88 || adjRatingB >= 88) ? 7 : (adjRatingA >= 84 || adjRatingB >= 84) ? 6 : 5;
+    var gl = Math.min(maxGoals, poisson(expectedA));
+    var gv = Math.min(maxGoals, poisson(expectedB));
+
+    var goalsOrder = [];
+    for (var ga = 0; ga < gl; ga++) goalsOrder.push('a');
+    for (var gb = 0; gb < gv; gb++) goalsOrder.push('b');
+    goalsOrder.sort(function () { return Math.random() - 0.5; });
 
     goalsOrder.forEach(function (team) {
       var min = 4 + Math.floor(Math.random() * 84);

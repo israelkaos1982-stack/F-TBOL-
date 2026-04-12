@@ -4908,17 +4908,27 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   };
 
   /* Prompt PIN 747 antes de cambiar el estado de forma */
+  /* Usa el PIN modal existente (funciona en móvil) en lugar de prompt() */
   window._ppRequestFormAdmin = function(side) {
     if (window._ppFormAdminUnlocked) {
       window._ppOpenFormDropdown(side);
       return;
     }
-    var pin = prompt('🔒 Introduce código de administrador para modificar el estado de forma:');
-    if (pin === '747') {
-      window._ppFormAdminUnlocked = true;
-      window._ppOpenFormDropdown(side);
-    } else if (pin !== null) {
-      alert('❌ Código incorrecto');
+    /* Usar el sistema pG global que muestra el modal numérico */
+    if (typeof window.pG === 'function') {
+      window.pG(function() {
+        window._ppFormAdminUnlocked = true;
+        window._ppOpenFormDropdown(side);
+      });
+    } else {
+      /* Fallback a prompt() si pG no está disponible */
+      var pin = prompt('🔒 Introduce código de administrador para modificar el estado de forma:');
+      if (pin === '747') {
+        window._ppFormAdminUnlocked = true;
+        window._ppOpenFormDropdown(side);
+      } else if (pin !== null) {
+        alert('❌ Código incorrecto');
+      }
     }
   };
 

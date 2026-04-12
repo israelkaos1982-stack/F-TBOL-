@@ -4466,6 +4466,84 @@
     if(_genActiveMk){ var _cSt=_mlSt(_genActiveMk); if(_cSt&&_cSt._pausedForEvent){ _cSt._pausedForEvent=false; _cSt.timerRunning=true; _mlStartIntervalGen(_genActiveMk); } }
   };
 
+  /* Launch penalty wizard from the generic event panel */
+  window.genEvPenWizard = function() {
+    if (!_genActiveMk) return;
+    var ov=document.getElementById('gen-ev-ov'); if(ov)ov.classList.remove('show');
+    var st=_mlSt(_genActiveMk);
+    var min=Math.min(st.etDone?120:90,Math.floor(st.timerSec/60));
+    if (typeof window.mlPenWizStart === 'function') {
+      window.mlPenWizStart(_genActiveMk, min);
+    }
+  };
+
+  /* Commit handler for dynamic matches — called by the penalty wizard */
+  window.mlPenWizardCommitGen = function(wiz) {
+    var mk = wiz.matchId;
+    var st = _mlSt(mk);
+    if (!st) return;
+    var min = wiz.minute || Math.min(st.etDone?120:90, Math.floor(st.timerSec/60));
+    var list = document.getElementById('ml-acta-list-'+mk);
+    var emk = mk.replace(/'/g,"\\'");
+    var attackSide = wiz.attackTeam;  /* 'a' = home, 'b' = away (equipo que recibe la falta) */
+    var defendSide = wiz.defendTeam;  /* equipo que comete la falta */
+    var attackTeamName = attackSide === 'a' ? st.home : st.away;
+    var defendTeamName = defendSide === 'a' ? st.home : st.away;
+    var baseId = Date.now();
+    function _pushEvent(type, team, num, name, ico) {
+      var id = baseId++;
+      st.events.push({ type:type, label:type, team:team, num:num||'', name:name||'', min:min, ico:ico, id:id });
+      if (list) {
+        var emp=list.querySelector('.ml-acta-empty'); if(emp)emp.remove();
+        var teamLabel = team==='a' ? st.home : st.away;
+        var _shortTeam = teamLabel.length > 16 ? teamLabel.substring(0,14)+'\u2026' : teamLabel;
+        var row = document.createElement('div');
+        row.className='ml-evt-item';
+        row.setAttribute('data-team',team);
+        row.setAttribute('data-type',type);
+        row.setAttribute('data-id',id);
+        row.innerHTML = '<span class="ml-evt-min">'+min+"'</span>"
+          +'<span class="ml-evt-ico">'+ico+'</span>'
+          +'<span class="ml-evt-name">'+(num&&num!=='0'?num+'. ':'')+(name||'')+'</span>'
+          +'<span class="ml-evt-team">'+escapeHtml(_shortTeam)+'</span>'
+          +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\','+id+')" title="Editar">🖍</button>'
+          +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\']('+id+')">✕</button>';
+        var items = list.querySelectorAll('.ml-evt-item');
+        var inserted = false;
+        for (var i = 0; i < items.length; i++) {
+          var em = parseInt((items[i].querySelector('.ml-evt-min')||{}).textContent||'999');
+          if (min < em) { list.insertBefore(row, items[i]); inserted=true; break; }
+        }
+        if (!inserted) list.appendChild(row);
+      }
+    }
+    /* 1. Pen. provocado (equipo atacante — el jugador que recibió la falta) */
+    if (wiz.provocador) {
+      _pushEvent('pen-prov', attackSide, wiz.provocador.num, wiz.provocador.name, '🤦🥅');
+    }
+    /* 2. Tarjeta al infractor (si hubo sanción) */
+    if (wiz.sancion && wiz.infractor) {
+      var cardIco = wiz.sancion==='amarilla' ? '🟨' : '🟥';
+      _pushEvent(wiz.sancion, defendSide, wiz.infractor.num, wiz.infractor.name, cardIco);
+    }
+    /* 3. Resultado del penalti */
+    if (wiz.resultado === 'gol' && wiz.tirador) {
+      _pushEvent('pen-gol', attackSide, wiz.tirador.num, wiz.tirador.name, '⚽🥅');
+      st.sc[attackSide]++;
+      var scA=document.getElementById('sc-'+mk+'-a'); if(scA)scA.textContent=st.sc.a;
+      var scB=document.getElementById('sc-'+mk+'-b'); if(scB)scB.textContent=st.sc.b;
+      if (typeof _mlShowEventFlash === 'function') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
+    } else if (wiz.resultado === 'fallo') {
+      if (wiz.falladoTipo === 'parado' && wiz.portero) {
+        _pushEvent('pen-parado', defendSide, wiz.portero.num, wiz.portero.name, '🖐🥅');
+      } else if (wiz.tirador) {
+        _pushEvent('pen-fallo', attackSide, wiz.tirador.num, wiz.tirador.name, '❌🥅');
+      }
+    }
+    /* Resume timer if it was paused */
+    if (st._pausedForEvent) { st._pausedForEvent=false; st.timerRunning=true; _mlStartIntervalGen(mk); }
+  };
+
   /* ── MVP OBLIGATORIO GENÉRICO ───────────────────────── */
   var _genMvpCallback = null;
   window.showMvpForceGen = function(mk, teamA, teamB, sqA, sqB, scoreA, scoreB, onConfirm) {
@@ -6740,10 +6818,7 @@
     <div class="ml-ev-ov-card c-gol" onclick="genEvPick('Gol','gol')"><span class="ml-ev-ov-ico">⚽</span><span class="ml-ev-ov-lbl">Gol</span></div>
     <div class="ml-ev-ov-card c-gol" onclick="genEvPick('Autogol','propia')"><span class="ml-ev-ov-ico">🚫</span><span class="ml-ev-ov-lbl">Autogol</span></div>
     <div class="ml-ev-ov-card c-gol" onclick="genEvPick('Gol de Falta','falta-gol')"><span class="ml-ev-ov-ico">🎯</span><span class="ml-ev-ov-lbl">Gol de Falta</span></div>
-    <div class="ml-ev-ov-card c-pen" onclick="genEvPick('Penalti Gol','pen-gol')"><span class="ml-ev-ov-ico">🥅</span><span class="ml-ev-ov-lbl">Penalti Gol</span></div>
-    <div class="ml-ev-ov-card c-pen" onclick="genEvPick('Penalti Fallado','pen-fallo')"><span class="ml-ev-ov-ico">❌</span><span class="ml-ev-ov-lbl">Penalti Fallado</span></div>
-    <div class="ml-ev-ov-card c-pen" onclick="genEvPick('Pen. Provocado','pen-prov')"><span class="ml-ev-ov-ico">🤦</span><span class="ml-ev-ov-lbl">Pen. Provocado</span></div>
-    <div class="ml-ev-ov-card c-pen" onclick="genEvPick('Penalti Parado','pen-parado')"><span class="ml-ev-ov-ico">🖐</span><span class="ml-ev-ov-lbl">Penalti Parado</span></div>
+    <div class="ml-ev-ov-card c-pen" onclick="genEvPenWizard()"><span class="ml-ev-ov-ico">🥅</span><span class="ml-ev-ov-lbl">Penalti</span></div>
     <div class="ml-ev-ov-card c-yel" onclick="genEvPick('Tarjeta Amarilla','amarilla')"><span class="ml-ev-ov-ico">🟨</span><span class="ml-ev-ov-lbl">Tarjeta Amarilla</span></div>
     <div class="ml-ev-ov-card c-yel" onclick="genEvPick('Doble Amarilla','d-amarilla')"><span class="ml-ev-ov-ico">🟨🟥</span><span class="ml-ev-ov-lbl">Doble Amarilla</span></div>
     <div class="ml-ev-ov-card c-red" onclick="genEvPick('Roja Directa','roja')"><span class="ml-ev-ov-ico">🟥</span><span class="ml-ev-ov-lbl">Roja Directa</span></div>

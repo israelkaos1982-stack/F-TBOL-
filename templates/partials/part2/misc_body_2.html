@@ -5057,6 +5057,26 @@
     document.getElementById('gm-team-pick').style.display = 'none';
     if (!_gm.isFriendly) {
       guardarResultado(_gm.j, _gm.home, _gm.away, _gm.sc.a, _gm.sc.b);
+    } else {
+      /* Guardar el amistoso en el historial (igual que _mlFinishMatchGen) */
+      try {
+        var _mvpEvt = _gm.events.find(function(e){ return e && e.type === 'mvp'; });
+        var _mvpName = _mvpEvt ? (_mvpEvt.player || _mvpEvt.name || '') : '';
+        var _hist = JSON.parse(localStorage.getItem('friendlyMatchHistory') || '[]');
+        _hist.unshift({
+          date: new Date().toISOString(),
+          home: _gm.home, away: _gm.away,
+          scoreA: _gm.sc.a, scoreB: _gm.sc.b,
+          mvp: _mvpName,
+          events: (_gm.events || []).filter(function(e){ return e && e.type !== 'pen-result'; }).map(function(e){
+            var _nm = e.player || e.name || '';
+            return {type:e.type, min:e.min, player:(e.num && e.num !== '0' ? e.num + '. ' : '') + _nm, team:e.team, ico:e.ico};
+          })
+        });
+        if (_hist.length > 50) _hist = _hist.slice(0, 50);
+        localStorage.setItem('friendlyMatchHistory', JSON.stringify(_hist));
+        if (typeof window._amsRenderHistory === 'function') window._amsRenderHistory();
+      } catch(_e){}
     }
 
     /* Rellenar acta de la tarjeta genérica (ml-acta-list-{mk}) con los eventos del gm */
@@ -5313,6 +5333,132 @@
     if (aplazarRow) aplazarRow.style.display = 'none';
     gmRenderTimer();
     document.getElementById('gm-modal').style.display = '';
+
+    /* ── AUTO-SIMULACIÓN IA vs IA en AMISTOSOS ────────────────────────
+       Si ambos equipos son IA y es un amistoso, generamos al instante
+       todos los eventos del partido (goles, tarjetas, lesiones, MVP)
+       a partir del nivel/poder de cada equipo y jugador. La pantalla
+       queda en estado FIN: el usuario solo tiene que pulsar FINALIZAR
+       (que ya está habilitado) para guardar el partido en el historial. */
+    if (isFriendly && !esHumano(home) && !esHumano(away)) {
+      setTimeout(function(){ _gmAutoSimulateIAvsIA(); }, 200);
+    }
+  }
+
+  /* Genera y vuelca instantáneamente un partido IA-vs-IA en el gm-modal.
+     Usa simSimple (basado en TEAM_RATINGS, ventaja local 1.10) para el
+     marcador y genMatchEvents (selección ponderada por poder de jugador
+     vía _weightedScorerPick + calculateGoalProbability) para los eventos. */
+  function _gmAutoSimulateIAvsIA() {
+    var rat = window.TEAM_RATINGS || {};
+    function _resolveRating(name) {
+      var v = rat[name];
+      if (typeof v === 'number') return v;
+      if (v && typeof v.rating === 'number') return v.rating;
+      return 76;
+    }
+    var rA = _resolveRating(_gm.home);
+    var rB = _resolveRating(_gm.away);
+    /* Ventaja de local */
+    var rAeff = Math.round(rA * 1.10);
+    var rBeff = Math.round(rB);
+    var score;
+    if (typeof simSimple === 'function') {
+      score = simSimple(rAeff, rBeff);
+    } else {
+      score = { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+    }
+    var ev = { events: [], mvp: '', mvpTeam: '' };
+    if (typeof genMatchEvents === 'function') {
+      try { ev = genMatchEvents(_gm.home, _gm.away, score.gh, score.ga); } catch(_){}
+    }
+    /* Si el motor falló, fallback minimalista por jugadores */
+    if (!ev.events || !ev.events.length) {
+      var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(_gm.home)) || [];
+      var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(_gm.away)) || [];
+      var outA = sqA.filter(function(p){ return p && p[2] !== 'P'; });
+      var outB = sqB.filter(function(p){ return p && p[2] !== 'P'; });
+      if (!outA.length) outA = [['','Jugador A','F',76]];
+      if (!outB.length) outB = [['','Jugador B','F',76]];
+      var tmpEvents = [];
+      function _pickByPower(out) {
+        var totW = out.reduce(function(a,p){ return a + (p[3]||70); }, 0);
+        var r = Math.random() * totW, acc = 0;
+        for (var i=0;i<out.length;i++){ acc+=(out[i][3]||70); if(r<=acc) return out[i]; }
+        return out[out.length-1];
+      }
+      for (var i=0;i<score.gh;i++){ var pa=_pickByPower(outA); tmpEvents.push({type:'gol',min:Math.floor(Math.random()*88)+2,team:'a',num:pa[0]||'',player:pa[1]||'?'}); }
+      for (var k=0;k<score.ga;k++){ var pb=_pickByPower(outB); tmpEvents.push({type:'gol',min:Math.floor(Math.random()*88)+2,team:'b',num:pb[0]||'',player:pb[1]||'?'}); }
+      tmpEvents.sort(function(a,b){return a.min-b.min;});
+      ev.events = tmpEvents;
+    }
+    /* Recalcular el marcador real a partir de los eventos */
+    var realA = 0, realB = 0;
+    ev.events.forEach(function(e) {
+      if (e.type === 'gol' || e.type === 'pen-gol' || e.type === 'falta-gol') {
+        if (e.team === 'a') realA++; else realB++;
+      } else if (e.type === 'propia') {
+        if (e.team === 'a') realB++; else realA++;
+      }
+    });
+    /* Volcar al estado del gm-modal */
+    var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨','d-amarilla':'🟨🟥',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+    var list = document.getElementById('gm-acta-list');
+    if (list) list.innerHTML = '';
+    _gm.events = [];
+    ev.events.forEach(function(e) {
+      var ico = e.ico || icoMap[e.type] || '•';
+      var teamName = e.team === 'a' ? _gm.home : _gm.away;
+      var playerName = e.player || e.name || '?';
+      var num = e.num || '';
+      _gm.events.push({type:e.type, label:e.type, team:e.team, min:e.min, num:num, player:playerName});
+      if (list) {
+        var li = document.createElement('div');
+        li.className = 'ml-evt-item';
+        li.innerHTML = '<span class="ml-evt-min">' + e.min + "'</span>"
+          + '<span class="ml-evt-ico">' + ico + '</span>'
+          + '<span class="ml-evt-name">' + (num && num !== '0' ? num + '. ' : '') + playerName + '</span>'
+          + '<span class="ml-evt-team">' + teamName + '</span>';
+        list.appendChild(li);
+      }
+    });
+    /* MVP: si genMatchEvents ya añadió un evento mvp, lo mostramos; si no, lo elegimos */
+    var hasMvpEvent = _gm.events.some(function(e){ return e.type === 'mvp'; });
+    if (!hasMvpEvent) {
+      var mvpName = ev.mvp || '';
+      var mvpTeam = ev.mvpTeam || '';
+      if (!mvpName) {
+        /* Elegir un goleador del ganador como MVP */
+        var winSide = realA > realB ? 'a' : (realB > realA ? 'b' : (Math.random()<0.5?'a':'b'));
+        var winGoals = _gm.events.filter(function(e){ return (e.type==='gol'||e.type==='pen-gol'||e.type==='falta-gol') && e.team===winSide; });
+        if (winGoals.length) { mvpName = winGoals[0].player; mvpTeam = winSide==='a'?_gm.home:_gm.away; }
+      }
+      if (mvpName) {
+        var mvpSide = mvpTeam === _gm.home ? 'a' : 'b';
+        _gm.events.push({type:'mvp', label:'MVP', team:mvpSide, min:90, num:'', player:mvpName});
+        if (list) {
+          var mvpLi = document.createElement('div');
+          mvpLi.className = 'ml-evt-item';
+          mvpLi.innerHTML = '<span class="ml-evt-min">90\'</span><span class="ml-evt-ico">⭐</span><span class="ml-evt-name">MVP — ' + mvpName + '</span><span class="ml-evt-team">' + (mvpSide==='a'?_gm.home:_gm.away) + '</span>';
+          list.appendChild(mvpLi);
+        }
+      }
+    }
+    /* Marcador y estado FIN */
+    _gm.sc.a = realA; _gm.sc.b = realB;
+    var scEl = document.getElementById('gm-score');
+    if (scEl) scEl.textContent = realA + '-' + realB;
+    _gm.kickoffDone = true;
+    _gm.htDone = true;
+    _gm.stDone = true;
+    _gm.timerSec = 5400;
+    _gm.timerRunning = false;
+    clearInterval(_gm.timerInterval);
+    gmRenderTimer();
+    /* AÑADIR EVENTO desactivado en partido auto-simulado; FINALIZAR sigue activo */
+    var addBtn = document.getElementById('gm-add-btn');
+    if (addBtn) { addBtn.disabled = true; addBtn.style.opacity = '0.45'; }
   }
 
   window.abrirResultadoLiga = function (j, home, away) {

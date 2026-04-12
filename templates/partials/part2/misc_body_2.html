@@ -3436,6 +3436,8 @@
   function _mlPreGenAIEvents(mk) {
     var st = _mlSt(mk);
     if (st.isHvH || st.aiEventsGenerated) return;
+    /* Amistosos: nunca auto-generar eventos, solo añadir manualmente */
+    if (st.isFriendly) { st.aiEventsGenerated = true; st.pendingAIEvents = []; return; }
     var humanA = typeof esHumano === 'function' && esHumano(st.home);
     var humanB = typeof esHumano === 'function' && esHumano(st.away);
     /* IA vs IA: usar generador dedicado con expulsiones */

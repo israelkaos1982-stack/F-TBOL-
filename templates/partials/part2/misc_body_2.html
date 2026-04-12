@@ -4739,6 +4739,101 @@
     _gm.timerWasRunning = false;
   };
 
+  /* ── Penalty wizard launcher para el gm-modal ─────────────────────
+     Reaprovecha el wizard global (mlPenWizStart). Para que el wizard
+     conozca los equipos del gm-modal, registramos un estado temporal
+     en _mlStates['gm'] con los nombres de home/away. Después del commit
+     limpiamos ese estado para que no se mezcle con datos reales. */
+  window.gmPenWizStart = function() {
+    if (_gm.finished) return;
+    /* Cerrar panel de eventos pero NO reanudar el cronómetro todavía */
+    document.getElementById('gm-event-panel').style.display = 'none';
+    document.getElementById('gm-add-btn').classList.remove('open');
+    /* Calcular minuto actual del partido */
+    var min = Math.floor(_gm.timerSec / 60);
+    /* Inyectar estado temporal para que _getTeams('gm') / _getSquads('gm') funcionen */
+    if (typeof window._calMlSt === 'function') {
+      var stub = window._calMlSt('gm');
+      stub.home = _gm.home;
+      stub.away = _gm.away;
+    }
+    /* Pre-cargar squads desde SQUAD_REGISTRY para asegurar sección por posiciones */
+    function _toOverlayFmt(sq) {
+      if (!sq || !sq.length) return [];
+      var out = [];
+      var posLabels = {P:'🧤 PORTEROS',D:'🛡 DEFENSAS',M:'⚙️ MEDIOS',F:'⚡ DELANTEROS'};
+      var curPos = null;
+      sq.forEach(function(p) {
+        if (Array.isArray(p) && p[2] !== curPos) { curPos = p[2]; out.push({h: posLabels[curPos] || curPos}); }
+        out.push(p);
+      });
+      return out;
+    }
+    var regA = (typeof window.sqFromRegistryFull === 'function') ? window.sqFromRegistryFull(_gm.home) : null;
+    var regB = (typeof window.sqFromRegistryFull === 'function') ? window.sqFromRegistryFull(_gm.away) : null;
+    window._sqA_gm = regA ? _toOverlayFmt(regA) : [];
+    window._sqB_gm = regB ? _toOverlayFmt(regB) : [];
+    if (typeof window.mlPenWizStart === 'function') {
+      window.mlPenWizStart('gm', min);
+    }
+  };
+
+  /* Commit handler dedicado al gm-modal: añade los eventos del wizard a _gm.events
+     y al acta visual del gm-modal, sumando al marcador cuando proceda. */
+  window.mlPenWizardCommit_gm = function(wiz) {
+    var min = wiz.minute || Math.floor(_gm.timerSec / 60);
+    var attackSide = wiz.attackTeam;
+    var defendSide = wiz.defendTeam;
+    var attackTeamName = attackSide === 'a' ? _gm.home : _gm.away;
+    var defendTeamName = defendSide === 'a' ? _gm.home : _gm.away;
+    var list = document.getElementById('gm-acta-list');
+    function _push(type, team, num, name, ico, label) {
+      _gm.events.push({type:type, label:label||type, team:team, min:min, num:num||'', player:name||''});
+      if (list) {
+        var emp = list.querySelector('.ml-acta-empty'); if (emp) emp.remove();
+        var teamLabel = team === 'a' ? _gm.home : _gm.away;
+        var li = document.createElement('div');
+        li.className = 'ml-evt-item';
+        li.innerHTML = '<span class="ml-evt-min">' + min + "'</span>"
+          + '<span class="ml-evt-ico">' + ico + '</span>'
+          + '<span class="ml-evt-name">' + (num && num !== '0' ? num + '. ' : '') + (name || '') + '</span>'
+          + '<span class="ml-evt-team">' + teamLabel + '</span>';
+        list.appendChild(li);
+      }
+    }
+    /* 1. Pen. provocado */
+    if (wiz.provocador) {
+      _push('pen-prov', attackSide, wiz.provocador.num, wiz.provocador.name, '🤦🥅', 'Pen. Provocado');
+    }
+    /* 2. Tarjeta al infractor (si hubo) */
+    if (wiz.sancion && wiz.infractor) {
+      var cardIco = wiz.sancion === 'amarilla' ? '🟨' : '🟥';
+      var cardLbl = wiz.sancion === 'amarilla' ? 'Tarjeta Amarilla' : 'Roja Directa';
+      _push(wiz.sancion, defendSide, wiz.infractor.num, wiz.infractor.name, cardIco, cardLbl);
+    }
+    /* 3. Resultado */
+    if (wiz.resultado === 'gol' && wiz.tirador) {
+      _push('pen-gol', attackSide, wiz.tirador.num, wiz.tirador.name, '⚽🥅', 'Penalti Gol');
+      _gm.sc[attackSide]++;
+      var sc = document.getElementById('gm-score'); if (sc) sc.textContent = _gm.sc.a + '-' + _gm.sc.b;
+      if (typeof _mlShowEventFlash === 'function') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
+    } else if (wiz.resultado === 'fallo') {
+      if (wiz.falladoTipo === 'parado' && wiz.portero) {
+        _push('pen-parado', defendSide, wiz.portero.num, wiz.portero.name, '🖐🥅', 'Penalti Parado');
+        if (wiz.tirador) _push('pen-fallo', attackSide, wiz.tirador.num, wiz.tirador.name, '❌🥅', 'Penalti Fallado');
+      } else if (wiz.tirador) {
+        _push('pen-fallo', attackSide, wiz.tirador.num, wiz.tirador.name, '❌🥅', 'Penalti Fallado');
+      }
+    }
+    /* Limpiar el estado stub para no contaminar _mlStates */
+    try { if (window._mlGetState && window._mlGetState('gm')) { delete (window._calMlSt && window._calMlSt('gm')); } } catch(_){}
+    /* Reanudar el cronómetro si estaba corriendo antes del panel de eventos */
+    if (_gm.timerWasRunning && !_gm.finished && !_gm.inDescanso && _gm.kickoffDone) {
+      gmStartTimer();
+    }
+    _gm.timerWasRunning = false;
+  };
+
   window.gmPickEvent = function (label, type) {
     _gm.pendingEvt = { label: label, type: type };
     document.getElementById('gm-event-panel').style.display = 'none';
@@ -6492,17 +6587,8 @@
         <div class="gm-card c-gol" onclick="window.gmPickEvent('Gol de Falta','falta-gol')">
           <span class="gm-card-ico">⚽🎯</span><span class="gm-card-lbl">Gol de Falta</span>
         </div>
-        <div class="gm-card c-pen" onclick="window.gmPickEvent('Penalti Gol','pen-gol')">
-          <span class="gm-card-ico">⚽🥅</span><span class="gm-card-lbl">Penalti Gol</span>
-        </div>
-        <div class="gm-card c-pen" onclick="window.gmPickEvent('Penalti Fallado','pen-fallo')">
-          <span class="gm-card-ico">❌🥅</span><span class="gm-card-lbl">Penalti Fallado</span>
-        </div>
-        <div class="gm-card c-pen" onclick="window.gmPickEvent('Pen. Provocado','pen-prov')">
-          <span class="gm-card-ico">🤦🥅</span><span class="gm-card-lbl">Pen. Provocado</span>
-        </div>
-        <div class="gm-card c-pen" onclick="window.gmPickEvent('Penalti Parado','pen-parado')">
-          <span class="gm-card-ico">🖐🥅</span><span class="gm-card-lbl">Penalti Parado</span>
+        <div class="gm-card c-pen" onclick="window.gmPenWizStart()">
+          <span class="gm-card-ico">🥅</span><span class="gm-card-lbl">Penalti</span>
         </div>
         <div class="gm-card c-yel" onclick="window.gmPickEvent('Tarjeta Amarilla','amarilla')">
           <span class="gm-card-ico">🟨</span><span class="gm-card-lbl">Tarjeta Amarilla</span>

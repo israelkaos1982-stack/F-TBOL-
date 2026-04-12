@@ -3906,18 +3906,177 @@
 
   // Compartir marcador en el DESCANSO del modo espectador (gm)
   window._gmShareHalfTime = function() {
-    var gIco = {gol:'⚽', propia:'🚫', 'falta-gol':'🎯', 'pen-gol':'🥅'};
+    var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+    var comp = _gm.comp || '';
     var lines = [];
-    lines.push('\u23f8 DESCANSO — Jornada ' + (_gm.j||''));
-    lines.push(_gm.home + '  ' + _gm.sc.a + ' \u2013 ' + _gm.sc.b + '  ' + _gm.away);
-    var goalEvts = (_gm.events||[]).filter(function(e){ return gIco[e.type]; });
-    if (goalEvts.length) {
+    if (comp) lines.push(comp + ' - Jornada ' + (_gm.j||''));
+    else lines.push('Jornada ' + (_gm.j||''));
+    lines.push('');
+    lines.push(_gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away);
+    lines.push('');
+    lines.push('ACTA DEL PARTIDO:');
+    var htEvts = (_gm.events||[]).filter(function(e){ return e && e.min <= 45 && e.type !== 'mvp'; });
+    htEvts.forEach(function(e){
+      var ico = icoMap[e.type] || '📋';
+      var tName = e.team === 'a' ? _gm.home : _gm.away;
+      lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + tName + ')');
+    });
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
+    _gm.htShared = true;
+    var continueBtn = document.getElementById('gm-ht-continue-btn');
+    if (continueBtn) continueBtn.style.display = '';
+    if (_gm.isHvH) {
+      try { localStorage.setItem('gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
+    }
+  };
+
+  function _gmLogoUrl(name) {
+    var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
+    if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1) return byAlt.src;
+    var tlu = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
+    if (tlu) return tlu;
+    return (typeof getLogoEquipo === 'function' && getLogoEquipo(name)) || '';
+  }
+
+  function _gmEvtRow(e, homeTeam, awayTeam) {
+    var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+    var ico = icoMap[e.type] || '📋';
+    var tName = e.team === 'a' ? homeTeam : awayTeam;
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:13px;">'
+      + '<span style="color:rgba(255,255,255,.4);min-width:28px;">' + e.min + '\'</span>'
+      + '<span>' + ico + '</span>'
+      + '<span style="flex:1;color:rgba(255,255,255,.85);">' + (e.player || e.name || 'Jugador') + '</span>'
+      + '<span style="color:rgba(255,255,255,.4);font-size:11px;">' + tName + '</span>'
+      + '</div>';
+  }
+
+  function _gmShowHalftimeOv() {
+    var ov = document.getElementById('gm-ht-ov');
+    if (!ov) return;
+    document.getElementById('gm-ht-score').textContent = _gm.sc.a + ' - ' + _gm.sc.b;
+    document.getElementById('gm-ht-name-a').textContent = _gm.home;
+    document.getElementById('gm-ht-name-b').textContent = _gm.away;
+    var logoA = document.getElementById('gm-ht-logo-a');
+    var logoB = document.getElementById('gm-ht-logo-b');
+    if (logoA) { logoA.src = _gmLogoUrl(_gm.home) || ''; }
+    if (logoB) { logoB.src = _gmLogoUrl(_gm.away) || ''; }
+    var htEvts = (_gm.events||[]).filter(function(e){ return e && e.min <= 45 && e.type !== 'mvp'; });
+    var evList = document.getElementById('gm-ht-events');
+    if (evList) {
+      if (htEvts.length === 0) {
+        evList.innerHTML = '<div style="padding:14px 12px;color:rgba(255,255,255,.3);font-family:Rajdhani,sans-serif;font-size:13px;text-align:center;">Sin eventos en la primera parte</div>';
+      } else {
+        evList.innerHTML = htEvts.map(function(e){ return _gmEvtRow(e, _gm.home, _gm.away); }).join('');
+      }
+    }
+    var continueBtn = document.getElementById('gm-ht-continue-btn');
+    if (continueBtn) continueBtn.style.display = 'none';
+    var shareBtn = document.getElementById('gm-ht-share-btn');
+    if (shareBtn) shareBtn.style.display = '';
+    ov.style.display = 'flex';
+    if (_gm.isHvH) {
+      var htPoll = setInterval(function() {
+        try {
+          if (localStorage.getItem('gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away) === '1') {
+            clearInterval(htPoll);
+            var cb = document.getElementById('gm-ht-continue-btn');
+            if (cb) cb.style.display = '';
+          }
+        } catch(e) { clearInterval(htPoll); }
+      }, 3000);
+    }
+  }
+
+  window.gmContinueSecondHalf = function() {
+    var ov = document.getElementById('gm-ht-ov');
+    if (ov) ov.style.display = 'none';
+    _gm.inDescanso = false;
+    gmStartTimer();
+    gmUpdateAplazarBtn();
+  };
+
+  function _gmShowFinalOv() {
+    var ov = document.getElementById('gm-fin-ov');
+    if (!ov) {
+      document.getElementById('gm-modal').style.display = 'none';
+      window.gmShowPost && window.gmShowPost();
+      return;
+    }
+    document.getElementById('gm-fin-score').textContent = _gm.sc.a + ' - ' + _gm.sc.b;
+    document.getElementById('gm-fin-name-a').textContent = _gm.home;
+    document.getElementById('gm-fin-name-b').textContent = _gm.away;
+    var logoA = document.getElementById('gm-fin-logo-a');
+    var logoB = document.getElementById('gm-fin-logo-b');
+    if (logoA) { logoA.src = _gmLogoUrl(_gm.home) || ''; }
+    if (logoB) { logoB.src = _gmLogoUrl(_gm.away) || ''; }
+    var mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });
+    var mvpEl = document.getElementById('gm-fin-mvp');
+    if (mvpEl) { mvpEl.textContent = mvpEvt ? ('⭐ MVP: ' + (mvpEvt.player || mvpEvt.name || '')) : ''; }
+    var allEvts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp'; });
+    var evList = document.getElementById('gm-fin-events');
+    if (evList) {
+      if (allEvts.length === 0) {
+        evList.innerHTML = '<div style="padding:14px 12px;color:rgba(255,255,255,.3);font-family:Rajdhani,sans-serif;font-size:13px;text-align:center;">Sin eventos registrados</div>';
+      } else {
+        evList.innerHTML = allEvts.map(function(e){ return _gmEvtRow(e, _gm.home, _gm.away); }).join('');
+      }
+    }
+    var exitBtn = document.getElementById('gm-fin-exit-btn');
+    if (exitBtn) exitBtn.style.display = 'none';
+    var shareBtn = document.getElementById('gm-fin-share-btn');
+    if (shareBtn) shareBtn.style.display = '';
+    ov.style.display = 'flex';
+    if (_gm.isHvH) {
+      var finPoll = setInterval(function() {
+        try {
+          if (localStorage.getItem('gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away) === '1') {
+            clearInterval(finPoll);
+            var eb = document.getElementById('gm-fin-exit-btn');
+            if (eb) eb.style.display = '';
+          }
+        } catch(e) { clearInterval(finPoll); }
+      }, 3000);
+    }
+  }
+
+  window._gmShareFinal = function() {
+    var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+    var comp = _gm.comp || '';
+    var lines = [];
+    if (comp) lines.push(comp + ' - Jornada ' + (_gm.j||''));
+    else lines.push('Jornada ' + (_gm.j||''));
+    lines.push('');
+    lines.push(_gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away);
+    lines.push('');
+    lines.push('ACTA DEL PARTIDO:');
+    var evts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp'; });
+    evts.forEach(function(e){
+      var ico = icoMap[e.type] || '📋';
+      var tName = e.team === 'a' ? _gm.home : _gm.away;
+      lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + tName + ')');
+    });
+    var mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });
+    if (mvpEvt) {
       lines.push('');
-      goalEvts.forEach(function(e){
-        lines.push(gIco[e.type] + ' ' + e.min + '\' ' + (e.player||e.name||'') + ' (' + (e.team==='a'?_gm.home:_gm.away) + ')');
-      });
+      lines.push('⭐ MVP: ' + (mvpEvt.player || mvpEvt.name || ''));
     }
     try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
+    _gm.finalShared = true;
+    var exitBtn = document.getElementById('gm-fin-exit-btn');
+    if (exitBtn) exitBtn.style.display = '';
+    if (_gm.isHvH) {
+      try { localStorage.setItem('gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
+    }
+  };
+
+  window.gmExitFinal = function() {
+    var ov = document.getElementById('gm-fin-ov');
+    if (ov) ov.style.display = 'none';
+    document.getElementById('gm-modal').style.display = 'none';
+    window.gmShowPost && window.gmShowPost();
   };
 
   /* ── SELECCIÓN DE EVENTOS GENÉRICA (overlays globales) ── */
@@ -4107,7 +4266,8 @@
   /* ── ENTRADA RESULTADO HUMANO (modal interactivo) ── */
   var _gm = { j:0, home:'', away:'', sc:{a:0,b:0}, events:[], etDone:false, finished:false,
               timerSec:0, timerRunning:false, timerInterval:null, pendingEvt:null, pendingTeam:null, isHvH:false,
-              htDone:false, inDescanso:false, stDone:false };
+              htDone:false, inDescanso:false, stDone:false,
+              timerWasRunning:false, comp:'', htShared:false, finalShared:false };
   var GM_MAX_NORMAL   = 5400; /* 90 min */
   var GM_MAX_ET       = 7200; /* 120 min */
   var GM_MAX_STOPPAGE = 5820; /* 90+7 min */
@@ -4148,7 +4308,7 @@
           list.appendChild(_gmWaWrap);
         }
         gmRenderTimer();
-        setTimeout(function () { if (!_gm.finished) { _gm.inDescanso = false; _gm.timerRunning = true; gmStartTimer(); } }, 20000);
+        _gmShowHalftimeOv();
         return;
       }
       /* Tiempo de descuento al llegar al 90:00 */
@@ -4171,6 +4331,8 @@
 
   window.gmShowEvents = function () {
     if (_gm.finished) return;
+    _gm.timerWasRunning = _gm.timerRunning;
+    if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; gmRenderTimer(); }
     document.getElementById('gm-event-panel').style.display = 'flex';
     document.getElementById('gm-team-pick').style.display = 'none';
     var pp2 = document.getElementById('gm-player-pick'); if (pp2) pp2.style.display = 'none';
@@ -4185,6 +4347,8 @@
     document.getElementById('gm-add-btn').classList.remove('open');
     _gm.pendingEvt = null;
     _gm.pendingTeam = null;
+    if (_gm.timerWasRunning && !_gm.finished && !_gm.inDescanso && _gm.kickoffDone) { gmStartTimer(); }
+    _gm.timerWasRunning = false;
   };
 
   window.gmPickEvent = function (label, type) {
@@ -4360,6 +4524,9 @@
       + '<span class="ml-evt-team">' + teamName + '</span>';
     var list = document.getElementById('gm-acta-list');
     list.appendChild(li);
+    list.scrollTop = list.scrollHeight;
+    if (_gm.timerWasRunning && !_gm.finished && !_gm.inDescanso && _gm.kickoffDone) { gmStartTimer(); }
+    _gm.timerWasRunning = false;
     var empty = list.querySelector('.ml-acta-empty');
     if (empty) empty.remove();
   };
@@ -4420,8 +4587,7 @@
     });
 
     setTimeout(function () {
-      document.getElementById('gm-modal').style.display = 'none';
-      window.gmShowPost();
+      _gmShowFinalOv();
     }, 420);
   };
 
@@ -4603,7 +4769,7 @@
     try { window.open(url, '_blank'); } catch(e) {}
   };
 
-  function gmOpen(j, home, away, isHvH) {
+  function gmOpen(j, home, away, isHvH, comp) {
     /* ── Si ya hay un partido activo para estos mismos equipos/jornada, solo mostramos el modal ── */
     if (_gm.kickoffDone && !_gm.finished
         && _gm.j === j && _gm.home === home && _gm.away === away) {
@@ -4616,6 +4782,7 @@
     _gm.htDone = false; _gm.inDescanso = false; _gm.stDone = false;
     clearInterval(_gm.timerInterval);
     _gm.kickoffDone = false; _gm.htDone = false; _gm.inDescanso = false; _gm.stDone = false;
+    _gm.timerWasRunning = false; _gm.comp = comp || ''; _gm.htShared = false; _gm.finalShared = false;
     /* Escudos + nombres en la pantalla de partido */
     function _gmLogo(name) {
       var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
@@ -7066,6 +7233,49 @@ window.goLiveMatches = function() {
   font-family:'Oswald',sans-serif; letter-spacing:1.5px; cursor:pointer;
 }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var htOv = document.createElement('div');
+  htOv.id = 'gm-ht-ov';
+  htOv.style.cssText = 'display:none;position:fixed;inset:0;background:linear-gradient(160deg,#050a10 0%,#0d1a28 100%);z-index:10001;overflow-y:auto;';
+  htOv.innerHTML = '<div style="max-width:480px;margin:0 auto;padding:24px 16px 48px;">'
+    +'<div style="text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:3px;color:#666;margin-bottom:20px;">⏸ DESCANSO · 45 MIN</div>'
+    +'<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:20px;">'
+      +'<div style="text-align:center;flex:1;"><img id="gm-ht-logo-a" src="" style="width:52px;height:52px;object-fit:contain;" onerror="this.style.display=\'none\'"><div id="gm-ht-name-a" style="font-family:Oswald,sans-serif;font-size:13px;color:rgba(255,255,255,.7);margin-top:4px;word-break:break-word;"></div></div>'
+      +'<div style="text-align:center;padding:0 8px;"><div id="gm-ht-score" style="font-family:Oswald,sans-serif;font-size:52px;font-weight:900;color:#fff;line-height:1;white-space:nowrap;"></div></div>'
+      +'<div style="text-align:center;flex:1;"><img id="gm-ht-logo-b" src="" style="width:52px;height:52px;object-fit:contain;" onerror="this.style.display=\'none\'"><div id="gm-ht-name-b" style="font-family:Oswald,sans-serif;font-size:13px;color:rgba(255,255,255,.7);margin-top:4px;word-break:break-word;"></div></div>'
+    +'</div>'
+    +'<div style="margin-bottom:24px;">'
+      +'<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.3);margin-bottom:8px;">ACTA PRIMERA PARTE</div>'
+      +'<div id="gm-ht-events" style="border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden;"></div>'
+    +'</div>'
+    +'<button id="gm-ht-share-btn" onclick="window._gmShareHalfTime()" style="width:100%;padding:14px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;margin-bottom:12px;">🟢 COMPARTIR DESCANSO</button>'
+    +'<button id="gm-ht-continue-btn" onclick="window.gmContinueSecondHalf()" style="display:none;width:100%;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;">▶ INICIAR SEGUNDA PARTE</button>'
+    +'</div>';
+  document.body.appendChild(htOv);
+
+  var finOv = document.createElement('div');
+  finOv.id = 'gm-fin-ov';
+  finOv.style.cssText = 'display:none;position:fixed;inset:0;background:linear-gradient(160deg,#050a10 0%,#0d1a28 100%);z-index:10001;overflow-y:auto;';
+  finOv.innerHTML = '<div style="max-width:480px;margin:0 auto;padding:24px 16px 48px;">'
+    +'<div style="text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:3px;color:#666;margin-bottom:20px;">🏁 PARTIDO FINALIZADO</div>'
+    +'<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px;">'
+      +'<div style="text-align:center;flex:1;"><img id="gm-fin-logo-a" src="" style="width:52px;height:52px;object-fit:contain;" onerror="this.style.display=\'none\'"><div id="gm-fin-name-a" style="font-family:Oswald,sans-serif;font-size:13px;color:rgba(255,255,255,.7);margin-top:4px;word-break:break-word;"></div></div>'
+      +'<div style="text-align:center;padding:0 8px;"><div id="gm-fin-score" style="font-family:Oswald,sans-serif;font-size:52px;font-weight:900;color:#fff;line-height:1;white-space:nowrap;"></div></div>'
+      +'<div style="text-align:center;flex:1;"><img id="gm-fin-logo-b" src="" style="width:52px;height:52px;object-fit:contain;" onerror="this.style.display=\'none\'"><div id="gm-fin-name-b" style="font-family:Oswald,sans-serif;font-size:13px;color:rgba(255,255,255,.7);margin-top:4px;word-break:break-word;"></div></div>'
+    +'</div>'
+    +'<div id="gm-fin-mvp" style="text-align:center;font-family:Oswald,sans-serif;font-size:16px;color:#ffd700;margin-bottom:20px;letter-spacing:1px;"></div>'
+    +'<div style="margin-bottom:24px;">'
+      +'<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.3);margin-bottom:8px;">ACTA COMPLETA</div>'
+      +'<div id="gm-fin-events" style="border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden;"></div>'
+    +'</div>'
+    +'<button id="gm-fin-share-btn" onclick="window._gmShareFinal()" style="width:100%;padding:14px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;margin-bottom:12px;">🟢 COMPARTIR PARTIDO FINALIZADO</button>'
+    +'<button id="gm-fin-exit-btn" onclick="window.gmExitFinal()" style="display:none;width:100%;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;">✅ SALIR AL MENÚ</button>'
+    +'</div>';
+  document.body.appendChild(finOv);
+});
+</script>
 
 <!-- ══ ADMIN SYSTEM: PIN AUTH + ENVIRONMENT ENGINE ══════════ -->
 <script>

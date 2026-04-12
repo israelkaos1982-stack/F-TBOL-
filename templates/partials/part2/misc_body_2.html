@@ -2616,7 +2616,8 @@
 
   function _effectiveIARating(teamName, isHome, j, oppName) {
     var rat = window.TEAM_RATINGS || {};
-    var base = Number(rat[teamName]);
+    var entry = rat[teamName];
+    var base = entry ? Number(entry.media || entry) : NaN;
     if (!isFinite(base)) base = 75;
     var squad = _avgSquadPower(teamName);
     var blended = base * 0.62 + squad * 0.38;
@@ -2633,7 +2634,8 @@
   }
   function _legacyIARating(teamName, fallback) {
     var rat = window.TEAM_RATINGS || {};
-    var val = Number(rat[teamName]);
+    var entry = rat[teamName];
+    var val = entry ? Number(entry.media || entry) : NaN;
     return isFinite(val) ? val : (fallback || 75);
   }
   function _fallbackIAvsIAScore(home, away) {
@@ -2656,16 +2658,10 @@
   }
   function _applyRedCardPenalty(rating, reds, side) {
     var count = 0;
-    var earliestMin = 90;
-    reds.forEach(function(r) {
-      if (r.side !== side) return;
-      count++;
-      if (r.min < earliestMin) earliestMin = r.min;
-    });
+    reds.forEach(function(r) { if (r.side === side) count++; });
     if (!count) return rating;
-    /* 30 puntos planos de penalización ponderados por tiempo restante */
-    var remaining = Math.max(0, (90 - earliestMin) / 90);
-    return Math.max(30, rating - (_RED_CARD_FLAT_PENALTY * remaining * count));
+    /* 30 puntos planos INSTANTÁNEOS por cada roja */
+    return Math.max(30, rating - (_RED_CARD_FLAT_PENALTY * count));
   }
 
   function _simIAvsIAWithContext(home, away, j) {
@@ -5456,10 +5452,7 @@
         }
         actualizarDom('l-j' + j, home, away, scA, scB);
         if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
-        /* Mostrar overlay de lesiones si las hay */
-        if (lesionesPost.length && typeof window.showLesionPostOverlay === 'function') {
-          window.showLesionPostOverlay(lesionesPost, null);
-        }
+        /* Lesiones IA vs IA: solo registrar en acta, NO mostrar overlay flash */
         /* Decrementar contador y reconstruir solo si no hay otras simulaciones activas */
         window._iaRunningCount = Math.max(0, (window._iaRunningCount || 1) - 1);
         setTimeout(function() {
@@ -5635,13 +5628,20 @@
 
     events.sort(function(a,b){ return a.min - b.min; });
     var mvpScore = {}, mvpTeams2 = {};
-    // Los expulsados no pueden ser MVP aunque hayan marcado antes de su expulsión,
-    // pero sí pueden si ya habían marcado y la expulsión fue posterior al gol;
-    // en cualquier caso, no pueden recibir el MVP si terminaron expulsados.
     var expelledAll = {};
     Object.keys(expelledA).forEach(function(n){ expelledAll[n] = true; });
     Object.keys(expelledB).forEach(function(n){ expelledAll[n] = true; });
-    events.forEach(function(e){ if(e.type==='gol' && !expelledAll[e.player]){ mvpScore[e.player]=(mvpScore[e.player]||0)+3; mvpTeams2[e.player]=e.team==='a'?teamA:teamB; } });
+    /* MVP: must be from the WINNING team (or either team if draw) */
+    var winSide = goalsA > goalsB ? 'a' : goalsB > goalsA ? 'b' : null;
+    events.forEach(function(e){
+      if(e.type==='gol' && !expelledAll[e.player]){
+        /* Only count goals from winning team (or both if draw) */
+        if (!winSide || e.team === winSide) {
+          mvpScore[e.player]=(mvpScore[e.player]||0)+3;
+          mvpTeams2[e.player]=e.team==='a'?teamA:teamB;
+        }
+      }
+    });
     var mvp='', mvpTeamName='', best=0;
     Object.keys(mvpScore).forEach(function(p){ if(mvpScore[p]>best){ best=mvpScore[p]; mvp=p; mvpTeamName=mvpTeams2[p]; } });
     if (!mvp) {
@@ -5651,7 +5651,8 @@
       var mp = msEligible[Math.floor(Math.random()*msEligible.length)];
       mvp = mp?mp[1]:'?'; mvpTeamName = goalsA >= goalsB ? teamA : teamB;
     }
-    events.push({ type:'mvp', ico:'⭐', min:90, player:mvp, team:goalsA >= goalsB ? 'a' : 'b' });
+    var mvpSide = mvpTeamName === teamA ? 'a' : 'b';
+    events.push({ type:'mvp', ico:'⭐', min:90, player:mvp, team:mvpSide });
     return { events:events, mvp:mvp, mvpTeam:mvpTeamName };
   }
 

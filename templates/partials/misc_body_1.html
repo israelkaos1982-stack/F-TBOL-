@@ -44,12 +44,13 @@ window.pG = function(fn) {
 <p>Temporada 32-33</p>
 </div>
 <div class="hdr-btns">
+<button id="amistoso-hdr-btn" onclick="goAmistosos()" title="Buscar Enfrentamientos">🔍</button>
 <button id="ajustes-hdr-btn" onclick="goAjustes()" title="Ajustes">⚙️</button>
 </div>
 
 <style>
-#ajustes-hdr-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;opacity:.75;transition:opacity .2s;}
-#ajustes-hdr-btn:hover{opacity:1;}
+#ajustes-hdr-btn,#amistoso-hdr-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;opacity:.75;transition:opacity .2s;}
+#ajustes-hdr-btn:hover,#amistoso-hdr-btn:hover{opacity:1;}
 .pin-key{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;transition:background .15s;}
 .pin-key:active{background:rgba(255,255,255,.22);}
 .pin-key-del{color:#ff9060;}
@@ -123,6 +124,10 @@ window.pG = function(fn) {
 (function(){
   window.goLiveMatches = window.goLiveMatches || function(){
     if (typeof go === 'function') go('s-live');
+  };
+  window.goAmistosos = window.goAmistosos || function(){
+    if (typeof go === 'function') go('s-amistosos');
+    setTimeout(function(){ if (typeof window._initAmistososScreen === 'function') window._initAmistososScreen(); }, 30);
   };
   window.goDerbys = window.goDerbys || function(){
     alert('Derbys — espacio reservado para próximas mejoras.');
@@ -1311,6 +1316,90 @@ window.pG = function(fn) {
   <div class="sec-hdr"><span class="sec-emoji">⚽</span><h2>Ball Storage</h2></div>
   <div id="balls-list" style="padding:8px 0 24px;"></div>
 </div>
+
+<!-- ══ PANTALLA AMISTOSOS ══ -->
+<div class="screen" id="s-amistosos">
+  <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">🔍</span><h2>Buscar Enfrentamientos</h2></div>
+
+  <!-- Selector de equipos -->
+  <div id="ams-setup" style="padding:8px 12px 0;">
+    <div class="ams-team-pick" id="ams-pick-a">
+      <label class="ams-label">EQUIPO LOCAL</label>
+      <div class="ams-search-wrap">
+        <input type="text" id="ams-search-a" class="ams-search" placeholder="Buscar equipo..." autocomplete="off"/>
+      </div>
+      <div class="ams-selected" id="ams-sel-a" style="display:none;">
+        <img class="ams-sel-shield" id="ams-shield-a" alt=""/>
+        <span class="ams-sel-name" id="ams-name-a"></span>
+        <button class="ams-sel-clear" onclick="window._amsClear('a')">✕</button>
+      </div>
+      <div class="ams-results" id="ams-results-a"></div>
+    </div>
+
+    <div class="ams-vs">VS</div>
+
+    <div class="ams-team-pick" id="ams-pick-b">
+      <label class="ams-label">EQUIPO VISITANTE</label>
+      <div class="ams-search-wrap">
+        <input type="text" id="ams-search-b" class="ams-search" placeholder="Buscar equipo..." autocomplete="off"/>
+      </div>
+      <div class="ams-selected" id="ams-sel-b" style="display:none;">
+        <img class="ams-sel-shield" id="ams-shield-b" alt=""/>
+        <span class="ams-sel-name" id="ams-name-b"></span>
+        <button class="ams-sel-clear" onclick="window._amsClear('b')">✕</button>
+      </div>
+      <div class="ams-results" id="ams-results-b"></div>
+    </div>
+
+    <button class="ams-play-btn" id="ams-play-btn" disabled onclick="window._amsCreateMatch()">⚽ CREAR PARTIDO AMISTOSO</button>
+  </div>
+
+  <!-- Contenedor del partido amistoso creado -->
+  <div id="ams-match-container" style="padding:8px 0 12px;"></div>
+
+  <!-- Historial de amistosos -->
+  <div id="ams-history-section" style="padding:0 12px 24px;">
+    <div class="ams-history-hdr" id="ams-history-hdr" style="display:none;">
+      <span>📋 HISTORIAL DE AMISTOSOS</span>
+    </div>
+    <div id="ams-history-list"></div>
+  </div>
+</div>
+
+<style>
+  #s-amistosos .sec-hdr{margin-bottom:4px;}
+  .ams-team-pick{margin-bottom:12px;}
+  .ams-label{display:block;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.5px;color:rgba(255,255,255,.55);margin-bottom:6px;}
+  .ams-search-wrap{position:relative;}
+  .ams-search{width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 14px;color:#fff;font-family:Rajdhani,sans-serif;font-size:14px;letter-spacing:.5px;outline:none;transition:border-color .2s;}
+  .ams-search:focus{border-color:rgba(100,180,255,.6);}
+  .ams-search::placeholder{color:rgba(255,255,255,.3);}
+  .ams-results{max-height:200px;overflow-y:auto;border-radius:0 0 10px 10px;}
+  .ams-result-item{display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;transition:background .15s;border-bottom:1px solid rgba(255,255,255,.05);}
+  .ams-result-item:hover,.ams-result-item:active{background:rgba(255,255,255,.1);}
+  .ams-result-shield{width:28px;height:28px;object-fit:contain;flex-shrink:0;}
+  .ams-result-name{font-family:Rajdhani,sans-serif;font-size:14px;color:#fff;letter-spacing:.5px;}
+  .ams-result-tag{font-family:Rajdhani,sans-serif;font-size:10px;letter-spacing:1px;padding:2px 6px;border-radius:4px;margin-left:auto;flex-shrink:0;}
+  .ams-result-tag.human{background:rgba(255,80,160,.2);color:#ff80b0;border:1px solid rgba(255,80,160,.3);}
+  .ams-result-tag.ia{background:rgba(100,180,255,.15);color:rgba(100,180,255,.8);border:1px solid rgba(100,180,255,.2);}
+  .ams-selected{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.07);border:1px solid rgba(100,220,120,.35);border-radius:10px;padding:8px 12px;}
+  .ams-sel-shield{width:32px;height:32px;object-fit:contain;}
+  .ams-sel-name{font-family:Oswald,sans-serif;font-size:14px;letter-spacing:1.5px;color:#fff;flex:1;}
+  .ams-sel-clear{background:none;border:none;color:rgba(255,100,100,.8);font-size:16px;cursor:pointer;padding:0 4px;}
+  .ams-vs{text-align:center;font-family:Oswald,sans-serif;font-size:20px;letter-spacing:4px;color:rgba(255,255,255,.35);padding:4px 0 8px;}
+  .ams-play-btn{width:100%;padding:14px;margin-top:8px;border:none;border-radius:12px;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;transition:all .2s;background:linear-gradient(135deg,#1a5c2e,#2d8a4e);color:#fff;box-shadow:0 0 12px rgba(40,180,90,.3);}
+  .ams-play-btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;}
+  .ams-play-btn:not(:disabled):active{transform:scale(.97);}
+  .ams-history-hdr{font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2.5px;color:rgba(255,255,255,.45);padding:16px 0 8px;border-top:1px solid rgba(255,255,255,.08);margin-top:12px;}
+  .ams-hist-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+  .ams-hist-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .ams-hist-teams{font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;font-weight:600;letter-spacing:.5px;}
+  .ams-hist-score{font-family:Oswald,sans-serif;font-size:15px;color:#ffe7a6;letter-spacing:1px;}
+  .ams-hist-date{font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.35);letter-spacing:.5px;margin-top:2px;}
+  .ams-hist-acta{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.5);margin-top:4px;line-height:1.5;}
+</style>
+
 <div class="screen active" id="s-espana">
 <button class="back-btn" style="visibility:hidden;">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🇪🇸</span><h2>España</h2></div>

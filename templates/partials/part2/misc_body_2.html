@@ -2997,6 +2997,10 @@
     +'</div>';
   }
 
+  /* Expose buildMatchCard and _mlSt for friendly matches */
+  window._calBuildMatchCard = buildMatchCard;
+  window._calMlSt = _mlSt;
+
   function populateCalendar() {
     var results = loadResults();
     SCHEDULE.forEach(function (jornada, idx) {
@@ -3430,8 +3434,8 @@
     else {
       if (!st.kickoffDone) {
         st.kickoffDone = true; _mlPlayUiTone('start');
-        /* Pre-generar lesión aleatoria para el equipo humano (5-10%, min 1-75) */
-        if (!st.injuryScheduled && typeof esHumano === 'function') {
+        /* Pre-generar lesión aleatoria para el equipo humano (5-10%, min 1-75) — skip for friendlies */
+        if (!st.isFriendly && !st.injuryScheduled && typeof esHumano === 'function') {
           var humA = esHumano(st.home), humB = esHumano(st.away);
           if (humA || humB) {
             var prob = 0.05 + Math.random() * 0.05;
@@ -3627,6 +3631,29 @@
     ['ml-btn-end-','ml-btn-et-','ml-add-btn-'].forEach(function(pfx){
       var b=document.getElementById(pfx+mk); if(b){b.disabled=true;b.style.opacity='0.35';}
     });
+    /* ── AMISTOSO: guardar en historial propio, no en liga ── */
+    if (st.isFriendly) {
+      var evts=st.events;
+      var mvpEvt=evts.find(function(e){return e.type==='mvp';});
+      var mvpName=mvpEvt?mvpEvt.name:'';
+      try {
+        var hist = JSON.parse(localStorage.getItem('friendlyMatchHistory') || '[]');
+        hist.unshift({
+          date: new Date().toISOString(),
+          home: st.home, away: st.away,
+          scoreA: st.sc.a, scoreB: st.sc.b,
+          mvp: mvpName,
+          events: evts.filter(function(e){return e.type!=='pen-result';}).map(function(e){
+            return {type:e.type, min:e.min, player:(e.num&&e.num!=='0'?e.num+'. ':'')+e.name, team:e.team, ico:e.ico};
+          })
+        });
+        if (hist.length > 50) hist = hist.slice(0, 50);
+        localStorage.setItem('friendlyMatchHistory', JSON.stringify(hist));
+      } catch(_e){}
+      if (typeof window._amsRenderHistory === 'function') window._amsRenderHistory();
+      _mlShowFinalThenPost(mk);
+      return;
+    }
     guardarResultado(st.j, st.home, st.away, st.sc.a, st.sc.b);
     // Register stats for classification + player tables
     var evts=st.events;
@@ -3682,7 +3709,7 @@
 
     // Jornada
     var jorEl = document.getElementById('ml-post-jornada');
-    if (jorEl) jorEl.textContent = 'Jornada ' + st.j;
+    if (jorEl) jorEl.textContent = st.isFriendly ? 'Amistoso' : ('Jornada ' + st.j);
 
     // Scores
     var scA = document.getElementById('ml-post-sc-a');
@@ -3758,9 +3785,12 @@
       };
     }
 
-    /* Disable close button until WhatsApp is shared */
+    /* Disable close button until WhatsApp is shared (skip for friendlies) */
     var closeBtn = document.getElementById('ml-post-close-btn');
-    if (closeBtn) { closeBtn.disabled = true; closeBtn.style.opacity = '0.4'; }
+    if (closeBtn) {
+      if (st.isFriendly) { closeBtn.disabled = false; closeBtn.style.opacity = ''; }
+      else { closeBtn.disabled = true; closeBtn.style.opacity = '0.4'; }
+    }
 
     ov.classList.add('show');
   }
@@ -7613,6 +7643,244 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.addEventListener('DOMContentLoaded', function () {
     _adminRefreshEnvStatus();
+  });
+}());
+</script>
+
+<!-- ══ MÓDULO AMISTOSOS ══ -->
+<script>
+(function(){
+  var HUMANOS_AMS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+  var _amsCounter = 0;
+  var _selA = null, _selB = null;
+
+  function _escH(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function _getTeamList() {
+    var teams = [];
+    var seen = {};
+    if (window.TEAM_RATINGS) {
+      for (var name in window.TEAM_RATINGS) {
+        if (!window.TEAM_RATINGS.hasOwnProperty(name)) continue;
+        var canon = name.trim();
+        var lower = canon.toLowerCase();
+        if (seen[lower]) continue;
+        seen[lower] = true;
+        var r = window.TEAM_RATINGS[canon];
+        var isHuman = HUMANOS_AMS.indexOf(canon) !== -1;
+        teams.push({ name: canon, media: r.media || 0, shield: r.shield || '', isHuman: isHuman });
+      }
+    }
+    teams.sort(function(a,b){ return a.name.localeCompare(b.name,'es'); });
+    return teams;
+  }
+
+  function _renderResults(side, query) {
+    var container = document.getElementById('ams-results-' + side);
+    if (!container) return;
+    var q = (query || '').trim().toLowerCase();
+    if (q.length < 1) { container.innerHTML = ''; return; }
+    var teams = _getTeamList();
+    var other = side === 'a' ? _selB : _selA;
+    var matches = teams.filter(function(t){
+      if (other && t.name === other) return false;
+      return t.name.toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 12);
+    if (!matches.length) { container.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:rgba(255,255,255,.35);">Sin resultados</div>'; return; }
+    container.innerHTML = matches.map(function(t){
+      var tag = t.isHuman
+        ? '<span class="ams-result-tag human">HUMANO</span>'
+        : '<span class="ams-result-tag ia">IA</span>';
+      var shieldImg = t.shield
+        ? '<img class="ams-result-shield" src="' + _escH(t.shield) + '" alt="" onerror="this.style.display=\'none\'">'
+        : '<span style="width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">⚽</span>';
+      return '<div class="ams-result-item" data-team="' + _escH(t.name) + '" data-side="' + side + '">'
+        + shieldImg
+        + '<span class="ams-result-name">' + _escH(t.name) + '</span>'
+        + tag
+        + '</div>';
+    }).join('');
+
+    container.querySelectorAll('.ams-result-item').forEach(function(el){
+      el.addEventListener('click', function(){
+        var team = el.getAttribute('data-team');
+        var s = el.getAttribute('data-side');
+        _selectTeam(s, team);
+      });
+    });
+  }
+
+  function _selectTeam(side, name) {
+    var r = window.TEAM_RATINGS && window.TEAM_RATINGS[name];
+    var shield = (r && r.shield) || '';
+    if (side === 'a') _selA = name; else _selB = name;
+    var searchWrap = document.querySelector('#ams-pick-' + side + ' .ams-search-wrap');
+    var selDiv = document.getElementById('ams-sel-' + side);
+    var shieldImg = document.getElementById('ams-shield-' + side);
+    var nameSpan = document.getElementById('ams-name-' + side);
+    var resultsDiv = document.getElementById('ams-results-' + side);
+    if (searchWrap) searchWrap.style.display = 'none';
+    if (resultsDiv) resultsDiv.innerHTML = '';
+    if (shieldImg) { shieldImg.src = shield; shieldImg.style.display = shield ? '' : 'none'; }
+    if (nameSpan) nameSpan.textContent = name;
+    if (selDiv) selDiv.style.display = 'flex';
+    _updatePlayBtn();
+  }
+
+  window._amsClear = function(side) {
+    if (side === 'a') _selA = null; else _selB = null;
+    var searchWrap = document.querySelector('#ams-pick-' + side + ' .ams-search-wrap');
+    var selDiv = document.getElementById('ams-sel-' + side);
+    var input = document.getElementById('ams-search-' + side);
+    if (searchWrap) searchWrap.style.display = '';
+    if (selDiv) selDiv.style.display = 'none';
+    if (input) input.value = '';
+    _updatePlayBtn();
+  };
+
+  function _updatePlayBtn() {
+    var btn = document.getElementById('ams-play-btn');
+    if (btn) btn.disabled = !(_selA && _selB && _selA !== _selB);
+  }
+
+  window._amsCreateMatch = function() {
+    if (!_selA || !_selB || _selA === _selB) return;
+    _amsCounter++;
+    var mk = 'ams-' + _amsCounter + '-' + Date.now();
+    var isHomeHuman = HUMANOS_AMS.indexOf(_selA) !== -1;
+    var isAwayHuman = HUMANOS_AMS.indexOf(_selB) !== -1;
+    var isHvH = isHomeHuman && isAwayHuman;
+    // Build match card using exposed function
+    if (typeof window._calBuildMatchCard !== 'function') { alert('Error: motor de partidos no disponible.'); return; }
+    var cardHtml = window._calBuildMatchCard(0, _selA, _selB, isHvH, mk);
+    var container = document.getElementById('ams-match-container');
+    if (!container) return;
+    container.innerHTML = cardHtml;
+    // Set up match state
+    var st = window._calMlSt(mk);
+    st.j = 0;
+    st.home = _selA;
+    st.away = _selB;
+    st.isHvH = isHvH;
+    st.isFriendly = true;
+    // Ensure the previa button calls mlPreviaClick with amistoso compKey
+    var previaBtn = document.getElementById('ml-previa-' + mk);
+    if (previaBtn) {
+      previaBtn.onclick = function() {
+        // For friendlies: no extra time, 12 or 16 min
+        var duracion = isHvH ? '16 min' : '12 min';
+        // Override _ppConfirm to also show the action-row for friendlies
+        var _origPpConfirm = window._ppConfirm;
+        window._ppConfirm = function() {
+          _origPpConfirm();
+          // Show the action-row for friendly matches
+          var actionRow = document.getElementById('ml-action-row-' + mk);
+          if (actionRow) actionRow.style.display = 'flex';
+          // Restore original
+          window._ppConfirm = _origPpConfirm;
+        };
+        if (typeof window.showPrePartidoOverlay === 'function') {
+          window.showPrePartidoOverlay(mk, 'amistoso', 'No', duracion, isHvH);
+        }
+      };
+    }
+    // Hide setup, show match
+    var setup = document.getElementById('ams-setup');
+    if (setup) setup.style.display = 'none';
+    // Add a "Nuevo Amistoso" button after match ends
+    window._amsPendingMk = mk;
+  };
+
+  /* ── Render friendly match history ── */
+  window._amsRenderHistory = function() {
+    var list = document.getElementById('ams-history-list');
+    var hdr = document.getElementById('ams-history-hdr');
+    if (!list) return;
+    var hist = [];
+    try { hist = JSON.parse(localStorage.getItem('friendlyMatchHistory') || '[]'); } catch(e){}
+    if (!hist.length) { if(hdr) hdr.style.display = 'none'; list.innerHTML = ''; return; }
+    if(hdr) hdr.style.display = '';
+    var icos = {gol:'\u26BD',propia:'\u26BD\ud83d\udeab','pen-gol':'\u26BD\ud83e\udd45','pen-fallo':'\u274c\ud83e\udd45','pen-prov':'\ud83e\udd26\ud83e\udd45','pen-parado':'\ud83d\udd90\ud83e\udd45','falta-gol':'\u26BD\ud83c\udfaf',amarilla:'\ud83d\udfe8','d-amarilla':'\ud83d\udfe8\ud83d\udfe5',roja:'\ud83d\udfe5',lesion:'\ud83e\ude79',mvp:'\u2b50'};
+    list.innerHTML = hist.slice(0, 20).map(function(m){
+      var d = new Date(m.date);
+      var dateStr = d.toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'});
+      var actaHtml = '';
+      if (m.events && m.events.length) {
+        actaHtml = '<div class="ams-hist-acta">' + m.events.map(function(e){
+          return (e.ico || icos[e.type] || '') + ' ' + e.min + "' " + _escH(e.player);
+        }).join('<br>') + '</div>';
+      }
+      return '<div class="ams-hist-card">'
+        + '<div class="ams-hist-top">'
+        + '<span class="ams-hist-teams">' + _escH(m.home) + ' vs ' + _escH(m.away) + '</span>'
+        + '<span class="ams-hist-score">' + m.scoreA + ' – ' + m.scoreB + '</span>'
+        + '</div>'
+        + '<div class="ams-hist-date">' + dateStr + (m.mvp ? ' · MVP: ' + _escH(m.mvp) : '') + '</div>'
+        + actaHtml
+        + '</div>';
+    }).join('');
+  };
+
+  /* ── Init screen ── */
+  window._initAmistososScreen = function() {
+    // Reset state
+    _selA = null; _selB = null;
+    var setup = document.getElementById('ams-setup');
+    if (setup) setup.style.display = '';
+    var container = document.getElementById('ams-match-container');
+    if (container) container.innerHTML = '';
+    // Clear search inputs
+    ['a','b'].forEach(function(side){
+      var input = document.getElementById('ams-search-' + side);
+      if (input) input.value = '';
+      var searchWrap = document.querySelector('#ams-pick-' + side + ' .ams-search-wrap');
+      if (searchWrap) searchWrap.style.display = '';
+      var selDiv = document.getElementById('ams-sel-' + side);
+      if (selDiv) selDiv.style.display = 'none';
+      var results = document.getElementById('ams-results-' + side);
+      if (results) results.innerHTML = '';
+    });
+    _updatePlayBtn();
+    _amsRenderHistory();
+  };
+
+  /* ── Bind search inputs ── */
+  document.addEventListener('DOMContentLoaded', function(){
+    ['a','b'].forEach(function(side){
+      var input = document.getElementById('ams-search-' + side);
+      if (input) {
+        input.addEventListener('input', function(){
+          _renderResults(side, input.value);
+        });
+      }
+    });
+    /* After friendly match finishes, allow creating a new one */
+    var origFinal = window._mlShowFinalThenPost;
+    if (!origFinal) {
+      /* Observe ams-match-container for finished state */
+      setInterval(function(){
+        if (!window._amsPendingMk) return;
+        var st = window._calMlSt && window._calMlSt(window._amsPendingMk);
+        if (st && st.finished) {
+          var container = document.getElementById('ams-match-container');
+          if (container && !document.getElementById('ams-new-btn')) {
+            var btn = document.createElement('button');
+            btn.id = 'ams-new-btn';
+            btn.className = 'ams-play-btn';
+            btn.textContent = '🔍 NUEVO AMISTOSO';
+            btn.style.margin = '12px 12px 0';
+            btn.style.width = 'calc(100% - 24px)';
+            btn.onclick = function() {
+              window._amsPendingMk = null;
+              if (typeof window._initAmistososScreen === 'function') window._initAmistososScreen();
+            };
+            container.appendChild(btn);
+          }
+        }
+      }, 1000);
+    }
   });
 }());
 </script>

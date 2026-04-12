@@ -1769,7 +1769,7 @@
 </div>
 <div class="pp-alerts" id="pp-alerts"></div>
 <div class="pp-list pp-list-h" id="pp-list"></div>
-<button class="pp-wa-btn" id="pp-wa-btn" disabled="" onclick="window._ppShareWA()">
+<button class="pp-wa-btn" id="pp-wa-btn" disabled="" style="display:none;" onclick="window._ppShareWA()">
   <svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17" style="flex-shrink:0"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>
   <span id="pp-wa-btn-label">Compartir Partido en WhatsApp</span>
 </button>
@@ -4005,6 +4005,7 @@
 
   /* ── COMPARTIR EN WHATSAPP — funciones globales ───────────── */
   // Compartir desde la pantalla de PREVIA (antes de empezar el partido)
+  // Texto: competición · local vs visitante · bajas del equipo humano
   window._ppShareWA = function() {
     var home = '', away = '', jornada = 0;
     if (window._ppPreviaTeams) {
@@ -4025,13 +4026,83 @@
       var jm = String(window._ppMatchKey).match(/(?:lj|j)(\d+)/);
       if (jm) jornada = parseInt(jm[1]);
     }
+    /* Etiqueta de competición */
+    var COMP_LABELS_WA = {
+      'liga':'Liga EA Sports','copa':'Copa del Rey','copa-fin':'Final Copa del Rey',
+      'sc':'Supercopa de España','sc-final':'Final Supercopa',
+      'usc':'UEFA Super Cup','usc-fin':'Final UEFA Super Cup',
+      'ucl':'Champions League','ucl-fin':'Final Champions League',
+      'uel':'Europa League','uel-fin':'Final Europa League',
+      'uecl':'Conference League','uecl-fin':'Final Conference League',
+      'superliga':'Superliga','inter':'Copa Intercontinental','inter-fin':'Final Intercontinental',
+      'amistoso':'Partido Amistoso'
+    };
+    var compLabel = (window._ppCompKey && COMP_LABELS_WA[window._ppCompKey]) || 'Partido';
+    if (jornada && (window._ppCompKey === 'liga' || !window._ppCompKey)) {
+      compLabel += ' · Jornada ' + jornada;
+    }
+    /* Determinar equipo humano */
+    var humanTeam = null;
+    try {
+      if (typeof window.esHumano === 'function') {
+        if (window.esHumano(home)) humanTeam = home;
+        else if (window.esHumano(away)) humanTeam = away;
+      }
+    } catch(_) {}
+    /* Recoger bajas del equipo humano */
+    var bajaLines = [];
+    if (humanTeam) {
+      var normFn = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
+      var nH = normFn(humanTeam);
+      var belongs = function(name) {
+        if (typeof window._ppPlayerBelongsToMatch === 'function') {
+          /* fallback heurístico: usar SQUAD_REGISTRY */
+        }
+        var squads = window.SQUAD_REGISTRY || {};
+        for (var team in squads) {
+          if (normFn(team) !== nH) continue;
+          var arr = squads[team] || [];
+          for (var i = 0; i < arr.length; i++) {
+            var pl = arr[i];
+            if (Array.isArray(pl) && pl[1] === name) return true;
+            if (pl && pl.nombre === name) return true;
+          }
+        }
+        return false;
+      };
+      var bajas = window.BAJA_STORE || {};
+      var lesiones = window.LESION_STORE || {};
+      Object.keys(bajas).forEach(function(n) {
+        if (!belongs(n)) return;
+        var b = bajas[n];
+        var t = b && (b.tipo || b);
+        if (t === 'sancion')   bajaLines.push('🟨 Sancionado: ' + n);
+        else if (t === 'expulsion') bajaLines.push('🟥 Expulsado: ' + n);
+      });
+      Object.keys(lesiones).forEach(function(n) {
+        if (!belongs(n)) return;
+        var l = lesiones[n];
+        var ico = l.grado === 3 ? '🚑' : (l.grado === 2 ? '💉' : '🩹');
+        bajaLines.push(ico + ' Lesionado: ' + n + (l.descripcion ? ' (' + l.descripcion + ')' : ''));
+      });
+    }
     var lines = [];
-    if (jornada) lines.push('🏆 Jornada ' + jornada);
+    lines.push('🏆 ' + compLabel);
     lines.push('⚽ ' + home + ' vs ' + away);
-    lines.push('');
-    lines.push('¡Estamos a punto de jugar!');
+    if (humanTeam) {
+      lines.push('');
+      if (bajaLines.length) {
+        lines.push('🚑 Bajas de ' + humanTeam + ':');
+        lines = lines.concat(bajaLines);
+      } else {
+        lines.push('✅ ' + humanTeam + ' — Plantilla al 100%');
+      }
+    }
     var twitch = window._ppSelectedTwitch;
-    if (twitch) lines.push('📺 En directo: https://twitch.tv/' + twitch);
+    if (twitch) {
+      lines.push('');
+      lines.push('📺 En directo: https://twitch.tv/' + twitch);
+    }
     try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
   };
 

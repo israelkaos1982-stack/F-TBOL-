@@ -5006,24 +5006,52 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     });
   };
 
-  /* Editar duración del partido */
+  /* Modal para seleccionar duración (1-30 min) — reemplaza prompt() nativo */
+  function _ensureDurationModal() {
+    if (document.getElementById('pp-dur-modal')) return;
+    var m = document.createElement('div');
+    m.id = 'pp-dur-modal';
+    m.style.cssText = 'display:none;position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:16px;';
+    var opts = '';
+    for (var i = 1; i <= 30; i++) {
+      opts += '<button class="pp-dur-opt" data-min="' + i + '" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-family:Oswald,sans-serif;font-size:14px;font-weight:700;padding:12px 0;cursor:pointer;transition:all .15s;">' + i + "'</button>";
+    }
+    m.innerHTML =
+      '<div style="background:linear-gradient(160deg,#0d1117,#161b22);border:1px solid rgba(240,192,64,.4);border-radius:14px;padding:22px 20px 16px;width:320px;max-width:92vw;text-align:center;box-shadow:0 0 40px rgba(0,0,0,.9);">'
+      + '<div style="font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;color:#f0c040;margin-bottom:16px;">⏱️ DURACIÓN DEL PARTIDO</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;max-height:260px;overflow-y:auto;padding:4px;">' + opts + '</div>'
+      + '<button id="pp-dur-cancel" style="background:none;border:none;color:rgba(255,255,255,.4);font-size:12px;font-family:Rajdhani,sans-serif;letter-spacing:1.5px;cursor:pointer;padding:10px;margin-top:12px;">CANCELAR</button>'
+      + '</div>';
+    document.body.appendChild(m);
+    m.querySelectorAll('.pp-dur-opt').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var mins = parseInt(btn.getAttribute('data-min'), 10);
+        window._ppDurationMin = mins;
+        /* Re-renderizar items */
+        var isHvH = false;
+        if (_ppMatchKey) {
+          var w = document.getElementById('mlw-' + _ppMatchKey);
+          isHvH = w && w.classList.contains('hvh');
+        }
+        _ppItems = _buildItems(_ppMatchKey, _ppCompKey, 'No', mins + ' min', isHvH);
+        _renderList(_ppItems);
+        _updateBtn();
+        m.style.display = 'none';
+      });
+    });
+    document.getElementById('pp-dur-cancel').addEventListener('click', function(e) {
+      e.stopPropagation();
+      m.style.display = 'none';
+    });
+  }
+
+  /* Editar duración del partido — requiere PIN admin */
   window._ppEditDuration = function() {
     window._ppAdminGate(function() {
-      var cur = window._ppDurationMin || (document.querySelector('.pp-item[data-ppid="duracion"] .pp-item-val') || {}).textContent || '';
-      var input = prompt('⏱️ Duración del partido (minutos, 1-30):', String(parseInt(cur) || 10));
-      if (input === null) return;
-      var mins = parseInt(input, 10);
-      if (isNaN(mins) || mins < 1 || mins > 30) { alert('❌ Valor no válido. Debe ser entre 1 y 30 minutos.'); return; }
-      window._ppDurationMin = mins;
-      /* Re-renderizar items */
-      var isHvH = false;
-      if (_ppMatchKey) {
-        var w = document.getElementById('mlw-' + _ppMatchKey);
-        isHvH = w && w.classList.contains('hvh');
-      }
-      _ppItems = _buildItems(_ppMatchKey, _ppCompKey, 'No', mins + ' min', isHvH);
-      _renderList(_ppItems);
-      _updateBtn();
+      _ensureDurationModal();
+      var m = document.getElementById('pp-dur-modal');
+      if (m) m.style.display = 'flex';
     });
   };
 
@@ -5036,11 +5064,12 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var rect = btn.getBoundingClientRect();
     var dd = document.createElement('div');
     dd.id = 'pp-form-dropdown';
-    dd.style.cssText = 'position:fixed;z-index:9999;background:rgba(10,10,24,.98);border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:160px;';
-    dd.style.left = Math.max(10, rect.left - 30) + 'px';
+    /* z-index MAX para que esté encima del prepartido-overlay (10010) */
+    dd.style.cssText = 'position:fixed;z-index:2147483646;background:rgba(10,10,24,.98);border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:180px;';
+    dd.style.left = Math.max(10, Math.min(window.innerWidth - 200, rect.left - 30)) + 'px';
     dd.style.top = (rect.bottom + 6) + 'px';
     dd.innerHTML = FORM_VARIANTS.map(function(v) {
-      return '<div class="pp-form-opt" data-ico="' + v.ico + '" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-radius:6px;color:' + v.color + ';font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;transition:background .15s;"><span style="font-size:18px;">' + v.ico + '</span>' + v.name.toUpperCase() + '</div>';
+      return '<div class="pp-form-opt" data-ico="' + v.ico + '" style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-radius:6px;color:' + v.color + ';font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;transition:background .15s;"><span style="font-size:20px;">' + v.ico + '</span>' + v.name.toUpperCase() + '</div>';
     }).join('');
     document.body.appendChild(dd);
     dd.querySelectorAll('.pp-form-opt').forEach(function(el) {

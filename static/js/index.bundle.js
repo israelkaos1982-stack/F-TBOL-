@@ -5287,23 +5287,21 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
       var lA = _pickLogo(_svgImgs[0], home);
       var lB = _pickLogo(_svgImgs[1], away);
-      var imgA = lA ? '<img src="'+lA+'" alt="'+home+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
-      var imgB = lB ? '<img src="'+lB+'" alt="'+away+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
-      /* Nivel por equipo: Crack / Leyenda / IA */
+      var imgA = lA ? '<img src="'+lA+'" alt="'+home+'" style="width:84px;height:84px;object-fit:contain;display:block;margin:0 auto;"/>' : '<span style="font-size:54px;">🛡️</span>';
+      var imgB = lB ? '<img src="'+lB+'" alt="'+away+'" style="width:84px;height:84px;object-fit:contain;display:block;margin:0 auto;"/>' : '<span style="font-size:54px;">🛡️</span>';
+      /* Nivel por equipo: Crack / Leyenda (solo humanos) */
       function _teamLevel(name) {
         var normFn = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
         var n = normFn(name);
-        if (normFn('Atlético Madrid') === n || normFn('Atletico Madrid') === n) return { lbl: '🏅 LEYENDA', color: '#ffbb33' };
-        if (normFn('Real Madrid') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff' };
-        if (normFn('FC Barcelona') === n || normFn('Barcelona') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff' };
-        if (normFn('Bayern Munich') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff' };
-        if (normFn('Arsenal') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff' };
-        return { lbl: '🤖 IA', color: 'rgba(255,255,255,.45)' };
+        if (normFn('Atlético Madrid') === n || normFn('Atletico Madrid') === n) return { lbl: '🏅 LEYENDA', color: '#ffbb33', short: 'LEYENDA' };
+        if (normFn('Real Madrid') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
+        if (normFn('FC Barcelona') === n || normFn('Barcelona') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
+        if (normFn('Bayern Munich') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
+        if (normFn('Arsenal') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
+        return null; /* IA teams → no badge */
       }
-      function _levelHtml(name) {
-        var lvl = _teamLevel(name);
-        return '<div style="margin-top:4px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:' + lvl.color + ';">' + lvl.lbl + '</div>';
-      }
+      var lvlA = _teamLevel(home);
+      var lvlB = _teamLevel(away);
       /* Form state buttons — bajo cada escudo */
       function _formBtnHtml(side) {
         var ico = (window._ppFormStates && window._ppFormStates[side]) || '🎲';
@@ -5311,11 +5309,29 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         var variant = null;
         for (var v = 0; v < variants.length; v++) { if (variants[v].ico === ico) { variant = variants[v]; break; } }
         if (!variant) variant = { color: 'rgba(255,255,255,.85)' };
-        return '<button id="pp-form-' + side + '" type="button" title="Estado de forma (admin)" style="margin-top:8px;background:rgba(10,10,24,.6);border:2px solid ' + variant.color + ';border-radius:10px;padding:8px 18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 10px ' + variant.color + '55;transition:all .2s;pointer-events:auto;position:relative;z-index:10;font-size:22px;line-height:1;">' + ico + '</button>';
+        return '<button id="pp-form-' + side + '" type="button" title="Estado de forma (admin)" style="margin-top:10px;background:rgba(10,10,24,.6);border:2px solid ' + variant.color + ';border-radius:10px;padding:8px 18px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 10px ' + variant.color + '55;transition:all .2s;pointer-events:auto;position:relative;z-index:10;font-size:22px;line-height:1;">' + ico + '</button>';
       }
-      vs.innerHTML = '<div style="text-align:center;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+home.toUpperCase()+'</div>'+_levelHtml(home)+_formBtnHtml('home')+'</div>'
-        + '<div class="pp-vs-mid" style="padding:0 8px;">VS</div>'
-        + '<div style="text-align:center;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+away.toUpperCase()+'</div>'+_levelHtml(away)+_formBtnHtml('away')+'</div>';
+      /* Center column: NIVEL + VS + Duración */
+      var nivelHtml = '';
+      if (lvlA || lvlB) {
+        var aTxt = lvlA ? '<span style="color:'+lvlA.color+';">'+lvlA.short+'</span>' : '<span style="color:rgba(255,255,255,.35);">—</span>';
+        var bTxt = lvlB ? '<span style="color:'+lvlB.color+';">'+lvlB.short+'</span>' : '<span style="color:rgba(255,255,255,.35);">—</span>';
+        nivelHtml = '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#5aa9ff;text-align:center;">NIVEL</div>'
+          + '<div style="font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;text-align:center;margin-top:2px;">' + aTxt + ' · ' + bTxt + '</div>';
+      }
+      /* Duración central — tap para editar con admin PIN */
+      var isHvHCenter = wrap && wrap.classList.contains('hvh');
+      var durText = (window._ppDurationMin || (isHvHCenter ? 10 : 8)) + ' min';
+      var durHtml = '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#f0c040;text-align:center;margin-top:10px;">DURACIÓN</div>'
+        + '<div id="pp-dur-center" onclick="window._ppEditDuration&&window._ppEditDuration()" style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#fff;text-align:center;cursor:pointer;text-decoration:underline dotted rgba(240,192,64,.4);margin-top:2px;">' + durText + '</div>';
+      var centerHtml = '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 6px;min-width:110px;">'
+        + nivelHtml
+        + '<div class="pp-vs-mid" style="padding:10px 0 0;font-size:28px;">VS</div>'
+        + durHtml
+        + '</div>';
+      vs.innerHTML = '<div style="flex:1;text-align:center;min-width:0;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+home.toUpperCase()+'</div>'+_formBtnHtml('home')+'</div>'
+        + centerHtml
+        + '<div style="flex:1;text-align:center;min-width:0;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+away.toUpperCase()+'</div>'+_formBtnHtml('away')+'</div>';
       /* Wire form buttons via addEventListener (more reliable on mobile than inline onclick) */
       ['home','away'].forEach(function(side) {
         var b = document.getElementById('pp-form-' + side);

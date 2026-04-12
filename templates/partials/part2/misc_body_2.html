@@ -2642,39 +2642,30 @@
     }
     return { gh: Math.floor(Math.random() * 4), ga: Math.floor(Math.random() * 4) };
   }
-  /* ── EXPULSIÓN IA: pre-roll de rojas y penalización del 30% ── */
-  var _RED_CARD_PENALTY = 0.30; /* 30% reducción por expulsión */
+  /* ── EXPULSIÓN IA: pre-roll de rojas y penalización de 30 PUNTOS ── */
+  var _RED_CARD_FLAT_PENALTY = 30; /* 30 puntos planos por expulsión */
   function _rollRedCards() {
-    var reds = [];
-    /* Amarillas (2-4) con posibilidad de doble amarilla → roja */
-    var numYellow = Math.floor(Math.random() * 3) + 2;
-    var yellows = {};
-    for (var c = 0; c < numYellow; c++) {
-      var ct = Math.random() < 0.5 ? 'home' : 'away';
-      var cmin = Math.floor(Math.random() * 80) + 5;
-      var key = ct + '-' + c;
-      if (yellows[ct]) {
-        reds.push({ side: ct, min: cmin, reason: '2TA' });
-        yellows[ct] = false;
-      } else {
-        yellows[ct] = true;
-      }
-    }
-    /* Roja directa (~15%) */
+    /* Máximo 1 roja por partido (~15% de probabilidad) */
     if (Math.random() < 0.15) {
-      var rt = Math.random() < 0.5 ? 'home' : 'away';
-      reds.push({ side: rt, min: Math.floor(Math.random() * 80) + 10, reason: 'directa' });
+      var side = Math.random() < 0.5 ? 'home' : 'away';
+      var min = Math.floor(Math.random() * 70) + 10;
+      var reason = Math.random() < 0.6 ? 'directa' : '2TA';
+      return [{ side: side, min: min, reason: reason }];
     }
-    return reds;
+    return [];
   }
   function _applyRedCardPenalty(rating, reds, side) {
-    var penalty = 1;
+    var count = 0;
+    var earliestMin = 90;
     reds.forEach(function(r) {
       if (r.side !== side) return;
-      var remaining = Math.max(0, (90 - r.min) / 90);
-      penalty *= (1 - _RED_CARD_PENALTY * remaining);
+      count++;
+      if (r.min < earliestMin) earliestMin = r.min;
     });
-    return rating * penalty;
+    if (!count) return rating;
+    /* 30 puntos planos de penalización ponderados por tiempo restante */
+    var remaining = Math.max(0, (90 - earliestMin) / 90);
+    return Math.max(30, rating - (_RED_CARD_FLAT_PENALTY * remaining * count));
   }
 
   function _simIAvsIAWithContext(home, away, j) {
@@ -5133,17 +5124,8 @@
     }
 
     /* ── ROJAS / DOBLE AMARILLA adicionales ── */
-    /* Red cards: 8% direct red, 5% double yellow */
-    var roll = Math.random();
-    if (roll < 0.08) {
-      var rt = Math.random()<0.5?'a':'b'; var rp = rndSq(rt==='a'?outA:outB);
-      evts.push({ type:'roja', ico:'🟥', min:rndMin(), num:rp[0]||'', player:rp[1]||'?', team:rt });
-    } else if (roll < 0.13) {
-      var dt = Math.random()<0.5?'a':'b'; var dp = rndSq(dt==='a'?outA:outB);
-      var m1 = 5+Math.floor(Math.random()*40); var m2 = m1+5+Math.floor(Math.random()*30);
-      evts.push({ type:'amarilla', ico:'🟨', min:m1, num:dp[0]||'', player:dp[1]||'?', team:dt });
-      evts.push({ type:'roja', ico:'🟨🟥', min:Math.min(m2,90), num:dp[0]||'', player:dp[1]||'?', team:dt, dbl:true });
-    }
+    /* ELIMINADO: las rojas ya se generan en genMatchEvents.
+       Esta sección duplicaba tarjetas rojas causando 3+ expulsiones por partido. */
 
     /* ── LESIONES ── */
     /* Injuries: ~5% per team (leve 55%, moderada 30%, grave 15%) */
@@ -5473,49 +5455,65 @@
       outB = getOutfield(activeB); if (!outB.length) outB = [['','Jugador B','F',76,'titular']];
     }
 
-    // ── TARJETAS: 2-4 amarillas; 2ª al mismo jugador → roja ────────
+    // ── TARJETAS: 2-4 amarillas; máximo 1 roja por partido ────────
     // Se generan ANTES que los goles para poder excluir expulsados del marcador
-    // Si hay preReds de la simulación, usarlos para las rojas (ya afectaron al marcador)
     var expelledA = {}; // nombre → minuto de expulsión
     var expelledB = {};
     var _preReds = (simCtx && simCtx.preReds) ? simCtx.preReds : null;
-    var _preRedUsed = {}; // track which pre-rolled reds we've injected
 
-    var numYellow = Math.floor(Math.random() * 3) + 2;
-    var yellowsReceived = {};
-    for (var c = 0; c < numYellow; c++) {
-      var ct = Math.random() < 0.5 ? 'a' : 'b';
-      var csq = ct === 'a' ? outA : outB;
-      var cp = csq[Math.floor(Math.random()*csq.length)];
-      var cmin = Math.floor(Math.random()*80)+5;
-      if (yellowsReceived[cp[1]]) {
-        events.push({ type:'roja', ico:'🟥', min:cmin, num:cp[0]||'', player:cp[1]||'?', team:ct, reason:'2TA' });
-        var expMapY = ct === 'a' ? expelledA : expelledB;
-        if (expMapY[cp[1]] === undefined) expMapY[cp[1]] = cmin;
-      } else {
-        events.push({ type:'amarilla', ico:'🟨', min:cmin, num:cp[0]||'', player:cp[1]||'?', team:ct });
-        yellowsReceived[cp[1]] = true;
-      }
-    }
-    // Rojas: usar pre-rolled si disponibles (ya afectaron al rating del marcador),
-    // o generar aleatoriamente si no hay contexto de simulación
+    // Primero: inyectar la roja pre-rolled (si existe) o generar una nueva
+    var _redInjected = false;
     if (_preReds && _preReds.length) {
       _preReds.forEach(function(pr) {
         var rt = pr.side === 'home' ? 'a' : 'b';
         var rsq = rt === 'a' ? outA : outB;
         var rp = rsq[Math.floor(Math.random()*rsq.length)];
-        events.push({ type:'roja', ico:'🟥', min:pr.min, num:rp[0]||'', player:rp[1]||'?', team:rt, reason:pr.reason || 'directa' });
-        var expMapPR = rt === 'a' ? expelledA : expelledB;
-        if (expMapPR[rp[1]] === undefined) expMapPR[rp[1]] = pr.min;
+        if (pr.reason === '2TA') {
+          // Doble amarilla: generar amarilla previa + roja
+          var yelMin = Math.max(5, pr.min - 10 - Math.floor(Math.random()*25));
+          events.push({ type:'amarilla', ico:'🟨', min:yelMin, num:rp[0]||'', player:rp[1]||'?', team:rt });
+          events.push({ type:'roja', ico:'🟨🟥', min:pr.min, num:rp[0]||'', player:rp[1]||'?', team:rt, reason:'2TA' });
+        } else {
+          events.push({ type:'roja', ico:'🟥', min:pr.min, num:rp[0]||'', player:rp[1]||'?', team:rt, reason:'directa' });
+        }
+        var expMap = rt === 'a' ? expelledA : expelledB;
+        expMap[rp[1]] = pr.min;
+        _redInjected = true;
       });
     } else if (Math.random() < 0.15) {
       var rt = Math.random() < 0.5 ? 'a' : 'b';
       var rsq = rt === 'a' ? outA : outB;
       var rp = rsq[Math.floor(Math.random()*rsq.length)];
-      var rmin = Math.floor(Math.random()*80)+10;
+      var rmin = Math.floor(Math.random()*70)+10;
       events.push({ type:'roja', ico:'🟥', min:rmin, num:rp[0]||'', player:rp[1]||'?', team:rt, reason:'directa' });
       var expMapR = rt === 'a' ? expelledA : expelledB;
-      if (expMapR[rp[1]] === undefined) expMapR[rp[1]] = rmin;
+      expMapR[rp[1]] = rmin;
+      _redInjected = true;
+    }
+
+    // Después: amarillas normales (2-4), excluyendo jugadores ya expulsados
+    function _isExpelled(name) { return expelledA[name] !== undefined || expelledB[name] !== undefined; }
+    var numYellow = Math.floor(Math.random() * 3) + 2;
+    var yellowsReceived = {};
+    for (var c = 0; c < numYellow; c++) {
+      var ct = Math.random() < 0.5 ? 'a' : 'b';
+      var csq = ct === 'a' ? outA : outB;
+      // Filtrar expulsados del pool de candidatos
+      var eligible = csq.filter(function(p){ return !_isExpelled(p[1]); });
+      if (!eligible.length) continue;
+      var cp = eligible[Math.floor(Math.random()*eligible.length)];
+      var cmin = Math.floor(Math.random()*80)+5;
+      // Si ya tiene amarilla → doble amarilla (roja), pero solo si no hay roja ya en el partido
+      if (yellowsReceived[cp[1]] && !_redInjected) {
+        events.push({ type:'roja', ico:'🟨🟥', min:cmin, num:cp[0]||'', player:cp[1]||'?', team:ct, reason:'2TA' });
+        var expMapY = ct === 'a' ? expelledA : expelledB;
+        expMapY[cp[1]] = cmin;
+        _redInjected = true;
+      } else if (!yellowsReceived[cp[1]]) {
+        events.push({ type:'amarilla', ico:'🟨', min:cmin, num:cp[0]||'', player:cp[1]||'?', team:ct });
+        yellowsReceived[cp[1]] = true;
+      }
+      // Si ya tiene amarilla pero ya hay roja en el partido, simplemente no generar más tarjeta
     }
 
     // ── GOLES: minutoss aleatorios + selección ponderada ───────────

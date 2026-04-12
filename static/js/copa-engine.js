@@ -469,19 +469,23 @@
       }
     });
 
-    /* ── EXPULSIÓN: penalizar 30% del rating por cada roja ── */
-    var RED_PENALTY = 0.30;
+    /* ── EXPULSIÓN: penalizar 30 PUNTOS planos por cada roja ── */
+    var RED_FLAT_PENALTY = 30;
     var adjRatingA = ratingA, adjRatingB = ratingB;
-    Object.keys(expelledA).forEach(function(name) {
-      var redMin = expelledA[name];
-      var remaining = Math.max(0, (90 - redMin) / 90);
-      adjRatingA *= (1 - RED_PENALTY * remaining);
-    });
-    Object.keys(expelledB).forEach(function(name) {
-      var redMin = expelledB[name];
-      var remaining = Math.max(0, (90 - redMin) / 90);
-      adjRatingB *= (1 - RED_PENALTY * remaining);
-    });
+    var redCountA = Object.keys(expelledA).length;
+    var redCountB = Object.keys(expelledB).length;
+    if (redCountA > 0) {
+      var earliestA = 90;
+      Object.keys(expelledA).forEach(function(name) { if (expelledA[name] < earliestA) earliestA = expelledA[name]; });
+      var remainingA = Math.max(0, (90 - earliestA) / 90);
+      adjRatingA = Math.max(30, ratingA - (RED_FLAT_PENALTY * remainingA * redCountA));
+    }
+    if (redCountB > 0) {
+      var earliestB = 90;
+      Object.keys(expelledB).forEach(function(name) { if (expelledB[name] < earliestB) earliestB = expelledB[name]; });
+      var remainingB = Math.max(0, (90 - earliestB) / 90);
+      adjRatingB = Math.max(30, ratingB - (RED_FLAT_PENALTY * remainingB * redCountB));
+    }
 
     var strengthA = adjRatingA * 1.10; // bonus local del 10%
     var strengthB = adjRatingB;

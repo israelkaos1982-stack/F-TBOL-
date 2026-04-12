@@ -3413,6 +3413,21 @@ function _renderSancionBanner(matchKey, bodyEl) {
   };
   var cfg = sancionCompConfig[compKey] || { label: compKey, esFinal: false };
   var sanciones = (!cfg.esFinal && window.SANCION_STORE[compKey]) ? window.SANCION_STORE[compKey] : [];
+  /* Filtrar por los 2 equipos del partido en curso */
+  var wrap = document.getElementById('mlw-' + matchKey);
+  if (wrap) {
+    var names = wrap.querySelectorAll('.ml-team-name');
+    var hName = ((names[0]||{}).textContent||'').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+    var aName = ((names[1]||{}).textContent||'').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+    var normFn = window._ppNormTeam || function(s){ return String(s||'').toLowerCase(); };
+    var nH = normFn(hName), nA = normFn(aName);
+    sanciones = sanciones.filter(function(s) {
+      var nt = normFn(s.team || '');
+      return nt === nH || nt === nA
+        || (nt && (nt.indexOf(nH) !== -1 || nH.indexOf(nt) !== -1))
+        || (nt && (nt.indexOf(nA) !== -1 || nA.indexOf(nt) !== -1));
+    });
+  }
   // Eliminar banner anterior
   var prev = bodyEl.querySelector('.sancion-acta-banner');
   if (prev) prev.remove();
@@ -4807,6 +4822,69 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   var _ppMatchKey = null;
   var _ppCompKey  = null;
   var _ppChecked  = {};
+
+  /* ── Helper global: obtener los 2 equipos del partido actual ── */
+  window._ppGetCurrentMatchTeams = function() {
+    var mk = _ppMatchKey;
+    if (!mk) return null;
+    var wrap = document.getElementById('mlw-' + mk);
+    if (wrap) {
+      var names = wrap.querySelectorAll('.ml-team-name');
+      var h = ((names[0]||{}).textContent||'').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+      var a = ((names[1]||{}).textContent||'').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
+      if (h && a) return { home: h, away: a };
+    }
+    if (window._ppPreviaTeams) return { home: window._ppPreviaTeams.home, away: window._ppPreviaTeams.away };
+    return null;
+  };
+
+  /* ── Helper global: normalizar nombre de equipo para comparación ── */
+  window._ppNormTeam = function(s) {
+    return String(s||'').trim().toLowerCase()
+      .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u').replace(/ü/g,'u').replace(/ñ/g,'n')
+      .replace(/\s+cf$|\s+fc$|\s+ud$/i,'')
+      .replace(/^(fc|cf|ud)\s+/,'');
+  };
+
+  /* ── Helper global: ¿un jugador pertenece a alguno de los 2 equipos del partido? ── */
+  window._ppPlayerBelongsToMatch = function(playerName) {
+    var teams = window._ppGetCurrentMatchTeams();
+    if (!teams) return true; /* no match context → show everything (fallback) */
+    var normHome = window._ppNormTeam(teams.home);
+    var normAway = window._ppNormTeam(teams.away);
+    function matches(teamName) {
+      var nt = window._ppNormTeam(teamName);
+      return nt === normHome || nt === normAway
+        || (nt && (nt.indexOf(normHome) !== -1 || normHome.indexOf(nt) !== -1))
+        || (nt && (nt.indexOf(normAway) !== -1 || normAway.indexOf(nt) !== -1));
+    }
+    /* LESION_STORE.equipo */
+    var les = window.LESION_STORE && window.LESION_STORE[playerName];
+    if (les && les.equipo && matches(les.equipo)) return true;
+    /* SANCION_STORE[comp][i].team */
+    var sancionStore = window.SANCION_STORE || {};
+    for (var comp in sancionStore) {
+      if (!sancionStore.hasOwnProperty(comp)) continue;
+      var arr = sancionStore[comp] || [];
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && arr[i].name === playerName && matches(arr[i].team)) return true;
+      }
+    }
+    /* SQUAD_REGISTRY fallback */
+    if (window.SQUAD_REGISTRY) {
+      var candidateTeams = Object.keys(window.SQUAD_REGISTRY).filter(matches);
+      for (var t = 0; t < candidateTeams.length; t++) {
+        var sq = window.SQUAD_REGISTRY[candidateTeams[t]] || [];
+        for (var p = 0; p < sq.length; p++) {
+          var pl = sq[p];
+          if (!pl || pl.h) continue;
+          if (Array.isArray(pl) && pl[1] === playerName) return true;
+          if (pl && pl.nombre === playerName) return true;
+        }
+      }
+    }
+    return false;
+  };
   var _ppItems    = [];
 
   function _buildItems(matchKey, compKey, prorroga, duracion, isHvH) {
@@ -4930,52 +5008,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var alertsHtml = '';
       var bajas = window.BAJA_STORE || {};
       var lesionesStore = window.LESION_STORE || {};
-      var sancionStore = window.SANCION_STORE || {};
-      /* Normalize team names for comparison (uppercase from DOM vs canonical) */
-      function _normTeam(s) {
-        return String(s||'').trim().toLowerCase()
-          .replace(/\s+cf$|\s+fc$|\s+ud$/i,'')
-          .replace(/^real\s+/,'real ')
-          .replace(/^(fc|cf|ud)\s+/,'');
-      }
-      var normHome = _normTeam(home);
-      var normAway = _normTeam(away);
-      function _teamMatches(teamName) {
-        var nt = _normTeam(teamName);
-        return nt === normHome || nt === normAway
-          || nt.indexOf(normHome) !== -1 || normHome.indexOf(nt) !== -1
-          || nt.indexOf(normAway) !== -1 || normAway.indexOf(nt) !== -1;
-      }
-      function _belongsToMatch(playerName) {
-        /* Check LESION_STORE.equipo */
-        var les = lesionesStore[playerName];
-        if (les && les.equipo && _teamMatches(les.equipo)) return true;
-        /* Check SANCION_STORE across all comps */
-        for (var comp in sancionStore) {
-          if (!sancionStore.hasOwnProperty(comp)) continue;
-          var arr = sancionStore[comp] || [];
-          for (var i = 0; i < arr.length; i++) {
-            if (arr[i] && arr[i].name === playerName && _teamMatches(arr[i].team)) return true;
-          }
-        }
-        /* Check SQUAD_REGISTRY as fallback */
-        if (window.SQUAD_REGISTRY) {
-          var candidateTeams = Object.keys(window.SQUAD_REGISTRY).filter(_teamMatches);
-          for (var t = 0; t < candidateTeams.length; t++) {
-            var sq = window.SQUAD_REGISTRY[candidateTeams[t]] || [];
-            for (var p = 0; p < sq.length; p++) {
-              var pl = sq[p];
-              if (!pl || pl.h) continue;
-              if (Array.isArray(pl) && pl[1] === playerName) return true;
-              if (pl && pl.nombre === playerName) return true;
-            }
-          }
-        }
-        return false;
-      }
-      var sancionados = Object.keys(bajas).filter(function(n){ var b=bajas[n]; return b && (b.tipo||b)==='sancion' && _belongsToMatch(n); });
-      var expulsados   = Object.keys(bajas).filter(function(n){ var b=bajas[n]; return b && (b.tipo||b)==='expulsion' && _belongsToMatch(n); });
-      var lesionados   = Object.keys(lesionesStore).filter(function(n){ return _belongsToMatch(n); });
+      /* Solo jugadores de los 2 equipos del partido actual */
+      var belongs = window._ppPlayerBelongsToMatch || function(){ return true; };
+      var sancionados = Object.keys(bajas).filter(function(n){ var b=bajas[n]; return b && (b.tipo||b)==='sancion' && belongs(n); });
+      var expulsados   = Object.keys(bajas).filter(function(n){ var b=bajas[n]; return b && (b.tipo||b)==='expulsion' && belongs(n); });
+      var lesionados   = Object.keys(lesionesStore).filter(function(n){ return belongs(n); });
       sancionados.forEach(function(n) {
         var b=bajas[n]; var pts=(b&&b.liga)?b.liga+'P Liga':'';
         alertsHtml += '<div class="pp-alert-row pp-alert-yel">🟨 SANCIONADO: '+n+(pts?' · '+pts:'')+'</div>';
@@ -5583,7 +5620,8 @@ window.sqFromRegistryFull = function(teamName) {
 window._refreshSancionInjList = function() {
   var listInj = document.getElementById('sancion-ov-list-inj');
   if (!listInj) return;
-  var bajas = Object.keys(window.BAJA_STORE);
+  var belongs = window._ppPlayerBelongsToMatch || function(){ return true; };
+  var bajas = Object.keys(window.BAJA_STORE).filter(belongs);
   if (!bajas.length) {
     listInj.innerHTML = '<div class="sancion-empty">🚑 Sin lesionados</div>';
     return;
@@ -6151,7 +6189,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   window._refreshSancionInjList = function() {
     var listInj = document.getElementById('sancion-ov-list-inj');
     if (!listInj) return;
-    var lesiones = Object.keys(window.LESION_STORE);
+    var belongs = window._ppPlayerBelongsToMatch || function(){ return true; };
+    var lesiones = Object.keys(window.LESION_STORE).filter(belongs);
     if (!lesiones.length) {
       listInj.innerHTML = '<div class="sancion-empty">🚑 Sin lesionados</div>';
       return;

@@ -5102,12 +5102,14 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         if (FORM_VARIANTS[i].ico === ico) { variant = FORM_VARIANTS[i]; break; }
       }
       if (!variant) variant = FORM_VARIANTS[0];
-      btn.innerHTML = '<span style="font-size:22px;line-height:1;">' + variant.ico + '</span>';
+      btn.textContent = variant.ico;
       btn.style.borderColor = variant.color;
       btn.style.boxShadow = '0 0 10px ' + variant.color + '55';
     }
     /* Pésima → lesión automática */
     if (ico === '⬇️') window._ppTriggerInjury(side);
+    /* Refrescar estado del botón WhatsApp */
+    if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
   };
 
   /* Pésima → lesiona a un jugador aleatorio del equipo */
@@ -5402,7 +5404,25 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var done = _checkAllDone();
     btn.disabled = !done;
     btn.textContent = done ? '🎮 CONFIRMAR CONFIGURACIÓN' : '🔒 COMPLETA LAS CASILLAS';
+    /* WhatsApp button: requiere Twitch + todas las casillas + estado forma definido */
+    var waBtn = document.getElementById('pp-wa-btn');
+    var waLbl = document.getElementById('pp-wa-btn-label');
+    if (waBtn) {
+      var hasTwitch = !!(window._ppSelectedTwitch && window._ppSelectedTwitch.length);
+      var formOk = !!(window._ppFormStates && window._ppFormStates.home && window._ppFormStates.away);
+      var ok = done && hasTwitch && formOk;
+      waBtn.disabled = !ok;
+      waBtn.style.opacity = ok ? '' : '0.45';
+      if (waLbl) {
+        if (ok) waLbl.textContent = 'Compartir Partido en WhatsApp';
+        else if (!hasTwitch) waLbl.textContent = '🔒 Selecciona canal de Twitch';
+        else if (!done) waLbl.textContent = '🔒 Completa las casillas';
+        else waLbl.textContent = '🔒 Estado de forma pendiente';
+      }
+    }
   }
+  /* Expose to global so external handlers can refresh the unlock state */
+  window._ppRefreshUnlock = _updateBtn;
 
   window._ppToggle = function(id) {
     _ppChecked[id] = !_ppChecked[id];
@@ -8336,6 +8356,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     window._ppSelectedTwitch = val;
     var sel = document.getElementById('pp-twitch-select');
     if (sel) sel.value = val;
+    /* Actualizar estado del botón WhatsApp y confirm */
+    if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
   };
 
   /* ── 2. SOUND ENGINE (Web Audio API) ─────────────────────────────── */

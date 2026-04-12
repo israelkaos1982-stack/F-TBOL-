@@ -630,6 +630,8 @@
     syncRoundToCalendar('cua_ida', sorteo.cua || [], resultados.cua_ida || [], false);
     syncRoundToCalendar('cua_vta', sorteo.cua || [], resultados.cua_vta || [], true);
     syncRoundToCalendar('fin', sorteo.fin || [], resultados.fin || [], false);
+    /* Trigger universal jornada completion check */
+    if (typeof window._updateAllJornadaStatus === 'function') setTimeout(window._updateAllJornadaStatus, 100);
   }
 
   function applyStoredResultMeta(copa) {

@@ -2914,8 +2914,8 @@
   window.populateLigaCal = populateLigaCal;
 
   /* ── Indicador visual jornada completada ──────────────────── */
-  var _JOR_DONE_BG = 'linear-gradient(135deg,#041a08,#093d14,#0f6320,#093d14,#041a08)';
-  var _JOR_DONE_BORDER = '3px solid #2ecc71';
+  var _JOR_DONE_BG = 'linear-gradient(135deg,#1a1400,#3a2c00,#5a4400,#3a2c00,#1a1400)';
+  var _JOR_DONE_BORDER = '3px solid #F1C40F';
   var _JOR_DEF_BG = 'repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#2a0005,#6a0010,#a00018,#6a0010,#2a0005)';
   var _JOR_DEF_BORDER = '3px solid #ff2244';
 
@@ -2929,19 +2929,88 @@
       var btn = btns[idx];
       if (!btn) return;
       var allDone = jornada.every(function(m) { return !!results[rKey(j, m[0], m[1])]; });
-      var bEl = btn.querySelector('b');
       if (allDone) {
         btn.style.background = _JOR_DONE_BG;
         btn.style.borderLeft = _JOR_DONE_BORDER;
-        if (bEl && bEl.textContent.indexOf('✅') === -1) bEl.textContent = '✅ ' + bEl.textContent;
+        var pdot = btn.querySelector('.pdot');
+        if (pdot && pdot.textContent.indexOf('✅') === -1) pdot.textContent = '✅';
       } else {
         btn.style.background = _JOR_DEF_BG;
         btn.style.borderLeft = _JOR_DEF_BORDER;
-        if (bEl) bEl.textContent = bEl.textContent.replace(/^✅\s*/, '');
+        var pdot = btn.querySelector('.pdot');
+        if (pdot && pdot.textContent === '✅') pdot.textContent = '▶';
+      }
+    });
+    /* Also update universal calendar buttons */
+    if (typeof _updateAllJornadaStatus === 'function') setTimeout(_updateAllJornadaStatus, 50);
+  }
+  window._updateLigaJornadaStatus = _updateLigaJornadaStatus;
+
+  /* ══ UNIVERSAL: marcar jornada/ronda completada en TODAS las competiciones ══ */
+  var _DONE_GOLD_BG = 'linear-gradient(135deg,#1a1400,#3a2c00,#5a4400,#3a2c00,#1a1400)';
+  var _DONE_GOLD_BORDER = '3px solid #F1C40F';
+  var _DONE_CHECK = '✅';
+
+  function _isJblockComplete(jmatches) {
+    if (!jmatches) return false;
+    var mrows = jmatches.querySelectorAll('.mrow');
+    var liveWraps = jmatches.querySelectorAll('.match-live-wrap');
+    var totalItems = mrows.length + liveWraps.length;
+    if (totalItems === 0) return false;
+    /* Check .mrow items: score cell must NOT have class .p (pending) */
+    var pendingMrow = false;
+    mrows.forEach(function(row) {
+      var sc = row.querySelector('.ms');
+      if (!sc || sc.classList.contains('p')) pendingMrow = true;
+    });
+    if (pendingMrow) return false;
+    /* Check .match-live-wrap items: must have state-finished on .ml-score */
+    var pendingLive = false;
+    liveWraps.forEach(function(wrap) {
+      var score = wrap.querySelector('.ml-score');
+      if (!score || !score.classList.contains('state-finished')) pendingLive = true;
+    });
+    return !pendingLive;
+  }
+
+  function _updateAllJornadaStatus() {
+    document.querySelectorAll('.jblock').forEach(function(block) {
+      var btn = block.querySelector('.jbtn');
+      var jmatches = block.querySelector('.jmatches');
+      if (!btn || !jmatches) return;
+      /* Skip blocks that have no real match content (info-only like .minfo) */
+      var hasMatches = jmatches.querySelector('.mrow') || jmatches.querySelector('.match-live-wrap');
+      if (!hasMatches) return;
+      /* Skip Liga cal buttons — handled by _updateLigaJornadaStatus with its own style */
+      var jmId = jmatches.id || '';
+      if (jmId.match(/^cl-j\d+$/)) return;
+      var done = _isJblockComplete(jmatches);
+      var bEl = btn.querySelector('b');
+      if (done) {
+        btn.style.background = _DONE_GOLD_BG;
+        btn.style.borderLeft = _DONE_GOLD_BORDER;
+        /* Add pdot check */
+        var pdot = btn.querySelector('.pdot');
+        if (pdot && pdot.textContent.indexOf('✅') === -1) pdot.textContent = '✅';
+      } else {
+        /* Don't reset — preserve original competition color classes */
+        var pdot = btn.querySelector('.pdot');
+        if (pdot && pdot.textContent === '✅') pdot.textContent = '▶';
       }
     });
   }
-  window._updateLigaJornadaStatus = _updateLigaJornadaStatus;
+  window._updateAllJornadaStatus = _updateAllJornadaStatus;
+
+  /* Run universal check after any result is saved */
+  var _origGuardarResultado = guardarResultado;
+  guardarResultado = function() {
+    _origGuardarResultado.apply(this, arguments);
+    setTimeout(_updateAllJornadaStatus, 200);
+  };
+  /* Also run on page load and after simulations */
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(_updateAllJornadaStatus, 500);
+  });
 
   function addSimBtn(j, round) {
     if (document.getElementById('sim-ia-j' + j)) return;

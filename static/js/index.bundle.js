@@ -1278,7 +1278,7 @@ function _removeEmpty_j1m1(){var emp=document.querySelector('#ml-acta-list-j1m1 
 window.mlConfirmEvt_j1m1=function(){if(!_pendingEvt)return;var sel=document.getElementById('ml-modal-sel-j1m1');var parts=sel.value.split('|');var num=parts[0],name=parts[1];var e=_pendingEvt;var min=_currentMin_j1m1();var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==='propia')?(e.team==='a'?'b':'a'):e.team;_sc[st]++;document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;}var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||'•',id:Date.now()});_renderActa_j1m1();  mlCloseModal_j1m1();};
 function _renderActa_j1m1(){var list=document.getElementById('ml-acta-list-j1m1');var sorted=_events.slice().sort(function(a,b){return a.min-b.min;});list.innerHTML='';if(sorted.length===0){list.innerHTML='<div class="ml-acta-empty">Sin eventos registrados</div>';return;}sorted.forEach(function(ev){var row=document.createElement('div');row.className='ml-evt-item';row.setAttribute('data-team',ev.team);row.setAttribute('data-type',ev.type);var tl=(ev.team==='a')?TEAM_A_NAME:TEAM_B_NAME;var _penFalloExtra='';if(ev.type==='pen-parado'){var _contrario=ev.team==='a'?'b':'a';var _fallado=sorted.find(function(e){return e.type==='pen-fallo'&&e.team===_contrario&&e.min===ev.min;});if(_fallado){_penFalloExtra='<span class="ml-evt-pen-fallo">❌ '+_fallado.num+'. '+_fallado.name+'</span>';}}row.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"+'<span class="ml-evt-ico">'+ev.ico+'</span>'+'<span class="ml-evt-name">'+ev.num+'. '+ev.name+'</span>'+_penFalloExtra+'<span class="ml-evt-team">'+tl+'</span>'+'<button class="ml-evt-edit" onclick="window._openEditModal(\'j1m1\','+ev.id+')" title="Editar">✏️</button>'+'<button class="ml-evt-del" onclick="mlDelEvt_j1m1('+ev.id+')">✕</button>';list.appendChild(row);});};
 window.mlDelEvt_j1m1=function(id){var ev=_events.find(function(e){return e.id===id;});if(!ev)return;var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(ev.type)!==-1){var st=(ev.type==='propia')?(ev.team==='a'?'b':'a'):ev.team;_sc[st]=Math.max(0,_sc[st]-1);document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;}_events=_events.filter(function(e){return e.id!==id;});_renderActa_j1m1();};
-window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentMin_j1m1();_events.push({min:min,label:'Pen. Provocado',type:'pen-prov',team:wiz.attackTeam,num:wiz.provocador.num,name:wiz.provocador.name,ico:'🤦🥅',id:now});if(wiz.sancion&&wiz.infractor){var cardIco=wiz.sancion==='amarilla'?'🟨':'🟥';var cardLbl=wiz.sancion==='amarilla'?'Tarjeta Amarilla':'Roja Directa';_events.push({min:min,label:cardLbl,type:wiz.sancion,team:wiz.defendTeam,num:wiz.infractor.num,name:wiz.infractor.name,ico:cardIco,id:now+1});if(wiz.sancion==='roja'){_rojas=_rojas||{};_rojas[wiz.defendTeam]=(_rojas[wiz.defendTeam]||0)+1;}}if(wiz.resultado==='gol'){_sc[wiz.attackTeam]++;document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;_events.push({min:min,label:'Penalti Gol',type:'pen-gol',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'⚽🥅',id:now+2});}else{_events.push({min:min,label:'Penalti Fallado',type:'pen-fallo',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'❌🥅',id:now+2});if(wiz.falladoTipo==='parado'&&wiz.portero){_events.push({min:min,label:'Penalti Parado',type:'pen-parado',team:wiz.defendTeam,num:wiz.portero.num,name:wiz.portero.name,ico:'🖐🥅',id:now+3});}}  _renderActa_j1m1();};
+window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentMin_j1m1();var commitSide=wiz.attackTeam;var shootSide=wiz.defendTeam;_events.push({min:min,label:'Pen. Provocado',type:'pen-prov',team:commitSide,num:wiz.provocador.num,name:wiz.provocador.name,ico:'🤦🥅',id:now});if(wiz.sancion&&wiz.provocador){var cardIco=wiz.sancion==='amarilla'?'🟨':'🟥';var cardLbl=wiz.sancion==='amarilla'?'Tarjeta Amarilla':'Roja Directa';_events.push({min:min,label:cardLbl,type:wiz.sancion,team:commitSide,num:wiz.provocador.num,name:wiz.provocador.name,ico:cardIco,id:now+1});if(wiz.sancion==='roja'){_rojas=_rojas||{};_rojas[commitSide]=(_rojas[commitSide]||0)+1;}}if(wiz.resultado==='gol'){_sc[shootSide]++;document.getElementById('sc-j1m1-a').textContent=_sc.a;document.getElementById('sc-j1m1-b').textContent=_sc.b;_events.push({min:min,label:'Penalti Gol',type:'pen-gol',team:shootSide,num:wiz.tirador.num,name:wiz.tirador.name,ico:'⚽🥅',id:now+2});}else{_events.push({min:min,label:'Penalti Fallado',type:'pen-fallo',team:shootSide,num:wiz.tirador.num,name:wiz.tirador.name,ico:'❌🥅',id:now+2});if(wiz.falladoTipo==='parado'&&wiz.portero){_events.push({min:min,label:'Penalti Parado',type:'pen-parado',team:commitSide,num:wiz.portero.num,name:wiz.portero.name,ico:'🖐🥅',id:now+3});}}  _renderActa_j1m1();};
 })();
 
 /* ══ ESCUDOS EN JORNADAS — tamaño unificado + aliases sólidos ═══════ */
@@ -1387,7 +1387,7 @@ function _removeEmpty_j1m2(){var emp=document.querySelector('#ml-acta-list-j1m2 
 window.mlConfirmEvt_j1m2=function(){if(!_pendingEvt)return;var sel=document.getElementById('ml-modal-sel-j1m2');var parts=sel.value.split('|');var num=parts[0],name=parts[1];var e=_pendingEvt;var min=_currentMin_j1m2();var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==='propia')?(e.team==='a'?'b':'a'):e.team;_sc[st]++;document.getElementById('sc-j1m2-a').textContent=_sc.a;document.getElementById('sc-j1m2-b').textContent=_sc.b;}var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||'•',id:Date.now()});_renderActa_j1m2();  mlCloseModal_j1m2();};
 function _renderActa_j1m2(){var list=document.getElementById('ml-acta-list-j1m2');var sorted=_events.slice().sort(function(a,b){return a.min-b.min;});list.innerHTML='';if(sorted.length===0){list.innerHTML='<div class="ml-acta-empty">Sin eventos registrados</div>';return;}sorted.forEach(function(ev){var row=document.createElement('div');row.className='ml-evt-item';row.setAttribute('data-team',ev.team);row.setAttribute('data-type',ev.type);var tl=(ev.team==='a')?TEAM_A_NAME:TEAM_B_NAME;var _penFalloExtra='';if(ev.type==='pen-parado'){var _contrario=ev.team==='a'?'b':'a';var _fallado=sorted.find(function(e){return e.type==='pen-fallo'&&e.team===_contrario&&e.min===ev.min;});if(_fallado){_penFalloExtra='<span class="ml-evt-pen-fallo">❌ '+_fallado.num+'. '+_fallado.name+'</span>';}}row.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"+'<span class="ml-evt-ico">'+ev.ico+'</span>'+'<span class="ml-evt-name">'+ev.num+'. '+ev.name+'</span>'+_penFalloExtra+'<span class="ml-evt-team">'+tl+'</span>'+'<button class="ml-evt-edit" onclick="window._openEditModal(\'j1m2\','+ev.id+')" title="Editar">✏️</button>'+'<button class="ml-evt-del" onclick="mlDelEvt_j1m2('+ev.id+')">✕</button>';list.appendChild(row);});};
 window.mlDelEvt_j1m2=function(id){var ev=_events.find(function(e){return e.id===id;});if(!ev)return;var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(ev.type)!==-1){var st=(ev.type==='propia')?(ev.team==='a'?'b':'a'):ev.team;_sc[st]=Math.max(0,_sc[st]-1);document.getElementById('sc-j1m2-a').textContent=_sc.a;document.getElementById('sc-j1m2-b').textContent=_sc.b;}_events=_events.filter(function(e){return e.id!==id;});_renderActa_j1m2();};
-window.mlPenWizardCommit_j1m2=function(wiz){var now=Date.now();var min=_currentMin_j1m2();_events.push({min:min,label:'Pen. Provocado',type:'pen-prov',team:wiz.attackTeam,num:wiz.provocador.num,name:wiz.provocador.name,ico:'🤦🥅',id:now});if(wiz.sancion&&wiz.infractor){var cardIco=wiz.sancion==='amarilla'?'🟨':'🟥';var cardLbl=wiz.sancion==='amarilla'?'Tarjeta Amarilla':'Roja Directa';_events.push({min:min,label:cardLbl,type:wiz.sancion,team:wiz.defendTeam,num:wiz.infractor.num,name:wiz.infractor.name,ico:cardIco,id:now+1});if(wiz.sancion==='roja'){_rojas=_rojas||{};_rojas[wiz.defendTeam]=(_rojas[wiz.defendTeam]||0)+1;}}if(wiz.resultado==='gol'){_sc[wiz.attackTeam]++;document.getElementById('sc-j1m2-a').textContent=_sc.a;document.getElementById('sc-j1m2-b').textContent=_sc.b;_events.push({min:min,label:'Penalti Gol',type:'pen-gol',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'⚽🥅',id:now+2});}else{_events.push({min:min,label:'Penalti Fallado',type:'pen-fallo',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'❌🥅',id:now+2});if(wiz.falladoTipo==='parado'&&wiz.portero){_events.push({min:min,label:'Penalti Parado',type:'pen-parado',team:wiz.defendTeam,num:wiz.portero.num,name:wiz.portero.name,ico:'🖐🥅',id:now+3});}}  _renderActa_j1m2();};
+window.mlPenWizardCommit_j1m2=function(wiz){var now=Date.now();var min=_currentMin_j1m2();var commitSide=wiz.attackTeam;var shootSide=wiz.defendTeam;_events.push({min:min,label:'Pen. Provocado',type:'pen-prov',team:commitSide,num:wiz.provocador.num,name:wiz.provocador.name,ico:'🤦🥅',id:now});if(wiz.sancion&&wiz.provocador){var cardIco=wiz.sancion==='amarilla'?'🟨':'🟥';var cardLbl=wiz.sancion==='amarilla'?'Tarjeta Amarilla':'Roja Directa';_events.push({min:min,label:cardLbl,type:wiz.sancion,team:commitSide,num:wiz.provocador.num,name:wiz.provocador.name,ico:cardIco,id:now+1});if(wiz.sancion==='roja'){_rojas=_rojas||{};_rojas[commitSide]=(_rojas[commitSide]||0)+1;}}if(wiz.resultado==='gol'){_sc[shootSide]++;document.getElementById('sc-j1m2-a').textContent=_sc.a;document.getElementById('sc-j1m2-b').textContent=_sc.b;_events.push({min:min,label:'Penalti Gol',type:'pen-gol',team:shootSide,num:wiz.tirador.num,name:wiz.tirador.name,ico:'⚽🥅',id:now+2});}else{_events.push({min:min,label:'Penalti Fallado',type:'pen-fallo',team:shootSide,num:wiz.tirador.num,name:wiz.tirador.name,ico:'❌🥅',id:now+2});if(wiz.falladoTipo==='parado'&&wiz.portero){_events.push({min:min,label:'Penalti Parado',type:'pen-parado',team:commitSide,num:wiz.portero.num,name:wiz.portero.name,ico:'🖐🥅',id:now+3});}}  _renderActa_j1m2();};
 })();
 
 /* script block 4 */
@@ -1422,7 +1422,7 @@ function _removeEmpty_j1m3(){var emp=document.querySelector('#ml-acta-list-j1m3 
 window.mlConfirmEvt_j1m3=function(){if(!_pendingEvt)return;var sel=document.getElementById('ml-modal-sel-j1m3');var parts=sel.value.split('|');var num=parts[0],name=parts[1];var e=_pendingEvt;var min=_currentMin_j1m3();var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(e.type)!==-1){var st=(e.type==='propia')?(e.team==='a'?'b':'a'):e.team;_sc[st]++;document.getElementById('sc-j1m3-a').textContent=_sc.a;document.getElementById('sc-j1m3-b').textContent=_sc.b;}var icons={gol:'⚽',propia:'⚽🚫','pen-gol':'⚽🥅','pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅','falta-gol':'⚽🎯',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};_events.push({min:min,label:e.label,type:e.type,team:e.team,num:num,name:name,ico:icons[e.type]||'•',id:Date.now()});_renderActa_j1m3();  mlCloseModal_j1m3();};
 function _renderActa_j1m3(){var list=document.getElementById('ml-acta-list-j1m3');var sorted=_events.slice().sort(function(a,b){return a.min-b.min;});list.innerHTML='';if(sorted.length===0){list.innerHTML='<div class="ml-acta-empty">Sin eventos registrados</div>';return;}sorted.forEach(function(ev){var row=document.createElement('div');row.className='ml-evt-item';row.setAttribute('data-team',ev.team);row.setAttribute('data-type',ev.type);var tl=(ev.team==='a')?TEAM_A_NAME:TEAM_B_NAME;var _penFalloExtra='';if(ev.type==='pen-parado'){var _contrario=ev.team==='a'?'b':'a';var _fallado=sorted.find(function(e){return e.type==='pen-fallo'&&e.team===_contrario&&e.min===ev.min;});if(_fallado){_penFalloExtra='<span class="ml-evt-pen-fallo">❌ '+_fallado.num+'. '+_fallado.name+'</span>';}}row.innerHTML='<span class="ml-evt-min">'+ev.min+"'</span>"+'<span class="ml-evt-ico">'+ev.ico+'</span>'+'<span class="ml-evt-name">'+ev.num+'. '+ev.name+'</span>'+_penFalloExtra+'<span class="ml-evt-team">'+tl+'</span>'+'<button class="ml-evt-edit" onclick="window._openEditModal(\'j1m3\','+ev.id+')" title="Editar">✏️</button>'+'<button class="ml-evt-del" onclick="mlDelEvt_j1m3('+ev.id+')">✕</button>';list.appendChild(row);});};
 window.mlDelEvt_j1m3=function(id){var ev=_events.find(function(e){return e.id===id;});if(!ev)return;var scoringTypes=['gol','propia','pen-gol','falta-gol'];if(scoringTypes.indexOf(ev.type)!==-1){var st=(ev.type==='propia')?(ev.team==='a'?'b':'a'):ev.team;_sc[st]=Math.max(0,_sc[st]-1);document.getElementById('sc-j1m3-a').textContent=_sc.a;document.getElementById('sc-j1m3-b').textContent=_sc.b;}_events=_events.filter(function(e){return e.id!==id;});_renderActa_j1m3();};
-window.mlPenWizardCommit_j1m3=function(wiz){var now=Date.now();var min=_currentMin_j1m3();_events.push({min:min,label:'Pen. Provocado',type:'pen-prov',team:wiz.attackTeam,num:wiz.provocador.num,name:wiz.provocador.name,ico:'🤦🥅',id:now});if(wiz.sancion&&wiz.infractor){var cardIco=wiz.sancion==='amarilla'?'🟨':'🟥';var cardLbl=wiz.sancion==='amarilla'?'Tarjeta Amarilla':'Roja Directa';_events.push({min:min,label:cardLbl,type:wiz.sancion,team:wiz.defendTeam,num:wiz.infractor.num,name:wiz.infractor.name,ico:cardIco,id:now+1});if(wiz.sancion==='roja'){_rojas=_rojas||{};_rojas[wiz.defendTeam]=(_rojas[wiz.defendTeam]||0)+1;}}if(wiz.resultado==='gol'){_sc[wiz.attackTeam]++;document.getElementById('sc-j1m3-a').textContent=_sc.a;document.getElementById('sc-j1m3-b').textContent=_sc.b;_events.push({min:min,label:'Penalti Gol',type:'pen-gol',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'⚽🥅',id:now+2});}else{_events.push({min:min,label:'Penalti Fallado',type:'pen-fallo',team:wiz.attackTeam,num:wiz.tirador.num,name:wiz.tirador.name,ico:'❌🥅',id:now+2});if(wiz.falladoTipo==='parado'&&wiz.portero){_events.push({min:min,label:'Penalti Parado',type:'pen-parado',team:wiz.defendTeam,num:wiz.portero.num,name:wiz.portero.name,ico:'🖐🥅',id:now+3});}}  _renderActa_j1m3();};
+window.mlPenWizardCommit_j1m3=function(wiz){var now=Date.now();var min=_currentMin_j1m3();var commitSide=wiz.attackTeam;var shootSide=wiz.defendTeam;_events.push({min:min,label:'Pen. Provocado',type:'pen-prov',team:commitSide,num:wiz.provocador.num,name:wiz.provocador.name,ico:'🤦🥅',id:now});if(wiz.sancion&&wiz.provocador){var cardIco=wiz.sancion==='amarilla'?'🟨':'🟥';var cardLbl=wiz.sancion==='amarilla'?'Tarjeta Amarilla':'Roja Directa';_events.push({min:min,label:cardLbl,type:wiz.sancion,team:commitSide,num:wiz.provocador.num,name:wiz.provocador.name,ico:cardIco,id:now+1});if(wiz.sancion==='roja'){_rojas=_rojas||{};_rojas[commitSide]=(_rojas[commitSide]||0)+1;}}if(wiz.resultado==='gol'){_sc[shootSide]++;document.getElementById('sc-j1m3-a').textContent=_sc.a;document.getElementById('sc-j1m3-b').textContent=_sc.b;_events.push({min:min,label:'Penalti Gol',type:'pen-gol',team:shootSide,num:wiz.tirador.num,name:wiz.tirador.name,ico:'⚽🥅',id:now+2});}else{_events.push({min:min,label:'Penalti Fallado',type:'pen-fallo',team:shootSide,num:wiz.tirador.num,name:wiz.tirador.name,ico:'❌🥅',id:now+2});if(wiz.falladoTipo==='parado'&&wiz.portero){_events.push({min:min,label:'Penalti Parado',type:'pen-parado',team:commitSide,num:wiz.portero.num,name:wiz.portero.name,ico:'🖐🥅',id:now+3});}}  _renderActa_j1m3();};
 })();
 
 /* script block 5 */
@@ -8980,16 +8980,38 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     return { home: home || 'LOCAL', away: away || 'VISITANTE' };
   }
 
+  /* Cadena robusta para resolver el escudo de un equipo (igual que _gmLogoUrl):
+     1) Buscar una <img class="ml-team-svg" alt="..."> ya cargada en el DOM
+        (las tarjetas del calendario usan logos base64).
+     2) window.getTeamLogoUrl
+     3) getLogoEquipo */
+  function _wizLogoUrl(name) {
+    if (!name) return '';
+    try {
+      var byAlt = document.querySelector('.ml-team-svg[alt="' + String(name).replace(/"/g,'&quot;') + '"]');
+      if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1 && byAlt.src.length > 10) return byAlt.src;
+    } catch(_){}
+    if (typeof window.getTeamLogoUrl === 'function') {
+      var u = window.getTeamLogoUrl(name);
+      if (u) return u;
+    }
+    if (typeof getLogoEquipo === 'function') {
+      var g = getLogoEquipo(name);
+      if (g) return g;
+    }
+    return '';
+  }
+
   function _teamCardHtml(matchId,team){
     var teams = _getTeams(matchId);
-    var lA = (typeof getLogoEquipo === 'function') ? getLogoEquipo(teams.home) : '';
-    var lB = (typeof getLogoEquipo === 'function') ? getLogoEquipo(teams.away) : '';
+    var lA = _wizLogoUrl(teams.home);
+    var lB = _wizLogoUrl(teams.away);
     var cardStyle = 'flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.15);border-radius:14px;padding:24px 12px 20px;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:Oswald,sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;color:#fff;text-align:center;';
     var teamCardA = '<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'a\')" style="'+cardStyle+'">'
-      + (lA ? '<img src="'+lA+'" alt="" style="width:60px;height:60px;object-fit:contain;"/>' : '🛡️')
+      + (lA ? '<img src="'+lA+'" alt="'+teams.home+'" style="width:72px;height:72px;object-fit:contain;"/>' : '<span style="font-size:54px;line-height:1;">🛡️</span>')
       + '<div>' + teams.home.toUpperCase() + '</div></div>';
     var teamCardB = '<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'b\')" style="'+cardStyle+'">'
-      + (lB ? '<img src="'+lB+'" alt="" style="width:60px;height:60px;object-fit:contain;"/>' : '🛡️')
+      + (lB ? '<img src="'+lB+'" alt="'+teams.away+'" style="width:72px;height:72px;object-fit:contain;"/>' : '<span style="font-size:54px;line-height:1;">🛡️</span>')
       + '<div>' + teams.away.toUpperCase() + '</div></div>';
     return teamCardA + teamCardB;
   }
@@ -9003,8 +9025,12 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var squads = _getSquads(matchId);
     var sqA = squads.sqA;
     var sqB = squads.sqB;
-    var attackSq=_wiz.attackTeam==='a'?sqA:sqB;
-    var defendSq=_wiz.attackTeam==='a'?sqB:sqA;
+    /* SEMÁNTICA NUEVA:
+       _wiz.attackTeam = equipo que COMETIÓ el penalti (provocador)
+       _wiz.defendTeam = equipo CONTRARIO = el que LANZA el penalti
+       (Conservamos los nombres de variable por compatibilidad con commits viejos.) */
+    var commitSq = _wiz.attackTeam==='a'?sqA:sqB;  /* equipo que cometió */
+    var shootSq  = _wiz.attackTeam==='a'?sqB:sqA;  /* equipo contrario que lanza */
     if(step==='s2a'){
       var teamsEl=document.getElementById('ml-pwiz-teams-2a');
       if(teamsEl)teamsEl.innerHTML=_teamCardHtml(matchId);
@@ -9012,23 +9038,24 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       var tEl=document.getElementById('ml-pwiz-title-2b');
       if(tEl)tEl.textContent='¿Quién provocó el penalti?';
       var lEl=document.getElementById('ml-pwiz-pl-2b');
-      if(lEl)lEl.innerHTML=_plHtml(attackSq,'window.mlPenWizProvocador');
+      if(lEl)lEl.innerHTML=_plHtml(commitSq,'window.mlPenWizProvocador');
     }else if(step==='s3b'){
+      /* Ya no se usa: el infractor es siempre el mismo provocador. */
       var tEl3=document.getElementById('ml-pwiz-title-3b');
       var cardIcoLbl=_wiz.sancion==='amarilla'?'🟨 ':'🟥 ';
       if(tEl3)tEl3.textContent=cardIcoLbl+'¿Quién recibió la tarjeta?';
       var lEl3=document.getElementById('ml-pwiz-pl-3b');
-      if(lEl3)lEl3.innerHTML=_plHtml(defendSq,'window.mlPenWizInfractor');
+      if(lEl3)lEl3.innerHTML=_plHtml(commitSq,'window.mlPenWizInfractor');
     }else if(step==='s4'){
       var tEl4=document.getElementById('ml-pwiz-title-4');
       if(tEl4)tEl4.textContent='¿Quién tira el penalti?';
       var lEl4=document.getElementById('ml-pwiz-pl-4');
-      if(lEl4)lEl4.innerHTML=_plHtml(attackSq,'window.mlPenWizTirador');
+      if(lEl4)lEl4.innerHTML=_plHtml(shootSq,'window.mlPenWizTirador');
     }else if(step==='s6b'){
       var tEl6=document.getElementById('ml-pwiz-title-6b');
       if(tEl6)tEl6.textContent='🖐 ¿Quién paró el penalti?';
       var lEl6=document.getElementById('ml-pwiz-pl-6b');
-      if(lEl6)lEl6.innerHTML=_plHtml(defendSq,'window.mlPenWizPortero');
+      if(lEl6)lEl6.innerHTML=_plHtml(commitSq,'window.mlPenWizPortero');
     }
     _showStep(step);
   }
@@ -9057,8 +9084,14 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   window.mlPenWizSancion=function(tipo){
     _wiz.sancion=tipo;
-    if(tipo){_goStep('s3b');_renderAndShow('s3b');}
-    else{_wiz.infractor=null;_goStep('s4');_renderAndShow('s4');}
+    /* La tarjeta la recibe el MISMO jugador que cometió el penalti.
+       Saltamos s3b directamente al s4 (¿quién tira?). */
+    if(tipo){
+      _wiz.infractor = _wiz.provocador;
+    } else {
+      _wiz.infractor = null;
+    }
+    _goStep('s4');_renderAndShow('s4');
   };
 
   window.mlPenWizInfractor=function(num,name){

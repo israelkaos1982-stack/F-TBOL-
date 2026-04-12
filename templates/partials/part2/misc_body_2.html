@@ -4548,7 +4548,10 @@
     }
   };
 
-  /* Commit handler for dynamic matches — called by the penalty wizard */
+  /* Commit handler for dynamic matches — called by the penalty wizard
+     SEMÁNTICA NUEVA:
+       wiz.attackTeam = equipo que COMETIÓ el penalti (provocador / tarjeta)
+       wiz.defendTeam = equipo CONTRARIO = el que LANZA y puede marcar */
   window.mlPenWizardCommitGen = function(wiz) {
     var mk = wiz.matchId;
     var st = _mlSt(mk);
@@ -4556,10 +4559,10 @@
     var min = wiz.minute || Math.min(st.etDone?120:90, Math.floor(st.timerSec/60));
     var list = document.getElementById('ml-acta-list-'+mk);
     var emk = mk.replace(/'/g,"\\'");
-    var attackSide = wiz.attackTeam;  /* 'a' = home, 'b' = away (equipo que recibe la falta) */
-    var defendSide = wiz.defendTeam;  /* equipo que comete la falta */
-    var attackTeamName = attackSide === 'a' ? st.home : st.away;
-    var defendTeamName = defendSide === 'a' ? st.home : st.away;
+    var commitSide = wiz.attackTeam;  /* equipo que comete el penalti */
+    var shootSide  = wiz.defendTeam;  /* equipo que lanza */
+    var commitTeamName = commitSide === 'a' ? st.home : st.away;
+    var shootTeamName  = shootSide  === 'a' ? st.home : st.away;
     var baseId = Date.now();
     function _pushEvent(type, team, num, name, ico) {
       var id = baseId++;
@@ -4588,27 +4591,28 @@
         if (!inserted) list.appendChild(row);
       }
     }
-    /* 1. Pen. provocado (equipo atacante — el jugador que recibió la falta) */
+    /* 1. Pen. provocado (equipo que cometió la falta) */
     if (wiz.provocador) {
-      _pushEvent('pen-prov', attackSide, wiz.provocador.num, wiz.provocador.name, '🤦🥅');
+      _pushEvent('pen-prov', commitSide, wiz.provocador.num, wiz.provocador.name, '🤦🥅');
     }
-    /* 2. Tarjeta al infractor (si hubo sanción) */
-    if (wiz.sancion && wiz.infractor) {
+    /* 2. Tarjeta al MISMO provocador (mismo equipo, mismo jugador) */
+    if (wiz.sancion && wiz.provocador) {
       var cardIco = wiz.sancion==='amarilla' ? '🟨' : '🟥';
-      _pushEvent(wiz.sancion, defendSide, wiz.infractor.num, wiz.infractor.name, cardIco);
+      _pushEvent(wiz.sancion, commitSide, wiz.provocador.num, wiz.provocador.name, cardIco);
     }
-    /* 3. Resultado del penalti */
+    /* 3. Resultado del penalti — el lanzador es del equipo CONTRARIO */
     if (wiz.resultado === 'gol' && wiz.tirador) {
-      _pushEvent('pen-gol', attackSide, wiz.tirador.num, wiz.tirador.name, '⚽🥅');
-      st.sc[attackSide]++;
+      _pushEvent('pen-gol', shootSide, wiz.tirador.num, wiz.tirador.name, '⚽🥅');
+      st.sc[shootSide]++;
       var scA=document.getElementById('sc-'+mk+'-a'); if(scA)scA.textContent=st.sc.a;
       var scB=document.getElementById('sc-'+mk+'-b'); if(scB)scB.textContent=st.sc.b;
       if (typeof _mlShowEventFlash === 'function') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
     } else if (wiz.resultado === 'fallo') {
       if (wiz.falladoTipo === 'parado' && wiz.portero) {
-        _pushEvent('pen-parado', defendSide, wiz.portero.num, wiz.portero.name, '🖐🥅');
+        _pushEvent('pen-parado', commitSide, wiz.portero.num, wiz.portero.name, '🖐🥅');
+        if (wiz.tirador) _pushEvent('pen-fallo', shootSide, wiz.tirador.num, wiz.tirador.name, '❌🥅');
       } else if (wiz.tirador) {
-        _pushEvent('pen-fallo', attackSide, wiz.tirador.num, wiz.tirador.name, '❌🥅');
+        _pushEvent('pen-fallo', shootSide, wiz.tirador.num, wiz.tirador.name, '❌🥅');
       }
     }
     /* Resume timer if it was paused */
@@ -4779,13 +4783,16 @@
   };
 
   /* Commit handler dedicado al gm-modal: añade los eventos del wizard a _gm.events
-     y al acta visual del gm-modal, sumando al marcador cuando proceda. */
+     y al acta visual del gm-modal, sumando al marcador cuando proceda.
+     SEMÁNTICA NUEVA:
+       wiz.attackTeam = equipo que COMETIÓ el penalti (provocador / tarjeta)
+       wiz.defendTeam = equipo CONTRARIO = el que LANZA */
   window.mlPenWizardCommit_gm = function(wiz) {
     var min = wiz.minute || Math.floor(_gm.timerSec / 60);
-    var attackSide = wiz.attackTeam;
-    var defendSide = wiz.defendTeam;
-    var attackTeamName = attackSide === 'a' ? _gm.home : _gm.away;
-    var defendTeamName = defendSide === 'a' ? _gm.home : _gm.away;
+    var commitSide = wiz.attackTeam;  /* equipo que comete */
+    var shootSide  = wiz.defendTeam;  /* equipo que lanza */
+    var commitTeamName = commitSide === 'a' ? _gm.home : _gm.away;
+    var shootTeamName  = shootSide  === 'a' ? _gm.home : _gm.away;
     var list = document.getElementById('gm-acta-list');
     function _push(type, team, num, name, ico, label) {
       _gm.events.push({type:type, label:label||type, team:team, min:min, num:num||'', player:name||''});
@@ -4801,28 +4808,28 @@
         list.appendChild(li);
       }
     }
-    /* 1. Pen. provocado */
+    /* 1. Pen. provocado (equipo que cometió la falta) */
     if (wiz.provocador) {
-      _push('pen-prov', attackSide, wiz.provocador.num, wiz.provocador.name, '🤦🥅', 'Pen. Provocado');
+      _push('pen-prov', commitSide, wiz.provocador.num, wiz.provocador.name, '🤦🥅', 'Pen. Provocado');
     }
-    /* 2. Tarjeta al infractor (si hubo) */
-    if (wiz.sancion && wiz.infractor) {
+    /* 2. Tarjeta al MISMO provocador (mismo equipo, mismo jugador) */
+    if (wiz.sancion && wiz.provocador) {
       var cardIco = wiz.sancion === 'amarilla' ? '🟨' : '🟥';
       var cardLbl = wiz.sancion === 'amarilla' ? 'Tarjeta Amarilla' : 'Roja Directa';
-      _push(wiz.sancion, defendSide, wiz.infractor.num, wiz.infractor.name, cardIco, cardLbl);
+      _push(wiz.sancion, commitSide, wiz.provocador.num, wiz.provocador.name, cardIco, cardLbl);
     }
-    /* 3. Resultado */
+    /* 3. Resultado del penalti — el lanzador es del equipo CONTRARIO */
     if (wiz.resultado === 'gol' && wiz.tirador) {
-      _push('pen-gol', attackSide, wiz.tirador.num, wiz.tirador.name, '⚽🥅', 'Penalti Gol');
-      _gm.sc[attackSide]++;
+      _push('pen-gol', shootSide, wiz.tirador.num, wiz.tirador.name, '⚽🥅', 'Penalti Gol');
+      _gm.sc[shootSide]++;
       var sc = document.getElementById('gm-score'); if (sc) sc.textContent = _gm.sc.a + '-' + _gm.sc.b;
       if (typeof _mlShowEventFlash === 'function') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
     } else if (wiz.resultado === 'fallo') {
       if (wiz.falladoTipo === 'parado' && wiz.portero) {
-        _push('pen-parado', defendSide, wiz.portero.num, wiz.portero.name, '🖐🥅', 'Penalti Parado');
-        if (wiz.tirador) _push('pen-fallo', attackSide, wiz.tirador.num, wiz.tirador.name, '❌🥅', 'Penalti Fallado');
+        _push('pen-parado', commitSide, wiz.portero.num, wiz.portero.name, '🖐🥅', 'Penalti Parado');
+        if (wiz.tirador) _push('pen-fallo', shootSide, wiz.tirador.num, wiz.tirador.name, '❌🥅', 'Penalti Fallado');
       } else if (wiz.tirador) {
-        _push('pen-fallo', attackSide, wiz.tirador.num, wiz.tirador.name, '❌🥅', 'Penalti Fallado');
+        _push('pen-fallo', shootSide, wiz.tirador.num, wiz.tirador.name, '❌🥅', 'Penalti Fallado');
       }
     }
     /* Limpiar el estado stub para no contaminar _mlStates */

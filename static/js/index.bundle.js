@@ -5441,9 +5441,12 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var hasTwitch = !!(window._ppSelectedTwitch && window._ppSelectedTwitch.length);
     var ok = done && hasTwitch;
     btn.disabled = !ok;
-    if (ok) btn.textContent = '🎮 CONFIRMAR CONFIGURACIÓN';
-    else if (!done) btn.textContent = '🔒 MARCA EL BALÓN';
-    else btn.textContent = '🔒 SELECCIONA CANAL TWITCH';
+    /* Si ya estamos en etapa 2 (Comenzar Partido), no sobreescribir el label */
+    if (btn.getAttribute('data-pp-stage') !== '2') {
+      if (ok) btn.textContent = '🎮 CONFIRMAR CONFIGURACIÓN';
+      else if (!done) btn.textContent = '🔒 MARCA EL BALÓN';
+      else btn.textContent = '🔒 SELECCIONA CANAL TWITCH';
+    }
     /* Hide pre-confirm WhatsApp button (now lives in sancion overlay) */
     var waBtn = document.getElementById('pp-wa-btn');
     if (waBtn) waBtn.style.display = 'none';
@@ -5494,6 +5497,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     _renderPreviaMeta(matchKey, isHvH);
     _renderList(_ppItems);
     _updateBtn();
+    /* Reset etapa del botón Confirmar (vuelve a "CONFIRMAR CONFIGURACIÓN") */
+    var _btnReset = document.getElementById('pp-confirm-btn');
+    if (_btnReset) {
+      _btnReset.removeAttribute('data-pp-stage');
+      _btnReset.style.background = '';
+      _btnReset.style.color = '';
+      _btnReset.style.borderColor = '';
+      _btnReset.style.boxShadow = '';
+    }
     document.getElementById('prepartido-overlay').classList.add('show');
     window.scrollTo(0, 0);
   };
@@ -5503,6 +5515,17 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     /* Twitch obligatorio para avanzar */
     if (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length) {
       try { alert('⚠️ Debes seleccionar un Canal de Twitch antes de continuar.'); } catch(_){}
+      return;
+    }
+    /* ── Etapa 1 → Etapa 2: convertir el botón en "▶ COMENZAR PARTIDO" ── */
+    var btn = document.getElementById('pp-confirm-btn');
+    if (btn && btn.getAttribute('data-pp-stage') !== '2') {
+      btn.setAttribute('data-pp-stage', '2');
+      btn.textContent = '▶ COMENZAR PARTIDO';
+      btn.style.background = 'linear-gradient(135deg,rgba(61,204,110,.28),rgba(40,180,90,.18))';
+      btn.style.color = '#5fe08a';
+      btn.style.borderColor = 'rgba(95,224,138,.6)';
+      btn.style.boxShadow = '0 0 22px rgba(95,224,138,.35)';
       return;
     }
     // Reveal venue-bar and ball (in case not yet revealed)

@@ -7321,18 +7321,18 @@ window.goLiveMatches = function() {
       + '<span class="admin-env-badge">' + (env.tod==='SNOW'?'❄️':env.tod==='SOLEADO'?'☀️':'🌙') + ' ' + env.tod + '</span>'
       + (snowActive ? '<span class="admin-env-badge" style="color:#4de;border-color:rgba(40,200,220,.3);">Balón Override: eFootball_MAX_VIS_26</span>' : '')
       + '</div></div>'
-      + '<div style="display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:0;border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;">'
+      + '<div style="border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;">'
       + window.BALL_DB.map(function (b, i) {
           var isSnow = snowActive && b.key === 'snow';
           var bg = isSnow ? 'rgba(40,200,220,.1)' : (i%2===0?'rgba(255,255,255,.03)':'transparent');
           var ballIco = b.cat.indexOf('❄️')!==-1?'❄️':b.cat.indexOf('🤝')!==-1?'🤝':'⚽';
-          return '<div style="display:contents;">'
-            + '<div style="padding:10px 10px 10px 12px;background:' + bg + ';font-size:18px;">' + ballIco + '</div>'
-            + '<div style="padding:8px 6px;background:' + bg + ';border-left:1px solid rgba(255,255,255,.05);">'
+          return '<div style="display:flex;align-items:center;gap:0;background:' + bg + ';border-bottom:1px solid rgba(255,255,255,.05);">'
+            + '<div style="padding:10px 10px 10px 12px;font-size:18px;flex-shrink:0;">' + ballIco + '</div>'
+            + '<div style="flex:1;padding:8px 6px;border-left:1px solid rgba(255,255,255,.05);min-width:0;">'
             + '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.65);">' + b.comp + '</div>'
             + '<div style="font-family:\'Courier New\',monospace;font-size:10px;color:rgba(80,180,255,.8);word-break:break-all;">' + b.id + '</div>'
             + '</div>'
-            + '<div style="padding:8px 10px;background:' + bg + ';border-left:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;text-align:right;">'
+            + '<div style="flex-shrink:0;padding:8px 10px;border-left:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;text-align:right;">'
             + b.luz
             + (isSnow ? ' <span style="color:#4de;font-weight:700;">●ACTIVO</span>' : '')
             + '</div>'

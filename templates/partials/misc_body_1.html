@@ -1,3 +1,16 @@
+<script>
+/* PIN Guard - global, sin dependencias */
+window._adm = false;
+window._admQ = null;
+window.pG = function(fn) {
+  if (window._adm) { fn(); return; }
+  window._admQ = fn;
+  var m = document.getElementById('pin-modal');
+  if (m) m.style.display = 'flex';
+  var er = document.getElementById('pin-err');
+  if (er) er.style.display = 'none';
+};
+</script>
 <div class="screen active" id="s-home">
 <div class="hdr">
 <img alt="eFootball" class="hdr-logo" src="data:image/png;base64,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"/>
@@ -1411,7 +1424,7 @@
 <button class="back-btn" onclick="go('s-liga')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Liga EA Sports · Clasificación</h2></div>
 <div class="btn-action-bar">
-  <button data-pin-guard class="btn-action btn-action-rst" onclick="window.reiniciarLigaEA&&window.reiniciarLigaEA()"><span class="btn-action-ico">♻️</span>Reiniciar liga</button>
+  <button class="btn-action btn-action-rst" onclick="pG(function(){window.reiniciarLigaEA&&window.reiniciarLigaEA()})"><span class="btn-action-ico">♻️</span>Reiniciar liga</button>
 </div>
 
 <div class="clas-wrap">
@@ -1428,7 +1441,7 @@
 <div style="display:flex;align-items:center;justify-content:space-between;padding:0 0 8px;">
   <div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.4);">PARTIDOS</div>
   <div style="display:flex;gap:6px;">
-    <button data-pin-guard onclick="window.simularTodasJornadasIA();setTimeout(window.buildIAresults,300);" style="padding:4px 10px;background:#1a1a2e;color:#ccff00;border:1px solid #3a5a1a;border-radius:4px;font-size:11px;cursor:pointer;">⚡ Simular J1-38</button>
+    <button onclick="pG(function(){window.simularTodasJornadasIA&&window.simularTodasJornadasIA();setTimeout(window.buildIAresults,300)})" style="padding:4px 10px;background:#1a1a2e;color:#ccff00;border:1px solid #3a5a1a;border-radius:4px;font-size:11px;cursor:pointer;">⚡ Simular J1-38</button>
   </div>
 </div>
 <div class="jlist" id="ia-res-list">
@@ -1469,8 +1482,8 @@
 <button class="back-btn" onclick="go('s-segunda')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/LaLiga_Hypermotion_2023_Vertical_Logo.svg" onerror="this.style.display='none'" alt="Hypermotion"/><h2>Liga Hypermotion · Clasificación</h2></div>
 <div class="btn-action-bar">
-  <button data-pin-guard class="btn-action btn-action-sim" onclick="window.simularLigaSegundaMenu&&window.simularLigaSegundaMenu()"><span class="btn-action-ico">🎮</span>Simular</button>
-  <button data-pin-guard class="btn-action btn-action-rst" onclick="window.reiniciarLigaSegundaMenu&&window.reiniciarLigaSegundaMenu()"><span class="btn-action-ico">♻️</span>Reiniciar</button>
+  <button class="btn-action btn-action-sim" onclick="pG(function(){window.simularLigaSegundaMenu&&window.simularLigaSegundaMenu()})"><span class="btn-action-ico">🎮</span>Simular</button>
+  <button class="btn-action btn-action-rst" onclick="pG(function(){window.reiniciarLigaSegundaMenu&&window.reiniciarLigaSegundaMenu()})"><span class="btn-action-ico">♻️</span>Reiniciar</button>
 </div>
 <div class="clas-wrap">
 <div id="clas-segunda-content">

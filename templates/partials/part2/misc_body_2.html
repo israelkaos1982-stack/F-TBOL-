@@ -2692,6 +2692,11 @@
     var normalized = normalizarNombreEquipo(teamName);
     var logo = BACKEND_ESCUDOS[normalized] || BACKEND_ESCUDOS[original];
     if (!logo) { var tl = window.TEAM_LOGOS || {}; logo = tl[original] || tl[normalized]; }
+    /* Fallback: check TEAM_RATINGS shield property */
+    if (!logo && window.TEAM_RATINGS) {
+      var tr = window.TEAM_RATINGS[original] || window.TEAM_RATINGS[normalized];
+      if (tr && tr.shield) logo = tr.shield;
+    }
     if (!logo) logo = BACKEND_ESCUDO_DEFAULT;
     TEAM_LOGO_CACHE[original] = logo;
     return logo;
@@ -3254,9 +3259,11 @@
     row.setAttribute('data-type', type);
     row.setAttribute('data-id', id);
     var emk = mk.replace(/'/g,"\\'");
+    var _shortTeam = teamLabel.length > 16 ? teamLabel.substring(0,14)+'\u2026' : teamLabel;
     row.innerHTML = '<span class="ml-evt-min">'+min+"'</span>"
       +'<span class="ml-evt-ico">'+ico+'</span>'
       +'<span class="ml-evt-name">'+(num?num+'. ':'')+name+'</span>'
+      +'<span class="ml-evt-team">'+escapeHtml(_shortTeam)+'</span>'
       +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\','+id+')" title="Editar">🖍</button>'
       +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\']('+id+')">✕</button>';
     var items = list.querySelectorAll('.ml-evt-item');

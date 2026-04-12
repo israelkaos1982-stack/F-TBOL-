@@ -35,75 +35,6 @@
   </div>
 </div>
 
-<!-- ══ PANTALLA ADMIN ════════════════════════════════════════ -->
-<div class="screen" id="s-admin">
-  <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">⚙️</span><h2>Panel Admin</h2></div>
-  <div id="admin-modules-grid" style="padding:0 0 32px;">
-    <div class="admin-module-card" onclick="go('s-admin-teams')">
-      <span class="admin-mod-icon">👕</span>
-      <div class="admin-mod-label">Team Manager</div>
-      <div class="admin-mod-desc">Editar equipos, escudos y colores</div>
-    </div>
-    <div class="admin-module-card" onclick="go('s-admin-calendar')">
-      <span class="admin-mod-icon">📅</span>
-      <div class="admin-mod-label">Calendar</div>
-      <div class="admin-mod-desc">Gestión del calendario de partidos</div>
-    </div>
-    <div class="admin-module-card" onclick="go('s-admin-stadiums')">
-      <span class="admin-mod-icon">🏟️</span>
-      <div class="admin-mod-label">Stadium Hub</div>
-      <div class="admin-mod-desc">Asignación de estadios por club</div>
-    </div>
-    <div class="admin-module-card" onclick="go('s-admin-balls')">
-      <span class="admin-mod-icon">⚽</span>
-      <div class="admin-mod-label">Ball Storage</div>
-      <div class="admin-mod-desc">Balón activo por competición</div>
-    </div>
-  </div>
-  <div class="admin-env-panel">
-    <div class="admin-env-title">🌍 ENTORNO ACTUAL</div>
-    <div id="admin-env-status" style="display:flex;gap:12px;flex-wrap:wrap;padding:12px 0 4px;"></div>
-  </div>
-</div>
-
-<!-- ══ PANTALLA ADMIN: TEAM MANAGER ═════════════════════════ -->
-<div class="screen" id="s-admin-teams">
-  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">👕</span><h2>Team Manager</h2></div>
-  <div style="padding:16px;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:.5px;">
-    Módulo en construcción. Aquí podrás editar los datos de los equipos de la temporada.
-  </div>
-</div>
-
-<!-- ══ PANTALLA ADMIN: CALENDAR ═════════════════════════════ -->
-<div class="screen" id="s-admin-calendar">
-  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">📅</span><h2>Calendar</h2></div>
-  <div style="padding:16px;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:.5px;">
-    Módulo en construcción. Aquí podrás gestionar el calendario de partidos.
-  </div>
-</div>
-
-<!-- ══ PANTALLA ADMIN: STADIUM HUB ══════════════════════════ -->
-<div class="screen" id="s-admin-stadiums">
-  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">🏟️</span><h2>Stadium Hub</h2></div>
-  <div style="padding:0 0 8px;">
-    <div class="admin-stadium-filter">
-      <input id="stadium-search" type="text" placeholder="🔍 Buscar estadio o club..." oninput="adminRenderStadiums()" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;padding:10px 14px;font-family:Rajdhani,sans-serif;font-size:13px;outline:none;"/>
-    </div>
-    <div id="stadium-list" style="padding:8px 0 24px;"></div>
-  </div>
-</div>
-
-<!-- ══ PANTALLA ADMIN: BALL STORAGE ══════════════════════════ -->
-<div class="screen" id="s-admin-balls">
-  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">⚽</span><h2>Ball Storage</h2></div>
-  <div id="balls-list" style="padding:8px 0 24px;"></div>
-</div>
-
 <style>
 #ajustes-hdr-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;opacity:.75;transition:opacity .2s;}
 #ajustes-hdr-btn:hover{opacity:1;}
@@ -1307,6 +1238,66 @@
   <span id="live-match-count" style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,100,100,.7);margin-left:4px;font-weight:600;"></span>
 </div>
 <div id="live-matches-list" style="padding:8px 0 24px;min-height:120px;"></div>
+</div>
+<!-- ══ PANTALLAS ADMIN (fuera de s-home, hermanas de s-live) ══ -->
+<div class="screen" id="s-admin">
+  <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">⚙️</span><h2>Panel Admin</h2></div>
+  <div id="admin-modules-grid" style="padding:0 0 32px;">
+    <div class="admin-module-card" onclick="go('s-admin-teams')">
+      <span class="admin-mod-icon">👕</span>
+      <div class="admin-mod-label">Team Manager</div>
+      <div class="admin-mod-desc">Editar equipos, escudos y colores</div>
+    </div>
+    <div class="admin-module-card" onclick="go('s-admin-calendar')">
+      <span class="admin-mod-icon">📅</span>
+      <div class="admin-mod-label">Calendar</div>
+      <div class="admin-mod-desc">Gestión del calendario de partidos</div>
+    </div>
+    <div class="admin-module-card" onclick="go('s-admin-stadiums')">
+      <span class="admin-mod-icon">🏟️</span>
+      <div class="admin-mod-label">Stadium Hub</div>
+      <div class="admin-mod-desc">Asignación de estadios por club</div>
+    </div>
+    <div class="admin-module-card" onclick="go('s-admin-balls')">
+      <span class="admin-mod-icon">⚽</span>
+      <div class="admin-mod-label">Ball Storage</div>
+      <div class="admin-mod-desc">Balón activo por competición</div>
+    </div>
+  </div>
+  <div class="admin-env-panel">
+    <div class="admin-env-title">🌍 ENTORNO ACTUAL</div>
+    <div id="admin-env-status" style="display:flex;gap:12px;flex-wrap:wrap;padding:12px 0 4px;"></div>
+  </div>
+</div>
+<div class="screen" id="s-admin-teams">
+  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">👕</span><h2>Team Manager</h2></div>
+  <div style="padding:16px;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:.5px;">
+    Módulo en construcción. Aquí podrás editar los datos de los equipos de la temporada.
+  </div>
+</div>
+<div class="screen" id="s-admin-calendar">
+  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">📅</span><h2>Calendar</h2></div>
+  <div style="padding:16px;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:.5px;">
+    Módulo en construcción. Aquí podrás gestionar el calendario de partidos.
+  </div>
+</div>
+<div class="screen" id="s-admin-stadiums">
+  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">🏟️</span><h2>Stadium Hub</h2></div>
+  <div style="padding:0 0 8px;">
+    <div class="admin-stadium-filter">
+      <input id="stadium-search" type="text" placeholder="🔍 Buscar estadio o club..." oninput="adminRenderStadiums()" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;padding:10px 14px;font-family:Rajdhani,sans-serif;font-size:13px;outline:none;"/>
+    </div>
+    <div id="stadium-list" style="padding:8px 0 24px;"></div>
+  </div>
+</div>
+<div class="screen" id="s-admin-balls">
+  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">⚽</span><h2>Ball Storage</h2></div>
+  <div id="balls-list" style="padding:8px 0 24px;"></div>
 </div>
 <div class="screen active" id="s-espana">
 <button class="back-btn" style="visibility:hidden;">◀ Volver</button>

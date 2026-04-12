@@ -7172,64 +7172,64 @@ window.goLiveMatches = function() {
     return d.getFullYear() + '-' + mo + '-' + da;
   }
 
-  /* ── BALL DATABASE ────────────────────────────────────── */
-  window.BALL_DB = {
-    'liga':           { id: 'eFootball_Conext25_LaLiga',      name: 'Conext 25 LaLiga',       comp: 'Liga EA Sports' },
-    'segunda':        { id: 'eFootball_Derbystar_Brillant_S3', name: 'Derbystar Brillant S3',  comp: 'Segunda División' },
-    'copa':           { id: 'eFootball_Puma_King_Final26',     name: 'Puma King Final 26',     comp: 'Copa del Rey' },
-    'supercopa':      { id: 'eFootball_Adidas_Finale26',       name: 'Adidas Finale 26',       comp: 'Supercopa de España' },
-    'champions':      { id: 'eFootball_Adidas_Finale26',       name: 'Adidas Finale 26',       comp: 'UEFA Champions League' },
-    'uel':            { id: 'eFootball_Adidas_Europa26',       name: 'Adidas Europa 26',       comp: 'UEFA Europa League' },
-    'uecl':           { id: 'eFootball_Molten_UECL26',        name: 'Molten UECL 26',         comp: 'UEFA Conference League' },
-    'superliga':      { id: 'eFootball_Superliga_Ball26',      name: 'Superliga 26',           comp: 'Superliga' },
-    'intercontinental':{ id: 'eFootball_Adidas_Intercont26',  name: 'Adidas Intercont 26',    comp: 'Intercontinental' },
-    'usc':            { id: 'eFootball_Adidas_Finale26',       name: 'Adidas Finale 26',       comp: 'UEFA Super Cup' },
-    'selecciones':    { id: 'eFootball_Adidas_AlRihla26',      name: 'Adidas Al Rihla 26',     comp: 'Selecciones' },
-    'portugal':       { id: 'eFootball_Nike_Flight_Liga26',    name: 'Nike Flight Liga 26',    comp: 'Liga Portugal' },
-    'primf':          { id: 'eFootball_Nike_Premier26',        name: 'Nike Premier 26',        comp: 'Premier League' },
-    'snow':           { id: _SNOW_BALL,                        name: 'eFootball MAX VIS 26',   comp: '(Nieve)' }
-  };
+  /* ── BALL DATABASE (14 entradas exactas del spec) ────── */
+  window.BALL_DB = [
+    { key:'liga',          cat:'Nacional',    comp:'Liga EA Sports',              id:'Ligue_1_McDonalds_Official',    luz:'🌙 Noche' },
+    { key:'copa',          cat:'Nacional',    comp:'Copa del Rey',                id:'TSUBASA_J_PRO',                 luz:'🌙 Noche' },
+    { key:'supercopa',     cat:'Nacional',    comp:'Supercopa de España',         id:'Puma_Orbita_Portugal_25-26',    luz:'☀️ Sol'   },
+    { key:'champions',     cat:'Europea 🔵',  comp:'Champions League',            id:'PARADISE_Purple_Edition',       luz:'🌙 Noche' },
+    { key:'uel',           cat:'Europea 🟠',  comp:'Europa League',               id:'Resmi_Maç_Topudur',             luz:'🌙 Noche' },
+    { key:'uecl',          cat:'Europea 🟢',  comp:'Conference League',           id:'The_Brillant_Super_USL_v25',    luz:'🌙 Noche' },
+    { key:'recopa',        cat:'Europea 🟤',  comp:'Recopa de Europa',            id:'PARADISE_Blue_Edition',         luz:'🌙 Noche' },
+    { key:'usc',           cat:'Europea 🇪🇺', comp:'Supercopa de Europa',         id:'eFootball_Contact_26',          luz:'☀️ Sol'   },
+    { key:'ucl-previa',    cat:'Europea 🛰',  comp:'Fase Previa Champions',       id:'Derbystar_Globall_25-26',       luz:'🌙 Noche' },
+    { key:'selecciones',   cat:'Internac.',   comp:'Fase Final Selecciones',      id:'NIKE_CONTROL_CBF',              luz:'☀️ Sol'   },
+    { key:'intercontinental',cat:'Internac. 🟡',comp:'Copa Intercontinental',    id:'Vantaggio_5000',                luz:'☀️ Sol'   },
+    { key:'clasif',        cat:'Internac.',   comp:'Clasificatorias / Repesca',   id:'Ligue_2_BKT_Official',          luz:'🌙 Noche' },
+    { key:'amistosos',     cat:'Especial 🤝', comp:'Amistosos Pretemporada',      id:'eFootball_Origin',              luz:'🌙 Noche' },
+    { key:'snow',          cat:'Especial ❄️', comp:'Partidos con Nieve',          id:'eFootball_MAX_VIS_26',          luz:'🌙 Noche' }
+  ];
 
   window.adminGetBall = function (compKey, env) {
     env = env || {};
-    if (env.ball) {
-      return window.BALL_DB['snow'] || { id: env.ball, name: env.ball, comp: '(Nieve)' };
-    }
-    return window.BALL_DB[compKey] || window.BALL_DB['liga'];
+    var snowEntry = window.BALL_DB.filter(function(b){ return b.key==='snow'; })[0];
+    if (env.ball) return snowEntry || { id: env.ball, comp: '(Nieve)' };
+    var found = window.BALL_DB.filter(function(b){ return b.key===compKey; })[0];
+    return found || window.BALL_DB[0];
   };
 
-  /* ── STADIUM DATABASE ─────────────────────────────────── */
+  /* ── STADIUM DATABASE (30 recintos del spec) ─────────── */
   window.STADIUM_DB = [
-    { id:'sta001', name:'Camp Nou',             city:'Barcelona',    cap:99354, country:'España',   tags:['elite','spain'],            clubs:['barca','fc-barcelona'] },
-    { id:'sta002', name:'Estadio Santiago Bernabéu', city:'Madrid', cap:81044, country:'España',   tags:['elite','spain'],            clubs:['real-madrid','madrid'] },
-    { id:'sta003', name:'Estadio Metropolitano', city:'Madrid',     cap:70460, country:'España',   tags:['elite','spain'],            clubs:['atletico','atletico-madrid'] },
-    { id:'sta004', name:'Estadio de La Cartuja', city:'Sevilla',    cap:57619, country:'España',   tags:['national','spain','final'], clubs:[] },
-    { id:'sta005', name:'Estadio San Mamés',     city:'Bilbao',     cap:53289, country:'España',   tags:['elite','spain'],            clubs:['athletic','athletic-bilbao'] },
-    { id:'sta006', name:'Estadio Ramón Sánchez-Pizjuán', city:'Sevilla', cap:42714, country:'España', tags:['spain'],               clubs:['sevilla','sevilla-fc'] },
-    { id:'sta007', name:'Estadio de la Cerámica', city:'Vila-real', cap:23500, country:'España',   tags:['spain'],                    clubs:['villarreal'] },
-    { id:'sta008', name:'Estadio Benito Villamarín', city:'Sevilla', cap:60721, country:'España',  tags:['elite','spain'],            clubs:['betis','real-betis'] },
-    { id:'sta009', name:'Estadio de Mestalla',   city:'Valencia',   cap:49430, country:'España',   tags:['spain'],                    clubs:['valencia'] },
-    { id:'sta010', name:'RCDE Stadium',          city:'Cornellà',   cap:40000, country:'España',   tags:['spain'],                    clubs:['espanyol','rcd-espanyol'] },
-    { id:'sta011', name:'Coliseum Alfonso Pérez', city:'Getafe',    cap:17700, country:'España',   tags:['spain'],                    clubs:['getafe','getafe-cf'] },
-    { id:'sta012', name:'Estadio de la Romareda', city:'Zaragoza',  cap:34596, country:'España',   tags:['spain'],                    clubs:['zaragoza','real-zaragoza'] },
-    { id:'sta013', name:'Estadio Carlos Belmonte', city:'Albacete', cap:17524, country:'España',   tags:['spain','second'],           clubs:['albacete','albacete-bp'] },
-    { id:'sta014', name:'Allianz Arena',         city:'Múnich',     cap:75024, country:'Alemania',  tags:['elite','germany'],          clubs:['munich','bayern','fc-baviera'] },
-    { id:'sta015', name:'Emirates Stadium',      city:'Londres',    cap:60704, country:'Inglaterra', tags:['elite','england'],         clubs:['arsenal'] },
-    { id:'sta016', name:'Parc des Princes',      city:'París',      cap:47929, country:'Francia',   tags:['elite','france'],           clubs:['psg','paris-sg','paris-saint-germain'] },
-    { id:'sta017', name:'Estádio José Alvalade', city:'Lisboa',     cap:50095, country:'Portugal',  tags:['elite','portugal'],         clubs:['sporting','sporting-cp'] },
-    { id:'sta018', name:'Estádio da Luz',        city:'Lisboa',     cap:65647, country:'Portugal',  tags:['elite','portugal'],         clubs:['benfica','sl-benfica'] },
-    { id:'sta019', name:'Estádio do Dragão',     city:'Oporto',     cap:50033, country:'Portugal',  tags:['elite','portugal'],         clubs:['porto','fc-porto'] },
-    { id:'sta020', name:'Johan Cruyff Arena',    city:'Ámsterdam',  cap:54990, country:'Países Bajos', tags:['elite','netherlands'],  clubs:['ajax'] },
-    { id:'sta021', name:'Signal Iduna Park',     city:'Dortmund',   cap:81365, country:'Alemania',  tags:['elite','germany'],          clubs:['dortmund','borussia-dortmund'] },
-    { id:'sta022', name:'Stamford Bridge',       city:'Londres',    cap:40343, country:'Inglaterra', tags:['england'],                 clubs:['chelsea'] },
-    { id:'sta023', name:'Old Trafford',          city:'Mánchester', cap:74140, country:'Inglaterra', tags:['elite','england'],         clubs:['man-utd','manchester-united'] },
-    { id:'sta024', name:'Etihad Stadium',        city:'Mánchester', cap:53400, country:'Inglaterra', tags:['elite','england'],         clubs:['man-city','manchester-city'] },
-    { id:'sta025', name:'Anfield',               city:'Liverpool',  cap:61015, country:'Inglaterra', tags:['elite','england'],         clubs:['liverpool'] },
-    { id:'sta026', name:'Juventus Stadium',      city:'Turín',      cap:41507, country:'Italia',     tags:['elite','italy'],           clubs:['juventus'] },
-    { id:'sta027', name:'San Siro',              city:'Milán',      cap:80018, country:'Italia',     tags:['elite','italy'],           clubs:['milan','inter','ac-milan','inter-milan'] },
-    { id:'sta028', name:'Estadio Olímpico de Roma', city:'Roma',    cap:70634, country:'Italia',     tags:['elite','italy','final'],   clubs:['roma','lazio'] },
-    { id:'sta029', name:'Estadio Rey Fahd',      city:'Riad',       cap:68252, country:'Arabia Saudí', tags:['neutral','final'],      clubs:[] },
-    { id:'sta030', name:'Estadio Olímpico de Wembley', city:'Londres', cap:90000, country:'Inglaterra', tags:['national','england','final'], clubs:[] }
+    { id:'sta01',  name:'Spotify Camp Nou',        city:'Barcelona',     cap:105000, tipo:'Bowl',     status:'ELITE',    color:'#a50044', clubs:['barca','fc-barcelona'] },
+    { id:'sta02',  name:'Signal Iduna Park',        city:'Dortmund',      cap:81365,  tipo:'Clásico',  status:'ELITE',    color:'#fde100', clubs:['dortmund','borussia-dortmund'] },
+    { id:'sta03',  name:'Old Trafford',             city:'Mánchester',    cap:74140,  tipo:'Inglés',   status:'ELITE',    color:'#da291c', clubs:['man-utd','manchester-united'] },
+    { id:'sta04',  name:'Emirates Stadium',         city:'Londres',       cap:60704,  tipo:'Moderno',  status:'ELITE',    color:'#ef0107', clubs:['arsenal'] },
+    { id:'sta05',  name:'Wembley',                  city:'Londres',       cap:90000,  tipo:'Arco',     status:'ELITE',    color:'#0057a8', clubs:[] },
+    { id:'sta06',  name:'Giuseppe Meazza',          city:'Milán',         cap:75923,  tipo:'Torres',   status:'ELITE',    color:'#000000', clubs:['inter','inter-milan'] },
+    { id:'sta07',  name:'San Siro',                 city:'Milán',         cap:75923,  tipo:'Torres',   status:'ELITE',    color:'#8b0000', clubs:['milan','ac-milan'] },
+    { id:'sta08',  name:'Stadio Olimpico',          city:'Roma',          cap:72698,  tipo:'Olímpico', status:'ELITE',    color:'#8b008b', clubs:['roma','lazio'] },
+    { id:'sta09',  name:'New Balance Arena',        city:'Liverpool',     cap:61000,  tipo:'Vanguardia',status:'ELITE',   color:'#c8102e', clubs:['liverpool'] },
+    { id:'sta10',  name:'Johan Cruijff ArenA',      city:'Ámsterdam',     cap:54990,  tipo:'Techo',    status:'ELITE',    color:'#d2122e', clubs:['ajax'] },
+    { id:'sta11',  name:'Estadio Banorte',          city:'Culiacán',      cap:45000,  tipo:'Moderno',  status:'REGIONAL', color:'#cc0000', clubs:[] },
+    { id:'sta12',  name:'Estadio AKRON',            city:'Guadalajara',   cap:49850,  tipo:'Bowl',     status:'REGIONAL', color:'#c50a2c', clubs:[] },
+    { id:'sta13',  name:'El Volcán',                city:'Monterrey',     cap:51349,  tipo:'Clásico',  status:'REGIONAL', color:'#003591', clubs:[] },
+    { id:'sta14',  name:'Olímpico Universitario',   city:'Ciudad de Méx.',cap:72449,  tipo:'Olímpico', status:'ELITE',    color:'#003da5', clubs:[] },
+    { id:'sta15',  name:'Neo Química Arena',        city:'São Paulo',     cap:49205,  tipo:'Moderno',  status:'REGIONAL', color:'#000000', clubs:[] },
+    { id:'sta16',  name:'Estádio Beira-Rio',        city:'Porto Alegre',  cap:50128,  tipo:'Bowl',     status:'REGIONAL', color:'#cc0000', clubs:[] },
+    { id:'sta17',  name:'MorumbIS',                 city:'São Paulo',     cap:67052,  tipo:'Clásico',  status:'ELITE',    color:'#cc0000', clubs:[] },
+    { id:'sta18',  name:'Estádio Urbano Caldeira',  city:'Santos',        cap:16798,  tipo:'Clásico',  status:'BARRIO',   color:'#000000', clubs:[] },
+    { id:'sta19',  name:'Más Monumental',           city:'Buenos Aires',  cap:84567,  tipo:'Bowl',     status:'ELITE',    color:'#cc0000', clubs:[] },
+    { id:'sta20',  name:'La Bombonera',             city:'Buenos Aires',  cap:57395,  tipo:'Clásico',  status:'ELITE',    color:'#001489', clubs:[] },
+    { id:'sta21',  name:'Saitama 2002',             city:'Saitama',       cap:63700,  tipo:'Bowl',     status:'ELITE',    color:'#c8102e', clubs:[] },
+    { id:'sta22',  name:'eFootball™ Stadium',       city:'Virtual',       cap:0,      tipo:'Vanguardia',status:'NEUTRAL',  color:'#7744ff', clubs:[] },
+    { id:'sta23',  name:'Estádio do Escorpião',     city:'Brasil',        cap:20000,  tipo:'Moderno',  status:'REGIONAL', color:'#008000', clubs:[] },
+    { id:'sta24',  name:'Estadio del Nuevo Triunfo',city:'América Latina',cap:25000,  tipo:'Clásico',  status:'REGIONAL', color:'#ffd700', clubs:[] },
+    { id:'sta25',  name:'Stadio Orione',            city:'Italia',        cap:15000,  tipo:'Clásico',  status:'BARRIO',   color:'#0070b0', clubs:[] },
+    { id:'sta26',  name:'Burg Stadion',             city:'Europa Central',cap:18000,  tipo:'Moderno',  status:'BARRIO',   color:'#555555', clubs:[] },
+    { id:'sta27',  name:'Estadio del Martingal',    city:'España',        cap:22000,  tipo:'Moderno',  status:'REGIONAL', color:'#ff6600', clubs:[] },
+    { id:'sta28',  name:'Rose Park Stadium',        city:'Oceanía',       cap:30000,  tipo:'Bowl',     status:'REGIONAL', color:'#cc0066', clubs:[] },
+    { id:'sta29',  name:'Coliseo de los Deportes',  city:'América Latina',cap:12000,  tipo:'Olímpico', status:'BARRIO',   color:'#aa0000', clubs:[] },
+    { id:'sta30',  name:'Sports Park',              city:'Asia',          cap:8000,   tipo:'Moderno',  status:'BARRIO',   color:'#228b22', clubs:[] }
   ];
 
   /* Level-1: exact club slug → stadium ID */
@@ -7241,12 +7241,10 @@ window.goLiveMatches = function() {
     return m;
   }());
 
-  /* Level-2: country/tag heuristic */
-  function _stadiumByTag(tags) {
-    var matches = window.STADIUM_DB.filter(function (st) {
-      return tags.some(function (t) { return st.tags.indexOf(t) !== -1; });
-    });
-    return matches.length ? matches[Math.floor(Math.random() * matches.length)] : null;
+  /* Level-2: status heuristic */
+  function _stadiumByStatus(status) {
+    var pool = window.STADIUM_DB.filter(function(s){ return s.status === status; });
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
   }
 
   /* Level-3: full rotation pool */
@@ -7258,7 +7256,6 @@ window.goLiveMatches = function() {
   }
 
   window.adminGetStadium = function (clubSlug, opts) {
-    /* opts: { tags: ['spain','elite'] } */
     opts = opts || {};
     /* Level 1 */
     if (clubSlug) {
@@ -7270,15 +7267,18 @@ window.goLiveMatches = function() {
       }
     }
     /* Level 2 */
-    if (opts.tags && opts.tags.length) {
-      var byTag = _stadiumByTag(opts.tags);
-      if (byTag) return byTag;
+    if (opts.status) {
+      var byStatus = _stadiumByStatus(opts.status);
+      if (byStatus) return byStatus;
     }
     /* Level 3 */
     return _stadiumRotation();
   };
 
   /* ── ADMIN UI RENDERERS ───────────────────────────────── */
+  var _STATUS_COLOR = { ELITE:'#ffd700', REGIONAL:'#60aaff', BARRIO:'#aaaaaa', NEUTRAL:'#aa80ff' };
+  var _TIPO_ICON = { Bowl:'🏟', Clásico:'🏛', Inglés:'⬜', Moderno:'🔷', Arco:'🌉', Torres:'🗼', Olímpico:'🏅', Vanguardia:'✨', Techo:'🔒' };
+
   window.adminRenderStadiums = function () {
     var container = document.getElementById('stadium-list');
     if (!container) return;
@@ -7286,21 +7286,26 @@ window.goLiveMatches = function() {
     q = q.toLowerCase().trim();
     var filtered = window.STADIUM_DB.filter(function (s) {
       if (!q) return true;
-      return (s.name + s.city + s.country + s.clubs.join(' ')).toLowerCase().indexOf(q) !== -1;
+      return (s.name + s.city + (s.clubs||[]).join(' ') + s.tipo + s.status).toLowerCase().indexOf(q) !== -1;
     });
     if (!filtered.length) {
       container.innerHTML = '<p style="color:rgba(255,255,255,.35);font-family:Rajdhani,sans-serif;font-size:13px;padding:16px;">Sin resultados</p>';
       return;
     }
-    container.innerHTML = filtered.map(function (s) {
+    container.innerHTML = filtered.map(function (s, i) {
+      var stColor = _STATUS_COLOR[s.status] || '#888';
+      var tipoIco = _TIPO_ICON[s.tipo] || '🏟';
+      var capStr = s.cap > 0 ? s.cap.toLocaleString() + ' esp.' : 'Virtual';
       return '<div class="admin-stadium-row">'
-        + '<span class="admin-stadium-icon">🏟️</span>'
-        + '<div style="flex:1;">'
-        + '<div class="admin-stadium-name">' + s.name + '</div>'
-        + '<div class="admin-stadium-meta">' + s.city + ' · ' + s.country + ' · ' + s.cap.toLocaleString() + ' esp.</div>'
-        + (s.clubs.length ? '<div class="admin-stadium-meta" style="color:rgba(100,180,255,.6);">Clubs: ' + s.clubs.join(', ') + '</div>' : '')
+        + '<div style="width:36px;height:36px;border-radius:8px;background:' + s.color + ';display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">' + tipoIco + '</div>'
+        + '<div style="flex:1;min-width:0;">'
+        + '<div class="admin-stadium-name" style="display:flex;align-items:center;gap:6px;">'
+        + '<span style="font-size:10px;color:rgba(255,255,255,.3);font-family:Rajdhani,sans-serif;">' + (i+1) + '</span>'
+        + s.name + '</div>'
+        + '<div class="admin-stadium-meta">' + s.city + ' · ' + s.tipo + ' · ' + capStr + '</div>'
+        + (s.clubs&&s.clubs.length ? '<div class="admin-stadium-meta" style="color:rgba(100,180,255,.6);">Club: ' + s.clubs.join(', ') + '</div>' : '')
         + '</div>'
-        + '<span style="font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.3);">' + s.id + '</span>'
+        + '<span style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.07);color:' + stColor + ';">' + s.status + '</span>'
         + '</div>';
     }).join('');
   };
@@ -7309,33 +7314,40 @@ window.goLiveMatches = function() {
     var container = document.getElementById('balls-list');
     if (!container) return;
     var env = window.adminGetEnvironment();
-    var entries = Object.keys(window.BALL_DB).map(function (k) {
-      return { key: k, data: window.BALL_DB[k] };
-    });
+    var snowActive = env.snow;
     container.innerHTML = '<div class="admin-env-panel" style="margin:0 0 12px;">'
-      + '<div class="admin-env-title">ENTORNO HOY</div>'
-      + '<div style="padding:8px 0 0;font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.7);">'
-      + '🌍 ' + env.tod + (env.snow ? ' · ❄️ Nieve activa · Balón: ' + env.ball : '')
+      + '<div class="admin-env-title">ENTORNO HOY · ' + _todayISODate() + '</div>'
+      + '<div style="padding:8px 0 0;display:flex;gap:8px;flex-wrap:wrap;">'
+      + '<span class="admin-env-badge">' + (env.tod==='SNOW'?'❄️':env.tod==='SOLEADO'?'☀️':'🌙') + ' ' + env.tod + '</span>'
+      + (snowActive ? '<span class="admin-env-badge" style="color:#4de;border-color:rgba(40,200,220,.3);">Balón Override: eFootball_MAX_VIS_26</span>' : '')
       + '</div></div>'
-      + entries.map(function (e) {
-        var active = env.snow && e.key === 'snow';
-        return '<div class="admin-ball-row' + (active ? ' admin-ball-active' : '') + '">'
-          + '<span style="font-size:20px;">⚽</span>'
-          + '<div style="flex:1;">'
-          + '<div class="admin-ball-comp">' + e.data.comp + '</div>'
-          + '<div class="admin-ball-id">' + e.data.id + '</div>'
-          + '</div>'
-          + (active ? '<span style="font-size:10px;color:#5fe08a;font-family:Rajdhani,sans-serif;">ACTIVO</span>' : '')
-          + '</div>';
-      }).join('');
+      + '<div style="display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:0;border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;">'
+      + window.BALL_DB.map(function (b, i) {
+          var isSnow = snowActive && b.key === 'snow';
+          var bg = isSnow ? 'rgba(40,200,220,.1)' : (i%2===0?'rgba(255,255,255,.03)':'transparent');
+          var ballIco = b.cat.indexOf('❄️')!==-1?'❄️':b.cat.indexOf('🤝')!==-1?'🤝':'⚽';
+          return '<div style="display:contents;">'
+            + '<div style="padding:10px 10px 10px 12px;background:' + bg + ';font-size:18px;">' + ballIco + '</div>'
+            + '<div style="padding:8px 6px;background:' + bg + ';border-left:1px solid rgba(255,255,255,.05);">'
+            + '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.65);">' + b.comp + '</div>'
+            + '<div style="font-family:\'Courier New\',monospace;font-size:10px;color:rgba(80,180,255,.8);word-break:break-all;">' + b.id + '</div>'
+            + '</div>'
+            + '<div style="padding:8px 10px;background:' + bg + ';border-left:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;text-align:right;">'
+            + b.luz
+            + (isSnow ? ' <span style="color:#4de;font-weight:700;">●ACTIVO</span>' : '')
+            + '</div>'
+            + '</div>';
+        }).join('')
+      + '</div>';
   };
 
   function _adminRefreshEnvStatus() {
     var el = document.getElementById('admin-env-status');
     if (!el) return;
     var env = window.adminGetEnvironment();
-    el.innerHTML = '<span class="admin-env-badge">🌙 ' + env.tod + '</span>'
-      + (env.snow ? '<span class="admin-env-badge">❄️ NIEVE</span><span class="admin-env-badge">⚽ MAX VIS 26</span>' : '');
+    var tod = env.tod==='SNOW'?'❄️ SNOW':env.tod==='SOLEADO'?'☀️ SOLEADO':'🌙 NIGHT';
+    el.innerHTML = '<span class="admin-env-badge">' + tod + '</span>'
+      + (env.snow ? '<span class="admin-env-badge" style="color:#4de;border-color:rgba(40,200,220,.25);">eFootball_MAX_VIS_26</span>' : '');
   }
 
   /* hook into go() to render stadium/ball lists when entering those screens */

@@ -4887,15 +4887,167 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   };
   var _ppItems    = [];
 
+  /* ══ SISTEMA DE ESTADO DE FORMA ══════════════════════════════ */
+  /* 6 variantes: 🎲 Al azar, ⬆️ Excelente, ↗️ Buena, ➡️ Normal, ↘️ Mala, ⬇️ Pésima */
+  window._ppFormStates = { home: '🎲', away: '🎲' };
+  window._ppFormAdminUnlocked = false;
+  var FORM_VARIANTS = [
+    { ico: '🎲', name: 'Al azar',   color: 'rgba(255,255,255,.85)' },
+    { ico: '⬆️', name: 'Excelente', color: '#5aa9ff' },
+    { ico: '↗️', name: 'Buena',     color: '#4fd87a' },
+    { ico: '➡️', name: 'Normal',    color: '#f0c040' },
+    { ico: '↘️', name: 'Mala',      color: '#ff9040' },
+    { ico: '⬇️', name: 'Pésima',    color: '#ff5050' }
+  ];
+  window._ppFormVariants = FORM_VARIANTS;
+
+  /* Reset a 🎲 al abrir una nueva previa */
+  window._ppResetFormStates = function() {
+    window._ppFormStates = { home: '🎲', away: '🎲' };
+    window._ppFormAdminUnlocked = false;
+  };
+
+  /* Prompt PIN 747 antes de cambiar el estado de forma */
+  window._ppRequestFormAdmin = function(side) {
+    if (window._ppFormAdminUnlocked) {
+      window._ppOpenFormDropdown(side);
+      return;
+    }
+    var pin = prompt('🔒 Introduce código de administrador para modificar el estado de forma:');
+    if (pin === '747') {
+      window._ppFormAdminUnlocked = true;
+      window._ppOpenFormDropdown(side);
+    } else if (pin !== null) {
+      alert('❌ Código incorrecto');
+    }
+  };
+
+  /* Mostrar dropdown con las 6 variantes */
+  window._ppOpenFormDropdown = function(side) {
+    var existing = document.getElementById('pp-form-dropdown');
+    if (existing) existing.remove();
+    var btn = document.getElementById('pp-form-' + side);
+    if (!btn) return;
+    var rect = btn.getBoundingClientRect();
+    var dd = document.createElement('div');
+    dd.id = 'pp-form-dropdown';
+    dd.style.cssText = 'position:fixed;z-index:9999;background:rgba(10,10,24,.98);border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:160px;';
+    dd.style.left = Math.max(10, rect.left - 30) + 'px';
+    dd.style.top = (rect.bottom + 6) + 'px';
+    dd.innerHTML = FORM_VARIANTS.map(function(v) {
+      return '<div class="pp-form-opt" data-ico="' + v.ico + '" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-radius:6px;color:' + v.color + ';font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;transition:background .15s;"><span style="font-size:18px;">' + v.ico + '</span>' + v.name.toUpperCase() + '</div>';
+    }).join('');
+    document.body.appendChild(dd);
+    dd.querySelectorAll('.pp-form-opt').forEach(function(el) {
+      el.addEventListener('mouseenter', function(){ el.style.background = 'rgba(255,255,255,.08)'; });
+      el.addEventListener('mouseleave', function(){ el.style.background = ''; });
+      el.addEventListener('click', function() {
+        var ico = el.getAttribute('data-ico');
+        window._ppSetFormState(side, ico);
+        dd.remove();
+      });
+    });
+    setTimeout(function() {
+      function off(e) {
+        if (!dd.contains(e.target) && e.target !== btn) {
+          dd.remove();
+          document.removeEventListener('click', off, true);
+        }
+      }
+      document.addEventListener('click', off, true);
+    }, 50);
+  };
+
+  /* Asignar estado y re-renderizar */
+  window._ppSetFormState = function(side, ico) {
+    window._ppFormStates[side] = ico;
+    var btn = document.getElementById('pp-form-' + side);
+    if (btn) {
+      var variant = null;
+      for (var i = 0; i < FORM_VARIANTS.length; i++) {
+        if (FORM_VARIANTS[i].ico === ico) { variant = FORM_VARIANTS[i]; break; }
+      }
+      if (!variant) variant = FORM_VARIANTS[0];
+      btn.innerHTML = '<span style="font-size:22px;line-height:1;">' + variant.ico + '</span>';
+      btn.style.borderColor = variant.color;
+      btn.style.boxShadow = '0 0 10px ' + variant.color + '55';
+    }
+    /* Pésima → lesión automática */
+    if (ico === '⬇️') window._ppTriggerInjury(side);
+  };
+
+  /* Pésima → lesiona a un jugador aleatorio del equipo */
+  window._ppTriggerInjury = function(side) {
+    var teams = window._ppGetCurrentMatchTeams && window._ppGetCurrentMatchTeams();
+    if (!teams) return;
+    var teamName = side === 'home' ? teams.home : teams.away;
+    if (!teamName) return;
+    var HUMANOS_FORM = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+    var normFn = window._ppNormTeam || function(s){return (s||'').toLowerCase();};
+    var normTeam = normFn(teamName);
+    var canonicalTeam = null;
+    for (var k = 0; k < HUMANOS_FORM.length; k++) {
+      if (normFn(HUMANOS_FORM[k]) === normTeam) { canonicalTeam = HUMANOS_FORM[k]; break; }
+    }
+    if (!canonicalTeam) {
+      alert('⚠️ El estado Pésima solo aplica lesiones a equipos humanos');
+      return;
+    }
+    var squad = (window.SQUAD_REGISTRY && window.SQUAD_REGISTRY[canonicalTeam]) || [];
+    var pool = squad.filter(function(p) {
+      if (!p || p.h) return false;
+      if (!Array.isArray(p)) return false;
+      if (p[2] === 'P') return false;
+      var name = p[1];
+      if (window.BAJA_STORE && window.BAJA_STORE[name]) return false;
+      return true;
+    });
+    if (!pool.length) {
+      alert('⚠️ No hay jugadores disponibles en ' + canonicalTeam + ' para lesionar');
+      return;
+    }
+    var chosen = pool[Math.floor(Math.random() * pool.length)];
+    var playerName = chosen[1];
+    /* Asignar severidad aleatoria */
+    var r = Math.random();
+    var grado, gradoNombre, gradoEmoji, partidos, lesionesList;
+    if (r < 0.55) {
+      grado = 1; gradoNombre = 'Leve'; gradoEmoji = '🩹'; partidos = 1 + Math.floor(Math.random()*2);
+      lesionesList = ['Sobrecarga muscular','Contusión en el cuádriceps','Esguince de tobillo Grado I','Calambre persistente','Elongación en el aductor'];
+    } else if (r < 0.85) {
+      grado = 2; gradoNombre = 'Moderada'; gradoEmoji = '💉'; partidos = 2 + Math.floor(Math.random()*3);
+      lesionesList = ['Microrrotura de fibras','Esguince de tobillo Grado II','Edema óseo','Contractura severa','Distensión del ligamento lateral'];
+    } else {
+      grado = 3; gradoNombre = 'Grave'; gradoEmoji = '🚑'; partidos = 5 + Math.floor(Math.random()*6);
+      lesionesList = ['Rotura fibrilar Grado III','Fisura en el metatarsiano','Rotura parcial del ligamento','Luxación de hombro','Rotura del tendón de Aquiles'];
+    }
+    var descripcion = lesionesList[Math.floor(Math.random() * lesionesList.length)];
+    if (!window.LESION_STORE) window.LESION_STORE = {};
+    if (!window.BAJA_STORE) window.BAJA_STORE = {};
+    window.LESION_STORE[playerName] = {
+      equipo: canonicalTeam, grado: grado, gradoNombre: gradoNombre,
+      gradoEmoji: gradoEmoji, descripcion: descripcion, partidos: partidos,
+      timestamp: Date.now()
+    };
+    window.BAJA_STORE[playerName] = {
+      tipo: 'lesion', liga: partidos, copa: partidos, europa: partidos
+    };
+    alert('🏥 ' + gradoEmoji + ' LESIÓN ' + gradoNombre.toUpperCase() + '\n' +
+          playerName + ' (' + canonicalTeam + ')\n' +
+          descripcion + '\n' +
+          partidos + ' partido(s) de baja');
+    /* Refrescar el banner de alertas en la previa */
+    if (_ppMatchKey && typeof _renderPreviaMeta === 'function') {
+      _renderPreviaMeta(_ppMatchKey, false);
+    }
+  };
+
   function _buildItems(matchKey, compKey, prorroga, duracion, isHvH) {
     // Fixed items for Liga Jornada 1
     var estadio  = 'eFootball Stadium'; // fallback — overwritten below from venue-bar or TEAM_STADIUMS
     var estacion = 'Verano';
     var tiempo   = 'Soleado';
     var balon    = "Ligue 1 McDonald's";
-    var nivel    = 'Crack';
-    var formaT   = 'Excelente';
-    var formaR   = 'Normal';
     var sust     = '6';
     var ventanas = '6';
 
@@ -4907,7 +5059,6 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       if (nm) estadio = nm.textContent.trim();
       if (wt) {
         var wtext = wt.textContent.replace(/\s+/g,' ').trim();
-        // format: "☀️ Soleado · Verano"
         var parts = wtext.replace(/[\u2600-\u27FF\uFE0F]|\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDFFF]/g,'').trim().split('\u00B7');
         if (parts.length >= 2) {
           tiempo   = parts[0].trim();
@@ -4955,12 +5106,10 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var bn = bwrap.querySelector('.ml-ball-name');
       if (bn && bn.textContent.trim()) balon = bn.textContent.trim();
     }
-
+    /* Duración según HvH/HvIA — 10 min HvH, 8 min HvIA */
+    var durLabel = isHvH ? '10 min' : '8 min';
     var items = [
-      { id:'nivel',   ico:'🎮', lbl:'Nivel CRACK',   val:nivel },
-      { id:'formaT',  ico:'⬆️', lbl:'Tu Forma',      val:formaT },
-      { id:'formaR',  ico:'➡️', lbl:'Rival Forma',   val:formaR },
-      { id:'duracion',ico:'⏱️', lbl:'Duración',      val:duracion + (isHvH ? ' (H)' : ' (IA)') },
+      { id:'duracion',ico:'⏱️', lbl:'Duración',      val:durLabel + (isHvH ? ' (H)' : ' (IA)') },
       { id:'balon',   ico:'⚽️', lbl:'Balón',         val:balon }
     ];
     return items;
@@ -4999,9 +5148,18 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var lB = _pickLogo(_svgImgs[1], away);
       var imgA = lA ? '<img src="'+lA+'" alt="'+home+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
       var imgB = lB ? '<img src="'+lB+'" alt="'+away+'" style="width:100px;height:100px;object-fit:contain;display:block;"/>' : '<span style="font-size:60px;">🛡️</span>';
-      vs.innerHTML = '<div style="text-align:center;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+home.toUpperCase()+'</div></div>'
+      /* Form state buttons — bajo cada escudo */
+      function _formBtnHtml(side) {
+        var ico = (window._ppFormStates && window._ppFormStates[side]) || '🎲';
+        var variants = window._ppFormVariants || [];
+        var variant = null;
+        for (var v = 0; v < variants.length; v++) { if (variants[v].ico === ico) { variant = variants[v]; break; } }
+        if (!variant) variant = { color: 'rgba(255,255,255,.85)' };
+        return '<button id="pp-form-' + side + '" onclick="window._ppRequestFormAdmin(\'' + side + '\')" title="Estado de forma (admin)" style="margin-top:8px;background:rgba(10,10,24,.6);border:2px solid ' + variant.color + ';border-radius:10px;padding:6px 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 0 10px ' + variant.color + '55;transition:all .2s;"><span style="font-size:22px;line-height:1;">' + ico + '</span></button>';
+      }
+      vs.innerHTML = '<div style="text-align:center;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+home.toUpperCase()+'</div>'+_formBtnHtml('home')+'</div>'
         + '<div class="pp-vs-mid" style="padding:0 8px;">VS</div>'
-        + '<div style="text-align:center;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+away.toUpperCase()+'</div></div>';
+        + '<div style="text-align:center;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;">'+away.toUpperCase()+'</div>'+_formBtnHtml('away')+'</div>';
     }
     var alerts = document.getElementById('pp-alerts');
     if (alerts) {
@@ -5083,6 +5241,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     _ppMatchKey = matchKey;
     _ppCompKey  = compKey;
     _ppChecked  = {};
+    /* Reset form state for new match */
+    if (typeof window._ppResetFormStates === 'function') window._ppResetFormStates();
     _ppItems    = _buildItems(matchKey, compKey, prorroga, duracion, isHvH);
 
     var COMP_LABELS = {

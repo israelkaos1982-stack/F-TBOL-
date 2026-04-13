@@ -3604,6 +3604,17 @@
       // Half-time pause at 45': detener 45 segundos reales y reanudar automáticamente
       if (!st.htDone && st.timerSec >= 2700) {
         st.htDone = true;
+        /* Amistosos IA vs IA: no mostrar overlay de descanso ni el botón de
+           compartir por WhatsApp. Solo dejamos la marca en el acta y
+           continuamos la simulación, igual que en Liga IA-vs-IA. */
+        if (st.isFriendly && st.isIAvsIA) {
+          var listIA = document.getElementById('ml-acta-list-'+mk);
+          if (listIA) {
+            var mIA = document.createElement('div'); mIA.className='ml-ht'; mIA.textContent='— DESCANSO (45 min) —'; listIA.appendChild(mIA);
+          }
+          _mlRenderTimerGen(mk);
+          return;
+        }
         clearInterval(st.timerInterval); st.timerRunning = false; st.inDescanso = true;
         var list = document.getElementById('ml-acta-list-'+mk);
         if (list) {

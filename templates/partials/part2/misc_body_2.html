@@ -3391,51 +3391,79 @@
   function _mlPreGenIAvsIAEvents(mk) {
     var st = _mlSt(mk);
     st.aiEventsGenerated = true;
-    var rat = window.TEAM_RATINGS || {};
-    var rA = (rat[st.home] || 76) * 1.10; /* ventaja local */
-    var rB = rat[st.away] || 76;
-    var r = typeof simSimple === 'function'
-      ? simSimple(Math.round(rA), Math.round(rB))
-      : { gh: Math.floor(Math.random() * 3), ga: Math.floor(Math.random() * 3) };
-    var glA = r.gh || 0;
-    var glB = r.ga || 0;
+    /* Usar el mismo motor que las simulaciones IA-vs-IA de Liga:
+       _simIAvsIAWithContext aplica ventaja de local, red cards pre-rolled
+       y penalización de rating — y extrae correctamente la media de cada
+       equipo (TEAM_RATINGS[team].media) en lugar del objeto entero. */
+    var simScore;
+    if (typeof _simIAvsIAWithContext === 'function') {
+      simScore = _simIAvsIAWithContext(st.home, st.away, st.j || 0);
+    } else if (typeof _fallbackIAvsIAScore === 'function') {
+      simScore = _fallbackIAvsIAScore(st.home, st.away);
+    } else {
+      simScore = { gh: Math.floor(Math.random() * 4), ga: Math.floor(Math.random() * 4) };
+    }
+    var glA = simScore.gh || 0;
+    var glB = simScore.ga || 0;
     var events = [];
-    /* Expulsión: 12% por equipo */
-    var redA = Math.random() < 0.12;
-    var redB = Math.random() < 0.12;
-    if (redA) {
-      var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(st.home)) || [];
-      var outA = sqA.filter(function(p){ return p && p[2] !== 'P'; });
-      var pA = outA.length ? outA[Math.floor(Math.random() * outA.length)] : ['', 'Jugador'];
-      events.push({ type:'roja', min:Math.floor(Math.random()*80)+5, team:'a', num:pA[0]||'', name:pA[1]||'IA', ico:'🟥' });
-      glA = Math.max(0, glA - Math.round(glA * 0.30 + 0.5)); /* -30% poder → menos goles */
+    var rojasPush = [];
+    /* Si _simIAvsIAWithContext produjo expulsiones, transferirlas al acta */
+    if (simScore.preReds && simScore.preReds.length) {
+      simScore.preReds.forEach(function(pr) {
+        var rt = pr.side === 'home' ? 'a' : 'b';
+        var sqR = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(rt === 'a' ? st.home : st.away)) || [];
+        var outR = sqR.filter(function(p){ return p && p[2] !== 'P'; });
+        if (!outR.length) outR = [['', 'Jugador', 'F', 76]];
+        var pR = outR[Math.floor(Math.random() * outR.length)];
+        if (pr.reason === '2TA') {
+          var yMin = Math.max(5, pr.min - 10 - Math.floor(Math.random() * 25));
+          events.push({ type:'amarilla', min:yMin, team:rt, num:pR[0]||'', name:pR[1]||'Jugador', ico:'🟨' });
+          events.push({ type:'d-amarilla', min:pr.min, team:rt, num:pR[0]||'', name:pR[1]||'Jugador', ico:'🟨🟥' });
+        } else {
+          events.push({ type:'roja', min:pr.min, team:rt, num:pR[0]||'', name:pR[1]||'Jugador', ico:'🟥' });
+        }
+        rojasPush.push({ team:rt, name:pR[1] });
+      });
+    } else if (Math.random() < 0.15) {
+      /* Fallback: 15% roja si no hay pre-roll */
+      var rt2 = Math.random() < 0.5 ? 'a' : 'b';
+      var sqR2 = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(rt2 === 'a' ? st.home : st.away)) || [];
+      var outR2 = sqR2.filter(function(p){ return p && p[2] !== 'P'; });
+      if (!outR2.length) outR2 = [['', 'Jugador', 'F', 76]];
+      var pR2 = outR2[Math.floor(Math.random() * outR2.length)];
+      events.push({ type:'roja', min:Math.floor(Math.random()*70)+10, team:rt2, num:pR2[0]||'', name:pR2[1]||'Jugador', ico:'🟥' });
     }
-    if (redB) {
-      var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(st.away)) || [];
-      var outB = sqB.filter(function(p){ return p && p[2] !== 'P'; });
-      var pB = outB.length ? outB[Math.floor(Math.random() * outB.length)] : ['', 'Jugador'];
-      events.push({ type:'roja', min:Math.floor(Math.random()*80)+5, team:'b', num:pB[0]||'', name:pB[1]||'IA', ico:'🟥' });
-      glB = Math.max(0, glB - Math.round(glB * 0.30 + 0.5));
+    /* Amarillas: 2-4 por partido */
+    var sqAa = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(st.home)) || [];
+    var outAa = sqAa.filter(function(p){ return p && p[2] !== 'P'; });
+    if (!outAa.length) outAa = [['', 'Jugador', 'F', 76]];
+    var sqBa = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(st.away)) || [];
+    var outBa = sqBa.filter(function(p){ return p && p[2] !== 'P'; });
+    if (!outBa.length) outBa = [['', 'Jugador', 'F', 76]];
+    var numYellow = Math.floor(Math.random() * 3) + 2;
+    for (var c = 0; c < numYellow; c++) {
+      var ct = Math.random() < 0.5 ? 'a' : 'b';
+      var csq = ct === 'a' ? outAa : outBa;
+      var cp = csq[Math.floor(Math.random() * csq.length)];
+      events.push({ type:'amarilla', min:Math.floor(Math.random()*80)+5, team:ct, num:cp[0]||'', name:cp[1]||'Jugador', ico:'🟨' });
     }
-    /* Goles equipo A */
-    var sqAg = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(st.home)) || [];
-    var outAg = sqAg.filter(function(p){ return p && p[2] !== 'P'; });
-    if (!outAg.length) outAg = [['','Jugador','F',76]];
+    /* Goles equipo A: selección ponderada por poder de jugador */
     var usedA = {};
     for (var i = 0; i < glA; i++) {
-      var p = (typeof _weightedScorerPick === 'function') ? (_weightedScorerPick(outAg, false, usedA) || outAg[0]) : outAg[Math.floor(Math.random()*outAg.length)];
+      var p = (typeof _weightedScorerPick === 'function')
+        ? (_weightedScorerPick(outAa, true, usedA) || outAa[0])
+        : outAa[Math.floor(Math.random() * outAa.length)];
       usedA[p[1]] = (usedA[p[1]] || 0) + 1;
-      events.push({ type:'gol', min:Math.floor(Math.random()*88)+2, team:'a', num:p[0]||'', name:p[1]||'IA', ico:'⚽' });
+      events.push({ type:'gol', min:Math.floor(Math.random()*88)+2, team:'a', num:p[0]||'', name:p[1]||'Jugador', ico:'⚽' });
     }
     /* Goles equipo B */
-    var sqBg = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(st.away)) || [];
-    var outBg = sqBg.filter(function(p){ return p && p[2] !== 'P'; });
-    if (!outBg.length) outBg = [['','Jugador','F',76]];
     var usedB = {};
-    for (var j = 0; j < glB; j++) {
-      var pb = (typeof _weightedScorerPick === 'function') ? (_weightedScorerPick(outBg, false, usedB) || outBg[0]) : outBg[Math.floor(Math.random()*outBg.length)];
+    for (var k = 0; k < glB; k++) {
+      var pb = (typeof _weightedScorerPick === 'function')
+        ? (_weightedScorerPick(outBa, false, usedB) || outBa[0])
+        : outBa[Math.floor(Math.random() * outBa.length)];
       usedB[pb[1]] = (usedB[pb[1]] || 0) + 1;
-      events.push({ type:'gol', min:Math.floor(Math.random()*88)+2, team:'b', num:pb[0]||'', name:pb[1]||'IA', ico:'⚽' });
+      events.push({ type:'gol', min:Math.floor(Math.random()*88)+2, team:'b', num:pb[0]||'', name:pb[1]||'Jugador', ico:'⚽' });
     }
     events.sort(function(a, b){ return a.min - b.min; });
     st.pendingAIEvents = events;
@@ -3444,10 +3472,16 @@
   function _mlPreGenAIEvents(mk) {
     var st = _mlSt(mk);
     if (st.isHvH || st.aiEventsGenerated) return;
-    /* Amistosos: nunca auto-generar eventos, solo añadir manualmente */
-    if (st.isFriendly) { st.aiEventsGenerated = true; st.pendingAIEvents = []; return; }
     var humanA = typeof esHumano === 'function' && esHumano(st.home);
     var humanB = typeof esHumano === 'function' && esHumano(st.away);
+    /* Amistosos con algún equipo humano: solo añadir manualmente (no auto-generar).
+       Los amistosos IA-vs-IA SÍ caen al generador dedicado para que tengan goles,
+       tarjetas y expulsiones como los partidos de Liga IA-vs-IA. */
+    if (st.isFriendly && (humanA || humanB)) {
+      st.aiEventsGenerated = true;
+      st.pendingAIEvents = [];
+      return;
+    }
     /* IA vs IA: usar generador dedicado con expulsiones */
     if (!humanA && !humanB) { _mlPreGenIAvsIAEvents(mk); return; }
     st.aiEventsGenerated = true;

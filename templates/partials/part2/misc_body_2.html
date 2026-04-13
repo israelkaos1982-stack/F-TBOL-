@@ -8200,6 +8200,301 @@ window.goLiveMatches = function() {
 })();
 </script>
 
+<!-- ══ MÓDULO DERBYS (Humano vs Humano de cualquier competición) ══ -->
+<script>
+/* La Caja "🔥 DERBYS" del home abre una pantalla dedicada que lista
+   todos los enfrentamientos directos entre los 5 equipos humanos
+   (Bayern Munich, Arsenal, Real Madrid, Atlético Madrid, FC Barcelona)
+   detectados en el calendario. Amistosos NO entran aquí. */
+(function(){
+  var DERBYS_SCREEN_ID = 's-derbys';
+  var DERBYS_HUMANOS = (window.HUMANOS_AMS && window.HUMANOS_AMS.length)
+    ? window.HUMANOS_AMS
+    : ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+
+  function _esHumano(name) {
+    var n = String(name || '').trim();
+    for (var i = 0; i < DERBYS_HUMANOS.length; i++) {
+      if (DERBYS_HUMANOS[i].toLowerCase() === n.toLowerCase()) return true;
+    }
+    if (typeof window.esHumano === 'function') {
+      try { return !!window.esHumano(n); } catch(_){}
+    }
+    return false;
+  }
+
+  /* Mapa de prefijos de screen-id → info de competición. Reutilizamos la
+     lógica del hub PARTIDOS LIVE, pero con fallback propio por si el
+     otro módulo aún no se ha inicializado al llamar a goDerbys. */
+  var COMP_INFO = {
+    'cal-l':    { name:'Liga EA Sports',     ico:'⚽', color:'#e8173c', jornadaLabel:'Jornada' },
+    'cal-l2':   { name:'Liga Hypermotion',   ico:'⚽', color:'#0066ff', jornadaLabel:'Jornada' },
+    'cal-pf':   { name:'Primera Federación', ico:'⚽', color:'#147828', jornadaLabel:'Jornada' },
+    'cal-copa': { name:'Copa del Rey',       ico:'🏆', color:'#c04800', jornadaLabel:'Ronda'   },
+    'cal-scp':  { name:'Supercopa de España',ico:'🏅', color:'#9900ee', jornadaLabel:'Ronda'   },
+    'cal-cl':   { name:'UEFA Champions',     ico:'⭐', color:'#003087', jornadaLabel:'Jornada' },
+    'cal-el':   { name:'UEFA Europa',        ico:'🟠', color:'#f56000', jornadaLabel:'Jornada' },
+    'cal-ecl':  { name:'UEFA Conference',    ico:'🟢', color:'#00843d', jornadaLabel:'Jornada' },
+    'cal-na':   { name:'Nations League',     ico:'🌐', color:'#0050a0', jornadaLabel:'Fase'    },
+    'cal-mu':   { name:'Mundial',            ico:'🌍', color:'#c8a000', jornadaLabel:'Fase'    },
+    'cal-mf':   { name:'Mundial',            ico:'🌍', color:'#c8a000', jornadaLabel:'Fase'    }
+  };
+
+  function _compInfoFromWrap(wrap) {
+    var el = wrap;
+    while (el && el.parentElement) {
+      el = el.parentElement;
+      if (el.id && el.id.indexOf('cal-') === 0) {
+        var id = el.id;
+        var keys = Object.keys(COMP_INFO).sort(function(a,b){ return b.length - a.length; });
+        for (var i = 0; i < keys.length; i++) {
+          if (id.indexOf(keys[i]) === 0) return { info: COMP_INFO[keys[i]], rootId: id };
+        }
+        return { info: { name: id.replace('cal-','').toUpperCase(), ico:'⚽', color:'#888', jornadaLabel:'Jornada' }, rootId: id };
+      }
+    }
+    return { info: { name:'Partido', ico:'⚽', color:'#888', jornadaLabel:'Jornada' }, rootId: '' };
+  }
+
+  /* Intenta extraer el número de jornada del id del wrap (ej mlw-l-j5-m1) */
+  function _extractJornada(wrap) {
+    var id = wrap.id || '';
+    var m = id.match(/-j(\d+)/i) || id.match(/j(\d+)/i);
+    if (m) return parseInt(m[1], 10);
+    /* Alternativa: buscar en el ancestro un data-jornada */
+    var el = wrap;
+    while (el && el.parentElement) {
+      if (el.getAttribute && el.getAttribute('data-jornada')) return parseInt(el.getAttribute('data-jornada'), 10);
+      el = el.parentElement;
+    }
+    return 0;
+  }
+
+  function _teamsFromWrap(wrap) {
+    var els = wrap.querySelectorAll('.ml-team-name');
+    var home = els[0] ? els[0].textContent.trim() : '';
+    var away = els[1] ? els[1].textContent.trim() : '';
+    return { home: home, away: away };
+  }
+
+  function _matchState(wrap) {
+    var s = wrap.querySelector('.ml-score');
+    if (!s) return 'pending';
+    if (s.classList.contains('state-finished')) return 'finished';
+    if (s.classList.contains('state-playing'))  return 'playing';
+    return 'pending';
+  }
+
+  function _matchScore(wrap) {
+    var s = wrap.querySelector('.ml-score');
+    if (!s) return { a:'0', b:'0' };
+    var spans = s.querySelectorAll('span');
+    return {
+      a: spans[0] ? spans[0].textContent.trim() : '0',
+      b: spans[1] ? spans[1].textContent.trim() : '0'
+    };
+  }
+
+  /* Devuelve lista de wraps HvH con ambos equipos humanos, filtrando
+     duplicados por id. Ignora amistosos (los que están dentro de
+     #s-amistosos o tienen ancestro con id 'ams-match-container'). */
+  function _findDerbyWraps() {
+    var out = [];
+    var seen = {};
+    var wraps = document.querySelectorAll('.match-live-wrap');
+    wraps.forEach(function(w){
+      /* Exclusión de amistosos */
+      var p = w;
+      var isAmistoso = false;
+      while (p && p.parentElement) {
+        if (p.id === 'ams-match-container' || p.id === 's-amistosos') { isAmistoso = true; break; }
+        p = p.parentElement;
+      }
+      if (isAmistoso) return;
+      var teams = _teamsFromWrap(w);
+      if (!teams.home || !teams.away) return;
+      if (!_esHumano(teams.home) || !_esHumano(teams.away)) return;
+      var key = (w.id || (teams.home + '|' + teams.away));
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push(w);
+    });
+    return out;
+  }
+
+  /* Crea el div.screen#s-derbys en body si no existe. */
+  function _ensureDerbysScreen() {
+    var existing = document.getElementById(DERBYS_SCREEN_ID);
+    if (existing) return existing;
+    var html = ''
+      + '<div class="screen" id="' + DERBYS_SCREEN_ID + '">'
+      +   '<button class="back-btn" onclick="go(\'s-home\')">◀ Volver</button>'
+      +   '<div class="sec-hdr"><span class="sec-emoji">🔥</span><h2>Derbys · Humano vs Humano</h2></div>'
+      +   '<div id="derbys-list" style="padding:8px 0 24px;min-height:160px;"></div>'
+      + '</div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+    /* Inyectar CSS una sola vez */
+    if (!document.getElementById('derbys-css')) {
+      var css = document.createElement('style');
+      css.id = 'derbys-css';
+      css.textContent =
+        '@keyframes derbyPulse{0%,100%{box-shadow:0 0 10px rgba(220,80,220,.35)}50%{box-shadow:0 0 22px rgba(255,120,240,.75)}}' +
+        '#s-derbys .derby-comp-hdr{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.55);text-transform:uppercase;padding:16px 4px 6px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:8px;}' +
+        '#s-derbys .derby-card{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(120,20,160,.18),rgba(60,8,120,.10));border:1px solid rgba(200,80,240,.45);border-radius:12px;padding:12px 14px;margin-bottom:10px;cursor:pointer;transition:transform .18s,background .18s;animation:derbyPulse 1.8s ease-in-out infinite;}' +
+        '#s-derbys .derby-card:hover{transform:translateY(-1px);background:linear-gradient(135deg,rgba(160,40,200,.25),rgba(80,10,140,.14));}' +
+        '#s-derbys .derby-card.finished{animation:none;opacity:.7;border-color:rgba(255,255,255,.18);background:rgba(255,255,255,.04);}' +
+        '#s-derbys .derby-card.playing{border-color:rgba(255,80,80,.75);animation:derbyPulse .9s ease-in-out infinite;}' +
+        '#s-derbys .derby-teams{flex:1;display:flex;flex-direction:column;gap:6px;}' +
+        '#s-derbys .derby-row{display:flex;align-items:center;gap:9px;font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;color:#fff;}' +
+        '#s-derbys .derby-logo{width:26px;height:26px;object-fit:contain;flex-shrink:0;}' +
+        '#s-derbys .derby-vs{min-width:48px;text-align:center;font-family:Oswald,sans-serif;font-size:22px;font-weight:700;color:#ff9bff;letter-spacing:1px;}' +
+        '#s-derbys .derby-vs.playing{color:#ff4444;}' +
+        '#s-derbys .derby-vs.finished{color:rgba(255,255,255,.55);}' +
+        '#s-derbys .derby-status{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.4px;padding:3px 8px;border-radius:999px;text-transform:uppercase;font-weight:700;}' +
+        '#s-derbys .derby-status.pending{background:rgba(120,80,220,.25);color:#d0b0ff;border:1px solid rgba(200,150,255,.35);}' +
+        '#s-derbys .derby-status.playing{background:rgba(255,60,60,.22);color:#ffd0d0;border:1px solid rgba(255,120,120,.45);}' +
+        '#s-derbys .derby-status.finished{background:rgba(120,120,120,.18);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.22);}' +
+        '#s-derbys .derby-empty{text-align:center;color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;font-size:15px;padding:50px 10px;letter-spacing:1px;line-height:1.55;}' +
+        '#s-derbys .derby-empty small{display:block;margin-top:10px;font-size:12px;opacity:.7;letter-spacing:.6px;}';
+      document.head.appendChild(css);
+    }
+    return document.getElementById(DERBYS_SCREEN_ID);
+  }
+
+  function _logoFor(name) {
+    if (typeof window.getTeamLogoUrl === 'function') {
+      try { return window.getTeamLogoUrl(name) || ''; } catch(_){}
+    }
+    if (typeof getLogoEquipo === 'function') {
+      try { return getLogoEquipo(name) || ''; } catch(_){}
+    }
+    return '';
+  }
+
+  function _escHtml(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function _buildDerbyCard(wrap) {
+    var teams = _teamsFromWrap(wrap);
+    var comp  = _compInfoFromWrap(wrap);
+    var state = _matchState(wrap);
+    var score = _matchScore(wrap);
+    var lA = _logoFor(teams.home);
+    var lB = _logoFor(teams.away);
+    var statusLabel = state === 'playing'  ? 'EN DIRECTO'
+                    : state === 'finished' ? 'FINALIZADO'
+                    : 'POR JUGAR';
+    var vsText = (state === 'pending') ? 'VS' : (score.a + '-' + score.b);
+    var card = document.createElement('div');
+    card.className = 'derby-card ' + state;
+    card.setAttribute('data-derby-wrap-id', wrap.id || '');
+    card.innerHTML =
+        '<div class="derby-teams">'
+      +   '<div class="derby-row">'
+      +     (lA ? '<img class="derby-logo" src="' + _escHtml(lA) + '" alt="" onerror="this.style.display=\'none\'">' : '')
+      +     '<span>' + _escHtml(teams.home) + '</span>'
+      +   '</div>'
+      +   '<div class="derby-row">'
+      +     (lB ? '<img class="derby-logo" src="' + _escHtml(lB) + '" alt="" onerror="this.style.display=\'none\'">' : '')
+      +     '<span>' + _escHtml(teams.away) + '</span>'
+      +   '</div>'
+      + '</div>'
+      + '<div class="derby-vs ' + state + '">' + _escHtml(vsText) + '</div>'
+      + '<span class="derby-status ' + state + '">' + statusLabel + '</span>';
+    card.addEventListener('click', function(){
+      /* Si el partido ya terminó, solo scroll al acta */
+      if (state === 'finished') {
+        var scFinEl = wrap; var scrFin = null;
+        while (scFinEl && !scFinEl.classList.contains('screen')) scFinEl = scFinEl.parentElement;
+        if (scFinEl && scFinEl.id && typeof go === 'function') {
+          try { go(scFinEl.id); } catch(_){}
+          setTimeout(function(){ try { wrap.scrollIntoView({behavior:'smooth',block:'center'}); } catch(_){} }, 140);
+        }
+        return;
+      }
+      /* Si el partido ya está en directo, navega al modal del gm si
+         existe o hace scroll al wrap. */
+      if (state === 'playing' && window.__GM_LIVE && !window.__GM_LIVE.finished &&
+          window.__GM_LIVE.home === teams.home && window.__GM_LIVE.away === teams.away) {
+        if (typeof window.gmReopen === 'function') window.gmReopen();
+        return;
+      }
+      /* Partido nuevo: abrir con el motor de Liga HvH (noET=true). */
+      var jnum = _extractJornada(wrap) || 0;
+      if (typeof window.abrirResultadoLiga === 'function') {
+        try { window.abrirResultadoLiga(jnum, teams.home, teams.away); return; } catch(_){}
+      }
+      /* Fallback: scroll al wrap en su screen original */
+      var scEl = wrap;
+      while (scEl && !scEl.classList.contains('screen')) scEl = scEl.parentElement;
+      if (scEl && scEl.id && typeof go === 'function') {
+        try { go(scEl.id); } catch(_){}
+        setTimeout(function(){ try { wrap.scrollIntoView({behavior:'smooth',block:'center'}); } catch(_){} }, 140);
+      }
+    });
+    return card;
+  }
+
+  function _buildDerbysList() {
+    var listEl = document.getElementById('derbys-list');
+    if (!listEl) return;
+    var wraps = _findDerbyWraps();
+    listEl.innerHTML = '';
+    if (!wraps.length) {
+      var empty = document.createElement('div');
+      empty.className = 'derby-empty';
+      empty.innerHTML = 'No hay derbys detectados en el calendario todavía.'
+        + '<small>Aparecerán aquí automáticamente cuando el calendario incluya un enfrentamiento entre dos equipos humanos.</small>';
+      listEl.appendChild(empty);
+      return;
+    }
+    /* Agrupar por competición */
+    var groups = {}; var order = [];
+    wraps.forEach(function(w){
+      var ci = _compInfoFromWrap(w);
+      var key = ci.info.name;
+      if (!groups[key]) { groups[key] = { info: ci.info, wraps: [] }; order.push(key); }
+      groups[key].wraps.push(w);
+    });
+    order.forEach(function(key){
+      var g = groups[key];
+      var hdr = document.createElement('div');
+      hdr.className = 'derby-comp-hdr';
+      hdr.textContent = g.info.ico + '  ' + g.info.name;
+      hdr.style.color = g.info.color;
+      listEl.appendChild(hdr);
+      g.wraps.forEach(function(w){
+        try { listEl.appendChild(_buildDerbyCard(w)); } catch(_){}
+      });
+    });
+  }
+
+  /* Expuesto globalmente: _buildDerbysList y _ensureDerbysScreen. */
+  window._buildDerbysList = _buildDerbysList;
+
+  /* Sustituimos el placeholder goDerbys con la implementación real. */
+  window.goDerbys = function() {
+    try { _ensureDerbysScreen(); } catch(_){}
+    try { _buildDerbysList(); } catch(_){}
+    try { if (typeof window.go === 'function') window.go(DERBYS_SCREEN_ID); } catch(_){}
+  };
+
+  /* Refrescar la lista cuando el usuario entra a la pantalla desde
+     otra ruta (p.ej. popstate o un click en el card del home). */
+  document.addEventListener('click', function(ev){
+    var t = ev.target;
+    while (t && t !== document.body) {
+      if (t.classList && t.classList.contains('mc-derbys')) {
+        setTimeout(function(){ try { _buildDerbysList(); } catch(_){} }, 60);
+        return;
+      }
+      t = t.parentElement;
+    }
+  }, true);
+})();
+</script>
+
 <!-- ══ MODAL CONFIRMACIÓN APLAZAR PARTIDO ════════════════ -->
 <div id="gm-aplazar-modal" style="display:none;">
   <div id="gm-aplazar-box">

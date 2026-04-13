@@ -2735,6 +2735,19 @@
     return isRight ? (text + shield) : (shield + text);
   }
 
+  /* Detecta si hay un partido en curso del gm-modal para (j, home, away).
+     El gm-modal registra el partido vivo en window.__GM_LIVE; si el usuario
+     sale del modal con "☰ Menú · 🔴 LIVE" el partido sigue corriendo en
+     segundo plano. Volver a la jornada debe reconocer ese estado para no
+     ofrecer "Previa" (que reinicia el partido al pasar por la pantalla
+     de pre-partido) sino un botón que reabra el modal directamente. */
+  function _liveGmMatchFor(j, home, away) {
+    var gm = window.__GM_LIVE;
+    if (!gm || gm.finished) return null;
+    if (gm.j !== j || gm.home !== home || gm.away !== away) return null;
+    return gm;
+  }
+
   function scoreHtmlForMatch(j, home, away, res) {
     if (res) {
       if (!esHumano(home) && !esHumano(away) && res.events && res.events.length) {
@@ -2742,6 +2755,18 @@
         return '<div class="ms" style="cursor:pointer;text-decoration:underline dotted rgba(255,255,255,.35);" title="Ver acta del partido" onclick="window.showMatchActaModal(' + j + ',\'' + h + '\',\'' + a + '\')">' + res.gh + '\u2013' + res.ga + '</div>';
       }
       return '<div class="ms">' + res.gh + '\u2013' + res.ga + '</div>';
+    }
+    /* Partido en curso (gm-modal vivo en segundo plano) */
+    var liveGm = _liveGmMatchFor(j, home, away);
+    if (liveGm) {
+      var hL = home.replace(/'/g, "\\'");
+      var aL = away.replace(/'/g, "\\'");
+      var sa = (liveGm.sc && typeof liveGm.sc.a === 'number') ? liveGm.sc.a : 0;
+      var sb = (liveGm.sc && typeof liveGm.sc.b === 'number') ? liveGm.sc.b : 0;
+      return '<div class="ms p live-resume" title="Reanudar partido en directo" '
+        + 'style="cursor:pointer;color:#ff5555;font-family:Oswald,sans-serif;letter-spacing:.5px;" '
+        + 'onclick="window._openMatchWithPrevia(' + j + ',\'' + hL + '\',\'' + aL + '\')">'
+        + '🔴 ' + sa + '\u2013' + sb + '</div>';
     }
     if (esHumano(home) || esHumano(away)) {
       var h = home.replace(/'/g, "\\'");

@@ -5727,6 +5727,24 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   /* Abrir partido del calendario pasando primero por la PANTALLA DE PREVIA */
   window._openMatchWithPrevia = function(j, home, away) {
+    /* ── Si el partido YA está vivo en segundo plano (gm-modal cerrado
+       con ☰ Menú · 🔴 LIVE), reabrimos el modal directamente sin pasar
+       por la pantalla de pre-partido para no reiniciar el estado. */
+    var gm = window.__GM_LIVE;
+    if (gm && !gm.finished && gm.j === j && gm.home === home && gm.away === away) {
+      /* Actualizamos returnScreen para que al cerrar el modal con
+         ☰ Menú · 🔴 LIVE se vuelva a la jornada actual en lugar de a
+         la pantalla en la que se abrió originalmente. */
+      try {
+        var _active = document.querySelector('.screen.active');
+        if (_active && _active.id) gm.returnScreen = _active.id;
+      } catch(_) {}
+      if (typeof window.gmReopen === 'function') {
+        try { window.gmReopen(); return; } catch(_) {}
+      }
+      var modal = document.getElementById('gm-modal');
+      if (modal) { modal.style.display = ''; return; }
+    }
     var isHvH = (typeof esHumano === 'function') && esHumano(home) && esHumano(away);
     var duracion = isHvH ? '16 min' : '12 min';
     /* Guardar equipos para que _renderPreviaMeta los use */

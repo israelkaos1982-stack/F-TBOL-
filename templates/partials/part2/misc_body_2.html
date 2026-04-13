@@ -3117,6 +3117,26 @@
   }
   /* Expose state getter for external patches */
   window._mlGetState = function(mk) { return _mlStates[mk] || null; };
+  /* Expone la referencia al diccionario completo para el módulo de
+     persistencia (window._liveStore) — permite iterar todos los partidos
+     live y serializarlos a localStorage. */
+  window._mlGetAllStates = function() { return _mlStates; };
+  /* Entry point usado por _liveStore.rehydrate() para volver a crear un
+     _mlStates[mk] durante la carga de página, con todos los campos
+     restaurados desde localStorage. Devuelve el objeto st. */
+  window._mlRestoreState = function(mk, saved) {
+    var st = _mlSt(mk);
+    if (saved && typeof saved === 'object') {
+      Object.keys(saved).forEach(function(k){ st[k] = saved[k]; });
+    }
+    /* El cronómetro siempre queda detenido tras una rehidratación:
+       - `timerRunning=false` evita que el usuario vea el contador
+         correr sin haber pulsado PLAY
+       - `timerInterval=null` impide pasar por clearInterval un id viejo */
+    st.timerRunning = false;
+    st.timerInterval = null;
+    return st;
+  };
 
   function _buildTwitchBtn(mk) {
     var chs = ['kaotiko8219','Serraxxxx','budygamer1981','toni_ayuso','vk54in2'];
@@ -3831,7 +3851,12 @@
     if (st.timerRunning) { clearInterval(st.timerInterval); st.timerRunning=false; _mlRenderTimerGen(mk); }
     else {
       if (!st.kickoffDone) {
-        st.kickoffDone = true; st.startedAt = Date.now(); _mlPlayUiTone('start');
+        st.kickoffDone = true; st.startedAt = st.startedAt || Date.now(); _mlPlayUiTone('start');
+        /* Persistir en localStorage — el primer kickoff es el hito más
+           importante, no queremos perderlo por el debounce. */
+        if (window._liveStore && typeof window._liveStore.flush === 'function') {
+          try { window._liveStore.flush(); } catch(_){}
+        }
         /* Pre-generar lesión aleatoria para el equipo humano (5-10%, min 1-75) — skip for friendlies */
         if (!st.isFriendly && !st.injuryScheduled && typeof esHumano === 'function') {
           var humA = esHumano(st.home), humB = esHumano(st.away);
@@ -4024,6 +4049,10 @@
     st.finished=true; clearInterval(st.timerInterval); st.timerRunning=false;
     _mlRenderTimerGen(mk);
     _mlSetLiveState(mk, 'finished');
+    /* Match finalizado → sale de la lista de partidos persistidos */
+    if (window._liveStore && typeof window._liveStore.flush === 'function') {
+      try { window._liveStore.flush(); } catch(_){}
+    }
     var _aplRow = document.querySelector('#mlw-' + mk + ' .ml-apl-row');
     if (_aplRow) _aplRow.style.display = 'none';
     ['ml-btn-end-','ml-btn-et-','ml-add-btn-'].forEach(function(pfx){
@@ -4910,7 +4939,17 @@
   window.gmTimerClick = function () {
     if (_gm.finished || _gm.inDescanso) return;
     if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; gmRenderTimer(); }
-    else { if (!_gm.kickoffDone) { _gm.kickoffDone = true; _gm.startedAt = Date.now(); _mlPlayUiTone('start'); } gmStartTimer(); }
+    else {
+      if (!_gm.kickoffDone) {
+        _gm.kickoffDone = true;
+        _gm.startedAt = _gm.startedAt || Date.now();
+        _mlPlayUiTone('start');
+        if (window._liveStore && typeof window._liveStore.flush === 'function') {
+          try { window._liveStore.flush(); } catch(_){}
+        }
+      }
+      gmStartTimer();
+    }
     gmUpdateAplazarBtn();
   };
 
@@ -5242,6 +5281,11 @@
     /* Partido finalizado: ya no es live */
     if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
     if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
+    /* Persistir inmediatamente el estado finished para que la recarga
+       lo excluya del hub y no lo resucite. */
+    if (window._liveStore && typeof window._liveStore.flush === 'function') {
+      try { window._liveStore.flush(); } catch(_){}
+    }
     gmRenderTimer();
     var endBtn = document.getElementById('gm-btn-end');
     if (endBtn) { endBtn.disabled = true; endBtn.style.opacity = '0.35'; }
@@ -8933,6 +8977,308 @@ window.goLiveMatches = function() {
       if (_tryInstall() || tries > 40) clearInterval(iv);
     }, 100);
   }
+})();
+</script>
+
+<!-- ══ LIVE STATE PERSISTENCE ═══════════════════════════════
+     Serializa a localStorage los partidos HvH/HvIA que están
+     corriendo en el navegador (`_mlStates` ticking, `window.__GM_LIVE`,
+     `window._gmBg`) para que una recarga de página NO pierda los
+     partidos live. Al volver a cargar, rehidrata el estado y, en el
+     caso de los amistosos, reconstruye las tarjetas en
+     `#ams-match-container` — en Liga/competiciones las tarjetas ya
+     existen via `populateCalendar`, así que solo restauramos el
+     estado y actualizamos el DOM (marcador, botones, clase
+     state-playing). El cronómetro queda pausado: el usuario lo
+     reanuda pulsando ▶ igual que con los partidos aplazados.
+════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  var LS_KEY = 'F_TBOL_LIVE_STATE_V1';
+  var SAVE_DEBOUNCE_MS = 800;
+  var _pendingSave = null;
+  var _rehydrated = false;
+
+  /* ─────────── SERIALIZATION ─────────── */
+
+  function _serializeSt(st) {
+    if (!st) return null;
+    return {
+      j: st.j,
+      home: st.home,
+      away: st.away,
+      sc: { a: (st.sc && st.sc.a) || 0, b: (st.sc && st.sc.b) || 0 },
+      events: (st.events || []).slice(),
+      pendingAIEvents: (st.pendingAIEvents || []).slice(),
+      aiEventsGenerated: !!st.aiEventsGenerated,
+      etDone: !!st.etDone,
+      et1Done: !!st.et1Done,
+      finished: !!st.finished,
+      timerSec: st.timerSec || 0,
+      isHvH: !!st.isHvH,
+      isIAvsIA: !!st.isIAvsIA,
+      isFriendly: !!st.isFriendly,
+      htDone: !!st.htDone,
+      inDescanso: !!st.inDescanso,
+      stDone: !!st.stDone,
+      kickoffDone: !!st.kickoffDone,
+      startedAt: st.startedAt || null,
+      stoppageSec: (typeof st.stoppageSec === 'number') ? st.stoppageSec : null,
+      stoppageMax: (typeof st.stoppageMax === 'number') ? st.stoppageMax : null,
+      injuryScheduled: !!st.injuryScheduled,
+      injuryMin: st.injuryMin || 0,
+      injuryTeam: st.injuryTeam || null,
+      injuryInjected: !!st.injuryInjected,
+      comp: st.comp || '',
+      varAnuladoIds: (st.varAnuladoIds || []).slice(),
+      redCards: (st.redCards || []).slice()
+    };
+  }
+
+  /* Considera que un estado está "live persistible" cuando ha arrancado
+     (kickoffDone) pero no ha terminado (!finished). Ignoramos los
+     prepartido puros. */
+  function _isPersistable(st) {
+    return st && st.kickoffDone && !st.finished && st.home && st.away;
+  }
+
+  function _snapshot() {
+    var out = { ml: {}, gmLive: null, gmBg: {} };
+    try {
+      var states = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : null;
+      if (states) {
+        Object.keys(states).forEach(function(mk){
+          var st = states[mk];
+          if (!_isPersistable(st)) return;
+          out.ml[mk] = _serializeSt(st);
+        });
+      }
+    } catch(_){}
+    try {
+      if (window.__GM_LIVE && _isPersistable(window.__GM_LIVE)) {
+        out.gmLive = _serializeSt(window.__GM_LIVE);
+      }
+    } catch(_){}
+    try {
+      if (window._gmBg) {
+        Object.keys(window._gmBg).forEach(function(k){
+          var snap = window._gmBg[k];
+          if (!_isPersistable(snap)) return;
+          out.gmBg[k] = _serializeSt(snap);
+        });
+      }
+    } catch(_){}
+    return out;
+  }
+
+  function _write() {
+    try {
+      var data = _snapshot();
+      var hasAny = Object.keys(data.ml).length || data.gmLive || Object.keys(data.gmBg).length;
+      if (!hasAny) {
+        localStorage.removeItem(LS_KEY);
+        return;
+      }
+      data._savedAt = Date.now();
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+    } catch(_){}
+  }
+
+  /* Debounced save — evita escribir 100 veces por segundo cuando
+     _mlStartIntervalGen tick a tick modifica `timerSec`. */
+  function save() {
+    if (_pendingSave) return;
+    _pendingSave = setTimeout(function(){
+      _pendingSave = null;
+      _write();
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  function flush() {
+    if (_pendingSave) { clearTimeout(_pendingSave); _pendingSave = null; }
+    _write();
+  }
+
+  /* ─────────── REHYDRATION ─────────── */
+
+  function _read() {
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch(_){ return null; }
+  }
+
+  /* Restaura el estado de `_mlStates[mk]` y, si la tarjeta
+     `.match-live-wrap` asociada no existe todavía (caso amistosos), la
+     reconstruye en el contenedor correspondiente. Después sincroniza
+     el DOM con el estado restaurado. */
+  function _rehydrateMlEntry(mk, saved) {
+    if (!mk || !saved) return;
+    /* 1) Asegurar que existe la tarjeta en el DOM */
+    var wrap = document.getElementById('mlw-' + mk);
+    var isAms = mk.indexOf('ams-') === 0;
+    if (!wrap && isAms) {
+      if (typeof window._calBuildMatchCard !== 'function') return;
+      var container = document.getElementById('ams-match-container');
+      if (!container) return;
+      var cardHtml = window._calBuildMatchCard(0, saved.home, saved.away, !!saved.isHvH, mk);
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = cardHtml;
+      var newCard = wrapper.firstChild;
+      if (newCard) container.appendChild(newCard);
+      wrap = document.getElementById('mlw-' + mk);
+    }
+    if (!wrap) return; /* Liga/Copa no regenerado todavía — reintentamos más tarde */
+
+    /* 2) Restaurar el estado en _mlStates */
+    if (typeof window._mlRestoreState === 'function') {
+      window._mlRestoreState(mk, saved);
+    }
+
+    /* 3) Actualizar DOM desde el estado restaurado */
+    try {
+      var scoreWrap = wrap.querySelector('.ml-score');
+      if (scoreWrap) scoreWrap.classList.add('state-playing');
+      var scA = document.getElementById('sc-' + mk + '-a');
+      var scB = document.getElementById('sc-' + mk + '-b');
+      if (scA) scA.textContent = String(saved.sc && saved.sc.a || 0);
+      if (scB) scB.textContent = String(saved.sc && saved.sc.b || 0);
+    } catch(_){}
+
+    /* 4) Ocultar previa, mostrar timer/acciones, revelar venue bar */
+    try {
+      var previaBtn = document.getElementById('ml-previa-' + mk);
+      if (previaBtn) previaBtn.style.display = 'none';
+      var timerBtn = document.getElementById('ml-timer-' + mk);
+      if (timerBtn) { timerBtn.style.display = ''; timerBtn.disabled = false; }
+      if (typeof window._mlRenderTimerGen === 'function') window._mlRenderTimerGen(mk);
+      var venueBar = document.getElementById('venue-bar-' + mk);
+      if (venueBar) venueBar.classList.remove('pre-hidden');
+      var actionRow = document.getElementById('ml-action-row-' + mk);
+      if (actionRow && !saved.finished) actionRow.style.display = 'flex';
+      var actionsBar = document.getElementById('ml-actions-bar-' + mk);
+      if (actionsBar) actionsBar.style.visibility = 'visible';
+      if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {
+        window._mlEnsureLegacyPreMatchStructure(mk);
+      }
+    } catch(_){}
+
+    /* 5) Reconstruir la lista de eventos en el acta */
+    try {
+      var list = document.getElementById('ml-acta-list-' + mk);
+      if (list) {
+        list.innerHTML = '';
+        var icoMap = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽', 'pen-gol':'🥅⚽',
+                       'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅',
+                       amarilla:'🟨', 'd-amarilla':'🟨🟥', damarilla:'🟨🟥',
+                       roja:'🟥', lesion:'🩹', mvp:'⭐' };
+        (saved.events || []).forEach(function(ev){
+          if (!ev) return;
+          var ico = ev.ico || icoMap[ev.type] || '📋';
+          var tName = ev.team === 'a' ? saved.home : saved.away;
+          if (typeof window._mlAddActaRow === 'function') {
+            try { window._mlAddActaRow(mk, ev.min, ico, ev.player || 'Jugador', ev.num || '', tName, ev.type, ev._id || (Date.now() + Math.random())); } catch(_){}
+          } else {
+            var row = document.createElement('div');
+            row.className = 'ml-acta-row';
+            row.innerHTML = "<span class='ml-evt-min'>" + (ev.min || 0) + "'</span>"
+              + "<span class='ml-evt-ico'>" + ico + "</span>"
+              + "<span class='ml-evt-name'>" + (ev.player || '') + "</span>"
+              + "<span class='ml-evt-team'>" + tName + "</span>";
+            list.appendChild(row);
+          }
+        });
+      }
+    } catch(_){}
+  }
+
+  function rehydrate() {
+    if (_rehydrated) return;
+    var data = _read();
+    if (!data) { _rehydrated = true; return; }
+
+    /* Rehidratar .match-live-wrap (amistosos + Liga calendar) */
+    if (data.ml) {
+      Object.keys(data.ml).forEach(function(mk){
+        try { _rehydrateMlEntry(mk, data.ml[mk]); } catch(_){}
+      });
+    }
+
+    /* Rehidratar _gmBg (partidos gm-modal backgrounded). El gm-modal
+       es un singleton con closure privado, así que no podemos restaurar
+       `_gm` directamente; los volcamos en `window._gmBg` para que el
+       hub 🔴 PARTIDOS LIVE los muestre como tarjetas "Pausados" y el
+       click dispare `gmOpenFromLive(key)` — esa función ya sabe
+       restaurar el estado completo al `_gm` del closure. */
+    window._gmBg = window._gmBg || {};
+    if (data.gmBg) {
+      Object.keys(data.gmBg).forEach(function(k){
+        if (!window._gmBg[k]) window._gmBg[k] = data.gmBg[k];
+      });
+    }
+    /* El partido que estaba en __GM_LIVE al recargar tampoco se puede
+       reinyectar en `_gm`; va al `_gmBg` con su key j|home|away, así
+       que aparece en el hub y el usuario lo reabre con un tap. */
+    if (data.gmLive) {
+      var gl = data.gmLive;
+      var k = (gl.j || 0) + '|' + (gl.home || '') + '|' + (gl.away || '');
+      if (!window._gmBg[k]) window._gmBg[k] = gl;
+    }
+
+    /* Refrescar indicadores */
+    try { if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub(); } catch(_){}
+
+    _rehydrated = true;
+  }
+
+  /* ─────────── WIRING ─────────── */
+
+  window._liveStore = {
+    save: save,
+    flush: flush,
+    rehydrate: rehydrate
+  };
+
+  /* Guardar al salir de la página para no perder el último tick. */
+  window.addEventListener('pagehide', flush);
+  window.addEventListener('beforeunload', flush);
+  /* También cuando la pestaña pasa a background (en móvil a veces
+     pagehide no se dispara). */
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'hidden') flush();
+  });
+
+  /* Rehydratar después de que populateCalendar y los script blocks
+     hayan terminado. Reintentamos varias veces si algunas dependencias
+     (`_calBuildMatchCard`, `_mlRestoreState`, `_rebuildLiveHub`) aún
+     no están listas por orden de carga de index.bundle.js. */
+  function _attemptRehydrate() {
+    if (_rehydrated) return true;
+    if (typeof window._mlGetAllStates !== 'function') return false;
+    if (typeof window._calBuildMatchCard !== 'function') return false;
+    try { rehydrate(); } catch(_){}
+    return _rehydrated;
+  }
+  function _boot() {
+    if (_attemptRehydrate()) return;
+    var tries = 0;
+    var iv = setInterval(function(){
+      tries++;
+      if (_attemptRehydrate() || tries > 60) clearInterval(iv);
+    }, 100);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _boot);
+  } else {
+    _boot();
+  }
+
+  /* Persistencia periódica "safety net": cada 10s flusheamos por si
+     alguna ruta de cambio no ha llamado a save() explícitamente. */
+  setInterval(function(){
+    try { flush(); } catch(_){}
+  }, 10000);
 })();
 </script>
 

@@ -8495,6 +8495,56 @@ window.goLiveMatches = function() {
 })();
 </script>
 
+<!-- ══ PARCHE: _openMatchWithPrevia reutiliza partido live existente ══ -->
+<script>
+/* Cuando el usuario pulsa "📋 PREVIA" en una jornada para un partido
+   que YA está live en segundo plano (arrancado antes y minimizado con
+   ☰ Menú · 🔴 LIVE), el flujo original vuelve a mostrar la pantalla
+   de pre-partido, forzándole a empezar de cero. Aquí interceptamos
+   _openMatchWithPrevia: si window.__GM_LIVE corresponde a los mismos
+   equipos y está vivo, llamamos directamente a gmReopen para restaurar
+   el modal con el marcador, el reloj y los eventos intactos. */
+(function(){
+  function _same(a, b) {
+    return String(a||'').trim().toLowerCase() === String(b||'').trim().toLowerCase();
+  }
+  function _tryInstall() {
+    var orig = window._openMatchWithPrevia;
+    if (typeof orig !== 'function') return false;
+    if (orig.__liveReusePatched) return true;
+    var patched = function(j, home, away) {
+      try {
+        var live = window.__GM_LIVE;
+        if (live && !live.finished && live.kickoffDone
+            && _same(live.home, home) && _same(live.away, away)) {
+          if (typeof window.gmReopen === 'function') {
+            window.gmReopen();
+            return;
+          }
+          /* Si no existe gmReopen por algún motivo, al menos mostramos
+             el modal sin tocar el estado. */
+          var modal = document.getElementById('gm-modal');
+          if (modal) { modal.style.display = ''; return; }
+        }
+      } catch(_){}
+      return orig.apply(this, arguments);
+    };
+    patched.__liveReusePatched = true;
+    window._openMatchWithPrevia = patched;
+    return true;
+  }
+  if (!_tryInstall()) {
+    /* _openMatchWithPrevia vive en index.bundle.js que puede cargar
+       antes o después que misc_body_2. Reintentamos hasta que aparezca. */
+    var tries = 0;
+    var iv = setInterval(function(){
+      tries++;
+      if (_tryInstall() || tries > 40) clearInterval(iv);
+    }, 100);
+  }
+})();
+</script>
+
 <!-- ══ MODAL CONFIRMACIÓN APLAZAR PARTIDO ════════════════ -->
 <div id="gm-aplazar-modal" style="display:none;">
   <div id="gm-aplazar-box">

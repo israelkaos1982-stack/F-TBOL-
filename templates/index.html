@@ -163,11 +163,27 @@
         row.className = 'nav-row';
         btn.parentNode.insertBefore(row, btn);
         row.appendChild(btn);
-        var homeBtn = document.createElement('a');
-        homeBtn.href = '/';
+        /* IMPORTANTE: usar un <button> con go('s-home') en lugar de un
+           <a href="/"> para evitar que el navegador recargue la página
+           entera y destruya todo el estado JavaScript. Una recarga mata
+           cualquier partido live en curso (gm-modal, amistosos, etc).
+           Con go('s-home') mantenemos la SPA viva y los cronómetros
+           siguen corriendo en segundo plano. */
+        var homeBtn = document.createElement('button');
+        homeBtn.type = 'button';
         homeBtn.className = 'home-icon-btn';
         homeBtn.setAttribute('aria-label', 'Ir al inicio');
         homeBtn.textContent = '🏠';
+        homeBtn.addEventListener('click', function(ev){
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (typeof window.go === 'function') {
+            try { window.go('s-home'); return; } catch(_){}
+          }
+          /* Último recurso: si go no está disponible, recarga la home
+             SOLO si realmente no hay forma de navegar sin romper nada. */
+          try { window.location.hash = '#/'; } catch(_){}
+        });
         row.appendChild(homeBtn);
       });
       /* Nuclear override: fuerza 80px en TODOS los cards del home */

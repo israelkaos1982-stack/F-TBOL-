@@ -3251,11 +3251,29 @@
      HvIA      : 12m real  → 720000/1080 ≈  667ms/tick  (1 min juego = 8s reales)
      HvH 90min : 16m real  → 960000/1080 ≈  889ms/tick  (1 min juego ≈ 10.67s reales)
      HvH ET    : 5m real for 30 game min → 300000/360 ≈ 833ms/tick */
+  /* ── DURACIÓN REAL DE PARTIDOS HUMANOS ──────────────────────
+     Forzamos los tick del cronómetro para que la duración real de
+     un partido (0' → 90' + descuento) coincida con:
+       • Humano vs Humano  : 16-17 minutos reales
+       • Humano vs IA       : 12-13 minutos reales
+       • IA vs IA            : ~30 segundos (auto-simulación)
+     El reloj del partido avanza _ML_TICK_SEC (5 seg de juego) cada tick.
+     Total de ticks para 90+7 = (5400+420)/5 = 1164 ticks.
+       HvH  876ms × 1164 ≈ 1019,7 s ≈ 16:59  (≤ 17 min) ✓
+       HvIA 670ms × 1164 ≈ 779,9 s ≈ 12:59  (≤ 13 min) ✓
+     El descuento se aleatoriza 1-7 min por partido para que la
+     duración real caiga dentro del rango deseado en cada partido. */
   var _ML_TICK_SEC = 5;
+  var _MATCH_TICKS = {
+    HvH:    876, /* 90+7' real ≈ 16:59 */
+    HvH_ET: 833, /* prórroga (30 game min ≈ 5 min reales) */
+    HvIA:   670, /* 90+7' real ≈ 12:59 */
+    IAIA:    28  /* IA vs IA auto-sim ultra rápida */
+  };
   function _mlTickMs(st) {
-    if (st.isHvH) return st.etDone ? 833 : 889;
+    if (st.isHvH) return st.etDone ? _MATCH_TICKS.HvH_ET : _MATCH_TICKS.HvH;
     var humanInvolved = typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away));
-    return humanInvolved ? 667 : 28;
+    return humanInvolved ? _MATCH_TICKS.HvIA : _MATCH_TICKS.IAIA;
   }
 
   function _mlAddActaRow(mk, min, ico, name, num, teamLabel, type, id) {
@@ -3602,9 +3620,11 @@
     var st = _mlSt(mk);
     // Pre-generate AI events for HvIA matches
     _mlPreGenAIEvents(mk);
-    // Stoppage time: fijo en 7 minutos de juego extra (90+1 a 90+7)
+    // Stoppage time: 1-7 minutos aleatorios de juego extra (90+1 a 90+7)
+    // así la duración real cae dentro de los rangos:
+    //   HvH  → 16-17 min reales · HvIA → 12-13 min reales
     if (!st.stoppageSec && !st.etDone) {
-      st.stoppageSec = 7;
+      st.stoppageSec = 1 + Math.floor(Math.random() * 7); // 1..7
     }
     st.timerInterval = setInterval(function(){
       st.timerSec += _ML_TICK_SEC;
@@ -4738,8 +4758,11 @@
   var GM_MAX_NORMAL   = 5400; /* 90 min */
   var GM_MAX_ET       = 7200; /* 120 min */
   var GM_MAX_STOPPAGE = 5820; /* 90+7 min */
-  var GM_TICK_HVH     = 889;  /* HvH: 1 min juego ≈ 10.67s reales → 16 min totales */
-  var GM_TICK_HVIA    = 667;  /* HvIA: 1 min juego = 8s reales → 12 min totales */
+  /* Mismas velocidades que el flujo de partidos amistosos / Liga (_MATCH_TICKS).
+     HvH  876ms × 1164 ticks ≈ 17 min reales (rango 16-17 con stoppage 1-7)
+     HvIA 670ms × 1164 ticks ≈ 13 min reales (rango 12-13 con stoppage 1-7) */
+  var GM_TICK_HVH  = (typeof _MATCH_TICKS !== 'undefined' && _MATCH_TICKS.HvH)  || 876;
+  var GM_TICK_HVIA = (typeof _MATCH_TICKS !== 'undefined' && _MATCH_TICKS.HvIA) || 670;
 
   function gmRenderTimer() {
     var btn = document.getElementById('gm-timer');
@@ -4747,7 +4770,7 @@
     var min = Math.floor(_gm.timerSec / 60);
     if (_gm.finished) { btn.textContent = '🏁 FIN'; btn.className = 'ml-timer finished'; return; }
     if (_gm.inDescanso) { btn.textContent = '⏸ DESCANSO'; btn.className = 'ml-timer running'; return; }
-    var max = _gm.etDone ? GM_MAX_ET : (_gm.stDone ? GM_MAX_STOPPAGE : GM_MAX_NORMAL);
+    var max = _gm.etDone ? GM_MAX_ET : (_gm.stDone ? (_gm.stoppageMax || GM_MAX_STOPPAGE) : GM_MAX_NORMAL);
     var lbl = _gm.timerRunning ? '⏸ ' : (_gm.timerSec >= max ? '🔁 ' : '▶ ');
     var baseMax = _gm.etDone ? 120 : 90;
     var display = min > baseMax ? baseMax + '+' + (min - baseMax) + "'" : min + "'";
@@ -4760,7 +4783,7 @@
     _gm.timerRunning = true;
     _gm.timerInterval = setInterval(function () {
       _gm.timerSec += 5;
-      var max = _gm.etDone ? GM_MAX_ET : (_gm.stDone ? GM_MAX_STOPPAGE : GM_MAX_NORMAL);
+      var max = _gm.etDone ? GM_MAX_ET : (_gm.stDone ? (_gm.stoppageMax || GM_MAX_STOPPAGE) : GM_MAX_NORMAL);
       /* Descanso automático en el 45:00 */
       if (!_gm.htDone && _gm.timerSec >= 2700) {
         _gm.htDone = true;
@@ -5372,6 +5395,10 @@
     _gm.kickoffDone = false; _gm.htDone = false; _gm.inDescanso = false; _gm.stDone = false;
     _gm.timerWasRunning = false; _gm.comp = comp || ''; _gm.htShared = false; _gm.finalShared = false;
     _gm.noET = noET || false; _gm.isFriendly = isFriendly || false;
+    /* Descuento aleatorio 1-7 minutos por partido para que la duración real
+       caiga dentro de los rangos: HvH 16-17 min · HvIA 12-13 min */
+    _gm.stoppageSec = 1 + Math.floor(Math.random() * 7); // 1..7
+    _gm.stoppageMax = GM_MAX_NORMAL + _gm.stoppageSec * 60;
     /* Escudos + nombres en la pantalla de partido */
     function _gmLogo(name) {
       var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');

@@ -2375,7 +2375,8 @@
     'Deportivo Alavés','Osasuna','Getafe CF','Arsenal','Girona FC',
     'Elche CF','Atlético Madrid','Rayo Vallecano','Real Betis','FC Barcelona'
   ];
-  var HUMANOS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+  /* Equipos humanos grabados a fuego. Object.freeze impide mutación. */
+  var HUMANOS = Object.freeze(['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid']);
   var FEATURED_TEAMS = [
     'Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid',
     'Athletic Club','Real Betis','Sevilla'
@@ -3277,7 +3278,11 @@
     HvH:    { gameMin: 94, realMin: 16.5 }, /* 10-min → 16-17 real */
     HvH_ET: { gameMin: 30, realMin: 5.0  }, /* prórroga */
     HvIA:   { gameMin: 94, realMin: 12.5 }, /*  8-min → 12-13 real */
-    IAIA:   { gameMin: 94, realMin: 0.5  }  /* auto-sim ultra rápida */
+    /* IA vs IA (Amistoso/Liga/Copa/Europa/Selecciones/etc): mismo
+       protocolo que el simulador Liga IA-vs-IA → 15 seg por parte
+       → 30 seg totales. El descuento se ignora para mantener la
+       duración constante.                                           */
+    IAIA:   { gameMin: 90, realMin: 0.5 }
   };
   function _tickMsFromRule(r) {
     /* regla de tres: tickMs = realMs / (ticksTotales) */
@@ -3644,11 +3649,16 @@
     var st = _mlSt(mk);
     // Pre-generate AI events for HvIA matches
     _mlPreGenAIEvents(mk);
-    // Stoppage time: 1-7 minutos aleatorios de juego extra (90+1 a 90+7)
-    // así la duración real cae dentro de los rangos:
-    //   HvH  → 16-17 min reales · HvIA → 12-13 min reales
-    if (!st.stoppageSec && !st.etDone) {
-      st.stoppageSec = 1 + Math.floor(Math.random() * 7); // 1..7
+    // Stoppage time: 1-7 minutos aleatorios para HvH/HvIA (→ duración
+    // real 16-17 / 12-13 min). Los IA vs IA no tienen descuento para
+    // mantener exactamente 30 seg reales (15 por parte) como el
+    // protocolo del simulador Liga IA-vs-IA.
+    if (typeof st.stoppageSec !== 'number' && !st.etDone) {
+      if (st.isFriendly && st.isIAvsIA) {
+        st.stoppageSec = 0;
+      } else {
+        st.stoppageSec = 1 + Math.floor(Math.random() * 7); // 1..7
+      }
     }
     st.timerInterval = setInterval(function(){
       st.timerSec += _ML_TICK_SEC;
@@ -5238,23 +5248,32 @@
   };
 
   window.gmVolver = function () {
-    /* El partido SIGUE vivo: no clearInterval, solo ocultamos el modal
-       y navegamos a la pantalla desde la que se abrió (o al home).
-       Se registra en window.__GM_LIVE para que el hub PARTIDOS LIVE
-       muestre la tarjeta y permita reabrirlo. */
-    var modal = document.getElementById('gm-modal');
-    if (modal) modal.style.display = 'none';
-    /* Asegurar registro del partido como live en segundo plano */
-    window.__GM_LIVE = _gm;
-    _gm.liveBackground = true;
-    /* Refrescar el hub de partidos live para que muestre este partido */
-    if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
-    /* Navegar a la pantalla anterior (o al menú principal) */
-    var target = _gm.returnScreen || 's-home';
-    if (typeof window.go === 'function') {
-      try { window.go(target); } catch(_) {
-        try { window.go('s-home'); } catch(__){}
-      }
+    /* El partido SIGUE vivo: NO clearInterval — el cronómetro continúa
+       en segundo plano. Solo ocultamos el modal, registramos el
+       partido como live y navegamos atrás.
+       Todo envuelto en try-catch para que un fallo aislado (p.ej. un
+       screen id inexistente o un listener fallado) NO rompa la salida
+       del modal. Siempre terminamos con al menos un go('s-home'). */
+    try {
+      var modal = document.getElementById('gm-modal');
+      if (modal) modal.style.display = 'none';
+    } catch(_){}
+    try {
+      window.__GM_LIVE = _gm;
+      _gm.liveBackground = true;
+    } catch(_){}
+    try {
+      if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
+    } catch(_){}
+    var target = (_gm && _gm.returnScreen) ? _gm.returnScreen : 's-home';
+    /* Asegurar que el target existe como .screen; si no, caer a home */
+    try {
+      if (!document.getElementById(target)) target = 's-home';
+    } catch(_){ target = 's-home'; }
+    try {
+      if (typeof window.go === 'function') window.go(target);
+    } catch(_){
+      try { if (typeof window.go === 'function') window.go('s-home'); } catch(__){}
     }
   };
 
@@ -5262,14 +5281,15 @@
      estado (marcador, minuto, eventos). El interval de reloj sigue
      corriendo porque gmVolver no lo limpia. */
   window.gmReopen = function () {
-    if (!window.__GM_LIVE || window.__GM_LIVE !== _gm) return;
-    if (_gm.finished) return;
-    var modal = document.getElementById('gm-modal');
-    if (!modal) return;
-    _gm.liveBackground = false;
-    modal.style.display = '';
-    /* Asegurar que el render del cronómetro refleja el estado actual */
-    if (typeof gmRenderTimer === 'function') gmRenderTimer();
+    try {
+      if (!window.__GM_LIVE || window.__GM_LIVE !== _gm) return;
+      if (_gm.finished) return;
+      var modal = document.getElementById('gm-modal');
+      if (!modal) return;
+      _gm.liveBackground = false;
+      modal.style.display = '';
+      if (typeof gmRenderTimer === 'function') gmRenderTimer();
+    } catch(_){}
   };
 
   function gmUpdateAplazarBtn() {
@@ -7998,14 +8018,22 @@ function buildLiveScreen() {
   var list = document.getElementById('live-matches-list');
   if (!list) return;
 
-  /* find all live human matches in .match-live-wrap format */
+  /* find all live human matches in .match-live-wrap format. Excluimos
+     IA vs IA (ambos equipos no humanos) porque solo HvH/HvIA deben
+     aparecer en el hub PARTIDOS LIVE. */
+  var esH = (typeof window.esHumano === 'function') ? window.esHumano : null;
   var wraps = document.querySelectorAll('.match-live-wrap.hvh, .match-live-wrap.hvia');
   var liveWraps = [];
   wraps.forEach(function(w) {
     var scoreEl = w.querySelector('.ml-score');
-    if (scoreEl && scoreEl.classList.contains('state-playing')) {
-      liveWraps.push(w);
+    if (!scoreEl || !scoreEl.classList.contains('state-playing')) return;
+    if (esH) {
+      var teamEls = w.querySelectorAll('.ml-team-name');
+      var hName = teamEls[0] ? teamEls[0].textContent.trim() : '';
+      var aName = teamEls[1] ? teamEls[1].textContent.trim() : '';
+      if (!esH(hName) && !esH(aName)) return; /* IA vs IA → fuera */
     }
+    liveWraps.push(w);
   });
 
   /* gm-modal match abierto en segundo plano (HvH/HvIA de cualquier
@@ -8080,11 +8108,20 @@ function buildLiveScreen() {
    gm-modal si está activo) y actualiza el indicador del home sin
    necesidad de que el usuario esté en la pantalla de PARTIDOS LIVE. */
 function _refreshLiveCount() {
+ try {
+  var esH = (typeof window.esHumano === 'function') ? window.esHumano : null;
   var wraps = document.querySelectorAll('.match-live-wrap.hvh, .match-live-wrap.hvia');
   var liveWrapCount = 0;
   wraps.forEach(function(w) {
     var s = w.querySelector('.ml-score');
-    if (s && s.classList.contains('state-playing')) liveWrapCount++;
+    if (!s || !s.classList.contains('state-playing')) return;
+    if (esH) {
+      var te = w.querySelectorAll('.ml-team-name');
+      var hn = te[0] ? te[0].textContent.trim() : '';
+      var an = te[1] ? te[1].textContent.trim() : '';
+      if (!esH(hn) && !esH(an)) return;
+    }
+    liveWrapCount++;
   });
   var gmActive = (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone) ? 1 : 0;
   var total = liveWrapCount + gmActive;
@@ -8103,6 +8140,7 @@ function _refreshLiveCount() {
     if (total > 0) homeCard.classList.add('live-active');
     else homeCard.classList.remove('live-active');
   }
+ } catch(_){}
 }
 
 /* Expuesto para que gmVolver/gmClose/gmEndMatch puedan forzar un
@@ -8110,9 +8148,11 @@ function _refreshLiveCount() {
    Siempre actualiza el contador del home; si la pantalla PARTIDOS
    LIVE está visible, también reconstruye su lista. */
 window._rebuildLiveHub = function() {
-  _refreshLiveCount();
-  var list = document.getElementById('live-matches-list');
-  if (list) buildLiveScreen();
+  try { _refreshLiveCount(); } catch(_){}
+  try {
+    var list = document.getElementById('live-matches-list');
+    if (list) buildLiveScreen();
+  } catch(_){}
 };
 
 /* ── override goLiveMatches ── */
@@ -8753,7 +8793,19 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- ══ MÓDULO AMISTOSOS ══ -->
 <script>
 (function(){
-  var HUMANOS_AMS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+  /* ── EQUIPOS HUMANOS (grabados a fuego) ─────────────────────
+     Lista inmutable de los 5 equipos controlados por el usuario.
+     No puede mutarse en runtime porque está congelada con
+     Object.freeze. Cualquier otro equipo es automáticamente IA.
+     Fuente única para todo el módulo AMS / amistosos / gm-modal. */
+  var HUMANOS_AMS = Object.freeze([
+    'Real Madrid',
+    'FC Barcelona',
+    'Bayern Munich',
+    'Arsenal',
+    'Atlético Madrid'
+  ]);
+  try { window.HUMANOS_AMS = HUMANOS_AMS; } catch(_){}
   var _amsCounter = 0;
   var _selA = null, _selB = null;
 

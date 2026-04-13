@@ -136,6 +136,8 @@ GLOBAL_STATE_KEY = "global_state"
 
 DEFAULT_GLOBAL_STATE = {
     "liga_results": {},
+    "friendly_match_history": [],
+    "gm_background_matches": {},
     "segunda_state": {"table": [], "players": []},
     "segunda_teams": [],
     "primera_state": {

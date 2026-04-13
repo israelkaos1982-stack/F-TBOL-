@@ -3831,7 +3831,7 @@
     if (st.timerRunning) { clearInterval(st.timerInterval); st.timerRunning=false; _mlRenderTimerGen(mk); }
     else {
       if (!st.kickoffDone) {
-        st.kickoffDone = true; _mlPlayUiTone('start');
+        st.kickoffDone = true; st.startedAt = Date.now(); _mlPlayUiTone('start');
         /* Pre-generar lesión aleatoria para el equipo humano (5-10%, min 1-75) — skip for friendlies */
         if (!st.isFriendly && !st.injuryScheduled && typeof esHumano === 'function') {
           var humA = esHumano(st.home), humB = esHumano(st.away);
@@ -4910,7 +4910,7 @@
   window.gmTimerClick = function () {
     if (_gm.finished || _gm.inDescanso) return;
     if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; gmRenderTimer(); }
-    else { if (!_gm.kickoffDone) { _gm.kickoffDone = true; _mlPlayUiTone('start'); } gmStartTimer(); }
+    else { if (!_gm.kickoffDone) { _gm.kickoffDone = true; _gm.startedAt = Date.now(); _mlPlayUiTone('start'); } gmStartTimer(); }
     gmUpdateAplazarBtn();
   };
 
@@ -5558,7 +5558,8 @@
       kickoffDone: !!_gm.kickoffDone,
       returnScreen: _gm.returnScreen || '',
       stoppageSec: _gm.stoppageSec,
-      stoppageMax: _gm.stoppageMax
+      stoppageMax: _gm.stoppageMax,
+      startedAt: _gm.startedAt || null
     };
   }
   /* Reabre un partido guardado en `window._gmBg`. Invoca `gmOpen` con
@@ -5630,6 +5631,9 @@
        mostrarlo como tarjeta live aunque el usuario navegue a otra
        pantalla. Se limpia en gmClose/gmAplazar/endMatch. */
     window.__GM_LIVE = _gm;
+    /* Restaura el timestamp del kickoff si lo había en el snapshot
+       (sirve para mostrar HH:MM en la tarjeta del hub LIVE). */
+    _gm.startedAt = (saved && saved.startedAt) || (_gm.kickoffDone ? (_gm.startedAt || Date.now()) : null);
     /* Descuento aleatorio 1-7 minutos por partido para que la duración real
        caiga dentro de los rangos: HvH 16-17 min · HvIA 12-13 min */
     if (saved && saved.stoppageSec) {
@@ -7995,7 +7999,15 @@ if (!document.getElementById('live-hub-css')) {
     '.live-badge{font-size:9px;font-family:Oswald,sans-serif;letter-spacing:1px;padding:1px 5px;border-radius:3px;font-weight:700;}' +
     '.live-badge-hvh{background:rgba(80,200,120,.2);color:#50c878;border:1px solid rgba(80,200,120,.4);}' +
     '.live-badge-hvia{background:rgba(80,160,255,.2);color:#50a0ff;border:1px solid rgba(80,160,255,.4);}' +
-    '.live-empty{text-align:center;color:rgba(255,255,255,.35);font-family:Rajdhani,sans-serif;font-size:15px;padding:40px 0;letter-spacing:1px;}';
+    '.live-empty{text-align:center;color:rgba(255,255,255,.35);font-family:Rajdhani,sans-serif;font-size:15px;padding:40px 0;letter-spacing:1px;}' +
+    /* Partidos gm-modal en segundo plano (_gmBg): el glow se desactiva
+       y la tarjeta se ve ligeramente apagada para distinguirlos del
+       partido que está ticking ahora mismo. Siguen siendo clicables
+       para hacer el swap. */
+    '.live-card-paused{animation:none!important;opacity:.72;border-color:rgba(255,170,68,.45)!important;}' +
+    '.live-card-paused .live-card-score{color:#ffaa44!important;}' +
+    /* Hora del kickoff (HH:MM) bajo el minuto del partido. */
+    '.live-card-date{font-family:Rajdhani,sans-serif;font-size:9px;color:rgba(255,255,255,.4);font-weight:600;letter-spacing:.5px;margin-top:2px;}';
   document.head.appendChild(_ls);
 }
 
@@ -8015,11 +8027,17 @@ var COMP_MAP = {
 };
 
 function getCompInfo(wrap) {
-  var el = wrap;
-  while (el && el.parentElement) {
-    el = el.parentElement;
-    if (el.id && el.id.indexOf('cal-') === 0) {
-      var id = el.id;
+  /* Amistosos: wraps que viven dentro del contenedor #ams-match-container
+     o de la pantalla #s-amistosos. No tienen prefijo cal-* así que los
+     detectamos por ancestro y devolvemos una entrada dedicada. */
+  var anc = wrap;
+  while (anc && anc.parentElement) {
+    anc = anc.parentElement;
+    if (anc.id === 'ams-match-container' || anc.id === 's-amistosos') {
+      return { name: 'Amistoso', ico: '🏟️', color: '#50c878' };
+    }
+    if (anc.id && anc.id.indexOf('cal-') === 0) {
+      var id = anc.id;
       /* try longest match first */
       var keys = Object.keys(COMP_MAP).sort(function(a,b){ return b.length - a.length; });
       for (var i = 0; i < keys.length; i++) {
@@ -8031,11 +8049,27 @@ function getCompInfo(wrap) {
   return { name:'Partido', ico:'⚽', color:'#888' };
 }
 
-function getTeamNames(wrap) {
+/* Resuelve el nombre canónico (sin uppercase) y los datos del estado
+   `_mlStates` para un wrap `.match-live-wrap`. Devuelve `{home, away, st}`
+   donde st puede ser null si el registro aún no existe. */
+function getCanonicalTeams(wrap) {
+  var mk = wrap.id ? wrap.id.replace(/^mlw-/, '').replace(/^match-live-/, '') : '';
+  var st = (typeof window._mlGetState === 'function') ? window._mlGetState(mk) : null;
+  if (st && st.home && st.away) return { home: st.home, away: st.away, st: st };
   var els = wrap.querySelectorAll('.ml-team-name');
-  var home = els[0] ? els[0].textContent.trim() : '?';
-  var away = els[1] ? els[1].textContent.trim() : '?';
-  return { home: home, away: away };
+  return {
+    home: els[0] ? els[0].textContent.trim() : '?',
+    away: els[1] ? els[1].textContent.trim() : '?',
+    st: st
+  };
+}
+
+function getTeamNames(wrap) {
+  /* Mantiene compatibilidad con código legacy: devuelve el nombre
+     canónico (del registro `_mlStates`) cuando está disponible, y si no
+     cae al DOM (texto MAYÚSCULA). */
+  var ct = getCanonicalTeams(wrap);
+  return { home: ct.home, away: ct.away };
 }
 
 function getLiveScore(mid) {
@@ -8068,9 +8102,13 @@ function buildLiveCard(wrap) {
   var mid = wrap.id ? wrap.id.replace('match-live-','').replace('mlw-','') : '';
   var isHvH = wrap.classList.contains('hvh');
   var isHvIA = wrap.classList.contains('hvia');
-  var teams = getTeamNames(wrap);
+  var canonical = getCanonicalTeams(wrap);
+  var teams = { home: canonical.home, away: canonical.away };
   var score = getLiveScore(mid);
   var min   = getLiveMinute(mid);
+  /* Pasamos el nombre CANÓNICO a getLogoEquipo para que los amistosos
+     (cuyo DOM tiene el nombre en MAYÚSCULAS) encuentren el escudo
+     correcto en lugar de caer al estepona.svg por defecto. */
   var logoA = getLogoForTeam(teams.home);
   var logoB = getLogoForTeam(teams.away);
 
@@ -8094,6 +8132,7 @@ function buildLiveCard(wrap) {
     if (logoUrl) {
       var img = document.createElement('img');
       img.src = logoUrl; img.className = 'live-card-logo'; img.alt = '';
+      img.onerror = function(){ this.style.display = 'none'; };
       row.appendChild(img);
     }
     var nm = document.createElement('span');
@@ -8112,11 +8151,27 @@ function buildLiveCard(wrap) {
   scoreDiv.textContent = score.a + '-' + score.b;
   card.appendChild(scoreDiv);
 
-  /* minute */
-  var minDiv = document.createElement('div');
-  minDiv.className = 'live-card-min';
-  minDiv.textContent = min;
-  card.appendChild(minDiv);
+  /* meta: minuto arriba + fecha/hora de inicio abajo (si la hay) */
+  var metaDiv = document.createElement('div');
+  metaDiv.className = 'live-card-min';
+  var minEl = document.createElement('div');
+  minEl.textContent = min;
+  metaDiv.appendChild(minEl);
+  /* Fecha del partido: si el estado guardó `startedAt` (timestamp del
+     kickoff), mostramos HH:MM bajo el minuto. Útil sobre todo en
+     partidos de Liga/competición donde el usuario puede tener varios
+     abiertos y quiere saber cuál arrancó antes. */
+  var startedAt = canonical.st && canonical.st.startedAt;
+  if (startedAt) {
+    var dateEl = document.createElement('div');
+    dateEl.className = 'live-card-date';
+    var d = new Date(startedAt);
+    var hh = String(d.getHours()).padStart(2, '0');
+    var mm = String(d.getMinutes()).padStart(2, '0');
+    dateEl.textContent = hh + ':' + mm;
+    metaDiv.appendChild(dateEl);
+  }
+  card.appendChild(metaDiv);
 
   /* click → navigate to match screen or scroll to match wrap */
   card.addEventListener('click', function() {
@@ -8150,8 +8205,9 @@ function buildGmLiveCard(gm, bgKey) {
   var isHvH = gm.isHvH === true || (humanA && humanB);
 
   var card = document.createElement('div');
-  card.className = 'live-card';
+  card.className = 'live-card' + (bgKey ? ' live-card-paused' : '');
   card.setAttribute('data-gm-live', '1');
+  if (bgKey) card.setAttribute('data-bg-key', bgKey);
 
   var badge = document.createElement('span');
   badge.className = 'live-badge ' + (isHvH ? 'live-badge-hvh' : 'live-badge-hvia');
@@ -8164,6 +8220,7 @@ function buildGmLiveCard(gm, bgKey) {
     var row = document.createElement('div');
     row.className = 'live-card-row';
     var logo = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
+    if (!logo && typeof getLogoEquipo === 'function') logo = getLogoEquipo(name);
     if (logo) {
       var img = document.createElement('img');
       img.src = logo; img.className = 'live-card-logo'; img.alt = '';
@@ -8184,12 +8241,24 @@ function buildGmLiveCard(gm, bgKey) {
   scoreDiv.textContent = (gm.sc ? gm.sc.a : 0) + '-' + (gm.sc ? gm.sc.b : 0);
   card.appendChild(scoreDiv);
 
-  var minDiv = document.createElement('div');
-  minDiv.className = 'live-card-min';
+  var metaDiv = document.createElement('div');
+  metaDiv.className = 'live-card-min';
   var curMin = Math.floor((gm.timerSec || 0) / 60);
   var base = gm.etDone ? 120 : 90;
-  minDiv.textContent = curMin > base ? (base + '+' + (curMin - base) + "'") : (curMin + "'");
-  card.appendChild(minDiv);
+  var minEl = document.createElement('div');
+  minEl.textContent = (bgKey ? '⏸ ' : '') + (curMin > base ? (base + '+' + (curMin - base) + "'") : (curMin + "'"));
+  metaDiv.appendChild(minEl);
+  /* Fecha/hora del kickoff si está disponible */
+  if (gm.startedAt) {
+    var dateEl = document.createElement('div');
+    dateEl.className = 'live-card-date';
+    var d = new Date(gm.startedAt);
+    var hh = String(d.getHours()).padStart(2, '0');
+    var mm = String(d.getMinutes()).padStart(2, '0');
+    dateEl.textContent = hh + ':' + mm;
+    metaDiv.appendChild(dateEl);
+  }
+  card.appendChild(metaDiv);
 
   card.addEventListener('click', function(){
     if (bgKey) {
@@ -8294,55 +8363,104 @@ function buildLiveScreen() {
     return;
   }
 
-  /* Primero el partido de gm-modal (si existe) bajo su competición */
-  if (gmLive) {
-    var gmCard = buildGmLiveCard(gmLive);
-    if (gmCard) {
-      var gmHdr = document.createElement('div');
-      gmHdr.className = 'live-comp-hdr';
-      var compLabel = gmLive.comp || 'Partido';
-      if (!gmLive.comp && typeof gmLive.j === 'number' && gmLive.j > 0) compLabel = 'Liga · Jornada ' + gmLive.j;
-      gmHdr.textContent = '⚽  ' + compLabel;
-      gmHdr.style.color = '#ff4444';
-      list.appendChild(gmHdr);
-      list.appendChild(gmCard);
+  /* ── GROUPING UNIFICADO ──────────────────────────────────────────
+     Antes había tres secciones separadas (gm-live, gm-bg "Pausados",
+     .match-live-wrap) y el usuario veía los partidos de Liga dispersos
+     entre "LIGA · JORNADA 1" y "⏸️ Pausados". Ahora agrupamos TODO
+     por competición: cada partido de Liga/Copa/Europa/Amistoso va bajo
+     su cabecera correspondiente, con el partido activo del gm-modal
+     primero dentro del grupo y los backgrounded (pausados) detrás, con
+     un indicador sutil ⏸ en el minuto. Los .match-live-wrap ticking
+     aparecen en sus competiciones respectivas.                         */
+
+  /* Helper: mapea un snapshot de gm-modal (__GM_LIVE o _gmBg) a
+     `{name, ico, color}` — misma forma que COMP_MAP. */
+  function _gmCompInfo(gm) {
+    var comp = (gm && gm.comp) ? String(gm.comp).trim() : '';
+    if (gm && gm.isFriendly) return { name:'Amistoso', ico:'🏟️', color:'#50c878' };
+    if (comp) {
+      var lc = comp.toLowerCase();
+      if (lc.indexOf('liga hypermotion') !== -1) return COMP_MAP['cal-l2'];
+      if (lc.indexOf('liga ea') !== -1 || lc.indexOf('liga ·') !== -1) return COMP_MAP['cal-l'];
+      if (lc.indexOf('primera federación') !== -1 || lc.indexOf('primera federacion') !== -1) return COMP_MAP['cal-pf'];
+      if (lc.indexOf('copa') !== -1) return COMP_MAP['cal-copa'];
+      if (lc.indexOf('supercopa') !== -1) return COMP_MAP['cal-scp'];
+      if (lc.indexOf('champions') !== -1) return COMP_MAP['cal-cl'];
+      if (lc.indexOf('europa') !== -1) return COMP_MAP['cal-el'];
+      if (lc.indexOf('conference') !== -1) return COMP_MAP['cal-ecl'];
+      if (lc.indexOf('nations') !== -1) return COMP_MAP['cal-na'];
+      if (lc.indexOf('mundial') !== -1) return COMP_MAP['cal-mu'];
+      return { name: comp, ico: '⚽', color: '#ff4444' };
     }
+    /* Sin comp explícita pero con jornada → Liga EA Sports · Jornada X */
+    if (gm && typeof gm.j === 'number' && gm.j > 0) {
+      var base = COMP_MAP['cal-l'];
+      return { name: base.name + ' · Jornada ' + gm.j, ico: base.ico, color: base.color };
+    }
+    return { name:'Partido', ico:'⚽', color:'#ff4444' };
   }
 
-  /* Partidos gm-modal EN SEGUNDO PLANO (_gmBg). Uno por cada equipo
-     humano que se quedó pausado cuando el usuario abrió otro partido.
-     Click en la tarjeta → gmOpenFromLive(key) → swap. */
-  if (gmBgList.length) {
-    var bgHdr = document.createElement('div');
-    bgHdr.className = 'live-comp-hdr';
-    bgHdr.textContent = '⏸️  Pausados';
-    bgHdr.style.color = '#ffaa44';
-    list.appendChild(bgHdr);
-    gmBgList.forEach(function(entry){
-      var bgCard = buildGmLiveCard(entry.snap, entry.key);
-      if (bgCard) list.appendChild(bgCard);
-    });
-  }
-
-  /* group .match-live-wrap matches by competition */
+  /* Construimos la tabla de grupos: clave = nombre de competición. */
   var groups = {};
   var groupOrder = [];
-  liveWraps.forEach(function(w) {
-    var ci = getCompInfo(w);
-    var key = ci.name;
-    if (!groups[key]) { groups[key] = { ci: ci, wraps: [] }; groupOrder.push(key); }
-    groups[key].wraps.push(w);
+  function _ensureGroup(key, ci) {
+    if (!groups[key]) {
+      groups[key] = { ci: ci, gmLive: null, gmBg: [], wraps: [] };
+      groupOrder.push(key);
+    }
+    return groups[key];
+  }
+
+  /* gm-modal ACTIVO (ticking) */
+  if (gmLive) {
+    var gmCi = _gmCompInfo(gmLive);
+    /* Para Liga añadimos la jornada al nombre para que cada jornada
+       sea su propio grupo (J1 vs J2 separados). */
+    var gmKey = gmCi.name;
+    if (gmCi.name.indexOf('Jornada') === -1 && typeof gmLive.j === 'number' && gmLive.j > 0
+        && (gmCi.name.indexOf('Liga') !== -1 || gmCi.name.indexOf('Hypermotion') !== -1 || gmCi.name.indexOf('Primera Federación') !== -1)) {
+      gmKey = gmCi.name + ' · Jornada ' + gmLive.j;
+    }
+    var gmCiExtended = { name: gmKey, ico: gmCi.ico, color: gmCi.color };
+    _ensureGroup(gmKey, gmCiExtended).gmLive = gmLive;
+  }
+
+  /* gm-modal PAUSADOS (_gmBg) — se reparten por su propia competición */
+  gmBgList.forEach(function(entry){
+    var ci = _gmCompInfo(entry.snap);
+    var k = ci.name;
+    if (ci.name.indexOf('Jornada') === -1 && typeof entry.snap.j === 'number' && entry.snap.j > 0
+        && (ci.name.indexOf('Liga') !== -1 || ci.name.indexOf('Hypermotion') !== -1 || ci.name.indexOf('Primera Federación') !== -1)) {
+      k = ci.name + ' · Jornada ' + entry.snap.j;
+    }
+    var ciExtended = { name: k, ico: ci.ico, color: ci.color };
+    _ensureGroup(k, ciExtended).gmBg.push(entry);
   });
 
+  /* .match-live-wrap ticking — agrupados por getCompInfo(w) */
+  liveWraps.forEach(function(w) {
+    var ci = getCompInfo(w);
+    _ensureGroup(ci.name, ci).wraps.push(w);
+  });
+
+  /* Render final: cada grupo una cabecera + sus cards
+     (gmLive → gmBg → wraps). */
   groupOrder.forEach(function(key) {
     var g = groups[key];
-    /* competition header */
     var hdr = document.createElement('div');
     hdr.className = 'live-comp-hdr';
     hdr.textContent = g.ci.ico + '  ' + g.ci.name;
     hdr.style.color = g.ci.color;
     list.appendChild(hdr);
 
+    if (g.gmLive) {
+      var c1 = buildGmLiveCard(g.gmLive);
+      if (c1) list.appendChild(c1);
+    }
+    g.gmBg.forEach(function(entry){
+      var c2 = buildGmLiveCard(entry.snap, entry.key);
+      if (c2) list.appendChild(c2);
+    });
     g.wraps.forEach(function(w) {
       list.appendChild(buildLiveCard(w));
     });

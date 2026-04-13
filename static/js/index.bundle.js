@@ -5727,9 +5727,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   /* Abrir partido del calendario pasando primero por la PANTALLA DE PREVIA */
   window._openMatchWithPrevia = function(j, home, away) {
-    /* ── Si el partido YA está vivo en segundo plano (gm-modal cerrado
-       con ☰ Menú · 🔴 LIVE), reabrimos el modal directamente sin pasar
-       por la pantalla de pre-partido para no reiniciar el estado. */
+    /* ── Si el partido YA está vivo en el gm-modal activo (__GM_LIVE),
+       reabrimos el modal directamente sin pasar por la pantalla de
+       pre-partido para no reiniciar el estado. */
     var gm = window.__GM_LIVE;
     if (gm && !gm.finished && gm.j === j && gm.home === home && gm.away === away) {
       /* Actualizamos returnScreen para que al cerrar el modal con
@@ -5744,6 +5744,17 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
       var modal = document.getElementById('gm-modal');
       if (modal) { modal.style.display = ''; return; }
+    }
+    /* ── Si el partido está en segundo plano (otro partido humano que
+       se quedó pausado en _gmBg mientras el usuario abría otro), lo
+       restauramos via gmOpenFromLive, que hace snapshot-el-actual y
+       load-el-pedido en un solo paso. */
+    var bg = window._gmBg;
+    if (bg) {
+      var bgKey = (j || 0) + '|' + (home || '') + '|' + (away || '');
+      if (bg[bgKey] && typeof window.gmOpenFromLive === 'function') {
+        try { window.gmOpenFromLive(bgKey); return; } catch(_) {}
+      }
     }
     var isHvH = (typeof esHumano === 'function') && esHumano(home) && esHumano(away);
     var duracion = isHvH ? '16 min' : '12 min';

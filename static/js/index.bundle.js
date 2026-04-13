@@ -1934,6 +1934,10 @@ window.mlSimulate_j1m10=function(){
     'Paris Saint-Germain':'/static/img/escudos-1/france_paris-saint-germain.svg',
     'Elche CF':           '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
     'Elche':              '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
+    'Levante UD':         '/static/img/escudos-2/spain_levante.football-logos.cc.svg',
+    'Levante':            '/static/img/escudos-2/spain_levante.football-logos.cc.svg',
+    'Real Oviedo':        '/static/img/escudos-1/spain_oviedo.football-logos.cc.svg',
+    'Oviedo':             '/static/img/escudos-1/spain_oviedo.football-logos.cc.svg',
     // ── Liga Hypermotion (2ª) ───────────────────────────────
     'Real Racing Club':   '/static/img/escudos-2/spain_racing.football-logos.cc.svg',
     'Racing Santander':   '/static/img/escudos-2/spain_racing.football-logos.cc.svg',

@@ -2693,14 +2693,28 @@
     if (!original) return '';
     if (TEAM_LOGO_CACHE[original]) return TEAM_LOGO_CACHE[original];
     var normalized = normalizarNombreEquipo(teamName);
-    var logo = BACKEND_ESCUDOS[normalized] || BACKEND_ESCUDOS[original];
+    /* BACKEND_ESCUDOS incluye entradas que apuntan al escudo-default para
+       todos los equipos conocidos por el backend (ver build_escudos_resueltos).
+       Tratamos esas entradas como "no encontradas" para que el fallback caiga
+       a window.TEAM_LOGOS / TEAM_RATINGS.shield, que tienen el mapeo completo
+       real (incluidos equipos como Getafe, Levante, Real Sociedad, Cádiz…).
+       Sin este filtro, los amistosos entre dos equipos IA mostraban siempre
+       el escudo por defecto porque BACKEND_ESCUDOS ganaba a TEAM_LOGOS. */
+    function _notDefault(path) { return path && path !== BACKEND_ESCUDO_DEFAULT ? path : ''; }
+    var logo = _notDefault(BACKEND_ESCUDOS[normalized]) || _notDefault(BACKEND_ESCUDOS[original]);
     if (!logo) { var tl = window.TEAM_LOGOS || {}; logo = tl[original] || tl[normalized]; }
+    /* getTeamLogoUrl maneja alias y claves normalizadas mejor que nuestro
+       lookup directo en TEAM_LOGOS */
+    if (!logo && typeof window.getTeamLogoUrl === 'function') {
+      logo = window.getTeamLogoUrl(original) || window.getTeamLogoUrl(normalized) || '';
+    }
     /* Fallback: check TEAM_RATINGS shield property */
     if (!logo && window.TEAM_RATINGS) {
       var tr = window.TEAM_RATINGS[original] || window.TEAM_RATINGS[normalized];
       if (tr && tr.shield) logo = tr.shield;
     }
-    if (!logo) logo = BACKEND_ESCUDO_DEFAULT;
+    /* Último recurso: el escudo-default del backend (estepona) */
+    if (!logo) logo = BACKEND_ESCUDOS[normalized] || BACKEND_ESCUDOS[original] || BACKEND_ESCUDO_DEFAULT;
     TEAM_LOGO_CACHE[original] = logo;
     return logo;
   }

@@ -8514,19 +8514,41 @@ document.addEventListener('DOMContentLoaded', function() {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
+  /* Normaliza una cadena eliminando tildes/acentos y pasándola a minúsculas.
+     Permite que la lupa encuentre equipos escribiendo "merida", "cadiz",
+     "hercules" o "malaga" aunque el nombre canónico lleve tilde. */
+  function _normalizeAms(s) {
+    return String(s || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
+  }
+
   function _getTeamList() {
     var teams = [];
     var seen = {};
+    var hidden = window.AMS_LUPA_HIDDEN || {};
     if (window.TEAM_RATINGS) {
       for (var name in window.TEAM_RATINGS) {
         if (!window.TEAM_RATINGS.hasOwnProperty(name)) continue;
         var canon = name.trim();
+        /* Duplicados ocultos (p.ej. 'Sevilla FC' cuando ya mostramos 'Sevilla') */
+        if (hidden[canon]) continue;
         var lower = canon.toLowerCase();
         if (seen[lower]) continue;
         seen[lower] = true;
         var r = window.TEAM_RATINGS[canon];
+        var media = (r && typeof r === 'object') ? (r.media || 0) : (typeof r === 'number' ? r : 0);
+        var shield = (r && typeof r === 'object' && r.shield) ? r.shield : '';
+        if (!shield && typeof window.getTeamLogoUrl === 'function') {
+          shield = window.getTeamLogoUrl(canon) || '';
+        }
+        if (!shield && window.TEAM_LOGOS && window.TEAM_LOGOS[canon]) {
+          shield = window.TEAM_LOGOS[canon];
+        }
         var isHuman = HUMANOS_AMS.indexOf(canon) !== -1;
-        teams.push({ name: canon, media: r.media || 0, shield: r.shield || '', isHuman: isHuman });
+        teams.push({ name: canon, media: media, shield: shield, isHuman: isHuman });
       }
     }
     teams.sort(function(a,b){ return a.name.localeCompare(b.name,'es'); });
@@ -8536,24 +8558,25 @@ document.addEventListener('DOMContentLoaded', function() {
   function _renderResults(side, query) {
     var container = document.getElementById('ams-results-' + side);
     if (!container) return;
-    var q = (query || '').trim().toLowerCase();
+    var q = _normalizeAms(query);
     if (q.length < 1) { container.innerHTML = ''; return; }
     var teams = _getTeamList();
     var other = side === 'a' ? _selB : _selA;
     /* Aliases que apuntan al nombre canónico de cada equipo. Permite que el
        usuario escriba "depor", "nàstic", "barca", "rm castilla", etc. y
-       encuentre el equipo aunque el nombre canónico sea distinto. */
+       encuentre el equipo aunque el nombre canónico sea distinto.
+       La búsqueda también es insensible a tildes. */
     var aliases = window.TEAM_ALIASES || {};
     var canonicalAliasHits = {};
     for (var aliasKey in aliases) {
       if (!aliases.hasOwnProperty(aliasKey)) continue;
-      if (aliasKey.indexOf(q) !== -1) {
+      if (_normalizeAms(aliasKey).indexOf(q) !== -1) {
         canonicalAliasHits[aliases[aliasKey]] = true;
       }
     }
     var matches = teams.filter(function(t){
       if (other && t.name === other) return false;
-      if (t.name.toLowerCase().indexOf(q) !== -1) return true;
+      if (_normalizeAms(t.name).indexOf(q) !== -1) return true;
       /* Coincidencia por alias */
       if (canonicalAliasHits[t.name]) return true;
       return false;
@@ -8584,7 +8607,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function _selectTeam(side, name) {
     var r = window.TEAM_RATINGS && window.TEAM_RATINGS[name];
-    var shield = (r && r.shield) || '';
+    var shield = (r && typeof r === 'object' && r.shield) ? r.shield : '';
+    if (!shield && typeof window.getTeamLogoUrl === 'function') {
+      shield = window.getTeamLogoUrl(name) || '';
+    }
+    if (!shield && window.TEAM_LOGOS && window.TEAM_LOGOS[name]) {
+      shield = window.TEAM_LOGOS[name];
+    }
     if (side === 'a') _selA = name; else _selB = name;
     var searchWrap = document.querySelector('#ams-pick-' + side + ' .ams-search-wrap');
     var selDiv = document.getElementById('ams-sel-' + side);

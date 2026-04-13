@@ -5282,9 +5282,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     /* PRIORIDAD 1: equipos explícitos pasados vía _ppPreviaTeams
        (para casos como el click en PREVIA desde la pantalla de resultados IA
        donde el matchKey es genérico tipo 'lj2m0' y no corresponde al partido real) */
+    var _teamsFromOverride = false;
     if (window._ppPreviaTeams && window._ppPreviaTeams.home && window._ppPreviaTeams.away) {
       home = window._ppPreviaTeams.home;
       away = window._ppPreviaTeams.away;
+      _teamsFromOverride = true;
     } else if (wrap) {
       /* PRIORIDAD 2: leer del DOM (mlw-{matchKey}) */
       home = ((wrap.querySelectorAll('.ml-team-name')[0]||{}).textContent||'LOCAL').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
@@ -5297,8 +5299,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (env) env.innerHTML = '🏟️ <b>' + _ppStadium + '</b> &nbsp;·&nbsp; 🌝 Verano &nbsp;·&nbsp; ☀️ Soleado';
     var vs = document.getElementById('pp-vs');
     if (vs) {
-      // Try DOM first (match wrap has real logos incl. base64), then API fallbacks
-      var _svgImgs = wrap ? wrap.querySelectorAll('.ml-team-svg') : [];
+      /* Si los equipos vinieron de _ppPreviaTeams, NO usar las <img> del wrap
+         (matchKey es genérico tipo "lj8m0" y apunta al primer partido de la
+         jornada, no al partido real → los escudos del wrap son los del PRIMER
+         partido). Resolver siempre por nombre vía la cadena de fallbacks. */
+      var _svgImgs = (wrap && !_teamsFromOverride) ? wrap.querySelectorAll('.ml-team-svg') : [];
       function _pickLogo(img, name) {
         if (img && img.src && img.src.indexOf('estepona') === -1 && img.src.length > 10) return img.src;
         var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');

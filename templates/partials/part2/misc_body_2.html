@@ -3251,25 +3251,49 @@
      HvIA      : 12m real  → 720000/1080 ≈  667ms/tick  (1 min juego = 8s reales)
      HvH 90min : 16m real  → 960000/1080 ≈  889ms/tick  (1 min juego ≈ 10.67s reales)
      HvH ET    : 5m real for 30 game min → 300000/360 ≈ 833ms/tick */
-  /* ── DURACIÓN REAL DE PARTIDOS HUMANOS ──────────────────────
-     Forzamos los tick del cronómetro para que la duración real de
-     un partido (0' → 90' + descuento) coincida con:
-       • Humano vs Humano  : 16-17 minutos reales
-       • Humano vs IA       : 12-13 minutos reales
-       • IA vs IA            : ~30 segundos (auto-simulación)
-     El reloj del partido avanza _ML_TICK_SEC (5 seg de juego) cada tick.
-     Total de ticks para 90+7 = (5400+420)/5 = 1164 ticks.
-       HvH  876ms × 1164 ≈ 1019,7 s ≈ 16:59  (≤ 17 min) ✓
-       HvIA 670ms × 1164 ≈ 779,9 s ≈ 12:59  (≤ 13 min) ✓
-     El descuento se aleatoriza 1-7 min por partido para que la
-     duración real caiga dentro del rango deseado en cada partido. */
+  /* ── DURACIÓN REAL DE PARTIDOS HUMANOS (regla de tres) ──────
+     Fuente única de verdad para la velocidad del cronómetro. Cada
+     "modo" (HvH / HvIA / IAIA / prórroga) declara:
+        • gameMin  : minutos de juego simulados en un partido completo
+        • realMin  : minutos de tiempo real que ese partido debe durar
+     Y el tick del setInterval se calcula por regla de tres:
+        tickMs = realMin * 60 000 / (gameMin * 60 / _ML_TICK_SEC)
+
+     Objetivo pedido:
+        HvH   : 10 min de juego  → 16-17 min reales  (pto medio 16.5)
+        HvIA  :  8 min de juego  → 12-13 min reales  (pto medio 12.5)
+
+     Escalado a nuestro reloj (90 game-min + descuento 1..7, media 4):
+        HvH   → 94 game-min deben durar 16.5 min reales → tick ≈ 878 ms
+        HvIA  → 94 game-min deben durar 12.5 min reales → tick ≈ 665 ms
+        HvH_ET→ 30 game-min deben durar  5.0 min reales → tick ≈ 833 ms
+        IAIA  → 94 game-min deben durar  0.5 min reales → tick ≈  27 ms
+     Si en el futuro alguien quiere que los partidos HvH duren por
+     ejemplo 20 min reales en vez de 16.5, basta con cambiar realMin
+     en _MATCH_RULE.HvH y el tick se recalcula automáticamente. */
   var _ML_TICK_SEC = 5;
-  var _MATCH_TICKS = {
-    HvH:    876, /* 90+7' real ≈ 16:59 */
-    HvH_ET: 833, /* prórroga (30 game min ≈ 5 min reales) */
-    HvIA:   670, /* 90+7' real ≈ 12:59 */
-    IAIA:    28  /* IA vs IA auto-sim ultra rápida */
+  var _MATCH_RULE = {
+    /* 90 game-min base + 4 min de descuento (media de 1..7 aleatorio) */
+    HvH:    { gameMin: 94, realMin: 16.5 }, /* 10-min → 16-17 real */
+    HvH_ET: { gameMin: 30, realMin: 5.0  }, /* prórroga */
+    HvIA:   { gameMin: 94, realMin: 12.5 }, /*  8-min → 12-13 real */
+    IAIA:   { gameMin: 94, realMin: 0.5  }  /* auto-sim ultra rápida */
   };
+  function _tickMsFromRule(r) {
+    /* regla de tres: tickMs = realMs / (ticksTotales) */
+    var realMs = r.realMin * 60 * 1000;
+    var ticks  = (r.gameMin * 60) / _ML_TICK_SEC;
+    return Math.max(1, Math.round(realMs / ticks));
+  }
+  var _MATCH_TICKS = {
+    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 878 ms */
+    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms */
+    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 665 ms */
+    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  27 ms */
+  };
+  /* Exponemos la regla para que otros flujos (bundle legacy, campo 3D)
+     puedan leer la misma fuente si les hace falta. */
+  try { window._MATCH_RULE = _MATCH_RULE; window._MATCH_TICKS = _MATCH_TICKS; } catch(_){}
   function _mlTickMs(st) {
     if (st.isHvH) return st.etDone ? _MATCH_TICKS.HvH_ET : _MATCH_TICKS.HvH;
     var humanInvolved = typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away));
@@ -4758,11 +4782,11 @@
   var GM_MAX_NORMAL   = 5400; /* 90 min */
   var GM_MAX_ET       = 7200; /* 120 min */
   var GM_MAX_STOPPAGE = 5820; /* 90+7 min */
-  /* Mismas velocidades que el flujo de partidos amistosos / Liga (_MATCH_TICKS).
-     HvH  876ms × 1164 ticks ≈ 17 min reales (rango 16-17 con stoppage 1-7)
-     HvIA 670ms × 1164 ticks ≈ 13 min reales (rango 12-13 con stoppage 1-7) */
-  var GM_TICK_HVH  = (typeof _MATCH_TICKS !== 'undefined' && _MATCH_TICKS.HvH)  || 876;
-  var GM_TICK_HVIA = (typeof _MATCH_TICKS !== 'undefined' && _MATCH_TICKS.HvIA) || 670;
+  /* Misma fuente de verdad que el flujo de amistosos/Liga (_MATCH_TICKS).
+     Si alguien cambia _MATCH_RULE arriba, el gm flow se recalcula solo.
+     Valores por defecto (10-min = 16.5 real, 8-min = 12.5 real): */
+  var GM_TICK_HVH  = (typeof _MATCH_TICKS !== 'undefined' && _MATCH_TICKS.HvH)  || 878;
+  var GM_TICK_HVIA = (typeof _MATCH_TICKS !== 'undefined' && _MATCH_TICKS.HvIA) || 665;
 
   function gmRenderTimer() {
     var btn = document.getElementById('gm-timer');

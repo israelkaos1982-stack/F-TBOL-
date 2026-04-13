@@ -2736,16 +2736,24 @@
   }
 
   /* Detecta si hay un partido en curso del gm-modal para (j, home, away).
-     El gm-modal registra el partido vivo en window.__GM_LIVE; si el usuario
-     sale del modal con "☰ Menú · 🔴 LIVE" el partido sigue corriendo en
-     segundo plano. Volver a la jornada debe reconocer ese estado para no
-     ofrecer "Previa" (que reinicia el partido al pasar por la pantalla
-     de pre-partido) sino un botón que reabra el modal directamente. */
+     El gm-modal registra el partido vivo en window.__GM_LIVE (visible)
+     y en window._gmBg[key] (otros partidos humanos en segundo plano
+     — sistema multi-live). Volver a la jornada debe reconocer ambos
+     estados para no ofrecer "Previa" (que reinicia el partido al
+     pasar por la pantalla de pre-partido) sino un botón que reabra
+     el modal directamente. */
   function _liveGmMatchFor(j, home, away) {
     var gm = window.__GM_LIVE;
-    if (!gm || gm.finished) return null;
-    if (gm.j !== j || gm.home !== home || gm.away !== away) return null;
-    return gm;
+    if (gm && !gm.finished && gm.j === j && gm.home === home && gm.away === away) {
+      return gm;
+    }
+    var bg = window._gmBg;
+    if (bg) {
+      var key = (j || 0) + '|' + (home || '') + '|' + (away || '');
+      var snap = bg[key];
+      if (snap && !snap.finished) return snap;
+    }
+    return null;
   }
 
   function scoreHtmlForMatch(j, home, away, res) {
@@ -5503,6 +5511,52 @@
     try { window.open(url, '_blank'); } catch(e) {}
   };
 
+  /* ── BACKGROUND MATCH STORE (multi-live gm-modal) ────────────────
+     El gm-modal es un singleton (`_gm`), pero el usuario quiere tener
+     VARIOS partidos HvH/HvIA abiertos a la vez — uno por cada equipo
+     humano. Cuando se pide abrir un partido distinto del que se está
+     jugando, guardamos una instantánea del partido actual en
+     `window._gmBg[key]`; cuando se pide abrir un partido que ya está
+     en la tienda, restauramos su instantánea en `_gm` en lugar de
+     reiniciar el estado. El cronómetro solo avanza en el partido que
+     está visible; los del segundo plano se quedan pausados hasta que
+     el usuario los reabra desde el hub 🔴 PARTIDOS LIVE. */
+  window._gmBg = window._gmBg || {};
+  function _gmKey(j, home, away) { return (j || 0) + '|' + (home || '') + '|' + (away || ''); }
+  function _gmCurrentKey() { return _gmKey(_gm.j, _gm.home, _gm.away); }
+  function _gmIsLiveCurrent() {
+    return _gm && _gm.kickoffDone && !_gm.finished && _gm.home && _gm.away;
+  }
+  function _gmSnapshotCurrent() {
+    return {
+      j: _gm.j, home: _gm.home, away: _gm.away,
+      sc: { a: (_gm.sc && _gm.sc.a) || 0, b: (_gm.sc && _gm.sc.b) || 0 },
+      events: (_gm.events || []).slice(),
+      etDone: !!_gm.etDone, finished: !!_gm.finished,
+      timerSec: _gm.timerSec || 0,
+      timerRunning: false,                 /* siempre pausado en segundo plano */
+      isHvH: !!_gm.isHvH,
+      htDone: !!_gm.htDone, inDescanso: !!_gm.inDescanso, stDone: !!_gm.stDone,
+      timerWasRunning: false,
+      comp: _gm.comp || '',
+      htShared: !!_gm.htShared, finalShared: !!_gm.finalShared,
+      noET: !!_gm.noET, isFriendly: !!_gm.isFriendly,
+      kickoffDone: !!_gm.kickoffDone,
+      returnScreen: _gm.returnScreen || '',
+      stoppageSec: _gm.stoppageSec,
+      stoppageMax: _gm.stoppageMax
+    };
+  }
+  /* Reabre un partido guardado en `window._gmBg`. Invoca `gmOpen` con
+     los parámetros del snapshot; la propia `gmOpen` se encarga de
+     restaurarlo (snapshot-el-actual y luego load-el-pedido). */
+  window.gmOpenFromLive = function(key) {
+    var saved = window._gmBg && window._gmBg[key];
+    if (!saved) return;
+    gmOpen(saved.j, saved.home, saved.away, saved.isHvH || false,
+           saved.comp || '', saved.noET || false, saved.isFriendly || false);
+  };
+
   function gmOpen(j, home, away, isHvH, comp, noET, isFriendly) {
     /* Capturar la pantalla activa ANTES de abrir el modal para que
        el botón "☰ Menú · 🔴 LIVE" pueda volver a ella manteniendo
@@ -5517,14 +5571,45 @@
       window.__GM_LIVE = _gm; /* mantener referencia global para el hub LIVE */
       return;
     }
-    _gm.j = j; _gm.home = home; _gm.away = away; _gm.sc = {a:0,b:0};
-    _gm.events = []; _gm.etDone = false; _gm.finished = false;
-    _gm.timerSec = 0; _gm.timerRunning = false; _gm.isHvH = isHvH; _gm.pendingEvt = null;
-    _gm.htDone = false; _gm.inDescanso = false; _gm.stDone = false;
+
+    /* ── MULTI-LIVE: si había otro partido vivo en `_gm`, guarda su
+       estado en `_gmBg` antes de sobrescribirlo, para que el usuario
+       pueda reanudarlo luego desde el hub 🔴 PARTIDOS LIVE. */
+    if (_gmIsLiveCurrent()) {
+      try {
+        clearInterval(_gm.timerInterval);
+        _gm.timerRunning = false;
+        window._gmBg[_gmCurrentKey()] = _gmSnapshotCurrent();
+      } catch(_) {}
+    }
+
+    /* ── MULTI-LIVE: si el partido pedido tiene un snapshot en `_gmBg`
+       (fue backgrounded antes), lo sacamos para restaurar su estado
+       en lugar de empezar desde cero. */
+    var reqKey = _gmKey(j, home, away);
+    var saved = (window._gmBg && window._gmBg[reqKey]) || null;
+    if (saved) { delete window._gmBg[reqKey]; }
+
+    _gm.j = j; _gm.home = home; _gm.away = away;
+    _gm.sc = saved ? { a: saved.sc.a || 0, b: saved.sc.b || 0 } : { a:0, b:0 };
+    _gm.events = saved ? (saved.events || []).slice() : [];
+    _gm.etDone = saved ? !!saved.etDone : false;
+    _gm.finished = false;
+    _gm.timerSec = saved ? (saved.timerSec || 0) : 0;
+    _gm.timerRunning = false;
+    _gm.isHvH = saved ? !!saved.isHvH : !!isHvH;
+    _gm.pendingEvt = null;
+    _gm.htDone = saved ? !!saved.htDone : false;
+    _gm.inDescanso = saved ? !!saved.inDescanso : false;
+    _gm.stDone = saved ? !!saved.stDone : false;
     clearInterval(_gm.timerInterval);
-    _gm.kickoffDone = false; _gm.htDone = false; _gm.inDescanso = false; _gm.stDone = false;
-    _gm.timerWasRunning = false; _gm.comp = comp || ''; _gm.htShared = false; _gm.finalShared = false;
-    _gm.noET = noET || false; _gm.isFriendly = isFriendly || false;
+    _gm.kickoffDone = saved ? !!saved.kickoffDone : false;
+    _gm.timerWasRunning = false;
+    _gm.comp = saved ? (saved.comp || '') : (comp || '');
+    _gm.htShared = saved ? !!saved.htShared : false;
+    _gm.finalShared = saved ? !!saved.finalShared : false;
+    _gm.noET = saved ? !!saved.noET : !!noET;
+    _gm.isFriendly = saved ? !!saved.isFriendly : !!isFriendly;
     _gm.returnScreen = _returnScreen;
     /* Registro global para el hub PARTIDOS LIVE: expone el estado del
        partido abierto en gm-modal para que buildLiveScreen pueda
@@ -5533,8 +5618,13 @@
     window.__GM_LIVE = _gm;
     /* Descuento aleatorio 1-7 minutos por partido para que la duración real
        caiga dentro de los rangos: HvH 16-17 min · HvIA 12-13 min */
-    _gm.stoppageSec = 1 + Math.floor(Math.random() * 7); // 1..7
-    _gm.stoppageMax = GM_MAX_NORMAL + _gm.stoppageSec * 60;
+    if (saved && saved.stoppageSec) {
+      _gm.stoppageSec = saved.stoppageSec;
+      _gm.stoppageMax = saved.stoppageMax || (GM_MAX_NORMAL + saved.stoppageSec * 60);
+    } else {
+      _gm.stoppageSec = 1 + Math.floor(Math.random() * 7); // 1..7
+      _gm.stoppageMax = GM_MAX_NORMAL + _gm.stoppageSec * 60;
+    }
     /* Escudos + nombres en la pantalla de partido */
     function _gmLogo(name) {
       var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
@@ -5551,20 +5641,50 @@
     var elB = document.getElementById('gm-team-b-name');
     if (elA) elA.innerHTML = shA + '<span>' + home + '</span>';
     if (elB) elB.innerHTML = shB + '<span>' + away + '</span>';
-    document.getElementById('gm-score').textContent = '0-0';
-    document.getElementById('gm-acta-list').innerHTML = '<div class="ml-acta-empty" style="padding:8px;color:#555;font-size:11px;text-align:center;">Sin eventos aún</div>';
+    document.getElementById('gm-score').textContent = _gm.sc.a + '-' + _gm.sc.b;
+    /* Reconstruir acta si estamos restaurando un partido en segundo plano */
+    var _actaListEl = document.getElementById('gm-acta-list');
+    if (_actaListEl) {
+      if (saved && _gm.events.length) {
+        var _icoMapGm = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽', 'pen-gol':'🥅⚽',
+                          'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅',
+                          amarilla:'🟨', damarilla:'🟨🟥', 'd-amarilla':'🟨🟥',
+                          roja:'🟥', lesion:'🩹', mvp:'⭐' };
+        _actaListEl.innerHTML = '';
+        _gm.events.forEach(function(ev) {
+          if (!ev) return;
+          var tName = ev.team === 'a' ? _gm.home : _gm.away;
+          var ico = (ev.ico) || _icoMapGm[ev.type] || '📋';
+          var pLabel = (ev.num && String(ev.num).trim() && String(ev.num) !== '0' ? ev.num + '. ' : '')
+                      + (ev.player || ev.name || '');
+          var li = document.createElement('li');
+          li.className = 'ml-evt-row';
+          li.innerHTML = '<span class="ml-evt-min">' + (ev.min || 0) + "'</span>"
+                        + '<span class="ml-evt-ico">' + ico + '</span>'
+                        + '<span class="ml-evt-name">' + pLabel + '</span>'
+                        + '<span class="ml-evt-team">' + tName + '</span>';
+          _actaListEl.appendChild(li);
+        });
+      } else {
+        _actaListEl.innerHTML = '<div class="ml-acta-empty" style="padding:8px;color:#555;font-size:11px;text-align:center;">Sin eventos aún</div>';
+      }
+    }
     document.getElementById('gm-event-panel').style.display = 'none';
     document.getElementById('gm-team-pick').style.display = 'none';
     var gmPP = document.getElementById('gm-player-pick');
     if (gmPP) gmPP.style.display = 'none';
     var etBtn = document.getElementById('gm-btn-et');
-    if (etBtn) { etBtn.style.display = (isHvH && !_gm.noET) ? '' : 'none'; etBtn.disabled = false; etBtn.style.opacity = '1'; }
+    if (etBtn) {
+      etBtn.style.display = (_gm.isHvH && !_gm.noET) ? '' : 'none';
+      etBtn.disabled = !!_gm.etDone;
+      etBtn.style.opacity = _gm.etDone ? '0.35' : '1';
+    }
     var endBtn = document.getElementById('gm-btn-end');
     if (endBtn) { endBtn.disabled = false; endBtn.style.opacity = '1'; }
     var addBtn = document.getElementById('gm-add-btn');
     if (addBtn) { addBtn.disabled = false; addBtn.classList.remove('open'); }
     var jBadge = document.getElementById('gm-jornada-badge');
-    if (jBadge) jBadge.textContent = isFriendly ? 'Amistoso' : (comp || ('Liga · Jornada ' + j));
+    if (jBadge) jBadge.textContent = _gm.isFriendly ? 'Amistoso' : (_gm.comp || ('Liga · Jornada ' + _gm.j));
     var postOv = document.getElementById('gm-post-ov');
     if (postOv) postOv.classList.remove('show');
     var aplazarRow = document.getElementById('gm-aplazar-row');
@@ -5577,10 +5697,15 @@
        todos los eventos del partido (goles, tarjetas, lesiones, MVP)
        a partir del nivel/poder de cada equipo y jugador. La pantalla
        queda en estado FIN: el usuario solo tiene que pulsar FINALIZAR
-       (que ya está habilitado) para guardar el partido en el historial. */
-    if (isFriendly && !esHumano(home) && !esHumano(away)) {
+       (que ya está habilitado) para guardar el partido en el historial.
+       No se re-simula si estamos restaurando un snapshot guardado. */
+    if (!saved && isFriendly && !esHumano(home) && !esHumano(away)) {
       setTimeout(function(){ _gmAutoSimulateIAvsIA(); }, 200);
     }
+
+    /* Refrescar el hub LIVE para que los backgrounded aparezcan con
+       el estado actualizado (p.ej. el que acabamos de backgroundear). */
+    try { if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub(); } catch(_) {}
   }
 
   /* Genera y vuelca instantáneamente un partido IA-vs-IA en el gm-modal.
@@ -7995,8 +8120,13 @@ function buildLiveCard(wrap) {
 
 /* Construye la tarjeta del partido abierto en gm-modal (Liga/Copa/
    Europa/Selecciones/Amistoso) cuando existe un partido HvH o HvIA
-   en segundo plano. */
-function buildGmLiveCard(gm) {
+   en segundo plano.
+   - `gm` puede ser el `_gm` actual (via window.__GM_LIVE) o un
+     snapshot guardado en window._gmBg.
+   - `bgKey` se pasa cuando la tarjeta corresponde a un partido
+     backgrounded: el click en la tarjeta llama a gmOpenFromLive(key)
+     en lugar de gmReopen() para forzar el swap snapshot→current. */
+function buildGmLiveCard(gm, bgKey) {
   if (!gm || gm.finished || !gm.kickoffDone) return null;
   var esH = (typeof window.esHumano === 'function') ? window.esHumano : null;
   var humanA = esH ? !!esH(gm.home) : false;
@@ -8048,6 +8178,13 @@ function buildGmLiveCard(gm) {
   card.appendChild(minDiv);
 
   card.addEventListener('click', function(){
+    if (bgKey) {
+      /* Snapshot-el-actual + load-el-pedido */
+      if (typeof window.gmOpenFromLive === 'function') {
+        window.gmOpenFromLive(bgKey);
+      }
+      return;
+    }
     if (typeof window.gmReopen === 'function') window.gmReopen();
   });
   return card;
@@ -8079,8 +8216,22 @@ function buildLiveScreen() {
      competición que haya usado gmVolver para salir del modal) */
   var gmLive = (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone)
     ? window.__GM_LIVE : null;
+  /* Partidos gm-modal backgrounded (otros HvH/HvIA pausados en
+     window._gmBg porque el usuario abrió un partido distinto). Se
+     muestran como tarjetas live adicionales para que el usuario
+     pueda alternar entre todos sus partidos humanos. */
+  var gmBgList = [];
+  if (window._gmBg) {
+    Object.keys(window._gmBg).forEach(function(k){
+      var snap = window._gmBg[k];
+      if (!snap || snap.finished || !snap.kickoffDone) return;
+      /* Ignorar si coincide con el gm-modal activo (edge case) */
+      if (gmLive && snap.j === gmLive.j && snap.home === gmLive.home && snap.away === gmLive.away) return;
+      gmBgList.push({ key: k, snap: snap });
+    });
+  }
 
-  var totalLive = liveWraps.length + (gmLive ? 1 : 0);
+  var totalLive = liveWraps.length + (gmLive ? 1 : 0) + gmBgList.length;
 
   /* update count badge */
   var countEl = document.getElementById('live-match-count');
@@ -8117,6 +8268,21 @@ function buildLiveScreen() {
       list.appendChild(gmHdr);
       list.appendChild(gmCard);
     }
+  }
+
+  /* Partidos gm-modal EN SEGUNDO PLANO (_gmBg). Uno por cada equipo
+     humano que se quedó pausado cuando el usuario abrió otro partido.
+     Click en la tarjeta → gmOpenFromLive(key) → swap. */
+  if (gmBgList.length) {
+    var bgHdr = document.createElement('div');
+    bgHdr.className = 'live-comp-hdr';
+    bgHdr.textContent = '⏸️  Pausados';
+    bgHdr.style.color = '#ffaa44';
+    list.appendChild(bgHdr);
+    gmBgList.forEach(function(entry){
+      var bgCard = buildGmLiveCard(entry.snap, entry.key);
+      if (bgCard) list.appendChild(bgCard);
+    });
   }
 
   /* group .match-live-wrap matches by competition */
@@ -8163,7 +8329,16 @@ function _refreshLiveCount() {
     liveWrapCount++;
   });
   var gmActive = (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone) ? 1 : 0;
-  var total = liveWrapCount + gmActive;
+  /* Partidos gm-modal en segundo plano (multi-live) — uno por cada
+     equipo humano que se dejó pausado mientras el usuario abría otro. */
+  var gmBgCount = 0;
+  if (window._gmBg) {
+    Object.keys(window._gmBg).forEach(function(k){
+      var snap = window._gmBg[k];
+      if (snap && !snap.finished && snap.kickoffDone) gmBgCount++;
+    });
+  }
+  var total = liveWrapCount + gmActive + gmBgCount;
   window.__LIVE_MATCH_COUNT = total;
   try {
     localStorage.setItem('liveMatchCount', String(total));

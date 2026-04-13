@@ -156,19 +156,19 @@
   <script src="{{ url_for('static', filename='js/primera-rfef-data.js') }}?v=1.1"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function(){
-      /* Agrupa cada back-btn con el icono de inicio.
-         IMPORTANTE: el botón 🏠 navega vía window.go('s-home') en lugar
-         de recargar la página (href='/'). El reload mataba todo el
-         estado en memoria: partidos amistosos en curso, partidos live
-         en segundo plano (__GM_LIVE / _gmBg), plantillas editadas, etc.
-         Con go('s-home') el estado se mantiene y el usuario puede
-         volver a sus partidos desde el hub PARTIDOS LIVE. */
+      /* Agrupa cada back-btn con el icono de inicio */
       document.querySelectorAll('.back-btn').forEach(function(btn){
         if(btn.closest('.nav-row')) return;
         var row = document.createElement('div');
         row.className = 'nav-row';
         btn.parentNode.insertBefore(row, btn);
         row.appendChild(btn);
+        /* IMPORTANTE: usar un <button> con go('s-home') en lugar de un
+           <a href="/"> para evitar que el navegador recargue la página
+           entera y destruya todo el estado JavaScript. Una recarga mata
+           cualquier partido live en curso (gm-modal, amistosos, etc).
+           Con go('s-home') mantenemos la SPA viva y los cronómetros
+           siguen corriendo en segundo plano. */
         var homeBtn = document.createElement('button');
         homeBtn.type = 'button';
         homeBtn.className = 'home-icon-btn';
@@ -176,14 +176,13 @@
         homeBtn.textContent = '🏠';
         homeBtn.addEventListener('click', function(ev){
           ev.preventDefault();
-          try {
-            if (typeof window.go === 'function') {
-              window.go('s-home');
-              return;
-            }
-          } catch(_) {}
-          /* Último recurso si el router SPA no está disponible */
-          window.location.href = '/';
+          ev.stopPropagation();
+          if (typeof window.go === 'function') {
+            try { window.go('s-home'); return; } catch(_){}
+          }
+          /* Último recurso: si go no está disponible, recarga la home
+             SOLO si realmente no hay forma de navegar sin romper nada. */
+          try { window.location.hash = '#/'; } catch(_){}
         });
         row.appendChild(homeBtn);
       });

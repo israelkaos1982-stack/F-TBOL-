@@ -3636,6 +3636,10 @@
         if (st.etDone) {
           if (st.sc.a === st.sc.b) { window.mlShowPenPanelGen(mk); }
           else { window.mlEndMatchGen(mk); }
+        } else if (st.isFriendly && st.isIAvsIA) {
+          /* IA vs IA amistoso: auto-finalizar al llegar a 90+stoppage para
+             que el flujo sea idéntico al de la simulación de Liga IA-vs-IA */
+          window.mlEndMatchGen(mk);
         }
       }
       _mlRenderTimerGen(mk);
@@ -8536,9 +8540,23 @@ document.addEventListener('DOMContentLoaded', function() {
     if (q.length < 1) { container.innerHTML = ''; return; }
     var teams = _getTeamList();
     var other = side === 'a' ? _selB : _selA;
+    /* Aliases que apuntan al nombre canónico de cada equipo. Permite que el
+       usuario escriba "depor", "nàstic", "barca", "rm castilla", etc. y
+       encuentre el equipo aunque el nombre canónico sea distinto. */
+    var aliases = window.TEAM_ALIASES || {};
+    var canonicalAliasHits = {};
+    for (var aliasKey in aliases) {
+      if (!aliases.hasOwnProperty(aliasKey)) continue;
+      if (aliasKey.indexOf(q) !== -1) {
+        canonicalAliasHits[aliases[aliasKey]] = true;
+      }
+    }
     var matches = teams.filter(function(t){
       if (other && t.name === other) return false;
-      return t.name.toLowerCase().indexOf(q) !== -1;
+      if (t.name.toLowerCase().indexOf(q) !== -1) return true;
+      /* Coincidencia por alias */
+      if (canonicalAliasHits[t.name]) return true;
+      return false;
     }).slice(0, 12);
     if (!matches.length) { container.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:rgba(255,255,255,.35);">Sin resultados</div>'; return; }
     container.innerHTML = matches.map(function(t){
@@ -8604,6 +8622,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var isHomeHuman = HUMANOS_AMS.indexOf(_selA) !== -1;
     var isAwayHuman = HUMANOS_AMS.indexOf(_selB) !== -1;
     var isHvH = isHomeHuman && isAwayHuman;
+    var isIAvsIA = !isHomeHuman && !isAwayHuman;
     // Build match card using exposed function
     if (typeof window._calBuildMatchCard !== 'function') { alert('Error: motor de partidos no disponible.'); return; }
     var cardHtml = window._calBuildMatchCard(0, _selA, _selB, isHvH, mk);
@@ -8620,24 +8639,54 @@ document.addEventListener('DOMContentLoaded', function() {
     st.away = _selB;
     st.isHvH = isHvH;
     st.isFriendly = true;
-    // Ensure the previa button calls mlPreviaClick with amistoso compKey
-    var previaBtn = document.getElementById('ml-previa-' + mk);
-    if (previaBtn) {
-      (function(matchKey, hvh) {
-        previaBtn.onclick = function() {
-          var duracion = hvh ? '16 min' : '12 min';
-          var _origPpConfirm = window._ppConfirm;
-          window._ppConfirm = function() {
-            _origPpConfirm();
-            var actionRow = document.getElementById('ml-action-row-' + matchKey);
-            if (actionRow) actionRow.style.display = 'flex';
-            window._ppConfirm = _origPpConfirm;
+    st.isIAvsIA = isIAvsIA;
+    /* ── IA vs IA: saltarse la previa por completo ─────────────────────
+       Como en las simulaciones de Liga IA-vs-IA, el usuario solo tiene
+       que pulsar ▶ y el partido se auto-simula con eventos generados a
+       partir del nivel de cada equipo y jugador. Marcamos la card como
+       prepartido-ready, ocultamos el botón PREVIA y revelamos el timer
+       y la venue bar al instante. mlEndMatchGen se llamará automática-
+       mente al llegar a 90' (ver _mlStartIntervalGen). */
+    if (isIAvsIA) {
+      var wrapEl = document.getElementById('mlw-' + mk);
+      if (wrapEl) wrapEl.setAttribute('data-prepartido-ready', '1');
+      var venueBar = document.getElementById('venue-bar-' + mk);
+      if (venueBar) venueBar.classList.remove('pre-hidden');
+      if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {
+        window._mlEnsureLegacyPreMatchStructure(mk);
+      }
+      var previaBtn0 = document.getElementById('ml-previa-' + mk);
+      if (previaBtn0) previaBtn0.style.display = 'none';
+      var timerBtn0 = document.getElementById('ml-timer-' + mk);
+      if (timerBtn0) {
+        timerBtn0.style.display = '';
+        timerBtn0.disabled = false;
+        timerBtn0.textContent = '▶ SIMULAR';
+      }
+      var addBtn0 = document.getElementById('ml-add-btn-' + mk);
+      if (addBtn0) { addBtn0.style.visibility = 'hidden'; addBtn0.disabled = true; }
+      var actionRow0 = document.getElementById('ml-action-row-' + mk);
+      if (actionRow0) actionRow0.style.display = 'none';
+    } else {
+      // Ensure the previa button calls mlPreviaClick with amistoso compKey
+      var previaBtn = document.getElementById('ml-previa-' + mk);
+      if (previaBtn) {
+        (function(matchKey, hvh) {
+          previaBtn.onclick = function() {
+            var duracion = hvh ? '16 min' : '12 min';
+            var _origPpConfirm = window._ppConfirm;
+            window._ppConfirm = function() {
+              _origPpConfirm();
+              var actionRow = document.getElementById('ml-action-row-' + matchKey);
+              if (actionRow) actionRow.style.display = 'flex';
+              window._ppConfirm = _origPpConfirm;
+            };
+            if (typeof window.showPrePartidoOverlay === 'function') {
+              window.showPrePartidoOverlay(matchKey, 'amistoso', 'No', duracion, hvh);
+            }
           };
-          if (typeof window.showPrePartidoOverlay === 'function') {
-            window.showPrePartidoOverlay(matchKey, 'amistoso', 'No', duracion, hvh);
-          }
-        };
-      })(mk, isHvH);
+        })(mk, isHvH);
+      }
     }
     // Reset selectors for next match (don't hide setup)
     _selA = null; _selB = null;

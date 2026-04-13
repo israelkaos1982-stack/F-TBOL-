@@ -5168,6 +5168,9 @@
     _gm.finished = true;
     clearInterval(_gm.timerInterval);
     _gm.timerRunning = false;
+    /* Partido finalizado: ya no es live */
+    if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
+    if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
     gmRenderTimer();
     var endBtn = document.getElementById('gm-btn-end');
     if (endBtn) { endBtn.disabled = true; endBtn.style.opacity = '0.35'; }
@@ -5229,10 +5232,44 @@
   window.gmClose = function () {
     clearInterval(_gm.timerInterval);
     document.getElementById('gm-modal').style.display = 'none';
+    /* Al cerrar de verdad el partido ya no es live: desregistramos */
+    if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
+    if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
   };
 
   window.gmVolver = function () {
-    document.getElementById('gm-modal').style.display = 'none';
+    /* El partido SIGUE vivo: no clearInterval, solo ocultamos el modal
+       y navegamos a la pantalla desde la que se abrió (o al home).
+       Se registra en window.__GM_LIVE para que el hub PARTIDOS LIVE
+       muestre la tarjeta y permita reabrirlo. */
+    var modal = document.getElementById('gm-modal');
+    if (modal) modal.style.display = 'none';
+    /* Asegurar registro del partido como live en segundo plano */
+    window.__GM_LIVE = _gm;
+    _gm.liveBackground = true;
+    /* Refrescar el hub de partidos live para que muestre este partido */
+    if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
+    /* Navegar a la pantalla anterior (o al menú principal) */
+    var target = _gm.returnScreen || 's-home';
+    if (typeof window.go === 'function') {
+      try { window.go(target); } catch(_) {
+        try { window.go('s-home'); } catch(__){}
+      }
+    }
+  };
+
+  /* Reabre el gm-modal desde el hub PARTIDOS LIVE manteniendo el
+     estado (marcador, minuto, eventos). El interval de reloj sigue
+     corriendo porque gmVolver no lo limpia. */
+  window.gmReopen = function () {
+    if (!window.__GM_LIVE || window.__GM_LIVE !== _gm) return;
+    if (_gm.finished) return;
+    var modal = document.getElementById('gm-modal');
+    if (!modal) return;
+    _gm.liveBackground = false;
+    modal.style.display = '';
+    /* Asegurar que el render del cronómetro refleja el estado actual */
+    if (typeof gmRenderTimer === 'function') gmRenderTimer();
   };
 
   function gmUpdateAplazarBtn() {
@@ -5319,6 +5356,9 @@
       localStorage.setItem('partidos_aplazados', JSON.stringify(ap2));
       var gmModalEl = document.getElementById('gm-modal');
       if (gmModalEl) gmModalEl.style.display = 'none';
+      /* Partido aplazado: ya no es live en segundo plano */
+      if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
+      if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
       if (typeof window.gmRenderPendientes === 'function') window.gmRenderPendientes();
     }
   };
@@ -5405,10 +5445,17 @@
   };
 
   function gmOpen(j, home, away, isHvH, comp, noET, isFriendly) {
+    /* Capturar la pantalla activa ANTES de abrir el modal para que
+       el botón "☰ Menú · 🔴 LIVE" pueda volver a ella manteniendo
+       el partido en marcha. */
+    var _activeScreen = document.querySelector('.screen.active');
+    var _returnScreen = (_activeScreen && _activeScreen.id) || 's-home';
     /* ── Si ya hay un partido activo para estos mismos equipos/jornada, solo mostramos el modal ── */
     if (_gm.kickoffDone && !_gm.finished
         && _gm.j === j && _gm.home === home && _gm.away === away) {
       document.getElementById('gm-modal').style.display = '';
+      _gm.returnScreen = _returnScreen;
+      window.__GM_LIVE = _gm; /* mantener referencia global para el hub LIVE */
       return;
     }
     _gm.j = j; _gm.home = home; _gm.away = away; _gm.sc = {a:0,b:0};
@@ -5419,6 +5466,12 @@
     _gm.kickoffDone = false; _gm.htDone = false; _gm.inDescanso = false; _gm.stDone = false;
     _gm.timerWasRunning = false; _gm.comp = comp || ''; _gm.htShared = false; _gm.finalShared = false;
     _gm.noET = noET || false; _gm.isFriendly = isFriendly || false;
+    _gm.returnScreen = _returnScreen;
+    /* Registro global para el hub PARTIDOS LIVE: expone el estado del
+       partido abierto en gm-modal para que buildLiveScreen pueda
+       mostrarlo como tarjeta live aunque el usuario navegue a otra
+       pantalla. Se limpia en gmClose/gmAplazar/endMatch. */
+    window.__GM_LIVE = _gm;
     /* Descuento aleatorio 1-7 minutos por partido para que la duración real
        caiga dentro de los rangos: HvH 16-17 min · HvIA 12-13 min */
     _gm.stoppageSec = 1 + Math.floor(Math.random() * 7); // 1..7
@@ -7881,11 +7934,71 @@ function buildLiveCard(wrap) {
   return card;
 }
 
+/* Construye la tarjeta del partido abierto en gm-modal (Liga/Copa/
+   Europa/Selecciones/Amistoso) cuando existe un partido HvH o HvIA
+   en segundo plano. */
+function buildGmLiveCard(gm) {
+  if (!gm || gm.finished || !gm.kickoffDone) return null;
+  var esH = (typeof window.esHumano === 'function') ? window.esHumano : null;
+  var humanA = esH ? !!esH(gm.home) : false;
+  var humanB = esH ? !!esH(gm.away) : false;
+  /* Solo HvH y HvIA — los IA vs IA no aparecen en el hub */
+  if (!humanA && !humanB) return null;
+  var isHvH = gm.isHvH === true || (humanA && humanB);
+
+  var card = document.createElement('div');
+  card.className = 'live-card';
+  card.setAttribute('data-gm-live', '1');
+
+  var badge = document.createElement('span');
+  badge.className = 'live-badge ' + (isHvH ? 'live-badge-hvh' : 'live-badge-hvia');
+  badge.textContent = isHvH ? 'PvP' : 'HvIA';
+  card.appendChild(badge);
+
+  var teamsDiv = document.createElement('div');
+  teamsDiv.className = 'live-card-teams';
+  function _row(name) {
+    var row = document.createElement('div');
+    row.className = 'live-card-row';
+    var logo = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
+    if (logo) {
+      var img = document.createElement('img');
+      img.src = logo; img.className = 'live-card-logo'; img.alt = '';
+      img.onerror = function(){ this.style.display = 'none'; };
+      row.appendChild(img);
+    }
+    var nm = document.createElement('span');
+    nm.textContent = name || '?';
+    row.appendChild(nm);
+    return row;
+  }
+  teamsDiv.appendChild(_row(gm.home));
+  teamsDiv.appendChild(_row(gm.away));
+  card.appendChild(teamsDiv);
+
+  var scoreDiv = document.createElement('div');
+  scoreDiv.className = 'live-card-score';
+  scoreDiv.textContent = (gm.sc ? gm.sc.a : 0) + '-' + (gm.sc ? gm.sc.b : 0);
+  card.appendChild(scoreDiv);
+
+  var minDiv = document.createElement('div');
+  minDiv.className = 'live-card-min';
+  var curMin = Math.floor((gm.timerSec || 0) / 60);
+  var base = gm.etDone ? 120 : 90;
+  minDiv.textContent = curMin > base ? (base + '+' + (curMin - base) + "'") : (curMin + "'");
+  card.appendChild(minDiv);
+
+  card.addEventListener('click', function(){
+    if (typeof window.gmReopen === 'function') window.gmReopen();
+  });
+  return card;
+}
+
 function buildLiveScreen() {
   var list = document.getElementById('live-matches-list');
   if (!list) return;
 
-  /* find all live human matches */
+  /* find all live human matches in .match-live-wrap format */
   var wraps = document.querySelectorAll('.match-live-wrap.hvh, .match-live-wrap.hvia');
   var liveWraps = [];
   wraps.forEach(function(w) {
@@ -7895,21 +8008,28 @@ function buildLiveScreen() {
     }
   });
 
+  /* gm-modal match abierto en segundo plano (HvH/HvIA de cualquier
+     competición que haya usado gmVolver para salir del modal) */
+  var gmLive = (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone)
+    ? window.__GM_LIVE : null;
+
+  var totalLive = liveWraps.length + (gmLive ? 1 : 0);
+
   /* update count badge */
   var countEl = document.getElementById('live-match-count');
   if (countEl) {
-    countEl.textContent = liveWraps.length > 0 ? liveWraps.length + ' en directo' : '';
+    countEl.textContent = totalLive > 0 ? (totalLive + ' en directo') : '';
   }
 
   /* update home card animation state */
   if (typeof window.__LIVE_MATCH_COUNT !== 'undefined') {
-    window.__LIVE_MATCH_COUNT = liveWraps.length;
+    window.__LIVE_MATCH_COUNT = totalLive;
   }
 
   /* clear list */
   list.innerHTML = '';
 
-  if (liveWraps.length === 0) {
+  if (totalLive === 0) {
     var empty = document.createElement('div');
     empty.className = 'live-empty';
     empty.textContent = 'No hay partidos en directo ahora mismo';
@@ -7917,7 +8037,22 @@ function buildLiveScreen() {
     return;
   }
 
-  /* group by competition */
+  /* Primero el partido de gm-modal (si existe) bajo su competición */
+  if (gmLive) {
+    var gmCard = buildGmLiveCard(gmLive);
+    if (gmCard) {
+      var gmHdr = document.createElement('div');
+      gmHdr.className = 'live-comp-hdr';
+      var compLabel = gmLive.comp || 'Partido';
+      if (!gmLive.comp && typeof gmLive.j === 'number' && gmLive.j > 0) compLabel = 'Liga · Jornada ' + gmLive.j;
+      gmHdr.textContent = '⚽  ' + compLabel;
+      gmHdr.style.color = '#ff4444';
+      list.appendChild(gmHdr);
+      list.appendChild(gmCard);
+    }
+  }
+
+  /* group .match-live-wrap matches by competition */
   var groups = {};
   var groupOrder = [];
   liveWraps.forEach(function(w) {
@@ -7941,6 +8076,44 @@ function buildLiveScreen() {
     });
   });
 }
+/* Recuenta los partidos en directo (incluyendo el partido del
+   gm-modal si está activo) y actualiza el indicador del home sin
+   necesidad de que el usuario esté en la pantalla de PARTIDOS LIVE. */
+function _refreshLiveCount() {
+  var wraps = document.querySelectorAll('.match-live-wrap.hvh, .match-live-wrap.hvia');
+  var liveWrapCount = 0;
+  wraps.forEach(function(w) {
+    var s = w.querySelector('.ml-score');
+    if (s && s.classList.contains('state-playing')) liveWrapCount++;
+  });
+  var gmActive = (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone) ? 1 : 0;
+  var total = liveWrapCount + gmActive;
+  window.__LIVE_MATCH_COUNT = total;
+  try {
+    localStorage.setItem('liveMatchCount', String(total));
+  } catch(_){}
+  /* Si existe el contador en la pantalla home, actualízalo */
+  var homeIcon = document.getElementById('home-live-icon');
+  if (homeIcon) homeIcon.style.display = total > 0 ? '' : 'none';
+  var countEl = document.getElementById('live-match-count');
+  if (countEl) countEl.textContent = total > 0 ? (total + ' en directo') : '';
+  /* Activar el glow del card PARTIDOS LIVE en el home */
+  var homeCard = document.getElementById('home-live-card');
+  if (homeCard) {
+    if (total > 0) homeCard.classList.add('live-active');
+    else homeCard.classList.remove('live-active');
+  }
+}
+
+/* Expuesto para que gmVolver/gmClose/gmEndMatch puedan forzar un
+   refresco del hub sin depender del polling de 3 segundos.
+   Siempre actualiza el contador del home; si la pantalla PARTIDOS
+   LIVE está visible, también reconstruye su lista. */
+window._rebuildLiveHub = function() {
+  _refreshLiveCount();
+  var list = document.getElementById('live-matches-list');
+  if (list) buildLiveScreen();
+};
 
 /* ── override goLiveMatches ── */
 var _livePolling = null;

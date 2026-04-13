@@ -2647,8 +2647,13 @@
   /* ── EXPULSIÓN IA: pre-roll de rojas y penalización de 30 PUNTOS ── */
   var _RED_CARD_FLAT_PENALTY = 30; /* 30 puntos planos por expulsión */
   function _rollRedCards() {
-    /* Máximo 1 roja por partido (~18% de probabilidad) */
-    if (Math.random() < 0.18) {
+    /* Máximo 1 roja por partido (~30% de probabilidad).
+       TODAS las rojas pasan por aquí para garantizar que la penalización
+       de -30 puntos se aplica al rating ANTES de calcular el marcador.
+       Antes existía un fallback aleatorio en los generadores de eventos
+       que producía rojas sin penalización; eso provocaba marcadores
+       incoherentes (equipo con 10 ganando 2-0). */
+    if (Math.random() < 0.30) {
       var side = Math.random() < 0.5 ? 'home' : 'away';
       var min = Math.floor(Math.random() * 70) + 10;
       var reason = Math.random() < 0.6 ? 'directa' : '2TA';
@@ -3407,61 +3412,75 @@
     var glB = simScore.ga || 0;
     var events = [];
     var rojasPush = [];
-    /* Si _simIAvsIAWithContext produjo expulsiones, transferirlas al acta */
-    if (simScore.preReds && simScore.preReds.length) {
-      simScore.preReds.forEach(function(pr) {
-        var rt = pr.side === 'home' ? 'a' : 'b';
-        var sqR = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(rt === 'a' ? st.home : st.away)) || [];
-        var outR = sqR.filter(function(p){ return p && p[2] !== 'P'; });
-        if (!outR.length) outR = [['', 'Jugador', 'F', 76]];
-        var pR = outR[Math.floor(Math.random() * outR.length)];
-        if (pr.reason === '2TA') {
-          var yMin = Math.max(5, pr.min - 10 - Math.floor(Math.random() * 25));
-          events.push({ type:'amarilla', min:yMin, team:rt, num:pR[0]||'', name:pR[1]||'Jugador', ico:'🟨' });
-          events.push({ type:'d-amarilla', min:pr.min, team:rt, num:pR[0]||'', name:pR[1]||'Jugador', ico:'🟨🟥' });
-        } else {
-          events.push({ type:'roja', min:pr.min, team:rt, num:pR[0]||'', name:pR[1]||'Jugador', ico:'🟥' });
-        }
-        rojasPush.push({ team:rt, name:pR[1] });
-      });
-    } else if (Math.random() < 0.15) {
-      /* Fallback: 15% roja si no hay pre-roll */
-      var rt2 = Math.random() < 0.5 ? 'a' : 'b';
-      var sqR2 = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(rt2 === 'a' ? st.home : st.away)) || [];
-      var outR2 = sqR2.filter(function(p){ return p && p[2] !== 'P'; });
-      if (!outR2.length) outR2 = [['', 'Jugador', 'F', 76]];
-      var pR2 = outR2[Math.floor(Math.random() * outR2.length)];
-      events.push({ type:'roja', min:Math.floor(Math.random()*70)+10, team:rt2, num:pR2[0]||'', name:pR2[1]||'Jugador', ico:'🟥' });
-    }
-    /* Amarillas: 2-4 por partido */
+    /* Pools de jugadores fuera de la portería para ambos equipos */
     var sqAa = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(st.home)) || [];
     var outAa = sqAa.filter(function(p){ return p && p[2] !== 'P'; });
     if (!outAa.length) outAa = [['', 'Jugador', 'F', 76]];
     var sqBa = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(st.away)) || [];
     var outBa = sqBa.filter(function(p){ return p && p[2] !== 'P'; });
     if (!outBa.length) outBa = [['', 'Jugador', 'F', 76]];
+    /* Mapas de jugadores expulsados (nombre → minuto) y de amarillas ya
+       repartidas, para evitar 2 amarillas al mismo jugador sin expulsión. */
+    var expelledA = {};
+    var expelledB = {};
+    var yellowsReceived = {};
+    /* Si _simIAvsIAWithContext produjo expulsiones, transferirlas al acta.
+       TODAS las rojas vienen de aquí: la penalización de -30 puntos al
+       rating del equipo expulsado YA se aplicó dentro de
+       _simIAvsIAWithContext antes de calcular el marcador. */
+    if (simScore.preReds && simScore.preReds.length) {
+      simScore.preReds.forEach(function(pr) {
+        var rt = pr.side === 'home' ? 'a' : 'b';
+        var poolR = rt === 'a' ? outAa : outBa;
+        var pR = poolR[Math.floor(Math.random() * poolR.length)];
+        if (pr.reason === '2TA') {
+          var yMin = Math.max(5, pr.min - 10 - Math.floor(Math.random() * 25));
+          events.push({ type:'amarilla', min:yMin, team:rt, num:pR[0]||'', name:pR[1]||'Jugador', ico:'🟨' });
+          events.push({ type:'d-amarilla', min:pr.min, team:rt, num:pR[0]||'', name:pR[1]||'Jugador', ico:'🟨🟥' });
+          yellowsReceived[pR[1]] = true;
+        } else {
+          events.push({ type:'roja', min:pr.min, team:rt, num:pR[0]||'', name:pR[1]||'Jugador', ico:'🟥' });
+        }
+        var expMap = rt === 'a' ? expelledA : expelledB;
+        expMap[pR[1]] = pr.min;
+        rojasPush.push({ team:rt, name:pR[1] });
+      });
+    }
+    function _isExpelled(name) { return expelledA[name] !== undefined || expelledB[name] !== undefined; }
+    /* Amarillas: 2-4 por partido. Excluimos jugadores expulsados y
+       a quienes ya tienen una amarilla, así nunca aparecen 2 amarillas
+       sin expulsión sobre el mismo jugador. */
     var numYellow = Math.floor(Math.random() * 3) + 2;
     for (var c = 0; c < numYellow; c++) {
       var ct = Math.random() < 0.5 ? 'a' : 'b';
       var csq = ct === 'a' ? outAa : outBa;
-      var cp = csq[Math.floor(Math.random() * csq.length)];
+      var eligible = csq.filter(function(p){ return p && !_isExpelled(p[1]) && !yellowsReceived[p[1]]; });
+      if (!eligible.length) continue;
+      var cp = eligible[Math.floor(Math.random() * eligible.length)];
       events.push({ type:'amarilla', min:Math.floor(Math.random()*80)+5, team:ct, num:cp[0]||'', name:cp[1]||'Jugador', ico:'🟨' });
+      yellowsReceived[cp[1]] = true;
     }
-    /* Goles equipo A: selección ponderada por poder de jugador */
+    /* Goles equipo A: selección ponderada por poder de jugador.
+       Excluimos del pool a los jugadores expulsados (ya no están en el
+       campo). */
+    var goalPoolA = outAa.filter(function(p){ return p && !expelledA[p[1]]; });
+    if (!goalPoolA.length) goalPoolA = outAa;
     var usedA = {};
     for (var i = 0; i < glA; i++) {
       var p = (typeof _weightedScorerPick === 'function')
-        ? (_weightedScorerPick(outAa, true, usedA) || outAa[0])
-        : outAa[Math.floor(Math.random() * outAa.length)];
+        ? (_weightedScorerPick(goalPoolA, true, usedA) || goalPoolA[0])
+        : goalPoolA[Math.floor(Math.random() * goalPoolA.length)];
       usedA[p[1]] = (usedA[p[1]] || 0) + 1;
       events.push({ type:'gol', min:Math.floor(Math.random()*88)+2, team:'a', num:p[0]||'', name:p[1]||'Jugador', ico:'⚽' });
     }
     /* Goles equipo B */
+    var goalPoolB = outBa.filter(function(p){ return p && !expelledB[p[1]]; });
+    if (!goalPoolB.length) goalPoolB = outBa;
     var usedB = {};
     for (var k = 0; k < glB; k++) {
       var pb = (typeof _weightedScorerPick === 'function')
-        ? (_weightedScorerPick(outBa, false, usedB) || outBa[0])
-        : outBa[Math.floor(Math.random() * outBa.length)];
+        ? (_weightedScorerPick(goalPoolB, false, usedB) || goalPoolB[0])
+        : goalPoolB[Math.floor(Math.random() * goalPoolB.length)];
       usedB[pb[1]] = (usedB[pb[1]] || 0) + 1;
       events.push({ type:'gol', min:Math.floor(Math.random()*88)+2, team:'b', num:pb[0]||'', name:pb[1]||'Jugador', ico:'⚽' });
     }
@@ -6017,7 +6036,9 @@
     var expelledB = {};
     var _preReds = (simCtx && simCtx.preReds) ? simCtx.preReds : null;
 
-    // Primero: inyectar la roja pre-rolled (si existe) o generar una nueva
+    // Inyectar la roja pre-rolled (si existe). TODAS las rojas vienen de
+    // _rollRedCards/simCtx.preReds para que la penalización -30 al rating
+    // se haya aplicado ANTES de calcular el marcador.
     var _redInjected = false;
     if (_preReds && _preReds.length) {
       _preReds.forEach(function(pr) {
@@ -6036,15 +6057,6 @@
         expMap[rp[1]] = pr.min;
         _redInjected = true;
       });
-    } else if (Math.random() < 0.15) {
-      var rt = Math.random() < 0.5 ? 'a' : 'b';
-      var rsq = rt === 'a' ? outA : outB;
-      var rp = rsq[Math.floor(Math.random()*rsq.length)];
-      var rmin = Math.floor(Math.random()*70)+10;
-      events.push({ type:'roja', ico:'🟥', min:rmin, num:rp[0]||'', player:rp[1]||'?', team:rt, reason:'directa' });
-      var expMapR = rt === 'a' ? expelledA : expelledB;
-      expMapR[rp[1]] = rmin;
-      _redInjected = true;
     }
 
     // Después: amarillas normales (2-4), excluyendo jugadores ya expulsados

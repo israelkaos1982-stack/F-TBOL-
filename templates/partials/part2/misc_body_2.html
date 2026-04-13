@@ -2742,9 +2742,16 @@
      estados para no ofrecer "Previa" (que reinicia el partido al
      pasar por la pantalla de pre-partido) sino un botón que reabra
      el modal directamente. */
+  function _teamNameEq(a, b) {
+    /* Comparación tolerante: trim + case-insensitive. Necesaria porque
+       algunos nombres llegan en MAYÚSCULAS desde el DOM (ej. al leer
+       `.ml-team-name` que usa `home.toUpperCase()`). */
+    return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+  }
   function _liveGmMatchFor(j, home, away) {
     var gm = window.__GM_LIVE;
-    if (gm && !gm.finished && gm.j === j && gm.home === home && gm.away === away) {
+    if (gm && !gm.finished && gm.j === j
+        && _teamNameEq(gm.home, home) && _teamNameEq(gm.away, away)) {
       return gm;
     }
     var bg = window._gmBg;
@@ -2752,6 +2759,13 @@
       var key = (j || 0) + '|' + (home || '') + '|' + (away || '');
       var snap = bg[key];
       if (snap && !snap.finished) return snap;
+      /* Segunda pasada tolerante a mayúsculas/trim */
+      for (var k in bg) {
+        if (!bg.hasOwnProperty(k)) continue;
+        var s = bg[k];
+        if (!s || s.finished) continue;
+        if (s.j === j && _teamNameEq(s.home, home) && _teamNameEq(s.away, away)) return s;
+      }
     }
     return null;
   }
@@ -8204,10 +8218,35 @@ function buildLiveScreen() {
     var scoreEl = w.querySelector('.ml-score');
     if (!scoreEl || !scoreEl.classList.contains('state-playing')) return;
     if (esH) {
-      var teamEls = w.querySelectorAll('.ml-team-name');
-      var hName = teamEls[0] ? teamEls[0].textContent.trim() : '';
-      var aName = teamEls[1] ? teamEls[1].textContent.trim() : '';
-      if (!esH(hName) && !esH(aName)) return; /* IA vs IA → fuera */
+      /* Los nombres en `.ml-team-name` vienen en MAYÚSCULAS
+         (`home.toUpperCase()` en buildMatchCard), por lo que
+         `esHumano(hName)` siempre devuelve false — los amistosos
+         HvH/HvIA quedaban filtrados como si fueran IA vs IA.
+         Resolvemos los nombres canónicos desde el registro _mlStates
+         a partir del id `mlw-{mk}`. Como fallback tolerante a
+         mayúsculas, comparamos con HUMANOS case-insensitive. */
+      var mk = w.id ? w.id.replace(/^mlw-/, '') : '';
+      var st = (typeof window._mlGetState === 'function') ? window._mlGetState(mk) : null;
+      var hName, aName;
+      if (st && st.home && st.away) {
+        hName = st.home;
+        aName = st.away;
+      } else {
+        var teamEls = w.querySelectorAll('.ml-team-name');
+        hName = teamEls[0] ? teamEls[0].textContent.trim() : '';
+        aName = teamEls[1] ? teamEls[1].textContent.trim() : '';
+      }
+      function _isHumanLoose(n) {
+        if (!n) return false;
+        if (esH(n)) return true;
+        var lc = String(n).trim().toLowerCase();
+        var hum = window.HUMANOS || window.HUMANOS_AMS || [];
+        for (var i = 0; i < hum.length; i++) {
+          if (String(hum[i]).trim().toLowerCase() === lc) return true;
+        }
+        return false;
+      }
+      if (!_isHumanLoose(hName) && !_isHumanLoose(aName)) return; /* IA vs IA → fuera */
     }
     liveWraps.push(w);
   });
@@ -8321,10 +8360,30 @@ function _refreshLiveCount() {
     var s = w.querySelector('.ml-score');
     if (!s || !s.classList.contains('state-playing')) return;
     if (esH) {
-      var te = w.querySelectorAll('.ml-team-name');
-      var hn = te[0] ? te[0].textContent.trim() : '';
-      var an = te[1] ? te[1].textContent.trim() : '';
-      if (!esH(hn) && !esH(an)) return;
+      /* Ver nota en buildLiveScreen — usar _mlGetState(mk) para
+         obtener los nombres canónicos (no uppercase) de cada wrap. */
+      var mk = w.id ? w.id.replace(/^mlw-/, '') : '';
+      var st = (typeof window._mlGetState === 'function') ? window._mlGetState(mk) : null;
+      var hn, an;
+      if (st && st.home && st.away) {
+        hn = st.home; an = st.away;
+      } else {
+        var te = w.querySelectorAll('.ml-team-name');
+        hn = te[0] ? te[0].textContent.trim() : '';
+        an = te[1] ? te[1].textContent.trim() : '';
+      }
+      var _hLc = String(hn||'').trim().toLowerCase();
+      var _aLc = String(an||'').trim().toLowerCase();
+      var _hum = window.HUMANOS || window.HUMANOS_AMS || [];
+      function _isHum(lc) {
+        if (!lc) return false;
+        if (esH && esH(lc)) return true;
+        for (var i = 0; i < _hum.length; i++) {
+          if (String(_hum[i]).trim().toLowerCase() === lc) return true;
+        }
+        return false;
+      }
+      if (!_isHum(_hLc) && !_isHum(_aLc)) return;
     }
     liveWrapCount++;
   });

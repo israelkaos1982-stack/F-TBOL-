@@ -3374,10 +3374,8 @@ window.pG = function(fn) {
     lines.forEach(function(raw){
       var line = raw.trim();
       if(!line) return;
-      // Detecta encabezados (### ... o líneas con solo la categoría)
-      var isHeader = /^#+\s|^##|section|cat/i.test(line) || /^[\*\-\>\s]*[🧤🛡⚙⚽⚒🥇🎽]/u.test(line);
       // Intento de detección flexible: si no hay dígitos finales y tiene palabra clave → header
-      var hasTrailingNum = /\s\d{1,3}\s*$/.test(line.replace(/[🧤🛡⚙⚽]/gu,''));
+      var hasTrailingNum = /\s\d{1,3}\s*$/.test(line.replace(/[\u{1F9E4}\u{1F6E1}\u2699\u26BD]/gu,''));
       if(!hasTrailingNum){
         // Línea sin número al final — probablemente header
         var m = SECTION_RE.exec(line);
@@ -3390,7 +3388,7 @@ window.pG = function(fn) {
         return;
       }
       // Línea de jugador: quitar bullets/emojis iniciales
-      var clean = line.replace(/^[\*\-•·▪▫►▸\s]+/u,'').trim();
+      var clean = line.replace(/^[*\-\u2022\u00B7\u25AA\u25AB\u25BA\u25B8\s]+/,'').trim();
       // Extraer número al final
       var match = clean.match(/^(.+?)[\s\u00A0]+(\d{1,3})\s*$/);
       if(!match) return;

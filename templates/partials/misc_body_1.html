@@ -2989,18 +2989,480 @@ window.pG = function(fn) {
 </div>
 <div class="screen" id="s-liga-ext">
 <button class="back-btn" onclick="go('s-ligas')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji" id="liga-ext-emoji">🌍</span><h2 id="liga-ext-title">Liga</h2></div>
-<div class="empty-ph">Datos — próximamente</div>
+<div class="sec-hdr"><span class="sec-emoji" id="liga-ext-emoji" style="font-size:26px;">🏆</span><h2 id="liga-ext-title">Liga</h2></div>
+
+<div class="btn-action-bar" style="margin:0 14px 10px;">
+  <button class="btn-action btn-action-sim" onclick="pG(function(){ligaExtSimular()})"><span class="btn-action-ico">🎮</span>Simular</button>
+  <button class="btn-action btn-action-rst" onclick="pG(function(){ligaExtReiniciar()})"><span class="btn-action-ico">♻️</span>Reiniciar</button>
+  <button class="btn-action" onclick="pG(function(){ligaExtEditar()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">✏️</span>Editar</button>
+  <button class="btn-action btn-action-stats" onclick="ligaExtStats()"><span class="btn-action-ico">📈</span>Estadísticas</button>
 </div>
+
+<div class="lext-legend" id="lext-legend">
+  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#3160ff;"></span>Champions</div>
+  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#a050ff;"></span>Previa Ch.</div>
+  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#f0c040;"></span>Open Qual.</div>
+  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#ff8214;"></span>E.League</div>
+  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#3cc878;"></span>Conference</div>
+  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#e03c3c;"></span>Descenso</div>
+</div>
+
+<style>
+.lext-legend{display:flex;flex-wrap:wrap;gap:8px 12px;padding:8px 16px 12px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.7);}
+.lext-leg-item{display:flex;align-items:center;gap:5px;}
+.lext-leg-dot{width:10px;height:10px;border-radius:50%;display:inline-block;box-shadow:0 0 8px currentColor;}
+.lext-wrap{padding:0 14px 32px;}
+.lext-table{width:100%;display:flex;flex-direction:column;gap:0;min-width:440px;}
+.lext-hdr,.lext-row{display:grid;grid-template-columns:28px minmax(110px,1.4fr) 28px 24px 24px 24px 28px 28px 30px 34px;gap:2px;align-items:center;padding:7px 6px;}
+.lext-hdr{background:linear-gradient(90deg,#082a14,#0f5a28);border-bottom:2px solid rgba(240,192,64,.4);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.72);font-weight:700;text-align:center;position:sticky;top:44px;z-index:20;}
+.lext-hdr span:nth-child(2){text-align:left;}
+.lext-row{border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;border-left:3px solid transparent;transition:filter .12s,background .12s;}
+.lext-row:hover{filter:brightness(1.18);background:rgba(255,255,255,.02);}
+.lext-row.z-uclD{background:rgba(49,96,255,.14);border-left-color:#3160ff;}
+.lext-row.z-uclP{background:rgba(160,80,255,.13);border-left-color:#a050ff;}
+.lext-row.z-uclQ{background:rgba(240,192,64,.12);border-left-color:#f0c040;}
+.lext-row.z-uel{background:rgba(255,130,20,.13);border-left-color:#ff8214;}
+.lext-row.z-uecl{background:rgba(60,200,120,.12);border-left-color:#3cc878;}
+.lext-row.z-desc{background:rgba(224,60,60,.13);border-left-color:#e03c3c;}
+.lext-pos{font-family:"Bebas Neue",sans-serif;font-size:15px;color:rgba(255,255,255,.55);text-align:center;}
+.lext-team{display:flex;align-items:center;gap:6px;min-width:0;}
+.lext-team-shield{width:18px;height:18px;object-fit:contain;flex:0 0 18px;filter:drop-shadow(0 0 2px rgba(0,0,0,.4));}
+.lext-team-name{font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lext-cell{font-family:"Bebas Neue",sans-serif;font-size:14px;color:rgba(255,255,255,.78);text-align:center;}
+.lext-cell.gf{color:#80d0ff;}
+.lext-cell.gc{color:#ff9090;}
+.lext-cell.dg.pos{color:#4fc86a;}
+.lext-cell.dg.neg{color:#ff7070;}
+.lext-pts{font-family:"Bebas Neue",sans-serif;font-size:17px;color:#f0c040;text-align:center;font-weight:700;}
+.lext-empty{padding:28px 0;text-align:center;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.35);}
+/* Overlay base */
+.lext-ov{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999990;display:none;align-items:flex-start;justify-content:center;padding:40px 12px;overflow-y:auto;}
+.lext-ov.show{display:flex;}
+.lext-ov-box{background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:18px 16px;width:100%;max-width:520px;box-shadow:0 0 40px rgba(0,0,0,.8);color:#fff;font-family:Rajdhani,sans-serif;}
+.lext-ov-head{display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.08);}
+.lext-ov-title{font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;color:#f0c040;flex:1;text-transform:uppercase;}
+.lext-ov-close{background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.65);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;}
+.lext-input,.lext-select{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;margin-bottom:8px;}
+.lext-input:focus,.lext-select:focus{outline:none;border-color:#f0c040;}
+.lext-label{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.5);display:block;margin:8px 0 3px;}
+.lext-btn{background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.45);color:#f0c040;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;transition:all .15s;}
+.lext-btn:hover{background:rgba(240,192,64,.25);}
+.lext-btn.danger{background:rgba(224,60,60,.12);border-color:rgba(224,60,60,.5);color:#ff7070;}
+.lext-btn.green{background:rgba(60,200,120,.12);border-color:rgba(60,200,120,.5);color:#3cc878;}
+.lext-btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+.lext-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:50vh;overflow-y:auto;}
+.lext-list-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;}
+.lext-list-item img{width:24px;height:24px;object-fit:contain;flex:0 0 24px;}
+.lext-li-name{flex:1;font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lext-li-pw{font-family:"Bebas Neue",sans-serif;font-size:15px;color:#f0c040;min-width:26px;text-align:right;}
+.lext-li-pos{font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.45);font-family:Oswald,sans-serif;padding:2px 5px;border:1px solid rgba(255,255,255,.12);border-radius:3px;}
+.lext-li-btn{background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.6);padding:3px 7px;border-radius:3px;cursor:pointer;font-size:10px;}
+.lext-li-btn:hover{color:#fff;border-color:#f0c040;}
+.lext-sub{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.45);margin:2px 0;}
+.lext-stat-row{display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;}
+.lext-stat-row span:first-child{color:rgba(255,255,255,.6);}
+.lext-stat-row span:last-child{color:#f0c040;font-weight:700;}
+</style>
+
+<div class="lext-wrap">
+  <div class="lext-table">
+    <div class="lext-hdr">
+      <span>#</span><span>EQUIPO</span><span>PJ</span><span>G</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>PTS</span>
+    </div>
+    <div id="lext-body">
+      <div class="lext-empty">No hay equipos. Usa ✏️ Editar para añadir clubes.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══ MODALES ═══ -->
+<div class="lext-ov" id="lext-ov-teams">
+  <div class="lext-ov-box">
+    <div class="lext-ov-head">
+      <div class="lext-ov-title" id="lext-ov-teams-title">✏️ Editar Equipos</div>
+      <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-teams')">✕</button>
+    </div>
+    <div id="lext-teams-form">
+      <label class="lext-label">Nombre del equipo</label>
+      <input class="lext-input" id="lext-team-name" placeholder="Ej. Real Madrid" />
+      <label class="lext-label">Poder-Valor-Nivel (1-100)</label>
+      <input class="lext-input" id="lext-team-power" type="number" min="1" max="100" value="75" />
+      <label class="lext-label">Estadio local</label>
+      <input class="lext-input" id="lext-team-stadium" placeholder="Ej. Santiago Bernabéu" />
+      <label class="lext-label">Escudo (URL — p.ej. sofascore)</label>
+      <input class="lext-input" id="lext-team-shield" placeholder="https://api.sofascore.app/api/v1/team/2817/image" />
+      <div class="lext-btn-row">
+        <button class="lext-btn green" onclick="lextSaveTeam()">💾 Guardar</button>
+        <button class="lext-btn" onclick="lextClearTeamForm()">🗑 Limpiar</button>
+      </div>
+    </div>
+    <div class="lext-sub" style="margin-top:14px;">EQUIPOS ACTUALES (toca para editar / ver plantilla)</div>
+    <div class="lext-list" id="lext-teams-list"></div>
+  </div>
+</div>
+
+<div class="lext-ov" id="lext-ov-squad">
+  <div class="lext-ov-box">
+    <div class="lext-ov-head">
+      <div class="lext-ov-title" id="lext-ov-squad-title">🛡 Plantilla</div>
+      <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-squad')">✕</button>
+    </div>
+    <label class="lext-label">Nombre del jugador</label>
+    <input class="lext-input" id="lext-pl-name" placeholder="Ej. Vinicius Jr." />
+    <label class="lext-label">Posición</label>
+    <select class="lext-select" id="lext-pl-pos">
+      <option value="POR">Portero</option>
+      <option value="DEF">Defensa</option>
+      <option value="MED">Medio</option>
+      <option value="DEL">Delantero</option>
+    </select>
+    <label class="lext-label">🛡 Nivel / Poder (1-99)</label>
+    <input class="lext-input" id="lext-pl-power" type="number" min="1" max="99" value="75" />
+    <div class="lext-btn-row">
+      <button class="lext-btn green" onclick="lextSavePlayer()">💾 Añadir jugador</button>
+    </div>
+    <div class="lext-sub" style="margin-top:14px;">PLANTILLA</div>
+    <div class="lext-list" id="lext-squad-list"></div>
+  </div>
+</div>
+
+<div class="lext-ov" id="lext-ov-stats">
+  <div class="lext-ov-box">
+    <div class="lext-ov-head">
+      <div class="lext-ov-title">📈 Estadísticas</div>
+      <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-stats')">✕</button>
+    </div>
+    <div id="lext-stats-body"></div>
+  </div>
+</div>
+
 <script>
 (function(){
+  var CURRENT_KEY = null;
+  var CURRENT_NAME = '';
+  var CURRENT_EMOJI = '🌍';
+  var EDITING_TEAM_ID = null;
+  var CURRENT_SQUAD_TEAM = null;
+
+  function slugify(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+  function uid(){ return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+  function storeKey(k){ return 'ligaExt_'+k; }
+  function loadData(k){
+    try{ var raw = localStorage.getItem(storeKey(k)); if(raw) return JSON.parse(raw); }catch(_){}
+    return {teams:[], results:[]};
+  }
+  function saveData(k,d){ try{ localStorage.setItem(storeKey(k), JSON.stringify(d)); }catch(_){} }
+
+  function computeTeamPower(t){
+    if(!t.players || !t.players.length) return Number(t.power)||50;
+    var sum = t.players.reduce(function(a,p){return a+(Number(p.power)||0);},0);
+    // Promedio de los jugadores como poder efectivo
+    return Math.round(sum/t.players.length);
+  }
+
+  function standings(data){
+    var map = {};
+    data.teams.forEach(function(t){
+      map[t.id] = {id:t.id,name:t.name,shield:t.shield,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0};
+    });
+    (data.results||[]).forEach(function(r){
+      var H = map[r.h], A = map[r.a]; if(!H||!A) return;
+      H.pj++; A.pj++;
+      H.gf+=r.gh; H.gc+=r.ga;
+      A.gf+=r.ga; A.gc+=r.gh;
+      if(r.gh>r.ga){H.v++;A.p++;H.pts+=3;}
+      else if(r.gh<r.ga){A.v++;H.p++;A.pts+=3;}
+      else {H.e++;A.e++;H.pts++;A.pts++;}
+    });
+    var arr = Object.keys(map).map(function(k){ var m=map[k]; m.dg=m.gf-m.gc; return m; });
+    arr.sort(function(a,b){
+      if(b.pts!==a.pts) return b.pts-a.pts;
+      if(b.dg!==a.dg) return b.dg-a.dg;
+      if(b.gf!==a.gf) return b.gf-a.gf;
+      return a.name.localeCompare(b.name,'es');
+    });
+    return arr;
+  }
+
+  function zoneClass(pos, total){
+    // Defaults: 1 Champions / 2 Previa / 3 Open Qual / 4 E.League / 5 Conference / últimos 3 Descenso
+    if(total<=0) return '';
+    if(pos===1) return 'z-uclD';
+    if(pos===2 && total>=6) return 'z-uclP';
+    if(pos===3 && total>=8) return 'z-uclQ';
+    if(pos===4 && total>=10) return 'z-uel';
+    if(pos===5 && total>=12) return 'z-uecl';
+    if(pos>total-3) return 'z-desc';
+    return '';
+  }
+
+  function renderTable(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var body = document.getElementById('lext-body');
+    if(!body) return;
+    if(!data.teams.length){
+      body.innerHTML = '<div class="lext-empty">No hay equipos. Usa ✏️ Editar para añadir clubes.</div>';
+      return;
+    }
+    var rows = standings(data);
+    var total = rows.length;
+    body.innerHTML = rows.map(function(r,i){
+      var pos = i+1;
+      var z = zoneClass(pos,total);
+      var dgSign = r.dg>0?'+'+r.dg:(r.dg<0?r.dg:'0');
+      var dgCls = r.dg>0?'pos':(r.dg<0?'neg':'');
+      var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
+      return '<div class="lext-row '+z+'" onclick="lextOpenSquad(\''+r.id+'\')">'
+        +'<span class="lext-pos">'+pos+'</span>'
+        +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span></span>'
+        +'<span class="lext-cell">'+r.pj+'</span>'
+        +'<span class="lext-cell">'+r.v+'</span>'
+        +'<span class="lext-cell">'+r.e+'</span>'
+        +'<span class="lext-cell">'+r.p+'</span>'
+        +'<span class="lext-cell gf">'+r.gf+'</span>'
+        +'<span class="lext-cell gc">'+r.gc+'</span>'
+        +'<span class="lext-cell dg '+dgCls+'">'+dgSign+'</span>'
+        +'<span class="lext-pts">'+r.pts+'</span>'
+      +'</div>';
+    }).join('');
+  }
+
+  // ── Simulación ─────────────────────────────────────
+  function simulateMatch(tA, tB){
+    var pA = computeTeamPower(tA);
+    var pB = computeTeamPower(tB);
+    // Ligera ventaja local
+    pA += 3;
+    var diff = pA - pB;
+    // Expectativa de goles (aprox poisson simplificada)
+    var baseA = 1.3 + diff*0.03;
+    var baseB = 1.3 - diff*0.03;
+    baseA = Math.max(0.15, baseA);
+    baseB = Math.max(0.15, baseB);
+    function poisson(l){
+      var L = Math.exp(-l), k = 0, p = 1;
+      do { k++; p *= Math.random(); } while (p > L);
+      return k-1;
+    }
+    return {gh:poisson(baseA), ga:poisson(baseB)};
+  }
+
+  function ligaExtSimular(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    if(data.teams.length < 2){ alert('Añade al menos 2 equipos.'); return; }
+    data.results = [];
+    var ts = data.teams.slice();
+    for(var i=0;i<ts.length;i++){
+      for(var j=0;j<ts.length;j++){
+        if(i===j) continue;
+        var r = simulateMatch(ts[i], ts[j]);
+        data.results.push({h:ts[i].id, a:ts[j].id, gh:r.gh, ga:r.ga});
+      }
+    }
+    saveData(CURRENT_KEY, data);
+    renderTable();
+  }
+  window.ligaExtSimular = ligaExtSimular;
+
+  function ligaExtReiniciar(){
+    if(!CURRENT_KEY) return;
+    if(!confirm('¿Reiniciar puntos/partidos de '+CURRENT_NAME+'?')) return;
+    var data = loadData(CURRENT_KEY);
+    data.results = [];
+    saveData(CURRENT_KEY, data);
+    renderTable();
+  }
+  window.ligaExtReiniciar = ligaExtReiniciar;
+
+  // ── Editor equipos ────────────────────────────────
+  function ligaExtEditar(){
+    if(!CURRENT_KEY) return;
+    EDITING_TEAM_ID = null;
+    document.getElementById('lext-ov-teams-title').textContent = '✏️ Editar · '+CURRENT_NAME;
+    lextClearTeamForm();
+    renderTeamsList();
+    lextOpenOv('lext-ov-teams');
+  }
+  window.ligaExtEditar = ligaExtEditar;
+
+  function lextClearTeamForm(){
+    EDITING_TEAM_ID = null;
+    document.getElementById('lext-team-name').value='';
+    document.getElementById('lext-team-power').value='75';
+    document.getElementById('lext-team-stadium').value='';
+    document.getElementById('lext-team-shield').value='';
+  }
+  window.lextClearTeamForm = lextClearTeamForm;
+
+  function renderTeamsList(){
+    var data = loadData(CURRENT_KEY);
+    var host = document.getElementById('lext-teams-list');
+    if(!data.teams.length){ host.innerHTML = '<div class="lext-sub">— Sin equipos —</div>'; return; }
+    host.innerHTML = data.teams.map(function(t){
+      var sh = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'"/>' : '';
+      return '<div class="lext-list-item">'
+        + sh
+        + '<span class="lext-li-name">'+t.name+'</span>'
+        + '<span class="lext-li-pos">PW '+computeTeamPower(t)+'</span>'
+        + '<button class="lext-li-btn" onclick="lextEditTeam(\''+t.id+'\')">✏️</button>'
+        + '<button class="lext-li-btn" onclick="lextOpenSquad(\''+t.id+'\')">🛡</button>'
+        + '<button class="lext-li-btn" onclick="lextDeleteTeam(\''+t.id+'\')">🗑</button>'
+      +'</div>';
+    }).join('');
+  }
+
+  window.lextEditTeam = function(id){
+    var data = loadData(CURRENT_KEY);
+    var t = data.teams.filter(function(x){return x.id===id;})[0];
+    if(!t) return;
+    EDITING_TEAM_ID = id;
+    document.getElementById('lext-team-name').value = t.name||'';
+    document.getElementById('lext-team-power').value = t.power||75;
+    document.getElementById('lext-team-stadium').value = t.stadium||'';
+    document.getElementById('lext-team-shield').value = t.shield||'';
+  };
+
+  window.lextDeleteTeam = function(id){
+    if(!confirm('¿Eliminar este equipo?')) return;
+    var data = loadData(CURRENT_KEY);
+    data.teams = data.teams.filter(function(x){return x.id!==id;});
+    data.results = (data.results||[]).filter(function(r){return r.h!==id && r.a!==id;});
+    saveData(CURRENT_KEY,data);
+    renderTeamsList();
+    renderTable();
+  };
+
+  window.lextSaveTeam = function(){
+    var name = document.getElementById('lext-team-name').value.trim();
+    if(!name){ alert('Falta el nombre del equipo.'); return; }
+    var power = parseInt(document.getElementById('lext-team-power').value,10)||50;
+    var stadium = document.getElementById('lext-team-stadium').value.trim();
+    var shield = document.getElementById('lext-team-shield').value.trim();
+    var data = loadData(CURRENT_KEY);
+    if(EDITING_TEAM_ID){
+      var t = data.teams.filter(function(x){return x.id===EDITING_TEAM_ID;})[0];
+      if(t){ t.name=name; t.power=power; t.stadium=stadium; t.shield=shield; }
+    } else {
+      data.teams.push({id:uid(),name:name,power:power,stadium:stadium,shield:shield,players:[]});
+    }
+    saveData(CURRENT_KEY,data);
+    lextClearTeamForm();
+    renderTeamsList();
+    renderTable();
+  };
+
+  // ── Plantilla (jugadores) ─────────────────────────
+  window.lextOpenSquad = function(id){
+    CURRENT_SQUAD_TEAM = id;
+    var data = loadData(CURRENT_KEY);
+    var t = data.teams.filter(function(x){return x.id===id;})[0];
+    if(!t) return;
+    document.getElementById('lext-ov-squad-title').textContent = '🛡 '+t.name;
+    document.getElementById('lext-pl-name').value='';
+    document.getElementById('lext-pl-power').value='75';
+    renderSquadList();
+    lextOpenOv('lext-ov-squad');
+  };
+
+  function renderSquadList(){
+    if(!CURRENT_SQUAD_TEAM) return;
+    var data = loadData(CURRENT_KEY);
+    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
+    var host = document.getElementById('lext-squad-list');
+    if(!t || !t.players || !t.players.length){ host.innerHTML='<div class="lext-sub">— Sin jugadores —</div>'; return; }
+    host.innerHTML = t.players.map(function(p){
+      return '<div class="lext-list-item">'
+        +'<span class="lext-li-pos">'+p.pos+'</span>'
+        +'<span class="lext-li-name">'+p.name+'</span>'
+        +'<span class="lext-li-pw">🛡 '+p.power+'</span>'
+        +'<button class="lext-li-btn" onclick="lextDeletePlayer(\''+p.id+'\')">🗑</button>'
+      +'</div>';
+    }).join('');
+  }
+
+  window.lextSavePlayer = function(){
+    if(!CURRENT_SQUAD_TEAM) return;
+    var name = document.getElementById('lext-pl-name').value.trim();
+    if(!name){ alert('Falta el nombre del jugador.'); return; }
+    var pos = document.getElementById('lext-pl-pos').value;
+    var power = parseInt(document.getElementById('lext-pl-power').value,10)||50;
+    var data = loadData(CURRENT_KEY);
+    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
+    if(!t) return;
+    t.players = t.players || [];
+    t.players.push({id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:name,pos:pos,power:power});
+    // Actualiza poder global del equipo como promedio de plantilla
+    t.power = computeTeamPower(t);
+    saveData(CURRENT_KEY,data);
+    document.getElementById('lext-pl-name').value='';
+    renderSquadList();
+    renderTeamsList();
+    renderTable();
+  };
+
+  window.lextDeletePlayer = function(pid){
+    var data = loadData(CURRENT_KEY);
+    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
+    if(!t) return;
+    t.players = (t.players||[]).filter(function(p){return p.id!==pid;});
+    t.power = computeTeamPower(t);
+    saveData(CURRENT_KEY,data);
+    renderSquadList();
+    renderTeamsList();
+    renderTable();
+  };
+
+  // ── Estadísticas ──────────────────────────────────
+  window.ligaExtStats = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var s = standings(data);
+    var body = document.getElementById('lext-stats-body');
+    if(!s.length){ body.innerHTML='<div class="lext-empty">Sin datos todavía.</div>'; lextOpenOv('lext-ov-stats'); return; }
+    var totGoles=0, totPJ=0, maxGF=null, minGC=null;
+    s.forEach(function(r){
+      totGoles += r.gf;
+      totPJ += r.pj;
+      if(!maxGF || r.gf>maxGF.gf) maxGF=r;
+      if(!minGC || r.gc<minGC.gc) minGC=r;
+    });
+    var prom = totPJ>0 ? (totGoles/(totPJ/2)).toFixed(2) : '0';
+    var lider = s[0];
+    var colista = s[s.length-1];
+    body.innerHTML = ''
+      +'<div class="lext-stat-row"><span>🏆 Líder</span><span>'+lider.name+' ('+lider.pts+' pts)</span></div>'
+      +'<div class="lext-stat-row"><span>🔻 Colista</span><span>'+colista.name+' ('+colista.pts+' pts)</span></div>'
+      +'<div class="lext-stat-row"><span>⚽ Máximo goleador (equipo)</span><span>'+(maxGF?maxGF.name+' · '+maxGF.gf+' GF':'-')+'</span></div>'
+      +'<div class="lext-stat-row"><span>🧤 Menos goleado</span><span>'+(minGC?minGC.name+' · '+minGC.gc+' GC':'-')+'</span></div>'
+      +'<div class="lext-stat-row"><span>📊 Equipos</span><span>'+s.length+'</span></div>'
+      +'<div class="lext-stat-row"><span>📈 Partidos jugados</span><span>'+(totPJ/2)+'</span></div>'
+      +'<div class="lext-stat-row"><span>🎯 Goles totales</span><span>'+totGoles+'</span></div>'
+      +'<div class="lext-stat-row"><span>📉 Promedio goles/partido</span><span>'+prom+'</span></div>';
+    lextOpenOv('lext-ov-stats');
+  };
+
+  // ── Overlay helpers ───────────────────────────────
+  window.lextOpenOv = function(id){ var el=document.getElementById(id); if(el) el.classList.add('show'); };
+  window.lextCloseOv = function(id){ var el=document.getElementById(id); if(el) el.classList.remove('show'); };
+
+  // ── Entry point ───────────────────────────────────
   window.openLigaExt = function(name, emoji){
+    CURRENT_NAME = name || 'Liga';
+    CURRENT_EMOJI = emoji || '🌍';
+    CURRENT_KEY = slugify(name||'liga');
     var t = document.getElementById('liga-ext-title');
     var e = document.getElementById('liga-ext-emoji');
-    if(t) t.textContent = name || 'Liga';
-    if(e && emoji) e.textContent = emoji;
+    if(t) t.textContent = '🏆 '+CURRENT_NAME;
+    if(e) e.textContent = CURRENT_EMOJI;
+    // Inicializa storage si no existe
+    loadData(CURRENT_KEY);
+    renderTable();
     if(typeof window.go === 'function') window.go('s-liga-ext');
   };
+
   function wireLigasExt(){
     var host = document.getElementById('s-ligas');
     if(!host || host.__ligasExtWired) return;

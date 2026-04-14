@@ -2952,6 +2952,42 @@ window.pG = function(fn) {
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#244aa5,#e4aa3c,#244aa5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇽🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kosovo</span></div>
 </div>
 </div>
+<div class="screen" id="s-liga-ext">
+<button class="back-btn" onclick="go('s-ligas')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji" id="liga-ext-emoji">🌍</span><h2 id="liga-ext-title">Liga</h2></div>
+<div class="empty-ph">Datos — próximamente</div>
+</div>
+<script>
+(function(){
+  window.openLigaExt = function(name, emoji){
+    var t = document.getElementById('liga-ext-title');
+    var e = document.getElementById('liga-ext-emoji');
+    if(t) t.textContent = name || 'Liga';
+    if(e && emoji) e.textContent = emoji;
+    if(typeof window.go === 'function') window.go('s-liga-ext');
+  };
+  function wireLigasExt(){
+    var host = document.getElementById('s-ligas');
+    if(!host || host.__ligasExtWired) return;
+    host.__ligasExtWired = true;
+    host.addEventListener('click', function(ev){
+      var card = ev.target && ev.target.closest ? ev.target.closest('.menu-card') : null;
+      if(!card || !host.contains(card)) return;
+      var lbl = card.querySelector('.mc-label');
+      var emo = card.querySelector('.mc-emoji');
+      window.openLigaExt(
+        lbl ? (lbl.textContent || '').trim() : 'Liga',
+        emo ? (emo.textContent || '').trim() : '🌍'
+      );
+    });
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', wireLigasExt);
+  } else {
+    wireLigasExt();
+  }
+})();
+</script>
 <div class="screen" id="s-selecciones">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🌐</span><h2>Selecciones</h2></div>

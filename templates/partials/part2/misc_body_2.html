@@ -2419,11 +2419,28 @@
     if (typeof window.refreshMainCalendarCards === 'function') window.refreshMainCalendarCards();
   }
 
-  function hydrateLigaStateFromBackend() {
-    return fetch('/api/state')
-      .then(function(res) { return res.ok ? res.json() : null; })
+  /* Timestamp del último /api/state que el cliente ha recibido.
+     Se usa como ETag en el poll para que el servidor devuelva 304
+     cuando no haya cambios — evita re-renderizar el DOM y gastar
+     ancho de banda 5 veces al minuto. */
+  var _ligaStateLastSeenAt = '';
+
+  function hydrateLigaStateFromBackend(opts) {
+    opts = opts || {};
+    var url = '/api/state';
+    if (opts.useSince && _ligaStateLastSeenAt) {
+      url += '?since=' + encodeURIComponent(_ligaStateLastSeenAt);
+    }
+    return fetch(url, { cache: 'no-store' })
+      .then(function(res) {
+        if (!res) return null;
+        if (res.status === 304) return null; /* sin cambios */
+        return res.ok ? res.json() : null;
+      })
       .then(function(payload) {
-        var state = payload && payload.state && typeof payload.state === 'object' ? payload.state : null;
+        if (!payload) return;
+        if (payload.updated_at) _ligaStateLastSeenAt = payload.updated_at;
+        var state = payload.state && typeof payload.state === 'object' ? payload.state : null;
         if (!state) return;
 
         if (state.liga_results && typeof state.liga_results === 'object') {
@@ -2437,9 +2454,48 @@
           if (typeof window.setLigaSchedule === 'function') window.setLigaSchedule(sharedLigaScheduleCache, false);
         }
 
+        /* Tras refrescar caché, rehidratar también LIGA_J1_RESULTS desde
+           los resultados recién llegados (si la función está expuesta).
+           Esto hace que los partidos simulados en otro dispositivo
+           aparezcan en la clasificación del móvil sin recargar. */
+        try {
+          if (typeof window.restoreJ1FromResults === 'function') {
+            window.restoreJ1FromResults();
+          }
+        } catch (_e) {}
+
         refreshLigaViewsAfterSync();
       })
       .catch(function(){});
+  }
+  /* Expuesto para que otros módulos (ej. el poll) puedan pedir una
+     rehidratación condicional con `since`. */
+  window.hydrateLigaStateFromBackend = hydrateLigaStateFromBackend;
+
+  /* Poll cada 5s mientras la pestaña está visible. Así los resultados
+     simulados en otro dispositivo (PC simulando J1, por ejemplo) se
+     ven en este dispositivo (móvil) sin recargar la página. */
+  var _ligaStatePollInterval = null;
+  function _startLigaStatePoll() {
+    if (_ligaStatePollInterval) return;
+    _ligaStatePollInterval = setInterval(function(){
+      if (document.hidden) return;
+      try { hydrateLigaStateFromBackend({ useSince: true }); } catch (_e) {}
+    }, 5000);
+  }
+  /* Al volver del background, tirar de sincronización inmediata
+     en lugar de esperar al próximo tick del setInterval. */
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'visible') {
+      try { hydrateLigaStateFromBackend({ useSince: true }); } catch (_e) {}
+    }
+  });
+  /* Arranque del poll después del primer hydrate inicial (hecho más
+     abajo en la secuencia de inicialización). */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _startLigaStatePoll);
+  } else {
+    _startLigaStatePoll();
   }
 
   function mezclarEquipos(names) {
@@ -6541,7 +6597,8 @@
     if (typeof window[fn] === 'function') window[fn]();
   };
 
-  /* ── RESTAURAR J1 EN LIGA_J1_RESULTS (tras recarga) */
+  /* ── RESTAURAR J1 EN LIGA_J1_RESULTS (tras recarga o tras poll
+        /api/state recibiendo cambios de otro dispositivo) */
   function restoreJ1() {
     var results  = loadResults();
     var arr      = window.LIGA_J1_RESULTS;
@@ -6549,15 +6606,29 @@
     SCHEDULE[0].forEach(function (m) {
       var res = results[rKey(1, m[0], m[1])];
       if (!res) return;
-      var exists = arr.some(function (r) { return r.home === m[0] && r.away === m[1]; });
-      if (!exists) {
-        arr.push({ key: 'ls-j1-' + m[0], home: m[0], away: m[1],
-                   gh: res.gh, ga_: res.ga,
-                   ta_h: 0, tr_h: 0, ta_a_: 0, tr_a_: 0,
-                   mvp_h: 0, mvp_a: 0, penWinner: null });
+      var existingIdx = -1;
+      for (var i = 0; i < arr.length; i++) {
+        if (arr[i] && arr[i].home === m[0] && arr[i].away === m[1]) { existingIdx = i; break; }
+      }
+      var entry = {
+        key: 'ls-j1-' + m[0], home: m[0], away: m[1],
+        gh: res.gh, ga_: res.ga,
+        ta_h: 0, tr_h: 0, ta_a_: 0, tr_a_: 0,
+        mvp_h: 0, mvp_a: 0, penWinner: null
+      };
+      if (existingIdx >= 0) {
+        /* Actualizar marcador si cambió (p.ej. otro dispositivo
+           simuló el partido y nos llega por /api/state poll). */
+        arr[existingIdx].gh = entry.gh;
+        arr[existingIdx].ga_ = entry.ga_;
+      } else {
+        arr.push(entry);
       }
     });
   }
+  /* Expuesto para que el hydrate desde el poll de /api/state pueda
+     sincronizar LIGA_J1_RESULTS sin necesitar recargar la página. */
+  window.restoreJ1FromResults = restoreJ1;
 
   /* ── PATCH registrarResultadoLiga → persistir J1 ── */
   function patchRegistrar() {

@@ -133,6 +133,31 @@ class TestApiState:
         state = _json(rv)["state"]
         assert state["liga_results"].get("test_key") == "hello"
 
+    def test_get_state_returns_updated_at(self, client):
+        rv = client.get("/api/state")
+        data = _json(rv)
+        assert "updated_at" in data
+        assert isinstance(data["updated_at"], str)
+
+    def test_get_state_with_since_returns_304_when_unchanged(self, client):
+        # Write something so we have a non-default updated_at.
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {"x": 1}}}),
+            content_type="application/json",
+        )
+        rv = client.get("/api/state")
+        current_ts = _json(rv)["updated_at"]
+        rv2 = client.get("/api/state", query_string={"since": current_ts})
+        assert rv2.status_code == 304
+
+    def test_get_state_with_stale_since_returns_data(self, client):
+        rv = client.get("/api/state", query_string={"since": "1999-01-01T00:00:00+00:00"})
+        assert rv.status_code == 200
+        data = _json(rv)
+        assert data["ok"] is True
+        assert "state" in data
+
 
 # ---------------------------------------------------------------------------
 # /reiniciar

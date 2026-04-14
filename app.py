@@ -191,9 +191,46 @@ def load_global_state():
 
     return merge_dict(DEFAULT_GLOBAL_STATE, data)
 
-def save_global_state(new_state):
+def save_global_state(new_state, replace=False):
+    """Guarda una actualización del estado global.
+
+    Dos modos:
+
+    * `replace=False` (por defecto) — actualización **PARCIAL**: la
+      fila existente se preserva y solo se sobreescriben las claves
+      presentes en `new_state`. Así un POST con `{liga_results: X}`
+      no borra `liga_schedule`, `copa_state`, etc. Es el comportamiento
+      que espera `/api/state` cuando el frontend manda un patch.
+
+    * `replace=True` — **REEMPLAZO TOTAL**: la fila se reconstruye
+      desde `DEFAULT_GLOBAL_STATE + new_state`. Útil para rutas de
+      reseteo (p.ej. `copa_reiniciar`) que necesitan limpiar claves
+      que hayan quedado pobladas.
+
+    Antes del fix, la única modalidad era `replace=True` y cualquier
+    POST parcial desde el frontend perdía claves fuera de DEFAULT
+    (y también claves que estaban en DEFAULT con valor vacío eran
+    "reset" aunque el cliente no lo pidiera). Eso rompía la
+    sincronización multi-dispositivo de Liga: un POST de
+    `{liga_schedule: Y}` en un navegador pisaba `liga_results` del
+    otro navegador, y al siguiente poll todos veían `0/10`.
+    """
     row = get_or_create_global_state()
-    merged = merge_dict(DEFAULT_GLOBAL_STATE, new_state if isinstance(new_state, dict) else {})
+    incoming = new_state if isinstance(new_state, dict) else {}
+    if replace:
+        merged = merge_dict(DEFAULT_GLOBAL_STATE, incoming)
+    else:
+        try:
+            existing = json.loads(row.valor_json or "{}")
+        except Exception:
+            existing = {}
+        if not isinstance(existing, dict):
+            existing = {}
+        # Asegurar que la base tiene todas las claves DEFAULT (para
+        # filas antiguas incompletas), pero sin pisar valores reales
+        # del row.
+        base = merge_dict(DEFAULT_GLOBAL_STATE, existing)
+        merged = merge_dict(base, incoming)
     row.valor_json = json.dumps(merged, ensure_ascii=False)
     row.updated_at = utc_now_iso()
     db.session.commit()
@@ -594,7 +631,9 @@ def copa_clasificar():
 def copa_reiniciar():
     data = load_global_state()
     data["copa_state"] = {"fase": "r1", "sorteo": {}, "resultados": {}, "clasificados": {}}
-    save_global_state(data)
+    # replace=True para que el copa_state interno se borre por completo
+    # (el merge por defecto es aditivo y no limpia claves anidadas).
+    save_global_state(data, replace=True)
     return jsonify({"ok": True})
 
 # --- SIMULACIÓN ---

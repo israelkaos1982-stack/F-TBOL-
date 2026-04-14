@@ -133,6 +133,54 @@ class TestApiState:
         state = _json(rv)["state"]
         assert state["liga_results"].get("test_key") == "hello"
 
+    def test_partial_post_does_not_wipe_other_keys(self, client):
+        """Un POST parcial (ej. solo `liga_schedule`) NO debe borrar
+        las claves que ya había en la fila (ej. `liga_results`)."""
+        # 1. Primer POST: escribimos liga_results con datos reales.
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {"1|A|B": {"gh": 2, "ga": 1}}}}),
+            content_type="application/json",
+        )
+        rv = client.get("/api/state")
+        assert _json(rv)["state"]["liga_results"].get("1|A|B") == {"gh": 2, "ga": 1}
+
+        # 2. Segundo POST: solo liga_schedule. Antes del fix este POST
+        #    pisaba liga_results con el valor DEFAULT ({}).
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_schedule": [["X", "Y"], ["Z", "W"]]}}),
+            content_type="application/json",
+        )
+        rv = client.get("/api/state")
+        state = _json(rv)["state"]
+        # liga_schedule aplicado
+        assert state.get("liga_schedule") == [["X", "Y"], ["Z", "W"]]
+        # liga_results PRESERVADO (antes se perdía)
+        assert state["liga_results"].get("1|A|B") == {"gh": 2, "ga": 1}
+
+    def test_partial_post_does_not_wipe_same_root_key(self, client):
+        """POST de `{liga_results: {new_key: X}}` debe HACER MERGE
+        con las entradas previas de liga_results, no reemplazarlas.
+
+        Nota: `merge_dict` hace merge recursivo cuando ambos valores
+        son dicts, así que este test verifica ese comportamiento."""
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {"1|A|B": {"gh": 1, "ga": 0}}}}),
+            content_type="application/json",
+        )
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {"1|C|D": {"gh": 3, "ga": 2}}}}),
+            content_type="application/json",
+        )
+        rv = client.get("/api/state")
+        liga_results = _json(rv)["state"]["liga_results"]
+        # Ambas entradas presentes tras los dos POSTs
+        assert liga_results.get("1|A|B") == {"gh": 1, "ga": 0}
+        assert liga_results.get("1|C|D") == {"gh": 3, "ga": 2}
+
     def test_get_state_returns_updated_at(self, client):
         rv = client.get("/api/state")
         data = _json(rv)

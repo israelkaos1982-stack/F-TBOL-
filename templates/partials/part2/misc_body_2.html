@@ -4102,7 +4102,15 @@
   };
   function _mlFinishMatchGen(mk, winner) {
     var st=_mlSt(mk);
-    st.finished=true; clearInterval(st.timerInterval); st.timerRunning=false;
+    st.finished=true;
+    /* Arrancar el grace period de propagación: durante los próximos
+       FINISHED_PROPAGATE_MS el snapshot seguirá incluyendo la entrada
+       con finished=true para que otros dispositivos la vean y hagan
+       cleanup local. Sin esto, la finalización "se pierde" porque
+       el snapshot excluye inmediatamente la entrada y el otro
+       dispositivo nunca se entera → loop infinito. */
+    st._finishPropagatedAt = Date.now();
+    clearInterval(st.timerInterval); st.timerRunning=false;
     _mlRenderTimerGen(mk);
     _mlSetLiveState(mk, 'finished');
     /* Match finalizado → sale de la lista de partidos persistidos */
@@ -5332,16 +5340,28 @@
       return;
     }
     _gm.finished = true;
+    /* Arrancar el grace period de propagación: el snapshot seguirá
+       incluyendo este partido con finished=true durante
+       FINISHED_PROPAGATE_MS para que los otros dispositivos lo vean
+       y limpien sus _gmBg locales. Sin esto, nullear __GM_LIVE aquí
+       haría que el snapshot pierda la señal de finished y el otro
+       dispositivo resucitara el partido en el siguiente flush. */
+    _gm._finishPropagatedAt = Date.now();
     clearInterval(_gm.timerInterval);
     _gm.timerRunning = false;
-    /* Partido finalizado: ya no es live */
-    if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
-    if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
-    /* Persistir inmediatamente el estado finished para que la recarga
-       lo excluya del hub y no lo resucite. */
+    /* Persistir INMEDIATAMENTE con finished=true (antes de nullear
+       __GM_LIVE) para que el servidor reciba la señal. La rama
+       `_isPersistable` incluye entradas finished dentro del grace
+       period, así que el snapshot sí contendrá este partido. */
     if (window._liveStore && typeof window._liveStore.flush === 'function') {
       try { window._liveStore.flush(); } catch(_){}
     }
+    /* Ahora sí podemos nullear __GM_LIVE: el flush ya propagó el
+       finished y los próximos snapshots se basarán en _gmBg si queda
+       alguna entrada residual, o simplemente no incluirán este
+       partido si el grace period ya expiró. */
+    if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
+    if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
     gmRenderTimer();
     var endBtn = document.getElementById('gm-btn-end');
     if (endBtn) { endBtn.disabled = true; endBtn.style.opacity = '0.35'; }
@@ -9075,8 +9095,24 @@ window.goLiveMatches = function() {
   var _rehydrated = false;
   var _lastServerUpdatedAt = '';   /* ETag de servidor — para el `since` */
   var _syncing = false;            /* evita reentrancia en poll */
+  var _hasPendingChanges = false;  /* true mientras haya cambios locales
+                                      pendientes de confirmar en servidor.
+                                      Protege contra la race "crear local
+                                      → poll antes del POST → delete
+                                      semantics borra lo recién creado". */
 
   /* ─────────── SERIALIZATION ─────────── */
+
+  /* Grace period para propagar finalizaciones: cuando un partido se
+     finaliza, lo seguimos incluyendo en el snapshot durante este
+     intervalo (con finished:true) para que los demás dispositivos
+     reciban la señal de "este partido ya terminó, hazle cleanup".
+     Sin este grace period, la finalización se "pierde" porque el
+     snapshot de A excluye el partido el mismo instante en que lo
+     finaliza, así que B nunca ve el finished=true y sigue postenado
+     el partido como live → loop infinito. */
+  var FINISHED_PROPAGATE_MS = 60 * 1000;  /* 60s es suficiente para
+     que todos los dispositivos hagan al menos 2 polls y converjan. */
 
   function _serializeSt(st) {
     if (!st) return null;
@@ -9091,6 +9127,7 @@ window.goLiveMatches = function() {
       etDone: !!st.etDone,
       et1Done: !!st.et1Done,
       finished: !!st.finished,
+      _finishPropagatedAt: st._finishPropagatedAt || null,
       timerSec: st.timerSec || 0,
       isHvH: !!st.isHvH,
       isIAvsIA: !!st.isIAvsIA,
@@ -9112,11 +9149,19 @@ window.goLiveMatches = function() {
     };
   }
 
-  /* Considera que un estado está "live persistible" cuando ha arrancado
-     (kickoffDone) pero no ha terminado (!finished). Ignoramos los
-     prepartido puros. */
+  /* Considera que un estado está "live persistible" cuando ha
+     arrancado (kickoffDone). Los partidos finalizados TAMBIÉN se
+     incluyen durante el grace period (FINISHED_PROPAGATE_MS) para
+     que la finalización se propague a todos los dispositivos — una
+     vez que todos se enteraron, se dejan de incluir y caen del
+     server por la delete-semantics normal. */
   function _isPersistable(st) {
-    return st && st.kickoffDone && !st.finished && st.home && st.away;
+    if (!st || !st.home || !st.away || !st.kickoffDone) return false;
+    if (!st.finished) return true;
+    /* Finalizado → propagamos durante FINISHED_PROPAGATE_MS para
+       que los otros dispositivos lo vean y hagan cleanup. */
+    if (!st._finishPropagatedAt) st._finishPropagatedAt = Date.now();
+    return (Date.now() - st._finishPropagatedAt) < FINISHED_PROPAGATE_MS;
   }
 
   function _snapshot() {
@@ -9159,36 +9204,49 @@ window.goLiveMatches = function() {
     } catch(_){}
   }
 
-  /* POST al servidor compartido. Fire-and-forget: si hay red, bien;
-     si no, quedamos con lo que ya escribimos en localStorage y el
-     siguiente ciclo intentará de nuevo. La respuesta trae el
-     updated_at del servidor para sincronizar el `since` del GET. */
+  /* POST al servidor compartido. Devuelve una Promise para que el
+     poll pueda esperar a que el POST esté confirmado antes de hacer
+     el GET (elimina la race condition que borraba partidos recién
+     creados cuando el GET llegaba antes que el POST). */
   function _postToServer(data) {
-    if (typeof fetch !== 'function') return;
+    if (typeof fetch !== 'function') return Promise.resolve();
     try {
-      fetch(API_URL, {
+      return fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state: data }),
         keepalive: true /* permite enviar durante unload */
       }).then(function(r){
         if (r && r.ok) return r.json();
+        return null;
       }).then(function(resp){
         if (resp && resp.updated_at) _lastServerUpdatedAt = resp.updated_at;
+        /* Nuestro estado local ya ha sido persistido en el servidor,
+           así que las próximas aplicaciones pueden borrar entradas
+           "stale" del local sin miedo a perder cosas recién creadas
+           que aún no habían llegado al servidor. */
+        _hasPendingChanges = false;
       }).catch(function(){});
-    } catch(_){}
+    } catch(_) {
+      return Promise.resolve();
+    }
   }
 
   function _write() {
     var data = _snapshot();
     data._savedAt = Date.now();
     _writeLocal(data);
-    _postToServer(data);
+    return _postToServer(data);
   }
 
   /* Debounced save — evita escribir 100 veces por segundo cuando
-     _mlStartIntervalGen tick a tick modifica `timerSec`. */
+     _mlStartIntervalGen tick a tick modifica `timerSec`. Marcamos
+     `_hasPendingChanges=true` inmediatamente para que un poll que
+     entre antes de que el POST se complete no aplique la semántica
+     de borrado (que borraría cosas recién creadas que aún no han
+     llegado al servidor). */
   function save() {
+    _hasPendingChanges = true;
     if (_pendingSave) return;
     _pendingSave = setTimeout(function(){
       _pendingSave = null;
@@ -9197,8 +9255,9 @@ window.goLiveMatches = function() {
   }
 
   function flush() {
+    _hasPendingChanges = true;
     if (_pendingSave) { clearTimeout(_pendingSave); _pendingSave = null; }
-    _write();
+    return _write();
   }
 
   /* GET del servidor con short-circuit 304 cuando no hay nada nuevo
@@ -9338,38 +9397,146 @@ window.goLiveMatches = function() {
     } catch(_){}
   }
 
+  /* Marca una entrada local de `_mlStates` como finalizada y oculta
+     su tarjeta DOM. Se usa cuando el servidor confirma que la entrada
+     ya no está live en ningún otro dispositivo (p.ej. otro dispositivo
+     la finalizó) y hay que limpiarla localmente para no pingponear.
+     `propagatedAt` es el timestamp del `_finishPropagatedAt` que vino
+     del servidor (si existe) — lo copiamos al estado local para que
+     todos los dispositivos convergan en el mismo grace period. */
+  function _cleanupStaleMlEntry(mk, propagatedAt) {
+    try {
+      var states = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : null;
+      if (states && states[mk]) {
+        /* Detener cualquier interval que esté corriendo */
+        try { if (states[mk].timerInterval) clearInterval(states[mk].timerInterval); } catch(_){}
+        states[mk].finished = true;
+        states[mk].timerRunning = false;
+        /* Copiar el timestamp de propagación del servidor (o marcarlo
+           ahora si no vino) — así nuestro próximo snapshot también lo
+           incluye con la finalizada hasta que expire el grace period. */
+        if (propagatedAt) {
+          states[mk]._finishPropagatedAt = propagatedAt;
+        } else if (!states[mk]._finishPropagatedAt) {
+          states[mk]._finishPropagatedAt = Date.now();
+        }
+      }
+    } catch(_){}
+    /* Quitar la card del DOM SOLO si es un amistoso (vive en
+       #ams-match-container y no se regenera automáticamente). Las
+       cards de Liga las rebuilda populateCalendar, así que no las
+       tocamos aquí para evitar flicker. */
+    try {
+      if (mk && mk.indexOf('ams-') === 0) {
+        var wrap = document.getElementById('mlw-' + mk);
+        if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      }
+    } catch(_){}
+  }
+
   /* Aplica un estado (venga del localStorage o del servidor) al
      runtime: recrea tarjetas de amistosos, restaura _mlStates, vuelca
      _gmBg y refresca el hub. Se llama tanto en rehidratación inicial
-     como en cada poll que trae cambios de otro dispositivo. */
-  function _applyStateToRuntime(data) {
+     como en cada poll que trae cambios de otro dispositivo.
+
+     `allowDelete=true` aplica **semántica de reemplazo total**: las
+     entradas locales que ya no estén en el estado del servidor se
+     borran (amistosos finalizados en otro dispositivo). Solo se pasa
+     `true` cuando sabemos que nuestros cambios locales ya están
+     confirmados en el servidor (`_hasPendingChanges===false`).
+     Sin esta protección, un poll que llega justo después de crear
+     un partido pero antes de que termine el POST lo borraría. */
+  function _applyStateToRuntime(data, allowDelete) {
     if (!data) return;
 
-    /* Rehidratar .match-live-wrap (amistosos + Liga calendar) */
+    /* ── DELETE SEMANTICS PARA _mlStates ──────────────────────
+       Recorre los _mlStates locales y borra los que ya no están en
+       data.ml (otro dispositivo los finalizó). Solo si allowDelete. */
+    if (allowDelete) {
+      try {
+        var states = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : null;
+        if (states) {
+          var serverMl = data.ml || {};
+          Object.keys(states).forEach(function(mk){
+            var st = states[mk];
+            /* Solo nos interesan las entradas que estaban "persistibles"
+               (kickoffDone && !finished) — las que aparecerían en el hub
+               y que el servidor debería conocer. Si no están en el
+               servidor, asumimos que otro dispositivo las finalizó. */
+            if (st && st.kickoffDone && !st.finished && st.home && st.away
+                && !serverMl[mk]) {
+              _cleanupStaleMlEntry(mk);
+            }
+          });
+        }
+      } catch(_){}
+    }
+
+    /* Procesar entradas de data.ml: las que llegan con finished=true
+       son señales de finalización de otro dispositivo — limpiamos
+       localmente en vez de rehidratarlas como live. Las que llegan
+       con finished=false se rehidratan normal. */
     if (data.ml) {
       Object.keys(data.ml).forEach(function(mk){
-        try { _rehydrateMlEntry(mk, data.ml[mk]); } catch(_){}
+        var saved = data.ml[mk];
+        if (!saved) return;
+        if (saved.finished) {
+          /* Finalización propagada por otro dispositivo → cleanup
+             local (marcar finished + remover card DOM para amistosos)
+             y copiar el `_finishPropagatedAt` del servidor para que
+             nuestro propio snapshot siga propagando el mensaje hasta
+             que expire el grace period. */
+          try { _cleanupStaleMlEntry(mk, saved._finishPropagatedAt); } catch(_){}
+          return;
+        }
+        /* Live match activo del servidor → rehidratar como antes. */
+        try { _rehydrateMlEntry(mk, saved); } catch(_){}
       });
     }
 
-    /* Rehidratar _gmBg (partidos gm-modal backgrounded). El gm-modal
-       es un singleton con closure privado, así que no podemos restaurar
-       `_gm` directamente; los volcamos en `window._gmBg` para que el
-       hub 🔴 PARTIDOS LIVE los muestre como tarjetas "Pausados" y el
-       click dispare `gmOpenFromLive(key)` — esa función ya sabe
-       restaurar el estado completo al `_gm` del closure. */
+    /* ── DELETE SEMANTICS PARA _gmBg ──────────────────────────
+       Las cards del gm-modal que otros dispositivos finalizaron
+       también deben desaparecer de nuestro _gmBg para no empujarlas
+       de vuelta en el próximo flush. */
     window._gmBg = window._gmBg || {};
+    if (allowDelete) {
+      try {
+        var serverBg = (data && data.gmBg) || {};
+        Object.keys(window._gmBg).forEach(function(k){
+          if (!serverBg[k]) {
+            try { delete window._gmBg[k]; } catch(_){}
+          }
+        });
+      } catch(_){}
+    }
     if (data.gmBg) {
       Object.keys(data.gmBg).forEach(function(k){
+        var bgSnap = data.gmBg[k];
+        if (bgSnap && bgSnap.finished) {
+          /* gm-modal finalizado en otro dispositivo → borrar local. */
+          try { delete window._gmBg[k]; } catch(_){}
+          /* Si coincide con el __GM_LIVE activo, también marcarlo finished. */
+          try {
+            if (window.__GM_LIVE
+                && (window.__GM_LIVE.j === bgSnap.j)
+                && (window.__GM_LIVE.home === bgSnap.home)
+                && (window.__GM_LIVE.away === bgSnap.away)) {
+              window.__GM_LIVE.finished = true;
+              try { if (window.__GM_LIVE.timerInterval) clearInterval(window.__GM_LIVE.timerInterval); } catch(_){}
+              window.__GM_LIVE = null;
+            }
+          } catch(_){}
+          return;
+        }
         /* Overwrite permitido: el servidor es la fuente de verdad y
            puede haber cambios que vengan de otro dispositivo. */
-        window._gmBg[k] = data.gmBg[k];
+        window._gmBg[k] = bgSnap;
       });
     }
     /* El partido que estaba en __GM_LIVE al recargar tampoco se puede
        reinyectar en `_gm`; va al `_gmBg` con su key j|home|away, así
        que aparece en el hub y el usuario lo reabre con un tap. */
-    if (data.gmLive) {
+    if (data.gmLive && !data.gmLive.finished) {
       var gl = data.gmLive;
       var k = (gl.j || 0) + '|' + (gl.home || '') + '|' + (gl.away || '');
       window._gmBg[k] = gl;
@@ -9404,19 +9571,36 @@ window.goLiveMatches = function() {
 
   /* Poll periódico para recibir cambios de otros dispositivos.
      Llamado por setInterval cada POLL_INTERVAL_MS. Usa `since` para
-     evitar ancho de banda cuando el servidor no tiene novedades. */
+     evitar ancho de banda cuando el servidor no tiene novedades.
+
+     Orden de operaciones: GET → apply (con delete-semantics si no
+     tenemos cambios pendientes) → flush. Aplicar PRIMERO y flushear
+     DESPUÉS garantiza que:
+     1. Los cambios que vengan del servidor se integran en el estado
+        local antes de que nosotros escribamos nuestro snapshot.
+     2. Si el servidor ha borrado algo (otro dispositivo lo finalizó),
+        nuestro próximo POST incluirá ya el estado SIN esa entrada,
+        rompiendo el ping-pong que resucitaba los partidos finalizados. */
   function pollOnce() {
     if (_syncing) return;
     _syncing = true;
-    /* Antes de leer, flusheamos cualquier save pendiente para que
-       nuestros cambios lleguen al servidor primero y el próximo poll
-       no nos "pise" con una versión desactualizada. */
-    try { flush(); } catch(_){}
     _fetchFromServer(function(serverState){
+      try {
+        if (serverState) {
+          /* Solo permitimos delete semantics si no tenemos cambios
+             locales sin confirmar. Si los tenemos, aplicar sin borrar
+             para no perder partidos recién creados en este dispositivo. */
+          var canDelete = !_hasPendingChanges;
+          _applyStateToRuntime(serverState, canDelete);
+          _writeLocal(serverState);
+        }
+      } catch(_){}
+      /* Después de aplicar, flusheamos nuestro estado actual (que
+         incluye lo que acabamos de recibir + cualquier cambio local
+         pendiente). Si todo está sincronizado, el server devuelve
+         304 en el próximo poll. */
+      try { flush(); } catch(_){}
       _syncing = false;
-      if (!serverState) return;
-      try { _applyStateToRuntime(serverState); } catch(_){}
-      try { _writeLocal(serverState); } catch(_){}
     });
   }
 

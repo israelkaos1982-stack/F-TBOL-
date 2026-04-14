@@ -9268,8 +9268,19 @@ window.goLiveMatches = function() {
       if (scB) scB.textContent = String(saved.sc && saved.sc.b || 0);
     } catch(_){}
 
-    /* 4) Ocultar previa, mostrar timer/acciones, revelar venue bar */
+    /* 4) Ocultar previa, mostrar timer/acciones, revelar venue bar
+
+       PASO CLAVE: marcar `data-prepartido-ready='1'` en el wrap ANTES
+       de llamar a `_mlEnsureLegacyPreMatchStructure`. Sin esta marca,
+       esa función lee `wrap.getAttribute('data-prepartido-ready')` →
+       null → decide "previa no hecha" → re-muestra el botón
+       CONFIGURACIÓN y oculta el timer/action row, anulando los
+       style.display que ponemos aquí. Con la marca, llama a
+       `_setPreMatchStage(mk, true)` que desbloquea la UI. */
     try {
+      if (saved.kickoffDone && !saved.finished) {
+        wrap.setAttribute('data-prepartido-ready', '1');
+      }
       var previaBtn = document.getElementById('ml-previa-' + mk);
       if (previaBtn) previaBtn.style.display = 'none';
       var timerBtn = document.getElementById('ml-timer-' + mk);
@@ -9281,9 +9292,21 @@ window.goLiveMatches = function() {
       if (actionRow && !saved.finished) actionRow.style.display = 'flex';
       var actionsBar = document.getElementById('ml-actions-bar-' + mk);
       if (actionsBar) actionsBar.style.visibility = 'visible';
+      /* _mlEnsureLegacyPreMatchStructure ahora verá data-prepartido-ready='1'
+         y hará el unlock (previa oculta, timer/acciones visibles). */
       if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {
         window._mlEnsureLegacyPreMatchStructure(mk);
       }
+      /* Rellenar la venue bar con el estadio del equipo local (solo
+         necesita saber `st.home` que ya restauramos). Y el nombre
+         del equipo es determinista vía `getTeamStadium`. */
+      try {
+        if (typeof window.getTeamStadium === 'function') {
+          var vbarNm = wrap.querySelector('.ml-venue-bar .ml-venue-name');
+          var stad = window.getTeamStadium(saved.home);
+          if (vbarNm && stad) vbarNm.textContent = stad;
+        }
+      } catch(_){}
     } catch(_){}
 
     /* 5) Reconstruir la lista de eventos en el acta */

@@ -933,10 +933,22 @@ def simular_y_guardar(jornada, local, visitante):
 # --- API ESTADO COMPARTIDO ---
 @app.route("/api/state", methods=["GET"])
 def api_get_state():
+    """Devuelve el estado compartido (Liga, Segunda, Primera, Copa, etc.).
+
+    Soporta `?since=<iso>` para 304 Not Modified si el cliente ya tiene
+    la versión más reciente, igual que /api/live/state. Esto permite
+    al frontend hacer polling barato cada pocos segundos para que los
+    resultados de Liga simulados en un dispositivo (ej. PC) se vean
+    en otros (ej. móvil) sin tener que recargar la página."""
+    row = get_or_create_global_state()
     data = load_global_state()
+    since = request.args.get("since", "")
+    if since and since == (row.updated_at or ""):
+        return ("", 304)
     return jsonify({
         "ok": True,
-        "state": data
+        "state": data,
+        "updated_at": row.updated_at or "",
     })
 
 @app.route("/api/state", methods=["POST"])
@@ -948,9 +960,11 @@ def api_save_state():
         return jsonify({"ok": False, "error": "Estado no válido"}), 400
 
     saved = save_global_state(incoming_state)
+    row = get_or_create_global_state()
     return jsonify({
         "ok": True,
-        "state": saved
+        "state": saved,
+        "updated_at": row.updated_at or "",
     })
 
 

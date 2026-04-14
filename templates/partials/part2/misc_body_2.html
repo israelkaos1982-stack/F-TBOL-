@@ -9075,6 +9075,11 @@ window.goLiveMatches = function() {
   var _rehydrated = false;
   var _lastServerUpdatedAt = '';   /* ETag de servidor — para el `since` */
   var _syncing = false;            /* evita reentrancia en poll */
+  var _hasPendingChanges = false;  /* true mientras haya cambios locales
+                                      pendientes de confirmar en servidor.
+                                      Protege contra la race "crear local
+                                      → poll antes del POST → delete
+                                      semantics borra lo recién creado". */
 
   /* ─────────── SERIALIZATION ─────────── */
 
@@ -9159,36 +9164,49 @@ window.goLiveMatches = function() {
     } catch(_){}
   }
 
-  /* POST al servidor compartido. Fire-and-forget: si hay red, bien;
-     si no, quedamos con lo que ya escribimos en localStorage y el
-     siguiente ciclo intentará de nuevo. La respuesta trae el
-     updated_at del servidor para sincronizar el `since` del GET. */
+  /* POST al servidor compartido. Devuelve una Promise para que el
+     poll pueda esperar a que el POST esté confirmado antes de hacer
+     el GET (elimina la race condition que borraba partidos recién
+     creados cuando el GET llegaba antes que el POST). */
   function _postToServer(data) {
-    if (typeof fetch !== 'function') return;
+    if (typeof fetch !== 'function') return Promise.resolve();
     try {
-      fetch(API_URL, {
+      return fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ state: data }),
         keepalive: true /* permite enviar durante unload */
       }).then(function(r){
         if (r && r.ok) return r.json();
+        return null;
       }).then(function(resp){
         if (resp && resp.updated_at) _lastServerUpdatedAt = resp.updated_at;
+        /* Nuestro estado local ya ha sido persistido en el servidor,
+           así que las próximas aplicaciones pueden borrar entradas
+           "stale" del local sin miedo a perder cosas recién creadas
+           que aún no habían llegado al servidor. */
+        _hasPendingChanges = false;
       }).catch(function(){});
-    } catch(_){}
+    } catch(_) {
+      return Promise.resolve();
+    }
   }
 
   function _write() {
     var data = _snapshot();
     data._savedAt = Date.now();
     _writeLocal(data);
-    _postToServer(data);
+    return _postToServer(data);
   }
 
   /* Debounced save — evita escribir 100 veces por segundo cuando
-     _mlStartIntervalGen tick a tick modifica `timerSec`. */
+     _mlStartIntervalGen tick a tick modifica `timerSec`. Marcamos
+     `_hasPendingChanges=true` inmediatamente para que un poll que
+     entre antes de que el POST se complete no aplique la semántica
+     de borrado (que borraría cosas recién creadas que aún no han
+     llegado al servidor). */
   function save() {
+    _hasPendingChanges = true;
     if (_pendingSave) return;
     _pendingSave = setTimeout(function(){
       _pendingSave = null;
@@ -9197,8 +9215,9 @@ window.goLiveMatches = function() {
   }
 
   function flush() {
+    _hasPendingChanges = true;
     if (_pendingSave) { clearTimeout(_pendingSave); _pendingSave = null; }
-    _write();
+    return _write();
   }
 
   /* GET del servidor con short-circuit 304 cuando no hay nada nuevo
@@ -9315,12 +9334,69 @@ window.goLiveMatches = function() {
     } catch(_){}
   }
 
+  /* Marca una entrada local de `_mlStates` como finalizada y oculta
+     su tarjeta DOM. Se usa cuando el servidor confirma que la entrada
+     ya no está live en ningún otro dispositivo (p.ej. otro dispositivo
+     la finalizó) y hay que limpiarla localmente para no pingponear. */
+  function _cleanupStaleMlEntry(mk) {
+    try {
+      var states = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : null;
+      if (states && states[mk]) {
+        /* Detener cualquier interval que esté corriendo */
+        try { if (states[mk].timerInterval) clearInterval(states[mk].timerInterval); } catch(_){}
+        states[mk].finished = true;
+        states[mk].timerRunning = false;
+      }
+    } catch(_){}
+    /* Quitar la card del DOM SOLO si es un amistoso (vive en
+       #ams-match-container y no se regenera automáticamente). Las
+       cards de Liga las rebuilda populateCalendar, así que no las
+       tocamos aquí para evitar flicker. */
+    try {
+      if (mk && mk.indexOf('ams-') === 0) {
+        var wrap = document.getElementById('mlw-' + mk);
+        if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      }
+    } catch(_){}
+  }
+
   /* Aplica un estado (venga del localStorage o del servidor) al
      runtime: recrea tarjetas de amistosos, restaura _mlStates, vuelca
      _gmBg y refresca el hub. Se llama tanto en rehidratación inicial
-     como en cada poll que trae cambios de otro dispositivo. */
-  function _applyStateToRuntime(data) {
+     como en cada poll que trae cambios de otro dispositivo.
+
+     `allowDelete=true` aplica **semántica de reemplazo total**: las
+     entradas locales que ya no estén en el estado del servidor se
+     borran (amistosos finalizados en otro dispositivo). Solo se pasa
+     `true` cuando sabemos que nuestros cambios locales ya están
+     confirmados en el servidor (`_hasPendingChanges===false`).
+     Sin esta protección, un poll que llega justo después de crear
+     un partido pero antes de que termine el POST lo borraría. */
+  function _applyStateToRuntime(data, allowDelete) {
     if (!data) return;
+
+    /* ── DELETE SEMANTICS PARA _mlStates ──────────────────────
+       Recorre los _mlStates locales y borra los que ya no están en
+       data.ml (otro dispositivo los finalizó). Solo si allowDelete. */
+    if (allowDelete) {
+      try {
+        var states = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : null;
+        if (states) {
+          var serverMl = data.ml || {};
+          Object.keys(states).forEach(function(mk){
+            var st = states[mk];
+            /* Solo nos interesan las entradas que estaban "persistibles"
+               (kickoffDone && !finished) — las que aparecerían en el hub
+               y que el servidor debería conocer. Si no están en el
+               servidor, asumimos que otro dispositivo las finalizó. */
+            if (st && st.kickoffDone && !st.finished && st.home && st.away
+                && !serverMl[mk]) {
+              _cleanupStaleMlEntry(mk);
+            }
+          });
+        }
+      } catch(_){}
+    }
 
     /* Rehidratar .match-live-wrap (amistosos + Liga calendar) */
     if (data.ml) {
@@ -9329,13 +9405,21 @@ window.goLiveMatches = function() {
       });
     }
 
-    /* Rehidratar _gmBg (partidos gm-modal backgrounded). El gm-modal
-       es un singleton con closure privado, así que no podemos restaurar
-       `_gm` directamente; los volcamos en `window._gmBg` para que el
-       hub 🔴 PARTIDOS LIVE los muestre como tarjetas "Pausados" y el
-       click dispare `gmOpenFromLive(key)` — esa función ya sabe
-       restaurar el estado completo al `_gm` del closure. */
+    /* ── DELETE SEMANTICS PARA _gmBg ──────────────────────────
+       Las cards del gm-modal que otros dispositivos finalizaron
+       también deben desaparecer de nuestro _gmBg para no empujarlas
+       de vuelta en el próximo flush. */
     window._gmBg = window._gmBg || {};
+    if (allowDelete) {
+      try {
+        var serverBg = (data && data.gmBg) || {};
+        Object.keys(window._gmBg).forEach(function(k){
+          if (!serverBg[k]) {
+            try { delete window._gmBg[k]; } catch(_){}
+          }
+        });
+      } catch(_){}
+    }
     if (data.gmBg) {
       Object.keys(data.gmBg).forEach(function(k){
         /* Overwrite permitido: el servidor es la fuente de verdad y
@@ -9381,19 +9465,36 @@ window.goLiveMatches = function() {
 
   /* Poll periódico para recibir cambios de otros dispositivos.
      Llamado por setInterval cada POLL_INTERVAL_MS. Usa `since` para
-     evitar ancho de banda cuando el servidor no tiene novedades. */
+     evitar ancho de banda cuando el servidor no tiene novedades.
+
+     Orden de operaciones: GET → apply (con delete-semantics si no
+     tenemos cambios pendientes) → flush. Aplicar PRIMERO y flushear
+     DESPUÉS garantiza que:
+     1. Los cambios que vengan del servidor se integran en el estado
+        local antes de que nosotros escribamos nuestro snapshot.
+     2. Si el servidor ha borrado algo (otro dispositivo lo finalizó),
+        nuestro próximo POST incluirá ya el estado SIN esa entrada,
+        rompiendo el ping-pong que resucitaba los partidos finalizados. */
   function pollOnce() {
     if (_syncing) return;
     _syncing = true;
-    /* Antes de leer, flusheamos cualquier save pendiente para que
-       nuestros cambios lleguen al servidor primero y el próximo poll
-       no nos "pise" con una versión desactualizada. */
-    try { flush(); } catch(_){}
     _fetchFromServer(function(serverState){
+      try {
+        if (serverState) {
+          /* Solo permitimos delete semantics si no tenemos cambios
+             locales sin confirmar. Si los tenemos, aplicar sin borrar
+             para no perder partidos recién creados en este dispositivo. */
+          var canDelete = !_hasPendingChanges;
+          _applyStateToRuntime(serverState, canDelete);
+          _writeLocal(serverState);
+        }
+      } catch(_){}
+      /* Después de aplicar, flusheamos nuestro estado actual (que
+         incluye lo que acabamos de recibir + cualquier cambio local
+         pendiente). Si todo está sincronizado, el server devuelve
+         304 en el próximo poll. */
+      try { flush(); } catch(_){}
       _syncing = false;
-      if (!serverState) return;
-      try { _applyStateToRuntime(serverState); } catch(_){}
-      try { _writeLocal(serverState); } catch(_){}
     });
   }
 

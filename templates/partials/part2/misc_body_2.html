@@ -8995,9 +8995,13 @@ window.goLiveMatches = function() {
 <script>
 (function(){
   var LS_KEY = 'F_TBOL_LIVE_STATE_V1';
+  var API_URL = '/api/live/state';
   var SAVE_DEBOUNCE_MS = 800;
+  var POLL_INTERVAL_MS = 5000;
   var _pendingSave = null;
   var _rehydrated = false;
+  var _lastServerUpdatedAt = '';   /* ETag de servidor — para el `since` */
+  var _syncing = false;            /* evita reentrancia en poll */
 
   /* ─────────── SERIALIZATION ─────────── */
 
@@ -9071,17 +9075,42 @@ window.goLiveMatches = function() {
     return out;
   }
 
-  function _write() {
+  function _writeLocal(data) {
     try {
-      var data = _snapshot();
-      var hasAny = Object.keys(data.ml).length || data.gmLive || Object.keys(data.gmBg).length;
+      var hasAny = Object.keys(data.ml || {}).length || data.gmLive || Object.keys(data.gmBg || {}).length;
       if (!hasAny) {
         localStorage.removeItem(LS_KEY);
         return;
       }
-      data._savedAt = Date.now();
       localStorage.setItem(LS_KEY, JSON.stringify(data));
     } catch(_){}
+  }
+
+  /* POST al servidor compartido. Fire-and-forget: si hay red, bien;
+     si no, quedamos con lo que ya escribimos en localStorage y el
+     siguiente ciclo intentará de nuevo. La respuesta trae el
+     updated_at del servidor para sincronizar el `since` del GET. */
+  function _postToServer(data) {
+    if (typeof fetch !== 'function') return;
+    try {
+      fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: data }),
+        keepalive: true /* permite enviar durante unload */
+      }).then(function(r){
+        if (r && r.ok) return r.json();
+      }).then(function(resp){
+        if (resp && resp.updated_at) _lastServerUpdatedAt = resp.updated_at;
+      }).catch(function(){});
+    } catch(_){}
+  }
+
+  function _write() {
+    var data = _snapshot();
+    data._savedAt = Date.now();
+    _writeLocal(data);
+    _postToServer(data);
   }
 
   /* Debounced save — evita escribir 100 veces por segundo cuando
@@ -9097,6 +9126,26 @@ window.goLiveMatches = function() {
   function flush() {
     if (_pendingSave) { clearTimeout(_pendingSave); _pendingSave = null; }
     _write();
+  }
+
+  /* GET del servidor con short-circuit 304 cuando no hay nada nuevo
+     desde el último `since`. Devuelve el state via callback o null. */
+  function _fetchFromServer(cb) {
+    if (typeof fetch !== 'function') { cb(null); return; }
+    var url = API_URL;
+    if (_lastServerUpdatedAt) url += '?since=' + encodeURIComponent(_lastServerUpdatedAt);
+    try {
+      fetch(url, { headers: { 'Accept': 'application/json' }, cache: 'no-store' }).then(function(r){
+        if (!r) return null;
+        if (r.status === 304) return null;
+        if (!r.ok) return null;
+        return r.json();
+      }).then(function(resp){
+        if (!resp) { cb(null); return; }
+        if (resp.updated_at) _lastServerUpdatedAt = resp.updated_at;
+        cb(resp.state || null);
+      }).catch(function(){ cb(null); });
+    } catch(_) { cb(null); }
   }
 
   /* ─────────── REHYDRATION ─────────── */
@@ -9193,10 +9242,12 @@ window.goLiveMatches = function() {
     } catch(_){}
   }
 
-  function rehydrate() {
-    if (_rehydrated) return;
-    var data = _read();
-    if (!data) { _rehydrated = true; return; }
+  /* Aplica un estado (venga del localStorage o del servidor) al
+     runtime: recrea tarjetas de amistosos, restaura _mlStates, vuelca
+     _gmBg y refresca el hub. Se llama tanto en rehidratación inicial
+     como en cada poll que trae cambios de otro dispositivo. */
+  function _applyStateToRuntime(data) {
+    if (!data) return;
 
     /* Rehidratar .match-live-wrap (amistosos + Liga calendar) */
     if (data.ml) {
@@ -9214,7 +9265,9 @@ window.goLiveMatches = function() {
     window._gmBg = window._gmBg || {};
     if (data.gmBg) {
       Object.keys(data.gmBg).forEach(function(k){
-        if (!window._gmBg[k]) window._gmBg[k] = data.gmBg[k];
+        /* Overwrite permitido: el servidor es la fuente de verdad y
+           puede haber cambios que vengan de otro dispositivo. */
+        window._gmBg[k] = data.gmBg[k];
       });
     }
     /* El partido que estaba en __GM_LIVE al recargar tampoco se puede
@@ -9223,13 +9276,52 @@ window.goLiveMatches = function() {
     if (data.gmLive) {
       var gl = data.gmLive;
       var k = (gl.j || 0) + '|' + (gl.home || '') + '|' + (gl.away || '');
-      if (!window._gmBg[k]) window._gmBg[k] = gl;
+      window._gmBg[k] = gl;
     }
 
     /* Refrescar indicadores */
     try { if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub(); } catch(_){}
+  }
 
-    _rehydrated = true;
+  function rehydrate() {
+    if (_rehydrated) return;
+    /* Primera pasada: localStorage (instantáneo, mejor UX en cold start) */
+    var local = _read();
+    if (local) {
+      try { _applyStateToRuntime(local); } catch(_){}
+    }
+    /* Segunda pasada: servidor (fuente de verdad compartida). Si
+       devuelve algo nuevo, sobrescribe el estado local. Silencioso en
+       caso de error de red — el usuario puede seguir con lo que había
+       en localStorage. */
+    _fetchFromServer(function(serverState){
+      if (serverState) {
+        try { _applyStateToRuntime(serverState); } catch(_){}
+        try { _writeLocal(serverState); } catch(_){}
+      }
+      _rehydrated = true;
+    });
+    /* Si fetch no está disponible (navegador arcaico) marcamos como
+       rehidratado de inmediato para no quedarnos en loop. */
+    if (typeof fetch !== 'function') _rehydrated = true;
+  }
+
+  /* Poll periódico para recibir cambios de otros dispositivos.
+     Llamado por setInterval cada POLL_INTERVAL_MS. Usa `since` para
+     evitar ancho de banda cuando el servidor no tiene novedades. */
+  function pollOnce() {
+    if (_syncing) return;
+    _syncing = true;
+    /* Antes de leer, flusheamos cualquier save pendiente para que
+       nuestros cambios lleguen al servidor primero y el próximo poll
+       no nos "pise" con una versión desactualizada. */
+    try { flush(); } catch(_){}
+    _fetchFromServer(function(serverState){
+      _syncing = false;
+      if (!serverState) return;
+      try { _applyStateToRuntime(serverState); } catch(_){}
+      try { _writeLocal(serverState); } catch(_){}
+    });
   }
 
   /* ─────────── WIRING ─────────── */
@@ -9237,7 +9329,8 @@ window.goLiveMatches = function() {
   window._liveStore = {
     save: save,
     flush: flush,
-    rehydrate: rehydrate
+    rehydrate: rehydrate,
+    poll: pollOnce
   };
 
   /* Guardar al salir de la página para no perder el último tick. */
@@ -9279,6 +9372,23 @@ window.goLiveMatches = function() {
   setInterval(function(){
     try { flush(); } catch(_){}
   }, 10000);
+
+  /* Sync periódico con el servidor: cada 5s descargamos el estado
+     compartido para ver cambios de otros dispositivos. Así si tu
+     amigo crea un amistoso en su móvil, en máximo 5s aparece en el
+     tuyo. */
+  setInterval(function(){
+    if (document.hidden) return; /* no gastes CPU cuando no se ve */
+    try { pollOnce(); } catch(_){}
+  }, POLL_INTERVAL_MS);
+
+  /* Al volver del background (visibilitychange → visible), refresca
+     inmediatamente en lugar de esperar al próximo tick. */
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'visible' && _rehydrated) {
+      try { pollOnce(); } catch(_){}
+    }
+  });
 })();
 </script>
 

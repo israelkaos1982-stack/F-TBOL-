@@ -406,3 +406,74 @@ class TestSimularYGuardarDB:
             partido = app_module.Partido.query.first()
         assert partido.goles_local >= 0
         assert partido.goles_visitante >= 0
+
+
+# ---------------------------------------------------------------------------
+# LIVE STATE shared API  (/api/live/state)
+# ---------------------------------------------------------------------------
+
+class TestLiveStateAPI:
+
+    def test_get_returns_shape(self, client):
+        rv = client.get("/api/live/state")
+        assert rv.status_code == 200
+        data = _json(rv)
+        assert "state" in data
+        assert "updated_at" in data
+        assert isinstance(data["state"], dict)
+
+    def test_post_saves_and_get_returns_it(self, client):
+        payload = {
+            "state": {
+                "ml": {
+                    "ams-1": {
+                        "home": "Arsenal",
+                        "away": "Bayern Munich",
+                        "sc": {"a": 1, "b": 0},
+                        "kickoffDone": True,
+                        "finished": False,
+                        "timerSec": 420,
+                        "isHvH": True,
+                        "isFriendly": True,
+                    }
+                },
+                "gmLive": None,
+                "gmBg": {},
+            }
+        }
+        rv = client.post("/api/live/state", json=payload)
+        assert rv.status_code == 200
+        saved = _json(rv)
+        assert saved["state"]["ml"]["ams-1"]["home"] == "Arsenal"
+        assert saved["state"]["ml"]["ams-1"]["sc"]["a"] == 1
+        first_updated_at = saved["updated_at"]
+
+        rv2 = client.get("/api/live/state")
+        assert rv2.status_code == 200
+        fetched = _json(rv2)
+        assert fetched["state"]["ml"]["ams-1"]["home"] == "Arsenal"
+        assert fetched["updated_at"] == first_updated_at
+
+    def test_get_with_since_returns_304_when_unchanged(self, client):
+        # First write something so we have a non-default updated_at.
+        client.post("/api/live/state", json={"state": {"ml": {"ams-1": {"home": "A", "away": "B"}}}})
+        rv = client.get("/api/live/state")
+        current_ts = _json(rv)["updated_at"]
+
+        rv2 = client.get("/api/live/state", query_string={"since": current_ts})
+        assert rv2.status_code == 304
+
+    def test_post_accepts_plain_body_too(self, client):
+        # The endpoint should accept both {state: {...}} and a bare dict.
+        rv = client.post("/api/live/state", json={"ml": {"x": {"home": "H", "away": "A"}}})
+        assert rv.status_code == 200
+        fetched = _json(client.get("/api/live/state"))
+        assert "x" in fetched["state"]["ml"]
+
+    def test_post_overwrites_previous_state(self, client):
+        client.post("/api/live/state", json={"state": {"ml": {"m1": {"home": "A", "away": "B"}}}})
+        client.post("/api/live/state", json={"state": {"ml": {"m2": {"home": "C", "away": "D"}}}})
+        fetched = _json(client.get("/api/live/state"))
+        # Last-write-wins: m1 is gone, m2 is present
+        assert "m1" not in fetched["state"]["ml"]
+        assert "m2" in fetched["state"]["ml"]

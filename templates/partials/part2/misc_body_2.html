@@ -8823,12 +8823,81 @@ window.goLiveMatches = function() {
     };
   }
 
-  /* Devuelve lista de wraps HvH con ambos equipos humanos, filtrando
-     duplicados por id. Ignora amistosos (los que están dentro de
-     #s-amistosos o tienen ancestro con id 'ams-match-container'). */
-  function _findDerbyWraps() {
+  /* Normaliza un nombre de equipo quitando emojis, NBSP y trim para
+     que `.mn` con `data-team` atribute o sin él convierta al nombre
+     canónico. Si el equipo no es uno de los 5 humanos, devuelve ''. */
+  function _normalizeHumanName(rawText) {
+    if (!rawText) return '';
+    var s = String(rawText).replace(/\u00a0/g, ' ').trim();
+    /* Strip leading emojis (humanIcon prefix) */
+    s = s.replace(/^[^A-Za-z0-9À-ÿ]+/, '').trim();
+    if (!s || s === 'Por definir') return '';
+    /* Match case-insensitive contra HUMANOS */
+    for (var i = 0; i < DERBYS_HUMANOS.length; i++) {
+      if (DERBYS_HUMANOS[i].toLowerCase() === s.toLowerCase()) return DERBYS_HUMANOS[i];
+    }
+    return '';
+  }
+
+  /* Devuelve la info de competición a partir de un id de contenedor
+     `cal-*`. Busca el prefijo más largo en COMP_INFO. */
+  function _compInfoFromContainerId(containerId) {
+    if (!containerId) return { name:'Partido', ico:'⚽', color:'#888', jornadaLabel:'Jornada' };
+    var keys = Object.keys(COMP_INFO).sort(function(a,b){ return b.length - a.length; });
+    for (var i = 0; i < keys.length; i++) {
+      if (containerId.indexOf(keys[i]) === 0) return COMP_INFO[keys[i]];
+    }
+    return { name: containerId.replace('cal-','').toUpperCase(), ico:'⚽', color:'#888', jornadaLabel:'Jornada' };
+  }
+
+  /* Extrae el número de jornada/ronda del id del contenedor. Ej:
+     'cal-l5' → 5, 'cal-copa-16' → 16, 'cal-ucl-j3' → 3. Si no hay
+     número, devuelve 0 (y el renderer muestra solo el nombre del
+     contenedor como etiqueta). */
+  function _jornadaFromContainerId(containerId) {
+    if (!containerId) return 0;
+    var m = containerId.match(/-(?:j|l|r|ron)(\d+)$/i) || containerId.match(/(\d+)$/);
+    if (m) return parseInt(m[1], 10);
+    return 0;
+  }
+
+  /* Devuelve lista UNIFICADA de derbies de TODAS las competiciones.
+     Cada entrada:
+       { source, home, away, j, comp, state, score, wrap?, row?, container? }
+
+     Fuentes:
+
+     (1) `.match-live-wrap.hvh` en el DOM — para partidos ya
+         renderizados con cronómetro/acta (Liga J1 hardcoded, Liga
+         J2-J38 post-populateCalendar, y cualquier wrap HvH que otro
+         módulo haya creado en Copa/Europa/etc.).
+
+     (2) `window.LIGA_SCHEDULE` — iterar TODAS las 38 jornadas de
+         Liga y encontrar los partidos HvH programados. Cubre los
+         enfrentamientos futuros que aún no se han renderizado como
+         .match-live-wrap porque el usuario no ha scrolleado al
+         calendario. Es lo que el spec pide: "todos los HvH del
+         calendario oficial".
+
+     (3) `.mrow` dentro de contenedores `cal-*` (Copa, Supercopa,
+         Champions, Europa, Conference, Nations, Mundial, etc.) con
+         dos `.mn` cuyo textContent coincida con dos humanos. Esto
+         captura los HvH de competiciones KO cuando los nombres se
+         han rellenado (antes de ese momento aparecen "Por definir"
+         y quedan fuera del filtro). */
+  function _scanAllDerbies() {
     var out = [];
     var seen = {};
+    function _addUnique(item) {
+      if (!item || !item.home || !item.away) return;
+      var key = (item.comp && item.comp.name ? item.comp.name : '?') + '|'
+              + (item.j || 0) + '|' + item.home + '|' + item.away;
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push(item);
+    }
+
+    /* (1) Scan de .match-live-wrap existentes (la lógica original) */
     var wraps = document.querySelectorAll('.match-live-wrap');
     wraps.forEach(function(w){
       /* Exclusión de amistosos */
@@ -8840,14 +8909,118 @@ window.goLiveMatches = function() {
       }
       if (isAmistoso) return;
       var teams = _teamsFromWrap(w);
-      if (!teams.home || !teams.away) return;
-      if (!_esHumano(teams.home) || !_esHumano(teams.away)) return;
-      var key = (w.id || (teams.home + '|' + teams.away));
-      if (seen[key]) return;
-      seen[key] = true;
-      out.push(w);
+      var home = _normalizeHumanName(teams.home);
+      var away = _normalizeHumanName(teams.away);
+      if (!home || !away) return;
+      var comp = _compInfoFromWrap(w);
+      var jnum = _extractJornada(w);
+      _addUnique({
+        source: 'wrap',
+        wrap: w,
+        home: home, away: away,
+        j: jnum,
+        comp: comp.info,
+        state: _matchState(w),
+        score: _matchScore(w)
+      });
     });
+
+    /* (2) Scan de LIGA_SCHEDULE — todos los HvH de las 38 jornadas. */
+    try {
+      var SCH = window.LIGA_SCHEDULE;
+      var ligaComp = COMP_INFO['cal-l'];
+      var loadRes = (typeof window._mlGetState === 'function' && typeof window.loadResults === 'function')
+        ? null : null; /* Evitar side-effects si no están expuestas. */
+      var lsResults = {};
+      try {
+        lsResults = JSON.parse(localStorage.getItem('ef_liga38_v4') || '{}') || {};
+      } catch(_){}
+      if (Array.isArray(SCH)) {
+        SCH.forEach(function(jornada, idx){
+          if (!Array.isArray(jornada)) return;
+          var j = idx + 1;
+          jornada.forEach(function(m){
+            if (!Array.isArray(m) || m.length < 2) return;
+            var home = _normalizeHumanName(m[0]);
+            var away = _normalizeHumanName(m[1]);
+            if (!home || !away) return;
+            /* Estado y marcador: mirar en localStorage ef_liga38_v4
+               por rKey(j, home, away). Si hay resultado es 'finished',
+               si no 'pending'. El estado 'playing' solo se refleja vía
+               la fuente (1) desde el DOM. */
+            var rk = j + '|' + m[0] + '|' + m[1];
+            var res = lsResults[rk];
+            var state = 'pending';
+            var score = { a:'0', b:'0' };
+            if (res && (typeof res.gh === 'number' || typeof res.ga === 'number')) {
+              state = 'finished';
+              score = { a: String(res.gh || 0), b: String(res.ga || 0) };
+            }
+            _addUnique({
+              source: 'schedule',
+              home: home, away: away,
+              j: j,
+              comp: ligaComp,
+              state: state,
+              score: score
+            });
+          });
+        });
+      }
+    } catch(_){}
+
+    /* (3) Scan de .mrow en contenedores cal-* (Copa, Champions,
+           Europa, Supercopa, etc.) para capturar HvH ya definidos. */
+    try {
+      var calContainers = document.querySelectorAll('[id^="cal-"]');
+      calContainers.forEach(function(cont){
+        if (!cont.id || cont.id.indexOf('cal-') !== 0) return;
+        if (cont.id.indexOf('cal-ams') === 0) return;       /* amistosos fuera */
+        if (cont.id.indexOf('cal-l') === 0) return;         /* Liga ya cubierta por (2) */
+        var rows = cont.querySelectorAll('.mrow');
+        rows.forEach(function(row){
+          var mn = row.querySelectorAll('.mn');
+          if (mn.length < 2) return;
+          var hRaw = (mn[0].dataset && mn[0].dataset.team) || mn[0].textContent || '';
+          var aRaw = (mn[1].dataset && mn[1].dataset.team) || mn[1].textContent || '';
+          var home = _normalizeHumanName(hRaw);
+          var away = _normalizeHumanName(aRaw);
+          if (!home || !away) return;
+          var comp = _compInfoFromContainerId(cont.id);
+          var j = _jornadaFromContainerId(cont.id);
+          /* Estado: si el .ms tiene clase 'p' (pending) o un score */
+          var msEl = row.querySelector('.ms');
+          var state = 'pending';
+          var score = { a:'0', b:'0' };
+          if (msEl && !msEl.classList.contains('p')) {
+            var txt = (msEl.textContent || '').trim();
+            var m = txt.match(/(\d+)\s*[–-]\s*(\d+)/);
+            if (m) {
+              state = 'finished';
+              score = { a: m[1], b: m[2] };
+            }
+          }
+          _addUnique({
+            source: 'mrow',
+            row: row,
+            container: cont,
+            home: home, away: away,
+            j: j,
+            comp: comp,
+            state: state,
+            score: score
+          });
+        });
+      });
+    } catch(_){}
+
     return out;
+  }
+
+  /* Mantiene el nombre antiguo como alias para que otros callers
+     (tests, código externo) sigan funcionando. */
+  function _findDerbyWraps() {
+    return _scanAllDerbies().filter(function(item){ return item.source === 'wrap'; }).map(function(i){ return i.wrap; });
   }
 
   /* Crea el div.screen#s-derbys en body si no existe. */
@@ -8903,73 +9076,105 @@ window.goLiveMatches = function() {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
-  function _buildDerbyCard(wrap) {
-    var teams = _teamsFromWrap(wrap);
-    var comp  = _compInfoFromWrap(wrap);
-    var state = _matchState(wrap);
-    var score = _matchScore(wrap);
-    var lA = _logoFor(teams.home);
-    var lB = _logoFor(teams.away);
+  function _buildDerbyCard(item) {
+    var home = item.home;
+    var away = item.away;
+    var state = item.state || 'pending';
+    var score = item.score || { a: '0', b: '0' };
+    var comp = item.comp || { name: 'Partido', ico: '⚽', color:'#888', jornadaLabel:'Jornada' };
+    var lA = _logoFor(home);
+    var lB = _logoFor(away);
     var statusLabel = state === 'playing'  ? 'EN DIRECTO'
                     : state === 'finished' ? 'FINALIZADO'
                     : 'POR JUGAR';
     var vsText = (state === 'pending') ? 'VS' : (score.a + '-' + score.b);
+    /* Etiqueta de jornada/ronda: usa el `jornadaLabel` que viene de
+       COMP_INFO para que Liga sea "Jornada 5" pero Copa sea
+       "Ronda 16" y Mundial sea "Fase 3", etc. */
+    var jLabel = '';
+    if (item.j) {
+      jLabel = (comp.jornadaLabel || 'Jornada') + ' ' + item.j;
+    }
     var card = document.createElement('div');
     card.className = 'derby-card ' + state;
-    card.setAttribute('data-derby-wrap-id', wrap.id || '');
+    card.setAttribute('data-derby-source', item.source || '');
+    if (item.wrap && item.wrap.id) card.setAttribute('data-derby-wrap-id', item.wrap.id);
     card.innerHTML =
         '<div class="derby-teams">'
+      +   (jLabel ? '<div class="derby-jlabel" style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.4px;color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:2px;">' + _escHtml(jLabel) + '</div>' : '')
       +   '<div class="derby-row">'
       +     (lA ? '<img class="derby-logo" src="' + _escHtml(lA) + '" alt="" onerror="this.style.display=\'none\'">' : '')
-      +     '<span>' + _escHtml(teams.home) + '</span>'
+      +     '<span>' + _escHtml(home) + '</span>'
       +   '</div>'
       +   '<div class="derby-row">'
       +     (lB ? '<img class="derby-logo" src="' + _escHtml(lB) + '" alt="" onerror="this.style.display=\'none\'">' : '')
-      +     '<span>' + _escHtml(teams.away) + '</span>'
+      +     '<span>' + _escHtml(away) + '</span>'
       +   '</div>'
       + '</div>'
       + '<div class="derby-vs ' + state + '">' + _escHtml(vsText) + '</div>'
       + '<span class="derby-status ' + state + '">' + statusLabel + '</span>';
     card.addEventListener('click', function(){
-      /* Si el partido ya terminó, solo scroll al acta */
-      if (state === 'finished') {
-        var scFinEl = wrap; var scrFin = null;
-        while (scFinEl && !scFinEl.classList.contains('screen')) scFinEl = scFinEl.parentElement;
-        if (scFinEl && scFinEl.id && typeof go === 'function') {
-          try { go(scFinEl.id); } catch(_){}
-          setTimeout(function(){ try { wrap.scrollIntoView({behavior:'smooth',block:'center'}); } catch(_){} }, 140);
-        }
-        return;
-      }
-      /* Si el partido ya está en directo, navega al modal del gm si
-         existe o hace scroll al wrap. */
+      /* Si el partido está en directo en el gm-modal activo, reabrirlo. */
       if (state === 'playing' && window.__GM_LIVE && !window.__GM_LIVE.finished &&
-          window.__GM_LIVE.home === teams.home && window.__GM_LIVE.away === teams.away) {
+          window.__GM_LIVE.home === home && window.__GM_LIVE.away === away) {
         if (typeof window.gmReopen === 'function') window.gmReopen();
         return;
       }
-      /* Partido nuevo: abrir con el motor de Liga HvH (noET=true). */
-      var jnum = _extractJornada(wrap) || 0;
+      /* Si terminado y hay un wrap DOM, scroll a él. Si no, abrir
+         el acta via modal genérico si existe. */
+      if (state === 'finished') {
+        if (item.wrap) {
+          var scFinEl = item.wrap;
+          while (scFinEl && !scFinEl.classList.contains('screen')) scFinEl = scFinEl.parentElement;
+          if (scFinEl && scFinEl.id && typeof go === 'function') {
+            try { go(scFinEl.id); } catch(_){}
+            setTimeout(function(){ try { item.wrap.scrollIntoView({behavior:'smooth',block:'center'}); } catch(_){} }, 140);
+          }
+          return;
+        }
+        /* Schedule/mrow sin wrap — abrir acta modal si es Liga finalizada */
+        if (typeof window.showMatchActaModal === 'function' && item.j) {
+          try { window.showMatchActaModal(item.j, home, away); return; } catch(_){}
+        }
+        return;
+      }
+      /* Partido nuevo (pending) o wrap sin gm-modal activo:
+         - Para Liga (y otras comps que usan gm-modal), abrir con
+           `abrirResultadoLiga(j, home, away)`. Es HvH así que noET=true.
+         - Para wraps concretos (source=wrap), si está en cal-* con
+           mlPreviaClick cableado, hacer click en la tarjeta real.   */
       if (typeof window.abrirResultadoLiga === 'function') {
-        try { window.abrirResultadoLiga(jnum, teams.home, teams.away); return; } catch(_){}
+        try { window.abrirResultadoLiga(item.j || 0, home, away); return; } catch(_){}
       }
       /* Fallback: scroll al wrap en su screen original */
-      var scEl = wrap;
-      while (scEl && !scEl.classList.contains('screen')) scEl = scEl.parentElement;
-      if (scEl && scEl.id && typeof go === 'function') {
-        try { go(scEl.id); } catch(_){}
-        setTimeout(function(){ try { wrap.scrollIntoView({behavior:'smooth',block:'center'}); } catch(_){} }, 140);
+      if (item.wrap) {
+        var scEl = item.wrap;
+        while (scEl && !scEl.classList.contains('screen')) scEl = scEl.parentElement;
+        if (scEl && scEl.id && typeof go === 'function') {
+          try { go(scEl.id); } catch(_){}
+          setTimeout(function(){ try { item.wrap.scrollIntoView({behavior:'smooth',block:'center'}); } catch(_){} }, 140);
+        }
       }
     });
     return card;
   }
 
+  /* Prioridad para ordenar estados dentro de un grupo: primero los
+     que están en directo, luego los pendientes (por jornada
+     ascendente), luego los finalizados. */
+  function _stateOrder(s) {
+    if (s === 'playing') return 0;
+    if (s === 'pending') return 1;
+    if (s === 'finished') return 2;
+    return 3;
+  }
+
   function _buildDerbysList() {
     var listEl = document.getElementById('derbys-list');
     if (!listEl) return;
-    var wraps = _findDerbyWraps();
+    var items = _scanAllDerbies();
     listEl.innerHTML = '';
-    if (!wraps.length) {
+    if (!items.length) {
       var empty = document.createElement('div');
       empty.className = 'derby-empty';
       empty.innerHTML = 'No hay derbys detectados en el calendario todavía.'
@@ -8977,23 +9182,46 @@ window.goLiveMatches = function() {
       listEl.appendChild(empty);
       return;
     }
-    /* Agrupar por competición */
+    /* Agrupar por competición — usa el nombre del comp como clave. */
     var groups = {}; var order = [];
-    wraps.forEach(function(w){
-      var ci = _compInfoFromWrap(w);
-      var key = ci.info.name;
-      if (!groups[key]) { groups[key] = { info: ci.info, wraps: [] }; order.push(key); }
-      groups[key].wraps.push(w);
+    items.forEach(function(it){
+      var compName = (it.comp && it.comp.name) || 'Partido';
+      if (!groups[compName]) {
+        groups[compName] = { info: it.comp, items: [] };
+        order.push(compName);
+      }
+      groups[compName].items.push(it);
     });
-    order.forEach(function(key){
-      var g = groups[key];
+    /* Dentro de cada grupo, ordenar por (estado, jornada). */
+    order.forEach(function(compName){
+      var g = groups[compName];
+      g.items.sort(function(a, b){
+        var ds = _stateOrder(a.state) - _stateOrder(b.state);
+        if (ds !== 0) return ds;
+        return (a.j || 0) - (b.j || 0);
+      });
+    });
+    /* Render: cabecera de competición + cards. Las competiciones con
+       partidos en directo van primero; luego liga, luego el resto. */
+    order.sort(function(a, b){
+      var ga = groups[a].items;
+      var gb = groups[b].items;
+      var aPlaying = ga.some(function(it){ return it.state === 'playing'; });
+      var bPlaying = gb.some(function(it){ return it.state === 'playing'; });
+      if (aPlaying !== bPlaying) return aPlaying ? -1 : 1;
+      if (a === 'Liga EA Sports') return -1;
+      if (b === 'Liga EA Sports') return 1;
+      return a.localeCompare(b, 'es');
+    });
+    order.forEach(function(compName){
+      var g = groups[compName];
       var hdr = document.createElement('div');
       hdr.className = 'derby-comp-hdr';
-      hdr.textContent = g.info.ico + '  ' + g.info.name;
-      hdr.style.color = g.info.color;
+      hdr.textContent = (g.info.ico || '⚽') + '  ' + compName;
+      hdr.style.color = g.info.color || '#888';
       listEl.appendChild(hdr);
-      g.wraps.forEach(function(w){
-        try { listEl.appendChild(_buildDerbyCard(w)); } catch(_){}
+      g.items.forEach(function(it){
+        try { listEl.appendChild(_buildDerbyCard(it)); } catch(_){}
       });
     });
   }

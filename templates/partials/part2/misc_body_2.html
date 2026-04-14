@@ -4102,7 +4102,15 @@
   };
   function _mlFinishMatchGen(mk, winner) {
     var st=_mlSt(mk);
-    st.finished=true; clearInterval(st.timerInterval); st.timerRunning=false;
+    st.finished=true;
+    /* Arrancar el grace period de propagación: durante los próximos
+       FINISHED_PROPAGATE_MS el snapshot seguirá incluyendo la entrada
+       con finished=true para que otros dispositivos la vean y hagan
+       cleanup local. Sin esto, la finalización "se pierde" porque
+       el snapshot excluye inmediatamente la entrada y el otro
+       dispositivo nunca se entera → loop infinito. */
+    st._finishPropagatedAt = Date.now();
+    clearInterval(st.timerInterval); st.timerRunning=false;
     _mlRenderTimerGen(mk);
     _mlSetLiveState(mk, 'finished');
     /* Match finalizado → sale de la lista de partidos persistidos */
@@ -5332,16 +5340,28 @@
       return;
     }
     _gm.finished = true;
+    /* Arrancar el grace period de propagación: el snapshot seguirá
+       incluyendo este partido con finished=true durante
+       FINISHED_PROPAGATE_MS para que los otros dispositivos lo vean
+       y limpien sus _gmBg locales. Sin esto, nullear __GM_LIVE aquí
+       haría que el snapshot pierda la señal de finished y el otro
+       dispositivo resucitara el partido en el siguiente flush. */
+    _gm._finishPropagatedAt = Date.now();
     clearInterval(_gm.timerInterval);
     _gm.timerRunning = false;
-    /* Partido finalizado: ya no es live */
-    if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
-    if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
-    /* Persistir inmediatamente el estado finished para que la recarga
-       lo excluya del hub y no lo resucite. */
+    /* Persistir INMEDIATAMENTE con finished=true (antes de nullear
+       __GM_LIVE) para que el servidor reciba la señal. La rama
+       `_isPersistable` incluye entradas finished dentro del grace
+       period, así que el snapshot sí contendrá este partido. */
     if (window._liveStore && typeof window._liveStore.flush === 'function') {
       try { window._liveStore.flush(); } catch(_){}
     }
+    /* Ahora sí podemos nullear __GM_LIVE: el flush ya propagó el
+       finished y los próximos snapshots se basarán en _gmBg si queda
+       alguna entrada residual, o simplemente no incluirán este
+       partido si el grace period ya expiró. */
+    if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
+    if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
     gmRenderTimer();
     var endBtn = document.getElementById('gm-btn-end');
     if (endBtn) { endBtn.disabled = true; endBtn.style.opacity = '0.35'; }
@@ -9083,6 +9103,17 @@ window.goLiveMatches = function() {
 
   /* ─────────── SERIALIZATION ─────────── */
 
+  /* Grace period para propagar finalizaciones: cuando un partido se
+     finaliza, lo seguimos incluyendo en el snapshot durante este
+     intervalo (con finished:true) para que los demás dispositivos
+     reciban la señal de "este partido ya terminó, hazle cleanup".
+     Sin este grace period, la finalización se "pierde" porque el
+     snapshot de A excluye el partido el mismo instante en que lo
+     finaliza, así que B nunca ve el finished=true y sigue postenado
+     el partido como live → loop infinito. */
+  var FINISHED_PROPAGATE_MS = 60 * 1000;  /* 60s es suficiente para
+     que todos los dispositivos hagan al menos 2 polls y converjan. */
+
   function _serializeSt(st) {
     if (!st) return null;
     return {
@@ -9096,6 +9127,7 @@ window.goLiveMatches = function() {
       etDone: !!st.etDone,
       et1Done: !!st.et1Done,
       finished: !!st.finished,
+      _finishPropagatedAt: st._finishPropagatedAt || null,
       timerSec: st.timerSec || 0,
       isHvH: !!st.isHvH,
       isIAvsIA: !!st.isIAvsIA,
@@ -9117,11 +9149,19 @@ window.goLiveMatches = function() {
     };
   }
 
-  /* Considera que un estado está "live persistible" cuando ha arrancado
-     (kickoffDone) pero no ha terminado (!finished). Ignoramos los
-     prepartido puros. */
+  /* Considera que un estado está "live persistible" cuando ha
+     arrancado (kickoffDone). Los partidos finalizados TAMBIÉN se
+     incluyen durante el grace period (FINISHED_PROPAGATE_MS) para
+     que la finalización se propague a todos los dispositivos — una
+     vez que todos se enteraron, se dejan de incluir y caen del
+     server por la delete-semantics normal. */
   function _isPersistable(st) {
-    return st && st.kickoffDone && !st.finished && st.home && st.away;
+    if (!st || !st.home || !st.away || !st.kickoffDone) return false;
+    if (!st.finished) return true;
+    /* Finalizado → propagamos durante FINISHED_PROPAGATE_MS para
+       que los otros dispositivos lo vean y hagan cleanup. */
+    if (!st._finishPropagatedAt) st._finishPropagatedAt = Date.now();
+    return (Date.now() - st._finishPropagatedAt) < FINISHED_PROPAGATE_MS;
   }
 
   function _snapshot() {
@@ -9360,8 +9400,11 @@ window.goLiveMatches = function() {
   /* Marca una entrada local de `_mlStates` como finalizada y oculta
      su tarjeta DOM. Se usa cuando el servidor confirma que la entrada
      ya no está live en ningún otro dispositivo (p.ej. otro dispositivo
-     la finalizó) y hay que limpiarla localmente para no pingponear. */
-  function _cleanupStaleMlEntry(mk) {
+     la finalizó) y hay que limpiarla localmente para no pingponear.
+     `propagatedAt` es el timestamp del `_finishPropagatedAt` que vino
+     del servidor (si existe) — lo copiamos al estado local para que
+     todos los dispositivos convergan en el mismo grace period. */
+  function _cleanupStaleMlEntry(mk, propagatedAt) {
     try {
       var states = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : null;
       if (states && states[mk]) {
@@ -9369,6 +9412,14 @@ window.goLiveMatches = function() {
         try { if (states[mk].timerInterval) clearInterval(states[mk].timerInterval); } catch(_){}
         states[mk].finished = true;
         states[mk].timerRunning = false;
+        /* Copiar el timestamp de propagación del servidor (o marcarlo
+           ahora si no vino) — así nuestro próximo snapshot también lo
+           incluye con la finalizada hasta que expire el grace period. */
+        if (propagatedAt) {
+          states[mk]._finishPropagatedAt = propagatedAt;
+        } else if (!states[mk]._finishPropagatedAt) {
+          states[mk]._finishPropagatedAt = Date.now();
+        }
       }
     } catch(_){}
     /* Quitar la card del DOM SOLO si es un amistoso (vive en
@@ -9421,10 +9472,25 @@ window.goLiveMatches = function() {
       } catch(_){}
     }
 
-    /* Rehidratar .match-live-wrap (amistosos + Liga calendar) */
+    /* Procesar entradas de data.ml: las que llegan con finished=true
+       son señales de finalización de otro dispositivo — limpiamos
+       localmente en vez de rehidratarlas como live. Las que llegan
+       con finished=false se rehidratan normal. */
     if (data.ml) {
       Object.keys(data.ml).forEach(function(mk){
-        try { _rehydrateMlEntry(mk, data.ml[mk]); } catch(_){}
+        var saved = data.ml[mk];
+        if (!saved) return;
+        if (saved.finished) {
+          /* Finalización propagada por otro dispositivo → cleanup
+             local (marcar finished + remover card DOM para amistosos)
+             y copiar el `_finishPropagatedAt` del servidor para que
+             nuestro propio snapshot siga propagando el mensaje hasta
+             que expire el grace period. */
+          try { _cleanupStaleMlEntry(mk, saved._finishPropagatedAt); } catch(_){}
+          return;
+        }
+        /* Live match activo del servidor → rehidratar como antes. */
+        try { _rehydrateMlEntry(mk, saved); } catch(_){}
       });
     }
 
@@ -9445,15 +9511,32 @@ window.goLiveMatches = function() {
     }
     if (data.gmBg) {
       Object.keys(data.gmBg).forEach(function(k){
+        var bgSnap = data.gmBg[k];
+        if (bgSnap && bgSnap.finished) {
+          /* gm-modal finalizado en otro dispositivo → borrar local. */
+          try { delete window._gmBg[k]; } catch(_){}
+          /* Si coincide con el __GM_LIVE activo, también marcarlo finished. */
+          try {
+            if (window.__GM_LIVE
+                && (window.__GM_LIVE.j === bgSnap.j)
+                && (window.__GM_LIVE.home === bgSnap.home)
+                && (window.__GM_LIVE.away === bgSnap.away)) {
+              window.__GM_LIVE.finished = true;
+              try { if (window.__GM_LIVE.timerInterval) clearInterval(window.__GM_LIVE.timerInterval); } catch(_){}
+              window.__GM_LIVE = null;
+            }
+          } catch(_){}
+          return;
+        }
         /* Overwrite permitido: el servidor es la fuente de verdad y
            puede haber cambios que vengan de otro dispositivo. */
-        window._gmBg[k] = data.gmBg[k];
+        window._gmBg[k] = bgSnap;
       });
     }
     /* El partido que estaba en __GM_LIVE al recargar tampoco se puede
        reinyectar en `_gm`; va al `_gmBg` con su key j|home|away, así
        que aparece en el hub y el usuario lo reabre con un tap. */
-    if (data.gmLive) {
+    if (data.gmLive && !data.gmLive.finished) {
       var gl = data.gmLive;
       var k = (gl.j || 0) + '|' + (gl.home || '') + '|' + (gl.away || '');
       window._gmBg[k] = gl;

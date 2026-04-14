@@ -1813,8 +1813,14 @@ window.mlSimulate_j1m10=function(){
         var awayEl = row.querySelector('.mn.r');
         var scoreEl = row.querySelector('.ms');
         if(!homeEl || !awayEl || !scoreEl || scoreEl.classList.contains('p')) return;
-        var homeName = homeEl.textContent.trim();
-        var awayName = awayEl.textContent.trim();
+        // Nombre canónico desde el atributo data-team (se inyecta en
+        // jornadaTeamHtml con el nombre SIN emoji ni \u00a0). Usar
+        // textContent daría "🔨\u00a0Real Madrid" y rompería la
+        // deduplicación contra LIGA_J1_RESULTS → el partido quedaría
+        // contado dos veces (una desde el almacén directo y otra desde
+        // el DOM), hinchando PJ/GF/GC para los equipos de J1.
+        var homeName = (homeEl.dataset && homeEl.dataset.team) || homeEl.textContent.trim();
+        var awayName = (awayEl.dataset && awayEl.dataset.team) || awayEl.textContent.trim();
         // Si ya fue procesado desde el almacén directo, omitir para no duplicar
         if(j===1 && j1SimPairs[homeName+'·'+awayName]) return;
         var home = ensureTeam(teams, homeName);

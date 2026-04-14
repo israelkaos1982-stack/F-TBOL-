@@ -7628,8 +7628,10 @@
         var homeEl = row.querySelector('.mn:not(.r)');
         var awayEl = row.querySelector('.mn.r');
         if (!homeEl || !awayEl) return;
-        var home = homeEl.textContent.trim();
-        var away = awayEl.textContent.trim();
+        /* Usar data-team (nombre canónico sin emoji + NBSP) para que
+           las comparaciones contra TEAM no fallen en equipos humanos. */
+        var home = (homeEl.dataset && homeEl.dataset.team) || homeEl.textContent.trim();
+        var away = (awayEl.dataset && awayEl.dataset.team) || awayEl.textContent.trim();
         if (home === 'Por definir' || away === 'Por definir') return;
         if (home !== TEAM && away !== TEAM) return;
         if (results[rKey(j, home, away)]) return;

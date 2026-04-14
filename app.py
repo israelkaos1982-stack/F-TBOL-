@@ -199,6 +199,56 @@ def save_global_state(new_state):
     db.session.commit()
     return merged
 
+# ── LIVE STATE COMPARTIDO ────────────────────────────────────────
+# Estado de los partidos HvH/HvIA en curso, serializado por el
+# frontend (window._liveStore) y compartido entre TODOS los navegadores
+# que abran la app. Cada dispositivo hace POST /api/live/state cuando
+# ocurre un cambio relevante (kickoff, gol, tarjeta, fin) y hace GET
+# periódicamente para recibir los cambios de los otros dispositivos.
+#
+# Almacenamos una única fila en GlobalState con clave
+# `live_state_shared_v1`. El valor es un blob JSON opaco desde el punto
+# de vista del backend: no lo interpreta, solo lo persiste y devuelve
+# tal cual, con un updated_at UTC que sirve de ETag básico.
+LIVE_STATE_KEY = "live_state_shared_v1"
+DEFAULT_LIVE_STATE = {"ml": {}, "gmLive": None, "gmBg": {}}
+
+def _get_or_create_live_state_row():
+    row = GlobalState.query.filter_by(clave=LIVE_STATE_KEY).first()
+    if not row:
+        row = GlobalState(
+            clave=LIVE_STATE_KEY,
+            valor_json=json.dumps(DEFAULT_LIVE_STATE, ensure_ascii=False),
+            updated_at=utc_now_iso(),
+        )
+        db.session.add(row)
+        db.session.commit()
+    return row
+
+def load_live_state():
+    row = _get_or_create_live_state_row()
+    try:
+        data = json.loads(row.valor_json or "{}")
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    return {
+        "state": data,
+        "updated_at": row.updated_at or utc_now_iso(),
+    }
+
+def save_live_state(new_state):
+    row = _get_or_create_live_state_row()
+    payload = new_state if isinstance(new_state, dict) else {}
+    row.valor_json = json.dumps(payload, ensure_ascii=False)
+    row.updated_at = utc_now_iso()
+    db.session.commit()
+    return {
+        "state": payload,
+        "updated_at": row.updated_at,
+    }
+
 # --- FUNCIONES MOTOR ---
 def calcular_prob(perfil, local=False, goles_previos=0):
     # Porteros casi nunca marcan: peso fijo 0.001 ignorando su poder de portería
@@ -913,6 +963,32 @@ def inject_shield_data():
     }
 
 # --- RUTAS ---
+# ── LIVE STATE API (compartido entre dispositivos) ──────────────
+@app.route("/api/live/state", methods=["GET"])
+def api_live_state_get():
+    """Devuelve el estado live compartido (parcial si el cliente manda
+    `if_updated_after` y el servidor no tiene nada nuevo, devolvemos 304)."""
+    data = load_live_state()
+    since = request.args.get("since", "")
+    if since and since == data["updated_at"]:
+        # El cliente ya tiene la última versión, ahorramos ancho de banda.
+        return ("", 304)
+    return jsonify(data)
+
+@app.route("/api/live/state", methods=["POST"])
+def api_live_state_post():
+    """Guarda el estado live compartido. Body JSON: {state: {...}}.
+    Devuelve {state, updated_at}. No hay auth ni conflict detection:
+    last-write-wins, suficiente para uso casual entre amigos."""
+    body = request.get_json(silent=True) or {}
+    incoming = body.get("state")
+    if incoming is None:
+        incoming = body  # aceptar también el body plano
+    if not isinstance(incoming, dict):
+        incoming = {}
+    result = save_live_state(incoming)
+    return jsonify(result)
+
 @app.route("/")
 def inicio():
     return render_template("index.html")

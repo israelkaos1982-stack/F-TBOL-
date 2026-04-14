@@ -1707,10 +1707,16 @@ window.mlSimulate_j1m10=function(){
   // Registra resultado de un partido y actualiza clasificación en tiempo real
   window.registrarResultadoLiga = function(matchKey, teamA, teamB, ga, gb, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, penWinner){
     // Guardar resultado directo (sin depender del calendario DOM)
-    // Si ya existe este matchKey, actualizarlo; si no, añadirlo
+    // Dedup por PAR home/away, no por matchKey — porque `restoreJ1()`
+    // rehidrata entradas de sesiones previas con una clave distinta
+    // (`ls-j1-<home>`) y si comparamos por matchKey nos queda una
+    // entrada "vieja" + una "nueva" para el MISMO partido → la
+    // clasificación los cuenta dos veces (PJ=2 para equipos que solo
+    // jugaron 1 partido en J1, puntos y goles dobles, etc.).
     var existing = -1;
     for(var i=0;i<LIGA_J1_RESULTS.length;i++){
-      if(LIGA_J1_RESULTS[i].key===matchKey){existing=i;break;}
+      var _r = LIGA_J1_RESULTS[i];
+      if(_r && _r.home===teamA && _r.away===teamB){existing=i;break;}
     }
     var result = {key:matchKey, home:teamA, away:teamB, gh:ga, ga_:gb, ta_h:ta_a, tr_h:tr_a, ta_a_:ta_b, tr_a_:tr_b, mvp_h:mvp_a, mvp_a:mvp_b, penWinner:penWinner||null};
     if(existing>=0)LIGA_J1_RESULTS[existing]=result; else LIGA_J1_RESULTS.push(result);

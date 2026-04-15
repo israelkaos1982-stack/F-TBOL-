@@ -3462,6 +3462,19 @@ window.pG = function(fn) {
           <span id="lext-liga-ea-count">0</span><span style="color:rgba(255,255,255,.4);font-size:14px;"> / 20</span>
         </div>
         <div class="lext-sub" id="lext-liga-ea-counter-msg" style="margin-top:2px;">Crea 20 equipos para activar el motor nuevo. Hoy la simulación sigue usando los 20 hardcodeados.</div>
+        <button type="button" class="lext-btn" style="margin-top:8px;font-size:10px;padding:6px 10px;" onclick="lextShowEnginePreview()">🔍 Vista previa motor (Fase 2)</button>
+      </div>
+
+      <!-- Modal de vista previa del motor (lo que recibirá el simulador en Fase 2) -->
+      <div id="lext-engine-preview-ov" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:1000000;align-items:flex-start;justify-content:center;padding:30px 12px;overflow-y:auto;">
+        <div style="background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(240,192,64,.4);border-radius:14px;padding:18px 16px;width:100%;max-width:680px;color:#fff;font-family:Rajdhani,sans-serif;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.08);">
+            <div style="font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;color:#f0c040;flex:1;text-transform:uppercase;">🛠 Vista previa motor (Fase 2)</div>
+            <button type="button" style="background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.65);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;" onclick="lextHideEnginePreview()">✕ Cerrar</button>
+          </div>
+          <div class="lext-sub" style="margin-bottom:10px;">Esto es <b>exactamente</b> lo que recibirá el simulador cuando se active la Fase 2. Si ves un equipo o jugador mal, edítalo y vuelve a abrir esta vista.</div>
+          <pre id="lext-engine-preview-body" style="background:#000;border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:10px;font-family:'Courier New',monospace;font-size:11px;line-height:1.45;color:#a8e6a8;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-word;"></pre>
+        </div>
       </div>
 
       <label class="lext-label">Nombre del equipo</label>
@@ -3550,6 +3563,8 @@ window.pG = function(fn) {
       <summary>➕ Añadir jugador individual</summary>
       <label class="lext-label">Nombre del jugador</label>
       <input class="lext-input" id="lext-pl-name" placeholder="Ej. Vinicius Jr." />
+      <label class="lext-label">Dorsal · opcional, autocalculado si lo dejas vacío</label>
+      <input class="lext-input" id="lext-pl-num" type="number" min="1" max="99" placeholder="Ej. 9" />
       <label class="lext-label">Posición</label>
       <select class="lext-select" id="lext-pl-pos">
         <option value="POR">Portero</option>
@@ -4381,7 +4396,16 @@ window.pG = function(fn) {
       }
       // Línea de jugador: quitar bullets/emojis iniciales
       var clean = line.replace(/^[*\-\u2022\u00B7\u25AA\u25AB\u25BA\u25B8\s]+/,'').trim();
-      // Patrón: Nombre + espacio + número + (opcional C/F/P con separadores)
+      // Dorsal opcional al INICIO ("9 Haaland 91" o "#9 Haaland 91" o
+      // "9. Haaland 91"). Lo extraemos primero para no confundirlo con
+      // el poder, que va al final.
+      var jersey = 0;
+      var jerseyMatch = clean.match(/^#?(\d{1,2})[.\s\)\]·]\s*(.+)$/);
+      if(jerseyMatch){
+        jersey = parseInt(jerseyMatch[1],10);
+        clean = jerseyMatch[2].trim();
+      }
+      // Patrón: Nombre + espacio + número(=poder) + (opcional C/F/P con separadores)
       // Ej. válidos: "Rodri 89", "Rodri 89 C", "Rodri 89 CFP",
       //              "Rodri 89 (C)", "Rodri 89 [CF]", "Rodri 89 · C"
       var match = clean.match(/^(.+?)[\s\u00A0]+(\d{1,3})\s*(?:[\[(·\-\|]*\s*([CFPcfp]{1,3})\s*[\])·\-\|]*)?\s*$/);
@@ -4399,6 +4423,7 @@ window.pG = function(fn) {
       players.push({
         id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
         name:name,
+        num:jersey,
         pos:currentPos||'MED',
         power:Math.max(1,Math.min(99,power)),
         captain: flags.indexOf('C')>-1,
@@ -4770,6 +4795,8 @@ window.pG = function(fn) {
     if(!name){ alert('Falta el nombre del jugador.'); return; }
     var pos = document.getElementById('lext-pl-pos').value;
     var power = parseInt(document.getElementById('lext-pl-power').value,10)||50;
+    var numRaw = (document.getElementById('lext-pl-num').value||'').trim();
+    var num = numRaw ? Math.max(1, Math.min(99, parseInt(numRaw,10)||0)) : 0;
     var capChk = document.getElementById('lext-pl-cap');
     var fkChk  = document.getElementById('lext-pl-fk');
     var pkChk  = document.getElementById('lext-pl-pk');
@@ -4787,7 +4814,7 @@ window.pG = function(fn) {
     }
     var newP = {
       id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-      name:name, pos:pos, power:power,
+      name:name, num:num, pos:pos, power:power,
       captain: isCap,
       freeKick: isFk,
       penalty:  isPk,
@@ -4798,8 +4825,9 @@ window.pG = function(fn) {
     saveData(CURRENT_KEY,data);
     // Limpiar el form para añadir el siguiente sin perder los selectores
     // de posición/poder (suelen ser los mismos para varios jugadores
-    // seguidos), pero sí limpiamos nombre y roles especiales.
+    // seguidos), pero sí limpiamos nombre, dorsal y roles especiales.
     document.getElementById('lext-pl-name').value='';
+    document.getElementById('lext-pl-num').value='';
     if(capChk) capChk.checked = false;
     if(fkChk)  fkChk.checked  = false;
     if(pkChk)  pkChk.checked  = false;
@@ -4929,6 +4957,181 @@ window.pG = function(fn) {
   // como se muestra en la clasificación) coincide con displayName. Si el
   // equipo todavía no se ha creado vía Edit, muestra un mensaje útil y
   // abre el editor directamente prellenando el nombre.
+  // Render legible (no JSON crudo) de las salidas del puente Fase 2
+  // para que el admin pueda comprobar de un vistazo que sus equipos y
+  // plantillas se traducen bien al formato del simulador.
+  window.lextShowEnginePreview = function(){
+    var ov = document.getElementById('lext-engine-preview-ov');
+    var body = document.getElementById('lext-engine-preview-body');
+    if(!ov || !body) return;
+    var bridge = window.ligaEaBuildEngineOverrides();
+    if(!bridge){
+      body.textContent = '⚠ No hay equipos creados todavía.\n\nCrea al menos uno desde el formulario de arriba para ver qué recibirá el simulador.';
+      ov.style.display = 'flex';
+      return;
+    }
+    var lines = [];
+    lines.push('═══════════════════════════════════════════════');
+    lines.push('  RESUMEN');
+    lines.push('═══════════════════════════════════════════════');
+    lines.push('  Equipos creados:  ' + bridge.meta.teamsCount + ' / 20');
+    lines.push('  Jugadores totales: ' + bridge.meta.playersCount);
+    lines.push('  Equipos humanos:   ' + bridge.meta.humansCount);
+    lines.push('  Generado:          ' + bridge.meta.generatedAt);
+    lines.push('');
+    lines.push('═══════════════════════════════════════════════');
+    lines.push('  TEAM_RATINGS (probabilidad de victoria)');
+    lines.push('═══════════════════════════════════════════════');
+    Object.keys(bridge.ratings).sort(function(a,b){return bridge.ratings[b]-bridge.ratings[a];}).forEach(function(name){
+      var em = bridge.emojis[name] ? ' ' + bridge.emojis[name] : '';
+      var human = bridge.humanos.indexOf(name) !== -1 ? ' [HUMANO]' : ' [IA]';
+      lines.push('  ' + String(bridge.ratings[name]).padStart(3,' ') + '  ' + name + em + human);
+    });
+    lines.push('');
+    lines.push('═══════════════════════════════════════════════');
+    lines.push('  SQUAD_REGISTRY (plantillas y goles)');
+    lines.push('═══════════════════════════════════════════════');
+    Object.keys(bridge.squads).forEach(function(name){
+      lines.push('');
+      lines.push('▼ ' + name + '  (rating ' + bridge.ratings[name] + ')');
+      var sq = bridge.squads[name];
+      sq.forEach(function(item){
+        if(item && item.h){
+          lines.push('  ─ ' + item.h);
+        } else if(Array.isArray(item)){
+          var num = item[0]||'?', nm = item[1]||'?', pw = item[2]||0;
+          lines.push('     #' + String(num).padStart(2,' ') + '  ' + String(nm).padEnd(22,' ') + '  pw ' + String(pw).padStart(2,' '));
+        }
+      });
+    });
+    body.textContent = lines.join('\n');
+    ov.style.display = 'flex';
+  };
+  window.lextHideEnginePreview = function(){
+    var ov = document.getElementById('lext-engine-preview-ov');
+    if(ov) ov.style.display = 'none';
+  };
+
+  // ──────────────────────────────────────────────────────────────────
+  // 🛠 PUENTE FASE 2 — Traduce el storage de Liga EA Sports al formato
+  // que el simulador del bundle ya espera (TEAM_RATINGS / SQUAD_REGISTRY).
+  //
+  // El simulador (index.bundle.js) lee:
+  //   • window.TEAM_RATINGS[name] → number 1-99 (rating del equipo).
+  //     Decide probabilidad de gol, expectativa Poisson, max goles.
+  //   • window.SQUAD_REGISTRY[name] → array tipo:
+  //       [{h:'🧤 PORTEROS'}, ['1','Oblak',89], ['13','Musso',80],
+  //        {h:'🛡 DEFENSAS'},  ['2','Giménez',83], ...,
+  //        {h:'⚙️ MEDIOS'},    ['8','De Paul',83], ...,
+  //        {h:'⚡ DELANTEROS'},['9','Julián Álvarez',88], ...]
+  //   • Cada jugador se lee como [num, name, pos, power]; el simulador
+  //     usa pos para _posGoalWeight (P/D/M/F: 0.001/0.075/0.175/0.70)
+  //     y power para el boost de goleo +15% por cada 20 puntos sobre 70.
+  //   • window.HUMANOS / FEATURED_TEAMS / HUMAN_TEAMS / etc → lista de
+  //     nombres de equipos humanos (decide derbys, cajas del home,
+  //     simulación con previa).
+  //
+  // Esta función NO modifica nada — solo construye el objeto que
+  // Fase 2 inyectará en window.* al cargar la página y tras cada save.
+  //
+  // Devuelve null si no hay equipos creados.
+  // ──────────────────────────────────────────────────────────────────
+  window.ligaEaBuildEngineOverrides = function(){
+    var data = loadData('liga-ea-sports') || {teams:[]};
+    var teams = (data.teams || []).slice();
+    if(!teams.length) return null;
+
+    // Traducción posición editor → simulador
+    var POS_MAP = { POR:'P', DEF:'D', MED:'M', DEL:'F' };
+    // Section header del simulador para cada posición
+    var POS_HEADER = {
+      P: '🧤 PORTEROS',
+      D: '🛡 DEFENSAS',
+      M: '⚙️ MEDIOS',
+      F: '⚡ DELANTEROS'
+    };
+    var POS_ORDER = ['P','D','M','F'];
+
+    // Auto-numeración de dorsales por posición cuando el admin no los
+    // asignó manualmente (cosmético en el simulador, sale en logs/MVP).
+    var DEFAULT_NUMS = {
+      P: [1, 13, 25, 12, 31],
+      D: [2, 3, 4, 5, 15, 16, 22, 24, 23, 18, 26],
+      M: [6, 8, 10, 14, 17, 19, 20, 21, 27, 28],
+      F: [7, 9, 11, 29, 30, 32, 33]
+    };
+
+    var ratings = {};   // name → power
+    var squads  = {};   // name → array formato simulador
+    var humanos = [];   // nombres de equipos humanos
+    var emojis  = {};   // name → humanEmoji
+    var shields = {};   // name → URL del escudo
+
+    teams.forEach(function(t){
+      if(!t || !t.name) return;
+      ratings[t.name] = Math.max(1, Math.min(99, Number(t.power) || 75));
+      if(t.isHuman) humanos.push(t.name);
+      if(t.humanEmoji) emojis[t.name] = t.humanEmoji;
+      if(t.shield) shields[t.name] = t.shield;
+
+      // Agrupar jugadores por posición traducida
+      var byPos = { P:[], D:[], M:[], F:[] };
+      (t.players || []).forEach(function(p){
+        var simPos = POS_MAP[p.pos] || 'M';
+        byPos[simPos].push(p);
+      });
+
+      // Asignar dorsales a los que no tienen
+      var usedNums = {};
+      Object.keys(byPos).forEach(function(k){
+        byPos[k].forEach(function(p){
+          if(p.num && !usedNums[p.num]){ usedNums[p.num] = true; }
+        });
+      });
+      function nextFreeNum(simPos){
+        var pool = DEFAULT_NUMS[simPos] || [];
+        for(var i=0;i<pool.length;i++){
+          if(!usedNums[pool[i]]){ usedNums[pool[i]] = true; return pool[i]; }
+        }
+        for(var n=1;n<=99;n++){
+          if(!usedNums[n]){ usedNums[n] = true; return n; }
+        }
+        return 99;
+      }
+
+      // Construir el array final con los headers de sección
+      var simSquad = [];
+      POS_ORDER.forEach(function(simPos){
+        var pool = byPos[simPos];
+        if(!pool.length) return;
+        // Ordenar por poder descendente dentro de cada línea (igual que
+        // hace el SQUAD_REGISTRY hardcodeado del bundle).
+        pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+        simSquad.push({ h: POS_HEADER[simPos] });
+        pool.forEach(function(p){
+          var num = p.num && p.num > 0 ? p.num : nextFreeNum(simPos);
+          var pw  = Math.max(1, Math.min(99, Number(p.power)||70));
+          simSquad.push([String(num), String(p.name||'?'), pw]);
+        });
+      });
+      squads[t.name] = simSquad;
+    });
+
+    return {
+      ratings: ratings,
+      squads:  squads,
+      humanos: humanos,
+      emojis:  emojis,
+      shields: shields,
+      meta: {
+        teamsCount: teams.length,
+        playersCount: teams.reduce(function(a,t){ return a + ((t.players||[]).length); }, 0),
+        humansCount: humanos.length,
+        generatedAt: new Date().toISOString()
+      }
+    };
+  };
+
   window.openLigaEaSquadByName = function(displayName){
     setLigaEaContext();
     var tryOpen = function(){

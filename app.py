@@ -1042,6 +1042,83 @@ def api_live_state_post():
     result = save_live_state(incoming)
     return jsonify(result)
 
+# ── Ligas externas (Resto de Ligas — 51 países) ────────────────────
+# Persistencia compartida entre dispositivos. Una fila de GlobalState
+# por cada liga, con clave "liga_ext_<slug>". Cada liga guarda su
+# propio {teams, results}.
+
+import re as _re_liga_ext
+
+def _liga_ext_slug(raw):
+    s = unicodedata.normalize("NFD", str(raw or "")).encode("ascii", "ignore").decode("ascii")
+    s = s.lower()
+    s = _re_liga_ext.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    return s or "liga"
+
+def _liga_ext_key(slug):
+    return "liga_ext_" + _liga_ext_slug(slug)
+
+def _liga_ext_load(slug):
+    key = _liga_ext_key(slug)
+    row = GlobalState.query.filter_by(clave=key).first()
+    if not row:
+        return {"teams": [], "results": []}
+    try:
+        data = json.loads(row.valor_json or "{}")
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    data.setdefault("teams", [])
+    data.setdefault("results", [])
+    return data
+
+def _liga_ext_save(slug, data):
+    key = _liga_ext_key(slug)
+    row = GlobalState.query.filter_by(clave=key).first()
+    payload = json.dumps(data or {}, ensure_ascii=False)
+    now = utc_now_iso()
+    if row:
+        row.valor_json = payload
+        row.updated_at = now
+    else:
+        row = GlobalState(clave=key, valor_json=payload, updated_at=now)
+        db.session.add(row)
+    db.session.commit()
+    return row
+
+@app.route("/api/liga-ext/<slug>", methods=["GET"])
+def api_liga_ext_get(slug):
+    data = _liga_ext_load(slug)
+    row = GlobalState.query.filter_by(clave=_liga_ext_key(slug)).first()
+    updated_at = row.updated_at if row else ""
+    since = request.args.get("since", "")
+    if since and since == (updated_at or ""):
+        return ("", 304)
+    return jsonify({
+        "ok": True,
+        "slug": _liga_ext_slug(slug),
+        "data": data,
+        "updated_at": updated_at or "",
+    })
+
+@app.route("/api/liga-ext/<slug>", methods=["POST"])
+def api_liga_ext_post(slug):
+    payload = request.get_json(silent=True) or {}
+    incoming = payload.get("data", payload)
+    if not isinstance(incoming, dict):
+        return jsonify({"ok": False, "error": "data inválida"}), 400
+    incoming.setdefault("teams", [])
+    incoming.setdefault("results", [])
+    if not isinstance(incoming["teams"], list) or not isinstance(incoming["results"], list):
+        return jsonify({"ok": False, "error": "teams/results deben ser listas"}), 400
+    row = _liga_ext_save(slug, incoming)
+    return jsonify({
+        "ok": True,
+        "slug": _liga_ext_slug(slug),
+        "updated_at": row.updated_at or "",
+    })
+
 @app.route("/")
 def inicio():
     return render_template("index.html")

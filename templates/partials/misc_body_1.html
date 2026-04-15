@@ -3163,11 +3163,55 @@ window.pG = function(fn) {
   function slugify(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
   function uid(){ return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
   function storeKey(k){ return 'ligaExt_'+k; }
+
+  // ── Persistencia en servidor (sincroniza entre dispositivos) ──
+  // Cache local por liga + write-back optimista al servidor. Si el
+  // servidor está caído o tarda, renderizamos igual desde la cache.
+  var LIGA_CACHE = {}; // slug → data
+  var LIGA_UPDATED = {}; // slug → iso
+
   function loadData(k){
-    try{ var raw = localStorage.getItem(storeKey(k)); if(raw) return JSON.parse(raw); }catch(_){}
-    return {teams:[], results:[]};
+    if(LIGA_CACHE[k]) return LIGA_CACHE[k];
+    try{ var raw = localStorage.getItem(storeKey(k)); if(raw){ LIGA_CACHE[k] = JSON.parse(raw); return LIGA_CACHE[k]; } }catch(_){}
+    LIGA_CACHE[k] = {teams:[], results:[]};
+    return LIGA_CACHE[k];
   }
-  function saveData(k,d){ try{ localStorage.setItem(storeKey(k), JSON.stringify(d)); }catch(_){} }
+
+  function saveData(k,d){
+    LIGA_CACHE[k] = d;
+    try{ localStorage.setItem(storeKey(k), JSON.stringify(d)); }catch(_){}
+    // Write-back al servidor (async, best-effort)
+    try{
+      fetch('/api/liga-ext/'+encodeURIComponent(k), {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({data:d})
+      }).then(function(r){return r.ok?r.json():null;}).then(function(j){
+        if(j && j.updated_at) LIGA_UPDATED[k] = j.updated_at;
+      }).catch(function(){});
+    }catch(_){}
+  }
+
+  function fetchData(k, cb){
+    try{
+      var since = LIGA_UPDATED[k] || '';
+      var url = '/api/liga-ext/'+encodeURIComponent(k) + (since?('?since='+encodeURIComponent(since)):'');
+      fetch(url).then(function(r){
+        if(r.status===304){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); return; }
+        if(!r.ok){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); return; }
+        return r.json();
+      }).then(function(j){
+        if(!j) return;
+        var data = (j && j.data) || {teams:[],results:[]};
+        data.teams = data.teams || [];
+        data.results = data.results || [];
+        LIGA_CACHE[k] = data;
+        LIGA_UPDATED[k] = j.updated_at || '';
+        try{ localStorage.setItem(storeKey(k), JSON.stringify(data)); }catch(_){}
+        cb && cb(data, true);
+      }).catch(function(){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); });
+    }catch(_){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); }
+  }
 
   function computeTeamPower(t){
     if(!t.players || !t.players.length) return Number(t.power)||50;
@@ -3597,10 +3641,19 @@ window.pG = function(fn) {
     var e = document.getElementById('liga-ext-emoji');
     if(t) t.textContent = '🏆 '+CURRENT_NAME;
     if(e) e.textContent = CURRENT_EMOJI;
-    // Inicializa storage si no existe
+    // Renderiza primero desde cache local (respuesta inmediata)
     loadData(CURRENT_KEY);
     renderTable();
     if(typeof window.go === 'function') window.go('s-liga-ext');
+    // Sincroniza con servidor y re-renderiza cuando llega
+    fetchData(CURRENT_KEY, function(data, fromServer){
+      if(fromServer && CURRENT_KEY){
+        renderTable();
+        // Si está el modal de equipos abierto, refrescar lista
+        var ov = document.getElementById('lext-ov-teams');
+        if(ov && ov.classList.contains('show')) renderTeamsList();
+      }
+    });
   };
 
   function wireLigasExt(){

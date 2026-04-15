@@ -3078,6 +3078,38 @@ window.pG = function(fn) {
 .lext-badge.cap{background:rgba(240,192,64,.22);color:#f0c040;border:1px solid rgba(240,192,64,.5);}
 .lext-badge.fk{background:rgba(80,180,255,.22);color:#60bfff;border:1px solid rgba(80,180,255,.5);}
 .lext-badge.pk{background:rgba(255,90,90,.22);color:#ff7070;border:1px solid rgba(255,90,90,.5);}
+/* Tabla de plantilla dentro del modal */
+.lext-sq-wrap{overflow-x:auto;margin-top:6px;padding-bottom:6px;}
+.lext-sq-sec{margin-bottom:10px;}
+.lext-sq-title{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:#f0c040;padding:4px 0 3px;border-bottom:1px solid rgba(240,192,64,.2);margin-bottom:3px;}
+.lext-sq-hdr,.lext-sq-row{display:grid;gap:2px;align-items:center;padding:5px 4px;}
+.lext-sq-hdr.ot,.lext-sq-row.ot{grid-template-columns:minmax(115px,1.3fr) 28px 28px 28px 28px 28px 28px 28px 28px 44px 24px;min-width:470px;}
+.lext-sq-hdr.gk,.lext-sq-row.gk{grid-template-columns:minmax(115px,1.3fr) 28px 28px 28px 28px 28px 28px 28px 44px 24px;min-width:440px;}
+.lext-sq-hdr{font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.5px;background:rgba(255,255,255,.03);border-radius:4px;}
+.lext-sq-hdr span{text-align:center;}
+.lext-sq-hdr span:first-child{text-align:left;padding-left:6px;}
+.lext-sq-row{border-bottom:1px solid rgba(255,255,255,.04);}
+.lext-sq-row:hover{background:rgba(255,255,255,.03);}
+.lext-sq-name{font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:6px;display:flex;align-items:center;gap:4px;}
+.lext-sq-cell{font-family:"Bebas Neue",sans-serif;font-size:14px;color:rgba(255,255,255,.78);text-align:center;}
+.lext-sq-cell.pw{color:#f0c040;}
+.lext-sq-cell.zero{color:rgba(255,255,255,.22);}
+.lext-sq-cell.gol{color:#4fc86a;}
+.lext-sq-cell.pen{color:#ffd080;}
+.lext-sq-cell.fk{color:#60bfff;}
+.lext-sq-cell.mvp{color:#ffd700;}
+.lext-sq-cell.ta{color:#f0c040;}
+.lext-sq-cell.tr{color:#e05050;}
+.lext-sq-cell.imbat{color:#80d0ff;}
+.lext-sq-cell.psave{color:#a0ffa0;}
+.lext-sq-cell.rating{font-family:"Bebas Neue",sans-serif;font-size:15px;color:#fff;font-weight:700;background:rgba(240,192,64,.12);border-radius:3px;padding:2px 0;}
+.lext-sq-cell.rating.r9{color:#ffd700;background:rgba(255,215,0,.18);}
+.lext-sq-cell.rating.r8{color:#ffb050;background:rgba(255,176,80,.15);}
+.lext-sq-cell.rating.r7{color:#80d0ff;background:rgba(128,208,255,.12);}
+.lext-sq-cell.rating.r6{color:#c0e0a0;}
+.lext-sq-cell.rating.r0{color:rgba(255,255,255,.22);background:transparent;}
+.lext-sq-mini{background:none;border:none;color:rgba(255,255,255,.35);font-size:12px;cursor:pointer;}
+.lext-sq-mini:hover{color:#ff7070;}
 </style>
 
 <div class="lext-wrap">
@@ -3346,14 +3378,10 @@ window.pG = function(fn) {
   function simulateMatch(tA, tB){
     var pA = computeTeamPower(tA);
     var pB = computeTeamPower(tB);
-    // Ligera ventaja local
-    pA += 3;
+    pA += 3; // ventaja local
     var diff = pA - pB;
-    // Expectativa de goles
     var baseA = Math.max(0.15, 1.3 + diff*0.03);
     var baseB = Math.max(0.15, 1.3 - diff*0.03);
-    // Tarjetas: media ~2.1 amarillas/equipo, ~0.08 rojas/equipo
-    // Ligeramente más al equipo más débil (recibe faltas por defender más)
     var yA = Math.max(0.4, 2.0 - diff*0.02);
     var yB = Math.max(0.4, 2.0 + diff*0.02);
     var rA = Math.max(0.02, 0.07 - diff*0.002);
@@ -3368,10 +3396,118 @@ window.pG = function(fn) {
     };
   }
 
+  // Reparto de stats por jugador para un partido concreto.
+  function weightedPick(pool){
+    if(!pool.length) return null;
+    var total = pool.reduce(function(s,p){return s+Math.max(1,Number(p.power)||1);},0);
+    var r = Math.random()*total;
+    var acc = 0;
+    for(var i=0;i<pool.length;i++){
+      acc += Math.max(1,Number(pool[i].power)||1);
+      if(r<=acc) return pool[i];
+    }
+    return pool[pool.length-1];
+  }
+
+  function pickScorer(players){
+    // 60% DEL, 30% MED, 10% DEF
+    var r = Math.random();
+    var pool;
+    if(r < 0.6) pool = players.filter(function(p){return p.pos==='DEL';});
+    else if(r < 0.9) pool = players.filter(function(p){return p.pos==='MED';});
+    else pool = players.filter(function(p){return p.pos==='DEF';});
+    if(!pool.length) pool = players.filter(function(p){return p.pos!=='POR';});
+    if(!pool.length) pool = players;
+    return weightedPick(pool);
+  }
+
+  function pickCardie(players){
+    var pool = players.filter(function(p){return p.pos==='DEF'||p.pos==='MED';});
+    if(!pool.length) pool = players.filter(function(p){return p.pos!=='POR';});
+    if(!pool.length) pool = players;
+    return pool[Math.floor(Math.random()*pool.length)];
+  }
+
+  function ensurePlayerStats(p){
+    if(p.pj==null) p.pj=0;
+    if(p.gol==null) p.gol=0;
+    if(p.pen==null) p.pen=0;
+    if(p.fk==null) p.fk=0;
+    if(p.mvp==null) p.mvp=0;
+    if(p.ta==null) p.ta=0;
+    if(p.tr==null) p.tr=0;
+    if(p.imbat==null) p.imbat=0;
+    if(p.penSaved==null) p.penSaved=0;
+  }
+
+  function resetPlayerStats(p){
+    p.pj=0; p.gol=0; p.pen=0; p.fk=0; p.mvp=0; p.ta=0; p.tr=0; p.imbat=0; p.penSaved=0;
+  }
+
+  function applyMatchStats(team, gf, ga, yellows, reds){
+    if(!team.players || !team.players.length) return;
+    team.players.forEach(ensurePlayerStats);
+    // PJ para todos
+    team.players.forEach(function(p){ p.pj++; });
+    // Clean sheet + pen parado al portero
+    var gks = team.players.filter(function(p){return p.pos==='POR';});
+    if(gks.length){
+      if(ga === 0) gks[0].imbat++;
+      if(Math.random() < 0.08) gks[0].penSaved++;
+    }
+    // Distribución de goles
+    for(var g=0; g<gf; g++){
+      var scorer;
+      var roll = Math.random();
+      if(roll < 0.12){
+        // Penalti
+        var penTaker = team.players.filter(function(p){return p.penalty;})[0];
+        scorer = penTaker || pickScorer(team.players);
+        if(scorer){ scorer.pen++; }
+      } else if(roll < 0.17){
+        // Falta directa
+        var fkTaker = team.players.filter(function(p){return p.freeKick;})[0];
+        scorer = fkTaker || pickScorer(team.players);
+        if(scorer){ scorer.fk++; }
+      } else {
+        scorer = pickScorer(team.players);
+      }
+      if(scorer) scorer.gol++;
+    }
+    // Amarillas
+    for(var y=0; y<yellows; y++){
+      var c = pickCardie(team.players);
+      if(c) c.ta++;
+    }
+    // Rojas
+    for(var rr=0; rr<reds; rr++){
+      var c2 = pickCardie(team.players);
+      if(c2) c2.tr++;
+    }
+  }
+
+  function assignMVP(winner, loser, isTie){
+    // 80% del MVP al ganador, 20% al perdedor; si empate, 50/50.
+    var team;
+    if(isTie) team = Math.random()<0.5 ? winner : loser;
+    else team = Math.random()<0.2 ? loser : winner;
+    if(!team || !team.players || !team.players.length) return;
+    team.players.forEach(ensurePlayerStats);
+    // Ponderamos por power pero con ligero boost a los que hayan marcado este "ciclo"
+    var pool = team.players.filter(function(p){return p.pos!=='POR';});
+    if(!pool.length) pool = team.players;
+    var sel = weightedPick(pool);
+    if(sel) sel.mvp++;
+  }
+
   function ligaExtSimular(){
     if(!CURRENT_KEY) return;
     var data = loadData(CURRENT_KEY);
     if(data.teams.length < 2){ alert('Añade al menos 2 equipos.'); return; }
+    // Resetear stats de jugadores
+    data.teams.forEach(function(t){
+      (t.players||[]).forEach(resetPlayerStats);
+    });
     data.results = [];
     var ts = data.teams.slice();
     for(var i=0;i<ts.length;i++){
@@ -3384,12 +3520,52 @@ window.pG = function(fn) {
           tah:r.tah, taa:r.taa,
           trh:r.trh, tra:r.tra
         });
+        applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
+        applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
+        if(r.gh > r.ga) assignMVP(ts[i], ts[j], false);
+        else if(r.ga > r.gh) assignMVP(ts[j], ts[i], false);
+        else assignMVP(ts[i], ts[j], true);
       }
     }
     saveData(CURRENT_KEY, data);
     renderTable();
   }
   window.ligaExtSimular = ligaExtSimular;
+
+  // ── Valoración 0-10 de un jugador ────────────────
+  // Calibrada con Haaland (33 PJ · 26 gol · 6 pen · 2 falta · 13 MVP) ≈ 9.0
+  // Puntos Haaland: 3.3 + 26 + 6 + 6 + 13 = 54.3
+  // Rating = 5 + (puntos/PJ) * 2.43 → 5 + 1.645*2.43 = 9.0
+  function computePlayerRating(p){
+    ensurePlayerStats(p);
+    var pj = Number(p.pj)||0;
+    if(pj === 0) return 0;
+    var pts = pj * 0.10;
+    if(p.pos === 'POR'){
+      pts += (p.imbat||0) * 2;
+      pts += (p.penSaved||0) * 1;
+      pts += (p.mvp||0) * 3.5;
+    } else if(p.pos === 'DEF'){
+      pts += (p.gol||0) * 2;
+      pts += (p.pen||0) * 1;
+      pts += (p.fk||0) * 3;
+      pts += (p.mvp||0) * 2;
+    } else if(p.pos === 'MED'){
+      pts += (p.gol||0) * 1.5;
+      pts += (p.pen||0) * 1;
+      pts += (p.fk||0) * 3;
+      pts += (p.mvp||0) * 1.5;
+    } else {
+      pts += (p.gol||0) * 1;
+      pts += (p.pen||0) * 1;
+      pts += (p.fk||0) * 3;
+      pts += (p.mvp||0) * 1;
+    }
+    var r = 5.0 + (pts / pj) * 2.43;
+    if(r < 0) r = 0;
+    if(r > 10) r = 10;
+    return r;
+  }
 
   // ── Copa (placeholder) ────────────────────────────
   window.ligaExtCopa = function(){
@@ -3507,7 +3683,8 @@ window.pG = function(fn) {
         power:Math.max(1,Math.min(99,power)),
         captain: flags.indexOf('C')>-1,
         freeKick: flags.indexOf('F')>-1,
-        penalty: flags.indexOf('P')>-1
+        penalty: flags.indexOf('P')>-1,
+        pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
       });
     });
     // Si se marcó más de un capitán, solo el primero queda; los demás pierden el flag
@@ -3643,37 +3820,108 @@ window.pG = function(fn) {
     lextOpenOv('lext-ov-squad');
   };
 
+  function ratingClass(r){
+    if(r <= 0) return 'r0';
+    if(r >= 9) return 'r9';
+    if(r >= 8) return 'r8';
+    if(r >= 7) return 'r7';
+    if(r >= 6) return 'r6';
+    return '';
+  }
+
+  function fmtCell(val, cls){
+    var n = Number(val)||0;
+    var z = n === 0 ? ' zero' : '';
+    return '<span class="lext-sq-cell '+(cls||'')+z+'">'+n+'</span>';
+  }
+
   function renderSquadList(){
     if(!CURRENT_SQUAD_TEAM) return;
     var data = loadData(CURRENT_KEY);
     var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
     var host = document.getElementById('lext-squad-list');
     if(!t || !t.players || !t.players.length){ host.innerHTML='<div class="lext-sub">— Sin jugadores —</div>'; return; }
-    // Agrupar por posición
     var ORDER = ['POR','DEF','MED','DEL'];
-    var LABEL = {POR:'🧤 Porteros',DEF:'🛡 Defensas',MED:'⚙ Centrocampistas',DEL:'⚽ Delanteros'};
+    var LABEL = {POR:'🧤 PORTEROS',DEF:'🛡 DEFENSAS',MED:'⚙ CENTROCAMPISTAS',DEL:'⚽ DELANTEROS'};
     var byPos = {POR:[],DEF:[],MED:[],DEL:[]};
-    t.players.forEach(function(p){ (byPos[p.pos]||byPos.MED).push(p); });
-    var html = '';
-    ORDER.forEach(function(k){
-      if(!byPos[k].length) return;
-      html += '<div class="lext-sub" style="margin-top:6px;">'+LABEL[k]+'</div>';
-      html += byPos[k].map(function(p){
-        var badges = '';
-        if(p.captain) badges += '<span class="lext-badge cap" title="Capitán">C</span>';
-        if(p.freeKick) badges += '<span class="lext-badge fk" title="Lanzador de faltas">F</span>';
-        if(p.penalty) badges += '<span class="lext-badge pk" title="Lanzador de penaltis">P</span>';
-        return '<div class="lext-list-item">'
-          +'<span class="lext-li-pos">'+p.pos+'</span>'
-          +'<span class="lext-li-name">'+p.name+badges+'</span>'
-          +'<span class="lext-li-pw">🛡 '+p.power+'</span>'
-          +'<button class="lext-li-btn" onclick="lextTogglePlayerFlag(\''+p.id+'\',\'captain\')" title="Capitán">C</button>'
-          +'<button class="lext-li-btn" onclick="lextTogglePlayerFlag(\''+p.id+'\',\'freeKick\')" title="Faltas">F</button>'
-          +'<button class="lext-li-btn" onclick="lextTogglePlayerFlag(\''+p.id+'\',\'penalty\')" title="Penaltis">P</button>'
-          +'<button class="lext-li-btn" onclick="lextDeletePlayer(\''+p.id+'\')">🗑</button>'
-        +'</div>';
-      }).join('');
+    t.players.forEach(function(p){
+      ensurePlayerStats(p);
+      (byPos[p.pos]||byPos.MED).push(p);
     });
+
+    function rowFor(p, isGK){
+      var badges = '';
+      if(p.captain) badges += '<span class="lext-badge cap" title="Capitán">C</span>';
+      if(p.freeKick) badges += '<span class="lext-badge fk" title="Lanzador de faltas">F</span>';
+      if(p.penalty) badges += '<span class="lext-badge pk" title="Lanzador de penaltis">P</span>';
+      var rating = computePlayerRating(p);
+      var rStr = rating>0 ? rating.toFixed(2) : '0.00';
+      var rCls = 'rating '+ratingClass(rating);
+      var power = '<span class="lext-sq-cell pw">'+(p.power||0)+'</span>';
+      var pj = fmtCell(p.pj,'');
+      var mvp = fmtCell(p.mvp,'mvp');
+      var ta = fmtCell(p.ta,'ta');
+      var tr = fmtCell(p.tr,'tr');
+      var rCell = '<span class="lext-sq-cell '+rCls+'">'+rStr+'</span>';
+      var cls = isGK ? 'gk' : 'ot';
+      var cells;
+      if(isGK){
+        cells = power + pj + fmtCell(p.imbat,'imbat') + fmtCell(p.penSaved,'psave') + mvp + ta + tr + rCell;
+      } else {
+        cells = power + pj + fmtCell(p.gol,'gol') + fmtCell(p.pen,'pen') + fmtCell(p.fk,'fk') + mvp + ta + tr + rCell;
+      }
+      return '<div class="lext-sq-row '+cls+'">'
+        + '<span class="lext-sq-name">'+p.name+badges+'</span>'
+        + cells
+        + '<button class="lext-sq-mini" onclick="lextDeletePlayer(\''+p.id+'\')" title="Eliminar">🗑</button>'
+        + '</div>';
+    }
+
+    function sectionFor(k){
+      var list = byPos[k];
+      if(!list.length) return '';
+      var isGK = k==='POR';
+      var cls = isGK ? 'gk' : 'ot';
+      var header;
+      if(isGK){
+        header = '<div class="lext-sq-hdr '+cls+'">'
+          + '<span>'+LABEL[k]+'</span>'
+          + '<span title="Poder">🛡</span>'
+          + '<span title="Partidos">👤</span>'
+          + '<span title="Imbatido">🧤</span>'
+          + '<span title="Pen parados">🖐</span>'
+          + '<span title="MVP">⭐</span>'
+          + '<span title="Tar. amarillas">🟨</span>'
+          + '<span title="Tar. rojas">🟥</span>'
+          + '<span title="Valoración">📈</span>'
+          + '<span></span>'
+          + '</div>';
+      } else {
+        header = '<div class="lext-sq-hdr '+cls+'">'
+          + '<span>'+LABEL[k]+'</span>'
+          + '<span title="Poder">🛡</span>'
+          + '<span title="Partidos">👤</span>'
+          + '<span title="Goles">⚽</span>'
+          + '<span title="Pen marcados">🥅</span>'
+          + '<span title="Goles de falta">🎯</span>'
+          + '<span title="MVP">⭐</span>'
+          + '<span title="Tar. amarillas">🟨</span>'
+          + '<span title="Tar. rojas">🟥</span>'
+          + '<span title="Valoración">📈</span>'
+          + '<span></span>'
+          + '</div>';
+      }
+      list.sort(function(a,b){
+        var ra = computePlayerRating(a), rb = computePlayerRating(b);
+        if(rb !== ra) return rb-ra;
+        return (Number(b.power)||0)-(Number(a.power)||0);
+      });
+      return '<div class="lext-sq-sec">'+header+list.map(function(p){return rowFor(p,isGK);}).join('')+'</div>';
+    }
+
+    var html = '<div class="lext-sq-wrap">';
+    ORDER.forEach(function(k){ html += sectionFor(k); });
+    html += '</div>';
     host.innerHTML = html;
   }
 
@@ -3705,7 +3953,8 @@ window.pG = function(fn) {
     var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
     if(!t) return;
     t.players = t.players || [];
-    t.players.push({id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:name,pos:pos,power:power});
+    var newP = {id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:name,pos:pos,power:power,pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+    t.players.push(newP);
     // Actualiza poder global del equipo como promedio de plantilla
     t.power = computeTeamPower(t);
     saveData(CURRENT_KEY,data);

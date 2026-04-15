@@ -3343,15 +3343,10 @@ window.pG = function(fn) {
 .lext-grid4>div{display:flex;flex-direction:column;}
 .lext-mini-lbl{font-family:Oswald,sans-serif;font-size:8px;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:2px;text-align:center;}
 .lext-input.lext-mini{padding:6px 4px;font-family:"Bebas Neue",sans-serif;font-size:16px;text-align:center;margin-bottom:0;}
-.lext-badge{display:inline-block;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.5px;padding:1px 5px;border-radius:3px;margin-left:3px;font-weight:700;cursor:pointer;user-select:none;transition:all .12s;}
-.lext-badge:hover{transform:scale(1.18);}
+.lext-badge{display:inline-block;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.5px;padding:1px 5px;border-radius:3px;margin-left:3px;font-weight:700;}
 .lext-badge.cap{background:rgba(240,192,64,.22);color:#f0c040;border:1px solid rgba(240,192,64,.5);}
 .lext-badge.fk{background:rgba(80,180,255,.22);color:#60bfff;border:1px solid rgba(80,180,255,.5);}
 .lext-badge.pk{background:rgba(255,90,90,.22);color:#ff7070;border:1px solid rgba(255,90,90,.5);}
-/* Estado inactivo: badge "apagada" indica que el rol NO está asignado.
-   El admin la pulsa para activar / desactivar. */
-.lext-badge.off{background:rgba(255,255,255,.04);color:rgba(255,255,255,.25);border-color:rgba(255,255,255,.12);}
-.lext-badge.off:hover{color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.3);}
 /* Tabla de plantilla dentro del modal */
 .lext-sq-wrap{overflow-x:auto;margin-top:6px;padding-bottom:6px;}
 .lext-sq-sec{margin-bottom:10px;}
@@ -4658,14 +4653,15 @@ window.pG = function(fn) {
     });
 
     function rowFor(p, isGK){
-      // Badges siempre visibles y clicables — toggle de roles en caliente
-      // sin necesidad de borrar y recrear al jugador. Muestran estado
-      // activo/inactivo para que el admin vea de un vistazo qué jugadores
-      // tienen cada rol asignado en todo el equipo.
-      var badges = ''
-        + '<span class="lext-badge cap'+(p.captain  ? '' : ' off')+'" title="Capitán (clic para alternar)" onclick="event.stopPropagation();lextTogglePlayerFlag(\''+p.id+'\',\'captain\')">C</span>'
-        + '<span class="lext-badge fk' +(p.freeKick ? '' : ' off')+'" title="Lanzador de faltas (clic para alternar)" onclick="event.stopPropagation();lextTogglePlayerFlag(\''+p.id+'\',\'freeKick\')">F</span>'
-        + '<span class="lext-badge pk' +(p.penalty  ? '' : ' off')+'" title="Lanzador de penaltis (clic para alternar)" onclick="event.stopPropagation();lextTogglePlayerFlag(\''+p.id+'\',\'penalty\')">P</span>';
+      // Las badges C/F/P solo se muestran cuando el rol está asignado.
+      // Los roles solo se asignan al PEGAR la plantilla o al AÑADIR un
+      // jugador individual desde el formulario superior — no se pueden
+      // alternar desde aquí. Toda esta UI ya vive detrás de PIN admin
+      // 747 (modal pG → ligaExt edit), no hace falta otra puerta.
+      var badges = '';
+      if(p.captain)  badges += '<span class="lext-badge cap" title="Capitán">C</span>';
+      if(p.freeKick) badges += '<span class="lext-badge fk"  title="Lanzador de faltas">F</span>';
+      if(p.penalty)  badges += '<span class="lext-badge pk"  title="Lanzador de penaltis">P</span>';
       var rating = computePlayerRating(p);
       var rStr = rating>0 ? rating.toFixed(2) : '0.00';
       var rCls = 'rating '+ratingClass(rating);

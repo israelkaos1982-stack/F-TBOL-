@@ -3343,10 +3343,15 @@ window.pG = function(fn) {
 .lext-grid4>div{display:flex;flex-direction:column;}
 .lext-mini-lbl{font-family:Oswald,sans-serif;font-size:8px;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:2px;text-align:center;}
 .lext-input.lext-mini{padding:6px 4px;font-family:"Bebas Neue",sans-serif;font-size:16px;text-align:center;margin-bottom:0;}
-.lext-badge{display:inline-block;font-family:Oswald,sans-serif;font-size:8px;letter-spacing:.5px;padding:1px 5px;border-radius:3px;margin-left:3px;font-weight:700;}
+.lext-badge{display:inline-block;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.5px;padding:1px 5px;border-radius:3px;margin-left:3px;font-weight:700;cursor:pointer;user-select:none;transition:all .12s;}
+.lext-badge:hover{transform:scale(1.18);}
 .lext-badge.cap{background:rgba(240,192,64,.22);color:#f0c040;border:1px solid rgba(240,192,64,.5);}
 .lext-badge.fk{background:rgba(80,180,255,.22);color:#60bfff;border:1px solid rgba(80,180,255,.5);}
 .lext-badge.pk{background:rgba(255,90,90,.22);color:#ff7070;border:1px solid rgba(255,90,90,.5);}
+/* Estado inactivo: badge "apagada" indica que el rol NO está asignado.
+   El admin la pulsa para activar / desactivar. */
+.lext-badge.off{background:rgba(255,255,255,.04);color:rgba(255,255,255,.25);border-color:rgba(255,255,255,.12);}
+.lext-badge.off:hover{color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.3);}
 /* Tabla de plantilla dentro del modal */
 .lext-sq-wrap{overflow-x:auto;margin-top:6px;padding-bottom:6px;}
 .lext-sq-sec{margin-bottom:10px;}
@@ -3422,6 +3427,13 @@ window.pG = function(fn) {
 .lext-li-tipo{display:inline-flex;align-items:center;gap:3px;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.8px;padding:2px 6px;border-radius:3px;margin-left:4px;font-weight:700;text-transform:uppercase;}
 .lext-li-tipo.human{background:rgba(94,200,255,.14);color:#9fdcff;border:1px solid rgba(94,200,255,.4);}
 .lext-li-tipo.ia{background:rgba(255,255,255,.06);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.15);}
+/* Roles de jugador (Capitán / Faltas / Penaltis) en el form individual */
+.lext-pl-roles{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+.lext-pl-role{flex:1;min-width:90px;display:flex;align-items:center;justify-content:center;gap:5px;padding:8px 6px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:6px;cursor:pointer;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.6);font-weight:700;text-transform:uppercase;transition:all .15s;user-select:none;}
+.lext-pl-role:hover{background:rgba(255,255,255,.08);color:#fff;}
+.lext-pl-role input{margin:0;accent-color:#f0c040;cursor:pointer;}
+.lext-pl-role:has(input:checked){background:rgba(240,192,64,.16);border-color:#f0c040;color:#f0c040;box-shadow:inset 0 0 10px rgba(240,192,64,.2);}
+.lext-pl-role-ico{font-size:14px;line-height:1;}
 </style>
 
 <div class="lext-wrap">
@@ -3547,6 +3559,13 @@ window.pG = function(fn) {
       </select>
       <label class="lext-label">🛡 Nivel / Poder (1-99)</label>
       <input class="lext-input" id="lext-pl-power" type="number" min="1" max="99" value="75" />
+      <label class="lext-label">Roles especiales</label>
+      <div class="lext-pl-roles">
+        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-cap"/><span class="lext-pl-role-ico">©</span><span>Capitán</span></label>
+        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-fk"/><span class="lext-pl-role-ico">🎯</span><span>Lanza faltas</span></label>
+        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-pk"/><span class="lext-pl-role-ico">🥅</span><span>Lanza penaltis</span></label>
+      </div>
+      <div class="lext-sub">Pueden combinarse (p.ej. el capitán también lanza penaltis). Solo puede haber <b>un capitán</b> por equipo: si marcas otro, el anterior pierde el rol automáticamente.</div>
       <div class="lext-btn-row">
         <button class="lext-btn green" onclick="lextSavePlayer()">💾 Añadir jugador</button>
       </div>
@@ -4614,10 +4633,14 @@ window.pG = function(fn) {
     });
 
     function rowFor(p, isGK){
-      var badges = '';
-      if(p.captain) badges += '<span class="lext-badge cap" title="Capitán">C</span>';
-      if(p.freeKick) badges += '<span class="lext-badge fk" title="Lanzador de faltas">F</span>';
-      if(p.penalty) badges += '<span class="lext-badge pk" title="Lanzador de penaltis">P</span>';
+      // Badges siempre visibles y clicables — toggle de roles en caliente
+      // sin necesidad de borrar y recrear al jugador. Muestran estado
+      // activo/inactivo para que el admin vea de un vistazo qué jugadores
+      // tienen cada rol asignado en todo el equipo.
+      var badges = ''
+        + '<span class="lext-badge cap'+(p.captain  ? '' : ' off')+'" title="Capitán (clic para alternar)" onclick="event.stopPropagation();lextTogglePlayerFlag(\''+p.id+'\',\'captain\')">C</span>'
+        + '<span class="lext-badge fk' +(p.freeKick ? '' : ' off')+'" title="Lanzador de faltas (clic para alternar)" onclick="event.stopPropagation();lextTogglePlayerFlag(\''+p.id+'\',\'freeKick\')">F</span>'
+        + '<span class="lext-badge pk' +(p.penalty  ? '' : ' off')+'" title="Lanzador de penaltis (clic para alternar)" onclick="event.stopPropagation();lextTogglePlayerFlag(\''+p.id+'\',\'penalty\')">P</span>';
       var rating = computePlayerRating(p);
       var rStr = rating>0 ? rating.toFixed(2) : '0.00';
       var rCls = 'rating '+ratingClass(rating);
@@ -4747,15 +4770,39 @@ window.pG = function(fn) {
     if(!name){ alert('Falta el nombre del jugador.'); return; }
     var pos = document.getElementById('lext-pl-pos').value;
     var power = parseInt(document.getElementById('lext-pl-power').value,10)||50;
+    var capChk = document.getElementById('lext-pl-cap');
+    var fkChk  = document.getElementById('lext-pl-fk');
+    var pkChk  = document.getElementById('lext-pl-pk');
+    var isCap = !!(capChk && capChk.checked);
+    var isFk  = !!(fkChk  && fkChk.checked);
+    var isPk  = !!(pkChk  && pkChk.checked);
     var data = loadData(CURRENT_KEY);
     var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
     if(!t) return;
     t.players = t.players || [];
-    var newP = {id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:name,pos:pos,power:power,pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+    // Regla: solo puede haber UN capitán por equipo. Si el admin marca
+    // capitán al nuevo jugador, le quitamos el rol al capitán anterior.
+    if(isCap){
+      t.players.forEach(function(p){ if(p.captain) p.captain = false; });
+    }
+    var newP = {
+      id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+      name:name, pos:pos, power:power,
+      captain: isCap,
+      freeKick: isFk,
+      penalty:  isPk,
+      pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
+    };
     t.players.push(newP);
     // El poder del equipo NO se recalcula — es fijo.
     saveData(CURRENT_KEY,data);
+    // Limpiar el form para añadir el siguiente sin perder los selectores
+    // de posición/poder (suelen ser los mismos para varios jugadores
+    // seguidos), pero sí limpiamos nombre y roles especiales.
     document.getElementById('lext-pl-name').value='';
+    if(capChk) capChk.checked = false;
+    if(fkChk)  fkChk.checked  = false;
+    if(pkChk)  pkChk.checked  = false;
     renderSquadList();
     renderTeamsList();
     renderTable();

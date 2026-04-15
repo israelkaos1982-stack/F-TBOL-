@@ -3017,8 +3017,8 @@ window.pG = function(fn) {
 .lext-leg-item{display:flex;align-items:center;gap:5px;}
 .lext-leg-dot{width:10px;height:10px;border-radius:50%;display:inline-block;box-shadow:0 0 8px currentColor;}
 .lext-wrap{padding:0 14px 32px;}
-.lext-table{width:100%;display:flex;flex-direction:column;gap:0;min-width:520px;}
-.lext-hdr,.lext-row{display:grid;grid-template-columns:24px minmax(95px,1.4fr) 32px 26px 22px 22px 22px 26px 26px 28px 26px 26px;gap:2px;align-items:center;padding:7px 4px;}
+.lext-table{width:100%;display:flex;flex-direction:column;gap:0;min-width:560px;}
+.lext-hdr,.lext-row{display:grid;grid-template-columns:24px minmax(95px,1.3fr) 32px 26px 22px 22px 22px 26px 26px 28px 26px 26px 38px;gap:2px;align-items:center;padding:7px 4px;}
 .lext-btn-compact{flex:1;min-width:0;padding:8px 4px !important;font-size:11px !important;justify-content:center;}
 .lext-hdr{background:linear-gradient(90deg,#082a14,#0f5a28);border-bottom:2px solid rgba(240,192,64,.4);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.72);font-weight:700;text-align:center;position:sticky;top:44px;z-index:20;}
 .lext-hdr span:nth-child(2){text-align:left;}
@@ -3041,6 +3041,10 @@ window.pG = function(fn) {
 .lext-cell.dg.neg{color:#ff7070;}
 .lext-cell.ta{color:#f0c040;}
 .lext-cell.tr{color:#e05050;}
+.lext-cell.pct{font-size:12px;font-weight:700;}
+.lext-cell.pct.pct-hi{color:#4fc86a;}
+.lext-cell.pct.pct-mid{color:#f0c040;}
+.lext-cell.pct.pct-lo{color:#ff7070;}
 .lext-pts{font-family:"Bebas Neue",sans-serif;font-size:17px;color:#f0c040;text-align:center;font-weight:700;}
 .lext-empty{padding:28px 0;text-align:center;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.35);}
 /* Overlay base */
@@ -3110,12 +3114,20 @@ window.pG = function(fn) {
 .lext-sq-cell.rating.r0{color:rgba(255,255,255,.22);background:transparent;}
 .lext-sq-mini{background:none;border:none;color:rgba(255,255,255,.35);font-size:12px;cursor:pointer;}
 .lext-sq-mini:hover{color:#ff7070;}
+.lext-details{border:1px solid rgba(255,255,255,.08);border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,.02);}
+.lext-details summary{padding:10px 12px;cursor:pointer;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.75);font-weight:700;list-style:none;display:flex;align-items:center;gap:6px;user-select:none;}
+.lext-details summary::-webkit-details-marker{display:none;}
+.lext-details summary::before{content:'▶';font-size:9px;color:rgba(255,255,255,.45);transition:transform .2s;}
+.lext-details[open] summary::before{transform:rotate(90deg);}
+.lext-details[open] summary{border-bottom:1px solid rgba(255,255,255,.08);}
+.lext-details > *:not(summary){padding:0 12px 10px;}
+.lext-details > textarea{padding:8px 10px;}
 </style>
 
 <div class="lext-wrap">
   <div class="lext-table">
     <div class="lext-hdr">
-      <span>#</span><span>EQUIPO</span><span>PTS</span><span>PJ</span><span>G</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span>
+      <span>#</span><span>EQUIPO</span><span>PTS</span><span>PJ</span><span>G</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>%VIC</span>
     </div>
     <div id="lext-body">
       <div class="lext-empty">No hay equipos. Usa ✏️ Editar para añadir clubes.</div>
@@ -3178,25 +3190,48 @@ window.pG = function(fn) {
 </div>
 
 <div class="lext-ov" id="lext-ov-squad">
-  <div class="lext-ov-box">
+  <div class="lext-ov-box" style="max-width:720px;">
     <div class="lext-ov-head">
       <div class="lext-ov-title" id="lext-ov-squad-title">🛡 Plantilla</div>
       <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-squad')">✕</button>
     </div>
-    <label class="lext-label">Nombre del jugador</label>
-    <input class="lext-input" id="lext-pl-name" placeholder="Ej. Vinicius Jr." />
-    <label class="lext-label">Posición</label>
-    <select class="lext-select" id="lext-pl-pos">
-      <option value="POR">Portero</option>
-      <option value="DEF">Defensa</option>
-      <option value="MED">Medio</option>
-      <option value="DEL">Delantero</option>
-    </select>
-    <label class="lext-label">🛡 Nivel / Poder (1-99)</label>
-    <input class="lext-input" id="lext-pl-power" type="number" min="1" max="99" value="75" />
-    <div class="lext-btn-row">
-      <button class="lext-btn green" onclick="lextSavePlayer()">💾 Añadir jugador</button>
-    </div>
+
+    <details class="lext-details" id="lext-squad-paste-details">
+      <summary>📋 Pegar plantilla completa (se añade al equipo)</summary>
+      <textarea class="lext-input" id="lext-squad-paste-ta" rows="10" style="font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.45;resize:vertical;margin-top:6px;" placeholder="### 🧤 Porteros
+ * Alisson 87 C
+ * Caoimhin Kelleher 75
+### 🛡️ Defensas
+ * Virgil van Dijk 88
+ * Ibrahima Konaté 83
+### ⚙️ Centrocampistas
+ * Mac Allister 85 F
+### ⚽ Delanteros
+ * Mohamed Salah 89 P"></textarea>
+      <div class="lext-sub">C=Capitán · F=Faltas · P=Penaltis. Si el equipo ya tiene jugadores, te preguntará si reemplazar o añadir.</div>
+      <div class="lext-btn-row">
+        <button class="lext-btn green" onclick="lextApplySquadPaste()">💾 Aplicar plantilla</button>
+      </div>
+    </details>
+
+    <details class="lext-details">
+      <summary>➕ Añadir jugador individual</summary>
+      <label class="lext-label">Nombre del jugador</label>
+      <input class="lext-input" id="lext-pl-name" placeholder="Ej. Vinicius Jr." />
+      <label class="lext-label">Posición</label>
+      <select class="lext-select" id="lext-pl-pos">
+        <option value="POR">Portero</option>
+        <option value="DEF">Defensa</option>
+        <option value="MED">Medio</option>
+        <option value="DEL">Delantero</option>
+      </select>
+      <label class="lext-label">🛡 Nivel / Poder (1-99)</label>
+      <input class="lext-input" id="lext-pl-power" type="number" min="1" max="99" value="75" />
+      <div class="lext-btn-row">
+        <button class="lext-btn green" onclick="lextSavePlayer()">💾 Añadir jugador</button>
+      </div>
+    </details>
+
     <div class="lext-sub" style="margin-top:14px;">PLANTILLA</div>
     <div class="lext-list" id="lext-squad-list"></div>
   </div>
@@ -3351,6 +3386,8 @@ window.pG = function(fn) {
       var dgSign = r.dg>0?'+'+r.dg:(r.dg<0?r.dg:'0');
       var dgCls = r.dg>0?'pos':(r.dg<0?'neg':'');
       var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
+      var pct = r.pj>0 ? Math.round((r.v/r.pj)*100) : 0;
+      var pctCls = pct>=60?'pct-hi':(pct>=40?'pct-mid':'pct-lo');
       return '<div class="lext-row '+z+'" onclick="lextOpenSquad(\''+r.id+'\')">'
         +'<span class="lext-pos">'+pos+'</span>'
         +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span></span>'
@@ -3364,6 +3401,7 @@ window.pG = function(fn) {
         +'<span class="lext-cell dg '+dgCls+'">'+dgSign+'</span>'
         +'<span class="lext-cell ta">'+r.ta+'</span>'
         +'<span class="lext-cell tr">'+r.tr+'</span>'
+        +'<span class="lext-cell pct '+pctCls+'">'+pct+'%</span>'
       +'</div>';
     }).join('');
   }
@@ -3840,7 +3878,10 @@ window.pG = function(fn) {
     var data = loadData(CURRENT_KEY);
     var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
     var host = document.getElementById('lext-squad-list');
-    if(!t || !t.players || !t.players.length){ host.innerHTML='<div class="lext-sub">— Sin jugadores —</div>'; return; }
+    if(!t || !t.players || !t.players.length){
+      host.innerHTML='<div class="lext-sub" style="text-align:center;padding:16px 8px;line-height:1.6;">— Sin jugadores —<br><span style="color:rgba(255,255,255,.55);">Usa <b>📋 Pegar plantilla completa</b> arriba para añadir toda la plantilla de una vez, o <b>➕ Añadir jugador individual</b> para ir uno por uno.</span></div>';
+      return;
+    }
     var ORDER = ['POR','DEF','MED','DEL'];
     var LABEL = {POR:'🧤 PORTEROS',DEF:'🛡 DEFENSAS',MED:'⚙ CENTROCAMPISTAS',DEL:'⚽ DELANTEROS'};
     var byPos = {POR:[],DEF:[],MED:[],DEL:[]};
@@ -3941,6 +3982,40 @@ window.pG = function(fn) {
     }
     saveData(CURRENT_KEY,data);
     renderSquadList();
+  };
+
+  window.lextApplySquadPaste = function(){
+    if(!CURRENT_SQUAD_TEAM) return;
+    var ta = document.getElementById('lext-squad-paste-ta');
+    if(!ta) return;
+    var txt = ta.value || '';
+    var parsed = parseSquadPaste(txt);
+    if(!parsed.length){
+      alert('No he podido leer ningún jugador del texto. Comprueba que cada línea tenga «Nombre 89» al final.');
+      return;
+    }
+    var data = loadData(CURRENT_KEY);
+    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
+    if(!t) return;
+    t.players = t.players || [];
+    if(t.players.length){
+      var replace = confirm('Este equipo ya tiene '+t.players.length+' jugadores.\n\nOK = REEMPLAZAR toda la plantilla por los '+parsed.length+' pegados\nCancelar = AÑADIR los '+parsed.length+' a los existentes');
+      if(replace) t.players = parsed;
+      else t.players = t.players.concat(parsed);
+    } else {
+      t.players = parsed;
+    }
+    // Recalcular stats del equipo
+    var ls = computeLineStats(t);
+    t.power = ls.glob; t.atk = ls.atk || t.atk; t.mid = ls.mid || t.mid; t.def = ls.def || t.def;
+    saveData(CURRENT_KEY, data);
+    ta.value = '';
+    // Cerrar el details
+    var d = document.getElementById('lext-squad-paste-details');
+    if(d) d.open = false;
+    renderSquadList();
+    renderTeamsList();
+    renderTable();
   };
 
   window.lextSavePlayer = function(){

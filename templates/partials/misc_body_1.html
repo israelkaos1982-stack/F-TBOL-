@@ -1589,6 +1589,11 @@ window.pG = function(fn) {
   </div>
 </div>
 
+<div id="liga-ea-engine-banner" style="margin:6px 14px 4px;padding:8px 12px;border-radius:6px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;line-height:1.5;display:none;">
+  <span id="liga-ea-engine-icon" style="font-size:13px;margin-right:6px;">🔧</span>
+  <span id="liga-ea-engine-text">Cargando estado del motor…</span>
+</div>
+
 <div class="clas-wrap">
 <div id="clas-liga-content">
 <div class="clas-empty">Calculando clasificación...</div>
@@ -1780,6 +1785,54 @@ window.pG = function(fn) {
     obs.observe(cont, {childList:true, subtree:true});
   }
   installContentObserver();
+
+  // ── Banner del estado del motor (Fase 1 del refactor) ──
+  // Lee ligaExt_liga-ea-sports y muestra cuántos de los 20 equipos
+  // ha creado ya el admin. Mientras < 20, el motor sigue siendo el
+  // hardcodeado (aviso amarillo). En cuanto haya 20, el banner pasa
+  // a verde y avisa de que la Fase 2 (override del simulador) se
+  // activará automáticamente cuando esté implementada.
+  function refreshEngineBanner(){
+    var banner = document.getElementById('liga-ea-engine-banner');
+    if(!banner) return;
+    var teams = loadLigaEaTeams();
+    var n = teams.length;
+    var icon = document.getElementById('liga-ea-engine-icon');
+    var text = document.getElementById('liga-ea-engine-text');
+    banner.style.display = 'block';
+    if(n === 0){
+      banner.style.background = 'rgba(255,255,255,.04)';
+      banner.style.border = '1px solid rgba(255,255,255,.12)';
+      banner.style.color = 'rgba(255,255,255,.62)';
+      if(icon) icon.textContent = '🔧';
+      if(text) text.innerHTML = 'Motor: <b>hardcodeado (20 equipos default)</b>. Pulsa ✏️ Edit para empezar a crear los tuyos.';
+    } else if(n < 20){
+      banner.style.background = 'rgba(240,192,64,.08)';
+      banner.style.border = '1px solid rgba(240,192,64,.4)';
+      banner.style.color = '#f0c040';
+      if(icon) icon.textContent = '🛠';
+      if(text) text.innerHTML = 'Motor: <b>hardcodeado</b>. Has creado <b>'+n+'/20</b> equipos. Faltan <b>'+(20-n)+'</b> para activar el motor nuevo.';
+    } else {
+      banner.style.background = 'rgba(60,200,120,.08)';
+      banner.style.border = '1px solid rgba(60,200,120,.45)';
+      banner.style.color = '#5fe08a';
+      if(icon) icon.textContent = '✅';
+      if(text) text.innerHTML = '<b>20/20 equipos listos.</b> El motor nuevo se activará automáticamente en la <b>Fase 2</b> del refactor (próxima iteración).';
+    }
+  }
+  // Refresca al entrar al screen y tras buildLigaClas
+  var _origBuildWrap2 = window.buildLigaClas;
+  // Guardamos también un MutationObserver sobre los botones para refrescar
+  // al cerrar el editor (donde se acaban de guardar/borrar equipos).
+  function startBannerWatcher(){
+    refreshEngineBanner();
+    setInterval(refreshEngineBanner, 1500);
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', startBannerWatcher);
+  } else {
+    startBannerWatcher();
+  }
 })();
 </script>
 
@@ -3341,6 +3394,21 @@ window.pG = function(fn) {
 .lext-details[open] summary{border-bottom:1px solid rgba(255,255,255,.08);}
 .lext-details > *:not(summary){padding:0 12px 10px;}
 .lext-details > textarea{padding:8px 10px;}
+/* Selector tipo de equipo (IA / Humano) */
+.lext-tipo-row{display:flex;gap:8px;margin-bottom:10px;}
+.lext-tipo-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:6px;color:rgba(255,255,255,.6);cursor:pointer;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;transition:all .15s;}
+.lext-tipo-btn:hover{background:rgba(255,255,255,.08);color:#fff;}
+.lext-tipo-btn.active{background:rgba(240,192,64,.14);border-color:#f0c040;color:#f0c040;box-shadow:inset 0 0 12px rgba(240,192,64,.18);}
+.lext-tipo-ico{font-size:18px;}
+/* Grid de emojis para equipos humanos */
+.lext-emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:10px;}
+.lext-emoji-cell{display:flex;align-items:center;justify-content:center;height:38px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:6px;font-size:18px;cursor:pointer;transition:all .12s;user-select:none;}
+.lext-emoji-cell:hover{background:rgba(255,255,255,.08);transform:scale(1.08);}
+.lext-emoji-cell.active{background:rgba(240,192,64,.18);border-color:#f0c040;box-shadow:0 0 10px rgba(240,192,64,.35);}
+/* Badge humano/IA en la lista de equipos */
+.lext-li-tipo{display:inline-flex;align-items:center;gap:3px;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.8px;padding:2px 6px;border-radius:3px;margin-left:4px;font-weight:700;text-transform:uppercase;}
+.lext-li-tipo.human{background:rgba(94,200,255,.14);color:#9fdcff;border:1px solid rgba(94,200,255,.4);}
+.lext-li-tipo.ia{background:rgba(255,255,255,.06);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.15);}
 </style>
 
 <div class="lext-wrap">
@@ -3363,8 +3431,28 @@ window.pG = function(fn) {
       <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-teams')">✕</button>
     </div>
     <div id="lext-teams-form">
+      <div id="lext-liga-ea-counter" style="display:none;margin:-4px 0 12px;padding:8px 10px;border:1px solid rgba(240,192,64,.35);border-radius:6px;background:rgba(240,192,64,.06);">
+        <div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#f0c040;text-transform:uppercase;">📋 Liga EA Sports — equipos creados</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:#fff;letter-spacing:2px;margin-top:2px;">
+          <span id="lext-liga-ea-count">0</span><span style="color:rgba(255,255,255,.4);font-size:14px;"> / 20</span>
+        </div>
+        <div class="lext-sub" id="lext-liga-ea-counter-msg" style="margin-top:2px;">Crea 20 equipos para activar el motor nuevo. Hoy la simulación sigue usando los 20 hardcodeados.</div>
+      </div>
+
       <label class="lext-label">Nombre del equipo</label>
       <input class="lext-input" id="lext-team-name" placeholder="Ej. Manchester City" />
+
+      <div id="lext-liga-ea-tipo" style="display:none;">
+        <label class="lext-label">Tipo de equipo · ¿quién lo controla?</label>
+        <div class="lext-tipo-row">
+          <button type="button" class="lext-tipo-btn active" id="lext-tipo-ia" onclick="lextSetTipo('ia')"><span class="lext-tipo-ico">🤖</span><span class="lext-tipo-lbl">IA</span></button>
+          <button type="button" class="lext-tipo-btn" id="lext-tipo-human" onclick="lextSetTipo('human')"><span class="lext-tipo-ico">👤</span><span class="lext-tipo-lbl">Humano</span></button>
+        </div>
+        <div id="lext-emoji-row" style="display:none;">
+          <label class="lext-label">Emoji del equipo humano · aparecerá en la clasificación junto al nombre</label>
+          <div class="lext-emoji-grid" id="lext-emoji-grid"></div>
+        </div>
+      </div>
 
       <label class="lext-label">Valor-Poder-Nivel equipo · valores FIJOS definidos por el admin</label>
       <div class="lext-grid4">
@@ -4110,6 +4198,78 @@ window.pG = function(fn) {
   }
   window.ligaExtEditar = ligaExtEditar;
 
+  // ── Estado del selector Humano/IA del formulario actual ───
+  // Solo aplica cuando CURRENT_KEY === 'liga-ea-sports'.
+  var FORM_TIPO = 'ia';            // 'ia' | 'human'
+  var FORM_HUMAN_EMOJI = '';       // emoji elegido (vacío hasta que el admin marque uno)
+  // Catálogo de emojis disponibles para equipos humanos. Los 5 primeros
+  // son los "clásicos" del proyecto (los que ya estaban hardcodeados como
+  // 💡 Bayern, 🐭 Arsenal, ✏️ Atlético, 🔨 Real Madrid, 👿 FC Barcelona).
+  var HUMAN_EMOJI_OPTIONS = ['💡','🐭','✏️','🔨','👿','⚽','🎯','🏆','⭐','🦁','🐺','🐉','🦅','🐍','🔥','💎'];
+
+  function renderEmojiGrid(){
+    var grid = document.getElementById('lext-emoji-grid');
+    if(!grid) return;
+    grid.innerHTML = HUMAN_EMOJI_OPTIONS.map(function(em){
+      var active = (em === FORM_HUMAN_EMOJI) ? ' active' : '';
+      return '<div class="lext-emoji-cell'+active+'" data-emoji="'+em+'" onclick="lextPickEmoji(\''+em+'\')">'+em+'</div>';
+    }).join('');
+  }
+  window.lextPickEmoji = function(em){
+    FORM_HUMAN_EMOJI = em;
+    renderEmojiGrid();
+  };
+  window.lextSetTipo = function(tipo){
+    FORM_TIPO = (tipo === 'human') ? 'human' : 'ia';
+    var btnIA = document.getElementById('lext-tipo-ia');
+    var btnH  = document.getElementById('lext-tipo-human');
+    if(btnIA) btnIA.classList.toggle('active', FORM_TIPO === 'ia');
+    if(btnH)  btnH.classList.toggle('active',  FORM_TIPO === 'human');
+    var emojiRow = document.getElementById('lext-emoji-row');
+    if(emojiRow) emojiRow.style.display = (FORM_TIPO === 'human') ? 'block' : 'none';
+    if(FORM_TIPO === 'human' && !FORM_HUMAN_EMOJI){
+      // Auto-asignar el primer emoji libre (no usado por otro humano)
+      var data = loadData(CURRENT_KEY) || {teams:[]};
+      var used = {};
+      (data.teams||[]).forEach(function(t){
+        if(t.isHuman && t.humanEmoji && t.id !== EDITING_TEAM_ID) used[t.humanEmoji] = true;
+      });
+      for(var i=0;i<HUMAN_EMOJI_OPTIONS.length;i++){
+        if(!used[HUMAN_EMOJI_OPTIONS[i]]){ FORM_HUMAN_EMOJI = HUMAN_EMOJI_OPTIONS[i]; break; }
+      }
+    }
+    renderEmojiGrid();
+  };
+
+  function isLigaEaContext(){ return CURRENT_KEY === 'liga-ea-sports'; }
+  function refreshLigaEaCounter(){
+    var box = document.getElementById('lext-liga-ea-counter');
+    var tipo = document.getElementById('lext-liga-ea-tipo');
+    if(!box || !tipo) return;
+    if(!isLigaEaContext()){
+      box.style.display = 'none';
+      tipo.style.display = 'none';
+      return;
+    }
+    box.style.display = 'block';
+    tipo.style.display = 'block';
+    var data = loadData(CURRENT_KEY) || {teams:[]};
+    var n = (data.teams||[]).length;
+    var lbl = document.getElementById('lext-liga-ea-count');
+    if(lbl) lbl.textContent = n;
+    var msg = document.getElementById('lext-liga-ea-counter-msg');
+    if(msg){
+      if(n >= 20){
+        msg.innerHTML = '✅ <span style="color:#5fe08a;">20 equipos completos.</span> El motor nuevo se activará en la próxima fase del refactor (Fase 2). Hoy aún se simula con los hardcodeados.';
+      } else if(n === 0){
+        msg.textContent = 'Crea 20 equipos para activar el motor nuevo. Hoy la simulación sigue usando los 20 hardcodeados.';
+      } else {
+        msg.innerHTML = 'Faltan <b>'+(20-n)+'</b> equipos para llegar a 20. Hoy la simulación sigue usando los 20 hardcodeados.';
+      }
+    }
+  }
+  window.refreshLigaEaCounter = refreshLigaEaCounter;
+
   function lextClearTeamForm(){
     EDITING_TEAM_ID = null;
     document.getElementById('lext-team-name').value='';
@@ -4121,6 +4281,18 @@ window.pG = function(fn) {
     document.getElementById('lext-team-shield').value='';
     var bud = document.getElementById('lext-team-budget'); if(bud) bud.value='';
     var ta = document.getElementById('lext-team-squad-paste'); if(ta) ta.value='';
+    // Reset tipo a IA por defecto. El emoji se queda vacío hasta que
+    // el admin pulse Humano explícitamente.
+    FORM_TIPO = 'ia';
+    FORM_HUMAN_EMOJI = '';
+    var btnIA = document.getElementById('lext-tipo-ia');
+    var btnH  = document.getElementById('lext-tipo-human');
+    if(btnIA) btnIA.classList.add('active');
+    if(btnH)  btnH.classList.remove('active');
+    var emojiRow = document.getElementById('lext-emoji-row');
+    if(emojiRow) emojiRow.style.display = 'none';
+    renderEmojiGrid();
+    refreshLigaEaCounter();
   }
   window.lextClearTeamForm = lextClearTeamForm;
 
@@ -4214,16 +4386,27 @@ window.pG = function(fn) {
   function renderTeamsList(){
     var data = loadData(CURRENT_KEY);
     var host = document.getElementById('lext-teams-list');
+    refreshLigaEaCounter();
     if(!data.teams.length){ host.innerHTML = '<div class="lext-sub">— Sin equipos —</div>'; return; }
+    var ligaEa = isLigaEaContext();
     host.innerHTML = data.teams.map(function(t){
       var sh = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'"/>' : '';
       var ls = computeLineStats(t);
       var budStr = t.budget ? formatBudget(t.budget) : '';
       var tTone = poderToneLocal(ls.glob);
+      // Badge Humano/IA solo en Liga EA Sports.
+      var tipoBadge = '';
+      if(ligaEa){
+        if(t.isHuman){
+          tipoBadge = '<span class="lext-li-tipo human">'+(t.humanEmoji||'👤')+' Humano</span>';
+        } else {
+          tipoBadge = '<span class="lext-li-tipo ia">🤖 IA</span>';
+        }
+      }
       return '<div class="lext-list-item">'
         + sh
         + '<div style="flex:1;min-width:0;">'
-          + '<div class="lext-li-name" data-team-power="'+ls.glob+'" data-team-power-tone="'+tTone+'">'+t.name+'</div>'
+          + '<div class="lext-li-name" data-team-power="'+ls.glob+'" data-team-power-tone="'+tTone+'">'+t.name+tipoBadge+'</div>'
           + '<div class="lext-sub" style="margin:1px 0 0;">ATK '+ls.atk+' · MED '+ls.mid+' · DEF '+ls.def+(budStr?(' · '+budStr):'')+'</div>'
         +'</div>'
         + '<button class="lext-li-btn" onclick="lextEditTeam(\''+t.id+'\')">✏️</button>'
@@ -4250,6 +4433,19 @@ window.pG = function(fn) {
     var bud = document.getElementById('lext-team-budget');
     if(bud) bud.value = t.budget ? String(t.budget) : '';
     document.getElementById('lext-team-squad-paste').value = '';
+    // Cargar tipo (Humano/IA) y emoji solo si estamos en Liga EA Sports.
+    if(isLigaEaContext()){
+      FORM_TIPO = t.isHuman ? 'human' : 'ia';
+      FORM_HUMAN_EMOJI = t.humanEmoji || '';
+      var btnIA = document.getElementById('lext-tipo-ia');
+      var btnH  = document.getElementById('lext-tipo-human');
+      if(btnIA) btnIA.classList.toggle('active', FORM_TIPO === 'ia');
+      if(btnH)  btnH.classList.toggle('active',  FORM_TIPO === 'human');
+      var emojiRow = document.getElementById('lext-emoji-row');
+      if(emojiRow) emojiRow.style.display = (FORM_TIPO === 'human') ? 'block' : 'none';
+      renderEmojiGrid();
+    }
+    refreshLigaEaCounter();
     try{ document.getElementById('lext-team-name').scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){}
   };
 
@@ -4287,6 +4483,26 @@ window.pG = function(fn) {
     var parsed = parseSquadPaste(squadText);
     var data = loadData(CURRENT_KEY);
 
+    // ── Liga EA Sports: tope de 20 equipos + tipo Humano/IA ──
+    var ligaEa = isLigaEaContext();
+    if(ligaEa && !EDITING_TEAM_ID && (data.teams||[]).length >= 20){
+      alert('⚠️ Liga EA Sports tiene un máximo de 20 equipos.\n\nYa tienes 20 creados. Edita uno existente o elimina alguno antes de añadir uno nuevo.');
+      return;
+    }
+    // Validación: si el admin marcó Humano pero no eligió emoji, asignar uno.
+    if(ligaEa && FORM_TIPO === 'human' && !FORM_HUMAN_EMOJI){
+      FORM_HUMAN_EMOJI = '👤';
+    }
+    // Validación: dos humanos no pueden compartir el mismo emoji.
+    if(ligaEa && FORM_TIPO === 'human' && FORM_HUMAN_EMOJI){
+      var clash = (data.teams||[]).some(function(x){
+        return x.id !== EDITING_TEAM_ID && x.isHuman && x.humanEmoji === FORM_HUMAN_EMOJI;
+      });
+      if(clash){
+        if(!confirm('⚠️ Otro equipo humano ya usa el emoji '+FORM_HUMAN_EMOJI+'.\n\n¿Quieres usarlo igualmente?')) return;
+      }
+    }
+
     // Los valores Global/ATK/MED/DEF son FIJOS: siempre los que el
     // admin escribe en el formulario. No se recalculan nunca desde la
     // plantilla — el admin es quien decide el nivel del equipo.
@@ -4295,6 +4511,10 @@ window.pG = function(fn) {
       if(t){
         t.name=name; t.stadium=stadium; t.shield=shield; t.budget=budget;
         t.power=pwGlob; t.atk=pwAtk; t.mid=pwMid; t.def=pwDef;
+        if(ligaEa){
+          t.isHuman = (FORM_TIPO === 'human');
+          t.humanEmoji = t.isHuman ? FORM_HUMAN_EMOJI : '';
+        }
         if(parsed.length){
           if(t.players && t.players.length){
             if(!confirm('Este equipo ya tiene '+t.players.length+' jugadores. ¿Reemplazar la plantilla con los '+parsed.length+' pegados? (Cancelar = añadir a los existentes)')){
@@ -4308,7 +4528,12 @@ window.pG = function(fn) {
         }
       }
     } else {
-      data.teams.push({id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,budget:budget,players:parsed});
+      var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,budget:budget,players:parsed};
+      if(ligaEa){
+        newTeam.isHuman   = (FORM_TIPO === 'human');
+        newTeam.humanEmoji = newTeam.isHuman ? FORM_HUMAN_EMOJI : '';
+      }
+      data.teams.push(newTeam);
     }
     saveData(CURRENT_KEY,data);
     populateStadiumsDatalist();

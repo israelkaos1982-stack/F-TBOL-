@@ -1670,6 +1670,55 @@ window.pG = function(fn) {
       return data.teams;
     } catch(_){ return []; }
   }
+
+  // ── REGLAS DE LA COMPETICIÓN — Liga EA Sports ────────────────────
+  // Lee las plazas configuradas por el admin desde el modal Reglas
+  // (lext-ov-reglas, slug 'liga-ea-sports'). Devuelve las clases CSS
+  // que el bundle (rowZoneClass) y mi appendLigaEaExtras necesitan.
+  // Default: reparto clásico de Liga EA Sports (4+1+0+2+1+4 = 12 con
+  // hueco intermedio). Si total < suma → la zona desc se respeta y se
+  // recortan zonas europeas de abajo hacia arriba.
+  function loadLigaEaZones(){
+    var defaults = {ucl:4, uclPrev:1, uclQual:0, uel:2, uecl:1, desc:4};
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(!raw) return defaults;
+      var data = JSON.parse(raw);
+      if(!data || !data.config || !data.config.zones) return defaults;
+      var z = data.config.zones || {};
+      return {
+        ucl:     Math.max(0, z.ucl|0),
+        uclPrev: Math.max(0, z.uclPrev|0),
+        uclQual: Math.max(0, z.uclQual|0),
+        uel:     Math.max(0, z.uel|0),
+        uecl:    Math.max(0, z.uecl|0),
+        desc:    Math.max(0, z.desc|0)
+      };
+    } catch(_){ return defaults; }
+  }
+  window._ligaEaZoneClass = function(pos, total){
+    if(!total || total <= 0) total = 20;
+    var z = loadLigaEaZones();
+    if(z.desc > 0 && pos > total - z.desc) return 'zone-desc';
+    var c = 0;
+    if(pos <= (c += z.ucl))     return 'zone-ucl';
+    if(pos <= (c += z.uclPrev)) return 'zone-ucl-prev';
+    if(pos <= (c += z.uclQual)) return 'zone-ucl-qual';
+    if(pos <= (c += z.uel))     return 'zone-uel';
+    if(pos <= (c += z.uecl))    return 'zone-conf';
+    return '';
+  };
+  window._ligaEaLegendHtml = function(){
+    var z = loadLigaEaZones();
+    var items = [];
+    if(z.ucl > 0)     items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Champions</span>');
+    if(z.uclPrev > 0) items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#a855f7"></span>🟣 Previa Ch.</span>');
+    if(z.uclQual > 0) items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#f0c040"></span>🟡 Open Qualifier</span>');
+    if(z.uel > 0)     items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 E.League</span>');
+    if(z.uecl > 0)    items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3cc878"></span>🟢 Conference</span>');
+    if(z.desc > 0)    items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso</span>');
+    return '<div class="clas-legend">'+items.join('')+'</div>';
+  };
   function collectExistingNames(container){
     var out = {};
     var nameEls = container.querySelectorAll('.clas-row .clas-team-name');
@@ -1698,7 +1747,8 @@ window.pG = function(fn) {
     if(team.isHuman && team.humanEmoji){
       suffixHtml = '<span class="clas-team-human-suffix">'+team.humanEmoji+'</span>';
     }
-    return '<div class="clas-row" data-liga-ea-extra="1">'
+    var zoneClass = (typeof window._ligaEaZoneClass === 'function') ? window._ligaEaZoneClass(pos, 20) : '';
+    return '<div class="clas-row '+zoneClass+'" data-liga-ea-extra="1">'
       + '<div class="clas-team-cell">'
       +   '<span class="clas-pos-n">' + pos + '</span>'
       +   badgeHtml
@@ -1900,6 +1950,7 @@ window.pG = function(fn) {
 <div class="btn-action-bar">
   <button class="btn-action btn-action-sim" onclick="pG(function(){window.simularLigaSegundaMenu&&window.simularLigaSegundaMenu()})"><span class="btn-action-ico">🎮</span>Simular</button>
   <button class="btn-action btn-action-rst" onclick="pG(function(){window.reiniciarLigaSegundaMenu&&window.reiniciarLigaSegundaMenu()})"><span class="btn-action-ico">♻️</span>Reiniciar</button>
+  <button class="btn-action" onclick="pG(function(){window.openSimpleRules&&window.openSimpleRules('hypermotion')})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
 </div>
 <div class="clas-wrap">
 <div id="clas-segunda-content">
@@ -1988,6 +2039,123 @@ window.pG = function(fn) {
   window.simularLigaSegundaMenu=function(){var data=buildSecondData(); saveState(data); renderClas(); renderStats(); if(typeof go==='function') go('s-segunda-clas');};
   window.reiniciarLigaSegundaMenu=function(){try{localStorage.removeItem(LS_KEY)}catch(e){} renderClas(); renderStats();};
   document.addEventListener('DOMContentLoaded', function(){renderClas(); renderStats();});
+})();
+</script>
+
+<!-- ══ MODAL SIMPLE RULES — Hypermotion / Primera Federación ══ -->
+<!-- Modal compartido por ambas ligas (formato más simple que el ligaExt
+     porque solo tienen ascenso/playoff/descenso, no UCL/UEL/etc.). -->
+<div id="simple-rules-ov" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999990;align-items:flex-start;justify-content:center;padding:40px 12px;overflow-y:auto;">
+  <div style="background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:18px 16px;width:100%;max-width:520px;color:#fff;font-family:Rajdhani,sans-serif;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.08);">
+      <div id="simple-rules-title" style="font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;color:#f0c040;flex:1;text-transform:uppercase;">📜 Reglas de la competición</div>
+      <button type="button" style="background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.65);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;" onclick="closeSimpleRules()">✕ Cerrar</button>
+    </div>
+    <div class="lext-sub" style="margin-bottom:10px;">Define cuántas plazas tiene cada zona. La tabla colorea los puestos automáticamente: los <b>directos</b> arriba, los <b>playoff</b> después y los <b>descensos</b> abajo. Si sumas más plazas que equipos, las que sobren se ignoran.</div>
+    <label class="lext-label">🟣 Ascenso directo (primeras plazas)</label>
+    <input class="lext-input" id="simple-rules-asc" type="number" min="0" max="20" value="2" />
+    <label class="lext-label">🟠 Playoff de ascenso</label>
+    <input class="lext-input" id="simple-rules-playoff" type="number" min="0" max="20" value="4" />
+    <label class="lext-label">🔴 Descenso (últimas plazas)</label>
+    <input class="lext-input" id="simple-rules-desc" type="number" min="0" max="20" value="4" />
+    <div class="lext-btn-row">
+      <button class="lext-btn green" onclick="saveSimpleRules()">💾 Guardar reglas</button>
+      <button class="lext-btn" onclick="resetSimpleRules()">↩ Restaurar por defecto</button>
+    </div>
+  </div>
+</div>
+
+<style>
+/* Zona playoff (Hypermotion / Primera Fed) — entre ascenso y resto */
+.clas-row.clas-zone-playoff{background:rgba(255,130,20,.13);border-left:3px solid #ff8214;}
+.clas-row.clas-zone-playoff .clas-team-cell{background:rgba(120,55,5,.18);}
+.clas-zone-playoff .clas-pos-n{color:#ffb066;}
+</style>
+
+<script>
+(function(){
+  // ── REGLAS SIMPLES (Hypermotion + Primera Federación) ─────────
+  // Cada liga tiene 3 zonas: ascenso directo + playoff de ascenso +
+  // descenso. Storage compartido en localStorage bajo una clave única
+  // con sub-objeto por liga. La key permite añadir más ligas sin
+  // duplicar este modal.
+  var STORAGE_KEY = 'simple_league_rules_v1';
+  var DEFAULTS = {
+    hypermotion: { ascDirecto: 2, ascPlayoff: 4, desc: 4, label: '🏆 LIGA HYPERMOTION' },
+    primera:     { ascDirecto: 1, ascPlayoff: 4, desc: 5, label: '🏆 PRIMERA FEDERACIÓN' }
+  };
+  var CURRENT_LEAGUE = null;
+
+  function loadAll(){
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') || {}; }
+    catch(_){ return {}; }
+  }
+  function saveAll(data){
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data || {})); } catch(_){}
+  }
+  // Lectura pública para que rowZoneClassSegunda / Primera lean los
+  // valores saved (con fallback a los defaults sensatos).
+  window.loadSimpleRules = function(league){
+    var all = loadAll();
+    var def = DEFAULTS[league] || { ascDirecto:0, ascPlayoff:0, desc:0 };
+    var saved = all[league] || {};
+    return {
+      ascDirecto: saved.ascDirecto != null ? Math.max(0, saved.ascDirecto|0) : def.ascDirecto,
+      ascPlayoff: saved.ascPlayoff != null ? Math.max(0, saved.ascPlayoff|0) : def.ascPlayoff,
+      desc:       saved.desc       != null ? Math.max(0, saved.desc|0)       : def.desc
+    };
+  };
+  // Helper: dado pos/total devuelve la clase CSS correspondiente.
+  // Útil tanto para Hypermotion como para Primera Federación.
+  window.simpleRulesZoneClass = function(league, pos, total){
+    if(!total || total <= 0) return '';
+    var z = window.loadSimpleRules(league);
+    if(z.desc > 0 && pos > total - z.desc) return 'clas-zone-down';
+    if(z.ascDirecto > 0 && pos <= z.ascDirecto) return 'clas-zone-asc';
+    if(z.ascPlayoff > 0 && pos <= z.ascDirecto + z.ascPlayoff) return 'clas-zone-playoff';
+    return '';
+  };
+
+  window.openSimpleRules = function(league){
+    CURRENT_LEAGUE = league;
+    var def = DEFAULTS[league];
+    if(!def) return;
+    var z = window.loadSimpleRules(league);
+    document.getElementById('simple-rules-title').textContent = '📜 Reglas · ' + def.label;
+    document.getElementById('simple-rules-asc').value = z.ascDirecto;
+    document.getElementById('simple-rules-playoff').value = z.ascPlayoff;
+    document.getElementById('simple-rules-desc').value = z.desc;
+    document.getElementById('simple-rules-ov').style.display = 'flex';
+  };
+  window.closeSimpleRules = function(){
+    document.getElementById('simple-rules-ov').style.display = 'none';
+  };
+  window.saveSimpleRules = function(){
+    if(!CURRENT_LEAGUE) return;
+    var all = loadAll();
+    all[CURRENT_LEAGUE] = {
+      ascDirecto: Math.max(0, parseInt(document.getElementById('simple-rules-asc').value,10)||0),
+      ascPlayoff: Math.max(0, parseInt(document.getElementById('simple-rules-playoff').value,10)||0),
+      desc:       Math.max(0, parseInt(document.getElementById('simple-rules-desc').value,10)||0)
+    };
+    saveAll(all);
+    window.closeSimpleRules();
+    // Re-render según la liga afectada
+    if(CURRENT_LEAGUE === 'hypermotion'){
+      if(typeof window.renderSegunda === 'function') window.renderSegunda();
+    }
+    if(CURRENT_LEAGUE === 'primera'){
+      if(typeof window.renderPrimera === 'function') window.renderPrimera();
+    }
+  };
+  window.resetSimpleRules = function(){
+    if(!CURRENT_LEAGUE) return;
+    var def = DEFAULTS[CURRENT_LEAGUE];
+    if(!def) return;
+    document.getElementById('simple-rules-asc').value = def.ascDirecto;
+    document.getElementById('simple-rules-playoff').value = def.ascPlayoff;
+    document.getElementById('simple-rules-desc').value = def.desc;
+  };
 })();
 </script>
 
@@ -4123,6 +4291,13 @@ window.pG = function(fn) {
     saveData(CURRENT_KEY, data);
     lextCloseOv('lext-ov-reglas');
     renderTable();
+    // Si estamos editando las reglas de Liga EA Sports, también
+    // re-renderizamos su clasificación (que vive en otro screen y usa
+    // un renderer distinto del lext) para que los colores cambien al
+    // instante sin tener que recargar.
+    if(CURRENT_KEY === 'liga-ea-sports' && typeof window.buildLigaClas === 'function'){
+      try{ window.buildLigaClas(); }catch(_){ }
+    }
   };
   window.lextResetReglas = function(){
     document.getElementById('lext-reg-ucl').value = DEFAULT_ZONES.ucl;

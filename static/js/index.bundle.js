@@ -2135,7 +2135,7 @@ window.mlSimulate_j1m10=function(){
       +   '<div class="clas-hdr-scroll" id="clas-hdr-scroll">'
       +     '<div class="clas-table">'
       +       '<div class="clas-hdr">'
-      +         '<span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span><span>Últ. 5</span>'
+      +         '<span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span>'
       +       '</div>'
       +     '</div>'
       +   '</div>'
@@ -2146,11 +2146,17 @@ window.mlSimulate_j1m10=function(){
       var pos = idx + 1;
       var zone = rowZoneClass(pos);
       var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
+      // Escudo antes del nombre + emoji humano después del nombre.
+      var badgeHtml = (typeof window.getTeamBadgeHtml === 'function') ? window.getTeamBadgeHtml(team.name) : '';
+      var displayName = SHORT_NAMES[team.name] || team.name;
+      var humanEmoji = HUMAN_TEAMS[team.name] || '';
+      var suffixHtml = humanEmoji ? '<span class="clas-team-human-suffix">'+humanEmoji+'</span>' : '';
       html += ''
         + '<div class="clas-row ' + zone + '">'
         +   '<div class="clas-team-cell">'
         +     '<span class="clas-pos-n">' + pos + '</span>'
-        +     '<span class="clas-team-name">' + (HUMAN_TEAMS[team.name] ? '<span class="human-prefix">' + HUMAN_TEAMS[team.name] + '</span>' : '') + (SHORT_NAMES[team.name] || team.name) + '</span>'
+        +     badgeHtml
+        +     '<span class="clas-team-name"><span class="clas-team-name-text">' + displayName + '</span>' + suffixHtml + '</span>'
         +   '</div>'
         +   '<div class="clas-pts">' + team.pts + '</div>'
         +   '<div class="clas-pj">' + team.pj + '</div>'
@@ -2164,7 +2170,6 @@ window.mlSimulate_j1m10=function(){
         +   '<div class="clas-val tr">' + team.tr + '</div>'
         +   '<div class="clas-mvp">' + team.mvp + '</div>'
         +   '<div class="clas-pct">' + (team.pj > 0 ? Math.round((team.v / team.pj) * 100) : 0) + '%</div>'
-        +   '<div class="clas-form">' + formHtml(team.form) + '</div>'
         + '</div>';
     });
 
@@ -8097,7 +8102,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       +   '<div class="clas-hdr-scroll" id="clas-hdr-scroll">'
       +     '<div class="clas-table">'
       +       '<div class="clas-hdr">'
-      +         '<span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span><span>Últ. 5</span>'
+      +         '<span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span>'
       +       '</div>'
       +     '</div>'
       +   '</div>'
@@ -8107,11 +8112,18 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       var pos = idx + 1;
       var zone = rowZoneClass(pos);
       var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
+      // Escudo antes del nombre + emoji humano después del nombre.
+      // El escudo lo resuelve getTeamBadgeHtml (ya devuelve <img class="clas-team-logo"> con onerror a fallback).
+      var badgeHtml = (typeof window.getTeamBadgeHtml === 'function') ? window.getTeamBadgeHtml(team.name) : '';
+      var displayName = SHORT_NAMES[team.name] || team.name;
+      var humanEmoji = HUMAN_TEAMS[team.name] || '';
+      var suffixHtml = humanEmoji ? '<span class="clas-team-human-suffix">'+humanEmoji+'</span>' : '';
       html += ''
         + '<div class="clas-row ' + zone + '">'
         +   '<div class="clas-team-cell">'
         +     '<span class="clas-pos-n">' + pos + '</span>'
-        +     '<span class="clas-team-name">' + (HUMAN_TEAMS[team.name] ? '<span class="human-prefix">' + HUMAN_TEAMS[team.name] + '</span>' : '') + (SHORT_NAMES[team.name] || team.name) + '</span>'
+        +     badgeHtml
+        +     '<span class="clas-team-name"><span class="clas-team-name-text">' + displayName + '</span>' + suffixHtml + '</span>'
         +   '</div>'
         +   '<div class="clas-pts">' + team.pts + '</div>'
         +   '<div class="clas-pj">' + team.pj + '</div>'
@@ -8125,7 +8137,6 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         +   '<div class="clas-val tr">' + team.tr + '</div>'
         +   '<div class="clas-mvp">' + team.mvp + '</div>'
         +   '<div class="clas-pct">' + (team.pj > 0 ? Math.round((team.v / team.pj) * 100) : 0) + '%</div>'
-        +   '<div class="clas-form">' + formHtml(team.form) + '</div>'
         + '</div>';
     });
     html += '    </div></div></div>';

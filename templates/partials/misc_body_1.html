@@ -3147,14 +3147,14 @@ window.pG = function(fn) {
       <label class="lext-label">Nombre del equipo</label>
       <input class="lext-input" id="lext-team-name" placeholder="Ej. Manchester City" />
 
-      <label class="lext-label">Valor-Poder-Nivel equipo</label>
+      <label class="lext-label">Valor-Poder-Nivel equipo · valores FIJOS definidos por el admin</label>
       <div class="lext-grid4">
         <div><span class="lext-mini-lbl">GLOBAL</span><input class="lext-input lext-mini" id="lext-team-pw-glob" type="number" min="1" max="100" value="75" /></div>
         <div><span class="lext-mini-lbl">ATAQUE</span><input class="lext-input lext-mini" id="lext-team-pw-atk" type="number" min="1" max="100" value="75" /></div>
         <div><span class="lext-mini-lbl">MEDIO</span><input class="lext-input lext-mini" id="lext-team-pw-mid" type="number" min="1" max="100" value="75" /></div>
         <div><span class="lext-mini-lbl">DEFENSA</span><input class="lext-input lext-mini" id="lext-team-pw-def" type="number" min="1" max="100" value="75" /></div>
       </div>
-      <div class="lext-sub">Si pegas plantilla, los 4 se calculan automáticamente (Global = media total, Defensa = POR+DEF, Medio = MED, Ataque = DEL).</div>
+      <div class="lext-sub">Estos 4 valores se guardan exactamente como los escribes. Global es el que decide las probabilidades de victoria en la simulación. No cambian al editar jugadores — solo si los modificas aquí.</div>
 
       <label class="lext-label">Estadio local</label>
       <select class="lext-select" id="lext-team-stadium"><option value="">— Elegir estadio del Stadium Hub —</option></select>
@@ -3314,21 +3314,19 @@ window.pG = function(fn) {
   }
 
   function computeLineStats(t){
-    var out = {glob: Number(t.power)||50, atk: Number(t.atk)||0, mid: Number(t.mid)||0, def: Number(t.def)||0};
-    if(!t.players || !t.players.length) return out;
-    var all = t.players.map(function(p){return Number(p.power)||0;});
-    var def = t.players.filter(function(p){return p.pos==='POR'||p.pos==='DEF';}).map(function(p){return Number(p.power)||0;});
-    var mid = t.players.filter(function(p){return p.pos==='MED';}).map(function(p){return Number(p.power)||0;});
-    var atk = t.players.filter(function(p){return p.pos==='DEL';}).map(function(p){return Number(p.power)||0;});
-    out.glob = avg(all);
-    if(def.length) out.def = avg(def);
-    if(mid.length) out.mid = avg(mid);
-    if(atk.length) out.atk = avg(atk);
-    return out;
+    // Devuelve los valores fijos del equipo tal como el usuario los puso.
+    // Ya no se recalculan desde la plantilla — los stats del equipo son
+    // los que el admin define manualmente en el editor.
+    return {
+      glob: Number(t.power)||50,
+      atk:  Number(t.atk)||Number(t.power)||50,
+      mid:  Number(t.mid)||Number(t.power)||50,
+      def:  Number(t.def)||Number(t.power)||50
+    };
   }
 
   function computeTeamPower(t){
-    return computeLineStats(t).glob;
+    return Number(t.power)||50;
   }
 
   function standings(data){
@@ -3759,12 +3757,12 @@ window.pG = function(fn) {
     var t = data.teams.filter(function(x){return x.id===id;})[0];
     if(!t) return;
     EDITING_TEAM_ID = id;
-    var ls = computeLineStats(t);
+    // Cargar los valores EXACTOS que el admin guardó (no recalcular)
     document.getElementById('lext-team-name').value = t.name||'';
-    document.getElementById('lext-team-pw-glob').value = ls.glob;
-    document.getElementById('lext-team-pw-atk').value = ls.atk || t.atk || 75;
-    document.getElementById('lext-team-pw-mid').value = ls.mid || t.mid || 75;
-    document.getElementById('lext-team-pw-def').value = ls.def || t.def || 75;
+    document.getElementById('lext-team-pw-glob').value = Number(t.power)||75;
+    document.getElementById('lext-team-pw-atk').value = Number(t.atk)||Number(t.power)||75;
+    document.getElementById('lext-team-pw-mid').value = Number(t.mid)||Number(t.power)||75;
+    document.getElementById('lext-team-pw-def').value = Number(t.def)||Number(t.power)||75;
     var selS = document.getElementById('lext-team-stadium');
     if(selS) selS.value = t.stadium||'';
     document.getElementById('lext-team-shield').value = t.shield||'';
@@ -3799,18 +3797,14 @@ window.pG = function(fn) {
     var parsed = parseSquadPaste(squadText);
     var data = loadData(CURRENT_KEY);
 
-    function applyStats(t, fromPaste){
-      t.power = pwGlob; t.atk = pwAtk; t.mid = pwMid; t.def = pwDef;
-      if(fromPaste){
-        var ls = computeLineStats(t);
-        t.power = ls.glob; t.atk = ls.atk || t.atk; t.mid = ls.mid || t.mid; t.def = ls.def || t.def;
-      }
-    }
-
+    // Los valores Global/ATK/MED/DEF son FIJOS: siempre los que el
+    // admin escribe en el formulario. No se recalculan nunca desde la
+    // plantilla — el admin es quien decide el nivel del equipo.
     if(EDITING_TEAM_ID){
       var t = data.teams.filter(function(x){return x.id===EDITING_TEAM_ID;})[0];
       if(t){
         t.name=name; t.stadium=stadium; t.shield=shield; t.budget=budget;
+        t.power=pwGlob; t.atk=pwAtk; t.mid=pwMid; t.def=pwDef;
         if(parsed.length){
           if(t.players && t.players.length){
             if(!confirm('Este equipo ya tiene '+t.players.length+' jugadores. ¿Reemplazar la plantilla con los '+parsed.length+' pegados? (Cancelar = añadir a los existentes)')){
@@ -3821,15 +3815,10 @@ window.pG = function(fn) {
           } else {
             t.players = parsed;
           }
-          applyStats(t, true);
-        } else {
-          applyStats(t, false);
         }
       }
     } else {
-      var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,budget:budget,players:parsed};
-      if(parsed.length) applyStats(newTeam, true);
-      data.teams.push(newTeam);
+      data.teams.push({id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,budget:budget,players:parsed});
     }
     saveData(CURRENT_KEY,data);
     populateStadiumsDatalist();
@@ -4005,9 +3994,8 @@ window.pG = function(fn) {
     } else {
       t.players = parsed;
     }
-    // Recalcular stats del equipo
-    var ls = computeLineStats(t);
-    t.power = ls.glob; t.atk = ls.atk || t.atk; t.mid = ls.mid || t.mid; t.def = ls.def || t.def;
+    // NO se recalcula el poder del equipo — los valores Global/ATK/MED/DEF
+    // son los que el admin definió en el editor y se mantienen fijos.
     saveData(CURRENT_KEY, data);
     ta.value = '';
     // Cerrar el details
@@ -4030,8 +4018,7 @@ window.pG = function(fn) {
     t.players = t.players || [];
     var newP = {id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:name,pos:pos,power:power,pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
     t.players.push(newP);
-    // Actualiza poder global del equipo como promedio de plantilla
-    t.power = computeTeamPower(t);
+    // El poder del equipo NO se recalcula — es fijo.
     saveData(CURRENT_KEY,data);
     document.getElementById('lext-pl-name').value='';
     renderSquadList();
@@ -4044,7 +4031,7 @@ window.pG = function(fn) {
     var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
     if(!t) return;
     t.players = (t.players||[]).filter(function(p){return p.id!==pid;});
-    t.power = computeTeamPower(t);
+    // El poder del equipo NO se recalcula — es fijo.
     saveData(CURRENT_KEY,data);
     renderSquadList();
     renderTeamsList();

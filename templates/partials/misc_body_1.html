@@ -1685,10 +1685,24 @@ window.pG = function(fn) {
     var safe = String(team.name || '').replace(/[<>]/g, '');
     var canonKey = _normName(team.name);
     var displayName = SHORT_NAMES_CANON_TO_DISPLAY[canonKey] || safe;
+    // Escudo antes del nombre (si el equipo tiene URL de escudo).
+    var badgeHtml = '';
+    if(team.shield){
+      var safeShield = String(team.shield).replace(/"/g, '&quot;');
+      badgeHtml = '<img class="clas-team-logo" src="'+safeShield+'" onerror="this.style.display=\'none\'" alt=""/>';
+    } else if(typeof window.getTeamBadgeHtml === 'function'){
+      badgeHtml = window.getTeamBadgeHtml(team.name);
+    }
+    // Emoji humano después del nombre (si el equipo es humano).
+    var suffixHtml = '';
+    if(team.isHuman && team.humanEmoji){
+      suffixHtml = '<span class="clas-team-human-suffix">'+team.humanEmoji+'</span>';
+    }
     return '<div class="clas-row" data-liga-ea-extra="1">'
       + '<div class="clas-team-cell">'
       +   '<span class="clas-pos-n">' + pos + '</span>'
-      +   '<span class="clas-team-name">' + displayName + '</span>'
+      +   badgeHtml
+      +   '<span class="clas-team-name"><span class="clas-team-name-text">' + displayName + '</span>' + suffixHtml + '</span>'
       + '</div>'
       + '<div class="clas-pts">0</div>'
       + '<div class="clas-pj">0</div>'
@@ -1702,7 +1716,6 @@ window.pG = function(fn) {
       + '<div class="clas-val tr">0</div>'
       + '<div class="clas-mvp">0</div>'
       + '<div class="clas-pct">0%</div>'
-      + '<div class="clas-form"><span class="clas-dot pending" title="Sin resultados"></span></div>'
     + '</div>';
   }
   var _appending = false;

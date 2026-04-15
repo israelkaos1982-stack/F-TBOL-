@@ -2989,7 +2989,14 @@ window.pG = function(fn) {
 </div>
 <div class="screen" id="s-liga-ext">
 <button class="back-btn" onclick="go('s-ligas')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji" id="liga-ext-emoji" style="font-size:26px;">🏆</span><h2 id="liga-ext-title">Liga</h2></div>
+<div class="sec-hdr">
+  <span class="sec-emoji" id="liga-ext-emoji" style="font-size:26px;">🌍</span>
+  <div class="lext-logo-slot" id="liga-ext-logo-slot" onclick="lextEditLeagueLogo()" title="Click para editar el logo de la liga">
+    <img id="liga-ext-logo-img" alt="Logo" style="display:none;"/>
+    <span class="lext-logo-ph">📷</span>
+  </div>
+  <h2 id="liga-ext-title">Liga</h2>
+</div>
 
 <div class="btn-action-bar" style="margin:0 14px 10px;flex-direction:column;gap:6px;">
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
@@ -2998,8 +3005,8 @@ window.pG = function(fn) {
     <button class="btn-action lext-btn-compact" onclick="pG(function(){ligaExtEditar()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">✏️</span>Edit</button>
   </div>
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
-    <button class="btn-action btn-action-stats lext-btn-compact" onclick="ligaExtStats()"><span class="btn-action-ico">📈</span>Estadísticas</button>
-    <button class="btn-action lext-btn-compact" onclick="ligaExtCopa()" style="border-color:rgba(255,200,80,.4);color:#ffc850;background:rgba(255,200,80,.06);"><span class="btn-action-ico">🏆</span>Copa</button>
+    <button class="btn-action lext-btn-compact" onclick="pG(function(){ligaExtReglas()})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
+    <button class="btn-action lext-btn-compact" onclick="ligaExtCopa()" style="border-color:rgba(255,200,80,.4);color:#ffc850;background:rgba(255,200,80,.06);"><span class="btn-action-ico">🏆</span><span id="lext-copa-btn-label">Copa</span></button>
   </div>
 </div>
 
@@ -3125,6 +3132,15 @@ window.pG = function(fn) {
 .lext-sq-name.tier-base{color:rgba(255,255,255,.78);}
 /* Team name in classification: el CSS global [data-team-power]::after aplica el badge automáticamente */
 .lext-team-name[data-team-power]{display:inline-flex;align-items:center;}
+/* Slots de imagen editables (logo de liga, logo de copa) */
+.lext-logo-slot{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:8px;border:1px dashed rgba(240,192,64,.35);background:rgba(255,255,255,.04);cursor:pointer;overflow:hidden;flex-shrink:0;transition:all .18s;}
+.lext-logo-slot:hover{border-color:#f0c040;background:rgba(240,192,64,.08);}
+.lext-logo-slot img{width:100%;height:100%;object-fit:contain;}
+.lext-logo-ph{font-size:18px;opacity:.55;}
+.lext-logo-preview-wrap{display:flex;flex-direction:column;align-items:center;gap:4px;margin:6px 0 12px;}
+.lext-logo-preview{width:90px;height:90px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.lext-logo-preview img{width:100%;height:100%;object-fit:contain;}
+.lext-logo-preview .lext-logo-ph{font-size:32px;}
 .lext-details{border:1px solid rgba(255,255,255,.08);border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,.02);}
 .lext-details summary{padding:10px 12px;cursor:pointer;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.75);font-weight:700;list-style:none;display:flex;align-items:center;gap:6px;user-select:none;}
 .lext-details summary::-webkit-details-marker{display:none;}
@@ -3258,6 +3274,79 @@ window.pG = function(fn) {
   </div>
 </div>
 
+<div class="lext-ov" id="lext-ov-reglas">
+  <div class="lext-ov-box">
+    <div class="lext-ov-head">
+      <div class="lext-ov-title">📜 Reglas de la competición</div>
+      <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-reglas')">✕</button>
+    </div>
+    <div class="lext-sub" style="margin-bottom:10px;">Define cuántas plazas hay en cada zona. La tabla colorea los puestos automáticamente de arriba hacia abajo. Si sumas más plazas que equipos, las que sobren se ignoran.</div>
+    <label class="lext-label">🔵 Champions League (plazas directas)</label>
+    <input class="lext-input" id="lext-reg-ucl" type="number" min="0" max="20" value="1" />
+    <label class="lext-label">🟣 Previa Champions</label>
+    <input class="lext-input" id="lext-reg-ucl-prev" type="number" min="0" max="20" value="1" />
+    <label class="lext-label">🟡 Open Qualifier</label>
+    <input class="lext-input" id="lext-reg-ucl-qual" type="number" min="0" max="20" value="1" />
+    <label class="lext-label">🟠 Europa League</label>
+    <input class="lext-input" id="lext-reg-uel" type="number" min="0" max="20" value="1" />
+    <label class="lext-label">🟢 Conference League</label>
+    <input class="lext-input" id="lext-reg-uecl" type="number" min="0" max="20" value="1" />
+    <label class="lext-label">🔴 Descenso (últimas plazas)</label>
+    <input class="lext-input" id="lext-reg-desc" type="number" min="0" max="20" value="3" />
+    <div class="lext-btn-row">
+      <button class="lext-btn green" onclick="lextSaveReglas()">💾 Guardar reglas</button>
+      <button class="lext-btn" onclick="lextResetReglas()">↩ Restaurar por defecto</button>
+    </div>
+  </div>
+</div>
+
+<div class="lext-ov" id="lext-ov-copa">
+  <div class="lext-ov-box">
+    <div class="lext-ov-head">
+      <div class="lext-ov-title">🏆 Copa de la competición</div>
+      <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-copa')">✕</button>
+    </div>
+    <div class="lext-sub" style="margin-bottom:10px;">Configura el nombre y el logo de la copa nacional de esta liga. El cuadro de eliminatorias se activará próximamente.</div>
+    <label class="lext-label">Nombre de la copa</label>
+    <input class="lext-input" id="lext-copa-name" placeholder="Ej. FA Cup" />
+    <label class="lext-label">Logo de la copa (URL)</label>
+    <input class="lext-input" id="lext-copa-logo" placeholder="https://..." oninput="lextPreviewCopaLogo()" />
+    <div class="lext-logo-preview-wrap">
+      <div class="lext-logo-preview">
+        <img id="lext-copa-logo-preview" alt="Preview" style="display:none;"/>
+        <span class="lext-logo-ph">📷</span>
+      </div>
+      <div class="lext-sub">Vista previa</div>
+    </div>
+    <div class="lext-btn-row">
+      <button class="lext-btn green" onclick="lextSaveCopa()">💾 Guardar copa</button>
+    </div>
+  </div>
+</div>
+
+<div class="lext-ov" id="lext-ov-league-logo">
+  <div class="lext-ov-box">
+    <div class="lext-ov-head">
+      <div class="lext-ov-title">📷 Logo de la liga</div>
+      <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-league-logo')">✕</button>
+    </div>
+    <div class="lext-sub" style="margin-bottom:10px;">Pega la URL del logo oficial de la liga (p.ej. de football-logos.cc o sofascore).</div>
+    <label class="lext-label">URL del logo</label>
+    <input class="lext-input" id="lext-league-logo-url" placeholder="https://..." oninput="lextPreviewLeagueLogo()" />
+    <div class="lext-logo-preview-wrap">
+      <div class="lext-logo-preview">
+        <img id="lext-league-logo-preview" alt="Preview" style="display:none;"/>
+        <span class="lext-logo-ph">📷</span>
+      </div>
+      <div class="lext-sub">Vista previa</div>
+    </div>
+    <div class="lext-btn-row">
+      <button class="lext-btn green" onclick="lextSaveLeagueLogo()">💾 Guardar logo</button>
+      <button class="lext-btn danger" onclick="lextClearLeagueLogo()">🗑 Quitar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   var CURRENT_KEY = null;
@@ -3375,15 +3464,40 @@ window.pG = function(fn) {
     return arr;
   }
 
-  function zoneClass(pos, total){
-    // Defaults: 1 Champions / 2 Previa / 3 Open Qual / 4 E.League / 5 Conference / últimos 3 Descenso
+  var DEFAULT_ZONES = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, desc:3};
+
+  function ensureConfig(data){
+    if(!data.config) data.config = {};
+    if(!data.config.zones) data.config.zones = Object.assign({}, DEFAULT_ZONES);
+    else {
+      Object.keys(DEFAULT_ZONES).forEach(function(k){
+        if(typeof data.config.zones[k] !== 'number') data.config.zones[k] = DEFAULT_ZONES[k];
+      });
+    }
+    if(typeof data.config.logo !== 'string') data.config.logo = '';
+    if(typeof data.config.cupName !== 'string') data.config.cupName = '';
+    if(typeof data.config.cupLogo !== 'string') data.config.cupLogo = '';
+    return data.config;
+  }
+
+  function zoneClass(pos, total, zones){
     if(total<=0) return '';
-    if(pos===1) return 'z-uclD';
-    if(pos===2 && total>=6) return 'z-uclP';
-    if(pos===3 && total>=8) return 'z-uclQ';
-    if(pos===4 && total>=10) return 'z-uel';
-    if(pos===5 && total>=12) return 'z-uecl';
-    if(pos>total-3) return 'z-desc';
+    zones = zones || DEFAULT_ZONES;
+    var ucl = Math.max(0, zones.ucl|0);
+    var uclP = Math.max(0, zones.uclPrev|0);
+    var uclQ = Math.max(0, zones.uclQual|0);
+    var uel = Math.max(0, zones.uel|0);
+    var uecl = Math.max(0, zones.uecl|0);
+    var desc = Math.max(0, zones.desc|0);
+    // Zona de descenso (últimas plazas)
+    if(desc>0 && pos > total-desc) return 'z-desc';
+    // Zonas europeas de arriba hacia abajo
+    var cursor = 0;
+    if(pos <= (cursor+=ucl)) return 'z-uclD';
+    if(pos <= (cursor+=uclP)) return 'z-uclP';
+    if(pos <= (cursor+=uclQ)) return 'z-uclQ';
+    if(pos <= (cursor+=uel)) return 'z-uel';
+    if(pos <= (cursor+=uecl)) return 'z-uecl';
     return '';
   }
 
@@ -3398,18 +3512,18 @@ window.pG = function(fn) {
     }
     var rows = standings(data);
     var total = rows.length;
+    var cfg = ensureConfig(data);
     body.innerHTML = rows.map(function(r,i){
       var pos = i+1;
-      var z = zoneClass(pos,total);
+      var z = zoneClass(pos,total,cfg.zones);
       var dgSign = r.dg>0?'+'+r.dg:(r.dg<0?r.dg:'0');
       var dgCls = r.dg>0?'pos':(r.dg<0?'neg':'');
       var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
       var pct = r.pj>0 ? Math.round((r.v/r.pj)*100) : 0;
       var pctCls = pct>=60?'pct-hi':(pct>=40?'pct-mid':'pct-lo');
-      var tTone = poderToneLocal(r.power);
       return '<div class="lext-row '+z+'" onclick="lextOpenSquad(\''+r.id+'\')">'
         +'<span class="lext-pos">'+pos+'</span>'
-        +'<span class="lext-team">'+shield+'<span class="lext-team-name" data-team-power="'+r.power+'" data-team-power-tone="'+tTone+'">'+r.name+'</span></span>'
+        +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span></span>'
         +'<span class="lext-pts">'+r.pts+'</span>'
         +'<span class="lext-cell">'+r.pj+'</span>'
         +'<span class="lext-cell">'+r.v+'</span>'
@@ -3624,10 +3738,129 @@ window.pG = function(fn) {
     return r;
   }
 
-  // ── Copa (placeholder) ────────────────────────────
-  window.ligaExtCopa = function(){
-    alert('🏆 Copa de '+(CURRENT_NAME||'la liga')+' — próximamente.\n\nCuando se active, generará un cuadro de eliminatorias entre los equipos registrados.');
+  // ── Reglas de la competición ──────────────────────
+  window.ligaExtReglas = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var cfg = ensureConfig(data);
+    var z = cfg.zones;
+    document.getElementById('lext-reg-ucl').value = z.ucl;
+    document.getElementById('lext-reg-ucl-prev').value = z.uclPrev;
+    document.getElementById('lext-reg-ucl-qual').value = z.uclQual;
+    document.getElementById('lext-reg-uel').value = z.uel;
+    document.getElementById('lext-reg-uecl').value = z.uecl;
+    document.getElementById('lext-reg-desc').value = z.desc;
+    lextOpenOv('lext-ov-reglas');
   };
+  window.lextSaveReglas = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var cfg = ensureConfig(data);
+    cfg.zones = {
+      ucl: Math.max(0, parseInt(document.getElementById('lext-reg-ucl').value,10)||0),
+      uclPrev: Math.max(0, parseInt(document.getElementById('lext-reg-ucl-prev').value,10)||0),
+      uclQual: Math.max(0, parseInt(document.getElementById('lext-reg-ucl-qual').value,10)||0),
+      uel: Math.max(0, parseInt(document.getElementById('lext-reg-uel').value,10)||0),
+      uecl: Math.max(0, parseInt(document.getElementById('lext-reg-uecl').value,10)||0),
+      desc: Math.max(0, parseInt(document.getElementById('lext-reg-desc').value,10)||0)
+    };
+    saveData(CURRENT_KEY, data);
+    lextCloseOv('lext-ov-reglas');
+    renderTable();
+  };
+  window.lextResetReglas = function(){
+    document.getElementById('lext-reg-ucl').value = DEFAULT_ZONES.ucl;
+    document.getElementById('lext-reg-ucl-prev').value = DEFAULT_ZONES.uclPrev;
+    document.getElementById('lext-reg-ucl-qual').value = DEFAULT_ZONES.uclQual;
+    document.getElementById('lext-reg-uel').value = DEFAULT_ZONES.uel;
+    document.getElementById('lext-reg-uecl').value = DEFAULT_ZONES.uecl;
+    document.getElementById('lext-reg-desc').value = DEFAULT_ZONES.desc;
+  };
+
+  // ── Copa editable (nombre + logo) ─────────────────
+  window.ligaExtCopa = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var cfg = ensureConfig(data);
+    document.getElementById('lext-copa-name').value = cfg.cupName || '';
+    document.getElementById('lext-copa-logo').value = cfg.cupLogo || '';
+    lextPreviewCopaLogo();
+    lextOpenOv('lext-ov-copa');
+  };
+  window.lextPreviewCopaLogo = function(){
+    var url = (document.getElementById('lext-copa-logo').value||'').trim();
+    var img = document.getElementById('lext-copa-logo-preview');
+    var ph = img.parentNode.querySelector('.lext-logo-ph');
+    if(url){ img.src = url; img.style.display='block'; if(ph) ph.style.display='none'; }
+    else { img.src=''; img.style.display='none'; if(ph) ph.style.display='block'; }
+  };
+  window.lextSaveCopa = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var cfg = ensureConfig(data);
+    cfg.cupName = (document.getElementById('lext-copa-name').value||'').trim();
+    cfg.cupLogo = (document.getElementById('lext-copa-logo').value||'').trim();
+    saveData(CURRENT_KEY, data);
+    // Actualiza el label del botón Copa
+    var lbl = document.getElementById('lext-copa-btn-label');
+    if(lbl) lbl.textContent = cfg.cupName || 'Copa';
+    lextCloseOv('lext-ov-copa');
+  };
+
+  // ── Logo de la liga ───────────────────────────────
+  window.lextEditLeagueLogo = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var cfg = ensureConfig(data);
+    document.getElementById('lext-league-logo-url').value = cfg.logo || '';
+    lextPreviewLeagueLogo();
+    lextOpenOv('lext-ov-league-logo');
+  };
+  window.lextPreviewLeagueLogo = function(){
+    var url = (document.getElementById('lext-league-logo-url').value||'').trim();
+    var img = document.getElementById('lext-league-logo-preview');
+    var ph = img.parentNode.querySelector('.lext-logo-ph');
+    if(url){ img.src = url; img.style.display='block'; if(ph) ph.style.display='none'; }
+    else { img.src=''; img.style.display='none'; if(ph) ph.style.display='block'; }
+  };
+  window.lextSaveLeagueLogo = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var cfg = ensureConfig(data);
+    cfg.logo = (document.getElementById('lext-league-logo-url').value||'').trim();
+    saveData(CURRENT_KEY, data);
+    applyLeagueLogoToHeader(cfg.logo);
+    lextCloseOv('lext-ov-league-logo');
+  };
+  window.lextClearLeagueLogo = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var cfg = ensureConfig(data);
+    cfg.logo = '';
+    saveData(CURRENT_KEY, data);
+    applyLeagueLogoToHeader('');
+    lextCloseOv('lext-ov-league-logo');
+  };
+
+  function applyLeagueLogoToHeader(url){
+    var img = document.getElementById('liga-ext-logo-img');
+    var slot = document.getElementById('liga-ext-logo-slot');
+    if(!img || !slot) return;
+    var ph = slot.querySelector('.lext-logo-ph');
+    if(url){
+      img.src = url;
+      img.style.display = 'block';
+      if(ph) ph.style.display='none';
+      img.onerror = function(){
+        img.style.display='none';
+        if(ph) ph.style.display='block';
+      };
+    } else {
+      img.src = '';
+      img.style.display = 'none';
+      if(ph) ph.style.display='block';
+    }
+  }
 
   function ligaExtReiniciar(){
     if(!CURRENT_KEY) return;
@@ -4100,6 +4333,13 @@ window.pG = function(fn) {
   window.lextOpenOv = function(id){ var el=document.getElementById(id); if(el) el.classList.add('show'); };
   window.lextCloseOv = function(id){ var el=document.getElementById(id); if(el) el.classList.remove('show'); };
 
+  function applyLeagueHeaderFromData(data){
+    var cfg = ensureConfig(data);
+    applyLeagueLogoToHeader(cfg.logo || '');
+    var lbl = document.getElementById('lext-copa-btn-label');
+    if(lbl) lbl.textContent = cfg.cupName || 'Copa';
+  }
+
   // ── Entry point ───────────────────────────────────
   window.openLigaExt = function(name, emoji){
     CURRENT_NAME = name || 'Liga';
@@ -4107,17 +4347,18 @@ window.pG = function(fn) {
     CURRENT_KEY = slugify(name||'liga');
     var t = document.getElementById('liga-ext-title');
     var e = document.getElementById('liga-ext-emoji');
-    if(t) t.textContent = '🏆 '+CURRENT_NAME;
+    if(t) t.textContent = CURRENT_NAME;
     if(e) e.textContent = CURRENT_EMOJI;
     // Renderiza primero desde cache local (respuesta inmediata)
-    loadData(CURRENT_KEY);
+    var cached = loadData(CURRENT_KEY);
+    applyLeagueHeaderFromData(cached);
     renderTable();
     if(typeof window.go === 'function') window.go('s-liga-ext');
     // Sincroniza con servidor y re-renderiza cuando llega
     fetchData(CURRENT_KEY, function(data, fromServer){
       if(fromServer && CURRENT_KEY){
+        applyLeagueHeaderFromData(data);
         renderTable();
-        // Si está el modal de equipos abierto, refrescar lista
         var ov = document.getElementById('lext-ov-teams');
         if(ov && ov.classList.contains('show')) renderTeamsList();
       }

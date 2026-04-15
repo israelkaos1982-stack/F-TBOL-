@@ -3592,6 +3592,40 @@ window.pG = function(fn) {
         var data = (j && j.data) || {teams:[],results:[]};
         data.teams = data.teams || [];
         data.results = data.results || [];
+        // ── Anti-wipe protection ─────────────────────────
+        // Si el servidor nos devuelve un payload con menos equipos
+        // de los que tenemos cacheados/guardados localmente, NO lo
+        // aplicamos: eso suele pasar cuando la DB del servidor se
+        // reinicia (Railway, migraciones, etc.). En vez de perder
+        // el trabajo del admin, re-empujamos el estado local al
+        // servidor como acción de auto-curación.
+        var localCache = LIGA_CACHE[k];
+        if(!localCache){
+          try{
+            var raw = localStorage.getItem(storeKey(k));
+            if(raw) localCache = JSON.parse(raw);
+          }catch(_){}
+        }
+        var localTeams = (localCache && Array.isArray(localCache.teams)) ? localCache.teams : [];
+        if(localTeams.length > (data.teams ? data.teams.length : 0)){
+          try{ console.warn('[ligaExt] servidor devolvió '+(data.teams||[]).length+' equipos pero local tiene '+localTeams.length+' — conservando local y re-subiendo ('+k+').'); }catch(_){}
+          // Conservamos la versión local en memoria y disco.
+          LIGA_CACHE[k] = localCache;
+          try{ localStorage.setItem(storeKey(k), JSON.stringify(localCache)); }catch(_){}
+          // Re-subida best-effort (sin tocar updated_at hasta que
+          // el servidor confirme).
+          try{
+            fetch('/api/liga-ext/'+encodeURIComponent(k), {
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({data:localCache})
+            }).then(function(r){return r.ok?r.json():null;}).then(function(rj){
+              if(rj && rj.updated_at) LIGA_UPDATED[k] = rj.updated_at;
+            }).catch(function(){});
+          }catch(_){}
+          cb && cb(localCache, false);
+          return;
+        }
         LIGA_CACHE[k] = data;
         LIGA_UPDATED[k] = j.updated_at || '';
         try{ localStorage.setItem(storeKey(k), JSON.stringify(data)); }catch(_){}
@@ -4220,13 +4254,22 @@ window.pG = function(fn) {
   };
 
   window.lextDeleteTeam = function(id){
-    if(!confirm('¿Eliminar este equipo?')) return;
-    var data = loadData(CURRENT_KEY);
-    data.teams = data.teams.filter(function(x){return x.id!==id;});
-    data.results = (data.results||[]).filter(function(r){return r.h!==id && r.a!==id;});
-    saveData(CURRENT_KEY,data);
-    renderTeamsList();
-    renderTable();
+    // Protección admin: eliminar un equipo requiere PIN 747.
+    // pG() abre el modal si todavía no estás admin; si ya lo estás
+    // (mismo patrón que Res/Edit/Reglas) ejecuta directo.
+    var doDelete = function(){
+      var data = loadData(CURRENT_KEY);
+      var t = (data.teams||[]).filter(function(x){return x.id===id;})[0];
+      var teamLabel = t && t.name ? '«'+t.name+'»' : 'este equipo';
+      if(!confirm('⚠️ ¿Eliminar '+teamLabel+' definitivamente?\n\nSe borrará también de la clasificación y de los resultados guardados. Esta acción no se puede deshacer.')) return;
+      data.teams = data.teams.filter(function(x){return x.id!==id;});
+      data.results = (data.results||[]).filter(function(r){return r.h!==id && r.a!==id;});
+      saveData(CURRENT_KEY,data);
+      renderTeamsList();
+      renderTable();
+    };
+    if(typeof window.pG === 'function') window.pG(doDelete);
+    else doDelete();
   };
 
   window.lextSaveTeam = function(){

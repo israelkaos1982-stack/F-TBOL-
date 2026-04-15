@@ -1878,7 +1878,14 @@ window.mlSimulate_j1m10=function(){
     }).join('');
   }
 
-  function rowZoneClass(pos){
+  function rowZoneClass(pos, total){
+    // Lee las plazas configuradas por el admin desde Reglas de la
+    // competición (modal lext-ov-reglas, slug 'liga-ea-sports'). Si no
+    // hay config guardada, usa el reparto clásico de Liga EA Sports
+    // (4 UCL + 1 Previa + 0 Open + 2 UEL + 1 Conference + 4 Descenso).
+    if(typeof window._ligaEaZoneClass === 'function'){
+      return window._ligaEaZoneClass(pos, total || 20);
+    }
     if(pos >= 1 && pos <= 4) return 'zone-ucl';
     if(pos === 5) return 'zone-ucl-prev';
     if(pos === 6 || pos === 7) return 'zone-uel';
@@ -2142,9 +2149,10 @@ window.mlSimulate_j1m10=function(){
       +   '<div class="clas-scroll" id="clas-body-scroll">'
       +     '<div class="clas-table">';
 
+    var _total1 = list.length;
     list.forEach(function(team, idx){
       var pos = idx + 1;
-      var zone = rowZoneClass(pos);
+      var zone = rowZoneClass(pos, _total1);
       var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
       // Escudo antes del nombre + emoji humano después del nombre.
       var badgeHtml = (typeof window.getTeamBadgeHtml === 'function') ? window.getTeamBadgeHtml(team.name) : '';
@@ -8078,7 +8086,14 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       return '<span class="clas-dot loss" title="Derrota"></span>';
     }).join('');
   }
-  function rowZoneClass(pos){
+  function rowZoneClass(pos, total){
+    // Idéntico al del script-block 12: delega en window._ligaEaZoneClass
+    // (definido en misc_body_1.html) que lee las Reglas guardadas y aplica
+    // el reparto configurable. Fallback a los puestos clásicos si no hay
+    // helper disponible.
+    if(typeof window._ligaEaZoneClass === 'function'){
+      return window._ligaEaZoneClass(pos, total || 20);
+    }
     if(pos >= 1 && pos <= 4) return 'zone-ucl';
     if(pos === 5) return 'zone-ucl-prev';
     if(pos === 6 || pos === 7) return 'zone-uel';
@@ -8090,14 +8105,18 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var list = getSavedLigaTable();
     var el = document.getElementById('clas-liga-content');
     if(!el) return;
-    var html = ''
-      + '<div class="clas-legend">'
+    // Leyenda dinámica: solo muestra los items de las zonas que el admin
+    // ha configurado con > 0 plazas en el modal Reglas de la competición.
+    var legendHtml = (typeof window._ligaEaLegendHtml === 'function') ? window._ligaEaLegendHtml() :
+        '<div class="clas-legend">'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Champions</span>'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#a855f7"></span>🟣 Previa Ch.</span>'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 E.League</span>'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3cc878"></span>🟢 Conference</span>'
       +   '<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso</span>'
-      + '</div>'
+      + '</div>';
+    var html = ''
+      + legendHtml
       + '<div class="clas-scroll-outer">'
       +   '<div class="clas-hdr-scroll" id="clas-hdr-scroll">'
       +     '<div class="clas-table">'
@@ -8108,9 +8127,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       +   '</div>'
       +   '<div class="clas-scroll" id="clas-body-scroll">'
       +     '<div class="clas-table">';
+    var _total2 = list.length;
     list.forEach(function(team, idx){
       var pos = idx + 1;
-      var zone = rowZoneClass(pos);
+      var zone = rowZoneClass(pos, _total2);
       var dgClass = 'clas-val dg ' + (team.dg > 0 ? 'pos' : team.dg < 0 ? 'neg' : 'zer');
       // Escudo antes del nombre + emoji humano después del nombre.
       // El escudo lo resuelve getTeamBadgeHtml (ya devuelve <img class="clas-team-logo"> con onerror a fallback).

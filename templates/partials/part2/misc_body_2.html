@@ -2104,11 +2104,20 @@
   }
 
   function rowZoneClassSegunda(pos, total){
+    // Lee las plazas configuradas por el admin desde el modal Reglas
+    // (📜 Reglas en s-segunda-clas). Fallback: 4 ascensos + 4 descensos.
+    if(typeof window.simpleRulesZoneClass === 'function'){
+      return window.simpleRulesZoneClass('hypermotion', pos, total);
+    }
     if(pos<=4) return 'clas-zone-asc';
     if(pos>total-4) return 'clas-zone-down';
     return '';
   }
   function rowZoneClassPrimera(pos,total){
+    // Igual que Segunda pero con la liga 'primera'. Fallback: 2+2.
+    if(typeof window.simpleRulesZoneClass === 'function'){
+      return window.simpleRulesZoneClass('primera', pos, total);
+    }
     if(pos<=2) return 'clas-zone-asc';
     if(pos>=(total-2)) return 'clas-zone-down';
     return '';
@@ -2273,6 +2282,7 @@
     +'<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_primera-federacion.football-logos.cc.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
     +'<div class="btn-action-bar">'
     +'<button class="btn-action btn-action-sim" onclick="pG(function(){simularAmbosPrimera()})"><span class="btn-action-ico">🎮</span>Simular</button>'
+    +'<button class="btn-action" onclick="pG(function(){window.openSimpleRules&&window.openSimpleRules(\'primera\')})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>'
     +'<button class="btn-action btn-action-rst" onclick="pG(function(){reiniciarAmbosPrimera()})"><span class="btn-action-ico">♻️</span>Reiniciar</button>'
     +'<button class="btn-action btn-action-stats" onclick="go(\'s-primf-stats\')"><span class="btn-action-ico">📊</span>Estadísticas</button>'
     +'</div>'

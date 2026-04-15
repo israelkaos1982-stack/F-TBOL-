@@ -3114,6 +3114,17 @@ window.pG = function(fn) {
 .lext-sq-cell.rating.r0{color:rgba(255,255,255,.22);background:transparent;}
 .lext-sq-mini{background:none;border:none;color:rgba(255,255,255,.35);font-size:12px;cursor:pointer;}
 .lext-sq-mini:hover{color:#ff7070;}
+/* Tiers de poder (mismos rangos que el bundle): elite 84+, alto 79+, medio 74+, base <74 */
+.lext-sq-cell.pw.tier-elite{color:rgba(255,215,130,.95);font-weight:700;}
+.lext-sq-cell.pw.tier-alto{color:rgba(193,229,255,.92);font-weight:700;}
+.lext-sq-cell.pw.tier-medio{color:rgba(222,222,222,.88);}
+.lext-sq-cell.pw.tier-base{color:rgba(255,182,151,.82);}
+.lext-sq-name.tier-elite{color:rgba(255,215,130,.98);}
+.lext-sq-name.tier-alto{color:rgba(193,229,255,.95);}
+.lext-sq-name.tier-medio{color:#fff;}
+.lext-sq-name.tier-base{color:rgba(255,255,255,.78);}
+/* Team name in classification: el CSS global [data-team-power]::after aplica el badge automáticamente */
+.lext-team-name[data-team-power]{display:inline-flex;align-items:center;}
 .lext-details{border:1px solid rgba(255,255,255,.08);border-radius:6px;margin-bottom:8px;background:rgba(255,255,255,.02);}
 .lext-details summary{padding:10px 12px;cursor:pointer;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.75);font-weight:700;list-style:none;display:flex;align-items:center;gap:6px;user-select:none;}
 .lext-details summary::-webkit-details-marker{display:none;}
@@ -3329,10 +3340,19 @@ window.pG = function(fn) {
     return Number(t.power)||50;
   }
 
+  // Tier de poder — mismos rangos que window.poderTone del bundle
+  function poderToneLocal(val){
+    val = Number(val)||0;
+    if(val >= 84) return 'elite';
+    if(val >= 79) return 'alto';
+    if(val >= 74) return 'medio';
+    return 'base';
+  }
+
   function standings(data){
     var map = {};
     data.teams.forEach(function(t){
-      map[t.id] = {id:t.id,name:t.name,shield:t.shield,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0};
+      map[t.id] = {id:t.id,name:t.name,shield:t.shield,power:Number(t.power)||50,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0};
     });
     (data.results||[]).forEach(function(r){
       var H = map[r.h], A = map[r.a]; if(!H||!A) return;
@@ -3386,9 +3406,10 @@ window.pG = function(fn) {
       var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
       var pct = r.pj>0 ? Math.round((r.v/r.pj)*100) : 0;
       var pctCls = pct>=60?'pct-hi':(pct>=40?'pct-mid':'pct-lo');
+      var tTone = poderToneLocal(r.power);
       return '<div class="lext-row '+z+'" onclick="lextOpenSquad(\''+r.id+'\')">'
         +'<span class="lext-pos">'+pos+'</span>'
-        +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span></span>'
+        +'<span class="lext-team">'+shield+'<span class="lext-team-name" data-team-power="'+r.power+'" data-team-power-tone="'+tTone+'">'+r.name+'</span></span>'
         +'<span class="lext-pts">'+r.pts+'</span>'
         +'<span class="lext-cell">'+r.pj+'</span>'
         +'<span class="lext-cell">'+r.v+'</span>'
@@ -3739,11 +3760,12 @@ window.pG = function(fn) {
       var sh = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'"/>' : '';
       var ls = computeLineStats(t);
       var budStr = t.budget ? formatBudget(t.budget) : '';
+      var tTone = poderToneLocal(ls.glob);
       return '<div class="lext-list-item">'
         + sh
         + '<div style="flex:1;min-width:0;">'
-          + '<div class="lext-li-name">'+t.name+'</div>'
-          + '<div class="lext-sub" style="margin:1px 0 0;">G '+ls.glob+' · ATK '+ls.atk+' · MED '+ls.mid+' · DEF '+ls.def+(budStr?(' · '+budStr):'')+'</div>'
+          + '<div class="lext-li-name" data-team-power="'+ls.glob+'" data-team-power-tone="'+tTone+'">'+t.name+'</div>'
+          + '<div class="lext-sub" style="margin:1px 0 0;">ATK '+ls.atk+' · MED '+ls.mid+' · DEF '+ls.def+(budStr?(' · '+budStr):'')+'</div>'
         +'</div>'
         + '<button class="lext-li-btn" onclick="lextEditTeam(\''+t.id+'\')">✏️</button>'
         + '<button class="lext-li-btn" onclick="lextOpenSquad(\''+t.id+'\')">🛡</button>'
@@ -3840,7 +3862,13 @@ window.pG = function(fn) {
     var data = loadData(CURRENT_KEY);
     var t = data.teams.filter(function(x){return x.id===id;})[0];
     if(!t) return;
-    document.getElementById('lext-ov-squad-title').textContent = '🛡 '+t.name;
+    var tp = Number(t.power)||0;
+    var tTone = poderToneLocal(tp);
+    var title = document.getElementById('lext-ov-squad-title');
+    if(title){
+      // Reconstruimos el título con data-team-power para que aparezca el badge dorado/azul
+      title.innerHTML = '🛡 <span data-team-power="'+tp+'" data-team-power-tone="'+tTone+'">'+t.name+'</span>';
+    }
     document.getElementById('lext-pl-name').value='';
     document.getElementById('lext-pl-power').value='75';
     renderSquadList();
@@ -3887,7 +3915,8 @@ window.pG = function(fn) {
       var rating = computePlayerRating(p);
       var rStr = rating>0 ? rating.toFixed(2) : '0.00';
       var rCls = 'rating '+ratingClass(rating);
-      var power = '<span class="lext-sq-cell pw">'+(p.power||0)+'</span>';
+      var pTier = poderToneLocal(p.power||0);
+      var power = '<span class="lext-sq-cell pw tier-'+pTier+'" title="Poder '+(p.power||0)+'/99 · '+pTier.toUpperCase()+'">'+(p.power||0)+'</span>';
       var pj = fmtCell(p.pj,'');
       var mvp = fmtCell(p.mvp,'mvp');
       var ta = fmtCell(p.ta,'ta');
@@ -3901,7 +3930,7 @@ window.pG = function(fn) {
         cells = power + pj + fmtCell(p.gol,'gol') + fmtCell(p.pen,'pen') + fmtCell(p.fk,'fk') + mvp + ta + tr + rCell;
       }
       return '<div class="lext-sq-row '+cls+'">'
-        + '<span class="lext-sq-name">'+p.name+badges+'</span>'
+        + '<span class="lext-sq-name tier-'+pTier+'">'+p.name+badges+'</span>'
         + cells
         + '<button class="lext-sq-mini" onclick="lextDeletePlayer(\''+p.id+'\')" title="Eliminar">🗑</button>'
         + '</div>';

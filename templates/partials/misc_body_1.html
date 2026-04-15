@@ -1595,6 +1595,41 @@ window.pG = function(fn) {
 </div>
 </div>
 
+<style>
+/* Filas clicables → abren la plantilla del equipo (misma UI que las
+   51 ligas externas). El cursor pointer + el resaltado en hover dan
+   el feedback visual. */
+#s-liga-clas .clas-row{cursor:pointer;}
+#s-liga-clas .clas-row:hover{background:rgba(240,192,64,.06);}
+</style>
+<script>
+(function(){
+  // Delegación: cada click sobre una fila de la clasificación de Liga
+  // EA Sports abre la plantilla (overlay lext-ov-squad) del equipo
+  // correspondiente, recuperando los datos creados desde ✏️ Edit.
+  document.addEventListener('click', function(ev){
+    var t = ev.target;
+    if(!t || typeof t.closest !== 'function') return;
+    var row = t.closest('.clas-row');
+    if(!row) return;
+    var scope = row.closest('#s-liga-clas');
+    if(!scope) return;
+    var nameEl = row.querySelector('.clas-team-name');
+    if(!nameEl) return;
+    // Clonamos y eliminamos el prefijo humano (emoji) para quedarnos
+    // solo con el nombre del equipo tal como se ve en pantalla.
+    var clone = nameEl.cloneNode(true);
+    var prefix = clone.querySelector('.human-prefix');
+    if(prefix) prefix.remove();
+    var displayName = (clone.textContent || '').trim();
+    if(!displayName) return;
+    if(typeof window.openLigaEaSquadByName === 'function'){
+      window.openLigaEaSquadByName(displayName);
+    }
+  }, false);
+})();
+</script>
+
 </div>
 <div class="screen" id="s-liga-resultados">
 <button class="back-btn" onclick="go('s-liga')">◀ Volver</button>
@@ -4371,6 +4406,65 @@ window.pG = function(fn) {
     // ligaExtReglas se define como window.ligaExtReglas = function(){…}
     // (no hay binding local), así que lo invocamos por el objeto global.
     window.ligaExtReglas();
+  };
+
+  // Mapa de nombres cortos mostrados en la clasificación de Liga EA Sports,
+  // para revertir el display name al nombre canónico que usa el editor.
+  // Debe estar alineado con el mapa SHORT_NAMES del bundle (buildLigaClas).
+  var LIGA_EA_SHORT_NAMES = {
+    'Bayern Munich':   'Bayern',
+    'Atlético Madrid': 'Atl Madrid',
+    'Celta de Vigo':   'Celta',
+    'Elche CF':        'Elche',
+    'Rayo Vallecano':  'Rayo',
+    'Deportivo Alavés':'Alavés',
+    'Valencia CF':     'Valencia'
+  };
+  function _normalize(s){
+    return String(s||'')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ')
+      .replace(/\s+/g,' ')
+      .trim().toLowerCase();
+  }
+  function _findLigaEaTeamByName(displayName){
+    var data = loadData(CURRENT_KEY) || {teams:[]};
+    var teams = data.teams || [];
+    var target = _normalize(displayName);
+    for(var i=0;i<teams.length;i++){
+      var t = teams[i];
+      if(_normalize(t.name) === target) return t;
+      // Si el short-name del mapa coincide con el display, el nombre real
+      // canónico es la clave → comparamos contra esa.
+      var k; for(k in LIGA_EA_SHORT_NAMES){
+        if(_normalize(LIGA_EA_SHORT_NAMES[k]) === target && _normalize(t.name) === _normalize(k)){
+          return t;
+        }
+      }
+    }
+    return null;
+  }
+  // Abre la plantilla (overlay lext-ov-squad) del equipo cuyo nombre (tal
+  // como se muestra en la clasificación) coincide con displayName. Si el
+  // equipo todavía no se ha creado vía Edit, muestra un mensaje útil y
+  // abre el editor directamente prellenando el nombre.
+  window.openLigaEaSquadByName = function(displayName){
+    setLigaEaContext();
+    var tryOpen = function(){
+      var team = _findLigaEaTeamByName(displayName);
+      if(team){
+        if(typeof window.lextOpenSquad === 'function') window.lextOpenSquad(team.id);
+        return true;
+      }
+      return false;
+    };
+    if(tryOpen()) return;
+    // Si no hay nada en cache local, fuerza un refresh al servidor por si
+    // los datos existen allí pero aún no se habían descargado.
+    fetchData(CURRENT_KEY, function(){
+      if(tryOpen()) return;
+      alert('«'+displayName+'» todavía no tiene plantilla.\n\nPulsa ✏️ Edit y crea el equipo con ese nombre (o pégale la plantilla) para ver aquí todas sus estadísticas.');
+    });
   };
 
   window.openLigaExt = function(name, emoji){

@@ -1627,6 +1627,159 @@ window.pG = function(fn) {
       window.openLigaEaSquadByName(displayName);
     }
   }, false);
+
+  // ── Integración con el editor de equipos ────────────────
+  // Cuando el admin añade/edita un equipo en ✏️ Edit (CURRENT_KEY
+  // 'liga-ea-sports'), ese equipo se guarda en ligaExt_liga-ea-sports
+  // del localStorage. La clasificación, sin embargo, la construye
+  // buildLigaClas() a partir del listado hardcodeado del bundle, así
+  // que los equipos nuevos no aparecerían. Aquí enganchamos el render
+  // para APPEND-ear al final de la tabla cualquier equipo del editor
+  // que todavía no esté en la clasificación — el click existente los
+  // enlaza automáticamente con su plantilla.
+  function _normName(s){
+    return String(s||'')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ')
+      .replace(/\s+/g,' ')
+      .trim().toLowerCase();
+  }
+  // Mapa canónico → display tal como usa el bundle. Imprescindible
+  // para no duplicar filas cuando el editor usa «Atlético Madrid»
+  // pero la clasificación muestra «Atl Madrid».
+  var SHORT_NAMES_CANON_TO_DISPLAY = {
+    'bayern munich':   'Bayern',
+    'atletico madrid': 'Atl Madrid',
+    'celta de vigo':   'Celta',
+    'elche cf':        'Elche',
+    'rayo vallecano':  'Rayo',
+    'deportivo alaves':'Alavés',
+    'valencia cf':     'Valencia'
+  };
+  function loadLigaEaTeams(){
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(!raw) return [];
+      var data = JSON.parse(raw);
+      if(!data || !Array.isArray(data.teams)) return [];
+      return data.teams;
+    } catch(_){ return []; }
+  }
+  function collectExistingNames(container){
+    var out = {};
+    var nameEls = container.querySelectorAll('.clas-row .clas-team-name');
+    Array.prototype.forEach.call(nameEls, function(el){
+      var clone = el.cloneNode(true);
+      var pfx = clone.querySelector('.human-prefix');
+      if(pfx) pfx.remove();
+      out[_normName(clone.textContent)] = true;
+    });
+    return out;
+  }
+  function buildExtraRowHtml(team, pos){
+    var safe = String(team.name || '').replace(/[<>]/g, '');
+    var canonKey = _normName(team.name);
+    var displayName = SHORT_NAMES_CANON_TO_DISPLAY[canonKey] || safe;
+    return '<div class="clas-row" data-liga-ea-extra="1">'
+      + '<div class="clas-team-cell">'
+      +   '<span class="clas-pos-n">' + pos + '</span>'
+      +   '<span class="clas-team-name">' + displayName + '</span>'
+      + '</div>'
+      + '<div class="clas-pts">0</div>'
+      + '<div class="clas-pj">0</div>'
+      + '<div class="clas-val">0</div>'
+      + '<div class="clas-val">0</div>'
+      + '<div class="clas-val">0</div>'
+      + '<div class="clas-val gf">0</div>'
+      + '<div class="clas-val gc">0</div>'
+      + '<div class="clas-val dg zer">0</div>'
+      + '<div class="clas-val ta">0</div>'
+      + '<div class="clas-val tr">0</div>'
+      + '<div class="clas-mvp">0</div>'
+      + '<div class="clas-pct">0%</div>'
+      + '<div class="clas-form"><span class="clas-dot pending" title="Sin resultados"></span></div>'
+    + '</div>';
+  }
+  var _appending = false;
+  function appendLigaEaExtras(){
+    if(_appending) return;
+    var cont = document.getElementById('clas-liga-content');
+    if(!cont) return;
+    var teams = loadLigaEaTeams();
+    if(!teams.length) return;
+    var tables = cont.querySelectorAll('.clas-table');
+    // La tabla de filas es la segunda (.clas-hdr-scroll contiene la
+    // primera, solo con el <div class="clas-hdr">). Buscamos la que
+    // contiene filas reales.
+    var bodyTable = null;
+    for(var i=0;i<tables.length;i++){
+      if(tables[i].querySelector('.clas-row')){ bodyTable = tables[i]; break; }
+      // Si todavía no hay filas, toma la segunda (body).
+      if(tables[i].querySelector('.clas-scroll') == null) bodyTable = tables[i];
+    }
+    if(!bodyTable) bodyTable = tables[tables.length-1];
+    if(!bodyTable) return;
+    var existing = collectExistingNames(cont);
+    var startPos = cont.querySelectorAll('.clas-row').length;
+    _appending = true;
+    try {
+      teams.forEach(function(t){
+        var norm = _normName(t.name);
+        if(existing[norm]) return;
+        var shortForm = SHORT_NAMES_CANON_TO_DISPLAY[norm];
+        if(shortForm && existing[_normName(shortForm)]) return;
+        startPos++;
+        bodyTable.insertAdjacentHTML('beforeend', buildExtraRowHtml(t, startPos));
+      });
+    } finally {
+      _appending = false;
+    }
+  }
+
+  // Envuelve window.buildLigaClas (lo publica el bundle al cargar) para
+  // re-appendear cada vez que se re-renderiza la clasificación.
+  function wrapBuildLigaClas(){
+    if(typeof window.buildLigaClas !== 'function') return false;
+    if(window.buildLigaClas.__ligaEaWrapped) return true;
+    var orig = window.buildLigaClas;
+    var wrapped = function(){
+      var out = orig.apply(this, arguments);
+      setTimeout(appendLigaEaExtras, 0);
+      return out;
+    };
+    wrapped.__ligaEaWrapped = true;
+    window.buildLigaClas = wrapped;
+    // Primer render tras el wrap
+    setTimeout(appendLigaEaExtras, 0);
+    return true;
+  }
+  if(!wrapBuildLigaClas()){
+    var tries = 0;
+    var t = setInterval(function(){
+      if(wrapBuildLigaClas() || ++tries > 80) clearInterval(t);
+    }, 120);
+  }
+
+  // Observer sobre #clas-liga-content para cubrir el caso de que
+  // buildLigaClas se invoque directamente sin pasar por el wrap (por
+  // ejemplo, desde el MutationObserver del propio bundle sobre
+  // s-liga-cal). Si detectamos que las extras desaparecieron,
+  // re-appendeamos.
+  function installContentObserver(){
+    var cont = document.getElementById('clas-liga-content');
+    if(!cont){ setTimeout(installContentObserver, 400); return; }
+    if(cont.__ligaEaObserved) return;
+    cont.__ligaEaObserved = true;
+    var obs = new MutationObserver(function(){
+      if(_appending) return;
+      // Si ya no hay filas extras y sí hay contenido, reaplica
+      var hasAny = !!cont.querySelector('.clas-row');
+      var hasExtras = !!cont.querySelector('[data-liga-ea-extra="1"]');
+      if(hasAny && !hasExtras) appendLigaEaExtras();
+    });
+    obs.observe(cont, {childList:true, subtree:true});
+  }
+  installContentObserver();
 })();
 </script>
 

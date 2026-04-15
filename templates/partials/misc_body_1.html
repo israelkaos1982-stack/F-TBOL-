@@ -3062,6 +3062,14 @@ window.pG = function(fn) {
 .lext-stat-row{display:flex;justify-content:space-between;padding:7px 2px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;}
 .lext-stat-row span:first-child{color:rgba(255,255,255,.6);}
 .lext-stat-row span:last-child{color:#f0c040;font-weight:700;}
+.lext-grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:4px;}
+.lext-grid4>div{display:flex;flex-direction:column;}
+.lext-mini-lbl{font-family:Oswald,sans-serif;font-size:8px;letter-spacing:1px;color:rgba(255,255,255,.45);margin-bottom:2px;text-align:center;}
+.lext-input.lext-mini{padding:6px 4px;font-family:"Bebas Neue",sans-serif;font-size:16px;text-align:center;margin-bottom:0;}
+.lext-badge{display:inline-block;font-family:Oswald,sans-serif;font-size:8px;letter-spacing:.5px;padding:1px 5px;border-radius:3px;margin-left:3px;font-weight:700;}
+.lext-badge.cap{background:rgba(240,192,64,.22);color:#f0c040;border:1px solid rgba(240,192,64,.5);}
+.lext-badge.fk{background:rgba(80,180,255,.22);color:#60bfff;border:1px solid rgba(80,180,255,.5);}
+.lext-badge.pk{background:rgba(255,90,90,.22);color:#ff7070;border:1px solid rgba(255,90,90,.5);}
 </style>
 
 <div class="lext-wrap">
@@ -3086,27 +3094,39 @@ window.pG = function(fn) {
     <div id="lext-teams-form">
       <label class="lext-label">Nombre del equipo</label>
       <input class="lext-input" id="lext-team-name" placeholder="Ej. Manchester City" />
-      <label class="lext-label">Poder-Valor-Nivel (1-100) · se recalcula si pegas plantilla</label>
-      <input class="lext-input" id="lext-team-power" type="number" min="1" max="100" value="75" />
+
+      <label class="lext-label">Valor-Poder-Nivel equipo</label>
+      <div class="lext-grid4">
+        <div><span class="lext-mini-lbl">GLOBAL</span><input class="lext-input lext-mini" id="lext-team-pw-glob" type="number" min="1" max="100" value="75" /></div>
+        <div><span class="lext-mini-lbl">ATAQUE</span><input class="lext-input lext-mini" id="lext-team-pw-atk" type="number" min="1" max="100" value="75" /></div>
+        <div><span class="lext-mini-lbl">MEDIO</span><input class="lext-input lext-mini" id="lext-team-pw-mid" type="number" min="1" max="100" value="75" /></div>
+        <div><span class="lext-mini-lbl">DEFENSA</span><input class="lext-input lext-mini" id="lext-team-pw-def" type="number" min="1" max="100" value="75" /></div>
+      </div>
+      <div class="lext-sub">Si pegas plantilla, los 4 se calculan automáticamente (Global = media total, Defensa = POR+DEF, Medio = MED, Ataque = DEL).</div>
+
       <label class="lext-label">Estadio local</label>
-      <input class="lext-input" id="lext-team-stadium" list="lext-stadiums-dl" placeholder="Escribe o elige…" />
-      <datalist id="lext-stadiums-dl"></datalist>
+      <select class="lext-select" id="lext-team-stadium"><option value="">— Elegir estadio del Stadium Hub —</option></select>
+
       <label class="lext-label">Escudo (URL — p.ej. sofascore)</label>
       <input class="lext-input" id="lext-team-shield" placeholder="https://api.sofascore.app/api/v1/team/17/image" />
+
+      <label class="lext-label">Presupuesto del equipo (€ — valor para fichar el club)</label>
+      <input class="lext-input" id="lext-team-budget" type="text" inputmode="numeric" placeholder="Ej. 1200000000" />
+
       <label class="lext-label">📋 Pegar plantilla completa (opcional — se parsea automáticamente)</label>
       <textarea class="lext-input" id="lext-team-squad-paste" rows="10" style="font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.45;resize:vertical;" placeholder="### 🧤 Porteros
  * Gianluigi Donnarumma 89
  * James Trafford 76
 ### 🛡️ Defensas
- * Rúben Dias 86
+ * Rúben Dias 86 C       ← C = Capitán
  * Joško Gvardiol 85
 ### ⚙️ Centrocampistas
- * Rodri 89
+ * Rodri 89 F            ← F = Lanzador de faltas
  * Phil Foden 85
 ### ⚽ Delanteros
- * Erling Haaland 91
+ * Erling Haaland 91 P   ← P = Lanzador de penaltis
  * Rayan Cherki 83"></textarea>
-      <div class="lext-sub">Detecta secciones: Porteros · Defensas · Centrocampistas/Medios · Delanteros. Cada jugador: «Nombre 89» (el número final es el poder).</div>
+      <div class="lext-sub">Detecta secciones (Porteros · Defensas · Centrocampistas · Delanteros) y marcadores al final de cada línea: <b>C</b>=Capitán, <b>F</b>=Faltas, <b>P</b>=Penaltis. Pueden combinarse (ej. «Rodri 89 CF»).</div>
       <div class="lext-btn-row">
         <button class="lext-btn green" onclick="lextSaveTeam()">💾 Guardar equipo + plantilla</button>
         <button class="lext-btn" onclick="lextClearTeamForm()">🗑 Limpiar</button>
@@ -3213,11 +3233,27 @@ window.pG = function(fn) {
     }catch(_){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); }
   }
 
+  function avg(arr){
+    if(!arr.length) return 0;
+    return Math.round(arr.reduce(function(a,b){return a+b;},0)/arr.length);
+  }
+
+  function computeLineStats(t){
+    var out = {glob: Number(t.power)||50, atk: Number(t.atk)||0, mid: Number(t.mid)||0, def: Number(t.def)||0};
+    if(!t.players || !t.players.length) return out;
+    var all = t.players.map(function(p){return Number(p.power)||0;});
+    var def = t.players.filter(function(p){return p.pos==='POR'||p.pos==='DEF';}).map(function(p){return Number(p.power)||0;});
+    var mid = t.players.filter(function(p){return p.pos==='MED';}).map(function(p){return Number(p.power)||0;});
+    var atk = t.players.filter(function(p){return p.pos==='DEL';}).map(function(p){return Number(p.power)||0;});
+    out.glob = avg(all);
+    if(def.length) out.def = avg(def);
+    if(mid.length) out.mid = avg(mid);
+    if(atk.length) out.atk = avg(atk);
+    return out;
+  }
+
   function computeTeamPower(t){
-    if(!t.players || !t.players.length) return Number(t.power)||50;
-    var sum = t.players.reduce(function(a,p){return a+(Number(p.power)||0);},0);
-    // Promedio de los jugadores como poder efectivo
-    return Math.round(sum/t.players.length);
+    return computeLineStats(t).glob;
   }
 
   function standings(data){
@@ -3351,64 +3387,47 @@ window.pG = function(fn) {
   function lextClearTeamForm(){
     EDITING_TEAM_ID = null;
     document.getElementById('lext-team-name').value='';
-    document.getElementById('lext-team-power').value='75';
-    document.getElementById('lext-team-stadium').value='';
+    document.getElementById('lext-team-pw-glob').value='75';
+    document.getElementById('lext-team-pw-atk').value='75';
+    document.getElementById('lext-team-pw-mid').value='75';
+    document.getElementById('lext-team-pw-def').value='75';
+    var selS = document.getElementById('lext-team-stadium'); if(selS) selS.value='';
     document.getElementById('lext-team-shield').value='';
+    var bud = document.getElementById('lext-team-budget'); if(bud) bud.value='';
     var ta = document.getElementById('lext-team-squad-paste'); if(ta) ta.value='';
   }
   window.lextClearTeamForm = lextClearTeamForm;
 
-  // ── Lista pre-seed de estadios famosos (autocompletado) ──
-  var STADIUMS_SEED = [
-    // Inglaterra
-    'Etihad Stadium','Old Trafford','Anfield','Stamford Bridge','Emirates Stadium',
-    'Tottenham Hotspur Stadium','St. James\u2019 Park','Goodison Park','Villa Park',
-    'Craven Cottage','London Stadium','Molineux','American Express Community Stadium',
-    'Selhurst Park','Gtech Community Stadium','Vitality Stadium','City Ground','St Mary\u2019s Stadium',
-    // Alemania
-    'Allianz Arena','Signal Iduna Park','Red Bull Arena','Volkswagen Arena','BayArena',
-    'Deutsche Bank Park','Merkur Spiel-Arena','Weserstadion','MHPArena','Veltins-Arena',
-    // Italia
-    'San Siro','Stadio Olimpico','Stadio Diego Armando Maradona','Allianz Stadium',
-    'Gewiss Stadium','Stadio Artemio Franchi','Stadio Luigi Ferraris','Mapei Stadium',
-    // España
-    'Santiago Bern\u00e1beu','Spotify Camp Nou','Metropolitano','Benito Villamar\u00edn',
-    'La Cartuja','Ram\u00f3n S\u00e1nchez-Pizju\u00e1n','San Mam\u00e9s','Mestalla','Coliseum',
-    'RCDE Stadium','Estadi Montilivi','El Sadar','Vallecas','Son Moix','Bala\u00eddos',
-    'Mart\u00ednez Valero','La Cer\u00e1mica','Reale Arena',
-    // Francia
-    'Parc des Princes','Groupama Stadium','Orange V\u00e9lodrome','Stade Pierre-Mauroy',
-    'Allianz Riviera','Stade Louis II','Stade de la Meinau','Stade Rennais',
-    // Portugal
-    'Est\u00e1dio da Luz','Est\u00e1dio Jos\u00e9 Alvalade','Est\u00e1dio do Drag\u00e3o','Est\u00e1dio Municipal de Braga',
-    // Países Bajos
-    'Johan Cruijff ArenA','De Kuip','Philips Stadion','Euroborg','Goffertstadion',
-    // Bélgica · Turquía · Escocia · otros
-    'Jan Breydelstadion','Constant Vanden Stock','T\u00fcrk Telekom Stadium','\u015e\u00fckr\u00fc Saracoglu',
-    'Vodafone Park','Celtic Park','Ibrox Stadium','Tynecastle Park','Tannadice Park',
-    // Grecia · Suiza · Austria · Nórdicos · Este
-    'OAKA Spyros Louis','Karaiskakis Stadium','St. Jakob-Park','Letzigrund',
-    'Allianz Stadion (Rapid)','Red Bull Arena (Salzburg)','Ullevaal Stadion','Lerkendal Stadion',
-    'Friends Arena','T\u00e6let Parken','MCH Arena','Fortuna Arena','Eden Arena',
-    'Stadion Miejski Legii','Stadion Narodowy','Arena Nationala','Maksimir','Rajko Miti\u0107',
-    'Lu\u017eniki','Krestovsky','Olimpiyskiy','Philips Moduro'
-  ];
+  function formatBudget(n){
+    n = Number(n)||0;
+    if(n>=1e9) return (n/1e9).toFixed(2).replace(/\.00$/,'')+' B€';
+    if(n>=1e6) return (n/1e6).toFixed(1).replace(/\.0$/,'')+' M€';
+    if(n>=1e3) return (n/1e3).toFixed(0)+' K€';
+    return n+' €';
+  }
 
+  // ── Poblar el <select> de estadios desde Stadium Hub ──
   function populateStadiumsDatalist(){
-    var dl = document.getElementById('lext-stadiums-dl');
-    if(!dl) return;
-    var set = {};
-    STADIUMS_SEED.forEach(function(s){ set[s]=1; });
-    // Añade los estadios ya registrados en ESTA liga
-    if(CURRENT_KEY){
-      var data = loadData(CURRENT_KEY);
-      (data.teams||[]).forEach(function(t){ if(t.stadium) set[t.stadium]=1; });
+    var sel = document.getElementById('lext-team-stadium');
+    if(!sel) return;
+    var current = sel.value || '';
+    var db = (window.STADIUM_DB && window.STADIUM_DB.length) ? window.STADIUM_DB : [];
+    var opts = ['<option value="">— Elegir estadio del Stadium Hub —</option>'];
+    if(db.length){
+      // Ordenar por nombre
+      var sorted = db.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'','es');});
+      sorted.forEach(function(s){
+        var label = s.name + (s.city?' · '+s.city:'') + (s.status?' · '+s.status:'');
+        opts.push('<option value="'+String(s.name).replace(/"/g,'&quot;')+'">'+label+'</option>');
+      });
     }
-    dl.innerHTML = Object.keys(set).sort(function(a,b){return a.localeCompare(b,'es');})
-      .map(function(s){return '<option value="'+s.replace(/"/g,'&quot;')+'">';}).join('');
+    sel.innerHTML = opts.join('');
+    if(current) sel.value = current;
   }
 
   // ── Parser de plantilla pegada ─────────────────────
+  // Acepta al final de la línea marcadores C (Capitán), F (Falta),
+  // P (Penalti) combinables en cualquier orden, con o sin [], (), espacios.
   function parseSquadPaste(text){
     if(!text) return [];
     var lines = String(text).split(/\r?\n/);
@@ -3418,10 +3437,9 @@ window.pG = function(fn) {
     lines.forEach(function(raw){
       var line = raw.trim();
       if(!line) return;
-      // Intento de detección flexible: si no hay dígitos finales y tiene palabra clave → header
-      var hasTrailingNum = /\s\d{1,3}\s*$/.test(line.replace(/[\u{1F9E4}\u{1F6E1}\u2699\u26BD]/gu,''));
-      if(!hasTrailingNum){
-        // Línea sin número al final — probablemente header
+      // ¿Tiene dígitos que puedan ser el poder?
+      var probe = line.replace(/[\u{1F9E4}\u{1F6E1}\u2699\u26BD]/gu,'');
+      if(!/\d{1,3}/.test(probe)){
         var m = SECTION_RE.exec(line);
         if(m){
           if(m[1]) currentPos='POR';
@@ -3433,18 +3451,35 @@ window.pG = function(fn) {
       }
       // Línea de jugador: quitar bullets/emojis iniciales
       var clean = line.replace(/^[*\-\u2022\u00B7\u25AA\u25AB\u25BA\u25B8\s]+/,'').trim();
-      // Extraer número al final
-      var match = clean.match(/^(.+?)[\s\u00A0]+(\d{1,3})\s*$/);
-      if(!match) return;
-      var name = match[1].trim().replace(/\s+\(.*?\)\s*$/,''); // quita paréntesis finales
+      // Patrón: Nombre + espacio + número + (opcional C/F/P con separadores)
+      // Ej. válidos: "Rodri 89", "Rodri 89 C", "Rodri 89 CFP",
+      //              "Rodri 89 (C)", "Rodri 89 [CF]", "Rodri 89 · C"
+      var match = clean.match(/^(.+?)[\s\u00A0]+(\d{1,3})\s*(?:[\[(·\-\|]*\s*([CFPcfp]{1,3})\s*[\])·\-\|]*)?\s*$/);
+      if(!match){
+        // Intento tolerante: número al final sin marcadores
+        match = clean.match(/^(.+?)[\s\u00A0]+(\d{1,3})\s*$/);
+        if(!match) return;
+      }
+      var name = match[1].trim()
+        .replace(/\s+\(.*?\)\s*$/,'')  // quita paréntesis finales
+        .replace(/[·•\-\|]\s*$/,'').trim();
       var power = parseInt(match[2],10);
+      var flags = (match[3]||'').toUpperCase();
       if(!name || isNaN(power)) return;
       players.push({
         id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
         name:name,
         pos:currentPos||'MED',
-        power:Math.max(1,Math.min(99,power))
+        power:Math.max(1,Math.min(99,power)),
+        captain: flags.indexOf('C')>-1,
+        freeKick: flags.indexOf('F')>-1,
+        penalty: flags.indexOf('P')>-1
       });
+    });
+    // Si se marcó más de un capitán, solo el primero queda; los demás pierden el flag
+    var seenCap = false;
+    players.forEach(function(p){
+      if(p.captain){ if(seenCap) p.captain=false; else seenCap=true; }
     });
     return players;
   }
@@ -3455,10 +3490,14 @@ window.pG = function(fn) {
     if(!data.teams.length){ host.innerHTML = '<div class="lext-sub">— Sin equipos —</div>'; return; }
     host.innerHTML = data.teams.map(function(t){
       var sh = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'"/>' : '';
+      var ls = computeLineStats(t);
+      var budStr = t.budget ? formatBudget(t.budget) : '';
       return '<div class="lext-list-item">'
         + sh
-        + '<span class="lext-li-name">'+t.name+'</span>'
-        + '<span class="lext-li-pos">PW '+computeTeamPower(t)+'</span>'
+        + '<div style="flex:1;min-width:0;">'
+          + '<div class="lext-li-name">'+t.name+'</div>'
+          + '<div class="lext-sub" style="margin:1px 0 0;">G '+ls.glob+' · ATK '+ls.atk+' · MED '+ls.mid+' · DEF '+ls.def+(budStr?(' · '+budStr):'')+'</div>'
+        +'</div>'
         + '<button class="lext-li-btn" onclick="lextEditTeam(\''+t.id+'\')">✏️</button>'
         + '<button class="lext-li-btn" onclick="lextOpenSquad(\''+t.id+'\')">🛡</button>'
         + '<button class="lext-li-btn" onclick="lextDeleteTeam(\''+t.id+'\')">🗑</button>'
@@ -3471,12 +3510,18 @@ window.pG = function(fn) {
     var t = data.teams.filter(function(x){return x.id===id;})[0];
     if(!t) return;
     EDITING_TEAM_ID = id;
+    var ls = computeLineStats(t);
     document.getElementById('lext-team-name').value = t.name||'';
-    document.getElementById('lext-team-power').value = computeTeamPower(t);
-    document.getElementById('lext-team-stadium').value = t.stadium||'';
+    document.getElementById('lext-team-pw-glob').value = ls.glob;
+    document.getElementById('lext-team-pw-atk').value = ls.atk || t.atk || 75;
+    document.getElementById('lext-team-pw-mid').value = ls.mid || t.mid || 75;
+    document.getElementById('lext-team-pw-def').value = ls.def || t.def || 75;
+    var selS = document.getElementById('lext-team-stadium');
+    if(selS) selS.value = t.stadium||'';
     document.getElementById('lext-team-shield').value = t.shield||'';
+    var bud = document.getElementById('lext-team-budget');
+    if(bud) bud.value = t.budget ? String(t.budget) : '';
     document.getElementById('lext-team-squad-paste').value = '';
-    // Scroll al formulario
     try{ document.getElementById('lext-team-name').scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){}
   };
 
@@ -3493,16 +3538,30 @@ window.pG = function(fn) {
   window.lextSaveTeam = function(){
     var name = document.getElementById('lext-team-name').value.trim();
     if(!name){ alert('Falta el nombre del equipo.'); return; }
-    var power = parseInt(document.getElementById('lext-team-power').value,10)||50;
-    var stadium = document.getElementById('lext-team-stadium').value.trim();
+    var pwGlob = parseInt(document.getElementById('lext-team-pw-glob').value,10)||50;
+    var pwAtk = parseInt(document.getElementById('lext-team-pw-atk').value,10)||50;
+    var pwMid = parseInt(document.getElementById('lext-team-pw-mid').value,10)||50;
+    var pwDef = parseInt(document.getElementById('lext-team-pw-def').value,10)||50;
+    var stadium = (document.getElementById('lext-team-stadium').value||'').trim();
     var shield = document.getElementById('lext-team-shield').value.trim();
+    var budgetRaw = (document.getElementById('lext-team-budget').value||'').replace(/[^\d]/g,'');
+    var budget = budgetRaw ? parseInt(budgetRaw,10) : 0;
     var squadText = document.getElementById('lext-team-squad-paste').value;
     var parsed = parseSquadPaste(squadText);
     var data = loadData(CURRENT_KEY);
+
+    function applyStats(t, fromPaste){
+      t.power = pwGlob; t.atk = pwAtk; t.mid = pwMid; t.def = pwDef;
+      if(fromPaste){
+        var ls = computeLineStats(t);
+        t.power = ls.glob; t.atk = ls.atk || t.atk; t.mid = ls.mid || t.mid; t.def = ls.def || t.def;
+      }
+    }
+
     if(EDITING_TEAM_ID){
       var t = data.teams.filter(function(x){return x.id===EDITING_TEAM_ID;})[0];
       if(t){
-        t.name=name; t.stadium=stadium; t.shield=shield;
+        t.name=name; t.stadium=stadium; t.shield=shield; t.budget=budget;
         if(parsed.length){
           if(t.players && t.players.length){
             if(!confirm('Este equipo ya tiene '+t.players.length+' jugadores. ¿Reemplazar la plantilla con los '+parsed.length+' pegados? (Cancelar = añadir a los existentes)')){
@@ -3513,20 +3572,19 @@ window.pG = function(fn) {
           } else {
             t.players = parsed;
           }
-          t.power = computeTeamPower(t);
+          applyStats(t, true);
         } else {
-          t.power = power;
+          applyStats(t, false);
         }
       }
     } else {
-      var newTeam = {id:uid(),name:name,power:power,stadium:stadium,shield:shield,players:parsed};
-      if(parsed.length) newTeam.power = computeTeamPower(newTeam);
+      var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,budget:budget,players:parsed};
+      if(parsed.length) applyStats(newTeam, true);
       data.teams.push(newTeam);
     }
     saveData(CURRENT_KEY,data);
     populateStadiumsDatalist();
     var msg = parsed.length ? ('✅ Equipo guardado con '+parsed.length+' jugadores') : '✅ Equipo guardado';
-    // Feedback ligero
     var title = document.getElementById('lext-ov-teams-title');
     if(title){
       var old = title.textContent;
@@ -3557,15 +3615,51 @@ window.pG = function(fn) {
     var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
     var host = document.getElementById('lext-squad-list');
     if(!t || !t.players || !t.players.length){ host.innerHTML='<div class="lext-sub">— Sin jugadores —</div>'; return; }
-    host.innerHTML = t.players.map(function(p){
-      return '<div class="lext-list-item">'
-        +'<span class="lext-li-pos">'+p.pos+'</span>'
-        +'<span class="lext-li-name">'+p.name+'</span>'
-        +'<span class="lext-li-pw">🛡 '+p.power+'</span>'
-        +'<button class="lext-li-btn" onclick="lextDeletePlayer(\''+p.id+'\')">🗑</button>'
-      +'</div>';
-    }).join('');
+    // Agrupar por posición
+    var ORDER = ['POR','DEF','MED','DEL'];
+    var LABEL = {POR:'🧤 Porteros',DEF:'🛡 Defensas',MED:'⚙ Centrocampistas',DEL:'⚽ Delanteros'};
+    var byPos = {POR:[],DEF:[],MED:[],DEL:[]};
+    t.players.forEach(function(p){ (byPos[p.pos]||byPos.MED).push(p); });
+    var html = '';
+    ORDER.forEach(function(k){
+      if(!byPos[k].length) return;
+      html += '<div class="lext-sub" style="margin-top:6px;">'+LABEL[k]+'</div>';
+      html += byPos[k].map(function(p){
+        var badges = '';
+        if(p.captain) badges += '<span class="lext-badge cap" title="Capitán">C</span>';
+        if(p.freeKick) badges += '<span class="lext-badge fk" title="Lanzador de faltas">F</span>';
+        if(p.penalty) badges += '<span class="lext-badge pk" title="Lanzador de penaltis">P</span>';
+        return '<div class="lext-list-item">'
+          +'<span class="lext-li-pos">'+p.pos+'</span>'
+          +'<span class="lext-li-name">'+p.name+badges+'</span>'
+          +'<span class="lext-li-pw">🛡 '+p.power+'</span>'
+          +'<button class="lext-li-btn" onclick="lextTogglePlayerFlag(\''+p.id+'\',\'captain\')" title="Capitán">C</button>'
+          +'<button class="lext-li-btn" onclick="lextTogglePlayerFlag(\''+p.id+'\',\'freeKick\')" title="Faltas">F</button>'
+          +'<button class="lext-li-btn" onclick="lextTogglePlayerFlag(\''+p.id+'\',\'penalty\')" title="Penaltis">P</button>'
+          +'<button class="lext-li-btn" onclick="lextDeletePlayer(\''+p.id+'\')">🗑</button>'
+        +'</div>';
+      }).join('');
+    });
+    host.innerHTML = html;
   }
+
+  window.lextTogglePlayerFlag = function(pid, flag){
+    var data = loadData(CURRENT_KEY);
+    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
+    if(!t || !t.players) return;
+    var target = t.players.filter(function(p){return p.id===pid;})[0];
+    if(!target) return;
+    if(flag === 'captain'){
+      // Solo un capitán
+      var willBe = !target.captain;
+      t.players.forEach(function(p){ p.captain = false; });
+      target.captain = willBe;
+    } else {
+      target[flag] = !target[flag];
+    }
+    saveData(CURRENT_KEY,data);
+    renderSquadList();
+  };
 
   window.lextSavePlayer = function(){
     if(!CURRENT_SQUAD_TEAM) return;

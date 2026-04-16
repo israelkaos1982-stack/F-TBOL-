@@ -2069,6 +2069,13 @@ window.mlSimulate_j1m10=function(){
     var clean = String(name || '').trim();
     var normalizedClean = normalizeTeamKey(clean);
     var canonical = aliases[normalizedClean] || aliases[clean.toLowerCase()] || clean;
+    // ── Prioridad 1: escudo definido por el admin en el editor de Liga
+    // EA Sports (ligaExt_liga-ea-sports). Si el usuario puso una URL de
+    // escudo personalizada, gana sobre el TEAM_LOGOS hardcodeado.
+    if(window._ligaEaShields){
+      var s = window._ligaEaShields[canonical] || window._ligaEaShields[clean] || window._ligaEaShields[normalizedClean];
+      if(s) return s;
+    }
     var logos = window.TEAM_LOGOS || {};
     if (logos[canonical]) return logos[canonical];
     if (logos[clean]) return logos[clean];

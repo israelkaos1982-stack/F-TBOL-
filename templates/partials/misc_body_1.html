@@ -1744,10 +1744,11 @@ window.pG = function(fn) {
     window._ligaEaShields = shields;
   }
   // Ejecutar al cargar para que getTeamLogoUrl ya los vea desde el
-  // primer render de buildLigaClas.
+  // primer render de buildLigaClas. Se refresca también tras cada save
+  // vía applyEngineOverrides (sin setInterval para no interferir con
+  // partidos en curso).
   refreshLigaEaShields();
-  // Refresco periódico (1.5s) para sincronizar tras saves del editor.
-  setInterval(refreshLigaEaShields, 1500);
+  window.refreshLigaEaShields = refreshLigaEaShields;
 
   window._ligaEaLegendHtml = function(){
     var z = loadLigaEaZones();
@@ -1930,7 +1931,11 @@ window.pG = function(fn) {
   // al cerrar el editor (donde se acaban de guardar/borrar equipos).
   function startBannerWatcher(){
     refreshEngineBanner();
-    setInterval(refreshEngineBanner, 1500);
+    // Refresca al navegar al screen (no con setInterval para no
+    // interferir con partidos en curso).
+    document.addEventListener('click', function(){
+      setTimeout(refreshEngineBanner, 200);
+    });
   }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', startBannerWatcher);
@@ -2023,11 +2028,14 @@ window.pG = function(fn) {
 
   // Aplicar en DOMContentLoaded con retardo (el bundle necesita haber
   // definido TEAM_RATINGS, SQUAD_REGISTRY, etc.)
+  // IMPORTANTE: NO usar setInterval — un tick periódico puede
+  // interferir con partidos en curso (resetea timers, corrompe el
+  // estado de simulaciones live). Solo aplicamos:
+  //   • Al cargar (300ms + 1.5s para cubrir la inicialización del bundle)
+  //   • Tras cada save en el editor (hook en lextSaveTeam)
   function initOverrides(){
     setTimeout(applyEngineOverrides, 300);
     setTimeout(applyEngineOverrides, 1500);
-    // Tick periódico por si el admin edita equipos desde otro tab
-    setInterval(applyEngineOverrides, 2000);
   }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', initOverrides);

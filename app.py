@@ -1119,6 +1119,92 @@ def api_liga_ext_post(slug):
         "updated_at": row.updated_at or "",
     })
 
+# ══════════════════════════════════════════════════════════════════
+# LIVE MATCH — Sistema de partidos en tiempo real compartidos
+# ══════════════════════════════════════════════════════════════════
+# Permite que el admin publique eventos de un partido live (goles,
+# tarjetas, etc.) y que otros dispositivos los vean en tiempo real
+# vía polling cada 2-3 segundos.
+#
+# Modelo: GlobalState con clave 'live_match_<id>' + JSON con:
+#   { id, home, away, comp, events:[], score:{a,b}, status:'playing'|'finished', updatedAt }
+#
+# Endpoints:
+#   POST /api/live-match/<match_id>   → crear/actualizar partido
+#   GET  /api/live-match/<match_id>   → leer estado actual (poll)
+#   GET  /api/live-match              → listar partidos activos
+#   DELETE /api/live-match/<match_id> → cerrar/borrar partido
+# ══════════════════════════════════════════════════════════════════
+
+def _live_key(match_id):
+    return "live_match_" + str(match_id or "default")
+
+@app.route("/api/live-match", methods=["GET"])
+def api_live_match_list():
+    """Lista todos los partidos live activos."""
+    rows = GlobalState.query.filter(GlobalState.clave.like("live_match_%")).all()
+    matches = []
+    for row in rows:
+        try:
+            data = json.loads(row.valor_json or "{}")
+            if data.get("status") != "finished":
+                matches.append(data)
+        except Exception:
+            pass
+    return jsonify({"ok": True, "matches": matches})
+
+@app.route("/api/live-match/<match_id>", methods=["GET"])
+def api_live_match_get(match_id):
+    """Lee el estado actual de un partido (para polling de espectadores)."""
+    key = _live_key(match_id)
+    row = GlobalState.query.filter_by(clave=key).first()
+    if not row:
+        return jsonify({"ok": False, "error": "Partido no encontrado"}), 404
+    since = request.args.get("since", "")
+    if since and since == (row.updated_at or ""):
+        return ("", 304)
+    try:
+        data = json.loads(row.valor_json or "{}")
+    except Exception:
+        data = {}
+    return jsonify({
+        "ok": True,
+        "match": data,
+        "updated_at": row.updated_at or ""
+    })
+
+@app.route("/api/live-match/<match_id>", methods=["POST"])
+def api_live_match_post(match_id):
+    """Crear o actualizar un partido live (llamado por el admin)."""
+    payload = request.get_json(silent=True) or {}
+    key = _live_key(match_id)
+    now = utc_now_iso()
+    payload["updatedAt"] = now
+    payload.setdefault("id", match_id)
+    payload.setdefault("events", [])
+    payload.setdefault("score", {"a": 0, "b": 0})
+    payload.setdefault("status", "playing")
+    json_str = json.dumps(payload, ensure_ascii=False)
+    row = GlobalState.query.filter_by(clave=key).first()
+    if row:
+        row.valor_json = json_str
+        row.updated_at = now
+    else:
+        row = GlobalState(clave=key, valor_json=json_str, updated_at=now)
+        db.session.add(row)
+    db.session.commit()
+    return jsonify({"ok": True, "updated_at": now})
+
+@app.route("/api/live-match/<match_id>", methods=["DELETE"])
+def api_live_match_delete(match_id):
+    """Cerrar/borrar un partido live."""
+    key = _live_key(match_id)
+    row = GlobalState.query.filter_by(clave=key).first()
+    if row:
+        db.session.delete(row)
+        db.session.commit()
+    return jsonify({"ok": True})
+
 @app.route("/")
 def inicio():
     return render_template("index.html")

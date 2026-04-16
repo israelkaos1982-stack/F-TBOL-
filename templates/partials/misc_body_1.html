@@ -1489,6 +1489,50 @@ window.pG = function(fn) {
   refreshLigaEaShields();
   window.refreshLigaEaShields = refreshLigaEaShields;
 
+  // ══ RECUPERACIÓN DE EMERGENCIA ══
+  // Si los datos se pierden, intenta restaurar desde:
+  //  1) Backup local (ligaExt_XXX_backup)
+  //  2) Servidor (/api/liga-ext/XXX)
+  // Accesible desde consola: window.emergencyRestore('liga-ea-sports')
+  window.emergencyRestore = function(slug){
+    slug = slug || 'liga-ea-sports';
+    // 1. Intentar desde backup local
+    try {
+      var backup = localStorage.getItem('ligaExt_'+slug+'_backup');
+      if(backup){
+        var check = JSON.parse(backup);
+        if(check && check.teams && check.teams.length > 0){
+          localStorage.setItem('ligaExt_'+slug, backup);
+          if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
+          alert('✅ Restaurados '+check.teams.length+' equipos de '+slug+' desde backup local.');
+          return;
+        }
+      }
+    } catch(_){}
+    // 2. Intentar desde servidor
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/liga-ext/'+encodeURIComponent(slug), false); // síncrono
+      xhr.send();
+      if(xhr.status === 200){
+        var resp = JSON.parse(xhr.responseText);
+        if(resp && resp.data && resp.data.teams && resp.data.teams.length > 0){
+          localStorage.setItem('ligaExt_'+slug, JSON.stringify(resp.data));
+          if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
+          alert('✅ Restaurados '+resp.data.teams.length+' equipos de '+slug+' desde el servidor.');
+          return;
+        }
+      }
+    } catch(_){}
+    alert('❌ No se encontraron datos de backup para '+slug+'. Ni en local ni en el servidor.');
+  };
+  // Botón de emergencia accesible desde el editor
+  window.emergencyRestoreAll = function(){
+    var slugs = ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion', 'inglaterra'];
+    slugs.forEach(function(s){ window.emergencyRestore(s); });
+    location.reload();
+  };
+
   window._ligaEaLegendHtml = function(){
     var z = loadLigaEaZones();
     var items = [];

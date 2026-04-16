@@ -2684,37 +2684,11 @@
       delete _mlStates[k];
     });
 
-    // Resetear stats de jugadores en el storage ligaExt a cero
-    // PROTECCIÓN: backup antes de tocar, verificación antes de guardar
-    try {
-      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
-      if(raw){
-        // Backup de seguridad
-        localStorage.setItem('ligaExt_liga-ea-sports_backup', raw);
-        var eaData = JSON.parse(raw);
-        var numTeams = (eaData && eaData.teams) ? eaData.teams.length : 0;
-        if(eaData && Array.isArray(eaData.teams)){
-          eaData.teams.forEach(function(t){
-            (t.players||[]).forEach(function(p){
-              // Solo resetear contadores, JAMÁS tocar name/pos/power/id
-              p.pj=0; p.gol=0; p.pen=0; p.fk=0; p.mvp=0;
-              p.ta=0; p.tr=0; p.imbat=0; p.penSaved=0;
-            });
-          });
-          eaData.results = [];
-          // Verificar integridad antes de guardar
-          var check = JSON.stringify(eaData);
-          var verify = JSON.parse(check);
-          if(verify.teams.length >= numTeams){
-            localStorage.setItem('ligaExt_liga-ea-sports', check);
-          } else {
-            // Restaurar backup si perdimos equipos
-            localStorage.setItem('ligaExt_liga-ea-sports', raw);
-          }
-          if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports');
-        }
-      }
-    } catch(_){}
+    // Resetear stats de jugadores — DESACTIVADO
+    // Esta sección causó pérdida de datos. Los stats de jugadores
+    // se gestionarán en un sistema separado que NO escriba al storage
+    // de equipos. Los equipos/plantillas son intocables.
+    if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports');
 
     // Regenerar calendario completo de 38 jornadas usando los equipos del editor
     var baseOrder = leerOrdenEquiposActual();

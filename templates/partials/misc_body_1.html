@@ -1851,28 +1851,11 @@ window.pG = function(fn) {
   }
 
   function syncLigaEaPlayerStats(){
-    var slug = 'liga-ea-sports';
-    var raw;
-    try { raw = localStorage.getItem('ligaExt_'+slug); } catch(_){ return; }
-    if(!raw) return;
-    var original;
-    try { original = JSON.parse(raw); } catch(_){ return; }
-    if(!original || !Array.isArray(original.teams) || !original.teams.length) return;
-
-    // ══ PROTECCIÓN ABSOLUTA ══
-    // 1. Hacemos backup antes de cualquier modificación
-    try { localStorage.setItem('ligaExt_'+slug+'_backup', raw); } catch(_){}
-    // 2. Trabajamos sobre una COPIA profunda — nunca tocamos el original
-    var data;
-    try { data = JSON.parse(raw); } catch(_){ return; }
-
-    // 3. Solo modificamos CONTADORES de stats, jamás nombre/pos/power/id
-    data.teams.forEach(function(t){
-      (t.players||[]).forEach(function(p){
-        p.pj=0; p.gol=0; p.pen=0; p.fk=0; p.mvp=0; p.ta=0; p.tr=0;
-        p.imbat=0; p.penSaved=0;
-      });
-    });
+    // DESACTIVADO: esta función causó pérdida de datos.
+    // Las stats de jugadores se mostrarán en la próxima sesión
+    // con un sistema seguro que NO escriba al storage de equipos.
+    return;
+  }
     data.teams.forEach(function(t){
       (t.players||[]).forEach(function(p){
         p.pj=0; p.gol=0; p.pen=0; p.fk=0; p.mvp=0; p.ta=0; p.tr=0;

@@ -2555,6 +2555,10 @@ var STAT_CLASS_MAP = {
     if (typeof window.rebuildLigaPlayerStatsFixed === 'function') {
       window.rebuildLigaPlayerStatsFixed();
     }
+    // Fase 2: sincronizar stats al storage ligaExt
+    if(typeof window.syncLigaEaPlayerStats === 'function'){
+      try { window.syncLigaEaPlayerStats(); } catch(_){}
+    }
   };
 
   function getLigaStatFromRow(row, key){

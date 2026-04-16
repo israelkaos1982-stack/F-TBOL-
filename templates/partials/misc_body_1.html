@@ -2193,23 +2193,10 @@ window.pG = function(fn) {
 
   window.syncLigaEaPlayerStats = syncLigaEaPlayerStats;
 
-  // Hook: tras cada registrarLigaPlayerStats, sincronizar al storage.
-  var _origRegistrarPlayerStats = window.registrarLigaPlayerStats;
-  if(typeof _origRegistrarPlayerStats === 'function'){
-    window.registrarLigaPlayerStats = function(){
-      _origRegistrarPlayerStats.apply(this, arguments);
-      try { syncLigaEaPlayerStats(); } catch(_){}
-    };
-  }
-  // También sincronizar tras Simular J1-38 (que llama a buildLigaClas al final)
-  var _origBuildClasForSync = window.buildLigaClas;
-  if(typeof _origBuildClasForSync === 'function'){
-    window.buildLigaClas = function(){
-      var out = _origBuildClasForSync.apply(this, arguments);
-      try { syncLigaEaPlayerStats(); } catch(_){}
-      return out;
-    };
-  }
+  // Los hooks de sincronización están directamente en el bundle
+  // (registrarLigaPlayerStats en index.bundle.js:2540) y en la
+  // definición final de misc_body_1 (línea ~6116). Ambos llaman a
+  // window.syncLigaEaPlayerStats() tras cada partido.
 })();
 </script>
 
@@ -6121,6 +6108,10 @@ window.pG = function(fn) {
         setMVPTracker(t);
         updateMVPCounter();
         saveObjState();
+      }
+      // Fase 2: sincronizar stats al storage ligaExt tras cada partido
+      if(typeof window.syncLigaEaPlayerStats === 'function'){
+        try { window.syncLigaEaPlayerStats(); } catch(_){}
       }
     };
   }

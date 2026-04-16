@@ -2502,7 +2502,26 @@
     'Elche CF','Atlético Madrid','Rayo Vallecano','Real Betis','FC Barcelona'
   ];
   /* Equipos humanos grabados a fuego. Object.freeze impide mutación. */
-  var HUMANOS = Object.freeze(['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid']);
+  // HUMANOS ahora se lee dinámicamente del storage ligaExt.
+  // Si el admin tiene equipos con isHuman=true, esos son los humanos.
+  // Fallback a la lista clásica si no hay equipos en el editor.
+  var _HUMANOS_DEFAULT = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+  var HUMANOS = _HUMANOS_DEFAULT.slice();
+  function _refreshHumanosFromStorage(){
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(!raw) return;
+      var data = JSON.parse(raw);
+      if(!data || !Array.isArray(data.teams) || !data.teams.length) return;
+      var humans = data.teams.filter(function(t){ return t.isHuman; }).map(function(t){ return t.name; });
+      if(humans.length > 0){
+        HUMANOS = humans;
+      }
+    } catch(_){}
+  }
+  _refreshHumanosFromStorage();
+  // Re-check after DOMContentLoaded (applyEngineOverrides might have loaded data)
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(_refreshHumanosFromStorage, 500); });
   var FEATURED_TEAMS = [
     'Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid',
     'Athletic Club','Real Betis','Sevilla'

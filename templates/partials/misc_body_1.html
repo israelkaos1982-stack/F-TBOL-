@@ -1830,246 +1830,158 @@ window.pG = function(fn) {
   }
 
   // ══════════════════════════════════════════════════════════════════
-  // PUNTO 6 — SINCRONIZAR STATS DE SIMULACIÓN AL STORAGE LIGAEXT
+  // SISTEMA DE STATS SEGURO — storage SEPARADO de equipos
   // ══════════════════════════════════════════════════════════════════
-  // El simulador del bundle genera eventos (goles, tarjetas, MVPs) y
-  // los guarda en window.LIGA_PLAYER_MATCH_STORE. Pero las stats de
-  // jugadores que se muestran en el overlay lext-ov-squad vienen del
-  // storage ligaExt (player.gol, player.ta, etc.), no del DOM.
-  // Esta función recorre TODOS los eventos acumulados de TODOS los
-  // partidos simulados y actualiza las stats en el storage ligaExt
-  // para que cuando abras la plantilla de un equipo, los goles/
-  // tarjetas/MVPs estén reflejados.
+  // Las stats de jugadores (goles, tarjetas, MVPs) viven en su propio
+  // localStorage key: ef_player_stats_v1
+  // JAMÁS lee ni escribe a ligaExt_liga-ea-sports (donde viven los
+  // equipos y plantillas del usuario).
   //
-  // Se ejecuta automáticamente tras cada simulación (hook en
-  // registrarLigaPlayerStats) y tras Simular J1-38.
+  // Estructura: { 'teamNorm::playerNorm': {gol,pen,fk,mvp,ta,tr,pj,...} }
+  // Se recalcula desde cero cada vez que se llama, leyendo de:
+  //   - LIGA_PLAYER_MATCH_STORE (eventos del bundle)
+  //   - ef_liga38_v4 (resultados guardados)
   // ══════════════════════════════════════════════════════════════════
+  var PLAYER_STATS_KEY = 'ef_player_stats_v1';
 
-  function _normSync(s){
+  function _normPS(s){
     return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
       .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
   }
 
-  function syncLigaEaPlayerStats(){
-    // DESACTIVADO: esta función causó pérdida de datos.
-    // Las stats de jugadores se mostrarán en la próxima sesión
-    // con un sistema seguro que NO escriba al storage de equipos.
-    return;
-  }
-    data.teams.forEach(function(t){
-      (t.players||[]).forEach(function(p){
-        p.pj=0; p.gol=0; p.pen=0; p.fk=0; p.mvp=0; p.ta=0; p.tr=0;
-        p.imbat=0; p.penSaved=0;
-      });
-    });
+  function rebuildPlayerStatsStore(){
+    var stats = {}; // 'teamNorm::playerNorm' → counters
 
-    // 2. Índice de jugadores con MÚLTIPLES claves para máximo matching
-    var idx = {};
-    data.teams.forEach(function(t){
-      var tNorm = _normSync(t.name);
-      (t.players||[]).forEach(function(p){
-        var pNorm = _normSync(p.name);
-        idx[tNorm + '::' + pNorm] = p;
-        // También registrar sin el equipo para fallback
-        if(!idx['*::' + pNorm]) idx['*::' + pNorm] = {player:p, team:tNorm};
-      });
-    });
-
-    // Índice de equipos para fuzzy
-    var teamIdx = {};
-    data.teams.forEach(function(t){ teamIdx[_normSync(t.name)] = t; });
-
-    function findPlayer(teamName, playerName){
-      var tNorm = _normSync(teamName);
-      var pNorm = _normSync(playerName);
-      if(!pNorm) return null;
-      // Directo team::player
-      if(idx[tNorm + '::' + pNorm]) return idx[tNorm + '::' + pNorm];
-      // Fuzzy team (Deportivo Alavés ↔ Alavés)
-      var tKeys = Object.keys(teamIdx);
-      for(var ti=0;ti<tKeys.length;ti++){
-        if(tKeys[ti].indexOf(tNorm)!==-1 || tNorm.indexOf(tKeys[ti])!==-1){
-          var match = idx[tKeys[ti] + '::' + pNorm];
-          if(match) return match;
-        }
-      }
-      // Fuzzy player name (substring)
-      var allKeys = Object.keys(idx);
-      for(var i=0;i<allKeys.length;i++){
-        var parts = allKeys[i].split('::');
-        if(parts[0] === '*') continue;
-        if(parts[0].indexOf(tNorm)===-1 && tNorm.indexOf(parts[0])===-1) continue;
-        if(parts[1].indexOf(pNorm)!==-1 || pNorm.indexOf(parts[1])!==-1){
-          return idx[allKeys[i]];
-        }
-      }
-      // Último recurso: buscar solo por nombre de jugador en cualquier equipo
-      var wildcard = idx['*::' + pNorm];
-      if(wildcard) return wildcard.player;
-      return null;
+    function getOrCreate(teamName, playerName){
+      var key = _normPS(teamName) + '::' + _normPS(playerName);
+      if(!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+      return stats[key];
     }
 
-    // 3. Recoger eventos de AMBAS fuentes:
-    //    A) LIGA_PLAYER_MATCH_STORE (populated by registrarLigaPlayerStats)
-    //    B) localStorage ef_liga38_v4 (populated by simularJornadaIA directly)
-    var allMatches = []; // [{teamA, teamB, events, mvp, mvpTeam}]
-    var seen = {};
+    // Fuzzy team finder for events
+    function findTeamKey(teamName, allTeamKeys){
+      var norm = _normPS(teamName);
+      if(allTeamKeys[norm]) return norm;
+      var keys = Object.keys(allTeamKeys);
+      for(var i=0;i<keys.length;i++){
+        if(keys[i].indexOf(norm)!==-1 || norm.indexOf(keys[i])!==-1) return keys[i];
+      }
+      return norm;
+    }
 
-    // Fuente A: LIGA_PLAYER_MATCH_STORE
+    // Collect all team names from both sources
+    var teamPJ = {}; // teamNorm → {matchKey: true}
+
+    // Source 1: LIGA_PLAYER_MATCH_STORE
     var store = window.LIGA_PLAYER_MATCH_STORE;
     if(store && typeof store === 'object'){
-      Object.keys(store).forEach(function(key){
-        var m = store[key];
-        if(!m) return;
-        seen[key] = true;
-        allMatches.push({
-          key: key,
-          teamA: m.teamA || '',
-          teamB: m.teamB || '',
-          events: (m.evts||[]).map(function(ev){
-            return {
-              type: ev.type||'',
-              ico: ev.ico||'',
-              team: ev.team||'',
-              realTeam: ev.realTeam||'',
-              player: ev.player
-            };
-          }),
-          mvp: m.mvpName||'',
-          mvpTeam: m.mvpTeam||''
+      Object.keys(store).forEach(function(matchKey){
+        var m = store[matchKey]; if(!m) return;
+        var tA = m.teamA||'', tB = m.teamB||'';
+        if(!teamPJ[_normPS(tA)]) teamPJ[_normPS(tA)] = {};
+        if(!teamPJ[_normPS(tB)]) teamPJ[_normPS(tB)] = {};
+        teamPJ[_normPS(tA)][matchKey] = true;
+        teamPJ[_normPS(tB)][matchKey] = true;
+        (m.evts||[]).forEach(function(ev){
+          var team = ev.realTeam || '';
+          if(!team){ team = ev.team==='a'?tA:ev.team==='b'?tB:''; }
+          var player = '';
+          if(Array.isArray(ev.player)) player = ev.player[1]||ev.player[0]||'';
+          else if(typeof ev.player==='string') player = ev.player;
+          else player = ev.name||ev.playerName||'';
+          if(!player) return;
+          var p = getOrCreate(team, player);
+          var type = ev.type||'';
+          var ico = String(ev.ico||'').replace(/️/g,'').trim();
+          if(type==='amarilla') p.ta++;
+          else if(type==='roja'||type==='d-amarilla') p.tr++;
+          else if(type==='card'){
+            if(ico==='🟨') p.ta++; else if(ico==='🟥') p.tr++; else if(ico==='🟨🟥'){p.ta++;p.tr++;}
+          }
+          else if(type==='gol') p.gol++;
+          else if(type==='falta-gol'){p.gol++;p.fk++;}
+          else if(type==='pen-gol'){p.gol++;p.pen++;}
+          else if(type==='pen-parado') p.penSaved++;
+          else if(type==='mvp') p.mvp++;
         });
+        if(m.mvpName && m.mvpTeam){
+          var hasMvpEvt = (m.evts||[]).some(function(e){return e.type==='mvp';});
+          if(!hasMvpEvt) getOrCreate(m.mvpTeam, m.mvpName).mvp++;
+        }
       });
     }
 
-    // Fuente B: localStorage resultados (ef_liga38_v4)
+    // Source 2: ef_liga38_v4 (results from simularJornadaIA)
     try {
       var resRaw = localStorage.getItem('ef_liga38_v4');
       if(resRaw){
         var results = JSON.parse(resRaw);
-        if(results && typeof results === 'object'){
-          Object.keys(results).forEach(function(key){
-            if(seen[key]) return; // ya procesado desde Fuente A
-            var r = results[key];
-            if(!r || !r.events) return;
-            // Parsear key: "j2|Athletic Club|Villarreal CF"
-            var parts = key.split('|');
-            if(parts.length < 3) return;
-            var teamA = parts[1]||'';
-            var teamB = parts[2]||'';
-            allMatches.push({
-              key: key,
-              teamA: teamA,
-              teamB: teamB,
-              events: (r.events||[]).map(function(ev){
-                return {
-                  type: ev.type||'',
-                  ico: ev.ico||'',
-                  team: ev.team||'',
-                  realTeam: '',
-                  player: ev.player
-                };
-              }),
-              mvp: r.mvp||'',
-              mvpTeam: r.mvpTeam||''
-            });
+        Object.keys(results||{}).forEach(function(key){
+          var r = results[key]; if(!r||!r.events) return;
+          var parts = key.split('|'); if(parts.length<3) return;
+          var tA = parts[1]||'', tB = parts[2]||'';
+          // Skip if already processed from LIGA_PLAYER_MATCH_STORE
+          if(store && store[key]) return;
+          if(!teamPJ[_normPS(tA)]) teamPJ[_normPS(tA)] = {};
+          if(!teamPJ[_normPS(tB)]) teamPJ[_normPS(tB)] = {};
+          teamPJ[_normPS(tA)][key] = true;
+          teamPJ[_normPS(tB)][key] = true;
+          (r.events||[]).forEach(function(ev){
+            var team = ev.team==='a'?tA:ev.team==='b'?tB:'';
+            var player = typeof ev.player==='string'?ev.player:(Array.isArray(ev.player)?ev.player[1]:'');
+            if(!player) return;
+            var p = getOrCreate(team, player);
+            var type = ev.type||'';
+            if(type==='amarilla') p.ta++;
+            else if(type==='roja'||type==='d-amarilla') p.tr++;
+            else if(type==='gol') p.gol++;
+            else if(type==='falta-gol'){p.gol++;p.fk++;}
+            else if(type==='pen-gol'){p.gol++;p.pen++;}
+            else if(type==='pen-parado') p.penSaved++;
+            else if(type==='mvp') p.mvp++;
           });
-        }
+          if(r.mvp && r.mvpTeam) getOrCreate(r.mvpTeam, r.mvp).mvp++;
+        });
       }
     } catch(_){}
 
-    // 4. Procesar todos los partidos
-    var teamPJ = {};
-    allMatches.forEach(function(match){
-      var teamA = match.teamA;
-      var teamB = match.teamB;
-      var taNorm = _normSync(teamA);
-      var tbNorm = _normSync(teamB);
-      if(!teamPJ[taNorm]) teamPJ[taNorm] = {};
-      if(!teamPJ[tbNorm]) teamPJ[tbNorm] = {};
-      teamPJ[taNorm][match.key] = true;
-      teamPJ[tbNorm][match.key] = true;
-
-      match.events.forEach(function(ev){
-        var teamName = ev.realTeam || '';
-        if(!teamName){
-          if(ev.team === 'a') teamName = teamA;
-          else if(ev.team === 'b') teamName = teamB;
-          else teamName = ev.team || '';
-        }
-        var playerName = '';
-        if(Array.isArray(ev.player)) playerName = ev.player[1] || ev.player[0] || '';
-        else if(typeof ev.player === 'string') playerName = ev.player;
-        if(!playerName) return;
-        var p = findPlayer(teamName, playerName);
-        if(!p) return;
-
-        var ico = String(ev.ico||'').replace(/️/g,'').trim();
-        var type = ev.type || '';
-        if(type==='amarilla') p.ta++;
-        else if(type==='roja' || type==='d-amarilla') p.tr++;
-        else if(type==='card'){
-          if(ico==='🟨') p.ta++;
-          else if(ico==='🟥') p.tr++;
-          else if(ico==='🟨🟥'){p.ta++;p.tr++;}
-        }
-        else if(type==='gol') p.gol++;
-        else if(type==='falta-gol'){p.gol++;p.fk++;}
-        else if(type==='pen-gol'){p.gol++;p.pen++;}
-        else if(type==='pen-parado') p.penSaved++;
-        else if(type==='mvp') p.mvp++;
-      });
-
-      // MVP separado
-      if(match.mvp && match.mvpTeam){
-        var mvpP = findPlayer(match.mvpTeam, match.mvp);
-        var alreadyMvp = match.events.some(function(ev){
-          return ev.type==='mvp';
-        });
-        if(mvpP && !alreadyMvp) mvpP.mvp++;
-      }
+    // Assign PJ
+    Object.keys(stats).forEach(function(key){
+      var teamNorm = key.split('::')[0];
+      stats[key].pj = teamPJ[teamNorm] ? Object.keys(teamPJ[teamNorm]).length : 0;
     });
 
-    // 5. PJ por equipo → todos los jugadores
-    data.teams.forEach(function(t){
-      var tNorm = _normSync(t.name);
-      var count = teamPJ[tNorm] ? Object.keys(teamPJ[tNorm]).length : 0;
-      // Fuzzy match for team PJ too
-      if(!count){
-        var tk = Object.keys(teamPJ);
-        for(var i=0;i<tk.length;i++){
-          if(tk[i].indexOf(tNorm)!==-1 || tNorm.indexOf(tk[i])!==-1){
-            count = Object.keys(teamPJ[tk[i]]).length;
-            break;
-          }
-        }
-      }
-      (t.players||[]).forEach(function(p){ p.pj = count; });
-    });
-
-    // 6. Guardar — con verificación de integridad
-    try {
-      var toSave = JSON.stringify(data);
-      // Verificar que no perdimos equipos ni jugadores en el proceso
-      var check = JSON.parse(toSave);
-      if(!check.teams || check.teams.length < original.teams.length){
-        console.error('[syncStats] Abortado: se perdieron equipos. Restaurando backup.');
-        return;
-      }
-      localStorage.setItem('ligaExt_'+slug, toSave);
-    } catch(e){
-      console.error('[syncStats] Error al guardar. Restaurando backup.', e);
-      try { localStorage.setItem('ligaExt_'+slug, raw); } catch(_){}
-      return;
-    }
-    if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
+    // Save to SEPARATE storage
+    try { localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(stats)); } catch(_){}
+    return stats;
   }
 
-  window.syncLigaEaPlayerStats = syncLigaEaPlayerStats;
+  // Read stats for a player (used by renderSquadList)
+  window.getPlayerStats = function(teamName, playerName){
+    var key = _normPS(teamName) + '::' + _normPS(playerName);
+    try {
+      var raw = localStorage.getItem(PLAYER_STATS_KEY);
+      if(!raw) return null;
+      var stats = JSON.parse(raw);
+      if(stats[key]) return stats[key];
+      // Fuzzy fallback
+      var prefix = _normPS(teamName) + '::';
+      var pNorm = _normPS(playerName);
+      var keys = Object.keys(stats);
+      for(var i=0;i<keys.length;i++){
+        if(keys[i].indexOf(prefix)!==0) continue;
+        var storedP = keys[i].slice(prefix.length);
+        if(storedP.indexOf(pNorm)!==-1 || pNorm.indexOf(storedP)!==-1) return stats[keys[i]];
+      }
+    } catch(_){}
+    return null;
+  };
 
-  // Los hooks de sincronización están directamente en el bundle
-  // (registrarLigaPlayerStats en index.bundle.js:2540) y en la
-  // definición final de misc_body_1 (línea ~6116). Ambos llaman a
-  // window.syncLigaEaPlayerStats() tras cada partido.
+  // Rebuild + expose
+  function syncLigaEaPlayerStats(){
+    rebuildPlayerStatsStore();
+  }
+  window.syncLigaEaPlayerStats = syncLigaEaPlayerStats;
 })();
 </script>
 
@@ -4968,13 +4880,9 @@ window.pG = function(fn) {
 
   // ── Plantilla (jugadores) ─────────────────────────
   window.lextOpenSquad = function(id){
-    // Forzar sync de stats ANTES de abrir la plantilla
+    // Rebuild stats desde el storage SEPARADO (NO toca equipos)
     if(typeof window.syncLigaEaPlayerStats === 'function'){
       try { window.syncLigaEaPlayerStats(); } catch(_){}
-    }
-    // Invalidar cache para re-leer datos frescos del localStorage
-    if(typeof window.invalidateLigaCache === 'function'){
-      try { window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
     }
     CURRENT_SQUAD_TEAM = id;
     var data = loadData(CURRENT_KEY);
@@ -5022,6 +4930,17 @@ window.pG = function(fn) {
     var byPos = {POR:[],DEF:[],MED:[],DEL:[]};
     t.players.forEach(function(p){
       ensurePlayerStats(p);
+      // Aplicar stats del storage SEPARADO (ef_player_stats_v1)
+      // Esto NO modifica el storage de equipos — solo pone valores
+      // en memoria para esta renderización.
+      if(typeof window.getPlayerStats === 'function' && t.name){
+        var ps = window.getPlayerStats(t.name, p.name);
+        if(ps){
+          p.pj = ps.pj||0; p.gol = ps.gol||0; p.pen = ps.pen||0;
+          p.fk = ps.fk||0; p.mvp = ps.mvp||0; p.ta = ps.ta||0;
+          p.tr = ps.tr||0; p.imbat = ps.imbat||0; p.penSaved = ps.penSaved||0;
+        }
+      }
       (byPos[p.pos]||byPos.MED).push(p);
     });
 

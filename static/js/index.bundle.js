@@ -1919,13 +1919,21 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     'Deportivo Alavés': 'Alavés',
     'Valencia CF':      'Valencia'
   };
-  var HUMAN_TEAMS = {
-    'Bayern Munich':    '💡',
-    'Arsenal':          '🐭',
-    'Atlético Madrid':  '✏️',
-    'Real Madrid':      '🔨',
-    'FC Barcelona':     '👿'
-  };
+  // HUMAN_TEAMS dinámico desde ligaExt
+  var HUMAN_TEAMS = (function(){
+    var ht = {};
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(raw){
+        var d = JSON.parse(raw);
+        if(d && Array.isArray(d.teams)){
+          d.teams.forEach(function(t){ if(t.isHuman && t.humanEmoji) ht[t.name] = t.humanEmoji; });
+        }
+      }
+    } catch(_){}
+    if(!Object.keys(ht).length) ht = {'Bayern Munich':'💡','Arsenal':'🐭','Atlético Madrid':'✏️','Real Madrid':'🔨','FC Barcelona':'👿'};
+    return ht;
+  })();
 
   function buildLigaClas(){
     var list = collectStandings();
@@ -5117,7 +5125,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (!teams) return;
     var teamName = side === 'home' ? teams.home : teams.away;
     if (!teamName) return;
-    var HUMANOS_FORM = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+    var HUMANOS_FORM = (function(){ try { var r=localStorage.getItem('ligaExt_liga-ea-sports'); if(r){var d=JSON.parse(r); if(d&&d.teams){var h=d.teams.filter(function(t){return t.isHuman}).map(function(t){return t.name}); if(h.length) return h;}} } catch(_){} return ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid']; })();
     var normFn = window._ppNormTeam || function(s){return (s||'').toLowerCase();};
     var normTeam = normFn(teamName);
     var canonicalTeam = null;
@@ -6655,7 +6663,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   // ── Generar lesión para partidos HvH / IA vs H ──────────────────
   // Se llama al terminar el partido, genera 0 o 1 lesión por equipo
   // y las guarda en LESIONES_PARTIDO_ACTUAL para mostrar en el overlay
-  var _EQUIPOS_HUMANOS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid','PSG'];
+  var _EQUIPOS_HUMANOS = (function(){ try { var r=localStorage.getItem('ligaExt_liga-ea-sports'); if(r){var d=JSON.parse(r); if(d&&d.teams){var h=d.teams.filter(function(t){return t.isHuman}).map(function(t){return t.name}); if(h.length) return h;}} } catch(_){} return ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid','PSG']; })();
 
   window._generarLesionHumano = function(teamA, teamB) {
     window.LESIONES_PARTIDO_ACTUAL = [];
@@ -7734,13 +7742,21 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     'Rayo Vallecano':'Rayo',
     'Valencia CF':'Valencia'
   };
-  var HUMAN_TEAMS = {
-    'Bayern Munich':    '💡',
-    'Arsenal':          '🐭',
-    'Atlético Madrid':  '✏️',
-    'Real Madrid':      '🔨',
-    'FC Barcelona':     '👿'
-  };
+  // HUMAN_TEAMS dinámico desde ligaExt (misma lógica que script block 12)
+  var HUMAN_TEAMS = (function(){
+    var ht = {};
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(raw){
+        var d = JSON.parse(raw);
+        if(d && Array.isArray(d.teams)){
+          d.teams.forEach(function(t){ if(t.isHuman && t.humanEmoji) ht[t.name] = t.humanEmoji; });
+        }
+      }
+    } catch(_){}
+    if(!Object.keys(ht).length) ht = {'Bayern Munich':'💡','Arsenal':'🐭','Atlético Madrid':'✏️','Real Madrid':'🔨','FC Barcelona':'👿'};
+    return ht;
+  })();
   var TEAM_ALIAS = {
     'sevilla fc':'Sevilla','sevilla':'Sevilla',
     'villarreal cf':'Villarreal','villarreal':'Villarreal',
@@ -8430,7 +8446,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   /* ── 0. EXPORT esHumano GLOBAL (fallback si no está en window) ────── */
   if (typeof window.esHumano !== 'function') {
-    var _mmHUMANOS = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+    var _mmHUMANOS = (function(){ try { var r=localStorage.getItem('ligaExt_liga-ea-sports'); if(r){var d=JSON.parse(r); if(d&&d.teams){var h=d.teams.filter(function(t){return t.isHuman}).map(function(t){return t.name}); if(h.length) return h;}} } catch(_){} return ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid']; })();
     window.esHumano = function(t) {
       var s = String(t || '').trim();
       return _mmHUMANOS.some(function(h) {

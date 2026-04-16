@@ -1876,6 +1876,8 @@ window.pG = function(fn) {
         var playerName = '';
         if(Array.isArray(ev.player)){
           playerName = ev.player[1] || ev.player[0] || '';
+        } else if(typeof ev.player === 'string'){
+          playerName = ev.player;
         } else {
           playerName = ev.name || ev.playerName || ev.jugador || '';
         }

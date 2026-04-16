@@ -6725,6 +6725,10 @@
   /* botón "Simular TODAS las jornadas IA" */
   window.simularTodasJornadasIA = function () {
     for (var j = 1; j <= 38; j++) window.simularJornadaIA(j);
+    // Forzar sync de stats al storage ligaExt al finalizar todo
+    if(typeof window.syncLigaEaPlayerStats === 'function'){
+      try { window.syncLigaEaPlayerStats(); } catch(_){}
+    }
   };
 
   /* ── SIMULAR J1 IA con mlSimEngine ─────────────────── */

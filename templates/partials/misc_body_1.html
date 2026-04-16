@@ -2042,6 +2042,174 @@ window.pG = function(fn) {
   } else {
     initOverrides();
   }
+
+  // ══════════════════════════════════════════════════════════════════
+  // PUNTO 6 — SINCRONIZAR STATS DE SIMULACIÓN AL STORAGE LIGAEXT
+  // ══════════════════════════════════════════════════════════════════
+  // El simulador del bundle genera eventos (goles, tarjetas, MVPs) y
+  // los guarda en window.LIGA_PLAYER_MATCH_STORE. Pero las stats de
+  // jugadores que se muestran en el overlay lext-ov-squad vienen del
+  // storage ligaExt (player.gol, player.ta, etc.), no del DOM.
+  // Esta función recorre TODOS los eventos acumulados de TODOS los
+  // partidos simulados y actualiza las stats en el storage ligaExt
+  // para que cuando abras la plantilla de un equipo, los goles/
+  // tarjetas/MVPs estén reflejados.
+  //
+  // Se ejecuta automáticamente tras cada simulación (hook en
+  // registrarLigaPlayerStats) y tras Simular J1-38.
+  // ══════════════════════════════════════════════════════════════════
+
+  function _normSync(s){
+    return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+
+  function syncLigaEaPlayerStats(){
+    var store = window.LIGA_PLAYER_MATCH_STORE;
+    if(!store || typeof store !== 'object') return;
+    var slug = 'liga-ea-sports';
+    var raw;
+    try { raw = localStorage.getItem('ligaExt_'+slug); } catch(_){ return; }
+    if(!raw) return;
+    var data;
+    try { data = JSON.parse(raw); } catch(_){ return; }
+    if(!data || !Array.isArray(data.teams) || !data.teams.length) return;
+
+    // 1. Reset all player stats to 0 (recalculamos desde cero cada vez)
+    data.teams.forEach(function(t){
+      (t.players||[]).forEach(function(p){
+        p.pj=0; p.gol=0; p.pen=0; p.fk=0; p.mvp=0; p.ta=0; p.tr=0;
+        p.imbat=0; p.penSaved=0;
+      });
+    });
+
+    // 2. Índice de jugadores por team+name normalizado
+    var idx = {};
+    data.teams.forEach(function(t){
+      var tNorm = _normSync(t.name);
+      (t.players||[]).forEach(function(p){
+        var key = tNorm + '::' + _normSync(p.name);
+        idx[key] = p;
+      });
+    });
+
+    // Helper: buscar jugador por nombre fuzzy en un equipo
+    function findPlayer(teamName, playerName){
+      var tNorm = _normSync(teamName);
+      var pNorm = _normSync(playerName);
+      // Directo
+      var direct = idx[tNorm + '::' + pNorm];
+      if(direct) return direct;
+      // Fuzzy: substring
+      var prefix = tNorm + '::';
+      var keys = Object.keys(idx);
+      for(var i=0;i<keys.length;i++){
+        if(keys[i].indexOf(prefix) !== 0) continue;
+        var storedName = keys[i].slice(prefix.length);
+        if(storedName.indexOf(pNorm) !== -1 || pNorm.indexOf(storedName) !== -1){
+          return idx[keys[i]];
+        }
+      }
+      return null;
+    }
+
+    // 3. Recorrer TODOS los partidos almacenados
+    var teamPJ = {}; // team → Set de matchKeys donde jugó
+
+    Object.keys(store).forEach(function(matchKey){
+      var match = store[matchKey];
+      if(!match) return;
+      var teamA = match.teamA || '';
+      var teamB = match.teamB || '';
+      // Registrar PJ (partidos jugados) por equipo
+      if(!teamPJ[_normSync(teamA)]) teamPJ[_normSync(teamA)] = {};
+      if(!teamPJ[_normSync(teamB)]) teamPJ[_normSync(teamB)] = {};
+      teamPJ[_normSync(teamA)][matchKey] = true;
+      teamPJ[_normSync(teamB)][matchKey] = true;
+
+      // Recorrer eventos
+      (match.evts||[]).forEach(function(ev){
+        var teamName = ev.realTeam || ev.teamName || ev.team_label || '';
+        if(!teamName){
+          if(ev.team === 'a') teamName = teamA;
+          else if(ev.team === 'b') teamName = teamB;
+        }
+        var playerName = '';
+        if(Array.isArray(ev.player)){
+          playerName = ev.player[1] || ev.player[0] || '';
+        } else {
+          playerName = ev.name || ev.playerName || ev.jugador || '';
+        }
+        if(!teamName || !playerName) return;
+        var p = findPlayer(teamName, playerName);
+        if(!p) return;
+
+        var ico = String(ev.ico||'').replace(/️/g,'').trim();
+        var type = ev.type || '';
+        if(type === 'card' || type === 'amarilla' || type === 'roja' || type === 'd-amarilla'){
+          if(ico === '🟨') p.ta++;
+          else if(ico === '🟥') p.tr++;
+          else if(ico === '🟨🟥'){ p.ta++; p.tr++; }
+          else if(type === 'amarilla') p.ta++;
+          else if(type === 'roja' || type === 'd-amarilla') p.tr++;
+        }
+        else if(type === 'gol') p.gol++;
+        else if(type === 'falta-gol'){ p.gol++; p.fk++; }
+        else if(type === 'pen-gol'){ p.gol++; p.pen++; }
+        else if(type === 'pen-fallo' || type === 'pen-fallado') { /* no stat */ }
+        else if(type === 'pen-parado') p.penSaved++;
+        else if(type === 'pen-prov') { /* no individual stat */ }
+        else if(type === 'propia') { /* own-goal, no positive stat */ }
+        else if(type === 'mvp') p.mvp++;
+      });
+
+      // MVP del partido (viene como campo separado a veces)
+      if(match.mvpName && match.mvpTeam){
+        var mvpP = findPlayer(match.mvpTeam, match.mvpName);
+        // Solo sumar si no ya contado como evento tipo 'mvp'
+        var alreadyCounted = (match.evts||[]).some(function(ev){
+          return ev.type === 'mvp' && findPlayer(
+            ev.realTeam || ev.teamName || (ev.team==='a'?teamA:teamB),
+            Array.isArray(ev.player)?ev.player[1]:''
+          ) === mvpP;
+        });
+        if(mvpP && !alreadyCounted) mvpP.mvp++;
+      }
+    });
+
+    // 4. Asignar PJ (partidos jugados) a cada jugador del equipo
+    data.teams.forEach(function(t){
+      var tNorm = _normSync(t.name);
+      var matchCount = teamPJ[tNorm] ? Object.keys(teamPJ[tNorm]).length : 0;
+      (t.players||[]).forEach(function(p){
+        p.pj = matchCount;
+      });
+    });
+
+    // 5. Guardar de vuelta al storage (sin re-subir al servidor ahora,
+    //    solo localStorage para respuesta inmediata).
+    try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+  }
+
+  window.syncLigaEaPlayerStats = syncLigaEaPlayerStats;
+
+  // Hook: tras cada registrarLigaPlayerStats, sincronizar al storage.
+  var _origRegistrarPlayerStats = window.registrarLigaPlayerStats;
+  if(typeof _origRegistrarPlayerStats === 'function'){
+    window.registrarLigaPlayerStats = function(){
+      _origRegistrarPlayerStats.apply(this, arguments);
+      try { syncLigaEaPlayerStats(); } catch(_){}
+    };
+  }
+  // También sincronizar tras Simular J1-38 (que llama a buildLigaClas al final)
+  var _origBuildClasForSync = window.buildLigaClas;
+  if(typeof _origBuildClasForSync === 'function'){
+    window.buildLigaClas = function(){
+      var out = _origBuildClasForSync.apply(this, arguments);
+      try { syncLigaEaPlayerStats(); } catch(_){}
+      return out;
+    };
+  }
 })();
 </script>
 

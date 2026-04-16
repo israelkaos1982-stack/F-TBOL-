@@ -2072,8 +2072,21 @@ window.mlSimulate_j1m10=function(){
     // ── Prioridad 1: escudo definido por el admin en el editor de Liga
     // EA Sports (ligaExt_liga-ea-sports). Si el usuario puso una URL de
     // escudo personalizada, gana sobre el TEAM_LOGOS hardcodeado.
+    // Fuzzy match: si el nombre canónico es "Deportivo Alavés" y el
+    // admin guardó el escudo bajo "Alavés", se busca como substring.
     if(window._ligaEaShields){
       var s = window._ligaEaShields[canonical] || window._ligaEaShields[clean] || window._ligaEaShields[normalizedClean];
+      if(!s){
+        var _shKeys = Object.keys(window._ligaEaShields);
+        for(var _si=0; _si<_shKeys.length; _si++){
+          var _sk = _shKeys[_si];
+          if(!window._ligaEaShields[_sk]) continue;
+          if(canonical.indexOf(_sk)!==-1 || _sk.indexOf(canonical)!==-1 ||
+             normalizedClean.indexOf(_sk)!==-1 || _sk.indexOf(normalizedClean)!==-1){
+            s = window._ligaEaShields[_sk]; break;
+          }
+        }
+      }
       if(s) return s;
     }
     var logos = window.TEAM_LOGOS || {};

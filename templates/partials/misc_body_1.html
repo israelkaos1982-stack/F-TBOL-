@@ -1808,11 +1808,24 @@ window.pG = function(fn) {
     var raw;
     try { raw = localStorage.getItem('ligaExt_'+slug); } catch(_){ return; }
     if(!raw) return;
+    var original;
+    try { original = JSON.parse(raw); } catch(_){ return; }
+    if(!original || !Array.isArray(original.teams) || !original.teams.length) return;
+
+    // ══ PROTECCIÓN ABSOLUTA ══
+    // 1. Hacemos backup antes de cualquier modificación
+    try { localStorage.setItem('ligaExt_'+slug+'_backup', raw); } catch(_){}
+    // 2. Trabajamos sobre una COPIA profunda — nunca tocamos el original
     var data;
     try { data = JSON.parse(raw); } catch(_){ return; }
-    if(!data || !Array.isArray(data.teams) || !data.teams.length) return;
 
-    // 1. Reset TODOS los stats de TODOS los jugadores a 0
+    // 3. Solo modificamos CONTADORES de stats, jamás nombre/pos/power/id
+    data.teams.forEach(function(t){
+      (t.players||[]).forEach(function(p){
+        p.pj=0; p.gol=0; p.pen=0; p.fk=0; p.mvp=0; p.ta=0; p.tr=0;
+        p.imbat=0; p.penSaved=0;
+      });
+    });
     data.teams.forEach(function(t){
       (t.players||[]).forEach(function(p){
         p.pj=0; p.gol=0; p.pen=0; p.fk=0; p.mvp=0; p.ta=0; p.tr=0;
@@ -2003,8 +2016,21 @@ window.pG = function(fn) {
       (t.players||[]).forEach(function(p){ p.pj = count; });
     });
 
-    // 6. Guardar
-    try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+    // 6. Guardar — con verificación de integridad
+    try {
+      var toSave = JSON.stringify(data);
+      // Verificar que no perdimos equipos ni jugadores en el proceso
+      var check = JSON.parse(toSave);
+      if(!check.teams || check.teams.length < original.teams.length){
+        console.error('[syncStats] Abortado: se perdieron equipos. Restaurando backup.');
+        return;
+      }
+      localStorage.setItem('ligaExt_'+slug, toSave);
+    } catch(e){
+      console.error('[syncStats] Error al guardar. Restaurando backup.', e);
+      try { localStorage.setItem('ligaExt_'+slug, raw); } catch(_){}
+      return;
+    }
     if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
   }
 

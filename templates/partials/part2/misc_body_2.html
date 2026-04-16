@@ -1930,7 +1930,23 @@
   function loadJSON(key,fallback){try{var raw=localStorage.getItem(key); return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}
   function saveJSON(key,val){localStorage.setItem(key,JSON.stringify(val));}
 
-  function getSegundaTeams(){return loadJSON(SEGUNDA_TEAMS_KEY, deepCopy(DEFAULT_SEGUNDA_TEAMS));}
+  function getSegundaTeams(){
+    // Si el admin ha creado equipos en el editor (✏️ Edit de Hypermotion),
+    // esos REEMPLAZAN a los hardcodeados. Cuando no hay equipos en el
+    // editor, se usan los DEFAULT_SEGUNDA_TEAMS de siempre.
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-hypermotion');
+      if(raw){
+        var data = JSON.parse(raw);
+        if(data && Array.isArray(data.teams) && data.teams.length > 0){
+          return data.teams.map(function(t){
+            return { name: t.name||'?', short: t.name||'?', media: Number(t.power)||70 };
+          });
+        }
+      }
+    } catch(_){}
+    return loadJSON(SEGUNDA_TEAMS_KEY, deepCopy(DEFAULT_SEGUNDA_TEAMS));
+  }
   function setSegundaTeams(teams){saveJSON(SEGUNDA_TEAMS_KEY, teams);}
   function sameTeamSet(list, expected){
     if(!Array.isArray(list) || list.length !== expected.length) return false;
@@ -1948,6 +1964,22 @@
     return {g1:deepCopy(DEFAULT_PRIMERA_G1), g2:deepCopy(DEFAULT_PRIMERA_G2)};
   }
   function getPrimeraTeams(){
+    // Si el admin ha creado equipos en el editor de Primera Federación,
+    // esos REEMPLAZAN a los hardcodeados. Se reparten mitad y mitad
+    // entre G1 y G2 (primera mitad → G1, segunda → G2).
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-primera-federacion');
+      if(raw){
+        var data = JSON.parse(raw);
+        if(data && Array.isArray(data.teams) && data.teams.length > 0){
+          var all = data.teams.map(function(t){
+            return { name: t.name||'?', short: t.name||'?', media: Number(t.power)||60 };
+          });
+          var half = Math.ceil(all.length / 2);
+          return { g1: all.slice(0, half), g2: all.slice(half) };
+        }
+      }
+    } catch(_){}
     var normalized = normalizePrimeraTeams(loadJSON(PRIMERA_STATE_KEY + '_teams', null));
     saveJSON(PRIMERA_STATE_KEY + '_teams', normalized);
     return normalized;

@@ -1618,7 +1618,16 @@ window.pG = function(fn) {
     var row = t.closest('.clas-row');
     if(!row) return;
     var scope = row.closest('#s-liga-clas');
+    // También funciona en Hypermotion y Primera Federación
+    var slugMap = {
+      's-liga-clas':     'liga-ea-sports',
+      's-segunda-clas':  'liga-hypermotion',
+      's-primf-clas':    'liga-primera-federacion'
+    };
+    if(!scope) scope = row.closest('#s-segunda-clas');
+    if(!scope) scope = row.closest('#s-primf-clas');
     if(!scope) return;
+    var slug = slugMap[scope.id] || 'liga-ea-sports';
     var nameEl = row.querySelector('.clas-team-name');
     if(!nameEl) return;
     // Clonamos y eliminamos el prefijo humano (emoji) para quedarnos
@@ -1628,7 +1637,9 @@ window.pG = function(fn) {
     if(prefix) prefix.remove();
     var displayName = (clone.textContent || '').trim();
     if(!displayName) return;
-    if(typeof window.openLigaEaSquadByName === 'function'){
+    if(typeof window.openLigaExtSquadByName === 'function'){
+      window.openLigaExtSquadByName(slug, displayName);
+    } else if(typeof window.openLigaEaSquadByName === 'function'){
       window.openLigaEaSquadByName(displayName);
     }
   }, false);
@@ -1711,16 +1722,24 @@ window.pG = function(fn) {
   // ── ESCUDOS CUSTOM: alimenta window._ligaEaShields para que
   // getTeamLogoUrl (bundle.js) devuelva el escudo del editor en lugar
   // del hardcodeado cuando el admin ha puesto una URL nueva.
+  // Cubre Liga EA Sports, Hypermotion y Primera Federación.
   function refreshLigaEaShields(){
     var shields = {};
-    var teams = loadLigaEaTeams();
-    teams.forEach(function(t){
-      if(t && t.name && t.shield){
-        shields[t.name] = t.shield;
-        // También guardar la versión normalizada (sin acentos, lowercase)
-        var norm = _normName(t.name);
-        if(norm) shields[norm] = t.shield;
-      }
+    var slugs = ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion'];
+    slugs.forEach(function(slug){
+      try {
+        var raw = localStorage.getItem('ligaExt_'+slug);
+        if(!raw) return;
+        var data = JSON.parse(raw);
+        if(!data || !Array.isArray(data.teams)) return;
+        data.teams.forEach(function(t){
+          if(t && t.name && t.shield){
+            shields[t.name] = t.shield;
+            var norm = _normName(t.name);
+            if(norm) shields[norm] = t.shield;
+          }
+        });
+      } catch(_){}
     });
     window._ligaEaShields = shields;
   }
@@ -5366,6 +5385,32 @@ window.pG = function(fn) {
         generatedAt: new Date().toISOString()
       }
     };
+  };
+
+  // Versión genérica: abre la plantilla para CUALQUIER liga (EA Sports,
+  // Hypermotion, Primera Federación) dado su slug y el nombre del equipo.
+  window.openLigaExtSquadByName = function(slug, displayName){
+    var slugToContext = {
+      'liga-ea-sports':          setLigaEaContext,
+      'liga-hypermotion':        typeof setHypermotionContext === 'function' ? setHypermotionContext : null,
+      'liga-primera-federacion': typeof setPrimeraContext === 'function' ? setPrimeraContext : null
+    };
+    var setCtx = slugToContext[slug];
+    if(setCtx) setCtx();
+    else { CURRENT_KEY = slug; CURRENT_NAME = slug; loadData(slug); }
+    var tryOpen = function(){
+      var team = _findLigaEaTeamByName(displayName);
+      if(team){
+        if(typeof window.lextOpenSquad === 'function') window.lextOpenSquad(team.id);
+        return true;
+      }
+      return false;
+    };
+    if(tryOpen()) return;
+    fetchData(CURRENT_KEY, function(){
+      if(tryOpen()) return;
+      alert('«'+displayName+'» todavía no tiene plantilla.\n\nPulsa ✏️ Edit y crea el equipo con ese nombre para ver aquí todas sus estadísticas.');
+    });
   };
 
   window.openLigaEaSquadByName = function(displayName){

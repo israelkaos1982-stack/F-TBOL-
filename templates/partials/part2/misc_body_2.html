@@ -8900,9 +8900,22 @@ window.goLiveMatches = function() {
    detectados en el calendario. Amistosos NO entran aquí. */
 (function(){
   var DERBYS_SCREEN_ID = 's-derbys';
-  var DERBYS_HUMANOS = (window.HUMANOS_AMS && window.HUMANOS_AMS.length)
-    ? window.HUMANOS_AMS
-    : ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+  var DERBYS_HUMANOS = (function(){
+    // Lee dinámicamente los equipos humanos del editor
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(raw){
+        var d = JSON.parse(raw);
+        if(d && Array.isArray(d.teams)){
+          var h = d.teams.filter(function(t){return t.isHuman;}).map(function(t){return t.name;});
+          if(h.length) return h;
+        }
+      }
+    } catch(_){}
+    // Fallback
+    if(window.HUMANOS_AMS && window.HUMANOS_AMS.length) return window.HUMANOS_AMS;
+    return ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+  })();
 
   function _esHumano(name) {
     var n = String(name || '').trim();

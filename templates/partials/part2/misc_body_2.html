@@ -2126,8 +2126,8 @@
   function renderTable(rootId, table, legendHtml, zoneFn, emptyText){
     var root = document.getElementById(rootId); if(!root) return;
     if(!table || !table.length){root.innerHTML='<div class="clas-empty">'+emptyText+'</div>'; return;}
-    var html=(legendHtml||'')+'<div class="clas-scroll-outer"><div class="clas-hdr-scroll"><div class="clas-table"><div class="clas-hdr"><span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span><span>Últ. 5</span></div></div></div><div class="clas-scroll"><div class="clas-table">';
-    table.forEach(function(team,idx){var pos=idx+1; var dgClass='clas-val dg '+(team.dg>0?'pos':(team.dg<0?'neg':'zer')); html+='<div class="clas-row '+(zoneFn?zoneFn(pos,table.length):'')+'"><div class="clas-team-cell"><span class="clas-pos-n">'+pos+'</span><span class="clas-team-name">'+humanIcon(team.name)+esc(team.short||team.name)+'</span></div><div class="clas-pts">'+team.pts+'</div><div class="clas-pj">'+team.pj+'</div><div class="clas-val">'+team.v+'</div><div class="clas-val">'+team.e+'</div><div class="clas-val">'+team.p+'</div><div class="clas-val gf">'+team.gf+'</div><div class="clas-val gc">'+team.gc+'</div><div class="'+dgClass+'">'+(team.dg>0?'+':'')+team.dg+'</div><div class="clas-val ta">'+team.ta+'</div><div class="clas-val tr">'+team.tr+'</div><div class="clas-mvp">'+team.mvp+'</div><div class="clas-pct">'+(team.pj?Math.round((team.v/team.pj)*100):0)+'%</div><div class="clas-form">'+formHtml(team.form)+'</div></div>';});
+    var html=(legendHtml||'')+'<div class="clas-scroll-outer"><div class="clas-hdr-scroll"><div class="clas-table"><div class="clas-hdr"><span class="clas-hdr-team">Equipo</span><span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>MVP</span><span>%</span></div></div></div><div class="clas-scroll"><div class="clas-table">';
+    table.forEach(function(team,idx){var pos=idx+1; var dgClass='clas-val dg '+(team.dg>0?'pos':(team.dg<0?'neg':'zer')); html+='<div class="clas-row '+(zoneFn?zoneFn(pos,table.length):'')+'"><div class="clas-team-cell"><span class="clas-pos-n">'+pos+'</span><span class="clas-team-name">'+humanIcon(team.name)+esc(team.short||team.name)+'</span></div><div class="clas-pts">'+team.pts+'</div><div class="clas-pj">'+team.pj+'</div><div class="clas-val">'+team.v+'</div><div class="clas-val">'+team.e+'</div><div class="clas-val">'+team.p+'</div><div class="clas-val gf">'+team.gf+'</div><div class="clas-val gc">'+team.gc+'</div><div class="'+dgClass+'">'+(team.dg>0?'+':'')+team.dg+'</div><div class="clas-val ta">'+team.ta+'</div><div class="clas-val tr">'+team.tr+'</div><div class="clas-mvp">'+team.mvp+'</div><div class="clas-pct">'+(team.pj?Math.round((team.v/team.pj)*100):0)+'%</div></div>';});
     html+='</div></div></div>';
     root.innerHTML=html;
   }
@@ -2280,11 +2280,13 @@
     +'<div class="screen" id="s-primf-clas">'
     +'<button class="back-btn" onclick="go(\'s-primf\')">◀ Volver</button>'
     +'<div class="sec-hdr"><img class="sec-ico" src="/static/img/logos/spain_primera-federacion.football-logos.cc.svg" onerror="this.style.display=\'none\'" alt="1ªFed"/><h2>Primera Federación</h2></div>'
-    +'<div class="btn-action-bar">'
-    +'<button class="btn-action btn-action-sim" onclick="pG(function(){simularAmbosPrimera()})"><span class="btn-action-ico">🎮</span>Simular</button>'
-    +'<button class="btn-action" onclick="pG(function(){window.openSimpleRules&&window.openSimpleRules(\'primera\')})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>'
-    +'<button class="btn-action btn-action-rst" onclick="pG(function(){reiniciarAmbosPrimera()})"><span class="btn-action-ico">♻️</span>Reiniciar</button>'
-    +'<button class="btn-action btn-action-stats" onclick="go(\'s-primf-stats\')"><span class="btn-action-ico">📊</span>Estadísticas</button>'
+    +'<div class="btn-action-bar" style="flex-direction:column;gap:6px;">'
+    +'<div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">'
+    +'<button class="btn-action btn-action-sim lext-btn-compact" onclick="pG(function(){simularAmbosPrimera()})"><span class="btn-action-ico">🎮</span>Sim</button>'
+    +'<button class="btn-action btn-action-rst lext-btn-compact" onclick="pG(function(){reiniciarAmbosPrimera()})"><span class="btn-action-ico">♻️</span>Res</button>'
+    +'<button class="btn-action lext-btn-compact" onclick="pG(function(){window.openPrimeraEditor&&window.openPrimeraEditor()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">✏️</span>Edit</button>'
+    +'<button class="btn-action lext-btn-compact" onclick="pG(function(){window.openSimpleRules&&window.openSimpleRules(\'primera\')})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>'
+    +'</div>'
     +'</div>'
     +'<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.45);padding:0 0 6px;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.08);">① GRUPO 1</div>'
     +'<div id="clas-primf-g1-content"></div>'

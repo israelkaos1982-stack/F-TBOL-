@@ -1331,6 +1331,152 @@ window.pG = function(fn) {
   </div>
 </div>
 
+<!-- ══ LIVE MATCH SYSTEM ══════════════════════════════════════ -->
+<script>
+(function(){
+  // ── PUBLICAR partido live (admin) ─────────────────────────
+  // Envía el estado completo del partido al servidor para que
+  // otros dispositivos puedan verlo vía polling.
+  window.liveMatchPublish = function(matchId, data){
+    if(!matchId || !data) return;
+    try {
+      fetch('/api/live-match/'+encodeURIComponent(matchId), {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(data)
+      }).catch(function(){});
+    } catch(_){}
+  };
+
+  // ── FINALIZAR partido live ────────────────────────────────
+  window.liveMatchFinish = function(matchId){
+    if(!matchId) return;
+    try {
+      fetch('/api/live-match/'+encodeURIComponent(matchId), {
+        method:'DELETE'
+      }).catch(function(){});
+    } catch(_){}
+  };
+
+  // ── ESPECTADOR: polling de un partido live ────────────────
+  var _spectatorInterval = null;
+  var _spectatorSince = '';
+
+  window.liveMatchWatch = function(matchId, onUpdate){
+    if(_spectatorInterval) clearInterval(_spectatorInterval);
+    _spectatorSince = '';
+    function poll(){
+      var url = '/api/live-match/'+encodeURIComponent(matchId);
+      if(_spectatorSince) url += '?since='+encodeURIComponent(_spectatorSince);
+      fetch(url).then(function(r){
+        if(r.status === 304) return null;
+        if(!r.ok) return null;
+        return r.json();
+      }).then(function(j){
+        if(!j || !j.match) return;
+        _spectatorSince = j.updated_at || '';
+        if(onUpdate) onUpdate(j.match);
+      }).catch(function(){});
+    }
+    poll();
+    _spectatorInterval = setInterval(poll, 2500);
+  };
+
+  window.liveMatchStopWatch = function(){
+    if(_spectatorInterval){ clearInterval(_spectatorInterval); _spectatorInterval = null; }
+  };
+
+  // ── LISTAR partidos live activos ──────────────────────────
+  window.liveMatchList = function(cb){
+    fetch('/api/live-match').then(function(r){ return r.json(); })
+      .then(function(j){ if(cb && j && j.matches) cb(j.matches); })
+      .catch(function(){ if(cb) cb([]); });
+  };
+
+  // ── INDICADOR LIVE en pantalla ────────────────────────────
+  // Muestra un banner rojo parpadeante cuando hay partidos live
+  function checkLiveMatches(){
+    window.liveMatchList(function(matches){
+      var banner = document.getElementById('live-match-banner');
+      if(!banner) return;
+      if(matches.length > 0){
+        var m = matches[0];
+        banner.style.display = 'block';
+        banner.innerHTML = '🔴 <b>EN DIRECTO</b>: '
+          + (m.home||'?') + ' vs ' + (m.away||'?')
+          + ' <span style="color:#ff9;">' + (m.score?m.score.a:'0') + '-' + (m.score?m.score.b:'0') + '</span>'
+          + ' <button onclick="window.openLiveSpectator(\''+String(m.id||'').replace(/'/g,'\\\'')+'\')" style="margin-left:8px;padding:3px 10px;background:#ff3333;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;">VER LIVE</button>';
+      } else {
+        banner.style.display = 'none';
+      }
+    });
+  }
+  // Poll cada 10s para detectar partidos live
+  setInterval(checkLiveMatches, 10000);
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(checkLiveMatches, 2000); });
+
+  // ── VISTA ESPECTADOR ──────────────────────────────────────
+  window.openLiveSpectator = function(matchId){
+    var ov = document.getElementById('live-spectator-ov');
+    if(!ov){
+      ov = document.createElement('div');
+      ov.id = 'live-spectator-ov';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:20px 12px;overflow-y:auto;color:#fff;font-family:Rajdhani,sans-serif;';
+      ov.innerHTML = '<div style="width:100%;max-width:480px;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'
+        +   '<div style="font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;color:#ff3333;">🔴 PARTIDO EN DIRECTO</div>'
+        +   '<button onclick="window.liveMatchStopWatch();this.closest(\'#live-spectator-ov\').style.display=\'none\'" style="background:none;border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px;">✕ Cerrar</button>'
+        + '</div>'
+        + '<div id="live-spec-header" style="text-align:center;margin-bottom:16px;"></div>'
+        + '<div id="live-spec-score" style="text-align:center;font-family:Bebas Neue,sans-serif;font-size:48px;color:#f0c040;margin-bottom:12px;">0 - 0</div>'
+        + '<div id="live-spec-status" style="text-align:center;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:16px;"></div>'
+        + '<div id="live-spec-events" style="display:flex;flex-direction:column;gap:6px;"></div>'
+        + '</div>';
+      document.body.appendChild(ov);
+    }
+    ov.style.display = 'flex';
+    document.getElementById('live-spec-header').innerHTML = 'Conectando...';
+    document.getElementById('live-spec-events').innerHTML = '';
+
+    window.liveMatchWatch(matchId, function(match){
+      var hdr = document.getElementById('live-spec-header');
+      var scr = document.getElementById('live-spec-score');
+      var sts = document.getElementById('live-spec-status');
+      var evs = document.getElementById('live-spec-events');
+      if(!hdr) return;
+      var logoA = (typeof window.getTeamLogoUrl==='function') ? window.getTeamLogoUrl(match.home||'') : '';
+      var logoB = (typeof window.getTeamLogoUrl==='function') ? window.getTeamLogoUrl(match.away||'') : '';
+      hdr.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;gap:16px;">'
+        + (logoA ? '<img src="'+logoA+'" style="width:40px;height:40px;object-fit:contain;" onerror="this.style.display=\'none\'"/>' : '')
+        + '<span style="font-size:16px;font-weight:700;">' + (match.home||'?') + '</span>'
+        + '<span style="color:rgba(255,255,255,.4);font-size:12px;">vs</span>'
+        + '<span style="font-size:16px;font-weight:700;">' + (match.away||'?') + '</span>'
+        + (logoB ? '<img src="'+logoB+'" style="width:40px;height:40px;object-fit:contain;" onerror="this.style.display=\'none\'"/>' : '')
+        + '</div>'
+        + (match.comp ? '<div style="font-size:11px;color:rgba(255,255,255,.45);margin-top:4px;">'+match.comp+'</div>' : '');
+      scr.textContent = (match.score?match.score.a:'0') + ' - ' + (match.score?match.score.b:'0');
+      sts.textContent = match.status === 'finished' ? '🏁 FINALIZADO' : '🔴 EN DIRECTO' + (match.minute ? ' · Min '+match.minute : '');
+      // Eventos
+      var html = '';
+      (match.events||[]).forEach(function(ev){
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(255,255,255,.04);border-radius:6px;border-left:3px solid '
+          + (ev.team==='a'?'#3160ff':'#ff4444') + ';">'
+          + '<span style="font-family:Oswald,sans-serif;font-size:11px;color:#f0c040;min-width:28px;">' + (ev.min||'') + '\'</span>'
+          + '<span style="font-size:14px;">' + (ev.ico||'') + '</span>'
+          + '<span style="flex:1;font-size:13px;">' + (ev.player||'') + '</span>'
+          + '<span style="font-size:10px;color:rgba(255,255,255,.45);">' + (ev.teamName||'') + '</span>'
+          + '</div>';
+      });
+      evs.innerHTML = html;
+      // Auto-scroll al último evento
+      if(evs.lastElementChild) evs.lastElementChild.scrollIntoView({behavior:'smooth',block:'end'});
+    });
+  };
+})();
+</script>
+
+<div id="live-match-banner" style="display:none;margin:4px 14px 8px;padding:10px 14px;border-radius:8px;background:rgba(255,30,30,.12);border:1px solid rgba(255,60,60,.5);font-family:Rajdhani,sans-serif;font-size:13px;color:#ff7070;animation:derbyPulse 1.5s ease-in-out infinite;"></div>
+
 <div id="liga-ea-engine-banner" style="margin:6px 14px 4px;padding:8px 12px;border-radius:6px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;line-height:1.5;display:none;">
   <span id="liga-ea-engine-icon" style="font-size:13px;margin-right:6px;">🔧</span>
   <span id="liga-ea-engine-text">Cargando estado del motor…</span>

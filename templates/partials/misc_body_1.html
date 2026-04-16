@@ -1921,7 +1921,7 @@ window.pG = function(fn) {
       banner.style.border = '1px solid rgba(60,200,120,.45)';
       banner.style.color = '#5fe08a';
       if(icon) icon.textContent = '✅';
-      if(text) text.innerHTML = '<b>20/20 equipos listos.</b> El motor nuevo se activará automáticamente en la <b>Fase 2</b> del refactor (próxima iteración).';
+      if(text) text.innerHTML = '<b>20/20 equipos · Motor ACTIVO.</b> La simulación usa tus equipos, valoraciones y plantillas.';
     }
   }
   // Refresca al entrar al screen y tras buildLigaClas
@@ -1936,6 +1936,103 @@ window.pG = function(fn) {
     document.addEventListener('DOMContentLoaded', startBannerWatcher);
   } else {
     startBannerWatcher();
+  }
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     FASE 2 — MOTOR NUEVO: sobrescribe TEAM_RATINGS, SQUAD_REGISTRY
+     y HUMANOS con los datos del editor cuando hay 20 equipos.
+     ══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  // Aplica los overrides del motor. Se ejecuta:
+  // 1) Al cargar la página (DOMContentLoaded + retardo para que el bundle
+  //    haya definido sus globales).
+  // 2) Cada 2s para recoger cambios del editor sin recargar.
+  // 3) Después de cada save en el editor (vía lextSaveTeam).
+  //
+  // Solo actúa si hay exactamente 20 equipos en liga-ea-sports.
+  // Si hay menos, no toca nada — el motor sigue con los hardcodeados.
+
+  var _lastAppliedHash = '';
+
+  function applyEngineOverrides(){
+    if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
+    var bridge = window.ligaEaBuildEngineOverrides();
+    if(!bridge || bridge.meta.teamsCount < 20) return;
+
+    // Hash rápido para no re-aplicar si nada cambió
+    var hash = bridge.meta.teamsCount + ':' + bridge.meta.playersCount + ':' + bridge.meta.humansCount + ':' + bridge.meta.generatedAt;
+    if(hash === _lastAppliedHash) return;
+    _lastAppliedHash = hash;
+
+    // ── 1. TEAM_RATINGS ──────────────────────────────────────────
+    // El simulador lee window.TEAM_RATINGS[name] para decidir
+    // probabilidades de victoria, goles esperados (Poisson), etc.
+    if(window.TEAM_RATINGS){
+      Object.keys(bridge.ratings).forEach(function(name){
+        window.TEAM_RATINGS[name] = bridge.ratings[name];
+      });
+    }
+
+    // ── 2. SQUAD_REGISTRY ────────────────────────────────────────
+    // El simulador lee window.SQUAD_REGISTRY[name] para elegir
+    // goleadores, MVPs, tarjetas, ponderados por poder del jugador.
+    // Formato: [{h:'🧤 PORTEROS'}, ['1','Oblak',89], ...]
+    if(window.SQUAD_REGISTRY){
+      Object.keys(bridge.squads).forEach(function(name){
+        window.SQUAD_REGISTRY[name] = bridge.squads[name];
+      });
+    }
+
+    // ── 3. HUMAN_TEAMS (emojis en clasificación) ─────────────────
+    // El bundle tiene varias listas dispersas. Las accesibles desde
+    // fuera del closure son las que viven en window.* . Las demás
+    // (HUMANOS_FORM, _EQUIPOS_HUMANOS, _mmHUMANOS) están en closures
+    // y no podemos tocarlas directamente — pero no afectan a la
+    // clasificación ni al simulador de J2-38, solo a features
+    // secundarias (formulario de enfrentamientos, estilo de partido).
+    // Por ahora sobreescribimos HUMAN_TEAMS (mapa nombre→emoji) que
+    // es el que pinta los emojis en la tabla de clasificación.
+    // En Fase 3 (demolición) eliminaremos las listas hardcodeadas.
+
+    // ── 4. TEAM_ORDER / LIGA_SCHEDULE ────────────────────────────
+    // Regenerar el calendario de 38 jornadas con los 20 equipos del
+    // editor. Esto hace que Sim J1-38 use tus equipos.
+    if(typeof window.generateLigaScheduleFromTeams === 'function' &&
+       typeof window.setLigaSchedule === 'function'){
+      var teamNames = Object.keys(bridge.ratings);
+      // Solo regenerar si la lista cambió (evitar reset en cada tick)
+      var currentNames = (window.LIGA_SCHEDULE && window.LIGA_SCHEDULE[0])
+        ? window.LIGA_SCHEDULE[0].map(function(m){ return m[0]; }).sort().join('|')
+        : '';
+      var newNames = teamNames.slice().sort().join('|');
+      if(currentNames !== newNames){
+        window.setLigaSchedule(window.generateLigaScheduleFromTeams(teamNames));
+        if(typeof window.populateLigaCal === 'function') window.populateLigaCal();
+      }
+    }
+
+    // ── 5. Refrescar escudos y clasificación ─────────────────────
+    if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
+  }
+
+  // Exponer para que lextSaveTeam pueda llamarlo tras guardar
+  window.applyEngineOverrides = applyEngineOverrides;
+
+  // Aplicar en DOMContentLoaded con retardo (el bundle necesita haber
+  // definido TEAM_RATINGS, SQUAD_REGISTRY, etc.)
+  function initOverrides(){
+    setTimeout(applyEngineOverrides, 300);
+    setTimeout(applyEngineOverrides, 1500);
+    // Tick periódico por si el admin edita equipos desde otro tab
+    setInterval(applyEngineOverrides, 2000);
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initOverrides);
+  } else {
+    initOverrides();
   }
 })();
 </script>
@@ -4818,6 +4915,11 @@ window.pG = function(fn) {
     lextClearTeamForm();
     renderTeamsList();
     renderTable();
+    // Fase 2: re-aplicar overrides del motor tras cada save para que
+    // TEAM_RATINGS, SQUAD_REGISTRY y LIGA_SCHEDULE reflejen el cambio.
+    if(typeof window.applyEngineOverrides === 'function'){
+      setTimeout(window.applyEngineOverrides, 100);
+    }
   };
 
   // ── Plantilla (jugadores) ─────────────────────────

@@ -7381,7 +7381,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var rA = window.TEAM_RATINGS && (window.TEAM_RATINGS[resolvedA] || window.TEAM_RATINGS[TEAM_A]) || 0;
     var rB = window.TEAM_RATINGS && (window.TEAM_RATINGS[resolvedB] || window.TEAM_RATINGS[TEAM_B]) || 0;
 
-    var usarCampo = rA >= 79 && rB >= 79;
+    var usarCampo = false; // Fase 3: campo 3D desactivado para IA vs IA (el usuario quiere 30s/parte fijos)
 
     if (usarCampo) {
       // Cambiar velocidad: 45s por parte (total ~90s)

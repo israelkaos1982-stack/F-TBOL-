@@ -1708,6 +1708,28 @@ window.pG = function(fn) {
     if(pos <= (c += z.uecl))    return 'zone-conf';
     return '';
   };
+  // ── ESCUDOS CUSTOM: alimenta window._ligaEaShields para que
+  // getTeamLogoUrl (bundle.js) devuelva el escudo del editor en lugar
+  // del hardcodeado cuando el admin ha puesto una URL nueva.
+  function refreshLigaEaShields(){
+    var shields = {};
+    var teams = loadLigaEaTeams();
+    teams.forEach(function(t){
+      if(t && t.name && t.shield){
+        shields[t.name] = t.shield;
+        // También guardar la versión normalizada (sin acentos, lowercase)
+        var norm = _normName(t.name);
+        if(norm) shields[norm] = t.shield;
+      }
+    });
+    window._ligaEaShields = shields;
+  }
+  // Ejecutar al cargar para que getTeamLogoUrl ya los vea desde el
+  // primer render de buildLigaClas.
+  refreshLigaEaShields();
+  // Refresco periódico (1.5s) para sincronizar tras saves del editor.
+  setInterval(refreshLigaEaShields, 1500);
+
   window._ligaEaLegendHtml = function(){
     var z = loadLigaEaZones();
     var items = [];

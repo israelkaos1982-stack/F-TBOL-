@@ -476,9 +476,10 @@ window.pG = function(fn) {
 </div></div>
 <div class="jblock"><button class="jbtn c-liga" onclick="tog('cal-l1')"><div class="pdot">▶</div>🇪🇸 <b>Liga</b>  Jornada 1</button>
 <div class="jmatches" id="cal-l1">
-<!-- Fase 3: J1 cards eliminadas. Los partidos de la J1 se acceden
-     desde el Calendario (openLigaJornada(1)) o se simulan con
-     Simular J1-38. Ya no hay cards hardcodeadas. -->
+<!-- J1 dinámica: se accede igual que J2-J38 -->
+<div style="padding:8px 12px;text-align:center;">
+  <button class="btn-action btn-action-sim" style="font-size:11px;padding:6px 14px;" onclick="pG(function(){if(typeof window.openLigaJornada==='function')window.openLigaJornada(1)})"><span class="btn-action-ico">📅</span>Ver Jornada 1</button>
+</div>
 </div></div>
 <div class="jblock"><button class="jbtn c-liga" onclick="tog('cal-l2')"><div class="pdot">▶</div>🇪🇸 <b>Liga</b>  Jornada 2</button>
 <div class="jmatches" id="cal-l2"> <div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
@@ -1927,6 +1928,11 @@ window.pG = function(fn) {
     // 5. Guardar de vuelta al storage (sin re-subir al servidor ahora,
     //    solo localStorage para respuesta inmediata).
     try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+    // Invalidar la cache del IIFE de ligaExt para que la próxima
+    // apertura de lextOpenSquad re-lea los stats actualizados.
+    if(typeof window.invalidateLigaCache === 'function'){
+      window.invalidateLigaCache(slug);
+    }
   }
 
   window.syncLigaEaPlayerStats = syncLigaEaPlayerStats;
@@ -3896,6 +3902,14 @@ window.pG = function(fn) {
   // servidor está caído o tarda, renderizamos igual desde la cache.
   var LIGA_CACHE = {}; // slug → data
   var LIGA_UPDATED = {}; // slug → iso
+
+  // Exponer invalidación de cache para que syncLigaEaPlayerStats
+  // (que escribe directamente a localStorage) pueda forzar una
+  // re-lectura cuando la plantilla se abra después de una simulación.
+  window.invalidateLigaCache = function(k){
+    if(k) delete LIGA_CACHE[k];
+    else LIGA_CACHE = {};
+  };
 
   function loadData(k){
     if(LIGA_CACHE[k]) return LIGA_CACHE[k];

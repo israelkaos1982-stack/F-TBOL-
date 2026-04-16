@@ -2141,12 +2141,78 @@
     root.innerHTML=html;
   }
 
+  // ── Append equipos del editor ligaExt que no estén en la clasificación
+  // hardcodeada. Mismo patrón que appendLigaEaExtras de Liga EA Sports.
+  function _normName(s){
+    return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+  function _appendLigaExtTeams(containerId, slug){
+    var cont = document.getElementById(containerId);
+    if(!cont) return;
+    var teams = [];
+    try {
+      var raw = localStorage.getItem('ligaExt_'+slug);
+      if(raw){ var data = JSON.parse(raw); teams = (data && data.teams) || []; }
+    } catch(_){ return; }
+    if(!teams.length) return;
+    // Recoger nombres ya pintados en la tabla
+    var existing = {};
+    var nameEls = cont.querySelectorAll('.clas-row .clas-team-name');
+    for(var i=0;i<nameEls.length;i++){
+      existing[_normName(nameEls[i].textContent)] = true;
+    }
+    var tables = cont.querySelectorAll('.clas-table');
+    var bodyTable = null;
+    for(var j=0;j<tables.length;j++){
+      if(tables[j].querySelector('.clas-row')){ bodyTable=tables[j]; break; }
+    }
+    if(!bodyTable && tables.length) bodyTable = tables[tables.length-1];
+    if(!bodyTable) return;
+    var startPos = cont.querySelectorAll('.clas-row').length;
+    teams.forEach(function(t){
+      var norm = _normName(t.name);
+      if(existing[norm]) return;
+      // Fuzzy: check substring (Alavés ↔ Deportivo Alavés etc.)
+      var found = false;
+      for(var k in existing){
+        if(k.indexOf(norm)!==-1 || norm.indexOf(k)!==-1){ found=true; break; }
+      }
+      if(found) return;
+      startPos++;
+      var safe = String(t.name||'').replace(/[<>]/g,'');
+      var shieldHtml = '';
+      if(t.shield){
+        shieldHtml = '<img class="clas-team-logo" src="'+String(t.shield).replace(/"/g,'&quot;')+'" onerror="this.style.display=\'none\'" alt=""/>';
+      }
+      bodyTable.insertAdjacentHTML('beforeend',
+        '<div class="clas-row">'
+        +'<div class="clas-team-cell"><span class="clas-pos-n">'+startPos+'</span>'+shieldHtml+'<span class="clas-team-name"><span class="clas-team-name-text">'+safe+'</span></span></div>'
+        +'<div class="clas-pts">0</div>'
+        +'<div class="clas-pj">0</div>'
+        +'<div class="clas-val">0</div>'
+        +'<div class="clas-val">0</div>'
+        +'<div class="clas-val">0</div>'
+        +'<div class="clas-val gf">0</div>'
+        +'<div class="clas-val gc">0</div>'
+        +'<div class="clas-val dg zer">0</div>'
+        +'<div class="clas-val ta">0</div>'
+        +'<div class="clas-val tr">0</div>'
+        +'<div class="clas-mvp">0</div>'
+        +'<div class="clas-pct">0%</div>'
+        +'</div>'
+      );
+    });
+  }
+
   function renderSegunda(){
     var st=loadSegundaState();
     var initialTable = createInitialTable(getSegundaTeams());
     var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#9c3cdc"></span>🟣 Ascenso a LaLiga</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso a Primera Federación</span></div>';
     renderTable('clas-segunda-content', (st.table && st.table.length) ? st.table : initialTable, legend, rowZoneClassSegunda, 'No hay equipos cargados todavía.');
     renderStats('segunda-stats-dashboard', st.players, 'Sin datos todavía');
+    // Append equipos creados en el editor ✏️ que no estén ya en la tabla
+    _appendLigaExtTeams('clas-segunda-content', 'liga-hypermotion');
   }
 
   function renderPrimera(){
@@ -2155,6 +2221,9 @@
     var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#9c3cdc"></span>🟣 Ascenso a Hypermotion</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso a 2ª Federación</span></div>';
     renderTable('clas-primf-g1-content', (st.g1.table && st.g1.table.length) ? st.g1.table : createInitialTable(teams.g1), legend, rowZoneClassPrimera, 'No hay equipos cargados todavía.');
     renderTable('clas-primf-g2-content', (st.g2.table && st.g2.table.length) ? st.g2.table : createInitialTable(teams.g2), legend, rowZoneClassPrimera, 'No hay equipos cargados todavía.');
+    // Append equipos creados en el editor ✏️ que no estén ya en las tablas
+    _appendLigaExtTeams('clas-primf-g1-content', 'liga-primera-federacion');
+    _appendLigaExtTeams('clas-primf-g2-content', 'liga-primera-federacion');
     renderStats('primf-g1-stats-dashboard', st.g1.players, 'Sin datos todavía');
     renderStats('primf-g2-stats-dashboard', st.g2.players, 'Sin datos todavía');
     renderMovement();
@@ -2331,6 +2400,8 @@
 
   window.simularLigaSegundaMenu=function(){ saveSegundaState(simulateLeague(getSegundaTeams())); renderSegunda(); renderMovement(); if(typeof go==='function') go('s-segunda-clas'); };
   window.reiniciarLigaSegundaMenu=function(){ saveSegundaState({table:[],players:[]}); localStorage.removeItem(TRANSITION_KEY); renderSegunda(); renderMovement(); };
+  window.renderSegunda = renderSegunda;
+  window.renderPrimera = renderPrimera;
   window.simularPrimeraGrupo=function(n){ var teams=getPrimeraTeams(), state=getPrimeraState(); if(n===1){state.g1=simulateLeague(teams.g1); saveJSON(TRANSITION_KEY, null);} else {state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null);} setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };
   window.reiniciarPrimeraGrupo=function(n){ var state=getPrimeraState(); if(n===1) state.g1={table:[],players:[]}; else state.g2={table:[],players:[]}; setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
   window.simularAmbosPrimera=function(){ var teams=getPrimeraTeams(), state=getPrimeraState(); state.g1=simulateLeague(teams.g1); state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null); setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };

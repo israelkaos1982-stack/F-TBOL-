@@ -3263,7 +3263,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     // ── LIVE TICKER ───────────────────────────────────────────────────
     // Si ambos equipos ≥79 → 45s por parte (campo activo), sino 15s
     var _campoMode = (rA >= 79 && rB >= 79);
-    var _halfDuration = _campoMode ? 45000 : 15000;
+    var _halfDuration = 30000; // 30 segundos reales por parte (IA vs IA)
     var _tickTotal = _campoMode ? 90 : 30;
     var _tickMs = _campoMode ? 3000 : 1000;
     var msPerMinFH = _halfDuration / ht45;

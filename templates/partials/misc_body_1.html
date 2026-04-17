@@ -1897,7 +1897,8 @@ window.pG = function(fn) {
   function applyEngineOverrides(){
     if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
     var bridge = window.ligaEaBuildEngineOverrides();
-    if(!bridge || bridge.meta.teamsCount < 20) return;
+    // Funciona con CUALQUIER número de equipos (no solo 20)
+    if(!bridge || bridge.meta.teamsCount === 0) return;
 
     // Hash rápido para no re-aplicar si nada cambió
     var hash = bridge.meta.teamsCount + ':' + bridge.meta.playersCount + ':' + bridge.meta.humansCount + ':' + bridge.meta.generatedAt;
@@ -1905,39 +1906,37 @@ window.pG = function(fn) {
     _lastAppliedHash = hash;
 
     // ── 1. TEAM_RATINGS ──────────────────────────────────────────
-    // El simulador lee window.TEAM_RATINGS[name] para decidir
-    // probabilidades de victoria, goles esperados (Poisson), etc.
     if(window.TEAM_RATINGS){
       Object.keys(bridge.ratings).forEach(function(name){
         window.TEAM_RATINGS[name] = bridge.ratings[name];
       });
     }
 
-    // ── 2. SQUAD_REGISTRY ────────────────────────────────────────
-    // El simulador lee window.SQUAD_REGISTRY[name] para elegir
-    // goleadores, MVPs, tarjetas, ponderados por poder del jugador.
-    // Formato: [{h:'🧤 PORTEROS'}, ['1','Oblak',89], ...]
+    // ── 2. SQUAD_REGISTRY — LIMPIAR hardcodeados + aplicar del editor
+    // Primero: vaciar TODAS las entradas del registry que NO estén
+    // en el editor del usuario. Así no quedan jugadores fantasma de
+    // los equipos hardcodeados originales del bundle.
+    // Solo los equipos que el admin ha creado tendrán plantilla.
     if(window.SQUAD_REGISTRY){
+      var userTeamNames = {};
+      Object.keys(bridge.squads).forEach(function(name){ userTeamNames[name] = true; });
+      // Limpiar entradas que no son del usuario
+      Object.keys(window.SQUAD_REGISTRY).forEach(function(name){
+        if(!userTeamNames[name]){
+          window.SQUAD_REGISTRY[name] = [];
+        }
+      });
+      // Aplicar las del editor
       Object.keys(bridge.squads).forEach(function(name){
         window.SQUAD_REGISTRY[name] = bridge.squads[name];
       });
     }
 
-    // ── 3. HUMAN_TEAMS (emojis en clasificación) ─────────────────
-    // El bundle tiene varias listas dispersas. Las accesibles desde
-    // fuera del closure son las que viven en window.* . Las demás
-    // (HUMANOS_FORM, _EQUIPOS_HUMANOS, _mmHUMANOS) están en closures
-    // y no podemos tocarlas directamente — pero no afectan a la
-    // clasificación ni al simulador de J2-38, solo a features
-    // secundarias (formulario de enfrentamientos, estilo de partido).
-    // Por ahora sobreescribimos HUMAN_TEAMS (mapa nombre→emoji) que
-    // es el que pinta los emojis en la tabla de clasificación.
-    // En Fase 3 (demolición) eliminaremos las listas hardcodeadas.
-
-    // ── 4. TEAM_ORDER / LIGA_SCHEDULE ────────────────────────────
-    // Regenerar el calendario de 38 jornadas con los 20 equipos del
-    // editor. Esto hace que Sim J1-38 use tus equipos.
-    if(typeof window.generateLigaScheduleFromTeams === 'function' &&
+    // ── 3. LIGA_SCHEDULE ─────────────────────────────────────────
+    // Solo regenerar si hay exactamente 20 equipos (necesario para
+    // el calendario de 38 jornadas con algoritmo Berger).
+    if(bridge.meta.teamsCount >= 20 &&
+       typeof window.generateLigaScheduleFromTeams === 'function' &&
        typeof window.setLigaSchedule === 'function'){
       var teamNames = Object.keys(bridge.ratings);
       // Solo regenerar si la lista cambió (evitar reset en cada tick)

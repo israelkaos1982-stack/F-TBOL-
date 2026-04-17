@@ -4211,6 +4211,58 @@
     }
   }
 
+  /* Edita el minuto del cronómetro para CORREGIR DESFASE con el partido
+     real (ej. "llevamos 38' pero el juego va por 42'"). Se invoca por
+     long-press o right-click/context-menu sobre el botón del timer.
+     Acepta números simples ("45") o con descuento ("45+2" → 47).
+
+     Implementación: pausa el interval, recalcula el wall-clock de
+     referencia (`_wallStart` / `_gameSecAtStart` son los pivotes del
+     cronómetro anti-drift), aplica el nuevo minuto y reanuda si estaba
+     corriendo. Persiste vía `_liveStore.flush()` para que el otro móvil
+     lo reciba. */
+  window._mlOpenTimerEdit = function(mk) {
+    var st = _mlSt(mk);
+    if (!st || st.finished) return;
+    var wasRunning = !!st.timerRunning;
+    if (wasRunning) {
+      try { clearInterval(st.timerInterval); } catch(_){}
+      st.timerInterval = null;
+      st.timerRunning = false;
+    }
+    var curMin = Math.floor((st.timerSec||0) / 60);
+    var v = prompt(
+      '⏱ Ajustar minuto del partido\n' +
+      '(corrige el desfase con el partido real que estáis jugando)\n\n' +
+      'Actual: ' + curMin + "'\n\n" +
+      'Nuevo minuto (ej. 45 o 45+2 para descuento):',
+      String(curMin)
+    );
+    if (v === null) {
+      if (wasRunning) { st.timerRunning = true; _mlStartIntervalGen(mk); }
+      return;
+    }
+    var parts = String(v).trim().replace(/'/g,'').split('+');
+    var base = parseInt(parts[0], 10);
+    var extra = parts.length > 1 ? (parseInt(parts[1], 10) || 0) : 0;
+    if (isNaN(base) || base < 0 || base > 130) {
+      alert('Minuto inválido. Debe ser un número entre 0 y 130.');
+      if (wasRunning) { st.timerRunning = true; _mlStartIntervalGen(mk); }
+      return;
+    }
+    var newMin = base + (extra > 0 ? extra : 0);
+    st.timerSec = newMin * 60;
+    // Reset del wall-clock para que el interval anti-drift no revierta
+    // al siguiente tick al valor antiguo.
+    st._wallStart = Date.now();
+    st._gameSecAtStart = st.timerSec;
+    _mlRenderTimerGen(mk);
+    if (window._liveStore && typeof window._liveStore.flush === 'function') {
+      try { window._liveStore.flush(); } catch(_){}
+    }
+    if (wasRunning) { st.timerRunning = true; _mlStartIntervalGen(mk); }
+  };
+
   window.mlTimerClickGen = function(mk) {
     var st = _mlSt(mk);
     if (st.finished || st.inDescanso) return;
@@ -5308,6 +5360,48 @@
       gmRenderTimer();
     }, tickMs);
   }
+
+  /* Equivalente a `_mlOpenTimerEdit` pero para el gm-modal (partidos
+     HvH y eliminatorias de Competición). Edita `_gm.timerSec` y
+     repinta. El gm-modal usa un tick escalado (`GM_TICK_HVH/HVIA`),
+     así que sólo hace falta reasignar timerSec y re-arrancar el
+     interval; no hay wall-clock anti-drift como en los mlStates. */
+  window._gmOpenTimerEdit = function() {
+    if (!_gm || _gm.finished) return;
+    var wasRunning = !!_gm.timerRunning;
+    if (wasRunning) {
+      try { clearInterval(_gm.timerInterval); } catch(_){}
+      _gm.timerInterval = null;
+      _gm.timerRunning = false;
+    }
+    var curMin = Math.floor((_gm.timerSec||0) / 60);
+    var v = prompt(
+      '⏱ Ajustar minuto del partido\n' +
+      '(corrige el desfase con el partido real que estáis jugando)\n\n' +
+      'Actual: ' + curMin + "'\n\n" +
+      'Nuevo minuto (ej. 45 o 45+2 para descuento):',
+      String(curMin)
+    );
+    if (v === null) {
+      if (wasRunning) { gmStartTimer(); }
+      return;
+    }
+    var parts = String(v).trim().replace(/'/g,'').split('+');
+    var base = parseInt(parts[0], 10);
+    var extra = parts.length > 1 ? (parseInt(parts[1], 10) || 0) : 0;
+    if (isNaN(base) || base < 0 || base > 130) {
+      alert('Minuto inválido. Debe ser un número entre 0 y 130.');
+      if (wasRunning) { gmStartTimer(); }
+      return;
+    }
+    var newMin = base + (extra > 0 ? extra : 0);
+    _gm.timerSec = newMin * 60;
+    gmRenderTimer();
+    if (window._liveStore && typeof window._liveStore.flush === 'function') {
+      try { window._liveStore.flush(); } catch(_){}
+    }
+    if (wasRunning) { gmStartTimer(); }
+  };
 
   window.gmTimerClick = function () {
     if (_gm.finished || _gm.inDescanso) return;
@@ -10307,6 +10401,67 @@ window.goLiveMatches = function() {
     if (document.visibilityState === 'visible' && _rehydrated) {
       try { pollOnce(); } catch(_){}
     }
+  });
+})();
+
+/* ══ TIMER EDIT — long-press o right-click sobre el cronómetro ══════
+   Abre un prompt para ajustar el minuto del partido cuando el tiempo
+   del juego real se desfasa del cronómetro en pantalla (ej. "el
+   partido va por 48' pero la app marca 43'"). No cambiamos el click
+   normal del botón (sigue siendo play/pausa); solo añadimos un
+   gesto secundario:
+     · Móvil: pulsar 650 ms sin mover el dedo.
+     · Escritorio: click derecho (context menu).
+   Si el gesto empieza pero el usuario mueve el dedo, se cancela (así
+   un scroll accidental no dispara el prompt). */
+(function _wireTimerEdit(){
+  var LONG_PRESS_MS = 650;
+  var pressTimer = null;
+  var pressBtn = null;
+
+  function _btnFromEvent(e) {
+    var t = e.target;
+    if (!t || !t.closest) return null;
+    return t.closest('.ml-timer');
+  }
+
+  function _openFor(btn) {
+    if (!btn || !btn.id) return;
+    if (btn.id === 'gm-timer') {
+      if (typeof window._gmOpenTimerEdit === 'function') window._gmOpenTimerEdit();
+    } else if (btn.id.indexOf('ml-timer-') === 0) {
+      var mk = btn.id.slice('ml-timer-'.length);
+      if (typeof window._mlOpenTimerEdit === 'function') window._mlOpenTimerEdit(mk);
+    }
+  }
+
+  function _clearPress() {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    pressBtn = null;
+  }
+
+  document.addEventListener('touchstart', function(e){
+    var btn = _btnFromEvent(e);
+    if (!btn) return;
+    pressBtn = btn;
+    pressTimer = setTimeout(function(){
+      pressTimer = null;
+      var b = pressBtn;
+      pressBtn = null;
+      if (b) _openFor(b);
+    }, LONG_PRESS_MS);
+  }, {passive: true});
+  document.addEventListener('touchend', _clearPress, {passive: true});
+  document.addEventListener('touchcancel', _clearPress, {passive: true});
+  document.addEventListener('touchmove', _clearPress, {passive: true});
+
+  /* En escritorio: click derecho para editar. preventDefault evita el
+     menú contextual del navegador sobre el botón. */
+  document.addEventListener('contextmenu', function(e){
+    var btn = _btnFromEvent(e);
+    if (!btn) return;
+    e.preventDefault();
+    _openFor(btn);
   });
 })();
 </script>

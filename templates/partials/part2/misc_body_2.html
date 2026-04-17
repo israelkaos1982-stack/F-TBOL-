@@ -3945,6 +3945,26 @@
 
   function _mlStartIntervalGen(mk) {
     var st = _mlSt(mk);
+
+    // ── AUTO-RESUME: cuando el móvil vuelve del background ──
+    // El navegador congela setInterval al perder foco. Al volver,
+    // este listener detecta que la pestaña es visible de nuevo y
+    // fuerza un re-render inmediato del timer (que ya tiene el
+    // tiempo correcto gracias a Date.now()).
+    if(!st._visHandler){
+      st._visHandler = function(){
+        if(document.visibilityState === 'visible' && st.timerRunning && !st.finished && !st.inDescanso){
+          // Forzar re-render inmediato al volver
+          _mlRenderTimerGen(mk);
+          // Si el interval murió (algunos browsers lo matan), recrearlo
+          if(!st.timerInterval){
+            _mlStartIntervalGen(mk);
+          }
+        }
+      };
+      document.addEventListener('visibilitychange', st._visHandler);
+    }
+
     // Pre-generate AI events for HvIA matches
     _mlPreGenAIEvents(mk);
     // Stoppage time: 1-7 minutos aleatorios para HvH/HvIA (→ duración
@@ -3959,19 +3979,22 @@
       }
     }
     // ── TIMER BASADO EN RELOJ REAL ──────────────────────────
-    // Usa Date.now() en lugar de incrementar _timerSec con cada
-    // tick de setInterval. Así el cronómetro NO se detiene cuando
-    // el móvil se bloquea o la pestaña pierde el foco.
-    // El setInterval solo sirve para RENDERIZAR — el tiempo real
-    // se calcula siempre desde Date.now().
-    var _timerStartWall = Date.now();
-    var _timerStartGameSec = st.timerSec;
+    // Usa Date.now() como fuente de verdad. El cronómetro NUNCA
+    // se detiene aunque el móvil se bloquee o la pestaña pierda
+    // el foco. Al volver, salta al tiempo correcto.
+    //
+    // Los valores de referencia se guardan en `st` (estado del
+    // partido) para que persistan entre pausa/reanudación.
+    if(!st._wallStart || st._wallStart === 0){
+      st._wallStart = Date.now();
+      st._gameSecAtStart = st.timerSec;
+    }
     var _tickMs = _mlTickMs(st);
     var _gameSecPerMs = _ML_TICK_SEC / _tickMs;
     st.timerInterval = setInterval(function(){
-      // Calcular cuánto tiempo real ha pasado desde el último arranque
-      var elapsedMs = Date.now() - _timerStartWall;
-      st.timerSec = _timerStartGameSec + Math.round(elapsedMs * _gameSecPerMs);
+      // Calcular tiempo real transcurrido desde el arranque
+      var elapsedMs = Date.now() - st._wallStart;
+      st.timerSec = st._gameSecAtStart + Math.round(elapsedMs * _gameSecPerMs);
       var curMin = Math.floor(st.timerSec/60);
       var normalMax = st.etDone ? 7200 : 5400;
       var stoppageMax = normalMax + (st.stoppageSec||0)*60;

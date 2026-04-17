@@ -3562,24 +3562,25 @@
         HvIA  :  8 min de juego  → 12-13 min reales  (pto medio 12.5)
 
      Escalado a nuestro reloj (90 game-min + descuento 1..7, media 4):
-        HvH   → 94 game-min deben durar 16.5 min reales → tick ≈ 878 ms
-        HvIA  → 94 game-min deben durar 12.5 min reales → tick ≈ 665 ms
-        HvH_ET→ 30 game-min deben durar  5.0 min reales → tick ≈ 833 ms
-        IAIA  → 94 game-min deben durar  0.5 min reales → tick ≈  27 ms
-     Si en el futuro alguien quiere que los partidos HvH duren por
-     ejemplo 20 min reales en vez de 16.5, basta con cambiar realMin
-     en _MATCH_RULE.HvH y el tick se recalcula automáticamente. */
+     ══════════════════════════════════════════════════════════════
+     TIEMPOS OFICIALES (FIJADOS PARA SIEMPRE):
+
+        IA vs IA   → 30s cada parte  → 1 min total real
+        HvIA       → 6min 45s/parte  → 13.5 min total real
+        HvH        → 8min 15s/parte  → 16.5 min total real
+        HvH prórroga → 2.5 min/parte → 5 min total real
+
+        Descuento: +1 minuto de juego por cada evento (gol, tarjeta,
+        lesión, penalti) que ocurra en la segunda parte. El cronómetro
+        del juego marca del 0 al 45 + desc / descanso / 45 al 90 + desc.
+
+     ══════════════════════════════════════════════════════════════ */
   var _ML_TICK_SEC = 5;
   var _MATCH_RULE = {
-    /* 90 game-min base + 4 min de descuento (media de 1..7 aleatorio) */
-    HvH:    { gameMin: 94, realMin: 16.5 }, /* 10-min → 16-17 real */
-    HvH_ET: { gameMin: 30, realMin: 5.0  }, /* prórroga */
-    HvIA:   { gameMin: 94, realMin: 12.5 }, /*  8-min → 12-13 real */
-    /* IA vs IA (Amistoso/Liga/Copa/Europa/Selecciones/etc): mismo
-       protocolo que el simulador Liga IA-vs-IA → 15 seg por parte
-       → 30 seg totales. El descuento se ignora para mantener la
-       duración constante.                                           */
-    IAIA:   { gameMin: 90, realMin: 1.0 }
+    HvH:    { gameMin: 94, realMin: 16.5 },
+    HvH_ET: { gameMin: 30, realMin: 5.0  },
+    HvIA:   { gameMin: 94, realMin: 13.5 },
+    IAIA:   { gameMin: 90, realMin: 1.0  }
   };
   function _tickMsFromRule(r) {
     /* regla de tres: tickMs = realMs / (ticksTotales) */
@@ -3957,8 +3958,20 @@
         st.stoppageSec = 1 + Math.floor(Math.random() * 7); // 1..7
       }
     }
+    // ── TIMER BASADO EN RELOJ REAL ──────────────────────────
+    // Usa Date.now() en lugar de incrementar _timerSec con cada
+    // tick de setInterval. Así el cronómetro NO se detiene cuando
+    // el móvil se bloquea o la pestaña pierde el foco.
+    // El setInterval solo sirve para RENDERIZAR — el tiempo real
+    // se calcula siempre desde Date.now().
+    var _timerStartWall = Date.now();
+    var _timerStartGameSec = st.timerSec;
+    var _tickMs = _mlTickMs(st);
+    var _gameSecPerMs = _ML_TICK_SEC / _tickMs;
     st.timerInterval = setInterval(function(){
-      st.timerSec += _ML_TICK_SEC;
+      // Calcular cuánto tiempo real ha pasado desde el último arranque
+      var elapsedMs = Date.now() - _timerStartWall;
+      st.timerSec = _timerStartGameSec + Math.round(elapsedMs * _gameSecPerMs);
       var curMin = Math.floor(st.timerSec/60);
       var normalMax = st.etDone ? 7200 : 5400;
       var stoppageMax = normalMax + (st.stoppageSec||0)*60;
@@ -4024,7 +4037,7 @@
         }
       }
       _mlRenderTimerGen(mk);
-    }, _mlTickMs(st));
+    }, Math.min(_mlTickMs(st), 500)); // render cada 500ms max para fluido + detectar vuelta de background
   }
   /* ── helpers LIVE state + aplazar btn for calendar matches ── */
   function _mlSetLiveState(mk, state) {

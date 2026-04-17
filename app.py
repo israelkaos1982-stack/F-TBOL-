@@ -1456,6 +1456,89 @@ def api_live_match_delete(match_id):
         db.session.commit()
     return jsonify({"ok": True})
 
+@app.route("/api/debug", methods=["GET"])
+def api_debug():
+    """Endpoint de diagnóstico: revela qué backend de base de datos se
+    está usando y cuántas filas hay en las tablas clave. Sirve para
+    saber en 2 segundos si la app corre con SQLite efímera (Railway
+    sin plugin Postgres → datos que se pierden en cada deploy) o con
+    Postgres persistente (DATABASE_URL inyectada por el plugin).
+
+    No expone credenciales: solo el backend (`sqlite`/`postgresql`) y,
+    en el caso de Postgres, el host sin contraseña."""
+    try:
+        engine_url = str(db.engine.url)
+    except Exception:
+        engine_url = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    backend = "sqlite" if engine_url.startswith("sqlite") else (
+        "postgresql" if engine_url.startswith("postgresql") else "unknown"
+    )
+    # Sanitizar la URL: ocultar contraseña si viene en la URI.
+    sanitized = engine_url
+    if "@" in sanitized and "://" in sanitized:
+        try:
+            scheme, rest = sanitized.split("://", 1)
+            if "@" in rest:
+                creds, host = rest.split("@", 1)
+                user = creds.split(":", 1)[0]
+                sanitized = scheme + "://" + user + ":***@" + host
+        except Exception:
+            pass
+    persistence_note = (
+        "PERSISTENTE ✅ — los datos sobreviven reinicios." if backend == "postgresql"
+        else "EFÍMERA ⚠️ — en Railway la SQLite se borra en cada deploy. "
+             "Añade el plugin Postgres para persistir datos."
+    )
+    # Contar filas para ver qué hay guardado.
+    try:
+        global_rows = GlobalState.query.count()
+        liga_ext_rows = GlobalState.query.filter(
+            GlobalState.clave.like("liga_ext_%")
+        ).count()
+        live_match_rows = GlobalState.query.filter(
+            GlobalState.clave.like("live_match_%")
+        ).count()
+        partidos_rows = Partido.query.count()
+        eventos_rows = Evento.query.count()
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "backend": backend,
+            "db_url_sanitized": sanitized,
+            "error": str(e),
+        }), 500
+    # Listar las ligas externas que tienen datos (nombres + tamaño JSON).
+    ligas_ext = []
+    try:
+        for row in GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all():
+            try:
+                data = json.loads(row.valor_json or "{}")
+                n_teams = len((data or {}).get("teams") or [])
+            except Exception:
+                n_teams = None
+            ligas_ext.append({
+                "clave": row.clave,
+                "teams": n_teams,
+                "updated_at": row.updated_at or "",
+            })
+    except Exception:
+        pass
+    return jsonify({
+        "ok": True,
+        "backend": backend,
+        "db_url_sanitized": sanitized,
+        "persistence": persistence_note,
+        "counts": {
+            "global_state_rows": global_rows,
+            "liga_ext_rows": liga_ext_rows,
+            "live_match_rows": live_match_rows,
+            "partidos_rows": partidos_rows,
+            "eventos_rows": eventos_rows,
+        },
+        "ligas_ext": ligas_ext,
+        "database_url_env_set": bool(os.environ.get("DATABASE_URL")),
+    })
+
 @app.route("/")
 def inicio():
     return render_template("index.html")

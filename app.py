@@ -15,8 +15,33 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 instance_dir = os.path.join(basedir, "instance")
 os.makedirs(instance_dir, exist_ok=True)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(instance_dir, "liga.db")
+# Selección de backend de base de datos:
+#
+# 1. Si la plataforma inyecta `DATABASE_URL` (Railway con plugin Postgres,
+#    Heroku, Fly, etc.) → usarla. Así los datos persisten entre reinicios
+#    del contenedor, que es el caso real en Railway donde el disco es
+#    efímero por defecto y los SQLite se borran en cada deploy.
+# 2. Si no, SQLite en `instance/liga.db` (desarrollo local + Render,
+#    que ya tiene volumen persistente configurado en render.yaml).
+#
+# Normalización de prefijo: Railway/Heroku envían `postgres://` pero
+# SQLAlchemy >= 1.4 requiere `postgresql://`. Sustituimos solo el prefijo.
+_db_url = os.environ.get("DATABASE_URL", "").strip()
+if _db_url.startswith("postgres://"):
+    _db_url = "postgresql://" + _db_url[len("postgres://"):]
+if not _db_url:
+    _db_url = "sqlite:///" + os.path.join(instance_dir, "liga.db")
+
+app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+# Postgres en Railway cierra conexiones ociosas al cabo de unos minutos.
+# `pool_pre_ping` evita errores "server closed the connection unexpectedly"
+# haciendo un ping barato antes de cada consulta; `pool_recycle` recicla
+# conexiones cada 5 min para mantenerlas frescas. No afecta a SQLite.
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+}
 
 db = SQLAlchemy(app)
 

@@ -851,6 +851,42 @@ def copa_reiniciar():
     save_global_state(data, replace=True)
     return jsonify({"ok": True})
 
+@app.route("/api/state/reset-liga", methods=["POST"])
+def api_state_reset_liga():
+    """Reset FORZADO de Liga EA Sports (clasificación + resultados).
+
+    Por qué existe este endpoint: el POST normal a `/api/state` con
+    patch `{liga_results: {}}` NO vacía `liga_results` porque
+    `merge_dict` recursa y, al iterar un dict incoming vacío, no
+    sobreescribe las claves anidadas del base. Eso provoca que al
+    pulsar "Res" desde el móvil los resultados "reaparezcan" en el
+    siguiente poll (el servidor devuelve el estado anterior).
+
+    Este endpoint usa `replace=True` sobre una copia del estado con
+    `liga_results` forzado a `{}`, así el servidor se queda con la
+    versión vacía y la propaga a todos los dispositivos.
+
+    Acepta opcionalmente un `liga_schedule` nuevo en el body para
+    aplicar un calendario recién generado en el cliente en la misma
+    operación atómica (no hace falta, pero evita una ronda extra
+    de POST)."""
+    body = request.get_json(silent=True) or {}
+    data = load_global_state()
+    data["liga_results"] = {}
+    new_schedule = body.get("liga_schedule")
+    if isinstance(new_schedule, list) and len(new_schedule) == 38:
+        data["liga_schedule"] = new_schedule
+    save_global_state(data, replace=True)
+    row = get_or_create_global_state()
+    return jsonify({
+        "ok": True,
+        "state": {
+            "liga_results": data["liga_results"],
+            "liga_schedule": data.get("liga_schedule"),
+        },
+        "updated_at": row.updated_at or "",
+    })
+
 # --- SIMULACIÓN ---
 def _elegir_jugador_campo(equipo, es_local=False):
     """Elige un jugador de campo aleatorio (no portero) ponderado por poder."""

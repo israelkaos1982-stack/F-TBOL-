@@ -39,6 +39,17 @@ def client(tmp_path):
             live_row.valor_json = json.dumps(app_module.DEFAULT_LIVE_STATE)
             live_row.updated_at = app_module.utc_now_iso()
             app_module.db.session.commit()
+        # Mismo razonamiento para `global_state`: un test que escriba
+        # {copa_state: {resultados: "foo"}} dejaba el string ahí para
+        # el siguiente test, que esperaba lista y fallaba. Reseteamos
+        # a DEFAULT_GLOBAL_STATE para garantizar aislamiento.
+        gs_row = app_module.GlobalState.query.filter_by(
+            clave=app_module.GLOBAL_STATE_KEY
+        ).first()
+        if gs_row is not None:
+            gs_row.valor_json = json.dumps(app_module.DEFAULT_GLOBAL_STATE)
+            gs_row.updated_at = app_module.utc_now_iso()
+            app_module.db.session.commit()
 
     with app_module.app.test_client() as c:
         yield c
@@ -311,6 +322,75 @@ class TestCopaAPI:
         rv2 = client.get("/api/copa/state")
         copa = _json(rv2)["copa"]
         assert copa.get("sorteo", {}) == {}
+
+
+# ---------------------------------------------------------------------------
+# Reset forzado de Liga EA Sports  (/api/state/reset-liga)
+# ---------------------------------------------------------------------------
+
+class TestResetLiga:
+
+    def test_reset_liga_vacia_resultados_aunque_merge_parcial_no_lo_haga(self, client):
+        """Regresión: el POST parcial a /api/state con {liga_results:{}}
+        no vacía liga_results porque merge_dict preserva sub-claves.
+        El endpoint /api/state/reset-liga debe SÍ vaciarlo siempre,
+        usando replace=True en el servidor."""
+        # 1) Simular que hay resultados acumulados de una temporada.
+        client.post("/api/state", json={
+            "liga_results": {
+                "1|Real Madrid|FC Barcelona": {"gl": 2, "gv": 1},
+                "1|Athletic Club|Alavés": {"gl": 0, "gv": 0},
+            }
+        })
+        # 2) Confirmar que efectivamente se guardaron.
+        state = _json(client.get("/api/state"))["state"]
+        assert "1|Real Madrid|FC Barcelona" in (state.get("liga_results") or {})
+
+        # 3) El patch parcial con {} NO los limpia (este es el bug
+        # que motiva el endpoint nuevo).
+        client.post("/api/state", json={"liga_results": {}})
+        state_after_patch = _json(client.get("/api/state"))["state"]
+        assert "1|Real Madrid|FC Barcelona" in (state_after_patch.get("liga_results") or {}), \
+            "merge_dict con incoming vacío NO debería limpiar — comportamiento esperado que motiva /api/state/reset-liga"
+
+        # 4) El endpoint de reset sí los limpia.
+        rv = client.post("/api/state/reset-liga")
+        assert rv.status_code == 200
+        assert _json(rv)["ok"] is True
+        state_after_reset = _json(client.get("/api/state"))["state"]
+        assert (state_after_reset.get("liga_results") or {}) == {}
+
+    def test_reset_liga_acepta_nuevo_schedule_atomico(self, client):
+        """El endpoint puede recibir un schedule nuevo en el body para
+        aplicarlo a la vez que vacía los resultados (evita una ronda
+        extra de POST desde el cliente tras reiniciar)."""
+        # Schedule mínimamente válido: 38 jornadas con listas no vacías.
+        fake_schedule = [[["Equipo A", "Equipo B"]] for _ in range(38)]
+        rv = client.post("/api/state/reset-liga",
+                         json={"liga_schedule": fake_schedule})
+        assert rv.status_code == 200
+        state = _json(client.get("/api/state"))["state"]
+        assert (state.get("liga_results") or {}) == {}
+        # El schedule debe haberse aplicado.
+        assert state.get("liga_schedule") == fake_schedule
+
+    def test_reset_liga_no_toca_copa_ni_otros_estados(self, client):
+        """El reset de liga NO debe borrar copa_state, segunda_state,
+        etc. (sólo liga_results / liga_schedule)."""
+        # copa_state con formato válido (fase + sorteo como dict) para
+        # no contaminar el estado compartido con el resto de tests que
+        # asumen que `resultados` es dict-de-listas.
+        client.post("/api/state", json={
+            "liga_results": {"k": {"gl": 1, "gv": 0}},
+            "copa_state": {"fase": "oct", "sorteo": {"oct": [["A", "B"]]}},
+        })
+        client.post("/api/state/reset-liga")
+        state = _json(client.get("/api/state"))["state"]
+        assert (state.get("liga_results") or {}) == {}
+        # copa_state intacto
+        copa = state.get("copa_state") or {}
+        assert copa.get("fase") == "oct"
+        assert copa.get("sorteo") == {"oct": [["A", "B"]]}
 
 
 # ---------------------------------------------------------------------------

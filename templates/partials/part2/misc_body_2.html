@@ -2684,7 +2684,27 @@
   window.setLigaSchedule = setLigaSchedule;
 
   window.reiniciarLigaEA = function() {
-    if (!confirm('⚠️ ¿REINICIAR Liga EA Sports?\n\nSe eliminarán TODOS los resultados, la clasificación, las estadísticas de jugadores y se generará una temporada nueva.\n\nLos equipos y plantillas que has creado NO se borran.')) return;
+    /* Reset FORZADO con código. Antes este botón usaba un `confirm`
+       y llamaba a `saveResults({})`, pero ese patch no vaciaba de
+       verdad la clave en el servidor (merge_dict recursa y preserva
+       sub-claves cuando incoming es `{}`) → al siguiente poll los
+       resultados volvían y el usuario veía "no pasa nada al pulsar
+       Res". Ahora pedimos el código 747 y llamamos al endpoint
+       dedicado `/api/state/reset-liga` que usa replace=True en el
+       servidor. */
+    var code = prompt(
+      '⚠️ REINICIAR FORZOSAMENTE Liga EA Sports\n\n' +
+      'Se eliminarán TODOS los resultados, la clasificación y se\n' +
+      'generará un calendario nuevo. Los equipos y plantillas NO se\n' +
+      'borran. El reset se propaga al resto de dispositivos en el\n' +
+      'próximo poll (unos 5 s).\n\n' +
+      'Escribe 747 para confirmar:'
+    );
+    if (code === null) return;
+    if (String(code).trim() !== '747') {
+      alert('❌ Código incorrecto. Reset cancelado.');
+      return;
+    }
 
     // ── LIMPIEZA AGRESIVA: borrar absolutamente todo ──
     try { localStorage.removeItem(LS_KEY); } catch(e){}
@@ -2712,7 +2732,21 @@
     // Regenerar calendario completo de 38 jornadas usando los equipos del editor
     var baseOrder = leerOrdenEquiposActual();
     var randomOrder = mezclarEquipos(baseOrder);
-    setLigaSchedule(generarCalendario(randomOrder));
+    var newSchedule = generarCalendario(randomOrder);
+    setLigaSchedule(newSchedule);
+
+    // ── FORZAR RESET EN EL SERVIDOR ──
+    // El POST parcial de saveResults({}) no vacía la clave (merge_dict
+    // preserva sub-claves con incoming vacío). Este endpoint usa
+    // replace=True server-side y aplica el nuevo schedule atómicamente.
+    try {
+      fetch('/api/state/reset-liga', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ liga_schedule: newSchedule }),
+        keepalive: true
+      }).catch(function(){});
+    } catch(_) {}
 
     // Re-aplicar overrides del motor (TEAM_RATINGS, SQUAD_REGISTRY)
     if(typeof window.applyEngineOverrides === 'function') window.applyEngineOverrides();
@@ -2725,7 +2759,7 @@
     if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
     if (typeof window.buildLigaStatsDashboard === 'function') window.buildLigaStatsDashboard();
 
-    alert('✅ Liga reiniciada. Clasificación, resultados y estadísticas de jugadores a cero. Los equipos y plantillas se mantienen.');
+    alert('✅ Liga reiniciada forzosamente. Clasificación y resultados a cero. Los equipos y plantillas se mantienen. El resto de dispositivos se actualiza en unos segundos.');
   };
 
   /* ── GENERADOR CALENDARIO BERGER ─────────────────── */

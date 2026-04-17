@@ -6677,12 +6677,83 @@ Tottenham
   var INCIDENT_PROB = 0.05;
   var INCIDENT_GRAVE_THRESH = 0.015;
   var INCIDENT_MEDIA_THRESH = 0.030;
-  var MATCHDAY_FREQUENCY = 3;
   var MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-  var state = { day: 16, month: 'Julio', isMatchday: false, pi: 8, injured: null, budgetSpent: 0, rating: 0 };
+  /* Mapa de clases de agenda → metadatos visuales y si el Bayern juega
+     ese día. Las Selecciones son días de "descanso" para el club
+     (internacionales fuera) → mostramos la escena de entrenamiento. */
+  var AG_TYPE_MAP = {
+    'ag-liga':   { icon: '⚽',  compName: 'Liga',            bayernPlays: true,  lookupOpp: 'liga'    },
+    'ag-copa':   { icon: '🏆',  compName: 'Copa del Rey',    bayernPlays: true,  lookupOpp: null      },
+    'ag-eur':    { icon: '🔵',  compName: 'Europa/Champions',bayernPlays: true,  lookupOpp: null      },
+    'ag-recopa': { icon: '🟤',  compName: 'Recopa Europa',   bayernPlays: true,  lookupOpp: null      },
+    'ag-inter':  { icon: '🟡',  compName: 'Intercontinental',bayernPlays: true,  lookupOpp: null      },
+    'ag-amist':  { icon: '🤝',  compName: 'Amistoso',        bayernPlays: true,  lookupOpp: null      },
+    'ag-sel':    { icon: '🌍',  compName: 'Selecciones',     bayernPlays: false, lookupOpp: null      }
+  };
+
+  var state = {
+    pi: 8, injured: null, budgetSpent: 0, rating: 0,
+    eventIdx: 0, events: []
+  };
 
   function getEl(id) { return document.getElementById(id); }
+
+  /* Parsea la agenda oficial (<div id="s-agenda">) una sola vez y la
+     memoriza en `state.events`. Cada entrada tiene fecha visible,
+     etiqueta ("Liga — J1"), clase de tipo y metadatos. El Bayern
+     avanza a través de esta lista con cada SIGUIENTE DÍA. Así el
+     "Próximo partido" queda sincronizado con lo que el usuario ve
+     en AGENDA 32-33. */
+  function parseAgenda() {
+    var ag = document.getElementById('s-agenda');
+    if (!ag) return [];
+    var rows = ag.querySelectorAll('.ag-r');
+    var out = [];
+    rows.forEach(function(row){
+      var typeCls = null;
+      for (var key in AG_TYPE_MAP) {
+        if (row.classList.contains(key)) { typeCls = key; break; }
+      }
+      if (!typeCls) return;
+      var dateEl  = row.querySelector('.ag-date');
+      var lblEl   = row.querySelector('.ag-lbl');
+      out.push({
+        date:    dateEl ? dateEl.textContent.trim() : '',
+        label:   lblEl  ? lblEl.textContent.trim()  : '',
+        typeCls: typeCls,
+        type:    AG_TYPE_MAP[typeCls]
+      });
+    });
+    return out;
+  }
+
+  /* Busca el rival del Bayern en la jornada N de Liga. Usa
+     `window.LIGA_SCHEDULE` (array 38 jornadas × partidos [home, away]).
+     Devuelve { opp, home } o null si no encuentra. */
+  function getLigaOpponent(jornada) {
+    var sched = window.LIGA_SCHEDULE;
+    if (!Array.isArray(sched) || !sched[jornada - 1]) return null;
+    var round = sched[jornada - 1];
+    for (var i = 0; i < round.length; i++) {
+      var m = round[i];
+      if (!m || m.length < 2) continue;
+      if (m[0] === 'Bayern Munich') return { opp: m[1], home: true };
+      if (m[1] === 'Bayern Munich') return { opp: m[0], home: false };
+    }
+    return null;
+  }
+
+  /* Devuelve la ruta del escudo para un nombre de equipo. Usa las
+     tablas que el backend inyecta en `window.BACKEND_ESCUDOS` +
+     `BACKEND_ESCUDOS_ALIASES`. Fallback al escudo genérico. */
+  function getShieldPath(name) {
+    if (!name) return '/static/img/escudos-fallback/estepona.svg';
+    var ESC     = window.BACKEND_ESCUDOS || {};
+    var ALIASES = window.BACKEND_ESCUDOS_ALIASES || {};
+    var canonical = ALIASES[name] || name;
+    return ESC[canonical] || ESC[name] || '/static/img/escudos-fallback/estepona.svg';
+  }
 
   function updateHud() {
     var budgetEl = getEl('ath-money-val');
@@ -6695,6 +6766,7 @@ Tottenham
     var medIcon  = getEl('ath-med-icon');
     var visTraining = getEl('munich-visual-training');
     var visMatch    = getEl('munich-visual-match');
+    var trainLbl    = document.querySelector('#s-munich .munich-training-label');
 
     /* El sufijo "/ 1300€" viene del `<small>` del HUD nuevo. Aquí
        escribimos solo el número para no duplicar "/ 1300€ / 1300€". */
@@ -6706,19 +6778,45 @@ Tottenham
     if (barPts)   barPts.style.width = Math.min(100, (state.rating / RATING_MAX) * 100) + '%';
     if (barMoney) barMoney.style.width = Math.min(100, (state.budgetSpent / BUDGET_LIMIT) * 100) + '%';
 
-    var dayLabel = state.day + ' ' + state.month;
-    if (matchEl) matchEl.textContent = (state.isMatchday ? '⚽ Matchday · Bayern vs Osasuna · ' : 'Entrenamiento · ') + dayLabel;
+    /* Re-parseo perezoso de la agenda (por si se cargó después que
+       el IIFE de Munich). */
+    if (!state.events.length) state.events = parseAgenda();
 
-    /* Alterna visual: escena de entrenamiento vs chapas del partido.
-       Cuando llega el matchday (cada 3 días) el usuario ve los dos
-       escudos con "VS" — igual que un partido Humano vs IA. */
-    if (visTraining && visMatch) {
-      if (state.isMatchday) {
-        visTraining.style.display = 'none';
-        visMatch.style.display = 'flex';
+    var evt = state.events[state.eventIdx];
+    if (!evt) {
+      /* Temporada terminada: estado neutro. */
+      if (matchEl) matchEl.textContent = '🏁 Temporada finalizada';
+      if (visTraining) visTraining.style.display = '';
+      if (visMatch)    visMatch.style.display    = 'none';
+      if (trainLbl)    trainLbl.textContent      = '🏁 FIN DE TEMPORADA';
+    } else {
+      if (matchEl) matchEl.textContent = evt.type.icon + ' ' + evt.label + ' · ' + evt.date;
+
+      if (!evt.type.bayernPlays) {
+        /* Selecciones / día de descanso del club → escena de
+           entrenamiento con etiqueta contextual. */
+        if (visTraining) visTraining.style.display = '';
+        if (visMatch)    visMatch.style.display    = 'none';
+        if (trainLbl)    trainLbl.textContent      = evt.type.icon + ' ' + evt.label.toUpperCase();
       } else {
-        visTraining.style.display = '';
-        visMatch.style.display = 'none';
+        /* Día de partido del Bayern → escudos + badge competición. */
+        if (visTraining) visTraining.style.display = 'none';
+        if (visMatch)    visMatch.style.display    = 'flex';
+        if (trainLbl)    trainLbl.textContent      = '🏋️ ENTRENAMIENTO';
+        var awayShieldEl = getEl('munich-away-shield');
+        var awayNameEl   = getEl('munich-away-name');
+        var compEl       = getEl('munich-match-comp');
+        if (compEl) compEl.textContent = evt.type.icon + ' ' + evt.type.compName.toUpperCase();
+        var oppName = null;
+        if (evt.type.lookupOpp === 'liga') {
+          var mJ = /J(\d+)/.exec(evt.label);
+          var jorn = mJ ? parseInt(mJ[1], 10) : 0;
+          var opp = getLigaOpponent(jorn);
+          if (opp && opp.opp) oppName = opp.opp;
+        }
+        if (!oppName) oppName = 'Rival por definir';
+        if (awayShieldEl) awayShieldEl.src = getShieldPath(oppName);
+        if (awayNameEl)   awayNameEl.textContent = oppName;
       }
     }
 
@@ -6748,24 +6846,46 @@ Tottenham
 
   document.addEventListener('click', function(e) {
     if (e.target && e.target.id === 'munich-next-day-btn') {
-      if (state.isMatchday) { alert('Debes jugar o simular el partido antes de avanzar.'); return; }
-      state.day += 1;
+      /* SIGUIENTE DÍA: avanza al siguiente evento de la agenda. */
+      if (state.eventIdx >= state.events.length - 1) {
+        alert('Temporada completada. 🏁');
+      } else {
+        state.eventIdx += 1;
+      }
       state.pi = Math.min(10, state.pi + 1);
       if (state.injured) { state.injured.days -= 1; if (state.injured.days <= 0) state.injured = null; }
-      state.isMatchday = state.day % MATCHDAY_FREQUENCY === 0;
       maybeIncident();
       updateHud();
     }
     if (e.target && e.target.id === 'munich-play-btn') {
-      if (!state.isMatchday) { alert('Hoy no hay partido oficial. Usa \u27a1\ufe0f SIGUIENTE D\u00cdA.'); return; }
-      state.isMatchday = false;
+      /* JUGAR PARTIDO: solo tiene sentido en eventos donde el Bayern
+         juega. En días de Selecciones el botón lo avisa. */
+      var evt = state.events[state.eventIdx];
+      if (!evt) { alert('Temporada completada. 🏁'); return; }
+      if (!evt.type.bayernPlays) {
+        alert('Hoy hay Selecciones — los jugadores del Bayern están fuera. Usa \u27a1\ufe0f SIGUIENTE DÍA.');
+        return;
+      }
       state.rating = Math.min(RATING_MAX, state.rating + 0.15);
+      if (state.eventIdx < state.events.length - 1) state.eventIdx += 1;
       updateHud();
-      alert('Partido completado. Se desbloqu\u00f3 el siguiente d\u00eda.');
+      alert('✅ Partido completado: ' + evt.label);
     }
   });
 
-  updateHud();
+  /* La agenda está en misc_body_2.html (se carga después). Esperamos
+     a DOMContentLoaded para parsear; si aún no están las secciones
+     reintentamos. */
+  function boot(){
+    state.events = parseAgenda();
+    updateHud();
+    if (!state.events.length) setTimeout(boot, 300);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
 })();
 </script>
 

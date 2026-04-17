@@ -5937,6 +5937,90 @@ Tottenham
   #s-munich #ath-bar-pts.superado, #s-munich #ath-bar-money.superado{
     background:linear-gradient(90deg,#67ff8a,#35c060);box-shadow:0 0 10px rgba(103,255,138,.6);
   }
+
+  /* ═══ VISUAL DE PRÓXIMO PARTIDO ═══
+     Se alterna entre una escena de entrenamiento (días sin partido)
+     y las chapas de los dos equipos con "VS" (días de matchday,
+     mismo look que los partidos Humano vs IA). */
+  #s-munich .munich-next-visual{
+    position:relative;margin:6px 0;border-radius:14px;overflow:hidden;
+    border:1px solid rgba(255,255,255,0.08);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.05), 0 6px 18px rgba(0,0,0,0.35);
+  }
+  /* — Modo ENTRENAMIENTO: "campo" verde + iconos flotando — */
+  #s-munich .munich-training-visual{
+    position:relative;height:180px;
+    background:
+      linear-gradient(180deg, #0a5a2e 0%, #0c7a40 40%, #0a5a2e 100%);
+  }
+  #s-munich .munich-training-bg{
+    position:absolute;inset:0;
+    background:
+      /* Líneas tenues horizontales imitando césped cortado */
+      repeating-linear-gradient(0deg,
+        rgba(255,255,255,0) 0px, rgba(255,255,255,0) 18px,
+        rgba(255,255,255,0.05) 18px, rgba(255,255,255,0.05) 20px),
+      /* Halo central */
+      radial-gradient(ellipse at 50% 55%, rgba(255,255,255,0.10) 0%, transparent 55%);
+  }
+  #s-munich .munich-training-scene{position:absolute;inset:0;pointer-events:none;}
+  #s-munich .munich-train-ico{
+    position:absolute;font-size:38px;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.6));
+    animation: munichTrainFloat 3.2s ease-in-out infinite;
+  }
+  #s-munich .munich-train-ico-1{left:10%;top:32%;animation-delay:.0s;}
+  #s-munich .munich-train-ico-2{left:30%;top:52%;animation-delay:.4s;font-size:50px;}
+  #s-munich .munich-train-ico-3{left:52%;top:28%;animation-delay:.8s;}
+  #s-munich .munich-train-ico-4{left:72%;top:56%;animation-delay:1.2s;}
+  #s-munich .munich-train-ico-5{left:88%;top:36%;animation-delay:1.6s;}
+  @keyframes munichTrainFloat{
+    0%,100%{transform:translateY(0) rotate(-4deg);}
+    50%    {transform:translateY(-8px) rotate(4deg);}
+  }
+  #s-munich .munich-training-label{
+    position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+    font-family:Oswald,sans-serif;letter-spacing:3px;font-size:14px;
+    color:#fff;text-shadow:0 2px 6px rgba(0,0,0,0.8);
+    padding:7px 16px;background:rgba(0,0,0,0.45);border-radius:6px;
+    border:1px solid rgba(255,255,255,0.18);white-space:nowrap;
+  }
+
+  /* — Modo MATCHDAY: dos escudos + VS — */
+  #s-munich .munich-match-visual{
+    display:flex;align-items:center;justify-content:space-around;gap:10px;
+    padding:16px 12px;min-height:180px;
+    background: linear-gradient(180deg, #1b0510 0%, #2c0a1e 50%, #1b0510 100%);
+  }
+  #s-munich .munich-match-side{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;
+  }
+  #s-munich .munich-match-side img{
+    width:76px;height:76px;object-fit:contain;
+    filter:drop-shadow(0 4px 12px rgba(0,0,0,0.7));
+    animation: munichShieldBounce 2.4s ease-in-out infinite;
+  }
+  #s-munich .munich-match-side.munich-match-away img{animation-delay:1.2s;}
+  @keyframes munichShieldBounce{
+    0%,100%{transform:translateY(0) scale(1);}
+    50%    {transform:translateY(-4px) scale(1.04);}
+  }
+  #s-munich .munich-match-name{
+    font-family:Oswald,sans-serif;letter-spacing:2px;font-size:12px;
+    color:#fff;text-align:center;max-width:100%;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  #s-munich .munich-match-vs{
+    display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 6px;flex-shrink:0;
+  }
+  #s-munich .munich-match-vs-main{
+    font-family:'Bebas Neue',sans-serif;font-size:42px;line-height:1;color:#f0c040;
+    text-shadow:0 2px 10px rgba(240,192,64,0.5);letter-spacing:3px;
+  }
+  #s-munich .munich-match-vs-comp{
+    font-family:Rajdhani,sans-serif;font-size:10px;font-weight:600;letter-spacing:2px;
+    color:rgba(255,255,255,0.75);white-space:nowrap;
+    padding:3px 8px;background:rgba(255,255,255,0.08);border-radius:10px;
+  }
 </style>
 <div class="sec-hdr"><img alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
@@ -6023,6 +6107,36 @@ Tottenham
     <p class="fixture-label">Próximo partido</p>
     <p class="fixture-value" id="munich-next-match">Entrenamiento · 16 Julio</p>
     <p class="fixture-injury" id="munich-injury-warning"></p>
+  </div>
+  <!-- Visual dinámico: entrenamiento ↔ matchday.
+       `updateHud()` alterna el `display` de los dos bloques de abajo
+       según `state.isMatchday`. -->
+  <div class="munich-next-visual" id="munich-next-visual">
+    <div class="munich-training-visual" id="munich-visual-training">
+      <div class="munich-training-bg"></div>
+      <div class="munich-training-scene">
+        <span class="munich-train-ico munich-train-ico-1">⚽</span>
+        <span class="munich-train-ico munich-train-ico-2">🏋️</span>
+        <span class="munich-train-ico munich-train-ico-3">🎯</span>
+        <span class="munich-train-ico munich-train-ico-4">👟</span>
+        <span class="munich-train-ico munich-train-ico-5">🧤</span>
+      </div>
+      <div class="munich-training-label">🏋️ ENTRENAMIENTO</div>
+    </div>
+    <div class="munich-match-visual" id="munich-visual-match" style="display:none;">
+      <div class="munich-match-side munich-match-home">
+        <img id="munich-home-shield" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" alt="Local" />
+        <span class="munich-match-name" id="munich-home-name">Bayern</span>
+      </div>
+      <div class="munich-match-vs">
+        <span class="munich-match-vs-comp" id="munich-match-comp">🇪🇸 LIGA</span>
+        <span class="munich-match-vs-main">VS</span>
+      </div>
+      <div class="munich-match-side munich-match-away">
+        <img id="munich-away-shield" src="/static/img/escudos-1/spain_osasuna.football-logos.cc.svg" alt="Visitante" />
+        <span class="munich-match-name" id="munich-away-name">Osasuna</span>
+      </div>
+    </div>
   </div>
   <div class="hub-actions">
     <button class="btn-play" id="munich-play-btn">⚽ JUGAR PARTIDO</button>
@@ -6579,15 +6693,34 @@ Tottenham
     var matchEl  = getEl('munich-next-match');
     var warnEl   = getEl('munich-injury-warning');
     var medIcon  = getEl('ath-med-icon');
+    var visTraining = getEl('munich-visual-training');
+    var visMatch    = getEl('munich-visual-match');
 
-    if (budgetEl) budgetEl.textContent = String(state.budgetSpent).padStart(4, '0') + ' / ' + BUDGET_LIMIT + '\u20ac';
+    /* El sufijo "/ 1300€" viene del `<small>` del HUD nuevo. Aquí
+       escribimos solo el número para no duplicar "/ 1300€ / 1300€". */
+    if (budgetEl) budgetEl.textContent = String(state.budgetSpent);
     if (ratingEl) ratingEl.textContent = state.rating.toFixed(2);
+    /* El " PI" lo stripea un MutationObserver arriba; aquí mantenemos
+       el formato legacy para no romper el modal de tratamiento. */
     if (medEl)    medEl.textContent = state.pi + ' PI';
     if (barPts)   barPts.style.width = Math.min(100, (state.rating / RATING_MAX) * 100) + '%';
     if (barMoney) barMoney.style.width = Math.min(100, (state.budgetSpent / BUDGET_LIMIT) * 100) + '%';
 
     var dayLabel = state.day + ' ' + state.month;
     if (matchEl) matchEl.textContent = (state.isMatchday ? '⚽ Matchday · Bayern vs Osasuna · ' : 'Entrenamiento · ') + dayLabel;
+
+    /* Alterna visual: escena de entrenamiento vs chapas del partido.
+       Cuando llega el matchday (cada 3 días) el usuario ve los dos
+       escudos con "VS" — igual que un partido Humano vs IA. */
+    if (visTraining && visMatch) {
+      if (state.isMatchday) {
+        visTraining.style.display = 'none';
+        visMatch.style.display = 'flex';
+      } else {
+        visTraining.style.display = '';
+        visMatch.style.display = 'none';
+      }
+    }
 
     if (state.injured) {
       if (warnEl)  warnEl.textContent = '\u26a0\ufe0f BAJA CONFIRMADA: ' + state.injured.name + ' (' + state.injured.days + ' partidos)';

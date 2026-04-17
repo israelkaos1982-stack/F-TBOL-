@@ -5896,15 +5896,17 @@ Tottenham
   #s-munich .munich-hud-money .munich-hud-num{color:#f0c040;}       /* Dorado */
   #s-munich .munich-hud-med .munich-hud-num{color:#49f3df;}         /* Turquesa */
 
-  /* Etiqueta "pop-on-tap": oculta en reposo, aparece encima del item */
+  /* Etiqueta "pop-on-tap": oculta en reposo, aparece DEBAJO del item
+     (antes iba encima, pero el nombre del equipo en `.sec-hdr` la
+     tapaba). Además subo z-index por encima de las barras y hub. */
   #s-munich .munich-hud-label{
-    position:absolute;left:50%;bottom:calc(100% + 6px);transform:translate(-50%, 6px);
-    opacity:0;pointer-events:none;white-space:nowrap;
+    position:absolute;left:50%;top:calc(100% + 6px);transform:translate(-50%, -6px);
+    opacity:0;pointer-events:none;white-space:nowrap;z-index:20;
     padding:6px 10px;border-radius:8px;
     font-family:Rajdhani,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:600;
-    background:rgba(10,4,12,0.88);color:#fff;
+    background:rgba(10,4,12,0.92);color:#fff;
     border:1px solid rgba(255,255,255,0.14);
-    box-shadow:0 6px 14px rgba(0,0,0,0.5);
+    box-shadow:0 6px 14px rgba(0,0,0,0.55);
     transition:opacity .22s ease, transform .22s ease;
   }
   #s-munich .munich-hud-money .munich-hud-label{color:#f0c040;border-color:rgba(240,192,64,.35);}
@@ -5966,7 +5968,7 @@ Tottenham
        title="Abrir menú de tratamiento rápido">
     <span class="munich-hud-label">Puntos de Fisio · 1 PI = 1 partido de lesión</span>
     <span class="munich-hud-icon" id="ath-med-icon">💊</span>
-    <span class="munich-hud-num"><span id="ath-med-val">00</span><small>/ 00</small></span>
+    <span class="munich-hud-num"><span id="ath-med-val">00</span></span>
   </div>
 </div>
 
@@ -6050,6 +6052,40 @@ Tottenham
       _curItem = null; _curTimer = null;
     }, 3000);
   };
+})();
+
+/* Sanitizador del valor de Fisio: el JS legacy escribe "NN PI" en
+   `#ath-med-val` (updateHud + athSetMedicalPI). El usuario pidió que
+   sólo se vea el número ("💊 00 es suficiente"), así que al detectar
+   cualquier cambio stripamos el sufijo " PI" y cualquier espacio
+   final. Usamos un flag interno para no entrar en bucle con nuestro
+   propio set. */
+(function(){
+  function wire(){
+    var el = document.getElementById('ath-med-val');
+    if (!el) { setTimeout(wire, 200); return; }
+    function sanitize(){
+      if (el._muMedSanitizing) return;
+      var t = el.textContent || '';
+      var clean = t.replace(/\s*PI\s*$/i, '').trim();
+      if (clean !== t) {
+        el._muMedSanitizing = true;
+        el.textContent = clean;
+        el._muMedSanitizing = false;
+      }
+    }
+    try {
+      new MutationObserver(sanitize).observe(el, {
+        childList: true, characterData: true, subtree: true
+      });
+    } catch(_) {}
+    sanitize();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    wire();
+  }
 })();
 
 /* Observa el valor de Valoración y activa el parpadeo rojo del

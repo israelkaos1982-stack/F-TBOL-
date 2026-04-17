@@ -5838,6 +5838,103 @@ Tottenham
   .ath-med-actions{display:flex;gap:8px;justify-content:flex-end;}
   .ath-med-btn{border:1px solid rgba(73,243,223,.35);background:rgba(73,243,223,.12);color:#dffff9;font-family:Oswald,sans-serif;letter-spacing:1px;padding:8px 12px;border-radius:8px;cursor:pointer;}
   .ath-med-btn.danger{border-color:rgba(255,110,110,.45);background:rgba(255,80,80,.14);color:#ffd4d4;}
+
+  /* ═══════════════════════════════════════════════════════════════
+     ALLIANZ MANAGEMENT ARENA — rediseño del HUD del Bayern (boceto
+     para replicar en Madrid / Barça / Arsenal / Sporting).
+
+     Fondo: degradado radial Rojo Imperial → Azul Real del escudo +
+     trama de diamantes bávaros como marca de agua (SVG tileable).
+     HUD superior compacto "pop-on-tap": en reposo solo icono +
+     números; al tocar un item desliza un texto flotante arriba
+     durante 3 s. Si la valoración cae por debajo del 20% del
+     objetivo el maletín 💼 parpadea en rojo neón.
+     ═════════════════════════════════════════════════════════════ */
+  #s-munich .munich-arena-wrap{
+    position:relative;padding:8px 14px 90px;display:flex;flex-direction:column;gap:14px;
+    border-radius:14px;overflow:hidden;isolation:isolate;
+  }
+  #s-munich .munich-arena-bg{
+    position:absolute;inset:0;z-index:-1;pointer-events:none;
+    background:
+      /* Diamantes bávaros tileables como marca de agua muy sutil */
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><g fill='none' stroke='rgba(255,255,255,0.07)' stroke-width='1'><path d='M32 0 L64 32 L32 64 L0 32 Z'/><path d='M32 16 L48 32 L32 48 L16 32 Z' fill='rgba(255,255,255,0.035)'/></g></svg>"),
+      /* Degradado radial: Rojo Imperial centro → Azul Real borde */
+      radial-gradient(ellipse at 50% 35%, #DC052D 0%, #a6001f 42%, #3a0b3f 78%, #0E2C5E 100%);
+    background-size: 64px 64px, 100% 100%;
+    background-repeat: repeat, no-repeat;
+  }
+  #s-munich .munich-hud{
+    position:sticky;top:4px;z-index:10;
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;
+    padding:6px;border-radius:12px;
+    background:rgba(10,4,12,0.36);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border:1px solid rgba(255,255,255,0.10);
+    box-shadow:0 4px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  #s-munich .munich-hud-item{
+    position:relative;display:flex;align-items:center;justify-content:center;gap:8px;
+    padding:10px 8px;border-radius:9px;cursor:pointer;user-select:none;
+    background:rgba(255,255,255,0.04);
+    transition:background .15s ease;
+  }
+  #s-munich .munich-hud-item:active{background:rgba(255,255,255,0.10);}
+  #s-munich .munich-hud-icon{
+    font-size:20px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));
+  }
+  #s-munich .munich-hud-num{
+    font-family:'Bebas Neue','Oswald',sans-serif;font-size:22px;letter-spacing:1px;
+    color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);white-space:nowrap;line-height:1;
+  }
+  #s-munich .munich-hud-num small{
+    font-size:11px;opacity:.55;margin-left:4px;letter-spacing:.5px;font-family:Rajdhani,sans-serif;
+  }
+  /* Colorines por item */
+  #s-munich .munich-hud-val .munich-hud-num{color:#f8fbff;}        /* Blanco nieve */
+  #s-munich .munich-hud-money .munich-hud-num{color:#f0c040;}       /* Dorado */
+  #s-munich .munich-hud-med .munich-hud-num{color:#49f3df;}         /* Turquesa */
+
+  /* Etiqueta "pop-on-tap": oculta en reposo, aparece encima del item */
+  #s-munich .munich-hud-label{
+    position:absolute;left:50%;bottom:calc(100% + 6px);transform:translate(-50%, 6px);
+    opacity:0;pointer-events:none;white-space:nowrap;
+    padding:6px 10px;border-radius:8px;
+    font-family:Rajdhani,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:600;
+    background:rgba(10,4,12,0.88);color:#fff;
+    border:1px solid rgba(255,255,255,0.14);
+    box-shadow:0 6px 14px rgba(0,0,0,0.5);
+    transition:opacity .22s ease, transform .22s ease;
+  }
+  #s-munich .munich-hud-money .munich-hud-label{color:#f0c040;border-color:rgba(240,192,64,.35);}
+  #s-munich .munich-hud-val   .munich-hud-label{color:#f8fbff;}
+  #s-munich .munich-hud-med   .munich-hud-label{color:#49f3df;border-color:rgba(73,243,223,.35);}
+  #s-munich .munich-hud-item.show-label .munich-hud-label{
+    opacity:1;transform:translate(-50%, 0);
+  }
+
+  /* Aviso de despido: valoración < 20% del objetivo (< 1.82 / 9.10)
+     → maletín parpadea rojo neón. La clase la pone/quita el JS
+     observando cambios en #ath-pts-val. */
+  @keyframes munichWarnPulse{
+    0%,100%{text-shadow:0 0 6px rgba(255,40,70,.6), 0 0 14px rgba(255,40,70,.4);transform:scale(1);}
+    50%    {text-shadow:0 0 12px rgba(255,80,110,.95), 0 0 22px rgba(255,40,70,.8);transform:scale(1.08);}
+  }
+  #s-munich .munich-warn-pulse{
+    animation:munichWarnPulse 1.1s ease-in-out infinite;
+    filter:drop-shadow(0 0 6px rgba(255,40,70,.7));
+  }
+
+  /* Barras de progreso (finas y discretas) */
+  #s-munich .munich-bars{display:flex;gap:10px;padding:2px 6px;}
+  #s-munich .munich-bar-wrap{flex:1;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;}
+  #s-munich .munich-bar{height:100%;width:0;background:linear-gradient(90deg,#f0c040,#ffe489);transition:width .6s ease;}
+  #s-munich #ath-bar-pts{background:linear-gradient(90deg,#f8fbff,#dde6ff);}
+  #s-munich #ath-bar-money{background:linear-gradient(90deg,#f0c040,#ffe489);}
+  #s-munich #ath-bar-pts.superado, #s-munich #ath-bar-money.superado{
+    background:linear-gradient(90deg,#67ff8a,#35c060);box-shadow:0 0 10px rgba(103,255,138,.6);
+  }
 </style>
 <div class="sec-hdr"><img alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
@@ -5850,38 +5947,41 @@ Tottenham
 <span style="font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;color:#dc052d;opacity:0.6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">NEW BALANCE ARENA</span>
 </div>
 </div></div>
-<div style="padding:10px 14px 90px; display:flex; flex-direction:column; gap:18px;background:linear-gradient(165deg,#DC052D 0%,#810817 100%);border-radius:14px;">
-<div class="ath-marcador" style="position:sticky;top:0;z-index:100;">
-<div class="ath-marc-row">
-<div class="ath-marc-item">
-<span class="ath-marc-label">VALORACIÓN <span id="ath-rank-icon" class="ath-hud-icon">💼</span></span>
-<span class="ath-marc-val" id="ath-pts-val">0.00</span>
-<span class="ath-marc-target" id="ath-pts-target">OBJETIVO: 9.10 pts</span>
+<div class="munich-arena-wrap">
+<div class="munich-arena-bg" aria-hidden="true"></div>
+<!-- HUD SUPERIOR · pop-on-tap ──────────────────────────────────── -->
+<div class="munich-hud">
+  <div class="munich-hud-item munich-hud-val" onclick="muHudTap(this)">
+    <span class="munich-hud-label">Valoración Actual / Valoración Club</span>
+    <span class="munich-hud-icon" id="ath-rank-icon">💼</span>
+    <span class="munich-hud-num"><span id="ath-pts-val">0.00</span><small>/ 9.10</small></span>
+  </div>
+  <div class="munich-hud-item munich-hud-money" onclick="muHudTap(this)">
+    <span class="munich-hud-label">Presupuesto ganado / Presupuesto necesario</span>
+    <span class="munich-hud-icon" id="ath-money-icon">🪙</span>
+    <span class="munich-hud-num"><span id="ath-money-val">0</span><small>/ 1300€</small></span>
+  </div>
+  <div class="munich-hud-item munich-hud-med ath-med-item"
+       onclick="var o=document.getElementById('ath-med-ov');if(o)o.classList.add('show');"
+       title="Abrir menú de tratamiento rápido">
+    <span class="munich-hud-label">Puntos de Fisio · 1 PI = 1 partido de lesión</span>
+    <span class="munich-hud-icon" id="ath-med-icon">💊</span>
+    <span class="munich-hud-num"><span id="ath-med-val">00</span><small>/ 00</small></span>
+  </div>
 </div>
-<div class="ath-marc-sep"></div>
-<div class="ath-marc-item">
-<span class="ath-marc-label">PRESUPUESTO <span id="ath-money-icon" class="ath-hud-icon">💶</span></span>
-<span class="ath-marc-val" id="ath-money-val">0</span>
-<span class="ath-marc-target" id="ath-money-target">OBJETIVO: 1300 €</span>
-</div>
-<div class="ath-marc-sep"></div>
-<div class="ath-marc-item ath-med-item">
-<span class="ath-marc-label">MÉDICO <span id="ath-med-icon" class="ath-hud-icon" title="Abrir menú de tratamiento rápido">💊</span></span>
-<span class="ath-marc-val" id="ath-med-val">00 PI</span>
-<span class="ath-marc-target" id="ath-med-target">1 PI = 1 partido de lesión</span>
-</div>
-</div>
-<div class="ath-marc-divider"></div>
-<div style="display:flex;gap:10px;padding:8px 14px 12px;align-items:center;">
-<span style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.3);width:28px;flex-shrink:0;">PTS</span>
-<div class="ath-marc-bar-wrap" style="flex:1;margin:0;">
-<div class="ath-marc-bar" id="ath-bar-pts"></div>
-</div>
-<span style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.3);width:28px;flex-shrink:0;text-align:right;">M€</span>
-<div class="ath-marc-bar-wrap" style="flex:1;margin:0;">
-<div class="ath-marc-bar" id="ath-bar-money"></div>
-</div>
-</div>
+
+<!-- IDs legacy ocultos: el JS del bundle (`athObjCount`) sigue
+     escribiendo en `ath-pts-target`, `ath-money-target` y
+     `ath-med-target`. No los eliminamos para no romper nada; el
+     nuevo HUD ya muestra la info de forma más compacta. -->
+<span id="ath-pts-target" style="display:none;">OBJETIVO: 9.10 pts</span>
+<span id="ath-money-target" style="display:none;">OBJETIVO: 1300 €</span>
+<span id="ath-med-target" style="display:none;">1 PI = 1 partido de lesión</span>
+
+<!-- Barras finas bajo el HUD (PTS / M€) -->
+<div class="munich-bars">
+  <div class="munich-bar-wrap"><div class="munich-bar" id="ath-bar-pts"></div></div>
+  <div class="munich-bar-wrap"><div class="munich-bar" id="ath-bar-money"></div></div>
 </div>
 <div id="ath-med-ov" onclick="if(event.target===this)this.classList.remove('show')">
   <div class="ath-med-box">
@@ -5928,6 +6028,62 @@ Tottenham
   </div>
 </section>
 </div>
+<script>
+/* HUD pop-on-tap: al tocar un indicador, desliza la etiqueta flotante
+   encima durante 3 s. Varios taps seguidos reinician el temporizador
+   (experiencia esperada). Si se toca otro item, el anterior se cierra
+   al instante para no tener dos etiquetas simultáneas. */
+(function(){
+  if (typeof window.muHudTap === 'function') return;
+  var _curTimer = null;
+  var _curItem = null;
+  window.muHudTap = function(el) {
+    if (!el) return;
+    if (_curItem && _curItem !== el) {
+      _curItem.classList.remove('show-label');
+    }
+    if (_curTimer) { clearTimeout(_curTimer); _curTimer = null; }
+    el.classList.add('show-label');
+    _curItem = el;
+    _curTimer = setTimeout(function(){
+      if (_curItem) _curItem.classList.remove('show-label');
+      _curItem = null; _curTimer = null;
+    }, 3000);
+  };
+})();
+
+/* Observa el valor de Valoración y activa el parpadeo rojo del
+   maletín 💼 cuando la cifra cae entre 0.01 y 1.81 (0 < v < 20% del
+   objetivo 9.10). En 0.00 exacto no parpadea (estado inicial, aún
+   sin progreso). Al subir de 1.82 o llegar al objetivo se apaga. */
+(function(){
+  var MAX = 9.10;
+  var THRESHOLD = MAX * 0.20; /* = 1.82 */
+  function check(){
+    var valEl = document.getElementById('ath-pts-val');
+    var iconEl = document.getElementById('ath-rank-icon');
+    if (!valEl || !iconEl) return;
+    var v = parseFloat(valEl.textContent) || 0;
+    var danger = v > 0 && v < THRESHOLD;
+    iconEl.classList.toggle('munich-warn-pulse', danger);
+  }
+  function wire(){
+    var valEl = document.getElementById('ath-pts-val');
+    if (!valEl) { setTimeout(wire, 200); return; }
+    try {
+      new MutationObserver(check).observe(valEl, {
+        childList: true, characterData: true, subtree: true
+      });
+    } catch(_) {}
+    check();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    wire();
+  }
+})();
+</script>
 </div>
 
 <div class="screen" id="s-munich-trofeos">

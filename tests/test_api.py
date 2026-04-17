@@ -25,6 +25,20 @@ def client(tmp_path):
     with app_module.app.app_context():
         app_module.db.create_all()
         app_module.get_or_create_global_state()
+        # El motor SQLAlchemy se vincula a la URI del fichero al
+        # importar la app, así que el `:memory:` de arriba no surte
+        # efecto: los tests COMPARTEN la fila live_state. Para que los
+        # tests del merge backend partan de un estado limpio, reseteamos
+        # explícitamente la fila a su valor por defecto al inicio de
+        # cada test (no toca otras tablas/filas para no afectar al
+        # resto de la suite ni a la BD de desarrollo).
+        live_row = app_module.GlobalState.query.filter_by(
+            clave=app_module.LIVE_STATE_KEY
+        ).first()
+        if live_row is not None:
+            live_row.valor_json = json.dumps(app_module.DEFAULT_LIVE_STATE)
+            live_row.updated_at = app_module.utc_now_iso()
+            app_module.db.session.commit()
 
     with app_module.app.test_client() as c:
         yield c
@@ -547,6 +561,175 @@ class TestLiveStateAPI:
         client.post("/api/live/state", json={"state": {"ml": {"m1": {"home": "A", "away": "B"}}}})
         client.post("/api/live/state", json={"state": {"ml": {"m2": {"home": "C", "away": "D"}}}})
         fetched = _json(client.get("/api/live/state"))
-        # Last-write-wins: m1 is gone, m2 is present
+        # Last-write-wins a nivel de qué partidos existen: m1 desaparece
+        # porque el segundo POST no lo incluye en su snapshot.
         assert "m1" not in fetched["state"]["ml"]
         assert "m2" in fetched["state"]["ml"]
+
+    # ── COEDICIÓN HUMANO vs HUMANO ──────────────────────────────────
+    # Los siguientes tests verifican que dos dispositivos pueden añadir
+    # eventos al MISMO partido sin que un POST le pise los eventos al
+    # otro (escenario: dos humanos jugando un partido HvH live, cada uno
+    # marcando goles/tarjetas desde su propio móvil).
+
+    def test_events_are_unioned_by_id_across_posts(self, client):
+        """Dos clientes añaden eventos distintos al mismo partido. Tras
+        el segundo POST, el servidor debe contener AMBOS eventos."""
+        match = {"home": "Real Madrid", "away": "Barcelona", "kickoffDone": True}
+        # Cliente A postea con el evento E_A
+        ev_a = {"id": "evt-a-001", "type": "gol", "team": "a", "min": 23,
+                "player": "Jugador A", "num": "9"}
+        client.post("/api/live/state", json={"state": {
+            "ml": {"hvh-1": dict(match, events=[ev_a])}
+        }})
+        # Cliente B postea con el evento E_B (no conoce E_A todavía)
+        ev_b = {"id": "evt-b-002", "type": "gol", "team": "b", "min": 31,
+                "player": "Jugador B", "num": "10"}
+        client.post("/api/live/state", json={"state": {
+            "ml": {"hvh-1": dict(match, events=[ev_b])}
+        }})
+        fetched = _json(client.get("/api/live/state"))
+        merged = fetched["state"]["ml"]["hvh-1"]["events"]
+        ids = sorted(e["id"] for e in merged)
+        assert ids == ["evt-a-001", "evt-b-002"]
+        # Y el marcador se recalcula a partir de los eventos: 1-1
+        assert fetched["state"]["ml"]["hvh-1"]["sc"] == {"a": 1, "b": 1}
+
+    def test_event_with_same_id_does_not_duplicate(self, client):
+        """Un cliente reposteando su snapshot con el mismo id no debe
+        crear duplicados (debounce + flush periódico repostea seguido)."""
+        ev = {"id": "evt-x", "type": "gol", "team": "a", "min": 10}
+        match = {"home": "A", "away": "B", "kickoffDone": True, "events": [ev]}
+        for _ in range(3):
+            client.post("/api/live/state", json={"state": {"ml": {"m": match}}})
+        fetched = _json(client.get("/api/live/state"))
+        assert len(fetched["state"]["ml"]["m"]["events"]) == 1
+
+    def test_event_update_with_same_id_overwrites(self, client):
+        """Editar un evento existente (mismo id, distinto contenido)
+        debe reemplazarlo en su sitio, no añadir uno nuevo."""
+        ev_v1 = {"id": "evt-1", "type": "amarilla", "team": "a", "min": 12,
+                 "player": "Pepe"}
+        client.post("/api/live/state", json={"state": {
+            "ml": {"m": {"home": "A", "away": "B", "kickoffDone": True,
+                          "events": [ev_v1]}}
+        }})
+        ev_v2 = dict(ev_v1, type="d-amarilla", min=45)
+        client.post("/api/live/state", json={"state": {
+            "ml": {"m": {"home": "A", "away": "B", "kickoffDone": True,
+                          "events": [ev_v2]}}
+        }})
+        fetched = _json(client.get("/api/live/state"))
+        evs = fetched["state"]["ml"]["m"]["events"]
+        assert len(evs) == 1
+        assert evs[0]["type"] == "d-amarilla"
+        assert evs[0]["min"] == 45
+
+    def test_legacy_events_without_id_dedup_by_content(self, client):
+        """Eventos sin id (clientes legacy) se deduplican por contenido
+        para que reposteos seguidos no creen duplicados."""
+        ev = {"type": "gol", "team": "a", "min": 7, "player": "X", "num": "11"}
+        match = {"home": "A", "away": "B", "kickoffDone": True, "events": [ev]}
+        client.post("/api/live/state", json={"state": {"ml": {"m": match}}})
+        client.post("/api/live/state", json={"state": {"ml": {"m": match}}})
+        fetched = _json(client.get("/api/live/state"))
+        assert len(fetched["state"]["ml"]["m"]["events"]) == 1
+
+    def test_timer_takes_max_across_posts(self, client):
+        """El cronómetro es monotónico: gana el valor más alto entre
+        dos snapshots concurrentes (no LWW que podría retroceder)."""
+        client.post("/api/live/state", json={"state": {
+            "ml": {"m": {"home": "A", "away": "B", "kickoffDone": True,
+                          "events": [], "timerSec": 600}}
+        }})
+        # Snapshot "atrasado" llega después; no debe pisar el timer.
+        client.post("/api/live/state", json={"state": {
+            "ml": {"m": {"home": "A", "away": "B", "kickoffDone": True,
+                          "events": [], "timerSec": 540}}
+        }})
+        fetched = _json(client.get("/api/live/state"))
+        assert fetched["state"]["ml"]["m"]["timerSec"] == 600
+
+    def test_monotonic_flags_latch_true(self, client):
+        """Las banderas como `finished`, `htDone`, `etDone` son
+        monotónicas: una vez en True, ningún snapshot posterior con
+        False puede revertirlas."""
+        client.post("/api/live/state", json={"state": {
+            "ml": {"m": {"home": "A", "away": "B", "kickoffDone": True,
+                          "htDone": True, "events": []}}
+        }})
+        client.post("/api/live/state", json={"state": {
+            "ml": {"m": {"home": "A", "away": "B", "kickoffDone": True,
+                          "htDone": False, "events": []}}
+        }})
+        fetched = _json(client.get("/api/live/state"))
+        assert fetched["state"]["ml"]["m"]["htDone"] is True
+
+    def test_score_recomputed_from_merged_events(self, client):
+        """El marcador se recalcula a partir de los eventos fusionados,
+        ignorando goles anulados por VAR."""
+        match = {"home": "A", "away": "B", "kickoffDone": True}
+        client.post("/api/live/state", json={"state": {
+            "ml": {"m": dict(match, events=[
+                {"id": "g1", "type": "gol", "team": "a", "min": 10},
+                {"id": "g2", "type": "gol", "team": "a", "min": 20},
+            ], varAnuladoIds=["g2"])}
+        }})
+        client.post("/api/live/state", json={"state": {
+            "ml": {"m": dict(match, events=[
+                {"id": "g3", "type": "propia", "team": "a", "min": 30},
+            ])}
+        }})
+        fetched = _json(client.get("/api/live/state"))
+        m = fetched["state"]["ml"]["m"]
+        assert sorted(e["id"] for e in m["events"]) == ["g1", "g2", "g3"]
+        # g1 cuenta para A. g2 anulado por VAR. g3 propia → cuenta para B.
+        assert m["sc"] == {"a": 1, "b": 1}
+
+    def test_var_anulado_ids_are_unioned(self, client):
+        """varAnuladoIds y redCards también se fusionan (set semantics)
+        para que dos dispositivos puedan anular distintos goles."""
+        match = {"home": "A", "away": "B", "kickoffDone": True, "events": [
+            {"id": "g1", "type": "gol", "team": "a", "min": 10},
+            {"id": "g2", "type": "gol", "team": "b", "min": 20},
+        ]}
+        client.post("/api/live/state", json={"state": {
+            "ml": {"m": dict(match, varAnuladoIds=["g1"])}
+        }})
+        client.post("/api/live/state", json={"state": {
+            "ml": {"m": dict(match, varAnuladoIds=["g2"])}
+        }})
+        fetched = _json(client.get("/api/live/state"))
+        anulados = fetched["state"]["ml"]["m"]["varAnuladoIds"]
+        assert sorted(anulados) == ["g1", "g2"]
+        # Ambos goles anulados → 0-0
+        assert fetched["state"]["ml"]["m"]["sc"] == {"a": 0, "b": 0}
+
+    def test_gm_live_merges_events_when_same_match(self, client):
+        """gmLive (modal de partido genérico) también une eventos cuando
+        el partido es el mismo (mismo j/home/away)."""
+        gm_a = {"j": 1, "home": "RM", "away": "FCB", "kickoffDone": True,
+                "events": [{"id": "e1", "type": "gol", "team": "a", "min": 5}]}
+        client.post("/api/live/state", json={"state": {"gmLive": gm_a}})
+        gm_b = dict(gm_a, events=[
+            {"id": "e2", "type": "gol", "team": "b", "min": 8}
+        ])
+        client.post("/api/live/state", json={"state": {"gmLive": gm_b}})
+        fetched = _json(client.get("/api/live/state"))
+        ids = sorted(e["id"] for e in fetched["state"]["gmLive"]["events"])
+        assert ids == ["e1", "e2"]
+
+    def test_gm_live_replaces_when_different_match(self, client):
+        """Si el `gmLive` cambia a OTRO partido (otro j/home/away), se
+        reemplaza por completo (no se mezclan eventos de partidos
+        distintos)."""
+        gm_a = {"j": 1, "home": "RM", "away": "FCB", "kickoffDone": True,
+                "events": [{"id": "e1", "type": "gol", "team": "a", "min": 5}]}
+        client.post("/api/live/state", json={"state": {"gmLive": gm_a}})
+        gm_b = {"j": 2, "home": "Atletico", "away": "Sevilla", "kickoffDone": True,
+                "events": [{"id": "z9", "type": "gol", "team": "a", "min": 10}]}
+        client.post("/api/live/state", json={"state": {"gmLive": gm_b}})
+        fetched = _json(client.get("/api/live/state"))
+        gl = fetched["state"]["gmLive"]
+        assert gl["home"] == "Atletico"
+        assert [e["id"] for e in gl["events"]] == ["z9"]

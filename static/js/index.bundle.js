@@ -3127,9 +3127,19 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var events = [];
     items.forEach(function(item) {
       var delBtn = item.querySelector('.ml-evt-del');
-      var idMatch = delBtn ? (delBtn.getAttribute('onclick')||'').match(/\((\d+)\)/) : null;
-      var id = idMatch ? parseInt(idMatch[1]) : null;
-      if (!id) return;
+      // Lee data-id directamente; soporta ids string (window._evtId())
+      // y números legacy. Fallback al onclick si no hay data-id.
+      var rawId = item.getAttribute('data-id');
+      var id = null;
+      if (rawId !== null && rawId !== '') {
+        id = /^-?\d+$/.test(rawId) ? parseInt(rawId, 10) : rawId;
+      } else if (delBtn) {
+        var oc = delBtn.getAttribute('onclick') || '';
+        var mNum = oc.match(/\((\d+)\)/);
+        if (mNum) id = parseInt(mNum[1], 10);
+        else { var mStr = oc.match(/\(['"]([^'"]+)['"]\)/); if (mStr) id = mStr[1]; }
+      }
+      if (id === null || id === '') return;
       var minEl  = item.querySelector('.ml-evt-min');
       var icoEl  = item.querySelector('.ml-evt-ico');
       var nameEl = item.querySelector('.ml-evt-name');
@@ -3180,9 +3190,25 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var editBtn = item.querySelector('.ml-evt-edit');
       var delBtn  = item.querySelector('.ml-evt-del');
       if (!editBtn && !delBtn) return;
-      // extract id from onclick of del button: mlDelEvt_jXmX(ID)
-      var idMatch = delBtn ? (delBtn.getAttribute('onclick')||'').match(/\((\d+)\)/) : null;
-      var id = idMatch ? parseInt(idMatch[1]) : null;
+      // El id se lee de data-id (más robusto que parsear el onclick).
+      // Soporta tanto strings (formato `<ms36>-<rand>` del helper
+      // window._evtId() introducido para que el merge backend pueda
+      // unionar eventos por id entre dispositivos) como números legacy.
+      var rawId = item.getAttribute('data-id');
+      var id = null;
+      if (rawId !== null && rawId !== '') {
+        id = /^-?\d+$/.test(rawId) ? parseInt(rawId, 10) : rawId;
+      } else {
+        // Fallback legacy: extraer del onclick. Soporta `(123)` y `('abc')`.
+        var oc = delBtn ? (delBtn.getAttribute('onclick')||'') : '';
+        var mNum = oc.match(/\((\d+)\)/);
+        if (mNum) {
+          id = parseInt(mNum[1], 10);
+        } else {
+          var mStr = oc.match(/\(['"]([^'"]+)['"]\)/);
+          if (mStr) id = mStr[1];
+        }
+      }
       var minEl   = item.querySelector('.ml-evt-min');
       var icoEl   = item.querySelector('.ml-evt-ico');
       var nameEl  = item.querySelector('.ml-evt-name');

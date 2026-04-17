@@ -275,9 +275,199 @@ def load_live_state():
         "updated_at": row.updated_at or utc_now_iso(),
     }
 
+_GOAL_TYPES_DIRECT = {"gol", "falta-gol", "pen-gol"}
+_GOAL_TYPES_OWN = {"propia"}
+
+def _legacy_evt_key(e):
+    """Dedupe key para eventos antiguos sin id (clientes que aún no
+    asignaban id). Identifica un evento por su contenido visible."""
+    return (
+        e.get("type"),
+        e.get("min"),
+        e.get("team"),
+        e.get("num"),
+        e.get("player") or e.get("name"),
+    )
+
+def _merge_events(existing_events, incoming_events):
+    """Union de eventos por `id`. Conserva el orden cronológico:
+    primero los existentes, luego los nuevos del incoming.
+
+    Si un id aparece en ambos lados, el del incoming pisa al existente
+    (permite editar etiqueta/jugador sin duplicar).
+
+    Eventos sin id (legacy) se deduplican por contenido para que un
+    cliente legacy reposteando su snapshot no genere duplicados."""
+    existing = existing_events if isinstance(existing_events, list) else []
+    incoming = incoming_events if isinstance(incoming_events, list) else []
+    merged = []
+    pos_by_id = {}
+    legacy_seen = set()
+    for src in (existing, incoming):
+        for e in src:
+            if not isinstance(e, dict):
+                continue
+            eid = e.get("id")
+            if eid is not None and eid != "":
+                if eid in pos_by_id:
+                    merged[pos_by_id[eid]] = e
+                else:
+                    pos_by_id[eid] = len(merged)
+                    merged.append(e)
+            else:
+                key = _legacy_evt_key(e)
+                if key in legacy_seen:
+                    continue
+                legacy_seen.add(key)
+                merged.append(e)
+    return merged
+
+def _merge_id_list(existing_list, incoming_list):
+    """Union de un array tipo `varAnuladoIds` o ids de tarjetas rojas
+    (set semantics, conserva orden de aparición)."""
+    out = []
+    seen = set()
+    for src in (existing_list or [], incoming_list or []):
+        if not isinstance(src, list):
+            continue
+        for v in src:
+            try:
+                key = json.dumps(v, sort_keys=True, ensure_ascii=False)
+            except Exception:
+                key = str(v)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(v)
+    return out
+
+def _score_from_events(events, var_anulado_ids):
+    """Recalcula el marcador a partir de los eventos, ignorando los
+    goles anulados por VAR. Devuelve (a, b) o None si `events` no
+    es una lista."""
+    if not isinstance(events, list):
+        return None
+    cancelled = set()
+    if isinstance(var_anulado_ids, list):
+        for v in var_anulado_ids:
+            cancelled.add(v)
+    a, b = 0, 0
+    for e in events:
+        if not isinstance(e, dict):
+            continue
+        if e.get("id") in cancelled:
+            continue
+        t = e.get("type")
+        team = e.get("team")
+        if t in _GOAL_TYPES_DIRECT:
+            if team == "a":
+                a += 1
+            elif team == "b":
+                b += 1
+        elif t in _GOAL_TYPES_OWN:
+            if team == "a":
+                b += 1
+            elif team == "b":
+                a += 1
+    return (a, b)
+
+_MONOTONIC_FLAGS = (
+    "kickoffDone", "htDone", "stDone", "etDone", "et1Done",
+    "finished", "aiEventsGenerated", "injuryScheduled", "injuryInjected",
+)
+
+def _merge_match(existing, incoming):
+    """Merge per-partido: union de eventos por id, max de timerSec,
+    OR de banderas monotónicas, recálculo de marcador a partir de
+    eventos. Para el resto de campos, gana el incoming.
+
+    Esto permite que dos humanos editen el mismo partido en paralelo
+    sin que un POST le pise al otro los goles/tarjetas que añadió."""
+    if not isinstance(existing, dict):
+        return incoming if isinstance(incoming, dict) else {}
+    if not isinstance(incoming, dict):
+        return existing
+    out = dict(existing)
+    out.update(incoming)
+    if "events" in existing or "events" in incoming:
+        out["events"] = _merge_events(existing.get("events"), incoming.get("events"))
+    out["varAnuladoIds"] = _merge_id_list(
+        existing.get("varAnuladoIds"), incoming.get("varAnuladoIds")
+    )
+    out["redCards"] = _merge_id_list(
+        existing.get("redCards"), incoming.get("redCards")
+    )
+    e_t = existing.get("timerSec")
+    i_t = incoming.get("timerSec")
+    if isinstance(e_t, (int, float)) and isinstance(i_t, (int, float)):
+        out["timerSec"] = max(e_t, i_t)
+    for flag in _MONOTONIC_FLAGS:
+        if existing.get(flag) or incoming.get(flag):
+            out[flag] = True
+    sc = _score_from_events(out.get("events"), out.get("varAnuladoIds"))
+    if sc is not None:
+        out["sc"] = {"a": sc[0], "b": sc[1]}
+    return out
+
+def _merge_match_dict(existing_map, incoming_map):
+    """Para `ml` y `gmBg`: para cada clave que esté en incoming, hacer
+    `_merge_match` con la versión existente. Las claves que NO estén
+    en incoming se eliminan (mantiene la semántica "el cliente que
+    postea su snapshot completo es la fuente de verdad" para la
+    EXISTENCIA del partido). Las claves que estén en ambos lados se
+    fusionan a nivel de eventos."""
+    if not isinstance(incoming_map, dict):
+        return {}
+    if not isinstance(existing_map, dict):
+        existing_map = {}
+    out = {}
+    for k, inc in incoming_map.items():
+        if k in existing_map:
+            out[k] = _merge_match(existing_map[k], inc)
+        else:
+            out[k] = inc
+    return out
+
+def _merge_live_state(existing, incoming):
+    """Merge de alto nivel del estado live compartido. Mantiene la
+    semántica LWW para qué partidos existen, pero hace UNION de
+    eventos cuando un partido aparece en ambos lados — así dos
+    humanos pueden añadir eventos al mismo partido en paralelo sin
+    que se pisen."""
+    if not isinstance(existing, dict):
+        existing = {}
+    if not isinstance(incoming, dict):
+        return existing
+    out = dict(existing)
+    out.update(incoming)
+    if "ml" in incoming:
+        out["ml"] = _merge_match_dict(existing.get("ml"), incoming.get("ml"))
+    if "gmBg" in incoming:
+        out["gmBg"] = _merge_match_dict(existing.get("gmBg"), incoming.get("gmBg"))
+    if "gmLive" in incoming:
+        inc_gl = incoming.get("gmLive")
+        ex_gl = existing.get("gmLive")
+        if inc_gl is None:
+            out["gmLive"] = None
+        elif isinstance(ex_gl, dict) and isinstance(inc_gl, dict) \
+                and ex_gl.get("home") == inc_gl.get("home") \
+                and ex_gl.get("away") == inc_gl.get("away") \
+                and ex_gl.get("j") == inc_gl.get("j"):
+            out["gmLive"] = _merge_match(ex_gl, inc_gl)
+        else:
+            out["gmLive"] = inc_gl
+    return out
+
 def save_live_state(new_state):
     row = _get_or_create_live_state_row()
-    payload = new_state if isinstance(new_state, dict) else {}
+    incoming = new_state if isinstance(new_state, dict) else {}
+    try:
+        existing = json.loads(row.valor_json or "{}")
+    except Exception:
+        existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+    payload = _merge_live_state(existing, incoming)
     row.valor_json = json.dumps(payload, ensure_ascii=False)
     row.updated_at = utc_now_iso()
     db.session.commit()

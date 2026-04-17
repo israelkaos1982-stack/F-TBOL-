@@ -3317,6 +3317,18 @@
   }
 
   /* ── RELLENAR cal-l{N} (s-calendario) ───────────── */
+  /* ID globalmente único para eventos. Necesario para que el merge
+     del backend (`_merge_events`) pueda hacer UNION por id cuando dos
+     humanos añaden eventos al mismo partido en paralelo desde distintos
+     dispositivos — sin esto, `Date.now()` colisiona si los dos pulsan
+     en el mismo milisegundo y un POST le pisa el evento al otro.
+     Formato: <ms>-<random36>. Idempotente entre recargas. */
+  if (typeof window._evtId !== 'function') {
+    window._evtId = function() {
+      return Date.now().toString(36) + '-' +
+             Math.random().toString(36).slice(2, 10);
+    };
+  }
   /* ── ESTADO POR PARTIDO GENÉRICO ─────────────────────── */
   var _mlStates = {};
   function _mlSt(mk) {
@@ -3618,8 +3630,8 @@
       +'<span class="ml-evt-ico">'+ico+'</span>'
       +'<span class="ml-evt-name">'+(num?num+'. ':'')+name+'</span>'
       +'<span class="ml-evt-team">'+escapeHtml(_shortTeam)+'</span>'
-      +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\','+id+')" title="Editar">🖍</button>'
-      +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\']('+id+')">✕</button>';
+      +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\',\''+id+'\')" title="Editar">🖍</button>'
+      +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\'](\''+id+'\')">✕</button>';
     var items = list.querySelectorAll('.ml-evt-item');
     var inserted = false;
     for (var i=0; i<items.length; i++) {
@@ -3911,7 +3923,7 @@
     window.LESION_STORE[playerName] = { equipo:teamName, grado:d.grado, gradoEmoji:d.ico, gradoNombre:grade, descripcion:desc };
     /* Añadir evento al acta */
     var min = Math.floor(st.timerSec/60);
-    var id = Date.now();
+    var id = window._evtId();
     st.events.push({type:'lesion',label:'Lesión',team:st.injuryTeam,num:target[0]||'',name:playerName,min:min,ico:'🩹',id:id});
     _mlAddActaRow(mk, min, '🩹', playerName, target[0]||'', teamName, 'lesion', id);
     /* Reproducir sonido de público asustado */
@@ -4165,7 +4177,7 @@
     var psEl=document.getElementById('pen-score-'+mk);
     if (psEl) { psEl.textContent='⚽ '+pa+'–'+pb+' (pen.)'; psEl.style.display=''; }
     var penWinner = pa>pb ? 'a' : 'b';
-    st.events.push({type:'pen-result',label:'Penaltis',team:penWinner,pa:pa,pb:pb,id:Date.now()});
+    st.events.push({type:'pen-result',label:'Penaltis',team:penWinner,pa:pa,pb:pb,id:window._evtId()});
     _mlFinishMatchGen(mk, penWinner);
   };
 
@@ -4287,7 +4299,7 @@
         _genActiveMk=mk;
         window.showMvpForceGen(mk, st.home, st.away, sqA, sqB, st.sc.a, st.sc.b, function(team,num,name){
           var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
-          st.events.push({min:90,label:'MVP del Partido',type:'mvp',team:team,num:num,name:name,ico:'⭐',id:Date.now()});
+          st.events.push({min:90,label:'MVP del Partido',type:'mvp',team:team,num:num,name:name,ico:'⭐',id:window._evtId()});
           _mlFinishMatchGen(mk, winner);
         });
         return;
@@ -4976,7 +4988,7 @@
     else if(evt.type==='propia'){st.sc[team==='a'?'b':'a']++;}
     var scA=document.getElementById('sc-'+mk+'-a'); if(scA)scA.textContent=st.sc.a;
     var scB=document.getElementById('sc-'+mk+'-b'); if(scB)scB.textContent=st.sc.b;
-    var id=Date.now();
+    var id=window._evtId();
     st.events.push({type:evt.type,label:evt.label,team:team,num:num,name:name,min:min,ico:ico,id:id});
     if (evt.type === 'gol' || evt.type === 'falta-gol' || evt.type === 'pen-gol' || evt.type === 'propia') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
     if (evt.type === 'roja' || evt.type === 'd-amarilla') _mlShowEventFlash('EXPULSIÓN','red');
@@ -4993,8 +5005,8 @@
       row.innerHTML='<span class="ml-evt-min">'+min+"'</span>"
         +'<span class="ml-evt-ico">'+ico+'</span>'
         +'<span class="ml-evt-name">'+(num&&num!=='0'?num+'. ':'')+name+'</span>'
-        +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\','+id+')" title="Editar">🖍</button>'
-        +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\']('+id+')">✕</button>';
+        +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\',\''+id+'\')" title="Editar">🖍</button>'
+        +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\'](\''+id+'\')">✕</button>';
       // Insert in sorted minute order
       var items=list.querySelectorAll('.ml-evt-item');
       var inserted=false;
@@ -5042,9 +5054,8 @@
     var shootSide  = wiz.defendTeam;  /* equipo que lanza */
     var commitTeamName = commitSide === 'a' ? st.home : st.away;
     var shootTeamName  = shootSide  === 'a' ? st.home : st.away;
-    var baseId = Date.now();
     function _pushEvent(type, team, num, name, ico) {
-      var id = baseId++;
+      var id = window._evtId();
       st.events.push({ type:type, label:type, team:team, num:num||'', name:name||'', min:min, ico:ico, id:id });
       if (list) {
         var emp=list.querySelector('.ml-acta-empty'); if(emp)emp.remove();
@@ -5059,8 +5070,8 @@
           +'<span class="ml-evt-ico">'+ico+'</span>'
           +'<span class="ml-evt-name">'+(num&&num!=='0'?num+'. ':'')+(name||'')+'</span>'
           +'<span class="ml-evt-team">'+escapeHtml(_shortTeam)+'</span>'
-          +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\','+id+')" title="Editar">🖍</button>'
-          +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\']('+id+')">✕</button>';
+          +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\',\''+id+'\')" title="Editar">🖍</button>'
+          +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\'](\''+id+'\')">✕</button>';
         var items = list.querySelectorAll('.ml-evt-item');
         var inserted = false;
         for (var i = 0; i < items.length; i++) {
@@ -5287,7 +5298,7 @@
     var shootTeamName  = shootSide  === 'a' ? _gm.home : _gm.away;
     var list = document.getElementById('gm-acta-list');
     function _push(type, team, num, name, ico, label) {
-      _gm.events.push({type:type, label:label||type, team:team, min:min, num:num||'', player:name||''});
+      _gm.events.push({id:window._evtId(), type:type, label:label||type, team:team, min:min, num:num||'', player:name||''});
       if (list) {
         var emp = list.querySelector('.ml-acta-empty'); if (emp) emp.remove();
         var teamLabel = team === 'a' ? _gm.home : _gm.away;
@@ -5474,7 +5485,7 @@
                 'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅',
                 amarilla:'🟨', 'damarilla':'🟨🟥', roja:'🟥', mvp:'⭐', lesion:'🩹' }[evt.type] || '📋';
     var teamName = team === 'a' ? _gm.home : _gm.away;
-    _gm.events.push({ type: evt.type, label: evt.label, team: team, min: min, num: num || '', player: playerName || '' });
+    _gm.events.push({ id: window._evtId(), type: evt.type, label: evt.label, team: team, min: min, num: num || '', player: playerName || '' });
 
     /* actualizar marcador */
     var goalTypes = ['gol','falta-gol','pen-gol'];
@@ -6109,7 +6120,7 @@
       var teamName = e.team === 'a' ? _gm.home : _gm.away;
       var playerName = e.player || e.name || '?';
       var num = e.num || '';
-      _gm.events.push({type:e.type, label:e.type, team:e.team, min:e.min, num:num, player:playerName});
+      _gm.events.push({id:window._evtId(), type:e.type, label:e.type, team:e.team, min:e.min, num:num, player:playerName});
       if (list) {
         var li = document.createElement('div');
         li.className = 'ml-evt-item';
@@ -6133,7 +6144,7 @@
       }
       if (mvpName) {
         var mvpSide = mvpTeam === _gm.home ? 'a' : 'b';
-        _gm.events.push({type:'mvp', label:'MVP', team:mvpSide, min:90, num:'', player:mvpName});
+        _gm.events.push({id:window._evtId(), type:'mvp', label:'MVP', team:mvpSide, min:90, num:'', player:mvpName});
         if (list) {
           var mvpLi = document.createElement('div');
           mvpLi.className = 'ml-evt-item';
@@ -9823,7 +9834,7 @@ window.goLiveMatches = function() {
           var ico = ev.ico || icoMap[ev.type] || '📋';
           var tName = ev.team === 'a' ? saved.home : saved.away;
           if (typeof window._mlAddActaRow === 'function') {
-            try { window._mlAddActaRow(mk, ev.min, ico, ev.player || 'Jugador', ev.num || '', tName, ev.type, ev._id || (Date.now() + Math.random())); } catch(_){}
+            try { window._mlAddActaRow(mk, ev.min, ico, ev.player || 'Jugador', ev.num || '', tName, ev.type, ev.id || ev._id || window._evtId()); } catch(_){}
           } else {
             var row = document.createElement('div');
             row.className = 'ml-acta-row';

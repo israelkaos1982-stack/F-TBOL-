@@ -6021,6 +6021,98 @@ Tottenham
     color:rgba(255,255,255,0.75);white-space:nowrap;
     padding:3px 8px;background:rgba(255,255,255,0.08);border-radius:10px;
   }
+
+  /* ═══ SELECTOR DE TORNEOS DE VERANO ═══
+     Antes de los amistosos, el usuario elige 2 de 3 torneos de
+     pretemporada. Reemplaza la pantalla de "próximo partido" hasta
+     que confirma la selección. */
+  #s-munich .munich-tour-picker{
+    padding:14px 12px;min-height:180px;
+    background:linear-gradient(180deg,#0d0310 0%,#1a0620 50%,#0d0310 100%);
+    display:none;flex-direction:column;gap:10px;
+  }
+  #s-munich .munich-tour-picker.show{display:flex;}
+  #s-munich .munich-tour-title{
+    text-align:center;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:3px;
+    color:#f0c040;text-transform:uppercase;
+  }
+  #s-munich .munich-tour-sub{
+    text-align:center;font-family:Rajdhani,sans-serif;font-size:11px;
+    color:rgba(255,255,255,.55);letter-spacing:1px;margin-top:-4px;
+  }
+  #s-munich .munich-tour-cards{display:flex;flex-direction:column;gap:8px;}
+  #s-munich .munich-tour-card{
+    position:relative;display:flex;align-items:center;gap:10px;
+    padding:10px 12px;border-radius:10px;cursor:pointer;
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.12);
+    transition:background .15s, border-color .15s, transform .12s;
+  }
+  #s-munich .munich-tour-card:active{transform:scale(0.98);}
+  #s-munich .munich-tour-card.picked{
+    background:rgba(240,192,64,0.14);
+    border-color:rgba(240,192,64,0.7);
+    box-shadow:0 0 14px rgba(240,192,64,0.25);
+  }
+  #s-munich .munich-tour-card.picked::after{
+    content:'✓';position:absolute;top:4px;right:8px;
+    color:#f0c040;font-family:Oswald,sans-serif;font-size:14px;font-weight:700;
+  }
+  #s-munich .munich-tour-flag{font-size:26px;line-height:1;flex-shrink:0;}
+  #s-munich .munich-tour-body{flex:1;min-width:0;}
+  #s-munich .munich-tour-name{
+    font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;color:#fff;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  #s-munich .munich-tour-meta{
+    font-family:Rajdhani,sans-serif;font-size:10px;letter-spacing:1px;
+    color:rgba(255,255,255,.65);margin-top:2px;
+  }
+  #s-munich .munich-tour-info-btn{
+    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.18);
+    color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;font-size:14px;
+  }
+  #s-munich .munich-tour-info-btn:active{background:rgba(255,255,255,0.18);}
+  #s-munich .munich-tour-confirm{
+    margin-top:6px;padding:10px;border:none;border-radius:10px;cursor:pointer;
+    font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;color:#0d0310;
+    background:linear-gradient(135deg,#f0c040,#ffe489);
+    box-shadow:0 4px 12px rgba(240,192,64,0.4);
+    opacity:0.4;pointer-events:none;transition:opacity .2s;
+  }
+  #s-munich .munich-tour-confirm.ready{opacity:1;pointer-events:auto;}
+
+  /* Modal de información del torneo */
+  .munich-tour-ov{
+    position:fixed;inset:0;background:rgba(5,2,10,.9);z-index:99995;
+    display:none;align-items:center;justify-content:center;padding:16px;
+  }
+  .munich-tour-ov.show{display:flex;}
+  .munich-tour-ov-box{
+    width:min(460px,95vw);max-height:85vh;overflow:auto;
+    background:linear-gradient(180deg,#0e0418 0%,#1c0634 100%);
+    border:1px solid rgba(240,192,64,.4);border-radius:14px;padding:18px;
+    color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.5;
+    box-shadow:0 12px 40px rgba(0,0,0,.6);
+  }
+  .munich-tour-ov-title{
+    display:flex;align-items:center;gap:10px;font-family:Oswald,sans-serif;
+    font-size:18px;letter-spacing:2px;color:#f0c040;margin:0 0 10px;
+    padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.1);
+  }
+  .munich-tour-ov-section{margin-top:10px;}
+  .munich-tour-ov-lbl{
+    font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2.5px;
+    color:#b090ff;text-transform:uppercase;margin-bottom:3px;
+  }
+  .munich-tour-ov-box ul{margin:4px 0 0;padding-left:20px;}
+  .munich-tour-ov-close{
+    margin-top:14px;width:100%;padding:10px;border:none;border-radius:8px;cursor:pointer;
+    font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;color:#fff;
+    background:rgba(255,80,80,.18);border:1px solid rgba(255,120,120,.4);
+  }
 </style>
 <div class="sec-hdr"><img alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
@@ -6112,6 +6204,47 @@ Tottenham
        `updateHud()` alterna el `display` de los dos bloques de abajo
        según `state.isMatchday`. -->
   <div class="munich-next-visual" id="munich-next-visual">
+    <!-- PICKER DE TORNEOS DE VERANO (se muestra solo hasta que el
+         usuario elige 2 de los 3). -->
+    <div class="munich-tour-picker" id="munich-tour-picker">
+      <div class="munich-tour-title">🌞 PRETEMPORADA · ELIGE 2 TORNEOS</div>
+      <div class="munich-tour-sub">Participación: 40 🪙 por torneo</div>
+      <div class="munich-tour-cards">
+        <div class="munich-tour-card" data-tour="sct"
+             onclick="window.muTourToggle('sct', event)">
+          <span class="munich-tour-flag">🇺🇸</span>
+          <div class="munich-tour-body">
+            <div class="munich-tour-name">Soccer Champions Tour</div>
+            <div class="munich-tour-meta">16 👤 · 1-10 Julio · hasta 4 partidos</div>
+          </div>
+          <button type="button" class="munich-tour-info-btn"
+                  onclick="event.stopPropagation();window.muTourInfo('sct')" title="Info">ℹ️</button>
+        </div>
+        <div class="munich-tour-card" data-tour="pss"
+             onclick="window.muTourToggle('pss', event)">
+          <span class="munich-tour-flag">🇬🇧</span>
+          <div class="munich-tour-body">
+            <div class="munich-tour-name">Premier Summer Series</div>
+            <div class="munich-tour-meta">6 👤 · 12-24 Julio · 5 partidos</div>
+          </div>
+          <button type="button" class="munich-tour-info-btn"
+                  onclick="event.stopPropagation();window.muTourInfo('pss')" title="Info">ℹ️</button>
+        </div>
+        <div class="munich-tour-card" data-tour="jg"
+             onclick="window.muTourToggle('jg', event)">
+          <span class="munich-tour-flag">🇪🇸</span>
+          <div class="munich-tour-body">
+            <div class="munich-tour-name">Trofeo Joan Gamper</div>
+            <div class="munich-tour-meta">8 👤 · 21-30 Julio · grupos + playoffs</div>
+          </div>
+          <button type="button" class="munich-tour-info-btn"
+                  onclick="event.stopPropagation();window.muTourInfo('jg')" title="Info">ℹ️</button>
+        </div>
+      </div>
+      <button type="button" class="munich-tour-confirm" id="munich-tour-confirm"
+              onclick="window.muTourConfirm()">✅ CONFIRMAR 0/2</button>
+    </div>
+
     <div class="munich-training-visual" id="munich-visual-training">
       <div class="munich-training-bg"></div>
       <div class="munich-training-scene">
@@ -6667,6 +6800,13 @@ Tottenham
 </div>
 </div>
 
+<!-- Modal reutilizable para ℹ️ de cada torneo de pretemporada. Se
+     rellena dinámicamente desde window.muTourInfo(id). -->
+<div class="munich-tour-ov" id="munich-tour-ov"
+     onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="munich-tour-ov-box" id="munich-tour-ov-box"></div>
+</div>
+
 <script>
 (function(){
   if (window.__MUNICH_STRI_READY) return;
@@ -6692,12 +6832,144 @@ Tottenham
     'ag-sel':    { icon: '🌍',  compName: 'Selecciones',     bayernPlays: false, lookupOpp: null      }
   };
 
+  /* Torneos de pretemporada: el usuario elige 2 de 3 antes de que
+     empiece la liga. Reemplazan los 4 amistosos genéricos de Julio. */
+  var SUMMER_TOURS = {
+    sct: {
+      flag: '🇺🇸', name: 'Soccer Champions Tour',
+      fee: 40, teams: 16, dates: '1 al 10 de Julio',
+      format: 'Eliminatoria directa: Octavos → Cuartos → Semis → Final (máx. 4 partidos).',
+      prizes: [
+        ['Octavos', 20], ['Cuartos', 40], ['Semis', 60],
+        ['Subcampeón', 80], ['Campeón', 100]
+      ]
+    },
+    pss: {
+      flag: '🇬🇧', name: 'Premier Summer Series',
+      fee: 40, teams: 6, dates: '12 al 24 de Julio',
+      format: '1 grupo de 6 equipos a ida (5 partidos).',
+      prizes: [
+        ['Sexto', 15], ['Quinto', 25], ['Cuarto', 40],
+        ['Tercero', 60], ['Subcampeón', 80], ['Campeón', 100]
+      ]
+    },
+    jg: {
+      flag: '🇪🇸', name: 'Trofeo Joan Gamper',
+      fee: 40, teams: 8, dates: '21 al 30 de Julio',
+      format: '2 grupos de 4 (3 partidos) + Playoffs Semis / Final.',
+      prizes: [
+        ['Cuartos de Grupo', 20], ['Tercero de Grupo', 40],
+        ['Semis Playoffs', 60], ['Subcampeón', 80], ['Campeón', 100]
+      ]
+    }
+  };
+  var TOURS_STORAGE_KEY = 'munich_summer_tours_v1';
+
+  function loadPickedTours() {
+    try {
+      var raw = localStorage.getItem(TOURS_STORAGE_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      return arr.filter(function(id){ return !!SUMMER_TOURS[id]; }).slice(0,2);
+    } catch(_){ return []; }
+  }
+  function savePickedTours(arr) {
+    try { localStorage.setItem(TOURS_STORAGE_KEY, JSON.stringify(arr||[])); } catch(_){}
+  }
+
   var state = {
     pi: 8, injured: null, budgetSpent: 0, rating: 0,
-    eventIdx: 0, events: []
+    eventIdx: 0, events: [],
+    pickedTours: [],       /* IDs ya confirmados (hasta 2) */
+    tempPicks:   []        /* selección en curso antes de confirmar */
   };
 
   function getEl(id) { return document.getElementById(id); }
+
+  /* ── TORNEOS DE PRETEMPORADA · picker ───────────────────────────
+     Render y handlers. Antes de los "amistosos" de Julio el usuario
+     ve este selector con las 3 opciones y elige 2. La selección se
+     guarda en localStorage para no pedirla otra vez por sesión. */
+  function renderTourPicker() {
+    var pk = getEl('munich-tour-picker');
+    if (!pk) return;
+    /* Mostrar solo si aún no hay torneos confirmados. Una vez elegidos
+       2, ocultamos el picker y el flujo normal de la agenda continúa. */
+    if (state.pickedTours.length >= 2) {
+      pk.classList.remove('show');
+      return;
+    }
+    pk.classList.add('show');
+    var cards = pk.querySelectorAll('.munich-tour-card');
+    cards.forEach(function(c){
+      var id = c.getAttribute('data-tour');
+      c.classList.toggle('picked', state.tempPicks.indexOf(id) !== -1);
+    });
+    var btn = getEl('munich-tour-confirm');
+    if (btn) {
+      btn.textContent = '✅ CONFIRMAR ' + state.tempPicks.length + '/2';
+      btn.classList.toggle('ready', state.tempPicks.length === 2);
+    }
+  }
+
+  window.muTourToggle = function(id, ev) {
+    if (ev && ev.target && ev.target.classList.contains('munich-tour-info-btn')) return;
+    if (!SUMMER_TOURS[id]) return;
+    var idx = state.tempPicks.indexOf(id);
+    if (idx !== -1) {
+      state.tempPicks.splice(idx, 1);
+    } else {
+      if (state.tempPicks.length >= 2) {
+        /* Ya hay 2: sustituimos el primero para que el nuevo entre. */
+        state.tempPicks.shift();
+      }
+      state.tempPicks.push(id);
+    }
+    renderTourPicker();
+  };
+
+  window.muTourConfirm = function() {
+    if (state.tempPicks.length !== 2) {
+      alert('Elige exactamente 2 torneos.');
+      return;
+    }
+    state.pickedTours = state.tempPicks.slice();
+    savePickedTours(state.pickedTours);
+    renderTourPicker();
+    updateHud();
+    var names = state.pickedTours.map(function(id){ return SUMMER_TOURS[id].name; }).join(' + ');
+    alert('✅ Torneos de pretemporada: ' + names);
+  };
+
+  window.muTourInfo = function(id) {
+    var t = SUMMER_TOURS[id];
+    if (!t) return;
+    var box = getEl('munich-tour-ov-box');
+    if (!box) return;
+    var prizesHtml = t.prizes.map(function(p){
+      return '<li><b>' + p[0] + ':</b> +' + p[1] + ' 🪙</li>';
+    }).join('');
+    box.innerHTML =
+      '<h3 class="munich-tour-ov-title">' + t.flag + ' ' + t.name + '</h3>' +
+      '<div class="munich-tour-ov-section">' +
+        '<div class="munich-tour-ov-lbl">Participación</div>' +
+        t.fee + ' 🪙 · ' + t.teams + ' equipos 👤' +
+      '</div>' +
+      '<div class="munich-tour-ov-section">' +
+        '<div class="munich-tour-ov-lbl">Fechas</div>' + t.dates +
+      '</div>' +
+      '<div class="munich-tour-ov-section">' +
+        '<div class="munich-tour-ov-lbl">Formato</div>' + t.format +
+      '</div>' +
+      '<div class="munich-tour-ov-section">' +
+        '<div class="munich-tour-ov-lbl">Premios</div>' +
+        '<ul>' + prizesHtml + '</ul>' +
+      '</div>' +
+      '<button type="button" class="munich-tour-ov-close"' +
+      ' onclick="document.getElementById(\'munich-tour-ov\').classList.remove(\'show\')">Cerrar</button>';
+    getEl('munich-tour-ov').classList.add('show');
+  };
 
   /* Parsea la agenda oficial (<div id="s-agenda">) una sola vez y la
      memoriza en `state.events`. Cada entrada tiene fecha visible,
@@ -6781,6 +7053,27 @@ Tottenham
     /* Re-parseo perezoso de la agenda (por si se cargó después que
        el IIFE de Munich). */
     if (!state.events.length) state.events = parseAgenda();
+
+    /* Si todavía no hemos elegido los torneos de pretemporada, el
+       picker ocupa el bloque "Próximo partido" — ocultamos los otros
+       dos visuales y salimos sin tocar el resto del HUD. */
+    if (state.pickedTours.length < 2) {
+      if (visTraining) visTraining.style.display = 'none';
+      if (visMatch)    visMatch.style.display    = 'none';
+      renderTourPicker();
+      if (matchEl) matchEl.textContent = '🌞 PRETEMPORADA · Elige 2 torneos';
+      if (state.injured) {
+        if (warnEl)  warnEl.textContent = '\u26a0\ufe0f BAJA CONFIRMADA: ' + state.injured.name + ' (' + state.injured.days + ' partidos)';
+        if (medIcon) medIcon.classList.add('blink');
+      } else {
+        if (warnEl)  warnEl.textContent = '';
+        if (medIcon) medIcon.classList.remove('blink');
+      }
+      return;
+    }
+    /* Torneos ya elegidos → nos aseguramos de ocultar el picker. */
+    var pkEl = getEl('munich-tour-picker');
+    if (pkEl) pkEl.classList.remove('show');
 
     var evt = state.events[state.eventIdx];
     if (!evt) {
@@ -6877,6 +7170,8 @@ Tottenham
      a DOMContentLoaded para parsear; si aún no están las secciones
      reintentamos. */
   function boot(){
+    state.pickedTours = loadPickedTours();
+    state.tempPicks   = state.pickedTours.slice();
     state.events = parseAgenda();
     updateHud();
     if (!state.events.length) setTimeout(boot, 300);

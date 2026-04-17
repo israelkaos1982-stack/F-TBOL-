@@ -3704,6 +3704,108 @@
     setTimeout(function(){ ov.className = ''; }, 5000);
   }
 
+  /* Toast pequeño no intrusivo para eventos que ENTRAN por sync de
+     otro dispositivo (un humano añadió un gol/tarjeta desde su móvil
+     y nos llega vía polling). Distinto del flash a pantalla completa
+     que dispara el evento local — aquí queremos avisar sin tapar el
+     juego del otro humano que sigue mirando su pantalla. Los toasts
+     se apilan y caen al cabo de 3.5s. */
+  function _mlEnsureToastStack() {
+    var st = document.getElementById('ml-remote-toasts');
+    if (st) return st;
+    st = document.createElement('div');
+    st.id = 'ml-remote-toasts';
+    st.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);'
+      + 'z-index:99999;display:flex;flex-direction:column;gap:6px;'
+      + 'pointer-events:none;max-width:92vw;';
+    document.body.appendChild(st);
+    return st;
+  }
+
+  var _GOAL_TYPES_TOAST = {gol:1,'falta-gol':1,'pen-gol':1,propia:1};
+  var _ICO_FALLBACK = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽',
+    'pen-gol':'🥅⚽', 'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅',
+    'pen-parado':'🖐🥅', amarilla:'🟨', 'd-amarilla':'🟨🟥',
+    damarilla:'🟨🟥', roja:'🟥', lesion:'🩹', mvp:'⭐' };
+
+  function _mlShowRemoteEventToast(ev, teamName, matchLabel) {
+    if (!ev) return;
+    var stack = _mlEnsureToastStack();
+    var ico = ev.ico || _ICO_FALLBACK[ev.type] || '📋';
+    var who = (ev.player || ev.name || '').toString();
+    var num = ev.num ? ev.num + '. ' : '';
+    var min = (typeof ev.min === 'number') ? ev.min + "'" : '';
+    var isGoal = !!_GOAL_TYPES_TOAST[ev.type];
+    var bg = isGoal ? 'linear-gradient(180deg,#0b8a3c 0%,#075b28 100%)'
+                    : (ev.type === 'roja' || ev.type === 'd-amarilla'
+                        ? 'linear-gradient(180deg,#9a1b1b 0%,#5e1010 100%)'
+                        : 'linear-gradient(180deg,#1f2a44 0%,#0e1730 100%)');
+    var t = document.createElement('div');
+    t.style.cssText = 'background:' + bg + ';color:#fff;'
+      + 'padding:8px 14px;border-radius:10px;font:600 13px/1.25 system-ui,sans-serif;'
+      + 'box-shadow:0 6px 18px rgba(0,0,0,.35);'
+      + 'opacity:0;transform:translateY(-6px);transition:opacity .18s,transform .18s;'
+      + 'display:flex;align-items:center;gap:8px;pointer-events:auto;'
+      + 'border:1px solid rgba(255,255,255,.08);';
+    var matchTxt = matchLabel ? '<div style="opacity:.75;font-weight:500;font-size:11px;">' + matchLabel + '</div>' : '';
+    t.innerHTML =
+      '<span style="font-size:18px;line-height:1;">' + ico + '</span>'
+      + '<div style="display:flex;flex-direction:column;min-width:0;">'
+      +   '<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+      +     (min ? '<span style="opacity:.8;margin-right:6px;">' + min + '</span>' : '')
+      +     '<span>' + num + (who || 'Jugador') + '</span>'
+      +   '</div>'
+      +   (teamName ? '<div style="opacity:.8;font-weight:500;font-size:11px;">' + teamName + '</div>' : '')
+      +   matchTxt
+      + '</div>';
+    stack.appendChild(t);
+    requestAnimationFrame(function(){
+      t.style.opacity = '1';
+      t.style.transform = 'translateY(0)';
+    });
+    setTimeout(function(){
+      t.style.opacity = '0';
+      t.style.transform = 'translateY(-6px)';
+      setTimeout(function(){ if (t.parentNode) t.parentNode.removeChild(t); }, 220);
+    }, 3500);
+    /* Sonido opcional para goles remotos (mismo tono que el local) */
+    if (isGoal) { try { _mlPlayUiTone('goal'); } catch(_){} }
+    else if (ev.type === 'roja' || ev.type === 'd-amarilla') {
+      try { _mlPlayUiTone('red'); } catch(_){}
+    }
+  }
+
+  /* Diff de ids: devuelve los eventos del array `incoming` cuyo id NO
+     está en `oldIdSet`. Eventos sin id no se notifican (no se pueden
+     diferenciar de forma fiable y normalmente son AI/relleno). */
+  function _mlNewEventsSinceLocal(incomingEvents, oldIdSet) {
+    if (!Array.isArray(incomingEvents) || !incomingEvents.length) return [];
+    var out = [];
+    for (var i = 0; i < incomingEvents.length; i++) {
+      var ev = incomingEvents[i];
+      if (!ev || typeof ev !== 'object') continue;
+      var id = ev.id;
+      if (id === undefined || id === null || id === '') continue;
+      if (!oldIdSet[id]) out.push(ev);
+    }
+    return out;
+  }
+
+  function _mlEventIdSet(events) {
+    var s = {};
+    if (!Array.isArray(events)) return s;
+    for (var i = 0; i < events.length; i++) {
+      var e = events[i];
+      if (e && e.id !== undefined && e.id !== null && e.id !== '') s[e.id] = true;
+    }
+    return s;
+  }
+  /* Expuestos para que _liveStore (definido más abajo) los pueda usar
+     desde su propio IIFE. */
+  window._mlShowRemoteEventToast = _mlShowRemoteEventToast;
+  window._mlNewEventsSinceLocal = _mlNewEventsSinceLocal;
+  window._mlEventIdSet = _mlEventIdSet;
+
   function _mlRenderTimerGen(mk) {
     var st = _mlSt(mk);
     var btn = document.getElementById('ml-timer-'+mk);
@@ -9898,8 +10000,36 @@ window.goLiveMatches = function() {
      confirmados en el servidor (`_hasPendingChanges===false`).
      Sin esta protección, un poll que llega justo después de crear
      un partido pero antes de que termine el POST lo borraría. */
-  function _applyStateToRuntime(data, allowDelete) {
+  function _applyStateToRuntime(data, allowDelete, notifyNew) {
     if (!data) return;
+    /* Snapshot de los ids de eventos que YA tenemos localmente (antes
+       de aplicar el estado del servidor) para poder detectar después
+       cuáles son nuevos. Se usa solo si `notifyNew` (lo activa
+       pollOnce, no la rehidratación inicial — en cold start TODOS los
+       eventos serían "nuevos" y el usuario vería un chorro de toasts
+       sin sentido). */
+    var _oldIds = null;
+    if (notifyNew) {
+      _oldIds = { ml: {}, gmBg: {}, gmLive: null };
+      try {
+        var lstates = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : null;
+        if (lstates) {
+          Object.keys(lstates).forEach(function(mk){
+            _oldIds.ml[mk] = window._mlEventIdSet((lstates[mk] || {}).events);
+          });
+        }
+      } catch(_){}
+      try {
+        if (window.__GM_LIVE) _oldIds.gmLive = window._mlEventIdSet(window.__GM_LIVE.events);
+      } catch(_){}
+      try {
+        if (window._gmBg) {
+          Object.keys(window._gmBg).forEach(function(k){
+            _oldIds.gmBg[k] = window._mlEventIdSet((window._gmBg[k] || {}).events);
+          });
+        }
+      } catch(_){}
+    }
 
     /* ── DELETE SEMANTICS PARA _mlStates ──────────────────────
        Recorre los _mlStates locales y borra los que ya no están en
@@ -9943,6 +10073,23 @@ window.goLiveMatches = function() {
         }
         /* Live match activo del servidor → rehidratar como antes. */
         try { _rehydrateMlEntry(mk, saved); } catch(_){}
+        /* Tras rehidratar, detectar eventos NUEVOS (los que no
+           teníamos antes localmente) y disparar un toast por cada
+           uno — son los eventos que añadió el otro humano desde su
+           móvil y nos llegan vía polling. */
+        if (notifyNew && _oldIds) {
+          try {
+            var oldSet = _oldIds.ml[mk] || {};
+            var newEvents = window._mlNewEventsSinceLocal(saved.events, oldSet);
+            if (newEvents.length) {
+              var matchLbl = (saved.home || '?') + ' vs ' + (saved.away || '?');
+              newEvents.forEach(function(ev){
+                var teamName = ev.team === 'a' ? saved.home : saved.away;
+                window._mlShowRemoteEventToast(ev, teamName, matchLbl);
+              });
+            }
+          } catch(_){}
+        }
       });
     }
 
@@ -9983,6 +10130,19 @@ window.goLiveMatches = function() {
         /* Overwrite permitido: el servidor es la fuente de verdad y
            puede haber cambios que vengan de otro dispositivo. */
         window._gmBg[k] = bgSnap;
+        if (notifyNew && _oldIds) {
+          try {
+            var oldSet = _oldIds.gmBg[k] || {};
+            var newEvents = window._mlNewEventsSinceLocal(bgSnap.events, oldSet);
+            if (newEvents.length) {
+              var matchLbl = (bgSnap.home || '?') + ' vs ' + (bgSnap.away || '?');
+              newEvents.forEach(function(ev){
+                var teamName = ev.team === 'a' ? bgSnap.home : bgSnap.away;
+                window._mlShowRemoteEventToast(ev, teamName, matchLbl);
+              });
+            }
+          } catch(_){}
+        }
       });
     }
     /* El partido que estaba en __GM_LIVE al recargar tampoco se puede
@@ -9992,6 +10152,29 @@ window.goLiveMatches = function() {
       var gl = data.gmLive;
       var k = (gl.j || 0) + '|' + (gl.home || '') + '|' + (gl.away || '');
       window._gmBg[k] = gl;
+      if (notifyNew && _oldIds) {
+        try {
+          /* Para gmLive comparamos contra los ids que tenía __GM_LIVE
+             ANTES (si era el mismo partido) o contra los del _gmBg[k]
+             previo. Si era otro partido distinto, todos los eventos
+             son "nuevos" desde nuestro punto de vista, pero pertenecen
+             a un partido que no estábamos viendo, así que evitamos
+             notificar para no spamear. */
+          var prevGl = _oldIds.gmLive;
+          var prevBg = _oldIds.gmBg[k];
+          var oldSet = (prevGl || prevBg || null);
+          if (oldSet) {
+            var newEvents = window._mlNewEventsSinceLocal(gl.events, oldSet);
+            if (newEvents.length) {
+              var matchLbl = (gl.home || '?') + ' vs ' + (gl.away || '?');
+              newEvents.forEach(function(ev){
+                var teamName = ev.team === 'a' ? gl.home : gl.away;
+                window._mlShowRemoteEventToast(ev, teamName, matchLbl);
+              });
+            }
+          }
+        } catch(_){}
+      }
     }
 
     /* Refrescar indicadores */
@@ -10043,7 +10226,11 @@ window.goLiveMatches = function() {
              locales sin confirmar. Si los tenemos, aplicar sin borrar
              para no perder partidos recién creados en este dispositivo. */
           var canDelete = !_hasPendingChanges;
-          _applyStateToRuntime(serverState, canDelete);
+          /* notifyNew=true → si llegan eventos con id que no teníamos
+             localmente (los añadió otro humano desde su móvil), mostrar
+             un toast por cada uno. La rehidratación inicial NO pasa
+             este flag porque ahí todos serían "nuevos" para nosotros. */
+          _applyStateToRuntime(serverState, canDelete, true);
           _writeLocal(serverState);
         }
       } catch(_){}

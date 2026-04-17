@@ -3375,7 +3375,82 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       return;
     }
 
-    // Fallback for IA matches
+    // Fallback para partidos dinámicos (HvIA, IA-vs-Humano en Liga/Copa/
+    // amistosos): usa el estado real `_mlStates[mid]` y NO solo el DOM.
+    // Antes esto llamaba a `injectEventDOM` que solo pintaba un `<div>`
+    // en la lista del acta → la edición "desaparecía" al siguiente
+    // poll/re-render porque el array `st.events` se quedaba sin
+    // actualizar. Ahora editamos in-place (mismo id) y sincronizamos
+    // vía _liveStore para que el otro móvil vea el cambio.
+    var st = (typeof window._mlGetState === 'function') ? window._mlGetState(mid) : null;
+    if (st && Array.isArray(st.events)) {
+      var idx = -1, oldEvt = null;
+      for (var k = 0; k < st.events.length; k++) {
+        if (st.events[k] && String(st.events[k].id) === String(evId)) {
+          idx = k; oldEvt = st.events[k]; break;
+        }
+      }
+      if (idx >= 0 && oldEvt) {
+        // Ajustar marcador: restar el gol antiguo si aplicaba, sumar el
+        // nuevo si aplica. Tipos que cuentan como gol directo al equipo:
+        var DIRECT = {'gol':1,'falta-gol':1,'pen-gol':1};
+        function scMove(type, team, sign) {
+          if (!st.sc) st.sc = {a:0,b:0};
+          if (DIRECT[type]) {
+            st.sc[team] = Math.max(0, (st.sc[team]||0) + sign);
+          } else if (type === 'propia') {
+            var other = (team === 'a') ? 'b' : 'a';
+            st.sc[other] = Math.max(0, (st.sc[other]||0) + sign);
+          }
+        }
+        scMove(oldEvt.type, oldEvt.team, -1);
+        scMove(newType, newTeam, +1);
+        // Reflejar marcador en la UI
+        var scA_el = document.getElementById('sc-'+mid+'-a');
+        var scB_el = document.getElementById('sc-'+mid+'-b');
+        if (scA_el) scA_el.textContent = st.sc.a || 0;
+        if (scB_el) scB_el.textContent = st.sc.b || 0;
+
+        // Actualizar el evento en su sitio (conservando id para que el
+        // merge backend por id funcione y no duplique).
+        var ICO_MAP = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽',
+          'pen-gol':'🥅⚽', 'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅',
+          'pen-parado':'🖐🥅', amarilla:'🟨', 'd-amarilla':'🟨🟥',
+          damarilla:'🟨🟥', roja:'🟥', lesion:'🩹', mvp:'⭐' };
+        oldEvt.type = newType;
+        oldEvt.team = newTeam;
+        oldEvt.min  = newMin;
+        oldEvt.num  = newNum;
+        oldEvt.name = newName;
+        oldEvt.player = newName; // algunos paths usan `player`, otros `name`
+        oldEvt.ico  = ICO_MAP[newType] || oldEvt.ico || '📋';
+        oldEvt.label = ICO_MAP[newType] ? oldEvt.label : (oldEvt.label || newType);
+
+        // Redibujar la fila del acta: quitamos la antigua y la volvemos
+        // a insertar (reutiliza el mismo id, así los handlers de editar/
+        // borrar siguen válidos).
+        var list = document.getElementById('ml-acta-list-' + mid);
+        if (list) {
+          var oldRow = list.querySelector('.ml-evt-item[data-id="' + String(oldEvt.id).replace(/"/g,'') + '"]');
+          if (oldRow && oldRow.parentNode) oldRow.parentNode.removeChild(oldRow);
+        }
+        var teamLabel = newTeam === 'a' ? (st.home || 'Local') : (st.away || 'Visitante');
+        if (typeof window._mlAddActaRow === 'function') {
+          try { window._mlAddActaRow(mid, newMin, oldEvt.ico, newName, newNum, teamLabel, newType, oldEvt.id); } catch(_){}
+        }
+
+        // Sincronizar con el servidor para que los otros dispositivos
+        // vean la edición (merge por id en backend).
+        if (window._liveStore && typeof window._liveStore.save === 'function') {
+          try { window._liveStore.save(); } catch(_){}
+        }
+        window._closeEditModal();
+        return;
+      }
+    }
+
+    // Último recurso si no hay estado (partido muy legacy o error):
+    // borrar + inyectar en DOM (no persiste, pero al menos no rompe).
     var delFnIA = window['mlDelEvt_' + mid];
     if (typeof delFnIA === 'function') delFnIA(evId);
     injectEventDOM(mid, newType, newTeam, newMin, newNum, newName);

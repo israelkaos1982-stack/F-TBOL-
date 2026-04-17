@@ -3925,6 +3925,24 @@ window.pG = function(fn) {
         <button class="lext-btn green" onclick="lextSaveTeam()">💾 Guardar equipo + plantilla</button>
         <button class="lext-btn" onclick="lextClearTeamForm()">🗑 Limpiar</button>
       </div>
+
+      <!-- ═══ AÑADIR MÚLTIPLES EQUIPOS (1 nombre por línea) ═══ -->
+      <div style="margin-top:18px;padding:12px;border:1px solid rgba(100,180,255,.35);border-radius:8px;background:rgba(40,100,180,.06);">
+        <label class="lext-label" style="margin-top:0;">📥 Añadir lista completa · 1 nombre por línea</label>
+        <textarea class="lext-input" id="lext-bulk-names" rows="6"
+          style="font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.45;resize:vertical;"
+          placeholder="Un equipo por línea. Ejemplo:
+Manchester City
+Liverpool
+Chelsea
+Tottenham
+# Las líneas con # se ignoran"></textarea>
+        <div class="lext-sub">Crea equipos IA con poder por defecto <b>75/75/75/75</b> (sin estadio, escudo ni plantilla — los editas después individualmente). Los nombres que ya existen se omiten.</div>
+        <div class="lext-btn-row">
+          <button class="lext-btn green" onclick="lextBulkAddTeams()">📥 Añadir todos</button>
+          <button class="lext-btn" onclick="document.getElementById('lext-bulk-names').value='';">🗑 Limpiar lista</button>
+        </div>
+      </div>
     </div>
     <div class="lext-sub" style="margin-top:14px;">EQUIPOS ACTUALES (toca para editar / ver plantilla)</div>
     <div class="lext-list" id="lext-teams-list"></div>
@@ -4935,6 +4953,80 @@ window.pG = function(fn) {
     };
     if(typeof window.pG === 'function') window.pG(doDelete);
     else doDelete();
+  };
+
+  /* ── Bulk add: pega N nombres (1 por línea), crea N equipos IA con
+     valores por defecto. El admin los edita uno a uno después si quiere
+     afinar poderes/estadio/escudo/plantilla. Útil para rellenar ligas
+     de 18–20 equipos sin tener que pulsar "Guardar" 20 veces.
+
+     Parser MUY tolerante: trim, ignora líneas vacías y las que empiezan
+     por #. Dedup case-insensitive contra los equipos ya existentes y
+     contra los nombres duplicados dentro del propio pegado. */
+  window.lextBulkAddTeams = function(){
+    if(!CURRENT_KEY){ alert('Abre una liga primero.'); return; }
+    var ta = document.getElementById('lext-bulk-names');
+    if(!ta){ return; }
+    var raw = ta.value || '';
+    var lines = raw.split(/\r?\n/);
+    var candidates = [];
+    for(var i=0;i<lines.length;i++){
+      var n = (lines[i]||'').trim();
+      if(!n) continue;
+      if(n.charAt(0) === '#') continue;
+      candidates.push(n);
+    }
+    if(!candidates.length){ alert('Pega al menos un nombre de equipo.'); return; }
+
+    var data = loadData(CURRENT_KEY) || {teams:[],results:[]};
+    if(!Array.isArray(data.teams)) data.teams = [];
+
+    // Normalizador para dedup. Minúsculas + sin acentos + colapsa espacios.
+    function norm(s){
+      try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g,''); } catch(_){}
+      return s.toLowerCase().replace(/\s+/g,' ').trim();
+    }
+    var existing = {};
+    data.teams.forEach(function(t){ if(t && t.name) existing[norm(t.name)] = true; });
+
+    // Tope de 20 equipos en Liga EA Sports.
+    var ligaEa = isLigaEaContext();
+    var cap = ligaEa ? 20 : Infinity;
+    var room = Math.max(0, cap - data.teams.length);
+
+    var added = 0, skippedDup = 0, skippedCap = 0;
+    var seenInBatch = {};
+    for(var j=0;j<candidates.length;j++){
+      var name = candidates[j];
+      var key = norm(name);
+      if(existing[key] || seenInBatch[key]){ skippedDup++; continue; }
+      if(added >= room){ skippedCap++; continue; }
+      seenInBatch[key] = true;
+      var newTeam = {
+        id: uid(), name: name,
+        power: 75, atk: 75, mid: 75, def: 75,
+        stadium: '', shield: '', budget: 0, players: []
+      };
+      if(ligaEa){ newTeam.isHuman = false; newTeam.humanEmoji = ''; }
+      data.teams.push(newTeam);
+      added++;
+    }
+
+    saveData(CURRENT_KEY, data);
+    populateStadiumsDatalist();
+    renderTeamsList();
+    refreshLigaEaCounter();
+
+    var parts = ['✅ '+added+' equipo(s) añadido(s).'];
+    if(skippedDup) parts.push(skippedDup+' duplicado(s) omitido(s).');
+    if(skippedCap) parts.push(skippedCap+' omitido(s) por tope de '+cap+' equipos.');
+    var title = document.getElementById('lext-ov-teams-title');
+    if(title){
+      var old = title.textContent;
+      title.textContent = parts.join(' · ');
+      setTimeout(function(){ title.textContent = old; }, 2200);
+    }
+    if(added) ta.value = '';
   };
 
   window.lextSaveTeam = function(){

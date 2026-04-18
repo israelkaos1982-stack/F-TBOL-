@@ -275,6 +275,16 @@ window.pG = function(fn) {
 <div class="screen" id="s-bayern-plantilla">
   <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
   <div class="sec-hdr"><span class="sec-emoji">👕</span><h2>Plantilla · Gestión de Jugadores</h2></div>
+  <!-- Contenedor vacío: al navegar a esta pantalla, `syncSquadToScreen`
+       (en index.bundle.js) detecta `.ent-body[id*="plantilla"]` y le
+       inyecta las filas desde `SQUAD_REGISTRY['Bayern Munich']` — que
+       es la misma fuente que alimenta el modal del editor de Liga. El
+       `.plant-col-hdr` se conserva entre sincronizaciones. -->
+  <div class="ent-section" style="border:1px solid rgba(238,28,37,.3);">
+    <div class="ent-body open" id="bayern-plantilla" style="padding:0;">
+      <div class="plant-col-hdr"><span>#</span><span>Jugador</span><span>⚽</span><span>🟨</span><span>🟥</span><span>⭐</span><span>🛡</span></div>
+    </div>
+  </div>
 </div>
 
 <style>

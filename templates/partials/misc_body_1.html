@@ -7001,6 +7001,55 @@ Tottenham
     return out;
   }
 
+  /* Rangos oficiales de cada torneo de pretemporada (mes 0-based). La
+     superposición del 24 Jul (PSS cierra, JG abre) la resolvemos
+     dando prioridad a JG para que ese día sea día de playoff si el
+     usuario lo ha elegido; PSS termina el 23 para este mapeo. */
+  var _SUMMER_TOUR_WINDOWS = [
+    { id: 'sct', startM: 6, startD:  1, endM: 6, endD: 10 },
+    { id: 'pss', startM: 6, startD: 12, endM: 6, endD: 23 },
+    { id: 'jg',  startM: 6, startD: 24, endM: 7, endD:  1 }
+  ];
+  var _ES_MONTH_ABBR = {
+    'ene':0,'feb':1,'mar':2,'abr':3,'may':4,'jun':5,
+    'jul':6,'ago':7,'sep':8,'oct':9,'nov':10,'dic':11
+  };
+  function _parseAgDate(s) {
+    var parts = String(s==null?'':s).trim().split(/\s+/);
+    if (parts.length < 2) return null;
+    var d = parseInt(parts[0], 10);
+    if (isNaN(d)) return null;
+    var k = parts[1].toLowerCase().replace(/\./g,'').slice(0,3);
+    var m = _ES_MONTH_ABBR[k];
+    if (m == null) return null;
+    return { m: m, d: d };
+  }
+  function tourIdForDate(dateStr) {
+    var p = _parseAgDate(dateStr);
+    if (!p) return null;
+    var key = p.m * 100 + p.d;
+    for (var i = 0; i < _SUMMER_TOUR_WINDOWS.length; i++) {
+      var w = _SUMMER_TOUR_WINDOWS[i];
+      if (key >= w.startM * 100 + w.startD && key <= w.endM * 100 + w.endD) {
+        return w.id;
+      }
+    }
+    return null;
+  }
+  /* Abreviaturas cortas para el badge "VS" (compEl) — el nombre
+     completo es demasiado largo para ese chip. */
+  var _SUMMER_TOUR_SHORT = { sct: 'SCT', pss: 'PSS', jg: 'GAMPER' };
+  /* Devuelve la info para renderizar un evento `ag-torneo`:
+     - si Bayern ha elegido el torneo que cubre esa fecha → flag + nombre
+     - si no → icono 🌞 genérico */
+  function resolveTourEvent(dateStr) {
+    var id = tourIdForDate(dateStr);
+    if (!id || state.pickedTours.indexOf(id) === -1) return null;
+    var t = SUMMER_TOURS[id];
+    if (!t) return null;
+    return { id: id, flag: t.flag, name: t.name, short: _SUMMER_TOUR_SHORT[id] || t.name };
+  }
+
   /* Busca el rival del Bayern en la jornada N de Liga. Usa
      `window.LIGA_SCHEDULE` (array 38 jornadas × partidos [home, away]).
      Devuelve { opp, home } o null si no encuentra. */
@@ -7084,14 +7133,27 @@ Tottenham
       if (visMatch)    visMatch.style.display    = 'none';
       if (trainLbl)    trainLbl.textContent      = '🏁 FIN DE TEMPORADA';
     } else {
-      if (matchEl) matchEl.textContent = evt.type.icon + ' ' + evt.label + ' · ' + evt.date;
+      /* Si el evento es `ag-torneo` y Bayern ha elegido el torneo que
+         cubre esa fecha, resolvemos la flag + nombre reales; si no,
+         queda el genérico 🌞 Torneo Verano. */
+      var tourInfo = (evt.typeCls === 'ag-torneo') ? resolveTourEvent(evt.date) : null;
+      var evtIcon  = tourInfo ? tourInfo.flag : evt.type.icon;
+      var evtLabel = tourInfo ? (tourInfo.name + ' · ' + evt.label) : evt.label;
+      /* Un día `ag-torneo` en el que Bayern NO participa (no eligió el
+         torneo que cubre esa fecha) se degrada a entrenamiento. */
+      var torneoSinPick = (evt.typeCls === 'ag-torneo') && !tourInfo;
+      if (torneoSinPick) {
+        evtIcon  = '🏋️';
+        evtLabel = 'Entrenamiento (torneo no elegido)';
+      }
+      if (matchEl) matchEl.textContent = evtIcon + ' ' + evtLabel + ' · ' + evt.date;
 
-      if (!evt.type.bayernPlays) {
+      if (!evt.type.bayernPlays || torneoSinPick) {
         /* Selecciones / día de descanso del club → escena de
            entrenamiento con etiqueta contextual. */
         if (visTraining) visTraining.style.display = '';
         if (visMatch)    visMatch.style.display    = 'none';
-        if (trainLbl)    trainLbl.textContent      = evt.type.icon + ' ' + evt.label.toUpperCase();
+        if (trainLbl)    trainLbl.textContent      = evtIcon + ' ' + evtLabel.toUpperCase();
       } else {
         /* Día de partido del Bayern → escudos + badge competición. */
         if (visTraining) visTraining.style.display = 'none';
@@ -7100,7 +7162,10 @@ Tottenham
         var awayShieldEl = getEl('munich-away-shield');
         var awayNameEl   = getEl('munich-away-name');
         var compEl       = getEl('munich-match-comp');
-        if (compEl) compEl.textContent = evt.type.icon + ' ' + evt.type.compName.toUpperCase();
+        var compText = tourInfo
+          ? (tourInfo.flag + ' ' + tourInfo.short)
+          : (evt.type.icon + ' ' + evt.type.compName.toUpperCase());
+        if (compEl) compEl.textContent = compText;
         var oppName = null;
         if (evt.type.lookupOpp === 'liga') {
           var mJ = /J(\d+)/.exec(evt.label);

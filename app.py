@@ -1348,8 +1348,57 @@ CALENDARIO_DEFAULT = {"version": 1, "season": "32-33", "sections": []}
 # Iconos válidos para eventos (debe coincidir con el <select> del UI
 # de edición). No impedimos otros iconos pero sí vetamos strings
 # absurdamente largas.
-CALENDARIO_VALID_ICONS = {"⚽", "🏆", "🇪🇺", "🌍", "🤝", "🔵", "🟤", "🟡"}
+CALENDARIO_VALID_ICONS = {"⚽", "🏆", "🇪🇺", "🌍", "🤝", "🔵", "🟤", "🟡", "🏃", "💤"}
 CALENDARIO_VALID_WEATHERS = {"☀️", "🌧", "❄️"}
+
+# Abreviaturas de mes en español → índice 0..11 (Ene=0). Usado para
+# ordenar eventos por fecha ("15 Jul", "03 Ago", …) dentro de una
+# sección. El orden real es "relativo al primer evento" — ver
+# `_sort_section_events` — para soportar secciones que cruzan años
+# (Sep→Feb, Jun→Jul).
+_SPANISH_MONTH_NUM = {
+    "ene": 0, "feb": 1, "mar": 2, "abr": 3, "may": 4, "jun": 5,
+    "jul": 6, "ago": 7, "sep": 8, "oct": 9, "nov": 10, "dic": 11,
+}
+
+def _parse_event_date(date_str):
+    """'15 Jul' → (6, 15). Devuelve None si no parseable."""
+    parts = str(date_str or "").strip().split()
+    if len(parts) < 2:
+        return None
+    try:
+        day = int(parts[0])
+    except ValueError:
+        return None
+    key = parts[1].strip().lower().rstrip(".")[:3]
+    m = _SPANISH_MONTH_NUM.get(key)
+    if m is None:
+        return None
+    return (m, day)
+
+def _sort_section_events(section):
+    """Ordena in-place los eventos de una sección cronológicamente.
+    El ancla es el mes del primer evento existente para que secciones
+    como INVIERNO (Sep→Feb) o FASE FINAL (Jun→Jul) mantengan su tramo
+    lógico de temporada sin que enero/julio salten al principio."""
+    evs = section.get("events")
+    if not isinstance(evs, list) or len(evs) < 2:
+        return
+    anchor = None
+    for ev in evs:
+        parsed = _parse_event_date(ev.get("date"))
+        if parsed is not None:
+            anchor = parsed[0]
+            break
+    if anchor is None:
+        return
+    def key(ev):
+        parsed = _parse_event_date(ev.get("date"))
+        if parsed is None:
+            return (99, 99)
+        m, d = parsed
+        return ((m - anchor) % 12, d)
+    evs.sort(key=key)
 
 def load_calendario():
     """Carga `calendario.json`. Si no existe o está corrupto, devuelve
@@ -1458,6 +1507,7 @@ def api_calendario_add():
     new_evt = {"id": _next_event_id(data)}
     new_evt.update(fields)
     sec.setdefault("events", []).append(new_evt)
+    _sort_section_events(sec)
     save_calendario(data)
     return jsonify({"ok": True, "event": new_evt, "section_id": section_id})
 
@@ -1478,6 +1528,7 @@ def api_calendario_edit():
     if ev is None:
         return jsonify({"ok": False, "error": "evento no encontrado"}), 404
     ev.update(fields)
+    _sort_section_events(sec)
     save_calendario(data)
     return jsonify({"ok": True, "event": ev, "section_id": sec.get("id")})
 
@@ -1523,6 +1574,8 @@ _AGENDA_ICON_CLASS_MAP = {
     "🤝": "ag-amist",
     "🟤": "ag-recopa",
     "🟡": "ag-inter",
+    "🏃": "ag-train",
+    "💤": "ag-rest",
 }
 _AGENDA_WEATHER_CLASS_MAP = {
     "🌧": "ag-rain",

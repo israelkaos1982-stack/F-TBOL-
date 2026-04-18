@@ -371,13 +371,41 @@ window.pG = function(fn) {
       enforceSingleActive(id);
       return out;
     };
-    document.addEventListener('DOMContentLoaded', function(){
-      var active = document.querySelectorAll('.screen.active');
-      if(active.length > 1){
-        var keep = active[active.length - 1];
-        active.forEach(function(sc){ if(sc !== keep) sc.classList.remove('active'); });
+    /* El guard anterior (wrap + cleanup en DOMContentLoaded) NO basta
+       porque `index.bundle.js` declara `function go(id)` al inicio del
+       script, y esa declaración hoisted sobreescribe `window.go` y
+       rompe la cadena de wraps. Además, hay 8+ redefinciones de
+       `window.go` en `bundle.js`, cualquiera podría dejar dos screens
+       en `.active` (p. ej. al volver atrás rápido).
+       Solución: MutationObserver que observa body y, cada vez que
+       detecta >1 `.screen.active`, conserva la última añadida y quita
+       `.active` del resto. Flag `_dedupe` evita bucles recursivos. */
+    var _dedupe = false;
+    function dedupeActiveScreens(){
+      if (_dedupe) return;
+      var actives = document.querySelectorAll('.screen.active');
+      if (actives.length <= 1) return;
+      _dedupe = true;
+      try {
+        var keep = actives[actives.length - 1];
+        actives.forEach(function(sc){ if (sc !== keep) sc.classList.remove('active'); });
+      } finally {
+        _dedupe = false;
       }
-    });
+    }
+    function startObserver(){
+      dedupeActiveScreens();
+      if (typeof MutationObserver !== 'function') return;
+      var obs = new MutationObserver(dedupeActiveScreens);
+      obs.observe(document.body, {
+        subtree: true, attributes: true, attributeFilter: ['class']
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startObserver);
+    } else {
+      startObserver();
+    }
   }
   if(window.__BAYERN_HUB_READY) return;
   window.__BAYERN_HUB_READY = true;

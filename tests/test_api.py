@@ -813,3 +813,164 @@ class TestLiveStateAPI:
         gl = fetched["state"]["gmLive"]
         assert gl["home"] == "Atletico"
         assert [e["id"] for e in gl["events"]] == ["z9"]
+
+
+# ---------------------------------------------------------------------------
+# Admin session (PIN 747) + CRUD del calendario editable
+# ---------------------------------------------------------------------------
+
+class TestAdminSession:
+
+    def test_status_anonymous_is_false(self, client):
+        rv = client.get("/api/admin/status")
+        assert rv.status_code == 200
+        assert _json(rv)["admin"] is False
+
+    def test_login_wrong_pin_returns_401(self, client):
+        rv = client.post("/api/admin/login", json={"pin": "000"})
+        assert rv.status_code == 401
+        assert _json(rv)["ok"] is False
+
+    def test_login_right_pin_sets_session(self, client):
+        rv = client.post("/api/admin/login", json={"pin": "747"})
+        assert rv.status_code == 200
+        assert _json(rv) == {"ok": True, "admin": True}
+        # La sesión persiste entre peticiones del mismo test_client
+        rv2 = client.get("/api/admin/status")
+        assert _json(rv2)["admin"] is True
+
+    def test_logout_clears_admin(self, client):
+        client.post("/api/admin/login", json={"pin": "747"})
+        rv = client.post("/api/admin/logout")
+        assert _json(rv) == {"ok": True, "admin": False}
+        rv2 = client.get("/api/admin/status")
+        assert _json(rv2)["admin"] is False
+
+
+class TestCalendario:
+
+    def _login(self, client):
+        client.post("/api/admin/login", json={"pin": "747"})
+
+    def test_get_calendario_shape(self, client):
+        rv = client.get("/api/calendario")
+        assert rv.status_code == 200
+        data = _json(rv)
+        assert data["ok"] is True
+        cal = data["calendario"]
+        assert isinstance(cal.get("sections"), list)
+        # El seed tiene 4 secciones y 99 eventos en total.
+        assert len(cal["sections"]) == 4
+        total = sum(len(s["events"]) for s in cal["sections"])
+        assert total == 99
+
+    def test_add_edit_delete_require_admin(self, client):
+        """Sin login, los 3 POST de mutación devuelven 403."""
+        for path, body in [
+            ("/api/calendario/add", {"section_id": "verano-p1", "date": "X", "icon": "🤝", "name": "X", "weather": "☀️"}),
+            ("/api/calendario/edit", {"event_id": "ev-001", "date": "X", "icon": "🤝", "name": "X", "weather": "☀️"}),
+            ("/api/calendario/delete", {"event_id": "ev-001"}),
+        ]:
+            rv = client.post(path, json=body)
+            assert rv.status_code == 403, f"{path} debería requerir admin"
+
+    def test_add_event_generates_id_and_persists(self, client, tmp_path, monkeypatch):
+        """El add genera un id `ev-NNN` único y guarda el evento en
+        la sección indicada."""
+        # Redirige el archivo a un tmp para no manchar el del repo.
+        fake = tmp_path / "calendario.json"
+        fake.write_text(open(app_module.CALENDARIO_PATH).read(), encoding="utf-8")
+        monkeypatch.setattr(app_module, "CALENDARIO_PATH", str(fake))
+        self._login(client)
+        rv = client.post("/api/calendario/add", json={
+            "section_id": "verano-p1",
+            "date": "16 Jul",
+            "icon": "🤝",
+            "name": "Amistoso EXTRA",
+            "weather": "☀️",
+        })
+        assert rv.status_code == 200
+        j = _json(rv)
+        assert j["ok"] is True
+        assert j["event"]["id"].startswith("ev-")
+        assert j["event"]["name"] == "Amistoso EXTRA"
+        # El nuevo id no debe colisionar con uno existente.
+        cal = _json(client.get("/api/calendario"))["calendario"]
+        all_ids = [e["id"] for s in cal["sections"] for e in s["events"]]
+        assert len(all_ids) == len(set(all_ids))
+        # Y el evento se encuentra en verano-p1.
+        verano_events = next(s["events"] for s in cal["sections"] if s["id"] == "verano-p1")
+        assert any(e["name"] == "Amistoso EXTRA" for e in verano_events)
+
+    def test_add_rejects_missing_fields(self, client, tmp_path, monkeypatch):
+        fake = tmp_path / "calendario.json"
+        fake.write_text(open(app_module.CALENDARIO_PATH).read(), encoding="utf-8")
+        monkeypatch.setattr(app_module, "CALENDARIO_PATH", str(fake))
+        self._login(client)
+        # Falta `name`
+        rv = client.post("/api/calendario/add", json={
+            "section_id": "verano-p1", "date": "X", "icon": "🤝", "weather": "☀️"
+        })
+        assert rv.status_code == 400
+        assert _json(rv)["error"] == "falta nombre"
+
+    def test_add_rejects_unknown_section(self, client, tmp_path, monkeypatch):
+        fake = tmp_path / "calendario.json"
+        fake.write_text(open(app_module.CALENDARIO_PATH).read(), encoding="utf-8")
+        monkeypatch.setattr(app_module, "CALENDARIO_PATH", str(fake))
+        self._login(client)
+        rv = client.post("/api/calendario/add", json={
+            "section_id": "no-existe", "date": "X", "icon": "🤝",
+            "name": "Y", "weather": "☀️"
+        })
+        assert rv.status_code == 404
+
+    def test_edit_updates_fields_in_place(self, client, tmp_path, monkeypatch):
+        fake = tmp_path / "calendario.json"
+        fake.write_text(open(app_module.CALENDARIO_PATH).read(), encoding="utf-8")
+        monkeypatch.setattr(app_module, "CALENDARIO_PATH", str(fake))
+        self._login(client)
+        rv = client.post("/api/calendario/edit", json={
+            "event_id": "ev-001",
+            "date": "16 Jul",
+            "icon": "🤝",
+            "name": "Amistoso editado",
+            "weather": "🌧",
+        })
+        assert rv.status_code == 200
+        j = _json(rv)
+        assert j["event"]["name"] == "Amistoso editado"
+        assert j["event"]["weather"] == "🌧"
+        assert j["event"]["id"] == "ev-001"  # id conservado
+
+    def test_edit_rejects_unknown_event(self, client, tmp_path, monkeypatch):
+        fake = tmp_path / "calendario.json"
+        fake.write_text(open(app_module.CALENDARIO_PATH).read(), encoding="utf-8")
+        monkeypatch.setattr(app_module, "CALENDARIO_PATH", str(fake))
+        self._login(client)
+        rv = client.post("/api/calendario/edit", json={
+            "event_id": "ev-zzz",
+            "date": "X", "icon": "🤝", "name": "X", "weather": "☀️"
+        })
+        assert rv.status_code == 404
+
+    def test_delete_removes_event(self, client, tmp_path, monkeypatch):
+        fake = tmp_path / "calendario.json"
+        fake.write_text(open(app_module.CALENDARIO_PATH).read(), encoding="utf-8")
+        monkeypatch.setattr(app_module, "CALENDARIO_PATH", str(fake))
+        self._login(client)
+        rv = client.post("/api/calendario/delete", json={"event_id": "ev-005"})
+        assert rv.status_code == 200
+        assert _json(rv)["ok"] is True
+        # Ya no debe aparecer en el GET.
+        cal = _json(client.get("/api/calendario"))["calendario"]
+        all_ids = [e["id"] for s in cal["sections"] for e in s["events"]]
+        assert "ev-005" not in all_ids
+
+    def test_delete_rejects_unknown_event(self, client, tmp_path, monkeypatch):
+        fake = tmp_path / "calendario.json"
+        fake.write_text(open(app_module.CALENDARIO_PATH).read(), encoding="utf-8")
+        monkeypatch.setattr(app_module, "CALENDARIO_PATH", str(fake))
+        self._login(client)
+        rv = client.post("/api/calendario/delete", json={"event_id": "ev-zzz"})
+        assert rv.status_code == 404

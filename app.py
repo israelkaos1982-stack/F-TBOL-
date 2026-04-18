@@ -1,10 +1,12 @@
-from flask import Flask, render_template, redirect, url_for, request, jsonify, abort
+from flask import Flask, render_template, redirect, url_for, request, jsonify, abort, session
 from flask_sqlalchemy import SQLAlchemy
 import random
 import os
 import json
 import unicodedata
+import uuid
 from datetime import datetime, timezone
+from functools import wraps
 
 from jugadores_data import jugadores_por_equipo
 from logica_liga import calcular_tabla, obtener_resultados_ia
@@ -34,6 +36,14 @@ if not _db_url:
 
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# `secret_key` es obligatoria para que Flask pueda firmar las cookies
+# de sesión (y por tanto para que la sesión admin sobreviva entre
+# peticiones). Se puede sobreescribir con la env var `SECRET_KEY` en
+# producción para que distintos deploys compartan sesiones si hace
+# falta (normalmente no hace falta — cada deploy sale con una
+# secret_key nueva generada en tiempo de import).
+app.secret_key = os.environ.get("SECRET_KEY") or uuid.uuid4().hex
 # Postgres en Railway cierra conexiones ociosas al cabo de unos minutos.
 # `pool_pre_ping` evita errores "server closed the connection unexpectedly"
 # haciendo un ping barato antes de cada consulta; `pool_recycle` recicla
@@ -1265,6 +1275,276 @@ def inject_shield_data():
         "escudos_aliases": ALIASES_ESCUDOS_RAW,
         "escudo_default": ESCUDO_DEFAULT,
     }
+
+
+# ══════════════════════════════════════════════════════════════════
+# ADMIN SESSION (PIN 747)
+# ══════════════════════════════════════════════════════════════════
+# Antes la comprobación del PIN 747 era puramente cliente-side
+# (`window._adm` en JS). Ahora la duplicamos en servidor vía
+# `session['admin']` para poder proteger endpoints de escritura
+# (editar/añadir/borrar eventos del calendario). El cliente sigue
+# controlando qué UI se muestra; el servidor controla qué
+# peticiones acepta.
+ADMIN_PIN = "747"
+
+def _is_admin():
+    """Devuelve True si la sesión Flask actual tiene el flag admin."""
+    return bool(session.get("admin"))
+
+def admin_required(fn):
+    """Decorador: responde 403 si la sesión no es admin.
+    Se usa en POST/DELETE del calendario; los GET son públicos."""
+    @wraps(fn)
+    def _wrap(*args, **kwargs):
+        if not _is_admin():
+            return jsonify({"ok": False, "error": "admin requerido"}), 403
+        return fn(*args, **kwargs)
+    return _wrap
+
+@app.context_processor
+def inject_admin_flag():
+    """Expone `is_admin` en todas las plantillas para que el ✏️ del
+    calendario (y cualquier otro control admin) se pinte solo cuando
+    haya sesión activa."""
+    return {"is_admin": _is_admin()}
+
+@app.route("/api/admin/status", methods=["GET"])
+def api_admin_status():
+    """El cliente puede preguntar si está logueado como admin sin
+    revelar el PIN."""
+    return jsonify({"admin": _is_admin()})
+
+@app.route("/api/admin/login", methods=["POST"])
+def api_admin_login():
+    """Valida el PIN 747. Si coincide, setea `session['admin']=True`
+    y la cookie de sesión Flask firmada protege todas las peticiones
+    siguientes. No hay rate-limiting (uso personal entre amigos)."""
+    body = request.get_json(silent=True) or {}
+    pin = str(body.get("pin") or "").strip()
+    if pin != ADMIN_PIN:
+        return jsonify({"ok": False, "error": "pin incorrecto"}), 401
+    session["admin"] = True
+    return jsonify({"ok": True, "admin": True})
+
+@app.route("/api/admin/logout", methods=["POST"])
+def api_admin_logout():
+    """Limpia el flag admin de la sesión. No destruye la sesión
+    entera para no romper otras posibles claves."""
+    session.pop("admin", None)
+    return jsonify({"ok": True, "admin": False})
+
+
+# ══════════════════════════════════════════════════════════════════
+# CALENDARIO EDITABLE (calendario.json en raíz del proyecto)
+# ══════════════════════════════════════════════════════════════════
+# El admin puede añadir, editar y borrar eventos desde la pantalla
+# AGENDA 32-33 vía fetch a /api/calendario/*. La fuente de verdad es
+# `calendario.json` en la raíz del proyecto; los cambios lo
+# sobreescriben atómicamente (write tmp + rename) para evitar estados
+# corruptos si el contenedor muere a mitad de escritura.
+CALENDARIO_PATH = os.path.join(basedir, "calendario.json")
+CALENDARIO_DEFAULT = {"version": 1, "season": "32-33", "sections": []}
+# Iconos válidos para eventos (debe coincidir con el <select> del UI
+# de edición). No impedimos otros iconos pero sí vetamos strings
+# absurdamente largas.
+CALENDARIO_VALID_ICONS = {"⚽", "🏆", "🇪🇺", "🌍", "🤝", "🔵", "🟤", "🟡"}
+CALENDARIO_VALID_WEATHERS = {"☀️", "🌧", "❄️"}
+
+def load_calendario():
+    """Carga `calendario.json`. Si no existe o está corrupto, devuelve
+    el esqueleto por defecto (no rompe el render de la agenda)."""
+    try:
+        with open(CALENDARIO_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return json.loads(json.dumps(CALENDARIO_DEFAULT))
+    if not isinstance(data, dict):
+        return json.loads(json.dumps(CALENDARIO_DEFAULT))
+    data.setdefault("version", 1)
+    data.setdefault("season", "32-33")
+    if not isinstance(data.get("sections"), list):
+        data["sections"] = []
+    return data
+
+def save_calendario(data):
+    """Escribe atómicamente el calendario a disco.
+    `fsync + rename` evitan dejar un JSON truncado si el proceso muere."""
+    payload = json.dumps(data, ensure_ascii=False, indent=2)
+    tmp = CALENDARIO_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(payload)
+        try:
+            f.flush()
+            os.fsync(f.fileno())
+        except OSError:
+            pass
+    os.replace(tmp, CALENDARIO_PATH)
+
+def _find_section(data, section_id):
+    for s in data.get("sections") or []:
+        if s.get("id") == section_id:
+            return s
+    return None
+
+def _find_event(data, event_id):
+    """Devuelve `(section, event, index)` o `(None, None, -1)`."""
+    for s in data.get("sections") or []:
+        evs = s.get("events") or []
+        for i, ev in enumerate(evs):
+            if ev.get("id") == event_id:
+                return s, ev, i
+    return None, None, -1
+
+def _next_event_id(data):
+    """Genera un id `ev-XXX` único incrementando el máximo existente."""
+    max_n = 0
+    for s in data.get("sections") or []:
+        for ev in s.get("events") or []:
+            eid = str(ev.get("id") or "")
+            if eid.startswith("ev-"):
+                try:
+                    n = int(eid.split("-", 1)[1])
+                    if n > max_n:
+                        max_n = n
+                except ValueError:
+                    pass
+    return "ev-" + str(max_n + 1).zfill(3)
+
+def _normalize_event_fields(body):
+    """Sanea y valida los campos del body de una petición add/edit.
+    Devuelve `(fields_dict, error_msg)`."""
+    date = str(body.get("date") or "").strip()
+    name = str(body.get("name") or "").strip()
+    icon = str(body.get("icon") or "").strip()
+    weather = str(body.get("weather") or "").strip()
+    if not date:
+        return None, "falta fecha"
+    if not name:
+        return None, "falta nombre"
+    if not icon:
+        return None, "falta icono"
+    if not weather:
+        return None, "falta clima"
+    # Cap de longitud anti-abuso.
+    if len(date) > 20 or len(name) > 120 or len(icon) > 16 or len(weather) > 16:
+        return None, "campos demasiado largos"
+    return {"date": date, "name": name, "icon": icon, "weather": weather}, None
+
+@app.route("/api/calendario", methods=["GET"])
+def api_calendario_get():
+    """Público: devuelve el calendario entero. El GET se usa tanto
+    desde la UI pública como desde el modo edición admin para
+    refrescar tras un cambio."""
+    return jsonify({"ok": True, "calendario": load_calendario()})
+
+@app.route("/api/calendario/add", methods=["POST"])
+@admin_required
+def api_calendario_add():
+    """Añade un evento a una sección. Body:
+    `{section_id, date, icon, name, weather}`. Devuelve el evento
+    creado con el id asignado."""
+    body = request.get_json(silent=True) or {}
+    section_id = str(body.get("section_id") or "").strip()
+    if not section_id:
+        return jsonify({"ok": False, "error": "falta section_id"}), 400
+    fields, err = _normalize_event_fields(body)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    data = load_calendario()
+    sec = _find_section(data, section_id)
+    if sec is None:
+        return jsonify({"ok": False, "error": "sección no encontrada"}), 404
+    new_evt = {"id": _next_event_id(data)}
+    new_evt.update(fields)
+    sec.setdefault("events", []).append(new_evt)
+    save_calendario(data)
+    return jsonify({"ok": True, "event": new_evt, "section_id": section_id})
+
+@app.route("/api/calendario/edit", methods=["POST"])
+@admin_required
+def api_calendario_edit():
+    """Edita un evento existente in-place. Body:
+    `{event_id, date, icon, name, weather}`."""
+    body = request.get_json(silent=True) or {}
+    event_id = str(body.get("event_id") or "").strip()
+    if not event_id:
+        return jsonify({"ok": False, "error": "falta event_id"}), 400
+    fields, err = _normalize_event_fields(body)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    data = load_calendario()
+    sec, ev, _idx = _find_event(data, event_id)
+    if ev is None:
+        return jsonify({"ok": False, "error": "evento no encontrado"}), 404
+    ev.update(fields)
+    save_calendario(data)
+    return jsonify({"ok": True, "event": ev, "section_id": sec.get("id")})
+
+@app.route("/api/calendario/delete", methods=["POST"])
+@admin_required
+def api_calendario_delete():
+    """Elimina un evento por id. Body: `{event_id}`.
+    Se hace POST (no DELETE) por sencillez del cliente (fetch sin
+    necesidad de métodos extra ni preflight CORS)."""
+    body = request.get_json(silent=True) or {}
+    event_id = str(body.get("event_id") or "").strip()
+    if not event_id:
+        return jsonify({"ok": False, "error": "falta event_id"}), 400
+    data = load_calendario()
+    sec, ev, idx = _find_event(data, event_id)
+    if ev is None:
+        return jsonify({"ok": False, "error": "evento no encontrado"}), 404
+    sec["events"].pop(idx)
+    save_calendario(data)
+    return jsonify({"ok": True, "event_id": event_id, "section_id": sec.get("id")})
+
+
+@app.context_processor
+def inject_calendario():
+    """Expone el calendario en las plantillas para el render SSR de
+    la pantalla AGENDA 32-33 (mismo HTML que antes estaba hardcoded,
+    ahora se genera con un loop Jinja a partir del JSON)."""
+    return {
+        "calendario_data": load_calendario(),
+        "CALENDARIO_VALID_ICONS": sorted(CALENDARIO_VALID_ICONS),
+        "CALENDARIO_VALID_WEATHERS": sorted(CALENDARIO_VALID_WEATHERS),
+    }
+
+
+# Mapas icon→clase y clima→clase usados en el render de la agenda y
+# también desde el cliente para recomputar la fila tras un add/edit.
+_AGENDA_ICON_CLASS_MAP = {
+    "⚽": "ag-liga",
+    "🏆": "ag-copa",
+    "🇪🇺": "ag-eur",
+    "🔵": "ag-eur",
+    "🌍": "ag-sel",
+    "🤝": "ag-amist",
+    "🟤": "ag-recopa",
+    "🟡": "ag-inter",
+}
+_AGENDA_WEATHER_CLASS_MAP = {
+    "🌧": "ag-rain",
+    "❄️": "ag-snow",
+}
+
+@app.template_filter("agenda_row_class")
+def agenda_row_class(event):
+    """Devuelve las clases CSS para un evento del calendario, p.ej.
+    `ag-r ag-liga ag-rain`. Usado por Jinja al pintar cada fila y
+    también por el filtro `tojson` en el bootstrap JS para que el
+    cliente pueda reconstruir la misma clase al editar sin recargar."""
+    if not isinstance(event, dict):
+        return "ag-r"
+    parts = ["ag-r"]
+    icon = (event.get("icon") or "").strip()
+    if icon in _AGENDA_ICON_CLASS_MAP:
+        parts.append(_AGENDA_ICON_CLASS_MAP[icon])
+    wx = (event.get("weather") or "").strip()
+    if wx in _AGENDA_WEATHER_CLASS_MAP:
+        parts.append(_AGENDA_WEATHER_CLASS_MAP[wx])
+    return " ".join(parts)
 
 # --- RUTAS ---
 # ── LIVE STATE API (compartido entre dispositivos) ──────────────

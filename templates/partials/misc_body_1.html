@@ -7147,22 +7147,20 @@ Tottenham
       if (visMatch)    visMatch.style.display    = 'none';
       if (trainLbl)    trainLbl.textContent      = '🏁 FIN DE TEMPORADA';
     } else {
-      /* Si el evento es `ag-torneo` y Bayern ha elegido el torneo que
-         cubre esa fecha, resolvemos la flag + nombre reales; si no,
-         queda el genérico 🌞 Torneo Verano. */
+      /* El HUD debe reflejar EXACTAMENTE lo que muestra la AGENDA
+         32-33 para esa fecha (la AGENDA es la única fuente de verdad).
+         Si el evento es `ag-torneo` y Bayern ha elegido el torneo que
+         cubre esa fecha, resolvemos la bandera + nombre reales del
+         torneo (p. ej. "🇬🇧 Premier Summer Series"). Si no está
+         picked, se queda con el label genérico "🌞 Torneo
+         Pretemporada · J1" — igual que la AGENDA. NO degradamos a
+         entrenamiento: si la agenda dice que hay partido, hay partido. */
       var tourInfo = (evt.typeCls === 'ag-torneo') ? resolveTourEvent(evt.date) : null;
       var evtIcon  = tourInfo ? tourInfo.flag : evt.type.icon;
       var evtLabel = tourInfo ? (tourInfo.name + ' · ' + evt.label) : evt.label;
-      /* Un día `ag-torneo` en el que Bayern NO participa (no eligió el
-         torneo que cubre esa fecha) se degrada a entrenamiento. */
-      var torneoSinPick = (evt.typeCls === 'ag-torneo') && !tourInfo;
-      if (torneoSinPick) {
-        evtIcon  = '🏋️';
-        evtLabel = 'Entrenamiento (torneo no elegido)';
-      }
       if (matchEl) matchEl.textContent = evtIcon + ' ' + evtLabel + ' · ' + evt.date;
 
-      if (!evt.type.bayernPlays || torneoSinPick) {
+      if (!evt.type.bayernPlays) {
         /* Selecciones / día de descanso del club → escena de
            entrenamiento con etiqueta contextual. */
         if (visTraining) visTraining.style.display = '';
@@ -7232,17 +7230,37 @@ Tottenham
     }
     if (e.target && e.target.id === 'munich-play-btn') {
       /* JUGAR PARTIDO: solo tiene sentido en eventos donde el Bayern
-         juega. En días de Selecciones el botón lo avisa. */
+         juega. En días de Selecciones el botón lo avisa. El flujo
+         antes auto-completaba el partido (alert "Partido completado")
+         sin que el usuario jugara nada — el usuario lo llamó "simular
+         solo" y no lo quiere. Ahora el botón pide el resultado real
+         (goles a favor / en contra) que el usuario habrá jugado en
+         eFootball, y con ese marcador avanza la agenda y bonifica la
+         valoración solo si ha habido empate o victoria. */
       var evt = state.events[state.eventIdx];
-      if (!evt) { alert('Temporada completada. 🏁'); return; }
+      if (!evt) { alert('Temporada completada. \ud83c\udfc1'); return; }
       if (!evt.type.bayernPlays) {
         alert('Hoy hay Selecciones — los jugadores del Bayern están fuera. Usa \u27a1\ufe0f SIGUIENTE DÍA.');
         return;
       }
-      state.rating = Math.min(RATING_MAX, state.rating + 0.15);
+      var gfRaw = prompt('⚽ ' + evt.label + ' · ' + evt.date + '\n\nGoles Bayern:');
+      if (gfRaw === null) return;
+      var gcRaw = prompt('⚽ ' + evt.label + ' · ' + evt.date + '\n\nGoles rival:');
+      if (gcRaw === null) return;
+      var gf = parseInt(gfRaw, 10);
+      var gc = parseInt(gcRaw, 10);
+      if (isNaN(gf) || isNaN(gc) || gf < 0 || gc < 0) {
+        alert('Marcador inválido. Introduce dos números (p. ej. 2 y 1).');
+        return;
+      }
+      var resIcon, deltaRating;
+      if (gf > gc)      { resIcon = '✅ VICTORIA';  deltaRating = 0.20; }
+      else if (gf < gc) { resIcon = '❌ DERROTA';   deltaRating = 0.00; }
+      else              { resIcon = '🟰 EMPATE';    deltaRating = 0.08; }
+      state.rating = Math.min(RATING_MAX, state.rating + deltaRating);
       if (state.eventIdx < state.events.length - 1) state.eventIdx += 1;
       updateHud();
-      alert('✅ Partido completado: ' + evt.label);
+      alert(resIcon + ' ' + gf + '-' + gc + '\n' + evt.label);
     }
   });
 

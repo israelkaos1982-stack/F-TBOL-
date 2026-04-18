@@ -6083,6 +6083,15 @@ Tottenham
     opacity:0.4;pointer-events:none;transition:opacity .2s;
   }
   #s-munich .munich-tour-confirm.ready{opacity:1;pointer-events:auto;}
+  /* Botón "cambiar torneos": aparece debajo de JUGAR/SIGUIENTE cuando
+     los 2 torneos ya están confirmados. Permite reabrir el picker. */
+  #s-munich .munich-tour-reset{
+    display:none;margin-top:8px;padding:8px 10px;width:100%;
+    background:rgba(240,192,64,0.08);border:1px dashed rgba(240,192,64,0.38);
+    color:rgba(240,192,64,0.85);font-family:Oswald,sans-serif;
+    font-size:11px;letter-spacing:2px;border-radius:8px;cursor:pointer;
+  }
+  #s-munich .munich-tour-reset.show{display:block;}
 
   /* Modal de información del torneo */
   .munich-tour-ov{
@@ -6275,6 +6284,8 @@ Tottenham
     <button class="btn-play" id="munich-play-btn">⚽ JUGAR PARTIDO</button>
     <button class="btn-next" id="munich-next-day-btn">➡️ SIGUIENTE DÍA</button>
   </div>
+  <button type="button" class="munich-tour-reset" id="munich-tour-reset"
+          onclick="window.muTourReset()">🔄 Cambiar torneos de pretemporada</button>
 </section>
 </div>
 <script>
@@ -6894,14 +6905,17 @@ Tottenham
      guarda en localStorage para no pedirla otra vez por sesión. */
   function renderTourPicker() {
     var pk = getEl('munich-tour-picker');
+    var resetBtn = getEl('munich-tour-reset');
     if (!pk) return;
     /* Mostrar solo si aún no hay torneos confirmados. Una vez elegidos
        2, ocultamos el picker y el flujo normal de la agenda continúa. */
     if (state.pickedTours.length >= 2) {
       pk.classList.remove('show');
+      if (resetBtn) resetBtn.classList.add('show');
       return;
     }
     pk.classList.add('show');
+    if (resetBtn) resetBtn.classList.remove('show');
     var cards = pk.querySelectorAll('.munich-tour-card');
     cards.forEach(function(c){
       var id = c.getAttribute('data-tour');
@@ -6941,6 +6955,18 @@ Tottenham
     updateHud();
     var names = state.pickedTours.map(function(id){ return SUMMER_TOURS[id].name; }).join(' + ');
     alert('✅ Torneos de pretemporada: ' + names);
+  };
+
+  /* Vuelve a abrir el picker: limpia picks confirmados (el localStorage
+     también) y deja el estado como si fuera la primera vez, para que
+     el usuario pueda elegir otros 2 torneos. */
+  window.muTourReset = function() {
+    if (!confirm('¿Volver a elegir los 2 torneos de pretemporada?\nSe perderá la selección actual.')) return;
+    state.pickedTours = [];
+    state.tempPicks   = [];
+    savePickedTours([]);
+    renderTourPicker();
+    updateHud();
   };
 
   window.muTourInfo = function(id) {
@@ -7121,9 +7147,12 @@ Tottenham
       }
       return;
     }
-    /* Torneos ya elegidos → nos aseguramos de ocultar el picker. */
+    /* Torneos ya elegidos → ocultamos picker y mostramos el botón
+       de "Cambiar torneos" por si el usuario se arrepiente. */
     var pkEl = getEl('munich-tour-picker');
     if (pkEl) pkEl.classList.remove('show');
+    var resetBtnEl = getEl('munich-tour-reset');
+    if (resetBtnEl) resetBtnEl.classList.add('show');
 
     var evt = state.events[state.eventIdx];
     if (!evt) {

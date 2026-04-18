@@ -1348,7 +1348,7 @@ CALENDARIO_DEFAULT = {"version": 1, "season": "32-33", "sections": []}
 # Iconos válidos para eventos (debe coincidir con el <select> del UI
 # de edición). No impedimos otros iconos pero sí vetamos strings
 # absurdamente largas.
-CALENDARIO_VALID_ICONS = {"⚽", "🏆", "🇪🇺", "🌍", "🤝", "🔵", "🟤", "🟡", "🏃", "💤"}
+CALENDARIO_VALID_ICONS = {"⚽", "🏆", "🇪🇺", "🌍", "🤝", "🔵", "🟤", "🟡", "🌞", "🏃", "💤"}
 CALENDARIO_VALID_WEATHERS = {"☀️", "🌧", "❄️"}
 
 # Abreviaturas de mes en español → índice 0..11 (Ene=0). Usado para
@@ -1574,6 +1574,7 @@ _AGENDA_ICON_CLASS_MAP = {
     "🤝": "ag-amist",
     "🟤": "ag-recopa",
     "🟡": "ag-inter",
+    "🌞": "ag-torneo",
     "🏃": "ag-train",
     "💤": "ag-rest",
 }

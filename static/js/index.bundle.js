@@ -4958,30 +4958,41 @@ var POS_LABEL = {
   'del': '⚡ DELANTEROS'
 };
 
-function makePlantRow(num, nombre, posClass, poder) {
+function makePlantRow(num, nombre, posClass, poder, stats) {
   var baja = _bajaTipo(nombre) || '';
   var bajaClass = baja ? ' baja-' + baja : '';
   var bajaIco   = baja === 'lesion' ? '🚑' : baja === 'sancion' ? '🟨' : baja === 'expulsion' ? '🟥' : '';
   var btnClass  = 'plant-baja-btn' + (baja ? ' ' + baja : '');
   var badgeTxt  = _bajaBadgeText(nombre);
-  var span = function(cls, content) {
-    return '<span class="plant-stat zero"><span class="' + cls + '" data-global="0" data-liga="0" data-copa="0" data-uecl="0" data-super="0" hidden></span>' + content + '</span>';
+  /* `stats` (si se pasa) es el objeto devuelto por getPlayerStats():
+     {pj,gol,pen,fk,mvp,ta,tr,imbat,penSaved}. Si no hay datos se
+     rellena con 0s, como antes. La clase .zero se quita cuando el
+     valor es >0 para quitar el color apagado y dejarlo destacado. */
+  var s = stats || {};
+  var n = function(k){ var v = parseInt(s[k], 10); return isNaN(v) ? 0 : v; };
+  var span = function(cls, val) {
+    var v = parseInt(val, 10) || 0;
+    var zero = v > 0 ? '' : ' zero';
+    return '<span class="plant-stat' + zero + '"><span class="' + cls + '" data-global="' + v + '" data-liga="' + v + '" data-copa="0" data-uecl="0" data-super="0" hidden></span>' + v + '</span>';
   };
+  var pens   = n('pen');      /* penaltis marcados */
+  var pensT  = n('penTirados'); if (!pensT) pensT = pens;
+  var penFrac = '<span class="plant-stat' + (pens > 0 ? '' : ' zero') + ' frac"><span class="ps-pen-gol" data-global="' + pens + '" data-liga="' + pens + '" data-copa="0" data-uecl="0" data-super="0" data-tirado="' + pensT + '" hidden></span>' + pens + '/' + pensT + '</span>';
   return '<div class="plant-row ' + posClass + bajaClass + '" data-player="' + nombre.replace(/"/g,'&quot;') + '">'
     + '<span class="plant-num">' + num + '</span>'
     + '<span class="plant-name">' + nombre
       + (badgeTxt ? ' <span class="plant-baja-badge">' + badgeTxt + '</span>' : '<span class="plant-baja-badge" style="display:none"></span>')
     + '</span>'
-    + span((posClass === 'por' ? 'ps-cs' : 'ps-gol'),'0')
-    + span('ps-yel','0')
-    + span('ps-red','0')
-    + span('ps-mvp','0')
+    + (posClass === 'por' ? span('ps-cs', n('imbat')) : span('ps-gol', n('gol')))
+    + span('ps-yel', n('ta'))
+    + span('ps-red', n('tr'))
+    + span('ps-mvp', n('mvp'))
     + '<span class="plant-stat poder zero">' + (poder || 70) + '</span>'
-    + '<span class="plant-stat zero frac"><span class="ps-pen-gol" data-global="0" data-liga="0" data-copa="0" data-uecl="0" data-super="0" data-tirado="0" hidden></span>0/0</span>'
-    + span('ps-pen-prov','0')
-    + span('ps-pen-parado','0')
-    + span('ps-falta-gol','0')
-    + span('ps-propia','0')
+    + penFrac
+    + span('ps-pen-prov', n('penProv'))
+    + span('ps-pen-parado', n('penSaved'))
+    + span('ps-falta-gol', n('fk'))
+    + span('ps-propia', n('propia'))
     + '<button class="' + btnClass + '" title="Marcar baja" onclick="window.openBajaModal(this.closest(\'.plant-row\'),\'' + nombre.replace(/'/g,"\\'") + '\')">' + bajaIco + '</button>'
     + '</div>';
 }
@@ -5032,7 +5043,16 @@ function syncSquadToScreen(screenId, teamName) {
         prevPos = curPos;
       }
     } else {
-      html += makePlantRow(e[0], e[1], curPos, e[2] || 70);
+      /* Si existe `getPlayerStats` (definido en misc_body_1.html),
+         pasamos los stats reales del storage compartido
+         `ef_player_stats_v1` — la MISMA fuente que usa el modal del
+         editor de Liga. Así goles/tarjetas/MVP suben en ambas vistas.
+         Si no existe, makePlantRow rellena 0s. */
+      var playerStats = null;
+      if (typeof window.getPlayerStats === 'function') {
+        try { playerStats = window.getPlayerStats(teamName, e[0]); } catch(_){}
+      }
+      html += makePlantRow(e[0], e[1], curPos, e[2] || 70, playerStats);
     }
   }
 

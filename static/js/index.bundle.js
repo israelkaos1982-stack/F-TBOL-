@@ -5072,7 +5072,11 @@ function syncSquadToScreen(screenId, teamName) {
 
 // Mapa screenId → teamName
 var SCREEN_SQUAD_MAP = {
-  's-munich':        'Bayern Munich',
+  /* 's-munich' se omite a propósito: la pantalla del Bayern es un
+     HUD tipo Arena (no un listado de jugadores), y dejarla aquí hace
+     que `syncSquadToScreen` inyecte los porteros/defensas/medios del
+     Bayern Munich debajo del HUD (usa el fallback .sec-hdr + siguiente
+     DIV). El usuario no quiere ver la plantilla en esa pantalla. */
   's-arsenal':       'Arsenal',
   's-sporting':      'Sporting CP',
   's-madrid':        'Real Madrid',

@@ -8350,6 +8350,8 @@
       <option value="🔵">🔵 Previa Champions</option>
       <option value="🟤">🟤 Recopa Europa</option>
       <option value="🟡">🟡 Intercontinental</option>
+      <option value="🏃">🏃 Entrenamiento</option>
+      <option value="💤">💤 Descanso</option>
     </select>
     <label style="display:block;font-size:10px;letter-spacing:2px;color:#b090ff;margin-bottom:4px;">NOMBRE</label>
     <input id="ag-f-name" type="text" placeholder="Liga — J1"
@@ -8424,9 +8426,27 @@
 
   var ICON_TO_CLASS = {
     '⚽':'ag-liga', '🏆':'ag-copa', '🇪🇺':'ag-eur', '🔵':'ag-eur',
-    '🌍':'ag-sel',  '🤝':'ag-amist','🟤':'ag-recopa','🟡':'ag-inter'
+    '🌍':'ag-sel',  '🤝':'ag-amist','🟤':'ag-recopa','🟡':'ag-inter',
+    '🏃':'ag-train','💤':'ag-rest'
   };
   var WX_TO_CLASS = { '🌧':'ag-rain', '❄️':'ag-snow' };
+
+  /* Orden cronológico para abreviaturas "Jul", "Ago", etc. Mismo
+     mapeo que el backend para que cliente y servidor ordenen igual. */
+  var SPANISH_MONTH_NUM = {
+    'ene':0,'feb':1,'mar':2,'abr':3,'may':4,'jun':5,
+    'jul':6,'ago':7,'sep':8,'oct':9,'nov':10,'dic':11
+  };
+  function parseEventDate(s){
+    var parts = String(s==null?'':s).trim().split(/\s+/);
+    if (parts.length < 2) return null;
+    var d = parseInt(parts[0], 10);
+    if (isNaN(d)) return null;
+    var k = parts[1].toLowerCase().replace(/\./g,'').slice(0,3);
+    var m = SPANISH_MONTH_NUM[k];
+    if (m == null) return null;
+    return [m, d];
+  }
 
   /* Estado del formulario actual: modo='add'→targetSectionId /
      modo='edit'→targetEventId. Un único modal para ambos casos. */
@@ -8544,7 +8564,7 @@
       payload.event_id = _form.eventId;
       _post('/api/calendario/edit', payload).then(function(j){
         if (!j || !j.ok) return;
-        updateEventRow(j.event);
+        updateEventRow(j.event, j.section_id);
         window.agHideForm();
       });
     }
@@ -8565,7 +8585,8 @@
     var secHdr = document.querySelector('#s-agenda .ag-season[data-section-id="'+sectionId+'"]');
     if (!secHdr) return;
     /* Insertamos la fila justo antes del `.ag-add-row` de esa sección
-       (está al final de la lista de eventos de la sección). */
+       (está al final de la lista de eventos de la sección). Luego
+       `sortSectionRows` la recoloca por fecha. */
     var addRow = document.querySelector('#s-agenda .ag-add-row[data-section-id="'+sectionId+'"]');
     var row = document.createElement('div');
     row.className = rowClassFor(event);
@@ -8576,14 +8597,51 @@
     } else {
       secHdr.parentNode.appendChild(row);
     }
+    sortSectionRows(sectionId);
     recountSections();
   }
 
-  function updateEventRow(event){
+  function updateEventRow(event, sectionId){
     var row = document.querySelector('#s-agenda .ag-r[data-event-id="'+event.id+'"]');
     if (!row) return;
     row.className = rowClassFor(event);
     row.innerHTML = buildRowHtml(event);
+    if (sectionId) sortSectionRows(sectionId);
+  }
+
+  function sortSectionRows(sectionId){
+    /* Reordena las filas de una sección por fecha cronológica. El
+       ancla es el mes de la primera fila existente (mismo criterio
+       que el backend) para respetar secciones que cruzan año. */
+    var secHdr = document.querySelector('#s-agenda .ag-season[data-section-id="'+sectionId+'"]');
+    if (!secHdr) return;
+    var addRow = document.querySelector('#s-agenda .ag-add-row[data-section-id="'+sectionId+'"]');
+    if (!addRow || addRow.parentNode !== secHdr.parentNode) return;
+    var parent = addRow.parentNode;
+    var rows = [];
+    var n = secHdr.nextElementSibling;
+    while (n && n !== addRow) {
+      if (n.classList && n.classList.contains('ag-r') && n.hasAttribute('data-event-id')) {
+        rows.push(n);
+      }
+      n = n.nextElementSibling;
+    }
+    if (rows.length < 2) return;
+    var anchor = null;
+    for (var i = 0; i < rows.length; i++) {
+      var p0 = parseEventDate((rows[i].querySelector('.ag-date')||{}).textContent);
+      if (p0) { anchor = p0[0]; break; }
+    }
+    if (anchor == null) return;
+    rows.sort(function(a, b){
+      var pa = parseEventDate((a.querySelector('.ag-date')||{}).textContent) || [99, 99];
+      var pb = parseEventDate((b.querySelector('.ag-date')||{}).textContent) || [99, 99];
+      var oa = ((pa[0] - anchor) % 12 + 12) % 12;
+      var ob = ((pb[0] - anchor) % 12 + 12) % 12;
+      if (oa !== ob) return oa - ob;
+      return pa[1] - pb[1];
+    });
+    rows.forEach(function(r){ parent.insertBefore(r, addRow); });
   }
 
   function recountSections(){

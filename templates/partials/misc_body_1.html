@@ -2501,35 +2501,48 @@ window.pG = function(fn) {
 <span class="sc-emoji">⭐</span><span class="sc-label">Superliga</span><span class="sc-arr">▶</span>
 </div>
 
-<!-- ═══ TORNEOS DE VERANO ═══
-     Agrupa los 3 torneos de pretemporada. La caja exterior lleva un
-     degradado amarillo/dorado; cada sub-caja tiene los colores de la
-     bandera del país anfitrión (🇺🇸 azul-rojo-blanco, 🇬🇧 azul-rojo
-     -blanco, 🇪🇸 rojo-amarillo). -->
+<!-- ═══ TORNEOS DE VERANO (acordeón) ═══
+     Caja plegada al final del listado; al pulsarla se despliegan, en
+     su interior, 3 sub-cajas (una por torneo con los colores de la
+     bandera). Usa la helper `tog(id)` que ya existe en bundle.js:
+     añade/quita `.open` al elemento y al `#<id>-arr`. -->
+<style>
+  .sc-torneos-verano-body{display:none;margin-top:8px;}
+  .sc-torneos-verano-body.open{display:block;}
+  .sc-torneos-verano-arr{transition:transform .18s ease;display:inline-block;}
+  .sc-torneos-verano-arr.open{transform:rotate(90deg);}
+</style>
 <div class="sc-torneos-verano-group"
      style="margin-top:10px;padding:10px 10px 8px;border-radius:10px;
             background:linear-gradient(135deg,#2a1f00 0%,#7a5a00 25%,#f0c040 50%,#c89020 75%,#2a1f00 100%);
             border:1px solid #f0c040;
             box-shadow:0 0 18px rgba(240,192,64,.28);">
-  <div style="font-family:Oswald,sans-serif;font-size:13px;font-weight:700;
-              letter-spacing:3px;color:#1a1000;text-align:center;
-              padding:4px 0 10px;text-shadow:0 1px 0 rgba(255,230,140,.6);">
-    🌞 TORNEOS DE VERANO
+  <div onclick="tog('torneos-verano-body')"
+       style="display:flex;align-items:center;gap:10px;cursor:pointer;
+              font-family:Oswald,sans-serif;font-size:13px;font-weight:700;
+              letter-spacing:3px;color:#1a1000;padding:6px 8px;
+              text-shadow:0 1px 0 rgba(255,230,140,.6);user-select:none;">
+    <span style="font-size:18px;">🌞</span>
+    <span style="flex:1;">TORNEOS DE VERANO</span>
+    <span class="sc-torneos-verano-arr" id="torneos-verano-body-arr"
+          style="font-size:14px;">▶</span>
   </div>
-  <div class="submenu-card sc-sct"
-       style="background:linear-gradient(135deg,#0a1a3a 0%,#b22234 35%,#ffffff 50%,#3c3b6e 65%,#0a1a3a 100%) !important;border-color:#b22234 !important;margin-bottom:6px;"
-       onclick="go('s-sct')">
-    <span class="sc-emoji">🇺🇸</span><span class="sc-label">Soccer Champions Tour</span><span class="sc-arr">▶</span>
-  </div>
-  <div class="submenu-card sc-pss"
-       style="background:linear-gradient(135deg,#012169 0%,#ce1124 35%,#ffffff 50%,#ce1124 65%,#012169 100%) !important;border-color:#ce1124 !important;margin-bottom:6px;"
-       onclick="go('s-pss')">
-    <span class="sc-emoji">🇬🇧</span><span class="sc-label">Premier Summer Series</span><span class="sc-arr">▶</span>
-  </div>
-  <div class="submenu-card sc-jg"
-       style="background:linear-gradient(135deg,#aa151b 0%,#f1bf00 35%,#ffffff 50%,#f1bf00 65%,#aa151b 100%) !important;border-color:#f1bf00 !important;margin-bottom:0;"
-       onclick="go('s-jg')">
-    <span class="sc-emoji">🇪🇸</span><span class="sc-label">Trofeo Joan Gamper</span><span class="sc-arr">▶</span>
+  <div id="torneos-verano-body" class="sc-torneos-verano-body">
+    <div class="submenu-card sc-sct"
+         style="background:linear-gradient(135deg,#0a1a3a 0%,#b22234 35%,#ffffff 50%,#3c3b6e 65%,#0a1a3a 100%) !important;border-color:#b22234 !important;margin-bottom:6px;"
+         onclick="go('s-sct')">
+      <span class="sc-emoji">🇺🇸</span><span class="sc-label">Soccer Champions Tour</span><span class="sc-arr">▶</span>
+    </div>
+    <div class="submenu-card sc-pss"
+         style="background:linear-gradient(135deg,#012169 0%,#ce1124 35%,#ffffff 50%,#ce1124 65%,#012169 100%) !important;border-color:#ce1124 !important;margin-bottom:6px;"
+         onclick="go('s-pss')">
+      <span class="sc-emoji">🇬🇧</span><span class="sc-label">Premier Summer Series</span><span class="sc-arr">▶</span>
+    </div>
+    <div class="submenu-card sc-jg"
+         style="background:linear-gradient(135deg,#aa151b 0%,#f1bf00 35%,#ffffff 50%,#f1bf00 65%,#aa151b 100%) !important;border-color:#f1bf00 !important;margin-bottom:0;"
+         onclick="go('s-jg')">
+      <span class="sc-emoji">🇪🇸</span><span class="sc-label">Trofeo Joan Gamper</span><span class="sc-arr">▶</span>
+    </div>
   </div>
 </div>
 </div>

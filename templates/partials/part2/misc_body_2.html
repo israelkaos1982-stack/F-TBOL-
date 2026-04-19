@@ -4619,7 +4619,7 @@
         var sqB=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.away])||[];
         _genActiveMk=mk;
         window.showMvpForceGen(mk, st.home, st.away, sqA, sqB, st.sc.a, st.sc.b, function(team,num,name){
-          var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
+          var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
           st.events.push({min:90,label:'MVP del Partido',type:'mvp',team:team,num:num,name:name,ico:'⭐',id:window._evtId()});
           _mlFinishMatchGen(mk, winner);
         });
@@ -5028,7 +5028,7 @@
   // Compartir marcador en el DESCANSO del modo espectador (gm)
   window._gmShareHalfTime = function() {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
-                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
     var comp = _gm.comp || '';
     var lines = [];
     if (comp) lines.push(comp + ' - Jornada ' + (_gm.j||''));
@@ -5062,7 +5062,7 @@
 
   function _gmEvtRow(e, homeTeam, awayTeam) {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
-                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
     var ico = icoMap[e.type] || '📋';
     var tName = e.team === 'a' ? homeTeam : awayTeam;
     return '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:13px;">'
@@ -5164,7 +5164,7 @@
 
   window._gmShareFinal = function() {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
-                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
     var comp = _gm.comp || '';
     var lines = [];
     if (comp) lines.push(comp + ' - Jornada ' + (_gm.j||''));
@@ -5998,7 +5998,7 @@
     /* Rellenar acta de la tarjeta genérica (ml-acta-list-{mk}) con los eventos del gm */
     var _icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
                    'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',
-                   roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
+                   roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
     Object.keys(_mlStates).forEach(function(mk){
       var st = _mlStates[mk];
       if (st.j === _gm.j && st.home === _gm.home && st.away === _gm.away) {
@@ -6504,7 +6504,7 @@
     });
     /* Volcar al estado del gm-modal */
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
-                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨','d-amarilla':'🟨🟥',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨','d-amarilla':'🟨🟥',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
     var list = document.getElementById('gm-acta-list');
     if (list) list.innerHTML = '';
     _gm.events = [];

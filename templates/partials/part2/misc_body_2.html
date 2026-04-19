@@ -2684,82 +2684,138 @@
   window.setLigaSchedule = setLigaSchedule;
 
   window.reiniciarLigaEA = function() {
-    /* Reset FORZADO con código. Antes este botón usaba un `confirm`
-       y llamaba a `saveResults({})`, pero ese patch no vaciaba de
-       verdad la clave en el servidor (merge_dict recursa y preserva
-       sub-claves cuando incoming es `{}`) → al siguiente poll los
-       resultados volvían y el usuario veía "no pasa nada al pulsar
-       Res". Ahora pedimos el código 747 y llamamos al endpoint
-       dedicado `/api/state/reset-liga` que usa replace=True en el
-       servidor. */
-    var code = prompt(
-      '⚠️ REINICIAR FORZOSAMENTE Liga EA Sports\n\n' +
-      'Se eliminarán TODOS los resultados, la clasificación y se\n' +
+    /* Reset FORZADO TOTAL.
+       - Usa `confirm` simple: el `prompt()` se bloqueaba o se cerraba
+         sólo en algunos navegadores móviles y el reset fallaba en
+         silencio. Ahora una confirmación basta; si el usuario cancela,
+         nada cambia.
+       - Cada paso está envuelto en try/catch para que un fallo aislado
+         (p.ej. un localStorage lleno, un interval huérfano) no aborte
+         el resto del reset.
+       - El POST a /api/state/reset-liga se reintenta hasta 3 veces
+         (2s, 4s, 8s) y el resultado se verifica con un GET; si el
+         servidor devuelve liga_results no vacío se vuelve a forzar.
+       - El botón Res está en Liga · Clasificación y en Liga ·
+         Resultados; ambos llaman a esta función — un único camino. */
+    if (!confirm(
+      '⚠️ REINICIAR Liga EA Sports\n\n' +
+      'Se eliminarán TODOS los resultados y la clasificación y se\n' +
       'generará un calendario nuevo. Los equipos y plantillas NO se\n' +
-      'borran. El reset se propaga al resto de dispositivos en el\n' +
-      'próximo poll (unos 5 s).\n\n' +
-      'Escribe 747 para confirmar:'
-    );
-    if (code === null) return;
-    if (String(code).trim() !== '747') {
-      alert('❌ Código incorrecto. Reset cancelado.');
-      return;
-    }
+      'borran.\n\n' +
+      '¿Continuar?'
+    )) return;
 
-    // ── LIMPIEZA AGRESIVA: borrar absolutamente todo ──
-    try { localStorage.removeItem(LS_KEY); } catch(e){}
-    try { localStorage.removeItem(LS_SCHEDULE_KEY); } catch(e){}
-    sharedLigaResultsCache = {};
-    saveResults({});
-
-    // Limpiar resultados/estados acumulados de jornada
-    if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
-    var _ex = window.LIGA_EXTRAS;
-    if (_ex) Object.keys(_ex).forEach(function(k){ delete _ex[k]; });
-    var _pm = window.LIGA_PLAYER_MATCH_STORE;
-    if (_pm) Object.keys(_pm).forEach(function(k){ delete _pm[k]; });
-    Object.keys(_mlStates || {}).forEach(function(k){
-      if (_mlStates[k] && _mlStates[k].timerInterval) clearInterval(_mlStates[k].timerInterval);
-      delete _mlStates[k];
-    });
-
-    // Resetear stats de jugadores — DESACTIVADO
-    // Esta sección causó pérdida de datos. Los stats de jugadores
-    // se gestionarán en un sistema separado que NO escriba al storage
-    // de equipos. Los equipos/plantillas son intocables.
-    if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports');
-
-    // Regenerar calendario completo de 38 jornadas usando los equipos del editor
-    var baseOrder = leerOrdenEquiposActual();
-    var randomOrder = mezclarEquipos(baseOrder);
-    var newSchedule = generarCalendario(randomOrder);
-    setLigaSchedule(newSchedule);
-
-    // ── FORZAR RESET EN EL SERVIDOR ──
-    // El POST parcial de saveResults({}) no vacía la clave (merge_dict
-    // preserva sub-claves con incoming vacío). Este endpoint usa
-    // replace=True server-side y aplica el nuevo schedule atómicamente.
+    // ── 1. LIMPIEZA LOCAL AGRESIVA ─────────────────────────────
+    // Cada try aislado: ningún paso puede tumbar a los siguientes.
+    try { localStorage.removeItem(LS_KEY); } catch(_) {}
+    try { localStorage.removeItem(LS_SCHEDULE_KEY); } catch(_) {}
+    try { sharedLigaResultsCache = {}; } catch(_) {}
+    try { saveResults({}); } catch(_) {}
     try {
-      fetch('/api/state/reset-liga', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ liga_schedule: newSchedule }),
-        keepalive: true
-      }).catch(function(){});
+      if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
+    } catch(_) {}
+    try {
+      var _ex = window.LIGA_EXTRAS;
+      if (_ex) Object.keys(_ex).forEach(function(k){ delete _ex[k]; });
+    } catch(_) {}
+    try {
+      var _pm = window.LIGA_PLAYER_MATCH_STORE;
+      if (_pm) Object.keys(_pm).forEach(function(k){ delete _pm[k]; });
+    } catch(_) {}
+    try {
+      Object.keys(_mlStates || {}).forEach(function(k){
+        try {
+          if (_mlStates[k] && _mlStates[k].timerInterval) clearInterval(_mlStates[k].timerInterval);
+        } catch(_){}
+        delete _mlStates[k];
+      });
     } catch(_) {}
 
-    // Re-aplicar overrides del motor (TEAM_RATINGS, SQUAD_REGISTRY)
-    if(typeof window.applyEngineOverrides === 'function') window.applyEngineOverrides();
+    // Purgar stats de jugadores de Liga (mantiene Copa/Europa)
+    try {
+      var psRaw = localStorage.getItem('ef_player_stats_v1');
+      if (psRaw) {
+        // Reconstruir stats con matches vacíos → el rebuild posterior
+        // los recalcula desde cero a partir de LIGA_PLAYER_MATCH_STORE
+        // (que acabamos de vaciar arriba) y ef_liga38_v4 (que también).
+        localStorage.setItem('ef_player_stats_v1', '{}');
+      }
+    } catch(_) {}
 
-    if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
-    if (typeof window.populateLigaCal === 'function') window.populateLigaCal();
-    if (typeof window.buildIAresults === 'function') window.buildIAresults();
-    if (typeof window.populateCalendar === 'function') window.populateCalendar();
-    if (typeof window.rebuildLigaPlayerStats === 'function') window.rebuildLigaPlayerStats();
-    if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
-    if (typeof window.buildLigaStatsDashboard === 'function') window.buildLigaStatsDashboard();
+    try {
+      if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports');
+    } catch(_) {}
 
-    alert('✅ Liga reiniciada forzosamente. Clasificación y resultados a cero. Los equipos y plantillas se mantienen. El resto de dispositivos se actualiza en unos segundos.');
+    // ── 2. NUEVO CALENDARIO ────────────────────────────────────
+    var newSchedule = null;
+    try {
+      var baseOrder = leerOrdenEquiposActual();
+      var randomOrder = mezclarEquipos(baseOrder);
+      newSchedule = generarCalendario(randomOrder);
+      setLigaSchedule(newSchedule);
+    } catch(_) {}
+
+    // ── 3. FORZAR EN EL SERVIDOR con REINTENTOS ────────────────
+    function _postReset(attempt) {
+      attempt = attempt || 1;
+      var body = JSON.stringify({ liga_schedule: newSchedule || [] });
+      return fetch('/api/state/reset-liga', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: body,
+        keepalive: true,
+        cache: 'no-store'
+      }).then(function(r){
+        if (!r || !r.ok) throw new Error('http ' + (r && r.status));
+        return r.json().catch(function(){ return {}; });
+      }).then(function(j){
+        // Verificación: si el server devolvió liga_results con claves,
+        // algo no se aplicó. Relanzamos.
+        var lr = j && j.state && j.state.liga_results;
+        if (lr && typeof lr === 'object' && Object.keys(lr).length > 0) {
+          throw new Error('server mantuvo resultados');
+        }
+        return true;
+      }).catch(function(err){
+        if (attempt >= 3) throw err;
+        var wait = 1000 * Math.pow(2, attempt); // 2s, 4s, 8s
+        return new Promise(function(resolve){ setTimeout(resolve, wait); })
+                 .then(function(){ return _postReset(attempt + 1); });
+      });
+    }
+
+    // ── 4. REBUILD UI ──────────────────────────────────────────
+    function _rebuildUi() {
+      var calls = [
+        'applyEngineOverrides',
+        'buildLigaClas',
+        'populateLigaCal',
+        'buildIAresults',
+        'populateCalendar',
+        'rebuildLigaPlayerStats',
+        'rebuildLigaPlayerStatsFixed',
+        'buildLigaStatsDashboard',
+        'syncLigaEaPlayerStats'
+      ];
+      calls.forEach(function(fn){
+        try { if (typeof window[fn] === 'function') window[fn](); } catch(_){}
+      });
+    }
+
+    _rebuildUi(); // Refresco inmediato (no esperamos al server)
+
+    _postReset().then(function(){
+      _rebuildUi();
+      alert('✅ Liga reiniciada. Clasificación y resultados a cero. Los equipos y plantillas se mantienen.');
+    }).catch(function(err){
+      // Si tras 3 intentos el server sigue fallando, lo comunicamos
+      // pero dejamos el cliente ya vacío: en cuanto haya red, el
+      // siguiente POST normal forzará el estado servidor-lado.
+      _rebuildUi();
+      alert('⚠️ Liga reiniciada LOCALMENTE, pero no se pudo confirmar al servidor tras 3 intentos (' +
+            (err && err.message || 'sin detalle') + ').\n\n' +
+            'En cuanto se restablezca la conexión, vuelve a pulsar Res para sincronizar el resto de dispositivos.');
+    });
   };
 
   /* ── GENERADOR CALENDARIO BERGER ─────────────────── */

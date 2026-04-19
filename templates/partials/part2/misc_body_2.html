@@ -2584,6 +2584,11 @@
       })
       .then(function(payload) {
         if (!payload) return;
+        // Si el poll quedó pausado DURANTE la petición (p.ej. el usuario
+        // pulsó Res mientras el fetch estaba en vuelo), descartar el
+        // payload — aplicarlo repoblaría LS_KEY con el estado anterior
+        // al reset y tendríamos el bug de "la clasificación vuelve".
+        if (_ligaStatePollPaused) return;
         if (payload.updated_at) _ligaStateLastSeenAt = payload.updated_at;
         var state = payload.state && typeof payload.state === 'object' ? payload.state : null;
         if (!state) return;

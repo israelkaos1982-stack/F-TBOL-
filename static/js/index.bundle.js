@@ -49,6 +49,107 @@ window.confirmMvpForce = function(btn) {
 // ══════════════════════════════════════════════════════════════
 
 
+// ══ PORTERÍA IMBATIDA OBLIGATORIA ═════════════════════════════
+// Helper para el flujo humano (HvIA / HvH): si un equipo ha encajado
+// 0 goles y aún no hay evento 'imbat' en el acta, se obliga al usuario
+// a elegir al portero. Los equipos IA se resuelven auto con el GK de
+// mayor poder vía window.sqFromRegistryFull.
+window._imbatForceCallback = null;
+
+window._getTopGk = function(teamName) {
+  if (typeof window.sqFromRegistryFull === 'function') {
+    var full = window.sqFromRegistryFull(teamName) || [];
+    var gks = full.filter(function(p){ return p[2] === 'P'; })
+                  .sort(function(a,b){ return (b[3]||0) - (a[3]||0); });
+    if (gks.length) return { num: String(gks[0][0]||''), name: String(gks[0][1]||'') };
+  }
+  return { num: '', name: '' };
+};
+
+window.showImbatForce = function(teamName, onConfirm) {
+  var prev = document.getElementById('imbat-force-ov');
+  if (prev) prev.remove();
+  var gks = [];
+  if (typeof window.sqFromRegistryFull === 'function') {
+    var full = window.sqFromRegistryFull(teamName) || [];
+    gks = full.filter(function(p){ return p[2] === 'P'; })
+              .sort(function(a,b){ return (b[3]||0) - (a[3]||0); });
+  }
+  if (!gks.length) {
+    // Sin porteros en registry — fallback silencioso con GK por defecto
+    if (onConfirm) onConfirm('1', 'Portero');
+    return;
+  }
+  var ov = document.createElement('div');
+  ov.id = 'imbat-force-ov';
+  ov.className = 'mvp-force-overlay show';
+  var btns = gks.map(function(g){
+    var num = String(g[0]||'');
+    var name = String(g[1]||'');
+    return '<button class="mvp-pl-btn" data-num="'+num+'" data-name="'+name.replace(/"/g,'&quot;')
+         + '" onclick="window.confirmImbatForce(this)">'
+         + '<span class="mvp-pl-num">'+num+'</span>'
+         + '<span class="mvp-pl-name">'+name+'</span>'
+         + '</button>';
+  }).join('');
+  ov.innerHTML = '<div class="mvp-force-header">'
+    + '<div class="mvp-force-star">🧤</div>'
+    + '<div class="mvp-force-title">PORTERÍA IMBATIDA</div>'
+    + '<div class="mvp-force-sub">' + teamName + ' no ha encajado goles</div>'
+    + '</div>'
+    + '<div class="mvp-force-warn">⚠️ Elige el portero que ha mantenido la portería a cero.</div>'
+    + '<div class="mvp-force-teams"><div><div class="mvp-pl-list">' + btns + '</div></div></div>';
+  document.body.appendChild(ov);
+  window._imbatForceCallback = onConfirm;
+};
+
+window.confirmImbatForce = function(btn) {
+  var num = btn.getAttribute('data-num');
+  var name = btn.getAttribute('data-name');
+  var ov = document.getElementById('imbat-force-ov');
+  if (ov) ov.remove();
+  if (window._imbatForceCallback) {
+    var cb = window._imbatForceCallback;
+    window._imbatForceCallback = null;
+    cb(num, name);
+  }
+};
+
+// Procesa secuencialmente las dos posibles porterías imbatidas antes
+// de llamar a onDone(). pushEv(evObj) es el callback que añade el
+// evento al acta del partido y refresca el render.
+window._ensureImbatEvents = function(opts, onDone){
+  // opts: { events, home, away, scoreA, scoreB, pushEv }
+  var evts = opts.events || [];
+  var hasA = evts.some(function(e){ return e && e.type==='imbat' && e.team==='a'; });
+  var hasB = evts.some(function(e){ return e && e.type==='imbat' && e.team==='b'; });
+  var esH = (typeof window.esHumano === 'function') ? window.esHumano : function(){ return false; };
+
+  function _step(side){
+    var teamName = side==='a' ? opts.home : opts.away;
+    var concededZero = side==='a' ? (opts.scoreB === 0) : (opts.scoreA === 0);
+    var already = side==='a' ? hasA : hasB;
+    if (!concededZero || already) return Promise.resolve();
+    if (esH(teamName)) {
+      return new Promise(function(resolve){
+        window.showImbatForce(teamName, function(num, name){
+          opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:num, player:name, name:name });
+          resolve();
+        });
+      });
+    } else {
+      var gk = window._getTopGk(teamName);
+      if (gk.name) opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:gk.num, player:gk.name, name:gk.name });
+      return Promise.resolve();
+    }
+  }
+  _step('a').then(function(){ return _step('b'); }).then(function(){
+    if (typeof onDone === 'function') onDone();
+  });
+};
+// ══════════════════════════════════════════════════════════════
+
+
 /* script block 2 */
 (function(){
 var _sc={a:0,b:0};var _rojas={a:0,b:0};var _events=[];var _timerSec=0;var _timerInterval=null;var _timerRunning=false;
@@ -388,6 +489,20 @@ function _addMarker_j1m1(txt){var list=document.getElementById('ml-acta-list-j1m
 window.mlActivateET_j1m1=function(){if(_etDone||_matchFinished)return;_etDone=true;_etPhase=true;if(_timerRunning){clearInterval(_timerInterval);_startInterval_j1m1();}if(_timerSec<MAX_NORMAL)_timerSec=MAX_NORMAL;_addMarker_j1m1('— PRÓRROGA —');var btn=document.getElementById('ml-btn-et-j1m1');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var penBtn=document.getElementById('ml-btn-pen-j1m1');if(penBtn)penBtn.style.display='';_renderTimer_j1m1();};
 window.mlShowPenPanel_j1m1=function(){var pp=document.getElementById('ml-pen-panel-j1m1');if(pp)pp.classList.add('show');var penBtn=document.getElementById('ml-btn-pen-j1m1');if(penBtn){penBtn.disabled=true;penBtn.style.opacity='0.35';}var addBtn=document.getElementById('ml-add-btn-j1m1');if(addBtn){addBtn.disabled=true;addBtn.style.opacity='0.35';}};
 window.mlEndMatch_j1m1=function(winner){if(_matchFinished)return;
+  // ── Portería imbatida obligatoria antes del MVP ──
+  var _needsImb=((_sc.b===0&&!_events.some(function(e){return e&&e.type==='imbat'&&e.team==='a';}))
+              ||(_sc.a===0&&!_events.some(function(e){return e&&e.type==='imbat'&&e.team==='b';})));
+  if(_needsImb&&typeof window._ensureImbatEvents==='function'){
+    window._ensureImbatEvents({
+      events:_events, home:TEAM_A_NAME, away:TEAM_B_NAME,
+      scoreA:_sc.a, scoreB:_sc.b,
+      pushEv:function(ev){
+        _events.push({min:90,label:'🧤 Portería Imbatida',type:'imbat',team:ev.team,num:ev.num,name:ev.player,ico:'🧤',id:Date.now()+Math.random()});
+        _renderActa_j1m1();
+      }
+    }, function(){ window.mlEndMatch_j1m1(winner); });
+    return;
+  }
   // ── MVP obligatorio ──
   var hasMvp=_events.some(function(e){return e.type==='mvp';});
   if(!hasMvp){
@@ -1067,6 +1182,7 @@ var STAT_CLASS_MAP = {
     'yel': 'ps-yel',
     'red': 'ps-red',
     'mvp': 'ps-mvp',
+    'cs':  'ps-cs',
     'pen-prov': 'ps-pen-prov',
     'pen-parado': 'ps-pen-parado',
     'pen-gol': 'ps-pen-gol',
@@ -1077,6 +1193,7 @@ var STAT_CLASS_MAP = {
 
   var LIGA_STAT_CATEGORIES = [
     { key:'goles-total', title:'Goleadores',            icon:'⚽️', top:6 },
+    { key:'cs',          title:'Portería imbatida',     icon:'🧤', top:6 },
     { key:'yel',         title:'Tarjetas amarillas',    icon:'🟨', top:6 },
     { key:'red',         title:'Tarjetas rojas',        icon:'🟥', top:6 },
     { key:'pen-prov',    title:'Penaltis provocados',   icon:'🤦‍♂️🥅', top:6 },
@@ -2778,6 +2895,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     else if(type === 'pen-prov') inc(row, 'pen-prov', 1);
     else if(type === 'propia') inc(row, 'propia', 1);
     else if(type === 'mvp') inc(row, 'mvp', 1);
+    else if(type === 'imbat') inc(row, 'cs', 1);
     else if(type === 'card'){
       if(ico === '🟨') inc(row, 'yel', 1);
       else if(ico === '🟥') inc(row, 'red', 1);
@@ -2868,11 +2986,14 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     Object.keys(store).forEach(function(matchKey){
       var data = store[matchKey] || {};
       done[matchKey] = true;
+      var hasImbatEvt = (data.evts || []).some(function(e){ return e && e.type === 'imbat'; });
       (data.evts || []).forEach(function(ev){
         var teamName = canonicalTeamName(ev && (ev.realTeam || ev.teamName || ev.team_label || (ev.team === 'a' ? data.teamA : ev.team === 'b' ? data.teamB : ev.team)) || '');
         applyEvent(index, teamName, ev);
       });
-      applyCleanSheetFromMatch(data);
+      // Sólo aplicar el cálculo por marcador si el acta no trae el evento
+      // 'imbat' explícito — evita doble conteo ahora que el motor lo emite.
+      if (!hasImbatEvt) applyCleanSheetFromMatch(data);
       // MVP ya viene dentro de data.evts — NO aplicar de nuevo para evitar doble conteo
     });
 

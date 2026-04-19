@@ -2084,6 +2084,11 @@ window.pG = function(fn) {
           else if(type==='pen-gol'){p.gol++;p.pen++;}
           else if(type==='pen-parado') p.penSaved++;
           else if(type==='mvp') p.mvp++;
+          // 'sust' no incrementa contadores — sólo registra al jugador
+          // entrante (y al saliente) para que ambos reciban PJ.
+          if(type==='sust' && ev.playerOut){
+            getOrCreate(team, ev.playerOut);
+          }
         });
         if(m.mvpName && m.mvpTeam){
           var hasMvpEvt = (m.evts||[]).some(function(e){return e.type==='mvp';});
@@ -2120,11 +2125,67 @@ window.pG = function(fn) {
             else if(type==='pen-gol'){p.gol++;p.pen++;}
             else if(type==='pen-parado') p.penSaved++;
             else if(type==='mvp') p.mvp++;
+            // 'sust' — idem fuente 1: sólo registra el PJ del entrante
+            // y del saliente si viene en el evento.
+            if(type==='sust' && ev.playerOut){
+              getOrCreate(team, ev.playerOut);
+            }
           });
           if(r.mvp && r.mvpTeam) getOrCreate(r.mvpTeam, r.mvp).mvp++;
         });
       }
     } catch(_){}
+
+    // ── Portero titular: el de MAYOR valoración juega todos los partidos ──
+    // Recorremos todas las ligas (ligaExt_*) para localizar al portero con
+    // mayor poder en cada equipo que haya disputado partidos, y aseguramos
+    // que tenga entrada en `stats` para recibir PJ en el siguiente paso.
+    var _topGkCache = null;
+    function _buildTopGkCache(){
+      if(_topGkCache) return _topGkCache;
+      var cache = {}; // teamNorm → { name, power, displayTeam }
+      try {
+        for(var i=0; i<localStorage.length; i++){
+          var k = localStorage.key(i);
+          if(!k || k.indexOf('ligaExt_') !== 0) continue;
+          var raw = localStorage.getItem(k); if(!raw) continue;
+          var data; try { data = JSON.parse(raw); } catch(_) { continue; }
+          var teams = (data && data.teams) || [];
+          teams.forEach(function(t){
+            if(!t || !t.name || !Array.isArray(t.players)) return;
+            var tNorm = _normPS(t.name);
+            t.players.forEach(function(p){
+              if(!p || p.pos !== 'POR' || !p.name) return;
+              var pw = Number(p.power) || 0;
+              var cur = cache[tNorm];
+              if(!cur || pw > cur.power){
+                cache[tNorm] = { name: p.name, power: pw, displayTeam: t.name };
+              }
+            });
+          });
+        }
+      } catch(_){}
+      _topGkCache = cache;
+      return cache;
+    }
+
+    Object.keys(teamPJ).forEach(function(teamNorm){
+      if(!Object.keys(teamPJ[teamNorm]).length) return;
+      var gkCache = _buildTopGkCache();
+      var gk = gkCache[teamNorm];
+      if(!gk){
+        // Fuzzy match: la normalización del evento puede diferir
+        var ck = Object.keys(gkCache);
+        for(var i=0; i<ck.length; i++){
+          if(ck[i].indexOf(teamNorm) !== -1 || teamNorm.indexOf(ck[i]) !== -1){
+            gk = gkCache[ck[i]]; break;
+          }
+        }
+      }
+      if(!gk) return;
+      var key = teamNorm + '::' + _normPS(gk.name);
+      if(!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+    });
 
     // Assign PJ
     Object.keys(stats).forEach(function(key){

@@ -6885,12 +6885,83 @@
             events.push({ type:'lesion', min:evLes.min, player:lesName, team:evLes.team,
                           gradoNombre:evLes.gradoNombre, gradoEmoji:evLes.gradoEmoji,
                           partidos:evLes.partidos, grave:evLes.grave });
+            // Sustitución automática por lesión: si aplicarLesionEnSimulacion
+            // metió un suplente en active, emitimos el evento 'sust' para que
+            // el jugador entrante acumule PJ en las stats.
+            if (les.sustituto) {
+              events.push({
+                type:'sust', min:evLes.min, team:evLes.team,
+                player: les.sustituto[1] || '?', num: les.sustituto[0] || '',
+                playerOut: Array.isArray(evLes.player) ? (evLes.player[1] || '?') : lesName,
+                reason: 'lesion'
+              });
+              // Marcamos el suplente como consumido para que las subs
+              // planificadas más abajo no lo usen dos veces.
+              var consumedFrom = les.equipo === 'a' ? benA : benB;
+              var ci = consumedFrom.indexOf(les.sustituto);
+              if (ci >= 0) consumedFrom.splice(ci, 1);
+            }
           }
         }
       });
       // Refresh outfield after injury substitutions
       outA = getOutfield(activeA); if (!outA.length) outA = [['','Jugador A','F',76,'titular']];
       outB = getOutfield(activeB); if (!outB.length) outB = [['','Jugador B','F',76,'titular']];
+    }
+
+    // ── SUSTITUCIONES TÁCTICAS (hasta 4 por equipo, desde min 46) ──
+    // El técnico saca al más débil en ataque/medio/defensa y mete al
+    // siguiente suplente disponible. Así los partidos no los juegan
+    // siempre los mismos 11 y se reparten los PJ por toda la plantilla.
+    var maxSubs = 4;
+    function _rollSubMins(n, loMin, hiMin) {
+      var m = [];
+      for (var i = 0; i < n; i++) m.push(loMin + Math.floor(Math.random() * (hiMin - loMin + 1)));
+      m.sort(function(a,b){ return a - b; });
+      return m;
+    }
+    var benAOut = benA.filter(function(p){ return p[2] !== 'P'; });
+    var benBOut = benB.filter(function(p){ return p[2] !== 'P'; });
+    var plannedSubsA = Math.min(maxSubs, benAOut.length);
+    var plannedSubsB = Math.min(maxSubs, benBOut.length);
+    var subMinsA = _rollSubMins(plannedSubsA, 46, 85);
+    var subMinsB = _rollSubMins(plannedSubsB, 46, 85);
+    var subIdxA = 0, subIdxB = 0;
+    var plannedSubEvents = [];
+
+    function _applySubsUpTo(min) {
+      while (subIdxA < subMinsA.length && subMinsA[subIdxA] <= min) {
+        if (subIdxA < benAOut.length && outA.length) {
+          var weakest = outA.reduce(function(a,b){ return (a[3]||70) < (b[3]||70) ? a : b; });
+          var wi = outA.indexOf(weakest);
+          if (wi >= 0) outA.splice(wi, 1);
+          var incoming = benAOut[subIdxA];
+          outA.push(incoming);
+          plannedSubEvents.push({
+            type:'sust', min: subMinsA[subIdxA], team:'a',
+            player: incoming[1] || '?', num: incoming[0] || '',
+            playerOut: weakest[1] || '?', numOut: weakest[0] || '',
+            reason: 'tactica'
+          });
+        }
+        subIdxA++;
+      }
+      while (subIdxB < subMinsB.length && subMinsB[subIdxB] <= min) {
+        if (subIdxB < benBOut.length && outB.length) {
+          var weakestB = outB.reduce(function(a,b){ return (a[3]||70) < (b[3]||70) ? a : b; });
+          var wiB = outB.indexOf(weakestB);
+          if (wiB >= 0) outB.splice(wiB, 1);
+          var incomingB = benBOut[subIdxB];
+          outB.push(incomingB);
+          plannedSubEvents.push({
+            type:'sust', min: subMinsB[subIdxB], team:'b',
+            player: incomingB[1] || '?', num: incomingB[0] || '',
+            playerOut: weakestB[1] || '?', numOut: weakestB[0] || '',
+            reason: 'tactica'
+          });
+        }
+        subIdxB++;
+      }
     }
 
     // ── TARJETAS: 2-4 amarillas; máximo 1 roja por partido ────────
@@ -6922,49 +6993,65 @@
       });
     }
 
-    // Después: amarillas normales (2-4), excluyendo jugadores ya expulsados
-    // NO convertimos doble amarilla a roja aquí — todas las rojas vienen de simCtx.preReds
-    // para mantener sincronización con el marcador (que ya se calculó con la penalización)
+    // Pre-roll de minutos de amarillas y goles para poder aplicar las subs
+    // cronológicamente — así un suplente que entra en el 70' puede anotar
+    // o ver amarilla en el 78'.
     function _isExpelled(name) { return expelledA[name] !== undefined || expelledB[name] !== undefined; }
     var numYellow = Math.floor(Math.random() * 3) + 2;
-    var yellowsReceived = {};
+    var yellowSlots = [];
     for (var c = 0; c < numYellow; c++) {
-      var ct = Math.random() < 0.5 ? 'a' : 'b';
-      var csq = ct === 'a' ? outA : outB;
-      // Filtrar expulsados del pool de candidatos
-      var eligible = csq.filter(function(p){ return !_isExpelled(p[1]) && !yellowsReceived[p[1]]; });
-      if (!eligible.length) continue;
-      var cp = eligible[Math.floor(Math.random()*eligible.length)];
-      var cmin = Math.floor(Math.random()*80)+5;
-      events.push({ type:'amarilla', ico:'🟨', min:cmin, num:cp[0]||'', player:cp[1]||'?', team:ct });
-      yellowsReceived[cp[1]] = true;
+      yellowSlots.push({ kind:'yel', min: Math.floor(Math.random()*80) + 5,
+                         team: Math.random() < 0.5 ? 'a' : 'b' });
     }
 
-    // ── GOLES: minutoss aleatorios + selección ponderada ───────────
-    // Los jugadores expulsados antes del minuto del gol quedan excluidos
     var totalGoals = goalsA + goalsB;
     var goalMins = [];
     for (var i = 0; i < totalGoals; i++) goalMins.push(Math.floor(Math.random() * 88) + 2);
-    goalMins.sort(function(a,b){ return a-b; });
+    goalMins.sort(function(a,b){ return a - b; });
     var assign = [];
     for (var ga = 0; ga < goalsA; ga++) assign.push('a');
     for (var gb = 0; gb < goalsB; gb++) assign.push('b');
-    for (var s = assign.length - 1; s > 0; s--) { var t = Math.floor(Math.random()*(s+1)); var tmp=assign[s]; assign[s]=assign[t]; assign[t]=tmp; }
+    for (var s = assign.length - 1; s > 0; s--) {
+      var t = Math.floor(Math.random()*(s+1));
+      var tmp = assign[s]; assign[s] = assign[t]; assign[t] = tmp;
+    }
+    var goalSlots = assign.map(function(team, idx){
+      return { kind:'gol', min: goalMins[idx], team: team };
+    });
 
-    // Selección ponderada por poder en Liga (j1-j38), Copa y competiciones europeas
+    // Ordenar TODOS los eventos por minuto y procesar cronológicamente,
+    // aplicando subs antes de cada pick.
+    var slots = yellowSlots.concat(goalSlots)
+                           .sort(function(a,b){ return a.min - b.min; });
+    var yellowsReceived = {};
     var goalsPerPlayer = {};
 
-    assign.forEach(function(team, idx) {
-      var min = goalMins[idx];
-      var expMap = team === 'a' ? expelledA : expelledB;
-      var sq = team === 'a' ? outA : outB;
-      // Excluir jugadores que ya fueron expulsados antes del minuto del gol
-      var eligible = sq.filter(function(p){ return expMap[p[1]] === undefined || expMap[p[1]] > min; });
-      if (!eligible.length) eligible = sq;
-      var pl = _weightedScorerPick(eligible, team === 'a', goalsPerPlayer) || eligible[0] || sq[0];
-      goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
-      events.push({ type:'gol', min:min, num:pl[0]||'', player:pl[1]||'?', team:team });
+    slots.forEach(function(slot) {
+      _applySubsUpTo(slot.min);
+      var pool = slot.team === 'a' ? outA : outB;
+      var expMap = slot.team === 'a' ? expelledA : expelledB;
+      if (slot.kind === 'yel') {
+        var eligibleYel = pool.filter(function(p){ return !_isExpelled(p[1]) && !yellowsReceived[p[1]]; });
+        if (!eligibleYel.length) return;
+        var cp = eligibleYel[Math.floor(Math.random()*eligibleYel.length)];
+        events.push({ type:'amarilla', ico:'🟨', min:slot.min, num:cp[0]||'', player:cp[1]||'?', team:slot.team });
+        yellowsReceived[cp[1]] = true;
+      } else { // gol
+        var eligibleGol = pool.filter(function(p){ return expMap[p[1]] === undefined || expMap[p[1]] > slot.min; });
+        if (!eligibleGol.length) eligibleGol = pool;
+        var pl = _weightedScorerPick(eligibleGol, slot.team === 'a', goalsPerPlayer) || eligibleGol[0];
+        if (!pl) return;
+        goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
+        events.push({ type:'gol', min:slot.min, num:pl[0]||'', player:pl[1]||'?', team:slot.team });
+      }
     });
+
+    // Aplicar el resto de subs hasta el 90' (las que queden sin gatillar
+    // por falta de eventos tardíos siguen entrando: es fútbol real).
+    _applySubsUpTo(90);
+    // Añadir las subs al acta para que el sistema de stats pueda
+    // registrar PJ a los jugadores entrantes.
+    plannedSubEvents.forEach(function(e){ events.push(e); });
 
     events.sort(function(a,b){ return a.min - b.min; });
     var mvpScore = {}, mvpTeams2 = {};

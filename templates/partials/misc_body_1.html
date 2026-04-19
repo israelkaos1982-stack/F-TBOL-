@@ -4017,6 +4017,10 @@ window.pG = function(fn) {
       <label class="lext-label">Escudo (URL — p.ej. sofascore)</label>
       <input class="lext-input" id="lext-team-shield" placeholder="https://api.sofascore.app/api/v1/team/17/image" />
 
+      <label class="lext-label">Alias en eFootball (opcional — solo se muestra cuando el rival es Humano)</label>
+      <input class="lext-input" id="lext-team-efootball-alias" placeholder="Ej. AZ Alkmaar (si el equipo real no existe en eFootball)" />
+      <div class="lext-sub">Para equipos que no existen en eFootball. Escribe aquí el nombre del equipo similar que usas en el juego. Aparecerá bajo el nombre real <b>solo</b> en las tarjetas de partido cuando el rival sea un equipo Humano.</div>
+
       <label class="lext-label">Presupuesto del equipo (€ — valor para fichar el club)</label>
       <input class="lext-input" id="lext-team-budget" type="text" inputmode="numeric" placeholder="Ej. 1200000000" />
 
@@ -4234,6 +4238,37 @@ Tottenham
     LIGA_CACHE[k] = {teams:[], results:[]};
     return LIGA_CACHE[k];
   }
+
+  // Busca el alias de eFootball de un equipo en CUALQUIER liga guardada
+  // en ligaExt_*. Si el equipo no existe o no tiene alias, devuelve "".
+  // Lo usan las tarjetas de partido para mostrar el nombre del equipo
+  // que el admin usa en eFootball cuando el equipo real no existe en
+  // el juego (p.ej. "Talavera" en Primera Federación → "AZ Alkmaar").
+  window.getTeamEfootballAlias = function(teamName){
+    if(!teamName) return '';
+    var target = String(teamName).trim().toLowerCase();
+    try {
+      for(var i=0;i<localStorage.length;i++){
+        var key = localStorage.key(i);
+        if(!key || key.indexOf('ligaExt_') !== 0) continue;
+        if(key.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(key);
+        if(!raw) continue;
+        try {
+          var data = JSON.parse(raw);
+          var teams = data && Array.isArray(data.teams) ? data.teams : [];
+          for(var j=0;j<teams.length;j++){
+            var t = teams[j];
+            if(!t || !t.name) continue;
+            if(String(t.name).trim().toLowerCase() === target){
+              return String(t.efootballAlias||'').trim();
+            }
+          }
+        } catch(_){}
+      }
+    } catch(_){}
+    return '';
+  };
 
   function saveData(k,d){
     LIGA_CACHE[k] = d;
@@ -4869,6 +4904,7 @@ Tottenham
     document.getElementById('lext-team-pw-def').value='75';
     var selS = document.getElementById('lext-team-stadium'); if(selS) selS.value='';
     document.getElementById('lext-team-shield').value='';
+    var aliasEl = document.getElementById('lext-team-efootball-alias'); if(aliasEl) aliasEl.value='';
     var bud = document.getElementById('lext-team-budget'); if(bud) bud.value='';
     var ta = document.getElementById('lext-team-squad-paste'); if(ta) ta.value='';
     // Reset tipo a IA por defecto. El emoji se queda vacío hasta que
@@ -5030,6 +5066,8 @@ Tottenham
     var selS = document.getElementById('lext-team-stadium');
     if(selS) selS.value = t.stadium||'';
     document.getElementById('lext-team-shield').value = t.shield||'';
+    var aliasEl = document.getElementById('lext-team-efootball-alias');
+    if(aliasEl) aliasEl.value = t.efootballAlias||'';
     var bud = document.getElementById('lext-team-budget');
     if(bud) bud.value = t.budget ? String(t.budget) : '';
     document.getElementById('lext-team-squad-paste').value = '';
@@ -5151,6 +5189,8 @@ Tottenham
     var pwDef = parseInt(document.getElementById('lext-team-pw-def').value,10)||50;
     var stadium = (document.getElementById('lext-team-stadium').value||'').trim();
     var shield = document.getElementById('lext-team-shield').value.trim();
+    var efootballAliasEl = document.getElementById('lext-team-efootball-alias');
+    var efootballAlias = efootballAliasEl ? efootballAliasEl.value.trim() : '';
     var budgetRaw = (document.getElementById('lext-team-budget').value||'').replace(/[^\d]/g,'');
     var budget = budgetRaw ? parseInt(budgetRaw,10) : 0;
     var squadText = document.getElementById('lext-team-squad-paste').value;
@@ -5184,6 +5224,7 @@ Tottenham
       var t = data.teams.filter(function(x){return x.id===EDITING_TEAM_ID;})[0];
       if(t){
         t.name=name; t.stadium=stadium; t.shield=shield; t.budget=budget;
+        t.efootballAlias=efootballAlias;
         t.power=pwGlob; t.atk=pwAtk; t.mid=pwMid; t.def=pwDef;
         if(ligaEa){
           t.isHuman = (FORM_TIPO === 'human');
@@ -5202,7 +5243,7 @@ Tottenham
         }
       }
     } else {
-      var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,budget:budget,players:parsed};
+      var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
       if(ligaEa){
         newTeam.isHuman   = (FORM_TIPO === 'human');
         newTeam.humanEmoji = newTeam.isHuman ? FORM_HUMAN_EMOJI : '';

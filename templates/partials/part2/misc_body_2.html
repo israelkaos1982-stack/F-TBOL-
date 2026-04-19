@@ -7417,6 +7417,7 @@
     window.go = function (id) {
       if (_orig) _orig(id);
       if (id === 's-liga-clas') setTimeout(window.buildIAresults, 150);
+      if (id === 's-liga-resultados') setTimeout(window.buildIAresults, 150);
     };
   }
 
@@ -7495,17 +7496,36 @@
   window.buildIAresults = function () {
     var container = document.getElementById('ia-res-list');
     if (!container) return;
-    // Guard: si SCHEDULE se ha perdido (p.ej. tras un reset parcial
-    // en el que setLigaSchedule rechazó un schedule inválido), lo
-    // regeneramos en sitio para no dejar la pantalla vacía.
+    // Guard: si SCHEDULE se ha perdido, regenerarlo desde TEAMS.
     if (!Array.isArray(SCHEDULE) || SCHEDULE.length !== 38) {
       try {
         var _fallback = generarCalendario(TEAMS.slice());
         setLigaSchedule(_fallback);
       } catch(_) {}
+      // Si setLigaSchedule falló por cualquier razón, asignamos
+      // localmente para que al menos el render actual tenga datos.
+      if (!Array.isArray(SCHEDULE) || SCHEDULE.length !== 38) {
+        try { SCHEDULE = generarCalendario(TEAMS.slice()); } catch(__) {}
+      }
     }
     var html    = '';
-    var results = loadResults();
+    var results = {};
+    try { results = loadResults() || {}; } catch(_) { results = {}; }
+
+    // SAFETY NET FINAL: si aun así SCHEDULE sigue roto, pintamos los
+    // 38 botones vacíos — la pantalla NUNCA debe quedar en blanco.
+    var _scheduleOk = Array.isArray(SCHEDULE) && SCHEDULE.length === 38;
+    if (!_scheduleOk) {
+      for (var jj = 1; jj <= 38; jj++) {
+        html += '<div class="jblock"><button class="jbtn"'
+          + ' style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#2a0005,#6a0010,#a00018,#6a0010,#2a0005);border-left:3px solid #ff2244;">'
+          + '<img class="jbtn-ico" src="/static/img/logos/spain_la-liga.football-logos.cc.svg" alt="EA"> <b>Jornada ' + jj + '</b>'
+          + '<span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/10</span>'
+          + '</button></div>';
+      }
+      container.innerHTML = html;
+      return;
+    }
 
     for (var j = 1; j <= 38; j++) {
       if (!Array.isArray(SCHEDULE[j - 1])) continue; // fila malformada
@@ -7558,13 +7578,41 @@
     container.innerHTML = html
       || '<div style="padding:12px;color:#555;font-size:13px;">Sin partidos disponibles a\xfan</div>';
     /* Refresh jornada screen if currently open */
-    if (window._currentIAJornada && typeof window.openIAJornada === 'function') {
-      var iaScr = document.getElementById('s-liga-ia-jornada');
-      if (iaScr && iaScr.classList.contains('active')) {
-        window.openIAJornada(window._currentIAJornada);
+    try {
+      if (window._currentIAJornada && typeof window.openIAJornada === 'function') {
+        var iaScr = document.getElementById('s-liga-ia-jornada');
+        if (iaScr && iaScr.classList.contains('active')) {
+          window.openIAJornada(window._currentIAJornada);
+        }
       }
-    }
+    } catch(_) {}
   };
+
+  /* Wrap buildIAresults en un try/catch externo: aunque hay guards
+     internos, si algún cambio futuro introduce un error éste NO debe
+     dejar la pantalla vacía. Pintamos 38 botones fallback. */
+  (function(){
+    var _origBuildIA = window.buildIAresults;
+    window.buildIAresults = function(){
+      try { return _origBuildIA.apply(this, arguments); }
+      catch(err) {
+        try {
+          var cont = document.getElementById('ia-res-list');
+          if (!cont) return;
+          var h = '';
+          for (var j = 1; j <= 38; j++) {
+            h += '<div class="jblock"><button class="jbtn" onclick="window.openIAJornada(' + j + ')"'
+              + ' style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#2a0005,#6a0010,#a00018,#6a0010,#2a0005);border-left:3px solid #ff2244;">'
+              + '<img class="jbtn-ico" src="/static/img/logos/spain_la-liga.football-logos.cc.svg" alt="EA"> <b>Jornada ' + j + '</b>'
+              + '<span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/10</span>'
+              + '</button></div>';
+          }
+          cont.innerHTML = h;
+        } catch(_) {}
+        if (typeof console !== 'undefined') console.error('buildIAresults error:', err);
+      }
+    };
+  })();
 
   /* ── ABRIR JORNADA IA EN PANTALLA DEDICADA ─────────── */
   window.openIAJornada = function (j) {

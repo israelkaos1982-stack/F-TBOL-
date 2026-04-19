@@ -2619,19 +2619,28 @@
 
   /* Poll cada 5s mientras la pestaña está visible. Así los resultados
      simulados en otro dispositivo (PC simulando J1, por ejemplo) se
-     ven en este dispositivo (móvil) sin recargar la página. */
+     ven en este dispositivo (móvil) sin recargar la página.
+     `_ligaStatePollPaused` lo desactiva temporalmente — lo usa el
+     reset para que un poll intermedio no repopule los datos antes
+     de que el servidor procese la petición. */
   var _ligaStatePollInterval = null;
+  var _ligaStatePollPaused = false;
+  window._pauseLigaStatePoll = function(ms){
+    _ligaStatePollPaused = true;
+    setTimeout(function(){ _ligaStatePollPaused = false; }, Math.max(1000, ms || 15000));
+  };
   function _startLigaStatePoll() {
     if (_ligaStatePollInterval) return;
     _ligaStatePollInterval = setInterval(function(){
       if (document.hidden) return;
+      if (_ligaStatePollPaused) return;
       try { hydrateLigaStateFromBackend({ useSince: true }); } catch (_e) {}
     }, 5000);
   }
   /* Al volver del background, tirar de sincronización inmediata
      en lugar de esperar al próximo tick del setInterval. */
   document.addEventListener('visibilitychange', function(){
-    if (document.visibilityState === 'visible') {
+    if (document.visibilityState === 'visible' && !_ligaStatePollPaused) {
       try { hydrateLigaStateFromBackend({ useSince: true }); } catch (_e) {}
     }
   });
@@ -2704,6 +2713,12 @@
       'borran.\n\n' +
       '¿Continuar?'
     )) return;
+
+    // ── PAUSAR el poll de /api/state durante el reset ──
+    // Sin esto, un tick del poll (cada 5s) puede pillar el servidor
+    // antes de que procese el reset y repopula el cliente con el
+    // estado antiguo → al usuario le parece "que no hace nada".
+    try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(20000); } catch(_) {}
 
     // ── 1. LIMPIEZA LOCAL AGRESIVA ─────────────────────────────
     // Cada try aislado: ningún paso puede tumbar a los siguientes.

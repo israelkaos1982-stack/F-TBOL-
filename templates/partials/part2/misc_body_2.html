@@ -2718,7 +2718,7 @@
     // Sin esto, un tick del poll (cada 5s) puede pillar el servidor
     // antes de que procese el reset y repopula el cliente con el
     // estado antiguo → al usuario le parece "que no hace nada".
-    try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(20000); } catch(_) {}
+    try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(35000); } catch(_) {}
 
     // ── 1. LIMPIEZA LOCAL AGRESIVA ─────────────────────────────
     // Cada try aislado: ningún paso puede tumbar a los siguientes.
@@ -2771,6 +2771,20 @@
     } catch(_) {}
 
     // ── 3. FORZAR EN EL SERVIDOR con REINTENTOS ────────────────
+    //    a) POST /api/state/reset-liga (replace=True server-side).
+    //    b) GET /api/state para verificar que liga_results quedó vacío.
+    //    c) Si sigue con datos, se reintenta (hasta 5 intentos).
+    function _verifyCleanReset() {
+      return fetch('/api/state', { cache: 'no-store' })
+        .then(function(r){ return r && r.ok ? r.json() : null; })
+        .then(function(j){
+          var lr = j && j.state && j.state.liga_results;
+          if (lr && typeof lr === 'object' && Object.keys(lr).length > 0) {
+            throw new Error('GET: quedan ' + Object.keys(lr).length + ' resultados');
+          }
+          return true;
+        });
+    }
     function _postReset(attempt) {
       attempt = attempt || 1;
       var body = JSON.stringify({ liga_schedule: newSchedule || [] });
@@ -2784,16 +2798,15 @@
         if (!r || !r.ok) throw new Error('http ' + (r && r.status));
         return r.json().catch(function(){ return {}; });
       }).then(function(j){
-        // Verificación: si el server devolvió liga_results con claves,
-        // algo no se aplicó. Relanzamos.
         var lr = j && j.state && j.state.liga_results;
         if (lr && typeof lr === 'object' && Object.keys(lr).length > 0) {
-          throw new Error('server mantuvo resultados');
+          throw new Error('POST respondió con resultados');
         }
-        return true;
+        // Verificación adicional con GET por si hay cache o latencia.
+        return _verifyCleanReset();
       }).catch(function(err){
-        if (attempt >= 3) throw err;
-        var wait = 1000 * Math.pow(2, attempt); // 2s, 4s, 8s
+        if (attempt >= 5) throw err;
+        var wait = 500 * Math.pow(2, attempt); // 1s, 2s, 4s, 8s, 16s
         return new Promise(function(resolve){ setTimeout(resolve, wait); })
                  .then(function(){ return _postReset(attempt + 1); });
       });
@@ -3866,7 +3879,8 @@
   var _ICO_FALLBACK = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽',
     'pen-gol':'🥅⚽', 'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅',
     'pen-parado':'🖐🥅', amarilla:'🟨', 'd-amarilla':'🟨🟥',
-    damarilla:'🟨🟥', roja:'🟥', lesion:'🩹', mvp:'⭐' };
+    damarilla:'🟨🟥', roja:'🟥', lesion:'🩹', mvp:'⭐',
+    imbat:'🧤', sust:'🔁' };
 
   function _mlShowRemoteEventToast(ev, teamName, matchLabel) {
     if (!ev) return;
@@ -4592,7 +4606,7 @@
         var sqB=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.away])||[];
         _genActiveMk=mk;
         window.showMvpForceGen(mk, st.home, st.away, sqA, sqB, st.sc.a, st.sc.b, function(team,num,name){
-          var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+          var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
           st.events.push({min:90,label:'MVP del Partido',type:'mvp',team:team,num:num,name:name,ico:'⭐',id:window._evtId()});
           _mlFinishMatchGen(mk, winner);
         });
@@ -5001,7 +5015,7 @@
   // Compartir marcador en el DESCANSO del modo espectador (gm)
   window._gmShareHalfTime = function() {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
-                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
     var comp = _gm.comp || '';
     var lines = [];
     if (comp) lines.push(comp + ' - Jornada ' + (_gm.j||''));
@@ -5035,7 +5049,7 @@
 
   function _gmEvtRow(e, homeTeam, awayTeam) {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
-                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
     var ico = icoMap[e.type] || '📋';
     var tName = e.team === 'a' ? homeTeam : awayTeam;
     return '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:13px;">'
@@ -5137,7 +5151,7 @@
 
   window._gmShareFinal = function() {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
-                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
     var comp = _gm.comp || '';
     var lines = [];
     if (comp) lines.push(comp + ' - Jornada ' + (_gm.j||''));
@@ -5971,7 +5985,7 @@
     /* Rellenar acta de la tarjeta genérica (ml-acta-list-{mk}) con los eventos del gm */
     var _icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
                    'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',
-                   roja:'🟥',lesion:'🩹',mvp:'⭐'};
+                   roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
     Object.keys(_mlStates).forEach(function(mk){
       var st = _mlStates[mk];
       if (st.j === _gm.j && st.home === _gm.home && st.away === _gm.away) {
@@ -6477,7 +6491,7 @@
     });
     /* Volcar al estado del gm-modal */
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
-                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨','d-amarilla':'🟨🟥',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐'};
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨','d-amarilla':'🟨🟥',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'}
     var list = document.getElementById('gm-acta-list');
     if (list) list.innerHTML = '';
     _gm.events = [];
@@ -7625,7 +7639,7 @@
     var h = '';
     m.events.forEach(function(ev) {
       if (ev.type === 'mvp') return;
-      var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'propia' ? '&#9917;&#128683;' : ev.type === 'falta-gol' ? '&#9917;&#127919;' : ev.type === 'pen-gol' ? '&#9917;&#129349;' : ev.type === 'pen-fallo' ? '&#10060;&#129349;' : ev.type === 'pen-prov' ? '&#129318;&#129349;' : ev.type === 'pen-parado' ? '&#128400;&#129349;' : ev.type === 'amarilla' ? '&#129000;' : ev.type === 'd-amarilla' ? '&#129000;&#128997;' : ev.type === 'roja' ? '&#128997;' : ev.type === 'lesion' ? '&#129657;' : '&#11088;';
+      var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'propia' ? '&#9917;&#128683;' : ev.type === 'falta-gol' ? '&#9917;&#127919;' : ev.type === 'pen-gol' ? '&#9917;&#129349;' : ev.type === 'pen-fallo' ? '&#10060;&#129349;' : ev.type === 'pen-prov' ? '&#129318;&#129349;' : ev.type === 'pen-parado' ? '&#128400;&#129349;' : ev.type === 'amarilla' ? '&#129000;' : ev.type === 'd-amarilla' ? '&#129000;&#128997;' : ev.type === 'roja' ? '&#128997;' : ev.type === 'lesion' ? '&#129657;' : ev.type === 'imbat' ? '&#129508;' : ev.type === 'sust' ? '&#128257;' : '&#128203;';
       var lesColor = ev.type === 'lesion' ? (ev.lesGrado === 3 ? '#ff4444' : ev.lesGrado === 2 ? '#ff8c00' : '#ffd700') : '#fff';
       var lesExtra = (ev.type === 'lesion' && ev.lesDesc) ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + 'P)</span>' : '';
       /* Eventos anulados por VAR: mismo orden y jugador, pero con texto "ANULADA POR VAR" en rojo

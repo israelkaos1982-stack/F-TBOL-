@@ -5770,6 +5770,36 @@
 
   window.gmEndMatch = function () {
     if (_gm.finished) return;
+    // ── Portería imbatida obligatoria antes del MVP ──
+    // Si algún equipo ha encajado 0 goles, se fuerza el registro del
+    // portero (humano: overlay · IA: auto con el GK de mayor poder).
+    var needsImbat = (
+      (_gm.sc.b === 0 && !_gm.events.some(function(e){ return e && e.type==='imbat' && e.team==='a'; })) ||
+      (_gm.sc.a === 0 && !_gm.events.some(function(e){ return e && e.type==='imbat' && e.team==='b'; }))
+    );
+    if (needsImbat && typeof window._ensureImbatEvents === 'function') {
+      window._ensureImbatEvents({
+        events: _gm.events,
+        home: _gm.home, away: _gm.away,
+        scoreA: _gm.sc.a, scoreB: _gm.sc.b,
+        pushEv: function(ev){
+          ev.id = window._evtId();
+          ev.label = '🧤 Portería Imbatida';
+          _gm.events.push(ev);
+          var list = document.getElementById('gm-acta-list');
+          if (list) {
+            var li = document.createElement('div');
+            li.className = 'ml-evt-item';
+            li.innerHTML = '<span class="ml-evt-min">90\'</span>'
+              + '<span class="ml-evt-ico">🧤</span>'
+              + '<span class="ml-evt-name">Portería Imbatida — ' + ev.player + '</span>'
+              + '<span class="ml-evt-team">' + (ev.team === 'a' ? _gm.home : _gm.away) + '</span>';
+            list.appendChild(li);
+          }
+        }
+      }, function(){ window.gmEndMatch(); });
+      return;
+    }
     var mvpExists = _gm.events.some(function(e){ return e && e.type === 'mvp'; });
     if (!mvpExists) {
       alert('⭐ Debes elegir MVP antes de finalizar el acta.');
@@ -7079,6 +7109,31 @@
       mvp = mp?mp[1]:'?'; mvpTeamName = goalsA >= goalsB ? teamA : teamB;
     }
     var mvpSide = mvpTeamName === teamA ? 'a' : 'b';
+
+    // ── PORTERÍA IMBATIDA: antes del MVP, si un equipo encajó 0 goles
+    //    se registra el evento 🧤 con el portero titular (mayor poder).
+    function _topGk(teamNameLocal) {
+      if (typeof window.sqFromRegistryFull === 'function') {
+        var full = window.sqFromRegistryFull(teamNameLocal) || [];
+        var gks = full.filter(function(p){ return p[2] === 'P'; })
+                      .sort(function(a,b){ return (b[3]||0) - (a[3]||0); });
+        if (gks.length) return { num: gks[0][0] || '', name: gks[0][1] || '' };
+      }
+      return { num: '', name: '' };
+    }
+    if (goalsB === 0) {
+      var gkA = _topGk(teamA);
+      if (gkA.name) events.push({
+        type:'imbat', ico:'🧤', min:90, num:gkA.num, player:gkA.name, team:'a'
+      });
+    }
+    if (goalsA === 0) {
+      var gkB = _topGk(teamB);
+      if (gkB.name) events.push({
+        type:'imbat', ico:'🧤', min:90, num:gkB.num, player:gkB.name, team:'b'
+      });
+    }
+
     events.push({ type:'mvp', ico:'⭐', min:90, player:mvp, team:mvpSide });
     return { events:events, mvp:mvp, mvpTeam:mvpTeamName };
   }

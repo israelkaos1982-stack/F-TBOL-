@@ -1889,6 +1889,37 @@ window.pG = function(fn) {
 
   var _lastAppliedHash = '';
 
+  // Equipos cuyo nombre canónico (el que usa el simulador) difiere del
+  // nombre corto que el usuario puede haber guardado en el editor.
+  // Cada entrada registra todos los alias equivalentes para que SQUAD_REGISTRY
+  // y TEAM_RATINGS se puedan consultar con cualquiera de ellos.
+  var TEAM_NAME_ALIASES = [
+    ['Bayern Munich',    'Bayern'],
+    ['Atlético Madrid',  'Atletico Madrid', 'Atl Madrid'],
+    ['Celta de Vigo',    'Celta', 'RC Celta'],
+    ['Elche CF',         'Elche'],
+    ['Rayo Vallecano',   'Rayo'],
+    ['Deportivo Alavés', 'Deportivo Alaves', 'Alavés', 'Alaves'],
+    ['Valencia CF',      'Valencia'],
+    ['Villarreal CF',    'Villarreal'],
+    ['Sevilla FC',       'Sevilla'],
+    ['Getafe CF',        'Getafe'],
+    ['Girona FC',        'Girona'],
+    ['Mallorca',         'RCD Mallorca'],
+    ['Osasuna',          'CA Osasuna'],
+    ['Real Betis',       'Betis'],
+    ['Levante UD',       'Levante']
+  ];
+  function _namesForAlias(name){
+    var trimmed = (name || '').trim();
+    if(!trimmed) return [];
+    for(var i=0;i<TEAM_NAME_ALIASES.length;i++){
+      var group = TEAM_NAME_ALIASES[i];
+      if(group.indexOf(trimmed) !== -1) return group.slice();
+    }
+    return [trimmed];
+  }
+
   function applyEngineOverrides(){
     if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
     var bridge = window.ligaEaBuildEngineOverrides();
@@ -1903,7 +1934,10 @@ window.pG = function(fn) {
     // ── 1. TEAM_RATINGS ──────────────────────────────────────────
     if(window.TEAM_RATINGS){
       Object.keys(bridge.ratings).forEach(function(name){
-        window.TEAM_RATINGS[name] = bridge.ratings[name];
+        var aliases = _namesForAlias(name);
+        aliases.forEach(function(alias){
+          window.TEAM_RATINGS[alias] = bridge.ratings[name];
+        });
       });
     }
 
@@ -1914,16 +1948,23 @@ window.pG = function(fn) {
     // Solo los equipos que el admin ha creado tendrán plantilla.
     if(window.SQUAD_REGISTRY){
       var userTeamNames = {};
-      Object.keys(bridge.squads).forEach(function(name){ userTeamNames[name] = true; });
+      Object.keys(bridge.squads).forEach(function(name){
+        _namesForAlias(name).forEach(function(alias){ userTeamNames[alias] = true; });
+      });
       // Limpiar entradas que no son del usuario
       Object.keys(window.SQUAD_REGISTRY).forEach(function(name){
         if(!userTeamNames[name]){
           window.SQUAD_REGISTRY[name] = [];
         }
       });
-      // Aplicar las del editor
+      // Aplicar las del editor (bajo el nombre guardado y bajo todos
+      // sus alias canónicos, para que el simulador encuentre la
+      // plantilla tanto si usa 'Celta' como 'Celta de Vigo').
       Object.keys(bridge.squads).forEach(function(name){
-        window.SQUAD_REGISTRY[name] = bridge.squads[name];
+        var sq = bridge.squads[name];
+        _namesForAlias(name).forEach(function(alias){
+          window.SQUAD_REGISTRY[alias] = sq;
+        });
       });
     }
 

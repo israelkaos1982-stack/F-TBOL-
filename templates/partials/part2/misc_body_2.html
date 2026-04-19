@@ -3594,11 +3594,24 @@
     var etStyle = ' style="display:none"'; /* Liga: empate es resultado válido, sin prórroga */
     var emk = mk.replace(/'/g,"\\'");
     var _homeStadium = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || 'eFootball Stadium') : 'eFootball Stadium';
+    /* Alias en eFootball: lo mostramos bajo el nombre del equipo SOLO
+       cuando el rival es Humano (no entre IA vs IA ni Humano vs Humano).
+       Así el usuario ve, justo al empezar a jugar, con qué equipo del
+       juego está representando al equipo real que no existe. */
+    var _aliasGet = (typeof window.getTeamEfootballAlias === 'function') ? window.getTeamEfootballAlias : function(){return '';};
+    var homeAliasTxt = (isAwayHuman && !isHomeHuman) ? _aliasGet(home) : '';
+    var awayAliasTxt = (isHomeHuman && !isAwayHuman) ? _aliasGet(away) : '';
+    function _aliasHtml(txt){
+      if(!txt) return '';
+      return '<div class="ml-team-alias" style="font-family:Rajdhani,sans-serif;font-size:9px;font-weight:600;letter-spacing:.4px;color:rgba(255,255,255,.55);text-align:center;line-height:1.1;white-space:nowrap;margin-top:2px;">🎮 '+String(txt).replace(/[<>]/g,'')+'</div>';
+    }
+    var homeAliasHtml = _aliasHtml(homeAliasTxt);
+    var awayAliasHtml = _aliasHtml(awayAliasTxt);
     return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'" style="'+gradStyle+'">'
       +bgShA+bgShB
       +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">'+_homeStadium+'</span><span class="ml-venue-sep">·</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado</span><span class="ml-venue-sep">·</span><span class="ml-venue-ball" id="vball-'+mk+'"></span></div>'
       +'<div class="ml-header">'
-        +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldA+'<div class="ml-team-name">'+hiH+hu+'</div></div>'
+        +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldA+'<div class="ml-team-name">'+hiH+hu+'</div>'+homeAliasHtml+'</div>'
         +'<div class="ml-score-wrap" style="z-index:1;">'
           +_buildTwitchBtn(mk)
           +'<div class="ml-score"><span id="sc-'+mk+'-a">0</span>–<span id="sc-'+mk+'-b">0</span></div>'
@@ -3606,7 +3619,7 @@
           +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
           +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
         +'</div>'
-        +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldB+'<div class="ml-team-name">'+hiA+au+'</div></div>'
+        +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldB+'<div class="ml-team-name">'+hiA+au+'</div>'+awayAliasHtml+'</div>'
       +'</div>'
       +'<div class="ml-pen-panel" id="ml-pen-panel-'+mk+'">'
         +'<div class="ml-pen-title">⚽ TANDA DE PENALTIS</div>'

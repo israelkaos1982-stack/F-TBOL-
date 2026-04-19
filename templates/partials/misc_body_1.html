@@ -2084,6 +2084,11 @@ window.pG = function(fn) {
           else if(type==='pen-gol'){p.gol++;p.pen++;}
           else if(type==='pen-parado') p.penSaved++;
           else if(type==='mvp') p.mvp++;
+          // 'sust' no incrementa contadores — sólo registra al jugador
+          // entrante (y al saliente) para que ambos reciban PJ.
+          if(type==='sust' && ev.playerOut){
+            getOrCreate(team, ev.playerOut);
+          }
         });
         if(m.mvpName && m.mvpTeam){
           var hasMvpEvt = (m.evts||[]).some(function(e){return e.type==='mvp';});
@@ -2120,6 +2125,11 @@ window.pG = function(fn) {
             else if(type==='pen-gol'){p.gol++;p.pen++;}
             else if(type==='pen-parado') p.penSaved++;
             else if(type==='mvp') p.mvp++;
+            // 'sust' — idem fuente 1: sólo registra el PJ del entrante
+            // y del saliente si viene en el evento.
+            if(type==='sust' && ev.playerOut){
+              getOrCreate(team, ev.playerOut);
+            }
           });
           if(r.mvp && r.mvpTeam) getOrCreate(r.mvpTeam, r.mvp).mvp++;
         });

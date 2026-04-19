@@ -2762,13 +2762,26 @@
     } catch(_) {}
 
     // ── 2. NUEVO CALENDARIO ────────────────────────────────────
+    // BLINDADO: si cualquier paso produce un schedule no válido
+    // (longitud != 38), se cae a generarCalendario(TEAMS) como
+    // último recurso — así NUNCA nos quedamos sin jornadas.
     var newSchedule = null;
     try {
       var baseOrder = leerOrdenEquiposActual();
+      if (!Array.isArray(baseOrder) || baseOrder.length < 20) baseOrder = TEAMS.slice();
       var randomOrder = mezclarEquipos(baseOrder);
+      if (!Array.isArray(randomOrder) || randomOrder.length < 20) randomOrder = TEAMS.slice();
       newSchedule = generarCalendario(randomOrder);
+      if (!Array.isArray(newSchedule) || newSchedule.length !== 38) {
+        newSchedule = generarCalendario(TEAMS.slice());
+      }
       setLigaSchedule(newSchedule);
-    } catch(_) {}
+    } catch(_) {
+      try {
+        newSchedule = generarCalendario(TEAMS.slice());
+        setLigaSchedule(newSchedule);
+      } catch(__) {}
+    }
 
     // ── 3. FORZAR EN EL SERVIDOR con REINTENTOS ────────────────
     //    a) POST /api/state/reset-liga (replace=True server-side).
@@ -7482,10 +7495,20 @@
   window.buildIAresults = function () {
     var container = document.getElementById('ia-res-list');
     if (!container) return;
+    // Guard: si SCHEDULE se ha perdido (p.ej. tras un reset parcial
+    // en el que setLigaSchedule rechazó un schedule inválido), lo
+    // regeneramos en sitio para no dejar la pantalla vacía.
+    if (!Array.isArray(SCHEDULE) || SCHEDULE.length !== 38) {
+      try {
+        var _fallback = generarCalendario(TEAMS.slice());
+        setLigaSchedule(_fallback);
+      } catch(_) {}
+    }
     var html    = '';
     var results = loadResults();
 
     for (var j = 1; j <= 38; j++) {
+      if (!Array.isArray(SCHEDULE[j - 1])) continue; // fila malformada
       var matches = [];
       var pending = [];
 

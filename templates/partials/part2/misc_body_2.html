@@ -2833,6 +2833,41 @@
     });
   };
 
+  /* ── TRIGGER POR URL (?reset=liga) ────────────────────────────
+     Escotilla de emergencia: abrir cualquier URL de la app con el
+     query `?reset=liga` dispara el reset nada más cargar la página,
+     saltándose el botón Res y su diálogo. Útil cuando el estado
+     cliente se queda anclado y el botón no responde. Se limpia la
+     query de la URL tras ejecutar para que un F5 no lo relance.
+     Ejemplo: …/espana/liga-ea-sports/clasificacion?reset=liga */
+  (function(){
+    try {
+      var qs = (location && location.search) || '';
+      if (qs.indexOf('reset=liga') === -1) return;
+      function _run(){
+        if (typeof window.reiniciarLigaEA !== 'function') {
+          return setTimeout(_run, 300);
+        }
+        // Saltamos el confirm con un shim temporal.
+        var _origConfirm = window.confirm;
+        window.confirm = function(){ return true; };
+        try { window.reiniciarLigaEA(); } catch(_){}
+        window.confirm = _origConfirm;
+        // Quitar `reset=liga` de la URL sin recargar.
+        try {
+          var url = new URL(location.href);
+          url.searchParams.delete('reset');
+          history.replaceState(null, '', url.pathname + (url.search || '') + url.hash);
+        } catch(_){}
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function(){ setTimeout(_run, 200); });
+      } else {
+        setTimeout(_run, 200);
+      }
+    } catch(_){}
+  })();
+
   /* ── GENERADOR CALENDARIO BERGER ─────────────────── */
   function generarCalendario(teamList) {
     var teams = Array.isArray(teamList) && teamList.length ? teamList.slice() : TEAMS.slice();

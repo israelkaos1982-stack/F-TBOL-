@@ -3472,6 +3472,7 @@
               : ev.type === 'propia'     ? '⚽🚫'
               : ev.type === 'roja'       ? '🟥'
               : ev.type === 'amarilla'   ? '🟨'
+              : ev.type === 'imbat'      ? '🧤'
               : ev.type === 'lesion'     ? (ev.lesIco || '🩹') : '•';
       if (ev.dbl) ico = '🟨🟥';
       var varSfx = '';
@@ -7005,6 +7006,43 @@
         else                     ev._varAnulado = true;
       }
     });
+    /* ── PORTERÍA IMBATIDA ───────────────────────────────────────────
+       En IA vs IA `genMatchEventsEnhanced` no emitía el evento 'imbat'
+       cuando un equipo cerraba el partido con 0 goles recibidos, así
+       que el acta no mostraba 🧤 y el portero no sumaba clean sheets
+       (sólo el flujo humano lo emitía en mlEndMatch/gmEndMatch).
+       Lo calculamos DESPUÉS del reparto VAR porque los eventos
+       `_varAnulado` no deben puntuar: un gol anulado por VAR deja al
+       equipo contrario imbatido. */
+    (function _injectImbatEvents(){
+      var finalA = 0, finalB = 0;
+      evts.forEach(function(ev){
+        if (ev._varAnulado) return;
+        if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
+          if (ev.team === 'a') finalA++;
+          else if (ev.team === 'b') finalB++;
+        } else if (ev.type === 'propia'){
+          /* autogol suma para el rival */
+          if (ev.team === 'a') finalB++;
+          else if (ev.team === 'b') finalA++;
+        }
+      });
+      function _topGk(sq){
+        if (!Array.isArray(sq) || !sq.length) return null;
+        return sq.reduce(function(x,y){ return (Number(y[3])||0) > (Number(x[3])||0) ? y : x; });
+      }
+      function _hasImbat(side){
+        return evts.some(function(e){ return e && e.type === 'imbat' && e.team === side; });
+      }
+      if (finalB === 0 && !_hasImbat('a')){
+        var gA = _topGk(gkA);
+        if (gA) evts.push({ type:'imbat', ico:'🧤', min:90, team:'a', num:gA[0]||'', player:gA[1]||'?' });
+      }
+      if (finalA === 0 && !_hasImbat('b')){
+        var gB = _topGk(gkB);
+        if (gB) evts.push({ type:'imbat', ico:'🧤', min:90, team:'b', num:gB[0]||'', player:gB[1]||'?' });
+      }
+    })();
     /* 'played' para cada titular + suplente ordenadamente (4 primeros
        suplentes asumimos que entran — mismo criterio que mlSimEngine).
        Sin esto, jugadores sin eventos explícitos (gol/tarjeta/MVP) no
@@ -7108,6 +7146,7 @@
                 : ev.type === 'roja'       ? '🟥'
                 : ev.type === 'amarilla'   ? '🟨'
                 : ev.type === 'sust'       ? '🔄'
+                : ev.type === 'imbat'      ? '🧤'
                 : ev.type === 'lesion'     ? (ev.lesIco || '🩹') : '•';
         if (ev.dbl) ico = '🟨🟥';
 

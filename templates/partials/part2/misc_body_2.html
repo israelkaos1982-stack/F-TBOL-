@@ -4001,12 +4001,22 @@
         del juego marca del 0 al 45 + desc / descanso / 45 al 90 + desc.
 
      ══════════════════════════════════════════════════════════════ */
+  /* Duración AUTORITATIVA de cada partido.
+     Fuente única — Live/amistoso/batch leen todo desde aquí.
+       HvH      → 16.5 min reales (~88 ticks de ~878 ms)
+       HvH_ET   →  5.0 min reales para la prórroga
+       HvIA     → 13.5 min reales (Humano vs IA)
+       IAIA     →  0.5 min reales (= 30 s, 15 por parte)
+     Antes IAIA estaba en 1.0 min pero el propio comentario del
+     código señalaba "30 s reales (15 por parte)" como protocolo de
+     Liga IA vs IA. Alineado para que el amistoso IA vs IA dure lo
+     mismo que la simulación de jornada. */
   var _ML_TICK_SEC = 5;
   var _MATCH_RULE = {
     HvH:    { gameMin: 94, realMin: 16.5 },
     HvH_ET: { gameMin: 30, realMin: 5.0  },
     HvIA:   { gameMin: 94, realMin: 13.5 },
-    IAIA:   { gameMin: 90, realMin: 1.0  }
+    IAIA:   { gameMin: 90, realMin: 0.5  }
   };
   function _tickMsFromRule(r) {
     /* regla de tres: tickMs = realMs / (ticksTotales) */
@@ -12575,7 +12585,12 @@ document.addEventListener('DOMContentLoaded', function() {
       if (previaBtn) {
         (function(matchKey, hvh) {
           previaBtn.onclick = function() {
-            var duracion = hvh ? '16 min' : '12 min';
+            /* Duración mostrada en la previa — derivada de _MATCH_RULE
+               para no depender de literales. Si el admin afina los
+               tiempos, la previa se actualiza sola. */
+            var _rule = (window._MATCH_RULE && window._MATCH_RULE[hvh ? 'HvH' : 'HvIA']);
+            var _minNum = _rule ? Math.round(_rule.realMin) : (hvh ? 16 : 12);
+            var duracion = _minNum + ' min';
             var _origPpConfirm = window._ppConfirm;
             window._ppConfirm = function() {
               _origPpConfirm();

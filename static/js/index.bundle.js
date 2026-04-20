@@ -8404,8 +8404,26 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     };
   }
 
-  /* ── 1. TWITCH SELECTOR ───────────────────────────────────────────── */
+  /* ── 1. TWITCH SELECTOR ─────────────────────────────────────────────
+     Dropdown custom (no <select> nativo) para evitar el lag del picker
+     móvil y los "clics perdidos". El <select> oculto se mantiene como
+     espejo para cualquier código que consulte su .value. */
   window._ppSelectedTwitch = window._ppSelectedTwitch || '';
+  var _PP_TWITCH_CHANNELS = [
+    { value: '',              label: '— Selecciona canal —'       },
+    { value: 'kaotiko8219',   label: '🟣 kaotiko8219 (Tu Canal)' },
+    { value: 'vk54in2',       label: '🟣 vk54in2'                },
+    { value: 'Serraxxxx',     label: '🟣 Serraxxxx'              },
+    { value: 'toni_ayuso',    label: '🟣 toni_ayuso'             },
+    { value: 'budygamer1981', label: '🟣 budygamer1981'          }
+  ];
+
+  function _ppTwitchLabelFor(val) {
+    for (var i = 0; i < _PP_TWITCH_CHANNELS.length; i++) {
+      if (_PP_TWITCH_CHANNELS[i].value === val) return _PP_TWITCH_CHANNELS[i].label;
+    }
+    return '— Selecciona canal —';
+  }
 
   window._ppTwitchChange = function(val) {
     /* Antes esta función llamaba a `_ppRefreshUnlock()` en el mismo tick
@@ -8413,16 +8431,76 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
        previa (_renderList + _updateBtn) y bloqueaba la respuesta del
        <select>. Resultado: había que hacer varios clics para que el
        navegador aceptara la selección. Ahora el valor se guarda al
-       instante y el refresco se difiere al siguiente frame para que
-       el dropdown reaccione fluido. */
+       instante y el refresco se difiere al siguiente frame. */
     window._ppSelectedTwitch = val;
     var sel = document.getElementById('pp-twitch-select');
     if (sel && sel.value !== val) sel.value = val;
+    var btn = document.getElementById('pp-twitch-btn');
+    if (btn) {
+      btn.setAttribute('data-value', val || '');
+      var lbl = btn.querySelector('.pp-twitch-btn-label');
+      if (lbl) lbl.textContent = _ppTwitchLabelFor(val);
+    }
     var _doRefresh = function(){
       if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
     };
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_doRefresh);
     else setTimeout(_doRefresh, 0);
+  };
+
+  window._ppOpenTwitchDropdown = function() {
+    var existing = document.getElementById('pp-twitch-dropdown');
+    if (existing) { existing.remove(); return; }
+    var btn = document.getElementById('pp-twitch-btn');
+    if (!btn) return;
+    var rect = btn.getBoundingClientRect();
+    var currentVal = btn.getAttribute('data-value') || '';
+    var dd = document.createElement('div');
+    dd.id = 'pp-twitch-dropdown';
+    /* z-index máximo: el overlay de previa vive en 10010, así que usamos
+       un valor mayor para no quedar tapados. */
+    dd.style.cssText = 'position:fixed;z-index:2147483646;background:#10101e;'
+      + 'border:1px solid rgba(191,148,255,.45);border-radius:10px;padding:6px;'
+      + 'box-shadow:0 10px 32px rgba(0,0,0,.75);min-width:' + Math.round(rect.width) + 'px;'
+      + 'max-width:92vw;';
+    dd.style.left = Math.max(8, rect.left) + 'px';
+    dd.style.top  = (rect.bottom + 4) + 'px';
+    dd.innerHTML = _PP_TWITCH_CHANNELS.map(function(ch){
+      var isSel = ch.value === currentVal;
+      return '<button type="button" class="pp-twitch-opt" data-val="' + ch.value + '" '
+        + 'style="display:block;width:100%;text-align:left;padding:10px 12px;'
+        + 'background:' + (isSel ? 'rgba(191,148,255,.18)' : 'transparent') + ';'
+        + 'border:none;border-radius:6px;color:#e8d8ff;font-family:Oswald,sans-serif;'
+        + 'font-size:13px;letter-spacing:.5px;cursor:pointer;">' + ch.label + '</button>';
+    }).join('');
+    document.body.appendChild(dd);
+    /* Pointer events: captura instantánea (touchstart + click) para que el
+       móvil no añada los ~300 ms de tap-delay. */
+    dd.querySelectorAll('.pp-twitch-opt').forEach(function(opt){
+      var pick = function(e){
+        e.preventDefault(); e.stopPropagation();
+        var v = opt.getAttribute('data-val') || '';
+        window._ppTwitchChange(v);
+        dd.remove();
+        document.removeEventListener('click', outsideClose, true);
+      };
+      opt.addEventListener('touchstart', pick, { passive: false });
+      opt.addEventListener('click', pick);
+      opt.addEventListener('mouseenter', function(){
+        if (opt.style.background.indexOf('148') === -1) opt.style.background = 'rgba(255,255,255,.05)';
+      });
+      opt.addEventListener('mouseleave', function(){
+        var v = opt.getAttribute('data-val') || '';
+        opt.style.background = (v === currentVal) ? 'rgba(191,148,255,.18)' : 'transparent';
+      });
+    });
+    function outsideClose(e){
+      if (!dd.contains(e.target) && e.target !== btn) {
+        dd.remove();
+        document.removeEventListener('click', outsideClose, true);
+      }
+    }
+    setTimeout(function(){ document.addEventListener('click', outsideClose, true); }, 50);
   };
 
   /* ── 2. SOUND ENGINE (Web Audio API) ─────────────────────────────── */
@@ -8657,10 +8735,26 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     window[fn]._mmWhistlePatched = true;
   }
 
-  /* ── 7. CLIMA DINÁMICO SEGÚN CALENDARIO ─────────────────────────── */
+  /* ── 7. CLIMA DINÁMICO SEGÚN CALENDARIO ─────────────────────────────
+     Estaciones: Verano 🌝 / Invierno 🌚 (2 únicas).
+     Climas:     ☀️ Soleado / 🌧️ Lluvia / ❄️ Nieve (3 únicos).
+     NO existen "Nublado", "Parcialmente nublado" ni "Calor extremo".
+     El clima concreto se lee de la fila del calendario (.ag-wx) vía
+     _mmGetWeatherFromCal; esta tabla solo se usa como fallback cuando
+     no hay dato en calendario. */
   function _mmGetClimate(month) {
-    if (month >= 5 && month <= 9) return { season: '🌝 Verano', weathers: ['☀️ Soleado', '🌡️ Calor extremo', '☁️ Parcialmente nublado'] };
-    return { season: '🌚 Invierno', weathers: ['🌧️ Lluvia', '❄️ Nieve', '☁️ Nublado'] };
+    if (month >= 5 && month <= 9) return { season: '🌝 Verano', weathers: ['☀️ Soleado'] };
+    return { season: '🌚 Invierno', weathers: ['☀️ Soleado', '🌧️ Lluvia', '❄️ Nieve'] };
+  }
+  /* Mapea el emoji almacenado en calendario.json (.ag-wx) al label completo. */
+  var _MM_WEATHER_FROM_EMOJI = {
+    '☀️': '☀️ Soleado', '☀': '☀️ Soleado',
+    '🌧️': '🌧️ Lluvia', '🌧': '🌧️ Lluvia',
+    '❄️': '❄️ Nieve',   '❄': '❄️ Nieve'
+  };
+  function _mmLookupWeatherLabel(emoji) {
+    var e = String(emoji || '').trim();
+    return _MM_WEATHER_FROM_EMOJI[e] || null;
   }
 
   var MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -8677,14 +8771,21 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   /* ── Calendar date helpers ───────────────────────────────────────── */
   var _MONTH_ABBR_ES = {Ene:1,Feb:2,Mar:3,Abr:4,May:5,Jun:6,Jul:7,Ago:8,Sep:9,Oct:10,Nov:11,Dic:12};
+  /* Devuelve {date, wx} indexado por la etiqueta del evento del calendario
+     (ej. "Liga — J1"). `wx` es el emoji del clima leído de `.ag-wx` (☀️/🌧/❄️)
+     o null si no se encuentra. */
   function _mmAgDateMap() {
     var map = {};
     document.querySelectorAll('.ag-r').forEach(function(row) {
       var d = row.querySelector('.ag-date');
       var l = row.querySelector('.ag-lbl');
+      var w = row.querySelector('.ag-wx');
       if (d && l) {
         var key = l.textContent.trim().split(' · ')[0].trim();
-        map[key] = d.textContent.trim();
+        map[key] = {
+          date: d.textContent.trim(),
+          wx:   w ? w.textContent.trim() : null
+        };
       }
     });
     return map;
@@ -8710,21 +8811,28 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var envEl = document.getElementById('pp-env');
     if (!envEl) return;
 
-    var month, dayNum;
+    var month, dayNum, calWxEmoji = null;
     var dateMap = _mmAgDateMap();
     var label = _mmCalLabel(matchKey || '', compKey || '');
-    var calStr = label ? (dateMap[label] || null) : null;
-    if (calStr) {
-      var parsed = _mmParseCalDate(calStr);
+    var calEntry = label ? (dateMap[label] || null) : null;
+    if (calEntry) {
+      var parsed = _mmParseCalDate(calEntry.date);
       month = parsed.month || (new Date().getMonth() + 1);
       dayNum = parsed.day || new Date().getDate();
+      calWxEmoji = calEntry.wx;
     } else {
       month  = new Date().getMonth() + 1;
       dayNum = new Date().getDate();
     }
 
     var sc = _mmGetClimate(month);
-    var weather = sc.weathers[Math.floor(Math.random() * sc.weathers.length)];
+    /* Clima: fuente única = calendario (.ag-wx). Si no hay dato, cae al
+       fallback por estación. NUNCA se inventa un clima aleatorio fuera de
+       los 3 válidos (☀️/🌧️/❄️). */
+    var weather = _mmLookupWeatherLabel(calWxEmoji);
+    if (!weather) {
+      weather = sc.weathers[0];  // fallback determinista: primer valor
+    }
     var compLabel = COMP_LABELS_MM[compKey] || compKey || 'Liga';
     var sParts = sc.season.split(' ');
     var sEmoji = sParts[0];
@@ -8747,29 +8855,49 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       if (s) stadiumName = s;
     }
 
+    /* Layout en 3 líneas independientes para que estación+clima NUNCA se
+       pierdan por overflow ni por wrap. Antes iban en la misma línea que
+       el estadio con margin-left y ocasionalmente no aparecían. */
     envEl.innerHTML =
-      '<div class="pp-env-line"><span>🏟️</span><b>' + stadiumName + '</b>'
-      /* Estación + clima SIEMPRE visibles (sin display:none inicial). Antes
-         sólo aparecían cuando el usuario marcaba todos los "checks" de la
-         previa, así que en el 99% de los partidos estaban ocultos. */
-      + '<span id="pp-env-meteo" style="margin-left:8px;">'
-      + '<span style="opacity:.4">·</span> <span>' + sEmoji + '</span> <b>' + sName + '</b>'
-      + ' <span style="opacity:.4">·</span> <b>' + weather + '</b>'
-      + '</span></div>'
+        '<div class="pp-env-line"><span>🏟️</span><b>' + stadiumName + '</b></div>'
+      + '<div class="pp-env-line" id="pp-env-meteo">'
+      +   '<span>' + sEmoji + '</span><b>' + sName + '</b>'
+      +   '<span style="margin:0 6px;opacity:.4">·</span>'
+      +   '<b>' + weather + '</b>'
+      + '</div>'
       + '<div class="pp-env-line"><span>🗓️</span><b>' + dayNum + ' de ' + MONTHS_ES[month - 1] + '</b>'
-      + '<span style="margin:0 6px;opacity:.4">|</span><span>🏆</span><b>' + compLabel + '</b></div>';
+      +   '<span style="margin:0 6px;opacity:.4">|</span><span>🏆</span><b>' + compLabel + '</b></div>';
+  }
 
-    // Reset Twitch selector for each new match
+  /* Reset del canal Twitch al abrir una NUEVA previa. Se hace síncrono
+     (no esperar a _mmInjectEnv) para evitar que el valor del partido
+     anterior se quede "anclado" durante los ~60 ms iniciales. */
+  function _mmResetTwitchSelection() {
     window._ppSelectedTwitch = '';
     var sel = document.getElementById('pp-twitch-select');
     if (sel) sel.value = '';
+    var btn = document.getElementById('pp-twitch-btn');
+    if (btn) {
+      var lbl = btn.querySelector('.pp-twitch-btn-label');
+      if (lbl) lbl.textContent = '— Selecciona canal —';
+      btn.setAttribute('data-value', '');
+    }
   }
 
   // Wrap showPrePartidoOverlay to inject climate + calendar date
   var _mmPrevShowPre = window.showPrePartidoOverlay;
   if (typeof _mmPrevShowPre === 'function') {
     window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
+      _mmResetTwitchSelection();
       _mmPrevShowPre.apply(this, arguments);
+      /* Inyectamos el env inmediatamente y además re-inyectamos al next
+         frame y a 60 ms por si la fila del calendario aún no existe en
+         el DOM. Cualquiera de las pasadas que encuentre datos fija el
+         resultado definitivo. */
+      _mmInjectEnv(compKey, matchKey);
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function(){ _mmInjectEnv(compKey, matchKey); });
+      }
       setTimeout(function() { _mmInjectEnv(compKey, matchKey); }, 60);
     };
   } else {
@@ -8779,7 +8907,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       clearInterval(_mmClimateCheck);
       var _prev = window.showPrePartidoOverlay;
       window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
+        _mmResetTwitchSelection();
         _prev.apply(this, arguments);
+        _mmInjectEnv(compKey, matchKey);
         setTimeout(function() { _mmInjectEnv(compKey, matchKey); }, 60);
       };
     }, 200);

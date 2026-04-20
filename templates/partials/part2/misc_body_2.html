@@ -1758,7 +1758,16 @@
 <div class="pp-vs" id="pp-vs"></div>
 <div class="pp-twitch-sel">
 <div class="pp-twitch-lbl"><svg width="14" height="14" viewBox="0 0 24 24" fill="#bf94ff" style="vertical-align:middle;margin-right:5px"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>📺 Canal Twitch</div>
-<select id="pp-twitch-select" onchange="window._ppTwitchChange(this.value)" style="width:100%;background:#1a1a2e;color:#bf94ff;border:1px solid rgba(191,148,255,.35);border-radius:8px;padding:8px 10px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;outline:none;cursor:pointer;">
+<!-- Dropdown custom (touch-friendly, sin lag nativo). Los valores los
+     sincroniza _ppTwitchChange, y un <select> oculto mantiene la misma
+     API para el resto del código. -->
+<button type="button" id="pp-twitch-btn" data-value=""
+  onclick="window._ppOpenTwitchDropdown && window._ppOpenTwitchDropdown()"
+  style="width:100%;background:#1a1a2e;color:#bf94ff;border:1px solid rgba(191,148,255,.35);border-radius:8px;padding:10px 12px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;outline:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+  <span class="pp-twitch-btn-label" style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">— Selecciona canal —</span>
+  <span style="opacity:.6;font-size:10px;">▼</span>
+</button>
+<select id="pp-twitch-select" style="display:none;" onchange="window._ppTwitchChange(this.value)">
 <option value="">— Selecciona canal —</option>
 <option value="kaotiko8219">🟣 kaotiko8219 (Tu Canal)</option>
 <option value="vk54in2">🟣 vk54in2</option>

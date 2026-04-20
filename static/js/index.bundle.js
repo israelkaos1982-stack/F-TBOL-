@@ -473,8 +473,11 @@ window.sqFromRegistry = function(teamName, opts) {
           pool.forEach(function(p){
             var pw = Math.max(1, Math.min(99, Number(p.power)||70));
             var entry = [String(p.num || ''), String(p.name || '?'), pw];
-            if (p.elite)   entry.elite   = true;
-            if (p.natGoal) entry.natGoal = true;
+            if (p.elite)    entry.elite    = true;
+            if (p.natGoal)  entry.natGoal  = true;
+            if (p.captain)  entry.captain  = true;
+            if (p.freeKick) entry.freeKick = true;
+            if (p.penalty)  entry.penalty  = true;
             built.push(entry);
           });
         });
@@ -522,13 +525,16 @@ window.sqFromRegistry = function(teamName, opts) {
       var nombre = e[1];
       // Saltar lesionados/sancionados
       if (excluded.indexOf(nombre) !== -1) continue;
-      /* Propagamos `.elite` (⭐) y `.natGoal` (⚾) como propiedades
-         del array para que los scorers (_weightedScorerPick, etc.)
-         puedan aplicar el bonus de goleo sin alterar los índices
-         posicionales que usan todos los consumidores del formato. */
+      /* Propagamos los 5 flags (⭐ elite, ⚾ natGoal, C captain, F freeKick,
+         P penalty) como propiedades del array. Los scorers y el motor de
+         equipo los consumen sin alterar los índices posicionales que usan
+         los demás consumidores del formato. Obligatorio (CLAUDE.md). */
       var row = [e[0], nombre, curPos, poder];
-      if (e && e.elite)   row.elite   = true;
-      if (e && e.natGoal) row.natGoal = true;
+      if (e && e.elite)    row.elite    = true;
+      if (e && e.natGoal)  row.natGoal  = true;
+      if (e && e.captain)  row.captain  = true;
+      if (e && e.freeKick) row.freeKick = true;
+      if (e && e.penalty)  row.penalty  = true;
       full.push(row);
     }
   }
@@ -558,11 +564,17 @@ window.sqFromRegistry = function(teamName, opts) {
   //    Los primeros 11 son: portero titular + los 10 de campo de más poder
   //    El resto son banquillo
   for (var ci = 0; ci < conv.length; ci++) {
-    var wasElite   = !!conv[ci].elite;
-    var wasNatGoal = !!conv[ci].natGoal;
+    var wasElite    = !!conv[ci].elite;
+    var wasNatGoal  = !!conv[ci].natGoal;
+    var wasCaptain  = !!conv[ci].captain;
+    var wasFreeKick = !!conv[ci].freeKick;
+    var wasPenalty  = !!conv[ci].penalty;
     conv[ci] = [conv[ci][0], conv[ci][1], conv[ci][2], conv[ci][3], ci < 11 ? 'titular' : 'suplente'];
-    if (wasElite)   conv[ci].elite   = true;
-    if (wasNatGoal) conv[ci].natGoal = true;
+    if (wasElite)    conv[ci].elite    = true;
+    if (wasNatGoal)  conv[ci].natGoal  = true;
+    if (wasCaptain)  conv[ci].captain  = true;
+    if (wasFreeKick) conv[ci].freeKick = true;
+    if (wasPenalty)  conv[ci].penalty  = true;
   }
 
   return conv;
@@ -600,8 +612,11 @@ window.sqFromRegistryFull = function(teamName) {
     if (e.h) { curPos = posMap[e.h] || 'M'; }
     else {
       var row = [e[0], e[1], curPos, (e.length>=3 ? e[2] : 70)];
-      if (e && e.elite)   row.elite   = true;
-      if (e && e.natGoal) row.natGoal = true;
+      if (e && e.elite)    row.elite    = true;
+      if (e && e.natGoal)  row.natGoal  = true;
+      if (e && e.captain)  row.captain  = true;
+      if (e && e.freeKick) row.freeKick = true;
+      if (e && e.penalty)  row.penalty  = true;
       full.push(row);
     }
   }
@@ -2100,6 +2115,12 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       var sumB=0,cntB=0; sqB.forEach(function(p){if(p[3]&&p[2]!=='P'){sumB+=p[3];cntB++;}});
       if(cntB>0) rB=Math.round(sumB/cntB);
     }
+    /* Bonus de Capitán (C): +5% al valor del equipo — modificador
+       invisible obligatorio (CLAUDE.md). Aplica a cualquier partido
+       (Liga, Copa, Europa, amistoso). */
+    var _capBonus = (typeof window._captainBonus === 'function') ? window._captainBonus : function(){ return 1.0; };
+    rA = rA * _capBonus(_resolvedA);
+    rB = rB * _capBonus(_resolvedB);
     // probA = probabilidad de que marque equipo A en cada evento de gol
     // ── VENTAJA LOCAL: equipo A es siempre el local (+10% sobre su poder) ──
     var _baseA = (rA * 1.10) / ((rA * 1.10) + rB);

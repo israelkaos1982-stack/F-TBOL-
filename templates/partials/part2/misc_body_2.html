@@ -7539,11 +7539,18 @@
       } else {
         w = Math.max(0.001, (p[3] || 70) * _poderPosWeight(p[2], p[3]));
       }
-      /* Prioridad MÁXIMA al goleador nato (⚾): marca el 50%+ de los
-         goles de su equipo, así que aplicamos el multiplicador más
-         agresivo. ⭐ Estrella no afecta al peso de gol — su efecto
-         único es en la elección de MVP (ver selector MVP abajo). */
-      if (p && p.natGoal) w *= 3;
+      /* Reglas OBLIGATORIAS (CLAUDE.md):
+         - ⚾ goleador nato: ×3 (prioridad máxima, ≈50% de los goles)
+         - P lanzador de penaltis: +bonus fijo 0.40 al peso
+         - F lanzador de faltas: +bonus fijo 0.30 al peso
+           (aseguran que los especialistas sumen goles aunque no sean
+            delanteros)
+         - ⭐ estrella: NO afecta al peso — solo al MVP
+         - C capitán: NO afecta al peso individual — su bonus se aplica
+           al valor del equipo (ver _teamValueWithFlags) */
+      if (p && p.natGoal)  w *= 3;
+      if (p && p.penalty)  w += 0.40;
+      if (p && p.freeKick) w += 0.30;
       return w;
     });
     var total = weights.reduce(function(sum, weight) { return sum + weight; }, 0);

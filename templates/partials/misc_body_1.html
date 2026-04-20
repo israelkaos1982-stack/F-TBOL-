@@ -1918,8 +1918,17 @@ window.pG = function(fn) {
   function applyEngineOverrides(){
     if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
     var bridge = window.ligaEaBuildEngineOverrides();
-    // Funciona con CUALQUIER número de equipos (no solo 20)
-    if(!bridge || bridge.meta.teamsCount === 0) return;
+
+    /* Si Liga EA está vacía, todavía queremos importar las demás
+       ligas del editor al motor (Hypermotion, Primera Fed y las 51
+       externas). Sin esto, un admin que solo haya creado equipos
+       en Hypermotion no podía jugar amistosos con su plantilla real:
+       `sqFromRegistry('Racing')` volvía al placeholder. */
+    if(!bridge || bridge.meta.teamsCount === 0){
+      _importOtherLeaguesIntoEngine();
+      if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
+      return;
+    }
 
     // Hash rápido para no re-aplicar si nada cambió
     var hash = bridge.meta.teamsCount + ':' + bridge.meta.playersCount + ':' + bridge.meta.humansCount + ':' + bridge.meta.generatedAt;
@@ -1978,8 +1987,87 @@ window.pG = function(fn) {
       }
     }
 
+    // ── 4. Importar equipos de OTRAS ligas al motor ──────────────
+    // Hypermotion, Primera Federación y las 51 ligas externas
+    // viven cada una en su propio `ligaExt_<slug>`. Sin este paso,
+    // `sqFromRegistry('Racing')` o `sqFromRegistry('Manchester City')`
+    // caía al placeholder "Jugador A/B" cuando el admin intentaba
+    // jugar un amistoso con un equipo de Hypermotion, Primera Fed o
+    // cualquier otra liga creada en el editor. Ahora poblamos
+    // SQUAD_REGISTRY + TEAM_RATINGS para TODOS los equipos creados,
+    // no solo los 20 de Liga EA.
+    _importOtherLeaguesIntoEngine();
+
     // ── 5. Refrescar escudos y clasificación ─────────────────────
     if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
+  }
+
+  function _importOtherLeaguesIntoEngine(){
+    var POS_MAP = { POR:'P', DEF:'D', MED:'M', DEL:'F' };
+    var POS_HEADER = { P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS' };
+    var POS_ORDER = ['P','D','M','F'];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (!key || key.indexOf('ligaExt_') !== 0) continue;
+        if (key === 'ligaExt_liga-ea-sports') continue;   /* ya lo hizo el bridge */
+        if (key.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(key);
+        if (!raw) continue;
+        var data;
+        try { data = JSON.parse(raw); } catch(_e){ continue; }
+        if (!data || !Array.isArray(data.teams)) continue;
+        data.teams.forEach(function(t){
+          if (!t || !t.name) return;
+          var name = String(t.name).trim();
+          if (!name) return;
+          /* TEAM_RATINGS: solo lo seteamos si el motor aún no tiene
+             una entrada para este equipo, para no pisar ratings
+             hardcodeados (Liga EA, selecciones, etc.). */
+          if (window.TEAM_RATINGS && !window.TEAM_RATINGS[name]){
+            var pw = Math.max(1, Math.min(99, Number(t.power) || Number(t.media) || 70));
+            var shield = t.shield ? String(t.shield) : '';
+            window.TEAM_RATINGS[name] = shield ? {media: pw, shield: shield} : pw;
+          }
+          /* SQUAD_REGISTRY: solo pisamos si traemos jugadores de
+             verdad (si no, respetamos lo que tenga el bundle o lo
+             que hayan puesto otros pipelines). */
+          if (!Array.isArray(t.players) || !t.players.length) return;
+          var byPos = {P:[], D:[], M:[], F:[]};
+          t.players.forEach(function(p){
+            var simPos = POS_MAP[p.pos] || 'M';
+            byPos[simPos].push(p);
+          });
+          var simSquad = [];
+          POS_ORDER.forEach(function(simPos){
+            var pool = byPos[simPos];
+            if (!pool.length) return;
+            pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+            simSquad.push({h: POS_HEADER[simPos]});
+            pool.forEach(function(p){
+              var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+              /* Flags a sidecar (C/F/P/⭐/⚾) — mismo formato que Liga EA. */
+              if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal){
+                var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
+                fmap[name + '::' + String(p.name||'')] = {
+                  captain:  !!p.captain,
+                  freeKick: !!p.freeKick,
+                  penalty:  !!p.penalty,
+                  elite:    !!p.elite,
+                  natGoal:  !!p.natGoal
+                };
+              }
+              /* ⭐ / ⚾ como propiedades del array para los scorers. */
+              var entry = [String(p.num || ''), String(p.name || '?'), pw];
+              if (p.elite)   entry.elite   = true;
+              if (p.natGoal) entry.natGoal = true;
+              simSquad.push(entry);
+            });
+          });
+          if (window.SQUAD_REGISTRY) window.SQUAD_REGISTRY[name] = simSquad;
+        });
+      }
+    } catch(_){}
   }
 
   // Exponer para que lextSaveTeam pueda llamarlo tras guardar
@@ -3913,6 +4001,7 @@ window.pG = function(fn) {
 .lext-badge.fk{background:rgba(80,180,255,.22);color:#60bfff;border:1px solid rgba(80,180,255,.5);}
 .lext-badge.pk{background:rgba(255,90,90,.22);color:#ff7070;border:1px solid rgba(255,90,90,.5);}
 .lext-badge.star{background:rgba(255,215,80,.18);color:#ffd750;border:1px solid rgba(255,215,80,.55);font-size:10px;padding:0 4px;}
+.lext-badge.scorer{background:rgba(120,220,120,.18);color:#8bdc8b;border:1px solid rgba(120,220,120,.55);font-size:10px;padding:0 4px;}
 /* Tabla de plantilla dentro del modal */
 .lext-sq-wrap{overflow-x:auto;margin-top:6px;padding-bottom:6px;}
 .lext-sq-sec{margin-bottom:10px;}
@@ -3952,6 +4041,7 @@ window.pG = function(fn) {
 .lext-sq-tog:nth-child(2).on{background:rgba(80,180,255,.2);color:#60bfff;border-color:rgba(80,180,255,.6);}
 .lext-sq-tog:nth-child(3).on{background:rgba(255,90,90,.2);color:#ff7070;border-color:rgba(255,90,90,.55);}
 .lext-sq-tog:nth-child(4).on{background:rgba(255,215,80,.2);color:#ffd750;border-color:rgba(255,215,80,.6);}
+.lext-sq-tog:nth-child(5).on{background:rgba(120,220,120,.2);color:#8bdc8b;border-color:rgba(120,220,120,.6);}
 /* Tiers de poder (mismos rangos que el bundle): elite 84+, alto 79+, medio 74+, base <74 */
 .lext-sq-cell.pw.tier-elite{color:rgba(255,215,130,.95);font-weight:700;}
 .lext-sq-cell.pw.tier-alto{color:rgba(193,229,255,.92);font-weight:700;}
@@ -4169,9 +4259,10 @@ Tottenham
         <label class="lext-pl-role"><input type="checkbox" id="lext-pl-cap"/><span class="lext-pl-role-ico">©</span><span>Capitán</span></label>
         <label class="lext-pl-role"><input type="checkbox" id="lext-pl-fk"/><span class="lext-pl-role-ico">🎯</span><span>Lanza faltas</span></label>
         <label class="lext-pl-role"><input type="checkbox" id="lext-pl-pk"/><span class="lext-pl-role-ico">🥅</span><span>Lanza penaltis</span></label>
-        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-star"/><span class="lext-pl-role-ico">⭐</span><span>Estrella del equipo</span></label>
+        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-star"/><span class="lext-pl-role-ico">⭐</span><span>Estrella</span></label>
+        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-scorer"/><span class="lext-pl-role-ico">⚾</span><span>Goleador nato</span></label>
       </div>
-      <div class="lext-sub">Pueden combinarse (p.ej. el capitán también lanza penaltis). Solo puede haber <b>un capitán</b> y <b>una estrella</b> por equipo: si marcas otro, el anterior pierde el rol automáticamente. La estrella (⭐) sube las opciones de marcar gol del jugador.</div>
+      <div class="lext-sub">Pueden combinarse libremente. Solo <b>el capitán</b> es único por equipo — <b>F</b>, <b>P</b>, <b>⭐ Estrella</b> y <b>⚾ Goleador nato</b> pueden estar activados en varios jugadores a la vez. La estrella y el goleador aumentan las opciones de marcar gol.</div>
       <div class="lext-btn-row">
         <button class="lext-btn green" id="lext-pl-save-btn" onclick="lextSavePlayer()">💾 Añadir jugador</button>
         <button class="lext-btn" id="lext-pl-cancel-btn" onclick="lextCancelEditPlayer()" style="display:none;">✕ Cancelar</button>
@@ -5396,16 +5487,18 @@ Tottenham
     });
 
     function rowFor(p, isGK){
-      /* Badges C/F/P/⭐ visibles cuando el rol está asignado + botones
-         para alternarlos directamente desde aquí (el admin pidió poder
-         editar individualmente a un jugador ya creado sin tener que
-         borrarlo y rehacerlo). Toda esta UI vive detrás del PIN admin
-         747 (modal pG → ligaExt edit). */
+      /* Badges C/F/P/⭐/⚾ visibles cuando el rol está asignado + botones
+         para alternarlos. Cada botón va envuelto en pG(...) para que
+         exija el PIN admin 747 antes de modificar nada, incluso si el
+         usuario ya está dentro del editor (p. ej. después de cerrar
+         sesión admin). Solo `captain` es exclusivo — el resto permite
+         varios jugadores del mismo equipo a la vez. */
       var badges = '';
-      if(p.captain)  badges += '<span class="lext-badge cap"   title="Capitán">C</span>';
-      if(p.freeKick) badges += '<span class="lext-badge fk"    title="Lanzador de faltas">F</span>';
-      if(p.penalty)  badges += '<span class="lext-badge pk"    title="Lanzador de penaltis">P</span>';
-      if(p.elite)    badges += '<span class="lext-badge star"  title="Estrella del equipo">⭐</span>';
+      if(p.captain)  badges += '<span class="lext-badge cap"    title="Capitán">C</span>';
+      if(p.freeKick) badges += '<span class="lext-badge fk"     title="Lanzador de faltas">F</span>';
+      if(p.penalty)  badges += '<span class="lext-badge pk"     title="Lanzador de penaltis">P</span>';
+      if(p.elite)    badges += '<span class="lext-badge star"   title="Estrella del equipo">⭐</span>';
+      if(p.natGoal)  badges += '<span class="lext-badge scorer" title="Goleador nato">⚾</span>';
       var rating = computePlayerRating(p);
       var rStr = rating>0 ? rating.toFixed(2) : '0.00';
       var rCls = 'rating '+ratingClass(rating);
@@ -5424,21 +5517,24 @@ Tottenham
         cells = power + pj + fmtCell(p.gol,'gol') + fmtCell(p.pen,'pen') + fmtCell(p.fk,'fk') + mvp + ta + tr + rCell;
       }
       function togBtn(flag, ico, on, title){
+        /* pG(...) exige el PIN 747 si la sesión admin está cerrada.
+           Si ya está abierta (window._adm===true) corre al instante. */
         return '<button class="lext-sq-mini lext-sq-tog'+(on?' on':'')+'" '
-          + 'onclick="lextTogglePlayerFlag(\''+p.id+'\',\''+flag+'\')" '
-          + 'title="'+title+'">'+ico+'</button>';
+          + 'onclick="pG(function(){lextTogglePlayerFlag(\''+p.id+'\',\''+flag+'\')})" '
+          + 'title="'+title+' · requiere PIN 747">'+ico+'</button>';
       }
       var tog = togBtn('captain','C',!!p.captain,'Capitán')
               + togBtn('freeKick','F',!!p.freeKick,'Lanzador de faltas')
               + togBtn('penalty','P',!!p.penalty,'Lanzador de penaltis')
-              + togBtn('elite','⭐',!!p.elite,'Estrella del equipo');
+              + togBtn('elite','⭐',!!p.elite,'Estrella del equipo')
+              + togBtn('natGoal','⚾',!!p.natGoal,'Goleador nato');
       return '<div class="lext-sq-row '+cls+'">'
         + '<span class="lext-sq-name tier-'+pTier+'">'+p.name+badges+'</span>'
         + cells
         + '<span class="lext-sq-actions">'
         + tog
-        + '<button class="lext-sq-mini" onclick="lextEditPlayer(\''+p.id+'\')" title="Editar jugador">✏️</button>'
-        + '<button class="lext-sq-mini" onclick="lextDeletePlayer(\''+p.id+'\')" title="Eliminar">🗑</button>'
+        + '<button class="lext-sq-mini" onclick="pG(function(){lextEditPlayer(\''+p.id+'\')})" title="Editar jugador · requiere PIN 747">✏️</button>'
+        + '<button class="lext-sq-mini" onclick="pG(function(){lextDeletePlayer(\''+p.id+'\')})" title="Eliminar · requiere PIN 747">🗑</button>'
         + '</span>'
         + '</div>';
     }
@@ -5497,12 +5593,13 @@ Tottenham
     if(!t || !t.players) return;
     var target = t.players.filter(function(p){return p.id===pid;})[0];
     if(!target) return;
-    if(flag === 'captain' || flag === 'elite'){
-      /* Capitán y estrella son ÚNICOS por equipo: al activar uno nuevo,
-         el anterior pierde el rol automáticamente. */
-      var willBe = !target[flag];
-      t.players.forEach(function(p){ p[flag] = false; });
-      target[flag] = willBe;
+    if(flag === 'captain'){
+      /* Solo el capitán es ÚNICO por equipo. El resto de roles
+         (F, P, ⭐, ⚾) pueden estar en VARIOS jugadores del mismo
+         equipo a la vez — a petición del admin. */
+      var willBe = !target.captain;
+      t.players.forEach(function(p){ p.captain = false; });
+      target.captain = willBe;
     } else {
       target[flag] = !target[flag];
     }
@@ -5559,14 +5656,16 @@ Tottenham
     var power = parseInt(document.getElementById('lext-pl-power').value,10)||50;
     var numRaw = (document.getElementById('lext-pl-num').value||'').trim();
     var num = numRaw ? Math.max(1, Math.min(99, parseInt(numRaw,10)||0)) : 0;
-    var capChk  = document.getElementById('lext-pl-cap');
-    var fkChk   = document.getElementById('lext-pl-fk');
-    var pkChk   = document.getElementById('lext-pl-pk');
-    var starChk = document.getElementById('lext-pl-star');
-    var isCap  = !!(capChk  && capChk.checked);
-    var isFk   = !!(fkChk   && fkChk.checked);
-    var isPk   = !!(pkChk   && pkChk.checked);
-    var isStar = !!(starChk && starChk.checked);
+    var capChk    = document.getElementById('lext-pl-cap');
+    var fkChk     = document.getElementById('lext-pl-fk');
+    var pkChk     = document.getElementById('lext-pl-pk');
+    var starChk   = document.getElementById('lext-pl-star');
+    var scorerChk = document.getElementById('lext-pl-scorer');
+    var isCap    = !!(capChk    && capChk.checked);
+    var isFk     = !!(fkChk     && fkChk.checked);
+    var isPk     = !!(pkChk     && pkChk.checked);
+    var isStar   = !!(starChk   && starChk.checked);
+    var isScorer = !!(scorerChk && scorerChk.checked);
     var data = loadData(CURRENT_KEY);
     var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
     if(!t) return;
@@ -5575,9 +5674,8 @@ Tottenham
     if(_editingPlayerId){
       var target = t.players.filter(function(p){ return p.id === _editingPlayerId; })[0];
       if(!target){ _editingPlayerId = null; return; }
-      // Exclusividad: capitán y estrella únicos por equipo.
-      if(isCap)  t.players.forEach(function(p){ if(p !== target) p.captain = false; });
-      if(isStar) t.players.forEach(function(p){ if(p !== target) p.elite   = false; });
+      // Exclusividad: solo el capitán es único por equipo.
+      if(isCap) t.players.forEach(function(p){ if(p !== target) p.captain = false; });
       target.name = name;
       target.num = num;
       target.pos = pos;
@@ -5586,9 +5684,9 @@ Tottenham
       target.freeKick = isFk;
       target.penalty  = isPk;
       target.elite    = isStar;
+      target.natGoal  = isScorer;
     } else {
-      if(isCap)  t.players.forEach(function(p){ if(p.captain) p.captain = false; });
-      if(isStar) t.players.forEach(function(p){ if(p.elite)   p.elite   = false; });
+      if(isCap) t.players.forEach(function(p){ if(p.captain) p.captain = false; });
       var newP = {
         id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
         name:name, num:num, pos:pos, power:power,
@@ -5596,6 +5694,7 @@ Tottenham
         freeKick: isFk,
         penalty:  isPk,
         elite:    isStar,
+        natGoal:  isScorer,
         pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
       };
       t.players.push(newP);
@@ -5606,10 +5705,11 @@ Tottenham
     // Limpiar form + salir de modo edición
     document.getElementById('lext-pl-name').value='';
     document.getElementById('lext-pl-num').value='';
-    if(capChk)  capChk.checked  = false;
-    if(fkChk)   fkChk.checked   = false;
-    if(pkChk)   pkChk.checked   = false;
-    if(starChk) starChk.checked = false;
+    if(capChk)    capChk.checked    = false;
+    if(fkChk)     fkChk.checked     = false;
+    if(pkChk)     pkChk.checked     = false;
+    if(starChk)   starChk.checked   = false;
+    if(scorerChk) scorerChk.checked = false;
     _exitEditPlayerMode();
 
     renderSquadList();
@@ -5637,14 +5737,16 @@ Tottenham
     document.getElementById('lext-pl-num').value   = target.num  || '';
     document.getElementById('lext-pl-pos').value   = target.pos  || 'MED';
     document.getElementById('lext-pl-power').value = target.power|| 75;
-    var capChk  = document.getElementById('lext-pl-cap');
-    var fkChk   = document.getElementById('lext-pl-fk');
-    var pkChk   = document.getElementById('lext-pl-pk');
-    var starChk = document.getElementById('lext-pl-star');
-    if(capChk)  capChk.checked  = !!target.captain;
-    if(fkChk)   fkChk.checked   = !!target.freeKick;
-    if(pkChk)   pkChk.checked   = !!target.penalty;
-    if(starChk) starChk.checked = !!target.elite;
+    var capChk    = document.getElementById('lext-pl-cap');
+    var fkChk     = document.getElementById('lext-pl-fk');
+    var pkChk     = document.getElementById('lext-pl-pk');
+    var starChk   = document.getElementById('lext-pl-star');
+    var scorerChk = document.getElementById('lext-pl-scorer');
+    if(capChk)    capChk.checked    = !!target.captain;
+    if(fkChk)     fkChk.checked     = !!target.freeKick;
+    if(pkChk)     pkChk.checked     = !!target.penalty;
+    if(starChk)   starChk.checked   = !!target.elite;
+    if(scorerChk) scorerChk.checked = !!target.natGoal;
     var sum = document.getElementById('lext-pl-summary');
     if(sum) sum.textContent = '✏️ Editando: ' + (target.name || '?');
     var btn = document.getElementById('lext-pl-save-btn');
@@ -5996,24 +6098,27 @@ Tottenham
           var num = p.num && p.num > 0 ? p.num : nextFreeNum(simPos);
           var pw  = Math.max(1, Math.min(99, Number(p.power)||70));
           /* Formato clásico de 3 elementos: [num, name, power]. Flags
-             (C/F/P/⭐) se guardan aparte en window._LIGA_EA_PLAYER_FLAGS
+             (C/F/P/⭐/⚾) se guardan aparte en _LIGA_EA_PLAYER_FLAGS
              (sidecar), así no rompemos ningún consumidor del formato. */
-          if (p.captain || p.freeKick || p.penalty || p.elite) {
+          if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal) {
             var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
             var fkey = String(t.name) + '::' + String(p.name||'');
             fmap[fkey] = {
-              captain: !!p.captain,
+              captain:  !!p.captain,
               freeKick: !!p.freeKick,
-              penalty: !!p.penalty,
-              elite: !!p.elite
+              penalty:  !!p.penalty,
+              elite:    !!p.elite,
+              natGoal:  !!p.natGoal
             };
           }
-          /* La propiedad .elite va COMO METADATO del array. Los
-             consumidores del formato [num,name,power] siguen viendo
-             los 3 elementos habituales; los scorers que quieren aplicar
-             el bonus de ⭐ leen `entry.elite`. */
+          /* Las flags de scoring (.elite y .natGoal) viajan COMO
+             METADATO del array. Los consumidores del formato
+             [num,name,power] siguen viendo los 3 elementos habituales;
+             los scorers que quieren aplicar el bonus leen entry.elite
+             / entry.natGoal. */
           var entry = [String(num), String(p.name||'?'), pw];
-          if(p.elite) entry.elite = true;
+          if(p.elite)   entry.elite   = true;
+          if(p.natGoal) entry.natGoal = true;
           simSquad.push(entry);
         });
       });

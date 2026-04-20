@@ -404,15 +404,68 @@ window.sqFromRegistry = function(teamName, opts) {
   var resolved = aliases[trimmed.toLowerCase()] || trimmed;
   var reg = window.SQUAD_REGISTRY[resolved] || window.SQUAD_REGISTRY[trimmed] || window.SQUAD_REGISTRY[teamName];
   if (!reg) {
-    /* Lazy fallback: si SQUAD_REGISTRY aún no está poblado (p.ej. el
+    /* Lazy fallback 1: si SQUAD_REGISTRY aún no está poblado (p.ej. el
        usuario abre el partido antes del setTimeout de
-       applyEngineOverrides) tiramos del editor ahora mismo. Sin este
-       fallback los equipos arrancaban sin plantilla y el simulador
-       caía a "Jugador A"/"Jugador B" para todos. */
+       applyEngineOverrides) tiramos del editor ahora mismo. */
     if (typeof window.applyEngineOverrides === 'function') {
       try { window.applyEngineOverrides(); } catch(_){}
       reg = window.SQUAD_REGISTRY[resolved] || window.SQUAD_REGISTRY[trimmed] || window.SQUAD_REGISTRY[teamName];
     }
+  }
+  if (!reg) {
+    /* Lazy fallback 2: leer directamente ligaExt_liga-ea-sports y
+       montar el sq en línea, saltándose el pipeline habitual de
+       applyEngineOverrides. Si llegamos aquí es porque ese camino
+       falló por la razón que sea (hash cache, _hasPlayers, alias,
+       lo que toque). Así nos aseguramos de que, mientras haya datos
+       en ligaExt_liga-ea-sports, jamás caemos al placeholder. */
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (raw) {
+        var data = JSON.parse(raw);
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        function _norm(s){ return String(s||'').trim().toLowerCase(); }
+        var target = _norm(teamName);
+        var targetResolved = _norm(resolved);
+        var match = null;
+        for (var ti = 0; ti < teams.length; ti++) {
+          var tn = _norm(teams[ti] && teams[ti].name);
+          if (!tn) continue;
+          if (tn === target || tn === targetResolved || tn.indexOf(target) !== -1 || target.indexOf(tn) !== -1) {
+            match = teams[ti]; break;
+          }
+        }
+        if (match && Array.isArray(match.players) && match.players.length) {
+          var POS_HEADER_DIRECT = {P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS'};
+          var POS_MAP_DIRECT = {POR:'P', DEF:'D', MED:'M', DEL:'F'};
+          var POS_ORDER_DIRECT = ['P','D','M','F'];
+          var groupsD = {P:[], D:[], M:[], F:[]};
+          match.players.forEach(function(p){
+            if (!p || !p.name) return;
+            var ps = POS_MAP_DIRECT[p.pos] || 'M';
+            groupsD[ps].push(p);
+          });
+          var built = [];
+          POS_ORDER_DIRECT.forEach(function(ps){
+            var pool = groupsD[ps];
+            if (!pool.length) return;
+            pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+            built.push({h: POS_HEADER_DIRECT[ps]});
+            pool.forEach(function(p){
+              var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+              built.push([String(p.num || ''), String(p.name || '?'), pw]);
+            });
+          });
+          if (built.length) {
+            /* Cache en SQUAD_REGISTRY bajo el nombre que nos pidieron
+               para no repetir este parseo el resto de la sesión. */
+            window.SQUAD_REGISTRY[teamName] = built;
+            if (resolved !== teamName) window.SQUAD_REGISTRY[resolved] = built;
+            reg = built;
+          }
+        }
+      }
+    } catch(_){}
     if (!reg) {
       console.warn('sqFromRegistry: equipo no encontrado:', teamName, '(resolved:', resolved, ')');
       return [];

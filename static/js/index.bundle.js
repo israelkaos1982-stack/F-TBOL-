@@ -2257,7 +2257,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     },_tickMs);
 
     function renderEvtEl(ev){
-      if(ev.type==='ht'||ev.type==='sub')return;
+      if(ev.type==='ht'||ev.type==='sub'||ev.type==='played')return;
       // Lesión grave: STOP en timer
       if(ev.type==='lesion'&&ev.grave){
         var _btnTimer=document.getElementById(cfg.btnId);
@@ -2389,6 +2389,39 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
       var _tr_b=evts.filter(function(e){return e.team==='b'&&(e.ico==='🟥'||e.ico==='🟨🟥');}).length;
       var _mvp_a=mvpTeam===TEAM_A?1:0;
       var _mvp_b=mvpTeam===TEAM_B?1:0;
+      /* Emitir 'played' por cada jugador que ha pisado el campo
+         (titulares + suplentes que entraron en sustitución). Sin esto,
+         sólo los jugadores con al menos 1 evento (gol/tarjeta/MVP)
+         acababan con una entrada en el dashboard de estadísticas → los
+         demás quedaban fuera y no sumaban PJ, ni los suplentes que
+         entraron en el partido. El tipo 'played' no incrementa ningún
+         contador en applyEvent; simplemente crea la entrada stats[team::
+         jugador] para que el asignador posterior de PJ (misc_body_1.html)
+         le dé el partido que le corresponde. */
+      (function _pushPlayedEvts(){
+        function _pushSide(teamLetter, sq, benchIn){
+          var pushed = {};
+          (sq||[]).forEach(function(p){
+            if(!p) return;
+            if(p[4] === 'suplente') return; /* titulares */
+            var key = String(p[0]||'') + '|' + String(p[1]||'');
+            if(pushed[key]) return;
+            pushed[key] = true;
+            evts.push({min:0, team:teamLetter, player:[p[0]||'', p[1]||'', p[2]||''], type:'played'});
+          });
+          (benchIn||[]).forEach(function(p){
+            if(!p) return;
+            var key = String(p[0]||'') + '|' + String(p[1]||'');
+            if(pushed[key]) return;
+            pushed[key] = true;
+            evts.push({min:0, team:teamLetter, player:[p[0]||'', p[1]||'', p[2]||''], type:'played'});
+          });
+        }
+        try {
+          _pushSide('a', sqA, benA.slice(0, subIdxA));
+          _pushSide('b', sqB, benB.slice(0, subIdxB));
+        } catch(_){}
+      })();
       // registrarLigaPlayerStats MUST be called first so that patchRegistrar can use the
       // already-stored events (with pen-gol, falta-gol, propia) instead of falling back
       // to genMatchEvents which lacks those set-piece event types.
@@ -2934,21 +2967,26 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       name = String((ev && (ev.name || ev.playerName || ev.jugador || ev.player)) || '').trim();
     }
     var row = null;
-    if(num) row = index.byNum[canonicalTeam + '::' + num] || null;
-    if(!row && name) row = index.byName[canonicalTeam + '::' + norm(name)] || null;
-    /* Fallback por apellido: si la fuente del simulador trae "Swiderski"
-       pero la plantilla del HTML lo registra como "G. Swiderski" (o vice-
-       versa), el match exacto falla y la stat se pierde. Hacemos un
-       segundo intento comparando el último token (apellido) normalizado.
-       Ej.: "swiderski" matchea "g swiderski" porque ambos terminan en
-       "swiderski". Solo aplica con tokens de >=4 chars para evitar
-       falsos positivos con apellidos cortos / iniciales. */
+    /* Orden de match: nombre > apellido > número.
+       Antes probábamos el número PRIMERO, pero los equipos cuya
+       plantilla HTML y la del simulador tienen dorsales distintos
+       (p.ej. Celta: HTML Carreira #14 vs simulador Iago Aspas #14,
+       HTML Á. Núñez #17 vs simulador F. López #17...) acababan
+       atribuyendo eventos al jugador equivocado — y el correcto se
+       perdía silenciosamente. Con nombre primero, solo caemos al
+       número cuando no tenemos nombre. */
+    if(name) row = index.byName[canonicalTeam + '::' + norm(name)] || null;
+    /* Fallback por apellido: "Swiderski" ↔ "G. Swiderski",
+       "Iago Aspas" ↔ "I. Aspas". Solo aceptamos si hay UN único match
+       dentro del equipo, para no asignar a un jugador al azar cuando
+       el apellido está repetido. */
     if(!row && name){
       var nname = norm(name);
       var tokens = nname.split(' ').filter(Boolean);
       var lastToken = tokens.length ? tokens[tokens.length - 1] : '';
       if(lastToken && lastToken.length >= 4){
         var prefix = canonicalTeam + '::';
+        var matched = [];
         var allKeys = Object.keys(index.byName);
         for(var _ki=0; _ki<allKeys.length; _ki++){
           var _k = allKeys[_ki];
@@ -2956,13 +2994,13 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
           var rowName = _k.substring(prefix.length);
           var rowTokens = rowName.split(' ').filter(Boolean);
           var rowLast = rowTokens.length ? rowTokens[rowTokens.length - 1] : '';
-          if(rowLast === lastToken){
-            row = index.byName[_k];
-            break;
-          }
+          if(rowLast === lastToken) matched.push(index.byName[_k]);
         }
+        if(matched.length === 1) row = matched[0];
       }
     }
+    /* Último recurso: número. Solo si no había nombre o no matcheó. */
+    if(!row && num && !name) row = index.byNum[canonicalTeam + '::' + num] || null;
     if(!row) return;
 
     var type = parseType(ev);

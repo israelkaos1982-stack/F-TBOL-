@@ -1490,9 +1490,25 @@ var STAT_CLASS_MAP = {
   }
 
   window.registrarLigaPlayerStats = function(matchKey, teamA, teamB, evts, mvpName, mvpTeam){
-    LIGA_PLAYER_MATCH_STORE[matchKey] = {
-      teamA: canonicalTeamName(teamA),
-      teamB: canonicalTeamName(teamB),
+    /* Clave canónica por pareja (home|away canónicos) en vez de usar
+       el matchKey tal cual viene del caller. Distintos flujos producen
+       claves distintas para el MISMO partido:
+         - live match:   `mk = mlw-j1-Home-Away` / 'ams-N-...'
+         - IA auto-sim:  rKey(j,home,away) = 'j|Home|Away'
+       Si el usuario simulaba el mismo partido dos veces por vías
+       distintas, LIGA_PLAYER_MATCH_STORE acababa con dos entradas y
+       las stats de jugadores se sumaban doble (p.ej. Real Sociedad
+       con GF=1 en la clasificación pero 4 goles repartidos en la
+       plantilla). Al usar 'canonA|canonB' la re-simulación sobreescribe
+       la entrada previa, igual que ya hacía LIGA_J1_RESULTS con su
+       dedup por home/away. Doble round-robin no interfiere porque cada
+       jornada vuela con home/away invertidos → claves distintas. */
+    var canonA = canonicalTeamName(teamA);
+    var canonB = canonicalTeamName(teamB);
+    var storeKey = (canonA && canonB) ? (canonA + '|' + canonB) : matchKey;
+    LIGA_PLAYER_MATCH_STORE[storeKey] = {
+      teamA: canonA,
+      teamB: canonB,
       evts: (evts || []).map(function(ev){
         var copy = {};
         Object.keys(ev || {}).forEach(function(k){ copy[k] = ev[k]; });
@@ -7315,20 +7331,27 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   function hydrateStoreFromSavedResults(){
     var results = parseSavedResults();
-    var store = window.LIGA_PLAYER_MATCH_STORE = window.LIGA_PLAYER_MATCH_STORE || {};
+    /* Reset completo del store para que una re-hidratación no deje entradas
+       antiguas de formatos de key distintos conviviendo con las nuevas.
+       Antes usábamos el `key` crudo (jornada|home|away), pero
+       registrarLigaPlayerStats ahora deduplica por `canonHome|canonAway`,
+       así que tenemos que alinear AMBOS caminos en la misma clave. */
+    var store = (window.LIGA_PLAYER_MATCH_STORE = {});
     Object.keys(results).forEach(function(key){
       var meta = parseResultKey(key);
       var data = results[key] || {};
       if(!meta || !data || !Array.isArray(data.events)) return;
-      store[key] = {
-        teamA: meta.home,
-        teamB: meta.away,
+      var canonA = meta.home, canonB = meta.away;
+      var storeKey = (canonA && canonB) ? (canonA + '|' + canonB) : key;
+      store[storeKey] = {
+        teamA: canonA,
+        teamB: canonB,
         evts: data.events.map(function(ev){
           var copy = {};
           Object.keys(ev || {}).forEach(function(k){ copy[k] = ev[k]; });
           if(!copy.realTeam){
-            if(copy.team === 'a') copy.realTeam = meta.home;
-            else if(copy.team === 'b') copy.realTeam = meta.away;
+            if(copy.team === 'a') copy.realTeam = canonA;
+            else if(copy.team === 'b') copy.realTeam = canonB;
           }
           return copy;
         }),

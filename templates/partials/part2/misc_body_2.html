@@ -4720,9 +4720,24 @@
             team:e.team
           };
           /* Para sustituciones guardamos también al jugador saliente
-             para que _iaEventsHtml pueda renderlo con flechas ⬆️⬇️. */
+             (aunque en el acta queden ocultas, lo mantenemos por si se
+             decide enseñarlas en algún sitio). */
           if (e.type === 'sust' && (e.playerOut || e.numOut)) {
             out.playerOut = (e.numOut && e.numOut!=='0'?e.numOut+'. ':'') + (e.playerOut||'');
+          }
+          /* VAR: preservamos los flags para que el acta finalizada
+             muestre "ANULADA POR VAR" o "Confirmado por VAR" al recargar
+             o al reabrir el partido ya terminado. */
+          if (e.var) out.var = true;
+          if (e._varAnulado) out._varAnulado = true;
+          if (e._varConfirmed) out._varConfirmed = true;
+          /* Lesión: guardamos también los campos de descripción y
+             grado para que el acta final los reproduzca tal cual. */
+          if (e.type === 'lesion') {
+            if (e.lesDesc) out.lesDesc = e.lesDesc;
+            if (e.lesPartidos != null) out.lesPartidos = e.lesPartidos;
+            if (e.lesGrado != null) out.lesGrado = e.lesGrado;
+            if (e.lesIco) out.lesIco = e.lesIco;
           }
           return out;
         });
@@ -6888,6 +6903,7 @@
         var ev = evts[evtIdx]; evtIdx++;
         if (ev.type === 'mvp') continue;
         if (ev.type === 'played') continue; /* marcador interno para PJ, no acta */
+        if (ev.type === 'sust') continue;   /* sustituciones ocultas en el acta */
         var ico = ev.type === 'gol'        ? '⚽'
                 : ev.type === 'pen-gol'    ? '⚽'
                 : ev.type === 'pen-prov'   ? '🤦'
@@ -6924,6 +6940,7 @@
             setTimeout(function() {
               /* Apply score update ONLY if VAR confirmed the event */
               if (varConfirmed) {
+                capturedEv._varConfirmed = true;
                 if (capturedEv.type === 'gol' || capturedEv.type === 'pen-gol' || capturedEv.type === 'falta-gol') {
                   if (capturedEv.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
                   else                         { scB++; if (scBEl) scBEl.textContent = scB; }
@@ -7815,6 +7832,7 @@
     m.events.forEach(function(ev) {
       if (ev.type === 'mvp') return;
       if (ev.type === 'played') return; /* marcador interno para PJ, no se renderiza */
+      if (ev.type === 'sust') return;   /* sustituciones ocultas en el acta final */
       var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'propia' ? '&#9917;&#128683;' : ev.type === 'falta-gol' ? '&#9917;&#127919;' : ev.type === 'pen-gol' ? '&#9917;&#129349;' : ev.type === 'pen-fallo' ? '&#10060;&#129349;' : ev.type === 'pen-prov' ? '&#129318;&#129349;' : ev.type === 'pen-parado' ? '&#128400;&#129349;' : ev.type === 'amarilla' ? '&#129000;' : ev.type === 'd-amarilla' ? '&#129000;&#128997;' : ev.type === 'roja' ? '&#128997;' : ev.type === 'lesion' ? '&#129657;' : ev.type === 'imbat' ? '&#129508;' : ev.type === 'sust' ? '&#128257;' : '&#128203;';
       var lesColor = ev.type === 'lesion' ? (ev.lesGrado === 3 ? '#ff4444' : ev.lesGrado === 2 ? '#ff8c00' : '#ffd700') : '#fff';
       var lesExtra = (ev.type === 'lesion' && ev.lesDesc) ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + 'P)</span>' : '';
@@ -7827,6 +7845,15 @@
         varAnulSfx = ' <span style="font-size:10px;font-weight:700;color:#ff5555;letter-spacing:.5px;">⛔ ANULADA POR &#128250; VAR</span>';
         rowBg = 'background:rgba(255,80,80,.07);';
         nameColor = 'rgba(255,255,255,.55)';
+      } else if (ev._varConfirmed) {
+        /* VAR confirmó el evento: badge verde discreto para que quede
+           claro en el acta final que pasó por revisión y se validó. */
+        var _varConfTxt;
+        if (['gol','pen-gol','falta-gol','propia'].indexOf(ev.type) !== -1) _varConfTxt = '✓ Confirmado por &#128250; VAR';
+        else if (['pen-prov','pen-parado','pen-fallo'].indexOf(ev.type) !== -1) _varConfTxt = '✓ Tras revisión &#128250; VAR';
+        else _varConfTxt = '✓ Validado por &#128250; VAR';
+        varAnulSfx = ' <span style="font-size:10px;color:#4fd87a;font-weight:700;letter-spacing:.5px;">' + _varConfTxt + '</span>';
+        rowBg = 'background:rgba(80,200,100,.04);';
       }
       /* Sustitución: misma estética que el tick vivo (entrante ⬆️ + saliente ⬇️) */
       var playerHtmlH;

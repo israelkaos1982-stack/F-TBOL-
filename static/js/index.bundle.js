@@ -2349,7 +2349,7 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     },_tickMs);
 
     function renderEvtEl(ev){
-      if(ev.type==='ht'||ev.type==='sub'||ev.type==='played')return;
+      if(ev.type==='ht'||ev.type==='sub'||ev.type==='played'||ev.type==='sust')return;
       // Lesión grave: STOP en timer
       if(ev.type==='lesion'&&ev.grave){
         var _btnTimer=document.getElementById(cfg.btnId);
@@ -5909,10 +5909,33 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       var partidos = sortearPartidos(tipo);
       var minLesion = 5 + Math.floor(Math.random() * (ft90 - 10));
 
-      // Sustituto: el mejor disponible del banquillo
+      // Sustituto: mismo puesto que el lesionado (D→D, M→M, F→F).
+      // Fallback: cualquier jugador de campo disponible, o por último
+      // cualquier jugador. Antes usábamos "el mejor del banquillo" sin
+      // mirar la posición, así que un delantero lesionado podía acabar
+      // sustituido por un central, lo cual no tiene sentido táctico.
+      var posLesion = (lesionado && lesionado[2]) || 'F';
       var sustituto = null;
       for (var i = subIdx; i < ben.length; i++) {
-        if (!window.BAJA_STORE[ben[i][1]]) { sustituto = ben[i]; break; }
+        var b = ben[i];
+        if (!b || window.BAJA_STORE[b[1]]) continue;
+        if (b[2] === posLesion) { sustituto = b; break; }
+      }
+      if (!sustituto) {
+        // Sin suplente de la misma posición: tirar de cualquier jugador
+        // de campo (no portero) que no esté de baja.
+        for (var j = subIdx; j < ben.length; j++) {
+          var b2 = ben[j];
+          if (!b2 || window.BAJA_STORE[b2[1]]) continue;
+          if (b2[2] !== 'P') { sustituto = b2; break; }
+        }
+      }
+      if (!sustituto) {
+        // Último recurso: el primero disponible (puede ser portero si
+        // fuera un lesionado con el banquillo agotado).
+        for (var k = subIdx; k < ben.length; k++) {
+          if (!window.BAJA_STORE[ben[k][1]]) { sustituto = ben[k]; break; }
+        }
       }
 
       return {

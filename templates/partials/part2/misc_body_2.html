@@ -7698,12 +7698,25 @@
     }
     container.innerHTML = html
       || '<div style="padding:12px;color:#555;font-size:13px;">Sin partidos disponibles a\xfan</div>';
-    /* Refresh jornada screen if currently open */
+    /* Refresh jornada screen if currently open — conservando el
+       scrollY del usuario. Antes cada fin de partido IA desencadenaba
+       buildIAresults → openIAJornada → bodyEl.innerHTML + go(...) →
+       window.scrollTo(0,0), y la pantalla saltaba a la parte superior
+       cada pocos segundos aunque el usuario estuviera intentando ver
+       un partido en directo bien avanzado. */
     try {
       if (window._currentIAJornada && typeof window.openIAJornada === 'function') {
         var iaScr = document.getElementById('s-liga-ia-jornada');
         if (iaScr && iaScr.classList.contains('active')) {
-          window.openIAJornada(window._currentIAJornada);
+          var _savedY = window.pageYOffset || document.documentElement.scrollTop || 0;
+          window._iaRefreshInPlace = true; /* flag para que go() no resetee scroll */
+          try { window.openIAJornada(window._currentIAJornada); }
+          finally { window._iaRefreshInPlace = false; }
+          /* Restaurar scroll tras el innerHTML + go(). Dos pasadas:
+             una inmediata y otra diferida porque algunos navegadores
+             normalizan el scroll después de reflow. */
+          window.scrollTo(0, _savedY);
+          setTimeout(function(){ window.scrollTo(0, _savedY); }, 0);
         }
       }
     } catch(_) {}

@@ -421,9 +421,7 @@ window.sqFromRegistry = function(teamName, opts) {
       var nombre = e[1];
       // Saltar lesionados/sancionados
       if (excluded.indexOf(nombre) !== -1) continue;
-      // Flags (C/F/P) en e[3] si vienen del editor.
-      var flags = (e.length >= 4 && e[3] && typeof e[3] === 'object') ? e[3] : null;
-      full.push([e[0], nombre, curPos, poder, null, flags]);
+      full.push([e[0], nombre, curPos, poder]);
     }
   }
 
@@ -452,8 +450,7 @@ window.sqFromRegistry = function(teamName, opts) {
   //    Los primeros 11 son: portero titular + los 10 de campo de más poder
   //    El resto son banquillo
   for (var ci = 0; ci < conv.length; ci++) {
-    var fl = conv[ci][5] || null;
-    conv[ci] = [conv[ci][0], conv[ci][1], conv[ci][2], conv[ci][3], ci < 11 ? 'titular' : 'suplente', fl];
+    conv[ci] = [conv[ci][0], conv[ci][1], conv[ci][2], conv[ci][3], ci < 11 ? 'titular' : 'suplente'];
   }
 
   return conv;

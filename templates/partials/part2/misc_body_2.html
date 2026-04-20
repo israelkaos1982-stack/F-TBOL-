@@ -6754,12 +6754,18 @@
     function rndMin() { return Math.floor(Math.random()*88)+2; }
     /* Picker que respeta los flags P (lanzador de penaltis) y F
        (lanzador de faltas) marcados por el admin en el editor.
-       Si hay varios marcados prioriza el de mayor poder. Si no hay
-       ninguno marcado, cae al random normal (rndSq).
-       sq entry: [num, name, posLetter, poder, titular/suplente, flags] */
-    function pickSpecialist(sq, flag) {
+       Los flags viven en un sidecar window._LIGA_EA_PLAYER_FLAGS
+       indexado como "<team>::<player>". Si hay varios marcados,
+       prioriza el de mayor poder. Si no hay ninguno, cae al random. */
+    function pickSpecialist(sq, flag, teamName) {
       if (!Array.isArray(sq) || !sq.length) return null;
-      var marked = sq.filter(function(p){ return p && p[5] && p[5][flag]; });
+      var fmap = window._LIGA_EA_PLAYER_FLAGS || {};
+      var tName = String(teamName || '').trim();
+      var marked = sq.filter(function(p){
+        if (!p) return false;
+        var k = tName + '::' + String(p[1]||'');
+        return !!(fmap[k] && fmap[k][flag]);
+      });
       if (marked.length) {
         marked.sort(function(a,b){ return (Number(b[3])||0) - (Number(a[3])||0); });
         return marked[0];
@@ -6771,7 +6777,7 @@
     if (Math.random() < 0.08) {
       var penTeam   = Math.random() < 0.5 ? 'a' : 'b';    // equipo que RECIBE y tira
       var foulTeam  = penTeam === 'a' ? 'b' : 'a';         // equipo que COMETE la falta
-      var penKicker = pickSpecialist(penTeam === 'a' ? outA : outB, 'penalty');
+      var penKicker = pickSpecialist(penTeam === 'a' ? outA : outB, 'penalty', penTeam === 'a' ? teamA : teamB);
       var foulDef   = rndSq(foulTeam === 'a' ? outA : outB);
       var penGk     = rndSq(foulTeam === 'a' ? gkA : gkB);
       var penMin    = rndMin();
@@ -6797,7 +6803,7 @@
     /* ── GOL DE FALTA (8% por partido) ── */
     if (Math.random() < 0.08) {
       var fkTeam = Math.random() < 0.5 ? 'a' : 'b';
-      var fkP    = pickSpecialist(fkTeam === 'a' ? outA : outB, 'freeKick');
+      var fkP    = pickSpecialist(fkTeam === 'a' ? outA : outB, 'freeKick', fkTeam === 'a' ? teamA : teamB);
       evts.push({ type:'falta-gol', ico:'⚽🎯', min:rndMin(), num:fkP[0]||'', player:fkP[1]||'?', team:fkTeam });
     }
 

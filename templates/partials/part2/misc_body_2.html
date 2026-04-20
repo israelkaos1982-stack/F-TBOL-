@@ -1996,7 +1996,64 @@
   function loadSegundaState(){return loadJSON(SEGUNDA_STATE_KEY, {table:[],players:[]});}
   function saveSegundaState(data){saveJSON(SEGUNDA_STATE_KEY, data);}
 
+  /* Cache de plantillas reales leídas del editor ligaExt. Se invalida al
+     inicio de cada simulación para reflejar ediciones recientes. */
+  var _realRosterCache = null;
+  function _loadRealRosters(){
+    if(_realRosterCache) return _realRosterCache;
+    var out = {};
+    ['ligaExt_liga-hypermotion','ligaExt_liga-primera-federacion','ligaExt_liga-ea-sports'].forEach(function(slug){
+      try {
+        var raw = localStorage.getItem(slug);
+        if(!raw) return;
+        var d = JSON.parse(raw);
+        var teams = (d && d.teams) || [];
+        teams.forEach(function(t){
+          if(!t || !t.name || !Array.isArray(t.players) || !t.players.length) return;
+          var roster = {porteros:[], defensas:[], medios:[], delanteros:[]};
+          t.players.forEach(function(p){
+            if(!p || !p.name) return;
+            var entry = [p.name, Number(p.power)||70];
+            if(p.pos === 'POR') roster.porteros.push(entry);
+            else if(p.pos === 'DEF') roster.defensas.push(entry);
+            else if(p.pos === 'MED') roster.medios.push(entry);
+            else roster.delanteros.push(entry);
+          });
+          out[t.name] = roster;
+        });
+      } catch(_){}
+    });
+    _realRosterCache = out;
+    return out;
+  }
+  function _invalidateRealRosterCache(){ _realRosterCache = null; }
+
   function buildRoster(team){
+    /* Si el editor ligaExt tiene jugadores reales para este equipo, los
+       usamos como plantilla de la sim. Así las estadísticas (goles, MVP,
+       tarjetas, clean sheets, etc.) se acumulan contra los nombres
+       auténticos y al volcarlas a `ef_player_stats_v1` aparecen en la
+       columna 👤 del modal Plantilla (renderSquadList en misc_body_1). */
+    var real = _loadRealRosters()[team.name];
+    if(real){
+      var total = real.porteros.length + real.defensas.length + real.medios.length + real.delanteros.length;
+      if(total){
+        /* Rellenar los grupos que falten con placeholders para que la
+           sim (que reparte goles/imbat/tarjetas por posición) nunca
+           choque contra un grupo vacío. */
+        var base = getTeamSimulationPower(team);
+        function pad(arr, prefix, minCount, shift){
+          while(arr.length < minCount){
+            arr.push([team.short+' '+prefix+' '+(arr.length+1), clamp(base+shift+randInt(-3,3),48,90)]);
+          }
+        }
+        pad(real.porteros, 'POR', 1, -4);
+        pad(real.defensas, 'DEF', 3, -2);
+        pad(real.medios,   'MED', 3,  0);
+        pad(real.delanteros,'DEL', 2, 2);
+        return real;
+      }
+    }
     var base = getTeamSimulationPower(team);
     function mk(prefix,count,shift){var arr=[]; for(var i=1;i<=count;i++){arr.push([team.short+' '+prefix+' '+i, clamp(base+shift+randInt(-3,3),48,90)]);} return arr;}
     return {porteros:mk('POR',2,-4), defensas:mk('DEF',7,-2), medios:mk('MED',7,0), delanteros:mk('DEL',6,2)};
@@ -2016,7 +2073,7 @@
 
   function incPlayerStat(map, team, name, key, val){
     var id = team+'__'+name;
-    if(!map[id]) map[id] = {name:name, team:team, 'goles-total':0, yel:0, red:0, mvp:0, 'pen-gol':0, 'pen-prov':0, 'pen-parado':0, 'falta-gol':0, propia:0, 'pen-fallado':0};
+    if(!map[id]) map[id] = {name:name, team:team, 'goles-total':0, yel:0, red:0, mvp:0, 'pen-gol':0, 'pen-prov':0, 'pen-parado':0, 'falta-gol':0, propia:0, 'pen-fallado':0, imbat:0, pj:0};
     map[id][key] = (map[id][key]||0) + (val||1);
   }
 
@@ -2113,12 +2170,22 @@
     }
     addEvents(a.name,b.name,homeRoster,gl);
     addEvents(b.name,a.name,awayRoster,gv);
+    /* Clean sheet: si el equipo recibe 0 goles, el portero titular
+       (primero del grupo porteros, que es el de mayor poder tras
+       ordenar por ranking en el editor) se lleva un `imbat`. */
+    if(gv === 0 && homeRoster && homeRoster.porteros && homeRoster.porteros.length){
+      incPlayerStat(playerStats, a.name, homeRoster.porteros[0][0], 'imbat', 1);
+    }
+    if(gl === 0 && awayRoster && awayRoster.porteros && awayRoster.porteros.length){
+      incPlayerStat(playerStats, b.name, awayRoster.porteros[0][0], 'imbat', 1);
+    }
     var mvpTeam = gl>gv ? a : (gv>gl ? b : (Math.random()<0.5?a:b));
     mvpTeam.mvp += 1;
     incPlayerStat(playerStats, mvpTeam.name, pickPlayer(rosters[mvpTeam.name], Math.random()<0.55?'delanteros':'medios'), 'mvp', 1);
   }
 
   function simulateLeague(teams){
+    _invalidateRealRosterCache();
     var table = createTableTemplate(teams);
     var teamMap = {};
     var rosters = {};
@@ -2132,7 +2199,67 @@
     }
     table.forEach(function(t){t.dg=t.gf-t.gc; t.form=t.form.slice(-5);});
     table.sort(function(a,b){if(b.pts!==a.pts)return b.pts-a.pts; if(b.dg!==a.dg)return b.dg-a.dg; if(b.gf!==a.gf)return b.gf-a.gf; if((b.media||0)!==(a.media||0)) return (b.media||0)-(a.media||0); return a.name.localeCompare(b.name,'es')});
+
+    /* Asignar PJ a TODOS los jugadores de la plantilla (también a los
+       que no tuvieron eventos — suplentes, etc.) para que la fila del
+       modal no aparezca con PJ=0. */
+    table.forEach(function(t){
+      var roster = rosters[t.name];
+      if(!roster) return;
+      ['porteros','defensas','medios','delanteros'].forEach(function(group){
+        (roster[group]||[]).forEach(function(pl){
+          var name = pl && pl[0];
+          if(!name) return;
+          var id = t.name+'__'+name;
+          if(!playerStats[id]) playerStats[id] = {name:name, team:t.name, 'goles-total':0, yel:0, red:0, mvp:0, 'pen-gol':0, 'pen-prov':0, 'pen-parado':0, 'falta-gol':0, propia:0, 'pen-fallado':0, imbat:0, pj:0};
+          playerStats[id].pj = t.pj;
+        });
+      });
+    });
+
+    /* Volcar las stats a `ef_player_stats_v1` — la MISMA storage que
+       usa el modal Plantilla (renderSquadList). Sin este paso los
+       jugadores reales aparecen con todo a 0 en el modal, aunque la
+       simulación los haya usado correctamente. */
+    _writeSegundaStatsToPlayerStore(playerStats, table);
+
     return {table:table, players:Object.keys(playerStats).map(function(k){return playerStats[k]})};
+  }
+
+  function _normPlayerStatsKey(s){
+    return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+  function _writeSegundaStatsToPlayerStore(playerStats, table){
+    var KEY = 'ef_player_stats_v1';
+    var store;
+    try { store = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; }
+    catch(_){ store = {}; }
+    /* Re-simular la liga debe SUSTITUIR (no sumar) — si un equipo
+       pertenece a esta tabla, limpiamos sus entradas previas. */
+    var teamsNorm = {};
+    (table||[]).forEach(function(t){ if(t && t.name) teamsNorm[_normPlayerStatsKey(t.name)] = true; });
+    Object.keys(store).forEach(function(k){
+      var tn = k.split('::')[0];
+      if(teamsNorm[tn]) delete store[k];
+    });
+    Object.keys(playerStats).forEach(function(id){
+      var p = playerStats[id];
+      if(!p || !p.team || !p.name) return;
+      var key = _normPlayerStatsKey(p.team) + '::' + _normPlayerStatsKey(p.name);
+      store[key] = {
+        gol:      Number(p['goles-total']||0),
+        pen:      Number(p['pen-gol']||0),
+        fk:       Number(p['falta-gol']||0),
+        mvp:      Number(p.mvp||0),
+        ta:       Number(p.yel||0),
+        tr:       Number(p.red||0),
+        pj:       Number(p.pj||0),
+        penSaved: Number(p['pen-parado']||0),
+        imbat:    Number(p.imbat||0)
+      };
+    });
+    try { localStorage.setItem(KEY, JSON.stringify(store)); } catch(_){}
   }
 
   function rowZoneClassSegunda(pos, total){
@@ -2442,13 +2569,35 @@
   }
 
   window.simularLigaSegundaMenu=function(){ saveSegundaState(simulateLeague(getSegundaTeams())); renderSegunda(); renderMovement(); if(typeof go==='function') go('s-segunda-clas'); };
-  window.reiniciarLigaSegundaMenu=function(){ saveSegundaState({table:[],players:[]}); localStorage.removeItem(TRANSITION_KEY); renderSegunda(); renderMovement(); };
+  window.reiniciarLigaSegundaMenu=function(){ saveSegundaState({table:[],players:[]}); localStorage.removeItem(TRANSITION_KEY); _clearPlayerStatsForTeams(getSegundaTeams()); renderSegunda(); renderMovement(); };
+
+  function _clearPlayerStatsForTeams(teams){
+    /* Al resetear una liga, borramos también las entradas de sus
+       equipos en `ef_player_stats_v1` para que el modal Plantilla no
+       siga mostrando las stats de la simulación anterior. */
+    if(!Array.isArray(teams) || !teams.length) return;
+    var KEY = 'ef_player_stats_v1';
+    var store;
+    try { store = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; }
+    catch(_){ return; }
+    var teamsNorm = {};
+    teams.forEach(function(t){
+      var n = t && (t.name || t);
+      if(n) teamsNorm[_normPlayerStatsKey(n)] = true;
+    });
+    var changed = false;
+    Object.keys(store).forEach(function(k){
+      var tn = k.split('::')[0];
+      if(teamsNorm[tn]){ delete store[k]; changed = true; }
+    });
+    if(changed){ try { localStorage.setItem(KEY, JSON.stringify(store)); } catch(_){} }
+  }
   window.renderSegunda = renderSegunda;
   window.renderPrimera = renderPrimera;
   window.simularPrimeraGrupo=function(n){ var teams=getPrimeraTeams(), state=getPrimeraState(); if(n===1){state.g1=simulateLeague(teams.g1); saveJSON(TRANSITION_KEY, null);} else {state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null);} setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };
-  window.reiniciarPrimeraGrupo=function(n){ var state=getPrimeraState(); if(n===1) state.g1={table:[],players:[]}; else state.g2={table:[],players:[]}; setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
+  window.reiniciarPrimeraGrupo=function(n){ var state=getPrimeraState(), teams=getPrimeraTeams(); if(n===1){state.g1={table:[],players:[]}; _clearPlayerStatsForTeams(teams.g1);} else {state.g2={table:[],players:[]}; _clearPlayerStatsForTeams(teams.g2);} setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
   window.simularAmbosPrimera=function(){ var teams=getPrimeraTeams(), state=getPrimeraState(); state.g1=simulateLeague(teams.g1); state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null); setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };
-  window.reiniciarAmbosPrimera=function(){ var state=getPrimeraState(); state.g1={table:[],players:[]}; state.g2={table:[],players:[]}; setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
+  window.reiniciarAmbosPrimera=function(){ var state=getPrimeraState(), teams=getPrimeraTeams(); state.g1={table:[],players:[]}; state.g2={table:[],players:[]}; _clearPlayerStatsForTeams(teams.g1); _clearPlayerStatsForTeams(teams.g2); setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
   window.applyPrimeraMovements=function(){ applyMovements(); };
 
   document.addEventListener('DOMContentLoaded', function(){
@@ -2484,11 +2633,16 @@
 .mrow .ms.p.previa:hover {
   filter: brightness(1.08);
 }
-/* Zonas clasificación Primera Federación */
+/* Zonas clasificación Primera Federación / Hypermotion.
+   El sticky cell del equipo DEBE tener fondo OPACO (sin alfa) porque
+   al hacer scroll horizontal en la tabla las celdas de stats pasan
+   por DEBAJO y si el fondo es translúcido se ve el número de PTS
+   pegado al número de posición (p. ej. "1" + "73" → "173"). Para
+   las filas sin zona, index.bundle.css ya pone `#080a0f` sólido. */
 .clas-row.clas-zone-asc { background: rgba(156,60,220,.18); border-left: 3px solid #9c3cdc; }
-.clas-row.clas-zone-asc .clas-team-cell { background: rgba(100,20,160,.25); }
+.clas-row.clas-zone-asc .clas-team-cell { background: #281040; }
 .clas-row.clas-zone-down { background: rgba(224,60,60,.15); border-left: 3px solid #e03c3c; }
-.clas-row.clas-zone-down .clas-team-cell { background: rgba(130,20,20,.25); }
+.clas-row.clas-zone-down .clas-team-cell { background: #2a0c0c; }
 </style>
 <script>
 (function () {

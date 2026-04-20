@@ -1541,7 +1541,99 @@ var STAT_CLASS_MAP = {
     return valueFor(key);
   }
 
+  /* Agrega stats de TODOS los eventos del store LIGA_PLAYER_MATCH_STORE
+     directamente, sin depender del lookup en plant-rows DOM. Esto hace
+     que el dashboard "Liga EA Sports · Estadísticas" no dependa de que
+     el nombre/dorsal del jugador del simulador case con el de la
+     plantilla HTML: cada gol/tarjeta/MVP cuenta tal cual aparece en el
+     acta, que es lo que el usuario ve al abrir el partido. Para casos
+     donde dos variantes del mismo jugador (p.ej. "Iago Aspas" vs
+     "I. Aspas") aparecen en matches distintos, priorizamos la versión
+     más larga del nombre como etiqueta final.  */
+  function collectLigaPlayerStatsFromStore(){
+    var store = window.LIGA_PLAYER_MATCH_STORE || {};
+    var byKey = {}; // teamCanon::nameNorm → {team,name,stats}
+    function _norm(s){
+      return String(s||'')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g,'')
+        .replace(/[^\w\s]/g,' ')
+        .replace(/\s+/g,' ')
+        .trim()
+        .toLowerCase();
+    }
+    function _ensure(team, name){
+      var tc = canonicalTeamName(team);
+      var nn = _norm(name);
+      if(!tc || !nn) return null;
+      var key = tc + '::' + nn;
+      if(!byKey[key]){
+        var empty = {};
+        LIGA_STAT_CATEGORIES.forEach(function(cat){ empty[cat.key] = 0; });
+        byKey[key] = { team: tc, name: String(name||'').trim(), stats: empty };
+      } else {
+        // preferir la versión del nombre más larga como etiqueta
+        var cur = byKey[key].name || '';
+        var cand = String(name||'').trim();
+        if(cand.length > cur.length) byKey[key].name = cand;
+      }
+      return byKey[key];
+    }
+    function _incr(rec, statKey, amount){
+      if(!rec || !rec.stats) return;
+      rec.stats[statKey] = (rec.stats[statKey] || 0) + (amount || 1);
+    }
+    Object.keys(store).forEach(function(matchKey){
+      var match = store[matchKey]; if(!match) return;
+      var tA = match.teamA || '', tB = match.teamB || '';
+      (match.evts || []).forEach(function(ev){
+        if(!ev) return;
+        var type = String(ev.type || '').trim().toLowerCase();
+        if(!type || type === 'played' || type === 'ht' || type === 'sub' || type === 'mvp') return;
+        // MVP lo metemos vía match.mvpName/mvpTeam más abajo (consistente con countEventExtras).
+        var team = ev.realTeam || '';
+        if(!team){
+          if(ev.team === 'a') team = tA;
+          else if(ev.team === 'b') team = tB;
+        }
+        var nameVal = '';
+        if(Array.isArray(ev.player)) nameVal = String(ev.player[1]||ev.player[0]||'').trim();
+        else if(typeof ev.player === 'string') nameVal = ev.player.trim();
+        else nameVal = String(ev.name || ev.playerName || '').trim();
+        // Normalizar player 'N. Apellido' cuando viene con número pegado: '10. Aspas'
+        nameVal = nameVal.replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
+        if(!nameVal) return;
+        var rec = _ensure(team, nameVal);
+        if(!rec) return;
+        if(type === 'gol') _incr(rec, 'goles-total');
+        else if(type === 'falta-gol'){ _incr(rec, 'goles-total'); _incr(rec, 'falta-gol'); }
+        else if(type === 'pen-gol'){ _incr(rec, 'goles-total'); _incr(rec, 'pen-gol'); _incr(rec, 'pen-prov'); }
+        else if(type === 'pen-fallo' || type === 'pen-fallado') _incr(rec, 'pen-fallado');
+        else if(type === 'pen-parado') _incr(rec, 'pen-parado');
+        else if(type === 'pen-prov') _incr(rec, 'pen-prov');
+        else if(type === 'propia') _incr(rec, 'propia');
+        else if(type === 'amarilla' || type === 'card') _incr(rec, 'yel');
+        else if(type === 'roja') _incr(rec, 'red');
+        else if(type === 'd-amarilla'){ _incr(rec, 'yel'); _incr(rec, 'red'); }
+        else if(type === 'imbat') _incr(rec, 'cs');
+      });
+      // MVP y clean-sheet implícito
+      if(match.mvpName && match.mvpTeam){
+        var mvpRec = _ensure(match.mvpTeam, match.mvpName);
+        if(mvpRec) _incr(mvpRec, 'mvp');
+      }
+    });
+    return Object.keys(byKey).map(function(k){ return byKey[k]; });
+  }
+
   function collectLigaPlayerStats(){
+    /* Preferimos la fuente basada en eventos (acta) — es la misma
+       fuente de verdad que usa el asignador de PJ y la clasificación,
+       así que si aparece en la clasificación, aparece en el dashboard.
+       Si el store está vacío (primera carga sin simular aún) caemos al
+       lookup clásico por plant-rows. */
+    var storeStats = collectLigaPlayerStatsFromStore();
+    if(storeStats.length) return storeStats;
     var players = [];
     getPlantillaScreens().forEach(function(screen){
       Array.prototype.forEach.call(screen.rows, function(row){

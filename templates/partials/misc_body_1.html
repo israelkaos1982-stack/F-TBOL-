@@ -5798,6 +5798,10 @@ Tottenham
     var humanos = [];   // nombres de equipos humanos
     var emojis  = {};   // name → humanEmoji
     var shields = {};   // name → URL del escudo
+    /* Reset del sidecar de flags C/F/P para que no queden jugadores
+       "marcados" que ya no existen en la plantilla actual. Lo rellenamos
+       equipo a equipo justo debajo. */
+    window._LIGA_EA_PLAYER_FLAGS = {};
 
     teams.forEach(function(t){
       if(!t || !t.name) return;
@@ -5843,15 +5847,19 @@ Tottenham
         pool.forEach(function(p){
           var num = p.num && p.num > 0 ? p.num : nextFreeNum(simPos);
           var pw  = Math.max(1, Math.min(99, Number(p.power)||70));
-          /* Cuarto elemento: flags del jugador (C=capitán, F=faltas, P=penaltis).
-             El simulador lo lee para elegir lanzador de penalti/falta con
-             prioridad sobre el resto de la plantilla. */
-          var flags = {
-            captain: !!p.captain,
-            freeKick: !!p.freeKick,
-            penalty: !!p.penalty
-          };
-          simSquad.push([String(num), String(p.name||'?'), pw, flags]);
+          /* Formato clásico de 3 elementos: [num, name, power]. Flags
+             (C/F/P) se guardan aparte en window._LIGA_EA_PLAYER_FLAGS
+             (sidecar), así no rompemos ningún consumidor del formato. */
+          if (p.captain || p.freeKick || p.penalty) {
+            var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
+            var fkey = String(t.name) + '::' + String(p.name||'');
+            fmap[fkey] = {
+              captain: !!p.captain,
+              freeKick: !!p.freeKick,
+              penalty: !!p.penalty
+            };
+          }
+          simSquad.push([String(num), String(p.name||'?'), pw]);
         });
       });
       squads[t.name] = simSquad;

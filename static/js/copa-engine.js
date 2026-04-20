@@ -472,8 +472,11 @@
       }
     });
 
-    /* ── EXPULSIÓN: penalizar 30 PUNTOS planos INSTANTÁNEOS por cada roja ── */
-    var RED_FLAT_PENALTY = 30;
+    /* ── EXPULSIÓN: penalizar 15 PUNTOS planos por cada roja ──
+       Harmonizado con el resto de ligas (Liga EA Sports, Hypermotion,
+       Primera Federación, y las 51 ligas que comparten simSimple): el
+       expulsado quita 15 puntos al poder efectivo del equipo. */
+    var RED_FLAT_PENALTY = 15;
     var adjRatingA = Math.max(30, ratingA - (Object.keys(expelledA).length * RED_FLAT_PENALTY));
     var adjRatingB = Math.max(30, ratingB - (Object.keys(expelledB).length * RED_FLAT_PENALTY));
 

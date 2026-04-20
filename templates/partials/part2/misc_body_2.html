@@ -2127,10 +2127,17 @@
     return bag[bag.length - 1];
   }
 
-  function simulateGoals(home, away){
-    // PowerLocal = MediaEquipo * 1.10 (ventaja de localía del 10%)
-    var rA = getTeamSimulationPower(home) * 1.10;
-    var rB = getTeamSimulationPower(away);
+  function simulateGoals(home, away, opts){
+    /* Regla unificada de "carta de valor" (misma que Liga EA Sports y
+       Copa del Rey):
+         · power del local × 1.10 (ventaja de localía del 10%)
+         · −15 por cada jugador expulsado ese partido
+       Si no se pasan rojas explícitas, mantenemos el comportamiento
+       antiguo (sin penalización) para callers externos. */
+    var redA = (opts && opts.redA) || 0;
+    var redB = (opts && opts.redB) || 0;
+    var rA = Math.max(1, getTeamSimulationPower(home) * 1.10 - 15 * redA);
+    var rB = Math.max(1, getTeamSimulationPower(away)        - 15 * redB);
     var baseA = rA / Math.max(1, (rA + rB));
     var probA = Math.min(0.82, baseA);
     function sample(prob){
@@ -2144,17 +2151,22 @@
   }
 
   function playMatch(a,b,playerStats,rosters){
-    var glgv = simulateGoals(a,b), gl=glgv[0], gv=glgv[1];
+    /* Rojas pre-rolled: se deciden ANTES del marcador para que la
+       penalización de −15 puntos de poder afecte a la probabilidad
+       real del partido (regla "carta de valor"). */
+    var redA = Math.random() < 0.10 ? 1 : 0;
+    var redB = Math.random() < 0.10 ? 1 : 0;
+    var glgv = simulateGoals(a, b, {redA:redA, redB:redB}), gl=glgv[0], gv=glgv[1];
     a.pj++; b.pj++; a.gf+=gl; a.gc+=gv; b.gf+=gv; b.gc+=gl;
     a.ta += randInt(0,4); b.ta += randInt(0,4);
-    if(Math.random()<0.10) a.tr += 1;
-    if(Math.random()<0.10) b.tr += 1;
+    a.tr += redA;
+    b.tr += redB;
     if(gl>gv){a.v++; b.p++; a.pts+=3; a.form.push('V'); b.form.push('D');}
     else if(gv>gl){b.v++; a.p++; b.pts+=3; b.form.push('V'); a.form.push('D');}
     else {a.e++; b.e++; a.pts++; b.pts++; a.form.push('E'); b.form.push('E');}
 
     var homeRoster=rosters[a.name], awayRoster=rosters[b.name];
-    function addEvents(teamName, oppName, roster, goals){
+    function addEvents(teamName, oppName, roster, goals, red){
       for(var i=0;i<goals;i++){
         var scorer = weightedScorer(roster);
         var roll = Math.random();
@@ -2166,10 +2178,13 @@
       if(Math.random()<0.15) incPlayerStat(playerStats, teamName, pickPlayer(roster,'delanteros'), 'pen-fallado', 1);
       if(Math.random()<0.12) incPlayerStat(playerStats, teamName, pickPlayer(roster,'porteros'), 'pen-parado', 1);
       if(Math.random()<0.55) incPlayerStat(playerStats, teamName, pickPlayer(roster,'medios'), 'yel', randInt(0,1));
-      if(Math.random()<0.18) incPlayerStat(playerStats, teamName, pickPlayer(roster,'defensas'), 'red', 1);
+      /* El expulsado se le asigna al defensor seleccionado al azar
+         sólo cuando la roja ya fue pre-rolled (ver arriba). Así `a.tr`
+         y el stat 'red' del jugador cuadran entre sí. */
+      if(red) incPlayerStat(playerStats, teamName, pickPlayer(roster,'defensas'), 'red', 1);
     }
-    addEvents(a.name,b.name,homeRoster,gl);
-    addEvents(b.name,a.name,awayRoster,gv);
+    addEvents(a.name,b.name,homeRoster,gl,redA);
+    addEvents(b.name,a.name,awayRoster,gv,redB);
     /* Clean sheet: si el equipo recibe 0 goles, el portero titular
        (primero del grupo porteros, que es el de mayor poder tras
        ordenar por ranking en el editor) se lleva un `imbat`. */

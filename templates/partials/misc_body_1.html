@@ -2215,6 +2215,28 @@ window.pG = function(fn) {
       stats[key].pj = teamPJ[teamNorm] || 0;
     });
 
+    /* Preservar entradas de otras competiciones.
+       rebuildPlayerStatsStore parte de {} y sólo procesa fuentes de
+       Liga EA Sports (LIGA_PLAYER_MATCH_STORE + ef_liga38_v4). Las
+       stats de Liga Hypermotion / Primera Federación se escriben con
+       `_writeSegundaStatsToPlayerStore` desde misc_body_2.html, y si
+       no las preservásemos aquí, cada vez que el usuario abre el
+       modal Plantilla (que llama a syncLigaEaPlayerStats) el sync las
+       borraría. Conservamos cualquier entrada cuyo equipo NO aparezca
+       en teamPJ (== equipos de Liga EA Sports con partidos jugados). */
+    try {
+      var _prevRaw = localStorage.getItem(PLAYER_STATS_KEY);
+      if(_prevRaw){
+        var _prev = JSON.parse(_prevRaw) || {};
+        Object.keys(_prev).forEach(function(k){
+          var tn = k.split('::')[0];
+          if(!teamPJ[tn] && !stats[k]){
+            stats[k] = _prev[k];
+          }
+        });
+      }
+    } catch(_){}
+
     // Save to SEPARATE storage
     try { localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(stats)); } catch(_){}
     return stats;

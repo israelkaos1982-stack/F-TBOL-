@@ -421,7 +421,9 @@ window.sqFromRegistry = function(teamName, opts) {
       var nombre = e[1];
       // Saltar lesionados/sancionados
       if (excluded.indexOf(nombre) !== -1) continue;
-      full.push([e[0], nombre, curPos, poder]);
+      // Flags (C/F/P) en e[3] si vienen del editor.
+      var flags = (e.length >= 4 && e[3] && typeof e[3] === 'object') ? e[3] : null;
+      full.push([e[0], nombre, curPos, poder, null, flags]);
     }
   }
 
@@ -450,7 +452,8 @@ window.sqFromRegistry = function(teamName, opts) {
   //    Los primeros 11 son: portero titular + los 10 de campo de más poder
   //    El resto son banquillo
   for (var ci = 0; ci < conv.length; ci++) {
-    conv[ci] = [conv[ci][0], conv[ci][1], conv[ci][2], conv[ci][3], ci < 11 ? 'titular' : 'suplente'];
+    var fl = conv[ci][5] || null;
+    conv[ci] = [conv[ci][0], conv[ci][1], conv[ci][2], conv[ci][3], ci < 11 ? 'titular' : 'suplente', fl];
   }
 
   return conv;
@@ -1781,6 +1784,31 @@ function triggerShootingBall(gf, team) {
 }
 
 /* script block 17 */
+/* ── Guard global contra scroll-to-top mientras el usuario está
+   viendo simulaciones IA vs IA ──────────────────────────────────
+   Hay múltiples rutas (overlays post-partido, re-renders, animaciones)
+   que llaman window.scrollTo(0,0) y mandan la vista al top mientras
+   el usuario intenta seguir un partido en la pantalla
+   #s-liga-ia-jornada. Parchamos window.scrollTo para ignorar esos
+   saltos cuando esa pantalla está activa; si otra pantalla necesita
+   scroll al top seguirá funcionando normalmente. */
+(function(){
+  var _origScrollTo = window.scrollTo.bind(window);
+  window.scrollTo = function(){
+    try {
+      var iaScr = document.getElementById('s-liga-ia-jornada');
+      var active = iaScr && iaScr.classList.contains('active');
+      if (active) {
+        /* scrollTo(0, 0) o scrollTo({top:0, ...}) → ignorar. */
+        var x = arguments[0], y = arguments[1];
+        if (typeof x === 'object' && x) { y = x.top; }
+        if ((y === 0 || y === '0') && !window._iaAllowScrollTop) return;
+      }
+    } catch(_){}
+    return _origScrollTo.apply(window, arguments);
+  };
+})();
+
 window.addEventListener('scroll',function(){ var b=document.getElementById('goto-top'); if(window.scrollY>300)b.classList.add('show'); else b.classList.remove('show'); }); var _origGo=window.go; window.go=function(id){ if(_origGo)_origGo(id); else{document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');}); var el=document.getElementById(id);if(el)el.classList.add('active');} if(id==='s-liga-clas' && typeof window.buildLigaClas==='function'){ window.buildLigaClas(); } if(id==='s-liga-stats' && typeof window.buildLigaStatsDashboard==='function'){ window.buildLigaStatsDashboard(); } };
 
 /* script block 18 */

@@ -5843,7 +5843,15 @@ Tottenham
         pool.forEach(function(p){
           var num = p.num && p.num > 0 ? p.num : nextFreeNum(simPos);
           var pw  = Math.max(1, Math.min(99, Number(p.power)||70));
-          simSquad.push([String(num), String(p.name||'?'), pw]);
+          /* Cuarto elemento: flags del jugador (C=capitán, F=faltas, P=penaltis).
+             El simulador lo lee para elegir lanzador de penalti/falta con
+             prioridad sobre el resto de la plantilla. */
+          var flags = {
+            captain: !!p.captain,
+            freeKick: !!p.freeKick,
+            penalty: !!p.penalty
+          };
+          simSquad.push([String(num), String(p.name||'?'), pw, flags]);
         });
       });
       squads[t.name] = simSquad;

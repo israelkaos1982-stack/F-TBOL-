@@ -626,9 +626,24 @@ window.sqFromRegistryFull = function(teamName) {
 var TEAM_A_NAME="Real Madrid";var TEAM_B_NAME="FC Barcelona";
 var TEAM_A_OPTS='<option value="1|Thibaut Courtois">1. Thibaut Courtois</option><option value="13|Andriy Lunin">13. Andriy Lunin</option><option value="26|Fran González">26. Fran González</option><option value="43|Sergio Mestre">43. Sergio Mestre</option><option value="9|Kylian Mbappé">9. Kylian Mbappé</option><option value="38|César Palacios">38. César Palacios</option><option value="5|Jude Bellingham">5. Jude Bellingham</option><option value="7|Vinicius Júnior">7. Vinicius Júnior</option><option value="8|Federico Valverde">8. Federico Valverde</option><option value="12|Trent Alexander-Arnold">12. Trent Alexander-Arnold</option><option value="2|Daniel Carvajal">2. Daniel Carvajal</option><option value="22|Antonio Rüdiger">22. Antonio Rüdiger</option><option value="3|Éder Militão">3. Éder Militão</option><option value="14|Aurélien Tchouaméni">14. Aurélien Tchouaméni</option><option value="11|Rodrygo">11. Rodrygo</option><option value="24|Dean Huijsen">24. Dean Huijsen</option><option value="6|Eduardo Camavinga">6. Eduardo Camavinga</option><option value="15|Arda Güler">15. Arda Güler</option><option value="28|Jorge Cestero">28. Jorge Cestero</option><option value="4|David Alaba">4. David Alaba</option><option value="23|Ferland Mendy">23. Ferland Mendy</option><option value="21|Brahim Díaz">21. Brahim Díaz</option><option value="18|Álvaro Carreras">18. Álvaro Carreras</option><option value="19|Dani Ceballos">19. Dani Ceballos</option><option value="17|Raúl Asencio">17. Raúl Asencio</option><option value="20|Fran García">20. Fran García</option><option value="30|Franco Mastantuono">30. Franco Mastantuono</option><option value="16|Gonzalo García">16. Gonzalo García</option><option value="37|Manuel Ángel Morán">37. Manuel Ángel Morán</option><option value="48|Lamini Fati">48. Lamini Fati</option><option value="45|Thiago Pitarch">45. Thiago Pitarch</option><option value="27|Diego Aguado">27. Diego Aguado</option>';var TEAM_B_OPTS='<option value="13|Joan García">13. Joan García</option><option value="31|Diego Kochen">31. Diego Kochen</option><option value="25|Wojciech Szczęsny">25. Wojciech Szczęsny</option><option value="8|Pedri">8. Pedri</option><option value="10|Lamine Yamal">10. Lamine Yamal</option><option value="11|Raphinha">11. Raphinha</option><option value="21|Frenkie de Jong">21. Frenkie de Jong</option><option value="9|Robert Lewandowski">9. Robert Lewandowski</option><option value="23|Jules Koundé">23. Jules Koundé</option><option value="2|João Cancelo">2. João Cancelo</option><option value="36|Álvaro Cortés">36. Álvaro Cortés</option><option value="20|Dani Olmo">20. Dani Olmo</option><option value="7|Ferran Torres">7. Ferran Torres</option><option value="3|Alejandro Balde">3. Alejandro Balde</option><option value="24|Eric García">24. Eric García</option><option value="6|Pablo Gavi">6. Pablo Gavi</option><option value="16|Fermín López">16. Fermín López</option><option value="43|Tomás Marqués">43. Tomás Marqués</option><option value="4|Ronald Araújo">4. Ronald Araújo</option><option value="5|Pau Cubarsí">5. Pau Cubarsí</option><option value="14|Marcus Rashford">14. Marcus Rashford</option><option value="15|Andreas Christensen">15. Andreas Christensen</option><option value="17|Marc Casadó">17. Marc Casadó</option><option value="18|Gerard Martín">18. Gerard Martín</option><option value="22|Marc Bernal">22. Marc Bernal</option><option value="28|Roony Bardghji">28. Roony Bardghji</option><option value="42|Xavi Espart">42. Xavi Espart</option>';
 var MAX_NORMAL=5400;var MAX_ET=7200;
-var NORMAL_SPEED_HVH=(window._MATCH_TICKS&&window._MATCH_TICKS.HvH)||878;var NORMAL_SPEED_HVIA=(window._MATCH_TICKS&&window._MATCH_TICKS.HvIA)||665;var ET_SPEED=(window._MATCH_TICKS&&window._MATCH_TICKS.HvH_ET)||833;
+/* Fuente única de verdad: _mlResolveClock (definido en misc_body_2.html).
+   Lee _MATCH_TICKS/_MATCH_RULE + override admin _ppDurationMin. NO cachear
+   en variables de módulo (eso era el bug antiguo: al cambiar la duración
+   el reloj seguía con el valor anterior). CLAUDE.md: obligatorio. */
+function _j1m1ResolveSpd(){
+  if (typeof window._mlResolveClock === 'function') {
+    var info = window._mlResolveClock({ isHvH: !!(document.getElementById('mlw-j1m1')||{classList:{contains:function(){return false;}}}).classList.contains('hvh'), etDone: !!_etPhase });
+    return info.tickMs;
+  }
+  /* Fallback defensivo si misc_body_2 no cargó aún */
+  var t = window._MATCH_TICKS || {};
+  var _w = document.getElementById('mlw-j1m1');
+  var _hvh = _w && _w.classList.contains('hvh');
+  if (_etPhase) return t.HvH_ET || 833;
+  return _hvh ? (t.HvH || 878) : (t.HvIA || 718);
+}
 window.mlTimerClick_j1m1=function(){if(_matchFinished||_inDescanso)return;if(_timerRunning){clearInterval(_timerInterval);_timerRunning=false;_renderTimer_j1m1();}else{_timerRunning=true;_startInterval_j1m1();}};
-function _startInterval_j1m1(){var _w=document.getElementById('mlw-j1m1');var _hvh=_w&&_w.classList.contains('hvh');var NS=_hvh?NORMAL_SPEED_HVH:NORMAL_SPEED_HVIA;var spd=_etPhase?ET_SPEED:NS;var MAX_ST=5820;_timerInterval=setInterval(function(){_timerSec+=5;var maxSec=_etDone?MAX_ET:(_stDone?MAX_ST:MAX_NORMAL);if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m1("— DESCANSO (45 min) —");_renderTimer_j1m1();setTimeout(function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;_startInterval_j1m1();}},20000);return;}if(!_etDone&&!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m1("— TIEMPO DE DESCUENTO (90') —");}if(_etDone&&!_et1Done&&_timerSec>=6300){_et1Done=true;_addMarker_j1m1("— DESCANSO PRÓRROGA (105 min) —");}if(_timerSec>=maxSec){_timerSec=maxSec;clearInterval(_timerInterval);_timerRunning=false;if(_etDone){_checkPenalties_j1m1();}} _renderTimer_j1m1();},spd);};
+function _startInterval_j1m1(){var spd=_j1m1ResolveSpd();var MAX_ST=5820;_timerInterval=setInterval(function(){_timerSec+=5;var maxSec=_etDone?MAX_ET:(_stDone?MAX_ST:MAX_NORMAL);if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m1("— DESCANSO (45 min) —");_renderTimer_j1m1();setTimeout(function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;_startInterval_j1m1();}},20000);return;}if(!_etDone&&!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m1("— TIEMPO DE DESCUENTO (90') —");}if(_etDone&&!_et1Done&&_timerSec>=6300){_et1Done=true;_addMarker_j1m1("— DESCANSO PRÓRROGA (105 min) —");}if(_timerSec>=maxSec){_timerSec=maxSec;clearInterval(_timerInterval);_timerRunning=false;if(_etDone){_checkPenalties_j1m1();}} _renderTimer_j1m1();},spd);};
 function _renderTimer_j1m1(){var btn=document.getElementById('ml-timer-j1m1');if(!btn)return;var totalMin=Math.floor(_timerSec/60);if(_matchFinished){btn.textContent='🏁 FIN';btn.className='ml-timer finished';if(window._setScoreState)window._setScoreState('j1m1','finished');return;}if(_inDescanso){btn.textContent='⏸ DESCANSO';btn.className='ml-timer running';if(window._setScoreState)window._setScoreState('j1m1','playing');return;}var isStop=!_etDone&&_timerSec>5400;var dispStr=isStop?('90+'+Math.ceil((_timerSec-5400)/60)+"'"):(totalMin+"'");var maxForLabel=_etDone?MAX_ET:(_stDone?5820:MAX_NORMAL);var label=_timerRunning?'⏸ ':(_timerSec>=maxForLabel?'🔁 ':'▶ ');btn.textContent=label+dispStr;btn.className='ml-timer'+(_timerRunning?' running':'');if(window._setScoreState)window._setScoreState('j1m1',_timerRunning?'playing':'pending');var _bl=document.getElementById('ball-j1m1');if(_bl){if(_timerRunning){_bl.classList.remove('spinning');_bl.classList.add('static');}else{_bl.classList.remove('static');_bl.classList.add('spinning');}}};
 function _currentMin_j1m1(){return Math.min(_etDone?120:(_stDone?97:90),Math.floor(_timerSec/60));};
 function _addMarker_j1m1(txt){var list=document.getElementById('ml-acta-list-j1m1');var div=document.createElement('div');div.className='ml-ht';div.textContent=txt;list.appendChild(div);_removeEmpty_j1m1();};
@@ -2502,11 +2517,17 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     var mvpGoalStr=mvpGoalCount>1?' ('+mvpGoalCount+'⚽)':'';
 
     // ── LIVE TICKER ───────────────────────────────────────────────────
-    // Si ambos equipos ≥79 → 45s por parte (campo activo), sino 15s
-    var _campoMode = (rA >= 79 && rB >= 79);
-    var _halfDuration = 30000; // 30 segundos reales por parte (IA vs IA)
-    var _tickTotal = _campoMode ? 90 : 30;
-    var _tickMs = _campoMode ? 3000 : 1000;
+    // Fuente única: _MATCH_RULE.IAIA.realMin → 30 s total (15 s por parte).
+    // CLAUDE.md: es obligatorio respetar esta duración, sin excepciones de
+    // "campo mode" u otros atajos que la alarguen y desincronicen el
+    // cronómetro de los eventos.
+    var _iaiaInfo = (typeof window._mlResolveClock === 'function')
+      ? window._mlResolveClock({ isHvH: false, humanInvolved: false })
+      : { realMs: 30000 };
+    var _totalRealMs = _iaiaInfo.realMs || 30000;
+    var _halfDuration = _totalRealMs / 2;   // ms por parte (15000 por defecto)
+    var _tickTotal = 30;                     // 30 ticks fijos (contador fluido)
+    var _tickMs = Math.max(50, Math.round(_totalRealMs / _tickTotal));
     var msPerMinFH = _halfDuration / ht45;
     var msPerMinSH = _halfDuration / (ft90-45);
     list.innerHTML='';
@@ -2514,12 +2535,12 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     var _tick=0;
     var _tickInterval=setInterval(function(){
       _tick++;
-      var _half = Math.floor(_tickTotal / 3);
+      var _half = Math.floor(_tickTotal / 2);  // mitad exacta → sincroniza con _halfDuration
       if(_tick<=_half){
         var dm=Math.round(_tick*ht45/_half); if(dm>ht45)dm=ht45;
         btn.textContent=(_tick<_half?dm:ht45+'+'+extraA)+"'";
       } else if(_tick<=_tickTotal){
-        var t2=_tick-_half; var dm2=45+Math.round(t2*(ft90-45)/_half); if(dm2>ft90)dm2=ft90;
+        var t2=_tick-_half; var dm2=45+Math.round(t2*(ft90-45)/(_tickTotal-_half)); if(dm2>ft90)dm2=ft90;
         btn.textContent=(dm2<=90?dm2:'90+'+extraB)+"'";
       }
       if(_tick>=_tickTotal)clearInterval(_tickInterval);
@@ -2788,8 +2809,11 @@ function mlPreviaClick(matchKey) {
     var conProrroga = ['copa','copa-fin','sc','sc-final','usc','usc-fin','inter','inter-fin','ucl-fin','uel-fin','uecl-fin','recopa','recopa-fin','eur-ko','eur-fin','sel','sel-fin'];
     prorroga = (conProrroga.indexOf(compKey) !== -1) ? 'Sí' : 'No';
   }
-  // Duración según HvH o HvIA
-  var duracion = isHvH ? '16 min' : '12 min';
+  // Duración real según spec (_MATCH_RULE): HvH=16.5 min, HvIA=13.5 min.
+  // CLAUDE.md: NUNCA hardcodear minutos — leer siempre del helper.
+  var duracion = (typeof window._mlRealDurationLabel === 'function')
+    ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
+    : (isHvH ? '16.5 min' : '13.5 min');
   // Mostrar cuestionario
   if (typeof window.showPrePartidoOverlay === 'function') {
     window.showPrePartidoOverlay(matchKey, compKey, prorroga, duracion, isHvH);
@@ -4866,12 +4890,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var bn = bwrap.querySelector('.ml-ball-name');
       if (bn && bn.textContent.trim()) balon = bn.textContent.trim();
     }
-    /* Duración según HvH/HvIA — 10 min HvH, 8 min HvIA. Admin puede sobrescribir */
+    /* Duración real según spec (_MATCH_RULE). Admin puede sobrescribir vía
+       _ppDurationMin (minutos reales). CLAUDE.md: obligatorio usar helper. */
     var durLabel;
     if (window._ppDurationMin) {
       durLabel = window._ppDurationMin + ' min';
+    } else if (typeof window._mlRealDurationLabel === 'function') {
+      durLabel = window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH });
     } else {
-      durLabel = isHvH ? '10 min' : '8 min';
+      durLabel = isHvH ? '16.5 min' : '13.5 min';
     }
     var items = [
       { id:'balon',   ico:'⚽️', lbl:'Balón',         val:balon }
@@ -4956,9 +4983,17 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         nivelHtml = '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#5aa9ff;text-align:center;">NIVEL</div>'
           + '<div style="font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;text-align:center;margin-top:2px;">' + aTxt + ' · ' + bTxt + '</div>';
       }
-      /* Duración central — tap para editar con admin PIN */
+      /* Duración central — tap para editar con admin PIN. Fuente única:
+         _MATCH_RULE → helper _mlRealDurationLabel (CLAUDE.md obligatorio). */
       var isHvHCenter = wrap && wrap.classList.contains('hvh');
-      var durText = (window._ppDurationMin || (isHvHCenter ? 10 : 8)) + ' min';
+      var durText;
+      if (window._ppDurationMin) {
+        durText = window._ppDurationMin + ' min';
+      } else if (typeof window._mlRealDurationLabel === 'function') {
+        durText = window._mlRealDurationLabel({ isHvH: isHvHCenter, humanInvolved: !isHvHCenter });
+      } else {
+        durText = (isHvHCenter ? 16.5 : 13.5) + ' min';
+      }
       var durHtml = '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#f0c040;text-align:center;margin-top:10px;">DURACIÓN</div>'
         + '<div id="pp-dur-center" onclick="window._ppEditDuration&&window._ppEditDuration()" style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#fff;text-align:center;cursor:pointer;margin-top:2px;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.35);border-radius:6px;padding:2px 10px;">' + durText + '<span style="font-size:13px;opacity:.8;">✏️</span></div>';
       var centerHtml = '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 6px;min-width:110px;">'
@@ -5226,7 +5261,10 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
     }
     var isHvH = (typeof esHumano === 'function') && esHumano(home) && esHumano(away);
-    var duracion = isHvH ? '16 min' : '12 min';
+    /* Duración real según spec (_MATCH_RULE) — CLAUDE.md obligatorio. */
+    var duracion = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
+      : (isHvH ? '16.5 min' : '13.5 min');
     /* Guardar equipos para que _renderPreviaMeta los use */
     window._ppPreviaTeams = { home: home, away: away };
     window._ppCustomCallback = function() {
@@ -8366,8 +8404,26 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     };
   }
 
-  /* ── 1. TWITCH SELECTOR ───────────────────────────────────────────── */
+  /* ── 1. TWITCH SELECTOR ─────────────────────────────────────────────
+     Dropdown custom (no <select> nativo) para evitar el lag del picker
+     móvil y los "clics perdidos". El <select> oculto se mantiene como
+     espejo para cualquier código que consulte su .value. */
   window._ppSelectedTwitch = window._ppSelectedTwitch || '';
+  var _PP_TWITCH_CHANNELS = [
+    { value: '',              label: '— Selecciona canal —'       },
+    { value: 'kaotiko8219',   label: '🟣 kaotiko8219 (Tu Canal)' },
+    { value: 'vk54in2',       label: '🟣 vk54in2'                },
+    { value: 'Serraxxxx',     label: '🟣 Serraxxxx'              },
+    { value: 'toni_ayuso',    label: '🟣 toni_ayuso'             },
+    { value: 'budygamer1981', label: '🟣 budygamer1981'          }
+  ];
+
+  function _ppTwitchLabelFor(val) {
+    for (var i = 0; i < _PP_TWITCH_CHANNELS.length; i++) {
+      if (_PP_TWITCH_CHANNELS[i].value === val) return _PP_TWITCH_CHANNELS[i].label;
+    }
+    return '— Selecciona canal —';
+  }
 
   window._ppTwitchChange = function(val) {
     /* Antes esta función llamaba a `_ppRefreshUnlock()` en el mismo tick
@@ -8375,16 +8431,76 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
        previa (_renderList + _updateBtn) y bloqueaba la respuesta del
        <select>. Resultado: había que hacer varios clics para que el
        navegador aceptara la selección. Ahora el valor se guarda al
-       instante y el refresco se difiere al siguiente frame para que
-       el dropdown reaccione fluido. */
+       instante y el refresco se difiere al siguiente frame. */
     window._ppSelectedTwitch = val;
     var sel = document.getElementById('pp-twitch-select');
     if (sel && sel.value !== val) sel.value = val;
+    var btn = document.getElementById('pp-twitch-btn');
+    if (btn) {
+      btn.setAttribute('data-value', val || '');
+      var lbl = btn.querySelector('.pp-twitch-btn-label');
+      if (lbl) lbl.textContent = _ppTwitchLabelFor(val);
+    }
     var _doRefresh = function(){
       if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
     };
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_doRefresh);
     else setTimeout(_doRefresh, 0);
+  };
+
+  window._ppOpenTwitchDropdown = function() {
+    var existing = document.getElementById('pp-twitch-dropdown');
+    if (existing) { existing.remove(); return; }
+    var btn = document.getElementById('pp-twitch-btn');
+    if (!btn) return;
+    var rect = btn.getBoundingClientRect();
+    var currentVal = btn.getAttribute('data-value') || '';
+    var dd = document.createElement('div');
+    dd.id = 'pp-twitch-dropdown';
+    /* z-index máximo: el overlay de previa vive en 10010, así que usamos
+       un valor mayor para no quedar tapados. */
+    dd.style.cssText = 'position:fixed;z-index:2147483646;background:#10101e;'
+      + 'border:1px solid rgba(191,148,255,.45);border-radius:10px;padding:6px;'
+      + 'box-shadow:0 10px 32px rgba(0,0,0,.75);min-width:' + Math.round(rect.width) + 'px;'
+      + 'max-width:92vw;';
+    dd.style.left = Math.max(8, rect.left) + 'px';
+    dd.style.top  = (rect.bottom + 4) + 'px';
+    dd.innerHTML = _PP_TWITCH_CHANNELS.map(function(ch){
+      var isSel = ch.value === currentVal;
+      return '<button type="button" class="pp-twitch-opt" data-val="' + ch.value + '" '
+        + 'style="display:block;width:100%;text-align:left;padding:10px 12px;'
+        + 'background:' + (isSel ? 'rgba(191,148,255,.18)' : 'transparent') + ';'
+        + 'border:none;border-radius:6px;color:#e8d8ff;font-family:Oswald,sans-serif;'
+        + 'font-size:13px;letter-spacing:.5px;cursor:pointer;">' + ch.label + '</button>';
+    }).join('');
+    document.body.appendChild(dd);
+    /* Pointer events: captura instantánea (touchstart + click) para que el
+       móvil no añada los ~300 ms de tap-delay. */
+    dd.querySelectorAll('.pp-twitch-opt').forEach(function(opt){
+      var pick = function(e){
+        e.preventDefault(); e.stopPropagation();
+        var v = opt.getAttribute('data-val') || '';
+        window._ppTwitchChange(v);
+        dd.remove();
+        document.removeEventListener('click', outsideClose, true);
+      };
+      opt.addEventListener('touchstart', pick, { passive: false });
+      opt.addEventListener('click', pick);
+      opt.addEventListener('mouseenter', function(){
+        if (opt.style.background.indexOf('148') === -1) opt.style.background = 'rgba(255,255,255,.05)';
+      });
+      opt.addEventListener('mouseleave', function(){
+        var v = opt.getAttribute('data-val') || '';
+        opt.style.background = (v === currentVal) ? 'rgba(191,148,255,.18)' : 'transparent';
+      });
+    });
+    function outsideClose(e){
+      if (!dd.contains(e.target) && e.target !== btn) {
+        dd.remove();
+        document.removeEventListener('click', outsideClose, true);
+      }
+    }
+    setTimeout(function(){ document.addEventListener('click', outsideClose, true); }, 50);
   };
 
   /* ── 2. SOUND ENGINE (Web Audio API) ─────────────────────────────── */
@@ -8619,10 +8735,26 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     window[fn]._mmWhistlePatched = true;
   }
 
-  /* ── 7. CLIMA DINÁMICO SEGÚN CALENDARIO ─────────────────────────── */
+  /* ── 7. CLIMA DINÁMICO SEGÚN CALENDARIO ─────────────────────────────
+     Estaciones: Verano 🌝 / Invierno 🌚 (2 únicas).
+     Climas:     ☀️ Soleado / 🌧️ Lluvia / ❄️ Nieve (3 únicos).
+     NO existen "Nublado", "Parcialmente nublado" ni "Calor extremo".
+     El clima concreto se lee de la fila del calendario (.ag-wx) vía
+     _mmGetWeatherFromCal; esta tabla solo se usa como fallback cuando
+     no hay dato en calendario. */
   function _mmGetClimate(month) {
-    if (month >= 5 && month <= 9) return { season: '🌝 Verano', weathers: ['☀️ Soleado', '🌡️ Calor extremo', '☁️ Parcialmente nublado'] };
-    return { season: '🌚 Invierno', weathers: ['🌧️ Lluvia', '❄️ Nieve', '☁️ Nublado'] };
+    if (month >= 5 && month <= 9) return { season: '🌝 Verano', weathers: ['☀️ Soleado'] };
+    return { season: '🌚 Invierno', weathers: ['☀️ Soleado', '🌧️ Lluvia', '❄️ Nieve'] };
+  }
+  /* Mapea el emoji almacenado en calendario.json (.ag-wx) al label completo. */
+  var _MM_WEATHER_FROM_EMOJI = {
+    '☀️': '☀️ Soleado', '☀': '☀️ Soleado',
+    '🌧️': '🌧️ Lluvia', '🌧': '🌧️ Lluvia',
+    '❄️': '❄️ Nieve',   '❄': '❄️ Nieve'
+  };
+  function _mmLookupWeatherLabel(emoji) {
+    var e = String(emoji || '').trim();
+    return _MM_WEATHER_FROM_EMOJI[e] || null;
   }
 
   var MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -8639,14 +8771,21 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   /* ── Calendar date helpers ───────────────────────────────────────── */
   var _MONTH_ABBR_ES = {Ene:1,Feb:2,Mar:3,Abr:4,May:5,Jun:6,Jul:7,Ago:8,Sep:9,Oct:10,Nov:11,Dic:12};
+  /* Devuelve {date, wx} indexado por la etiqueta del evento del calendario
+     (ej. "Liga — J1"). `wx` es el emoji del clima leído de `.ag-wx` (☀️/🌧/❄️)
+     o null si no se encuentra. */
   function _mmAgDateMap() {
     var map = {};
     document.querySelectorAll('.ag-r').forEach(function(row) {
       var d = row.querySelector('.ag-date');
       var l = row.querySelector('.ag-lbl');
+      var w = row.querySelector('.ag-wx');
       if (d && l) {
         var key = l.textContent.trim().split(' · ')[0].trim();
-        map[key] = d.textContent.trim();
+        map[key] = {
+          date: d.textContent.trim(),
+          wx:   w ? w.textContent.trim() : null
+        };
       }
     });
     return map;
@@ -8672,21 +8811,28 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var envEl = document.getElementById('pp-env');
     if (!envEl) return;
 
-    var month, dayNum;
+    var month, dayNum, calWxEmoji = null;
     var dateMap = _mmAgDateMap();
     var label = _mmCalLabel(matchKey || '', compKey || '');
-    var calStr = label ? (dateMap[label] || null) : null;
-    if (calStr) {
-      var parsed = _mmParseCalDate(calStr);
+    var calEntry = label ? (dateMap[label] || null) : null;
+    if (calEntry) {
+      var parsed = _mmParseCalDate(calEntry.date);
       month = parsed.month || (new Date().getMonth() + 1);
       dayNum = parsed.day || new Date().getDate();
+      calWxEmoji = calEntry.wx;
     } else {
       month  = new Date().getMonth() + 1;
       dayNum = new Date().getDate();
     }
 
     var sc = _mmGetClimate(month);
-    var weather = sc.weathers[Math.floor(Math.random() * sc.weathers.length)];
+    /* Clima: fuente única = calendario (.ag-wx). Si no hay dato, cae al
+       fallback por estación. NUNCA se inventa un clima aleatorio fuera de
+       los 3 válidos (☀️/🌧️/❄️). */
+    var weather = _mmLookupWeatherLabel(calWxEmoji);
+    if (!weather) {
+      weather = sc.weathers[0];  // fallback determinista: primer valor
+    }
     var compLabel = COMP_LABELS_MM[compKey] || compKey || 'Liga';
     var sParts = sc.season.split(' ');
     var sEmoji = sParts[0];
@@ -8709,29 +8855,49 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       if (s) stadiumName = s;
     }
 
+    /* Layout en 3 líneas independientes para que estación+clima NUNCA se
+       pierdan por overflow ni por wrap. Antes iban en la misma línea que
+       el estadio con margin-left y ocasionalmente no aparecían. */
     envEl.innerHTML =
-      '<div class="pp-env-line"><span>🏟️</span><b>' + stadiumName + '</b>'
-      /* Estación + clima SIEMPRE visibles (sin display:none inicial). Antes
-         sólo aparecían cuando el usuario marcaba todos los "checks" de la
-         previa, así que en el 99% de los partidos estaban ocultos. */
-      + '<span id="pp-env-meteo" style="margin-left:8px;">'
-      + '<span style="opacity:.4">·</span> <span>' + sEmoji + '</span> <b>' + sName + '</b>'
-      + ' <span style="opacity:.4">·</span> <b>' + weather + '</b>'
-      + '</span></div>'
+        '<div class="pp-env-line"><span>🏟️</span><b>' + stadiumName + '</b></div>'
+      + '<div class="pp-env-line" id="pp-env-meteo">'
+      +   '<span>' + sEmoji + '</span><b>' + sName + '</b>'
+      +   '<span style="margin:0 6px;opacity:.4">·</span>'
+      +   '<b>' + weather + '</b>'
+      + '</div>'
       + '<div class="pp-env-line"><span>🗓️</span><b>' + dayNum + ' de ' + MONTHS_ES[month - 1] + '</b>'
-      + '<span style="margin:0 6px;opacity:.4">|</span><span>🏆</span><b>' + compLabel + '</b></div>';
+      +   '<span style="margin:0 6px;opacity:.4">|</span><span>🏆</span><b>' + compLabel + '</b></div>';
+  }
 
-    // Reset Twitch selector for each new match
+  /* Reset del canal Twitch al abrir una NUEVA previa. Se hace síncrono
+     (no esperar a _mmInjectEnv) para evitar que el valor del partido
+     anterior se quede "anclado" durante los ~60 ms iniciales. */
+  function _mmResetTwitchSelection() {
     window._ppSelectedTwitch = '';
     var sel = document.getElementById('pp-twitch-select');
     if (sel) sel.value = '';
+    var btn = document.getElementById('pp-twitch-btn');
+    if (btn) {
+      var lbl = btn.querySelector('.pp-twitch-btn-label');
+      if (lbl) lbl.textContent = '— Selecciona canal —';
+      btn.setAttribute('data-value', '');
+    }
   }
 
   // Wrap showPrePartidoOverlay to inject climate + calendar date
   var _mmPrevShowPre = window.showPrePartidoOverlay;
   if (typeof _mmPrevShowPre === 'function') {
     window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
+      _mmResetTwitchSelection();
       _mmPrevShowPre.apply(this, arguments);
+      /* Inyectamos el env inmediatamente y además re-inyectamos al next
+         frame y a 60 ms por si la fila del calendario aún no existe en
+         el DOM. Cualquiera de las pasadas que encuentre datos fija el
+         resultado definitivo. */
+      _mmInjectEnv(compKey, matchKey);
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function(){ _mmInjectEnv(compKey, matchKey); });
+      }
       setTimeout(function() { _mmInjectEnv(compKey, matchKey); }, 60);
     };
   } else {
@@ -8741,7 +8907,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       clearInterval(_mmClimateCheck);
       var _prev = window.showPrePartidoOverlay;
       window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
+        _mmResetTwitchSelection();
         _prev.apply(this, arguments);
+        _mmInjectEnv(compKey, matchKey);
         setTimeout(function() { _mmInjectEnv(compKey, matchKey); }, 60);
       };
     }, 200);

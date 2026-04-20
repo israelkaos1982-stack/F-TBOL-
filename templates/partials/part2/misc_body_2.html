@@ -1758,7 +1758,16 @@
 <div class="pp-vs" id="pp-vs"></div>
 <div class="pp-twitch-sel">
 <div class="pp-twitch-lbl"><svg width="14" height="14" viewBox="0 0 24 24" fill="#bf94ff" style="vertical-align:middle;margin-right:5px"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>📺 Canal Twitch</div>
-<select id="pp-twitch-select" onchange="window._ppTwitchChange(this.value)" style="width:100%;background:#1a1a2e;color:#bf94ff;border:1px solid rgba(191,148,255,.35);border-radius:8px;padding:8px 10px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;outline:none;cursor:pointer;">
+<!-- Dropdown custom (touch-friendly, sin lag nativo). Los valores los
+     sincroniza _ppTwitchChange, y un <select> oculto mantiene la misma
+     API para el resto del código. -->
+<button type="button" id="pp-twitch-btn" data-value=""
+  onclick="window._ppOpenTwitchDropdown && window._ppOpenTwitchDropdown()"
+  style="width:100%;background:#1a1a2e;color:#bf94ff;border:1px solid rgba(191,148,255,.35);border-radius:8px;padding:10px 12px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;outline:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+  <span class="pp-twitch-btn-label" style="flex:1;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">— Selecciona canal —</span>
+  <span style="opacity:.6;font-size:10px;">▼</span>
+</button>
+<select id="pp-twitch-select" style="display:none;" onchange="window._ppTwitchChange(this.value)">
 <option value="">— Selecciona canal —</option>
 <option value="kaotiko8219">🟣 kaotiko8219 (Tu Canal)</option>
 <option value="vk54in2">🟣 vk54in2</option>
@@ -4134,19 +4143,65 @@
     return Math.max(1, Math.round(realMs / ticks));
   }
   var _MATCH_TICKS = {
-    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 878 ms */
-    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms */
-    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 665 ms */
-    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  27 ms */
+    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 878 ms (16.5 min real) */
+    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5.0 min real) */
+    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 718 ms (13.5 min real) */
+    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  28 ms (30 s reales)   */
   };
-  /* Exponemos la regla para que otros flujos (bundle legacy, campo 3D)
-     puedan leer la misma fuente si les hace falta. */
+  /* Exponemos la regla para que TODOS los flujos (bundle legacy, campo 3D,
+     previa, clock, live ticker, copa engine) lean de una única fuente.
+     CLAUDE.md: es OBLIGATORIO consumir esto en cualquier nuevo timer/ticker. */
   try { window._MATCH_RULE = _MATCH_RULE; window._MATCH_TICKS = _MATCH_TICKS; } catch(_){}
+  window._ML_TICK_SEC = _ML_TICK_SEC;
+
+  /* Helper global único: resuelve tipo de partido y aplica el override
+     admin (_ppDurationMin). Devuelve {type, rule, tickMs, realMs}. Llamar
+     SIEMPRE que se arranca o reinicia un cronómetro de partido. */
+  window._mlResolveClock = function(opts) {
+    opts = opts || {};
+    var rule = window._MATCH_RULE || _MATCH_RULE;
+    var ticks = window._MATCH_TICKS || _MATCH_TICKS;
+    var etDone = !!opts.etDone;
+    var type;
+    if (opts.isHvH) type = etDone ? 'HvH_ET' : 'HvH';
+    else {
+      var humanInvolved = !!opts.humanInvolved;
+      if (typeof humanInvolved !== 'boolean' && typeof esHumano === 'function') {
+        humanInvolved = esHumano(opts.home) || esHumano(opts.away);
+      }
+      type = humanInvolved ? 'HvIA' : 'IAIA';
+    }
+    var r = rule[type];
+    var tickMs = ticks[type];
+    var realMs = r.realMin * 60000;
+    /* Override admin: _ppDurationMin en minutos reales (solo partidos con
+       humano). Se reescala la velocidad manteniendo el mismo número total
+       de ticks. Nunca aplica a IAIA (siempre 30s). */
+    var override = window._ppDurationMin;
+    if (override && type !== 'IAIA') {
+      realMs = override * 60000;
+      var totalTicks = (r.gameMin * 60) / _ML_TICK_SEC;
+      tickMs = Math.max(1, Math.round(realMs / totalTicks));
+    }
+    return { type: type, rule: r, tickMs: tickMs, realMs: realMs };
+  };
+
+  /* Compatibilidad con llamadas antiguas: st = {isHvH, etDone, home, away}. */
   function _mlTickMs(st) {
-    if (st.isHvH) return st.etDone ? _MATCH_TICKS.HvH_ET : _MATCH_TICKS.HvH;
-    var humanInvolved = typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away));
-    return humanInvolved ? _MATCH_TICKS.HvIA : _MATCH_TICKS.IAIA;
+    return window._mlResolveClock(st).tickMs;
   }
+  window._mlTickMs = _mlTickMs;
+
+  /* Label de duración real para la previa (ej: "16.5 min"). SIEMPRE
+     consultar esto en vez de hardcodear "16 min" / "10 min". */
+  window._mlRealDurationLabel = function(opts) {
+    var info = window._mlResolveClock(opts);
+    var mins = info.realMs / 60000;
+    /* Formateo: 0.5 → "30 s"; n.5 → "16.5 min"; entero → "13 min". */
+    if (mins < 1) return Math.round(mins * 60) + ' s';
+    if (mins % 1 === 0) return mins + ' min';
+    return mins.toFixed(1) + ' min';
+  };
 
   function _mlAddActaRow(mk, min, ico, name, num, teamLabel, type, id) {
     var list = document.getElementById('ml-acta-list-'+mk);
@@ -6081,7 +6136,9 @@
   var GM_MAX_STOPPAGE = 5820; /* 90+7 min */
   /* Misma fuente de verdad que el flujo de amistosos/Liga (_MATCH_TICKS).
      Si alguien cambia _MATCH_RULE arriba, el gm flow se recalcula solo.
-     Valores por defecto (10-min = 16.5 real, 8-min = 12.5 real): */
+     Valores por defecto: HvH=16.5 min real, HvIA=13.5 min real (ver spec
+     en el bloque _MATCH_RULE). Se lee vía _mlResolveClock en gmStartTimer
+     para honrar el override admin (_ppDurationMin). */
   var GM_TICK_HVH  = (typeof _MATCH_TICKS !== 'undefined' && _MATCH_TICKS.HvH)  || 878;
   var GM_TICK_HVIA = (typeof _MATCH_TICKS !== 'undefined' && _MATCH_TICKS.HvIA) || 665;
 
@@ -6100,7 +6157,14 @@
   }
 
   function gmStartTimer() {
-    var tickMs = _gm.isHvH ? GM_TICK_HVH : GM_TICK_HVIA;
+    /* Helper único (CLAUDE.md): honra _ppDurationMin y lee _MATCH_TICKS
+       en cada arranque del reloj (no se cachea). */
+    var tickMs;
+    if (typeof window._mlResolveClock === 'function') {
+      tickMs = window._mlResolveClock({ isHvH: !!_gm.isHvH, etDone: !!_gm.etDone }).tickMs;
+    } else {
+      tickMs = _gm.isHvH ? GM_TICK_HVH : GM_TICK_HVIA;
+    }
     _gm.timerRunning = true;
     _gm.timerInterval = setInterval(function () {
       _gm.timerSec += 5;
@@ -9280,11 +9344,20 @@
         window._ppTwitchChange._twPatched = true;
       }
 
-      /* ── Bug 2: Duración mostrada 8 min (IA) / 10 min (HvH) ── */
+      /* ── Duración mostrada: SIEMPRE vía _mlRealDurationLabel (CLAUDE.md).
+         Si el admin puso un override (_ppDurationMin), gana. Si no, sale
+         del spec (_MATCH_RULE): HvH=16.5 min, HvIA=13.5 min, IAIA=30 s. */
       var _oSPP = window.showPrePartidoOverlay;
       if (typeof _oSPP === 'function' && !_oSPP._durPatched) {
         window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
-          var newDur = isHvH ? '10 min' : '8 min';
+          var newDur;
+          if (window._ppDurationMin) {
+            newDur = window._ppDurationMin + ' min';
+          } else if (typeof window._mlRealDurationLabel === 'function') {
+            newDur = window._mlRealDurationLabel({ isHvH: !!isHvH, humanInvolved: !isHvH });
+          } else {
+            newDur = duracion || (isHvH ? '16.5 min' : '13.5 min');
+          }
           return _oSPP.call(this, matchKey, compKey, prorroga, newDur, isHvH);
         };
         window.showPrePartidoOverlay._durPatched = true;

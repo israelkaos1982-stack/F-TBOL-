@@ -62,3 +62,44 @@ de jugador para la simulación (`sqFromRegistry`, builders similares)
   etc.) sin acordarlo explícitamente con el usuario.
 - No añadas simulación nueva sin que consuma estos flags.
 - No borres flags al serializar/deserializar plantillas.
+
+
+## Duración del cronómetro del partido (obligatorio, siempre)
+
+**TIEMPOS OFICIALES — FIJADOS PARA SIEMPRE** (definidos en
+`templates/partials/part2/misc_body_2.html`, bloque `_MATCH_RULE`):
+
+| Modo  | gameMin | realMin | ms/tick (5s juego) |
+|-------|---------|---------|--------------------|
+| HvH         | 94 | 16.5 | ≈ 878 ms |
+| HvH prórroga| 30 |  5.0 | ≈ 833 ms |
+| HvIA        | 94 | 13.5 | ≈ 718 ms |
+| IAIA        | 90 |  0.5 | ≈  28 ms |
+
+- HvH = humano vs humano → 16.5 min reales (8:15 por parte).
+- HvIA = humano vs IA → 13.5 min reales (6:45 por parte).
+- IAIA = IA vs IA → 30 s reales total (15 s por parte).
+- HvH_ET = prórroga humana → 5 min reales (2:30 por parte).
+
+### Fuente única
+
+La velocidad del reloj (`tickMs`) SIEMPRE debe salir de
+`window._mlResolveClock({ isHvH, etDone, home, away })` o su alias
+`window._mlTickMs(st)`. El label visible SIEMPRE debe salir de
+`window._mlRealDurationLabel({ isHvH, humanInvolved })`.
+
+**PROHIBIDO**:
+- Hardcodear `"16 min"`, `"10 min"`, `"8 min"` o cualquier duración.
+- Cachear `tickMs` en variables de módulo al cargar (hay que leerlo en
+  cada arranque del reloj porque el admin puede cambiar el override).
+- Duplicar tablas `_MATCH_RULE` / `_MATCH_TICKS`.
+- Añadir "campo mode" u otros atajos visuales que extiendan la duración
+  real de IAIA por encima de 30 s.
+
+### Override admin (`_ppDurationMin`)
+
+- Solo aplica a partidos con humano (HvH / HvIA). No toca IAIA.
+- Se aplica reescalando `tickMs = realMs / totalTicks`, manteniendo el
+  mismo número de ticks totales (no rompe la progresión de eventos).
+- El helper `_mlResolveClock` ya lo consume. Cualquier ruta nueva debe
+  usar el helper, no leer `_MATCH_TICKS` directamente.

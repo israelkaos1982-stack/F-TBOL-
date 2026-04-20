@@ -6762,6 +6762,34 @@
       else if (ev.type === 'roja' || ev.dbl) vp = 0.25;
       if (vp > 0 && Math.random() < vp) ev.var = true;
     });
+    /* 'played' para cada titular + suplente ordenadamente (4 primeros
+       suplentes asumimos que entran — mismo criterio que mlSimEngine).
+       Sin esto, jugadores sin eventos explícitos (gol/tarjeta/MVP) no
+       tienen entrada en el dashboard de stats y se quedan sin PJ aunque
+       sí hayan jugado. El tipo 'played' no incrementa ningún contador,
+       solo crea la entrada. */
+    (function _pushPlayedEnhanced(){
+      function _pushSide(teamLetter, sq){
+        if(!Array.isArray(sq) || !sq.length) return;
+        var titulares = sq.filter(function(p){ return p && (!p[4] || p[4]==='titular'); });
+        var suplentes = sq.filter(function(p){ return p && p[4]==='suplente'; });
+        var seen = {};
+        titulares.forEach(function(p){
+          if(!p) return;
+          var k = String(p[0]||'') + '|' + String(p[1]||'');
+          if(seen[k]) return; seen[k] = true;
+          evts.push({min:0, team:teamLetter, player:[p[0]||'', p[1]||'', p[2]||''], type:'played'});
+        });
+        /* Hasta 4 suplentes "que entran" */
+        suplentes.slice(0,4).forEach(function(p){
+          if(!p) return;
+          var k = String(p[0]||'') + '|' + String(p[1]||'');
+          if(seen[k]) return; seen[k] = true;
+          evts.push({min:0, team:teamLetter, player:[p[0]||'', p[1]||'', p[2]||''], type:'played'});
+        });
+      }
+      try { _pushSide('a', sqA); _pushSide('b', sqB); } catch(_){}
+    })();
     evts.sort(function(a,b){ return a.min - b.min; });
     return { events:evts, mvp:base.mvp, mvpTeam:base.mvpTeam };
   }
@@ -6825,6 +6853,7 @@
       while (evtIdx < evts.length && evts[evtIdx].min <= curMin) {
         var ev = evts[evtIdx]; evtIdx++;
         if (ev.type === 'mvp') continue;
+        if (ev.type === 'played') continue; /* marcador interno para PJ, no acta */
         var ico = ev.type === 'gol'        ? '⚽'
                 : ev.type === 'pen-gol'    ? '⚽'
                 : ev.type === 'pen-prov'   ? '🤦'
@@ -7738,6 +7767,7 @@
     var h = '';
     m.events.forEach(function(ev) {
       if (ev.type === 'mvp') return;
+      if (ev.type === 'played') return; /* marcador interno para PJ, no se renderiza */
       var ico = ev.type === 'gol' ? '&#9917;' : ev.type === 'propia' ? '&#9917;&#128683;' : ev.type === 'falta-gol' ? '&#9917;&#127919;' : ev.type === 'pen-gol' ? '&#9917;&#129349;' : ev.type === 'pen-fallo' ? '&#10060;&#129349;' : ev.type === 'pen-prov' ? '&#129318;&#129349;' : ev.type === 'pen-parado' ? '&#128400;&#129349;' : ev.type === 'amarilla' ? '&#129000;' : ev.type === 'd-amarilla' ? '&#129000;&#128997;' : ev.type === 'roja' ? '&#128997;' : ev.type === 'lesion' ? '&#129657;' : ev.type === 'imbat' ? '&#129508;' : ev.type === 'sust' ? '&#128257;' : '&#128203;';
       var lesColor = ev.type === 'lesion' ? (ev.lesGrado === 3 ? '#ff4444' : ev.lesGrado === 2 ? '#ff8c00' : '#ffd700') : '#fff';
       var lesExtra = (ev.type === 'lesion' && ev.lesDesc) ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + 'P)</span>' : '';

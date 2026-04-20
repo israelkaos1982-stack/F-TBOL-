@@ -2014,6 +2014,10 @@
           t.players.forEach(function(p){
             if(!p || !p.name) return;
             var entry = [p.name, Number(p.power)||70];
+            /* ⭐ Estrella: se propaga como propiedad del array para
+               que weightedScorer pueda multiplicar su peso goleador
+               sin romper los consumidores que esperan [name, power]. */
+            if(p.elite) entry.elite = true;
             if(p.pos === 'POR') roster.porteros.push(entry);
             else if(p.pos === 'DEF') roster.defensas.push(entry);
             else if(p.pos === 'MED') roster.medios.push(entry);
@@ -2107,11 +2111,14 @@
     var bag = [];
     ['porteros','defensas','medios','delanteros'].forEach(function(group){
       (roster[group] || []).forEach(function(player){
+        /* Bonus ⭐ Estrella del equipo: ×2 al peso goleador. */
+        var w = (player[1] || 70) * poderPosWeight(group, player[1] || 70);
+        if (player && player.elite) w *= 2;
         bag.push({
           group: group,
           name: player[0],
           power: player[1] || 70,
-          weight: (player[1] || 70) * poderPosWeight(group, player[1] || 70)
+          weight: w
         });
       });
     });
@@ -7372,10 +7379,16 @@
     if (!sq || !sq.length) return null;
     var weights = sq.map(function(p) {
       var scored = goalsPerPlayer && p ? (goalsPerPlayer[p[1]] || 0) : 0;
+      var w;
       if (typeof window.calculateGoalProbability === 'function') {
-        return Math.max(0.001, window.calculateGoalProbability(p[2], p[3], isLocal, scored));
+        w = Math.max(0.001, window.calculateGoalProbability(p[2], p[3], isLocal, scored));
+      } else {
+        w = Math.max(0.001, (p[3] || 70) * _poderPosWeight(p[2], p[3]));
       }
-      return Math.max(0.001, (p[3] || 70) * _poderPosWeight(p[2], p[3]));
+      /* Bonus ⭐ Estrella del equipo: doble probabilidad de marcar.
+         Propagado como propiedad del array por sqFromRegistry. */
+      if (p && p.elite) w *= 2;
+      return w;
     });
     var total = weights.reduce(function(sum, weight) { return sum + weight; }, 0);
     if (total <= 0) return _weightedPick(sq);

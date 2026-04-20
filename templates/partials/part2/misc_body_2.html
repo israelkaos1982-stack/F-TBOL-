@@ -2112,12 +2112,11 @@
     var bag = [];
     ['porteros','defensas','medios','delanteros'].forEach(function(group){
       (roster[group] || []).forEach(function(player){
-        /* Bonus goleadores. Pueden acumularse ⭐ y ⚾:
-             ⭐ Estrella del equipo  → ×2
-             ⚾ Goleador nato         → ×2.5 */
+        /* ⚾ Goleador nato (prioridad máxima en la tabla de flags):
+           ×3 al peso goleador. ⭐ Estrella NO afecta a goles —
+           solo influye en la elección de MVP (se maneja aparte). */
         var w = (player[1] || 70) * poderPosWeight(group, player[1] || 70);
-        if (player && player.elite)   w *= 2;
-        if (player && player.natGoal) w *= 2.5;
+        if (player && player.natGoal) w *= 3;
         bag.push({
           group: group,
           name: player[0],
@@ -2142,13 +2141,16 @@
     /* Regla unificada de "carta de valor" (misma que Liga EA Sports y
        Copa del Rey):
          · power del local × 1.10 (ventaja de localía del 10%)
+         · × 1.05 si el equipo tiene Capitán (C) — bonus de líder
          · −15 por cada jugador expulsado ese partido
        Si no se pasan rojas explícitas, mantenemos el comportamiento
        antiguo (sin penalización) para callers externos. */
     var redA = (opts && opts.redA) || 0;
     var redB = (opts && opts.redB) || 0;
-    var rA = Math.max(1, getTeamSimulationPower(home) * 1.10 - 15 * redA);
-    var rB = Math.max(1, getTeamSimulationPower(away)        - 15 * redB);
+    var capA = _captainBonus(home && home.name);
+    var capB = _captainBonus(away && away.name);
+    var rA = Math.max(1, getTeamSimulationPower(home) * 1.10 * capA - 15 * redA);
+    var rB = Math.max(1, getTeamSimulationPower(away)        * capB - 15 * redB);
     var baseA = rA / Math.max(1, (rA + rB));
     var probA = Math.min(0.82, baseA);
     function sample(prob){
@@ -2207,7 +2209,28 @@
     }
     var mvpTeam = gl>gv ? a : (gv>gl ? b : (Math.random()<0.5?a:b));
     mvpTeam.mvp += 1;
-    incPlayerStat(playerStats, mvpTeam.name, pickPlayer(rosters[mvpTeam.name], Math.random()<0.55?'delanteros':'medios'), 'mvp', 1);
+    /* ⭐ Estrella del equipo: prioridad MEDIA — solo influye aquí, en
+       la selección de MVP. Si el equipo ganador tiene alguna estrella
+       en su plantilla, se le da preferencia (ponderada por poder).
+       Sin estrellas, caemos al reparto clásico delantero/medio. */
+    var mvpRoster = rosters[mvpTeam.name] || {};
+    var stars = [];
+    ['delanteros','medios','defensas','porteros'].forEach(function(g){
+      (mvpRoster[g] || []).forEach(function(p){ if(p && p.elite) stars.push(p); });
+    });
+    var mvpName;
+    if (stars.length){
+      var totalW = stars.reduce(function(s,p){ return s + (p[1]||70); }, 0);
+      var roll = Math.random() * totalW, acc = 0, chosen = stars[0];
+      for (var si=0; si<stars.length; si++){
+        acc += (stars[si][1]||70);
+        if (roll <= acc){ chosen = stars[si]; break; }
+      }
+      mvpName = chosen[0];
+    } else {
+      mvpName = pickPlayer(mvpRoster, Math.random()<0.55?'delanteros':'medios');
+    }
+    incPlayerStat(playerStats, mvpTeam.name, mvpName, 'mvp', 1);
   }
 
   function simulateLeague(teams){
@@ -3186,6 +3209,24 @@
     return weight ? total / weight : 75;
   }
 
+  /* Bonus de Capitán (C): +5% al poder del equipo (modificador
+     "invisible" que premia a los equipos con liderazgo, según la
+     tabla de prioridades). Se aplica una sola vez aunque haya varios
+     capitanes (la regla de exclusividad solo permite uno). */
+  function _hasCaptain(teamName){
+    var fmap = window._LIGA_EA_PLAYER_FLAGS || {};
+    if (!teamName) return false;
+    var prefix = String(teamName) + '::';
+    for (var k in fmap){
+      if (!fmap.hasOwnProperty(k)) continue;
+      if (k.indexOf(prefix) !== 0) continue;
+      if (fmap[k] && fmap[k].captain) return true;
+    }
+    return false;
+  }
+  function _captainBonus(teamName){ return _hasCaptain(teamName) ? 1.05 : 1.0; }
+  window._captainBonus = _captainBonus;
+
   function _effectiveIARating(teamName, isHome, j, oppName) {
     var rat = window.TEAM_RATINGS || {};
     var entry = rat[teamName];
@@ -3193,6 +3234,8 @@
     if (!isFinite(base)) base = 75;
     var squad = _avgSquadPower(teamName);
     var blended = base * 0.62 + squad * 0.38;
+    /* Capitán: +5% aunque el equipo sea visitante. */
+    blended *= _captainBonus(teamName);
     if (!isHome) return { rating: blended, bonusPct: 0 };
     /* Keep home bonus stable per fixture/jornada so cards/live/batch stay consistent */
     var seed = _seed01(['ia', j || 0, teamName || '', oppName || ''].join('|'));
@@ -7389,12 +7432,11 @@
       } else {
         w = Math.max(0.001, (p[3] || 70) * _poderPosWeight(p[2], p[3]));
       }
-      /* Bonus por flags de scoring (propagados como propiedades del
-         array por sqFromRegistry). Pueden acumularse:
-           ⭐ Estrella del equipo   → ×2
-           ⚾ Goleador nato          → ×2.5 (más específico al gol) */
-      if (p && p.elite)   w *= 2;
-      if (p && p.natGoal) w *= 2.5;
+      /* Prioridad MÁXIMA al goleador nato (⚾): marca el 50%+ de los
+         goles de su equipo, así que aplicamos el multiplicador más
+         agresivo. ⭐ Estrella no afecta al peso de gol — su efecto
+         único es en la elección de MVP (ver selector MVP abajo). */
+      if (p && p.natGoal) w *= 3;
       return w;
     });
     var total = weights.reduce(function(sum, weight) { return sum + weight; }, 0);
@@ -7625,6 +7667,24 @@
         }
       }
     });
+    /* ⭐ Estrella del equipo: bonus SOLO aquí (en la elección de MVP).
+       Según la tabla de prioridades, ⭐ no afecta al resultado del
+       partido — únicamente sube las opciones de ser MVP. Damos +2
+       puntos a cada estrella del equipo ganador (o ambos si empate)
+       para empujar la selección sin invalidar el goleador claro. */
+    function _iterStars(sq, teamNameLocal, side){
+      if (!Array.isArray(sq) || !sq.length) return;
+      sq.forEach(function(p){
+        if (!p || !p.elite) return;
+        var name = p[1];
+        if (!name || expelledAll[name]) return;
+        if (winSide && side !== winSide) return;
+        mvpScore[name] = (mvpScore[name] || 0) + 2;
+        mvpTeams2[name] = teamNameLocal;
+      });
+    }
+    _iterStars(sqA, teamA, 'a');
+    _iterStars(sqB, teamB, 'b');
     var mvp='', mvpTeamName='', best=0;
     Object.keys(mvpScore).forEach(function(p){ if(mvpScore[p]>best){ best=mvpScore[p]; mvp=p; mvpTeamName=mvpTeams2[p]; } });
     if (!mvp) {

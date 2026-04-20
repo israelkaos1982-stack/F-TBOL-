@@ -480,8 +480,10 @@
     var adjRatingA = Math.max(30, ratingA - (Object.keys(expelledA).length * RED_FLAT_PENALTY));
     var adjRatingB = Math.max(30, ratingB - (Object.keys(expelledB).length * RED_FLAT_PENALTY));
 
-    var strengthA = adjRatingA * 1.10; // bonus local del 10%
-    var strengthB = adjRatingB;
+    /* Bonus de Capitán: +5% al poder del equipo. */
+    var _capBonus = (typeof window._captainBonus === 'function') ? window._captainBonus : function(){ return 1.0; };
+    var strengthA = adjRatingA * 1.10 * _capBonus(teamA); // 10% local + 5% capitán
+    var strengthB = adjRatingB         * _capBonus(teamB);
     var shareA = Math.max(0.22, Math.min(0.78, strengthA / Math.max(1, strengthA + strengthB)));
     var baseTotal = 1.75 + (((adjRatingA + adjRatingB) / 2) - 74) * 0.05;
     var expectedA = Math.max(0.15, Math.min(3.8, baseTotal * shareA + Math.max(0, adjRatingA - adjRatingB) * 0.018 + 0.10));

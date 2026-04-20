@@ -712,6 +712,35 @@ def copa_get_state():
     data = load_global_state()
     return jsonify({"ok": True, "copa": data.get("copa_state") or {}})
 
+
+@app.route("/api/forma_counter", methods=["GET"])
+def forma_counter_get():
+    """Contador persistente de estados ↘️ por jugador. Al llegar a 3 se
+    dispara LESIÓN LEVE automática y se resetea a 0 (lo hace el cliente,
+    esto solo almacena el contador)."""
+    data = load_global_state()
+    return jsonify({"ok": True, "counters": data.get("forma_down_counter") or {}})
+
+
+@app.route("/api/forma_counter", methods=["POST"])
+def forma_counter_save():
+    payload = request.get_json(silent=True) or {}
+    counters = payload.get("counters")
+    if not isinstance(counters, dict):
+        return jsonify({"ok": False, "error": "counters debe ser objeto"}), 400
+    cleaned = {}
+    for name, value in counters.items():
+        try:
+            n = int(value)
+        except (TypeError, ValueError):
+            continue
+        if n > 0:
+            cleaned[str(name)] = n
+    data = load_global_state()
+    data["forma_down_counter"] = cleaned
+    save_global_state(data)
+    return jsonify({"ok": True, "counters": cleaned})
+
 @app.route("/api/copa/sorteo", methods=["POST"])
 def copa_sorteo():
     payload = request.get_json(silent=True) or {}

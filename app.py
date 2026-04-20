@@ -512,7 +512,7 @@ def save_live_state(new_state):
     }
 
 # --- FUNCIONES MOTOR ---
-def calcular_prob(perfil, local=False, goles_previos=0):
+def calcular_prob(perfil, local=False, goles_previos=0, flags=None):
     # Porteros casi nunca marcan: peso fijo 0.001 ignorando su poder de portería
     if perfil["posicion"] == "portero":
         return 0.001
@@ -524,18 +524,52 @@ def calcular_prob(perfil, local=False, goles_previos=0):
         prob *= BONUS_LOCAL
 
     prob *= MULTIGOL[min(goles_previos, 4)]
+
+    # Flags obligatorios (CLAUDE.md): se aplican en TODOS los partidos.
+    if flags:
+        if flags.get("natGoal"):
+            prob *= 3        # ⚾ prioridad máxima — ~50% de los goles
+        if flags.get("penalty"):
+            prob += 0.40     # P — bonus fijo al peso de goleador
+        if flags.get("freeKick"):
+            prob += 0.30     # F — bonus fijo al peso de goleador
+        # ⭐ elite y C capitán no afectan a esta función (MVP / equipo)
     return prob
 
 def resolve_team_name(team_name):
     clean = (team_name or "").strip()
     return TEAM_ALIASES.get(clean.lower(), clean)
 
+"""Flags obligatorios por equipo (CLAUDE.md): capitan (C), freeKick (F),
+penalti (P), elite (⭐), natGoal (⚾). Estructura opcional que, cuando
+está presente, el motor de simulación aplica en TODOS los partidos
+(Liga, Copa, Europa, amistosos). Vacío por defecto — los admins las
+marcan desde el editor web y se sincronizan aquí cuando aplique."""
+TEAM_PLAYER_FLAGS = {}
+
+
+def get_player_flags(team_name, player_name):
+    team_flags = TEAM_PLAYER_FLAGS.get(resolve_team_name(team_name)) or \
+                 TEAM_PLAYER_FLAGS.get(team_name) or {}
+    return team_flags.get(player_name, {}) or {}
+
+
+def team_has_captain(team_name):
+    team_flags = TEAM_PLAYER_FLAGS.get(resolve_team_name(team_name)) or \
+                 TEAM_PLAYER_FLAGS.get(team_name) or {}
+    return any(f.get("captain") for f in team_flags.values() if isinstance(f, dict))
+
+
 def get_team_power(team_name):
     resolved = resolve_team_name(team_name)
     squad = jugadores_por_equipo.get(resolved) or jugadores_por_equipo.get(team_name) or []
     if squad:
         powers = [int(j.get("poder", 70) or 70) for j in squad]
-        return max(1, min(100, round(sum(powers) / max(1, len(powers)))))
+        avg = sum(powers) / max(1, len(powers))
+        # Capitán (C): +5% obligatorio al valor del equipo (CLAUDE.md)
+        if team_has_captain(resolved):
+            avg *= 1.05
+        return max(1, min(100, round(avg)))
     return 76
 
 def elegir_goleador(equipo, local=False, conteo=None):
@@ -548,7 +582,8 @@ def elegir_goleador(equipo, local=False, conteo=None):
 
     for j in jugadores:
         goles_previos = conteo.get(j["nombre"], 0)
-        p = calcular_prob(j, local, goles_previos)
+        flags = get_player_flags(resolved, j["nombre"])
+        p = calcular_prob(j, local, goles_previos, flags=flags)
         pesos.append(max(p, 0.001))
 
     elegido = random.choices(jugadores, weights=pesos, k=1)[0]

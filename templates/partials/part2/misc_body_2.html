@@ -2971,8 +2971,12 @@
   }
 
   function esHumano(t) { return HUMANOS.indexOf(t) !== -1 || HUMANOS.indexOf(normalizarNombreEquipo(t)) !== -1; }
+  /* Bono de local: el equipo que juega en casa suma un +10% fijo a su
+     valor-poder-nivel, sea cual sea la competición. Antes usábamos un
+     rango 10-12% aleatorio por partido; lo dejamos fijo al 10% como
+     regla única. */
   var _IA_HOME_BONUS_MIN = 0.10;
-  var _IA_HOME_BONUS_MAX = 0.12;
+  var _IA_HOME_BONUS_MAX = 0.10;
 
   function _seed01(str) {
     var s = String(str || '');
@@ -3032,8 +3036,10 @@
     }
     return { gh: Math.floor(Math.random() * 4), ga: Math.floor(Math.random() * 4) };
   }
-  /* ── EXPULSIÓN IA: pre-roll de rojas y penalización de 30 PUNTOS ── */
-  var _RED_CARD_FLAT_PENALTY = 30; /* 30 puntos planos por expulsión */
+  /* ── EXPULSIÓN IA: pre-roll de rojas y penalización de 15 PUNTOS ── */
+  var _RED_CARD_FLAT_PENALTY = 15; /* 15 puntos planos por expulsión (antes 30).
+     Se aplican en el instante mismo de la roja / doble-amarilla, por lo
+     que el resto del partido se simula con el rating ya reducido. */
   function _rollRedCards() {
     /* Máximo 1 roja por partido (~30% de probabilidad).
        TODAS las rojas pasan por aquí para garantizar que la penalización

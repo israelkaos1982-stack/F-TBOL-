@@ -1941,27 +1941,24 @@ window.pG = function(fn) {
       });
     }
 
-    // ── 2. SQUAD_REGISTRY — LIMPIAR hardcodeados + aplicar del editor
-    // Primero: vaciar TODAS las entradas del registry que NO estén
-    // en el editor del usuario. Así no quedan jugadores fantasma de
-    // los equipos hardcodeados originales del bundle.
-    // Solo los equipos que el admin ha creado tendrán plantilla.
+    // ── 2. SQUAD_REGISTRY — aplicar las del editor SIN pisar la
+    //    plantilla hardcodeada del bundle si el editor no trae
+    //    jugadores. Antes, un equipo creado vacío desde el editor
+    //    sobreescribía la plantilla original con [] y el simulador
+    //    caía al fallback 'Jugador A/B'.
     if(window.SQUAD_REGISTRY){
-      var userTeamNames = {};
-      Object.keys(bridge.squads).forEach(function(name){
-        _namesForAlias(name).forEach(function(alias){ userTeamNames[alias] = true; });
-      });
-      // Limpiar entradas que no son del usuario
-      Object.keys(window.SQUAD_REGISTRY).forEach(function(name){
-        if(!userTeamNames[name]){
-          window.SQUAD_REGISTRY[name] = [];
+      // Sólo se consideran 'plantilla válida del editor' las que
+      // traigan al menos un jugador (no sólo la cabecera de sección).
+      function _hasPlayers(sq){
+        if(!Array.isArray(sq) || !sq.length) return false;
+        for(var i=0; i<sq.length; i++){
+          if(Array.isArray(sq[i])) return true; // entrada [num,name,power]
         }
-      });
-      // Aplicar las del editor (bajo el nombre guardado y bajo todos
-      // sus alias canónicos, para que el simulador encuentre la
-      // plantilla tanto si usa 'Celta' como 'Celta de Vigo').
+        return false;
+      }
       Object.keys(bridge.squads).forEach(function(name){
         var sq = bridge.squads[name];
+        if(!_hasPlayers(sq)) return; // editor sin plantilla → respeta hardcodeada
         _namesForAlias(name).forEach(function(alias){
           window.SQUAD_REGISTRY[alias] = sq;
         });

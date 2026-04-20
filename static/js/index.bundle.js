@@ -1018,19 +1018,56 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
       .join('') || 'CLB';
   }
 
-  window.getTeamBadgeHtml = function(name){
-    var logoUrl = window.getTeamLogoUrl ? window.getTeamLogoUrl(name) : '';
+  // Letter-badge fallback (extraído para que el onerror del <img> pueda
+  // degradar sin reintentar la URL que falló — antes el onerror llamaba
+  // de nuevo a getTeamBadgeHtml con el mismo nombre y, como el admin
+  // shield seguía en window._ligaEaShields, devolvía el mismo <img>
+  // roto y el navegador entraba en un bucle de 404 sin que el escudo
+  // llegase nunca a mostrar nada).
+  window.getTeamBadgeHtmlLetter = function(name){
     var safeName = String(name || '').trim();
-    var fallbackName = safeName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    if (logoUrl) {
-      return '<img class="clas-team-logo" src="' + logoUrl + '" onerror="this.outerHTML=window.getTeamBadgeHtml(\'' + fallbackName + '\')" alt="Escudo de ' + safeName.replace(/"/g, '&quot;') + '"/>';
-    }
     var aliases = window.TEAM_ALIASES || {};
     var ratings = window.TEAM_RATINGS || {};
     var canonical = aliases[safeName.toLowerCase()] || safeName;
     var meta = ratings[canonical] || ratings[safeName] || {};
     var bg = (meta && meta.color) || '#24324a';
     return '<span class="clas-team-logo clas-team-logo-fallback" role="img" aria-label="Escudo de ' + safeName.replace(/"/g, '&quot;') + '" style="background:' + bg + ';">' + getTeamBadgeLabel(safeName) + '</span>';
+  };
+
+  // Hardcoded-only lookup (salta _ligaEaShields). Se usa en la cascada
+  // de fallback cuando la URL del admin da 404.
+  function _hardcodedLogoUrl(name){
+    var aliases = window.TEAM_ALIASES || {};
+    var clean = String(name || '').trim();
+    var normalizedClean = normalizeTeamKey(clean);
+    var canonical = aliases[normalizedClean] || aliases[clean.toLowerCase()] || clean;
+    var logos = window.TEAM_LOGOS || {};
+    if (logos[canonical]) return logos[canonical];
+    if (logos[clean]) return logos[clean];
+    if (TEAM_LOGOS_NORMALIZED[normalizeTeamKey(canonical)]) return TEAM_LOGOS_NORMALIZED[normalizeTeamKey(canonical)];
+    if (TEAM_LOGOS_NORMALIZED[normalizedClean]) return TEAM_LOGOS_NORMALIZED[normalizedClean];
+    var ratings = window.TEAM_RATINGS || {};
+    var meta = ratings[canonical] || ratings[clean];
+    if (meta && typeof meta === 'object' && meta.shield) return meta.shield;
+    return '';
+  }
+
+  window.getTeamBadgeHtml = function(name, skipAdmin){
+    var safeName = String(name || '').trim();
+    var fallbackName = safeName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    var logoUrl = skipAdmin
+      ? _hardcodedLogoUrl(name)
+      : (window.getTeamLogoUrl ? window.getTeamLogoUrl(name) : '');
+    if (logoUrl) {
+      // Cascada en onerror: primero salta al escudo hardcodeado si el
+      // admin URL ha fallado (skipAdmin=true); si también falla, cae al
+      // badge de letras. Esto rompe el bucle infinito de 404.
+      var onerrorHandler = skipAdmin
+        ? 'this.outerHTML=window.getTeamBadgeHtmlLetter(\'' + fallbackName + '\')'
+        : 'this.outerHTML=window.getTeamBadgeHtml(\'' + fallbackName + '\', true)';
+      return '<img class="clas-team-logo" src="' + logoUrl + '" onerror="' + onerrorHandler + '" alt="Escudo de ' + safeName.replace(/"/g, '&quot;') + '"/>';
+    }
+    return window.getTeamBadgeHtmlLetter(name);
   };
 
   var SHORT_NAMES = {

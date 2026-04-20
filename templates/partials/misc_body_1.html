@@ -1918,8 +1918,17 @@ window.pG = function(fn) {
   function applyEngineOverrides(){
     if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
     var bridge = window.ligaEaBuildEngineOverrides();
-    // Funciona con CUALQUIER número de equipos (no solo 20)
-    if(!bridge || bridge.meta.teamsCount === 0) return;
+
+    /* Si Liga EA está vacía, todavía queremos importar las demás
+       ligas del editor al motor (Hypermotion, Primera Fed y las 51
+       externas). Sin esto, un admin que solo haya creado equipos
+       en Hypermotion no podía jugar amistosos con su plantilla real:
+       `sqFromRegistry('Racing')` volvía al placeholder. */
+    if(!bridge || bridge.meta.teamsCount === 0){
+      _importOtherLeaguesIntoEngine();
+      if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
+      return;
+    }
 
     // Hash rápido para no re-aplicar si nada cambió
     var hash = bridge.meta.teamsCount + ':' + bridge.meta.playersCount + ':' + bridge.meta.humansCount + ':' + bridge.meta.generatedAt;
@@ -1978,8 +1987,87 @@ window.pG = function(fn) {
       }
     }
 
+    // ── 4. Importar equipos de OTRAS ligas al motor ──────────────
+    // Hypermotion, Primera Federación y las 51 ligas externas
+    // viven cada una en su propio `ligaExt_<slug>`. Sin este paso,
+    // `sqFromRegistry('Racing')` o `sqFromRegistry('Manchester City')`
+    // caía al placeholder "Jugador A/B" cuando el admin intentaba
+    // jugar un amistoso con un equipo de Hypermotion, Primera Fed o
+    // cualquier otra liga creada en el editor. Ahora poblamos
+    // SQUAD_REGISTRY + TEAM_RATINGS para TODOS los equipos creados,
+    // no solo los 20 de Liga EA.
+    _importOtherLeaguesIntoEngine();
+
     // ── 5. Refrescar escudos y clasificación ─────────────────────
     if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
+  }
+
+  function _importOtherLeaguesIntoEngine(){
+    var POS_MAP = { POR:'P', DEF:'D', MED:'M', DEL:'F' };
+    var POS_HEADER = { P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS' };
+    var POS_ORDER = ['P','D','M','F'];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (!key || key.indexOf('ligaExt_') !== 0) continue;
+        if (key === 'ligaExt_liga-ea-sports') continue;   /* ya lo hizo el bridge */
+        if (key.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(key);
+        if (!raw) continue;
+        var data;
+        try { data = JSON.parse(raw); } catch(_e){ continue; }
+        if (!data || !Array.isArray(data.teams)) continue;
+        data.teams.forEach(function(t){
+          if (!t || !t.name) return;
+          var name = String(t.name).trim();
+          if (!name) return;
+          /* TEAM_RATINGS: solo lo seteamos si el motor aún no tiene
+             una entrada para este equipo, para no pisar ratings
+             hardcodeados (Liga EA, selecciones, etc.). */
+          if (window.TEAM_RATINGS && !window.TEAM_RATINGS[name]){
+            var pw = Math.max(1, Math.min(99, Number(t.power) || Number(t.media) || 70));
+            var shield = t.shield ? String(t.shield) : '';
+            window.TEAM_RATINGS[name] = shield ? {media: pw, shield: shield} : pw;
+          }
+          /* SQUAD_REGISTRY: solo pisamos si traemos jugadores de
+             verdad (si no, respetamos lo que tenga el bundle o lo
+             que hayan puesto otros pipelines). */
+          if (!Array.isArray(t.players) || !t.players.length) return;
+          var byPos = {P:[], D:[], M:[], F:[]};
+          t.players.forEach(function(p){
+            var simPos = POS_MAP[p.pos] || 'M';
+            byPos[simPos].push(p);
+          });
+          var simSquad = [];
+          POS_ORDER.forEach(function(simPos){
+            var pool = byPos[simPos];
+            if (!pool.length) return;
+            pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+            simSquad.push({h: POS_HEADER[simPos]});
+            pool.forEach(function(p){
+              var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+              /* Flags a sidecar (C/F/P/⭐/⚾) — mismo formato que Liga EA. */
+              if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal){
+                var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
+                fmap[name + '::' + String(p.name||'')] = {
+                  captain:  !!p.captain,
+                  freeKick: !!p.freeKick,
+                  penalty:  !!p.penalty,
+                  elite:    !!p.elite,
+                  natGoal:  !!p.natGoal
+                };
+              }
+              /* ⭐ / ⚾ como propiedades del array para los scorers. */
+              var entry = [String(p.num || ''), String(p.name || '?'), pw];
+              if (p.elite)   entry.elite   = true;
+              if (p.natGoal) entry.natGoal = true;
+              simSquad.push(entry);
+            });
+          });
+          if (window.SQUAD_REGISTRY) window.SQUAD_REGISTRY[name] = simSquad;
+        });
+      }
+    } catch(_){}
   }
 
   // Exponer para que lextSaveTeam pueda llamarlo tras guardar

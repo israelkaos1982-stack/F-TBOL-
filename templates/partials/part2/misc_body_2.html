@@ -12264,16 +12264,37 @@ document.addEventListener('DOMContentLoaded', function() {
       .toLowerCase();
   }
 
-  /* Fuente de verdad única: los equipos que el admin ha añadido en los
-     editores (Liga EA Sports, Hypermotion, Primera Federación y las 51
-     ligas externas). Cada liga guarda sus equipos en localStorage bajo
-     la clave `ligaExt_<slug>`. Antes leíamos `window.TEAM_RATINGS`, que
-     es hardcodeado y generaba duplicados ("Sevilla" + "Sevilla FC",
-     "Villarreal" + "Villarreal CF", etc.) además de sacar equipos que
-     ya no queremos porque el admin los ha reemplazado por los suyos. */
+  /* Fuente de verdad: unimos los equipos del editor (ligaExt_*) con
+     los que vienen ya cargados en el motor (SQUAD_REGISTRY +
+     TEAM_RATINGS). De esta forma aparecen TODOS los equipos de todas
+     las ligas aunque el admin no haya abierto nunca ese editor
+     (p.ej. Liga EA Sports viene hardcodeada y sólo se copia a
+     ligaExt_liga-ea-sports cuando se edita). Cualquier equipo nuevo
+     añadido en cualquier editor aparece automáticamente al recargar
+     el buscador, porque lo leemos en vivo cada vez. */
   function _getTeamList() {
     var teams = [];
     var seen = {};
+    function _pushTeam(name, media, shield, isHuman){
+      if (!name) return;
+      var canon = String(name).trim();
+      if (!canon) return;
+      var lower = canon.toLowerCase();
+      if (seen[lower]) return;
+      seen[lower] = true;
+      if (!shield && typeof window.getTeamLogoUrl === 'function') {
+        shield = window.getTeamLogoUrl(canon) || '';
+      }
+      teams.push({
+        name: canon,
+        media: Number(media) || 0,
+        shield: String(shield || ''),
+        isHuman: !!isHuman
+      });
+    }
+
+    /* 1. Editores ligaExt_* (Liga EA Sports, Hypermotion, Primera Fed,
+          y las 51 ligas del "Resto"). */
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var key = localStorage.key(i);
@@ -12285,26 +12306,33 @@ document.addEventListener('DOMContentLoaded', function() {
         try { data = JSON.parse(raw); } catch (_e) { continue; }
         if (!data || !Array.isArray(data.teams)) continue;
         data.teams.forEach(function (t) {
-          if (!t || !t.name) return;
-          var canon = String(t.name).trim();
-          if (!canon) return;
-          var lower = canon.toLowerCase();
-          if (seen[lower]) return; /* ya visto en otra liga o duplicado */
-          seen[lower] = true;
-          var media = Number(t.power) || Number(t.media) || 0;
-          var shield = String(t.shield || '').trim();
-          if (!shield && typeof window.getTeamLogoUrl === 'function') {
-            shield = window.getTeamLogoUrl(canon) || '';
-          }
-          teams.push({
-            name: canon,
-            media: media,
-            shield: shield,
-            isHuman: !!t.isHuman
-          });
+          if (!t) return;
+          _pushTeam(t.name, t.power || t.media, t.shield, t.isHuman);
         });
       }
     } catch (_) {}
+
+    /* 2. Equipos del motor (hardcoded + cualquier equipo cargado por
+          applyEngineOverrides). Así aparecen los equipos de Liga EA
+          Sports incluso si el admin no ha abierto el editor, y los
+          rivales de torneos europeos (Champions / Europa /
+          Conference) también se pueden escoger para amistosos. */
+    try {
+      var ratings = window.TEAM_RATINGS || {};
+      Object.keys(ratings).forEach(function(name){
+        var r = ratings[name];
+        var media = (r && typeof r === 'object') ? (r.media || 0) : (typeof r === 'number' ? r : 0);
+        var shield = (r && typeof r === 'object' && r.shield) ? r.shield : '';
+        _pushTeam(name, media, shield, false);
+      });
+    } catch (_) {}
+    try {
+      var reg = window.SQUAD_REGISTRY || {};
+      Object.keys(reg).forEach(function(name){
+        _pushTeam(name, 0, '', false);
+      });
+    } catch (_) {}
+
     teams.sort(function (a, b) { return a.name.localeCompare(b.name, 'es'); });
     return teams;
   }

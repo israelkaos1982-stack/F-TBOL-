@@ -11821,33 +11821,48 @@ document.addEventListener('DOMContentLoaded', function() {
       .toLowerCase();
   }
 
+  /* Fuente de verdad única: los equipos que el admin ha añadido en los
+     editores (Liga EA Sports, Hypermotion, Primera Federación y las 51
+     ligas externas). Cada liga guarda sus equipos en localStorage bajo
+     la clave `ligaExt_<slug>`. Antes leíamos `window.TEAM_RATINGS`, que
+     es hardcodeado y generaba duplicados ("Sevilla" + "Sevilla FC",
+     "Villarreal" + "Villarreal CF", etc.) además de sacar equipos que
+     ya no queremos porque el admin los ha reemplazado por los suyos. */
   function _getTeamList() {
     var teams = [];
     var seen = {};
-    var hidden = window.AMS_LUPA_HIDDEN || {};
-    if (window.TEAM_RATINGS) {
-      for (var name in window.TEAM_RATINGS) {
-        if (!window.TEAM_RATINGS.hasOwnProperty(name)) continue;
-        var canon = name.trim();
-        /* Duplicados ocultos (p.ej. 'Sevilla FC' cuando ya mostramos 'Sevilla') */
-        if (hidden[canon]) continue;
-        var lower = canon.toLowerCase();
-        if (seen[lower]) continue;
-        seen[lower] = true;
-        var r = window.TEAM_RATINGS[canon];
-        var media = (r && typeof r === 'object') ? (r.media || 0) : (typeof r === 'number' ? r : 0);
-        var shield = (r && typeof r === 'object' && r.shield) ? r.shield : '';
-        if (!shield && typeof window.getTeamLogoUrl === 'function') {
-          shield = window.getTeamLogoUrl(canon) || '';
-        }
-        if (!shield && window.TEAM_LOGOS && window.TEAM_LOGOS[canon]) {
-          shield = window.TEAM_LOGOS[canon];
-        }
-        var isHuman = HUMANOS_AMS.indexOf(canon) !== -1;
-        teams.push({ name: canon, media: media, shield: shield, isHuman: isHuman });
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (!key || key.indexOf('ligaExt_') !== 0) continue;
+        if (key.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(key);
+        if (!raw) continue;
+        var data;
+        try { data = JSON.parse(raw); } catch (_e) { continue; }
+        if (!data || !Array.isArray(data.teams)) continue;
+        data.teams.forEach(function (t) {
+          if (!t || !t.name) return;
+          var canon = String(t.name).trim();
+          if (!canon) return;
+          var lower = canon.toLowerCase();
+          if (seen[lower]) return; /* ya visto en otra liga o duplicado */
+          seen[lower] = true;
+          var media = Number(t.power) || Number(t.media) || 0;
+          var shield = String(t.shield || '').trim();
+          if (!shield && typeof window.getTeamLogoUrl === 'function') {
+            shield = window.getTeamLogoUrl(canon) || '';
+          }
+          teams.push({
+            name: canon,
+            media: media,
+            shield: shield,
+            isHuman: !!t.isHuman
+          });
+        });
       }
-    }
-    teams.sort(function(a,b){ return a.name.localeCompare(b.name,'es'); });
+    } catch (_) {}
+    teams.sort(function (a, b) { return a.name.localeCompare(b.name, 'es'); });
     return teams;
   }
 
@@ -11940,12 +11955,43 @@ document.addEventListener('DOMContentLoaded', function() {
     if (btn) btn.disabled = !(_selA && _selB && _selA !== _selB);
   }
 
+  /* Comprueba si un equipo está marcado como Humano en alguno de los
+     editores (ligaExt_*). Antes usábamos solo HUMANOS_AMS, que es un
+     array hardcodeado — así los humanos nuevos añadidos desde el editor
+     no se detectaban como tales en amistosos. */
+  function _isTeamHuman(teamName) {
+    if (!teamName) return false;
+    if (HUMANOS_AMS.indexOf(teamName) !== -1) return true;
+    var target = String(teamName).trim().toLowerCase();
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (!key || key.indexOf('ligaExt_') !== 0) continue;
+        if (key.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          var data = JSON.parse(raw);
+          var teams = data && Array.isArray(data.teams) ? data.teams : [];
+          for (var j = 0; j < teams.length; j++) {
+            var t = teams[j];
+            if (!t || !t.name) continue;
+            if (String(t.name).trim().toLowerCase() === target) {
+              return !!t.isHuman;
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return false;
+  }
+
   window._amsCreateMatch = function() {
     if (!_selA || !_selB || _selA === _selB) return;
     _amsCounter++;
     var mk = 'ams-' + _amsCounter + '-' + Date.now();
-    var isHomeHuman = HUMANOS_AMS.indexOf(_selA) !== -1;
-    var isAwayHuman = HUMANOS_AMS.indexOf(_selB) !== -1;
+    var isHomeHuman = _isTeamHuman(_selA);
+    var isAwayHuman = _isTeamHuman(_selB);
     var isHvH = isHomeHuman && isAwayHuman;
     var isIAvsIA = !isHomeHuman && !isAwayHuman;
     // Build match card using exposed function

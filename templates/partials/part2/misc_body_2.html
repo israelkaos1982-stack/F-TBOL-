@@ -2014,11 +2014,17 @@
           t.players.forEach(function(p){
             if(!p || !p.name) return;
             var entry = [p.name, Number(p.power)||70];
-            /* Flags de scoring propagadas como propiedades del array
-               para que weightedScorer pueda multiplicar su peso sin
-               romper a los consumidores que esperan [name, power]. */
-            if(p.elite)   entry.elite   = true;
-            if(p.natGoal) entry.natGoal = true;
+            /* Flags propagadas como propiedades del array para que los
+               pickers (weightedScorer, MVP, specialist) puedan aplicar
+               sus bonus sin romper a los consumidores que esperan
+               [name, power]. Captain viaja también por si algún día
+               queremos darle peso individual (hoy se usa a nivel de
+               equipo con _captainBonus). */
+            if(p.elite)    entry.elite    = true;
+            if(p.natGoal)  entry.natGoal  = true;
+            if(p.captain)  entry.captain  = true;
+            if(p.freeKick) entry.freeKick = true;
+            if(p.penalty)  entry.penalty  = true;
             if(p.pos === 'POR') roster.porteros.push(entry);
             else if(p.pos === 'DEF') roster.defensas.push(entry);
             else if(p.pos === 'MED') roster.medios.push(entry);
@@ -3236,21 +3242,91 @@
 
   /* Bonus de Capitán (C): +5% al poder del equipo (modificador
      "invisible" que premia a los equipos con liderazgo, según la
-     tabla de prioridades). Se aplica una sola vez aunque haya varios
-     capitanes (la regla de exclusividad solo permite uno). */
+     tabla de prioridades). Lectura en dos pasos:
+       1) sidecar window._LIGA_EA_PLAYER_FLAGS — rápido, pre-cargado
+          por applyEngineOverrides + _importOtherLeaguesIntoEngine.
+       2) FALLBACK a ligaExt_* — si la sim arranca antes de que el
+          sidecar esté listo (timing / cold start / refresh de
+          pestaña) seguimos encontrando el capitán, con lo que el
+          bonus nunca se pierde.
+     Así el flag C influye SIEMPRE, sea la competición que sea. */
   function _hasCaptain(teamName){
-    var fmap = window._LIGA_EA_PLAYER_FLAGS || {};
     if (!teamName) return false;
+    var fmap = window._LIGA_EA_PLAYER_FLAGS || {};
     var prefix = String(teamName) + '::';
     for (var k in fmap){
       if (!fmap.hasOwnProperty(k)) continue;
       if (k.indexOf(prefix) !== 0) continue;
       if (fmap[k] && fmap[k].captain) return true;
     }
+    /* Fallback robusto: escanear ligaExt_* buscando el equipo por
+       nombre (case-insensitive) y mirar sus players[].captain. */
+    try {
+      var target = String(teamName).trim().toLowerCase();
+      for (var li = 0; li < localStorage.length; li++){
+        var lk = localStorage.key(li);
+        if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+        if (lk.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(lk);
+        if (!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_e){ continue; }
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        for (var ti = 0; ti < teams.length; ti++){
+          var t = teams[ti];
+          if (!t || !t.name) continue;
+          if (String(t.name).trim().toLowerCase() !== target) continue;
+          var players = Array.isArray(t.players) ? t.players : [];
+          for (var pi = 0; pi < players.length; pi++){
+            if (players[pi] && players[pi].captain) return true;
+          }
+        }
+      }
+    } catch(_){}
     return false;
   }
   function _captainBonus(teamName){ return _hasCaptain(teamName) ? 1.05 : 1.0; }
   window._captainBonus = _captainBonus;
+
+  /* Seed del sidecar _LIGA_EA_PLAYER_FLAGS a demanda para un equipo.
+     Lo llamamos desde los pickers (pickSpecialist, mvp, scorer) para
+     garantizar que los flags F/P/⭐/⚾ de un jugador estén disponibles
+     aunque la sim haya arrancado antes de applyEngineOverrides. */
+  function _seedPlayerFlagsForTeam(teamName){
+    if (!teamName) return;
+    var target = String(teamName).trim().toLowerCase();
+    try {
+      for (var li = 0; li < localStorage.length; li++){
+        var lk = localStorage.key(li);
+        if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+        if (lk.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(lk);
+        if (!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_e){ continue; }
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        for (var ti = 0; ti < teams.length; ti++){
+          var t = teams[ti];
+          if (!t || !t.name) continue;
+          if (String(t.name).trim().toLowerCase() !== target) continue;
+          var players = Array.isArray(t.players) ? t.players : [];
+          var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
+          players.forEach(function(p){
+            if (!p || !p.name) return;
+            if (!(p.captain || p.freeKick || p.penalty || p.elite || p.natGoal)) return;
+            var fkey = String(t.name) + '::' + String(p.name);
+            fmap[fkey] = {
+              captain:  !!p.captain,
+              freeKick: !!p.freeKick,
+              penalty:  !!p.penalty,
+              elite:    !!p.elite,
+              natGoal:  !!p.natGoal
+            };
+          });
+          return;
+        }
+      }
+    } catch(_){}
+  }
+  window._seedPlayerFlagsForTeam = _seedPlayerFlagsForTeam;
 
   function _effectiveIARating(teamName, isHome, j, oppName) {
     var rat = window.TEAM_RATINGS || {};
@@ -7228,8 +7304,14 @@
        prioriza el de mayor poder. Si no hay ninguno, cae al random. */
     function pickSpecialist(sq, flag, teamName) {
       if (!Array.isArray(sq) || !sq.length) return null;
-      var fmap = window._LIGA_EA_PLAYER_FLAGS || {};
       var tName = String(teamName || '').trim();
+      /* Asegurar que el sidecar tiene flags de este equipo aunque la
+         sim haya arrancado antes de applyEngineOverrides — garantiza
+         que F/P/⭐/⚾ SIEMPRE respetan al jugador marcado. */
+      if (typeof window._seedPlayerFlagsForTeam === 'function'){
+        try { window._seedPlayerFlagsForTeam(tName); } catch(_){}
+      }
+      var fmap = window._LIGA_EA_PLAYER_FLAGS || {};
       var marked = sq.filter(function(p){
         if (!p) return false;
         var k = tName + '::' + String(p[1]||'');
@@ -7914,17 +7996,33 @@
     });
     /* ⭐ Estrella del equipo: bonus SOLO aquí (en la elección de MVP).
        Según la tabla de prioridades, ⭐ no afecta al resultado del
-       partido — únicamente sube las opciones de ser MVP. Damos +2
-       puntos a cada estrella del equipo ganador (o ambos si empate)
-       para empujar la selección sin invalidar el goleador claro. */
+       partido — únicamente sube las opciones de ser MVP. +5 puntos
+       a cada estrella del equipo ganador (o ambos si empate) para
+       empujar la selección visiblemente sin invalidar al goleador
+       claro (un hat-trick = 9 pts, sigue ganando el goleador; una
+       estrella con 1 gol = 8 pts, bien por encima de un gol solo). */
+    if (typeof window._seedPlayerFlagsForTeam === 'function'){
+      try { window._seedPlayerFlagsForTeam(teamA); } catch(_){}
+      try { window._seedPlayerFlagsForTeam(teamB); } catch(_){}
+    }
+    var _fmapMvp = window._LIGA_EA_PLAYER_FLAGS || {};
     function _iterStars(sq, teamNameLocal, side){
       if (!Array.isArray(sq) || !sq.length) return;
       sq.forEach(function(p){
-        if (!p || !p.elite) return;
+        if (!p) return;
         var name = p[1];
         if (!name || expelledAll[name]) return;
         if (winSide && side !== winSide) return;
-        mvpScore[name] = (mvpScore[name] || 0) + 2;
+        /* Aceptamos tanto la propiedad en el array (propagada por
+           sqFromRegistry) como el sidecar — así no importa si sqA
+           llegó con el metadato o sin él. */
+        var isElite = !!p.elite;
+        if (!isElite){
+          var k = teamNameLocal + '::' + name;
+          if (_fmapMvp[k] && _fmapMvp[k].elite) isElite = true;
+        }
+        if (!isElite) return;
+        mvpScore[name] = (mvpScore[name] || 0) + 5;
         mvpTeams2[name] = teamNameLocal;
       });
     }

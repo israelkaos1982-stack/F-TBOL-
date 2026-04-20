@@ -4897,6 +4897,9 @@
         _mlSetLiveState(mk, 'playing');
       }
       st.timerRunning=true; _mlStartIntervalGen(mk);
+      /* Render inmediato tras pulsar ▶️ para que el control ⏪/⏩ salga
+         sin esperar al primer tick de render (hasta 500 ms después). */
+      _mlRenderTimerGen(mk);
     }
     _mlUpdateAplazarBtn(mk);
   };

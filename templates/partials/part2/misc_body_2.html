@@ -2014,11 +2014,17 @@
           t.players.forEach(function(p){
             if(!p || !p.name) return;
             var entry = [p.name, Number(p.power)||70];
-            /* Flags de scoring propagadas como propiedades del array
-               para que weightedScorer pueda multiplicar su peso sin
-               romper a los consumidores que esperan [name, power]. */
-            if(p.elite)   entry.elite   = true;
-            if(p.natGoal) entry.natGoal = true;
+            /* Flags propagadas como propiedades del array para que los
+               pickers (weightedScorer, MVP, specialist) puedan aplicar
+               sus bonus sin romper a los consumidores que esperan
+               [name, power]. Captain viaja también por si algún día
+               queremos darle peso individual (hoy se usa a nivel de
+               equipo con _captainBonus). */
+            if(p.elite)    entry.elite    = true;
+            if(p.natGoal)  entry.natGoal  = true;
+            if(p.captain)  entry.captain  = true;
+            if(p.freeKick) entry.freeKick = true;
+            if(p.penalty)  entry.penalty  = true;
             if(p.pos === 'POR') roster.porteros.push(entry);
             else if(p.pos === 'DEF') roster.defensas.push(entry);
             else if(p.pos === 'MED') roster.medios.push(entry);
@@ -3236,21 +3242,91 @@
 
   /* Bonus de Capitán (C): +5% al poder del equipo (modificador
      "invisible" que premia a los equipos con liderazgo, según la
-     tabla de prioridades). Se aplica una sola vez aunque haya varios
-     capitanes (la regla de exclusividad solo permite uno). */
+     tabla de prioridades). Lectura en dos pasos:
+       1) sidecar window._LIGA_EA_PLAYER_FLAGS — rápido, pre-cargado
+          por applyEngineOverrides + _importOtherLeaguesIntoEngine.
+       2) FALLBACK a ligaExt_* — si la sim arranca antes de que el
+          sidecar esté listo (timing / cold start / refresh de
+          pestaña) seguimos encontrando el capitán, con lo que el
+          bonus nunca se pierde.
+     Así el flag C influye SIEMPRE, sea la competición que sea. */
   function _hasCaptain(teamName){
-    var fmap = window._LIGA_EA_PLAYER_FLAGS || {};
     if (!teamName) return false;
+    var fmap = window._LIGA_EA_PLAYER_FLAGS || {};
     var prefix = String(teamName) + '::';
     for (var k in fmap){
       if (!fmap.hasOwnProperty(k)) continue;
       if (k.indexOf(prefix) !== 0) continue;
       if (fmap[k] && fmap[k].captain) return true;
     }
+    /* Fallback robusto: escanear ligaExt_* buscando el equipo por
+       nombre (case-insensitive) y mirar sus players[].captain. */
+    try {
+      var target = String(teamName).trim().toLowerCase();
+      for (var li = 0; li < localStorage.length; li++){
+        var lk = localStorage.key(li);
+        if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+        if (lk.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(lk);
+        if (!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_e){ continue; }
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        for (var ti = 0; ti < teams.length; ti++){
+          var t = teams[ti];
+          if (!t || !t.name) continue;
+          if (String(t.name).trim().toLowerCase() !== target) continue;
+          var players = Array.isArray(t.players) ? t.players : [];
+          for (var pi = 0; pi < players.length; pi++){
+            if (players[pi] && players[pi].captain) return true;
+          }
+        }
+      }
+    } catch(_){}
     return false;
   }
   function _captainBonus(teamName){ return _hasCaptain(teamName) ? 1.05 : 1.0; }
   window._captainBonus = _captainBonus;
+
+  /* Seed del sidecar _LIGA_EA_PLAYER_FLAGS a demanda para un equipo.
+     Lo llamamos desde los pickers (pickSpecialist, mvp, scorer) para
+     garantizar que los flags F/P/⭐/⚾ de un jugador estén disponibles
+     aunque la sim haya arrancado antes de applyEngineOverrides. */
+  function _seedPlayerFlagsForTeam(teamName){
+    if (!teamName) return;
+    var target = String(teamName).trim().toLowerCase();
+    try {
+      for (var li = 0; li < localStorage.length; li++){
+        var lk = localStorage.key(li);
+        if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+        if (lk.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(lk);
+        if (!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_e){ continue; }
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        for (var ti = 0; ti < teams.length; ti++){
+          var t = teams[ti];
+          if (!t || !t.name) continue;
+          if (String(t.name).trim().toLowerCase() !== target) continue;
+          var players = Array.isArray(t.players) ? t.players : [];
+          var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
+          players.forEach(function(p){
+            if (!p || !p.name) return;
+            if (!(p.captain || p.freeKick || p.penalty || p.elite || p.natGoal)) return;
+            var fkey = String(t.name) + '::' + String(p.name);
+            fmap[fkey] = {
+              captain:  !!p.captain,
+              freeKick: !!p.freeKick,
+              penalty:  !!p.penalty,
+              elite:    !!p.elite,
+              natGoal:  !!p.natGoal
+            };
+          });
+          return;
+        }
+      }
+    } catch(_){}
+  }
+  window._seedPlayerFlagsForTeam = _seedPlayerFlagsForTeam;
 
   function _effectiveIARating(teamName, isHome, j, oppName) {
     var rat = window.TEAM_RATINGS || {};
@@ -5100,16 +5176,130 @@
 
   function _mlShowFinalThenPost(mk) {
     var finalOv = document.getElementById('ml-final-ov');
+    var _next = function(){
+      /* Humano involucrado → pedir estadísticas antes de WhatsApp.
+         IA vs IA pura → saltar directo al post-partido. */
+      var st = _mlSt(mk);
+      var humA = typeof esHumano === 'function' ? esHumano(st.home) : false;
+      var humB = typeof esHumano === 'function' ? esHumano(st.away) : false;
+      if (humA || humB || st.isHvH){
+        _mlOpenStatsEntry(mk);
+      } else {
+        _mlOpenPostMatch(mk);
+      }
+    };
     if (finalOv) {
       finalOv.classList.add('show');
       setTimeout(function() {
         finalOv.classList.remove('show');
-        _mlOpenPostMatch(mk);
+        _next();
       }, 3000);
     } else {
-      _mlOpenPostMatch(mk);
+      _next();
     }
   }
+
+  /* ── Stats entry overlay (posesión, remates, …) ─────────────────
+     Se muestra después del MVP y antes del overlay de WhatsApp para
+     partidos con algún equipo humano. La confirmación guarda los
+     valores en `st.postStats = {a:{...}, b:{...}}` y se añaden al
+     final del texto de WhatsApp en `_mlBuildAndShareWA`. */
+  var _ML_STATS_DEFS = [
+    { key: 'pos',      label: 'Posesión',       max: 100, pct: true  },
+    { key: 'remates',  label: 'Remates',        max: 99,  pct: false },
+    { key: 'tiros',    label: 'Tiros a puerta', max: 99,  pct: false },
+    { key: 'amar',     label: 'Amarillas',      max: 99,  pct: false },
+    { key: 'roj',      label: 'Rojas',          max: 99,  pct: false },
+    { key: 'corners',  label: 'Corners',        max: 99,  pct: false },
+    { key: 'paradas',  label: 'Paradas',        max: 99,  pct: false }
+  ];
+  var _mlActiveStatsMk = null;
+  var _mlStatsBuffer = null;
+
+  function _mlOpenStatsEntry(mk){
+    var st = _mlSt(mk);
+    var ov = document.getElementById('ml-stats-entry-ov');
+    var rows = document.getElementById('ml-stats-entry-rows');
+    if (!ov || !rows) { _mlOpenPostMatch(mk); return; }
+
+    /* Pre-rellenar amarillas y rojas a partir del acta para ahorrar
+       clicks (son datos que ya tenemos). Posesión arranca en 50/50. */
+    var evts = st.events || [];
+    function _cardCount(team, types){
+      return evts.filter(function(e){
+        return e && e.team === team && types.indexOf(e.type) !== -1;
+      }).length;
+    }
+    _mlStatsBuffer = {
+      a: { pos:50, remates:0, tiros:0, amar:_cardCount('a',['amarilla']),
+           roj:_cardCount('a',['roja','d-amarilla']), corners:0, paradas:0 },
+      b: { pos:50, remates:0, tiros:0, amar:_cardCount('b',['amarilla']),
+           roj:_cardCount('b',['roja','d-amarilla']), corners:0, paradas:0 }
+    };
+    _mlActiveStatsMk = mk;
+
+    var tnameA = document.getElementById('ml-stats-tname-a');
+    var tnameB = document.getElementById('ml-stats-tname-b');
+    if (tnameA) tnameA.textContent = st.home;
+    if (tnameB) tnameB.textContent = st.away;
+
+    rows.innerHTML = _ML_STATS_DEFS.map(function(d){
+      function ctrl(side){
+        return '<div class="ml-stats-ctrl">'
+          + '<button class="ml-stats-btn" data-act="dec" data-side="'+side+'" data-key="'+d.key+'">−</button>'
+          + '<span class="ml-stats-val'+(d.pct?' pct':'')+'" id="ml-sv-'+side+'-'+d.key+'">'
+          + _mlStatsBuffer[side][d.key] + (d.pct?'%':'') + '</span>'
+          + '<button class="ml-stats-btn" data-act="inc" data-side="'+side+'" data-key="'+d.key+'">+</button>'
+          + '</div>';
+      }
+      return '<div class="ml-stats-row">'
+        + ctrl('a')
+        + '<span class="ml-stats-label">'+d.label+'</span>'
+        + ctrl('b')
+        + '</div>';
+    }).join('');
+
+    rows.querySelectorAll('.ml-stats-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var act = btn.getAttribute('data-act');
+        var side = btn.getAttribute('data-side');
+        var key = btn.getAttribute('data-key');
+        var def = null;
+        for (var i=0; i<_ML_STATS_DEFS.length; i++) if (_ML_STATS_DEFS[i].key===key){ def = _ML_STATS_DEFS[i]; break; }
+        if (!def) return;
+        var step = def.pct ? 5 : 1;
+        var cur = _mlStatsBuffer[side][key] || 0;
+        var next = act === 'inc' ? Math.min(def.max, cur + step) : Math.max(0, cur - step);
+        _mlStatsBuffer[side][key] = next;
+        /* Posesión: al tocar un lado, el otro se ajusta para sumar 100. */
+        if (def.pct){
+          _mlStatsBuffer[side === 'a' ? 'b' : 'a'][key] = 100 - next;
+          var otherEl = document.getElementById('ml-sv-'+(side==='a'?'b':'a')+'-'+key);
+          if (otherEl) otherEl.textContent = (100 - next) + '%';
+        }
+        var el = document.getElementById('ml-sv-'+side+'-'+key);
+        if (el) el.textContent = next + (def.pct ? '%' : '');
+      });
+    });
+    ov.classList.add('show');
+  }
+
+  window._mlConfirmStatsEntry = function(){
+    var mk = _mlActiveStatsMk;
+    if (!mk) return;
+    var st = _mlSt(mk);
+    if (st && _mlStatsBuffer){
+      st.postStats = {
+        a: Object.assign({}, _mlStatsBuffer.a),
+        b: Object.assign({}, _mlStatsBuffer.b)
+      };
+    }
+    var ov = document.getElementById('ml-stats-entry-ov');
+    if (ov) ov.classList.remove('show');
+    _mlActiveStatsMk = null;
+    _mlStatsBuffer = null;
+    _mlOpenPostMatch(mk);
+  };
 
   function _mlOpenPostMatch(mk) {
     var st = _mlSt(mk);
@@ -5338,6 +5528,30 @@
     if (isFinal) {
       var mvpEvt = st.events.find(function(e){ return e.type==='mvp'; });
       if (mvpEvt) lines.push('\u2b50 MVP: ' + mvpEvt.name);
+    }
+    /* Bloque de estadísticas del partido — se rellena manualmente en
+       la pantalla `ml-stats-entry-ov` que aparece entre el MVP y el
+       compartir por WhatsApp. Va al FINAL del texto, después de todo
+       lo demás. Sólo aparece en partidos con algún humano y solo en
+       el mensaje final (isFinal === true). */
+    if (isFinal && st.postStats){
+      var sA = st.postStats.a || {}, sB = st.postStats.b || {};
+      var sDefs = [
+        { k:'pos',     lbl:'Posesión',       sfx:'%' },
+        { k:'remates', lbl:'Remates',        sfx:''  },
+        { k:'tiros',   lbl:'Tiros a puerta', sfx:''  },
+        { k:'amar',    lbl:'Amarillas',      sfx:''  },
+        { k:'roj',     lbl:'Rojas',          sfx:''  },
+        { k:'corners', lbl:'Corners',        sfx:''  },
+        { k:'paradas', lbl:'Paradas',        sfx:''  }
+      ];
+      lines.push('');
+      lines.push('📊 ESTADÍSTICAS:');
+      sDefs.forEach(function(d){
+        var va = (sA[d.k] == null ? 0 : sA[d.k]);
+        var vb = (sB[d.k] == null ? 0 : sB[d.k]);
+        lines.push(va + d.sfx + '  ' + d.lbl + '  ' + vb + d.sfx);
+      });
     }
     try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
   }
@@ -7090,8 +7304,14 @@
        prioriza el de mayor poder. Si no hay ninguno, cae al random. */
     function pickSpecialist(sq, flag, teamName) {
       if (!Array.isArray(sq) || !sq.length) return null;
-      var fmap = window._LIGA_EA_PLAYER_FLAGS || {};
       var tName = String(teamName || '').trim();
+      /* Asegurar que el sidecar tiene flags de este equipo aunque la
+         sim haya arrancado antes de applyEngineOverrides — garantiza
+         que F/P/⭐/⚾ SIEMPRE respetan al jugador marcado. */
+      if (typeof window._seedPlayerFlagsForTeam === 'function'){
+        try { window._seedPlayerFlagsForTeam(tName); } catch(_){}
+      }
+      var fmap = window._LIGA_EA_PLAYER_FLAGS || {};
       var marked = sq.filter(function(p){
         if (!p) return false;
         var k = tName + '::' + String(p[1]||'');
@@ -7783,17 +8003,33 @@
     });
     /* ⭐ Estrella del equipo: bonus SOLO aquí (en la elección de MVP).
        Según la tabla de prioridades, ⭐ no afecta al resultado del
-       partido — únicamente sube las opciones de ser MVP. Damos +2
-       puntos a cada estrella del equipo ganador (o ambos si empate)
-       para empujar la selección sin invalidar el goleador claro. */
+       partido — únicamente sube las opciones de ser MVP. +5 puntos
+       a cada estrella del equipo ganador (o ambos si empate) para
+       empujar la selección visiblemente sin invalidar al goleador
+       claro (un hat-trick = 9 pts, sigue ganando el goleador; una
+       estrella con 1 gol = 8 pts, bien por encima de un gol solo). */
+    if (typeof window._seedPlayerFlagsForTeam === 'function'){
+      try { window._seedPlayerFlagsForTeam(teamA); } catch(_){}
+      try { window._seedPlayerFlagsForTeam(teamB); } catch(_){}
+    }
+    var _fmapMvp = window._LIGA_EA_PLAYER_FLAGS || {};
     function _iterStars(sq, teamNameLocal, side){
       if (!Array.isArray(sq) || !sq.length) return;
       sq.forEach(function(p){
-        if (!p || !p.elite) return;
+        if (!p) return;
         var name = p[1];
         if (!name || expelledAll[name]) return;
         if (winSide && side !== winSide) return;
-        mvpScore[name] = (mvpScore[name] || 0) + 2;
+        /* Aceptamos tanto la propiedad en el array (propagada por
+           sqFromRegistry) como el sidecar — así no importa si sqA
+           llegó con el metadato o sin él. */
+        var isElite = !!p.elite;
+        if (!isElite){
+          var k = teamNameLocal + '::' + name;
+          if (_fmapMvp[k] && _fmapMvp[k].elite) isElite = true;
+        }
+        if (!isElite) return;
+        mvpScore[name] = (mvpScore[name] || 0) + 5;
         mvpTeams2[name] = teamNameLocal;
       });
     }
@@ -8768,6 +9004,28 @@
   <div class="ml-final-text">FINAL</div>
 </div>
 
+<!-- ══ STATS ENTRY (Humano vs IA · Humano vs Humano) ═══════════════
+     Entre el overlay "FINAL" y la pantalla de compartir por WhatsApp,
+     en partidos con al menos un humano mostramos esta pantalla para
+     registrar manualmente posesión, remates, tiros a puerta, tarjetas,
+     corners y paradas. Las cifras se pegan al final del texto del
+     WhatsApp, después del acta del partido. -->
+<div id="ml-stats-entry-ov" class="ml-stats-entry-ov">
+  <div class="ml-stats-entry-card">
+    <div class="ml-stats-entry-header">
+      <div class="ml-stats-entry-title">📊 Estadísticas del partido</div>
+      <div class="ml-stats-entry-sub">Ajusta con los botones +/− y confirma</div>
+    </div>
+    <div class="ml-stats-entry-teams">
+      <span class="ml-stats-entry-tname" id="ml-stats-tname-a">Local</span>
+      <span class="ml-stats-entry-vs">vs</span>
+      <span class="ml-stats-entry-tname" id="ml-stats-tname-b">Visitante</span>
+    </div>
+    <div id="ml-stats-entry-rows"></div>
+    <button class="ml-stats-entry-confirm" id="ml-stats-entry-confirm" onclick="window._mlConfirmStatsEntry()">✓ CONFIRMAR Y COMPARTIR</button>
+  </div>
+</div>
+
 <!-- ══ POST-PARTIDO GENÉRICO (jornadas 2-38 y Europa) ═══════ -->
 <div id="ml-post-ov" class="ml-post-ov">
   <div class="ml-post-card">
@@ -8890,6 +9148,29 @@
 .ml-final-ov.show{display:flex;}
 .ml-final-text{font-family:'Bebas Neue',sans-serif;font-size:90px;letter-spacing:10px;animation:mlFinalBlink 0.5s linear infinite;background:linear-gradient(90deg,#f0c040,#fff,#f0c040);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
 @keyframes mlFinalBlink{0%,100%{opacity:1}50%{opacity:.25}}
+/* ── Stats entry (post-MVP, pre-WhatsApp) ─────────────────── */
+.ml-stats-entry-ov{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:100000;display:none;align-items:flex-start;justify-content:center;padding:18px 10px;overflow-y:auto;}
+.ml-stats-entry-ov.show{display:flex;}
+.ml-stats-entry-card{width:100%;max-width:420px;border-radius:16px;border:1px solid rgba(240,192,64,.35);background:linear-gradient(170deg,#0b1320,#101a2e);padding:16px 14px 14px;box-shadow:0 0 40px rgba(240,192,64,.15),0 8px 32px rgba(0,0,0,.7);}
+.ml-stats-entry-header{text-align:center;margin-bottom:10px;}
+.ml-stats-entry-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:#f0c040;}
+.ml-stats-entry-sub{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.5);margin-top:2px;}
+.ml-stats-entry-teams{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 4px 12px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:10px;}
+.ml-stats-entry-tname{flex:1;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;color:#fff;letter-spacing:.5px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ml-stats-entry-tname:last-child{text-align:right;}
+.ml-stats-entry-vs{font-family:'Bebas Neue',sans-serif;font-size:14px;color:rgba(255,255,255,.4);padding:0 6px;}
+.ml-stats-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.04);}
+.ml-stats-row:last-child{border-bottom:none;}
+.ml-stats-row .ml-stats-label{font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:rgba(255,255,255,.78);text-align:center;letter-spacing:.5px;white-space:nowrap;}
+.ml-stats-ctrl{display:flex;align-items:center;justify-content:center;gap:4px;}
+.ml-stats-btn{border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font-size:14px;font-weight:700;width:30px;height:30px;border-radius:6px;cursor:pointer;line-height:1;}
+.ml-stats-btn:hover{background:rgba(255,255,255,.12);}
+.ml-stats-btn:active{transform:scale(.92);}
+.ml-stats-val{font-family:'Bebas Neue',sans-serif;font-size:17px;color:#fff;min-width:36px;text-align:center;letter-spacing:1px;}
+.ml-stats-val.pct{color:#3dcc6e;}
+.ml-stats-entry-confirm{display:block;width:100%;margin-top:14px;padding:12px;border:1px solid rgba(61,204,110,.6);border-radius:10px;background:linear-gradient(180deg,rgba(61,204,110,.18),rgba(61,204,110,.06));color:#b7f5c7;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;cursor:pointer;text-transform:uppercase;}
+.ml-stats-entry-confirm:hover{filter:brightness(1.1);}
+.ml-stats-entry-confirm:active{transform:scale(.98);}
 /* ── Post-partido genérico ─────────────────────────────────── */
 .ml-post-ov{position:fixed;inset:0;z-index:10009;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;padding:16px;}
 .ml-post-ov.show{display:flex;}

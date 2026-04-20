@@ -71,15 +71,15 @@ de jugador para la simulación (`sqFromRegistry`, builders similares)
 
 | Modo  | gameMin | realMin | ms/tick (5s juego) |
 |-------|---------|---------|--------------------|
-| HvH         | 94 | 16.5 | ≈ 878 ms |
-| HvH prórroga| 30 |  5.0 | ≈ 833 ms |
-| HvIA        | 94 | 13.5 | ≈ 718 ms |
-| IAIA        | 90 |  0.5 | ≈  28 ms |
+| HvH         | 94 | 10 | ≈ 532 ms |
+| HvH prórroga| 30 |  3 | ≈ 500 ms |
+| HvIA        | 94 |  8 | ≈ 426 ms |
+| IAIA        | 90 |  1 | ≈  56 ms |
 
-- HvH = humano vs humano → 16.5 min reales (8:15 por parte).
-- HvIA = humano vs IA → 13.5 min reales (6:45 por parte).
-- IAIA = IA vs IA → 30 s reales total (15 s por parte).
-- HvH_ET = prórroga humana → 5 min reales (2:30 por parte).
+- HvH = humano vs humano → **10 min reales** (5 min por parte).
+- HvIA = humano vs IA → **8 min reales** (4 min por parte).
+- IAIA = IA vs IA → **1 min real total** (30 s por parte).
+- HvH_ET = prórroga humana → **3 min reales** (1:30 por parte).
 
 ### Fuente única
 

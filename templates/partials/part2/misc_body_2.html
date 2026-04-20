@@ -4119,22 +4119,22 @@
         del juego marca del 0 al 45 + desc / descanso / 45 al 90 + desc.
 
      ══════════════════════════════════════════════════════════════ */
-  /* Duración AUTORITATIVA de cada partido.
-     Fuente única — Live/amistoso/batch leen todo desde aquí.
-       HvH      → 16.5 min reales (~88 ticks de ~878 ms)
-       HvH_ET   →  5.0 min reales para la prórroga
-       HvIA     → 13.5 min reales (Humano vs IA)
-       IAIA     →  0.5 min reales (= 30 s, 15 por parte)
-     Antes IAIA estaba en 1.0 min pero el propio comentario del
-     código señalaba "30 s reales (15 por parte)" como protocolo de
-     Liga IA vs IA. Alineado para que el amistoso IA vs IA dure lo
-     mismo que la simulación de jornada. */
+  /* Duración AUTORITATIVA de cada partido — FIJADA POR EL USUARIO:
+       HvH      → 10 min reales (Humano vs Humano)
+       HvIA     →  8 min reales (Humano vs IA)
+       HvH_ET   →  3 min reales para la prórroga (escala proporcional)
+       IAIA     →  1 min real total = 30 s por parte (IA vs IA)
+     Estos son los minutos REALES que durará el partido en pantalla.
+     El reloj de juego (0-90) se compresa dentro de ese tiempo real
+     mediante una regla de tres (ver _tickMsFromRule). Si el usuario
+     pide cambios, se actualiza SOLO esta tabla — el resto del motor
+     (live ticker, gm, j1m1) lee de aquí. */
   var _ML_TICK_SEC = 5;
   var _MATCH_RULE = {
-    HvH:    { gameMin: 94, realMin: 16.5 },
-    HvH_ET: { gameMin: 30, realMin: 5.0  },
-    HvIA:   { gameMin: 94, realMin: 13.5 },
-    IAIA:   { gameMin: 90, realMin: 0.5  }
+    HvH:    { gameMin: 94, realMin: 10 },
+    HvH_ET: { gameMin: 30, realMin: 3  },
+    HvIA:   { gameMin: 94, realMin: 8  },
+    IAIA:   { gameMin: 90, realMin: 1  }
   };
   function _tickMsFromRule(r) {
     /* regla de tres: tickMs = realMs / (ticksTotales) */
@@ -4143,10 +4143,10 @@
     return Math.max(1, Math.round(realMs / ticks));
   }
   var _MATCH_TICKS = {
-    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 878 ms (16.5 min real) */
-    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5.0 min real) */
-    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 718 ms (13.5 min real) */
-    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  28 ms (30 s reales)   */
+    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 532 ms (10 min real) */
+    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 500 ms ( 3 min real) */
+    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 426 ms ( 8 min real) */
+    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  56 ms ( 1 min real, 30 s/parte) */
   };
   /* Exponemos la regla para que TODOS los flujos (bundle legacy, campo 3D,
      previa, clock, live ticker, copa engine) lean de una única fuente.
@@ -4165,9 +4165,20 @@
     var type;
     if (opts.isHvH) type = etDone ? 'HvH_ET' : 'HvH';
     else {
-      var humanInvolved = !!opts.humanInvolved;
-      if (typeof humanInvolved !== 'boolean' && typeof esHumano === 'function') {
+      /* Detectar humano. Si quien llama no pasa explícitamente
+         `humanInvolved`, lo deducimos de los nombres con esHumano().
+         BUG arreglado: antes usábamos `!!opts.humanInvolved` y luego
+         `typeof !== 'boolean'` para decidir el fallback — pero `!!`
+         siempre da boolean → el fallback no se ejecutaba nunca, así
+         que cualquier HvIA se trataba como IAIA (28 ms tick) y el
+         partido terminaba en 30 s. Ahora detectamos undefined. */
+      var humanInvolved;
+      if (opts.humanInvolved === true || opts.humanInvolved === false) {
+        humanInvolved = opts.humanInvolved;
+      } else if (typeof esHumano === 'function') {
         humanInvolved = esHumano(opts.home) || esHumano(opts.away);
+      } else {
+        humanInvolved = false;
       }
       type = humanInvolved ? 'HvIA' : 'IAIA';
     }
@@ -4176,7 +4187,7 @@
     var realMs = r.realMin * 60000;
     /* Override admin: _ppDurationMin en minutos reales (solo partidos con
        humano). Se reescala la velocidad manteniendo el mismo número total
-       de ticks. Nunca aplica a IAIA (siempre 30s). */
+       de ticks. Nunca aplica a IAIA (siempre 1 min total = 30 s/parte). */
     var override = window._ppDurationMin;
     if (override && type !== 'IAIA') {
       realMs = override * 60000;
@@ -10467,9 +10478,58 @@ if (!document.getElementById('live-hub-css')) {
     '.live-card-paused{animation:none!important;opacity:.72;border-color:rgba(255,170,68,.45)!important;}' +
     '.live-card-paused .live-card-score{color:#ffaa44!important;}' +
     /* Hora del kickoff (HH:MM) bajo el minuto del partido. */
-    '.live-card-date{font-family:Rajdhani,sans-serif;font-size:9px;color:rgba(255,255,255,.4);font-weight:600;letter-spacing:.5px;margin-top:2px;}';
+    '.live-card-date{font-family:Rajdhani,sans-serif;font-size:9px;color:rgba(255,255,255,.4);font-weight:600;letter-spacing:.5px;margin-top:2px;}' +
+    /* Botón papelera para forzar el cierre de un partido live atascado.
+       Aparece a la derecha del minuto, muy contenido para no romper el
+       layout horizontal de la card. */
+    '.live-card-trash{flex-shrink:0;width:32px;height:32px;border-radius:8px;border:1px solid rgba(255,80,80,.45);background:rgba(255,80,80,.08);color:#ff8080;font-size:15px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,color .15s;}' +
+    '.live-card-trash:hover{background:rgba(255,80,80,.22);color:#fff;}' +
+    '.live-card-trash:active{transform:scale(.94);}';
   document.head.appendChild(_ls);
 }
+
+/* Helper global: fuerza el cierre de un partido live atascado.
+   - Limpia el setInterval del cronómetro si seguía corriendo.
+   - Marca st.finished=true y elimina la entrada del diccionario.
+   - Persiste el cambio (_liveStore.flush) para que el otro dispositivo
+     se entere y lo deje de mostrar.
+   - Re-pinta la pantalla LIVE.
+   Se usa desde la papelera de las live-cards y desde el botón 🗑 que
+   ahora añadimos al wrap del partido. */
+window._mlForceFinishMatch = function(mk) {
+  if (!mk) return;
+  try {
+    var states = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : {};
+    var st = states[mk];
+    if (st) {
+      if (st.timerInterval) { try { clearInterval(st.timerInterval); } catch(_){} st.timerInterval = null; }
+      st.timerRunning = false;
+      st.finished = true;
+      st._finishPropagatedAt = Date.now();
+    }
+  } catch(_){}
+  /* Limpiar el wrap visual: ocultar timer, marcar como finalizado.   */
+  try {
+    var btn = document.getElementById('ml-timer-' + mk);
+    if (btn) { btn.textContent = '🏁 FIN'; btn.className = 'ml-timer finished'; }
+    var sc = document.querySelector('#mlw-' + mk + ' .ml-score');
+    if (sc) { sc.classList.remove('state-playing'); sc.classList.add('state-finished'); }
+    var actBar = document.getElementById('ml-actions-bar-' + mk);
+    if (actBar) actBar.style.visibility = 'hidden';
+    ['ml-btn-end-','ml-btn-et-','ml-add-btn-'].forEach(function(pfx){
+      var b = document.getElementById(pfx + mk); if (b) { b.disabled = true; b.style.opacity = '0.35'; }
+    });
+  } catch(_){}
+  /* Persistir + repintar el hub LIVE. */
+  try { if (window._liveStore && typeof window._liveStore.flush === 'function') window._liveStore.flush(); } catch(_){}
+  try { if (typeof buildLiveScreen === 'function') buildLiveScreen(); } catch(_){}
+  /* Eliminar definitivamente la entrada del diccionario para que no
+     vuelva a aparecer en la siguiente render. */
+  try {
+    var states2 = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : null;
+    if (states2 && states2[mk]) delete states2[mk];
+  } catch(_){}
+};
 
 /* ── mapa de competiciones por prefijo de cal-ID ── */
 var COMP_MAP = {
@@ -10633,6 +10693,20 @@ function buildLiveCard(wrap) {
   }
   card.appendChild(metaDiv);
 
+  /* Papelera 🗑 — fuerza el cierre del partido (caso "se quedó atascado y
+     no termina"). stopPropagation para no disparar el click de la card. */
+  var trash = document.createElement('button');
+  trash.type = 'button';
+  trash.className = 'live-card-trash';
+  trash.title = 'Eliminar partido (forzar fin)';
+  trash.textContent = '🗑';
+  trash.addEventListener('click', function(e){
+    e.stopPropagation(); e.preventDefault();
+    if (!confirm('¿Eliminar este partido en directo? El cronómetro se detiene y la tarjeta desaparece de PARTIDOS LIVE.')) return;
+    if (typeof window._mlForceFinishMatch === 'function') window._mlForceFinishMatch(mid);
+  });
+  card.appendChild(trash);
+
   /* click → navigate to match screen or scroll to match wrap */
   card.addEventListener('click', function() {
     wrap.scrollIntoView({ behavior:'smooth', block:'center' });
@@ -10719,6 +10793,27 @@ function buildGmLiveCard(gm, bgKey) {
     metaDiv.appendChild(dateEl);
   }
   card.appendChild(metaDiv);
+
+  /* Papelera 🗑 — fuerza el cierre del gm-modal-match atascado. */
+  var trash = document.createElement('button');
+  trash.type = 'button';
+  trash.className = 'live-card-trash';
+  trash.title = 'Eliminar partido (forzar fin)';
+  trash.textContent = '🗑';
+  trash.addEventListener('click', function(e){
+    e.stopPropagation(); e.preventDefault();
+    if (!confirm('¿Eliminar este partido en directo? El cronómetro se detiene y la tarjeta desaparece de PARTIDOS LIVE.')) return;
+    /* Para gm-live: marcamos finished en el snapshot/_gm para que el hub
+       lo deje de pintar; flush a _liveStore para propagar.            */
+    try {
+      if (bgKey && window._gmBg && window._gmBg[bgKey]) { window._gmBg[bgKey].finished = true; }
+      if (window.__GM_LIVE) { window.__GM_LIVE.finished = true; }
+      if (window._gm) { window._gm.finished = true; }
+    } catch(_){}
+    try { if (window._liveStore && typeof window._liveStore.flush === 'function') window._liveStore.flush(); } catch(_){}
+    try { if (typeof buildLiveScreen === 'function') buildLiveScreen(); } catch(_){}
+  });
+  card.appendChild(trash);
 
   card.addEventListener('click', function(){
     if (bgKey) {

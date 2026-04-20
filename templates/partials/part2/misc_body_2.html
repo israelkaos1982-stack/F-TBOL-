@@ -2965,6 +2965,31 @@
       }
     } catch(_) {}
 
+    /* Además, cero sobre los contadores embebidos en los jugadores
+       del editor (ligaExt_liga-ea-sports). Si no los limpiamos aquí,
+       el modal Plantilla podía seguir pintando PJ/gol/MVP viejos
+       (fallback a `p.pj` sobre el objeto del jugador cuando
+       getPlayerStats devolvía null tras el reset). Stats reportadas:
+       Espanyol, Villarreal y Sevilla con estadísticas tras reiniciar. */
+    try {
+      var _leaRaw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (_leaRaw) {
+        var _lea = JSON.parse(_leaRaw);
+        if (_lea && Array.isArray(_lea.teams)) {
+          _lea.teams.forEach(function(t){
+            if (!t || !Array.isArray(t.players)) return;
+            t.players.forEach(function(p){
+              if (!p) return;
+              p.pj = 0; p.gol = 0; p.pen = 0; p.fk = 0;
+              p.mvp = 0; p.ta = 0; p.tr = 0; p.imbat = 0; p.penSaved = 0;
+            });
+          });
+          localStorage.setItem('ligaExt_liga-ea-sports', JSON.stringify(_lea));
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports'); } catch(_){}
+        }
+      }
+    } catch(_) {}
+
     try {
       if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports');
     } catch(_) {}

@@ -5479,17 +5479,24 @@ Tottenham
     var byPos = {POR:[],DEF:[],MED:[],DEL:[]};
     t.players.forEach(function(p){
       ensurePlayerStats(p);
-      // Aplicar stats del storage SEPARADO (ef_player_stats_v1)
-      // Esto NO modifica el storage de equipos — solo pone valores
-      // en memoria para esta renderización.
-      if(typeof window.getPlayerStats === 'function' && t.name){
-        var ps = window.getPlayerStats(t.name, p.name);
-        if(ps){
-          p.pj = ps.pj||0; p.gol = ps.gol||0; p.pen = ps.pen||0;
-          p.fk = ps.fk||0; p.mvp = ps.mvp||0; p.ta = ps.ta||0;
-          p.tr = ps.tr||0; p.imbat = ps.imbat||0; p.penSaved = ps.penSaved||0;
-        }
-      }
+      /* Stats SIEMPRE derivan de `ef_player_stats_v1` (fuente única).
+         Si no hay entrada para el jugador (p. ej. tras reiniciar la
+         liga, o para un jugador nuevo), se pone a 0 de forma
+         EXPLÍCITA — antes sólo se sobreescribía cuando getPlayerStats
+         devolvía algo, así que viejos valores persistían en la
+         plantilla incluso después de reset (bug reportado: Espanyol,
+         Villarreal y Sevilla con stats tras reiniciar). */
+      var ps = (typeof window.getPlayerStats === 'function' && t.name)
+        ? window.getPlayerStats(t.name, p.name) : null;
+      p.pj       = (ps && ps.pj)       || 0;
+      p.gol      = (ps && ps.gol)      || 0;
+      p.pen      = (ps && ps.pen)      || 0;
+      p.fk       = (ps && ps.fk)       || 0;
+      p.mvp      = (ps && ps.mvp)      || 0;
+      p.ta       = (ps && ps.ta)       || 0;
+      p.tr       = (ps && ps.tr)       || 0;
+      p.imbat    = (ps && ps.imbat)    || 0;
+      p.penSaved = (ps && ps.penSaved) || 0;
       (byPos[p.pos]||byPos.MED).push(p);
     });
 

@@ -4880,7 +4880,12 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
     var env = document.getElementById('pp-env');
     var _ppStadium = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || 'eFootball Stadium') : 'eFootball Stadium';
-    if (env) env.innerHTML = '🏟️ <b>' + _ppStadium + '</b> &nbsp;·&nbsp; 🌝 Verano &nbsp;·&nbsp; ☀️ Soleado';
+    /* Solo pintamos el estadio aquí — la estación (Verano/Invierno) y el
+       clima (Sol/Lluvia/Nieve) los rellena `_mmInjectEnv()` 60 ms después
+       a partir de la fecha real del calendario. Antes esta línea los
+       hardcodeaba a "🌝 Verano · ☀️ Soleado" y tapaba el resultado
+       correcto, por eso al abrir la previa desaparecían. */
+    if (env) env.innerHTML = '🏟️ <b>' + _ppStadium + '</b>';
     var vs = document.getElementById('pp-vs');
     if (vs) {
       /* Si los equipos vinieron de _ppPreviaTeams, NO usar las <img> del wrap
@@ -5049,9 +5054,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     _renderPreviaMeta(_ppMatchKey, false);
     _renderList(_ppItems);
     _updateBtn();
-    // Mostrar/ocultar la línea horizontal de estación + clima en pp-env
-    var meteo = document.getElementById('pp-env-meteo');
-    if (meteo) meteo.style.display = _checkAllDone() ? 'inline' : 'none';
+    /* La línea de estación + clima ya se inyecta visible por defecto en
+       `_mmInjectEnv`; no la toggle-amos aquí. */
     // If all done, reveal venue-bar and ball immediately
     if (_checkAllDone() && _ppMatchKey) {
       var vbar = document.getElementById('venue-bar-' + _ppMatchKey);
@@ -5067,6 +5071,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     _ppChecked  = {};
     /* Reset form state for new match */
     if (typeof window._ppResetFormStates === 'function') window._ppResetFormStates();
+    /* Reset del canal Twitch AL ABRIR la previa (antes estaba en
+       `_mmInjectEnv`, que corre 60 ms después; si el usuario abría la
+       previa del siguiente partido rápido, veía el canal del partido
+       anterior "anclado" hasta que llegaba el reset diferido). */
+    try {
+      window._ppSelectedTwitch = '';
+      var _selReset = document.getElementById('pp-twitch-select');
+      if (_selReset) _selReset.value = '';
+    } catch(_){}
     _ppItems    = _buildItems(matchKey, compKey, prorroga, duracion, isHvH);
 
     var COMP_LABELS = {
@@ -8120,11 +8133,21 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   window._ppSelectedTwitch = window._ppSelectedTwitch || '';
 
   window._ppTwitchChange = function(val) {
+    /* Antes esta función llamaba a `_ppRefreshUnlock()` en el mismo tick
+       del evento `change`, lo que disparaba un re-render completo de la
+       previa (_renderList + _updateBtn) y bloqueaba la respuesta del
+       <select>. Resultado: había que hacer varios clics para que el
+       navegador aceptara la selección. Ahora el valor se guarda al
+       instante y el refresco se difiere al siguiente frame para que
+       el dropdown reaccione fluido. */
     window._ppSelectedTwitch = val;
     var sel = document.getElementById('pp-twitch-select');
-    if (sel) sel.value = val;
-    /* Actualizar estado del botón WhatsApp y confirm */
-    if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
+    if (sel && sel.value !== val) sel.value = val;
+    var _doRefresh = function(){
+      if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
+    };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(_doRefresh);
+    else setTimeout(_doRefresh, 0);
   };
 
   /* ── 2. SOUND ENGINE (Web Audio API) ─────────────────────────────── */
@@ -8451,7 +8474,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
     envEl.innerHTML =
       '<div class="pp-env-line"><span>🏟️</span><b>' + stadiumName + '</b>'
-      + '<span id="pp-env-meteo" style="display:none;margin-left:8px;">'
+      /* Estación + clima SIEMPRE visibles (sin display:none inicial). Antes
+         sólo aparecían cuando el usuario marcaba todos los "checks" de la
+         previa, así que en el 99% de los partidos estaban ocultos. */
+      + '<span id="pp-env-meteo" style="margin-left:8px;">'
       + '<span style="opacity:.4">·</span> <span>' + sEmoji + '</span> <b>' + sName + '</b>'
       + ' <span style="opacity:.4">·</span> <b>' + weather + '</b>'
       + '</span></div>'

@@ -3848,6 +3848,14 @@
           +'<div class="ml-pen-score" id="pen-score-'+mk+'" style="display:none;">⚽ 0–0 (pen.)</div>'
           +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
           +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
+          /* Control de velocidad del reloj del partido. Comparte visibilidad
+             con el propio timer (mismo display:none inicial → se muestran
+             juntos). Rangos: ⏪ 0.25× / 0.5× / 1× / ⏩ 2× / 4×. */
+          +'<div class="ml-speed-ctrl" id="ml-speed-ctrl-'+mk+'" style="display:none;">'
+            +'<button class="ml-speed-btn" onclick="mlSpeedDownGen(\''+emk+'\')" title="Ralentizar (⏪)">⏪</button>'
+            +'<span class="ml-speed-x" id="ml-speed-x-'+mk+'">1×</span>'
+            +'<button class="ml-speed-btn" onclick="mlSpeedUpGen(\''+emk+'\')" title="Acelerar (⏩)">⏩</button>'
+          +'</div>'
         +'</div>'
         +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldB+'<div class="ml-team-name">'+hiA+au+'</div>'+awayAliasHtml+'</div>'
       +'</div>'
@@ -4235,6 +4243,18 @@
     var st = _mlSt(mk);
     var btn = document.getElementById('ml-timer-'+mk);
     if (!btn) return;
+    /* Mantener el control de velocidad visible cuando el timer lo está.
+       Lo oculto al finalizar porque ya no tiene sentido cambiar ritmo. */
+    var speedCtrl = document.getElementById('ml-speed-ctrl-'+mk);
+    if (speedCtrl){
+      var timerVisible = btn.style.display !== 'none';
+      speedCtrl.style.display = (timerVisible && !st.finished) ? '' : 'none';
+    }
+    var speedLbl = document.getElementById('ml-speed-x-'+mk);
+    if (speedLbl){
+      var mult = st.speedMult || 1;
+      speedLbl.textContent = (mult === 1 ? '1×' : (mult < 1 ? mult + '×' : mult + '×'));
+    }
     var rawSec = st.timerSec;
     var stoppageAdded = st.stoppageSec || 0;
     var normalMax = st.etDone ? 7200 : 5400;
@@ -4528,7 +4548,12 @@
       st._wallStart = Date.now();
       st._gameSecAtStart = st.timerSec;
     }
-    var _tickMs = _mlTickMs(st);
+    /* speedMult: multiplicador aplicado a la velocidad del reloj real.
+       >1 acelera (⏩), <1 ralentiza (⏪). Cambia por los botones
+       mlSpeedUpGen / mlSpeedDownGen, que rebasen _wallStart antes de
+       recrear el interval para que no haya saltos visuales. */
+    var _speedMult = st.speedMult || 1;
+    var _tickMs = Math.max(1, Math.round(_mlTickMs(st) / _speedMult));
     var _gameSecPerMs = _ML_TICK_SEC / _tickMs;
     st.timerInterval = setInterval(function(){
       // Calcular tiempo real transcurrido desde el arranque
@@ -4719,6 +4744,53 @@
     }
     _mlUpdateAplazarBtn(mk);
   };
+
+  /* ── Control de velocidad del reloj ─────────────────────────────────
+     El cronómetro funciona con reloj real (`Date.now()`) y un
+     `_gameSecPerMs` que convierte ms reales → segundos de juego. Para
+     aplicar el multiplicador basta con rebasar `_wallStart` y
+     `_gameSecAtStart` para la sesión actual y recrear el setInterval
+     con el nuevo tickMs. Así la transición es suave sin saltos. */
+  var _SPEED_STEPS = [0.25, 0.5, 1, 2, 4];
+  function _mlRebaseClock(st){
+    /* Tras cambiar speedMult, recalculamos el anclaje temporal para
+       que el tiempo de juego actual (st.timerSec) sea el punto de
+       partida del nuevo ritmo. Sin esto, el cronómetro daría un
+       salto hacia adelante/atrás al mover la velocidad. */
+    if (!st) return;
+    st._wallStart = Date.now();
+    st._gameSecAtStart = st.timerSec || 0;
+  }
+  function _mlSetSpeed(mk, mult){
+    var st = _mlSt(mk);
+    if (!st || st.finished) return;
+    st.speedMult = mult;
+    _mlRebaseClock(st);
+    /* Si el reloj está corriendo, recrear el interval con el nuevo
+       tickMs. Si está pausado, basta con haber guardado el mult. */
+    if (st.timerRunning && st.timerInterval){
+      clearInterval(st.timerInterval);
+      _mlStartIntervalGen(mk);
+    }
+    _mlRenderTimerGen(mk);
+  }
+  window.mlSpeedUpGen = function(mk){
+    var st = _mlSt(mk);
+    var cur = (st && st.speedMult) || 1;
+    var idx = _SPEED_STEPS.indexOf(cur);
+    if (idx < 0) idx = _SPEED_STEPS.indexOf(1);
+    var next = _SPEED_STEPS[Math.min(_SPEED_STEPS.length - 1, idx + 1)];
+    _mlSetSpeed(mk, next);
+  };
+  window.mlSpeedDownGen = function(mk){
+    var st = _mlSt(mk);
+    var cur = (st && st.speedMult) || 1;
+    var idx = _SPEED_STEPS.indexOf(cur);
+    if (idx < 0) idx = _SPEED_STEPS.indexOf(1);
+    var next = _SPEED_STEPS[Math.max(0, idx - 1)];
+    _mlSetSpeed(mk, next);
+  };
+
   window.mlActivateETGen = function(mk) {
     var st = _mlSt(mk);
     if (st.etDone||st.finished) return;

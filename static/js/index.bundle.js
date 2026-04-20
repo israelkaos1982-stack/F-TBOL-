@@ -7571,6 +7571,29 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   window.buildLigaClas = renderSavedLigaClas;
   window.collectStandings = getSavedLigaTable;
 
+  /* Migración de eventos "Jugador A"/"Jugador B" guardados por
+     simulaciones antiguas cuando SQUAD_REGISTRY estaba vacío. Si al
+     rehidratar detectamos un evento con nombre placeholder tiramos
+     un jugador real aleatorio de la plantilla actual del equipo y
+     reescribimos el evento (también persistimos en localStorage
+     vía saveResults) para que la migración sea definitiva. */
+  function _migratePlaceholderName(team, playerRaw){
+    var raw = String(playerRaw || '').trim();
+    var isPlaceholder = (raw === 'Jugador A' || raw === 'Jugador B'
+      || /^\d+\.\s*Jugador [AB]$/.test(raw));
+    if (!isPlaceholder) return null;
+    if (!team || typeof window.sqFromRegistry !== 'function') return null;
+    try {
+      var sq = window.sqFromRegistry(team) || [];
+      var out = sq.filter(function(p){ return p && p[2] && p[2] !== 'P'; });
+      if (!out.length) out = sq;
+      if (!out.length) return null;
+      var p = out[Math.floor(Math.random() * out.length)];
+      if (!p) return null;
+      return (p[0] ? (p[0] + '. ') : '') + String(p[1] || '');
+    } catch(_){ return null; }
+  }
+
   function hydrateStoreFromSavedResults(){
     var results = parseSavedResults();
     /* Reset completo del store para que una re-hidratación no deje entradas
@@ -7579,12 +7602,20 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
        registrarLigaPlayerStats ahora deduplica por `canonHome|canonAway`,
        así que tenemos que alinear AMBOS caminos en la misma clave. */
     var store = (window.LIGA_PLAYER_MATCH_STORE = {});
+    var _dirtyMigration = false;
     Object.keys(results).forEach(function(key){
       var meta = parseResultKey(key);
       var data = results[key] || {};
       if(!meta || !data || !Array.isArray(data.events)) return;
       var canonA = meta.home, canonB = meta.away;
       var storeKey = (canonA && canonB) ? (canonA + '|' + canonB) : key;
+      /* Repair pass: sustituimos placeholders por nombres reales. */
+      data.events.forEach(function(ev){
+        if (!ev) return;
+        var team = ev.team === 'a' ? canonA : ev.team === 'b' ? canonB : null;
+        var fixed = _migratePlaceholderName(team, ev.player);
+        if (fixed) { ev.player = fixed; _dirtyMigration = true; }
+      });
       store[storeKey] = {
         teamA: canonA,
         teamB: canonB,
@@ -7601,6 +7632,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         mvpTeam: canonicalTeamName(data.mvpTeam || '')
       };
     });
+    /* Persistir la migración para que no haya que rehacerla cada carga. */
+    if (_dirtyMigration) {
+      try { localStorage.setItem('ef_liga38_v4', JSON.stringify(results)); } catch(_){}
+    }
   }
   var _origRebuildFixed = window.rebuildLigaPlayerStatsFixed;
   if(typeof _origRebuildFixed === 'function'){

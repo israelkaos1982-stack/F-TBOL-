@@ -404,8 +404,19 @@ window.sqFromRegistry = function(teamName, opts) {
   var resolved = aliases[trimmed.toLowerCase()] || trimmed;
   var reg = window.SQUAD_REGISTRY[resolved] || window.SQUAD_REGISTRY[trimmed] || window.SQUAD_REGISTRY[teamName];
   if (!reg) {
-    console.warn('sqFromRegistry: equipo no encontrado:', teamName, '(resolved:', resolved, ')');
-    return [];
+    /* Lazy fallback: si SQUAD_REGISTRY aún no está poblado (p.ej. el
+       usuario abre el partido antes del setTimeout de
+       applyEngineOverrides) tiramos del editor ahora mismo. Sin este
+       fallback los equipos arrancaban sin plantilla y el simulador
+       caía a "Jugador A"/"Jugador B" para todos. */
+    if (typeof window.applyEngineOverrides === 'function') {
+      try { window.applyEngineOverrides(); } catch(_){}
+      reg = window.SQUAD_REGISTRY[resolved] || window.SQUAD_REGISTRY[trimmed] || window.SQUAD_REGISTRY[teamName];
+    }
+    if (!reg) {
+      console.warn('sqFromRegistry: equipo no encontrado:', teamName, '(resolved:', resolved, ')');
+      return [];
+    }
   }
   var posMap = {'🧤 PORTEROS':'P','🛡 DEFENSAS':'D','⚙️ MEDIOS':'M','⚡ DELANTEROS':'F',
                 '⚙️CENTROCAMPISTAS':'M','⚙️ CENTROCAMPISTAS':'M'};

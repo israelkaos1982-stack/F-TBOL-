@@ -2014,10 +2014,11 @@
           t.players.forEach(function(p){
             if(!p || !p.name) return;
             var entry = [p.name, Number(p.power)||70];
-            /* ⭐ Estrella: se propaga como propiedad del array para
-               que weightedScorer pueda multiplicar su peso goleador
-               sin romper los consumidores que esperan [name, power]. */
-            if(p.elite) entry.elite = true;
+            /* Flags de scoring propagadas como propiedades del array
+               para que weightedScorer pueda multiplicar su peso sin
+               romper a los consumidores que esperan [name, power]. */
+            if(p.elite)   entry.elite   = true;
+            if(p.natGoal) entry.natGoal = true;
             if(p.pos === 'POR') roster.porteros.push(entry);
             else if(p.pos === 'DEF') roster.defensas.push(entry);
             else if(p.pos === 'MED') roster.medios.push(entry);
@@ -2111,9 +2112,12 @@
     var bag = [];
     ['porteros','defensas','medios','delanteros'].forEach(function(group){
       (roster[group] || []).forEach(function(player){
-        /* Bonus ⭐ Estrella del equipo: ×2 al peso goleador. */
+        /* Bonus goleadores. Pueden acumularse ⭐ y ⚾:
+             ⭐ Estrella del equipo  → ×2
+             ⚾ Goleador nato         → ×2.5 */
         var w = (player[1] || 70) * poderPosWeight(group, player[1] || 70);
-        if (player && player.elite) w *= 2;
+        if (player && player.elite)   w *= 2;
+        if (player && player.natGoal) w *= 2.5;
         bag.push({
           group: group,
           name: player[0],
@@ -7385,9 +7389,12 @@
       } else {
         w = Math.max(0.001, (p[3] || 70) * _poderPosWeight(p[2], p[3]));
       }
-      /* Bonus ⭐ Estrella del equipo: doble probabilidad de marcar.
-         Propagado como propiedad del array por sqFromRegistry. */
-      if (p && p.elite) w *= 2;
+      /* Bonus por flags de scoring (propagados como propiedades del
+         array por sqFromRegistry). Pueden acumularse:
+           ⭐ Estrella del equipo   → ×2
+           ⚾ Goleador nato          → ×2.5 (más específico al gol) */
+      if (p && p.elite)   w *= 2;
+      if (p && p.natGoal) w *= 2.5;
       return w;
     });
     var total = weights.reduce(function(sum, weight) { return sum + weight; }, 0);

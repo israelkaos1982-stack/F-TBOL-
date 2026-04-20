@@ -485,12 +485,13 @@ window.sqFromRegistry = function(teamName, opts) {
       var nombre = e[1];
       // Saltar lesionados/sancionados
       if (excluded.indexOf(nombre) !== -1) continue;
-      /* Propagamos `.elite` (⭐ Estrella del equipo) como propiedad
+      /* Propagamos `.elite` (⭐) y `.natGoal` (⚾) como propiedades
          del array para que los scorers (_weightedScorerPick, etc.)
          puedan aplicar el bonus de goleo sin alterar los índices
          posicionales que usan todos los consumidores del formato. */
       var row = [e[0], nombre, curPos, poder];
-      if (e && e.elite) row.elite = true;
+      if (e && e.elite)   row.elite   = true;
+      if (e && e.natGoal) row.natGoal = true;
       full.push(row);
     }
   }
@@ -520,9 +521,11 @@ window.sqFromRegistry = function(teamName, opts) {
   //    Los primeros 11 son: portero titular + los 10 de campo de más poder
   //    El resto son banquillo
   for (var ci = 0; ci < conv.length; ci++) {
-    var wasElite = !!conv[ci].elite;
+    var wasElite   = !!conv[ci].elite;
+    var wasNatGoal = !!conv[ci].natGoal;
     conv[ci] = [conv[ci][0], conv[ci][1], conv[ci][2], conv[ci][3], ci < 11 ? 'titular' : 'suplente'];
-    if (wasElite) conv[ci].elite = true;
+    if (wasElite)   conv[ci].elite   = true;
+    if (wasNatGoal) conv[ci].natGoal = true;
   }
 
   return conv;

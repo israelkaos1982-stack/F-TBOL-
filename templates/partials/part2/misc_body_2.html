@@ -6643,21 +6643,44 @@
 
   /* ── SIMULACIÓN IA (jornadas 1-38, Copa y Europa) ──────────────── */
   function simSimple(rA, rB) {
-    /* Use squared ratings so the 74-85 range creates meaningful differences:
-       e.g. Real Madrid (85) vs Alavés (74): 85²/(85²+74²) = 0.569 (>0.56 → high scoring mode)
-       vs Athletic (79) vs Espanyol (76): 79²/(79²+76²) = 0.519 (balanced match) */
-    var p = (rA * rA) / (rA * rA + rB * rB);
-    function goles(prob) {
-      var r = Math.random();
-      if (prob > 0.56) {
-        return r < 0.10 ? 4 : r < 0.25 ? 3 : r < 0.52 ? 2 : r < 0.80 ? 1 : 0;
-      } else if (prob < 0.44) {
-        return r < 0.44 ? 0 : r < 0.79 ? 1 : r < 0.94 ? 2 : r < 0.99 ? 3 : 4;
-      } else {
-        return r < 0.20 ? 0 : r < 0.52 ? 1 : r < 0.76 ? 2 : r < 0.91 ? 3 : 4;
-      }
+    /* Simulación basada en goles esperados (xG) tipo Poisson.
+       Antes usábamos un p=rA²/(rA²+rB²) con 3 tramos (high/balanced/
+       low) y umbral 0.56 — pero eso metía en "balanced" la mayoría de
+       enfrentamientos dentro del rango 74-85 (p.ej. 80 vs 75 → p=0.53),
+       y en balanced los dos equipos acaban promediando ~1.6 goles con
+       lo que el poder apenas cambia el resultado. Resultado: Mallorca
+       (75) compitiendo por Champions y Villarreal (80) peleando por
+       la permanencia tras 28 jornadas.
+
+       Nueva lógica:
+       • xG_A = BASE * (rA / rB) ^ EXP
+       • xG_B = BASE * (rB / rA) ^ EXP
+       • Goles = Poisson(xG)
+       Con EXP=2.5 y BASE=1.4 la brecha de poder se traduce en una
+       ventaja clara y consistente a lo largo de la temporada, y sigue
+       dejando margen para sorpresas (la propia varianza de Poisson).
+       rA/rB ya llegan con bono de local aplicado desde
+       _effectiveIARating y con expulsiones descontadas desde
+       _applyRedCardPenalty, así que aquí no se duplica nada. */
+    var BASE_XG = 1.4;
+    var EXP = 2.5;
+    var safeA = Math.max(30, Number(rA) || 75);
+    var safeB = Math.max(30, Number(rB) || 75);
+    var xgA = BASE_XG * Math.pow(safeA / safeB, EXP);
+    var xgB = BASE_XG * Math.pow(safeB / safeA, EXP);
+    xgA = Math.max(0.2, Math.min(4.5, xgA));
+    xgB = Math.max(0.2, Math.min(4.5, xgB));
+    function poisson(lambda) {
+      var L = Math.exp(-lambda), k = 0, p = 1;
+      do { k++; p *= Math.random(); } while (p > L);
+      return k - 1;
     }
-    return { gh: goles(p), ga: goles(1 - p) };
+    var gh = poisson(xgA);
+    var ga = poisson(xgB);
+    /* Cap razonable: >6 goles en un partido es muy poco frecuente */
+    if (gh > 6) gh = 6;
+    if (ga > 6) ga = 6;
+    return { gh: gh, ga: ga };
   }
 
   /* ── Diccionario de 30 lesiones por severidad ── */

@@ -5228,9 +5228,151 @@
       try { window.buildLigaClas(); } catch(_){}
     }
     athApplyMedicalFromActa(st);
-    /* Mostrar overlay FINAL → luego post-partido con WhatsApp */
-    _mlShowFinalThenPost(mk);
+    /* Overlay OBLIGATORIO de estadísticas (solo HvH y HvIA: partidos con
+       al menos un humano). Se inyecta entre MVP y WhatsApp. Cuando el
+       usuario confirma las stats, seguimos con el overlay FINAL + post
+       match. Si no aplica (IA vs IA), saltamos directo. */
+    var _humA = typeof esHumano === 'function' && esHumano(st.home);
+    var _humB = typeof esHumano === 'function' && esHumano(st.away);
+    if (_humA || _humB) {
+      _mlShowStatsOverlay(mk, function(){ _mlShowFinalThenPost(mk); });
+    } else {
+      _mlShowFinalThenPost(mk);
+    }
   }
+
+  /* ── OVERLAY DE ESTADÍSTICAS DEL PARTIDO ─────────────────────────
+     Obligatorio tras MVP en HvH y HvIA. Lee del array de eventos los
+     contadores automáticos (amarillas, rojas, goles de penalti y de
+     falta — estos 2 solo se muestran si hay al menos 1). El usuario
+     rellena manualmente posesión (auto-completa a 100%), remates,
+     tiros a puerta, córners y paradas. Al confirmar se guarda en
+     st.matchStats y lo consumimos en _mlBuildAndShareWA. */
+  var _STAT_DEFS_MANUAL = [
+    { key: 'posesion', ico: '➗', lbl: 'POSESIÓN (%)',     max: 100, pairSum: 100 },
+    { key: 'remates',  ico: '👟', lbl: 'REMATES',          max: 99 },
+    { key: 'tiros',    ico: '🚪', lbl: 'TIROS A PUERTA',   max: 99 },
+    { key: 'corners',  ico: '⛳', lbl: 'CÓRNERS',           max: 99 },
+    { key: 'paradas',  ico: '🧤', lbl: 'PARADAS',          max: 99 }
+  ];
+  var _STAT_DEFS_AUTO = [
+    { key: 'penGol',   ico: '🥅', lbl: 'GOLES DE PENALTI', skipIfZero: true },
+    { key: 'faltaGol', ico: '🎯', lbl: 'GOLES DE FALTA',   skipIfZero: true },
+    { key: 'amarillas',ico: '🟨', lbl: 'AMARILLAS' },
+    { key: 'rojas',    ico: '🟥', lbl: 'ROJAS' }
+  ];
+  function _mlCountAutoStats(st){
+    var ev = st.events || [];
+    function by(team, fn){
+      var n = 0;
+      for (var i=0;i<ev.length;i++){ if (ev[i] && ev[i].team===team && fn(ev[i])) n++; }
+      return n;
+    }
+    return {
+      a: {
+        penGol:    by('a', function(e){ return e.type==='pen-gol'; }),
+        faltaGol:  by('a', function(e){ return e.type==='falta-gol'; }),
+        amarillas: by('a', function(e){ return e.type==='amarilla'; }),
+        rojas:     by('a', function(e){ return e.type==='roja' || e.type==='d-amarilla'; })
+      },
+      b: {
+        penGol:    by('b', function(e){ return e.type==='pen-gol'; }),
+        faltaGol:  by('b', function(e){ return e.type==='falta-gol'; }),
+        amarillas: by('b', function(e){ return e.type==='amarilla'; }),
+        rojas:     by('b', function(e){ return e.type==='roja' || e.type==='d-amarilla'; })
+      }
+    };
+  }
+  var _mlStatsCallback = null;
+  var _mlStatsMk = null;
+  function _mlShowStatsOverlay(mk, onConfirm){
+    var st = _mlSt(mk); if (!st) { if (onConfirm) onConfirm(); return; }
+    _mlStatsMk = mk;
+    _mlStatsCallback = onConfirm || function(){};
+    var ov = document.getElementById('ml-stats-ov');
+    if (!ov) { _mlStatsCallback(); return; }
+    /* Cabecera: escudos, nombres, marcador */
+    document.getElementById('ml-stats-name-a').textContent = st.home;
+    document.getElementById('ml-stats-name-b').textContent = st.away;
+    document.getElementById('ml-stats-sc-a').textContent = st.sc.a;
+    document.getElementById('ml-stats-sc-b').textContent = st.sc.b;
+    var lgo = typeof getLogoEquipo === 'function' ? getLogoEquipo : function(){return '';};
+    var shA = document.getElementById('ml-stats-shield-a'); var lA = lgo(st.home);
+    if (shA){ shA.src = lA || ''; shA.style.display = lA ? '' : 'none'; }
+    var shB = document.getElementById('ml-stats-shield-b'); var lB = lgo(st.away);
+    if (shB){ shB.src = lB || ''; shB.style.display = lB ? '' : 'none'; }
+    /* Construir filas */
+    var autos = _mlCountAutoStats(st);
+    var grid = document.getElementById('ml-stats-grid');
+    grid.innerHTML = '';
+    function appendRow(def, valA, valB, readonly){
+      if (def.skipIfZero && !valA && !valB) return;
+      var row = document.createElement('div');
+      row.className = 'ml-stats-row';
+      var lbl = document.createElement('div');
+      lbl.className = 'ml-stats-row-lbl';
+      lbl.innerHTML = def.ico + ' ' + def.lbl;
+      row.appendChild(lbl);
+      function mkInput(side, v){
+        var inp = document.createElement('input');
+        inp.type = 'number'; inp.min = '0'; inp.max = String(def.max || 99);
+        inp.className = 'ml-stats-val' + (readonly ? ' readonly' : '');
+        inp.value = (v == null ? '' : String(v));
+        inp.setAttribute('data-key', def.key);
+        inp.setAttribute('data-side', side);
+        if (readonly){ inp.readOnly = true; inp.tabIndex = -1; }
+        return inp;
+      }
+      var ia = mkInput('a', valA);
+      var ib = mkInput('b', valB);
+      if (def.pairSum){
+        /* Si el usuario escribe A, B se auto-completa a (100 - A), y vv. */
+        ia.addEventListener('input', function(){
+          var n = parseInt(ia.value); if (!isFinite(n) || n<0) n=0; if (n>def.pairSum) n=def.pairSum;
+          ia.value = String(n); ib.value = String(def.pairSum - n);
+        });
+        ib.addEventListener('input', function(){
+          var n = parseInt(ib.value); if (!isFinite(n) || n<0) n=0; if (n>def.pairSum) n=def.pairSum;
+          ib.value = String(n); ia.value = String(def.pairSum - n);
+        });
+      }
+      var ico = document.createElement('div');
+      ico.className = 'ml-stats-ico'; ico.textContent = def.ico;
+      row.appendChild(ia); row.appendChild(ico); row.appendChild(ib);
+      grid.appendChild(row);
+    }
+    /* Orden del usuario: Posesión, Remates, Tiros, Goles pen, Goles falta,
+       Amarillas, Rojas, Córners, Paradas. */
+    appendRow(_STAT_DEFS_MANUAL[0], 50, 50, false); // posesion default 50/50
+    appendRow(_STAT_DEFS_MANUAL[1], '', '', false); // remates
+    appendRow(_STAT_DEFS_MANUAL[2], '', '', false); // tiros
+    appendRow(_STAT_DEFS_AUTO[0], autos.a.penGol,    autos.b.penGol,    true); // goles penalti (auto, solo si >0)
+    appendRow(_STAT_DEFS_AUTO[1], autos.a.faltaGol,  autos.b.faltaGol,  true); // goles falta
+    appendRow(_STAT_DEFS_AUTO[2], autos.a.amarillas, autos.b.amarillas, true); // amarillas
+    appendRow(_STAT_DEFS_AUTO[3], autos.a.rojas,     autos.b.rojas,     true); // rojas
+    appendRow(_STAT_DEFS_MANUAL[3], '', '', false); // corners
+    appendRow(_STAT_DEFS_MANUAL[4], '', '', false); // paradas
+    ov.classList.add('show');
+  }
+  window._mlStatsConfirm = function(){
+    var mk = _mlStatsMk; if (!mk) return;
+    var st = _mlSt(mk); if (!st) return;
+    var stats = { a: {}, b: {} };
+    var inputs = document.querySelectorAll('#ml-stats-grid .ml-stats-val');
+    inputs.forEach(function(inp){
+      var k = inp.getAttribute('data-key');
+      var s = inp.getAttribute('data-side');
+      var raw = (inp.value || '').trim();
+      if (raw === '') return;
+      var n = parseInt(raw); if (!isFinite(n) || n < 0) n = 0;
+      stats[s][k] = n;
+    });
+    st.matchStats = stats;
+    var ov = document.getElementById('ml-stats-ov');
+    if (ov) ov.classList.remove('show');
+    var cb = _mlStatsCallback; _mlStatsCallback = null; _mlStatsMk = null;
+    if (cb) cb();
+  };
 
   function _mlShowFinalThenPost(mk) {
     var finalOv = document.getElementById('ml-final-ov');
@@ -5582,6 +5724,37 @@
         var ico = allIco[e.type] || '';
         lines.push(e.min + '\' ' + ico + ' ' + (e.name||'') + ' (' + (e.team==='a'?st.home:st.away) + ')');
       });
+    }
+    /* Estadísticas confirmadas en el overlay post-MVP. Se añaden debajo
+       del acta (siempre que existan — IAIA no llega aquí). */
+    if (isFinal && st.matchStats && (st.matchStats.a || st.matchStats.b)) {
+      var sa = st.matchStats.a || {};
+      var sb = st.matchStats.b || {};
+      var statRows = [
+        ['posesion',  '➗', 'Posesión (%)',       false],
+        ['remates',   '👟', 'Remates',             false],
+        ['tiros',     '🚪', 'Tiros a puerta',      false],
+        ['penGol',    '🥅', 'Goles de penalti',    true],
+        ['faltaGol',  '🎯', 'Goles de falta',      true],
+        ['amarillas', '🟨', 'Amarillas',           false],
+        ['rojas',     '🟥', 'Rojas',               false],
+        ['corners',   '⛳', 'Córners',             false],
+        ['paradas',   '🧤', 'Paradas',             false]
+      ];
+      var out = [];
+      statRows.forEach(function(row){
+        var k = row[0], ico = row[1], lbl = row[2], skipZero = row[3];
+        var va = sa[k], vb = sb[k];
+        var hasA = va != null, hasB = vb != null;
+        if (!hasA && !hasB) return;
+        if (skipZero && !va && !vb) return;
+        out.push(ico + ' ' + lbl + ': ' + (hasA ? va : 0) + ' - ' + (hasB ? vb : 0));
+      });
+      if (out.length) {
+        lines.push('');
+        lines.push('ESTADÍSTICAS:');
+        out.forEach(function(l){ lines.push(l); });
+      }
     }
     if (isFinal) {
       var mvpEvt = st.events.find(function(e){ return e.type==='mvp'; });
@@ -9133,6 +9306,38 @@
   </div>
 </div>
 
+<!-- ══ ESTADÍSTICAS DEL PARTIDO (obligatorio tras MVP, antes de WA) ═══
+     Se muestra solo en HvH y HvIA (al menos un humano).
+     - Posesión: manual; si el usuario pone A, B se auto-completa a 100-A.
+     - Remates, Tiros, Corners, Paradas: manual (inputs numéricos).
+     - Goles de penalti / falta: AUTO desde eventos; solo visibles si >0.
+     - Amarillas / Rojas: AUTO desde eventos (suman sin excepción).    -->
+<div id="ml-stats-ov" class="ml-stats-ov">
+  <div class="ml-stats-card">
+    <div class="ml-stats-header">
+      <div class="ml-stats-title">📊 ESTADÍSTICAS DEL PARTIDO</div>
+      <div class="ml-stats-sub" id="ml-stats-sub">Rellena y confirma</div>
+    </div>
+    <div class="ml-stats-scoreboard">
+      <div class="ml-stats-team-side">
+        <img id="ml-stats-shield-a" class="ml-stats-shield" src="" alt="" onerror="this.style.display='none'"/>
+        <span id="ml-stats-name-a" class="ml-stats-team-name"></span>
+      </div>
+      <div class="ml-stats-score-box">
+        <span id="ml-stats-sc-a">0</span>
+        <span class="ml-stats-dash">–</span>
+        <span id="ml-stats-sc-b">0</span>
+      </div>
+      <div class="ml-stats-team-side">
+        <img id="ml-stats-shield-b" class="ml-stats-shield" src="" alt="" onerror="this.style.display='none'"/>
+        <span id="ml-stats-name-b" class="ml-stats-team-name"></span>
+      </div>
+    </div>
+    <div class="ml-stats-grid" id="ml-stats-grid"></div>
+    <button id="ml-stats-confirm-btn" class="ml-stats-confirm" onclick="window._mlStatsConfirm()">✓ CONFIRMAR ESTADÍSTICAS</button>
+  </div>
+</div>
+
 <!-- ── OVERLAY DESCANSO (45 min) ──────────────────────────── -->
 <div id="ml-descanso-ov" class="ml-descanso-ov">
   <div class="ml-descanso-card">
@@ -9278,6 +9483,29 @@
 /* Cerrar */
 .ml-post-close{width:100%;border-radius:8px;border:1px solid rgba(255,255,255,.1);padding:8px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.38);font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;transition:color .15s,background .15s;}
 .ml-post-close:hover{color:rgba(255,255,255,.75);background:rgba(255,255,255,.08);}
+/* ── Estadísticas del partido (post-MVP, pre-WhatsApp) ──────── */
+.ml-stats-ov{display:none;position:fixed;inset:0;z-index:10030;background:rgba(0,0,6,0.97);align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 10px 32px;}
+.ml-stats-ov.show{display:flex;}
+.ml-stats-card{width:100%;max-width:420px;border-radius:18px;border:1px solid rgba(90,169,255,.3);background:linear-gradient(170deg,#06101c,#0d1a2a);padding:18px 14px 14px;box-shadow:0 0 40px rgba(90,169,255,.15),0 8px 32px rgba(0,0,0,.6);}
+.ml-stats-header{text-align:center;margin-bottom:14px;}
+.ml-stats-title{font-family:'Oswald',sans-serif;font-size:15px;letter-spacing:2px;color:#5aa9ff;font-weight:700;}
+.ml-stats-sub{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.5);margin-top:2px;}
+.ml-stats-scoreboard{display:flex;align-items:center;justify-content:space-between;padding:8px 4px 14px;border-bottom:1px solid rgba(90,169,255,.2);margin-bottom:12px;gap:6px;}
+.ml-stats-team-side{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;}
+.ml-stats-shield{width:34px;height:34px;object-fit:contain;}
+.ml-stats-team-name{font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.5px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center;}
+.ml-stats-score-box{display:flex;align-items:center;gap:8px;font-family:'Bebas Neue',sans-serif;font-size:28px;color:#fff;}
+.ml-stats-dash{opacity:.5;}
+.ml-stats-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+.ml-stats-row{display:grid;grid-template-columns:1fr 32px 1fr;align-items:center;gap:8px;padding:6px 4px;background:rgba(255,255,255,.03);border-radius:8px;}
+.ml-stats-row-lbl{grid-column:1 / -1;text-align:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.75);padding-bottom:2px;}
+.ml-stats-ico{text-align:center;font-size:15px;line-height:1;}
+.ml-stats-val{border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.35);color:#fff;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;text-align:center;border-radius:6px;padding:6px 0;width:100%;outline:none;min-width:0;}
+.ml-stats-val:focus{border-color:#5aa9ff;box-shadow:0 0 0 2px rgba(90,169,255,.18);}
+.ml-stats-val.readonly{opacity:.85;background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.08);}
+.ml-stats-confirm{width:100%;border:none;border-radius:10px;padding:12px;background:linear-gradient(135deg,#1b4a82,#3777c7);color:#fff;font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;transition:filter .15s;}
+.ml-stats-confirm:hover{filter:brightness(1.1);}
+.ml-stats-confirm:disabled{opacity:.4;cursor:not-allowed;filter:none;}
 /* ── Alert rows en pre-partido ─────────────────────────────── */
 .pp-alert-row{font-family:'Rajdhani',sans-serif;font-size:13px;line-height:1.4;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);}
 .pp-alert-yel{color:#ffd700;}

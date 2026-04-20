@@ -4044,21 +4044,25 @@
 
      ══════════════════════════════════════════════════════════════ */
   /* Duración AUTORITATIVA de cada partido — FIJADA POR EL USUARIO:
-       HvH      → 10 min reales (Humano vs Humano)
-       HvIA     →  8 min reales (Humano vs IA)
-       HvH_ET   →  3 min reales para la prórroga (escala proporcional)
-       IAIA     →  1 min real total = 30 s por parte (IA vs IA)
-     Estos son los minutos REALES que durará el partido en pantalla.
-     El reloj de juego (0-90) se compresa dentro de ese tiempo real
-     mediante una regla de tres (ver _tickMsFromRule). Si el usuario
-     pide cambios, se actualiza SOLO esta tabla — el resto del motor
-     (live ticker, gm, j1m1) lee de aquí. */
+       HvH      → 16 min REALES   (label en previa: "10 min")
+       HvIA     → 13.5 min REALES (label en previa: "8 min")
+       HvH_ET   →  5 min REALES   (prórroga, escala proporcional)
+       IAIA     →  1 min REAL total = 30 s por parte (label "30 s/parte")
+     - `realMin`: minutos de reloj real que durará el partido en pantalla.
+       Es lo que controla el tickMs del cronómetro.
+     - `displayMin` (opcional): lo que aparece en la previa como
+       DURACIÓN. Se separa de realMin porque el usuario prefiere ver
+       "10 min" / "8 min" aunque la simulación dure más.
+     - `displayLabel` (opcional): etiqueta literal para casos especiales
+       (IAIA = "30 s/parte"). Si está, gana sobre displayMin.
+     El reloj de juego (0-90) se comprime dentro de ese tiempo real
+     mediante una regla de tres (ver _tickMsFromRule). */
   var _ML_TICK_SEC = 5;
   var _MATCH_RULE = {
-    HvH:    { gameMin: 94, realMin: 10 },
-    HvH_ET: { gameMin: 30, realMin: 3  },
-    HvIA:   { gameMin: 94, realMin: 8  },
-    IAIA:   { gameMin: 90, realMin: 1  }
+    HvH:    { gameMin: 94, realMin: 16,  displayMin: 10 },
+    HvH_ET: { gameMin: 30, realMin: 5                    },
+    HvIA:   { gameMin: 94, realMin: 13.5, displayMin: 8 },
+    IAIA:   { gameMin: 90, realMin: 1,   displayLabel: '30 s/parte' }
   };
   function _tickMsFromRule(r) {
     /* regla de tres: tickMs = realMs / (ticksTotales) */
@@ -4067,10 +4071,10 @@
     return Math.max(1, Math.round(realMs / ticks));
   }
   var _MATCH_TICKS = {
-    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 532 ms (10 min real) */
-    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 500 ms ( 3 min real) */
-    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 426 ms ( 8 min real) */
-    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  56 ms ( 1 min real, 30 s/parte) */
+    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 851 ms (16 min reales → label "10 min") */
+    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5 min reales) */
+    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 718 ms (13.5 min reales → label "8 min") */
+    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  56 ms ( 1 min real = 30 s/parte) */
   };
   /* Exponemos la regla para que TODOS los flujos (bundle legacy, campo 3D,
      previa, clock, live ticker, copa engine) lean de una única fuente.
@@ -4127,12 +4131,22 @@
   }
   window._mlTickMs = _mlTickMs;
 
-  /* Label de duración real para la previa (ej: "16.5 min"). SIEMPRE
-     consultar esto en vez de hardcodear "16 min" / "10 min". */
+  /* Label de duración para la previa. Prioridad:
+       1. Override admin `_ppDurationMin` (minutos reales).
+       2. `displayLabel` de la regla (literal, ej "30 s/parte").
+       3. `displayMin` de la regla (minutos, ej 10 → "10 min").
+       4. `realMin` de la regla como último recurso.
+     El usuario quiere ver "10 min" para HvH y "8 min" para HvIA
+     aunque el partido dure realmente 16 / 13.5 min. */
   window._mlRealDurationLabel = function(opts) {
+    if (window._ppDurationMin) return window._ppDurationMin + ' min';
     var info = window._mlResolveClock(opts);
+    var r = info.rule || {};
+    if (r.displayLabel) return r.displayLabel;
+    if (r.displayMin != null) {
+      return (r.displayMin % 1 === 0 ? r.displayMin : r.displayMin.toFixed(1)) + ' min';
+    }
     var mins = info.realMs / 60000;
-    /* Formateo: 0.5 → "30 s"; n.5 → "16.5 min"; entero → "13 min". */
     if (mins < 1) return Math.round(mins * 60) + ' s';
     if (mins % 1 === 0) return mins + ' min';
     return mins.toFixed(1) + ' min';
@@ -6131,10 +6145,13 @@
 
   function gmStartTimer() {
     /* Helper único (CLAUDE.md): honra _ppDurationMin y lee _MATCH_TICKS
-       en cada arranque del reloj (no se cachea). */
+       en cada arranque del reloj (no se cachea). Pasamos home/away para
+       que detecte correctamente HvIA cuando solo uno de los dos equipos
+       es humano (sin eso, el helper caía a IAIA y el cronómetro iba a
+       56 ms → el partido duraba 1 minuto real). */
     var tickMs;
     if (typeof window._mlResolveClock === 'function') {
-      tickMs = window._mlResolveClock({ isHvH: !!_gm.isHvH, etDone: !!_gm.etDone }).tickMs;
+      tickMs = window._mlResolveClock({ isHvH: !!_gm.isHvH, etDone: !!_gm.etDone, home: _gm.home, away: _gm.away }).tickMs;
     } else {
       tickMs = _gm.isHvH ? GM_TICK_HVH : GM_TICK_HVIA;
     }

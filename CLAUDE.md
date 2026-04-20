@@ -69,17 +69,21 @@ de jugador para la simulación (`sqFromRegistry`, builders similares)
 **TIEMPOS OFICIALES — FIJADOS PARA SIEMPRE** (definidos en
 `templates/partials/part2/misc_body_2.html`, bloque `_MATCH_RULE`):
 
-| Modo  | gameMin | realMin | ms/tick (5s juego) |
-|-------|---------|---------|--------------------|
-| HvH         | 94 | 10 | ≈ 532 ms |
-| HvH prórroga| 30 |  3 | ≈ 500 ms |
-| HvIA        | 94 |  8 | ≈ 426 ms |
-| IAIA        | 90 |  1 | ≈  56 ms |
+| Modo  | gameMin | realMin | displayMin (previa) | ms/tick (5s juego) |
+|-------|---------|---------|---------------------|--------------------|
+| HvH         | 94 | 16    | 10  | ≈ 851 ms |
+| HvH prórroga| 30 |  5    | —   | ≈ 833 ms |
+| HvIA        | 94 | 13.5  |  8  | ≈ 718 ms |
+| IAIA        | 90 |  1    | "30 s/parte" | ≈ 56 ms |
 
-- HvH = humano vs humano → **10 min reales** (5 min por parte).
-- HvIA = humano vs IA → **8 min reales** (4 min por parte).
+- HvH = humano vs humano → **16 min reales**. La previa muestra "10 min".
+- HvIA = humano vs IA → **13.5 min reales** (13 min 30 seg). La previa muestra "8 min".
 - IAIA = IA vs IA → **1 min real total** (30 s por parte).
-- HvH_ET = prórroga humana → **3 min reales** (1:30 por parte).
+- HvH_ET = prórroga humana → **5 min reales**.
+
+`realMin` controla el cronómetro real. `displayMin` / `displayLabel`
+controlan SOLO el label visible en la pantalla de PREVIA — están
+desacoplados a petición del usuario.
 
 ### Fuente única
 

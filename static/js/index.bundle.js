@@ -636,12 +636,13 @@ function _j1m1ResolveSpd(){
     return info.tickMs;
   }
   /* Fallback defensivo si misc_body_2 no cargó aún. Valores oficiales:
-     HvH=10 min real → ~532 ms, HvIA=8 min → ~426 ms, ET=3 min → ~500 ms. */
+     HvH=16 min real → ~851 ms, HvIA=13.5 min → ~718 ms, ET=5 min → ~833 ms.
+     (label que muestra la previa es otro: 10/8 min — ver displayMin). */
   var t = window._MATCH_TICKS || {};
   var _w = document.getElementById('mlw-j1m1');
   var _hvh = _w && _w.classList.contains('hvh');
-  if (_etPhase) return t.HvH_ET || 500;
-  return _hvh ? (t.HvH || 532) : (t.HvIA || 426);
+  if (_etPhase) return t.HvH_ET || 833;
+  return _hvh ? (t.HvH || 851) : (t.HvIA || 718);
 }
 window.mlTimerClick_j1m1=function(){if(_matchFinished||_inDescanso)return;if(_timerRunning){clearInterval(_timerInterval);_timerRunning=false;_renderTimer_j1m1();}else{_timerRunning=true;_startInterval_j1m1();}};
 function _startInterval_j1m1(){var spd=_j1m1ResolveSpd();var MAX_ST=5820;_timerInterval=setInterval(function(){_timerSec+=5;var maxSec=_etDone?MAX_ET:(_stDone?MAX_ST:MAX_NORMAL);if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m1("— DESCANSO (45 min) —");_renderTimer_j1m1();setTimeout(function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;_startInterval_j1m1();}},20000);return;}if(!_etDone&&!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m1("— TIEMPO DE DESCUENTO (90') —");}if(_etDone&&!_et1Done&&_timerSec>=6300){_et1Done=true;_addMarker_j1m1("— DESCANSO PRÓRROGA (105 min) —");}if(_timerSec>=maxSec){_timerSec=maxSec;clearInterval(_timerInterval);_timerRunning=false;if(_etDone){_checkPenalties_j1m1();}} _renderTimer_j1m1();},spd);};

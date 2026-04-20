@@ -2920,6 +2920,33 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var row = null;
     if(num) row = index.byNum[canonicalTeam + '::' + num] || null;
     if(!row && name) row = index.byName[canonicalTeam + '::' + norm(name)] || null;
+    /* Fallback por apellido: si la fuente del simulador trae "Swiderski"
+       pero la plantilla del HTML lo registra como "G. Swiderski" (o vice-
+       versa), el match exacto falla y la stat se pierde. Hacemos un
+       segundo intento comparando el último token (apellido) normalizado.
+       Ej.: "swiderski" matchea "g swiderski" porque ambos terminan en
+       "swiderski". Solo aplica con tokens de >=4 chars para evitar
+       falsos positivos con apellidos cortos / iniciales. */
+    if(!row && name){
+      var nname = norm(name);
+      var tokens = nname.split(' ').filter(Boolean);
+      var lastToken = tokens.length ? tokens[tokens.length - 1] : '';
+      if(lastToken && lastToken.length >= 4){
+        var prefix = canonicalTeam + '::';
+        var allKeys = Object.keys(index.byName);
+        for(var _ki=0; _ki<allKeys.length; _ki++){
+          var _k = allKeys[_ki];
+          if(_k.indexOf(prefix) !== 0) continue;
+          var rowName = _k.substring(prefix.length);
+          var rowTokens = rowName.split(' ').filter(Boolean);
+          var rowLast = rowTokens.length ? rowTokens[rowTokens.length - 1] : '';
+          if(rowLast === lastToken){
+            row = index.byName[_k];
+            break;
+          }
+        }
+      }
+    }
     if(!row) return;
 
     var type = parseType(ev);

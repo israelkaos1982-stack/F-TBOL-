@@ -4720,6 +4720,16 @@
         saveResults(_r2);
       }
     } catch(_e){}
+    /* Re-pintar la clasificación AHORA que los eventos están persistidos.
+       guardarResultado() ya disparó un buildLigaClas() arriba, pero en
+       ese momento el entry de localStorage todavía no tenía .events ni
+       .mvpTeam (los acabamos de guardar 4 líneas más arriba), así que
+       countEventExtras() leía un objeto sin eventos y ponía TA/TR/MVP a
+       0 para todos los equipos. Sin esta llamada, la clasificación se
+       quedaba en 0 hasta que el usuario navegase fuera y volviese. */
+    if (typeof window.buildLigaClas === 'function') {
+      try { window.buildLigaClas(); } catch(_){}
+    }
     athApplyMedicalFromActa(st);
     /* Mostrar overlay FINAL → luego post-partido con WhatsApp */
     _mlShowFinalThenPost(mk);

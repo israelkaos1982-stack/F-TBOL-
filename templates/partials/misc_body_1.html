@@ -2042,16 +2042,36 @@ window.pG = function(fn) {
       return norm;
     }
 
-    // Collect all team names from both sources
-    var teamPJ = {}; // teamNorm → {matchKey: true}
-    /* Clave normalizada de partido (home|away sin jornada) compartida
-       por ambas fuentes. Antes las dos fuentes usaban claves distintas
-       (Source 1: canonHome|canonAway; Source 2: j|home|away) así que
-       el dedup fallaba y los eventos se contaban DOS veces → Villarreal
-       con 28 partidos mostraba PJ=56 en los delanteros, goles
-       duplicados, etc. */
-    function _mkPJ(hA, hB){ return _normPS(hA) + '||' + _normPS(hB); }
+    /* PJ por equipo desde la fuente AUTORITATIVA (ef_liga38_v4). Cada
+       clave `j|home|away` ahí representa UN partido de liga → lo
+       contamos una vez por cada equipo. La clasificación en pantalla
+       deriva su PJ de la misma fuente (vía applyMatch), así que el
+       PJ de la plantilla coincidirá siempre con el de la tabla.
+
+       Antes, teamPJ era un set de matchKeys normalizados (`home||away`)
+       acumulado en dos pasadas (LIGA_PLAYER_MATCH_STORE + ef_liga38_v4)
+       con dedup por esa clave. Si los flujos de live-match / IA-sim
+       dejaban copias con nombres no canónicos divergentes (p. ej.
+       un evento con `realTeam: "Bayern"` frente al canónico
+       "Bayern Munich"), la dedup fallaba y los partidos contaban dos
+       veces → la clasificación mostraba 28 PJ pero la plantilla 34. */
+    var teamPJ = {}; // teamNorm → integer count (matches played)
+    try {
+      var _pjRaw = localStorage.getItem('ef_liga38_v4');
+      if(_pjRaw){
+        var _pjResults = JSON.parse(_pjRaw);
+        Object.keys(_pjResults||{}).forEach(function(k){
+          var parts = k.split('|');
+          if(parts.length < 3) return;
+          var nA = _normPS(parts[1]||''), nB = _normPS(parts[2]||'');
+          if(nA) teamPJ[nA] = (teamPJ[nA]||0) + 1;
+          if(nB) teamPJ[nB] = (teamPJ[nB]||0) + 1;
+        });
+      }
+    } catch(_){}
+
     var processedMatches = {};
+    function _mkPJ(hA, hB){ return _normPS(hA) + '||' + _normPS(hB); }
 
     // Source 1: LIGA_PLAYER_MATCH_STORE
     var store = window.LIGA_PLAYER_MATCH_STORE;
@@ -2061,10 +2081,6 @@ window.pG = function(fn) {
         var tA = m.teamA||'', tB = m.teamB||'';
         var pjKey = _mkPJ(tA, tB);
         processedMatches[pjKey] = true;
-        if(!teamPJ[_normPS(tA)]) teamPJ[_normPS(tA)] = {};
-        if(!teamPJ[_normPS(tB)]) teamPJ[_normPS(tB)] = {};
-        teamPJ[_normPS(tA)][pjKey] = true;
-        teamPJ[_normPS(tB)][pjKey] = true;
         (m.evts||[]).forEach(function(ev){
           var team = ev.realTeam || '';
           if(!team){ team = ev.team==='a'?tA:ev.team==='b'?tB:''; }
@@ -2117,10 +2133,6 @@ window.pG = function(fn) {
           var pjKey2 = _mkPJ(tA, tB);
           if(processedMatches[pjKey2]) return;
           processedMatches[pjKey2] = true;
-          if(!teamPJ[_normPS(tA)]) teamPJ[_normPS(tA)] = {};
-          if(!teamPJ[_normPS(tB)]) teamPJ[_normPS(tB)] = {};
-          teamPJ[_normPS(tA)][pjKey2] = true;
-          teamPJ[_normPS(tB)][pjKey2] = true;
           (r.events||[]).forEach(function(ev){
             var team = ev.team==='a'?tA:ev.team==='b'?tB:'';
             var player = typeof ev.player==='string'?ev.player:(Array.isArray(ev.player)?ev.player[1]:'');
@@ -2180,7 +2192,7 @@ window.pG = function(fn) {
     }
 
     Object.keys(teamPJ).forEach(function(teamNorm){
-      if(!Object.keys(teamPJ[teamNorm]).length) return;
+      if(!teamPJ[teamNorm]) return;
       var gkCache = _buildTopGkCache();
       var gk = gkCache[teamNorm];
       if(!gk){
@@ -2197,10 +2209,10 @@ window.pG = function(fn) {
       if(!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
     });
 
-    // Assign PJ
+    // Assign PJ: use authoritative counter from ef_liga38_v4
     Object.keys(stats).forEach(function(key){
       var teamNorm = key.split('::')[0];
-      stats[key].pj = teamPJ[teamNorm] ? Object.keys(teamPJ[teamNorm]).length : 0;
+      stats[key].pj = teamPJ[teamNorm] || 0;
     });
 
     // Save to SEPARATE storage

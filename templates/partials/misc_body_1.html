@@ -2044,6 +2044,14 @@ window.pG = function(fn) {
 
     // Collect all team names from both sources
     var teamPJ = {}; // teamNorm → {matchKey: true}
+    /* Clave normalizada de partido (home|away sin jornada) compartida
+       por ambas fuentes. Antes las dos fuentes usaban claves distintas
+       (Source 1: canonHome|canonAway; Source 2: j|home|away) así que
+       el dedup fallaba y los eventos se contaban DOS veces → Villarreal
+       con 28 partidos mostraba PJ=56 en los delanteros, goles
+       duplicados, etc. */
+    function _mkPJ(hA, hB){ return _normPS(hA) + '||' + _normPS(hB); }
+    var processedMatches = {};
 
     // Source 1: LIGA_PLAYER_MATCH_STORE
     var store = window.LIGA_PLAYER_MATCH_STORE;
@@ -2051,10 +2059,12 @@ window.pG = function(fn) {
       Object.keys(store).forEach(function(matchKey){
         var m = store[matchKey]; if(!m) return;
         var tA = m.teamA||'', tB = m.teamB||'';
+        var pjKey = _mkPJ(tA, tB);
+        processedMatches[pjKey] = true;
         if(!teamPJ[_normPS(tA)]) teamPJ[_normPS(tA)] = {};
         if(!teamPJ[_normPS(tB)]) teamPJ[_normPS(tB)] = {};
-        teamPJ[_normPS(tA)][matchKey] = true;
-        teamPJ[_normPS(tB)][matchKey] = true;
+        teamPJ[_normPS(tA)][pjKey] = true;
+        teamPJ[_normPS(tB)][pjKey] = true;
         (m.evts||[]).forEach(function(ev){
           var team = ev.realTeam || '';
           if(!team){ team = ev.team==='a'?tA:ev.team==='b'?tB:''; }
@@ -2099,12 +2109,18 @@ window.pG = function(fn) {
           var r = results[key]; if(!r||!r.events) return;
           var parts = key.split('|'); if(parts.length<3) return;
           var tA = parts[1]||'', tB = parts[2]||'';
-          // Skip if already processed from LIGA_PLAYER_MATCH_STORE
-          if(store && store[key]) return;
+          // Skip if already processed from LIGA_PLAYER_MATCH_STORE.
+          // Usamos la misma clave normalizada que Source 1 (home|away
+          // sin jornada) para que los dos formatos de storeKey
+          // (canonHome|canonAway y j|home|away) colisionen y el
+          // partido se cuente UNA sola vez.
+          var pjKey2 = _mkPJ(tA, tB);
+          if(processedMatches[pjKey2]) return;
+          processedMatches[pjKey2] = true;
           if(!teamPJ[_normPS(tA)]) teamPJ[_normPS(tA)] = {};
           if(!teamPJ[_normPS(tB)]) teamPJ[_normPS(tB)] = {};
-          teamPJ[_normPS(tA)][key] = true;
-          teamPJ[_normPS(tB)][key] = true;
+          teamPJ[_normPS(tA)][pjKey2] = true;
+          teamPJ[_normPS(tB)][pjKey2] = true;
           (r.events||[]).forEach(function(ev){
             var team = ev.team==='a'?tA:ev.team==='b'?tB:'';
             var player = typeof ev.player==='string'?ev.player:(Array.isArray(ev.player)?ev.player[1]:'');

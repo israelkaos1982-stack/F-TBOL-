@@ -2851,6 +2851,12 @@ function mlPreviaClick(matchKey) {
     if (addBtn) addBtn.style.visibility = unlocked ? '' : 'hidden';
     if (actBar) actBar.style.visibility = unlocked ? '' : 'hidden';
     if (unlocked) wrap.setAttribute('data-prepartido-ready', '1');
+    /* Refresh para que el control de velocidad ⏪/⏩ se muestre (o se
+       oculte) junto con el botón ▶️. _mlRenderTimerGen sincroniza
+       ambos según el estado del partido. */
+    if (typeof window._mlRenderTimerGen === 'function') {
+      try { window._mlRenderTimerGen(matchKey); } catch(_){}
+    }
   }
 
   window._mlEnsureLegacyPreMatchStructure = function(matchKey) {
@@ -5212,6 +5218,10 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       if (actBar) actBar.style.visibility = '';
       var wrap = document.getElementById('mlw-' + mk);
       if (wrap) wrap.setAttribute('data-prepartido-ready', '1');
+      /* Mostrar control de velocidad ⏪/⏩ junto al cronómetro. */
+      if (typeof window._mlRenderTimerGen === 'function') {
+        try { window._mlRenderTimerGen(mk); } catch(_){}
+      }
       if (window._ppCustomCallback) { var fn=window._ppCustomCallback; window._ppCustomCallback=null; fn(); }
     }
     /* Marcar el overlay como "modo previa" para que sancion-ov-ok comparta WA */

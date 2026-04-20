@@ -413,56 +413,93 @@ window.sqFromRegistry = function(teamName, opts) {
     }
   }
   if (!reg) {
-    /* Lazy fallback 2: leer directamente ligaExt_liga-ea-sports y
-       montar el sq en línea, saltándose el pipeline habitual de
-       applyEngineOverrides. Si llegamos aquí es porque ese camino
-       falló por la razón que sea (hash cache, _hasPlayers, alias,
-       lo que toque). Así nos aseguramos de que, mientras haya datos
-       en ligaExt_liga-ea-sports, jamás caemos al placeholder. */
+    /* Lazy fallback 2: escanear TODAS las tiendas `ligaExt_*`. Antes
+       sólo leíamos `ligaExt_liga-ea-sports`, con lo que un equipo
+       guardado en Hypermotion / Primera Fed / cualquiera de las 51
+       ligas externas (Premier, Bundesliga, etc.) caía al placeholder
+       "Jugador A/B" en amistosos, IA vs IA, Humano vs IA y Humano vs
+       Humano. Ahora iteramos todas las claves `ligaExt_*` y, para la
+       primera con un equipo cuyo nombre coincida con `teamName` o
+       `resolved`, montamos el sq en línea — sin depender de que
+       applyEngineOverrides haya corrido antes. */
     try {
-      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
-      if (raw) {
-        var data = JSON.parse(raw);
+      function _normAmSq(s){ return String(s||'').trim().toLowerCase(); }
+      var target = _normAmSq(teamName);
+      var targetResolved = _normAmSq(resolved);
+      var match = null;
+      for (var li = 0; li < localStorage.length && !match; li++) {
+        var lk = localStorage.key(li);
+        if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+        if (lk.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(lk);
+        if (!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_e){ continue; }
         var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
-        function _norm(s){ return String(s||'').trim().toLowerCase(); }
-        var target = _norm(teamName);
-        var targetResolved = _norm(resolved);
-        var match = null;
         for (var ti = 0; ti < teams.length; ti++) {
-          var tn = _norm(teams[ti] && teams[ti].name);
+          var tn = _normAmSq(teams[ti] && teams[ti].name);
           if (!tn) continue;
-          if (tn === target || tn === targetResolved || tn.indexOf(target) !== -1 || target.indexOf(tn) !== -1) {
-            match = teams[ti]; break;
+          if (tn === target || tn === targetResolved) { match = teams[ti]; break; }
+        }
+        /* Segunda pasada tolerante (substring) sólo si no hubo match
+           exacto, para evitar que "Real Madrid" pille "Real Madrid
+           Castilla" por contener la cadena. */
+        if (!match) {
+          for (var ti2 = 0; ti2 < teams.length; ti2++) {
+            var tn2 = _normAmSq(teams[ti2] && teams[ti2].name);
+            if (!tn2) continue;
+            if (tn2.indexOf(target) !== -1 || target.indexOf(tn2) !== -1 ||
+                tn2.indexOf(targetResolved) !== -1 || targetResolved.indexOf(tn2) !== -1) {
+              match = teams[ti2]; break;
+            }
           }
         }
-        if (match && Array.isArray(match.players) && match.players.length) {
-          var POS_HEADER_DIRECT = {P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS'};
-          var POS_MAP_DIRECT = {POR:'P', DEF:'D', MED:'M', DEL:'F'};
-          var POS_ORDER_DIRECT = ['P','D','M','F'];
-          var groupsD = {P:[], D:[], M:[], F:[]};
+      }
+      if (match && Array.isArray(match.players) && match.players.length) {
+        var POS_HEADER_DIRECT = {P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS'};
+        var POS_MAP_DIRECT = {POR:'P', DEF:'D', MED:'M', DEL:'F'};
+        var POS_ORDER_DIRECT = ['P','D','M','F'];
+        var groupsD = {P:[], D:[], M:[], F:[]};
+        match.players.forEach(function(p){
+          if (!p || !p.name) return;
+          var ps = POS_MAP_DIRECT[p.pos] || 'M';
+          groupsD[ps].push(p);
+        });
+        var built = [];
+        POS_ORDER_DIRECT.forEach(function(ps){
+          var pool = groupsD[ps];
+          if (!pool.length) return;
+          pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+          built.push({h: POS_HEADER_DIRECT[ps]});
+          pool.forEach(function(p){
+            var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+            var entry = [String(p.num || ''), String(p.name || '?'), pw];
+            if (p.elite)   entry.elite   = true;
+            if (p.natGoal) entry.natGoal = true;
+            built.push(entry);
+          });
+        });
+        if (built.length) {
+          /* Cache en SQUAD_REGISTRY bajo el nombre que nos pidieron +
+             el canónico (alias) para no repetir este parseo en la
+             misma sesión. Además, rellenamos el sidecar de flags por
+             si la sim necesita C/F/P/⭐/⚾ más abajo. */
+          window.SQUAD_REGISTRY[teamName] = built;
+          if (resolved !== teamName) window.SQUAD_REGISTRY[resolved] = built;
           match.players.forEach(function(p){
             if (!p || !p.name) return;
-            var ps = POS_MAP_DIRECT[p.pos] || 'M';
-            groupsD[ps].push(p);
+            if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal){
+              var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
+              var fkey = String(match.name) + '::' + String(p.name);
+              fmap[fkey] = {
+                captain:  !!p.captain,
+                freeKick: !!p.freeKick,
+                penalty:  !!p.penalty,
+                elite:    !!p.elite,
+                natGoal:  !!p.natGoal
+              };
+            }
           });
-          var built = [];
-          POS_ORDER_DIRECT.forEach(function(ps){
-            var pool = groupsD[ps];
-            if (!pool.length) return;
-            pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
-            built.push({h: POS_HEADER_DIRECT[ps]});
-            pool.forEach(function(p){
-              var pw = Math.max(1, Math.min(99, Number(p.power)||70));
-              built.push([String(p.num || ''), String(p.name || '?'), pw]);
-            });
-          });
-          if (built.length) {
-            /* Cache en SQUAD_REGISTRY bajo el nombre que nos pidieron
-               para no repetir este parseo el resto de la sesión. */
-            window.SQUAD_REGISTRY[teamName] = built;
-            if (resolved !== teamName) window.SQUAD_REGISTRY[resolved] = built;
-            reg = built;
-          }
+          reg = built;
         }
       }
     } catch(_){}
@@ -538,7 +575,21 @@ window.sqFromRegistryFull = function(teamName) {
   var resolved = aliases[trimmed.toLowerCase()] || trimmed;
   var reg = window.SQUAD_REGISTRY[resolved] || window.SQUAD_REGISTRY[trimmed] || window.SQUAD_REGISTRY[teamName];
   if (!reg) {
-    console.warn('sqFromRegistry: equipo no encontrado:', teamName, '(resolved:', resolved, ')');
+    /* Fallback: disparar applyEngineOverrides + un re-check en
+       SQUAD_REGISTRY. sqFromRegistry ya tiene un fallback robusto que
+       escanea todas las ligaExt_*, así que llamándola forzamos que
+       cachee el sq del equipo bajo SQUAD_REGISTRY[teamName]. Luego
+       releemos y seguimos. Así ningún partido (humano manual, event
+       picker, MVP override, clean-sheet, etc.) cae al placeholder
+       "Jugador A/B". */
+    if (typeof window.applyEngineOverrides === 'function') {
+      try { window.applyEngineOverrides(); } catch(_){}
+    }
+    try { if (typeof window.sqFromRegistry === 'function') window.sqFromRegistry(teamName); } catch(_){}
+    reg = window.SQUAD_REGISTRY[resolved] || window.SQUAD_REGISTRY[trimmed] || window.SQUAD_REGISTRY[teamName];
+  }
+  if (!reg) {
+    console.warn('sqFromRegistryFull: equipo no encontrado:', teamName, '(resolved:', resolved, ')');
     return [];
   }
   var posMap = {'🧤 PORTEROS':'P','🛡 DEFENSAS':'D','⚙️ MEDIOS':'M','⚡ DELANTEROS':'F',
@@ -547,7 +598,12 @@ window.sqFromRegistryFull = function(teamName) {
   for (var i = 0; i < reg.length; i++) {
     var e = reg[i];
     if (e.h) { curPos = posMap[e.h] || 'M'; }
-    else { full.push([e[0], e[1], curPos, (e.length>=3 ? e[2] : 70)]); }
+    else {
+      var row = [e[0], e[1], curPos, (e.length>=3 ? e[2] : 70)];
+      if (e && e.elite)   row.elite   = true;
+      if (e && e.natGoal) row.natGoal = true;
+      full.push(row);
+    }
   }
   return full;
 };

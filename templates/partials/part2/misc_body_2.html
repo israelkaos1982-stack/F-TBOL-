@@ -11184,11 +11184,19 @@ window.goLiveMatches = function() {
 
   /* Mapa de prefijos de screen-id → info de competición. Reutilizamos la
      lógica del hub PARTIDOS LIVE, pero con fallback propio por si el
-     otro módulo aún no se ha inicializado al llamar a goDerbys. */
+     otro módulo aún no se ha inicializado al llamar a goDerbys.
+
+     IMPORTANTE: NO añadir aquí 'cal-l2' (Hypermotion) ni 'cal-pf'
+     (Primera Federación). Razones:
+       1) Los humanos no juegan en esas ligas → no debe haber derbys.
+       2) Los contenedores reales del calendario son `cal-l2`, `cal-l20`
+          ... `cal-l38` para LIGA EA SPORTS jornadas 2-38. Si añadimos
+          `cal-l2` al mapa, _compInfoFromContainerId (que ordena por
+          longitud descendente) etiqueta la jornada 2 de Liga EA Sports
+          como "Liga Hypermotion" y aparecen DUPLICADOS al final de
+          la pantalla DERBYS. */
   var COMP_INFO = {
     'cal-l':    { name:'Liga EA Sports',     ico:'⚽', color:'#e8173c', jornadaLabel:'Jornada' },
-    'cal-l2':   { name:'Liga Hypermotion',   ico:'⚽', color:'#0066ff', jornadaLabel:'Jornada' },
-    'cal-pf':   { name:'Primera Federación', ico:'⚽', color:'#147828', jornadaLabel:'Jornada' },
     'cal-copa': { name:'Copa del Rey',       ico:'🏆', color:'#c04800', jornadaLabel:'Ronda'   },
     'cal-scp':  { name:'Supercopa de España',ico:'🏅', color:'#9900ee', jornadaLabel:'Ronda'   },
     'cal-cl':   { name:'UEFA Champions',     ico:'⭐', color:'#003087', jornadaLabel:'Jornada' },

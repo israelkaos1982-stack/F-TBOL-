@@ -4990,15 +4990,23 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
           + '<div style="font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;text-align:center;margin-top:2px;">' + aTxt + ' · ' + bTxt + '</div>';
       }
       /* Duración central — tap para editar con admin PIN. Fuente única:
-         _MATCH_RULE → helper _mlRealDurationLabel (CLAUDE.md obligatorio). */
-      var isHvHCenter = wrap && wrap.classList.contains('hvh');
+         _MATCH_RULE → helper _mlRealDurationLabel (CLAUDE.md obligatorio).
+         Detectamos HvH comprobando esHumano(home) && esHumano(away)
+         directamente, NO por la clase del wrap. Cuando se abre la
+         previa desde el calendario (via _ppPreviaTeams), el wrap
+         puede no tener la clase 'hvh' correcta y el usuario veía
+         "8 MIN" en partidos HvH que deberían mostrar "10 MIN". */
+      var _humHome = (typeof window.esHumano === 'function') ? !!window.esHumano(home) : false;
+      var _humAway = (typeof window.esHumano === 'function') ? !!window.esHumano(away) : false;
+      var isHvHCenter = _humHome && _humAway;
+      var _humanInvolved = _humHome || _humAway;
       var durText;
       if (window._ppDurationMin) {
         durText = window._ppDurationMin + ' min';
       } else if (typeof window._mlRealDurationLabel === 'function') {
-        durText = window._mlRealDurationLabel({ isHvH: isHvHCenter, humanInvolved: !isHvHCenter });
+        durText = window._mlRealDurationLabel({ isHvH: isHvHCenter, humanInvolved: _humanInvolved, home: home, away: away });
       } else {
-        durText = (isHvHCenter ? 16.5 : 13.5) + ' min';
+        durText = (isHvHCenter ? 10 : (_humanInvolved ? 8 : 1)) + ' min';
       }
       var durHtml = '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#f0c040;text-align:center;margin-top:10px;">DURACIÓN</div>'
         + '<div id="pp-dur-center" onclick="window._ppEditDuration&&window._ppEditDuration()" style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#fff;text-align:center;cursor:pointer;margin-top:2px;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.35);border-radius:6px;padding:2px 10px;">' + durText + '<span style="font-size:13px;opacity:.8;">✏️</span></div>';

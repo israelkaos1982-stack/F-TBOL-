@@ -5467,6 +5467,17 @@ Tottenham
 
   function renderSquadList(){
     if(!CURRENT_SQUAD_TEAM) return;
+    /* Forzamos reconstrucción de ef_player_stats_v1 desde
+       LIGA_PLAYER_MATCH_STORE antes de cada render. Sin esto, el
+       storage podía quedar stale y los goles de la plantilla no
+       cuadraban con los del dashboard de Estadísticas (que se recalcula
+       cada apertura desde los eventos). Ahora los 2 lados leen del
+       mismo cómputo actualizado. */
+    try {
+      if (typeof window.syncLigaEaPlayerStats === 'function') {
+        window.syncLigaEaPlayerStats();
+      }
+    } catch(_){}
     var data = loadData(CURRENT_KEY);
     var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
     var host = document.getElementById('lext-squad-list');

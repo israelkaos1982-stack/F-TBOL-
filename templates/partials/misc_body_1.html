@@ -2185,9 +2185,18 @@ window.pG = function(fn) {
           else if(type==='card'){
             if(ico==='🟨') p.ta++; else if(ico==='🟥') p.tr++; else if(ico==='🟨🟥'){p.ta++;p.tr++;}
           }
+          /* Contadores DISJUNTOS: la plantilla muestra 3 columnas
+             independientes (⚽ regular, 🥅 penalti, 🎯 falta). La suma
+             de las 3 = total del jugador y coincide con el GF del
+             equipo en la clasificación. ANTES p.gol incluía pen y fk
+             (p.gol++; p.pen++), lo que inflaba visualmente los totales
+             (reportado: Athletic suma 71 en plantilla vs 53 GF). El
+             dashboard de Estadísticas recalcula `goles-total` aparte
+             vía collectLigaPlayerStatsFromStore, así que no se ve
+             afectado. */
           else if(type==='gol') p.gol++;
-          else if(type==='falta-gol'){p.gol++;p.fk++;}
-          else if(type==='pen-gol'){p.gol++;p.pen++;}
+          else if(type==='falta-gol') p.fk++;
+          else if(type==='pen-gol') p.pen++;
           else if(type==='pen-parado') p.penSaved++;
           else if(type==='mvp') p.mvp++;
           else if(type==='imbat') p.imbat++;
@@ -2229,9 +2238,10 @@ window.pG = function(fn) {
             var type = ev.type||'';
             if(type==='amarilla') p.ta++;
             else if(type==='roja'||type==='d-amarilla') p.tr++;
+            /* Contadores DISJUNTOS (ver comentario en Source 1). */
             else if(type==='gol') p.gol++;
-            else if(type==='falta-gol'){p.gol++;p.fk++;}
-            else if(type==='pen-gol'){p.gol++;p.pen++;}
+            else if(type==='falta-gol') p.fk++;
+            else if(type==='pen-gol') p.pen++;
             else if(type==='pen-parado') p.penSaved++;
             else if(type==='mvp') p.mvp++;
             else if(type==='imbat') p.imbat++;

@@ -2599,10 +2599,19 @@
       var p = playerStats[id];
       if(!p || !p.team || !p.name) return;
       var key = _normPlayerStatsKey(p.team) + '::' + _normPlayerStatsKey(p.name);
+      /* Contadores DISJUNTOS: la plantilla muestra 3 columnas
+         independientes (⚽ gol regular, 🥅 pen, 🎯 falta). `goles-total`
+         viene del simulador incluyendo pen-gol y falta-gol, así que
+         restamos para obtener los regulares y evitar el doble conteo
+         cuando el usuario suma las 3 columnas. Aplica a Hypermotion,
+         Primera Federación, resto de ligas ligaExt_*. */
+      var _totalG = Number(p['goles-total']||0);
+      var _penG   = Number(p['pen-gol']||0);
+      var _fkG    = Number(p['falta-gol']||0);
       store[key] = {
-        gol:      Number(p['goles-total']||0),
-        pen:      Number(p['pen-gol']||0),
-        fk:       Number(p['falta-gol']||0),
+        gol:      Math.max(0, _totalG - _penG - _fkG),
+        pen:      _penG,
+        fk:       _fkG,
         mvp:      Number(p.mvp||0),
         ta:       Number(p.yel||0),
         tr:       Number(p.red||0),

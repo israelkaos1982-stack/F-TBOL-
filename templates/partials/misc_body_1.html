@@ -6054,18 +6054,56 @@ Tottenham
   function _findLigaEaTeamByName(displayName){
     var data = loadData(CURRENT_KEY) || {teams:[]};
     var teams = data.teams || [];
+    if (!teams.length) return null;
     var target = _normalize(displayName);
-    for(var i=0;i<teams.length;i++){
-      var t = teams[i];
-      if(_normalize(t.name) === target) return t;
-      // Si el short-name del mapa coincide con el display, el nombre real
-      // canónico es la clave → comparamos contra esa.
-      var k; for(k in LIGA_EA_SHORT_NAMES){
-        if(_normalize(LIGA_EA_SHORT_NAMES[k]) === target && _normalize(t.name) === _normalize(k)){
+    if (!target) return null;
+
+    /* 1ª pasada: match normalizado exacto. Captura el 95% de casos —
+       tanto si el equipo en el editor se llama igual que en la
+       clasificación ("Athletic Club", "Osasuna", "Mallorca") como si
+       el usuario usó la forma corta tal cual ("Celta", "Elche"). */
+    for (var i = 0; i < teams.length; i++) {
+      if (teams[i] && _normalize(teams[i].name) === target) return teams[i];
+    }
+
+    /* 2ª pasada: reverse lookup vía LIGA_EA_SHORT_NAMES. Cubre el
+       caso "display='Celta' ↔ editor='Celta de Vigo'". */
+    for (var j = 0; j < teams.length; j++) {
+      var t = teams[j];
+      if (!t) continue;
+      var tn = _normalize(t.name);
+      for (var k in LIGA_EA_SHORT_NAMES) {
+        if (!Object.prototype.hasOwnProperty.call(LIGA_EA_SHORT_NAMES, k)) continue;
+        var sh = _normalize(LIGA_EA_SHORT_NAMES[k]);
+        var full = _normalize(k);
+        if ((sh === target && tn === full) || (sh === tn && full === target)) {
           return t;
         }
       }
     }
+
+    /* 3ª pasada: fuzzy substring — `target` contenido en `t.name` o
+       viceversa. Soluciona desajustes del usuario ("Celta Vigo" sin
+       "de", "Atletico" sin tilde, "Ath. Club", "Dep. Alavés", etc.).
+       Se acepta solo si el match es único — si dos o más equipos
+       cumplen el criterio, evitamos devolver uno arbitrario.
+       IMPORTANTE: la longitud mínima evita que un `target` corto
+       ("CF", "AC") traiga falsos positivos. */
+    if (target.length >= 4) {
+      var hits = [];
+      for (var m = 0; m < teams.length; m++) {
+        var tt = teams[m];
+        if (!tt) continue;
+        var nn = _normalize(tt.name);
+        if (!nn) continue;
+        if (nn.indexOf(target) !== -1 || target.indexOf(nn) !== -1) {
+          hits.push(tt);
+        }
+      }
+      if (hits.length === 1) return hits[0];
+    }
+
+    try { console.warn('[ligaEa] no se encontró equipo para "' + displayName + '" (target="' + target + '"). Equipos en editor:', teams.map(function(x){return x && x.name;})); } catch(_){}
     return null;
   }
   // Abre la plantilla (overlay lext-ov-squad) del equipo cuyo nombre (tal
@@ -6295,7 +6333,23 @@ Tottenham
     if(tryOpen()) return;
     fetchData(CURRENT_KEY, function(){
       if(tryOpen()) return;
-      alert('«'+displayName+'» todavía no tiene plantilla.\n\nPulsa ✏️ Edit y crea el equipo con ese nombre para ver aquí todas sus estadísticas.');
+      /* Diagnóstico: si tras el fetch al servidor seguimos sin poder
+         emparejar, mostramos los nombres que el sistema SÍ ve — así
+         el usuario descubre si la diferencia es de tildes, "CF"/"de
+         Vigo" u otro matiz. */
+      var _known = [];
+      try {
+        var _d = loadData(CURRENT_KEY) || {teams:[]};
+        _known = (_d.teams||[]).map(function(x){ return x && x.name; }).filter(Boolean);
+      } catch(_){}
+      var msg = '«'+displayName+'» no coincide con ningún equipo en el editor.\n';
+      if (_known.length) {
+        msg += '\nEquipos guardados ('+_known.length+'):\n• ' + _known.slice(0, 20).join('\n• ');
+        if (_known.length > 20) msg += '\n• …';
+      } else {
+        msg += '\nEl editor de «'+CURRENT_NAME+'» está vacío. Pulsa ✏️ Edit y añade el equipo.';
+      }
+      alert(msg);
     });
   };
 

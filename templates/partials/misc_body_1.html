@@ -1508,12 +1508,23 @@ window.pG = function(fn) {
     var slug = slugMap[scope.id] || 'liga-ea-sports';
     var nameEl = row.querySelector('.clas-team-name');
     if(!nameEl) return;
-    // Clonamos y eliminamos el prefijo humano (emoji) para quedarnos
-    // solo con el nombre del equipo tal como se ve en pantalla.
-    var clone = nameEl.cloneNode(true);
-    var prefix = clone.querySelector('.human-prefix');
-    if(prefix) prefix.remove();
-    var displayName = (clone.textContent || '').trim();
+    /* Preferimos el span interno `.clas-team-name-text` que contiene SOLO
+       el nombre, sin escudo ni emoji (prefijo o sufijo). Si por cualquier
+       motivo no existe (render antiguo), caemos al clon limpiando los
+       emojis con `.human-prefix` (legado) y `.clas-team-human-suffix`
+       (actual). Sin este strip, `displayName` incluía el emoji de humano
+       y `_findLigaEaTeamByName` devolvía null en navegadores/instalaciones
+       donde el normalizador no mataba los surrogate pairs del emoji —
+       resultado: al pulsar el equipo no salía la plantilla. */
+    var displayName = '';
+    var textEl = nameEl.querySelector('.clas-team-name-text');
+    if(textEl && textEl.textContent){
+      displayName = textEl.textContent.trim();
+    } else {
+      var clone = nameEl.cloneNode(true);
+      clone.querySelectorAll('.human-prefix, .clas-team-human-suffix, .clas-team-human-prefix').forEach(function(el){ el.remove(); });
+      displayName = (clone.textContent || '').trim();
+    }
     if(!displayName) return;
     if(typeof window.openLigaExtSquadByName === 'function'){
       window.openLigaExtSquadByName(slug, displayName);

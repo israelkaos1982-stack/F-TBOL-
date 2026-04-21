@@ -1913,6 +1913,131 @@ window.pG = function(fn) {
         }
       }
 
+      /* 2.c) Si AUN así no hay jugadores, reconstruir desde
+              SQUAD_REGISTRY (memoria de la sesión actual) + bajada
+              síncrona de TODOS los slugs conocidos desde el server +
+              ef_player_stats_v1 (stats históricas) — las MISMAS
+              fuentes que usa la simulación para pintar goleadores. */
+      if (!found.players || !found.players.length) {
+        var rebuilt = [];
+        var seenP = Object.create(null);
+
+        /* Fuente A: SQUAD_REGISTRY (memoria) */
+        try {
+          var SR = window.SQUAD_REGISTRY || {};
+          var srKeys = Object.keys(SR);
+          var srMatch = null;
+          for (var sk = 0; sk < srKeys.length; sk++) {
+            var srN = _normForClick(srKeys[sk]);
+            for (var st = 0; st < targets.length; st++) {
+              if (srN === targets[st]) { srMatch = SR[srKeys[sk]]; break; }
+            }
+            if (srMatch) break;
+          }
+          if (Array.isArray(srMatch)) {
+            var POS_INV = {'🧤 PORTEROS':'POR','🛡 DEFENSAS':'DEF','⚙️ MEDIOS':'MED','⚡ DELANTEROS':'DEL'};
+            var curPos = 'MED';
+            srMatch.forEach(function(e){
+              if (e && typeof e === 'object' && e.h) { curPos = POS_INV[e.h] || 'MED'; return; }
+              if (!Array.isArray(e) || e.length < 2) return;
+              var nm = String(e[1]||'').trim(); if (!nm) return;
+              var key = _normForClick(nm); if (seenP[key]) return; seenP[key] = true;
+              var pObj = { num: Number(e[0])||0, name: nm, power: Number(e[2])||70, pos: curPos };
+              if (e.elite)    pObj.elite    = true;
+              if (e.natGoal)  pObj.natGoal  = true;
+              if (e.captain)  pObj.captain  = true;
+              if (e.freeKick) pObj.freeKick = true;
+              if (e.penalty)  pObj.penalty  = true;
+              rebuilt.push(pObj);
+            });
+          }
+        } catch(_){}
+
+        /* Fuente B: bajar TODOS los slugs conocidos del server y
+           escanearlos. Si el admin guardó el equipo en otra liga, el
+           server tendrá su players allí. Síncrono para que sea simple. */
+        if (rebuilt.length === 0) {
+          var knownSlugs = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion',
+                            'inglaterra','alemania','italia','francia','portugal',
+                            'holanda','belgica','brasil','argentina','turquia'];
+          for (var ks = 0; ks < knownSlugs.length && rebuilt.length === 0; ks++) {
+            if (knownSlugs[ks] === slug) continue;
+            try {
+              var xx = new XMLHttpRequest();
+              xx.open('GET', '/api/liga-ext/'+encodeURIComponent(knownSlugs[ks]), false);
+              xx.send();
+              if (xx.status !== 200) continue;
+              var rr = JSON.parse(xx.responseText);
+              var ds = rr && rr.data; if (!ds || !Array.isArray(ds.teams)) continue;
+              for (var tz = 0; tz < ds.teams.length; tz++) {
+                var tzt = ds.teams[tz];
+                if (!tzt || !tzt.name || !Array.isArray(tzt.players) || !tzt.players.length) continue;
+                var nz = _normForClick(tzt.name);
+                var nameOK = false;
+                for (var yt = 0; yt < targets.length; yt++) {
+                  if (nz === targets[yt]) { nameOK = true; break; }
+                }
+                if (!nameOK && target.length >= 4) {
+                  if (nz.indexOf(target) !== -1 || target.indexOf(nz) !== -1) nameOK = true;
+                }
+                if (nameOK) {
+                  tzt.players.forEach(function(p){
+                    if (!p || !p.name) return;
+                    var k = _normForClick(p.name); if (seenP[k]) return; seenP[k] = true;
+                    rebuilt.push(p);
+                  });
+                  /* Guardar también en localStorage bajo ese otro slug
+                     por si el user vuelve allí */
+                  try { localStorage.setItem('ligaExt_'+knownSlugs[ks], JSON.stringify(ds)); } catch(_){}
+                  break;
+                }
+              }
+            } catch(_){}
+          }
+        }
+
+        /* Fuente C: ef_player_stats_v1 (nombres + stats). Último
+           recurso — no tenemos pos/power, usamos MED/70. */
+        if (rebuilt.length === 0) {
+          try {
+            var psr = localStorage.getItem('ef_player_stats_v1');
+            if (psr) {
+              var ps = JSON.parse(psr);
+              Object.keys(ps||{}).forEach(function(k){
+                var parts = k.split('::'); if (parts.length < 2) return;
+                var match = false;
+                for (var y = 0; y < targets.length; y++) {
+                  if (parts[0] === targets[y]) { match = true; break; }
+                }
+                if (!match) return;
+                var keyP = parts[1]; if (seenP[keyP]) return; seenP[keyP] = true;
+                var nm = keyP.split(' ').map(function(w){ return w ? w.charAt(0).toUpperCase()+w.slice(1) : ''; }).join(' ').trim();
+                if (!nm) return;
+                var r = ps[k] || {};
+                rebuilt.push({
+                  num: 0, name: nm, power: 70, pos: 'MED',
+                  gol: Number(r.gol)||0, pen: Number(r.pen)||0, fk: Number(r.fk)||0,
+                  mvp: Number(r.mvp)||0, ta: Number(r.ta)||0, tr: Number(r.tr)||0, pj: Number(r.pj)||0
+                });
+              });
+            }
+          } catch(_){}
+        }
+
+        if (rebuilt.length) {
+          found.players = rebuilt;
+          try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+          try {
+            fetch('/api/liga-ext/'+encodeURIComponent(slug), {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({data: data})
+            }).catch(function(){});
+          } catch(_){}
+        }
+      }
+
       /* 3. Abrir el overlay pasándole el TEAM OBJECT completo — así
             lextOpenSquad no tiene que buscarlo por id (que puede
             fallar si la cache está desincronizada con localStorage). */

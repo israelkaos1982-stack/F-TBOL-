@@ -1971,15 +1971,36 @@ window.pG = function(fn) {
 
     // ── 3. LIGA_SCHEDULE ─────────────────────────────────────────
     // Solo regenerar si hay exactamente 20 equipos (necesario para
-    // el calendario de 38 jornadas con algoritmo Berger).
+    // el calendario de 38 jornadas con algoritmo Berger) Y la LISTA
+    // de equipos del schedule actual es DISTINTA a la del editor.
+    //
+    // BUG HISTÓRICO: antes comparábamos `LIGA_SCHEDULE[0].map(m=>m[0])`
+    // (10 nombres, sólo locales de J1) contra los 20 nombres del
+    // editor → nunca eran iguales, así que cada llamada a
+    // applyEngineOverrides SOBREESCRIBÍA el calendario con uno
+    // determinista (Object.keys(bridge.ratings) en el orden del
+    // editor). Consecuencia: tras reiniciar la Liga y recargar, el
+    // calendario aleatorio recién generado por reiniciarLigaEA era
+    // pisado por este bloque → el usuario veía SIEMPRE el mismo
+    // calendario, no importa cuántas veces pulsase ♻️ Res.
     if(bridge.meta.teamsCount >= 20 &&
        typeof window.generateLigaScheduleFromTeams === 'function' &&
        typeof window.setLigaSchedule === 'function'){
       var teamNames = Object.keys(bridge.ratings);
-      // Solo regenerar si la lista cambió (evitar reset en cada tick)
-      var currentNames = (window.LIGA_SCHEDULE && window.LIGA_SCHEDULE[0])
-        ? window.LIGA_SCHEDULE[0].map(function(m){ return m[0]; }).sort().join('|')
-        : '';
+      /* Recogemos TODOS los equipos del schedule actual (home+away de
+         J1 → 20 nombres) y los comparamos con los 20 del editor. Si
+         coinciden como conjunto, el schedule actual ya cubre a todos
+         los equipos y NO hace falta regenerarlo (respetamos el orden
+         aleatorio que haya generado el reset o cualquier otro
+         flujo). */
+      var scheduleTeamSet = Object.create(null);
+      if(window.LIGA_SCHEDULE && Array.isArray(window.LIGA_SCHEDULE[0])){
+        window.LIGA_SCHEDULE[0].forEach(function(m){
+          if(m && m[0]) scheduleTeamSet[m[0]] = true;
+          if(m && m[1]) scheduleTeamSet[m[1]] = true;
+        });
+      }
+      var currentNames = Object.keys(scheduleTeamSet).sort().join('|');
       var newNames = teamNames.slice().sort().join('|');
       if(currentNames !== newNames){
         window.setLigaSchedule(window.generateLigaScheduleFromTeams(teamNames));

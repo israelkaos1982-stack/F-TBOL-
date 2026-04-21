@@ -3258,6 +3258,26 @@
     try {
       if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
     } catch(_) {}
+    /* Reset del contador persistente ↘️ de estado de forma. Si no se
+       limpia aquí, jugadores que fueron marcados ↘️ en una sesión
+       anterior siguen apareciendo con "↘️×1" al iniciar una nueva
+       liga sin haber disputado ningún partido (bug reportado). */
+    try {
+      if (window._FORMA_DOWN_COUNTER) {
+        Object.keys(window._FORMA_DOWN_COUNTER).forEach(function(k){ delete window._FORMA_DOWN_COUNTER[k]; });
+      }
+      window._FORMA_DOWN_COUNTER = {};
+      window._FORMA_MATCH_STATES = {};
+      localStorage.removeItem('ligaExt_forma_down_counter');
+      /* Propagar al backend para que sobreviva al próximo GET. */
+      try {
+        fetch('/api/forma_counter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ counters: {} })
+        }).catch(function(){});
+      } catch(_){}
+    } catch(_) {}
     try {
       var _ex = window.LIGA_EXTRAS;
       if (_ex) Object.keys(_ex).forEach(function(k){ delete _ex[k]; });

@@ -44,13 +44,15 @@ window.pG = function(fn) {
 <p>Temporada 32-33</p>
 </div>
 <div class="hdr-btns">
+<button id="guardar-all-btn" onclick="window.guardarTodoProtegido&&window.guardarTodoProtegido()" title="Guardar TODAS las plantillas (protegidas de borrado accidental)">💾</button>
 <button id="buscar-enfr-btn" onclick="goAmistosos()" title="Buscar Enfrentamientos">🔍</button>
 <button id="ajustes-hdr-btn" onclick="goAjustes()" title="Ajustes">⚙️</button>
 </div>
 
 <style>
-#ajustes-hdr-btn,#buscar-enfr-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;opacity:.75;transition:opacity .2s;}
-#ajustes-hdr-btn:hover,#buscar-enfr-btn:hover{opacity:1;}
+#ajustes-hdr-btn,#buscar-enfr-btn,#guardar-all-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;opacity:.75;transition:opacity .2s;}
+#ajustes-hdr-btn:hover,#buscar-enfr-btn:hover,#guardar-all-btn:hover{opacity:1;}
+#guardar-all-btn.locked{filter:drop-shadow(0 0 6px rgba(60,200,120,.9));opacity:1;}
 .pin-key{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;transition:background .15s;}
 .pin-key:active{background:rgba(255,255,255,.22);}
 .pin-key-del{color:#ff9060;}
@@ -2573,6 +2575,137 @@ window.pG = function(fn) {
     reader.onerror = function(){ alert('⚠️ Error al leer el archivo.'); };
     reader.readAsText(file);
   };
+
+  /* ══ GUARDAR TODO + PROTECCIÓN PERPETUA ═════════════════════════
+     Botón 💾 en la cabecera del home. Al pulsarlo:
+       1. Descarga un .json con TODAS las plantillas (como 💾 de la
+          clasificación).
+       2. Marca un "lock" en localStorage. Con el lock activo:
+            • reiniciarLigaEA / ligaExtReiniciar NO pueden vaciar
+              ligaExt_* — solo reinician resultados y clasificación.
+            • fetchData no aplica payload del server si vaciaría
+              las plantillas.
+            • Los snapshots de cada slug (_snap_*) NO se borran.
+       3. El lock SOLO se quita si el usuario lo pide explícitamente
+          desde el PIN admin 747.
+
+     El usuario pidió "que no se pueda eliminar a no ser que te lo
+     pida". Este lock es el mecanismo. */
+  var _LOCK_KEY = 'ftbol_plantillas_locked_v1';
+
+  window.isPlantillasLocked = function(){
+    try { return localStorage.getItem(_LOCK_KEY) === '1'; } catch(_){ return false; }
+  };
+  function _updateLockBadge(){
+    try {
+      var btn = document.getElementById('guardar-all-btn');
+      if (!btn) return;
+      var locked = window.isPlantillasLocked();
+      btn.classList.toggle('locked', locked);
+      btn.title = locked
+        ? 'Plantillas PROTEGIDAS ✓  (pulsa largo para desbloquear con PIN 747)'
+        : 'Guardar TODAS las plantillas (protegidas de borrado accidental)';
+    } catch(_){}
+  }
+  /* Long-press en el 💾 para desbloquear — exige PIN admin. */
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      var btn = document.getElementById('guardar-all-btn');
+      if (!btn) return;
+      _updateLockBadge();
+      var pressTimer = null;
+      function startPress(){
+        pressTimer = setTimeout(function(){
+          if (!window.isPlantillasLocked()) return;
+          var doUnlock = function(){
+            if (!confirm('⚠️ ¿Quitar la protección de las plantillas?\n\nDespués de desbloquear, las plantillas podrían ser sobrescritas por un reset o un fetch del servidor. Vuelve a pulsar 💾 para re-bloquear.')) return;
+            try { localStorage.removeItem(_LOCK_KEY); } catch(_){}
+            _updateLockBadge();
+            alert('🔓 Plantillas desbloqueadas. Ahora los resets y fetches pueden modificarlas.');
+          };
+          if (typeof window.pG === 'function') window.pG(doUnlock); else doUnlock();
+        }, 900);
+      }
+      function cancelPress(){ if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } }
+      btn.addEventListener('touchstart', startPress);
+      btn.addEventListener('touchend', cancelPress);
+      btn.addEventListener('touchmove', cancelPress);
+      btn.addEventListener('mousedown', startPress);
+      btn.addEventListener('mouseup', cancelPress);
+      btn.addEventListener('mouseleave', cancelPress);
+    }, 200);
+  });
+
+  window.guardarTodoProtegido = function(){
+    /* 1. Descargar .json completo (misma lógica que lextExportBackup) */
+    try {
+      if (typeof window.lextExportBackup === 'function') {
+        window.lextExportBackup();
+      }
+    } catch(_){}
+    /* 2. Activar lock */
+    try { localStorage.setItem(_LOCK_KEY, '1'); } catch(_){}
+    /* 3. Copiar CADA ligaExt_<slug> a una clave `_protected` que
+          sobrevive a cualquier wipe de resets. */
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_snap_') !== -1 || k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1) continue;
+        var raw = localStorage.getItem(k); if (!raw) continue;
+        try {
+          var p = JSON.parse(raw);
+          var n = 0;
+          if (p && Array.isArray(p.teams)) p.teams.forEach(function(t){
+            if (t && Array.isArray(t.players)) n += t.players.length;
+          });
+          if (n > 0) localStorage.setItem(k+'_protected', raw);
+        } catch(_){}
+      }
+    } catch(_){}
+    _updateLockBadge();
+  };
+
+  /* Watcher: si el lock está activo y algún flujo intenta escribir
+     un ligaExt_<slug> con MENOS jugadores que su versión _protected,
+     rechazamos la escritura restaurando la versión protegida. */
+  (function(){
+    var _origSet = null;
+    try { _origSet = localStorage.setItem.bind(localStorage); } catch(_){ return; }
+    localStorage.setItem = function(key, val){
+      try {
+        if (window.isPlantillasLocked && window.isPlantillasLocked() &&
+            typeof key === 'string' && key.indexOf('ligaExt_') === 0 &&
+            key.indexOf('_snap_') === -1 && key.indexOf('_backup') === -1 &&
+            key.indexOf('_protected') === -1) {
+          var prot = _origSet && localStorage.getItem(key+'_protected');
+          if (prot) {
+            var protP = 0;
+            try {
+              var pp = JSON.parse(prot);
+              if (pp && Array.isArray(pp.teams)) pp.teams.forEach(function(t){
+                if (t && Array.isArray(t.players)) protP += t.players.length;
+              });
+            } catch(_){}
+            var newP = 0;
+            try {
+              var np = JSON.parse(val);
+              if (np && Array.isArray(np.teams)) np.teams.forEach(function(t){
+                if (t && Array.isArray(t.players)) newP += t.players.length;
+              });
+            } catch(_){}
+            if (protP > 0 && newP < protP) {
+              /* Intento de reducción: ignoramos la escritura y
+                 restauramos la versión protegida. */
+              try { console.warn('[lock] bloqueado write a '+key+': '+newP+' jugadores < '+protP+' protegidos. Restaurando.'); } catch(_){}
+              return _origSet(key, prot);
+            }
+          }
+        }
+      } catch(_){}
+      return _origSet(key, val);
+    };
+  })();
 
   /* Auto-backup al descargar la pestaña: escribimos una copia de
      seguridad en localStorage con timestamp por si el siguiente

@@ -2937,6 +2937,21 @@
     // estado antiguo → al usuario le parece "que no hace nada".
     try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(35000); } catch(_) {}
 
+    // ── 0. CAPTURAR CALENDARIO ACTUAL ANTES DE LIMPIAR ─────────
+    // Necesitamos el schedule ANTERIOR para poder garantizar que el
+    // nuevo sea distinto. Si leemos localStorage DESPUÉS del remove
+    // estaría vacío y el check "anti-duplicado" sería un no-op, que
+    // era justo el bug reportado.
+    var _prevScheduleRaw = '';
+    try { _prevScheduleRaw = localStorage.getItem(LS_SCHEDULE_KEY) || ''; } catch(_) {}
+    if (!_prevScheduleRaw) {
+      try {
+        if (Array.isArray(SCHEDULE) && SCHEDULE.length === 38) {
+          _prevScheduleRaw = JSON.stringify(SCHEDULE);
+        }
+      } catch(_) {}
+    }
+
     // ── 1. LIMPIEZA LOCAL AGRESIVA ─────────────────────────────
     // Cada try aislado: ningún paso puede tumbar a los siguientes.
     try { localStorage.removeItem(LS_KEY); } catch(_) {}
@@ -3018,15 +3033,18 @@
       var baseOrder = leerOrdenEquiposActual();
       if (!Array.isArray(baseOrder) || baseOrder.length < 20) baseOrder = TEAMS.slice();
 
-      var prevSerialized = '';
-      try { prevSerialized = localStorage.getItem(LS_SCHEDULE_KEY) || ''; } catch(_){}
+      /* Usamos el calendario anterior CAPTURADO en el paso 0 (antes de
+         la limpieza). Así la comparación es real, no contra '' como
+         pasaba antes. */
+      var prevSerialized = _prevScheduleRaw || '';
 
       var randomOrder = null;
-      for (var _shuffle = 0; _shuffle < 6; _shuffle++) {
-        randomOrder = mezclarEquipos(baseOrder);
-        if (!Array.isArray(randomOrder) || randomOrder.length < 20) {
-          randomOrder = mezclarEquipos(TEAMS.slice());
-        }
+      for (var _shuffle = 0; _shuffle < 12; _shuffle++) {
+        /* Doble shuffle: mezcla dos veces sobre TEAMS.slice() para
+           romper cualquier correlación con baseOrder. Math.random()
+           suele dar suficiente entropía, pero reforzamos. */
+        randomOrder = mezclarEquipos(mezclarEquipos(TEAMS.slice()));
+        if (!Array.isArray(randomOrder) || randomOrder.length < 20) continue;
         var candidate = generarCalendario(randomOrder);
         if (Array.isArray(candidate) && candidate.length === 38) {
           var candSerialized = JSON.stringify(candidate);
@@ -3035,6 +3053,16 @@
             break;
           }
         }
+      }
+      /* Garantía final: si los 12 intentos salieron iguales al anterior
+         (imposible por azar, pero por paranoia), forzamos una rotación
+         no-trivial del orden para que SÍ sea distinto. */
+      if (!newSchedule && prevSerialized) {
+        var forced = TEAMS.slice();
+        /* Rotación: mover los 3 primeros al final. Esto cambia la
+           estructura del round-robin y garantiza calendario distinto. */
+        forced = forced.slice(3).concat(forced.slice(0, 3));
+        newSchedule = generarCalendario(forced);
       }
       if (!Array.isArray(newSchedule) || newSchedule.length !== 38) {
         newSchedule = generarCalendario(mezclarEquipos(TEAMS.slice()));

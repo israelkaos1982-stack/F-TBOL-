@@ -74,11 +74,11 @@ de jugador para la simulación (`sqFromRegistry`, builders similares)
 | HvH         | 90 | 16.5 | 10 | ≈ 917 ms | 11 s |
 | HvH prórroga| 30 |  5   | —  | ≈ 833 ms | — |
 | HvIA        | 90 | 13.5 |  8 | ≈ 750 ms | 9 s |
-| IAIA        | 90 |  1   | "30 s/parte" | ≈ 56 ms | ~0.67 s (≈1 s) |
+| IAIA        | 90 |  1.5 | "45 s/parte" | ≈ 83 ms | 1 s |
 
 - HvH = humano vs humano → **16 min 30 s reales**. Previa: "10 min". 1 game-min = 11 s reales.
 - HvIA = humano vs IA → **13 min 30 s reales**. Previa: "8 min". 1 game-min = 9 s reales.
-- IAIA = IA vs IA → **1 min real total** (30 s por parte).
+- IAIA = IA vs IA → **1 min 30 s reales total** (45 s por parte). 1 game-min = 1 seg real.
 - HvH_ET = prórroga humana → 5 min reales.
 
 `realMin` controla el cronómetro real. `displayMin` / `displayLabel`
@@ -102,7 +102,7 @@ amarilla, roja, lesión) añade **1 game-minute** al tope de SU parte:
 En tiempo REAL, 1 game-minute de descuento equivale a:
 - HvH → 11 segundos reales por evento.
 - HvIA → 9 segundos reales por evento.
-- IAIA → ~1 segundo real por evento.
+- IAIA → 1 segundo real por evento.
 
 Helper: `window._mlCountStoppageHalves(st)` → `{first, second}`.
 Se invoca en el tick del cronómetro y en cada render. NO cachear los
@@ -121,7 +121,7 @@ La velocidad del reloj (`tickMs`) SIEMPRE debe salir de
   cada arranque del reloj porque el admin puede cambiar el override).
 - Duplicar tablas `_MATCH_RULE` / `_MATCH_TICKS`.
 - Añadir "campo mode" u otros atajos visuales que extiendan la duración
-  real de IAIA por encima de 30 s.
+  real de IAIA por encima de 90 s.
 
 ### Override admin (`_ppDurationMin`)
 

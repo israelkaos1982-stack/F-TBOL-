@@ -4422,7 +4422,8 @@
      ══════════════════════════════════════════════════════════════
      TIEMPOS OFICIALES (FIJADOS PARA SIEMPRE):
 
-        IA vs IA   → 30s cada parte  → 1 min total real
+        IA vs IA   → 45s cada parte  → 1.5 min total (90 s reales)
+                     (1 sec real = 1 game-minute)
         HvIA       → 6min 45s/parte  → 13.5 min total real
         HvH        → 8min 15s/parte  → 16.5 min total real
         HvH prórroga → 2.5 min/parte → 5 min total real
@@ -4445,18 +4446,19 @@
      parte y "90+1, 90+2…" en la 2ª. Cada evento prolonga la parte:
        HvH:  11 segundos reales
        HvIA:  9 segundos reales
-       IAIA: ~1 segundo real (~672 ms — el usuario lo redondea a 1 s)
+       IAIA:  1 segundo real (90 game-min / 90 sec real = 1:1 tras
+              el ajuste 2026-04-21)
 
      Consecuencia matemática (verificada): 1 game-minute = tickMs × 12
        HvH   tick ≈ 917 ms → 60 × 917/5 = 11 s
        HvIA  tick ≈ 750 ms → 60 × 750/5 = 9 s
-       IAIA  tick ≈  56 ms → 60 ×  56/5 ≈ 0.67 s */
+       IAIA  tick ≈  83 ms → 60 ×  83/5 = 1 s  (90 s total) */
   var _ML_TICK_SEC = 5;
   var _MATCH_RULE = {
     HvH:    { gameMin: 90, realMin: 16.5, displayMin: 10 },
     HvH_ET: { gameMin: 30, realMin: 5                     },
     HvIA:   { gameMin: 90, realMin: 13.5, displayMin: 8  },
-    IAIA:   { gameMin: 90, realMin: 1,    displayLabel: '30 s/parte' }
+    IAIA:   { gameMin: 90, realMin: 1.5,  displayLabel: '45 s/parte' }
   };
   function _tickMsFromRule(r) {
     /* regla de tres: tickMs = realMs / (ticksTotales) */

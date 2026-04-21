@@ -1729,10 +1729,296 @@
 <div class="sancion-section-hdr sancion-section-hdr-inj"><span class="sancion-hdr-ico d2">🚑</span> LESIONADOS</div>
 <div class="sancion-list" id="sancion-ov-list-inj"></div>
 </div>
+<!-- ESTADO DE FORMA (↘️/⬇️) — sección dedicada. Se rellena desde el
+     script inline de abajo, que no depende del bundle ni de caché. -->
+<div class="sancion-section" id="sancion-ov-forma-section" style="border:1px solid rgba(255,160,64,.35);border-radius:10px;background:rgba(255,160,64,.05);margin-top:10px;">
+<div class="sancion-section-hdr" style="color:#ff9040;">
+  <span class="sancion-hdr-ico">📉</span> ESTADO DE FORMA · EQUIPO HUMANO
+</div>
+<div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.65);margin:4px 10px 8px;letter-spacing:.3px;line-height:1.45;">
+  Marca ↘️ <b style="color:#ff9040">Mala</b> o ⬇️ <b style="color:#ff5050">Pésima</b>. Los marcados no juegan este partido.<br>
+  · 3↘️ acumulados (no consecutivos) → 🩹 LESIÓN LEVE automática.<br>
+  · 1⬇️ → 💉 MODERADA o 🚑 GRAVE automática.
+</div>
+<div class="sancion-list" id="sancion-ov-list-forma" style="padding:0 10px 10px;"></div>
+</div>
 <div class="sancion-ov-warn" id="sancion-ov-warn">⚠️ Estos jugadores NO pueden participar en este partido.</div>
 <button class="sancion-ov-btn" id="sancion-ov-ok" onclick="window._sancionConfirm()">✓ ENTENDIDO</button>
 </div>
 </div>
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   FORMA ↘️/⬇️  —  checklist inline en el overlay de BAJAS PARA EL
+   PARTIDO. Rellena #sancion-ov-list-forma sin depender del bundle.
+   Funciona por MutationObserver sobre #sancion-overlay (dispara cada
+   vez que se le añade la clase `show`) + listener adicional en el
+   click del botón PREVIA/CONFIRMAR. Bulletproof contra caché.
+   ══════════════════════════════════════════════════════════════════ */
+(function(){
+  if (window.__FORMA_INLINE_WIRED) return;
+  window.__FORMA_INLINE_WIRED = true;
+  window._FORMA_DOWN_COUNTER  = window._FORMA_DOWN_COUNTER  || {};
+  window._FORMA_MATCH_STATES  = window._FORMA_MATCH_STATES  || {};
+  var LS_COUNTER = 'ligaExt_forma_down_counter';
+  try {
+    var raw = localStorage.getItem(LS_COUNTER);
+    if (raw) { var d = JSON.parse(raw); if (d && typeof d === 'object') window._FORMA_DOWN_COUNTER = d; }
+  } catch(_){}
+  function saveCounter(){
+    try { localStorage.setItem(LS_COUNTER, JSON.stringify(window._FORMA_DOWN_COUNTER||{})); } catch(_){}
+    try {
+      fetch('/api/forma_counter', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({counters: window._FORMA_DOWN_COUNTER||{}})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function normTeam(s){
+    return String(s||'').trim().toLowerCase()
+      .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
+      .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').replace(/ñ/g,'n');
+  }
+  function getHumanList(){
+    try {
+      var r = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (r) { var d = JSON.parse(r); if (d && d.teams) {
+        var h = d.teams.filter(function(t){return t.isHuman;}).map(function(t){return t.name;});
+        if (h.length) return h;
+      } }
+    } catch(_){}
+    return ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid','PSG'];
+  }
+  function getMatchTeams(){
+    /* 3 fuentes en cascada: _ppPreviaTeams → DOM del wrap → API
+       _ppGetCurrentMatchTeams (si existe). */
+    if (window._ppPreviaTeams && window._ppPreviaTeams.home && window._ppPreviaTeams.away) {
+      return { home: window._ppPreviaTeams.home, away: window._ppPreviaTeams.away };
+    }
+    if (window._ppMatchKey) {
+      var wrap = document.getElementById('mlw-' + window._ppMatchKey);
+      if (wrap) {
+        var names = wrap.querySelectorAll('.ml-team-name');
+        var strip = function(s){ return String(s||'').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+\s*/, '').trim(); };
+        var h = strip(names[0] && names[0].textContent);
+        var a = strip(names[1] && names[1].textContent);
+        if (h && a) return { home: h, away: a };
+      }
+    }
+    try {
+      if (typeof window._ppGetCurrentMatchTeams === 'function') {
+        var t = window._ppGetCurrentMatchTeams();
+        if (t && t.home && t.away) return t;
+      }
+    } catch(_){}
+    return null;
+  }
+  function humansInMatch(){
+    var t = getMatchTeams();
+    if (!t) return [];
+    var HUMS = getHumanList();
+    var found = [];
+    [t.home, t.away].forEach(function(tn){
+      var nt = normTeam(tn);
+      for (var i = 0; i < HUMS.length; i++) {
+        if (normTeam(HUMS[i]) === nt) { found.push(HUMS[i]); return; }
+      }
+      for (var j = 0; j < HUMS.length; j++) {
+        var nh = normTeam(HUMS[j]);
+        if (nh && nt && (nh.indexOf(nt) !== -1 || nt.indexOf(nh) !== -1)) { found.push(HUMS[j]); return; }
+      }
+    });
+    return found;
+  }
+  function rosterFor(team){
+    var out = [];
+    try {
+      if (typeof window.sqFromRegistryFull === 'function') {
+        out = window.sqFromRegistryFull(team) || [];
+      }
+    } catch(_){}
+    if (!out.length) {
+      var reg = (window.SQUAD_REGISTRY && window.SQUAD_REGISTRY[team]) || [];
+      out = reg.filter(function(p){ return p && !p.h && Array.isArray(p); });
+    }
+    /* Último recurso: leer plantilla de ligaExt_liga-ea-sports. */
+    if (!out.length) {
+      try {
+        var r = localStorage.getItem('ligaExt_liga-ea-sports');
+        if (r) {
+          var d = JSON.parse(r);
+          var t = (d.teams||[]).filter(function(x){ return normTeam(x.name) === normTeam(team); })[0];
+          if (t && Array.isArray(t.players)) {
+            out = t.players.map(function(p,i){ return [String(p.num||p.id||(i+1)), p.name || '?', p.pos||'M', p.power||70]; });
+          }
+        }
+      } catch(_){}
+    }
+    return out.filter(function(p){ return p && Array.isArray(p) && p[1]; });
+  }
+  function randomLeve(team, name){
+    var arr = ['Sobrecarga muscular','Contusión en el cuádriceps','Esguince de tobillo Grado I','Calambre persistente','Elongación en el aductor'];
+    var d = arr[Math.floor(Math.random()*arr.length)];
+    var p = 1 + Math.floor(Math.random()*2);
+    window.LESION_STORE = window.LESION_STORE || {};
+    window.BAJA_STORE   = window.BAJA_STORE   || {};
+    window.LESION_STORE[name] = { equipo:team, grado:1, gradoNombre:'Leve', gradoEmoji:'🩹', descripcion:d, partidos:p, timestamp:Date.now() };
+    window.BAJA_STORE[name]   = { tipo:'lesion', liga:p, copa:p, europa:p };
+    return {desc:d, partidos:p};
+  }
+  function randomModGrave(team, name){
+    var r = Math.random(), grado, gn, ge, partidos, arr;
+    if (r < 0.65) { grado=2; gn='Moderada'; ge='💉'; partidos=2+Math.floor(Math.random()*3);
+      arr=['Microrrotura de fibras','Esguince de tobillo Grado II','Edema óseo','Contractura severa','Distensión del ligamento lateral']; }
+    else { grado=3; gn='Grave'; ge='🚑'; partidos=5+Math.floor(Math.random()*6);
+      arr=['Rotura fibrilar Grado III','Fisura en el metatarsiano','Rotura parcial del ligamento','Luxación de hombro','Rotura del tendón de Aquiles']; }
+    var d = arr[Math.floor(Math.random()*arr.length)];
+    window.LESION_STORE = window.LESION_STORE || {};
+    window.BAJA_STORE   = window.BAJA_STORE   || {};
+    window.LESION_STORE[name] = { equipo:team, grado:grado, gradoNombre:gn, gradoEmoji:ge, descripcion:d, partidos:partidos, timestamp:Date.now() };
+    window.BAJA_STORE[name]   = { tipo:'lesion', liga:partidos, copa:partidos, europa:partidos };
+    return {grado:grado, gradoNombre:gn, gradoEmoji:ge, descripcion:d, partidos:partidos};
+  }
+  window._formaToggleInline = function(team, name, kind){
+    window.BAJA_STORE         = window.BAJA_STORE         || {};
+    window._FORMA_MATCH_STATES= window._FORMA_MATCH_STATES|| {};
+    window._FORMA_DOWN_COUNTER= window._FORMA_DOWN_COUNTER|| {};
+    var target = kind === 'down' ? '↘️' : '⬇️';
+    var existing = window._FORMA_MATCH_STATES[name];
+    if (existing === target) {
+      /* deseleccionar */
+      delete window._FORMA_MATCH_STATES[name];
+      var cur = window.BAJA_STORE[name];
+      if (cur && cur.tipo === 'forma') delete window.BAJA_STORE[name];
+      if (kind === 'down') {
+        var n = (window._FORMA_DOWN_COUNTER[name]||0) - 1;
+        if (n > 0) window._FORMA_DOWN_COUNTER[name] = n;
+        else       delete window._FORMA_DOWN_COUNTER[name];
+        saveCounter();
+      }
+      renderForma(); return;
+    }
+    if (existing) {
+      delete window._FORMA_MATCH_STATES[name];
+      var c2 = window.BAJA_STORE[name];
+      if (c2 && c2.tipo === 'forma') delete window.BAJA_STORE[name];
+      if (existing === '↘️') {
+        var n2 = (window._FORMA_DOWN_COUNTER[name]||0) - 1;
+        if (n2 > 0) window._FORMA_DOWN_COUNTER[name] = n2;
+        else        delete window._FORMA_DOWN_COUNTER[name];
+      }
+    }
+    if (kind === 'down') {
+      window._FORMA_MATCH_STATES[name] = '↘️';
+      window.BAJA_STORE[name] = { tipo:'forma', liga:1, copa:1, europa:1 };
+      var nc = (window._FORMA_DOWN_COUNTER[name]||0) + 1;
+      window._FORMA_DOWN_COUNTER[name] = nc;
+      if (nc >= 3) {
+        var l = randomLeve(team, name);
+        delete window._FORMA_DOWN_COUNTER[name];
+        delete window._FORMA_MATCH_STATES[name];
+        alert('🩹 LESIÓN LEVE AUTOMÁTICA\n' + name + ' (' + team + ')\n' +
+              '3 partidos con ↘️ Mala forma.\n' + l.desc + '\n' + l.partidos + ' partido(s) de baja');
+      }
+      saveCounter();
+    } else {
+      window._FORMA_MATCH_STATES[name] = '⬇️';
+      var inj = randomModGrave(team, name);
+      alert('🏥 ' + inj.gradoEmoji + ' LESIÓN ' + inj.gradoNombre.toUpperCase() + '\n' +
+            name + ' (' + team + ')\n' +
+            '⬇️ Pésima forma → ' + inj.descripcion + '\n' +
+            inj.partidos + ' partido(s) de baja');
+    }
+    renderForma();
+    /* Re-render del listado de lesionados para que los marcados aparezcan también arriba. */
+    if (typeof window._refreshSancionInjList === 'function') {
+      try { window._refreshSancionInjList(); } catch(_){}
+    }
+  };
+  function renderForma(){
+    var host = document.getElementById('sancion-ov-list-forma');
+    if (!host) return;
+    var humans = humansInMatch();
+    if (!humans.length) {
+      host.innerHTML = '<div style="font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,160,64,.75);text-align:center;padding:10px;">Abre la PREVIA de un partido con equipo humano para marcar la forma.</div>';
+      return;
+    }
+    var counter = window._FORMA_DOWN_COUNTER || {};
+    var states  = window._FORMA_MATCH_STATES || {};
+    var html = '';
+    humans.forEach(function(team){
+      var roster = rosterFor(team);
+      if (!roster.length) {
+        html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);margin:6px 0;padding:8px;background:rgba(255,255,255,.03);border-radius:6px;">⚔️ ' + team + ' — plantilla no cargada aún.</div>';
+        return;
+      }
+      html += '<div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#fff;margin:10px 0 6px;border-top:1px solid rgba(255,255,255,.1);padding-top:8px;">⚔️ ' + team + ' <span style="font-size:10px;color:rgba(255,255,255,.45);font-weight:400;margin-left:6px;">' + roster.length + ' jugadores</span></div>';
+      html += '<div style="display:flex;flex-direction:column;gap:4px;">';
+      roster.forEach(function(p){
+        var name = p[1] || '?';
+        var num  = p[0] || '';
+        var cnt  = counter[name] || 0;
+        var cur  = states[name] || '';
+        var isLes = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && !states[name]);
+        var cntBadge = cnt > 0 ? '<span style="background:rgba(255,144,64,.2);border:1px solid rgba(255,144,64,.5);border-radius:6px;padding:1px 6px;font-size:10px;color:#ff9040;margin-left:6px;">↘️×' + cnt + '</span>' : '';
+        var dis = isLes ? 'disabled' : '';
+        var rowStyle = 'display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 8px;background:rgba(255,255,255,.04);border-radius:6px;' + (isLes ? 'opacity:.4;' : '');
+        var esc = function(s){ return String(s).replace(/\\/g,'\\\\').replace(/\'/g,"\\'"); };
+        html += '<div style="' + rowStyle + '">'
+          + '<span style="font-family:Oswald,sans-serif;font-size:12px;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+          +   (num ? '<span style="color:rgba(255,255,255,.4);margin-right:6px;">' + num + '</span>' : '')
+          +   name + cntBadge
+          + '</span>'
+          + '<span style="display:flex;gap:4px;flex-shrink:0;">'
+          +   '<button type="button" ' + dis + ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\',\'down\')" '
+          +     'style="background:' + (cur === '↘️' ? 'rgba(255,144,64,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '↘️' ? '#ff9040' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer;">↘️</button>'
+          +   '<button type="button" ' + dis + ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\',\'pesima\')" '
+          +     'style="background:' + (cur === '⬇️' ? 'rgba(255,80,80,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '⬇️' ? '#ff5050' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer;">⬇️</button>'
+          + '</span>'
+          + '</div>';
+      });
+      html += '</div>';
+    });
+    host.innerHTML = html;
+  }
+  window._renderFormaInline = renderForma;
+  /* Disparar el render cada vez que el overlay muestra la clase `show`. */
+  function wireObserver(){
+    var ov = document.getElementById('sancion-overlay');
+    if (!ov) { setTimeout(wireObserver, 300); return; }
+    /* Render inicial si ya está visible. */
+    if (ov.classList.contains('show')) renderForma();
+    var obs = new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++) {
+        if (muts[i].attributeName === 'class' && ov.classList.contains('show')) {
+          /* Re-render en cada apertura. Hacemos varias pasadas con
+             retraso por si SQUAD_REGISTRY tarda en poblarse. */
+          renderForma();
+          setTimeout(renderForma,  80);
+          setTimeout(renderForma, 250);
+          setTimeout(renderForma, 600);
+          break;
+        }
+      }
+    });
+    obs.observe(ov, { attributes:true, attributeFilter:['class'] });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wireObserver);
+  } else {
+    wireObserver();
+  }
+  /* GET inicial del contador desde backend. */
+  try {
+    fetch('/api/forma_counter').then(function(r){return r.json();}).then(function(d){
+      if (d && d.ok && d.counters) {
+        window._FORMA_DOWN_COUNTER = d.counters;
+        try { localStorage.setItem(LS_COUNTER, JSON.stringify(d.counters)); } catch(_){}
+        renderForma();
+      }
+    }).catch(function(){});
+  } catch(_){}
+})();
+</script>
 <script>/* doc */</script>
 <div id="sancion-post-overlay">
 <div class="spost-icon" id="spost-icon">🟥</div>

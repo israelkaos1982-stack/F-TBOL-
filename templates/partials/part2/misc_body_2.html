@@ -1952,27 +1952,29 @@
         return;
       }
       html += '<div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#fff;margin:10px 0 6px;border-top:1px solid rgba(255,255,255,.1);padding-top:8px;">⚔️ ' + team + ' <span style="font-size:10px;color:rgba(255,255,255,.45);font-weight:400;margin-left:6px;">' + roster.length + ' jugadores</span></div>';
-      html += '<div style="display:flex;flex-direction:column;gap:4px;">';
+      html += '<div style="display:flex;flex-direction:column;gap:5px;">';
       roster.forEach(function(p){
         var name = p[1] || '?';
         var num  = p[0] || '';
         var cnt  = counter[name] || 0;
         var cur  = states[name] || '';
         var isLes = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && !states[name]);
-        var cntBadge = cnt > 0 ? '<span style="background:rgba(255,144,64,.2);border:1px solid rgba(255,144,64,.5);border-radius:6px;padding:1px 6px;font-size:10px;color:#ff9040;margin-left:6px;">↘️×' + cnt + '</span>' : '';
+        var cntBadge = cnt > 0 ? '<span style="background:rgba(255,144,64,.2);border:1px solid rgba(255,144,64,.5);border-radius:6px;padding:2px 7px;font-size:12px;color:#ff9040;margin-left:8px;">↘️×' + cnt + '</span>' : '';
         var dis = isLes ? 'disabled' : '';
-        var rowStyle = 'display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 8px;background:rgba(255,255,255,.04);border-radius:6px;' + (isLes ? 'opacity:.4;' : '');
+        /* Fila con más padding vertical + fuente grande para los nombres,
+           según petición del usuario (plantilla más legible en móvil). */
+        var rowStyle = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:rgba(255,255,255,.04);border-radius:8px;' + (isLes ? 'opacity:.4;' : '');
         var esc = function(s){ return String(s).replace(/\\/g,'\\\\').replace(/\'/g,"\\'"); };
         html += '<div style="' + rowStyle + '">'
-          + '<span style="font-family:Oswald,sans-serif;font-size:12px;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
-          +   (num ? '<span style="color:rgba(255,255,255,.4);margin-right:6px;">' + num + '</span>' : '')
+          + '<span style="font-family:Rajdhani,sans-serif;font-size:17px;font-weight:600;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.3px;">'
+          +   (num ? '<span style="color:rgba(255,255,255,.5);margin-right:10px;font-size:15px;font-weight:500;">' + num + '</span>' : '')
           +   name + cntBadge
           + '</span>'
-          + '<span style="display:flex;gap:4px;flex-shrink:0;">'
+          + '<span style="display:flex;gap:6px;flex-shrink:0;">'
           +   '<button type="button" ' + dis + ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\',\'down\')" '
-          +     'style="background:' + (cur === '↘️' ? 'rgba(255,144,64,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '↘️' ? '#ff9040' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer;">↘️</button>'
+          +     'style="background:' + (cur === '↘️' ? 'rgba(255,144,64,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '↘️' ? '#ff9040' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:8px;padding:7px 14px;font-size:18px;cursor:pointer;min-width:48px;">↘️</button>'
           +   '<button type="button" ' + dis + ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\',\'pesima\')" '
-          +     'style="background:' + (cur === '⬇️' ? 'rgba(255,80,80,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '⬇️' ? '#ff5050' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer;">⬇️</button>'
+          +     'style="background:' + (cur === '⬇️' ? 'rgba(255,80,80,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '⬇️' ? '#ff5050' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:8px;padding:7px 14px;font-size:18px;cursor:pointer;min-width:48px;">⬇️</button>'
           + '</span>'
           + '</div>';
       });

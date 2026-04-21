@@ -5904,7 +5904,9 @@
       var jm = String(window._ppMatchKey).match(/(?:lj|j)(\d+)/);
       if (jm) jornada = parseInt(jm[1]);
     }
-    /* Etiqueta de competición */
+    /* Etiqueta de competición. Default "Liga EA Sports" cuando no hay
+       _ppCompKey (el usuario pidió explícitamente "🏆 Liga Ea Sport
+       Jornada 4" y la mayoría de previas sin compKey son de Liga). */
     var COMP_LABELS_WA = {
       'liga':'Liga EA Sports','copa':'Copa del Rey','copa-fin':'Final Copa del Rey',
       'sc':'Supercopa de España','sc-final':'Final Supercopa',
@@ -5915,8 +5917,12 @@
       'superliga':'Superliga','inter':'Copa Intercontinental','inter-fin':'Final Intercontinental',
       'amistoso':'Partido Amistoso'
     };
-    var compLabel = (window._ppCompKey && COMP_LABELS_WA[window._ppCompKey]) || 'Partido';
-    if (jornada && (window._ppCompKey === 'liga' || !window._ppCompKey)) {
+    var compLabel = (window._ppCompKey && COMP_LABELS_WA[window._ppCompKey]) || 'Liga EA Sports';
+    if (jornada && (!window._ppCompKey || window._ppCompKey === 'liga')) {
+      /* Formato pedido por el usuario: "Liga EA Sports Jornada 4"
+         (sin separador · para que case con el mensaje que escribió). */
+      compLabel += ' Jornada ' + jornada;
+    } else if (jornada) {
       compLabel += ' · Jornada ' + jornada;
     }
     /* Determinar equipo humano */
@@ -5950,18 +5956,38 @@
       };
       var bajas = window.BAJA_STORE || {};
       var lesiones = window.LESION_STORE || {};
+      /* Formato por baja (pedido por el usuario):
+           💉 Lesionado: Nombre
+           • +N partidos lesionado
+           • Descripción */
       Object.keys(bajas).forEach(function(n) {
         if (!belongs(n)) return;
         var b = bajas[n];
         var t = b && (b.tipo || b);
-        if (t === 'sancion')   bajaLines.push('🟨 Sancionado: ' + n);
-        else if (t === 'expulsion') bajaLines.push('🟥 Expulsado: ' + n);
+        if (t === 'sancion') {
+          bajaLines.push('🟨 Sancionado: ' + n);
+          var pS = [];
+          if (b.liga > 0)   pS.push(b.liga + ' Liga');
+          if (b.copa > 0)   pS.push(b.copa + ' Copa');
+          if (b.europa > 0) pS.push(b.europa + ' Europa');
+          if (pS.length)    bajaLines.push('• +' + pS.join(' / '));
+        }
+        else if (t === 'expulsion' || t === 'roja') {
+          bajaLines.push('🟥 Expulsado: ' + n);
+          var pE = [];
+          if (b.liga > 0)   pE.push(b.liga + ' Liga');
+          if (b.copa > 0)   pE.push(b.copa + ' Copa');
+          if (b.europa > 0) pE.push(b.europa + ' Europa');
+          if (pE.length)    bajaLines.push('• +' + pE.join(' / '));
+        }
       });
       Object.keys(lesiones).forEach(function(n) {
         if (!belongs(n)) return;
         var l = lesiones[n];
         var ico = l.grado === 3 ? '🚑' : (l.grado === 2 ? '💉' : '🩹');
-        bajaLines.push(ico + ' Lesionado: ' + n + (l.descripcion ? ' (' + l.descripcion + ')' : ''));
+        bajaLines.push(ico + ' Lesionado: ' + n);
+        if (l.partidos) bajaLines.push('• +' + l.partidos + ' partidos lesionado');
+        if (l.descripcion) bajaLines.push('• ' + l.descripcion);
       });
     }
     var lines = [];

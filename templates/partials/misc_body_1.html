@@ -1775,11 +1775,30 @@ window.pG = function(fn) {
             if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
               data = respSq.data;
               teams = data.teams;
+              /* Asegurar que todos los teams tienen un `id` estable.
+                 Si el server guardó una versión antigua sin id, el
+                 `data.teams.filter(x=>x.id===id)` de lextOpenSquad
+                 falla silenciosamente → overlay vacío con título
+                 "PLANTILLA" default. Generamos id desde el nombre. */
+              teams.forEach(function(tt, idx){
+                if (tt && !tt.id) {
+                  tt.id = 't_' + (_normForClick(tt.name) || 'x') + '_' + idx;
+                }
+              });
               /* Persistir en local para los próximos clicks */
               try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
               try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
               /* Refrescar LIGA_CACHE si el editor usa ese cache */
               try { if (typeof window.LIGA_CACHE !== 'undefined') window.LIGA_CACHE[slug] = data; } catch(_){}
+              /* Re-POST al servidor con los ids normalizados para que
+                 otros dispositivos hereden los mismos ids. */
+              try {
+                fetch('/api/liga-ext/'+encodeURIComponent(slug), {
+                  method: 'POST',
+                  headers: {'Content-Type':'application/json'},
+                  body: JSON.stringify({data: data})
+                }).catch(function(){});
+              } catch(_){}
             }
           }
         } catch(errSrv) {
@@ -1833,11 +1852,12 @@ window.pG = function(fn) {
         return;
       }
 
-      /* 3. Forzar la apertura del overlay del editor directamente. Si
-            lextOpenSquad falla, lo inicializamos a mano. */
+      /* 3. Abrir el overlay pasándole el TEAM OBJECT completo — así
+            lextOpenSquad no tiene que buscarlo por id (que puede
+            fallar si la cache está desincronizada con localStorage). */
       if (typeof window.lextOpenSquad === 'function') {
         try {
-          window.lextOpenSquad(found.id);
+          window.lextOpenSquad(found);
         } catch(errLs) {
           alert('⚠️ Error al abrir el editor de «' + found.name + '»:\n' + (errLs && errLs.message || errLs));
           return;
@@ -1847,12 +1867,31 @@ window.pG = function(fn) {
         return;
       }
 
-      /* 4. Verificación post-abrir: si 400 ms después el overlay no
-            tiene .show, algo lo está cerrando — lo reabrimos. */
+      /* 4. Post-check 400 ms: si el título del overlay sigue siendo el
+            default "🛡 Plantilla" (lextOpenSquad hizo early-return por
+            mismatch de id), lo inicializamos A MANO con el team que
+            ya tenemos en `found`. Así es imposible que el overlay
+            quede vacío o con título default. */
       setTimeout(function(){
         var ov = document.getElementById('lext-ov-squad');
-        if (ov && !ov.classList.contains('show')) {
+        if (!ov) return;
+        /* Forzar .show si no está visible */
+        if (!ov.classList.contains('show')) {
           try { ov.classList.add('show'); } catch(_){}
+        }
+        var titleEl = document.getElementById('lext-ov-squad-title');
+        var titleText = titleEl ? (titleEl.textContent || '').trim().toLowerCase() : '';
+        /* El default es "🛡 Plantilla". Si eso es lo que hay, reintentamos. */
+        if (titleEl && (titleText === 'plantilla' || titleText === '🛡 plantilla' || titleText.indexOf(String(found.name).toLowerCase()) === -1)) {
+          try {
+            var tp = Number(found.power)||0;
+            titleEl.innerHTML = '🛡 <span data-team-power="'+tp+'">'+found.name+'</span>';
+            try { window.CURRENT_SQUAD_TEAM = found.id; } catch(_){}
+            /* Re-render de la lista con el team correcto */
+            if (typeof window.renderSquadList === 'function') {
+              try { window.renderSquadList(); } catch(_){}
+            }
+          } catch(_){}
         }
       }, 400);
     } catch (err) {
@@ -6016,25 +6055,49 @@ Tottenham
   };
 
   // ── Plantilla (jugadores) ─────────────────────────
-  window.lextOpenSquad = function(id){
-    // Rebuild stats desde el storage SEPARADO (NO toca equipos)
+  /* Acepta tanto un id string como un objeto team completo.
+     Motivo: el handler del click puede haber encontrado el team
+     en una pasada fuzzy y pasarnos el objeto directamente — así
+     no dependemos de que `data.teams.filter(x=>x.id===id)` lo
+     encuentre (si el id no está sincronizado, la búsqueda fallaba
+     en silencio y el overlay quedaba vacío). */
+  window.lextOpenSquad = function(idOrTeam){
     if(typeof window.syncLigaEaPlayerStats === 'function'){
       try { window.syncLigaEaPlayerStats(); } catch(_){}
     }
-    CURRENT_SQUAD_TEAM = id;
-    var data = loadData(CURRENT_KEY);
-    var t = data.teams.filter(function(x){return x.id===id;})[0];
-    if(!t) return;
+    var id, t;
+    if (idOrTeam && typeof idOrTeam === 'object') {
+      /* Objeto team pasado directamente — fast path, no buscamos por id. */
+      t = idOrTeam;
+      if (!t.id) t.id = uid();
+      id = t.id;
+    } else {
+      id = idOrTeam;
+      /* Primera pasada: buscar en cache. */
+      var data = loadData(CURRENT_KEY);
+      t = (data.teams || []).filter(function(x){return x && x.id===id;})[0];
+      /* Si no aparece, INVALIDAMOS cache y releemos localStorage por
+         si alguien acabe de escribirlo en este mismo tick (handler del
+         click tras sync-fetch). */
+      if (!t) {
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
+        data = loadData(CURRENT_KEY);
+        t = (data.teams || []).filter(function(x){return x && x.id===id;})[0];
+      }
+      if (!t) return;
+    }
+    CURRENT_SQUAD_TEAM = t.id;
     var tp = Number(t.power)||0;
     var tTone = poderToneLocal(tp);
     var title = document.getElementById('lext-ov-squad-title');
     if(title){
-      // Reconstruimos el título con data-team-power para que aparezca el badge dorado/azul
       title.innerHTML = '🛡 <span data-team-power="'+tp+'" data-team-power-tone="'+tTone+'">'+t.name+'</span>';
     }
-    document.getElementById('lext-pl-name').value='';
-    document.getElementById('lext-pl-power').value='75';
-    renderSquadList();
+    var plNameEl = document.getElementById('lext-pl-name');
+    if (plNameEl) plNameEl.value = '';
+    var plPowerEl = document.getElementById('lext-pl-power');
+    if (plPowerEl) plPowerEl.value = '75';
+    try { renderSquadList(); } catch(_){}
     lextOpenOv('lext-ov-squad');
   };
 

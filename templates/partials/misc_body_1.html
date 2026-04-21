@@ -1730,14 +1730,104 @@ window.pG = function(fn) {
       displayName = (clone.textContent || '').trim();
     }
     if(!displayName) return;
-    /* Flujo ORIGINAL: abre el editor completo (lext-ov-squad) con
-       Compartir / Editar / Añadir a / Papelera, flags C F P, rating
-       y stats reales — igual que los equipos de ligas externas que
-       usan `onclick="lextOpenSquad(id)"` directo en su row. */
-    if(typeof window.openLigaExtSquadByName === 'function'){
-      window.openLigaExtSquadByName(slug, displayName);
-    } else if(typeof window.openLigaEaSquadByName === 'function'){
-      window.openLigaEaSquadByName(displayName);
+    /* Handler bulletproof: en vez de delegar a openLigaExtSquadByName
+       (que puede silenciar errores), hacemos el trabajo AQUÍ con
+       try/catch visible. Si algo falla el usuario ve un alert con el
+       motivo — no quedamos callados. */
+    try {
+      /* 1. Establecer contexto y cargar data del slug correcto. */
+      var slugToCtx = {
+        'liga-ea-sports':          (typeof setLigaEaContext === 'function' ? setLigaEaContext : null),
+        'liga-hypermotion':        (typeof setHypermotionContext === 'function' ? setHypermotionContext : null),
+        'liga-primera-federacion': (typeof setPrimeraContext === 'function' ? setPrimeraContext : null)
+      };
+      var setCtx = slugToCtx[slug];
+      if (setCtx) {
+        setCtx();
+      } else if (typeof window.CURRENT_KEY !== 'undefined') {
+        try { window.CURRENT_KEY = slug; } catch(_){}
+      }
+
+      /* 2. Buscar el equipo por nombre (scoped al slug actual). */
+      function _normForClick(s){
+        return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+          .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+      }
+      var raw = null;
+      try { raw = localStorage.getItem('ligaExt_'+slug); } catch(_){}
+      var data = null;
+      try { data = raw ? JSON.parse(raw) : null; } catch(_){}
+      var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+      var target = _normForClick(displayName);
+      var targetAlias = {
+        'bayern':'bayern munich','bayern munich':'bayern',
+        'atl madrid':'atletico madrid','atletico madrid':'atl madrid',
+        'celta':'celta de vigo','celta de vigo':'celta',
+        'elche':'elche cf','elche cf':'elche',
+        'rayo':'rayo vallecano','rayo vallecano':'rayo',
+        'alaves':'deportivo alaves','deportivo alaves':'alaves',
+        'valencia':'valencia cf','valencia cf':'valencia'
+      };
+      var targets = [target];
+      if (targetAlias[target]) targets.push(targetAlias[target]);
+      var found = null;
+      /* Pasada 1: match exacto con cualquier alias */
+      for (var i = 0; i < teams.length && !found; i++) {
+        var n = _normForClick(teams[i] && teams[i].name);
+        for (var a = 0; a < targets.length; a++) {
+          if (n && n === targets[a]) { found = teams[i]; break; }
+        }
+      }
+      /* Pasada 2: substring único si len ≥ 4 */
+      if (!found && target.length >= 4) {
+        var hits = [];
+        for (var j = 0; j < teams.length; j++) {
+          var nn = _normForClick(teams[j] && teams[j].name);
+          if (!nn) continue;
+          for (var b = 0; b < targets.length; b++) {
+            if (nn.indexOf(targets[b]) !== -1 || targets[b].indexOf(nn) !== -1) {
+              hits.push(teams[j]); break;
+            }
+          }
+        }
+        if (hits.length === 1) found = hits[0];
+      }
+
+      if (!found) {
+        alert(
+          '⚠️ No encuentro «' + displayName + '» en ligaExt_' + slug + '.\n\n' +
+          'Equipos guardados (' + teams.length + '):\n' +
+          teams.slice(0, 15).map(function(t){ return '• ' + (t && t.name); }).join('\n') +
+          (teams.length > 15 ? '\n• …' : '') +
+          '\n\nVerifica en ✏️ Edit que el equipo se llama exactamente igual que en la clasificación.'
+        );
+        return;
+      }
+
+      /* 3. Forzar la apertura del overlay del editor directamente. Si
+            lextOpenSquad falla, lo inicializamos a mano. */
+      if (typeof window.lextOpenSquad === 'function') {
+        try {
+          window.lextOpenSquad(found.id);
+        } catch(errLs) {
+          alert('⚠️ Error al abrir el editor de «' + found.name + '»:\n' + (errLs && errLs.message || errLs));
+          return;
+        }
+      } else {
+        alert('⚠️ lextOpenSquad no está disponible todavía — recarga la página.');
+        return;
+      }
+
+      /* 4. Verificación post-abrir: si 400 ms después el overlay no
+            tiene .show, algo lo está cerrando — lo reabrimos. */
+      setTimeout(function(){
+        var ov = document.getElementById('lext-ov-squad');
+        if (ov && !ov.classList.contains('show')) {
+          try { ov.classList.add('show'); } catch(_){}
+        }
+      }, 400);
+    } catch (err) {
+      alert('⚠️ Error al abrir plantilla: ' + (err && err.message || err) + '\n\nslug=' + slug + '\nnombre=' + displayName);
     }
   }, false);
 

@@ -1758,6 +1758,35 @@ window.pG = function(fn) {
       var data = null;
       try { data = raw ? JSON.parse(raw) : null; } catch(_){}
       var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+
+      /* Si localStorage está VACÍO, bajar del servidor de forma
+         SÍNCRONA. Caso típico: abre el navegador en un dispositivo
+         nuevo o tras limpiar cookies. Los datos viven en el servidor
+         (el admin los guardó en otra sesión). Sin este fetch, el
+         usuario ve "Equipos guardados (0)" aunque el server tenga
+         toda su plantilla. */
+      if (!teams.length) {
+        try {
+          var xhrSq = new XMLHttpRequest();
+          xhrSq.open('GET', '/api/liga-ext/'+encodeURIComponent(slug), false);
+          xhrSq.send();
+          if (xhrSq.status === 200) {
+            var respSq = JSON.parse(xhrSq.responseText);
+            if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
+              data = respSq.data;
+              teams = data.teams;
+              /* Persistir en local para los próximos clicks */
+              try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+              try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+              /* Refrescar LIGA_CACHE si el editor usa ese cache */
+              try { if (typeof window.LIGA_CACHE !== 'undefined') window.LIGA_CACHE[slug] = data; } catch(_){}
+            }
+          }
+        } catch(errSrv) {
+          /* sin conexión o server down — seguimos con teams=[] y
+             mostraremos el alert con lista vacía pero informativo. */
+        }
+      }
       var target = _normForClick(displayName);
       var targetAlias = {
         'bayern':'bayern munich','bayern munich':'bayern',

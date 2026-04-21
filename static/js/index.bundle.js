@@ -5924,12 +5924,11 @@ function _formaRandomLeveInjury(teamName, playerName) {
 }
 
 function _formaRandomAnyInjury(teamName, playerName) {
+  /* ⬇️ Pésima: SIEMPRE cae en MODERADA o GRAVE (nunca Leve).
+     Distribución: 65% Moderada, 35% Grave. Requisito del usuario. */
   var r = Math.random();
   var grado, gradoNombre, gradoEmoji, partidos, lesionesList;
-  if (r < 0.55) {
-    grado = 1; gradoNombre = 'Leve'; gradoEmoji = '🩹'; partidos = 1 + Math.floor(Math.random()*2);
-    lesionesList = ['Sobrecarga muscular','Contusión en el cuádriceps','Esguince de tobillo Grado I','Calambre persistente','Elongación en el aductor'];
-  } else if (r < 0.85) {
+  if (r < 0.65) {
     grado = 2; gradoNombre = 'Moderada'; gradoEmoji = '💉'; partidos = 2 + Math.floor(Math.random()*3);
     lesionesList = ['Microrrotura de fibras','Esguince de tobillo Grado II','Edema óseo','Contractura severa','Distensión del ligamento lateral'];
   } else {

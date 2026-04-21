@@ -3013,20 +3013,50 @@
     // BLINDADO: si cualquier paso produce un schedule no válido
     // (longitud != 38), se cae a generarCalendario(TEAMS) como
     // último recurso — así NUNCA nos quedamos sin jornadas.
+    //
+    // GARANTÍA ANTI-DUPLICADO: hacemos el shuffle hasta que el
+    // resultado sea distinto al anterior (si había uno guardado).
+    // Sin esto, un shuffle que por azar devolviera el mismo orden
+    // que el calendario anterior dejaría al usuario viendo los
+    // mismos partidos en las mismas jornadas tras reiniciar.
     var newSchedule = null;
     try {
       var baseOrder = leerOrdenEquiposActual();
       if (!Array.isArray(baseOrder) || baseOrder.length < 20) baseOrder = TEAMS.slice();
-      var randomOrder = mezclarEquipos(baseOrder);
-      if (!Array.isArray(randomOrder) || randomOrder.length < 20) randomOrder = TEAMS.slice();
-      newSchedule = generarCalendario(randomOrder);
+
+      var prevSerialized = '';
+      try { prevSerialized = localStorage.getItem(LS_SCHEDULE_KEY) || ''; } catch(_){}
+
+      var randomOrder = null;
+      for (var _shuffle = 0; _shuffle < 6; _shuffle++) {
+        randomOrder = mezclarEquipos(baseOrder);
+        if (!Array.isArray(randomOrder) || randomOrder.length < 20) {
+          randomOrder = mezclarEquipos(TEAMS.slice());
+        }
+        var candidate = generarCalendario(randomOrder);
+        if (Array.isArray(candidate) && candidate.length === 38) {
+          var candSerialized = JSON.stringify(candidate);
+          if (!prevSerialized || candSerialized !== prevSerialized) {
+            newSchedule = candidate;
+            break;
+          }
+        }
+      }
+      if (!Array.isArray(newSchedule) || newSchedule.length !== 38) {
+        newSchedule = generarCalendario(mezclarEquipos(TEAMS.slice()));
+      }
       if (!Array.isArray(newSchedule) || newSchedule.length !== 38) {
         newSchedule = generarCalendario(TEAMS.slice());
       }
+      /* Escribir el calendario nuevo en TODOS los puntos de verdad
+         ANTES de repintar la UI — si cualquier paso posterior falla,
+         al menos el schedule guardado ya es el nuevo. */
+      try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(newSchedule)); } catch(_){}
       setLigaSchedule(newSchedule);
+      try { window.LIGA_SCHEDULE = newSchedule; } catch(_){}
     } catch(_) {
       try {
-        newSchedule = generarCalendario(TEAMS.slice());
+        newSchedule = generarCalendario(mezclarEquipos(TEAMS.slice()));
         setLigaSchedule(newSchedule);
       } catch(__) {}
     }
@@ -3096,6 +3126,14 @@
     _postReset().then(function(){
       _rebuildUi();
       alert('✅ Liga reiniciada. Clasificación y resultados a cero. Los equipos y plantillas se mantienen.');
+      /* Reload defensivo: algunas pantallas cachean matches/jornadas
+         en closures/DOM que no se limpian con _rebuildUi (p.ej. las
+         live-wraps ya instanciadas con los nombres de equipo del
+         calendario anterior). Con este reload nos aseguramos de que
+         el usuario vea el nuevo calendario sin trazas del antiguo.
+         El POST al server ya acabó, así que perder estado in-memory
+         es seguro. */
+      try { setTimeout(function(){ location.reload(); }, 250); } catch(_){}
     }).catch(function(err){
       // Si tras 3 intentos el server sigue fallando, lo comunicamos
       // pero dejamos el cliente ya vacío: en cuanto haya red, el
@@ -3104,6 +3142,9 @@
       alert('⚠️ Liga reiniciada LOCALMENTE, pero no se pudo confirmar al servidor tras 3 intentos (' +
             (err && err.message || 'sin detalle') + ').\n\n' +
             'En cuanto se restablezca la conexión, vuelve a pulsar Res para sincronizar el resto de dispositivos.');
+      /* Reload igualmente — el calendario local SÍ está actualizado
+         aunque el server no se haya enterado todavía. */
+      try { setTimeout(function(){ location.reload(); }, 250); } catch(_){}
     });
   };
 

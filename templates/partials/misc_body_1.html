@@ -1852,6 +1852,67 @@ window.pG = function(fn) {
         return;
       }
 
+      /* 2.b) Si `found` tiene 0 jugadores, ESCANEAMOS el resto de
+              ligaExt_* del localStorage buscando el MISMO nombre con
+              su array players lleno. Caso típico: el admin guardó
+              Athletic Club en varias ligas (p.ej. ligaExt_liga-ea-sports
+              tiene el equipo vacío + ligaExt_alemania tiene la
+              plantilla). Nos quedamos con la versión con MÁS jugadores
+              y la copiamos al slug actual para que futuros clicks
+              sean instantáneos. */
+      if (!found.players || !found.players.length) {
+        var altBest = null, altBestCount = 0;
+        try {
+          for (var lk = 0; lk < localStorage.length; lk++) {
+            var K = localStorage.key(lk);
+            if (!K || K.indexOf('ligaExt_') !== 0) continue;
+            if (K === 'ligaExt_'+slug) continue;
+            var rawK = localStorage.getItem(K);
+            if (!rawK) continue;
+            var dK; try { dK = JSON.parse(rawK); } catch(_){ continue; }
+            if (!dK || !Array.isArray(dK.teams)) continue;
+            for (var tk = 0; tk < dK.teams.length; tk++) {
+              var tt = dK.teams[tk];
+              if (!tt || !tt.name) continue;
+              var nt = _normForClick(tt.name);
+              var nameMatch = false;
+              for (var xt = 0; xt < targets.length; xt++) {
+                if (nt === targets[xt]) { nameMatch = true; break; }
+              }
+              if (!nameMatch && target.length >= 4) {
+                if (nt.indexOf(target) !== -1 || target.indexOf(nt) !== -1) nameMatch = true;
+              }
+              if (!nameMatch) continue;
+              var pc = (tt.players && tt.players.length) || 0;
+              if (pc > altBestCount) { altBest = tt; altBestCount = pc; }
+            }
+          }
+        } catch(_){}
+        if (altBest && altBestCount > 0) {
+          /* Copiar SOLO players/power/flags al equipo del slug actual. */
+          found.players = altBest.players;
+          if (!found.power && altBest.power) found.power = altBest.power;
+          if (!found.atk && altBest.atk) found.atk = altBest.atk;
+          if (!found.mid && altBest.mid) found.mid = altBest.mid;
+          if (!found.def && altBest.def) found.def = altBest.def;
+          if (!found.shield && altBest.shield) found.shield = altBest.shield;
+          /* Persistir el equipo enriquecido en el slug actual (data
+             ya apunta al objeto que venía del localStorage / server). */
+          try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+          /* Re-subir al server para que el equipo quede completo en
+             el slug canónico y otros dispositivos no vuelvan a ver
+             "Sin jugadores". */
+          try {
+            fetch('/api/liga-ext/'+encodeURIComponent(slug), {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({data: data})
+            }).catch(function(){});
+          } catch(_){}
+        }
+      }
+
       /* 3. Abrir el overlay pasándole el TEAM OBJECT completo — así
             lextOpenSquad no tiene que buscarlo por id (que puede
             fallar si la cache está desincronizada con localStorage). */

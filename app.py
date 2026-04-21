@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request, jsonify, abort, session
+from flask import Flask, render_template, redirect, url_for, request, jsonify, abort, session, make_response
 from flask_sqlalchemy import SQLAlchemy
 import random
 import os
@@ -2011,7 +2011,11 @@ def api_debug():
 
 @app.route("/")
 def inicio():
-    return render_template("index.html")
+    resp = make_response(render_template("index.html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 @app.route("/calendario")
 def calendario_view():
@@ -2019,7 +2023,9 @@ def calendario_view():
 
 @app.route("/clasificacion")
 def clasificacion():
-    return render_template("index.html")
+    resp = make_response(render_template("index.html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 @app.route("/estadisticas")
 def estadisticas():

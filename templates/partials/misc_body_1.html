@@ -5498,6 +5498,49 @@ Tottenham
     var ORDER = ['POR','DEF','MED','DEL'];
     var LABEL = {POR:'🧤 PORTEROS',DEF:'🛡 DEFENSAS',MED:'⚙ CENTROCAMPISTAS',DEL:'⚽ DELANTEROS'};
     var byPos = {POR:[],DEF:[],MED:[],DEL:[]};
+
+    /* Pre-computar goles DISJUNTOS (gol regular / pen / falta) desde
+       LIGA_PLAYER_MATCH_STORE en vivo para este equipo. Bypass total
+       de ef_player_stats_v1 — si ese storage tiene datos stale o
+       inflados de versiones antiguas, los sobrescribimos con el
+       recuento real basado en eventos del acta. */
+    var _liveCounts = {};  // norm(name) → {gol, pen, fk}
+    (function(){
+      try {
+        var store = window.LIGA_PLAYER_MATCH_STORE || {};
+        var teamNorm = _normPS(t.name || '');
+        Object.keys(store).forEach(function(mk){
+          var m = store[mk]; if (!m) return;
+          var tA = _normPS(m.teamA||''), tB = _normPS(m.teamB||'');
+          if (tA !== teamNorm && tB !== teamNorm) return;
+          var mySide = (tA === teamNorm) ? 'a' : 'b';
+          (m.evts || []).forEach(function(ev){
+            if (!ev) return;
+            var evSide = ev.team;
+            if (ev.realTeam) {
+              evSide = (_normPS(ev.realTeam) === teamNorm) ? 'self' : 'other';
+              if (evSide !== 'self') return;
+            } else if (evSide !== mySide) {
+              return;
+            }
+            var nm = '';
+            if (Array.isArray(ev.player)) nm = ev.player[1] || ev.player[0] || '';
+            else if (typeof ev.player === 'string') nm = ev.player;
+            else nm = ev.name || ev.playerName || '';
+            nm = String(nm || '').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
+            if (!nm) return;
+            var key = _normPS(nm);
+            var rec = _liveCounts[key] || {gol:0, pen:0, fk:0};
+            var ty = ev.type || '';
+            if (ty === 'gol') rec.gol++;
+            else if (ty === 'pen-gol') rec.pen++;
+            else if (ty === 'falta-gol') rec.fk++;
+            _liveCounts[key] = rec;
+          });
+        });
+      } catch(_){}
+    })();
+
     t.players.forEach(function(p){
       ensurePlayerStats(p);
       /* Stats SIEMPRE derivan de `ef_player_stats_v1` (fuente única).
@@ -5505,14 +5548,25 @@ Tottenham
          liga, o para un jugador nuevo), se pone a 0 de forma
          EXPLÍCITA — antes sólo se sobreescribía cuando getPlayerStats
          devolvía algo, así que viejos valores persistían en la
-         plantilla incluso después de reset (bug reportado: Espanyol,
-         Villarreal y Sevilla con stats tras reiniciar). */
+         plantilla incluso después de reset. */
       var ps = (typeof window.getPlayerStats === 'function' && t.name)
         ? window.getPlayerStats(t.name, p.name) : null;
       p.pj       = (ps && ps.pj)       || 0;
-      p.gol      = (ps && ps.gol)      || 0;
-      p.pen      = (ps && ps.pen)      || 0;
-      p.fk       = (ps && ps.fk)       || 0;
+      /* gol/pen/fk vienen del recuento LIVE desde eventos si existe,
+         si no caemos al ef_player_stats_v1 (que ya también es disjunto
+         tras el fix). Esto garantiza que la suma de las 3 columnas =
+         total de goles del jugador en competiciones registradas. */
+      var liveKey = _normPS(p.name);
+      var live = _liveCounts[liveKey];
+      if (live) {
+        p.gol = live.gol;
+        p.pen = live.pen;
+        p.fk  = live.fk;
+      } else {
+        p.gol = (ps && ps.gol) || 0;
+        p.pen = (ps && ps.pen) || 0;
+        p.fk  = (ps && ps.fk)  || 0;
+      }
       p.mvp      = (ps && ps.mvp)      || 0;
       p.ta       = (ps && ps.ta)       || 0;
       p.tr       = (ps && ps.tr)       || 0;

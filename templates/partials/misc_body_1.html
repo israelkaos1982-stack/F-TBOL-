@@ -2031,6 +2031,8 @@ window.pG = function(fn) {
            (memoria, lazy import, scan ligaExt_*) que ya localiza
            datos donde quiera que estén. Si TODO lo anterior falló,
            este es el último intento: pedir directamente al motor. */
+        /* Fuente D: sqFromRegistry — la MISMA que la simulación. */
+        var sourceCounts = {A_sqReg:0, B_servers:0, C_stats:0, D_sqFrom:0, E_matchStore:0, F_results:0, G_anyLS:0};
         if (rebuilt.length === 0 && typeof window.sqFromRegistry === 'function') {
           try {
             var POS_INV_SR = {'🧤 PORTEROS':'POR','🛡 DEFENSAS':'DEF','⚙️ MEDIOS':'MED','⚡ DELANTEROS':'DEL'};
@@ -2067,6 +2069,151 @@ window.pG = function(fn) {
               }
             }
           } catch(_){}
+        }
+
+        sourceCounts.D_sqFrom = rebuilt.length;
+
+        /* Fuente E: LIGA_PLAYER_MATCH_STORE (eventos del acta) —
+           aquí quedan nombres de jugadores que han intervenido en
+           cualquier partido del equipo. Sin pos/power (default),
+           pero captura nombres que no estén en stats. */
+        if (rebuilt.length === 0) {
+          try {
+            var mps = window.LIGA_PLAYER_MATCH_STORE || {};
+            Object.keys(mps).forEach(function(mk){
+              var m = mps[mk]; if (!m) return;
+              var tA = _normForClick(m.teamA||''), tB = _normForClick(m.teamB||'');
+              var sideMatch = null;
+              for (var t9 = 0; t9 < targets.length; t9++) {
+                if (tA === targets[t9]) sideMatch = 'a';
+                else if (tB === targets[t9]) sideMatch = 'b';
+                if (sideMatch) break;
+              }
+              if (!sideMatch) return;
+              (m.evts || []).forEach(function(ev){
+                if (!ev) return;
+                var evSide = ev.team;
+                if (ev.realTeam) {
+                  var normRT = _normForClick(ev.realTeam);
+                  var matchRT = false;
+                  for (var t10 = 0; t10 < targets.length; t10++) {
+                    if (normRT === targets[t10]) { matchRT = true; break; }
+                  }
+                  if (!matchRT) return;
+                } else if (evSide !== sideMatch) return;
+                var nm3 = '';
+                if (Array.isArray(ev.player)) nm3 = ev.player[1] || ev.player[0] || '';
+                else if (typeof ev.player === 'string') nm3 = ev.player;
+                else nm3 = ev.name || ev.playerName || '';
+                nm3 = String(nm3||'').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
+                if (!nm3) return;
+                var kk3 = _normForClick(nm3); if (seenP[kk3]) return; seenP[kk3] = true;
+                rebuilt.push({ num:0, name:nm3, power:70, pos:'MED' });
+              });
+            });
+          } catch(_){}
+        }
+        sourceCounts.E_matchStore = rebuilt.length - sourceCounts.D_sqFrom;
+
+        /* Fuente F: ef_liga38_v4 (resultados con scorers). */
+        if (rebuilt.length === 0) {
+          try {
+            var resR = localStorage.getItem('ef_liga38_v4');
+            if (resR) {
+              var results = JSON.parse(resR) || {};
+              Object.keys(results).forEach(function(rk){
+                var parts = rk.split('|'); if (parts.length < 3) return;
+                var nh = _normForClick(parts[1]||''), na = _normForClick(parts[2]||'');
+                var hit = false;
+                for (var t11 = 0; t11 < targets.length; t11++) {
+                  if (nh === targets[t11] || na === targets[t11]) { hit = true; break; }
+                }
+                if (!hit) return;
+                var res = results[rk]; if (!res) return;
+                var scorers = [].concat(res.scorersH||[], res.scorersA||[], res.scorers||[]);
+                scorers.forEach(function(sc){
+                  var nm4 = typeof sc === 'string' ? sc : (sc && sc.name);
+                  if (!nm4) return;
+                  var kk4 = _normForClick(nm4); if (seenP[kk4]) return; seenP[kk4] = true;
+                  rebuilt.push({ num:0, name:String(nm4).trim(), power:70, pos:'MED' });
+                });
+              });
+            }
+          } catch(_){}
+        }
+        sourceCounts.F_results = rebuilt.length - sourceCounts.D_sqFrom - sourceCounts.E_matchStore;
+
+        /* Fuente G: RECORRER todas las claves del localStorage
+           buscando cualquier `teams` array con algún equipo que
+           coincida y tenga players. Cubre claves custom que no
+           sigan el patrón ligaExt_*. */
+        if (rebuilt.length === 0) {
+          try {
+            for (var lk2 = 0; lk2 < localStorage.length; lk2++) {
+              var kK = localStorage.key(lk2); if (!kK) continue;
+              var rawK2 = localStorage.getItem(kK); if (!rawK2 || rawK2.charAt(0) !== '{') continue;
+              var dK2; try { dK2 = JSON.parse(rawK2); } catch(_){ continue; }
+              if (!dK2 || !Array.isArray(dK2.teams)) continue;
+              for (var t12 = 0; t12 < dK2.teams.length; t12++) {
+                var tt2 = dK2.teams[t12];
+                if (!tt2 || !tt2.name) continue;
+                if (!Array.isArray(tt2.players) || !tt2.players.length) continue;
+                var nt2 = _normForClick(tt2.name);
+                var ok = false;
+                for (var t13 = 0; t13 < targets.length; t13++) {
+                  if (nt2 === targets[t13]) { ok = true; break; }
+                }
+                if (!ok && target.length >= 4) {
+                  if (nt2.indexOf(target) !== -1 || target.indexOf(nt2) !== -1) ok = true;
+                }
+                if (ok) {
+                  tt2.players.forEach(function(p){
+                    if (!p || !p.name) return;
+                    var kk5 = _normForClick(p.name); if (seenP[kk5]) return; seenP[kk5] = true;
+                    rebuilt.push(p);
+                  });
+                  if (rebuilt.length) break;
+                }
+              }
+              if (rebuilt.length) break;
+            }
+          } catch(_){}
+        }
+        sourceCounts.G_anyLS = rebuilt.length - sourceCounts.D_sqFrom - sourceCounts.E_matchStore - sourceCounts.F_results;
+
+        if (rebuilt.length === 0) {
+          /* Diagnóstico loud: muestra al usuario qué se escaneó y
+             qué había para que sepamos exactamente dónde están (o
+             no) sus datos. */
+          var diag = '';
+          diag += '• SQUAD_REGISTRY keys (memoria): ' + ((window.SQUAD_REGISTRY && Object.keys(window.SQUAD_REGISTRY).length)||0) + '\n';
+          try {
+            var lsLigaExt = 0;
+            for (var z1 = 0; z1 < localStorage.length; z1++) {
+              var kz = localStorage.key(z1);
+              if (kz && kz.indexOf('ligaExt_') === 0 && kz.indexOf('_backup') === -1) lsLigaExt++;
+            }
+            diag += '• localStorage ligaExt_* (sin backup): ' + lsLigaExt + ' claves\n';
+          } catch(_){}
+          try {
+            var psC = localStorage.getItem('ef_player_stats_v1');
+            var psO = psC ? JSON.parse(psC) : {};
+            diag += '• ef_player_stats_v1: ' + Object.keys(psO||{}).length + ' entradas (team::player)\n';
+          } catch(_){}
+          try {
+            var mpsC = window.LIGA_PLAYER_MATCH_STORE || {};
+            diag += '• LIGA_PLAYER_MATCH_STORE (memoria): ' + Object.keys(mpsC).length + ' partidos\n';
+          } catch(_){}
+          try {
+            var r8 = localStorage.getItem('ef_liga38_v4');
+            var r8o = r8 ? JSON.parse(r8) : {};
+            diag += '• ef_liga38_v4 (resultados): ' + Object.keys(r8o||{}).length + ' partidos\n';
+          } catch(_){}
+          alert(
+            '⚠️ No se han encontrado jugadores de «' + displayName + '» en ninguna fuente:\n\n' +
+            diag +
+            '\nSi viste sus jugadores en simulación de ESTE mismo navegador hoy, puede que estén ahí pero no seamos capaces de localizarlos por el nombre — dime el nombre EXACTO que pone el equipo en ✏️ Edit (ej: «Athletic de Bilbao» vs «Athletic Club») y ajusto el alias.'
+          );
         }
 
         if (rebuilt.length) {

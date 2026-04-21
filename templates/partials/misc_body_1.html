@@ -1730,17 +1730,15 @@ window.pG = function(fn) {
       displayName = (clone.textContent || '').trim();
     }
     if(!displayName) return;
-    /* MUESTRA GARANTIZADA: abrimos SIEMPRE showPlantillaSimple que lee
-       de TODAS las fuentes (ligaExt + SQUAD_REGISTRY + stats). Aunque
-       algo fallase en el flujo del editor (context, fetchData, etc.)
-       el usuario siempre ve los jugadores que existen en su instalación.
-       Si hay flujo de edición disponible, en 900ms lo abrimos también
-       en modo edición — pero ya hemos mostrado algo al tacto. */
-    try {
-      if (typeof window.showPlantillaSimple === 'function') {
-        window.showPlantillaSimple(displayName);
-      }
-    } catch(_){}
+    /* Flujo ORIGINAL: abre el editor completo (lext-ov-squad) con
+       Compartir / Editar / Añadir a / Papelera, flags C F P, rating
+       y stats reales — igual que los equipos de ligas externas que
+       usan `onclick="lextOpenSquad(id)"` directo en su row. */
+    if(typeof window.openLigaExtSquadByName === 'function'){
+      window.openLigaExtSquadByName(slug, displayName);
+    } else if(typeof window.openLigaEaSquadByName === 'function'){
+      window.openLigaEaSquadByName(displayName);
+    }
   }, false);
 
   // ── Integración con el editor de equipos ────────────────

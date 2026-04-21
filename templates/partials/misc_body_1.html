@@ -2181,6 +2181,47 @@ window.pG = function(fn) {
         }
         sourceCounts.G_anyLS = rebuilt.length - sourceCounts.D_sqFrom - sourceCounts.E_matchStore - sourceCounts.F_results;
 
+        /* Fuente H: dataset hardcoded del Python backend
+           (jugadores_data.py → /api/jugadores-hardcoded). Esta es
+           la plantilla por defecto del simulador — CADA equipo de
+           Liga EA tiene aquí sus jugadores canónicos con num, pos,
+           power. Si el admin no ha editado nada, esto es lo que
+           hay, y es lo que usa el motor Python al simular. */
+        if (rebuilt.length === 0) {
+          try {
+            var xhrHc = new XMLHttpRequest();
+            xhrHc.open('GET', '/api/jugadores-hardcoded', false);
+            xhrHc.send();
+            if (xhrHc.status === 200) {
+              var rhc = JSON.parse(xhrHc.responseText);
+              var hcTeams = (rhc && rhc.teams) || {};
+              var hcKeys = Object.keys(hcTeams);
+              for (var hk = 0; hk < hcKeys.length; hk++) {
+                var hcN = _normForClick(hcKeys[hk]);
+                var hcHit = false;
+                for (var t14 = 0; t14 < targets.length; t14++) {
+                  if (hcN === targets[t14]) { hcHit = true; break; }
+                }
+                if (!hcHit && target.length >= 4) {
+                  if (hcN.indexOf(target) !== -1 || target.indexOf(hcN) !== -1) hcHit = true;
+                }
+                if (hcHit) {
+                  var hcPlayers = hcTeams[hcKeys[hk]] || [];
+                  hcPlayers.forEach(function(p){
+                    if (!p || !p.name) return;
+                    var kH = _normForClick(p.name); if (seenP[kH]) return; seenP[kH] = true;
+                    rebuilt.push({
+                      num: Number(p.num)||0, name: p.name,
+                      power: Number(p.power)||70, pos: p.pos || 'MED'
+                    });
+                  });
+                  if (rebuilt.length) break;
+                }
+              }
+            }
+          } catch(_){}
+        }
+
         if (rebuilt.length === 0) {
           /* Diagnóstico loud: muestra al usuario qué se escaneó y
              qué había para que sepamos exactamente dónde están (o

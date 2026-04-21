@@ -1841,6 +1841,38 @@ def api_liga_ext_post(slug):
     })
 
 # ══════════════════════════════════════════════════════════════════
+# JUGADORES HARDCODED — fuente de última recuperación
+# ══════════════════════════════════════════════════════════════════
+# El frontend usa esto cuando el editor (ligaExt_*) y el resto de
+# fuentes están vacíos pero la simulación sí tiene jugadores. La
+# data viene del Python (`jugadores_data.py` — generada de
+# SQUAD_REGISTRY original del bundle), así que es EXACTAMENTE la
+# plantilla por defecto del simulador. Convertimos formato
+# Python (numero/nombre/posicion/poder) → editor
+# (num/name/pos/power).
+@app.route("/api/jugadores-hardcoded", methods=["GET"])
+def api_jugadores_hardcoded():
+    POS_MAP = {
+        "portero": "POR",
+        "defensa": "DEF",
+        "medio": "MED",
+        "delantero": "DEL",
+    }
+    out = {}
+    for team_name, players in jugadores_por_equipo.items():
+        out_players = []
+        for p in (players or []):
+            out_players.append({
+                "num": p.get("numero", "") or "",
+                "name": p.get("nombre", "") or "",
+                "pos": POS_MAP.get(p.get("posicion", "medio"), "MED"),
+                "power": int(p.get("poder", 70) or 70),
+            })
+        out[team_name] = out_players
+    return jsonify({"ok": True, "teams": out})
+
+
+# ══════════════════════════════════════════════════════════════════
 # LIVE MATCH — Sistema de partidos en tiempo real compartidos
 # ══════════════════════════════════════════════════════════════════
 # Permite que el admin publique eventos de un partido live (goles,

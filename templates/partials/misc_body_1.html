@@ -1678,9 +1678,228 @@ window.pG = function(fn) {
   };
   // Botón de emergencia accesible desde el editor
   window.emergencyRestoreAll = function(){
-    var slugs = ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion', 'inglaterra'];
-    slugs.forEach(function(s){ window.emergencyRestore(s); });
-    location.reload();
+    window.lextDeepRecoverAll({ reload: true });
+  };
+
+  /* ══ DEEP RECOVERY ══════════════════════════════════════════════
+     Reconstruye `ligaExt_<slug>` de cualquier liga usando TODAS las
+     fuentes disponibles:
+       1. Servidor  `/api/liga-ext/<slug>`
+       2. Backup local `ligaExt_<slug>_backup`
+       3. Contenido actual de `ligaExt_<slug>` (si no está vacío)
+       4. SQUAD_REGISTRY (en memoria de la sesión actual)
+       5. `ef_player_stats_v1`  (stats acumuladas por jugador)
+       6. `LIGA_PLAYER_MATCH_STORE` (eventos del acta)
+
+     Elige la versión con MÁS equipos y jugadores. Si aun así falta
+     algún equipo, rellena sus jugadores desde stats/eventos con la
+     info mínima (nombre, pos por defecto MED, power 70) para que la
+     plantilla aparezca y el usuario pueda re-asignarles los valores.
+
+     Uso:
+       window.lextDeepRecoverSlug('liga-ea-sports')        // un slug
+       window.lextDeepRecoverAll({reload:true})            // todos
+  */
+  function _lextFetchServerSync(slug){
+    try{
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/liga-ext/'+encodeURIComponent(slug), false);
+      xhr.send();
+      if (xhr.status === 200){
+        var resp = JSON.parse(xhr.responseText);
+        return resp && resp.data || null;
+      }
+    }catch(_){}
+    return null;
+  }
+  function _lextReadBackup(slug){
+    try{
+      var raw = localStorage.getItem('ligaExt_'+slug+'_backup');
+      if(raw) return JSON.parse(raw);
+    }catch(_){}
+    return null;
+  }
+  function _lextReadMain(slug){
+    try{
+      var raw = localStorage.getItem('ligaExt_'+slug);
+      if(raw) return JSON.parse(raw);
+    }catch(_){}
+    return null;
+  }
+  function _lextCountPlayers(d){
+    if(!d || !Array.isArray(d.teams)) return 0;
+    var n = 0;
+    d.teams.forEach(function(t){
+      if(t && Array.isArray(t.players)) n += t.players.length;
+    });
+    return n;
+  }
+  function _lextMergePlayersFromRegistry(team){
+    /* Para un team {name, players:[]}, intenta poblar `players` desde
+       window.SQUAD_REGISTRY si está vacío. Convierte el formato
+       simulador → editor. Devuelve true si añadió jugadores. */
+    if (!team || !team.name || (team.players && team.players.length)) return false;
+    var reg = window.SQUAD_REGISTRY && (window.SQUAD_REGISTRY[team.name] || window.SQUAD_REGISTRY[String(team.name).trim()]);
+    if (!reg || !reg.length) return false;
+    var POS_INVERSE = {P:'POR', D:'DEF', M:'MED', F:'DEL'};
+    var POS_HEADER_INV = {'🧤 PORTEROS':'POR','🛡 DEFENSAS':'DEF','⚙️ MEDIOS':'MED','⚡ DELANTEROS':'DEL'};
+    var curPos = 'MED';
+    var out = [];
+    reg.forEach(function(entry){
+      if (entry && typeof entry === 'object' && entry.h) {
+        curPos = POS_HEADER_INV[entry.h] || 'MED';
+        return;
+      }
+      if (!Array.isArray(entry) || entry.length < 2) return;
+      var num = Number(entry[0]) || 0;
+      var name = String(entry[1]||'').trim();
+      if (!name) return;
+      var pw = Math.max(1, Math.min(99, Number(entry[2])||70));
+      var p = { num: num, name: name, power: pw, pos: curPos };
+      if (entry.elite)    p.elite    = true;
+      if (entry.natGoal)  p.natGoal  = true;
+      if (entry.captain)  p.captain  = true;
+      if (entry.freeKick) p.freeKick = true;
+      if (entry.penalty)  p.penalty  = true;
+      out.push(p);
+    });
+    if (out.length){ team.players = out; return true; }
+    return false;
+  }
+  function _lextNormForRecover(s){
+    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+  function _lextMergePlayersFromStats(team){
+    /* Si aún no tiene jugadores, rescata los nombres desde
+       `ef_player_stats_v1`. Le ponemos pos MED / power 70 por defecto
+       — es lo mejor que podemos hacer sin saber su posición original.
+       Mejor que ver la plantilla vacía. */
+    if (!team || !team.name || (team.players && team.players.length)) return false;
+    var teamNorm = _lextNormForRecover(team.name);
+    var picked = [];
+    try{
+      var raw = localStorage.getItem('ef_player_stats_v1');
+      if (raw){
+        var st = JSON.parse(raw);
+        Object.keys(st||{}).forEach(function(k){
+          var parts = k.split('::');
+          if (parts.length < 2) return;
+          if (parts[0] !== teamNorm) return;
+          /* El nombre en la clave está normalizado sin capitalizar.
+             Guardamos tal cual — al menos el jugador existe y tiene
+             stats asociados en el dashboard. */
+          picked.push({ key: parts[1], rec: st[k] });
+        });
+      }
+    }catch(_){}
+    if (!picked.length) return false;
+    /* Dedup por nombre normalizado — si ya metimos este player, skip. */
+    var seen = Object.create(null);
+    var out = [];
+    picked.forEach(function(p){
+      if (seen[p.key]) return;
+      seen[p.key] = true;
+      var nm = p.key.split(' ').map(function(w){
+        return w ? (w.charAt(0).toUpperCase()+w.slice(1)) : '';
+      }).join(' ').trim();
+      if (!nm) return;
+      out.push({
+        num: 0, name: nm, power: 70, pos: 'MED',
+        gol: Number(p.rec && p.rec.gol)||0,
+        pen: Number(p.rec && p.rec.pen)||0,
+        fk:  Number(p.rec && p.rec.fk) ||0,
+        mvp: Number(p.rec && p.rec.mvp)||0,
+        ta:  Number(p.rec && p.rec.ta) ||0,
+        tr:  Number(p.rec && p.rec.tr) ||0,
+        pj:  Number(p.rec && p.rec.pj) ||0
+      });
+    });
+    if (out.length){ team.players = out; return true; }
+    return false;
+  }
+  window.lextDeepRecoverSlug = function(slug){
+    if (!slug) return { ok:false, reason:'no-slug' };
+    var candidates = [
+      { src:'main',    data: _lextReadMain(slug) },
+      { src:'server',  data: _lextFetchServerSync(slug) },
+      { src:'backup',  data: _lextReadBackup(slug) }
+    ];
+    var best = null, bestScore = -1;
+    candidates.forEach(function(c){
+      var p = _lextCountPlayers(c.data);
+      var teams = (c.data && Array.isArray(c.data.teams)) ? c.data.teams.length : 0;
+      /* Puntuación: jugadores * 100 + equipos. Prioriza la fuente con
+         más jugadores; ante empate, la de más equipos. */
+      var score = p * 100 + teams;
+      if (score > bestScore){ bestScore = score; best = c; }
+    });
+    var data = (best && best.data) ? best.data : { teams:[], results:[] };
+    data.teams = data.teams || [];
+    data.results = data.results || [];
+
+    /* Pasada de relleno: para equipos SIN jugadores, intenta
+       reconstruir desde SQUAD_REGISTRY y luego desde stats. */
+    var filledFromReg = 0, filledFromStats = 0;
+    data.teams.forEach(function(t){
+      if (_lextMergePlayersFromRegistry(t)) filledFromReg++;
+      else if (_lextMergePlayersFromStats(t)) filledFromStats++;
+    });
+
+    try{ localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); }catch(_){}
+    try{ if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); }catch(_){}
+    /* Re-subir al servidor si local quedó con más teams/players que
+       el servidor original (anti-wipe en reverso). */
+    try{
+      fetch('/api/liga-ext/'+encodeURIComponent(slug), {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({data:data})
+      }).catch(function(){});
+    }catch(_){}
+    return {
+      ok: true,
+      slug: slug,
+      source: best && best.src,
+      teams: data.teams.length,
+      players: _lextCountPlayers(data),
+      filledFromRegistry: filledFromReg,
+      filledFromStats: filledFromStats
+    };
+  };
+  window.lextDeepRecoverAll = function(opts){
+    opts = opts || {};
+    /* Enumera TODOS los slugs: los 4 habituales + cualquier otro
+       `ligaExt_*` que exista en localStorage (Alemania, Inglaterra,
+       Francia, Italia… + las 51 externas). */
+    var slugs = {};
+    ['liga-ea-sports','liga-hypermotion','liga-primera-federacion',
+     'inglaterra','alemania','italia','francia','portugal',
+     'holanda','belgica','brasil','argentina','turquia'].forEach(function(s){ slugs[s]=true; });
+    try{
+      for (var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup') !== -1) continue;
+        slugs[k.replace(/^ligaExt_/,'')] = true;
+      }
+    }catch(_){}
+    var summary = [];
+    Object.keys(slugs).forEach(function(s){
+      try{
+        var r = window.lextDeepRecoverSlug(s);
+        if (r && r.players > 0) summary.push(r);
+      }catch(_){}
+    });
+    summary.sort(function(a,b){ return b.players - a.players; });
+    var msgLines = ['✅ Recuperación profunda completada.', ''];
+    summary.forEach(function(r){
+      msgLines.push('• ' + r.slug + ': ' + r.teams + ' equipos · ' + r.players + ' jugadores (fuente: ' + r.source + (r.filledFromRegistry?' +'+r.filledFromRegistry+' reg':'') + (r.filledFromStats?' +'+r.filledFromStats+' stats':'') + ')');
+    });
+    if (!summary.length) msgLines.push('⚠ No se encontraron plantillas en ninguna fuente.');
+    try{ alert(msgLines.join('\n')); }catch(_){}
+    if (opts.reload) setTimeout(function(){ location.reload(); }, 250);
+    return summary;
   };
 
   window._ligaEaLegendHtml = function(){

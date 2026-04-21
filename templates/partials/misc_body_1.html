@@ -1321,8 +1321,11 @@ window.pG = function(fn) {
     <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openLigaEaEditor&&window.openLigaEaEditor()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">✏️</span>Edit</button>
     <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openLigaEaReglas&&window.openLigaEaReglas()})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
   </div>
-  <div style="display:flex;gap:6px;width:100%;justify-content:center;">
-    <button class="btn-action lext-btn-compact" onclick="window.emergencyRestoreAll&&window.emergencyRestoreAll()" style="border-color:rgba(255,60,60,.5);color:#ff7070;background:rgba(255,60,60,.08);font-size:10px;"><span class="btn-action-ico">🆘</span>Restaurar datos</button>
+  <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:wrap;">
+    <button class="btn-action lext-btn-compact" onclick="window.emergencyRestoreAll&&window.emergencyRestoreAll()" style="border-color:rgba(255,60,60,.5);color:#ff7070;background:rgba(255,60,60,.08);font-size:10px;"><span class="btn-action-ico">🆘</span>Restaurar</button>
+    <button class="btn-action lext-btn-compact" onclick="window.lextExportBackup&&window.lextExportBackup()" style="border-color:rgba(60,180,240,.5);color:#60b4f0;background:rgba(60,180,240,.08);font-size:10px;"><span class="btn-action-ico">💾</span>Descargar</button>
+    <button class="btn-action lext-btn-compact" onclick="document.getElementById('lext-import-file').click()" style="border-color:rgba(60,200,120,.5);color:#3cc878;background:rgba(60,200,120,.08);font-size:10px;"><span class="btn-action-ico">📂</span>Importar</button>
+    <input type="file" id="lext-import-file" accept="application/json,.json" style="display:none" onchange="window.lextImportBackup&&window.lextImportBackup(this.files[0])"/>
   </div>
 </div>
 
@@ -2465,6 +2468,134 @@ window.pG = function(fn) {
   window.emergencyRestoreAll = function(){
     window.lextDeepRecoverAll({ reload: true });
   };
+
+  /* ══ EXPORT / IMPORT BACKUP ════════════════════════════════════
+     El admin puede descargar un JSON con TODAS sus plantillas y
+     guardarlo en el móvil / correo / nube. En caso de desastre
+     (DB wipe, localStorage borrado, dispositivo nuevo) reimporta
+     y recupera todo. Es el "guardado para toda la historia" que
+     pidió el usuario — fuera de nuestro control, en SUS archivos.
+
+     Formato del JSON:
+     {
+       "format":"ftbol-backup-v1",
+       "createdAt":"2026-04-21T20:00:00Z",
+       "ligas": {
+         "liga-ea-sports":      { teams:[…], results:[…] },
+         "liga-hypermotion":    {...},
+         "ligaExt_<slug>_snap_<ts>": {...}    ← snapshots también
+       },
+       "flags": { "Team::Player": {captain,freeKick,penalty,elite,natGoal} }
+     }
+  */
+  window.lextExportBackup = function(){
+    var out = { format:'ftbol-backup-v1', createdAt: new Date().toISOString(), ligas:{}, flags:{} };
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k) continue;
+        if (k.indexOf('ligaExt_') === 0) {
+          try { out.ligas[k] = JSON.parse(localStorage.getItem(k)); } catch(_){}
+        }
+      }
+    } catch(_){}
+    try {
+      if (window._LIGA_EA_PLAYER_FLAGS) out.flags = JSON.parse(JSON.stringify(window._LIGA_EA_PLAYER_FLAGS));
+    } catch(_){}
+    try {
+      var blob = new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'ftbol-plantillas-' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.json';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ try { document.body.removeChild(a); URL.revokeObjectURL(url); } catch(_){} }, 500);
+      var nLigas = Object.keys(out.ligas).length;
+      var nTeams = 0, nPlayers = 0;
+      Object.keys(out.ligas).forEach(function(lk){
+        var d = out.ligas[lk]; if (d && Array.isArray(d.teams)) {
+          nTeams += d.teams.length;
+          d.teams.forEach(function(t){ if (t && Array.isArray(t.players)) nPlayers += t.players.length; });
+        }
+      });
+      alert('✅ Backup descargado.\n\n• Ligas:    '+nLigas+'\n• Equipos: '+nTeams+'\n• Jugadores: '+nPlayers+'\n• Flags C/F/P/⭐/⚾: '+Object.keys(out.flags).length+'\n\nGuarda ese .json en sitio seguro. Lo puedes re-importar con 📂.');
+    } catch(errE){
+      alert('⚠️ No se pudo crear el backup: ' + (errE && errE.message || errE));
+    }
+  };
+
+  window.lextImportBackup = function(file){
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var txt = ev.target.result || '';
+      var payload;
+      try { payload = JSON.parse(txt); } catch(errP){
+        alert('⚠️ El archivo no es un JSON válido.\n'+(errP && errP.message));
+        return;
+      }
+      if (!payload || !payload.ligas || typeof payload.ligas !== 'object') {
+        alert('⚠️ El archivo no es un backup de F-TBOL (falta la sección "ligas").');
+        return;
+      }
+      if (!confirm('⚠️ Vas a reemplazar TODAS las plantillas actuales con las del backup.\n\nBackup creado: '+(payload.createdAt||'?')+'\nLigas en backup: '+Object.keys(payload.ligas).length+'\n\n¿Continuar?')) return;
+      var restoredLigas = 0, restoredTeams = 0, restoredPlayers = 0;
+      Object.keys(payload.ligas).forEach(function(lk){
+        try {
+          var d = payload.ligas[lk];
+          if (!d || !Array.isArray(d.teams)) return;
+          localStorage.setItem(lk, JSON.stringify(d));
+          restoredLigas++;
+          restoredTeams += d.teams.length;
+          d.teams.forEach(function(t){ if (t && Array.isArray(t.players)) restoredPlayers += t.players.length; });
+          /* Re-subir al server — solo el main (sin sufijos _snap_ o _backup) */
+          if (lk.indexOf('_snap_') === -1 && lk.indexOf('_backup') === -1) {
+            var slugK = lk.replace(/^ligaExt_/,'');
+            try {
+              fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({data: d})
+              }).catch(function(){});
+            } catch(_){}
+          }
+        } catch(_){}
+      });
+      try {
+        if (payload.flags && typeof payload.flags === 'object') {
+          window._LIGA_EA_PLAYER_FLAGS = payload.flags;
+        }
+      } catch(_){}
+      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(); } catch(_){}
+      alert('✅ Backup importado.\n\n• Ligas/snaps: '+restoredLigas+'\n• Equipos: '+restoredTeams+'\n• Jugadores: '+restoredPlayers+'\n\nRecargando…');
+      setTimeout(function(){ location.reload(); }, 400);
+    };
+    reader.onerror = function(){ alert('⚠️ Error al leer el archivo.'); };
+    reader.readAsText(file);
+  };
+
+  /* Auto-backup al descargar la pestaña: escribimos una copia de
+     seguridad en localStorage con timestamp por si el siguiente
+     uso del navegador pierde los datos principales. */
+  window.addEventListener('beforeunload', function(){
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_snap_') !== -1 || k.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(k); if (!raw) continue;
+        try {
+          var p = JSON.parse(raw);
+          var hasPlayers = p && Array.isArray(p.teams) && p.teams.some(function(t){
+            return t && Array.isArray(t.players) && t.players.length > 0;
+          });
+          if (hasPlayers) {
+            localStorage.setItem(k+'_backup', raw);
+          }
+        } catch(_){}
+      }
+    } catch(_){}
+  });
 
   /* ══ DEEP RECOVERY ══════════════════════════════════════════════
      Reconstruye `ligaExt_<slug>` de cualquier liga usando TODAS las
@@ -5474,10 +5605,51 @@ Tottenham
     return '';
   };
 
+  function _countPlayers(d){
+    if (!d || !Array.isArray(d.teams)) return 0;
+    var n = 0;
+    d.teams.forEach(function(t){ if (t && Array.isArray(t.players)) n += t.players.length; });
+    return n;
+  }
   function saveData(k,d){
     LIGA_CACHE[k] = d;
     try{ localStorage.setItem(storeKey(k), JSON.stringify(d)); }catch(_){}
-    // Write-back al servidor (async, best-effort)
+    /* ── BACKUPS AUTOMÁTICOS ──
+       Cada guardado escribe además:
+         1) ligaExt_<k>_backup           → backup inmediato (pisa el anterior)
+         2) ligaExt_<k>_backup_<ts>      → historial hasta 5 snapshots
+       Si el admin pierde la plantilla por cualquier motivo (wipe
+       del navegador, fetch fallido, bug de importación), siempre
+       queda un registro reciente del que tirar vía
+       emergencyRestore o lextDeepRecoverAll. */
+    try {
+      var nowMs = Date.now();
+      var serialized = JSON.stringify(d);
+      localStorage.setItem('ligaExt_'+k+'_backup', serialized);
+      /* Historial: si hay jugadores suficientes, mantener snapshot
+         datado. Si d está vacío (p.ej. wipe), NO escribimos snapshot
+         — los snapshots existentes sobreviven. */
+      if (_countPlayers(d) > 0) {
+        localStorage.setItem('ligaExt_'+k+'_snap_'+nowMs, serialized);
+        /* Limpieza: mantener solo los 5 snapshots más recientes */
+        var snaps = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var kk = localStorage.key(i);
+          if (kk && kk.indexOf('ligaExt_'+k+'_snap_') === 0) {
+            snaps.push(kk);
+          }
+        }
+        if (snaps.length > 5) {
+          snaps.sort();
+          snaps.slice(0, snaps.length - 5).forEach(function(old){
+            try { localStorage.removeItem(old); } catch(_){}
+          });
+        }
+      }
+    } catch(_){}
+    /* Write-back al servidor (async, best-effort). Ahora también
+       se sube a una KEY de backup en el server — si el server
+       wipea el main por alguna razón, queda el backup. */
     try{
       fetch('/api/liga-ext/'+encodeURIComponent(k), {
         method:'POST',
@@ -5486,6 +5658,15 @@ Tottenham
       }).then(function(r){return r.ok?r.json():null;}).then(function(j){
         if(j && j.updated_at) LIGA_UPDATED[k] = j.updated_at;
       }).catch(function(){});
+      /* Backup en server — sólo si hay jugadores, para no
+         sobrescribir un backup válido con un d vacío accidental. */
+      if (_countPlayers(d) > 0) {
+        fetch('/api/liga-ext/'+encodeURIComponent(k+'_backup'), {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({data:d})
+        }).catch(function(){});
+      }
     }catch(_){}
   }
 
@@ -5517,8 +5698,19 @@ Tottenham
           }catch(_){}
         }
         var localTeams = (localCache && Array.isArray(localCache.teams)) ? localCache.teams : [];
-        if(localTeams.length > (data.teams ? data.teams.length : 0)){
-          try{ console.warn('[ligaExt] servidor devolvió '+(data.teams||[]).length+' equipos pero local tiene '+localTeams.length+' — conservando local y re-subiendo ('+k+').'); }catch(_){}
+        /* Anti-wipe ahora compara TANTO teams como total de players.
+           Caso que antes se escapaba: server y local tienen el mismo
+           nº de equipos (20) pero el server los trae con players=[]
+           (porque se pushó un estado corrupto en otra sesión). Sin
+           comparar players, el fetch sobrescribía el local lleno con
+           el server vacío → plantillas "perdidas". Ahora si el server
+           trae MENOS jugadores totales, aplicamos anti-wipe. */
+        var localPlayerCount = _countPlayers(localCache);
+        var serverPlayerCount = _countPlayers(data);
+        var teamsWipe  = localTeams.length       > (data.teams ? data.teams.length : 0);
+        var playersWipe = localPlayerCount > 0 && serverPlayerCount < localPlayerCount;
+        if (teamsWipe || playersWipe) {
+          try{ console.warn('[ligaExt] anti-wipe activado ('+k+'): local='+localTeams.length+'T/'+localPlayerCount+'J vs server='+(data.teams||[]).length+'T/'+serverPlayerCount+'J. Conservando local y re-subiendo.'); }catch(_){}
           // Conservamos la versión local en memoria y disco.
           LIGA_CACHE[k] = localCache;
           try{ localStorage.setItem(storeKey(k), JSON.stringify(localCache)); }catch(_){}

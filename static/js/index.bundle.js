@@ -645,7 +645,40 @@ function _j1m1ResolveSpd(){
   return _hvh ? (t.HvH || 851) : (t.HvIA || 718);
 }
 window.mlTimerClick_j1m1=function(){if(_matchFinished||_inDescanso)return;if(_timerRunning){clearInterval(_timerInterval);_timerRunning=false;_renderTimer_j1m1();}else{_timerRunning=true;_startInterval_j1m1();}};
-function _startInterval_j1m1(){var spd=_j1m1ResolveSpd();var MAX_ST=5820;_timerInterval=setInterval(function(){_timerSec+=5;var maxSec=_etDone?MAX_ET:(_stDone?MAX_ST:MAX_NORMAL);if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m1("— DESCANSO (45 min) —");_renderTimer_j1m1();setTimeout(function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;_startInterval_j1m1();}},20000);return;}if(!_etDone&&!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m1("— TIEMPO DE DESCUENTO (90') —");}if(_etDone&&!_et1Done&&_timerSec>=6300){_et1Done=true;_addMarker_j1m1("— DESCANSO PRÓRROGA (105 min) —");}if(_timerSec>=maxSec){_timerSec=maxSec;clearInterval(_timerInterval);_timerRunning=false;if(_etDone){_checkPenalties_j1m1();}} _renderTimer_j1m1();},spd);};
+/* Reloj de muralla (wall-clock) anti-throttling para el j1m1. Antes
+   hacía _timerSec+=5 en cada tick — si setInterval se ralentizaba
+   (móvil, background tab, throttling del navegador) el reloj de
+   juego iba más lento que la realidad. El usuario reportó que 1
+   minuto real ≈ 1 minuto de juego (cuando debía ser 11 seg reales
+   por game-min en HvH). Ahora calculamos _timerSec a partir de
+   Date.now() desde el arranque, igual que _mlStartIntervalGen. */
+function _startInterval_j1m1(){
+  var spd=_j1m1ResolveSpd();
+  var MAX_ST=5820;
+  /* Rebase del reloj de muralla: cada vez que ARRANCAMOS el interval
+     (primer kickoff o reanudación tras pausa/descanso), anclamos
+     Date.now() al _timerSec actual. Así el tiempo durante la pausa
+     no se suma al reloj del partido. */
+  window._j1m1_wallStart = Date.now();
+  window._j1m1_secAtStart = _timerSec;
+  /* _ML_TICK_SEC viene de misc_body_2; fallback a 5. */
+  var GS = (window._ML_TICK_SEC || 5);
+  var _gameSecPerMs = GS / spd;
+  _timerInterval=setInterval(function(){
+    /* Avanzar timerSec con el tiempo REAL transcurrido desde el
+       arranque (no sumando 5 por tick). Esto compensa ráfagas y
+       throttling: si el navegador nos da ticks cada 1000 ms en vez
+       de 917, el elapsed real sigue siendo correcto. */
+    var elapsedMs = Date.now() - window._j1m1_wallStart;
+    _timerSec = window._j1m1_secAtStart + Math.round(elapsedMs * _gameSecPerMs);
+    var maxSec=_etDone?MAX_ET:(_stDone?MAX_ST:MAX_NORMAL);
+    if(!_htDone&&_timerSec>=2700){_htDone=true;clearInterval(_timerInterval);_timerRunning=false;_inDescanso=true;_addMarker_j1m1("— DESCANSO (45 min) —");_renderTimer_j1m1();setTimeout(function(){if(!_matchFinished){_inDescanso=false;_timerRunning=true;window._j1m1_wallStart=0;_startInterval_j1m1();}},20000);return;}
+    if(!_etDone&&!_stDone&&_timerSec>=MAX_NORMAL){_stDone=true;_addMarker_j1m1("— TIEMPO DE DESCUENTO (90') —");}
+    if(_etDone&&!_et1Done&&_timerSec>=6300){_et1Done=true;_addMarker_j1m1("— DESCANSO PRÓRROGA (105 min) —");}
+    if(_timerSec>=maxSec){_timerSec=maxSec;clearInterval(_timerInterval);_timerRunning=false;if(_etDone){_checkPenalties_j1m1();}}
+    _renderTimer_j1m1();
+  }, Math.min(spd, 500));
+};
 function _renderTimer_j1m1(){var btn=document.getElementById('ml-timer-j1m1');if(!btn)return;var totalMin=Math.floor(_timerSec/60);if(_matchFinished){btn.textContent='🏁 FIN';btn.className='ml-timer finished';if(window._setScoreState)window._setScoreState('j1m1','finished');return;}if(_inDescanso){btn.textContent='⏸ DESCANSO';btn.className='ml-timer running';if(window._setScoreState)window._setScoreState('j1m1','playing');return;}var isStop=!_etDone&&_timerSec>5400;var dispStr=isStop?('90+'+Math.ceil((_timerSec-5400)/60)+"'"):(totalMin+"'");var maxForLabel=_etDone?MAX_ET:(_stDone?5820:MAX_NORMAL);var label=_timerRunning?'⏸ ':(_timerSec>=maxForLabel?'🔁 ':'▶ ');btn.textContent=label+dispStr;btn.className='ml-timer'+(_timerRunning?' running':'');if(window._setScoreState)window._setScoreState('j1m1',_timerRunning?'playing':'pending');var _bl=document.getElementById('ball-j1m1');if(_bl){if(_timerRunning){_bl.classList.remove('spinning');_bl.classList.add('static');}else{_bl.classList.remove('static');_bl.classList.add('spinning');}}};
 function _currentMin_j1m1(){return Math.min(_etDone?120:(_stDone?97:90),Math.floor(_timerSec/60));};
 function _addMarker_j1m1(txt){var list=document.getElementById('ml-acta-list-j1m1');var div=document.createElement('div');div.className='ml-ht';div.textContent=txt;list.appendChild(div);_removeEmpty_j1m1();};

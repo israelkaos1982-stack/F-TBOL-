@@ -69,21 +69,44 @@ de jugador para la simulación (`sqFromRegistry`, builders similares)
 **TIEMPOS OFICIALES — FIJADOS PARA SIEMPRE** (definidos en
 `templates/partials/part2/misc_body_2.html`, bloque `_MATCH_RULE`):
 
-| Modo  | gameMin | realMin | displayMin (previa) | ms/tick (5s juego) |
-|-------|---------|---------|---------------------|--------------------|
-| HvH         | 94 | 16    | 10  | ≈ 851 ms |
-| HvH prórroga| 30 |  5    | —   | ≈ 833 ms |
-| HvIA        | 94 | 13.5  |  8  | ≈ 718 ms |
-| IAIA        | 90 |  1    | "30 s/parte" | ≈ 56 ms |
+| Modo  | gameMin | realMin | displayMin (previa) | ms/tick (5s juego) | s/game-min |
+|-------|---------|---------|---------------------|--------------------|------------|
+| HvH         | 90 | 16.5 | 10 | ≈ 917 ms | 11 s |
+| HvH prórroga| 30 |  5   | —  | ≈ 833 ms | — |
+| HvIA        | 90 | 13.5 |  8 | ≈ 750 ms | 9 s |
+| IAIA        | 90 |  1   | "30 s/parte" | ≈ 56 ms | ~0.67 s (≈1 s) |
 
-- HvH = humano vs humano → **16 min reales**. La previa muestra "10 min".
-- HvIA = humano vs IA → **13.5 min reales** (13 min 30 seg). La previa muestra "8 min".
+- HvH = humano vs humano → **16 min 30 s reales**. Previa: "10 min". 1 game-min = 11 s reales.
+- HvIA = humano vs IA → **13 min 30 s reales**. Previa: "8 min". 1 game-min = 9 s reales.
 - IAIA = IA vs IA → **1 min real total** (30 s por parte).
-- HvH_ET = prórroga humana → **5 min reales**.
+- HvH_ET = prórroga humana → 5 min reales.
 
 `realMin` controla el cronómetro real. `displayMin` / `displayLabel`
 controlan SOLO el label visible en la pantalla de PREVIA — están
 desacoplados a petición del usuario.
+
+### Descuento dinámico por eventos (obligatorio)
+
+`gameMin = 90` significa que el reloj llega a 90:00 en "tiempo normal".
+El descuento NO se pre-calcula: cada evento del acta (gol, autogol,
+penalti provocado/gol/parado/fallado, gol de falta, amarilla, doble
+amarilla, roja, lesión) añade **1 game-minute** al tope de SU parte:
+
+- Evento en min < 45 → prolonga la 1ª parte. El reloj muestra `45+1`,
+  `45+2`, …, hasta `45+N` (N = eventos en 1ª parte) antes del descanso.
+- Evento en min ∈ [45, 90) → prolonga la 2ª parte. Reloj: `90+1`,
+  `90+2`, …, `90+N`.
+- Eventos con min ≥ 90 (ya en stoppage) no cuentan — no se pueden
+  prolongar a sí mismos.
+
+En tiempo REAL, 1 game-minute de descuento equivale a:
+- HvH → 11 segundos reales por evento.
+- HvIA → 9 segundos reales por evento.
+- IAIA → ~1 segundo real por evento.
+
+Helper: `window._mlCountStoppageHalves(st)` → `{first, second}`.
+Se invoca en el tick del cronómetro y en cada render. NO cachear los
+valores — cambian con cada evento nuevo.
 
 ### Fuente única
 

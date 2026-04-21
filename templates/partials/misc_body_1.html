@@ -44,15 +44,18 @@ window.pG = function(fn) {
 <p>Temporada 32-33</p>
 </div>
 <div class="hdr-btns">
-<button id="guardar-all-btn" onclick="window.guardarTodoProtegido&&window.guardarTodoProtegido()" title="Guardar TODAS las plantillas (protegidas de borrado accidental)">💾</button>
+<button id="guardar-all-btn" onclick="window.guardarTodoProtegido&&window.guardarTodoProtegido()" title="Guardar TODAS las plantillas (protegidas de borrado accidental)" aria-label="Guardar">
+<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+</button>
 <button id="buscar-enfr-btn" onclick="goAmistosos()" title="Buscar Enfrentamientos">🔍</button>
 <button id="ajustes-hdr-btn" onclick="goAjustes()" title="Ajustes">⚙️</button>
 </div>
 
 <style>
-#ajustes-hdr-btn,#buscar-enfr-btn,#guardar-all-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;opacity:.75;transition:opacity .2s;}
+#ajustes-hdr-btn,#buscar-enfr-btn,#guardar-all-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;opacity:.75;transition:opacity .2s;color:#e5e7ea;line-height:1;display:inline-flex;align-items:center;justify-content:center;}
 #ajustes-hdr-btn:hover,#buscar-enfr-btn:hover,#guardar-all-btn:hover{opacity:1;}
-#guardar-all-btn.locked{filter:drop-shadow(0 0 6px rgba(60,200,120,.9));opacity:1;}
+#guardar-all-btn svg{display:block;}
+#guardar-all-btn.locked{opacity:1;color:#3cc878;filter:drop-shadow(0 0 6px rgba(60,200,120,.9));}
 .pin-key{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;transition:background .15s;}
 .pin-key:active{background:rgba(255,255,255,.22);}
 .pin-key-del{color:#ff9060;}

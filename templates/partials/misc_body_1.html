@@ -2024,6 +2024,51 @@ window.pG = function(fn) {
           } catch(_){}
         }
 
+        /* Fuente D: LA MISMA función que usa la simulación,
+           `window.sqFromRegistry(teamName)`. Si el simulador
+           encuentra los players, nosotros también — es la misma
+           puerta. sqFromRegistry tiene una cadena de fallbacks
+           (memoria, lazy import, scan ligaExt_*) que ya localiza
+           datos donde quiera que estén. Si TODO lo anterior falló,
+           este es el último intento: pedir directamente al motor. */
+        if (rebuilt.length === 0 && typeof window.sqFromRegistry === 'function') {
+          try {
+            var POS_INV_SR = {'🧤 PORTEROS':'POR','🛡 DEFENSAS':'DEF','⚙️ MEDIOS':'MED','⚡ DELANTEROS':'DEL'};
+            for (var q = 0; q < targets.length && rebuilt.length === 0; q++) {
+              /* sqFromRegistry acepta el nombre tal cual lo pasemos
+                 — la función normaliza internamente. Probamos con el
+                 displayName original (capitalizado) y luego con cada
+                 alias por si ayuda. */
+              var tryNames = [displayName];
+              if (targets[q] !== _normForClick(displayName)) {
+                /* Convertir target a title-case para probar */
+                tryNames.push(targets[q].split(' ').map(function(w){
+                  return w ? w.charAt(0).toUpperCase()+w.slice(1) : '';
+                }).join(' '));
+              }
+              for (var n2 = 0; n2 < tryNames.length && rebuilt.length === 0; n2++) {
+                var sqR = null;
+                try { sqR = window.sqFromRegistry(tryNames[n2]); } catch(_){}
+                if (!Array.isArray(sqR) || !sqR.length) continue;
+                var curPos2 = 'MED';
+                sqR.forEach(function(e){
+                  if (e && typeof e === 'object' && e.h) { curPos2 = POS_INV_SR[e.h] || 'MED'; return; }
+                  if (!Array.isArray(e) || e.length < 2) return;
+                  var nm2 = String(e[1]||'').trim(); if (!nm2) return;
+                  var kk = _normForClick(nm2); if (seenP[kk]) return; seenP[kk] = true;
+                  var po = { num: Number(e[0])||0, name: nm2, power: Number(e[2])||70, pos: curPos2 };
+                  if (e.elite)    po.elite    = true;
+                  if (e.natGoal)  po.natGoal  = true;
+                  if (e.captain)  po.captain  = true;
+                  if (e.freeKick) po.freeKick = true;
+                  if (e.penalty)  po.penalty  = true;
+                  rebuilt.push(po);
+                });
+              }
+            }
+          } catch(_){}
+        }
+
         if (rebuilt.length) {
           found.players = rebuilt;
           try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}

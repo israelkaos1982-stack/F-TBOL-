@@ -5513,6 +5513,18 @@ Tottenham
       if(p.penalty)  badges += '<span class="lext-badge pk"     title="Lanzador de penaltis">P</span>';
       if(p.elite)    badges += '<span class="lext-badge star"   title="Estrella del equipo">⭐</span>';
       if(p.natGoal)  badges += '<span class="lext-badge scorer" title="Goleador nato">⚾</span>';
+      /* Badge de lesión: si el jugador está en LESION_STORE y aún tiene
+         partidos pendientes, mostramos el emoji de gravedad y "N P" de
+         partidos restantes, con tooltip con la descripción. Pedido por
+         el usuario: "en las plantillas de las cajas de los equipos
+         humanos salga los partidos lesionados". */
+      var _les = (window.LESION_STORE || {})[p.name];
+      if (_les && _les.partidos > 0) {
+        var _lesIco = _les.gradoEmoji || '🩹';
+        var _lesPart = Math.max(0, parseInt(_les.partidos) || 0);
+        var _lesDesc = (_les.gradoNombre||'Lesión') + (_les.descripcion ? ' · ' + _les.descripcion : '') + ' · ' + _lesPart + ' partido(s) restante(s)';
+        badges += '<span class="lext-badge injury" title="' + _lesDesc.replace(/"/g,'&quot;') + '" style="background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;">' + _lesIco + ' ' + _lesPart + 'P</span>';
+      }
       var rating = computePlayerRating(p);
       var rStr = rating>0 ? rating.toFixed(2) : '0.00';
       var rCls = 'rating '+ratingClass(rating);

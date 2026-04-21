@@ -13771,3 +13771,167 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 }());
 </script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   PARCHES INLINE PARA LA TARJETA DE PARTIDO LIVE
+   Son DEFENSIVOS: corrigen el DOM independiente del bundle y del
+   caché del navegador. Si el bundle ya lo hace bien, estos parches
+   son no-ops; si no, los aplican.
+
+   1. ESTADIO REAL: el venue-bar muestra "eFootball Stadium" cuando
+      TEAM_STADIUMS no estaba disponible al construir la tarjeta o
+      cuando el nombre del equipo llegaba sin normalizar. Este parche
+      re-lee el stadium por cada wrap y actualiza el .ml-venue-name.
+
+   2. SPEED CONTROLS ⏪/⏩: cada .ml-timer debe estar flanqueado por
+      los botones de velocidad (×0.5 / ×2). Si falta el wrapper
+      .ml-timer-row, lo creamos y metemos los botones alrededor.
+   ══════════════════════════════════════════════════════════════════ */
+(function(){
+  if (window.__ML_INLINE_PATCHES) return;
+  window.__ML_INLINE_PATCHES = true;
+
+  function _getStadiumFor(teamName) {
+    if (!teamName) return '';
+    try {
+      if (typeof window.getTeamStadium === 'function') {
+        var s = window.getTeamStadium(teamName);
+        if (s) return s;
+      }
+    } catch(_){}
+    var map = window.TEAM_STADIUMS || {};
+    var clean = String(teamName).replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+/, '').trim();
+    if (map[clean]) return map[clean];
+    var low = clean.toLowerCase();
+    for (var k in map) {
+      if (String(k).toLowerCase() === low) return map[k];
+    }
+    return '';
+  }
+
+  function patchStadiumIn(wrap) {
+    if (!wrap) return;
+    var nmEl = wrap.querySelector('.ml-venue-bar .ml-venue-name');
+    if (!nmEl) return;
+    var current = (nmEl.textContent || '').trim().toLowerCase();
+    /* Solo reemplazamos el valor por defecto. Si el usuario o otro
+       código ya puso un estadio real (no "eFootball"), no tocamos. */
+    if (current && current !== 'efootball stadium') return;
+    var teamEl = wrap.querySelector('.ml-team .ml-team-name');
+    if (!teamEl) return;
+    var home = (teamEl.textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+\s*/, '').trim();
+    if (!home) return;
+    var real = _getStadiumFor(home);
+    if (real) nmEl.textContent = real;
+  }
+
+  function patchAllStadiums() {
+    document.querySelectorAll('.match-live-wrap').forEach(patchStadiumIn);
+  }
+
+  /* ── SPEED CONTROLS — inyectar ⏪/⏩ si faltan ── */
+  function patchSpeedIn(wrap) {
+    if (!wrap) return;
+    var timer = wrap.querySelector('.ml-timer');
+    if (!timer) return;
+    /* Si ya vive dentro de .ml-timer-row con los dos botones, no hacemos nada. */
+    var parent = timer.parentElement;
+    if (parent && parent.classList.contains('ml-timer-row') &&
+        parent.querySelector('.ml-speed-btn[data-inline-dir="down"]') &&
+        parent.querySelector('.ml-speed-btn[data-inline-dir="up"]')) return;
+    var mk = (wrap.id || '').replace(/^mlw-/, '');
+    if (!mk) return;
+    var row = document.getElementById('ml-timer-row-' + mk);
+    if (!row) {
+      row = document.createElement('div');
+      row.id = 'ml-timer-row-' + mk;
+      row.className = 'ml-timer-row';
+      row.style.cssText = 'display:inline-flex;align-items:center;gap:6px;align-self:center;flex-wrap:nowrap;';
+      timer.parentNode.insertBefore(row, timer);
+    }
+    var down = document.getElementById('ml-speed-down-' + mk);
+    if (!down) {
+      down = document.createElement('button');
+      down.id = 'ml-speed-down-' + mk;
+      down.type = 'button';
+      down.className = 'ml-speed-btn';
+      down.setAttribute('data-inline-dir','down');
+      down.title = 'Ralentizar (⏪ ×0.5)';
+      down.textContent = '⏪';
+      down.onclick = function(){ if (typeof window.mlSpeedDownGen === 'function') window.mlSpeedDownGen(mk); };
+    }
+    var up = document.getElementById('ml-speed-up-' + mk);
+    if (!up) {
+      up = document.createElement('button');
+      up.id = 'ml-speed-up-' + mk;
+      up.type = 'button';
+      up.className = 'ml-speed-btn';
+      up.setAttribute('data-inline-dir','up');
+      up.title = 'Acelerar (⏩ ×2)';
+      up.textContent = '⏩';
+      up.onclick = function(){ if (typeof window.mlSpeedUpGen === 'function') window.mlSpeedUpGen(mk); };
+    }
+    var lbl = document.getElementById('ml-speed-x-' + mk);
+    if (!lbl) {
+      lbl = document.createElement('span');
+      lbl.id = 'ml-speed-x-' + mk;
+      lbl.className = 'ml-speed-x';
+      lbl.title = 'Velocidad actual';
+      lbl.textContent = '1×';
+    }
+    /* Reordenar dentro del row: ⏪ [timer] ⏩ 1× */
+    row.appendChild(down);
+    row.appendChild(timer);
+    row.appendChild(up);
+    row.appendChild(lbl);
+    var timerVisible = timer.style.display !== 'none';
+    row.style.display = timerVisible ? 'inline-flex' : 'none';
+    timer.style.display = '';
+  }
+
+  function patchAllSpeed() {
+    document.querySelectorAll('.match-live-wrap').forEach(patchSpeedIn);
+  }
+
+  function runAll() {
+    try { patchAllStadiums(); } catch(_){}
+    try { patchAllSpeed();    } catch(_){}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){
+      runAll();
+      setTimeout(runAll, 300);
+      setTimeout(runAll, 1200);
+      setTimeout(runAll, 3000);
+    });
+  } else {
+    runAll();
+    setTimeout(runAll, 300);
+    setTimeout(runAll, 1200);
+    setTimeout(runAll, 3000);
+  }
+
+  var _tPatch = null;
+  function scheduleRun(){
+    if (_tPatch) clearTimeout(_tPatch);
+    _tPatch = setTimeout(runAll, 150);
+  }
+  try {
+    var obs = new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++) {
+        var m = muts[i];
+        if (m.type === 'childList' && (m.addedNodes.length || m.removedNodes.length)) {
+          scheduleRun(); break;
+        }
+        if (m.type === 'attributes' && m.target && m.target.classList &&
+            (m.target.classList.contains('ml-timer') || m.target.classList.contains('match-live-wrap'))) {
+          scheduleRun(); break;
+        }
+      }
+    });
+    obs.observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:['style','class'] });
+  } catch(_){}
+})();
+</script>

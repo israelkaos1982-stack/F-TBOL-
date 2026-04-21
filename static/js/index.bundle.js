@@ -2842,20 +2842,18 @@ function mlPreviaClick(matchKey) {
     if (!wrap) return;
     _ensureIds(matchKey);
     var timerBtn = document.getElementById('ml-timer-' + matchKey);
+    var timerRow = document.getElementById('ml-timer-row-' + matchKey);
     var addBtn = document.getElementById('ml-add-btn-' + matchKey);
     var actBar = document.getElementById('ml-actions-bar-' + matchKey);
     var previaBtn = document.getElementById('ml-previa-' + matchKey);
     if (previaBtn) previaBtn.style.display = unlocked ? 'none' : '';
-    if (timerBtn) {
-      timerBtn.style.display = unlocked ? '' : 'none';
-      timerBtn.disabled = !unlocked;
-    }
+    /* La fila inline ⏪ [▶/⏸ min] ⏩ es lo que se oculta/muestra como
+       unidad. El botón interior sigue el estado del wrapper. */
+    if (timerRow) timerRow.style.display = unlocked ? '' : 'none';
+    if (timerBtn) timerBtn.disabled = !unlocked;
     if (addBtn) addBtn.style.visibility = unlocked ? '' : 'hidden';
     if (actBar) actBar.style.visibility = unlocked ? '' : 'hidden';
     if (unlocked) wrap.setAttribute('data-prepartido-ready', '1');
-    /* Refresh para que el control de velocidad ⏪/⏩ se muestre (o se
-       oculte) junto con el botón ▶️. _mlRenderTimerGen sincroniza
-       ambos según el estado del partido. */
     if (typeof window._mlRenderTimerGen === 'function') {
       try { window._mlRenderTimerGen(matchKey); } catch(_){}
     }
@@ -5213,14 +5211,16 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var mk = _ppMatchKey;
     function _afterShare() {
       var timerBtn = document.getElementById('ml-timer-' + mk);
-      if (timerBtn) { timerBtn.style.display = ''; timerBtn.disabled = false; }
+      var timerRow = document.getElementById('ml-timer-row-' + mk);
+      if (timerRow) timerRow.style.display = '';
+      if (timerBtn) timerBtn.disabled = false;
       var addBtn = document.getElementById('ml-add-btn-' + mk);
       if (addBtn) addBtn.style.visibility = '';
       var actBar = document.getElementById('ml-actions-bar-' + mk);
       if (actBar) actBar.style.visibility = '';
       var wrap = document.getElementById('mlw-' + mk);
       if (wrap) wrap.setAttribute('data-prepartido-ready', '1');
-      /* Mostrar control de velocidad ⏪/⏩ junto al cronómetro. */
+      /* Mostrar la fila del cronómetro ⏪ [▶/⏸] ⏩ junto con el ▶. */
       if (typeof window._mlRenderTimerGen === 'function') {
         try { window._mlRenderTimerGen(mk); } catch(_){}
       }

@@ -3950,14 +3950,17 @@
           +'<div class="ml-score"><span id="sc-'+mk+'-a">0</span>–<span id="sc-'+mk+'-b">0</span></div>'
           +'<div class="ml-pen-score" id="pen-score-'+mk+'" style="display:none;">⚽ 0–0 (pen.)</div>'
           +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
-          +'<button class="ml-timer" id="ml-timer-'+mk+'" style="display:none;" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
-          /* Control de velocidad del reloj del partido. Comparte visibilidad
-             con el propio timer (mismo display:none inicial → se muestran
-             juntos). Rangos: ⏪ 0.25× / 0.5× / 1× / ⏩ 2× / 4×. */
-          +'<div class="ml-speed-ctrl" id="ml-speed-ctrl-'+mk+'" style="display:none;">'
-            +'<button class="ml-speed-btn" onclick="mlSpeedDownGen(\''+emk+'\')" title="Ralentizar (⏪)">⏪</button>'
-            +'<span class="ml-speed-x" id="ml-speed-x-'+mk+'">1×</span>'
-            +'<button class="ml-speed-btn" onclick="mlSpeedUpGen(\''+emk+'\')" title="Acelerar (⏩)">⏩</button>'
+          /* Fila del cronómetro: ⏪ [▶/⏸ minuto] ⏩ en la MISMA fila
+             horizontal. Layout pedido por el usuario:
+               Equipo A  ⏪ ⏸ ⏩  Equipo B
+             (con el minuto dentro del botón central). Los 3 controles
+             comparten visibilidad: se muestran al confirmar la previa.
+             Rangos de velocidad: 0.25× / 0.5× / 1× / 2× / 4×. */
+          +'<div class="ml-timer-row" id="ml-timer-row-'+mk+'" style="display:none;">'
+            +'<button class="ml-speed-btn" id="ml-speed-down-'+mk+'" onclick="mlSpeedDownGen(\''+emk+'\')" title="Ralentizar (⏪ ×0.5)">⏪</button>'
+            +'<button class="ml-timer" id="ml-timer-'+mk+'" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
+            +'<button class="ml-speed-btn" id="ml-speed-up-'+mk+'" onclick="mlSpeedUpGen(\''+emk+'\')" title="Acelerar (⏩ ×2)">⏩</button>'
+            +'<span class="ml-speed-x" id="ml-speed-x-'+mk+'" title="Velocidad actual">1×</span>'
           +'</div>'
         +'</div>'
         +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldB+'<div class="ml-team-name">'+hiA+au+'</div>'+awayAliasHtml+'</div>'
@@ -4452,17 +4455,28 @@
     var st = _mlSt(mk);
     var btn = document.getElementById('ml-timer-'+mk);
     if (!btn) return;
-    /* Mantener el control de velocidad visible cuando el timer lo está.
-       Lo oculto al finalizar porque ya no tiene sentido cambiar ritmo. */
+    /* La fila inline ⏪ [▶/⏸ min] ⏩ comparte visibilidad y vive en
+       #ml-timer-row-{mk}. Antes había un ctrl aparte (ml-speed-ctrl)
+       apilado debajo; ahora está todo inline en la misma fila. */
+    var row = document.getElementById('ml-timer-row-'+mk);
+    /* Legacy: algunos flujos antiguos todavía miran ml-speed-ctrl;
+       mantenemos su sync por compatibilidad. */
     var speedCtrl = document.getElementById('ml-speed-ctrl-'+mk);
     if (speedCtrl){
-      var timerVisible = btn.style.display !== 'none';
+      var timerVisible = row ? (row.style.display !== 'none') : (btn.style.display !== 'none');
       speedCtrl.style.display = (timerVisible && !st.finished) ? '' : 'none';
     }
     var speedLbl = document.getElementById('ml-speed-x-'+mk);
     if (speedLbl){
       var mult = st.speedMult || 1;
       speedLbl.textContent = (mult === 1 ? '1×' : (mult < 1 ? mult + '×' : mult + '×'));
+    }
+    /* Ocultar las flechas ⏪/⏩ si el partido está finalizado. */
+    if (row) {
+      var downBtn = document.getElementById('ml-speed-down-'+mk);
+      var upBtn   = document.getElementById('ml-speed-up-'+mk);
+      if (downBtn) downBtn.style.visibility = st.finished ? 'hidden' : '';
+      if (upBtn)   upBtn.style.visibility   = st.finished ? 'hidden' : '';
     }
     var rawSec = st.timerSec;
     /* Descuento dinámico: cada evento del acta en la 1ª/2ª parte añade
@@ -11904,7 +11918,9 @@ window.goLiveMatches = function() {
       var previaBtn = document.getElementById('ml-previa-' + mk);
       if (previaBtn) previaBtn.style.display = 'none';
       var timerBtn = document.getElementById('ml-timer-' + mk);
-      if (timerBtn) { timerBtn.style.display = ''; timerBtn.disabled = false; }
+      var timerRow = document.getElementById('ml-timer-row-' + mk);
+      if (timerRow) timerRow.style.display = '';
+      if (timerBtn) timerBtn.disabled = false;
       if (typeof window._mlRenderTimerGen === 'function') window._mlRenderTimerGen(mk);
       var venueBar = document.getElementById('venue-bar-' + mk);
       if (venueBar) venueBar.classList.remove('pre-hidden');
@@ -13256,8 +13272,9 @@ document.addEventListener('DOMContentLoaded', function() {
       var previaBtn0 = document.getElementById('ml-previa-' + mk);
       if (previaBtn0) previaBtn0.style.display = 'none';
       var timerBtn0 = document.getElementById('ml-timer-' + mk);
+      var timerRow0 = document.getElementById('ml-timer-row-' + mk);
+      if (timerRow0) timerRow0.style.display = '';
       if (timerBtn0) {
-        timerBtn0.style.display = '';
         timerBtn0.disabled = false;
         timerBtn0.textContent = '▶ SIMULAR';
       }

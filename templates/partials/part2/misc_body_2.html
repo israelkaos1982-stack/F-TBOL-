@@ -4189,25 +4189,30 @@
 
      ══════════════════════════════════════════════════════════════ */
   /* Duración AUTORITATIVA de cada partido — FIJADA POR EL USUARIO:
-       HvH      → 16 min REALES   (label en previa: "10 min")
-       HvIA     → 13.5 min REALES (label en previa: "8 min")
-       HvH_ET   →  5 min REALES   (prórroga, escala proporcional)
-       IAIA     →  1 min REAL total = 30 s por parte (label "30 s/parte")
-     - `realMin`: minutos de reloj real que durará el partido en pantalla.
-       Es lo que controla el tickMs del cronómetro.
-     - `displayMin` (opcional): lo que aparece en la previa como
-       DURACIÓN. Se separa de realMin porque el usuario prefiere ver
-       "10 min" / "8 min" aunque la simulación dure más.
-     - `displayLabel` (opcional): etiqueta literal para casos especiales
-       (IAIA = "30 s/parte"). Si está, gana sobre displayMin.
-     El reloj de juego (0-90) se comprime dentro de ese tiempo real
-     mediante una regla de tres (ver _tickMsFromRule). */
+       HvH    → 16 min 30 s reales, label "10 min", 11 s/game-min
+       HvIA   → 13 min 30 s reales, label "8 min",  9 s/game-min
+       IAIA   →  1 min real total  (30 s por parte), label "30 s/parte"
+       HvH_ET →  5 min reales de prórroga
+
+     gameMin = 90 SIEMPRE (el reloj de juego va de 0 a 90). El
+     descuento NO se suma aquí — se añade dinámicamente en tiempo de
+     partido: +1 game-minute por cada evento del acta (gol, tarjeta,
+     penalti, falta, lesión). Se muestra como "45+1, 45+2…" en la 1ª
+     parte y "90+1, 90+2…" en la 2ª. Cada evento prolonga la parte:
+       HvH:  11 segundos reales
+       HvIA:  9 segundos reales
+       IAIA: ~1 segundo real (~672 ms — el usuario lo redondea a 1 s)
+
+     Consecuencia matemática (verificada): 1 game-minute = tickMs × 12
+       HvH   tick ≈ 917 ms → 60 × 917/5 = 11 s
+       HvIA  tick ≈ 750 ms → 60 × 750/5 = 9 s
+       IAIA  tick ≈  56 ms → 60 ×  56/5 ≈ 0.67 s */
   var _ML_TICK_SEC = 5;
   var _MATCH_RULE = {
-    HvH:    { gameMin: 94, realMin: 16,  displayMin: 10 },
-    HvH_ET: { gameMin: 30, realMin: 5                    },
-    HvIA:   { gameMin: 94, realMin: 13.5, displayMin: 8 },
-    IAIA:   { gameMin: 90, realMin: 1,   displayLabel: '30 s/parte' }
+    HvH:    { gameMin: 90, realMin: 16.5, displayMin: 10 },
+    HvH_ET: { gameMin: 30, realMin: 5                     },
+    HvIA:   { gameMin: 90, realMin: 13.5, displayMin: 8  },
+    IAIA:   { gameMin: 90, realMin: 1,    displayLabel: '30 s/parte' }
   };
   function _tickMsFromRule(r) {
     /* regla de tres: tickMs = realMs / (ticksTotales) */
@@ -4275,6 +4280,36 @@
     return window._mlResolveClock(st).tickMs;
   }
   window._mlTickMs = _mlTickMs;
+
+  /* Tipos de evento del acta que prolongan la parte en 1 game-minute.
+     Gol, autogol, goles de jugada, tarjetas (incluyendo doble amarilla
+     y roja directa), penaltis (provocados, fallados, parados) y
+     lesiones. NO cuenta substituciones (son invisibles en el acta) ni
+     imbat/mvp (eventos de cierre). */
+  var _MLSTOP_TYPES = {
+    'gol': 1, 'propia': 1, 'pen-gol': 1, 'pen-fallo': 1,
+    'pen-prov': 1, 'pen-parado': 1, 'falta-gol': 1,
+    'amarilla': 1, 'd-amarilla': 1, 'roja': 1, 'lesion': 1
+  };
+  /* Cuenta cuántos eventos del acta han ocurrido en cada parte del
+     partido, para calcular descuento dinámico. Retorna
+     {first, second}. Se considera "1ª parte" min < 45 y "2ª parte"
+     min ∈ [45, 90). Eventos ya en stoppage time (>= 90) no cuentan
+     — no se pueden prolongar a sí mismos. */
+  function _mlCountStoppageHalves(st) {
+    var fh = 0, sh = 0;
+    var ev = (st && st.events) || [];
+    for (var i = 0; i < ev.length; i++) {
+      var e = ev[i];
+      if (!e || !_MLSTOP_TYPES[e.type]) continue;
+      var m = Number(e.min);
+      if (!isFinite(m)) continue;
+      if (m < 45) fh++;
+      else if (m < 90) sh++;
+    }
+    return { first: fh, second: sh };
+  }
+  window._mlCountStoppageHalves = _mlCountStoppageHalves;
 
   /* Label de duración para la previa. Prioridad:
        1. Override admin `_ppDurationMin` (minutos reales).
@@ -4506,16 +4541,35 @@
       speedLbl.textContent = (mult === 1 ? '1×' : (mult < 1 ? mult + '×' : mult + '×'));
     }
     var rawSec = st.timerSec;
-    var stoppageAdded = st.stoppageSec || 0;
+    /* Descuento dinámico: cada evento del acta en la 1ª/2ª parte añade
+       1 game-minute al tope de esa parte. halfMax y fullMax se calculan
+       cada render sin cachear, para que reflejen eventos recién
+       fireados en la misma iteración del loop. */
+    var stops = _mlCountStoppageHalves(st);
     var normalMax = st.etDone ? 7200 : 5400;
-    var fullMax = normalMax + stoppageAdded * 60;
+    var halfMax = 2700 + (stops.first || 0) * 60;   // 1ª parte finaliza aquí (min 45 + stoppage)
+    var fullMax = normalMax + (stops.second || 0) * 60;
     var min = Math.floor(rawSec/60);
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
     if (st.inDescanso) { btn.textContent='⏸ DESCANSO'; btn.className='ml-timer running'; return; }
     var lbl = st.timerRunning ? '⏸ ' : (rawSec>=fullMax ? '🔁 ' : '▶ ');
-    // Show stoppage minutes like 90+2'
-    var baseMax = st.etDone ? 120 : 90;
-    var display = min > baseMax ? baseMax+'+'+(min-baseMax)+"'" : min+"'";
+    var display;
+    if (st.etDone) {
+      var baseMax = 120;
+      display = min > baseMax ? baseMax+'+'+(min-baseMax)+"'" : min+"'";
+    } else if (!st.htDone && rawSec >= 2700 && rawSec < halfMax) {
+      /* 1ª parte en tiempo de descuento: "45+1, 45+2…". N = cuántos
+         game-minutes hemos consumido de stoppage hasta ahora. */
+      var n1 = Math.min(stops.first, Math.max(1, min - 44));
+      display = '45+' + n1 + "'";
+    } else if (rawSec >= 5400 && rawSec < fullMax) {
+      /* 2ª parte en tiempo de descuento: "90+1, 90+2…". */
+      var n2 = Math.min(stops.second, Math.max(1, min - 89));
+      display = '90+' + n2 + "'";
+    } else {
+      var baseMax = 90;
+      display = min > baseMax ? baseMax+'+'+(min-baseMax)+"'" : min+"'";
+    }
     btn.textContent = lbl+display;
     btn.className = 'ml-timer'+(st.timerRunning?' running':'');
   }
@@ -4776,17 +4830,12 @@
 
     // Pre-generate AI events for HvIA matches
     _mlPreGenAIEvents(mk);
-    // Stoppage time: 1-7 minutos aleatorios para HvH/HvIA (→ duración
-    // real 16-17 / 12-13 min). Los IA vs IA no tienen descuento para
-    // mantener exactamente 30 seg reales (15 por parte) como el
-    // protocolo del simulador Liga IA-vs-IA.
-    if (typeof st.stoppageSec !== 'number' && !st.etDone) {
-      if (st.isFriendly && st.isIAvsIA) {
-        st.stoppageSec = 0;
-      } else {
-        st.stoppageSec = 1 + Math.floor(Math.random() * 7); // 1..7
-      }
-    }
+    /* Descuento dinámico (nuevo): NO hay stoppageSec fijo. Cada evento
+       del acta añade 1 game-minute al tope de su parte (45 → 45+N o
+       90 → 90+N). Se calcula vía _mlCountStoppageHalves en cada tick.
+       Conservamos st.stoppageSec=0 por compatibilidad con código que
+       todavía pueda leerlo. */
+    st.stoppageSec = 0;
     // ── TIMER BASADO EN RELOJ REAL ──────────────────────────
     // Usa Date.now() como fuente de verdad. El cronómetro NUNCA
     // se detiene aunque el móvil se bloquee o la pestaña pierda
@@ -4810,10 +4859,17 @@
       var elapsedMs = Date.now() - st._wallStart;
       st.timerSec = st._gameSecAtStart + Math.round(elapsedMs * _gameSecPerMs);
       var curMin = Math.floor(st.timerSec/60);
-      var normalMax = st.etDone ? 7200 : 5400;
-      var stoppageMax = normalMax + (st.stoppageSec||0)*60;
-      // Fire pending AI events
+      // Fire pending AI events ANTES de comprobar el half-time, así los
+      // eventos recién disparados en min 44 ya cuentan para el stoppage
+      // de la 1ª parte en esta misma iteración.
       _mlFirePendingEvents(mk, curMin);
+      /* Descuento dinámico: cada evento del acta añade 1 game-minute al
+         tope de su parte. Se recalcula aquí, cada tick, por si un
+         evento se acaba de disparar. */
+      var _stops = _mlCountStoppageHalves(st);
+      var normalMax = st.etDone ? 7200 : 5400;
+      var halfMax = 2700 + (_stops.first || 0) * 60;
+      var stoppageMax = normalMax + (_stops.second || 0) * 60;
       /* Disparar lesión programada para el equipo humano */
       if (st.injuryScheduled && !st.injuryFired && curMin >= st.injuryMin) {
         st.injuryFired = true;
@@ -4821,8 +4877,8 @@
         _mlRenderTimerGen(mk);
         _mlTriggerHumanInjury(mk);
       }
-      // Half-time pause at 45': detener 45 segundos reales y reanudar automáticamente
-      if (!st.htDone && st.timerSec >= 2700) {
+      // Half-time pause at 45' + stoppage 1ª parte
+      if (!st.htDone && st.timerSec >= halfMax) {
         st.htDone = true;
         /* Amistosos IA vs IA: no mostrar overlay de descanso ni el botón de
            compartir por WhatsApp. Solo dejamos la marca en el acta y
@@ -4849,11 +4905,19 @@
         _mlShowDescansoOverlay(mk);
         return;
       }
-      // Stoppage time marker at 90'
+      // Stoppage time marker at 90' — muestra el nº de game-minutes
+      // añadidos dinámicamente por los eventos de la 2ª parte.
       if (!st.etDone && !st.stoppageMarked && st.timerSec >= 5400) {
         st.stoppageMarked = true;
         var listSt = document.getElementById('ml-acta-list-'+mk);
-        if (listSt) { var mst = document.createElement('div'); mst.className='ml-ht'; mst.textContent='— TIEMPO DE DESCUENTO (90+1 a 90+'+st.stoppageSec+"') —"; listSt.appendChild(mst); }
+        var _stMinsSh = _stops.second || 0;
+        if (listSt) {
+          var mst = document.createElement('div'); mst.className='ml-ht';
+          mst.textContent = _stMinsSh > 0
+            ? ('— TIEMPO DE DESCUENTO (90+1 a 90+' + _stMinsSh + "') —")
+            : '— TIEMPO DE DESCUENTO —';
+          listSt.appendChild(mst);
+        }
       }
       // ET half-time marker at 105'
       if (st.etDone && !st.et1Done && st.timerSec >= 6300) {
@@ -6418,10 +6482,26 @@
     var min = Math.floor(_gm.timerSec / 60);
     if (_gm.finished) { btn.textContent = '🏁 FIN'; btn.className = 'ml-timer finished'; return; }
     if (_gm.inDescanso) { btn.textContent = '⏸ DESCANSO'; btn.className = 'ml-timer running'; return; }
-    var max = _gm.etDone ? GM_MAX_ET : (_gm.stDone ? (_gm.stoppageMax || GM_MAX_STOPPAGE) : GM_MAX_NORMAL);
-    var lbl = _gm.timerRunning ? '⏸ ' : (_gm.timerSec >= max ? '🔁 ' : '▶ ');
-    var baseMax = _gm.etDone ? 120 : 90;
-    var display = min > baseMax ? baseMax + '+' + (min - baseMax) + "'" : min + "'";
+    /* Descuento dinámico vía _mlCountStoppageHalves (mismo helper que
+       el flujo ml-…). Formato 45+N en la 1ª parte y 90+N en la 2ª. */
+    var stops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
+    var normalMax = _gm.etDone ? GM_MAX_ET : GM_MAX_NORMAL;
+    var halfMax = 2700 + (stops.first || 0) * 60;
+    var fullMax = normalMax + (stops.second || 0) * 60;
+    var lbl = _gm.timerRunning ? '⏸ ' : (_gm.timerSec >= fullMax ? '🔁 ' : '▶ ');
+    var display;
+    if (_gm.etDone) {
+      var baseMaxET = 120;
+      display = min > baseMaxET ? baseMaxET + '+' + (min - baseMaxET) + "'" : min + "'";
+    } else if (!_gm.htDone && _gm.timerSec >= 2700 && _gm.timerSec < halfMax) {
+      var n1 = Math.min(stops.first, Math.max(1, min - 44));
+      display = '45+' + n1 + "'";
+    } else if (_gm.timerSec >= 5400 && _gm.timerSec < fullMax) {
+      var n2 = Math.min(stops.second, Math.max(1, min - 89));
+      display = '90+' + n2 + "'";
+    } else {
+      display = min > 90 ? '90+' + (min - 90) + "'" : min + "'";
+    }
     btn.textContent = lbl + display;
     btn.className = 'ml-timer' + (_gm.timerRunning ? ' running' : '');
   }
@@ -6441,9 +6521,14 @@
     _gm.timerRunning = true;
     _gm.timerInterval = setInterval(function () {
       _gm.timerSec += 5;
-      var max = _gm.etDone ? GM_MAX_ET : (_gm.stDone ? (_gm.stoppageMax || GM_MAX_STOPPAGE) : GM_MAX_NORMAL);
-      /* Descanso automático en el 45:00 */
-      if (!_gm.htDone && _gm.timerSec >= 2700) {
+      /* Descuento dinámico en ambas partes (igual que el flujo ml-…).
+         Se recalcula cada tick por si un evento recién añadido lo ha
+         movido. */
+      var gmStops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
+      var gmHalfMax = 2700 + (gmStops.first || 0) * 60;
+      var max = _gm.etDone ? GM_MAX_ET : (GM_MAX_NORMAL + (gmStops.second || 0) * 60);
+      /* Descanso automático al llegar al tope dinámico de la 1ª parte */
+      if (!_gm.htDone && _gm.timerSec >= gmHalfMax) {
         _gm.htDone = true;
         clearInterval(_gm.timerInterval); _gm.timerRunning = false; _gm.inDescanso = true;
         var list = document.getElementById('gm-acta-list');
@@ -6459,11 +6544,18 @@
         _gmShowHalftimeOv();
         return;
       }
-      /* Tiempo de descuento al llegar al 90:00 */
+      /* Tiempo de descuento al llegar al 90:00 — muestra N dinámico */
       if (!_gm.etDone && !_gm.stDone && _gm.timerSec >= GM_MAX_NORMAL) {
         _gm.stDone = true;
         var listSt = document.getElementById('gm-acta-list');
-        if (listSt) { var ms = document.createElement('div'); ms.className = 'ml-ht'; ms.textContent = '— TIEMPO DE DESCUENTO (90+1 a 90+7) —'; listSt.appendChild(ms); }
+        var _gmN2 = gmStops.second || 0;
+        if (listSt) {
+          var ms = document.createElement('div'); ms.className = 'ml-ht';
+          ms.textContent = _gmN2 > 0
+            ? ('— TIEMPO DE DESCUENTO (90+1 a 90+' + _gmN2 + "') —")
+            : '— TIEMPO DE DESCUENTO —';
+          listSt.appendChild(ms);
+        }
       }
       if (_gm.timerSec >= max) { _gm.timerSec = max; clearInterval(_gm.timerInterval); _gm.timerRunning = false; }
       gmRenderTimer();
@@ -7296,15 +7388,12 @@
     /* Restaura el timestamp del kickoff si lo había en el snapshot
        (sirve para mostrar HH:MM en la tarjeta del hub LIVE). */
     _gm.startedAt = (saved && saved.startedAt) || (_gm.kickoffDone ? (_gm.startedAt || Date.now()) : null);
-    /* Descuento aleatorio 1-7 minutos por partido para que la duración real
-       caiga dentro de los rangos: HvH 16-17 min · HvIA 12-13 min */
-    if (saved && saved.stoppageSec) {
-      _gm.stoppageSec = saved.stoppageSec;
-      _gm.stoppageMax = saved.stoppageMax || (GM_MAX_NORMAL + saved.stoppageSec * 60);
-    } else {
-      _gm.stoppageSec = 1 + Math.floor(Math.random() * 7); // 1..7
-      _gm.stoppageMax = GM_MAX_NORMAL + _gm.stoppageSec * 60;
-    }
+    /* Descuento DINÁMICO (nuevo): ya no se pre-calcula un stoppage
+       random. Cada evento del acta añade 1 game-minute al descuento
+       de su parte (45 → "45+N" o 90 → "90+N"). El gmRenderTimer y
+       gmStartTimer consumen _mlCountStoppageHalves(_gm) al vuelo. */
+    _gm.stoppageSec = 0;
+    _gm.stoppageMax = GM_MAX_NORMAL;
     /* Escudos + nombres en la pantalla de partido */
     function _gmLogo(name) {
       var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');

@@ -5840,8 +5840,10 @@ window._formaLoadCounter = function() {
 };
 
 function _formaHumanTeamsInMatch() {
-  var teams = (typeof window._ppGetCurrentMatchTeams === 'function') ? window._ppGetCurrentMatchTeams() : null;
-  if (!teams) return [];
+  /* Devuelve hasta 2 nombres de equipos HUMANOS implicados en el partido
+     actual. Hacemos múltiples intentos defensivos porque la lista no
+     puede salir vacía: el usuario reportó "no se ve" cuando alguno de
+     los pasos fallaba en silencio. */
   var HUMANOS = (function(){
     try {
       var r = localStorage.getItem('ligaExt_liga-ea-sports');
@@ -5852,34 +5854,99 @@ function _formaHumanTeamsInMatch() {
     } catch(_){}
     return ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid','PSG'];
   })();
-  var normFn = window._ppNormTeam || function(s){return (s||'').toLowerCase();};
+  var normFn = window._ppNormTeam || function(s){
+    return String(s||'').trim().toLowerCase()
+      .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
+      .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').replace(/ñ/g,'n');
+  };
+
+  /* Intento 1: API oficial _ppGetCurrentMatchTeams (lee mlw-{mk} o
+     _ppPreviaTeams). */
+  var teams = null;
+  try { teams = (typeof window._ppGetCurrentMatchTeams === 'function') ? window._ppGetCurrentMatchTeams() : null; } catch(_){}
+
+  /* Intento 2: si la API falló, inspeccionamos el wrap por _ppMatchKey
+     o _ppPreviaTeams directamente. */
+  if (!teams) {
+    if (window._ppPreviaTeams && window._ppPreviaTeams.home && window._ppPreviaTeams.away) {
+      teams = { home: window._ppPreviaTeams.home, away: window._ppPreviaTeams.away };
+    } else if (window._ppMatchKey) {
+      var wrap = document.getElementById('mlw-' + window._ppMatchKey);
+      if (wrap) {
+        var names = wrap.querySelectorAll('.ml-team-name');
+        var hRaw = (names[0] && names[0].textContent) || '';
+        var aRaw = (names[1] && names[1].textContent) || '';
+        var stripPrefix = function(s){ return String(s||'').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+\s*/, '').trim(); };
+        var h = stripPrefix(hRaw), a = stripPrefix(aRaw);
+        if (h && a) teams = { home: h, away: a };
+      }
+    }
+  }
+
+  if (!teams) return [];
+
+  /* Match contra HUMANOS por nombre normalizado. Devuelve los nombres
+     CANÓNICOS (los del HUMANOS) para que sqFromRegistry los encuentre. */
   var found = [];
   [teams.home, teams.away].forEach(function(tname){
     var nt = normFn(tname);
     for (var i = 0; i < HUMANOS.length; i++) {
-      if (normFn(HUMANOS[i]) === nt) { found.push(HUMANOS[i]); break; }
+      if (normFn(HUMANOS[i]) === nt) { found.push(HUMANOS[i]); return; }
+    }
+    /* Fallback laxo: comparar incluyendo si uno contiene al otro
+       (ej. "FC Barcelona" vs "Barcelona"). Solo lo aplicamos para
+       evitar falsos positivos cuando el nombre exacto no está. */
+    for (var j = 0; j < HUMANOS.length; j++) {
+      var nh = normFn(HUMANOS[j]);
+      if (nh && nt && (nh.indexOf(nt) !== -1 || nt.indexOf(nh) !== -1)) {
+        found.push(HUMANOS[j]); return;
+      }
     }
   });
   return found;
 }
 
 function _formaRosterForTeam(teamName) {
-  var squad = (window.SQUAD_REGISTRY && window.SQUAD_REGISTRY[teamName]) || [];
-  return squad.filter(function(p){ return p && !p.h && Array.isArray(p); });
+  /* Resolver roster con varios fallbacks. SQUAD_REGISTRY puede no
+     tener el equipo aún si applyEngineOverrides no se ha ejecutado.
+     sqFromRegistryFull tiene su propia lógica de carga. */
+  var roster = [];
+  try {
+    if (typeof window.sqFromRegistryFull === 'function') {
+      roster = window.sqFromRegistryFull(teamName) || [];
+    }
+  } catch(_){}
+  if (!roster.length) {
+    var squad = (window.SQUAD_REGISTRY && (window.SQUAD_REGISTRY[teamName] || window.SQUAD_REGISTRY[(window.TEAM_ALIASES||{})[String(teamName||'').toLowerCase()]])) || [];
+    /* SQUAD_REGISTRY tiene formato mixto: header rows {h:'...'} +
+       arrays [num, nombre, poder]. Filtramos solo las arrays. */
+    roster = squad.filter(function(p){ return p && !p.h && Array.isArray(p); });
+  }
+  return roster.filter(function(p){ return p && Array.isArray(p) && p[1]; });
 }
 
 window._renderFormaChecklist = function() {
   var humans = _formaHumanTeamsInMatch();
-  if (!humans.length) return '';
+  if (!humans.length) {
+    /* Aún sin equipos humanos detectados, dejamos un mensaje breve para
+       que el usuario sepa que el panel existe y que hay un problema de
+       contexto (no es silencioso). */
+    return '<div style="margin-top:14px;padding:10px 12px;border:1px solid rgba(255,160,64,.25);border-radius:10px;background:rgba(255,160,64,.04);font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,160,64,.85);text-align:center;letter-spacing:.5px;">📉 Estado de forma — abre la previa de un partido con equipo humano para ver la lista</div>';
+  }
   var counter = window._FORMA_DOWN_COUNTER || {};
   var matchStates = window._FORMA_MATCH_STATES || {};
-  var html = '<div style="margin-top:16px;padding:12px;border:1px solid rgba(255,160,64,.35);border-radius:10px;background:rgba(255,160,64,.06);">'
-    + '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;color:#ff9040;margin-bottom:8px;">📉 ESTADO DE FORMA DEL EQUIPO HUMANO</div>'
-    + '<div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.55);margin-bottom:10px;letter-spacing:.5px;">Marca ↘️ Mala o ⬇️ Pésima. Los marcados no juegan este partido. 3↘️ acumulados → LESIÓN LEVE 🩹 automática.</div>';
+  var html = '<div style="margin-top:16px;padding:12px;border:1px solid rgba(255,160,64,.45);border-radius:10px;background:rgba(255,160,64,.08);">'
+    + '<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;color:#ff9040;margin-bottom:8px;font-weight:700;">📉 ESTADO DE FORMA DEL EQUIPO HUMANO</div>'
+    + '<div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.6);margin-bottom:10px;letter-spacing:.5px;line-height:1.4;">Marca ↘️ <b style="color:#ff9040">Mala</b> o ⬇️ <b style="color:#ff5050">Pésima</b>. Los marcados no juegan este partido. 3↘️ acumulados → LESIÓN LEVE 🩹 automática. 1⬇️ → LESIÓN MODERADA 💉 o GRAVE 🚑 automática.</div>';
+  var anyRendered = false;
   humans.forEach(function(team){
     var roster = _formaRosterForTeam(team);
-    if (!roster.length) return;
-    html += '<div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#fff;margin:8px 0 6px;">⚔️ ' + team + '</div>';
+    if (!roster.length) {
+      html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);margin:8px 0;padding:8px;background:rgba(255,255,255,.03);border-radius:6px;">⚔️ ' + team + ' — plantilla no cargada todavía. Recarga la página y vuelve a abrir la previa.</div>';
+      return;
+    }
+    anyRendered = true;
+    html += '<div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#fff;margin:10px 0 6px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px;">⚔️ ' + team + ' <span style="font-size:10px;color:rgba(255,255,255,.45);font-weight:400;margin-left:6px;">' + roster.length + ' jugadores</span></div>';
     html += '<div style="display:flex;flex-direction:column;gap:4px;">';
     roster.forEach(function(p){
       var name = p[1] || '?';
@@ -5890,15 +5957,17 @@ window._renderFormaChecklist = function() {
       var cntBadge = cnt > 0 ? '<span style="background:rgba(255,144,64,.2);border:1px solid rgba(255,144,64,.5);border-radius:6px;padding:1px 6px;font-size:10px;color:#ff9040;margin-left:6px;">↘️×' + cnt + '</span>' : '';
       var dis = isLesionado ? 'disabled' : '';
       var rowStyle = 'display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 8px;background:rgba(255,255,255,.04);border-radius:6px;' + (isLesionado ? 'opacity:.4;' : '');
+      var safeTeam = team.replace(/\\/g,'\\\\').replace(/\'/g,"\\'");
+      var safeName = name.replace(/\\/g,'\\\\').replace(/\'/g,"\\'");
       html += '<label style="' + rowStyle + '">'
         + '<span style="font-family:Oswald,sans-serif;font-size:12px;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
         +   (num ? '<span style="color:rgba(255,255,255,.4);margin-right:6px;">' + num + '</span>' : '')
         +   name + cntBadge
         + '</span>'
         + '<span style="display:flex;gap:4px;flex-shrink:0;">'
-        +   '<button type="button" ' + dis + ' onclick="window._formaToggle(\'' + team.replace(/\'/g,"\\'") + '\',\'' + name.replace(/\'/g,"\\'") + '\',\'down\')" '
+        +   '<button type="button" ' + dis + ' onclick="window._formaToggle(\'' + safeTeam + '\',\'' + safeName + '\',\'down\')" '
         +     'style="background:' + (cur === '↘️' ? 'rgba(255,144,64,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '↘️' ? '#ff9040' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer;">↘️</button>'
-        +   '<button type="button" ' + dis + ' onclick="window._formaToggle(\'' + team.replace(/\'/g,"\\'") + '\',\'' + name.replace(/\'/g,"\\'") + '\',\'pesima\')" '
+        +   '<button type="button" ' + dis + ' onclick="window._formaToggle(\'' + safeTeam + '\',\'' + safeName + '\',\'pesima\')" '
         +     'style="background:' + (cur === '⬇️' ? 'rgba(255,80,80,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '⬇️' ? '#ff5050' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer;">⬇️</button>'
         + '</span>'
         + '</label>';

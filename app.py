@@ -1734,7 +1734,79 @@ def _liga_ext_save(slug, data):
         row = GlobalState(clave=key, valor_json=payload, updated_at=now)
         db.session.add(row)
     db.session.commit()
+    # Propagar a la tabla en memoria que consume la simulación Python.
+    try:
+        _refresh_player_flags_from_liga_ext(data)
+    except Exception:
+        pass
     return row
+
+
+def _refresh_player_flags_from_liga_ext(data):
+    """Reconstruye TEAM_PLAYER_FLAGS leyendo team.players[].{captain,freeKick,
+    penalty,elite,natGoal} del blob de ligaExt recién guardado. Es la vía por
+    la que las marcas asignadas en el editor se aplican para SIEMPRE al motor
+    de simulación Python — sin esto los flags vivían solo en el JS y las
+    simulaciones del servidor (calendario IA) los ignoraban."""
+    if not isinstance(data, dict):
+        return
+    teams = data.get("teams") or []
+    if not isinstance(teams, list):
+        return
+    for team in teams:
+        if not isinstance(team, dict):
+            continue
+        team_name = team.get("name") or team.get("shortName") or ""
+        if not team_name:
+            continue
+        players = team.get("players") or []
+        if not isinstance(players, list):
+            continue
+        team_flags = {}
+        for p in players:
+            if not isinstance(p, dict):
+                continue
+            player_name = p.get("name") or p.get("nombre") or ""
+            if not player_name:
+                continue
+            flags = {}
+            for key, src in (
+                ("captain",  "captain"),
+                ("freeKick", "freeKick"),
+                ("penalty",  "penalty"),
+                ("elite",    "elite"),
+                ("natGoal",  "natGoal"),
+            ):
+                if bool(p.get(src)):
+                    flags[key] = True
+            if flags:
+                team_flags[player_name] = flags
+        if team_flags:
+            TEAM_PLAYER_FLAGS[team_name] = team_flags
+            resolved = resolve_team_name(team_name)
+            if resolved and resolved != team_name:
+                TEAM_PLAYER_FLAGS[resolved] = team_flags
+
+
+def _load_player_flags_on_startup():
+    """Carga TEAM_PLAYER_FLAGS desde GlobalState al arrancar el servidor.
+    Lee todas las filas liga_ext_* y extrae los flags. Así los flags sobre-
+    viven a reinicios del contenedor (Railway) sin que el cliente tenga que
+    tocar nada."""
+    try:
+        rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
+    except Exception:
+        return
+    for row in rows or []:
+        try:
+            data = json.loads(row.valor_json or "{}")
+        except Exception:
+            continue
+        try:
+            _refresh_player_flags_from_liga_ext(data)
+        except Exception:
+            continue
+
 
 @app.route("/api/liga-ext/<slug>", methods=["GET"])
 def api_liga_ext_get(slug):
@@ -2015,6 +2087,12 @@ def spa_fallback(path):
 with app.app_context():
     db.create_all()
     get_or_create_global_state()
+    # Cargar flags de jugadores (C/F/P/⭐/⚾) desde la BD a memoria para que
+    # el motor de simulación Python los aplique desde el primer partido.
+    try:
+        _load_player_flags_on_startup()
+    except Exception:
+        pass
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

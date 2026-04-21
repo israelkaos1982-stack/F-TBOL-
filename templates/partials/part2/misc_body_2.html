@@ -14113,9 +14113,34 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.match-live-wrap').forEach(patchStadiumIn);
   }
 
-  /* ── SPEED CONTROLS — inyectar ⏪/⏩ si faltan ── */
+  /* ── SPEED CONTROLS — inyectar ⏪/⏩ si faltan ──
+     IMPORTANTE (petición del usuario): SOLO en HvH y HvIA. En IA vs IA
+     NUNCA. El wrap del calendario lleva la clase `hvh` o `hvia`
+     según el tipo; cualquier otra cosa se considera IA vs IA y se
+     limpia si tenía controles inyectados por error. */
+  function _isHumanWrap(wrap) {
+    if (!wrap || !wrap.classList) return false;
+    return wrap.classList.contains('hvh') || wrap.classList.contains('hvia');
+  }
+  function _cleanupSpeedIn(wrap) {
+    if (!wrap) return;
+    var mk = (wrap.id || '').replace(/^mlw-/, '');
+    if (!mk) return;
+    var row = document.getElementById('ml-timer-row-' + mk);
+    if (!row) return;
+    /* Sacar el timer del row, colocarlo DONDE ESTABA el row, y eliminar
+       el row con los botones de velocidad. */
+    var timer = row.querySelector('.ml-timer');
+    if (timer && row.parentNode) row.parentNode.insertBefore(timer, row);
+    try { row.parentNode.removeChild(row); } catch(_){}
+  }
   function patchSpeedIn(wrap) {
     if (!wrap) return;
+    if (!_isHumanWrap(wrap)) {
+      /* IA vs IA: limpiar cualquier inyección previa y no hacer nada. */
+      _cleanupSpeedIn(wrap);
+      return;
+    }
     var timer = wrap.querySelector('.ml-timer');
     if (!timer) return;
     /* Si ya vive dentro de .ml-timer-row con los dos botones, no hacemos nada. */
@@ -14174,6 +14199,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function patchAllSpeed() {
+    /* Recorremos TODOS los wraps pero patchSpeedIn filtra internamente:
+       inyecta solo en HvH/HvIA, LIMPIA en IA vs IA. */
     document.querySelectorAll('.match-live-wrap').forEach(patchSpeedIn);
   }
 

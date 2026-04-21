@@ -3173,12 +3173,44 @@
   }
 
   function mezclarEquipos(names) {
+    /* Fisher-Yates con entropía reforzada. Math.random() basta en
+       navegadores de escritorio, pero en algunos WebViews móviles y
+       modos privacidad devuelve secuencias con muy poca variabilidad
+       entre recargas — resultado: el Res "generaba" calendarios
+       cuasi-idénticos. Usamos crypto.getRandomValues cuando esté y
+       caemos a Math.random como red de seguridad. */
     var shuffled = (Array.isArray(names) ? names.slice() : []).filter(Boolean);
-    for (var i = shuffled.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
+    var n = shuffled.length;
+    var cryptoBuf = null;
+    try {
+      if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+        cryptoBuf = new Uint32Array(n);
+        crypto.getRandomValues(cryptoBuf);
+      }
+    } catch (_) { cryptoBuf = null; }
+    for (var i = n - 1; i > 0; i--) {
+      var r = cryptoBuf ? (cryptoBuf[i] / 0x100000000) : Math.random();
+      var j = Math.floor(r * (i + 1));
       var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
     }
     return shuffled;
+  }
+
+  /* Rotación basada en el reloj: cualquier par de clicks humanos en
+     Res están separados por varios milisegundos, así que Date.now()
+     cambia SIEMPRE entre resets. Rotar el array por un offset derivado
+     del reloj garantiza que el calendario resultante es distinto al
+     anterior incluso si Math.random() devolviera la misma secuencia
+     (caso raro en móviles pero reportado). Offset ∈ [1, n-1] — nunca
+     0, porque 0 dejaría el array igual. */
+  function _rotarPorReloj(arr) {
+    if (!Array.isArray(arr) || arr.length < 2) return arr;
+    var n = arr.length;
+    var raw = (typeof performance !== 'undefined' && performance.now)
+      ? Math.floor(performance.now() * 1000)
+      : Date.now();
+    var off = 1 + Math.abs(raw) % (n - 1);
+    return arr.slice(off).concat(arr.slice(0, off));
   }
 
   function leerOrdenEquiposActual() {
@@ -3363,10 +3395,18 @@
 
       var randomOrder = null;
       for (var _shuffle = 0; _shuffle < 12; _shuffle++) {
-        /* Doble shuffle: mezcla dos veces sobre TEAMS.slice() para
-           romper cualquier correlación con baseOrder. Math.random()
-           suele dar suficiente entropía, pero reforzamos. */
-        randomOrder = mezclarEquipos(mezclarEquipos(TEAMS.slice()));
+        /* Triple capa de variación para GARANTIZAR que cada Res produce
+           un calendario distinto al anterior:
+             1) Doble Fisher-Yates (con crypto.getRandomValues si hay)
+                sobre TEAMS — entropía del RNG.
+             2) Rotación basada en performance.now() — aunque el RNG
+                devuelva la misma secuencia entre recargas (caso visto
+                en algún WebView móvil), el reloj cambia SIEMPRE entre
+                dos clicks humanos → rotación distinta → round-robin
+                distinto → partidos distintos en cada jornada.
+           Sin la capa (2) el usuario seguía viendo los mismos partidos
+           tras pulsar Res repetidamente. */
+        randomOrder = _rotarPorReloj(mezclarEquipos(mezclarEquipos(TEAMS.slice())));
         if (!Array.isArray(randomOrder) || randomOrder.length < 20) continue;
         var candidate = generarCalendario(randomOrder);
         if (Array.isArray(candidate) && candidate.length === 38) {
@@ -3379,13 +3419,11 @@
       }
       /* Garantía final: si los 12 intentos salieron iguales al anterior
          (imposible por azar, pero por paranoia), forzamos una rotación
-         no-trivial del orden para que SÍ sea distinto. */
+         basada en el reloj para que SÍ sea distinto. El offset sale de
+         performance.now(), no de una constante — así dos Res seguidos
+         producen rotaciones distintas. */
       if (!newSchedule && prevSerialized) {
-        var forced = TEAMS.slice();
-        /* Rotación: mover los 3 primeros al final. Esto cambia la
-           estructura del round-robin y garantiza calendario distinto. */
-        forced = forced.slice(3).concat(forced.slice(0, 3));
-        newSchedule = generarCalendario(forced);
+        newSchedule = generarCalendario(_rotarPorReloj(TEAMS.slice()));
       }
       if (!Array.isArray(newSchedule) || newSchedule.length !== 38) {
         newSchedule = generarCalendario(mezclarEquipos(TEAMS.slice()));

@@ -3588,7 +3588,17 @@
     if (Array.isArray(teamList) && teamList.length) return generarCalendario(teamList);
     return generarCalendario(leerOrdenEquiposActual());
   };
-  var SCHEDULE = loadSchedule() || generarCalendario(TEAMS);
+  /* Carga inicial: si no hay schedule guardado (primer arranque o
+     localStorage limpiada), generamos uno aleatorio en vez de caer a
+     TEAMS (orden fijo). Si cayéramos a TEAMS, el usuario vería el
+     mismo calendario "por defecto" cada vez que la localStorage se
+     vaciara por cualquier motivo. El aleatorio se persiste para
+     que sobreviva a recargas subsiguientes. */
+  var SCHEDULE = loadSchedule();
+  if (!isValidLigaSchedule(SCHEDULE)) {
+    SCHEDULE = generarCalendario(_rotarPorReloj(mezclarEquipos(TEAMS.slice())));
+    try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(SCHEDULE)); } catch(_){}
+  }
   window.LIGA_SCHEDULE = SCHEDULE;
   hydrateLigaStateFromBackend();
 
@@ -9184,16 +9194,20 @@
   window.buildIAresults = function () {
     var container = document.getElementById('ia-res-list');
     if (!container) return;
-    // Guard: si SCHEDULE se ha perdido, regenerarlo desde TEAMS.
+    /* Guard: si SCHEDULE se ha perdido, regenerarlo aleatorio. ANTES
+       usábamos TEAMS.slice() (orden fijo), de modo que cualquier
+       invalidación accidental pisaba el calendario del Res con el
+       calendario alfabético → el usuario veía "siempre las mismas
+       jornadas". Usamos mezclarEquipos + _rotarPorReloj, igual que el
+       reset, para que el fallback también produzca un calendario
+       distinto cada vez. */
     if (!Array.isArray(SCHEDULE) || SCHEDULE.length !== 38) {
       try {
-        var _fallback = generarCalendario(TEAMS.slice());
+        var _fallback = generarCalendario(_rotarPorReloj(mezclarEquipos(TEAMS.slice())));
         setLigaSchedule(_fallback);
       } catch(_) {}
-      // Si setLigaSchedule falló por cualquier razón, asignamos
-      // localmente para que al menos el render actual tenga datos.
       if (!Array.isArray(SCHEDULE) || SCHEDULE.length !== 38) {
-        try { SCHEDULE = generarCalendario(TEAMS.slice()); } catch(__) {}
+        try { SCHEDULE = generarCalendario(_rotarPorReloj(mezclarEquipos(TEAMS.slice()))); } catch(__) {}
       }
     }
     var html    = '';

@@ -925,6 +925,62 @@ def copa_reiniciar():
     save_global_state(data, replace=True)
     return jsonify({"ok": True})
 
+# Nombres de los 20 equipos de Liga EA Sports tal como los usa el
+# cliente (misc_body_2.html). Se mantiene sincronizado a mano porque el
+# Python de esta app tiene otros nombres (jugadores_data) que no valen
+# para la Liga EA (p.ej. "Celta" vs "Celta de Vigo"). Si en el futuro
+# se hace configurable desde el editor, sustitúyase por la lectura del
+# estado; hoy basta con la constante.
+LIGA_EA_TEAMS_DEFAULT = [
+    "Real Madrid", "Athletic Club", "Real Sociedad", "Sevilla", "Villarreal",
+    "Mallorca", "Valencia CF", "Espanyol", "Bayern Munich", "Celta de Vigo",
+    "Deportivo Alavés", "Osasuna", "Getafe CF", "Arsenal", "Girona FC",
+    "Elche CF", "Atlético Madrid", "Rayo Vallecano", "Real Betis", "FC Barcelona",
+]
+
+
+def _liga_extract_teams(schedule):
+    """Extrae los nombres únicos de equipos de un schedule serializado."""
+    if not isinstance(schedule, list):
+        return []
+    out = []
+    seen = set()
+    for jornada in schedule:
+        if not isinstance(jornada, list):
+            continue
+        for match in jornada:
+            if not isinstance(match, (list, tuple)) or len(match) < 2:
+                continue
+            for team in (match[0], match[1]):
+                if isinstance(team, str) and team and team not in seen:
+                    seen.add(team)
+                    out.append(team)
+    return out
+
+
+def _liga_calendario_aleatorio(teams, distinto_a=None):
+    """Genera un calendario de 38 jornadas con el orden de equipos
+    aleatorizado. Si `distinto_a` se proporciona y el resultado coincide,
+    vuelve a intentar; si tras 10 intentos sigue igual (probabilidad
+    astronómicamente baja), rota el array no-trivialmente como garantía
+    absoluta.
+    """
+    base = list(teams)
+    for _ in range(10):
+        random.shuffle(base)
+        cal = generar_calendario(base)
+        cal_lists = [[list(m) for m in jor] for jor in cal]
+        if len(cal_lists) == 38 and cal_lists != distinto_a:
+            return cal_lists
+    # Fallback: rotar por un offset derivado del reloj — siempre
+    # distinto entre dos llamadas consecutivas.
+    ns = int(datetime.now(timezone.utc).timestamp() * 1_000_000)
+    offset = 1 + (ns % (len(base) - 1))
+    rotated = base[offset:] + base[:offset]
+    cal = generar_calendario(rotated)
+    return [[list(m) for m in jor] for jor in cal]
+
+
 @app.route("/api/state/reset-liga", methods=["POST"])
 def api_state_reset_liga():
     """Reset FORZADO de Liga EA Sports (clasificación + resultados).
@@ -942,14 +998,43 @@ def api_state_reset_liga():
 
     Acepta opcionalmente un `liga_schedule` nuevo en el body para
     aplicar un calendario recién generado en el cliente en la misma
-    operación atómica (no hace falta, pero evita una ronda extra
-    de POST)."""
+    operación atómica.
+
+    GARANTÍA DE NUEVO CALENDARIO (server-side): si el body no trae un
+    `liga_schedule` válido, o si el que trae es IDÉNTICO al actual
+    (caso de clientes con JS cacheado o RNG con poca entropía en
+    WebViews móviles), el servidor genera él mismo un calendario
+    aleatorio distinto del actual. Así el usuario SIEMPRE ve un
+    calendario nuevo tras pulsar Res, sin depender de la calidad
+    del RNG del navegador."""
     body = request.get_json(silent=True) or {}
     data = load_global_state()
     data["liga_results"] = {}
-    new_schedule = body.get("liga_schedule")
-    if isinstance(new_schedule, list) and len(new_schedule) == 38:
-        data["liga_schedule"] = new_schedule
+
+    current_schedule = data.get("liga_schedule")
+    client_schedule = body.get("liga_schedule")
+
+    # Aceptamos el calendario del cliente sólo si es válido Y distinto
+    # al actual. Si coincide, caemos al generador del servidor para
+    # garantizar que el usuario vea jornadas nuevas.
+    new_schedule = None
+    if (
+        isinstance(client_schedule, list)
+        and len(client_schedule) == 38
+        and client_schedule != current_schedule
+    ):
+        new_schedule = client_schedule
+    else:
+        teams = (
+            _liga_extract_teams(client_schedule)
+            or _liga_extract_teams(current_schedule)
+            or list(LIGA_EA_TEAMS_DEFAULT)
+        )
+        if len(teams) != 20:
+            teams = list(LIGA_EA_TEAMS_DEFAULT)
+        new_schedule = _liga_calendario_aleatorio(teams, distinto_a=current_schedule)
+
+    data["liga_schedule"] = new_schedule
     save_global_state(data, replace=True)
     row = get_or_create_global_state()
     return jsonify({

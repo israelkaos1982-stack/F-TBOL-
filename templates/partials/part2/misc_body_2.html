@@ -3506,28 +3506,31 @@
 
     _rebuildUi(); // Refresco inmediato (no esperamos al server)
 
+    /* Reload con cache-buster: añadimos ?_r=<timestamp> para forzar
+       al navegador a pedir el HTML de nuevo en vez de servirlo de la
+       caché. Sin esto, Chrome móvil puede servir la versión cacheada
+       del template, que trae el JS viejo (con el RNG pobre), y al
+       usuario le parece que el Res no actualiza nada. */
+    function _reloadConCacheBuster() {
+      try {
+        var url = new URL(location.href);
+        url.searchParams.set('_r', String(Date.now()));
+        setTimeout(function(){ location.replace(url.toString()); }, 250);
+      } catch(_) {
+        try { setTimeout(function(){ location.reload(); }, 250); } catch(__){}
+      }
+    }
+
     _postReset().then(function(){
       _rebuildUi();
       alert('✅ Liga reiniciada. Clasificación y resultados a cero. Los equipos y plantillas se mantienen.');
-      /* Reload defensivo: algunas pantallas cachean matches/jornadas
-         en closures/DOM que no se limpian con _rebuildUi (p.ej. las
-         live-wraps ya instanciadas con los nombres de equipo del
-         calendario anterior). Con este reload nos aseguramos de que
-         el usuario vea el nuevo calendario sin trazas del antiguo.
-         El POST al server ya acabó, así que perder estado in-memory
-         es seguro. */
-      try { setTimeout(function(){ location.reload(); }, 250); } catch(_){}
+      _reloadConCacheBuster();
     }).catch(function(err){
-      // Si tras 3 intentos el server sigue fallando, lo comunicamos
-      // pero dejamos el cliente ya vacío: en cuanto haya red, el
-      // siguiente POST normal forzará el estado servidor-lado.
       _rebuildUi();
       alert('⚠️ Liga reiniciada LOCALMENTE, pero no se pudo confirmar al servidor tras 3 intentos (' +
             (err && err.message || 'sin detalle') + ').\n\n' +
             'En cuanto se restablezca la conexión, vuelve a pulsar Res para sincronizar el resto de dispositivos.');
-      /* Reload igualmente — el calendario local SÍ está actualizado
-         aunque el server no se haya enterado todavía. */
-      try { setTimeout(function(){ location.reload(); }, 250); } catch(_){}
+      _reloadConCacheBuster();
     });
   };
 

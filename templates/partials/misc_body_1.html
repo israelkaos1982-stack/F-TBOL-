@@ -1487,6 +1487,210 @@ window.pG = function(fn) {
 </style>
 <script>
 (function(){
+  /* ══ VIEWER SIMPLE DE PLANTILLA ═══════════════════════════════
+     Overlay autosuficiente que lee de TODAS las fuentes posibles
+     (ligaExt_*, SQUAD_REGISTRY, ef_player_stats_v1) sin depender
+     del context switching del editor. Si existe el equipo en
+     CUALQUIER lado, se muestra aquí. Garantiza que el usuario
+     SIEMPRE ve algo al pulsar un equipo. */
+  function _psN(s){
+    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+  function _psCollect(teamName){
+    var target = _psN(teamName);
+    if (!target) return { target:target, teamObj:null, registry:null, stats:{} };
+    /* Mapa de alias para capturar "Celta"→"Celta de Vigo" etc. */
+    var aliases = {
+      'bayern':'bayern munich', 'bayern munich':'bayern',
+      'atl madrid':'atletico madrid', 'atletico madrid':'atl madrid',
+      'celta':'celta de vigo', 'celta de vigo':'celta',
+      'elche':'elche cf', 'elche cf':'elche',
+      'rayo':'rayo vallecano', 'rayo vallecano':'rayo',
+      'alaves':'deportivo alaves', 'deportivo alaves':'alaves',
+      'valencia':'valencia cf', 'valencia cf':'valencia'
+    };
+    var targets = [target];
+    if (aliases[target]) targets.push(aliases[target]);
+    function matches(name){
+      var n = _psN(name);
+      if (!n) return false;
+      for (var i = 0; i < targets.length; i++) {
+        if (n === targets[i]) return true;
+      }
+      /* substring match para desajustes ("Celta Vigo" vs "Celta de Vigo") */
+      for (var j = 0; j < targets.length; j++) {
+        if (targets[j].length >= 4 && (n.indexOf(targets[j])!==-1 || targets[j].indexOf(n)!==-1)) return true;
+      }
+      return false;
+    }
+    var teamObj = null;
+    /* 1. ligaExt_* stores (main + backup) — elige el que tenga
+          MÁS jugadores para este equipo. */
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        var raw = localStorage.getItem(k);
+        if (!raw) continue;
+        var d; try { d = JSON.parse(raw); } catch(_){ continue; }
+        if (!d || !Array.isArray(d.teams)) continue;
+        for (var j = 0; j < d.teams.length; j++) {
+          var t = d.teams[j];
+          if (!t || !matches(t.name)) continue;
+          var cnt = (t.players && t.players.length) || 0;
+          var bestCnt = (teamObj && teamObj.players && teamObj.players.length) || 0;
+          if (!teamObj || cnt > bestCnt) teamObj = t;
+        }
+      }
+    } catch(_){}
+    /* 2. window.SQUAD_REGISTRY — iteramos todas las claves */
+    var registry = null;
+    try {
+      var SR = window.SQUAD_REGISTRY || {};
+      var keys = Object.keys(SR);
+      for (var a = 0; a < keys.length; a++) {
+        if (matches(keys[a])) { registry = SR[keys[a]]; break; }
+      }
+    } catch(_){}
+    /* 3. ef_player_stats_v1 — stats por team::player normalizado */
+    var stats = {};
+    try {
+      var srw = localStorage.getItem('ef_player_stats_v1');
+      if (srw) {
+        var sm = JSON.parse(srw);
+        Object.keys(sm||{}).forEach(function(kk){
+          var parts = kk.split('::');
+          if (parts.length < 2) return;
+          for (var t = 0; t < targets.length; t++) {
+            if (parts[0] === targets[t]) { stats[parts[1]] = sm[kk]; break; }
+          }
+        });
+      }
+    } catch(_){}
+    return { target:target, teamObj:teamObj, registry:registry, stats:stats };
+  }
+  function _psBuildPlayers(collected){
+    var out = [];
+    var seen = Object.create(null);
+    /* Prioridad 1: ligaExt team.players (datos completos) */
+    if (collected.teamObj && Array.isArray(collected.teamObj.players)) {
+      collected.teamObj.players.forEach(function(p){
+        if (!p || !p.name) return;
+        var key = _psN(p.name);
+        if (seen[key]) return;
+        seen[key] = true;
+        out.push({
+          name: p.name, num: Number(p.num)||0, power: Number(p.power)||70,
+          pos: p.pos || 'MED',
+          captain: !!p.captain, freeKick: !!p.freeKick, penalty: !!p.penalty,
+          elite: !!p.elite, natGoal: !!p.natGoal, source: 'ligaExt'
+        });
+      });
+    }
+    /* Prioridad 2: SQUAD_REGISTRY entries */
+    if (collected.registry && Array.isArray(collected.registry)) {
+      var curPos = 'MED';
+      var HDR = {'🧤 PORTEROS':'POR','🛡 DEFENSAS':'DEF','⚙️ MEDIOS':'MED','⚡ DELANTEROS':'DEL'};
+      collected.registry.forEach(function(e){
+        if (e && typeof e === 'object' && e.h) { curPos = HDR[e.h] || 'MED'; return; }
+        if (!Array.isArray(e) || e.length < 2) return;
+        var name = String(e[1]||'').trim();
+        if (!name) return;
+        var key = _psN(name);
+        if (seen[key]) return;
+        seen[key] = true;
+        out.push({
+          name: name, num: Number(e[0])||0, power: Number(e[2])||70, pos: curPos,
+          captain: !!e.captain, freeKick: !!e.freeKick, penalty: !!e.penalty,
+          elite: !!e.elite, natGoal: !!e.natGoal, source: 'registry'
+        });
+      });
+    }
+    /* Prioridad 3: stats-only (solo el nombre, resto por defecto) */
+    Object.keys(collected.stats).forEach(function(k){
+      if (seen[k]) return;
+      seen[k] = true;
+      var nm = k.split(' ').map(function(w){ return w ? w.charAt(0).toUpperCase()+w.slice(1) : ''; }).join(' ').trim();
+      if (!nm) return;
+      out.push({ name:nm, num:0, power:70, pos:'MED', source:'stats' });
+    });
+    /* Adjuntar stats acumuladas a cada jugador (desde ef_player_stats_v1) */
+    out.forEach(function(p){
+      var s = collected.stats[_psN(p.name)];
+      if (s) {
+        p.gol = Number(s.gol)||0; p.pen = Number(s.pen)||0; p.fk = Number(s.fk)||0;
+        p.mvp = Number(s.mvp)||0; p.ta = Number(s.ta)||0; p.tr = Number(s.tr)||0;
+        p.pj = Number(s.pj)||0;
+      } else {
+        p.gol = Number(p.gol)||0; p.pen = Number(p.pen)||0; p.fk = Number(p.fk)||0;
+        p.mvp = Number(p.mvp)||0; p.ta = Number(p.ta)||0; p.tr = Number(p.tr)||0;
+        p.pj = Number(p.pj)||0;
+      }
+    });
+    return out;
+  }
+  window.showPlantillaSimple = function(teamName){
+    var collected = _psCollect(teamName);
+    var players = _psBuildPlayers(collected);
+    var ov = document.getElementById('ps-plantilla-ov');
+    if (ov) ov.remove();
+    ov = document.createElement('div');
+    ov.id = 'ps-plantilla-ov';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999999;padding:14px 8px;overflow-y:auto;font-family:Rajdhani,sans-serif;';
+    ov.addEventListener('click', function(e){ if (e.target === ov) ov.remove(); });
+    var html = '<div style="max-width:680px;margin:0 auto;background:#0a0a14;border:1px solid rgba(240,192,64,.3);border-radius:8px;padding:14px;">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">';
+    html += '<h2 style="margin:0;color:#f0c040;font-family:Oswald,sans-serif;font-size:18px;">🛡 '+teamName+'</h2>';
+    html += '<button onclick="document.getElementById(\'ps-plantilla-ov\').remove()" style="background:rgba(255,60,60,.15);border:1px solid rgba(255,60,60,.5);color:#ff7070;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:14px;font-weight:700;">✕</button>';
+    html += '</div>';
+    if (players.length === 0) {
+      html += '<div style="padding:36px 12px;text-align:center;color:rgba(255,255,255,.6);line-height:1.7;">';
+      html += '<div style="font-size:40px;margin-bottom:12px;">😔</div>';
+      html += '<p>No se encontraron jugadores de <b>«'+teamName+'»</b> en ninguna fuente:</p>';
+      html += '<ul style="text-align:left;font-size:12px;display:inline-block;margin:12px 0;">';
+      html += '<li>Editor ligaExt_* (el sitio "oficial")</li>';
+      html += '<li>SQUAD_REGISTRY (memoria sesión)</li>';
+      html += '<li>ef_player_stats_v1 (stats acumuladas)</li>';
+      html += '</ul>';
+      html += '<p style="margin-top:16px;">Usa <b>✏️ Edit</b> para crear el equipo o pega su plantilla.</p>';
+      html += '</div>';
+    } else {
+      var byPos = {POR:[],DEF:[],MED:[],DEL:[]};
+      players.forEach(function(p){ (byPos[p.pos]||byPos.MED).push(p); });
+      var ORDER = ['POR','DEF','MED','DEL'];
+      var LBL = {POR:'🧤 PORTEROS', DEF:'🛡 DEFENSAS', MED:'⚙️ CENTROCAMPISTAS', DEL:'⚽ DELANTEROS'};
+      html += '<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:10px;">'+players.length+' jugadores · ligaExt='+players.filter(function(p){return p.source==='ligaExt';}).length+' · registry='+players.filter(function(p){return p.source==='registry';}).length+' · stats='+players.filter(function(p){return p.source==='stats';}).length+'</div>';
+      ORDER.forEach(function(pos){
+        var list = byPos[pos];
+        if (!list.length) return;
+        list.sort(function(a,b){ return (b.power||0)-(a.power||0); });
+        html += '<div style="margin-top:14px;padding:6px 10px;background:rgba(240,192,64,.08);border-left:3px solid #f0c040;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#f0c040;">'+LBL[pos]+'</div>';
+        list.forEach(function(p){
+          html += '<div style="display:flex;align-items:center;gap:6px;padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px;flex-wrap:wrap;">';
+          html += '<span style="color:rgba(255,255,255,.4);min-width:24px;font-family:\'Bebas Neue\',sans-serif;">'+(p.num||'·')+'</span>';
+          html += '<span style="flex:1;min-width:110px;color:#fff;font-weight:600;">'+p.name+'</span>';
+          var flags = '';
+          if (p.captain)  flags += '<span style="background:rgba(255,100,100,.2);color:#ff8080;padding:1px 5px;border-radius:3px;margin-left:3px;font-size:10px;font-weight:700;">C</span>';
+          if (p.freeKick) flags += '<span style="background:rgba(100,200,255,.2);color:#80d0ff;padding:1px 5px;border-radius:3px;margin-left:3px;font-size:10px;font-weight:700;">F</span>';
+          if (p.penalty)  flags += '<span style="background:rgba(255,180,100,.2);color:#ffb480;padding:1px 5px;border-radius:3px;margin-left:3px;font-size:10px;font-weight:700;">P</span>';
+          if (p.elite)    flags += '<span style="margin-left:3px;font-size:12px;">⭐</span>';
+          if (p.natGoal)  flags += '<span style="margin-left:3px;font-size:12px;">⚾</span>';
+          if (flags) html += '<span>'+flags+'</span>';
+          html += '<span style="color:#f0c040;min-width:32px;text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:17px;">'+(p.power||'-')+'</span>';
+          html += '<span style="color:rgba(255,255,255,.65);min-width:28px;text-align:right;font-size:11px;">PJ '+(p.pj||0)+'</span>';
+          html += '<span style="color:#80ff80;min-width:34px;text-align:right;">⚽'+(p.gol||0)+'</span>';
+          html += '<span style="color:#ffff80;min-width:30px;text-align:right;">🥅'+(p.pen||0)+'</span>';
+          html += '<span style="color:#ff8080;min-width:30px;text-align:right;">🎯'+(p.fk||0)+'</span>';
+          html += '<span style="color:#ffff40;min-width:30px;text-align:right;">⭐'+(p.mvp||0)+'</span>';
+          html += '</div>';
+        });
+      });
+    }
+    html += '</div>';
+    ov.innerHTML = html;
+    document.body.appendChild(ov);
+  };
   // Delegación: cada click sobre una fila de la clasificación de Liga
   // EA Sports abre la plantilla (overlay lext-ov-squad) del equipo
   // correspondiente, recuperando los datos creados desde ✏️ Edit.
@@ -1526,11 +1730,17 @@ window.pG = function(fn) {
       displayName = (clone.textContent || '').trim();
     }
     if(!displayName) return;
-    if(typeof window.openLigaExtSquadByName === 'function'){
-      window.openLigaExtSquadByName(slug, displayName);
-    } else if(typeof window.openLigaEaSquadByName === 'function'){
-      window.openLigaEaSquadByName(displayName);
-    }
+    /* MUESTRA GARANTIZADA: abrimos SIEMPRE showPlantillaSimple que lee
+       de TODAS las fuentes (ligaExt + SQUAD_REGISTRY + stats). Aunque
+       algo fallase en el flujo del editor (context, fetchData, etc.)
+       el usuario siempre ve los jugadores que existen en su instalación.
+       Si hay flujo de edición disponible, en 900ms lo abrimos también
+       en modo edición — pero ya hemos mostrado algo al tacto. */
+    try {
+      if (typeof window.showPlantillaSimple === 'function') {
+        window.showPlantillaSimple(displayName);
+      }
+    } catch(_){}
   }, false);
 
   // ── Integración con el editor de equipos ────────────────

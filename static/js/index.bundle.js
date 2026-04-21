@@ -629,20 +629,34 @@ var MAX_NORMAL=5400;var MAX_ET=7200;
 /* Fuente única de verdad: _mlResolveClock (definido en misc_body_2.html).
    Lee _MATCH_TICKS/_MATCH_RULE + override admin _ppDurationMin. NO cachear
    en variables de módulo (eso era el bug antiguo: al cambiar la duración
-   el reloj seguía con el valor anterior). CLAUDE.md: obligatorio. */
+   el reloj seguía con el valor anterior). CLAUDE.md: obligatorio.
+
+   BUG HISTÓRICO: antes solo detectábamos `.hvh`. Un partido HvIA
+   lleva la clase `.hvia`, no `.hvh`, así que caía al flujo "no-HvH"
+   SIN pasar home/away ni humanInvolved → _mlResolveClock asumía
+   IAIA (83 ms tick) y el partido HvIA terminaba en 1:30 en vez de
+   los 13:30 reales. Fix: detectar también `.hvia` y pasar
+   humanInvolved=true cuando corresponde. */
 function _j1m1ResolveSpd(){
+  var _w = document.getElementById('mlw-j1m1');
+  var _isHvH  = !!(_w && _w.classList && _w.classList.contains('hvh'));
+  var _isHvIA = !!(_w && _w.classList && _w.classList.contains('hvia'));
   if (typeof window._mlResolveClock === 'function') {
-    var info = window._mlResolveClock({ isHvH: !!(document.getElementById('mlw-j1m1')||{classList:{contains:function(){return false;}}}).classList.contains('hvh'), etDone: !!_etPhase });
+    var info = window._mlResolveClock({
+      isHvH: _isHvH,
+      humanInvolved: _isHvH || _isHvIA,
+      etDone: !!_etPhase
+    });
     return info.tickMs;
   }
   /* Fallback defensivo si misc_body_2 no cargó aún. Valores oficiales:
-     HvH=16 min real → ~851 ms, HvIA=13.5 min → ~718 ms, ET=5 min → ~833 ms.
-     (label que muestra la previa es otro: 10/8 min — ver displayMin). */
+     HvH=16.5 min real → 917 ms, HvIA=13.5 min → 750 ms, ET=5 min → 833 ms,
+     IAIA=1.5 min → 83 ms. (label previa HvH=10 min, HvIA=8 min). */
   var t = window._MATCH_TICKS || {};
-  var _w = document.getElementById('mlw-j1m1');
-  var _hvh = _w && _w.classList.contains('hvh');
   if (_etPhase) return t.HvH_ET || 833;
-  return _hvh ? (t.HvH || 851) : (t.HvIA || 718);
+  if (_isHvH)  return t.HvH  || 917;
+  if (_isHvIA) return t.HvIA || 750;
+  return t.IAIA || 83;
 }
 window.mlTimerClick_j1m1=function(){if(_matchFinished||_inDescanso)return;if(_timerRunning){clearInterval(_timerInterval);_timerRunning=false;_renderTimer_j1m1();}else{_timerRunning=true;_startInterval_j1m1();}};
 /* Reloj de muralla (wall-clock) anti-throttling para el j1m1. Antes

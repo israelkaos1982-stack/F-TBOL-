@@ -5457,9 +5457,25 @@
   }
   var _mlStatsCallback = null;
   var _mlStatsMk = null;
-  function _mlShowStatsOverlay(mk, onConfirm){
-    var st = _mlSt(mk); if (!st) { if (onConfirm) onConfirm(); return; }
-    _mlStatsMk = mk;
+  var _mlStatsStateRef = null;
+  /* Acepta (mk, onConfirm) o (stateObject, onConfirm). Así el flujo gm-
+     modal y amistosos (que no tienen mk en _mlStates) también pueden
+     abrir el overlay pasando _gm directamente. El confirm guarda las
+     stats en el mismo objeto state para que _mlBuildAndShareWA las
+     consuma. */
+  function _mlShowStatsOverlay(mkOrState, onConfirm){
+    var st;
+    if (typeof mkOrState === 'string') {
+      st = _mlSt(mkOrState); if (!st) { if (onConfirm) onConfirm(); return; }
+      _mlStatsMk = mkOrState;
+      _mlStatsStateRef = null;
+    } else if (mkOrState && typeof mkOrState === 'object') {
+      st = mkOrState;
+      _mlStatsMk = null;
+      _mlStatsStateRef = st;
+    } else {
+      if (onConfirm) onConfirm(); return;
+    }
     _mlStatsCallback = onConfirm || function(){};
     var ov = document.getElementById('ml-stats-ov');
     if (!ov) { _mlStatsCallback(); return; }
@@ -5527,8 +5543,9 @@
     ov.classList.add('show');
   }
   window._mlStatsConfirm = function(){
-    var mk = _mlStatsMk; if (!mk) return;
-    var st = _mlSt(mk); if (!st) return;
+    /* Acepta el state abierto con mk o el objeto directo (_gm). */
+    var st = _mlStatsStateRef || (_mlStatsMk ? _mlSt(_mlStatsMk) : null);
+    if (!st) return;
     var stats = { a: {}, b: {} };
     var inputs = document.querySelectorAll('#ml-stats-grid .ml-stats-val');
     inputs.forEach(function(inp){
@@ -5542,7 +5559,7 @@
     st.matchStats = stats;
     var ov = document.getElementById('ml-stats-ov');
     if (ov) ov.classList.remove('show');
-    var cb = _mlStatsCallback; _mlStatsCallback = null; _mlStatsMk = null;
+    var cb = _mlStatsCallback; _mlStatsCallback = null; _mlStatsMk = null; _mlStatsStateRef = null;
     if (cb) cb();
   };
 
@@ -6187,6 +6204,38 @@
       var tName = e.team === 'a' ? _gm.home : _gm.away;
       lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + tName + ')');
     });
+    /* Stats del partido confirmadas en el overlay post-MVP. Se añaden
+       debajo del acta cuando existen (no aplican a IAIA). Mismo formato
+       que _mlBuildAndShareWA. */
+    if (_gm.matchStats && (_gm.matchStats.a || _gm.matchStats.b)) {
+      var _sa = _gm.matchStats.a || {};
+      var _sb = _gm.matchStats.b || {};
+      var statRows = [
+        ['posesion',  '➗', 'Posesión (%)',       false],
+        ['remates',   '👟', 'Remates',             false],
+        ['tiros',     '🚪', 'Tiros a puerta',      false],
+        ['penGol',    '🥅', 'Goles de penalti',    true],
+        ['faltaGol',  '🎯', 'Goles de falta',      true],
+        ['amarillas', '🟨', 'Amarillas',           false],
+        ['rojas',     '🟥', 'Rojas',               false],
+        ['corners',   '⛳', 'Córners',             false],
+        ['paradas',   '🧤', 'Paradas',             false]
+      ];
+      var out = [];
+      statRows.forEach(function(row){
+        var k = row[0], ico = row[1], lbl = row[2], skipZero = row[3];
+        var va = _sa[k], vb = _sb[k];
+        var hasA = va != null, hasB = vb != null;
+        if (!hasA && !hasB) return;
+        if (skipZero && !va && !vb) return;
+        out.push(ico + ' ' + lbl + ': ' + (hasA ? va : 0) + ' - ' + (hasB ? vb : 0));
+      });
+      if (out.length) {
+        lines.push('');
+        lines.push('ESTADÍSTICAS:');
+        out.forEach(function(l){ lines.push(l); });
+      }
+    }
     var mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });
     if (mvpEvt) {
       lines.push('');
@@ -7063,9 +7112,17 @@
       }
     });
 
-    setTimeout(function () {
-      _gmShowFinalOv();
-    }, 420);
+    /* Overlay OBLIGATORIO de estadísticas (HvH y HvIA). Se inyecta
+       ENTRE MVP y la pantalla FINAL. IA vs IA se salta. Misma lógica
+       que _mlFinishMatchGen pero pasando _gm como state directo. */
+    function _gmShowFinalSoon() { setTimeout(function(){ _gmShowFinalOv(); }, 420); }
+    var _gmHumA = typeof esHumano === 'function' && esHumano(_gm.home);
+    var _gmHumB = typeof esHumano === 'function' && esHumano(_gm.away);
+    if ((_gmHumA || _gmHumB) && typeof _mlShowStatsOverlay === 'function') {
+      _mlShowStatsOverlay(_gm, _gmShowFinalSoon);
+    } else {
+      _gmShowFinalSoon();
+    }
   };
 
   window.gmClose = function () {

@@ -1086,6 +1086,30 @@ window.pG = function(fn) {
       <div class="admin-mod-label">Ball Storage</div>
       <div class="admin-mod-desc">Balón activo por competición</div>
     </div>
+    <!-- ── Plantillas: Restaurar / Descargar / Importar ────────────
+         Antes vivían en la pantalla "Liga EA Sports · Clasificación"
+         como una fila secundaria de botones. Cualquier toque accidental
+         desde el móvil podía disparar Restaurar (sobre-escribir desde
+         backup) o Importar (abrir el selector de fichero). Aquí, dentro
+         del Panel Admin, ya están protegidos por el PIN 747 que pide
+         goAjustes — no hace falta envolver con pG() / requireAdmin
+         porque entrar al panel ya es admin-only. -->
+    <div class="admin-module-card" style="border-color:rgba(255,60,60,.4);" onclick="window.emergencyRestoreAll&&window.emergencyRestoreAll()">
+      <span class="admin-mod-icon">🆘</span>
+      <div class="admin-mod-label" style="color:#ff7070;">Restaurar Datos</div>
+      <div class="admin-mod-desc">Recupera plantillas desde el backup local o el servidor</div>
+    </div>
+    <div class="admin-module-card" style="border-color:rgba(60,180,240,.4);" onclick="window.lextExportBackup&&window.lextExportBackup()">
+      <span class="admin-mod-icon">💾</span>
+      <div class="admin-mod-label" style="color:#60b4f0;">Descargar Backup</div>
+      <div class="admin-mod-desc">Exporta un .json con todas las plantillas y reglas</div>
+    </div>
+    <div class="admin-module-card" style="border-color:rgba(60,200,120,.4);" onclick="document.getElementById('lext-import-file').click()">
+      <span class="admin-mod-icon">📂</span>
+      <div class="admin-mod-label" style="color:#3cc878;">Importar Backup</div>
+      <div class="admin-mod-desc">Carga un .json previamente descargado</div>
+    </div>
+    <input type="file" id="lext-import-file" accept="application/json,.json" style="display:none" onchange="window.lextImportBackup&&window.lextImportBackup(this.files[0])"/>
   </div>
   <div class="admin-env-panel">
     <div class="admin-env-title">🌍 ENTORNO ACTUAL</div>
@@ -1326,12 +1350,9 @@ window.pG = function(fn) {
     <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openLigaEaEditor&&window.openLigaEaEditor()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">✏️</span>Edit</button>
     <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openLigaEaReglas&&window.openLigaEaReglas()})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
   </div>
-  <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:wrap;">
-    <button class="btn-action lext-btn-compact" onclick="window.emergencyRestoreAll&&window.emergencyRestoreAll()" style="border-color:rgba(255,60,60,.5);color:#ff7070;background:rgba(255,60,60,.08);font-size:10px;"><span class="btn-action-ico">🆘</span>Restaurar</button>
-    <button class="btn-action lext-btn-compact" onclick="window.lextExportBackup&&window.lextExportBackup()" style="border-color:rgba(60,180,240,.5);color:#60b4f0;background:rgba(60,180,240,.08);font-size:10px;"><span class="btn-action-ico">💾</span>Descargar</button>
-    <button class="btn-action lext-btn-compact" onclick="document.getElementById('lext-import-file').click()" style="border-color:rgba(60,200,120,.5);color:#3cc878;background:rgba(60,200,120,.08);font-size:10px;"><span class="btn-action-ico">📂</span>Importar</button>
-    <input type="file" id="lext-import-file" accept="application/json,.json" style="display:none" onchange="window.lextImportBackup&&window.lextImportBackup(this.files[0])"/>
-  </div>
+  <!-- Restaurar / Descargar / Importar movidos al Panel Admin (⚙️ →
+       PIN 747). Aquí no van porque cualquier toque accidental podía
+       borrar plantillas o sobreescribir un backup malo. -->
 </div>
 
 <!-- ══ LIVE MATCH SYSTEM ══════════════════════════════════════ -->

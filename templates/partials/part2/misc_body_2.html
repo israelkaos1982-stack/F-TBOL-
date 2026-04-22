@@ -6305,6 +6305,51 @@
     if (contBtn) { contBtn.disabled = false; contBtn.style.opacity = ''; }
   };
 
+  /* Helper compartido: construye el bloque de estadísticas para los
+     mensajes de WhatsApp (final de partido). Envuelve la tabla en
+     triple backtick para que WhatsApp la renderice en monoespacio y
+     las columnas queden alineadas aunque los nombres de los equipos o
+     los iconos cambien.
+
+     Formato de cada fila:  <home pad-left>  <ico> <label pad-right>  <away>
+     Ejemplo:                 "60  ➗ Posesión (%)      40"
+
+     Devuelve '' si no hay ninguna fila con valores; el caller decide
+     si omitir la sección completa. */
+  function _waFmtStatsBlock(statRows, sa, sb, homeName, scoreA, scoreB, awayName) {
+    function padL(s, n) { s = String(s); while (s.length < n) s = ' ' + s; return s; }
+    function padR(s, n) { s = String(s); while (s.length < n) s = s + ' '; return s; }
+    /* Ancho del label = el más largo de las filas con datos. */
+    var activas = [];
+    statRows.forEach(function(row){
+      var k = row[0], skipZero = row[3];
+      var va = sa[k], vb = sb[k];
+      var hasA = va != null, hasB = vb != null;
+      if (!hasA && !hasB) return;
+      if (skipZero && !va && !vb) return;
+      activas.push({
+        ico: row[1],
+        lbl: row[2],
+        hv: String(hasA ? va : 0),
+        av: String(hasB ? vb : 0)
+      });
+    });
+    if (!activas.length) return '';
+    var maxLblLen = 0;
+    var maxHvLen = 1;
+    var maxAvLen = 1;
+    activas.forEach(function(r){
+      if (r.lbl.length > maxLblLen) maxLblLen = r.lbl.length;
+      if (r.hv.length > maxHvLen)  maxHvLen  = r.hv.length;
+      if (r.av.length > maxAvLen)  maxAvLen  = r.av.length;
+    });
+    var rows = activas.map(function(r){
+      return padL(r.hv, maxHvLen) + '  ' + r.ico + ' ' + padR(r.lbl, maxLblLen) + '  ' + padL(r.av, maxAvLen);
+    });
+    var header = homeName + ' ' + scoreA + ' - ' + scoreB + ' ' + awayName;
+    return '```\n' + header + '\n' + rows.join('\n') + '\n```';
+  }
+
   /* Build the standard WA message and open WhatsApp */
   function _mlBuildAndShareWA(mk, st, isFinal) {
     var allIco = {gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',porteria:'🧤'};
@@ -6325,8 +6370,9 @@
       });
     }
     /* Estadísticas confirmadas en el overlay post-MVP. Formato
-       columnar `<home>  <ico label>  <away>` — consistente con
-       _gmShareFinal. */
+       columnar `<home>  <ico label>  <away>` envuelto en ``` para que
+       WhatsApp lo renderice en monoespacio y las columnas queden
+       alineadas. Mismo formato que _gmShareFinal. */
     if (isFinal && st.matchStats && (st.matchStats.a || st.matchStats.b)) {
       var sa = st.matchStats.a || {};
       var sb = st.matchStats.b || {};
@@ -6341,22 +6387,11 @@
         ['corners',   '⛳', 'Córners',             false],
         ['paradas',   '🧤', 'Paradas',             false]
       ];
-      var out = [];
-      statRows.forEach(function(row){
-        var k = row[0], ico = row[1], lbl = row[2], skipZero = row[3];
-        var va = sa[k], vb = sb[k];
-        var hasA = va != null, hasB = vb != null;
-        if (!hasA && !hasB) return;
-        if (skipZero && !va && !vb) return;
-        var hv = String(hasA ? va : 0);
-        var av = String(hasB ? vb : 0);
-        out.push(hv + '  ' + ico + ' ' + lbl + '  ' + av);
-      });
-      if (out.length) {
+      var outBlock = _waFmtStatsBlock(statRows, sa, sb, st.home, st.sc.a, st.sc.b, st.away);
+      if (outBlock) {
         lines.push('');
         lines.push('ESTADÍSTICAS:');
-        lines.push(st.home + ' ' + st.sc.a + ' - ' + st.sc.b + ' ' + st.away);
-        out.forEach(function(l){ lines.push(l); });
+        lines.push(outBlock);
       }
     }
     if (isFinal) {
@@ -6622,9 +6657,9 @@
     });
     /* Stats del partido confirmadas en el overlay post-MVP. Se añaden
        debajo del acta cuando existen (no aplican a IAIA). Formato
-       columnar: `<home>  <ico label>  <away>` para que los valores
-       queden alineados a cada lado del nombre del stat (mismo patrón
-       que pidió el usuario). */
+       columnar alineado en bloque monospace de WhatsApp (triple
+       backtick) para que las columnas queden rectas aunque los nombres
+       de los equipos o los iconos varíen. */
     if (_gm.matchStats && (_gm.matchStats.a || _gm.matchStats.b)) {
       var _sa = _gm.matchStats.a || {};
       var _sb = _gm.matchStats.b || {};
@@ -6639,24 +6674,11 @@
         ['corners',   '⛳', 'Córners',             false],
         ['paradas',   '🧤', 'Paradas',             false]
       ];
-      var out = [];
-      statRows.forEach(function(row){
-        var k = row[0], ico = row[1], lbl = row[2], skipZero = row[3];
-        var va = _sa[k], vb = _sb[k];
-        var hasA = va != null, hasB = vb != null;
-        if (!hasA && !hasB) return;
-        if (skipZero && !va && !vb) return;
-        var hv = String(hasA ? va : 0);
-        var av = String(hasB ? vb : 0);
-        out.push(hv + '  ' + ico + ' ' + lbl + '  ' + av);
-      });
-      if (out.length) {
+      var outBlock = _waFmtStatsBlock(statRows, _sa, _sb, _gm.home, _gm.sc.a, _gm.sc.b, _gm.away);
+      if (outBlock) {
         lines.push('');
         lines.push('ESTADÍSTICAS:');
-        /* Repite la línea del resultado como cabecera del bloque de
-           stats, como pidió el usuario. */
-        lines.push(_gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away);
-        out.forEach(function(l){ lines.push(l); });
+        lines.push(outBlock);
       }
     }
     var mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });

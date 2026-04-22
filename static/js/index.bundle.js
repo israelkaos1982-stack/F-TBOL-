@@ -5362,8 +5362,13 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var duracion = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
       : (isHvH ? '16.5 min' : '13.5 min');
-    /* Guardar equipos para que _renderPreviaMeta los use */
-    window._ppPreviaTeams = { home: home, away: away };
+    /* Guardar equipos + jornada para que _renderPreviaMeta y _ppShareWA
+       los usen. Incluimos `j` porque _ppShareWA necesita la jornada
+       para pintar "Jornada N" en la primera línea del mensaje de
+       WhatsApp — antes sólo llegaba por el regex sobre matchKey y en
+       algunos dispositivos fallaba, dejando "🏆 Liga EA Sports" sin
+       el número de jornada. */
+    window._ppPreviaTeams = { home: home, away: away, j: j };
     window._ppCustomCallback = function() {
       window._ppPreviaTeams = null;
       if (typeof window.abrirResultadoLiga === 'function') {

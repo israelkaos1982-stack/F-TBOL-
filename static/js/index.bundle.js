@@ -92,13 +92,18 @@ window.showImbatForce = function(teamName, onConfirm) {
          + '<span class="mvp-pl-name">'+name+'</span>'
          + '</button>';
   }).join('');
+  /* Botón CANCELAR: sin él el usuario queda atrapado en el overlay (el
+     bug "FINALIZAR se bloquea y no funciona"). Al cancelar abortamos la
+     cadena de _ensureImbatEvents → no se llama onDone → el partido
+     vuelve al estado abierto. */
   ov.innerHTML = '<div class="mvp-force-header">'
     + '<div class="mvp-force-star">🧤</div>'
     + '<div class="mvp-force-title">PORTERÍA IMBATIDA</div>'
     + '<div class="mvp-force-sub">' + teamName + ' no ha encajado goles</div>'
     + '</div>'
     + '<div class="mvp-force-warn">⚠️ Elige el portero que ha mantenido la portería a cero.</div>'
-    + '<div class="mvp-force-teams"><div><div class="mvp-pl-list">' + btns + '</div></div></div>';
+    + '<div class="mvp-force-teams"><div><div class="mvp-pl-list">' + btns + '</div></div></div>'
+    + '<button class="ml-pl-ov-close" style="margin-top:20px;" onclick="window.cancelImbatForce()">✕ Cancelar (no finalizar)</button>';
   document.body.appendChild(ov);
   window._imbatForceCallback = onConfirm;
 };
@@ -112,6 +117,19 @@ window.confirmImbatForce = function(btn) {
     var cb = window._imbatForceCallback;
     window._imbatForceCallback = null;
     cb(num, name);
+  }
+};
+
+/* Cancelar el overlay: cierra la tarjeta y llama al callback con
+   `null` para que _ensureImbatEvents detecte la cancelación y aborte
+   la cadena de finalización. */
+window.cancelImbatForce = function() {
+  var ov = document.getElementById('imbat-force-ov');
+  if (ov) ov.remove();
+  if (window._imbatForceCallback) {
+    var cb = window._imbatForceCallback;
+    window._imbatForceCallback = null;
+    cb(null, null);
   }
 };
 
@@ -131,8 +149,14 @@ window._ensureImbatEvents = function(opts, onDone){
     var already = side==='a' ? hasA : hasB;
     if (!concededZero || already) return Promise.resolve();
     if (esH(teamName)) {
-      return new Promise(function(resolve){
+      return new Promise(function(resolve, reject){
         window.showImbatForce(teamName, function(num, name){
+          /* num === null → el usuario pulsó CANCELAR en el overlay.
+             Rechazamos la promesa para que la cadena salte a .catch y
+             abortamos la finalización. Sin esto el overlay no tenía
+             escape: el usuario veía el modal de "Portería imbatida" y
+             no podía cerrar; el partido parecía bloqueado. */
+          if (num === null) return reject(new Error('imbat_cancelled'));
           opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:num, player:name, name:name });
           resolve();
         });
@@ -145,6 +169,12 @@ window._ensureImbatEvents = function(opts, onDone){
   }
   _step('a').then(function(){ return _step('b'); }).then(function(){
     if (typeof onDone === 'function') onDone();
+  }).catch(function(err){
+    /* Cancelación del usuario: cerramos silenciosamente. El partido
+       queda como estaba (abierto). No repintamos ni llamamos a onDone. */
+    if (err && err.message === 'imbat_cancelled') return;
+    /* Cualquier otro error — lo logueamos pero tampoco bloqueamos. */
+    try { console.warn('_ensureImbatEvents fallo:', err); } catch(_){}
   });
 };
 // ══════════════════════════════════════════════════════════════

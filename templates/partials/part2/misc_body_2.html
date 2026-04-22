@@ -4638,8 +4638,19 @@
     var realMs = r.realMin * 60000;
     /* Override admin: _ppDurationMin en minutos reales (solo partidos con
        humano). Se reescala la velocidad manteniendo el mismo número total
-       de ticks. Nunca aplica a IAIA (siempre 1 min total = 30 s/parte). */
+       de ticks. Nunca aplica a IAIA (siempre 1 min total = 30 s/parte).
+
+       BLINDAJE: validamos que el override es un número en 1..30 (el rango
+       del selector de admin). Fuera de ese rango, se ignora y se usa el
+       default de la regla. Esto evita el bug en el que un valor corrupto
+       (p.ej. _ppDurationMin = 90 por JS cacheado o reload a medias) hacía
+       que tickMs subiera a 5000 ms y el cronómetro del partido fuera en
+       proporción 1:1 con el reloj real (1 game-min = 1 minuto real). */
     var override = window._ppDurationMin;
+    if (typeof override !== 'number' || !isFinite(override) || override < 1 || override > 30) {
+      override = null;
+      try { window._ppDurationMin = null; } catch(_){}
+    }
     if (override && type !== 'IAIA') {
       realMs = override * 60000;
       var totalTicks = (r.gameMin * 60) / _ML_TICK_SEC;

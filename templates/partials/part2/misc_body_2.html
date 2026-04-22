@@ -6309,7 +6309,10 @@
   function _mlBuildAndShareWA(mk, st, isFinal) {
     var allIco = {gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',porteria:'🧤'};
     var lines = [];
-    lines.push('Liga española - Jornada ' + st.j);
+    /* Header: "Jornada N Liga EA Sports" (usamos st.comp si viene
+       informado, fallback a Liga EA Sports). */
+    var _compML = st.comp || 'Liga EA Sports';
+    lines.push('Jornada ' + st.j + ' ' + _compML);
     lines.push('');
     lines.push(st.home + ' ' + st.sc.a + ' - ' + st.sc.b + ' ' + st.away);
     var actaEvts = st.events.filter(function(e){ return allIco[e.type]; });
@@ -6321,8 +6324,9 @@
         lines.push(e.min + '\' ' + ico + ' ' + (e.name||'') + ' (' + (e.team==='a'?st.home:st.away) + ')');
       });
     }
-    /* Estadísticas confirmadas en el overlay post-MVP. Se añaden debajo
-       del acta (siempre que existan — IAIA no llega aquí). */
+    /* Estadísticas confirmadas en el overlay post-MVP. Formato
+       columnar `<home>  <ico label>  <away>` — consistente con
+       _gmShareFinal. */
     if (isFinal && st.matchStats && (st.matchStats.a || st.matchStats.b)) {
       var sa = st.matchStats.a || {};
       var sb = st.matchStats.b || {};
@@ -6344,11 +6348,14 @@
         var hasA = va != null, hasB = vb != null;
         if (!hasA && !hasB) return;
         if (skipZero && !va && !vb) return;
-        out.push(ico + ' ' + lbl + ': ' + (hasA ? va : 0) + ' - ' + (hasB ? vb : 0));
+        var hv = String(hasA ? va : 0);
+        var av = String(hasB ? vb : 0);
+        out.push(hv + '  ' + ico + ' ' + lbl + '  ' + av);
       });
       if (out.length) {
         lines.push('');
         lines.push('ESTADÍSTICAS:');
+        lines.push(st.home + ' ' + st.sc.a + ' - ' + st.sc.b + ' ' + st.away);
         out.forEach(function(l){ lines.push(l); });
       }
     }
@@ -6597,10 +6604,12 @@
   window._gmShareFinal = function() {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
                   'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
-    var comp = _gm.comp || '';
+    var comp = _gm.comp || 'Liga EA Sports';
     var lines = [];
-    if (comp) lines.push(comp + ' - Jornada ' + (_gm.j||''));
-    else lines.push('Jornada ' + (_gm.j||''));
+    /* Header: "Jornada N Liga EA Sports" (el usuario pidió la
+       competición detrás del número de jornada y, si falta comp,
+       default a Liga EA Sports). */
+    lines.push('Jornada ' + (_gm.j||'') + ' ' + comp);
     lines.push('');
     lines.push(_gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away);
     lines.push('');
@@ -6612,8 +6621,10 @@
       lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + tName + ')');
     });
     /* Stats del partido confirmadas en el overlay post-MVP. Se añaden
-       debajo del acta cuando existen (no aplican a IAIA). Mismo formato
-       que _mlBuildAndShareWA. */
+       debajo del acta cuando existen (no aplican a IAIA). Formato
+       columnar: `<home>  <ico label>  <away>` para que los valores
+       queden alineados a cada lado del nombre del stat (mismo patrón
+       que pidió el usuario). */
     if (_gm.matchStats && (_gm.matchStats.a || _gm.matchStats.b)) {
       var _sa = _gm.matchStats.a || {};
       var _sb = _gm.matchStats.b || {};
@@ -6635,11 +6646,16 @@
         var hasA = va != null, hasB = vb != null;
         if (!hasA && !hasB) return;
         if (skipZero && !va && !vb) return;
-        out.push(ico + ' ' + lbl + ': ' + (hasA ? va : 0) + ' - ' + (hasB ? vb : 0));
+        var hv = String(hasA ? va : 0);
+        var av = String(hasB ? vb : 0);
+        out.push(hv + '  ' + ico + ' ' + lbl + '  ' + av);
       });
       if (out.length) {
         lines.push('');
         lines.push('ESTADÍSTICAS:');
+        /* Repite la línea del resultado como cabecera del bloque de
+           stats, como pidió el usuario. */
+        lines.push(_gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away);
         out.forEach(function(l){ lines.push(l); });
       }
     }

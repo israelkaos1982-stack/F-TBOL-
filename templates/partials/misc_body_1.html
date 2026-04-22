@@ -6579,13 +6579,11 @@ Tottenham
     players.forEach(function(p){
       if(p.captain){ if(seenCap) p.captain=false; else seenCap=true; }
     });
-    /* Mismo saneado para ⚾: sólo un goleador nato por equipo (regla
-       del motor — multiplicador x3). Si el usuario marcó varios en el
-       texto, el primero gana. */
-    var seenGoal = false;
-    players.forEach(function(p){
-      if(p.natGoal){ if(seenGoal) p.natGoal=false; else seenGoal=true; }
-    });
+    /* ⚾ (goleador nato), ⭐ (estrella), F (faltas) y P (penaltis)
+       PUEDEN asignarse a varios jugadores del mismo equipo — no
+       tocamos esas flags. El motor acepta múltiples goleadores con
+       peso ×3, múltiples lanzadores de falta/penalti y múltiples
+       estrellas. Sólo el capitán (C) es único por equipo. */
     return players;
   }
 

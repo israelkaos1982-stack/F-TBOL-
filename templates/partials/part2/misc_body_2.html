@@ -7026,9 +7026,27 @@
     } else {
       tickMs = _gm.isHvH ? GM_TICK_HVH : GM_TICK_HVIA;
     }
+    /* Wall-clock anti-throttling: anclamos Date.now() al timerSec
+       actual y cada tick calcula timerSec a partir del tiempo REAL
+       transcurrido — no sumando +5 a ciegas. Así, si Chrome/Safari
+       congelan setInterval al bloquear el móvil o pasar la pestaña a
+       segundo plano (throttling hasta 1 tick/min), al volver a primer
+       plano el cronómetro se sincroniza de golpe con el tiempo real
+       transcurrido. El usuario reportó que al bloquear el móvil a los
+       13' y desbloquear 3 min después, el cronómetro seguía en 22'
+       en vez de los ~29' correctos — ese era el síntoma del throttling.
+       Patrón espejo del _startInterval_j1m1 en el flujo ml. */
+    _gm._wallStart = Date.now();
+    _gm._secAtStart = _gm.timerSec;
+    _gm._gameSecPerMs = 5 / Math.max(1, tickMs);  /* game-seconds por 1 ms real */
     _gm.timerRunning = true;
+    var _renderMs = Math.min(tickMs, 500); /* refresco visual fluido */
     _gm.timerInterval = setInterval(function () {
-      _gm.timerSec += 5;
+      /* Avanzar timerSec a partir del reloj de muralla, no sumando
+         +5 por tick. `Date.now() - _wallStart` sigue siendo correcto
+         aunque el browser haya pausado los ticks en segundo plano. */
+      var elapsedMs = Date.now() - (_gm._wallStart || Date.now());
+      _gm.timerSec = (_gm._secAtStart || 0) + Math.round(elapsedMs * (_gm._gameSecPerMs || 0));
       /* Descuento dinámico en ambas partes (igual que el flujo ml-…).
          Se recalcula cada tick por si un evento recién añadido lo ha
          movido. */
@@ -7038,6 +7056,7 @@
       /* Descanso automático al llegar al tope dinámico de la 1ª parte */
       if (!_gm.htDone && _gm.timerSec >= gmHalfMax) {
         _gm.htDone = true;
+        _gm.timerSec = gmHalfMax; /* capar exactamente en el tope */
         clearInterval(_gm.timerInterval); _gm.timerRunning = false; _gm.inDescanso = true;
         var list = document.getElementById('gm-acta-list');
         if (list) {
@@ -7067,7 +7086,7 @@
       }
       if (_gm.timerSec >= max) { _gm.timerSec = max; clearInterval(_gm.timerInterval); _gm.timerRunning = false; }
       gmRenderTimer();
-    }, tickMs);
+    }, _renderMs);
   }
 
   /* Equivalente a `_mlOpenTimerEdit` pero para el gm-modal (partidos

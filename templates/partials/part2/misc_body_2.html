@@ -7046,7 +7046,65 @@
     }
     btn.textContent = lbl + display;
     btn.className = 'ml-timer' + (_gm.timerRunning ? ' running' : '');
+    /* Botón "🛌 DESCANSO" — visible sólo cuando el usuario puede
+       forzar el half-time: tras minuto 45 (game-time), antes del
+       descanso, fuera de prórroga, partido no acabado. Lo ocultamos
+       en el resto de estados (incluido _gm.inDescanso, donde el
+       overlay de descanso ya está activo). */
+    try {
+      var fhWrap = document.getElementById('gm-force-ht-wrap');
+      if (fhWrap) {
+        var canForce = !_gm.finished && !_gm.htDone && !_gm.etDone
+                       && !_gm.inDescanso && _gm.timerSec >= 2700;
+        fhWrap.style.display = canForce ? '' : 'none';
+      }
+    } catch(_) {}
   }
+
+  /* Entra en el descanso del partido — extraído del bucle de
+     gmStartTimer para que el botón manual "🛌 DESCANSO" pueda
+     reusar exactamente el mismo flujo. Capa el timer al tope
+     dinámico de la 1ª parte (45 + descuento por eventos), añade
+     el marcador "DESCANSO" al acta y muestra el overlay de
+     halftime. Idempotente: si ya estamos en descanso, no hace
+     nada. */
+  function _gmEnterHalftime() {
+    if (_gm.htDone || _gm.finished) return;
+    var stops = (typeof _mlCountStoppageHalves === 'function')
+                  ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
+    var halfMax = 2700 + (stops.first || 0) * 60;
+    _gm.htDone = true;
+    if (_gm.timerSec < halfMax) _gm.timerSec = halfMax;
+    if (_gm.timerSec > halfMax) _gm.timerSec = halfMax;
+    try { clearInterval(_gm.timerInterval); } catch(_){}
+    _gm.timerRunning = false;
+    _gm.inDescanso = true;
+    var list = document.getElementById('gm-acta-list');
+    if (list) {
+      var m = document.createElement('div');
+      m.className = 'ml-ht';
+      m.textContent = '— DESCANSO (45 min) —';
+      list.appendChild(m);
+      var _gmWaWrap = document.createElement('div');
+      _gmWaWrap.className = 'ml-ht-wa-wrap';
+      _gmWaWrap.innerHTML = '<button class="ml-ht-wa-btn" onclick="window._gmShareHalfTime()">'
+        +'<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
+        +' Compartir descanso</button>';
+      list.appendChild(_gmWaWrap);
+    }
+    gmRenderTimer();
+    _gmShowHalftimeOv();
+  }
+  /* Botón manual: el usuario puede forzar el descanso a partir del
+     minuto 45 (antes de que se llegue al tope con descuentos). El
+     botón sólo se muestra en partidos con humano (HvH/HvIA), tras
+     el min 45 game-time, antes del descanso, y nunca durante prórroga.
+     Si se llama fuera de esas condiciones, no hace nada (idempotente). */
+  window.gmForceHalftime = function() {
+    if (!_gm || _gm.finished || _gm.htDone || _gm.etDone) return;
+    if (_gm.timerSec < 2700) return; /* sólo desde el min 45 game-time */
+    _gmEnterHalftime();
+  };
 
   function gmStartTimer() {
     /* Helper único (CLAUDE.md): honra _ppDurationMin y lee _MATCH_TICKS
@@ -7089,20 +7147,7 @@
       var max = _gm.etDone ? GM_MAX_ET : (GM_MAX_NORMAL + (gmStops.second || 0) * 60);
       /* Descanso automático al llegar al tope dinámico de la 1ª parte */
       if (!_gm.htDone && _gm.timerSec >= gmHalfMax) {
-        _gm.htDone = true;
-        _gm.timerSec = gmHalfMax; /* capar exactamente en el tope */
-        clearInterval(_gm.timerInterval); _gm.timerRunning = false; _gm.inDescanso = true;
-        var list = document.getElementById('gm-acta-list');
-        if (list) {
-          var m = document.createElement('div'); m.className = 'ml-ht'; m.textContent = '— DESCANSO (45 min) —'; list.appendChild(m);
-          var _gmWaWrap = document.createElement('div'); _gmWaWrap.className = 'ml-ht-wa-wrap';
-          _gmWaWrap.innerHTML = '<button class="ml-ht-wa-btn" onclick="window._gmShareHalfTime()">'
-            +'<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
-            +' Compartir descanso</button>';
-          list.appendChild(_gmWaWrap);
-        }
-        gmRenderTimer();
-        _gmShowHalftimeOv();
+        _gmEnterHalftime();
         return;
       }
       /* Tiempo de descuento al llegar al 90:00 — muestra N dinámico */
@@ -9885,6 +9930,21 @@
     <!-- Add event button -->
     <div style="padding:0 8px 6px;">
       <button class="ml-add-btn" id="gm-add-btn" onclick="window.gmShowEvents()">＋ AÑADIR EVENTO</button>
+    </div>
+
+    <!-- Forzar descanso: aparece a partir del min 45 (game-time) en
+         partidos HvH/HvIA, antes del descanso real. Permite saltar al
+         half-time sin esperar a que se consuma el descuento dinámico. -->
+    <div id="gm-force-ht-wrap" style="display:none;padding:0 8px 6px;">
+      <button id="gm-btn-force-ht" onclick="window.gmForceHalftime()"
+        style="width:100%;padding:10px 6px;border-radius:6px;
+               border:1px solid rgba(240,192,64,.45);
+               background:linear-gradient(135deg,rgba(240,192,64,.1),rgba(240,192,64,.18));
+               color:#f0c040;font-size:13px;font-weight:700;
+               font-family:'Oswald',sans-serif;letter-spacing:1.5px;cursor:pointer;
+               box-shadow:0 0 12px rgba(240,192,64,.18);">
+        🛌 DESCANSO
+      </button>
     </div>
 
     <!-- Action buttons -->

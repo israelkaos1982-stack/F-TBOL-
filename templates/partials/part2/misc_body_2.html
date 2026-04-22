@@ -2061,7 +2061,7 @@
 <option value="vk54in2">🟣 vk54in2</option>
 <option value="Serraxxxx">🟣 Serraxxxx</option>
 <option value="toni_ayuso">🟣 toni_ayuso</option>
-<option value="budygamer1981">🟣 budygamer1981</option>
+<option value="buddygamer1981">🟣 buddygamer1981</option>
 </select>
 </div>
 <div class="pp-alerts" id="pp-alerts"></div>
@@ -4315,7 +4315,7 @@
   };
 
   function _buildTwitchBtn(mk) {
-    var chs = ['kaotiko8219','Serraxxxx','budygamer1981','toni_ayuso','vk54in2'];
+    var chs = ['kaotiko8219','Serraxxxx','buddygamer1981','toni_ayuso','vk54in2'];
     var drop = chs.map(function(c){
       return '<div onclick="window._selectTwitchChannel(\''+c+'\',\''+mk+'\');event.stopPropagation();" style="display:block;padding:7px 12px;color:#a97fff;font-size:11px;font-weight:600;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.06);transition:background .15s;" onmousedown="this.style.background=\'rgba(140,80,220,.2)\'" onmouseup="this.style.background=\'\'">📺 '+c+'</div>';
     }).join('');
@@ -5801,12 +5801,17 @@
      rellena manualmente posesión (auto-completa a 100%), remates,
      tiros a puerta, córners y paradas. Al confirmar se guarda en
      st.matchStats y lo consumimos en _mlBuildAndShareWA. */
+  /* Rangos pedidos por el usuario — con `def` marcamos el valor
+     centrado que debe aparecer pre-seleccionado al abrir el selector
+     (mitad del rango, el más probable). Usamos un <select> en vez de
+     <input type=number> para que el móvil abra una ruleta vertical
+     nativa, mucho más rápido que teclear. */
   var _STAT_DEFS_MANUAL = [
-    { key: 'posesion', ico: '➗', lbl: 'POSESIÓN (%)',     max: 100, pairSum: 100 },
-    { key: 'remates',  ico: '👟', lbl: 'REMATES',          max: 99 },
-    { key: 'tiros',    ico: '🚪', lbl: 'TIROS A PUERTA',   max: 99 },
-    { key: 'corners',  ico: '⛳', lbl: 'CÓRNERS',           max: 99 },
-    { key: 'paradas',  ico: '🧤', lbl: 'PARADAS',          max: 99 }
+    { key: 'posesion', ico: '➗', lbl: 'POSESIÓN (%)',     min: 30, max: 70, def: 50, pairSum: 100 },
+    { key: 'remates',  ico: '👟', lbl: 'REMATES',          min: 0,  max: 30, def: 10 },
+    { key: 'tiros',    ico: '🚪', lbl: 'TIROS A PUERTA',   min: 0,  max: 20, def: 7  },
+    { key: 'corners',  ico: '⛳', lbl: 'CÓRNERS',           min: 0,  max: 10, def: 3  },
+    { key: 'paradas',  ico: '🧤', lbl: 'PARADAS',          min: 0,  max: 15, def: 5  }
   ];
   var _STAT_DEFS_AUTO = [
     { key: 'penGol',   ico: '🥅', lbl: 'GOLES DE PENALTI', skipIfZero: true },
@@ -5883,6 +5888,28 @@
       lbl.innerHTML = def.ico + ' ' + def.lbl;
       row.appendChild(lbl);
       function mkInput(side, v){
+        /* Si la definición tiene min/max (stats manuales), usamos un
+           <select> con las opciones del rango — en móvil se abre la
+           ruleta nativa y el usuario elige girando el dedo, mucho
+           más rápido que teclear. Si no (stats auto como amarillas),
+           mantenemos <input readonly> porque el valor viene del acta. */
+        if (!readonly && typeof def.min === 'number' && typeof def.max === 'number') {
+          var sel = document.createElement('select');
+          sel.className = 'ml-stats-val';
+          sel.setAttribute('data-key', def.key);
+          sel.setAttribute('data-side', side);
+          var preset = (v == null || v === '') ? (def.def != null ? def.def : def.min) : v;
+          var n = parseInt(preset, 10);
+          if (!isFinite(n)) n = def.def != null ? def.def : def.min;
+          for (var k = def.min; k <= def.max; k++) {
+            var opt = document.createElement('option');
+            opt.value = String(k);
+            opt.textContent = String(k);
+            if (k === n) opt.selected = true;
+            sel.appendChild(opt);
+          }
+          return sel;
+        }
         var inp = document.createElement('input');
         inp.type = 'number'; inp.min = '0'; inp.max = String(def.max || 99);
         inp.className = 'ml-stats-val' + (readonly ? ' readonly' : '');
@@ -5895,15 +5922,23 @@
       var ia = mkInput('a', valA);
       var ib = mkInput('b', valB);
       if (def.pairSum){
-        /* Si el usuario escribe A, B se auto-completa a (100 - A), y vv. */
-        ia.addEventListener('input', function(){
+        /* Si el usuario cambia un lado, el otro se auto-completa a
+           (pairSum - valor). Funciona igual para <input type=number>
+           y para <select> — ambos disparan 'input' y 'change' en
+           navegadores modernos; mantenemos los dos por seguridad en
+           WebViews viejos (Samsung Internet). */
+        function _syncA(){
           var n = parseInt(ia.value); if (!isFinite(n) || n<0) n=0; if (n>def.pairSum) n=def.pairSum;
           ia.value = String(n); ib.value = String(def.pairSum - n);
-        });
-        ib.addEventListener('input', function(){
+        }
+        function _syncB(){
           var n = parseInt(ib.value); if (!isFinite(n) || n<0) n=0; if (n>def.pairSum) n=def.pairSum;
           ib.value = String(n); ia.value = String(def.pairSum - n);
-        });
+        }
+        ia.addEventListener('input',  _syncA);
+        ia.addEventListener('change', _syncA);
+        ib.addEventListener('input',  _syncB);
+        ib.addEventListener('change', _syncB);
       }
       var ico = document.createElement('div');
       ico.className = 'ml-stats-ico'; ico.textContent = def.ico;

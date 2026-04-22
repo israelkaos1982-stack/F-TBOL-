@@ -8580,12 +8580,12 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
      espejo para cualquier código que consulte su .value. */
   window._ppSelectedTwitch = window._ppSelectedTwitch || '';
   var _PP_TWITCH_CHANNELS = [
-    { value: '',              label: '— Selecciona canal —'       },
-    { value: 'kaotiko8219',   label: '🟣 kaotiko8219 (Tu Canal)' },
-    { value: 'vk54in2',       label: '🟣 vk54in2'                },
-    { value: 'Serraxxxx',     label: '🟣 Serraxxxx'              },
-    { value: 'toni_ayuso',    label: '🟣 toni_ayuso'             },
-    { value: 'budygamer1981', label: '🟣 budygamer1981'          }
+    { value: '',               label: '— Selecciona canal —'        },
+    { value: 'kaotiko8219',    label: '🟣 kaotiko8219 (Tu Canal)'  },
+    { value: 'vk54in2',        label: '🟣 vk54in2'                 },
+    { value: 'Serraxxxx',      label: '🟣 Serraxxxx'               },
+    { value: 'toni_ayuso',     label: '🟣 toni_ayuso'              },
+    { value: 'buddygamer1981', label: '🟣 buddygamer1981'          }
   ];
 
   function _ppTwitchLabelFor(val) {
@@ -8629,10 +8629,16 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     dd.id = 'pp-twitch-dropdown';
     /* z-index máximo: el overlay de previa vive en 10010, así que usamos
        un valor mayor para no quedar tapados. */
+    /* max-height + overflow-y: scroll interno para que el dropdown
+       no tape canales en móviles. Antes el desplegable se extendía
+       por debajo del viewport y como <body> no hace scroll mientras
+       el overlay de previa está abierto, los canales finales (p.ej.
+       buddygamer1981) quedaban inaccesibles. */
     dd.style.cssText = 'position:fixed;z-index:2147483646;background:#10101e;'
       + 'border:1px solid rgba(191,148,255,.45);border-radius:10px;padding:6px;'
       + 'box-shadow:0 10px 32px rgba(0,0,0,.75);min-width:' + Math.round(rect.width) + 'px;'
-      + 'max-width:92vw;';
+      + 'max-width:92vw;max-height:60vh;overflow-y:auto;'
+      + '-webkit-overflow-scrolling:touch;overscroll-behavior:contain;';
     dd.style.left = Math.max(8, rect.left) + 'px';
     dd.style.top  = (rect.bottom + 4) + 'px';
     dd.innerHTML = _PP_TWITCH_CHANNELS.map(function(ch){

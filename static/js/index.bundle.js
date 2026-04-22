@@ -8627,20 +8627,34 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var currentVal = btn.getAttribute('data-value') || '';
     var dd = document.createElement('div');
     dd.id = 'pp-twitch-dropdown';
-    /* z-index máximo: el overlay de previa vive en 10010, así que usamos
-       un valor mayor para no quedar tapados. */
-    /* max-height + overflow-y: scroll interno para que el dropdown
-       no tape canales en móviles. Antes el desplegable se extendía
-       por debajo del viewport y como <body> no hace scroll mientras
-       el overlay de previa está abierto, los canales finales (p.ej.
-       buddygamer1981) quedaban inaccesibles. */
+    /* Calcular espacio disponible debajo y encima del botón. El bug
+       que reportó el usuario era que el dropdown se extendía por debajo
+       del viewport (móvil) y, como <body> no hace scroll con la previa
+       abierta, los canales finales (buddygamer1981) quedaban fuera de
+       la pantalla. max-height: 60vh no ayuda porque la lista es más
+       corta que 60vh y no activa el overflow interno — aun así el
+       dropdown sobresalía por el fondo.
+
+       Solución: elegir entre "desplegar debajo" o "desplegar encima"
+       según dónde haya más espacio, y fijar max-height al espacio real
+       disponible en esa dirección. Así el dropdown SIEMPRE cabe en
+       pantalla y, si la lista no cupiera, se hace scroll interno. */
+    var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+    var spaceBelow = Math.max(0, vh - rect.bottom - 12);
+    var spaceAbove = Math.max(0, rect.top - 12);
+    var placeAbove = spaceBelow < 260 && spaceAbove > spaceBelow;
+    var maxH = Math.max(160, placeAbove ? spaceAbove : spaceBelow);
     dd.style.cssText = 'position:fixed;z-index:2147483646;background:#10101e;'
       + 'border:1px solid rgba(191,148,255,.45);border-radius:10px;padding:6px;'
       + 'box-shadow:0 10px 32px rgba(0,0,0,.75);min-width:' + Math.round(rect.width) + 'px;'
-      + 'max-width:92vw;max-height:60vh;overflow-y:auto;'
+      + 'max-width:92vw;max-height:' + maxH + 'px;overflow-y:auto;'
       + '-webkit-overflow-scrolling:touch;overscroll-behavior:contain;';
     dd.style.left = Math.max(8, rect.left) + 'px';
-    dd.style.top  = (rect.bottom + 4) + 'px';
+    if (placeAbove) {
+      dd.style.bottom = (vh - rect.top + 4) + 'px';
+    } else {
+      dd.style.top = (rect.bottom + 4) + 'px';
+    }
     dd.innerHTML = _PP_TWITCH_CHANNELS.map(function(ch){
       var isSel = ch.value === currentVal;
       return '<button type="button" class="pp-twitch-opt" data-val="' + ch.value + '" '

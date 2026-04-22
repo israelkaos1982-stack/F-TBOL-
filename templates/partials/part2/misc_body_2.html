@@ -6174,6 +6174,9 @@
     if (window._ppPreviaTeams) {
       home = window._ppPreviaTeams.home || '';
       away = window._ppPreviaTeams.away || '';
+      /* j llega desde el lanzador de la previa (ver static/js/index.bundle.js).
+         Sin esto, el mensaje perdía la jornada en algunos caminos. */
+      if (window._ppPreviaTeams.j) jornada = window._ppPreviaTeams.j;
     } else if (window._ppMatchKey) {
       var stPP = _mlSt(window._ppMatchKey);
       if (stPP) { home = stPP.home; away = stPP.away; jornada = stPP.j; }
@@ -6317,9 +6320,13 @@
      Devuelve '' si no hay ninguna fila con valores; el caller decide
      si omitir la sección completa. */
   function _waFmtStatsBlock(statRows, sa, sb, homeName, scoreA, scoreB, awayName) {
-    function padL(s, n) { s = String(s); while (s.length < n) s = ' ' + s; return s; }
-    function padR(s, n) { s = String(s); while (s.length < n) s = s + ' '; return s; }
-    /* Ancho del label = el más largo de las filas con datos. */
+    /* Formato simple, sin depender de monoespacio de WhatsApp:
+       - Cabecera con los dos equipos y el resultado.
+       - Cada fila: `<icono> <etiqueta>: <home> - <away>`.
+       El user probó con triple-backtick (monospace) pero con los temas
+       WA tipo "manuscrito" el bloque sigue en fuente proporcional y
+       las columnas quedan desordenadas. Este formato se lee limpio en
+       cualquier tema y en cualquier fuente. */
     var activas = [];
     statRows.forEach(function(row){
       var k = row[0], skipZero = row[3];
@@ -6335,19 +6342,11 @@
       });
     });
     if (!activas.length) return '';
-    var maxLblLen = 0;
-    var maxHvLen = 1;
-    var maxAvLen = 1;
-    activas.forEach(function(r){
-      if (r.lbl.length > maxLblLen) maxLblLen = r.lbl.length;
-      if (r.hv.length > maxHvLen)  maxHvLen  = r.hv.length;
-      if (r.av.length > maxAvLen)  maxAvLen  = r.av.length;
-    });
-    var rows = activas.map(function(r){
-      return padL(r.hv, maxHvLen) + '  ' + r.ico + ' ' + padR(r.lbl, maxLblLen) + '  ' + padL(r.av, maxAvLen);
-    });
     var header = homeName + ' ' + scoreA + ' - ' + scoreB + ' ' + awayName;
-    return '```\n' + header + '\n' + rows.join('\n') + '\n```';
+    var body = activas.map(function(r){
+      return r.ico + ' ' + r.lbl + ': ' + r.hv + ' - ' + r.av;
+    }).join('\n');
+    return header + '\n' + body;
   }
 
   /* Build the standard WA message and open WhatsApp */

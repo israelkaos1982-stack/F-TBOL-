@@ -7932,6 +7932,21 @@
     if (addBtn) { addBtn.disabled = false; addBtn.classList.remove('open'); }
     var jBadge = document.getElementById('gm-jornada-badge');
     if (jBadge) jBadge.textContent = _gm.isFriendly ? 'Amistoso' : (_gm.comp || ('Liga · Jornada ' + _gm.j));
+    /* Estadio del equipo LOCAL. En la previa ya se muestra el correcto
+       (Stadio Orione para Atlético, etc.) pero el gm-modal dejaba el
+       literal "eFootball Stadium" hardcoded. Leemos el estadio asignado
+       vía window.getTeamStadium — la misma función que consume la previa
+       y el flujo ml — y caemos al default sólo si el equipo no tiene
+       estadio configurado. */
+    try {
+      var stadEl = document.getElementById('gm-venue-stadium');
+      if (stadEl) {
+        var stad = (typeof window.getTeamStadium === 'function')
+          ? (window.getTeamStadium(_gm.home) || 'eFootball Stadium')
+          : 'eFootball Stadium';
+        stadEl.textContent = stad;
+      }
+    } catch(_) {}
     var postOv = document.getElementById('gm-post-ov');
     if (postOv) postOv.classList.remove('show');
     var aplazarRow = document.getElementById('gm-aplazar-row');
@@ -9758,7 +9773,7 @@
   <div id="gm-inner">
     <!-- Venue bar -->
     <div id="gm-venue">
-      <span>🏟️ eFootball Stadium · ☀️ Soleado</span>
+      <span id="gm-venue-info">🏟️ <span id="gm-venue-stadium">eFootball Stadium</span> · ☀️ Soleado</span>
       <span id="gm-jornada-badge" style="font-weight:700;color:#c8a0ff;">Liga</span>
     </div>
 

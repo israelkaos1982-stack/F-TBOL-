@@ -7805,6 +7805,28 @@
        alguna entrada residual, o simplemente no incluirán este
        partido si el grace period ya expiró. */
     if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
+    /* Limpiar cualquier snapshot residual de este partido en _gmBg
+       (puede haber uno si el usuario saltó a otro partido y volvió a
+       éste antes de finalizar). Sin esta línea el hub PARTIDOS LIVE
+       volvía a pintar la tarjeta cada vez que re-renderizaba. */
+    try {
+      var _endKey = _gmCurrentKey();
+      if (window._gmBg && window._gmBg[_endKey]) {
+        delete window._gmBg[_endKey];
+      }
+    } catch(_){}
+    /* Apagar también el state-playing de la tarjeta en el calendario
+       (si hay un .match-live-wrap asociado) para que buildLiveScreen
+       no la incluya en el recuento de live-wraps. */
+    try {
+      Object.keys(_mlStates).forEach(function(_mk){
+        var _st = _mlStates[_mk];
+        if (_st && _st.j === _gm.j && _st.home === _gm.home && _st.away === _gm.away) {
+          _st.finished = true;
+          if (typeof _mlSetLiveState === 'function') _mlSetLiveState(_mk, 'finished');
+        }
+      });
+    } catch(_){}
     if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
     gmRenderTimer();
     var endBtn = document.getElementById('gm-btn-end');
@@ -7921,8 +7943,20 @@
       if (modal) modal.style.display = 'none';
     } catch(_){}
     try {
-      window.__GM_LIVE = _gm;
-      _gm.liveBackground = true;
+      /* Si el partido ya acabó, NO lo reinyectamos en __GM_LIVE: si
+         lo hacemos la tarjeta FIN reaparece en el hub PARTIDOS LIVE
+         hasta que se re-renderice con un filtro. Mejor asegurarnos
+         aquí de que __GM_LIVE queda desregistrado y el hub se limpia. */
+      if (_gm && _gm.finished) {
+        if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
+        try {
+          var _vkey = (_gm.j || 0) + '|' + (_gm.home || '') + '|' + (_gm.away || '');
+          if (window._gmBg && window._gmBg[_vkey]) delete window._gmBg[_vkey];
+        } catch(_){}
+      } else {
+        window.__GM_LIVE = _gm;
+        _gm.liveBackground = true;
+      }
     } catch(_){}
     try {
       if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub();
@@ -11878,14 +11912,33 @@ function buildGmLiveCard(gm, bgKey) {
   trash.addEventListener('click', function(e){
     e.stopPropagation(); e.preventDefault();
     if (!confirm('¿Eliminar este partido en directo? El cronómetro se detiene y la tarjeta desaparece de PARTIDOS LIVE.')) return;
-    /* Para gm-live: marcamos finished en el snapshot/_gm para que el hub
-       lo deje de pintar; flush a _liveStore para propagar.            */
+    /* Para gm-live: primero marcamos finished (propaga al servidor
+       durante el grace period) y luego BORRAMOS la entrada local de
+       _gmBg. Si solo marcábamos finished, la entrada seguía viva en
+       _gmBg y cualquier re-render de buildLiveScreen la podía volver
+       a pintar en cuanto el snapshot del servidor refrescase. */
     try {
-      if (bgKey && window._gmBg && window._gmBg[bgKey]) { window._gmBg[bgKey].finished = true; }
-      if (window.__GM_LIVE) { window.__GM_LIVE.finished = true; }
-      if (window._gm) { window._gm.finished = true; }
+      if (window.__GM_LIVE && !bgKey) {
+        try { if (window.__GM_LIVE.timerInterval) clearInterval(window.__GM_LIVE.timerInterval); } catch(_){}
+        window.__GM_LIVE.finished = true;
+        window.__GM_LIVE.timerRunning = false;
+      }
+      if (window._gm && !bgKey) {
+        try { if (window._gm.timerInterval) clearInterval(window._gm.timerInterval); } catch(_){}
+        window._gm.finished = true;
+        window._gm.timerRunning = false;
+      }
+      if (bgKey && window._gmBg && window._gmBg[bgKey]) {
+        window._gmBg[bgKey].finished = true;
+      }
     } catch(_){}
     try { if (window._liveStore && typeof window._liveStore.flush === 'function') window._liveStore.flush(); } catch(_){}
+    /* Cleanup local tras el flush: asegura que no se vuelva a
+       renderizar la tarjeta en la siguiente pasada. */
+    try {
+      if (bgKey && window._gmBg) { delete window._gmBg[bgKey]; }
+      if (!bgKey && window.__GM_LIVE) { window.__GM_LIVE = null; }
+    } catch(_){}
     try { if (typeof buildLiveScreen === 'function') buildLiveScreen(); } catch(_){}
   });
   card.appendChild(trash);

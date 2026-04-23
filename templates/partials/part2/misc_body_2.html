@@ -7301,16 +7301,23 @@
     var shootTeamName  = shootSide  === 'a' ? _gm.home : _gm.away;
     var list = document.getElementById('gm-acta-list');
     function _push(type, team, num, name, ico, label) {
-      _gm.events.push({id:window._evtId(), type:type, label:label||type, team:team, min:min, num:num||'', player:name||''});
+      var evId = window._evtId();
+      _gm.events.push({id:evId, type:type, label:label||type, team:team, min:min, num:num||'', player:name||'', ico:ico});
       if (list) {
         var emp = list.querySelector('.ml-acta-empty'); if (emp) emp.remove();
         var teamLabel = team === 'a' ? _gm.home : _gm.away;
         var li = document.createElement('div');
         li.className = 'ml-evt-item';
+        li.setAttribute('data-id', evId);
+        li.setAttribute('data-team', team);
+        li.setAttribute('data-type', type);
+        var eidEsc = String(evId).replace(/'/g,"\\'");
         li.innerHTML = '<span class="ml-evt-min">' + min + "'</span>"
           + '<span class="ml-evt-ico">' + ico + '</span>'
           + '<span class="ml-evt-name">' + (num && num !== '0' ? num + '. ' : '') + (name || '') + '</span>'
-          + '<span class="ml-evt-team">' + teamLabel + '</span>';
+          + '<span class="ml-evt-team">' + teamLabel + '</span>'
+          + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + eidEsc + '\')" title="Editar">✏️</button>'
+          + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + eidEsc + '\')" title="Eliminar">✕</button>';
         list.appendChild(li);
       }
     }
@@ -7488,7 +7495,8 @@
                 'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅',
                 amarilla:'🟨', 'damarilla':'🟨🟥', roja:'🟥', mvp:'⭐', lesion:'🩹' }[evt.type] || '📋';
     var teamName = team === 'a' ? _gm.home : _gm.away;
-    _gm.events.push({ id: window._evtId(), type: evt.type, label: evt.label, team: team, min: min, num: num || '', player: playerName || '' });
+    var _evId = window._evtId();
+    _gm.events.push({ id: _evId, type: evt.type, label: evt.label, team: team, min: min, num: num || '', player: playerName || '', ico: ico });
 
     /* actualizar marcador */
     var goalTypes = ['gol','falta-gol','pen-gol'];
@@ -7512,12 +7520,18 @@
     /* añadir al acta */
     var li = document.createElement('div');
     li.className = 'ml-evt-item';
+    li.setAttribute('data-id', _evId);
+    li.setAttribute('data-team', team);
+    li.setAttribute('data-type', evt.type);
     var pLabel = playerName || 'Jugador';
     var gmDisplayName = evt.type === 'mvp' ? ('MVP — ' + pLabel) : pLabel;
+    var _evIdEsc = String(_evId).replace(/'/g,"\\'");
     li.innerHTML = '<span class="ml-evt-min">' + min + "'</span>"
       + '<span class="ml-evt-ico">' + ico + '</span>'
       + '<span class="ml-evt-name">' + gmDisplayName + '</span>'
-      + '<span class="ml-evt-team">' + teamName + '</span>';
+      + '<span class="ml-evt-team">' + teamName + '</span>'
+      + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _evIdEsc + '\')" title="Editar">✏️</button>'
+      + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _evIdEsc + '\')" title="Eliminar">✕</button>';
     var list = document.getElementById('gm-acta-list');
     list.appendChild(li);
     var modal = document.getElementById('gm-modal');
@@ -7527,6 +7541,189 @@
     var empty = list.querySelector('.ml-acta-empty');
     if (empty) empty.remove();
   };
+
+  /* ── Edición/eliminación de eventos del gm-modal ─────────────────
+     Reutiliza el modal global #_editModal sustituyendo temporalmente
+     los handlers de guardar/cancelar para que modifiquen _gm.events
+     en lugar de _mlStates[mid]. Al cerrar, restaura los handlers
+     originales para no romper la edición en otros modos.  */
+  (function(){
+    var _gmEditId = null;
+
+    var _gmIcoMap = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽', 'pen-gol':'🥅⚽',
+                      'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅',
+                      amarilla:'🟨', 'd-amarilla':'🟨🟥', damarilla:'🟨🟥',
+                      roja:'🟥', lesion:'🩹', mvp:'⭐', imbat:'🧤' };
+
+    function _gmMkSquadOpts(sq, teamName) {
+      var h = '<optgroup label="——  ' + teamName + '  ——">';
+      (sq || []).forEach(function(p){
+        if (p && p.h) {
+          h += '</optgroup><optgroup label="' + p.h + '">';
+        } else if (Array.isArray(p) && p.length >= 2) {
+          h += '<option value="' + p[0] + '|' + String(p[1]||'').replace(/"/g,'&quot;')
+            + '">' + p[0] + '. ' + p[1] + '</option>';
+        }
+      });
+      return h + '</optgroup>';
+    }
+
+    window._gmOpenEditModal = function(id) {
+      var sid = String(id);
+      var ev = (_gm.events || []).find(function(e){ return e && String(e.id) === sid; });
+      if (!ev) return;
+      _gmEditId = sid;
+
+      document.getElementById('_editType').value = ev.type || 'gol';
+      document.getElementById('_editMin').value  = ev.min  || 1;
+
+      var selTeam = document.getElementById('_editTeam');
+      if (selTeam && selTeam.options && selTeam.options.length >= 2) {
+        selTeam.options[0].text = (_gm.home || 'Local') + ' (local)';
+        selTeam.options[1].text = (_gm.away || 'Visitante') + ' (visitante)';
+        selTeam.value = ev.team || 'a';
+      }
+
+      var selPl = document.getElementById('_editPlayerSel');
+      if (selPl) {
+        var sqA = (typeof window.sqFromRegistry === 'function') ? (window.sqFromRegistry(_gm.home) || []) : [];
+        var sqB = (typeof window.sqFromRegistry === 'function') ? (window.sqFromRegistry(_gm.away) || []) : [];
+        selPl.innerHTML = '<option value="">— seleccionar jugador —</option>'
+          + _gmMkSquadOpts(sqA, _gm.home || 'Local')
+          + _gmMkSquadOpts(sqB, _gm.away || 'Visitante');
+        selPl.value = '';
+      }
+
+      var playerName = ev.player || ev.name || '';
+      var manual = ev.num ? (ev.num + '. ' + playerName) : playerName;
+      document.getElementById('_editManual').value = manual || '';
+
+      var saveBtn = document.getElementById('_editModal-save');
+      if (saveBtn) {
+        saveBtn.dataset.gmOrigOnclick = saveBtn.getAttribute('onclick') || '';
+        saveBtn.setAttribute('onclick', 'window._gmSaveEditModal()');
+      }
+      var cancelBtn = document.getElementById('_editModal-cancel');
+      if (cancelBtn) {
+        cancelBtn.dataset.gmOrigOnclick = cancelBtn.getAttribute('onclick') || '';
+        cancelBtn.setAttribute('onclick', 'window._gmCloseEditModal()');
+      }
+
+      /* Pausar cronómetro durante la edición (se reanuda al cerrar si procede) */
+      _gm.timerWasRunning = _gm.timerWasRunning || _gm.timerRunning;
+      if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; if (typeof gmRenderTimer === 'function') gmRenderTimer(); }
+
+      var m = document.getElementById('_editModal');
+      if (m) { m.style.display = ''; m.classList.add('show'); }
+    };
+
+    window._gmCloseEditModal = function() {
+      var m = document.getElementById('_editModal');
+      if (m) { m.classList.remove('show'); m.style.display = 'none'; }
+      var saveBtn = document.getElementById('_editModal-save');
+      if (saveBtn && saveBtn.dataset.gmOrigOnclick !== undefined) {
+        saveBtn.setAttribute('onclick', saveBtn.dataset.gmOrigOnclick);
+        delete saveBtn.dataset.gmOrigOnclick;
+      }
+      var cancelBtn = document.getElementById('_editModal-cancel');
+      if (cancelBtn && cancelBtn.dataset.gmOrigOnclick !== undefined) {
+        cancelBtn.setAttribute('onclick', cancelBtn.dataset.gmOrigOnclick);
+        delete cancelBtn.dataset.gmOrigOnclick;
+      }
+      _gmEditId = null;
+      if (_gm.timerWasRunning && !_gm.finished && !_gm.inDescanso && _gm.kickoffDone) { gmStartTimer(); }
+      _gm.timerWasRunning = false;
+    };
+
+    function _gmScMove(type, team, sign) {
+      if (!_gm.sc) _gm.sc = {a:0, b:0};
+      if (type === 'gol' || type === 'falta-gol' || type === 'pen-gol') {
+        _gm.sc[team] = Math.max(0, (_gm.sc[team]||0) + sign);
+      } else if (type === 'propia') {
+        var other = team === 'a' ? 'b' : 'a';
+        _gm.sc[other] = Math.max(0, (_gm.sc[other]||0) + sign);
+      }
+    }
+
+    window._gmSaveEditModal = function() {
+      if (!_gmEditId) { window._gmCloseEditModal(); return; }
+      var ev = (_gm.events || []).find(function(e){ return e && String(e.id) === _gmEditId; });
+      if (!ev) { window._gmCloseEditModal(); return; }
+
+      var newType = document.getElementById('_editType').value;
+      var newTeam = document.getElementById('_editTeam').value;
+      var newMin  = parseInt(document.getElementById('_editMin').value, 10) || 1;
+      var manualVal = (document.getElementById('_editManual').value || '').trim();
+      if (!manualVal) { alert('⚠️ Escribe el jugador manualmente o selecciónalo de la plantilla.'); return; }
+
+      var newNum = '', newName = '';
+      var dotIdx = manualVal.indexOf('. ');
+      if (dotIdx !== -1) {
+        newNum  = manualVal.slice(0, dotIdx).trim();
+        newName = manualVal.slice(dotIdx + 2).trim();
+      } else {
+        newName = manualVal;
+      }
+      if (!newName) { alert('⚠️ El nombre del jugador es obligatorio.'); return; }
+
+      _gmScMove(ev.type, ev.team, -1);
+      _gmScMove(newType, newTeam, +1);
+      var scEl = document.getElementById('gm-score');
+      if (scEl) scEl.textContent = _gm.sc.a + '-' + _gm.sc.b;
+
+      ev.type  = newType;
+      ev.team  = newTeam;
+      ev.min   = newMin;
+      ev.num   = newNum;
+      ev.name  = newName;
+      ev.player = newName;
+      ev.ico   = _gmIcoMap[newType] || ev.ico || '📋';
+      ev.label = ev.label || newType;
+
+      var list = document.getElementById('gm-acta-list');
+      if (list) {
+        var sel = '.ml-evt-item[data-id="' + _gmEditId.replace(/"/g,'\\"') + '"]';
+        var row = list.querySelector(sel);
+        if (row) {
+          var teamLabel = newTeam === 'a' ? _gm.home : _gm.away;
+          var displayName = newType === 'mvp'
+            ? ('MVP — ' + newName)
+            : ((newNum && newNum !== '0' ? newNum + '. ' : '') + newName);
+          var _eidEsc = _gmEditId.replace(/'/g,"\\'");
+          row.setAttribute('data-team', newTeam);
+          row.setAttribute('data-type', newType);
+          row.innerHTML = '<span class="ml-evt-min">' + newMin + "'</span>"
+            + '<span class="ml-evt-ico">' + ev.ico + '</span>'
+            + '<span class="ml-evt-name">' + displayName + '</span>'
+            + '<span class="ml-evt-team">' + teamLabel + '</span>'
+            + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _eidEsc + '\')" title="Editar">✏️</button>'
+            + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _eidEsc + '\')" title="Eliminar">✕</button>';
+        }
+      }
+      window._gmCloseEditModal();
+    };
+
+    window._gmDelEvt = function(id) {
+      var sid = String(id);
+      var idx = (_gm.events || []).findIndex(function(e){ return e && String(e.id) === sid; });
+      if (idx < 0) return;
+      if (!confirm('¿Eliminar este evento del acta?')) return;
+      var ev = _gm.events[idx];
+      _gmScMove(ev.type, ev.team, -1);
+      _gm.events.splice(idx, 1);
+      var scEl = document.getElementById('gm-score');
+      if (scEl) scEl.textContent = _gm.sc.a + '-' + _gm.sc.b;
+      var list = document.getElementById('gm-acta-list');
+      if (list) {
+        var sel = '.ml-evt-item[data-id="' + sid.replace(/"/g,'\\"') + '"]';
+        var row = list.querySelector(sel);
+        if (row && row.parentNode) row.parentNode.removeChild(row);
+        if (!list.querySelector('.ml-evt-item')) {
+          list.innerHTML = '<div class="ml-acta-empty" style="padding:8px;color:#555;font-size:11px;text-align:center;">Sin eventos aún</div>';
+        }
+      }
+    };
+  })();
 
   window.gmActivateET = function () {
     if (_gm.etDone || _gm.finished) return;
@@ -7558,15 +7755,22 @@
         pushEv: function(ev){
           ev.id = window._evtId();
           ev.label = '🧤 Portería Imbatida';
+          ev.ico = ev.ico || '🧤';
           _gm.events.push(ev);
           var list = document.getElementById('gm-acta-list');
           if (list) {
             var li = document.createElement('div');
             li.className = 'ml-evt-item';
+            li.setAttribute('data-id', ev.id);
+            li.setAttribute('data-team', ev.team);
+            li.setAttribute('data-type', ev.type || 'imbat');
+            var _imbEidEsc = String(ev.id).replace(/'/g,"\\'");
             li.innerHTML = '<span class="ml-evt-min">90\'</span>'
               + '<span class="ml-evt-ico">🧤</span>'
               + '<span class="ml-evt-name">Portería Imbatida — ' + ev.player + '</span>'
-              + '<span class="ml-evt-team">' + (ev.team === 'a' ? _gm.home : _gm.away) + '</span>';
+              + '<span class="ml-evt-team">' + (ev.team === 'a' ? _gm.home : _gm.away) + '</span>'
+              + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _imbEidEsc + '\')" title="Editar">✏️</button>'
+              + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _imbEidEsc + '\')" title="Eliminar">✕</button>';
             list.appendChild(li);
           }
         }
@@ -7613,6 +7817,35 @@
     document.getElementById('gm-team-pick').style.display = 'none';
     if (!_gm.isFriendly) {
       guardarResultado(_gm.j, _gm.home, _gm.away, _gm.sc.a, _gm.sc.b);
+      /* Persistir eventos en el mismo registro para que el acta sea
+         visible al volver a la pantalla de la Jornada (HvH/HvIA).
+         _iaEventsHtml lee res.events de loadResults(). Mismo formato
+         que el guardado de partidos IA-vs-IA (player = "Nº. Nombre"). */
+      try {
+        var _r = loadResults();
+        var _k = rKey(_gm.j, _gm.home, _gm.away);
+        if (_r[_k]) {
+          _r[_k].events = (_gm.events || [])
+            .filter(function(e){ return e && e.type !== 'pen-result'; })
+            .map(function(e){
+              var _nm = e.player || e.name || '';
+              var _lbl = (e.num && e.num !== '0' ? e.num + '. ' : '') + _nm;
+              return {
+                id: e.id,
+                type: e.type,
+                team: e.team,
+                min: e.min,
+                player: _lbl
+              };
+            });
+          var _mvpGm = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+          if (_mvpGm) {
+            _r[_k].mvp     = _mvpGm.player || _mvpGm.name || '';
+            _r[_k].mvpTeam = _mvpGm.team;
+          }
+          saveResults(_r);
+        }
+      } catch(_){}
     } else {
       /* Guardar el amistoso en el historial (igual que _mlFinishMatchGen) */
       try {
@@ -7831,15 +8064,27 @@
     if (actaList && _gm.events.length) {
       var _icoMap2 = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽', 'pen-gol':'🥅⚽',
                        'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅',
-                       amarilla:'🟨', damarilla:'🟨🟥', roja:'🟥', lesion:'🩹', mvp:'⭐' };
+                       amarilla:'🟨', damarilla:'🟨🟥', roja:'🟥', lesion:'🩹', mvp:'⭐', imbat:'🧤' };
       actaList.innerHTML = '';
       _gm.events.forEach(function (ev) {
         if (!ev) return;
+        if (!ev.id) ev.id = window._evtId();
         var tName = ev.team === 'a' ? _gm.home : _gm.away;
-        var ico = _icoMap2[ev.type] || '📋';
+        var ico = ev.ico || _icoMap2[ev.type] || '📋';
+        var pLabel = (ev.num && String(ev.num).trim() && String(ev.num) !== '0' ? ev.num + '. ' : '')
+                    + (ev.player || ev.name || '');
         var div = document.createElement('div');
-        div.className = 'ml-acta-row';
-        div.innerHTML = ico + ' ' + (ev.min || 0) + "' - " + (ev.player || '') + ' (' + tName + ')';
+        div.className = 'ml-evt-item';
+        div.setAttribute('data-id', ev.id);
+        div.setAttribute('data-team', ev.team || 'a');
+        div.setAttribute('data-type', ev.type || '');
+        var _evIdEsc3 = String(ev.id).replace(/'/g,"\\'");
+        div.innerHTML = '<span class="ml-evt-min">' + (ev.min || 0) + "'</span>"
+                      + '<span class="ml-evt-ico">' + ico + '</span>'
+                      + '<span class="ml-evt-name">' + pLabel + '</span>'
+                      + '<span class="ml-evt-team">' + tName + '</span>'
+                      + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _evIdEsc3 + '\')" title="Editar">✏️</button>'
+                      + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _evIdEsc3 + '\')" title="Eliminar">✕</button>';
         actaList.appendChild(div);
       });
     }
@@ -8032,20 +8277,27 @@
         var _icoMapGm = { gol:'⚽', propia:'🚫⚽', 'falta-gol':'🎯⚽', 'pen-gol':'🥅⚽',
                           'pen-fallo':'❌🥅', 'pen-prov':'🤦🥅', 'pen-parado':'🖐🥅',
                           amarilla:'🟨', damarilla:'🟨🟥', 'd-amarilla':'🟨🟥',
-                          roja:'🟥', lesion:'🩹', mvp:'⭐' };
+                          roja:'🟥', lesion:'🩹', mvp:'⭐', imbat:'🧤' };
         _actaListEl.innerHTML = '';
         _gm.events.forEach(function(ev) {
           if (!ev) return;
+          if (!ev.id) ev.id = window._evtId();
           var tName = ev.team === 'a' ? _gm.home : _gm.away;
           var ico = (ev.ico) || _icoMapGm[ev.type] || '📋';
           var pLabel = (ev.num && String(ev.num).trim() && String(ev.num) !== '0' ? ev.num + '. ' : '')
                       + (ev.player || ev.name || '');
-          var li = document.createElement('li');
-          li.className = 'ml-evt-row';
+          var li = document.createElement('div');
+          li.className = 'ml-evt-item';
+          li.setAttribute('data-id', ev.id);
+          li.setAttribute('data-team', ev.team || 'a');
+          li.setAttribute('data-type', ev.type || '');
+          var _evIdEsc2 = String(ev.id).replace(/'/g,"\\'");
           li.innerHTML = '<span class="ml-evt-min">' + (ev.min || 0) + "'</span>"
                         + '<span class="ml-evt-ico">' + ico + '</span>'
                         + '<span class="ml-evt-name">' + pLabel + '</span>'
-                        + '<span class="ml-evt-team">' + tName + '</span>';
+                        + '<span class="ml-evt-team">' + tName + '</span>'
+                        + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _evIdEsc2 + '\')" title="Editar">✏️</button>'
+                        + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _evIdEsc2 + '\')" title="Eliminar">✕</button>';
           _actaListEl.appendChild(li);
         });
       } else {

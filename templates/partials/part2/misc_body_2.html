@@ -7616,15 +7616,38 @@
     if (_gm.finished || _gm.inDescanso) return;
     if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; gmRenderTimer(); }
     else {
-      if (!_gm.kickoffDone) {
+      /* ─────────────────────────────────────────────────────────────
+         RESPUESTA INMEDIATA — antes el kickoff hacía síncronamente:
+           1) _mlPlayUiTone('start') — crea AudioContext (puede bloquear
+              varios cientos de ms en la primera invocación del tab).
+           2) _liveStore.flush() — _snapshot() + JSON.stringify del
+              estado global + localStorage.setItem + POST al server.
+              Con muchos partidos persistidos la stringify/write puede
+              pasar de 1-2s en móvil.
+         El usuario reportó >7s entre tap y reacción. Ahora:
+           A) Arrancamos `gmStartTimer()` de inmediato (el botón pasa
+              a "⏸" en este tick y setInterval ya está planificado).
+           B) _mlPlayUiTone y _liveStore.flush se difieren con
+              setTimeout(..., 0) para que la UI responda sin esperar
+              a que acaben.
+         ───────────────────────────────────────────────────────────── */
+      var _firstKickoff = !_gm.kickoffDone;
+      if (_firstKickoff) {
         _gm.kickoffDone = true;
         _gm.startedAt = _gm.startedAt || Date.now();
-        _mlPlayUiTone('start');
-        if (window._liveStore && typeof window._liveStore.flush === 'function') {
-          try { window._liveStore.flush(); } catch(_){}
-        }
       }
       gmStartTimer();
+      gmRenderTimer(); /* feedback visual inmediato: botón → ⏸ */
+      if (_firstKickoff) {
+        setTimeout(function(){
+          try { _mlPlayUiTone('start'); } catch(_){}
+        }, 0);
+        setTimeout(function(){
+          if (window._liveStore && typeof window._liveStore.flush === 'function') {
+            try { window._liveStore.flush(); } catch(_){}
+          }
+        }, 0);
+      }
     }
     gmUpdateAplazarBtn();
   };

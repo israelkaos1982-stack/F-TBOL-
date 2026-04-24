@@ -10,6 +10,29 @@ window.pG = function(fn) {
   var er = document.getElementById('pin-err');
   if (er) er.style.display = 'none';
 };
+
+/* ══════════════════════════════════════════════════════════════════
+   _normPS bootstrap GLOBAL — se define aquí ANTES que cualquier otro
+   <script>, por lo que los IIFEs posteriores siempre encuentran
+   window._normPS disponible como red de seguridad definitiva.
+
+   El bug histórico "Error al pintar plantilla: _normPS is not defined"
+   salía porque los fixes anteriores añadían la función dentro de cada
+   IIFE, pero si UN solo consumidor caía fuera de ese scope (p.ej. un
+   closure en window.getPlayerStats cuya IIFE se había quedado a medio
+   ejecutar por una race condition, o una llamada desde otro bloque
+   <script>) tirábamos ReferenceError y renderSquadList mostraba el
+   error en la UI. Definirla aquí, en el primer <script>, garantiza
+   que NUNCA es undefined en window.
+   ══════════════════════════════════════════════════════════════════ */
+(function(){
+  var __DIACRITICS = new RegExp('[\\u0300-\\u036f]', 'g');
+  function __boot_normPS(s){
+    return String(s||'').normalize('NFD').replace(__DIACRITICS,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+  try { if (typeof window !== 'undefined') window._normPS = __boot_normPS; } catch(_){}
+})();
 </script>
 
 <!-- ══ PIN MODAL — fuera de cualquier .screen para que sea visible siempre ══ -->
@@ -3670,15 +3693,25 @@ window.pG = function(fn) {
 
   // Read stats for a player (used by renderSquadList)
   window.getPlayerStats = function(teamName, playerName){
-    var key = _normPS(teamName) + '::' + _normPS(playerName);
+    /* Alias bulletproof: si por cualquier motivo (hoisting anómalo,
+       IIFE partial-execution, minificación agresiva) `_normPS` del
+       closure de este IIFE no estuviera disponible, caemos a
+       `window._normPS` (bootstrap global en el primer <script>).
+       Antes una ReferenceError aquí propagaba como "_normPS is not
+       defined" hasta el catch de renderSquadList y dejaba la
+       plantilla en blanco con el mensaje de error. */
+    var _np = (typeof _normPS === 'function') ? _normPS
+            : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
+            : function(s){ return String(s||'').toLowerCase(); };
+    var key = _np(teamName) + '::' + _np(playerName);
     try {
       var raw = localStorage.getItem(PLAYER_STATS_KEY);
       if(!raw) return null;
       var stats = JSON.parse(raw);
       if(stats[key]) return stats[key];
       // Fuzzy fallback
-      var prefix = _normPS(teamName) + '::';
-      var pNorm = _normPS(playerName);
+      var prefix = _np(teamName) + '::';
+      var pNorm = _np(playerName);
       var keys = Object.keys(stats);
       for(var i=0;i<keys.length;i++){
         if(keys[i].indexOf(prefix)!==0) continue;
@@ -7262,15 +7295,25 @@ Tottenham
     })();
 
     t.players.forEach(function(p){
-      ensurePlayerStats(p);
+      try { ensurePlayerStats(p); } catch(_){}
       /* Stats SIEMPRE derivan de `ef_player_stats_v1` (fuente única).
          Si no hay entrada para el jugador (p. ej. tras reiniciar la
          liga, o para un jugador nuevo), se pone a 0 de forma
          EXPLÍCITA — antes sólo se sobreescribía cuando getPlayerStats
          devolvía algo, así que viejos valores persistían en la
-         plantilla incluso después de reset. */
-      var ps = (typeof window.getPlayerStats === 'function' && t.name)
-        ? window.getPlayerStats(t.name, p.name) : null;
+         plantilla incluso después de reset.
+         IMPORTANTE: envolvemos la llamada a getPlayerStats en su
+         propio try/catch. Si esa función (definida en otro IIFE)
+         lanzase cualquier error (p.ej. un ReferenceError latente a
+         `_normPS` por closures corruptos), la plantilla SEGUIRÁ
+         renderizándose en vez de explotar en el catch de arriba y
+         dejar al usuario sin ver los jugadores. */
+      var ps = null;
+      try {
+        if (typeof window.getPlayerStats === 'function' && t.name) {
+          ps = window.getPlayerStats(t.name, p.name);
+        }
+      } catch(_) { ps = null; }
       p.pj       = (ps && ps.pj)       || 0;
       /* gol/pen/fk vienen del recuento LIVE desde eventos si existe,
          si no caemos al ef_player_stats_v1 (que ya también es disjunto

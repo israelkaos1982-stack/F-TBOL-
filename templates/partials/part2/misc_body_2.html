@@ -2372,6 +2372,20 @@
     var rawName = (team && team.name ? team.name : team) || '';
     var clean = String(rawName).trim();
     var resolved = aliases[clean.toLowerCase()] || clean;
+    /* CLAUDE.md: "El valor del equipo es la SUMA del poder de los
+       jugadores titulares". Preferimos _sumTitularsPower (plantilla
+       real del editor) antes que TEAM_RATINGS hardcodeado. Esta
+       función la usan Hypermotion, Primera Federación y las 51
+       LigasExt — antes TODAS caían a TEAM_RATINGS achatado y la
+       plantilla editada no afectaba el resultado. */
+    if (typeof window._sumTitularsPower === 'function') {
+      var fromSquad = -1;
+      try { fromSquad = window._sumTitularsPower(resolved); } catch(_){}
+      if (fromSquad < 0) {
+        try { fromSquad = window._sumTitularsPower(clean); } catch(_){}
+      }
+      if (fromSquad >= 0) return clamp(Math.round(fromSquad), 1, 100);
+    }
     var ratings = window.TEAM_RATINGS || {};
     var rating = ratings[resolved] || ratings[clean];
     if (typeof rating === 'object' && rating && typeof rating.media === 'number') rating = rating.media;
@@ -3758,6 +3772,14 @@
   }
   function _captainBonus(teamName){ return _hasCaptain(teamName) ? 1.05 : 1.0; }
   window._captainBonus = _captainBonus;
+
+  /* Exponer en window las funciones de rating CLAUDE.md-compliant para
+     que el resto de motores (Copa del Rey en copa-engine.js,
+     getTeamSimulationPower de Hypermotion/Primera/LigasExt, HvIA) las
+     usen como fuente única y NO caigan a TEAM_RATINGS achatado. */
+  window._sumTitularsPower = _sumTitularsPower;
+  window._avgSquadPower    = _avgSquadPower;
+  window._effectiveIARating = _effectiveIARating;
 
   /* Seed del sidecar _LIGA_EA_PLAYER_FLAGS a demanda para un equipo.
      Lo llamamos desde los pickers (pickSpecialist, mvp, scorer) para
@@ -5159,9 +5181,33 @@
     st.aiEventsGenerated = true;
     var aiTeam = humanA ? 'b' : 'a';
     var aiTeamName = humanA ? st.away : st.home;
-    var rat = window.TEAM_RATINGS || {};
-    var humRat = rat[humanA ? st.home : st.away] || 76;
-    var aiRat = rat[aiTeamName] || 76;
+    var humTeamName = humanA ? st.home : st.away;
+    /* CLAUDE.md: rating = suma titulares. Preferimos _sumTitularsPower
+       (plantilla real) sobre TEAM_RATINGS hardcodeado. Así en HvIA
+       el poder que el admin asigne a los 11 titulares de cada equipo
+       decide los goles que genera el motor. */
+    function _ratingFor(name){
+      if (typeof window._sumTitularsPower === 'function') {
+        try {
+          var v = window._sumTitularsPower(name);
+          if (v >= 0) return v;
+        } catch(_){}
+      }
+      var rat = window.TEAM_RATINGS || {};
+      var e = rat[name];
+      if (typeof e === 'number') return e;
+      if (e && typeof e.media === 'number') return e.media;
+      return 76;
+    }
+    var humRat = _ratingFor(humTeamName);
+    var aiRat  = _ratingFor(aiTeamName);
+    /* Bonus capitán (×1.05) invisible, coherente con IA-vs-IA. */
+    if (typeof window._captainBonus === 'function') {
+      try { humRat *= window._captainBonus(humTeamName); } catch(_){}
+      try { aiRat  *= window._captainBonus(aiTeamName);  } catch(_){}
+    }
+    /* Localía ×1.10 sobre el que juega en casa (CLAUDE.md). */
+    if (humanA) humRat *= 1.10; else aiRat *= 1.10;
     var r = typeof simSimple === 'function' ? simSimple(humanA ? humRat : aiRat, humanA ? aiRat : humRat) : {gh:1,ga:1};
     var aiGoals = humanA ? r.ga : r.gh;
     var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(aiTeamName)) || [];

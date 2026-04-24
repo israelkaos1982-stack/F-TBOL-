@@ -7121,7 +7121,22 @@ Tottenham
   }
 
   function renderSquadList(){
-    if(!CURRENT_SQUAD_TEAM) return;
+    /* Envolvemos TODO el cuerpo en try/catch con un diagnóstico
+       visible en `lext-squad-list`. Antes un throw silencioso (p.ej.
+       en ensurePlayerStats, getPlayerStats o computePlayerRating)
+       dejaba el div sin contenido y al usuario le aparecía "vacío
+       debajo de PLANTILLA" sin ni "— Sin jugadores —" siquiera.
+       Ahora si algo falla el admin ve el mensaje de error y puede
+       reportarlo con precisión.                                     */
+    var _dbgHost = document.getElementById('lext-squad-list');
+    if (_dbgHost) {
+      _dbgHost.innerHTML = '<div class="lext-sub" style="text-align:center;padding:10px;color:rgba(255,255,255,.45);">🔄 Cargando plantilla…</div>';
+    }
+    try {
+    if(!CURRENT_SQUAD_TEAM) {
+      if (_dbgHost) _dbgHost.innerHTML = '<div class="lext-sub" style="text-align:center;padding:14px;color:#ff9860;">⚠️ No hay equipo activo (CURRENT_SQUAD_TEAM=null). Cierra la plantilla y vuelve a abrirla desde ✏️ Edit.</div>';
+      return;
+    }
     /* Forzamos reconstrucción de ef_player_stats_v1 desde
        LIGA_PLAYER_MATCH_STORE antes de cada render. Sin esto, el
        storage podía quedar stale y los goles de la plantilla no
@@ -7162,7 +7177,15 @@ Tottenham
       } catch(_){}
     }
     if(!t || !t.players || !t.players.length){
-      host.innerHTML='<div class="lext-sub" style="text-align:center;padding:16px 8px;line-height:1.6;">— Sin jugadores —<br><span style="color:rgba(255,255,255,.55);">Usa <b>📋 Pegar plantilla completa</b> arriba para añadir toda la plantilla de una vez, o <b>➕ Añadir jugador individual</b> para ir uno por uno.</span></div>';
+      /* Diagnóstico: si no tenemos `t` no es lo mismo que tenerlo
+         con 0 jugadores. Diferenciar ayuda al usuario a saber si el
+         problema es que no encontramos el equipo (id/nombre) o que
+         el equipo está realmente vacío. */
+      if (!t) {
+        host.innerHTML='<div class="lext-sub" style="text-align:center;padding:14px;color:#ff9860;">⚠️ No encuentro el equipo «'+(_fbRS||'?')+'» en ligaExt_'+String(CURRENT_KEY||'?')+' (ni por id «'+String(CURRENT_SQUAD_TEAM||'?')+'» ni por nombre).<br><br>Guárdalo desde ✏️ Edit antes de añadir plantilla.</div>';
+      } else {
+        host.innerHTML='<div class="lext-sub" style="text-align:center;padding:16px 8px;line-height:1.6;">— Sin jugadores —<br><span style="color:rgba(255,255,255,.55);">Usa <b>📋 Pegar plantilla completa</b> arriba para añadir toda la plantilla de una vez, o <b>➕ Añadir jugador individual</b> para ir uno por uno.</span></div>';
+      }
       return;
     }
     var ORDER = ['POR','DEF','MED','DEL'];
@@ -7356,6 +7379,16 @@ Tottenham
     ORDER.forEach(function(k){ html += sectionFor(k); });
     html += '</div>';
     host.innerHTML = html;
+    } catch (_renderErr) {
+      /* Error silencioso al renderizar la plantilla: antes el try/catch
+         en lextOpenSquad se lo comía y al admin le aparecía "vacío
+         debajo de PLANTILLA". Ahora lo mostramos en pantalla para
+         reportarlo. */
+      var _errHost = document.getElementById('lext-squad-list');
+      if (_errHost) {
+        _errHost.innerHTML = '<div class="lext-sub" style="text-align:center;padding:14px;color:#ff5c5c;line-height:1.5;">⚠️ Error al pintar plantilla:<br><br><code style="font-size:11px;color:#ffbb90;">'+ String((_renderErr && _renderErr.message) || _renderErr || 'desconocido').replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}) +'</code></div>';
+      }
+    }
   }
 
   window.lextTogglePlayerFlag = function(pid, flag){

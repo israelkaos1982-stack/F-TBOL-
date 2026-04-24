@@ -5091,6 +5091,33 @@
 
   function _mlShowRemoteEventToast(ev, teamName, matchLabel) {
     if (!ev) return;
+    /* Solo mostrar toasts cuando el usuario está viendo una pantalla
+       en la que el evento es CONTEXTUAL — gm-modal abierto, o pantalla
+       con tarjetas de partidos en vivo (.match-live-wrap visible).
+       Pedido del usuario: navegando los menús (s-home, s-ligas,
+       s-competiciones, s-resto-ligas, s-selecciones, etc.) salían
+       toasts de IA-vs-IA por encima del menú; sin contexto el aviso
+       es ruido y tapa la pantalla. */
+    var _shouldShow = false;
+    try {
+      var _gmModal = document.getElementById('gm-modal');
+      if (_gmModal && _gmModal.style && _gmModal.style.display === 'flex') {
+        _shouldShow = true;
+      } else {
+        var _activeScr = document.querySelector('.screen.active');
+        if (_activeScr) {
+          /* Visible significa offsetParent != null + dimensiones reales.
+             Buscar al menos una match-live-wrap o un gm-modal-wrap
+             dentro de la pantalla activa. */
+          var _liveCards = _activeScr.querySelectorAll('.match-live-wrap, .ml-card');
+          for (var _li = 0; _li < _liveCards.length; _li++) {
+            var _c = _liveCards[_li];
+            if (_c && _c.offsetParent !== null) { _shouldShow = true; break; }
+          }
+        }
+      }
+    } catch(_) { _shouldShow = true; /* fallback seguro: si la detección falla, mejor mostrar */ }
+    if (!_shouldShow) return;
     var stack = _mlEnsureToastStack();
     var ico = ev.ico || _ICO_FALLBACK[ev.type] || '📋';
     var who = (ev.player || ev.name || '').toString();

@@ -5722,6 +5722,19 @@ Tottenham
   function _lextNormName(s){
     return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   }
+  /* Alias local de `_normPS` (definido en el IIFE de ef_player_stats_v1,
+     bloque <script> 3177-3694). renderSquadList y el bloque que recorre
+     LIGA_PLAYER_MATCH_STORE necesitan normalizar nombres de equipo/
+     jugador con los MISMOS criterios que el store de estad\u00edsticas, pero
+     este IIFE (5701-8145) no tiene acceso directo a aquella funci\u00f3n.
+     Sin esta copia, renderSquadList lanzaba `_normPS is not defined` y
+     la plantilla aparec\u00eda "vac\u00eda" debajo de PLANTILLA (error silenciado
+     por el try/catch de lextOpenSquad \u2014 ahora visible gracias al
+     commit anterior). */
+  function _normPS(s){
+    return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
   function _lextFindTeamRow(data, id, fallbackName){
     if (!data || !Array.isArray(data.teams)) return null;
     if (id) {

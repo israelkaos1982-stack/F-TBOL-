@@ -7419,16 +7419,22 @@
         _spX.textContent = _spTxt;
       }
     } catch(_){}
-    /* Botón "🛌 DESCANSO" — visible sólo cuando el usuario puede
-       forzar el half-time: tras minuto 45 (game-time), antes del
-       descanso, fuera de prórroga, partido no acabado. Lo ocultamos
-       en el resto de estados (incluido _gm.inDescanso, donde el
-       overlay de descanso ya está activo). */
+    /* Botón "🛌 DESCANSO" — visible para que el usuario pueda forzar
+       el half-time desde el minuto 37 de la primera parte. Razón:
+       cuadrar el cronómetro real (TV / cronómetro del propio partido
+       eFootball) con el simulado es casi imposible — los goles, faltas
+       y pausas hacen que vayan desfasados. Permitiendo descanso
+       anticipado desde 37' el usuario salta al medio tiempo cuando
+       el partido REAL acaba la primera parte, sin importar lo que
+       marque el reloj de la app. Si NO pulsa el botón, el cronómetro
+       sigue subiendo (38, 39, ...) hasta llegar al auto-descanso en
+       45+descuento (gmHalfMax). Solo se muestra HvH/HvIA (gm-modal),
+       fuera de prórroga y antes del descanso. */
     try {
       var fhWrap = document.getElementById('gm-force-ht-wrap');
       if (fhWrap) {
         var canForce = !_gm.finished && !_gm.htDone && !_gm.etDone
-                       && !_gm.inDescanso && _gm.timerSec >= 2700;
+                       && !_gm.inDescanso && _gm.timerSec >= 2220;  /* 37' */
         fhWrap.style.display = canForce ? '' : 'none';
       }
     } catch(_) {}
@@ -7469,13 +7475,25 @@
     _gmShowHalftimeOv();
   }
   /* Botón manual: el usuario puede forzar el descanso a partir del
-     minuto 45 (antes de que se llegue al tope con descuentos). El
-     botón sólo se muestra en partidos con humano (HvH/HvIA), tras
-     el min 45 game-time, antes del descanso, y nunca durante prórroga.
-     Si se llama fuera de esas condiciones, no hace nada (idempotente). */
+     minuto 37 de la primera parte. Razón: el cronómetro de la app
+     no siempre va sincronizado con el partido REAL en eFootball
+     (goles, faltas y pausas lo desfasan), así que necesitamos un
+     margen amplio para saltar al descanso cuando el árbitro pita el
+     final de la primera parte de verdad — sin tener que esperar a
+     que el reloj de la app cuadre con los 45'.
+
+     IMPORTANTE: si el usuario NO pulsa el botón, el cronómetro
+     SIGUE corriendo normalmente (38, 39, 40, ..., 45+descuento) y
+     `gmStartTimer` activará el auto-descanso al llegar al tope
+     dinámico (gmHalfMax). El botón solo da una salida ANTICIPADA;
+     no acelera el reloj.
+
+     Solo se muestra en partidos con humano (HvH/HvIA — el gm-modal
+     no se usa en IAvsIA), tras el min 37 game-time, antes del
+     descanso, y nunca durante prórroga. */
   window.gmForceHalftime = function() {
     if (!_gm || _gm.finished || _gm.htDone || _gm.etDone) return;
-    if (_gm.timerSec < 2700) return; /* sólo desde el min 45 game-time */
+    if (_gm.timerSec < 2220) return; /* sólo desde el min 37 game-time */
     _gmEnterHalftime();
   };
 

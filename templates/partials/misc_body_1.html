@@ -6066,6 +6066,39 @@ Tottenham
         var data = (j && j.data) || {teams:[],results:[]};
         data.teams = data.teams || [];
         data.results = data.results || [];
+        /* ─── BLACKLIST DE EQUIPOS BORRADOS ─────────────────────
+           Si el admin borró un equipo en esta sesión (o en alguna
+           anterior cuya blacklist viaja en localStorage), NUNCA se
+           re-aplica desde el servidor, aunque el servidor todavía lo
+           tenga (p.ej. el POST falló por red). Antes, la anti-wipe
+           solo protegía "local > server" y dejaba que el server
+           resucitara equipos. Ahora el filtro blacklist corre siempre,
+           en ambas direcciones. */
+        try {
+          var _localBlk = [];
+          var _lcRaw = LIGA_CACHE[k];
+          if (!_lcRaw) {
+            try {
+              var _rawBL = localStorage.getItem(storeKey(k));
+              if (_rawBL) _lcRaw = JSON.parse(_rawBL);
+            } catch(_){}
+          }
+          if (_lcRaw && Array.isArray(_lcRaw.deletedTeamNames)) {
+            _localBlk = _lcRaw.deletedTeamNames.slice();
+          }
+          if (Array.isArray(data.deletedTeamNames)) {
+            data.deletedTeamNames.forEach(function(nm){
+              if (_localBlk.indexOf(nm) < 0) _localBlk.push(nm);
+            });
+          }
+          if (_localBlk.length) {
+            data.teams = data.teams.filter(function(tt){
+              if (!tt || !tt.name) return true;
+              return _localBlk.indexOf(_lextNormName(tt.name)) < 0;
+            });
+            data.deletedTeamNames = _localBlk;
+          }
+        } catch(_){}
         // ── Anti-wipe protection ─────────────────────────
         // Si el servidor nos devuelve un payload con menos equipos
         // de los que tenemos cacheados/guardados localmente, NO lo
@@ -6915,6 +6948,24 @@ Tottenham
       if(!confirm('⚠️ ¿Eliminar '+teamLabel+' definitivamente?\n\nSe borrará también de la clasificación y de los resultados guardados. Esta acción no se puede deshacer.')) return;
       data.teams = data.teams.filter(function(x){return x.id!==id;});
       data.results = (data.results||[]).filter(function(r){return r.h!==id && r.a!==id;});
+      /* ═══════════════════════════════════════════════════════════
+         Blacklist persistente de equipos borrados por NOMBRE. Impide
+         que cualquier camino (fetchData del servidor con estado
+         stale, lextOpenSquad al clicar en una fila huérfana,
+         hidratación desde SQUAD_REGISTRY, sync desde otra liga) los
+         re-inyecte. El bug original: si el POST al servidor fallaba,
+         la próxima fetchData devolvía el equipo borrado y el
+         anti-wipe NO disparaba (solo actúa si local > servidor), por
+         lo que Arsenal / Atlético Madrid "resucitaban" en Inglaterra.
+         Se limpia cuando el admin re-crea explícitamente el equipo
+         (lextSaveTeam / lextBulkAddTeams). */
+      if (t && t.name) {
+        if (!Array.isArray(data.deletedTeamNames)) data.deletedTeamNames = [];
+        var _nk = _lextNormName(t.name);
+        if (_nk && data.deletedTeamNames.indexOf(_nk) < 0) {
+          data.deletedTeamNames.push(_nk);
+        }
+      }
       saveData(CURRENT_KEY,data);
       renderTeamsList();
       renderTable();
@@ -6972,11 +7023,19 @@ Tottenham
       seenInBatch[key] = true;
       var newTeam = {
         id: uid(), name: name,
-        power: 75, atk: 75, mid: 75, def: 75,
+        power: 75, atk: 75, mid: 75, def: 75, aggressiveness: 50,
         stadium: '', shield: '', budget: 0, players: []
       };
       if(ligaEa){ newTeam.isHuman = false; newTeam.humanEmoji = ''; }
       data.teams.push(newTeam);
+      /* Si el nombre estaba en la blacklist (borrado previamente) el
+         admin lo está re-creando explícitamente → quitar de blacklist. */
+      if (Array.isArray(data.deletedTeamNames) && data.deletedTeamNames.length) {
+        var _revBk = _lextNormName(name);
+        if (_revBk) {
+          data.deletedTeamNames = data.deletedTeamNames.filter(function(nm){ return nm !== _revBk; });
+        }
+      }
       added++;
     }
 
@@ -7018,6 +7077,16 @@ Tottenham
     var squadText = document.getElementById('lext-team-squad-paste').value;
     var parsed = parseSquadPaste(squadText);
     var data = loadData(CURRENT_KEY);
+    /* Si el admin re-crea un equipo con nombre que estaba en la
+       blacklist (borrado previamente), quitarlo de la lista — la
+       intención explícita es "revivir" este equipo, así que ya no
+       bloqueamos su inserción en fetchData / lextOpenSquad. */
+    if (Array.isArray(data.deletedTeamNames) && data.deletedTeamNames.length) {
+      var _revNm = _lextNormName(name);
+      if (_revNm) {
+        data.deletedTeamNames = data.deletedTeamNames.filter(function(nm){ return nm !== _revNm; });
+      }
+    }
 
     // ── Liga EA Sports: tope de 20 equipos + tipo Humano/IA ──
     var ligaEa = isLigaEaContext();
@@ -7183,9 +7252,21 @@ Tottenham
             _mustSave = true;
           }
         } else {
-          /* No estaba en storage bajo CURRENT_KEY → lo añadimos con
-             su id. Así lextSavePlayer/ApplySquadPaste podrán
-             encontrarlo después. */
+          /* No estaba en storage bajo CURRENT_KEY. Antes lo añadíamos
+             SIEMPRE, lo que permitía que un click en la clasificación
+             (o un fetch del servidor con estado stale) resucitara un
+             equipo que el admin acababa de borrar — era el origen
+             del bug "Arsenal/Atlético Madrid vuelven a Inglaterra
+             aunque pulse papelera". Ahora, si el nombre está en la
+             blacklist `data.deletedTeamNames`, NO se re-añade y
+             salimos con un aviso. El admin puede revivir el equipo
+             creándolo explícitamente desde ✏️ Edit. */
+          var _normNm = _lextNormName(t.name);
+          var _blk = Array.isArray(_data.deletedTeamNames) ? _data.deletedTeamNames : [];
+          if (_normNm && _blk.indexOf(_normNm) >= 0) {
+            try { alert('⚠️ «'+(t.name||'?')+'» fue eliminado de esta liga. Créalo de nuevo desde ✏️ Edit si quieres recuperarlo.'); } catch(_){}
+            return;
+          }
           _data.teams.push(t);
           _mustSave = true;
         }

@@ -3433,6 +3433,10 @@ window.pG = function(fn) {
     return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
       .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
   }
+  /* Exponer en window para que el IIFE del editor (bloque 5701-
+     8145) pueda usarlo sin duplicar. Las funciones declaradas
+     en distintos <script> NO se comparten entre IIFEs. */
+  try { if (typeof window !== 'undefined') window._normPS = _normPS; } catch(_){}
 
   function rebuildPlayerStatsStore(){
     var stats = {}; // 'teamNorm::playerNorm' → counters
@@ -5722,6 +5726,22 @@ Tottenham
   function _lextNormName(s){
     return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   }
+  /* Alias local de `_normPS` (definido en el IIFE de ef_player_stats_v1,
+     bloque <script> 3177-3694). renderSquadList y el bloque que recorre
+     LIGA_PLAYER_MATCH_STORE necesitan normalizar nombres de equipo/
+     jugador con los MISMOS criterios que el store de estad\u00edsticas, pero
+     este IIFE (5701-8145) no tiene acceso directo a aquella funci\u00f3n.
+     Sin esta copia, renderSquadList lanzaba `_normPS is not defined` y
+     la plantilla aparec\u00eda "vac\u00eda" debajo de PLANTILLA (error silenciado
+     por el try/catch de lextOpenSquad \u2014 ahora visible gracias al
+     commit anterior). */
+  function _normPS(s){
+    return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+  /* Bridge global desde este bloque: si el IIFE del otro
+     <script> no llegó a ejecutar, garantizamos window._normPS. */
+  try { if (typeof window !== 'undefined' && !window._normPS) window._normPS = _normPS; } catch(_){}
   function _lextFindTeamRow(data, id, fallbackName){
     if (!data || !Array.isArray(data.teams)) return null;
     if (id) {
@@ -7133,6 +7153,13 @@ Tottenham
       _dbgHost.innerHTML = '<div class="lext-sub" style="text-align:center;padding:10px;color:rgba(255,255,255,.45);">🔄 Cargando plantilla…</div>';
     }
     try {
+    /* Alias local bulletproof: usa la función local si está en
+       scope, si no cae a window._normPS (expuesta desde el otro
+       IIFE), si no a un no-op. Así un error de hoisting NO rompe
+       todo el render. */
+    var _np = (typeof _normPS === 'function') ? _normPS
+            : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
+            : function(s){ return String(s||'').toLowerCase(); };
     if(!CURRENT_SQUAD_TEAM) {
       if (_dbgHost) _dbgHost.innerHTML = '<div class="lext-sub" style="text-align:center;padding:14px;color:#ff9860;">⚠️ No hay equipo activo (CURRENT_SQUAD_TEAM=null). Cierra la plantilla y vuelve a abrirla desde ✏️ Edit.</div>';
       return;
@@ -7201,17 +7228,17 @@ Tottenham
     (function(){
       try {
         var store = window.LIGA_PLAYER_MATCH_STORE || {};
-        var teamNorm = _normPS(t.name || '');
+        var teamNorm = _np(t.name || '');
         Object.keys(store).forEach(function(mk){
           var m = store[mk]; if (!m) return;
-          var tA = _normPS(m.teamA||''), tB = _normPS(m.teamB||'');
+          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
           if (tA !== teamNorm && tB !== teamNorm) return;
           var mySide = (tA === teamNorm) ? 'a' : 'b';
           (m.evts || []).forEach(function(ev){
             if (!ev) return;
             var evSide = ev.team;
             if (ev.realTeam) {
-              evSide = (_normPS(ev.realTeam) === teamNorm) ? 'self' : 'other';
+              evSide = (_np(ev.realTeam) === teamNorm) ? 'self' : 'other';
               if (evSide !== 'self') return;
             } else if (evSide !== mySide) {
               return;
@@ -7222,7 +7249,7 @@ Tottenham
             else nm = ev.name || ev.playerName || '';
             nm = String(nm || '').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
             if (!nm) return;
-            var key = _normPS(nm);
+            var key = _np(nm);
             var rec = _liveCounts[key] || {gol:0, pen:0, fk:0};
             var ty = ev.type || '';
             if (ty === 'gol') rec.gol++;
@@ -7249,7 +7276,7 @@ Tottenham
          si no caemos al ef_player_stats_v1 (que ya también es disjunto
          tras el fix). Esto garantiza que la suma de las 3 columnas =
          total de goles del jugador en competiciones registradas. */
-      var liveKey = _normPS(p.name);
+      var liveKey = _np(p.name);
       var live = _liveCounts[liveKey];
       if (live) {
         p.gol = live.gol;

@@ -12452,6 +12452,14 @@ function buildLiveScreen() {
   wraps.forEach(function(w) {
     var scoreEl = w.querySelector('.ml-score');
     if (!scoreEl || !scoreEl.classList.contains('state-playing')) return;
+    /* Excluir partidos cuyo cronómetro ya alcanzó el tope (90+stoppage
+       o 120+stoppage en prórroga) y está en pausa. El usuario los
+       considera "finalizados" aunque aún no haya pulsado FINALIZAR. */
+    try {
+      var _wrapMk = w.id ? w.id.replace(/^mlw-/, '') : '';
+      var _wrapSt = (typeof window._mlGetState === 'function') ? window._mlGetState(_wrapMk) : null;
+      if (_wrapSt && _gmTimerExhausted(_wrapSt)) return;
+    } catch(_){}
     if (esH) {
       /* Los nombres en `.ml-team-name` vienen en MAYÚSCULAS
          (`home.toUpperCase()` en buildMatchCard), por lo que
@@ -12504,6 +12512,22 @@ function buildLiveScreen() {
       return !!(_r && _r[rKey(j, home, away)]);
     } catch(_){ return false; }
   }
+  /* Helper: un partido cuyo cronómetro alcanzó el tope (90 + descuento
+     o 120 + descuento en prórroga) y está pausado se considera
+     "agotado". El usuario no le está dando juego — está esperando a
+     pulsar FINALIZAR. No tiene sentido seguir mostrándolo en
+     PARTIDOS LIVE como si estuviera ocurriendo, así que lo
+     excluimos del hub aunque no esté marcado finished:true.
+     Pedido del usuario: "los partidos live se quedan abiertos aunque
+     finalice". */
+  function _gmTimerExhausted(snap) {
+    if (!snap || snap.timerRunning) return false;
+    var stops = (typeof _mlCountStoppageHalves === 'function')
+                  ? _mlCountStoppageHalves(snap) : { first: 0, second: 0 };
+    var normalMax = snap.etDone ? 7200 : 5400;  // GM_MAX_ET / GM_MAX_NORMAL
+    var max = normalMax + (stops.second || 0) * 60;
+    return (snap.timerSec || 0) >= max;
+  }
   if (gmLive && _gmMatchIsAlreadyFinished(gmLive.j, gmLive.home, gmLive.away)) {
     /* Limpieza defensiva: si el marcador está guardado, el partido
        terminó → desregistrar el __GM_LIVE obsoleto. */
@@ -12512,6 +12536,12 @@ function buildLiveScreen() {
       gmLive.finished = true;
       if (gmLive.timerInterval) clearInterval(gmLive.timerInterval);
     } catch(_){}
+    gmLive = null;
+  }
+  if (gmLive && _gmTimerExhausted(gmLive)) {
+    /* Cronómetro agotado y partido en pausa → quitar del hub. El
+       usuario puede seguir viéndolo si vuelve al gm-modal pero ya no
+       molesta en PARTIDOS LIVE. */
     gmLive = null;
   }
 
@@ -12531,6 +12561,9 @@ function buildLiveScreen() {
         try { delete window._gmBg[k]; } catch(_){}
         return;
       }
+      /* Cronómetro agotado y pausado: el partido espera FINALIZAR,
+         no tiene sentido mostrarlo como "en directo". */
+      if (_gmTimerExhausted(snap)) return;
       /* Ignorar si coincide con el gm-modal activo (edge case) */
       if (gmLive && snap.j === gmLive.j && snap.home === gmLive.home && snap.away === gmLive.away) return;
       gmBgList.push({ key: k, snap: snap });

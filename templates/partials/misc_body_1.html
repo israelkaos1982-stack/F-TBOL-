@@ -7420,9 +7420,14 @@ Tottenham
     } else {
       t.players = parsed;
     }
+    var _finalCount = t.players.length;
     // NO se recalcula el poder del equipo — los valores Global/ATK/MED/DEF
     // son los que el admin definió en el editor y se mantienen fijos.
     saveData(CURRENT_KEY, data);
+    /* Invalidamos la cache por si alguna fetchData async la sobrescribe
+       entre save y render — al recargar desde localStorage vemos SIEMPRE
+       lo que acabamos de guardar. */
+    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
     ta.value = '';
     // Cerrar el details
     var d = document.getElementById('lext-squad-paste-details');
@@ -7430,6 +7435,17 @@ Tottenham
     renderSquadList();
     renderTeamsList();
     renderTable();
+    /* Verificación post-render: si tras pintar la plantilla la fila
+       del equipo sigue saliendo vacía (p.ej. porque alguna async
+       sobrescribió localStorage), avisamos en pantalla con un alert
+       claro en vez de dejar al usuario pensando que no se guardó. */
+    try {
+      var _postData = loadData(CURRENT_KEY);
+      var _postT = _lextFindTeamRow(_postData, CURRENT_SQUAD_TEAM, _fallbackName);
+      if (!_postT || !Array.isArray(_postT.players) || !_postT.players.length) {
+        alert('⚠️ Se guardaron ' + _finalCount + ' jugadores, pero al re-leer de localStorage la plantilla aparece vacía. Esto suele ser una sincronización del servidor pisando el guardado — espera 5 s, recarga la página y vuelve a abrir el equipo. Si persiste, avisa.');
+      }
+    } catch(_){}
   };
 
   /* Si _editingPlayerId está puesto, lextSavePlayer MODIFICA ese jugador

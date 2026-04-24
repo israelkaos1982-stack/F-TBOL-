@@ -5741,6 +5741,77 @@ Tottenham
     return null;
   }
 
+  /* Reconstruye una plantilla en formato `ligaExt` a partir del mismo
+     SQUAD_REGISTRY que usa la simulación. La simulación lee desde
+     `window.sqFromRegistry(teamName)` (o `sqFromRegistryFull`) — si
+     los partidos pintan goleadores de un equipo, ese team tiene una
+     entrada válida en SQUAD_REGISTRY. Traducir esa entrada al formato
+     del editor garantiza que el editor SIEMPRE muestra lo mismo que
+     la simulación está usando.
+     Formato SR (registry): array mezclando cabeceras `{h:'🧤 PORTEROS'}`
+     con filas `[num, name, power]`. Puede traer flags opcionales en
+     el índice [3] (objeto o booleanos sueltos). */
+  function _lextHydrateFromSquadRegistry(teamName){
+    if (!teamName) return [];
+    var sq = null;
+    try {
+      if (typeof window.sqFromRegistryFull === 'function') sq = window.sqFromRegistryFull(teamName);
+      if ((!sq || !sq.length) && typeof window.sqFromRegistry === 'function') sq = window.sqFromRegistry(teamName);
+    } catch(_){}
+    /* Fallback directo al diccionario global SQUAD_REGISTRY con
+       matching case-insensitive si las funciones helper no están
+       disponibles (p.ej. carga parcial del bundle). */
+    if ((!sq || !sq.length) && window.SQUAD_REGISTRY) {
+      var want = _lextNormName(teamName);
+      var keys = Object.keys(window.SQUAD_REGISTRY);
+      for (var kk = 0; kk < keys.length; kk++) {
+        if (_lextNormName(keys[kk]) === want) {
+          sq = window.SQUAD_REGISTRY[keys[kk]];
+          break;
+        }
+      }
+    }
+    if (!Array.isArray(sq) || !sq.length) return [];
+    var POS_INV = {'🧤 PORTEROS':'POR','🛡 DEFENSAS':'DEF','⚙️ MEDIOS':'MED','⚙ MEDIOS':'MED','⚡ DELANTEROS':'DEL'};
+    var curPos = 'MED';
+    var out = [];
+    var seen = Object.create(null);
+    sq.forEach(function(e){
+      if (e && typeof e === 'object' && !Array.isArray(e) && e.h) {
+        curPos = POS_INV[e.h] || 'MED';
+        return;
+      }
+      if (!Array.isArray(e) || e.length < 2) return;
+      var num = Number(e[0])||0;
+      var name = String(e[1]||'').trim();
+      if (!name) return;
+      var dedup = _lextNormName(name);
+      if (seen[dedup]) return;
+      seen[dedup] = true;
+      var power = Number(e[2])||70;
+      var p = {
+        id: 'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+        name: name,
+        num: num,
+        pos: curPos,
+        power: power,
+        captain:false, freeKick:false, penalty:false, elite:false, natGoal:false,
+        pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
+      };
+      /* Las flags pueden venir en e[3] como objeto o como propiedades
+         sueltas del propio array (algunas builds las setean con
+         e.captain = true). Intentamos ambos. */
+      var flagsObj = (e.length >= 4 && e[3] && typeof e[3] === 'object') ? e[3] : e;
+      if (flagsObj.captain)  p.captain  = true;
+      if (flagsObj.freeKick) p.freeKick = true;
+      if (flagsObj.penalty)  p.penalty  = true;
+      if (flagsObj.elite)    p.elite    = true;
+      if (flagsObj.natGoal)  p.natGoal  = true;
+      out.push(p);
+    });
+    return out;
+  }
+
 
   // ── Persistencia en servidor (sincroniza entre dispositivos) ──
   // Cache local por liga + write-back optimista al servidor. Si el
@@ -6978,6 +7049,23 @@ Tottenham
           _data.teams.push(t);
           _mustSave = true;
         }
+        /* Si la fila (ya sea la existente o la recién insertada) sigue
+           sin jugadores, hidratamos desde SQUAD_REGISTRY — la misma
+           fuente que la simulación — para que el editor no muestre
+           "Sin jugadores" cuando el motor sí tiene la plantilla. */
+        try {
+          var _row = _data.teams[(_idx >= 0) ? _idx : (_data.teams.length - 1)];
+          if (_row && (!Array.isArray(_row.players) || !_row.players.length)) {
+            var _fromSR = _lextHydrateFromSquadRegistry(_row.name || t.name);
+            if (_fromSR && _fromSR.length) {
+              _row.players = _fromSR;
+              /* Propagar al objeto recibido también por si algún código
+                 posterior lo lee directamente. */
+              t.players = _fromSR;
+              _mustSave = true;
+            }
+          }
+        } catch(_){}
         if (_mustSave && typeof saveData === 'function') saveData(CURRENT_KEY, _data);
       } catch(_){}
     } else {
@@ -7048,6 +7136,24 @@ Tottenham
     var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fbRS);
     if (t && t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
     var host = document.getElementById('lext-squad-list');
+    /* Si el equipo existe pero su plantilla en ligaExt está vacía
+       Y la simulación SÍ tiene jugadores para él (vía sqFromRegistry
+       / SQUAD_REGISTRY), hidratamos la fila desde ahí. Así, aunque
+       el backup que tenga el admin esté sin plantilla, el editor
+       muestra EXACTAMENTE los mismos jugadores que usa el motor de
+       simulación — y los persiste en storage para que las próximas
+       aperturas sean instantáneas. Sin esto, el usuario veía "Sin
+       jugadores" aunque el acta de los partidos llenase de
+       goleadores del mismo equipo.                                  */
+    if (t && (!t.players || !t.players.length)) {
+      try {
+        var _hydrated = _lextHydrateFromSquadRegistry(t.name);
+        if (_hydrated && _hydrated.length) {
+          t.players = _hydrated;
+          try { saveData(CURRENT_KEY, data); } catch(_){}
+        }
+      } catch(_){}
+    }
     if(!t || !t.players || !t.players.length){
       host.innerHTML='<div class="lext-sub" style="text-align:center;padding:16px 8px;line-height:1.6;">— Sin jugadores —<br><span style="color:rgba(255,255,255,.55);">Usa <b>📋 Pegar plantilla completa</b> arriba para añadir toda la plantilla de una vez, o <b>➕ Añadir jugador individual</b> para ir uno por uno.</span></div>';
       return;

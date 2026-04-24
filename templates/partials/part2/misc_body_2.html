@@ -7021,9 +7021,20 @@
   function gmRenderTimer() {
     var btn = document.getElementById('gm-timer');
     if (!btn) return;
+    var row = document.getElementById('gm-timer-row');
     var min = Math.floor(_gm.timerSec / 60);
-    if (_gm.finished) { btn.textContent = '🏁 FIN'; btn.className = 'ml-timer finished'; return; }
-    if (_gm.inDescanso) { btn.textContent = '⏸ DESCANSO'; btn.className = 'ml-timer running'; return; }
+    if (_gm.finished) {
+      btn.textContent = '🏁 FIN';
+      btn.className = 'ml-timer finished';
+      if (row) { row.classList.remove('running'); row.classList.add('finished'); }
+      return;
+    }
+    if (_gm.inDescanso) {
+      btn.textContent = '⏸ DESCANSO';
+      btn.className = 'ml-timer running';
+      if (row) { row.classList.add('running'); row.classList.remove('finished'); }
+      return;
+    }
     /* Descuento dinámico vía _mlCountStoppageHalves (mismo helper que
        el flujo ml-…). Formato 45+N en la 1ª parte y 90+N en la 2ª. */
     var stops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
@@ -7046,6 +7057,10 @@
     }
     btn.textContent = lbl + display;
     btn.className = 'ml-timer' + (_gm.timerRunning ? ' running' : '');
+    if (row) {
+      row.classList.toggle('running', !!_gm.timerRunning);
+      row.classList.remove('finished');
+    }
     /* Indicador de velocidad actual (⏪/⏩). Se actualiza junto al
        repintado del cronómetro para que tras speedUp/speedDown el
        texto quede sincronizado sin tener que redibujar manualmente. */

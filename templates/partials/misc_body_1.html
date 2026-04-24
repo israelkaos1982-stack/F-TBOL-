@@ -5910,11 +5910,82 @@ Tottenham
   };
 
   function loadData(k){
-    if(LIGA_CACHE[k]) return LIGA_CACHE[k];
-    try{ var raw = localStorage.getItem(storeKey(k)); if(raw){ LIGA_CACHE[k] = JSON.parse(raw); return LIGA_CACHE[k]; } }catch(_){}
+    if(LIGA_CACHE[k]) return _applyForcedBlacklist(k, LIGA_CACHE[k]);
+    try{ var raw = localStorage.getItem(storeKey(k)); if(raw){ LIGA_CACHE[k] = JSON.parse(raw); return _applyForcedBlacklist(k, LIGA_CACHE[k]); } }catch(_){}
     LIGA_CACHE[k] = {teams:[], results:[]};
-    return LIGA_CACHE[k];
+    return _applyForcedBlacklist(k, LIGA_CACHE[k]);
   }
+
+  /* ═══════════════════════════════════════════════════════════════
+     FORCED_BLACKLIST — equipos vetados PERMANENTEMENTE por liga.
+     Petición explícita del usuario ("fuerza su eliminación"):
+     Arsenal y Atlético Madrid no pueden existir en Liga Inglaterra;
+     Athletic Club no puede existir en la liga de Escocia.
+     Esta lista actúa ANTES que cualquier otra cosa: cada loadData
+     la aplica para filtrar data.teams y para garantizar que los
+     nombres estén en data.deletedTeamNames. Si el server re-sube
+     esos equipos (p.ej. por estado heredado), el filtro los vuelve
+     a quitar al próximo load, y el siguiente saveData persiste la
+     limpieza. El admin NO puede re-crearlos mientras estén en esta
+     lista — lextSaveTeam tampoco los acepta (ver más abajo).
+     ═══════════════════════════════════════════════════════════════ */
+  var FORCED_BLACKLIST = {
+    'inglaterra':    ['Arsenal', 'Atlético Madrid', 'Atletico Madrid'],
+    'escocia':       ['Athletic Club']
+  };
+  function _forcedBlacklistNormFor(k){
+    var list = FORCED_BLACKLIST[k] || [];
+    return list.map(function(n){ return _lextNormName(n); }).filter(Boolean);
+  }
+  function _applyForcedBlacklist(k, data){
+    if (!data || typeof data !== 'object') return data;
+    var blk = _forcedBlacklistNormFor(k);
+    if (!blk.length) return data;
+    var mutated = false;
+    if (Array.isArray(data.teams)) {
+      var before = data.teams.length;
+      data.teams = data.teams.filter(function(t){
+        if (!t || !t.name) return true;
+        return blk.indexOf(_lextNormName(t.name)) < 0;
+      });
+      if (data.teams.length !== before) mutated = true;
+    }
+    if (!Array.isArray(data.deletedTeamNames)) data.deletedTeamNames = [];
+    blk.forEach(function(nm){
+      if (data.deletedTeamNames.indexOf(nm) < 0) {
+        data.deletedTeamNames.push(nm);
+        mutated = true;
+      }
+    });
+    /* Si este load encontró equipos vetados en local/storage los
+       persistimos quitados — así el próximo fetchData contra el
+       server ya sube el estado limpio y no vuelven a aparecer en
+       otros dispositivos. Solo si hay algo que persistir: evita
+       tocar localStorage/server cuando todo ya estaba bien. */
+    if (mutated) {
+      try {
+        LIGA_CACHE[k] = data;
+        localStorage.setItem(storeKey(k), JSON.stringify(data));
+        /* Push async al server (sin await); si falla no rompe nada
+           porque la blacklist se volverá a aplicar al siguiente load. */
+        fetch('/api/liga-ext/'+encodeURIComponent(k), {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({data:data})
+        }).catch(function(){});
+      } catch(_){}
+    }
+    return data;
+  }
+
+  /* Helper público: indica si un nombre está en la blacklist forzada
+     para una liga concreta. Usado por lextSaveTeam para rechazar
+     re-creación manual. */
+  window._lextIsForcedBlacklisted = function(k, name){
+    if (!k || !name) return false;
+    var blk = _forcedBlacklistNormFor(k);
+    return blk.indexOf(_lextNormName(name)) >= 0;
+  };
 
   // Busca el alias de eFootball de un equipo en CUALQUIER liga guardada
   // en ligaExt_*. Si el equipo no existe o no tiene alias, devuelve "".
@@ -6972,12 +7043,17 @@ Tottenham
     var cap = ligaEa ? 20 : Infinity;
     var room = Math.max(0, cap - data.teams.length);
 
-    var added = 0, skippedDup = 0, skippedCap = 0;
+    var added = 0, skippedDup = 0, skippedCap = 0, skippedForced = 0;
     var seenInBatch = {};
     for(var j=0;j<candidates.length;j++){
       var name = candidates[j];
       var key = norm(name);
       if(existing[key] || seenInBatch[key]){ skippedDup++; continue; }
+      /* Blacklist forzada: saltar nombres vetados en este slug. */
+      if (typeof window._lextIsForcedBlacklisted === 'function' &&
+          window._lextIsForcedBlacklisted(CURRENT_KEY, name)) {
+        skippedForced++; continue;
+      }
       if(added >= room){ skippedCap++; continue; }
       seenInBatch[key] = true;
       var newTeam = {
@@ -7018,6 +7094,15 @@ Tottenham
   window.lextSaveTeam = function(){
     var name = document.getElementById('lext-team-name').value.trim();
     if(!name){ alert('Falta el nombre del equipo.'); return; }
+    /* Rechazar si el equipo está en la blacklist forzada del slug
+       actual (petición explícita del admin). Ejemplos: Arsenal no
+       puede existir en ligaExt_inglaterra; Athletic Club no puede
+       existir en ligaExt_escocia. */
+    if (typeof window._lextIsForcedBlacklisted === 'function' &&
+        window._lextIsForcedBlacklisted(CURRENT_KEY, name)) {
+      alert('🚫 «' + name + '» está vetado en esta liga.\n\nNo se puede añadir este equipo a ' + (CURRENT_KEY||'') + '.');
+      return;
+    }
     var pwGlob = parseInt(document.getElementById('lext-team-pw-glob').value,10)||50;
     var pwAtk = parseInt(document.getElementById('lext-team-pw-atk').value,10)||50;
     var pwMid = parseInt(document.getElementById('lext-team-pw-mid').value,10)||50;

@@ -6850,10 +6850,72 @@ Tottenham
     }
     var id, t;
     if (idOrTeam && typeof idOrTeam === 'object') {
-      /* Objeto team pasado directamente — fast path, no buscamos por id. */
+      /* Objeto team pasado directamente (típico: click en la fila de
+         la clasificación). El bug histórico era que aceptábamos el
+         objeto tal cual y llamábamos a renderSquadList — que vuelve
+         a leer `loadData(CURRENT_KEY)` y filtra por `CURRENT_SQUAD_TEAM`.
+         Si el equipo NO estaba en esa `data.teams` (porque el id no
+         casa, porque la cache es stale, o porque el team viene de
+         otro slug), el filter devolvía undefined y se pintaba
+         "Sin jugadores" aunque los datos viajaran en el mismo
+         objeto. Además `lextSavePlayer` y `lextApplySquadPaste` usan
+         el mismo filtro → al intentar añadir un jugador salían en
+         silencio y la plantilla quedaba irreparable.
+
+         Arreglo: antes de renderizar forzamos que `data.teams[]`
+         contenga ESTE equipo con un `id` que coincida con el que
+         usaremos en `CURRENT_SQUAD_TEAM`. Si ya existe (por id o por
+         nombre), adoptamos su id y rellenamos `players` si venía
+         mejor en el objeto recibido. Si no existe, lo añadimos y
+         persistimos con `saveData`.                                 */
       t = idOrTeam;
       if (!t.id) t.id = uid();
       id = t.id;
+      try {
+        var _nrm = function(s){ return String(s||'').trim().toLowerCase(); };
+        var _data = loadData(CURRENT_KEY) || {teams:[], results:[]};
+        if (!Array.isArray(_data.teams)) _data.teams = [];
+        var _idx = -1;
+        for (var _i = 0; _i < _data.teams.length; _i++) {
+          var _et = _data.teams[_i];
+          if (_et && _et.id === t.id) { _idx = _i; break; }
+        }
+        if (_idx < 0 && t.name) {
+          var _tn = _nrm(t.name);
+          for (var _j = 0; _j < _data.teams.length; _j++) {
+            var _ej = _data.teams[_j];
+            if (_ej && _nrm(_ej.name) === _tn) { _idx = _j; break; }
+          }
+        }
+        var _mustSave = false;
+        if (_idx >= 0) {
+          /* Adoptamos el id del registro existente para que todo el
+             resto del editor (add/save/delete player) encuentre la
+             misma fila. */
+          if (_data.teams[_idx].id && _data.teams[_idx].id !== t.id) {
+            t.id = _data.teams[_idx].id;
+            id   = t.id;
+          } else if (!_data.teams[_idx].id) {
+            _data.teams[_idx].id = t.id;
+            _mustSave = true;
+          }
+          /* Si el objeto recibido trae players y el registro no,
+             copiamos para no perder los datos visibles en la
+             clasificación. */
+          if (Array.isArray(t.players) && t.players.length
+              && (!Array.isArray(_data.teams[_idx].players) || !_data.teams[_idx].players.length)) {
+            _data.teams[_idx].players = t.players.slice();
+            _mustSave = true;
+          }
+        } else {
+          /* No estaba en storage bajo CURRENT_KEY → lo añadimos con
+             su id. Así lextSavePlayer/ApplySquadPaste podrán
+             encontrarlo después. */
+          _data.teams.push(t);
+          _mustSave = true;
+        }
+        if (_mustSave && typeof saveData === 'function') saveData(CURRENT_KEY, _data);
+      } catch(_){}
     } else {
       id = idOrTeam;
       /* Primera pasada: buscar en cache. */

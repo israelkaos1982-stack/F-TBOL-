@@ -1704,6 +1704,16 @@
 
 <div id="sancion-overlay">
 <div class="sancion-ov-inner">
+<!-- Botón Volver arriba a la derecha. Cierra el overlay sin confirmar,
+     cancela cualquier callback pendiente (no arranca el partido) y
+     devuelve al usuario a la vista del calendario. Pedido explícito
+     del usuario: "hay que poner la palabra volver arriba a la
+     derecha, no hay manera de volver una vez inicias". -->
+<button id="sancion-ov-volver"
+        onclick="window._sancionVolver()"
+        style="position:absolute;top:10px;right:12px;z-index:10;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;padding:6px 14px;cursor:pointer;">
+  ◀ VOLVER
+</button>
 <div class="sancion-ov-header">
 <div class="sancion-ov-icons-row">
 <span class="sancion-ico-anim" id="sov-ico-yel">🚫</span>
@@ -5961,6 +5971,14 @@
   function _mlFinishMatchGen(mk, winner) {
     var st=_mlSt(mk);
     st.finished=true;
+    /* Persistir lesiones generadas durante el partido humano en
+       LESION_STORE antes de decrementar, para que los contadores
+       se sincronicen correctamente. */
+    try {
+      if (typeof window._registrarLesionesDesdeEventos === 'function' && st.events) {
+        window._registrarLesionesDesdeEventos(st.events, st.home, st.away);
+      }
+    } catch(_){}
     /* Decrementar lesiones de ambos equipos por haber jugado este
        partido (HvH, HvIA, IAvIA live). Alinea con simularJornadaIA
        para que las bajas se consuman siempre al mismo ritmo que los
@@ -9416,17 +9434,19 @@
             + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (evtData.mvpTeam||'') + '</span>';
           actaEl.appendChild(mvpRow);
         }
-        /* Register injuries in BAJA_STORE (all competitions) */
+        /* Register injuries in BAJA_STORE + LESION_STORE (all comps).
+           _registrarLesionesDesdeEventos centraliza el guardado en
+           LESION_STORE (que es lo que lee la pantalla "BAJAS PARA EL
+           PARTIDO") y BAJA_STORE — así el IA-vs-IA live queda
+           alineado con el batch simularJornadaIA. */
+        try {
+          if (typeof window._registrarLesionesDesdeEventos === 'function') {
+            window._registrarLesionesDesdeEventos(evtData.events, home, away);
+          }
+        } catch(_){}
         var lesionesPost = [];
         evtData.events.forEach(function(ev) {
           if (ev.type !== 'lesion' || !ev.player || ev.player === '?' || !ev.lesPartidos) return;
-          window.BAJA_STORE = window.BAJA_STORE || {};
-          window.BAJA_STORE[ev.player] = {
-            tipo: 'lesion',
-            liga:   ev.lesPartidos,
-            copa:   ev.lesPartidos,
-            europa: ev.lesPartidos
-          };
           lesionesPost.push({
             nombre: ev.player,
             equipo: ev.team === 'a' ? home : away,
@@ -9831,6 +9851,17 @@
       if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
         window.registrarLigaPlayerStats(key, m[0], m[1], evtData.events, evtData.mvp, evtData.mvpTeam);
       }
+      /* Persistir lesiones generadas en este partido (IA-vs-IA batch).
+         Antes evtData.events traía eventos tipo 'lesion' con todos los
+         datos (lesPartidos, lesGrado, lesDesc...) pero nadie los
+         guardaba en LESION_STORE, así que la pantalla BAJAS PARA EL
+         PARTIDO mostraba "Sin lesionados" aunque el acta anunciara
+         que Pablo Barrios tenía 9 partidos de baja. */
+      try {
+        if (typeof window._registrarLesionesDesdeEventos === 'function') {
+          window._registrarLesionesDesdeEventos(evtData.events, m[0], m[1]);
+        }
+      } catch(_){}
       /* Decrementar lesiones: cada equipo que juega un partido resta
          1 a las bajas pendientes de sus lesionados. Pablo Barrios
          con 9 partidos en J1 tendrá 8 tras J2, 7 tras J3, ... y

@@ -4515,6 +4515,17 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (window._sancionCallback) { window._sancionCallback(); window._sancionCallback = null; }
   };
 
+  /* Volver: cierra el overlay BAJAS PARA EL PARTIDO y cancela el
+     callback pendiente (no arranca el partido). Útil cuando el
+     usuario entra en la previa por error o cambia de idea — antes
+     no había forma de salir sin confirmar. */
+  window._sancionVolver = function() {
+    window._ppForceSancionShareMode = false;
+    window._sancionCallback = null;
+    var ov = document.getElementById('sancion-overlay');
+    if (ov) ov.classList.remove('show');
+  };
+
   // ══ OVERLAY POST-PARTIDO ═════════════════════════════════════
   window.showSancionPostOverlay = function(sanciones, compKey, onConfirm) {
     var cfg = COMP_CONFIG[compKey] || { label: compKey };
@@ -6896,6 +6907,66 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     sortearEjemplo: sortearEjemplo,
     tiposLesion: LESION_TIPOS,
     decrementarPorPartido: decrementarPorPartido
+  };
+
+  /* Helper global para persistir lesiones que vengan en la lista de
+     eventos de un partido (evento tipo 'lesion' con lesPartidos,
+     lesDesc, lesGrado, lesIco o con propiedades tipo/grado/nombre).
+     Se llama desde simularJornadaIA, genMatchEventsEnhanced live y
+     _mlFinishMatchGen — antes las lesiones IA-vs-IA solo se pintaban
+     en el acta y se metían en BAJA_STORE, pero NUNCA aterrizaban en
+     LESION_STORE, así que la pantalla "BAJAS PARA EL PARTIDO"
+     mostraba "Sin lesionados" aunque Pablo Barrios acabara de
+     romperse el metatarsiano. */
+  window._registrarLesionesDesdeEventos = function(events, homeName, awayName){
+    if (!Array.isArray(events)) return;
+    if (!window.LESION_STORE) window.LESION_STORE = {};
+    if (!window.BAJA_STORE)   window.BAJA_STORE   = {};
+    events.forEach(function(ev){
+      if (!ev || ev.type !== 'lesion') return;
+      /* Nombre: puede venir como string (ev.player = 'Pablo Barrios')
+         o como array (ev.player = [num, name, ...]) o en ev.name. */
+      var playerName = '';
+      if (Array.isArray(ev.player)) playerName = ev.player[1] || ev.player[0] || '';
+      else if (typeof ev.player === 'string') playerName = ev.player;
+      else playerName = ev.name || '';
+      playerName = String(playerName || '').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
+      if (!playerName || playerName === '?') return;
+      var teamName = (ev.realTeam) ? String(ev.realTeam)
+                   : (ev.team === 'a') ? String(homeName || '')
+                   : String(awayName || '');
+      var partidos = Number(ev.lesPartidos || ev.partidos) || 1;
+      var grado   = Number(ev.lesGrado   || ev.grado)   || 1;
+      var desc    = String(ev.lesDesc    || ev.descripcion || '');
+      var gNombre = ev.gradoNombre || (grado === 3 ? 'Grave' : grado === 2 ? 'Moderada' : 'Leve');
+      var gEmoji  = ev.lesIco || ev.gradoEmoji || (grado === 3 ? '🚑' : grado === 2 ? '💉' : '🩹');
+      /* Si ya hay una lesión pendiente para este jugador, SOLO
+         actualizamos si la nueva es MÁS grave o MÁS larga (evita que
+         un roce leve pise una fractura grave que aún está sanando). */
+      var prev = window.LESION_STORE[playerName];
+      if (prev && Number(prev.partidos) > 0) {
+        var prevPart  = Number(prev.partidos) || 0;
+        var prevGrado = Number(prev.grado) || 0;
+        if (grado < prevGrado || (grado === prevGrado && partidos < prevPart)) {
+          return;  /* la lesión previa es peor, no la sobrescribimos */
+        }
+      }
+      window.LESION_STORE[playerName] = {
+        equipo:      teamName,
+        grado:       grado,
+        gradoNombre: gNombre,
+        gradoEmoji:  gEmoji,
+        descripcion: desc,
+        partidos:    partidos,
+        timestamp:   Date.now()
+      };
+      window.BAJA_STORE[playerName] = {
+        tipo:   'lesion',
+        liga:   partidos,
+        copa:   partidos,
+        europa: partidos
+      };
+    });
   };
 
   console.log('[eFootball] Sistema de Lesiones activado ✓');

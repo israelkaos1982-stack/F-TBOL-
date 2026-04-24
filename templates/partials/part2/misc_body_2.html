@@ -5961,6 +5961,17 @@
   function _mlFinishMatchGen(mk, winner) {
     var st=_mlSt(mk);
     st.finished=true;
+    /* Decrementar lesiones de ambos equipos por haber jugado este
+       partido (HvH, HvIA, IAvIA live). Alinea con simularJornadaIA
+       para que las bajas se consuman siempre al mismo ritmo que los
+       partidos realmente jugados. */
+    try {
+      if (window.LESION_STORE_UTILS && typeof window.LESION_STORE_UTILS.decrementarPorPartido === 'function') {
+        var _comp = st.isFriendly ? 'amistoso' : 'liga';
+        window.LESION_STORE_UTILS.decrementarPorPartido(st.home, _comp);
+        window.LESION_STORE_UTILS.decrementarPorPartido(st.away, _comp);
+      }
+    } catch(_){}
     /* Arrancar el grace period de propagación: durante los próximos
        FINISHED_PROPAGATE_MS el snapshot seguirá incluyendo la entrada
        con finished=true para que otros dispositivos la vean y hagan
@@ -9820,6 +9831,17 @@
       if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
         window.registrarLigaPlayerStats(key, m[0], m[1], evtData.events, evtData.mvp, evtData.mvpTeam);
       }
+      /* Decrementar lesiones: cada equipo que juega un partido resta
+         1 a las bajas pendientes de sus lesionados. Pablo Barrios
+         con 9 partidos en J1 tendrá 8 tras J2, 7 tras J3, ... y
+         volverá a ser elegible cuando llegue a 0. sqFromRegistry
+         auto-excluye los que tengan partidos > 0. */
+      try {
+        if (window.LESION_STORE_UTILS && typeof window.LESION_STORE_UTILS.decrementarPorPartido === 'function') {
+          window.LESION_STORE_UTILS.decrementarPorPartido(m[0], 'liga');
+          window.LESION_STORE_UTILS.decrementarPorPartido(m[1], 'liga');
+        }
+      } catch(_){}
       actualizarDom('l-j' + j, m[0], m[1], actualGh, actualGa);
       actualizarDom('cl-j' + j, m[0], m[1], actualGh, actualGa);
       dirty = true;

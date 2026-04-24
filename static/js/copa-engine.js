@@ -603,6 +603,16 @@
     var mvp = pickMvp(evts, gl + et_gl, gv + et_gv, local, visitante, activeA, activeB, expelledA, expelledB);
     evts.push({ min: 120, ico: '⭐', team: mvp.team === local ? 'a' : 'b', player: ['', mvp.name], type: 'mvp', realTeam: mvp.team });
 
+    /* Al terminar el partido de Copa, decrementar lesiones de ambos
+       equipos (1 partido menos de baja pendiente). sqFromRegistry ya
+       auto-excluye a los que siguen con partidos > 0. */
+    try {
+      if (window.LESION_STORE_UTILS && typeof window.LESION_STORE_UTILS.decrementarPorPartido === 'function') {
+        window.LESION_STORE_UTILS.decrementarPorPartido(local, 'copa');
+        window.LESION_STORE_UTILS.decrementarPorPartido(visitante, 'copa');
+      }
+    } catch (_) {}
+
     return {
       gl: gl,
       gv: gv,

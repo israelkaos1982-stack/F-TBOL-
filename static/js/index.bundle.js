@@ -543,7 +543,29 @@ window.sqFromRegistry = function(teamName, opts) {
   }
   var posMap = {'🧤 PORTEROS':'P','🛡 DEFENSAS':'D','⚙️ MEDIOS':'M','⚡ DELANTEROS':'F',
                 '⚙️CENTROCAMPISTAS':'M','⚙️ CENTROCAMPISTAS':'M'};
-  var excluded = (opts && opts.excluded) ? opts.excluded : [];
+  var excluded = (opts && opts.excluded) ? opts.excluded.slice() : [];
+  /* CLAUDE.md: los jugadores lesionados NO juegan sus partidos pendientes.
+     Antes sqFromRegistry solo excluía lo que el caller pasara en
+     opts.excluded — pero ningún caller (simularJornadaIA, Copa,
+     genMatchEvents, HvIA) lo hacía, así que los lesionados salían en
+     los 11 titulares, marcaban goles y ganaban MVPs. Ahora leemos
+     automáticamente window.LESION_STORE y añadimos a `excluded` a
+     todos los jugadores del equipo con `partidos > 0`. El admin no
+     tiene que acordarse de propagar nada — cualquier camino que use
+     sqFromRegistry los saltará. */
+  try {
+    var _lesMap = window.LESION_STORE || {};
+    var _teamNorm = String(teamName || '').trim().toLowerCase();
+    Object.keys(_lesMap).forEach(function(pn){
+      var rec = _lesMap[pn];
+      if (!rec || !(Number(rec.partidos) > 0)) return;
+      /* Match por nombre de equipo normalizado — cubre "Atlético
+         Madrid" / "Atletico Madrid" / "Atl Madrid" consistentemente. */
+      var eqNorm = String(rec.equipo || '').trim().toLowerCase();
+      if (eqNorm && eqNorm !== _teamNorm) return;
+      if (excluded.indexOf(pn) === -1) excluded.push(pn);
+    });
+  } catch(_){}
 
   // 1. Parsear plantilla completa con posición y poder
   var full = []; var curPos = 'M';
@@ -6813,12 +6835,67 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     });
   };
 
+  /* Decrementa la baja de TODOS los lesionados pertenecientes al
+     equipo `teamName` (normalización case-insensitive) en 1 partido
+     y elimina del store los que lleguen a 0. Se llama desde:
+       · simularJornadaIA — tras cada partido IA-vs-IA.
+       · mlEndMatchGen    — cuando termina un partido con humano.
+       · copa-engine      — tras cada partido de Copa.
+     De este modo la cuenta de partidos pendientes refleja la realidad:
+     si Pablo Barrios tenía 9 partidos en J1, en J2 tendrá 8, etc.,
+     y cuando llegue a 0 el jugador vuelve a aparecer en sqFromRegistry
+     (que ya auto-excluye lesionados con partidos > 0).
+
+     También sincroniza BAJA_STORE[name].liga / copa / europa si existe,
+     descontando la competición que se indique en `compKey` (default
+     'liga'). Si no hay BAJA_STORE (versión antigua) no rompe nada. */
+  function decrementarPorPartido(teamName, compKey) {
+    compKey = compKey || 'liga';
+    var store = window.LESION_STORE || {};
+    var target = String(teamName || '').trim().toLowerCase();
+    if (!target) return;
+    var removed = [];
+    Object.keys(store).forEach(function(name){
+      var rec = store[name];
+      if (!rec) return;
+      var eq = String(rec.equipo || '').trim().toLowerCase();
+      if (eq !== target) return;
+      var n = Number(rec.partidos) || 0;
+      if (n <= 0) { removed.push(name); return; }
+      rec.partidos = n - 1;
+      if (rec.partidos <= 0) {
+        delete store[name];
+        removed.push(name);
+      }
+    });
+    /* Sincroniza BAJA_STORE si existe: restar 1 al contador de la
+       competición correspondiente, quitar la baja si todo 0. */
+    try {
+      var bs = window.BAJA_STORE || {};
+      Object.keys(bs).forEach(function(nm){
+        var b = bs[nm];
+        if (!b) return;
+        /* Si el jugador ya no está en LESION_STORE y la baja es de
+           tipo lesión, quitar la baja también. */
+        if (removed.indexOf(nm) >= 0 && b.tipo === 'lesion') {
+          delete bs[nm];
+          return;
+        }
+        /* Decrementar contador de la competición activa. */
+        if (typeof b[compKey] === 'number' && b[compKey] > 0) {
+          b[compKey] = b[compKey] - 1;
+        }
+      });
+    } catch(_){}
+  }
+
   window.LESION_STORE_UTILS = {
     registrar: registrarLesion,
     sortearGrado: sortearGrado,
     sortearPartidos: sortearPartidos,
     sortearEjemplo: sortearEjemplo,
-    tiposLesion: LESION_TIPOS
+    tiposLesion: LESION_TIPOS,
+    decrementarPorPartido: decrementarPorPartido
   };
 
   console.log('[eFootball] Sistema de Lesiones activado ✓');

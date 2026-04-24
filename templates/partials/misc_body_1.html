@@ -4213,7 +4213,7 @@ window.pG = function(fn) {
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" onerror="this.style.display='none'" alt="UCL"/><h2>UCL · Fase de Grupos</h2></div>
 <div class="submenu-list">
-<div class="submenu-card sc-ucl2" onclick="go('s-ucl-grupos-clas')">
+<div class="submenu-card sc-ucl2" onclick="if(window.buildUclGruposClas)window.buildUclGruposClas();go('s-ucl-grupos-clas')">
 <span class="sc-emoji">📊</span><span class="sc-label">Clasificación</span><span class="sc-arr">▶</span>
 </div>
 <div class="submenu-card sc-ucl2" onclick="go('s-ucl-grupos-res')">
@@ -4229,13 +4229,107 @@ window.pG = function(fn) {
 </div>
 <script>
 (function(){
-  /* Placeholder de 40 equipos — se rellenarán más adelante. Mantiene
-     la misma interfaz visual que la clasificación de Liga EA Sports
-     (mismas clases .clas-*) para que, cuando se añadan los equipos
-     reales, solo haya que sustituir los nombres. */
+  /* ── UCL · FASE DE GRUPOS · CLASIFICACIÓN ──────────────────
+     Lee de localStorage todas las ligas (`ligaExt_<slug>`) que
+     hayan terminado su temporada (results.length >= N*(N-1),
+     round-robin completo ida+vuelta) y promociona los primeros
+     `config.zones.ucl` equipos de cada una. Los stats UCL
+     empiezan a 0 — la fase de grupos aún no ha empezado. Los
+     huecos hasta 40 siguen como "Por definir". */
+  function _esc(s){
+    return String(s==null?'':s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function _teamName(t){
+    if(!t) return '';
+    if(typeof t === 'string') return t;
+    return t.name || t.nombre || t.id || '';
+  }
+  function _teamLogo(t){
+    if(!t || typeof t !== 'object') return '';
+    return t.logo || t.escudo || t.shield || t.img || t.src || '';
+  }
+  /* Ordena equipos usando los resultados de la liga: pts, DG,
+     GF, nombre. Devuelve array con {name, logo, pts, dg, gf}. */
+  function _standingsFromResults(teams, results){
+    var stats = {};
+    teams.forEach(function(t){
+      var nm = _teamName(t);
+      if(!nm) return;
+      stats[nm] = { name:nm, logo:_teamLogo(t), pts:0, pj:0, gf:0, gc:0 };
+    });
+    (results||[]).forEach(function(r){
+      if(!r) return;
+      var hn = typeof r.h === 'string' ? r.h : _teamName(r.h);
+      var an = typeof r.a === 'string' ? r.a : _teamName(r.a);
+      var h = stats[hn], a = stats[an];
+      if(!h || !a) return;
+      var gh = Number(r.gh)||0, ga = Number(r.ga)||0;
+      h.pj++; a.pj++;
+      h.gf+=gh; h.gc+=ga; a.gf+=ga; a.gc+=gh;
+      if(gh>ga) h.pts+=3;
+      else if(gh<ga) a.pts+=3;
+      else { h.pts+=1; a.pts+=1; }
+    });
+    var arr = [];
+    for(var k in stats) if(Object.prototype.hasOwnProperty.call(stats,k)) arr.push(stats[k]);
+    arr.forEach(function(s){ s.dg = s.gf - s.gc; });
+    arr.sort(function(x,y){
+      return (y.pts-x.pts) || (y.dg-x.dg) || (y.gf-x.gf)
+        || String(x.name).localeCompare(String(y.name),'es');
+    });
+    return arr;
+  }
+  /* Recorre localStorage y devuelve la lista de equipos que se
+     han ganado plaza directa de Champions en su liga terminada. */
+  function computeUclClassified(){
+    var out = [];
+    if(typeof localStorage === 'undefined') return out;
+    try {
+      var keys = [];
+      for(var i=0;i<localStorage.length;i++){
+        var k = localStorage.key(i);
+        if(!k || k.indexOf('ligaExt_')!==0) continue;
+        if(k.indexOf('_backup')>=0) continue;
+        if(/_v\d+$/.test(k)) continue;
+        keys.push(k);
+      }
+      /* Orden estable entre ligas para que el tablero no baile
+         al recalcular. */
+      keys.sort();
+      keys.forEach(function(key){
+        var raw = localStorage.getItem(key);
+        if(!raw) return;
+        var data;
+        try { data = JSON.parse(raw); } catch(_){ return; }
+        if(!data || !Array.isArray(data.teams) || !Array.isArray(data.results)) return;
+        var teams = data.teams;
+        var N = teams.length;
+        if(N < 2) return;
+        var expected = N*(N-1);
+        if(data.results.length < expected) return; // liga no terminada
+        var zones = (data.config && data.config.zones) || {};
+        var slots = Number(zones.ucl || 0);
+        if(!(slots > 0)) return;
+        var ranking = _standingsFromResults(teams, data.results);
+        for(var j=0;j<slots && j<ranking.length;j++){
+          out.push({
+            name:  ranking[j].name,
+            logo:  ranking[j].logo,
+            league: key.substring('ligaExt_'.length)
+          });
+        }
+      });
+    } catch(_){}
+    return out;
+  }
+  window.computeUclClassified = computeUclClassified;
+
   function buildUclGruposClas(){
     var container = document.getElementById('clas-ucl-grupos-content');
     if(!container) return;
+    var classified = computeUclClassified();
     var N = 40;
     var html = ''
       + '<div class="clas-scroll-outer">'
@@ -4251,10 +4345,20 @@ window.pG = function(fn) {
       if(i<=8) zone = 'zone-ucl';            // clasificados directos a 8vos
       else if(i<=24) zone = 'zone-ucl-qual'; // playoff de 16vos
       else zone = 'zone-desc';               // eliminados
+      var team = classified[i-1];
+      var nameHtml, logoHtml = '';
+      if(team){
+        if(team.logo){
+          logoHtml = '<img class="clas-team-logo" src="' + _esc(team.logo) + '" alt="" onerror="this.style.display=\'none\'">';
+        }
+        nameHtml = '<span class="clas-team-name-text">' + _esc(team.name) + '</span>';
+      } else {
+        nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
+      }
       html += '<div class="clas-row ' + zone + '">'
         + '<div class="clas-team-cell">'
         +   '<span class="clas-pos-n">' + i + '</span>'
-        +   '<span class="clas-team-name"><span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span></span>'
+        +   '<span class="clas-team-name">' + logoHtml + nameHtml + '</span>'
         + '</div>'
         + '<div class="clas-pts">0</div>'
         + '<div class="clas-pj">0</div>'
@@ -4281,6 +4385,7 @@ window.pG = function(fn) {
       +   '<span class="clas-legend-item"><span class="clas-dot" style="background:#3160ff;"></span>1-8 · Octavos</span>'
       +   '<span class="clas-legend-item"><span class="clas-dot" style="background:#f0c040;"></span>9-24 · Playoff</span>'
       +   '<span class="clas-legend-item"><span class="clas-dot" style="background:#e03c3c;"></span>25-40 · Eliminados</span>'
+      +   '<span class="clas-legend-item" style="margin-left:auto;color:rgba(255,255,255,.5);">' + classified.length + ' / 40 clasificados</span>'
       + '</div>'
       + '</div>';
     container.innerHTML = html;

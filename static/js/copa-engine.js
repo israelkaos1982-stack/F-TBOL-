@@ -330,23 +330,36 @@
     return weighted[weighted.length - 1].player;
   }
 
-  function maybeCardEvents(activeA, activeB, ft90) {
+  function maybeCardEvents(activeA, activeB, ft90, teamNameA, teamNameB) {
     var events = [];
+    /* Probabilidades base (antes fijas) escaladas por agresividad del
+       equipo: amarilla 42% × (aggr/50)², roja 6% × (aggr/50)². Un
+       Getafe aggr=90 tiene ~136% amarilla (clampada a 95%) y ~19% roja.
+       Alineado con el sistema de Liga EA Sports y el resto de ligas. */
+    function _aggr(name){
+      return (typeof window._aggressivenessFactor === 'function')
+        ? window._aggressivenessFactor(name) : 1;
+    }
+    var aggrA = _aggr(teamNameA);
+    var aggrB = _aggr(teamNameB);
     ['a', 'b'].forEach(function (team) {
       var active = team === 'a' ? activeA : activeB;
+      var f = team === 'a' ? aggrA : aggrB;
       var yellowPlayer = null;
-      if (Math.random() < 0.42) {
+      var yellowProb = Math.min(0.95, 0.42 * f);
+      if (Math.random() < yellowProb) {
         yellowPlayer = pickWeightedPlayer(active);
         if (yellowPlayer) {
           events.push({ min: 8 + Math.floor(Math.random() * Math.max(10, ft90 - 12)), ico: '🟨', team: team, player: yellowPlayer, type: 'amarilla' });
-          if (Math.random() < 0.08) {
+          if (Math.random() < Math.min(0.30, 0.08 * f)) {
             events.push({ min: Math.min(ft90, 15 + Math.floor(Math.random() * Math.max(12, ft90 - 15))), ico: '🟨🟥', team: team, player: yellowPlayer, type: 'd-amarilla' });
           }
         }
       }
       // Only generate a direct red for a player who has not already received any card,
       // since an expelled player cannot receive further cards (real football rules).
-      if (Math.random() < 0.06) {
+      var redProb = Math.min(0.35, 0.06 * f);
+      if (Math.random() < redProb) {
         var excludeFromRed = yellowPlayer ? [yellowPlayer[1]] : [];
         var redPlayer = pickWeightedPlayer(active, { exclude: excludeFromRed });
         if (redPlayer) {
@@ -453,8 +466,22 @@
     var activeB = squadB.active.slice();
     var benchA = squadA.bench.slice();
     var benchB = squadB.bench.slice();
-    var ratingA = getTeamRating(local);
-    var ratingB = getTeamRating(visitante);
+    /* Ratings asimétricos ATK-vs-DEF: ofensivo del local decide cuánto
+       marca contra la defensa del visitante, y viceversa. Caída a
+       power global (getTeamRating) si los helpers aún no cargan. */
+    var offLocal, defLocal, offVisit, defVisit;
+    if (typeof window._teamOffense === 'function' && typeof window._teamDefense === 'function') {
+      offLocal = window._teamOffense(local);    defLocal = window._teamDefense(local);
+      offVisit = window._teamOffense(visitante); defVisit = window._teamDefense(visitante);
+    } else {
+      offLocal = defLocal = getTeamRating(local);
+      offVisit = defVisit = getTeamRating(visitante);
+    }
+    /* Las dos variables legacy ratingA/ratingB se mantienen como
+       "nivel medio" del equipo para los cálculos de baseTotal, cap de
+       goles, etc. — igual que antes. */
+    var ratingA = (offLocal + defLocal) / 2;
+    var ratingB = (offVisit + defVisit) / 2;
     var ft90 = 90;
     var evts = [];
 
@@ -466,7 +493,7 @@
     }
 
     // Generate card events FIRST so expelled players affect score calculation
-    var cardEvts = maybeCardEvents(activeA, activeB, ft90);
+    var cardEvts = maybeCardEvents(activeA, activeB, ft90, local, visitante);
     cardEvts.forEach(function (ev) {
       ev.realTeam = ev.team === 'a' ? local : visitante;
       evts.push(ev);
@@ -492,14 +519,19 @@
     var adjRatingA = Math.max(30, ratingA - (Object.keys(expelledA).length * RED_FLAT_PENALTY));
     var adjRatingB = Math.max(30, ratingB - (Object.keys(expelledB).length * RED_FLAT_PENALTY));
 
-    /* Bonus de Capitán: +5% al poder del equipo. */
+    /* Bonus de Capitán: +5% al ofensivo del equipo con C titular. */
     var _capBonus = (typeof window._captainBonus === 'function') ? window._captainBonus : function(){ return 1.0; };
-    var strengthA = adjRatingA * 1.10 * _capBonus(teamA); // 10% local + 5% capitán
-    var strengthB = adjRatingB         * _capBonus(teamB);
+    /* Ofensivos finales con todos los modificadores aplicados
+       (localía ×1.10 al local, capitán ×1.05, −15 por expulsión). */
+    var offLocalAdj = Math.max(30, offLocal * 1.10 * _capBonus(teamA) - RED_FLAT_PENALTY * Object.keys(expelledA).length);
+    var offVisitAdj = Math.max(30, offVisit        * _capBonus(teamB) - RED_FLAT_PENALTY * Object.keys(expelledB).length);
+    /* xG asimétrico: local marca ~f(offLocal / defVisit). */
+    var strengthA = offLocalAdj * (75 / Math.max(30, defVisit));
+    var strengthB = offVisitAdj * (75 / Math.max(30, defLocal));
     var shareA = Math.max(0.22, Math.min(0.78, strengthA / Math.max(1, strengthA + strengthB)));
     var baseTotal = 1.75 + (((adjRatingA + adjRatingB) / 2) - 74) * 0.05;
-    var expectedA = Math.max(0.15, Math.min(3.8, baseTotal * shareA + Math.max(0, adjRatingA - adjRatingB) * 0.018 + 0.10));
-    var expectedB = Math.max(0.10, Math.min(3.3, baseTotal * (1 - shareA) + Math.max(0, adjRatingB - adjRatingA) * 0.018));
+    var expectedA = Math.max(0.15, Math.min(3.8, baseTotal * shareA + Math.max(0, offLocalAdj - offVisitAdj) * 0.018 + 0.10));
+    var expectedB = Math.max(0.10, Math.min(3.3, baseTotal * (1 - shareA) + Math.max(0, offVisitAdj - offLocalAdj) * 0.018));
     var maxGoals = (adjRatingA >= 88 || adjRatingB >= 88) ? 7 : (adjRatingA >= 84 || adjRatingB >= 84) ? 6 : 5;
     var gl = Math.min(maxGoals, poisson(expectedA));
     var gv = Math.min(maxGoals, poisson(expectedB));

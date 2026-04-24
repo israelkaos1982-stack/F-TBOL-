@@ -2456,18 +2456,39 @@
 
   function simulateGoals(home, away, opts){
     /* Regla unificada de "carta de valor" (misma que Liga EA Sports y
-       Copa del Rey):
-         · power del local × 1.10 (ventaja de localía del 10%)
-         · × 1.05 si el equipo tiene Capitán (C) — bonus de líder
-         · −15 por cada jugador expulsado ese partido
-       Si no se pasan rojas explícitas, mantenemos el comportamiento
-       antiguo (sin penalización) para callers externos. */
+       Copa del Rey) — ahora ASIMÉTRICA ATK vs DEF:
+         · Ofensivo del local × 1.10 (ventaja de localía)
+         · Ofensivo × 1.05 si tiene Capitán titular
+         · −15 al ofensivo por cada jugador expulsado
+         · Los goles del local se calculan vía Poisson(offensive_local
+           / defensive_visitante); idem para el visitante.
+       Retorno legacy [gl, gv] para compatibilidad con callers que
+       indexan por posición. */
     var redA = (opts && opts.redA) || 0;
     var redB = (opts && opts.redB) || 0;
-    var capA = _captainBonus(home && home.name);
-    var capB = _captainBonus(away && away.name);
-    var rA = Math.max(1, getTeamSimulationPower(home) * 1.10 * capA - 15 * redA);
-    var rB = Math.max(1, getTeamSimulationPower(away)        * capB - 15 * redB);
+    var nameA = home && home.name ? home.name : home;
+    var nameB = away && away.name ? away.name : away;
+    var capA = _captainBonus(nameA);
+    var capB = _captainBonus(nameB);
+    /* Ofensiva/Defensa asimétricas. Si los helpers no están (caso
+       borde: motor arranca antes que misc_body_2 cargue) caemos a
+       getTeamSimulationPower en ambas dimensiones → equipo balanceado. */
+    var offA, defA, offB, defB;
+    if (typeof window._teamOffense === 'function' && typeof window._teamDefense === 'function') {
+      offA = window._teamOffense(nameA);  defA = window._teamDefense(nameA);
+      offB = window._teamOffense(nameB);  defB = window._teamDefense(nameB);
+    } else {
+      offA = defA = getTeamSimulationPower(home);
+      offB = defB = getTeamSimulationPower(away);
+    }
+    offA = Math.max(30, offA * 1.10 * capA - 15 * redA);
+    offB = Math.max(30, offB         * capB - 15 * redB);
+    if (typeof window._simAsymmetric === 'function') {
+      var sc = window._simAsymmetric(offA, defA, offB, defB);
+      return [sc.gh, sc.ga];
+    }
+    /* Fallback muestral si no hay _simAsymmetric (build parcial). */
+    var rA = offA, rB = offB;
     var baseA = rA / Math.max(1, (rA + rB));
     var probA = Math.min(0.82, baseA);
     function sample(prob){
@@ -2481,14 +2502,24 @@
   }
 
   function playMatch(a,b,playerStats,rosters){
-    /* Rojas pre-rolled: se deciden ANTES del marcador para que la
-       penalización de −15 puntos de poder afecte a la probabilidad
-       real del partido (regla "carta de valor"). */
-    var redA = Math.random() < 0.10 ? 1 : 0;
-    var redB = Math.random() < 0.10 ? 1 : 0;
+    /* Rojas pre-rolled ponderadas por agresividad: base 10% × factor
+       (aggr/50)². Un equipo aggr=90 → 10% × 3.24 = 32.4%; aggr=30 →
+       10% × 0.36 = 3.6%. Se deciden ANTES del marcador para que la
+       penalización de −15 puntos al poder afecte al cálculo. */
+    var aggrFA = (typeof window._aggressivenessFactor === 'function')
+      ? window._aggressivenessFactor(a && a.name) : 1;
+    var aggrFB = (typeof window._aggressivenessFactor === 'function')
+      ? window._aggressivenessFactor(b && b.name) : 1;
+    var redA = Math.random() < Math.min(0.5, 0.10 * aggrFA) ? 1 : 0;
+    var redB = Math.random() < Math.min(0.5, 0.10 * aggrFB) ? 1 : 0;
     var glgv = simulateGoals(a, b, {redA:redA, redB:redB}), gl=glgv[0], gv=glgv[1];
     a.pj++; b.pj++; a.gf+=gl; a.gc+=gv; b.gf+=gv; b.gc+=gl;
-    a.ta += randInt(0,4); b.ta += randInt(0,4);
+    /* Amarillas escaladas por agresividad. Base 0-4 (media 2) ×
+       factor: un equipo aggr=90 recibe ~6.5 de media por partido,
+       uno aggr=30 recibe ~0.72. Coherente con la tabla real de
+       tarjetas (Getafe, Sevilla, Rayo top; Barça, City bottom). */
+    a.ta += Math.round(randInt(0,4) * aggrFA);
+    b.ta += Math.round(randInt(0,4) * aggrFB);
     a.tr += redA;
     b.tr += redB;
     if(gl>gv){a.v++; b.p++; a.pts+=3; a.form.push('V'); b.form.push('D');}
@@ -3773,13 +3804,82 @@
   function _captainBonus(teamName){ return _hasCaptain(teamName) ? 1.05 : 1.0; }
   window._captainBonus = _captainBonus;
 
+  /* ═══════════════════════════════════════════════════════════════
+     HELPERS DE STATS DE EQUIPO (ATK / MID / DEF / AGRESIVIDAD)
+     ───────────────────────────────────────────────────────────────
+     El editor de equipo guarda 4 valores FIJOS (power/atk/mid/def)
+     + aggressiveness. Se propagan al sidecar global
+     `window._LIGA_EA_TEAM_STATS[nombre]` por el bridge
+     `ligaEaBuildEngineOverrides` y por `_importOtherLeaguesIntoEngine`
+     (misc_body_1.html).
+
+     `_teamStats(name)` resuelve el equipo por nombre/alias y devuelve:
+       { power, atk, mid, def, aggressiveness }
+     Si el equipo no está registrado (por ejemplo, equipo hardcodeado
+     que nunca pasó por el editor), usa `TEAM_RATINGS` como power y
+     replica el valor en los 4 campos (el equipo se comporta como
+     balanceado con agresividad media 50).
+     ═══════════════════════════════════════════════════════════════ */
+  function _teamStats(name){
+    var sidecar = window._LIGA_EA_TEAM_STATS || {};
+    if (name && sidecar[name]) return sidecar[name];
+    /* Resolución por alias: misc_body_1 ya propaga con _namesForAlias,
+       pero como doble seguro probamos por TEAM_ALIASES. */
+    var aliases = window.TEAM_ALIASES || {};
+    var resolved = name ? (aliases[String(name).toLowerCase()] || name) : '';
+    if (resolved && sidecar[resolved]) return sidecar[resolved];
+    /* Fallback a TEAM_RATINGS: power global, atk/mid/def = power,
+       aggressiveness = 50 (media liga). */
+    var rat = window.TEAM_RATINGS || {};
+    var entry = rat[resolved] || rat[name];
+    var power = 75;
+    if (typeof entry === 'number') power = entry;
+    else if (entry && typeof entry.media === 'number') power = entry.media;
+    return { power: power, atk: power, mid: power, def: power, aggressiveness: 50 };
+  }
+
+  /* Ofensiva = 60% ataque + 40% mediocampo. Controla los goles que
+     MARCA el equipo. Un equipo con ATK 95 MID 70 tiene offense 85. */
+  function _teamOffense(name){
+    var s = _teamStats(name);
+    return Math.max(1, 0.60 * Number(s.atk||0) + 0.40 * Number(s.mid||0));
+  }
+  /* Defensiva = 60% defensa + 40% mediocampo. Controla los goles que
+     RECIBE el equipo. Un equipo con DEF 95 MID 70 tiene defense 85. */
+  function _teamDefense(name){
+    var s = _teamStats(name);
+    return Math.max(1, 0.60 * Number(s.def||0) + 0.40 * Number(s.mid||0));
+  }
+  /* Agresividad: 1-99, 50 = media liga. Factor multiplicativo lineal
+     = 0.5 + aggr/100 (rango 0.51–1.49). Aplicado a una base media de 2
+     amarillas/partido, da:
+       aggr=99 → 1.49 × 2 × 38 = 113 amarillas/temporada (Getafe-tier)
+       aggr=75 → 1.25 × 2 × 38 =  95
+       aggr=50 → 1.00 × 2 × 38 =  76 (media liga)
+       aggr=25 → 0.75 × 2 × 38 =  57
+       aggr=1  → 0.51 × 2 × 38 =  39 (Barça-tier)
+     Coherente con la tabla real de amarillas del usuario (Getafe 93,
+     Mallorca 70, Villarreal 69, etc.). */
+  function _teamAggressiveness(name){
+    var s = _teamStats(name);
+    return Math.max(1, Math.min(99, Number(s.aggressiveness || 50)));
+  }
+  function _aggressivenessFactor(name){
+    return 0.5 + _teamAggressiveness(name) / 100;
+  }
+
   /* Exponer en window las funciones de rating CLAUDE.md-compliant para
      que el resto de motores (Copa del Rey en copa-engine.js,
      getTeamSimulationPower de Hypermotion/Primera/LigasExt, HvIA) las
      usen como fuente única y NO caigan a TEAM_RATINGS achatado. */
-  window._sumTitularsPower = _sumTitularsPower;
-  window._avgSquadPower    = _avgSquadPower;
-  window._effectiveIARating = _effectiveIARating;
+  window._sumTitularsPower    = _sumTitularsPower;
+  window._avgSquadPower       = _avgSquadPower;
+  window._effectiveIARating   = _effectiveIARating;
+  window._teamStats           = _teamStats;
+  window._teamOffense         = _teamOffense;
+  window._teamDefense         = _teamDefense;
+  window._teamAggressiveness  = _teamAggressiveness;
+  window._aggressivenessFactor = _aggressivenessFactor;
 
   /* Seed del sidecar _LIGA_EA_PLAYER_FLAGS a demanda para un equipo.
      Lo llamamos desde los pickers (pickSpecialist, mvp, scorer) para
@@ -3882,15 +3982,30 @@
   var _RED_CARD_FLAT_PENALTY = 15; /* 15 puntos planos por expulsión (antes 30).
      Se aplican en el instante mismo de la roja / doble-amarilla, por lo
      que el resto del partido se simula con el rating ya reducido. */
-  function _rollRedCards() {
-    /* Máximo 1 roja por partido (~30% de probabilidad).
+  function _rollRedCards(homeName, awayName) {
+    /* Probabilidad de expulsión ponderada por agresividad de los dos
+       equipos del partido. Base: 30% (antes fijo). Con un equipo
+       muy violento (aggr=90, factor=3.24) en un partido se sube hasta
+       ~97%. Con dos equipos disciplinados (aggr=30, factor=0.36) baja
+       a ~11%. El lado que recibe la roja también se pondera por
+       agresividad: el más agresivo es más probable que vea la roja.
+
        TODAS las rojas pasan por aquí para garantizar que la penalización
-       de -30 puntos se aplica al rating ANTES de calcular el marcador.
+       de -15 puntos se aplica al rating ANTES de calcular el marcador.
        Antes existía un fallback aleatorio en los generadores de eventos
        que producía rojas sin penalización; eso provocaba marcadores
        incoherentes (equipo con 10 ganando 2-0). */
-    if (Math.random() < 0.30) {
-      var side = Math.random() < 0.5 ? 'home' : 'away';
+    var fh = (typeof window._aggressivenessFactor === 'function')
+      ? window._aggressivenessFactor(homeName) : 1;
+    var fa = (typeof window._aggressivenessFactor === 'function')
+      ? window._aggressivenessFactor(awayName) : 1;
+    var combined = (fh + fa) / 2;           /* media de los dos factores */
+    var prob = Math.max(0.05, Math.min(0.95, 0.30 * combined));
+    if (Math.random() < prob) {
+      /* Lado: ponderado por factor de agresividad. Si fh=2 y fa=1,
+         hay ~67% probabilidad de que la roja sea del equipo local. */
+      var total = fh + fa;
+      var side = (Math.random() * total) < fh ? 'home' : 'away';
       var min = Math.floor(Math.random() * 70) + 10;
       var reason = Math.random() < 0.6 ? 'directa' : '2TA';
       return [{ side: side, min: min, reason: reason }];
@@ -3906,19 +4021,81 @@
     return Math.max(30, adjusted);
   }
 
-  function _simIAvsIAWithContext(home, away, j) {
-    var ctx = _iaContextRatings(home, away, j);
-    /* Pre-roll red cards and adjust ratings BEFORE score generation */
-    var preReds = _rollRedCards();
-    var adjHome = _applyRedCardPenalty(ctx.homeEff.rating, preReds, 'home');
-    var adjAway = _applyRedCardPenalty(ctx.awayEff.rating, preReds, 'away');
-    var score;
-    if (typeof simSimple === 'function') {
-      score = simSimple(adjHome, adjAway);
-    } else {
-      score = { gh: Math.floor(Math.random() * 4), ga: Math.floor(Math.random() * 4) };
+  /* simAsymmetric: motor asimétrico ATK-vs-DEF basado en Poisson.
+     Goles del local se derivan de SU ofensiva contra la DEFENSA rival
+     (y viceversa). Diferencia clave con simSimple (que solo compara
+     dos escalares): aquí un equipo con ATK 95 y DEF 60 marca muchos
+     y encaja muchos, un ATK 60 DEF 95 hace lo contrario — justo como
+     en la realidad.
+
+     offHome/defAway -> xG del local.
+     offAway/defHome -> xG del visitante.
+     Bonuses de capitán y localía ya vienen aplicados al ofensivo. */
+  function _simAsymmetric(offHome, defHome, offAway, defAway) {
+    var BASE_XG = 1.4, EXP = 2.5;
+    var sOffH = Math.max(30, Number(offHome)||75);
+    var sDefH = Math.max(30, Number(defHome)||75);
+    var sOffA = Math.max(30, Number(offAway)||75);
+    var sDefA = Math.max(30, Number(defAway)||75);
+    var xgH = BASE_XG * Math.pow(sOffH / sDefA, EXP);
+    var xgA = BASE_XG * Math.pow(sOffA / sDefH, EXP);
+    xgH = Math.max(0.2, Math.min(4.5, xgH));
+    xgA = Math.max(0.2, Math.min(4.5, xgA));
+    function poisson(lambda){
+      var L = Math.exp(-lambda), k = 0, p = 1;
+      do { k++; p *= Math.random(); } while (p > L);
+      return k - 1;
     }
-    return { gh: score.gh, ga: score.ga, homeEff: ctx.homeEff, awayEff: ctx.awayEff, preReds: preReds };
+    var gh = poisson(xgH), ga = poisson(xgA);
+    if (gh > 6) gh = 6;
+    if (ga > 6) ga = 6;
+    return { gh: gh, ga: ga };
+  }
+  window._simAsymmetric = _simAsymmetric;
+
+  function _simIAvsIAWithContext(home, away, j) {
+    /* Pre-roll red cards ponderado por agresividad ANTES del cálculo
+       del marcador, para que la penalización al rating ya cuente. */
+    var preReds = _rollRedCards(home, away);
+
+    /* Construcción del rating asimétrico ATK-vs-DEF:
+       - offensive = _teamOffense = 0.6*atk + 0.4*mid
+       - defensive = _teamDefense = 0.6*def + 0.4*mid
+       - Bonus de capitán ×1.05 al ofensivo (no al defensivo, para que
+         el modificador quede aislado — si afectara a ambos se
+         cancelaría en los ratios).
+       - Bonus de localía ×1.10 (o variable seed) al ofensivo del local.
+       - Penalización por expulsión: -15 al ofensivo del lado
+         expulsado (tiene menos jugadores → menos peligro). */
+    var offH = (typeof _teamOffense === 'function') ? _teamOffense(home) : 75;
+    var defH = (typeof _teamDefense === 'function') ? _teamDefense(home) : 75;
+    var offA = (typeof _teamOffense === 'function') ? _teamOffense(away) : 75;
+    var defA = (typeof _teamDefense === 'function') ? _teamDefense(away) : 75;
+    /* Capitán: +5% al ofensivo del equipo que lo tenga titular (CLAUDE.md). */
+    offH *= _captainBonus(home);
+    offA *= _captainBonus(away);
+    /* Localía: bono seeded para que IAIA jornada->jornada quede estable. */
+    var seedH = _seed01(['ia', j || 0, home || '', away || ''].join('|'));
+    var bonusHomePct = _IA_HOME_BONUS_MIN + ((_IA_HOME_BONUS_MAX - _IA_HOME_BONUS_MIN) * seedH);
+    offH *= (1 + bonusHomePct);
+    /* Rojas: -15 al ofensivo del equipo sancionado. */
+    var redHome = 0, redAway = 0;
+    preReds.forEach(function(r){ if (r.side === 'home') redHome++; else redAway++; });
+    offH = Math.max(30, offH - _RED_CARD_FLAT_PENALTY * redHome);
+    offA = Math.max(30, offA - _RED_CARD_FLAT_PENALTY * redAway);
+
+    var score = _simAsymmetric(offH, defH, offA, defA);
+
+    /* Estructura de retorno compatible con el código existente
+       (homeEff.rating, awayEff.rating se usan aguas abajo para render
+       de previas, tooltips, etc.). Usamos el ofensivo como "rating"
+       visible porque es el que dicta los goles que marca el equipo. */
+    return {
+      gh: score.gh, ga: score.ga,
+      homeEff: { rating: offH, bonusPct: bonusHomePct, offense: offH, defense: defH },
+      awayEff: { rating: offA, bonusPct: 0, offense: offA, defense: defA },
+      preReds: preReds
+    };
   }
 
   function esEquipoDestacado(t) { return FEATURED_TEAMS.indexOf(normalizarNombreEquipo(t)) !== -1; }
@@ -5122,12 +5299,26 @@
       });
     }
     function _isExpelled(name) { return expelledA[name] !== undefined || expelledB[name] !== undefined; }
-    /* Amarillas: 2-4 por partido. Excluimos jugadores expulsados y
-       a quienes ya tienen una amarilla, así nunca aparecen 2 amarillas
-       sin expulsión sobre el mismo jugador. */
-    var numYellow = Math.floor(Math.random() * 3) + 2;
+    /* Amarillas: ponderadas por agresividad de cada equipo.
+       - Base = 2-4 amarillas (aleatorias) × factor combinado.
+       - Reparto: cada amarilla cae al equipo con probabilidad
+         proporcional a SU propio factor de agresividad. Un Getafe
+         (aggr=90) enfrente de un Barça (aggr=30) recibe ~90% de las
+         amarillas del partido. Explica directamente los 93 amarillas
+         de Getafe en la captura del usuario.
+       Excluimos expulsados y jugadores que ya vieron una amarilla
+       para no duplicar. */
+    var aggrFactorA = (typeof window._aggressivenessFactor === 'function')
+      ? window._aggressivenessFactor(teamA) : 1;
+    var aggrFactorB = (typeof window._aggressivenessFactor === 'function')
+      ? window._aggressivenessFactor(teamB) : 1;
+    var aggrMean = (aggrFactorA + aggrFactorB) / 2;  /* 1.0 = liga media */
+    var baseYellow = Math.floor(Math.random() * 3) + 2;  /* 2-4 */
+    var numYellow = Math.max(0, Math.round(baseYellow * aggrMean));
     for (var c = 0; c < numYellow; c++) {
-      var ct = Math.random() < 0.5 ? 'a' : 'b';
+      /* Reparto ponderado: más amarillas al lado más agresivo. */
+      var totalF = aggrFactorA + aggrFactorB;
+      var ct = (Math.random() * totalF) < aggrFactorA ? 'a' : 'b';
       var csq = ct === 'a' ? outAa : outBa;
       var eligible = csq.filter(function(p){ return p && !_isExpelled(p[1]) && !yellowsReceived[p[1]]; });
       if (!eligible.length) continue;

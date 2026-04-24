@@ -3376,6 +3376,29 @@ window.pG = function(fn) {
             var shield = t.shield ? String(t.shield) : '';
             window.TEAM_RATINGS[name] = shield ? {media: pw, shield: shield} : pw;
           }
+          /* Propagar stats del equipo (atk/mid/def/aggressiveness) al
+             sidecar global para que el motor de cualquier liga pueda
+             leer ATK vs DEF real en lugar de tirar de power global. */
+          try {
+            window._LIGA_EA_TEAM_STATS = window._LIGA_EA_TEAM_STATS || {};
+            var _statExt = {
+              power: Math.max(1, Math.min(99, Number(t.power)||75)),
+              atk:   Math.max(1, Math.min(99, Number(t.atk) ||Number(t.power)||75)),
+              mid:   Math.max(1, Math.min(99, Number(t.mid) ||Number(t.power)||75)),
+              def:   Math.max(1, Math.min(99, Number(t.def) ||Number(t.power)||75)),
+              aggressiveness: Math.max(1, Math.min(99, Number(t.aggressiveness) || 50))
+            };
+            /* No pisar si ya había una entrada (Liga EA manda sobre
+               las demás ligas cuando un equipo comparte nombre). */
+            if (!window._LIGA_EA_TEAM_STATS[name]) {
+              window._LIGA_EA_TEAM_STATS[name] = _statExt;
+              _namesForAlias(name).forEach(function(al){
+                if (!window._LIGA_EA_TEAM_STATS[al]) {
+                  window._LIGA_EA_TEAM_STATS[al] = _statExt;
+                }
+              });
+            }
+          } catch(_){}
           /* SQUAD_REGISTRY: solo pisamos si traemos jugadores de
              verdad (si no, respetamos lo que tenga el bundle o lo
              que hayan puesto otros pipelines). */
@@ -5528,7 +5551,13 @@ window.pG = function(fn) {
         <div><span class="lext-mini-lbl">MEDIO</span><input class="lext-input lext-mini" id="lext-team-pw-mid" type="number" min="1" max="100" value="75" /></div>
         <div><span class="lext-mini-lbl">DEFENSA</span><input class="lext-input lext-mini" id="lext-team-pw-def" type="number" min="1" max="100" value="75" /></div>
       </div>
-      <div class="lext-sub">Estos 4 valores se guardan exactamente como los escribes. Global es el que decide las probabilidades de victoria en la simulación. No cambian al editar jugadores — solo si los modificas aquí.</div>
+      <div class="lext-sub">Global = balance general. ATAQUE + MEDIO determinan goles que marca; MEDIO + DEFENSA determinan goles que recibe. Un equipo con ATQ 90 / DEF 60 marca mucho y encaja mucho; ATQ 60 / DEF 90 al revés.</div>
+
+      <label class="lext-label">🟨 Agresividad (1-99) · tendencia a cometer faltas y recibir tarjetas</label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input class="lext-input lext-mini" id="lext-team-aggr" type="number" min="1" max="99" value="50" style="flex:0 0 80px;" />
+        <span class="lext-sub" style="flex:1;">50 = media de la liga · &lt;30 disciplinados (Barça, City) · &gt;70 violentos (Getafe, Athletic, Sevilla). Afecta al número de amarillas y a la probabilidad de expulsión en TODAS las competiciones.</span>
+      </div>
 
       <label class="lext-label">Estadio local</label>
       <select class="lext-select" id="lext-team-stadium"><option value="">— Elegir estadio del Stadium Hub —</option></select>
@@ -6611,6 +6640,7 @@ Tottenham
     document.getElementById('lext-team-pw-atk').value='75';
     document.getElementById('lext-team-pw-mid').value='75';
     document.getElementById('lext-team-pw-def').value='75';
+    var aggrEl0 = document.getElementById('lext-team-aggr'); if(aggrEl0) aggrEl0.value='50';
     var selS = document.getElementById('lext-team-stadium'); if(selS) selS.value='';
     document.getElementById('lext-team-shield').value='';
     var aliasEl = document.getElementById('lext-team-efootball-alias'); if(aliasEl) aliasEl.value='';
@@ -6806,6 +6836,9 @@ Tottenham
     document.getElementById('lext-team-pw-atk').value = Number(t.atk)||Number(t.power)||75;
     document.getElementById('lext-team-pw-mid').value = Number(t.mid)||Number(t.power)||75;
     document.getElementById('lext-team-pw-def').value = Number(t.def)||Number(t.power)||75;
+    /* Agresividad: default 50 para equipos legacy que no la tenían. */
+    var _aggrEdit = document.getElementById('lext-team-aggr');
+    if (_aggrEdit) _aggrEdit.value = Number(t.aggressiveness) > 0 ? Number(t.aggressiveness) : 50;
     var selS = document.getElementById('lext-team-stadium');
     if(selS) selS.value = t.stadium||'';
     document.getElementById('lext-team-shield').value = t.shield||'';
@@ -6930,6 +6963,11 @@ Tottenham
     var pwAtk = parseInt(document.getElementById('lext-team-pw-atk').value,10)||50;
     var pwMid = parseInt(document.getElementById('lext-team-pw-mid').value,10)||50;
     var pwDef = parseInt(document.getElementById('lext-team-pw-def').value,10)||50;
+    /* Agresividad (1-99). Default 50 = media liga. Un equipo 70 comete
+       ~2× más faltas, ~2× más amarillas y ~2× más probabilidad de roja
+       que uno 50. Afecta a TODAS las competiciones. */
+    var _aggrFormEl = document.getElementById('lext-team-aggr');
+    var pwAggr = _aggrFormEl ? Math.max(1, Math.min(99, parseInt(_aggrFormEl.value,10)||50)) : 50;
     var stadium = (document.getElementById('lext-team-stadium').value||'').trim();
     var shield = document.getElementById('lext-team-shield').value.trim();
     var efootballAliasEl = document.getElementById('lext-team-efootball-alias');
@@ -6979,6 +7017,7 @@ Tottenham
         t.name=name; t.stadium=stadium; t.shield=shield; t.budget=budget;
         t.efootballAlias=efootballAlias;
         t.power=pwGlob; t.atk=pwAtk; t.mid=pwMid; t.def=pwDef;
+        t.aggressiveness=pwAggr;
         if(ligaEa){
           t.isHuman = (FORM_TIPO === 'human');
           t.humanEmoji = t.isHuman ? FORM_HUMAN_EMOJI : '';
@@ -6997,7 +7036,7 @@ Tottenham
       } else {
         /* Ni por id ni por nombre. Caemos al flujo de creación con
            los mismos datos para no perder el trabajo del admin.    */
-        var recoverTeam = {id:EDITING_TEAM_ID||uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
+        var recoverTeam = {id:EDITING_TEAM_ID||uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,aggressiveness:pwAggr,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
         if(ligaEa){
           recoverTeam.isHuman   = (FORM_TIPO === 'human');
           recoverTeam.humanEmoji = recoverTeam.isHuman ? FORM_HUMAN_EMOJI : '';
@@ -7006,7 +7045,7 @@ Tottenham
         EDITING_TEAM_ID = recoverTeam.id;
       }
     } else {
-      var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
+      var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,aggressiveness:pwAggr,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
       if(ligaEa){
         newTeam.isHuman   = (FORM_TIPO === 'human');
         newTeam.humanEmoji = newTeam.isHuman ? FORM_HUMAN_EMOJI : '';
@@ -8014,14 +8053,27 @@ Tottenham
     var humanos = [];   // nombres de equipos humanos
     var emojis  = {};   // name → humanEmoji
     var shields = {};   // name → URL del escudo
+    var atks    = {};   // name → ataque (1-99)
+    var mids    = {};   // name → mediocampo (1-99)
+    var defs    = {};   // name → defensa (1-99)
+    var aggrs   = {};   // name → agresividad (1-99, default 50)
     /* Reset del sidecar de flags C/F/P para que no queden jugadores
        "marcados" que ya no existen en la plantilla actual. Lo rellenamos
        equipo a equipo justo debajo. */
     window._LIGA_EA_PLAYER_FLAGS = {};
+    /* Sidecar con los 4 ratings tipo FIFA + agresividad, indexados por
+       nombre de equipo. Expuesto a window para que los motores (IA-vs-IA
+       de todas las ligas, Copa del Rey, HvIA, etc.) puedan leerlo
+       sin depender del storage ligaExt_*. */
+    window._LIGA_EA_TEAM_STATS = {};
 
     teams.forEach(function(t){
       if(!t || !t.name) return;
       ratings[t.name] = Math.max(1, Math.min(99, Number(t.power) || 75));
+      atks[t.name]   = Math.max(1, Math.min(99, Number(t.atk)  || Number(t.power) || 75));
+      mids[t.name]   = Math.max(1, Math.min(99, Number(t.mid)  || Number(t.power) || 75));
+      defs[t.name]   = Math.max(1, Math.min(99, Number(t.def)  || Number(t.power) || 75));
+      aggrs[t.name]  = Math.max(1, Math.min(99, Number(t.aggressiveness) || 50));
       if(t.isHuman) humanos.push(t.name);
       if(t.humanEmoji) emojis[t.name] = t.humanEmoji;
       if(t.shield) shields[t.name] = t.shield;
@@ -8089,6 +8141,19 @@ Tottenham
         });
       });
       squads[t.name] = simSquad;
+      /* Propagar stats del equipo al sidecar global + aliases.
+         Así `_teamOffense('Villarreal')` y `_teamOffense('Villarreal CF')`
+         devuelven lo mismo, y el motor de cualquier liga lo encuentra. */
+      var _stat = {
+        power: ratings[t.name],
+        atk:   atks[t.name],
+        mid:   mids[t.name],
+        def:   defs[t.name],
+        aggressiveness: aggrs[t.name]
+      };
+      _namesForAlias(t.name).forEach(function(al){
+        window._LIGA_EA_TEAM_STATS[al] = _stat;
+      });
     });
 
     return {
@@ -8097,6 +8162,10 @@ Tottenham
       humanos: humanos,
       emojis:  emojis,
       shields: shields,
+      atks:    atks,
+      mids:    mids,
+      defs:    defs,
+      aggrs:   aggrs,
       meta: {
         teamsCount: teams.length,
         playersCount: teams.reduce(function(a,t){ return a + ((t.players||[]).length); }, 0),

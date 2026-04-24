@@ -5710,6 +5710,38 @@ Tottenham
   function uid(){ return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
   function storeKey(k){ return 'ligaExt_'+k; }
 
+  /* Helper defensivo para localizar una fila en data.teams cuando
+     solo tenemos un id (CURRENT_SQUAD_TEAM / EDITING_TEAM_ID) pero
+     por sincronizaci\u00f3n con el servidor, cache stale o regeneraci\u00f3n
+     de ids ese id puede no existir ya bajo CURRENT_KEY. El flujo de
+     "Edit Arsenal \u2192 a\u00f1adir plantilla \u2192 no hace nada" era exactamente
+     esto: lextSaveTeam filtraba por EDITING_TEAM_ID, no encontraba
+     nada y sal\u00eda en silencio sin guardar los jugadores.
+     Uso: var t = _lextFindTeamRow(data, id, fallbackName);
+     Devuelve null si ni el id ni el nombre casan.                  */
+  function _lextNormName(s){
+    return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  }
+  function _lextFindTeamRow(data, id, fallbackName){
+    if (!data || !Array.isArray(data.teams)) return null;
+    if (id) {
+      for (var i = 0; i < data.teams.length; i++) {
+        if (data.teams[i] && data.teams[i].id === id) return data.teams[i];
+      }
+    }
+    if (fallbackName) {
+      var nm = _lextNormName(fallbackName);
+      if (nm) {
+        for (var j = 0; j < data.teams.length; j++) {
+          var et = data.teams[j];
+          if (et && _lextNormName(et.name) === nm) return et;
+        }
+      }
+    }
+    return null;
+  }
+
+
   // ── Persistencia en servidor (sincroniza entre dispositivos) ──
   // Cache local por liga + write-back optimista al servidor. Si el
   // servidor está caído o tarda, renderizamos igual desde la cache.
@@ -6622,9 +6654,21 @@ Tottenham
 
   window.lextEditTeam = function(id){
     var data = loadData(CURRENT_KEY);
-    var t = data.teams.filter(function(x){return x.id===id;})[0];
-    if(!t) return;
-    EDITING_TEAM_ID = id;
+    var t = _lextFindTeamRow(data, id, null);
+    if(!t){
+      /* Si la cache estaba stale y el id ya no casa, invalidamos y
+         reintentamos leyendo directo desde localStorage. Sin esto el
+         click en ✏️ no abría el formulario (nada pasaba visualmente)
+         y el usuario quedaba sin poder editar el equipo. */
+      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
+      data = loadData(CURRENT_KEY);
+      t = _lextFindTeamRow(data, id, null);
+    }
+    if(!t){
+      alert('⚠️ No encuentro este equipo en la liga actual. Prueba a recargar la página o revisa ✏️ Edit.');
+      return;
+    }
+    EDITING_TEAM_ID = t.id || id;
     // Cargar los valores EXACTOS que el admin guardó (no recalcular)
     document.getElementById('lext-team-name').value = t.name||'';
     document.getElementById('lext-team-pw-glob').value = Number(t.power)||75;
@@ -6789,8 +6833,18 @@ Tottenham
     // admin escribe en el formulario. No se recalculan nunca desde la
     // plantilla — el admin es quien decide el nivel del equipo.
     if(EDITING_TEAM_ID){
-      var t = data.teams.filter(function(x){return x.id===EDITING_TEAM_ID;})[0];
+      /* Fallback defensivo: si el id editado ya no casa con ninguna
+         fila (cache stale, id regenerado por server-sync), buscamos
+         por nombre. Sin este fallback se perdían silenciosamente el
+         guardado del equipo Y la plantilla pegada — el usuario veía
+         "nada pasa". Si aun así no lo encontramos, adoptamos la
+         rama de creación para no perder los datos del formulario. */
+      var t = _lextFindTeamRow(data, EDITING_TEAM_ID, name);
       if(t){
+        /* Asegurar que el id en storage queda alineado con el que
+           usaremos de aquí en adelante. */
+        if (!t.id) t.id = EDITING_TEAM_ID || uid();
+        EDITING_TEAM_ID = t.id;
         t.name=name; t.stadium=stadium; t.shield=shield; t.budget=budget;
         t.efootballAlias=efootballAlias;
         t.power=pwGlob; t.atk=pwAtk; t.mid=pwMid; t.def=pwDef;
@@ -6809,6 +6863,16 @@ Tottenham
             t.players = parsed;
           }
         }
+      } else {
+        /* Ni por id ni por nombre. Caemos al flujo de creación con
+           los mismos datos para no perder el trabajo del admin.    */
+        var recoverTeam = {id:EDITING_TEAM_ID||uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
+        if(ligaEa){
+          recoverTeam.isHuman   = (FORM_TIPO === 'human');
+          recoverTeam.humanEmoji = recoverTeam.isHuman ? FORM_HUMAN_EMOJI : '';
+        }
+        data.teams.push(recoverTeam);
+        EDITING_TEAM_ID = recoverTeam.id;
       }
     } else {
       var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
@@ -6975,7 +7039,14 @@ Tottenham
       }
     } catch(_){}
     var data = loadData(CURRENT_KEY);
-    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
+    /* Fallback por nombre del título del overlay por si CURRENT_SQUAD_TEAM
+       quedó desincronizado (ver helper _lextFindTeamRow). Sin este
+       fallback la lista se pintaba "Sin jugadores" aunque los datos
+       sí estuvieran en storage. */
+    var _fbRS = '';
+    try { var _eRS = document.getElementById('lext-ov-squad-title'); if (_eRS) _fbRS = (_eRS.textContent||'').replace(/🛡/g,'').trim(); } catch(_){}
+    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fbRS);
+    if (t && t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
     var host = document.getElementById('lext-squad-list');
     if(!t || !t.players || !t.players.length){
       host.innerHTML='<div class="lext-sub" style="text-align:center;padding:16px 8px;line-height:1.6;">— Sin jugadores —<br><span style="color:rgba(255,255,255,.55);">Usa <b>📋 Pegar plantilla completa</b> arriba para añadir toda la plantilla de una vez, o <b>➕ Añadir jugador individual</b> para ir uno por uno.</span></div>';
@@ -7176,8 +7247,11 @@ Tottenham
 
   window.lextTogglePlayerFlag = function(pid, flag){
     var data = loadData(CURRENT_KEY);
-    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
+    var _fbT = '';
+    try { var _eT = document.getElementById('lext-ov-squad-title'); if (_eT) _fbT = (_eT.textContent||'').replace(/🛡/g,'').trim(); } catch(_){}
+    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fbT);
     if(!t || !t.players) return;
+    if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
     var target = t.players.filter(function(p){return p.id===pid;})[0];
     if(!target) return;
     if(flag === 'captain'){
@@ -7198,7 +7272,10 @@ Tottenham
   };
 
   window.lextApplySquadPaste = function(){
-    if(!CURRENT_SQUAD_TEAM) return;
+    if(!CURRENT_SQUAD_TEAM){
+      alert('⚠️ No hay equipo activo. Cierra y vuelve a abrir la plantilla.');
+      return;
+    }
     var ta = document.getElementById('lext-squad-paste-ta');
     if(!ta) return;
     var txt = ta.value || '';
@@ -7208,8 +7285,20 @@ Tottenham
       return;
     }
     var data = loadData(CURRENT_KEY);
-    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
-    if(!t) return;
+    /* Fallback defensivo: lookup por id, luego por nombre del título
+       del overlay (por si el id quedó desincronizado y el usuario no
+       ve sus jugadores tras pegar). */
+    var _fallbackName = '';
+    try {
+      var _titleEl = document.getElementById('lext-ov-squad-title');
+      if (_titleEl) _fallbackName = (_titleEl.textContent||'').replace(/🛡/g,'').trim();
+    } catch(_){}
+    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fallbackName);
+    if(!t){
+      alert('⚠️ No encuentro este equipo en la liga actual. Abre ✏️ Edit y guárdalo antes de pegar la plantilla.');
+      return;
+    }
+    if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
     t.players = t.players || [];
     if(t.players.length){
       var replace = confirm('Este equipo ya tiene '+t.players.length+' jugadores.\n\nOK = REEMPLAZAR toda la plantilla por los '+parsed.length+' pegados\nCancelar = AÑADIR los '+parsed.length+' a los existentes');
@@ -7236,7 +7325,10 @@ Tottenham
   var _editingPlayerId = null;
 
   window.lextSavePlayer = function(){
-    if(!CURRENT_SQUAD_TEAM) return;
+    if(!CURRENT_SQUAD_TEAM){
+      alert('⚠️ No hay equipo activo. Cierra y vuelve a abrir la plantilla.');
+      return;
+    }
     var name = document.getElementById('lext-pl-name').value.trim();
     if(!name){ alert('Falta el nombre del jugador.'); return; }
     var pos = document.getElementById('lext-pl-pos').value;
@@ -7254,8 +7346,19 @@ Tottenham
     var isStar   = !!(starChk   && starChk.checked);
     var isScorer = !!(scorerChk && scorerChk.checked);
     var data = loadData(CURRENT_KEY);
-    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
-    if(!t) return;
+    /* Fallback por nombre del título del overlay por si el id quedó
+       desincronizado (ver helper _lextFindTeamRow). */
+    var _fallbackNamePl = '';
+    try {
+      var _tEl = document.getElementById('lext-ov-squad-title');
+      if (_tEl) _fallbackNamePl = (_tEl.textContent||'').replace(/🛡/g,'').trim();
+    } catch(_){}
+    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fallbackNamePl);
+    if(!t){
+      alert('⚠️ No encuentro este equipo en la liga actual. Abre ✏️ Edit y guárdalo antes de añadir jugadores.');
+      return;
+    }
+    if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
     t.players = t.players || [];
 
     if(_editingPlayerId){
@@ -7315,8 +7418,11 @@ Tottenham
      Antes sólo se podía borrar y recrear; ahora se edita en sitio. */
   window.lextEditPlayer = function(pid){
     var data = loadData(CURRENT_KEY);
-    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
+    var _fbEP = '';
+    try { var _eEP = document.getElementById('lext-ov-squad-title'); if (_eEP) _fbEP = (_eEP.textContent||'').replace(/🛡/g,'').trim(); } catch(_){}
+    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fbEP);
     if(!t) return;
+    if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
     var target = (t.players||[]).filter(function(p){ return p.id === pid; })[0];
     if(!target) return;
     _editingPlayerId = pid;
@@ -7362,8 +7468,11 @@ Tottenham
 
   window.lextDeletePlayer = function(pid){
     var data = loadData(CURRENT_KEY);
-    var t = data.teams.filter(function(x){return x.id===CURRENT_SQUAD_TEAM;})[0];
+    var _fbDP = '';
+    try { var _eDP = document.getElementById('lext-ov-squad-title'); if (_eDP) _fbDP = (_eDP.textContent||'').replace(/🛡/g,'').trim(); } catch(_){}
+    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fbDP);
     if(!t) return;
+    if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
     t.players = (t.players||[]).filter(function(p){return p.id!==pid;});
     // El poder del equipo NO se recalcula — es fijo.
     saveData(CURRENT_KEY,data);

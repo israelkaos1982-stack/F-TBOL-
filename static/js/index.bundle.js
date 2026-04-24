@@ -4429,9 +4429,52 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (compLbl) compLbl.textContent = compLabel;
     window._sancionCallback = onConfirm || null;
 
-    // Separar sanciones por tipo
-    var san = sanciones.filter(function(s){ return s.tipo === 'amarilla' || !s.tipo; });
-    var exp = sanciones.filter(function(s){ return s.tipo === 'roja' || s.tipo === 'd-amarilla'; });
+    /* ═══════════════════════════════════════════════════════════════
+       FILTRO "SOLO EQUIPOS HUMANOS DEL PARTIDO"
+       Pedido explícito del usuario: en BAJAS PARA EL PARTIDO solo
+       deben aparecer bajas (sancionados/expulsados/lesionados) de los
+       equipos humanos que disputan ESTE partido, no de toda la liga.
+       · HvIA → solo el equipo humano.
+       · HvH  → los dos equipos humanos.
+       · IAvIA → no se usa este overlay (ya había early-return).
+       Si por alguna razón no podemos determinar los equipos, caemos
+       al comportamiento anterior (mostrar todo) como fallback seguro.
+       ═══════════════════════════════════════════════════════════════ */
+    var _matchTeams = (typeof window._ppGetCurrentMatchTeams === 'function')
+      ? window._ppGetCurrentMatchTeams() : null;
+    var _humanTeamsOfMatch = null;  /* null = sin filtro */
+    if (_matchTeams && typeof window.esHumano === 'function') {
+      var _htmp = [];
+      if (_matchTeams.home && window.esHumano(_matchTeams.home)) _htmp.push(_matchTeams.home);
+      if (_matchTeams.away && window.esHumano(_matchTeams.away)) _htmp.push(_matchTeams.away);
+      if (_htmp.length) _humanTeamsOfMatch = _htmp;
+    }
+    function _normTm(s){
+      return (typeof window._ppNormTeam === 'function')
+        ? window._ppNormTeam(s)
+        : String(s||'').trim().toLowerCase();
+    }
+    function _belongsToHumanOfMatch(teamName){
+      if (!_humanTeamsOfMatch) return true;  /* sin contexto → no filtramos */
+      var tn = _normTm(teamName);
+      if (!tn) return false;
+      for (var i = 0; i < _humanTeamsOfMatch.length; i++) {
+        var hn = _normTm(_humanTeamsOfMatch[i]);
+        if (tn === hn) return true;
+        if (hn && (tn.indexOf(hn) !== -1 || hn.indexOf(tn) !== -1)) return true;
+      }
+      return false;
+    }
+
+    // Separar sanciones por tipo — filtradas a los humanos del partido
+    var san = sanciones.filter(function(s){
+      if (!(s.tipo === 'amarilla' || !s.tipo)) return false;
+      return _belongsToHumanOfMatch(s.team);
+    });
+    var exp = sanciones.filter(function(s){
+      if (!(s.tipo === 'roja' || s.tipo === 'd-amarilla')) return false;
+      return _belongsToHumanOfMatch(s.team);
+    });
 
 
     function renderCard(s, ico) {
@@ -4450,8 +4493,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       return '<div class="sancion-empty">' + txt + '</div>';
     }
 
-    // Lesionados desde LESION_STORE
-    var injList = window.LESION_STORE ? Object.keys(window.LESION_STORE) : [];
+    // Lesionados desde LESION_STORE — filtrados a los humanos del partido
+    var injList = window.LESION_STORE ? Object.keys(window.LESION_STORE).filter(function(nm){
+      var l = window.LESION_STORE[nm];
+      if (!l) return false;
+      /* Solo lesiones con partidos pendientes (>0). Las que ya
+         expiraron quedan en el store pero no se muestran. */
+      if (!(Number(l.partidos) > 0)) return false;
+      return _belongsToHumanOfMatch(l.equipo);
+    }) : [];
 
     listYel.innerHTML = san.length ? san.map(function(s){ return renderCard(s,'🟨'); }).join('') : renderEmpty('✅ Sin sancionados');
     listRed.innerHTML = exp.length ? exp.map(function(s){ return renderCard(s,'🟥'); }).join('') : renderEmpty('✅ Sin expulsados');
@@ -4513,6 +4563,17 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     window._ppForceSancionShareMode = false;
     document.getElementById('sancion-overlay').classList.remove('show');
     if (window._sancionCallback) { window._sancionCallback(); window._sancionCallback = null; }
+  };
+
+  /* Volver: cierra el overlay BAJAS PARA EL PARTIDO y cancela el
+     callback pendiente (no arranca el partido). Útil cuando el
+     usuario entra en la previa por error o cambia de idea — antes
+     no había forma de salir sin confirmar. */
+  window._sancionVolver = function() {
+    window._ppForceSancionShareMode = false;
+    window._sancionCallback = null;
+    var ov = document.getElementById('sancion-overlay');
+    if (ov) ov.classList.remove('show');
   };
 
   // ══ OVERLAY POST-PARTIDO ═════════════════════════════════════
@@ -5892,8 +5953,52 @@ window.sqFromRegistryFull = function(teamName) {
 window._refreshSancionInjList = function() {
   var listInj = document.getElementById('sancion-ov-list-inj');
   if (!listInj) return;
-  var belongs = window._ppPlayerBelongsToMatch || function(){ return true; };
-  var bajas = Object.keys(window.BAJA_STORE).filter(belongs);
+  /* Filtro "solo humanos del partido": usamos _ppGetCurrentMatchTeams
+     para los 2 equipos y esHumano para saber cuáles son humanos. Un
+     jugador pasa el filtro si su equipo (LESION_STORE.equipo) coincide
+     con alguno de esos humanos. Sin contexto → no filtramos (fallback
+     seguro). */
+  var matchTeams = (typeof window._ppGetCurrentMatchTeams === 'function')
+    ? window._ppGetCurrentMatchTeams() : null;
+  var humansOfMatch = null;
+  if (matchTeams && typeof window.esHumano === 'function') {
+    var _hm = [];
+    if (matchTeams.home && window.esHumano(matchTeams.home)) _hm.push(matchTeams.home);
+    if (matchTeams.away && window.esHumano(matchTeams.away)) _hm.push(matchTeams.away);
+    if (_hm.length) humansOfMatch = _hm;
+  }
+  function _normT(s){
+    return (typeof window._ppNormTeam === 'function')
+      ? window._ppNormTeam(s) : String(s||'').trim().toLowerCase();
+  }
+  function _belongsHuman(playerName){
+    if (!humansOfMatch) return true;
+    var les = window.LESION_STORE && window.LESION_STORE[playerName];
+    var eq  = les && les.equipo ? _normT(les.equipo) : '';
+    if (!eq) {
+      /* Sin equipo conocido: si existe SQUAD_REGISTRY, buscamos su team */
+      if (window.SQUAD_REGISTRY) {
+        var found = null;
+        Object.keys(window.SQUAD_REGISTRY).some(function(tn){
+          var sq = window.SQUAD_REGISTRY[tn] || [];
+          for (var i = 0; i < sq.length; i++) {
+            var p = sq[i];
+            if (Array.isArray(p) && p[1] === playerName) { found = tn; return true; }
+          }
+          return false;
+        });
+        if (found) eq = _normT(found);
+      }
+    }
+    if (!eq) return false;
+    for (var i = 0; i < humansOfMatch.length; i++) {
+      var hn = _normT(humansOfMatch[i]);
+      if (eq === hn) return true;
+      if (hn && (eq.indexOf(hn) !== -1 || hn.indexOf(eq) !== -1)) return true;
+    }
+    return false;
+  }
+  var bajas = Object.keys(window.BAJA_STORE).filter(_belongsHuman);
   var cardsHtml = '';
   if (!bajas.length) {
     cardsHtml = '<div class="sancion-empty">🚑 Sin lesionados</div>';
@@ -6896,6 +7001,66 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     sortearEjemplo: sortearEjemplo,
     tiposLesion: LESION_TIPOS,
     decrementarPorPartido: decrementarPorPartido
+  };
+
+  /* Helper global para persistir lesiones que vengan en la lista de
+     eventos de un partido (evento tipo 'lesion' con lesPartidos,
+     lesDesc, lesGrado, lesIco o con propiedades tipo/grado/nombre).
+     Se llama desde simularJornadaIA, genMatchEventsEnhanced live y
+     _mlFinishMatchGen — antes las lesiones IA-vs-IA solo se pintaban
+     en el acta y se metían en BAJA_STORE, pero NUNCA aterrizaban en
+     LESION_STORE, así que la pantalla "BAJAS PARA EL PARTIDO"
+     mostraba "Sin lesionados" aunque Pablo Barrios acabara de
+     romperse el metatarsiano. */
+  window._registrarLesionesDesdeEventos = function(events, homeName, awayName){
+    if (!Array.isArray(events)) return;
+    if (!window.LESION_STORE) window.LESION_STORE = {};
+    if (!window.BAJA_STORE)   window.BAJA_STORE   = {};
+    events.forEach(function(ev){
+      if (!ev || ev.type !== 'lesion') return;
+      /* Nombre: puede venir como string (ev.player = 'Pablo Barrios')
+         o como array (ev.player = [num, name, ...]) o en ev.name. */
+      var playerName = '';
+      if (Array.isArray(ev.player)) playerName = ev.player[1] || ev.player[0] || '';
+      else if (typeof ev.player === 'string') playerName = ev.player;
+      else playerName = ev.name || '';
+      playerName = String(playerName || '').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
+      if (!playerName || playerName === '?') return;
+      var teamName = (ev.realTeam) ? String(ev.realTeam)
+                   : (ev.team === 'a') ? String(homeName || '')
+                   : String(awayName || '');
+      var partidos = Number(ev.lesPartidos || ev.partidos) || 1;
+      var grado   = Number(ev.lesGrado   || ev.grado)   || 1;
+      var desc    = String(ev.lesDesc    || ev.descripcion || '');
+      var gNombre = ev.gradoNombre || (grado === 3 ? 'Grave' : grado === 2 ? 'Moderada' : 'Leve');
+      var gEmoji  = ev.lesIco || ev.gradoEmoji || (grado === 3 ? '🚑' : grado === 2 ? '💉' : '🩹');
+      /* Si ya hay una lesión pendiente para este jugador, SOLO
+         actualizamos si la nueva es MÁS grave o MÁS larga (evita que
+         un roce leve pise una fractura grave que aún está sanando). */
+      var prev = window.LESION_STORE[playerName];
+      if (prev && Number(prev.partidos) > 0) {
+        var prevPart  = Number(prev.partidos) || 0;
+        var prevGrado = Number(prev.grado) || 0;
+        if (grado < prevGrado || (grado === prevGrado && partidos < prevPart)) {
+          return;  /* la lesión previa es peor, no la sobrescribimos */
+        }
+      }
+      window.LESION_STORE[playerName] = {
+        equipo:      teamName,
+        grado:       grado,
+        gradoNombre: gNombre,
+        gradoEmoji:  gEmoji,
+        descripcion: desc,
+        partidos:    partidos,
+        timestamp:   Date.now()
+      };
+      window.BAJA_STORE[playerName] = {
+        tipo:   'lesion',
+        liga:   partidos,
+        copa:   partidos,
+        europa: partidos
+      };
+    });
   };
 
   console.log('[eFootball] Sistema de Lesiones activado ✓');

@@ -2198,14 +2198,27 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
     var _teamAliases = window.TEAM_ALIASES || {};
     var _resolvedA = _teamAliases[TEAM_A.toLowerCase()] || TEAM_A;
     var _resolvedB = _teamAliases[TEAM_B.toLowerCase()] || TEAM_B;
-    var rA = window.TEAM_RATINGS ? (window.TEAM_RATINGS[_resolvedA] || window.TEAM_RATINGS[TEAM_A] || 76) : 76;
-    var rB = window.TEAM_RATINGS ? (window.TEAM_RATINGS[_resolvedB] || window.TEAM_RATINGS[TEAM_B] || 76) : 76;
-    // También calcular poder medio de la plantilla si no hay rating global
-    if (!window.TEAM_RATINGS || (!window.TEAM_RATINGS[TEAM_A] && !window.TEAM_RATINGS[_resolvedA])) {
+    /* CLAUDE.md: rating = SUMA del poder de los titulares de la
+       plantilla real. Preferimos _sumTitularsPower (expuesto desde
+       misc_body_2.html) antes que TEAM_RATINGS hardcodeado. Así la
+       plantilla editada por el admin decide el resultado en este
+       camino (usado por partidos humano-vs-IA y amistosos). */
+    function _ratingFromSquad(name){
+      if (typeof window._sumTitularsPower !== 'function') return -1;
+      try { var v = window._sumTitularsPower(name); return v; } catch(_){ return -1; }
+    }
+    var rA = _ratingFromSquad(_resolvedA);
+    if (rA < 0) rA = _ratingFromSquad(TEAM_A);
+    if (rA < 0) rA = window.TEAM_RATINGS ? (window.TEAM_RATINGS[_resolvedA] || window.TEAM_RATINGS[TEAM_A] || 76) : 76;
+    var rB = _ratingFromSquad(_resolvedB);
+    if (rB < 0) rB = _ratingFromSquad(TEAM_B);
+    if (rB < 0) rB = window.TEAM_RATINGS ? (window.TEAM_RATINGS[_resolvedB] || window.TEAM_RATINGS[TEAM_B] || 76) : 76;
+    // Último fallback: media de la plantilla si no hay rating ninguno
+    if (!rA || rA < 1) {
       var sumA=0,cntA=0; sqA.forEach(function(p){if(p[3]&&p[2]!=='P'){sumA+=p[3];cntA++;}});
       if(cntA>0) rA=Math.round(sumA/cntA);
     }
-    if (!window.TEAM_RATINGS || (!window.TEAM_RATINGS[TEAM_B] && !window.TEAM_RATINGS[_resolvedB])) {
+    if (!rB || rB < 1) {
       var sumB=0,cntB=0; sqB.forEach(function(p){if(p[3]&&p[2]!=='P'){sumB+=p[3];cntB++;}});
       if(cntB>0) rB=Math.round(sumB/cntB);
     }

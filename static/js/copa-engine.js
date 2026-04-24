@@ -261,6 +261,18 @@
   }
 
   function getTeamRating(teamName) {
+    /* CLAUDE.md: el valor del equipo es la SUMA del poder de los
+       titulares de la plantilla REAL. Preferimos _sumTitularsPower
+       (expuesto desde misc_body_2.html) para que la plantilla editada
+       por el admin determine el resultado de la Copa del Rey igual
+       que en Liga EA Sports. Antes Copa caía a TEAM_RATINGS
+       hardcodeado → plantillas modificadas no influían en el torneo. */
+    if (typeof window._sumTitularsPower === 'function') {
+      try {
+        var fromSquad = window._sumTitularsPower(teamName);
+        if (fromSquad >= 0) return fromSquad;
+      } catch(_){}
+    }
     if (!window.TEAM_RATINGS) return 75;
     var entry = window.TEAM_RATINGS[teamName];
     if (typeof entry === 'number') return entry;

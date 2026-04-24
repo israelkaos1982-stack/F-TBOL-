@@ -2372,6 +2372,20 @@
     var rawName = (team && team.name ? team.name : team) || '';
     var clean = String(rawName).trim();
     var resolved = aliases[clean.toLowerCase()] || clean;
+    /* CLAUDE.md: "El valor del equipo es la SUMA del poder de los
+       jugadores titulares". Preferimos _sumTitularsPower (plantilla
+       real del editor) antes que TEAM_RATINGS hardcodeado. Esta
+       función la usan Hypermotion, Primera Federación y las 51
+       LigasExt — antes TODAS caían a TEAM_RATINGS achatado y la
+       plantilla editada no afectaba el resultado. */
+    if (typeof window._sumTitularsPower === 'function') {
+      var fromSquad = -1;
+      try { fromSquad = window._sumTitularsPower(resolved); } catch(_){}
+      if (fromSquad < 0) {
+        try { fromSquad = window._sumTitularsPower(clean); } catch(_){}
+      }
+      if (fromSquad >= 0) return clamp(Math.round(fromSquad), 1, 100);
+    }
     var ratings = window.TEAM_RATINGS || {};
     var rating = ratings[resolved] || ratings[clean];
     if (typeof rating === 'object' && rating && typeof rating.media === 'number') rating = rating.media;
@@ -3668,22 +3682,48 @@
     return ((h >>> 0) % 10000) / 10000;
   }
 
-  function _avgSquadPower(teamName) {
+  /* _sumTitularsPower(teamName) → SUMA del poder de los 11 titulares
+     de la plantilla, tal y como exige CLAUDE.md
+     ("el 'valor' del equipo es la SUMA del poder de los jugadores
+      titulares, NO la media"). Para preservar la escala 0-99 con la
+     que ya trabajan las demás constantes del motor (floors,
+     _RED_CARD_FLAT_PENALTY, simSimple), devolvemos la suma dividida
+     por el número de titulares — matemáticamente simSimple(rA,rB)
+     con ratios iguales da la misma xG que simSimple(sumA, sumB), así
+     que dividir por N solo ajusta la escala, NO el comportamiento.
+
+     Devuelve -1 cuando no hay datos de plantilla suficientes, para
+     que _effectiveIARating pueda caer a TEAM_RATINGS de manera
+     explícita sin confundirlo con "plantilla de poder 0". */
+  function _sumTitularsPower(teamName) {
     var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
-    if (!sq.length) return 75;
-    var titulares = sq.filter(function(p){ return p && p[4] === 'titular'; });
-    var src = titulares.length ? titulares : sq;
-    var total = 0, weight = 0;
-    src.forEach(function(p) {
-      if (!p) return;
-      var pos = p[2] || 'M';
+    if (!sq.length) return -1;
+    /* Filtrar SOLO titulares (los 11 primeros por poder que marca
+       sqFromRegistry con p[4]='titular'). Si el formato no trae el
+       flag (p.ej. algún consumidor que devuelve 3-tuplas), usamos
+       los 11 primeros por poder como best-effort. */
+    var titulares = sq.filter(function(p){ return Array.isArray(p) && p[4] === 'titular'; });
+    if (!titulares.length) {
+      var onlyPlayers = sq.filter(function(p){ return Array.isArray(p) && Number(p[3]); });
+      onlyPlayers.sort(function(a,b){ return (Number(b[3])||0) - (Number(a[3])||0); });
+      titulares = onlyPlayers.slice(0, 11);
+    }
+    if (!titulares.length) return -1;
+    var total = 0;
+    titulares.forEach(function(p){
       var val = Number(p[3]);
       if (!isFinite(val)) val = 70;
-      var w = pos === 'P' ? 0.65 : pos === 'D' ? 0.95 : pos === 'M' ? 1.00 : 1.08;
-      total += val * w;
-      weight += w;
+      total += val;
     });
-    return weight ? total / weight : 75;
+    /* Escala de salida = suma / 11 para compatibilidad con el resto
+       del motor. (Si alguien quiere la suma cruda, multiplica ×11.) */
+    return total / titulares.length;
+  }
+  /* Alias legacy: algunos consumidores antiguos podían llamar a
+     _avgSquadPower. Lo mantenemos como wrapper del nuevo cálculo. */
+  function _avgSquadPower(teamName) {
+    var v = _sumTitularsPower(teamName);
+    return v < 0 ? 75 : v;
   }
 
   /* Bonus de Capitán (C): +5% al poder del equipo (modificador
@@ -3733,6 +3773,14 @@
   function _captainBonus(teamName){ return _hasCaptain(teamName) ? 1.05 : 1.0; }
   window._captainBonus = _captainBonus;
 
+  /* Exponer en window las funciones de rating CLAUDE.md-compliant para
+     que el resto de motores (Copa del Rey en copa-engine.js,
+     getTeamSimulationPower de Hypermotion/Primera/LigasExt, HvIA) las
+     usen como fuente única y NO caigan a TEAM_RATINGS achatado. */
+  window._sumTitularsPower = _sumTitularsPower;
+  window._avgSquadPower    = _avgSquadPower;
+  window._effectiveIARating = _effectiveIARating;
+
   /* Seed del sidecar _LIGA_EA_PLAYER_FLAGS a demanda para un equipo.
      Lo llamamos desde los pickers (pickSpecialist, mvp, scorer) para
      garantizar que los flags F/P/⭐/⚾ de un jugador estén disponibles
@@ -3775,19 +3823,43 @@
   window._seedPlayerFlagsForTeam = _seedPlayerFlagsForTeam;
 
   function _effectiveIARating(teamName, isHome, j, oppName) {
-    var rat = window.TEAM_RATINGS || {};
-    var entry = rat[teamName];
-    var base = entry ? Number(entry.media || entry) : NaN;
-    if (!isFinite(base)) base = 75;
-    var squad = _avgSquadPower(teamName);
-    var blended = base * 0.62 + squad * 0.38;
-    /* Capitán: +5% aunque el equipo sea visitante. */
-    blended *= _captainBonus(teamName);
-    if (!isHome) return { rating: blended, bonusPct: 0 };
+    /* Cumplimiento CLAUDE.md:
+         "El 'valor' del equipo es la SUMA del poder de los jugadores
+          titulares. La simulación debe usar este valor numérico como
+          peso del equipo al calcular goles, dominio y resultado."
+
+       Implementación:
+       1) Leemos la plantilla REAL (editor → SQUAD_REGISTRY vía
+          applyEngineOverrides) con _sumTitularsPower — devuelve la
+          suma de los 11 titulares en escala 0-99 (suma/11).
+       2) Si hay plantilla, ESE es el rating base. Sin blend con
+          TEAM_RATINGS hardcodeado. Antes blendeábamos 0.62 base +
+          0.38 squad, lo que aplastaba el efecto de subir el poder
+          de los titulares en el editor — un equipo con media 90 en
+          titulares apenas se diferenciaba de uno con 75 si
+          TEAM_RATINGS los tenía parecidos (bug reportado: Villarreal
+          con titulares top quedaba 15º porque TEAM_RATINGS lo tenía
+          en 80).
+       3) Solo si NO hay plantilla (squad === -1) caemos a
+          TEAM_RATINGS como fallback de último recurso. */
+    var squad = _sumTitularsPower(teamName);
+    var rating;
+    if (squad >= 0) {
+      rating = squad;
+    } else {
+      var rat = window.TEAM_RATINGS || {};
+      var entry = rat[teamName];
+      var base = entry ? Number(entry.media || entry) : NaN;
+      rating = isFinite(base) ? base : 75;
+    }
+    /* Capitán: +5% aunque el equipo sea visitante. Bonus INVISIBLE
+       que premia liderazgo (CLAUDE.md). */
+    rating *= _captainBonus(teamName);
+    if (!isHome) return { rating: rating, bonusPct: 0 };
     /* Keep home bonus stable per fixture/jornada so cards/live/batch stay consistent */
     var seed = _seed01(['ia', j || 0, teamName || '', oppName || ''].join('|'));
     var bonusPct = _IA_HOME_BONUS_MIN + ((_IA_HOME_BONUS_MAX - _IA_HOME_BONUS_MIN) * seed);
-    return { rating: blended * (1 + bonusPct), bonusPct: bonusPct };
+    return { rating: rating * (1 + bonusPct), bonusPct: bonusPct };
   }
   function _iaContextRatings(home, away, j) {
     var homeEff = _effectiveIARating(home, true, j, away);
@@ -5109,9 +5181,33 @@
     st.aiEventsGenerated = true;
     var aiTeam = humanA ? 'b' : 'a';
     var aiTeamName = humanA ? st.away : st.home;
-    var rat = window.TEAM_RATINGS || {};
-    var humRat = rat[humanA ? st.home : st.away] || 76;
-    var aiRat = rat[aiTeamName] || 76;
+    var humTeamName = humanA ? st.home : st.away;
+    /* CLAUDE.md: rating = suma titulares. Preferimos _sumTitularsPower
+       (plantilla real) sobre TEAM_RATINGS hardcodeado. Así en HvIA
+       el poder que el admin asigne a los 11 titulares de cada equipo
+       decide los goles que genera el motor. */
+    function _ratingFor(name){
+      if (typeof window._sumTitularsPower === 'function') {
+        try {
+          var v = window._sumTitularsPower(name);
+          if (v >= 0) return v;
+        } catch(_){}
+      }
+      var rat = window.TEAM_RATINGS || {};
+      var e = rat[name];
+      if (typeof e === 'number') return e;
+      if (e && typeof e.media === 'number') return e.media;
+      return 76;
+    }
+    var humRat = _ratingFor(humTeamName);
+    var aiRat  = _ratingFor(aiTeamName);
+    /* Bonus capitán (×1.05) invisible, coherente con IA-vs-IA. */
+    if (typeof window._captainBonus === 'function') {
+      try { humRat *= window._captainBonus(humTeamName); } catch(_){}
+      try { aiRat  *= window._captainBonus(aiTeamName);  } catch(_){}
+    }
+    /* Localía ×1.10 sobre el que juega en casa (CLAUDE.md). */
+    if (humanA) humRat *= 1.10; else aiRat *= 1.10;
     var r = typeof simSimple === 'function' ? simSimple(humanA ? humRat : aiRat, humanA ? aiRat : humRat) : {gh:1,ga:1};
     var aiGoals = humanA ? r.ga : r.gh;
     var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(aiTeamName)) || [];

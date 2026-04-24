@@ -6631,6 +6631,13 @@ Tottenham
       }
       // Línea de jugador: quitar bullets/emojis iniciales
       var clean = line.replace(/^[*\-\u2022\u00B7\u25AA\u25AB\u25BA\u25B8\s]+/,'').trim();
+      /* Markdown bold (**88**) al pegar desde ChatGPT/BeSoccer: el
+         regex de abajo pide "Nombre + espacio + digitos" y no
+         casaba con `Rice **88 (F)**` -> antes se perdian casi
+         todos los jugadores (usuario vio "23 existentes, 1
+         nuevo" de 11). Quitamos ** y __ de negrita; el * suelto
+         sobrevive porque es fallback ASCII para estrella. */
+      clean = clean.replace(/\*\*/g, '').replace(/__/g, '').replace(/\s+/g, ' ').trim();
       // Dorsal opcional al INICIO ("9 Haaland 91" o "#9 Haaland 91" o
       // "9. Haaland 91"). Lo extraemos primero para no confundirlo con
       // el poder, que va al final.

@@ -7046,6 +7046,21 @@
     }
     btn.textContent = lbl + display;
     btn.className = 'ml-timer' + (_gm.timerRunning ? ' running' : '');
+    /* Indicador de velocidad actual (⏪/⏩). Se actualiza junto al
+       repintado del cronómetro para que tras speedUp/speedDown el
+       texto quede sincronizado sin tener que redibujar manualmente. */
+    try {
+      var _spX = document.getElementById('gm-speed-x');
+      if (_spX) {
+        var _spMult = _gm.speedMult || 1;
+        var _spTxt;
+        if (_spMult === 0.25) _spTxt = '0.25×';
+        else if (_spMult === 0.5) _spTxt = '0.5×';
+        else if (_spMult === 1) _spTxt = '1×';
+        else _spTxt = _spMult + '×';
+        _spX.textContent = _spTxt;
+      }
+    } catch(_){}
     /* Botón "🛌 DESCANSO" — visible sólo cuando el usuario puede
        forzar el half-time: tras minuto 45 (game-time), antes del
        descanso, fuera de prórroga, partido no acabado. Lo ocultamos
@@ -7118,6 +7133,13 @@
     } else {
       tickMs = _gm.isHvH ? GM_TICK_HVH : GM_TICK_HVIA;
     }
+    /* speedMult (⏪/⏩): acelera o ralentiza el ritmo real. Se aplica
+       dividiendo el tickMs por el multiplicador, igual que en los ml-
+       states. El mismo `_gameSecPerMs` resultante se usa para convertir
+       ms reales → segundos de juego, manteniendo el anti-throttling
+       con wall-clock. */
+    var _speedMult = _gm.speedMult || 1;
+    var effTickMs = Math.max(1, Math.round(tickMs / _speedMult));
     /* Wall-clock anti-throttling: anclamos Date.now() al timerSec
        actual y cada tick calcula timerSec a partir del tiempo REAL
        transcurrido — no sumando +5 a ciegas. Así, si Chrome/Safari
@@ -7130,9 +7152,9 @@
        Patrón espejo del _startInterval_j1m1 en el flujo ml. */
     _gm._wallStart = Date.now();
     _gm._secAtStart = _gm.timerSec;
-    _gm._gameSecPerMs = 5 / Math.max(1, tickMs);  /* game-seconds por 1 ms real */
+    _gm._gameSecPerMs = 5 / effTickMs;  /* game-seconds por 1 ms real (con speedMult) */
     _gm.timerRunning = true;
-    var _renderMs = Math.min(tickMs, 500); /* refresco visual fluido */
+    var _renderMs = Math.min(effTickMs, 500); /* refresco visual fluido */
     _gm.timerInterval = setInterval(function () {
       /* Avanzar timerSec a partir del reloj de muralla, no sumando
          +5 por tick. `Date.now() - _wallStart` sigue siendo correcto
@@ -7167,6 +7189,55 @@
       gmRenderTimer();
     }, _renderMs);
   }
+
+  /* ── Control de velocidad del cronómetro del gm-modal (⏪/⏩) ──────
+     Mismos pasos (0.25× / 0.5× / 1× / 2× / 4×) que el flujo ml-…
+     Cambiar la velocidad rebasea el wall-clock (_wallStart y
+     _secAtStart) para que timerSec NO dé saltos al recrear el
+     interval con el nuevo ritmo. Funciona tanto si el reloj está
+     corriendo como si está pausado. */
+  var _GM_SPEED_STEPS = [0.25, 0.5, 1, 2, 4];
+
+  function _gmSetSpeed(mult) {
+    if (!_gm || _gm.finished) return;
+    _gm.speedMult = mult;
+    /* Rebase del anclaje para que el tiempo de juego actual sea el
+       punto de partida del nuevo ritmo. Si no rebaseamos, Date.now -
+       _wallStart se multiplica con el nuevo _gameSecPerMs y el reloj
+       pega un salto (hacia delante al acelerar, hacia atrás al
+       ralentizar). */
+    _gm._wallStart = Date.now();
+    _gm._secAtStart = _gm.timerSec || 0;
+    /* Si está corriendo recreamos el interval para que el tick recoja
+       el nuevo effTickMs + _gameSecPerMs. Si está pausado basta con
+       guardar el mult: el próximo gmStartTimer lo usará. */
+    if (_gm.timerRunning && _gm.timerInterval) {
+      try { clearInterval(_gm.timerInterval); } catch(_){}
+      _gm.timerInterval = null;
+      _gm.timerRunning = false;
+      gmStartTimer();
+    } else {
+      gmRenderTimer();
+    }
+  }
+
+  window.gmSpeedUp = function() {
+    if (!_gm || _gm.finished) return;
+    var cur = _gm.speedMult || 1;
+    var idx = _GM_SPEED_STEPS.indexOf(cur);
+    if (idx < 0) idx = _GM_SPEED_STEPS.indexOf(1);
+    var next = _GM_SPEED_STEPS[Math.min(_GM_SPEED_STEPS.length - 1, idx + 1)];
+    _gmSetSpeed(next);
+  };
+
+  window.gmSpeedDown = function() {
+    if (!_gm || _gm.finished) return;
+    var cur = _gm.speedMult || 1;
+    var idx = _GM_SPEED_STEPS.indexOf(cur);
+    if (idx < 0) idx = _GM_SPEED_STEPS.indexOf(1);
+    var next = _GM_SPEED_STEPS[Math.max(0, idx - 1)];
+    _gmSetSpeed(next);
+  };
 
   /* Equivalente a `_mlOpenTimerEdit` pero para el gm-modal (partidos
      HvH y eliminatorias de Competición). Edita `_gm.timerSec` y
@@ -8206,7 +8277,8 @@
       returnScreen: _gm.returnScreen || '',
       stoppageSec: _gm.stoppageSec,
       stoppageMax: _gm.stoppageMax,
-      startedAt: _gm.startedAt || null
+      startedAt: _gm.startedAt || null,
+      speedMult: _gm.speedMult || 1
     };
   }
   /* Reabre un partido guardado en `window._gmBg`. Invoca `gmOpen` con
@@ -8259,6 +8331,7 @@
     _gm.finished = false;
     _gm.timerSec = saved ? (saved.timerSec || 0) : 0;
     _gm.timerRunning = false;
+    _gm.speedMult = saved && saved.speedMult ? saved.speedMult : 1;
     _gm.isHvH = saved ? !!saved.isHvH : !!isHvH;
     _gm.pendingEvt = null;
     _gm.htDone = saved ? !!saved.htDone : false;
@@ -10206,7 +10279,12 @@
       </div>
       <div class="gm-score-center">
         <div id="gm-score">0-0</div>
-        <button class="ml-timer" id="gm-timer" onclick="window.gmTimerClick()">▶ 0'</button>
+        <div class="ml-timer-row" id="gm-timer-row">
+          <button class="ml-speed-btn" id="gm-speed-down" onclick="window.gmSpeedDown()" title="Ralentizar (⏪ ×0.5)">⏪</button>
+          <button class="ml-timer" id="gm-timer" onclick="window.gmTimerClick()">▶ 0'</button>
+          <button class="ml-speed-btn" id="gm-speed-up" onclick="window.gmSpeedUp()" title="Acelerar (⏩ ×2)">⏩</button>
+          <span class="ml-speed-x" id="gm-speed-x" title="Velocidad actual">1×</span>
+        </div>
       </div>
       <div class="gm-team">
         <div class="gm-team-name" id="gm-team-b-name">EQUIPO B</div>

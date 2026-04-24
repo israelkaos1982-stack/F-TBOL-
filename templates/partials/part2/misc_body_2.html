@@ -12100,6 +12100,31 @@ function buildLiveScreen() {
      competición que haya usado gmVolver para salir del modal) */
   var gmLive = (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone)
     ? window.__GM_LIVE : null;
+
+  /* Helper: un partido con marcador guardado en `loadResults()` está
+     por definición FINALIZADO, aunque por alguna razón su snapshot
+     legacy siga en `_gmBg` o `__GM_LIVE`. Filtrar por esto impide que
+     una sesión interrumpida a los 45' (guardada en _gmBg con 0-0)
+     siga apareciendo en el hub después de que otra sesión del mismo
+     partido se jugara entera y guardara el resultado real.           */
+  function _gmMatchIsAlreadyFinished(j, home, away) {
+    try {
+      if (typeof loadResults !== 'function' || typeof rKey !== 'function') return false;
+      var _r = loadResults();
+      return !!(_r && _r[rKey(j, home, away)]);
+    } catch(_){ return false; }
+  }
+  if (gmLive && _gmMatchIsAlreadyFinished(gmLive.j, gmLive.home, gmLive.away)) {
+    /* Limpieza defensiva: si el marcador está guardado, el partido
+       terminó → desregistrar el __GM_LIVE obsoleto. */
+    try {
+      if (window.__GM_LIVE === gmLive) window.__GM_LIVE = null;
+      gmLive.finished = true;
+      if (gmLive.timerInterval) clearInterval(gmLive.timerInterval);
+    } catch(_){}
+    gmLive = null;
+  }
+
   /* Partidos gm-modal backgrounded (otros HvH/HvIA pausados en
      window._gmBg porque el usuario abrió un partido distinto). Se
      muestran como tarjetas live adicionales para que el usuario
@@ -12109,6 +12134,13 @@ function buildLiveScreen() {
     Object.keys(window._gmBg).forEach(function(k){
       var snap = window._gmBg[k];
       if (!snap || snap.finished || !snap.kickoffDone) return;
+      /* Snapshot fantasma: hay resultado guardado para este j|home|
+         away en loadResults() → el partido ya terminó, aunque este
+         snapshot diga otra cosa. Borramos la entrada y continuamos. */
+      if (_gmMatchIsAlreadyFinished(snap.j, snap.home, snap.away)) {
+        try { delete window._gmBg[k]; } catch(_){}
+        return;
+      }
       /* Ignorar si coincide con el gm-modal activo (edge case) */
       if (gmLive && snap.j === gmLive.j && snap.home === gmLive.home && snap.away === gmLive.away) return;
       gmBgList.push({ key: k, snap: snap });
@@ -12282,13 +12314,36 @@ function _refreshLiveCount() {
     liveWrapCount++;
   });
   var gmActive = (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone) ? 1 : 0;
+  /* Si el partido "activo" ya tiene resultado guardado en
+     loadResults(), en realidad está FINALIZADO — no lo contamos y
+     desregistramos la referencia para que la próxima pasada del hub
+     lo termine de limpiar. */
+  function _finishedByResult(gm) {
+    try {
+      if (!gm || typeof loadResults !== 'function' || typeof rKey !== 'function') return false;
+      var _r = loadResults();
+      return !!(_r && _r[rKey(gm.j, gm.home, gm.away)]);
+    } catch(_){ return false; }
+  }
+  if (gmActive && _finishedByResult(window.__GM_LIVE)) {
+    try {
+      if (window.__GM_LIVE && window.__GM_LIVE.timerInterval) clearInterval(window.__GM_LIVE.timerInterval);
+      if (window.__GM_LIVE) window.__GM_LIVE.finished = true;
+      window.__GM_LIVE = null;
+    } catch(_){}
+    gmActive = 0;
+  }
   /* Partidos gm-modal en segundo plano (multi-live) — uno por cada
      equipo humano que se dejó pausado mientras el usuario abría otro. */
   var gmBgCount = 0;
   if (window._gmBg) {
     Object.keys(window._gmBg).forEach(function(k){
       var snap = window._gmBg[k];
-      if (snap && !snap.finished && snap.kickoffDone) gmBgCount++;
+      if (!snap || snap.finished || !snap.kickoffDone) return;
+      /* Snapshot fantasma: si ya hay resultado guardado, lo borramos y
+         no lo contamos. */
+      if (_finishedByResult(snap)) { try { delete window._gmBg[k]; } catch(_){} return; }
+      gmBgCount++;
     });
   }
   var total = liveWrapCount + gmActive + gmBgCount;
@@ -13444,6 +13499,17 @@ window.goLiveMatches = function() {
         });
       } catch(_){}
     }
+    /* Helper: un partido con marcador guardado en loadResults() ya
+       está FINALIZADO. Si el servidor nos manda un snapshot legacy
+       de ese partido (p.ej. de una sesión previa abortada a los 45'),
+       lo descartamos para que no reaparezca en el hub PARTIDOS LIVE. */
+    function _gmBgFinishedByResult(snap) {
+      try {
+        if (!snap || typeof loadResults !== 'function' || typeof rKey !== 'function') return false;
+        var _r = loadResults();
+        return !!(_r && _r[rKey(snap.j, snap.home, snap.away)]);
+      } catch(_){ return false; }
+    }
     if (data.gmBg) {
       Object.keys(data.gmBg).forEach(function(k){
         var bgSnap = data.gmBg[k];
@@ -13461,6 +13527,12 @@ window.goLiveMatches = function() {
               window.__GM_LIVE = null;
             }
           } catch(_){}
+          return;
+        }
+        /* Snapshot fantasma: el partido ya tiene marcador guardado →
+           no rehidratar ni escribir en _gmBg. */
+        if (_gmBgFinishedByResult(bgSnap)) {
+          try { delete window._gmBg[k]; } catch(_){}
           return;
         }
         /* Overwrite permitido: el servidor es la fuente de verdad y
@@ -13483,8 +13555,10 @@ window.goLiveMatches = function() {
     }
     /* El partido que estaba en __GM_LIVE al recargar tampoco se puede
        reinyectar en `_gm`; va al `_gmBg` con su key j|home|away, así
-       que aparece en el hub y el usuario lo reabre con un tap. */
-    if (data.gmLive && !data.gmLive.finished) {
+       que aparece en el hub y el usuario lo reabre con un tap.
+       Si ya tiene resultado guardado (partido finalizado), lo
+       descartamos para evitar tarjetas fantasma.                    */
+    if (data.gmLive && !data.gmLive.finished && !_gmBgFinishedByResult(data.gmLive)) {
       var gl = data.gmLive;
       var k = (gl.j || 0) + '|' + (gl.home || '') + '|' + (gl.away || '');
       window._gmBg[k] = gl;

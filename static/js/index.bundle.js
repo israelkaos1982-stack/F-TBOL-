@@ -5059,9 +5059,28 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (COMP_BALL[compKey]) {
       balon = COMP_BALL[compKey];
     }
-    // Liga en nieve → balón especial
-    if (compKey === 'liga' && tiempo && tiempo.toLowerCase().indexOf('nieve') !== -1) {
-      balon = "eFootball MAX VIS 26";
+    /* Liga/partido en nieve → balón amarillo especial "eFootball MAX VIS 26".
+       Antes solo se comprobaba `tiempo` (parte 0 del texto del venue-bar),
+       pero la UI guarda "Invierno · ❄ Nieve" donde "Invierno" es el
+       tiempo/estación y "Nieve" es el clima real. Así que revisamos
+       AMBOS strings + el texto completo original como tercer salvavidas.
+       El balón de nieve aplica en TODAS las competiciones (liga, copa,
+       europa, amistoso) porque el clima no distingue competición. */
+    var _snowDetect = function(){
+      try {
+        if (tiempo && String(tiempo).toLowerCase().indexOf('nieve') !== -1) return true;
+        if (estacion && String(estacion).toLowerCase().indexOf('nieve') !== -1) return true;
+        /* Leer el texto completo del venue-bar como último recurso. */
+        var _vb = document.getElementById('venue-bar-' + matchKey);
+        if (_vb) {
+          var _vt = (_vb.textContent || '').toLowerCase();
+          if (_vt.indexOf('nieve') !== -1 || _vt.indexOf('❄') !== -1) return true;
+        }
+      } catch(_){}
+      return false;
+    };
+    if (_snowDetect()) {
+      balon = 'eFootball MAX VIS 26';
     }
     // Fallback: leer del DOM si existe un balón personalizado
     var bwrap = document.getElementById('ball-wrap-' + matchKey);
@@ -9279,6 +9298,36 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       weather = sc.weathers[0];  // fallback determinista: primer valor
     }
     var compLabel = COMP_LABELS_MM[compKey] || compKey || 'Liga';
+    /* Añadir jornada/ronda usando el mismo ROUND_MAP que la pantalla
+       BAJAS. Ejemplo: "Liga EA Sports · J3" o "Copa del Rey · Octavos".
+       Resuelve el blockId por `matchKey` (cal-l3 → "J3", etc.) o por
+       `window._ppBlockId` como fallback. */
+    var _PREVIA_ROUND_MAP = {
+      'cal-l1':'J1','cal-l2':'J2','cal-l3':'J3','cal-l4':'J4',
+      'cal-l5':'J5','cal-l6':'J6','cal-l7':'J7','cal-l8':'J8',
+      'cal-l9':'J9','cal-l10':'J10','cal-l11':'J11','cal-l12':'J12',
+      'cal-l13':'J13','cal-l14':'J14','cal-l15':'J15','cal-l16':'J16',
+      'cal-l17':'J17','cal-l18':'J18','cal-l19':'J19','cal-l20':'J20',
+      'cal-l21':'J21','cal-l22':'J22','cal-l23':'J23','cal-l24':'J24',
+      'cal-l25':'J25','cal-l26':'J26','cal-l27':'J27','cal-l28':'J28',
+      'cal-l29':'J29','cal-l30':'J30','cal-l31':'J31','cal-l32':'J32',
+      'cal-l33':'J33','cal-l34':'J34','cal-l35':'J35','cal-l36':'J36',
+      'cal-l37':'J37','cal-l38':'J38',
+      'cal-eu1':'Grupo J1','cal-eu2':'Grupo J2','cal-eu3':'Grupo J3',
+      'cal-eu4':'Grupo J4','cal-eu5':'Grupo J5','cal-eu6':'Grupo J6',
+      'cal-copa-1r':'1ª Ronda','cal-copa-2r':'2ª Ronda',
+      'cal-copa-16':'Dieciseisavos','cal-copa-8':'Octavos',
+      'cal-copa-4':'Cuartos','cal-copa-sf':'Semis','cal-copa-fin':'Final',
+      'cal-sc-s':'Semis','sc-semis':'Semis','sc-final':'Final',
+      'cal-usc-s':'Semis','cal-usc-f':'Final',
+      'cal-rm1':'J1','cal-rm2':'J2','cal-rm3':'J3',
+      'cal-sl1':'J1','cal-sl2':'J2','cal-sl3':'J3',
+      'ucl-fin':'Final','uel-fin':'Final','uecl-fin':'Final','cal-inter-f':'Final'
+    };
+    var _previaRound = null;
+    if (matchKey && _PREVIA_ROUND_MAP[matchKey]) _previaRound = _PREVIA_ROUND_MAP[matchKey];
+    else if (window._ppBlockId && _PREVIA_ROUND_MAP[window._ppBlockId]) _previaRound = _PREVIA_ROUND_MAP[window._ppBlockId];
+    if (_previaRound) compLabel += ' · ' + _previaRound;
     var sParts = sc.season.split(' ');
     var sEmoji = sParts[0];
     var sName  = sParts.slice(1).join(' ');

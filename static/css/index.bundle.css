@@ -1548,8 +1548,12 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 .pp-item-val {
   font-family:'Oswald',sans-serif; font-size:13px; font-weight:400;
   font-style:normal; letter-spacing:.5px; color:#f0c040; text-align:right;
-  flex-shrink:1; line-height:1; white-space:nowrap; overflow:hidden;
-  text-overflow:ellipsis; max-width:160px;
+  flex:1; line-height:1.25;
+  /* Permitir multilínea y romper palabras largas para que el nombre
+     entero del balón (p.ej. "Ligue 1 McDonald's Official Match Ball")
+     se vea completo sin truncar con "..." — petición del usuario. */
+  white-space:normal; overflow:visible; word-break:break-word;
+  overflow-wrap:anywhere;
 }
 .pp-item.checked .pp-item-val { color:#4fc86a; }
 .pp-check {

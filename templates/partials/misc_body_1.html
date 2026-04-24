@@ -4218,19 +4218,21 @@ window.pG = function(fn) {
     return t.logo || t.escudo || t.shield || t.img || t.src || '';
   }
   /* Ordena equipos usando los resultados de la liga: pts, DG,
-     GF, nombre. Devuelve array con {name, logo, pts, dg, gf}. */
+     GF, nombre. Devuelve array con {name, logo, pts, dg, gf}.
+     IMPORTANTE: `results[i]` usa `h`/`a` como IDs del equipo
+     (no nombres), así que indexamos stats por `t.id`. */
   function _standingsFromResults(teams, results){
-    var stats = {};
+    var byId = {};
     teams.forEach(function(t){
+      if(!t) return;
+      var id = (t.id != null) ? t.id : (typeof t === 'string' ? t : null);
       var nm = _teamName(t);
-      if(!nm) return;
-      stats[nm] = { name:nm, logo:_teamLogo(t), pts:0, pj:0, gf:0, gc:0 };
+      if(id == null || !nm) return;
+      byId[id] = { id:id, name:nm, logo:_teamLogo(t), pts:0, pj:0, gf:0, gc:0 };
     });
     (results||[]).forEach(function(r){
       if(!r) return;
-      var hn = typeof r.h === 'string' ? r.h : _teamName(r.h);
-      var an = typeof r.a === 'string' ? r.a : _teamName(r.a);
-      var h = stats[hn], a = stats[an];
+      var h = byId[r.h], a = byId[r.a];
       if(!h || !a) return;
       var gh = Number(r.gh)||0, ga = Number(r.ga)||0;
       h.pj++; a.pj++;
@@ -4240,7 +4242,7 @@ window.pG = function(fn) {
       else { h.pts+=1; a.pts+=1; }
     });
     var arr = [];
-    for(var k in stats) if(Object.prototype.hasOwnProperty.call(stats,k)) arr.push(stats[k]);
+    for(var k in byId) if(Object.prototype.hasOwnProperty.call(byId,k)) arr.push(byId[k]);
     arr.forEach(function(s){ s.dg = s.gf - s.gc; });
     arr.sort(function(x,y){
       return (y.pts-x.pts) || (y.dg-x.dg) || (y.gf-x.gf)
@@ -4249,7 +4251,11 @@ window.pG = function(fn) {
     return arr;
   }
   /* Recorre localStorage y devuelve la lista de equipos que se
-     han ganado plaza directa de Champions en su liga terminada. */
+     han ganado plaza directa de Champions en su liga terminada.
+     Filtra backups (`_backup`), snapshots (`_snap_`) y versionados
+     (`_v\d+`) para no duplicar el mismo equipo desde varias claves
+     del mismo slug. Además deduplica por nombre al final por si
+     dos slugs distintos apuntan al mismo club. */
   function computeUclClassified(){
     var out = [];
     if(typeof localStorage === 'undefined') return out;
@@ -4259,6 +4265,8 @@ window.pG = function(fn) {
         var k = localStorage.key(i);
         if(!k || k.indexOf('ligaExt_')!==0) continue;
         if(k.indexOf('_backup')>=0) continue;
+        if(k.indexOf('_snap_')>=0) continue;
+        if(k.indexOf('_snapshot')>=0) continue;
         if(/_v\d+$/.test(k)) continue;
         keys.push(k);
       }
@@ -4289,7 +4297,19 @@ window.pG = function(fn) {
         }
       });
     } catch(_){}
-    return out;
+    /* Dedupe por nombre normalizado — si varios slugs listan el
+       mismo club, se conserva la primera aparición (orden por
+       slug alfabético). */
+    var seen = {};
+    var dedup = [];
+    out.forEach(function(t){
+      var key = String(t.name||'').toLowerCase().normalize('NFD')
+        .replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+      if(!key || seen[key]) return;
+      seen[key] = true;
+      dedup.push(t);
+    });
+    return dedup;
   }
   window.computeUclClassified = computeUclClassified;
 

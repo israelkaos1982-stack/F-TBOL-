@@ -4429,9 +4429,52 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (compLbl) compLbl.textContent = compLabel;
     window._sancionCallback = onConfirm || null;
 
-    // Separar sanciones por tipo
-    var san = sanciones.filter(function(s){ return s.tipo === 'amarilla' || !s.tipo; });
-    var exp = sanciones.filter(function(s){ return s.tipo === 'roja' || s.tipo === 'd-amarilla'; });
+    /* ═══════════════════════════════════════════════════════════════
+       FILTRO "SOLO EQUIPOS HUMANOS DEL PARTIDO"
+       Pedido explícito del usuario: en BAJAS PARA EL PARTIDO solo
+       deben aparecer bajas (sancionados/expulsados/lesionados) de los
+       equipos humanos que disputan ESTE partido, no de toda la liga.
+       · HvIA → solo el equipo humano.
+       · HvH  → los dos equipos humanos.
+       · IAvIA → no se usa este overlay (ya había early-return).
+       Si por alguna razón no podemos determinar los equipos, caemos
+       al comportamiento anterior (mostrar todo) como fallback seguro.
+       ═══════════════════════════════════════════════════════════════ */
+    var _matchTeams = (typeof window._ppGetCurrentMatchTeams === 'function')
+      ? window._ppGetCurrentMatchTeams() : null;
+    var _humanTeamsOfMatch = null;  /* null = sin filtro */
+    if (_matchTeams && typeof window.esHumano === 'function') {
+      var _htmp = [];
+      if (_matchTeams.home && window.esHumano(_matchTeams.home)) _htmp.push(_matchTeams.home);
+      if (_matchTeams.away && window.esHumano(_matchTeams.away)) _htmp.push(_matchTeams.away);
+      if (_htmp.length) _humanTeamsOfMatch = _htmp;
+    }
+    function _normTm(s){
+      return (typeof window._ppNormTeam === 'function')
+        ? window._ppNormTeam(s)
+        : String(s||'').trim().toLowerCase();
+    }
+    function _belongsToHumanOfMatch(teamName){
+      if (!_humanTeamsOfMatch) return true;  /* sin contexto → no filtramos */
+      var tn = _normTm(teamName);
+      if (!tn) return false;
+      for (var i = 0; i < _humanTeamsOfMatch.length; i++) {
+        var hn = _normTm(_humanTeamsOfMatch[i]);
+        if (tn === hn) return true;
+        if (hn && (tn.indexOf(hn) !== -1 || hn.indexOf(tn) !== -1)) return true;
+      }
+      return false;
+    }
+
+    // Separar sanciones por tipo — filtradas a los humanos del partido
+    var san = sanciones.filter(function(s){
+      if (!(s.tipo === 'amarilla' || !s.tipo)) return false;
+      return _belongsToHumanOfMatch(s.team);
+    });
+    var exp = sanciones.filter(function(s){
+      if (!(s.tipo === 'roja' || s.tipo === 'd-amarilla')) return false;
+      return _belongsToHumanOfMatch(s.team);
+    });
 
 
     function renderCard(s, ico) {
@@ -4450,8 +4493,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       return '<div class="sancion-empty">' + txt + '</div>';
     }
 
-    // Lesionados desde LESION_STORE
-    var injList = window.LESION_STORE ? Object.keys(window.LESION_STORE) : [];
+    // Lesionados desde LESION_STORE — filtrados a los humanos del partido
+    var injList = window.LESION_STORE ? Object.keys(window.LESION_STORE).filter(function(nm){
+      var l = window.LESION_STORE[nm];
+      if (!l) return false;
+      /* Solo lesiones con partidos pendientes (>0). Las que ya
+         expiraron quedan en el store pero no se muestran. */
+      if (!(Number(l.partidos) > 0)) return false;
+      return _belongsToHumanOfMatch(l.equipo);
+    }) : [];
 
     listYel.innerHTML = san.length ? san.map(function(s){ return renderCard(s,'🟨'); }).join('') : renderEmpty('✅ Sin sancionados');
     listRed.innerHTML = exp.length ? exp.map(function(s){ return renderCard(s,'🟥'); }).join('') : renderEmpty('✅ Sin expulsados');
@@ -5903,8 +5953,52 @@ window.sqFromRegistryFull = function(teamName) {
 window._refreshSancionInjList = function() {
   var listInj = document.getElementById('sancion-ov-list-inj');
   if (!listInj) return;
-  var belongs = window._ppPlayerBelongsToMatch || function(){ return true; };
-  var bajas = Object.keys(window.BAJA_STORE).filter(belongs);
+  /* Filtro "solo humanos del partido": usamos _ppGetCurrentMatchTeams
+     para los 2 equipos y esHumano para saber cuáles son humanos. Un
+     jugador pasa el filtro si su equipo (LESION_STORE.equipo) coincide
+     con alguno de esos humanos. Sin contexto → no filtramos (fallback
+     seguro). */
+  var matchTeams = (typeof window._ppGetCurrentMatchTeams === 'function')
+    ? window._ppGetCurrentMatchTeams() : null;
+  var humansOfMatch = null;
+  if (matchTeams && typeof window.esHumano === 'function') {
+    var _hm = [];
+    if (matchTeams.home && window.esHumano(matchTeams.home)) _hm.push(matchTeams.home);
+    if (matchTeams.away && window.esHumano(matchTeams.away)) _hm.push(matchTeams.away);
+    if (_hm.length) humansOfMatch = _hm;
+  }
+  function _normT(s){
+    return (typeof window._ppNormTeam === 'function')
+      ? window._ppNormTeam(s) : String(s||'').trim().toLowerCase();
+  }
+  function _belongsHuman(playerName){
+    if (!humansOfMatch) return true;
+    var les = window.LESION_STORE && window.LESION_STORE[playerName];
+    var eq  = les && les.equipo ? _normT(les.equipo) : '';
+    if (!eq) {
+      /* Sin equipo conocido: si existe SQUAD_REGISTRY, buscamos su team */
+      if (window.SQUAD_REGISTRY) {
+        var found = null;
+        Object.keys(window.SQUAD_REGISTRY).some(function(tn){
+          var sq = window.SQUAD_REGISTRY[tn] || [];
+          for (var i = 0; i < sq.length; i++) {
+            var p = sq[i];
+            if (Array.isArray(p) && p[1] === playerName) { found = tn; return true; }
+          }
+          return false;
+        });
+        if (found) eq = _normT(found);
+      }
+    }
+    if (!eq) return false;
+    for (var i = 0; i < humansOfMatch.length; i++) {
+      var hn = _normT(humansOfMatch[i]);
+      if (eq === hn) return true;
+      if (hn && (eq.indexOf(hn) !== -1 || hn.indexOf(eq) !== -1)) return true;
+    }
+    return false;
+  }
+  var bajas = Object.keys(window.BAJA_STORE).filter(_belongsHuman);
   var cardsHtml = '';
   if (!bajas.length) {
     cardsHtml = '<div class="sancion-empty">🚑 Sin lesionados</div>';

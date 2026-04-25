@@ -5978,6 +5978,16 @@
     if (!winner && st.sc.a===st.sc.b && st.isHvH && st.etDone) {
       window.mlShowPenPanelGen(mk); return;
     }
+    /* ── Estadísticas OBLIGATORIAS (HvH / HvIA) — ANTES del MVP ──
+       El usuario quiere ver y confirmar las stats del partido antes
+       de elegir MVP. Cuando confirma, _mlStatsConfirm guarda
+       st.matchStats y re-llamamos a mlEndMatchGen para continuar. */
+    var _humAEnd = typeof esHumano === 'function' && esHumano(st.home);
+    var _humBEnd = typeof esHumano === 'function' && esHumano(st.away);
+    if ((_humAEnd || _humBEnd) && !st.matchStats && typeof _mlShowStatsOverlay === 'function') {
+      _mlShowStatsOverlay(mk, function(){ window.mlEndMatchGen(mk, winner); });
+      return;
+    }
     if (st.isHvH) {
       var hasMvp=st.events.some(function(e){return e.type==='mvp';});
       if (!hasMvp) {
@@ -6124,13 +6134,13 @@
       try { window.buildLigaClas(); } catch(_){}
     }
     athApplyMedicalFromActa(st);
-    /* Overlay OBLIGATORIO de estadísticas (solo HvH y HvIA: partidos con
-       al menos un humano). Se inyecta entre MVP y WhatsApp. Cuando el
-       usuario confirma las stats, seguimos con el overlay FINAL + post
-       match. Si no aplica (IA vs IA), saltamos directo. */
+    /* Estadísticas: por defecto se piden ANTES del MVP en mlEndMatchGen
+       (st.matchStats ya está en el state). Aquí solo las pedimos como
+       fallback si el flujo entró por otra ruta (p. ej. tanda de penaltis
+       directa) y un humano está involucrado. */
     var _humA = typeof esHumano === 'function' && esHumano(st.home);
     var _humB = typeof esHumano === 'function' && esHumano(st.away);
-    if (_humA || _humB) {
+    if ((_humA || _humB) && !st.matchStats) {
       _mlShowStatsOverlay(mk, function(){ _mlShowFinalThenPost(mk); });
     } else {
       _mlShowFinalThenPost(mk);
@@ -6326,11 +6336,14 @@
     var finalOv = document.getElementById('ml-final-ov');
     var _next = function(){
       /* Humano involucrado → pedir estadísticas antes de WhatsApp.
-         IA vs IA pura → saltar directo al post-partido. */
+         IA vs IA pura → saltar directo al post-partido.
+         Si ya rellenó las stats en el overlay ml-stats-ov (ANTES del MVP),
+         saltamos también el segundo overlay ml-stats-entry-ov para no
+         duplicar. */
       var st = _mlSt(mk);
       var humA = typeof esHumano === 'function' ? esHumano(st.home) : false;
       var humB = typeof esHumano === 'function' ? esHumano(st.away) : false;
-      if (humA || humB || st.isHvH){
+      if ((humA || humB || st.isHvH) && !st.matchStats){
         _mlOpenStatsEntry(mk);
       } else {
         _mlOpenPostMatch(mk);
@@ -8247,6 +8260,17 @@
       }, function(){ window.gmEndMatch(); });
       return;
     }
+    /* ── Estadísticas OBLIGATORIAS (HvH / HvIA) — ANTES del MVP ──
+       Tras imbatida (si aplica) y antes de elegir MVP, el usuario debe
+       rellenar las estadísticas del partido (posesión, remates, etc.).
+       Cuando confirma, _mlStatsConfirm guarda en _gm.matchStats y
+       re-llamamos a gmEndMatch para continuar con MVP y final. */
+    var _gmHumA = typeof esHumano === 'function' && esHumano(_gm.home);
+    var _gmHumB = typeof esHumano === 'function' && esHumano(_gm.away);
+    if ((_gmHumA || _gmHumB) && !_gm.matchStats && typeof _mlShowStatsOverlay === 'function') {
+      _mlShowStatsOverlay(_gm, function(){ window.gmEndMatch(); });
+      return;
+    }
     var mvpExists = _gm.events.some(function(e){ return e && e.type === 'mvp'; });
     if (!mvpExists) {
       alert('⭐ Debes elegir MVP antes de finalizar el acta.');
@@ -8380,17 +8404,9 @@
       }
     });
 
-    /* Overlay OBLIGATORIO de estadísticas (HvH y HvIA). Se inyecta
-       ENTRE MVP y la pantalla FINAL. IA vs IA se salta. Misma lógica
-       que _mlFinishMatchGen pero pasando _gm como state directo. */
-    function _gmShowFinalSoon() { setTimeout(function(){ _gmShowFinalOv(); }, 420); }
-    var _gmHumA = typeof esHumano === 'function' && esHumano(_gm.home);
-    var _gmHumB = typeof esHumano === 'function' && esHumano(_gm.away);
-    if ((_gmHumA || _gmHumB) && typeof _mlShowStatsOverlay === 'function') {
-      _mlShowStatsOverlay(_gm, _gmShowFinalSoon);
-    } else {
-      _gmShowFinalSoon();
-    }
+    /* Estadísticas ya recogidas ANTES del MVP (ver bloque arriba en
+       gmEndMatch). Aquí solo lanzamos la pantalla FINAL — nada más. */
+    setTimeout(function(){ _gmShowFinalOv(); }, 420);
   };
 
   window.gmClose = function () {
@@ -8677,7 +8693,8 @@
       stoppageSec: _gm.stoppageSec,
       stoppageMax: _gm.stoppageMax,
       startedAt: _gm.startedAt || null,
-      speedMult: _gm.speedMult || 1
+      speedMult: _gm.speedMult || 1,
+      matchStats: _gm.matchStats || null
     };
   }
   /* Reabre un partido guardado en `window._gmBg`. Invoca `gmOpen` con
@@ -8726,6 +8743,10 @@
     _gm.j = j; _gm.home = home; _gm.away = away;
     _gm.sc = saved ? { a: saved.sc.a || 0, b: saved.sc.b || 0 } : { a:0, b:0 };
     _gm.events = saved ? (saved.events || []).slice() : [];
+    /* matchStats vive solo durante el cierre del partido. Reset al
+       abrir para que el overlay obligatorio aparezca de nuevo y no
+       herede stats de un partido anterior. */
+    _gm.matchStats = saved && saved.matchStats ? saved.matchStats : null;
     _gm.etDone = saved ? !!saved.etDone : false;
     _gm.finished = false;
     _gm.timerSec = saved ? (saved.timerSec || 0) : 0;
@@ -11107,25 +11128,33 @@
 /* ── Estadísticas del partido (post-MVP, pre-WhatsApp) ──────── */
 .ml-stats-ov{display:none;position:fixed;inset:0;z-index:10030;background:rgba(0,0,6,0.97);align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 10px 32px;}
 .ml-stats-ov.show{display:flex;}
-.ml-stats-card{width:100%;max-width:420px;border-radius:18px;border:1px solid rgba(90,169,255,.3);background:linear-gradient(170deg,#06101c,#0d1a2a);padding:18px 14px 14px;box-shadow:0 0 40px rgba(90,169,255,.15),0 8px 32px rgba(0,0,0,.6);}
-.ml-stats-header{text-align:center;margin-bottom:14px;}
-.ml-stats-title{font-family:'Oswald',sans-serif;font-size:15px;letter-spacing:2px;color:#5aa9ff;font-weight:700;}
-.ml-stats-sub{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.5);margin-top:2px;}
-.ml-stats-scoreboard{display:flex;align-items:center;justify-content:space-between;padding:8px 4px 14px;border-bottom:1px solid rgba(90,169,255,.2);margin-bottom:12px;gap:6px;}
-.ml-stats-team-side{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;}
-.ml-stats-shield{width:34px;height:34px;object-fit:contain;}
-.ml-stats-team-name{font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:.5px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center;}
-.ml-stats-score-box{display:flex;align-items:center;gap:8px;font-family:'Bebas Neue',sans-serif;font-size:28px;color:#fff;}
+.ml-stats-card{width:100%;max-width:460px;border-radius:18px;border:1px solid rgba(90,169,255,.35);background:linear-gradient(170deg,#06101c,#0d1a2a);padding:22px 16px 18px;box-shadow:0 0 40px rgba(90,169,255,.18),0 8px 32px rgba(0,0,0,.6);}
+.ml-stats-header{text-align:center;margin-bottom:16px;}
+.ml-stats-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:24px;letter-spacing:3px;color:#5aa9ff;font-weight:700;text-shadow:0 0 12px rgba(90,169,255,.35);}
+.ml-stats-sub{font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:2px;color:rgba(255,255,255,.6);margin-top:4px;}
+.ml-stats-scoreboard{display:flex;align-items:center;justify-content:space-between;padding:10px 4px 16px;border-bottom:1px solid rgba(90,169,255,.22);margin-bottom:14px;gap:6px;}
+.ml-stats-team-side{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}
+.ml-stats-shield{width:42px;height:42px;object-fit:contain;}
+.ml-stats-team-name{font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:.5px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center;font-weight:700;}
+.ml-stats-score-box{display:flex;align-items:center;gap:10px;font-family:'Bebas Neue',sans-serif;font-size:36px;color:#fff;}
 .ml-stats-dash{opacity:.5;}
-.ml-stats-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
-.ml-stats-row{display:grid;grid-template-columns:1fr 32px 1fr;align-items:center;gap:8px;padding:6px 4px;background:rgba(255,255,255,.03);border-radius:8px;}
-.ml-stats-row-lbl{grid-column:1 / -1;text-align:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.75);padding-bottom:2px;}
-.ml-stats-ico{text-align:center;font-size:15px;line-height:1;}
-.ml-stats-val{border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.35);color:#fff;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;text-align:center;border-radius:6px;padding:6px 0;width:100%;outline:none;min-width:0;}
-.ml-stats-val:focus{border-color:#5aa9ff;box-shadow:0 0 0 2px rgba(90,169,255,.18);}
-.ml-stats-val.readonly{opacity:.85;background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.08);}
-.ml-stats-confirm{width:100%;border:none;border-radius:10px;padding:12px;background:linear-gradient(135deg,#1b4a82,#3777c7);color:#fff;font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;transition:filter .15s;}
+.ml-stats-grid{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;}
+.ml-stats-row{display:grid;grid-template-columns:1fr 46px 1fr;align-items:center;gap:12px;padding:10px 8px;background:rgba(255,255,255,.04);border-radius:12px;border:1px solid rgba(255,255,255,.05);}
+.ml-stats-row-lbl{grid-column:1 / -1;text-align:center;font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:3px;color:#fff;padding-bottom:6px;font-weight:700;}
+.ml-stats-ico{text-align:center;font-size:26px;line-height:1;}
+.ml-stats-val{border:2px solid rgba(90,169,255,.45);background:rgba(0,0,0,.45);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:30px;font-weight:700;text-align:center;letter-spacing:2px;border-radius:12px;padding:14px 8px;width:100%;outline:none;min-width:0;min-height:60px;cursor:pointer;-webkit-appearance:none;appearance:none;text-align-last:center;-webkit-tap-highlight-color:rgba(90,169,255,.3);transition:border-color .15s,box-shadow .15s,background .15s;}
+.ml-stats-val:focus,.ml-stats-val:active{border-color:#5aa9ff;box-shadow:0 0 0 3px rgba(90,169,255,.25);background:rgba(0,0,0,.6);}
+.ml-stats-val.readonly{opacity:.9;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);cursor:default;font-size:28px;}
+/* Móvil: tap-target todavía más grande para dedos */
+@media (max-width:480px){
+  .ml-stats-val{font-size:32px;min-height:64px;padding:16px 8px;}
+  .ml-stats-row-lbl{font-size:19px;letter-spacing:3px;}
+  .ml-stats-ico{font-size:28px;}
+  .ml-stats-row{gap:14px;padding:12px 8px;}
+}
+.ml-stats-confirm{width:100%;border:none;border-radius:12px;padding:16px;background:linear-gradient(135deg,#1b4a82,#3777c7);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:3px;cursor:pointer;transition:filter .15s,transform .1s;box-shadow:0 4px 16px rgba(55,119,199,.35);}
 .ml-stats-confirm:hover{filter:brightness(1.1);}
+.ml-stats-confirm:active{transform:translateY(1px);filter:brightness(.95);}
 .ml-stats-confirm:disabled{opacity:.4;cursor:not-allowed;filter:none;}
 /* ── Alert rows en pre-partido ─────────────────────────────── */
 .pp-alert-row{font-family:'Rajdhani',sans-serif;font-size:13px;line-height:1.4;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);}
@@ -11249,7 +11278,9 @@
       <div class="gm-post-stat"><b id="gm-st-lesiones">0</b><span>LESIONES</span></div>
     </div>
     <div id="gm-post-mvp">⭐ MVP: —</div>
-    <button id="gm-wa-btn" onclick="window.gmShareWhatsApp()">🟢 WHATSAPP · COMPARTIR RESULTADO</button>
+    <!-- Botón WhatsApp eliminado: el único compartir está en gm-fin-ov
+         (incluye estadísticas + acta completa). Este overlay es solo
+         resumen post-salida. -->
     <button id="gm-post-close" onclick="window.gmClosePost()">CERRAR</button>
   </div>
 </div>

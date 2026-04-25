@@ -6861,12 +6861,30 @@ Tottenham
     var lines = String(text).split(/\r?\n/);
     var players = [];
     var currentPos = null;
-    var SECTION_RE = /(porter|goalkeep|gk)|(defens|back|defende)|(centrocamp|medio|midfi|mediocent)|(delante|forward|attack|stri)/i;
+    /* Detección de cabecera de sección. Soporta:
+       - Palabras: portero/goalkeeper · defensa/defender/back ·
+                   centrocampista/medio/midfielder · delantero/forward/attacker/striker
+       - Abreviaturas sueltas: GK/POR · DEF/DF · MID/MED/MF · DEL/FWD/ATT
+       - Emojis-cabecera: \u{1F9E4}(POR) · \u{1F6E1}(DEF) · \u2699(MED) · \u26BD/\u26A1(DEL)
+       Antes solo entendía las palabras largas, así que pegando una
+       plantilla con cabeceras tipo "\u{1F9E4} GK" o solo "\u{1F9E4}",
+       todos los jugadores caían a MED como fallback (Raya en
+       CENTROCAMPISTAS). */
+    var SECTION_RE = /(porter|goalkeep|\bgk\b|\bpor\b|\u{1F9E4})|(defens|\bback\b|defende|\bdef\b|\bdf\b|\u{1F6E1})|(centrocamp|medio|midfi|mediocent|\bmed\b|\bmid\b|\bmf\b|\u2699)|(delante|forward|attack|stri|\bdel\b|\bfwd\b|\batt\b|\u26BD|\u26A1)/iu;
     lines.forEach(function(raw){
       var line = raw.trim();
       if(!line) return;
-      // ¿Tiene dígitos que puedan ser el poder?
-      var probe = line.replace(/[\u{1F9E4}\u{1F6E1}\u2699\u26BD]/gu,'');
+      /* Probe = línea sin emojis-cabecera ni dorsales/conteos en
+         paréntesis. Antes "\u{1F9E4} Porteros (3)" o
+         "### \u{1F6E1} DEFENSA (n=8)" se tomaban como línea de jugador
+         (porque tenían dígitos) y la cabecera se perdía → todos los
+         jugadores siguientes caían a MED. Con este strip los counts y
+         numeraciones de cabecera se descartan. */
+      var probe = line
+        .replace(/[\u{1F9E4}\u{1F6E1}\u2699\u26BD\u26A1]/gu,'')
+        .replace(/\(\s*\d+\s*\)/g, '')
+        .replace(/\bn\s*=\s*\d+\b/ig, '')
+        .replace(/^#+\s*/, '');
       if(!/\d{1,3}/.test(probe)){
         var m = SECTION_RE.exec(line);
         if(m){
@@ -6877,8 +6895,23 @@ Tottenham
         }
         return;
       }
-      // Línea de jugador: quitar bullets/emojis iniciales
-      var clean = line.replace(/^[*\-\u2022\u00B7\u25AA\u25AB\u25BA\u25B8\s]+/,'').trim();
+      // Línea de jugador: quitar bullets/emojis iniciales (incluye # markdown y >)
+      var clean = line.replace(/^[*\-\u2022\u00B7\u25AA\u25AB\u25BA\u25B8\s#>]+/,'').trim();
+      /* Pista de posición a NIVEL DE LÍNEA: si el jugador trae al
+         inicio un emoji \u{1F9E4}/\u{1F6E1}/\u2699/\u26BD/\u26A1, lo
+         usamos como pos para ESE jugador (sin tocar currentPos del
+         bloque). Útil en listas mixtas: "\u{1F9E4} David Raya 70"
+         sin sección previa queda como POR aunque currentPos sea null. */
+      var lineHintPos = null;
+      var hintMatch = clean.match(/^([\u{1F9E4}\u{1F6E1}\u2699\u26BD\u26A1])\s+/u);
+      if(hintMatch){
+        var ico = hintMatch[1];
+        if(ico === '\u{1F9E4}') lineHintPos = 'POR';
+        else if(ico === '\u{1F6E1}') lineHintPos = 'DEF';
+        else if(ico === '\u2699') lineHintPos = 'MED';
+        else lineHintPos = 'DEL';
+        clean = clean.replace(/^[\u{1F9E4}\u{1F6E1}\u2699\u26BD\u26A1]\s+/u, '').trim();
+      }
       /* Markdown bold (**88**) al pegar desde ChatGPT/BeSoccer: el
          regex de abajo pide "Nombre + espacio + digitos" y no
          casaba con `Rice **88 (F)**` -> antes se perdian casi
@@ -6922,7 +6955,7 @@ Tottenham
         id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
         name:name,
         num:jersey,
-        pos:currentPos||'MED',
+        pos: lineHintPos || currentPos || 'MED',
         power:Math.max(1,Math.min(99,power)),
         captain: hasCap,
         freeKick: hasFK,
@@ -7766,6 +7799,27 @@ Tottenham
       alert('No he podido leer ningún jugador del texto. Comprueba que cada línea tenga «Nombre 89» al final.');
       return;
     }
+    /* Diagnóstico previo al guardado — sin esto, cuando el parser pone
+       todo en CENTROCAMPISTAS por no detectar las cabeceras (caso típico
+       Arsenal: "🧤 Porteros" sin la palabra "porter" reconocible o un
+       formato sin secciones), el usuario solo ve "1 jugador" sin saber
+       por qué. Mostramos el desglose y, si todo cae a una sola sección,
+       avisamos para que añada cabeceras o emojis 🧤/🛡/⚙/⚽. */
+    try {
+      var _cnt = {POR:0, DEF:0, MED:0, DEL:0};
+      parsed.forEach(function(p){ _cnt[p.pos] = (_cnt[p.pos]||0) + 1; });
+      var _nonZero = ['POR','DEF','MED','DEL'].filter(function(k){ return _cnt[k] > 0; });
+      if (_nonZero.length === 1 && parsed.length >= 5) {
+        var _proceed = confirm(
+          'He leído ' + parsed.length + ' jugadores, pero TODOS están bajo "' + _nonZero[0] + '".\n\n' +
+          'Tu plantilla seguramente no tenía cabeceras de sección reconocibles.\n' +
+          'Asegúrate de incluir líneas tipo:\n' +
+          '   🧤 Porteros\n   🛡 Defensas\n   ⚙ Centrocampistas\n   ⚽ Delanteros\n\n' +
+          '¿Aplicar igual los ' + parsed.length + ' jugadores como ' + _nonZero[0] + '?'
+        );
+        if (!_proceed) return;
+      }
+    } catch(_){}
     var data = loadData(CURRENT_KEY);
     /* Fallback defensivo: lookup por id, luego por nombre del título
        del overlay (por si el id quedó desincronizado y el usuario no

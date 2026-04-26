@@ -533,6 +533,42 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 }
 
 
+/* ── Amistosos: nombre del equipo SIEMPRE en una línea ──
+   El override global pone `white-space: normal !important` y
+   `word-break: break-word`, lo que rompe "ATLÉTICO MADRID" en 3
+   líneas verticales en una columna estrecha. En amistosos
+   (id="mlw-ams-…") forzamos nowrap + ellipsis y dejamos que la
+   columna se ensanche absorbiendo el espacio del score-wrap.
+   Reducimos el tamaño del nombre y le damos más ancho a
+   `.ml-team` para que palabras largas (Crystal Palace, Atlético
+   Madrid…) entren horizontales sin partirse. */
+.match-live-wrap[id^="mlw-ams-"] .ml-team {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 46%;
+}
+.match-live-wrap[id^="mlw-ams-"] .ml-team-name {
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px !important;
+  max-width: 100%;
+  display: block;
+}
+/* Acta: que las columnas (min, ico, name, team) queden alineadas
+   independientemente de la longitud del nombre. min/ico/team con
+   ancho fijo, name absorbe el resto. Evita el efecto desordenado
+   en amistosos cuando una fila no trae jugador o el nombre del
+   equipo es largo. */
+.match-live-wrap[id^="mlw-ams-"] .ml-evt-item {
+  gap: 6px;
+}
+.match-live-wrap[id^="mlw-ams-"] .ml-evt-min   { min-width: 32px; flex-shrink: 0; }
+.match-live-wrap[id^="mlw-ams-"] .ml-evt-ico   { min-width: 22px; flex-shrink: 0; text-align: center; }
+.match-live-wrap[id^="mlw-ams-"] .ml-evt-name  { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match-live-wrap[id^="mlw-ams-"] .ml-evt-team  { flex-shrink: 0; max-width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+
 /* style block 5 */
 .equipo-card{grid-column:span 2!important;position:relative !important;overflow:hidden !important;height:80px!important;min-height:80px!important;max-height:80px!important;box-sizing:border-box!important;}
 

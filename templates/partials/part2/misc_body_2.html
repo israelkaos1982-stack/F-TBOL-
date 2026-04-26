@@ -8682,6 +8682,51 @@
     }
   };
 
+  /* Cancelar el partido sin guardar resultado. NO es FINALIZAR
+     (eso registra marcador y stats); NO es APLAZAR (eso conserva
+     el estado para reanudar). Cancelar = "este partido nunca pasó":
+     - Detiene el reloj
+     - Marca _gm.finished + _finishPropagatedAt para que el flush
+       propague la finalización al servidor durante el grace period
+       (60 s) y otros dispositivos lo limpien.
+     - Marca trashed local — bloquea cualquier rehidratación por
+       polling antes de que la propagación se complete.
+     - Borra __GM_LIVE y _gmBg[bgKey] → al reabrir el mismo partido
+       (calendario, derbys, jornada) la PREVIA vuelve a salir limpia.
+     - NO guarda en loadResults — el partido sigue como "POR JUGAR". */
+  window.gmCancelMatch = function () {
+    if (!_gm) return;
+    if (!_gm.kickoffDone) {
+      /* Nada que cancelar — no había kickoff. Volvemos como gmVolver. */
+      if (typeof window.gmVolver === 'function') window.gmVolver();
+      return;
+    }
+    if (!confirm('¿Cancelar este partido?\n\nEl cronómetro se detiene, NO se guarda el resultado, y la tarjeta deja de salir en PARTIDOS LIVE. Podrás volver a empezarlo desde la PREVIA.')) return;
+    try { clearInterval(_gm.timerInterval); } catch(_){}
+    _gm.timerRunning = false;
+    _gm.finished = true;
+    _gm._finishPropagatedAt = Date.now();
+    var bgKey = (_gm.j||0) + '|' + (_gm.home||'') + '|' + (_gm.away||'');
+    try { if (typeof window._mlMarkTrashed === 'function') window._mlMarkTrashed(bgKey); } catch(_){}
+    try { if (window._liveStore && typeof window._liveStore.flush === 'function') window._liveStore.flush(); } catch(_){}
+    try {
+      if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
+      if (window._gmBg && window._gmBg[bgKey]) delete window._gmBg[bgKey];
+    } catch(_){}
+    try { if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub(); } catch(_){}
+    try {
+      var modal = document.getElementById('gm-modal');
+      if (modal) modal.style.display = 'none';
+    } catch(_){}
+    var target = (_gm.returnScreen) ? _gm.returnScreen : 's-home';
+    try {
+      if (!document.getElementById(target)) target = 's-home';
+      if (typeof window.go === 'function') window.go(target);
+    } catch(_){
+      try { if (typeof window.go === 'function') window.go('s-home'); } catch(__){}
+    }
+  };
+
   /* Reabre el gm-modal desde el hub PARTIDOS LIVE manteniendo el
      estado (marcador, minuto, eventos). El interval de reloj sigue
      corriendo porque gmVolver no lo limpia. */
@@ -8963,6 +9008,13 @@
     var reqKey = _gmKey(j, home, away);
     var saved = (window._gmBg && window._gmBg[reqKey]) || null;
     if (saved) { delete window._gmBg[reqKey]; }
+    /* Si la clave quedó vetada por un CANCELAR previo, la liberamos
+       — el usuario está abriendo el partido de nuevo, así que el flag
+       trashed (que bloquea polls) ya no debe aplicar. Sin esto el
+       siguiente flush sería neutralizado por el filtro de poll. */
+    try {
+      if (typeof window._mlUnmarkTrashed === 'function') window._mlUnmarkTrashed(reqKey);
+    } catch(_){}
 
     _gm.j = j; _gm.home = home; _gm.away = away;
     _gm.sc = saved ? { a: saved.sc.a || 0, b: saved.sc.b || 0 } : { a:0, b:0 };
@@ -11085,7 +11137,7 @@
     </div>
 
     <!-- Menú (sin cancelar ni resetear el partido) -->
-    <div style="padding:8px;">
+    <div style="padding:8px 8px 4px;">
       <button onclick="window.gmVolver()"
         style="width:100%;padding:11px 8px;border-radius:8px;border:1px solid rgba(255,80,80,.45);
                background:linear-gradient(135deg,rgba(255,40,40,.18),rgba(255,80,80,.08));
@@ -11094,6 +11146,20 @@
                box-shadow:0 0 12px rgba(255,60,60,.25);"
         title="El partido sigue en directo. Solo finaliza con FINALIZAR o APLAZAR.">
         ☰ Menú · 🔴 LIVE
+      </button>
+    </div>
+
+    <!-- Cancelar partido: detiene el reloj, NO guarda resultado y
+         libera el slot para que la PREVIA vuelva a salir al pulsar
+         el partido desde el calendario/derbys. -->
+    <div style="padding:0 8px 8px;">
+      <button onclick="window.gmCancelMatch()"
+        style="width:100%;padding:10px 6px;border-radius:8px;border:1px solid rgba(160,160,160,.35);
+               background:rgba(60,60,60,.18);color:rgba(220,220,220,.85);
+               font-size:11px;font-weight:700;
+               font-family:'Oswald',sans-serif;letter-spacing:1.5px;cursor:pointer;"
+        title="Detiene el reloj, descarta este partido y libera la previa.">
+        🗑 CANCELAR PARTIDO
       </button>
     </div>
   </div>
@@ -12499,6 +12565,14 @@ if (!document.getElementById('live-hub-css')) {
     if (!ts) return false;
     if (Date.now() - ts > TTL_MS) { delete s[String(k)]; _save(s); return false; }
     return true;
+  };
+  /* Limpia el veto para una clave concreta. Lo usa gmOpen al
+     reabrir un partido tras un CANCELAR — el usuario quiere
+     reactivarlo, no debe heredar el flag. */
+  window._mlUnmarkTrashed = function(k) {
+    if (!k) return;
+    var s = _load();
+    if (s[String(k)]) { delete s[String(k)]; _save(s); }
   };
 })();
 

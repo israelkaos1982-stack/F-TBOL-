@@ -5921,8 +5921,12 @@ var SCREEN_SQUAD_MAP = {
      HUD tipo Arena (no un listado de jugadores), y dejarla aquí hace
      que `syncSquadToScreen` inyecte los porteros/defensas/medios del
      Bayern Munich debajo del HUD (usa el fallback .sec-hdr + siguiente
-     DIV). El usuario no quiere ver la plantilla en esa pantalla. */
-  's-bayern-plantilla': 'Bayern Munich',
+     DIV). El usuario no quiere ver la plantilla en esa pantalla.
+     's-bayern-plantilla' también se omite: tiene su propio renderer
+     en `misc_body_1.html` (`renderBayernPlantillaScreen`) que reusa
+     el layout EXACTO del modal del editor EA Sports (lext-sq-*) y
+     suma stats de TODAS las competiciones oficiales. Mantenerla aquí
+     duplica el render con dos layouts distintos. */
   's-arsenal':       'Arsenal',
   's-sporting':      'Sporting CP',
   's-madrid':        'Real Madrid',

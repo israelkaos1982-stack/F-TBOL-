@@ -303,16 +303,210 @@ window.pG = function(fn) {
 <div class="screen" id="s-bayern-plantilla">
   <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
   <div class="sec-hdr"><span class="sec-emoji">👕</span><h2>Plantilla · Gestión de Jugadores</h2></div>
-  <!-- Contenedor vacío: al navegar a esta pantalla, `syncSquadToScreen`
-       (en index.bundle.js) detecta `.ent-body[id*="plantilla"]` y le
-       inyecta las filas desde `SQUAD_REGISTRY['Bayern Munich']` — que
-       es la misma fuente que alimenta el modal del editor de Liga. El
-       `.plant-col-hdr` se conserva entre sincronizaciones. -->
-  <div class="ent-section" style="border:1px solid rgba(238,28,37,.3);">
-    <div class="ent-body open" id="bayern-plantilla" style="padding:0;">
-      <div class="plant-col-hdr"><span>#</span><span>Jugador</span><span>⚽</span><span>🟨</span><span>🟥</span><span>⭐</span><span>🛡</span></div>
+  <!-- La caja del Bayern reusa EXACTAMENTE el mismo layout del modal
+       del editor EA Sports (lext-sq-*) y se pinta a partir de la misma
+       fuente de datos (`ligaExt_liga-ea-sports`). Los iconos por sección
+       (🛡 👤 🧤 🖐 ⭐ ... para porteros, 🛡 👤 ⚽ 🥅 🎯 ... para el resto)
+       son idénticos a la modal porque las cabeceras y celdas se
+       comparten. Las stats se obtienen de `getPlayerStats()` que
+       agrega TODAS las competiciones oficiales (Liga + Hypermotion +
+       Primera Fed + Copa + Champions + Europa + Super Liga); los
+       amistosos y torneos de verano no se vuelcan en `ef_player_stats_v1`,
+       así que quedan excluidos automáticamente. -->
+  <div class="ent-section" style="border:1px solid rgba(238,28,37,.3);background:rgba(8,4,12,.4);">
+    <div class="ent-body open" id="bayern-plantilla" style="padding:8px 8px 12px;">
+      <div id="bayern-plantilla-host" class="lext-sq-wrap" style="margin:0;"></div>
     </div>
   </div>
+  <script>
+  (function(){
+    if (window.__BAYERN_PLANT_HOST_READY) return;
+    window.__BAYERN_PLANT_HOST_READY = true;
+
+    function _findBayernRow(){
+      try {
+        var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+        if (!raw) return null;
+        var data = JSON.parse(raw);
+        var teams = (data && data.teams) || [];
+        for (var i=0; i<teams.length; i++){
+          var t = teams[i];
+          if (!t || !t.name) continue;
+          if (/bayern/i.test(t.name)) return t;
+        }
+      } catch(_){}
+      return null;
+    }
+
+    function _statCell(cls, val){
+      var n = Number(val) || 0;
+      var z = n === 0 ? ' zero' : '';
+      return '<span class="lext-sq-cell '+cls+z+'">'+n+'</span>';
+    }
+
+    function _powerTier(p){
+      var n = Number(p) || 0;
+      if (n >= 87) return 'elite';
+      if (n >= 80) return 'alto';
+      if (n >= 72) return 'medio';
+      return 'base';
+    }
+
+    function _badges(p){
+      var b = '';
+      if (p.captain)  b += '<span class="lext-badge cap"   title="Capitán">C</span>';
+      if (p.freeKick) b += '<span class="lext-badge fk"    title="Lanzador de faltas">F</span>';
+      if (p.penalty)  b += '<span class="lext-badge pk"    title="Lanzador de penaltis">P</span>';
+      if (p.elite)    b += '<span class="lext-badge star"  title="Estrella del equipo">⭐</span>';
+      if (p.natGoal)  b += '<span class="lext-badge scorer" title="Goleador nato">⚾</span>';
+      return b;
+    }
+
+    /* Stats globales por jugador. Suma todas las competiciones oficiales
+       que se hayan volcado a `ef_player_stats_v1` (Liga EA Sports,
+       Hypermotion, Primera Fed, y cualquier otra liga ligaExt_*). Los
+       motores de Copa / Champions / Super Liga / Europa que actualicen
+       en vivo los `data-global` de las celdas DOM también se reflejarán
+       — ese sumatorio se aplica `_overlayLiveCounters`. Amistosos y
+       torneos de verano NO se vuelcan al storage, así que quedan fuera. */
+    function _statsFor(playerName){
+      var base = {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};
+      try {
+        if (typeof window.getPlayerStats === 'function'){
+          var ps = window.getPlayerStats('Bayern Munich', playerName);
+          if (ps){
+            ['pj','gol','pen','fk','mvp','ta','tr','imbat','penSaved'].forEach(function(k){
+              base[k] = Number(ps[k]||0);
+            });
+          }
+        }
+      } catch(_){}
+      return base;
+    }
+
+    function _rowFor(p, isGK){
+      var name = String(p.name||'?');
+      var pw = Number(p.power)||0;
+      var tier = _powerTier(pw);
+      var s = _statsFor(name);
+      var pwCell = '<span class="lext-sq-cell pw tier-'+tier+'" title="Poder '+pw+'/99">'+pw+'</span>';
+      var pj = _statCell('', s.pj);
+      var mvp = _statCell('mvp', s.mvp);
+      var ta = _statCell('ta', s.ta);
+      var tr = _statCell('tr', s.tr);
+      var cells, cls;
+      if (isGK){
+        cls = 'gk';
+        cells = pwCell + pj
+              + _statCell('imbat', s.imbat)
+              + _statCell('psave', s.penSaved)
+              + mvp + ta + tr
+              + '<span class="lext-sq-cell">—</span>';
+      } else {
+        cls = 'ot';
+        cells = pwCell + pj
+              + _statCell('gol', s.gol)
+              + _statCell('pen', s.pen)
+              + _statCell('fk',  s.fk)
+              + mvp + ta + tr
+              + '<span class="lext-sq-cell">—</span>';
+      }
+      return '<div class="lext-sq-row '+cls+'" data-player="'+name.replace(/"/g,'&quot;')+'">'
+           + '<span class="lext-sq-name tier-'+tier+'">'+name+_badges(p)+'</span>'
+           + cells
+           + '<span class="lext-sq-actions"></span>'
+           + '</div>';
+    }
+
+    function _section(label, list, isGK){
+      if (!list.length) return '';
+      var hdrCells, cls;
+      if (isGK){
+        cls = 'gk';
+        hdrCells = '<span title="Poder">🛡</span>'
+                 + '<span title="Partidos">👤</span>'
+                 + '<span title="Imbatido">🧤</span>'
+                 + '<span title="Pen parados">🖐</span>'
+                 + '<span title="MVP">⭐</span>'
+                 + '<span title="Tar. amarillas">🟨</span>'
+                 + '<span title="Tar. rojas">🟥</span>'
+                 + '<span></span>'
+                 + '<span></span>';
+      } else {
+        cls = 'ot';
+        hdrCells = '<span title="Poder">🛡</span>'
+                 + '<span title="Partidos">👤</span>'
+                 + '<span title="Goles">⚽</span>'
+                 + '<span title="Pen marcados">🥅</span>'
+                 + '<span title="Goles de falta">🎯</span>'
+                 + '<span title="MVP">⭐</span>'
+                 + '<span title="Tar. amarillas">🟨</span>'
+                 + '<span title="Tar. rojas">🟥</span>'
+                 + '<span></span>';
+      }
+      var hdr = '<div class="lext-sq-hdr '+cls+'"><span>'+label+'</span>'+hdrCells+'</div>';
+      list.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+      return '<div class="lext-sq-sec">'+hdr+list.map(function(p){return _rowFor(p, isGK);}).join('')+'</div>';
+    }
+
+    function _renderEmpty(host){
+      host.innerHTML = '<div style="padding:28px 14px;text-align:center;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;line-height:1.55;">'
+        + '— Sin jugadores —<br>'
+        + '<span style="font-size:11px;color:rgba(255,255,255,.4);">Edita la plantilla del Bayern desde <b>Liga EA Sports → Bayern Munich → 🛡 Plantilla</b>.</span>'
+        + '</div>';
+    }
+
+    window.renderBayernPlantillaScreen = function(){
+      var host = document.getElementById('bayern-plantilla-host');
+      if (!host) return;
+      /* Forzar reconstrucción del store de stats antes de pintar — si
+         se ha simulado una jornada / partido el storage podía estar
+         stale, igual que hace `renderSquadList` en el modal EA Sports. */
+      try {
+        if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats();
+      } catch(_){}
+      var t = _findBayernRow();
+      if (!t || !Array.isArray(t.players) || !t.players.length){
+        _renderEmpty(host);
+        return;
+      }
+      var by = {POR:[], DEF:[], MED:[], DEL:[]};
+      t.players.forEach(function(p){
+        if (!p || !p.name) return;
+        (by[p.pos] || by.MED).push(p);
+      });
+      var html = ''
+        + _section('🧤 PORTEROS',     by.POR, true)
+        + _section('🛡 DEFENSAS',     by.DEF, false)
+        + _section('⚙ CENTROCAMPISTAS', by.MED, false)
+        + _section('⚽ DELANTEROS',    by.DEL, false);
+      host.innerHTML = html || '';
+      if (!html) _renderEmpty(host);
+    };
+
+    /* Re-pintar cada vez que se navega a la pantalla. Sin gating —
+       si el primer render llega antes de que `applyEngineOverrides`
+       cargue los datos, el siguiente vuelve a intentarlo. */
+    var _origGoBayern = window.go;
+    window.go = function(id){
+      var out = _origGoBayern ? _origGoBayern.apply(this, arguments) : undefined;
+      if (id === 's-bayern-plantilla'){
+        setTimeout(window.renderBayernPlantillaScreen, 60);
+        setTimeout(window.renderBayernPlantillaScreen, 600);
+      }
+      return out;
+    };
+
+    /* Pintado inicial si la app arrancó ya en esta pantalla. */
+    document.addEventListener('DOMContentLoaded', function(){
+      var act = document.querySelector('.screen.active');
+      if (act && act.id === 's-bayern-plantilla'){
+        setTimeout(window.renderBayernPlantillaScreen, 80);
+        setTimeout(window.renderBayernPlantillaScreen, 800);
+      }
+    });
+  })();
+  </script>
 </div>
 
 <style>
@@ -346,7 +540,9 @@ window.pG = function(fn) {
   .hub-team-name{font-size:14px;font-weight:700;color:#fff;letter-spacing:1.5px;text-transform:uppercase}
   .hub-team-coach{font-size:11px;color:#ffd5aa;opacity:.82}
   .hub-season{font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.5);white-space:nowrap}
-  #s-bayern-plantilla .plant-row.por{grid-template-columns:28px 1fr 32px 32px 32px 32px 36px !important}
+  #s-bayern-plantilla .lext-sq-wrap{padding:0 4px;}
+  #s-bayern-plantilla .lext-sq-sec{margin-bottom:14px;}
+  #s-bayern-plantilla .lext-sq-hdr span:first-child{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2.5px;color:#f0c040;font-weight:700;}
 </style>
 
 <script>

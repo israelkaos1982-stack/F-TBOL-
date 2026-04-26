@@ -1850,38 +1850,62 @@
       var reg = (window.SQUAD_REGISTRY && window.SQUAD_REGISTRY[team]) || [];
       out = reg.filter(function(p){ return p && !p.h && Array.isArray(p); });
     }
-    /* Último recurso: leer plantilla de ligaExt_liga-ea-sports. Si
-       localStorage está vacío (típico en móvil / dispositivo nuevo
-       donde el usuario nunca abrió el editor de equipos), bajar del
-       servidor en sync XHR — mismo patrón que misc_body_1.html. Sin
-       esto, el panel "ESTADO DE FORMA · EQUIPO HUMANO" mostraba
-       "plantilla no cargada aún" aunque el server tuviera la
-       plantilla guardada desde otra sesión. */
-    if (!out.length) {
+    /* Escanear TODOS los `ligaExt_*` en localStorage. Antes este
+       paso solo miraba `ligaExt_liga-ea-sports`, así que en
+       amistosos con equipos de Hypermotion o Primera Federación
+       el panel de plantilla salía vacío ("plantilla no cargada
+       aún"). El editor guarda cada liga en su propia clave
+       (`liga-ea-sports`, `liga-hypermotion`,
+       `liga-primera-federacion`, …), así que recorremos todas. */
+    function _scanLocalLigaExt(){
       try {
-        var r = localStorage.getItem('ligaExt_liga-ea-sports');
-        if (!r) {
-          try {
-            var xhrSq = new XMLHttpRequest();
-            xhrSq.open('GET', '/api/liga-ext/liga-ea-sports', false);
-            xhrSq.send();
-            if (xhrSq.status === 200) {
-              var respSq = JSON.parse(xhrSq.responseText);
-              if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
-                r = JSON.stringify(respSq.data);
-                try { localStorage.setItem('ligaExt_liga-ea-sports', r); } catch(_){}
-              }
-            }
-          } catch(_){}
-        }
-        if (r) {
-          var d = JSON.parse(r);
-          var t = (d.teams||[]).filter(function(x){ return normTeam(x.name) === normTeam(team); })[0];
-          if (t && Array.isArray(t.players)) {
-            out = t.players.map(function(p,i){ return [String(p.num||p.id||(i+1)), p.name || '?', p.pos||'M', p.power||70]; });
+        var target = normTeam(team);
+        for (var li = 0; li < localStorage.length; li++){
+          var lk = localStorage.key(li);
+          if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+          if (lk.indexOf('_backup') !== -1) continue;
+          var raw = localStorage.getItem(lk);
+          if (!raw) continue;
+          var data; try { data = JSON.parse(raw); } catch(_e){ continue; }
+          var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+          for (var ti = 0; ti < teams.length; ti++){
+            var t = teams[ti];
+            if (!t || !t.name) continue;
+            if (normTeam(t.name) !== target) continue;
+            var players = Array.isArray(t.players) ? t.players : [];
+            if (!players.length) continue;
+            return players.map(function(p,i){
+              return [String(p.num||p.id||(i+1)), p.name || '?', p.pos||'M', p.power||70];
+            });
           }
         }
       } catch(_){}
+      return [];
+    }
+    if (!out.length) out = _scanLocalLigaExt();
+    /* Último recurso: si ninguna cache local tiene al equipo (típico
+       en dispositivo nuevo donde el usuario nunca abrió el editor),
+       bajar del servidor en sync XHR los slugs conocidos. Tras
+       persistir, volvemos a escanear localmente. Mismo patrón que
+       misc_body_1.html — pero AHORA ataca los tres slugs. */
+    if (!out.length) {
+      var slugs = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion'];
+      for (var si = 0; si < slugs.length && !out.length; si++) {
+        var slug = slugs[si];
+        if (localStorage.getItem('ligaExt_' + slug)) continue; /* ya cubierto por _scanLocalLigaExt */
+        try {
+          var xhrSq = new XMLHttpRequest();
+          xhrSq.open('GET', '/api/liga-ext/' + encodeURIComponent(slug), false);
+          xhrSq.send();
+          if (xhrSq.status === 200) {
+            var respSq = JSON.parse(xhrSq.responseText);
+            if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
+              try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(respSq.data)); } catch(_){}
+              out = _scanLocalLigaExt();
+            }
+          }
+        } catch(_){}
+      }
     }
     return out.filter(function(p){ return p && Array.isArray(p) && p[1]; });
   }

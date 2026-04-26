@@ -1850,10 +1850,30 @@
       var reg = (window.SQUAD_REGISTRY && window.SQUAD_REGISTRY[team]) || [];
       out = reg.filter(function(p){ return p && !p.h && Array.isArray(p); });
     }
-    /* Último recurso: leer plantilla de ligaExt_liga-ea-sports. */
+    /* Último recurso: leer plantilla de ligaExt_liga-ea-sports. Si
+       localStorage está vacío (típico en móvil / dispositivo nuevo
+       donde el usuario nunca abrió el editor de equipos), bajar del
+       servidor en sync XHR — mismo patrón que misc_body_1.html. Sin
+       esto, el panel "ESTADO DE FORMA · EQUIPO HUMANO" mostraba
+       "plantilla no cargada aún" aunque el server tuviera la
+       plantilla guardada desde otra sesión. */
     if (!out.length) {
       try {
         var r = localStorage.getItem('ligaExt_liga-ea-sports');
+        if (!r) {
+          try {
+            var xhrSq = new XMLHttpRequest();
+            xhrSq.open('GET', '/api/liga-ext/liga-ea-sports', false);
+            xhrSq.send();
+            if (xhrSq.status === 200) {
+              var respSq = JSON.parse(xhrSq.responseText);
+              if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
+                r = JSON.stringify(respSq.data);
+                try { localStorage.setItem('ligaExt_liga-ea-sports', r); } catch(_){}
+              }
+            }
+          } catch(_){}
+        }
         if (r) {
           var d = JSON.parse(r);
           var t = (d.teams||[]).filter(function(x){ return normTeam(x.name) === normTeam(team); })[0];

@@ -4276,7 +4276,8 @@ window.pG = function(fn) {
      aparezca en dos competiciones. */
   function _computeQualifiedFromLeagues(zoneKey){
     var out = [];
-    if(typeof localStorage === 'undefined') return out;
+    var diag = []; // [{slug, n, results, needed, status, note}]
+    if(typeof localStorage === 'undefined') { window._lastQualDiag = diag; return out; }
     var seenLeagueHash = {};
     try {
       var keys = [];
@@ -4293,26 +4294,36 @@ window.pG = function(fn) {
          al recalcular. */
       keys.sort();
       keys.forEach(function(key){
+        var slug = key.substring('ligaExt_'.length);
         var raw = localStorage.getItem(key);
-        if(!raw) return;
+        if(!raw){ diag.push({slug:slug, status:'skip', note:'sin datos'}); return; }
         var data;
-        try { data = JSON.parse(raw); } catch(_){ return; }
-        if(!data || !Array.isArray(data.teams) || !Array.isArray(data.results)) return;
+        try { data = JSON.parse(raw); } catch(_){ diag.push({slug:slug, status:'skip', note:'JSON inválido'}); return; }
+        if(!data || !Array.isArray(data.teams) || !Array.isArray(data.results)){
+          diag.push({slug:slug, status:'skip', note:'estructura no reconocida'}); return;
+        }
         var teams = data.teams;
         var N = teams.length;
-        if(N < 2) return;
-        if(data.results.length < N*(N-1)) return; // liga no terminada
+        var rN = data.results.length;
+        var needed = N*(N-1);
+        if(N < 2){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'menos de 2 equipos'}); return; }
+        if(rN < needed){
+          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'incompleta', note:'faltan partidos'});
+          return;
+        }
         var zones = (data.config && data.config.zones) || {};
         var slots = Number(zones[zoneKey] || 0);
-        if(!(slots > 0)) return;
-        /* Hash de la liga = conjunto ordenado de nombres normalizados.
-           Si dos slugs distintos guardan la misma plantilla (por ej.
-           `alemania` y un alias antiguo `germany`), solo procesamos
-           el primero. Esto evita que la misma liga cuente dos veces
-           y la UCL muestre 8 equipos en vez de 4. */
+        if(!(slots > 0)){
+          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'sin-plazas', note:'zones.'+zoneKey+'='+slots});
+          return;
+        }
         var hash = teams.map(function(t){ return _normName(_teamName(t)); })
                         .filter(Boolean).sort().join('|');
-        if(!hash || seenLeagueHash[hash]) return;
+        if(!hash){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'plantilla sin nombres'}); return; }
+        if(seenLeagueHash[hash]){
+          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'duplicada', note:'misma plantilla que otra liga ya procesada'});
+          return;
+        }
         seenLeagueHash[hash] = true;
         var skip = 0;
         if(zoneKey === 'uel'){
@@ -4326,15 +4337,18 @@ window.pG = function(fn) {
                + (Number(zones.uel)||0);
         }
         var ranking = _standingsFromResults(teams, data.results);
+        var added = 0;
         for(var j=skip; j<skip+slots && j<ranking.length; j++){
           out.push({
             name:  String(ranking[j].name||'').replace(/^\s*\*+\s*/,''),
             logo:  ranking[j].logo,
-            league: key.substring('ligaExt_'.length)
+            league: slug
           });
+          added++;
         }
+        diag.push({slug:slug, n:N, results:rN, needed:needed, status:'ok', note:'+'+added+' equipos'});
       });
-    } catch(_){}
+    } catch(e){ diag.push({slug:'?', status:'error', note:String(e&&e.message||e)}); }
     /* Dedupe global — si por lo que sea el mismo club entra desde
        dos slugs distintos (no equiparables a nivel de plantilla
        completa), nos quedamos con la primera aparición. */
@@ -4346,6 +4360,7 @@ window.pG = function(fn) {
       seen[key] = true;
       dedup.push(t);
     });
+    window._lastQualDiag = diag;
     return dedup;
   }
   function computeUclClassified(){ return _computeQualifiedFromLeagues('ucl'); }
@@ -4416,8 +4431,45 @@ window.pG = function(fn) {
       +   '<span class="clas-legend-item"><span class="clas-dot" style="background:#e03c3c;"></span>25-40 · Eliminados</span>'
       +   '<span class="clas-legend-item" style="margin-left:auto;color:rgba(255,255,255,.5);">' + classified.length + ' / 40 clasificados</span>'
       + '</div>'
+      + _renderDiag(window._lastQualDiag, classified.length)
       + '</div>';
     container.innerHTML = html;
+  }
+  /* Panel diagnóstico — solo aparece si hay alguna fuente. Muestra
+     fila por fila qué claves localStorage se inspeccionaron y por
+     qué se aceptaron / rechazaron. Pensado para que el usuario sepa
+     EXACTAMENTE por qué su pantalla está vacía o le faltan equipos. */
+  function _renderDiag(diag, classifiedCount){
+    if(!Array.isArray(diag) || !diag.length){
+      return '<div style="margin:10px 6px 4px;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:rgba(255,255,255,.03);font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);">No se encontró ninguna liga (<code>ligaExt_*</code>) en localStorage. Crea ligas en <b>Resto de Ligas</b> y simúlalas para que aparezcan aquí.</div>';
+    }
+    var rows = '';
+    diag.forEach(function(d){
+      var color = '#888', icon = '·';
+      if(d.status==='ok'){ color = '#4fc86a'; icon = '✓'; }
+      else if(d.status==='incompleta'){ color = '#f0c040'; icon = '⏳'; }
+      else if(d.status==='sin-plazas'){ color = '#a0a0a0'; icon = '○'; }
+      else if(d.status==='duplicada'){ color = '#9090ff'; icon = '⇌'; }
+      else if(d.status==='error'){ color = '#ff7070'; icon = '!'; }
+      else { color = '#ff7070'; icon = '✗'; }
+      var meta = '';
+      if(d.results != null && d.needed != null){
+        meta = ' · ' + d.results + '/' + d.needed + ' partidos';
+      }
+      rows += '<div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);">'
+        + '<span style="color:'+color+';font-weight:700;width:14px;text-align:center;">'+icon+'</span>'
+        + '<span style="color:#fff;font-weight:700;">'+_esc(d.slug)+'</span>'
+        + '<span style="color:rgba(255,255,255,.45);font-size:11px;">'+meta+'</span>'
+        + '<span style="margin-left:auto;color:'+color+';font-size:11px;">'+_esc(d.note||d.status||'')+'</span>'
+        + '</div>';
+    });
+    var heading = classifiedCount > 0
+      ? 'Fuentes inspeccionadas'
+      : 'Ninguna liga ha clasificado equipos. Revisa el detalle:';
+    return '<div style="margin:10px 6px 4px;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:rgba(255,255,255,.03);">'
+      + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(240,192,64,.85);margin:0 0 6px;">'+heading+'</div>'
+      + rows
+      + '</div>';
   }
   window.buildUclGruposClas = buildUclGruposClas;
   document.addEventListener('DOMContentLoaded', buildUclGruposClas);

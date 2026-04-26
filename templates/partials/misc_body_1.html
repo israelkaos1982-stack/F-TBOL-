@@ -5889,7 +5889,17 @@ Tottenham
      ═══════════════════════════════════════════════════════════════ */
   var FORCED_BLACKLIST = {
     'inglaterra':    ['Arsenal', 'Atlético Madrid', 'Atletico Madrid'],
-    'escocia':       ['Athletic Club']
+    'escocia':       ['Athletic Club'],
+    /* Polonia: limpiar equipos españoles que se colaron por error
+       (Getafe, Mallorca, Villarreal). El admin no puede re-crearlos
+       en Polonia mientras estén en esta lista. */
+    'polonia':       ['Getafe CF', 'Getafe', 'Mallorca', 'RCD Mallorca',
+                      'Villarreal', 'Villarreal CF'],
+    /* Rusia: ídem para Arsenal (el de la Premier) y Getafe.
+       Si un día se quiere meter el FC Arsenal Tula (ruso real), añádelo
+       como entrada nueva en el editor con su nombre completo: la
+       blacklist solo bloquea el literal "Arsenal" / "Arsenal FC". */
+    'rusia':         ['Arsenal', 'Arsenal FC', 'Getafe CF', 'Getafe']
   };
   function _forcedBlacklistNormFor(k){
     var list = FORCED_BLACKLIST[k] || [];

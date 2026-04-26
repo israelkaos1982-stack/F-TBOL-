@@ -5682,15 +5682,24 @@
           _mlRenderTimerGen(mk);
           return;
         }
-        /* HvH / HvIA: capamos el reloj en halfMax y paramos el
-           interval. Visualmente "45+N'" se queda congelado hasta
-           que el humano pulsa "🛌 DESCANSO" (mlForceHalftimeGen).
-           Sin parar el interval, el reloj llegaría a 90' y
-           dispararía marcadores de 2ª parte / auto-fin estando
-           todavía en 1ª. Petición usuario: la 1ª parte jamás
-           termina sin pulsar el botón. Reseteamos _wallStart /
-           _gameSecAtStart para que cualquier reanudación posterior
-           anclada en halfMax no salte por el tiempo congelado. */
+        /* Amistosos HvH/HvIA: auto-descanso ORIGINAL — el flujo
+           amistoso depende de que el descanso llegue solo al 45'.
+           La regla "descanso solo manual" del usuario aplica a Liga
+           / Copa / Europa, no a amistosos. */
+        if (st.isFriendly) {
+          _mlEnterDescansoCore(mk, st);
+          return;
+        }
+        /* Liga / Copa / Europa HvH-HvIA: capamos el reloj en halfMax
+           y paramos el interval. Visualmente "45+N'" se queda
+           congelado hasta que el humano pulsa "🛌 DESCANSO"
+           (mlForceHalftimeGen). Sin parar el interval, el reloj
+           llegaría a 90' y dispararía marcadores de 2ª parte /
+           auto-fin estando todavía en 1ª. Petición usuario: la 1ª
+           parte jamás termina sin pulsar el botón. Reseteamos
+           _wallStart / _gameSecAtStart para que cualquier
+           reanudación posterior anclada en halfMax no salte por el
+           tiempo congelado. */
         st.timerSec = halfMax;
         st._wallStart = Date.now();
         st._gameSecAtStart = halfMax;
@@ -5702,8 +5711,9 @@
       }
       /* Visibilidad del botón manual de descanso. Aparece a partir
          del minuto 37 game-time y antes de entrar al descanso /
-         prórroga. Sólo HvH y HvIA — IAvIA usa el camino de arriba. */
-      if (!st.htDone && !st.etDone && !st.matchFinished && !st.isIAvsIA) {
+         prórroga. Sólo HvH/HvIA de Liga/Copa/Europa — IAvIA y
+         amistosos usan los caminos de arriba. */
+      if (!st.htDone && !st.etDone && !st.matchFinished && !st.isIAvsIA && !st.isFriendly) {
         var _htBtn = document.getElementById('ml-btn-ht-'+mk);
         if (_htBtn) _htBtn.style.display = (st.timerSec >= 2220) ? '' : 'none';
       }

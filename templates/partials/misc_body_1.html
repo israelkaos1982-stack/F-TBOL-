@@ -4213,6 +4213,21 @@ window.pG = function(fn) {
     if(typeof t === 'string') return t;
     return t.name || t.nombre || t.id || '';
   }
+  /* Limpia el nombre para mostrar — quita el prefijo "* " que
+     algunos equipos tienen persistido como marca de "sin escudo
+     concreto". */
+  function _displayName(t){
+    return String(_teamName(t)).replace(/^\s*\*+\s*/,'');
+  }
+  /* Normaliza para comparar: minúsculas, sin acentos, sin
+     asteriscos ni puntuación. */
+  function _normName(s){
+    return String(s==null?'':s).toLowerCase().normalize('NFD')
+      .replace(/[̀-ͯ]/g,'')
+      .replace(/^\s*\*+\s*/,'')
+      .replace(/[^a-z0-9]+/g,' ')
+      .replace(/\s+/g,' ').trim();
+  }
   function _teamLogo(t){
     if(!t || typeof t !== 'object') return '';
     return t.logo || t.escudo || t.shield || t.img || t.src || '';
@@ -4262,6 +4277,7 @@ window.pG = function(fn) {
   function _computeQualifiedFromLeagues(zoneKey){
     var out = [];
     if(typeof localStorage === 'undefined') return out;
+    var seenLeagueHash = {};
     try {
       var keys = [];
       for(var i=0;i<localStorage.length;i++){
@@ -4289,6 +4305,15 @@ window.pG = function(fn) {
         var zones = (data.config && data.config.zones) || {};
         var slots = Number(zones[zoneKey] || 0);
         if(!(slots > 0)) return;
+        /* Hash de la liga = conjunto ordenado de nombres normalizados.
+           Si dos slugs distintos guardan la misma plantilla (por ej.
+           `alemania` y un alias antiguo `germany`), solo procesamos
+           el primero. Esto evita que la misma liga cuente dos veces
+           y la UCL muestre 8 equipos en vez de 4. */
+        var hash = teams.map(function(t){ return _normName(_teamName(t)); })
+                        .filter(Boolean).sort().join('|');
+        if(!hash || seenLeagueHash[hash]) return;
+        seenLeagueHash[hash] = true;
         var skip = 0;
         if(zoneKey === 'uel'){
           skip = (Number(zones.ucl)||0)
@@ -4303,21 +4328,20 @@ window.pG = function(fn) {
         var ranking = _standingsFromResults(teams, data.results);
         for(var j=skip; j<skip+slots && j<ranking.length; j++){
           out.push({
-            name:  ranking[j].name,
+            name:  String(ranking[j].name||'').replace(/^\s*\*+\s*/,''),
             logo:  ranking[j].logo,
             league: key.substring('ligaExt_'.length)
           });
         }
       });
     } catch(_){}
-    /* Dedupe por nombre normalizado — si varios slugs listan el
-       mismo club, se conserva la primera aparición (orden por
-       slug alfabético). */
+    /* Dedupe global — si por lo que sea el mismo club entra desde
+       dos slugs distintos (no equiparables a nivel de plantilla
+       completa), nos quedamos con la primera aparición. */
     var seen = {};
     var dedup = [];
     out.forEach(function(t){
-      var key = String(t.name||'').toLowerCase().normalize('NFD')
-        .replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+      var key = _normName(t.name);
       if(!key || seen[key]) return;
       seen[key] = true;
       dedup.push(t);

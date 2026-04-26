@@ -14879,6 +14879,25 @@ document.addEventListener('DOMContentLoaded', function() {
   try { window.HUMANOS_AMS = HUMANOS_AMS; } catch(_){}
   var _amsCounter = 0;
   var _selA = null, _selB = null;
+  /* Configuración por amistoso (editable sin PIN admin) */
+  var _selA_human = null, _selB_human = null; /* true=Humano, false=IA */
+  var _selA_form  = '🎲', _selB_form  = '🎲'; /* estado de forma */
+  var _amsDur     = 'auto'; /* 'auto' | 8 | 10 — minutos reales */
+  var _AMS_FORM_VARIANTS = [
+    { ico: '🎲', name: 'Al azar',   color: 'rgba(255,255,255,.85)' },
+    { ico: '⬆️', name: 'Excelente', color: '#5aa9ff' },
+    { ico: '↗️', name: 'Buena',     color: '#4fd87a' },
+    { ico: '➡️', name: 'Normal',    color: '#f0c040' },
+    { ico: '↘️', name: 'Mala',      color: '#ff9040' },
+    { ico: '⬇️', name: 'Pésima',    color: '#ff5050' }
+  ];
+
+  function _amsFormVariant(ico){
+    for (var i = 0; i < _AMS_FORM_VARIANTS.length; i++) {
+      if (_AMS_FORM_VARIANTS[i].ico === ico) return _AMS_FORM_VARIANTS[i];
+    }
+    return _AMS_FORM_VARIANTS[0];
+  }
 
   function _escH(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -14895,20 +14914,57 @@ document.addEventListener('DOMContentLoaded', function() {
       .toLowerCase();
   }
 
-  /* Fuente de verdad: unimos los equipos del editor (ligaExt_*) con
-     los que vienen ya cargados en el motor (SQUAD_REGISTRY +
-     TEAM_RATINGS). De esta forma aparecen TODOS los equipos de todas
-     las ligas aunque el admin no haya abierto nunca ese editor
-     (p.ej. Liga EA Sports viene hardcodeada y sólo se copia a
-     ligaExt_liga-ea-sports cuando se edita). Cualquier equipo nuevo
-     añadido en cualquier editor aparece automáticamente al recargar
-     el buscador, porque lo leemos en vivo cada vez. */
+  /* Devuelve el nombre canónico para deduplicar variantes ("Alavés"
+     vs "Deportivo Alavés", "Barca" vs "FC Barcelona", …). Usa
+     TEAM_ALIASES si el nombre tiene alias; si no, devuelve el nombre
+     tal cual (trim) — así dos entradas idénticas siguen colapsando
+     en una sola. */
+  function _canonAms(name) {
+    var trimmed = String(name || '').trim();
+    if (!trimmed) return '';
+    try {
+      var aliases = window.TEAM_ALIASES || {};
+      var key = trimmed.toLowerCase();
+      if (aliases[key]) return aliases[key];
+      var normKey = _normalizeAms(trimmed);
+      if (aliases[normKey]) return aliases[normKey];
+    } catch (_) {}
+    return trimmed;
+  }
+  try { window._amsCanon = _canonAms; } catch (_) {}
+
+  /* Comprueba si un equipo tiene plantilla cacheada en SQUAD_REGISTRY
+     (con jugadores reales, no sólo headers de posición). */
+  function _hasCachedRoster(name) {
+    try {
+      if (!window.SQUAD_REGISTRY) return false;
+      var canon = _canonAms(name);
+      var sq = window.SQUAD_REGISTRY[canon] || window.SQUAD_REGISTRY[name];
+      if (!sq || !sq.length) return false;
+      for (var i = 0; i < sq.length; i++) {
+        var entry = sq[i];
+        /* headers = {h:'…'}; jugadores = arrays [num, nombre, pw]. */
+        if (Array.isArray(entry) && entry.length >= 2) return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  /* Fuente de verdad: solo equipos CON plantilla. Unimos los equipos
+     de los editores (ligaExt_*) cuyo `players[]` no está vacío con
+     los de SQUAD_REGISTRY que ya tienen jugadores cacheados. Se
+     ignoran las entradas sueltas de TEAM_RATINGS (sin plantilla,
+     filiales, selecciones) para no inflar el buscador con equipos
+     que el motor no puede simular. La deduplicación por nombre
+     canónico (TEAM_ALIASES) colapsa "Alavés" / "Deportivo Alavés"
+     en una única entrada. Cualquier equipo nuevo al que se le edite
+     la plantilla aparece automáticamente al volver a abrir el
+     buscador (lo leemos en vivo cada vez). */
   function _getTeamList() {
     var teams = [];
     var seen = {};
     function _pushTeam(name, media, shield, isHuman){
-      if (!name) return;
-      var canon = String(name).trim();
+      var canon = _canonAms(name);
       if (!canon) return;
       var lower = canon.toLowerCase();
       if (seen[lower]) return;
@@ -14925,7 +14981,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /* 1. Editores ligaExt_* (Liga EA Sports, Hypermotion, Primera Fed,
-          y las 51 ligas del "Resto"). */
+          y las 51 ligas del "Resto"). Sólo se acepta el equipo si
+          tiene plantilla (`players[]` no vacío) o si la plantilla ya
+          está cacheada en SQUAD_REGISTRY. Así no se cuelan equipos
+          que el admin haya empezado a crear pero aún no haya
+          rellenado. */
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var key = localStorage.key(i);
@@ -14937,29 +14997,21 @@ document.addEventListener('DOMContentLoaded', function() {
         try { data = JSON.parse(raw); } catch (_e) { continue; }
         if (!data || !Array.isArray(data.teams)) continue;
         data.teams.forEach(function (t) {
-          if (!t) return;
+          if (!t || !t.name) return;
+          var hasRoster = Array.isArray(t.players) && t.players.length > 0;
+          if (!hasRoster && !_hasCachedRoster(t.name)) return;
           _pushTeam(t.name, t.power || t.media, t.shield, t.isHuman);
         });
       }
     } catch (_) {}
 
-    /* 2. Equipos del motor (hardcoded + cualquier equipo cargado por
-          applyEngineOverrides). Así aparecen los equipos de Liga EA
-          Sports incluso si el admin no ha abierto el editor, y los
-          rivales de torneos europeos (Champions / Europa /
-          Conference) también se pueden escoger para amistosos. */
-    try {
-      var ratings = window.TEAM_RATINGS || {};
-      Object.keys(ratings).forEach(function(name){
-        var r = ratings[name];
-        var media = (r && typeof r === 'object') ? (r.media || 0) : (typeof r === 'number' ? r : 0);
-        var shield = (r && typeof r === 'object' && r.shield) ? r.shield : '';
-        _pushTeam(name, media, shield, false);
-      });
-    } catch (_) {}
+    /* 2. Equipos con plantilla cacheada en SQUAD_REGISTRY que no
+          aparezcan en ningún editor (p.ej. los hardcodeados por el
+          motor que el usuario nunca abrió a editar). */
     try {
       var reg = window.SQUAD_REGISTRY || {};
       Object.keys(reg).forEach(function(name){
+        if (!_hasCachedRoster(name)) return;
         _pushTeam(name, 0, '', false);
       });
     } catch (_) {}
@@ -15027,7 +15079,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!shield && window.TEAM_LOGOS && window.TEAM_LOGOS[name]) {
       shield = window.TEAM_LOGOS[name];
     }
-    if (side === 'a') _selA = name; else _selB = name;
+    /* Modo por defecto: el que tiene marcado el equipo en su editor.
+       El usuario puede cambiarlo SOLO para este partido amistoso vía
+       el toggle 👤 HUMANO / 🤖 IA — no toca su flag global. */
+    var defaultHuman = _isTeamHuman(name);
+    if (side === 'a') { _selA = name; _selA_human = defaultHuman; _selA_form = '🎲'; }
+    else              { _selB = name; _selB_human = defaultHuman; _selB_form = '🎲'; }
     var searchWrap = document.querySelector('#ams-pick-' + side + ' .ams-search-wrap');
     var selDiv = document.getElementById('ams-sel-' + side);
     var shieldImg = document.getElementById('ams-shield-' + side);
@@ -15038,11 +15095,87 @@ document.addEventListener('DOMContentLoaded', function() {
     if (shieldImg) { shieldImg.src = shield; shieldImg.style.display = shield ? '' : 'none'; }
     if (nameSpan) nameSpan.textContent = name;
     if (selDiv) selDiv.style.display = 'flex';
+    _renderModeToggle(side);
+    _renderFormBtn(side);
     _updatePlayBtn();
   }
 
+  function _renderModeToggle(side) {
+    var wrap = document.getElementById('ams-mode-' + side);
+    if (!wrap) return;
+    var human = side === 'a' ? _selA_human : _selB_human;
+    wrap.querySelectorAll('.ams-mode-btn').forEach(function(btn){
+      var mode = btn.getAttribute('data-mode');
+      var active = (mode === 'human' && human === true) || (mode === 'ia' && human === false);
+      btn.classList.toggle('active', active);
+    });
+  }
+
+  function _renderFormBtn(side) {
+    var btn = document.getElementById('ams-form-' + side);
+    if (!btn) return;
+    var ico = side === 'a' ? _selA_form : _selB_form;
+    var variant = _amsFormVariant(ico);
+    btn.textContent = variant.ico;
+    btn.style.borderColor = variant.color;
+    btn.style.boxShadow = '0 0 8px ' + variant.color + '55';
+  }
+
+  window._amsSetMode = function(side, mode) {
+    var human = (mode === 'human');
+    if (side === 'a') _selA_human = human; else _selB_human = human;
+    _renderModeToggle(side);
+  };
+
+  window._amsSetDuration = function(val) {
+    _amsDur = (val === 8 || val === 10) ? val : 'auto';
+    var wrap = document.getElementById('ams-dur-toggle');
+    if (!wrap) return;
+    wrap.querySelectorAll('.ams-dur-btn').forEach(function(btn){
+      var d = btn.getAttribute('data-dur');
+      var active = String(_amsDur) === d || (_amsDur === 'auto' && d === 'auto');
+      btn.classList.toggle('active', active);
+    });
+  };
+
+  window._amsOpenFormDropdown = function(side) {
+    var existing = document.getElementById('ams-form-dropdown');
+    if (existing) existing.remove();
+    var btn = document.getElementById('ams-form-' + side);
+    if (!btn) return;
+    var rect = btn.getBoundingClientRect();
+    var dd = document.createElement('div');
+    dd.id = 'ams-form-dropdown';
+    dd.className = 'ams-form-dropdown';
+    dd.style.left = Math.max(10, Math.min(window.innerWidth - 200, rect.left - 60)) + 'px';
+    dd.style.top  = (rect.bottom + 6) + 'px';
+    dd.innerHTML = _AMS_FORM_VARIANTS.map(function(v){
+      return '<div class="ams-form-opt" data-ico="' + _escH(v.ico) + '" style="color:' + v.color + ';">'
+        + '<span class="ams-form-opt-ico">' + v.ico + '</span>' + v.name.toUpperCase() + '</div>';
+    }).join('');
+    document.body.appendChild(dd);
+    dd.querySelectorAll('.ams-form-opt').forEach(function(el){
+      el.addEventListener('click', function(){
+        var ico = el.getAttribute('data-ico');
+        if (side === 'a') _selA_form = ico; else _selB_form = ico;
+        _renderFormBtn(side);
+        dd.remove();
+      });
+    });
+    setTimeout(function(){
+      function off(e){
+        if (!dd.contains(e.target) && e.target !== btn) {
+          dd.remove();
+          document.removeEventListener('click', off, true);
+        }
+      }
+      document.addEventListener('click', off, true);
+    }, 50);
+  };
+
   window._amsClear = function(side) {
-    if (side === 'a') _selA = null; else _selB = null;
+    if (side === 'a') { _selA = null; _selA_human = null; _selA_form = '🎲'; }
+    else              { _selB = null; _selB_human = null; _selB_form = '🎲'; }
     var searchWrap = document.querySelector('#ams-pick-' + side + ' .ams-search-wrap');
     var selDiv = document.getElementById('ams-sel-' + side);
     var input = document.getElementById('ams-search-' + side);
@@ -15092,10 +15225,17 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!_selA || !_selB || _selA === _selB) return;
     _amsCounter++;
     var mk = 'ams-' + _amsCounter + '-' + Date.now();
-    var isHomeHuman = _isTeamHuman(_selA);
-    var isAwayHuman = _isTeamHuman(_selB);
+    /* Modo H/IA por equipo: por defecto el de su editor; el usuario lo
+       puede sobrescribir SOLO para este amistoso vía el toggle 👤/🤖. */
+    var isHomeHuman = (_selA_human === null) ? _isTeamHuman(_selA) : _selA_human;
+    var isAwayHuman = (_selB_human === null) ? _isTeamHuman(_selB) : _selB_human;
     var isHvH = isHomeHuman && isAwayHuman;
     var isIAvsIA = !isHomeHuman && !isAwayHuman;
+    /* Snapshot de la configuración del amistoso para aplicar al abrir
+       la previa (duración + estado de forma por equipo). */
+    var matchDur  = _amsDur;       /* 'auto' | 8 | 10 */
+    var formHome  = _selA_form;
+    var formAway  = _selB_form;
     // Build match card using exposed function
     if (typeof window._calBuildMatchCard !== 'function') { alert('Error: motor de partidos no disponible.'); return; }
     var cardHtml = window._calBuildMatchCard(0, _selA, _selB, isHvH, mk);
@@ -15145,7 +15285,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Ensure the previa button calls mlPreviaClick with amistoso compKey
       var previaBtn = document.getElementById('ml-previa-' + mk);
       if (previaBtn) {
-        (function(matchKey, hvh) {
+        (function(matchKey, hvh, durChoice, fHome, fAway) {
           previaBtn.onclick = function() {
             /* Duración mostrada en la previa — derivada de _MATCH_RULE
                para no depender de literales. Si el admin afina los
@@ -15161,14 +15301,40 @@ document.addEventListener('DOMContentLoaded', function() {
               window._ppConfirm = _origPpConfirm;
             };
             if (typeof window.showPrePartidoOverlay === 'function') {
-              window.showPrePartidoOverlay(matchKey, 'amistoso', 'No', duracion, hvh);
+              /* En amistosos NO se pide PIN admin para tocar duración
+                 ni estado de forma. La previa llama internamente a
+                 `_ppResetFormStates`, que restaura defaults y bloquea
+                 admin → lo monkey-patcheamos durante esta apertura
+                 para que aplique la configuración elegida en el setup
+                 y deje admin desbloqueado, así el usuario puede
+                 re-editar desde la propia previa sin teclado. */
+              var _origReset = window._ppResetFormStates;
+              window._ppResetFormStates = function() {
+                window._ppFormStates = { home: fHome || '🎲', away: fAway || '🎲' };
+                window._ppFormAdminUnlocked = true;
+                window._ppDurationMin = (durChoice === 8 || durChoice === 10) ? durChoice : null;
+              };
+              try {
+                window.showPrePartidoOverlay(matchKey, 'amistoso', 'No', duracion, hvh);
+              } finally {
+                window._ppResetFormStates = _origReset;
+              }
             }
           };
-        })(mk, isHvH);
+        })(mk, isHvH, matchDur, formHome, formAway);
       }
     }
     // Reset selectors for next match (don't hide setup)
     _selA = null; _selB = null;
+    _selA_human = null; _selB_human = null;
+    _selA_form = '🎲'; _selB_form = '🎲';
+    _amsDur = 'auto';
+    var durResetWrap = document.getElementById('ams-dur-toggle');
+    if (durResetWrap) {
+      durResetWrap.querySelectorAll('.ams-dur-btn').forEach(function(b){
+        b.classList.toggle('active', b.getAttribute('data-dur') === 'auto');
+      });
+    }
     ['a','b'].forEach(function(side){
       var input = document.getElementById('ams-search-' + side);
       if (input) input.value = '';
@@ -15229,6 +15395,9 @@ document.addEventListener('DOMContentLoaded', function() {
   window._initAmistososScreen = function() {
     // Reset state
     _selA = null; _selB = null;
+    _selA_human = null; _selB_human = null;
+    _selA_form = '🎲'; _selB_form = '🎲';
+    _amsDur = 'auto';
     var setup = document.getElementById('ams-setup');
     if (setup) setup.style.display = '';
     /* Keep existing live matches — don't clear container */
@@ -15243,6 +15412,12 @@ document.addEventListener('DOMContentLoaded', function() {
       var results = document.getElementById('ams-results-' + side);
       if (results) results.innerHTML = '';
     });
+    var durWrap = document.getElementById('ams-dur-toggle');
+    if (durWrap) {
+      durWrap.querySelectorAll('.ams-dur-btn').forEach(function(b){
+        b.classList.toggle('active', b.getAttribute('data-dur') === 'auto');
+      });
+    }
     _updatePlayBtn();
     _amsRenderHistory();
   };

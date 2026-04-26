@@ -4378,7 +4378,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       else if (ev.type === 'd-amarilla') {
         if (!processedExpulsion[key]) {
           processedExpulsion[key] = true;
-          var partidos = sorteoDobleAmarilla();
+          /* Si la alerta in-game ya hizo el sorteo, reusamos su
+             valor para que el número del overlay live y el del
+             post-partido coincidan. */
+          var liveD = window._LIVE_SANCION_DRAW && window._LIVE_SANCION_DRAW[ev.name + '::' + teamName];
+          var partidos = (liveD && liveD.type === 'd-amarilla') ? liveD.partidos : sorteoDobleAmarilla();
           result.push({
             name: ev.name,
             team: teamName,
@@ -4394,7 +4398,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       else if (ev.type === 'roja') {
         if (!processedExpulsion[key]) {
           processedExpulsion[key] = true;
-          var pts = sorteoRojaDirecta();
+          var liveR = window._LIVE_SANCION_DRAW && window._LIVE_SANCION_DRAW[ev.name + '::' + teamName];
+          var pts = (liveR && liveR.type === 'roja') ? liveR.partidos : sorteoRojaDirecta();
           result.push({
             name: ev.name,
             team: teamName,
@@ -4407,6 +4412,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
     });
 
+    /* Limpiar la cache live tras consumirla — evita que valores de
+       este partido se filtren al siguiente si el jugador repite. */
+    window._LIVE_SANCION_DRAW = {};
     return result;
   };
 
@@ -9156,6 +9164,93 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     if (window._mmLesionCallback) { window._mmLesionCallback(); window._mmLesionCallback = null; }
   };
 
+  /* ── 4-bis. EXPULSIÓN EN VIVO (solo equipos humanos) ──────────────
+     Se dispara tras el flash "EXPULSIÓN" de _mmFlash. Sortea los
+     partidos sancionados (roja directa: 2-8 pesados, doble amarilla:
+     1-2 al 50%) y muestra una alerta tipo PARTE DISCIPLINARIO.
+     El número se cachea en _LIVE_SANCION_DRAW para que
+     calcularSancionesPartido() reuse el mismo valor al cerrar el
+     partido (números consistentes entre live y post-partido). */
+  function _mmEnsureSancionLive() {
+    if (document.getElementById('mm-sancion-live')) return;
+    var el = document.createElement('div');
+    el.id = 'mm-sancion-live';
+    el.innerHTML =
+        '<div id="mm-sanc-card-wrap"><div id="mm-sanc-card">🟥</div></div>'
+      + '<div id="mm-sanc-title">¡¡¡ JUGADOR EXPULSADO !!!</div>'
+      + '<div id="mm-sanc-reason"></div>'
+      + '<div id="mm-sanc-info"></div>'
+      + '<div id="mm-sanc-partidos-row"><div id="mm-sanc-pn"></div><div id="mm-sanc-pl"></div></div>'
+      + '<button id="mm-sanc-btn" onclick="window.mmSancionConfirm()">✓ ENTENDIDO</button>';
+    document.body.appendChild(el);
+  }
+
+  window._mmTriggerSancionLive = function(type, teamName, playerName) {
+    /* Sorteo replicado aquí porque sorteoRojaDirecta /
+       sorteoDobleAmarilla viven en otra IIFE. Mismas distribuciones. */
+    var partidos;
+    if (type === 'd-amarilla') {
+      partidos = Math.random() < 0.5 ? 1 : 2;
+    } else {
+      var r = Math.random();
+      if      (r < 0.35) partidos = 2;
+      else if (r < 0.60) partidos = 3;
+      else if (r < 0.77) partidos = 4;
+      else if (r < 0.87) partidos = 5;
+      else if (r < 0.94) partidos = 6;
+      else if (r < 0.98) partidos = 7;
+      else               partidos = 8;
+    }
+    window._LIVE_SANCION_DRAW = window._LIVE_SANCION_DRAW || {};
+    window._LIVE_SANCION_DRAW[playerName + '::' + teamName] = { type: type, partidos: partidos };
+    if (typeof window.mmShowSancionLive === 'function') {
+      window.mmShowSancionLive(playerName, teamName, type, partidos);
+    }
+  };
+
+  window.mmShowSancionLive = function(playerName, teamName, type, partidos) {
+    _mmEnsureSancionLive();
+    var reasonEl = document.getElementById('mm-sanc-reason');
+    var infoEl   = document.getElementById('mm-sanc-info');
+    var pnEl     = document.getElementById('mm-sanc-pn');
+    var plEl     = document.getElementById('mm-sanc-pl');
+    if (reasonEl) reasonEl.textContent = (type === 'd-amarilla') ? '🟨🟨  DOBLE AMARILLA' : '🟥  ROJA DIRECTA';
+    if (infoEl)   infoEl.innerHTML = '<b>' + (playerName || '') + '</b><br>' + (teamName || '');
+    if (pnEl)     pnEl.textContent  = partidos;
+    if (plEl)     plEl.textContent  = (partidos === 1 ? 'PARTIDO' : 'PARTIDOS') + ' DE SANCIÓN';
+    var el = document.getElementById('mm-sancion-live');
+    if (el) el.classList.add('show');
+    window.scrollTo(0, 0);
+  };
+
+  window.mmSancionConfirm = function() {
+    var el = document.getElementById('mm-sancion-live');
+    if (el) el.classList.remove('show');
+  };
+
+  (function _injectSancionLiveCSS(){
+    if (document.getElementById('mm-sancion-live-style')) return;
+    var s = document.createElement('style');
+    s.id = 'mm-sancion-live-style';
+    s.textContent = [
+      '#mm-sancion-live{display:none;position:fixed;inset:0;z-index:99998;background:rgba(50,0,0,0.95);align-items:center;justify-content:center;flex-direction:column;padding:24px 16px;text-align:center;}',
+      '#mm-sancion-live.show{display:flex;}',
+      '#mm-sanc-card-wrap{margin-bottom:14px;}',
+      '#mm-sanc-card{font-size:80px;line-height:1;display:inline-block;animation:mmSancShake 0.45s ease-in-out infinite;}',
+      '@keyframes mmSancShake{0%,100%{transform:rotate(-6deg) scale(1.05)}50%{transform:rotate(6deg) scale(1.10)}}',
+      "#mm-sanc-title{font-family:'Bebas Neue',Oswald,sans-serif;font-size:30px;letter-spacing:3px;color:#ff4d4d;margin-bottom:14px;text-shadow:0 0 14px rgba(255,77,77,0.55);}",
+      '#mm-sanc-reason{font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2.5px;color:#ffd1d1;margin-bottom:14px;}',
+      '#mm-sanc-info{font-family:Rajdhani,sans-serif;font-size:18px;color:#fff;line-height:1.4;margin-bottom:18px;}',
+      '#mm-sanc-info b{font-family:Oswald,sans-serif;font-size:22px;font-weight:700;letter-spacing:1px;}',
+      '#mm-sanc-partidos-row{margin-bottom:24px;display:flex;flex-direction:column;align-items:center;gap:2px;}',
+      "#mm-sanc-pn{font-family:'Bebas Neue',sans-serif;font-size:64px;line-height:1;color:#ff4d4d;text-shadow:0 0 16px rgba(255,77,77,0.55);}",
+      '#mm-sanc-pl{font-family:Oswald,sans-serif;font-size:13px;letter-spacing:3px;color:rgba(255,255,255,0.55);}',
+      '#mm-sanc-btn{background:linear-gradient(90deg,#5a1a1a,#a23030,#5a1a1a);border:1px solid rgba(255,80,80,0.55);color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;padding:14px 26px;border-radius:8px;cursor:pointer;transition:filter .15s;}',
+      '#mm-sanc-btn:hover{filter:brightness(1.2);}'
+    ].join('');
+    document.head.appendChild(s);
+  })();
+
   /* ── 5. OBSERVADOR DE ACTAS — detecta eventos en partidos humanos ── */
   var HM_KEYS = ['j1m1', 'j1m2', 'j1m3'];
   var _mmObserved = {};
@@ -9195,6 +9290,17 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
           window.mmShowFlash('gol', teamName, playerName);
         } else if (redTypes.indexOf(type) !== -1) {
           _mmFlash('roja', teamName, playerName);
+          /* Si el expulsado es humano, tras los 5 s del flash mostrar
+             la alerta con el sorteo de partidos sancionados. `type`
+             distingue roja directa vs doble amarilla — distribuciones
+             distintas como pidió el usuario. */
+          if (typeof window.esHumano === 'function'
+              && window.esHumano(teamName)
+              && typeof window._mmTriggerSancionLive === 'function') {
+            setTimeout(function(){
+              window._mmTriggerSancionLive(type, teamName, playerName);
+            }, 5200);
+          }
         } else if (type === 'lesion') {
           var les = window.LESION_STORE && window.LESION_STORE[playerName];
           var grado  = les ? les.gradoNombre : 'Leve';

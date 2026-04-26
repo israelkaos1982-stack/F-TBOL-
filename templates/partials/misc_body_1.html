@@ -4307,12 +4307,15 @@ window.pG = function(fn) {
     return arr;
   }
   /* Recorre localStorage y devuelve la lista de equipos que se
-     han ganado plaza directa de Champions en su liga terminada.
-     Filtra backups (`_backup`), snapshots (`_snap_`) y versionados
-     (`_v\d+`) para no duplicar el mismo equipo desde varias claves
-     del mismo slug. Además deduplica por nombre al final por si
-     dos slugs distintos apuntan al mismo club. */
-  function computeUclClassified(){
+     han ganado plaza en su liga terminada. zoneKey ∈ 'ucl' | 'uel'
+     | 'uecl'. Filtra backups (`_backup`), snapshots (`_snap_`) y
+     versionados (`_v\d+`) para no duplicar el mismo equipo desde
+     varias claves del mismo slug. Además deduplica por nombre al
+     final por si dos slugs distintos apuntan al mismo club.
+     Para UEL/UECL salta primero las plazas de zonas superiores
+     (ucl + uclPrev + uclQual [+ uel]) para que un mismo equipo no
+     aparezca en dos competiciones. */
+  function _computeQualifiedFromLeagues(zoneKey){
     var out = [];
     if(typeof localStorage === 'undefined') return out;
     try {
@@ -4338,13 +4341,23 @@ window.pG = function(fn) {
         var teams = data.teams;
         var N = teams.length;
         if(N < 2) return;
-        var expected = N*(N-1);
-        if(data.results.length < expected) return; // liga no terminada
+        if(data.results.length < N*(N-1)) return; // liga no terminada
         var zones = (data.config && data.config.zones) || {};
-        var slots = Number(zones.ucl || 0);
+        var slots = Number(zones[zoneKey] || 0);
         if(!(slots > 0)) return;
+        var skip = 0;
+        if(zoneKey === 'uel'){
+          skip = (Number(zones.ucl)||0)
+               + (Number(zones.uclPrev)||0)
+               + (Number(zones.uclQual)||0);
+        } else if(zoneKey === 'uecl'){
+          skip = (Number(zones.ucl)||0)
+               + (Number(zones.uclPrev)||0)
+               + (Number(zones.uclQual)||0)
+               + (Number(zones.uel)||0);
+        }
         var ranking = _standingsFromResults(teams, data.results);
-        for(var j=0;j<slots && j<ranking.length;j++){
+        for(var j=skip; j<skip+slots && j<ranking.length; j++){
           out.push({
             name:  ranking[j].name,
             logo:  ranking[j].logo,
@@ -4367,7 +4380,12 @@ window.pG = function(fn) {
     });
     return dedup;
   }
+  function computeUclClassified(){ return _computeQualifiedFromLeagues('ucl'); }
+  function computeUelClassified(){ return _computeQualifiedFromLeagues('uel'); }
+  function computeUeclClassified(){ return _computeQualifiedFromLeagues('uecl'); }
   window.computeUclClassified = computeUclClassified;
+  window.computeUelClassified = computeUelClassified;
+  window.computeUeclClassified = computeUeclClassified;
 
   function buildUclGruposClas(){
     var container = document.getElementById('clas-ucl-grupos-content');
@@ -4603,239 +4621,156 @@ window.pG = function(fn) {
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Europa_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UEL"/><h2>Europa League</h2></div>
 <div class="submenu-list">
-<div class="submenu-card sc-uel1" onclick="go('s-uel-previa')">
-<span class="sc-emoji">🔵</span><span class="sc-label">Fase Previa</span><span class="sc-arr">▶</span>
-</div>
 <div class="submenu-card sc-uel2" onclick="go('s-uel-grupos')">
-<span class="sc-emoji">🔵</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
+<span class="sc-emoji">🟠</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
 </div>
 <div class="submenu-card sc-uel3" onclick="go('s-uel-playoffs')">
-<span class="sc-emoji">🔵</span><span class="sc-label">Playoffs Final</span><span class="sc-arr">▶</span>
+<span class="sc-emoji">🟠</span><span class="sc-label">Playoffs Final</span><span class="sc-arr">▶</span>
 </div>
-</div>
-</div>
-<div class="screen" id="s-uel-previa">
-<button class="back-btn" onclick="go('s-uel')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🟠</span><h2>Europa · Fase de Liga</h2></div>
-<div class="jlist">
-<div class="jblock"><button class="jbtn c-uel" onclick="tog('uel-p-cal')"><div class="pdot">▶</div>🟠 <b>Europa</b>  Calendario (36 equipos)</button>
-<div class="jmatches" id="uel-p-cal">
-<div class="mrow"><div class="mn">Equipo 1</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 2</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 3</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 4</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 5</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 6</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 7</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 8</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 9</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 10</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 11</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 12</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 13</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 14</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 15</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 16</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 17</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 18</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 19</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 20</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 21</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 22</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 23</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 24</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 25</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 26</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 27</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 28</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 29</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 30</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 31</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 32</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 33</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 34</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 35</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 36</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uel" onclick="tog('uel-p-clas')"><div class="pdot">▶</div>📊 <b>Europa</b>  Clasificación</button>
-<div class="jmatches" id="uel-p-clas">
-<div class="mrow"><div class="mn" style="color:rgba(255,255,255,.35);font-size:11px;">Clasificación — próximamente</div></div>
-</div></div>
 </div>
 </div>
 <div class="screen" id="s-uel-grupos">
 <button class="back-btn" onclick="go('s-uel')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🟠</span><h2>Europa · Fase Grupos</h2></div>
-<div class="jlist">
-<div class="jblock"><button class="jbtn c-uel" onclick="tog('uel-g1')"><div class="pdot">▶</div>🟠 <b>Europa</b>  Jornada 1</button>
-<div class="jmatches" id="uel-g1">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uel" onclick="tog('uel-g2')"><div class="pdot">▶</div>🟠 <b>Europa</b>  Jornada 2</button>
-<div class="jmatches" id="uel-g2">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uel" onclick="tog('uel-g3')"><div class="pdot">▶</div>🟠 <b>Europa</b>  Jornada 3</button>
-<div class="jmatches" id="uel-g3">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uel" onclick="tog('uel-g4')"><div class="pdot">▶</div>🟠 <b>Europa</b>  Jornada 4</button>
-<div class="jmatches" id="uel-g4">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uel" onclick="tog('uel-g5')"><div class="pdot">▶</div>🟠 <b>Europa</b>  Jornada 5</button>
-<div class="jmatches" id="uel-g5">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uel" onclick="tog('uel-g6')"><div class="pdot">▶</div>🟠 <b>Europa</b>  Jornada 6</button>
-<div class="jmatches" id="uel-g6">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uel" onclick="tog('uel-g7')"><div class="pdot">▶</div>🟠 <b>Europa</b>  Jornada 7</button>
-<div class="jmatches" id="uel-g7">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uel" onclick="tog('uel-g8')"><div class="pdot">▶</div>🟠 <b>Europa</b>  Jornada 8</button>
-<div class="jmatches" id="uel-g8">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
+<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Europa_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UEL"/><h2>Europa League · Fase de Grupos</h2></div>
+<div class="submenu-list">
+<div class="submenu-card sc-uel2" onclick="if(window.buildUelGruposClas)window.buildUelGruposClas();go('s-uel-grupos-clas')">
+<span class="sc-emoji">📊</span><span class="sc-label">Clasificación</span><span class="sc-arr">▶</span>
 </div>
+<div class="submenu-card sc-uel2" onclick="go('s-uel-grupos-res')">
+<span class="sc-emoji">⚽</span><span class="sc-label">Resultados</span><span class="sc-arr">▶</span>
+</div>
+</div>
+</div>
+<div class="screen" id="s-uel-grupos-clas">
+<button class="back-btn" onclick="go('s-uel-grupos')">◀ Volver</button>
+<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Europa_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UEL"/><h2>UEL · Clasificación</h2></div>
+<div class="clas-wrap">
+<div id="clas-uel-grupos-content"></div>
+</div>
+<script>
+(function(){
+  /* Pinta la clasificación de UEL · Fase de Grupos a partir
+     de window.computeUelClassified() (que recoge los equipos
+     promocionados desde las ligas terminadas). Mismo formato visual
+     que la clasificación de Liga EA Sports / UCL. Stats arrancan
+     a 0 — la fase aún no ha jugado. */
+  function _esc(s){
+    return String(s==null?'':s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function build(){
+    var container = document.getElementById('clas-uel-grupos-content');
+    if(!container) return;
+    var classified = (window.computeUelClassified && window.computeUelClassified()) || [];
+    var N = 40;
+    var html = ''
+      + '<div class="clas-scroll-outer">'
+      + '<div class="clas-hdr-scroll"><div class="clas-table"><div class="clas-hdr">'
+      +   '<div class="clas-hdr-team">Equipo</div>'
+      +   '<div>PTS</div><div>PJ</div><div>V</div><div>E</div><div>P</div>'
+      +   '<div>GF</div><div>GC</div><div>DG</div>'
+      +   '<div>TA</div><div>TR</div><div>MVP</div><div>Últ.5</div>'
+      + '</div></div></div>'
+      + '<div class="clas-scroll"><div class="clas-table">';
+    for(var i=1;i<=N;i++){
+      var zone = '';
+      if(i<=8) zone = 'zone-uel';
+      else if(i>24) zone = 'zone-desc';
+      var team = classified[i-1];
+      var nameHtml, logoHtml = '';
+      if(team){
+        if(team.logo){
+          logoHtml = '<img class="clas-team-logo" src="' + _esc(team.logo) + '" alt="" onerror="this.style.display=\'none\'">';
+        }
+        nameHtml = '<span class="clas-team-name-text">' + _esc(team.name) + '</span>';
+      } else {
+        nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
+      }
+      html += '<div class="clas-row ' + zone + '">'
+        + '<div class="clas-team-cell">'
+        +   '<span class="clas-pos-n">' + i + '</span>'
+        +   '<span class="clas-team-name">' + logoHtml + nameHtml + '</span>'
+        + '</div>'
+        + '<div class="clas-pts">0</div>'
+        + '<div class="clas-pj">0</div>'
+        + '<div class="clas-val">0</div>'
+        + '<div class="clas-val">0</div>'
+        + '<div class="clas-val">0</div>'
+        + '<div class="clas-val gf">0</div>'
+        + '<div class="clas-val gc">0</div>'
+        + '<div class="clas-val dg zer">0</div>'
+        + '<div class="clas-val ta">0</div>'
+        + '<div class="clas-val tr">0</div>'
+        + '<div class="clas-mvp">0</div>'
+        + '<div class="clas-form">'
+        +   '<span class="clas-dot pending"></span>'
+        +   '<span class="clas-dot pending"></span>'
+        +   '<span class="clas-dot pending"></span>'
+        +   '<span class="clas-dot pending"></span>'
+        +   '<span class="clas-dot pending"></span>'
+        + '</div>'
+        + '</div>';
+    }
+    html += '</div></div>'
+      + '<div class="clas-legend">'
+      +   '<span class="clas-legend-item"><span class="clas-dot" style="background:#ff8214;"></span>1-8 · Octavos</span>'
+      +   '<span class="clas-legend-item"><span class="clas-dot" style="background:rgba(255,255,255,.18);"></span>9-24 · Playoff</span>'
+      +   '<span class="clas-legend-item"><span class="clas-dot" style="background:#e03c3c;"></span>25-40 · Eliminados</span>'
+      +   '<span class="clas-legend-item" style="margin-left:auto;color:rgba(255,255,255,.5);">' + classified.length + ' / 40 clasificados</span>'
+      + '</div>'
+      + '</div>';
+    container.innerHTML = html;
+  }
+  window.buildUelGruposClas = build;
+  document.addEventListener('DOMContentLoaded', build);
+})();
+</script>
+</div>
+<div class="screen" id="s-uel-grupos-res">
+<button class="back-btn" onclick="go('s-uel-grupos')">◀ Volver</button>
+<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Europa_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UEL"/><h2>UEL · Resultados</h2></div>
+<div id="uel-grupos-res-section" style="margin-top:8px;padding:0 4px 20px;">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:0 0 8px;">
+  <div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.4);">PARTIDOS</div>
+</div>
+<div class="jlist" id="uel-grupos-res-list">
+<div class="jblock"><button class="jbtn" onclick="window.openUelGrupoJornada(1)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#280c00,#5a2400,#a04010,#5a2400,#280c00);border-left:3px solid #ff8214;"><span style="font-size:14px;margin-right:6px;">🟠</span> <b>Jornada 1</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUelGrupoJornada(2)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#280c00,#5a2400,#a04010,#5a2400,#280c00);border-left:3px solid #ff8214;"><span style="font-size:14px;margin-right:6px;">🟠</span> <b>Jornada 2</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUelGrupoJornada(3)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#280c00,#5a2400,#a04010,#5a2400,#280c00);border-left:3px solid #ff8214;"><span style="font-size:14px;margin-right:6px;">🟠</span> <b>Jornada 3</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUelGrupoJornada(4)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#280c00,#5a2400,#a04010,#5a2400,#280c00);border-left:3px solid #ff8214;"><span style="font-size:14px;margin-right:6px;">🟠</span> <b>Jornada 4</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUelGrupoJornada(5)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#280c00,#5a2400,#a04010,#5a2400,#280c00);border-left:3px solid #ff8214;"><span style="font-size:14px;margin-right:6px;">🟠</span> <b>Jornada 5</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUelGrupoJornada(6)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#280c00,#5a2400,#a04010,#5a2400,#280c00);border-left:3px solid #ff8214;"><span style="font-size:14px;margin-right:6px;">🟠</span> <b>Jornada 6</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUelGrupoJornada(7)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#280c00,#5a2400,#a04010,#5a2400,#280c00);border-left:3px solid #ff8214;"><span style="font-size:14px;margin-right:6px;">🟠</span> <b>Jornada 7</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUelGrupoJornada(8)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#280c00,#5a2400,#a04010,#5a2400,#280c00);border-left:3px solid #ff8214;"><span style="font-size:14px;margin-right:6px;">🟠</span> <b>Jornada 8</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+</div>
+</div>
+</div>
+<div class="screen" id="s-uel-grupos-jornada">
+<button class="back-btn" onclick="go('s-uel-grupos-res')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Europa_League_logo_%282024_version%29.svg" style="height:22px;width:auto;vertical-align:middle;filter:brightness(1.1);" onerror="this.style.display='none'"></span><h2 id="uel-grupos-jornada-title">Jornada</h2></div>
+<div id="uel-grupos-jornada-body" style="padding:0 4px 20px;"></div>
+<script>
+(function(){
+  window.openUelGrupoJornada = function(j){
+    var titleEl = document.getElementById('uel-grupos-jornada-title');
+    var bodyEl  = document.getElementById('uel-grupos-jornada-body');
+    if(!titleEl || !bodyEl) return;
+    titleEl.textContent = 'Jornada ' + j + ' de UEL · Fase de Grupos';
+    var html = '<div class="jlist"><div class="jmatches" style="display:block;">';
+    for(var i=0;i<20;i++){
+      html += '<div class="mrow">'
+        +   '<div class="mn">Por definir</div>'
+        +   '<div class="ms p">vs</div>'
+        +   '<div class="mn r">Por definir</div>'
+        + '</div>';
+    }
+    html += '</div></div>';
+    bodyEl.innerHTML = html;
+    go('s-uel-grupos-jornada');
+  };
+})();
+</script>
 </div>
 <div class="screen" id="s-uel-playoffs">
 <button class="back-btn" onclick="go('s-uel')">◀ Volver</button>
@@ -4926,9 +4861,6 @@ window.pG = function(fn) {
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Conference_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UECL"/><h2>Conference League</h2></div>
 <div class="submenu-list">
-<div class="submenu-card sc-uecl1" onclick="go('s-uecl-previa')">
-<span class="sc-emoji">🟢</span><span class="sc-label">Fase Previa</span><span class="sc-arr">▶</span>
-</div>
 <div class="submenu-card sc-uecl2" onclick="go('s-uecl-grupos')">
 <span class="sc-emoji">🟢</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
 </div>
@@ -4937,228 +4869,148 @@ window.pG = function(fn) {
 </div>
 </div>
 </div>
-<div class="screen" id="s-uecl-previa">
-<button class="back-btn" onclick="go('s-uecl')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🟢</span><h2>UECL · Fase de Liga</h2></div>
-<div class="jlist">
-<div class="jblock"><button class="jbtn c-uecl" onclick="tog('uecl-p-cal')"><div class="pdot">▶</div>🟢 <b>UECL</b>  Calendario (36 equipos)</button>
-<div class="jmatches" id="uecl-p-cal">
-<div class="mrow"><div class="mn">Equipo 1</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 2</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 3</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 4</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 5</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 6</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 7</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 8</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 9</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 10</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 11</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 12</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 13</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 14</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 15</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 16</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 17</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 18</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 19</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 20</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 21</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 22</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 23</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 24</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 25</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 26</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 27</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 28</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 29</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 30</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 31</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 32</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 33</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 34</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 35</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Equipo 36</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uecl" onclick="tog('uecl-p-clas')"><div class="pdot">▶</div>📊 <b>UECL</b>  Clasificación</button>
-<div class="jmatches" id="uecl-p-clas">
-<div class="mrow"><div class="mn" style="color:rgba(255,255,255,.35);font-size:11px;">Clasificación — próximamente</div></div>
-</div></div>
-</div>
-</div>
 <div class="screen" id="s-uecl-grupos">
 <button class="back-btn" onclick="go('s-uecl')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🟢</span><h2>UECL · Fase Grupos</h2></div>
-<div class="jlist">
-<div class="jblock"><button class="jbtn c-uecl" onclick="tog('uecl-g1')"><div class="pdot">▶</div>🟢 <b>UECL</b>  Jornada 1</button>
-<div class="jmatches" id="uecl-g1">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uecl" onclick="tog('uecl-g2')"><div class="pdot">▶</div>🟢 <b>UECL</b>  Jornada 2</button>
-<div class="jmatches" id="uecl-g2">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uecl" onclick="tog('uecl-g3')"><div class="pdot">▶</div>🟢 <b>UECL</b>  Jornada 3</button>
-<div class="jmatches" id="uecl-g3">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uecl" onclick="tog('uecl-g4')"><div class="pdot">▶</div>🟢 <b>UECL</b>  Jornada 4</button>
-<div class="jmatches" id="uecl-g4">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uecl" onclick="tog('uecl-g5')"><div class="pdot">▶</div>🟢 <b>UECL</b>  Jornada 5</button>
-<div class="jmatches" id="uecl-g5">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uecl" onclick="tog('uecl-g6')"><div class="pdot">▶</div>🟢 <b>UECL</b>  Jornada 6</button>
-<div class="jmatches" id="uecl-g6">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uecl" onclick="tog('uecl-g7')"><div class="pdot">▶</div>🟢 <b>UECL</b>  Jornada 7</button>
-<div class="jmatches" id="uecl-g7">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-uecl" onclick="tog('uecl-g8')"><div class="pdot">▶</div>🟢 <b>UECL</b>  Jornada 8</button>
-<div class="jmatches" id="uecl-g8">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
+<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Conference_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UECL"/><h2>Conference League · Fase de Grupos</h2></div>
+<div class="submenu-list">
+<div class="submenu-card sc-uecl2" onclick="if(window.buildUeclGruposClas)window.buildUeclGruposClas();go('s-uecl-grupos-clas')">
+<span class="sc-emoji">📊</span><span class="sc-label">Clasificación</span><span class="sc-arr">▶</span>
 </div>
+<div class="submenu-card sc-uecl2" onclick="go('s-uecl-grupos-res')">
+<span class="sc-emoji">⚽</span><span class="sc-label">Resultados</span><span class="sc-arr">▶</span>
+</div>
+</div>
+</div>
+<div class="screen" id="s-uecl-grupos-clas">
+<button class="back-btn" onclick="go('s-uecl-grupos')">◀ Volver</button>
+<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Conference_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UECL"/><h2>UECL · Clasificación</h2></div>
+<div class="clas-wrap">
+<div id="clas-uecl-grupos-content"></div>
+</div>
+<script>
+(function(){
+  /* Pinta la clasificación de UECL · Fase de Grupos a partir
+     de window.computeUeclClassified() (que recoge los equipos
+     promocionados desde las ligas terminadas). Mismo formato visual
+     que la clasificación de Liga EA Sports / UCL. Stats arrancan
+     a 0 — la fase aún no ha jugado. */
+  function _esc(s){
+    return String(s==null?'':s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function build(){
+    var container = document.getElementById('clas-uecl-grupos-content');
+    if(!container) return;
+    var classified = (window.computeUeclClassified && window.computeUeclClassified()) || [];
+    var N = 40;
+    var html = ''
+      + '<div class="clas-scroll-outer">'
+      + '<div class="clas-hdr-scroll"><div class="clas-table"><div class="clas-hdr">'
+      +   '<div class="clas-hdr-team">Equipo</div>'
+      +   '<div>PTS</div><div>PJ</div><div>V</div><div>E</div><div>P</div>'
+      +   '<div>GF</div><div>GC</div><div>DG</div>'
+      +   '<div>TA</div><div>TR</div><div>MVP</div><div>Últ.5</div>'
+      + '</div></div></div>'
+      + '<div class="clas-scroll"><div class="clas-table">';
+    for(var i=1;i<=N;i++){
+      var zone = '';
+      if(i<=8) zone = 'zone-conf';
+      else if(i>24) zone = 'zone-desc';
+      var team = classified[i-1];
+      var nameHtml, logoHtml = '';
+      if(team){
+        if(team.logo){
+          logoHtml = '<img class="clas-team-logo" src="' + _esc(team.logo) + '" alt="" onerror="this.style.display=\'none\'">';
+        }
+        nameHtml = '<span class="clas-team-name-text">' + _esc(team.name) + '</span>';
+      } else {
+        nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
+      }
+      html += '<div class="clas-row ' + zone + '">'
+        + '<div class="clas-team-cell">'
+        +   '<span class="clas-pos-n">' + i + '</span>'
+        +   '<span class="clas-team-name">' + logoHtml + nameHtml + '</span>'
+        + '</div>'
+        + '<div class="clas-pts">0</div>'
+        + '<div class="clas-pj">0</div>'
+        + '<div class="clas-val">0</div>'
+        + '<div class="clas-val">0</div>'
+        + '<div class="clas-val">0</div>'
+        + '<div class="clas-val gf">0</div>'
+        + '<div class="clas-val gc">0</div>'
+        + '<div class="clas-val dg zer">0</div>'
+        + '<div class="clas-val ta">0</div>'
+        + '<div class="clas-val tr">0</div>'
+        + '<div class="clas-mvp">0</div>'
+        + '<div class="clas-form">'
+        +   '<span class="clas-dot pending"></span>'
+        +   '<span class="clas-dot pending"></span>'
+        +   '<span class="clas-dot pending"></span>'
+        +   '<span class="clas-dot pending"></span>'
+        +   '<span class="clas-dot pending"></span>'
+        + '</div>'
+        + '</div>';
+    }
+    html += '</div></div>'
+      + '<div class="clas-legend">'
+      +   '<span class="clas-legend-item"><span class="clas-dot" style="background:#3cc878;"></span>1-8 · Octavos</span>'
+      +   '<span class="clas-legend-item"><span class="clas-dot" style="background:rgba(255,255,255,.18);"></span>9-24 · Playoff</span>'
+      +   '<span class="clas-legend-item"><span class="clas-dot" style="background:#e03c3c;"></span>25-40 · Eliminados</span>'
+      +   '<span class="clas-legend-item" style="margin-left:auto;color:rgba(255,255,255,.5);">' + classified.length + ' / 40 clasificados</span>'
+      + '</div>'
+      + '</div>';
+    container.innerHTML = html;
+  }
+  window.buildUeclGruposClas = build;
+  document.addEventListener('DOMContentLoaded', build);
+})();
+</script>
+</div>
+<div class="screen" id="s-uecl-grupos-res">
+<button class="back-btn" onclick="go('s-uecl-grupos')">◀ Volver</button>
+<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Conference_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UECL"/><h2>UECL · Resultados</h2></div>
+<div id="uecl-grupos-res-section" style="margin-top:8px;padding:0 4px 20px;">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:0 0 8px;">
+  <div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.4);">PARTIDOS</div>
+</div>
+<div class="jlist" id="uecl-grupos-res-list">
+<div class="jblock"><button class="jbtn" onclick="window.openUeclGrupoJornada(1)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#052812,#0a4a25,#1a8048,#0a4a25,#052812);border-left:3px solid #3cc878;"><span style="font-size:14px;margin-right:6px;">🟢</span> <b>Jornada 1</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUeclGrupoJornada(2)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#052812,#0a4a25,#1a8048,#0a4a25,#052812);border-left:3px solid #3cc878;"><span style="font-size:14px;margin-right:6px;">🟢</span> <b>Jornada 2</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUeclGrupoJornada(3)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#052812,#0a4a25,#1a8048,#0a4a25,#052812);border-left:3px solid #3cc878;"><span style="font-size:14px;margin-right:6px;">🟢</span> <b>Jornada 3</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUeclGrupoJornada(4)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#052812,#0a4a25,#1a8048,#0a4a25,#052812);border-left:3px solid #3cc878;"><span style="font-size:14px;margin-right:6px;">🟢</span> <b>Jornada 4</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUeclGrupoJornada(5)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#052812,#0a4a25,#1a8048,#0a4a25,#052812);border-left:3px solid #3cc878;"><span style="font-size:14px;margin-right:6px;">🟢</span> <b>Jornada 5</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUeclGrupoJornada(6)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#052812,#0a4a25,#1a8048,#0a4a25,#052812);border-left:3px solid #3cc878;"><span style="font-size:14px;margin-right:6px;">🟢</span> <b>Jornada 6</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUeclGrupoJornada(7)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#052812,#0a4a25,#1a8048,#0a4a25,#052812);border-left:3px solid #3cc878;"><span style="font-size:14px;margin-right:6px;">🟢</span> <b>Jornada 7</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openUeclGrupoJornada(8)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#052812,#0a4a25,#1a8048,#0a4a25,#052812);border-left:3px solid #3cc878;"><span style="font-size:14px;margin-right:6px;">🟢</span> <b>Jornada 8</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/20</span></button></div>
+</div>
+</div>
+</div>
+<div class="screen" id="s-uecl-grupos-jornada">
+<button class="back-btn" onclick="go('s-uecl-grupos-res')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji"><img src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Conference_League_logo_%282024_version%29.svg" style="height:22px;width:auto;vertical-align:middle;filter:brightness(1.1);" onerror="this.style.display='none'"></span><h2 id="uecl-grupos-jornada-title">Jornada</h2></div>
+<div id="uecl-grupos-jornada-body" style="padding:0 4px 20px;"></div>
+<script>
+(function(){
+  window.openUeclGrupoJornada = function(j){
+    var titleEl = document.getElementById('uecl-grupos-jornada-title');
+    var bodyEl  = document.getElementById('uecl-grupos-jornada-body');
+    if(!titleEl || !bodyEl) return;
+    titleEl.textContent = 'Jornada ' + j + ' de UECL · Fase de Grupos';
+    var html = '<div class="jlist"><div class="jmatches" style="display:block;">';
+    for(var i=0;i<20;i++){
+      html += '<div class="mrow">'
+        +   '<div class="mn">Por definir</div>'
+        +   '<div class="ms p">vs</div>'
+        +   '<div class="mn r">Por definir</div>'
+        + '</div>';
+    }
+    html += '</div></div>';
+    bodyEl.innerHTML = html;
+    go('s-uecl-grupos-jornada');
+  };
+})();
+</script>
 </div>
 <div class="screen" id="s-uecl-playoffs">
 <button class="back-btn" onclick="go('s-uecl')">◀ Volver</button>

@@ -9428,7 +9428,7 @@ Tottenham
   <div style="display:flex;justify-content:center;padding:6px 0 0;">
     <button id="munich-trofeos-add-btn" onclick="window.munichTrofeosPromptAdd && window.munichTrofeosPromptAdd()"
       style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(255,198,77,.35);">
-      ➕ AÑADIR TÍTULO (ADMIN · PIN 747)
+      ➕ AÑADIR TÍTULO
     </button>
   </div>
 </div>
@@ -9441,7 +9441,11 @@ Tottenham
   #s-munich-trofeos .ath-titulo-name{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;text-transform:uppercase;}
   #s-munich-trofeos .ath-titulo-sub{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;}
   #s-munich-trofeos .ath-titulo-n{font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;}
-  #s-munich-trofeos .ath-titulo-del{position:absolute;top:6px;right:8px;background:rgba(197,15,31,.35);border:1px solid rgba(197,15,31,.55);color:#ffb0b0;border-radius:6px;padding:2px 8px;font-size:11px;letter-spacing:1px;cursor:pointer;font-family:Oswald,sans-serif;}
+  /* Papelera de eliminar SOLO visible cuando hay sesión admin abierta
+     (`<body class="adm-on">` lo activa `window.pinOk` tras introducir
+     el PIN 747). Sin sesión admin → ni se ve. */
+  #s-munich-trofeos .ath-titulo-del{display:none;position:absolute;top:6px;right:8px;background:rgba(197,15,31,.35);border:1px solid rgba(197,15,31,.55);color:#ffb0b0;border-radius:6px;padding:2px 8px;font-size:11px;letter-spacing:1px;cursor:pointer;font-family:Oswald,sans-serif;}
+  body.adm-on #s-munich-trofeos .ath-titulo-del{display:block;}
   #s-munich-trofeos .ath-titulo-del:hover{background:rgba(197,15,31,.55);color:#fff;}
 </style>
 
@@ -9456,22 +9460,41 @@ Tottenham
      admin añade/elimina algo, las modificaciones quedan persistidas
      y la semilla no vuelve a aplicarse. */
   var DEFAULTS = [
-    { id:'def-fcwc', icon:'https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg', title:'MUNDIAL DE CLUBES', sub:'FIFA Club World Cup' },
-    { id:'def-supesp', icon:'/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg', title:'SUPERCOPA DE ESPAÑA', sub:'RFEF – Competición Nacional' }
+    { id:'def-fcwc',   icon:'https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg', title:'MUNDIAL DE CLUBES',   sub:'FIFA Club World Cup',          count:1 },
+    { id:'def-supesp', icon:'/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg',         title:'SUPERCOPA DE ESPAÑA', sub:'RFEF – Competición Nacional',  count:1 }
   ];
 
+  /* Normaliza el texto del título para detectar duplicados (mismo
+     título en mayúsculas/minúsculas/acentos → cuenta como mismo
+     trofeo, sumando una unidad al `count` en vez de crear fila nueva). */
+  function _normTitle(s){
+    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^A-Za-z0-9]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+
   function load(){
+    var arr = null;
     try {
       var raw = localStorage.getItem(STORE_KEY);
       if (raw){
-        var arr = JSON.parse(raw);
-        if (Array.isArray(arr)) return arr;
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) arr = parsed;
       }
     } catch(_){}
-    /* Persistir la semilla en la primera lectura para que el admin
-       pueda eliminar los defaults sin que vuelvan a aparecer. */
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(DEFAULTS)); } catch(_){}
-    return DEFAULTS.slice();
+    if (!arr){
+      /* Persistir la semilla en la primera lectura para que el admin
+         pueda eliminar los defaults sin que vuelvan a aparecer. */
+      arr = DEFAULTS.map(function(t){ var c = {}; for (var k in t) c[k]=t[k]; return c; });
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(arr)); } catch(_){}
+    }
+    /* Backfill de `count` para entradas guardadas con la versión antigua
+       (antes solo había 1 fila por trofeo, sin contador explícito). */
+    arr.forEach(function(t){
+      if (!t) return;
+      var n = parseInt(t.count, 10);
+      t.count = (isNaN(n) || n < 1) ? 1 : n;
+    });
+    return arr;
   }
 
   function save(arr){
@@ -9495,9 +9518,15 @@ Tottenham
          +     '<div class="ath-titulo-name">'+esc(t.title)+'</div>'
          +     (t.sub ? '<div class="ath-titulo-sub">'+esc(t.sub)+'</div>' : '')
          +   '</div>'
-         +   '<span class="ath-titulo-n">1</span>'
-         +   '<button class="ath-titulo-del" onclick="window.munichTrofeosPromptDelete && window.munichTrofeosPromptDelete(\''+esc(t.id)+'\')" title="Eliminar (PIN 747)">🗑</button>'
+         +   '<span class="ath-titulo-n">'+(t.count|0)+'</span>'
+         +   '<button class="ath-titulo-del" onclick="window.munichTrofeosPromptDelete && window.munichTrofeosPromptDelete(\''+esc(t.id)+'\')" title="Eliminar 1 título">🗑</button>'
          + '</div>';
+  }
+
+  function _sumTotal(arr){
+    var s = 0;
+    (arr||[]).forEach(function(t){ s += (t && t.count|0) || 0; });
+    return s;
   }
 
   function render(){
@@ -9505,12 +9534,12 @@ Tottenham
     var host = document.getElementById('munich-trofeos-list');
     if (host){
       if (!list.length){
-        host.innerHTML = '<div style="text-align:center;padding:30px 14px;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:1px;">— Sin títulos —<br><span style="font-size:11px;color:rgba(255,255,255,.35);">Pulsa <b>➕ AÑADIR TÍTULO</b> e introduce PIN 747.</span></div>';
+        host.innerHTML = '<div style="text-align:center;padding:30px 14px;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:1px;">— Sin títulos —<br><span style="font-size:11px;color:rgba(255,255,255,.35);">Pulsa <b>➕ AÑADIR TÍTULO</b> para empezar.</span></div>';
       } else {
         host.innerHTML = list.map(_rowHtml).join('');
       }
     }
-    var total = list.length;
+    var total = _sumTotal(list);
     var totEl = document.getElementById('munich-trofeos-total');
     if (totEl) totEl.textContent = 'TOTAL: ' + total;
     var hubCnt = document.getElementById('munich-trofeos-count');
@@ -9520,24 +9549,41 @@ Tottenham
   window.munichTrofeosRender = render;
 
   window.munichTrofeosPromptAdd = function(){
-    /* Gate admin con PIN 747 reusando el modal global pG. */
+    /* Gate admin con PIN 747 reusando el modal global pG. Tras el PIN
+       la sesión admin queda abierta (window._adm = true, body.adm-on)
+       y los siguientes "AÑADIR" / 🗑 no vuelven a pedirlo. */
     var doAdd = function(){
       var iconUrl = window.prompt('🖼️  URL del icono del título\n(p. ej. https://… o /static/img/logos/…)\n\nDeja vacío para cancelar.', '');
       if (!iconUrl) return;
       iconUrl = String(iconUrl).trim();
       if (!iconUrl) return;
-      var titleTxt = window.prompt('🏆  Texto del título ganado\n(p. ej. CHAMPIONS LEAGUE 2032)', '');
+      var titleTxt = window.prompt('🏆  Texto del título ganado\n(p. ej. LIGA EA SPORTS)', '');
       if (!titleTxt) return;
       titleTxt = String(titleTxt).trim();
       if (!titleTxt) return;
-      var subTxt = window.prompt('📝  Subtítulo / descripción (opcional)\n(p. ej. UEFA · Final 25-Mayo-2032)\n\nDeja vacío si no quieres subtítulo.', '');
       var arr = load();
-      arr.push({
-        id:    _newId(),
-        icon:  iconUrl,
-        title: titleTxt,
-        sub:   subTxt ? String(subTxt).trim() : ''
-      });
+      /* Si ya existe un trofeo con el MISMO nombre (normalizado),
+         incrementamos su `count` en vez de crear fila nueva. Esto
+         permite mostrar "LIGA EA SPORTS  4" cuando se ha ganado 4
+         veces, en lugar de 4 filas idénticas. Solo se pide
+         subtítulo cuando es un trofeo nuevo. */
+      var key = _normTitle(titleTxt);
+      var existing = arr.filter(function(t){ return t && _normTitle(t.title) === key; })[0];
+      if (existing){
+        existing.count = (existing.count|0) + 1;
+        /* Si no había icono o lo cambian, lo refrescamos al último
+           que han pegado — el usuario podría querer actualizar la URL. */
+        if (iconUrl) existing.icon = iconUrl;
+      } else {
+        var subTxt = window.prompt('📝  Subtítulo / descripción (opcional)\n(p. ej. UEFA · Final 25-Mayo-2032)\n\nDeja vacío si no quieres subtítulo.', '');
+        arr.push({
+          id:    _newId(),
+          icon:  iconUrl,
+          title: titleTxt,
+          sub:   subTxt ? String(subTxt).trim() : '',
+          count: 1
+        });
+      }
       save(arr);
       render();
     };
@@ -9548,11 +9594,19 @@ Tottenham
     if (!id) return;
     var doDel = function(){
       var arr = load();
-      var keep = arr.filter(function(t){ return t && t.id !== id; });
-      if (keep.length === arr.length) return;
       var victim = arr.filter(function(t){ return t && t.id === id; })[0];
-      if (!window.confirm('🗑  ¿Eliminar el título «' + ((victim && victim.title) || id) + '»?')) return;
-      save(keep);
+      if (!victim) return;
+      var n = victim.count|0;
+      var msg = n > 1
+        ? '🗑  Quitar 1 « ' + victim.title + ' » (quedarían ' + (n - 1) + ')'
+        : '🗑  Eliminar el título « ' + victim.title + ' »';
+      if (!window.confirm(msg + ' ?')) return;
+      if (n > 1){
+        victim.count = n - 1;
+      } else {
+        arr = arr.filter(function(t){ return t && t.id !== id; });
+      }
+      save(arr);
       render();
     };
     if (typeof window.pG === 'function') window.pG(doDel); else doDel();

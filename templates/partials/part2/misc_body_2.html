@@ -7110,6 +7110,17 @@
         st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk);
         _mlUpdateAplazarBtn(mk);
       }
+      /* Quitar el botón "Compartir descanso" del acta — la 2ª parte
+         ya empezó y ese CTA pertenece al medio tiempo. Si no lo
+         retiramos, sigue visible hasta el final del partido. */
+      try {
+        var acta = document.getElementById('ml-acta-list-' + mk);
+        if (acta) {
+          acta.querySelectorAll('.ml-ht-wa-wrap').forEach(function(n){
+            try { n.parentNode.removeChild(n); } catch(_){}
+          });
+        }
+      } catch(_){}
     }
   };
 
@@ -16194,6 +16205,100 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
     obs.observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:['style','class'] });
+  } catch(_){}
+})();
+</script>
+
+<!-- ── Spinner de "Procesando…" tras FINALIZAR ───────────────────
+     El cierre del partido encadena overlays (stats → MVP → post)
+     y entre uno y otro pueden pasar 1-5 s sin nada visible en
+     pantalla, lo que hacía pensar al usuario que la app se había
+     bloqueado. Mostramos este spinner inmediatamente al pulsar
+     FINALIZAR / CONFIRMAR y lo ocultamos en cuanto aparece
+     cualquier overlay (.show) o tras un timeout de seguridad. -->
+<div id="ml-loading-ov" aria-hidden="true">
+  <div class="ml-loading-card">
+    <div class="ml-loading-spinner"></div>
+    <div class="ml-loading-text" id="ml-loading-text">Procesando partido…</div>
+  </div>
+</div>
+<style>
+#ml-loading-ov{display:none;position:fixed;inset:0;z-index:100020;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;}
+#ml-loading-ov.show{display:flex;}
+#ml-loading-ov .ml-loading-card{display:flex;flex-direction:column;align-items:center;gap:16px;padding:26px 30px;background:linear-gradient(170deg,#0b1320,#101a2e);border:1px solid rgba(240,192,64,.4);border-radius:14px;box-shadow:0 0 32px rgba(0,0,0,.7),0 0 24px rgba(240,192,64,.18);}
+#ml-loading-ov .ml-loading-spinner{width:42px;height:42px;border-radius:50%;border:3px solid rgba(240,192,64,.18);border-top-color:#f0c040;animation:mlLoadSpin .85s linear infinite;}
+@keyframes mlLoadSpin{to{transform:rotate(360deg)}}
+#ml-loading-ov .ml-loading-text{font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;color:#f0c040;text-align:center;text-transform:uppercase;}
+</style>
+<script>
+(function(){
+  var ov, _safety, _tHide;
+  function _el(){ ov = ov || document.getElementById('ml-loading-ov'); return ov; }
+  function _show(text){
+    var e = _el(); if (!e) return;
+    if (text) {
+      var tEl = document.getElementById('ml-loading-text');
+      if (tEl) tEl.textContent = text;
+    }
+    e.classList.add('show');
+    /* Timeout de seguridad: si por algún motivo ningún overlay
+       siguiente aparece, cerramos el spinner a los 8 s. */
+    if (_safety) clearTimeout(_safety);
+    _safety = setTimeout(_hide, 8000);
+  }
+  function _hide(){
+    var e = _el(); if (!e) return;
+    e.classList.remove('show');
+    if (_safety) { clearTimeout(_safety); _safety = null; }
+  }
+  window._mlShowLoading = _show;
+  window._mlHideLoading = _hide;
+
+  /* Hook automático: cualquier botón de FINALIZAR / CONFIRMAR del
+     flujo post-partido dispara el spinner. Usamos delegación en
+     body para no atarnos a IDs concretos (varios botones por
+     partido + recarga del DOM). */
+  function _isFinalizeBtn(t){
+    if (!t || !t.id) return false;
+    var id = t.id;
+    return /^ml-btn-end-/.test(id)
+        || id === 'gm-btn-end'
+        || id === 'ml-stats-confirm-btn'
+        || id === 'ml-post-close-btn';
+  }
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    while (t && t !== document.body) {
+      if (_isFinalizeBtn(t)) {
+        if (t.id === 'ml-post-close-btn') { _hide(); return; }
+        _show('Procesando partido…');
+        return;
+      }
+      t = t.parentNode;
+    }
+  }, true);
+
+  /* En cuanto cualquier overlay relevante gana .show, ocultamos
+     el spinner — la siguiente pantalla está lista. */
+  var TARGETS = ['ml-stats-ov','ml-post-ov','gm-post-ov','mvp-force-overlay','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live'];
+  function _scanShown(root){
+    if (!root || root.nodeType !== 1) return false;
+    for (var i = 0; i < TARGETS.length; i++) {
+      var el = (root.id === TARGETS[i]) ? root : root.querySelector ? root.querySelector('#' + TARGETS[i] + '.show') : null;
+      if (el && el.classList && el.classList.contains('show')) return true;
+    }
+    return false;
+  }
+  try {
+    var obs2 = new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++) {
+        var m = muts[i];
+        if (m.type === 'attributes' && m.target && m.target.id && TARGETS.indexOf(m.target.id) !== -1) {
+          if (m.target.classList && m.target.classList.contains('show')) { _hide(); return; }
+        }
+      }
+    });
+    obs2.observe(document.body, { subtree:true, attributes:true, attributeFilter:['class'] });
   } catch(_){}
 })();
 </script>

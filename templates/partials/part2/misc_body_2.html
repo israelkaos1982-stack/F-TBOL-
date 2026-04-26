@@ -5105,14 +5105,16 @@
     imbat:'🧤', sust:'🔁' };
 
   function _mlShowRemoteEventToast(ev, teamName, matchLabel) {
+    /* Petición del usuario: estos recuadros flotantes (toasts de
+       eventos remotos, p.ej. "7' Koke / Atlético Madrid / Atlético
+       Madrid vs Elche CF") no deben aparecer en ningún caso —
+       interrumpen la lectura del acta y no aportan contexto. Se
+       desactiva por completo manteniendo la firma para no romper a
+       quien la llame. Si en el futuro hace falta reactivarlos, basta
+       quitar este return temprano. */
+    return;
+    /* eslint-disable no-unreachable */
     if (!ev) return;
-    /* Solo mostrar toasts cuando el usuario está viendo una pantalla
-       en la que el evento es CONTEXTUAL — gm-modal abierto, o pantalla
-       con tarjetas de partidos en vivo (.match-live-wrap visible).
-       Pedido del usuario: navegando los menús (s-home, s-ligas,
-       s-competiciones, s-resto-ligas, s-selecciones, etc.) salían
-       toasts de IA-vs-IA por encima del menú; sin contexto el aviso
-       es ruido y tapa la pantalla. */
     var _shouldShow = false;
     try {
       var _gmModal = document.getElementById('gm-modal');
@@ -5247,7 +5249,7 @@
     var fullMax = normalMax + (stops.second || 0) * 60;
     var min = Math.floor(rawSec/60);
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
-    if (st.inDescanso) { btn.textContent='⏸ DESCANSO'; btn.className='ml-timer running'; return; }
+    if (st.inDescanso) { btn.textContent='⏸ HT'; btn.className='ml-timer running'; return; }
     var lbl = st.timerRunning ? '⏸ ' : (rawSec>=fullMax ? '🔁 ' : '▶ ');
     var display;
     if (st.etDone) {
@@ -6262,57 +6264,122 @@
       lbl.innerHTML = def.ico + ' ' + def.lbl;
       row.appendChild(lbl);
       function mkInput(side, v){
-        /* Si la definición tiene min/max (stats manuales), usamos un
-           <select> con las opciones del rango — en móvil se abre la
-           ruleta nativa y el usuario elige girando el dedo, mucho
-           más rápido que teclear. Si no (stats auto como amarillas),
-           mantenemos <input readonly> porque el valor viene del acta. */
+        /* Stats manuales: spinner inline ⊖ [valor] ⊕. Cada toque
+           instantáneamente incrementa o decrementa el valor sin
+           abrir la ruleta nativa del select (que en Android tarda
+           1-2 s en abrir y otro tanto en cerrar). El valor empieza
+           en `def.min` (= 0 en todas las stats salvo posesión, que
+           parte de 50) — petición usuario: "el desplegable de todas
+           tiene que empezar por el numero 0 en cada estadística".
+           Stats auto (amarillas, rojas, …) siguen siendo <input
+           readonly> porque el valor viene del acta y no se edita. */
         if (!readonly && typeof def.min === 'number' && typeof def.max === 'number') {
-          var sel = document.createElement('select');
-          sel.className = 'ml-stats-val';
-          sel.setAttribute('data-key', def.key);
-          sel.setAttribute('data-side', side);
-          var preset = (v == null || v === '') ? (def.def != null ? def.def : def.min) : v;
-          var n = parseInt(preset, 10);
-          if (!isFinite(n)) n = def.def != null ? def.def : def.min;
-          for (var k = def.min; k <= def.max; k++) {
-            var opt = document.createElement('option');
-            opt.value = String(k);
-            opt.textContent = String(k);
-            if (k === n) opt.selected = true;
-            sel.appendChild(opt);
+          var startN = (v == null || v === '') ? def.min : parseInt(v, 10);
+          if (!isFinite(startN)) startN = def.min;
+          if (startN < def.min) startN = def.min;
+          if (startN > def.max) startN = def.max;
+          var wrap = document.createElement('div');
+          wrap.className = 'ml-stats-spin';
+          var minus = document.createElement('button');
+          minus.type = 'button';
+          minus.className = 'ml-stats-spin-btn';
+          minus.textContent = '−';
+          minus.setAttribute('aria-label', 'Restar');
+          var inp = document.createElement('input');
+          inp.type = 'tel'; /* Numeric pad without spinners; permite
+                               teclear directamente además de usar +/−. */
+          inp.inputMode = 'numeric';
+          inp.pattern = '[0-9]*';
+          inp.className = 'ml-stats-val';
+          inp.value = String(startN);
+          inp.setAttribute('data-key', def.key);
+          inp.setAttribute('data-side', side);
+          inp.setAttribute('data-min', String(def.min));
+          inp.setAttribute('data-max', String(def.max));
+          if (def.pairSum) inp.setAttribute('data-pair-sum', String(def.pairSum));
+          var plus = document.createElement('button');
+          plus.type = 'button';
+          plus.className = 'ml-stats-spin-btn';
+          plus.textContent = '+';
+          plus.setAttribute('aria-label', 'Sumar');
+          function _clamp(n){
+            if (!isFinite(n)) n = def.min;
+            if (n < def.min) n = def.min;
+            if (n > def.max) n = def.max;
+            return n;
           }
-          return sel;
+          function _set(n){
+            var v2 = _clamp(n);
+            inp.value = String(v2);
+            /* Disparar 'input' para que el listener de pairSum
+               sincronice el otro lado sin esperar al blur. */
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          minus.addEventListener('click', function(e){ e.preventDefault(); _set(parseInt(inp.value, 10) - 1); });
+          plus .addEventListener('click', function(e){ e.preventDefault(); _set(parseInt(inp.value, 10) + 1); });
+          /* Long-press repeat: tras 350ms, sigue restando/sumando
+             cada 90ms. Soltar o salir cancela. */
+          function _holdRepeat(btn, dir){
+            var t1, t2;
+            function start(e){
+              e.preventDefault();
+              t1 = setTimeout(function(){
+                t2 = setInterval(function(){ _set(parseInt(inp.value, 10) + dir); }, 90);
+              }, 350);
+            }
+            function stop(){
+              if (t1) { clearTimeout(t1); t1 = null; }
+              if (t2) { clearInterval(t2); t2 = null; }
+            }
+            btn.addEventListener('mousedown', start);
+            btn.addEventListener('touchstart', start, { passive: false });
+            ['mouseup','mouseleave','touchend','touchcancel'].forEach(function(ev){
+              btn.addEventListener(ev, stop);
+            });
+          }
+          _holdRepeat(minus, -1);
+          _holdRepeat(plus,   1);
+          /* Validar al terminar de teclear directamente. */
+          inp.addEventListener('blur', function(){ _set(parseInt(inp.value, 10)); });
+          wrap.appendChild(minus);
+          wrap.appendChild(inp);
+          wrap.appendChild(plus);
+          return wrap;
         }
-        var inp = document.createElement('input');
-        inp.type = 'number'; inp.min = '0'; inp.max = String(def.max || 99);
-        inp.className = 'ml-stats-val' + (readonly ? ' readonly' : '');
-        inp.value = (v == null ? '' : String(v));
-        inp.setAttribute('data-key', def.key);
-        inp.setAttribute('data-side', side);
-        if (readonly){ inp.readOnly = true; inp.tabIndex = -1; }
-        return inp;
+        var inp2 = document.createElement('input');
+        inp2.type = 'number'; inp2.min = '0'; inp2.max = String(def.max || 99);
+        inp2.className = 'ml-stats-val' + (readonly ? ' readonly' : '');
+        inp2.value = (v == null ? '' : String(v));
+        inp2.setAttribute('data-key', def.key);
+        inp2.setAttribute('data-side', side);
+        if (readonly){ inp2.readOnly = true; inp2.tabIndex = -1; }
+        return inp2;
       }
       var ia = mkInput('a', valA);
       var ib = mkInput('b', valB);
       if (def.pairSum){
         /* Si el usuario cambia un lado, el otro se auto-completa a
-           (pairSum - valor). Funciona igual para <input type=number>
-           y para <select> — ambos disparan 'input' y 'change' en
-           navegadores modernos; mantenemos los dos por seguridad en
-           WebViews viejos (Samsung Internet). */
+           (pairSum - valor). `ia`/`ib` ahora pueden ser un wrapper
+           del spinner (.ml-stats-spin) en vez del propio input —
+           buscamos el .ml-stats-val dentro y atacamos su .value. */
+        var inA = ia.classList && ia.classList.contains('ml-stats-val') ? ia : ia.querySelector('.ml-stats-val');
+        var inB = ib.classList && ib.classList.contains('ml-stats-val') ? ib : ib.querySelector('.ml-stats-val');
         function _syncA(){
-          var n = parseInt(ia.value); if (!isFinite(n) || n<0) n=0; if (n>def.pairSum) n=def.pairSum;
-          ia.value = String(n); ib.value = String(def.pairSum - n);
+          var n = parseInt(inA.value); if (!isFinite(n) || n<0) n=0; if (n>def.pairSum) n=def.pairSum;
+          inA.value = String(n); inB.value = String(def.pairSum - n);
         }
         function _syncB(){
-          var n = parseInt(ib.value); if (!isFinite(n) || n<0) n=0; if (n>def.pairSum) n=def.pairSum;
-          ib.value = String(n); ia.value = String(def.pairSum - n);
+          var n = parseInt(inB.value); if (!isFinite(n) || n<0) n=0; if (n>def.pairSum) n=def.pairSum;
+          inB.value = String(n); inA.value = String(def.pairSum - n);
         }
-        ia.addEventListener('input',  _syncA);
-        ia.addEventListener('change', _syncA);
-        ib.addEventListener('input',  _syncB);
-        ib.addEventListener('change', _syncB);
+        if (inA) {
+          inA.addEventListener('input',  _syncA);
+          inA.addEventListener('change', _syncA);
+        }
+        if (inB) {
+          inB.addEventListener('input',  _syncB);
+          inB.addEventListener('change', _syncB);
+        }
       }
       var ico = document.createElement('div');
       ico.className = 'ml-stats-ico'; ico.textContent = def.ico;
@@ -6775,9 +6842,19 @@
     if (actaEvts.length) {
       lines.push('');
       lines.push('ACTA DEL PARTIDO:');
+      /* Usamos la sigla del equipo en cada línea del acta — así
+         "Atlético Madrid" pasa a "ATM" y la línea no se rompe en la
+         pantalla del receptor de WhatsApp. La sigla canónica vive en
+         TEAM_DATA (helper window.getTeamAbbr); para equipos sin
+         entrada se genera con las iniciales de las palabras
+         significativas, p.ej. "CD Mirandés" → "MIR". */
+      var _abbr = (typeof window.getTeamAbbr === 'function')
+        ? window.getTeamAbbr
+        : function(s){ return String(s||'').substring(0,3).toUpperCase(); };
       actaEvts.forEach(function(e){
         var ico = allIco[e.type] || '';
-        lines.push(e.min + '\' ' + ico + ' ' + (e.name||'') + ' (' + (e.team==='a'?st.home:st.away) + ')');
+        var teamFull = e.team==='a' ? st.home : st.away;
+        lines.push(e.min + '\' ' + ico + ' ' + (e.name||'') + ' (' + _abbr(teamFull) + ')');
       });
     }
     /* Estadísticas confirmadas en el overlay post-MVP. Formato
@@ -6807,7 +6884,13 @@
     }
     if (isFinal) {
       var mvpEvt = st.events.find(function(e){ return e.type==='mvp'; });
-      if (mvpEvt) lines.push('\u2b50 MVP: ' + mvpEvt.name);
+      if (mvpEvt) {
+        var _mvpTm2 = mvpEvt.team === 'a' ? st.home : st.away;
+        var _abbrMV = (typeof window.getTeamAbbr === 'function')
+          ? window.getTeamAbbr(_mvpTm2)
+          : String(_mvpTm2 || '').substring(0,3).toUpperCase();
+        lines.push('\u2b50 MVP: ' + mvpEvt.name + (_mvpTm2 ? ' (' + _abbrMV + ')' : ''));
+      }
     }
     /* Bloque de estadísticas del partido — se rellena manualmente en
        la pantalla `ml-stats-entry-ov` que aparece entre el MVP y el
@@ -6923,10 +7006,13 @@
     lines.push('');
     lines.push('ACTA DEL PARTIDO:');
     var htEvts = (_gm.events||[]).filter(function(e){ return e && e.min <= 45 && e.type !== 'mvp'; });
+    var _abbr1 = (typeof window.getTeamAbbr === 'function')
+      ? window.getTeamAbbr
+      : function(s){ return String(s||'').substring(0,3).toUpperCase(); };
     htEvts.forEach(function(e){
       var ico = icoMap[e.type] || '📋';
       var tName = e.team === 'a' ? _gm.home : _gm.away;
-      lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + tName + ')');
+      lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + _abbr1(tName) + ')');
     });
     try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
     _gm.htShared = true;
@@ -7019,7 +7105,15 @@
     if (logoB) { logoB.src = _gmLogoUrl(_gm.away) || ''; }
     var mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });
     var mvpEl = document.getElementById('gm-fin-mvp');
-    if (mvpEl) { mvpEl.textContent = mvpEvt ? ('⭐ MVP: ' + (mvpEvt.player || mvpEvt.name || '')) : ''; }
+    if (mvpEl) {
+      if (mvpEvt) {
+        var _mvpName = mvpEvt.player || mvpEvt.name || '';
+        var _mvpTeam = (mvpEvt.team === 'a') ? (_gm.home || '') : (_gm.away || '');
+        mvpEl.textContent = '⭐ MVP: ' + _mvpName + (_mvpTeam ? ' (' + _mvpTeam + ')' : '');
+      } else {
+        mvpEl.textContent = '';
+      }
+    }
     var allEvts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp'; });
     var evList = document.getElementById('gm-fin-events');
     if (evList) {
@@ -7061,10 +7155,13 @@
     lines.push('');
     lines.push('ACTA DEL PARTIDO:');
     var evts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp'; });
+    var _abbr2 = (typeof window.getTeamAbbr === 'function')
+      ? window.getTeamAbbr
+      : function(s){ return String(s||'').substring(0,3).toUpperCase(); };
     evts.forEach(function(e){
       var ico = icoMap[e.type] || '📋';
       var tName = e.team === 'a' ? _gm.home : _gm.away;
-      lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + tName + ')');
+      lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + _abbr2(tName) + ')');
     });
     /* Stats del partido confirmadas en el overlay post-MVP. Se añaden
        debajo del acta cuando existen (no aplican a IAIA). Formato
@@ -7407,7 +7504,7 @@
       return;
     }
     if (_gm.inDescanso) {
-      btn.textContent = '⏸ DESCANSO';
+      btn.textContent = '⏸ HT';
       btn.className = 'ml-timer running';
       if (row) { row.classList.add('running'); row.classList.remove('finished'); }
       return;
@@ -8660,7 +8757,8 @@
     var tarjetas = _gm.events.filter(function(e){ return e && ['amarilla','damarilla','roja'].indexOf(e.type)!==-1; }).length;
     var lesiones = _gm.events.filter(function(e){ return e && e.type==='lesion'; }).length;
     var mvp = _gm.events.find(function(e){ return e && e.type==='mvp'; });
-    var mvpLabel = '⭐ MVP: ' + (mvp ? (((mvp.num||'').trim()?mvp.num+'. ':'') + (mvp.player||'Jugador')) : '—');
+    var _mvpTm = mvp ? ((mvp.team === 'a') ? (_gm.home || '') : (_gm.away || '')) : '';
+    var mvpLabel = '⭐ MVP: ' + (mvp ? (((mvp.num||'').trim()?mvp.num+'. ':'') + (mvp.player||'Jugador') + (_mvpTm ? ' (' + _mvpTm + ')' : '')) : '—');
     var gEl=document.getElementById('gm-st-goles'); if(gEl) gEl.textContent=String(goles);
     var tEl=document.getElementById('gm-st-tarjetas'); if(tEl) tEl.textContent=String(tarjetas);
     var lEl=document.getElementById('gm-st-lesiones'); if(lEl) lEl.textContent=String(lesiones);
@@ -11166,12 +11264,20 @@
 .ml-stats-val{border:2px solid rgba(90,169,255,.45);background:rgba(0,0,0,.45);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:30px;font-weight:700;text-align:center;letter-spacing:2px;border-radius:12px;padding:14px 8px;width:100%;outline:none;min-width:0;min-height:60px;cursor:pointer;-webkit-appearance:none;appearance:none;text-align-last:center;-webkit-tap-highlight-color:rgba(90,169,255,.3);transition:border-color .15s,box-shadow .15s,background .15s;}
 .ml-stats-val:focus,.ml-stats-val:active{border-color:#5aa9ff;box-shadow:0 0 0 3px rgba(90,169,255,.25);background:rgba(0,0,0,.6);}
 .ml-stats-val.readonly{opacity:.9;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);cursor:default;font-size:28px;}
+/* Spinner inline ⊖ [valor] ⊕ — sustituye al <select> nativo (lento
+   en Android). Toques son instantáneos y permiten teclear directo. */
+.ml-stats-spin{display:flex;align-items:center;gap:6px;width:100%;}
+.ml-stats-spin .ml-stats-val{flex:1;padding:14px 4px;font-size:28px;letter-spacing:1px;}
+.ml-stats-spin-btn{flex:0 0 auto;width:46px;height:60px;border-radius:10px;border:2px solid rgba(90,169,255,.45);background:rgba(0,0,0,.5);color:#fff;font-size:26px;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(90,169,255,.3);user-select:none;-webkit-user-select:none;touch-action:manipulation;}
+.ml-stats-spin-btn:active{transform:scale(.94);background:rgba(90,169,255,.25);border-color:#5aa9ff;}
 /* Móvil: tap-target todavía más grande para dedos */
 @media (max-width:480px){
   .ml-stats-val{font-size:32px;min-height:64px;padding:16px 8px;}
   .ml-stats-row-lbl{font-size:19px;letter-spacing:3px;}
   .ml-stats-ico{font-size:28px;}
   .ml-stats-row{gap:14px;padding:12px 8px;}
+  .ml-stats-spin-btn{width:48px;height:64px;font-size:28px;}
+  .ml-stats-spin .ml-stats-val{font-size:30px;}
 }
 .ml-stats-confirm{width:100%;border:none;border-radius:12px;padding:16px;background:linear-gradient(135deg,#1b4a82,#3777c7);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:3px;cursor:pointer;transition:filter .15s,transform .1s;box-shadow:0 4px 16px rgba(55,119,199,.35);}
 .ml-stats-confirm:hover{filter:brightness(1.1);}

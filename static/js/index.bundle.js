@@ -745,7 +745,7 @@ function _startInterval_j1m1(){
     _renderTimer_j1m1();
   }, Math.min(spd, 500));
 };
-function _renderTimer_j1m1(){var btn=document.getElementById('ml-timer-j1m1');if(!btn)return;var totalMin=Math.floor(_timerSec/60);if(_matchFinished){btn.textContent='🏁 FIN';btn.className='ml-timer finished';if(window._setScoreState)window._setScoreState('j1m1','finished');return;}if(_inDescanso){btn.textContent='⏸ DESCANSO';btn.className='ml-timer running';if(window._setScoreState)window._setScoreState('j1m1','playing');return;}var isStop=!_etDone&&_timerSec>5400;var dispStr=isStop?('90+'+Math.ceil((_timerSec-5400)/60)+"'"):(totalMin+"'");var maxForLabel=_etDone?MAX_ET:(_stDone?5820:MAX_NORMAL);var label=_timerRunning?'⏸ ':(_timerSec>=maxForLabel?'🔁 ':'▶ ');btn.textContent=label+dispStr;btn.className='ml-timer'+(_timerRunning?' running':'');if(window._setScoreState)window._setScoreState('j1m1',_timerRunning?'playing':'pending');var _bl=document.getElementById('ball-j1m1');if(_bl){if(_timerRunning){_bl.classList.remove('spinning');_bl.classList.add('static');}else{_bl.classList.remove('static');_bl.classList.add('spinning');}}};
+function _renderTimer_j1m1(){var btn=document.getElementById('ml-timer-j1m1');if(!btn)return;var totalMin=Math.floor(_timerSec/60);if(_matchFinished){btn.textContent='🏁 FIN';btn.className='ml-timer finished';if(window._setScoreState)window._setScoreState('j1m1','finished');return;}if(_inDescanso){btn.textContent='⏸ HT';btn.className='ml-timer running';if(window._setScoreState)window._setScoreState('j1m1','playing');return;}var isStop=!_etDone&&_timerSec>5400;var dispStr=isStop?('90+'+Math.ceil((_timerSec-5400)/60)+"'"):(totalMin+"'");var maxForLabel=_etDone?MAX_ET:(_stDone?5820:MAX_NORMAL);var label=_timerRunning?'⏸ ':(_timerSec>=maxForLabel?'🔁 ':'▶ ');btn.textContent=label+dispStr;btn.className='ml-timer'+(_timerRunning?' running':'');if(window._setScoreState)window._setScoreState('j1m1',_timerRunning?'playing':'pending');var _bl=document.getElementById('ball-j1m1');if(_bl){if(_timerRunning){_bl.classList.remove('spinning');_bl.classList.add('static');}else{_bl.classList.remove('static');_bl.classList.add('spinning');}}};
 function _currentMin_j1m1(){return Math.min(_etDone?120:(_stDone?97:90),Math.floor(_timerSec/60));};
 function _addMarker_j1m1(txt){var list=document.getElementById('ml-acta-list-j1m1');var div=document.createElement('div');div.className='ml-ht';div.textContent=txt;list.appendChild(div);_removeEmpty_j1m1();};
 window.mlActivateET_j1m1=function(){if(_etDone||_matchFinished)return;_etDone=true;_etPhase=true;if(_timerRunning){clearInterval(_timerInterval);_startInterval_j1m1();}if(_timerSec<MAX_NORMAL)_timerSec=MAX_NORMAL;_addMarker_j1m1('— PRÓRROGA —');var btn=document.getElementById('ml-btn-et-j1m1');if(btn){btn.disabled=true;btn.style.opacity='0.35';}var penBtn=document.getElementById('ml-btn-pen-j1m1');if(penBtn)penBtn.style.display='';_renderTimer_j1m1();};
@@ -1082,6 +1082,38 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     'Deportivo Alavés': {abbr:'AVS', bg:'#0052a3', fg:'#ffffff'},
     'Valencia CF':      {abbr:'VAL', bg:'#ef7d00', fg:'#ffffff'},
     'Villarreal':       {abbr:'VIL', bg:'#ffd700', fg:'#1a1a1a'}
+  };
+  /* Exponer TEAM_DATA y un helper getTeamAbbr para que otros
+     módulos (acta WhatsApp, badges) puedan abreviar nombres largos
+     ("Atlético Madrid" → "ATM") sin duplicar el mapa. Si no hay
+     entrada para un equipo, generamos una sigla con las iniciales
+     de las palabras significativas (saltando "FC", "CF", "de",
+     "Real" cuando sobra) — fallback: 3 primeras letras en
+     mayúsculas. */
+  try { window.TEAM_DATA = TEAM_DATA; } catch(_){}
+  window.getTeamAbbr = function(name) {
+    if (!name) return '';
+    var n = String(name).trim();
+    if (TEAM_DATA[n] && TEAM_DATA[n].abbr) return TEAM_DATA[n].abbr;
+    /* Resolver alias canónico (ej. "Alavés" → "Deportivo Alavés"). */
+    try {
+      var aliases = window.TEAM_ALIASES || {};
+      var canon = aliases[n.toLowerCase()] || n;
+      if (TEAM_DATA[canon] && TEAM_DATA[canon].abbr) return TEAM_DATA[canon].abbr;
+    } catch(_){}
+    var STOP = { fc:1, cf:1, cd:1, ud:1, ad:1, sd:1, ca:1, sad:1, real:1, de:1, del:1, la:1, los:1, club:1, atletico:1, athletic:1 };
+    var parts = n.normalize('NFD').replace(/[̀-ͯ]/g,'')
+                 .replace(/[^A-Za-z0-9 ]/g,' ').split(/\s+/).filter(Boolean);
+    var sig = parts.filter(function(p){ return !STOP[p.toLowerCase()]; });
+    var abbr = '';
+    if (sig.length >= 2) {
+      abbr = sig.slice(0, 3).map(function(p){ return p.charAt(0).toUpperCase(); }).join('');
+    } else if (sig.length === 1) {
+      abbr = sig[0].substring(0, 3).toUpperCase();
+    } else if (parts.length) {
+      abbr = parts[0].substring(0, 3).toUpperCase();
+    }
+    return abbr || n.substring(0, 3).toUpperCase();
   };
 
   // Team logo URLs — rutas locales explícitas (evita fallos por nombres/tildes/espacios)
@@ -9515,7 +9547,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var _gm = window._gm;
     if (!_gm) { if (_mmOrigGmShare) _mmOrigGmShare.apply(this, arguments); return; }
     var mvpEvt = (_gm.events || []).find(function(e) { return e.type === 'mvp'; });
-    var mvpLabel = mvpEvt ? ' ⭐ MVP: ' + mvpEvt.name : '';
+    var _mvpTeamWA = mvpEvt ? ((mvpEvt.team === 'a') ? (_gm.home || '') : (_gm.away || '')) : '';
+    var mvpLabel = mvpEvt ? ' ⭐ MVP: ' + mvpEvt.name + (_mvpTeamWA ? ' (' + _mvpTeamWA + ')' : '') : '';
     var suffix = _mmTwitchSuffix();
     var msg = '¡Mira el resultado de mi partido: '
       + (_gm.home || '') + ' ' + (_gm.sc ? _gm.sc.a : 0) + ' - ' + (_gm.sc ? _gm.sc.b : 0) + ' ' + (_gm.away || '') + '!'

@@ -6191,13 +6191,37 @@ Tottenham
   function loadData(k){
     if(LIGA_CACHE[k]) return _applyForcedBlacklist(k, LIGA_CACHE[k]);
     try{ var raw = localStorage.getItem(storeKey(k)); if(raw){ LIGA_CACHE[k] = JSON.parse(raw); return _applyForcedBlacklist(k, LIGA_CACHE[k]); } }catch(_){}
-    /* Cache vacía → intento síncrono al servidor para que la primera
-       apertura de la liga en un dispositivo nuevo NO muestre
-       "No hay equipos" durante segundos mientras la fetch async
-       responde. Es el mismo patrón que ya usan misc_body_2.html
-       (rosterFor) y la rama de equipos editados de este mismo
-       archivo. Si el sync falla (offline / timeout), caemos al
-       objeto vacío y la fetchData posterior repoblará. */
+    /* REFUERZO: si la clave principal está vacía, intentamos restaurar
+       desde la copia `_protected` que guarda el lock de plantillas
+       (línea ~2740). El propósito original del lock es bloquear
+       escrituras que reduzcan jugadores, pero si el main key se
+       vacía por cualquier ruta (otro flow, reset, server con teams=[]
+       que se coló), la copia protegida sigue viva — la usamos como
+       fuente y la promovemos al main key + cache para que el resto
+       del código la vea. Sin esto, el usuario veía "No hay equipos"
+       aunque sus equipos estuvieran a salvo en _protected. */
+    try {
+      var protKey = storeKey(k) + '_protected';
+      var protRaw = localStorage.getItem(protKey);
+      if (protRaw) {
+        var pdata = JSON.parse(protRaw);
+        if (pdata && Array.isArray(pdata.teams) && pdata.teams.length) {
+          LIGA_CACHE[k] = pdata;
+          /* Promover la copia protegida a la clave principal para que
+             la lectura siguiente la encuentre directamente. */
+          try { localStorage.setItem(storeKey(k), protRaw); } catch(_){}
+          try { console.warn('[ligaExt] restaurado '+k+' desde _protected ('+pdata.teams.length+' equipos).'); } catch(_){}
+          return _applyForcedBlacklist(k, pdata);
+        }
+      }
+    } catch(_){}
+    /* Cache + protected vacíos → intento síncrono al servidor para
+       que la primera apertura de la liga en un dispositivo nuevo NO
+       muestre "No hay equipos" durante segundos mientras la fetch
+       async responde. Mismo patrón que rosterFor (misc_body_2.html)
+       y la rama de equipos editados de este mismo archivo. Si el
+       sync falla (offline / timeout), caemos al objeto vacío y la
+       fetchData posterior repoblará. */
     try {
       var xhr = new XMLHttpRequest();
       xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(k), false);

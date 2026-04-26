@@ -484,27 +484,43 @@ window.pG = function(fn) {
       if (!html) _renderEmpty(host);
     };
 
-    /* Re-pintar cada vez que se navega a la pantalla. Sin gating —
-       si el primer render llega antes de que `applyEngineOverrides`
-       cargue los datos, el siguiente vuelve a intentarlo. */
-    var _origGoBayern = window.go;
-    window.go = function(id){
-      var out = _origGoBayern ? _origGoBayern.apply(this, arguments) : undefined;
-      if (id === 's-bayern-plantilla'){
-        setTimeout(window.renderBayernPlantillaScreen, 60);
-        setTimeout(window.renderBayernPlantillaScreen, 600);
-      }
-      return out;
-    };
+    /* Re-pintar cada vez que se abre la pantalla. NO podemos envolver
+       `window.go` aquí porque este partial se evalúa ANTES de que
+       `index.bundle.js` defina y re-envuelva `window.go` varias veces
+       (líneas 2033, 2106, 2109, 5953). Esos overrides borrarían el wrap.
+       En su lugar usamos un MutationObserver que detecta cuándo el
+       screen recibe `.active` — robusto frente a cualquier cadena de
+       wrappers de `go`. Pintamos también con un retry a 600ms para
+       cubrir el caso en el que `applyEngineOverrides` aún no ha
+       cargado los datos del editor. */
+    function _scheduleRender(){
+      setTimeout(window.renderBayernPlantillaScreen, 60);
+      setTimeout(window.renderBayernPlantillaScreen, 600);
+    }
 
-    /* Pintado inicial si la app arrancó ya en esta pantalla. */
-    document.addEventListener('DOMContentLoaded', function(){
-      var act = document.querySelector('.screen.active');
-      if (act && act.id === 's-bayern-plantilla'){
-        setTimeout(window.renderBayernPlantillaScreen, 80);
-        setTimeout(window.renderBayernPlantillaScreen, 800);
-      }
-    });
+    function _wireObserver(){
+      var screen = document.getElementById('s-bayern-plantilla');
+      if (!screen) return;
+      if (screen.classList.contains('active')) _scheduleRender();
+      try {
+        var obs = new MutationObserver(function(muts){
+          for (var i=0; i<muts.length; i++){
+            var m = muts[i];
+            if (m.attributeName === 'class' && screen.classList.contains('active')){
+              _scheduleRender();
+              return;
+            }
+          }
+        });
+        obs.observe(screen, { attributes: true, attributeFilter: ['class'] });
+      } catch(_){}
+    }
+
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', _wireObserver);
+    } else {
+      _wireObserver();
+    }
   })();
   </script>
 </div>

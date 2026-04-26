@@ -5870,6 +5870,21 @@ window.pG = function(fn) {
         <button class="lext-btn" onclick="lextClearTeamForm()">🗑 Limpiar</button>
       </div>
 
+      <!-- ═══ Acceso rápido al modal de plantilla en modo edición ═══
+           Petición usuario: dentro de "Editar equipo" debe haber una
+           opción para editar UN jugador concreto (cambiar su poder, su
+           rol C/F/P/⭐/⚾) o añadir uno nuevo a la plantilla sin tener
+           que volver a la lista y pulsar el icono 🛡. Reutilizamos el
+           overlay `lext-ov-squad` con `editable:true` — exactamente la
+           misma UI que ya existe (Pegar plantilla + Añadir jugador
+           individual + lista con click en cada jugador para editarlo).
+           Si todavía no se ha pulsado ✏️ en ningún equipo, avisamos. -->
+      <div class="lext-btn-row" style="margin-top:6px;">
+        <button class="lext-btn" type="button" onclick="lextOpenSquadFromEditor()" style="background:rgba(90,169,255,.12);color:#9ed0ff;border-color:rgba(90,169,255,.45);">
+          🧤 Editar / Añadir jugadores
+        </button>
+      </div>
+
       <!-- ═══ AÑADIR MÚLTIPLES EQUIPOS (1 nombre por línea) ═══ -->
       <div style="margin-top:18px;padding:12px;border:1px solid rgba(100,180,255,.35);border-radius:8px;background:rgba(40,100,180,.06);">
         <label class="lext-label" style="margin-top:0;">📥 Añadir lista completa · 1 nombre por línea</label>
@@ -7559,6 +7574,22 @@ Tottenham
      no dependemos de que `data.teams.filter(x=>x.id===id)` lo
      encuentre (si el id no está sincronizado, la búsqueda fallaba
      en silencio y el overlay quedaba vacío). */
+  /* Atajo desde el formulario "Editar equipo" para abrir la modal
+     de plantilla EN MODO EDICIÓN — equivalente al botón 🛡 de la
+     lista de equipos pero accesible directamente desde la pantalla
+     en la que el admin está retocando los datos del equipo. Si
+     todavía no se ha cargado un equipo en el formulario (no se ha
+     pulsado ✏️ en ninguna fila), avisamos al usuario. */
+  window.lextOpenSquadFromEditor = function(){
+    if (!EDITING_TEAM_ID) {
+      try { alert('⚠️ Pulsa primero ✏️ en un equipo de la lista para cargarlo en el formulario, y luego abre su plantilla desde aquí.'); } catch(_){}
+      return;
+    }
+    if (typeof window.lextOpenSquad === 'function') {
+      window.lextOpenSquad(EDITING_TEAM_ID, { editable: true });
+    }
+  };
+
   /* `lextOpenSquad(idOrTeam, opts)` — opts.editable=true muestra los
      dos <details> superiores (Pegar plantilla + Añadir jugador). Por
      defecto (clic desde la fila de la clasificación) la modal queda

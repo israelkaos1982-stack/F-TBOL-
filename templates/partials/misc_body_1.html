@@ -7913,10 +7913,12 @@ Tottenham
 
     /* ── 2. Líderes del equipo (sobre t.players) ── */
     var players = Array.isArray(team.players) ? team.players : [];
-    /* Hidratamos stats con getPlayerStats si no vienen en el objeto
-       (renderSquadList las pega en cada player; pero esta función se
-       ejecuta antes que renderSquadList, así que los players todavía
-       no tienen .gol/.mvp/.ta/.tr). */
+    /* Hidratamos stats con getPlayerStats. Necesario porque esta
+       función se llama ANTES que renderSquadList → los players
+       todavía no traen .gol/.mvp/.pj/etc. Hidratamos TODO el set de
+       stats que `computePlayerRating` consume (pj, gol, pen, fk,
+       mvp, imbat, penSaved) además de pos para el cálculo por
+       posición. */
     var hydrated = players.map(function(p){
       if (!p || !p.name) return null;
       var ps = null;
@@ -7926,12 +7928,15 @@ Tottenham
         }
       } catch(_) {}
       return {
-        name:  p.name,
-        power: Number(p.power) || 0,
-        gol:   Number((ps && ps.gol)) || Number(p.gol) || 0,
-        mvp:   Number((ps && ps.mvp)) || Number(p.mvp) || 0,
-        ta:    Number((ps && ps.ta))  || Number(p.ta)  || 0,
-        tr:    Number((ps && ps.tr))  || Number(p.tr)  || 0
+        name:     p.name,
+        pos:      p.pos || 'MED',
+        pj:       Number((ps && ps.pj))       || Number(p.pj)       || 0,
+        gol:      Number((ps && ps.gol))      || Number(p.gol)      || 0,
+        pen:      Number((ps && ps.pen))      || Number(p.pen)      || 0,
+        fk:       Number((ps && ps.fk))       || Number(p.fk)       || 0,
+        mvp:      Number((ps && ps.mvp))      || Number(p.mvp)      || 0,
+        imbat:    Number((ps && ps.imbat))    || Number(p.imbat)    || 0,
+        penSaved: Number((ps && ps.penSaved)) || Number(p.penSaved) || 0
       };
     }).filter(Boolean);
 
@@ -7949,20 +7954,30 @@ Tottenham
 
     var topGol = _topBy('gol');
     var topMvp = _topBy('mvp');
-    var topTa  = _topBy('ta');
-    var topTr  = _topBy('tr');
-    /* Mejor puntuación = jugador con mayor `power` (valor que el
-       admin asignó al jugador en el editor). No hay un sistema de
-       rating por partido aún. Ignoramos los porteros con power 0. */
-    var topPow = (function(){
+    /* Mejor puntuación = max `computePlayerRating(p)` (puntuación
+       media 0-10 que combina pj/gol/pen/fk/mvp ponderados por
+       posición). Antes mostrábamos `p.power` (valor del jugador
+       en el editor), pero el usuario quiere la puntuación media
+       real en la liga — la misma que ya pinta `renderSquadList`
+       junto a cada jugador. Si nadie ha jugado todavía
+       computePlayerRating devuelve 0, así que filtramos los <= 0
+       para no mostrar empates a 0. */
+    var topRating = (function(){
+      if (typeof computePlayerRating !== 'function') return null;
       var t = -Infinity, names = [];
       hydrated.forEach(function(p){
-        if (p.power <= 0) return;
-        if (p.power > t) { t = p.power; names = [p.name]; }
-        else if (p.power === t) names.push(p.name);
+        if (p.pj <= 0) return;
+        var r;
+        try { r = computePlayerRating(p); } catch(_) { r = 0; }
+        if (!isFinite(r) || r <= 0) return;
+        /* Redondeamos a 2 decimales para que empates como 7.98 vs
+           7.97 cuenten distinto. */
+        var rr = Math.round(r * 100) / 100;
+        if (rr > t) { t = rr; names = [p.name]; }
+        else if (rr === t) names.push(p.name);
       });
       if (t === -Infinity) return null;
-      return { names: names, val: t };
+      return { names: names, val: t.toFixed(2) };
     })();
 
     function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -7997,12 +8012,14 @@ Tottenham
       + _cell('%',   pct + '%', pct >= 60 ? '#3dcc6e' : (pct >= 40 ? '#f0c040' : '#ff7070'))
       + '</div>';
 
+    /* Solo 3 líneas de líderes (petición usuario). Las amarillas y
+       rojas se eliminan porque ya aparecen en cada fila de jugador
+       en la lista PLANTILLA y antes mostraban valores no
+       sincronizados con los acumulados reales. */
     var leadersBlock = ''
-      + _line('⚽',  'Máximo goleador',  topGol, ' gol' + (topGol && topGol.val === 1 ? '' : 'es'), '#3dcc6e')
-      + _line('⭐',  'MVP',              topMvp, ' MVP'  + (topMvp && topMvp.val === 1 ? '' : 's'), '#f0c040')
-      + _line('📈', 'Mejor puntuación', topPow, '',                                                  '#5aa9ff')
-      + _line('🟨', 'Amarillas',        topTa,  '',                                                  '#f0c040')
-      + _line('🟥', 'Rojas',            topTr,  '',                                                  '#ff7070');
+      + _line('⚽',  'Máximo goleador',  topGol,    ' gol' + (topGol && topGol.val === 1 ? '' : 'es'), '#3dcc6e')
+      + _line('⭐',  'MVP',              topMvp,    ' MVP'  + (topMvp && topMvp.val === 1 ? '' : 's'), '#f0c040')
+      + _line('📈', 'Mejor puntuación', topRating, '',                                                  '#5aa9ff');
 
     box.innerHTML = statsRow
       + '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);line-height:1.6;">'

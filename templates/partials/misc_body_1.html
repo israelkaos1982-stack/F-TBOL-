@@ -9474,10 +9474,18 @@ Tottenham
   <div style="text-align:center;padding:14px 0 0;">
     <span id="munich-trofeos-total" style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:6px;color:rgba(240,192,64,.5);">TOTAL: 0</span>
   </div>
-  <div style="display:flex;justify-content:center;padding:6px 0 0;">
+  <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;padding:6px 0 0;">
     <button id="munich-trofeos-add-btn" onclick="window.munichTrofeosPromptAdd && window.munichTrofeosPromptAdd()"
       style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(255,198,77,.35);">
       ➕ AÑADIR TÍTULO
+    </button>
+    <!-- "ELIMINAR TÍTULO" solo visible cuando hay sesión admin abierta
+         (`<body class="adm-on">` lo activa `window.pinOk` tras el PIN
+         747). Al pulsar "AÑADIR" sin sesión, pG dispara el modal del
+         PIN, y una vez introducido este botón aparece automáticamente. -->
+    <button id="munich-trofeos-del-btn" onclick="window.munichTrofeosPromptDelete && window.munichTrofeosPromptDelete()"
+      style="display:none;background:linear-gradient(145deg,#a02030,#5e0c1a);border:1px solid rgba(255,90,90,.55);color:#ffe0e0;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(220,40,60,.35);">
+      🗑 ELIMINAR TÍTULO
     </button>
   </div>
 </div>
@@ -9490,12 +9498,11 @@ Tottenham
   #s-munich-trofeos .ath-titulo-name{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;text-transform:uppercase;}
   #s-munich-trofeos .ath-titulo-sub{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;}
   #s-munich-trofeos .ath-titulo-n{font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;}
-  /* Papelera de eliminar SOLO visible cuando hay sesión admin abierta
-     (`<body class="adm-on">` lo activa `window.pinOk` tras introducir
-     el PIN 747). Sin sesión admin → ni se ve. */
-  #s-munich-trofeos .ath-titulo-del{display:none;position:absolute;top:6px;right:8px;background:rgba(197,15,31,.35);border:1px solid rgba(197,15,31,.55);color:#ffb0b0;border-radius:6px;padding:2px 8px;font-size:11px;letter-spacing:1px;cursor:pointer;font-family:Oswald,sans-serif;}
-  body.adm-on #s-munich-trofeos .ath-titulo-del{display:block;}
-  #s-munich-trofeos .ath-titulo-del:hover{background:rgba(197,15,31,.55);color:#fff;}
+  /* "ELIMINAR TÍTULO" del pie SOLO visible cuando hay sesión admin
+     abierta (`<body class="adm-on">` lo activa `window.pinOk` tras el
+     PIN 747). Sin sesión admin → no se ve, así nada tapa el contador
+     a la derecha de cada fila. */
+  body.adm-on #s-munich-trofeos #munich-trofeos-del-btn{display:inline-flex !important;align-items:center;}
 </style>
 
 <script>
@@ -9561,6 +9568,9 @@ Tottenham
   }
 
   function _rowHtml(t){
+    /* Sin botón 🗑 inline — antes tapaba el número de la derecha. La
+       eliminación se hace ahora desde "🗑 ELIMINAR TÍTULO" del pie,
+       que solo aparece cuando hay sesión admin abierta. */
     return '<div class="ath-titulo-row" data-trofeo-id="'+esc(t.id)+'">'
          +   '<img src="'+esc(t.icon)+'" alt="'+esc(t.title)+'" onerror="this.style.visibility=\'hidden\'">'
          +   '<div class="ath-titulo-info">'
@@ -9568,7 +9578,6 @@ Tottenham
          +     (t.sub ? '<div class="ath-titulo-sub">'+esc(t.sub)+'</div>' : '')
          +   '</div>'
          +   '<span class="ath-titulo-n">'+(t.count|0)+'</span>'
-         +   '<button class="ath-titulo-del" onclick="window.munichTrofeosPromptDelete && window.munichTrofeosPromptDelete(\''+esc(t.id)+'\')" title="Eliminar 1 título">🗑</button>'
          + '</div>';
   }
 
@@ -9639,12 +9648,29 @@ Tottenham
     if (typeof window.pG === 'function') window.pG(doAdd); else doAdd();
   };
 
-  window.munichTrofeosPromptDelete = function(id){
-    if (!id) return;
+  /* Flujo de eliminación: el admin pulsa "🗑 ELIMINAR TÍTULO" (visible
+     solo tras el PIN 747). Se muestra una lista numerada de los
+     trofeos en vitrina y el admin teclea el número del que quiere
+     quitar. Si tiene más de 1 copia, se decrementa; si era el último
+     se elimina la fila entera. */
+  window.munichTrofeosPromptDelete = function(){
     var doDel = function(){
       var arr = load();
-      var victim = arr.filter(function(t){ return t && t.id === id; })[0];
-      if (!victim) return;
+      if (!arr.length){
+        window.alert('La vitrina está vacía — no hay nada que eliminar.');
+        return;
+      }
+      var menu = arr.map(function(t, i){
+        return (i + 1) + ') ' + t.title + (t.count > 1 ? '  ×' + t.count : '');
+      }).join('\n');
+      var raw = window.prompt('🗑  ELIMINAR TÍTULO\n\nEscribe el número del título a quitar:\n\n' + menu + '\n\nDeja vacío para cancelar.', '');
+      if (!raw) return;
+      var idx = parseInt(String(raw).trim(), 10) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= arr.length){
+        window.alert('Número inválido.');
+        return;
+      }
+      var victim = arr[idx];
       var n = victim.count|0;
       var msg = n > 1
         ? '🗑  Quitar 1 « ' + victim.title + ' » (quedarían ' + (n - 1) + ')'
@@ -9653,7 +9679,7 @@ Tottenham
       if (n > 1){
         victim.count = n - 1;
       } else {
-        arr = arr.filter(function(t){ return t && t.id !== id; });
+        arr.splice(idx, 1);
       }
       save(arr);
       render();

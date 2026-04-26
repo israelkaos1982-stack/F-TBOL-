@@ -13478,11 +13478,14 @@ window.goLiveMatches = function() {
         }
         return;
       }
-      /* Partido nuevo (pending) o wrap sin gm-modal activo:
-         - Para Liga (y otras comps que usan gm-modal), abrir con
-           `abrirResultadoLiga(j, home, away)`. Es HvH así que noET=true.
-         - Para wraps concretos (source=wrap), si está en cal-* con
-           mlPreviaClick cableado, hacer click en la tarjeta real.   */
+      /* Partido nuevo (pending): los derbys son HvH por definición,
+         así que SIEMPRE pasan por la previa (Twitch, balón, panel de
+         sancionados/lesionados, compartir WhatsApp). Sin esta llamada
+         la tarjeta saltaba directa al partido — petición usuario. */
+      if (typeof window._openMatchWithPrevia === 'function') {
+        try { window._openMatchWithPrevia(item.j || 0, home, away); return; } catch(_){}
+      }
+      /* Fallback si la previa no está disponible: abrir directo. */
       if (typeof window.abrirResultadoLiga === 'function') {
         try { window.abrirResultadoLiga(item.j || 0, home, away); return; } catch(_){}
       }

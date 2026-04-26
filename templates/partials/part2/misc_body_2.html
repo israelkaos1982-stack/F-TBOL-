@@ -1850,18 +1850,62 @@
       var reg = (window.SQUAD_REGISTRY && window.SQUAD_REGISTRY[team]) || [];
       out = reg.filter(function(p){ return p && !p.h && Array.isArray(p); });
     }
-    /* Último recurso: leer plantilla de ligaExt_liga-ea-sports. */
-    if (!out.length) {
+    /* Escanear TODOS los `ligaExt_*` en localStorage. Antes este
+       paso solo miraba `ligaExt_liga-ea-sports`, así que en
+       amistosos con equipos de Hypermotion o Primera Federación
+       el panel de plantilla salía vacío ("plantilla no cargada
+       aún"). El editor guarda cada liga en su propia clave
+       (`liga-ea-sports`, `liga-hypermotion`,
+       `liga-primera-federacion`, …), así que recorremos todas. */
+    function _scanLocalLigaExt(){
       try {
-        var r = localStorage.getItem('ligaExt_liga-ea-sports');
-        if (r) {
-          var d = JSON.parse(r);
-          var t = (d.teams||[]).filter(function(x){ return normTeam(x.name) === normTeam(team); })[0];
-          if (t && Array.isArray(t.players)) {
-            out = t.players.map(function(p,i){ return [String(p.num||p.id||(i+1)), p.name || '?', p.pos||'M', p.power||70]; });
+        var target = normTeam(team);
+        for (var li = 0; li < localStorage.length; li++){
+          var lk = localStorage.key(li);
+          if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+          if (lk.indexOf('_backup') !== -1) continue;
+          var raw = localStorage.getItem(lk);
+          if (!raw) continue;
+          var data; try { data = JSON.parse(raw); } catch(_e){ continue; }
+          var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+          for (var ti = 0; ti < teams.length; ti++){
+            var t = teams[ti];
+            if (!t || !t.name) continue;
+            if (normTeam(t.name) !== target) continue;
+            var players = Array.isArray(t.players) ? t.players : [];
+            if (!players.length) continue;
+            return players.map(function(p,i){
+              return [String(p.num||p.id||(i+1)), p.name || '?', p.pos||'M', p.power||70];
+            });
           }
         }
       } catch(_){}
+      return [];
+    }
+    if (!out.length) out = _scanLocalLigaExt();
+    /* Último recurso: si ninguna cache local tiene al equipo (típico
+       en dispositivo nuevo donde el usuario nunca abrió el editor),
+       bajar del servidor en sync XHR los slugs conocidos. Tras
+       persistir, volvemos a escanear localmente. Mismo patrón que
+       misc_body_1.html — pero AHORA ataca los tres slugs. */
+    if (!out.length) {
+      var slugs = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion'];
+      for (var si = 0; si < slugs.length && !out.length; si++) {
+        var slug = slugs[si];
+        if (localStorage.getItem('ligaExt_' + slug)) continue; /* ya cubierto por _scanLocalLigaExt */
+        try {
+          var xhrSq = new XMLHttpRequest();
+          xhrSq.open('GET', '/api/liga-ext/' + encodeURIComponent(slug), false);
+          xhrSq.send();
+          if (xhrSq.status === 200) {
+            var respSq = JSON.parse(xhrSq.responseText);
+            if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
+              try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(respSq.data)); } catch(_){}
+              out = _scanLocalLigaExt();
+            }
+          }
+        } catch(_){}
+      }
     }
     return out.filter(function(p){ return p && Array.isArray(p) && p[1]; });
   }
@@ -4704,6 +4748,7 @@
       +'</div>'
       +'<div class="ml-action-row" id="ml-action-row-'+mk+'" style="display:none;">'
         +'<button class="ml-action-add" id="ml-add-btn-'+mk+'" onclick="mlTogglePanelGen(\''+emk+'\')">＋ AÑADIR EVENTO</button>'
+        +'<button class="ml-action-ht" id="ml-btn-ht-'+mk+'" onclick="window.mlForceHalftimeGen(\''+emk+'\')" style="display:none;">🛌 DESCANSO</button>'
         +'<button class="ml-action-end" id="ml-btn-end-'+mk+'" onclick="mlEndMatchGen(\''+emk+'\')">🏁 FINALIZAR</button>'
       +'</div>'
       +'<div class="ml-acta">'
@@ -5626,11 +5671,10 @@
       }
       // Half-time pause at 45' + stoppage 1ª parte
       if (!st.htDone && st.timerSec >= halfMax) {
-        st.htDone = true;
-        /* Amistosos IA vs IA: no mostrar overlay de descanso ni el botón de
-           compartir por WhatsApp. Solo dejamos la marca en el acta y
-           continuamos la simulación, igual que en Liga IA-vs-IA. */
-        if (st.isFriendly && st.isIAvsIA) {
+        /* IA vs IA (amistoso o cualquier otro modo): solo marca y
+           sigue simulando — no hay humano que pulse nada. */
+        if (st.isIAvsIA) {
+          st.htDone = true;
           var listIA = document.getElementById('ml-acta-list-'+mk);
           if (listIA) {
             var mIA = document.createElement('div'); mIA.className='ml-ht'; mIA.textContent='— DESCANSO (45 min) —'; listIA.appendChild(mIA);
@@ -5638,19 +5682,40 @@
           _mlRenderTimerGen(mk);
           return;
         }
-        clearInterval(st.timerInterval); st.timerRunning = false; st.inDescanso = true;
-        var list = document.getElementById('ml-acta-list-'+mk);
-        if (list) {
-          var m = document.createElement('div'); m.className='ml-ht'; m.textContent='— DESCANSO (45 min) —'; list.appendChild(m);
-          var _waWrap = document.createElement('div'); _waWrap.className='ml-ht-wa-wrap';
-          _waWrap.innerHTML='<button class="ml-ht-wa-btn" onclick="window._mlShareHalfTime(\''+mk.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'
-            +'<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
-            +' Compartir descanso</button>';
-          list.appendChild(_waWrap);
+        /* Amistosos HvH/HvIA: auto-descanso ORIGINAL — el flujo
+           amistoso depende de que el descanso llegue solo al 45'.
+           La regla "descanso solo manual" del usuario aplica a Liga
+           / Copa / Europa, no a amistosos. */
+        if (st.isFriendly) {
+          _mlEnterDescansoCore(mk, st);
+          return;
+        }
+        /* Liga / Copa / Europa HvH-HvIA: capamos el reloj en halfMax
+           y paramos el interval. Visualmente "45+N'" se queda
+           congelado hasta que el humano pulsa "🛌 DESCANSO"
+           (mlForceHalftimeGen). Sin parar el interval, el reloj
+           llegaría a 90' y dispararía marcadores de 2ª parte /
+           auto-fin estando todavía en 1ª. Petición usuario: la 1ª
+           parte jamás termina sin pulsar el botón. Reseteamos
+           _wallStart / _gameSecAtStart para que cualquier
+           reanudación posterior anclada en halfMax no salte por el
+           tiempo congelado. */
+        st.timerSec = halfMax;
+        st._wallStart = Date.now();
+        st._gameSecAtStart = halfMax;
+        if (st.timerRunning) {
+          clearInterval(st.timerInterval);
+          st.timerRunning = false;
         }
         _mlRenderTimerGen(mk);
-        _mlShowDescansoOverlay(mk);
-        return;
+      }
+      /* Visibilidad del botón manual de descanso. Aparece a partir
+         del minuto 37 game-time y antes de entrar al descanso /
+         prórroga. Sólo HvH/HvIA de Liga/Copa/Europa — IAvIA y
+         amistosos usan los caminos de arriba. */
+      if (!st.htDone && !st.etDone && !st.matchFinished && !st.isIAvsIA && !st.isFriendly) {
+        var _htBtn = document.getElementById('ml-btn-ht-'+mk);
+        if (_htBtn) _htBtn.style.display = (st.timerSec >= 2220) ? '' : 'none';
       }
       // Stoppage time marker at 90' — muestra el nº de game-minutes
       // añadidos dinámicamente por los eventos de la 2ª parte.
@@ -6282,15 +6347,15 @@
       lbl.innerHTML = def.ico + ' ' + def.lbl;
       row.appendChild(lbl);
       function mkInput(side, v){
-        /* Stats manuales: spinner inline ⊖ [valor] ⊕. Cada toque
-           instantáneamente incrementa o decrementa el valor sin
-           abrir la ruleta nativa del select (que en Android tarda
-           1-2 s en abrir y otro tanto en cerrar). El valor empieza
-           en `def.min` (= 0 en todas las stats salvo posesión, que
-           parte de 50) — petición usuario: "el desplegable de todas
-           tiene que empezar por el numero 0 en cada estadística".
+        /* Stats manuales: tres formas de introducir el valor —
+           (1) ⊖/⊕ para ajustes rápidos, (2) tap en el número para
+           abrir un picker con rejilla de cifras + campo manual,
+           (3) campo manual dentro del picker.
+           El input se monta `readOnly` para que el tap no levante
+           el teclado nativo (que oculta el picker). El picker
+           tiene su propio campo manual donde sí se teclea.
            Stats auto (amarillas, rojas, …) siguen siendo <input
-           readonly> porque el valor viene del acta y no se edita. */
+           readonly sin picker> porque el valor viene del acta. */
         if (!readonly && typeof def.min === 'number' && typeof def.max === 'number') {
           var startN = (v == null || v === '') ? def.min : parseInt(v, 10);
           if (!isFinite(startN)) startN = def.min;
@@ -6304,11 +6369,9 @@
           minus.textContent = '−';
           minus.setAttribute('aria-label', 'Restar');
           var inp = document.createElement('input');
-          inp.type = 'tel'; /* Numeric pad without spinners; permite
-                               teclear directamente además de usar +/−. */
-          inp.inputMode = 'numeric';
-          inp.pattern = '[0-9]*';
-          inp.className = 'ml-stats-val';
+          inp.type = 'text';
+          inp.readOnly = true;          /* sin teclado nativo; el manual va en el picker */
+          inp.className = 'ml-stats-val ml-stats-val-pick';
           inp.value = String(startN);
           inp.setAttribute('data-key', def.key);
           inp.setAttribute('data-side', side);
@@ -6335,12 +6398,14 @@
           }
           minus.addEventListener('click', function(e){ e.preventDefault(); _set(parseInt(inp.value, 10) - 1); });
           plus .addEventListener('click', function(e){ e.preventDefault(); _set(parseInt(inp.value, 10) + 1); });
-          /* Long-press repeat: tras 350ms, sigue restando/sumando
-             cada 90ms. Soltar o salir cancela. */
+          /* Long-press repeat: tras 350 ms, sigue restando/sumando
+             cada 90 ms. CRITICAL: passive:true en touchstart para
+             NO bloquear el `click` que viene después en móvil.
+             Antes hacíamos preventDefault aquí y el tap simple no
+             incrementaba en Android. */
           function _holdRepeat(btn, dir){
             var t1, t2;
-            function start(e){
-              e.preventDefault();
+            function start(){
               t1 = setTimeout(function(){
                 t2 = setInterval(function(){ _set(parseInt(inp.value, 10) + dir); }, 90);
               }, 350);
@@ -6350,15 +6415,19 @@
               if (t2) { clearInterval(t2); t2 = null; }
             }
             btn.addEventListener('mousedown', start);
-            btn.addEventListener('touchstart', start, { passive: false });
+            btn.addEventListener('touchstart', start, { passive: true });
             ['mouseup','mouseleave','touchend','touchcancel'].forEach(function(ev){
               btn.addEventListener(ev, stop);
             });
           }
           _holdRepeat(minus, -1);
           _holdRepeat(plus,   1);
-          /* Validar al terminar de teclear directamente. */
-          inp.addEventListener('blur', function(){ _set(parseInt(inp.value, 10)); });
+          /* Tap en el número → abre picker. */
+          inp.addEventListener('click', function(){
+            if (typeof window._mlOpenStatsPicker === 'function') {
+              window._mlOpenStatsPicker(inp, def);
+            }
+          });
           wrap.appendChild(minus);
           wrap.appendChild(inp);
           wrap.appendChild(plus);
@@ -6944,6 +7013,52 @@
     try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
   }
 
+  /* Entrada al descanso compartida por la ruta manual (botón
+     "🛌 DESCANSO" del action bar) y la ruta automática que sólo
+     usa IAvIA. Mete la marca en el acta, capa el reloj al tope
+     dinámico de la 1ª parte (45+stoppage), pausa el timer y abre
+     el overlay. Idempotente. */
+  function _mlEnterDescansoCore(mk, st) {
+    if (!st || st.htDone || st.matchFinished) return;
+    var stops = (typeof _mlCountStoppageHalves === 'function')
+                  ? _mlCountStoppageHalves(st) : { first: 0, second: 0 };
+    var halfMax = 2700 + (stops.first || 0) * 60;
+    if (st.timerSec > halfMax) st.timerSec = halfMax;
+    st.htDone = true;
+    clearInterval(st.timerInterval);
+    st.timerRunning = false;
+    st.inDescanso = true;
+    var list = document.getElementById('ml-acta-list-'+mk);
+    if (list) {
+      var m = document.createElement('div');
+      m.className = 'ml-ht';
+      m.textContent = '— DESCANSO (45 min) —';
+      list.appendChild(m);
+      var _waWrap = document.createElement('div');
+      _waWrap.className = 'ml-ht-wa-wrap';
+      _waWrap.innerHTML = '<button class="ml-ht-wa-btn" onclick="window._mlShareHalfTime(\''+mk.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'
+        +'<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
+        +' Compartir descanso</button>';
+      list.appendChild(_waWrap);
+    }
+    var htBtn = document.getElementById('ml-btn-ht-'+mk);
+    if (htBtn) htBtn.style.display = 'none';
+    _mlRenderTimerGen(mk);
+    _mlShowDescansoOverlay(mk);
+  }
+
+  /* Botón manual: el usuario fuerza el descanso desde el min 37
+     game-time. Mismo patrón que window.gmForceHalftime para gm-modal.
+     En HvH/HvIA es la ÚNICA forma de entrar al descanso — el
+     auto-trigger ya no dispara para humanos. */
+  window.mlForceHalftimeGen = function(mk) {
+    var st = _mlSt(mk);
+    if (!st) return;
+    if (st.htDone || st.matchFinished || st.etDone) return;
+    if (st.timerSec < 2220) return; /* min 37' game-time */
+    _mlEnterDescansoCore(mk, st);
+  };
+
   /* Show the halftime blocking overlay */
   function _mlShowDescansoOverlay(mk) {
     var st = _mlSt(mk);
@@ -7015,6 +7130,17 @@
         st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk);
         _mlUpdateAplazarBtn(mk);
       }
+      /* Quitar el botón "Compartir descanso" del acta — la 2ª parte
+         ya empezó y ese CTA pertenece al medio tiempo. Si no lo
+         retiramos, sigue visible hasta el final del partido. */
+      try {
+        var acta = document.getElementById('ml-acta-list-' + mk);
+        if (acta) {
+          acta.querySelectorAll('.ml-ht-wa-wrap').forEach(function(n){
+            try { n.parentNode.removeChild(n); } catch(_){}
+          });
+        }
+      } catch(_){}
     }
   };
 
@@ -7699,8 +7825,15 @@
       var gmStops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
       var gmHalfMax = 2700 + (gmStops.first || 0) * 60;
       var max = _gm.etDone ? GM_MAX_ET : (GM_MAX_NORMAL + (gmStops.second || 0) * 60);
-      /* Descanso automático al llegar al tope dinámico de la 1ª parte */
-      if (!_gm.htDone && _gm.timerSec >= gmHalfMax) {
+      /* Descanso automático: SOLO si no hay humano implicado. En la
+         práctica gm-modal sólo se usa en HvH/HvIA (IAvIA va por el
+         flujo ml-wrap), así que esto es un no-op de seguridad: el
+         humano debe pulsar el botón "🛌 DESCANSO" (gm-btn-force-ht).
+         Petición usuario: la 1ª parte jamás termina sin pulsar el
+         botón en partidos con humano. */
+      var _gmHasHuman = !!_gm.isHvH
+        || (typeof esHumano === 'function' && (esHumano(_gm.home) || esHumano(_gm.away)));
+      if (!_gm.htDone && _gm.timerSec >= gmHalfMax && !_gmHasHuman) {
         _gmEnterHalftime();
         return;
       }
@@ -8981,7 +9114,14 @@
     if (gmPP) gmPP.style.display = 'none';
     var etBtn = document.getElementById('gm-btn-et');
     if (etBtn) {
-      etBtn.style.display = (_gm.isHvH && !_gm.noET) ? '' : 'none';
+      /* Liga (comp == '') NUNCA tiene prórroga, ni siquiera en HvH —
+         empate es resultado válido. Endurecemos con `_gm.comp` para
+         blindarnos de snapshots antiguos en _gmBg que no llevan
+         serializado `noET` (volvía a aparecer el botón al reabrir
+         desde la caja Derbys). */
+      var _isLiga = !_gm.comp;
+      var _showET = _gm.isHvH && !_gm.noET && !_isLiga;
+      etBtn.style.display = _showET ? '' : 'none';
       etBtn.disabled = !!_gm.etDone;
       etBtn.style.opacity = _gm.etDone ? '0.35' : '1';
     }
@@ -11124,6 +11264,97 @@
   </div>
 </div>
 
+<!-- ══ PICKER de números para las stats — desplegable + manual ══════
+     Modal compartido entre todas las filas. Se rellena en
+     `_mlOpenStatsPicker(inp, def)` con el rango def.min..def.max y
+     se cierra al elegir un número o pulsar OK del manual. -->
+<div id="ml-stats-picker-ov" class="ml-stats-picker-ov">
+  <div class="ml-stats-picker-card">
+    <div class="ml-stats-picker-title" id="ml-stats-picker-title">Selecciona un valor</div>
+    <div class="ml-stats-picker-manual-row">
+      <input type="tel" inputmode="numeric" pattern="[0-9]*" id="ml-stats-picker-manual" placeholder="Manual…" autocomplete="off"/>
+      <button type="button" class="ml-stats-picker-ok" id="ml-stats-picker-ok">OK</button>
+    </div>
+    <div class="ml-stats-picker-grid" id="ml-stats-picker-grid"></div>
+    <button type="button" class="ml-stats-picker-cancel" id="ml-stats-picker-cancel">Cancelar</button>
+  </div>
+</div>
+<style>
+.ml-stats-picker-ov{display:none;position:fixed;inset:0;z-index:10040;background:rgba(0,0,6,.85);align-items:center;justify-content:center;padding:14px;}
+.ml-stats-picker-ov.show{display:flex;}
+.ml-stats-picker-card{width:100%;max-width:340px;border-radius:14px;border:1px solid rgba(90,169,255,.4);background:linear-gradient(170deg,#06101c,#0d1a2a);padding:14px 12px 12px;box-shadow:0 0 30px rgba(90,169,255,.18),0 6px 24px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:10px;}
+.ml-stats-picker-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2.5px;color:#5aa9ff;text-align:center;font-weight:700;}
+.ml-stats-picker-manual-row{display:flex;gap:6px;}
+#ml-stats-picker-manual{flex:1;border:2px solid rgba(90,169,255,.4);background:rgba(0,0,0,.45);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:20px;font-weight:700;text-align:center;letter-spacing:1px;border-radius:8px;padding:8px 4px;outline:none;min-width:0;}
+#ml-stats-picker-manual:focus{border-color:#5aa9ff;box-shadow:0 0 0 3px rgba(90,169,255,.25);}
+.ml-stats-picker-ok{flex:0 0 auto;width:54px;border-radius:8px;border:1.5px solid rgba(61,204,110,.55);background:rgba(61,204,110,.18);color:#b7f5c7;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;}
+.ml-stats-picker-ok:active{transform:scale(.95);}
+.ml-stats-picker-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;max-height:48vh;overflow-y:auto;padding:4px 2px;}
+.ml-stats-picker-num{border:1.5px solid rgba(90,169,255,.35);background:rgba(0,0,0,.4);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;font-weight:700;padding:8px 0;border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:rgba(90,169,255,.3);touch-action:manipulation;}
+.ml-stats-picker-num:active{transform:scale(.94);background:rgba(90,169,255,.25);}
+.ml-stats-picker-num.selected{border-color:#5aa9ff;background:rgba(90,169,255,.28);box-shadow:0 0 0 2px rgba(90,169,255,.25);}
+.ml-stats-picker-cancel{width:100%;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.6);font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;padding:10px;cursor:pointer;}
+.ml-stats-picker-cancel:hover{background:rgba(255,255,255,.08);color:#fff;}
+.ml-stats-val-pick{cursor:pointer;}
+@media (max-width:380px){
+  .ml-stats-picker-grid{grid-template-columns:repeat(5,1fr);}
+}
+</style>
+<script>
+(function(){
+  function _close(){ var ov=document.getElementById('ml-stats-picker-ov'); if(ov) ov.classList.remove('show'); }
+  window._mlOpenStatsPicker = function(inp, def){
+    var ov = document.getElementById('ml-stats-picker-ov');
+    if (!ov) return;
+    var titleEl  = document.getElementById('ml-stats-picker-title');
+    var manualEl = document.getElementById('ml-stats-picker-manual');
+    var gridEl   = document.getElementById('ml-stats-picker-grid');
+    var okBtn    = document.getElementById('ml-stats-picker-ok');
+    var cancelBtn= document.getElementById('ml-stats-picker-cancel');
+    var min = (typeof def.min === 'number') ? def.min : 0;
+    var max = (typeof def.max === 'number') ? def.max : 99;
+    var lbl = (def.lbl || '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 %()]/g,'').trim();
+    titleEl.textContent = lbl || 'Selecciona un valor';
+    manualEl.value = inp.value || String(min);
+    /* Construir rejilla de números clicables. */
+    var html = '';
+    for (var n = min; n <= max; n++) {
+      html += '<button type="button" class="ml-stats-picker-num'
+            + (String(n) === String(inp.value) ? ' selected' : '')
+            + '" data-n="' + n + '">' + n + '</button>';
+    }
+    gridEl.innerHTML = html;
+    function _commit(n){
+      var v = parseInt(n, 10);
+      if (!isFinite(v)) return;
+      if (v < min) v = min;
+      if (v > max) v = max;
+      inp.value = String(v);
+      inp.dispatchEvent(new Event('input',  { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+      _close();
+    }
+    /* Tap en un número → fija + cierra. */
+    gridEl.querySelectorAll('.ml-stats-picker-num').forEach(function(btn){
+      btn.onclick = function(){ _commit(btn.getAttribute('data-n')); };
+    });
+    okBtn.onclick = function(){ _commit(manualEl.value); };
+    manualEl.onkeydown = function(e){ if (e.key === 'Enter') _commit(manualEl.value); };
+    cancelBtn.onclick = _close;
+    /* Click fuera de la tarjeta → cerrar. */
+    ov.onclick = function(e){ if (e.target === ov) _close(); };
+    ov.classList.add('show');
+    /* Auto-scroll al número seleccionado para verlo de inmediato. */
+    setTimeout(function(){
+      var sel = gridEl.querySelector('.ml-stats-picker-num.selected');
+      if (sel && typeof sel.scrollIntoView === 'function') {
+        try { sel.scrollIntoView({ block: 'center' }); } catch(_){}
+      }
+    }, 30);
+  };
+})();
+</script>
+
 <!-- ── OVERLAY DESCANSO (45 min) ──────────────────────────── -->
 <div id="ml-descanso-ov" class="ml-descanso-ov">
   <div class="ml-descanso-card">
@@ -11283,26 +11514,27 @@
 .ml-stats-score-box{display:flex;align-items:center;gap:10px;font-family:'Bebas Neue',sans-serif;font-size:36px;color:#fff;}
 .ml-stats-dash{opacity:.5;}
 .ml-stats-grid{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;}
-.ml-stats-row{display:grid;grid-template-columns:1fr 46px 1fr;align-items:center;gap:12px;padding:10px 8px;background:rgba(255,255,255,.04);border-radius:12px;border:1px solid rgba(255,255,255,.05);}
-.ml-stats-row-lbl{grid-column:1 / -1;text-align:center;font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:3px;color:#fff;padding-bottom:6px;font-weight:700;}
-.ml-stats-ico{text-align:center;font-size:26px;line-height:1;}
-.ml-stats-val{border:2px solid rgba(90,169,255,.45);background:rgba(0,0,0,.45);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:30px;font-weight:700;text-align:center;letter-spacing:2px;border-radius:12px;padding:14px 8px;width:100%;outline:none;min-width:0;min-height:60px;cursor:pointer;-webkit-appearance:none;appearance:none;text-align-last:center;-webkit-tap-highlight-color:rgba(90,169,255,.3);transition:border-color .15s,box-shadow .15s,background .15s;}
+.ml-stats-row{display:grid;grid-template-columns:1fr 38px 1fr;align-items:center;gap:8px;padding:8px 6px;background:rgba(255,255,255,.04);border-radius:12px;border:1px solid rgba(255,255,255,.05);}
+.ml-stats-row-lbl{grid-column:1 / -1;text-align:center;font-family:'Bebas Neue','Oswald',sans-serif;font-size:16px;letter-spacing:2.5px;color:#fff;padding-bottom:4px;font-weight:700;}
+.ml-stats-ico{text-align:center;font-size:20px;line-height:1;}
+.ml-stats-val{border:2px solid rgba(90,169,255,.45);background:rgba(0,0,0,.45);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:22px;font-weight:700;text-align:center;letter-spacing:1px;border-radius:8px;padding:6px 4px;width:100%;outline:none;min-width:0;min-height:40px;cursor:pointer;-webkit-appearance:none;appearance:none;text-align-last:center;-webkit-tap-highlight-color:rgba(90,169,255,.3);transition:border-color .15s,box-shadow .15s,background .15s;}
 .ml-stats-val:focus,.ml-stats-val:active{border-color:#5aa9ff;box-shadow:0 0 0 3px rgba(90,169,255,.25);background:rgba(0,0,0,.6);}
-.ml-stats-val.readonly{opacity:.9;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);cursor:default;font-size:28px;}
+.ml-stats-val.readonly{opacity:.9;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);cursor:default;font-size:20px;}
 /* Spinner inline ⊖ [valor] ⊕ — sustituye al <select> nativo (lento
    en Android). Toques son instantáneos y permiten teclear directo. */
-.ml-stats-spin{display:flex;align-items:center;gap:6px;width:100%;}
-.ml-stats-spin .ml-stats-val{flex:1;padding:14px 4px;font-size:28px;letter-spacing:1px;}
-.ml-stats-spin-btn{flex:0 0 auto;width:46px;height:60px;border-radius:10px;border:2px solid rgba(90,169,255,.45);background:rgba(0,0,0,.5);color:#fff;font-size:26px;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(90,169,255,.3);user-select:none;-webkit-user-select:none;touch-action:manipulation;}
+.ml-stats-spin{display:flex;align-items:center;gap:4px;width:100%;}
+.ml-stats-spin .ml-stats-val{flex:1 1 auto;padding:6px 2px;font-size:22px;letter-spacing:1px;min-width:34px;min-height:40px;border-radius:6px;}
+.ml-stats-spin-btn{flex:0 0 auto;width:32px;height:40px;border-radius:6px;border:1.5px solid rgba(90,169,255,.45);background:rgba(0,0,0,.5);color:#fff;font-size:18px;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:rgba(90,169,255,.3);user-select:none;-webkit-user-select:none;touch-action:manipulation;padding:0;}
 .ml-stats-spin-btn:active{transform:scale(.94);background:rgba(90,169,255,.25);border-color:#5aa9ff;}
-/* Móvil: tap-target todavía más grande para dedos */
+/* Móvil: layout compacto pero con tap-target usable. */
 @media (max-width:480px){
-  .ml-stats-val{font-size:32px;min-height:64px;padding:16px 8px;}
-  .ml-stats-row-lbl{font-size:19px;letter-spacing:3px;}
-  .ml-stats-ico{font-size:28px;}
-  .ml-stats-row{gap:14px;padding:12px 8px;}
-  .ml-stats-spin-btn{width:48px;height:64px;font-size:28px;}
-  .ml-stats-spin .ml-stats-val{font-size:30px;}
+  .ml-stats-val{font-size:22px;min-height:42px;padding:6px 4px;}
+  .ml-stats-row-lbl{font-size:16px;letter-spacing:2.5px;}
+  .ml-stats-ico{font-size:22px;}
+  .ml-stats-row{gap:8px;padding:8px 6px;grid-template-columns:1fr 36px 1fr;}
+  .ml-stats-spin{gap:4px;}
+  .ml-stats-spin-btn{width:34px;height:42px;font-size:20px;}
+  .ml-stats-spin .ml-stats-val{font-size:24px;min-height:42px;min-width:36px;}
 }
 .ml-stats-confirm{width:100%;border:none;border-radius:12px;padding:16px;background:linear-gradient(135deg,#1b4a82,#3777c7);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:3px;cursor:pointer;transition:filter .15s,transform .1s;box-shadow:0 4px 16px rgba(55,119,199,.35);}
 .ml-stats-confirm:hover{filter:brightness(1.1);}
@@ -11327,11 +11559,12 @@
 .ml-venue-ball{font-family:"Oswald",sans-serif;font-size:11.5px;font-weight:700;letter-spacing:1px;color:rgba(255,210,90,.9);white-space:nowrap;flex-shrink:1;overflow:hidden;text-overflow:ellipsis;max-width:38vw;}
 /* ── Botones acción partido ─────────────────────────────────── */
 .ml-action-row{display:none;gap:6px;padding:6px 10px 4px;}
-.ml-action-add,.ml-action-end{flex:1;border:none;border-radius:8px;padding:9px 6px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.2px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:filter .15s,opacity .15s;}
+.ml-action-add,.ml-action-end,.ml-action-ht{flex:1;border:none;border-radius:8px;padding:9px 6px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.2px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:filter .15s,opacity .15s;}
 .ml-action-add{background:linear-gradient(135deg,#1a3a6a,#1e4fa0);color:#a8d0ff;box-shadow:0 2px 8px rgba(30,79,160,.4);}
+.ml-action-ht{background:linear-gradient(135deg,#6a4a1a,#c08c20);color:#ffe2a0;box-shadow:0 2px 8px rgba(192,140,32,.4);}
 .ml-action-end{background:linear-gradient(135deg,#6a1a1a,#b02020);color:#ffd0d0;box-shadow:0 2px 8px rgba(176,32,32,.4);}
-.ml-action-add:hover,.ml-action-end:hover{filter:brightness(1.15);}
-.ml-action-add:disabled,.ml-action-end:disabled{opacity:0.35;cursor:default;filter:none;}
+.ml-action-add:hover,.ml-action-end:hover,.ml-action-ht:hover{filter:brightness(1.15);}
+.ml-action-add:disabled,.ml-action-end:disabled,.ml-action-ht:disabled{opacity:0.35;cursor:default;filter:none;}
 /* ── Eventos del acta ────────────────────────────────────────── */
 .ml-evt-item{padding-left:10px!important;}
 .ml-evt-team{font-size:11px;color:rgba(255,255,255,.45);font-family:"Rajdhani",sans-serif;white-space:nowrap;}
@@ -12289,8 +12522,46 @@ if (!document.getElementById('live-hub-css')) {
    - Re-pinta la pantalla LIVE.
    Se usa desde la papelera de las live-cards y desde el botón 🗑 que
    ahora añadimos al wrap del partido. */
+/* ── Lista de basura PERSISTENTE para el hub LIVE ────────────────
+   Cuando el usuario pulsa la papelera, marcamos la clave aquí
+   ANTES de hacer cualquier otra cosa. El poll cada 5 s rehidrata
+   entradas desde el servidor (por defecto un overwrite directo
+   en _gmBg / _mlStates) — sin esta lista, una entrada borrada
+   localmente vuelve a aparecer en cuanto el servidor responde
+   con un snapshot anterior. Aquí tenemos un veto local que
+   dura 24 h: el rehydrate y el render del hub la ignoran.
+   Las claves usadas son:
+     • mid de ml-wrap (p.ej. "j23m1") para tarjetas de calendario
+     • bgKey de gm-modal ("23|Arsenal|Atléti") para tarjetas de
+       gmBg / __GM_LIVE                                            */
+(function(){
+  var KEY = '_trashedLiveV1';
+  var TTL_MS = 24 * 60 * 60 * 1000;
+  function _load() {
+    try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; }
+    catch(_) { return {}; }
+  }
+  function _save(s) {
+    try { localStorage.setItem(KEY, JSON.stringify(s || {})); } catch(_){}
+  }
+  window._mlMarkTrashed = function(k) {
+    if (!k) return;
+    var s = _load(); s[String(k)] = Date.now(); _save(s);
+  };
+  window._mlIsTrashed = function(k) {
+    if (!k) return false;
+    var s = _load(); var ts = s[String(k)];
+    if (!ts) return false;
+    if (Date.now() - ts > TTL_MS) { delete s[String(k)]; _save(s); return false; }
+    return true;
+  };
+})();
+
 window._mlForceFinishMatch = function(mk) {
   if (!mk) return;
+  /* Marcar trashed PRIMERO — si el poll dispara entre el flush y la
+     pintada, _isTrashed evita que la entrada se rehidrate. */
+  try { window._mlMarkTrashed(mk); } catch(_){}
   try {
     var states = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : {};
     var st = states[mk];
@@ -12659,6 +12930,16 @@ function buildGmLiveCard(gm, bgKey) {
   trash.addEventListener('click', function(e){
     e.stopPropagation(); e.preventDefault();
     if (!confirm('¿Eliminar este partido en directo? El cronómetro se detiene y la tarjeta desaparece de PARTIDOS LIVE.')) return;
+    /* Marcar trashed PRIMERO. Sin esto, el poll de _gmBg overwrite
+       (línea ~14335) volvía a pintar la tarjeta en cuanto el
+       snapshot del servidor refrescase. */
+    try {
+      var _trashKey = bgKey || (function(){
+        var g = window.__GM_LIVE;
+        return g ? ((g.j||0)+'|'+(g.home||'')+'|'+(g.away||'')) : '';
+      })();
+      if (_trashKey) window._mlMarkTrashed(_trashKey);
+    } catch(_){}
     /* Para gm-live: primero marcamos finished (propaga al servidor
        durante el grace period) y luego BORRAMOS la entrada local de
        _gmBg. Si solo marcábamos finished, la entrada seguía viva en
@@ -12713,18 +12994,73 @@ function buildLiveScreen() {
   var esH = (typeof window.esHumano === 'function') ? window.esHumano : null;
   var wraps = document.querySelectorAll('.match-live-wrap.hvh, .match-live-wrap.hvia');
   var liveWraps = [];
+  /* Helper interno: limpia el wrap visualmente para que NUNCA más
+     vuelva a colarse como live. Quita state-playing, marca el state
+     como finished, oculta action bar. Idempotente. */
+  function _hardCleanupLiveWrap(w, scoreEl, st) {
+    try {
+      if (scoreEl) {
+        scoreEl.classList.remove('state-playing');
+        scoreEl.classList.add('state-finished');
+      }
+      if (st) {
+        if (st.timerInterval) { try { clearInterval(st.timerInterval); } catch(_){} st.timerInterval = null; }
+        st.timerRunning = false;
+        st.finished = true;
+        st._finishPropagatedAt = st._finishPropagatedAt || Date.now();
+      }
+      var actBar = w.querySelector('.ml-match-actions, .ml-action-row');
+      if (actBar) actBar.style.visibility = 'hidden';
+      var btnTimer = w.querySelector('.ml-timer');
+      if (btnTimer && !btnTimer.classList.contains('finished')) {
+        btnTimer.textContent = '🏁 FIN';
+        btnTimer.className = 'ml-timer finished';
+      }
+    } catch(_){}
+  }
+
   wraps.forEach(function(w) {
     var scoreEl = w.querySelector('.ml-score');
     if (!scoreEl || !scoreEl.classList.contains('state-playing')) return;
-    /* Excluir partidos cuyo cronómetro ya alcanzó el tope o nunca
-       arrancó. El usuario considera "fuera del LIVE" tanto los que
-       están a 90+ pendientes de FINALIZAR como los amistosos que se
-       crearon sin pulsar nunca ▶. */
+    var _wrapMk = w.id ? w.id.replace(/^mlw-/, '') : '';
+    var _wrapSt = (_wrapMk && typeof window._mlGetState === 'function') ? window._mlGetState(_wrapMk) : null;
+
+    /* Trashed manualmente → cleanup duro y fuera. */
     try {
-      var _wrapMk = w.id ? w.id.replace(/^mlw-/, '') : '';
-      var _wrapSt = (typeof window._mlGetState === 'function') ? window._mlGetState(_wrapMk) : null;
-      if (_wrapSt && _gmTimerExhausted(_wrapSt)) return;
-      if (_wrapSt && _wrapNeverStarted(_wrapSt)) return;
+      if (_wrapMk && typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(_wrapMk)) {
+        _hardCleanupLiveWrap(w, scoreEl, _wrapSt);
+        return;
+      }
+    } catch(_){}
+
+    /* Estado.finished o sin kickoff → no es live. Hard-cleanup para
+       que el state-playing residual NO vuelva a colar la card. */
+    if (_wrapSt && (_wrapSt.finished || !_wrapSt.kickoffDone)) {
+      _hardCleanupLiveWrap(w, scoreEl, _wrapSt);
+      return;
+    }
+
+    /* loadResults() ya tiene marcador guardado para este (j,home,away)
+       → el partido está oficialmente finalizado, aunque el wrap siga
+       con state-playing por una sesión obsoleta o un poll que pintó
+       un snapshot antiguo. Fuente de verdad: loadResults. */
+    try {
+      if (_wrapSt && _wrapSt.j && _wrapSt.home && _wrapSt.away
+          && typeof _gmMatchIsAlreadyFinished === 'function'
+          && _gmMatchIsAlreadyFinished(_wrapSt.j, _wrapSt.home, _wrapSt.away)) {
+        _hardCleanupLiveWrap(w, scoreEl, _wrapSt);
+        return;
+      }
+    } catch(_){}
+
+    /* Excluir partidos cuyo cronómetro ya alcanzó el tope (90+stoppage
+       o 120+stoppage en prórroga). El usuario los considera
+       "finalizados" aunque aún no haya pulsado FINALIZAR. */
+    try {
+      if (_wrapSt && _gmTimerExhausted(_wrapSt)) {
+        _hardCleanupLiveWrap(w, scoreEl, _wrapSt);
+        return;
+      }
     } catch(_){}
     if (esH) {
       /* Los nombres en `.ml-team-name` vienen en MAYÚSCULAS
@@ -12734,8 +13070,8 @@ function buildLiveScreen() {
          Resolvemos los nombres canónicos desde el registro _mlStates
          a partir del id `mlw-{mk}`. Como fallback tolerante a
          mayúsculas, comparamos con HUMANOS case-insensitive. */
-      var mk = w.id ? w.id.replace(/^mlw-/, '') : '';
-      var st = (typeof window._mlGetState === 'function') ? window._mlGetState(mk) : null;
+      var mk = _wrapMk;
+      var st = _wrapSt;
       var hName, aName;
       if (st && st.home && st.away) {
         hName = st.home;
@@ -12764,6 +13100,13 @@ function buildLiveScreen() {
      competición que haya usado gmVolver para salir del modal) */
   var gmLive = (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone)
     ? window.__GM_LIVE : null;
+  /* Si el usuario lo había marcado como basura, no lo mostramos. */
+  try {
+    if (gmLive && typeof window._mlIsTrashed === 'function') {
+      var _gKey = (gmLive.j||0)+'|'+(gmLive.home||'')+'|'+(gmLive.away||'');
+      if (window._mlIsTrashed(_gKey)) gmLive = null;
+    }
+  } catch(_){}
 
   /* Helper: un partido con marcador guardado en `loadResults()` está
      por definición FINALIZADO, aunque por alguna razón su snapshot
@@ -12842,6 +13185,11 @@ function buildLiveScreen() {
     Object.keys(window._gmBg).forEach(function(k){
       var snap = window._gmBg[k];
       if (!snap || snap.finished || !snap.kickoffDone) return;
+      /* Marcado como basura por el usuario → fuera y borrar local. */
+      if (typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(k)) {
+        try { delete window._gmBg[k]; } catch(_){}
+        return;
+      }
       /* Snapshot fantasma: hay resultado guardado para este j|home|
          away en loadResults() → el partido ya terminó, aunque este
          snapshot diga otra cosa. Borramos la entrada y continuamos. */
@@ -13570,11 +13918,14 @@ window.goLiveMatches = function() {
         }
         return;
       }
-      /* Partido nuevo (pending) o wrap sin gm-modal activo:
-         - Para Liga (y otras comps que usan gm-modal), abrir con
-           `abrirResultadoLiga(j, home, away)`. Es HvH así que noET=true.
-         - Para wraps concretos (source=wrap), si está en cal-* con
-           mlPreviaClick cableado, hacer click en la tarjeta real.   */
+      /* Partido nuevo (pending): los derbys son HvH por definición,
+         así que SIEMPRE pasan por la previa (Twitch, balón, panel de
+         sancionados/lesionados, compartir WhatsApp). Sin esta llamada
+         la tarjeta saltaba directa al partido — petición usuario. */
+      if (typeof window._openMatchWithPrevia === 'function') {
+        try { window._openMatchWithPrevia(item.j || 0, home, away); return; } catch(_){}
+      }
+      /* Fallback si la previa no está disponible: abrir directo. */
       if (typeof window.abrirResultadoLiga === 'function') {
         try { window.abrirResultadoLiga(item.j || 0, home, away); return; } catch(_){}
       }
@@ -13956,6 +14307,9 @@ window.goLiveMatches = function() {
      el DOM con el estado restaurado. */
   function _rehydrateMlEntry(mk, saved) {
     if (!mk || !saved) return;
+    /* Si el usuario lo mandó a la papelera, NUNCA rehidratar — el
+     veto local supera cualquier snapshot vivo del servidor. */
+    if (typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(mk)) return;
     /* 1) Asegurar que existe la tarjeta en el DOM */
     var wrap = document.getElementById('mlw-' + mk);
     var isAms = mk.indexOf('ams-') === 0;
@@ -14230,6 +14584,11 @@ window.goLiveMatches = function() {
     if (data.gmBg) {
       Object.keys(data.gmBg).forEach(function(k){
         var bgSnap = data.gmBg[k];
+        /* Trashed por el usuario → no rehidratar, no recrear. */
+        if (typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(k)) {
+          try { delete window._gmBg[k]; } catch(_){}
+          return;
+        }
         if (bgSnap && bgSnap.finished) {
           /* gm-modal finalizado en otro dispositivo → borrar local. */
           try { delete window._gmBg[k]; } catch(_){}
@@ -15957,6 +16316,100 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
     obs.observe(document.body, { childList:true, subtree:true, attributes:true, attributeFilter:['style','class'] });
+  } catch(_){}
+})();
+</script>
+
+<!-- ── Spinner de "Procesando…" tras FINALIZAR ───────────────────
+     El cierre del partido encadena overlays (stats → MVP → post)
+     y entre uno y otro pueden pasar 1-5 s sin nada visible en
+     pantalla, lo que hacía pensar al usuario que la app se había
+     bloqueado. Mostramos este spinner inmediatamente al pulsar
+     FINALIZAR / CONFIRMAR y lo ocultamos en cuanto aparece
+     cualquier overlay (.show) o tras un timeout de seguridad. -->
+<div id="ml-loading-ov" aria-hidden="true">
+  <div class="ml-loading-card">
+    <div class="ml-loading-spinner"></div>
+    <div class="ml-loading-text" id="ml-loading-text">Procesando partido…</div>
+  </div>
+</div>
+<style>
+#ml-loading-ov{display:none;position:fixed;inset:0;z-index:100020;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;}
+#ml-loading-ov.show{display:flex;}
+#ml-loading-ov .ml-loading-card{display:flex;flex-direction:column;align-items:center;gap:16px;padding:26px 30px;background:linear-gradient(170deg,#0b1320,#101a2e);border:1px solid rgba(240,192,64,.4);border-radius:14px;box-shadow:0 0 32px rgba(0,0,0,.7),0 0 24px rgba(240,192,64,.18);}
+#ml-loading-ov .ml-loading-spinner{width:42px;height:42px;border-radius:50%;border:3px solid rgba(240,192,64,.18);border-top-color:#f0c040;animation:mlLoadSpin .85s linear infinite;}
+@keyframes mlLoadSpin{to{transform:rotate(360deg)}}
+#ml-loading-ov .ml-loading-text{font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;color:#f0c040;text-align:center;text-transform:uppercase;}
+</style>
+<script>
+(function(){
+  var ov, _safety, _tHide;
+  function _el(){ ov = ov || document.getElementById('ml-loading-ov'); return ov; }
+  function _show(text){
+    var e = _el(); if (!e) return;
+    if (text) {
+      var tEl = document.getElementById('ml-loading-text');
+      if (tEl) tEl.textContent = text;
+    }
+    e.classList.add('show');
+    /* Timeout de seguridad: si por algún motivo ningún overlay
+       siguiente aparece, cerramos el spinner a los 8 s. */
+    if (_safety) clearTimeout(_safety);
+    _safety = setTimeout(_hide, 8000);
+  }
+  function _hide(){
+    var e = _el(); if (!e) return;
+    e.classList.remove('show');
+    if (_safety) { clearTimeout(_safety); _safety = null; }
+  }
+  window._mlShowLoading = _show;
+  window._mlHideLoading = _hide;
+
+  /* Hook automático: cualquier botón de FINALIZAR / CONFIRMAR del
+     flujo post-partido dispara el spinner. Usamos delegación en
+     body para no atarnos a IDs concretos (varios botones por
+     partido + recarga del DOM). */
+  function _isFinalizeBtn(t){
+    if (!t || !t.id) return false;
+    var id = t.id;
+    return /^ml-btn-end-/.test(id)
+        || id === 'gm-btn-end'
+        || id === 'ml-stats-confirm-btn'
+        || id === 'ml-post-close-btn';
+  }
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    while (t && t !== document.body) {
+      if (_isFinalizeBtn(t)) {
+        if (t.id === 'ml-post-close-btn') { _hide(); return; }
+        _show('Procesando partido…');
+        return;
+      }
+      t = t.parentNode;
+    }
+  }, true);
+
+  /* En cuanto cualquier overlay relevante gana .show, ocultamos
+     el spinner — la siguiente pantalla está lista. */
+  var TARGETS = ['ml-stats-ov','ml-post-ov','gm-post-ov','mvp-force-overlay','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live'];
+  function _scanShown(root){
+    if (!root || root.nodeType !== 1) return false;
+    for (var i = 0; i < TARGETS.length; i++) {
+      var el = (root.id === TARGETS[i]) ? root : root.querySelector ? root.querySelector('#' + TARGETS[i] + '.show') : null;
+      if (el && el.classList && el.classList.contains('show')) return true;
+    }
+    return false;
+  }
+  try {
+    var obs2 = new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++) {
+        var m = muts[i];
+        if (m.type === 'attributes' && m.target && m.target.id && TARGETS.indexOf(m.target.id) !== -1) {
+          if (m.target.classList && m.target.classList.contains('show')) { _hide(); return; }
+        }
+      }
+    });
+    obs2.observe(document.body, { subtree:true, attributes:true, attributeFilter:['class'] });
   } catch(_){}
 })();
 </script>

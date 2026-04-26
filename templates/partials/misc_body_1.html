@@ -303,16 +303,210 @@ window.pG = function(fn) {
 <div class="screen" id="s-bayern-plantilla">
   <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
   <div class="sec-hdr"><span class="sec-emoji">👕</span><h2>Plantilla · Gestión de Jugadores</h2></div>
-  <!-- Contenedor vacío: al navegar a esta pantalla, `syncSquadToScreen`
-       (en index.bundle.js) detecta `.ent-body[id*="plantilla"]` y le
-       inyecta las filas desde `SQUAD_REGISTRY['Bayern Munich']` — que
-       es la misma fuente que alimenta el modal del editor de Liga. El
-       `.plant-col-hdr` se conserva entre sincronizaciones. -->
-  <div class="ent-section" style="border:1px solid rgba(238,28,37,.3);">
-    <div class="ent-body open" id="bayern-plantilla" style="padding:0;">
-      <div class="plant-col-hdr"><span>#</span><span>Jugador</span><span>⚽</span><span>🟨</span><span>🟥</span><span>⭐</span><span>🛡</span></div>
+  <!-- La caja del Bayern reusa EXACTAMENTE el mismo layout del modal
+       del editor EA Sports (lext-sq-*) y se pinta a partir de la misma
+       fuente de datos (`ligaExt_liga-ea-sports`). Los iconos por sección
+       (🛡 👤 🧤 🖐 ⭐ ... para porteros, 🛡 👤 ⚽ 🥅 🎯 ... para el resto)
+       son idénticos a la modal porque las cabeceras y celdas se
+       comparten. Las stats se obtienen de `getPlayerStats()` que
+       agrega TODAS las competiciones oficiales (Liga + Hypermotion +
+       Primera Fed + Copa + Champions + Europa + Super Liga); los
+       amistosos y torneos de verano no se vuelcan en `ef_player_stats_v1`,
+       así que quedan excluidos automáticamente. -->
+  <div class="ent-section" style="border:1px solid rgba(238,28,37,.3);background:rgba(8,4,12,.4);">
+    <div class="ent-body open" id="bayern-plantilla" style="padding:8px 8px 12px;">
+      <div id="bayern-plantilla-host" class="lext-sq-wrap" style="margin:0;"></div>
     </div>
   </div>
+  <script>
+  (function(){
+    if (window.__BAYERN_PLANT_HOST_READY) return;
+    window.__BAYERN_PLANT_HOST_READY = true;
+
+    function _findBayernRow(){
+      try {
+        var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+        if (!raw) return null;
+        var data = JSON.parse(raw);
+        var teams = (data && data.teams) || [];
+        for (var i=0; i<teams.length; i++){
+          var t = teams[i];
+          if (!t || !t.name) continue;
+          if (/bayern/i.test(t.name)) return t;
+        }
+      } catch(_){}
+      return null;
+    }
+
+    function _statCell(cls, val){
+      var n = Number(val) || 0;
+      var z = n === 0 ? ' zero' : '';
+      return '<span class="lext-sq-cell '+cls+z+'">'+n+'</span>';
+    }
+
+    function _powerTier(p){
+      var n = Number(p) || 0;
+      if (n >= 87) return 'elite';
+      if (n >= 80) return 'alto';
+      if (n >= 72) return 'medio';
+      return 'base';
+    }
+
+    function _badges(p){
+      var b = '';
+      if (p.captain)  b += '<span class="lext-badge cap"   title="Capitán">C</span>';
+      if (p.freeKick) b += '<span class="lext-badge fk"    title="Lanzador de faltas">F</span>';
+      if (p.penalty)  b += '<span class="lext-badge pk"    title="Lanzador de penaltis">P</span>';
+      if (p.elite)    b += '<span class="lext-badge star"  title="Estrella del equipo">⭐</span>';
+      if (p.natGoal)  b += '<span class="lext-badge scorer" title="Goleador nato">⚾</span>';
+      return b;
+    }
+
+    /* Stats globales por jugador. Suma todas las competiciones oficiales
+       que se hayan volcado a `ef_player_stats_v1` (Liga EA Sports,
+       Hypermotion, Primera Fed, y cualquier otra liga ligaExt_*). Los
+       motores de Copa / Champions / Super Liga / Europa que actualicen
+       en vivo los `data-global` de las celdas DOM también se reflejarán
+       — ese sumatorio se aplica `_overlayLiveCounters`. Amistosos y
+       torneos de verano NO se vuelcan al storage, así que quedan fuera. */
+    function _statsFor(playerName){
+      var base = {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};
+      try {
+        if (typeof window.getPlayerStats === 'function'){
+          var ps = window.getPlayerStats('Bayern Munich', playerName);
+          if (ps){
+            ['pj','gol','pen','fk','mvp','ta','tr','imbat','penSaved'].forEach(function(k){
+              base[k] = Number(ps[k]||0);
+            });
+          }
+        }
+      } catch(_){}
+      return base;
+    }
+
+    function _rowFor(p, isGK){
+      var name = String(p.name||'?');
+      var pw = Number(p.power)||0;
+      var tier = _powerTier(pw);
+      var s = _statsFor(name);
+      var pwCell = '<span class="lext-sq-cell pw tier-'+tier+'" title="Poder '+pw+'/99">'+pw+'</span>';
+      var pj = _statCell('', s.pj);
+      var mvp = _statCell('mvp', s.mvp);
+      var ta = _statCell('ta', s.ta);
+      var tr = _statCell('tr', s.tr);
+      var cells, cls;
+      if (isGK){
+        cls = 'gk';
+        cells = pwCell + pj
+              + _statCell('imbat', s.imbat)
+              + _statCell('psave', s.penSaved)
+              + mvp + ta + tr
+              + '<span class="lext-sq-cell">—</span>';
+      } else {
+        cls = 'ot';
+        cells = pwCell + pj
+              + _statCell('gol', s.gol)
+              + _statCell('pen', s.pen)
+              + _statCell('fk',  s.fk)
+              + mvp + ta + tr
+              + '<span class="lext-sq-cell">—</span>';
+      }
+      return '<div class="lext-sq-row '+cls+'" data-player="'+name.replace(/"/g,'&quot;')+'">'
+           + '<span class="lext-sq-name tier-'+tier+'">'+name+_badges(p)+'</span>'
+           + cells
+           + '<span class="lext-sq-actions"></span>'
+           + '</div>';
+    }
+
+    function _section(label, list, isGK){
+      if (!list.length) return '';
+      var hdrCells, cls;
+      if (isGK){
+        cls = 'gk';
+        hdrCells = '<span title="Poder">🛡</span>'
+                 + '<span title="Partidos">👤</span>'
+                 + '<span title="Imbatido">🧤</span>'
+                 + '<span title="Pen parados">🖐</span>'
+                 + '<span title="MVP">⭐</span>'
+                 + '<span title="Tar. amarillas">🟨</span>'
+                 + '<span title="Tar. rojas">🟥</span>'
+                 + '<span></span>'
+                 + '<span></span>';
+      } else {
+        cls = 'ot';
+        hdrCells = '<span title="Poder">🛡</span>'
+                 + '<span title="Partidos">👤</span>'
+                 + '<span title="Goles">⚽</span>'
+                 + '<span title="Pen marcados">🥅</span>'
+                 + '<span title="Goles de falta">🎯</span>'
+                 + '<span title="MVP">⭐</span>'
+                 + '<span title="Tar. amarillas">🟨</span>'
+                 + '<span title="Tar. rojas">🟥</span>'
+                 + '<span></span>';
+      }
+      var hdr = '<div class="lext-sq-hdr '+cls+'"><span>'+label+'</span>'+hdrCells+'</div>';
+      list.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+      return '<div class="lext-sq-sec">'+hdr+list.map(function(p){return _rowFor(p, isGK);}).join('')+'</div>';
+    }
+
+    function _renderEmpty(host){
+      host.innerHTML = '<div style="padding:28px 14px;text-align:center;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;line-height:1.55;">'
+        + '— Sin jugadores —<br>'
+        + '<span style="font-size:11px;color:rgba(255,255,255,.4);">Edita la plantilla del Bayern desde <b>Liga EA Sports → Bayern Munich → 🛡 Plantilla</b>.</span>'
+        + '</div>';
+    }
+
+    window.renderBayernPlantillaScreen = function(){
+      var host = document.getElementById('bayern-plantilla-host');
+      if (!host) return;
+      /* Forzar reconstrucción del store de stats antes de pintar — si
+         se ha simulado una jornada / partido el storage podía estar
+         stale, igual que hace `renderSquadList` en el modal EA Sports. */
+      try {
+        if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats();
+      } catch(_){}
+      var t = _findBayernRow();
+      if (!t || !Array.isArray(t.players) || !t.players.length){
+        _renderEmpty(host);
+        return;
+      }
+      var by = {POR:[], DEF:[], MED:[], DEL:[]};
+      t.players.forEach(function(p){
+        if (!p || !p.name) return;
+        (by[p.pos] || by.MED).push(p);
+      });
+      var html = ''
+        + _section('🧤 PORTEROS',     by.POR, true)
+        + _section('🛡 DEFENSAS',     by.DEF, false)
+        + _section('⚙ CENTROCAMPISTAS', by.MED, false)
+        + _section('⚽ DELANTEROS',    by.DEL, false);
+      host.innerHTML = html || '';
+      if (!html) _renderEmpty(host);
+    };
+
+    /* Re-pintar cada vez que se navega a la pantalla. Sin gating —
+       si el primer render llega antes de que `applyEngineOverrides`
+       cargue los datos, el siguiente vuelve a intentarlo. */
+    var _origGoBayern = window.go;
+    window.go = function(id){
+      var out = _origGoBayern ? _origGoBayern.apply(this, arguments) : undefined;
+      if (id === 's-bayern-plantilla'){
+        setTimeout(window.renderBayernPlantillaScreen, 60);
+        setTimeout(window.renderBayernPlantillaScreen, 600);
+      }
+      return out;
+    };
+
+    /* Pintado inicial si la app arrancó ya en esta pantalla. */
+    document.addEventListener('DOMContentLoaded', function(){
+      var act = document.querySelector('.screen.active');
+      if (act && act.id === 's-bayern-plantilla'){
+        setTimeout(window.renderBayernPlantillaScreen, 80);
+        setTimeout(window.renderBayernPlantillaScreen, 800);
+      }
+    });
+  })();
+  </script>
 </div>
 
 <style>
@@ -346,7 +540,9 @@ window.pG = function(fn) {
   .hub-team-name{font-size:14px;font-weight:700;color:#fff;letter-spacing:1.5px;text-transform:uppercase}
   .hub-team-coach{font-size:11px;color:#ffd5aa;opacity:.82}
   .hub-season{font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.5);white-space:nowrap}
-  #s-bayern-plantilla .plant-row.por{grid-template-columns:28px 1fr 32px 32px 32px 32px 36px !important}
+  #s-bayern-plantilla .lext-sq-wrap{padding:0 4px;}
+  #s-bayern-plantilla .lext-sq-sec{margin-bottom:14px;}
+  #s-bayern-plantilla .lext-sq-hdr span:first-child{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2.5px;color:#f0c040;font-weight:700;}
 </style>
 
 <script>
@@ -4137,19 +4333,52 @@ window.pG = function(fn) {
   <div class="submenu-card sc-sct"
        style="background:linear-gradient(135deg,#0a1a3a 0%,#b22234 35%,#ffffff 50%,#3c3b6e 65%,#0a1a3a 100%) !important;border-color:#b22234 !important;"
        onclick="go('s-sct')">
-    <span class="sc-emoji">🇺🇸</span><span class="sc-label">Soccer Champions Tour</span><span class="sc-arr">▶</span>
+    <span class="sc-emoji">🇺🇸</span><span class="sc-label">Soccer Champions Tour</span>
+    <button type="button" class="sc-info-btn"
+            onclick="event.stopPropagation();window.muTourInfo('sct')" title="Info">ℹ️</button>
+    <span class="sc-arr">▶</span>
   </div>
   <div class="submenu-card sc-pss"
        style="background:linear-gradient(135deg,#012169 0%,#ce1124 35%,#ffffff 50%,#ce1124 65%,#012169 100%) !important;border-color:#ce1124 !important;"
        onclick="go('s-pss')">
-    <span class="sc-emoji">🇬🇧</span><span class="sc-label">Premier Summer Series</span><span class="sc-arr">▶</span>
+    <span class="sc-emoji">🇬🇧</span><span class="sc-label">Premier Summer Series</span>
+    <button type="button" class="sc-info-btn"
+            onclick="event.stopPropagation();window.muTourInfo('pss')" title="Info">ℹ️</button>
+    <span class="sc-arr">▶</span>
   </div>
   <div class="submenu-card sc-jg"
        style="background:linear-gradient(135deg,#aa151b 0%,#f1bf00 35%,#ffffff 50%,#f1bf00 65%,#aa151b 100%) !important;border-color:#f1bf00 !important;"
        onclick="go('s-jg')">
-    <span class="sc-emoji">🇪🇸</span><span class="sc-label">Trofeo Joan Gamper</span><span class="sc-arr">▶</span>
+    <span class="sc-emoji">🇪🇸</span><span class="sc-label">Trofeo Joan Gamper</span>
+    <button type="button" class="sc-info-btn"
+            onclick="event.stopPropagation();window.muTourInfo('jg')" title="Info">ℹ️</button>
+    <span class="sc-arr">▶</span>
+  </div>
+  <div class="submenu-card sc-asia"
+       style="background:linear-gradient(135deg,#1a0612 0%,#bc002d 35%,#ffffff 50%,#bc002d 65%,#1a0612 100%) !important;border-color:#bc002d !important;"
+       onclick="go('s-asia')">
+    <span class="sc-emoji">🇯🇵</span><span class="sc-label">Asian Tournament</span>
+    <button type="button" class="sc-info-btn"
+            onclick="event.stopPropagation();window.muTourInfo('asia')" title="Info">ℹ️</button>
+    <span class="sc-arr">▶</span>
   </div>
 </div>
+<style>
+  /* Botón ℹ️ inline en las cajas del listado de Torneos de Verano.
+     Se coloca entre el label y la flecha; usa stopPropagation para no
+     navegar al pulsar — abre el modal compartido `muTourInfo`. */
+  #s-torneos-verano .submenu-card .sc-info-btn{
+    background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.35);
+    color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;line-height:1;flex-shrink:0;padding:0;
+    margin-left:auto;
+  }
+  #s-torneos-verano .submenu-card .sc-info-btn:active{
+    background:rgba(255,255,255,.18);
+  }
+  #s-torneos-verano .submenu-card .sc-arr{margin-left:6px;}
+</style>
 </div>
 
 <!-- ═══ PANTALLAS PLACEHOLDER DE LOS 3 TORNEOS ═══
@@ -4203,6 +4432,21 @@ window.pG = function(fn) {
     <li>Cuartos de Grupo <b>+20 🪙</b></li>
     <li>Tercero de Grupo <b>+40 🪙</b></li>
     <li>Semis Playoffs <b>+60 🪙</b></li>
+    <li>Subcampeón <b>+80 🪙</b></li>
+    <li>Campeón <b>+100 🪙</b></li>
+  </ul>
+</div>
+</div>
+<div class="screen" id="s-asia">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🇯🇵</span><h2>Asian Tournament</h2></div>
+<div style="padding:14px 18px;font-family:Rajdhani,sans-serif;font-size:14px;color:#d8e8f8;line-height:1.7;">
+  <p><b style="color:#f0c040;">Participación:</b> 40 🪙 · 4 equipos 👤</p>
+  <p><b style="color:#f0c040;">Fechas:</b> 14 al 17 de Junio</p>
+  <p><b style="color:#f0c040;">Formato:</b> Eliminatoria directa<br>Semis → Final (máx. 2 partidos).</p>
+  <p style="margin-top:10px;"><b style="color:#f0c040;">Premios:</b></p>
+  <ul style="margin:4px 0 0 20px;">
+    <li>Semis <b>+40 🪙</b></li>
     <li>Subcampeón <b>+80 🪙</b></li>
     <li>Campeón <b>+100 🪙</b></li>
   </ul>
@@ -4315,6 +4559,21 @@ window.pG = function(fn) {
     if(typeof t === 'string') return t;
     return t.name || t.nombre || t.id || '';
   }
+  /* Limpia el nombre para mostrar — quita el prefijo "* " que
+     algunos equipos tienen persistido como marca de "sin escudo
+     concreto". */
+  function _displayName(t){
+    return String(_teamName(t)).replace(/^\s*\*+\s*/,'');
+  }
+  /* Normaliza para comparar: minúsculas, sin acentos, sin
+     asteriscos ni puntuación. */
+  function _normName(s){
+    return String(s==null?'':s).toLowerCase().normalize('NFD')
+      .replace(/[̀-ͯ]/g,'')
+      .replace(/^\s*\*+\s*/,'')
+      .replace(/[^a-z0-9]+/g,' ')
+      .replace(/\s+/g,' ').trim();
+  }
   function _teamLogo(t){
     if(!t || typeof t !== 'object') return '';
     return t.logo || t.escudo || t.shield || t.img || t.src || '';
@@ -4363,7 +4622,9 @@ window.pG = function(fn) {
      aparezca en dos competiciones. */
   function _computeQualifiedFromLeagues(zoneKey){
     var out = [];
-    if(typeof localStorage === 'undefined') return out;
+    var diag = []; // [{slug, n, results, needed, status, note}]
+    if(typeof localStorage === 'undefined') { window._lastQualDiag = diag; return out; }
+    var seenLeagueHash = {};
     try {
       var keys = [];
       for(var i=0;i<localStorage.length;i++){
@@ -4379,18 +4640,37 @@ window.pG = function(fn) {
          al recalcular. */
       keys.sort();
       keys.forEach(function(key){
+        var slug = key.substring('ligaExt_'.length);
         var raw = localStorage.getItem(key);
-        if(!raw) return;
+        if(!raw){ diag.push({slug:slug, status:'skip', note:'sin datos'}); return; }
         var data;
-        try { data = JSON.parse(raw); } catch(_){ return; }
-        if(!data || !Array.isArray(data.teams) || !Array.isArray(data.results)) return;
+        try { data = JSON.parse(raw); } catch(_){ diag.push({slug:slug, status:'skip', note:'JSON inválido'}); return; }
+        if(!data || !Array.isArray(data.teams) || !Array.isArray(data.results)){
+          diag.push({slug:slug, status:'skip', note:'estructura no reconocida'}); return;
+        }
         var teams = data.teams;
         var N = teams.length;
-        if(N < 2) return;
-        if(data.results.length < N*(N-1)) return; // liga no terminada
+        var rN = data.results.length;
+        var needed = N*(N-1);
+        if(N < 2){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'menos de 2 equipos'}); return; }
+        if(rN < needed){
+          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'incompleta', note:'faltan partidos'});
+          return;
+        }
         var zones = (data.config && data.config.zones) || {};
         var slots = Number(zones[zoneKey] || 0);
-        if(!(slots > 0)) return;
+        if(!(slots > 0)){
+          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'sin-plazas', note:'zones.'+zoneKey+'='+slots});
+          return;
+        }
+        var hash = teams.map(function(t){ return _normName(_teamName(t)); })
+                        .filter(Boolean).sort().join('|');
+        if(!hash){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'plantilla sin nombres'}); return; }
+        if(seenLeagueHash[hash]){
+          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'duplicada', note:'misma plantilla que otra liga ya procesada'});
+          return;
+        }
+        seenLeagueHash[hash] = true;
         var skip = 0;
         if(zoneKey === 'uel'){
           skip = (Number(zones.ucl)||0)
@@ -4403,27 +4683,30 @@ window.pG = function(fn) {
                + (Number(zones.uel)||0);
         }
         var ranking = _standingsFromResults(teams, data.results);
+        var added = 0;
         for(var j=skip; j<skip+slots && j<ranking.length; j++){
           out.push({
-            name:  ranking[j].name,
+            name:  String(ranking[j].name||'').replace(/^\s*\*+\s*/,''),
             logo:  ranking[j].logo,
-            league: key.substring('ligaExt_'.length)
+            league: slug
           });
+          added++;
         }
+        diag.push({slug:slug, n:N, results:rN, needed:needed, status:'ok', note:'+'+added+' equipos'});
       });
-    } catch(_){}
-    /* Dedupe por nombre normalizado — si varios slugs listan el
-       mismo club, se conserva la primera aparición (orden por
-       slug alfabético). */
+    } catch(e){ diag.push({slug:'?', status:'error', note:String(e&&e.message||e)}); }
+    /* Dedupe global — si por lo que sea el mismo club entra desde
+       dos slugs distintos (no equiparables a nivel de plantilla
+       completa), nos quedamos con la primera aparición. */
     var seen = {};
     var dedup = [];
     out.forEach(function(t){
-      var key = String(t.name||'').toLowerCase().normalize('NFD')
-        .replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+      var key = _normName(t.name);
       if(!key || seen[key]) return;
       seen[key] = true;
       dedup.push(t);
     });
+    window._lastQualDiag = diag;
     return dedup;
   }
   function computeUclClassified(){ return _computeQualifiedFromLeagues('ucl'); }
@@ -4494,8 +4777,45 @@ window.pG = function(fn) {
       +   '<span class="clas-legend-item"><span class="clas-dot" style="background:#e03c3c;"></span>25-40 · Eliminados</span>'
       +   '<span class="clas-legend-item" style="margin-left:auto;color:rgba(255,255,255,.5);">' + classified.length + ' / 40 clasificados</span>'
       + '</div>'
+      + _renderDiag(window._lastQualDiag, classified.length)
       + '</div>';
     container.innerHTML = html;
+  }
+  /* Panel diagnóstico — solo aparece si hay alguna fuente. Muestra
+     fila por fila qué claves localStorage se inspeccionaron y por
+     qué se aceptaron / rechazaron. Pensado para que el usuario sepa
+     EXACTAMENTE por qué su pantalla está vacía o le faltan equipos. */
+  function _renderDiag(diag, classifiedCount){
+    if(!Array.isArray(diag) || !diag.length){
+      return '<div style="margin:10px 6px 4px;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:rgba(255,255,255,.03);font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);">No se encontró ninguna liga (<code>ligaExt_*</code>) en localStorage. Crea ligas en <b>Resto de Ligas</b> y simúlalas para que aparezcan aquí.</div>';
+    }
+    var rows = '';
+    diag.forEach(function(d){
+      var color = '#888', icon = '·';
+      if(d.status==='ok'){ color = '#4fc86a'; icon = '✓'; }
+      else if(d.status==='incompleta'){ color = '#f0c040'; icon = '⏳'; }
+      else if(d.status==='sin-plazas'){ color = '#a0a0a0'; icon = '○'; }
+      else if(d.status==='duplicada'){ color = '#9090ff'; icon = '⇌'; }
+      else if(d.status==='error'){ color = '#ff7070'; icon = '!'; }
+      else { color = '#ff7070'; icon = '✗'; }
+      var meta = '';
+      if(d.results != null && d.needed != null){
+        meta = ' · ' + d.results + '/' + d.needed + ' partidos';
+      }
+      rows += '<div style="display:flex;gap:8px;align-items:baseline;padding:3px 0;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);">'
+        + '<span style="color:'+color+';font-weight:700;width:14px;text-align:center;">'+icon+'</span>'
+        + '<span style="color:#fff;font-weight:700;">'+_esc(d.slug)+'</span>'
+        + '<span style="color:rgba(255,255,255,.45);font-size:11px;">'+meta+'</span>'
+        + '<span style="margin-left:auto;color:'+color+';font-size:11px;">'+_esc(d.note||d.status||'')+'</span>'
+        + '</div>';
+    });
+    var heading = classifiedCount > 0
+      ? 'Fuentes inspeccionadas'
+      : 'Ninguna liga ha clasificado equipos. Revisa el detalle:';
+    return '<div style="margin:10px 6px 4px;padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:rgba(255,255,255,.03);">'
+      + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(240,192,64,.85);margin:0 0 6px;">'+heading+'</div>'
+      + rows
+      + '</div>';
   }
   window.buildUclGruposClas = buildUclGruposClas;
   document.addEventListener('DOMContentLoaded', buildUclGruposClas);
@@ -4667,11 +4987,11 @@ window.pG = function(fn) {
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Europa_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UEL"/><h2>Europa League</h2></div>
 <div class="submenu-list">
-<div class="submenu-card sc-uel2" onclick="go('s-uel-grupos')">
-<span class="sc-emoji">🟠</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
-</div>
 <div class="submenu-card sc-uel3" onclick="go('s-uel-playoffs')">
 <span class="sc-emoji">🟠</span><span class="sc-label">Playoffs Final</span><span class="sc-arr">▶</span>
+</div>
+<div class="submenu-card sc-uel2" onclick="go('s-uel-grupos')">
+<span class="sc-emoji">🟠</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
 </div>
 </div>
 </div>
@@ -4907,11 +5227,11 @@ window.pG = function(fn) {
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Conference_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UECL"/><h2>Conference League</h2></div>
 <div class="submenu-list">
-<div class="submenu-card sc-uecl2" onclick="go('s-uecl-grupos')">
-<span class="sc-emoji">🟢</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
-</div>
 <div class="submenu-card sc-uecl3" onclick="go('s-uecl-playoffs')">
 <span class="sc-emoji">🟢</span><span class="sc-label">Playoffs Final</span><span class="sc-arr">▶</span>
+</div>
+<div class="submenu-card sc-uecl2" onclick="go('s-uecl-grupos')">
+<span class="sc-emoji">🟢</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
 </div>
 </div>
 </div>
@@ -8932,6 +9252,16 @@ Tottenham
           <button type="button" class="munich-tour-info-btn"
                   onclick="event.stopPropagation();window.muTourInfo('jg')" title="Info">ℹ️</button>
         </div>
+        <div class="munich-tour-card" data-tour="asia"
+             onclick="window.muTourToggle('asia', event)">
+          <span class="munich-tour-flag">🇯🇵</span>
+          <div class="munich-tour-body">
+            <div class="munich-tour-name">Asian Tournament</div>
+            <div class="munich-tour-meta">4 👤 · 14-17 Junio · semis + final</div>
+          </div>
+          <button type="button" class="munich-tour-info-btn"
+                  onclick="event.stopPropagation();window.muTourInfo('asia')" title="Info">ℹ️</button>
+        </div>
       </div>
       <button type="button" class="munich-tour-confirm" id="munich-tour-confirm"
               onclick="window.muTourConfirm()">✅ CONFIRMAR 0/2</button>
@@ -9638,6 +9968,14 @@ Tottenham
         ['Cuartos de Grupo', 20], ['Tercero de Grupo', 40],
         ['Semis Playoffs', 60], ['Subcampeón', 80], ['Campeón', 100]
       ]
+    },
+    asia: {
+      flag: '🇯🇵', name: 'Asian Tournament',
+      fee: 40, teams: 4, dates: '14 al 17 de Junio',
+      format: 'Eliminatoria directa: Semis → Final (máx. 2 partidos).',
+      prizes: [
+        ['Semis', 40], ['Subcampeón', 80], ['Campeón', 100]
+      ]
     }
   };
   var TOURS_STORAGE_KEY = 'munich_summer_tours_v1';
@@ -9797,6 +10135,7 @@ Tottenham
      dando prioridad a JG para que ese día sea día de playoff si el
      usuario lo ha elegido; PSS termina el 23 para este mapeo. */
   var _SUMMER_TOUR_WINDOWS = [
+    { id: 'asia', startM: 5, startD: 14, endM: 5, endD: 17 },
     { id: 'sct', startM: 6, startD:  1, endM: 6, endD: 10 },
     { id: 'pss', startM: 6, startD: 12, endM: 6, endD: 23 },
     { id: 'jg',  startM: 6, startD: 24, endM: 7, endD:  1 }
@@ -9829,7 +10168,7 @@ Tottenham
   }
   /* Abreviaturas cortas para el badge "VS" (compEl) — el nombre
      completo es demasiado largo para ese chip. */
-  var _SUMMER_TOUR_SHORT = { sct: 'SCT', pss: 'PSS', jg: 'GAMPER' };
+  var _SUMMER_TOUR_SHORT = { sct: 'SCT', pss: 'PSS', jg: 'GAMPER', asia: 'ASIA' };
   /* Devuelve la info para renderizar un evento `ag-torneo`:
      - si Bayern ha elegido el torneo que cubre esa fecha → flag + nombre
      - si no → icono 🌞 genérico */

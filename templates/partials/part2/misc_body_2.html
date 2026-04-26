@@ -4724,6 +4724,7 @@
       +'</div>'
       +'<div class="ml-action-row" id="ml-action-row-'+mk+'" style="display:none;">'
         +'<button class="ml-action-add" id="ml-add-btn-'+mk+'" onclick="mlTogglePanelGen(\''+emk+'\')">＋ AÑADIR EVENTO</button>'
+        +'<button class="ml-action-ht" id="ml-btn-ht-'+mk+'" onclick="window.mlForceHalftimeGen(\''+emk+'\')" style="display:none;">🛌 DESCANSO</button>'
         +'<button class="ml-action-end" id="ml-btn-end-'+mk+'" onclick="mlEndMatchGen(\''+emk+'\')">🏁 FINALIZAR</button>'
       +'</div>'
       +'<div class="ml-acta">'
@@ -5646,11 +5647,10 @@
       }
       // Half-time pause at 45' + stoppage 1ª parte
       if (!st.htDone && st.timerSec >= halfMax) {
-        st.htDone = true;
-        /* Amistosos IA vs IA: no mostrar overlay de descanso ni el botón de
-           compartir por WhatsApp. Solo dejamos la marca en el acta y
-           continuamos la simulación, igual que en Liga IA-vs-IA. */
-        if (st.isFriendly && st.isIAvsIA) {
+        /* IA vs IA (amistoso o cualquier otro modo): solo marca y
+           sigue simulando — no hay humano que pulse nada. */
+        if (st.isIAvsIA) {
+          st.htDone = true;
           var listIA = document.getElementById('ml-acta-list-'+mk);
           if (listIA) {
             var mIA = document.createElement('div'); mIA.className='ml-ht'; mIA.textContent='— DESCANSO (45 min) —'; listIA.appendChild(mIA);
@@ -5658,19 +5658,30 @@
           _mlRenderTimerGen(mk);
           return;
         }
-        clearInterval(st.timerInterval); st.timerRunning = false; st.inDescanso = true;
-        var list = document.getElementById('ml-acta-list-'+mk);
-        if (list) {
-          var m = document.createElement('div'); m.className='ml-ht'; m.textContent='— DESCANSO (45 min) —'; list.appendChild(m);
-          var _waWrap = document.createElement('div'); _waWrap.className='ml-ht-wa-wrap';
-          _waWrap.innerHTML='<button class="ml-ht-wa-btn" onclick="window._mlShareHalfTime(\''+mk.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'
-            +'<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
-            +' Compartir descanso</button>';
-          list.appendChild(_waWrap);
+        /* HvH / HvIA: capamos el reloj en halfMax y paramos el
+           interval. Visualmente "45+N'" se queda congelado hasta
+           que el humano pulsa "🛌 DESCANSO" (mlForceHalftimeGen).
+           Sin parar el interval, el reloj llegaría a 90' y
+           dispararía marcadores de 2ª parte / auto-fin estando
+           todavía en 1ª. Petición usuario: la 1ª parte jamás
+           termina sin pulsar el botón. Reseteamos _wallStart /
+           _gameSecAtStart para que cualquier reanudación posterior
+           anclada en halfMax no salte por el tiempo congelado. */
+        st.timerSec = halfMax;
+        st._wallStart = Date.now();
+        st._gameSecAtStart = halfMax;
+        if (st.timerRunning) {
+          clearInterval(st.timerInterval);
+          st.timerRunning = false;
         }
         _mlRenderTimerGen(mk);
-        _mlShowDescansoOverlay(mk);
-        return;
+      }
+      /* Visibilidad del botón manual de descanso. Aparece a partir
+         del minuto 37 game-time y antes de entrar al descanso /
+         prórroga. Sólo HvH y HvIA — IAvIA usa el camino de arriba. */
+      if (!st.htDone && !st.etDone && !st.matchFinished && !st.isIAvsIA) {
+        var _htBtn = document.getElementById('ml-btn-ht-'+mk);
+        if (_htBtn) _htBtn.style.display = (st.timerSec >= 2220) ? '' : 'none';
       }
       // Stoppage time marker at 90' — muestra el nº de game-minutes
       // añadidos dinámicamente por los eventos de la 2ª parte.
@@ -6948,6 +6959,52 @@
     try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
   }
 
+  /* Entrada al descanso compartida por la ruta manual (botón
+     "🛌 DESCANSO" del action bar) y la ruta automática que sólo
+     usa IAvIA. Mete la marca en el acta, capa el reloj al tope
+     dinámico de la 1ª parte (45+stoppage), pausa el timer y abre
+     el overlay. Idempotente. */
+  function _mlEnterDescansoCore(mk, st) {
+    if (!st || st.htDone || st.matchFinished) return;
+    var stops = (typeof _mlCountStoppageHalves === 'function')
+                  ? _mlCountStoppageHalves(st) : { first: 0, second: 0 };
+    var halfMax = 2700 + (stops.first || 0) * 60;
+    if (st.timerSec > halfMax) st.timerSec = halfMax;
+    st.htDone = true;
+    clearInterval(st.timerInterval);
+    st.timerRunning = false;
+    st.inDescanso = true;
+    var list = document.getElementById('ml-acta-list-'+mk);
+    if (list) {
+      var m = document.createElement('div');
+      m.className = 'ml-ht';
+      m.textContent = '— DESCANSO (45 min) —';
+      list.appendChild(m);
+      var _waWrap = document.createElement('div');
+      _waWrap.className = 'ml-ht-wa-wrap';
+      _waWrap.innerHTML = '<button class="ml-ht-wa-btn" onclick="window._mlShareHalfTime(\''+mk.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'
+        +'<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
+        +' Compartir descanso</button>';
+      list.appendChild(_waWrap);
+    }
+    var htBtn = document.getElementById('ml-btn-ht-'+mk);
+    if (htBtn) htBtn.style.display = 'none';
+    _mlRenderTimerGen(mk);
+    _mlShowDescansoOverlay(mk);
+  }
+
+  /* Botón manual: el usuario fuerza el descanso desde el min 37
+     game-time. Mismo patrón que window.gmForceHalftime para gm-modal.
+     En HvH/HvIA es la ÚNICA forma de entrar al descanso — el
+     auto-trigger ya no dispara para humanos. */
+  window.mlForceHalftimeGen = function(mk) {
+    var st = _mlSt(mk);
+    if (!st) return;
+    if (st.htDone || st.matchFinished || st.etDone) return;
+    if (st.timerSec < 2220) return; /* min 37' game-time */
+    _mlEnterDescansoCore(mk, st);
+  };
+
   /* Show the halftime blocking overlay */
   function _mlShowDescansoOverlay(mk) {
     var st = _mlSt(mk);
@@ -7703,8 +7760,15 @@
       var gmStops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
       var gmHalfMax = 2700 + (gmStops.first || 0) * 60;
       var max = _gm.etDone ? GM_MAX_ET : (GM_MAX_NORMAL + (gmStops.second || 0) * 60);
-      /* Descanso automático al llegar al tope dinámico de la 1ª parte */
-      if (!_gm.htDone && _gm.timerSec >= gmHalfMax) {
+      /* Descanso automático: SOLO si no hay humano implicado. En la
+         práctica gm-modal sólo se usa en HvH/HvIA (IAvIA va por el
+         flujo ml-wrap), así que esto es un no-op de seguridad: el
+         humano debe pulsar el botón "🛌 DESCANSO" (gm-btn-force-ht).
+         Petición usuario: la 1ª parte jamás termina sin pulsar el
+         botón en partidos con humano. */
+      var _gmHasHuman = !!_gm.isHvH
+        || (typeof esHumano === 'function' && (esHumano(_gm.home) || esHumano(_gm.away)));
+      if (!_gm.htDone && _gm.timerSec >= gmHalfMax && !_gmHasHuman) {
         _gmEnterHalftime();
         return;
       }
@@ -11430,11 +11494,12 @@
 .ml-venue-ball{font-family:"Oswald",sans-serif;font-size:11.5px;font-weight:700;letter-spacing:1px;color:rgba(255,210,90,.9);white-space:nowrap;flex-shrink:1;overflow:hidden;text-overflow:ellipsis;max-width:38vw;}
 /* ── Botones acción partido ─────────────────────────────────── */
 .ml-action-row{display:none;gap:6px;padding:6px 10px 4px;}
-.ml-action-add,.ml-action-end{flex:1;border:none;border-radius:8px;padding:9px 6px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.2px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:filter .15s,opacity .15s;}
+.ml-action-add,.ml-action-end,.ml-action-ht{flex:1;border:none;border-radius:8px;padding:9px 6px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.2px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:filter .15s,opacity .15s;}
 .ml-action-add{background:linear-gradient(135deg,#1a3a6a,#1e4fa0);color:#a8d0ff;box-shadow:0 2px 8px rgba(30,79,160,.4);}
+.ml-action-ht{background:linear-gradient(135deg,#6a4a1a,#c08c20);color:#ffe2a0;box-shadow:0 2px 8px rgba(192,140,32,.4);}
 .ml-action-end{background:linear-gradient(135deg,#6a1a1a,#b02020);color:#ffd0d0;box-shadow:0 2px 8px rgba(176,32,32,.4);}
-.ml-action-add:hover,.ml-action-end:hover{filter:brightness(1.15);}
-.ml-action-add:disabled,.ml-action-end:disabled{opacity:0.35;cursor:default;filter:none;}
+.ml-action-add:hover,.ml-action-end:hover,.ml-action-ht:hover{filter:brightness(1.15);}
+.ml-action-add:disabled,.ml-action-end:disabled,.ml-action-ht:disabled{opacity:0.35;cursor:default;filter:none;}
 /* ── Eventos del acta ────────────────────────────────────────── */
 .ml-evt-item{padding-left:10px!important;}
 .ml-evt-team{font-size:11px;color:rgba(255,255,255,.45);font-family:"Rajdhani",sans-serif;white-space:nowrap;}

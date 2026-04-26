@@ -12457,8 +12457,46 @@ if (!document.getElementById('live-hub-css')) {
    - Re-pinta la pantalla LIVE.
    Se usa desde la papelera de las live-cards y desde el botón 🗑 que
    ahora añadimos al wrap del partido. */
+/* ── Lista de basura PERSISTENTE para el hub LIVE ────────────────
+   Cuando el usuario pulsa la papelera, marcamos la clave aquí
+   ANTES de hacer cualquier otra cosa. El poll cada 5 s rehidrata
+   entradas desde el servidor (por defecto un overwrite directo
+   en _gmBg / _mlStates) — sin esta lista, una entrada borrada
+   localmente vuelve a aparecer en cuanto el servidor responde
+   con un snapshot anterior. Aquí tenemos un veto local que
+   dura 24 h: el rehydrate y el render del hub la ignoran.
+   Las claves usadas son:
+     • mid de ml-wrap (p.ej. "j23m1") para tarjetas de calendario
+     • bgKey de gm-modal ("23|Arsenal|Atléti") para tarjetas de
+       gmBg / __GM_LIVE                                            */
+(function(){
+  var KEY = '_trashedLiveV1';
+  var TTL_MS = 24 * 60 * 60 * 1000;
+  function _load() {
+    try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; }
+    catch(_) { return {}; }
+  }
+  function _save(s) {
+    try { localStorage.setItem(KEY, JSON.stringify(s || {})); } catch(_){}
+  }
+  window._mlMarkTrashed = function(k) {
+    if (!k) return;
+    var s = _load(); s[String(k)] = Date.now(); _save(s);
+  };
+  window._mlIsTrashed = function(k) {
+    if (!k) return false;
+    var s = _load(); var ts = s[String(k)];
+    if (!ts) return false;
+    if (Date.now() - ts > TTL_MS) { delete s[String(k)]; _save(s); return false; }
+    return true;
+  };
+})();
+
 window._mlForceFinishMatch = function(mk) {
   if (!mk) return;
+  /* Marcar trashed PRIMERO — si el poll dispara entre el flush y la
+     pintada, _isTrashed evita que la entrada se rehidrate. */
+  try { window._mlMarkTrashed(mk); } catch(_){}
   try {
     var states = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : {};
     var st = states[mk];
@@ -12764,6 +12802,16 @@ function buildGmLiveCard(gm, bgKey) {
   trash.addEventListener('click', function(e){
     e.stopPropagation(); e.preventDefault();
     if (!confirm('¿Eliminar este partido en directo? El cronómetro se detiene y la tarjeta desaparece de PARTIDOS LIVE.')) return;
+    /* Marcar trashed PRIMERO. Sin esto, el poll de _gmBg overwrite
+       (línea ~14335) volvía a pintar la tarjeta en cuanto el
+       snapshot del servidor refrescase. */
+    try {
+      var _trashKey = bgKey || (function(){
+        var g = window.__GM_LIVE;
+        return g ? ((g.j||0)+'|'+(g.home||'')+'|'+(g.away||'')) : '';
+      })();
+      if (_trashKey) window._mlMarkTrashed(_trashKey);
+    } catch(_){}
     /* Para gm-live: primero marcamos finished (propaga al servidor
        durante el grace period) y luego BORRAMOS la entrada local de
        _gmBg. Si solo marcábamos finished, la entrada seguía viva en
@@ -12821,6 +12869,15 @@ function buildLiveScreen() {
   wraps.forEach(function(w) {
     var scoreEl = w.querySelector('.ml-score');
     if (!scoreEl || !scoreEl.classList.contains('state-playing')) return;
+    /* Excluir partidos que el usuario ya ha mandado a la papelera —
+       sobrevive a polls, recargas y rehydrates durante 24 h. */
+    try {
+      var _trKey = w.id ? w.id.replace(/^mlw-/, '') : '';
+      if (_trKey && typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(_trKey)) {
+        if (scoreEl) { scoreEl.classList.remove('state-playing'); scoreEl.classList.add('state-finished'); }
+        return;
+      }
+    } catch(_){}
     /* Excluir partidos cuyo cronómetro ya alcanzó el tope (90+stoppage
        o 120+stoppage en prórroga) y está en pausa. El usuario los
        considera "finalizados" aunque aún no haya pulsado FINALIZAR. */
@@ -12867,6 +12924,13 @@ function buildLiveScreen() {
      competición que haya usado gmVolver para salir del modal) */
   var gmLive = (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone)
     ? window.__GM_LIVE : null;
+  /* Si el usuario lo había marcado como basura, no lo mostramos. */
+  try {
+    if (gmLive && typeof window._mlIsTrashed === 'function') {
+      var _gKey = (gmLive.j||0)+'|'+(gmLive.home||'')+'|'+(gmLive.away||'');
+      if (window._mlIsTrashed(_gKey)) gmLive = null;
+    }
+  } catch(_){}
 
   /* Helper: un partido con marcador guardado en `loadResults()` está
      por definición FINALIZADO, aunque por alguna razón su snapshot
@@ -12923,6 +12987,11 @@ function buildLiveScreen() {
     Object.keys(window._gmBg).forEach(function(k){
       var snap = window._gmBg[k];
       if (!snap || snap.finished || !snap.kickoffDone) return;
+      /* Marcado como basura por el usuario → fuera y borrar local. */
+      if (typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(k)) {
+        try { delete window._gmBg[k]; } catch(_){}
+        return;
+      }
       /* Snapshot fantasma: hay resultado guardado para este j|home|
          away en loadResults() → el partido ya terminó, aunque este
          snapshot diga otra cosa. Borramos la entrada y continuamos. */
@@ -14034,6 +14103,9 @@ window.goLiveMatches = function() {
      el DOM con el estado restaurado. */
   function _rehydrateMlEntry(mk, saved) {
     if (!mk || !saved) return;
+    /* Si el usuario lo mandó a la papelera, NUNCA rehidratar — el
+     veto local supera cualquier snapshot vivo del servidor. */
+    if (typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(mk)) return;
     /* 1) Asegurar que existe la tarjeta en el DOM */
     var wrap = document.getElementById('mlw-' + mk);
     var isAms = mk.indexOf('ams-') === 0;
@@ -14308,6 +14380,11 @@ window.goLiveMatches = function() {
     if (data.gmBg) {
       Object.keys(data.gmBg).forEach(function(k){
         var bgSnap = data.gmBg[k];
+        /* Trashed por el usuario → no rehidratar, no recrear. */
+        if (typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(k)) {
+          try { delete window._gmBg[k]; } catch(_){}
+          return;
+        }
         if (bgSnap && bgSnap.finished) {
           /* gm-modal finalizado en otro dispositivo → borrar local. */
           try { delete window._gmBg[k]; } catch(_){}

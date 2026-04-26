@@ -6289,15 +6289,15 @@
       lbl.innerHTML = def.ico + ' ' + def.lbl;
       row.appendChild(lbl);
       function mkInput(side, v){
-        /* Stats manuales: spinner inline ⊖ [valor] ⊕. Cada toque
-           instantáneamente incrementa o decrementa el valor sin
-           abrir la ruleta nativa del select (que en Android tarda
-           1-2 s en abrir y otro tanto en cerrar). El valor empieza
-           en `def.min` (= 0 en todas las stats salvo posesión, que
-           parte de 50) — petición usuario: "el desplegable de todas
-           tiene que empezar por el numero 0 en cada estadística".
+        /* Stats manuales: tres formas de introducir el valor —
+           (1) ⊖/⊕ para ajustes rápidos, (2) tap en el número para
+           abrir un picker con rejilla de cifras + campo manual,
+           (3) campo manual dentro del picker.
+           El input se monta `readOnly` para que el tap no levante
+           el teclado nativo (que oculta el picker). El picker
+           tiene su propio campo manual donde sí se teclea.
            Stats auto (amarillas, rojas, …) siguen siendo <input
-           readonly> porque el valor viene del acta y no se edita. */
+           readonly sin picker> porque el valor viene del acta. */
         if (!readonly && typeof def.min === 'number' && typeof def.max === 'number') {
           var startN = (v == null || v === '') ? def.min : parseInt(v, 10);
           if (!isFinite(startN)) startN = def.min;
@@ -6311,11 +6311,9 @@
           minus.textContent = '−';
           minus.setAttribute('aria-label', 'Restar');
           var inp = document.createElement('input');
-          inp.type = 'tel'; /* Numeric pad without spinners; permite
-                               teclear directamente además de usar +/−. */
-          inp.inputMode = 'numeric';
-          inp.pattern = '[0-9]*';
-          inp.className = 'ml-stats-val';
+          inp.type = 'text';
+          inp.readOnly = true;          /* sin teclado nativo; el manual va en el picker */
+          inp.className = 'ml-stats-val ml-stats-val-pick';
           inp.value = String(startN);
           inp.setAttribute('data-key', def.key);
           inp.setAttribute('data-side', side);
@@ -6342,12 +6340,14 @@
           }
           minus.addEventListener('click', function(e){ e.preventDefault(); _set(parseInt(inp.value, 10) - 1); });
           plus .addEventListener('click', function(e){ e.preventDefault(); _set(parseInt(inp.value, 10) + 1); });
-          /* Long-press repeat: tras 350ms, sigue restando/sumando
-             cada 90ms. Soltar o salir cancela. */
+          /* Long-press repeat: tras 350 ms, sigue restando/sumando
+             cada 90 ms. CRITICAL: passive:true en touchstart para
+             NO bloquear el `click` que viene después en móvil.
+             Antes hacíamos preventDefault aquí y el tap simple no
+             incrementaba en Android. */
           function _holdRepeat(btn, dir){
             var t1, t2;
-            function start(e){
-              e.preventDefault();
+            function start(){
               t1 = setTimeout(function(){
                 t2 = setInterval(function(){ _set(parseInt(inp.value, 10) + dir); }, 90);
               }, 350);
@@ -6357,15 +6357,19 @@
               if (t2) { clearInterval(t2); t2 = null; }
             }
             btn.addEventListener('mousedown', start);
-            btn.addEventListener('touchstart', start, { passive: false });
+            btn.addEventListener('touchstart', start, { passive: true });
             ['mouseup','mouseleave','touchend','touchcancel'].forEach(function(ev){
               btn.addEventListener(ev, stop);
             });
           }
           _holdRepeat(minus, -1);
           _holdRepeat(plus,   1);
-          /* Validar al terminar de teclear directamente. */
-          inp.addEventListener('blur', function(){ _set(parseInt(inp.value, 10)); });
+          /* Tap en el número → abre picker. */
+          inp.addEventListener('click', function(){
+            if (typeof window._mlOpenStatsPicker === 'function') {
+              window._mlOpenStatsPicker(inp, def);
+            }
+          });
           wrap.appendChild(minus);
           wrap.appendChild(inp);
           wrap.appendChild(plus);
@@ -8981,7 +8985,14 @@
     if (gmPP) gmPP.style.display = 'none';
     var etBtn = document.getElementById('gm-btn-et');
     if (etBtn) {
-      etBtn.style.display = (_gm.isHvH && !_gm.noET) ? '' : 'none';
+      /* Liga (comp == '') NUNCA tiene prórroga, ni siquiera en HvH —
+         empate es resultado válido. Endurecemos con `_gm.comp` para
+         blindarnos de snapshots antiguos en _gmBg que no llevan
+         serializado `noET` (volvía a aparecer el botón al reabrir
+         desde la caja Derbys). */
+      var _isLiga = !_gm.comp;
+      var _showET = _gm.isHvH && !_gm.noET && !_isLiga;
+      etBtn.style.display = _showET ? '' : 'none';
       etBtn.disabled = !!_gm.etDone;
       etBtn.style.opacity = _gm.etDone ? '0.35' : '1';
     }
@@ -11123,6 +11134,97 @@
     <button id="ml-stats-confirm-btn" class="ml-stats-confirm" onclick="window._mlStatsConfirm()">✓ CONFIRMAR ESTADÍSTICAS</button>
   </div>
 </div>
+
+<!-- ══ PICKER de números para las stats — desplegable + manual ══════
+     Modal compartido entre todas las filas. Se rellena en
+     `_mlOpenStatsPicker(inp, def)` con el rango def.min..def.max y
+     se cierra al elegir un número o pulsar OK del manual. -->
+<div id="ml-stats-picker-ov" class="ml-stats-picker-ov">
+  <div class="ml-stats-picker-card">
+    <div class="ml-stats-picker-title" id="ml-stats-picker-title">Selecciona un valor</div>
+    <div class="ml-stats-picker-manual-row">
+      <input type="tel" inputmode="numeric" pattern="[0-9]*" id="ml-stats-picker-manual" placeholder="Manual…" autocomplete="off"/>
+      <button type="button" class="ml-stats-picker-ok" id="ml-stats-picker-ok">OK</button>
+    </div>
+    <div class="ml-stats-picker-grid" id="ml-stats-picker-grid"></div>
+    <button type="button" class="ml-stats-picker-cancel" id="ml-stats-picker-cancel">Cancelar</button>
+  </div>
+</div>
+<style>
+.ml-stats-picker-ov{display:none;position:fixed;inset:0;z-index:10040;background:rgba(0,0,6,.85);align-items:center;justify-content:center;padding:14px;}
+.ml-stats-picker-ov.show{display:flex;}
+.ml-stats-picker-card{width:100%;max-width:340px;border-radius:14px;border:1px solid rgba(90,169,255,.4);background:linear-gradient(170deg,#06101c,#0d1a2a);padding:14px 12px 12px;box-shadow:0 0 30px rgba(90,169,255,.18),0 6px 24px rgba(0,0,0,.55);display:flex;flex-direction:column;gap:10px;}
+.ml-stats-picker-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2.5px;color:#5aa9ff;text-align:center;font-weight:700;}
+.ml-stats-picker-manual-row{display:flex;gap:6px;}
+#ml-stats-picker-manual{flex:1;border:2px solid rgba(90,169,255,.4);background:rgba(0,0,0,.45);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:20px;font-weight:700;text-align:center;letter-spacing:1px;border-radius:8px;padding:8px 4px;outline:none;min-width:0;}
+#ml-stats-picker-manual:focus{border-color:#5aa9ff;box-shadow:0 0 0 3px rgba(90,169,255,.25);}
+.ml-stats-picker-ok{flex:0 0 auto;width:54px;border-radius:8px;border:1.5px solid rgba(61,204,110,.55);background:rgba(61,204,110,.18);color:#b7f5c7;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;}
+.ml-stats-picker-ok:active{transform:scale(.95);}
+.ml-stats-picker-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px;max-height:48vh;overflow-y:auto;padding:4px 2px;}
+.ml-stats-picker-num{border:1.5px solid rgba(90,169,255,.35);background:rgba(0,0,0,.4);color:#fff;font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;font-weight:700;padding:8px 0;border-radius:8px;cursor:pointer;-webkit-tap-highlight-color:rgba(90,169,255,.3);touch-action:manipulation;}
+.ml-stats-picker-num:active{transform:scale(.94);background:rgba(90,169,255,.25);}
+.ml-stats-picker-num.selected{border-color:#5aa9ff;background:rgba(90,169,255,.28);box-shadow:0 0 0 2px rgba(90,169,255,.25);}
+.ml-stats-picker-cancel{width:100%;border:1px solid rgba(255,255,255,.15);border-radius:8px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.6);font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;padding:10px;cursor:pointer;}
+.ml-stats-picker-cancel:hover{background:rgba(255,255,255,.08);color:#fff;}
+.ml-stats-val-pick{cursor:pointer;}
+@media (max-width:380px){
+  .ml-stats-picker-grid{grid-template-columns:repeat(5,1fr);}
+}
+</style>
+<script>
+(function(){
+  function _close(){ var ov=document.getElementById('ml-stats-picker-ov'); if(ov) ov.classList.remove('show'); }
+  window._mlOpenStatsPicker = function(inp, def){
+    var ov = document.getElementById('ml-stats-picker-ov');
+    if (!ov) return;
+    var titleEl  = document.getElementById('ml-stats-picker-title');
+    var manualEl = document.getElementById('ml-stats-picker-manual');
+    var gridEl   = document.getElementById('ml-stats-picker-grid');
+    var okBtn    = document.getElementById('ml-stats-picker-ok');
+    var cancelBtn= document.getElementById('ml-stats-picker-cancel');
+    var min = (typeof def.min === 'number') ? def.min : 0;
+    var max = (typeof def.max === 'number') ? def.max : 99;
+    var lbl = (def.lbl || '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 %()]/g,'').trim();
+    titleEl.textContent = lbl || 'Selecciona un valor';
+    manualEl.value = inp.value || String(min);
+    /* Construir rejilla de números clicables. */
+    var html = '';
+    for (var n = min; n <= max; n++) {
+      html += '<button type="button" class="ml-stats-picker-num'
+            + (String(n) === String(inp.value) ? ' selected' : '')
+            + '" data-n="' + n + '">' + n + '</button>';
+    }
+    gridEl.innerHTML = html;
+    function _commit(n){
+      var v = parseInt(n, 10);
+      if (!isFinite(v)) return;
+      if (v < min) v = min;
+      if (v > max) v = max;
+      inp.value = String(v);
+      inp.dispatchEvent(new Event('input',  { bubbles: true }));
+      inp.dispatchEvent(new Event('change', { bubbles: true }));
+      _close();
+    }
+    /* Tap en un número → fija + cierra. */
+    gridEl.querySelectorAll('.ml-stats-picker-num').forEach(function(btn){
+      btn.onclick = function(){ _commit(btn.getAttribute('data-n')); };
+    });
+    okBtn.onclick = function(){ _commit(manualEl.value); };
+    manualEl.onkeydown = function(e){ if (e.key === 'Enter') _commit(manualEl.value); };
+    cancelBtn.onclick = _close;
+    /* Click fuera de la tarjeta → cerrar. */
+    ov.onclick = function(e){ if (e.target === ov) _close(); };
+    ov.classList.add('show');
+    /* Auto-scroll al número seleccionado para verlo de inmediato. */
+    setTimeout(function(){
+      var sel = gridEl.querySelector('.ml-stats-picker-num.selected');
+      if (sel && typeof sel.scrollIntoView === 'function') {
+        try { sel.scrollIntoView({ block: 'center' }); } catch(_){}
+      }
+    }, 30);
+  };
+})();
+</script>
 
 <!-- ── OVERLAY DESCANSO (45 min) ──────────────────────────── -->
 <div id="ml-descanso-ov" class="ml-descanso-ov">

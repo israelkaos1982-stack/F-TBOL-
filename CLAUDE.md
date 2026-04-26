@@ -66,24 +66,39 @@ de jugador para la simulación (`sqFromRegistry`, builders similares)
 
 ## Duración del cronómetro del partido (obligatorio, siempre)
 
-**TIEMPOS OFICIALES — FIJADOS PARA SIEMPRE** (definidos en
+**TIEMPOS OFICIALES** (definidos en
 `templates/partials/part2/misc_body_2.html`, bloque `_MATCH_RULE`):
 
 | Modo  | gameMin | realMin | displayMin (previa) | ms/tick (5s juego) | s/game-min |
 |-------|---------|---------|---------------------|--------------------|------------|
-| HvH         | 90 | 16.5 | 10 | ≈ 917 ms | 11 s |
-| HvH prórroga| 30 |  5   | —  | ≈ 833 ms | — |
-| HvIA        | 90 | 13.5 |  8 | ≈ 750 ms | 9 s |
-| IAIA        | 90 |  1.5 | "45 s/parte" | ≈ 83 ms | 1 s |
+| HvH         | 90 | 15.75 | 10 | ≈ 875 ms | 10.5 s |
+| HvH prórroga| 30 |  5    | —  | ≈ 833 ms | — |
+| HvIA        | 90 |  9.75 |  8 | ≈ 542 ms |  6.5 s |
+| IAIA        | 90 |  1.5  | "45 s/parte" | ≈ 83 ms | 1 s |
 
-- HvH = humano vs humano → **16 min 30 s reales**. Previa: "10 min". 1 game-min = 11 s reales.
-- HvIA = humano vs IA → **13 min 30 s reales**. Previa: "8 min". 1 game-min = 9 s reales.
+- HvH = humano vs humano → **15 min 45 s reales**. Previa: "10 min". 1 game-min = 10.5 s reales.
+- HvIA = humano vs IA → **9 min 45 s reales**. Previa: "8 min". 1 game-min = 6.5 s reales.
 - IAIA = IA vs IA → **1 min 30 s reales total** (45 s por parte). 1 game-min = 1 seg real.
 - HvH_ET = prórroga humana → 5 min reales.
+
+Estos valores los puede ajustar el usuario mediante petición explícita
+(historial: 2026-04-26 bajada de HvH 11→10.5 s y HvIA 9→6.5 s). No
+cambiar sin acuerdo.
 
 `realMin` controla el cronómetro real. `displayMin` / `displayLabel`
 controlan SOLO el label visible en la pantalla de PREVIA — están
 desacoplados a petición del usuario.
+
+### Inicio de la 2ª parte (obligatorio)
+
+Tras el descanso (HT), al pulsar ▶️ "continuar 2ª parte" el cronómetro
+de juego debe arrancar SIEMPRE en `45:00` exacto, NO en `45+N` ni en
+`46:00`/`47:00`/`48:00`. El descuento de la 1ª parte ya se mostró
+durante "45+1, 45+2…" antes del descanso, así que se descarta al
+reanudar. Se aplica tanto al flujo `_ml*` (calendar cards,
+`_mlResumeFromDescanso`) como al gm-modal (`gmContinueSecondHalf`):
+ambos hacen `timerSec = 2700` y re-anclan `_wallStart` /
+`_secAtStart` antes de arrancar el interval.
 
 ### Descuento dinámico por eventos (obligatorio)
 
@@ -100,8 +115,8 @@ amarilla, roja, lesión) añade **1 game-minute** al tope de SU parte:
   prolongar a sí mismos.
 
 En tiempo REAL, 1 game-minute de descuento equivale a:
-- HvH → 11 segundos reales por evento.
-- HvIA → 9 segundos reales por evento.
+- HvH → 10.5 segundos reales por evento.
+- HvIA → 6.5 segundos reales por evento.
 - IAIA → 1 segundo real por evento.
 
 Helper: `window._mlCountStoppageHalves(st)` → `{first, second}`.
@@ -116,12 +131,17 @@ La velocidad del reloj (`tickMs`) SIEMPRE debe salir de
 `window._mlRealDurationLabel({ isHvH, humanInvolved })`.
 
 **PROHIBIDO**:
-- Hardcodear `"16 min"`, `"10 min"`, `"8 min"` o cualquier duración.
+- Hardcodear `"15 min 45 s"`, `"9 min 45 s"`, `"10 min"`, `"8 min"` o
+  cualquier duración.
 - Cachear `tickMs` en variables de módulo al cargar (hay que leerlo en
   cada arranque del reloj porque el admin puede cambiar el override).
 - Duplicar tablas `_MATCH_RULE` / `_MATCH_TICKS`.
 - Añadir "campo mode" u otros atajos visuales que extiendan la duración
   real de IAIA por encima de 90 s.
+- Reintroducir botones ⏪/⏩ de retrasar/adelantar tiempo en partidos
+  HvH/HvIA. El usuario los retiró (2026-04-26) porque ocupaban
+  demasiado espacio en el header del cronómetro y desplazaban los
+  nombres de los equipos. Solo botón ▶ visible.
 
 ### Override admin (`_ppDurationMin`)
 

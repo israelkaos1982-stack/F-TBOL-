@@ -5942,6 +5942,30 @@ Tottenham
   function loadData(k){
     if(LIGA_CACHE[k]) return _applyForcedBlacklist(k, LIGA_CACHE[k]);
     try{ var raw = localStorage.getItem(storeKey(k)); if(raw){ LIGA_CACHE[k] = JSON.parse(raw); return _applyForcedBlacklist(k, LIGA_CACHE[k]); } }catch(_){}
+    /* Cache vacía → intento síncrono al servidor para que la primera
+       apertura de la liga en un dispositivo nuevo NO muestre
+       "No hay equipos" durante segundos mientras la fetch async
+       responde. Es el mismo patrón que ya usan misc_body_2.html
+       (rosterFor) y la rama de equipos editados de este mismo
+       archivo. Si el sync falla (offline / timeout), caemos al
+       objeto vacío y la fetchData posterior repoblará. */
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(k), false);
+      xhr.send();
+      if (xhr.status === 200) {
+        var resp = JSON.parse(xhr.responseText);
+        if (resp && resp.data && Array.isArray(resp.data.teams)) {
+          var d = resp.data;
+          d.teams   = d.teams   || [];
+          d.results = d.results || [];
+          LIGA_CACHE[k] = d;
+          if (resp.updated_at) LIGA_UPDATED[k] = resp.updated_at;
+          try { localStorage.setItem(storeKey(k), JSON.stringify(d)); } catch(_){}
+          return _applyForcedBlacklist(k, d);
+        }
+      }
+    } catch(_){}
     LIGA_CACHE[k] = {teams:[], results:[]};
     return _applyForcedBlacklist(k, LIGA_CACHE[k]);
   }

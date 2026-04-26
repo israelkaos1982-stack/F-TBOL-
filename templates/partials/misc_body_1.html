@@ -543,20 +543,28 @@ window.pG = function(fn) {
   /* HUB · Vitrina de Trofeos — estilo videojuego, contenido centrado */
   .hub-card-trofeos{align-items:center !important;justify-content:center !important;text-align:center;background:radial-gradient(ellipse at center,rgba(240,192,64,.22),rgba(0,0,0,.28) 65%),linear-gradient(160deg,rgba(80,50,0,.55),rgba(0,0,0,.5)) !important;border:1px solid rgba(240,192,64,.55) !important;box-shadow:0 0 14px rgba(240,192,64,.18),inset 0 0 18px rgba(240,192,64,.06) !important;gap:4px !important;}
   .hub-trofeos-emoji{font-size:34px;line-height:1;filter:drop-shadow(0 0 10px rgba(240,192,64,.55));margin-bottom:2px;}
-  .hub-trofeos-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:17px;font-weight:700;letter-spacing:3px;color:#ffd750;text-shadow:0 0 8px rgba(255,215,80,.65),0 1px 0 rgba(0,0,0,.55);}
+  /* `white-space:nowrap` + tamaño 15px (~10% más pequeño que antes)
+     evita el salto de línea de "VITRINA TROFEOS" en pantallas
+     pequeñas. */
+  .hub-trofeos-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:2.5px;color:#ffd750;text-shadow:0 0 8px rgba(255,215,80,.65),0 1px 0 rgba(0,0,0,.55);white-space:nowrap;}
   .hub-trofeos-count{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.2px;color:rgba(255,228,168,.85);text-transform:uppercase;}
   /* HUB · Histórico Derbys — estilo videojuego, paleta azul-acero */
   .hub-card-derbys{align-items:center !important;justify-content:center !important;text-align:center;background:radial-gradient(ellipse at center,rgba(96,180,255,.20),rgba(0,0,0,.28) 65%),linear-gradient(160deg,rgba(20,40,80,.6),rgba(0,0,0,.5)) !important;border:1px solid rgba(96,180,255,.55) !important;box-shadow:0 0 14px rgba(96,180,255,.18),inset 0 0 18px rgba(96,180,255,.06) !important;gap:4px !important;}
   .hub-derbys-emoji{font-size:30px;line-height:1;filter:drop-shadow(0 0 10px rgba(96,180,255,.55));margin-bottom:2px;}
-  .hub-derbys-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:17px;font-weight:700;letter-spacing:3px;color:#cfe6ff;text-shadow:0 0 8px rgba(128,200,255,.6),0 1px 0 rgba(0,0,0,.55);margin-bottom:3px;}
-  .hub-derbys-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%;padding:0 4px;margin-top:2px;}
-  .hub-derbys-stat{display:flex;flex-direction:column;align-items:center;gap:1px;background:rgba(0,0,0,.30);border:1px solid rgba(96,180,255,.20);border-radius:6px;padding:4px 0;}
-  .hub-derbys-num{font-family:'Bebas Neue',sans-serif;font-size:18px;line-height:1;color:#fff;text-shadow:0 0 6px rgba(0,0,0,.6);}
-  .hub-derbys-num.pj{color:#cfe6ff;}
-  .hub-derbys-num.g {color:#4fc86a;text-shadow:0 0 6px rgba(79,200,106,.45);}
-  .hub-derbys-num.e {color:#f0c040;text-shadow:0 0 6px rgba(240,192,64,.45);}
-  .hub-derbys-num.p {color:#e05050;text-shadow:0 0 6px rgba(224,80,80,.45);}
-  .hub-derbys-lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.55);font-weight:700;}
+  /* HISTÓRICO DERBYS en una sola línea: nowrap + tamaño 15px (~10%
+     más pequeño) + letter-spacing reducido a 1.6px. */
+  .hub-derbys-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:1.6px;color:#cfe6ff;text-shadow:0 0 8px rgba(128,200,255,.6),0 1px 0 rgba(0,0,0,.55);margin-bottom:3px;white-space:nowrap;}
+  /* 5 columnas: PJ · G · E · P · % — paddings y gaps comprimidos
+     para que el conjunto entre cómodo en el ancho disponible. */
+  .hub-derbys-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;width:100%;padding:0 2px;margin-top:2px;}
+  .hub-derbys-stat{display:flex;flex-direction:column;align-items:center;gap:1px;background:rgba(0,0,0,.30);border:1px solid rgba(96,180,255,.20);border-radius:5px;padding:3px 0;min-width:0;}
+  .hub-derbys-num{font-family:'Bebas Neue',sans-serif;font-size:15px;line-height:1;color:#fff;text-shadow:0 0 6px rgba(0,0,0,.6);}
+  .hub-derbys-num.pj {color:#cfe6ff;}
+  .hub-derbys-num.g  {color:#4fc86a;text-shadow:0 0 6px rgba(79,200,106,.45);}
+  .hub-derbys-num.e  {color:#f0c040;text-shadow:0 0 6px rgba(240,192,64,.45);}
+  .hub-derbys-num.p  {color:#e05050;text-shadow:0 0 6px rgba(224,80,80,.45);}
+  .hub-derbys-num.pct{color:#c0a0ff;text-shadow:0 0 6px rgba(192,160,255,.45);}
+  .hub-derbys-lbl{font-family:Oswald,sans-serif;font-size:8px;letter-spacing:1px;color:rgba(255,255,255,.55);font-weight:700;}
   .hub-match-engine{background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:10px}
   .fixture-label{margin:0;font-size:11px;color:#f6f6f6}
   .fixture-value{margin:0;font-size:14px;color:#fff;font-weight:700}
@@ -9219,7 +9227,7 @@ Tottenham
 <section class="hub-main-grid">
   <button class="hub-card hub-card-trofeos" onclick="go('s-munich-trofeos')">
     <span class="hub-trofeos-emoji">🏆</span>
-    <span class="hub-trofeos-title">VITRINA DE TROFEOS</span>
+    <span class="hub-trofeos-title">VITRINA TROFEOS</span>
     <span class="hub-trofeos-count" id="munich-trofeos-count">0 títulos oficiales</span>
   </button>
   <button class="hub-card hub-card-derbys" onclick="go('s-munich-derbys')">
@@ -9230,6 +9238,7 @@ Tottenham
       <div class="hub-derbys-stat"><span class="hub-derbys-num g">0</span><span class="hub-derbys-lbl">G</span></div>
       <div class="hub-derbys-stat"><span class="hub-derbys-num e">0</span><span class="hub-derbys-lbl">E</span></div>
       <div class="hub-derbys-stat"><span class="hub-derbys-num p">0</span><span class="hub-derbys-lbl">P</span></div>
+      <div class="hub-derbys-stat"><span class="hub-derbys-num pct">0</span><span class="hub-derbys-lbl">%</span></div>
     </div>
   </button>
   <button class="hub-card" onclick="go('s-munich-objetivos')">
@@ -9722,10 +9731,15 @@ Tottenham
       else if (row.classList.contains('derby-p')) p++;
       /* derby-pend → NO suma */
     });
-    _setNum('pj', g + e + p);
-    _setNum('g',  g);
-    _setNum('e',  e);
-    _setNum('p',  p);
+    var pj = g + e + p;
+    /* % de victorias = G / PJ (redondeado). Si no hay partidos jugados
+       mostramos 0 para evitar NaN. */
+    var pct = pj > 0 ? Math.round((g / pj) * 100) : 0;
+    _setNum('pj',  pj);
+    _setNum('g',   g);
+    _setNum('e',   e);
+    _setNum('p',   p);
+    _setNum('pct', pct);
   }
 
   window.refreshMunichDerbysHub = refresh;

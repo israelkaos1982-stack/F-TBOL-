@@ -540,6 +540,11 @@ window.pG = function(fn) {
   .hub-sub{font-size:12px;color:#ffe4a8}
   .hub-trophy-logos{display:flex;gap:8px;align-items:center}
   .hub-trophy-logos img{width:32px;height:32px;object-fit:contain;background:#ffffffd8;border-radius:8px;padding:3px}
+  /* HUB · Vitrina de Trofeos — estilo videojuego, contenido centrado */
+  .hub-card-trofeos{align-items:center !important;justify-content:center !important;text-align:center;background:radial-gradient(ellipse at center,rgba(240,192,64,.22),rgba(0,0,0,.28) 65%),linear-gradient(160deg,rgba(80,50,0,.55),rgba(0,0,0,.5)) !important;border:1px solid rgba(240,192,64,.55) !important;box-shadow:0 0 14px rgba(240,192,64,.18),inset 0 0 18px rgba(240,192,64,.06) !important;gap:4px !important;}
+  .hub-trofeos-emoji{font-size:34px;line-height:1;filter:drop-shadow(0 0 10px rgba(240,192,64,.55));margin-bottom:2px;}
+  .hub-trofeos-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:17px;font-weight:700;letter-spacing:3px;color:#ffd750;text-shadow:0 0 8px rgba(255,215,80,.65),0 1px 0 rgba(0,0,0,.55);}
+  .hub-trofeos-count{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.2px;color:rgba(255,228,168,.85);text-transform:uppercase;}
   .hub-match-engine{background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:10px}
   .fixture-label{margin:0;font-size:11px;color:#f6f6f6}
   .fixture-value{margin:0;font-size:14px;color:#fff;font-weight:700}
@@ -9249,13 +9254,10 @@ Tottenham
   </div>
 </div>
 <section class="hub-main-grid">
-  <button class="hub-card" onclick="go('s-munich-trofeos')">
-    <span class="hub-title">🏆 Vitrina de Trofeos</span>
-    <span class="hub-sub">2 títulos oficiales</span>
-    <div class="hub-trophy-logos">
-      <img src="https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg" alt="FIFA Club World Cup">
-      <img src="/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg" alt="Supercopa de España">
-    </div>
+  <button class="hub-card hub-card-trofeos" onclick="go('s-munich-trofeos')">
+    <span class="hub-trofeos-emoji">🏆</span>
+    <span class="hub-trofeos-title">VITRINA DE TROFEOS</span>
+    <span class="hub-trofeos-count" id="munich-trofeos-count">0 títulos oficiales</span>
   </button>
   <button class="hub-card" onclick="go('s-munich-derbys')">
     <span class="hub-title">👤 Histórico Derbys</span>
@@ -9461,17 +9463,175 @@ Tottenham
 <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Vitrina de Trofeos</h2></div>
 <div style="padding:18px 18px 40px;display:flex;flex-direction:column;gap:14px;">
-<!-- BADGES FLASH VIDEOJUEGO -->
-<div style="text-align:center;padding:10px 0 4px;">
-<span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.35);">TEMPORADA 31–32</span>
+  <div style="text-align:center;padding:10px 0 4px;">
+    <span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.35);">TEMPORADA 31–32</span>
+  </div>
+  <!-- Filas de trofeos rellenadas por `renderMunichTrofeos`. La fuente
+       de datos es localStorage (`bayern_trofeos_v1`); si está vacía
+       se siembra con los 2 títulos por defecto (Mundial de Clubes +
+       Supercopa de España). El botón ➕ exige PIN admin 747 vía pG(). -->
+  <div id="munich-trofeos-list" style="display:flex;flex-direction:column;gap:14px;"></div>
+  <div style="text-align:center;padding:14px 0 0;">
+    <span id="munich-trofeos-total" style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:6px;color:rgba(240,192,64,.5);">TOTAL: 0</span>
+  </div>
+  <div style="display:flex;justify-content:center;padding:6px 0 0;">
+    <button id="munich-trofeos-add-btn" onclick="window.munichTrofeosPromptAdd && window.munichTrofeosPromptAdd()"
+      style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(255,198,77,.35);">
+      ➕ AÑADIR TÍTULO (ADMIN · PIN 747)
+    </button>
+  </div>
 </div>
-<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><img src="https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg" alt="FIFA Club World Cup" style="width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;"><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">MUNDIAL DE CLUBES</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">FIFA Club World Cup</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
-<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><img src="/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg" alt="Supercopa de España" style="width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;"><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">SUPERCOPA DE ESPAÑA</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">RFEF – Competición Nacional</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
-<div style="text-align:center;padding:14px 0 0;">
-<span style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:6px;color:rgba(240,192,64,.5);">TOTAL: 2</span>
 </div>
-</div>
-</div>
+
+<style>
+  #s-munich-trofeos .ath-titulo-row{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;position:relative;}
+  #s-munich-trofeos .ath-titulo-row img{width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;}
+  #s-munich-trofeos .ath-titulo-info{flex:1;min-width:0;}
+  #s-munich-trofeos .ath-titulo-name{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;text-transform:uppercase;}
+  #s-munich-trofeos .ath-titulo-sub{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;}
+  #s-munich-trofeos .ath-titulo-n{font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;}
+  #s-munich-trofeos .ath-titulo-del{position:absolute;top:6px;right:8px;background:rgba(197,15,31,.35);border:1px solid rgba(197,15,31,.55);color:#ffb0b0;border-radius:6px;padding:2px 8px;font-size:11px;letter-spacing:1px;cursor:pointer;font-family:Oswald,sans-serif;}
+  #s-munich-trofeos .ath-titulo-del:hover{background:rgba(197,15,31,.55);color:#fff;}
+</style>
+
+<script>
+(function(){
+  if (window.__MUNICH_TROFEOS_READY) return;
+  window.__MUNICH_TROFEOS_READY = true;
+
+  var STORE_KEY = 'bayern_trofeos_v1';
+  /* Semilla por defecto — los 2 títulos que estaban hardcodeados antes
+     en el HTML. Solo se aplica si el storage está vacío. Una vez el
+     admin añade/elimina algo, las modificaciones quedan persistidas
+     y la semilla no vuelve a aplicarse. */
+  var DEFAULTS = [
+    { id:'def-fcwc', icon:'https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg', title:'MUNDIAL DE CLUBES', sub:'FIFA Club World Cup' },
+    { id:'def-supesp', icon:'/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg', title:'SUPERCOPA DE ESPAÑA', sub:'RFEF – Competición Nacional' }
+  ];
+
+  function load(){
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw){
+        var arr = JSON.parse(raw);
+        if (Array.isArray(arr)) return arr;
+      }
+    } catch(_){}
+    /* Persistir la semilla en la primera lectura para que el admin
+       pueda eliminar los defaults sin que vuelvan a aparecer. */
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(DEFAULTS)); } catch(_){}
+    return DEFAULTS.slice();
+  }
+
+  function save(arr){
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(arr || [])); } catch(_){}
+  }
+
+  function esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function _newId(){
+    return 'tr-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7);
+  }
+
+  function _rowHtml(t){
+    return '<div class="ath-titulo-row" data-trofeo-id="'+esc(t.id)+'">'
+         +   '<img src="'+esc(t.icon)+'" alt="'+esc(t.title)+'" onerror="this.style.visibility=\'hidden\'">'
+         +   '<div class="ath-titulo-info">'
+         +     '<div class="ath-titulo-name">'+esc(t.title)+'</div>'
+         +     (t.sub ? '<div class="ath-titulo-sub">'+esc(t.sub)+'</div>' : '')
+         +   '</div>'
+         +   '<span class="ath-titulo-n">1</span>'
+         +   '<button class="ath-titulo-del" onclick="window.munichTrofeosPromptDelete && window.munichTrofeosPromptDelete(\''+esc(t.id)+'\')" title="Eliminar (PIN 747)">🗑</button>'
+         + '</div>';
+  }
+
+  function render(){
+    var list = load();
+    var host = document.getElementById('munich-trofeos-list');
+    if (host){
+      if (!list.length){
+        host.innerHTML = '<div style="text-align:center;padding:30px 14px;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:1px;">— Sin títulos —<br><span style="font-size:11px;color:rgba(255,255,255,.35);">Pulsa <b>➕ AÑADIR TÍTULO</b> e introduce PIN 747.</span></div>';
+      } else {
+        host.innerHTML = list.map(_rowHtml).join('');
+      }
+    }
+    var total = list.length;
+    var totEl = document.getElementById('munich-trofeos-total');
+    if (totEl) totEl.textContent = 'TOTAL: ' + total;
+    var hubCnt = document.getElementById('munich-trofeos-count');
+    if (hubCnt) hubCnt.textContent = total + (total === 1 ? ' título oficial' : ' títulos oficiales');
+  }
+
+  window.munichTrofeosRender = render;
+
+  window.munichTrofeosPromptAdd = function(){
+    /* Gate admin con PIN 747 reusando el modal global pG. */
+    var doAdd = function(){
+      var iconUrl = window.prompt('🖼️  URL del icono del título\n(p. ej. https://… o /static/img/logos/…)\n\nDeja vacío para cancelar.', '');
+      if (!iconUrl) return;
+      iconUrl = String(iconUrl).trim();
+      if (!iconUrl) return;
+      var titleTxt = window.prompt('🏆  Texto del título ganado\n(p. ej. CHAMPIONS LEAGUE 2032)', '');
+      if (!titleTxt) return;
+      titleTxt = String(titleTxt).trim();
+      if (!titleTxt) return;
+      var subTxt = window.prompt('📝  Subtítulo / descripción (opcional)\n(p. ej. UEFA · Final 25-Mayo-2032)\n\nDeja vacío si no quieres subtítulo.', '');
+      var arr = load();
+      arr.push({
+        id:    _newId(),
+        icon:  iconUrl,
+        title: titleTxt,
+        sub:   subTxt ? String(subTxt).trim() : ''
+      });
+      save(arr);
+      render();
+    };
+    if (typeof window.pG === 'function') window.pG(doAdd); else doAdd();
+  };
+
+  window.munichTrofeosPromptDelete = function(id){
+    if (!id) return;
+    var doDel = function(){
+      var arr = load();
+      var keep = arr.filter(function(t){ return t && t.id !== id; });
+      if (keep.length === arr.length) return;
+      var victim = arr.filter(function(t){ return t && t.id === id; })[0];
+      if (!window.confirm('🗑  ¿Eliminar el título «' + ((victim && victim.title) || id) + '»?')) return;
+      save(keep);
+      render();
+    };
+    if (typeof window.pG === 'function') window.pG(doDel); else doDel();
+  };
+
+  /* Pintado inicial + auto-render cada vez que el screen se activa.
+     Mismo patrón que la caja Bayern · Plantilla — un MutationObserver
+     sobre la clase del propio screen es inmune a cualquier wrap de
+     `window.go` que haga el bundle. */
+  function _wire(){
+    var screen = document.getElementById('s-munich-trofeos');
+    if (screen){
+      var rerender = function(){
+        if (screen.classList.contains('active')) render();
+      };
+      try {
+        new MutationObserver(rerender).observe(screen, {attributes:true, attributeFilter:['class']});
+      } catch(_){}
+    }
+    /* Render inicial: actualiza tanto la pantalla como el contador de
+       la HUB-card (que vive fuera del screen). */
+    render();
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _wire);
+  } else {
+    _wire();
+  }
+})();
+</script>
 
 <div class="screen" id="s-munich-objetivos">
 <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>

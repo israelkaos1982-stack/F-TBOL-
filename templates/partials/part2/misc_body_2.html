@@ -1739,16 +1739,14 @@
 <div class="sancion-section-hdr sancion-section-hdr-inj"><span class="sancion-hdr-ico d2">🚑</span> LESIONADOS</div>
 <div class="sancion-list" id="sancion-ov-list-inj"></div>
 </div>
-<!-- ESTADO DE FORMA (↘️/⬇️) — sección dedicada. Se rellena desde el
+<!-- AÑADIR LESIONADOS (⬇️) — sección dedicada. Se rellena desde el
      script inline de abajo, que no depende del bundle ni de caché. -->
-<div class="sancion-section" id="sancion-ov-forma-section" style="border:1px solid rgba(255,160,64,.35);border-radius:10px;background:rgba(255,160,64,.05);margin-top:10px;">
-<div class="sancion-section-hdr" style="color:#ff9040;">
-  <span class="sancion-hdr-ico">📉</span> ESTADO DE FORMA · EQUIPO HUMANO
+<div class="sancion-section" id="sancion-ov-forma-section" style="border:1px solid rgba(255,80,80,.35);border-radius:10px;background:rgba(255,80,80,.05);margin-top:10px;">
+<div class="sancion-section-hdr" style="color:#ff5050;">
+  <span class="sancion-hdr-ico">🩹</span> AÑADIR LESIONADOS · EQUIPO HUMANO
 </div>
 <div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.65);margin:4px 10px 8px;letter-spacing:.3px;line-height:1.45;">
-  Marca ↘️ <b style="color:#ff9040">Mala</b> o ⬇️ <b style="color:#ff5050">Pésima</b>. Los marcados no juegan este partido.<br>
-  · 3↘️ acumulados (no consecutivos) → 🩹 LESIÓN LEVE automática.<br>
-  · 1⬇️ → 💉 MODERADA o 🚑 GRAVE automática.
+  Pulsa ⬇️ para marcar al jugador como lesionado. Se asignará una lesión 💉 <b style="color:#ff8c00">MODERADA</b> o 🚑 <b style="color:#ff5050">GRAVE</b> automática y no jugará este partido.
 </div>
 <div class="sancion-list" id="sancion-ov-list-forma" style="padding:0 10px 10px;"></div>
 </div>
@@ -1758,31 +1756,17 @@
 </div>
 <script>
 /* ══════════════════════════════════════════════════════════════════
-   FORMA ↘️/⬇️  —  checklist inline en el overlay de BAJAS PARA EL
-   PARTIDO. Rellena #sancion-ov-list-forma sin depender del bundle.
-   Funciona por MutationObserver sobre #sancion-overlay (dispara cada
-   vez que se le añade la clase `show`) + listener adicional en el
-   click del botón PREVIA/CONFIRMAR. Bulletproof contra caché.
+   AÑADIR LESIONADOS ⬇️  —  checklist inline en el overlay de BAJAS
+   PARA EL PARTIDO. Rellena #sancion-ov-list-forma sin depender del
+   bundle. Funciona por MutationObserver sobre #sancion-overlay
+   (dispara cada vez que se le añade la clase `show`). Cada ⬇️ marca
+   al jugador como lesionado MODERADO/GRAVE y lo deja fuera del
+   partido. Sin acumulador ↘️ — directo al grano.
    ══════════════════════════════════════════════════════════════════ */
 (function(){
   if (window.__FORMA_INLINE_WIRED) return;
   window.__FORMA_INLINE_WIRED = true;
-  window._FORMA_DOWN_COUNTER  = window._FORMA_DOWN_COUNTER  || {};
   window._FORMA_MATCH_STATES  = window._FORMA_MATCH_STATES  || {};
-  var LS_COUNTER = 'ligaExt_forma_down_counter';
-  try {
-    var raw = localStorage.getItem(LS_COUNTER);
-    if (raw) { var d = JSON.parse(raw); if (d && typeof d === 'object') window._FORMA_DOWN_COUNTER = d; }
-  } catch(_){}
-  function saveCounter(){
-    try { localStorage.setItem(LS_COUNTER, JSON.stringify(window._FORMA_DOWN_COUNTER||{})); } catch(_){}
-    try {
-      fetch('/api/forma_counter', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({counters: window._FORMA_DOWN_COUNTER||{}})
-      }).catch(function(){});
-    } catch(_){}
-  }
   function normTeam(s){
     return String(s||'').trim().toLowerCase()
       .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
@@ -1909,16 +1893,6 @@
     }
     return out.filter(function(p){ return p && Array.isArray(p) && p[1]; });
   }
-  function randomLeve(team, name){
-    var arr = ['Sobrecarga muscular','Contusión en el cuádriceps','Esguince de tobillo Grado I','Calambre persistente','Elongación en el aductor'];
-    var d = arr[Math.floor(Math.random()*arr.length)];
-    var p = 1 + Math.floor(Math.random()*2);
-    window.LESION_STORE = window.LESION_STORE || {};
-    window.BAJA_STORE   = window.BAJA_STORE   || {};
-    window.LESION_STORE[name] = { equipo:team, grado:1, gradoNombre:'Leve', gradoEmoji:'🩹', descripcion:d, partidos:p, timestamp:Date.now() };
-    window.BAJA_STORE[name]   = { tipo:'lesion', liga:p, copa:p, europa:p };
-    return {desc:d, partidos:p};
-  }
   function randomModGrave(team, name){
     var r = Math.random(), grado, gn, ge, partidos, arr;
     if (r < 0.65) { grado=2; gn='Moderada'; ge='💉'; partidos=2+Math.floor(Math.random()*3);
@@ -1932,58 +1906,28 @@
     window.BAJA_STORE[name]   = { tipo:'lesion', liga:partidos, copa:partidos, europa:partidos };
     return {grado:grado, gradoNombre:gn, gradoEmoji:ge, descripcion:d, partidos:partidos};
   }
-  window._formaToggleInline = function(team, name, kind){
+  window._formaToggleInline = function(team, name){
     window.BAJA_STORE         = window.BAJA_STORE         || {};
     window._FORMA_MATCH_STATES= window._FORMA_MATCH_STATES|| {};
-    window._FORMA_DOWN_COUNTER= window._FORMA_DOWN_COUNTER|| {};
-    var target = kind === 'down' ? '↘️' : '⬇️';
     var existing = window._FORMA_MATCH_STATES[name];
-    if (existing === target) {
-      /* deseleccionar */
+    if (existing === '⬇️') {
+      /* deseleccionar: quitar la lesión asignada manualmente */
       delete window._FORMA_MATCH_STATES[name];
-      var cur = window.BAJA_STORE[name];
-      if (cur && cur.tipo === 'forma') delete window.BAJA_STORE[name];
-      if (kind === 'down') {
-        var n = (window._FORMA_DOWN_COUNTER[name]||0) - 1;
-        if (n > 0) window._FORMA_DOWN_COUNTER[name] = n;
-        else       delete window._FORMA_DOWN_COUNTER[name];
-        saveCounter();
+      if (window.BAJA_STORE[name]) delete window.BAJA_STORE[name];
+      if (window.LESION_STORE && window.LESION_STORE[name]) delete window.LESION_STORE[name];
+      renderForma();
+      if (typeof window._refreshSancionInjList === 'function') {
+        try { window._refreshSancionInjList(); } catch(_){}
       }
-      renderForma(); return;
+      return;
     }
-    if (existing) {
-      delete window._FORMA_MATCH_STATES[name];
-      var c2 = window.BAJA_STORE[name];
-      if (c2 && c2.tipo === 'forma') delete window.BAJA_STORE[name];
-      if (existing === '↘️') {
-        var n2 = (window._FORMA_DOWN_COUNTER[name]||0) - 1;
-        if (n2 > 0) window._FORMA_DOWN_COUNTER[name] = n2;
-        else        delete window._FORMA_DOWN_COUNTER[name];
-      }
-    }
-    if (kind === 'down') {
-      window._FORMA_MATCH_STATES[name] = '↘️';
-      window.BAJA_STORE[name] = { tipo:'forma', liga:1, copa:1, europa:1 };
-      var nc = (window._FORMA_DOWN_COUNTER[name]||0) + 1;
-      window._FORMA_DOWN_COUNTER[name] = nc;
-      if (nc >= 3) {
-        var l = randomLeve(team, name);
-        delete window._FORMA_DOWN_COUNTER[name];
-        delete window._FORMA_MATCH_STATES[name];
-        alert('🩹 LESIÓN LEVE AUTOMÁTICA\n' + name + ' (' + team + ')\n' +
-              '3 partidos con ↘️ Mala forma.\n' + l.desc + '\n' + l.partidos + ' partido(s) de baja');
-      }
-      saveCounter();
-    } else {
-      window._FORMA_MATCH_STATES[name] = '⬇️';
-      var inj = randomModGrave(team, name);
-      alert('🏥 ' + inj.gradoEmoji + ' LESIÓN ' + inj.gradoNombre.toUpperCase() + '\n' +
-            name + ' (' + team + ')\n' +
-            '⬇️ Pésima forma → ' + inj.descripcion + '\n' +
-            inj.partidos + ' partido(s) de baja');
-    }
+    window._FORMA_MATCH_STATES[name] = '⬇️';
+    var inj = randomModGrave(team, name);
+    alert('🏥 ' + inj.gradoEmoji + ' LESIÓN ' + inj.gradoNombre.toUpperCase() + '\n' +
+          name + ' (' + team + ')\n' +
+          inj.descripcion + '\n' +
+          inj.partidos + ' partido(s) de baja');
     renderForma();
-    /* Re-render del listado de lesionados para que los marcados aparezcan también arriba. */
     if (typeof window._refreshSancionInjList === 'function') {
       try { window._refreshSancionInjList(); } catch(_){}
     }
@@ -1993,11 +1937,10 @@
     if (!host) return;
     var humans = humansInMatch();
     if (!humans.length) {
-      host.innerHTML = '<div style="font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,160,64,.75);text-align:center;padding:10px;">Abre la PREVIA de un partido con equipo humano para marcar la forma.</div>';
+      host.innerHTML = '<div style="font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,80,80,.75);text-align:center;padding:10px;">Abre la PREVIA de un partido con equipo humano para añadir lesionados.</div>';
       return;
     }
-    var counter = window._FORMA_DOWN_COUNTER || {};
-    var states  = window._FORMA_MATCH_STATES || {};
+    var states = window._FORMA_MATCH_STATES || {};
     var html = '';
     humans.forEach(function(team){
       var roster = rosterFor(team);
@@ -2010,10 +1953,10 @@
       roster.forEach(function(p){
         var name = p[1] || '?';
         var num  = p[0] || '';
-        var cnt  = counter[name] || 0;
         var cur  = states[name] || '';
-        var isLes = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && !states[name]);
-        var cntBadge = cnt > 0 ? '<span style="background:rgba(255,144,64,.2);border:1px solid rgba(255,144,64,.5);border-radius:6px;padding:2px 7px;font-size:12px;color:#ff9040;margin-left:8px;">↘️×' + cnt + '</span>' : '';
+        /* Si ya hay una lesión registrada de otro origen (no de este toggle),
+           deshabilitamos el botón para no pisar la lesión existente. */
+        var isLes = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && cur !== '⬇️');
         var dis = isLes ? 'disabled' : '';
         /* Fila con más padding vertical + fuente grande para los nombres,
            según petición del usuario (plantilla más legible en móvil). */
@@ -2022,12 +1965,10 @@
         html += '<div style="' + rowStyle + '">'
           + '<span style="font-family:Rajdhani,sans-serif;font-size:17px;font-weight:600;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.3px;">'
           +   (num ? '<span style="color:rgba(255,255,255,.5);margin-right:10px;font-size:15px;font-weight:500;">' + num + '</span>' : '')
-          +   name + cntBadge
+          +   name
           + '</span>'
           + '<span style="display:flex;gap:6px;flex-shrink:0;">'
-          +   '<button type="button" ' + dis + ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\',\'down\')" '
-          +     'style="background:' + (cur === '↘️' ? 'rgba(255,144,64,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '↘️' ? '#ff9040' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:8px;padding:7px 14px;font-size:18px;cursor:pointer;min-width:48px;">↘️</button>'
-          +   '<button type="button" ' + dis + ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\',\'pesima\')" '
+          +   '<button type="button" ' + dis + ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\')" '
           +     'style="background:' + (cur === '⬇️' ? 'rgba(255,80,80,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '⬇️' ? '#ff5050' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:8px;padding:7px 14px;font-size:18px;cursor:pointer;min-width:48px;">⬇️</button>'
           + '</span>'
           + '</div>';
@@ -2063,16 +2004,6 @@
   } else {
     wireObserver();
   }
-  /* GET inicial del contador desde backend. */
-  try {
-    fetch('/api/forma_counter').then(function(r){return r.json();}).then(function(d){
-      if (d && d.ok && d.counters) {
-        window._FORMA_DOWN_COUNTER = d.counters;
-        try { localStorage.setItem(LS_COUNTER, JSON.stringify(d.counters)); } catch(_){}
-        renderForma();
-      }
-    }).catch(function(){});
-  } catch(_){}
 })();
 </script>
 <script>/* doc */</script>
@@ -3395,25 +3326,12 @@
     try {
       if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0;
     } catch(_) {}
-    /* Reset del contador persistente ↘️ de estado de forma. Si no se
-       limpia aquí, jugadores que fueron marcados ↘️ en una sesión
-       anterior siguen apareciendo con "↘️×1" al iniciar una nueva
-       liga sin haber disputado ningún partido (bug reportado). */
+    /* Reset de estados por partido del marcador manual de lesionados.
+       Limpia también restos del antiguo contador ↘️ por si quedó
+       persistido de versiones anteriores. */
     try {
-      if (window._FORMA_DOWN_COUNTER) {
-        Object.keys(window._FORMA_DOWN_COUNTER).forEach(function(k){ delete window._FORMA_DOWN_COUNTER[k]; });
-      }
-      window._FORMA_DOWN_COUNTER = {};
       window._FORMA_MATCH_STATES = {};
       localStorage.removeItem('ligaExt_forma_down_counter');
-      /* Propagar al backend para que sobreviva al próximo GET. */
-      try {
-        fetch('/api/forma_counter', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ counters: {} })
-        }).catch(function(){});
-      } catch(_){}
     } catch(_) {}
     try {
       var _ex = window.LIGA_EXTRAS;

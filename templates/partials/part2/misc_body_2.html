@@ -15508,7 +15508,22 @@ document.addEventListener('DOMContentLoaded', function() {
               window._ppResetFormStates = function() {
                 window._ppFormStates = { home: fHome || '🎲', away: fAway || '🎲' };
                 window._ppFormAdminUnlocked = true;
-                window._ppDurationMin = (durChoice === 8 || durChoice === 10) ? durChoice : null;
+                /* Amistosos: SINCRONIZAR cron real con el label de la
+                   previa (petición usuario). Si el usuario eligió 8 o
+                   10 min se aplica tal cual. AUTO 🎲 deriva del modo
+                   (HvH → 10, HvIA → 8, IAvsIA → no aplica). El override
+                   se aplica vía _ppDurationMin → _mlResolveClock →
+                   tickMs reescalado para que el cronómetro recorra los
+                   90 game-min en exactamente esos minutos reales.
+                   IAvsIA usa siempre el rule IAIA (1.5 min total) por
+                   diseño — _mlResolveClock ignora el override en IAIA. */
+                var _eff;
+                if (durChoice === 8 || durChoice === 10) {
+                  _eff = durChoice;
+                } else {
+                  _eff = hvh ? 10 : 8;
+                }
+                window._ppDurationMin = _eff;
               };
               try {
                 window.showPrePartidoOverlay(matchKey, 'amistoso', 'No', duracion, hvh);

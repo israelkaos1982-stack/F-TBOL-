@@ -12301,6 +12301,12 @@ window._mlForceFinishMatch = function(mk) {
       st._finishPropagatedAt = Date.now();
     }
   } catch(_){}
+  /* Borrar el wrap del DOM también — sin esto, una pantalla del
+     calendario podía seguir pintándolo tras la próxima navegación. */
+  try {
+    var w = document.getElementById('mlw-' + mk);
+    if (w && w.parentNode) w.parentNode.removeChild(w);
+  } catch(_){}
   /* Limpiar el wrap visual: ocultar timer, marcar como finalizado.   */
   try {
     var btn = document.getElementById('ml-timer-' + mk);
@@ -12322,6 +12328,63 @@ window._mlForceFinishMatch = function(mk) {
     var states2 = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : null;
     if (states2 && states2[mk]) delete states2[mk];
   } catch(_){}
+};
+
+/* "Limpiar todo" del hub LIVE — petición usuario: tras 10 turnos de
+   ajustes, los partidos paused/atascados (cron a 90+ pendientes de
+   FINALIZAR, amistosos creados sin jugar, snapshots stale en _gmBg
+   o __GM_LIVE) seguían apareciendo. Este botón elimina todos los
+   partidos del hub de un golpe — wraps + estados internos +
+   snapshot del gm-modal — y persiste la limpieza al server vía
+   `_liveStore.flush()`. Pide confirmación porque borra estado real,
+   pero es lo único que vacía el hub sin pulsar 13 papeleras. */
+window._liveClearAll = function() {
+  if (!confirm('¿Vaciar TODOS los partidos en directo?\n\nSe pararán los cronómetros y desaparecerán de PARTIDOS LIVE. Los resultados ya guardados en clasificación NO se tocan.')) return;
+  /* 1. Match-live-wraps: forzar cierre uno a uno via _mlForceFinishMatch.
+        Recorremos a posteriori el snapshot porque _mlForceFinishMatch
+        muta el DOM y borra entradas de _mlStates. */
+  try {
+    var wraps = document.querySelectorAll('.match-live-wrap');
+    var mks = [];
+    wraps.forEach(function(w){
+      if (!w.id) return;
+      var mk = w.id.replace(/^mlw-/, '');
+      if (mk) mks.push(mk);
+    });
+    mks.forEach(function(mk){
+      try { window._mlForceFinishMatch(mk); } catch(_){}
+    });
+  } catch(_){}
+  /* 2. gm-modal activo (__GM_LIVE) */
+  try {
+    if (window.__GM_LIVE) {
+      try { if (window.__GM_LIVE.timerInterval) clearInterval(window.__GM_LIVE.timerInterval); } catch(_){}
+      window.__GM_LIVE.finished = true;
+      window.__GM_LIVE.timerRunning = false;
+      window.__GM_LIVE = null;
+    }
+    if (window._gm) {
+      try { if (window._gm.timerInterval) clearInterval(window._gm.timerInterval); } catch(_){}
+      window._gm.finished = true;
+      window._gm.timerRunning = false;
+    }
+  } catch(_){}
+  /* 3. gm-modal backgrounded (_gmBg): borrar todos los snapshots */
+  try {
+    if (window._gmBg) {
+      Object.keys(window._gmBg).forEach(function(k){
+        var s = window._gmBg[k];
+        if (s) {
+          try { if (s.timerInterval) clearInterval(s.timerInterval); } catch(_){}
+          s.finished = true;
+        }
+        delete window._gmBg[k];
+      });
+    }
+  } catch(_){}
+  /* 4. Persist + repintar */
+  try { if (window._liveStore && typeof window._liveStore.flush === 'function') window._liveStore.flush(); } catch(_){}
+  try { if (typeof buildLiveScreen === 'function') buildLiveScreen(); } catch(_){}
 };
 
 /* ── mapa de competiciones por prefijo de cal-ID ── */
@@ -12653,13 +12716,15 @@ function buildLiveScreen() {
   wraps.forEach(function(w) {
     var scoreEl = w.querySelector('.ml-score');
     if (!scoreEl || !scoreEl.classList.contains('state-playing')) return;
-    /* Excluir partidos cuyo cronómetro ya alcanzó el tope (90+stoppage
-       o 120+stoppage en prórroga) y está en pausa. El usuario los
-       considera "finalizados" aunque aún no haya pulsado FINALIZAR. */
+    /* Excluir partidos cuyo cronómetro ya alcanzó el tope o nunca
+       arrancó. El usuario considera "fuera del LIVE" tanto los que
+       están a 90+ pendientes de FINALIZAR como los amistosos que se
+       crearon sin pulsar nunca ▶. */
     try {
       var _wrapMk = w.id ? w.id.replace(/^mlw-/, '') : '';
       var _wrapSt = (typeof window._mlGetState === 'function') ? window._mlGetState(_wrapMk) : null;
       if (_wrapSt && _gmTimerExhausted(_wrapSt)) return;
+      if (_wrapSt && _wrapNeverStarted(_wrapSt)) return;
     } catch(_){}
     if (esH) {
       /* Los nombres en `.ml-team-name` vienen en MAYÚSCULAS
@@ -12714,20 +12779,42 @@ function buildLiveScreen() {
     } catch(_){ return false; }
   }
   /* Helper: un partido cuyo cronómetro alcanzó el tope (90 + descuento
-     o 120 + descuento en prórroga) y está pausado se considera
-     "agotado". El usuario no le está dando juego — está esperando a
-     pulsar FINALIZAR. No tiene sentido seguir mostrándolo en
-     PARTIDOS LIVE como si estuviera ocurriendo, así que lo
-     excluimos del hub aunque no esté marcado finished:true.
-     Pedido del usuario: "los partidos live se quedan abiertos aunque
-     finalice". */
+     o 120 + descuento en prórroga) se considera "agotado".
+     IMPORTANTE: ya NO miramos `timerRunning` — un cron que llegó al
+     final pero por algún motivo se quedó con el flag a true (background
+     tab, navegador suspendido, etc.) seguía apareciendo en LIVE
+     eternamente. La ÚNICA condición es timerSec >= max. Si el partido
+     pasó del minuto 90+stoppage o del 120+stoppage en prórroga, fuera
+     del hub aunque el usuario nunca pulsase FINALIZAR. Pedido del
+     usuario: "los partidos live se quedan abiertos aunque finalice".
+
+     También consideramos "agotado" cualquier partido cuyo cronómetro
+     alcanzó 90' (5400 s) y está PAUSADO sin nuevos eventos en > 15 min
+     reales — un partido de Liga olvidado a los 90' no debe seguir
+     mostrándose horas después. Para gm-modal/__GM_LIVE el `startedAt`
+     se actualiza con el último tick de eventos. */
   function _gmTimerExhausted(snap) {
-    if (!snap || snap.timerRunning) return false;
+    if (!snap) return false;
     var stops = (typeof _mlCountStoppageHalves === 'function')
                   ? _mlCountStoppageHalves(snap) : { first: 0, second: 0 };
     var normalMax = snap.etDone ? 7200 : 5400;  // GM_MAX_ET / GM_MAX_NORMAL
     var max = normalMax + (stops.second || 0) * 60;
-    return (snap.timerSec || 0) >= max;
+    var ts = snap.timerSec || 0;
+    if (ts >= max) return true;
+    /* Idle > 30 min en pausa después de 70' jugado → fuera del hub. */
+    if (!snap.timerRunning && ts >= 4200 /* 70' */) {
+      var lastTouch = snap._finishPropagatedAt || snap._lastEventAt || snap.startedAt || 0;
+      if (lastTouch && (Date.now() - lastTouch) > 30 * 60 * 1000) return true;
+    }
+    return false;
+  }
+  /* Helper: amistoso que nunca llegó a arrancar el cronómetro
+     (kickoffDone=false y timerSec=0). Permanecía colgado en LIVE
+     desde que el usuario pulsaba CREAR PARTIDO AMISTOSO sin llegar a
+     iniciar la simulación. Lo excluimos del hub. */
+  function _wrapNeverStarted(st) {
+    if (!st) return false;
+    return !st.kickoffDone && (st.timerSec || 0) === 0;
   }
   if (gmLive && _gmMatchIsAlreadyFinished(gmLive.j, gmLive.home, gmLive.away)) {
     /* Limpieza defensiva: si el marcador está guardado, el partido
@@ -12778,6 +12865,12 @@ function buildLiveScreen() {
   if (countEl) {
     countEl.textContent = totalLive > 0 ? (totalLive + ' en directo') : '';
   }
+  /* Botón "Limpiar todo": solo visible cuando hay >= 1 partido en LIVE.
+     Permite al usuario vaciar el hub de un golpe sin tener que pulsar
+     la papelera de cada tarjeta. Útil cuando se le quedaron partidos
+     atascados (cron a 90+, amistosos creados sin jugar, etc.). */
+  var clearBtn = document.getElementById('live-clear-all-btn');
+  if (clearBtn) clearBtn.style.display = totalLive > 0 ? '' : 'none';
 
   /* update home card animation state */
   if (typeof window.__LIVE_MATCH_COUNT !== 'undefined') {

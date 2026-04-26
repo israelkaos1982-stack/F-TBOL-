@@ -6100,46 +6100,13 @@ window._refreshSancionInjList = function() {
 };
 
 // ══════════════════════════════════════════════════════════
-// 5B. ESTADO DE FORMA POR JUGADOR — ↘️ / ⬇️  (CLAUDE.md)
-//    - ↘️ = Mala: no puede jugar este partido + suma 1 al contador
-//             persistente. Al llegar a 3↘️ (no consecutivos) cae
-//             LESIÓN LEVE automática y el contador vuelve a 0.
-//    - ⬇️ = Pésima: lesión directa con severidad aleatoria.
-//    Persistencia: localStorage + backend (/api/forma_counter).
+// 5B. AÑADIR LESIONADOS MANUALMENTE EN LA PREVIA — ⬇️
+//    - ⬇️ = el usuario marca al jugador como lesionado.
+//      Severidad aleatoria MODERADA 💉 (65%) o GRAVE 🚑 (35%).
+//    Sin acumulador ↘️ — directo al grano. Estado solo por partido,
+//    no se persiste entre sesiones.
 // ══════════════════════════════════════════════════════════
-window._FORMA_DOWN_COUNTER   = window._FORMA_DOWN_COUNTER   || {};
-window._FORMA_MATCH_STATES   = window._FORMA_MATCH_STATES   || {};
-var _FORMA_LS_KEY = 'ligaExt_forma_down_counter';
-
-try {
-  var _lsRaw = localStorage.getItem(_FORMA_LS_KEY);
-  if (_lsRaw) {
-    var _parsed = JSON.parse(_lsRaw);
-    if (_parsed && typeof _parsed === 'object') window._FORMA_DOWN_COUNTER = _parsed;
-  }
-} catch(_){}
-
-function _formaSaveCounter() {
-  try { localStorage.setItem(_FORMA_LS_KEY, JSON.stringify(window._FORMA_DOWN_COUNTER || {})); } catch(_){}
-  try {
-    fetch('/api/forma_counter', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({counters: window._FORMA_DOWN_COUNTER || {}})
-    }).catch(function(){});
-  } catch(_){}
-}
-
-window._formaLoadCounter = function() {
-  try {
-    fetch('/api/forma_counter').then(function(r){ return r.json(); }).then(function(d){
-      if (d && d.ok && d.counters && typeof d.counters === 'object') {
-        window._FORMA_DOWN_COUNTER = d.counters;
-        try { localStorage.setItem(_FORMA_LS_KEY, JSON.stringify(d.counters)); } catch(_){}
-        if (typeof window._refreshSancionInjList === 'function') window._refreshSancionInjList();
-      }
-    }).catch(function(){});
-  } catch(_){}
-};
+window._FORMA_MATCH_STATES = window._FORMA_MATCH_STATES || {};
 
 function _formaHumanTeamsInMatch() {
   /* Devuelve hasta 2 nombres de equipos HUMANOS implicados en el partido
@@ -6230,33 +6197,25 @@ function _formaRosterForTeam(teamName) {
 window._renderFormaChecklist = function() {
   var humans = _formaHumanTeamsInMatch();
   if (!humans.length) {
-    /* Aún sin equipos humanos detectados, dejamos un mensaje breve para
-       que el usuario sepa que el panel existe y que hay un problema de
-       contexto (no es silencioso). */
-    return '<div style="margin-top:14px;padding:10px 12px;border:1px solid rgba(255,160,64,.25);border-radius:10px;background:rgba(255,160,64,.04);font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,160,64,.85);text-align:center;letter-spacing:.5px;">📉 Estado de forma — abre la previa de un partido con equipo humano para ver la lista</div>';
+    return '<div style="margin-top:14px;padding:10px 12px;border:1px solid rgba(255,80,80,.25);border-radius:10px;background:rgba(255,80,80,.04);font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,80,80,.85);text-align:center;letter-spacing:.5px;">🩹 Añadir lesionados — abre la previa de un partido con equipo humano para ver la lista</div>';
   }
-  var counter = window._FORMA_DOWN_COUNTER || {};
   var matchStates = window._FORMA_MATCH_STATES || {};
-  var html = '<div style="margin-top:16px;padding:12px;border:1px solid rgba(255,160,64,.45);border-radius:10px;background:rgba(255,160,64,.08);">'
-    + '<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;color:#ff9040;margin-bottom:8px;font-weight:700;">📉 ESTADO DE FORMA DEL EQUIPO HUMANO</div>'
-    + '<div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.6);margin-bottom:10px;letter-spacing:.5px;line-height:1.4;">Marca ↘️ <b style="color:#ff9040">Mala</b> o ⬇️ <b style="color:#ff5050">Pésima</b>. Los marcados no juegan este partido. 3↘️ acumulados → LESIÓN LEVE 🩹 automática. 1⬇️ → LESIÓN MODERADA 💉 o GRAVE 🚑 automática.</div>';
-  var anyRendered = false;
+  var html = '<div style="margin-top:16px;padding:12px;border:1px solid rgba(255,80,80,.45);border-radius:10px;background:rgba(255,80,80,.08);">'
+    + '<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;color:#ff5050;margin-bottom:8px;font-weight:700;">🩹 AÑADIR LESIONADOS DEL EQUIPO HUMANO</div>'
+    + '<div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.6);margin-bottom:10px;letter-spacing:.5px;line-height:1.4;">Pulsa ⬇️ para marcar al jugador como lesionado. Se asignará una lesión MODERADA 💉 o GRAVE 🚑 automática.</div>';
   humans.forEach(function(team){
     var roster = _formaRosterForTeam(team);
     if (!roster.length) {
       html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);margin:8px 0;padding:8px;background:rgba(255,255,255,.03);border-radius:6px;">⚔️ ' + team + ' — plantilla no cargada todavía. Recarga la página y vuelve a abrir la previa.</div>';
       return;
     }
-    anyRendered = true;
     html += '<div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#fff;margin:10px 0 6px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px;">⚔️ ' + team + ' <span style="font-size:10px;color:rgba(255,255,255,.45);font-weight:400;margin-left:6px;">' + roster.length + ' jugadores</span></div>';
     html += '<div style="display:flex;flex-direction:column;gap:4px;">';
     roster.forEach(function(p){
       var name = p[1] || '?';
       var num  = p[0] || '';
-      var cnt  = counter[name] || 0;
       var cur  = matchStates[name] || '';
-      var isLesionado = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && !matchStates[name]);
-      var cntBadge = cnt > 0 ? '<span style="background:rgba(255,144,64,.2);border:1px solid rgba(255,144,64,.5);border-radius:6px;padding:1px 6px;font-size:10px;color:#ff9040;margin-left:6px;">↘️×' + cnt + '</span>' : '';
+      var isLesionado = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && cur !== '⬇️');
       var dis = isLesionado ? 'disabled' : '';
       var rowStyle = 'display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 8px;background:rgba(255,255,255,.04);border-radius:6px;' + (isLesionado ? 'opacity:.4;' : '');
       var safeTeam = team.replace(/\\/g,'\\\\').replace(/\'/g,"\\'");
@@ -6264,12 +6223,10 @@ window._renderFormaChecklist = function() {
       html += '<label style="' + rowStyle + '">'
         + '<span style="font-family:Oswald,sans-serif;font-size:12px;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
         +   (num ? '<span style="color:rgba(255,255,255,.4);margin-right:6px;">' + num + '</span>' : '')
-        +   name + cntBadge
+        +   name
         + '</span>'
         + '<span style="display:flex;gap:4px;flex-shrink:0;">'
-        +   '<button type="button" ' + dis + ' onclick="window._formaToggle(\'' + safeTeam + '\',\'' + safeName + '\',\'down\')" '
-        +     'style="background:' + (cur === '↘️' ? 'rgba(255,144,64,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '↘️' ? '#ff9040' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer;">↘️</button>'
-        +   '<button type="button" ' + dis + ' onclick="window._formaToggle(\'' + safeTeam + '\',\'' + safeName + '\',\'pesima\')" '
+        +   '<button type="button" ' + dis + ' onclick="window._formaToggle(\'' + safeTeam + '\',\'' + safeName + '\')" '
         +     'style="background:' + (cur === '⬇️' ? 'rgba(255,80,80,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '⬇️' ? '#ff5050' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer;">⬇️</button>'
         + '</span>'
         + '</label>';
@@ -6279,20 +6236,6 @@ window._renderFormaChecklist = function() {
   html += '</div>';
   return html;
 };
-
-function _formaRandomLeveInjury(teamName, playerName) {
-  var lesionesList = ['Sobrecarga muscular','Contusión en el cuádriceps','Esguince de tobillo Grado I','Calambre persistente','Elongación en el aductor'];
-  var descripcion = lesionesList[Math.floor(Math.random() * lesionesList.length)];
-  var partidos = 1 + Math.floor(Math.random() * 2);  // 1-2 partidos
-  if (!window.LESION_STORE) window.LESION_STORE = {};
-  if (!window.BAJA_STORE)   window.BAJA_STORE   = {};
-  window.LESION_STORE[playerName] = {
-    equipo: teamName, grado: 1, gradoNombre: 'Leve', gradoEmoji: '🩹',
-    descripcion: descripcion, partidos: partidos, timestamp: Date.now()
-  };
-  window.BAJA_STORE[playerName] = { tipo: 'lesion', liga: partidos, copa: partidos, europa: partidos };
-  return { descripcion: descripcion, partidos: partidos };
-}
 
 function _formaRandomAnyInjury(teamName, playerName) {
   /* ⬇️ Pésima: SIEMPRE cae en MODERADA o GRAVE (nunca Leve).
@@ -6317,75 +6260,33 @@ function _formaRandomAnyInjury(teamName, playerName) {
   return { grado: grado, gradoNombre: gradoNombre, gradoEmoji: gradoEmoji, descripcion: descripcion, partidos: partidos };
 }
 
-window._formaToggle = function(teamName, playerName, kind) {
-  if (!window.BAJA_STORE)         window.BAJA_STORE = {};
+window._formaToggle = function(teamName, playerName) {
+  if (!window.BAJA_STORE)          window.BAJA_STORE = {};
   if (!window._FORMA_MATCH_STATES) window._FORMA_MATCH_STATES = {};
-  if (!window._FORMA_DOWN_COUNTER) window._FORMA_DOWN_COUNTER = {};
 
   var existing = window._FORMA_MATCH_STATES[playerName];
-  var targetIco = kind === 'down' ? '↘️' : '⬇️';
-  // Toggle off: si el mismo estado ya estaba marcado, lo quitamos
-  if (existing === targetIco) {
+  // Toggle off: si ya estaba marcado, retiramos la lesión asignada
+  if (existing === '⬇️') {
     delete window._FORMA_MATCH_STATES[playerName];
-    var cur = window.BAJA_STORE[playerName];
-    if (cur && cur.tipo === 'forma') delete window.BAJA_STORE[playerName];
-    // Si era ↘️ devolvemos el contador
-    if (kind === 'down') {
-      var n = (window._FORMA_DOWN_COUNTER[playerName] || 0) - 1;
-      if (n > 0) window._FORMA_DOWN_COUNTER[playerName] = n;
-      else       delete window._FORMA_DOWN_COUNTER[playerName];
-      _formaSaveCounter();
-    }
+    if (window.BAJA_STORE[playerName])     delete window.BAJA_STORE[playerName];
+    if (window.LESION_STORE && window.LESION_STORE[playerName]) delete window.LESION_STORE[playerName];
     window._refreshSancionInjList();
     return;
   }
 
-  // Si ya estaba marcado con otro estado, primero deshacemos el anterior
-  if (existing) {
-    delete window._FORMA_MATCH_STATES[playerName];
-    var cur2 = window.BAJA_STORE[playerName];
-    if (cur2 && cur2.tipo === 'forma') delete window.BAJA_STORE[playerName];
-    if (existing === '↘️') {
-      var n2 = (window._FORMA_DOWN_COUNTER[playerName] || 0) - 1;
-      if (n2 > 0) window._FORMA_DOWN_COUNTER[playerName] = n2;
-      else        delete window._FORMA_DOWN_COUNTER[playerName];
-    }
-  }
-
-  if (kind === 'down') {
-    window._FORMA_MATCH_STATES[playerName] = '↘️';
-    window.BAJA_STORE[playerName] = { tipo: 'forma', liga: 1, copa: 1, europa: 1 };
-    var newCount = (window._FORMA_DOWN_COUNTER[playerName] || 0) + 1;
-    window._FORMA_DOWN_COUNTER[playerName] = newCount;
-    if (newCount >= 3) {
-      // 3↘️ acumuladas → LESIÓN LEVE 🩹 automática, reset contador
-      var leve = _formaRandomLeveInjury(teamName, playerName);
-      delete window._FORMA_DOWN_COUNTER[playerName];
-      delete window._FORMA_MATCH_STATES[playerName];
-      alert('🩹 LESIÓN LEVE AUTOMÁTICA\n'
-        + playerName + ' (' + teamName + ')\n'
-        + 'Por acumular 3 partidos con ↘️ Mala forma.\n'
-        + leve.descripcion + '\n'
-        + leve.partidos + ' partido(s) de baja');
-    }
-    _formaSaveCounter();
-  } else {
-    window._FORMA_MATCH_STATES[playerName] = '⬇️';
-    var inj = _formaRandomAnyInjury(teamName, playerName);
-    alert('🏥 ' + inj.gradoEmoji + ' LESIÓN ' + inj.gradoNombre.toUpperCase() + '\n'
-      + playerName + ' (' + teamName + ')\n'
-      + 'Forma Pésima ⬇️ → ' + inj.descripcion + '\n'
-      + inj.partidos + ' partido(s) de baja');
-  }
+  window._FORMA_MATCH_STATES[playerName] = '⬇️';
+  var inj = _formaRandomAnyInjury(teamName, playerName);
+  alert('🏥 ' + inj.gradoEmoji + ' LESIÓN ' + inj.gradoNombre.toUpperCase() + '\n'
+    + playerName + ' (' + teamName + ')\n'
+    + inj.descripcion + '\n'
+    + inj.partidos + ' partido(s) de baja');
   window._refreshSancionInjList();
 };
 
-// Parchar showSancionOverlay para incluir bajas reales
+// Parchar showSancionOverlay para refrescar bajas reales al abrir
 var _origShowSancionOverlay = window.showSancionOverlay;
 window.showSancionOverlay = function(compKey, blockId, onConfirm) {
   if (_origShowSancionOverlay) _origShowSancionOverlay(compKey, blockId, onConfirm);
-  // Cargar contador persistente desde backend y refrescar
-  if (typeof window._formaLoadCounter === 'function') window._formaLoadCounter();
   window._refreshSancionInjList();
 };
 

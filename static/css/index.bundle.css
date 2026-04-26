@@ -177,16 +177,19 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 .match-live-wrap.hvh .ml-timer.running,.match-live-wrap.hvia .ml-timer.running{color:#ff3030;border-color:rgba(255,40,40,.95);background:rgba(255,30,30,.2);box-shadow:0 0 12px rgba(255,45,45,.42);}
 .ml-timer.finished{color:#f0c040;border-color:rgba(240,192,64,.4);}
 /* Fila de cronómetro inline: ⏪ [▶/⏸ minuto] ⏩  (spec del usuario:
-   Equipo A  ⏪ ⏸ ⏩  Equipo B con el minuto dentro del botón central). */
-.ml-timer-row{display:inline-flex;align-items:center;gap:6px;margin-top:4px;align-self:center;flex-wrap:nowrap;}
-.ml-timer-row .ml-timer{margin-top:0;}
+   Equipo A  ⏪ ⏸ ⏩  Equipo B con el minuto dentro del botón central).
+   gap reducido de 6→2px y botones/indicador estrechados para que
+   el bloque central deje sitio en horizontal a los nombres de los
+   equipos en pantallas estrechas. */
+.ml-timer-row{display:inline-flex;align-items:center;gap:2px;margin-top:4px;align-self:center;flex-wrap:nowrap;}
+.ml-timer-row .ml-timer{margin-top:0;padding:6px 8px;}
 /* Control de velocidad del reloj de partido (⏪ 1× ⏩) — estilo legacy
    para los flujos que aún usan .ml-speed-ctrl apilado verticalmente. */
 .ml-speed-ctrl{display:inline-flex;align-items:center;gap:4px;margin-top:6px;align-self:center;}
-.ml-speed-btn{font-size:14px;line-height:1;padding:3px 8px;border:1px solid rgba(255,255,255,.22);border-radius:6px;background:rgba(255,255,255,.04);color:#fff;cursor:pointer;min-width:32px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
+.ml-speed-btn{font-size:13px;line-height:1;padding:3px 4px;border:1px solid rgba(255,255,255,.22);border-radius:5px;background:rgba(255,255,255,.04);color:#fff;cursor:pointer;min-width:22px;touch-action:manipulation;-webkit-tap-highlight-color:transparent;}
 .ml-speed-btn:hover{background:rgba(255,255,255,.1);}
 .ml-speed-btn:active{transform:scale(.94);}
-.ml-speed-x{font-family:"Bebas Neue",sans-serif;font-size:11px;color:rgba(255,255,255,.55);letter-spacing:1px;min-width:28px;text-align:center;padding:0 3px;}
+.ml-speed-x{font-family:"Bebas Neue",sans-serif;font-size:10px;color:rgba(255,255,255,.55);letter-spacing:1px;min-width:18px;text-align:center;padding:0 1px;margin-left:2px;}
 /* === TWITCH BUTTON === */
 .ml-twitch-wrap{display:flex;flex-direction:column;align-items:center;gap:0;margin-bottom:2px;}
 .ml-twitch-btn{display:flex;align-items:center;gap:5px;background:rgba(100,65,165,.55);border:1px solid rgba(145,70,255,.45);border-radius:5px;padding:3px 10px;cursor:pointer;font-family:'Oswald',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#d4aaff;transition:all .16s;white-space:nowrap;}

@@ -6009,9 +6009,17 @@
     /* ── Estadísticas OBLIGATORIAS (HvH / HvIA) — ANTES del MVP ──
        El usuario quiere ver y confirmar las stats del partido antes
        de elegir MVP. Cuando confirma, _mlStatsConfirm guarda
-       st.matchStats y re-llamamos a mlEndMatchGen para continuar. */
-    var _humAEnd = typeof esHumano === 'function' && esHumano(st.home);
-    var _humBEnd = typeof esHumano === 'function' && esHumano(st.away);
+       st.matchStats y re-llamamos a mlEndMatchGen para continuar.
+       Para amistosos hay que respetar el toggle 👤/🤖 per-partido,
+       NO el flag global del editor. Si no, un Atlético "humano de
+       Liga" pero marcado como IA en el toggle del amistoso entraba
+       al overlay de stats y rompía el cierre del partido. */
+    var _humAEnd = st.isFriendly
+      ? !!st.homeIsHuman
+      : (typeof esHumano === 'function' && esHumano(st.home));
+    var _humBEnd = st.isFriendly
+      ? !!st.awayIsHuman
+      : (typeof esHumano === 'function' && esHumano(st.away));
     if ((_humAEnd || _humBEnd) && !st.matchStats && typeof _mlShowStatsOverlay === 'function') {
       _mlShowStatsOverlay(mk, function(){ window.mlEndMatchGen(mk, winner); });
       return;
@@ -6165,9 +6173,14 @@
     /* Estadísticas: por defecto se piden ANTES del MVP en mlEndMatchGen
        (st.matchStats ya está en el state). Aquí solo las pedimos como
        fallback si el flujo entró por otra ruta (p. ej. tanda de penaltis
-       directa) y un humano está involucrado. */
-    var _humA = typeof esHumano === 'function' && esHumano(st.home);
-    var _humB = typeof esHumano === 'function' && esHumano(st.away);
+       directa) y un humano está involucrado. Amistosos: usar el toggle
+       per-partido (st.homeIsHuman / st.awayIsHuman). */
+    var _humA = st.isFriendly
+      ? !!st.homeIsHuman
+      : (typeof esHumano === 'function' && esHumano(st.home));
+    var _humB = st.isFriendly
+      ? !!st.awayIsHuman
+      : (typeof esHumano === 'function' && esHumano(st.away));
     if ((_humA || _humB) && !st.matchStats) {
       _mlShowStatsOverlay(mk, function(){ _mlShowFinalThenPost(mk); });
     } else {
@@ -6434,8 +6447,15 @@
          saltamos también el segundo overlay ml-stats-entry-ov para no
          duplicar. */
       var st = _mlSt(mk);
-      var humA = typeof esHumano === 'function' ? esHumano(st.home) : false;
-      var humB = typeof esHumano === 'function' ? esHumano(st.away) : false;
+      /* Amistosos: respetar el toggle 👤/🤖 per-partido (no el flag
+         global). Antes, un IAvsIA amistoso de dos equipos "humanos
+         globales" abría stats overlay y se quedaba colgado. */
+      var humA = st.isFriendly
+        ? !!st.homeIsHuman
+        : (typeof esHumano === 'function' ? esHumano(st.home) : false);
+      var humB = st.isFriendly
+        ? !!st.awayIsHuman
+        : (typeof esHumano === 'function' ? esHumano(st.away) : false);
       if ((humA || humB || st.isHvH) && !st.matchStats){
         _mlOpenStatsEntry(mk);
       } else {

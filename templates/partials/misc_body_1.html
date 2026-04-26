@@ -5921,6 +5921,11 @@ Tottenham
       <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-squad')">✕</button>
     </div>
 
+    <!-- Cabecera de estadísticas del equipo en la competición actual.
+         Se rellena en lextOpenSquad: PJ G E P GF GC DG %VIC + máximo
+         goleador y MVP del equipo. -->
+    <div id="lext-squad-stats-header" style="display:none;margin:8px 0 10px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;"></div>
+
     <details class="lext-details" id="lext-squad-paste-details" style="display:none;">
       <summary>📋 Pegar plantilla completa (se añade al equipo)</summary>
       <textarea class="lext-input" id="lext-squad-paste-ta" rows="10" style="font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.45;resize:vertical;margin-top:6px;" placeholder="### 🧤 Porteros
@@ -7302,7 +7307,7 @@ Tottenham
           + '<div class="lext-sub" style="margin:1px 0 0;">ATK '+ls.atk+' · MED '+ls.mid+' · DEF '+ls.def+(budStr?(' · '+budStr):'')+'</div>'
         +'</div>'
         + '<button class="lext-li-btn" onclick="lextEditTeam(\''+t.id+'\')">✏️</button>'
-        + '<button class="lext-li-btn" onclick="lextOpenSquad(\''+t.id+'\')">🛡</button>'
+        + '<button class="lext-li-btn" onclick="lextOpenSquad(\''+t.id+'\',{editable:true})">🛡</button>'
         + '<button class="lext-li-btn" onclick="lextDeleteTeam(\''+t.id+'\')">🗑</button>'
       +'</div>';
     }).join('');
@@ -7623,7 +7628,14 @@ Tottenham
      no dependemos de que `data.teams.filter(x=>x.id===id)` lo
      encuentre (si el id no está sincronizado, la búsqueda fallaba
      en silencio y el overlay quedaba vacío). */
-  window.lextOpenSquad = function(idOrTeam){
+  /* `lextOpenSquad(idOrTeam, opts)` — opts.editable=true muestra los
+     dos <details> superiores (Pegar plantilla + Añadir jugador). Por
+     defecto (clic desde la fila de la clasificación) la modal queda
+     en modo SOLO LECTURA: solo cabecera de stats + lista de jugadores.
+     El flujo ✏️ Edit (lext-ov-edit → 🛡 botón) pasa editable=true para
+     volver a habilitar el alta/edición de jugadores individuales. */
+  window.lextOpenSquad = function(idOrTeam, opts){
+    opts = opts || {};
     if(typeof window.syncLigaEaPlayerStats === 'function'){
       try { window.syncLigaEaPlayerStats(); } catch(_){}
     }
@@ -7750,9 +7762,100 @@ Tottenham
     if (plNameEl) plNameEl.value = '';
     var plPowerEl = document.getElementById('lext-pl-power');
     if (plPowerEl) plPowerEl.value = '75';
+
+    /* Cabecera de stats del equipo en la competición actual. */
+    try { _lextRenderSquadStatsHeader(t); } catch(_){}
+
+    /* Modo editable (✏️ Edit → 🛡): mostrar Pegar plantilla y Añadir
+       jugador individual. Modo lectura (clasificación): mantenerlos
+       ocultos. Al volver a abrir desde el otro flujo se vuelve a
+       sobrescribir, así que no quedan restos. */
+    var _editable = !!opts.editable;
+    var _pasteEl = document.getElementById('lext-squad-paste-details');
+    var _addEl   = document.getElementById('lext-pl-details');
+    if (_pasteEl) _pasteEl.style.display = _editable ? '' : 'none';
+    if (_addEl)   _addEl.style.display   = _editable ? '' : 'none';
+
     try { renderSquadList(); } catch(_){}
     lextOpenOv('lext-ov-squad');
   };
+
+  /* Construye la cabecera de stats que aparece bajo el título del
+     equipo en `lext-ov-squad`. Lee la clasificación de la competición
+     actual (standings(data)) para PJ/G/E/P/GF/GC/DG/% y los
+     `t.players` ya hidratados con stats (gol/mvp) para máx. goleador
+     y máx. MVP del equipo. Si la competición no tiene resultados
+     aún (PJ=0), se muestran ceros. */
+  function _lextRenderSquadStatsHeader(team) {
+    var box = document.getElementById('lext-squad-stats-header');
+    if (!box || !team) return;
+    var data = (typeof loadData === 'function') ? loadData(CURRENT_KEY) : null;
+    var arr = (data && typeof standings === 'function') ? standings(data) : [];
+    var row = null;
+    for (var i = 0; i < arr.length; i++) {
+      if (arr[i] && arr[i].id === team.id) { row = arr[i]; break; }
+    }
+    if (!row) {
+      /* Fallback: equipo sin entrada en standings (no jugó aún) */
+      row = {pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0};
+    }
+    var pct = row.pj > 0 ? Math.round((row.v / row.pj) * 100) : 0;
+    /* Máximo goleador y MVP del equipo a partir de t.players (ya
+       hidratados en renderSquadList con ef_player_stats_v1). Pero
+       puede llamarse antes de renderSquadList → leemos getPlayerStats
+       directo si los players no traen stats acumulados. */
+    var topGol = null, topMvp = null;
+    var players = Array.isArray(team.players) ? team.players : [];
+    players.forEach(function(p){
+      if (!p || !p.name) return;
+      var gol = Number(p.gol) || 0;
+      var mvp = Number(p.mvp) || 0;
+      if (!gol || !mvp) {
+        try {
+          if (typeof window.getPlayerStats === 'function') {
+            var ps = window.getPlayerStats(team.name, p.name);
+            if (ps) {
+              if (!gol) gol = Number(ps.gol) || 0;
+              if (!mvp) mvp = Number(ps.mvp) || 0;
+            }
+          }
+        } catch(_) {}
+      }
+      if (gol > 0 && (!topGol || gol > topGol.gol)) topGol = { name: p.name, gol: gol };
+      if (mvp > 0 && (!topMvp || mvp > topMvp.mvp)) topMvp = { name: p.name, mvp: mvp };
+    });
+    function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    var _cell = function(lbl, val, color){
+      return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;flex:1;">'
+           +   '<span style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:rgba(255,255,255,.55);">'+lbl+'</span>'
+           +   '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:18px;color:'+(color||'#fff')+';line-height:1.05;">'+val+'</span>'
+           + '</div>';
+    };
+    var dgColor = row.dg > 0 ? '#3dcc6e' : (row.dg < 0 ? '#ff7070' : '#fff');
+    var dgVal = row.dg > 0 ? ('+' + row.dg) : String(row.dg);
+    var statsRow = '<div style="display:flex;align-items:stretch;gap:4px;">'
+      + _cell('PJ',  row.pj, '#fff')
+      + _cell('G',   row.v,  '#3dcc6e')
+      + _cell('E',   row.e,  '#f0c040')
+      + _cell('P',   row.p,  '#ff7070')
+      + _cell('G+',  row.gf, '#5aa9ff')
+      + _cell('G−',  row.gc, '#ff9040')
+      + _cell('D±',  dgVal,  dgColor)
+      + _cell('%',   pct + '%', pct >= 60 ? '#3dcc6e' : (pct >= 40 ? '#f0c040' : '#ff7070'))
+      + '</div>';
+    var golLine = topGol
+      ? '⚽ <b>Máximo goleador:</b> ' + _esc(topGol.name) + ' <span style="color:#3dcc6e;font-weight:700;">· ' + topGol.gol + ' gol' + (topGol.gol === 1 ? '' : 'es') + '</span>'
+      : '⚽ <span style="opacity:.55;">Sin goles registrados aún</span>';
+    var mvpLine = topMvp
+      ? '⭐ <b>MVP:</b> ' + _esc(topMvp.name) + ' <span style="color:#f0c040;font-weight:700;">· ' + topMvp.mvp + ' MVP' + (topMvp.mvp === 1 ? '' : 's') + '</span>'
+      : '⭐ <span style="opacity:.55;">Sin MVP registrados aún</span>';
+    box.innerHTML = statsRow
+      + '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);line-height:1.6;">'
+      +   '<div>' + golLine + '</div>'
+      +   '<div>' + mvpLine + '</div>'
+      + '</div>';
+    box.style.display = '';
+  }
 
   function ratingClass(r){
     if(r <= 0) return 'r0';

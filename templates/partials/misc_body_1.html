@@ -4136,19 +4136,52 @@ window.pG = function(fn) {
   <div class="submenu-card sc-sct"
        style="background:linear-gradient(135deg,#0a1a3a 0%,#b22234 35%,#ffffff 50%,#3c3b6e 65%,#0a1a3a 100%) !important;border-color:#b22234 !important;"
        onclick="go('s-sct')">
-    <span class="sc-emoji">🇺🇸</span><span class="sc-label">Soccer Champions Tour</span><span class="sc-arr">▶</span>
+    <span class="sc-emoji">🇺🇸</span><span class="sc-label">Soccer Champions Tour</span>
+    <button type="button" class="sc-info-btn"
+            onclick="event.stopPropagation();window.muTourInfo('sct')" title="Info">ℹ️</button>
+    <span class="sc-arr">▶</span>
   </div>
   <div class="submenu-card sc-pss"
        style="background:linear-gradient(135deg,#012169 0%,#ce1124 35%,#ffffff 50%,#ce1124 65%,#012169 100%) !important;border-color:#ce1124 !important;"
        onclick="go('s-pss')">
-    <span class="sc-emoji">🇬🇧</span><span class="sc-label">Premier Summer Series</span><span class="sc-arr">▶</span>
+    <span class="sc-emoji">🇬🇧</span><span class="sc-label">Premier Summer Series</span>
+    <button type="button" class="sc-info-btn"
+            onclick="event.stopPropagation();window.muTourInfo('pss')" title="Info">ℹ️</button>
+    <span class="sc-arr">▶</span>
   </div>
   <div class="submenu-card sc-jg"
        style="background:linear-gradient(135deg,#aa151b 0%,#f1bf00 35%,#ffffff 50%,#f1bf00 65%,#aa151b 100%) !important;border-color:#f1bf00 !important;"
        onclick="go('s-jg')">
-    <span class="sc-emoji">🇪🇸</span><span class="sc-label">Trofeo Joan Gamper</span><span class="sc-arr">▶</span>
+    <span class="sc-emoji">🇪🇸</span><span class="sc-label">Trofeo Joan Gamper</span>
+    <button type="button" class="sc-info-btn"
+            onclick="event.stopPropagation();window.muTourInfo('jg')" title="Info">ℹ️</button>
+    <span class="sc-arr">▶</span>
+  </div>
+  <div class="submenu-card sc-asia"
+       style="background:linear-gradient(135deg,#1a0612 0%,#bc002d 35%,#ffffff 50%,#bc002d 65%,#1a0612 100%) !important;border-color:#bc002d !important;"
+       onclick="go('s-asia')">
+    <span class="sc-emoji">🇯🇵</span><span class="sc-label">Asian Tournament</span>
+    <button type="button" class="sc-info-btn"
+            onclick="event.stopPropagation();window.muTourInfo('asia')" title="Info">ℹ️</button>
+    <span class="sc-arr">▶</span>
   </div>
 </div>
+<style>
+  /* Botón ℹ️ inline en las cajas del listado de Torneos de Verano.
+     Se coloca entre el label y la flecha; usa stopPropagation para no
+     navegar al pulsar — abre el modal compartido `muTourInfo`. */
+  #s-torneos-verano .submenu-card .sc-info-btn{
+    background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.35);
+    color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    font-size:13px;line-height:1;flex-shrink:0;padding:0;
+    margin-left:auto;
+  }
+  #s-torneos-verano .submenu-card .sc-info-btn:active{
+    background:rgba(255,255,255,.18);
+  }
+  #s-torneos-verano .submenu-card .sc-arr{margin-left:6px;}
+</style>
 </div>
 
 <!-- ═══ PANTALLAS PLACEHOLDER DE LOS 3 TORNEOS ═══
@@ -4202,6 +4235,21 @@ window.pG = function(fn) {
     <li>Cuartos de Grupo <b>+20 🪙</b></li>
     <li>Tercero de Grupo <b>+40 🪙</b></li>
     <li>Semis Playoffs <b>+60 🪙</b></li>
+    <li>Subcampeón <b>+80 🪙</b></li>
+    <li>Campeón <b>+100 🪙</b></li>
+  </ul>
+</div>
+</div>
+<div class="screen" id="s-asia">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🇯🇵</span><h2>Asian Tournament</h2></div>
+<div style="padding:14px 18px;font-family:Rajdhani,sans-serif;font-size:14px;color:#d8e8f8;line-height:1.7;">
+  <p><b style="color:#f0c040;">Participación:</b> 40 🪙 · 4 equipos 👤</p>
+  <p><b style="color:#f0c040;">Fechas:</b> 14 al 17 de Junio</p>
+  <p><b style="color:#f0c040;">Formato:</b> Eliminatoria directa<br>Semis → Final (máx. 2 partidos).</p>
+  <p style="margin-top:10px;"><b style="color:#f0c040;">Premios:</b></p>
+  <ul style="margin:4px 0 0 20px;">
+    <li>Semis <b>+40 🪙</b></li>
     <li>Subcampeón <b>+80 🪙</b></li>
     <li>Campeón <b>+100 🪙</b></li>
   </ul>
@@ -8945,6 +8993,16 @@ Tottenham
           <button type="button" class="munich-tour-info-btn"
                   onclick="event.stopPropagation();window.muTourInfo('jg')" title="Info">ℹ️</button>
         </div>
+        <div class="munich-tour-card" data-tour="asia"
+             onclick="window.muTourToggle('asia', event)">
+          <span class="munich-tour-flag">🇯🇵</span>
+          <div class="munich-tour-body">
+            <div class="munich-tour-name">Asian Tournament</div>
+            <div class="munich-tour-meta">4 👤 · 14-17 Junio · semis + final</div>
+          </div>
+          <button type="button" class="munich-tour-info-btn"
+                  onclick="event.stopPropagation();window.muTourInfo('asia')" title="Info">ℹ️</button>
+        </div>
       </div>
       <button type="button" class="munich-tour-confirm" id="munich-tour-confirm"
               onclick="window.muTourConfirm()">✅ CONFIRMAR 0/2</button>
@@ -9651,6 +9709,14 @@ Tottenham
         ['Cuartos de Grupo', 20], ['Tercero de Grupo', 40],
         ['Semis Playoffs', 60], ['Subcampeón', 80], ['Campeón', 100]
       ]
+    },
+    asia: {
+      flag: '🇯🇵', name: 'Asian Tournament',
+      fee: 40, teams: 4, dates: '14 al 17 de Junio',
+      format: 'Eliminatoria directa: Semis → Final (máx. 2 partidos).',
+      prizes: [
+        ['Semis', 40], ['Subcampeón', 80], ['Campeón', 100]
+      ]
     }
   };
   var TOURS_STORAGE_KEY = 'munich_summer_tours_v1';
@@ -9810,6 +9876,7 @@ Tottenham
      dando prioridad a JG para que ese día sea día de playoff si el
      usuario lo ha elegido; PSS termina el 23 para este mapeo. */
   var _SUMMER_TOUR_WINDOWS = [
+    { id: 'asia', startM: 5, startD: 14, endM: 5, endD: 17 },
     { id: 'sct', startM: 6, startD:  1, endM: 6, endD: 10 },
     { id: 'pss', startM: 6, startD: 12, endM: 6, endD: 23 },
     { id: 'jg',  startM: 6, startD: 24, endM: 7, endD:  1 }
@@ -9842,7 +9909,7 @@ Tottenham
   }
   /* Abreviaturas cortas para el badge "VS" (compEl) — el nombre
      completo es demasiado largo para ese chip. */
-  var _SUMMER_TOUR_SHORT = { sct: 'SCT', pss: 'PSS', jg: 'GAMPER' };
+  var _SUMMER_TOUR_SHORT = { sct: 'SCT', pss: 'PSS', jg: 'GAMPER', asia: 'ASIA' };
   /* Devuelve la info para renderizar un evento `ag-torneo`:
      - si Bayern ha elegido el torneo que cubre esa fecha → flag + nombre
      - si no → icono 🌞 genérico */

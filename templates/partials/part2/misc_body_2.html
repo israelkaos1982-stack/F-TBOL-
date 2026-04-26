@@ -3681,6 +3681,17 @@
   /* ── HELPERS ─────────────────────────────────────── */
   var TEAM_NAME_CACHE = {};
   var TEAM_LOGO_CACHE = {};
+  /* Permite a otros módulos invalidar la entrada cacheada de un equipo
+     cuando se acaba de registrar un escudo nuevo (p.ej. amistosos
+     leyendo `t.shield` desde ligaExt_*). Sin esto, getLogoEquipo
+     devolvería el escudo-default ya cacheado. */
+  try {
+    window._invalidateTeamLogo = function(name){
+      if (!name) return;
+      try { delete TEAM_LOGO_CACHE[name]; } catch(_){}
+      try { delete TEAM_LOGO_CACHE[String(name).trim()]; } catch(_){}
+    };
+  } catch(_){}
   var BACKEND_ESCUDOS = window.BACKEND_ESCUDOS || {};
   var BACKEND_ESCUDOS_ALIASES = window.BACKEND_ESCUDOS_ALIASES || {};
   var BACKEND_ESCUDO_DEFAULT = window.BACKEND_ESCUDO_DEFAULT || '/static/img/escudos-fallback/estepona.svg';
@@ -4599,7 +4610,8 @@
     if (sel) sel.value = channel;
   };
 
-  function buildMatchCard(j, home, away, isHvH, mk) {
+  function buildMatchCard(j, home, away, isHvH, mk, opts) {
+    opts = opts || {};
     var hu = home.toUpperCase();
     var au = away.toUpperCase();
     var hiH = humanIcon(home);
@@ -4614,8 +4626,11 @@
     var tcA = (window.getTeamColors && window.getTeamColors(home)) || {bg:'#1a2a4a'};
     var tcB = (window.getTeamColors && window.getTeamColors(away)) || {bg:'#1a2a4a'};
     var gradStyle = 'background:linear-gradient(to right,'+tcA.bg+'2e 0%,transparent 44%,transparent 56%,'+tcB.bg+'2e 100%);position:relative;overflow:hidden;';
-    /* faded bg shields — HvH both, Human vs IA only human side */
-    var isHomeHuman = esHumano(home), isAwayHuman = esHumano(away);
+    /* faded bg shields — HvH both, Human vs IA only human side.
+       Si el caller pasa flags H/IA explícitos (amistosos con toggle
+       per-match) los honramos; si no, caemos al esHumano global. */
+    var isHomeHuman = (typeof opts.homeIsHuman === 'boolean') ? opts.homeIsHuman : esHumano(home);
+    var isAwayHuman = (typeof opts.awayIsHuman === 'boolean') ? opts.awayIsHuman : esHumano(away);
     var showShA = isHvH || isHomeHuman;
     var showShB = isHvH || isAwayHuman;
     var bgShA = (showShA && lA) ? '<img src="'+lA+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
@@ -5346,9 +5361,9 @@
        Excluimos expulsados y jugadores que ya vieron una amarilla
        para no duplicar. */
     var aggrFactorA = (typeof window._aggressivenessFactor === 'function')
-      ? window._aggressivenessFactor(teamA) : 1;
+      ? window._aggressivenessFactor(st.home) : 1;
     var aggrFactorB = (typeof window._aggressivenessFactor === 'function')
-      ? window._aggressivenessFactor(teamB) : 1;
+      ? window._aggressivenessFactor(st.away) : 1;
     var aggrMean = (aggrFactorA + aggrFactorB) / 2;  /* 1.0 = liga media */
     var baseYellow = Math.floor(Math.random() * 3) + 2;  /* 2-4 */
     var numYellow = Math.max(0, Math.round(baseYellow * aggrMean));
@@ -5394,16 +5409,22 @@
   function _mlPreGenAIEvents(mk) {
     var st = _mlSt(mk);
     if (st.isHvH || st.aiEventsGenerated) return;
-    var humanA = typeof esHumano === 'function' && esHumano(st.home);
-    var humanB = typeof esHumano === 'function' && esHumano(st.away);
-    /* Amistosos con algún equipo humano: solo añadir manualmente (no auto-generar).
-       Los amistosos IA-vs-IA SÍ caen al generador dedicado para que tengan goles,
-       tarjetas y expulsiones como los partidos de Liga IA-vs-IA. */
-    if (st.isFriendly && (humanA || humanB)) {
-      st.aiEventsGenerated = true;
-      st.pendingAIEvents = [];
-      return;
+    /* En amistosos el rol H/IA es per-partido (toggle del setup), NO
+       el flag global del editor. Para Liga seguimos delegando en
+       esHumano(). */
+    var humanA, humanB;
+    if (st.isFriendly) {
+      humanA = !!st.homeIsHuman;
+      humanB = !!st.awayIsHuman;
+    } else {
+      humanA = typeof esHumano === 'function' && esHumano(st.home);
+      humanB = typeof esHumano === 'function' && esHumano(st.away);
     }
+    /* Amistosos: el sistema de simulación es idéntico al de Liga
+       (petición usuario). Si los dos son IA → generador dedicado con
+       expulsiones; si hay un humano → cae al pre-gen del lado IA
+       (más abajo); si los dos son humanos → return temprano por
+       st.isHvH al inicio de la función. */
     /* IA vs IA: usar generador dedicado con expulsiones */
     if (!humanA && !humanB) { _mlPreGenIAvsIAEvents(mk); return; }
     st.aiEventsGenerated = true;
@@ -15221,6 +15242,42 @@ document.addEventListener('DOMContentLoaded', function() {
     return false;
   }
 
+  /* Lee el escudo de un equipo desde cualquier ligaExt_* y lo
+     registra en window.TEAM_LOGOS para que getLogoEquipo lo
+     encuentre antes de caer al escudo-default. Necesario para
+     equipos como Bournemouth que viven solo en un editor (Premier,
+     Bundesliga, etc.) y no tienen TEAM_LOGOS hardcodeado. */
+  function _amsRegisterShield(name) {
+    if (!name) return;
+    try {
+      var lower = String(name).trim().toLowerCase();
+      var canon = (typeof _canonAms === 'function') ? _canonAms(name) : name;
+      var canonLower = String(canon || '').trim().toLowerCase();
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (!key || key.indexOf('ligaExt_') !== 0) continue;
+        if (key.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(key);
+        if (!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch (_) { continue; }
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        for (var j = 0; j < teams.length; j++) {
+          var t = teams[j];
+          if (!t || !t.name || !t.shield) continue;
+          var n = String(t.name).trim().toLowerCase();
+          if (n === lower || n === canonLower) {
+            window.TEAM_LOGOS = window.TEAM_LOGOS || {};
+            if (!window.TEAM_LOGOS[name])  window.TEAM_LOGOS[name]  = t.shield;
+            if (canon && !window.TEAM_LOGOS[canon]) window.TEAM_LOGOS[canon] = t.shield;
+            try { window._invalidateTeamLogo && window._invalidateTeamLogo(name); } catch(_){}
+            try { window._invalidateTeamLogo && window._invalidateTeamLogo(canon); } catch(_){}
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
   window._amsCreateMatch = function() {
     if (!_selA || !_selB || _selA === _selB) return;
     _amsCounter++;
@@ -15236,9 +15293,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var matchDur  = _amsDur;       /* 'auto' | 8 | 10 */
     var formHome  = _selA_form;
     var formAway  = _selB_form;
+    /* Pre-registrar escudos desde ligaExt_* para que la tarjeta no
+       caiga al escudo-default cuando el equipo solo vive en un
+       editor (p.ej. Bournemouth en "Resto de 51 ligas"). */
+    _amsRegisterShield(_selA);
+    _amsRegisterShield(_selB);
     // Build match card using exposed function
     if (typeof window._calBuildMatchCard !== 'function') { alert('Error: motor de partidos no disponible.'); return; }
-    var cardHtml = window._calBuildMatchCard(0, _selA, _selB, isHvH, mk);
+    /* Pasamos los flags H/IA per-match para que el render del card
+       (escudos de fondo, alias eFootball, clase del wrap) honre el
+       toggle del setup en lugar del flag global del editor. */
+    var cardHtml = window._calBuildMatchCard(0, _selA, _selB, isHvH, mk, {
+      homeIsHuman: isHomeHuman, awayIsHuman: isAwayHuman
+    });
     var container = document.getElementById('ams-match-container');
     if (!container) return;
     // Append (not replace) so multiple friendlies can coexist
@@ -15253,6 +15320,14 @@ document.addEventListener('DOMContentLoaded', function() {
     st.isHvH = isHvH;
     st.isFriendly = true;
     st.isIAvsIA = isIAvsIA;
+    /* Flags H/IA per-match — el motor (_mlPreGenAIEvents,
+       _mlResolveClock, etc.) los consulta cuando st.isFriendly
+       en lugar del esHumano global. Así un Atlético Madrid que el
+       usuario marque como IA en el toggle del amistoso se trata
+       realmente como IA durante este partido. */
+    st.homeIsHuman   = !!isHomeHuman;
+    st.awayIsHuman   = !!isAwayHuman;
+    st.humanInvolved = !!(isHomeHuman || isAwayHuman);
     /* ── IA vs IA: saltarse la previa por completo ─────────────────────
        Como en las simulaciones de Liga IA-vs-IA, el usuario solo tiene
        que pulsar ▶ y el partido se auto-simula con eventos generados a
@@ -15275,6 +15350,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (timerRow0) timerRow0.style.display = '';
       if (timerBtn0) {
         timerBtn0.disabled = false;
+        timerBtn0.style.display = '';
         timerBtn0.textContent = '▶ SIMULAR';
       }
       var addBtn0 = document.getElementById('ml-add-btn-' + mk);
@@ -15298,6 +15374,11 @@ document.addEventListener('DOMContentLoaded', function() {
               _origPpConfirm();
               var actionRow = document.getElementById('ml-action-row-' + matchKey);
               if (actionRow) actionRow.style.display = 'flex';
+              /* Asegurar que el timer ▶ es visible aunque el patcher
+                 de cleanup haya eliminado .ml-timer-row (amistosos no
+                 llevan controles ⏪/⏩, ver _isHumanWrap). */
+              var _t = document.getElementById('ml-timer-' + matchKey);
+              if (_t) _t.style.display = '';
               window._ppConfirm = _origPpConfirm;
             };
             if (typeof window.showPrePartidoOverlay === 'function') {
@@ -15502,6 +15583,10 @@ document.addEventListener('DOMContentLoaded', function() {
      limpia si tenía controles inyectados por error. */
   function _isHumanWrap(wrap) {
     if (!wrap || !wrap.classList) return false;
+    /* Amistosos: NUNCA inyectamos los controles de velocidad ⏪/⏩
+       (petición usuario). Solo el botón ▶ entra en pantalla. El id
+       del wrap de un amistoso es `mlw-ams-…` (ver `_amsCreateMatch`). */
+    if (wrap.id && wrap.id.indexOf('mlw-ams-') === 0) return false;
     return wrap.classList.contains('hvh') || wrap.classList.contains('hvia');
   }
   function _cleanupSpeedIn(wrap) {
@@ -15511,9 +15596,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var row = document.getElementById('ml-timer-row-' + mk);
     if (!row) return;
     /* Sacar el timer del row, colocarlo DONDE ESTABA el row, y eliminar
-       el row con los botones de velocidad. */
+       el row con los botones de velocidad. Propagamos el display del
+       row al timer: si el row estaba oculto (previa pendiente), el
+       timer también debe quedarse oculto hasta que se confirme la
+       previa o se active la simulación. */
+    var rowHidden = (row.style.display === 'none');
     var timer = row.querySelector('.ml-timer');
     if (timer && row.parentNode) row.parentNode.insertBefore(timer, row);
+    if (timer) timer.style.display = rowHidden ? 'none' : '';
     try { row.parentNode.removeChild(row); } catch(_){}
   }
   function patchSpeedIn(wrap) {

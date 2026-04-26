@@ -12900,25 +12900,73 @@ function buildLiveScreen() {
   var esH = (typeof window.esHumano === 'function') ? window.esHumano : null;
   var wraps = document.querySelectorAll('.match-live-wrap.hvh, .match-live-wrap.hvia');
   var liveWraps = [];
+  /* Helper interno: limpia el wrap visualmente para que NUNCA más
+     vuelva a colarse como live. Quita state-playing, marca el state
+     como finished, oculta action bar. Idempotente. */
+  function _hardCleanupLiveWrap(w, scoreEl, st) {
+    try {
+      if (scoreEl) {
+        scoreEl.classList.remove('state-playing');
+        scoreEl.classList.add('state-finished');
+      }
+      if (st) {
+        if (st.timerInterval) { try { clearInterval(st.timerInterval); } catch(_){} st.timerInterval = null; }
+        st.timerRunning = false;
+        st.finished = true;
+        st._finishPropagatedAt = st._finishPropagatedAt || Date.now();
+      }
+      var actBar = w.querySelector('.ml-match-actions, .ml-action-row');
+      if (actBar) actBar.style.visibility = 'hidden';
+      var btnTimer = w.querySelector('.ml-timer');
+      if (btnTimer && !btnTimer.classList.contains('finished')) {
+        btnTimer.textContent = '🏁 FIN';
+        btnTimer.className = 'ml-timer finished';
+      }
+    } catch(_){}
+  }
+
   wraps.forEach(function(w) {
     var scoreEl = w.querySelector('.ml-score');
     if (!scoreEl || !scoreEl.classList.contains('state-playing')) return;
-    /* Excluir partidos que el usuario ya ha mandado a la papelera —
-       sobrevive a polls, recargas y rehydrates durante 24 h. */
+    var _wrapMk = w.id ? w.id.replace(/^mlw-/, '') : '';
+    var _wrapSt = (_wrapMk && typeof window._mlGetState === 'function') ? window._mlGetState(_wrapMk) : null;
+
+    /* Trashed manualmente → cleanup duro y fuera. */
     try {
-      var _trKey = w.id ? w.id.replace(/^mlw-/, '') : '';
-      if (_trKey && typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(_trKey)) {
-        if (scoreEl) { scoreEl.classList.remove('state-playing'); scoreEl.classList.add('state-finished'); }
+      if (_wrapMk && typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(_wrapMk)) {
+        _hardCleanupLiveWrap(w, scoreEl, _wrapSt);
         return;
       }
     } catch(_){}
+
+    /* Estado.finished o sin kickoff → no es live. Hard-cleanup para
+       que el state-playing residual NO vuelva a colar la card. */
+    if (_wrapSt && (_wrapSt.finished || !_wrapSt.kickoffDone)) {
+      _hardCleanupLiveWrap(w, scoreEl, _wrapSt);
+      return;
+    }
+
+    /* loadResults() ya tiene marcador guardado para este (j,home,away)
+       → el partido está oficialmente finalizado, aunque el wrap siga
+       con state-playing por una sesión obsoleta o un poll que pintó
+       un snapshot antiguo. Fuente de verdad: loadResults. */
+    try {
+      if (_wrapSt && _wrapSt.j && _wrapSt.home && _wrapSt.away
+          && typeof _gmMatchIsAlreadyFinished === 'function'
+          && _gmMatchIsAlreadyFinished(_wrapSt.j, _wrapSt.home, _wrapSt.away)) {
+        _hardCleanupLiveWrap(w, scoreEl, _wrapSt);
+        return;
+      }
+    } catch(_){}
+
     /* Excluir partidos cuyo cronómetro ya alcanzó el tope (90+stoppage
        o 120+stoppage en prórroga) y está en pausa. El usuario los
        considera "finalizados" aunque aún no haya pulsado FINALIZAR. */
     try {
-      var _wrapMk = w.id ? w.id.replace(/^mlw-/, '') : '';
-      var _wrapSt = (typeof window._mlGetState === 'function') ? window._mlGetState(_wrapMk) : null;
-      if (_wrapSt && _gmTimerExhausted(_wrapSt)) return;
+      if (_wrapSt && _gmTimerExhausted(_wrapSt)) {
+        _hardCleanupLiveWrap(w, scoreEl, _wrapSt);
+        return;
+      }
     } catch(_){}
     if (esH) {
       /* Los nombres en `.ml-team-name` vienen en MAYÚSCULAS
@@ -12928,8 +12976,8 @@ function buildLiveScreen() {
          Resolvemos los nombres canónicos desde el registro _mlStates
          a partir del id `mlw-{mk}`. Como fallback tolerante a
          mayúsculas, comparamos con HUMANOS case-insensitive. */
-      var mk = w.id ? w.id.replace(/^mlw-/, '') : '';
-      var st = (typeof window._mlGetState === 'function') ? window._mlGetState(mk) : null;
+      var mk = _wrapMk;
+      var st = _wrapSt;
       var hName, aName;
       if (st && st.home && st.away) {
         hName = st.home;

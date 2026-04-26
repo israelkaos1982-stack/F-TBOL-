@@ -5460,6 +5460,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
     /* Marcar el overlay como "modo previa" para que sancion-ov-ok comparta WA */
     window._ppForceSancionShareMode = true;
+    /* Amistosos: NO mostrar el panel de SANCIONADOS / EXPULSADOS /
+       LESIONADOS / ESTADO DE FORMA tras la previa (petición usuario).
+       En amistosos ese panel no tiene sentido — son partidos de
+       exhibición que no afectan a sanciones acumuladas en Liga.
+       Saltamos directo a `_afterShare` para revelar el ▶. */
+    if (_ppCompKey === 'amistoso') {
+      _afterShare();
+      return;
+    }
     if (typeof window.showSancionOverlay === 'function') {
       window.showSancionOverlay(_ppCompKey, null, _afterShare);
       /* Si por cualquier motivo el overlay se omitió (sin bajas), forzar mostrarlo */

@@ -4658,6 +4658,19 @@
     }
     var homeAliasHtml = _aliasHtml(homeAliasTxt);
     var awayAliasHtml = _aliasHtml(awayAliasTxt);
+    /* Speed-controls (⏪/⏩): se renderizan en HvH/HvIA pero NO en
+       amistosos (petición usuario). Si `opts.noSpeedControls` es
+       true, omitimos los botones desde la generación — así no hay
+       carrera con el patcher post-DOM y el ▶ siempre queda solo. */
+    var _noSpeed = !!opts.noSpeedControls;
+    var timerBlock = _noSpeed
+      ? '<button class="ml-timer" id="ml-timer-'+mk+'" onclick="mlTimerClickGen(\''+emk+'\')" style="display:none;">▶ 0\'</button>'
+      : '<div class="ml-timer-row" id="ml-timer-row-'+mk+'" style="display:none;">'
+          +'<button class="ml-speed-btn" id="ml-speed-down-'+mk+'" onclick="mlSpeedDownGen(\''+emk+'\')" title="Ralentizar (⏪ ×0.5)">⏪</button>'
+          +'<button class="ml-timer" id="ml-timer-'+mk+'" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
+          +'<button class="ml-speed-btn" id="ml-speed-up-'+mk+'" onclick="mlSpeedUpGen(\''+emk+'\')" title="Acelerar (⏩ ×2)">⏩</button>'
+          +'<span class="ml-speed-x" id="ml-speed-x-'+mk+'" title="Velocidad actual">1×</span>'
+        +'</div>';
     return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'" style="'+gradStyle+'">'
       +bgShA+bgShB
       +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">'+_homeStadium+'</span><span class="ml-venue-sep">·</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado</span><span class="ml-venue-sep">·</span><span class="ml-venue-ball" id="vball-'+mk+'"></span></div>'
@@ -4669,17 +4682,9 @@
           +'<div class="ml-pen-score" id="pen-score-'+mk+'" style="display:none;">⚽ 0–0 (pen.)</div>'
           +'<button class="ml-previa-btn" id="ml-previa-'+mk+'" onclick="mlPreviaClick(\''+emk+'\')">📋 PREVIA</button>'
           /* Fila del cronómetro: ⏪ [▶/⏸ minuto] ⏩ en la MISMA fila
-             horizontal. Layout pedido por el usuario:
-               Equipo A  ⏪ ⏸ ⏩  Equipo B
-             (con el minuto dentro del botón central). Los 3 controles
-             comparten visibilidad: se muestran al confirmar la previa.
-             Rangos de velocidad: 0.25× / 0.5× / 1× / 2× / 4×. */
-          +'<div class="ml-timer-row" id="ml-timer-row-'+mk+'" style="display:none;">'
-            +'<button class="ml-speed-btn" id="ml-speed-down-'+mk+'" onclick="mlSpeedDownGen(\''+emk+'\')" title="Ralentizar (⏪ ×0.5)">⏪</button>'
-            +'<button class="ml-timer" id="ml-timer-'+mk+'" onclick="mlTimerClickGen(\''+emk+'\')">▶ 0\'</button>'
-            +'<button class="ml-speed-btn" id="ml-speed-up-'+mk+'" onclick="mlSpeedUpGen(\''+emk+'\')" title="Acelerar (⏩ ×2)">⏩</button>'
-            +'<span class="ml-speed-x" id="ml-speed-x-'+mk+'" title="Velocidad actual">1×</span>'
-          +'</div>'
+             horizontal (en HvH/HvIA). En amistosos solo entra el
+             botón ▶ — sin row ni ⏪/⏩ ni indicador "1×". */
+          +timerBlock
         +'</div>'
         +'<div class="ml-team" style="z-index:1;position:relative;">'+shieldB+'<div class="ml-team-name">'+hiA+au+'</div>'+awayAliasHtml+'</div>'
       +'</div>'
@@ -15408,9 +15413,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof window._calBuildMatchCard !== 'function') { alert('Error: motor de partidos no disponible.'); return; }
     /* Pasamos los flags H/IA per-match para que el render del card
        (escudos de fondo, alias eFootball, clase del wrap) honre el
-       toggle del setup en lugar del flag global del editor. */
+       toggle del setup en lugar del flag global del editor.
+       `noSpeedControls: true` impide que se rendericen los botones
+       ⏪/⏩ + indicador 1× — petición usuario: amistosos solo llevan
+       el ▶ en el cronómetro. */
     var cardHtml = window._calBuildMatchCard(0, _selA, _selB, isHvH, mk, {
-      homeIsHuman: isHomeHuman, awayIsHuman: isAwayHuman
+      homeIsHuman: isHomeHuman, awayIsHuman: isAwayHuman,
+      noSpeedControls: true
     });
     var container = document.getElementById('ams-match-container');
     if (!container) return;

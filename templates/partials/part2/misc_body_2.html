@@ -4620,10 +4620,14 @@
     }
     var homeAliasHtml = _aliasHtml(homeAliasTxt);
     var awayAliasHtml = _aliasHtml(awayAliasTxt);
-    /* Solo el botón ▶ — se quitaron los controles de velocidad ⏪/⏩
-       (petición usuario: ocupaban demasiado espacio y desplazaban el
-       nombre de los equipos en HvH/HvIA). */
-    var timerBlock = '<button class="ml-timer" id="ml-timer-'+mk+'" onclick="mlTimerClickGen(\''+emk+'\')" style="display:none;">▶ 0\'</button>';
+    /* Solo el botón ▶ + un pequeño ✎ para editar el minuto cuando el
+       cronómetro está pausado (petición usuario: poder fijar el minuto
+       manualmente y reanudar a partir de él). Se quitaron los antiguos
+       controles de velocidad ⏪/⏩ por ocupar demasiado espacio. */
+    var timerBlock = '<span class="ml-timer-wrap" id="ml-timer-wrap-'+mk+'" style="display:inline-flex;align-items:center;gap:4px;justify-content:center;align-self:center;">'
+      + '<button class="ml-timer" id="ml-timer-'+mk+'" onclick="mlTimerClickGen(\''+emk+'\')" style="display:none;">▶ 0\'</button>'
+      + '<button class="ml-timer-edit" id="ml-timer-edit-'+mk+'" onclick="window._mlOpenTimerEdit(\''+emk+'\')" title="Ajustar minuto manualmente" style="display:none;">✎</button>'
+      + '</span>';
     return '<div class="match-live-wrap '+(isHvH?'hvh':'hvia')+'" id="mlw-'+mk+'" style="'+gradStyle+'">'
       +bgShA+bgShB
       +'<div class="ml-venue-bar pre-hidden" id="venue-bar-'+mk+'"><span class="ml-venue-ico">🏟️</span><span class="ml-venue-name">'+_homeStadium+'</span><span class="ml-venue-sep">·</span><span class="ml-venue-weather"><span class="ml-sun">☀️</span> Soleado</span><span class="ml-venue-sep">·</span><span class="ml-venue-ball" id="vball-'+mk+'"></span></div>'
@@ -5176,6 +5180,17 @@
     var st = _mlSt(mk);
     var btn = document.getElementById('ml-timer-'+mk);
     if (!btn) return;
+    /* Botón ✎ de edición manual del minuto: solo visible cuando el
+       cronómetro está pausado y el partido en curso (kickoff hecho,
+       no finalizado, no en descanso). Pulsarlo abre _mlOpenTimerEdit
+       que ya existía y se invocaba con long-press. */
+    var editBtn = document.getElementById('ml-timer-edit-'+mk);
+    if (editBtn) {
+      var canEditNow = !!(st.kickoffDone && !st.timerRunning && !st.finished
+                          && !st.inDescanso && !st.matchFinished);
+      var timerVis = btn.style.display !== 'none';
+      editBtn.style.display = (canEditNow && timerVis) ? 'inline-flex' : 'none';
+    }
     /* La fila inline ⏪ [▶/⏸ min] ⏩ comparte visibilidad y vive en
        #ml-timer-row-{mk}. Antes había un ctrl aparte (ml-speed-ctrl)
        apilado debajo; ahora está todo inline en la misma fila. */
@@ -7570,18 +7585,28 @@
     if (!btn) return;
     var row = document.getElementById('gm-timer-row');
     var min = Math.floor(_gm.timerSec / 60);
+    /* Botón ✎ de edición manual del minuto: solo cuando el cronómetro
+       está pausado y el partido está en juego (no finalizado, no
+       descanso). Pulsarlo abre _gmOpenTimerEdit que ya existía. */
+    var editBtn = document.getElementById('gm-timer-edit');
+    function _setEditVis(visible){ if (editBtn) editBtn.style.display = visible ? 'inline-flex' : 'none'; }
     if (_gm.finished) {
       btn.textContent = '🏁 FIN';
       btn.className = 'ml-timer finished';
       if (row) { row.classList.remove('running'); row.classList.add('finished'); }
+      _setEditVis(false);
       return;
     }
     if (_gm.inDescanso) {
       btn.textContent = '⏸ HT';
       btn.className = 'ml-timer running';
       if (row) { row.classList.add('running'); row.classList.remove('finished'); }
+      _setEditVis(false);
       return;
     }
+    /* Edit ✎ visible solo cuando hay partido en curso, kickoff hecho
+       y el cronómetro está pausado. */
+    _setEditVis(!!_gm.kickoffDone && !_gm.timerRunning);
     /* Descuento dinámico vía _mlCountStoppageHalves (mismo helper que
        el flujo ml-…). Formato 45+N en la 1ª parte y 90+N en la 2ª. */
     var stops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
@@ -10929,7 +10954,10 @@
       </div>
       <div class="gm-score-center">
         <div id="gm-score">0-0</div>
-        <button class="ml-timer" id="gm-timer" onclick="window.gmTimerClick()">▶ 0'</button>
+        <span class="ml-timer-wrap" id="gm-timer-wrap" style="display:inline-flex;align-items:center;gap:4px;justify-content:center;">
+          <button class="ml-timer" id="gm-timer" onclick="window.gmTimerClick()">▶ 0'</button>
+          <button class="ml-timer-edit" id="gm-timer-edit" onclick="window._gmOpenTimerEdit()" title="Ajustar minuto manualmente" style="display:none;">✎</button>
+        </span>
       </div>
       <div class="gm-team">
         <div class="gm-team-name" id="gm-team-b-name">EQUIPO B</div>

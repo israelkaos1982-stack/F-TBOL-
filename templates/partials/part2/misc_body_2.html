@@ -16332,9 +16332,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     e.classList.add('show');
     /* Timeout de seguridad: si por algún motivo ningún overlay
-       siguiente aparece, cerramos el spinner a los 8 s. */
+       siguiente aparece, cerramos el spinner enseguida. Antes era
+       8 s y el usuario veía el spinner una eternidad cuando un
+       overlay no estaba en la lista TARGETS — ahora 1.5 s máximo. */
     if (_safety) clearTimeout(_safety);
-    _safety = setTimeout(_hide, 8000);
+    _safety = setTimeout(_hide, 1500);
   }
   function _hide(){
     var e = _el(); if (!e) return;
@@ -16370,7 +16372,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* En cuanto cualquier overlay relevante gana .show, ocultamos
      el spinner — la siguiente pantalla está lista. */
-  var TARGETS = ['ml-stats-ov','ml-post-ov','gm-post-ov','mvp-force-overlay','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live'];
+  /* IDs (no clases) de cualquier overlay que pueda aparecer tras un
+     FINALIZAR/CONFIRMAR. Si añades uno nuevo, mételo aquí o el
+     spinner se quedará pegado hasta el timeout de seguridad.
+     OJO: el MVP picker es id=gen-mvp-ov (su clase es mvp-force-overlay).
+     Antes solo teníamos la clase y el observer no lo cazaba. */
+  var TARGETS = ['ml-stats-ov','ml-stats-entry-ov','ml-post-ov','gm-post-ov','gen-mvp-ov','mvp-force-overlay','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live','ml-final-ov','ml-descanso-ov','ml-injury-ov','prepartido-overlay'];
   function _scanShown(root){
     if (!root || root.nodeType !== 1) return false;
     for (var i = 0; i < TARGETS.length; i++) {

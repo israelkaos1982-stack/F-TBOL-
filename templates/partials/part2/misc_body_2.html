@@ -6081,7 +6081,13 @@
       _mlShowStatsOverlay(mk, function(){ window.mlEndMatchGen(mk, winner); });
       return;
     }
-    if (st.isHvH) {
+    /* MVP picker: HvH (los dos humanos) y HvIA (al menos uno humano).
+       Antes solo se mostraba para HvH, así que en partidos del humano
+       contra IA nunca se asignaba MVP → la clasificación contaba 0
+       aunque el equipo hubiera jugado decenas de partidos. */
+    var _isHumanInvolved = st.isHvH
+      || (typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away)));
+    if (_isHumanInvolved) {
       var hasMvp=st.events.some(function(e){return e.type==='mvp';});
       if (!hasMvp) {
         var sqA=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.home])||[];

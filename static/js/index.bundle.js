@@ -933,6 +933,60 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
   }
 
   function getExtrasForTeam(name){
+    /* MVP / TA / TR ahora se calculan desde LIGA_PLAYER_MATCH_STORE
+       (fuente de verdad con los eventos completos por partido) en
+       vez del cache LIGA_EXTRAS, que solo se rellenaba desde
+       LIGA_J1_RESULTS y se reseteaba a 0 al cerrar partidos de
+       J2+, perdiendo MVPs. Con este cambio, Atléti con 9 MVPs
+       deja de salir como "0 MVP" en la clasificación.
+       Solo si la store está vacía caemos al cache vivo (preserva
+       comportamiento legacy en arranques en frío). */
+    var canon = (typeof canonicalTeamName === 'function')
+                  ? canonicalTeamName(name) : String(name||'').trim();
+    var store = window.LIGA_PLAYER_MATCH_STORE;
+    if (store && Object.keys(store).length) {
+      var ta = 0, tr = 0, mvp = 0;
+      Object.keys(store).forEach(function(k) {
+        var entry = store[k];
+        if (!entry) return;
+        var canonA = (typeof canonicalTeamName === 'function') ? canonicalTeamName(entry.teamA || '') : (entry.teamA || '');
+        var canonB = (typeof canonicalTeamName === 'function') ? canonicalTeamName(entry.teamB || '') : (entry.teamB || '');
+        var teamSide = (canonA === canon) ? 'a' : (canonB === canon ? 'b' : null);
+        if (!teamSide) return;
+        var evts = Array.isArray(entry.evts) ? entry.evts : [];
+        var hasMvpInEvts = false;
+        evts.forEach(function(ev) {
+          if (!ev) return;
+          /* realTeam (canonical) tiene prioridad sobre team (a/b)
+             para evitar mismatches cuando el orden home/away se invierte
+             en la 2ª vuelta. */
+          var sideOk = ev.realTeam
+            ? (canonicalTeamName(ev.realTeam) === canon)
+            : (ev.team === teamSide);
+          if (!sideOk) return;
+          var t = ev.type;
+          if (t === 'amarilla') ta++;
+          else if (t === 'roja' || t === 'd-amarilla') tr++;
+          else if (t === 'mvp') { mvp++; hasMvpInEvts = true; }
+          else if (t === 'card') {
+            /* Bundled flow legacy mapea amarilla/roja/d-amarilla → 'card'
+               + ico distintivo. 🟨 = amarilla; 🟥 / 🟨🟥 = roja. */
+            var ico = String(ev.ico || '');
+            if (ico === '🟨') ta++;
+            else tr++;
+          }
+        });
+        /* Fallback MVP: algunas rutas guardan el MVP en mvpName/mvpTeam
+           top-level pero NO como evento dentro de evts. */
+        if (!hasMvpInEvts && entry.mvpTeam) {
+          var canonMvpT = (typeof canonicalTeamName === 'function')
+                            ? canonicalTeamName(entry.mvpTeam)
+                            : entry.mvpTeam;
+          if (canonMvpT === canon) mvp++;
+        }
+      });
+      return { ta: ta, tr: tr, mvp: mvp };
+    }
     var ex = LIGA_EXTRAS[name] || {};
     return {
       ta: Number(ex.ta || 0),
@@ -1820,6 +1874,14 @@ var STAT_CLASS_MAP = {
     // Fase 2: sincronizar stats al storage ligaExt
     if(typeof window.syncLigaEaPlayerStats === 'function'){
       try { window.syncLigaEaPlayerStats(); } catch(_){}
+    }
+    /* Refrescar la tabla de Clasificación: getExtrasForTeam ahora
+       calcula MVP/TA/TR desde LIGA_PLAYER_MATCH_STORE, que se acaba
+       de actualizar arriba. Sin esta llamada la tabla se quedaba
+       con valores viejos hasta el siguiente registrarResultadoLiga
+       o navegación — el usuario percibía "tarda mucho en actualizarse". */
+    if (typeof window.buildLigaClas === 'function') {
+      try { window.buildLigaClas(); } catch(_){}
     }
   };
 

@@ -8305,6 +8305,21 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     return TEAM_ALIAS[key] || clean;
   }
   function parseSavedResults(){
+    /* Preferir la cache en memoria (sharedLigaResultsCache vía
+       window.loadResults) antes que localStorage. Cuando
+       simularTodasJornadasIA persiste muchos MB de eventos, el
+       setItem puede fallar en silencio por cuota — la cache en
+       memoria sí tiene las 38 jornadas, así que la clasificación
+       cuenta correctamente sin esperar a una recarga. Después de
+       recarga (cache vacía), caemos al localStorage como antes. */
+    try {
+      if (typeof window.loadResults === 'function') {
+        var inMem = window.loadResults();
+        if (inMem && typeof inMem === 'object' && Object.keys(inMem).length) {
+          return inMem;
+        }
+      }
+    } catch(_){}
     try {
       var data = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
       return data && typeof data === 'object' ? data : {};

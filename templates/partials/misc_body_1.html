@@ -354,11 +354,12 @@ window.pG = function(fn) {
 
     function _badges(p){
       var b = '';
-      if (p.captain)  b += '<span class="lext-badge cap"   title="Capitán">C</span>';
-      if (p.freeKick) b += '<span class="lext-badge fk"    title="Lanzador de faltas">F</span>';
-      if (p.penalty)  b += '<span class="lext-badge pk"    title="Lanzador de penaltis">P</span>';
-      if (p.elite)    b += '<span class="lext-badge star"  title="Estrella del equipo">⭐</span>';
-      if (p.natGoal)  b += '<span class="lext-badge scorer" title="Goleador nato">⚾</span>';
+      if (p.captain)    b += '<span class="lext-badge cap"   title="Capitán">C</span>';
+      if (p.freeKick)   b += '<span class="lext-badge fk"    title="Lanzador de faltas">F</span>';
+      if (p.penalty)    b += '<span class="lext-badge pk"    title="Lanzador de penaltis">P</span>';
+      if (p.elite)      b += '<span class="lext-badge star"  title="Estrella del equipo">⭐</span>';
+      if (p.natGoal)    b += '<span class="lext-badge scorer" title="Goleador nato (~30% goles)">⚾</span>';
+      if (p.natGoalPro) b += '<span class="lext-badge scorer" title="Goleador estrella (~45% goles)">🏀</span>';
       return b;
     }
 
@@ -7874,11 +7875,12 @@ Tottenham
          sesión admin). Solo `captain` es exclusivo — el resto permite
          varios jugadores del mismo equipo a la vez. */
       var badges = '';
-      if(p.captain)  badges += '<span class="lext-badge cap"    title="Capitán">C</span>';
-      if(p.freeKick) badges += '<span class="lext-badge fk"     title="Lanzador de faltas">F</span>';
-      if(p.penalty)  badges += '<span class="lext-badge pk"     title="Lanzador de penaltis">P</span>';
-      if(p.elite)    badges += '<span class="lext-badge star"   title="Estrella del equipo">⭐</span>';
-      if(p.natGoal)  badges += '<span class="lext-badge scorer" title="Goleador nato">⚾</span>';
+      if(p.captain)    badges += '<span class="lext-badge cap"    title="Capitán">C</span>';
+      if(p.freeKick)   badges += '<span class="lext-badge fk"     title="Lanzador de faltas">F</span>';
+      if(p.penalty)    badges += '<span class="lext-badge pk"     title="Lanzador de penaltis">P</span>';
+      if(p.elite)      badges += '<span class="lext-badge star"   title="Estrella del equipo">⭐</span>';
+      if(p.natGoal)    badges += '<span class="lext-badge scorer" title="Goleador nato (~30% goles)">⚾</span>';
+      if(p.natGoalPro) badges += '<span class="lext-badge scorer" title="Goleador estrella (~45% goles)">🏀</span>';
       /* Badge de lesión: si el jugador está en LESION_STORE y aún tiene
          partidos pendientes, mostramos el emoji de gravedad y "N P" de
          partidos restantes, con tooltip con la descripción. Pedido por

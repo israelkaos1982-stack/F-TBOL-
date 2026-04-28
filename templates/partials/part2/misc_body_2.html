@@ -15678,6 +15678,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return false;
   }
 
+
   /* Fuente de verdad: solo equipos CON plantilla. Unimos los equipos
      de los editores (ligaExt_*) cuyo `players[]` no está vacío con
      los de SQUAD_REGISTRY que ya tienen jugadores cacheados. Se
@@ -15709,11 +15710,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /* 1. Editores ligaExt_* (Liga EA Sports, Hypermotion, Primera Fed,
-          y las 51 ligas del "Resto"). Sólo se acepta el equipo si
-          tiene plantilla (`players[]` no vacío) o si la plantilla ya
-          está cacheada en SQUAD_REGISTRY. Así no se cuelan equipos
-          que el admin haya empezado a crear pero aún no haya
-          rellenado. */
+          y las 51 ligas del "Resto"). Aceptamos TODOS los equipos
+          creados por el admin, tengan o no plantilla manual en SU
+          slug. Si el equipo no tiene `players[]` ni roster en
+          SQUAD_REGISTRY, el simulador usará placeholders ("Eibar
+          POR 1") — no es lo ideal pero permite emparejar cualquier
+          equipo creado en amistosos.
+
+          Antes filtrábamos por `_hasCachedRoster`/`_hasSimulableRoster`
+          y dejábamos fuera los cientos de equipos guardados en
+          Primera Fed / ligas del "Resto" cuya plantilla aún no
+          estaba hidratada en memoria. Resultado: el admin creaba
+          40 equipos en Primera Fed y al buscar "Ta" solo le salía
+          Celta y Getafe. Ahora cualquier equipo con nombre
+          (`t.name`) en `data.teams` aparece. */
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var key = localStorage.key(i);
@@ -15726,8 +15736,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!data || !Array.isArray(data.teams)) continue;
         data.teams.forEach(function (t) {
           if (!t || !t.name) return;
-          var hasRoster = Array.isArray(t.players) && t.players.length > 0;
-          if (!hasRoster && !_hasCachedRoster(t.name)) return;
           _pushTeam(t.name, t.power || t.media, t.shield, t.isHuman);
         });
       }

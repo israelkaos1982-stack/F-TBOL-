@@ -3644,6 +3644,13 @@
     persistSharedLigaState({ liga_results: sharedLigaResultsCache });
   }
   function rKey(j, h, a) { return j + '|' + h + '|' + a; }
+  /* Exponer loadResults en window para que parseSavedResults
+     (index.bundle.js, otra IIFE) pueda preferir la cache en memoria
+     antes que el localStorage. simularTodasJornadasIA escribe muchos
+     MB de eventos y setItem puede fallar en silencio por cuota — la
+     clasificación se quedaba con solo media liga aunque la cache
+     en memoria sí tuviera los 38 jornadas. */
+  try { window.loadResults = loadResults; } catch(_){}
 
   /* ── HELPERS ─────────────────────────────────────── */
   var TEAM_NAME_CACHE = {};

@@ -6845,12 +6845,41 @@ Tottenham
   }
 
   function pickScorer(players){
-    // 60% DEL, 30% MED, 10% DEF
+    /* Selecciona el goleador SOLO entre los titulares aproximados
+       (top 3 DEL + top 3 MED + top 4 DEF por poder, formación
+       4-3-3). Antes competía dentro de la plantilla COMPLETA (25-30
+       jugadores), así que un 🏀 con ×3.0 quedaba diluido por 5-7
+       delanteros suplentes y el goleador estrella solo conseguía
+       ~25% de los goles del equipo en lugar del 46-50% objetivo.
+       Con titulares (Haaland 91·🏀 vs 2 delanteros ~84):
+         Haaland_w = 91 × 3.0 = 273
+         Otros_w  = 2 × 84    = 168
+         Cuota DEL = 273 / 441 = 61.9%
+         Open-play (60% del total) × 61.9% = 37.1%
+         + Penaltis (12% del total, todos al taker P) = 12%
+         → ≈ 49% del total — entra en el rango 46-50%. */
+    var byPos = {DEL: [], MED: [], DEF: []};
+    players.forEach(function(p){
+      if (!p) return;
+      var pos = p.pos;
+      if (pos === 'DEL' || pos === 'MED' || pos === 'DEF') byPos[pos].push(p);
+    });
+    Object.keys(byPos).forEach(function(k){
+      byPos[k].sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+    });
+    var titulares = {
+      DEL: byPos.DEL.slice(0, 3),
+      MED: byPos.MED.slice(0, 3),
+      DEF: byPos.DEF.slice(0, 4)
+    };
+    // 60% DEL, 30% MED, 10% DEF (misma distribución que antes).
     var r = Math.random();
     var pool;
-    if(r < 0.6) pool = players.filter(function(p){return p.pos==='DEL';});
-    else if(r < 0.9) pool = players.filter(function(p){return p.pos==='MED';});
-    else pool = players.filter(function(p){return p.pos==='DEF';});
+    if(r < 0.6) pool = titulares.DEL;
+    else if(r < 0.9) pool = titulares.MED;
+    else pool = titulares.DEF;
+    // Fallbacks por si la plantilla está corta.
+    if(!pool.length) pool = titulares.DEL.concat(titulares.MED, titulares.DEF);
     if(!pool.length) pool = players.filter(function(p){return p.pos!=='POR';});
     if(!pool.length) pool = players;
     return weightedPick(pool);

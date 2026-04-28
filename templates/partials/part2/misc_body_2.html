@@ -2284,6 +2284,37 @@
   function _loadRealRosters(){
     if(_realRosterCache) return _realRosterCache;
     var out = {};
+
+    function _ingestPlayers(teamName, players){
+      if(!teamName || !Array.isArray(players) || !players.length) return false;
+      var roster = {porteros:[], defensas:[], medios:[], delanteros:[]};
+      players.forEach(function(p){
+        if(!p || !p.name) return;
+        var entry = [p.name, Number(p.power)||70];
+        /* Flags propagadas como propiedades del array para que los
+           pickers (weightedScorer, MVP, specialist) puedan aplicar
+           sus bonus sin romper a los consumidores que esperan
+           [name, power]. Captain viaja también por si algún día
+           queremos darle peso individual (hoy se usa a nivel de
+           equipo con _captainBonus). */
+        if(p.elite)      entry.elite      = true;
+        if(p.natGoal)    entry.natGoal    = true;
+        if(p.natGoalPro) entry.natGoalPro = true;
+        if(p.captain)    entry.captain    = true;
+        if(p.freeKick)   entry.freeKick   = true;
+        if(p.penalty)    entry.penalty    = true;
+        if(p.pos === 'POR') roster.porteros.push(entry);
+        else if(p.pos === 'DEF') roster.defensas.push(entry);
+        else if(p.pos === 'MED') roster.medios.push(entry);
+        else roster.delanteros.push(entry);
+      });
+      var total = roster.porteros.length+roster.defensas.length+roster.medios.length+roster.delanteros.length;
+      if(!total) return false;
+      out[teamName] = roster;
+      return true;
+    }
+
+    /* 1. Fuente principal: las 3 ligas con plantilla manual. */
     ['ligaExt_liga-hypermotion','ligaExt_liga-primera-federacion','ligaExt_liga-ea-sports'].forEach(function(slug){
       try {
         var raw = localStorage.getItem(slug);
@@ -2291,32 +2322,69 @@
         var d = JSON.parse(raw);
         var teams = (d && d.teams) || [];
         teams.forEach(function(t){
-          if(!t || !t.name || !Array.isArray(t.players) || !t.players.length) return;
-          var roster = {porteros:[], defensas:[], medios:[], delanteros:[]};
-          t.players.forEach(function(p){
-            if(!p || !p.name) return;
-            var entry = [p.name, Number(p.power)||70];
-            /* Flags propagadas como propiedades del array para que los
-               pickers (weightedScorer, MVP, specialist) puedan aplicar
-               sus bonus sin romper a los consumidores que esperan
-               [name, power]. Captain viaja también por si algún día
-               queremos darle peso individual (hoy se usa a nivel de
-               equipo con _captainBonus). */
-            if(p.elite)      entry.elite      = true;
-            if(p.natGoal)    entry.natGoal    = true;
-            if(p.natGoalPro) entry.natGoalPro = true;
-            if(p.captain)    entry.captain    = true;
-            if(p.freeKick)   entry.freeKick   = true;
-            if(p.penalty)    entry.penalty    = true;
-            if(p.pos === 'POR') roster.porteros.push(entry);
-            else if(p.pos === 'DEF') roster.defensas.push(entry);
-            else if(p.pos === 'MED') roster.medios.push(entry);
-            else roster.delanteros.push(entry);
-          });
-          out[t.name] = roster;
+          if(!t || !t.name) return;
+          _ingestPlayers(t.name, t.players);
         });
       } catch(_){}
     });
+
+    /* 2. Fallback CRÍTICO: para CADA equipo de Hypermotion / Primera Fed
+       que aún no tenga roster (`out[name]` ausente o vacío), intentamos
+       hidratar desde `sqFromRegistry`. Antes este loader solo leía
+       `ligaExt_<slug>.teams[i].players` y, si ese array estaba vacío
+       (caso típico: equipos cargados por bundle sin plantilla manual,
+       o lazy-import pendiente), `buildRoster` caía a placeholders
+       "Eibar POR 1" → la sim escribía stats bajo nombres fake → la
+       plantilla (que sí hidrataba desde SQUAD_REGISTRY) mostraba
+       jugadores REALES con todas las columnas a 0. Ahora el sim usa la
+       MISMA fuente que el modal Plantilla.
+
+       sqFromRegistry devuelve formato [num, name, power] + headers
+       {h:'🧤 PORTEROS'} etc. Lo convertimos al formato roster. */
+    function _hydrateFromSqRegistry(slug){
+      var raw;
+      try { raw = localStorage.getItem(slug); } catch(_){}
+      if(!raw) return;
+      var d; try { d = JSON.parse(raw); } catch(_){ return; }
+      var teams = (d && d.teams) || [];
+      teams.forEach(function(t){
+        if(!t || !t.name) return;
+        if(out[t.name]) return; /* ya hidratado desde storage */
+        if(typeof window.sqFromRegistry !== 'function') return;
+        var sq;
+        try { sq = window.sqFromRegistry(t.name) || []; } catch(_){ sq = []; }
+        if(!sq || !sq.length) return;
+        var roster = {porteros:[], defensas:[], medios:[], delanteros:[]};
+        var POS_INV = {'🧤 PORTEROS':'POR','🛡 DEFENSAS':'DEF','⚙️ MEDIOS':'MED','⚙ MEDIOS':'MED','⚡ DELANTEROS':'DEL'};
+        var curPos = 'MED';
+        sq.forEach(function(e){
+          if(e && typeof e === 'object' && !Array.isArray(e) && e.h){
+            curPos = POS_INV[e.h] || 'MED';
+            return;
+          }
+          if(!Array.isArray(e) || e.length < 2) return;
+          var name = String(e[1]||'').trim();
+          if(!name) return;
+          var power = Number(e[2])||70;
+          var entry = [name, power];
+          if(e.elite)      entry.elite      = true;
+          if(e.natGoal)    entry.natGoal    = true;
+          if(e.natGoalPro) entry.natGoalPro = true;
+          if(e.captain)    entry.captain    = true;
+          if(e.freeKick)   entry.freeKick   = true;
+          if(e.penalty)    entry.penalty    = true;
+          if(curPos === 'POR') roster.porteros.push(entry);
+          else if(curPos === 'DEF') roster.defensas.push(entry);
+          else if(curPos === 'MED') roster.medios.push(entry);
+          else roster.delanteros.push(entry);
+        });
+        var total = roster.porteros.length+roster.defensas.length+roster.medios.length+roster.delanteros.length;
+        if(total) out[t.name] = roster;
+      });
+    }
+    _hydrateFromSqRegistry('ligaExt_liga-hypermotion');
+    _hydrateFromSqRegistry('ligaExt_liga-primera-federacion');
+
     _realRosterCache = out;
     return out;
   }

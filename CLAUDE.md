@@ -16,11 +16,19 @@ iconos definidos en la plantilla. Esto aplica tanto al motor Python
   calcular goles, dominio y resultado.
 - Se mantiene el bonus de localía `×1.10` sobre el valor resultante.
 
-### ⚾ Goleador nato (natGoal) — prioridad máxima
+### ⚾ Goleador nato (natGoal)
 
-- Multiplicador `×3` al peso del jugador en la elección de goleador.
-- El objetivo es que el goleador nato marque ≈50% de los goles del
-  equipo.
+- Multiplicador `×1.8` al peso del jugador en la elección de goleador.
+- El objetivo es que el goleador nato marque **≈30% de los goles del
+  equipo** (ajustado 2026-04-26: antes era ×3 → ~50%).
+
+### 🏀 Goleador estrella (natGoalPro) — prioridad máxima
+
+- Multiplicador `×2.7` al peso del jugador en la elección de goleador.
+- El objetivo es que el goleador estrella marque **≈45% de los goles
+  del equipo**.
+- Si un jugador lleva 🏀 + ⚾ a la vez los multiplicadores se acumulan
+  (caso poco habitual).
 
 ### P (lanzador de penaltis)
 
@@ -52,14 +60,15 @@ iconos definidos en la plantilla. Esto aplica tanto al motor Python
 Los flags viven en el editor de plantilla y se guardan en
 `window._LIGA_EA_PLAYER_FLAGS` (JS). Toda función que construya entradas
 de jugador para la simulación (`sqFromRegistry`, builders similares)
-**debe** propagar los 5 flags (`captain`, `freeKick`, `penalty`,
-`elite`, `natGoal`) a cada entry. No basta con propagar solo
-`elite`/`natGoal`.
+**debe** propagar los 6 flags (`captain`, `freeKick`, `penalty`,
+`elite`, `natGoal`, `natGoalPro`) a cada entry. No basta con propagar
+solo `elite`/`natGoal`.
 
 ## Qué NO hacer
 
-- No cambies los pesos numéricos anteriores (×3 natGoal, ×1.05 capitán,
-  etc.) sin acordarlo explícitamente con el usuario.
+- No cambies los pesos numéricos anteriores (×1.8 natGoal, ×2.7
+  natGoalPro, ×1.05 capitán, etc.) sin acordarlo explícitamente con el
+  usuario.
 - No añadas simulación nueva sin que consuma estos flags.
 - No borres flags al serializar/deserializar plantillas.
 

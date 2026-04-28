@@ -2302,11 +2302,12 @@
                [name, power]. Captain viaja también por si algún día
                queremos darle peso individual (hoy se usa a nivel de
                equipo con _captainBonus). */
-            if(p.elite)    entry.elite    = true;
-            if(p.natGoal)  entry.natGoal  = true;
-            if(p.captain)  entry.captain  = true;
-            if(p.freeKick) entry.freeKick = true;
-            if(p.penalty)  entry.penalty  = true;
+            if(p.elite)      entry.elite      = true;
+            if(p.natGoal)    entry.natGoal    = true;
+            if(p.natGoalPro) entry.natGoalPro = true;
+            if(p.captain)    entry.captain    = true;
+            if(p.freeKick)   entry.freeKick   = true;
+            if(p.penalty)    entry.penalty    = true;
             if(p.pos === 'POR') roster.porteros.push(entry);
             else if(p.pos === 'DEF') roster.defensas.push(entry);
             else if(p.pos === 'MED') roster.medios.push(entry);
@@ -2414,11 +2415,14 @@
     var bag = [];
     ['porteros','defensas','medios','delanteros'].forEach(function(group){
       (roster[group] || []).forEach(function(player){
-        /* ⚾ Goleador nato (prioridad máxima en la tabla de flags):
-           ×3 al peso goleador. ⭐ Estrella NO afecta a goles —
-           solo influye en la elección de MVP (se maneja aparte). */
+        /* ⚾ Goleador nato: ×1.8 al peso goleador (~30% goles).
+           🏀 Goleador estrella: ×2.7 al peso goleador (~45% goles).
+           Si un jugador lleva ambos flags, se multiplican (caso poco
+           habitual). ⭐ Estrella NO afecta a goles — solo influye en la
+           elección de MVP (se maneja aparte). */
         var w = (player[1] || 70) * poderPosWeight(group, player[1] || 70);
-        if (player && player.natGoal) w *= 3;
+        if (player && player.natGoal)    w *= 1.8;
+        if (player && player.natGoalPro) w *= 2.7;
         bag.push({
           group: group,
           name: player[0],
@@ -3888,14 +3892,15 @@
           var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
           players.forEach(function(p){
             if (!p || !p.name) return;
-            if (!(p.captain || p.freeKick || p.penalty || p.elite || p.natGoal)) return;
+            if (!(p.captain || p.freeKick || p.penalty || p.elite || p.natGoal || p.natGoalPro)) return;
             var fkey = String(t.name) + '::' + String(p.name);
             fmap[fkey] = {
-              captain:  !!p.captain,
-              freeKick: !!p.freeKick,
-              penalty:  !!p.penalty,
-              elite:    !!p.elite,
-              natGoal:  !!p.natGoal
+              captain:    !!p.captain,
+              freeKick:   !!p.freeKick,
+              penalty:    !!p.penalty,
+              elite:      !!p.elite,
+              natGoal:    !!p.natGoal,
+              natGoalPro: !!p.natGoalPro
             };
           });
           return;
@@ -9827,7 +9832,8 @@
         w = Math.max(0.001, (p[3] || 70) * _poderPosWeight(p[2], p[3]));
       }
       /* Reglas OBLIGATORIAS (CLAUDE.md):
-         - ⚾ goleador nato: ×3 (prioridad máxima, ≈50% de los goles)
+         - ⚾ goleador nato: ×1.8 (≈30% de los goles)
+         - 🏀 goleador estrella: ×2.7 (≈45% de los goles)
          - P lanzador de penaltis: +bonus fijo 0.40 al peso
          - F lanzador de faltas: +bonus fijo 0.30 al peso
            (aseguran que los especialistas sumen goles aunque no sean
@@ -9835,9 +9841,10 @@
          - ⭐ estrella: NO afecta al peso — solo al MVP
          - C capitán: NO afecta al peso individual — su bonus se aplica
            al valor del equipo (ver _teamValueWithFlags) */
-      if (p && p.natGoal)  w *= 3;
-      if (p && p.penalty)  w += 0.40;
-      if (p && p.freeKick) w += 0.30;
+      if (p && p.natGoal)    w *= 1.8;
+      if (p && p.natGoalPro) w *= 2.7;
+      if (p && p.penalty)    w += 0.40;
+      if (p && p.freeKick)   w += 0.30;
       return w;
     });
     var total = weights.reduce(function(sum, weight) { return sum + weight; }, 0);

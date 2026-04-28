@@ -8399,11 +8399,40 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     else if(mvpTeam === away) out.awayMVP += 1;
     return out;
   }
+  /* ¿La key (j|home|away) corresponde a un match del SCHEDULE
+     ACTUAL? Si el usuario ha reordenado el calendario en algún
+     momento, el cache acumula keys de schedules antiguos que ya
+     no son válidos — y eso inflaba PJ por encima del máximo
+     posible (51 en lugar de 38). Filtramos aquí para contar
+     solo los matches que pertenecen al calendario activo.
+     Si SCHEDULE no está disponible (caso edge en arranques),
+     aceptamos todo (comportamiento legacy). */
+  function _resultKeyMatchesSchedule(key){
+    var sch = window.LIGA_SCHEDULE;
+    if(!sch || !Array.isArray(sch) || !sch.length) return true;
+    var meta = parseResultKey(key);
+    if(!meta) return false;
+    if(meta.jornada < 1 || meta.jornada > sch.length) return false;
+    var jArr = sch[meta.jornada - 1];
+    if(!Array.isArray(jArr)) return false;
+    var ch = canonicalTeamName(meta.home);
+    var ca = canonicalTeamName(meta.away);
+    for(var i = 0; i < jArr.length; i++){
+      var pair = jArr[i];
+      if(!pair) continue;
+      if(canonicalTeamName(pair[0]) === ch && canonicalTeamName(pair[1]) === ca) return true;
+    }
+    return false;
+  }
   function getSavedLigaTable(){
     var teams = {};
     TEAM_ORDER.forEach(function(name){ ensureTeam(teams, name); });
     var results = parseSavedResults();
     Object.keys(results).forEach(function(key){
+      /* Saltar keys que no pertenecen al SCHEDULE actual (sims
+         antiguos de schedules reshuffled). Sin esto, los equipos
+         podían acumular 50+ PJ en una liga de 38 jornadas. */
+      if(!_resultKeyMatchesSchedule(key)) return;
       var meta = parseResultKey(key);
       var data = results[key] || {};
       if(!meta || typeof data !== 'object') return;

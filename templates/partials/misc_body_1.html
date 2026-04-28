@@ -6322,6 +6322,7 @@ window._showSimProgress = function(opts, onDone){
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
     <button class="btn-action lext-btn-compact" onclick="pG(function(){ligaExtReglas()})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
     <button class="btn-action lext-btn-compact" onclick="ligaExtCopa()" style="border-color:rgba(255,200,80,.4);color:#ffc850;background:rgba(255,200,80,.06);"><span class="btn-action-ico">🏆</span><span id="lext-copa-btn-label">Copa</span></button>
+    <button id="lext-wildcard-btn" class="btn-action lext-btn-compact" onclick="ligaExtWildcardRound()" style="display:none;border-color:rgba(139,85,32,.55);color:#d8a060;background:rgba(139,85,32,.08);"><span class="btn-action-ico">🎟️</span>Wildcard Round</button>
   </div>
 </div>
 
@@ -7797,6 +7798,19 @@ Tottenham
     document.getElementById('lext-reg-uel').value = DEFAULT_ZONES.uel;
     document.getElementById('lext-reg-uecl').value = DEFAULT_ZONES.uecl;
     document.getElementById('lext-reg-desc').value = DEFAULT_ZONES.desc;
+  };
+
+  // ── Wildcard Round (solo Gibraltar / Is. Feroe) ────
+  // Stub: el contenido real se definirá cuando el usuario indique
+  // exactamente qué debe mostrar este apartado. Por ahora informa
+  // y queda listo para enchufar.
+  window.ligaExtWildcardRound = function(){
+    if(!CURRENT_KEY) return;
+    if(!WILDCARD_LIGA_SLUGS[CURRENT_KEY]){
+      // No debería pasar: el botón está oculto para otros slugs.
+      return;
+    }
+    alert('Wildcard Round (' + (CURRENT_NAME||'') + ') — próximamente.\n\nDescríbeme qué debe contener este apartado y lo monto.');
   };
 
   // ── Copa editable (nombre + logo) ─────────────────
@@ -10113,6 +10127,12 @@ Tottenham
     });
   };
 
+  /* Slugs que tienen acceso al apartado "Wildcard Round" en la
+     pantalla de su liga. De momento solo Gibraltar e Islas Feroe.
+     Centralizado aquí para no salpicar el resto del código. */
+  var WILDCARD_LIGA_SLUGS = { 'gibraltar': 1, 'is-feroe': 1 };
+  window.WILDCARD_LIGA_SLUGS = WILDCARD_LIGA_SLUGS;
+
   window.openLigaExt = function(name, emoji){
     CURRENT_NAME = name || 'Liga';
     CURRENT_EMOJI = emoji || '🌍';
@@ -10121,6 +10141,10 @@ Tottenham
     var e = document.getElementById('liga-ext-emoji');
     if(t) t.textContent = CURRENT_NAME;
     if(e) e.textContent = CURRENT_EMOJI;
+    /* Toggle del botón Wildcard Round — solo en ligas pequeñas
+       (Gibraltar, Is. Feroe) que reciben plazas extra. */
+    var wcBtn = document.getElementById('lext-wildcard-btn');
+    if(wcBtn) wcBtn.style.display = WILDCARD_LIGA_SLUGS[CURRENT_KEY] ? '' : 'none';
     // Renderiza primero desde cache local (respuesta inmediata)
     var cached = loadData(CURRENT_KEY);
     applyLeagueHeaderFromData(cached);

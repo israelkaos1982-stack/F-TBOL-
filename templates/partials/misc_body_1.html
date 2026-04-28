@@ -5268,6 +5268,51 @@ window.pG = function(fn) {
 <div class="screen" id="s-ligas">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Resto de Ligas</h2></div>
+
+<!-- Acciones rápidas para las 51 ligas: simular todas, resetear todas, ver stats agregadas. -->
+<div class="restoligas-actions">
+  <button class="restoligas-btn restoligas-btn-sim" onclick="window.pG(function(){window._restoLigasSimAll&&window._restoLigasSimAll();})"><span class="restoligas-ico">🎮</span><span>Sim</span></button>
+  <button class="restoligas-btn restoligas-btn-res" onclick="window.pG(function(){window._restoLigasResAll&&window._restoLigasResAll();})"><span class="restoligas-ico">♻️</span><span>Res</span></button>
+  <button class="restoligas-btn restoligas-btn-stats" onclick="window._restoLigasShowStats&&window._restoLigasShowStats()"><span class="restoligas-ico">📈</span><span>Estadís</span></button>
+</div>
+<style>
+.restoligas-actions{display:flex;gap:6px;padding:0 14px 12px;justify-content:center;flex-wrap:nowrap;}
+.restoligas-btn{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:5px;padding:9px 6px;border-radius:8px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;background:rgba(255,255,255,.04);color:#fff;transition:filter .15s,transform .1s;}
+.restoligas-btn:hover{filter:brightness(1.18);}
+.restoligas-btn:active{transform:scale(.97);}
+.restoligas-btn-sim{border:1px solid rgba(61,204,110,.55);color:#7df0a0;background:rgba(61,204,110,.10);}
+.restoligas-btn-res{border:1px solid rgba(255,90,90,.55);color:#ff9b9b;background:rgba(255,90,90,.10);}
+.restoligas-btn-stats{border:1px solid rgba(94,182,228,.55);color:#9fdcff;background:rgba(94,182,228,.10);}
+.restoligas-ico{font-size:14px;line-height:1;}
+/* Modal compartido para las estadísticas agregadas. */
+#restoligas-stats-ov{display:none;position:fixed;inset:0;z-index:10050;background:rgba(0,0,6,.93);overflow-y:auto;padding:18px 12px 30px;}
+#restoligas-stats-ov.show{display:block;}
+.restoligas-stats-card{max-width:520px;margin:0 auto;background:linear-gradient(170deg,#06101c,#0d1a2a);border:1px solid rgba(94,182,228,.35);border-radius:14px;padding:16px 14px 14px;box-shadow:0 0 30px rgba(94,182,228,.12),0 6px 20px rgba(0,0,0,.6);}
+.restoligas-stats-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:24px;letter-spacing:3px;color:#9fdcff;text-align:center;font-weight:700;margin-bottom:14px;}
+.restoligas-stats-section{margin-bottom:14px;border:1px solid rgba(94,182,228,.25);border-radius:10px;background:rgba(0,0,0,.3);}
+.restoligas-stats-section-hdr{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid rgba(94,182,228,.18);font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:2px;color:#9fdcff;font-weight:700;text-transform:uppercase;}
+.restoligas-stats-section-ico{font-size:16px;line-height:1;}
+.restoligas-stats-list{display:flex;flex-direction:column;}
+.restoligas-stats-row{display:grid;grid-template-columns:32px 24px 1fr auto;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.04);font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
+.restoligas-stats-row:last-child{border-bottom:none;}
+.restoligas-stats-row.empty{text-align:center;padding:11px 8px;color:rgba(255,255,255,.45);font-style:italic;font-size:12px;display:block;}
+.restoligas-stats-pos{font-family:'Bebas Neue',sans-serif;font-size:14px;color:#f0c040;text-align:right;letter-spacing:1px;}
+.restoligas-stats-flag{font-size:16px;text-align:center;line-height:1;}
+.restoligas-stats-info{min-width:0;line-height:1.2;}
+.restoligas-stats-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.restoligas-stats-team{font-size:11px;color:rgba(255,255,255,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.restoligas-stats-val{font-family:'Bebas Neue',sans-serif;font-size:18px;color:#7df0a0;letter-spacing:1px;font-weight:700;text-align:right;}
+.restoligas-stats-close{display:block;width:100%;margin-top:8px;padding:11px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.7);font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;cursor:pointer;}
+.restoligas-stats-close:hover{background:rgba(255,255,255,.1);color:#fff;}
+</style>
+<div id="restoligas-stats-ov" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="restoligas-stats-card">
+    <div class="restoligas-stats-title">📈 Resto de Ligas · Estadísticas</div>
+    <div id="restoligas-stats-content"></div>
+    <button class="restoligas-stats-close" onclick="document.getElementById('restoligas-stats-ov').classList.remove('show')">Cerrar</button>
+  </div>
+</div>
+
 <div class="menu-grid">
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#7a0010,#cf142b,#fff);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇧</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Inglaterra</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#111,#dd0000,#ffcc00);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇩🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Alemania</span></div>
@@ -5322,6 +5367,169 @@ window.pG = function(fn) {
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#244aa5,#e4aa3c,#244aa5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇽🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kosovo</span></div>
 </div>
 </div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   "Resto de Ligas" — bulk Sim / Res / Estadísticas
+   - Lee las 51 ligas directamente del DOM (#s-ligas .menu-card)
+     para mantener el orden y la bandera (mc-emoji) sincronizados
+     con la tabla de banderas, sin duplicar la lista en JS.
+   - Sim y Res llaman a las variantes slug-aware ya expuestas en
+     window.ligaExtSimularSlug / window.ligaExtReiniciarSlug.
+     Las dos están protegidas por la PIN (727/747) vía window.pG.
+   - Estadísticas agrega top players de TODAS las ligaExt_* y los
+     muestra en un overlay con 4 secciones: Goleadores, Porterías
+     imbatidas, Tarjetas amarillas, Tarjetas rojas. Cada fila
+     muestra la bandera del país (resuelta a partir del nombre
+     del equipo → emoji de la menu-card de su liga).
+   ═══════════════════════════════════════════════════════════════ */
+(function(){
+  function _eachLeagueCard(cb){
+    var cards = document.querySelectorAll('#s-ligas .menu-card');
+    cards.forEach(function(card){
+      var lbl = card.querySelector('.mc-label');
+      var emo = card.querySelector('.mc-emoji');
+      if(!lbl) return;
+      var name = (lbl.textContent || '').trim();
+      var emoji = emo ? (emo.textContent || '').trim() : '🌍';
+      if(!name) return;
+      cb(name, emoji);
+    });
+  }
+  /* slugify igual que el del editor (líneas ~5805) — copia local
+     para no depender de funciones del IIFE que no están expuestas. */
+  function _slugify(s){
+    return String(s||'').toLowerCase().normalize('NFD')
+      .replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9]+/g,'-')
+      .replace(/^-|-$/g,'');
+  }
+
+  window._restoLigasSimAll = function(){
+    if(typeof window.ligaExtSimularSlug !== 'function'){
+      alert('Motor de simulación no disponible. Recarga la página.');
+      return;
+    }
+    if(!confirm('¿Simular las 51 ligas? Reseteará los resultados y stats actuales antes de simular.')) return;
+    var ok = 0, skip = 0;
+    _eachLeagueCard(function(name){
+      var slug = _slugify(name);
+      try {
+        if(window.ligaExtSimularSlug(slug, name)) ok++; else skip++;
+      } catch(_){ skip++; }
+    });
+    alert('Simuladas: ' + ok + ' liga' + (ok===1?'':'s') + (skip ? ' · sin equipos suficientes: ' + skip : '') + '.');
+  };
+
+  window._restoLigasResAll = function(){
+    if(typeof window.ligaExtReiniciarSlug !== 'function'){
+      alert('Motor de reset no disponible. Recarga la página.');
+      return;
+    }
+    if(!confirm('¿Resetear las 51 ligas? Las plantillas (jugadores y escudos) se mantienen, pero las estadísticas vuelven a 0.')) return;
+    var ok = 0;
+    _eachLeagueCard(function(name){
+      var slug = _slugify(name);
+      try { if(window.ligaExtReiniciarSlug(slug)) ok++; } catch(_){ }
+    });
+    alert('Reseteadas: ' + ok + ' liga' + (ok===1?'':'s') + '.');
+  };
+
+  /* ── Estadísticas agregadas ──────────────────────────────────── */
+  function _normNm(s){
+    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+  function _collectAggregateStats(){
+    /* Recorremos las 51 ligas de la lista, leemos su ligaExt_<slug>
+       de localStorage y construimos un mapa por jugador con sus
+       stats acumuladas + bandera (de la menu-card). Devolvemos
+       cuatro listas top-N para cada categoría. */
+    var teamFlag = {};   /* normNm(teamName) -> flag emoji */
+    var byPlayer = {};   /* "team::name" -> {name,team,flag,gol,imbat,ta,tr} */
+    _eachLeagueCard(function(name, flag){
+      var slug = _slugify(name);
+      var raw;
+      try { raw = localStorage.getItem('ligaExt_' + slug); } catch(_){ return; }
+      if(!raw) return;
+      var data; try { data = JSON.parse(raw); } catch(_){ return; }
+      if(!data || !Array.isArray(data.teams)) return;
+      data.teams.forEach(function(t){
+        if(!t || !t.name) return;
+        teamFlag[_normNm(t.name)] = flag;
+        var players = Array.isArray(t.players) ? t.players : [];
+        players.forEach(function(p){
+          if(!p || !p.name) return;
+          var key = _normNm(t.name) + '::' + _normNm(p.name);
+          if(!byPlayer[key]){
+            byPlayer[key] = { name:p.name, team:t.name, flag:flag, gol:0, imbat:0, ta:0, tr:0 };
+          }
+          var ent = byPlayer[key];
+          /* gol total = gol regular + pen + falta (mismo criterio
+             que la liga EA Sports para ser consistente). */
+          var golR = Number(p.gol||0);
+          var pen  = Number(p.pen||0);
+          var fk   = Number(p.fk||0);
+          ent.gol  += golR + pen + fk;
+          ent.imbat += Number(p.imbat||0);
+          ent.ta   += Number(p.ta||0);
+          ent.tr   += Number(p.tr||0);
+        });
+      });
+    });
+    function topBy(field, n){
+      var list = Object.keys(byPlayer).map(function(k){ return byPlayer[k]; })
+        .filter(function(e){ return Number(e[field]) > 0; })
+        .sort(function(a,b){
+          var d = Number(b[field]) - Number(a[field]);
+          if(d) return d;
+          return String(a.name).localeCompare(String(b.name),'es');
+        });
+      return list.slice(0, n);
+    }
+    return {
+      goleadores: topBy('gol', 15),
+      porteros:   topBy('imbat', 15),
+      amarillas:  topBy('ta', 15),
+      rojas:      topBy('tr', 15)
+    };
+  }
+  function _renderSection(title, ico, list, valLabel){
+    var rows;
+    if(!list.length){
+      rows = '<div class="restoligas-stats-row empty">Sin datos todavía</div>';
+    } else {
+      rows = list.map(function(p, i){
+        return '<div class="restoligas-stats-row">'
+          + '<div class="restoligas-stats-pos">' + (i+1) + '</div>'
+          + '<div class="restoligas-stats-flag">' + (p.flag || '🌍') + '</div>'
+          + '<div class="restoligas-stats-info">'
+          +   '<div class="restoligas-stats-name">' + (p.name||'?') + '</div>'
+          +   '<div class="restoligas-stats-team">' + (p.team||'?') + '</div>'
+          + '</div>'
+          + '<div class="restoligas-stats-val">' + (p[valLabel.field]||0) + '</div>'
+          + '</div>';
+      }).join('');
+    }
+    return '<div class="restoligas-stats-section">'
+      + '<div class="restoligas-stats-section-hdr"><span class="restoligas-stats-section-ico">' + ico + '</span><span>' + title + '</span></div>'
+      + '<div class="restoligas-stats-list">' + rows + '</div>'
+      + '</div>';
+  }
+  window._restoLigasShowStats = function(){
+    var ov = document.getElementById('restoligas-stats-ov');
+    var holder = document.getElementById('restoligas-stats-content');
+    if(!ov || !holder) return;
+    var s = _collectAggregateStats();
+    holder.innerHTML = ''
+      + _renderSection('Goleadores',         '⚽', s.goleadores, {field:'gol'})
+      + _renderSection('Portería imbatida',  '🧤', s.porteros,   {field:'imbat'})
+      + _renderSection('Tarjetas amarillas', '🟨', s.amarillas,  {field:'ta'})
+      + _renderSection('Tarjetas rojas',     '🟥', s.rojas,      {field:'tr'});
+    ov.classList.add('show');
+  };
+})();
+</script>
+
 <div class="screen" id="s-liga-ext">
 <button class="back-btn" onclick="go('s-ligas')">◀ Volver</button>
 <div class="sec-hdr">
@@ -6565,6 +6773,41 @@ Tottenham
   }
   window.ligaExtSimular = ligaExtSimular;
 
+  /* Variante slug-aware. La usa el botón global "Sim" del menú
+     "Resto de Ligas" para simular las 51 ligas de golpe sin tener
+     que abrir cada pantalla. Reusa exactamente la misma lógica
+     que ligaExtSimular (resetear stats jugadores, doble round
+     robin con simulateMatch, MVPs, persistir). */
+  window.ligaExtSimularSlug = function(slug, displayName){
+    if(!slug) return false;
+    var data = loadData(slug);
+    if(!data || !Array.isArray(data.teams) || data.teams.length < 2) return false;
+    data.teams.forEach(function(t){ (t.players||[]).forEach(resetPlayerStats); });
+    data.results = [];
+    var ts = data.teams.slice();
+    for(var i=0;i<ts.length;i++){
+      for(var j=0;j<ts.length;j++){
+        if(i===j) continue;
+        var r = simulateMatch(ts[i], ts[j]);
+        data.results.push({
+          h:ts[i].id, a:ts[j].id,
+          gh:r.gh, ga:r.ga,
+          tah:r.tah, taa:r.taa,
+          trh:r.trh, tra:r.tra
+        });
+        applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
+        applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
+        if(r.gh > r.ga) assignMVP(ts[i], ts[j], false);
+        else if(r.ga > r.gh) assignMVP(ts[j], ts[i], false);
+        else assignMVP(ts[i], ts[j], true);
+      }
+    }
+    saveData(slug, data);
+    /* Si la liga abierta actualmente coincide con la simulada, refrescar. */
+    if(slug === CURRENT_KEY){ try { renderTable(); } catch(_){} }
+    return true;
+  };
+
   // ── Valoración 0-10 de un jugador ────────────────
   // Calibrada con Haaland (33 PJ · 26 gol · 6 pen · 2 falta · 13 MVP) ≈ 9.0
   // Puntos Haaland: 3.3 + 26 + 6 + 6 + 13 = 54.3
@@ -6740,6 +6983,24 @@ Tottenham
     renderTable();
   }
   window.ligaExtReiniciar = ligaExtReiniciar;
+
+  /* Variante slug-aware. La usa el botón global "Res" del menú
+     "Resto de Ligas" para resetear las 51 ligas a 0. Resetea
+     resultados y stats individuales de los jugadores (gol, mvp,
+     amarillas, etc.) — la "0 estadísticas" que pide el usuario.
+     No toca la plantilla ni el código valor-nivel-escudo. */
+  window.ligaExtReiniciarSlug = function(slug){
+    if(!slug) return false;
+    var data = loadData(slug);
+    if(!data) return false;
+    data.results = [];
+    if(Array.isArray(data.teams)){
+      data.teams.forEach(function(t){ (t.players||[]).forEach(resetPlayerStats); });
+    }
+    saveData(slug, data);
+    if(slug === CURRENT_KEY){ try { renderTable(); } catch(_){} }
+    return true;
+  };
 
   // ── Editor equipos ────────────────────────────────
   function ligaExtEditar(){

@@ -4326,7 +4326,12 @@ window.pG = function(fn) {
         }
         seenLeagueHash[hash] = true;
         var skip = 0;
-        if(zoneKey === 'uel'){
+        if(zoneKey === 'uclPrev'){
+          skip = (Number(zones.ucl)||0);
+        } else if(zoneKey === 'uclQual'){
+          skip = (Number(zones.ucl)||0)
+               + (Number(zones.uclPrev)||0);
+        } else if(zoneKey === 'uel'){
           skip = (Number(zones.ucl)||0)
                + (Number(zones.uclPrev)||0)
                + (Number(zones.uclQual)||0);
@@ -4366,9 +4371,11 @@ window.pG = function(fn) {
   function computeUclClassified(){ return _computeQualifiedFromLeagues('ucl'); }
   function computeUelClassified(){ return _computeQualifiedFromLeagues('uel'); }
   function computeUeclClassified(){ return _computeQualifiedFromLeagues('uecl'); }
+  function computeOpenQualifierTeams(){ return _computeQualifiedFromLeagues('uclQual'); }
   window.computeUclClassified = computeUclClassified;
   window.computeUelClassified = computeUelClassified;
   window.computeUeclClassified = computeUeclClassified;
+  window.computeOpenQualifierTeams = computeOpenQualifierTeams;
 
   function buildUclGruposClas(){
     var container = document.getElementById('clas-ucl-grupos-content');
@@ -4630,7 +4637,179 @@ window.pG = function(fn) {
 <div class="screen" id="s-open-qualifier">
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🟡</span><h2>UCL · Open Qualifier</h2></div>
-<div class="empty-ph">Torneo abierto — próximamente</div>
+<div class="submenu-list">
+<div class="submenu-card sc-open-qual" style="background:linear-gradient(135deg,#3a1c00,#a05000,#F37335,#FDC830,#a05000,#3a1c00) !important;border-color:#F37335 !important;" onclick="if(window.buildOpenQualifierClas)window.buildOpenQualifierClas();go('s-open-qualifier-clas')">
+<span class="sc-emoji">📊</span><span class="sc-label">Clasificación</span><span class="sc-arr">▶</span>
+</div>
+<div class="submenu-card sc-open-qual" style="background:linear-gradient(135deg,#3a1c00,#a05000,#F37335,#FDC830,#a05000,#3a1c00) !important;border-color:#F37335 !important;" onclick="go('s-open-qualifier-res')">
+<span class="sc-emoji">⚽</span><span class="sc-label">Resultados</span><span class="sc-arr">▶</span>
+</div>
+</div>
+</div>
+<div class="screen" id="s-open-qualifier-clas">
+<button class="back-btn" onclick="go('s-open-qualifier')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🟡</span><h2>Open Qualifier · Clasificación</h2></div>
+<div class="clas-wrap" style="padding:0 0 24px;">
+<div id="open-qual-groups-container"></div>
+</div>
+<script>
+(function(){
+  /* Open Qualifier — 5 grupos de 13 equipos, round-robin a 1 vuelta
+     (12 partidos por equipo). Los 65 plazas se alimentan automá-
+     ticamente con la zona "Open Qualifier" (config.zones.uclQual)
+     de cada liga terminada. Distribución por sorteo en serpentina:
+     pos 1..5 → grupos A..E, pos 6 → E, pos 7 → D, etc. — para
+     que los grupos queden equilibrados por nivel.
+     Stats UCL/Promoción: pts=0 hasta que se simule el OQ. */
+  function _esc(s){
+    return String(s==null?'':s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function _distributeSnake(teams, nGroups){
+    /* Reparto en serpentina: 1→A, 2→B, 3→C, 4→D, 5→E, 6→E, 7→D,
+       8→C, 9→B, 10→A, 11→A, 12→B, ... */
+    var groups = [];
+    for(var g=0; g<nGroups; g++) groups.push([]);
+    teams.forEach(function(t, i){
+      var row = Math.floor(i / nGroups);
+      var col = i % nGroups;
+      var g = (row % 2 === 0) ? col : (nGroups - 1 - col);
+      groups[g].push(t);
+    });
+    return groups;
+  }
+  function buildOpenQualifierClas(){
+    var container = document.getElementById('open-qual-groups-container');
+    if(!container) return;
+    var classified = (window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || [];
+    var groups = _distributeSnake(classified, 5);
+    var GROUP_LABELS = ['A','B','C','D','E'];
+    var TEAMS_PER_GROUP = 13;
+    var html = ''
+      + '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.55);padding:6px 10px 0;">'
+      + '5 GRUPOS · 13 EQUIPOS · 12 PARTIDOS POR EQUIPO · ' + classified.length + ' / 65 plazas cubiertas'
+      + '</div>';
+    for(var g=0; g<5; g++){
+      var teams = groups[g] || [];
+      html += '<div style="margin:14px 4px 0;border:1px solid rgba(243,115,53,.22);border-radius:8px;background:linear-gradient(135deg,rgba(243,115,53,.06),rgba(0,0,0,0));">'
+        + '<div style="padding:8px 12px;border-bottom:1px solid rgba(243,115,53,.22);background:linear-gradient(90deg,rgba(58,28,0,.85),rgba(160,80,0,.45));border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px;">'
+        +   '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#FDC830;letter-spacing:1px;">GRUPO ' + GROUP_LABELS[g] + '</span>'
+        +   '<span style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.5);margin-left:auto;">' + teams.length + ' / ' + TEAMS_PER_GROUP + '</span>'
+        + '</div>'
+        + '<div class="clas-scroll" style="padding:4px 6px 8px;">'
+        +   '<div class="clas-table" style="min-width:420px;">'
+        +     '<div class="clas-hdr" style="grid-template-columns:minmax(150px,1.6fr) 30px 26px 22px 22px 22px 26px 26px 28px;">'
+        +       '<div class="clas-hdr-team">Equipo</div>'
+        +       '<div>PTS</div><div>PJ</div><div>V</div><div>E</div><div>P</div>'
+        +       '<div>GF</div><div>GC</div><div>DG</div>'
+        +     '</div>';
+      for(var i=0; i<TEAMS_PER_GROUP; i++){
+        var team = teams[i];
+        /* Zona visual:
+           pos 1-3 → púrpura (Previa Champions, 15 plazas seguras)
+           pos  4  → mixta púrpura/verde (top-3 → Previa, resto → UECL)
+           pos  5  → verde tenue (top-3 entre los 5º → UECL)
+           pos 6-13 → eliminado */
+        var rowZone = '', borderColor = 'transparent';
+        if(i<=2){ rowZone = 'background:rgba(168,85,247,.10);'; borderColor = '#a855f7'; }
+        else if(i===3){ rowZone = 'background:rgba(168,85,247,.06);'; borderColor = '#7d3eb6'; }
+        else if(i===4){ rowZone = 'background:rgba(60,200,120,.07);'; borderColor = '#3cc878'; }
+        else { rowZone = ''; borderColor = 'rgba(255,255,255,.05)'; }
+        var nameHtml, logoHtml = '';
+        if(team){
+          if(team.logo){
+            logoHtml = '<img class="clas-team-logo" src="' + _esc(team.logo) + '" alt="" onerror="this.style.display=\'none\'">';
+          }
+          nameHtml = '<span class="clas-team-name-text">' + _esc(team.name) + '</span>';
+        } else {
+          nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
+        }
+        html += '<div class="clas-row" style="grid-template-columns:minmax(150px,1.6fr) 30px 26px 22px 22px 22px 26px 26px 28px;border-left:3px solid ' + borderColor + ';' + rowZone + '">'
+          + '<div class="clas-team-cell">'
+          +   '<span class="clas-pos-n">' + (i+1) + '</span>'
+          +   '<span class="clas-team-name">' + logoHtml + nameHtml + '</span>'
+          + '</div>'
+          + '<div class="clas-pts">0</div>'
+          + '<div class="clas-pj">0</div>'
+          + '<div class="clas-val">0</div>'
+          + '<div class="clas-val">0</div>'
+          + '<div class="clas-val">0</div>'
+          + '<div class="clas-val gf">0</div>'
+          + '<div class="clas-val gc">0</div>'
+          + '<div class="clas-val dg zer">0</div>'
+          + '</div>';
+      }
+      html += '</div></div></div>';
+    }
+    html += '<div class="clas-legend" style="margin:16px 6px 0;">'
+      + '<span class="clas-legend-item"><span class="clas-dot" style="background:#a855f7;"></span>1-3 · Previa Champions (15 fijos + 3 mejores 4ºs)</span>'
+      + '<span class="clas-legend-item"><span class="clas-dot" style="background:#3cc878;"></span>4-5 · Conference (2 peores 4ºs + 3 mejores 5ºs)</span>'
+      + '<span class="clas-legend-item"><span class="clas-dot" style="background:#e03c3c;"></span>6-13 · Eliminados</span>'
+      + '</div>';
+    container.innerHTML = html;
+  }
+  window.buildOpenQualifierClas = buildOpenQualifierClas;
+  document.addEventListener('DOMContentLoaded', buildOpenQualifierClas);
+})();
+</script>
+</div>
+<div class="screen" id="s-open-qualifier-res">
+<button class="back-btn" onclick="go('s-open-qualifier')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🟡</span><h2>Open Qualifier · Resultados</h2></div>
+<div id="open-qual-res-section" style="margin-top:8px;padding:0 4px 20px;">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:0 0 8px;">
+  <div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.4);">PARTIDOS</div>
+</div>
+<div class="jlist" id="open-qual-res-list">
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(1)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 1</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(2)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 2</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(3)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 3</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(4)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 4</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(5)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 5</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(6)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 6</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(7)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 7</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(8)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 8</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(9)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 9</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(10)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 10</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(11)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 11</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(12)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 12</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
+</div>
+</div>
+</div>
+<div class="screen" id="s-open-qualifier-jornada">
+<button class="back-btn" onclick="go('s-open-qualifier-res')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🟡</span><h2 id="open-qual-jornada-title">Jornada</h2></div>
+<div id="open-qual-jornada-body" style="padding:0 4px 20px;"></div>
+<script>
+(function(){
+  /* Cada jornada del Open Qualifier: 6 partidos por grupo × 5 grupos =
+     30 partidos. Por ahora se muestran como placeholder; el motor de
+     simulación se añadirá cuando confirmemos esta UI. */
+  window.openOpenQualJornada = function(j){
+    var titleEl = document.getElementById('open-qual-jornada-title');
+    var bodyEl  = document.getElementById('open-qual-jornada-body');
+    if(!titleEl || !bodyEl) return;
+    titleEl.textContent = 'Jornada ' + j + ' · Open Qualifier';
+    var GROUP_LABELS = ['A','B','C','D','E'];
+    var html = '';
+    for(var g=0; g<5; g++){
+      html += '<div style="margin:10px 0 4px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#FDC830;">GRUPO ' + GROUP_LABELS[g] + '</div>'
+        + '<div class="jlist"><div class="jmatches" style="display:block;">';
+      for(var m=0; m<6; m++){
+        html += '<div class="mrow">'
+          +   '<div class="mn">Por definir</div>'
+          +   '<div class="ms p">vs</div>'
+          +   '<div class="mn r">Por definir</div>'
+          + '</div>';
+      }
+      html += '</div></div>';
+    }
+    bodyEl.innerHTML = html;
+    go('s-open-qualifier-jornada');
+  };
+})();
+</script>
 </div>
 <div class="screen" id="s-ucl-stats">
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>

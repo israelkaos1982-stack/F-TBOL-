@@ -59,6 +59,50 @@ window.pG = function(fn) {
   </div>
 </div>
 
+<!-- ══ SIM PROGRESS OVERLAY (Open Qualifier y futuros) ══ -->
+<div id="oq-sim-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999998;align-items:center;justify-content:center;flex-direction:column;">
+  <div id="oq-sim-ball" style="font-size:84px;line-height:1;animation:oqBallSpin 1.2s linear infinite;filter:drop-shadow(0 0 16px rgba(253,200,48,.6));">⚽</div>
+  <div id="oq-sim-pct" style="font-family:'Bebas Neue','Oswald',sans-serif;font-size:54px;color:#FDC830;margin-top:18px;letter-spacing:2px;">0%</div>
+  <div id="oq-sim-label" style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:3px;color:rgba(255,255,255,.6);margin-top:6px;">SIMULANDO</div>
+  <div style="width:220px;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;margin-top:14px;">
+    <div id="oq-sim-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#F37335,#FDC830);transition:width .12s linear;"></div>
+  </div>
+</div>
+<style>
+  @keyframes oqBallSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
+<script>
+/* Overlay reutilizable de "balón girando 0→100%" durante N ms.
+   onDone se ejecuta al llegar a 100%. */
+window._showSimProgress = function(opts, onDone){
+  opts = opts || {};
+  var ms    = Number(opts.ms || 3000);
+  var label = String(opts.label || 'SIMULANDO');
+  var ov  = document.getElementById('oq-sim-overlay');
+  var pct = document.getElementById('oq-sim-pct');
+  var lab = document.getElementById('oq-sim-label');
+  var bar = document.getElementById('oq-sim-bar');
+  if(!ov || !pct || !bar){ if(typeof onDone === 'function') onDone(); return; }
+  if(lab) lab.textContent = label;
+  ov.style.display = 'flex';
+  pct.textContent  = '0%';
+  bar.style.width  = '0%';
+  var start = Date.now();
+  var tick  = function(){
+    var t = Math.min(1, (Date.now() - start) / ms);
+    var p = Math.round(t * 100);
+    pct.textContent  = p + '%';
+    bar.style.width  = p + '%';
+    if(t < 1){ requestAnimationFrame(tick); }
+    else {
+      ov.style.display = 'none';
+      if(typeof onDone === 'function') onDone();
+    }
+  };
+  requestAnimationFrame(tick);
+};
+</script>
+
 <div class="screen active" id="s-home">
 <div class="hdr">
 <img alt="eFootball" class="hdr-logo" src="data:image/png;base64,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"/>
@@ -5093,7 +5137,45 @@ window.pG = function(fn) {
 </div>
 <div class="screen" id="s-open-qualifier-clas">
 <button class="back-btn" onclick="go('s-open-qualifier')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🟡</span><h2>Open Qualifier · Clasificación</h2></div>
+<div class="sec-hdr" style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;white-space:nowrap;">
+  <span class="sec-emoji">🟡</span>
+  <h2 style="margin:0;white-space:nowrap;">Open Qualifier · Clasificación</h2>
+</div>
+
+<!-- Sim / Reset (PIN 747 obligatorio) -->
+<div style="display:flex;gap:10px;justify-content:center;padding:8px 6px 4px;">
+  <button onclick="pG(function(){window.simulateOpenQualifier&&window.simulateOpenQualifier()})"
+          style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid rgba(80,200,120,.5);border-radius:8px;padding:9px 18px;color:#7fe09a;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
+    🎮 Sim
+  </button>
+  <button onclick="pG(function(){window.resetOpenQualifier&&window.resetOpenQualifier()})"
+          style="background:linear-gradient(135deg,#3a1414,#5a2424);border:1px solid rgba(255,80,80,.5);border-radius:8px;padding:9px 18px;color:#ff8080;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
+    ♻️ Reset
+  </button>
+</div>
+
+<!-- Leyenda compacta visible -->
+<div style="display:flex;gap:18px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex-wrap:wrap;">
+  <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>🟣 Previa UCL</span>
+  <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3cc878;margin-right:4px;vertical-align:middle;"></span>🟢 Conference</span>
+  <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e03c3c;margin-right:4px;vertical-align:middle;"></span>🔴 Eliminados</span>
+</div>
+
+<!-- Detalle de zonas — presente pero oculto -->
+<div style="text-align:center;padding:0 4px 4px;">
+  <button onclick="tog('oq-zones-details')"
+          style="background:none;border:none;color:rgba(255,255,255,.45);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;padding:4px;">
+    ▼ DETALLE DE ZONAS
+  </button>
+</div>
+<div class="jmatches" id="oq-zones-details" style="margin:0 8px 4px;padding:0;">
+  <div style="padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:rgba(255,255,255,.03);font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.78);line-height:1.7;">
+    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a855f7;margin-right:6px;"></span><b>1-3</b> · Previa Champions (15 fijos + 3 mejores 4ºs)</div>
+    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3cc878;margin-right:6px;"></span><b>4-5</b> · Conference (2 peores 4ºs + 3 mejores 5ºs)</div>
+    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e03c3c;margin-right:6px;"></span><b>6-13</b> · Eliminados</div>
+  </div>
+</div>
+
 <div class="clas-wrap" style="padding:0 0 24px;">
 <div id="open-qual-groups-container"></div>
 </div>
@@ -5104,16 +5186,18 @@ window.pG = function(fn) {
      ticamente con la zona "Open Qualifier" (config.zones.uclQual)
      de cada liga terminada. Distribución por sorteo en serpentina:
      pos 1..5 → grupos A..E, pos 6 → E, pos 7 → D, etc. — para
-     que los grupos queden equilibrados por nivel.
-     Stats UCL/Promoción: pts=0 hasta que se simule el OQ. */
+     que los grupos queden equilibrados por nivel. */
+  var STORE_KEY = 'oq_simulation_v1';
+  var GROUP_LABELS = ['A','B','C','D','E'];
+  var TEAMS_PER_GROUP = 13;
+  var N_GROUPS = 5;
+
   function _esc(s){
     return String(s==null?'':s)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
   function _distributeSnake(teams, nGroups){
-    /* Reparto en serpentina: 1→A, 2→B, 3→C, 4→D, 5→E, 6→E, 7→D,
-       8→C, 9→B, 10→A, 11→A, 12→B, ... */
     var groups = [];
     for(var g=0; g<nGroups; g++) groups.push([]);
     teams.forEach(function(t, i){
@@ -5124,23 +5208,94 @@ window.pG = function(fn) {
     });
     return groups;
   }
+  /* Goles aleatorios estilo Poisson aproximado (rejection method).
+     Lambda típico 0.4 - 2.5. */
+  function _poisson(lambda){
+    var L = Math.exp(-lambda), k = 0, p = 1;
+    do { k++; p *= Math.random(); } while(p > L);
+    return k - 1;
+  }
+  /* Round-robin a una sola vuelta: para cada par i<j genera un
+     partido con local/visitante. Lambdas dependen de team.power. */
+  function _simulateGroup(grp){
+    var matches = [];
+    for(var i=0; i<grp.length; i++){
+      for(var j=i+1; j<grp.length; j++){
+        var hp = Number(grp[i].power)||50, ap = Number(grp[j].power)||50;
+        var lh = Math.max(0.4, 1.25 + (hp-ap)/45);
+        var la = Math.max(0.3, 0.95 + (ap-hp)/45);
+        matches.push({hi:i, ai:j, gh:_poisson(lh), ga:_poisson(la)});
+      }
+    }
+    return matches;
+  }
+  /* Calcula clasificación de un grupo a partir de sus matches. */
+  function _standingsFor(grp, matches){
+    var arr = grp.map(function(t,i){
+      return {idx:i, name:t.name||'', logo:t.logo||'', pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0};
+    });
+    matches.forEach(function(m){
+      var H = arr[m.hi], A = arr[m.ai];
+      if(!H||!A) return;
+      H.pj++; A.pj++;
+      H.gf += m.gh; H.gc += m.ga; A.gf += m.ga; A.gc += m.gh;
+      if(m.gh>m.ga){ H.v++; A.p++; H.pts+=3; }
+      else if(m.gh<m.ga){ A.v++; H.p++; A.pts+=3; }
+      else { H.e++; A.e++; H.pts++; A.pts++; }
+    });
+    arr.forEach(function(s){ s.dg = s.gf - s.gc; });
+    arr.sort(function(a,b){
+      return (b.pts-a.pts) || (b.dg-a.dg) || (b.gf-a.gf)
+        || String(a.name).localeCompare(String(b.name),'es');
+    });
+    return arr;
+  }
+  function _loadSim(){
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return null;
+      var s = JSON.parse(raw);
+      if(s && Array.isArray(s.groups) && Array.isArray(s.matchesByGroup)) return s;
+    } catch(_){}
+    return null;
+  }
+  function _saveSim(sim){
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(sim)); } catch(_){}
+  }
+
   function buildOpenQualifierClas(){
     var container = document.getElementById('open-qual-groups-container');
     if(!container) return;
-    var classified = (window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || [];
-    var groups = _distributeSnake(classified, 5);
-    var GROUP_LABELS = ['A','B','C','D','E'];
-    var TEAMS_PER_GROUP = 13;
+    var sim = _loadSim();
+    var groups, totalTeams = 0;
+    if(sim){
+      groups = sim.groups;
+      totalTeams = groups.reduce(function(s,g){ return s + g.length; }, 0);
+    } else {
+      var classified = (window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || [];
+      groups = _distributeSnake(classified, N_GROUPS);
+      totalTeams = classified.length;
+    }
     var html = ''
       + '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.55);padding:6px 10px 0;">'
-      + '5 GRUPOS · 13 EQUIPOS · 12 PARTIDOS POR EQUIPO · ' + classified.length + ' / 65 plazas cubiertas'
+      + '5 GRUPOS · 13 EQUIPOS · 12 PARTIDOS POR EQUIPO · ' + totalTeams + ' / 65 plazas cubiertas'
+      + (sim ? ' · <span style="color:#7fe09a;">SIMULADO</span>' : '')
       + '</div>';
-    for(var g=0; g<5; g++){
-      var teams = groups[g] || [];
-      html += '<div style="margin:14px 4px 0;border:1px solid rgba(243,115,53,.22);border-radius:8px;background:linear-gradient(135deg,rgba(243,115,53,.06),rgba(0,0,0,0));">'
-        + '<div style="padding:8px 12px;border-bottom:1px solid rgba(243,115,53,.22);background:linear-gradient(90deg,rgba(58,28,0,.85),rgba(160,80,0,.45));border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px;">'
-        +   '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#FDC830;letter-spacing:1px;">GRUPO ' + GROUP_LABELS[g] + '</span>'
-        +   '<span style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.5);margin-left:auto;">' + teams.length + ' / ' + TEAMS_PER_GROUP + '</span>'
+    for(var g=0; g<N_GROUPS; g++){
+      var grp = groups[g] || [];
+      var standings;
+      if(sim && sim.matchesByGroup[g]){
+        standings = _standingsFor(grp, sim.matchesByGroup[g]);
+      } else {
+        /* Sin simular: orden de inserción + stats a 0 */
+        standings = grp.map(function(t,i){
+          return {idx:i, name:t.name||'', logo:t.logo||'', pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0};
+        });
+      }
+      html += '<div style="margin:14px 4px 0;border:1px solid #FDC830;border-radius:8px;background:linear-gradient(135deg,rgba(243,115,53,.06),rgba(0,0,0,0));">'
+        + '<div style="padding:10px 14px;border-bottom:2px solid #F37335;background:linear-gradient(90deg,#FDC830,#F37335);border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px;">'
+        +   '<span style="font-family:\'Bebas Neue\',\'Oswald\',sans-serif;font-size:24px;color:#000;font-weight:900;letter-spacing:2px;text-shadow:0 1px 0 rgba(255,255,255,.35);">GRUPO ' + GROUP_LABELS[g] + '</span>'
+        +   '<span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#000;font-weight:700;margin-left:auto;">' + grp.length + ' / ' + TEAMS_PER_GROUP + '</span>'
         + '</div>'
         + '<div class="clas-scroll" style="padding:4px 6px 8px;">'
         +   '<div class="clas-table" style="min-width:420px;">'
@@ -5150,19 +5305,16 @@ window.pG = function(fn) {
         +       '<div>GF</div><div>GC</div><div>DG</div>'
         +     '</div>';
       for(var i=0; i<TEAMS_PER_GROUP; i++){
-        var team = teams[i];
-        /* Zona visual:
-           pos 1-3 → púrpura (Previa Champions, 15 plazas seguras)
-           pos  4  → mixta púrpura/verde (top-3 → Previa, resto → UECL)
-           pos  5  → verde tenue (top-3 entre los 5º → UECL)
-           pos 6-13 → eliminado */
+        var team = standings[i];
+        /* Zona visual (orientativa — promoción real cruza grupos):
+           1-3 púrpura · 4 púrpura tenue · 5 verde · 6-13 default. */
         var rowZone = '', borderColor = 'transparent';
         if(i<=2){ rowZone = 'background:rgba(168,85,247,.10);'; borderColor = '#a855f7'; }
         else if(i===3){ rowZone = 'background:rgba(168,85,247,.06);'; borderColor = '#7d3eb6'; }
         else if(i===4){ rowZone = 'background:rgba(60,200,120,.07);'; borderColor = '#3cc878'; }
         else { rowZone = ''; borderColor = 'rgba(255,255,255,.05)'; }
         var nameHtml, logoHtml = '';
-        if(team){
+        if(team && team.name){
           if(team.logo){
             logoHtml = '<img class="clas-team-logo" src="' + _esc(team.logo) + '" alt="" onerror="this.style.display=\'none\'">';
           }
@@ -5170,31 +5322,63 @@ window.pG = function(fn) {
         } else {
           nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
         }
+        var dgClass = 'clas-val dg zer';
+        if(team){
+          if(team.dg>0) dgClass = 'clas-val dg pos';
+          else if(team.dg<0) dgClass = 'clas-val dg neg';
+        }
         html += '<div class="clas-row" style="grid-template-columns:minmax(150px,1.6fr) 30px 26px 22px 22px 22px 26px 26px 28px;border-left:3px solid ' + borderColor + ';' + rowZone + '">'
           + '<div class="clas-team-cell">'
           +   '<span class="clas-pos-n">' + (i+1) + '</span>'
           +   '<span class="clas-team-name">' + logoHtml + nameHtml + '</span>'
           + '</div>'
-          + '<div class="clas-pts">0</div>'
-          + '<div class="clas-pj">0</div>'
-          + '<div class="clas-val">0</div>'
-          + '<div class="clas-val">0</div>'
-          + '<div class="clas-val">0</div>'
-          + '<div class="clas-val gf">0</div>'
-          + '<div class="clas-val gc">0</div>'
-          + '<div class="clas-val dg zer">0</div>'
+          + '<div class="clas-pts">' + (team?team.pts:0) + '</div>'
+          + '<div class="clas-pj">' + (team?team.pj:0) + '</div>'
+          + '<div class="clas-val">' + (team?team.v:0) + '</div>'
+          + '<div class="clas-val">' + (team?team.e:0) + '</div>'
+          + '<div class="clas-val">' + (team?team.p:0) + '</div>'
+          + '<div class="clas-val gf">' + (team?team.gf:0) + '</div>'
+          + '<div class="clas-val gc">' + (team?team.gc:0) + '</div>'
+          + '<div class="' + dgClass + '">' + (team?(team.dg>0?'+':'')+team.dg:0) + '</div>'
           + '</div>';
       }
       html += '</div></div></div>';
     }
-    html += '<div class="clas-legend" style="margin:16px 6px 0;">'
-      + '<span class="clas-legend-item"><span class="clas-dot" style="background:#a855f7;"></span>1-3 · Previa Champions (15 fijos + 3 mejores 4ºs)</span>'
-      + '<span class="clas-legend-item"><span class="clas-dot" style="background:#3cc878;"></span>4-5 · Conference (2 peores 4ºs + 3 mejores 5ºs)</span>'
-      + '<span class="clas-legend-item"><span class="clas-dot" style="background:#e03c3c;"></span>6-13 · Eliminados</span>'
-      + '</div>';
     container.innerHTML = html;
   }
+
+  /* Simular: requiere que las ligas hayan llenado los 65 huecos
+     (cada liga aporta sus zones.uclQual a través de
+     computeOpenQualifierTeams). Si hay menos teams, simulamos los
+     que haya — cada grupo con menos equipos generará menos partidos. */
+  function simulateOpenQualifier(){
+    var classified = (window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || [];
+    if(!classified.length){
+      alert('Primero termina alguna liga con plazas en la zona "Open Qualifier".');
+      return;
+    }
+    if(typeof window._showSimProgress !== 'function'){
+      _doSimulate(classified);
+      return;
+    }
+    window._showSimProgress({ms:3000, label:'SIMULANDO OPEN QUALIFIER'}, function(){
+      _doSimulate(classified);
+    });
+  }
+  function _doSimulate(classified){
+    var groups = _distributeSnake(classified, N_GROUPS);
+    var matchesByGroup = groups.map(function(grp){ return _simulateGroup(grp); });
+    _saveSim({groups:groups, matchesByGroup:matchesByGroup, ts:Date.now()});
+    buildOpenQualifierClas();
+  }
+  function resetOpenQualifier(){
+    try { localStorage.removeItem(STORE_KEY); } catch(_){}
+    buildOpenQualifierClas();
+  }
+
   window.buildOpenQualifierClas = buildOpenQualifierClas;
+  window.simulateOpenQualifier  = simulateOpenQualifier;
+  window.resetOpenQualifier     = resetOpenQualifier;
   document.addEventListener('DOMContentLoaded', buildOpenQualifierClas);
 })();
 </script>

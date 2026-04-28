@@ -526,10 +526,12 @@ def calcular_prob(perfil, local=False, goles_previos=0, flags=None):
     prob *= MULTIGOL[min(goles_previos, 4)]
 
     # Flags obligatorios (CLAUDE.md): se aplican en TODOS los partidos.
+    # NO se acumulan ⚾ y 🏀: si hay 🏀, ⚾ se ignora (un jugador es
+    # goleador estrella O nato a efectos del peso, no ambos).
     if flags:
         if flags.get("natGoalPro"):
-            prob *= 2.7      # 🏀 goleador estrella — ~45% de los goles
-        if flags.get("natGoal"):
+            prob *= 3.0      # 🏀 goleador estrella — ~48% de los goles
+        elif flags.get("natGoal"):
             prob *= 1.8      # ⚾ goleador nato — ~30% de los goles
         if flags.get("penalty"):
             prob += 0.40     # P — bonus fijo al peso de goleador

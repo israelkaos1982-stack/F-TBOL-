@@ -24,11 +24,12 @@ iconos definidos en la plantilla. Esto aplica tanto al motor Python
 
 ### 🏀 Goleador estrella (natGoalPro) — prioridad máxima
 
-- Multiplicador `×2.7` al peso del jugador en la elección de goleador.
-- El objetivo es que el goleador estrella marque **≈45% de los goles
-  del equipo**.
-- Si un jugador lleva 🏀 + ⚾ a la vez los multiplicadores se acumulan
-  (caso poco habitual).
+- Multiplicador `×3.0` al peso del jugador en la elección de goleador.
+- El objetivo es que el goleador estrella marque **≈48% de los goles
+  del equipo** (rango 46-50%).
+- **NO se acumula con ⚾**: si un jugador lleva 🏀, ⚾ se ignora — un
+  jugador es "goleador estrella" O "goleador nato" a efectos del peso,
+  no ambos. Esto evita que el peso se dispare por encima del 48%.
 
 ### P (lanzador de penaltis)
 
@@ -66,7 +67,7 @@ solo `elite`/`natGoal`.
 
 ## Qué NO hacer
 
-- No cambies los pesos numéricos anteriores (×1.8 natGoal, ×2.7
+- No cambies los pesos numéricos anteriores (×1.8 natGoal, ×3.0
   natGoalPro, ×1.05 capitán, etc.) sin acordarlo explícitamente con el
   usuario.
 - No añadas simulación nueva sin que consuma estos flags.

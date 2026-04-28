@@ -6322,7 +6322,6 @@ window._showSimProgress = function(opts, onDone){
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
     <button class="btn-action lext-btn-compact" onclick="pG(function(){ligaExtReglas()})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
     <button class="btn-action lext-btn-compact" onclick="ligaExtCopa()" style="border-color:rgba(255,200,80,.4);color:#ffc850;background:rgba(255,200,80,.06);"><span class="btn-action-ico">🏆</span><span id="lext-copa-btn-label">Copa</span></button>
-    <button id="lext-wildcard-btn" class="btn-action lext-btn-compact" onclick="ligaExtWildcardRound()" style="display:none;border-color:rgba(139,85,32,.55);color:#d8a060;background:rgba(139,85,32,.08);"><span class="btn-action-ico">🎟️</span>Wildcard Round</button>
   </div>
 </div>
 
@@ -6740,6 +6739,10 @@ Tottenham
     <input class="lext-input" id="lext-reg-uel" type="number" min="0" max="20" value="1" />
     <label class="lext-label">🟢 Conference League</label>
     <input class="lext-input" id="lext-reg-uecl" type="number" min="0" max="20" value="1" />
+    <div id="lext-reg-wildcard-row" style="display:none;">
+      <label class="lext-label" style="color:rgba(255,255,255,.92);">⚪ WildCard Round</label>
+      <input class="lext-input" id="lext-reg-wildcard" type="number" min="0" max="20" value="0" style="border-color:rgba(255,255,255,.5);" />
+    </div>
     <label class="lext-label">🔴 Descenso (últimas plazas)</label>
     <input class="lext-input" id="lext-reg-desc" type="number" min="0" max="20" value="3" />
     <div class="lext-btn-row">
@@ -7369,7 +7372,7 @@ Tottenham
     return arr;
   }
 
-  var DEFAULT_ZONES = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, desc:3};
+  var DEFAULT_ZONES = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, wildcard:0, desc:3};
 
   function ensureConfig(data){
     if(!data.config) data.config = {};
@@ -7766,6 +7769,14 @@ Tottenham
     document.getElementById('lext-reg-uel').value = z.uel;
     document.getElementById('lext-reg-uecl').value = z.uecl;
     document.getElementById('lext-reg-desc').value = z.desc;
+    /* WildCard Round — solo se muestra en las ligas pequeñas que
+       reciben este cupo extra. Para el resto el campo permanece
+       oculto (y su valor persistido se mantiene a 0). */
+    var wcRow = document.getElementById('lext-reg-wildcard-row');
+    var wcInp = document.getElementById('lext-reg-wildcard');
+    var showWc = !!WILDCARD_LIGA_SLUGS[CURRENT_KEY];
+    if(wcRow) wcRow.style.display = showWc ? '' : 'none';
+    if(wcInp) wcInp.value = Number(z.wildcard||0);
     lextOpenOv('lext-ov-reglas');
   };
   window.lextSaveReglas = function(){
@@ -7778,6 +7789,7 @@ Tottenham
       uclQual: Math.max(0, parseInt(document.getElementById('lext-reg-ucl-qual').value,10)||0),
       uel: Math.max(0, parseInt(document.getElementById('lext-reg-uel').value,10)||0),
       uecl: Math.max(0, parseInt(document.getElementById('lext-reg-uecl').value,10)||0),
+      wildcard: Math.max(0, parseInt((document.getElementById('lext-reg-wildcard')||{}).value,10)||0),
       desc: Math.max(0, parseInt(document.getElementById('lext-reg-desc').value,10)||0)
     };
     saveData(CURRENT_KEY, data);
@@ -7798,12 +7810,13 @@ Tottenham
     document.getElementById('lext-reg-uel').value = DEFAULT_ZONES.uel;
     document.getElementById('lext-reg-uecl').value = DEFAULT_ZONES.uecl;
     document.getElementById('lext-reg-desc').value = DEFAULT_ZONES.desc;
+    var wcInp = document.getElementById('lext-reg-wildcard');
+    if(wcInp) wcInp.value = DEFAULT_ZONES.wildcard;
   };
 
-  // ── Wildcard Round (solo Gibraltar / Is. Feroe) ────
-  // Stub: el contenido real se definirá cuando el usuario indique
-  // exactamente qué debe mostrar este apartado. Por ahora informa
-  // y queda listo para enchufar.
+  // ── Wildcard Round (compat: invocador antiguo) ─────
+  // Mantenido como stub por compatibilidad. La configuración real
+  // ahora vive como cupo de zona en el modal Reglas.
   window.ligaExtWildcardRound = function(){
     if(!CURRENT_KEY) return;
     if(!WILDCARD_LIGA_SLUGS[CURRENT_KEY]){
@@ -10127,10 +10140,17 @@ Tottenham
     });
   };
 
-  /* Slugs que tienen acceso al apartado "Wildcard Round" en la
-     pantalla de su liga. De momento solo Gibraltar e Islas Feroe.
-     Centralizado aquí para no salpicar el resto del código. */
-  var WILDCARD_LIGA_SLUGS = { 'gibraltar': 1, 'is-feroe': 1 };
+  /* Slugs de ligas pequeñas con acceso al cupo "WildCard Round"
+     en su modal de Reglas. Estos 18 países reciben una plaza extra
+     hacia la fase WildCard centralizada. Mantener este listado
+     sincronizado con las menu-cards de s-ligas (resto de ligas). */
+  var WILDCARD_LIGA_SLUGS = {
+    'andorra':1, 'albania':1, 'san-marino':1, 'gibraltar':1,
+    'estonia':1, 'finlandia':1, 'letonia':1, 'lituania':1,
+    'islandia':1, 'armenia':1, 'bielorrsa':1, 'is-feroe':1,
+    'georgia':1, 'luxembgo':1, 'moldavia':1, 'n-maced':1,
+    'malta':1, 'kosovo':1
+  };
   window.WILDCARD_LIGA_SLUGS = WILDCARD_LIGA_SLUGS;
 
   window.openLigaExt = function(name, emoji){
@@ -10141,10 +10161,6 @@ Tottenham
     var e = document.getElementById('liga-ext-emoji');
     if(t) t.textContent = CURRENT_NAME;
     if(e) e.textContent = CURRENT_EMOJI;
-    /* Toggle del botón Wildcard Round — solo en ligas pequeñas
-       (Gibraltar, Is. Feroe) que reciben plazas extra. */
-    var wcBtn = document.getElementById('lext-wildcard-btn');
-    if(wcBtn) wcBtn.style.display = WILDCARD_LIGA_SLUGS[CURRENT_KEY] ? '' : 'none';
     // Renderiza primero desde cache local (respuesta inmediata)
     var cached = loadData(CURRENT_KEY);
     applyLeagueHeaderFromData(cached);

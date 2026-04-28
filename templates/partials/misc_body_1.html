@@ -7138,8 +7138,34 @@ Tottenham
     if(!confirm('¿Reiniciar puntos/partidos de '+CURRENT_NAME+'?')) return;
     var data = loadData(CURRENT_KEY);
     data.results = [];
+    /* Reset también los contadores per-jugador. ligaExtSimular escribe
+       p.{pj,gol,pen,fk,mvp,ta,tr,imbat,penSaved} directamente sobre el
+       objeto del jugador (vía applyMatchStats). Si no los limpiamos
+       aquí, renderSquadList los muestra como stats stale aunque la
+       clasificación marque PJ=0 — el usuario ve PJ del equipo en 0
+       pero jugadores con 14 PJ y 15 goles. */
+    if (Array.isArray(data.teams)) {
+      data.teams.forEach(function(t){
+        if (t && Array.isArray(t.players)) {
+          t.players.forEach(function(p){
+            if (!p) return;
+            p.pj = 0; p.gol = 0; p.pen = 0; p.fk = 0;
+            p.mvp = 0; p.ta = 0; p.tr = 0;
+            p.imbat = 0; p.penSaved = 0;
+          });
+        }
+      });
+    }
     saveData(CURRENT_KEY, data);
     renderTable();
+    /* Si la overlay de plantilla está abierta, repintar también para
+       que los jugadores se actualicen al instante. */
+    try {
+      var ov = document.getElementById('lext-ov-squad');
+      if (ov && ov.classList.contains('show') && typeof renderSquadList === 'function') {
+        renderSquadList();
+      }
+    } catch(_){}
   }
   window.ligaExtReiniciar = ligaExtReiniciar;
 
@@ -8308,6 +8334,25 @@ Tottenham
       } catch(_){}
     })();
 
+    /* Defensa contra datos rancios tras un reset incompleto: si el
+       equipo NO tiene resultados en `data.results` consideramos que
+       no ha jugado partidos en esta liga, así que ignoramos los
+       contadores per-jugador (p.pj/p.gol/...) aunque sigan ahí. Esto
+       cubre stats stale de versiones anteriores donde el botón "Res"
+       solo limpiaba data.results y dejaba los contadores por jugador
+       sin tocar — el usuario veía PJ del equipo en 0 pero jugadores
+       con 14 PJ y 15 goles. */
+    var _teamHasResults = (function(){
+      try {
+        if (!data || !Array.isArray(data.results) || !data.results.length) return false;
+        for (var ri = 0; ri < data.results.length; ri++) {
+          var r = data.results[ri];
+          if (r && (r.h === t.id || r.a === t.id)) return true;
+        }
+      } catch(_){}
+      return false;
+    })();
+
     t.players.forEach(function(p){
       try { ensurePlayerStats(p); } catch(_){}
       /* Fallback para Resto de Ligas (51 ligas IA): el simulador
@@ -8317,10 +8362,10 @@ Tottenham
          los persiste en `ligaExt_<slug>`. Liga EA Sports en cambio
          escribe en el store global `ef_player_stats_v1`.
          Capturamos esos contadores propios ANTES de pisarlos por la
-         vía global. Los gateamos con p.pj>0 para que tras un reset
-         (resetPlayerStats pone todo a 0) la plantilla se vea limpia
-         sin arrastrar valores stale. */
-      var hasOwnStats = (p.pj || 0) > 0;
+         vía global. Los gateamos con p.pj>0 Y _teamHasResults para
+         que tras un reset (incompleto o no) la plantilla se vea
+         limpia sin arrastrar valores stale. */
+      var hasOwnStats = _teamHasResults && (p.pj || 0) > 0;
       var own = hasOwnStats ? {
         pj: p.pj || 0, gol: p.gol || 0, pen: p.pen || 0, fk: p.fk || 0,
         mvp: p.mvp || 0, ta: p.ta || 0, tr: p.tr || 0,

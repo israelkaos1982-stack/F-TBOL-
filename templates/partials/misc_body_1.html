@@ -5646,6 +5646,37 @@ window.pG = function(fn) {
 .lext-ov-box{background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:18px 16px;width:100%;max-width:520px;box-shadow:0 0 40px rgba(0,0,0,.8);color:#fff;font-family:Rajdhani,sans-serif;}
 .lext-ov-head{display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.08);}
 .lext-ov-title{font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;color:#f0c040;flex:1;text-transform:uppercase;}
+/* ── Resumen del equipo (#lext-team-summary). Se inserta arriba del
+   formulario de pegar plantilla. Muestra stats de la clasificación,
+   los 4 niveles auto-derivados y las líneas de máximo goleador / MVP /
+   mejor puntuación. */
+#lext-team-summary{margin-bottom:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px;}
+.lext-ts-stats{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;}
+.lext-ts-cell{display:flex;flex-direction:column;align-items:center;text-align:center;padding:4px 2px;}
+.lext-ts-lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.45);}
+.lext-ts-val{font-family:"Bebas Neue",sans-serif;font-size:18px;color:#fff;line-height:1.05;}
+.lext-ts-cell.col-v .lext-ts-val{color:#3dcc6e;}
+.lext-ts-cell.col-e .lext-ts-val{color:#f0c040;}
+.lext-ts-cell.col-p .lext-ts-val{color:#ff7070;}
+.lext-ts-cell.col-gf .lext-ts-val{color:#74bcd8;}
+.lext-ts-cell.col-gc .lext-ts-val{color:#ff8c64;}
+.lext-ts-cell.col-pos .lext-ts-val{color:#3dcc6e;}
+.lext-ts-cell.col-neg .lext-ts-val{color:#ff7070;}
+.lext-ts-cell.pct-hi .lext-ts-val{color:#3dcc6e;}
+.lext-ts-cell.pct-mid .lext-ts-val{color:#f0c040;}
+.lext-ts-cell.pct-lo .lext-ts-val{color:#ff7070;}
+.lext-ts-levels{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);}
+.lext-ts-lvl{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.55);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:3px 7px;}
+.lext-ts-lvl b{color:#fff;margin-right:4px;font-weight:700;}
+.lext-ts-lvl.atk{border-color:rgba(255,140,100,.35);color:#ff8c64;}
+.lext-ts-lvl.atk b{color:#ff8c64;}
+.lext-ts-lvl.mid{border-color:rgba(240,192,64,.35);color:#f0c040;}
+.lext-ts-lvl.mid b{color:#f0c040;}
+.lext-ts-lvl.def{border-color:rgba(116,188,216,.35);color:#74bcd8;}
+.lext-ts-lvl.def b{color:#74bcd8;}
+.lext-ts-lines{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:3px;}
+.lext-ts-line{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);}
+.lext-ts-line b{font-weight:700;color:#fff;}
 .lext-ov-close{background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.65);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;}
 .lext-input,.lext-select{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;margin-bottom:8px;}
 .lext-input:focus,.lext-select:focus{outline:none;border-color:#f0c040;}
@@ -5901,6 +5932,11 @@ Tottenham
       <div class="lext-ov-title" id="lext-ov-squad-title">🛡 Plantilla</div>
       <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-squad')">✕</button>
     </div>
+
+    <!-- Resumen del equipo (PJ/G/E/P/G+/G-/DG/% + niveles 4-ejes +
+         líneas de máximo goleador / MVP / mejor puntuación). Lo
+         rellena renderTeamSummary() al abrir la plantilla. -->
+    <div id="lext-team-summary" style="display:none;"></div>
 
     <details class="lext-details" id="lext-squad-paste-details">
       <summary>📋 Pegar plantilla completa (se añade al equipo)</summary>
@@ -6479,19 +6515,60 @@ Tottenham
   }
 
   function computeLineStats(t){
-    // Devuelve los valores fijos del equipo tal como el usuario los puso.
-    // Ya no se recalculan desde la plantilla — los stats del equipo son
-    // los que el admin define manualmente en el editor.
+    /* Calcula los 4 ejes del equipo (GLOBAL, ATAQUE, MEDIO, DEFENSA)
+       a partir de la plantilla. Petición usuario (2026-04-28):
+       automatizado para todos los equipos de todas las ligas — antes
+       eran valores fijos del admin que casi nunca se editaban.
+
+       Reglas:
+         ATK = media de poder de los DELANTEROS
+         MED = media de poder de los CENTROCAMPISTAS
+         DEF = media de poder de los DEFENSAS
+         GLOBAL = media de los 11 jugadores de mayor poder (alineación
+                  ideal: 1 POR + 4 DEF + 3 MED + 3 DEL aprox.).
+
+       Si una posición no tiene jugadores, cae al GLOBAL como
+       fallback. Si la plantilla está vacía, usa los valores manuales
+       guardados (t.atk/mid/def/power) — esto preserva las ligas con
+       admin-overrides explícitos. */
+    var players = (t && Array.isArray(t.players)) ? t.players : [];
+    function _avg(pool){
+      if (!pool.length) return 0;
+      var sum = pool.reduce(function(s,p){return s + (Number(p.power)||0);}, 0);
+      return sum / pool.length;
+    }
+    if (!players.length) {
+      return {
+        glob: Number(t.power)||50,
+        atk:  Number(t.atk)||Number(t.power)||50,
+        mid:  Number(t.mid)||Number(t.power)||50,
+        def:  Number(t.def)||Number(t.power)||50
+      };
+    }
+    var atkPool = players.filter(function(p){return p.pos === 'DEL';});
+    var midPool = players.filter(function(p){return p.pos === 'MED';});
+    var defPool = players.filter(function(p){return p.pos === 'DEF';});
+    /* GLOBAL: media de los 11 mejores. Buena aproximación a la
+       fuerza real en el campo. */
+    var top11 = players.slice().sort(function(a,b){
+      return (Number(b.power)||0) - (Number(a.power)||0);
+    }).slice(0, 11);
+    var glob = _avg(top11) || Number(t.power) || 50;
+    var atk  = _avg(atkPool) || glob;
+    var mid  = _avg(midPool) || glob;
+    var def  = _avg(defPool) || glob;
     return {
-      glob: Number(t.power)||50,
-      atk:  Number(t.atk)||Number(t.power)||50,
-      mid:  Number(t.mid)||Number(t.power)||50,
-      def:  Number(t.def)||Number(t.power)||50
+      glob: Math.round(glob),
+      atk:  Math.round(atk),
+      mid:  Math.round(mid),
+      def:  Math.round(def)
     };
   }
 
   function computeTeamPower(t){
-    return Number(t.power)||50;
+    /* Mantenido para compatibilidad. Devuelve el GLOBAL auto-derivado
+       (o el valor manual si la plantilla está vacía). */
+    return computeLineStats(t).glob;
   }
 
   // Tier de poder — mismos rangos que window.poderTone del bundle
@@ -6612,16 +6689,44 @@ Tottenham
   }
 
   function simulateMatch(tA, tB){
-    var pA = computeTeamPower(tA);
-    var pB = computeTeamPower(tB);
-    pA += 3; // ventaja local
-    var diff = pA - pB;
-    var baseA = Math.max(0.15, 1.3 + diff*0.03);
-    var baseB = Math.max(0.15, 1.3 - diff*0.03);
-    var yA = Math.max(0.4, 2.0 - diff*0.02);
-    var yB = Math.max(0.4, 2.0 + diff*0.02);
-    var rA = Math.max(0.02, 0.07 - diff*0.002);
-    var rB = Math.max(0.02, 0.07 + diff*0.002);
+    /* Motor 4-ejes (CLAUDE.md, petición usuario 2026-04-28):
+       - ATAQUE: cuanto más alto, más goles MARCA el equipo.
+       - DEFENSA: cuanto más alto, menos goles ENCAJA.
+       - MEDIO: COMPENSA tanto ataque como defensa (peso 0.5 a cada
+         lado).
+       - GLOBAL: inclina la probabilidad general (peso 0.1).
+
+       Goles que marca A = Poisson(λ) donde λ depende de:
+         fuerza_ofensiva_A vs fuerza_defensiva_B.
+
+       Ventaja local: +3 al global del equipo de casa (mismo bonus que
+       el modelo anterior). Las tarjetas siguen ligadas al diferencial
+       de global porque no es realista que un buen mediocampo te
+       ahorre amarillas. */
+    var sA = computeLineStats(tA);
+    var sB = computeLineStats(tB);
+    var globA = sA.glob + 3;  // ventaja local
+    var globB = sB.glob;
+    function _atkForce(s, gBoost){ return s.atk + 0.5*s.mid + 0.1*(s.glob + gBoost); }
+    function _defForce(s, gBoost){ return s.def + 0.5*s.mid + 0.1*(s.glob + gBoost); }
+    var attackA  = _atkForce(sA, 3);
+    var attackB  = _atkForce(sB, 0);
+    var defenseA = _defForce(sA, 3);
+    var defenseB = _defForce(sB, 0);
+    /* λ base ≈ 1.3 goles (similar al modelo anterior) + factor por
+       diferencial atk-vs-def. El factor 0.025 es conservador para
+       que las distancias grandes no produzcan goleadas absurdas. */
+    var diffA = attackA - defenseB;
+    var diffB = attackB - defenseA;
+    var baseA = Math.max(0.15, 1.3 + diffA*0.025);
+    var baseB = Math.max(0.15, 1.3 + diffB*0.025);
+    /* Tarjetas: usan el diferencial de GLOBAL (con local advantage),
+       igual que el modelo anterior. */
+    var diffG = globA - globB;
+    var yA = Math.max(0.4, 2.0 - diffG*0.02);
+    var yB = Math.max(0.4, 2.0 + diffG*0.02);
+    var rA = Math.max(0.02, 0.07 - diffG*0.002);
+    var rB = Math.max(0.02, 0.07 + diffG*0.002);
     return {
       gh: poisson(baseA),
       ga: poisson(baseB),
@@ -7702,9 +7807,95 @@ Tottenham
     if (plNameEl) plNameEl.value = '';
     var plPowerEl = document.getElementById('lext-pl-power');
     if (plPowerEl) plPowerEl.value = '75';
+    try { renderTeamSummary(t); } catch(_){}
     try { renderSquadList(); } catch(_){}
     lextOpenOv('lext-ov-squad');
   };
+
+  /* Resumen del equipo arriba de la plantilla:
+       - Fila de stats de la clasificación (PJ/G/E/P/G+/G-/DG/%).
+       - Niveles 4 ejes (GLOBAL/ATQ/MED/DEF) auto-derivados.
+       - Líneas de máximo goleador, MVP y mejor puntuación.
+     Petición usuario (2026-04-28): que las stats del equipo arriba se
+     auto-rellenen desde la clasificación en lugar de quedarse a 0. */
+  function renderTeamSummary(t){
+    var host = document.getElementById('lext-team-summary');
+    if (!host || !t) return;
+    var data = loadData(CURRENT_KEY);
+    if (!data) return;
+    var rows = standings(data);
+    var row = null;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].id === t.id) { row = rows[i]; break; }
+    }
+    var stats = row || {pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0};
+    var pct = stats.pj > 0 ? Math.round((stats.v / stats.pj) * 100) : 0;
+    var pctCls = pct >= 60 ? 'pct-hi' : (pct >= 40 ? 'pct-mid' : 'pct-lo');
+    var dgSign = stats.dg > 0 ? '+'+stats.dg : (stats.dg < 0 ? String(stats.dg) : '0');
+    /* Niveles 4-ejes (auto-derivados de la plantilla). */
+    var ls = computeLineStats(t);
+    /* Top scorer / MVP / mejor puntuación leídos del propio objeto
+       de jugador (poblado por applyMatchStats). */
+    var players = Array.isArray(t.players) ? t.players : [];
+    function _topBy(field){
+      var best = null;
+      players.forEach(function(p){
+        var v = Number(p[field]) || 0;
+        if (!best || v > Number(best[field]) || 0) best = p;
+      });
+      return best && (Number(best[field])||0) > 0 ? best : null;
+    }
+    var topGol = _topBy('gol');
+    var topMvp = _topBy('mvp');
+    /* Mejor puntuación = jugador con mayor rating. computePlayerRating
+       puede no estar disponible si el bundle aún no terminó de cargar;
+       en ese caso saltamos la línea. */
+    var topRated = null, topRating = 0;
+    try {
+      if (typeof computePlayerRating === 'function') {
+        players.forEach(function(p){
+          var r = computePlayerRating(p) || 0;
+          if (r > topRating) { topRating = r; topRated = p; }
+        });
+      }
+    } catch(_){}
+    /* Construcción del HTML. */
+    function _cell(label, val, cls){
+      return '<div class="lext-ts-cell '+(cls||'')+'">'
+        + '<div class="lext-ts-lbl">'+label+'</div>'
+        + '<div class="lext-ts-val">'+val+'</div>'
+      + '</div>';
+    }
+    var _esc = (typeof escapeHtml === 'function') ? escapeHtml : (typeof window.escapeHtml === 'function' ? window.escapeHtml : function(s){
+      return String(s||'').replace(/[&<>"']/g, function(c){
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+      });
+    });
+    var lineHtml = '';
+    if (topGol) lineHtml += '<div class="lext-ts-line">⚽ <b>Máximo goleador:</b> '+_esc(topGol.name)+' · <span style="color:#3dcc6e;">'+(topGol.gol||0)+' goles</span></div>';
+    if (topMvp) lineHtml += '<div class="lext-ts-line">⭐ <b>MVP:</b> '+_esc(topMvp.name)+' · <span style="color:#f0c040;">'+(topMvp.mvp||0)+' MVPs</span></div>';
+    if (topRated) lineHtml += '<div class="lext-ts-line">📈 <b>Mejor puntuación:</b> '+_esc(topRated.name)+' · <span style="color:#74bcd8;">'+topRating.toFixed(2)+'</span></div>';
+    host.innerHTML = ''
+      + '<div class="lext-ts-stats">'
+      +   _cell('PJ', stats.pj)
+      +   _cell('G', stats.v, 'col-v')
+      +   _cell('E', stats.e, 'col-e')
+      +   _cell('P', stats.p, 'col-p')
+      +   _cell('G+', stats.gf, 'col-gf')
+      +   _cell('G-', stats.gc, 'col-gc')
+      +   _cell('D±', dgSign, stats.dg>0?'col-pos':(stats.dg<0?'col-neg':''))
+      +   _cell('%', pct+'%', pctCls)
+      + '</div>'
+      + '<div class="lext-ts-levels">'
+      +   '<span class="lext-ts-lvl"><b>GLOBAL</b> '+ls.glob+'</span>'
+      +   '<span class="lext-ts-lvl atk"><b>ATQ</b> '+ls.atk+'</span>'
+      +   '<span class="lext-ts-lvl mid"><b>MED</b> '+ls.mid+'</span>'
+      +   '<span class="lext-ts-lvl def"><b>DEF</b> '+ls.def+'</span>'
+      + '</div>'
+      + (lineHtml ? '<div class="lext-ts-lines">'+lineHtml+'</div>' : '');
+    host.style.display = '';
+  }
+  window._renderTeamSummary = renderTeamSummary;
 
   function ratingClass(r){
     if(r <= 0) return 'r0';

@@ -1919,7 +1919,8 @@ window.pG = function(fn) {
           name: p.name, num: Number(p.num)||0, power: Number(p.power)||70,
           pos: p.pos || 'MED',
           captain: !!p.captain, freeKick: !!p.freeKick, penalty: !!p.penalty,
-          elite: !!p.elite, natGoal: !!p.natGoal, source: 'ligaExt'
+          elite: !!p.elite, natGoal: !!p.natGoal, natGoalPro: !!p.natGoalPro,
+          source: 'ligaExt'
         });
       });
     }
@@ -1938,7 +1939,8 @@ window.pG = function(fn) {
         out.push({
           name: name, num: Number(e[0])||0, power: Number(e[2])||70, pos: curPos,
           captain: !!e.captain, freeKick: !!e.freeKick, penalty: !!e.penalty,
-          elite: !!e.elite, natGoal: !!e.natGoal, source: 'registry'
+          elite: !!e.elite, natGoal: !!e.natGoal, natGoalPro: !!e.natGoalPro,
+          source: 'registry'
         });
       });
     }
@@ -8292,7 +8294,8 @@ Tottenham
               + togBtn('freeKick','F',!!p.freeKick,'Lanzador de faltas')
               + togBtn('penalty','P',!!p.penalty,'Lanzador de penaltis')
               + togBtn('elite','⭐',!!p.elite,'Estrella del equipo')
-              + togBtn('natGoal','⚾',!!p.natGoal,'Goleador nato');
+              + togBtn('natGoal','⚾',!!p.natGoal,'Goleador nato (~30% goles)')
+              + togBtn('natGoalPro','🏀',!!p.natGoalPro,'Goleador estrella (~45% goles)');
       return '<div class="lext-sq-row '+cls+'">'
         + '<span class="lext-sq-name tier-'+pTier+'">'+p.name+badges+'</span>'
         + cells
@@ -8999,27 +9002,29 @@ Tottenham
           var num = p.num && p.num > 0 ? p.num : nextFreeNum(simPos);
           var pw  = Math.max(1, Math.min(99, Number(p.power)||70));
           /* Formato clásico de 3 elementos: [num, name, power]. Flags
-             (C/F/P/⭐/⚾) se guardan aparte en _LIGA_EA_PLAYER_FLAGS
+             (C/F/P/⭐/⚾/🏀) se guardan aparte en _LIGA_EA_PLAYER_FLAGS
              (sidecar), así no rompemos ningún consumidor del formato. */
-          if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal) {
+          if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal || p.natGoalPro) {
             var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
             var fkey = String(t.name) + '::' + String(p.name||'');
             fmap[fkey] = {
-              captain:  !!p.captain,
-              freeKick: !!p.freeKick,
-              penalty:  !!p.penalty,
-              elite:    !!p.elite,
-              natGoal:  !!p.natGoal
+              captain:    !!p.captain,
+              freeKick:   !!p.freeKick,
+              penalty:    !!p.penalty,
+              elite:      !!p.elite,
+              natGoal:    !!p.natGoal,
+              natGoalPro: !!p.natGoalPro
             };
           }
-          /* Las flags de scoring (.elite y .natGoal) viajan COMO
-             METADATO del array. Los consumidores del formato
+          /* Las flags de scoring (.elite, .natGoal y .natGoalPro) viajan
+             COMO METADATO del array. Los consumidores del formato
              [num,name,power] siguen viendo los 3 elementos habituales;
              los scorers que quieren aplicar el bonus leen entry.elite
-             / entry.natGoal. */
+             / entry.natGoal / entry.natGoalPro. */
           var entry = [String(num), String(p.name||'?'), pw];
-          if(p.elite)   entry.elite   = true;
-          if(p.natGoal) entry.natGoal = true;
+          if(p.elite)      entry.elite      = true;
+          if(p.natGoal)    entry.natGoal    = true;
+          if(p.natGoalPro) entry.natGoalPro = true;
           simSquad.push(entry);
         });
       });

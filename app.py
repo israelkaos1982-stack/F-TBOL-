@@ -527,8 +527,10 @@ def calcular_prob(perfil, local=False, goles_previos=0, flags=None):
 
     # Flags obligatorios (CLAUDE.md): se aplican en TODOS los partidos.
     if flags:
+        if flags.get("natGoalPro"):
+            prob *= 2.7      # 🏀 goleador estrella — ~45% de los goles
         if flags.get("natGoal"):
-            prob *= 3        # ⚾ prioridad máxima — ~50% de los goles
+            prob *= 1.8      # ⚾ goleador nato — ~30% de los goles
         if flags.get("penalty"):
             prob += 0.40     # P — bonus fijo al peso de goleador
         if flags.get("freeKick"):
@@ -541,10 +543,11 @@ def resolve_team_name(team_name):
     return TEAM_ALIASES.get(clean.lower(), clean)
 
 """Flags obligatorios por equipo (CLAUDE.md): capitan (C), freeKick (F),
-penalti (P), elite (⭐), natGoal (⚾). Estructura opcional que, cuando
-está presente, el motor de simulación aplica en TODOS los partidos
-(Liga, Copa, Europa, amistosos). Vacío por defecto — los admins las
-marcan desde el editor web y se sincronizan aquí cuando aplique."""
+penalti (P), elite (⭐), natGoal (⚾), natGoalPro (🏀). Estructura
+opcional que, cuando está presente, el motor de simulación aplica en
+TODOS los partidos (Liga, Copa, Europa, amistosos). Vacío por defecto
+— los admins las marcan desde el editor web y se sincronizan aquí
+cuando aplique."""
 TEAM_PLAYER_FLAGS = {}
 
 
@@ -1829,10 +1832,10 @@ def _liga_ext_save(slug, data):
 
 def _refresh_player_flags_from_liga_ext(data):
     """Reconstruye TEAM_PLAYER_FLAGS leyendo team.players[].{captain,freeKick,
-    penalty,elite,natGoal} del blob de ligaExt recién guardado. Es la vía por
-    la que las marcas asignadas en el editor se aplican para SIEMPRE al motor
-    de simulación Python — sin esto los flags vivían solo en el JS y las
-    simulaciones del servidor (calendario IA) los ignoraban."""
+    penalty,elite,natGoal,natGoalPro} del blob de ligaExt recién guardado. Es
+    la vía por la que las marcas asignadas en el editor se aplican para
+    SIEMPRE al motor de simulación Python — sin esto los flags vivían solo en
+    el JS y las simulaciones del servidor (calendario IA) los ignoraban."""
     if not isinstance(data, dict):
         return
     teams = data.get("teams") or []
@@ -1856,11 +1859,12 @@ def _refresh_player_flags_from_liga_ext(data):
                 continue
             flags = {}
             for key, src in (
-                ("captain",  "captain"),
-                ("freeKick", "freeKick"),
-                ("penalty",  "penalty"),
-                ("elite",    "elite"),
-                ("natGoal",  "natGoal"),
+                ("captain",    "captain"),
+                ("freeKick",   "freeKick"),
+                ("penalty",    "penalty"),
+                ("elite",      "elite"),
+                ("natGoal",    "natGoal"),
+                ("natGoalPro", "natGoalPro"),
             ):
                 if bool(p.get(src)):
                     flags[key] = True

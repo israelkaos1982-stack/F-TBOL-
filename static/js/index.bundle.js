@@ -503,11 +503,12 @@ window.sqFromRegistry = function(teamName, opts) {
           pool.forEach(function(p){
             var pw = Math.max(1, Math.min(99, Number(p.power)||70));
             var entry = [String(p.num || ''), String(p.name || '?'), pw];
-            if (p.elite)    entry.elite    = true;
-            if (p.natGoal)  entry.natGoal  = true;
-            if (p.captain)  entry.captain  = true;
-            if (p.freeKick) entry.freeKick = true;
-            if (p.penalty)  entry.penalty  = true;
+            if (p.elite)      entry.elite      = true;
+            if (p.natGoal)    entry.natGoal    = true;
+            if (p.natGoalPro) entry.natGoalPro = true;
+            if (p.captain)    entry.captain    = true;
+            if (p.freeKick)   entry.freeKick   = true;
+            if (p.penalty)    entry.penalty    = true;
             built.push(entry);
           });
         });
@@ -520,15 +521,16 @@ window.sqFromRegistry = function(teamName, opts) {
           if (resolved !== teamName) window.SQUAD_REGISTRY[resolved] = built;
           match.players.forEach(function(p){
             if (!p || !p.name) return;
-            if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal){
+            if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal || p.natGoalPro){
               var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
               var fkey = String(match.name) + '::' + String(p.name);
               fmap[fkey] = {
-                captain:  !!p.captain,
-                freeKick: !!p.freeKick,
-                penalty:  !!p.penalty,
-                elite:    !!p.elite,
-                natGoal:  !!p.natGoal
+                captain:    !!p.captain,
+                freeKick:   !!p.freeKick,
+                penalty:    !!p.penalty,
+                elite:      !!p.elite,
+                natGoal:    !!p.natGoal,
+                natGoalPro: !!p.natGoalPro
               };
             }
           });
@@ -577,16 +579,18 @@ window.sqFromRegistry = function(teamName, opts) {
       var nombre = e[1];
       // Saltar lesionados/sancionados
       if (excluded.indexOf(nombre) !== -1) continue;
-      /* Propagamos los 5 flags (⭐ elite, ⚾ natGoal, C captain, F freeKick,
-         P penalty) como propiedades del array. Los scorers y el motor de
-         equipo los consumen sin alterar los índices posicionales que usan
-         los demás consumidores del formato. Obligatorio (CLAUDE.md). */
+      /* Propagamos los 6 flags (⭐ elite, ⚾ natGoal, 🏀 natGoalPro,
+         C captain, F freeKick, P penalty) como propiedades del array. Los
+         scorers y el motor de equipo los consumen sin alterar los índices
+         posicionales que usan los demás consumidores del formato.
+         Obligatorio (CLAUDE.md). */
       var row = [e[0], nombre, curPos, poder];
-      if (e && e.elite)    row.elite    = true;
-      if (e && e.natGoal)  row.natGoal  = true;
-      if (e && e.captain)  row.captain  = true;
-      if (e && e.freeKick) row.freeKick = true;
-      if (e && e.penalty)  row.penalty  = true;
+      if (e && e.elite)      row.elite      = true;
+      if (e && e.natGoal)    row.natGoal    = true;
+      if (e && e.natGoalPro) row.natGoalPro = true;
+      if (e && e.captain)    row.captain    = true;
+      if (e && e.freeKick)   row.freeKick   = true;
+      if (e && e.penalty)    row.penalty    = true;
       full.push(row);
     }
   }
@@ -616,17 +620,19 @@ window.sqFromRegistry = function(teamName, opts) {
   //    Los primeros 11 son: portero titular + los 10 de campo de más poder
   //    El resto son banquillo
   for (var ci = 0; ci < conv.length; ci++) {
-    var wasElite    = !!conv[ci].elite;
-    var wasNatGoal  = !!conv[ci].natGoal;
-    var wasCaptain  = !!conv[ci].captain;
-    var wasFreeKick = !!conv[ci].freeKick;
-    var wasPenalty  = !!conv[ci].penalty;
+    var wasElite      = !!conv[ci].elite;
+    var wasNatGoal    = !!conv[ci].natGoal;
+    var wasNatGoalPro = !!conv[ci].natGoalPro;
+    var wasCaptain    = !!conv[ci].captain;
+    var wasFreeKick   = !!conv[ci].freeKick;
+    var wasPenalty    = !!conv[ci].penalty;
     conv[ci] = [conv[ci][0], conv[ci][1], conv[ci][2], conv[ci][3], ci < 11 ? 'titular' : 'suplente'];
-    if (wasElite)    conv[ci].elite    = true;
-    if (wasNatGoal)  conv[ci].natGoal  = true;
-    if (wasCaptain)  conv[ci].captain  = true;
-    if (wasFreeKick) conv[ci].freeKick = true;
-    if (wasPenalty)  conv[ci].penalty  = true;
+    if (wasElite)      conv[ci].elite      = true;
+    if (wasNatGoal)    conv[ci].natGoal    = true;
+    if (wasNatGoalPro) conv[ci].natGoalPro = true;
+    if (wasCaptain)    conv[ci].captain    = true;
+    if (wasFreeKick)   conv[ci].freeKick   = true;
+    if (wasPenalty)    conv[ci].penalty    = true;
   }
 
   return conv;
@@ -664,11 +670,12 @@ window.sqFromRegistryFull = function(teamName) {
     if (e.h) { curPos = posMap[e.h] || 'M'; }
     else {
       var row = [e[0], e[1], curPos, (e.length>=3 ? e[2] : 70)];
-      if (e && e.elite)    row.elite    = true;
-      if (e && e.natGoal)  row.natGoal  = true;
-      if (e && e.captain)  row.captain  = true;
-      if (e && e.freeKick) row.freeKick = true;
-      if (e && e.penalty)  row.penalty  = true;
+      if (e && e.elite)      row.elite      = true;
+      if (e && e.natGoal)    row.natGoal    = true;
+      if (e && e.natGoalPro) row.natGoalPro = true;
+      if (e && e.captain)    row.captain    = true;
+      if (e && e.freeKick)   row.freeKick   = true;
+      if (e && e.penalty)    row.penalty    = true;
       full.push(row);
     }
   }

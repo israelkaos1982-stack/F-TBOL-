@@ -8,13 +8,34 @@ iconos definidos en la plantilla. Esto aplica tanto al motor Python
 (`app.py`, `logica_liga.py`) como al motor JS (`static/js/*.js`,
 `templates/partials/**`).
 
-### 🛡 Nivel / valor del equipo
+### 🛡 Nivel / valor del equipo (4 ejes — auto-derivados, 2026-04-28)
 
-- El "valor" del equipo es la **suma** de los `poder` de los jugadores
-  titulares (no la media).
-- La simulación debe usar este valor numérico como peso del equipo al
-  calcular goles, dominio y resultado.
-- Se mantiene el bonus de localía `×1.10` sobre el valor resultante.
+Cada equipo tiene 4 valores numéricos calculados automáticamente desde
+la plantilla por `computeLineStats(t)` en
+`templates/partials/misc_body_1.html`:
+
+- **GLOBAL** = media de poder de los **11 mejores** jugadores (alineación
+  ideal). Inclina la probabilidad general del partido.
+- **ATAQUE** = media de poder de los **DELANTEROS**. Más ATQ → más goles
+  marca el equipo.
+- **MEDIO** = media de poder de los **CENTROCAMPISTAS**. **COMPENSA** tanto
+  ataque como defensa con peso `0.5` cada lado.
+- **DEFENSA** = media de poder de los **DEFENSAS**. Más DEF → menos goles
+  encaja el equipo.
+
+Si una posición no tiene jugadores, cae al GLOBAL como fallback. Si la
+plantilla está vacía, usa los valores manuales guardados
+(`t.atk/mid/def/power`) — esto preserva ligas con admin-overrides
+explícitos del editor.
+
+El simulador `simulateMatch(tA, tB)` usa la fórmula:
+```
+attackForce = ATK + 0.5·MID + 0.1·GLOBAL
+defenseForce = DEF + 0.5·MID + 0.1·GLOBAL
+goles_A = Poisson(1.3 + 0.025·(attackForce_A − defenseForce_B))
+```
+Local recibe +3 al GLOBAL como ventaja de casa. Se mantiene el bonus
+de capitán `×1.05` sobre el valor del equipo donde aplique.
 
 ### ⚾ Goleador nato (natGoal)
 
@@ -24,11 +45,12 @@ iconos definidos en la plantilla. Esto aplica tanto al motor Python
 
 ### 🏀 Goleador estrella (natGoalPro) — prioridad máxima
 
-- Multiplicador `×2.7` al peso del jugador en la elección de goleador.
-- El objetivo es que el goleador estrella marque **≈45% de los goles
-  del equipo**.
-- Si un jugador lleva 🏀 + ⚾ a la vez los multiplicadores se acumulan
-  (caso poco habitual).
+- Multiplicador `×3.0` al peso del jugador en la elección de goleador.
+- El objetivo es que el goleador estrella marque **≈48% de los goles
+  del equipo** (rango 46-50%).
+- **NO se acumula con ⚾**: si un jugador lleva 🏀, ⚾ se ignora — un
+  jugador es "goleador estrella" O "goleador nato" a efectos del peso,
+  no ambos. Esto evita que el peso se dispare por encima del 48%.
 
 ### P (lanzador de penaltis)
 
@@ -66,7 +88,7 @@ solo `elite`/`natGoal`.
 
 ## Qué NO hacer
 
-- No cambies los pesos numéricos anteriores (×1.8 natGoal, ×2.7
+- No cambies los pesos numéricos anteriores (×1.8 natGoal, ×3.0
   natGoalPro, ×1.05 capitán, etc.) sin acordarlo explícitamente con el
   usuario.
 - No añadas simulación nueva sin que consuma estos flags.

@@ -2416,13 +2416,14 @@
     ['porteros','defensas','medios','delanteros'].forEach(function(group){
       (roster[group] || []).forEach(function(player){
         /* ⚾ Goleador nato: ×1.8 al peso goleador (~30% goles).
-           🏀 Goleador estrella: ×2.7 al peso goleador (~45% goles).
-           Si un jugador lleva ambos flags, se multiplican (caso poco
-           habitual). ⭐ Estrella NO afecta a goles — solo influye en la
-           elección de MVP (se maneja aparte). */
+           🏀 Goleador estrella: ×3.0 al peso goleador (~48% goles).
+           NO se acumulan: si lleva 🏀, ⚾ se ignora (un jugador es
+           goleador estrella O nato, no ambos a efectos de peso).
+           ⭐ Estrella NO afecta a goles — solo influye en la elección
+           de MVP (se maneja aparte). */
         var w = (player[1] || 70) * poderPosWeight(group, player[1] || 70);
-        if (player && player.natGoal)    w *= 1.8;
-        if (player && player.natGoalPro) w *= 2.7;
+        if (player && player.natGoalPro)    w *= 3.0;
+        else if (player && player.natGoal)  w *= 1.8;
         bag.push({
           group: group,
           name: player[0],
@@ -9891,7 +9892,8 @@
       }
       /* Reglas OBLIGATORIAS (CLAUDE.md):
          - ⚾ goleador nato: ×1.8 (≈30% de los goles)
-         - 🏀 goleador estrella: ×2.7 (≈45% de los goles)
+         - 🏀 goleador estrella: ×3.0 (≈48% de los goles, dentro 46-50%)
+           NO se acumulan ⚾ y 🏀: si hay 🏀, ⚾ se ignora.
          - P lanzador de penaltis: +bonus fijo 0.40 al peso
          - F lanzador de faltas: +bonus fijo 0.30 al peso
            (aseguran que los especialistas sumen goles aunque no sean
@@ -9899,10 +9901,10 @@
          - ⭐ estrella: NO afecta al peso — solo al MVP
          - C capitán: NO afecta al peso individual — su bonus se aplica
            al valor del equipo (ver _teamValueWithFlags) */
-      if (p && p.natGoal)    w *= 1.8;
-      if (p && p.natGoalPro) w *= 2.7;
-      if (p && p.penalty)    w += 0.40;
-      if (p && p.freeKick)   w += 0.30;
+      if (p && p.natGoalPro)    w *= 3.0;
+      else if (p && p.natGoal)  w *= 1.8;
+      if (p && p.penalty)       w += 0.40;
+      if (p && p.freeKick)      w += 0.30;
       return w;
     });
     var total = weights.reduce(function(sum, weight) { return sum + weight; }, 0);

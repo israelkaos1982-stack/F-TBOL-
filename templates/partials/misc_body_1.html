@@ -5961,7 +5961,8 @@ Tottenham
 
     <!-- Cabecera de estadísticas del equipo en la competición actual.
          Se rellena en lextOpenSquad: PJ G E P GF GC DG %VIC + máximo
-         goleador y MVP del equipo. -->
+         goleador / MVP / mejor puntuación + niveles 4-ejes
+         (GLOBAL/ATQ/MED/DEF) auto-derivados. -->
     <div id="lext-squad-stats-header" style="display:none;margin:8px 0 10px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;"></div>
 
     <details class="lext-details" id="lext-squad-paste-details" style="display:none;">
@@ -6589,19 +6590,60 @@ Tottenham
   }
 
   function computeLineStats(t){
-    // Devuelve los valores fijos del equipo tal como el usuario los puso.
-    // Ya no se recalculan desde la plantilla — los stats del equipo son
-    // los que el admin define manualmente en el editor.
+    /* Calcula los 4 ejes del equipo (GLOBAL, ATAQUE, MEDIO, DEFENSA)
+       a partir de la plantilla. Petición usuario (2026-04-28):
+       automatizado para todos los equipos de todas las ligas — antes
+       eran valores fijos del admin que casi nunca se editaban.
+
+       Reglas:
+         ATK = media de poder de los DELANTEROS
+         MED = media de poder de los CENTROCAMPISTAS
+         DEF = media de poder de los DEFENSAS
+         GLOBAL = media de los 11 jugadores de mayor poder (alineación
+                  ideal: 1 POR + 4 DEF + 3 MED + 3 DEL aprox.).
+
+       Si una posición no tiene jugadores, cae al GLOBAL como
+       fallback. Si la plantilla está vacía, usa los valores manuales
+       guardados (t.atk/mid/def/power) — esto preserva las ligas con
+       admin-overrides explícitos. */
+    var players = (t && Array.isArray(t.players)) ? t.players : [];
+    function _avg(pool){
+      if (!pool.length) return 0;
+      var sum = pool.reduce(function(s,p){return s + (Number(p.power)||0);}, 0);
+      return sum / pool.length;
+    }
+    if (!players.length) {
+      return {
+        glob: Number(t.power)||50,
+        atk:  Number(t.atk)||Number(t.power)||50,
+        mid:  Number(t.mid)||Number(t.power)||50,
+        def:  Number(t.def)||Number(t.power)||50
+      };
+    }
+    var atkPool = players.filter(function(p){return p.pos === 'DEL';});
+    var midPool = players.filter(function(p){return p.pos === 'MED';});
+    var defPool = players.filter(function(p){return p.pos === 'DEF';});
+    /* GLOBAL: media de los 11 mejores. Buena aproximación a la
+       fuerza real en el campo. */
+    var top11 = players.slice().sort(function(a,b){
+      return (Number(b.power)||0) - (Number(a.power)||0);
+    }).slice(0, 11);
+    var glob = _avg(top11) || Number(t.power) || 50;
+    var atk  = _avg(atkPool) || glob;
+    var mid  = _avg(midPool) || glob;
+    var def  = _avg(defPool) || glob;
     return {
-      glob: Number(t.power)||50,
-      atk:  Number(t.atk)||Number(t.power)||50,
-      mid:  Number(t.mid)||Number(t.power)||50,
-      def:  Number(t.def)||Number(t.power)||50
+      glob: Math.round(glob),
+      atk:  Math.round(atk),
+      mid:  Math.round(mid),
+      def:  Math.round(def)
     };
   }
 
   function computeTeamPower(t){
-    return Number(t.power)||50;
+    /* Mantenido para compatibilidad. Devuelve el GLOBAL auto-derivado
+       (o el valor manual si la plantilla está vacía). */
+    return computeLineStats(t).glob;
   }
 
   // Tier de poder — mismos rangos que window.poderTone del bundle
@@ -6722,16 +6764,44 @@ Tottenham
   }
 
   function simulateMatch(tA, tB){
-    var pA = computeTeamPower(tA);
-    var pB = computeTeamPower(tB);
-    pA += 3; // ventaja local
-    var diff = pA - pB;
-    var baseA = Math.max(0.15, 1.3 + diff*0.03);
-    var baseB = Math.max(0.15, 1.3 - diff*0.03);
-    var yA = Math.max(0.4, 2.0 - diff*0.02);
-    var yB = Math.max(0.4, 2.0 + diff*0.02);
-    var rA = Math.max(0.02, 0.07 - diff*0.002);
-    var rB = Math.max(0.02, 0.07 + diff*0.002);
+    /* Motor 4-ejes (CLAUDE.md, petición usuario 2026-04-28):
+       - ATAQUE: cuanto más alto, más goles MARCA el equipo.
+       - DEFENSA: cuanto más alto, menos goles ENCAJA.
+       - MEDIO: COMPENSA tanto ataque como defensa (peso 0.5 a cada
+         lado).
+       - GLOBAL: inclina la probabilidad general (peso 0.1).
+
+       Goles que marca A = Poisson(λ) donde λ depende de:
+         fuerza_ofensiva_A vs fuerza_defensiva_B.
+
+       Ventaja local: +3 al global del equipo de casa (mismo bonus que
+       el modelo anterior). Las tarjetas siguen ligadas al diferencial
+       de global porque no es realista que un buen mediocampo te
+       ahorre amarillas. */
+    var sA = computeLineStats(tA);
+    var sB = computeLineStats(tB);
+    var globA = sA.glob + 3;  // ventaja local
+    var globB = sB.glob;
+    function _atkForce(s, gBoost){ return s.atk + 0.5*s.mid + 0.1*(s.glob + gBoost); }
+    function _defForce(s, gBoost){ return s.def + 0.5*s.mid + 0.1*(s.glob + gBoost); }
+    var attackA  = _atkForce(sA, 3);
+    var attackB  = _atkForce(sB, 0);
+    var defenseA = _defForce(sA, 3);
+    var defenseB = _defForce(sB, 0);
+    /* λ base ≈ 1.3 goles (similar al modelo anterior) + factor por
+       diferencial atk-vs-def. El factor 0.025 es conservador para
+       que las distancias grandes no produzcan goleadas absurdas. */
+    var diffA = attackA - defenseB;
+    var diffB = attackB - defenseA;
+    var baseA = Math.max(0.15, 1.3 + diffA*0.025);
+    var baseB = Math.max(0.15, 1.3 + diffB*0.025);
+    /* Tarjetas: usan el diferencial de GLOBAL (con local advantage),
+       igual que el modelo anterior. */
+    var diffG = globA - globB;
+    var yA = Math.max(0.4, 2.0 - diffG*0.02);
+    var yB = Math.max(0.4, 2.0 + diffG*0.02);
+    var rA = Math.max(0.02, 0.07 - diffG*0.002);
+    var rB = Math.max(0.02, 0.07 + diffG*0.002);
     return {
       gh: poisson(baseA),
       ga: poisson(baseB),
@@ -6748,20 +6818,20 @@ Tottenham
     /* Pesos de goleador (consistente con el motor JS de partidos en
        vivo y con el motor Python del servidor):
          - peso base = max(1, p.power)
-         - 🏀 natGoalPro: ×2.7  (~45% de los goles)
+         - 🏀 natGoalPro: ×3.0  (~48% de los goles, dentro del 46-50%)
          - ⚾ natGoal:    ×1.8  (~30% de los goles)
          - P penalty:     +0.40 fijo (asegura que los lanzadores marquen)
          - F freeKick:    +0.30 fijo (idem)
-       Si un jugador lleva 🏀 + ⚾ a la vez los multiplicadores se
-       acumulan (caso poco habitual). Antes weightedPick solo miraba
-       p.power, así que las flags ⚾/🏀 no tenían efecto en el reparto
-       de goles del simulador AI-vs-AI de las 51 ligas externas. */
+       NO se acumulan ⚾ y 🏀: si un jugador lleva 🏀, ⚾ se ignora.
+       Semánticamente un jugador es "goleador estrella" 🏀 O "goleador
+       nato" ⚾, pero llevarlos ambos no debe disparar el peso por
+       encima del objetivo del 46-50%. */
     function _w(p){
       var w = Math.max(1, Number(p.power)||1);
-      if (p.natGoalPro) w *= 2.7;
-      if (p.natGoal)    w *= 1.8;
-      if (p.penalty)    w += 0.40;
-      if (p.freeKick)   w += 0.30;
+      if (p.natGoalPro)    w *= 3.0;
+      else if (p.natGoal)  w *= 1.8;
+      if (p.penalty)       w += 0.40;
+      if (p.freeKick)      w += 0.30;
       return w;
     }
     var total = pool.reduce(function(s,p){return s + _w(p);}, 0);
@@ -7836,7 +7906,8 @@ Tottenham
     var plPowerEl = document.getElementById('lext-pl-power');
     if (plPowerEl) plPowerEl.value = '75';
 
-    /* Cabecera de stats del equipo en la competición actual. */
+    /* Cabecera de stats del equipo en la competición actual + niveles
+       4-ejes auto-derivados. */
     try { _lextRenderSquadStatsHeader(t); } catch(_){}
 
     /* Modo editable (✏️ Edit → 🛡): mostrar Pegar plantilla y Añadir
@@ -8065,6 +8136,25 @@ Tottenham
       + _cell('%',   pct + '%', pct >= 60 ? '#3dcc6e' : (pct >= 40 ? '#f0c040' : '#ff7070'))
       + '</div>';
 
+    /* Niveles 4-ejes (GLOBAL/ATQ/MED/DEF) auto-derivados desde la
+       plantilla por computeLineStats. El simulador AI-vs-AI los
+       consume en simulateMatch. */
+    var ls = (typeof computeLineStats === 'function') ? computeLineStats(team) : null;
+    var levelsBlock = '';
+    if (ls) {
+      var _lvl = function(lbl, val, color){
+        return '<span style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.55);background:rgba(255,255,255,.04);border:1px solid '+(color?color+'59':'rgba(255,255,255,.08)')+';border-radius:5px;padding:3px 7px;">'
+          + '<b style="color:'+(color||'#fff')+';margin-right:4px;font-weight:700;">'+lbl+'</b>'+val
+          + '</span>';
+      };
+      levelsBlock = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);">'
+        + _lvl('GLOBAL', ls.glob, '')
+        + _lvl('ATQ',    ls.atk,  '#ff8c64')
+        + _lvl('MED',    ls.mid,  '#f0c040')
+        + _lvl('DEF',    ls.def,  '#74bcd8')
+      + '</div>';
+    }
+
     /* Solo 3 líneas de líderes (petición usuario). Las amarillas y
        rojas se eliminan porque ya aparecen en cada fila de jugador
        en la lista PLANTILLA y antes mostraban valores no
@@ -8075,6 +8165,7 @@ Tottenham
       + _line('📈', 'Mejor puntuación', topRating, '',                                                  '#5aa9ff');
 
     box.innerHTML = statsRow
+      + levelsBlock
       + '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);line-height:1.6;">'
       + leadersBlock
       + '</div>';

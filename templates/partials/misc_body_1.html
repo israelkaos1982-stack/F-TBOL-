@@ -8200,29 +8200,40 @@ Tottenham
 
     t.players.forEach(function(p){
       try { ensurePlayerStats(p); } catch(_){}
-      /* Stats SIEMPRE derivan de `ef_player_stats_v1` (fuente única).
-         Si no hay entrada para el jugador (p. ej. tras reiniciar la
-         liga, o para un jugador nuevo), se pone a 0 de forma
-         EXPLÍCITA — antes sólo se sobreescribía cuando getPlayerStats
-         devolvía algo, así que viejos valores persistían en la
-         plantilla incluso después de reset.
-         IMPORTANTE: envolvemos la llamada a getPlayerStats en su
-         propio try/catch. Si esa función (definida en otro IIFE)
-         lanzase cualquier error (p.ej. un ReferenceError latente a
-         `_normPS` por closures corruptos), la plantilla SEGUIRÁ
-         renderizándose en vez de explotar en el catch de arriba y
-         dejar al usuario sin ver los jugadores. */
+      /* Fallback para Resto de Ligas (51 ligas IA): el simulador
+         `ligaExtSimular` llama a `applyMatchStats` que escribe los
+         contadores DIRECTAMENTE sobre el objeto del jugador
+         (p.pj/p.gol/p.pen/p.fk/p.mvp/p.ta/p.tr/p.imbat/p.penSaved) y
+         los persiste en `ligaExt_<slug>`. Liga EA Sports en cambio
+         escribe en el store global `ef_player_stats_v1`.
+         Capturamos esos contadores propios ANTES de pisarlos por la
+         vía global. Los gateamos con p.pj>0 para que tras un reset
+         (resetPlayerStats pone todo a 0) la plantilla se vea limpia
+         sin arrastrar valores stale. */
+      var hasOwnStats = (p.pj || 0) > 0;
+      var own = hasOwnStats ? {
+        pj: p.pj || 0, gol: p.gol || 0, pen: p.pen || 0, fk: p.fk || 0,
+        mvp: p.mvp || 0, ta: p.ta || 0, tr: p.tr || 0,
+        imbat: p.imbat || 0, penSaved: p.penSaved || 0
+      } : null;
+      /* Stats de Liga EA Sports SIEMPRE derivan de ef_player_stats_v1
+         (fuente única: viene de los eventos match-by-match). Si no
+         hay entrada para el jugador, cae al snapshot `own` (ligas
+         externas) y, si tampoco, a 0. */
       var ps = null;
       try {
         if (typeof window.getPlayerStats === 'function' && t.name) {
           ps = window.getPlayerStats(t.name, p.name);
         }
       } catch(_) { ps = null; }
-      p.pj       = (ps && ps.pj)       || 0;
+      function _pickStat(field){
+        if (ps && ps[field] != null) return ps[field];
+        if (own && own[field] != null) return own[field];
+        return 0;
+      }
+      p.pj       = _pickStat('pj');
       /* gol/pen/fk vienen del recuento LIVE desde eventos si existe,
-         si no caemos al ef_player_stats_v1 (que ya también es disjunto
-         tras el fix). Esto garantiza que la suma de las 3 columnas =
-         total de goles del jugador en competiciones registradas. */
+         si no caemos al ef_player_stats_v1 → snapshot propio → 0. */
       var liveKey = _np(p.name);
       var live = _liveCounts[liveKey];
       if (live) {
@@ -8230,15 +8241,15 @@ Tottenham
         p.pen = live.pen;
         p.fk  = live.fk;
       } else {
-        p.gol = (ps && ps.gol) || 0;
-        p.pen = (ps && ps.pen) || 0;
-        p.fk  = (ps && ps.fk)  || 0;
+        p.gol = _pickStat('gol');
+        p.pen = _pickStat('pen');
+        p.fk  = _pickStat('fk');
       }
-      p.mvp      = (ps && ps.mvp)      || 0;
-      p.ta       = (ps && ps.ta)       || 0;
-      p.tr       = (ps && ps.tr)       || 0;
-      p.imbat    = (ps && ps.imbat)    || 0;
-      p.penSaved = (ps && ps.penSaved) || 0;
+      p.mvp      = _pickStat('mvp');
+      p.ta       = _pickStat('ta');
+      p.tr       = _pickStat('tr');
+      p.imbat    = _pickStat('imbat');
+      p.penSaved = _pickStat('penSaved');
       (byPos[p.pos]||byPos.MED).push(p);
     });
 

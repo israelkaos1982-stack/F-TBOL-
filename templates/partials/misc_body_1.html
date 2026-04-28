@@ -6635,11 +6635,30 @@ Tottenham
   // Reparto de stats por jugador para un partido concreto.
   function weightedPick(pool){
     if(!pool.length) return null;
-    var total = pool.reduce(function(s,p){return s+Math.max(1,Number(p.power)||1);},0);
+    /* Pesos de goleador (consistente con el motor JS de partidos en
+       vivo y con el motor Python del servidor):
+         - peso base = max(1, p.power)
+         - 🏀 natGoalPro: ×2.7  (~45% de los goles)
+         - ⚾ natGoal:    ×1.8  (~30% de los goles)
+         - P penalty:     +0.40 fijo (asegura que los lanzadores marquen)
+         - F freeKick:    +0.30 fijo (idem)
+       Si un jugador lleva 🏀 + ⚾ a la vez los multiplicadores se
+       acumulan (caso poco habitual). Antes weightedPick solo miraba
+       p.power, así que las flags ⚾/🏀 no tenían efecto en el reparto
+       de goles del simulador AI-vs-AI de las 51 ligas externas. */
+    function _w(p){
+      var w = Math.max(1, Number(p.power)||1);
+      if (p.natGoalPro) w *= 2.7;
+      if (p.natGoal)    w *= 1.8;
+      if (p.penalty)    w += 0.40;
+      if (p.freeKick)   w += 0.30;
+      return w;
+    }
+    var total = pool.reduce(function(s,p){return s + _w(p);}, 0);
     var r = Math.random()*total;
     var acc = 0;
     for(var i=0;i<pool.length;i++){
-      acc += Math.max(1,Number(pool[i].power)||1);
+      acc += _w(pool[i]);
       if(r<=acc) return pool[i];
     }
     return pool[pool.length-1];

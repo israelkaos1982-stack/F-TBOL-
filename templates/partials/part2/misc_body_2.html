@@ -16421,3 +16421,377 @@ document.addEventListener('DOMContentLoaded', function() {
   } catch(_){}
 })();
 </script>
+
+<!-- ══════════════════════════════════════════════════
+     OVERLAY DE CARGA "BALÓN" para simulaciones largas
+     · Liga EA Sports J1-J38 (simularTodasJornadasIA)
+     · Liga Hypermotion (simularLigaSegundaMenu)
+     · Primera Federación G1/G2 (simularPrimeraGrupo / simularAmbosPrimera)
+     API global:
+       window.ftbolLoaderShow(title, sub)
+       window.ftbolLoaderProgress(percent, sub)
+       window.ftbolLoaderHide()
+       window.ftbolLoaderRun(opts, runner)
+     ══════════════════════════════════════════════════ -->
+<style>
+.ftbol-load-ov{
+  position:fixed;inset:0;z-index:99999;
+  display:none;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at center,rgba(8,18,8,.94),rgba(0,4,0,.98));
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  font-family:Oswald,sans-serif;
+  -webkit-user-select:none;user-select:none;
+}
+.ftbol-load-ov.show{display:flex;animation:ftbolLoadFadeIn .2s ease-out;}
+@keyframes ftbolLoadFadeIn{from{opacity:0}to{opacity:1}}
+.ftbol-load-card{
+  width:min(360px,86vw);
+  padding:30px 28px 22px;
+  background:linear-gradient(180deg,#0a1f0a 0%,#062006 60%,#040d04 100%);
+  border:1px solid rgba(204,255,0,.35);
+  border-radius:16px;
+  box-shadow:0 22px 70px rgba(0,0,0,.7),0 0 32px rgba(204,255,0,.18);
+  text-align:center;
+  position:relative;overflow:hidden;
+}
+.ftbol-load-card::before{
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(135deg,rgba(204,255,0,.04) 0 12px,transparent 12px 24px);
+  pointer-events:none;
+}
+.ftbol-load-title{
+  position:relative;
+  font-size:14px;letter-spacing:3px;font-weight:700;
+  color:#ccff00;text-transform:uppercase;
+  margin-bottom:18px;
+}
+.ftbol-load-ball-wrap{
+  position:relative;
+  height:74px;margin:0 0 16px;
+  display:flex;align-items:flex-end;justify-content:center;
+}
+.ftbol-load-ball{
+  font-size:46px;line-height:1;
+  animation:ftbolBallBounce 1s cubic-bezier(.45,.05,.5,.95) infinite,
+            ftbolBallSpin .9s linear infinite;
+  display:inline-block;
+  filter:drop-shadow(0 6px 8px rgba(0,0,0,.6));
+}
+@keyframes ftbolBallBounce{
+  0%,100%{transform:translateY(-44px) scale(1,1);}
+  45%{transform:translateY(-44px) scale(1,1);}
+  50%{transform:translateY(0) scale(1.2,.75);}
+  55%{transform:translateY(-44px) scale(1,1);}
+}
+@keyframes ftbolBallSpin{
+  from{transform:rotate(0deg);} to{transform:rotate(360deg);}
+}
+.ftbol-load-ball-shadow{
+  position:absolute;bottom:2px;left:50%;
+  width:42px;height:6px;margin-left:-21px;
+  background:radial-gradient(ellipse at center,rgba(0,0,0,.55),rgba(0,0,0,0));
+  border-radius:50%;
+  animation:ftbolBallShadow 1s ease-in-out infinite;
+}
+@keyframes ftbolBallShadow{
+  0%,100%{transform:scale(.45);opacity:.35;}
+  50%{transform:scale(1);opacity:.85;}
+}
+.ftbol-load-bar-wrap{
+  position:relative;
+  height:10px;border-radius:6px;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.1);
+  overflow:hidden;margin-bottom:8px;
+}
+.ftbol-load-bar{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,#88dd00 0%,#ccff00 50%,#88dd00 100%);
+  background-size:200% 100%;
+  border-radius:6px;
+  transition:width .25s ease-out;
+  animation:ftbolBarShine 1.2s linear infinite;
+  box-shadow:0 0 8px rgba(204,255,0,.5);
+}
+@keyframes ftbolBarShine{
+  from{background-position:200% 0;} to{background-position:0 0;}
+}
+.ftbol-load-pct{
+  font-family:Bebas Neue,Oswald,sans-serif;
+  font-size:30px;line-height:1;
+  color:#ccff00;letter-spacing:2px;
+  margin-bottom:4px;
+  text-shadow:0 0 12px rgba(204,255,0,.5);
+}
+.ftbol-load-sub{
+  font-size:11px;letter-spacing:1.5px;
+  color:rgba(255,255,255,.55);
+  text-transform:uppercase;
+  min-height:14px;
+}
+</style>
+
+<div class="ftbol-load-ov" id="ftbol-load-ov" aria-hidden="true">
+  <div class="ftbol-load-card">
+    <div class="ftbol-load-title" id="ftbol-load-title">SIMULANDO…</div>
+    <div class="ftbol-load-ball-wrap">
+      <span class="ftbol-load-ball-shadow"></span>
+      <span class="ftbol-load-ball">⚽</span>
+    </div>
+    <div class="ftbol-load-bar-wrap"><div class="ftbol-load-bar" id="ftbol-load-bar"></div></div>
+    <div class="ftbol-load-pct" id="ftbol-load-pct">0%</div>
+    <div class="ftbol-load-sub" id="ftbol-load-sub">Cargando jornada…</div>
+  </div>
+</div>
+
+<script>
+/* Loader API + envoltorios async para las 3 simulaciones lentas. */
+(function(){
+  function $(id){ return document.getElementById(id); }
+  var _shown = false;
+
+  function show(title, sub){
+    var ov = $('ftbol-load-ov'); if(!ov) return;
+    if(title) { var t=$('ftbol-load-title'); if(t) t.textContent=title; }
+    if(sub != null){ var s=$('ftbol-load-sub'); if(s) s.textContent=sub; }
+    var bar=$('ftbol-load-bar'); if(bar) bar.style.width='0%';
+    var pct=$('ftbol-load-pct'); if(pct) pct.textContent='0%';
+    ov.classList.add('show');
+    ov.setAttribute('aria-hidden','false');
+    _shown = true;
+  }
+  function progress(percent, sub){
+    if(!_shown) return;
+    var p = Math.max(0, Math.min(100, Math.round(Number(percent)||0)));
+    var bar=$('ftbol-load-bar'); if(bar) bar.style.width=p+'%';
+    var pct=$('ftbol-load-pct'); if(pct) pct.textContent=p+'%';
+    if(sub != null){ var s=$('ftbol-load-sub'); if(s) s.textContent=sub; }
+  }
+  function hide(){
+    var ov = $('ftbol-load-ov'); if(!ov) return;
+    ov.classList.remove('show');
+    ov.setAttribute('aria-hidden','true');
+    _shown = false;
+  }
+  /* run(opts, runner) — runner recibe {progress(p,sub)} y devuelve void/Promise.
+     opts: { title, sub, minMs (default 600) } */
+  function run(opts, runner){
+    opts = opts || {};
+    show(opts.title || 'SIMULANDO…', opts.sub || 'Preparando…');
+    var minMs = opts.minMs != null ? opts.minMs : 600;
+    var t0 = Date.now();
+    return new Promise(function(resolve, reject){
+      /* Damos un frame para que el overlay pinte ANTES del trabajo
+         pesado — si no, navegadores que congelan el repaint dejarían
+         la pantalla en blanco hasta el final. */
+      setTimeout(function(){
+        try {
+          var p = runner({ progress: progress });
+          Promise.resolve(p).then(function(res){
+            progress(100, 'Completado');
+            var elapsed = Date.now() - t0;
+            var wait = Math.max(0, minMs - elapsed);
+            setTimeout(function(){ hide(); resolve(res); }, wait);
+          }, function(err){
+            hide(); reject(err);
+          });
+        } catch(err){
+          hide();
+          try { console.error('[ftbolLoader]', err); } catch(_){}
+          reject(err);
+        }
+      }, 30);
+    });
+  }
+
+  window.ftbolLoaderShow = show;
+  window.ftbolLoaderProgress = progress;
+  window.ftbolLoaderHide = hide;
+  window.ftbolLoaderRun = run;
+})();
+
+/* ── Wrappers de overlay para las 4 simulaciones lentas ──
+   Estrategia: al cargar capturamos las funciones originales, definimos
+   los wrappers (overlay + progreso + refresh de plantilla) y
+   REASIGNAMOS las globales `simularTodasJornadasIA`, `simularLigaSegundaMenu`,
+   `simularPrimeraGrupo` y `simularAmbosPrimera` a los wrappers. Así
+   CUALQUIER caller (botón inline, función interna o futuro código)
+   pasa por el overlay sin necesidad de tocar el DOM ni rebindear
+   onclicks. */
+(function(){
+  function _refreshOpenSquadAfterSim(slug){
+    try {
+      if(typeof window.syncLigaEaPlayerStats === 'function'){
+        window.syncLigaEaPlayerStats();
+      }
+    } catch(_){}
+    try {
+      var ov = document.getElementById('lext-ov-squad');
+      if(ov && ov.classList && ov.classList.contains('show') &&
+         typeof window.renderSquadList === 'function'){
+        var ck = (typeof window.CURRENT_KEY === 'string') ? window.CURRENT_KEY : null;
+        if(!slug || !ck || ck === slug){
+          window.renderSquadList();
+        }
+      }
+    } catch(_){}
+  }
+  window._ftbolRefreshOpenSquadAfterSim = _refreshOpenSquadAfterSim;
+
+  function _runFakeProgress(opts, work){
+    return window.ftbolLoaderRun({
+      title: opts.title, sub: opts.sub || 'Inicializando equipos…', minMs: opts.minMs||1200
+    }, function(ctx){
+      return new Promise(function(resolve){
+        var phases = opts.phases || [
+          { pct:18, sub:'Cargando plantillas…',     ms:120 },
+          { pct:42, sub:'Generando jornadas…',      ms:180 },
+          { pct:68, sub:'Simulando partidos…',      ms:200 },
+          { pct:88, sub:'Calculando clasificación…',ms:160 }
+        ];
+        var i = 0;
+        function nextPhase(){
+          if(i >= phases.length){
+            ctx.progress(95, 'Volcando estadísticas…');
+            /* Cedemos un frame para que la barra pinte 95% antes del
+               trabajo síncrono (que congela el render). */
+            setTimeout(function(){
+              try { work(); } catch(e){ try{console.error(e);}catch(_){} }
+              ctx.progress(100, 'Hecho');
+              resolve();
+            }, 40);
+            return;
+          }
+          var ph = phases[i++];
+          ctx.progress(ph.pct, ph.sub);
+          setTimeout(nextPhase, ph.ms);
+        }
+        nextPhase();
+      });
+    });
+  }
+
+  function _wireOnce(){
+    if(window._ftbolSimsWired) return;
+    var origSjia = window.simularTodasJornadasIA;
+    var origSeg  = window.simularLigaSegundaMenu;
+    var origPg   = window.simularPrimeraGrupo;
+    var origPa   = window.simularAmbosPrimera;
+    var origSji  = window.simularJornadaIA;
+    var anyFound = !!(origSjia || origSeg || origPg || origPa);
+    if(!anyFound) return;
+
+    /* Liga EA Sports — recorre J1..J38 con yield para repintar la barra. */
+    if(origSji){
+      window.simularTodasJornadasIAAsync = function(onProgress){
+        return new Promise(function(resolve){
+          var j = 1;
+          function step(){
+            try { origSji(j); } catch(_){}
+            if(typeof onProgress === 'function'){
+              onProgress(Math.round(j/38*100), 'Jornada '+j+' / 38');
+            }
+            j++;
+            if(j > 38){
+              if(typeof window.syncLigaEaPlayerStats === 'function'){
+                try { window.syncLigaEaPlayerStats(); } catch(_){}
+              }
+              if(typeof window.buildIAresults === 'function'){
+                try { window.buildIAresults(); } catch(_){}
+              }
+              resolve();
+            } else {
+              setTimeout(step, 0);
+            }
+          }
+          step();
+        });
+      };
+    }
+
+    window.simularJ138ConOverlay = function(){
+      if(typeof window.ftbolLoaderRun !== 'function' ||
+         typeof window.simularTodasJornadasIAAsync !== 'function'){
+        if(typeof origSjia === 'function') origSjia();
+        return;
+      }
+      return window.ftbolLoaderRun(
+        { title:'LIGA EA SPORTS · J1 → J38', sub:'Iniciando simulación…', minMs: 700 },
+        function(ctx){
+          return window.simularTodasJornadasIAAsync(function(pct, sub){
+            ctx.progress(pct, sub);
+          });
+        }
+      ).then(function(){
+        if(typeof window.buildIAresults === 'function'){
+          try { window.buildIAresults(); } catch(_){}
+        }
+      });
+    };
+
+    window.simularHypermotionConOverlay = function(){
+      if(typeof window.ftbolLoaderRun !== 'function'){
+        if(typeof origSeg === 'function'){ origSeg(); _refreshOpenSquadAfterSim('liga-hypermotion'); }
+        return;
+      }
+      return _runFakeProgress(
+        { title:'LIGA HYPERMOTION', sub:'Preparando…', minMs:1400 },
+        function(){ if(typeof origSeg === 'function') origSeg(); }
+      ).then(function(){ _refreshOpenSquadAfterSim('liga-hypermotion'); });
+    };
+
+    window.simularPrimeraGrupoConOverlay = function(n){
+      if(typeof window.ftbolLoaderRun !== 'function'){
+        if(typeof origPg === 'function'){ origPg(n); _refreshOpenSquadAfterSim('liga-primera-federacion'); }
+        return;
+      }
+      return _runFakeProgress(
+        { title:'PRIMERA FEDERACIÓN · G'+(n||1), sub:'Preparando…', minMs:1300 },
+        function(){ if(typeof origPg === 'function') origPg(n); }
+      ).then(function(){ _refreshOpenSquadAfterSim('liga-primera-federacion'); });
+    };
+
+    window.simularAmbosPrimeraConOverlay = function(){
+      if(typeof window.ftbolLoaderRun !== 'function'){
+        if(typeof origPa === 'function'){ origPa(); _refreshOpenSquadAfterSim('liga-primera-federacion'); }
+        return;
+      }
+      return _runFakeProgress(
+        { title:'PRIMERA FEDERACIÓN · G1+G2', sub:'Preparando…', minMs:1700,
+          phases:[
+            { pct:14, sub:'Cargando plantillas G1…', ms:140 },
+            { pct:36, sub:'Simulando G1…',           ms:220 },
+            { pct:58, sub:'Cargando plantillas G2…', ms:140 },
+            { pct:82, sub:'Simulando G2…',           ms:220 }
+          ]
+        },
+        function(){ if(typeof origPa === 'function') origPa(); }
+      ).then(function(){ _refreshOpenSquadAfterSim('liga-primera-federacion'); });
+    };
+
+    /* Reasignamos las globales: los onclicks inline existentes del DOM
+       (p.ej. `pG(function(){simularLigaSegundaMenu()})`) ahora ejecutan
+       el wrapper con overlay. No hay recursión porque los wrappers
+       guardan referencias a las originales en su closure. */
+    if(typeof origSjia === 'function') window.simularTodasJornadasIA = window.simularJ138ConOverlay;
+    if(typeof origSeg  === 'function') window.simularLigaSegundaMenu = window.simularHypermotionConOverlay;
+    if(typeof origPg   === 'function') window.simularPrimeraGrupo    = window.simularPrimeraGrupoConOverlay;
+    if(typeof origPa   === 'function') window.simularAmbosPrimera    = window.simularAmbosPrimeraConOverlay;
+
+    window._ftbolSimsWired = true;
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(_wireOnce, 0); });
+  } else {
+    setTimeout(_wireOnce, 0);
+  }
+  /* Reintenta hasta 8 veces (cada 400ms) por si las funciones se
+     publican tarde (otros IIFEs con DOMContentLoaded difieren su init). */
+  var _tries = 0;
+  var _interval = setInterval(function(){
+    _wireOnce();
+    if(window._ftbolSimsWired || ++_tries >= 8) clearInterval(_interval);
+  }, 400);
+})();
+</script>

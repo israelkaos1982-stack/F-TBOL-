@@ -5405,6 +5405,40 @@ window.pG = function(fn) {
       .replace(/^-|-$/g,'');
   }
 
+  /* Lee la data de una liga buscando en VARIAS fuentes en orden:
+     1. localStorage.ligaExt_<slug>                      (cache normal)
+     2. localStorage.ligaExt_<slug>_protected            (refuerzo del lock)
+     3. sync XHR a /api/liga-ext/<slug>                  (servidor)
+     Sin esto, ligas como Escocia/Grecia/Israel/Ucrania/Polonia
+     que el usuario completó en otro dispositivo no aparecían en
+     el agregado porque la cache local del móvil estaba vacía.
+     Al hacer sync XHR también persistimos en local para futuras
+     lecturas. Devuelve {teams:[...]} o null. */
+  function _readLigaData(slug){
+    if(!slug) return null;
+    var raw;
+    try { raw = localStorage.getItem('ligaExt_' + slug); } catch(_){}
+    if(!raw){
+      try { raw = localStorage.getItem('ligaExt_' + slug + '_protected'); } catch(_){}
+    }
+    if(!raw){
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(slug), false);
+        xhr.send();
+        if(xhr.status === 200){
+          var resp = JSON.parse(xhr.responseText);
+          if(resp && resp.data && Array.isArray(resp.data.teams) && resp.data.teams.length){
+            raw = JSON.stringify(resp.data);
+            try { localStorage.setItem('ligaExt_' + slug, raw); } catch(_){}
+          }
+        }
+      } catch(_){}
+    }
+    if(!raw) return null;
+    try { return JSON.parse(raw); } catch(_){ return null; }
+  }
+
   window._restoLigasSimAll = function(){
     if(typeof window.ligaExtSimularSlug !== 'function'){
       alert('Motor de simulación no disponible. Recarga la página.');
@@ -5448,10 +5482,7 @@ window.pG = function(fn) {
     var byPlayer = {};   /* "team::name" -> {name,team,flag,gol,imbat,ta,tr} */
     _eachLeagueCard(function(name, flag){
       var slug = _slugify(name);
-      var raw;
-      try { raw = localStorage.getItem('ligaExt_' + slug); } catch(_){ return; }
-      if(!raw) return;
-      var data; try { data = JSON.parse(raw); } catch(_){ return; }
+      var data = _readLigaData(slug);
       if(!data || !Array.isArray(data.teams)) return;
       data.teams.forEach(function(t){
         if(!t || !t.name) return;

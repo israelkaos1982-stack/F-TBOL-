@@ -485,27 +485,43 @@ window.pG = function(fn) {
       if (!html) _renderEmpty(host);
     };
 
-    /* Re-pintar cada vez que se navega a la pantalla. Sin gating —
-       si el primer render llega antes de que `applyEngineOverrides`
-       cargue los datos, el siguiente vuelve a intentarlo. */
-    var _origGoBayern = window.go;
-    window.go = function(id){
-      var out = _origGoBayern ? _origGoBayern.apply(this, arguments) : undefined;
-      if (id === 's-bayern-plantilla'){
-        setTimeout(window.renderBayernPlantillaScreen, 60);
-        setTimeout(window.renderBayernPlantillaScreen, 600);
-      }
-      return out;
-    };
+    /* Re-pintar cada vez que se abre la pantalla. NO podemos envolver
+       `window.go` aquí porque este partial se evalúa ANTES de que
+       `index.bundle.js` defina y re-envuelva `window.go` varias veces
+       (líneas 2033, 2106, 2109, 5953). Esos overrides borrarían el wrap.
+       En su lugar usamos un MutationObserver que detecta cuándo el
+       screen recibe `.active` — robusto frente a cualquier cadena de
+       wrappers de `go`. Pintamos también con un retry a 600ms para
+       cubrir el caso en el que `applyEngineOverrides` aún no ha
+       cargado los datos del editor. */
+    function _scheduleRender(){
+      setTimeout(window.renderBayernPlantillaScreen, 60);
+      setTimeout(window.renderBayernPlantillaScreen, 600);
+    }
 
-    /* Pintado inicial si la app arrancó ya en esta pantalla. */
-    document.addEventListener('DOMContentLoaded', function(){
-      var act = document.querySelector('.screen.active');
-      if (act && act.id === 's-bayern-plantilla'){
-        setTimeout(window.renderBayernPlantillaScreen, 80);
-        setTimeout(window.renderBayernPlantillaScreen, 800);
-      }
-    });
+    function _wireObserver(){
+      var screen = document.getElementById('s-bayern-plantilla');
+      if (!screen) return;
+      if (screen.classList.contains('active')) _scheduleRender();
+      try {
+        var obs = new MutationObserver(function(muts){
+          for (var i=0; i<muts.length; i++){
+            var m = muts[i];
+            if (m.attributeName === 'class' && screen.classList.contains('active')){
+              _scheduleRender();
+              return;
+            }
+          }
+        });
+        obs.observe(screen, { attributes: true, attributeFilter: ['class'] });
+      } catch(_){}
+    }
+
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', _wireObserver);
+    } else {
+      _wireObserver();
+    }
   })();
   </script>
 </div>
@@ -525,6 +541,31 @@ window.pG = function(fn) {
   .hub-sub{font-size:12px;color:#ffe4a8}
   .hub-trophy-logos{display:flex;gap:8px;align-items:center}
   .hub-trophy-logos img{width:32px;height:32px;object-fit:contain;background:#ffffffd8;border-radius:8px;padding:3px}
+  /* HUB · Vitrina de Trofeos — estilo videojuego, contenido centrado */
+  .hub-card-trofeos{align-items:center !important;justify-content:center !important;text-align:center;background:radial-gradient(ellipse at center,rgba(240,192,64,.22),rgba(0,0,0,.28) 65%),linear-gradient(160deg,rgba(80,50,0,.55),rgba(0,0,0,.5)) !important;border:1px solid rgba(240,192,64,.55) !important;box-shadow:0 0 14px rgba(240,192,64,.18),inset 0 0 18px rgba(240,192,64,.06) !important;gap:4px !important;}
+  .hub-trofeos-emoji{font-size:34px;line-height:1;filter:drop-shadow(0 0 10px rgba(240,192,64,.55));margin-bottom:2px;}
+  /* `white-space:nowrap` + tamaño 15px (~10% más pequeño que antes)
+     evita el salto de línea de "VITRINA TROFEOS" en pantallas
+     pequeñas. */
+  .hub-trofeos-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:2.5px;color:#ffd750;text-shadow:0 0 8px rgba(255,215,80,.65),0 1px 0 rgba(0,0,0,.55);white-space:nowrap;}
+  .hub-trofeos-count{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.2px;color:rgba(255,228,168,.85);text-transform:uppercase;}
+  /* HUB · Histórico Derbys — estilo videojuego, paleta azul-acero */
+  .hub-card-derbys{align-items:center !important;justify-content:center !important;text-align:center;background:radial-gradient(ellipse at center,rgba(96,180,255,.20),rgba(0,0,0,.28) 65%),linear-gradient(160deg,rgba(20,40,80,.6),rgba(0,0,0,.5)) !important;border:1px solid rgba(96,180,255,.55) !important;box-shadow:0 0 14px rgba(96,180,255,.18),inset 0 0 18px rgba(96,180,255,.06) !important;gap:4px !important;}
+  .hub-derbys-emoji{font-size:30px;line-height:1;filter:drop-shadow(0 0 10px rgba(96,180,255,.55));margin-bottom:2px;}
+  /* HISTÓRICO DERBYS en una sola línea: nowrap + tamaño 15px (~10%
+     más pequeño) + letter-spacing reducido a 1.6px. */
+  .hub-derbys-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:1.6px;color:#cfe6ff;text-shadow:0 0 8px rgba(128,200,255,.6),0 1px 0 rgba(0,0,0,.55);margin-bottom:3px;white-space:nowrap;}
+  /* 5 columnas: PJ · G · E · P · % — paddings y gaps comprimidos
+     para que el conjunto entre cómodo en el ancho disponible. */
+  .hub-derbys-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;width:100%;padding:0 2px;margin-top:2px;}
+  .hub-derbys-stat{display:flex;flex-direction:column;align-items:center;gap:1px;background:rgba(0,0,0,.30);border:1px solid rgba(96,180,255,.20);border-radius:5px;padding:3px 0;min-width:0;}
+  .hub-derbys-num{font-family:'Bebas Neue',sans-serif;font-size:15px;line-height:1;color:#fff;text-shadow:0 0 6px rgba(0,0,0,.6);}
+  .hub-derbys-num.pj {color:#cfe6ff;}
+  .hub-derbys-num.g  {color:#4fc86a;text-shadow:0 0 6px rgba(79,200,106,.45);}
+  .hub-derbys-num.e  {color:#f0c040;text-shadow:0 0 6px rgba(240,192,64,.45);}
+  .hub-derbys-num.p  {color:#e05050;text-shadow:0 0 6px rgba(224,80,80,.45);}
+  .hub-derbys-num.pct{color:#c0a0ff;text-shadow:0 0 6px rgba(192,160,255,.45);}
+  .hub-derbys-lbl{font-family:Oswald,sans-serif;font-size:8px;letter-spacing:1px;color:rgba(255,255,255,.55);font-weight:700;}
   .hub-match-engine{background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:10px}
   .fixture-label{margin:0;font-size:11px;color:#f6f6f6}
   .fixture-value{margin:0;font-size:14px;color:#fff;font-weight:700}
@@ -1278,6 +1319,7 @@ window.pG = function(fn) {
   <span class="sec-emoji" id="live-hdr-dot" style="animation:homeLivePulse 1.1s ease-in-out infinite;display:inline-block;">🔴</span>
   <h2>LIVE</h2>
   <span id="live-match-count" style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,100,100,.7);margin-left:4px;font-weight:600;"></span>
+  <button id="live-clear-all-btn" onclick="window._liveClearAll&&window._liveClearAll()" style="margin-left:auto;background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.45);color:#ff8080;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;padding:6px 12px;border-radius:8px;cursor:pointer;display:none;">🗑 LIMPIAR TODO</button>
 </div>
 <div id="live-matches-list" style="padding:8px 0 24px;min-height:120px;"></div>
 </div>
@@ -5646,37 +5688,6 @@ window.pG = function(fn) {
 .lext-ov-box{background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:18px 16px;width:100%;max-width:520px;box-shadow:0 0 40px rgba(0,0,0,.8);color:#fff;font-family:Rajdhani,sans-serif;}
 .lext-ov-head{display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.08);}
 .lext-ov-title{font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;color:#f0c040;flex:1;text-transform:uppercase;}
-/* ── Resumen del equipo (#lext-team-summary). Se inserta arriba del
-   formulario de pegar plantilla. Muestra stats de la clasificación,
-   los 4 niveles auto-derivados y las líneas de máximo goleador / MVP /
-   mejor puntuación. */
-#lext-team-summary{margin-bottom:14px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px;}
-.lext-ts-stats{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;}
-.lext-ts-cell{display:flex;flex-direction:column;align-items:center;text-align:center;padding:4px 2px;}
-.lext-ts-lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.45);}
-.lext-ts-val{font-family:"Bebas Neue",sans-serif;font-size:18px;color:#fff;line-height:1.05;}
-.lext-ts-cell.col-v .lext-ts-val{color:#3dcc6e;}
-.lext-ts-cell.col-e .lext-ts-val{color:#f0c040;}
-.lext-ts-cell.col-p .lext-ts-val{color:#ff7070;}
-.lext-ts-cell.col-gf .lext-ts-val{color:#74bcd8;}
-.lext-ts-cell.col-gc .lext-ts-val{color:#ff8c64;}
-.lext-ts-cell.col-pos .lext-ts-val{color:#3dcc6e;}
-.lext-ts-cell.col-neg .lext-ts-val{color:#ff7070;}
-.lext-ts-cell.pct-hi .lext-ts-val{color:#3dcc6e;}
-.lext-ts-cell.pct-mid .lext-ts-val{color:#f0c040;}
-.lext-ts-cell.pct-lo .lext-ts-val{color:#ff7070;}
-.lext-ts-levels{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);}
-.lext-ts-lvl{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.55);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:3px 7px;}
-.lext-ts-lvl b{color:#fff;margin-right:4px;font-weight:700;}
-.lext-ts-lvl.atk{border-color:rgba(255,140,100,.35);color:#ff8c64;}
-.lext-ts-lvl.atk b{color:#ff8c64;}
-.lext-ts-lvl.mid{border-color:rgba(240,192,64,.35);color:#f0c040;}
-.lext-ts-lvl.mid b{color:#f0c040;}
-.lext-ts-lvl.def{border-color:rgba(116,188,216,.35);color:#74bcd8;}
-.lext-ts-lvl.def b{color:#74bcd8;}
-.lext-ts-lines{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:3px;}
-.lext-ts-line{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);}
-.lext-ts-line b{font-weight:700;color:#fff;}
 .lext-ov-close{background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.65);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;}
 .lext-input,.lext-select{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;margin-bottom:8px;}
 .lext-input:focus,.lext-select:focus{outline:none;border-color:#f0c040;}
@@ -5903,6 +5914,21 @@ window.pG = function(fn) {
         <button class="lext-btn" onclick="lextClearTeamForm()">🗑 Limpiar</button>
       </div>
 
+      <!-- ═══ Acceso rápido al modal de plantilla en modo edición ═══
+           Petición usuario: dentro de "Editar equipo" debe haber una
+           opción para editar UN jugador concreto (cambiar su poder, su
+           rol C/F/P/⭐/⚾) o añadir uno nuevo a la plantilla sin tener
+           que volver a la lista y pulsar el icono 🛡. Reutilizamos el
+           overlay `lext-ov-squad` con `editable:true` — exactamente la
+           misma UI que ya existe (Pegar plantilla + Añadir jugador
+           individual + lista con click en cada jugador para editarlo).
+           Si todavía no se ha pulsado ✏️ en ningún equipo, avisamos. -->
+      <div class="lext-btn-row" style="margin-top:6px;">
+        <button class="lext-btn" type="button" onclick="lextOpenSquadFromEditor()" style="background:rgba(90,169,255,.12);color:#9ed0ff;border-color:rgba(90,169,255,.45);">
+          🧤 Editar / Añadir jugadores
+        </button>
+      </div>
+
       <!-- ═══ AÑADIR MÚLTIPLES EQUIPOS (1 nombre por línea) ═══ -->
       <div style="margin-top:18px;padding:12px;border:1px solid rgba(100,180,255,.35);border-radius:8px;background:rgba(40,100,180,.06);">
         <label class="lext-label" style="margin-top:0;">📥 Añadir lista completa · 1 nombre por línea</label>
@@ -5933,12 +5959,13 @@ Tottenham
       <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-squad')">✕</button>
     </div>
 
-    <!-- Resumen del equipo (PJ/G/E/P/G+/G-/DG/% + niveles 4-ejes +
-         líneas de máximo goleador / MVP / mejor puntuación). Lo
-         rellena renderTeamSummary() al abrir la plantilla. -->
-    <div id="lext-team-summary" style="display:none;"></div>
+    <!-- Cabecera de estadísticas del equipo en la competición actual.
+         Se rellena en lextOpenSquad: PJ G E P GF GC DG %VIC + máximo
+         goleador / MVP / mejor puntuación + niveles 4-ejes
+         (GLOBAL/ATQ/MED/DEF) auto-derivados. -->
+    <div id="lext-squad-stats-header" style="display:none;margin:8px 0 10px;padding:10px 12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;"></div>
 
-    <details class="lext-details" id="lext-squad-paste-details">
+    <details class="lext-details" id="lext-squad-paste-details" style="display:none;">
       <summary>📋 Pegar plantilla completa (se añade al equipo)</summary>
       <textarea class="lext-input" id="lext-squad-paste-ta" rows="10" style="font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.45;resize:vertical;margin-top:6px;" placeholder="### 🧤 Porteros
  * Alisson 87 C
@@ -5956,7 +5983,7 @@ Tottenham
       </div>
     </details>
 
-    <details class="lext-details" id="lext-pl-details">
+    <details class="lext-details" id="lext-pl-details" style="display:none;">
       <summary id="lext-pl-summary">➕ Añadir jugador individual</summary>
       <label class="lext-label">Nombre del jugador</label>
       <input class="lext-input" id="lext-pl-name" placeholder="Ej. Vinicius Jr." />
@@ -6229,6 +6256,54 @@ Tottenham
   function loadData(k){
     if(LIGA_CACHE[k]) return _applyForcedBlacklist(k, LIGA_CACHE[k]);
     try{ var raw = localStorage.getItem(storeKey(k)); if(raw){ LIGA_CACHE[k] = JSON.parse(raw); return _applyForcedBlacklist(k, LIGA_CACHE[k]); } }catch(_){}
+    /* REFUERZO: si la clave principal está vacía, intentamos restaurar
+       desde la copia `_protected` que guarda el lock de plantillas
+       (línea ~2740). El propósito original del lock es bloquear
+       escrituras que reduzcan jugadores, pero si el main key se
+       vacía por cualquier ruta (otro flow, reset, server con teams=[]
+       que se coló), la copia protegida sigue viva — la usamos como
+       fuente y la promovemos al main key + cache para que el resto
+       del código la vea. Sin esto, el usuario veía "No hay equipos"
+       aunque sus equipos estuvieran a salvo en _protected. */
+    try {
+      var protKey = storeKey(k) + '_protected';
+      var protRaw = localStorage.getItem(protKey);
+      if (protRaw) {
+        var pdata = JSON.parse(protRaw);
+        if (pdata && Array.isArray(pdata.teams) && pdata.teams.length) {
+          LIGA_CACHE[k] = pdata;
+          /* Promover la copia protegida a la clave principal para que
+             la lectura siguiente la encuentre directamente. */
+          try { localStorage.setItem(storeKey(k), protRaw); } catch(_){}
+          try { console.warn('[ligaExt] restaurado '+k+' desde _protected ('+pdata.teams.length+' equipos).'); } catch(_){}
+          return _applyForcedBlacklist(k, pdata);
+        }
+      }
+    } catch(_){}
+    /* Cache + protected vacíos → intento síncrono al servidor para
+       que la primera apertura de la liga en un dispositivo nuevo NO
+       muestre "No hay equipos" durante segundos mientras la fetch
+       async responde. Mismo patrón que rosterFor (misc_body_2.html)
+       y la rama de equipos editados de este mismo archivo. Si el
+       sync falla (offline / timeout), caemos al objeto vacío y la
+       fetchData posterior repoblará. */
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(k), false);
+      xhr.send();
+      if (xhr.status === 200) {
+        var resp = JSON.parse(xhr.responseText);
+        if (resp && resp.data && Array.isArray(resp.data.teams)) {
+          var d = resp.data;
+          d.teams   = d.teams   || [];
+          d.results = d.results || [];
+          LIGA_CACHE[k] = d;
+          if (resp.updated_at) LIGA_UPDATED[k] = resp.updated_at;
+          try { localStorage.setItem(storeKey(k), JSON.stringify(d)); } catch(_){}
+          return _applyForcedBlacklist(k, d);
+        }
+      }
+    } catch(_){}
     LIGA_CACHE[k] = {teams:[], results:[]};
     return _applyForcedBlacklist(k, LIGA_CACHE[k]);
   }
@@ -7359,7 +7434,7 @@ Tottenham
           + '<div class="lext-sub" style="margin:1px 0 0;">ATK '+ls.atk+' · MED '+ls.mid+' · DEF '+ls.def+(budStr?(' · '+budStr):'')+'</div>'
         +'</div>'
         + '<button class="lext-li-btn" onclick="lextEditTeam(\''+t.id+'\')">✏️</button>'
-        + '<button class="lext-li-btn" onclick="lextOpenSquad(\''+t.id+'\')">🛡</button>'
+        + '<button class="lext-li-btn" onclick="lextOpenSquad(\''+t.id+'\',{editable:true})">🛡</button>'
         + '<button class="lext-li-btn" onclick="lextDeleteTeam(\''+t.id+'\')">🗑</button>'
       +'</div>';
     }).join('');
@@ -7680,7 +7755,30 @@ Tottenham
      no dependemos de que `data.teams.filter(x=>x.id===id)` lo
      encuentre (si el id no está sincronizado, la búsqueda fallaba
      en silencio y el overlay quedaba vacío). */
-  window.lextOpenSquad = function(idOrTeam){
+  /* Atajo desde el formulario "Editar equipo" para abrir la modal
+     de plantilla EN MODO EDICIÓN — equivalente al botón 🛡 de la
+     lista de equipos pero accesible directamente desde la pantalla
+     en la que el admin está retocando los datos del equipo. Si
+     todavía no se ha cargado un equipo en el formulario (no se ha
+     pulsado ✏️ en ninguna fila), avisamos al usuario. */
+  window.lextOpenSquadFromEditor = function(){
+    if (!EDITING_TEAM_ID) {
+      try { alert('⚠️ Pulsa primero ✏️ en un equipo de la lista para cargarlo en el formulario, y luego abre su plantilla desde aquí.'); } catch(_){}
+      return;
+    }
+    if (typeof window.lextOpenSquad === 'function') {
+      window.lextOpenSquad(EDITING_TEAM_ID, { editable: true });
+    }
+  };
+
+  /* `lextOpenSquad(idOrTeam, opts)` — opts.editable=true muestra los
+     dos <details> superiores (Pegar plantilla + Añadir jugador). Por
+     defecto (clic desde la fila de la clasificación) la modal queda
+     en modo SOLO LECTURA: solo cabecera de stats + lista de jugadores.
+     El flujo ✏️ Edit (lext-ov-edit → 🛡 botón) pasa editable=true para
+     volver a habilitar el alta/edición de jugadores individuales. */
+  window.lextOpenSquad = function(idOrTeam, opts){
+    opts = opts || {};
     if(typeof window.syncLigaEaPlayerStats === 'function'){
       try { window.syncLigaEaPlayerStats(); } catch(_){}
     }
@@ -7807,95 +7905,272 @@ Tottenham
     if (plNameEl) plNameEl.value = '';
     var plPowerEl = document.getElementById('lext-pl-power');
     if (plPowerEl) plPowerEl.value = '75';
-    try { renderTeamSummary(t); } catch(_){}
+
+    /* Cabecera de stats del equipo en la competición actual + niveles
+       4-ejes auto-derivados. */
+    try { _lextRenderSquadStatsHeader(t); } catch(_){}
+
+    /* Modo editable (✏️ Edit → 🛡): mostrar Pegar plantilla y Añadir
+       jugador individual. Modo lectura (clasificación): mantenerlos
+       ocultos. Al volver a abrir desde el otro flujo se vuelve a
+       sobrescribir, así que no quedan restos. */
+    var _editable = !!opts.editable;
+    var _pasteEl = document.getElementById('lext-squad-paste-details');
+    var _addEl   = document.getElementById('lext-pl-details');
+    if (_pasteEl) _pasteEl.style.display = _editable ? '' : 'none';
+    if (_addEl)   _addEl.style.display   = _editable ? '' : 'none';
+
     try { renderSquadList(); } catch(_){}
     lextOpenOv('lext-ov-squad');
   };
 
-  /* Resumen del equipo arriba de la plantilla:
-       - Fila de stats de la clasificación (PJ/G/E/P/G+/G-/DG/%).
-       - Niveles 4 ejes (GLOBAL/ATQ/MED/DEF) auto-derivados.
-       - Líneas de máximo goleador, MVP y mejor puntuación.
-     Petición usuario (2026-04-28): que las stats del equipo arriba se
-     auto-rellenen desde la clasificación en lugar de quedarse a 0. */
-  function renderTeamSummary(t){
-    var host = document.getElementById('lext-team-summary');
-    if (!host || !t) return;
-    var data = loadData(CURRENT_KEY);
-    if (!data) return;
-    var rows = standings(data);
+  /* Construye la cabecera de stats que aparece bajo el título del
+     equipo en `lext-ov-squad`. Datos REALES de la competición
+     actual. La fuente cambia según la liga:
+
+       1. Liga EA Sports / Hypermotion / Primera Fed → `window.collectStandings()`
+          (motor principal del bundle, lee `ef_liga38_v4` y aplica MVP/TA/TR).
+       2. DOM de la pantalla actual (`.clas-row` con `.clas-team-name-text`)
+          como fuente alternativa: si el usuario está en la
+          clasificación, los datos ya están pintados allí.
+       3. `standings(loadData(CURRENT_KEY))` para las 51 ligas
+          externas (cada una guarda sus resultados en
+          `ligaExt_<slug>.results`).
+
+     Sobre la lista de jugadores `team.players` calculamos:
+       · ⚽ Pichichi (max p.gol)
+       · ⭐ MVP (max p.mvp)
+       · 📈 Mejor puntuación (max p.power · valor del jugador)
+       · 🟨 Top amarillas (max p.ta)
+       · 🟥 Top rojas (max p.tr)
+     Cuando hay empates listamos los nombres separados por «y». */
+  function _lextRenderSquadStatsHeader(team) {
+    var box = document.getElementById('lext-squad-stats-header');
+    if (!box || !team) return;
+
+    function _normName(s){
+      return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+        .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+    }
+
+    /* ── 1. Buscar el row del equipo en la fuente más fiable ── */
     var row = null;
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i].id === t.id) { row = rows[i]; break; }
+    var targetId = team.id;
+    var targetName = _normName(team.name);
+
+    function _matchRow(r){
+      if (!r) return false;
+      if (targetId && r.id === targetId) return true;
+      if (r.name && _normName(r.name) === targetName) return true;
+      return false;
     }
-    var stats = row || {pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0};
-    var pct = stats.pj > 0 ? Math.round((stats.v / stats.pj) * 100) : 0;
-    var pctCls = pct >= 60 ? 'pct-hi' : (pct >= 40 ? 'pct-mid' : 'pct-lo');
-    var dgSign = stats.dg > 0 ? '+'+stats.dg : (stats.dg < 0 ? String(stats.dg) : '0');
-    /* Niveles 4-ejes (auto-derivados de la plantilla). */
-    var ls = computeLineStats(t);
-    /* Top scorer / MVP / mejor puntuación leídos del propio objeto
-       de jugador (poblado por applyMatchStats). */
-    var players = Array.isArray(t.players) ? t.players : [];
-    function _topBy(field){
-      var best = null;
-      players.forEach(function(p){
-        var v = Number(p[field]) || 0;
-        if (!best || v > Number(best[field]) || 0) best = p;
-      });
-      return best && (Number(best[field])||0) > 0 ? best : null;
-    }
-    var topGol = _topBy('gol');
-    var topMvp = _topBy('mvp');
-    /* Mejor puntuación = jugador con mayor rating. computePlayerRating
-       puede no estar disponible si el bundle aún no terminó de cargar;
-       en ese caso saltamos la línea. */
-    var topRated = null, topRating = 0;
+
+    /* 1a. collectStandings — motor principal de Liga EA Sports
+       (también reutilizado por Hypermotion / Primera Federación
+       cuando estas pantallas están activas). */
     try {
-      if (typeof computePlayerRating === 'function') {
-        players.forEach(function(p){
-          var r = computePlayerRating(p) || 0;
-          if (r > topRating) { topRating = r; topRated = p; }
-        });
+      if (typeof window.collectStandings === 'function') {
+        var arr1 = window.collectStandings() || [];
+        for (var i = 0; i < arr1.length && !row; i++) {
+          if (_matchRow(arr1[i])) row = arr1[i];
+        }
       }
     } catch(_){}
-    /* Construcción del HTML. */
-    function _cell(label, val, cls){
-      return '<div class="lext-ts-cell '+(cls||'')+'">'
-        + '<div class="lext-ts-lbl">'+label+'</div>'
-        + '<div class="lext-ts-val">'+val+'</div>'
+
+    /* 1b. DOM de la clasificación visible. Útil sobre todo cuando
+       el usuario abre la modal sobre una clasificación que ya
+       está renderizada — los valores que ve son los oficiales. */
+    if (!row) {
+      try {
+        var rowEls = document.querySelectorAll('.clas-row');
+        for (var ri = 0; ri < rowEls.length && !row; ri++) {
+          var nameEl = rowEls[ri].querySelector('.clas-team-name-text') || rowEls[ri].querySelector('.clas-team-name');
+          var domName = nameEl ? _normName(nameEl.textContent) : '';
+          if (!domName || domName !== targetName) continue;
+          /* Las celdas están dentro del row en el orden:
+             pos · escudo · nombre · PTS · PJ · V · E · P · GF · GC · DG · TA · TR · MVP · % */
+          var nums = function(sel){
+            var el = rowEls[ri].querySelector(sel);
+            if (!el) return null;
+            var n = parseInt((el.textContent||'').replace(/[^0-9-]/g,''), 10);
+            return isFinite(n) ? n : 0;
+          };
+          row = {
+            pj:  nums('.clas-pj') || 0,
+            v:   0, e: 0, p: 0,
+            gf:  0, gc: 0, dg: 0,
+            pts: nums('.clas-pts') || 0,
+            ta:  nums('.clas-val.ta') || 0,
+            tr:  nums('.clas-val.tr') || 0,
+            mvp: nums('.clas-mvp') || 0
+          };
+          /* V/E/P/GF/GC/DG no tienen clase distintiva → recorremos
+             los `.clas-val` en orden. La estructura de buildLigaClas
+             coloca: V, E, P, GF, GC, DG, TA, TR — así que tomamos
+             los primeros 6 que NO sean .ta/.tr. */
+          var vals = rowEls[ri].querySelectorAll('.clas-val:not(.ta):not(.tr):not(.dg), .clas-val.dg');
+          if (vals.length >= 6) {
+            row.v  = parseInt((vals[0].textContent||'').replace(/[^0-9-]/g,''), 10) || 0;
+            row.e  = parseInt((vals[1].textContent||'').replace(/[^0-9-]/g,''), 10) || 0;
+            row.p  = parseInt((vals[2].textContent||'').replace(/[^0-9-]/g,''), 10) || 0;
+            row.gf = parseInt((vals[3].textContent||'').replace(/[^0-9-]/g,''), 10) || 0;
+            row.gc = parseInt((vals[4].textContent||'').replace(/[^0-9-]/g,''), 10) || 0;
+            row.dg = parseInt((vals[5].textContent||'').replace(/[^0-9-]/g,''), 10) || (row.gf - row.gc);
+          }
+        }
+      } catch(_){}
+    }
+
+    /* 1c. Foreign league (`standings(loadData(CURRENT_KEY))`). */
+    if (!row) {
+      try {
+        var data = (typeof loadData === 'function') ? loadData(CURRENT_KEY) : null;
+        var arr2 = (data && typeof standings === 'function') ? standings(data) : [];
+        for (var j = 0; j < arr2.length && !row; j++) {
+          if (_matchRow(arr2[j])) row = arr2[j];
+        }
+      } catch(_){}
+    }
+
+    if (!row) row = {pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0};
+    var pct = row.pj > 0 ? Math.round((row.v / row.pj) * 100) : 0;
+
+    /* ── 2. Líderes del equipo (sobre t.players) ── */
+    var players = Array.isArray(team.players) ? team.players : [];
+    /* Hidratamos stats con getPlayerStats. Necesario porque esta
+       función se llama ANTES que renderSquadList → los players
+       todavía no traen .gol/.mvp/.pj/etc. Hidratamos TODO el set de
+       stats que `computePlayerRating` consume (pj, gol, pen, fk,
+       mvp, imbat, penSaved) además de pos para el cálculo por
+       posición. */
+    var hydrated = players.map(function(p){
+      if (!p || !p.name) return null;
+      var ps = null;
+      try {
+        if (typeof window.getPlayerStats === 'function') {
+          ps = window.getPlayerStats(team.name, p.name);
+        }
+      } catch(_) {}
+      return {
+        name:     p.name,
+        pos:      p.pos || 'MED',
+        pj:       Number((ps && ps.pj))       || Number(p.pj)       || 0,
+        gol:      Number((ps && ps.gol))      || Number(p.gol)      || 0,
+        pen:      Number((ps && ps.pen))      || Number(p.pen)      || 0,
+        fk:       Number((ps && ps.fk))       || Number(p.fk)       || 0,
+        mvp:      Number((ps && ps.mvp))      || Number(p.mvp)      || 0,
+        imbat:    Number((ps && ps.imbat))    || Number(p.imbat)    || 0,
+        penSaved: Number((ps && ps.penSaved)) || Number(p.penSaved) || 0
+      };
+    }).filter(Boolean);
+
+    function _topBy(field) {
+      var top = -Infinity, tied = [];
+      hydrated.forEach(function(p){
+        var v = p[field];
+        if (v <= 0) return;
+        if (v > top) { top = v; tied = [p.name]; }
+        else if (v === top) tied.push(p.name);
+      });
+      if (top === -Infinity) return null;
+      return { names: tied, val: top };
+    }
+
+    var topGol = _topBy('gol');
+    var topMvp = _topBy('mvp');
+    /* Mejor puntuación = max `computePlayerRating(p)` (puntuación
+       media 0-10 que combina pj/gol/pen/fk/mvp ponderados por
+       posición). Antes mostrábamos `p.power` (valor del jugador
+       en el editor), pero el usuario quiere la puntuación media
+       real en la liga — la misma que ya pinta `renderSquadList`
+       junto a cada jugador. Si nadie ha jugado todavía
+       computePlayerRating devuelve 0, así que filtramos los <= 0
+       para no mostrar empates a 0. */
+    var topRating = (function(){
+      if (typeof computePlayerRating !== 'function') return null;
+      var t = -Infinity, names = [];
+      hydrated.forEach(function(p){
+        if (p.pj <= 0) return;
+        var r;
+        try { r = computePlayerRating(p); } catch(_) { r = 0; }
+        if (!isFinite(r) || r <= 0) return;
+        /* Redondeamos a 2 decimales para que empates como 7.98 vs
+           7.97 cuenten distinto. */
+        var rr = Math.round(r * 100) / 100;
+        if (rr > t) { t = rr; names = [p.name]; }
+        else if (rr === t) names.push(p.name);
+      });
+      if (t === -Infinity) return null;
+      return { names: names, val: t.toFixed(2) };
+    })();
+
+    function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function _joinNames(names){
+      if (!names || !names.length) return '';
+      if (names.length === 1) return _esc(names[0]);
+      if (names.length === 2) return _esc(names[0]) + ' y ' + _esc(names[1]);
+      return _esc(names.slice(0, -1).join(', ')) + ' y ' + _esc(names[names.length - 1]);
+    }
+    function _line(emoji, lbl, leader, valSuffix, valColor) {
+      if (!leader) return '<div><span style="opacity:.55;">' + emoji + ' ' + lbl + ': sin registros</span></div>';
+      return '<div>' + emoji + ' <b>' + lbl + ':</b> ' + _joinNames(leader.names)
+           + ' <span style="color:' + (valColor || '#3dcc6e') + ';font-weight:700;">· ' + leader.val + valSuffix + '</span></div>';
+    }
+
+    var _cell = function(lbl, val, color){
+      return '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;flex:1;">'
+           +   '<span style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:rgba(255,255,255,.55);">'+lbl+'</span>'
+           +   '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:18px;color:'+(color||'#fff')+';line-height:1.05;">'+val+'</span>'
+           + '</div>';
+    };
+    var dgColor = row.dg > 0 ? '#3dcc6e' : (row.dg < 0 ? '#ff7070' : '#fff');
+    var dgVal = row.dg > 0 ? ('+' + row.dg) : String(row.dg);
+    var statsRow = '<div style="display:flex;align-items:stretch;gap:4px;">'
+      + _cell('PJ',  row.pj, '#fff')
+      + _cell('G',   row.v,  '#3dcc6e')
+      + _cell('E',   row.e,  '#f0c040')
+      + _cell('P',   row.p,  '#ff7070')
+      + _cell('G+',  row.gf, '#5aa9ff')
+      + _cell('G−',  row.gc, '#ff9040')
+      + _cell('D±',  dgVal,  dgColor)
+      + _cell('%',   pct + '%', pct >= 60 ? '#3dcc6e' : (pct >= 40 ? '#f0c040' : '#ff7070'))
+      + '</div>';
+
+    /* Niveles 4-ejes (GLOBAL/ATQ/MED/DEF) auto-derivados desde la
+       plantilla por computeLineStats. El simulador AI-vs-AI los
+       consume en simulateMatch. */
+    var ls = (typeof computeLineStats === 'function') ? computeLineStats(team) : null;
+    var levelsBlock = '';
+    if (ls) {
+      var _lvl = function(lbl, val, color){
+        return '<span style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.55);background:rgba(255,255,255,.04);border:1px solid '+(color?color+'59':'rgba(255,255,255,.08)')+';border-radius:5px;padding:3px 7px;">'
+          + '<b style="color:'+(color||'#fff')+';margin-right:4px;font-weight:700;">'+lbl+'</b>'+val
+          + '</span>';
+      };
+      levelsBlock = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);">'
+        + _lvl('GLOBAL', ls.glob, '')
+        + _lvl('ATQ',    ls.atk,  '#ff8c64')
+        + _lvl('MED',    ls.mid,  '#f0c040')
+        + _lvl('DEF',    ls.def,  '#74bcd8')
       + '</div>';
     }
-    var _esc = (typeof escapeHtml === 'function') ? escapeHtml : (typeof window.escapeHtml === 'function' ? window.escapeHtml : function(s){
-      return String(s||'').replace(/[&<>"']/g, function(c){
-        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
-      });
-    });
-    var lineHtml = '';
-    if (topGol) lineHtml += '<div class="lext-ts-line">⚽ <b>Máximo goleador:</b> '+_esc(topGol.name)+' · <span style="color:#3dcc6e;">'+(topGol.gol||0)+' goles</span></div>';
-    if (topMvp) lineHtml += '<div class="lext-ts-line">⭐ <b>MVP:</b> '+_esc(topMvp.name)+' · <span style="color:#f0c040;">'+(topMvp.mvp||0)+' MVPs</span></div>';
-    if (topRated) lineHtml += '<div class="lext-ts-line">📈 <b>Mejor puntuación:</b> '+_esc(topRated.name)+' · <span style="color:#74bcd8;">'+topRating.toFixed(2)+'</span></div>';
-    host.innerHTML = ''
-      + '<div class="lext-ts-stats">'
-      +   _cell('PJ', stats.pj)
-      +   _cell('G', stats.v, 'col-v')
-      +   _cell('E', stats.e, 'col-e')
-      +   _cell('P', stats.p, 'col-p')
-      +   _cell('G+', stats.gf, 'col-gf')
-      +   _cell('G-', stats.gc, 'col-gc')
-      +   _cell('D±', dgSign, stats.dg>0?'col-pos':(stats.dg<0?'col-neg':''))
-      +   _cell('%', pct+'%', pctCls)
-      + '</div>'
-      + '<div class="lext-ts-levels">'
-      +   '<span class="lext-ts-lvl"><b>GLOBAL</b> '+ls.glob+'</span>'
-      +   '<span class="lext-ts-lvl atk"><b>ATQ</b> '+ls.atk+'</span>'
-      +   '<span class="lext-ts-lvl mid"><b>MED</b> '+ls.mid+'</span>'
-      +   '<span class="lext-ts-lvl def"><b>DEF</b> '+ls.def+'</span>'
-      + '</div>'
-      + (lineHtml ? '<div class="lext-ts-lines">'+lineHtml+'</div>' : '');
-    host.style.display = '';
+
+    /* Solo 3 líneas de líderes (petición usuario). Las amarillas y
+       rojas se eliminan porque ya aparecen en cada fila de jugador
+       en la lista PLANTILLA y antes mostraban valores no
+       sincronizados con los acumulados reales. */
+    var leadersBlock = ''
+      + _line('⚽',  'Máximo goleador',  topGol,    ' gol' + (topGol && topGol.val === 1 ? '' : 'es'), '#3dcc6e')
+      + _line('⭐',  'MVP',              topMvp,    ' MVP'  + (topMvp && topMvp.val === 1 ? '' : 's'), '#f0c040')
+      + _line('📈', 'Mejor puntuación', topRating, '',                                                  '#5aa9ff');
+
+    box.innerHTML = statsRow
+      + levelsBlock
+      + '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);line-height:1.6;">'
+      + leadersBlock
+      + '</div>';
+    box.style.display = '';
   }
-  window._renderTeamSummary = renderTeamSummary;
 
   function ratingClass(r){
     if(r <= 0) return 'r0';
@@ -9412,17 +9687,21 @@ Tottenham
   </div>
 </div>
 <section class="hub-main-grid">
-  <button class="hub-card" onclick="go('s-munich-trofeos')">
-    <span class="hub-title">🏆 Vitrina de Trofeos</span>
-    <span class="hub-sub">2 títulos oficiales</span>
-    <div class="hub-trophy-logos">
-      <img src="https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg" alt="FIFA Club World Cup">
-      <img src="/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg" alt="Supercopa de España">
-    </div>
+  <button class="hub-card hub-card-trofeos" onclick="go('s-munich-trofeos')">
+    <span class="hub-trofeos-emoji">🏆</span>
+    <span class="hub-trofeos-title">VITRINA TROFEOS</span>
+    <span class="hub-trofeos-count" id="munich-trofeos-count">0 títulos oficiales</span>
   </button>
-  <button class="hub-card" onclick="go('s-munich-derbys')">
-    <span class="hub-title">👤 Histórico Derbys</span>
-    <span class="hub-sub">Récord: 6G – 7E – 16P · 21% Win</span>
+  <button class="hub-card hub-card-derbys" onclick="go('s-munich-derbys')">
+    <span class="hub-derbys-emoji">⚔️</span>
+    <span class="hub-derbys-title">HISTÓRICO DERBYS</span>
+    <div class="hub-derbys-stats" id="munich-derbys-stats">
+      <div class="hub-derbys-stat"><span class="hub-derbys-num pj">0</span><span class="hub-derbys-lbl">PJ</span></div>
+      <div class="hub-derbys-stat"><span class="hub-derbys-num g">0</span><span class="hub-derbys-lbl">G</span></div>
+      <div class="hub-derbys-stat"><span class="hub-derbys-num e">0</span><span class="hub-derbys-lbl">E</span></div>
+      <div class="hub-derbys-stat"><span class="hub-derbys-num p">0</span><span class="hub-derbys-lbl">P</span></div>
+      <div class="hub-derbys-stat"><span class="hub-derbys-num pct">0</span><span class="hub-derbys-lbl">%</span></div>
+    </div>
   </button>
   <button class="hub-card" onclick="go('s-munich-objetivos')">
     <span class="hub-title">🎯 Objetivos del Club</span>
@@ -9624,17 +9903,332 @@ Tottenham
 <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Vitrina de Trofeos</h2></div>
 <div style="padding:18px 18px 40px;display:flex;flex-direction:column;gap:14px;">
-<!-- BADGES FLASH VIDEOJUEGO -->
-<div style="text-align:center;padding:10px 0 4px;">
-<span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.35);">TEMPORADA 31–32</span>
+  <div style="text-align:center;padding:10px 0 4px;">
+    <span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.35);">TEMPORADA 31–32</span>
+  </div>
+  <!-- Filas de trofeos rellenadas por `renderMunichTrofeos`. La fuente
+       de datos es localStorage (`bayern_trofeos_v1`); si está vacía
+       se siembra con los 2 títulos por defecto (Mundial de Clubes +
+       Supercopa de España). El botón ➕ exige PIN admin 747 vía pG(). -->
+  <div id="munich-trofeos-list" style="display:flex;flex-direction:column;gap:14px;"></div>
+  <div style="text-align:center;padding:14px 0 0;">
+    <span id="munich-trofeos-total" style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:6px;color:rgba(240,192,64,.5);">TOTAL: 0</span>
+  </div>
+  <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;padding:6px 0 0;">
+    <button id="munich-trofeos-add-btn" onclick="window.munichTrofeosPromptAdd && window.munichTrofeosPromptAdd()"
+      style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(255,198,77,.35);">
+      ➕ AÑADIR TÍTULO
+    </button>
+    <!-- "ELIMINAR TÍTULO" solo visible cuando hay sesión admin abierta
+         (`<body class="adm-on">` lo activa `window.pinOk` tras el PIN
+         747). Al pulsar "AÑADIR" sin sesión, pG dispara el modal del
+         PIN, y una vez introducido este botón aparece automáticamente. -->
+    <button id="munich-trofeos-del-btn" onclick="window.munichTrofeosPromptDelete && window.munichTrofeosPromptDelete()"
+      style="display:none;background:linear-gradient(145deg,#a02030,#5e0c1a);border:1px solid rgba(255,90,90,.55);color:#ffe0e0;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(220,40,60,.35);">
+      🗑 ELIMINAR TÍTULO
+    </button>
+  </div>
 </div>
-<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><img src="https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg" alt="FIFA Club World Cup" style="width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;"><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">MUNDIAL DE CLUBES</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">FIFA Club World Cup</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
-<div class="ath-titulo-row" style="display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;"><img src="/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg" alt="Supercopa de España" style="width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;"><div style="flex:1;"><div style="font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;">SUPERCOPA DE ESPAÑA</div><div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;">RFEF – Competición Nacional</div></div><span style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;">1</span></div>
-<div style="text-align:center;padding:14px 0 0;">
-<span style="font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:6px;color:rgba(240,192,64,.5);">TOTAL: 2</span>
 </div>
-</div>
-</div>
+
+<style>
+  #s-munich-trofeos .ath-titulo-row{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;position:relative;}
+  #s-munich-trofeos .ath-titulo-row img{width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;}
+  #s-munich-trofeos .ath-titulo-info{flex:1;min-width:0;}
+  #s-munich-trofeos .ath-titulo-name{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;text-transform:uppercase;}
+  #s-munich-trofeos .ath-titulo-sub{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;}
+  #s-munich-trofeos .ath-titulo-n{font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;}
+  /* "ELIMINAR TÍTULO" del pie SOLO visible cuando hay sesión admin
+     abierta (`<body class="adm-on">` lo activa `window.pinOk` tras el
+     PIN 747). Sin sesión admin → no se ve, así nada tapa el contador
+     a la derecha de cada fila. */
+  body.adm-on #s-munich-trofeos #munich-trofeos-del-btn{display:inline-flex !important;align-items:center;}
+</style>
+
+<script>
+(function(){
+  if (window.__MUNICH_TROFEOS_READY) return;
+  window.__MUNICH_TROFEOS_READY = true;
+
+  var STORE_KEY = 'bayern_trofeos_v1';
+  /* Semilla por defecto — los 2 títulos que estaban hardcodeados antes
+     en el HTML. Solo se aplica si el storage está vacío. Una vez el
+     admin añade/elimina algo, las modificaciones quedan persistidas
+     y la semilla no vuelve a aplicarse. */
+  var DEFAULTS = [
+    { id:'def-fcwc',   icon:'https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg', title:'MUNDIAL DE CLUBES',   sub:'FIFA Club World Cup',          count:1 },
+    { id:'def-supesp', icon:'/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg',         title:'SUPERCOPA DE ESPAÑA', sub:'RFEF – Competición Nacional',  count:1 }
+  ];
+
+  /* Normaliza el texto del título para detectar duplicados (mismo
+     título en mayúsculas/minúsculas/acentos → cuenta como mismo
+     trofeo, sumando una unidad al `count` en vez de crear fila nueva). */
+  function _normTitle(s){
+    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^A-Za-z0-9]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+
+  function load(){
+    var arr = null;
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw){
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) arr = parsed;
+      }
+    } catch(_){}
+    if (!arr){
+      /* Persistir la semilla en la primera lectura para que el admin
+         pueda eliminar los defaults sin que vuelvan a aparecer. */
+      arr = DEFAULTS.map(function(t){ var c = {}; for (var k in t) c[k]=t[k]; return c; });
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(arr)); } catch(_){}
+    }
+    /* Backfill de `count` para entradas guardadas con la versión antigua
+       (antes solo había 1 fila por trofeo, sin contador explícito). */
+    arr.forEach(function(t){
+      if (!t) return;
+      var n = parseInt(t.count, 10);
+      t.count = (isNaN(n) || n < 1) ? 1 : n;
+    });
+    return arr;
+  }
+
+  function save(arr){
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(arr || [])); } catch(_){}
+  }
+
+  function esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function _newId(){
+    return 'tr-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7);
+  }
+
+  function _rowHtml(t){
+    /* Sin botón 🗑 inline — antes tapaba el número de la derecha. La
+       eliminación se hace ahora desde "🗑 ELIMINAR TÍTULO" del pie,
+       que solo aparece cuando hay sesión admin abierta. */
+    return '<div class="ath-titulo-row" data-trofeo-id="'+esc(t.id)+'">'
+         +   '<img src="'+esc(t.icon)+'" alt="'+esc(t.title)+'" onerror="this.style.visibility=\'hidden\'">'
+         +   '<div class="ath-titulo-info">'
+         +     '<div class="ath-titulo-name">'+esc(t.title)+'</div>'
+         +     (t.sub ? '<div class="ath-titulo-sub">'+esc(t.sub)+'</div>' : '')
+         +   '</div>'
+         +   '<span class="ath-titulo-n">'+(t.count|0)+'</span>'
+         + '</div>';
+  }
+
+  function _sumTotal(arr){
+    var s = 0;
+    (arr||[]).forEach(function(t){ s += (t && t.count|0) || 0; });
+    return s;
+  }
+
+  function render(){
+    var list = load();
+    var host = document.getElementById('munich-trofeos-list');
+    if (host){
+      if (!list.length){
+        host.innerHTML = '<div style="text-align:center;padding:30px 14px;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:1px;">— Sin títulos —<br><span style="font-size:11px;color:rgba(255,255,255,.35);">Pulsa <b>➕ AÑADIR TÍTULO</b> para empezar.</span></div>';
+      } else {
+        host.innerHTML = list.map(_rowHtml).join('');
+      }
+    }
+    var total = _sumTotal(list);
+    var totEl = document.getElementById('munich-trofeos-total');
+    if (totEl) totEl.textContent = 'TOTAL: ' + total;
+    var hubCnt = document.getElementById('munich-trofeos-count');
+    if (hubCnt) hubCnt.textContent = total + (total === 1 ? ' título oficial' : ' títulos oficiales');
+  }
+
+  window.munichTrofeosRender = render;
+
+  window.munichTrofeosPromptAdd = function(){
+    /* Gate admin con PIN 747 reusando el modal global pG. Tras el PIN
+       la sesión admin queda abierta (window._adm = true, body.adm-on)
+       y los siguientes "AÑADIR" / 🗑 no vuelven a pedirlo. */
+    var doAdd = function(){
+      var iconUrl = window.prompt('🖼️  URL del icono del título\n(p. ej. https://… o /static/img/logos/…)\n\nDeja vacío para cancelar.', '');
+      if (!iconUrl) return;
+      iconUrl = String(iconUrl).trim();
+      if (!iconUrl) return;
+      var titleTxt = window.prompt('🏆  Texto del título ganado\n(p. ej. LIGA EA SPORTS)', '');
+      if (!titleTxt) return;
+      titleTxt = String(titleTxt).trim();
+      if (!titleTxt) return;
+      var arr = load();
+      /* Si ya existe un trofeo con el MISMO nombre (normalizado),
+         incrementamos su `count` en vez de crear fila nueva. Esto
+         permite mostrar "LIGA EA SPORTS  4" cuando se ha ganado 4
+         veces, en lugar de 4 filas idénticas. Solo se pide
+         subtítulo cuando es un trofeo nuevo. */
+      var key = _normTitle(titleTxt);
+      var existing = arr.filter(function(t){ return t && _normTitle(t.title) === key; })[0];
+      if (existing){
+        existing.count = (existing.count|0) + 1;
+        /* Si no había icono o lo cambian, lo refrescamos al último
+           que han pegado — el usuario podría querer actualizar la URL. */
+        if (iconUrl) existing.icon = iconUrl;
+      } else {
+        var subTxt = window.prompt('📝  Subtítulo / descripción (opcional)\n(p. ej. UEFA · Final 25-Mayo-2032)\n\nDeja vacío si no quieres subtítulo.', '');
+        arr.push({
+          id:    _newId(),
+          icon:  iconUrl,
+          title: titleTxt,
+          sub:   subTxt ? String(subTxt).trim() : '',
+          count: 1
+        });
+      }
+      save(arr);
+      render();
+    };
+    if (typeof window.pG === 'function') window.pG(doAdd); else doAdd();
+  };
+
+  /* Flujo de eliminación: el admin pulsa "🗑 ELIMINAR TÍTULO" (visible
+     solo tras el PIN 747). Se muestra una lista numerada de los
+     trofeos en vitrina y el admin teclea el número del que quiere
+     quitar. Si tiene más de 1 copia, se decrementa; si era el último
+     se elimina la fila entera. */
+  window.munichTrofeosPromptDelete = function(){
+    var doDel = function(){
+      var arr = load();
+      if (!arr.length){
+        window.alert('La vitrina está vacía — no hay nada que eliminar.');
+        return;
+      }
+      var menu = arr.map(function(t, i){
+        return (i + 1) + ') ' + t.title + (t.count > 1 ? '  ×' + t.count : '');
+      }).join('\n');
+      var raw = window.prompt('🗑  ELIMINAR TÍTULO\n\nEscribe el número del título a quitar:\n\n' + menu + '\n\nDeja vacío para cancelar.', '');
+      if (!raw) return;
+      var idx = parseInt(String(raw).trim(), 10) - 1;
+      if (isNaN(idx) || idx < 0 || idx >= arr.length){
+        window.alert('Número inválido.');
+        return;
+      }
+      var victim = arr[idx];
+      var n = victim.count|0;
+      var msg = n > 1
+        ? '🗑  Quitar 1 « ' + victim.title + ' » (quedarían ' + (n - 1) + ')'
+        : '🗑  Eliminar el título « ' + victim.title + ' »';
+      if (!window.confirm(msg + ' ?')) return;
+      if (n > 1){
+        victim.count = n - 1;
+      } else {
+        arr.splice(idx, 1);
+      }
+      save(arr);
+      render();
+    };
+    if (typeof window.pG === 'function') window.pG(doDel); else doDel();
+  };
+
+  /* Pintado inicial + auto-render cada vez que el screen se activa.
+     Mismo patrón que la caja Bayern · Plantilla — un MutationObserver
+     sobre la clase del propio screen es inmune a cualquier wrap de
+     `window.go` que haga el bundle. */
+  function _wire(){
+    var screen = document.getElementById('s-munich-trofeos');
+    if (screen){
+      var rerender = function(){
+        if (screen.classList.contains('active')) render();
+      };
+      try {
+        new MutationObserver(rerender).observe(screen, {attributes:true, attributeFilter:['class']});
+      } catch(_){}
+    }
+    /* Render inicial: actualiza tanto la pantalla como el contador de
+       la HUB-card (que vive fuera del screen). */
+    render();
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _wire);
+  } else {
+    _wire();
+  }
+})();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   HUB · Histórico Derbys — contadores PJ / G / E / P
+   ───────────────────────────────────────────────────────────────
+   La caja de la Home muestra cuatro contadores que se calculan a
+   partir de las filas reales del screen `s-munich-derbys`. Cada
+   `<div class="derby-match-row derby-X">` indica el resultado del
+   partido (g / e / p) y los `derby-pend` no se cuentan.
+
+       PJ = G + E + P  (los pendientes no suman PJ)
+       G  = nº de filas con clase derby-g
+       E  = nº de filas con clase derby-e
+       P  = nº de filas con clase derby-p
+
+   Un MutationObserver vigila cualquier cambio dentro del screen
+   (añadir/eliminar/modificar partidos) y refresca la HUB-card al
+   instante. Render inicial al cargar.
+   ─────────────────────────────────────────────────────────────── */
+(function(){
+  if (window.__MUNICH_DERBYS_HUB_READY) return;
+  window.__MUNICH_DERBYS_HUB_READY = true;
+
+  function _setNum(cls, val){
+    var el = document.querySelector('#munich-derbys-stats .hub-derbys-num.' + cls);
+    if (el) el.textContent = String(val|0);
+  }
+
+  function refresh(){
+    var screen = document.getElementById('s-munich-derbys');
+    if (!screen) return;
+    /* Contamos UNA vez por `.derby-match-row`, evitando ambigüedades
+       con filas que pudieran tener varias clases por error. */
+    var rows = screen.querySelectorAll('.derby-match-row');
+    var g = 0, e = 0, p = 0;
+    rows.forEach(function(row){
+      if (row.classList.contains('derby-g')) g++;
+      else if (row.classList.contains('derby-e')) e++;
+      else if (row.classList.contains('derby-p')) p++;
+      /* derby-pend → NO suma */
+    });
+    var pj = g + e + p;
+    /* % de victorias = G / PJ (redondeado). Si no hay partidos jugados
+       mostramos 0 para evitar NaN. */
+    var pct = pj > 0 ? Math.round((g / pj) * 100) : 0;
+    _setNum('pj',  pj);
+    _setNum('g',   g);
+    _setNum('e',   e);
+    _setNum('p',   p);
+    _setNum('pct', pct);
+  }
+
+  window.refreshMunichDerbysHub = refresh;
+
+  function _wire(){
+    refresh();
+    var screen = document.getElementById('s-munich-derbys');
+    if (!screen) return;
+    try {
+      /* Observamos todo el subárbol del screen porque el admin/usuario
+         puede añadir filas en CUALQUIER bloque temporada. childList
+         para nuevas filas, attributes/class por si una fila pendiente
+         pasa a g/e/p al guardar el resultado. */
+      new MutationObserver(refresh).observe(screen, {
+        subtree: true, childList: true,
+        attributes: true, attributeFilter: ['class']
+      });
+    } catch(_){}
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _wire);
+  } else {
+    _wire();
+  }
+})();
+</script>
 
 <div class="screen" id="s-munich-objetivos">
 <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
@@ -9998,139 +10592,202 @@ Tottenham
 <div class="screen" id="s-munich-derbys">
 <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">👤</span><h2>Histórico Derbys</h2></div>
-<div style="padding:4px 14px 40px;">
-<div class="ent-body ath-body-derbys" id="ath-derbys-full" style="padding:0;">
-<div class="derby-stats-hdr">
-<span class="derby-stats-hdr-lbl">TEMP</span>
-<span class="derby-stats-hdr-lbl">PJ</span>
-<span class="derby-stats-hdr-lbl">PG</span>
-<span class="derby-stats-hdr-lbl">PE</span>
-<span class="derby-stats-hdr-lbl">PP</span>
-<span class="derby-stats-hdr-lbl">G+</span>
-<span class="derby-stats-hdr-lbl">G-</span>
-<span class="derby-stats-hdr-lbl">+-</span>
-<span class="derby-stats-hdr-lbl">%</span>
-<span class="derby-stats-hdr-lbl"></span>
+<div style="padding:14px 14px 40px;display:flex;flex-direction:column;gap:12px;">
+  <!-- Cards de temporada renderizadas dinámicamente por
+       `renderMunichDerbysSeasons`. Storage:
+       `bayern_derbys_seasons_v1` (array de `{id, season, teamName}`).
+       Si está vacío se siembra con 4 temporadas por defecto sin
+       equipo, para que el admin solo tenga que rellenar nombres. -->
+  <div id="munich-derbys-seasons" style="display:flex;flex-direction:column;gap:10px;"></div>
+  <div style="display:flex;justify-content:center;padding:6px 0 0;">
+    <button id="munich-derbys-add-btn" onclick="window.munichDerbysPromptAdd && window.munichDerbysPromptAdd()"
+      style="background:linear-gradient(145deg,#3a78d8,#1a3e88);border:1px solid rgba(96,180,255,.65);color:#eaf3ff;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(96,180,255,.35);">
+      ➕ AÑADIR TEMPORADA
+    </button>
+  </div>
 </div>
-<div class="derby-stats-row global-row">
-<span class="derby-stats-temp">TOTAL</span>
-<span class="derby-stats-val">29</span>
-<span class="derby-stats-val" style="color:#4fc86a;">6</span>
-<span class="derby-stats-val">7</span>
-<span class="derby-stats-val" style="color:#e05050;">16</span>
-<span class="derby-stats-val" style="color:#80d0ff;">35</span>
-<span class="derby-stats-val" style="color:#ff9090;">73</span>
-<span class="derby-stats-val" style="color:#f0c040;">-38</span>
-<span class="derby-stats-val" style="color:#c0a0ff;">21%</span>
-<span></span>
-</div>
-<div class="derby-temp-block">
-<button class="derby-temp-btn open" id="ddf-3132-btn" onclick="derbyTog('ddf-3132')">
-<span class="derby-temp-name">31-32</span>
-<span class="derby-temp-sv">5</span>
-<span class="derby-temp-sv" style="color:#4fc86a;">0</span>
-<span class="derby-temp-sv">0</span>
-<span class="derby-temp-sv" style="color:#e05050;">5</span>
-<span class="derby-temp-sv" style="color:#80d0ff;">1</span>
-<span class="derby-temp-sv" style="color:#ff9090;">19</span>
-<span class="derby-temp-sv" style="color:#f0c040;">-18</span>
-<span class="derby-temp-sv" style="color:#c0a0ff;">0%</span>
-<span class="derby-temp-arr open" id="ddf-3132-arr">▲</span>
-</button>
-<div class="derby-temp-body open" id="ddf-3132">
-<div class="derby-comp-lbl">🏆 COPA DEL REY</div>
-<div class="derby-match-row derby-pend"><span class="derby-score"></span><span class="derby-comp">—</span><span class="derby-rival-m" style="color:rgba(255,255,255,.3)">Por jugar</span><span class="derby-res"></span></div>
-<div class="derby-comp-lbl">🇪🇸 LIGA</div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-7</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🔵 SUPERLIGA (B Munich)</div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-5</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Arsenal</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Arsenal</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Man City 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Man City 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">PSG</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">PSG</span><span class="derby-res">—</span></div>
-<div class="derby-comp-lbl">🌍 SELECCION (Francia)</div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Italia 😈</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-5</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Austria</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Inglaterra 🔧</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Noruega</span><span class="derby-res">—</span></div>
-<div class="derby-match-row derby-pend"><span class="derby-score">vs</span><span class="derby-comp">✈️</span><span class="derby-rival-m">España</span><span class="derby-res">—</span></div>
-</div>
-</div>
-<div class="derby-temp-block">
-<button class="derby-temp-btn" id="ddf-3031-btn" onclick="derbyTog('ddf-3031')">
-<span class="derby-temp-name">30-31</span>
-<span class="derby-temp-sv">17</span>
-<span class="derby-temp-sv" style="color:#4fc86a;">4</span>
-<span class="derby-temp-sv">7</span>
-<span class="derby-temp-sv" style="color:#e05050;">6</span>
-<span class="derby-temp-sv" style="color:#80d0ff;">24</span>
-<span class="derby-temp-sv" style="color:#ff9090;">39</span>
-<span class="derby-temp-sv" style="color:#f0c040;">-15</span>
-<span class="derby-temp-sv" style="color:#c0a0ff;">24%</span>
-<span class="derby-temp-arr" id="ddf-3031-arr">▼</span>
-</button>
-<div class="derby-temp-body" id="ddf-3031">
-<div class="derby-comp-lbl">🏆 COPA DEL REY</div>
-<div class="derby-match-row derby-g"><span class="derby-score">4-0</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🇪🇸 LIGA</div>
-<div class="derby-match-row derby-e"><span class="derby-score">2-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">2-2</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">1-1</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Betis</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">2-0</span><span class="derby-comp">🏠</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">0-0</span><span class="derby-comp">✈️</span><span class="derby-rival-m">R. Sociedad 🔧</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-e"><span class="derby-score">3-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Atl Madrid</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-7</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Atl Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">3-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🌍 SELECCION (Egipto)</div>
-<div class="derby-match-row derby-e"><span class="derby-score">1-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Camerún 😈</span><span class="derby-res derby-res-e">E</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-4</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Nigeria</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Senegal 🔧</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">3-8</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Costa Marfil</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">2-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Nigeria</span><span class="derby-res derby-res-g">G</span></div>
-</div>
-</div>
-<div class="derby-temp-block">
-<button class="derby-temp-btn" id="ddf-2930-btn" onclick="derbyTog('ddf-2930')">
-<span class="derby-temp-name">29-30</span>
-<span class="derby-temp-sv">7</span>
-<span class="derby-temp-sv" style="color:#4fc86a;">2</span>
-<span class="derby-temp-sv">0</span>
-<span class="derby-temp-sv" style="color:#e05050;">5</span>
-<span class="derby-temp-sv" style="color:#80d0ff;">10</span>
-<span class="derby-temp-sv" style="color:#ff9090;">15</span>
-<span class="derby-temp-sv" style="color:#f0c040;">-5</span>
-<span class="derby-temp-sv" style="color:#c0a0ff;">29%</span>
-<span class="derby-temp-arr" id="ddf-2930-arr">▼</span>
-</button>
-<div class="derby-temp-body" id="ddf-2930">
-<div class="derby-comp-lbl">🏆 SUPERCOPA ESPAÑA</div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-3</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-comp-lbl">🇪🇸 LIGA</div>
-<div class="derby-match-row derby-g"><span class="derby-score">3-2</span><span class="derby-comp">🏠</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">FC Barcelona 😈</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-g"><span class="derby-score">5-1</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Villarreal</span><span class="derby-res derby-res-g">G</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Villarreal</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">1-2</span><span class="derby-comp">✈️</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-<div class="derby-match-row derby-p"><span class="derby-score">0-3</span><span class="derby-comp">🏠</span><span class="derby-rival-m">Real Madrid</span><span class="derby-res derby-res-p">P</span></div>
-</div>
-</div>
-</div>
-</div>
+
+<style>
+  /* Cards de temporada del Histórico Derbys */
+  #s-munich-derbys .derby-season-card{display:flex;align-items:center;gap:14px;background:radial-gradient(ellipse at 0% 0%,rgba(96,180,255,.18),transparent 60%),linear-gradient(135deg,rgba(20,40,80,.65),rgba(8,16,40,.55));border:1px solid rgba(96,180,255,.45);border-radius:12px;padding:14px 16px;box-shadow:0 0 12px rgba(96,180,255,.10),inset 0 0 14px rgba(96,180,255,.05);position:relative;}
+  #s-munich-derbys .derby-season-label{font-family:'Bebas Neue',sans-serif;font-size:34px;line-height:1;color:#cfe6ff;text-shadow:0 0 10px rgba(128,200,255,.55);letter-spacing:1px;flex-shrink:0;min-width:74px;text-align:left;}
+  #s-munich-derbys .derby-season-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+  #s-munich-derbys .derby-season-team-lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2.2px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;}
+  #s-munich-derbys .derby-season-team{font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;color:#fff;line-height:1.2;word-break:break-word;}
+  #s-munich-derbys .derby-season-team.empty{color:rgba(255,255,255,.35);font-style:italic;font-weight:400;}
+  /* Botones de admin solo cuando hay sesión abierta (body.adm-on) */
+  #s-munich-derbys .derby-season-actions{display:none;flex-direction:column;gap:5px;flex-shrink:0;}
+  body.adm-on #s-munich-derbys .derby-season-actions{display:flex;}
+  #s-munich-derbys .derby-season-btn{background:rgba(96,180,255,.18);border:1px solid rgba(96,180,255,.5);color:#cfe6ff;border-radius:6px;padding:4px 10px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;font-weight:700;}
+  #s-munich-derbys .derby-season-btn:hover{background:rgba(96,180,255,.35);color:#fff;}
+  #s-munich-derbys .derby-season-btn.del{background:rgba(197,15,31,.25);border-color:rgba(197,15,31,.55);color:#ffb0b0;}
+  #s-munich-derbys .derby-season-btn.del:hover{background:rgba(197,15,31,.5);color:#fff;}
+</style>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   HISTÓRICO DERBYS — temporadas editables
+   ───────────────────────────────────────────────────────────────
+   Storage:  `bayern_derbys_seasons_v1`  →  array `{id, season,
+   teamName}`. La temporada de cabecera (la primera del array) es
+   la más reciente, así "AÑADIR TEMPORADA" la coloca arriba.
+
+   Edición / añadido / borrado: PIN admin 747 vía `pG()`. Una vez
+   abierta la sesión, los botones "✏️ EDITAR" y "🗑" aparecen al
+   lado de cada card (CSS `body.adm-on`).
+   ─────────────────────────────────────────────────────────────── */
+(function(){
+  if (window.__MUNICH_DERBYS_SEASONS_READY) return;
+  window.__MUNICH_DERBYS_SEASONS_READY = true;
+
+  var STORE_KEY = 'bayern_derbys_seasons_v1';
+  var DEFAULTS = [
+    { id:'def-3233', season:'32-33', teamName:'' },
+    { id:'def-3132', season:'31-32', teamName:'' },
+    { id:'def-3031', season:'30-31', teamName:'' },
+    { id:'def-2930', season:'29-30', teamName:'' }
+  ];
+
+  function load(){
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw){
+        var arr = JSON.parse(raw);
+        if (Array.isArray(arr)) return arr;
+      }
+    } catch(_){}
+    var seed = DEFAULTS.map(function(t){ var c={}; for (var k in t) c[k]=t[k]; return c; });
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(seed)); } catch(_){}
+    return seed;
+  }
+
+  function save(arr){
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(arr || [])); } catch(_){}
+  }
+
+  function esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function _newId(){
+    return 'ds-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7);
+  }
+
+  function _cardHtml(t){
+    var teamHtml = t.teamName
+      ? '<div class="derby-season-team">'+esc(t.teamName)+'</div>'
+      : '<div class="derby-season-team empty">— sin asignar —</div>';
+    return '<div class="derby-season-card" data-season-id="'+esc(t.id)+'">'
+         +   '<div class="derby-season-label">'+esc(t.season)+'</div>'
+         +   '<div class="derby-season-info">'
+         +     '<div class="derby-season-team-lbl">EQUIPO</div>'
+         +     teamHtml
+         +   '</div>'
+         +   '<div class="derby-season-actions">'
+         +     '<button class="derby-season-btn"     onclick="window.munichDerbysPromptEdit  && window.munichDerbysPromptEdit(\''+esc(t.id)+'\')">✏️ EDITAR</button>'
+         +     '<button class="derby-season-btn del" onclick="window.munichDerbysPromptDelete && window.munichDerbysPromptDelete(\''+esc(t.id)+'\')">🗑</button>'
+         +   '</div>'
+         + '</div>';
+  }
+
+  function render(){
+    var host = document.getElementById('munich-derbys-seasons');
+    if (!host) return;
+    var list = load();
+    if (!list.length){
+      host.innerHTML = '<div style="text-align:center;padding:30px 14px;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:1px;">— Sin temporadas —<br><span style="font-size:11px;color:rgba(255,255,255,.35);">Pulsa <b>➕ AÑADIR TEMPORADA</b> para empezar.</span></div>';
+    } else {
+      host.innerHTML = list.map(_cardHtml).join('');
+    }
+    /* Refrescar contadores PJ/G/E/P del HUB-card; al no haber filas
+       `.derby-match-row` quedarán a 0 — coherente con la nueva vista. */
+    if (typeof window.refreshMunichDerbysHub === 'function'){
+      try { window.refreshMunichDerbysHub(); } catch(_){}
+    }
+  }
+
+  window.renderMunichDerbysSeasons = render;
+
+  window.munichDerbysPromptEdit = function(id){
+    if (!id) return;
+    var doEdit = function(){
+      var arr = load();
+      var t = arr.filter(function(x){ return x && x.id === id; })[0];
+      if (!t) return;
+      var nuevoSeason = window.prompt('🗓️  Etiqueta de la temporada\n(p. ej. 32-33)', t.season || '');
+      if (nuevoSeason == null) return;
+      nuevoSeason = String(nuevoSeason).trim();
+      if (!nuevoSeason){
+        window.alert('La temporada no puede estar vacía.');
+        return;
+      }
+      var nuevoTeam = window.prompt('👥  Nombre del equipo de esta temporada\n(deja vacío para borrarlo)', t.teamName || '');
+      if (nuevoTeam == null) return;
+      t.season   = nuevoSeason;
+      t.teamName = String(nuevoTeam).trim();
+      save(arr);
+      render();
+    };
+    if (typeof window.pG === 'function') window.pG(doEdit); else doEdit();
+  };
+
+  window.munichDerbysPromptAdd = function(){
+    var doAdd = function(){
+      var seasonTxt = window.prompt('🗓️  Etiqueta de la temporada nueva\n(p. ej. 33-34)\n\nLa temporada que añadas pasa a la primera caja.', '');
+      if (seasonTxt == null) return;
+      seasonTxt = String(seasonTxt).trim();
+      if (!seasonTxt) return;
+      var teamTxt = window.prompt('👥  Nombre del equipo (opcional)\n(podrás editarlo después)', '');
+      if (teamTxt == null) teamTxt = '';
+      var arr = load();
+      arr.unshift({
+        id:       _newId(),
+        season:   seasonTxt,
+        teamName: String(teamTxt).trim()
+      });
+      save(arr);
+      render();
+    };
+    if (typeof window.pG === 'function') window.pG(doAdd); else doAdd();
+  };
+
+  window.munichDerbysPromptDelete = function(id){
+    if (!id) return;
+    var doDel = function(){
+      var arr = load();
+      var t = arr.filter(function(x){ return x && x.id === id; })[0];
+      if (!t) return;
+      if (!window.confirm('🗑  ¿Eliminar la temporada « ' + t.season + ' » ?')) return;
+      arr = arr.filter(function(x){ return x && x.id !== id; });
+      save(arr);
+      render();
+    };
+    if (typeof window.pG === 'function') window.pG(doDel); else doDel();
+  };
+
+  /* MutationObserver sobre la clase del propio screen — robusto frente
+     a cualquier wrap de `window.go` que haga el bundle (mismo patrón
+     que la caja Plantilla). */
+  function _wire(){
+    var screen = document.getElementById('s-munich-derbys');
+    if (screen){
+      try {
+        new MutationObserver(function(){
+          if (screen.classList.contains('active')) render();
+        }).observe(screen, {attributes:true, attributeFilter:['class']});
+      } catch(_){}
+    }
+    render();
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _wire);
+  } else {
+    _wire();
+  }
+})();
+</script>
 </div>
 
 <!-- Modal reutilizable para ℹ️ de cada torneo de pretemporada. Se

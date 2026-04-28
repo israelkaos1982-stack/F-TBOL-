@@ -6021,7 +6021,13 @@
       _mlShowStatsOverlay(mk, function(){ window.mlEndMatchGen(mk, winner); });
       return;
     }
-    if (st.isHvH) {
+    /* MVP picker: HvH (los dos humanos) y HvIA (al menos uno humano).
+       Antes solo se mostraba para HvH, así que en partidos del humano
+       contra IA nunca se asignaba MVP → la clasificación contaba 0
+       aunque el equipo hubiera jugado decenas de partidos. */
+    var _isHumanInvolved = st.isHvH
+      || (typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away)));
+    if (_isHumanInvolved) {
       var hasMvp=st.events.some(function(e){return e.type==='mvp';});
       if (!hasMvp) {
         var sqA=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.home])||[];
@@ -8688,6 +8694,51 @@
     }
   };
 
+  /* Cancelar el partido sin guardar resultado. NO es FINALIZAR
+     (eso registra marcador y stats); NO es APLAZAR (eso conserva
+     el estado para reanudar). Cancelar = "este partido nunca pasó":
+     - Detiene el reloj
+     - Marca _gm.finished + _finishPropagatedAt para que el flush
+       propague la finalización al servidor durante el grace period
+       (60 s) y otros dispositivos lo limpien.
+     - Marca trashed local — bloquea cualquier rehidratación por
+       polling antes de que la propagación se complete.
+     - Borra __GM_LIVE y _gmBg[bgKey] → al reabrir el mismo partido
+       (calendario, derbys, jornada) la PREVIA vuelve a salir limpia.
+     - NO guarda en loadResults — el partido sigue como "POR JUGAR". */
+  window.gmCancelMatch = function () {
+    if (!_gm) return;
+    if (!_gm.kickoffDone) {
+      /* Nada que cancelar — no había kickoff. Volvemos como gmVolver. */
+      if (typeof window.gmVolver === 'function') window.gmVolver();
+      return;
+    }
+    if (!confirm('¿Cancelar este partido?\n\nEl cronómetro se detiene, NO se guarda el resultado, y la tarjeta deja de salir en PARTIDOS LIVE. Podrás volver a empezarlo desde la PREVIA.')) return;
+    try { clearInterval(_gm.timerInterval); } catch(_){}
+    _gm.timerRunning = false;
+    _gm.finished = true;
+    _gm._finishPropagatedAt = Date.now();
+    var bgKey = (_gm.j||0) + '|' + (_gm.home||'') + '|' + (_gm.away||'');
+    try { if (typeof window._mlMarkTrashed === 'function') window._mlMarkTrashed(bgKey); } catch(_){}
+    try { if (window._liveStore && typeof window._liveStore.flush === 'function') window._liveStore.flush(); } catch(_){}
+    try {
+      if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
+      if (window._gmBg && window._gmBg[bgKey]) delete window._gmBg[bgKey];
+    } catch(_){}
+    try { if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub(); } catch(_){}
+    try {
+      var modal = document.getElementById('gm-modal');
+      if (modal) modal.style.display = 'none';
+    } catch(_){}
+    var target = (_gm.returnScreen) ? _gm.returnScreen : 's-home';
+    try {
+      if (!document.getElementById(target)) target = 's-home';
+      if (typeof window.go === 'function') window.go(target);
+    } catch(_){
+      try { if (typeof window.go === 'function') window.go('s-home'); } catch(__){}
+    }
+  };
+
   /* Reabre el gm-modal desde el hub PARTIDOS LIVE manteniendo el
      estado (marcador, minuto, eventos). El interval de reloj sigue
      corriendo porque gmVolver no lo limpia. */
@@ -8969,6 +9020,13 @@
     var reqKey = _gmKey(j, home, away);
     var saved = (window._gmBg && window._gmBg[reqKey]) || null;
     if (saved) { delete window._gmBg[reqKey]; }
+    /* Si la clave quedó vetada por un CANCELAR previo, la liberamos
+       — el usuario está abriendo el partido de nuevo, así que el flag
+       trashed (que bloquea polls) ya no debe aplicar. Sin esto el
+       siguiente flush sería neutralizado por el filtro de poll. */
+    try {
+      if (typeof window._mlUnmarkTrashed === 'function') window._mlUnmarkTrashed(reqKey);
+    } catch(_){}
 
     _gm.j = j; _gm.home = home; _gm.away = away;
     _gm.sc = saved ? { a: saved.sc.a || 0, b: saved.sc.b || 0 } : { a:0, b:0 };
@@ -11094,7 +11152,7 @@
     </div>
 
     <!-- Menú (sin cancelar ni resetear el partido) -->
-    <div style="padding:8px;">
+    <div style="padding:8px 8px 4px;">
       <button onclick="window.gmVolver()"
         style="width:100%;padding:11px 8px;border-radius:8px;border:1px solid rgba(255,80,80,.45);
                background:linear-gradient(135deg,rgba(255,40,40,.18),rgba(255,80,80,.08));
@@ -11103,6 +11161,20 @@
                box-shadow:0 0 12px rgba(255,60,60,.25);"
         title="El partido sigue en directo. Solo finaliza con FINALIZAR o APLAZAR.">
         ☰ Menú · 🔴 LIVE
+      </button>
+    </div>
+
+    <!-- Cancelar partido: detiene el reloj, NO guarda resultado y
+         libera el slot para que la PREVIA vuelva a salir al pulsar
+         el partido desde el calendario/derbys. -->
+    <div style="padding:0 8px 8px;">
+      <button onclick="window.gmCancelMatch()"
+        style="width:100%;padding:10px 6px;border-radius:8px;border:1px solid rgba(160,160,160,.35);
+               background:rgba(60,60,60,.18);color:rgba(220,220,220,.85);
+               font-size:11px;font-weight:700;
+               font-family:'Oswald',sans-serif;letter-spacing:1.5px;cursor:pointer;"
+        title="Detiene el reloj, descarta este partido y libera la previa.">
+        🗑 CANCELAR PARTIDO
       </button>
     </div>
   </div>
@@ -12509,6 +12581,14 @@ if (!document.getElementById('live-hub-css')) {
     if (Date.now() - ts > TTL_MS) { delete s[String(k)]; _save(s); return false; }
     return true;
   };
+  /* Limpia el veto para una clave concreta. Lo usa gmOpen al
+     reabrir un partido tras un CANCELAR — el usuario quiere
+     reactivarlo, no debe heredar el flag. */
+  window._mlUnmarkTrashed = function(k) {
+    if (!k) return;
+    var s = _load();
+    if (s[String(k)]) { delete s[String(k)]; _save(s); }
+  };
 })();
 
 window._mlForceFinishMatch = function(mk) {
@@ -12525,6 +12605,12 @@ window._mlForceFinishMatch = function(mk) {
       st.finished = true;
       st._finishPropagatedAt = Date.now();
     }
+  } catch(_){}
+  /* Borrar el wrap del DOM también — sin esto, una pantalla del
+     calendario podía seguir pintándolo tras la próxima navegación. */
+  try {
+    var w = document.getElementById('mlw-' + mk);
+    if (w && w.parentNode) w.parentNode.removeChild(w);
   } catch(_){}
   /* Limpiar el wrap visual: ocultar timer, marcar como finalizado.   */
   try {
@@ -12547,6 +12633,63 @@ window._mlForceFinishMatch = function(mk) {
     var states2 = (typeof window._mlGetAllStates === 'function') ? window._mlGetAllStates() : null;
     if (states2 && states2[mk]) delete states2[mk];
   } catch(_){}
+};
+
+/* "Limpiar todo" del hub LIVE — petición usuario: tras 10 turnos de
+   ajustes, los partidos paused/atascados (cron a 90+ pendientes de
+   FINALIZAR, amistosos creados sin jugar, snapshots stale en _gmBg
+   o __GM_LIVE) seguían apareciendo. Este botón elimina todos los
+   partidos del hub de un golpe — wraps + estados internos +
+   snapshot del gm-modal — y persiste la limpieza al server vía
+   `_liveStore.flush()`. Pide confirmación porque borra estado real,
+   pero es lo único que vacía el hub sin pulsar 13 papeleras. */
+window._liveClearAll = function() {
+  if (!confirm('¿Vaciar TODOS los partidos en directo?\n\nSe pararán los cronómetros y desaparecerán de PARTIDOS LIVE. Los resultados ya guardados en clasificación NO se tocan.')) return;
+  /* 1. Match-live-wraps: forzar cierre uno a uno via _mlForceFinishMatch.
+        Recorremos a posteriori el snapshot porque _mlForceFinishMatch
+        muta el DOM y borra entradas de _mlStates. */
+  try {
+    var wraps = document.querySelectorAll('.match-live-wrap');
+    var mks = [];
+    wraps.forEach(function(w){
+      if (!w.id) return;
+      var mk = w.id.replace(/^mlw-/, '');
+      if (mk) mks.push(mk);
+    });
+    mks.forEach(function(mk){
+      try { window._mlForceFinishMatch(mk); } catch(_){}
+    });
+  } catch(_){}
+  /* 2. gm-modal activo (__GM_LIVE) */
+  try {
+    if (window.__GM_LIVE) {
+      try { if (window.__GM_LIVE.timerInterval) clearInterval(window.__GM_LIVE.timerInterval); } catch(_){}
+      window.__GM_LIVE.finished = true;
+      window.__GM_LIVE.timerRunning = false;
+      window.__GM_LIVE = null;
+    }
+    if (window._gm) {
+      try { if (window._gm.timerInterval) clearInterval(window._gm.timerInterval); } catch(_){}
+      window._gm.finished = true;
+      window._gm.timerRunning = false;
+    }
+  } catch(_){}
+  /* 3. gm-modal backgrounded (_gmBg): borrar todos los snapshots */
+  try {
+    if (window._gmBg) {
+      Object.keys(window._gmBg).forEach(function(k){
+        var s = window._gmBg[k];
+        if (s) {
+          try { if (s.timerInterval) clearInterval(s.timerInterval); } catch(_){}
+          s.finished = true;
+        }
+        delete window._gmBg[k];
+      });
+    }
+  } catch(_){}
+  /* 4. Persist + repintar */
+  try { if (window._liveStore && typeof window._liveStore.flush === 'function') window._liveStore.flush(); } catch(_){}
+  try { if (typeof buildLiveScreen === 'function') buildLiveScreen(); } catch(_){}
 };
 
 /* ── mapa de competiciones por prefijo de cal-ID ── */
@@ -12945,8 +13088,8 @@ function buildLiveScreen() {
     } catch(_){}
 
     /* Excluir partidos cuyo cronómetro ya alcanzó el tope (90+stoppage
-       o 120+stoppage en prórroga) y está en pausa. El usuario los
-       considera "finalizados" aunque aún no haya pulsado FINALIZAR. */
+       o 120+stoppage en prórroga). El usuario los considera
+       "finalizados" aunque aún no haya pulsado FINALIZAR. */
     try {
       if (_wrapSt && _gmTimerExhausted(_wrapSt)) {
         _hardCleanupLiveWrap(w, scoreEl, _wrapSt);
@@ -13013,20 +13156,42 @@ function buildLiveScreen() {
     } catch(_){ return false; }
   }
   /* Helper: un partido cuyo cronómetro alcanzó el tope (90 + descuento
-     o 120 + descuento en prórroga) y está pausado se considera
-     "agotado". El usuario no le está dando juego — está esperando a
-     pulsar FINALIZAR. No tiene sentido seguir mostrándolo en
-     PARTIDOS LIVE como si estuviera ocurriendo, así que lo
-     excluimos del hub aunque no esté marcado finished:true.
-     Pedido del usuario: "los partidos live se quedan abiertos aunque
-     finalice". */
+     o 120 + descuento en prórroga) se considera "agotado".
+     IMPORTANTE: ya NO miramos `timerRunning` — un cron que llegó al
+     final pero por algún motivo se quedó con el flag a true (background
+     tab, navegador suspendido, etc.) seguía apareciendo en LIVE
+     eternamente. La ÚNICA condición es timerSec >= max. Si el partido
+     pasó del minuto 90+stoppage o del 120+stoppage en prórroga, fuera
+     del hub aunque el usuario nunca pulsase FINALIZAR. Pedido del
+     usuario: "los partidos live se quedan abiertos aunque finalice".
+
+     También consideramos "agotado" cualquier partido cuyo cronómetro
+     alcanzó 90' (5400 s) y está PAUSADO sin nuevos eventos en > 15 min
+     reales — un partido de Liga olvidado a los 90' no debe seguir
+     mostrándose horas después. Para gm-modal/__GM_LIVE el `startedAt`
+     se actualiza con el último tick de eventos. */
   function _gmTimerExhausted(snap) {
-    if (!snap || snap.timerRunning) return false;
+    if (!snap) return false;
     var stops = (typeof _mlCountStoppageHalves === 'function')
                   ? _mlCountStoppageHalves(snap) : { first: 0, second: 0 };
     var normalMax = snap.etDone ? 7200 : 5400;  // GM_MAX_ET / GM_MAX_NORMAL
     var max = normalMax + (stops.second || 0) * 60;
-    return (snap.timerSec || 0) >= max;
+    var ts = snap.timerSec || 0;
+    if (ts >= max) return true;
+    /* Idle > 30 min en pausa después de 70' jugado → fuera del hub. */
+    if (!snap.timerRunning && ts >= 4200 /* 70' */) {
+      var lastTouch = snap._finishPropagatedAt || snap._lastEventAt || snap.startedAt || 0;
+      if (lastTouch && (Date.now() - lastTouch) > 30 * 60 * 1000) return true;
+    }
+    return false;
+  }
+  /* Helper: amistoso que nunca llegó a arrancar el cronómetro
+     (kickoffDone=false y timerSec=0). Permanecía colgado en LIVE
+     desde que el usuario pulsaba CREAR PARTIDO AMISTOSO sin llegar a
+     iniciar la simulación. Lo excluimos del hub. */
+  function _wrapNeverStarted(st) {
+    if (!st) return false;
+    return !st.kickoffDone && (st.timerSec || 0) === 0;
   }
   if (gmLive && _gmMatchIsAlreadyFinished(gmLive.j, gmLive.home, gmLive.away)) {
     /* Limpieza defensiva: si el marcador está guardado, el partido
@@ -13082,6 +13247,12 @@ function buildLiveScreen() {
   if (countEl) {
     countEl.textContent = totalLive > 0 ? (totalLive + ' en directo') : '';
   }
+  /* Botón "Limpiar todo": solo visible cuando hay >= 1 partido en LIVE.
+     Permite al usuario vaciar el hub de un golpe sin tener que pulsar
+     la papelera de cada tarjeta. Útil cuando se le quedaron partidos
+     atascados (cron a 90+, amistosos creados sin jugar, etc.). */
+  var clearBtn = document.getElementById('live-clear-all-btn');
+  if (clearBtn) clearBtn.style.display = totalLive > 0 ? '' : 'none';
 
   /* update home card animation state */
   if (typeof window.__LIVE_MATCH_COUNT !== 'undefined') {
@@ -13204,7 +13375,15 @@ function buildLiveScreen() {
 }
 /* Recuenta los partidos en directo (incluyendo el partido del
    gm-modal si está activo) y actualiza el indicador del home sin
-   necesidad de que el usuario esté en la pantalla de PARTIDOS LIVE. */
+   necesidad de que el usuario esté en la pantalla de PARTIDOS LIVE.
+   IMPORTANTE: el botón LIVE del home solo debe ANIMARSE cuando hay
+   un partido humano DISPUTÁNDOSE (cron ticking) ahora mismo —
+   pedido del usuario. Los partidos pausados, nunca iniciados o con
+   el cron agotado a la espera de FINALIZAR NO cuentan para la
+   animación; tampoco los snapshots backgrounded en _gmBg, que por
+   definición están en pausa. Sí siguen apareciendo en la lista
+   completa del hub PARTIDOS LIVE para que el usuario pueda
+   reanudarlos. */
 function _refreshLiveCount() {
  try {
   var esH = (typeof window.esHumano === 'function') ? window.esHumano : null;
@@ -13213,11 +13392,19 @@ function _refreshLiveCount() {
   wraps.forEach(function(w) {
     var s = w.querySelector('.ml-score');
     if (!s || !s.classList.contains('state-playing')) return;
+    /* Estado real del wrap. Si el partido no está corriendo
+       (paused, never-started, exhausted, finished, trashed) NO
+       cuenta para la animación del home. Esto cierra el caso
+       "icono LIVE saltando aunque no haya nada en juego" del
+       usuario. */
+    var mk = w.id ? w.id.replace(/^mlw-/, '') : '';
+    var st = (mk && typeof window._mlGetState === 'function') ? window._mlGetState(mk) : null;
+    if (!st || !st.timerRunning || st.finished) return;
+    if (typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(mk)) return;
+    if (typeof _gmTimerExhausted === 'function' && _gmTimerExhausted(st)) return;
     if (esH) {
       /* Ver nota en buildLiveScreen — usar _mlGetState(mk) para
          obtener los nombres canónicos (no uppercase) de cada wrap. */
-      var mk = w.id ? w.id.replace(/^mlw-/, '') : '';
-      var st = (typeof window._mlGetState === 'function') ? window._mlGetState(mk) : null;
       var hn, an;
       if (st && st.home && st.away) {
         hn = st.home; an = st.away;
@@ -13241,7 +13428,16 @@ function _refreshLiveCount() {
     }
     liveWrapCount++;
   });
-  var gmActive = (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone) ? 1 : 0;
+  /* gm-modal activo (__GM_LIVE) — solo cuenta si el cron está
+     ticking AHORA. Si el usuario lo pausó o ya está agotado
+     esperando FINALIZAR, no anima el home. */
+  var gmActive = 0;
+  if (window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone
+      && window.__GM_LIVE.timerRunning) {
+    if (typeof _gmTimerExhausted !== 'function' || !_gmTimerExhausted(window.__GM_LIVE)) {
+      gmActive = 1;
+    }
+  }
   /* Si el partido "activo" ya tiene resultado guardado en
      loadResults(), en realidad está FINALIZADO — no lo contamos y
      desregistramos la referencia para que la próxima pasada del hub
@@ -13261,20 +13457,21 @@ function _refreshLiveCount() {
     } catch(_){}
     gmActive = 0;
   }
-  /* Partidos gm-modal en segundo plano (multi-live) — uno por cada
-     equipo humano que se dejó pausado mientras el usuario abría otro. */
-  var gmBgCount = 0;
+  /* Snapshots `_gmBg`: por definición están EN PAUSA (el usuario
+     abrió otro partido y este se quedó en segundo plano). Aunque
+     siguen vivos en la lista del hub (para reanudarlos), NO deben
+     animar el botón LIVE del home — la animación es para partidos
+     que se están disputando ahora. Sí los seguimos enumerando
+     porque queremos limpiar snapshots fantasma con resultado ya
+     guardado. */
   if (window._gmBg) {
     Object.keys(window._gmBg).forEach(function(k){
       var snap = window._gmBg[k];
       if (!snap || snap.finished || !snap.kickoffDone) return;
-      /* Snapshot fantasma: si ya hay resultado guardado, lo borramos y
-         no lo contamos. */
       if (_finishedByResult(snap)) { try { delete window._gmBg[k]; } catch(_){} return; }
-      gmBgCount++;
     });
   }
-  var total = liveWrapCount + gmActive + gmBgCount;
+  var total = liveWrapCount + gmActive;
   window.__LIVE_MATCH_COUNT = total;
   try {
     localStorage.setItem('liveMatchCount', String(total));
@@ -13323,27 +13520,16 @@ window.goLiveMatches = function() {
   }, 3000);
 };
 
-/* ── background 5s poll to keep home card live-active state ── */
+/* ── background 5s poll to keep home card live-active state ──
+   Antes este poll contaba con un filtro mucho más laxo (solo
+   `state-playing` en el wrap) que sobrescribía el contador estricto
+   de `_refreshLiveCount` cada 5 s y volvía a animar el botón LIVE
+   aunque el partido estuviera pausado. Ahora delegamos en la
+   versión estricta para que el home solo brille cuando hay un
+   partido humano TICKING ahora mismo. Pedido del usuario. */
 (function startBgPoll() {
   setInterval(function() {
-    var wraps = document.querySelectorAll('.match-live-wrap.hvh, .match-live-wrap.hvia');
-    var count = 0;
-    wraps.forEach(function(w) {
-      var scoreEl = w.querySelector('.ml-score');
-      if (scoreEl && scoreEl.classList.contains('state-playing')) count++;
-    });
-    window.__LIVE_MATCH_COUNT = count;
-    /* animate home LIVE button if matches active */
-    var homeCard = document.querySelector('.home-live-card, [onclick*="goLiveMatches"]');
-    if (homeCard) {
-      if (count > 0) {
-        homeCard.style.animation = 'homeLivePulse 1.1s ease-in-out infinite';
-        homeCard.style.borderColor = 'rgba(255,60,60,.8)';
-      } else {
-        homeCard.style.animation = '';
-        homeCard.style.borderColor = '';
-      }
-    }
+    try { if (typeof _refreshLiveCount === 'function') _refreshLiveCount(); } catch(_){}
   }, 5000);
 })();
 
@@ -16161,9 +16347,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     e.classList.add('show');
     /* Timeout de seguridad: si por algún motivo ningún overlay
-       siguiente aparece, cerramos el spinner a los 8 s. */
+       siguiente aparece, cerramos el spinner enseguida. Antes era
+       8 s y el usuario veía el spinner una eternidad cuando un
+       overlay no estaba en la lista TARGETS — ahora 1.5 s máximo. */
     if (_safety) clearTimeout(_safety);
-    _safety = setTimeout(_hide, 8000);
+    _safety = setTimeout(_hide, 1500);
   }
   function _hide(){
     var e = _el(); if (!e) return;
@@ -16199,7 +16387,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* En cuanto cualquier overlay relevante gana .show, ocultamos
      el spinner — la siguiente pantalla está lista. */
-  var TARGETS = ['ml-stats-ov','ml-post-ov','gm-post-ov','mvp-force-overlay','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live'];
+  /* IDs (no clases) de cualquier overlay que pueda aparecer tras un
+     FINALIZAR/CONFIRMAR. Si añades uno nuevo, mételo aquí o el
+     spinner se quedará pegado hasta el timeout de seguridad.
+     OJO: el MVP picker es id=gen-mvp-ov (su clase es mvp-force-overlay).
+     Antes solo teníamos la clase y el observer no lo cazaba. */
+  var TARGETS = ['ml-stats-ov','ml-stats-entry-ov','ml-post-ov','gm-post-ov','gen-mvp-ov','mvp-force-overlay','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live','ml-final-ov','ml-descanso-ov','ml-injury-ov','prepartido-overlay'];
   function _scanShown(root){
     if (!root || root.nodeType !== 1) return false;
     for (var i = 0; i < TARGETS.length; i++) {

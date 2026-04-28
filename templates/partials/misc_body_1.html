@@ -8058,6 +8058,58 @@ Tottenham
       } catch(_){}
     }
 
+    /* 1d. ÚLTIMO RECURSO: agregar `data.results` directamente para
+       este equipo. Cubre el caso en el que `team.id` no encaja con
+       `data.teams[].id` (ej. el id se cambió a posteriori en
+       lextOpenSquad pero los resultados siguen referenciando el id
+       viejo) → standings() no enlaza nada y devuelve ceros. Aquí
+       resolvemos el id vía NOMBRE en data.teams y luego filtramos
+       results por home/away. */
+    if (!row || (!row.pj && !row.gf)) {
+      try {
+        var data2 = (typeof loadData === 'function') ? loadData(CURRENT_KEY) : null;
+        if (data2 && Array.isArray(data2.teams) && Array.isArray(data2.results)) {
+          /* Resolver id efectivo a partir del nombre. Buscamos por
+             nombre normalizado primero — más fiable que el id. */
+          var effId = null;
+          for (var ti = 0; ti < data2.teams.length; ti++) {
+            var dt = data2.teams[ti];
+            if (!dt) continue;
+            if (dt.id === targetId) { effId = dt.id; break; }
+          }
+          if (!effId) {
+            for (var ti2 = 0; ti2 < data2.teams.length; ti2++) {
+              var dt2 = data2.teams[ti2];
+              if (dt2 && _normName(dt2.name) === targetName) { effId = dt2.id; break; }
+            }
+          }
+          if (effId) {
+            var agg = {pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, ta:0, tr:0};
+            data2.results.forEach(function(r){
+              if (!r) return;
+              if (r.h === effId) {
+                agg.pj++;
+                agg.gf += (r.gh||0); agg.gc += (r.ga||0);
+                agg.ta += (r.tah||0); agg.tr += (r.trh||0);
+                if ((r.gh||0) > (r.ga||0)) { agg.v++; agg.pts += 3; }
+                else if ((r.gh||0) < (r.ga||0)) { agg.p++; }
+                else { agg.e++; agg.pts++; }
+              } else if (r.a === effId) {
+                agg.pj++;
+                agg.gf += (r.ga||0); agg.gc += (r.gh||0);
+                agg.ta += (r.taa||0); agg.tr += (r.tra||0);
+                if ((r.ga||0) > (r.gh||0)) { agg.v++; agg.pts += 3; }
+                else if ((r.ga||0) < (r.gh||0)) { agg.p++; }
+                else { agg.e++; agg.pts++; }
+              }
+            });
+            agg.dg = agg.gf - agg.gc;
+            if (agg.pj > 0) row = agg;
+          }
+        }
+      } catch(_){}
+    }
+
     if (!row) row = {pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0};
     var pct = row.pj > 0 ? Math.round((row.v / row.pj) * 100) : 0;
 

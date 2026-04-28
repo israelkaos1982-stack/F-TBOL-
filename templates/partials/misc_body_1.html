@@ -6326,11 +6326,12 @@ window._showSimProgress = function(opts, onDone){
 </div>
 
 <div class="lext-legend" id="lext-legend">
-  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#3160ff;"></span>UCL</div>
-  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#a050ff;"></span>Previa</div>
+  <div class="lext-leg-item lext-leg-ucl"><span class="lext-leg-dot" style="background:#3160ff;"></span>UCL</div>
+  <div class="lext-leg-item lext-leg-uclprev"><span class="lext-leg-dot" style="background:#a050ff;"></span>Previa</div>
   <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#f0c040;"></span>Open</div>
-  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#ff8214;"></span>E.League</div>
-  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#3cc878;"></span>Conference</div>
+  <div class="lext-leg-item lext-leg-uel"><span class="lext-leg-dot" style="background:#ff8214;"></span>E.League</div>
+  <div class="lext-leg-item lext-leg-uecl"><span class="lext-leg-dot" style="background:#3cc878;"></span>Conference</div>
+  <div class="lext-leg-item lext-leg-wildcard" style="display:none;"><span class="lext-leg-dot" style="background:#ffffff;"></span>WildCard</div>
   <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#e03c3c;"></span>Descenso</div>
 </div>
 
@@ -6351,6 +6352,7 @@ window._showSimProgress = function(opts, onDone){
 .lext-row.z-uclQ{background:rgba(240,192,64,.12);border-left-color:#f0c040;}
 .lext-row.z-uel{background:rgba(255,130,20,.13);border-left-color:#ff8214;}
 .lext-row.z-uecl{background:rgba(60,200,120,.12);border-left-color:#3cc878;}
+.lext-row.z-wildcard{background:rgba(255,255,255,.10);border-left-color:#ffffff;}
 .lext-row.z-desc{background:rgba(224,60,60,.13);border-left-color:#e03c3c;}
 .lext-pos{font-family:"Bebas Neue",sans-serif;font-size:15px;color:rgba(255,255,255,.55);text-align:center;}
 .lext-team{display:flex;align-items:center;gap:6px;min-width:0;}
@@ -6729,16 +6731,24 @@ Tottenham
       <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-reglas')">✕</button>
     </div>
     <div class="lext-sub" style="margin-bottom:10px;">Define cuántas plazas hay en cada zona. La tabla colorea los puestos automáticamente de arriba hacia abajo. Si sumas más plazas que equipos, las que sobren se ignoran.</div>
-    <label class="lext-label">🔵 Champions League (plazas directas)</label>
-    <input class="lext-input" id="lext-reg-ucl" type="number" min="0" max="20" value="1" />
-    <label class="lext-label">🟣 Previa Champions</label>
-    <input class="lext-input" id="lext-reg-ucl-prev" type="number" min="0" max="20" value="1" />
+    <div id="lext-reg-ucl-row">
+      <label class="lext-label">🔵 Champions League (plazas directas)</label>
+      <input class="lext-input" id="lext-reg-ucl" type="number" min="0" max="20" value="1" />
+    </div>
+    <div id="lext-reg-uclprev-row">
+      <label class="lext-label">🟣 Previa Champions</label>
+      <input class="lext-input" id="lext-reg-ucl-prev" type="number" min="0" max="20" value="1" />
+    </div>
     <label class="lext-label">🟡 Open Qualifier</label>
     <input class="lext-input" id="lext-reg-ucl-qual" type="number" min="0" max="20" value="1" />
-    <label class="lext-label">🟠 Europa League</label>
-    <input class="lext-input" id="lext-reg-uel" type="number" min="0" max="20" value="1" />
-    <label class="lext-label">🟢 Conference League</label>
-    <input class="lext-input" id="lext-reg-uecl" type="number" min="0" max="20" value="1" />
+    <div id="lext-reg-uel-row">
+      <label class="lext-label">🟠 Europa League</label>
+      <input class="lext-input" id="lext-reg-uel" type="number" min="0" max="20" value="1" />
+    </div>
+    <div id="lext-reg-uecl-row">
+      <label class="lext-label">🟢 Conference League</label>
+      <input class="lext-input" id="lext-reg-uecl" type="number" min="0" max="20" value="1" />
+    </div>
     <div id="lext-reg-wildcard-row" style="display:none;">
       <label class="lext-label" style="color:rgba(255,255,255,.92);">⚪ WildCard Round</label>
       <input class="lext-input" id="lext-reg-wildcard" type="number" min="0" max="20" value="0" style="border-color:rgba(255,255,255,.5);" />
@@ -7396,16 +7406,21 @@ Tottenham
     var uclQ = Math.max(0, zones.uclQual|0);
     var uel = Math.max(0, zones.uel|0);
     var uecl = Math.max(0, zones.uecl|0);
+    var wildcard = Math.max(0, zones.wildcard|0);
     var desc = Math.max(0, zones.desc|0);
     // Zona de descenso (últimas plazas)
     if(desc>0 && pos > total-desc) return 'z-desc';
-    // Zonas europeas de arriba hacia abajo
+    // Zonas europeas de arriba hacia abajo. WildCard se intercala
+    // tras Conference para que en las ligas pequeñas (donde
+    // ucl/uclP/uel/uecl están a 0) la franja blanca caiga justo
+    // después de Open Qualifier, como pidió el usuario.
     var cursor = 0;
     if(pos <= (cursor+=ucl)) return 'z-uclD';
     if(pos <= (cursor+=uclP)) return 'z-uclP';
     if(pos <= (cursor+=uclQ)) return 'z-uclQ';
     if(pos <= (cursor+=uel)) return 'z-uel';
     if(pos <= (cursor+=uecl)) return 'z-uecl';
+    if(pos <= (cursor+=wildcard)) return 'z-wildcard';
     return '';
   }
 
@@ -7770,27 +7785,34 @@ Tottenham
     document.getElementById('lext-reg-uecl').value = z.uecl;
     document.getElementById('lext-reg-desc').value = z.desc;
     /* WildCard Round — solo se muestra en las ligas pequeñas que
-       reciben este cupo extra. Para el resto el campo permanece
-       oculto (y su valor persistido se mantiene a 0). */
+       reciben este cupo extra. Para esas ligas también ocultamos
+       UCL/Previa/Europa/Conference (no aplican a su nivel) y solo
+       quedan visibles Open Qualifier + WildCard + Descenso. */
+    var isMinor = !!WILDCARD_LIGA_SLUGS[CURRENT_KEY];
     var wcRow = document.getElementById('lext-reg-wildcard-row');
     var wcInp = document.getElementById('lext-reg-wildcard');
-    var showWc = !!WILDCARD_LIGA_SLUGS[CURRENT_KEY];
-    if(wcRow) wcRow.style.display = showWc ? '' : 'none';
+    if(wcRow) wcRow.style.display = isMinor ? '' : 'none';
     if(wcInp) wcInp.value = Number(z.wildcard||0);
+    ['lext-reg-ucl-row','lext-reg-uclprev-row','lext-reg-uel-row','lext-reg-uecl-row']
+      .forEach(function(id){
+        var el = document.getElementById(id);
+        if(el) el.style.display = isMinor ? 'none' : '';
+      });
     lextOpenOv('lext-ov-reglas');
   };
   window.lextSaveReglas = function(){
     if(!CURRENT_KEY) return;
     var data = loadData(CURRENT_KEY);
     var cfg = ensureConfig(data);
+    var isMinor = !!WILDCARD_LIGA_SLUGS[CURRENT_KEY];
     cfg.zones = {
-      ucl: Math.max(0, parseInt(document.getElementById('lext-reg-ucl').value,10)||0),
-      uclPrev: Math.max(0, parseInt(document.getElementById('lext-reg-ucl-prev').value,10)||0),
-      uclQual: Math.max(0, parseInt(document.getElementById('lext-reg-ucl-qual').value,10)||0),
-      uel: Math.max(0, parseInt(document.getElementById('lext-reg-uel').value,10)||0),
-      uecl: Math.max(0, parseInt(document.getElementById('lext-reg-uecl').value,10)||0),
+      ucl:      isMinor ? 0 : Math.max(0, parseInt(document.getElementById('lext-reg-ucl').value,10)||0),
+      uclPrev:  isMinor ? 0 : Math.max(0, parseInt(document.getElementById('lext-reg-ucl-prev').value,10)||0),
+      uclQual:  Math.max(0, parseInt(document.getElementById('lext-reg-ucl-qual').value,10)||0),
+      uel:      isMinor ? 0 : Math.max(0, parseInt(document.getElementById('lext-reg-uel').value,10)||0),
+      uecl:     isMinor ? 0 : Math.max(0, parseInt(document.getElementById('lext-reg-uecl').value,10)||0),
       wildcard: Math.max(0, parseInt((document.getElementById('lext-reg-wildcard')||{}).value,10)||0),
-      desc: Math.max(0, parseInt(document.getElementById('lext-reg-desc').value,10)||0)
+      desc:     Math.max(0, parseInt(document.getElementById('lext-reg-desc').value,10)||0)
     };
     saveData(CURRENT_KEY, data);
     lextCloseOv('lext-ov-reglas');
@@ -10161,6 +10183,20 @@ Tottenham
     var e = document.getElementById('liga-ext-emoji');
     if(t) t.textContent = CURRENT_NAME;
     if(e) e.textContent = CURRENT_EMOJI;
+    /* Leyenda condicional: en ligas pequeñas (las 18 con WildCard)
+       solo mostramos Open + WildCard + Descenso. En el resto ocultamos
+       el chip WildCard. */
+    (function(){
+      var isMinor = !!WILDCARD_LIGA_SLUGS[CURRENT_KEY];
+      var legend = document.getElementById('lext-legend');
+      if(!legend) return;
+      ['lext-leg-ucl','lext-leg-uclprev','lext-leg-uel','lext-leg-uecl'].forEach(function(cls){
+        var el = legend.querySelector('.'+cls);
+        if(el) el.style.display = isMinor ? 'none' : '';
+      });
+      var wcLeg = legend.querySelector('.lext-leg-wildcard');
+      if(wcLeg) wcLeg.style.display = isMinor ? '' : 'none';
+    })();
     // Renderiza primero desde cache local (respuesta inmediata)
     var cached = loadData(CURRENT_KEY);
     applyLeagueHeaderFromData(cached);

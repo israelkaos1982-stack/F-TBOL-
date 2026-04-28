@@ -5581,6 +5581,8 @@ window.pG = function(fn) {
 #restoligas-stats-ov{display:none;position:fixed;inset:0;z-index:10050;background:rgba(0,0,6,.93);overflow-y:auto;padding:18px 12px 30px;}
 #restoligas-stats-ov.show{display:block;}
 .restoligas-stats-card{max-width:520px;margin:0 auto;background:linear-gradient(170deg,#06101c,#0d1a2a);border:1px solid rgba(94,182,228,.35);border-radius:14px;padding:16px 14px 14px;box-shadow:0 0 30px rgba(94,182,228,.12),0 6px 20px rgba(0,0,0,.6);}
+.restoligas-stats-back{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid rgba(94,182,228,.4);border-radius:8px;background:rgba(94,182,228,.08);color:#9fdcff;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;cursor:pointer;margin-bottom:10px;}
+.restoligas-stats-back:hover{background:rgba(94,182,228,.18);}
 .restoligas-stats-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:24px;letter-spacing:3px;color:#9fdcff;text-align:center;font-weight:700;margin-bottom:14px;}
 .restoligas-stats-section{margin-bottom:14px;border:1px solid rgba(94,182,228,.25);border-radius:10px;background:rgba(0,0,0,.3);}
 .restoligas-stats-section-hdr{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid rgba(94,182,228,.18);font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:2px;color:#9fdcff;font-weight:700;text-transform:uppercase;}
@@ -5600,6 +5602,7 @@ window.pG = function(fn) {
 </style>
 <div id="restoligas-stats-ov" onclick="if(event.target===this)this.classList.remove('show')">
   <div class="restoligas-stats-card">
+    <button class="restoligas-stats-back" onclick="document.getElementById('restoligas-stats-ov').classList.remove('show')">◀ Volver</button>
     <div class="restoligas-stats-title">📈 Resto de Ligas · Estadísticas</div>
     <div id="restoligas-stats-content"></div>
     <button class="restoligas-stats-close" onclick="document.getElementById('restoligas-stats-ov').classList.remove('show')">Cerrar</button>
@@ -5770,9 +5773,12 @@ window.pG = function(fn) {
     /* Recorremos las 51 ligas de la lista, leemos su ligaExt_<slug>
        de localStorage y construimos un mapa por jugador con sus
        stats acumuladas + bandera (de la menu-card). Devolvemos
-       cuatro listas top-N para cada categoría. */
+       una lista top-N por cada categoría (mismas que Liga EA Sports
+       reflejadas sobre los datos que applyMatchStats deja en cada
+       jugador del registro ligaExt: pj/gol/pen/fk/mvp/ta/tr/imbat/
+       penSaved). */
     var teamFlag = {};   /* normNm(teamName) -> flag emoji */
-    var byPlayer = {};   /* "team::name" -> {name,team,flag,gol,imbat,ta,tr} */
+    var byPlayer = {};   /* "team::name" -> {name,team,flag,gol,pen,fk,mvp,imbat,penSaved,ta,tr} */
     _eachLeagueCard(function(name, flag){
       var slug = _slugify(name);
       var data = _readLigaData(slug);
@@ -5785,18 +5791,22 @@ window.pG = function(fn) {
           if(!p || !p.name) return;
           var key = _normNm(t.name) + '::' + _normNm(p.name);
           if(!byPlayer[key]){
-            byPlayer[key] = { name:p.name, team:t.name, flag:flag, gol:0, imbat:0, ta:0, tr:0 };
+            byPlayer[key] = { name:p.name, team:t.name, flag:flag,
+              gol:0, pen:0, fk:0, mvp:0, imbat:0, penSaved:0, ta:0, tr:0 };
           }
           var ent = byPlayer[key];
-          /* gol total = gol regular + pen + falta (mismo criterio
-             que la liga EA Sports para ser consistente). */
-          var golR = Number(p.gol||0);
-          var pen  = Number(p.pen||0);
-          var fk   = Number(p.fk||0);
-          ent.gol  += golR + pen + fk;
-          ent.imbat += Number(p.imbat||0);
-          ent.ta   += Number(p.ta||0);
-          ent.tr   += Number(p.tr||0);
+          /* applyMatchStats ya hace `scorer.gol++` para TODO gol
+             (open + pen + fk), así que p.gol ES el total. Antes
+             sumábamos golR + pen + fk → doble conteo. Fix:
+             tomamos p.gol directamente como total. */
+          ent.gol      += Number(p.gol||0);
+          ent.pen      += Number(p.pen||0);
+          ent.fk       += Number(p.fk||0);
+          ent.mvp      += Number(p.mvp||0);
+          ent.imbat    += Number(p.imbat||0);
+          ent.penSaved += Number(p.penSaved||0);
+          ent.ta       += Number(p.ta||0);
+          ent.tr       += Number(p.tr||0);
         });
       });
     });
@@ -5811,10 +5821,14 @@ window.pG = function(fn) {
       return list.slice(0, n);
     }
     return {
-      goleadores: topBy('gol', 15),
-      porteros:   topBy('imbat', 15),
-      amarillas:  topBy('ta', 15),
-      rojas:      topBy('tr', 15)
+      goleadores:    topBy('gol',      15),
+      penaltis:      topBy('pen',      15),
+      faltas:        topBy('fk',       15),
+      mvps:          topBy('mvp',      15),
+      porteros:      topBy('imbat',    15),
+      penParados:    topBy('penSaved', 15),
+      amarillas:     topBy('ta',       15),
+      rojas:         topBy('tr',       15)
     };
   }
   function _renderSection(title, ico, list, valLabel){
@@ -5844,11 +5858,19 @@ window.pG = function(fn) {
     var holder = document.getElementById('restoligas-stats-content');
     if(!ov || !holder) return;
     var s = _collectAggregateStats();
+    /* Mismas categorías que Liga EA Sports — ordenadas de más
+       relevantes a menos. Las que no se pueden poblar desde
+       applyMatchStats (pen-prov, pen-fallado, propia) se omiten
+       porque no se trackean en el motor de las 51 ligas. */
     holder.innerHTML = ''
-      + _renderSection('Goleadores',         '⚽', s.goleadores, {field:'gol'})
-      + _renderSection('Portería imbatida',  '🧤', s.porteros,   {field:'imbat'})
-      + _renderSection('Tarjetas amarillas', '🟨', s.amarillas,  {field:'ta'})
-      + _renderSection('Tarjetas rojas',     '🟥', s.rojas,      {field:'tr'});
+      + _renderSection('Goleadores',         '⚽',  s.goleadores, {field:'gol'})
+      + _renderSection('MVP',                '⭐',  s.mvps,       {field:'mvp'})
+      + _renderSection('Goles de penalti',   '⚽🥅', s.penaltis,   {field:'pen'})
+      + _renderSection('Goles de falta',     '⚽🎯', s.faltas,     {field:'fk'})
+      + _renderSection('Portería imbatida',  '🧤',  s.porteros,   {field:'imbat'})
+      + _renderSection('Penaltis parados',   '🖐🥅', s.penParados, {field:'penSaved'})
+      + _renderSection('Tarjetas amarillas', '🟨',  s.amarillas,  {field:'ta'})
+      + _renderSection('Tarjetas rojas',     '🟥',  s.rojas,      {field:'tr'});
     ov.classList.add('show');
   };
 })();

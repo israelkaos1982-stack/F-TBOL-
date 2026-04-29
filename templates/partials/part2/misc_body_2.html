@@ -16842,6 +16842,119 @@ document.addEventListener('DOMContentLoaded', function() {
       ).then(function(){ _refreshOpenSquadAfterSim('liga-primera-federacion'); });
     };
 
+    /* Wrap de `simularJornadaIA(j)` — botones SIM J1, SIM J2, …, SIM J38
+       de la pantalla "Jornada N de Liga EA Sports". Una jornada simula
+       ~10 partidos IA-vs-IA, termina en <500ms; mostramos el overlay
+       con fake-progress muy corto solo para que la transición visual
+       sea consistente con el resto de simulaciones. */
+    var origSjiaSingle = window.simularJornadaIA;
+    if(typeof origSjiaSingle === 'function'){
+      window.simularJornadaIA = function(j){
+        if(typeof window.ftbolLoaderRun !== 'function'){
+          return origSjiaSingle(j);
+        }
+        return window.ftbolLoaderRun(
+          { title:'LIGA EA SPORTS · JORNADA '+j, sub:'Simulando partidos…', minMs:600 },
+          function(ctx){
+            return new Promise(function(resolve){
+              ctx.progress(20, 'Cargando plantillas…');
+              setTimeout(function(){ ctx.progress(55, 'Simulando partidos…');
+                setTimeout(function(){
+                  try { origSjiaSingle(j); } catch(_){}
+                  ctx.progress(95, 'Volcando resultados…');
+                  setTimeout(function(){ ctx.progress(100,'Hecho'); resolve(); }, 60);
+                }, 80);
+              }, 80);
+            });
+          }
+        );
+      };
+    }
+
+    /* Wrap de `simulateOpenQualifier` — botón 🎮 Sim de la pantalla
+       Open Qualifier · Clasificación. Simula 5 grupos de 13 equipos
+       (sync, ~2-3s). Fake-progress por fases. */
+    var origSimOQ = window.simulateOpenQualifier;
+    if(typeof origSimOQ === 'function'){
+      window.simulateOpenQualifier = function(){
+        if(typeof window.ftbolLoaderRun !== 'function'){
+          return origSimOQ();
+        }
+        return _runFakeProgress(
+          { title:'OPEN QUALIFIER · 5 GRUPOS', sub:'Preparando…', minMs:1500,
+            phases:[
+              { pct:18, sub:'Cargando plantillas…',     ms:140 },
+              { pct:42, sub:'Generando jornadas…',      ms:200 },
+              { pct:66, sub:'Simulando partidos…',      ms:240 },
+              { pct:88, sub:'Calculando clasificación…',ms:160 }
+            ]
+          },
+          function(){ if(typeof origSimOQ === 'function') origSimOQ(); }
+        );
+      };
+    }
+
+    /* Wrap de `ligaExtSimular()` — botón 🎮 Sim de cada liga del
+       "Resto de Ligas" (s-liga-ext). Simula la temporada completa
+       round-robin de los equipos de la liga (sync, ~0.5-2s según
+       tamaño). Fake-progress corto. */
+    var origSimLigaExt = window.ligaExtSimular;
+    if(typeof origSimLigaExt === 'function'){
+      window.ligaExtSimular = function(){
+        if(typeof window.ftbolLoaderRun !== 'function'){
+          return origSimLigaExt();
+        }
+        var title = 'LIGA';
+        try {
+          var ck = (typeof window.CURRENT_KEY === 'string') ? window.CURRENT_KEY : '';
+          if(ck) title = ck.replace(/-/g,' ').toUpperCase();
+        } catch(_){}
+        return _runFakeProgress(
+          { title: title, sub:'Preparando…', minMs:1100,
+            phases:[
+              { pct:22, sub:'Cargando plantillas…',     ms:130 },
+              { pct:48, sub:'Generando jornadas…',      ms:180 },
+              { pct:72, sub:'Simulando partidos…',      ms:220 },
+              { pct:90, sub:'Calculando clasificación…',ms:140 }
+            ]
+          },
+          function(){ if(typeof origSimLigaExt === 'function') origSimLigaExt(); }
+        );
+      };
+    }
+
+    /* Wrap de `_wcSimulate()` — botón 🎮 Simular del torneo Wild Card.
+       Cada pulsación simula UNA fase (grupos→octavos→cuartos→semis
+       →final). Mostramos overlay con fake-progress. */
+    var origWcSim = window._wcSimulate;
+    if(typeof origWcSim === 'function'){
+      window._wcSimulate = function(){
+        if(typeof window.ftbolLoaderRun !== 'function'){
+          return origWcSim();
+        }
+        var label = 'WILD CARD';
+        try {
+          var raw = localStorage.getItem('wc_state_v1');
+          var s = raw ? JSON.parse(raw) : null;
+          if(!s) label = 'WILD CARD · FASE DE GRUPOS';
+          else if(s.phase === 'octavos') label = 'WILD CARD · OCTAVOS';
+          else if(s.phase === 'cuartos') label = 'WILD CARD · CUARTOS';
+          else if(s.phase === 'semis')   label = 'WILD CARD · SEMIFINALES';
+          else if(s.phase === 'final')   label = 'WILD CARD · FINAL';
+        } catch(_){}
+        return _runFakeProgress(
+          { title: label, sub:'Preparando…', minMs:1200,
+            phases:[
+              { pct:24, sub:'Cargando equipos…',  ms:140 },
+              { pct:54, sub:'Simulando partidos…',ms:200 },
+              { pct:84, sub:'Resolviendo bracket…',ms:170 }
+            ]
+          },
+          function(){ if(typeof origWcSim === 'function') origWcSim(); }
+        );
+      };
+    }
+
     /* Reasignamos las globales: los onclicks inline existentes del DOM
        (p.ej. `pG(function(){simularLigaSegundaMenu()})`) ahora ejecutan
        el wrapper con overlay. No hay recursión porque los wrappers

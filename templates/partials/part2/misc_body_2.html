@@ -16872,8 +16872,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /* Wrap de `simulateOpenQualifier` — botón 🎮 Sim de la pantalla
-       Open Qualifier · Clasificación. Simula 5 grupos de 13 equipos
-       (sync, ~2-3s). Fake-progress por fases. */
+       Open Qualifier · Clasificación. Simula 6 grupos de 11 equipos
+       (sync, ~2-3s). Fake-progress por fases.
+
+       IMPORTANTE: el `simulateOpenQualifier` original llama a
+       `window._showSimProgress` (otro overlay viejo de 3s) ANTES de
+       hacer `_doSimulate`. Si lo dejamos correr en cascada, mi overlay
+       se cierra a los 1.5s y luego el viejo aparece otros 3s — UI
+       confusa Y la sim se diferiría tanto que el usuario podría
+       creer que no pasó nada. Lo neutralizo durante la llamada para
+       forzar la ruta síncrona del original (que llama a `_doSimulate`
+       directamente sin animar). */
     var origSimOQ = window.simulateOpenQualifier;
     if(typeof origSimOQ === 'function'){
       window.simulateOpenQualifier = function(){
@@ -16881,7 +16890,7 @@ document.addEventListener('DOMContentLoaded', function() {
           return origSimOQ();
         }
         return _runFakeProgress(
-          { title:'OPEN QUALIFIER · 5 GRUPOS', sub:'Preparando…', minMs:1500,
+          { title:'OPEN QUALIFIER · 6 GRUPOS', sub:'Preparando…', minMs:1500,
             phases:[
               { pct:18, sub:'Cargando plantillas…',     ms:140 },
               { pct:42, sub:'Generando jornadas…',      ms:200 },
@@ -16889,7 +16898,14 @@ document.addEventListener('DOMContentLoaded', function() {
               { pct:88, sub:'Calculando clasificación…',ms:160 }
             ]
           },
-          function(){ if(typeof origSimOQ === 'function') origSimOQ(); }
+          function(){
+            if(typeof origSimOQ !== 'function') return;
+            var savedShowSim = window._showSimProgress;
+            window._showSimProgress = null;     /* fuerza ruta síncrona en el original */
+            try { origSimOQ(); }
+            catch(e){ try{console.error('[oq-sim]', e);}catch(_){}}
+            window._showSimProgress = savedShowSim;
+          }
         );
       };
     }

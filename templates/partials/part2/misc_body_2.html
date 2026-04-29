@@ -17310,6 +17310,16 @@ document.addEventListener('DOMContentLoaded', function() {
     state.champion = f.winner;
     state.phase = 'done';
     try { localStorage.setItem(WC_CHAMP_KEY, JSON.stringify({name:f.winner, ts:Date.now()})); } catch(_){}
+    /* Si el Open Qualifier ya estaba simulado, limpiamos su cache
+       para que cuando el usuario vuelva a simularlo el campeón
+       Wild Card entre en el pool de equipos (`computeOpenQualifierTeams`
+       lee `wc_champion_v1` y lo apenda con dedupe). De lo contrario
+       el OQ seguiría con la simulación cacheada SIN el campeón.
+       También limpiamos el flag a Conference porque al re-simular
+       el OQ se generará uno nuevo. */
+    try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
+    try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
+    try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
   }
 
   /* Inicializa el estado leyendo los 18 equipos clasificados y
@@ -17468,7 +17478,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return '<div class="wc-champion">'
       + '<div class="wc-champion-lbl">⭐ CAMPEÓN WILD CARD ⭐</div>'
       + '<div class="wc-champion-name">'+_badge(s.champion)+_esc(s.champion)+'</div>'
-      + '<div class="wc-champion-note">Clasifica directo al <b>Open Qualifier</b> de la próxima temporada.</div>'
+      + '<div class="wc-champion-note">Clasifica directo al <b>Open Qualifier</b> de <b>ESTA</b> temporada.<br><span style="opacity:.6;font-size:11px;">El Open Qualifier se reinició — vuelve a simularlo para que el campeón entre en sus 6 grupos.</span></div>'
       + '</div>';
   }
 

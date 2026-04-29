@@ -17608,3 +17608,434 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 })();
 </script>
+
+<!-- ══════════════════════════════════════════════════
+     UCL · PREVIA DE CHAMPIONS — Torneo completo
+     · 12 grupos × 3 equipos = 36 equipos
+     · Round-robin ida + vuelta (4 partidos por equipo, 6 jornadas)
+     · Top 10 1ºs → Fase de Grupos Champions
+     · 2 peores 1ºs → Death Round (ida + vuelta + global) → 1 ganador
+     · Persistido en `wprev_to_fase_grupos_v1` (11 equipos)
+     ══════════════════════════════════════════════════ -->
+<script>
+(function(){
+  var WPREV_KEY    = 'wprev_state_v1';
+  var WPREV_FG_KEY = 'wprev_to_fase_grupos_v1';
+  var N_GROUPS = 12;
+  var TEAMS_PER_GROUP = 3;
+  var GROUP_LABELS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function _logoOf(name){
+    if(typeof window.getTeamLogoUrl === 'function'){ try { return window.getTeamLogoUrl(name)||''; } catch(_){} }
+    return (window.TEAM_LOGOS && window.TEAM_LOGOS[name]) || '';
+  }
+  function _powerOf(name){
+    var r = window.TEAM_RATINGS || {};
+    var e = r[name];
+    if(!e) return 70;
+    if(typeof e === 'number') return e;
+    if(typeof e === 'object' && typeof e.media === 'number') return e.media;
+    return 70;
+  }
+  function loadState(){ try { return JSON.parse(localStorage.getItem(WPREV_KEY)||'null'); } catch(_){ return null; } }
+  function saveState(s){ try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); } catch(_){} }
+  function clearState(){
+    try { localStorage.removeItem(WPREV_KEY); localStorage.removeItem(WPREV_FG_KEY); } catch(_){}
+  }
+
+  function buildPool(){
+    var pool = [];
+    if(typeof window.computeUclPrevTeams === 'function'){
+      try {
+        (window.computeUclPrevTeams()||[]).forEach(function(t){
+          if(!t || !t.name) return;
+          pool.push({
+            name: t.name,
+            logo: t.logo || _logoOf(t.name),
+            league: t.league || '',
+            power: _powerOf(t.name)
+          });
+        });
+      } catch(_){}
+    }
+    return pool;
+  }
+
+  function snakeDraft(pool){
+    var sorted = pool.slice().sort(function(a,b){ return (b.power||0)-(a.power||0); });
+    var groups = [];
+    for(var g=0; g<N_GROUPS; g++) groups.push([]);
+    sorted.forEach(function(t, i){
+      var row = Math.floor(i/N_GROUPS);
+      var col = i % N_GROUPS;
+      var g   = (row % 2 === 0) ? col : (N_GROUPS - 1 - col);
+      groups[g].push(t);
+    });
+    return groups;
+  }
+
+  function genJornadas(){
+    /* 3 equipos, ida + vuelta = 6 partidos en 6 jornadas:
+       J1: 0v1   J2: 1v2   J3: 2v0
+       J4: 1v0   J5: 2v1   J6: 0v2 */
+    return [
+      {hi:0, ai:1}, {hi:1, ai:2}, {hi:2, ai:0},
+      {hi:1, ai:0}, {hi:2, ai:1}, {hi:0, ai:2}
+    ];
+  }
+
+  function simMatch(home, away){
+    if(typeof window._simIAvsIAWithContext === 'function'){
+      try { return window._simIAvsIAWithContext(home, away, 0); } catch(_){}
+    }
+    if(typeof window._fallbackIAvsIAScore === 'function'){
+      try { return window._fallbackIAvsIAScore(home, away); } catch(_){}
+    }
+    function poiss(l){var L=Math.exp(-l),k=0,p=1;do{k++;p*=Math.random();}while(p>L);return k-1;}
+    var ph=_powerOf(home), pa=_powerOf(away);
+    return { gh:Math.min(5, poiss(0.9 + (ph-pa)/40)), ga:Math.min(5, poiss(0.8 - (ph-pa)/40)) };
+  }
+
+  function emptyTable(group){
+    return group.map(function(t){
+      return { name:t.name, logo:t.logo||'', power:t.power||70,
+               pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0 };
+    });
+  }
+  function applyToTable(table, hIdx, aIdx, gh, ga){
+    var H = table[hIdx], A = table[aIdx];
+    H.pj++; A.pj++; H.gf+=gh; H.gc+=ga; A.gf+=ga; A.gc+=gh;
+    if(gh>ga){H.v++; A.p++; H.pts+=3;}
+    else if(ga>gh){A.v++; H.p++; A.pts+=3;}
+    else {H.e++; A.e++; H.pts++; A.pts++;}
+    H.dg = H.gf - H.gc; A.dg = A.gf - A.gc;
+  }
+  function sortTable(t){
+    return t.slice().map(function(r,i){ r._i=i; return r; }).sort(function(a,b){
+      if(b.pts!==a.pts) return b.pts-a.pts;
+      if(b.dg !==a.dg ) return b.dg-a.dg;
+      if(b.gf !==a.gf ) return b.gf-a.gf;
+      return a.name.localeCompare(b.name,'es');
+    });
+  }
+
+  function _simPlayoffTie(homeTeam, awayTeam){
+    var ida = simMatch(homeTeam.name, awayTeam.name);
+    var vu  = simMatch(awayTeam.name, homeTeam.name);
+    var aggH = ida.gh + vu.ga;
+    var aggA = ida.ga + vu.gh;
+    var winner = null, etDecided = false;
+    if(aggH > aggA) winner = homeTeam;
+    else if(aggA > aggH) winner = awayTeam;
+    else {
+      var et = simMatch(homeTeam.name, awayTeam.name);
+      if(et.gh > et.ga) winner = homeTeam;
+      else if(et.ga > et.gh) winner = awayTeam;
+      else winner = (Math.random() < 0.5) ? homeTeam : awayTeam;
+      etDecided = true;
+    }
+    return {
+      teamH: homeTeam, teamA: awayTeam,
+      idaGh: ida.gh, idaGa: ida.ga,
+      vueltaGh: vu.gh, vueltaGa: vu.ga,
+      aggH: aggH, aggA: aggA,
+      winner: winner, etDecided: etDecided
+    };
+  }
+
+  function initState(){
+    var pool = buildPool();
+    if(pool.length === 0) return null;
+    if(pool.length > 36){
+      pool = pool.slice().sort(function(a,b){ return (b.power||0)-(a.power||0); }).slice(0, 36);
+    } else if(pool.length < 36){
+      for(var i=pool.length; i<36; i++){
+        pool.push({name:'TBD '+(i+1), logo:'', league:'?', power:55});
+      }
+    }
+    var groups = snakeDraft(pool);
+    var jornadasByGroup = groups.map(function(){
+      return genJornadas().map(function(m){
+        return { hi:m.hi, ai:m.ai, gh:null, ga:null, played:false };
+      });
+    });
+    return {
+      groups: groups,
+      tables: groups.map(emptyTable),
+      sortedTables: groups.map(emptyTable),
+      jornadasByGroup: jornadasByGroup,
+      deathRound: null,
+      bestFirsts: [],
+      worstFirsts: [],
+      phase: 'groups',
+      ts: Date.now()
+    };
+  }
+
+  function simAll(state){
+    state.groups.forEach(function(grp, gi){
+      var sched = state.jornadasByGroup[gi];
+      sched.forEach(function(m){
+        if(m.played) return;
+        var sc = simMatch(grp[m.hi].name, grp[m.ai].name);
+        m.gh = sc.gh; m.ga = sc.ga; m.played = true;
+        applyToTable(state.tables[gi], m.hi, m.ai, sc.gh, sc.ga);
+      });
+      state.sortedTables[gi] = sortTable(state.tables[gi]);
+    });
+    var firsts = state.sortedTables.map(function(st, gi){
+      var leader = st[0];
+      var team = state.groups[gi][leader._i];
+      return {
+        groupIdx: gi, group: GROUP_LABELS[gi],
+        name: team.name, logo: team.logo||'', power: team.power||70,
+        pts: leader.pts, dg: leader.dg, gf: leader.gf, gc: leader.gc
+      };
+    });
+    var ranked = firsts.slice().sort(function(a,b){
+      if(b.pts!==a.pts) return b.pts-a.pts;
+      if(b.dg !==a.dg ) return b.dg -a.dg;
+      if(b.gf !==a.gf ) return b.gf -a.gf;
+      return a.name.localeCompare(b.name,'es');
+    });
+    state.bestFirsts  = ranked.slice(0, 10);
+    state.worstFirsts = ranked.slice(10);
+    if(state.worstFirsts.length === 2){
+      state.deathRound = _simPlayoffTie(state.worstFirsts[0], state.worstFirsts[1]);
+    }
+    var fgArr = state.bestFirsts.map(function(t){
+      return { name:t.name, logo:t.logo||'', source:'previa-direct' };
+    });
+    if(state.deathRound && state.deathRound.winner){
+      fgArr.push({
+        name: state.deathRound.winner.name,
+        logo: state.deathRound.winner.logo||'',
+        source: 'previa-death-round'
+      });
+    }
+    try { localStorage.setItem(WPREV_FG_KEY, JSON.stringify({teams:fgArr, ts:Date.now()})); } catch(_){}
+    state.phase = 'done';
+    state.ts = Date.now();
+  }
+
+  function _badge(name, logo){
+    var l = logo || _logoOf(name) || '';
+    if(l) return '<img src="'+_esc(l)+'" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display=\'none\'">';
+    return '';
+  }
+
+  function renderGroupTable(gi, sortedTable, group){
+    var rows = '<div class="wprev-row hdr">'
+      + '<span>#</span><span>Equipo</span>'
+      + '<span>PTS</span><span>PJ</span><span>G</span><span>E</span><span>P</span>'
+      + '<span>GF</span><span>GC</span><span>D+-</span>'
+      + '</div>';
+    sortedTable.forEach(function(r, i){
+      var pos = i+1;
+      var cls = '';
+      if(i===0) cls = 'qual-best';
+      else if(i===sortedTable.length-1) cls = 'elim';
+      var dgCls = r.dg>0 ? 'pos' : (r.dg<0?'neg':'');
+      var dgTxt = (r.dg>0?'+':'') + r.dg;
+      rows += '<div class="wprev-row '+cls+'">'
+        + '<span class="wprev-pos">'+pos+'</span>'
+        + '<span class="wprev-name">'+_badge(r.name, r.logo)+_esc(r.name)+'</span>'
+        + '<span class="wprev-cell pts">'+r.pts+'</span>'
+        + '<span class="wprev-cell">'+r.pj+'</span>'
+        + '<span class="wprev-cell">'+r.v+'</span>'
+        + '<span class="wprev-cell">'+r.e+'</span>'
+        + '<span class="wprev-cell">'+r.p+'</span>'
+        + '<span class="wprev-cell">'+r.gf+'</span>'
+        + '<span class="wprev-cell">'+r.gc+'</span>'
+        + '<span class="wprev-cell dg '+dgCls+'">'+dgTxt+'</span>'
+        + '</div>';
+    });
+    return '<div class="wprev-group">'
+      + '<div class="wprev-group-h">GRUPO '+GROUP_LABELS[gi]
+      +   '<span class="wprev-group-count">'+sortedTable.length+' / '+TEAMS_PER_GROUP+'</span></div>'
+      + '<div class="wprev-table-scroll"><div class="wprev-table">'+rows+'</div></div>'
+      + _renderJornadas(gi, group)
+      + '</div>';
+  }
+
+  function _renderJornadas(gi, group){
+    var s = loadState();
+    if(!s || !s.jornadasByGroup || !s.jornadasByGroup[gi]) return '';
+    var sched = s.jornadasByGroup[gi];
+    var html = '<div class="wprev-jorns">';
+    for(var j=0; j<sched.length; j++){
+      var m = sched[j];
+      var hName = group[m.hi] && group[m.hi].name || '?';
+      var aName = group[m.ai] && group[m.ai].name || '?';
+      var jId = 'wprev-j-'+gi+'-'+j;
+      var played = m.played;
+      var scTxt = played ? (m.gh + ' - ' + m.ga) : 'vs';
+      html += '<button class="wprev-jbtn" onclick="(function(){var e=document.getElementById(\''+jId+'\');if(e)e.style.display=e.style.display===\'none\'?\'block\':\'none\';})()">'
+        +   '<span class="pdot">▶</span><b>Jornada '+(j+1)+'</b>'
+        +   '<span class="progress">'+(played?'1/1':'0/1')+'</span>'
+        + '</button>'
+        + '<div class="wprev-jmatches" id="'+jId+'" style="display:none;">'
+        +   '<div class="wprev-mrow">'
+        +     '<span class="h">'+_badge(hName)+_esc(hName)+'</span>'
+        +     '<span class="sc">'+scTxt+'</span>'
+        +     '<span class="a">'+_esc(aName)+_badge(aName)+'</span>'
+        +   '</div>'
+        + '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderDeathRound(s){
+    var host = document.getElementById('wprev-deathround-container');
+    if(!host) return;
+    if(!s || !s.deathRound){
+      host.innerHTML = '';
+      return;
+    }
+    var t = s.deathRound;
+    var winnerH = t.winner === t.teamH;
+    var winnerA = t.winner === t.teamA;
+    var html = '<div class="wprev-dr">'
+      + '<div class="wprev-dr-hdr">💀 DEATH ROUND · 2 PEORES 1ºS</div>'
+      + '<div class="wprev-dr-sub">ELIMINATORIA A IDA + VUELTA · GANADOR → FASE DE GRUPOS</div>'
+      + '<div class="wprev-dr-tie">'
+      +   '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:3px;">IDA</div>'
+      +   '<div class="wprev-dr-leg">'
+      +     '<span class="h">'+_badge(t.teamH.name)+_esc(t.teamH.name)+'</span>'
+      +     '<span class="sc">'+t.idaGh+' - '+t.idaGa+'</span>'
+      +     '<span class="a">'+_esc(t.teamA.name)+_badge(t.teamA.name)+'</span>'
+      +   '</div>'
+      +   '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-top:6px;margin-bottom:3px;">VUELTA</div>'
+      +   '<div class="wprev-dr-leg">'
+      +     '<span class="h">'+_badge(t.teamA.name)+_esc(t.teamA.name)+'</span>'
+      +     '<span class="sc">'+t.vueltaGh+' - '+t.vueltaGa+'</span>'
+      +     '<span class="a">'+_esc(t.teamH.name)+_badge(t.teamH.name)+'</span>'
+      +   '</div>'
+      +   '<div class="wprev-dr-agg">'
+      +     '<span class="'+(winnerH?'winner-mark':'loser-mark')+'" style="text-align:right;">GLOBAL</span>'
+      +     '<span class="sc">'+t.aggH+'-'+t.aggA+'</span>'
+      +     '<span class="'+(winnerA?'winner-mark':'loser-mark')+'">'+(t.etDecided?'(prórroga)':'')+'</span>'
+      +   '</div>'
+      +   '<div style="margin-top:8px;text-align:center;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#a855f7;font-weight:700;">'
+      +     '✓ ' + _esc(t.winner.name) + ' → FASE DE GRUPOS'
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+    host.innerHTML = html;
+  }
+
+  function buildUclPrevClas(){
+    var host = document.getElementById('wprev-groups-container');
+    if(!host) return;
+    var s = loadState();
+    if(!s){
+      var pool = buildPool();
+      host.innerHTML = '<div class="wprev-empty">'
+        + '<div style="font-size:32px;margin-bottom:10px;">🇪🇺</div>'
+        + 'Sin equipos clasificados todavía.<br><br>'
+        + 'Configura el cupo <b>🇪🇺 Previa de Champions</b> en cada liga (modal Reglas) y simula sus jornadas. '
+        + 'Equipos detectados ahora mismo: <b>'+pool.length+'/36</b>.<br><br>'
+        + 'Pulsa <b>🎮 Sim</b> para iniciar el torneo.'
+        + '</div>';
+      var dr = document.getElementById('wprev-deathround-container');
+      if(dr) dr.innerHTML = '';
+      return;
+    }
+    var html = '';
+    for(var g=0; g<N_GROUPS; g++){
+      html += renderGroupTable(g, s.sortedTables[g]||[], s.groups[g]||[]);
+    }
+    host.innerHTML = html;
+    renderDeathRound(s);
+  }
+  window.buildUclPrevClas = buildUclPrevClas;
+
+  window.simulateUclPrev = function(){
+    var pool = buildPool();
+    if(!pool.length){
+      alert('No hay equipos clasificados aún. Configura cupos 🇪🇺 Previa Champions en las ligas y simula primero el Open Qualifier.');
+      return;
+    }
+    var s = loadState();
+    if(!s){ s = initState(); if(!s) return; }
+    if(s.phase === 'done'){ buildUclPrevClas(); return; }
+    simAll(s);
+    saveState(s);
+    buildUclPrevClas();
+  };
+  window.resetUclPrev = function(){
+    if(!confirm('¿Reiniciar la Previa de Champions? Se perderán todos los partidos jugados.')) return;
+    clearState();
+    buildUclPrevClas();
+  };
+
+  /* Re-render al entrar a la pantalla. */
+  var _origGoUp = window.go;
+  if(typeof _origGoUp === 'function'){
+    window.go = function(id){
+      var r = _origGoUp.apply(this, arguments);
+      if(id === 's-ucl-previa-clas'){
+        try { setTimeout(buildUclPrevClas, 30); } catch(_){}
+      }
+      return r;
+    };
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(buildUclPrevClas, 250);
+  });
+})();
+
+/* Wrapper de overlay para `simulateUclPrev` — reusa el balón. */
+(function(){
+  function _wireOnce(){
+    if(window._uclPrevSimWired) return;
+    var orig = window.simulateUclPrev;
+    if(typeof orig !== 'function') return;
+    window.simulateUclPrev = function(){
+      if(typeof window.ftbolLoaderRun !== 'function') return orig();
+      return window.ftbolLoaderRun(
+        { title:'PREVIA DE CHAMPIONS · 12 GRUPOS', sub:'Preparando…', minMs:1500 },
+        function(ctx){
+          return new Promise(function(resolve){
+            var phases = [
+              { pct:18, sub:'Cargando plantillas…',     ms:140 },
+              { pct:42, sub:'Generando jornadas…',      ms:200 },
+              { pct:66, sub:'Simulando partidos…',      ms:240 },
+              { pct:88, sub:'Death Round…',             ms:160 }
+            ];
+            var i = 0;
+            function next(){
+              if(i >= phases.length){
+                ctx.progress(95, 'Volcando estadísticas…');
+                setTimeout(function(){
+                  try { orig(); } catch(e){ try{console.error(e);}catch(_){} }
+                  ctx.progress(100, 'Hecho');
+                  resolve();
+                }, 40);
+                return;
+              }
+              var ph = phases[i++];
+              ctx.progress(ph.pct, ph.sub);
+              setTimeout(next, ph.ms);
+            }
+            next();
+          });
+        }
+      );
+    };
+    window._uclPrevSimWired = true;
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(_wireOnce, 50); });
+  } else {
+    setTimeout(_wireOnce, 50);
+  }
+  var _tries = 0;
+  var _intv = setInterval(function(){
+    _wireOnce();
+    if(window._uclPrevSimWired || ++_tries >= 8) clearInterval(_intv);
+  }, 400);
+})();
+</script>

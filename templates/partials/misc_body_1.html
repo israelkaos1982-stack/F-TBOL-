@@ -4862,6 +4862,28 @@ window._showSimProgress = function(opts, onDone){
     return dedup;
   }
   function computeUclClassified(){ return _computeQualifiedFromLeagues('ucl'); }
+  function computeUclPrevTeams(){
+    var arr = _computeQualifiedFromLeagues('uclPrev');
+    /* Los 1º, 2º y 3º de cada grupo del Open Qualifier (18 plazas)
+       se añaden a la Previa de Champions ese mismo año. Los persiste
+       `simulateOpenQualifier` en `oq_to_previa_v1`. Dedupe por nombre. */
+    try {
+      var raw = localStorage.getItem('oq_to_previa_v1');
+      if(raw){
+        var data = JSON.parse(raw);
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        var seen = {};
+        arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+        teams.forEach(function(t){
+          if(!t || !t.name || seen[t.name]) return;
+          seen[t.name] = true;
+          arr.push({name:t.name, logo:t.logo||'', league:'open-qualifier'});
+        });
+      }
+    } catch(_){}
+    return arr;
+  }
+  window.computeUclPrevTeams = computeUclPrevTeams;
   function computeUelClassified(){ return _computeQualifiedFromLeagues('uel'); }
   function computeUeclClassified(){
     var arr = _computeQualifiedFromLeagues('uecl');
@@ -5172,7 +5194,74 @@ window._showSimProgress = function(opts, onDone){
 <div class="screen" id="s-ucl-previa-clas">
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🇪🇺</span><h2>UCL · Previa de Champions</h2></div>
-<div class="empty-ph">Fase clasificatoria — próximamente</div>
+
+<!-- Sim / Reset (PIN 747) -->
+<div style="display:flex;gap:10px;justify-content:center;padding:8px 6px 4px;">
+  <button onclick="pG(function(){window.simulateUclPrev&&window.simulateUclPrev()})"
+          style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid rgba(80,200,120,.5);border-radius:8px;padding:9px 18px;color:#7fe09a;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
+    🎮 Sim
+  </button>
+  <button onclick="pG(function(){window.resetUclPrev&&window.resetUclPrev()})"
+          style="background:linear-gradient(135deg,#3a1414,#5a2424);border:1px solid rgba(255,80,80,.5);border-radius:8px;padding:9px 18px;color:#ff8080;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
+    ♻️ Reset
+  </button>
+</div>
+
+<!-- Leyenda morada compacta -->
+<div style="display:flex;gap:10px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:11px;color:#fff;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;">
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>Top 10 1ºs → Fase de Grupos</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#5b1c8e;margin-right:4px;vertical-align:middle;"></span>2 peores 1ºs → Death Round</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e03c3c;margin-right:4px;vertical-align:middle;"></span>Eliminados</span>
+</div>
+
+<style>
+#s-ucl-previa-clas .wprev-group{margin:14px 4px 0;border:1px solid #a855f7;border-radius:8px;background:linear-gradient(135deg,rgba(168,85,247,.06),rgba(0,0,0,0));overflow:hidden;}
+#s-ucl-previa-clas .wprev-group-h{padding:10px 14px;border-bottom:2px solid #7e22ce;background:linear-gradient(90deg,#5b1c8e,#a855f7,#7e22ce);border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px;font-family:'Bebas Neue','Oswald',sans-serif;font-size:22px;color:#fff;font-weight:900;letter-spacing:2px;text-shadow:0 1px 0 rgba(0,0,0,.45);}
+#s-ucl-previa-clas .wprev-group-count{margin-left:auto;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#fff;font-weight:700;}
+#s-ucl-previa-clas .wprev-table{padding:4px 6px 8px;}
+#s-ucl-previa-clas .wprev-row{display:grid;grid-template-columns:24px minmax(120px,1.5fr) 30px 26px 22px 22px 22px 28px 28px 32px;gap:2px;align-items:center;padding:5px 8px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);min-width:420px;}
+#s-ucl-previa-clas .wprev-row.hdr{background:linear-gradient(90deg,#2a0a4a,#1a0535,#2a0a4a);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:#e0bfff;font-weight:700;text-transform:uppercase;border-bottom:1px solid rgba(168,85,247,.4);}
+#s-ucl-previa-clas .wprev-row.qual-best{background:rgba(168,85,247,.10);border-left:3px solid #a855f7;}
+#s-ucl-previa-clas .wprev-row.qual-death{background:rgba(91,28,142,.18);border-left:3px solid #5b1c8e;}
+#s-ucl-previa-clas .wprev-row.elim{background:rgba(255,80,80,.04);border-left:3px solid rgba(255,255,255,.05);}
+#s-ucl-previa-clas .wprev-pos{color:#fff;text-align:center;font-family:Bebas Neue,sans-serif;font-size:14px;}
+#s-ucl-previa-clas .wprev-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px;color:#fff;}
+#s-ucl-previa-clas .wprev-cell{text-align:center;}
+#s-ucl-previa-clas .wprev-cell.pts{font-family:Bebas Neue,sans-serif;font-size:14px;font-weight:700;color:#a855f7;}
+#s-ucl-previa-clas .wprev-cell.dg.pos{color:#bfffbf;}
+#s-ucl-previa-clas .wprev-cell.dg.neg{color:#ffaaaa;}
+#s-ucl-previa-clas .wprev-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+/* Jornadas (calendario) — estilo morado degradado */
+#s-ucl-previa-clas .wprev-jorns{padding:4px 6px 8px;border-top:1px solid rgba(168,85,247,.2);background:rgba(168,85,247,.03);}
+#s-ucl-previa-clas .wprev-jbtn{display:flex;align-items:center;width:100%;padding:8px 14px;border:none;background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0 1px,transparent 1px 8px),linear-gradient(90deg,#2a0a4a,#5b1c8e,#a855f7,#5b1c8e,#2a0a4a);border-left:3px solid #a855f7;border-radius:4px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;cursor:pointer;text-align:left;margin-bottom:3px;}
+#s-ucl-previa-clas .wprev-jbtn b{font-family:Oswald,sans-serif;letter-spacing:1px;font-weight:700;}
+#s-ucl-previa-clas .wprev-jbtn .pdot{margin-right:8px;font-size:14px;}
+#s-ucl-previa-clas .wprev-jbtn .progress{margin-left:auto;font-size:11px;color:rgba(255,255,255,.7);}
+#s-ucl-previa-clas .wprev-jmatches{padding:4px 8px;background:rgba(0,0,0,.25);border-radius:0 0 6px 6px;margin-bottom:6px;}
+#s-ucl-previa-clas .wprev-mrow{display:grid;grid-template-columns:1fr 60px 1fr;gap:6px;align-items:center;padding:4px 6px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);}
+#s-ucl-previa-clas .wprev-mrow .h{text-align:right;font-weight:600;}
+#s-ucl-previa-clas .wprev-mrow .a{text-align:left;font-weight:600;}
+#s-ucl-previa-clas .wprev-mrow .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:14px;background:rgba(168,85,247,.18);border:1px solid rgba(168,85,247,.4);border-radius:4px;padding:1px 0;color:#fff;font-weight:900;}
+/* Death Round */
+#s-ucl-previa-clas .wprev-dr{margin:14px 4px 0;border:2px solid #5b1c8e;border-radius:10px;background:linear-gradient(180deg,rgba(91,28,142,.15),rgba(0,0,0,0));overflow:hidden;}
+#s-ucl-previa-clas .wprev-dr-hdr{padding:10px 14px;background:linear-gradient(90deg,#1a0535,#5b1c8e,#7e22ce,#5b1c8e,#1a0535);font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);display:flex;align-items:center;gap:8px;}
+#s-ucl-previa-clas .wprev-dr-sub{padding:6px 14px 0;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.55);}
+#s-ucl-previa-clas .wprev-dr-tie{margin:10px 12px;padding:10px 12px;border:1px solid rgba(168,85,247,.35);border-radius:8px;background:rgba(0,0,0,.25);}
+#s-ucl-previa-clas .wprev-dr-leg{display:grid;grid-template-columns:1fr 70px 1fr;gap:8px;align-items:center;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
+#s-ucl-previa-clas .wprev-dr-leg .h{text-align:right;font-weight:600;}
+#s-ucl-previa-clas .wprev-dr-leg .a{text-align:left;font-weight:600;}
+#s-ucl-previa-clas .wprev-dr-leg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:16px;background:rgba(168,85,247,.18);border-radius:4px;padding:2px 0;color:#fff;font-weight:900;}
+#s-ucl-previa-clas .wprev-dr-agg{display:grid;grid-template-columns:1fr 70px 1fr;gap:8px;align-items:center;padding-top:6px;margin-top:5px;border-top:1px dashed rgba(168,85,247,.35);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#a855f7;}
+#s-ucl-previa-clas .wprev-dr-agg .winner-mark{font-weight:700;color:#a855f7;}
+#s-ucl-previa-clas .wprev-dr-agg .loser-mark{color:rgba(255,255,255,.4);}
+#s-ucl-previa-clas .wprev-dr-agg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#fff;background:rgba(168,85,247,.25);border:1px solid rgba(168,85,247,.55);border-radius:4px;padding:2px 0;font-weight:900;}
+#s-ucl-previa-clas .wprev-empty{padding:20px;text-align:center;color:rgba(255,255,255,.5);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.6;}
+</style>
+
+<div class="clas-wrap" style="padding:0 0 24px;">
+  <div id="wprev-groups-container"></div>
+  <div id="wprev-deathround-container" style="margin-top:14px;"></div>
+</div>
 </div>
 <!-- Pantalla intermedia s-open-qualifier eliminada: ahora la card
      "Open Qualifier" del menú Champions navega directamente a
@@ -5554,34 +5643,46 @@ window._showSimProgress = function(opts, onDone){
     return ties;
   }
 
-  /* Persiste los ganadores del playoff como flag separado para que
-     `computeUeclClassified` (Conference) los pueda añadir a su pool
-     en futuros ciclos. Un día y media equipos del Open Qualifier
-     terminan en Conference: 4ºs, 5ºs y 3 ganadores del playoff. */
+  /* Persiste los ganadores del playoff Y los top-3 de cada grupo
+     como flags separados:
+       oq_to_conference_v1 → 4ºs + 5ºs + 3 ganadores del playoff (15)
+       oq_to_previa_v1     → 1º + 2º + 3º de cada grupo (18)
+     Estos flags los leen `computeUeclClassified` (Conference) y
+     `computeUclPrevTeams` (Previa) para añadir al pool del torneo
+     correspondiente en el mismo ciclo. */
   function _persistConferenceFlags(sim){
     try {
-      var arr = [];
-      /* 4ºs y 5ºs (directos a Conference) */
+      var confArr = [];
+      var previaArr = [];
       if(sim && sim.groups && sim.matchesByGroup){
         for(var g=0; g<sim.groups.length; g++){
           var st = _standingsFor(sim.groups[g]||[], sim.matchesByGroup[g]||[]);
+          /* Top 3 → Previa de Champions */
+          [0,1,2].forEach(function(idx){
+            if(st[idx]){
+              var t = sim.groups[g][st[idx].idx];
+              if(t && t.name) previaArr.push({name:t.name, logo:t.logo||'', source:'oq-top3'});
+            }
+          });
+          /* 4º y 5º → Conference (directos) */
           [3,4].forEach(function(idx){
             if(st[idx]){
               var t = sim.groups[g][st[idx].idx];
-              if(t && t.name) arr.push({name:t.name, logo:t.logo||'', source:'oq-direct'});
+              if(t && t.name) confArr.push({name:t.name, logo:t.logo||'', source:'oq-direct'});
             }
           });
         }
       }
-      /* 3 ganadores del playoff */
+      /* 3 ganadores del playoff 6º → Conference */
       if(sim && sim.playoff){
         sim.playoff.forEach(function(tie){
           if(tie && tie.winner && tie.winner.name){
-            arr.push({name:tie.winner.name, logo:tie.winner.logo||'', source:'oq-playoff'});
+            confArr.push({name:tie.winner.name, logo:tie.winner.logo||'', source:'oq-playoff'});
           }
         });
       }
-      localStorage.setItem('oq_to_conference_v1', JSON.stringify({teams:arr, ts:Date.now()}));
+      localStorage.setItem('oq_to_conference_v1', JSON.stringify({teams:confArr, ts:Date.now()}));
+      localStorage.setItem('oq_to_previa_v1',     JSON.stringify({teams:previaArr, ts:Date.now()}));
     } catch(_){}
   }
 

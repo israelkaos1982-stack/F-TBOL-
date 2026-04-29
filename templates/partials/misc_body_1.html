@@ -4863,7 +4863,29 @@ window._showSimProgress = function(opts, onDone){
   }
   function computeUclClassified(){ return _computeQualifiedFromLeagues('ucl'); }
   function computeUelClassified(){ return _computeQualifiedFromLeagues('uel'); }
-  function computeUeclClassified(){ return _computeQualifiedFromLeagues('uecl'); }
+  function computeUeclClassified(){
+    var arr = _computeQualifiedFromLeagues('uecl');
+    /* Los 4ºs y 5ºs de cada grupo del Open Qualifier (12 plazas
+       directas) + los 3 ganadores del playoff 6º (3 plazas extra)
+       se añaden a la Conference. Los persiste `simulateOpenQualifier`
+       en `oq_to_conference_v1`. Dedupe por nombre. */
+    try {
+      var raw = localStorage.getItem('oq_to_conference_v1');
+      if(raw){
+        var data = JSON.parse(raw);
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        var seen = {};
+        arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+        teams.forEach(function(t){
+          if(!t || !t.name) return;
+          if(seen[t.name]) return;
+          seen[t.name] = true;
+          arr.push({name:t.name, logo:t.logo||'', league:'open-qualifier'});
+        });
+      }
+    } catch(_){}
+    return arr;
+  }
   function computeOpenQualifierTeams(){
     var arr = _computeQualifiedFromLeagues('uclQual');
     /* El campeón del torneo Wild Card (s-wild-card) entra como UNA
@@ -5184,9 +5206,10 @@ window._showSimProgress = function(opts, onDone){
 </div>
 
 <!-- Leyenda compacta visible -->
-<div style="display:flex;gap:18px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex-wrap:wrap;">
+<div style="display:flex;gap:14px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;flex-wrap:wrap;">
   <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>🟣 Previa UCL</span>
   <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3cc878;margin-right:4px;vertical-align:middle;"></span>🟢 Conference</span>
+  <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F37335;margin-right:4px;vertical-align:middle;"></span>🟠 Playoff Conf.</span>
   <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e03c3c;margin-right:4px;vertical-align:middle;"></span>🔴 Eliminados</span>
 </div>
 
@@ -5199,27 +5222,55 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="jmatches" id="oq-zones-details" style="margin:0 8px 4px;padding:0;">
   <div style="padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:rgba(255,255,255,.03);font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.78);line-height:1.7;">
-    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a855f7;margin-right:6px;"></span><b>1-3</b> · Previa Champions (15 fijos + 3 mejores 4ºs)</div>
-    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3cc878;margin-right:6px;"></span><b>4-5</b> · Conference (2 peores 4ºs + 3 mejores 5ºs)</div>
-    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e03c3c;margin-right:6px;"></span><b>6-13</b> · Eliminados</div>
+    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a855f7;margin-right:6px;"></span><b>1-3</b> · Previa Champions (18 plazas)</div>
+    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3cc878;margin-right:6px;"></span><b>4-5</b> · Conference directa (12 plazas)</div>
+    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#F37335;margin-right:6px;"></span><b>6</b> · Playoff Conference: 6A-6B · 6C-6D · 6E-6F (ida+vuelta) → 3 ganadores a Conference</div>
+    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e03c3c;margin-right:6px;"></span><b>7-11</b> · Eliminados</div>
   </div>
 </div>
 
 <div class="clas-wrap" style="padding:0 0 24px;">
 <div id="open-qual-groups-container"></div>
+<!-- Playoff 6º puesto: emerge SOLO cuando está simulado -->
+<div id="open-qual-playoff-container" style="margin-top:14px;"></div>
 </div>
+<style>
+.oq-pl-section{margin:14px 8px 0;border:1px solid rgba(243,115,53,.45);border-radius:10px;background:linear-gradient(180deg,rgba(243,115,53,.06),rgba(0,0,0,0));overflow:hidden;}
+.oq-pl-hdr{padding:10px 14px;background:linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);display:flex;align-items:center;gap:8px;}
+.oq-pl-sub{padding:6px 14px 0;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.55);}
+.oq-pl-tie{margin:10px 12px;padding:10px 12px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(0,0,0,.2);}
+.oq-pl-tie.played{border-color:rgba(60,200,120,.35);background:rgba(60,200,120,.04);}
+.oq-pl-leg{display:grid;grid-template-columns:1fr 70px 1fr;gap:8px;align-items:center;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
+.oq-pl-leg .lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);}
+.oq-pl-leg .h{text-align:right;font-weight:600;}
+.oq-pl-leg .a{text-align:left;font-weight:600;}
+.oq-pl-leg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:16px;background:rgba(255,255,255,.06);border-radius:4px;padding:2px 0;}
+.oq-pl-agg{display:grid;grid-template-columns:1fr 70px 1fr;gap:8px;align-items:center;padding-top:6px;margin-top:5px;border-top:1px dashed rgba(255,255,255,.1);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#3cc878;}
+.oq-pl-agg .winner-mark{font-weight:700;color:#3cc878;}
+.oq-pl-agg .loser-mark{color:rgba(255,255,255,.4);}
+.oq-pl-agg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#3cc878;background:rgba(60,200,120,.10);border:1px solid rgba(60,200,120,.35);border-radius:4px;padding:2px 0;}
+.oq-pl-empty{padding:14px;text-align:center;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;}
+</style>
 <script>
 (function(){
-  /* Open Qualifier — 5 grupos de 13 equipos, round-robin a 1 vuelta
-     (12 partidos por equipo). Los 65 plazas se alimentan automá-
+  /* Open Qualifier — 6 grupos de 11 equipos, round-robin a 1 vuelta
+     (10 partidos por equipo). Las 66 plazas se alimentan automá-
      ticamente con la zona "Open Qualifier" (config.zones.uclQual)
      de cada liga terminada. Distribución por sorteo en serpentina:
-     pos 1..5 → grupos A..E, pos 6 → E, pos 7 → D, etc. — para
-     que los grupos queden equilibrados por nivel. */
+     pos 1..6 → grupos A..F, pos 7 → F, pos 8 → E, etc. — para
+     que los grupos queden equilibrados por nivel.
+
+     Promoción tras simular:
+     - Pos 1-3 de cada grupo → Previa de Champions   (18 equipos)
+     - Pos 4-5 de cada grupo → Conference (directos) (12 equipos)
+     - Pos 6 de cada grupo   → Playoff Conference: 6 equipos en
+       3 eliminatorias a doble vuelta (6A-6B, 6C-6D, 6E-6F).
+       Los 3 ganadores → Conference (3 equipos extra).
+     - Pos 7-11              → Eliminados. */
   var STORE_KEY = 'oq_simulation_v1';
-  var GROUP_LABELS = ['A','B','C','D','E'];
-  var TEAMS_PER_GROUP = 13;
-  var N_GROUPS = 5;
+  var GROUP_LABELS = ['A','B','C','D','E','F'];
+  var TEAMS_PER_GROUP = 11;
+  var N_GROUPS = 6;
 
   function _esc(s){
     return String(s==null?'':s)
@@ -5307,7 +5358,7 @@ window._showSimProgress = function(opts, onDone){
     }
     var html = ''
       + '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.55);padding:6px 10px 0;">'
-      + '5 GRUPOS · 13 EQUIPOS · 12 PARTIDOS POR EQUIPO · ' + totalTeams + ' / 65 plazas cubiertas'
+      + '6 GRUPOS · 11 EQUIPOS · 10 PARTIDOS POR EQUIPO · ' + totalTeams + ' / 66 plazas cubiertas'
       + (sim ? ' · <span style="color:#7fe09a;">SIMULADO</span>' : '')
       + '</div>';
     for(var g=0; g<N_GROUPS; g++){
@@ -5335,12 +5386,15 @@ window._showSimProgress = function(opts, onDone){
         +     '</div>';
       for(var i=0; i<TEAMS_PER_GROUP; i++){
         var team = standings[i];
-        /* Zona visual (orientativa — promoción real cruza grupos):
-           1-3 púrpura · 4 púrpura tenue · 5 verde · 6-13 default. */
+        /* Zona visual:
+           1-3 púrpura → Previa Champions
+           4-5 verde → Conference (directos)
+           6 naranja → Playoff Conference (eliminatoria doble)
+           7-11 default → Eliminados. */
         var rowZone = '', borderColor = 'transparent';
         if(i<=2){ rowZone = 'background:rgba(168,85,247,.10);'; borderColor = '#a855f7'; }
-        else if(i===3){ rowZone = 'background:rgba(168,85,247,.06);'; borderColor = '#7d3eb6'; }
-        else if(i===4){ rowZone = 'background:rgba(60,200,120,.07);'; borderColor = '#3cc878'; }
+        else if(i===3 || i===4){ rowZone = 'background:rgba(60,200,120,.08);'; borderColor = '#3cc878'; }
+        else if(i===5){ rowZone = 'background:rgba(243,115,53,.10);'; borderColor = '#F37335'; }
         else { rowZone = ''; borderColor = 'rgba(255,255,255,.05)'; }
         var nameHtml, logoHtml = '';
         if(team && team.name){
@@ -5374,6 +5428,55 @@ window._showSimProgress = function(opts, onDone){
       html += '</div></div></div>';
     }
     container.innerHTML = html;
+    /* Render del playoff 6º puesto (solo si hay sim). */
+    _renderPlayoff(sim);
+  }
+
+  function _renderPlayoff(sim){
+    var host = document.getElementById('open-qual-playoff-container');
+    if(!host) return;
+    if(!sim){ host.innerHTML = ''; return; }
+    var ties = sim && sim.playoff;
+    if(!ties || !ties.length){
+      host.innerHTML = '<div class="oq-pl-section">'
+        + '<div class="oq-pl-hdr">🟠 PLAYOFF CONFERENCE · 6º DE CADA GRUPO</div>'
+        + '<div class="oq-pl-empty">No hay 6º clasificados todavía — algún grupo no tenía 6 equipos al simular.</div>'
+        + '</div>';
+      return;
+    }
+    var pairLabels = ['6A vs 6B', '6C vs 6D', '6E vs 6F'];
+    var html = '<div class="oq-pl-section">'
+      + '<div class="oq-pl-hdr">🟠 PLAYOFF CONFERENCE · 6º DE CADA GRUPO</div>'
+      + '<div class="oq-pl-sub">3 ELIMINATORIAS A IDA + VUELTA · 3 GANADORES → CONFERENCE</div>';
+    ties.forEach(function(t, i){
+      var winnerH = t.winner === t.teamH;
+      var winnerA = t.winner === t.teamA;
+      html += '<div class="oq-pl-tie played">'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.5);text-align:center;margin-bottom:6px;">'
+        +   pairLabels[i]
+        + '</div>'
+        + '<div class="oq-pl-leg">'
+        +   '<span class="h">'+_esc(t.teamH.name)+'</span>'
+        +   '<span class="sc">'+t.idaGh+' - '+t.idaGa+'</span>'
+        +   '<span class="a">'+_esc(t.teamA.name)+'</span>'
+        + '</div>'
+        + '<div class="oq-pl-leg" style="margin-top:3px;">'
+        +   '<span class="lbl" style="text-align:right;">VUELTA</span>'
+        +   '<span class="sc">'+t.vueltaGa+' - '+t.vueltaGh+'</span>'
+        +   '<span></span>'
+        + '</div>'
+        + '<div class="oq-pl-agg">'
+        +   '<span class="'+(winnerH?'winner-mark':'loser-mark')+'" style="text-align:right;">GLOBAL</span>'
+        +   '<span class="sc">'+t.aggH+'-'+t.aggA+'</span>'
+        +   '<span class="'+(winnerA?'winner-mark':'loser-mark')+'">'+(t.etDecided?'(prórroga)':'')+'</span>'
+        + '</div>'
+        + '<div style="margin-top:6px;text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:#7fe09a;">'
+        +   '✓ ' + _esc(t.winner.name) + ' → CONFERENCE'
+        + '</div>'
+      + '</div>';
+    });
+    html += '</div>';
+    host.innerHTML = html;
   }
 
   /* Simular: requiere que las ligas hayan llenado los 65 huecos
@@ -5394,14 +5497,106 @@ window._showSimProgress = function(opts, onDone){
       _doSimulate(classified);
     });
   }
+  /* Simula UNA eliminatoria 6X-6Y a doble vuelta. Tie = ida + vuelta;
+     si empate al global, prórroga + penaltis (sim extra; si vuelve
+     a empatar, sorteo 50/50). */
+  function _simPlayoffTie(homeTeam, awayTeam){
+    var hp = Number(homeTeam.power)||50, ap = Number(awayTeam.power)||50;
+    var lh1 = Math.max(0.4, 1.20 + (hp-ap)/45);
+    var la1 = Math.max(0.3, 0.90 + (ap-hp)/45);
+    var idaGh = _poisson(lh1), idaGa = _poisson(la1);
+    /* Vuelta: campos invertidos → el que era visitante en ida ahora es local. */
+    var lh2 = Math.max(0.4, 1.20 + (ap-hp)/45);
+    var la2 = Math.max(0.3, 0.90 + (hp-ap)/45);
+    var vueltaGh = _poisson(lh2), vueltaGa = _poisson(la2);
+    /* Aggregate: goles totales del equipo H = idaGh + vueltaGa
+       (vuelta se juega en casa del A, así que idaGh son los del H en
+       casa, y vueltaGa son los del H fuera). */
+    var aggH = idaGh + vueltaGa;
+    var aggA = idaGa + vueltaGh;
+    var winner = null, etDecided = false;
+    if(aggH > aggA) winner = 'h';
+    else if(aggA > aggH) winner = 'a';
+    else {
+      /* Empate al global tras vuelta → prórroga sintética. */
+      var et = _simulateGroup([homeTeam, awayTeam])[0];
+      if(et && et.gh > et.ga) winner = 'h';
+      else if(et && et.ga > et.gh) winner = 'a';
+      else winner = (Math.random() < 0.5) ? 'h' : 'a';
+      etDecided = true;
+    }
+    return {
+      teamH: homeTeam, teamA: awayTeam,
+      idaGh:idaGh, idaGa:idaGa,
+      vueltaGh:vueltaGh, vueltaGa:vueltaGa,
+      aggH:aggH, aggA:aggA,
+      winner: winner === 'h' ? homeTeam : awayTeam,
+      etDecided: etDecided
+    };
+  }
+
+  /* Tras simular los 6 grupos, recoge el 6º clasificado de cada grupo
+     y arma 3 eliminatorias: 6A-6B, 6C-6D, 6E-6F. */
+  function _buildPlayoff(groups, matchesByGroup){
+    if(!groups || groups.length < 6) return null;
+    var sixthByGroup = [];
+    for(var g=0; g<6; g++){
+      var standings = _standingsFor(groups[g]||[], matchesByGroup[g]||[]);
+      var s6 = standings[5];                 /* 6º (índice 5) */
+      if(!s6) return null;                   /* algún grupo no tenía 6 equipos */
+      sixthByGroup.push(groups[g][s6.idx]);   /* objeto team original */
+    }
+    var ties = [];
+    var pairs = [[0,1],[2,3],[4,5]];          /* A-B, C-D, E-F */
+    pairs.forEach(function(p){
+      ties.push(_simPlayoffTie(sixthByGroup[p[0]], sixthByGroup[p[1]]));
+    });
+    return ties;
+  }
+
+  /* Persiste los ganadores del playoff como flag separado para que
+     `computeUeclClassified` (Conference) los pueda añadir a su pool
+     en futuros ciclos. Un día y media equipos del Open Qualifier
+     terminan en Conference: 4ºs, 5ºs y 3 ganadores del playoff. */
+  function _persistConferenceFlags(sim){
+    try {
+      var arr = [];
+      /* 4ºs y 5ºs (directos a Conference) */
+      if(sim && sim.groups && sim.matchesByGroup){
+        for(var g=0; g<sim.groups.length; g++){
+          var st = _standingsFor(sim.groups[g]||[], sim.matchesByGroup[g]||[]);
+          [3,4].forEach(function(idx){
+            if(st[idx]){
+              var t = sim.groups[g][st[idx].idx];
+              if(t && t.name) arr.push({name:t.name, logo:t.logo||'', source:'oq-direct'});
+            }
+          });
+        }
+      }
+      /* 3 ganadores del playoff */
+      if(sim && sim.playoff){
+        sim.playoff.forEach(function(tie){
+          if(tie && tie.winner && tie.winner.name){
+            arr.push({name:tie.winner.name, logo:tie.winner.logo||'', source:'oq-playoff'});
+          }
+        });
+      }
+      localStorage.setItem('oq_to_conference_v1', JSON.stringify({teams:arr, ts:Date.now()}));
+    } catch(_){}
+  }
+
   function _doSimulate(classified){
     var groups = _distributeSnake(classified, N_GROUPS);
     var matchesByGroup = groups.map(function(grp){ return _simulateGroup(grp); });
-    _saveSim({groups:groups, matchesByGroup:matchesByGroup, ts:Date.now()});
+    var playoff = _buildPlayoff(groups, matchesByGroup);
+    var sim = {groups:groups, matchesByGroup:matchesByGroup, playoff:playoff, ts:Date.now()};
+    _saveSim(sim);
+    _persistConferenceFlags(sim);
     buildOpenQualifierClas();
   }
   function resetOpenQualifier(){
     try { localStorage.removeItem(STORE_KEY); } catch(_){}
+    try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
     buildOpenQualifierClas();
   }
 
@@ -5430,8 +5625,6 @@ window._showSimProgress = function(opts, onDone){
 <div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(8)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 8</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
 <div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(9)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 9</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
 <div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(10)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 10</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(11)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 11</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(12)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 12</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
 </div>
 </div>
 </div>

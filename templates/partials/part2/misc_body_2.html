@@ -16868,3 +16868,519 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 400);
 })();
 </script>
+
+<!-- ══════════════════════════════════════════════════
+     UCL · WILD CARD — Torneo completo
+     · 2 grupos de 9 equipos (18 totales, 1 por liga menor)
+     · Top 8 de cada grupo → Octavos (último eliminado)
+     · Octavos / Cuartos / Semis: ida + vuelta, agregado de goles
+     · Final: partido único en campo neutral
+     · Campeón → flag `wc_champion_v1` que Open Qualifier puede leer
+     ══════════════════════════════════════════════════ -->
+<script>
+(function(){
+  var WC_KEY  = 'wc_state_v1';
+  var WC_CHAMP_KEY = 'wc_champion_v1';
+
+  function loadState(){ try { return JSON.parse(localStorage.getItem(WC_KEY)||'null'); } catch(_){ return null; } }
+  function saveState(s){ try { localStorage.setItem(WC_KEY, JSON.stringify(s)); } catch(_){} }
+  function clearState(){ try { localStorage.removeItem(WC_KEY); localStorage.removeItem(WC_CHAMP_KEY); } catch(_){} }
+
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function _logoOf(name){
+    if(typeof window.getTeamLogoUrl === 'function'){ try { return window.getTeamLogoUrl(name) || ''; } catch(_){} }
+    return (window.TEAM_LOGOS && window.TEAM_LOGOS[name]) || '';
+  }
+  function _powerOf(name){
+    var r = window.TEAM_RATINGS || {};
+    var e = r[name];
+    if(!e) return 65;
+    if(typeof e === 'number') return e;
+    if(typeof e === 'object' && typeof e.media === 'number') return e.media;
+    return 65;
+  }
+
+  /* Recoge los 18 equipos clasificados desde las ligas menores
+     (zonas 'wildcard' de cada `ligaExt_<slug>`). Si la lista
+     resultante < 18, completamos con placeholders por liga
+     que aún no haya simulado, para que la UI no se bloquee. */
+  function buildPool(){
+    var pool = [];
+    if(typeof window.computeWildCardClassified === 'function'){
+      try {
+        var classified = window.computeWildCardClassified() || [];
+        classified.forEach(function(t){
+          if(!t || !t.name) return;
+          pool.push({
+            name: t.name,
+            league: t.league || '',
+            logo: t.logo || _logoOf(t.name),
+            power: _powerOf(t.name)
+          });
+        });
+      } catch(_){}
+    }
+    return pool;
+  }
+
+  /* Reparte 18 equipos en 2 grupos de 9 con SNAKE DRAFT por poder.
+     Ranking 1 (más fuerte) → A, 2 → B, 3 → B, 4 → A, 5 → A, … */
+  function snakeDraft(pool){
+    var sorted = pool.slice().sort(function(a,b){ return (b.power||0) - (a.power||0); });
+    var A = [], B = [];
+    for(var i=0; i<sorted.length; i++){
+      var round = Math.floor(i/2);
+      var even  = (i % 2) === 0;
+      var goesA = (round % 2 === 0) ? even : !even;
+      if(goesA && A.length < 9) A.push(sorted[i]);
+      else if(!goesA && B.length < 9) B.push(sorted[i]);
+      else if(A.length < 9) A.push(sorted[i]);
+      else B.push(sorted[i]);
+    }
+    return {A:A, B:B};
+  }
+
+  /* Round-robin: cada equipo juega contra los otros 8 una vez. */
+  function genRoundRobin(teams){
+    var matches = [];
+    for(var i=0;i<teams.length;i++){
+      for(var j=i+1;j<teams.length;j++){
+        /* Aleatorizamos el local para no sesgar siempre al de menor índice. */
+        if(Math.random() < 0.5) matches.push({h:teams[i].name, a:teams[j].name});
+        else                    matches.push({h:teams[j].name, a:teams[i].name});
+      }
+    }
+    return matches;
+  }
+
+  /* Wrap del simulador IA-vs-IA. Reusa _simIAvsIAWithContext si está
+     disponible (mismo motor que LaLiga), caemos a _fallbackIAvsIAScore
+     si no. */
+  function simMatch(home, away){
+    if(typeof window._simIAvsIAWithContext === 'function'){
+      try { return window._simIAvsIAWithContext(home, away, 0); } catch(_){}
+    }
+    if(typeof window._fallbackIAvsIAScore === 'function'){
+      try { return window._fallbackIAvsIAScore(home, away); } catch(_){}
+    }
+    /* Fallback puro: poisson simple basado en poder. */
+    var ph = _powerOf(home), pa = _powerOf(away);
+    function poiss(l){ var L=Math.exp(-l), k=0, p=1; do{k++; p*=Math.random();} while(p>L); return k-1; }
+    return { gh: Math.min(5, poiss(0.8 + (ph-pa)/40 + 0.3)), ga: Math.min(5, poiss(0.8 - (ph-pa)/40 + 0.1)) };
+  }
+
+  function emptyTable(teams){
+    return teams.map(function(t){
+      return { name:t.name, logo:t.logo||'', power:t.power||65, league:t.league||'',
+               pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0 };
+    });
+  }
+  function applyToTable(table, h, a, gh, ga){
+    var H=null, A=null;
+    for(var i=0;i<table.length;i++){
+      if(table[i].name===h) H=table[i];
+      else if(table[i].name===a) A=table[i];
+    }
+    if(!H || !A) return;
+    H.pj++; A.pj++; H.gf+=gh; H.gc+=ga; A.gf+=ga; A.gc+=gh;
+    if(gh>ga){ H.v++; A.p++; H.pts+=3; }
+    else if(ga>gh){ A.v++; H.p++; A.pts+=3; }
+    else { H.e++; A.e++; H.pts++; A.pts++; }
+    H.dg = H.gf - H.gc; A.dg = A.gf - A.gc;
+  }
+  function sortTable(t){
+    return t.slice().sort(function(a,b){
+      if(b.pts !== a.pts) return b.pts - a.pts;
+      if(b.dg  !== a.dg ) return b.dg  - a.dg;
+      if(b.gf  !== a.gf ) return b.gf  - a.gf;
+      return a.name.localeCompare(b.name,'es');
+    });
+  }
+
+  /* Construye el cuadro de Octavos a partir de las clasificaciones
+     ordenadas. Cruzado top-8: 1A-8B, 2A-7B, 3A-6B, 4A-5B,
+     5A-4B, 6A-3B, 7A-2B, 8A-1B. El último de cada grupo (9º)
+     queda eliminado. */
+  function buildOctavos(sortA, sortB){
+    var pairs = [];
+    for(var i=0; i<8; i++){
+      var posA = i+1;        // 1..8
+      var posB = 8 - i;      // 8..1
+      var hT, aT;
+      if(i < 4){ hT = sortA[i].name;            aT = sortB[8-1-i].name; }
+      else     { hT = sortA[i].name;            aT = sortB[(8-1-i)].name; }
+      pairs.push({
+        round:'octavos', idx:i,
+        labelH:'Pos '+posA+'A', labelA:'Pos '+posB+'B',
+        teamH:hT, teamA:aT,
+        idaGh:null, idaGa:null,
+        vueltaGh:null, vueltaGa:null,
+        played:false, winner:null
+      });
+    }
+    return pairs;
+  }
+
+  /* Dado el array de Octavos JUGADOS, calcula los Cuartos.
+     Cuadro fijo (estilo UEFA): el ganador del partido i juega
+     contra el ganador del i+1 (parejas: 0-1, 2-3, 4-5, 6-7).
+     Equipo con mayor seed (= menor índice de bracket) es local
+     en la ida. */
+  function buildCuartos(oct){
+    var out = [];
+    for(var i=0; i<8; i+=2){
+      var w1 = oct[i].winner;
+      var w2 = oct[i+1].winner;
+      if(!w1 || !w2) continue;
+      out.push({
+        round:'cuartos', idx:i/2,
+        labelH:'Gan '+(i+1), labelA:'Gan '+(i+2),
+        teamH:w1, teamA:w2,
+        idaGh:null, idaGa:null,
+        vueltaGh:null, vueltaGa:null,
+        played:false, winner:null
+      });
+    }
+    return out;
+  }
+  function buildSemis(cuart){
+    var out = [];
+    for(var i=0; i<cuart.length; i+=2){
+      var w1 = cuart[i].winner, w2 = cuart[i+1] && cuart[i+1].winner;
+      if(!w1 || !w2) continue;
+      out.push({
+        round:'semis', idx:i/2,
+        labelH:'Cuartos '+(i+1), labelA:'Cuartos '+(i+2),
+        teamH:w1, teamA:w2,
+        idaGh:null, idaGa:null,
+        vueltaGh:null, vueltaGa:null,
+        played:false, winner:null
+      });
+    }
+    return out;
+  }
+  function buildFinal(semis){
+    if(semis.length < 2 || !semis[0].winner || !semis[1].winner) return null;
+    return {
+      round:'final', idx:0,
+      teamH: semis[0].winner, teamA: semis[1].winner,
+      gh:null, ga:null,
+      played:false, winner:null
+    };
+  }
+
+  /* Resuelve una eliminatoria a doble vuelta: agregado, y si empate
+     a goles tras vuelta, prórroga simulada (penaltis ocultos). */
+  function playKoTie(tie){
+    var ida = simMatch(tie.teamH, tie.teamA);
+    tie.idaGh = ida.gh; tie.idaGa = ida.ga;
+    var vu  = simMatch(tie.teamA, tie.teamH); /* vuelta: el visitante en ida es local */
+    tie.vueltaGh = vu.gh; tie.vueltaGa = vu.ga;
+    tie.played = true;
+
+    var aggH = ida.gh + vu.ga;     /* goles del equipo H (local en ida, visitante en vuelta) */
+    var aggA = ida.ga + vu.gh;     /* goles del equipo A (visitante en ida, local en vuelta) */
+    if(aggH > aggA) tie.winner = tie.teamH;
+    else if(aggA > aggH) tie.winner = tie.teamA;
+    else {
+      /* Empate a goles → prórroga + penaltis. Resolvemos con sim
+         extra; si vuelve a empatar, sorteo 50/50. */
+      var et = simMatch(tie.teamH, tie.teamA);
+      if(et.gh > et.ga) tie.winner = tie.teamH;
+      else if(et.ga > et.gh) tie.winner = tie.teamA;
+      else tie.winner = (Math.random() < 0.5) ? tie.teamH : tie.teamA;
+      tie.etDecided = true;
+    }
+  }
+
+  /* ══════ SIM TODA LA FASE DE GRUPOS ══════ */
+  function simGroupStage(state){
+    function simOne(grp){
+      var table = state.groups[grp].table;
+      var sched = state.groups[grp].schedule;
+      sched.forEach(function(m){
+        if(m.played) return;
+        var sc = simMatch(m.h, m.a);
+        m.gh = sc.gh; m.ga = sc.ga;
+        m.played = true;
+        applyToTable(table, m.h, m.a, sc.gh, sc.ga);
+      });
+      state.groups[grp].sortedTable = sortTable(table);
+    }
+    simOne('A'); simOne('B');
+    /* Top 8 → Octavos. Último (9º) eliminado. */
+    state.ko.octavos = buildOctavos(state.groups.A.sortedTable, state.groups.B.sortedTable);
+    state.phase = 'octavos';
+  }
+
+  function simKoRound(state, roundKey){
+    var arr = state.ko[roundKey];
+    if(!arr || !arr.length) return;
+    arr.forEach(function(t){ if(!t.played) playKoTie(t); });
+    if(roundKey === 'octavos'){
+      state.ko.cuartos = buildCuartos(arr);
+      state.phase = 'cuartos';
+    } else if(roundKey === 'cuartos'){
+      state.ko.semis = buildSemis(arr);
+      state.phase = 'semis';
+    } else if(roundKey === 'semis'){
+      state.ko.final = buildFinal(arr);
+      state.phase = 'final';
+    }
+  }
+  function simFinal(state){
+    var f = state.ko.final;
+    if(!f || f.played) return;
+    var sc = simMatch(f.teamH, f.teamA);
+    f.gh = sc.gh; f.ga = sc.ga;
+    f.played = true;
+    if(sc.gh > sc.ga) f.winner = f.teamH;
+    else if(sc.ga > sc.gh) f.winner = f.teamA;
+    else {
+      /* Final a partido único → ETs + penaltis. */
+      var et = simMatch(f.teamH, f.teamA);
+      if(et.gh > et.ga) f.winner = f.teamH;
+      else if(et.ga > et.gh) f.winner = f.teamA;
+      else f.winner = (Math.random() < 0.5) ? f.teamH : f.teamA;
+      f.etDecided = true;
+    }
+    state.champion = f.winner;
+    state.phase = 'done';
+    try { localStorage.setItem(WC_CHAMP_KEY, JSON.stringify({name:f.winner, ts:Date.now()})); } catch(_){}
+  }
+
+  /* Inicializa el estado leyendo los 18 equipos clasificados y
+     repartiéndolos en 2 grupos por snake-draft. */
+  function initState(){
+    var pool = buildPool();
+    if(pool.length === 0) return null;
+    /* Si pool < 18, rellenamos con placeholders para que el bracket
+       no se rompa. Si > 18, recortamos por poder descendente. */
+    if(pool.length > 18){
+      pool = pool.slice().sort(function(a,b){ return (b.power||0)-(a.power||0); }).slice(0,18);
+    } else if(pool.length < 18){
+      for(var i=pool.length; i<18; i++){
+        pool.push({ name:'TBD '+(i+1), league:'?', logo:'', power:55 });
+      }
+    }
+    var grp = snakeDraft(pool);
+    return {
+      pool: pool,
+      groups: {
+        A: { teams: grp.A, table: emptyTable(grp.A), schedule: genRoundRobin(grp.A), sortedTable: emptyTable(grp.A) },
+        B: { teams: grp.B, table: emptyTable(grp.B), schedule: genRoundRobin(grp.B), sortedTable: emptyTable(grp.B) }
+      },
+      ko: { octavos:[], cuartos:[], semis:[], final:null },
+      champion: null,
+      phase: 'groups',
+      ts: Date.now()
+    };
+  }
+
+  /* ══════ RENDER ══════ */
+  function _badge(name, logo){
+    var l = logo || _logoOf(name) || '';
+    if(l) return '<img src="'+_esc(l)+'" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display=\'none\'">';
+    return '';
+  }
+
+  function renderGroupTable(grp, sortedTable, qualifiedTop){
+    var rows = '<div class="wc-row hdr"><span>#</span><span>Equipo</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>PTS</span></div>';
+    sortedTable.forEach(function(r, i){
+      var pos = i+1;
+      var cls = '';
+      if(pos <= qualifiedTop) cls = 'qual';
+      else if(pos === sortedTable.length) cls = 'elim';
+      var dgCls = r.dg>0 ? 'pos' : (r.dg<0?'neg':'');
+      rows += '<div class="wc-row '+cls+'">'
+        + '<span class="wc-pos">'+pos+'</span>'
+        + '<span class="wc-name">'+_badge(r.name, r.logo)+_esc(r.name)+'</span>'
+        + '<span class="wc-cell">'+r.pj+'</span>'
+        + '<span class="wc-cell">'+r.v+'</span>'
+        + '<span class="wc-cell">'+r.e+'</span>'
+        + '<span class="wc-cell">'+r.p+'</span>'
+        + '<span class="wc-cell">'+r.gf+'</span>'
+        + '<span class="wc-cell">'+r.gc+'</span>'
+        + '<span class="wc-cell pts">'+r.pts+'</span>'
+        + '</div>';
+    });
+    return '<div class="wc-group">'
+      + '<div class="wc-group-h">GRUPO '+grp+'</div>'
+      + rows
+      + '</div>';
+  }
+
+  function renderTie(tie){
+    var played = !!tie.played;
+    var aggH = (tie.idaGh||0) + (tie.vueltaGa||0);
+    var aggA = (tie.idaGa||0) + (tie.vueltaGh||0);
+    var winnerH = played && tie.winner === tie.teamH;
+    var winnerA = played && tie.winner === tie.teamA;
+    return '<div class="wc-tie '+(played?'played':'')+'">'
+      + '<div class="wc-tie-leg">'
+      +   '<span class="wc-tie-h">'+_badge(tie.teamH)+_esc(tie.teamH)+'</span>'
+      +   '<span class="wc-tie-sc">'+(played?(tie.idaGh+'-'+tie.idaGa):'vs')+'</span>'
+      +   '<span class="wc-tie-a">'+_esc(tie.teamA)+_badge(tie.teamA)+'</span>'
+      + '</div>'
+      + (played
+        ? '<div class="wc-tie-leg" style="margin-top:3px;">'
+          +   '<span class="wc-tie-h"><span class="lbl">VUELTA</span></span>'
+          +   '<span class="wc-tie-sc">'+tie.vueltaGa+'-'+tie.vueltaGh+'</span>'
+          +   '<span class="wc-tie-a"></span>'
+          + '</div>'
+        : '')
+      + (played
+        ? '<div class="wc-tie-agg">'
+          +   '<span class="'+(winnerH?'winner-mark':'loser-mark')+'" style="text-align:right;">GLOBAL</span>'
+          +   '<span class="agg-sc">'+aggH+'-'+aggA+'</span>'
+          +   '<span class="'+(winnerA?'winner-mark':'loser-mark')+'">'+(tie.etDecided?'(prórroga)':'')+'</span>'
+          + '</div>'
+        : '')
+      + '</div>';
+  }
+
+  function renderFinal(f){
+    if(!f) return '';
+    var played = !!f.played;
+    return '<div class="wc-final">'
+      + '<div class="wc-final-lbl">🏆 GRAN FINAL · CAMPO NEUTRAL</div>'
+      + '<div class="wc-final-row">'
+      +   '<span class="wc-final-team wc-final-h">'+_badge(f.teamH)+_esc(f.teamH)+'</span>'
+      +   '<span class="wc-final-sc">'+(played?(f.gh+' - '+f.ga):'vs')+'</span>'
+      +   '<span class="wc-final-team wc-final-a">'+_esc(f.teamA)+_badge(f.teamA)+'</span>'
+      + '</div>'
+      + (f.etDecided && played ? '<div class="wc-final-stadium">decidido en prórroga / penaltis</div>' : '')
+      + '</div>';
+  }
+
+  function renderChampion(s){
+    if(!s.champion) return '';
+    return '<div class="wc-champion">'
+      + '<div class="wc-champion-lbl">⭐ CAMPEÓN WILD CARD ⭐</div>'
+      + '<div class="wc-champion-name">'+_badge(s.champion)+_esc(s.champion)+'</div>'
+      + '<div class="wc-champion-note">Clasifica directo al <b>Open Qualifier</b> de la próxima temporada.</div>'
+      + '</div>';
+  }
+
+  function render(){
+    var host = document.getElementById('wc-body');
+    if(!host) return;
+    var s = loadState();
+    var btnSim = document.getElementById('wc-btn-sim');
+    if(!s){
+      var pool = buildPool();
+      host.innerHTML = '<div class="wc-empty">'
+        + '<div style="font-size:32px;margin-bottom:10px;">🎟️</div>'
+        + 'Sin equipos clasificados todavía.<br><br>'
+        + 'Configura el cupo <b>⚪ WildCard Round</b> en cada liga menor desde 📜 <i>Reglas</i> y simula sus jornadas. '
+        + 'Equipos detectados ahora mismo: <b>'+pool.length+'/18</b>.<br><br>'
+        + (pool.length > 0
+          ? 'Pulsa <b>🎮 Simular</b> para iniciar el torneo con los equipos disponibles (rellenamos hasta 18 con placeholders si faltan).'
+          : 'Necesitas al menos 1 equipo para arrancar.')
+        + '</div>';
+      if(btnSim) btnSim.disabled = (pool.length === 0);
+      return;
+    }
+    if(btnSim) btnSim.disabled = (s.phase === 'done');
+
+    var html = '';
+    /* Fase de grupos */
+    html += '<div class="wc-sec"><div class="wc-sec-title">FASE DE GRUPOS · 9 EQUIPOS · 8 PARTIDOS C/U</div>';
+    html += renderGroupTable('A', s.groups.A.sortedTable, 8);
+    html += renderGroupTable('B', s.groups.B.sortedTable, 8);
+    html += '</div>';
+
+    /* Octavos */
+    if(s.ko.octavos && s.ko.octavos.length){
+      html += '<div class="wc-sec"><div class="wc-sec-title">OCTAVOS DE FINAL · IDA + VUELTA · GLOBAL</div>';
+      s.ko.octavos.forEach(function(t){ html += renderTie(t); });
+      html += '</div>';
+    }
+    /* Cuartos */
+    if(s.ko.cuartos && s.ko.cuartos.length){
+      html += '<div class="wc-sec"><div class="wc-sec-title">CUARTOS DE FINAL · IDA + VUELTA · GLOBAL</div>';
+      s.ko.cuartos.forEach(function(t){ html += renderTie(t); });
+      html += '</div>';
+    }
+    /* Semis */
+    if(s.ko.semis && s.ko.semis.length){
+      html += '<div class="wc-sec"><div class="wc-sec-title">SEMIFINALES · IDA + VUELTA · GLOBAL</div>';
+      s.ko.semis.forEach(function(t){ html += renderTie(t); });
+      html += '</div>';
+    }
+    /* Final */
+    if(s.ko.final){
+      html += '<div class="wc-sec"><div class="wc-sec-title">FINAL · PARTIDO ÚNICO</div>';
+      html += renderFinal(s.ko.final);
+      html += '</div>';
+    }
+    /* Campeón */
+    if(s.champion){
+      html += renderChampion(s);
+    }
+    host.innerHTML = html;
+  }
+  window._wcRender = render;
+
+  /* Avanza UNA fase. La idea: el botón "Simular" es contextual al
+     estado actual. Si no hay nada → init + grupos + octavos. Si hay
+     octavos → cuartos. Etc. Así el usuario siempre ve "lo siguiente". */
+  function nextPhase(){
+    var s = loadState();
+    if(!s){
+      s = initState();
+      if(!s) return null;
+      simGroupStage(s);
+      saveState(s);
+      return 'groups+octavos';
+    }
+    if(s.phase === 'octavos'){ simKoRound(s, 'octavos'); saveState(s); return 'octavos'; }
+    if(s.phase === 'cuartos'){ simKoRound(s, 'cuartos'); saveState(s); return 'cuartos'; }
+    if(s.phase === 'semis'){   simKoRound(s, 'semis');   saveState(s); return 'semis'; }
+    if(s.phase === 'final'){   simFinal(s);              saveState(s); return 'final'; }
+    return 'done';
+  }
+
+  window._wcSimulate = function(){
+    function _go(){
+      var phase = nextPhase();
+      if(!phase){
+        alert('⚠️ No hay equipos clasificados. Simula al menos una liga menor con cupo ⚪ WildCard.');
+        return;
+      }
+      render();
+    }
+    if(typeof window.pG === 'function'){ window.pG(_go); }
+    else _go();
+  };
+
+  window._wcReset = function(){
+    function _doReset(){
+      if(!confirm('¿Reiniciar el torneo Wild Card? Se perderán todos los partidos jugados.')) return;
+      clearState();
+      render();
+    }
+    if(typeof window.pG === 'function'){ window.pG(_doReset); }
+    else _doReset();
+  };
+
+  /* Re-render al entrar al screen — `go(id)` ya está parcheado por
+     otros bloques, así que añadimos otro patch que dispara render
+     cuando se navega a #s-wild-card. */
+  var _origGoWc = window.go;
+  if(typeof _origGoWc === 'function'){
+    window.go = function(id){
+      var r = _origGoWc.apply(this, arguments);
+      if(id === 's-wild-card'){
+        try { setTimeout(render, 30); } catch(_){}
+      }
+      return r;
+    };
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    /* Render diferido — esperamos a que computeWildCardClassified esté
+       expuesta antes de renderizar por primera vez. */
+    setTimeout(render, 250);
+  });
+})();
+</script>

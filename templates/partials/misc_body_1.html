@@ -4827,6 +4827,12 @@ window._showSimProgress = function(opts, onDone){
                + (Number(zones.uclPrev)||0)
                + (Number(zones.uclQual)||0)
                + (Number(zones.uel)||0);
+        } else if(zoneKey === 'wildcard'){
+          skip = (Number(zones.ucl)||0)
+               + (Number(zones.uclPrev)||0)
+               + (Number(zones.uclQual)||0)
+               + (Number(zones.uel)||0)
+               + (Number(zones.uecl)||0);
         }
         var ranking = _standingsFromResults(teams, data.results);
         var added = 0;
@@ -4858,11 +4864,36 @@ window._showSimProgress = function(opts, onDone){
   function computeUclClassified(){ return _computeQualifiedFromLeagues('ucl'); }
   function computeUelClassified(){ return _computeQualifiedFromLeagues('uel'); }
   function computeUeclClassified(){ return _computeQualifiedFromLeagues('uecl'); }
-  function computeOpenQualifierTeams(){ return _computeQualifiedFromLeagues('uclQual'); }
+  function computeOpenQualifierTeams(){
+    var arr = _computeQualifiedFromLeagues('uclQual');
+    /* El campeón del torneo Wild Card (s-wild-card) entra como UNA
+       plaza extra al Open Qualifier. Lo añadimos solo si la fase
+       Wild Card terminó (champion no-null) y aún no aparece en `arr`
+       por otro slug. */
+    try {
+      var raw = localStorage.getItem('wc_champion_v1');
+      if(raw){
+        var champ = JSON.parse(raw);
+        var champName = champ && champ.name;
+        if(champName){
+          var seen = false;
+          for(var i=0;i<arr.length;i++){
+            if(arr[i] && arr[i].name === champName){ seen = true; break; }
+          }
+          if(!seen){
+            arr.push({ name: champName, league: 'wild-card', logo: '' });
+          }
+        }
+      }
+    } catch(_){}
+    return arr;
+  }
+  function computeWildCardClassified(){ return _computeQualifiedFromLeagues('wildcard'); }
   window.computeUclClassified = computeUclClassified;
   window.computeUelClassified = computeUelClassified;
   window.computeUeclClassified = computeUeclClassified;
   window.computeOpenQualifierTeams = computeOpenQualifierTeams;
+  window.computeWildCardClassified = computeWildCardClassified;
 
   function buildUclGruposClas(){
     var container = document.getElementById('clas-ucl-grupos-content');
@@ -5441,7 +5472,57 @@ window._showSimProgress = function(opts, onDone){
 <div class="screen" id="s-wild-card">
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🎟️</span><h2>UCL · Wild Card</h2></div>
-<div class="empty-ph">Wild Card — próximamente</div>
+<style>
+#s-wild-card .wc-toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);}
+#s-wild-card .wc-btn{flex:1;min-width:90px;padding:10px 14px;border:1px solid rgba(204,255,0,.4);background:rgba(204,255,0,.08);color:#ccff00;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.5px;border-radius:6px;cursor:pointer;}
+#s-wild-card .wc-btn.danger{border-color:rgba(255,80,80,.4);background:rgba(255,80,80,.08);color:#ff8080;}
+#s-wild-card .wc-btn:disabled{opacity:.4;cursor:not-allowed;}
+#s-wild-card .wc-empty{padding:24px 12px;text-align:center;color:rgba(255,255,255,.5);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.6;}
+#s-wild-card .wc-sec{padding:14px 8px 6px;border-bottom:1px solid rgba(255,255,255,.06);}
+#s-wild-card .wc-sec-title{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:#ccff00;padding:0 6px 8px;}
+#s-wild-card .wc-group{margin-bottom:14px;}
+#s-wild-card .wc-group-h{font-family:Bebas Neue,Oswald,sans-serif;font-size:14px;letter-spacing:2px;color:#fff;padding:6px 10px;background:rgba(204,255,0,.06);border-left:3px solid #ccff00;margin-bottom:4px;}
+#s-wild-card .wc-row{display:grid;grid-template-columns:24px 1fr 36px 28px 28px 28px 36px 36px 36px;gap:4px;align-items:center;padding:5px 8px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);}
+#s-wild-card .wc-row.hdr{background:rgba(255,255,255,.05);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.2px;color:rgba(255,255,255,.45);text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.08);}
+#s-wild-card .wc-row.qual{background:rgba(204,255,0,.05);border-left:2px solid #ccff00;}
+#s-wild-card .wc-row.elim{background:rgba(255,80,80,.04);border-left:2px solid #ff5050;}
+#s-wild-card .wc-pos{color:rgba(255,255,255,.5);text-align:center;}
+#s-wild-card .wc-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#s-wild-card .wc-cell{text-align:center;}
+#s-wild-card .wc-cell.pts{font-weight:700;color:#ccff00;}
+#s-wild-card .wc-cell.dg.pos{color:#88dd00;} #s-wild-card .wc-cell.dg.neg{color:#ff7070;}
+#s-wild-card .wc-tie{display:flex;flex-direction:column;gap:2px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;margin-bottom:8px;}
+#s-wild-card .wc-tie.played{border-color:rgba(204,255,0,.25);background:rgba(204,255,0,.04);}
+#s-wild-card .wc-tie.played.aw-win{border-color:rgba(255,160,80,.3);}
+#s-wild-card .wc-tie-leg{display:grid;grid-template-columns:1fr 60px 1fr;gap:8px;align-items:center;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
+#s-wild-card .wc-tie-leg .lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);min-width:34px;}
+#s-wild-card .wc-tie-h{text-align:right;font-weight:600;}
+#s-wild-card .wc-tie-a{text-align:left;font-weight:600;}
+#s-wild-card .wc-tie-sc{text-align:center;font-family:Bebas Neue,Oswald,sans-serif;font-size:15px;letter-spacing:1px;color:#fff;background:rgba(255,255,255,.06);border-radius:4px;padding:1px 0;}
+#s-wild-card .wc-tie-agg{display:grid;grid-template-columns:1fr 60px 1fr;gap:8px;align-items:center;padding-top:5px;margin-top:4px;border-top:1px dashed rgba(255,255,255,.1);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#ccff00;}
+#s-wild-card .wc-tie-agg .agg-sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#ccff00;background:rgba(204,255,0,.08);border:1px solid rgba(204,255,0,.3);border-radius:4px;padding:1px 0;}
+#s-wild-card .wc-tie-agg .winner-mark{font-weight:700;color:#ccff00;}
+#s-wild-card .wc-tie-agg .loser-mark{color:rgba(255,255,255,.4);}
+#s-wild-card .wc-final{padding:18px 14px;background:linear-gradient(135deg,#1a0e04,#3a2010,#6a3f1c);border:2px solid #8b5520;border-radius:12px;text-align:center;}
+#s-wild-card .wc-final-lbl{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:3px;color:#ffd080;margin-bottom:10px;}
+#s-wild-card .wc-final-row{display:grid;grid-template-columns:1fr 80px 1fr;gap:10px;align-items:center;}
+#s-wild-card .wc-final-team{font-family:Bebas Neue,sans-serif;font-size:18px;color:#fff;}
+#s-wild-card .wc-final-h{text-align:right;}
+#s-wild-card .wc-final-a{text-align:left;}
+#s-wild-card .wc-final-sc{font-family:Bebas Neue,sans-serif;font-size:32px;color:#ffd080;background:rgba(0,0,0,.3);border-radius:6px;padding:4px 0;}
+#s-wild-card .wc-final-stadium{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.5);margin-top:8px;}
+#s-wild-card .wc-champion{padding:24px 14px;text-align:center;background:radial-gradient(ellipse at center,rgba(204,255,0,.12),rgba(0,0,0,.95));border:2px solid #ccff00;border-radius:14px;margin:8px;}
+#s-wild-card .wc-champion-lbl{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:4px;color:#ccff00;}
+#s-wild-card .wc-champion-name{font-family:Bebas Neue,sans-serif;font-size:34px;color:#fff;letter-spacing:2px;margin:8px 0;text-shadow:0 0 14px rgba(204,255,0,.4);}
+#s-wild-card .wc-champion-note{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.7);}
+</style>
+<div id="wc-root">
+  <div class="wc-toolbar" id="wc-toolbar">
+    <button class="wc-btn" id="wc-btn-sim" onclick="window._wcSimulate&&window._wcSimulate()">🎮 Simular</button>
+    <button class="wc-btn danger" id="wc-btn-reset" onclick="window._wcReset&&window._wcReset()">♻️ Reset</button>
+  </div>
+  <div id="wc-body"></div>
+</div>
 </div>
 <div class="screen" id="s-ucl-stats">
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>

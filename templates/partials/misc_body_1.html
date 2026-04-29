@@ -5659,54 +5659,69 @@ window._showSimProgress = function(opts, onDone){
 <div class="sec-hdr"><span class="sec-emoji">🎟️</span><h2>UCL · Wild Card</h2></div>
 <style>
 #s-wild-card .wc-toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);}
-#s-wild-card .wc-btn{flex:1;min-width:90px;padding:10px 14px;border:1px solid rgba(204,255,0,.4);background:rgba(204,255,0,.08);color:#ccff00;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.5px;border-radius:6px;cursor:pointer;}
-#s-wild-card .wc-btn.danger{border-color:rgba(255,80,80,.4);background:rgba(255,80,80,.08);color:#ff8080;}
+#s-wild-card .wc-btn{flex:1;min-width:90px;padding:10px 14px;border:1px solid #ffffff;background:#ffffff;color:#000;font-family:Oswald,sans-serif;font-size:12px;font-weight:900;letter-spacing:1.5px;border-radius:6px;cursor:pointer;}
+#s-wild-card .wc-btn:hover{background:#e8e8e8;}
+#s-wild-card .wc-btn.danger{border-color:rgba(255,80,80,.6);background:rgba(255,80,80,.10);color:#ff8080;}
+#s-wild-card .wc-btn.danger:hover{background:rgba(255,80,80,.20);}
 #s-wild-card .wc-btn:disabled{opacity:.4;cursor:not-allowed;}
 #s-wild-card .wc-empty{padding:24px 12px;text-align:center;color:rgba(255,255,255,.5);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.6;}
 #s-wild-card .wc-sec{padding:14px 8px 6px;border-bottom:1px solid rgba(255,255,255,.06);}
-#s-wild-card .wc-sec-title{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:#ccff00;padding:0 6px 8px;}
-#s-wild-card .wc-group{margin-bottom:14px;}
-#s-wild-card .wc-group-h{font-family:Bebas Neue,Oswald,sans-serif;font-size:14px;letter-spacing:2px;color:#fff;padding:6px 10px;background:rgba(204,255,0,.06);border-left:3px solid #ccff00;margin-bottom:4px;}
-#s-wild-card .wc-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+#s-wild-card .wc-sec-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2px;color:#000;font-weight:900;text-shadow:0 1px 0 rgba(255,255,255,.35);background:linear-gradient(90deg,#ffffff,#d8d8d8,#ffffff);padding:8px 14px;border-radius:6px;}
+/* ── Grupo: card blanca (color oficial Wild Card) ───────────── */
+#s-wild-card .wc-group{margin:14px 4px 0;border:1px solid #ffffff;border-radius:8px;background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(0,0,0,0));overflow:hidden;}
+#s-wild-card .wc-group-h{
+  padding:10px 14px;border-bottom:2px solid #c8c8c8;
+  background:linear-gradient(90deg,#f0f0f0,#ffffff,#d8d8d8);
+  border-radius:8px 8px 0 0;
+  display:flex;align-items:center;gap:8px;
+  font-family:'Bebas Neue','Oswald',sans-serif;font-size:24px;color:#000;font-weight:900;letter-spacing:2px;text-shadow:0 1px 0 rgba(255,255,255,.35);
+}
+#s-wild-card .wc-group-h .wc-group-count{margin-left:auto;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#000;font-weight:700;}
+#s-wild-card .wc-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 0 4px;}
 #s-wild-card .wc-table-scroll::-webkit-scrollbar{height:6px;}
-#s-wild-card .wc-table-scroll::-webkit-scrollbar-thumb{background:rgba(204,255,0,.3);border-radius:3px;}
-#s-wild-card .wc-row{display:grid;grid-template-columns:24px minmax(150px,1fr) 36px 30px 28px 28px 28px 32px 32px 36px;gap:4px;align-items:center;padding:5px 8px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);min-width:520px;}
-#s-wild-card .wc-row.hdr{background:rgba(255,255,255,.05);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.2px;color:rgba(255,255,255,.45);text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.08);position:sticky;top:0;z-index:1;}
-#s-wild-card .wc-row.qual{background:rgba(204,255,0,.05);border-left:2px solid #ccff00;}
-#s-wild-card .wc-row.elim{background:rgba(255,80,80,.04);border-left:2px solid #ff5050;}
-#s-wild-card .wc-pos{color:rgba(255,255,255,.5);text-align:center;}
-#s-wild-card .wc-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px;}
+#s-wild-card .wc-table-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.4);border-radius:3px;}
+/* ── Filas: columnas más juntas (tighter) ───────────────────── */
+#s-wild-card .wc-row{display:grid;grid-template-columns:24px minmax(120px,1.5fr) 28px 24px 22px 22px 22px 26px 26px 30px;gap:2px;align-items:center;padding:5px 8px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);min-width:420px;}
+#s-wild-card .wc-row.hdr{background:linear-gradient(90deg,#1a1a1a,#000000,#1a1a1a);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:#ffffff;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ffffff;position:sticky;top:0;z-index:1;}
+#s-wild-card .wc-row.qual{background:rgba(255,255,255,.05);border-left:3px solid #ffffff;}
+#s-wild-card .wc-row.elim{background:rgba(255,80,80,.06);border-left:3px solid #ff5050;}
+#s-wild-card .wc-pos{color:#ffffff;text-align:center;font-family:Bebas Neue,sans-serif;font-size:14px;}
+#s-wild-card .wc-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px;color:#fff;}
 #s-wild-card .wc-cell{text-align:center;}
-#s-wild-card .wc-cell.pts{font-weight:700;color:#ccff00;}
-#s-wild-card .wc-cell.dg.pos{color:#88dd00;} #s-wild-card .wc-cell.dg.neg{color:#ff7070;}
+#s-wild-card .wc-cell.pts{font-family:Bebas Neue,sans-serif;font-size:14px;font-weight:700;color:#ffffff;}
+#s-wild-card .wc-cell.dg.pos{color:#aaffaa;} #s-wild-card .wc-cell.dg.neg{color:#ffaaaa;}
+/* ── Cabecera de sección con botón sim ──────────────────────── */
 #s-wild-card .wc-sec-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 6px 8px;}
-#s-wild-card .wc-sec-head .wc-sec-title{padding:0;flex:1;}
-#s-wild-card .wc-mini-sim{padding:5px 10px;border:1px solid rgba(204,255,0,.45);background:rgba(204,255,0,.10);color:#ccff00;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;border-radius:5px;cursor:pointer;font-weight:700;flex-shrink:0;}
-#s-wild-card .wc-mini-sim:hover{background:rgba(204,255,0,.18);}
+#s-wild-card .wc-sec-head .wc-sec-title{padding:8px 14px;flex:1;}
+#s-wild-card .wc-mini-sim{padding:8px 14px;border:1px solid #ffffff;background:#ffffff;color:#000;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;border-radius:6px;cursor:pointer;font-weight:900;flex-shrink:0;}
+#s-wild-card .wc-mini-sim:hover{background:#e0e0e0;}
 #s-wild-card .wc-mini-sim:disabled{opacity:.35;cursor:not-allowed;}
-#s-wild-card .wc-tie{display:flex;flex-direction:column;gap:2px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 10px;margin-bottom:8px;}
-#s-wild-card .wc-tie.played{border-color:rgba(204,255,0,.25);background:rgba(204,255,0,.04);}
-#s-wild-card .wc-tie.played.aw-win{border-color:rgba(255,160,80,.3);}
+/* ── Eliminatorias: blanco/negro ────────────────────────────── */
+#s-wild-card .wc-tie{display:flex;flex-direction:column;gap:2px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:10px 12px;margin:0 4px 8px;}
+#s-wild-card .wc-tie.played{border-color:#ffffff;background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(0,0,0,.4));}
 #s-wild-card .wc-tie-leg{display:grid;grid-template-columns:1fr 60px 1fr;gap:8px;align-items:center;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
-#s-wild-card .wc-tie-leg .lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);min-width:34px;}
+#s-wild-card .wc-tie-leg .lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.55);min-width:34px;}
 #s-wild-card .wc-tie-h{text-align:right;font-weight:600;}
 #s-wild-card .wc-tie-a{text-align:left;font-weight:600;}
-#s-wild-card .wc-tie-sc{text-align:center;font-family:Bebas Neue,Oswald,sans-serif;font-size:15px;letter-spacing:1px;color:#fff;background:rgba(255,255,255,.06);border-radius:4px;padding:1px 0;}
-#s-wild-card .wc-tie-agg{display:grid;grid-template-columns:1fr 60px 1fr;gap:8px;align-items:center;padding-top:5px;margin-top:4px;border-top:1px dashed rgba(255,255,255,.1);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#ccff00;}
-#s-wild-card .wc-tie-agg .agg-sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#ccff00;background:rgba(204,255,0,.08);border:1px solid rgba(204,255,0,.3);border-radius:4px;padding:1px 0;}
-#s-wild-card .wc-tie-agg .winner-mark{font-weight:700;color:#ccff00;}
+#s-wild-card .wc-tie-sc{text-align:center;font-family:Bebas Neue,Oswald,sans-serif;font-size:15px;letter-spacing:1px;color:#000;background:#ffffff;border-radius:4px;padding:1px 0;font-weight:900;}
+#s-wild-card .wc-tie-label{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:#ffffff;text-align:center;margin-top:6px;}
+#s-wild-card .wc-tie-agg{display:grid;grid-template-columns:1fr 60px 1fr;gap:8px;align-items:center;padding-top:6px;margin-top:5px;border-top:1px dashed rgba(255,255,255,.2);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#ffffff;}
+#s-wild-card .wc-tie-agg .agg-sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#000;background:#ffffff;border:1px solid #ffffff;border-radius:4px;padding:1px 0;font-weight:900;}
+#s-wild-card .wc-tie-agg .winner-mark{font-weight:700;color:#ffffff;}
 #s-wild-card .wc-tie-agg .loser-mark{color:rgba(255,255,255,.4);}
-#s-wild-card .wc-final{padding:18px 14px;background:linear-gradient(135deg,#1a0e04,#3a2010,#6a3f1c);border:2px solid #8b5520;border-radius:12px;text-align:center;}
-#s-wild-card .wc-final-lbl{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:3px;color:#ffd080;margin-bottom:10px;}
+/* ── Final: card blanca con borde negro ─────────────────────── */
+#s-wild-card .wc-final{padding:18px 14px;background:linear-gradient(135deg,#000000,#1a1a1a,#2a2a2a,#1a1a1a,#000000);border:2px solid #ffffff;border-radius:12px;text-align:center;margin:0 4px;}
+#s-wild-card .wc-final-lbl{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:#ffffff;font-weight:700;margin-bottom:10px;}
 #s-wild-card .wc-final-row{display:grid;grid-template-columns:1fr 80px 1fr;gap:10px;align-items:center;}
-#s-wild-card .wc-final-team{font-family:Bebas Neue,sans-serif;font-size:18px;color:#fff;}
+#s-wild-card .wc-final-team{font-family:Bebas Neue,sans-serif;font-size:18px;color:#ffffff;}
 #s-wild-card .wc-final-h{text-align:right;}
 #s-wild-card .wc-final-a{text-align:left;}
-#s-wild-card .wc-final-sc{font-family:Bebas Neue,sans-serif;font-size:32px;color:#ffd080;background:rgba(0,0,0,.3);border-radius:6px;padding:4px 0;}
-#s-wild-card .wc-final-stadium{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.5);margin-top:8px;}
-#s-wild-card .wc-champion{padding:24px 14px;text-align:center;background:radial-gradient(ellipse at center,rgba(204,255,0,.12),rgba(0,0,0,.95));border:2px solid #ccff00;border-radius:14px;margin:8px;}
-#s-wild-card .wc-champion-lbl{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:4px;color:#ccff00;}
-#s-wild-card .wc-champion-name{font-family:Bebas Neue,sans-serif;font-size:34px;color:#fff;letter-spacing:2px;margin:8px 0;text-shadow:0 0 14px rgba(204,255,0,.4);}
+#s-wild-card .wc-final-sc{font-family:Bebas Neue,sans-serif;font-size:32px;color:#000;background:#ffffff;border-radius:6px;padding:4px 0;font-weight:900;}
+#s-wild-card .wc-final-stadium{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.55);margin-top:8px;}
+/* ── Campeón ────────────────────────────────────────────────── */
+#s-wild-card .wc-champion{padding:24px 14px;text-align:center;background:radial-gradient(ellipse at center,rgba(255,255,255,.12),rgba(0,0,0,.95));border:2px solid #ffffff;border-radius:14px;margin:14px 4px 8px;}
+#s-wild-card .wc-champion-lbl{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:4px;color:#ffffff;font-weight:700;}
+#s-wild-card .wc-champion-name{font-family:Bebas Neue,sans-serif;font-size:34px;color:#fff;letter-spacing:2px;margin:8px 0;text-shadow:0 0 14px rgba(255,255,255,.4);}
 #s-wild-card .wc-champion-note{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.7);}
 </style>
 <div id="wc-root">

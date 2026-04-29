@@ -4603,7 +4603,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="submenu-card sc-ucl-prev-clas" style="background:linear-gradient(135deg,#0b2a3a,#1e5e7a,#4CA1AF,#2C3E50,#0b2a3a) !important;border-color:#4CA1AF !important;" onclick="go('s-ucl-previa-clas')">
 <span class="sc-emoji">🇪🇺</span><span class="sc-label">Previa de Champions</span><span class="sc-arr">▶</span>
 </div>
-<div class="submenu-card sc-open-qual" style="background:linear-gradient(135deg,#3a1c00,#a05000,#F37335,#FDC830,#a05000,#3a1c00) !important;border-color:#F37335 !important;" onclick="go('s-open-qualifier')">
+<div class="submenu-card sc-open-qual" style="background:linear-gradient(135deg,#3a1c00,#a05000,#F37335,#FDC830,#a05000,#3a1c00) !important;border-color:#F37335 !important;" onclick="if(window.buildOpenQualifierClas)window.buildOpenQualifierClas();go('s-open-qualifier-clas')">
 <span class="sc-emoji">🟡</span><span class="sc-label">Open Qualifier</span><span class="sc-arr">▶</span>
 </div>
 <div class="submenu-card sc-wild-card" style="background:linear-gradient(135deg,#1a0e04,#3a2010,#6a3f1c,#8b5520,#3a2010,#1a0e04) !important;border-color:#8b5520 !important;" onclick="go('s-wild-card')">
@@ -5174,20 +5174,12 @@ window._showSimProgress = function(opts, onDone){
 <div class="sec-hdr"><span class="sec-emoji">🇪🇺</span><h2>UCL · Previa de Champions</h2></div>
 <div class="empty-ph">Fase clasificatoria — próximamente</div>
 </div>
-<div class="screen" id="s-open-qualifier">
-<button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🟡</span><h2>UCL · Open Qualifier</h2></div>
-<div class="submenu-list">
-<div class="submenu-card sc-open-qual" style="background:linear-gradient(135deg,#3a1c00,#a05000,#F37335,#FDC830,#a05000,#3a1c00) !important;border-color:#F37335 !important;" onclick="if(window.buildOpenQualifierClas)window.buildOpenQualifierClas();go('s-open-qualifier-clas')">
-<span class="sc-emoji">📊</span><span class="sc-label">Clasificación</span><span class="sc-arr">▶</span>
-</div>
-<div class="submenu-card sc-open-qual" style="background:linear-gradient(135deg,#3a1c00,#a05000,#F37335,#FDC830,#a05000,#3a1c00) !important;border-color:#F37335 !important;" onclick="go('s-open-qualifier-res')">
-<span class="sc-emoji">⚽</span><span class="sc-label">Resultados</span><span class="sc-arr">▶</span>
-</div>
-</div>
-</div>
+<!-- Pantalla intermedia s-open-qualifier eliminada: ahora la card
+     "Open Qualifier" del menú Champions navega directamente a
+     s-open-qualifier-clas. La pantalla de resultados (s-open-qualifier-res)
+     queda como código pasivo (no alcanzable desde la UI). -->
 <div class="screen" id="s-open-qualifier-clas">
-<button class="back-btn" onclick="go('s-open-qualifier')">◀ Volver</button>
+<button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr" style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;white-space:nowrap;">
   <span class="sec-emoji">🟡</span>
   <h2 style="margin:0;white-space:nowrap;">Open Qualifier · Clasificación</h2>
@@ -5608,7 +5600,7 @@ window._showSimProgress = function(opts, onDone){
 </script>
 </div>
 <div class="screen" id="s-open-qualifier-res">
-<button class="back-btn" onclick="go('s-open-qualifier')">◀ Volver</button>
+<button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🟡</span><h2>Open Qualifier · Resultados</h2></div>
 <div id="open-qual-res-section" style="margin-top:8px;padding:0 4px 20px;">
 <div style="display:flex;align-items:center;justify-content:space-between;padding:0 0 8px;">

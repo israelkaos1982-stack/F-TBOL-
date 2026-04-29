@@ -5000,7 +5000,11 @@ window._showSimProgress = function(opts, onDone){
       +   '<span class="clas-legend-item"><span class="clas-dot" style="background:#e03c3c;"></span>25-40 · Eliminados</span>'
       +   '<span class="clas-legend-item" style="margin-left:auto;color:rgba(255,255,255,.5);">' + classified.length + ' / 40 clasificados</span>'
       + '</div>'
-      + _renderDiag(window._lastQualDiag, classified.length)
+      /* Panel de diagnóstico (ligas inspeccionadas + estado) ocultado
+         por petición del usuario — la lista era muy larga (51 ligas)
+         y no aportaba info útil en la pantalla principal. La función
+         `_renderDiag` se mantiene definida más abajo por si en el
+         futuro queremos un toggle "▼ Ver fuentes". */
       + '</div>';
     container.innerHTML = html;
   }

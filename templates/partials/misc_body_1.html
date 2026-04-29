@@ -5197,12 +5197,12 @@ window._showSimProgress = function(opts, onDone){
   </button>
 </div>
 
-<!-- Leyenda compacta visible -->
-<div style="display:flex;gap:14px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;flex-wrap:wrap;">
-  <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>🟣 Previa UCL</span>
-  <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3cc878;margin-right:4px;vertical-align:middle;"></span>🟢 Conference</span>
-  <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F37335;margin-right:4px;vertical-align:middle;"></span>🟠 Playoff Conf.</span>
-  <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e03c3c;margin-right:4px;vertical-align:middle;"></span>🔴 Eliminados</span>
+<!-- Leyenda compacta visible — sin duplicar el icono emoji + dot CSS -->
+<div style="display:flex;gap:10px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:11px;color:#fff;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;">
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>Previa UCL</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3cc878;margin-right:4px;vertical-align:middle;"></span>Conference</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F37335;margin-right:4px;vertical-align:middle;"></span>Playoff Conf.</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e03c3c;margin-right:4px;vertical-align:middle;"></span>Eliminados</span>
 </div>
 
 <!-- Detalle de zonas — presente pero oculto -->
@@ -5348,11 +5348,10 @@ window._showSimProgress = function(opts, onDone){
       groups = _distributeSnake(classified, N_GROUPS);
       totalTeams = classified.length;
     }
-    var html = ''
-      + '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.55);padding:6px 10px 0;">'
-      + '6 GRUPOS · 11 EQUIPOS · 10 PARTIDOS POR EQUIPO · ' + totalTeams + ' / 66 plazas cubiertas'
-      + (sim ? ' · <span style="color:#7fe09a;">SIMULADO</span>' : '')
-      + '</div>';
+    /* Cabecera "6 GRUPOS · 11 EQUIPOS · 10 PARTIDOS POR EQUIPO ·
+       N/66 plazas cubiertas · SIMULADO" eliminada por petición del
+       usuario — la información ya queda implícita al ver los grupos. */
+    var html = '';
     for(var g=0; g<N_GROUPS; g++){
       var grp = groups[g] || [];
       var standings;
@@ -5443,19 +5442,28 @@ window._showSimProgress = function(opts, onDone){
     ties.forEach(function(t, i){
       var winnerH = t.winner === t.teamH;
       var winnerA = t.winner === t.teamA;
+      /* IDA: teamH es local. Mostramos "teamH idaGh-idaGa teamA".
+         VUELTA: teamA es local (campos invertidos). Storage:
+           t.vueltaGh = goles teamA (local en vuelta)
+           t.vueltaGa = goles teamH (visitante en vuelta)
+         Renderizamos VUELTA con los nombres SWAPEADOS para que
+         quede claro quién juega de local en este partido y el
+         marcador en formato local-visitante. */
       html += '<div class="oq-pl-tie played">'
         + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.5);text-align:center;margin-bottom:6px;">'
         +   pairLabels[i]
         + '</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:3px;">IDA</div>'
         + '<div class="oq-pl-leg">'
         +   '<span class="h">'+_esc(t.teamH.name)+'</span>'
         +   '<span class="sc">'+t.idaGh+' - '+t.idaGa+'</span>'
         +   '<span class="a">'+_esc(t.teamA.name)+'</span>'
         + '</div>'
-        + '<div class="oq-pl-leg" style="margin-top:3px;">'
-        +   '<span class="lbl" style="text-align:right;">VUELTA</span>'
-        +   '<span class="sc">'+t.vueltaGa+' - '+t.vueltaGh+'</span>'
-        +   '<span></span>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-top:6px;margin-bottom:3px;">VUELTA</div>'
+        + '<div class="oq-pl-leg">'
+        +   '<span class="h">'+_esc(t.teamA.name)+'</span>'
+        +   '<span class="sc">'+t.vueltaGh+' - '+t.vueltaGa+'</span>'
+        +   '<span class="a">'+_esc(t.teamH.name)+'</span>'
         + '</div>'
         + '<div class="oq-pl-agg">'
         +   '<span class="'+(winnerH?'winner-mark':'loser-mark')+'" style="text-align:right;">GLOBAL</span>'

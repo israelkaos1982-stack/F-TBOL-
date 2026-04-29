@@ -4909,7 +4909,12 @@ window._showSimProgress = function(opts, onDone){
     return arr;
   }
   function computeOpenQualifierTeams(){
+    /* Pool ideal del Open Qualifier: 66 equipos = 65 (zonas `uclQual`
+       de las ligas) + 1 (campeón Wild Card). Si la suma de cupos
+       `uclQual` en las ligas es > 65, recortamos por orden de
+       inserción para que el snake-draft cuadre en 6 grupos × 11. */
     var arr = _computeQualifiedFromLeagues('uclQual');
+    if(arr.length > 65) arr = arr.slice(0, 65);
     /* El campeón del torneo Wild Card (s-wild-card) entra como UNA
        plaza extra al Open Qualifier. Lo añadimos solo si la fase
        Wild Card terminó (champion no-null) y aún no aparece en `arr`
@@ -4930,6 +4935,8 @@ window._showSimProgress = function(opts, onDone){
         }
       }
     } catch(_){}
+    /* Cap final por seguridad (debería ser 66 ya). */
+    if(arr.length > 66) arr = arr.slice(0, 66);
     return arr;
   }
   function computeWildCardClassified(){ return _computeQualifiedFromLeagues('wildcard'); }
@@ -5691,6 +5698,14 @@ window._showSimProgress = function(opts, onDone){
   }
 
   function _doSimulate(classified){
+    /* Cap defensivo: nunca admitir más de N_GROUPS × TEAMS_PER_GROUP
+       teams. Si el caller envía más, los grupos quedarían con 12-13
+       teams pero la UI solo pinta TEAMS_PER_GROUP filas → equipos
+       fantasmas en el snake. */
+    var maxTeams = N_GROUPS * TEAMS_PER_GROUP;
+    if(classified && classified.length > maxTeams){
+      classified = classified.slice(0, maxTeams);
+    }
     var groups = _distributeSnake(classified, N_GROUPS);
     var matchesByGroup = groups.map(function(grp){ return _simulateGroup(grp); });
     var playoff = _buildPlayoff(groups, matchesByGroup);

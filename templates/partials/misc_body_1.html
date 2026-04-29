@@ -7455,9 +7455,24 @@ Tottenham
      a quitar al próximo load, y el siguiente saveData persiste la
      limpieza. El admin NO puede re-crearlos mientras estén en esta
      lista — lextSaveTeam tampoco los acepta (ver más abajo).
+
+     La normalización (_lextNormName) ya quita acentos y pasa a
+     minúsculas, así que basta con cubrir las variantes de nombre
+     cortas/largas (con y sin sufijos como "CF", "BP", "At."). No
+     hace falta repetir cada acentuación.
      ═══════════════════════════════════════════════════════════════ */
   var FORCED_BLACKLIST = {
-    'inglaterra':    ['Arsenal', 'Atlético Madrid', 'Atletico Madrid'],
+    /* Inglaterra: Arsenal y Atlético Madrid son extranjeros que se
+       habían colado. Además, el usuario reportó (2026-04-29) que la
+       tabla de Inglaterra mostraba Hércules, RM Castilla, UD Ibiza
+       y Sevilla At. — todos ellos son equipos de Primera Federación
+       (España) y NO pueden estar en la Premier. */
+    'inglaterra':    ['Arsenal', 'Atlético Madrid', 'Atletico Madrid',
+                      'Hércules', 'Hércules CF', 'Hercules', 'Hercules CF',
+                      'Real Madrid Castilla', 'RM Castilla', 'Castilla',
+                      'UD Ibiza', 'Ibiza',
+                      'Sevilla At.', 'Sevilla At', 'Sevilla Atlético',
+                      'Sevilla Atletico'],
     'escocia':       ['Athletic Club'],
     /* Polonia: limpiar equipos españoles que se colaron por error
        (Getafe, Mallorca, Villarreal). El admin no puede re-crearlos
@@ -7468,7 +7483,12 @@ Tottenham
        Si un día se quiere meter el FC Arsenal Tula (ruso real), añádelo
        como entrada nueva en el editor con su nombre completo: la
        blacklist solo bloquea el literal "Arsenal" / "Arsenal FC". */
-    'rusia':         ['Arsenal', 'Arsenal FC', 'Getafe CF', 'Getafe']
+    'rusia':         ['Arsenal', 'Arsenal FC', 'Getafe CF', 'Getafe'],
+    /* Dinamarca: el usuario reportó (2026-04-29) que Albacete (de
+       Liga Hypermotion, España) aparecía en la Superliga Danesa.
+       Imposible — fuera. */
+    'dinamarca':     ['Albacete', 'Albacete BP', 'Albacete Balompié',
+                      'Albacete Balompie']
   };
   function _forcedBlacklistNormFor(k){
     var list = FORCED_BLACKLIST[k] || [];

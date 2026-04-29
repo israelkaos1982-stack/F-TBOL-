@@ -17257,21 +17257,55 @@ document.addEventListener('DOMContentLoaded', function() {
       state.phase = 'final';
     }
   }
+  /* Genera un acta sencilla del partido a partir del marcador final.
+     Reparte goles, amarillas y posibles rojas en minutos aleatorios
+     1-90. Imita el formato del acta de un partido IA-vs-IA estándar
+     pero sin necesidad de tirar del motor `genMatchEventsEnhanced`
+     (que vive en otro IIFE y no está expuesto). */
+  function _wcGenFinalEvents(gh, ga){
+    var ev = [];
+    function rndMin(){ return 1 + Math.floor(Math.random()*89); }
+    var i;
+    for(i=0;i<gh;i++) ev.push({type:'gol', team:'h', min: rndMin()});
+    for(i=0;i<ga;i++) ev.push({type:'gol', team:'a', min: rndMin()});
+    var nYel = 1 + Math.floor(Math.random()*5);  /* 1-5 amarillas */
+    for(i=0;i<nYel;i++){
+      ev.push({type:'yel', team: Math.random()<0.5?'h':'a', min: rndMin()});
+    }
+    if(Math.random() < 0.18){                     /* ~18% prob roja */
+      ev.push({type:'red', team: Math.random()<0.5?'h':'a', min: rndMin()});
+    }
+    ev.sort(function(a,b){ return a.min - b.min; });
+    return ev;
+  }
+
   function simFinal(state){
     var f = state.ko.final;
     if(!f || f.played) return;
     var sc = simMatch(f.teamH, f.teamA);
     f.gh = sc.gh; f.ga = sc.ga;
     f.played = true;
+    /* Acta del partido (goles, amarillas y posibles rojas con minutos). */
+    f.events = _wcGenFinalEvents(sc.gh, sc.ga);
     if(sc.gh > sc.ga) f.winner = f.teamH;
     else if(sc.ga > sc.gh) f.winner = f.teamA;
     else {
-      /* Final a partido único → ETs + penaltis. */
+      /* Empate al final del tiempo reglamentario → prórroga + penaltis.
+         Simulamos prórroga con marcador extra; si vuelve a empatar
+         se decide en penaltis 50/50. */
       var et = simMatch(f.teamH, f.teamA);
-      if(et.gh > et.ga) f.winner = f.teamH;
-      else if(et.ga > et.gh) f.winner = f.teamA;
-      else f.winner = (Math.random() < 0.5) ? f.teamH : f.teamA;
+      var etGh = et.gh, etGa = et.ga;
+      if(etGh > 0) f.events.push({type:'gol', team:'h', min: 91 + Math.floor(Math.random()*29)});
+      if(etGa > 0) f.events.push({type:'gol', team:'a', min: 91 + Math.floor(Math.random()*29)});
+      if(etGh > etGa) f.winner = f.teamH;
+      else if(etGa > etGh) f.winner = f.teamA;
+      else {
+        /* Penaltis. */
+        f.winner = (Math.random() < 0.5) ? f.teamH : f.teamA;
+        f.penDecided = true;
+      }
       f.etDecided = true;
+      f.events.sort(function(a,b){ return a.min - b.min; });
     }
     state.champion = f.winner;
     state.phase = 'done';
@@ -17314,63 +17348,109 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function renderGroupTable(grp, sortedTable, qualifiedTop){
-    var rows = '<div class="wc-row hdr"><span>#</span><span>Equipo</span><span>PJ</span><span>V</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>PTS</span></div>';
+    /* Cabecera: # | EQUIPO | PTS | PJ | G | E | P | GF | GC | D+-
+       Wrap en .wc-table-scroll para scroll lateral en móvil — el
+       nombre del equipo se ve entero y las stats quedan accesibles
+       deslizando. min-width en .wc-row fuerza el desbordamiento. */
+    var rows = '<div class="wc-row hdr">'
+      + '<span>#</span><span>Equipo</span>'
+      + '<span>PTS</span><span>PJ</span><span>G</span><span>E</span><span>P</span>'
+      + '<span>GF</span><span>GC</span><span>D+-</span>'
+      + '</div>';
     sortedTable.forEach(function(r, i){
       var pos = i+1;
       var cls = '';
       if(pos <= qualifiedTop) cls = 'qual';
       else if(pos === sortedTable.length) cls = 'elim';
       var dgCls = r.dg>0 ? 'pos' : (r.dg<0?'neg':'');
+      var dgTxt = (r.dg>0?'+':'') + r.dg;
       rows += '<div class="wc-row '+cls+'">'
         + '<span class="wc-pos">'+pos+'</span>'
         + '<span class="wc-name">'+_badge(r.name, r.logo)+_esc(r.name)+'</span>'
+        + '<span class="wc-cell pts">'+r.pts+'</span>'
         + '<span class="wc-cell">'+r.pj+'</span>'
         + '<span class="wc-cell">'+r.v+'</span>'
         + '<span class="wc-cell">'+r.e+'</span>'
         + '<span class="wc-cell">'+r.p+'</span>'
         + '<span class="wc-cell">'+r.gf+'</span>'
         + '<span class="wc-cell">'+r.gc+'</span>'
-        + '<span class="wc-cell pts">'+r.pts+'</span>'
+        + '<span class="wc-cell dg '+dgCls+'">'+dgTxt+'</span>'
         + '</div>';
     });
     return '<div class="wc-group">'
       + '<div class="wc-group-h">GRUPO '+grp+'</div>'
-      + rows
+      + '<div class="wc-table-scroll">'+rows+'</div>'
       + '</div>';
   }
 
   function renderTie(tie){
     var played = !!tie.played;
+    /* Aggregate por equipo:
+         teamH = local en ida + visitante en vuelta
+         teamA = visitante en ida + local en vuelta
+       Storage:
+         idaGh, idaGa  = goles teamH (local ida) - goles teamA (visit ida)
+         vueltaGh, vueltaGa = goles teamA (local vuelta) - goles teamH (visit vuelta)
+       Total teamH = idaGh + vueltaGa
+       Total teamA = idaGa + vueltaGh */
     var aggH = (tie.idaGh||0) + (tie.vueltaGa||0);
     var aggA = (tie.idaGa||0) + (tie.vueltaGh||0);
     var winnerH = played && tie.winner === tie.teamH;
     var winnerA = played && tie.winner === tie.teamA;
-    return '<div class="wc-tie '+(played?'played':'')+'">'
+    /* IDA: teamH es local. Mostramos "teamH idaGh-idaGa teamA". */
+    var html = '<div class="wc-tie '+(played?'played':'')+'">'
       + '<div class="wc-tie-leg">'
       +   '<span class="wc-tie-h">'+_badge(tie.teamH)+_esc(tie.teamH)+'</span>'
       +   '<span class="wc-tie-sc">'+(played?(tie.idaGh+'-'+tie.idaGa):'vs')+'</span>'
       +   '<span class="wc-tie-a">'+_esc(tie.teamA)+_badge(tie.teamA)+'</span>'
-      + '</div>'
-      + (played
-        ? '<div class="wc-tie-leg" style="margin-top:3px;">'
-          +   '<span class="wc-tie-h"><span class="lbl">VUELTA</span></span>'
-          +   '<span class="wc-tie-sc">'+tie.vueltaGa+'-'+tie.vueltaGh+'</span>'
-          +   '<span class="wc-tie-a"></span>'
-          + '</div>'
-        : '')
-      + (played
-        ? '<div class="wc-tie-agg">'
-          +   '<span class="'+(winnerH?'winner-mark':'loser-mark')+'" style="text-align:right;">GLOBAL</span>'
-          +   '<span class="agg-sc">'+aggH+'-'+aggA+'</span>'
-          +   '<span class="'+(winnerA?'winner-mark':'loser-mark')+'">'+(tie.etDecided?'(prórroga)':'')+'</span>'
-          + '</div>'
-        : '')
       + '</div>';
+    if(played){
+      /* VUELTA: teamA juega como local, teamH como visitante. Mostramos
+         los nombres SWAPEADOS para que quede claro quién es local en
+         este partido. Score en formato "vueltaGh-vueltaGa" (=
+         teamA local - teamH visitante). */
+      html += '<div class="wc-tie-label" style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-top:6px;">VUELTA</div>'
+        + '<div class="wc-tie-leg" style="margin-top:2px;">'
+        +   '<span class="wc-tie-h">'+_badge(tie.teamA)+_esc(tie.teamA)+'</span>'
+        +   '<span class="wc-tie-sc">'+tie.vueltaGh+'-'+tie.vueltaGa+'</span>'
+        +   '<span class="wc-tie-a">'+_esc(tie.teamH)+_badge(tie.teamH)+'</span>'
+        + '</div>';
+      html += '<div class="wc-tie-agg">'
+        +   '<span class="'+(winnerH?'winner-mark':'loser-mark')+'" style="text-align:right;">GLOBAL</span>'
+        +   '<span class="agg-sc">'+aggH+'-'+aggA+'</span>'
+        +   '<span class="'+(winnerA?'winner-mark':'loser-mark')+'">'+(tie.etDecided?'(prórroga)':'')+'</span>'
+        + '</div>';
+    }
+    html += '</div>';
+    return html;
   }
 
   function renderFinal(f){
     if(!f) return '';
     var played = !!f.played;
+    var actaHtml = '';
+    if(played && Array.isArray(f.events) && f.events.length){
+      var icoMap = { gol:'⚽', yel:'🟨', red:'🟥' };
+      actaHtml = '<div style="margin-top:14px;padding:10px 14px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.08);border-radius:8px;text-align:left;">'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.5);margin-bottom:6px;">📋 ACTA DEL PARTIDO</div>';
+      f.events.forEach(function(ev){
+        var ico = icoMap[ev.type] || '·';
+        var team = ev.team === 'h' ? f.teamH : f.teamA;
+        var side = ev.team === 'h' ? 'left' : 'right';
+        var minTxt = ev.min > 90 ? ('90+' + (ev.min - 90)) : (ev.min + "'");
+        actaHtml += '<div style="display:flex;justify-content:'+(side==='left'?'flex-start':'flex-end')+';gap:6px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;padding:2px 0;">'
+          + '<span style="color:rgba(255,255,255,.4);min-width:38px;'+(side==='right'?'order:2;text-align:right;':'')+'">'+minTxt+'</span>'
+          + '<span>'+ico+'</span>'
+          + '<span style="opacity:.85;">'+_esc(team)+'</span>'
+          + '</div>';
+      });
+      actaHtml += '</div>';
+    }
+    var subText = '';
+    if(played){
+      if(f.penDecided) subText = '<div class="wc-final-stadium">decidido en penaltis</div>';
+      else if(f.etDecided) subText = '<div class="wc-final-stadium">decidido en prórroga</div>';
+    }
     return '<div class="wc-final">'
       + '<div class="wc-final-lbl">🏆 GRAN FINAL · CAMPO NEUTRAL</div>'
       + '<div class="wc-final-row">'
@@ -17378,7 +17458,8 @@ document.addEventListener('DOMContentLoaded', function() {
       +   '<span class="wc-final-sc">'+(played?(f.gh+' - '+f.ga):'vs')+'</span>'
       +   '<span class="wc-final-team wc-final-a">'+_esc(f.teamA)+_badge(f.teamA)+'</span>'
       + '</div>'
-      + (f.etDecided && played ? '<div class="wc-final-stadium">decidido en prórroga / penaltis</div>' : '')
+      + subText
+      + actaHtml
       + '</div>';
   }
 
@@ -17412,34 +17493,48 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if(btnSim) btnSim.disabled = (s.phase === 'done');
 
+    /* Botón "🎮 Sim" embebido en el header de la ronda actual.
+       Solo aparece en la sección que coincide con `s.phase`. Disparar
+       `_wcSimulate()` (que ya pasa por el overlay del balón). */
+    function _miniSimBtn(forPhase){
+      if(s.phase !== forPhase) return '';
+      return '<button class="wc-mini-sim" onclick="window._wcSimulate&&window._wcSimulate()">🎮 Sim</button>';
+    }
+    function _secHead(title, forPhase){
+      return '<div class="wc-sec-head">'
+        +    '<div class="wc-sec-title">'+title+'</div>'
+        +    _miniSimBtn(forPhase)
+        +  '</div>';
+    }
+
     var html = '';
     /* Fase de grupos */
-    html += '<div class="wc-sec"><div class="wc-sec-title">FASE DE GRUPOS · 9 EQUIPOS · 8 PARTIDOS C/U</div>';
+    html += '<div class="wc-sec">' + _secHead('FASE DE GRUPOS · 9 EQUIPOS · 8 PARTIDOS C/U', null);
     html += renderGroupTable('A', s.groups.A.sortedTable, 8);
     html += renderGroupTable('B', s.groups.B.sortedTable, 8);
     html += '</div>';
 
     /* Octavos */
     if(s.ko.octavos && s.ko.octavos.length){
-      html += '<div class="wc-sec"><div class="wc-sec-title">OCTAVOS DE FINAL · IDA + VUELTA · GLOBAL</div>';
+      html += '<div class="wc-sec">' + _secHead('OCTAVOS DE FINAL', 'octavos');
       s.ko.octavos.forEach(function(t){ html += renderTie(t); });
       html += '</div>';
     }
     /* Cuartos */
     if(s.ko.cuartos && s.ko.cuartos.length){
-      html += '<div class="wc-sec"><div class="wc-sec-title">CUARTOS DE FINAL · IDA + VUELTA · GLOBAL</div>';
+      html += '<div class="wc-sec">' + _secHead('CUARTOS DE FINAL', 'cuartos');
       s.ko.cuartos.forEach(function(t){ html += renderTie(t); });
       html += '</div>';
     }
     /* Semis */
     if(s.ko.semis && s.ko.semis.length){
-      html += '<div class="wc-sec"><div class="wc-sec-title">SEMIFINALES · IDA + VUELTA · GLOBAL</div>';
+      html += '<div class="wc-sec">' + _secHead('SEMIFINALES', 'semis');
       s.ko.semis.forEach(function(t){ html += renderTie(t); });
       html += '</div>';
     }
     /* Final */
     if(s.ko.final){
-      html += '<div class="wc-sec"><div class="wc-sec-title">FINAL · PARTIDO ÚNICO</div>';
+      html += '<div class="wc-sec">' + _secHead('FINAL · PARTIDO ÚNICO', 'final');
       html += renderFinal(s.ko.final);
       html += '</div>';
     }

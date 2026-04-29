@@ -6245,14 +6245,53 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     if(!confirm('¿Simular las 51 ligas? Reseteará los resultados y stats actuales antes de simular.')) return;
-    var ok = 0, skip = 0;
-    _eachLeagueCard(function(name){
-      var slug = _slugify(name);
-      try {
-        if(window.ligaExtSimularSlug(slug, name)) ok++; else skip++;
-      } catch(_){ skip++; }
-    });
-    alert('Simuladas: ' + ok + ' liga' + (ok===1?'':'s') + (skip ? ' · sin equipos suficientes: ' + skip : '') + '.');
+
+    /* Recogemos la lista de ligas ANTES de mostrar el overlay para
+       saber el total y poder calcular el % real (1 liga = 1 step).
+       Luego iteramos con setTimeout(0) entre ligas para que la barra
+       de progreso pueda repintarse — antes este loop era 100% síncrono
+       y la pantalla se congelaba durante 30-60s sin feedback. */
+    var leagues = [];
+    _eachLeagueCard(function(name){ leagues.push(name); });
+    var total = leagues.length;
+    if(!total){ alert('No hay ligas para simular.'); return; }
+
+    var ok = 0, skip = 0, idx = 0;
+    function simNext(progressFn){
+      return new Promise(function(resolve){
+        function step(){
+          if(idx >= total){ resolve(); return; }
+          var name = leagues[idx];
+          var slug = _slugify(name);
+          try {
+            if(window.ligaExtSimularSlug(slug, name)) ok++; else skip++;
+          } catch(_){ skip++; }
+          idx++;
+          if(typeof progressFn === 'function'){
+            progressFn(Math.round(idx/total*100), 'Simulando ' + name + ' (' + idx + '/' + total + ')');
+          }
+          /* setTimeout(0) cede el hilo para que el overlay repinte
+             antes de la siguiente liga. */
+          setTimeout(step, 0);
+        }
+        step();
+      });
+    }
+
+    if(typeof window.ftbolLoaderRun === 'function'){
+      window.ftbolLoaderRun(
+        { title:'RESTO DE LIGAS · 51 LIGAS', sub:'Iniciando…', minMs:600 },
+        function(ctx){ return simNext(ctx.progress); }
+      ).then(function(){
+        alert('Simuladas: ' + ok + ' liga' + (ok===1?'':'s') + (skip ? ' · sin equipos suficientes: ' + skip : '') + '.');
+      });
+    } else {
+      /* Fallback sin overlay: mantener el comportamiento síncrono
+         clásico (raro pero por seguridad). */
+      simNext(null).then(function(){
+        alert('Simuladas: ' + ok + ' liga' + (ok===1?'':'s') + (skip ? ' · sin equipos suficientes: ' + skip : '') + '.');
+      });
+    }
   };
 
   window._restoLigasResAll = function(){

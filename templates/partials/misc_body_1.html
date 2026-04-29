@@ -7170,15 +7170,26 @@ Tottenham
   }
 
   function applyMatchStats(team, gf, ga, yellows, reds){
-    if(!team.players || !team.players.length) return;
+    if(!team.players || !team.players.length) return null;
     team.players.forEach(ensurePlayerStats);
     // PJ para todos
     team.players.forEach(function(p){ p.pj++; });
+    /* `info` recopila lo que ha hecho cada jugador EN ESTE PARTIDO
+       para que assignMVP elija al MVP por méritos (no por poder
+       como hacía la versión anterior). */
+    var info = {
+      gf: gf, ga: ga,
+      gk: null, cleanSheet: false, penSaved: false,
+      scorers: [],   // [player, ...] una entrada por gol marcado
+      yellows: [],   // [player, ...]
+      reds: []       // [player, ...]
+    };
     // Clean sheet + pen parado al portero
     var gks = team.players.filter(function(p){return p.pos==='POR';});
     if(gks.length){
-      if(ga === 0) gks[0].imbat++;
-      if(Math.random() < 0.08) gks[0].penSaved++;
+      info.gk = gks[0];
+      if(ga === 0){ gks[0].imbat++; info.cleanSheet = true; }
+      if(Math.random() < 0.08){ gks[0].penSaved++; info.penSaved = true; }
     }
     // Distribución de goles
     for(var g=0; g<gf; g++){
@@ -7197,31 +7208,94 @@ Tottenham
       } else {
         scorer = pickScorer(team.players);
       }
-      if(scorer) scorer.gol++;
+      if(scorer){ scorer.gol++; info.scorers.push(scorer); }
     }
     // Amarillas
     for(var y=0; y<yellows; y++){
       var c = pickCardie(team.players);
-      if(c) c.ta++;
+      if(c){ c.ta++; info.yellows.push(c); }
     }
     // Rojas
     for(var rr=0; rr<reds; rr++){
       var c2 = pickCardie(team.players);
-      if(c2) c2.tr++;
+      if(c2){ c2.tr++; info.reds.push(c2); }
     }
+    return info;
   }
 
-  function assignMVP(winner, loser, isTie){
-    // 80% del MVP al ganador, 20% al perdedor; si empate, 50/50.
-    var team;
-    if(isTie) team = Math.random()<0.5 ? winner : loser;
-    else team = Math.random()<0.2 ? loser : winner;
-    if(!team || !team.players || !team.players.length) return;
-    team.players.forEach(ensurePlayerStats);
-    // Ponderamos por power pero con ligero boost a los que hayan marcado este "ciclo"
+  /* MVP por MÉRITOS (petición usuario 2026-04-29). Antes era 80%
+     ganador / 20% perdedor con peso solo por poder, así que el MVP
+     salía repartido y poco realista (un Manchester City con 30
+     MVPs en 38 partidos repartidos entre 6+ jugadores diferentes).
+
+     Reglas nuevas:
+     - SIEMPRE para el equipo ganador (en empate, 50/50).
+     - Score por jugador en el partido:
+         · +3 por gol marcado (cumulativo)
+         · +5 extra si marcó 2 goles (brace)
+         · +6 extra adicional si marcó 3+ (hat-trick total: 3·3+5+6=20)
+         · +5 si el portero mantuvo portería imbatida
+         · +4 si el portero paró un penalti
+         · -2 por amarilla recibida
+         · -5 por roja recibida
+     - El jugador con mayor score se lleva el MVP. En empate, el
+       de mayor poder. Si nadie tiene score > 0 (típico en 0-0),
+       fallback al weightedPick clásico. */
+  function _pickMVPByMerit(team, info){
+    if(!team || !team.players || !team.players.length) return null;
+    if(!info) {
+      var pool0 = team.players.filter(function(p){return p.pos!=='POR';});
+      if(!pool0.length) pool0 = team.players;
+      return weightedPick(pool0);
+    }
+    var scores = new Map();
+    function _add(p, pts){
+      if(!p) return;
+      scores.set(p, (scores.get(p) || 0) + pts);
+    }
+    // Goles
+    var byScorer = new Map();
+    info.scorers.forEach(function(p){ byScorer.set(p, (byScorer.get(p)||0) + 1); });
+    byScorer.forEach(function(n, p){
+      var pts = n * 3;
+      if(n >= 2) pts += 5;
+      if(n >= 3) pts += 6;
+      _add(p, pts);
+    });
+    // Portero
+    if(info.gk){
+      if(info.cleanSheet) _add(info.gk, 5);
+      if(info.penSaved)   _add(info.gk, 4);
+    }
+    // Penalizaciones
+    info.yellows.forEach(function(p){ _add(p, -2); });
+    info.reds.forEach(function(p){ _add(p, -5); });
+    // Buscar máximo
+    var best = null, bestScore = 0;
+    scores.forEach(function(score, p){
+      if(score > bestScore || (score === bestScore && best && (Number(p.power)||0) > (Number(best.power)||0))){
+        if(score > 0){ best = p; bestScore = score; }
+      }
+    });
+    if(best) return best;
+    // Fallback: weightedPick entre no-porteros (típico 0-0 sin highlights)
     var pool = team.players.filter(function(p){return p.pos!=='POR';});
     if(!pool.length) pool = team.players;
-    var sel = weightedPick(pool);
+    return weightedPick(pool);
+  }
+
+  function assignMVP(winnerTeam, winnerInfo, loserTeam, loserInfo, isTie){
+    /* Petición usuario: el MVP SIEMPRE se le da al equipo ganador.
+       En empate (raro pero posible), se elige equipo al 50/50 y se
+       aplica el mismo scoring por méritos. */
+    var team, info;
+    if(isTie){
+      if(Math.random() < 0.5){ team = winnerTeam; info = winnerInfo; }
+      else                   { team = loserTeam;  info = loserInfo;  }
+    } else {
+      team = winnerTeam; info = winnerInfo;
+    }
+    var sel = _pickMVPByMerit(team, info);
     if(sel) sel.mvp++;
   }
 
@@ -7245,11 +7319,11 @@ Tottenham
           tah:r.tah, taa:r.taa,
           trh:r.trh, tra:r.tra
         });
-        applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
-        applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
-        if(r.gh > r.ga) assignMVP(ts[i], ts[j], false);
-        else if(r.ga > r.gh) assignMVP(ts[j], ts[i], false);
-        else assignMVP(ts[i], ts[j], true);
+        var infoI = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
+        var infoJ = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
+        if(r.gh > r.ga)      assignMVP(ts[i], infoI, ts[j], infoJ, false);
+        else if(r.ga > r.gh) assignMVP(ts[j], infoJ, ts[i], infoI, false);
+        else                 assignMVP(ts[i], infoI, ts[j], infoJ, true);
       }
     }
     saveData(CURRENT_KEY, data);
@@ -7279,11 +7353,11 @@ Tottenham
           tah:r.tah, taa:r.taa,
           trh:r.trh, tra:r.tra
         });
-        applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
-        applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
-        if(r.gh > r.ga) assignMVP(ts[i], ts[j], false);
-        else if(r.ga > r.gh) assignMVP(ts[j], ts[i], false);
-        else assignMVP(ts[i], ts[j], true);
+        var infoI2 = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
+        var infoJ2 = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
+        if(r.gh > r.ga)      assignMVP(ts[i], infoI2, ts[j], infoJ2, false);
+        else if(r.ga > r.gh) assignMVP(ts[j], infoJ2, ts[i], infoI2, false);
+        else                 assignMVP(ts[i], infoI2, ts[j], infoJ2, true);
       }
     }
     saveData(slug, data);

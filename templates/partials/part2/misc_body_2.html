@@ -2517,7 +2517,13 @@
     else {a.e++; b.e++; a.pts++; b.pts++; a.form.push('E'); b.form.push('E');}
 
     var homeRoster=rosters[a.name], awayRoster=rosters[b.name];
-    function addEvents(teamName, oppName, roster, goals, red){
+    /* Trackers por equipo del partido — sirven al MVP por méritos
+       (ver más abajo). Antes lo hacíamos con weights aleatorios y
+       el MVP salía repartido sin sentido (Manchester City con 30
+       MVPs en 38 partidos repartidos entre 6+ jugadores). */
+    var aInfo = {scorers:[], gkName:null, cleanSheet:false, penSaved:false, yellows:[], reds:[]};
+    var bInfo = {scorers:[], gkName:null, cleanSheet:false, penSaved:false, yellows:[], reds:[]};
+    function addEvents(teamName, oppName, roster, goals, red, info){
       for(var i=0;i<goals;i++){
         var scorer = weightedScorer(roster);
         var roll = Math.random();
@@ -2525,48 +2531,113 @@
         else if(roll<0.16){incPlayerStat(playerStats, teamName, scorer.name, 'falta-gol', 1); incPlayerStat(playerStats, teamName, scorer.name, 'goles-total', 1);}
         else if(roll<0.20){var own = pickPlayer(rosters[oppName], 'defensas'); incPlayerStat(playerStats, oppName, own, 'propia', 1); incPlayerStat(playerStats, teamName, scorer.name, 'goles-total', 1);}
         else {incPlayerStat(playerStats, teamName, scorer.name, 'goles-total', 1);}
+        info.scorers.push(scorer.name);
       }
       if(Math.random()<0.15) incPlayerStat(playerStats, teamName, pickPlayer(roster,'delanteros'), 'pen-fallado', 1);
-      if(Math.random()<0.12) incPlayerStat(playerStats, teamName, pickPlayer(roster,'porteros'), 'pen-parado', 1);
-      if(Math.random()<0.55) incPlayerStat(playerStats, teamName, pickPlayer(roster,'medios'), 'yel', randInt(0,1));
+      if(Math.random()<0.12){
+        var pp = pickPlayer(roster,'porteros');
+        incPlayerStat(playerStats, teamName, pp, 'pen-parado', 1);
+        info.gkName = pp; info.penSaved = true;
+      }
+      if(Math.random()<0.55){
+        var yc = randInt(0,1);
+        if(yc > 0){
+          var ym = pickPlayer(roster,'medios');
+          incPlayerStat(playerStats, teamName, ym, 'yel', yc);
+          info.yellows.push(ym);
+        }
+      }
       /* El expulsado se le asigna al defensor seleccionado al azar
          sólo cuando la roja ya fue pre-rolled (ver arriba). Así `a.tr`
          y el stat 'red' del jugador cuadran entre sí. */
-      if(red) incPlayerStat(playerStats, teamName, pickPlayer(roster,'defensas'), 'red', 1);
+      if(red){
+        var rd = pickPlayer(roster,'defensas');
+        incPlayerStat(playerStats, teamName, rd, 'red', 1);
+        info.reds.push(rd);
+      }
     }
-    addEvents(a.name,b.name,homeRoster,gl,redA);
-    addEvents(b.name,a.name,awayRoster,gv,redB);
+    addEvents(a.name,b.name,homeRoster,gl,redA,aInfo);
+    addEvents(b.name,a.name,awayRoster,gv,redB,bInfo);
     /* Clean sheet: si el equipo recibe 0 goles, el portero titular
        (primero del grupo porteros, que es el de mayor poder tras
        ordenar por ranking en el editor) se lleva un `imbat`. */
     if(gv === 0 && homeRoster && homeRoster.porteros && homeRoster.porteros.length){
-      incPlayerStat(playerStats, a.name, homeRoster.porteros[0][0], 'imbat', 1);
+      var gkA = homeRoster.porteros[0][0];
+      incPlayerStat(playerStats, a.name, gkA, 'imbat', 1);
+      aInfo.gkName = gkA; aInfo.cleanSheet = true;
+    } else if(homeRoster && homeRoster.porteros && homeRoster.porteros.length){
+      aInfo.gkName = aInfo.gkName || homeRoster.porteros[0][0];
     }
     if(gl === 0 && awayRoster && awayRoster.porteros && awayRoster.porteros.length){
-      incPlayerStat(playerStats, b.name, awayRoster.porteros[0][0], 'imbat', 1);
+      var gkB = awayRoster.porteros[0][0];
+      incPlayerStat(playerStats, b.name, gkB, 'imbat', 1);
+      bInfo.gkName = gkB; bInfo.cleanSheet = true;
+    } else if(awayRoster && awayRoster.porteros && awayRoster.porteros.length){
+      bInfo.gkName = bInfo.gkName || awayRoster.porteros[0][0];
     }
-    var mvpTeam = gl>gv ? a : (gv>gl ? b : (Math.random()<0.5?a:b));
+    /* MVP por MÉRITOS (petición usuario 2026-04-29): SIEMPRE para
+       el equipo ganador (en empate 50/50) y se elige al jugador
+       que más se haya destacado. Reglas:
+         · +3 por gol marcado
+         · +5 extra si marcó 2 goles (brace)
+         · +6 extra adicional si marcó 3+ (hat-trick total: 3·3+5+6=20)
+         · +5 si el portero mantuvo portería imbatida
+         · +4 si el portero paró un penalti
+         · -2 por amarilla recibida
+         · -5 por roja recibida
+       Si nadie destaca (típico 0-0 sin paradas) cae al reparto
+       legacy con preferencia por estrellas ⭐ y por delantero/medio. */
+    var mvpTeam, mvpInfo, mvpRoster;
+    if(gl > gv)      { mvpTeam = a; mvpInfo = aInfo; mvpRoster = homeRoster; }
+    else if(gv > gl) { mvpTeam = b; mvpInfo = bInfo; mvpRoster = awayRoster; }
+    else if(Math.random() < 0.5){ mvpTeam = a; mvpInfo = aInfo; mvpRoster = homeRoster; }
+    else                        { mvpTeam = b; mvpInfo = bInfo; mvpRoster = awayRoster; }
     mvpTeam.mvp += 1;
-    /* ⭐ Estrella del equipo: prioridad MEDIA — solo influye aquí, en
-       la selección de MVP. Si el equipo ganador tiene alguna estrella
-       en su plantilla, se le da preferencia (ponderada por poder).
-       Sin estrellas, caemos al reparto clásico delantero/medio. */
-    var mvpRoster = rosters[mvpTeam.name] || {};
-    var stars = [];
-    ['delanteros','medios','defensas','porteros'].forEach(function(g){
-      (mvpRoster[g] || []).forEach(function(p){ if(p && p.elite) stars.push(p); });
+    mvpRoster = mvpRoster || {};
+    var meritScores = {};
+    function _addMerit(name, pts){
+      if(!name) return;
+      meritScores[name] = (meritScores[name] || 0) + pts;
+    }
+    var byScorer = {};
+    mvpInfo.scorers.forEach(function(n){ byScorer[n] = (byScorer[n]||0) + 1; });
+    Object.keys(byScorer).forEach(function(name){
+      var n = byScorer[name];
+      var pts = n * 3;
+      if(n >= 2) pts += 5;
+      if(n >= 3) pts += 6;
+      _addMerit(name, pts);
+    });
+    if(mvpInfo.gkName){
+      if(mvpInfo.cleanSheet) _addMerit(mvpInfo.gkName, 5);
+      if(mvpInfo.penSaved)   _addMerit(mvpInfo.gkName, 4);
+    }
+    mvpInfo.yellows.forEach(function(n){ _addMerit(n, -2); });
+    mvpInfo.reds.forEach(function(n){ _addMerit(n, -5); });
+    var topMvpName = null, topMvpScore = 0;
+    Object.keys(meritScores).forEach(function(k){
+      if(meritScores[k] > topMvpScore){ topMvpScore = meritScores[k]; topMvpName = k; }
     });
     var mvpName;
-    if (stars.length){
-      var totalW = stars.reduce(function(s,p){ return s + (p[1]||70); }, 0);
-      var roll = Math.random() * totalW, acc = 0, chosen = stars[0];
-      for (var si=0; si<stars.length; si++){
-        acc += (stars[si][1]||70);
-        if (roll <= acc){ chosen = stars[si]; break; }
-      }
-      mvpName = chosen[0];
+    if(topMvpName && topMvpScore > 0){
+      mvpName = topMvpName;
     } else {
-      mvpName = pickPlayer(mvpRoster, Math.random()<0.55?'delanteros':'medios');
+      /* Fallback legacy: estrellas ⭐ ponderadas o reparto delantero/medio. */
+      var stars = [];
+      ['delanteros','medios','defensas','porteros'].forEach(function(g){
+        (mvpRoster[g] || []).forEach(function(p){ if(p && p.elite) stars.push(p); });
+      });
+      if(stars.length){
+        var totalW = stars.reduce(function(s,p){ return s + (p[1]||70); }, 0);
+        var roll = Math.random() * totalW, acc = 0, chosen = stars[0];
+        for(var si=0; si<stars.length; si++){
+          acc += (stars[si][1]||70);
+          if(roll <= acc){ chosen = stars[si]; break; }
+        }
+        mvpName = chosen[0];
+      } else {
+        mvpName = pickPlayer(mvpRoster, Math.random()<0.55?'delanteros':'medios');
+      }
     }
     incPlayerStat(playerStats, mvpTeam.name, mvpName, 'mvp', 1);
   }

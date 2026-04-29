@@ -2179,48 +2179,11 @@ var _compSoundMap = { 's-champions': { snd:'snd-ucl', flash:'flash-ucl' }, 's-su
 
 /* script block 20 */
 
-(function(){
-  var LIGA_TEAMS_EQ = [
-    {name:"Real Madrid",     ico:"⚪",  screen:"s-madrid"},
-    {name:"FC Barcelona",    ico:"🔵",  screen:"s-barca"},
-    {name:"Athletic Club",   ico:"🔴",  screen:"athletic-screen"},
-    {name:"Atlético Madrid", ico:"🔴",  screen:"s-atletico"},
-    {name:"Real Betis",      ico:"🟢",  screen:"betis-screen"},
-    {name:"Real Sociedad",   ico:"🔵",  screen:"sociedad-screen"},
-    {name:"Sevilla FC",      ico:"⚪",  screen:"s-sevilla"},
-    {name:"Villarreal CF",   ico:"🟡",  screen:"s-villarreal"},
-    {name:"Getafe CF",       ico:"🔵",  screen:"s-getafe"},
-    {name:"Osasuna",         ico:"🔴",  screen:"osasuna-screen"},
-    {name:"Valencia CF",     ico:"🦇",  screen:"valencia-screen"},
-    {name:"Celta de Vigo",   ico:"🔵",  screen:"celta-screen"},
-    {name:"Mallorca",        ico:"🔴",  screen:"mallorca-screen"},
-    {name:"Girona FC",       ico:"🔴",  screen:"girona-screen"},
-    {name:"Espanyol",        ico:"🔵",  screen:"s-espanyol"},
-    {name:"Arsenal",         ico:"🔴",  screen:"s-arsenal"},
-    {name:"Rayo Vallecano",  ico:"⚪",  screen:"rayo-screen"},
-    {name:"Elche CF",        ico:"🟢",  screen:"elche-screen"},
-    {name:"Bayern Munich",   ico:"🔴",  screen:"s-munich"},
-    {name:"Deportivo Alavés",ico:"🔵",  screen:"alaves-screen"}
-  ];
-
-  var grid = document.getElementById('equipos-grid');
-  LIGA_TEAMS_EQ.forEach(function(t){
-    var card = document.createElement('div');
-    card.className = 'eq-ov-card';
-    if(t.screen){
-      card.style.borderColor = 'rgba(240,192,64,.2)';
-    }
-    var logo = window.getTeamLogoUrl ? window.getTeamLogoUrl(t.name) : ((window.TEAM_LOGOS && window.TEAM_LOGOS[t.name]) || '');
-    var rating = window.TEAM_RATINGS && window.TEAM_RATINGS[t.name];
-    card.innerHTML = (logo ? '<img class="eq-ov-logo" src="'+logo+'" alt="'+t.name+'" onerror="this.style.display=\'none\'">' : '<span class="eq-ov-ico">'+t.ico+'</span>')
-      + '<span class="eq-ov-name">'+t.name+(rating?'<br><span class="eq-ov-rating">★ '+rating+'</span>':'')+(t.screen?'<br><span style="font-size:9px;color:rgba(240,192,64,.6);letter-spacing:2px;">VER PLANTILLA ▶</span>':'')+'</span>';
-    card.onclick = function(){
-      document.getElementById('equipos-overlay').classList.remove('show');
-      if(t.screen && typeof go === 'function') go(t.screen);
-    };
-    grid.appendChild(card);
-  });
-})();
+/* Bloque LIGA_TEAMS_EQ eliminado: era el populator del grid
+   #equipos-grid (overlay del antiguo Team Manager del Panel Admin).
+   El overlay y la card del Panel Admin se borraron porque eran
+   duplicado de LaLiga · Clasificación → click en equipo, que ya abre
+   la plantilla EDITABLE y refleja la simulación. */
 
 
 /* script block 21 */

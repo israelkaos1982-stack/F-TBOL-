@@ -17011,30 +17011,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /* Wrap de `_wcSimulate()` — botón 🎮 Simular del torneo Wild Card.
-       Cada pulsación simula UNA fase (grupos→octavos→cuartos→semis
-       →final). Mostramos overlay con fake-progress. */
+       Una sola pulsación juega las 18 eliminatorias (ida + vuelta +
+       prórroga + penaltis si hace falta). Overlay con fake-progress. */
     var origWcSim = window._wcSimulate;
     if(typeof origWcSim === 'function'){
       window._wcSimulate = function(){
         if(typeof window.ftbolLoaderRun !== 'function'){
           return origWcSim();
         }
-        var label = 'WILD CARD';
-        try {
-          var raw = localStorage.getItem('wc_state_v1');
-          var s = raw ? JSON.parse(raw) : null;
-          if(!s) label = 'WILD CARD · FASE DE GRUPOS';
-          else if(s.phase === 'octavos') label = 'WILD CARD · OCTAVOS';
-          else if(s.phase === 'cuartos') label = 'WILD CARD · CUARTOS';
-          else if(s.phase === 'semis')   label = 'WILD CARD · SEMIFINALES';
-          else if(s.phase === 'final')   label = 'WILD CARD · FINAL';
-        } catch(_){}
         return _runFakeProgress(
-          { title: label, sub:'Preparando…', minMs:1200,
+          { title: 'WILD CARD · ELIMINATORIAS', sub:'Preparando…', minMs:1200,
             phases:[
-              { pct:24, sub:'Cargando equipos…',  ms:140 },
-              { pct:54, sub:'Simulando partidos…',ms:200 },
-              { pct:84, sub:'Resolviendo bracket…',ms:170 }
+              { pct:24, sub:'Cargando equipos…',     ms:140 },
+              { pct:50, sub:'Simulando idas…',       ms:200 },
+              { pct:74, sub:'Simulando vueltas…',    ms:200 },
+              { pct:90, sub:'Resolviendo prórrogas y penaltis…', ms:170 }
             ]
           },
           function(){ if(typeof origWcSim === 'function') origWcSim(); }
@@ -17070,21 +17061,35 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- ══════════════════════════════════════════════════
-     UCL · WILD CARD — Torneo completo
-     · 2 grupos de 9 equipos (18 totales, 1 por liga menor)
-     · Top 8 de cada grupo → Octavos (último eliminado)
-     · Octavos / Cuartos / Semis: ida + vuelta, agregado de goles
-     · Final: partido único en campo neutral
-     · Campeón → flag `wc_champion_v1` que Open Qualifier puede leer
+     UCL · WILD CARD — Eliminatorias a doble vuelta (2026-04-30)
+     · Pool: hasta 36 equipos (zona `wildcard` de cada `ligaExt_*`)
+     · 18 eliminatorias seed-cruzadas: 1v36, 2v35, …, 18v19
+     · Cada eliminatoria: IDA (mejor seed local) + VUELTA + GLOBAL
+     · Empate al global → PRÓRROGA dentro de la vuelta
+     · Empate tras prórroga → PENALTIS deciden el ganador
+     · Los 18 ganadores → Open Qualifier (esa misma temporada),
+       persistidos en `wc_to_open_qualifier_v1` y leídos por
+       `computeOpenQualifierTeams` en misc_body_1.html.
+     · Los 18 perdedores quedan eliminados (la zona `wildcard` es la
+       de menor prioridad — no entran a otras competiciones).
      ══════════════════════════════════════════════════ -->
 <script>
 (function(){
-  var WC_KEY  = 'wc_state_v1';
-  var WC_CHAMP_KEY = 'wc_champion_v1';
+  var WC_KEY        = 'wc_state_v1';
+  var WC_CHAMP_KEY  = 'wc_champion_v1';            /* legacy — limpiado al reset */
+  var WC_TO_OQ_KEY  = 'wc_to_open_qualifier_v1';   /* 18 ganadores → OQ */
+  var POOL_TARGET   = 36;
+  var TIE_COUNT     = 18;
 
   function loadState(){ try { return JSON.parse(localStorage.getItem(WC_KEY)||'null'); } catch(_){ return null; } }
   function saveState(s){ try { localStorage.setItem(WC_KEY, JSON.stringify(s)); } catch(_){} }
-  function clearState(){ try { localStorage.removeItem(WC_KEY); localStorage.removeItem(WC_CHAMP_KEY); } catch(_){} }
+  function clearState(){
+    try {
+      localStorage.removeItem(WC_KEY);
+      localStorage.removeItem(WC_CHAMP_KEY);
+      localStorage.removeItem(WC_TO_OQ_KEY);
+    } catch(_){}
+  }
 
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _logoOf(name){

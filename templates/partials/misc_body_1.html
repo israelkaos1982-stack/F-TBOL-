@@ -4909,33 +4909,54 @@ window._showSimProgress = function(opts, onDone){
     return arr;
   }
   function computeOpenQualifierTeams(){
-    /* Pool ideal del Open Qualifier: 66 equipos = 65 (zonas `uclQual`
-       de las ligas) + 1 (campeón Wild Card). Si la suma de cupos
-       `uclQual` en las ligas es > 65, recortamos por orden de
-       inserción para que el snake-draft cuadre en 6 grupos × 11. */
+    /* Pool del Open Qualifier (cap a 66 = 6 grupos × 11). Antes
+       reservaba 1 slot para el campeón Wild Card; ahora el WC
+       devuelve hasta 18 ganadores (formato eliminatorias a doble
+       vuelta), así que reservamos dinámicamente:
+         · `wc_to_open_qualifier_v1` presente → reservamos ese
+           número (típicamente 18) restando plazas de ligas.
+         · Sin estado WC → dejamos 1 slot reservado por compat
+           con la versión antigua (`wc_champion_v1`).
+       En cualquier caso el total final está capado a 66 por
+       seguridad. Snake-draft del OQ cuadra en 6×11. */
     var arr = _computeQualifiedFromLeagues('uclQual');
-    if(arr.length > 65) arr = arr.slice(0, 65);
-    /* El campeón del torneo Wild Card (s-wild-card) entra como UNA
-       plaza extra al Open Qualifier. Lo añadimos solo si la fase
-       Wild Card terminó (champion no-null) y aún no aparece en `arr`
-       por otro slug. */
+
+    var wcWinners = [];
     try {
-      var raw = localStorage.getItem('wc_champion_v1');
+      var raw = localStorage.getItem('wc_to_open_qualifier_v1');
       if(raw){
-        var champ = JSON.parse(raw);
-        var champName = champ && champ.name;
-        if(champName){
-          var seen = false;
-          for(var i=0;i<arr.length;i++){
-            if(arr[i] && arr[i].name === champName){ seen = true; break; }
-          }
-          if(!seen){
-            arr.push({ name: champName, league: 'wild-card', logo: '' });
+        var data = JSON.parse(raw);
+        if(data && Array.isArray(data.teams)){
+          wcWinners = data.teams.filter(function(t){ return t && t.name; });
+        }
+      }
+      if(wcWinners.length === 0){
+        /* Fallback al flag legacy del campeón único. */
+        var rawC = localStorage.getItem('wc_champion_v1');
+        if(rawC){
+          var champ = JSON.parse(rawC);
+          if(champ && champ.name){
+            wcWinners = [{ name: champ.name, league: 'wild-card', logo: '' }];
           }
         }
       }
     } catch(_){}
-    /* Cap final por seguridad (debería ser 66 ya). */
+
+    var reserved = Math.max(1, wcWinners.length);
+    var maxLeagues = 66 - reserved;
+    if(maxLeagues < 0) maxLeagues = 0;
+    if(arr.length > maxLeagues) arr = arr.slice(0, maxLeagues);
+
+    /* Apendamos ganadores con dedupe por nombre. */
+    var seenN = {};
+    arr.forEach(function(t){ if(t && t.name) seenN[t.name] = true; });
+    wcWinners.forEach(function(w){
+      if(!w.name || seenN[w.name]) return;
+      seenN[w.name] = true;
+      arr.push({ name: w.name, league: w.league || 'wild-card', logo: w.logo || '' });
+    });
+
+    /* Cap final por seguridad. */
     if(arr.length > 66) arr = arr.slice(0, 66);
     return arr;
   }

@@ -17301,12 +17301,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* Juega las 18 eliminatorias de un tirón. Una sola pulsación de
      "🎮 Simular" basta para resolver toda la ronda y dejar la lista
-     de 18 clasificados al Open Qualifier lista. */
+     de 18 clasificados al Open Qualifier lista.
+     Tras persistir los ganadores, limpiamos la cache del Open
+     Qualifier (`oq_simulation_v1`, `oq_to_conference_v1`,
+     `oq_to_previa_v1`) para que la próxima sim del OQ incluya a los
+     18 ganadores en el pool — si no, el OQ seguiría con un estado
+     cacheado SIN ellos. Comportamiento heredado del fix 2b97e6d
+     (que solo aplicaba al campeón único). */
   function simAllTies(state){
     if(!state || !Array.isArray(state.ties)) return;
     state.ties.forEach(function(t){ if(!t.played) playKoTie(t); });
     state.phase = 'done';
     _persistWinners(state);
+    try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
+    try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
+    try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
   }
 
   /* Inicializa el estado leyendo los equipos clasificados desde las
@@ -17428,7 +17437,10 @@ document.addEventListener('DOMContentLoaded', function() {
     return html;
   }
 
-  /* Tarjeta-resumen con los 18 ganadores que pasan al Open Qualifier. */
+  /* Tarjeta-resumen con los 18 ganadores que pasan al Open Qualifier.
+     Reemplaza al antiguo `renderChampion` (1 campeón único). El mensaje
+     hereda el espíritu del fix 2b97e6d: avisa de que el OQ se reinició
+     para que los ganadores entren en sus 6 grupos al re-simularlo. */
   function renderWinners(s){
     if(!s.winners || !s.winners.length) return '';
     var rows = '';
@@ -17441,7 +17453,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return '<div class="wc-champion" style="padding:18px 14px;">'
       +    '<div class="wc-champion-lbl">⭐ '+s.winners.length+' GANADORES → OPEN QUALIFIER ⭐</div>'
       +    '<div style="margin-top:10px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;text-align:left;">'+rows+'</div>'
-      +    '<div class="wc-champion-note" style="margin-top:8px;">Clasifican directos al <b>Open Qualifier</b> de esta misma temporada. Los 18 eliminados quedan fuera de cualquier competición.</div>'
+      +    '<div class="wc-champion-note" style="margin-top:8px;">Clasifican directos al <b>Open Qualifier</b> de <b>ESTA</b> temporada. Los 18 eliminados quedan fuera de cualquier competición.<br><span style="opacity:.6;font-size:11px;">El Open Qualifier se reinició — vuelve a simularlo para que entren en sus 6 grupos.</span></div>'
       +  '</div>';
   }
 

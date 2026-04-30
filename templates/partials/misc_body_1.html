@@ -4885,27 +4885,58 @@ window._showSimProgress = function(opts, onDone){
     return arr;
   }
   window.computeUclPrevTeams = computeUclPrevTeams;
-  function computeUelClassified(){ return _computeQualifiedFromLeagues('uel'); }
-  function computeUeclClassified(){
-    var arr = _computeQualifiedFromLeagues('uecl');
-    /* Cambio (2026-04-30): el Open Qualifier ya NO alimenta a la
-       Conference League — el formato nuevo (7 × 14) solo promueve
-       top-5 a la Previa de Champions, y del 6 al 14 los equipos
-       quedan eliminados de cualquier competición europea (petición
-       explícita del usuario). El bloque que sigue lee
-       `oq_to_conference_v1` pero ese flag dejó de escribirse y
-       además se borra al simular el OQ. Mantenemos el lector como
-       fallback por si algún navegador conserva estado antiguo. */
+  function computeUelClassified(){
+    var arr = _computeQualifiedFromLeagues('uel');
+    /* Los 22 finalistas (2º + 3º × 11 grupos) de la Ronda Final de la
+       Previa de Champions entran como plazas extra a la Europa League
+       en la MISMA temporada. Los persiste el módulo de la Previa en
+       `wprev_to_europa_v1`. Dedupe por nombre. */
     try {
-      var raw = localStorage.getItem('oq_to_conference_v1');
+      var raw = localStorage.getItem('wprev_to_europa_v1');
       if(raw){
         var data = JSON.parse(raw);
         var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
         var seen = {};
         arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
         teams.forEach(function(t){
-          if(!t || !t.name) return;
-          if(seen[t.name]) return;
+          if(!t || !t.name || seen[t.name]) return;
+          seen[t.name] = true;
+          arr.push({name:t.name, logo:t.logo||'', league:'previa-champions'});
+        });
+      }
+    } catch(_){}
+    return arr;
+  }
+  function computeUeclClassified(){
+    var arr = _computeQualifiedFromLeagues('uecl');
+    /* Los 30 perdedores de la Ronda 1 de la Previa de Champions entran
+       como plazas extra a la Conference League en la MISMA temporada.
+       Los persiste el módulo de la Previa en `wprev_r1_to_conference_v1`.
+       Dedupe por nombre.
+       Nota: el Open Qualifier (formato 7×14) ya NO alimenta a la
+       Conference. Mantenemos lectura del flag legacy
+       `oq_to_conference_v1` solo como fallback por si quedaran datos
+       antiguos en algún navegador. */
+    var seen = {};
+    arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    try {
+      var rawW = localStorage.getItem('wprev_r1_to_conference_v1');
+      if(rawW){
+        var dataW = JSON.parse(rawW);
+        var teamsW = (dataW && Array.isArray(dataW.teams)) ? dataW.teams : [];
+        teamsW.forEach(function(t){
+          if(!t || !t.name || seen[t.name]) return;
+          seen[t.name] = true;
+          arr.push({name:t.name, logo:t.logo||'', league:'previa-champions'});
+        });
+      }
+      /* Fallback legacy. */
+      var raw = localStorage.getItem('oq_to_conference_v1');
+      if(raw){
+        var data = JSON.parse(raw);
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        teams.forEach(function(t){
+          if(!t || !t.name || seen[t.name]) return;
           seen[t.name] = true;
           arr.push({name:t.name, logo:t.logo||'', league:'open-qualifier'});
         });
@@ -5249,9 +5280,9 @@ window._showSimProgress = function(opts, onDone){
 
 <!-- Leyenda morada compacta -->
 <div style="display:flex;gap:10px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:11px;color:#fff;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;">
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>Top 10 1ºs → Fase de Grupos</span>
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#5b1c8e;margin-right:4px;vertical-align:middle;"></span>2 peores 1ºs → Death Round</span>
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e03c3c;margin-right:4px;vertical-align:middle;"></span>Eliminados</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>1º grupo → Champions</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F37335;margin-right:4px;vertical-align:middle;"></span>2º+3º → Europa</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3cc878;margin-right:4px;vertical-align:middle;"></span>Perdedor R1 → Conference</span>
 </div>
 
 <style>
@@ -5262,7 +5293,7 @@ window._showSimProgress = function(opts, onDone){
 #s-ucl-previa-clas .wprev-row{display:grid;grid-template-columns:24px minmax(120px,1.5fr) 30px 26px 22px 22px 22px 28px 28px 32px;gap:2px;align-items:center;padding:5px 8px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);min-width:420px;}
 #s-ucl-previa-clas .wprev-row.hdr{background:linear-gradient(90deg,#2a0a4a,#1a0535,#2a0a4a);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:#e0bfff;font-weight:700;text-transform:uppercase;border-bottom:1px solid rgba(168,85,247,.4);}
 #s-ucl-previa-clas .wprev-row.qual-best{background:rgba(168,85,247,.10);border-left:3px solid #a855f7;}
-#s-ucl-previa-clas .wprev-row.qual-death{background:rgba(91,28,142,.18);border-left:3px solid #5b1c8e;}
+#s-ucl-previa-clas .wprev-row.qual-death{background:rgba(243,115,53,.10);border-left:3px solid #F37335;}
 #s-ucl-previa-clas .wprev-row.elim{background:rgba(255,80,80,.04);border-left:3px solid rgba(255,255,255,.05);}
 #s-ucl-previa-clas .wprev-pos{color:#fff;text-align:center;font-family:Bebas Neue,sans-serif;font-size:14px;}
 #s-ucl-previa-clas .wprev-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px;color:#fff;}

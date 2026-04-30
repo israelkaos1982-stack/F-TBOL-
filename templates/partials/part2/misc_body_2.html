@@ -17565,20 +17565,40 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- ══════════════════════════════════════════════════
-     UCL · PREVIA DE CHAMPIONS — Torneo completo
-     · 12 grupos × 3 equipos = 36 equipos
-     · Round-robin ida + vuelta (4 partidos por equipo, 6 jornadas)
-     · Top 10 1ºs → Fase de Grupos Champions
-     · 2 peores 1ºs → Death Round (ida + vuelta + global) → 1 ganador
-     · Persistido en `wprev_to_fase_grupos_v1` (11 equipos)
+     UCL · PREVIA DE CHAMPIONS — Estructura oficial (2026-04-30)
+     · 63 equipos = 28 directos + 35 del Open Qualifier
+     · Ronda 1 (eliminatorias):
+         - 3 EXENTOS por mejor power (proxy de coef. UEFA) → Ronda Final
+         - 60 equipos juegan 30 cruces ida + vuelta:
+            · CABEZAS de serie (top 30 power) vs NO CABEZAS (bottom 30)
+            · Restricción: no enfrentar dos equipos del mismo país
+            · IDA en estadio del NO CABEZA, VUELTA en el CABEZA
+            · Empate global → gol de visitante / prórroga / penaltis
+         - 30 GANADORES → Ronda Final
+         - 30 PERDEDORES → Conference League (mismo año)
+     · Ronda Final (33 equipos = 30 R1 + 3 exentos):
+         - 11 grupos × 3 equipos (A-K)
+         - 3 BOMBOS por power (1-11, 12-22, 23-33), un equipo de cada
+         - Same-country avoidance dentro de cada grupo
+         - Liguilla IDA + VUELTA (4 partidos por equipo, 6 por grupo)
+         - 1º grupo → Champions League · 2º+3º → Europa League
+     · Persistencia (todo en la misma temporada):
+         - `wprev_to_fase_grupos_v1`     → 11 a Champions (1º × 11)
+         - `wprev_to_europa_v1`          → 22 a Europa    (2º + 3º)
+         - `wprev_r1_to_conference_v1`   → 30 a Conference (R1 losers)
      ══════════════════════════════════════════════════ -->
 <script>
 (function(){
-  var WPREV_KEY    = 'wprev_state_v1';
-  var WPREV_FG_KEY = 'wprev_to_fase_grupos_v1';
-  var N_GROUPS = 12;
-  var TEAMS_PER_GROUP = 3;
-  var GROUP_LABELS = ['A','B','C','D','E','F','G','H','I','J','K','L'];
+  var WPREV_KEY      = 'wprev_state_v1';
+  var WPREV_FG_KEY   = 'wprev_to_fase_grupos_v1';   /* 11 → Champions */
+  var WPREV_EUR_KEY  = 'wprev_to_europa_v1';        /* 22 → Europa    */
+  var WPREV_CONF_KEY = 'wprev_r1_to_conference_v1'; /* 30 → Conference */
+  var POOL_TARGET    = 63;
+  var BYES_COUNT     = 3;
+  var R1_TIES        = 30;                          /* (63 − 3) / 2 */
+  var N_GROUPS       = 11;
+  var TEAMS_PER_GROUP= 3;
+  var GROUP_LABELS   = ['A','B','C','D','E','F','G','H','I','J','K'];
 
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _logoOf(name){
@@ -17596,16 +17616,26 @@ document.addEventListener('DOMContentLoaded', function() {
   function loadState(){ try { return JSON.parse(localStorage.getItem(WPREV_KEY)||'null'); } catch(_){ return null; } }
   function saveState(s){ try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); } catch(_){} }
   function clearState(){
-    try { localStorage.removeItem(WPREV_KEY); localStorage.removeItem(WPREV_FG_KEY); } catch(_){}
+    try {
+      localStorage.removeItem(WPREV_KEY);
+      localStorage.removeItem(WPREV_FG_KEY);
+      localStorage.removeItem(WPREV_EUR_KEY);
+      localStorage.removeItem(WPREV_CONF_KEY);
+    } catch(_){}
   }
 
+  /* Lee del computador global el pool de Previa Champions (28 directos
+     desde zonas `uclPrev` + 35 desde `oq_to_previa_v1`). Si hay más de
+     63 recortamos por power; si hay menos completamos con placeholders
+     para que el bracket no se rompa. Cada equipo conserva su `league`
+     (slug del país de origen) para los filtros de mismo país. */
   function buildPool(){
-    var pool = [];
+    var raw = [];
     if(typeof window.computeUclPrevTeams === 'function'){
       try {
         (window.computeUclPrevTeams()||[]).forEach(function(t){
           if(!t || !t.name) return;
-          pool.push({
+          raw.push({
             name: t.name,
             logo: t.logo || _logoOf(t.name),
             league: t.league || '',
@@ -17614,20 +17644,78 @@ document.addEventListener('DOMContentLoaded', function() {
         });
       } catch(_){}
     }
-    return pool;
+    return raw;
   }
 
-  function snakeDraft(pool){
-    var sorted = pool.slice().sort(function(a,b){ return (b.power||0)-(a.power||0); });
-    var groups = [];
-    for(var g=0; g<N_GROUPS; g++) groups.push([]);
-    sorted.forEach(function(t, i){
-      var row = Math.floor(i/N_GROUPS);
-      var col = i % N_GROUPS;
-      var g   = (row % 2 === 0) ? col : (N_GROUPS - 1 - col);
-      groups[g].push(t);
-    });
-    return groups;
+  function _normalizePool(raw){
+    var arr = raw.slice().sort(function(a,b){ return (b.power||0)-(a.power||0); });
+    if(arr.length > POOL_TARGET) arr = arr.slice(0, POOL_TARGET);
+    while(arr.length < POOL_TARGET){
+      var i = arr.length;
+      arr.push({
+        name: 'TBD '+(i+1),
+        logo: '',
+        league: '__placeholder_'+i,
+        power: 50
+      });
+    }
+    return arr;
+  }
+
+  /* Los 3 mejores power van directos a Ronda Final (exentos). Los 60
+     restantes se dividen en CABEZAS (siguientes 30 mejores) y
+     NO CABEZAS (30 peores). Devuelve { byes, heads, nonHeads } con
+     pool ya ordenado por power desc. */
+  function splitByesAndR1(pool){
+    var byes     = pool.slice(0, BYES_COUNT);
+    var heads    = pool.slice(BYES_COUNT, BYES_COUNT + R1_TIES);
+    var nonHeads = pool.slice(BYES_COUNT + R1_TIES, BYES_COUNT + 2*R1_TIES);
+    return { byes: byes, heads: heads, nonHeads: nonHeads };
+  }
+
+  /* Construye 30 cruces 1 cabeza vs 1 no-cabeza, intentando no
+     enfrentar dos equipos del mismo país. Estrategia:
+       1. Pareo inicial por orden: head[i] vs nonHead[i].
+       2. Pasadas greedy (hasta 4): para cada pareja en conflicto,
+          intercambia el no-cabeza con otra pareja si eso resuelve el
+          conflicto sin crear uno nuevo.
+       3. Si no hay swap válido, se acepta la pareja como está
+          (best-effort — el pool puede tener tantos del mismo país
+          que haya conflictos inevitables). */
+  function pairR1Ties(heads, nonHeads){
+    var pairs = [];
+    for(var i=0;i<heads.length;i++){
+      pairs.push({
+        idx: i,
+        teamH: heads[i],     /* CABEZA — local en la VUELTA */
+        teamA: nonHeads[i]   /* NO CABEZA — local en la IDA */
+      });
+    }
+    function sameCountry(p){
+      var lh = p.teamH && p.teamH.league;
+      var la = p.teamA && p.teamA.league;
+      if(!lh || !la) return false;
+      if(/^__placeholder_/.test(lh) || /^__placeholder_/.test(la)) return false;
+      return lh === la;
+    }
+    for(var pass=0; pass<4; pass++){
+      var changed = false;
+      for(var i=0;i<pairs.length;i++){
+        if(!sameCountry(pairs[i])) continue;
+        for(var j=0;j<pairs.length;j++){
+          if(j===i) continue;
+          var newI = { teamH: pairs[i].teamH, teamA: pairs[j].teamA };
+          var newJ = { teamH: pairs[j].teamH, teamA: pairs[i].teamA };
+          if(!sameCountry(newI) && !sameCountry(newJ)){
+            var t = pairs[i].teamA; pairs[i].teamA = pairs[j].teamA; pairs[j].teamA = t;
+            changed = true;
+            break;
+          }
+        }
+      }
+      if(!changed) break;
+    }
+    return pairs;
   }
 
   function genJornadas(){
@@ -17675,101 +17763,238 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  function _simPlayoffTie(homeTeam, awayTeam){
-    var ida = simMatch(homeTeam.name, awayTeam.name);
-    var vu  = simMatch(awayTeam.name, homeTeam.name);
-    var aggH = ida.gh + vu.ga;
-    var aggA = ida.ga + vu.gh;
-    var winner = null, etDecided = false;
-    if(aggH > aggA) winner = homeTeam;
-    else if(aggA > aggH) winner = awayTeam;
-    else {
-      var et = simMatch(homeTeam.name, awayTeam.name);
-      if(et.gh > et.ga) winner = homeTeam;
-      else if(et.ga > et.gh) winner = awayTeam;
-      else winner = (Math.random() < 0.5) ? homeTeam : awayTeam;
-      etDecided = true;
+  /* Resuelve UNA eliminatoria de Ronda 1.
+       teamH (CABEZA)    — local en la VUELTA
+       teamA (NO CABEZA) — local en la IDA
+     Storage en el objeto tie:
+       idaGh / idaGa            — goles ida (NO-cabeza local)
+                                  idaGh = teamA, idaGa = teamH
+       vueltaGh / vueltaGa      — goles vuelta (CABEZA local)
+                                  vueltaGh = teamH, vueltaGa = teamA
+       aggH / aggA              — goles totales del CABEZA / NO-CABEZA
+       awayDecided              — true si decidió por gol de visitante
+       etDecided                — true si hubo prórroga
+       penDecided               — true si hubo penaltis
+       penGh / penGa            — penaltis convertidos por H / A
+       winner                   — referencia al teamH o teamA ganador
+     Empate en agg → primero gol de visitante, luego prórroga, luego
+     penaltis. */
+  function playR1Tie(tie){
+    var nameH = tie.teamH.name, nameA = tie.teamA.name;
+    /* IDA — teamA local */
+    var ida = simMatch(nameA, nameH);
+    tie.idaGh = ida.gh;   /* goles teamA (NO-cabeza local en ida) */
+    tie.idaGa = ida.ga;   /* goles teamH (CABEZA visitante en ida) */
+    /* VUELTA — teamH local */
+    var vu = simMatch(nameH, nameA);
+    tie.vueltaGh = vu.gh; /* goles teamH (CABEZA local en vuelta) */
+    tie.vueltaGa = vu.ga; /* goles teamA (NO-cabeza visitante en vuelta) */
+    /* Agregado: goles totales por equipo */
+    var aggH = tie.idaGa + tie.vueltaGh;   /* CABEZA: ida (visitante) + vuelta (local) */
+    var aggA = tie.idaGh + tie.vueltaGa;   /* NO-CABEZA: ida (local) + vuelta (visitante) */
+    tie.aggH = aggH; tie.aggA = aggA;
+    if(aggH > aggA){ tie.winner = tie.teamH; return; }
+    if(aggA > aggH){ tie.winner = tie.teamA; return; }
+    /* Empate global → REGLA DEL GOL DE VISITANTE.
+         awayH = goles del CABEZA fuera (en ida) = idaGa
+         awayA = goles del NO-CABEZA fuera (en vuelta) = vueltaGa
+       El que más metió FUERA gana. */
+    var awayH = tie.idaGa, awayA = tie.vueltaGa;
+    if(awayH > awayA){ tie.awayDecided = true; tie.winner = tie.teamH; return; }
+    if(awayA > awayH){ tie.awayDecided = true; tie.winner = tie.teamA; return; }
+    /* Sigue empate → PRÓRROGA en la vuelta (campo del CABEZA).
+       30 min ≈ ⅓ de partido → goles/2 floor. */
+    var et = simMatch(nameH, nameA);
+    var etGh = Math.min(2, Math.floor((et.gh||0)/2));   /* goles teamH (local prórroga) */
+    var etGa = Math.min(2, Math.floor((et.ga||0)/2));   /* goles teamA */
+    tie.etGh = etGh; tie.etGa = etGa;
+    tie.etDecided = true;
+    aggH += etGh;
+    aggA += etGa;
+    tie.aggH = aggH; tie.aggA = aggA;
+    if(aggH > aggA){ tie.winner = tie.teamH; return; }
+    if(aggA > aggH){ tie.winner = tie.teamA; return; }
+    /* PENALTIS — sesgo ±10 % por diferencia de power. */
+    var pH = _powerOf(nameH), pA = _powerOf(nameA);
+    var probH = 0.5 + Math.max(-0.10, Math.min(0.10, (pH - pA) / 200));
+    var winH = Math.random() < probH;
+    var winScore  = 4 + Math.floor(Math.random()*2);
+    var loseScore = Math.floor(Math.random() * winScore);
+    if(loseScore >= winScore) loseScore = winScore - 1;
+    if(loseScore < 0) loseScore = 0;
+    if(winH){ tie.penGh = winScore; tie.penGa = loseScore; tie.winner = tie.teamH; }
+    else    { tie.penGh = loseScore; tie.penGa = winScore; tie.winner = tie.teamA; }
+    tie.penDecided = true;
+  }
+
+  /* Reparte 33 equipos (30 ganadores R1 + 3 byes) en 11 grupos de 3.
+     Sembrado: ordena por power desc, divide en 3 BOMBOS de 11 y
+     reparte 1 de cada bombo a cada grupo. Después aplica un post-pass
+     de same-country avoidance: si un grupo tiene 2+ del mismo `league`,
+     intenta intercambiar UNO con otro grupo donde no se cree conflicto.
+     Si el conflicto es del mismo bombo, intercambia un equipo de ESE
+     bombo (preserva la estructura de bombos). */
+  function seedRoundFinal(qualified){
+    var sorted = qualified.slice().sort(function(a,b){ return (b.power||0)-(a.power||0); });
+    var bombo1 = sorted.slice(0, N_GROUPS);
+    var bombo2 = sorted.slice(N_GROUPS, 2*N_GROUPS);
+    var bombo3 = sorted.slice(2*N_GROUPS, 3*N_GROUPS);
+    var groups = [];
+    for(var g=0; g<N_GROUPS; g++){
+      groups.push([ bombo1[g], bombo2[g], bombo3[g] ]);
     }
-    return {
-      teamH: homeTeam, teamA: awayTeam,
-      idaGh: ida.gh, idaGa: ida.ga,
-      vueltaGh: vu.gh, vueltaGa: vu.ga,
-      aggH: aggH, aggA: aggA,
-      winner: winner, etDecided: etDecided
-    };
+    function dupCountry(grp){
+      var c = {};
+      for(var i=0;i<grp.length;i++){
+        var l = grp[i] && grp[i].league;
+        if(!l || /^__placeholder_/.test(l)) continue;
+        c[l] = (c[l]||0) + 1;
+      }
+      for(var k in c){ if(c[k] >= 2) return k; }
+      return null;
+    }
+    function maxDup(grp){
+      var c = {}, m = 0;
+      grp.forEach(function(t){
+        if(!t || !t.league || /^__placeholder_/.test(t.league)) return;
+        c[t.league] = (c[t.league]||0) + 1;
+        if(c[t.league] > m) m = c[t.league];
+      });
+      return m;
+    }
+    /* Greedy: para cada conflicto, intercambia con otro grupo en el
+       MISMO slot de bombo (mantiene estructura) si baja la suma de
+       máximos. */
+    for(var pass=0; pass<4; pass++){
+      var changed = false;
+      for(var g=0; g<N_GROUPS; g++){
+        var dup = dupCountry(groups[g]);
+        if(!dup) continue;
+        /* localiza el slot de bombo donde está la duplicación */
+        var slotToSwap = -1;
+        for(var s=0; s<groups[g].length; s++){
+          if(groups[g][s].league === dup){ slotToSwap = s; break; }
+        }
+        if(slotToSwap < 0) continue;
+        for(var dg=0; dg<N_GROUPS && !changed; dg++){
+          if(dg === g) continue;
+          var srcT = groups[g][slotToSwap], dstT = groups[dg][slotToSwap];
+          if(!srcT || !dstT) continue;
+          var origSum = maxDup(groups[g]) + maxDup(groups[dg]);
+          /* prueba el swap */
+          groups[g][slotToSwap] = dstT;
+          groups[dg][slotToSwap] = srcT;
+          var newSum = maxDup(groups[g]) + maxDup(groups[dg]);
+          if(newSum < origSum){
+            changed = true;
+            break;
+          }
+          /* revierte si no mejora */
+          groups[g][slotToSwap] = srcT;
+          groups[dg][slotToSwap] = dstT;
+        }
+      }
+      if(!changed) break;
+    }
+    return groups;
   }
 
   function initState(){
-    var pool = buildPool();
-    if(pool.length === 0) return null;
-    if(pool.length > 36){
-      pool = pool.slice().sort(function(a,b){ return (b.power||0)-(a.power||0); }).slice(0, 36);
-    } else if(pool.length < 36){
-      for(var i=pool.length; i<36; i++){
-        pool.push({name:'TBD '+(i+1), logo:'', league:'?', power:55});
-      }
-    }
-    var groups = snakeDraft(pool);
-    var jornadasByGroup = groups.map(function(){
-      return genJornadas().map(function(m){
-        return { hi:m.hi, ai:m.ai, gh:null, ga:null, played:false };
-      });
+    var raw = buildPool();
+    if(raw.length === 0) return null;
+    var pool = _normalizePool(raw);
+    var split = splitByesAndR1(pool);
+    var r1Pairs = pairR1Ties(split.heads, split.nonHeads);
+    var ties = r1Pairs.map(function(p){
+      return {
+        idx: p.idx,
+        teamH: p.teamH, teamA: p.teamA,
+        played: false, winner: null,
+        idaGh:null, idaGa:null,
+        vueltaGh:null, vueltaGa:null,
+        etGh:null, etGa:null, etDecided:false,
+        penGh:null, penGa:null, penDecided:false,
+        awayDecided: false,
+        aggH:null, aggA:null
+      };
     });
     return {
-      groups: groups,
-      tables: groups.map(emptyTable),
-      sortedTables: groups.map(emptyTable),
-      jornadasByGroup: jornadasByGroup,
-      deathRound: null,
-      bestFirsts: [],
-      worstFirsts: [],
-      phase: 'groups',
+      pool: pool,
+      byes: split.byes,
+      ties: ties,                /* 30 cruces R1 */
+      r1Losers: [],
+      groups: [],                /* se llena tras R1 */
+      tables: [],
+      sortedTables: [],
+      jornadasByGroup: [],
+      phase: 'pending',          /* 'pending' | 'done' */
       ts: Date.now()
     };
   }
 
+  function _persistBuckets(state){
+    /* Champions: 11 ganadores de los grupos de Ronda Final (1º × 11). */
+    var champArr = [];
+    /* Europa: 22 (2º + 3º × 11). */
+    var euroArr = [];
+    state.sortedTables.forEach(function(st, gi){
+      st.forEach(function(row, pos){
+        var t = state.groups[gi][row._i];
+        if(!t || !t.name) return;
+        var entry = { name:t.name, logo:t.logo||'', source:'previa-rf-g'+(gi+1)+'-pos'+(pos+1) };
+        if(pos === 0)            champArr.push(entry);
+        else if(pos === 1 || pos === 2) euroArr.push(entry);
+      });
+    });
+    /* Conference: los 30 perdedores de Ronda 1. */
+    var confArr = (state.r1Losers||[]).map(function(t){
+      return { name:t.name, logo:t.logo||'', source:'previa-r1-loser' };
+    });
+    try {
+      localStorage.setItem(WPREV_FG_KEY,   JSON.stringify({teams:champArr, ts:Date.now()}));
+      localStorage.setItem(WPREV_EUR_KEY,  JSON.stringify({teams:euroArr,  ts:Date.now()}));
+      localStorage.setItem(WPREV_CONF_KEY, JSON.stringify({teams:confArr,  ts:Date.now()}));
+    } catch(_){}
+  }
+
+  /* Una sola llamada simula TODO el torneo:
+       1. Juega las 30 eliminatorias R1.
+       2. Combina 30 ganadores + 3 byes → seedRoundFinal → 11 grupos × 3.
+       3. Genera jornadas + simula liguilla ida + vuelta de cada grupo.
+       4. Persiste las 3 claves de promoción a Champions / Europa /
+          Conference. */
   function simAll(state){
+    /* === RONDA 1 === */
+    state.r1Losers = [];
+    state.ties.forEach(function(tie){
+      if(!tie.played) playR1Tie(tie);
+      var loserTeam = (tie.winner === tie.teamH) ? tie.teamA : tie.teamH;
+      if(loserTeam) state.r1Losers.push(loserTeam);
+    });
+    /* === SEED RONDA FINAL === */
+    var qualified = state.byes.slice();
+    state.ties.forEach(function(tie){
+      if(tie.winner) qualified.push(tie.winner);
+    });
+    state.groups = seedRoundFinal(qualified);
+    state.tables = state.groups.map(emptyTable);
+    state.jornadasByGroup = state.groups.map(function(){
+      return genJornadas().map(function(m){
+        return { hi:m.hi, ai:m.ai, gh:null, ga:null, played:false };
+      });
+    });
+    /* === LIGUILLA RONDA FINAL === */
     state.groups.forEach(function(grp, gi){
       var sched = state.jornadasByGroup[gi];
       sched.forEach(function(m){
-        if(m.played) return;
         var sc = simMatch(grp[m.hi].name, grp[m.ai].name);
         m.gh = sc.gh; m.ga = sc.ga; m.played = true;
         applyToTable(state.tables[gi], m.hi, m.ai, sc.gh, sc.ga);
       });
-      state.sortedTables[gi] = sortTable(state.tables[gi]);
     });
-    var firsts = state.sortedTables.map(function(st, gi){
-      var leader = st[0];
-      var team = state.groups[gi][leader._i];
-      return {
-        groupIdx: gi, group: GROUP_LABELS[gi],
-        name: team.name, logo: team.logo||'', power: team.power||70,
-        pts: leader.pts, dg: leader.dg, gf: leader.gf, gc: leader.gc
-      };
-    });
-    var ranked = firsts.slice().sort(function(a,b){
-      if(b.pts!==a.pts) return b.pts-a.pts;
-      if(b.dg !==a.dg ) return b.dg -a.dg;
-      if(b.gf !==a.gf ) return b.gf -a.gf;
-      return a.name.localeCompare(b.name,'es');
-    });
-    state.bestFirsts  = ranked.slice(0, 10);
-    state.worstFirsts = ranked.slice(10);
-    if(state.worstFirsts.length === 2){
-      state.deathRound = _simPlayoffTie(state.worstFirsts[0], state.worstFirsts[1]);
-    }
-    var fgArr = state.bestFirsts.map(function(t){
-      return { name:t.name, logo:t.logo||'', source:'previa-direct' };
-    });
-    if(state.deathRound && state.deathRound.winner){
-      fgArr.push({
-        name: state.deathRound.winner.name,
-        logo: state.deathRound.winner.logo||'',
-        source: 'previa-death-round'
-      });
-    }
-    try { localStorage.setItem(WPREV_FG_KEY, JSON.stringify({teams:fgArr, ts:Date.now()})); } catch(_){}
+    state.sortedTables = state.tables.map(sortTable);
+    /* === PERSISTIR === */
+    _persistBuckets(state);
     state.phase = 'done';
     state.ts = Date.now();
   }
@@ -17788,9 +18013,10 @@ document.addEventListener('DOMContentLoaded', function() {
       + '</div>';
     sortedTable.forEach(function(r, i){
       var pos = i+1;
-      var cls = '';
-      if(i===0) cls = 'qual-best';
-      else if(i===sortedTable.length-1) cls = 'elim';
+      /* Zonas: 1º → Champions (qual-best, púrpura) · 2º-3º → Europa
+         (qual-death, naranja apagado). No hay eliminados — todos los
+         33 de Ronda Final clasifican a alguna competición. */
+      var cls = (i === 0) ? 'qual-best' : 'qual-death';
       var dgCls = r.dg>0 ? 'pos' : (r.dg<0?'neg':'');
       var dgTxt = (r.dg>0?'+':'') + r.dg;
       rows += '<div class="wprev-row '+cls+'">'
@@ -17842,42 +18068,89 @@ document.addEventListener('DOMContentLoaded', function() {
     return html;
   }
 
-  function renderDeathRound(s){
+  function _renderR1Tie(tie){
+    var played = !!tie.played;
+    var nameH = tie.teamH.name, nameA = tie.teamA.name;
+    /* Layout: IDA (NO-cabeza local) → VUELTA (CABEZA local) → GLOBAL.
+       teamH = CABEZA, teamA = NO CABEZA. */
+    var winnerH = played && tie.winner === tie.teamH;
+    var winnerA = played && tie.winner === tie.teamA;
+    var html = '<div class="wprev-dr-tie">'
+      + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:3px;">'
+      +   'IDA · estadio del NO-cabeza'
+      + '</div>'
+      + '<div class="wprev-dr-leg">'
+      +   '<span class="h">'+_badge(nameA, tie.teamA.logo)+_esc(nameA)+'</span>'
+      +   '<span class="sc">'+(played?(tie.idaGh+'-'+tie.idaGa):'vs')+'</span>'
+      +   '<span class="a">'+_esc(nameH)+_badge(nameH, tie.teamH.logo)+'</span>'
+      + '</div>';
+    if(played){
+      var vGh = tie.vueltaGh + (tie.etDecided ? (tie.etGh||0) : 0);
+      var vGa = tie.vueltaGa + (tie.etDecided ? (tie.etGa||0) : 0);
+      html += '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-top:6px;margin-bottom:3px;">'
+        +    'VUELTA · estadio del cabeza'+(tie.etDecided?' (con prórroga)':'')
+        +    '</div>'
+        + '<div class="wprev-dr-leg">'
+        +   '<span class="h">'+_badge(nameH, tie.teamH.logo)+_esc(nameH)+'</span>'
+        +   '<span class="sc">'+vGh+'-'+vGa+'</span>'
+        +   '<span class="a">'+_esc(nameA)+_badge(nameA, tie.teamA.logo)+'</span>'
+        + '</div>';
+      if(tie.etDecided){
+        html += '<div style="font-family:Oswald,sans-serif;font-size:9px;color:rgba(255,255,255,.45);text-align:center;margin-top:2px;">'
+          +    '90\': '+tie.vueltaGh+'-'+tie.vueltaGa+' · prórroga: '+(tie.etGh||0)+'-'+(tie.etGa||0)
+          +    '</div>';
+      }
+      html += '<div class="wprev-dr-agg">'
+        +   '<span class="'+(winnerH?'winner-mark':'loser-mark')+'" style="text-align:right;">'+_esc(nameH)+'</span>'
+        +   '<span class="sc">'+tie.aggH+'-'+tie.aggA+'</span>'
+        +   '<span class="'+(winnerA?'winner-mark':'loser-mark')+'">'+_esc(nameA)+'</span>'
+        + '</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.4);text-align:center;margin-top:2px;">GLOBAL</div>';
+      if(tie.penDecided){
+        var penH = tie.penGh, penA = tie.penGa;
+        html += '<div class="wprev-dr-agg" style="margin-top:6px;">'
+          +    '<span style="text-align:right;color:rgba(255,255,255,.7);">PENALTIS</span>'
+          +    '<span class="sc">'+penH+'-'+penA+'</span>'
+          +    '<span></span>'
+          +    '</div>';
+      }
+      var subTxt = tie.penDecided ? ' (en penaltis)'
+                : (tie.etDecided ? ' (en prórroga)'
+                : (tie.awayDecided ? ' (gol de visitante)' : ''));
+      html += '<div style="margin-top:8px;text-align:center;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#a855f7;font-weight:700;">'
+        +    '✓ '+_esc(tie.winner.name)+' → RONDA FINAL'+subTxt
+        +    '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderRound1(s){
     var host = document.getElementById('wprev-deathround-container');
     if(!host) return;
-    if(!s || !s.deathRound){
+    if(!s || !s.ties || !s.ties.length){
       host.innerHTML = '';
       return;
     }
-    var t = s.deathRound;
-    var winnerH = t.winner === t.teamH;
-    var winnerA = t.winner === t.teamA;
+    var byesHtml = '';
+    if(s.byes && s.byes.length){
+      byesHtml = '<div style="padding:8px 14px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.7);">'
+        + '⭐ EXENTOS (mejor power) → directos a Ronda Final:'
+        + '</div>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 8px;">';
+      s.byes.forEach(function(t){
+        byesHtml += '<span style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.4);border-radius:4px;padding:4px 8px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;">'
+          +    _badge(t.name, t.logo)+_esc(t.name)
+          +    '</span>';
+      });
+      byesHtml += '</div>';
+    }
     var html = '<div class="wprev-dr">'
-      + '<div class="wprev-dr-hdr">💀 DEATH ROUND · 2 PEORES 1ºS</div>'
-      + '<div class="wprev-dr-sub">ELIMINATORIA A IDA + VUELTA · GANADOR → FASE DE GRUPOS</div>'
-      + '<div class="wprev-dr-tie">'
-      +   '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:3px;">IDA</div>'
-      +   '<div class="wprev-dr-leg">'
-      +     '<span class="h">'+_badge(t.teamH.name)+_esc(t.teamH.name)+'</span>'
-      +     '<span class="sc">'+t.idaGh+' - '+t.idaGa+'</span>'
-      +     '<span class="a">'+_esc(t.teamA.name)+_badge(t.teamA.name)+'</span>'
-      +   '</div>'
-      +   '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-top:6px;margin-bottom:3px;">VUELTA</div>'
-      +   '<div class="wprev-dr-leg">'
-      +     '<span class="h">'+_badge(t.teamA.name)+_esc(t.teamA.name)+'</span>'
-      +     '<span class="sc">'+t.vueltaGh+' - '+t.vueltaGa+'</span>'
-      +     '<span class="a">'+_esc(t.teamH.name)+_badge(t.teamH.name)+'</span>'
-      +   '</div>'
-      +   '<div class="wprev-dr-agg">'
-      +     '<span class="'+(winnerH?'winner-mark':'loser-mark')+'" style="text-align:right;">GLOBAL</span>'
-      +     '<span class="sc">'+t.aggH+'-'+t.aggA+'</span>'
-      +     '<span class="'+(winnerA?'winner-mark':'loser-mark')+'">'+(t.etDecided?'(prórroga)':'')+'</span>'
-      +   '</div>'
-      +   '<div style="margin-top:8px;text-align:center;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#a855f7;font-weight:700;">'
-      +     '✓ ' + _esc(t.winner.name) + ' → FASE DE GRUPOS'
-      +   '</div>'
-      + '</div>'
-      + '</div>';
+      + '<div class="wprev-dr-hdr">⚔️ RONDA 1 · 30 ELIMINATORIAS + 3 EXENTOS</div>'
+      + '<div class="wprev-dr-sub">CABEZA vs NO-CABEZA · IDA + VUELTA · GANADOR → RONDA FINAL · PERDEDOR → CONFERENCE</div>'
+      + byesHtml;
+    s.ties.forEach(function(t){ html += _renderR1Tie(t); });
+    html += '</div>';
     host.innerHTML = html;
   }
 
@@ -17886,30 +18159,46 @@ document.addEventListener('DOMContentLoaded', function() {
     if(!host) return;
     var s = loadState();
     if(!s){
-      var pool = buildPool();
+      var raw = buildPool();
       host.innerHTML = '<div class="wprev-empty">'
         + '<div style="font-size:32px;margin-bottom:10px;">🇪🇺</div>'
         + 'Sin equipos clasificados todavía.<br><br>'
-        + 'Configura el cupo <b>🇪🇺 Previa de Champions</b> en cada liga (modal Reglas) y simula sus jornadas. '
-        + 'Equipos detectados ahora mismo: <b>'+pool.length+'/36</b>.<br><br>'
-        + 'Pulsa <b>🎮 Sim</b> para iniciar el torneo.'
+        + 'Configura el cupo <b>🇪🇺 Previa de Champions</b> en cada liga y simula primero el <b>Open Qualifier</b>. '
+        + 'Equipos detectados ahora mismo: <b>'+raw.length+'/'+POOL_TARGET+'</b> (objetivo: 28 directos + 35 OQ).<br><br>'
+        + 'Pulsa <b>🎮 Sim</b> para iniciar el torneo (rellenamos hasta '+POOL_TARGET+' con placeholders si faltan).'
         + '</div>';
       var dr = document.getElementById('wprev-deathround-container');
       if(dr) dr.innerHTML = '';
       return;
     }
-    var html = '';
-    for(var g=0; g<N_GROUPS; g++){
-      html += renderGroupTable(g, s.sortedTables[g]||[], s.groups[g]||[]);
+    /* Render: bloque de Ronda 1 (3 exentos + 30 ties) arriba, luego
+       los 11 grupos de Ronda Final con su liguilla. La R1 se pinta en
+       el container `wprev-deathround-container` (renombramiento
+       implícito — el id se conserva para minimizar cambios al HTML). */
+    var rfHtml = '';
+    if(s.phase === 'done' && s.groups && s.groups.length){
+      rfHtml += '<div style="padding:10px 14px;margin:14px 4px 0;background:linear-gradient(90deg,#5b1c8e,#a855f7,#7e22ce);border-radius:8px;font-family:Bebas Neue,Oswald,sans-serif;font-size:18px;letter-spacing:2px;color:#fff;text-align:center;font-weight:900;">'
+        +    '🏆 RONDA FINAL · 11 GRUPOS × 3 EQUIPOS'
+        +    '</div>'
+        +    '<div style="padding:6px 14px;font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,255,255,.6);text-align:center;">'
+        +    '1º → Champions League · 2º y 3º → Europa League'
+        +    '</div>';
+      for(var g=0; g<N_GROUPS; g++){
+        rfHtml += renderGroupTable(g, s.sortedTables[g]||[], s.groups[g]||[]);
+      }
+    } else {
+      rfHtml = '<div class="wprev-empty" style="padding:14px;">'
+        +     'La Ronda Final se construye tras la Ronda 1. Pulsa <b>🎮 Sim</b>.'
+        +     '</div>';
     }
-    host.innerHTML = html;
-    renderDeathRound(s);
+    host.innerHTML = rfHtml;
+    renderRound1(s);
   }
   window.buildUclPrevClas = buildUclPrevClas;
 
   window.simulateUclPrev = function(){
-    var pool = buildPool();
-    if(!pool.length){
+    var raw = buildPool();
+    if(!raw.length){
       alert('No hay equipos clasificados aún. Configura cupos 🇪🇺 Previa Champions en las ligas y simula primero el Open Qualifier.');
       return;
     }
@@ -17951,14 +18240,15 @@ document.addEventListener('DOMContentLoaded', function() {
     window.simulateUclPrev = function(){
       if(typeof window.ftbolLoaderRun !== 'function') return orig();
       return window.ftbolLoaderRun(
-        { title:'PREVIA DE CHAMPIONS · 12 GRUPOS', sub:'Preparando…', minMs:1500 },
+        { title:'PREVIA DE CHAMPIONS · RONDA 1 + RONDA FINAL', sub:'Preparando…', minMs:1600 },
         function(ctx){
           return new Promise(function(resolve){
             var phases = [
-              { pct:18, sub:'Cargando plantillas…',     ms:140 },
-              { pct:42, sub:'Generando jornadas…',      ms:200 },
-              { pct:66, sub:'Simulando partidos…',      ms:240 },
-              { pct:88, sub:'Death Round…',             ms:160 }
+              { pct:14, sub:'Cargando plantillas…',           ms:140 },
+              { pct:32, sub:'Sembrando cabezas y no-cabezas…',ms:170 },
+              { pct:54, sub:'Ronda 1 · idas + vueltas…',      ms:230 },
+              { pct:74, sub:'Reparto a 11 grupos…',           ms:160 },
+              { pct:90, sub:'Liguilla Ronda Final…',          ms:220 }
             ];
             var i = 0;
             function next(){

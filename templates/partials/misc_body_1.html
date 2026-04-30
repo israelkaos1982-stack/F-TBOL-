@@ -6784,7 +6784,7 @@ window._showSimProgress = function(opts, onDone){
   <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#f0c040;"></span>Open</div>
   <div class="lext-leg-item lext-leg-uel"><span class="lext-leg-dot" style="background:#ff8214;"></span>E.League</div>
   <div class="lext-leg-item lext-leg-uecl"><span class="lext-leg-dot" style="background:#3cc878;"></span>Conference</div>
-  <div class="lext-leg-item lext-leg-wildcard" style="display:none;"><span class="lext-leg-dot" style="background:#ffffff;"></span>WildCard</div>
+  <div class="lext-leg-item lext-leg-wildcard"><span class="lext-leg-dot" style="background:#ffffff;"></span>WildCard</div>
   <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#e03c3c;"></span>Descenso</div>
 </div>
 
@@ -7202,7 +7202,7 @@ Tottenham
       <label class="lext-label">🟢 Conference League</label>
       <input class="lext-input" id="lext-reg-uecl" type="number" min="0" max="20" value="1" />
     </div>
-    <div id="lext-reg-wildcard-row" style="display:none;">
+    <div id="lext-reg-wildcard-row">
       <label class="lext-label" style="color:rgba(255,255,255,.92);">⚪ WildCard Round</label>
       <input class="lext-input" id="lext-reg-wildcard" type="number" min="0" max="20" value="0" style="border-color:rgba(255,255,255,.5);" />
     </div>
@@ -8237,33 +8237,26 @@ Tottenham
     document.getElementById('lext-reg-uel').value = z.uel;
     document.getElementById('lext-reg-uecl').value = z.uecl;
     document.getElementById('lext-reg-desc').value = z.desc;
-    /* WildCard Round — solo se muestra en las ligas pequeñas que
-       reciben este cupo extra. Para esas ligas también ocultamos
-       UCL/Previa/Europa/Conference (no aplican a su nivel) y solo
-       quedan visibles Open Qualifier + WildCard + Descenso. */
-    var isMinor = !!WILDCARD_LIGA_SLUGS[CURRENT_KEY];
-    var wcRow = document.getElementById('lext-reg-wildcard-row');
+    /* WildCard Round disponible en TODAS las ligas. Antes ocultábamos
+       UCL/Previa/Europa/Conference para los slugs en
+       WILDCARD_LIGA_SLUGS, pero el usuario pidió que todas las
+       opciones (las 7) sean editables en cualquier país, incluso
+       en los menores que ahora también pueden mandar a UCL si el
+       admin lo configura. */
     var wcInp = document.getElementById('lext-reg-wildcard');
-    if(wcRow) wcRow.style.display = isMinor ? '' : 'none';
     if(wcInp) wcInp.value = Number(z.wildcard||0);
-    ['lext-reg-ucl-row','lext-reg-uclprev-row','lext-reg-uel-row','lext-reg-uecl-row']
-      .forEach(function(id){
-        var el = document.getElementById(id);
-        if(el) el.style.display = isMinor ? 'none' : '';
-      });
     lextOpenOv('lext-ov-reglas');
   };
   window.lextSaveReglas = function(){
     if(!CURRENT_KEY) return;
     var data = loadData(CURRENT_KEY);
     var cfg = ensureConfig(data);
-    var isMinor = !!WILDCARD_LIGA_SLUGS[CURRENT_KEY];
     cfg.zones = {
-      ucl:      isMinor ? 0 : Math.max(0, parseInt(document.getElementById('lext-reg-ucl').value,10)||0),
-      uclPrev:  isMinor ? 0 : Math.max(0, parseInt(document.getElementById('lext-reg-ucl-prev').value,10)||0),
+      ucl:      Math.max(0, parseInt(document.getElementById('lext-reg-ucl').value,10)||0),
+      uclPrev:  Math.max(0, parseInt(document.getElementById('lext-reg-ucl-prev').value,10)||0),
       uclQual:  Math.max(0, parseInt(document.getElementById('lext-reg-ucl-qual').value,10)||0),
-      uel:      isMinor ? 0 : Math.max(0, parseInt(document.getElementById('lext-reg-uel').value,10)||0),
-      uecl:     isMinor ? 0 : Math.max(0, parseInt(document.getElementById('lext-reg-uecl').value,10)||0),
+      uel:      Math.max(0, parseInt(document.getElementById('lext-reg-uel').value,10)||0),
+      uecl:     Math.max(0, parseInt(document.getElementById('lext-reg-uecl').value,10)||0),
       wildcard: Math.max(0, parseInt((document.getElementById('lext-reg-wildcard')||{}).value,10)||0),
       desc:     Math.max(0, parseInt(document.getElementById('lext-reg-desc').value,10)||0)
     };
@@ -10651,18 +10644,17 @@ Tottenham
     if(t) t.textContent = CURRENT_NAME;
     if(e) e.textContent = CURRENT_EMOJI;
     /* Leyenda condicional: en ligas pequeñas (las 18 con WildCard)
-       solo mostramos Open + WildCard + Descenso. En el resto ocultamos
-       el chip WildCard. */
+       Mostramos TODOS los chips (UCL/Previa/UEL/UECL/WildCard) en
+       cualquier liga. El usuario configura cupos en cada uno desde
+       el modal Reglas, así que la leyenda debe reflejar todas las
+       zonas posibles independientemente del slug. */
     (function(){
-      var isMinor = !!WILDCARD_LIGA_SLUGS[CURRENT_KEY];
       var legend = document.getElementById('lext-legend');
       if(!legend) return;
-      ['lext-leg-ucl','lext-leg-uclprev','lext-leg-uel','lext-leg-uecl'].forEach(function(cls){
+      ['lext-leg-ucl','lext-leg-uclprev','lext-leg-uel','lext-leg-uecl','lext-leg-wildcard'].forEach(function(cls){
         var el = legend.querySelector('.'+cls);
-        if(el) el.style.display = isMinor ? 'none' : '';
+        if(el) el.style.display = '';
       });
-      var wcLeg = legend.querySelector('.lext-leg-wildcard');
-      if(wcLeg) wcLeg.style.display = isMinor ? '' : 'none';
     })();
     // Renderiza primero desde cache local (respuesta inmediata)
     var cached = loadData(CURRENT_KEY);

@@ -4910,21 +4910,33 @@ window._showSimProgress = function(opts, onDone){
   }
   function computeOpenQualifierTeams(){
     var arr = _computeQualifiedFromLeagues('uclQual');
-    /* El campeón del torneo Wild Card (s-wild-card) entra como UNA
-       plaza extra al Open Qualifier. Lo añadimos solo si la fase
-       Wild Card terminó (champion no-null) y aún no aparece en `arr`
-       por otro slug. */
+    /* Los 18 ganadores del torneo Wild Card (s-wild-card, formato
+       eliminatorias a doble vuelta) entran como plazas extra al
+       Open Qualifier de la MISMA temporada. Los persiste el módulo
+       Wild Card en `wc_to_open_qualifier_v1`. Dedupe por nombre
+       para que ningún equipo ya colocado por otro slug se duplique.
+       Nota legacy: la versión antigua leía un único campeón de
+       `wc_champion_v1`; ese flag ya no se escribe — se mantiene
+       fallback por si algún navegador antiguo lo conserva. */
     try {
-      var raw = localStorage.getItem('wc_champion_v1');
+      var seenN = {};
+      arr.forEach(function(t){ if(t && t.name) seenN[t.name] = true; });
+      var raw = localStorage.getItem('wc_to_open_qualifier_v1');
       if(raw){
-        var champ = JSON.parse(raw);
-        var champName = champ && champ.name;
-        if(champName){
-          var seen = false;
-          for(var i=0;i<arr.length;i++){
-            if(arr[i] && arr[i].name === champName){ seen = true; break; }
-          }
-          if(!seen){
+        var data = JSON.parse(raw);
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        teams.forEach(function(w){
+          if(!w || !w.name || seenN[w.name]) return;
+          seenN[w.name] = true;
+          arr.push({ name: w.name, league: w.league || 'wild-card', logo: w.logo || '' });
+        });
+      } else {
+        /* Fallback al flag legacy del campeón único. */
+        var rawC = localStorage.getItem('wc_champion_v1');
+        if(rawC){
+          var champ = JSON.parse(rawC);
+          var champName = champ && champ.name;
+          if(champName && !seenN[champName]){
             arr.push({ name: champName, league: 'wild-card', logo: '' });
           }
         }

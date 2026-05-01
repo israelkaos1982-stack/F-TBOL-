@@ -4458,6 +4458,14 @@ window._showSimProgress = function(opts, onDone){
      onclick="go('s-torneos-verano')">
   <span class="sc-emoji">🌞</span><span class="sc-label">Torneos de Verano</span><span class="sc-arr">▶</span>
 </div>
+<!-- EA Sports → Europa: inyección manual de equipos en cualquier
+     competición europea. La navegación pasa por window.pG → exige
+     PIN 747 si la sesión admin está bloqueada. -->
+<div class="submenu-card sc-ea-manual"
+     style="background:linear-gradient(135deg,#0a1f0a,#1e4a1e,#2d6b2d,#1e4a1e,#0a1f0a) !important;border-color:#3cc878 !important;"
+     onclick="window.pG&&window.pG(function(){if(window._meaRender)window._meaRender();go('s-ea-manual');})">
+  <span class="sc-emoji">🎮</span><span class="sc-label">EA Sports → Europa <span style="font-size:10px;opacity:.7;">(admin)</span></span><span class="sc-arr">▶</span>
+</div>
 </div>
 </div>
 
@@ -4608,12 +4616,6 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="submenu-card sc-wild-card" style="background:linear-gradient(135deg,#1a0e04,#3a2010,#6a3f1c,#8b5520,#3a2010,#1a0e04) !important;border-color:#8b5520 !important;" onclick="go('s-wild-card')">
 <span class="sc-emoji">🎟️</span><span class="sc-label">Wild Card</span><span class="sc-arr">▶</span>
-</div>
-<!-- Manual EA Sports → Europa: navegación protegida con PIN 747 (pG).
-     Añadir / quitar equipos también pasa por pG en cada acción, así
-     una sesión admin desbloqueada permite operar sin re-pedir PIN. -->
-<div class="submenu-card sc-ea-manual" style="background:linear-gradient(135deg,#0a1f0a,#1e4a1e,#2d6b2d,#1e4a1e,#0a1f0a) !important;border-color:#3cc878 !important;" onclick="window.pG&&window.pG(function(){if(window._meaRender)window._meaRender();go('s-ea-manual');})">
-<span class="sc-emoji">🎮</span><span class="sc-label">EA Sports → Europa <span style="font-size:10px;opacity:.7;">(admin)</span></span><span class="sc-arr">▶</span>
 </div>
 <div class="submenu-card sc-ucl-stats" style="background:linear-gradient(135deg,#051525,#0a2a4a,#1565C0,#0a2a4a,#051525) !important;border-color:#42a5f5 !important;" onclick="go('s-ucl-stats')">
 <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
@@ -5957,6 +5959,16 @@ window._showSimProgress = function(opts, onDone){
 #s-ea-manual .mea-add input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:7px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;}
 #s-ea-manual .mea-add input:focus{border-color:#3cc878;}
 #s-ea-manual .mea-add .add{background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:4px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;cursor:pointer;font-weight:700;}
+/* Dropdown del typeahead — flota sobre el input. Cada sugerencia
+   muestra logo + nombre + tier (Liga EA Sports / Hypermotion / Primera
+   RFEF). Click en una sugerencia rellena el input y la añade. */
+#s-ea-manual .mea-drop{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#0f1a14;border:1px solid #3cc878;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.6);max-height:240px;overflow-y:auto;z-index:50;}
+#s-ea-manual .mea-drop-it{display:flex;align-items:center;gap:8px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;}
+#s-ea-manual .mea-drop-it:hover{background:rgba(60,200,120,.12);}
+#s-ea-manual .mea-drop-it img{width:18px;height:18px;object-fit:contain;}
+#s-ea-manual .mea-drop-it .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#s-ea-manual .mea-drop-it .tier{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.5);text-transform:uppercase;}
+#s-ea-manual .mea-drop-empty{padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.4);font-style:italic;}
 </style>
 <div id="mea-body" style="padding:0 0 24px;"></div>
 </div>
@@ -5975,13 +5987,75 @@ window._showSimProgress = function(opts, onDone){
    ══════════════════════════════════════════════════════════════ */
 (function(){
   var EVENTS = [
-    { slug:'ucl',      label:'🔵 Champions League',     icon:'🔵', accent:'#42a5f5' },
-    { slug:'uclPrev',  label:'🇪🇺 Previa de Champions', icon:'🇪🇺', accent:'#a855f7' },
-    { slug:'uclQual',  label:'🟡 Open Qualifier',       icon:'🟡', accent:'#FDC830' },
-    { slug:'wildcard', label:'🎟️ Wild Card',            icon:'🎟️', accent:'#8b5520' },
-    { slug:'uel',      label:'🟠 Europa League',        icon:'🟠', accent:'#F37335' },
-    { slug:'uecl',     label:'🟢 Conference League',    icon:'🟢', accent:'#3cc878' }
+    { slug:'ucl',           label:'🔵 Champions League',     icon:'🔵', accent:'#42a5f5' },
+    { slug:'uclPrev',       label:'🇪🇺 Previa de Champions', icon:'🇪🇺', accent:'#a855f7' },
+    { slug:'uclQual',       label:'🟡 Open Qualifier',       icon:'🟡', accent:'#FDC830' },
+    { slug:'wildcard',      label:'🎟️ Wild Card',            icon:'🎟️', accent:'#8b5520' },
+    { slug:'uel',           label:'🟠 Europa League',        icon:'🟠', accent:'#F37335' },
+    { slug:'uecl',          label:'🟢 Conference League',    icon:'🟢', accent:'#3cc878' },
+    /* Competiciones añadidas a petición del usuario (2026-04-30).
+       No tienen feed automático todavía: el manual es la única
+       fuente. Si en el futuro existe `compute*Classified` para
+       alguna, basta con leer `manual_ea_<slug>_v1` y prepender. */
+    { slug:'recopa',         label:'🟤 Recopa de Europa',    icon:'🟤', accent:'#a05000' },
+    { slug:'supercopa',      label:'⚪ Supercopa de Europa', icon:'⚪', accent:'#cccccc' },
+    { slug:'intercontinental', label:'🌐 Intercontinental',  icon:'🌐', accent:'#1565C0' },
+    { slug:'superliga',      label:'⭐ Superliga',           icon:'⭐', accent:'#7e22ce' },
+    { slug:'verano',         label:'🌞 Torneos de Verano',   icon:'🌞', accent:'#f0c040' }
   ];
+  /* Catálogo de los 20 equipos de la Liga EA Sports (LaLiga 25/26).
+     Lo usa el typeahead del input. Los logos se sacan automático
+     vía window.getTeamLogoUrl / TEAM_RATINGS. */
+  var LALIGA_TEAMS = [
+    'Real Madrid','FC Barcelona','Atlético Madrid','Athletic Club',
+    'Real Sociedad','Real Betis','Villarreal','Valencia',
+    'Sevilla','Osasuna','Celta Vigo','Girona FC','Mallorca',
+    'Rayo Vallecano','Espanyol','Getafe CF','Deportivo Alavés',
+    'Elche CF','Levante UD','Real Oviedo'
+  ];
+
+  /* Devuelve hasta `limit` matches del query entre los equipos
+     españoles de los 3 tiers (LaLiga + Hypermotion + Primera RFEF).
+     Match: substring case-insensitive, sin acentos. Ordenado:
+       1. Empiezan por el query
+       2. Lo contienen (orden alfabético).
+     Public API → consumido por el typeahead del input. */
+  window._meaSearchSpain = function(query, limit){
+    limit = limit || 8;
+    var q = String(query||'').trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'');
+    if(q.length < 3) return [];
+    var pool = [];
+    /* LaLiga */
+    LALIGA_TEAMS.forEach(function(n){
+      pool.push({ name:n, tier:'Liga EA Sports' });
+    });
+    /* Hypermotion + Primera RFEF (expuestos por misc_body_2.html). */
+    if(Array.isArray(window.SPAIN_LOWER_TIER_TEAMS)){
+      window.SPAIN_LOWER_TIER_TEAMS.forEach(function(t){
+        pool.push({ name:t.name, tier:t.tier });
+      });
+    }
+    /* Filtrado + scoring */
+    function _norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+    var matched = [];
+    var seen = {};
+    pool.forEach(function(t){
+      var nn = _norm(t.name);
+      if(seen[t.name]) return;
+      if(nn.indexOf(q) === -1) return;
+      seen[t.name] = true;
+      matched.push({ name:t.name, tier:t.tier, _starts: nn.indexOf(q) === 0 ? 0 : 1 });
+    });
+    matched.sort(function(a,b){
+      if(a._starts !== b._starts) return a._starts - b._starts;
+      return a.name.localeCompare(b.name,'es');
+    });
+    return matched.slice(0, limit).map(function(m){
+      return { name:m.name, tier:m.tier, logo:_logoFor(m.name) };
+    });
+  };
+
   function _key(slug){ return 'manual_ea_'+slug+'_v1'; }
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _logoFor(name){
@@ -6039,6 +6113,7 @@ window._showSimProgress = function(opts, onDone){
         }).join('');
       }
       var inputId = 'mea-input-'+ev.slug;
+      var dropId  = 'mea-drop-'+ev.slug;
       html += '<div class="mea-sec" style="border-color:'+ev.accent+'55;">'
         +    '<div class="mea-hdr" style="background:linear-gradient(90deg,rgba(0,0,0,.6),'+ev.accent+'33,rgba(0,0,0,.6));">'
         +      _esc(ev.label)
@@ -6046,7 +6121,11 @@ window._showSimProgress = function(opts, onDone){
         +    '</div>'
         +    '<div class="mea-list">'+rows+'</div>'
         +    '<div class="mea-add">'
-        +      '<input id="'+inputId+'" type="text" placeholder="Nombre del equipo (Liga EA Sports)…" autocomplete="off">'
+        +      '<div style="position:relative;flex:1;">'
+        +        '<input id="'+inputId+'" type="text" placeholder="Escribe 3+ letras (ej. \'Villa\')…" autocomplete="off"'
+        +              ' data-mea-search="1" data-slug="'+_esc(ev.slug)+'" data-drop="'+dropId+'">'
+        +        '<div id="'+dropId+'" class="mea-drop" style="display:none;"></div>'
+        +      '</div>'
         +      '<button class="add" data-mea-act="add" data-slug="'+_esc(ev.slug)+'" data-input="'+inputId+'">➕ Añadir</button>'
         +    '</div>'
         +    '</div>';
@@ -6056,19 +6135,76 @@ window._showSimProgress = function(opts, onDone){
   window._meaRender = render;
 
   /* Event delegation para botones add/rm — un solo listener en
-     `mea-body` cubre todos los botones. */
+     document cubre todos los botones de todas las secciones. */
   document.addEventListener('click', function(ev){
     var btn = ev.target && ev.target.closest && ev.target.closest('[data-mea-act]');
-    if(!btn) return;
-    var act = btn.getAttribute('data-mea-act');
-    var slug = btn.getAttribute('data-slug');
-    if(act === 'rm'){
-      var name = btn.getAttribute('data-name');
-      if(slug && name) window._meaRm(slug, name);
-    } else if(act === 'add'){
-      var inputId = btn.getAttribute('data-input');
-      if(slug && inputId) window._meaAddFromInput(slug, inputId);
+    if(!btn){
+      /* Si se pulsa fuera de un dropdown abierto, lo cerramos. */
+      var openDrops = document.querySelectorAll('#s-ea-manual .mea-drop');
+      openDrops.forEach(function(d){
+        if(d.style.display !== 'none' && !d.contains(ev.target)){
+          var inp = document.getElementById(d.id.replace('mea-drop-', 'mea-input-'));
+          if(inp && ev.target !== inp) d.style.display = 'none';
+        }
+      });
+      /* Click en una sugerencia → rellena input + añade. */
+      var sug = ev.target && ev.target.closest && ev.target.closest('[data-mea-sug]');
+      if(sug){
+        var slug = sug.getAttribute('data-slug');
+        var name = sug.getAttribute('data-name');
+        if(slug && name){
+          window._meaAdd(slug, name);
+          var inputId = 'mea-input-'+slug;
+          var dropId  = 'mea-drop-'+slug;
+          var inp2 = document.getElementById(inputId);
+          var drop = document.getElementById(dropId);
+          if(inp2) inp2.value = '';
+          if(drop) drop.style.display = 'none';
+        }
+      }
+      return;
     }
+    var act = btn.getAttribute('data-mea-act');
+    var slug2 = btn.getAttribute('data-slug');
+    if(act === 'rm'){
+      var nm = btn.getAttribute('data-name');
+      if(slug2 && nm) window._meaRm(slug2, nm);
+    } else if(act === 'add'){
+      var inputId2 = btn.getAttribute('data-input');
+      if(slug2 && inputId2) window._meaAddFromInput(slug2, inputId2);
+    }
+  });
+
+  /* Typeahead: escucha keyup en cualquier input con
+     data-mea-search="1" y rellena su dropdown con coincidencias de
+     window._meaSearchSpain(query). */
+  document.addEventListener('input', function(ev){
+    var inp = ev.target;
+    if(!inp || !inp.matches || !inp.matches('input[data-mea-search="1"]')) return;
+    var slug = inp.getAttribute('data-slug');
+    var dropId = inp.getAttribute('data-drop');
+    var drop = document.getElementById(dropId);
+    if(!drop) return;
+    var q = inp.value || '';
+    if(q.trim().length < 3){
+      drop.style.display = 'none';
+      drop.innerHTML = '';
+      return;
+    }
+    var matches = window._meaSearchSpain(q, 8) || [];
+    if(!matches.length){
+      drop.innerHTML = '<div class="mea-drop-empty">Sin coincidencias en LaLiga / Hypermotion / Primera RFEF.</div>';
+    } else {
+      drop.innerHTML = matches.map(function(m){
+        var img = m.logo ? '<img src="'+_esc(m.logo)+'" alt="" onerror="this.style.display=\'none\'">' : '';
+        return '<div class="mea-drop-it" data-mea-sug="1" data-slug="'+_esc(slug)+'" data-name="'+_esc(m.name)+'">'
+          +    img
+          +    '<span class="nm">'+_esc(m.name)+'</span>'
+          +    '<span class="tier">'+_esc(m.tier)+'</span>'
+          +    '</div>';
+      }).join('');
+    }
+    drop.style.display = 'block';
   });
 
   /* Mutaciones — todas envueltas en pG para exigir PIN si la sesión

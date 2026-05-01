@@ -4906,15 +4906,30 @@ window._showSimProgress = function(opts, onDone){
         var rN = data.results.length;
         var needed = N*(N-1);
         if(N < 2){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'menos de 2 equipos'}); return; }
+        /* Auto-cupo Wild Card: para los 40 slugs de WILDCARD_LIGA_SLUGS
+           tratamos `zones.wildcard` como ≥1 implícito y aceptamos
+           standings parciales (rN > 0) — el usuario configura la lista
+           de 40 ligas, no debería tener que tocar zones.wildcard ni
+           esperar a que TODAS estén 100% simuladas para que el pool
+           se complete (antes quedaba a 9/40). */
+        var isWcAuto = (zoneKey === 'wildcard')
+                    && window.WILDCARD_LIGA_SLUGS
+                    && window.WILDCARD_LIGA_SLUGS[slug];
         if(rN < needed){
-          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'incompleta', note:'faltan partidos'});
-          return;
+          if(!isWcAuto || rN === 0){
+            diag.push({slug:slug, n:N, results:rN, needed:needed, status:'incompleta', note:'faltan partidos'});
+            return;
+          }
+          /* Continuamos con standings parciales — anotamos como info. */
         }
         var zones = (data.config && data.config.zones) || {};
         var slots = Number(zones[zoneKey] || 0);
         if(!(slots > 0)){
-          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'sin-plazas', note:'zones.'+zoneKey+'='+slots});
-          return;
+          if(!isWcAuto){
+            diag.push({slug:slug, n:N, results:rN, needed:needed, status:'sin-plazas', note:'zones.'+zoneKey+'='+slots});
+            return;
+          }
+          slots = 1; /* auto-cupo: 1 plaza ⚪ implícita en las 40 ligas */
         }
         var hash = teams.map(function(t){ return _normName(_teamName(t)); })
                         .filter(Boolean).sort().join('|');
@@ -4961,7 +4976,10 @@ window._showSimProgress = function(opts, onDone){
           });
           added++;
         }
-        diag.push({slug:slug, n:N, results:rN, needed:needed, status:'ok', note:'+'+added+' equipos'});
+        var okNote = '+'+added+' equipos';
+        if(isWcAuto && rN < needed) okNote += ' · standings parcial ('+rN+'/'+needed+')';
+        if(isWcAuto && !(Number((data.config&&data.config.zones&&data.config.zones[zoneKey])||0) > 0)) okNote += ' · auto-cupo ⚪';
+        diag.push({slug:slug, n:N, results:rN, needed:needed, status:'ok', note:okNote});
       });
     } catch(e){ diag.push({slug:'?', status:'error', note:String(e&&e.message||e)}); }
     /* Dedupe global — si por lo que sea el mismo club entra desde
@@ -11492,13 +11510,17 @@ Tottenham
   };
 
   /* Slugs de ligas con acceso al cupo "WildCard Round" en su modal
-     de Reglas. Lista ampliada a 38 países: las 19 menores históricas
-     + 19 ligas medias añadidas a petición del usuario (Rep. Checa,
-     Austria, Noruega, Grecia, Israel, Ucrania, Polonia, Serbia,
-     Croacia, Suecia, Chipre, Irlanda, Kazajistán, Bosnia, Azerbaiyán,
-     Bulgaria, Gales, Eslovaquia, Eslovenia).
+     de Reglas. Lista de 40 países: las 19 menores históricas + 21
+     ligas medias (Rep. Checa, Austria, Noruega, Grecia, Israel,
+     Ucrania, Polonia, Serbia, Croacia, Rusia, Rumanía, Suecia, Chipre,
+     Irlanda, Kazajistán, Bosnia, Azerbaiyán, Bulgaria, Gales,
+     Eslovaquia, Eslovenia).
      El motor de Wild Card recoge la zona ⚪ de TODAS y, si suman
-     más de 18, recorta por poder; si suman menos, rellena con TBD.
+     más de 40, recorta por poder; si suman menos, rellena con TBD.
+     `_computeQualifiedFromLeagues('wildcard')` trata estos 40 slugs
+     como si tuvieran `zones.wildcard=1` automáticamente (auto-cupo)
+     y acepta standings parciales cuando ya hay resultados, evitando
+     que el pool quede a 9/40 cuando faltan jornadas en alguna liga.
      Mantener este listado sincronizado con las menu-cards de
      s-ligas. */
   var WILDCARD_LIGA_SLUGS = {
@@ -11509,12 +11531,13 @@ Tottenham
     'islandia':1, 'armenia':1, 'bielorrsa':1, 'is-feroe':1,
     'georgia':1, 'luxembgo':1, 'moldavia':1, 'n-maced':1,
     'malta':1, 'kosovo':1,
-    /* 19 medias añadidas */
+    /* 21 medias añadidas */
     'rep-checa':1, 'austria':1, 'noruega':1, 'grecia':1,
     'israel':1, 'ucrania':1, 'polonia':1, 'serbia':1,
-    'croacia':1, 'suecia':1, 'chipre':1, 'irlanda':1,
-    'kazajst':1, 'bosnia':1, 'azerbayan':1, 'bulgaria':1,
-    'gales':1, 'eslovaquia':1, 'eslovenia':1
+    'croacia':1, 'rusia':1, 'rumania':1, 'suecia':1,
+    'chipre':1, 'irlanda':1, 'kazajst':1, 'bosnia':1,
+    'azerbayan':1, 'bulgaria':1, 'gales':1, 'eslovaquia':1,
+    'eslovenia':1
   };
   window.WILDCARD_LIGA_SLUGS = WILDCARD_LIGA_SLUGS;
 

@@ -5266,9 +5266,13 @@ window._showSimProgress = function(opts, onDone){
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🇪🇺</span><h2>UCL · Previa de Champions</h2></div>
 
-<!-- Sim / Reset (PIN 747) -->
+<!-- Sim contextual / Reset (PIN 747).
+     El label del botón Sim cambia según la fase (sortear cruces /
+     simular ida / simular vuelta / completado). Se actualiza en cada
+     render llamando a window._wprevNextLabel(). El id permite que el
+     bloque JS de la Previa lo localice y refresque el texto. -->
 <div style="display:flex;gap:10px;justify-content:center;padding:8px 6px 4px;">
-  <button onclick="pG(function(){window.simulateUclPrev&&window.simulateUclPrev()})"
+  <button id="wprev-btn-sim" onclick="pG(function(){window.simulateUclPrev&&window.simulateUclPrev()})"
           style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid rgba(80,200,120,.5);border-radius:8px;padding:9px 18px;color:#7fe09a;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     🎮 Sim
   </button>

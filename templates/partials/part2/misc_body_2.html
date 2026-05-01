@@ -17740,9 +17740,13 @@ document.addEventListener('DOMContentLoaded', function() {
     /* Resumen agrupado por motivo — más útil que listar 50 líneas. */
     if(d.skipped.length){
       var byStatus = {};
+      var dupPairs = [];
       d.skipped.forEach(function(s){
         var st = s.status || 'desconocido';
         byStatus[st] = (byStatus[st] || 0) + 1;
+        if(st === 'duplicada' && s.dupOf){
+          dupPairs.push(s.slug + ' ↔ ' + s.dupOf);
+        }
       });
       lines.push('');
       lines.push('📊 RESUMEN SALTADAS (' + d.skipped.length + '):');
@@ -17752,7 +17756,15 @@ document.addEventListener('DOMContentLoaded', function() {
         else if(st === 'sin-plazas') label = 'sin-plazas (zones.wildcard=0)';
         else if(st === 'duplicada') label = 'duplicadas (mismo plantilla)';
         else if(st === 'skip') label = 'skip (sin equipos / inválidas)';
-        lines.push('  · ' + byStatus[st] + ' ' + label);
+        lines.push('  · ' + byStatus[st] + ' ' + label + (st==='duplicada' && dupPairs.length ? ':' : ''));
+        /* Para duplicadas, listar las parejas DIRECTAMENTE en el
+           resumen — así el usuario las ve sin necesidad de scrollear
+           hasta el detalle al final del alert. */
+        if(st === 'duplicada'){
+          dupPairs.forEach(function(pair){
+            lines.push('       ' + pair);
+          });
+        }
       });
       /* Recomendaciones contextuales según los motivos predominantes. */
       lines.push('');

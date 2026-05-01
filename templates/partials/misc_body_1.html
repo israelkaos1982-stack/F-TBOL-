@@ -5946,8 +5946,14 @@ window._showSimProgress = function(opts, onDone){
   Los equipos añadidos se incorporan al pool de cada torneo en la <b>misma temporada</b>.
 </div>
 <style>
-#s-ea-manual .mea-sec{margin:14px 8px 0;border:1px solid rgba(60,200,120,.35);border-radius:10px;background:linear-gradient(180deg,rgba(60,200,120,.05),rgba(0,0,0,0));overflow:hidden;}
-#s-ea-manual .mea-hdr{padding:10px 14px;background:linear-gradient(90deg,#0a1f0a,#1e4a1e,#3cc878,#1e4a1e,#0a1f0a);font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2px;color:#fff;display:flex;align-items:center;gap:8px;text-shadow:0 1px 2px rgba(0,0,0,.6);}
+#s-ea-manual .mea-sec{margin:14px 8px 0;border:1px solid rgba(60,200,120,.35);border-radius:10px;background:linear-gradient(180deg,rgba(60,200,120,.05),rgba(0,0,0,0));position:relative;}
+/* Cuando el usuario está escribiendo en un input dentro de la
+   sección, ésta sube de capa para que su dropdown se pinte sobre
+   las demás secciones (siblings posteriores) — sin esto el dropdown
+   queda tapado por la siguiente sección porque comparten el mismo
+   stacking context. */
+#s-ea-manual .mea-sec:focus-within{z-index:60;}
+#s-ea-manual .mea-hdr{padding:10px 14px;background:linear-gradient(90deg,#0a1f0a,#1e4a1e,#3cc878,#1e4a1e,#0a1f0a);border-radius:10px 10px 0 0;font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2px;color:#fff;display:flex;align-items:center;gap:8px;text-shadow:0 1px 2px rgba(0,0,0,.6);}
 #s-ea-manual .mea-hdr .mea-count{margin-left:auto;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#fff;font-weight:700;}
 #s-ea-manual .mea-list{padding:6px 10px;}
 #s-ea-manual .mea-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
@@ -5955,14 +5961,14 @@ window._showSimProgress = function(opts, onDone){
 #s-ea-manual .mea-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #s-ea-manual .mea-item .rm{background:rgba(255,80,80,.10);border:1px solid rgba(255,80,80,.5);color:#ff8080;border-radius:4px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;}
 #s-ea-manual .mea-empty{padding:8px 14px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.4);font-style:italic;}
-#s-ea-manual .mea-add{display:flex;gap:6px;padding:8px 10px;background:rgba(0,0,0,.25);border-top:1px solid rgba(255,255,255,.06);}
+#s-ea-manual .mea-add{display:flex;gap:6px;padding:8px 10px;background:rgba(0,0,0,.25);border-top:1px solid rgba(255,255,255,.06);border-radius:0 0 10px 10px;}
 #s-ea-manual .mea-add input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:7px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;}
 #s-ea-manual .mea-add input:focus{border-color:#3cc878;}
 #s-ea-manual .mea-add .add{background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:4px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;cursor:pointer;font-weight:700;}
 /* Dropdown del typeahead — flota sobre el input. Cada sugerencia
    muestra logo + nombre + tier (Liga EA Sports / Hypermotion / Primera
    RFEF). Click en una sugerencia rellena el input y la añade. */
-#s-ea-manual .mea-drop{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#0f1a14;border:1px solid #3cc878;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.6);max-height:240px;overflow-y:auto;z-index:50;}
+#s-ea-manual .mea-drop{position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#0f1a14;border:1px solid #3cc878;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,.6);max-height:240px;overflow-y:auto;z-index:9999;}
 #s-ea-manual .mea-drop-it{display:flex;align-items:center;gap:8px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;}
 #s-ea-manual .mea-drop-it:hover{background:rgba(60,200,120,.12);}
 #s-ea-manual .mea-drop-it img{width:18px;height:18px;object-fit:contain;}

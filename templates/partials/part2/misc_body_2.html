@@ -17763,12 +17763,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  /* Resuelve UNA eliminatoria de Ronda 1.
+  /* Resuelve UNA eliminatoria de Ronda 1 EN DOS FASES (separadas para
+     que el usuario pueda darle a "Simular IDA" y "Simular VUELTA"
+     por separado).
        teamH (CABEZA)    — local en la VUELTA
        teamA (NO CABEZA) — local en la IDA
      Storage en el objeto tie:
        idaGh / idaGa            — goles ida (NO-cabeza local)
                                   idaGh = teamA, idaGa = teamH
+       idaPlayed                — true tras playR1TieIda
        vueltaGh / vueltaGa      — goles vuelta (CABEZA local)
                                   vueltaGh = teamH, vueltaGa = teamA
        aggH / aggA              — goles totales del CABEZA / NO-CABEZA
@@ -17776,44 +17779,49 @@ document.addEventListener('DOMContentLoaded', function() {
        etDecided                — true si hubo prórroga
        penDecided               — true si hubo penaltis
        penGh / penGa            — penaltis convertidos por H / A
+       played                   — true tras playR1TieVuelta (winner final)
        winner                   — referencia al teamH o teamA ganador
      Empate en agg → primero gol de visitante, luego prórroga, luego
      penaltis. */
-  function playR1Tie(tie){
+  function playR1TieIda(tie){
+    if(tie.idaPlayed) return;
     var nameH = tie.teamH.name, nameA = tie.teamA.name;
-    /* IDA — teamA local */
-    var ida = simMatch(nameA, nameH);
-    tie.idaGh = ida.gh;   /* goles teamA (NO-cabeza local en ida) */
-    tie.idaGa = ida.ga;   /* goles teamH (CABEZA visitante en ida) */
+    var ida = simMatch(nameA, nameH);   /* teamA local */
+    tie.idaGh = ida.gh;                 /* goles teamA (NO-cabeza local) */
+    tie.idaGa = ida.ga;                 /* goles teamH (CABEZA visitante) */
+    tie.idaPlayed = true;
+  }
+
+  function playR1TieVuelta(tie){
+    if(tie.played) return;
+    if(!tie.idaPlayed) playR1TieIda(tie);
+    var nameH = tie.teamH.name, nameA = tie.teamA.name;
     /* VUELTA — teamH local */
     var vu = simMatch(nameH, nameA);
-    tie.vueltaGh = vu.gh; /* goles teamH (CABEZA local en vuelta) */
-    tie.vueltaGa = vu.ga; /* goles teamA (NO-cabeza visitante en vuelta) */
-    /* Agregado: goles totales por equipo */
+    tie.vueltaGh = vu.gh;
+    tie.vueltaGa = vu.ga;
+    /* Agregado tras 90+90 */
     var aggH = tie.idaGa + tie.vueltaGh;   /* CABEZA: ida (visitante) + vuelta (local) */
     var aggA = tie.idaGh + tie.vueltaGa;   /* NO-CABEZA: ida (local) + vuelta (visitante) */
     tie.aggH = aggH; tie.aggA = aggA;
-    if(aggH > aggA){ tie.winner = tie.teamH; return; }
-    if(aggA > aggH){ tie.winner = tie.teamA; return; }
+    if(aggH > aggA){ tie.winner = tie.teamH; tie.played = true; return; }
+    if(aggA > aggH){ tie.winner = tie.teamA; tie.played = true; return; }
     /* Empate global → REGLA DEL GOL DE VISITANTE.
          awayH = goles del CABEZA fuera (en ida) = idaGa
-         awayA = goles del NO-CABEZA fuera (en vuelta) = vueltaGa
-       El que más metió FUERA gana. */
+         awayA = goles del NO-CABEZA fuera (en vuelta) = vueltaGa */
     var awayH = tie.idaGa, awayA = tie.vueltaGa;
-    if(awayH > awayA){ tie.awayDecided = true; tie.winner = tie.teamH; return; }
-    if(awayA > awayH){ tie.awayDecided = true; tie.winner = tie.teamA; return; }
-    /* Sigue empate → PRÓRROGA en la vuelta (campo del CABEZA).
-       30 min ≈ ⅓ de partido → goles/2 floor. */
+    if(awayH > awayA){ tie.awayDecided = true; tie.winner = tie.teamH; tie.played = true; return; }
+    if(awayA > awayH){ tie.awayDecided = true; tie.winner = tie.teamA; tie.played = true; return; }
+    /* Sigue empate → PRÓRROGA en la vuelta (campo del CABEZA). */
     var et = simMatch(nameH, nameA);
-    var etGh = Math.min(2, Math.floor((et.gh||0)/2));   /* goles teamH (local prórroga) */
-    var etGa = Math.min(2, Math.floor((et.ga||0)/2));   /* goles teamA */
+    var etGh = Math.min(2, Math.floor((et.gh||0)/2));
+    var etGa = Math.min(2, Math.floor((et.ga||0)/2));
     tie.etGh = etGh; tie.etGa = etGa;
     tie.etDecided = true;
-    aggH += etGh;
-    aggA += etGa;
+    aggH += etGh; aggA += etGa;
     tie.aggH = aggH; tie.aggA = aggA;
-    if(aggH > aggA){ tie.winner = tie.teamH; return; }
-    if(aggA > aggH){ tie.winner = tie.teamA; return; }
+    if(aggH > aggA){ tie.winner = tie.teamH; tie.played = true; return; }
+    if(aggA > aggH){ tie.winner = tie.teamA; tie.played = true; return; }
     /* PENALTIS — sesgo ±10 % por diferencia de power. */
     var pH = _powerOf(nameH), pA = _powerOf(nameA);
     var probH = 0.5 + Math.max(-0.10, Math.min(0.10, (pH - pA) / 200));
@@ -17825,6 +17833,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if(winH){ tie.penGh = winScore; tie.penGa = loseScore; tie.winner = tie.teamH; }
     else    { tie.penGh = loseScore; tie.penGa = winScore; tie.winner = tie.teamA; }
     tie.penDecided = true;
+    tie.played = true;
   }
 
   /* Reparte 33 equipos (30 ganadores R1 + 3 byes) en 11 grupos de 3.
@@ -17909,6 +17918,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return {
         idx: p.idx,
         teamH: p.teamH, teamA: p.teamA,
+        idaPlayed: false,
         played: false, winner: null,
         idaGh:null, idaGa:null,
         vueltaGh:null, vueltaGa:null,
@@ -17921,13 +17931,22 @@ document.addEventListener('DOMContentLoaded', function() {
     return {
       pool: pool,
       byes: split.byes,
-      ties: ties,                /* 30 cruces R1 */
+      ties: ties,                /* 30 cruces R1 ya formados, sin partidos */
       r1Losers: [],
-      groups: [],                /* se llena tras R1 */
+      groups: [],                /* se llena tras R1 vuelta */
       tables: [],
       sortedTables: [],
       jornadasByGroup: [],
-      phase: 'pending',          /* 'pending' | 'done' */
+      /* Fases:
+           'paired'      → solo cruces formados, ningún partido jugado
+           'ida-played'  → idas jugadas, vueltas pendientes
+           'done'        → vueltas + Ronda Final completas (winners persistidos)
+         Esto separa los 3 botones del usuario:
+           1. "Sortear cruces"  → crea state, phase='paired'
+           2. "Simular IDA"     → simulateIda(s),    phase='ida-played'
+           3. "Simular VUELTA"  → simulateVuelta(s), phase='done'
+                                  (también ejecuta Ronda Final + persiste) */
+      phase: 'paired',
       ts: Date.now()
     };
   }
@@ -17957,17 +17976,22 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch(_){}
   }
 
-  /* Una sola llamada simula TODO el torneo:
-       1. Juega las 30 eliminatorias R1.
-       2. Combina 30 ganadores + 3 byes → seedRoundFinal → 11 grupos × 3.
-       3. Genera jornadas + simula liguilla ida + vuelta de cada grupo.
-       4. Persiste las 3 claves de promoción a Champions / Europa /
-          Conference. */
-  function simAll(state){
-    /* === RONDA 1 === */
+  /* PASO 2 — Simular las 30 IDAS (30 partidos en estadios de los
+     no-cabezas). NO determina ganadores aún; eso pasa tras la vuelta. */
+  function simulateIda(state){
+    state.ties.forEach(function(tie){ playR1TieIda(tie); });
+    state.phase = 'ida-played';
+    state.ts = Date.now();
+  }
+
+  /* PASO 3 — Simular las 30 VUELTAS + tiebreakers (gol visitante /
+     prórroga / penaltis). Determina los 30 ganadores y 30 perdedores,
+     siembra la Ronda Final, simula los 11 grupos y persiste los flags
+     a Champions, Europa y Conference. */
+  function simulateVuelta(state){
     state.r1Losers = [];
     state.ties.forEach(function(tie){
-      if(!tie.played) playR1Tie(tie);
+      playR1TieVuelta(tie);
       var loserTeam = (tie.winner === tie.teamH) ? tie.teamA : tie.teamH;
       if(loserTeam) state.r1Losers.push(loserTeam);
     });
@@ -18069,21 +18093,33 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function _renderR1Tie(tie){
+    var idaPlayed = !!tie.idaPlayed;
     var played = !!tie.played;
     var nameH = tie.teamH.name, nameA = tie.teamA.name;
     /* Layout: IDA (NO-cabeza local) → VUELTA (CABEZA local) → GLOBAL.
-       teamH = CABEZA, teamA = NO CABEZA. */
+       teamH = CABEZA, teamA = NO CABEZA. Estados:
+         idaPlayed && !played → solo se muestra IDA con score y un
+                                aviso "VUELTA pendiente"
+         played               → todo el bloque
+         ninguno              → solo "vs" (cruce sin partidos). */
     var winnerH = played && tie.winner === tie.teamH;
     var winnerA = played && tie.winner === tie.teamA;
+    var idaScore = idaPlayed ? (tie.idaGh+'-'+tie.idaGa) : 'vs';
     var html = '<div class="wprev-dr-tie">'
       + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:3px;">'
       +   'IDA · estadio del NO-cabeza'
       + '</div>'
       + '<div class="wprev-dr-leg">'
       +   '<span class="h">'+_badge(nameA, tie.teamA.logo)+_esc(nameA)+'</span>'
-      +   '<span class="sc">'+(played?(tie.idaGh+'-'+tie.idaGa):'vs')+'</span>'
+      +   '<span class="sc">'+idaScore+'</span>'
       +   '<span class="a">'+_esc(nameH)+_badge(nameH, tie.teamH.logo)+'</span>'
       + '</div>';
+    if(idaPlayed && !played){
+      /* IDA jugada, VUELTA pendiente — mostramos un aviso. */
+      html += '<div style="margin-top:8px;text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);">'
+        +    'VUELTA pendiente · pulsa Simular VUELTA'
+        +    '</div>';
+    }
     if(played){
       var vGh = tie.vueltaGh + (tie.etDecided ? (tie.etGh||0) : 0);
       var vGa = tie.vueltaGa + (tie.etDecided ? (tie.etGa||0) : 0);
@@ -18145,18 +18181,37 @@ document.addEventListener('DOMContentLoaded', function() {
       });
       byesHtml += '</div>';
     }
+    var phaseLabel = '';
+    if(s.phase === 'paired')          phaseLabel = '⏳ CRUCES SORTEADOS · PENDIENTE SIMULAR IDA';
+    else if(s.phase === 'ida-played') phaseLabel = '⏳ IDAS JUGADAS · PENDIENTE SIMULAR VUELTA';
+    else if(s.phase === 'done')       phaseLabel = '✓ RONDA 1 COMPLETA';
     var html = '<div class="wprev-dr">'
       + '<div class="wprev-dr-hdr">⚔️ RONDA 1 · 30 ELIMINATORIAS + 3 EXENTOS</div>'
       + '<div class="wprev-dr-sub">CABEZA vs NO-CABEZA · IDA + VUELTA · GANADOR → RONDA FINAL · PERDEDOR → CONFERENCE</div>'
+      + (phaseLabel ? '<div style="text-align:center;padding:6px 14px 0;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:#a855f7;font-weight:700;">'+phaseLabel+'</div>' : '')
       + byesHtml;
     s.ties.forEach(function(t){ html += _renderR1Tie(t); });
     html += '</div>';
     host.innerHTML = html;
   }
 
+  /* Refresca el label y disabled del botón Sim según la fase actual.
+     Llamado al inicio de buildUclPrevClas, así el botón queda
+     sincronizado con el state después de cada acción. */
+  function _refreshSimBtn(){
+    var btn = document.getElementById('wprev-btn-sim');
+    if(!btn) return;
+    btn.textContent = window._wprevNextLabel();
+    var disabled = window._wprevSimDisabled();
+    btn.disabled = disabled;
+    btn.style.opacity = disabled ? '0.45' : '1';
+    btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+  }
+
   function buildUclPrevClas(){
     var host = document.getElementById('wprev-groups-container');
     if(!host) return;
+    _refreshSimBtn();
     var s = loadState();
     if(!s){
       var raw = buildPool();
@@ -18196,18 +18251,50 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   window.buildUclPrevClas = buildUclPrevClas;
 
+  /* Botón contextual: cada pulsación avanza UNA fase.
+       - sin estado     → sortear cruces (init), phase='paired'
+       - phase='paired' → simular IDA,           phase='ida-played'
+       - phase='ida-played' → simular VUELTA + Ronda Final, phase='done'
+       - phase='done'   → no-op (botón deshabilitado por la UI). */
   window.simulateUclPrev = function(){
     var raw = buildPool();
-    if(!raw.length){
-      alert('No hay equipos clasificados aún. Configura cupos 🇪🇺 Previa Champions en las ligas y simula primero el Open Qualifier.');
+    var s = loadState();
+    if(!s){
+      if(!raw.length){
+        alert('No hay equipos clasificados aún. Configura cupos 🇪🇺 Previa Champions en las ligas y simula primero el Open Qualifier.');
+        return;
+      }
+      s = initState();
+      if(!s) return;
+      saveState(s);
+      buildUclPrevClas();
       return;
     }
-    var s = loadState();
-    if(!s){ s = initState(); if(!s) return; }
-    if(s.phase === 'done'){ buildUclPrevClas(); return; }
-    simAll(s);
-    saveState(s);
+    if(s.phase === 'paired'){
+      simulateIda(s);
+      saveState(s);
+      buildUclPrevClas();
+      return;
+    }
+    if(s.phase === 'ida-played'){
+      simulateVuelta(s);
+      saveState(s);
+      buildUclPrevClas();
+      return;
+    }
+    /* phase === 'done' → solo refrescar render. */
     buildUclPrevClas();
+  };
+  window._wprevNextLabel = function(){
+    var s = loadState();
+    if(!s)                       return '🎮 Sortear cruces';
+    if(s.phase === 'paired')     return '🎮 Simular IDA';
+    if(s.phase === 'ida-played') return '🎮 Simular VUELTA';
+    return '✓ Completado';
+  };
+  window._wprevSimDisabled = function(){
+    var s = loadState();
+    return !!(s && s.phase === 'done');
   };
   window.resetUclPrev = function(){
     if(!confirm('¿Reiniciar la Previa de Champions? Se perderán todos los partidos jugados.')) return;
@@ -18239,17 +18326,46 @@ document.addEventListener('DOMContentLoaded', function() {
     if(typeof orig !== 'function') return;
     window.simulateUclPrev = function(){
       if(typeof window.ftbolLoaderRun !== 'function') return orig();
+      /* Overlay contextual: labels y phases dependen de la fase actual.
+         Sortear cruces → ida → vuelta+RF. Cada acción tiene su propio
+         título y su set de phases para que el overlay muestre algo
+         coherente. */
+      var s = (function(){
+        try { return JSON.parse(localStorage.getItem('wprev_state_v1')||'null'); }
+        catch(_){ return null; }
+      })();
+      var title, phases, minMs = 1100;
+      if(!s){
+        title = 'PREVIA · SORTEO DE CRUCES';
+        phases = [
+          { pct:30, sub:'Cargando plantillas…',           ms:120 },
+          { pct:60, sub:'Sembrando cabezas y no-cabezas…',ms:160 },
+          { pct:90, sub:'Aplicando restricciones de país…',ms:140 }
+        ];
+      } else if(s.phase === 'paired'){
+        title = 'PREVIA · RONDA 1 · IDAS';
+        phases = [
+          { pct:34, sub:'Cargando estadios de los no-cabezas…', ms:140 },
+          { pct:74, sub:'Simulando 30 idas…',                  ms:240 }
+        ];
+        minMs = 1300;
+      } else if(s.phase === 'ida-played'){
+        title = 'PREVIA · RONDA 1 · VUELTAS + RONDA FINAL';
+        phases = [
+          { pct:24, sub:'Simulando 30 vueltas + tiebreakers…', ms:230 },
+          { pct:54, sub:'Reparto a 11 grupos…',                ms:170 },
+          { pct:90, sub:'Liguilla Ronda Final…',               ms:230 }
+        ];
+        minMs = 1700;
+      } else {
+        title = 'PREVIA DE CHAMPIONS';
+        phases = [{ pct:90, sub:'Refrescando…', ms:80 }];
+        minMs = 200;
+      }
       return window.ftbolLoaderRun(
-        { title:'PREVIA DE CHAMPIONS · RONDA 1 + RONDA FINAL', sub:'Preparando…', minMs:1600 },
+        { title: title, sub:'Preparando…', minMs: minMs },
         function(ctx){
           return new Promise(function(resolve){
-            var phases = [
-              { pct:14, sub:'Cargando plantillas…',           ms:140 },
-              { pct:32, sub:'Sembrando cabezas y no-cabezas…',ms:170 },
-              { pct:54, sub:'Ronda 1 · idas + vueltas…',      ms:230 },
-              { pct:74, sub:'Reparto a 11 grupos…',           ms:160 },
-              { pct:90, sub:'Liguilla Ronda Final…',          ms:220 }
-            ];
             var i = 0;
             function next(){
               if(i >= phases.length){

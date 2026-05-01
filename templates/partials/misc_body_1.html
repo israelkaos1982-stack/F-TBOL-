@@ -2233,6 +2233,8 @@ window._showSimProgress = function(opts, onDone){
             var _K = localStorage.key(_lk);
             if (!_K || _K.indexOf('ligaExt_') !== 0) continue;
             if (_K.indexOf('_backup') !== -1) continue;
+            if (_K.indexOf('_snap_') !== -1) continue;
+            if (_K.indexOf('_protected') !== -1) continue;
             if (_K === 'ligaExt_'+slug) continue;
             var _raw2; try { _raw2 = localStorage.getItem(_K); } catch(_){ continue; }
             if (!_raw2) continue;
@@ -2977,8 +2979,8 @@ window._showSimProgress = function(opts, onDone){
           restoredLigas++;
           restoredTeams += d.teams.length;
           d.teams.forEach(function(t){ if (t && Array.isArray(t.players)) restoredPlayers += t.players.length; });
-          /* Re-subir al server — solo el main (sin sufijos _snap_ o _backup) */
-          if (lk.indexOf('_snap_') === -1 && lk.indexOf('_backup') === -1) {
+          /* Re-subir al server — solo el main (sin sufijos _snap_, _backup ni _protected). */
+          if (lk.indexOf('_snap_') === -1 && lk.indexOf('_backup') === -1 && lk.indexOf('_protected') === -1) {
             var slugK = lk.replace(/^ligaExt_/,'');
             try {
               fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
@@ -3142,7 +3144,7 @@ window._showSimProgress = function(opts, onDone){
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
         if (!k || k.indexOf('ligaExt_') !== 0) continue;
-        if (k.indexOf('_snap_') !== -1 || k.indexOf('_backup') !== -1) continue;
+        if (k.indexOf('_snap_') !== -1 || k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1) continue;
         var raw = localStorage.getItem(k); if (!raw) continue;
         try {
           var p = JSON.parse(raw);
@@ -3833,6 +3835,8 @@ window._showSimProgress = function(opts, onDone){
         if (!key || key.indexOf('ligaExt_') !== 0) continue;
         if (key === 'ligaExt_liga-ea-sports') continue;   /* ya lo hizo el bridge */
         if (key.indexOf('_backup') !== -1) continue;
+        if (key.indexOf('_snap_') !== -1) continue;
+        if (key.indexOf('_protected') !== -1) continue;
         var raw = localStorage.getItem(key);
         if (!raw) continue;
         var data;
@@ -4876,6 +4880,12 @@ window._showSimProgress = function(opts, onDone){
         if(k.indexOf('_backup')>=0) continue;
         if(k.indexOf('_snap_')>=0) continue;
         if(k.indexOf('_snapshot')>=0) continue;
+        /* `_protected` ahora se crea en cada saveData (commit
+           abae402) — sin este filtro `_computeQualifiedFromLeagues`
+           lo trataba como una liga aparte y duplicaba todos los
+           cómputos de pool ("ligas saltadas (95)" en lugar de las
+           ~50 reales). */
+        if(k.indexOf('_protected')>=0) continue;
         if(/_v\d+$/.test(k)) continue;
         keys.push(k);
       }

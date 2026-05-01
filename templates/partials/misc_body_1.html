@@ -3343,15 +3343,35 @@ window._showSimProgress = function(opts, onDone){
       filledFromStats: filledFromStats
     };
   };
+  /* Lista de slugs de países conocidos del menú "Resto de Ligas".
+     Sincronizada con las cards del DOM (#s-ligas .menu-card). Se usa
+     desde:
+       - `lextDeepRecoverAll` para intentar recuperar incluso slugs
+         que ya no estén en localStorage.
+       - El auto-recovery en DOM ready que rellena ligas vacías.
+     Si añades una nueva card al menú, añade su slug aquí. */
+  var KNOWN_COUNTRY_SLUGS = [
+    'inglaterra','alemania','italia','francia','p-bajos','portugal',
+    'belgica','turquia','dinamarca','rep-checa','suiza','escocia',
+    'austria','noruega','grecia','israel','ucrania','polonia',
+    'serbia','croacia','rusia','rumania','suecia','chipre',
+    'irlanda','kazajst','andorra','albania','bosnia','azerbayan',
+    'san-marino','gibraltar','bulgaria','hungria','gales','estonia',
+    'finlandia','letonia','lituania','islandia','armenia','bielorrsa',
+    'eslovaquia','eslovenia','is-feroe','georgia','luxembgo','moldavia',
+    'n-maced','malta','kosovo'
+  ];
+
   window.lextDeepRecoverAll = function(opts){
     opts = opts || {};
-    /* Enumera TODOS los slugs: los 4 habituales + cualquier otro
-       `ligaExt_*` que exista en localStorage (Alemania, Inglaterra,
-       Francia, Italia… + las 51 externas). */
+    /* Enumera TODOS los slugs: las 4 ligas españolas + los 51 países
+       conocidos + cualquier otro `ligaExt_*` que ya esté en
+       localStorage. Sin la lista hardcodeada, ligas que se hayan
+       borrado totalmente del local NO podían recuperarse del server.
+       Con la lista, siempre intentamos los 55 slugs. */
     var slugs = {};
-    ['liga-ea-sports','liga-hypermotion','liga-primera-federacion',
-     'inglaterra','alemania','italia','francia','portugal',
-     'holanda','belgica','brasil','argentina','turquia'].forEach(function(s){ slugs[s]=true; });
+    ['liga-ea-sports','liga-hypermotion','liga-primera-federacion'].forEach(function(s){ slugs[s]=true; });
+    KNOWN_COUNTRY_SLUGS.forEach(function(s){ slugs[s]=true; });
     try{
       for (var i = 0; i < localStorage.length; i++){
         var k = localStorage.key(i);
@@ -3377,6 +3397,70 @@ window._showSimProgress = function(opts, onDone){
     if (opts.reload) setTimeout(function(){ location.reload(); }, 250);
     return summary;
   };
+
+  /* AUTO-RECOVERY al cargar la app: para cada slug conocido cuyo
+     `ligaExt_<slug>` esté vacío o ausente, intenta recuperar desde
+     el servidor en background (async, no-bloqueante). Se ejecuta
+     UNA sola vez por sesión vía un flag con TTL de 1h, para no
+     martillear el server en cada navegación.
+
+     Justificación: el usuario reportó que algunas ligas concretas
+     (Lituania, Islandia, etc.) habían perdido los equipos. Aunque
+     `loadData(slug)` ya hace un fetch sync cuando la cache está
+     vacía, eso solo dispara cuando el usuario ABRE la pantalla. Con
+     este auto-recovery, basta con cargar la app para que
+     localStorage se rellene con todo lo que el server tenga,
+     incluso para ligas que el usuario aún no haya abierto. */
+  function _autoRecoverEmptyLeagues(){
+    try {
+      var FLAG = 'ligaExt_autoRecoveryDone_v1';
+      var now = Date.now();
+      var prev = 0;
+      try { prev = parseInt(localStorage.getItem(FLAG)||'0', 10) || 0; } catch(_){}
+      if (now - prev < 60 * 60 * 1000) return;   /* TTL 1h */
+      var checkSlugs = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion'].concat(KNOWN_COUNTRY_SLUGS);
+      var fetched = 0;
+      checkSlugs.forEach(function(slug){
+        try {
+          var raw = localStorage.getItem('ligaExt_'+slug);
+          var hasTeams = false;
+          if (raw) {
+            try {
+              var d = JSON.parse(raw);
+              hasTeams = d && Array.isArray(d.teams) && d.teams.length > 0;
+            } catch(_){}
+          }
+          if (hasTeams) return;
+          /* Si está vacío o no existe, fetch async al server. */
+          fetch('/api/liga-ext/'+encodeURIComponent(slug))
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(j){
+              if (!j || !j.data) return;
+              var d2 = j.data;
+              if (!d2.teams || !d2.teams.length) return;
+              try {
+                localStorage.setItem('ligaExt_'+slug, JSON.stringify(d2));
+                if (typeof window.invalidateLigaCache === 'function') {
+                  window.invalidateLigaCache(slug);
+                }
+                fetched++;
+                try { console.info('[auto-recover] '+slug+' restaurado: '+d2.teams.length+' equipos'); } catch(_){}
+              } catch(_){}
+            })
+            .catch(function(){});
+        } catch(_){}
+      });
+      try { localStorage.setItem(FLAG, String(now)); } catch(_){}
+    } catch(_){}
+  }
+  /* Ejecutar diferido para no bloquear el primer paint. */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){
+      setTimeout(_autoRecoverEmptyLeagues, 1500);
+    });
+  } else {
+    setTimeout(_autoRecoverEmptyLeagues, 1500);
+  }
 
   window._ligaEaLegendHtml = function(){
     var z = loadLigaEaZones();

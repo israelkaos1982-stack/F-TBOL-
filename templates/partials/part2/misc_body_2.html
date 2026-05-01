@@ -2188,6 +2188,27 @@
     g2: DEFAULT_PRIMERA_G2.map(function(t){ return t.name; })
   };
 
+  /* Exposición pública de los nombres+medias de los 3 tiers
+     españoles para que el buscador del panel "EA Sports → Europa"
+     (s-ea-manual, misc_body_1.html) pueda autocompletar. La estructura
+     es {name, tier} para que el typeahead muestre la liga de origen
+     ("LaLiga", "Hypermotion", "Primera RFEF") como ayuda visual. */
+  try {
+    var _spainPool = [];
+    /* Hypermotion (~22 equipos). */
+    DEFAULT_SEGUNDA_TEAMS.forEach(function(t){
+      _spainPool.push({ name:t.name, tier:'Hypermotion' });
+    });
+    /* Primera Federación (~40 equipos). */
+    DEFAULT_PRIMERA_G1.forEach(function(t){
+      _spainPool.push({ name:t.name, tier:'Primera RFEF' });
+    });
+    DEFAULT_PRIMERA_G2.forEach(function(t){
+      _spainPool.push({ name:t.name, tier:'Primera RFEF' });
+    });
+    window.SPAIN_LOWER_TIER_TEAMS = _spainPool;
+  } catch(_){}
+
   var STATS_CATS = [
     {key:'goles-total', title:'Goleadores', icon:'⚽'},
     {key:'mvp', title:'MVP', icon:'⭐'},

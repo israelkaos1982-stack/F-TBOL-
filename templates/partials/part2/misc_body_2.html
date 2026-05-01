@@ -17167,12 +17167,14 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* Recoge equipos clasificados desde las ligas menores (zonas
-     'wildcard' de cada `ligaExt_<slug>`). El POOL_TARGET son 36
-     equipos (18 eliminatorias). Si hay más, recortamos por poder
-     descendente; si hay menos, rellenamos con placeholders para que
-     el bracket no se rompa. Cada equipo conserva su `league` (slug
-     del país) para el cruce que evita enfrentamientos del mismo
-     país. */
+     'wildcard' de cada `ligaExt_<slug>`). El POOL_TARGET son 40
+     equipos (8 SEMI + 32 byes; 18 ties en RF). Cada slug listado en
+     `WILDCARD_LIGA_SLUGS` aporta 1 plaza implícita aunque no tenga
+     `zones.wildcard` configurado, para que el pool se llene solo. Si
+     hay más, recortamos por poder descendente; si hay menos,
+     rellenamos con placeholders. Cada equipo conserva su `league`
+     (slug del país) para el cruce que evita enfrentamientos del
+     mismo país. */
   function buildPool(){
     var pool = [];
     if(typeof window.computeWildCardClassified === 'function'){
@@ -17752,8 +17754,8 @@ document.addEventListener('DOMContentLoaded', function() {
       lines.push('📊 RESUMEN SALTADAS (' + d.skipped.length + '):');
       Object.keys(byStatus).sort().forEach(function(st){
         var label = st;
-        if(st === 'incompleta') label = 'incompletas (faltan jornadas)';
-        else if(st === 'sin-plazas') label = 'sin-plazas (zones.wildcard=0)';
+        if(st === 'incompleta') label = 'incompletas (faltan jornadas, sin resultados)';
+        else if(st === 'sin-plazas') label = 'sin-plazas (zones.wildcard=0, fuera de los 40)';
         else if(st === 'duplicada') label = 'duplicadas (mismo plantilla)';
         else if(st === 'skip') label = 'skip (sin equipos / inválidas)';
         lines.push('  · ' + byStatus[st] + ' ' + label + (st==='duplicada' && dupPairs.length ? ':' : ''));
@@ -17771,12 +17773,16 @@ document.addEventListener('DOMContentLoaded', function() {
       lines.push('💡 ACCIONES POSIBLES:');
       if(byStatus['incompleta']){
         lines.push('  1. Para las ' + byStatus['incompleta'] + ' INCOMPLETAS:');
-        lines.push('     entra a "Resto de Ligas" → 🎮 Sim (simula las 51 ligas).');
+        lines.push('     son ligas SIN ningún partido jugado todavía. Las 40');
+        lines.push('     ligas Wild Card aportan automáticamente con standings');
+        lines.push('     parcial en cuanto se simule cualquier jornada.');
+        lines.push('     entra a "Resto de Ligas" → 🎮 Sim para arrancarlas.');
       }
       if(byStatus['sin-plazas']){
-        lines.push('  2. Para las ' + byStatus['sin-plazas'] + ' SIN-PLAZAS:');
-        lines.push('     pulsa Aceptar → te ofrezco auto-fix con PIN admin');
-        lines.push('     que pone wildcard=1 en todas las que están a 0.');
+        lines.push('  2. Las ligas SIN-PLAZAS están FUERA de los 40 slugs');
+        lines.push('     hardcodeados (WILDCARD_LIGA_SLUGS). No deberían');
+        lines.push('     contar para el pool — son ligas mayores (España,');
+        lines.push('     Italia, etc.) cuya 4ª/3ª plaza no es wildcard.');
       }
       if(byStatus['duplicada']){
         lines.push('  3. Para las ' + byStatus['duplicada'] + ' DUPLICADAS:');

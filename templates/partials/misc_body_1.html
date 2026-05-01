@@ -4609,6 +4609,12 @@ window._showSimProgress = function(opts, onDone){
 <div class="submenu-card sc-wild-card" style="background:linear-gradient(135deg,#1a0e04,#3a2010,#6a3f1c,#8b5520,#3a2010,#1a0e04) !important;border-color:#8b5520 !important;" onclick="go('s-wild-card')">
 <span class="sc-emoji">🎟️</span><span class="sc-label">Wild Card</span><span class="sc-arr">▶</span>
 </div>
+<!-- Manual EA Sports → Europa: navegación protegida con PIN 747 (pG).
+     Añadir / quitar equipos también pasa por pG en cada acción, así
+     una sesión admin desbloqueada permite operar sin re-pedir PIN. -->
+<div class="submenu-card sc-ea-manual" style="background:linear-gradient(135deg,#0a1f0a,#1e4a1e,#2d6b2d,#1e4a1e,#0a1f0a) !important;border-color:#3cc878 !important;" onclick="window.pG&&window.pG(function(){if(window._meaRender)window._meaRender();go('s-ea-manual');})">
+<span class="sc-emoji">🎮</span><span class="sc-label">EA Sports → Europa <span style="font-size:10px;opacity:.7;">(admin)</span></span><span class="sc-arr">▶</span>
+</div>
 <div class="submenu-card sc-ucl-stats" style="background:linear-gradient(135deg,#051525,#0a2a4a,#1565C0,#0a2a4a,#051525) !important;border-color:#42a5f5 !important;" onclick="go('s-ucl-stats')">
 <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
 </div>
@@ -4861,7 +4867,32 @@ window._showSimProgress = function(opts, onDone){
     window._lastQualDiag = diag;
     return dedup;
   }
-  function computeUclClassified(){ return _computeQualifiedFromLeagues('ucl'); }
+  /* Prepende los equipos inyectados manualmente desde la pantalla
+     "EA Sports → Europa" (s-ea-manual) al pool de cualquier
+     competición. Dedupe por nombre — si un manual coincide con un
+     equipo del pool automático, gana el manual (orden primero). */
+  function _prependManualEa(arr, slug){
+    if(typeof window._meaTeamsFor !== 'function') return arr;
+    var manual = window._meaTeamsFor(slug) || [];
+    if(!manual.length) return arr;
+    var seen = {};
+    var out = [];
+    manual.forEach(function(t){
+      if(!t || !t.name || seen[t.name]) return;
+      seen[t.name] = true;
+      out.push(t);
+    });
+    (arr||[]).forEach(function(t){
+      if(!t || !t.name || seen[t.name]) return;
+      seen[t.name] = true;
+      out.push(t);
+    });
+    return out;
+  }
+
+  function computeUclClassified(){
+    return _prependManualEa(_computeQualifiedFromLeagues('ucl'), 'ucl');
+  }
   function computeUclPrevTeams(){
     var arr = _computeQualifiedFromLeagues('uclPrev');
     /* Los TOP-5 de cada grupo del Open Qualifier (7 grupos × 5 = 35
@@ -4882,7 +4913,7 @@ window._showSimProgress = function(opts, onDone){
         });
       }
     } catch(_){}
-    return arr;
+    return _prependManualEa(arr, 'uclPrev');
   }
   window.computeUclPrevTeams = computeUclPrevTeams;
   function computeUelClassified(){
@@ -4905,7 +4936,7 @@ window._showSimProgress = function(opts, onDone){
         });
       }
     } catch(_){}
-    return arr;
+    return _prependManualEa(arr, 'uel');
   }
   function computeUeclClassified(){
     var arr = _computeQualifiedFromLeagues('uecl');
@@ -4942,7 +4973,7 @@ window._showSimProgress = function(opts, onDone){
         });
       }
     } catch(_){}
-    return arr;
+    return _prependManualEa(arr, 'uecl');
   }
   function computeOpenQualifierTeams(){
     /* Pool del Open Qualifier (cap a 98 = 7 grupos × 14). Composición
@@ -4995,11 +5026,16 @@ window._showSimProgress = function(opts, onDone){
       arr.push({ name: w.name, league: country, logo: w.logo || '' });
     });
 
+    /* Prepende equipos manuales (EA Sports → Europa) y recapa. */
+    arr = _prependManualEa(arr, 'uclQual');
+
     /* Cap final por seguridad. */
     if(arr.length > 98) arr = arr.slice(0, 98);
     return arr;
   }
-  function computeWildCardClassified(){ return _computeQualifiedFromLeagues('wildcard'); }
+  function computeWildCardClassified(){
+    return _prependManualEa(_computeQualifiedFromLeagues('wildcard'), 'wildcard');
+  }
   window.computeUclClassified = computeUclClassified;
   window.computeUelClassified = computeUelClassified;
   window.computeUeclClassified = computeUeclClassified;
@@ -5888,6 +5924,207 @@ window._showSimProgress = function(opts, onDone){
   <div id="wc-body"></div>
 </div>
 </div>
+
+<!-- ══════════════════════════════════════════════════
+     EA SPORTS → EUROPA — Inyección manual de equipos
+     · 6 secciones (Champions / Previa / OQ / Wild Card / Europa /
+       Conference). En cada una el admin añade equipos a mano que se
+       prepondrán al pool de la competición correspondiente.
+     · Persistencia: 6 keys `manual_ea_<slug>_v1` con array de
+       {name, logo}. Las funciones `compute*Classified()` los leen
+       y los meten en el pool antes de aplicar caps/dedupe.
+     · Navegación a la pantalla protegida con PIN (pG); cada
+       Añadir/Quitar también pasa por pG.
+     ══════════════════════════════════════════════════ -->
+<div class="screen" id="s-ea-manual">
+<button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🎮</span><h2>EA Sports → Europa</h2></div>
+<div style="padding:8px 12px 4px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.6);text-align:center;line-height:1.5;">
+  Inyecta manualmente equipos de la <b>Liga EA Sports</b> en cualquier competición europea.<br>
+  Los equipos añadidos se incorporan al pool de cada torneo en la <b>misma temporada</b>.
+</div>
+<style>
+#s-ea-manual .mea-sec{margin:14px 8px 0;border:1px solid rgba(60,200,120,.35);border-radius:10px;background:linear-gradient(180deg,rgba(60,200,120,.05),rgba(0,0,0,0));overflow:hidden;}
+#s-ea-manual .mea-hdr{padding:10px 14px;background:linear-gradient(90deg,#0a1f0a,#1e4a1e,#3cc878,#1e4a1e,#0a1f0a);font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2px;color:#fff;display:flex;align-items:center;gap:8px;text-shadow:0 1px 2px rgba(0,0,0,.6);}
+#s-ea-manual .mea-hdr .mea-count{margin-left:auto;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#fff;font-weight:700;}
+#s-ea-manual .mea-list{padding:6px 10px;}
+#s-ea-manual .mea-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.04);font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
+#s-ea-manual .mea-item img{width:18px;height:18px;object-fit:contain;}
+#s-ea-manual .mea-item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#s-ea-manual .mea-item .rm{background:rgba(255,80,80,.10);border:1px solid rgba(255,80,80,.5);color:#ff8080;border-radius:4px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;}
+#s-ea-manual .mea-empty{padding:8px 14px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.4);font-style:italic;}
+#s-ea-manual .mea-add{display:flex;gap:6px;padding:8px 10px;background:rgba(0,0,0,.25);border-top:1px solid rgba(255,255,255,.06);}
+#s-ea-manual .mea-add input{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:7px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;}
+#s-ea-manual .mea-add input:focus{border-color:#3cc878;}
+#s-ea-manual .mea-add .add{background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:4px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;cursor:pointer;font-weight:700;}
+</style>
+<div id="mea-body" style="padding:0 0 24px;"></div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   EA Sports → Europa: módulo de inyección manual.
+   Storage: localStorage `manual_ea_<slug>_v1` con
+              { teams: [{name, logo}], ts }.
+   API público:
+     window._meaTeamsFor(slug)  → array de {name, logo} para que
+                                   los compute*Classified los
+                                   prepondan al pool.
+     window._meaRender()         → render de la pantalla.
+     window._meaAdd / _meaRm     → mutaciones (vía pG).
+   ══════════════════════════════════════════════════════════════ */
+(function(){
+  var EVENTS = [
+    { slug:'ucl',      label:'🔵 Champions League',     icon:'🔵', accent:'#42a5f5' },
+    { slug:'uclPrev',  label:'🇪🇺 Previa de Champions', icon:'🇪🇺', accent:'#a855f7' },
+    { slug:'uclQual',  label:'🟡 Open Qualifier',       icon:'🟡', accent:'#FDC830' },
+    { slug:'wildcard', label:'🎟️ Wild Card',            icon:'🎟️', accent:'#8b5520' },
+    { slug:'uel',      label:'🟠 Europa League',        icon:'🟠', accent:'#F37335' },
+    { slug:'uecl',     label:'🟢 Conference League',    icon:'🟢', accent:'#3cc878' }
+  ];
+  function _key(slug){ return 'manual_ea_'+slug+'_v1'; }
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function _logoFor(name){
+    if(typeof window.getTeamLogoUrl === 'function'){
+      try { return window.getTeamLogoUrl(name) || ''; } catch(_){}
+    }
+    if(window.TEAM_RATINGS && window.TEAM_RATINGS[name]){
+      return window.TEAM_RATINGS[name].shield || '';
+    }
+    return '';
+  }
+  function _list(slug){
+    try {
+      var raw = localStorage.getItem(_key(slug));
+      if(!raw) return [];
+      var d = JSON.parse(raw);
+      if(d && Array.isArray(d.teams)) return d.teams.filter(function(t){ return t && t.name; });
+    } catch(_){}
+    return [];
+  }
+  function _save(slug, list){
+    try {
+      localStorage.setItem(_key(slug), JSON.stringify({teams:list, ts:Date.now()}));
+    } catch(_){}
+  }
+
+  /* API que consumen los compute*Classified() en este mismo archivo. */
+  window._meaTeamsFor = function(slug){
+    return _list(slug).map(function(t){
+      return {name:t.name, logo:t.logo||_logoFor(t.name), league:'ea-sports-manual'};
+    });
+  };
+
+  function render(){
+    var host = document.getElementById('mea-body');
+    if(!host) return;
+    var html = '';
+    EVENTS.forEach(function(ev){
+      var teams = _list(ev.slug);
+      var rows;
+      if(teams.length === 0){
+        rows = '<div class="mea-empty">Sin equipos añadidos. Añade abajo.</div>';
+      } else {
+        rows = teams.map(function(t){
+          var logo = t.logo || _logoFor(t.name);
+          var img = logo ? '<img src="'+_esc(logo)+'" alt="" onerror="this.style.display=\'none\'">' : '';
+          /* Botón quitar: data-attributes en lugar de onclick inline
+             para evitar el infierno de escapes de comillas con
+             nombres de equipo arbitrarios. */
+          return '<div class="mea-item">'
+            +    img
+            +    '<span class="nm">'+_esc(t.name)+'</span>'
+            +    '<button class="rm" data-mea-act="rm" data-slug="'+_esc(ev.slug)+'" data-name="'+_esc(t.name)+'">❌ Quitar</button>'
+            +    '</div>';
+        }).join('');
+      }
+      var inputId = 'mea-input-'+ev.slug;
+      html += '<div class="mea-sec" style="border-color:'+ev.accent+'55;">'
+        +    '<div class="mea-hdr" style="background:linear-gradient(90deg,rgba(0,0,0,.6),'+ev.accent+'33,rgba(0,0,0,.6));">'
+        +      _esc(ev.label)
+        +      '<span class="mea-count">'+teams.length+' añadido'+(teams.length===1?'':'s')+'</span>'
+        +    '</div>'
+        +    '<div class="mea-list">'+rows+'</div>'
+        +    '<div class="mea-add">'
+        +      '<input id="'+inputId+'" type="text" placeholder="Nombre del equipo (Liga EA Sports)…" autocomplete="off">'
+        +      '<button class="add" data-mea-act="add" data-slug="'+_esc(ev.slug)+'" data-input="'+inputId+'">➕ Añadir</button>'
+        +    '</div>'
+        +    '</div>';
+    });
+    host.innerHTML = html;
+  }
+  window._meaRender = render;
+
+  /* Event delegation para botones add/rm — un solo listener en
+     `mea-body` cubre todos los botones. */
+  document.addEventListener('click', function(ev){
+    var btn = ev.target && ev.target.closest && ev.target.closest('[data-mea-act]');
+    if(!btn) return;
+    var act = btn.getAttribute('data-mea-act');
+    var slug = btn.getAttribute('data-slug');
+    if(act === 'rm'){
+      var name = btn.getAttribute('data-name');
+      if(slug && name) window._meaRm(slug, name);
+    } else if(act === 'add'){
+      var inputId = btn.getAttribute('data-input');
+      if(slug && inputId) window._meaAddFromInput(slug, inputId);
+    }
+  });
+
+  /* Mutaciones — todas envueltas en pG para exigir PIN si la sesión
+     admin no está desbloqueada todavía. */
+  function _doAdd(slug, name){
+    name = String(name||'').trim();
+    if(!name){ alert('Escribe el nombre del equipo.'); return; }
+    var list = _list(slug);
+    var lower = name.toLowerCase();
+    if(list.some(function(t){ return t.name.toLowerCase() === lower; })){
+      alert('"'+name+'" ya estaba en la lista.');
+      return;
+    }
+    list.push({name:name, logo:_logoFor(name)});
+    _save(slug, list);
+    render();
+  }
+  window._meaAddFromInput = function(slug, inputId){
+    var inp = document.getElementById(inputId);
+    if(!inp) return;
+    var name = inp.value;
+    if(typeof window.pG === 'function'){
+      window.pG(function(){ _doAdd(slug, name); inp.value=''; });
+    } else { _doAdd(slug, name); inp.value=''; }
+  };
+  window._meaAdd = function(slug, name){
+    if(typeof window.pG === 'function') window.pG(function(){ _doAdd(slug, name); });
+    else _doAdd(slug, name);
+  };
+  window._meaRm = function(slug, name){
+    function _doRm(){
+      var list = _list(slug).filter(function(t){ return t.name !== name; });
+      _save(slug, list);
+      render();
+    }
+    if(typeof window.pG === 'function') window.pG(_doRm);
+    else _doRm();
+  };
+
+  /* Re-render al entrar a la pantalla. */
+  var _origGoMea = window.go;
+  if(typeof _origGoMea === 'function'){
+    window.go = function(id){
+      var r = _origGoMea.apply(this, arguments);
+      if(id === 's-ea-manual'){
+        try { setTimeout(render, 30); } catch(_){}
+      }
+      return r;
+    };
+  }
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(render, 250);
+  });
+})();
+</script>
+
 <div class="screen" id="s-ucl-stats">
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" onerror="this.style.display='none'" alt="UCL"/><h2>UCL · Estadísticas</h2></div>

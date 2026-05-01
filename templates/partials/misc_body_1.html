@@ -4920,10 +4920,15 @@ window._showSimProgress = function(opts, onDone){
                         .filter(Boolean).sort().join('|');
         if(!hash){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'plantilla sin nombres'}); return; }
         if(seenLeagueHash[hash]){
-          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'duplicada', note:'misma plantilla que otra liga ya procesada'});
+          /* Guardamos el slug de la liga "primera" que registró este
+             hash para que el diag muestre claramente la pareja
+             (antes solo decía "misma plantilla que otra liga ya
+             procesada" sin indicar cuál). */
+          var dupOf = seenLeagueHash[hash];
+          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'duplicada', note:'misma plantilla que: '+dupOf, dupOf:dupOf});
           return;
         }
-        seenLeagueHash[hash] = true;
+        seenLeagueHash[hash] = slug;
         var skip = 0;
         if(zoneKey === 'uclPrev'){
           skip = (Number(zones.ucl)||0);

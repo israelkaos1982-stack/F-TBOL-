@@ -17736,6 +17736,43 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       lines.push('✅ Pool completo · sin placeholders');
     }
+
+    /* Resumen agrupado por motivo — más útil que listar 50 líneas. */
+    if(d.skipped.length){
+      var byStatus = {};
+      d.skipped.forEach(function(s){
+        var st = s.status || 'desconocido';
+        byStatus[st] = (byStatus[st] || 0) + 1;
+      });
+      lines.push('');
+      lines.push('📊 RESUMEN SALTADAS (' + d.skipped.length + '):');
+      Object.keys(byStatus).sort().forEach(function(st){
+        var label = st;
+        if(st === 'incompleta') label = 'incompletas (faltan jornadas)';
+        else if(st === 'sin-plazas') label = 'sin-plazas (zones.wildcard=0)';
+        else if(st === 'duplicada') label = 'duplicadas (mismo plantilla)';
+        else if(st === 'skip') label = 'skip (sin equipos / inválidas)';
+        lines.push('  · ' + byStatus[st] + ' ' + label);
+      });
+      /* Recomendaciones contextuales según los motivos predominantes. */
+      lines.push('');
+      lines.push('💡 ACCIONES POSIBLES:');
+      if(byStatus['incompleta']){
+        lines.push('  1. Para las ' + byStatus['incompleta'] + ' INCOMPLETAS:');
+        lines.push('     entra a "Resto de Ligas" → 🎮 Sim (simula las 51 ligas).');
+      }
+      if(byStatus['sin-plazas']){
+        lines.push('  2. Para las ' + byStatus['sin-plazas'] + ' SIN-PLAZAS:');
+        lines.push('     pulsa Aceptar → te ofrezco auto-fix con PIN admin');
+        lines.push('     que pone wildcard=1 en todas las que están a 0.');
+      }
+      if(byStatus['duplicada']){
+        lines.push('  3. Para las ' + byStatus['duplicada'] + ' DUPLICADAS:');
+        lines.push('     dos ligas comparten la misma plantilla — renombra');
+        lines.push('     un equipo en una de ellas para diferenciarlas.');
+      }
+    }
+
     lines.push('');
     lines.push('LIGAS QUE APORTAN (' + d.contributing.length + '):');
     d.contributing.forEach(function(x){
@@ -17743,16 +17780,20 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     if(d.skipped.length){
       lines.push('');
-      lines.push('LIGAS SALTADAS (' + d.skipped.length + '):');
-      d.skipped.forEach(function(x){
-        var reason = x.status + (x.note ? ' · ' + x.note : '');
-        lines.push('  · ' + (x.slug || '?') + ' — ' + reason);
+      lines.push('LIGAS SALTADAS DETALLE (' + d.skipped.length + '):');
+      /* Agrupadas por status para que sea más legible. */
+      var grouped = {};
+      d.skipped.forEach(function(s){
+        var st = s.status || 'desconocido';
+        if(!grouped[st]) grouped[st] = [];
+        grouped[st].push(s);
       });
-      lines.push('');
-      lines.push('Causas frecuentes:');
-      lines.push('  • "incompleta" → faltan jornadas por simular en esa liga');
-      lines.push('  • "sin-plazas" → la liga tiene zones.wildcard = 0');
-      lines.push('  • "duplicada"  → tiene la misma plantilla que otra liga');
+      Object.keys(grouped).sort().forEach(function(st){
+        lines.push('  ─── ' + st + ' (' + grouped[st].length + ') ───');
+        grouped[st].forEach(function(x){
+          lines.push('    · ' + (x.slug || '?') + (x.note ? ' · ' + x.note : ''));
+        });
+      });
     }
     return lines.join('\n');
   }

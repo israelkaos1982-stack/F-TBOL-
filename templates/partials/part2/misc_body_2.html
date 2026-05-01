@@ -17701,6 +17701,70 @@ document.addEventListener('DOMContentLoaded', function() {
     else _doReset();
   };
 
+  /* 🔍 Diagnóstico del pool — útil cuando hay TBDs en los ganadores.
+     Llama a computeWildCardClassified (que internamente actualiza
+     window._lastQualDiag) y devuelve un objeto/texto con:
+       · Pool detectado (X / 40)
+       · Per-liga: cuántos equipos aporta
+       · Ligas saltadas (con motivo: 'incompleta', 'sin-plazas',
+         'duplicada', etc.)
+       · Total rellenado con placeholders TBD. */
+  window._wcDebugPool = function(){
+    var classified = (typeof window.computeWildCardClassified === 'function')
+      ? (window.computeWildCardClassified() || []) : [];
+    var diag = (window._lastQualDiag || []).slice();
+    var ok = diag.filter(function(d){ return d.status === 'ok'; });
+    var skipped = diag.filter(function(d){ return d.status !== 'ok'; });
+    var totalReal = classified.length;
+    var placeholders = Math.max(0, POOL_TARGET - totalReal);
+    return {
+      poolReal: totalReal,
+      poolTarget: POOL_TARGET,
+      placeholders: placeholders,
+      contributing: ok,
+      skipped: skipped
+    };
+  };
+
+  function _renderDebugPool(d){
+    var lines = [];
+    lines.push('🔍 DIAGNÓSTICO POOL WILD CARD');
+    lines.push('───────────────────────────');
+    lines.push('Pool real detectado: ' + d.poolReal + ' / ' + d.poolTarget);
+    if(d.placeholders > 0){
+      lines.push('⚠️ Faltan ' + d.placeholders + ' equipos → se rellenan con TBD ' + (d.poolReal+1) + (d.placeholders>1 ? '..TBD ' + d.poolTarget : ''));
+    } else {
+      lines.push('✅ Pool completo · sin placeholders');
+    }
+    lines.push('');
+    lines.push('LIGAS QUE APORTAN (' + d.contributing.length + '):');
+    d.contributing.forEach(function(x){
+      lines.push('  · ' + x.slug + ' → ' + (x.note || '+' + (x.added||0) + ' equipo(s)'));
+    });
+    if(d.skipped.length){
+      lines.push('');
+      lines.push('LIGAS SALTADAS (' + d.skipped.length + '):');
+      d.skipped.forEach(function(x){
+        var reason = x.status + (x.note ? ' · ' + x.note : '');
+        lines.push('  · ' + (x.slug || '?') + ' — ' + reason);
+      });
+      lines.push('');
+      lines.push('Causas frecuentes:');
+      lines.push('  • "incompleta" → faltan jornadas por simular en esa liga');
+      lines.push('  • "sin-plazas" → la liga tiene zones.wildcard = 0');
+      lines.push('  • "duplicada"  → tiene la misma plantilla que otra liga');
+    }
+    return lines.join('\n');
+  }
+
+  window._wcShowDebug = function(){
+    var d = window._wcDebugPool();
+    alert(_renderDebugPool(d));
+    /* También logueamos al console para que el usuario pueda
+       copiar/pegar la lista completa si la hay larga. */
+    try { console.log('[WC pool diag]', d); } catch(_){}
+  };
+
   /* Re-render al entrar al screen — `go(id)` ya está parcheado por
      otros bloques, así que añadimos otro patch que dispara render
      cuando se navega a #s-wild-card. */

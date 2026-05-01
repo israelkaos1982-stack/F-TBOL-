@@ -17757,67 +17757,12 @@ document.addEventListener('DOMContentLoaded', function() {
     return lines.join('\n');
   }
 
-  /* Auto-fix: pone `zones.wildcard = 1` en cada liga saltada por
-     'sin-plazas'. Mutación protegida con PIN admin (window.pG). NO
-     toca incompletas (esas hay que simularlas a mano) ni duplicadas. */
-  function _wcAutoFixSinPlazas(slugs){
-    var fixed = [];
-    slugs.forEach(function(slug){
-      var key = 'ligaExt_' + slug;
-      var raw = localStorage.getItem(key);
-      if(!raw) return;
-      try {
-        var data = JSON.parse(raw);
-        if(!data || typeof data !== 'object') return;
-        if(!data.config) data.config = {};
-        if(!data.config.zones) data.config.zones = {};
-        data.config.zones.wildcard = 1;
-        localStorage.setItem(key, JSON.stringify(data));
-        fixed.push(slug);
-      } catch(_){}
-    });
-    return fixed;
-  }
-
   window._wcShowDebug = function(){
     var d = window._wcDebugPool();
     alert(_renderDebugPool(d));
     /* También logueamos al console para que el usuario pueda
        copiar/pegar la lista completa si la hay larga. */
     try { console.log('[WC pool diag]', d); } catch(_){}
-
-    /* Si hay ligas saltadas por 'sin-plazas', ofrecer auto-fix.
-       Las 'incompleta' / 'duplicada' las dejamos al usuario porque
-       requieren acción específica (simular jornadas, renombrar
-       plantilla). */
-    var sinPlazas = (d.skipped||[]).filter(function(s){ return s.status === 'sin-plazas'; });
-    var incompletas = (d.skipped||[]).filter(function(s){ return s.status === 'incompleta'; });
-    if(sinPlazas.length){
-      var ask = 'AUTO-FIX disponible:\n\n¿Pongo `Wild Card = 1` en estas '
-        + sinPlazas.length + ' liga(s) con cupo a 0?\n\n';
-      sinPlazas.forEach(function(s){ ask += '  · ' + s.slug + '\n'; });
-      ask += '\n(Pediré PIN admin 747 al confirmar.)';
-      if(confirm(ask)){
-        var slugs = sinPlazas.map(function(s){ return s.slug; });
-        function _doApply(){
-          var fixed = _wcAutoFixSinPlazas(slugs);
-          var msg = '✅ ' + fixed.length + ' liga(s) modificadas (Wild Card = 1):\n\n';
-          fixed.forEach(function(sl){ msg += '  · ' + sl + '\n'; });
-          if(incompletas.length){
-            msg += '\n⚠️ Quedan ' + incompletas.length + ' liga(s) incompletas — '
-              +  'tendrás que simular sus jornadas a mano para que aporten:\n';
-            incompletas.forEach(function(s){ msg += '  · ' + s.slug + '\n'; });
-          }
-          msg += '\nPulsa 🎮 Sim del Wild Card para que entren al pool.';
-          alert(msg);
-          /* Si el usuario tenía el bracket ya simulado, sugerimos
-             reset para que la siguiente Sim use el pool nuevo. */
-          render();
-        }
-        if(typeof window.pG === 'function') window.pG(_doApply);
-        else _doApply();
-      }
-    }
   };
 
   /* Re-render al entrar al screen — `go(id)` ya está parcheado por

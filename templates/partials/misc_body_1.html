@@ -5766,8 +5766,26 @@ window._showSimProgress = function(opts, onDone){
        teams. Si el caller envía más, los grupos quedarían con teams
        fantasmas que la UI no pintaría. */
     var maxTeams = N_GROUPS * TEAMS_PER_GROUP;
-    if(classified && classified.length > maxTeams){
+    classified = (classified || []).slice();
+    if(classified.length > maxTeams){
       classified = classified.slice(0, maxTeams);
+    }
+    /* PADDING DEFENSIVO — si el pool calculado por
+       computeOpenQualifierTeams() es menor que 98 (típicamente porque
+       alguna liga no completó sus jornadas o tiene `uclQual=0`),
+       rellenamos con placeholders para que los 7 grupos tengan SIEMPRE
+       14 equipos. Sin esto algunos grupos quedaban con 12-13 y los
+       partidos por equipo bajaban de 26 a 22-24, descuadrando todo el
+       formato. Los placeholders se nombran TBD-OQ-N para distinguirlos
+       de los del Wild Card. */
+    while(classified.length < maxTeams){
+      var i = classified.length;
+      classified.push({
+        name: 'TBD-OQ-'+(i+1),
+        logo: '',
+        league: '__placeholder_oq_'+i,
+        power: 50
+      });
     }
     var groups = _distributeSnake(classified, N_GROUPS);
     var matchesByGroup = groups.map(function(grp){ return _simulateGroup(grp); });
@@ -5921,6 +5939,8 @@ window._showSimProgress = function(opts, onDone){
 <div id="wc-root">
   <div class="wc-toolbar" id="wc-toolbar">
     <button class="wc-btn" id="wc-btn-sim" onclick="window._wcSimulate&&window._wcSimulate()">🎮 Simular</button>
+    <!-- 🎲 Draw — solo sortea las eliminatorias (sin jugarlas). Pide PIN admin 747. -->
+    <button class="wc-btn" id="wc-btn-draw" onclick="window._wcDraw&&window._wcDraw()" style="border-color:#ffd700;background:#ffd700;color:#000;">🎲 Draw</button>
     <button class="wc-btn danger" id="wc-btn-reset" onclick="window._wcReset&&window._wcReset()">♻️ Reset</button>
   </div>
   <div id="wc-body"></div>

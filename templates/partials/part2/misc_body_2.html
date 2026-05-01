@@ -17032,24 +17032,58 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /* Wrap de `_wcSimulate()` — botón 🎮 Simular del torneo Wild Card.
-       Una sola pulsación juega las 18 eliminatorias (ida + vuelta +
-       prórroga + penaltis si hace falta). Overlay con fake-progress. */
+       Una sola pulsación juega las 4 semis + 18 RF (ida + vuelta +
+       prórroga + penaltis si hace falta). El overlay del balón usa
+       phases distintas según la fase actual: si ya hay sorteo, no
+       muestra el paso de "sortear". */
     var origWcSim = window._wcSimulate;
     if(typeof origWcSim === 'function'){
       window._wcSimulate = function(){
         if(typeof window.ftbolLoaderRun !== 'function'){
           return origWcSim();
         }
+        var hasDraw = false;
+        try {
+          var st = JSON.parse(localStorage.getItem('wc_state_v1')||'null');
+          hasDraw = !!(st && st.phase === 'drawn');
+        } catch(_){}
+        var phases;
+        if(hasDraw){
+          phases = [
+            { pct:30, sub:'Jugando 4 semifinales…',           ms:180 },
+            { pct:60, sub:'Resolviendo ganadores SF…',        ms:140 },
+            { pct:88, sub:'Jugando 18 eliminatorias Ronda Final…', ms:240 }
+          ];
+        } else {
+          phases = [
+            { pct:18, sub:'Cargando equipos…',                ms:130 },
+            { pct:38, sub:'Sorteando semis y Ronda Final…',   ms:160 },
+            { pct:62, sub:'Jugando 4 semifinales…',           ms:180 },
+            { pct:90, sub:'Jugando 18 eliminatorias Ronda Final…', ms:240 }
+          ];
+        }
         return _runFakeProgress(
-          { title: 'WILD CARD · ELIMINATORIAS', sub:'Preparando…', minMs:1200,
+          { title: 'WILD CARD · SEMIFINAL + RONDA FINAL', sub:'Preparando…', minMs:1300, phases: phases },
+          function(){ if(typeof origWcSim === 'function') origWcSim(); }
+        );
+      };
+    }
+    /* Wrap de `_wcDraw()` — solo sortea (sin sim). Overlay corto. */
+    var origWcDraw = window._wcDraw;
+    if(typeof origWcDraw === 'function'){
+      window._wcDraw = function(){
+        if(typeof window.ftbolLoaderRun !== 'function'){
+          return origWcDraw();
+        }
+        return _runFakeProgress(
+          { title: 'WILD CARD · SORTEO', sub:'Preparando…', minMs:900,
             phases:[
-              { pct:24, sub:'Cargando equipos…',     ms:140 },
-              { pct:50, sub:'Simulando idas…',       ms:200 },
-              { pct:74, sub:'Simulando vueltas…',    ms:200 },
-              { pct:90, sub:'Resolviendo prórrogas y penaltis…', ms:170 }
+              { pct:30, sub:'Eligiendo 8 equipos para semis…', ms:120 },
+              { pct:60, sub:'Aplicando restricciones de país…',ms:140 },
+              { pct:90, sub:'Cuadrando bracket de Ronda Final…',ms:160 }
             ]
           },
-          function(){ if(typeof origWcSim === 'function') origWcSim(); }
+          function(){ if(typeof origWcDraw === 'function') origWcDraw(); }
         );
       };
     }
@@ -17082,25 +17116,31 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- ══════════════════════════════════════════════════
-     UCL · WILD CARD — Eliminatorias a doble vuelta (2026-04-30)
-     · Pool: hasta 36 equipos (zona `wildcard` de cada `ligaExt_*`)
-     · 18 eliminatorias seed-cruzadas: 1v36, 2v35, …, 18v19
-     · Cada eliminatoria: IDA (mejor seed local) + VUELTA + GLOBAL
-     · Empate al global → PRÓRROGA dentro de la vuelta
-     · Empate tras prórroga → PENALTIS deciden el ganador
-     · Los 18 ganadores → Open Qualifier (esa misma temporada),
-       persistidos en `wc_to_open_qualifier_v1` y leídos por
-       `computeOpenQualifierTeams` en misc_body_1.html.
-     · Los 18 perdedores quedan eliminados (la zona `wildcard` es la
-       de menor prioridad — no entran a otras competiciones).
+     UCL · WILD CARD — Semifinal + Ronda Final (2026-04-30 v2)
+     · Pool: 40 equipos (zona `wildcard` de cada `ligaExt_*`).
+     · FASE SEMIFINAL: 8 equipos elegidos al azar juegan 4
+       eliminatorias ida + vuelta. Los 32 restantes son BYES y pasan
+       directos a la Ronda Final. 4 ganadores de SEMI avanzan; los
+       4 perdedores quedan ELIMINADOS de cualquier competición.
+     · RONDA FINAL: 32 byes + 4 ganadores SEMI = 36 equipos en 18
+       eliminatorias ida + vuelta + global + prórroga + penaltis.
+       18 ganadores → Open Qualifier de ESTA temporada
+       (`wc_to_open_qualifier_v1`). 18 perdedores ELIMINADOS.
+     · Botones:
+       - 🎮 Sim: contextual. Sin estado → init+draw+sim. drawn → sim.
+       - 🎲 Draw: solo sortea (PIN admin 747). Pre-pinta el bracket
+         con placeholders "Ganador SF N" donde toque, sin scores.
+       - ♻️ Res: limpia el estado.
      ══════════════════════════════════════════════════ -->
 <script>
 (function(){
-  var WC_KEY        = 'wc_state_v1';
-  var WC_CHAMP_KEY  = 'wc_champion_v1';            /* legacy — limpiado al reset */
-  var WC_TO_OQ_KEY  = 'wc_to_open_qualifier_v1';   /* 18 ganadores → OQ */
-  var POOL_TARGET   = 36;
-  var TIE_COUNT     = 18;
+  var WC_KEY         = 'wc_state_v1';
+  var WC_CHAMP_KEY   = 'wc_champion_v1';            /* legacy — limpiado al reset */
+  var WC_TO_OQ_KEY   = 'wc_to_open_qualifier_v1';   /* 18 ganadores RF → OQ */
+  var POOL_TARGET    = 40;
+  var SEMI_TIES      = 4;                            /* 8 equipos juegan SEMI */
+  var BYES_COUNT     = 32;                           /* 40 − 8 = 32 byes a RF */
+  var RF_TIES        = 18;                           /* (32 + 4) / 2 = 18 ties */
 
   function loadState(){ try { return JSON.parse(localStorage.getItem(WC_KEY)||'null'); } catch(_){ return null; } }
   function saveState(s){ try { localStorage.setItem(WC_KEY, JSON.stringify(s)); } catch(_){} }
@@ -17162,49 +17202,68 @@ document.addEventListener('DOMContentLoaded', function() {
     return arr;
   }
 
-  /* Empareja 36 equipos en 18 eliminatorias con cruce por seed:
-     1v36, 2v35, …, 18v19. El mejor seed (índice menor en el pool
-     ordenado) es local en la IDA. Después intenta evitar que dos
-     equipos del mismo país (mismo `league`) se enfrenten: si una
-     pareja comparte país, busca otra pareja con la que pueda
-     intercambiar el visitante sin crear un nuevo conflicto.
-     Best-effort — si no hay swap válido, deja la pareja como esté.
-     Los placeholders no comparten `league` real, así que no
-     activan el filtro. */
-  function pairTies(pool){
-    var top = pool.slice(0, 18);              /* seeds 1..18 */
-    var bot = pool.slice(18, 36).reverse();   /* bot[0]=seed36, bot[1]=seed35, … */
+  /* Devuelve {semiTeams, byes} a partir del pool: 8 equipos al azar
+     juegan SEMI; los 32 restantes son byes (RF directo). El usuario
+     pidió explícitamente "de manera aleatoria" para esta primera
+     ronda. */
+  function pickSemiAndByes(pool){
+    var shuffled = pool.slice();
+    for(var i=shuffled.length-1; i>0; i--){
+      var j = Math.floor(Math.random() * (i+1));
+      var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+    }
+    return {
+      semiTeams: shuffled.slice(0, 8),
+      byes:      shuffled.slice(8, POOL_TARGET)
+    };
+  }
+
+  /* Helper compartido — true si dos equipos comparten `league` real
+     (los placeholders __placeholder_ y __sf_winner_ no cuentan). */
+  function _sameCountry(p){
+    var lh = p.teamH && p.teamH.league;
+    var la = p.teamA && p.teamA.league;
+    if(!lh || !la) return false;
+    if(/^__placeholder_|^__sf_winner_/.test(lh)) return false;
+    if(/^__placeholder_|^__sf_winner_/.test(la)) return false;
+    return lh === la;
+  }
+
+  /* Pareo aleatorio con 4 pasadas greedy de same-country avoidance.
+     Genérica: la usan tanto pairSemiTies (4 ties) como pairRfTies
+     (18 ties). Asume `teams` length par. Devuelve array de
+     {idx, teamH, teamA}. */
+  function _pairRandom(teams){
+    var shuf = teams.slice();
+    for(var i=shuf.length-1; i>0; i--){
+      var j = Math.floor(Math.random()*(i+1));
+      var tmp = shuf[i]; shuf[i] = shuf[j]; shuf[j] = tmp;
+    }
     var pairs = [];
-    for(var i=0;i<18;i++){
-      pairs.push({
-        idx: i,
-        seedH: i+1,
-        seedA: 36-i,
-        teamH: top[i],
-        teamA: bot[i]
-      });
+    for(var k=0; k<shuf.length; k+=2){
+      pairs.push({ idx: k/2, teamH: shuf[k], teamA: shuf[k+1] });
     }
-    function sameCountry(p){
-      var lh = p.teamH && p.teamH.league;
-      var la = p.teamA && p.teamA.league;
-      if(!lh || !la) return false;
-      if(/^__placeholder_/.test(lh) || /^__placeholder_/.test(la)) return false;
-      return lh === la;
-    }
-    for(var i=0;i<18;i++){
-      if(!sameCountry(pairs[i])) continue;
-      for(var j=0;j<18;j++){
-        if(j===i) continue;
-        var newI = { teamH: pairs[i].teamH, teamA: pairs[j].teamA };
-        var newJ = { teamH: pairs[j].teamH, teamA: pairs[i].teamA };
-        if(!sameCountry(newI) && !sameCountry(newJ)){
-          var t = pairs[i].teamA; pairs[i].teamA = pairs[j].teamA; pairs[j].teamA = t;
-          break;
+    for(var pass=0; pass<4; pass++){
+      var changed = false;
+      for(var ii=0; ii<pairs.length; ii++){
+        if(!_sameCountry(pairs[ii])) continue;
+        for(var jj=0; jj<pairs.length; jj++){
+          if(jj===ii) continue;
+          var newI = { teamH: pairs[ii].teamH, teamA: pairs[jj].teamA };
+          var newJ = { teamH: pairs[jj].teamH, teamA: pairs[ii].teamA };
+          if(!_sameCountry(newI) && !_sameCountry(newJ)){
+            var t2 = pairs[ii].teamA; pairs[ii].teamA = pairs[jj].teamA; pairs[jj].teamA = t2;
+            changed = true; break;
+          }
         }
       }
+      if(!changed) break;
     }
     return pairs;
   }
+
+  function pairSemiTies(semiTeams){ return _pairRandom(semiTeams); }
+  function pairRfTies(rfTeams){     return _pairRandom(rfTeams); }
 
   /* Wrap del simulador IA-vs-IA. Reusa _simIAvsIAWithContext si está
      disponible (mismo motor que LaLiga), caemos a _fallbackIAvsIAScore
@@ -17292,14 +17351,14 @@ document.addEventListener('DOMContentLoaded', function() {
     tie.penDecided = true;
   }
 
-  /* Persiste los 18 ganadores en `wc_to_open_qualifier_v1` para que
-     `computeOpenQualifierTeams` (misc_body_1.html) los inyecte como
-     plazas extra del Open Qualifier de la misma temporada. Cada
-     entrada lleva `{name, logo, league:'wild-card'}` para que el
-     listado de OQ sepa de dónde viene. */
+  /* Persiste los 18 ganadores DE LA RONDA FINAL en
+     `wc_to_open_qualifier_v1`. Los 4 perdedores SEMI no entran aquí —
+     quedan eliminados de cualquier competición.
+     `computeOpenQualifierTeams` (misc_body_1.html) lee este flag y
+     mete los 18 ganadores en el pool del OQ de la misma temporada. */
   function _persistWinners(state){
     var winners = [];
-    state.ties.forEach(function(t){
+    (state.rfTies||[]).forEach(function(t){
       if(!t || !t.winner) return;
       var src = (t.winner === (t.teamH && t.teamH.name)) ? t.teamH : t.teamA;
       winners.push({
@@ -17320,18 +17379,41 @@ document.addEventListener('DOMContentLoaded', function() {
     try { localStorage.removeItem(WC_CHAMP_KEY); } catch(_){}
   }
 
-  /* Juega las 18 eliminatorias de un tirón. Una sola pulsación de
-     "🎮 Simular" basta para resolver toda la ronda y dejar la lista
-     de 18 clasificados al Open Qualifier lista.
-     Tras persistir los ganadores, limpiamos la cache del Open
-     Qualifier (`oq_simulation_v1`, `oq_to_conference_v1`,
-     `oq_to_previa_v1`) para que la próxima sim del OQ incluya a los
-     18 ganadores en el pool — si no, el OQ seguiría con un estado
-     cacheado SIN ellos. Comportamiento heredado del fix 2b97e6d
-     (que solo aplicaba al campeón único). */
-  function simAllTies(state){
-    if(!state || !Array.isArray(state.ties)) return;
-    state.ties.forEach(function(t){ if(!t.played) playKoTie(t); });
+  /* Sustituye en las RF ties los placeholders "Ganador SF N" por el
+     equipo real ganador de la SEMI correspondiente. Llamada después
+     de jugar las semis y antes de jugar las RF ties. */
+  function _resolveSemiWinnersInRf(state){
+    (state.rfTies||[]).forEach(function(rfTie){
+      ['teamH','teamA'].forEach(function(side){
+        var t = rfTie[side];
+        if(t && t.isSemiWinner){
+          var semi = state.semis[t.semiIdx];
+          if(semi && semi.winner){
+            /* semi.winner es el NAME del ganador. Buscamos su objeto. */
+            var realTeam = (semi.winner === semi.teamH.name) ? semi.teamH : semi.teamA;
+            rfTie[side] = realTeam;
+          }
+        }
+      });
+    });
+  }
+
+  /* Una sola pulsación de Sim juega TODA la fase: 4 semis + 18 RF.
+     Pasos:
+       1. Juega las 4 semis (si no están ya jugadas).
+       2. Resuelve los placeholders "Ganador SF N" en las RF ties.
+       3. Juega las 18 RF ties.
+       4. Persiste los 18 ganadores RF y limpia caché del OQ.
+     El flag legacy `wc_champion_v1` ya no se escribe. */
+  function simulateAll(state){
+    if(!state) return;
+    if(Array.isArray(state.semis)){
+      state.semis.forEach(function(t){ if(!t.played) playKoTie(t); });
+    }
+    _resolveSemiWinnersInRf(state);
+    if(Array.isArray(state.rfTies)){
+      state.rfTies.forEach(function(t){ if(!t.played) playKoTie(t); });
+    }
     state.phase = 'done';
     _persistWinners(state);
     try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
@@ -17339,34 +17421,59 @@ document.addEventListener('DOMContentLoaded', function() {
     try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
   }
 
-  /* Inicializa el estado leyendo los equipos clasificados desde las
-     ligas menores y montando 18 eliminatorias seed-cruzadas, evitando
-     en lo posible enfrentar equipos del mismo país. Si hay menos de
-     36 equipos reales, completamos con placeholders. */
+  function _newTie(idx, teamH, teamA){
+    return {
+      idx: idx,
+      teamH: teamH, teamA: teamA,
+      played: false,
+      idaGh: null, idaGa: null,
+      vueltaGh: null, vueltaGa: null,
+      etGh: null, etGa: null, etDecided: false,
+      penGh: null, penGa: null, penDecided: false,
+      aggH: null, aggA: null,
+      winner: null
+    };
+  }
+
+  /* Inicializa el estado SORTEANDO las eliminatorias (sin simular).
+     Pasos:
+       1. Pool de 40 equipos (rellenado con placeholders si hace falta).
+       2. 8 random a SEMI · 32 byes a RF directo.
+       3. 4 ties SEMI con same-country avoidance.
+       4. RF se pre-pinta con 32 byes + 4 placeholders "Ganador SF N"
+          → 18 ties RF random con same-country avoidance. Cuando se
+          simule, _resolveSemiWinnersInRf reemplaza los placeholders
+          por los ganadores reales conservando la posición original
+          en el bracket. */
   function initState(){
     var raw = buildPool();
     if(raw.length === 0) return null;
     var pool = _normalizePool(raw);
-    var pairs = pairTies(pool);
-    var ties = pairs.map(function(p){
-      return {
-        idx: p.idx,
-        seedH: p.seedH, seedA: p.seedA,
-        teamH: p.teamH, teamA: p.teamA,
-        played: false,
-        idaGh: null, idaGa: null,
-        vueltaGh: null, vueltaGa: null,
-        etGh: null, etGa: null, etDecided: false,
-        penGh: null, penGa: null, penDecided: false,
-        aggH: null, aggA: null,
-        winner: null
-      };
-    });
+    var split = pickSemiAndByes(pool);
+    var semiPairs = pairSemiTies(split.semiTeams);
+    var semis = semiPairs.map(function(p){ return _newTie(p.idx, p.teamH, p.teamA); });
+    /* Placeholders para los 4 ganadores SEMI (se sustituyen al sim). */
+    var sfPlaceholders = [];
+    for(var k=0; k<SEMI_TIES; k++){
+      sfPlaceholders.push({
+        name: 'Ganador SF'+(k+1),
+        league: '__sf_winner_'+k,
+        logo: '',
+        power: 60,
+        isSemiWinner: true,
+        semiIdx: k
+      });
+    }
+    var rfPool = split.byes.concat(sfPlaceholders);   /* 32 + 4 = 36 */
+    var rfPairs = pairRfTies(rfPool);                  /* 18 ties random */
+    var rfTies = rfPairs.map(function(p){ return _newTie(p.idx, p.teamH, p.teamA); });
     return {
       pool: pool,
-      ties: ties,
+      semis: semis,
+      byes: split.byes,
+      rfTies: rfTies,
       winners: [],
-      phase: 'pending',
+      phase: 'drawn',
       ts: Date.now()
     };
   }
@@ -17382,21 +17489,20 @@ document.addEventListener('DOMContentLoaded', function() {
   function _teamLogo(t){ return (t && t.logo) ? t.logo : _logoOf(_teamName(t)); }
 
   /* Render de UNA eliminatoria. Ida + Vuelta + (Prórroga + Penaltis si
-     aplica) + Global + indicador del clasificado. */
-  function renderTie(tie){
+     aplica) + Global + indicador del clasificado. Acepta un `prefix`
+     opcional para distinguir SEMI vs RF en el header (#1, #2…). */
+  function renderTie(tie, prefix){
     var played = !!tie.played;
     var nameH = _teamName(tie.teamH), nameA = _teamName(tie.teamA);
     var aggH = (tie.aggH != null) ? tie.aggH : ((tie.idaGh||0) + (tie.vueltaGa||0));
     var aggA = (tie.aggA != null) ? tie.aggA : ((tie.idaGa||0) + (tie.vueltaGh||0));
     var winnerH = played && tie.winner === nameH;
     var winnerA = played && tie.winner === nameA;
-    var seedH = tie.seedH ? tie.seedH : '';
-    var seedA = tie.seedA ? tie.seedA : '';
+    var label = (prefix||'ELIMINATORIA') + ' #' + ((tie.idx||0)+1);
 
     var html = '<div class="wc-tie '+(played?'played':'')+'">';
     html += '<div class="wc-tie-label" style="margin-bottom:6px;">'
-      +    'ELIMINATORIA #'+((tie.idx||0)+1)
-      +    (seedH && seedA ? ' · seed '+seedH+' vs seed '+seedA : '')
+      +    label
       +    '</div>';
 
     /* IDA — teamH local */
@@ -17478,11 +17584,18 @@ document.addEventListener('DOMContentLoaded', function() {
       +  '</div>';
   }
 
+  function _refreshSimBtn(s){
+    var btnSim   = document.getElementById('wc-btn-sim');
+    var btnDraw  = document.getElementById('wc-btn-draw');
+    if(btnSim)  btnSim.disabled  = !!(s && s.phase === 'done');
+    if(btnDraw) btnDraw.disabled = false;   /* Draw siempre disponible (re-sortea) */
+  }
+
   function render(){
     var host = document.getElementById('wc-body');
     if(!host) return;
     var s = loadState();
-    var btnSim = document.getElementById('wc-btn-sim');
+    _refreshSimBtn(s);
     if(!s){
       var pool = buildPool();
       host.innerHTML = '<div class="wc-empty">'
@@ -17491,32 +17604,41 @@ document.addEventListener('DOMContentLoaded', function() {
         + 'Configura el cupo <b>⚪ WildCard Round</b> en cada liga menor desde 📜 <i>Reglas</i> y simula sus jornadas. '
         + 'Equipos detectados ahora mismo: <b>'+pool.length+'/'+POOL_TARGET+'</b>.<br><br>'
         + (pool.length > 0
-          ? 'Pulsa <b>🎮 Simular</b> para jugar las '+TIE_COUNT+' eliminatorias (rellenamos hasta '+POOL_TARGET+' con placeholders si faltan).'
+          ? 'Pulsa <b>🎲 Draw</b> (PIN admin) para sortear las eliminatorias, o <b>🎮 Simular</b> para sortear y jugar todo de una vez. Rellenamos con placeholders si faltan.'
           : 'Necesitas al menos 1 equipo para arrancar.')
         + '</div>';
-      if(btnSim) btnSim.disabled = (pool.length === 0);
       return;
     }
-    if(btnSim) btnSim.disabled = (s.phase === 'done');
 
-    function _miniSimBtn(forPhase){
-      if(s.phase !== forPhase) return '';
-      return '<button class="wc-mini-sim" onclick="window._wcSimulate&&window._wcSimulate()">🎮 Sim</button>';
-    }
-    function _secHead(title, forPhase){
-      return '<div class="wc-sec-head">'
-        +    '<div class="wc-sec-title">'+title+'</div>'
-        +    _miniSimBtn(forPhase)
-        +  '</div>';
+    function _secHead(title){
+      return '<div class="wc-sec-head"><div class="wc-sec-title">'+title+'</div></div>';
     }
 
     var html = '';
-    var title = (s.phase === 'done')
-      ? 'ELIMINATORIAS · '+TIE_COUNT+' PARTIDOS · RESUELTAS'
-      : 'ELIMINATORIAS · '+TIE_COUNT+' PARTIDOS · PENDIENTES';
-    html += '<div class="wc-sec">' + _secHead(title, 'pending');
-    (s.ties || []).forEach(function(t){ html += renderTie(t); });
+    /* Banner de fase para el usuario */
+    var phaseBanner = (s.phase === 'drawn')
+      ? '⏳ SORTEO LISTO · pulsa 🎮 Simular para jugar las eliminatorias'
+      : '✓ TORNEO COMPLETO · 18 ganadores → Open Qualifier';
+    html += '<div style="margin:0 4px 6px;padding:8px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#ffffff;text-align:center;">'
+      +    phaseBanner
+      +    '</div>';
+
+    /* === SEMIFINAL === */
+    var semiTitle = (s.phase === 'done')
+      ? 'SEMIFINAL · 4 ELIMINATORIAS · RESUELTAS'
+      : 'SEMIFINAL · 4 ELIMINATORIAS · PENDIENTES';
+    html += '<div class="wc-sec">' + _secHead(semiTitle);
+    (s.semis || []).forEach(function(t){ html += renderTie(t, 'SEMI'); });
     html += '</div>';
+
+    /* === RONDA FINAL === */
+    var rfTitle = (s.phase === 'done')
+      ? 'RONDA FINAL · 18 ELIMINATORIAS · RESUELTAS'
+      : 'RONDA FINAL · 18 ELIMINATORIAS · PENDIENTES';
+    html += '<div class="wc-sec">' + _secHead(rfTitle);
+    (s.rfTies || []).forEach(function(t){ html += renderTie(t, 'RF'); });
+    html += '</div>';
+
     if(s.phase === 'done'){
       html += renderWinners(s);
     }
@@ -17524,34 +17646,49 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   window._wcRender = render;
 
-  /* Una sola pulsación = se generan TODAS las simulaciones de las 18
-     eliminatorias. No hay fases intermedias: si no hay estado lo
-     creamos, jugamos las 18 ties, persistimos los ganadores y
-     actualizamos `wc_to_open_qualifier_v1`. Si ya está jugado, no
-     hacemos nada. */
-  function simulateAll(){
+  /* 🎮 Sim — contextual:
+       - sin estado     → init + sortea + juega TODO (semis + RF) en uno.
+       - phase='drawn'  → solo juega (mantiene el sorteo previo).
+       - phase='done'   → no-op (re-render para refrescar UI).
+     NOTA: a diferencia de Draw, Sim NO exige PIN (solo juega lo que
+     ya está sorteado o sortea internamente). */
+  window._wcSimulate = function(){
     var s = loadState();
     if(!s){
-      s = initState();
-      if(!s) return null;
-    }
-    if(s.phase === 'done') return 'done';
-    simAllTies(s);
-    saveState(s);
-    return 'done';
-  }
-
-  window._wcSimulate = function(){
-    function _go(){
-      var r = simulateAll();
-      if(!r){
+      var pool = buildPool();
+      if(!pool.length){
         alert('⚠️ No hay equipos clasificados. Simula al menos una liga menor con cupo ⚪ WildCard.');
         return;
       }
+      s = initState();
+      if(!s) return;
+    }
+    if(s.phase === 'done'){ render(); return; }
+    simulateAll(s);
+    saveState(s);
+    render();
+  };
+
+  /* 🎲 Draw — solo sortea (sin simular). Pide PIN admin 747 vía pG.
+     Si ya hay un estado previo (drawn o done), confirma para
+     sobreescribirlo, así el usuario no pierde un torneo simulado por
+     error. */
+  window._wcDraw = function(){
+    function _doDraw(){
+      var pool = buildPool();
+      if(!pool.length){
+        alert('⚠️ No hay equipos clasificados. Configura cupos ⚪ WildCard en las ligas menores y simúlalas primero.');
+        return;
+      }
+      var prev = loadState();
+      if(prev && !confirm('Hay un sorteo previo'+(prev.phase==='done'?' Y simulado':'')+'. ¿Sobreescribirlo con uno nuevo?')) return;
+      var s = initState();
+      if(!s) return;
+      saveState(s);
       render();
     }
-    if(typeof window.pG === 'function'){ window.pG(_go); }
-    else _go();
+    if(typeof window.pG === 'function') window.pG(_doDraw);
+    else _doDraw();
   };
 
   window._wcReset = function(){

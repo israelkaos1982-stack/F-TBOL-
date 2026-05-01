@@ -3376,7 +3376,17 @@ window._showSimProgress = function(opts, onDone){
       for (var i = 0; i < localStorage.length; i++){
         var k = localStorage.key(i);
         if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        /* Filtrar TODAS las keys auxiliares: backups, snapshots y
+           protected. Antes solo se filtraba `_backup`, así que las
+           variantes `_protected` y `_snap_<ts>` se trataban como
+           slugs reales — `lextDeepRecoverSlug('inglaterra_protected')`
+           re-guardaba la data como si fuera una liga separada y
+           contaminaba el server con keys falsas. */
         if (k.indexOf('_backup') !== -1) continue;
+        if (k.indexOf('_protected') !== -1) continue;
+        if (k.indexOf('_snap_') !== -1) continue;
+        if (k.indexOf('_snapshot') !== -1) continue;
+        if (/_v\d+$/.test(k)) continue;
         slugs[k.replace(/^ligaExt_/,'')] = true;
       }
     }catch(_){}

@@ -8046,14 +8046,22 @@ Tottenham
   }
   function saveData(k,d){
     LIGA_CACHE[k] = d;
-    /* Invalidar cache de computeLineStats — si admin editó una
-       plantilla y mutó power de jugadores, los stats cacheados son
-       obsoletos. La invalidación es barata (recrear WeakMap) y
+    /* Invalidar cache de computeLineStats / roster — si admin editó
+       una plantilla y mutó power de jugadores, los stats cacheados
+       son obsoletos. La invalidación es barata (recrear WeakMap) y
        garantiza correctitud. */
     if (typeof window._invalidateLineStatsCache === 'function') {
       try { window._invalidateLineStatsCache(); } catch(_){}
     }
-    try{ localStorage.setItem(storeKey(k), JSON.stringify(d)); }catch(_){}
+    /* JSON.stringify cacheado UNA VEZ — antes se serializaba 2-3
+       veces el mismo objeto (main + backup + snap). Para una
+       plantilla de ~80KB esto es ~80ms × 3 = 240ms ahorrados por
+       saveData. En el flow "simular 51 ligas" son ~12s ahorrados. */
+    var serialized;
+    try { serialized = JSON.stringify(d); } catch(_){ serialized = null; }
+    if (serialized != null) {
+      try { localStorage.setItem(storeKey(k), serialized); } catch(_){}
+    }
     /* ── BACKUPS AUTOMÁTICOS ──
        Cada guardado escribe además:
          1) ligaExt_<k>_backup           → backup inmediato (pisa el anterior)
@@ -8062,31 +8070,32 @@ Tottenham
        del navegador, fetch fallido, bug de importación), siempre
        queda un registro reciente del que tirar vía
        emergencyRestore o lextDeepRecoverAll. */
-    try {
-      var nowMs = Date.now();
-      var serialized = JSON.stringify(d);
-      localStorage.setItem('ligaExt_'+k+'_backup', serialized);
-      /* Historial: si hay jugadores suficientes, mantener snapshot
-         datado. Si d está vacío (p.ej. wipe), NO escribimos snapshot
-         — los snapshots existentes sobreviven. */
-      if (_countPlayers(d) > 0) {
-        localStorage.setItem('ligaExt_'+k+'_snap_'+nowMs, serialized);
-        /* Limpieza: mantener solo los 5 snapshots más recientes */
-        var snaps = [];
-        for (var i = 0; i < localStorage.length; i++) {
-          var kk = localStorage.key(i);
-          if (kk && kk.indexOf('ligaExt_'+k+'_snap_') === 0) {
-            snaps.push(kk);
+    if (serialized != null) {
+      try {
+        var nowMs = Date.now();
+        localStorage.setItem('ligaExt_'+k+'_backup', serialized);
+        /* Historial: si hay jugadores suficientes, mantener snapshot
+           datado. Si d está vacío (p.ej. wipe), NO escribimos snapshot
+           — los snapshots existentes sobreviven. */
+        if (_countPlayers(d) > 0) {
+          localStorage.setItem('ligaExt_'+k+'_snap_'+nowMs, serialized);
+          /* Limpieza: mantener solo los 5 snapshots más recientes */
+          var snaps = [];
+          for (var i = 0; i < localStorage.length; i++) {
+            var kk = localStorage.key(i);
+            if (kk && kk.indexOf('ligaExt_'+k+'_snap_') === 0) {
+              snaps.push(kk);
+            }
+          }
+          if (snaps.length > 5) {
+            snaps.sort();
+            snaps.slice(0, snaps.length - 5).forEach(function(old){
+              try { localStorage.removeItem(old); } catch(_){}
+            });
           }
         }
-        if (snaps.length > 5) {
-          snaps.sort();
-          snaps.slice(0, snaps.length - 5).forEach(function(old){
-            try { localStorage.removeItem(old); } catch(_){}
-          });
-        }
-      }
-    } catch(_){}
+      } catch(_){}
+    }
     /* Write-back al servidor (async, best-effort). Ahora también
        se sube a una KEY de backup en el server — si el server
        wipea el main por alguna razón, queda el backup. */
@@ -8496,34 +8505,92 @@ Tottenham
     return pool[pool.length-1];
   }
 
-  function pickScorer(players){
-    /* Selecciona el goleador SOLO entre los titulares aproximados
-       (top 3 DEL + top 3 MED + top 4 DEF por poder, formación
-       4-3-3). Antes competía dentro de la plantilla COMPLETA (25-30
-       jugadores), así que un 🏀 con ×3.0 quedaba diluido por 5-7
-       delanteros suplentes y el goleador estrella solo conseguía
-       ~25% de los goles del equipo en lugar del 46-50% objetivo.
-       Con titulares (Haaland 91·🏀 vs 2 delanteros ~84):
-         Haaland_w = 91 × 3.0 = 273
-         Otros_w  = 2 × 84    = 168
-         Cuota DEL = 273 / 441 = 61.9%
-         Open-play (60% del total) × 61.9% = 37.1%
-         + Penaltis (12% del total, todos al taker P) = 12%
-         → ≈ 49% del total — entra en el rango 46-50%. */
-    var byPos = {DEL: [], MED: [], DEF: []};
+  /* Cache de roster por equipo — agrupa los lookups que `pickScorer`
+     y `pickCardie` repetían en cada uno de los ~5 picks por partido
+     (goles + amarillas + rojas). Para 14 equipos × 13 oponentes × 2
+     = 364 partidos × ~5 picks = ~1800 sorts/filters redundantes por
+     sim. Cacheándolo: 1 sort por equipo por sim.
+     Estructura cacheada:
+       { por: <portero|null>,
+         titulares: { DEL:[...3], MED:[...3], DEF:[...4] },
+         cardiePool: <DEF + MED>,
+         nonGkPool: <todos menos POR> } */
+  var _rosterCache = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+
+  function _getRoster(team){
+    if (!team) return null;
+    if (_rosterCache && _rosterCache.has(team)) return _rosterCache.get(team);
+    var players = (team && Array.isArray(team.players)) ? team.players : [];
+    var byPos = {DEL:[], MED:[], DEF:[], POR:[]};
     players.forEach(function(p){
-      if (!p) return;
+      if(!p) return;
       var pos = p.pos;
-      if (pos === 'DEL' || pos === 'MED' || pos === 'DEF') byPos[pos].push(p);
+      if(pos==='DEL' || pos==='MED' || pos==='DEF' || pos==='POR') byPos[pos].push(p);
     });
-    Object.keys(byPos).forEach(function(k){
+    /* Sort cada posición por power desc — una sola vez por sim. */
+    ['DEL','MED','DEF'].forEach(function(k){
       byPos[k].sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
     });
-    var titulares = {
-      DEL: byPos.DEL.slice(0, 3),
-      MED: byPos.MED.slice(0, 3),
-      DEF: byPos.DEF.slice(0, 4)
+    /* Penalty/freeKick takers — find single-pass una vez por equipo
+       por sim. Antes era 1 filter por gol (~5 filters/match). */
+    var penTaker = null, fkTaker = null;
+    for(var k=0;k<players.length;k++){
+      var p = players[k]; if(!p) continue;
+      if(!penTaker && p.penalty)  penTaker = p;
+      if(!fkTaker  && p.freeKick) fkTaker  = p;
+      if(penTaker && fkTaker) break;
+    }
+    var roster = {
+      por: byPos.POR[0] || null,
+      titulares: {
+        DEL: byPos.DEL.slice(0, 3),
+        MED: byPos.MED.slice(0, 3),
+        DEF: byPos.DEF.slice(0, 4)
+      },
+      cardiePool: byPos.DEF.concat(byPos.MED),
+      nonGkPool: players.filter(function(p){return p && p.pos !== 'POR';}),
+      penTaker: penTaker,
+      fkTaker:  fkTaker
     };
+    if (_rosterCache && team) {
+      try { _rosterCache.set(team, roster); } catch(_){}
+    }
+    return roster;
+  }
+
+  /* Invalidación combinada — invalida tanto `_lineStatsCache` como
+     `_rosterCache`. Llamada desde saveData cuando los datos cambian. */
+  var _origInvalidate = window._invalidateLineStatsCache;
+  window._invalidateLineStatsCache = function(){
+    if (typeof _origInvalidate === 'function') _origInvalidate();
+    _rosterCache = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+  };
+
+  function pickScorer(players, team){
+    /* Selecciona el goleador SOLO entre los titulares aproximados
+       (top 3 DEL + top 3 MED + top 4 DEF por poder, formación
+       4-3-3). Cuando se llama desde `applyMatchStats` ya viene con
+       `team` para usar el roster cacheado; sin team (rama legacy)
+       calcula el roster ad-hoc cada vez. */
+    var roster = team ? _getRoster(team) : null;
+    if(!roster){
+      /* Fallback legacy: replica el comportamiento original. */
+      var byPos = {DEL: [], MED: [], DEF: []};
+      players.forEach(function(p){
+        if (!p) return;
+        var pos = p.pos;
+        if (pos === 'DEL' || pos === 'MED' || pos === 'DEF') byPos[pos].push(p);
+      });
+      Object.keys(byPos).forEach(function(k){
+        byPos[k].sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+      });
+      roster = { titulares: {
+        DEL: byPos.DEL.slice(0, 3),
+        MED: byPos.MED.slice(0, 3),
+        DEF: byPos.DEF.slice(0, 4)
+      }};
+    }
+    var titulares = roster.titulares;
     // 60% DEL, 30% MED, 10% DEF (misma distribución que antes).
     var r = Math.random();
     var pool;
@@ -8537,9 +8604,17 @@ Tottenham
     return weightedPick(pool);
   }
 
-  function pickCardie(players){
-    var pool = players.filter(function(p){return p.pos==='DEF'||p.pos==='MED';});
-    if(!pool.length) pool = players.filter(function(p){return p.pos!=='POR';});
+  function pickCardie(players, team){
+    var roster = team ? _getRoster(team) : null;
+    var pool;
+    if(roster){
+      pool = roster.cardiePool;
+      if(!pool.length) pool = roster.nonGkPool;
+    } else {
+      /* Fallback legacy. */
+      pool = players.filter(function(p){return p.pos==='DEF'||p.pos==='MED';});
+      if(!pool.length) pool = players.filter(function(p){return p.pos!=='POR';});
+    }
     if(!pool.length) pool = players;
     return pool[Math.floor(Math.random()*pool.length)];
   }
@@ -8561,10 +8636,22 @@ Tottenham
   }
 
   function applyMatchStats(team, gf, ga, yellows, reds){
-    if(!team.players || !team.players.length) return null;
-    team.players.forEach(ensurePlayerStats);
+    var players = team && team.players;
+    if(!players || !players.length) return null;
+    /* Roster cacheado: portero, titulares, cardiePool, penTaker y
+       fkTaker — se computa una sola vez por equipo por sim. */
+    var roster = _getRoster(team);
+    /* ensurePlayerStats: ligaExtSimular ya hace resetPlayerStats
+       a TODOS los jugadores antes del primer partido, así que esto
+       sería un no-op redundante. Lo mantenemos solo si el flujo
+       llama a applyMatchStats sin reset previo (rama copa o
+       similares). Ese caso lo cubre `_statsEnsured` en el roster. */
+    if (roster && !roster._statsEnsured) {
+      players.forEach(ensurePlayerStats);
+      roster._statsEnsured = true;
+    }
     // PJ para todos
-    team.players.forEach(function(p){ p.pj++; });
+    for(var pi=0; pi<players.length; pi++) players[pi].pj++;
     /* `info` recopila lo que ha hecho cada jugador EN ESTE PARTIDO
        para que assignMVP elija al MVP por méritos (no por poder
        como hacía la versión anterior). */
@@ -8575,40 +8662,39 @@ Tottenham
       yellows: [],   // [player, ...]
       reds: []       // [player, ...]
     };
-    // Clean sheet + pen parado al portero
-    var gks = team.players.filter(function(p){return p.pos==='POR';});
-    if(gks.length){
-      info.gk = gks[0];
-      if(ga === 0){ gks[0].imbat++; info.cleanSheet = true; }
-      if(Math.random() < 0.08){ gks[0].penSaved++; info.penSaved = true; }
+    // Clean sheet + pen parado al portero (usando roster cacheado)
+    if(roster && roster.por){
+      info.gk = roster.por;
+      if(ga === 0){ roster.por.imbat++; info.cleanSheet = true; }
+      if(Math.random() < 0.08){ roster.por.penSaved++; info.penSaved = true; }
     }
+    var penTaker = roster ? roster.penTaker : null;
+    var fkTaker  = roster ? roster.fkTaker  : null;
     // Distribución de goles
     for(var g=0; g<gf; g++){
       var scorer;
       var roll = Math.random();
       if(roll < 0.12){
         // Penalti
-        var penTaker = team.players.filter(function(p){return p.penalty;})[0];
-        scorer = penTaker || pickScorer(team.players);
+        scorer = penTaker || pickScorer(players, team);
         if(scorer){ scorer.pen++; }
       } else if(roll < 0.17){
         // Falta directa
-        var fkTaker = team.players.filter(function(p){return p.freeKick;})[0];
-        scorer = fkTaker || pickScorer(team.players);
+        scorer = fkTaker || pickScorer(players, team);
         if(scorer){ scorer.fk++; }
       } else {
-        scorer = pickScorer(team.players);
+        scorer = pickScorer(players, team);
       }
       if(scorer){ scorer.gol++; info.scorers.push(scorer); }
     }
     // Amarillas
     for(var y=0; y<yellows; y++){
-      var c = pickCardie(team.players);
+      var c = pickCardie(players, team);
       if(c){ c.ta++; info.yellows.push(c); }
     }
     // Rojas
     for(var rr=0; rr<reds; rr++){
-      var c2 = pickCardie(team.players);
+      var c2 = pickCardie(players, team);
       if(c2){ c2.tr++; info.reds.push(c2); }
     }
     return info;

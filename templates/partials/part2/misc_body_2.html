@@ -17810,6 +17810,72 @@ document.addEventListener('DOMContentLoaded', function() {
     return lines.join('\n');
   }
 
+  /* Audit exhaustivo de TODAS las ligas en localStorage — útil
+     cuando el conteo de "incompletas" es sospechoso. Para cada
+     `ligaExt_<slug>` (sin aux keys), reporta:
+       · teams.length
+       · results.length
+       · needed = teams * (teams-1)
+       · complete = results.length >= needed
+       · zones.wildcard
+     Devuelve un array; también imprime una tabla en consola para
+     copy-paste fácil. */
+  window._wcAuditAllLeagues = function(){
+    var rows = [];
+    try {
+      for(var i=0; i<localStorage.length; i++){
+        var k = localStorage.key(i);
+        if(!k || k.indexOf('ligaExt_') !== 0) continue;
+        if(k.indexOf('_backup') !== -1) continue;
+        if(k.indexOf('_snap_') !== -1) continue;
+        if(k.indexOf('_snapshot') !== -1) continue;
+        if(k.indexOf('_protected') !== -1) continue;
+        if(/_v\d+$/.test(k)) continue;
+        var slug = k.substring('ligaExt_'.length);
+        var raw = localStorage.getItem(k);
+        if(!raw){ rows.push({slug:slug, status:'no-data'}); continue; }
+        var d;
+        try { d = JSON.parse(raw); } catch(_){ rows.push({slug:slug, status:'json-invalid'}); continue; }
+        var nT = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
+        var nR = (d && Array.isArray(d.results)) ? d.results.length : 0;
+        var needed = nT * (nT-1);
+        var zones = (d && d.config && d.config.zones) || {};
+        rows.push({
+          slug: slug,
+          teams: nT,
+          results: nR,
+          needed: needed,
+          complete: nR >= needed && nT >= 2,
+          zone_ucl: Number(zones.ucl||0),
+          zone_uclPrev: Number(zones.uclPrev||0),
+          zone_uclQual: Number(zones.uclQual||0),
+          zone_uel: Number(zones.uel||0),
+          zone_uecl: Number(zones.uecl||0),
+          zone_wildcard: Number(zones.wildcard||0)
+        });
+      }
+    } catch(_){}
+    rows.sort(function(a,b){ return a.slug.localeCompare(b.slug); });
+    /* Logs para que el usuario pueda copy-paste. */
+    try { console.table(rows); } catch(_){}
+    /* Resumen de incompletas con detalle. */
+    var incomp = rows.filter(function(r){ return r.teams >= 2 && r.results < r.needed; });
+    var sinPlazas = rows.filter(function(r){ return r.zone_wildcard === 0 && r.complete; });
+    var msg = ['🔬 AUDIT COMPLETO ('+rows.length+' ligas en localStorage)'];
+    msg.push('────────────────');
+    msg.push('Completas con wildcard=1: ' + rows.filter(function(r){return r.complete && r.zone_wildcard>0;}).length);
+    msg.push('Completas sin wildcard:  ' + sinPlazas.length);
+    msg.push('Incompletas (' + incomp.length + '):');
+    incomp.forEach(function(r){
+      msg.push('  · ' + r.slug + ' → ' + r.results + '/' + r.needed + ' partidos · ' + r.teams + ' equipos · wildcard=' + r.zone_wildcard);
+    });
+    msg.push('');
+    msg.push('💡 La consola tiene la tabla COMPLETA con todas las zonas');
+    msg.push('   (F12 → Consola → busca "_wcAuditAllLeagues")');
+    alert(msg.join('\n'));
+    return rows;
+  };
+
   window._wcShowDebug = function(){
     var d = window._wcDebugPool();
     alert(_renderDebugPool(d));

@@ -8046,6 +8046,13 @@ Tottenham
   }
   function saveData(k,d){
     LIGA_CACHE[k] = d;
+    /* Invalidar cache de computeLineStats — si admin editó una
+       plantilla y mutó power de jugadores, los stats cacheados son
+       obsoletos. La invalidación es barata (recrear WeakMap) y
+       garantiza correctitud. */
+    if (typeof window._invalidateLineStatsCache === 'function') {
+      try { window._invalidateLineStatsCache(); } catch(_){}
+    }
     try{ localStorage.setItem(storeKey(k), JSON.stringify(d)); }catch(_){}
     /* ── BACKUPS AUTOMÁTICOS ──
        Cada guardado escribe además:
@@ -8207,6 +8214,19 @@ Tottenham
     return Math.round(arr.reduce(function(a,b){return a+b;},0)/arr.length);
   }
 
+  /* Cache de computeLineStats — clave: identidad del objeto team
+     (WeakMap, se libera con GC). Evita recomputar atk/mid/def/glob
+     para cada uno de los 13 partidos como local + 13 como visitante
+     que cada equipo juega en una temporada. Para 14 equipos: 14
+     llamadas reales en lugar de 364 (×26 menos). El cache se limpia
+     al re-cargar una liga (loadData crea objetos nuevos al hacer
+     JSON.parse) y se puede limpiar manualmente con
+     window._invalidateLineStatsCache(). */
+  var _lineStatsCache = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+  window._invalidateLineStatsCache = function(){
+    _lineStatsCache = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+  };
+
   function computeLineStats(t){
     /* Calcula los 4 ejes del equipo (GLOBAL, ATAQUE, MEDIO, DEFENSA)
        a partir de la plantilla. Petición usuario (2026-04-28):
@@ -8224,38 +8244,47 @@ Tottenham
        fallback. Si la plantilla está vacía, usa los valores manuales
        guardados (t.atk/mid/def/power) — esto preserva las ligas con
        admin-overrides explícitos. */
+    if (_lineStatsCache && t && _lineStatsCache.has(t)) {
+      return _lineStatsCache.get(t);
+    }
     var players = (t && Array.isArray(t.players)) ? t.players : [];
     function _avg(pool){
       if (!pool.length) return 0;
       var sum = pool.reduce(function(s,p){return s + (Number(p.power)||0);}, 0);
       return sum / pool.length;
     }
+    var result;
     if (!players.length) {
-      return {
+      result = {
         glob: Number(t.power)||50,
         atk:  Number(t.atk)||Number(t.power)||50,
         mid:  Number(t.mid)||Number(t.power)||50,
         def:  Number(t.def)||Number(t.power)||50
       };
+    } else {
+      var atkPool = players.filter(function(p){return p.pos === 'DEL';});
+      var midPool = players.filter(function(p){return p.pos === 'MED';});
+      var defPool = players.filter(function(p){return p.pos === 'DEF';});
+      /* GLOBAL: media de los 11 mejores. Buena aproximación a la
+         fuerza real en el campo. */
+      var top11 = players.slice().sort(function(a,b){
+        return (Number(b.power)||0) - (Number(a.power)||0);
+      }).slice(0, 11);
+      var glob = _avg(top11) || Number(t.power) || 50;
+      var atk  = _avg(atkPool) || glob;
+      var mid  = _avg(midPool) || glob;
+      var def  = _avg(defPool) || glob;
+      result = {
+        glob: Math.round(glob),
+        atk:  Math.round(atk),
+        mid:  Math.round(mid),
+        def:  Math.round(def)
+      };
     }
-    var atkPool = players.filter(function(p){return p.pos === 'DEL';});
-    var midPool = players.filter(function(p){return p.pos === 'MED';});
-    var defPool = players.filter(function(p){return p.pos === 'DEF';});
-    /* GLOBAL: media de los 11 mejores. Buena aproximación a la
-       fuerza real en el campo. */
-    var top11 = players.slice().sort(function(a,b){
-      return (Number(b.power)||0) - (Number(a.power)||0);
-    }).slice(0, 11);
-    var glob = _avg(top11) || Number(t.power) || 50;
-    var atk  = _avg(atkPool) || glob;
-    var mid  = _avg(midPool) || glob;
-    var def  = _avg(defPool) || glob;
-    return {
-      glob: Math.round(glob),
-      atk:  Math.round(atk),
-      mid:  Math.round(mid),
-      def:  Math.round(def)
-    };
+    if (_lineStatsCache && t) {
+      try { _lineStatsCache.set(t, result); } catch(_){}
+    }
+    return result;
   }
 
   function computeTeamPower(t){

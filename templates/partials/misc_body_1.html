@@ -7947,7 +7947,37 @@ Tottenham
 
   function loadData(k){
     if(LIGA_CACHE[k]) return _applyForcedBlacklist(k, LIGA_CACHE[k]);
-    try{ var raw = localStorage.getItem(storeKey(k)); if(raw){ LIGA_CACHE[k] = JSON.parse(raw); return _applyForcedBlacklist(k, LIGA_CACHE[k]); } }catch(_){}
+    /* Lectura del main, pero CON DETECCIÓN DE WIPE: si el main
+       existe pero tiene `teams: []` y `_protected` (escrito por
+       saveData en cada guardado con equipos) tiene equipos, asumimos
+       que el main fue vaciado por un bug / fetch fallido / blacklist
+       agresiva, y restauramos desde `_protected`. Esto cumple lo que
+       pidió el usuario: "lo que yo haya creado se queda guardado
+       para siempre, salvo que yo lo borre". Un borrado real pasa por
+       saveData con la nueva data (1 menos), que también actualiza
+       `_protected` → no hay desfase. Solo los wipes accidentales
+       quedan bloqueados. */
+    try{
+      var raw = localStorage.getItem(storeKey(k));
+      if(raw){
+        var parsed = JSON.parse(raw);
+        var nMain = (parsed && Array.isArray(parsed.teams)) ? parsed.teams.length : 0;
+        if (nMain === 0) {
+          var protRawX = localStorage.getItem(storeKey(k) + '_protected');
+          if (protRawX) {
+            var protPX = JSON.parse(protRawX);
+            if (protPX && Array.isArray(protPX.teams) && protPX.teams.length > 0) {
+              LIGA_CACHE[k] = protPX;
+              try { localStorage.setItem(storeKey(k), protRawX); } catch(_){}
+              try { console.warn('[ligaExt] '+k+' main vacío pero _protected tenía '+protPX.teams.length+' equipos — restaurado.'); } catch(_){}
+              return _applyForcedBlacklist(k, protPX);
+            }
+          }
+        }
+        LIGA_CACHE[k] = parsed;
+        return _applyForcedBlacklist(k, LIGA_CACHE[k]);
+      }
+    }catch(_){}
     /* REFUERZO: si la clave principal está vacía, intentamos restaurar
        desde la copia `_protected` que guarda el lock de plantillas
        (línea ~2740). El propósito original del lock es bloquear
@@ -7972,13 +8002,53 @@ Tottenham
         }
       }
     } catch(_){}
-    /* Cache + protected vacíos → intento síncrono al servidor para
-       que la primera apertura de la liga en un dispositivo nuevo NO
-       muestre "No hay equipos" durante segundos mientras la fetch
-       async responde. Mismo patrón que rosterFor (misc_body_2.html)
-       y la rama de equipos editados de este mismo archivo. Si el
-       sync falla (offline / timeout), caemos al objeto vacío y la
-       fetchData posterior repoblará. */
+    /* REFUERZO ADICIONAL: si tampoco hay `_protected`, prueba
+       `_backup` y el snapshot `_snap_<ts>` más reciente. Estas dos
+       fuentes las escribe saveData en cada guardado (línea ~8170)
+       y deberían cubrir cualquier wipe del main que se haya colado
+       sin dejar `_protected` (caso edge: una versión muy antigua
+       del IIFE que no escribía `_protected`). */
+    try {
+      var bRaw = localStorage.getItem('ligaExt_'+k+'_backup');
+      if (bRaw) {
+        var bData = JSON.parse(bRaw);
+        if (bData && Array.isArray(bData.teams) && bData.teams.length) {
+          LIGA_CACHE[k] = bData;
+          try { localStorage.setItem(storeKey(k), bRaw); } catch(_){}
+          try { console.warn('[ligaExt] restaurado '+k+' desde _backup ('+bData.teams.length+' equipos).'); } catch(_){}
+          return _applyForcedBlacklist(k, bData);
+        }
+      }
+    } catch(_){}
+    try {
+      /* Snapshots: buscamos el más reciente con teams.length > 0. */
+      var snapKeys = [];
+      for (var si = 0; si < localStorage.length; si++) {
+        var sk = localStorage.key(si);
+        if (sk && sk.indexOf('ligaExt_'+k+'_snap_') === 0) snapKeys.push(sk);
+      }
+      snapKeys.sort();   /* timestamp en el nombre → orden ascendente */
+      for (var sj = snapKeys.length - 1; sj >= 0; sj--) {
+        var sRaw = localStorage.getItem(snapKeys[sj]);
+        if (!sRaw) continue;
+        try {
+          var sData = JSON.parse(sRaw);
+          if (sData && Array.isArray(sData.teams) && sData.teams.length) {
+            LIGA_CACHE[k] = sData;
+            try { localStorage.setItem(storeKey(k), sRaw); } catch(_){}
+            try { console.warn('[ligaExt] restaurado '+k+' desde '+snapKeys[sj]+' ('+sData.teams.length+' equipos).'); } catch(_){}
+            return _applyForcedBlacklist(k, sData);
+          }
+        } catch(_){}
+      }
+    } catch(_){}
+    /* Cache + protected + backup + snapshots vacíos → intento síncrono
+       al servidor para que la primera apertura de la liga en un
+       dispositivo nuevo NO muestre "No hay equipos" durante segundos
+       mientras la fetch async responde. Mismo patrón que rosterFor
+       (misc_body_2.html) y la rama de equipos editados de este mismo
+       archivo. Si el sync falla (offline / timeout), caemos al objeto
+       vacío y la fetchData posterior repoblará. */
     try {
       var xhr = new XMLHttpRequest();
       xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(k), false);
@@ -8155,6 +8225,27 @@ Tottenham
     try { serialized = JSON.stringify(d); } catch(_){ serialized = null; }
     if (serialized != null) {
       try { localStorage.setItem(storeKey(k), serialized); } catch(_){}
+      /* PROTECCIÓN PERSISTENTE: cada saveData actualiza también la
+         clave `_protected`, siempre que el estado nuevo tenga al
+         menos 1 equipo. Antes esto solo se hacía cuando admin
+         activaba el lock de plantillas. Con esto:
+           · Cualquier equipo/jugador que CREES queda mirroreado en
+             `_protected` automáticamente.
+           · Si admin BORRA un equipo (lextDeleteTeam) o un jugador
+             (lextDeletePlayer), saveData refleja el borrado en main
+             Y en `_protected` — la versión protegida sigue al estado
+             autoritativo del usuario.
+           · Si una escritura buggy o fetch fallido vacía main,
+             `loadData` lo restaura automáticamente desde `_protected`
+             (línea ~7950). Así "lo que tú hayas creado se queda
+             guardado, excepto si lo borras tú".
+         Salvaguarda extra: NO sobreescribimos `_protected` con un
+         estado de 0 equipos. Una sim que devuelva data vacía por bug
+         no debe destruir la copia de seguridad. */
+      var nTeamsNew = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
+      if (nTeamsNew > 0) {
+        try { localStorage.setItem(storeKey(k) + '_protected', serialized); } catch(_){}
+      }
     }
     /* ── BACKUPS AUTOMÁTICOS ──
        Cada guardado escribe además:

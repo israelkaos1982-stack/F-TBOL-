@@ -5634,6 +5634,31 @@ window._showSimProgress = function(opts, onDone){
     try { localStorage.setItem(STORE_KEY, JSON.stringify(sim)); } catch(_){}
   }
 
+  /* Rellena `classified` hasta `N_GROUPS × TEAMS_PER_GROUP` con
+     placeholders TBD-OQ-N. Llamado tanto al simular como al
+     renderizar la pantalla en modo "fresco" (sin sim previa) — sin
+     esto algunos grupos quedaban con 13 equipos cuando el pool
+     real era menor que 98 (típicamente porque alguna liga no
+     completó jornadas o tiene `uclQual=0`). El nombre TBD-OQ-N
+     distingue del TBD-N que viene propagado del Wild Card. */
+  function _padToFull(classified){
+    var maxTeams = N_GROUPS * TEAMS_PER_GROUP;
+    classified = (classified || []).slice();
+    if(classified.length > maxTeams){
+      classified = classified.slice(0, maxTeams);
+    }
+    while(classified.length < maxTeams){
+      var i = classified.length;
+      classified.push({
+        name: 'TBD-OQ-'+(i+1),
+        logo: '',
+        league: '__placeholder_oq_'+i,
+        power: 50
+      });
+    }
+    return classified;
+  }
+
   function buildOpenQualifierClas(){
     var container = document.getElementById('open-qual-groups-container');
     if(!container) return;
@@ -5643,7 +5668,9 @@ window._showSimProgress = function(opts, onDone){
       groups = sim.groups;
       totalTeams = groups.reduce(function(s,g){ return s + g.length; }, 0);
     } else {
-      var classified = (window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || [];
+      /* Render "fresco" (sin sim previa) — también padea a 98 para
+         que los grupos se vean siempre con 14 huecos en la UI. */
+      var classified = _padToFull((window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || []);
       groups = _distributeSnake(classified, N_GROUPS);
       totalTeams = classified.length;
     }
@@ -5768,31 +5795,10 @@ window._showSimProgress = function(opts, onDone){
   }
 
   function _doSimulate(classified){
-    /* Cap defensivo: nunca admitir más de N_GROUPS × TEAMS_PER_GROUP
-       teams. Si el caller envía más, los grupos quedarían con teams
-       fantasmas que la UI no pintaría. */
-    var maxTeams = N_GROUPS * TEAMS_PER_GROUP;
-    classified = (classified || []).slice();
-    if(classified.length > maxTeams){
-      classified = classified.slice(0, maxTeams);
-    }
-    /* PADDING DEFENSIVO — si el pool calculado por
-       computeOpenQualifierTeams() es menor que 98 (típicamente porque
-       alguna liga no completó sus jornadas o tiene `uclQual=0`),
-       rellenamos con placeholders para que los 7 grupos tengan SIEMPRE
-       14 equipos. Sin esto algunos grupos quedaban con 12-13 y los
-       partidos por equipo bajaban de 26 a 22-24, descuadrando todo el
-       formato. Los placeholders se nombran TBD-OQ-N para distinguirlos
-       de los del Wild Card. */
-    while(classified.length < maxTeams){
-      var i = classified.length;
-      classified.push({
-        name: 'TBD-OQ-'+(i+1),
-        logo: '',
-        league: '__placeholder_oq_'+i,
-        power: 50
-      });
-    }
+    /* Cap+pad a `N_GROUPS × TEAMS_PER_GROUP` (98). Misma helper que
+       usa el render "fresco" — así sim y fresco siempre cuadran a
+       7 × 14. */
+    classified = _padToFull(classified);
     var groups = _distributeSnake(classified, N_GROUPS);
     var matchesByGroup = groups.map(function(grp){ return _simulateGroup(grp); });
     /* Sin playoff — formato 7×14 solo promueve top-5 y elimina al

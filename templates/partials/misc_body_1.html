@@ -7146,6 +7146,7 @@ window._showSimProgress = function(opts, onDone){
     if(!total){ alert('No hay ligas para simular.'); return; }
 
     var ok = 0, skip = 0, idx = 0;
+    var skippedSlugs = [];
     function simNext(progressFn){
       return new Promise(function(resolve){
         function step(){
@@ -7153,8 +7154,16 @@ window._showSimProgress = function(opts, onDone){
           var name = leagues[idx];
           var slug = _slugify(name);
           try {
-            if(window.ligaExtSimularSlug(slug, name)) ok++; else skip++;
-          } catch(_){ skip++; }
+            if(window.ligaExtSimularSlug(slug, name)){
+              ok++;
+            } else {
+              skip++;
+              skippedSlugs.push({slug: slug, name: name});
+            }
+          } catch(e){
+            skip++;
+            skippedSlugs.push({slug: slug, name: name, error: String(e&&e.message||e)});
+          }
           idx++;
           if(typeof progressFn === 'function'){
             progressFn(Math.round(idx/total*100), 'Simulando ' + name + ' (' + idx + '/' + total + ')');
@@ -7167,19 +7176,40 @@ window._showSimProgress = function(opts, onDone){
       });
     }
 
+    function _onDone(){
+      /* Exponemos las ligas saltadas en window para que el usuario
+         pueda inspeccionarlas desde consola si el conteo no cuadra
+         (ej. "31 simuladas pero 32 incompletas en el WC diag"). */
+      try { window._lastSkippedLeagues = skippedSlugs; } catch(_){}
+      try {
+        if (skippedSlugs.length) {
+          console.log('[restoLigas] ligas saltadas (' + skippedSlugs.length + '):');
+          skippedSlugs.forEach(function(s){
+            console.log('  · ' + s.slug + ' (' + s.name + ')' + (s.error ? ' — error: ' + s.error : ' — sin equipos suficientes'));
+          });
+        }
+      } catch(_){}
+      var msg = 'Simuladas: ' + ok + ' liga' + (ok===1?'':'s');
+      if (skip) {
+        msg += ' · sin equipos suficientes: ' + skip + '.\n\n';
+        msg += 'Las saltadas (consulta window._lastSkippedLeagues en consola):\n';
+        msg += skippedSlugs.slice(0, 20).map(function(s){ return '  · ' + s.slug; }).join('\n');
+        if (skippedSlugs.length > 20) msg += '\n  · …(' + (skippedSlugs.length-20) + ' más)';
+      } else {
+        msg += '.';
+      }
+      alert(msg);
+    }
+
     if(typeof window.ftbolLoaderRun === 'function'){
       window.ftbolLoaderRun(
         { title:'RESTO DE LIGAS · 51 LIGAS', sub:'Iniciando…', minMs:600 },
         function(ctx){ return simNext(ctx.progress); }
-      ).then(function(){
-        alert('Simuladas: ' + ok + ' liga' + (ok===1?'':'s') + (skip ? ' · sin equipos suficientes: ' + skip : '') + '.');
-      });
+      ).then(_onDone);
     } else {
       /* Fallback sin overlay: mantener el comportamiento síncrono
          clásico (raro pero por seguridad). */
-      simNext(null).then(function(){
-        alert('Simuladas: ' + ok + ' liga' + (ok===1?'':'s') + (skip ? ' · sin equipos suficientes: ' + skip : '') + '.');
-      });
+      simNext(null).then(_onDone);
     }
   };
 

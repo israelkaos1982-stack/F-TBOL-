@@ -18006,6 +18006,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var bombo1 = sorted.slice(0, N_GROUPS);
     var bombo2 = sorted.slice(N_GROUPS, 2*N_GROUPS);
     var bombo3 = sorted.slice(2*N_GROUPS, 3*N_GROUPS);
+    /* Shuffle dentro de cada bombo para que el pareo a grupos sea
+       aleatorio en cada draw (sin esto el sortear era determinista
+       y re-Draw producía siempre los mismos grupos). La estructura
+       de bombos se conserva — solo cambia QUÉ equipo del bombo cae
+       en QUÉ grupo. */
+    function _shuf(a){
+      for(var i=a.length-1; i>0; i--){
+        var j = Math.floor(Math.random()*(i+1));
+        var t = a[i]; a[i] = a[j]; a[j] = t;
+      }
+      return a;
+    }
+    _shuf(bombo1); _shuf(bombo2); _shuf(bombo3);
     var groups = [];
     for(var g=0; g<N_GROUPS; g++){
       groups.push([ bombo1[g], bombo2[g], bombo3[g] ]);
@@ -18109,10 +18122,23 @@ document.addEventListener('DOMContentLoaded', function() {
     };
   }
 
-  function _persistBuckets(state){
-    /* Champions: 11 ganadores de los grupos de Ronda Final (1º × 11). */
+  /* Persiste los 30 perdedores de Ronda 1 a `wprev_r1_to_conference_v1`
+     INMEDIATAMENTE tras la VUELTA — el usuario quiere que al terminar
+     ida+vuelta los 30 perdedores ya estén en Conference, sin tener
+     que esperar a simular los grupos RF. */
+  function _persistR1Losers(state){
+    var confArr = (state.r1Losers||[]).map(function(t){
+      return { name:t.name, logo:t.logo||'', source:'previa-r1-loser' };
+    });
+    try {
+      localStorage.setItem(WPREV_CONF_KEY, JSON.stringify({teams:confArr, ts:Date.now()}));
+    } catch(_){}
+  }
+
+  /* Persiste Champions (1º × 11) y Europa (2º+3º × 11) tras la
+     liguilla. Los perdedores R1 ya se han persistido antes. */
+  function _persistChampionsAndEuropa(state){
     var champArr = [];
-    /* Europa: 22 (2º + 3º × 11). */
     var euroArr = [];
     state.sortedTables.forEach(function(st, gi){
       st.forEach(function(row, pos){
@@ -18123,14 +18149,9 @@ document.addEventListener('DOMContentLoaded', function() {
         else if(pos === 1 || pos === 2) euroArr.push(entry);
       });
     });
-    /* Conference: los 30 perdedores de Ronda 1. */
-    var confArr = (state.r1Losers||[]).map(function(t){
-      return { name:t.name, logo:t.logo||'', source:'previa-r1-loser' };
-    });
     try {
-      localStorage.setItem(WPREV_FG_KEY,   JSON.stringify({teams:champArr, ts:Date.now()}));
-      localStorage.setItem(WPREV_EUR_KEY,  JSON.stringify({teams:euroArr,  ts:Date.now()}));
-      localStorage.setItem(WPREV_CONF_KEY, JSON.stringify({teams:confArr,  ts:Date.now()}));
+      localStorage.setItem(WPREV_FG_KEY,  JSON.stringify({teams:champArr, ts:Date.now()}));
+      localStorage.setItem(WPREV_EUR_KEY, JSON.stringify({teams:euroArr,  ts:Date.now()}));
     } catch(_){}
   }
 
@@ -18143,9 +18164,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* PASO 3 — Simular las 30 VUELTAS + tiebreakers (gol visitante /
-     prórroga / penaltis). Determina los 30 ganadores y 30 perdedores,
-     siembra la Ronda Final, simula los 11 grupos y persiste los flags
-     a Champions, Europa y Conference. */
+     prórroga / penaltis). Determina ganadores y perdedores. Tras
+     esta fase los 30 PERDEDORES están YA en Conference (mismo año).
+     A continuación SORTEA los 11 grupos de Ronda Final con los 30
+     ganadores + 3 byes — pero NO simula la liguilla.
+     Phase resultante: 'rf-drawn'. */
   function simulateVuelta(state){
     state.r1Losers = [];
     state.ties.forEach(function(tie){
@@ -18153,9 +18176,20 @@ document.addEventListener('DOMContentLoaded', function() {
       var loserTeam = (tie.winner === tie.teamH) ? tie.teamA : tie.teamH;
       if(loserTeam) state.r1Losers.push(loserTeam);
     });
-    /* === SEED RONDA FINAL === */
-    var qualified = state.byes.slice();
-    state.ties.forEach(function(tie){
+    _persistR1Losers(state);    /* 30 perdedores → Conference, ya */
+    drawRfGroups(state);        /* sortea los 11 grupos, sin simular */
+    state.phase = 'rf-drawn';
+    state.ts = Date.now();
+  }
+
+  /* Sortea (o re-sortea) los 11 grupos de Ronda Final desde los 30
+     ganadores R1 + 3 byes (33 equipos). NO juega ningún partido —
+     deja las tables / sortedTables a 0 stats. Llamado tanto desde
+     simulateVuelta (auto, primera vez) como desde el botón 🎲 Draw
+     (manual, re-sortear con PIN admin). */
+  function drawRfGroups(state){
+    var qualified = (state.byes||[]).slice();
+    (state.ties||[]).forEach(function(tie){
       if(tie.winner) qualified.push(tie.winner);
     });
     state.groups = seedRoundFinal(qualified);
@@ -18165,18 +18199,26 @@ document.addEventListener('DOMContentLoaded', function() {
         return { hi:m.hi, ai:m.ai, gh:null, ga:null, played:false };
       });
     });
-    /* === LIGUILLA RONDA FINAL === */
+    state.sortedTables = state.tables.map(function(t){ return t.map(function(r,i){
+      return Object.assign({}, r, {_i:i});
+    }); });
+  }
+
+  /* PASO 4 — Simular la liguilla de los 11 grupos (ya sorteados).
+     Tras esta fase se persisten Champions (1º) y Europa (2º+3º).
+     Phase resultante: 'done'. */
+  function simulateRfGroups(state){
     state.groups.forEach(function(grp, gi){
       var sched = state.jornadasByGroup[gi];
       sched.forEach(function(m){
+        if(m.played) return;
         var sc = simMatch(grp[m.hi].name, grp[m.ai].name);
         m.gh = sc.gh; m.ga = sc.ga; m.played = true;
         applyToTable(state.tables[gi], m.hi, m.ai, sc.gh, sc.ga);
       });
     });
     state.sortedTables = state.tables.map(sortTable);
-    /* === PERSISTIR === */
-    _persistBuckets(state);
+    _persistChampionsAndEuropa(state);
     state.phase = 'done';
     state.ts = Date.now();
   }
@@ -18340,9 +18382,10 @@ document.addEventListener('DOMContentLoaded', function() {
       byesHtml += '</div>';
     }
     var phaseLabel = '';
-    if(s.phase === 'paired')          phaseLabel = '⏳ CRUCES SORTEADOS · PENDIENTE SIMULAR IDA';
-    else if(s.phase === 'ida-played') phaseLabel = '⏳ IDAS JUGADAS · PENDIENTE SIMULAR VUELTA';
-    else if(s.phase === 'done')       phaseLabel = '✓ RONDA 1 COMPLETA';
+    if(s.phase === 'paired')           phaseLabel = '⏳ CRUCES SORTEADOS · PENDIENTE SIMULAR IDA';
+    else if(s.phase === 'ida-played')  phaseLabel = '⏳ IDAS JUGADAS · PENDIENTE SIMULAR VUELTA';
+    else if(s.phase === 'rf-drawn')    phaseLabel = '✓ RONDA 1 COMPLETA · 30 PERDEDORES YA EN CONFERENCE';
+    else if(s.phase === 'done')        phaseLabel = '✓ RONDA 1 COMPLETA · TORNEO TERMINADO';
     var html = '<div class="wprev-dr">'
       + '<div class="wprev-dr-hdr">⚔️ RONDA 1 · 30 ELIMINATORIAS + 3 EXENTOS</div>'
       + '<div class="wprev-dr-sub">CABEZA vs NO-CABEZA · IDA + VUELTA · GANADOR → RONDA FINAL · PERDEDOR → CONFERENCE</div>'
@@ -18358,12 +18401,20 @@ document.addEventListener('DOMContentLoaded', function() {
      sincronizado con el state después de cada acción. */
   function _refreshSimBtn(){
     var btn = document.getElementById('wprev-btn-sim');
-    if(!btn) return;
-    btn.textContent = window._wprevNextLabel();
-    var disabled = window._wprevSimDisabled();
-    btn.disabled = disabled;
-    btn.style.opacity = disabled ? '0.45' : '1';
-    btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+    if(btn){
+      btn.textContent = window._wprevNextLabel();
+      var disabled = !!window._wprevSimDisabled();
+      btn.disabled = disabled;
+      btn.style.opacity = disabled ? '0.45' : '1';
+      btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+    }
+    var btnDraw = document.getElementById('wprev-btn-draw');
+    if(btnDraw){
+      var dDisabled = !!(typeof window._wprevDrawDisabled === 'function' && window._wprevDrawDisabled());
+      btnDraw.disabled = dDisabled;
+      btnDraw.style.opacity = dDisabled ? '0.45' : '1';
+      btnDraw.style.cursor = dDisabled ? 'not-allowed' : 'pointer';
+    }
   }
 
   function buildUclPrevClas(){
@@ -18389,12 +18440,16 @@ document.addEventListener('DOMContentLoaded', function() {
        el container `wprev-deathround-container` (renombramiento
        implícito — el id se conserva para minimizar cambios al HTML). */
     var rfHtml = '';
-    if(s.phase === 'done' && s.groups && s.groups.length){
+    var rfReady = (s.phase === 'rf-drawn' || s.phase === 'done') && s.groups && s.groups.length;
+    if(rfReady){
+      var rfSubtitle = (s.phase === 'done')
+        ? '1º → Champions League · 2º y 3º → Europa League'
+        : '⏳ GRUPOS SORTEADOS · sin partidos jugados todavía · pulsa 🎮 Sim para jugar la liguilla';
       rfHtml += '<div style="padding:10px 14px;margin:14px 4px 0;background:linear-gradient(90deg,#5b1c8e,#a855f7,#7e22ce);border-radius:8px;font-family:Bebas Neue,Oswald,sans-serif;font-size:18px;letter-spacing:2px;color:#fff;text-align:center;font-weight:900;">'
         +    '🏆 RONDA FINAL · 11 GRUPOS × 3 EQUIPOS'
         +    '</div>'
         +    '<div style="padding:6px 14px;font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,255,255,.6);text-align:center;">'
-        +    '1º → Champions League · 2º y 3º → Europa League'
+        +    rfSubtitle
         +    '</div>';
       for(var g=0; g<N_GROUPS; g++){
         rfHtml += renderGroupTable(g, s.sortedTables[g]||[], s.groups[g]||[]);
@@ -18410,10 +18465,15 @@ document.addEventListener('DOMContentLoaded', function() {
   window.buildUclPrevClas = buildUclPrevClas;
 
   /* Botón contextual: cada pulsación avanza UNA fase.
-       - sin estado     → sortear cruces (init), phase='paired'
-       - phase='paired' → simular IDA,           phase='ida-played'
-       - phase='ida-played' → simular VUELTA + Ronda Final, phase='done'
-       - phase='done'   → no-op (botón deshabilitado por la UI). */
+       - sin estado          → sortear cruces (init), phase='paired'
+       - phase='paired'      → simular IDA,           phase='ida-played'
+       - phase='ida-played'  → simular VUELTA + 30 perdedores a
+                                Conference + DRAW de los 11 grupos
+                                (sin simular liguilla),
+                                phase='rf-drawn'
+       - phase='rf-drawn'    → simular liguilla 11×3 → 11 a Champions
+                                + 22 a Europa, phase='done'
+       - phase='done'        → no-op (botón deshabilitado). */
   window.simulateUclPrev = function(){
     var raw = buildPool();
     var s = loadState();
@@ -18435,7 +18495,13 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     if(s.phase === 'ida-played'){
-      simulateVuelta(s);
+      simulateVuelta(s);   /* incluye persistir Conference + drawRfGroups */
+      saveState(s);
+      buildUclPrevClas();
+      return;
+    }
+    if(s.phase === 'rf-drawn'){
+      simulateRfGroups(s);
       saveState(s);
       buildUclPrevClas();
       return;
@@ -18443,16 +18509,54 @@ document.addEventListener('DOMContentLoaded', function() {
     /* phase === 'done' → solo refrescar render. */
     buildUclPrevClas();
   };
+
+  /* 🎲 Draw — re-sortea los 11 grupos de Ronda Final. PIN admin 747
+     vía window.pG. Solo activo cuando phase ∈ {'rf-drawn', 'done'}.
+     Si está 'done', avisa que se perderán los partidos jugados de
+     la liguilla. */
+  window._wprevDraw = function(){
+    function _doDraw(){
+      var s = loadState();
+      if(!s){
+        alert('Aún no hay torneo iniciado. Pulsa 🎮 Sim primero para sortear y simular la Ronda 1.');
+        return;
+      }
+      if(s.phase === 'paired' || s.phase === 'ida-played'){
+        alert('Simula primero las idas y las vueltas de Ronda 1 (botón 🎮 Sim).');
+        return;
+      }
+      if(s.phase === 'done' && !confirm('Hay un torneo simulado. ¿Sobreescribir el sorteo de los 11 grupos? Perderás los partidos jugados de la liguilla.')) return;
+      drawRfGroups(s);
+      s.phase = 'rf-drawn';
+      /* Si estaba 'done', también limpiamos los flags de Champions/Europa
+         persistidos previamente porque ya no son válidos hasta re-simular. */
+      try {
+        localStorage.removeItem(WPREV_FG_KEY);
+        localStorage.removeItem(WPREV_EUR_KEY);
+      } catch(_){}
+      saveState(s);
+      buildUclPrevClas();
+    }
+    if(typeof window.pG === 'function') window.pG(_doDraw);
+    else _doDraw();
+  };
+
   window._wprevNextLabel = function(){
     var s = loadState();
-    if(!s)                       return '🎮 Sortear cruces';
-    if(s.phase === 'paired')     return '🎮 Simular IDA';
-    if(s.phase === 'ida-played') return '🎮 Simular VUELTA';
+    if(!s)                          return '🎮 Sortear cruces';
+    if(s.phase === 'paired')        return '🎮 Simular IDA';
+    if(s.phase === 'ida-played')    return '🎮 Simular VUELTA';
+    if(s.phase === 'rf-drawn')      return '🎮 Simular Ronda Final';
     return '✓ Completado';
   };
   window._wprevSimDisabled = function(){
     var s = loadState();
     return !!(s && s.phase === 'done');
+  };
+  window._wprevDrawDisabled = function(){
+    var s = loadState();
+    /* Draw solo tiene sentido cuando ya hay 30 ganadores de R1. */
+    return !s || s.phase === 'paired' || s.phase === 'ida-played';
   };
   window.resetUclPrev = function(){
     if(!confirm('¿Reiniciar la Previa de Champions? Se perderán todos los partidos jugados.')) return;
@@ -18508,13 +18612,20 @@ document.addEventListener('DOMContentLoaded', function() {
         ];
         minMs = 1300;
       } else if(s.phase === 'ida-played'){
-        title = 'PREVIA · RONDA 1 · VUELTAS + RONDA FINAL';
+        title = 'PREVIA · RONDA 1 · VUELTAS + SORTEO RF';
         phases = [
-          { pct:24, sub:'Simulando 30 vueltas + tiebreakers…', ms:230 },
-          { pct:54, sub:'Reparto a 11 grupos…',                ms:170 },
-          { pct:90, sub:'Liguilla Ronda Final…',               ms:230 }
+          { pct:30, sub:'Simulando 30 vueltas + tiebreakers…', ms:240 },
+          { pct:60, sub:'Enviando 30 perdedores a Conference…',ms:140 },
+          { pct:90, sub:'Sorteando 11 grupos de Ronda Final…', ms:170 }
         ];
-        minMs = 1700;
+        minMs = 1500;
+      } else if(s.phase === 'rf-drawn'){
+        title = 'PREVIA · LIGUILLA RONDA FINAL';
+        phases = [
+          { pct:30, sub:'Cargando 11 grupos…',                 ms:140 },
+          { pct:90, sub:'Simulando 6 jornadas por grupo…',     ms:230 }
+        ];
+        minMs = 1300;
       } else {
         title = 'PREVIA DE CHAMPIONS';
         phases = [{ pct:90, sub:'Refrescando…', ms:80 }];
@@ -18544,6 +18655,41 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       );
     };
+
+    /* Wrapper de overlay para `_wprevDraw` — solo sortea, overlay corto. */
+    var origWprevDraw = window._wprevDraw;
+    if(typeof origWprevDraw === 'function' && typeof window.ftbolLoaderRun === 'function'){
+      window._wprevDraw = function(){
+        return window.ftbolLoaderRun(
+          { title:'PREVIA · SORTEO RONDA FINAL', sub:'Preparando…', minMs:900 },
+          function(ctx){
+            return new Promise(function(resolve){
+              var phases = [
+                { pct:30, sub:'Ordenando 33 equipos por power…', ms:120 },
+                { pct:60, sub:'Repartiendo 3 bombos a 11 grupos…',ms:160 },
+                { pct:88, sub:'Aplicando restricciones de país…',ms:140 }
+              ];
+              var k = 0;
+              function step(){
+                if(k >= phases.length){
+                  ctx.progress(95, 'Cuadrando bracket…');
+                  setTimeout(function(){
+                    try { origWprevDraw(); } catch(_){}
+                    ctx.progress(100, 'Hecho');
+                    resolve();
+                  }, 40);
+                  return;
+                }
+                var p = phases[k++];
+                ctx.progress(p.pct, p.sub);
+                setTimeout(step, p.ms);
+              }
+              step();
+            });
+          }
+        );
+      };
+    }
     window._uclPrevSimWired = true;
   }
   if(document.readyState === 'loading'){

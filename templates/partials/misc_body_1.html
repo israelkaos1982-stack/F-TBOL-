@@ -5309,13 +5309,19 @@ window._showSimProgress = function(opts, onDone){
      simular ida / simular vuelta / completado). Se actualiza en cada
      render llamando a window._wprevNextLabel(). El id permite que el
      bloque JS de la Previa lo localice y refresque el texto. -->
-<div style="display:flex;gap:10px;justify-content:center;padding:8px 6px 4px;">
+<div style="display:flex;gap:8px;justify-content:center;padding:8px 6px 4px;flex-wrap:wrap;">
   <button id="wprev-btn-sim" onclick="pG(function(){window.simulateUclPrev&&window.simulateUclPrev()})"
-          style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid rgba(80,200,120,.5);border-radius:8px;padding:9px 18px;color:#7fe09a;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
+          style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid rgba(80,200,120,.5);border-radius:8px;padding:9px 16px;color:#7fe09a;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     🎮 Sim
   </button>
+  <!-- 🎲 Draw — re-sortea los 11 grupos de Ronda Final (PIN admin 747).
+       Solo activo cuando ya hay 30 ganadores R1 (phase ∈ rf-drawn|done). -->
+  <button id="wprev-btn-draw" onclick="window._wprevDraw&&window._wprevDraw()"
+          style="background:linear-gradient(135deg,#3a2a00,#7a5a00);border:1px solid #ffd700;border-radius:8px;padding:9px 16px;color:#ffe480;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
+    🎲 Draw
+  </button>
   <button onclick="pG(function(){window.resetUclPrev&&window.resetUclPrev()})"
-          style="background:linear-gradient(135deg,#3a1414,#5a2424);border:1px solid rgba(255,80,80,.5);border-radius:8px;padding:9px 18px;color:#ff8080;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
+          style="background:linear-gradient(135deg,#3a1414,#5a2424);border:1px solid rgba(255,80,80,.5);border-radius:8px;padding:9px 16px;color:#ff8080;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     ♻️ Reset
   </button>
 </div>

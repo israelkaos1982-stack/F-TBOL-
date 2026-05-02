@@ -6341,6 +6341,21 @@
     ['ml-btn-end-','ml-btn-et-','ml-add-btn-'].forEach(function(pfx){
       var b=document.getElementById(pfx+mk); if(b){b.disabled=true;b.style.opacity='0.35';}
     });
+    /* ── PREVIA CHAMPIONS · RONDA FINAL: guardar en wprev_state_v1, no en liga ──
+       Cuando el partido proviene de _wprevPlayHumanMatch (st.isWprev),
+       el resultado se persiste en el state de la Previa de Champions y NO
+       en la tabla de Liga ni en friendlyMatchHistory. Después seguimos
+       reusando _mlShowFinalThenPost para mostrar el overlay de "FIN DEL
+       PARTIDO" como cualquier otro partido humano. */
+    if (st.isWprev) {
+      try {
+        if (typeof window._wprevSaveHumanResult === 'function') {
+          window._wprevSaveHumanResult(st.wprevGi, st.wprevJ, st.sc.a, st.sc.b);
+        }
+      } catch(_e){}
+      _mlShowFinalThenPost(mk);
+      return;
+    }
     /* ── AMISTOSO: guardar en historial propio, no en liga ── */
     if (st.isFriendly) {
       var evts=st.events;
@@ -18658,6 +18673,17 @@ document.addEventListener('DOMContentLoaded', function() {
      en TODOS los grupos. */
   function _isHumanTeam(name){
     if(!name) return false;
+    /* Fuente principal: window.esHumano (definido por el módulo de Liga
+       y por el bloque _mmHUMANOS de index.bundle.js). El IIFE de la
+       Previa de Champions no comparte scope con la lista HUMANOS, así
+       que confiarse a `typeof HUMANOS` aquí daba siempre false → los
+       partidos del Atlético Madrid (u otro humano) se auto-simulaban
+       incluso cuando deberían pasar por la PREVIA manual. */
+    try {
+      if(typeof window.esHumano === 'function'){
+        return !!window.esHumano(name);
+      }
+    } catch(_){}
     try {
       var list = (typeof HUMANOS !== 'undefined') ? HUMANOS : (window.HUMANOS || []);
       for(var i=0; i<list.length; i++){
@@ -18808,17 +18834,37 @@ document.addEventListener('DOMContentLoaded', function() {
       var aName = group[m.ai] && group[m.ai].name || '?';
       var jId = 'wprev-j-'+gi+'-'+j;
       var played = m.played;
+      var humanInvolved = _isHumanTeam(hName) || _isHumanTeam(aName);
+      var humanPending = !played && humanInvolved;
       var scTxt = played ? (m.gh + ' - ' + m.ga) : 'vs';
+      var rowId = 'wprev-row-'+gi+'-'+j;
+      var hostId = 'cal-ucl-wprev-'+gi+'-'+j;
+      /* Para partidos humanos pendientes mostramos un botón "📋 PREVIA" en
+         la columna del marcador. El click delega en _wprevPlayHumanMatch
+         que inyecta el match-card completo (mismo motor que Liga/amistosos)
+         dentro del host `cal-ucl-wprev-...` para que mlPreviaClick
+         reconozca la competición como UCL. */
+      var scCell;
+      if(humanPending){
+        scCell = '<button class="wprev-previa-btn" '
+          +    'onclick="window._wprevPlayHumanMatch('+gi+','+j+')" '
+          +    'style="background:linear-gradient(135deg,rgba(91,28,142,.55),rgba(168,85,247,.65));border:1px solid rgba(168,85,247,.8);border-radius:6px;color:#fff;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 8px;cursor:pointer;white-space:nowrap;">'
+          +    '📋 PREVIA</button>';
+      } else {
+        scCell = scTxt;
+      }
+      var progressTxt = played ? '1/1' : (humanPending ? '👤 0/1' : '0/1');
       html += '<button class="wprev-jbtn" onclick="(function(){var e=document.getElementById(\''+jId+'\');if(e)e.style.display=e.style.display===\'none\'?\'block\':\'none\';})()">'
         +   '<span class="pdot">▶</span><b>Jornada '+(j+1)+'</b>'
-        +   '<span class="progress">'+(played?'1/1':'0/1')+'</span>'
+        +   '<span class="progress">'+progressTxt+'</span>'
         + '</button>'
         + '<div class="wprev-jmatches" id="'+jId+'" style="display:none;">'
-        +   '<div class="wprev-mrow">'
+        +   '<div class="wprev-mrow" id="'+rowId+'">'
         +     '<span class="h">'+_badge(hName)+_esc(hName)+'</span>'
-        +     '<span class="sc">'+scTxt+'</span>'
+        +     '<span class="sc"'+(humanPending?' style="background:transparent;border:none;padding:0;"':'')+'>'+scCell+'</span>'
         +     '<span class="a">'+_esc(aName)+_badge(aName)+'</span>'
         +   '</div>'
+        +   (humanPending ? '<div class="jmatches" id="'+hostId+'" style="display:none;background:transparent;padding:0;margin-top:6px;"></div>' : '')
         + '</div>';
     }
     html += '</div>';
@@ -19176,6 +19222,84 @@ document.addEventListener('DOMContentLoaded', function() {
     if(!confirm('¿Reiniciar la Previa de Champions? Se perderán todos los partidos jugados.')) return;
     clearState();
     buildUclPrevClas();
+  };
+
+  /* Lanza el flujo PREVIA + match-card para un partido humano pendiente
+     de la Ronda Final. Inyecta una match-live-wrap dentro del host
+     `cal-ucl-wprev-<gi>-<j>` (clase `jmatches` + prefijo `cal-ucl-`)
+     para que `mlPreviaClick` la reconozca como Champions League y aplique
+     todos los códigos de equipo humano (capitán ×1.05, goleador nato ×1.8,
+     goleador estrella ×3.0, P, F, ⭐, formación, alineación ideal, MVP,
+     estadísticas, sanciones — los flags definidos en CLAUDE.md). El
+     resultado se persiste en wprev_state_v1 desde _mlFinishMatchGen. */
+  window._wprevPlayHumanMatch = function(gi, j){
+    var s = loadState();
+    if(!s || !s.jornadasByGroup || !s.jornadasByGroup[gi]) return;
+    var m = s.jornadasByGroup[gi][j];
+    if(!m || m.played) return;
+    var grp = s.groups && s.groups[gi];
+    if(!grp) return;
+    var home = grp[m.hi] && grp[m.hi].name;
+    var away = grp[m.ai] && grp[m.ai].name;
+    if(!home || !away) return;
+    var homeIsHuman = _isHumanTeam(home);
+    var awayIsHuman = _isHumanTeam(away);
+    var isHvH = homeIsHuman && awayIsHuman;
+    var mk = 'wprev-G'+gi+'-J'+j;
+    var host = document.getElementById('cal-ucl-wprev-'+gi+'-'+j);
+    var existingWrap = document.getElementById('mlw-'+mk);
+    if(host && !existingWrap && typeof window._calBuildMatchCard === 'function'){
+      var cardHtml = window._calBuildMatchCard(0, home, away, isHvH, mk, {
+        homeIsHuman: homeIsHuman,
+        awayIsHuman: awayIsHuman
+      });
+      host.innerHTML = cardHtml;
+      host.style.display = 'block';
+      var row = document.getElementById('wprev-row-'+gi+'-'+j);
+      if(row) row.style.display = 'none';
+      if(typeof window._calMlSt === 'function'){
+        var st = window._calMlSt(mk);
+        st.j = 0;
+        st.home = home;
+        st.away = away;
+        st.isHvH = isHvH;
+        st.isFriendly = false;
+        st.isIAvsIA = false;
+        st.isWprev = true;
+        st.wprevGi = gi;
+        st.wprevJ = j;
+        st.homeIsHuman = !!homeIsHuman;
+        st.awayIsHuman = !!awayIsHuman;
+        st.humanInvolved = !!(homeIsHuman || awayIsHuman);
+      }
+    }
+    if(typeof window.mlPreviaClick === 'function'){
+      try { window.mlPreviaClick(mk); } catch(_){}
+    } else if(typeof mlPreviaClick === 'function'){
+      try { mlPreviaClick(mk); } catch(_){}
+    }
+  };
+
+  /* Persiste el resultado de un partido humano de la Ronda Final tras
+     finalizar en _mlFinishMatchGen. Aplica la fila a la tabla del grupo,
+     reordena standings y deja phase='done' si era el último pendiente. */
+  window._wprevSaveHumanResult = function(gi, j, gh, ga){
+    var s = loadState();
+    if(!s || !s.jornadasByGroup || !s.jornadasByGroup[gi]) return;
+    var m = s.jornadasByGroup[gi][j];
+    if(!m || m.played) return;
+    m.gh = gh; m.ga = ga; m.played = true; m.humanPending = false;
+    if(s.tables && s.tables[gi]){
+      applyToTable(s.tables[gi], m.hi, m.ai, gh, ga);
+    }
+    if(s.tables) s.sortedTables = s.tables.map(sortTable);
+    s.ts = Date.now();
+    _maybeFinalizeWprev(s);
+    saveState(s);
+    /* Re-render solo si el usuario sigue en la pantalla de Previa. */
+    if(typeof buildUclPrevClas === 'function'){
+      try { buildUclPrevClas(); } catch(_){}
+    }
   };
 
   /* Re-render al entrar a la pantalla. */

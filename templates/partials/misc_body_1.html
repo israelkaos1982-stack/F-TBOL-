@@ -5961,8 +5961,56 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     return null;
   }
+  /* Borra keys auxiliares para liberar localStorage cuando setItem
+     lanza QuotaExceededError. NO toca ligas reales. */
+  function _oqFreeStorageSpace(){
+    var toDelete = [];
+    try {
+      for(var i=0; i<localStorage.length; i++){
+        var k = localStorage.key(i);
+        if(!k) continue;
+        if(k.indexOf('_backup') !== -1
+        || k.indexOf('_snap_') !== -1
+        || k.indexOf('_snapshot') !== -1
+        || k.indexOf('_protected') !== -1){
+          toDelete.push(k);
+        }
+      }
+    } catch(_){}
+    toDelete.forEach(function(k){ try{ localStorage.removeItem(k); }catch(_){} });
+    return toDelete.length;
+  }
   function _saveSim(sim){
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(sim)); } catch(_){}
+    /* Antes era `try{ setItem }catch(_){}` puro — con localStorage al
+       límite (50+ ligas con resultados → ~5MB), `setItem` lanzaba
+       QuotaExceededError, el catch lo tragaba, `_doSimulate` salía
+       como si todo OK, `buildOpenQualifierClas` re-leía null y
+       pintaba los grupos con 0 PTS / 0 PJ → "no se simulan".
+       Ahora detectamos cuota, liberamos snapshots/backups y
+       reintentamos. Si sigue fallando avisamos. */
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(sim));
+      return true;
+    } catch(e){
+      var name = (e && (e.name || e.code)) || '';
+      var isQuota = /Quota|QUOTA_EXCEEDED|22|1014/i.test(String(name)) || /quota/i.test(String(e && e.message));
+      try { console.error('[oq-saveSim]', e); } catch(_){}
+      if(isQuota){
+        var freed = _oqFreeStorageSpace();
+        try {
+          localStorage.setItem(STORE_KEY, JSON.stringify(sim));
+          try { console.warn('[oq-saveSim] retry OK tras liberar', freed, 'keys'); } catch(_){}
+          return true;
+        } catch(e2){
+          try { console.error('[oq-saveSim] retry falló', e2); } catch(_){}
+          alert('⚠️ Sin espacio en localStorage para guardar la simulación del Open Qualifier.\n\n'
+              + 'Liberé '+freed+' keys auxiliares pero sigue lleno. Borra alguna liga del Resto de Ligas.');
+          return false;
+        }
+      }
+      alert('⚠️ Error guardando la simulación del Open Qualifier: '+(e && e.message ? e.message : e));
+      return false;
+    }
   }
 
   /* Rellena `classified` hasta `N_GROUPS × TEAMS_PER_GROUP` con
@@ -6083,18 +6131,29 @@ window._showSimProgress = function(opts, onDone){
      computeOpenQualifierTeams). Si hay menos teams, simulamos los
      que haya — cada grupo con menos equipos generará menos partidos. */
   function simulateOpenQualifier(){
-    var classified = (window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || [];
-    if(!classified.length){
-      alert('Primero termina alguna liga con plazas en la zona "Open Qualifier".');
-      return;
+    try { console.log('[oq-sim] simulateOpenQualifier INICIO'); } catch(_){}
+    try {
+      var classified = (window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || [];
+      try { console.log('[oq-sim] classified →', classified.length, 'equipos'); } catch(_){}
+      if(!classified.length){
+        alert('Primero termina alguna liga con plazas en la zona "Open Qualifier".');
+        return;
+      }
+      if(typeof window._showSimProgress !== 'function'){
+        _doSimulate(classified);
+        return;
+      }
+      window._showSimProgress({ms:3000, label:'SIMULANDO OPEN QUALIFIER'}, function(){
+        try { _doSimulate(classified); }
+        catch(e){
+          try { console.error('[oq-sim] _doSimulate (con overlay)', e); } catch(_){}
+          alert('⚠️ Error simulando Open Qualifier: '+(e && e.message ? e.message : e));
+        }
+      });
+    } catch(e){
+      try { console.error('[simulateOpenQualifier]', e); } catch(_){}
+      alert('⚠️ Error en simulateOpenQualifier: '+(e && e.message ? e.message : e)+'\n\nF12 → Consola para detalles.');
     }
-    if(typeof window._showSimProgress !== 'function'){
-      _doSimulate(classified);
-      return;
-    }
-    window._showSimProgress({ms:3000, label:'SIMULANDO OPEN QUALIFIER'}, function(){
-      _doSimulate(classified);
-    });
   }
   /* Persiste los top-5 de cada grupo en `oq_to_previa_v1` (35 plazas).
      Lo lee `computeUclPrevTeams` (Previa de Champions) para añadirlos
@@ -6132,12 +6191,20 @@ window._showSimProgress = function(opts, onDone){
     classified = _padToFull(classified);
     var groups = _distributeSnake(classified, N_GROUPS);
     var matchesByGroup = groups.map(function(grp){ return _simulateGroup(grp); });
+    try { console.log('[oq-sim] _doSimulate · groups='+groups.length+' · matches/g='+(matchesByGroup[0]||[]).length); } catch(_){}
     /* Sin playoff — formato 7×14 solo promueve top-5 y elimina al
        resto (petición usuario). Mantenemos el campo `playoff:null`
        en el sim por compatibilidad con cualquier lectura antigua. */
     var sim = {groups:groups, matchesByGroup:matchesByGroup, playoff:null, ts:Date.now()};
-    _saveSim(sim);
+    var saved = _saveSim(sim);
+    if(!saved){
+      /* `_saveSim` ya alertó al usuario con el motivo. Salimos para
+         no re-pintar con datos que no se persistieron — antes
+         buildOpenQualifierClas leía null y dejaba grupos en 0. */
+      return;
+    }
     _persistPreviaFlag(sim);
+    try { console.log('[oq-sim] guardado OK · pintando clas'); } catch(_){}
     buildOpenQualifierClas();
   }
   function resetOpenQualifier(){

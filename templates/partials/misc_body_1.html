@@ -4892,6 +4892,83 @@ window._showSimProgress = function(opts, onDone){
     });
     return arr;
   }
+  /* Normalización canónica de nombre de equipo para el filtro
+     "no equipo español en WC/OQ". Va más allá de `_normName`: tras
+     bajar a minúsculas y quitar acentos, también elimina afijos
+     comunes de clubes (FC, CF, CD, SD, UD, AD, CE, SC, RC, CP, AC,
+     "club", "football", "real" cuando es prefijo no semántico) y
+     "B"/"II" al final (filiales). Así "Europa FC", "CE Europa" y
+     "Europa" colapsan al mismo canónico "europa". */
+  function _canonTeamName(s){
+    var n = String(s==null?'':s).toLowerCase().normalize('NFD')
+      .replace(/[̀-ͯ]/g,'')
+      .replace(/^\s*\*+\s*/,'')
+      .replace(/[^a-z0-9]+/g,' ')
+      .replace(/\s+/g,' ').trim();
+    /* Elimina afijos típicos en cualquier posición. NO toca "real" o
+       "atletico" porque forman parte semántica del nombre del club
+       (Real Madrid ≠ Madrid, Atlético Madrid ≠ Madrid). */
+    n = n.replace(/\b(fc|cf|cd|sd|ud|ad|ce|sc|rc|cp|ac|club|football|deportivo|deportiva)\b/g,'');
+    /* "B"/"II" al final → filial; los guardamos PERO también bajo el
+       canónico del club madre — la verificación siempre toma el
+       nombre tal cual y el canónico, así si ban tiene "real sociedad"
+       y "real sociedad b", ambos quedan filtrados sin colisionar. */
+    n = n.replace(/\s+/g,' ').trim();
+    return n;
+  }
+  /* Devuelve un set { canonName: true } con los nombres canónicos
+     de TODOS los equipos de Liga EA Sports + Hypermotion + 1ª RFEF.
+     Lo usa `_computeQualifiedFromLeagues` para filtrar teams del
+     pool de Wild Card y Open Qualifier — el usuario fue explícito:
+     ningún equipo español de las 3 ligas internas puede colarse en
+     WC/OQ, ni siquiera por sync accidental hacia un slug de país
+     pequeño (ej. "Europa FC" en `ligaExt_gibraltar`). */
+  function _spanishUpperTierTeamNames(){
+    var s = Object.create(null);
+    function _addByName(nm){
+      var c = _canonTeamName(nm || '');
+      if(c) s[c] = true;
+    }
+    ['ligaExt_liga-ea-sports',
+     'ligaExt_liga-hypermotion',
+     'ligaExt_liga-primera-federacion'].forEach(function(key){
+      try {
+        var raw = localStorage.getItem(key);
+        if(!raw) return;
+        var d = JSON.parse(raw);
+        (d && Array.isArray(d.teams) ? d.teams : []).forEach(function(t){
+          _addByName(t && (t.name || t.nombre));
+          _addByName(t && t.short);
+        });
+      } catch(_){}
+    });
+    /* Fallback hardcoded por si los ligaExt aún no están cargados —
+     nombres comunes de los grandes clubes de las 3 ligas españolas
+     y sus alias frecuentes. */
+    ['Real Madrid','FC Barcelona','Barcelona','Atlético Madrid','Atletico Madrid','Atl Madrid',
+     'Real Sociedad','Real Sociedad B','Athletic Club','Sevilla','Valencia','Valencia CF',
+     'Real Betis','Villarreal','Villarreal B','Osasuna','Mallorca','Espanyol','Getafe','Getafe CF',
+     'Celta','Celta Vigo','Celta de Vigo','Celta Fortuna','Rayo','Rayo Vallecano','Alaves','Alavés',
+     'Deportivo Alavés','Girona','Girona FC','Elche','Elche CF','Levante','Levante UD',
+     'Almeria','Almería','UD Almería','Real Oviedo','Oviedo','Albacete','Cadiz','Cádiz','Burgos',
+     'Castellon','Castellón','Andorra','FC Andorra','Las Palmas','UD Las Palmas','Leganes','Leganés',
+     'Malaga','Málaga','Racing','Real Racing Club','Sporting','Real Sporting','Valladolid','Real Valladolid',
+     'Zaragoza','Real Zaragoza','Granada','Huesca','Eibar','SD Eibar','Ceuta','Cordoba','Córdoba',
+     'Depor','RC Deportivo','Mirandes','Mirandés','RM Castilla','Real Madrid Castilla',
+     'Ponferradina','Cultural','Cultural Leonesa','CD Lugo','Lugo','Racing Ferrol','Nàstic',
+     'Gimnàstic Tarragona','Gimnastic','Osasuna B','Osasuna Promesas','Bilbao Ath','Bilbao Ath.',
+     'Unionistas','Unionistas CF','Mérida','Merida','AD Mérida','Barakaldo','Arenteiro','Zamora',
+     'Zamora CF','Ourense','Ourense CF','Talavera','CF Talavera','Guadalajara','CD Guadalajara',
+     'Cacereño','CP Cacereño','Arenas','Arenas de Getxo','Real Avilés','Avilés',
+     'Ibiza','UD Ibiza','Real Murcia','Murcia','Eldense','CD Eldense','Hércules','Hercules','Hércules CF',
+     'Alcorcón','Alcorcon','AD Alcorcón','Cartagena','FC Cartagena','Marbella','Marbella FC',
+     'Sabadell','CE Sabadell','Betis Deportivo','Betis Dep.','Antequera','Antequera CF',
+     'Sevilla At.','Sevilla At','Algeciras','Algeciras CF','Atlético Madrileño','Atletico Madrileño','At. Madrileño',
+     'At. Sanluqueño','Sanluqueño','Sanluqueno','CE Europa','Europa','Tarazona','SD Tarazona',
+     'Teruel','CD Teruel','Torremolinos','Juventud Torremolinos','Estepona'
+    ].forEach(_addByName);
+    return s;
+  }
   /* Recorre localStorage y devuelve la lista de equipos que se
      han ganado plaza en su liga terminada. zoneKey ∈ 'ucl' | 'uel'
      | 'uecl'. Filtra backups (`_backup`), snapshots (`_snap_`) y
@@ -4906,6 +4983,15 @@ window._showSimProgress = function(opts, onDone){
     var diag = []; // [{slug, n, results, needed, status, note}]
     if(typeof localStorage === 'undefined') { window._lastQualDiag = diag; return out; }
     var seenLeagueHash = {};
+    /* Filtro per-team-name para WC y OQ: los equipos de Liga EA Sports,
+       Hypermotion y 1ª RFEF NUNCA pueden colarse en estos pools, ni
+       aunque por accidente uno de ellos esté metido en un slug de país
+       pequeño (ej. "Europa FC"/"CE Europa" mal asignado a Gibraltar).
+       UCL/UEL/UECL no usan este filtro porque ahí EA Sports SÍ
+       contribuye legítimamente. */
+    var spanishTeamBanned = (zoneKey === 'wildcard' || zoneKey === 'uclQual')
+      ? _spanishUpperTierTeamNames()
+      : null;
     try {
       var keys = [];
       for(var i=0;i<localStorage.length;i++){
@@ -5046,10 +5132,23 @@ window._showSimProgress = function(opts, onDone){
           ? _rankByPower(teams)
           : _standingsFromResults(teams, data.results);
         var added = 0;
-        for(var j=skip; j<skip+slots && j<ranking.length; j++){
+        /* Si el slot wildcard/uclQual cae sobre un equipo español de
+           Primera/Segunda/1ª RFEF, lo SALTAMOS y avanzamos en el
+           ranking hasta encontrar uno limpio. Antes el bucle era
+           `for(j=skip; j<skip+slots; j++)` y se rompía si el equipo
+           estaba vetado — el slug aportaba 0 equipos al pool y
+           dejaba un TBD/desfase. */
+        var jStart = skip, jEnd = ranking.length;
+        for(var j=jStart; j<jEnd && added<slots; j++){
+          var rj = ranking[j];
+          if(!rj) continue;
+          var teamName = String(rj.name||'').replace(/^\s*\*+\s*/,'');
+          if(spanishTeamBanned && spanishTeamBanned[_canonTeamName(teamName)]){
+            continue; /* equipo español colado — saltar y avanzar */
+          }
           out.push({
-            name:  String(ranking[j].name||'').replace(/^\s*\*+\s*/,''),
-            logo:  ranking[j].logo,
+            name:  teamName,
+            logo:  rj.logo,
             league: slug
           });
           added++;

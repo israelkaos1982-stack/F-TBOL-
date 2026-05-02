@@ -4825,6 +4825,40 @@ window._showSimProgress = function(opts, onDone){
     if(!t || typeof t !== 'object') return '';
     return t.logo || t.escudo || t.shield || t.img || t.src || '';
   }
+  /* Lee el poder/rating de un equipo. Prioridad: campos directos del
+     objeto plantilla (power/media/poder) → TEAM_RATINGS global por
+     nombre → 65 default. Lo usa el ranking sintético de Wild Card
+     cuando una liga aún no ha simulado ningún partido (rN=0): así
+     los 40 slugs aportan equipo aunque el usuario no haya tocado
+     "Resto de Ligas". */
+  function _teamPower(t){
+    if(t && typeof t === 'object'){
+      if(typeof t.power === 'number') return t.power;
+      if(typeof t.media === 'number') return t.media;
+      if(typeof t.poder === 'number') return t.poder;
+    }
+    var nm = _teamName(t);
+    if(!nm) return 65;
+    var r = window.TEAM_RATINGS || {};
+    var e = r[nm];
+    if(!e) return 65;
+    if(typeof e === 'number') return e;
+    if(typeof e === 'object' && typeof e.media === 'number') return e.media;
+    return 65;
+  }
+  function _rankByPower(teams){
+    var arr = [];
+    teams.forEach(function(t){
+      if(!t) return;
+      var nm = _teamName(t);
+      if(!nm) return;
+      arr.push({ name:nm, logo:_teamLogo(t), pts:0, pj:0, gf:0, gc:0, dg:0, _pw:_teamPower(t) });
+    });
+    arr.sort(function(x,y){
+      return (y._pw - x._pw) || String(x.name).localeCompare(String(y.name),'es');
+    });
+    return arr;
+  }
   /* Ordena equipos usando los resultados de la liga: pts, DG,
      GF, nombre. Devuelve array con {name, logo, pts, dg, gf}.
      IMPORTANTE: `results[i]` usa `h`/`a` como IDs del equipo
@@ -4908,19 +4942,17 @@ window._showSimProgress = function(opts, onDone){
         if(N < 2){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'menos de 2 equipos'}); return; }
         /* Auto-cupo Wild Card: para los 40 slugs de WILDCARD_LIGA_SLUGS
            tratamos `zones.wildcard` como ≥1 implícito y aceptamos
-           standings parciales (rN > 0) — el usuario configura la lista
-           de 40 ligas, no debería tener que tocar zones.wildcard ni
-           esperar a que TODAS estén 100% simuladas para que el pool
-           se complete (antes quedaba a 9/40). */
+           CUALQUIER estado de simulación — incluso ligas con rN=0 (sin
+           ningún partido jugado) aportan equipo, ranking sintético por
+           poder. El usuario configura la lista de 40 ligas, no debería
+           tener que tocar zones.wildcard ni simular nada para que el
+           pool se complete (antes quedaba a 9/40 → 10/40). */
         var isWcAuto = (zoneKey === 'wildcard')
                     && window.WILDCARD_LIGA_SLUGS
                     && window.WILDCARD_LIGA_SLUGS[slug];
-        if(rN < needed){
-          if(!isWcAuto || rN === 0){
-            diag.push({slug:slug, n:N, results:rN, needed:needed, status:'incompleta', note:'faltan partidos'});
-            return;
-          }
-          /* Continuamos con standings parciales — anotamos como info. */
+        if(rN < needed && !isWcAuto){
+          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'incompleta', note:'faltan partidos'});
+          return;
         }
         var zones = (data.config && data.config.zones) || {};
         var slots = Number(zones[zoneKey] || 0);
@@ -4934,11 +4966,14 @@ window._showSimProgress = function(opts, onDone){
         var hash = teams.map(function(t){ return _normName(_teamName(t)); })
                         .filter(Boolean).sort().join('|');
         if(!hash){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'plantilla sin nombres'}); return; }
-        if(seenLeagueHash[hash]){
+        if(seenLeagueHash[hash] && !isWcAuto){
           /* Guardamos el slug de la liga "primera" que registró este
              hash para que el diag muestre claramente la pareja
              (antes solo decía "misma plantilla que otra liga ya
-             procesada" sin indicar cuál). */
+             procesada" sin indicar cuál). Para auto-cupo Wild Card
+             saltamos este filtro: cada uno de los 40 slugs aporta su
+             plaza aunque dos compartan plantilla; el dedupe global por
+             nombre al final ya pliega clones reales si los hubiese. */
           var dupOf = seenLeagueHash[hash];
           diag.push({slug:slug, n:N, results:rN, needed:needed, status:'duplicada', note:'misma plantilla que: '+dupOf, dupOf:dupOf});
           return;
@@ -4966,7 +5001,19 @@ window._showSimProgress = function(opts, onDone){
                + (Number(zones.uel)||0)
                + (Number(zones.uecl)||0);
         }
-        var ranking = _standingsFromResults(teams, data.results);
+        /* Auto-cupo: si la liga no tiene zonas europeas configuradas
+           (skip=0 porque el usuario nunca abrió Reglas), por defecto
+           tomamos la 4ª plaza (skip=3). Es la convención más común
+           para las ligas medias/pequeñas con UCL+UEL+UECL=3 europeas
+           por encima del wildcard. Sin esto el ranking sintético por
+           poder pondría al campeón de la liga como wildcard. */
+        if(isWcAuto && skip === 0) skip = 3;
+        /* Si la liga no tiene resultados todavía (ranking sintético),
+           ordenamos por poder. Solo aplica al auto-cupo Wild Card —
+           para UCL/UEL/UECL seguimos exigiendo liga completa. */
+        var ranking = (isWcAuto && rN === 0)
+          ? _rankByPower(teams)
+          : _standingsFromResults(teams, data.results);
         var added = 0;
         for(var j=skip; j<skip+slots && j<ranking.length; j++){
           out.push({
@@ -4977,7 +5024,8 @@ window._showSimProgress = function(opts, onDone){
           added++;
         }
         var okNote = '+'+added+' equipos';
-        if(isWcAuto && rN < needed) okNote += ' · standings parcial ('+rN+'/'+needed+')';
+        if(isWcAuto && rN === 0)              okNote += ' · ranking por poder (sin partidos)';
+        else if(isWcAuto && rN < needed)      okNote += ' · standings parcial ('+rN+'/'+needed+')';
         if(isWcAuto && !(Number((data.config&&data.config.zones&&data.config.zones[zoneKey])||0) > 0)) okNote += ' · auto-cupo ⚪';
         diag.push({slug:slug, n:N, results:rN, needed:needed, status:'ok', note:okNote});
       });

@@ -4840,8 +4840,12 @@
     var au = away.toUpperCase();
     var hiH = humanIcon(home);
     var hiA = humanIcon(away);
-    var lA = getLogoEquipo(home) || '';
-    var lB = getLogoEquipo(away) || '';
+    /* Logo overrides: el caller (p.ej. Previa Champions) puede pasar
+       el logo real desde su propio state (`grp[i].logo`). Esto evita
+       caer al estepona.svg de fallback para equipos foráneos como
+       Hapoel Ramat Gan o FC Haka, cuyo logo no vive en TEAM_LOGOS. */
+    var lA = (opts.homeLogoOverride && String(opts.homeLogoOverride).trim()) || getLogoEquipo(home) || '';
+    var lB = (opts.awayLogoOverride && String(opts.awayLogoOverride).trim()) || getLogoEquipo(away) || '';
     var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[home]) || '';
     var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[away]) || '';
     var homeRatDisplay = rA ? Math.round(rA * 1.1) : '';
@@ -4849,7 +4853,6 @@
     /* team color gradient */
     var tcA = (window.getTeamColors && window.getTeamColors(home)) || {bg:'#1a2a4a'};
     var tcB = (window.getTeamColors && window.getTeamColors(away)) || {bg:'#1a2a4a'};
-    var gradStyle = 'background:linear-gradient(to right,'+tcA.bg+'2e 0%,transparent 44%,transparent 56%,'+tcB.bg+'2e 100%);position:relative;overflow:hidden;';
     /* faded bg shields — HvH both, Human vs IA only human side.
        Si el caller pasa flags H/IA explícitos (amistosos con toggle
        per-match) los honramos; si no, caemos al esHumano global. */
@@ -4857,14 +4860,44 @@
     var isAwayHuman = (typeof opts.awayIsHuman === 'boolean') ? opts.awayIsHuman : esHumano(away);
     var showShA = isHvH || isHomeHuman;
     var showShB = isHvH || isAwayHuman;
-    var bgShA = (showShA && lA) ? '<img src="'+lA+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
-    var bgShB = (showShB && lB) ? '<img src="'+lB+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
-    /* shield groups (no power badge — hidden per design spec) */
+    /* Estilo Previa Champions HvIA: el escudo del HUMANO se usa como
+       fondo prominente del lado humano, y el degradado del lado IA
+       toma el color del equipo IA (más saturado que el .2e habitual).
+       Para HvH/Liga preservamos el look anterior (.11 / 2e). */
+    var enhanceHvIA = !!opts.wprevStyle && !isHvH && (isHomeHuman !== isAwayHuman);
+    var humanBgSize = enhanceHvIA ? '160px' : '80px';
+    var humanBgOpacity = enhanceHvIA ? '0.30' : '0.11';
+    var humanBgOffset = enhanceHvIA ? '-12px' : '-4px';
+    var bgShA = (showShA && lA) ? '<img src="'+lA+'" alt="" style="position:absolute;left:'+(isHomeHuman?humanBgOffset:'-4px')+';top:50%;transform:translateY(-50%);width:'+(isHomeHuman?humanBgSize:'80px')+';height:'+(isHomeHuman?humanBgSize:'80px')+';object-fit:contain;opacity:'+(isHomeHuman?humanBgOpacity:'0.11')+';pointer-events:none;z-index:0;">' : '';
+    var bgShB = (showShB && lB) ? '<img src="'+lB+'" alt="" style="position:absolute;right:'+(isAwayHuman?humanBgOffset:'-4px')+';top:50%;transform:translateY(-50%);width:'+(isAwayHuman?humanBgSize:'80px')+';height:'+(isAwayHuman?humanBgSize:'80px')+';object-fit:contain;opacity:'+(isAwayHuman?humanBgOpacity:'0.11')+';pointer-events:none;z-index:0;">' : '';
+    var iaSideAlpha = enhanceHvIA ? '7a' : '2e';
+    var humanSideAlpha = enhanceHvIA ? '14' : '2e';
+    var leftAlpha  = enhanceHvIA ? (isHomeHuman ? humanSideAlpha : iaSideAlpha) : '2e';
+    var rightAlpha = enhanceHvIA ? (isAwayHuman ? humanSideAlpha : iaSideAlpha) : '2e';
+    var gradStyle = 'background:linear-gradient(to right,'+tcA.bg+leftAlpha+' 0%,transparent 44%,transparent 56%,'+tcB.bg+rightAlpha+' 100%);position:relative;overflow:hidden;';
+    /* shield groups (no power badge — hidden per design spec).
+       En `wprevStyle` (Previa Champions), si el logo resuelto cae al
+       estepona-default por falta de mapping, usamos `iaShieldSVG`
+       para generar un escudo SVG con las iniciales del equipo —
+       evita la "EST" genérica para equipos foráneos como Hapoel
+       Ramat Gan o FC Haka. */
+    function _isFallbackShield(p){
+      return !!p && (p === BACKEND_ESCUDO_DEFAULT || /escudos-fallback\/estepona/.test(String(p)));
+    }
+    function _frontShieldImg(team, logo){
+      if(opts.wprevStyle && _isFallbackShield(logo) && typeof iaShieldSVG === 'function'){
+        return '<div class="ml-shield-wrap" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;">'+iaShieldSVG(team)+'</div>';
+      }
+      if(logo){
+        return '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+logo+'" alt="'+team+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>';
+      }
+      return '';
+    }
     var shieldA = '<div style="display:flex;flex-direction:column;align-items:center;z-index:1;position:relative;">'
-      + (lA ? '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+lA+'" alt="'+home+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>' : '')
+      + _frontShieldImg(home, lA)
       + '</div>';
     var shieldB = '<div style="display:flex;flex-direction:column;align-items:center;z-index:1;position:relative;">'
-      + (lB ? '<div class="ml-shield-wrap"><img class="ml-team-svg" src="'+lB+'" alt="'+away+'" onerror="this.style.display=\'none\'" style="width:44px;height:44px;object-fit:contain;"/></div>' : '')
+      + _frontShieldImg(away, lB)
       + '</div>';
     var etStyle = ' style="display:none"'; /* Liga: empate es resultado válido, sin prórroga */
     var emk = mk.replace(/'/g,"\\'");
@@ -19255,6 +19288,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var home = grp[m.hi] && grp[m.hi].name;
     var away = grp[m.ai] && grp[m.ai].name;
     if(!home || !away) return;
+    /* El estado wprev guarda el logo real de cada equipo (pool extraído
+       de `computeUclPrevTeams` con su `t.logo` original). Lo pasamos al
+       motor de match-card para evitar caer al escudo-default cuando el
+       equipo IA es foráneo (Hapoel, FC Haka, …) y no vive en TEAM_LOGOS. */
+    var homeLogo = (grp[m.hi] && grp[m.hi].logo) || '';
+    var awayLogo = (grp[m.ai] && grp[m.ai].logo) || '';
     var homeIsHuman = _isHumanTeam(home);
     var awayIsHuman = _isHumanTeam(away);
     var isHvH = homeIsHuman && awayIsHuman;
@@ -19264,7 +19303,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if(host && !existingWrap && typeof window._calBuildMatchCard === 'function'){
       var cardHtml = window._calBuildMatchCard(0, home, away, isHvH, mk, {
         homeIsHuman: homeIsHuman,
-        awayIsHuman: awayIsHuman
+        awayIsHuman: awayIsHuman,
+        homeLogoOverride: homeLogo,
+        awayLogoOverride: awayLogo,
+        wprevStyle: true
       });
       host.innerHTML = cardHtml;
       host.style.display = 'block';

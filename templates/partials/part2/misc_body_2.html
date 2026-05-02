@@ -18647,20 +18647,113 @@ document.addEventListener('DOMContentLoaded', function() {
   /* PASO 4 — Simular la liguilla de los 11 grupos (ya sorteados).
      Tras esta fase se persisten Champions (1º) y Europa (2º+3º).
      Phase resultante: 'done'. */
-  function simulateRfGroups(state){
+  /* PASO 4 — Simular liguilla por JORNADAS individuales (J1..J6).
+     Antes simulábamos las 6 jornadas de los 11 grupos en una sola
+     pulsación → el usuario perdía la posibilidad de jugar a mano
+     sus equipos humanos (Atlético Madrid, etc.). Ahora cada
+     pulsación juega SOLO una jornada (1 partido por grupo), salta
+     los partidos humanos (los marca `humanPending:true` para que el
+     flujo humano los recoja desde la lista de partidos jugables) y
+     marca `phase='done'` solo cuando las 6 jornadas están completas
+     en TODOS los grupos. */
+  function _isHumanTeam(name){
+    if(!name) return false;
+    try {
+      var list = (typeof HUMANOS !== 'undefined') ? HUMANOS : (window.HUMANOS || []);
+      for(var i=0; i<list.length; i++){
+        if(list[i] === name) return true;
+      }
+    } catch(_){}
+    return false;
+  }
+  function simulateRfJornada(state, jIdx){
+    /* jIdx: 0..5 → J1..J6 dentro del array `jornadasByGroup[gi]`. */
+    if(jIdx < 0 || jIdx > 5) return { simmed:0, humanPending:0 };
+    var simmed = 0, humanPending = 0;
     state.groups.forEach(function(grp, gi){
       var sched = state.jornadasByGroup[gi];
-      sched.forEach(function(m){
-        if(m.played) return;
-        var sc = simMatch(grp[m.hi].name, grp[m.ai].name);
-        m.gh = sc.gh; m.ga = sc.ga; m.played = true;
-        applyToTable(state.tables[gi], m.hi, m.ai, sc.gh, sc.ga);
-      });
+      var m = sched[jIdx];
+      if(!m || m.played) return;
+      var homeName = grp[m.hi] && grp[m.hi].name || '';
+      var awayName = grp[m.ai] && grp[m.ai].name || '';
+      if(_isHumanTeam(homeName) || _isHumanTeam(awayName)){
+        m.humanPending = true;
+        humanPending++;
+        return; /* el usuario debe jugarlo a mano (gm-modal/PREVIA) */
+      }
+      var sc = simMatch(homeName, awayName);
+      m.gh = sc.gh; m.ga = sc.ga; m.played = true;
+      m.humanPending = false;
+      applyToTable(state.tables[gi], m.hi, m.ai, sc.gh, sc.ga);
+      simmed++;
     });
     state.sortedTables = state.tables.map(sortTable);
+    state.ts = Date.now();
+    return { simmed: simmed, humanPending: humanPending };
+  }
+  /* Comprueba si TODAS las jornadas y partidos están completados —
+     si sí, marca phase='done' y persiste flags Champions/Europa. */
+  function _maybeFinalizeWprev(state){
+    var allDone = (state.jornadasByGroup||[]).every(function(sched){
+      return (sched||[]).every(function(m){ return m && m.played; });
+    });
+    if(!allDone) return false;
     _persistChampionsAndEuropa(state);
     state.phase = 'done';
     state.ts = Date.now();
+    return true;
+  }
+  /* Devuelve el índice (0..5) de la PRÓXIMA jornada con partidos
+     pendientes (incluyendo humanPending). Devuelve 6 si todas
+     están jugadas. */
+  function _wprevNextPendingJornada(state){
+    if(!state || !Array.isArray(state.jornadasByGroup)) return 0;
+    for(var j=0; j<6; j++){
+      var anyPending = false;
+      for(var gi=0; gi<state.jornadasByGroup.length; gi++){
+        var m = state.jornadasByGroup[gi][j];
+        if(m && !m.played){ anyPending = true; break; }
+      }
+      if(anyPending) return j;
+    }
+    return 6;
+  }
+  /* Devuelve el índice (0..5) de la próxima jornada cuyos partidos
+     IA estén sin simular. Útil para el botón Sim — si la jornada
+     actual ya tiene todos los IA simmed pero los humanos pending,
+     dejamos al usuario AVANZAR (sin completar humanos) sólo si las
+     IA siguientes están sin tocar. */
+  function _wprevNextSimableJornada(state){
+    if(!state || !Array.isArray(state.jornadasByGroup)) return 0;
+    for(var j=0; j<6; j++){
+      var anyIaPending = false;
+      for(var gi=0; gi<state.jornadasByGroup.length; gi++){
+        var m = state.jornadasByGroup[gi][j];
+        if(!m || m.played) continue;
+        var grp = state.groups[gi];
+        var hN = grp[m.hi] && grp[m.hi].name || '';
+        var aN = grp[m.ai] && grp[m.ai].name || '';
+        if(_isHumanTeam(hN) || _isHumanTeam(aN)) continue;
+        anyIaPending = true; break;
+      }
+      if(anyIaPending) return j;
+    }
+    return 6;
+  }
+  /* Wrapper compat: ahora simula UNA jornada (la próxima sin sim de
+     IA). Si recibe un jornadaIdx explícito, sim sólo esa. */
+  function simulateRfGroups(state, jornadaIdx){
+    if(typeof jornadaIdx !== 'number'){
+      jornadaIdx = _wprevNextSimableJornada(state);
+    }
+    if(jornadaIdx >= 6){
+      _maybeFinalizeWprev(state);
+      return { simmed:0, humanPending:0, jornada: 6 };
+    }
+    var r = simulateRfJornada(state, jornadaIdx);
+    _maybeFinalizeWprev(state);
+    r.jornada = jornadaIdx;
+    return r;
   }
 
   function _badge(name, logo){
@@ -18941,12 +19034,68 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     if(s.phase === 'rf-drawn'){
-      simulateRfGroups(s);
+      var r = simulateRfGroups(s);
       saveState(s);
       buildUclPrevClas();
+      /* Diagnóstico al usuario tras cada Simular JN. */
+      if(r.simmed === 0 && r.humanPending === 0 && r.jornada >= 6){
+        if(s.phase === 'done'){
+          alert('✓ Ronda Final completa.');
+        }
+      } else {
+        var msg = 'Jornada J'+(r.jornada+1)+' procesada · '
+                + r.simmed+' partidos IA simulados';
+        if(r.humanPending > 0){
+          msg += ' · '+r.humanPending+' partido(s) humano(s) pendiente(s)';
+          msg += '\n\nLos partidos del Atlético Madrid (u otros equipos humanos) '
+              +  'NO se han simulado automáticamente. Júgalos a mano con la PREVIA '
+              +  'desde la lista de partidos jugables, o usa "Forzar sim humanos" '
+              +  'al final si quieres autosimularlos.';
+        }
+        try { console.log('[wprev-sim]', r); } catch(_){}
+        if(r.humanPending > 0) alert(msg);
+      }
       return;
     }
     /* phase === 'done' → solo refrescar render. */
+    buildUclPrevClas();
+  };
+
+  /* Forzar sim de los partidos humanos pendientes — para que el
+     usuario pueda finalizar la Ronda Final sin pasar por la PREVIA
+     manual. Usa el mismo `simMatch` (que internamente llama a
+     `_simIAvsIAWithContext` cuando existe → respeta lineup humano
+     según CLAUDE.md). PIN admin no exigido — es una decisión del
+     dueño de la partida. */
+  window._wprevForceSimHumanos = function(){
+    var s = loadState();
+    if(!s || s.phase !== 'rf-drawn') return;
+    var pending = [];
+    (s.jornadasByGroup||[]).forEach(function(sched, gi){
+      sched.forEach(function(m, j){
+        if(!m || m.played) return;
+        var grp = s.groups[gi];
+        var hN = grp[m.hi] && grp[m.hi].name || '';
+        var aN = grp[m.ai] && grp[m.ai].name || '';
+        if(_isHumanTeam(hN) || _isHumanTeam(aN)){
+          pending.push({gi:gi, j:j, hN:hN, aN:aN, m:m});
+        }
+      });
+    });
+    if(!pending.length){
+      alert('No hay partidos humanos pendientes.');
+      return;
+    }
+    if(!confirm('Vas a auto-simular '+pending.length+' partido(s) humano(s) (Atlético Madrid u otros). '
+              + '¿Continuar? Esto los marca como jugados con el motor IA-vs-IA.')) return;
+    pending.forEach(function(p){
+      var sc = simMatch(p.hN, p.aN);
+      p.m.gh = sc.gh; p.m.ga = sc.ga; p.m.played = true; p.m.humanPending = false;
+      applyToTable(s.tables[p.gi], p.m.hi, p.m.ai, sc.gh, sc.ga);
+    });
+    s.sortedTables = s.tables.map(sortTable);
+    _maybeFinalizeWprev(s);
+    saveState(s);
     buildUclPrevClas();
   };
 
@@ -18986,12 +19135,37 @@ document.addEventListener('DOMContentLoaded', function() {
     if(!s)                          return '🎮 Sortear cruces';
     if(s.phase === 'paired')        return '🎮 Simular IDA';
     if(s.phase === 'ida-played')    return '🎮 Simular VUELTA';
-    if(s.phase === 'rf-drawn')      return '🎮 Simular Ronda Final';
+    if(s.phase === 'rf-drawn'){
+      /* Etiqueta dinámica: indica la próxima jornada IA pendiente,
+         de J1 a J6. Si todas las IA están simuladas pero quedan
+         humanos pending, decimos "Esperando humanos" para que el
+         usuario sepa que tiene que jugar sus partidos antes. */
+      var nextSim = _wprevNextSimableJornada(s);
+      if(nextSim >= 6){
+        var anyHumanPending = (s.jornadasByGroup||[]).some(function(sched){
+          return (sched||[]).some(function(m){ return m && !m.played; });
+        });
+        if(anyHumanPending) return '⏳ Esperando partidos humanos';
+        return '✓ Ronda Final completa';
+      }
+      return '🎮 Simular J' + (nextSim+1) + ' Ronda Final';
+    }
     return '✓ Completado';
   };
   window._wprevSimDisabled = function(){
     var s = loadState();
-    return !!(s && s.phase === 'done');
+    if(!s) return false;
+    if(s.phase === 'done') return true;
+    /* Si la próxima jornada IA ya está jugada y solo quedan humanos
+       pendientes, deshabilitamos el botón — el usuario tiene que
+       jugar sus partidos primero. */
+    if(s.phase === 'rf-drawn' && _wprevNextSimableJornada(s) >= 6){
+      var anyHumanPending = (s.jornadasByGroup||[]).some(function(sched){
+        return (sched||[]).some(function(m){ return m && !m.played; });
+      });
+      if(anyHumanPending) return true;
+    }
+    return false;
   };
   window._wprevDrawDisabled = function(){
     var s = loadState();

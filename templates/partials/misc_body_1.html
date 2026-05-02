@@ -4950,10 +4950,16 @@ window._showSimProgress = function(opts, onDone){
         var isWcAuto = (zoneKey === 'wildcard')
                     && window.WILDCARD_LIGA_SLUGS
                     && window.WILDCARD_LIGA_SLUGS[slug];
-        if(rN < needed && !isWcAuto){
-          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'incompleta', note:'faltan partidos'});
-          return;
-        }
+        /* Para el resto de zonas (ucl/uclPrev/uclQual/uel/uecl)
+           extendemos el mismo principio: nunca rechazamos por
+           `incompleta`. Si la liga tiene rN=0 caemos al ranking por
+           poder; si tiene resultados parciales (0<rN<needed) usamos
+           lo que haya. Esto evita que el pool del Open Qualifier (98
+           plazas) se llene de TBD-OQ-XX cuando hay ligas sin simular,
+           y replica el comportamiento que ya tenía Wild Card. La
+           condición de `slots > 0` SÍ se mantiene fuera de auto-cupo
+           wildcard, porque indica que el usuario ha configurado el
+           cupo en Reglas. */
         var zones = (data.config && data.config.zones) || {};
         var slots = Number(zones[zoneKey] || 0);
         if(!(slots > 0)){
@@ -5008,10 +5014,13 @@ window._showSimProgress = function(opts, onDone){
            por encima del wildcard. Sin esto el ranking sintético por
            poder pondría al campeón de la liga como wildcard. */
         if(isWcAuto && skip === 0) skip = 3;
-        /* Si la liga no tiene resultados todavía (ranking sintético),
-           ordenamos por poder. Solo aplica al auto-cupo Wild Card —
-           para UCL/UEL/UECL seguimos exigiendo liga completa. */
-        var ranking = (isWcAuto && rN === 0)
+        /* Ranking sintético por poder cuando rN=0 (sin partidos
+           jugados) para CUALQUIER zona — antes solo aplicaba al
+           wildcard. Esto evita que el pool del Open Qualifier llegue
+           con TBD-OQ-XX en las plazas finales por culpa de ligas que
+           no se han simulado. Si hay resultados parciales (rN>0)
+           usamos `_standingsFromResults` con lo que haya. */
+        var ranking = (rN === 0)
           ? _rankByPower(teams)
           : _standingsFromResults(teams, data.results);
         var added = 0;
@@ -5024,8 +5033,8 @@ window._showSimProgress = function(opts, onDone){
           added++;
         }
         var okNote = '+'+added+' equipos';
-        if(isWcAuto && rN === 0)              okNote += ' · ranking por poder (sin partidos)';
-        else if(isWcAuto && rN < needed)      okNote += ' · standings parcial ('+rN+'/'+needed+')';
+        if(rN === 0)              okNote += ' · ranking por poder (sin partidos)';
+        else if(rN < needed)      okNote += ' · standings parcial ('+rN+'/'+needed+')';
         if(isWcAuto && !(Number((data.config&&data.config.zones&&data.config.zones[zoneKey])||0) > 0)) okNote += ' · auto-cupo ⚪';
         diag.push({slug:slug, n:N, results:rN, needed:needed, status:'ok', note:okNote});
       });

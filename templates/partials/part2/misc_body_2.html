@@ -17039,6 +17039,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var origWcSim = window._wcSimulate;
     if(typeof origWcSim === 'function'){
       window._wcSimulate = function(){
+        try { console.log('[wc-sim] wrap llamado · ftbolLoaderRun?', typeof window.ftbolLoaderRun); } catch(_){}
         if(typeof window.ftbolLoaderRun !== 'function'){
           return origWcSim();
         }
@@ -17062,10 +17063,20 @@ document.addEventListener('DOMContentLoaded', function() {
             { pct:90, sub:'Jugando 18 eliminatorias Ronda Final…', ms:240 }
           ];
         }
-        return _runFakeProgress(
-          { title: 'WILD CARD · SEMIFINAL + RONDA FINAL', sub:'Preparando…', minMs:1300, phases: phases },
-          function(){ if(typeof origWcSim === 'function') origWcSim(); }
-        );
+        try {
+          return _runFakeProgress(
+            { title: 'WILD CARD · SEMIFINAL + RONDA FINAL', sub:'Preparando…', minMs:1300, phases: phases },
+            function(){ if(typeof origWcSim === 'function') origWcSim(); }
+          );
+        } catch(e){
+          /* Si el loader falla por cualquier razón (DOM no disponible,
+             error en _runFakeProgress, etc.), CAEMOS al sim directo
+             para que el botón siempre haga algo. Antes un fallo del
+             overlay dejaba al usuario sin sim — "no funciona" sin
+             pista. */
+          try { console.error('[wc-sim] _runFakeProgress falló, ejecuto origWcSim directo:', e); } catch(_){}
+          return origWcSim();
+        }
       };
     }
     /* Wrap de `_wcDraw()` — solo sortea (sin sim). Overlay corto. */
@@ -17662,14 +17673,27 @@ document.addEventListener('DOMContentLoaded', function() {
     _refreshSimBtn(s);
     if(!s){
       var pool = buildPool();
+      var poolFull = (pool.length >= POOL_TARGET);
+      var poolReady = (pool.length > 0);
+      var statusLine = poolFull
+        ? '✅ Pool listo: <b style="color:#a4ff9a;">'+pool.length+' / '+POOL_TARGET+'</b> equipos detectados'
+        : (poolReady
+            ? '⚠️ Pool incompleto: <b>'+pool.length+' / '+POOL_TARGET+'</b> equipos · faltarán <b>'+(POOL_TARGET-pool.length)+'</b> placeholders'
+            : '⚠️ Pool vacío: <b>0 / '+POOL_TARGET+'</b>');
+      var actionLine = poolReady
+        ? '<div style="margin-top:14px;padding:10px 12px;background:rgba(255,215,0,.10);border:1px solid rgba(255,215,0,.45);border-radius:8px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;color:#ffe680;">'
+          + '👉 Pulsa <b style="color:#fff;">🎮 Simular</b> arriba para sortear las eliminatorias y jugar las 4 semis + 18 ties de la Ronda Final de una sola vez.'
+          + '</div>'
+        : '<div style="margin-top:14px;font-size:12px;color:rgba(255,255,255,.5);">Necesitas al menos 1 equipo para arrancar — entra a "Resto de Ligas" y configura/sim alguna.</div>';
       host.innerHTML = '<div class="wc-empty">'
         + '<div style="font-size:32px;margin-bottom:10px;">🎟️</div>'
-        + 'Sin equipos clasificados todavía.<br><br>'
-        + 'Configura el cupo <b>⚪ WildCard Round</b> en cada liga menor desde 📜 <i>Reglas</i> y simula sus jornadas. '
-        + 'Equipos detectados ahora mismo: <b>'+pool.length+'/'+POOL_TARGET+'</b>.<br><br>'
-        + (pool.length > 0
-          ? 'Pulsa <b>🎲 Draw</b> (PIN admin) para sortear las eliminatorias, o <b>🎮 Simular</b> para sortear y jugar todo de una vez. Rellenamos con placeholders si faltan.'
-          : 'Necesitas al menos 1 equipo para arrancar.')
+        + '<div style="font-family:Oswald,sans-serif;font-size:14px;letter-spacing:1.5px;color:rgba(255,255,255,.85);">'
+        +   'TORNEO SIN SORTEAR'
+        + '</div>'
+        + '<div style="margin-top:6px;font-size:13px;color:rgba(255,255,255,.7);">'
+        +   statusLine
+        + '</div>'
+        + actionLine
         + '</div>';
       return;
     }
@@ -17717,10 +17741,13 @@ document.addEventListener('DOMContentLoaded', function() {
      NOTA: a diferencia de Draw, Sim NO exige PIN (solo juega lo que
      ya está sorteado o sortea internamente). */
   window._wcSimulate = function(){
+    try { console.log('[wc-sim] _wcSimulate INICIO'); } catch(_){}
     try {
       var s = loadState();
+      try { console.log('[wc-sim] loadState →', s ? ('phase='+s.phase) : 'null'); } catch(_){}
       if(!s){
         var pool = buildPool();
+        try { console.log('[wc-sim] buildPool →', pool.length, 'equipos'); } catch(_){}
         if(!pool.length){
           alert('⚠️ No hay equipos clasificados. Simula al menos una liga menor con cupo ⚪ WildCard.');
           return;
@@ -17730,10 +17757,12 @@ document.addEventListener('DOMContentLoaded', function() {
           alert('⚠️ No se pudo inicializar el sorteo. Revisa la consola (F12).');
           return;
         }
+        try { console.log('[wc-sim] initState OK · semis='+(s.semis||[]).length+' · rfTies='+(s.rfTies||[]).length); } catch(_){}
         saveState(s); /* persistimos sorteo antes de simular por si simulateAll falla */
       }
       if(s.phase === 'done'){ render(); return; }
       simulateAll(s);
+      try { console.log('[wc-sim] simulateAll OK · phase='+s.phase); } catch(_){}
       saveState(s);
       render();
       /* Verificación post-sim: si algo dejó el estado en 'drawn', avisa

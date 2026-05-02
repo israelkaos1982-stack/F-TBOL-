@@ -18965,14 +18965,27 @@ document.addEventListener('DOMContentLoaded', function() {
     else if(s.phase === 'ida-played')  phaseLabel = '⏳ IDAS JUGADAS · PENDIENTE SIMULAR VUELTA';
     else if(s.phase === 'rf-drawn')    phaseLabel = '✓ RONDA 1 COMPLETA · 30 PERDEDORES YA EN CONFERENCE';
     else if(s.phase === 'done')        phaseLabel = '✓ RONDA 1 COMPLETA · TORNEO TERMINADO';
-    var html = '<div class="wprev-dr">'
-      + '<div class="wprev-dr-hdr">⚔️ RONDA 1 · 30 ELIMINATORIAS + 3 EXENTOS</div>'
-      + '<div class="wprev-dr-sub">CABEZA vs NO-CABEZA · IDA + VUELTA · GANADOR → RONDA FINAL · PERDEDOR → CONFERENCE</div>'
+    var collapsed = false;
+    try { collapsed = localStorage.getItem('wprev_r1_collapsed') === '1'; } catch(_){}
+    var html = '<div class="wprev-dr'+(collapsed?' collapsed':'')+'" id="wprev-dr-root">'
+      + '<div class="wprev-dr-hdr" id="wprev-dr-toggle">'
+      +   '<span>⚔️ RONDA 1 · 30 ELIMINATORIAS + 3 EXENTOS</span>'
+      +   '<span class="wprev-dr-chev">▼</span>'
+      + '</div>'
+      + '<div class="wprev-dr-body">'
       + (phaseLabel ? '<div style="text-align:center;padding:6px 14px 0;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:#a855f7;font-weight:700;">'+phaseLabel+'</div>' : '')
       + byesHtml;
     s.ties.forEach(function(t){ html += _renderR1Tie(t); });
-    html += '</div>';
+    html += '</div></div>';
     host.innerHTML = html;
+    var tgl = document.getElementById('wprev-dr-toggle');
+    var root = document.getElementById('wprev-dr-root');
+    if(tgl && root){
+      tgl.addEventListener('click', function(){
+        var isCol = root.classList.toggle('collapsed');
+        try { localStorage.setItem('wprev_r1_collapsed', isCol ? '1' : '0'); } catch(_){}
+      });
+    }
   }
 
   /* Refresca el label y disabled del botón Sim según la fase actual.

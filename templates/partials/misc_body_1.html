@@ -5020,20 +5020,22 @@ window._showSimProgress = function(opts, onDone){
              europea (no UEFA, liga interna).
            - liga-primera-federacion (1ª RFEF) → JAMÁS a ninguna
              competición europea (no UEFA, liga interna).
-           - liga-ea-sports (Primera) → SÍ va a UCL/Previa/UEL/UECL
-             vía zones, pero NUNCA al Wild Card ni al Open Qualifier
-             (que están reservados para ligas pequeñas/medias).
-           Antes la default DEFAULT_ZONES.uclQual=1 colaba al 8º o 9º
-           clasificado de Hypermotion (Almería) o el 25º de 1ªFed
-           (Europa) al pool del OQ. Aquí cortamos en seco. */
+           - liga-ea-sports (Primera) → JAMÁS por la vía automática
+             (`_computeQualifiedFromLeagues`). Los equipos de Liga
+             EA Sports se añaden EXCLUSIVAMENTE a mano vía la
+             pantalla "EA Sports → Europa" (slugs s-ea-manual,
+             `_meaTeamsFor`/`_prependManualEa`). Ese camino sigue
+             funcionando porque se llama DESPUÉS de esta función.
+             Antes el automático metía al 5º clasificado (Athletic
+             Club, etc.) en uclPrev sin pasar por el panel manual. */
         var EUROPE_BLACKLIST = {
           'liga-hypermotion':        { all: true },
           'liga-primera-federacion': { all: true },
-          'liga-ea-sports':          { wildcard: true, uclQual: true }
+          'liga-ea-sports':          { all: true }
         };
         var blRule = EUROPE_BLACKLIST[slug];
         if(blRule && (blRule.all || blRule[zoneKey])){
-          diag.push({slug:slug, status:'blacklist', note:'fuera de '+zoneKey+' por reglamento'});
+          diag.push({slug:slug, status:'blacklist', note:'fuera de '+zoneKey+' por reglamento (manual-only)'});
           return;
         }
         var raw = localStorage.getItem(key);

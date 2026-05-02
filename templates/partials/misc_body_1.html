@@ -4916,6 +4916,30 @@ window._showSimProgress = function(opts, onDone){
     n = n.replace(/\s+/g,' ').trim();
     return n;
   }
+  /* Tokens (palabras canónicas) cuya simple presencia como palabra en
+     el nombre canónico de un equipo basta para vetarlo del pool
+     WC/OQ. Lista CURADA — sólo se añade aquí cuando el usuario
+     explícitamente reporta que un equipo con esa raíz se cuela.
+     "europa" → hace caer "Europa", "Europa FC", "CE Europa",
+     "Europa Point" y cualquier otra variante que el usuario pueda
+     tener en su data. NO añadir tokens genéricos (real, atletico,
+     athletic, etc.) sin pensarlo: false-positives garantizados. */
+  var _SPANISH_BANNED_TOKENS = { europa: true };
+  /* Aplica el filtro per-team: primero exact-canonical contra el
+     `bannedSet` (nombres concretos de Liga EA Sports/Hypermotion/
+     1ª RFEF), luego word-level contra `_SPANISH_BANNED_TOKENS`
+     (raíces que el usuario marcó como vetadas independientemente
+     del sufijo). */
+  function _isSpanishTeamBanned(teamName, bannedSet){
+    var canon = _canonTeamName(teamName);
+    if(!canon) return false;
+    if(bannedSet[canon]) return true;
+    var words = canon.split(/\s+/);
+    for(var i=0; i<words.length; i++){
+      if(_SPANISH_BANNED_TOKENS[words[i]]) return true;
+    }
+    return false;
+  }
   /* Devuelve un set { canonName: true } con los nombres canónicos
      de TODOS los equipos de Liga EA Sports + Hypermotion + 1ª RFEF.
      Lo usa `_computeQualifiedFromLeagues` para filtrar teams del
@@ -5145,7 +5169,7 @@ window._showSimProgress = function(opts, onDone){
           var rj = ranking[j];
           if(!rj) continue;
           var teamName = String(rj.name||'').replace(/^\s*\*+\s*/,'');
-          if(spanishTeamBanned && spanishTeamBanned[_canonTeamName(teamName)]){
+          if(spanishTeamBanned && _isSpanishTeamBanned(teamName, spanishTeamBanned)){
             continue; /* equipo español colado — saltar y avanzar */
           }
           out.push({

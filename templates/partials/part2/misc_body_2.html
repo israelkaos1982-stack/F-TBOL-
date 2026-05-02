@@ -17154,7 +17154,59 @@ document.addEventListener('DOMContentLoaded', function() {
   var RF_TIES        = 18;                           /* (32 + 4) / 2 = 18 ties */
 
   function loadState(){ try { return JSON.parse(localStorage.getItem(WC_KEY)||'null'); } catch(_){ return null; } }
-  function saveState(s){ try { localStorage.setItem(WC_KEY, JSON.stringify(s)); } catch(_){} }
+  function saveState(s){
+    /* Antes era `try { setItem } catch(_){}` puro — si la cuota
+       de localStorage estaba al límite (50+ ligaExt_* con
+       resultados pueden acercarse a los 5-10MB del navegador),
+       saveState fallaba SILENCIOSAMENTE. La sim corría OK en
+       memoria pero render() leía null y volvía al empty-state.
+       Ahora detectamos QuotaExceededError, intentamos liberar
+       espacio borrando snapshots / backups, reintentamos, y si
+       sigue fallando avisamos al usuario. */
+    try {
+      localStorage.setItem(WC_KEY, JSON.stringify(s));
+      return true;
+    } catch(e){
+      var name = (e && (e.name || e.code)) || '';
+      var isQuota = /Quota|QUOTA_EXCEEDED|22|1014/i.test(String(name)) || /quota/i.test(String(e && e.message));
+      try { console.error('[wc-saveState]', e); } catch(_){}
+      if(isQuota){
+        var freed = _wcFreeStorageSpace();
+        try {
+          localStorage.setItem(WC_KEY, JSON.stringify(s));
+          try { console.warn('[wc-saveState] retry OK tras liberar', freed, 'keys'); } catch(_){}
+          return true;
+        } catch(e2){
+          try { console.error('[wc-saveState] retry falló', e2); } catch(_){}
+          alert('⚠️ Sin espacio en localStorage para guardar el sorteo Wild Card.\n\n'
+              + 'Liberé '+freed+' keys auxiliares pero sigue lleno. Borra alguna liga del Resto de Ligas o usa Reset en otras competiciones.');
+          return false;
+        }
+      }
+      alert('⚠️ Error guardando el estado Wild Card: '+(e && e.message ? e.message : e));
+      return false;
+    }
+  }
+  /* Borra keys auxiliares (backups/snapshots/protected) que se
+     acumulan con el uso. Devuelve cuántas keys liberó. NO toca
+     ligaExt_<slug> reales — solo las copias de seguridad. */
+  function _wcFreeStorageSpace(){
+    var toDelete = [];
+    try {
+      for(var i=0; i<localStorage.length; i++){
+        var k = localStorage.key(i);
+        if(!k) continue;
+        if(k.indexOf('_backup') !== -1
+        || k.indexOf('_snap_') !== -1
+        || k.indexOf('_snapshot') !== -1
+        || k.indexOf('_protected') !== -1){
+          toDelete.push(k);
+        }
+      }
+    } catch(_){}
+    toDelete.forEach(function(k){ try{ localStorage.removeItem(k); }catch(_){} });
+    return toDelete.length;
+  }
   function clearState(){
     try {
       localStorage.removeItem(WC_KEY);
@@ -17483,11 +17535,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if(!pool.length){ alert('⚠️ Sin equipos clasificados.'); return; }
         s = initState();
         if(!s){ alert('⚠️ initState() falló.'); return; }
-        saveState(s);
+        if(!saveState(s)) return;
       }
       if(s.phase === 'done'){ render(); return s; }
       simulateAll(s);
-      saveState(s);
+      if(!saveState(s)) return;
       render();
       return s;
     } catch(e){
@@ -17758,12 +17810,12 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
         try { console.log('[wc-sim] initState OK · semis='+(s.semis||[]).length+' · rfTies='+(s.rfTies||[]).length); } catch(_){}
-        saveState(s); /* persistimos sorteo antes de simular por si simulateAll falla */
+        if(!saveState(s)) return; /* abortamos — el alert dentro de saveState ya avisó */
       }
       if(s.phase === 'done'){ render(); return; }
       simulateAll(s);
       try { console.log('[wc-sim] simulateAll OK · phase='+s.phase); } catch(_){}
-      saveState(s);
+      if(!saveState(s)) return;
       render();
       /* Verificación post-sim: si algo dejó el estado en 'drawn', avisa
          al usuario. Antes el usuario veía "PENDIENTES" sin ninguna
@@ -17783,6 +17835,7 @@ document.addEventListener('DOMContentLoaded', function() {
      error. */
   window._wcDraw = function(){
     function _doDraw(){
+      try { console.log('[wc-draw] _doDraw INICIO'); } catch(_){}
       var pool = buildPool();
       if(!pool.length){
         alert('⚠️ No hay equipos clasificados. Configura cupos ⚪ WildCard en las ligas menores y simúlalas primero.');
@@ -17791,8 +17844,8 @@ document.addEventListener('DOMContentLoaded', function() {
       var prev = loadState();
       if(prev && !confirm('Hay un sorteo previo'+(prev.phase==='done'?' Y simulado':'')+'. ¿Sobreescribirlo con uno nuevo?')) return;
       var s = initState();
-      if(!s) return;
-      saveState(s);
+      if(!s){ alert('⚠️ initState() falló. F12 → Consola.'); return; }
+      if(!saveState(s)) return;
       render();
     }
     if(typeof window.pG === 'function') window.pG(_doDraw);

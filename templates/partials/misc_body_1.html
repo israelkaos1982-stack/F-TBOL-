@@ -4928,6 +4928,22 @@ window._showSimProgress = function(opts, onDone){
       keys.sort();
       keys.forEach(function(key){
         var slug = key.substring('ligaExt_'.length);
+        /* BLACKLIST europeo: ligas que JAMÁS dan acceso a competición
+           europea ni a wildcard, sin importar lo que diga zones.X.
+           - liga-hypermotion = Segunda División española
+           - liga-primera-federacion = 1ª RFEF española
+           Estas ligas pueden contener equipos con power alto (Almería,
+           Real Oviedo, Racing, etc.) y antes se colaban en el Open
+           Qualifier porque la default DEFAULT_ZONES.uclQual=1 cuela
+           si el usuario nunca tocó Reglas. Aquí cortamos en seco. */
+        var EUROPE_BLACKLIST = {
+          'liga-hypermotion': 1,
+          'liga-primera-federacion': 1
+        };
+        if(EUROPE_BLACKLIST[slug]){
+          diag.push({slug:slug, status:'blacklist', note:'fuera de Europa por reglamento'});
+          return;
+        }
         var raw = localStorage.getItem(key);
         if(!raw){ diag.push({slug:slug, status:'skip', note:'sin datos'}); return; }
         var data;

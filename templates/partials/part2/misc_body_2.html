@@ -18893,6 +18893,13 @@ document.addEventListener('DOMContentLoaded', function() {
       var m = sched[j];
       var hName = group[m.hi] && group[m.hi].name || '?';
       var aName = group[m.ai] && group[m.ai].name || '?';
+      /* Logo real de cada equipo desde el state wprev. Sin esto los
+         escudos de equipos foráneos (Bistrica, BVSC Zuglo, etc.) no
+         aparecían — _badge cae a _logoOf que solo conoce ligas
+         españolas, así que devolvía '' aunque el equipo tuviera su
+         escudo guardado en Resto de Ligas. */
+      var hLogo = (group[m.hi] && group[m.hi].logo) || '';
+      var aLogo = (group[m.ai] && group[m.ai].logo) || '';
       var jId = 'wprev-j-'+gi+'-'+j;
       var played = m.played;
       var humanInvolved = _isHumanTeam(hName) || _isHumanTeam(aName);
@@ -18921,9 +18928,9 @@ document.addEventListener('DOMContentLoaded', function() {
         + '</button>'
         + '<div class="wprev-jmatches" id="'+jId+'" style="display:none;">'
         +   '<div class="wprev-mrow" id="'+rowId+'">'
-        +     '<span class="h">'+_badge(hName)+_esc(hName)+'</span>'
+        +     '<span class="h" title="'+_esc(hName)+'">'+_badge(hName, hLogo)+'<span class="nm">'+_esc(hName)+'</span></span>'
         +     '<span class="sc"'+(humanPending?' style="background:transparent;border:none;padding:0;"':'')+'>'+scCell+'</span>'
-        +     '<span class="a">'+_esc(aName)+_badge(aName)+'</span>'
+        +     '<span class="a" title="'+_esc(aName)+'"><span class="nm">'+_esc(aName)+'</span>'+_badge(aName, aLogo)+'</span>'
         +   '</div>'
         +   (humanPending ? '<div class="jmatches" id="'+hostId+'" style="display:none;background:transparent;padding:0;margin-top:6px;"></div>' : '')
         + '</div>';

@@ -9013,8 +9013,10 @@ Tottenham
          ATK = media de poder de los DELANTEROS
          MED = media de poder de los CENTROCAMPISTAS
          DEF = media de poder de los DEFENSAS
-         GLOBAL = media de los 11 jugadores de mayor poder (alineación
-                  ideal: 1 POR + 4 DEF + 3 MED + 3 DEL aprox.).
+         GLOBAL = media de los 3 ejes anteriores: (ATK + MED + DEF) / 3
+                  (petición usuario 2026-05-02 — antes era media de los
+                  11 mejores que incluía al portero y subía artificialmente
+                  el GLOBAL respecto a los chips de líneas).
 
        Si una posición no tiene jugadores, cae al GLOBAL como
        fallback. Si la plantilla está vacía, usa los valores manuales
@@ -9041,15 +9043,32 @@ Tottenham
       var atkPool = players.filter(function(p){return p.pos === 'DEL';});
       var midPool = players.filter(function(p){return p.pos === 'MED';});
       var defPool = players.filter(function(p){return p.pos === 'DEF';});
-      /* GLOBAL: media de los 11 mejores. Buena aproximación a la
-         fuerza real en el campo. */
-      var top11 = players.slice().sort(function(a,b){
-        return (Number(b.power)||0) - (Number(a.power)||0);
-      }).slice(0, 11);
-      var glob = _avg(top11) || Number(t.power) || 50;
-      var atk  = _avg(atkPool) || glob;
-      var mid  = _avg(midPool) || glob;
-      var def  = _avg(defPool) || glob;
+      /* Calcula la media de cada línea (null si la posición está vacía
+         para distinguirla de un equipo entero a 0). El GLOBAL nuevo es
+         la media de las líneas DISPONIBLES — así un equipo sin
+         delanteros (raro pero posible) saca su GLOBAL de MID+DEF. */
+      var atkRaw = atkPool.length ? _avg(atkPool) : null;
+      var midRaw = midPool.length ? _avg(midPool) : null;
+      var defRaw = defPool.length ? _avg(defPool) : null;
+      var sumLines = 0, countLines = 0;
+      [atkRaw, midRaw, defRaw].forEach(function(v){
+        if (v != null) { sumLines += v; countLines++; }
+      });
+      var glob;
+      if (countLines === 0) {
+        /* Solo hay porteros (caso raro). Caemos a la media del top-11
+           — comportamiento legacy — para no devolver 0 ni un valor
+           manual potencialmente obsoleto. */
+        var top11 = players.slice().sort(function(a,b){
+          return (Number(b.power)||0) - (Number(a.power)||0);
+        }).slice(0, 11);
+        glob = _avg(top11) || Number(t.power) || 50;
+      } else {
+        glob = sumLines / countLines;
+      }
+      var atk = atkRaw != null ? atkRaw : glob;
+      var mid = midRaw != null ? midRaw : glob;
+      var def = defRaw != null ? defRaw : glob;
       result = {
         glob: Math.round(glob),
         atk:  Math.round(atk),

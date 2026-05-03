@@ -8,23 +8,29 @@ iconos definidos en la plantilla. Esto aplica tanto al motor Python
 (`app.py`, `logica_liga.py`) como al motor JS (`static/js/*.js`,
 `templates/partials/**`).
 
-### 🛡 Nivel / valor del equipo (4 ejes — auto-derivados, 2026-04-28)
+### 🛡 Nivel / valor del equipo (4 ejes — auto-derivados, 2026-04-28, GLOBAL revisado 2026-05-02)
 
 Cada equipo tiene 4 valores numéricos calculados automáticamente desde
 la plantilla por `computeLineStats(t)` en
 `templates/partials/misc_body_1.html`:
 
-- **GLOBAL** = media de poder de los **11 mejores** jugadores (alineación
-  ideal). Inclina la probabilidad general del partido.
 - **ATAQUE** = media de poder de los **DELANTEROS**. Más ATQ → más goles
   marca el equipo.
 - **MEDIO** = media de poder de los **CENTROCAMPISTAS**. **COMPENSA** tanto
   ataque como defensa con peso `0.5` cada lado.
 - **DEFENSA** = media de poder de los **DEFENSAS**. Más DEF → menos goles
   encaja el equipo.
+- **GLOBAL** = `(ATAQUE + MEDIO + DEFENSA) / 3`. Petición usuario
+  2026-05-02 — antes era la media de los 11 mejores jugadores
+  incluyendo al portero, lo que inflaba el GLOBAL respecto a los chips
+  de líneas (p.ej. Backa Topola con ATQ 67 / MED 66 / DEF 64 daba
+  GLOBAL 71 incluyendo GK; con la nueva fórmula GLOBAL = 66, consistente
+  con los chips). Inclina la probabilidad general del partido.
 
-Si una posición no tiene jugadores, cae al GLOBAL como fallback. Si la
-plantilla está vacía, usa los valores manuales guardados
+Si una posición no tiene jugadores, cae al GLOBAL como fallback. Si
+**ninguna** línea tiene jugadores (solo hay porteros — caso raro),
+GLOBAL cae a la media del top-11 (comportamiento legacy). Si la
+plantilla está totalmente vacía, usa los valores manuales guardados
 (`t.atk/mid/def/power`) — esto preserva ligas con admin-overrides
 explícitos del editor.
 

@@ -50,6 +50,16 @@ def client(tmp_path):
             gs_row.valor_json = json.dumps(app_module.DEFAULT_GLOBAL_STATE)
             gs_row.updated_at = app_module.utc_now_iso()
             app_module.db.session.commit()
+        # El calendario también vive en GlobalState (clave
+        # `calendario_global_v1`) para sobrevivir reinicios en Railway,
+        # así que aplica el mismo aislamiento entre tests: borramos la
+        # fila para que cada test re-siembre desde `calendario.json`.
+        cal_row = app_module.GlobalState.query.filter_by(
+            clave=app_module.CALENDARIO_GLOBAL_KEY
+        ).first()
+        if cal_row is not None:
+            app_module.db.session.delete(cal_row)
+            app_module.db.session.commit()
 
     with app_module.app.test_client() as c:
         yield c

@@ -1554,14 +1554,11 @@ def _sort_section_events(section):
         return ((m - anchor) % 12, d)
     evs.sort(key=key)
 
-def load_calendario():
-    """Carga `calendario.json`. Si no existe o está corrupto, devuelve
-    el esqueleto por defecto (no rompe el render de la agenda)."""
-    try:
-        with open(CALENDARIO_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return json.loads(json.dumps(CALENDARIO_DEFAULT))
+CALENDARIO_GLOBAL_KEY = "calendario_global_v1"
+
+
+def _calendario_normalize(data):
+    """Asegura el esqueleto mínimo y los defaults de un dict de calendario."""
     if not isinstance(data, dict):
         return json.loads(json.dumps(CALENDARIO_DEFAULT))
     data.setdefault("version", 1)
@@ -1570,19 +1567,90 @@ def load_calendario():
         data["sections"] = []
     return data
 
-def save_calendario(data):
-    """Escribe atómicamente el calendario a disco.
-    `fsync + rename` evitan dejar un JSON truncado si el proceso muere."""
-    payload = json.dumps(data, ensure_ascii=False, indent=2)
-    tmp = CALENDARIO_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(payload)
+
+def _calendario_load_from_file():
+    """Carga el calendario semilla del fichero git-baked (`calendario.json`).
+    Esta es la fuente de verdad SOLO la primera vez (cuando GlobalState aún no
+    tiene la clave). Después de cualquier edición el calendario se persiste en
+    GlobalState y este fichero queda como semilla inmutable."""
+    try:
+        with open(CALENDARIO_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return json.loads(json.dumps(CALENDARIO_DEFAULT))
+    return _calendario_normalize(data)
+
+
+def load_calendario():
+    """Carga el calendario priorizando la BD (GlobalState) sobre el fichero.
+
+    En Render el fichero está en un volumen persistente, en Railway no — el
+    disco es efímero y `calendario.json` se reescribe a su versión git-baked
+    en cada deploy. Para que los add/edit/delete del admin sobrevivan a un
+    reinicio del contenedor en Railway (DATABASE_URL → Postgres), guardamos
+    el calendario en `GlobalState` igual que `liga_ext_*` y la liga global.
+
+    La primera vez que se llama y la fila de GlobalState aún no existe, se
+    siembra desde `calendario.json` (la versión inicial empaquetada con el
+    repo). A partir de ahí, todas las mutaciones van a la BD y el fichero
+    queda como semilla — nunca se sobreescribe."""
+    try:
+        row = GlobalState.query.filter_by(clave=CALENDARIO_GLOBAL_KEY).first()
+    except Exception:
+        # Si la BD aún no está lista (boot temprano), caemos al fichero.
+        return _calendario_load_from_file()
+    if row and row.valor_json:
         try:
-            f.flush()
-            os.fsync(f.fileno())
-        except OSError:
-            pass
-    os.replace(tmp, CALENDARIO_PATH)
+            data = json.loads(row.valor_json)
+        except (TypeError, ValueError):
+            data = None
+        if isinstance(data, dict):
+            return _calendario_normalize(data)
+    # No hay fila aún → sembramos desde el fichero y persistimos.
+    seed = _calendario_load_from_file()
+    try:
+        _calendario_save_to_db(seed)
+    except Exception:
+        pass
+    return seed
+
+
+def _calendario_save_to_db(data):
+    """Persiste el calendario en GlobalState. Usa el mismo patrón que
+    `_liga_ext_save`: upsert por clave, commit transaccional."""
+    payload = json.dumps(data or {}, ensure_ascii=False)
+    now = utc_now_iso()
+    row = GlobalState.query.filter_by(clave=CALENDARIO_GLOBAL_KEY).first()
+    if row:
+        row.valor_json = payload
+        row.updated_at = now
+    else:
+        row = GlobalState(clave=CALENDARIO_GLOBAL_KEY, valor_json=payload, updated_at=now)
+        db.session.add(row)
+    db.session.commit()
+
+
+def save_calendario(data):
+    """Escribe el calendario en BD (fuente de verdad) y, en paralelo,
+    intenta volcarlo al fichero local. La escritura al fichero es
+    best-effort: en Railway el disco es efímero pero seguir escribiéndolo
+    facilita el desarrollo local (volcado JSON legible) y no rompe Render
+    (donde sí persiste). El error de fichero NUNCA hace fallar la
+    operación — la BD es lo único obligatorio."""
+    _calendario_save_to_db(data)
+    try:
+        payload = json.dumps(data, ensure_ascii=False, indent=2)
+        tmp = CALENDARIO_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(payload)
+            try:
+                f.flush()
+                os.fsync(f.fileno())
+            except OSError:
+                pass
+        os.replace(tmp, CALENDARIO_PATH)
+    except OSError:
+        pass
 
 def _find_section(data, section_id):
     for s in data.get("sections") or []:

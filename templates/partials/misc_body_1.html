@@ -6064,6 +6064,9 @@ window._showSimProgress = function(opts, onDone){
 #s-ucl-previa-clas .wprev-jbtn b{font-family:Oswald,sans-serif;letter-spacing:1px;font-weight:700;}
 #s-ucl-previa-clas .wprev-jbtn .pdot{margin-right:8px;font-size:14px;}
 #s-ucl-previa-clas .wprev-jbtn .progress{margin-left:auto;font-size:11px;color:rgba(255,255,255,.7);}
+/* Jornada ya jugada (m.played === true): apaga el botón. */
+#s-ucl-previa-clas .wprev-jbtn.is-done{filter:grayscale(.8) brightness(.55);opacity:.55;}
+#s-ucl-previa-clas .wprev-jbtn.is-done .progress{color:rgba(120,255,160,.85);}
 #s-ucl-previa-clas .wprev-jmatches{padding:4px 8px;background:rgba(0,0,0,.25);border-radius:0 0 6px 6px;margin-bottom:6px;}
 #s-ucl-previa-clas .wprev-mrow{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;padding:6px 8px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);}
 #s-ucl-previa-clas .wprev-mrow .h,
@@ -6079,6 +6082,16 @@ window._showSimProgress = function(opts, onDone){
 #s-ucl-previa-clas .wprev-dr-hdr .wprev-dr-chev{margin-left:auto;font-size:14px;transition:transform .18s ease;}
 #s-ucl-previa-clas .wprev-dr.collapsed .wprev-dr-chev{transform:rotate(-90deg);}
 #s-ucl-previa-clas .wprev-dr.collapsed .wprev-dr-body{display:none;}
+/* Ronda 1 completada: apaga el bloque entero (tras phase='rf-drawn'
+   o 'done' en wprev_state_v1). El usuario ya no necesita verla
+   destacada porque su función ha terminado. */
+#s-ucl-previa-clas .wprev-dr.is-done{filter:grayscale(.7) brightness(.65);opacity:.6;}
+#s-ucl-previa-clas .wprev-dr.is-done .wprev-dr-hdr{background:linear-gradient(90deg,#0d0420,#241038,#3a1d52,#241038,#0d0420);}
+/* Submenu cards apagados (s-champions): el admin ve de un vistazo
+   qué fases están terminadas y cuál es la activa. La detección la
+   hace el script al entrar a la pantalla. */
+.submenu-card.is-done{filter:grayscale(.85) brightness(.6);opacity:.55;}
+.submenu-card.is-done::after{content:' ✓ COMPLETADA';font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:#80ff80;margin-left:8px;position:relative;z-index:3;}
 #s-ucl-previa-clas .wprev-dr-tie{margin:10px 12px;padding:10px 12px;border:1px solid rgba(168,85,247,.35);border-radius:8px;background:rgba(0,0,0,.25);}
 #s-ucl-previa-clas .wprev-dr-leg{display:grid;grid-template-columns:1fr 70px 1fr;gap:8px;align-items:center;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
 #s-ucl-previa-clas .wprev-dr-leg .h{text-align:right;font-weight:600;}
@@ -14518,6 +14531,72 @@ Tottenham
     document.addEventListener('DOMContentLoaded', boot);
   } else {
     boot();
+  }
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════
+     Champions League submenu — apagar cajas según fase completada
+     (petición usuario 2026-05-02): cuando una sub-competición ya
+     ha cumplido su función dentro de la temporada, su caja en
+     s-champions queda con filter:grayscale + opacity reducida
+     para que el admin vea de un vistazo en qué fase está.
+       · Wild Card → done si wc_to_open_qualifier_v1 trae 18 teams.
+       · Open Qualifier → done si oq_to_previa_v1 trae 35 teams.
+       · Previa Champions → done si wprev_state_v1.phase === 'done'.
+     Fase de Grupos y Playoffs/Final aún no tienen state propio
+     (motor pendiente), así que se quedan SIN apagar de momento.
+     La detección corre al cargar la página y cada vez que el
+     usuario navega a s-champions vía window.go.
+     ══════════════════════════════════════════════════ -->
+<script>
+(function(){
+  function _wcDone(){
+    try {
+      var raw = localStorage.getItem('wc_to_open_qualifier_v1');
+      if(!raw) return false;
+      var d = JSON.parse(raw);
+      return !!(d && Array.isArray(d.teams) && d.teams.length >= 18);
+    } catch(_){ return false; }
+  }
+  function _oqDone(){
+    try {
+      var raw = localStorage.getItem('oq_to_previa_v1');
+      if(!raw) return false;
+      var d = JSON.parse(raw);
+      return !!(d && Array.isArray(d.teams) && d.teams.length >= 35);
+    } catch(_){ return false; }
+  }
+  function _wprevDone(){
+    try {
+      var raw = localStorage.getItem('wprev_state_v1');
+      if(!raw) return false;
+      var s = JSON.parse(raw);
+      return !!(s && s.phase === 'done');
+    } catch(_){ return false; }
+  }
+  function refresh(){
+    var screen = document.getElementById('s-champions');
+    if(!screen) return;
+    var wc = screen.querySelector('.sc-wild-card');
+    var oq = screen.querySelector('.sc-open-qual');
+    var prev = screen.querySelector('.sc-ucl-prev-clas');
+    if(wc) wc.classList.toggle('is-done', _wcDone());
+    if(oq) oq.classList.toggle('is-done', _oqDone());
+    if(prev) prev.classList.toggle('is-done', _wprevDone());
+  }
+  var _origGoChamp = window.go;
+  if(typeof _origGoChamp === 'function'){
+    window.go = function(id){
+      var r = _origGoChamp.apply(this, arguments);
+      if(id === 's-champions') setTimeout(refresh, 30);
+      return r;
+    };
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(refresh, 250); });
+  } else {
+    setTimeout(refresh, 250);
   }
 })();
 </script>

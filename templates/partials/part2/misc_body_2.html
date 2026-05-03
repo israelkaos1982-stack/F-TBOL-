@@ -19160,7 +19160,12 @@ document.addEventListener('DOMContentLoaded', function() {
         scCell = scTxt;
       }
       var progressTxt = played ? '1/1' : (humanPending ? '👤 0/1' : '0/1');
-      html += '<button class="wprev-jbtn" onclick="(function(){var e=document.getElementById(\''+jId+'\');if(e)e.style.display=e.style.display===\'none\'?\'block\':\'none\';})()">'
+      /* Botón apagado cuando la jornada ya está jugada — petición
+         usuario 2026-05-02: cada caja desplegable de jornada se
+         apaga al haberse jugado para visualizar de un vistazo qué
+         queda pendiente. */
+      var jbtnCls = 'wprev-jbtn' + (played ? ' is-done' : '');
+      html += '<button class="'+jbtnCls+'" onclick="(function(){var e=document.getElementById(\''+jId+'\');if(e)e.style.display=e.style.display===\'none\'?\'block\':\'none\';})()">'
         +   '<span class="pdot">▶</span><b>Jornada '+(j+1)+'</b>'
         +   '<span class="progress">'+progressTxt+'</span>'
         + '</button>'
@@ -19273,7 +19278,13 @@ document.addEventListener('DOMContentLoaded', function() {
     else if(s.phase === 'done')        phaseLabel = '✓ RONDA 1 COMPLETA · TORNEO TERMINADO';
     var collapsed = false;
     try { collapsed = localStorage.getItem('wprev_r1_collapsed') === '1'; } catch(_){}
-    var html = '<div class="wprev-dr'+(collapsed?' collapsed':'')+'" id="wprev-dr-root">'
+    /* Apagar la caja desplegable cuando Ronda 1 ya cumplió su función
+       (phase 'rf-drawn' = 30 ganadores ya van a Ronda Final, 30
+       perdedores ya están en Conference; phase 'done' = torneo
+       completo). Petición usuario 2026-05-02. */
+    var r1Done = (s.phase === 'rf-drawn' || s.phase === 'done');
+    var rootCls = 'wprev-dr' + (collapsed?' collapsed':'') + (r1Done?' is-done':'');
+    var html = '<div class="'+rootCls+'" id="wprev-dr-root">'
       + '<div class="wprev-dr-hdr" id="wprev-dr-toggle">'
       +   '<span>⚔️ RONDA 1 · 30 ELIMINATORIAS + 3 EXENTOS</span>'
       +   '<span class="wprev-dr-chev">▼</span>'

@@ -5348,12 +5348,35 @@ window._showSimProgress = function(opts, onDone){
            por encima del wildcard. Sin esto el ranking sintético por
            poder pondría al campeón de la liga como wildcard. */
         if(isWcAuto && skip === 0) skip = 3;
-        /* Ranking sintético por poder cuando rN=0 (sin partidos
-           jugados) para CUALQUIER zona — antes solo aplicaba al
-           wildcard. Esto evita que el pool del Open Qualifier llegue
-           con TBD-OQ-XX en las plazas finales por culpa de ligas que
-           no se han simulado. Si hay resultados parciales (rN>0)
-           usamos `_standingsFromResults` con lo que haya. */
+        /* ── REGLA OBLIGATORIA (usuario, 2026-05-02) ─────────────
+           Para que un equipo vaya a CUALQUIER competición europea
+           debe haber terminado TODOS sus partidos de liga. Excepto:
+             - Liga EA Sports → ya bloqueada por EUROPE_BLACKLIST
+               (entra solo vía la pantalla manual EA Sports → Europa).
+             - Wild Card auto-cupo → permisivo a propósito: rellena el
+               pool del Open Qualifier desde los 40 slugs aunque la
+               liga tenga rN=0 (rank-by-power). Esto NO contradice la
+               regla porque WC alimenta al OQ, no clasifica directo.
+           Bug histórico: ligas recién simuladas tenían rN > 0 pero
+           algunos equipos con pj=0 (escritura batched / race en el
+           guardado). Esos equipos sorteaban a las primeras posiciones
+           de la clasificación por desempate alfabético sobre pts=0 y
+           el código los enviaba a Europa. Ahora: si rN < needed o
+           algún equipo del top-N no ha cerrado su pj === 2·(N-1),
+           tratamos la liga como NO LISTA y la saltamos. */
+        var expectedPj = 2 * (N - 1);
+        if(!isWcAuto){
+          if(rN < needed){
+            diag.push({slug:slug, n:N, results:rN, needed:needed,
+                       status:'no-lista',
+                       note:'liga incompleta '+rN+'/'+needed+' — necesita simular el resto'});
+            return;
+          }
+        }
+        /* Ranking sintético por poder cuando rN=0 (solo Wild Card
+           auto-cupo a partir del fix anterior). Para el resto de
+           zonas, llegado aquí rN === needed por la regla estricta
+           de arriba; usamos _standingsFromResults. */
         var ranking = (rN === 0)
           ? _rankByPower(teams)
           : _standingsFromResults(teams, data.results);
@@ -5371,6 +5394,15 @@ window._showSimProgress = function(opts, onDone){
           var teamName = String(rj.name||'').replace(/^\s*\*+\s*/,'');
           if(spanishTeamBanned && _isSpanishTeamBanned(teamName, spanishTeamBanned)){
             continue; /* equipo español colado — saltar y avanzar */
+          }
+          /* DEFENSA EXTRA: aunque rN === needed, si el equipo concreto
+             tiene pj < expectedPj significa que faltan resultados que
+             le incluyan (data.results desincronizada con data.teams).
+             Saltamos a este equipo — no lo enviamos a Europa con
+             plantilla parcial. No aplica a Wild Card auto-cupo (donde
+             pj=0 es el caso normal del rank-by-power). */
+          if(!isWcAuto && Number(rj.pj || 0) < expectedPj){
+            continue;
           }
           out.push({
             name:  teamName,

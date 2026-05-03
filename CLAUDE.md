@@ -111,6 +111,37 @@ solo `elite`/`natGoal`.
 - No borres flags al serializar/deserializar plantillas.
 
 
+## Clasificación a competiciones europeas (obligatorio, 2026-05-02)
+
+Para que un equipo de Resto de Ligas vaya a CUALQUIER competición
+europea (UCL, UEL, UECL, Previa Champions, fase de Wild Card → OQ, …)
+**la liga debe haber jugado todos sus partidos**: round-robin completo
+ida+vuelta = `2·(N−1)` partidos por equipo, total `N·(N−1)` resultados.
+
+Lógica en `_computeQualifiedFromLeagues(zoneKey)` (`misc_body_1.html`):
+
+1. Si `rN < needed` (la liga no ha terminado), saltamos esa liga
+   entera con `status: 'no-lista'` en el diag. NO se promueven equipos.
+2. Aunque `rN === needed`, si un equipo concreto del top tiene
+   `pj < 2·(N−1)` (resultados desincronizados con `data.teams`), ese
+   equipo se SALTA y se avanza al siguiente del ranking. Defensa
+   contra escrituras batched / race conditions tras un Sim.
+3. Excepciones a la regla:
+   - **Liga EA Sports / Hypermotion / 1ª RFEF** → bloqueadas en
+     `EUROPE_BLACKLIST` (manual-only vía pantalla "EA Sports → Europa").
+   - **Wild Card auto-cupo** (`isWcAuto`) → permisivo a propósito:
+     rellena el pool del Open Qualifier desde los 40 slugs aunque la
+     liga tenga `rN=0` (rank-by-power). NO contradice la regla porque
+     WC alimenta al OQ, no clasifica directo a Europa.
+
+Bug histórico que motivó la regla: tras pulsar Sim en una liga, la
+escritura de resultados era batched/asíncrona. Durante esa ventana el
+admin abría la pantalla de Europa y `_computeQualifiedFromLeagues`
+veía `rN > 0` pero `pj === 0` para varios equipos. Esos equipos
+empataban a `pts=0` y sorteaban a las primeras posiciones por
+desempate alfabético sobre el nombre — el código los enviaba a
+Europa con 0 partidos jugados.
+
 ## Duración del cronómetro del partido (obligatorio, siempre)
 
 **TIEMPOS OFICIALES** (definidos en

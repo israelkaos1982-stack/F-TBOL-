@@ -6423,10 +6423,23 @@
     var ta_b=evts.filter(function(e){return e.team==='b'&&e.type==='amarilla';}).length;
     var tr_b=evts.filter(function(e){return e.team==='b'&&(e.type==='roja'||e.type==='d-amarilla');}).length;
     var mvp_a=mvpTeam===st.home?1:0; var mvp_b=mvpTeam===st.away?1:0;
-    if (typeof window.registrarResultadoLiga==='function')
-      window.registrarResultadoLiga(mk, st.home, st.away, st.sc.a, st.sc.b, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, winner==='pen'?winner:null);
-    if (typeof window.registrarLigaPlayerStats==='function')
-      window.registrarLigaPlayerStats(mk, st.home, st.away, evts, mvpName, mvpTeam);
+    /* Registrar stats agregadas y per-jugador DIFERIDO. Estas
+       funciones reconstruyen tablas completas (LIGA_PLAYER_MATCH_STORE,
+       buildLigaClas, sync a ligaExt) y bloquean el flujo durante varios
+       segundos en ligas grandes. Reportado 2026-05-02: la transición
+       FIN → MVP / WhatsApp tardaba ~20 s. Diferimos a setTimeout(0)
+       para que el flujo siga al overlay siguiente sin esperar.
+       guardarResultado() arriba ya persistió goles/PJ/PTS que la
+       clasificación necesita; estas extras (TA, TR, MVP, jugadores)
+       se aplican en el siguiente tick. */
+    setTimeout(function(){
+      try {
+        if (typeof window.registrarResultadoLiga==='function')
+          window.registrarResultadoLiga(mk, st.home, st.away, st.sc.a, st.sc.b, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, winner==='pen'?winner:null);
+        if (typeof window.registrarLigaPlayerStats==='function')
+          window.registrarLigaPlayerStats(mk, st.home, st.away, evts, mvpName, mvpTeam);
+      } catch(_){}
+    }, 0);
     /* Guardar eventos en localStorage para que openIAJornada los muestre */
     try {
       var _rk = rKey(st.j, st.home, st.away);
@@ -6466,15 +6479,12 @@
         saveResults(_r2);
       }
     } catch(_e){}
-    /* Re-pintar la clasificación AHORA que los eventos están persistidos.
-       guardarResultado() ya disparó un buildLigaClas() arriba, pero en
-       ese momento el entry de localStorage todavía no tenía .events ni
-       .mvpTeam (los acabamos de guardar 4 líneas más arriba), así que
-       countEventExtras() leía un objeto sin eventos y ponía TA/TR/MVP a
-       0 para todos los equipos. Sin esta llamada, la clasificación se
-       quedaba en 0 hasta que el usuario navegase fuera y volviese. */
+    /* Re-pintar la clasificación con eventos persistidos. DIFERIDO
+       (mismo motivo que arriba — la transición a MVP/post no debe
+       esperar a este re-render pesado). La clasificación se actualiza
+       en el siguiente tick; el usuario la ve al volver a Liga. */
     if (typeof window.buildLigaClas === 'function') {
-      try { window.buildLigaClas(); } catch(_){}
+      setTimeout(function(){ try { window.buildLigaClas(); } catch(_){} }, 0);
     }
     athApplyMedicalFromActa(st);
     /* Estadísticas: por defecto se piden ANTES del MVP en mlEndMatchGen
@@ -6775,10 +6785,14 @@
     };
     if (finalOv) {
       finalOv.classList.add('show');
+      /* Antes 3000 ms — petición usuario 2026-05-02: la espera era
+         "horrible" durante la transición a MVP/post. Reducido a
+         900 ms — sigue mostrando el overlay de FIN DEL PARTIDO con
+         marcador, pero no bloquea el flujo. */
       setTimeout(function() {
         finalOv.classList.remove('show');
         _next();
-      }, 3000);
+      }, 900);
     } else {
       _next();
     }
@@ -8933,29 +8947,40 @@
       } catch(_e){}
     }
 
-    /* Rellenar acta de la tarjeta genérica (ml-acta-list-{mk}) con los eventos del gm */
-    var _icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
-                   'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',
-                   roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
-    Object.keys(_mlStates).forEach(function(mk){
-      var st = _mlStates[mk];
-      if (st.j === _gm.j && st.home === _gm.home && st.away === _gm.away) {
-        var list = document.getElementById('ml-acta-list-'+mk);
-        if (list) {
-          list.innerHTML = '';
-          _gm.events.forEach(function(ev){
-            if (!ev) return;
-            var tName = ev.team === 'a' ? _gm.home : _gm.away;
-            var ico = _icoMap[ev.type] || '📋';
-            _mlAddActaRow(mk, ev.min, ico, ev.player || 'Jugador', ev.num || '', tName, ev.type, Date.now()+Math.random());
-          });
+    /* Rellenar acta de la tarjeta genérica (ml-acta-list-{mk}) con los
+       eventos del gm — DIFERIDO: este bucle puede ser pesado cuando
+       hay varios match-live-wraps en el DOM. Lo movemos a un
+       setTimeout(0) para que el _gmShowFinalOv() siguiente se ejecute
+       en el frame actual sin esperar a este populate. La actualización
+       de las actas inline ocurre justo después; el usuario no las ve
+       hasta que cierra el gm-modal y vuelve a la jornada. */
+    setTimeout(function(){
+      var _icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
+                     'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',
+                     roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
+      Object.keys(_mlStates).forEach(function(mk){
+        var st = _mlStates[mk];
+        if (st.j === _gm.j && st.home === _gm.home && st.away === _gm.away) {
+          var list = document.getElementById('ml-acta-list-'+mk);
+          if (list) {
+            list.innerHTML = '';
+            _gm.events.forEach(function(ev){
+              if (!ev) return;
+              var tName = ev.team === 'a' ? _gm.home : _gm.away;
+              var ico = _icoMap[ev.type] || '📋';
+              _mlAddActaRow(mk, ev.min, ico, ev.player || 'Jugador', ev.num || '', tName, ev.type, Date.now()+Math.random());
+            });
+          }
         }
-      }
-    });
+      });
+    }, 0);
 
     /* Estadísticas ya recogidas ANTES del MVP (ver bloque arriba en
-       gmEndMatch). Aquí solo lanzamos la pantalla FINAL — nada más. */
-    setTimeout(function(){ _gmShowFinalOv(); }, 420);
+       gmEndMatch). Aquí solo lanzamos la pantalla FINAL — nada más.
+       Antes 420 ms — petición usuario 2026-05-02: la transición tras
+       FIN era demasiado lenta. Bajado a 80 ms (suficiente para que
+       acabe el frame actual y el spinner se actualice). */
+    setTimeout(function(){ _gmShowFinalOv(); }, 80);
   };
 
   window.gmClose = function () {
@@ -16755,11 +16780,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     e.classList.add('show');
     /* Timeout de seguridad: si por algún motivo ningún overlay
-       siguiente aparece, cerramos el spinner enseguida. Antes era
-       8 s y el usuario veía el spinner una eternidad cuando un
-       overlay no estaba en la lista TARGETS — ahora 1.5 s máximo. */
+       siguiente aparece, cerramos el spinner enseguida. Reportado
+       2026-05-02 por el usuario: el spinner se quedaba pegado hasta
+       20 s en algunos casos; bajamos el safety a 600 ms y el flujo
+       siguiente debe asegurar que el siguiente overlay aparece
+       dentro de ese rango (vía defer-work + más targets). */
     if (_safety) clearTimeout(_safety);
-    _safety = setTimeout(_hide, 1500);
+    _safety = setTimeout(_hide, 600);
   }
   function _hide(){
     var e = _el(); if (!e) return;
@@ -16801,6 +16828,10 @@ document.addEventListener('DOMContentLoaded', function() {
      OJO: el MVP picker es id=gen-mvp-ov (su clase es mvp-force-overlay).
      Antes solo teníamos la clase y el observer no lo cazaba. */
   var TARGETS = ['ml-stats-ov','ml-stats-entry-ov','ml-post-ov','gm-post-ov','gen-mvp-ov','mvp-force-overlay','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live','ml-final-ov','ml-descanso-ov','ml-injury-ov','prepartido-overlay'];
+  /* IDs cuyo show es vía `style.display` en lugar de `.show` class.
+     El MutationObserver de abajo no capta cambios de style, así que
+     vigilamos estos por separado y forzamos _hide() cuando aparecen. */
+  var STYLE_TARGETS = ['gm-fin-ov','gm-event-panel','gm-team-pick'];
   function _scanShown(root){
     if (!root || root.nodeType !== 1) return false;
     for (var i = 0; i < TARGETS.length; i++) {
@@ -16813,12 +16844,23 @@ document.addEventListener('DOMContentLoaded', function() {
     var obs2 = new MutationObserver(function(muts){
       for (var i = 0; i < muts.length; i++) {
         var m = muts[i];
-        if (m.type === 'attributes' && m.target && m.target.id && TARGETS.indexOf(m.target.id) !== -1) {
-          if (m.target.classList && m.target.classList.contains('show')) { _hide(); return; }
+        if (m.type === 'attributes' && m.target && m.target.id) {
+          var tid = m.target.id;
+          if (TARGETS.indexOf(tid) !== -1 && m.target.classList && m.target.classList.contains('show')) {
+            _hide(); return;
+          }
+          /* gm-fin-ov / gm-event-panel / gm-team-pick se muestran con
+             `style.display = 'flex'` (no `.show`), así que el watcher
+             de class no los caza. Comprobamos el display computed
+             style cuando cambia el atributo `style`. */
+          if (STYLE_TARGETS.indexOf(tid) !== -1) {
+            var d = (m.target.style && m.target.style.display) || '';
+            if (d && d !== 'none') { _hide(); return; }
+          }
         }
       }
     });
-    obs2.observe(document.body, { subtree:true, attributes:true, attributeFilter:['class'] });
+    obs2.observe(document.body, { subtree:true, attributes:true, attributeFilter:['class','style'] });
   } catch(_){}
 })();
 </script>
@@ -19437,9 +19479,15 @@ document.addEventListener('DOMContentLoaded', function() {
     s.ts = Date.now();
     _maybeFinalizeWprev(s);
     saveState(s);
-    /* Re-render solo si el usuario sigue en la pantalla de Previa. */
+    /* Re-render diferido: el usuario está en gm-modal viendo el flujo
+       de fin de partido (FIN → MVP → stats → WhatsApp). El re-render
+       de buildUclPrevClas (11 grupos × 3 equipos + Ronda 1 = pesado)
+       NO afecta a lo que ve y bloquearía la transición al overlay
+       siguiente. Lo difiero para que ocurra cuando el usuario ya esté
+       viendo la siguiente pantalla — la próxima vez que vuelva a
+       Previa Champions, los datos ya están aplicados. */
     if(typeof buildUclPrevClas === 'function'){
-      try { buildUclPrevClas(); } catch(_){}
+      setTimeout(function(){ try { buildUclPrevClas(); } catch(_){} }, 0);
     }
   };
 

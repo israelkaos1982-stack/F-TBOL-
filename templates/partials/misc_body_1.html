@@ -6878,9 +6878,23 @@ window._showSimProgress = function(opts, onDone){
     return [];
   }
   function _save(slug, list){
-    try {
-      localStorage.setItem(_key(slug), JSON.stringify({teams:list, ts:Date.now()}));
-    } catch(_){}
+    /* Devuelve true | 'quota' | false. Antes el catch era vacío y el
+       admin veía el equipo añadido en pantalla (por el render(), que
+       lee el array en memoria), pero al recargar la página el equipo
+       había desaparecido — porque el setItem había chocado con el cap
+       de localStorage y fallado en silencio. Reportado 2026-05-02:
+       "por más que añado manualmente los equipos españoles, no se
+       guardan al recargar". */
+    var payload;
+    try { payload = JSON.stringify({teams:list, ts:Date.now()}); } catch(_){ return false; }
+    try { localStorage.setItem(_key(slug), payload); return true; }
+    catch(err){
+      var isQuota = err && (
+        err.code === 22 || err.code === 1014 ||
+        err.name === 'QuotaExceededError' ||
+        err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+      return isQuota ? 'quota' : false;
+    }
   }
 
   /* API que consumen los compute*Classified() en este mismo archivo. */
@@ -7020,7 +7034,19 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     list.push({name:name, logo:_logoFor(name)});
-    _save(slug, list);
+    var saveResult = _save(slug, list);
+    if(saveResult === true){
+      render();
+      return;
+    }
+    /* Save falló — revertimos el push para que la UI no engañe al
+       admin mostrando el equipo que en realidad no se persistió. */
+    list.pop();
+    if(saveResult === 'quota'){
+      alert('⚠️ El navegador está sin espacio (localStorage lleno) y no he podido guardar "'+name+'".\n\nLibera espacio (entra a Resto de Ligas para que se auto-limpien backups antiguos, o reduce iconos personalizados en Competiciones) y vuelve a intentarlo.');
+    } else {
+      alert('No se pudo guardar "'+name+'" (error desconocido). Reintenta.');
+    }
     render();
   }
   window._meaAddFromInput = function(slug, inputId){

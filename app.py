@@ -14,8 +14,51 @@ from logica_liga import calcular_tabla, obtener_resultados_ia
 app = Flask(__name__)
 
 basedir = os.path.abspath(os.path.dirname(__file__))
-instance_dir = os.path.join(basedir, "instance")
-os.makedirs(instance_dir, exist_ok=True)
+
+
+def _resolve_data_dir():
+    """Devuelve el directorio donde guardamos SQLite + ficheros editables.
+
+    Orden de preferencia:
+      1. `LIGA_DATA_DIR` env var → cualquier ruta personalizada.
+      2. `RAILWAY_VOLUME_MOUNT_PATH` env var → si el usuario montó un
+         Volume en Railway (cualquier ruta), Railway pone esta variable.
+      3. `/data` si existe y es escribible (convención Railway/Render).
+      4. `instance/` (fallback local + Render con volumen ya mapeado).
+
+    Las primeras 3 opciones permiten que Railway sin Postgres tenga
+    persistencia: el usuario monta un Volume (e.g. en /data) y los
+    `liga_ext_*` + el calendario sobreviven a deploys/restarts en el
+    SQLite del volumen. Sin nada de esto, en Railway el SQLite es
+    efímero y los cambios del admin se pierden — el bug histórico que
+    el usuario reportaba con la AGENDA y con el editor de plantillas
+    de Resto de Ligas (2026-05-02). """
+    candidates = []
+    env_dir = os.environ.get("LIGA_DATA_DIR", "").strip()
+    if env_dir:
+        candidates.append(env_dir)
+    rwy_vol = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+    if rwy_vol:
+        candidates.append(rwy_vol)
+    candidates.append("/data")
+    for cand in candidates:
+        try:
+            os.makedirs(cand, exist_ok=True)
+            # Probar escritura — algunas plataformas montan /data como
+            # read-only por defecto si el usuario no creó el Volume.
+            probe = os.path.join(cand, ".liga_write_probe")
+            with open(probe, "w") as f:
+                f.write("ok")
+            os.remove(probe)
+            return cand
+        except OSError:
+            continue
+    fallback = os.path.join(basedir, "instance")
+    os.makedirs(fallback, exist_ok=True)
+    return fallback
+
+
+instance_dir = _resolve_data_dir()
 
 # Selección de backend de base de datos:
 #
@@ -23,8 +66,10 @@ os.makedirs(instance_dir, exist_ok=True)
 #    Heroku, Fly, etc.) → usarla. Así los datos persisten entre reinicios
 #    del contenedor, que es el caso real en Railway donde el disco es
 #    efímero por defecto y los SQLite se borran en cada deploy.
-# 2. Si no, SQLite en `instance/liga.db` (desarrollo local + Render,
-#    que ya tiene volumen persistente configurado en render.yaml).
+# 2. Si no, SQLite en `<instance_dir>/liga.db`. `_resolve_data_dir`
+#    intenta montar primero un volumen persistente (Railway Volume,
+#    /data, etc.) y solo cae a `instance/` si no hay nada disponible.
+#    En desarrollo local y en Render esto es transparente.
 #
 # Normalización de prefijo: Railway/Heroku envían `postgres://` pero
 # SQLAlchemy >= 1.4 requiere `postgresql://`. Sustituimos solo el prefijo.
@@ -33,6 +78,27 @@ if _db_url.startswith("postgres://"):
     _db_url = "postgresql://" + _db_url[len("postgres://"):]
 if not _db_url:
     _db_url = "sqlite:///" + os.path.join(instance_dir, "liga.db")
+
+# Log diagnóstico al arranque: imprime el backend de almacenamiento
+# detectado para que el deployer pueda confirmar en los logs si los
+# datos del admin (calendario, plantillas Resto de Ligas, etc.) van a
+# sobrevivir a un deploy/restart. Si dice "EPHEMERAL", los cambios
+# del admin se perderán en el próximo deploy y hay que mover SQLite a
+# un volumen persistente o configurar DATABASE_URL.
+def _persistence_diagnostic():
+    if _db_url.startswith("postgresql://") or _db_url.startswith("postgres://"):
+        return "PERSISTENT (Postgres via DATABASE_URL)"
+    if instance_dir.startswith("/data") or os.environ.get("LIGA_DATA_DIR") \
+            or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"):
+        return f"PERSISTENT (SQLite at {instance_dir}/liga.db — volumen montado)"
+    if os.path.exists(os.path.join(basedir, ".render-volume-marker")):
+        return f"PERSISTENT (SQLite at {instance_dir}/liga.db — Render volume)"
+    return f"EPHEMERAL (SQLite at {instance_dir}/liga.db — los cambios se PERDERÁN en el próximo deploy/restart). Configura DATABASE_URL (Postgres) o monta un volumen y exporta LIGA_DATA_DIR/RAILWAY_VOLUME_MOUNT_PATH."
+
+try:
+    print(f"[ftbol] Persistencia: {_persistence_diagnostic()}", flush=True)
+except Exception:
+    pass
 
 app.config["SQLALCHEMY_DATABASE_URI"] = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False

@@ -113,26 +113,30 @@ solo `elite`/`natGoal`.
 
 ## Clasificación a competiciones europeas (obligatorio, 2026-05-02)
 
-Para que un equipo de Resto de Ligas vaya a CUALQUIER competición
-europea (UCL, UEL, UECL, Previa Champions, fase de Wild Card → OQ, …)
-**la liga debe haber jugado todos sus partidos**: round-robin completo
-ida+vuelta = `2·(N−1)` partidos por equipo, total `N·(N−1)` resultados.
+Para que un equipo de Resto de Ligas vaya a una competición europea
+**directa** (UCL fase de liga, Previa Champions, UEL, UECL) la liga
+debe haber jugado todos sus partidos: round-robin completo ida+vuelta
+= `2·(N−1)` partidos por equipo, total `N·(N−1)` resultados.
+
+Las zonas **feeder** (`uclQual` = Open Qualifier, `wildcard`) son
+permisivas a propósito — alimentan al OQ y al pool de Previa
+Champions, NO clasifican directo a una competición europea. Aceptan
+ligas con resultados parciales o sin simular (rank-by-power) para no
+dejar plazas TBD-OQ-XX en el bracket de 7×14.
 
 Lógica en `_computeQualifiedFromLeagues(zoneKey)` (`misc_body_1.html`):
 
-1. Si `rN < needed` (la liga no ha terminado), saltamos esa liga
-   entera con `status: 'no-lista'` en el diag. NO se promueven equipos.
+1. Si la zona es directa (`ucl`/`uclPrev`/`uel`/`uecl`) y
+   `rN < needed`, saltamos esa liga entera con `status: 'no-lista'`.
+   Para zonas feeder se usa el ranking disponible (parcial o sintético).
 2. Aunque `rN === needed`, si un equipo concreto del top tiene
    `pj < 2·(N−1)` (resultados desincronizados con `data.teams`), ese
    equipo se SALTA y se avanza al siguiente del ranking. Defensa
-   contra escrituras batched / race conditions tras un Sim.
-3. Excepciones a la regla:
+   contra escrituras batched / race conditions tras un Sim. Solo
+   aplica a zonas directas.
+3. Excepciones absolutas (cualquier zona):
    - **Liga EA Sports / Hypermotion / 1ª RFEF** → bloqueadas en
      `EUROPE_BLACKLIST` (manual-only vía pantalla "EA Sports → Europa").
-   - **Wild Card auto-cupo** (`isWcAuto`) → permisivo a propósito:
-     rellena el pool del Open Qualifier desde los 40 slugs aunque la
-     liga tenga `rN=0` (rank-by-power). NO contradice la regla porque
-     WC alimenta al OQ, no clasifica directo a Europa.
 
 Bug histórico que motivó la regla: tras pulsar Sim en una liga, la
 escritura de resultados era batched/asíncrona. Durante esa ventana el
@@ -141,6 +145,12 @@ veía `rN > 0` pero `pj === 0` para varios equipos. Esos equipos
 empataban a `pts=0` y sorteaban a las primeras posiciones por
 desempate alfabético sobre el nombre — el código los enviaba a
 Europa con 0 partidos jugados.
+
+Bug derivado del primer fix (también 2026-05-02): el gate estricto
+inicial cubría TODAS las zonas, lo que rompió el Open Qualifier — 80
+plazas quedaban como TBD-OQ-XX porque las ligas medias/pequeñas rara
+vez tienen TODAS las jornadas simuladas cuando el admin abre el OQ.
+El fix fue separar zonas directas de zonas feeder.
 
 ## Duración del cronómetro del partido (obligatorio, siempre)
 

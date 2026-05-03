@@ -1,5 +1,29 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Límites de almacenamiento por carpeta (obligatorio, 2026-05-02)
+
+Cada carpeta y subcarpeta del almacenamiento del navegador
+(localStorage namespace) tiene un cap de **2 MB**. Esto aplica a:
+
+- Cada `ligaExt_<slug>` y todas sus claves derivadas
+  (`_protected`, `_snap_<ts>`, …) sumadas.
+- Cada estado de competición persistido (`wprev_state_v1`,
+  `oq_simulation_v1`, `comp_icons_v1`, …).
+
+Reglas a respetar:
+
+1. **No escribir más de 2 MB en una sola clave.** Si una plantilla,
+   acta o snapshot pasa de ese tamaño, hay que recortar (truncar
+   históricos, reducir JSON, mover datos al servidor).
+2. **No acumular tantos derivados que la suma por carpeta supere
+   2 MB.** Por eso `saveData` mantiene como mucho `main` +
+   `_protected` + 2 snapshots por liga (drop de `_backup` legacy
+    2026-05-02 — ver sección de quota más abajo).
+3. **Si añades una nueva clave**, calcula su tamaño máximo plausible
+   y déjalo bajo 2 MB. Los datos masivos (miles de eventos, históricos
+   largos) van al servidor (`GlobalState` row con su clave) o se
+   compactan/agregan antes de persistir.
+
 ## Iconos del equipo y del jugador en la simulación (obligatorio, siempre)
 
 Cada vez que se simule un partido (Liga, Copa, competiciones europeas,

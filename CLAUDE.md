@@ -138,43 +138,52 @@ solo `elite`/`natGoal`.
 ## Clasificación a competiciones europeas (obligatorio, 2026-05-02)
 
 Para que un equipo de Resto de Ligas vaya a una competición europea
-**directa** (UCL fase de liga, Previa Champions, UEL, UECL) la liga
-debe haber jugado todos sus partidos: round-robin completo ida+vuelta
-= `2·(N−1)` partidos por equipo, total `N·(N−1)` resultados.
+**directa** (UCL fase de liga, Previa Champions, UEL, UECL) ese equipo
+debe haber jugado todos sus partidos de liga (`pj === 2·(N−1)`
+resultados que le incluyan). El check es **per-team**, no per-liga:
+una liga con resultados parciales SÍ puede contribuir con sus equipos
+top SIEMPRE QUE tengan el `pj` completo. Los equipos con pj
+incompleto se saltan y se avanza al siguiente del ranking.
 
 Las zonas **feeder** (`uclQual` = Open Qualifier, `wildcard`) son
 permisivas a propósito — alimentan al OQ y al pool de Previa
 Champions, NO clasifican directo a una competición europea. Aceptan
-ligas con resultados parciales o sin simular (rank-by-power) para no
+standings parciales y rank-by-power sin filtro per-team, para no
 dejar plazas TBD-OQ-XX en el bracket de 7×14.
 
 Lógica en `_computeQualifiedFromLeagues(zoneKey)` (`misc_body_1.html`):
 
-1. Si la zona es directa (`ucl`/`uclPrev`/`uel`/`uecl`) y
-   `rN < needed`, saltamos esa liga entera con `status: 'no-lista'`.
-   Para zonas feeder se usa el ranking disponible (parcial o sintético).
-2. Aunque `rN === needed`, si un equipo concreto del top tiene
-   `pj < 2·(N−1)` (resultados desincronizados con `data.teams`), ese
-   equipo se SALTA y se avanza al siguiente del ranking. Defensa
-   contra escrituras batched / race conditions tras un Sim. Solo
-   aplica a zonas directas.
+1. Para zonas directas (`ucl`/`uclPrev`/`uel`/`uecl`), al iterar el
+   ranking de la liga, los equipos con `pj < 2·(N−1)` se SALTAN y
+   se avanza al siguiente. Una liga 100 % terminada contribuye su
+   cuota completa; una liga parcial contribuye solo sus equipos
+   fully-played; una liga sin simular contribuye 0 (todos tienen
+   pj=0).
+2. Para zonas feeder (`uclQual`/`wildcard`), no se aplica el filtro
+   per-team. Si rN=0 se usa `_rankByPower(teams)` para devolver un
+   ranking sintético; si rN>0 se usa `_standingsFromResults` con lo
+   que haya. Garantiza que el bracket 7×14 del OQ y los 40 slugs de
+   WC siempre se llenen.
 3. Excepciones absolutas (cualquier zona):
    - **Liga EA Sports / Hypermotion / 1ª RFEF** → bloqueadas en
      `EUROPE_BLACKLIST` (manual-only vía pantalla "EA Sports → Europa").
 
-Bug histórico que motivó la regla: tras pulsar Sim en una liga, la
-escritura de resultados era batched/asíncrona. Durante esa ventana el
-admin abría la pantalla de Europa y `_computeQualifiedFromLeagues`
-veía `rN > 0` pero `pj === 0` para varios equipos. Esos equipos
-empataban a `pts=0` y sorteaban a las primeras posiciones por
-desempate alfabético sobre el nombre — el código los enviaba a
-Europa con 0 partidos jugados.
+Bug histórico que motivó el filtro per-team: tras pulsar Sim en una
+liga, la escritura de resultados era batched/asíncrona. Durante esa
+ventana el admin abría la pantalla de Europa y
+`_computeQualifiedFromLeagues` veía `rN > 0` pero `pj === 0` para
+varios equipos. Esos equipos empataban a `pts=0` y sorteaban a las
+primeras posiciones por desempate alfabético sobre el nombre — el
+código los enviaba a Europa con 0 partidos jugados. El check
+`pj < expectedPj → continue` los descarta.
 
-Bug derivado del primer fix (también 2026-05-02): el gate estricto
-inicial cubría TODAS las zonas, lo que rompió el Open Qualifier — 80
-plazas quedaban como TBD-OQ-XX porque las ligas medias/pequeñas rara
-vez tienen TODAS las jornadas simuladas cuando el admin abre el OQ.
-El fix fue separar zonas directas de zonas feeder.
+Por qué NO hay también un gate de liga (`rN < needed → skip whole
+league`): se intentó el 2026-05-02 (commit `c983a56`) pero resultó
+demasiado coarse — descartaba ligas parciales enteras y el pool de
+Previa Champions caía a ~14 equipos reales + 49 placeholders TBD
+(reportado por el usuario con fotos). El per-team check ya cubre el
+caso edge sin destruir las contribuciones legítimas de ligas
+parciales.
 
 ## EXENTOS Previa Champions (obligatorio, 2026-05-02)
 

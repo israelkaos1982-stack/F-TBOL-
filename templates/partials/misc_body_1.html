@@ -3877,6 +3877,22 @@ window._showSimProgress = function(opts, onDone){
               });
             }
           } catch(_){}
+          /* TEAM_STADIUMS: importar el estadio del equipo si el admin
+             eligió uno en el editor. Sin esto, `getTeamStadium('Backa
+             Topola')` devolvía '' y la barra de venue del gm-modal
+             caía al placeholder "eFootball Stadium". Solo lo seteamos
+             si todavía no hay entrada para no pisar mapeos hardcoded
+             (Liga EA, internacionales). */
+          try {
+            window.TEAM_STADIUMS = window.TEAM_STADIUMS || {};
+            var _stad = (t && t.stadium) ? String(t.stadium).trim() : '';
+            if (_stad && !window.TEAM_STADIUMS[name]) {
+              window.TEAM_STADIUMS[name] = _stad;
+              _namesForAlias(name).forEach(function(al){
+                if (!window.TEAM_STADIUMS[al]) window.TEAM_STADIUMS[al] = _stad;
+              });
+            }
+          } catch(_){}
           /* SQUAD_REGISTRY: solo pisamos si traemos jugadores de
              verdad (si no, respetamos lo que tenga el bundle o lo
              que hayan puesto otros pipelines). */
@@ -8071,14 +8087,14 @@ window._showSimProgress = function(opts, onDone){
         </div>
       </div>
 
-      <label class="lext-label">Valor-Poder-Nivel equipo · valores FIJOS definidos por el admin</label>
+      <label class="lext-label">Valor-Poder-Nivel equipo · solo se usan si la plantilla está vacía</label>
       <div class="lext-grid4">
         <div><span class="lext-mini-lbl">GLOBAL</span><input class="lext-input lext-mini" id="lext-team-pw-glob" type="number" min="1" max="100" value="75" /></div>
         <div><span class="lext-mini-lbl">ATAQUE</span><input class="lext-input lext-mini" id="lext-team-pw-atk" type="number" min="1" max="100" value="75" /></div>
         <div><span class="lext-mini-lbl">MEDIO</span><input class="lext-input lext-mini" id="lext-team-pw-mid" type="number" min="1" max="100" value="75" /></div>
         <div><span class="lext-mini-lbl">DEFENSA</span><input class="lext-input lext-mini" id="lext-team-pw-def" type="number" min="1" max="100" value="75" /></div>
       </div>
-      <div class="lext-sub">Global = balance general. ATAQUE + MEDIO determinan goles que marca; MEDIO + DEFENSA determinan goles que recibe. Un equipo con ATQ 90 / DEF 60 marca mucho y encaja mucho; ATQ 60 / DEF 90 al revés.</div>
+      <div class="lext-sub">⚠️ Si pegas una plantilla, estos valores se IGNORAN: el motor calcula GLOBAL = media de los 11 mejores jugadores, ATAQUE = media de delanteros, MEDIO = media de centrocampistas y DEFENSA = media de defensas. Solo se usan estos valores manuales como fallback cuando la plantilla del equipo está vacía.</div>
 
       <label class="lext-label">🟨 Agresividad (1-99) · tendencia a cometer faltas y recibir tarjetas</label>
       <div style="display:flex;align-items:center;gap:10px;">
@@ -10677,7 +10693,15 @@ Tottenham
       if (!t) return;
     }
     CURRENT_SQUAD_TEAM = t.id;
-    var tp = Number(t.power)||0;
+    /* Mostramos el GLOBAL real (auto-derivado de los 11 mejores) en
+       el título — mismo valor que aparece en los chips de stats y
+       que usa el motor para simular. Antes mostrábamos `t.power`
+       (el valor manual del editor) lo que causaba la discrepancia
+       reportada 2026-05-02: editor mostraba 68, plantilla mostraba
+       71 en los chips pero 68 en la cabecera. Ahora ambos coinciden. */
+    var _statsForTitle = (typeof computeLineStats === 'function')
+      ? computeLineStats(t) : { glob: Number(t.power)||0 };
+    var tp = Number(_statsForTitle.glob) || Number(t.power) || 0;
     var tTone = poderToneLocal(tp);
     var title = document.getElementById('lext-ov-squad-title');
     if(title){

@@ -8870,7 +8870,17 @@
     if (addBtn) { addBtn.disabled = true; }
     document.getElementById('gm-event-panel').style.display = 'none';
     document.getElementById('gm-team-pick').style.display = 'none';
-    if (!_gm.isFriendly) {
+    if (_gm._isWprev) {
+      /* Previa Champions · Ronda Final: persistimos en wprev_state_v1
+         (no en la tabla de Liga). _wprevSaveHumanResult re-renderiza
+         buildUclPrevClas tras guardar, así la fila de la jornada pasa
+         de "📋 PREVIA" a mostrar el marcador final. */
+      try {
+        if (typeof window._wprevSaveHumanResult === 'function') {
+          window._wprevSaveHumanResult(_gm._wprevGi, _gm._wprevJ, _gm.sc.a, _gm.sc.b);
+        }
+      } catch(_e){}
+    } else if (!_gm.isFriendly) {
       guardarResultado(_gm.j, _gm.home, _gm.away, _gm.sc.a, _gm.sc.b);
       /* Persistir eventos en el mismo registro para que el acta sea
          visible al volver a la pantalla de la Jornada (HvH/HvIA).
@@ -9608,6 +9618,24 @@
   window.abrirAmistoso = function (home, away) {
     var isHvH = esHumano(home) && esHumano(away);
     gmOpen(0, home, away, isHvH, 'Amistoso', false, true); /* noET=false: amistosos pueden tener ET si HvH */
+  };
+
+  /* Previa Champions · Ronda Final: abre el gm-modal full-screen para
+     un partido humano (HvH o HvIA) de wprev_state_v1. Marca _gm con
+     _isWprev/_wprevGi/_wprevJ para que gmEndMatch persista el resultado
+     en wprev_state_v1 vía _wprevSaveHumanResult en lugar de ir a la
+     tabla de Liga. comp='ucl' alimenta el label de WhatsApp (Champions
+     League) y los côdigos de competición; noET=true porque la fase de
+     liga admite empate. */
+  window.abrirPreviaChampionsMatch = function (home, away, isHvH, gi, j) {
+    gmOpen(0, home, away, isHvH, 'ucl', true, false);
+    try {
+      if (window.__GM_LIVE) {
+        window.__GM_LIVE._isWprev = true;
+        window.__GM_LIVE._wprevGi = gi;
+        window.__GM_LIVE._wprevJ  = j;
+      }
+    } catch(_){}
   };
 
   function guardarResultado(j, home, away, gh, ga) {
@@ -19270,14 +19298,21 @@ document.addEventListener('DOMContentLoaded', function() {
     buildUclPrevClas();
   };
 
-  /* Lanza el flujo PREVIA + match-card para un partido humano pendiente
-     de la Ronda Final. Inyecta una match-live-wrap dentro del host
-     `cal-ucl-wprev-<gi>-<j>` (clase `jmatches` + prefijo `cal-ucl-`)
-     para que `mlPreviaClick` la reconozca como Champions League y aplique
-     todos los códigos de equipo humano (capitán ×1.05, goleador nato ×1.8,
-     goleador estrella ×3.0, P, F, ⭐, formación, alineación ideal, MVP,
-     estadísticas, sanciones — los flags definidos en CLAUDE.md). El
-     resultado se persiste en wprev_state_v1 desde _mlFinishMatchGen. */
+  /* Lanza el flujo PREVIA → COMPARTIR → gm-modal para un partido
+     humano pendiente (HvH/HvIA) de la Ronda Final. Mismo flujo que
+     las jornadas 2-38 de Liga: prepartido-overlay (configuración,
+     canal Twitch, bajas, COMPARTIR PARTIDO EN WHATSAPP) y, tras
+     compartir, gm-modal full-screen. compKey='ucl' aplica todos los
+     códigos de equipo humano (capitán ×1.05, goleador nato ×1.8,
+     goleador estrella ×3.0, P, F, ⭐, formación, alineación ideal,
+     MVP, estadísticas, sanciones — los flags definidos en
+     CLAUDE.md). El resultado se persiste en wprev_state_v1 desde
+     gmEndMatch (rama `_isWprev` que llama a _wprevSaveHumanResult).
+     Antes inyectábamos un .match-live-wrap inline + mlPreviaClick,
+     pero al cerrar el overlay el usuario quedaba con el timer parado
+     y la pantalla scrolleada al inicio de la Previa de Champions
+     (foto 1→2 vs expectativa foto 3 = gm-modal, reportado
+     2026-05-02). */
   window._wprevPlayHumanMatch = function(gi, j){
     var s = loadState();
     if(!s || !s.jornadasByGroup || !s.jornadasByGroup[gi]) return;
@@ -19288,56 +19323,32 @@ document.addEventListener('DOMContentLoaded', function() {
     var home = grp[m.hi] && grp[m.hi].name;
     var away = grp[m.ai] && grp[m.ai].name;
     if(!home || !away) return;
-    /* El estado wprev guarda el logo real de cada equipo (pool extraído
-       de `computeUclPrevTeams` con su `t.logo` original). Lo pasamos al
-       motor de match-card para evitar caer al escudo-default cuando el
-       equipo IA es foráneo (Hapoel, FC Haka, …) y no vive en TEAM_LOGOS. */
-    var homeLogo = (grp[m.hi] && grp[m.hi].logo) || '';
-    var awayLogo = (grp[m.ai] && grp[m.ai].logo) || '';
     var homeIsHuman = _isHumanTeam(home);
     var awayIsHuman = _isHumanTeam(away);
     var isHvH = homeIsHuman && awayIsHuman;
     var mk = 'wprev-G'+gi+'-J'+j;
-    var host = document.getElementById('cal-ucl-wprev-'+gi+'-'+j);
-    var existingWrap = document.getElementById('mlw-'+mk);
-    if(host && !existingWrap && typeof window._calBuildMatchCard === 'function'){
-      var cardHtml = window._calBuildMatchCard(0, home, away, isHvH, mk, {
-        homeIsHuman: homeIsHuman,
-        awayIsHuman: awayIsHuman,
-        homeLogoOverride: homeLogo,
-        awayLogoOverride: awayLogo,
-        wprevStyle: true
-      });
-      host.innerHTML = cardHtml;
-      host.style.display = 'block';
-      var row = document.getElementById('wprev-row-'+gi+'-'+j);
-      if(row) row.style.display = 'none';
-      if(typeof window._calMlSt === 'function'){
-        var st = window._calMlSt(mk);
-        st.j = 0;
-        st.home = home;
-        st.away = away;
-        st.isHvH = isHvH;
-        st.isFriendly = false;
-        st.isIAvsIA = false;
-        st.isWprev = true;
-        st.wprevGi = gi;
-        st.wprevJ = j;
-        st.homeIsHuman = !!homeIsHuman;
-        st.awayIsHuman = !!awayIsHuman;
-        st.humanInvolved = !!(homeIsHuman || awayIsHuman);
+    var duracion = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
+      : (isHvH ? '16.5 min' : '13.5 min');
+    /* _ppPreviaTeams alimenta _ppShareWA (mensaje de WhatsApp con la
+       jornada). Sumamos +1 a `j` porque el state es 0-indexed y el
+       usuario ve "Jornada 1..6". */
+    window._ppPreviaTeams = { home: home, away: away, j: (j+1) };
+    window._ppCustomCallback = function(){
+      window._ppPreviaTeams = null;
+      if(typeof window.abrirPreviaChampionsMatch === 'function'){
+        window.abrirPreviaChampionsMatch(home, away, isHvH, gi, j);
       }
-    }
-    if(typeof window.mlPreviaClick === 'function'){
-      try { window.mlPreviaClick(mk); } catch(_){}
-    } else if(typeof mlPreviaClick === 'function'){
-      try { mlPreviaClick(mk); } catch(_){}
+    };
+    if(typeof window.showPrePartidoOverlay === 'function'){
+      window.showPrePartidoOverlay(mk, 'ucl', 'No', duracion, isHvH);
     }
   };
 
   /* Persiste el resultado de un partido humano de la Ronda Final tras
-     finalizar en _mlFinishMatchGen. Aplica la fila a la tabla del grupo,
-     reordena standings y deja phase='done' si era el último pendiente. */
+     finalizar (rama _isWprev de gmEndMatch). Aplica la fila a la tabla
+     del grupo, reordena standings y deja phase='done' si era el último
+     pendiente. */
   window._wprevSaveHumanResult = function(gi, j, gh, ga){
     var s = loadState();
     if(!s || !s.jornadasByGroup || !s.jornadasByGroup[gi]) return;

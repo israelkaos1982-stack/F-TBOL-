@@ -8743,8 +8743,41 @@ Tottenham
        saveData. En el flow "simular 51 ligas" son ~12s ahorrados. */
     var serialized;
     try { serialized = JSON.stringify(d); } catch(_){ serialized = null; }
+    /* Helper local: setItem con auto-recuperación si saltó QuotaExceeded.
+       Borra snapshots antiguos (los más viejos primero) y reintenta una
+       vez. Si tras la limpieza sigue fallando, devuelve false para que
+       el caller pueda avisar al usuario — antes los `catch(_){}` en
+       cadena hacían que el guardado fallase en silencio y el admin
+       pensase "no se ha guardado nada". */
+    function _setItemSafe(key, value){
+      try { localStorage.setItem(key, value); return true; }
+      catch(err){
+        var isQuota = err && (
+          err.code === 22 || err.code === 1014 ||
+          err.name === 'QuotaExceededError' ||
+          err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+        if(!isQuota) return false;
+        /* Limpiar snapshots viejos (ligaExt_*_snap_<ts>) globalmente,
+           empezando por los más antiguos. Conservamos el _backup y el
+           main de cada liga — son las claves críticas. */
+        try {
+          var snaps = [];
+          for(var i=0; i<localStorage.length; i++){
+            var kk = localStorage.key(i);
+            if(kk && /^ligaExt_.+_snap_\d+$/.test(kk)) snaps.push(kk);
+          }
+          snaps.sort();
+          while(snaps.length){
+            try { localStorage.removeItem(snaps.shift()); } catch(_){}
+            try { localStorage.setItem(key, value); return true; } catch(_){}
+          }
+        } catch(_){}
+        return false;
+      }
+    }
+    var _saveOk = true;
     if (serialized != null) {
-      try { localStorage.setItem(storeKey(k), serialized); } catch(_){}
+      if(!_setItemSafe(storeKey(k), serialized)) _saveOk = false;
       /* PROTECCIÓN PERSISTENTE: cada saveData actualiza también la
          clave `_protected`, siempre que el estado nuevo tenga al
          menos 1 equipo. Antes esto solo se hacía cuando admin
@@ -8764,8 +8797,17 @@ Tottenham
          no debe destruir la copia de seguridad. */
       var nTeamsNew = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
       if (nTeamsNew > 0) {
-        try { localStorage.setItem(storeKey(k) + '_protected', serialized); } catch(_){}
+        _setItemSafe(storeKey(k) + '_protected', serialized);
       }
+    }
+    /* Si la clave principal NO se pudo escribir (quota lleno tras
+       limpieza), avisamos UNA vez al usuario con un alert claro. La
+       data viva en LIGA_CACHE y el server (POST de abajo), así que
+       el partido en curso sigue funcionando, pero al recargar la
+       página podría perderse si el servidor también falla. */
+    if (!_saveOk && !window._lextQuotaWarned) {
+      window._lextQuotaWarned = true;
+      try { alert('⚠️ El navegador está sin espacio (localStorage lleno) y no he podido guardar la plantilla en local.\n\nLos cambios se han subido al servidor, pero conviene cerrar otras pestañas o limpiar caché para que el guardado local funcione de nuevo.'); } catch(_){}
     }
     /* ── BACKUPS AUTOMÁTICOS ──
        Cada guardado escribe además:
@@ -9933,6 +9975,72 @@ Tottenham
   // ── Parser de plantilla pegada ─────────────────────
   // Acepta al final de la línea marcadores C (Capitán), F (Falta),
   // P (Penalti) combinables en cualquier orden, con o sin [], (), espacios.
+  /* Inverso de parseSquadPaste: serializa la plantilla guardada al
+     formato que el textarea acepta. Lo usamos al re-abrir un equipo
+     en `lextEditTeam` para que el admin VEA su plantilla guardada en
+     el textarea (en vez de un textarea vacío que daba la falsa
+     impresión de que "no se había guardado"). El formato preserva
+     dorsales (si hay) y todos los flags (C/F/P/⭐/⚾/🏀). */
+  function _squadToPasteText(players){
+    if(!Array.isArray(players) || !players.length) return '';
+    var SECTIONS = [
+      { key:'POR', header:'### 🧤 Porteros' },
+      { key:'DEF', header:'### 🛡️ Defensas' },
+      { key:'MED', header:'### ⚙️ Centrocampistas' },
+      { key:'DEL', header:'### ⚽ Delanteros' }
+    ];
+    var bySec = { POR:[], DEF:[], MED:[], DEL:[] };
+    players.forEach(function(p){
+      if(!p || !p.name) return;
+      var pos = (p.pos === 'POR' || p.pos === 'DEF' || p.pos === 'MED' || p.pos === 'DEL') ? p.pos : 'MED';
+      bySec[pos].push(p);
+    });
+    var lines = [];
+    SECTIONS.forEach(function(sec){
+      var arr = bySec[sec.key];
+      if(!arr.length) return;
+      lines.push(sec.header);
+      arr.forEach(function(p){
+        var dorsal = (p.num && Number(p.num) > 0) ? (Number(p.num) + '. ') : '';
+        var pw = Number(p.power) || 0;
+        var flags = '';
+        if(p.captain)    flags += 'C';
+        if(p.freeKick)   flags += 'F';
+        if(p.penalty)    flags += 'P';
+        if(p.elite)      flags += '⭐';
+        if(p.natGoalPro) flags += '🏀';
+        else if(p.natGoal) flags += '⚾';
+        var tail = flags ? (' ' + flags) : '';
+        lines.push(' * ' + dorsal + String(p.name).trim() + ' ' + pw + tail);
+      });
+    });
+    return lines.join('\n');
+  }
+
+  /* Compara dos plantillas para saber si son "iguales" tras parsear de
+     nuevo el textarea — así, si el admin guarda sin tocar la plantilla,
+     no preguntamos "¿reemplazar la plantilla?". Ignora id (re-generado
+     en cada parseSquadPaste) y stats agregadas (gol/mvp/...) que no
+     viajan en el textarea. */
+  function _squadsEqual(a, b){
+    if(!Array.isArray(a) || !Array.isArray(b)) return false;
+    if(a.length !== b.length) return false;
+    function norm(p){
+      return [
+        String(p.name||'').trim(),
+        Number(p.num)||0,
+        String(p.pos||'MED'),
+        Number(p.power)||0,
+        !!p.captain, !!p.freeKick, !!p.penalty,
+        !!p.elite, !!p.natGoal, !!p.natGoalPro
+      ].join('|');
+    }
+    var A = a.map(norm).sort();
+    var B = b.map(norm).sort();
+    for(var i=0;i<A.length;i++){ if(A[i] !== B[i]) return false; }
+    return true;
+  }
+
   function parseSquadPaste(text){
     if(!text) return [];
     var lines = String(text).split(/\r?\n/);
@@ -10027,7 +10135,12 @@ Tottenham
       var hasFK   = /F/.test(tailUpper);
       var hasPen  = /P/.test(tailUpper);
       var hasStar = /⭐|\*/.test(tail);   /* ⭐ estrella */
-      var hasGoal = /⚾|@/.test(tail);    /* ⚾ goleador nato */
+      /* 🏀 = goleador estrella (natGoalPro, ×3.0). Si lleva 🏀,
+         ⚾ se ignora — un jugador es "estrella" O "nato", no ambos
+         (ver CLAUDE.md). Antes parseSquadPaste no reconocía 🏀 y
+         la round-trip con _squadToPasteText perdía el flag. */
+      var hasPro  = /🏀/.test(tail);
+      var hasGoal = !hasPro && /⚾|@/.test(tail);  /* ⚾ goleador nato */
       players.push({
         id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
         name:name,
@@ -10039,6 +10152,7 @@ Tottenham
         penalty: hasPen,
         elite: hasStar,
         natGoal: hasGoal,
+        natGoalPro: hasPro,
         pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
       });
     });
@@ -10121,7 +10235,16 @@ Tottenham
     if(aliasEl) aliasEl.value = t.efootballAlias||'';
     var bud = document.getElementById('lext-team-budget');
     if(bud) bud.value = t.budget ? String(t.budget) : '';
-    document.getElementById('lext-team-squad-paste').value = '';
+    /* Prerrellenamos el textarea de "Pegar plantilla" con la plantilla
+       guardada del equipo. Antes lo dejábamos vacío y el admin creía
+       que "no se había guardado nada" cuando re-abría el equipo
+       (reportado 2026-05-02). Ahora ve directamente sus jugadores
+       con dorsales, poder y flags (C/F/P/⭐/⚾/🏀), y puede editar
+       inline o dejarlo tal cual. */
+    var _spasteEl = document.getElementById('lext-team-squad-paste');
+    if(_spasteEl){
+      _spasteEl.value = _squadToPasteText(Array.isArray(t.players) ? t.players : []);
+    }
     // Cargar tipo (Humano/IA) y emoji solo si estamos en Liga EA Sports.
     if(isLigaEaContext()){
       FORM_TIPO = t.isHuman ? 'human' : 'ia';
@@ -10349,7 +10472,14 @@ Tottenham
         }
         if(parsed.length){
           if(t.players && t.players.length){
-            if(!confirm('Este equipo ya tiene '+t.players.length+' jugadores. ¿Reemplazar la plantilla con los '+parsed.length+' pegados? (Cancelar = añadir a los existentes)')){
+            /* Si el textarea ya venía prerrellenado con la plantilla
+               actual y el admin no la tocó, parsear devuelve los mismos
+               jugadores → no preguntamos "¿reemplazar?". Solo guardamos
+               los otros campos (nombre/poder/escudo/etc) y dejamos
+               t.players intacto (preservando ids y stats agregadas). */
+            if(_squadsEqual(parsed, t.players)){
+              /* idempotente: nada que hacer */
+            } else if(!confirm('Este equipo ya tiene '+t.players.length+' jugadores. ¿Reemplazar la plantilla con los '+parsed.length+' del textarea? (Cancelar = añadir a los existentes)')){
               t.players = (t.players||[]).concat(parsed);
             } else {
               t.players = parsed;

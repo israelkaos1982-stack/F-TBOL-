@@ -19073,6 +19073,18 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function renderGroupTable(gi, sortedTable, group){
+    /* Detección del equipo humano en el grupo (petición usuario
+       2026-05-02: el grupo del humano debe tener un color distinto
+       para encontrarlo más rápido). _isHumanTeam ya consulta
+       window.esHumano y la lista HUMANOS legacy. Si cualquier equipo
+       del grupo es humano, marcamos el wrapper con
+       `wprev-group-human` y la fila de ese equipo con
+       `wprev-row-human` para destacar al admin entre 11 grupos. */
+    var humanIdx = -1;
+    var humanInGroup = false;
+    sortedTable.forEach(function(r, i){
+      if(_isHumanTeam(r.name)){ humanInGroup = true; humanIdx = i; }
+    });
     var rows = '<div class="wprev-row hdr">'
       + '<span>#</span><span>Equipo</span>'
       + '<span>PTS</span><span>PJ</span><span>G</span><span>E</span><span>P</span>'
@@ -19084,6 +19096,7 @@ document.addEventListener('DOMContentLoaded', function() {
          (qual-death, naranja apagado). No hay eliminados — todos los
          33 de Ronda Final clasifican a alguna competición. */
       var cls = (i === 0) ? 'qual-best' : 'qual-death';
+      if(_isHumanTeam(r.name)) cls += ' wprev-row-human';
       var dgCls = r.dg>0 ? 'pos' : (r.dg<0?'neg':'');
       var dgTxt = (r.dg>0?'+':'') + r.dg;
       rows += '<div class="wprev-row '+cls+'">'
@@ -19099,8 +19112,10 @@ document.addEventListener('DOMContentLoaded', function() {
         + '<span class="wprev-cell dg '+dgCls+'">'+dgTxt+'</span>'
         + '</div>';
     });
-    return '<div class="wprev-group">'
-      + '<div class="wprev-group-h">GRUPO '+GROUP_LABELS[gi]
+    var groupCls = 'wprev-group' + (humanInGroup ? ' wprev-group-human' : '');
+    var headerLabel = humanInGroup ? '👤 ' : '';
+    return '<div class="'+groupCls+'">'
+      + '<div class="wprev-group-h">'+headerLabel+'GRUPO '+GROUP_LABELS[gi]
       +   '<span class="wprev-group-count">'+sortedTable.length+' / '+TEAMS_PER_GROUP+'</span></div>'
       + '<div class="wprev-table-scroll"><div class="wprev-table">'+rows+'</div></div>'
       + _renderJornadas(gi, group)

@@ -8087,14 +8087,18 @@ window._showSimProgress = function(opts, onDone){
         </div>
       </div>
 
-      <label class="lext-label">Valor-Poder-Nivel equipo · solo se usan si la plantilla está vacía</label>
+      <label class="lext-label">Valor-Poder-Nivel equipo</label>
       <div class="lext-grid4">
         <div><span class="lext-mini-lbl">GLOBAL</span><input class="lext-input lext-mini" id="lext-team-pw-glob" type="number" min="1" max="100" value="75" /></div>
         <div><span class="lext-mini-lbl">ATAQUE</span><input class="lext-input lext-mini" id="lext-team-pw-atk" type="number" min="1" max="100" value="75" /></div>
         <div><span class="lext-mini-lbl">MEDIO</span><input class="lext-input lext-mini" id="lext-team-pw-mid" type="number" min="1" max="100" value="75" /></div>
         <div><span class="lext-mini-lbl">DEFENSA</span><input class="lext-input lext-mini" id="lext-team-pw-def" type="number" min="1" max="100" value="75" /></div>
       </div>
-      <div class="lext-sub">⚠️ Si pegas una plantilla, estos valores se IGNORAN: el motor calcula GLOBAL = media de los 11 mejores jugadores, ATAQUE = media de delanteros, MEDIO = media de centrocampistas y DEFENSA = media de defensas. Solo se usan estos valores manuales como fallback cuando la plantilla del equipo está vacía.</div>
+      <label style="display:flex;align-items:center;gap:8px;font-family:Rajdhani,sans-serif;font-size:13px;color:#f0c040;margin-top:8px;cursor:pointer;user-select:none;padding:8px 10px;background:rgba(240,192,64,.08);border:1px solid rgba(240,192,64,.35);border-radius:6px;">
+        <input type="checkbox" id="lext-team-stats-manual" style="width:16px;height:16px;cursor:pointer;flex-shrink:0;">
+        <span>🔒 <b>Forzar estos valores</b> (admin) — sobreescribe el auto-cálculo de la plantilla</span>
+      </label>
+      <div class="lext-sub">Por defecto, los valores se calculan automáticamente desde la plantilla: ATAQUE = media de delanteros, MEDIO = media de centrocampistas, DEFENSA = media de defensas, GLOBAL = (ATQ+MED+DEF)/3. Marca <b>🔒 Forzar</b> si quieres que los números que escribas arriba se usen tal cual, ignorando el auto-cálculo. Si la plantilla está vacía, también se usan estos valores como fallback aunque no esté marcado.</div>
 
       <label class="lext-label">🟨 Agresividad (1-99) · tendencia a cometer faltas y recibir tarjetas</label>
       <div style="display:flex;align-items:center;gap:10px;">
@@ -9024,6 +9028,24 @@ Tottenham
        admin-overrides explícitos. */
     if (_lineStatsCache && t && _lineStatsCache.has(t)) {
       return _lineStatsCache.get(t);
+    }
+    /* 🔒 Forzar valores manuales (admin override). Petición usuario
+       2026-05-02: con este flag activo, los valores que el admin escribe
+       en el editor (t.power/atk/mid/def) son la fuente de verdad y se
+       devuelven tal cual, ignorando el auto-cálculo desde la plantilla.
+       Si una línea está vacía en los valores manuales, cae a t.power. */
+    if (t && t.useManualStats) {
+      var manualGlob = Number(t.power) || 50;
+      var manualResult = {
+        glob: manualGlob,
+        atk:  Number(t.atk) || manualGlob,
+        mid:  Number(t.mid) || manualGlob,
+        def:  Number(t.def) || manualGlob
+      };
+      if (_lineStatsCache && t) {
+        try { _lineStatsCache.set(t, manualResult); } catch(_){}
+      }
+      return manualResult;
     }
     var players = (t && Array.isArray(t.players)) ? t.players : [];
     function _avg(pool){
@@ -9969,6 +9991,8 @@ Tottenham
     var aliasEl = document.getElementById('lext-team-efootball-alias'); if(aliasEl) aliasEl.value='';
     var bud = document.getElementById('lext-team-budget'); if(bud) bud.value='';
     var ta = document.getElementById('lext-team-squad-paste'); if(ta) ta.value='';
+    var _manualClr = document.getElementById('lext-team-stats-manual');
+    if (_manualClr) _manualClr.checked = false;
     // Reset tipo a IA por defecto. El emoji se queda vacío hasta que
     // el admin pulse Humano explícitamente.
     FORM_TIPO = 'ia';
@@ -10264,6 +10288,9 @@ Tottenham
     document.getElementById('lext-team-pw-atk').value = Number(t.atk)||Number(t.power)||75;
     document.getElementById('lext-team-pw-mid').value = Number(t.mid)||Number(t.power)||75;
     document.getElementById('lext-team-pw-def').value = Number(t.def)||Number(t.power)||75;
+    /* 🔒 Forzar valores manuales: el flag se persiste por equipo. */
+    var _manualEditEl = document.getElementById('lext-team-stats-manual');
+    if (_manualEditEl) _manualEditEl.checked = !!t.useManualStats;
     /* Agresividad: default 50 para equipos legacy que no la tenían. */
     var _aggrEdit = document.getElementById('lext-team-aggr');
     if (_aggrEdit) _aggrEdit.value = Number(t.aggressiveness) > 0 ? Number(t.aggressiveness) : 50;
@@ -10440,6 +10467,11 @@ Tottenham
     var pwAtk = parseInt(document.getElementById('lext-team-pw-atk').value,10)||50;
     var pwMid = parseInt(document.getElementById('lext-team-pw-mid').value,10)||50;
     var pwDef = parseInt(document.getElementById('lext-team-pw-def').value,10)||50;
+    /* 🔒 Forzar valores manuales (admin override). Petición usuario
+       2026-05-02: poder fijar GLOBAL/ATQ/MED/DEF a la fuerza, sin que
+       computeLineStats lo recalcule desde la plantilla. */
+    var _manualEl = document.getElementById('lext-team-stats-manual');
+    var useManualStats = !!(_manualEl && _manualEl.checked);
     /* Agresividad (1-99). Default 50 = media liga. Un equipo 70 comete
        ~2× más faltas, ~2× más amarillas y ~2× más probabilidad de roja
        que uno 50. Afecta a TODAS las competiciones. */
@@ -10505,6 +10537,7 @@ Tottenham
         t.efootballAlias=efootballAlias;
         t.power=pwGlob; t.atk=pwAtk; t.mid=pwMid; t.def=pwDef;
         t.aggressiveness=pwAggr;
+        t.useManualStats = useManualStats;
         if(ligaEa){
           t.isHuman = (FORM_TIPO === 'human');
           t.humanEmoji = t.isHuman ? FORM_HUMAN_EMOJI : '';
@@ -10530,7 +10563,7 @@ Tottenham
       } else {
         /* Ni por id ni por nombre. Caemos al flujo de creación con
            los mismos datos para no perder el trabajo del admin.    */
-        var recoverTeam = {id:EDITING_TEAM_ID||uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,aggressiveness:pwAggr,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
+        var recoverTeam = {id:EDITING_TEAM_ID||uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,aggressiveness:pwAggr,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed,useManualStats:useManualStats};
         if(ligaEa){
           recoverTeam.isHuman   = (FORM_TIPO === 'human');
           recoverTeam.humanEmoji = recoverTeam.isHuman ? FORM_HUMAN_EMOJI : '';
@@ -10539,7 +10572,7 @@ Tottenham
         EDITING_TEAM_ID = recoverTeam.id;
       }
     } else {
-      var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,aggressiveness:pwAggr,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
+      var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,aggressiveness:pwAggr,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed,useManualStats:useManualStats};
       if(ligaEa){
         newTeam.isHuman   = (FORM_TIPO === 'human');
         newTeam.humanEmoji = newTeam.isHuman ? FORM_HUMAN_EMOJI : '';

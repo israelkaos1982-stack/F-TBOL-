@@ -34,6 +34,16 @@ plantilla está totalmente vacía, usa los valores manuales guardados
 (`t.atk/mid/def/power`) — esto preserva ligas con admin-overrides
 explícitos del editor.
 
+#### 🔒 Forzar valores manuales (admin, 2026-05-02)
+
+El editor de Resto de Ligas tiene un toggle "🔒 Forzar estos valores
+(admin)". Cuando el admin lo activa, `t.useManualStats = true` en el
+state del equipo. `computeLineStats(t)` detecta el flag y devuelve los
+valores `t.power/atk/mid/def` tal cual — sin auto-derivar nada de la
+plantilla. Esto permite, por ejemplo, fijar el GLOBAL de un equipo a
+65 incluso si la media de las líneas dice 71. Si el flag está desactivado
+(default), se aplica el auto-cálculo descrito arriba.
+
 El simulador `simulateMatch(tA, tB)` usa la fórmula:
 ```
 attackForce = ATK + 0.5·MID + 0.1·GLOBAL

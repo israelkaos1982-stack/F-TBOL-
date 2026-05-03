@@ -18352,7 +18352,10 @@ document.addEventListener('DOMContentLoaded', function() {
      UCL · PREVIA DE CHAMPIONS — Estructura oficial (2026-04-30)
      · 63 equipos = 28 directos + 35 del Open Qualifier
      · Ronda 1 (eliminatorias):
-         - 3 EXENTOS por mejor power (proxy de coef. UEFA) → Ronda Final
+         - 3 EXENTOS → Ronda Final (regla 2026-05-02):
+            · 1 fijo: 5º de Liga EA Sports (entrada manual EA→Europa).
+            · 2 al azar: entre los 2º de Bélgica, Turquía, Suiza,
+              Dinamarca y Escocia. El sorteo se renueva con cada Draw.
          - 60 equipos juegan 30 cruces ida + vuelta:
             · CABEZAS de serie (top 30 power) vs NO CABEZAS (bottom 30)
             · Restricción: no enfrentar dos equipos del mismo país
@@ -18446,14 +18449,80 @@ document.addEventListener('DOMContentLoaded', function() {
     return arr;
   }
 
-  /* Los 3 mejores power van directos a Ronda Final (exentos). Los 60
-     restantes se dividen en CABEZAS (siguientes 30 mejores) y
-     NO CABEZAS (30 peores). Devuelve { byes, heads, nonHeads } con
-     pool ya ordenado por power desc. */
+  /* Selección de los 3 EXENTOS (regla del usuario, 2026-05-02):
+       - 1 fijo: el 5º de Liga EA Sports. Como Liga EA está blacklisted
+         del cómputo automático, ese equipo entra al pool vía la
+         pantalla manual "EA Sports → Europa" → su `league` en el pool
+         es 'ea-sports-manual'. Si admin añadió varios manuales para
+         uclPrev, escogemos el de mayor power.
+       - 2 aleatorios: 2 al azar de los 2º de {Bélgica, Turquía, Suiza,
+         Dinamarca, Escocia}. En el pool tienen `league` igual al slug
+         del país. Cada Draw produce un sorteo distinto (la persistencia
+         vive en wprev_state_v1, así que el sorteo SOLO cambia cuando
+         se vuelve a hacer Draw).
+       - Si por algún motivo faltan candidatos (admin no añadió el
+         español, alguna de las 5 ligas no está simulada), rellenamos
+         con los siguientes equipos por power para no dejar plazas
+         vacías.
+
+     El resto del pool (los 60 que no son byes) se divide en CABEZAS
+     (los 30 mejores por power) y NO CABEZAS (los 30 peores). */
   function splitByesAndR1(pool){
-    var byes     = pool.slice(0, BYES_COUNT);
-    var heads    = pool.slice(BYES_COUNT, BYES_COUNT + R1_TIES);
-    var nonHeads = pool.slice(BYES_COUNT + R1_TIES, BYES_COUNT + 2*R1_TIES);
+    var BYE_SPAIN_LEAGUE = 'ea-sports-manual';
+    var BYE_RANDOM_LEAGUES = ['belgica','turquia','suiza','dinamarca','escocia'];
+    var taken = {};
+    var byes = [];
+
+    /* 1. Bye fijo: el 5º de Liga EA Sports (manual). Si hay varios
+       en uclPrev, prevalece el de mayor power. */
+    var spainBest = -1;
+    for(var i = 0; i < pool.length; i++){
+      if(pool[i] && pool[i].league === BYE_SPAIN_LEAGUE){
+        if(spainBest === -1 || (Number(pool[i].power)||0) > (Number(pool[spainBest].power)||0)){
+          spainBest = i;
+        }
+      }
+    }
+    if(spainBest !== -1){
+      byes.push(pool[spainBest]);
+      taken[spainBest] = true;
+    }
+
+    /* 2. 2 aleatorios entre {Bélgica, Turquía, Suiza, Dinamarca, Escocia}.
+       Fisher-Yates sobre los índices candidatos. */
+    var foreign = [];
+    for(var fi = 0; fi < pool.length; fi++){
+      if(taken[fi]) continue;
+      if(BYE_RANDOM_LEAGUES.indexOf(pool[fi] && pool[fi].league) !== -1){
+        foreign.push(fi);
+      }
+    }
+    for(var sf = foreign.length - 1; sf > 0; sf--){
+      var sj = Math.floor(Math.random() * (sf + 1));
+      var tmpIdx = foreign[sf]; foreign[sf] = foreign[sj]; foreign[sj] = tmpIdx;
+    }
+    while(byes.length < BYES_COUNT && foreign.length){
+      var idx = foreign.shift();
+      byes.push(pool[idx]);
+      taken[idx] = true;
+    }
+
+    /* 3. Fallback: rellenar por power si faltan byes. El pool ya viene
+       ordenado por power desc desde _normalizePool. */
+    for(var fb = 0; fb < pool.length && byes.length < BYES_COUNT; fb++){
+      if(taken[fb]) continue;
+      byes.push(pool[fb]);
+      taken[fb] = true;
+    }
+
+    /* 4. Resto = pool sin byes, manteniendo el orden por power. Los 30
+       primeros son CABEZAS, los 30 siguientes son NO CABEZAS. */
+    var rest = [];
+    for(var ri = 0; ri < pool.length; ri++){
+      if(!taken[ri]) rest.push(pool[ri]);
+    }
+    var heads    = rest.slice(0, R1_TIES);
+    var nonHeads = rest.slice(R1_TIES, 2 * R1_TIES);
     return { byes: byes, heads: heads, nonHeads: nonHeads };
   }
 

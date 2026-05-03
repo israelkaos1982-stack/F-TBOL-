@@ -9428,10 +9428,24 @@
     var lB = _gmLogo(away);
     var shA = lA ? '<img src="'+lA+'" style="width:90px;height:90px;object-fit:contain;display:block;margin:0 auto 6px;">' : '';
     var shB = lB ? '<img src="'+lB+'" style="width:90px;height:90px;object-fit:contain;display:block;margin:0 auto 6px;">' : '';
+    /* Alias en eFootball: bajo el nombre del equipo IA cuando el rival
+       es humano. Petición usuario 2026-05-02. Mismo criterio que el
+       prepartido y que `buildMatchCard` (HvIA: solo lado IA; HvH y
+       IAvIA no muestran alias). */
+    var _gmHumA = (typeof esHumano === 'function') ? !!esHumano(home) : false;
+    var _gmHumB = (typeof esHumano === 'function') ? !!esHumano(away) : false;
+    var _gmAliasFor = (typeof window.getTeamEfootballAlias === 'function')
+      ? window.getTeamEfootballAlias : function(){ return ''; };
+    var _gmHomeAliasTxt = (_gmHumB && !_gmHumA) ? _gmAliasFor(home) : '';
+    var _gmAwayAliasTxt = (_gmHumA && !_gmHumB) ? _gmAliasFor(away) : '';
+    function _gmAliasHtml(txt){
+      if(!txt) return '';
+      return '<div class="gm-team-alias" style="font-family:Rajdhani,sans-serif;font-size:10px;font-weight:600;letter-spacing:.5px;color:rgba(255,255,255,.65);text-align:center;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;">🎮 '+String(txt).replace(/[<>]/g,'')+'</div>';
+    }
     var elA = document.getElementById('gm-team-a-name');
     var elB = document.getElementById('gm-team-b-name');
-    if (elA) elA.innerHTML = shA + '<span>' + home + '</span>';
-    if (elB) elB.innerHTML = shB + '<span>' + away + '</span>';
+    if (elA) elA.innerHTML = shA + '<span>' + home + '</span>' + _gmAliasHtml(_gmHomeAliasTxt);
+    if (elB) elB.innerHTML = shB + '<span>' + away + '</span>' + _gmAliasHtml(_gmAwayAliasTxt);
     document.getElementById('gm-score').textContent = _gm.sc.a + '-' + _gm.sc.b;
     /* Reconstruir acta si estamos restaurando un partido en segundo plano */
     var _actaListEl = document.getElementById('gm-acta-list');
@@ -11146,15 +11160,24 @@
     var lA2 = cAwayHuman ? (getLogoEquipo(m.away) || '') : '';
     var bgShH = lH2 ? '<img src="'+lH2+'" alt="" style="position:absolute;left:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
     var bgShAw = lA2 ? '<img src="'+lA2+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
+    /* Alias eFootball: bajo el nombre del IA cuando rival es humano. */
+    var _iaAliasFor = (typeof window.getTeamEfootballAlias === 'function')
+      ? window.getTeamEfootballAlias : function(){ return ''; };
+    var _iaHomeAliasTxt = (cAwayHuman && !cHomeHuman) ? _iaAliasFor(m.home) : '';
+    var _iaAwayAliasTxt = (cHomeHuman && !cAwayHuman) ? _iaAliasFor(m.away) : '';
+    function _iaAliasHtml(txt){
+      if(!txt) return '';
+      return '<div class="ml-team-alias" style="font-family:Rajdhani,sans-serif;font-size:9px;font-weight:600;letter-spacing:.4px;color:rgba(255,255,255,.55);text-align:center;line-height:1.1;white-space:nowrap;margin-top:2px;">\ud83c\udfae '+String(txt).replace(/[<>]/g,'')+'</div>';
+    }
     return '<div class="match-live-wrap" style="' + wrapStyle + '">'
       + bgShH + bgShAw
       + '<div class="ml-header">'
-      + '<div class="ml-team" style="z-index:1;position:relative;"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + humanIcon(m.home) + m.home + '</div></div>'
+      + '<div class="ml-team" style="z-index:1;position:relative;"><div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div><div class="ml-team-name">' + humanIcon(m.home) + m.home + '</div>' + _iaAliasHtml(_iaHomeAliasTxt) + '</div>'
       + '<div class="ml-score-wrap" style="z-index:1;">'
       + '<div class="ml-score state-finished"><span>' + m.gh + '</span>\u2013<span>' + m.ga + '</span></div>'
       + '<div class="ml-timer finished" style="cursor:default;">&#127937; FIN</div>'
       + '</div>'
-      + '<div class="ml-team" style="z-index:1;position:relative;"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + humanIcon(m.away) + m.away + '</div></div>'
+      + '<div class="ml-team" style="z-index:1;position:relative;"><div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div><div class="ml-team-name">' + humanIcon(m.away) + m.away + '</div>' + _iaAliasHtml(_iaAwayAliasTxt) + '</div>'
       + '</div>'
       + '<div class="ml-acta" data-ia="1">'
       + '<button class="ml-acta-toggle" onclick="window.iaActaTog(\'' + cid + '\')">'
@@ -11203,12 +11226,22 @@
     var cardStyleClean = cardStyle.replace(/background:[^;]+;/g,'').replace(/border:[^;]+;/g,'').replace(/box-shadow:[^;]+;/g,'');
     var hvhBorder = isHvH2 ? 'border:1px solid rgba(255,90,170,.75);box-shadow:0 0 14px rgba(255,80,160,.3),inset 0 0 0 1px rgba(255,90,170,.2);' : '';
     var wrapStyle = 'position:relative;overflow:hidden;' + gradAdd + cardStyleClean + hvhBorder;
+    /* Alias eFootball: bajo el nombre del IA cuando el rival es humano. */
+    var _iapAliasFor = (typeof window.getTeamEfootballAlias === 'function')
+      ? window.getTeamEfootballAlias : function(){ return ''; };
+    var _iapHomeAlias = (isAwayHuman2 && !isHomeHuman2) ? _iapAliasFor(m.home) : '';
+    var _iapAwayAlias = (isHomeHuman2 && !isAwayHuman2) ? _iapAliasFor(m.away) : '';
+    function _iapAliasHtml(txt){
+      if(!txt) return '';
+      return '<div class="ml-team-alias" style="font-family:Rajdhani,sans-serif;font-size:9px;font-weight:600;letter-spacing:.4px;color:rgba(255,255,255,.55);text-align:center;line-height:1.1;white-space:nowrap;margin-top:2px;">🎮 '+String(txt).replace(/[<>]/g,'')+'</div>';
+    }
     return '<div class="match-live-wrap" id="iapnd-' + mk + '" style="' + wrapStyle + '">'
       + bgShH + bgShA2
       + '<div class="ml-header">'
       + '<div class="ml-team" style="z-index:1;position:relative;">'
       + '<div class="ml-shield-wrap">' + iaShieldSVG(m.home) + '</div>'
       + '<div class="ml-team-name">' + m.home + '</div>'
+      + _iapAliasHtml(_iapHomeAlias)
       + '</div>'
       + '<div class="ml-score-wrap" style="flex-direction:column;gap:6px;z-index:1;">'
       + '<div class="ml-score"><span id="ia-sc-' + mk + '-a">–</span>&ndash;<span id="ia-sc-' + mk + '-b">–</span></div>'
@@ -11216,6 +11249,7 @@
       + '<div class="ml-team" style="z-index:1;position:relative;">'
       + '<div class="ml-shield-wrap">' + iaShieldSVG(m.away) + '</div>'
       + '<div class="ml-team-name">' + m.away + '</div>'
+      + _iapAliasHtml(_iapAwayAlias)
       + '</div>'
       + '</div>'
       + '<div id="ia-acta-' + mk + '" style="display:none;border-top:1px solid rgba(255,255,255,.07);"></div>'

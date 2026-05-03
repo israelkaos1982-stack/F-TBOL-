@@ -5288,6 +5288,22 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var _humAway = (typeof window.esHumano === 'function') ? !!window.esHumano(away) : false;
       var isHvHCenter = _humHome && _humAway;
       var _humanInvolved = _humHome || _humAway;
+      /* Alias en eFootball: bajo el nombre del equipo IA cuando el rival
+         es humano. Petición usuario 2026-05-02 — cuando un humano juega
+         contra un equipo de Resto de Ligas que no existe en eFootball,
+         se debe ver el nombre real arriba y el alias del juego debajo
+         (p.ej. "BACKA TOPOLA" + "🎮 2ª SAMPDORIA"). En HvH y IAvIA no
+         se muestra alias. */
+      var _aliasFor = (typeof window.getTeamEfootballAlias === 'function')
+        ? window.getTeamEfootballAlias : function(){ return ''; };
+      var _ppHomeAliasTxt = (_humAway && !_humHome) ? _aliasFor(home) : '';
+      var _ppAwayAliasTxt = (_humHome && !_humAway) ? _aliasFor(away) : '';
+      function _ppAliasHtml(txt){
+        if(!txt) return '';
+        return '<div style="font-family:Rajdhani,sans-serif;font-size:10px;font-weight:600;letter-spacing:.5px;color:rgba(255,255,255,.65);text-align:center;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;">🎮 '+String(txt).replace(/[<>]/g,'')+'</div>';
+      }
+      var _ppHomeAliasHtml = _ppAliasHtml(_ppHomeAliasTxt);
+      var _ppAwayAliasHtml = _ppAliasHtml(_ppAwayAliasTxt);
       var durText;
       if (window._ppDurationMin) {
         durText = window._ppDurationMin + ' min';
@@ -5303,9 +5319,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         + '<div class="pp-vs-mid" style="padding:10px 0 0;font-size:28px;">VS</div>'
         + durHtml
         + '</div>';
-      vs.innerHTML = '<div style="flex:1;text-align:center;min-width:0;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+home.toUpperCase()+'</div>'+_formBtnHtml('home')+'</div>'
+      vs.innerHTML = '<div style="flex:1;text-align:center;min-width:0;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+home.toUpperCase()+'</div>'+_ppHomeAliasHtml+_formBtnHtml('home')+'</div>'
         + centerHtml
-        + '<div style="flex:1;text-align:center;min-width:0;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+away.toUpperCase()+'</div>'+_formBtnHtml('away')+'</div>';
+        + '<div style="flex:1;text-align:center;min-width:0;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+away.toUpperCase()+'</div>'+_ppAwayAliasHtml+_formBtnHtml('away')+'</div>';
       /* Wire form buttons via addEventListener (more reliable on mobile than inline onclick) */
       ['home','away'].forEach(function(side) {
         var b = document.getElementById('pp-form-' + side);

@@ -18400,8 +18400,52 @@ document.addEventListener('DOMContentLoaded', function() {
     if(typeof e === 'object' && typeof e.media === 'number') return e.media;
     return 70;
   }
-  function loadState(){ try { return JSON.parse(localStorage.getItem(WPREV_KEY)||'null'); } catch(_){ return null; } }
-  function saveState(s){ try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); } catch(_){} }
+  function loadState(){
+    var s;
+    try { s = JSON.parse(localStorage.getItem(WPREV_KEY)||'null'); } catch(_){ return null; }
+    if(!s) return null;
+    /* Auto-migración 2026-05-02: si los byes vienen del flujo viejo
+       (regla "top 3 power") y aún no se ha simulado nada (phase
+       'paired'), recalculamos los byes con la regla nueva (5º España
+       fijo + 2 al azar de Bel/Tur/Sui/Den/Sco). Solo aplicamos esto
+       cuando es 100% seguro — phase='paired' significa que las
+       cruces se sortearon pero no hay IDA jugada todavía, así que
+       reordenar byes+heads+nonHeads no destruye datos del usuario.
+       Para fases posteriores (ida-played, rf-drawn, done) el admin
+       tendrá que hacer Reset si quiere aplicar la regla nueva. */
+    if(s.byesRule !== 'spain5+2random_v1' && s.phase === 'paired'
+        && Array.isArray(s.pool) && s.pool.length){
+      try {
+        var newSplit = splitByesAndR1(s.pool);
+        var newPairs = pairR1Ties(newSplit.heads, newSplit.nonHeads);
+        s.byes = newSplit.byes;
+        s.ties = newPairs.map(function(p){
+          return {
+            idx: p.idx,
+            teamH: p.teamH, teamA: p.teamA,
+            idaPlayed: false, played: false, winner: null,
+            idaGh:null, idaGa:null,
+            vueltaGh:null, vueltaGa:null,
+            etGh:null, etGa:null, etDecided:false,
+            penGh:null, penGa:null, penDecided:false,
+            awayDecided: false,
+            aggH:null, aggA:null
+          };
+        });
+        s.byesRule = 'spain5+2random_v1';
+        s.ts = Date.now();
+        try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); } catch(_){}
+      } catch(_){}
+    }
+    return s;
+  }
+  function saveState(s){
+    /* Marcamos los nuevos saves como conformes a la regla de byes
+       2026-05-02 para que la auto-migración solo se dispare en
+       estados antiguos. */
+    if(s && !s.byesRule) s.byesRule = 'spain5+2random_v1';
+    try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); } catch(_){}
+  }
   function clearState(){
     try {
       localStorage.removeItem(WPREV_KEY);
@@ -19197,7 +19241,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var byesHtml = '';
     if(s.byes && s.byes.length){
       byesHtml = '<div style="padding:8px 14px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.7);">'
-        + '⭐ EXENTOS (mejor power) → directos a Ronda Final:'
+        + '⭐ EXENTOS (5º España + 2 al azar de Bel/Tur/Sui/Den/Sco) → directos a Ronda Final:'
         + '</div>'
         + '<div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 8px;">';
       s.byes.forEach(function(t){

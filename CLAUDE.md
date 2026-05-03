@@ -176,6 +176,31 @@ plazas quedaban como TBD-OQ-XX porque las ligas medias/pequeñas rara
 vez tienen TODAS las jornadas simuladas cuando el admin abre el OQ.
 El fix fue separar zonas directas de zonas feeder.
 
+## EXENTOS Previa Champions (obligatorio, 2026-05-02)
+
+Los 3 EXENTOS — los equipos que pasan directos a la Ronda Final de la
+Previa de Champions sin jugar la Ronda 1 de eliminatorias — siguen una
+regla concreta del usuario, no "los 3 mejores por power":
+
+1. **Bye fijo**: el 5º clasificado de Liga EA Sports. Entra al pool de
+   Previa por la pantalla manual "EA Sports → Europa" (Liga EA está
+   blacklisted del cómputo automático), así que en el pool tiene
+   `league: 'ea-sports-manual'`. Si el admin añadió varios manuales
+   para `uclPrev`, prevalece el de mayor power.
+2. **2 byes aleatorios**: 2 elegidos al azar de entre los 2º
+   clasificados de **Bélgica, Turquía, Suiza, Dinamarca y Escocia**.
+   En el pool tienen `league` igual al slug del país. El sorteo se
+   renueva en cada `Draw` (`splitByesAndR1` en `misc_body_2.html`).
+   Una vez sorteados, los byes se persisten en `wprev_state_v1`, así
+   que sobreviven a recargas hasta el próximo Draw.
+3. **Fallback**: si faltan candidatos (admin no añadió el español o
+   alguna de las 5 ligas no está simulada), se rellena con los
+   siguientes equipos del pool por power para no dejar plazas vacías.
+
+Los otros 60 equipos del pool (los no-bye) se dividen en CABEZAS de
+serie (los 30 mejores por power) y NO CABEZAS (los 30 peores) y
+forman las 30 eliminatorias de Ronda 1.
+
 ## Duración del cronómetro del partido (obligatorio, siempre)
 
 **TIEMPOS OFICIALES** (definidos en

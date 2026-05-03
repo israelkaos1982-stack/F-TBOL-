@@ -8395,6 +8395,42 @@ Tottenham
   function uid(){ return 't'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
   function storeKey(k){ return 'ligaExt_'+k; }
 
+  /* Limpieza one-shot al cargar la p\u00e1gina: las claves `ligaExt_<k>_backup`
+     son legacy (2026-05-02 en adelante saveData ya no las escribe; la
+     misma data vive en `_protected`). Las borramos aqu\u00ed para liberar
+     espacio inmediatamente \u2014 sin esperar a que un saveData chocara con
+     QuotaExceeded. Se ejecuta una sola vez por carga. */
+  try {
+    var _legacyBackups = [];
+    for (var _bi = 0; _bi < localStorage.length; _bi++) {
+      var _bk = localStorage.key(_bi);
+      if (_bk && /^ligaExt_.+_backup$/.test(_bk)) _legacyBackups.push(_bk);
+    }
+    _legacyBackups.forEach(function(k){
+      try { localStorage.removeItem(k); } catch(_){}
+    });
+    /* Tambi\u00e9n recortamos snapshots viejos: dejamos solo los 2 m\u00e1s
+       recientes por liga (igual que saveData ahora). Antes se
+       guardaban hasta 5 \u2014 los 3 m\u00e1s antiguos por liga sobran. */
+    var _snapsByLiga = {};
+    for (var _si = 0; _si < localStorage.length; _si++) {
+      var _sk = localStorage.key(_si);
+      if (!_sk) continue;
+      var _m = _sk.match(/^(ligaExt_.+)_snap_(\d+)$/);
+      if (!_m) continue;
+      var _liga = _m[1];
+      (_snapsByLiga[_liga] = _snapsByLiga[_liga] || []).push(_sk);
+    }
+    Object.keys(_snapsByLiga).forEach(function(liga){
+      var arr = _snapsByLiga[liga];
+      if (arr.length <= 2) return;
+      arr.sort(); /* timestamp ascendente */
+      arr.slice(0, arr.length - 2).forEach(function(old){
+        try { localStorage.removeItem(old); } catch(_){}
+      });
+    });
+  } catch(_){}
+
   /* Helper defensivo para localizar una fila en data.teams cuando
      solo tenemos un id (CURRENT_SQUAD_TEAM / EDITING_TEAM_ID) pero
      por sincronizaci\u00f3n con el servidor, cache stale o regeneraci\u00f3n
@@ -8820,19 +8856,44 @@ Tottenham
           err.name === 'QuotaExceededError' ||
           err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
         if(!isQuota) return false;
-        /* Limpiar snapshots viejos (ligaExt_*_snap_<ts>) globalmente,
-           empezando por los más antiguos. Conservamos el _backup y el
-           main de cada liga — son las claves críticas. */
+        /* Limpieza progresiva cuando el navegador se queda sin espacio.
+           Reportado 2026-05-02 (alert visible en pantalla del usuario:
+           "localStorage lleno"). Causa: cada saveData escribía hasta 8
+           copias del mismo JSON por liga (main + _protected + _backup
+           + 5 snaps × 51 ligas = ~33 MB en el peor caso vs ~5–10 MB
+           que da el navegador). Estrategia escalonada:
+             1. Borrar snapshots datados (_snap_<ts>) — los 5 más viejos
+                primero. Son históricos, los menos críticos.
+             2. Borrar TODOS los _backup legacy — su contenido lo cubre
+                _protected (que se actualiza en cada saveData con
+                teams.length > 0).
+             3. Borrar snapshots restantes hasta agotar.
+           Tras cada paso reintentamos el setItem. Devolvemos true en
+           cuanto cabe; false si tras todo no hay forma. */
+        function _retry(){
+          try { localStorage.setItem(key, value); return true; }
+          catch(_) { return false; }
+        }
         try {
-          var snaps = [];
+          var snaps = [], backups = [];
           for(var i=0; i<localStorage.length; i++){
             var kk = localStorage.key(i);
-            if(kk && /^ligaExt_.+_snap_\d+$/.test(kk)) snaps.push(kk);
+            if(!kk) continue;
+            if(/^ligaExt_.+_snap_\d+$/.test(kk)) snaps.push(kk);
+            else if(/^ligaExt_.+_backup$/.test(kk)) backups.push(kk);
           }
+          /* Paso 1: snapshots ordenados ascendentemente (más antiguo
+             primero). */
           snaps.sort();
           while(snaps.length){
             try { localStorage.removeItem(snaps.shift()); } catch(_){}
-            try { localStorage.setItem(key, value); return true; } catch(_){}
+            if(_retry()) return true;
+          }
+          /* Paso 2: _backup legacy (cualquier liga) — los datos viven
+             ya en _protected, son redundantes. */
+          for(var b=0; b<backups.length; b++){
+            try { localStorage.removeItem(backups[b]); } catch(_){}
+            if(_retry()) return true;
           }
         } catch(_){}
         return false;
@@ -8873,23 +8934,22 @@ Tottenham
       try { alert('⚠️ El navegador está sin espacio (localStorage lleno) y no he podido guardar la plantilla en local.\n\nLos cambios se han subido al servidor, pero conviene cerrar otras pestañas o limpiar caché para que el guardado local funcione de nuevo.'); } catch(_){}
     }
     /* ── BACKUPS AUTOMÁTICOS ──
-       Cada guardado escribe además:
-         1) ligaExt_<k>_backup           → backup inmediato (pisa el anterior)
-         2) ligaExt_<k>_backup_<ts>      → historial hasta 5 snapshots
-       Si el admin pierde la plantilla por cualquier motivo (wipe
-       del navegador, fetch fallido, bug de importación), siempre
-       queda un registro reciente del que tirar vía
-       emergencyRestore o lextDeepRecoverAll. */
-    if (serialized != null) {
+       Snapshots datados (_snap_<ts>) hasta 2 más recientes. El
+       _backup separado se eliminó (2026-05-02) por redundancia con
+       _protected y por el peso en localStorage (51 ligas × 8 copias
+       = quota fácilmente). Si el admin pierde la plantilla, queda:
+         · main (autoritativo)
+         · _protected (mirror anti-wipe, escrito en cada saveData)
+         · _snap_<ts> × 2 (historial mínimo, útil para recuperación
+           de cambios accidentales)
+       loadData mantiene el fallback completo: main → _protected →
+       _backup (legacy, se ignora si no existe) → snaps. */
+    if (serialized != null && _saveOk) {
       try {
         var nowMs = Date.now();
-        localStorage.setItem('ligaExt_'+k+'_backup', serialized);
-        /* Historial: si hay jugadores suficientes, mantener snapshot
-           datado. Si d está vacío (p.ej. wipe), NO escribimos snapshot
-           — los snapshots existentes sobreviven. */
         if (_countPlayers(d) > 0) {
-          localStorage.setItem('ligaExt_'+k+'_snap_'+nowMs, serialized);
-          /* Limpieza: mantener solo los 5 snapshots más recientes */
+          _setItemSafe('ligaExt_'+k+'_snap_'+nowMs, serialized);
+          /* Limpieza: mantener solo los 2 snapshots más recientes */
           var snaps = [];
           for (var i = 0; i < localStorage.length; i++) {
             var kk = localStorage.key(i);
@@ -8897,9 +8957,9 @@ Tottenham
               snaps.push(kk);
             }
           }
-          if (snaps.length > 5) {
+          if (snaps.length > 2) {
             snaps.sort();
-            snaps.slice(0, snaps.length - 5).forEach(function(old){
+            snaps.slice(0, snaps.length - 2).forEach(function(old){
               try { localStorage.removeItem(old); } catch(_){}
             });
           }

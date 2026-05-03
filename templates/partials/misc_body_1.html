@@ -4595,11 +4595,111 @@ window._showSimProgress = function(opts, onDone){
 <script>
 (function(){
   var KEY = 'comp_icons_v1';
+  /* Compresión obligatoria de iconos antes de guardar — petición
+     usuario 2026-05-02. Antes guardábamos el dataURL crudo del
+     archivo subido (PNG/JPG sin redimensionar) y un PNG de 1080×1080
+     ocupaba 200–500 KB. Con 12 cajas de Competiciones eso pasaba
+     fácilmente del cap de 2 MB de la "carpeta" comp_icons_v1 →
+     localStorage.setItem fallaba en silencio (catch vacío) y al
+     recargar las imágenes desaparecían (visible en fotos del
+     usuario: cambiado vs recargado).
+
+     Nuevo flujo:
+       1. FileReader → dataURL crudo
+       2. Image() → pintar en <canvas> 256×256 (manteniendo aspect
+          ratio con padding transparente).
+       3. canvas.toDataURL('image/png') → dataURL recodificado.
+       4. Si el dataURL pesa >100 KB tras compresión, intentamos JPEG
+          calidad 0.85 — más pequeño pero pierde transparencia.
+       5. Si tras todo sigue >100 KB, alertamos y no guardamos.
+     A 256×256 PNG, un escudo típico ronda 15–40 KB, así que 12 cajas
+     son ~250–500 KB total. Bien por debajo del cap de 2 MB. */
+  var MAX_ICON_PX = 256;
+  var ICON_BYTES_HARD_CAP = 100 * 1024;        /* 100 KB por icono   */
+  var TOTAL_BYTES_SOFT_CAP = 1500 * 1024;      /* 1.5 MB para todo el comp_icons_v1 */
+
+  function _approxBlobBytes(dataUrl){
+    /* Tamaño aproximado del payload en bytes. Para un dataURL
+       'data:image/png;base64,...' el contenido base64 codifica con
+       overhead ~33%, así que cada 4 chars base64 = 3 bytes reales. */
+    if(typeof dataUrl !== 'string') return 0;
+    var i = dataUrl.indexOf(',');
+    var payload = i >= 0 ? dataUrl.slice(i+1) : dataUrl;
+    return Math.ceil(payload.length * 3 / 4);
+  }
+
+  function _compressIcon(file, cb){
+    var reader = new FileReader();
+    reader.onload = function(){
+      var raw = String(reader.result || '');
+      var img = new Image();
+      img.onload = function(){
+        var w = img.naturalWidth || img.width || MAX_ICON_PX;
+        var h = img.naturalHeight || img.height || MAX_ICON_PX;
+        /* Escalar manteniendo aspect ratio dentro de un cuadrado
+           MAX_ICON_PX × MAX_ICON_PX. Un escudo cuadrado queda 1:1; un
+           escudo rectangular queda centrado con transparencia
+           alrededor. */
+        var scale = Math.min(MAX_ICON_PX / w, MAX_ICON_PX / h, 1);
+        var dw = Math.round(w * scale);
+        var dh = Math.round(h * scale);
+        var canvas = document.createElement('canvas');
+        canvas.width = MAX_ICON_PX;
+        canvas.height = MAX_ICON_PX;
+        var ctx = canvas.getContext('2d');
+        if(!ctx){ cb(null, 'no canvas context'); return; }
+        ctx.clearRect(0,0,MAX_ICON_PX,MAX_ICON_PX);
+        ctx.drawImage(img, (MAX_ICON_PX-dw)/2, (MAX_ICON_PX-dh)/2, dw, dh);
+        /* Intento 1: PNG (preserva transparencia — los escudos suelen
+           tenerla). */
+        var pngUrl;
+        try { pngUrl = canvas.toDataURL('image/png'); } catch(_){ pngUrl = null; }
+        if(pngUrl && _approxBlobBytes(pngUrl) <= ICON_BYTES_HARD_CAP){
+          cb(pngUrl, null); return;
+        }
+        /* Intento 2: JPEG calidad 0.85 (mucho más pequeño pero pierde
+           el alpha — quedará fondo negro/blanco según el navegador).
+           Para escudos es un mal aceptable si la alternativa es no
+           guardar. */
+        var jpgUrl;
+        try { jpgUrl = canvas.toDataURL('image/jpeg', 0.85); } catch(_){ jpgUrl = null; }
+        if(jpgUrl && _approxBlobBytes(jpgUrl) <= ICON_BYTES_HARD_CAP){
+          cb(jpgUrl, null); return;
+        }
+        /* Intento 3: JPEG calidad 0.7. */
+        var jpgUrl2;
+        try { jpgUrl2 = canvas.toDataURL('image/jpeg', 0.70); } catch(_){ jpgUrl2 = null; }
+        if(jpgUrl2 && _approxBlobBytes(jpgUrl2) <= ICON_BYTES_HARD_CAP){
+          cb(jpgUrl2, null); return;
+        }
+        cb(null, 'la imagen sigue pesando '+Math.round(_approxBlobBytes(jpgUrl2||jpgUrl||pngUrl||raw)/1024)+' KB tras comprimir; sube una imagen más pequeña.');
+      };
+      img.onerror = function(){ cb(null, 'no se pudo decodificar la imagen'); };
+      img.src = raw;
+    };
+    reader.onerror = function(){ cb(null, 'no se pudo leer el archivo'); };
+    reader.readAsDataURL(file);
+  }
+
   function loadIcons(){
     try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(_){ return {}; }
   }
   function saveIcons(icons){
-    try { localStorage.setItem(KEY, JSON.stringify(icons)); } catch(_){}
+    /* Detección de quota: el setItem se hace dentro de try/catch y, si
+       falla, devolvemos false para que el caller pueda revertir/avisar.
+       Antes el catch era vacío y el usuario veía "guardado" pero al
+       recargar el icono había desaparecido (foto reportada
+       2026-05-02). */
+    var payload;
+    try { payload = JSON.stringify(icons || {}); } catch(_){ return false; }
+    try { localStorage.setItem(KEY, payload); return true; }
+    catch(err){
+      var isQuota = err && (
+        err.code === 22 || err.code === 1014 ||
+        err.name === 'QuotaExceededError' ||
+        err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+      return isQuota ? 'quota' : false;
+    }
   }
   function cardLabel(card){
     var lbl = card.querySelector('.sc-label');
@@ -4690,21 +4790,36 @@ window._showSimProgress = function(opts, onDone){
           input.addEventListener('change', function(){
             var file = input.files && input.files[0];
             if(!file){ document.body.removeChild(input); return; }
-            var reader = new FileReader();
-            reader.onload = function(){
-              var dataUrl = reader.result;
+            _compressIcon(file, function(dataUrl, err){
+              try { document.body.removeChild(input); } catch(_){}
+              if(err || !dataUrl){
+                alert('No se pudo procesar la imagen: '+(err||'desconocido'));
+                return;
+              }
               var icons = loadIcons();
+              /* Pre-check: tamaño total tras añadir/sobreescribir este
+                 icono. Si pasamos de 1.5 MB avisamos antes de intentar
+                 el setItem (que también haría su check pero alertando
+                 más tarde). */
+              var probe = {};
+              for(var pk in icons){ if(Object.prototype.hasOwnProperty.call(icons,pk)) probe[pk] = icons[pk]; }
+              probe[lbl] = dataUrl;
+              var totalBytes = 0;
+              try { totalBytes = JSON.stringify(probe).length; } catch(_){}
+              if(totalBytes > TOTAL_BYTES_SOFT_CAP){
+                alert('⚠️ Los iconos personalizados superan 1.5 MB en total ('+Math.round(totalBytes/1024)+' KB).\n\nElimina algún icono con 🗑 RESET o sube imágenes más pequeñas.');
+                return;
+              }
               icons[lbl] = dataUrl;
-              try { saveIcons(icons); }
-              catch(err){ alert('Error guardando el icono: '+(err && err.message || err)); }
-              applyIconToCard(card, dataUrl);
-              document.body.removeChild(input);
-            };
-            reader.onerror = function(){
-              alert('Error leyendo el archivo.');
-              document.body.removeChild(input);
-            };
-            reader.readAsDataURL(file);
+              var saveResult = saveIcons(icons);
+              if(saveResult === true){
+                applyIconToCard(card, dataUrl);
+              } else if(saveResult === 'quota'){
+                alert('⚠️ El navegador está sin espacio (localStorage lleno) y no he podido guardar el icono.\n\nVe a la pestaña de Resto de Ligas y verás que se intentó liberar espacio automáticamente. Reintenta este icono o limpia caché del navegador.');
+              } else {
+                alert('No se pudo guardar el icono (error desconocido).');
+              }
+            });
           });
           input.click();
         });

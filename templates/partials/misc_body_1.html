@@ -8355,7 +8355,7 @@ window._showSimProgress = function(opts, onDone){
       <label class="lext-label">Nombre del equipo</label>
       <input class="lext-input" id="lext-team-name" placeholder="Ej. Manchester City" />
 
-      <div id="lext-liga-ea-tipo" style="display:none;">
+      <div id="lext-liga-ea-tipo">
         <label class="lext-label">Tipo de equipo · ¿quién lo controla?</label>
         <div class="lext-tipo-row">
           <button type="button" class="lext-tipo-btn active" id="lext-tipo-ia" onclick="lextSetTipo('ia')"><span class="lext-tipo-ico">🤖</span><span class="lext-tipo-lbl">IA</span></button>
@@ -10182,7 +10182,7 @@ Tottenham
   // Catálogo de emojis disponibles para equipos humanos. Los 5 primeros
   // son los "clásicos" del proyecto (los que ya estaban hardcodeados como
   // 💡 Bayern, 🐭 Arsenal, ✏️ Atlético, 🔨 Real Madrid, 👿 FC Barcelona).
-  var HUMAN_EMOJI_OPTIONS = ['💡','🐭','✏️','🔨','👿','⚽','🎯','🏆','⭐','🦁','🐺','🐉','🦅','🐍','🔥','💎'];
+  var HUMAN_EMOJI_OPTIONS = ['💡','🐭','✏️','🔨','👿','⚽','🎯','🏆','⭐','🦁','🐺','🐉','🦅','🐍','🔥','💎','🐊','🦆'];
 
   function renderEmojiGrid(){
     var grid = document.getElementById('lext-emoji-grid');
@@ -10222,14 +10222,18 @@ Tottenham
   function refreshLigaEaCounter(){
     var box = document.getElementById('lext-liga-ea-counter');
     var tipo = document.getElementById('lext-liga-ea-tipo');
-    if(!box || !tipo) return;
+    /* El toggle Humano/IA SIEMPRE se muestra (petición usuario
+       2026-05-02: lo necesitan para todos los equipos de cualquier
+       liga, no solo Liga EA Sports). El contador "X/20 equipos" es
+       específico de Liga EA, así que ese sí se oculta fuera de ese
+       contexto. */
+    if(tipo) tipo.style.display = 'block';
+    if(!box) return;
     if(!isLigaEaContext()){
       box.style.display = 'none';
-      tipo.style.display = 'none';
       return;
     }
     box.style.display = 'block';
-    tipo.style.display = 'block';
     var data = loadData(CURRENT_KEY) || {teams:[]};
     var n = (data.teams||[]).length;
     var lbl = document.getElementById('lext-liga-ea-count');
@@ -10504,20 +10508,19 @@ Tottenham
     var host = document.getElementById('lext-teams-list');
     refreshLigaEaCounter();
     if(!data.teams.length){ host.innerHTML = '<div class="lext-sub">— Sin equipos —</div>'; return; }
-    var ligaEa = isLigaEaContext();
     host.innerHTML = data.teams.map(function(t){
       var sh = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'"/>' : '';
       var ls = computeLineStats(t);
       var budStr = t.budget ? formatBudget(t.budget) : '';
       var tTone = poderToneLocal(ls.glob);
-      // Badge Humano/IA solo en Liga EA Sports.
-      var tipoBadge = '';
-      if(ligaEa){
-        if(t.isHuman){
-          tipoBadge = '<span class="lext-li-tipo human">'+(t.humanEmoji||'👤')+' Humano</span>';
-        } else {
-          tipoBadge = '<span class="lext-li-tipo ia">🤖 IA</span>';
-        }
+      // Badge Humano/IA para CUALQUIER liga (petición usuario
+      // 2026-05-02). Si el equipo no tiene flag isHuman explícito
+      // (legacy o creado antes del cambio), default a IA.
+      var tipoBadge;
+      if(t.isHuman){
+        tipoBadge = '<span class="lext-li-tipo human">'+(t.humanEmoji||'👤')+' Humano</span>';
+      } else {
+        tipoBadge = '<span class="lext-li-tipo ia">🤖 IA</span>';
       }
       return '<div class="lext-list-item">'
         + sh
@@ -10575,18 +10578,18 @@ Tottenham
     if(_spasteEl){
       _spasteEl.value = _squadToPasteText(Array.isArray(t.players) ? t.players : []);
     }
-    // Cargar tipo (Humano/IA) y emoji solo si estamos en Liga EA Sports.
-    if(isLigaEaContext()){
-      FORM_TIPO = t.isHuman ? 'human' : 'ia';
-      FORM_HUMAN_EMOJI = t.humanEmoji || '';
-      var btnIA = document.getElementById('lext-tipo-ia');
-      var btnH  = document.getElementById('lext-tipo-human');
-      if(btnIA) btnIA.classList.toggle('active', FORM_TIPO === 'ia');
-      if(btnH)  btnH.classList.toggle('active',  FORM_TIPO === 'human');
-      var emojiRow = document.getElementById('lext-emoji-row');
-      if(emojiRow) emojiRow.style.display = (FORM_TIPO === 'human') ? 'block' : 'none';
-      renderEmojiGrid();
-    }
+    // Cargar tipo (Humano/IA) y emoji para CUALQUIER liga (petición
+    // usuario 2026-05-02: el toggle Humano/IA aplica a todos los
+    // equipos de todas las ligas, no solo Liga EA Sports).
+    FORM_TIPO = t.isHuman ? 'human' : 'ia';
+    FORM_HUMAN_EMOJI = t.humanEmoji || '';
+    var btnIA = document.getElementById('lext-tipo-ia');
+    var btnH  = document.getElementById('lext-tipo-human');
+    if(btnIA) btnIA.classList.toggle('active', FORM_TIPO === 'ia');
+    if(btnH)  btnH.classList.toggle('active',  FORM_TIPO === 'human');
+    var emojiRow = document.getElementById('lext-emoji-row');
+    if(emojiRow) emojiRow.style.display = (FORM_TIPO === 'human') ? 'block' : 'none';
+    renderEmojiGrid();
     refreshLigaEaCounter();
     try{ document.getElementById('lext-team-name').scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){}
   };
@@ -10683,9 +10686,9 @@ Tottenham
       var newTeam = {
         id: uid(), name: name,
         power: 75, atk: 75, mid: 75, def: 75, aggressiveness: 50,
-        stadium: '', shield: '', budget: 0, players: []
+        stadium: '', shield: '', budget: 0, players: [],
+        isHuman: false, humanEmoji: ''
       };
-      if(ligaEa){ newTeam.isHuman = false; newTeam.humanEmoji = ''; }
       data.teams.push(newTeam);
       /* Si el nombre estaba en la blacklist (borrado previamente) el
          admin lo está re-creando explícitamente → quitar de blacklist. */
@@ -10763,11 +10766,12 @@ Tottenham
       return;
     }
     // Validación: si el admin marcó Humano pero no eligió emoji, asignar uno.
-    if(ligaEa && FORM_TIPO === 'human' && !FORM_HUMAN_EMOJI){
+    // (Aplica a cualquier liga desde 2026-05-02, no solo Liga EA.)
+    if(FORM_TIPO === 'human' && !FORM_HUMAN_EMOJI){
       FORM_HUMAN_EMOJI = '👤';
     }
     // Validación: dos humanos no pueden compartir el mismo emoji.
-    if(ligaEa && FORM_TIPO === 'human' && FORM_HUMAN_EMOJI){
+    if(FORM_TIPO === 'human' && FORM_HUMAN_EMOJI){
       var clash = (data.teams||[]).some(function(x){
         return x.id !== EDITING_TEAM_ID && x.isHuman && x.humanEmoji === FORM_HUMAN_EMOJI;
       });
@@ -10796,10 +10800,8 @@ Tottenham
         t.efootballAlias=efootballAlias;
         t.power=pwGlob; t.atk=pwAtk; t.mid=pwMid; t.def=pwDef;
         t.aggressiveness=pwAggr;
-        if(ligaEa){
-          t.isHuman = (FORM_TIPO === 'human');
-          t.humanEmoji = t.isHuman ? FORM_HUMAN_EMOJI : '';
-        }
+        t.isHuman = (FORM_TIPO === 'human');
+        t.humanEmoji = t.isHuman ? FORM_HUMAN_EMOJI : '';
         if(parsed.length){
           if(t.players && t.players.length){
             /* Si el textarea ya venía prerrellenado con la plantilla
@@ -10822,19 +10824,15 @@ Tottenham
         /* Ni por id ni por nombre. Caemos al flujo de creación con
            los mismos datos para no perder el trabajo del admin.    */
         var recoverTeam = {id:EDITING_TEAM_ID||uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,aggressiveness:pwAggr,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
-        if(ligaEa){
-          recoverTeam.isHuman   = (FORM_TIPO === 'human');
-          recoverTeam.humanEmoji = recoverTeam.isHuman ? FORM_HUMAN_EMOJI : '';
-        }
+        recoverTeam.isHuman   = (FORM_TIPO === 'human');
+        recoverTeam.humanEmoji = recoverTeam.isHuman ? FORM_HUMAN_EMOJI : '';
         data.teams.push(recoverTeam);
         EDITING_TEAM_ID = recoverTeam.id;
       }
     } else {
       var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,aggressiveness:pwAggr,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
-      if(ligaEa){
-        newTeam.isHuman   = (FORM_TIPO === 'human');
-        newTeam.humanEmoji = newTeam.isHuman ? FORM_HUMAN_EMOJI : '';
-      }
+      newTeam.isHuman   = (FORM_TIPO === 'human');
+      newTeam.humanEmoji = newTeam.isHuman ? FORM_HUMAN_EMOJI : '';
       data.teams.push(newTeam);
     }
     saveData(CURRENT_KEY,data);

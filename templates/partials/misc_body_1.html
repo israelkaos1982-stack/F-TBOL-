@@ -4265,20 +4265,46 @@ window._showSimProgress = function(opts, onDone){
     var _np = (typeof _normPS === 'function') ? _normPS
             : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
             : function(s){ return String(s||'').toLowerCase(); };
-    var key = _np(teamName) + '::' + _np(playerName);
+    var tNorm  = _np(teamName);
+    var pNorm  = _np(playerName);
+    var key    = tNorm + '::' + pNorm;
     try {
       var raw = localStorage.getItem(PLAYER_STATS_KEY);
       if(!raw) return null;
       var stats = JSON.parse(raw);
       if(stats[key]) return stats[key];
-      // Fuzzy fallback
-      var prefix = _np(teamName) + '::';
-      var pNorm = _np(playerName);
+      /* Fuzzy fallback ampliado (2026-05-04). Cubre dos casos:
+         a) Mismo equipo, distinto formato del nombre del jugador
+            ("Budimir" vs "A. Budimir").
+         b) Mismo equipo, distinto formato del nombre del equipo
+            ("Alavés" vs "Deportivo Alavés", "Celta" vs "Celta de
+            Vigo", "Valencia" vs "Valencia CF", "Osasuna" vs "CA
+            Osasuna"). Los eventos de la sim usan nombres canónicos
+            de TEAMS (ver misc_body_2.html · 3749) y la plantilla del
+            editor puede tener nombres más cortos/largos.
+         Estrategia: aceptamos cualquier clave cuyo segmento de
+         equipo CONTENGA o ESTÉ CONTENIDO en el nombre buscado, y
+         cuyo segmento de jugador haga lo mismo con el nombre
+         buscado. Sin esto, los goles del usuario no aparecían en
+         la plantilla aunque el dashboard de Estadísticas sí los
+         mostrara — reportado para Osasuna/Celta/Valencia/Alavés. */
+      if (!tNorm) return null;
       var keys = Object.keys(stats);
       for(var i=0;i<keys.length;i++){
-        if(keys[i].indexOf(prefix)!==0) continue;
-        var storedP = keys[i].slice(prefix.length);
-        if(storedP.indexOf(pNorm)!==-1 || pNorm.indexOf(storedP)!==-1) return stats[keys[i]];
+        var sep = keys[i].indexOf('::');
+        if (sep < 0) continue;
+        var storedT = keys[i].slice(0, sep);
+        var storedP = keys[i].slice(sep + 2);
+        if (!storedT) continue;
+        var teamMatch = (storedT === tNorm)
+          || (tNorm    && storedT.indexOf(tNorm)    !== -1)
+          || (storedT  && tNorm.indexOf(storedT)    !== -1);
+        if (!teamMatch) continue;
+        if (!pNorm) continue;
+        var playerMatch = (storedP === pNorm)
+          || (storedP.indexOf(pNorm) !== -1)
+          || (pNorm.indexOf(storedP) !== -1);
+        if (playerMatch) return stats[keys[i]];
       }
     } catch(_){}
     return null;
@@ -11807,16 +11833,30 @@ Tottenham
       try {
         var store = window.LIGA_PLAYER_MATCH_STORE || {};
         var teamNorm = _np(t.name || '');
+        if (!teamNorm) return;
+        /* Fuzzy match de equipo: aceptamos cuando el nombre buscado
+           es subcadena del nombre almacenado o viceversa. Necesario
+           porque la sim usa nombres canónicos de TEAMS (p.ej.
+           "Deportivo Alavés", "Celta de Vigo", "Valencia CF") y la
+           plantilla del editor puede tener variantes ("Alavés",
+           "Celta", "Valencia"). Sin esto los goles del partido no
+           se atribuían al jugador en la plantilla. */
+        function _teamMatch(a){
+          if (!a) return false;
+          if (a === teamNorm) return true;
+          return a.indexOf(teamNorm) !== -1 || teamNorm.indexOf(a) !== -1;
+        }
         Object.keys(store).forEach(function(mk){
           var m = store[mk]; if (!m) return;
           var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
-          if (tA !== teamNorm && tB !== teamNorm) return;
-          var mySide = (tA === teamNorm) ? 'a' : 'b';
+          var matchA = _teamMatch(tA), matchB = _teamMatch(tB);
+          if (!matchA && !matchB) return;
+          var mySide = matchA ? 'a' : 'b';
           (m.evts || []).forEach(function(ev){
             if (!ev) return;
             var evSide = ev.team;
             if (ev.realTeam) {
-              evSide = (_np(ev.realTeam) === teamNorm) ? 'self' : 'other';
+              evSide = _teamMatch(_np(ev.realTeam)) ? 'self' : 'other';
               if (evSide !== 'self') return;
             } else if (evSide !== mySide) {
               return;
@@ -11839,20 +11879,54 @@ Tottenham
       } catch(_){}
     })();
 
-    /* Defensa contra datos rancios tras un reset incompleto: si el
-       equipo NO tiene resultados en `data.results` consideramos que
-       no ha jugado partidos en esta liga, así que ignoramos los
-       contadores per-jugador (p.pj/p.gol/...) aunque sigan ahí. Esto
-       cubre stats stale de versiones anteriores donde el botón "Res"
-       solo limpiaba data.results y dejaba los contadores por jugador
-       sin tocar — el usuario veía PJ del equipo en 0 pero jugadores
-       con 14 PJ y 15 goles. */
+    /* Defensa contra datos rancios tras un reset incompleto: el equipo
+       puede haber jugado partidos en `data.results` (Resto de Ligas)
+       O en `ef_liga38_v4` (Liga EA Sports) O en eventos del bundle
+       (Hypermotion / Primera Fed → `LIGA_PLAYER_MATCH_STORE`). Si no
+       aparece en NINGUNA de las tres fuentes, asumimos que la liga
+       está virgen y la plantilla debe verse a 0. Antes solo mirábamos
+       `data.results` y eso fallaba para Liga EA Sports — donde los
+       resultados viven en `ef_liga38_v4`, no en `ligaExt_<slug>` —
+       provocando que la plantilla del equipo NO actualizara sus
+       contadores aunque hubiera jugado 28 jornadas (reportado
+       2026-05-04 para Osasuna/Celta/Valencia/Alavés). */
     var _teamHasResults = (function(){
       try {
-        if (!data || !Array.isArray(data.results) || !data.results.length) return false;
-        for (var ri = 0; ri < data.results.length; ri++) {
-          var r = data.results[ri];
-          if (r && (r.h === t.id || r.a === t.id)) return true;
+        if (data && Array.isArray(data.results) && data.results.length) {
+          for (var ri = 0; ri < data.results.length; ri++) {
+            var r = data.results[ri];
+            if (r && (r.h === t.id || r.a === t.id)) return true;
+          }
+        }
+      } catch(_){}
+      try {
+        var teamN = _np(t.name||'');
+        if (teamN) {
+          var raw = localStorage.getItem('ef_liga38_v4');
+          if (raw) {
+            var resAll = JSON.parse(raw) || {};
+            var keys = Object.keys(resAll);
+            for (var i = 0; i < keys.length; i++) {
+              var parts = keys[i].split('|');
+              if (parts.length < 3) continue;
+              if (_np(parts[1]) === teamN || _np(parts[2]) === teamN) return true;
+              /* Fuzzy: el storage canoniza por nombre de TEAMS y la
+                 plantilla del editor puede tener variantes. */
+              if (_np(parts[1]).indexOf(teamN) !== -1
+               || _np(parts[2]).indexOf(teamN) !== -1
+               || teamN.indexOf(_np(parts[1])) !== -1
+               || teamN.indexOf(_np(parts[2])) !== -1) return true;
+            }
+          }
+          var pmStore = window.LIGA_PLAYER_MATCH_STORE || {};
+          var mks = Object.keys(pmStore);
+          for (var mi = 0; mi < mks.length; mi++) {
+            var m = pmStore[mks[mi]]; if (!m) continue;
+            var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
+            if (tA === teamN || tB === teamN) return true;
+            if ((tA && (tA.indexOf(teamN)!==-1 || teamN.indexOf(tA)!==-1)) ||
+                (tB && (tB.indexOf(teamN)!==-1 || teamN.indexOf(tB)!==-1))) return true;
+          }
         }
       } catch(_){}
       return false;
@@ -11860,26 +11934,19 @@ Tottenham
 
     t.players.forEach(function(p){
       try { ensurePlayerStats(p); } catch(_){}
-      /* Fallback para Resto de Ligas (51 ligas IA): el simulador
-         `ligaExtSimular` llama a `applyMatchStats` que escribe los
-         contadores DIRECTAMENTE sobre el objeto del jugador
-         (p.pj/p.gol/p.pen/p.fk/p.mvp/p.ta/p.tr/p.imbat/p.penSaved) y
-         los persiste en `ligaExt_<slug>`. Liga EA Sports en cambio
-         escribe en el store global `ef_player_stats_v1`.
-         Capturamos esos contadores propios ANTES de pisarlos por la
-         vía global. Los gateamos con p.pj>0 Y _teamHasResults para
-         que tras un reset (incompleto o no) la plantilla se vea
-         limpia sin arrastrar valores stale. */
-      var hasOwnStats = _teamHasResults && (p.pj || 0) > 0;
-      var own = hasOwnStats ? {
-        pj: p.pj || 0, gol: p.gol || 0, pen: p.pen || 0, fk: p.fk || 0,
-        mvp: p.mvp || 0, ta: p.ta || 0, tr: p.tr || 0,
-        imbat: p.imbat || 0, penSaved: p.penSaved || 0
-      } : null;
-      /* Stats de Liga EA Sports SIEMPRE derivan de ef_player_stats_v1
-         (fuente única: viene de los eventos match-by-match). Si no
-         hay entrada para el jugador, cae al snapshot `own` (ligas
-         externas) y, si tampoco, a 0. */
+      /* Fallback per-jugador alineado con el bloque de líderes
+         (`_lextRenderSquadStatsHeader`):
+           1º intentamos ef_player_stats_v1 vía getPlayerStats
+              (Liga EA Sports / Hypermotion / Primera Fed),
+           2º caemos al objeto del jugador (Resto de Ligas, donde
+              applyMatchStats escribe directamente p.pj/p.gol/…),
+           3º último recurso, 0.
+         Antes había un gate `_teamHasResults && p.pj > 0` que
+         desactivaba el fallback (2º) cuando data.results estaba
+         vacío. Para Liga EA Sports `data.results` SIEMPRE está
+         vacío (los resultados viven en `ef_liga38_v4`), así que
+         el gate hacía que ps=null tirara la celda a 0 en vez de
+         caer al objeto del jugador. */
       var ps = null;
       try {
         if (typeof window.getPlayerStats === 'function' && t.name) {
@@ -11887,16 +11954,22 @@ Tottenham
         }
       } catch(_) { ps = null; }
       function _pickStat(field){
-        if (ps && ps[field] != null) return ps[field];
-        if (own && own[field] != null) return own[field];
+        if (ps && ps[field] != null && Number(ps[field]) > 0) return Number(ps[field]);
+        if (_teamHasResults && p && p[field] != null && Number(p[field]) > 0) return Number(p[field]);
+        if (ps && ps[field] != null) return Number(ps[field]) || 0;
         return 0;
       }
       p.pj       = _pickStat('pj');
-      /* gol/pen/fk vienen del recuento LIVE desde eventos si existe,
-         si no caemos al ef_player_stats_v1 → snapshot propio → 0. */
+      /* gol/pen/fk vienen del recuento LIVE desde eventos si existe;
+         si no, caemos a la cadena ps → p[field] → 0. Solo aceptamos
+         el live count si tiene valor real (>0) — un live={0,0,0}
+         significa que el jugador apareció en eventos no-gol (mvp,
+         tarjeta, sustitución) y no debe pisar a ps que sí tiene
+         goles. */
       var liveKey = _np(p.name);
       var live = _liveCounts[liveKey];
-      if (live) {
+      var liveHas = !!(live && (live.gol > 0 || live.pen > 0 || live.fk > 0));
+      if (liveHas) {
         p.gol = live.gol;
         p.pen = live.pen;
         p.fk  = live.fk;

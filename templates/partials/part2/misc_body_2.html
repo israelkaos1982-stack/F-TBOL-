@@ -1619,6 +1619,175 @@
 })();
 </script>
 </div>
+
+<!-- ────────────────────────────────────────────────────────────────
+  CHAMPIONS · Estadísticas (cache: ef_player_stats_ucl_v1)
+  ──────────────────────────────────────────────────────────────── -->
+<div class="screen" id="s-ucl-stats">
+<button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Champions · Estadísticas</h2></div>
+<style>
+  #s-ucl-stats .liga-stats-wrap{padding:0 18px 28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;}
+  #s-ucl-stats .liga-stat-card{background:linear-gradient(180deg,#101622 0%,#0b1018 100%);border:1px solid rgba(0,140,255,.25);border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.35);}
+  #s-ucl-stats .liga-stat-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(90deg,#001f4d,#0050b3);border-bottom:1px solid rgba(0,140,255,.40);}
+  #s-ucl-stats .liga-stat-ico{font-size:20px;line-height:1;}
+  #s-ucl-stats .liga-stat-title{font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:1.5px;color:#fff;text-transform:uppercase;font-weight:700;}
+  #s-ucl-stats .liga-stat-body{padding:8px 10px 10px;}
+  #s-ucl-stats .liga-stat-row{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);}
+  #s-ucl-stats .liga-stat-row:last-child{border-bottom:none;}
+  #s-ucl-stats .liga-stat-rank{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#5aa9ff;text-align:center;}
+  #s-ucl-stats .liga-stat-player{min-width:0;display:flex;flex-direction:column;gap:2px;}
+  #s-ucl-stats .liga-stat-name{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #s-ucl-stats .liga-stat-team{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.4px;color:rgba(255,255,255,.45);text-transform:uppercase;}
+  #s-ucl-stats .liga-stat-value{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#5aa9ff;min-width:34px;text-align:right;letter-spacing:1px;}
+  #s-ucl-stats .liga-stat-empty{padding:16px 10px;text-align:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.28);}
+  #s-ucl-stats .liga-stat-more{margin-top:8px;border-top:1px solid rgba(255,255,255,.06);}
+  #s-ucl-stats .liga-stat-more summary{list-style:none;cursor:pointer;padding:10px 6px 4px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.8px;color:#5aa9ff;text-transform:uppercase;}
+  #s-ucl-stats .liga-stat-more summary::-webkit-details-marker{display:none;}
+  #s-ucl-stats .liga-stat-more-list{margin-top:4px;border-top:1px solid rgba(255,255,255,.04);}
+  #s-ucl-stats .liga-stat-more .liga-stat-row{padding-top:8px;padding-bottom:8px;}
+</style>
+<div class="liga-stats-wrap" id="ucl-stats-dashboard">
+<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>
+</div>
+<script>
+(function(){
+  function _renderUclStats(){
+    if (typeof window._lextBuildCompStatsDashboard === 'function') {
+      window._lextBuildCompStatsDashboard('ucl-stats-dashboard', 'ef_player_stats_ucl_v1');
+    }
+  }
+  window._renderUclStats = _renderUclStats;
+  document.addEventListener('DOMContentLoaded', _renderUclStats);
+  try {
+    var el = document.getElementById('s-ucl-stats');
+    if (el && typeof MutationObserver !== 'undefined') {
+      new MutationObserver(function(muts){
+        for (var i = 0; i < muts.length; i++) {
+          var m = muts[i];
+          if (m.type === 'attributes' && (m.attributeName === 'class' || m.attributeName === 'style')) {
+            if (el.classList && el.classList.contains('active')) _renderUclStats();
+          }
+        }
+      }).observe(el, { attributes:true });
+    }
+  } catch(_){}
+})();
+</script>
+</div>
+
+<!-- ────────────────────────────────────────────────────────────────
+  EUROPA LEAGUE · Estadísticas (cache: ef_player_stats_uel_v1)
+  ──────────────────────────────────────────────────────────────── -->
+<div class="screen" id="s-uel-stats">
+<button class="back-btn" onclick="go('s-uel')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🥈</span><h2>Europa League · Estadísticas</h2></div>
+<style>
+  #s-uel-stats .liga-stats-wrap{padding:0 18px 28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;}
+  #s-uel-stats .liga-stat-card{background:linear-gradient(180deg,#101622 0%,#0b1018 100%);border:1px solid rgba(255,140,0,.25);border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.35);}
+  #s-uel-stats .liga-stat-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(90deg,#3a1a00,#cc6a00);border-bottom:1px solid rgba(255,140,0,.40);}
+  #s-uel-stats .liga-stat-ico{font-size:20px;line-height:1;}
+  #s-uel-stats .liga-stat-title{font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:1.5px;color:#fff;text-transform:uppercase;font-weight:700;}
+  #s-uel-stats .liga-stat-body{padding:8px 10px 10px;}
+  #s-uel-stats .liga-stat-row{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);}
+  #s-uel-stats .liga-stat-row:last-child{border-bottom:none;}
+  #s-uel-stats .liga-stat-rank{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#ff9040;text-align:center;}
+  #s-uel-stats .liga-stat-player{min-width:0;display:flex;flex-direction:column;gap:2px;}
+  #s-uel-stats .liga-stat-name{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #s-uel-stats .liga-stat-team{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.4px;color:rgba(255,255,255,.45);text-transform:uppercase;}
+  #s-uel-stats .liga-stat-value{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#ff9040;min-width:34px;text-align:right;letter-spacing:1px;}
+  #s-uel-stats .liga-stat-empty{padding:16px 10px;text-align:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.28);}
+  #s-uel-stats .liga-stat-more{margin-top:8px;border-top:1px solid rgba(255,255,255,.06);}
+  #s-uel-stats .liga-stat-more summary{list-style:none;cursor:pointer;padding:10px 6px 4px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.8px;color:#ff9040;text-transform:uppercase;}
+  #s-uel-stats .liga-stat-more summary::-webkit-details-marker{display:none;}
+  #s-uel-stats .liga-stat-more-list{margin-top:4px;border-top:1px solid rgba(255,255,255,.04);}
+  #s-uel-stats .liga-stat-more .liga-stat-row{padding-top:8px;padding-bottom:8px;}
+</style>
+<div class="liga-stats-wrap" id="uel-stats-dashboard">
+<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>
+</div>
+<script>
+(function(){
+  function _renderUelStats(){
+    if (typeof window._lextBuildCompStatsDashboard === 'function') {
+      window._lextBuildCompStatsDashboard('uel-stats-dashboard', 'ef_player_stats_uel_v1');
+    }
+  }
+  window._renderUelStats = _renderUelStats;
+  document.addEventListener('DOMContentLoaded', _renderUelStats);
+  try {
+    var el = document.getElementById('s-uel-stats');
+    if (el && typeof MutationObserver !== 'undefined') {
+      new MutationObserver(function(muts){
+        for (var i = 0; i < muts.length; i++) {
+          var m = muts[i];
+          if (m.type === 'attributes' && (m.attributeName === 'class' || m.attributeName === 'style')) {
+            if (el.classList && el.classList.contains('active')) _renderUelStats();
+          }
+        }
+      }).observe(el, { attributes:true });
+    }
+  } catch(_){}
+})();
+</script>
+</div>
+
+<!-- ────────────────────────────────────────────────────────────────
+  CONFERENCE · Estadísticas (cache: ef_player_stats_uecl_v1)
+  ──────────────────────────────────────────────────────────────── -->
+<div class="screen" id="s-uecl-stats">
+<button class="back-btn" onclick="go('s-uecl')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🥉</span><h2>Conference · Estadísticas</h2></div>
+<style>
+  #s-uecl-stats .liga-stats-wrap{padding:0 18px 28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;}
+  #s-uecl-stats .liga-stat-card{background:linear-gradient(180deg,#101622 0%,#0b1018 100%);border:1px solid rgba(0,200,140,.25);border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.35);}
+  #s-uecl-stats .liga-stat-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(90deg,#003820,#018850);border-bottom:1px solid rgba(0,200,140,.40);}
+  #s-uecl-stats .liga-stat-ico{font-size:20px;line-height:1;}
+  #s-uecl-stats .liga-stat-title{font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:1.5px;color:#fff;text-transform:uppercase;font-weight:700;}
+  #s-uecl-stats .liga-stat-body{padding:8px 10px 10px;}
+  #s-uecl-stats .liga-stat-row{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);}
+  #s-uecl-stats .liga-stat-row:last-child{border-bottom:none;}
+  #s-uecl-stats .liga-stat-rank{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#3dcc8e;text-align:center;}
+  #s-uecl-stats .liga-stat-player{min-width:0;display:flex;flex-direction:column;gap:2px;}
+  #s-uecl-stats .liga-stat-name{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #s-uecl-stats .liga-stat-team{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.4px;color:rgba(255,255,255,.45);text-transform:uppercase;}
+  #s-uecl-stats .liga-stat-value{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#3dcc8e;min-width:34px;text-align:right;letter-spacing:1px;}
+  #s-uecl-stats .liga-stat-empty{padding:16px 10px;text-align:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.28);}
+  #s-uecl-stats .liga-stat-more{margin-top:8px;border-top:1px solid rgba(255,255,255,.06);}
+  #s-uecl-stats .liga-stat-more summary{list-style:none;cursor:pointer;padding:10px 6px 4px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.8px;color:#3dcc8e;text-transform:uppercase;}
+  #s-uecl-stats .liga-stat-more summary::-webkit-details-marker{display:none;}
+  #s-uecl-stats .liga-stat-more-list{margin-top:4px;border-top:1px solid rgba(255,255,255,.04);}
+  #s-uecl-stats .liga-stat-more .liga-stat-row{padding-top:8px;padding-bottom:8px;}
+</style>
+<div class="liga-stats-wrap" id="uecl-stats-dashboard">
+<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>
+</div>
+<script>
+(function(){
+  function _renderUeclStats(){
+    if (typeof window._lextBuildCompStatsDashboard === 'function') {
+      window._lextBuildCompStatsDashboard('uecl-stats-dashboard', 'ef_player_stats_uecl_v1');
+    }
+  }
+  window._renderUeclStats = _renderUeclStats;
+  document.addEventListener('DOMContentLoaded', _renderUeclStats);
+  try {
+    var el = document.getElementById('s-uecl-stats');
+    if (el && typeof MutationObserver !== 'undefined') {
+      new MutationObserver(function(muts){
+        for (var i = 0; i < muts.length; i++) {
+          var m = muts[i];
+          if (m.type === 'attributes' && (m.attributeName === 'class' || m.attributeName === 'style')) {
+            if (el.classList && el.classList.contains('active')) _renderUeclStats();
+          }
+        }
+      }).observe(el, { attributes:true });
+    }
+  } catch(_){}
+})();
+</script>
+</div>
+
 <div id="ucl-intro">
 <div id="ucl-ball-anim">🏆</div>
 <div id="ucl-stars">★ ★ ★ UEFA CHAMPIONS LEAGUE ★ ★ ★</div>

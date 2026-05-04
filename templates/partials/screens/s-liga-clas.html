@@ -612,6 +612,32 @@
   var LIGA_PLAYER_MATCH_STORE = window.LIGA_PLAYER_MATCH_STORE || {};
   window.LIGA_PLAYER_MATCH_STORE = LIGA_PLAYER_MATCH_STORE;
 
+  /* Inferencia de competición a partir del matchKey (2026-05-04).
+     Cada competición usa un prefijo distinto; mapeamos para taggear
+     el evento sin tener que tocar todos los callers a la vez. El
+     usuario quiere que cada competición tenga sus stats AISLADAS
+     (excepto Liga + Copa que se SUMAN como "EA Sports"):
+       · liga      → Liga EA Sports (j1m*, lj*, j*m*…)
+       · copa      → Copa del Rey (cdr-*, copa-*)
+       · superliga → Superliga (sl-*)
+       · ucl       → Champions / Previa Champions (ucl-*, wprev-*, champ-*)
+       · uel       → Europa League (uel-*)
+       · uecl      → Conference (uecl-*) */
+  function _inferCompetition(matchKey){
+    var k = String(matchKey || '').toLowerCase();
+    if (!k) return 'liga';
+    if (k.indexOf('uecl') === 0 || k.indexOf('-uecl') !== -1) return 'uecl';
+    if (k.indexOf('uel')  === 0 || k.indexOf('-uel')  !== -1) return 'uel';
+    if (k.indexOf('ucl')  === 0 || k.indexOf('-ucl')  !== -1
+        || k.indexOf('champ') === 0 || k.indexOf('wprev') !== -1) return 'ucl';
+    if (k.indexOf('sl-')  === 0 || k.indexOf('-sl')  !== -1
+        || k.indexOf('superliga') !== -1) return 'superliga';
+    if (k.indexOf('cdr-') === 0 || k.indexOf('copa-') === 0
+        || k.indexOf('copa') === 0) return 'copa';
+    return 'liga';
+  }
+  window._inferMatchCompetition = _inferCompetition;
+
   function applyEventToRoster(roster, teamName, playerName, type, ico){
     teamName = canonicalTeamName(teamName);
     playerName = String(playerName || '').replace(/^\s*\d+\.?\s*/, '').trim();
@@ -742,7 +768,13 @@
     buildLigaStatsDashboard();
   }
 
-  window.registrarLigaPlayerStats = function(matchKey, teamA, teamB, evts, mvpName, mvpTeam){
+  window.registrarLigaPlayerStats = function(matchKey, teamA, teamB, evts, mvpName, mvpTeam, competition){
+    /* `competition` opcional (2026-05-04): si no viene, lo deducimos
+       del prefijo del matchKey via _inferCompetition. Permite que
+       todos los callers existentes sigan funcionando sin tocarlos
+       y que los nuevos (Copa, Superliga, Champions, UEL, UECL)
+       puedan pasar el tag explícito. */
+    var comp = competition || _inferCompetition(matchKey);
     LIGA_PLAYER_MATCH_STORE[matchKey] = {
       teamA: canonicalTeamName(teamA),
       teamB: canonicalTeamName(teamB),
@@ -753,7 +785,8 @@
         return copy;
       }),
       mvpName: mvpName || '',
-      mvpTeam: canonicalTeamName(mvpTeam || '')
+      mvpTeam: canonicalTeamName(mvpTeam || ''),
+      competition: comp
     };
     rebuildLigaPlayerStats();
   };

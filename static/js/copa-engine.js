@@ -1345,6 +1345,11 @@
       + '.copa-card-fin{display:inline-block;font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:1.5px;color:#ffd54a;border:1px solid rgba(255,213,74,.45);border-radius:6px;padding:4px 12px;background:rgba(255,213,74,.04)}'
       + '.copa-card-score-num{color:#5fe08a;font-family:\'Bebas Neue\',sans-serif;font-size:30px;letter-spacing:2px;line-height:1}'
       + '.copa-card-score-pending{color:rgba(255,255,255,.5);font-family:\'Bebas Neue\',sans-serif;font-size:24px;letter-spacing:3px;line-height:1}'
+      /* Card de ronda en s-copa cuando está completada y los
+         clasificados están confirmados — atenuada como las jornadas
+         terminadas de Liga EA. */
+      + '.copa-rd-done .jbtn.c-copa{filter:grayscale(.55) brightness(.55);opacity:.78}'
+      + '.copa-rd-done .copa-rd-cnt{opacity:.85}'
       + '.copa-mrow-done{margin-bottom:0}'
       + '.copa-sim-all{margin-left:8px}'
       + '.chp-event-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}'
@@ -1670,7 +1675,7 @@
 
     /* Banner: Sortear 1ª Ronda · Sortear siguiente ronda (si hace
        falta) · Reiniciar (siempre disponible). */
-    var bannerHtml = '<p class="copa-info" style="text-align:center;color:#c5a058;font-family:Rajdhani,sans-serif;letter-spacing:1px;margin:0;">🏆 Copa del Rey — Temporada 2025/26</p>';
+    var bannerHtml = '';
     if (!sorteo.r1 || !sorteo.r1.length) {
       bannerHtml += '<button class="copa-btn-sortear" onclick="window.copaSortear(\'r1\')">🎯 Iniciar Copa — Sortear 1ª Ronda</button>';
     } else {
@@ -1693,6 +1698,49 @@
         + escapeHtml(clasificados.campeon) + '</div><div class="copa-champion-label">CAMPEÓN DE LA COPA DEL REY</div></div>';
     }
     banner.innerHTML = bannerHtml;
+
+    /* Actualizar el contador X/Y de cada ronda en s-copa + estado de
+       "completada" (oscurece la card). El contador cuenta partidos
+       jugados / total. Para two-leg, total = matches.length * 2 (ida +
+       vuelta) y jugados se acumula entre ambas. */
+    ROUNDS.forEach(function (ronda) {
+      var blk = document.getElementById('copa-rd-' + ronda + '-blk');
+      var cntEl = document.getElementById('copa-rd-' + ronda + '-cnt');
+      if (!cntEl || !blk) return;
+      var matches = sorteo[ronda] || [];
+      var total = 0, played = 0;
+      var twoLegRd = !!TWO_LEG[ronda];
+      if (twoLegRd) {
+        total = matches.length * 2;
+        var idaR = resultados[ronda + '_ida'] || [];
+        var vtaR = resultados[ronda + '_vta'] || [];
+        for (var i = 0; i < matches.length; i++) {
+          if (idaR[i] && idaR[i].jugado) played++;
+          if (vtaR[i] && vtaR[i].jugado) played++;
+        }
+      } else {
+        total = matches.length;
+        var rL = resultados[ronda] || [];
+        for (var i2 = 0; i2 < matches.length; i2++) {
+          if (rL[i2] && rL[i2].jugado) played++;
+        }
+      }
+      var clasifR = (clasificados[ronda] || []).length;
+      var ico, txtCol;
+      if (total === 0) { ico = '○'; txtCol = 'rgba(255,255,255,.5)'; }
+      else if (played === 0) { ico = '○'; txtCol = 'rgba(255,255,255,.55)'; }
+      else if (played < total || !clasifR) { ico = '⏳'; txtCol = '#ffd54a'; }
+      else { ico = '✅'; txtCol = '#5fe08a'; }
+      cntEl.textContent = ico + ' ' + played + '/' + total;
+      cntEl.style.color = txtCol;
+      /* Card completada → modo "oscuro" (igual a las jornadas de
+         Liga EA terminadas: gris/atenuadas). */
+      if (total > 0 && played >= total && clasifR > 0) {
+        blk.classList.add('copa-rd-done');
+      } else {
+        blk.classList.remove('copa-rd-done');
+      }
+    });
 
     /* Pintar cada pantalla dedicada con sus partidos. */
     ROUNDS.forEach(function (ronda) {
@@ -2233,19 +2281,18 @@
   function _copaInjectExtraConfirms(ronda) {
     /* Reset del estado al abrir cada previa nueva. */
     _copaConfirmState = { prorroga: false, penaltis: false };
-    /* Banner dorado con la fase y el reglamento — visual + a la vez
-       marcador para que `_copaWrapPpRefreshUnlock` sepa que la previa
-       activa es la de Copa. */
+    /* Marcador invisible para que `_copaWrapPpRefreshUnlock` /
+       `_copaWrapPpToggle` detecten que la previa activa es de Copa.
+       El usuario pidió que NO salga el cartel "🏆 N · COPA DEL REY ·
+       Reglas obligatorias" — los 3 items confirmables (Balón, Prórroga,
+       Penaltis) ya cubren la información del reglamento. */
     var alerts = document.getElementById('pp-alerts');
     if (alerts) {
       var prev = alerts.querySelector('[data-copa-rules]');
       if (prev) prev.remove();
       var chip = document.createElement('div');
       chip.setAttribute('data-copa-rules', '1');
-      chip.style.cssText = 'display:flex;flex-direction:column;gap:2px;background:linear-gradient(135deg,rgba(180,120,40,.18),rgba(220,170,80,.06));border:1px solid rgba(220,170,80,.55);border-radius:8px;padding:8px 12px;margin:6px 0;font-family:Rajdhani,sans-serif;font-size:12px;color:#ffd54a;letter-spacing:.6px;';
-      chip.innerHTML = ''
-        + '<div style="font-weight:700;letter-spacing:1.2px;text-transform:uppercase;font-size:11px;color:#f0c45c">🏆 ' + escapeHtml(ROUND_LABEL[ronda] || ronda) + ' · COPA DEL REY</div>'
-        + '<div>Reglas obligatorias: confirma el balón, prórroga y penaltis para empezar.</div>';
+      chip.style.cssText = 'display:none';
       alerts.appendChild(chip);
     }
     _copaRenderExtraConfirms();

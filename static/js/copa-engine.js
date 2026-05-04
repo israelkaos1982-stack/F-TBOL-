@@ -2165,27 +2165,121 @@
     };
     if (typeof window.showPrePartidoOverlay === 'function') {
       window.showPrePartidoOverlay(matchKey, compKey, 'Sí', duracion, isHvH);
-      /* Inyectar el chip "Prórroga + Penaltis" en el bloque de alertas
-         de la previa, ya que `_buildItems` (bundle) solo muestra "Balón"
-         como item y el reglamento de Copa exige el aviso explícito. */
-      try {
-        var alerts = document.getElementById('pp-alerts');
-        if (alerts) {
-          var prev = alerts.querySelector('[data-copa-rules]');
-          if (prev) prev.remove();
-          var chip = document.createElement('div');
-          chip.setAttribute('data-copa-rules', '1');
-          chip.style.cssText = 'display:flex;flex-direction:column;gap:4px;background:linear-gradient(135deg,rgba(180,120,40,.18),rgba(220,170,80,.06));border:1px solid rgba(220,170,80,.55);border-radius:8px;padding:8px 12px;margin:6px 0;font-family:Rajdhani,sans-serif;font-size:12px;color:#ffd54a;letter-spacing:.6px;';
-          chip.innerHTML = ''
-            + '<div style="font-weight:700;letter-spacing:1.2px;text-transform:uppercase;font-size:11px;color:#f0c45c">🏆 ' + escapeHtml(ROUND_LABEL[ronda] || ronda) + ' · COPA DEL REY</div>'
-            + '<div>⏱ Prórroga: <b style="color:#5fe08a">SÍ</b> &nbsp;·&nbsp; 🥅 Penaltis: <b style="color:#5fe08a">SÍ</b> (si empate)</div>';
-          alerts.appendChild(chip);
-        }
-      } catch(_){}
+      /* Banner del reglamento de Copa + 2 items extra de confirmación
+         (Prórroga / Penaltis) que el usuario debe marcar antes de
+         poder pulsar CONFIRMAR CONFIGURACIÓN. Imitan el formato de
+         `_renderList` del bundle (.pp-item) pero los toggleamos con
+         un map local porque `_ppItems` es privado del IIFE. */
+      try { _copaInjectExtraConfirms(ronda); } catch(_){}
     } else {
       alert('No se pudo abrir la previa: showPrePartidoOverlay no disponible.');
     }
   };
+
+  /* Estado local de los 2 toggles de Copa (Prórroga / Penaltis). Vacío
+     significa "no marcado". */
+  var _copaConfirmState = { prorroga: false, penaltis: false };
+  /* Wrapper sobre `_ppRefreshUnlock` que también requiere los 2
+     toggles de Copa antes de habilitar el botón CONFIRMAR. */
+  var _origPpRefreshUnlock = null;
+  function _copaWrapPpRefreshUnlock() {
+    if (typeof window._ppRefreshUnlock !== 'function') return;
+    if (window._ppRefreshUnlock.__copaWrapped) return;
+    var orig = window._ppRefreshUnlock;
+    _origPpRefreshUnlock = orig;
+    var wrapped = function () {
+      var ret = orig.apply(this, arguments);
+      try {
+        var btn = document.getElementById('pp-confirm-btn');
+        if (!btn) return ret;
+        /* Solo aplicamos la regla si la previa actual es de Copa
+           (detectado por la presencia del banner data-copa-rules). */
+        var rulesEl = document.querySelector('#pp-alerts [data-copa-rules]');
+        if (!rulesEl) return ret;
+        if (!_copaConfirmState.prorroga || !_copaConfirmState.penaltis) {
+          btn.setAttribute('disabled', '');
+        }
+      } catch(_){}
+      return ret;
+    };
+    wrapped.__copaWrapped = true;
+    window._ppRefreshUnlock = wrapped;
+  }
+
+  function _copaToggleConfirm(key) {
+    _copaConfirmState[key] = !_copaConfirmState[key];
+    _copaRenderExtraConfirms();
+    if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
+  }
+
+  function _copaRenderExtraConfirms() {
+    var list = document.getElementById('pp-list');
+    if (!list) return;
+    /* Quitamos versiones previas */
+    list.querySelectorAll('[data-copa-confirm]').forEach(function (n) { n.remove(); });
+    var rows = [
+      { key: 'prorroga', ico: '⏱', lbl: 'Prórroga',  val: 'SÍ' },
+      { key: 'penaltis', ico: '🥅', lbl: 'Penaltis',  val: 'SÍ' }
+    ];
+    rows.forEach(function (it) {
+      var checked = !!_copaConfirmState[it.key];
+      var div = document.createElement('div');
+      div.className = 'pp-item' + (checked ? ' checked' : '');
+      div.setAttribute('data-copa-confirm', it.key);
+      div.innerHTML = ''
+        + '<span class="pp-item-lbl"><span class="pp-ico">' + it.ico + '</span>' + escapeHtml(it.lbl) + '</span>'
+        + '<span class="pp-item-val">' + escapeHtml(it.val) + '</span>'
+        + '<span class="pp-check">' + (checked ? '✅' : '\u{1F533}') + '</span>';
+      div.addEventListener('click', function () { _copaToggleConfirm(it.key); });
+      list.appendChild(div);
+    });
+  }
+
+  /* Wrap `_ppToggle` para reinyectar Prórroga/Penaltis después de que
+     el bundle re-renderice `#pp-list` (cada vez que el user toca un
+     item, la lista se redibuja entera y borra nuestros 2 items). */
+  function _copaWrapPpToggle() {
+    if (typeof window._ppToggle !== 'function') return;
+    if (window._ppToggle.__copaWrapped) return;
+    var orig = window._ppToggle;
+    var wrapped = function (id) {
+      var ret = orig.apply(this, arguments);
+      try {
+        if (document.querySelector('#pp-alerts [data-copa-rules]')) {
+          _copaRenderExtraConfirms();
+          if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
+        }
+      } catch(_){}
+      return ret;
+    };
+    wrapped.__copaWrapped = true;
+    window._ppToggle = wrapped;
+  }
+
+  function _copaInjectExtraConfirms(ronda) {
+    /* Reset del estado al abrir cada previa nueva. */
+    _copaConfirmState = { prorroga: false, penaltis: false };
+    /* Banner dorado con la fase y el reglamento — visual + a la vez
+       marcador para que `_copaWrapPpRefreshUnlock` sepa que la previa
+       activa es la de Copa. */
+    var alerts = document.getElementById('pp-alerts');
+    if (alerts) {
+      var prev = alerts.querySelector('[data-copa-rules]');
+      if (prev) prev.remove();
+      var chip = document.createElement('div');
+      chip.setAttribute('data-copa-rules', '1');
+      chip.style.cssText = 'display:flex;flex-direction:column;gap:2px;background:linear-gradient(135deg,rgba(180,120,40,.18),rgba(220,170,80,.06));border:1px solid rgba(220,170,80,.55);border-radius:8px;padding:8px 12px;margin:6px 0;font-family:Rajdhani,sans-serif;font-size:12px;color:#ffd54a;letter-spacing:.6px;';
+      chip.innerHTML = ''
+        + '<div style="font-weight:700;letter-spacing:1.2px;text-transform:uppercase;font-size:11px;color:#f0c45c">🏆 ' + escapeHtml(ROUND_LABEL[ronda] || ronda) + ' · COPA DEL REY</div>'
+        + '<div>Reglas obligatorias: confirma el balón, prórroga y penaltis para empezar.</div>';
+      alerts.appendChild(chip);
+    }
+    _copaRenderExtraConfirms();
+    _copaWrapPpRefreshUnlock();
+    _copaWrapPpToggle();
+    /* Tras meter los items, re-evaluamos el botón. */
+    if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
+  }
 
   /* IA-vs-IA → live tick + acta usando el mismo motor de Liga EA
      (iaSimLive). El hook `window._copaSimLivePersist` (registrado más

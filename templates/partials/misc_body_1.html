@@ -3774,14 +3774,17 @@ window._showSimProgress = function(opts, onDone){
     if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
     var bridge = window.ligaEaBuildEngineOverrides();
 
-    /* Si Liga EA está vacía, todavía queremos importar las demás
-       ligas del editor al motor (Hypermotion, Primera Fed y las 51
-       externas). Sin esto, un admin que solo haya creado equipos
-       en Hypermotion no podía jugar amistosos con su plantilla real:
-       `sqFromRegistry('Racing')` volvía al placeholder. */
+    /* SIEMPRE volcamos también las demás ligas del editor (Hypermotion,
+       Primera Fed y las 51 externas) al motor. Antes solo lo hacíamos
+       si Liga EA estaba vacía → cualquier rename/edit en otras ligas
+       NO llegaba al motor. Reportado 2026-05-04: rename de jugador en
+       Resto de Ligas no aparecía en el event picker del partido. Lo
+       hacemos al final (línea ~3870 vía finally) para no doblar el
+       trabajo cuando el bridge YA cubre Liga EA. */
     if(!bridge || bridge.meta.teamsCount === 0){
       _importOtherLeaguesIntoEngine();
       if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
+      _lextRefreshJ1Pickers();
       return;
     }
 
@@ -3876,7 +3879,67 @@ window._showSimProgress = function(opts, onDone){
 
     // ── 5. Refrescar escudos y clasificación ─────────────────────
     if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
+
+    // ── 6. Refrescar cachés del picker en partidos j1m* del bundle ─
+    // Los matches j1m1..j1m10 del bundle inicializan _sqA_jXmY /
+    // _sqB_jXmY UNA SOLA VEZ via IIFE al cargar la página. Tras un
+    // rename/paste de plantilla, esas cachés quedan stale aunque
+    // SQUAD_REGISTRY ya esté actualizado. Mutamos cada array EN
+    // SITIO (sin reasignar) para que la closure original las vea.
+    _lextRefreshJ1Pickers();
   }
+
+  /* Reconstruye `window._sqA_jXmY` / `window._sqB_jXmY` (cachés que
+     usan los matches estáticos del bundle, p.ej. Real Madrid·Barça
+     en j1m1) leyendo de SQUAD_REGISTRY. Mutación in-place para que
+     la closure capturada al cargar el bundle siga apuntando al mismo
+     array — así un rename del editor llega al picker sin recargar
+     la página. Reportado 2026-05-04 (rename "Giuliano" → "Giuliano
+     Simeone" no aparecía en el event picker). */
+  function _lextRefreshJ1Pickers(){
+    if (typeof window === 'undefined') return;
+    var SCHEDULE = window.LIGA_SCHEDULE;
+    if (!Array.isArray(SCHEDULE) || !Array.isArray(SCHEDULE[0])) return;
+    var POS_LABELS = {P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS'};
+    function _toOverlayFmt(sq){
+      if (!Array.isArray(sq) || !sq.length) return [];
+      var out = [];
+      var curPos = null;
+      sq.forEach(function(p){
+        if (!p) return;
+        /* sqFromRegistryFull devuelve [num, name, pos, power] (pos en
+           p[2]). El formato del overlay es {h:label} + [num, name]. */
+        if (p[2] !== curPos){
+          curPos = p[2];
+          out.push({h: POS_LABELS[curPos] || curPos});
+        }
+        out.push([p[0], p[1]]);
+      });
+      return out;
+    }
+    SCHEDULE[0].forEach(function(match, idx){
+      if (!Array.isArray(match) || match.length < 2) return;
+      var mid = 'j1m' + (idx + 1);
+      var sqAArr = window['_sqA_' + mid];
+      var sqBArr = window['_sqB_' + mid];
+      if (!Array.isArray(sqAArr) && !Array.isArray(sqBArr)) return;
+      var sqAFresh = (typeof window.sqFromRegistryFull === 'function')
+        ? window.sqFromRegistryFull(match[0]) : null;
+      var sqBFresh = (typeof window.sqFromRegistryFull === 'function')
+        ? window.sqFromRegistryFull(match[1]) : null;
+      var fmtA = _toOverlayFmt(sqAFresh || []);
+      var fmtB = _toOverlayFmt(sqBFresh || []);
+      if (Array.isArray(sqAArr) && fmtA.length){
+        sqAArr.length = 0;
+        fmtA.forEach(function(p){ sqAArr.push(p); });
+      }
+      if (Array.isArray(sqBArr) && fmtB.length){
+        sqBArr.length = 0;
+        fmtB.forEach(function(p){ sqBArr.push(p); });
+      }
+    });
+  }
+  window._lextRefreshJ1Pickers = _lextRefreshJ1Pickers;
 
   function _importOtherLeaguesIntoEngine(){
     var POS_MAP = { POR:'P', DEF:'D', MED:'M', DEL:'F' };
@@ -4323,6 +4386,251 @@ window._showSimProgress = function(opts, onDone){
     rebuildPlayerStatsStore();
   }
   window.syncLigaEaPlayerStats = syncLigaEaPlayerStats;
+
+  /* ════════════════════════════════════════════════════════════════
+     HELPER COMPARTIDO: stats per-jugador "fuente de la verdad"
+     ════════════════════════════════════════════════════════════════
+     Devuelve {teamPJ, liveStats} computado desde fuentes vivas:
+       · data.results (Resto de Ligas — applyMatchStats)
+       · ef_liga38_v4 (Liga EA Sports — simularJornadaIA)
+       · LIGA_PLAYER_MATCH_STORE (live HvH/HvIA + sims registrados)
+     Se usa tanto desde renderSquadList (filas per-jugador) como
+     desde _lextRenderSquadStatsHeader (Máximo goleador / MVP /
+     Mejor puntuación) para garantizar que ambos lados muestren
+     los mismos números. Antes el header miraba ef_player_stats_v1
+     directo (que podía estar stale tras un reset parcial) y la
+     tabla otra fuente → datos inconsistentes (Ayoze 14 goles en
+     header vs 0 en tabla, o vice versa).                          */
+  window._lextComputeRealStats = function(team, leagueData){
+    var _np = (typeof _normPS === 'function') ? _normPS
+            : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
+            : function(s){ return String(s||'').toLowerCase(); };
+    var teamN = _np((team && team.name) || '');
+    function _fuzz(a, b){
+      if (!a || !b) return false;
+      if (a === b) return true;
+      return a.indexOf(b) !== -1 || b.indexOf(a) !== -1;
+    }
+    /* — teamPJ desde fuentes vivas — */
+    var teamPJ = 0;
+    try {
+      if (leagueData && Array.isArray(leagueData.results) && team && team.id) {
+        for (var ri = 0; ri < leagueData.results.length; ri++) {
+          var r = leagueData.results[ri];
+          if (r && (r.h === team.id || r.a === team.id)) teamPJ++;
+        }
+      }
+    } catch(_){}
+    if (teamPJ === 0 && teamN) {
+      try {
+        var raw = localStorage.getItem('ef_liga38_v4');
+        if (raw) {
+          var resAll = JSON.parse(raw) || {};
+          var rkeys = Object.keys(resAll);
+          for (var i = 0; i < rkeys.length; i++) {
+            var parts = rkeys[i].split('|');
+            if (parts.length < 3) continue;
+            var nA = _np(parts[1]||''), nB = _np(parts[2]||'');
+            if (_fuzz(nA, teamN) || _fuzz(nB, teamN)) teamPJ++;
+          }
+        }
+      } catch(_){}
+    }
+    if (teamPJ === 0 && teamN) {
+      try {
+        var pmStore = window.LIGA_PLAYER_MATCH_STORE || {};
+        var mks = Object.keys(pmStore);
+        var seen = {};
+        for (var mi = 0; mi < mks.length; mi++) {
+          var m = pmStore[mks[mi]]; if (!m) continue;
+          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
+          if (_fuzz(tA, teamN) || _fuzz(tB, teamN)) {
+            if (!seen[mks[mi]]) { teamPJ++; seen[mks[mi]] = true; }
+          }
+        }
+      } catch(_){}
+    }
+    /* — Hypermotion / Primera Federación: no tienen eventos en
+         LIGA_PLAYER_MATCH_STORE / ef_liga38_v4 ni results en
+         ligaExt_<slug>. Sus stats viven en ef_player_stats_v1
+         (escritas por _writeSegundaStatsToPlayerStore). Tomamos el
+         max(ps.pj) entre todas las entradas del equipo como teamPJ. */
+    if (teamPJ === 0 && teamN) {
+      try {
+        var psRaw = localStorage.getItem('ef_player_stats_v1');
+        if (psRaw) {
+          var psAll = JSON.parse(psRaw) || {};
+          var maxPj = 0;
+          Object.keys(psAll).forEach(function(k){
+            var sep = k.indexOf('::');
+            if (sep < 0) return;
+            var storedT = k.slice(0, sep);
+            if (!_fuzz(storedT, teamN)) return;
+            var pj = Number((psAll[k] && psAll[k].pj) || 0);
+            if (pj > maxPj) maxPj = pj;
+          });
+          teamPJ = maxPj;
+        }
+      } catch(_){}
+    }
+    /* — liveStats per-jugador desde EVENTOS reales — */
+    var liveStats = {};
+    function _get(k){
+      if (!liveStats[k]) liveStats[k] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+      return liveStats[k];
+    }
+    function _ingest(ev){
+      var nm = '';
+      if (Array.isArray(ev.player)) nm = ev.player[1] || ev.player[0] || '';
+      else if (typeof ev.player === 'string') nm = ev.player;
+      else nm = ev.name || ev.playerName || '';
+      nm = String(nm || '').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
+      if (!nm) return;
+      var key = _np(nm);
+      var rec = _get(key);
+      var ty = ev.type || '';
+      var ico = String(ev.ico||'').replace(/️/g,'').trim();
+      if (ty === 'gol')                        rec.gol++;
+      else if (ty === 'pen-gol')               rec.pen++;
+      else if (ty === 'falta-gol')             rec.fk++;
+      else if (ty === 'amarilla')              rec.ta++;
+      else if (ty === 'roja' || ty === 'd-amarilla') rec.tr++;
+      else if (ty === 'card') {
+        if (ico === '🟨') rec.ta++;
+        else if (ico === '🟥') rec.tr++;
+        else if (ico === '🟨🟥') { rec.ta++; rec.tr++; }
+      }
+      else if (ty === 'mvp')        rec.mvp++;
+      else if (ty === 'imbat')      rec.imbat++;
+      else if (ty === 'pen-parado') rec.penSaved++;
+    }
+    var processedKeys = {};
+    if (teamPJ > 0 && teamN) {
+      try {
+        var store = window.LIGA_PLAYER_MATCH_STORE || {};
+        Object.keys(store).forEach(function(mk){
+          var m = store[mk]; if (!m) return;
+          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
+          var matchA = _fuzz(tA, teamN), matchB = _fuzz(tB, teamN);
+          if (!matchA && !matchB) return;
+          processedKeys[mk] = true;
+          var mySide = matchA ? 'a' : 'b';
+          (m.evts || []).forEach(function(ev){
+            if (!ev) return;
+            if (ev.realTeam) {
+              if (!_fuzz(_np(ev.realTeam), teamN)) return;
+            } else if (ev.team !== mySide) {
+              return;
+            }
+            _ingest(ev);
+          });
+          if (m.mvpName && m.mvpTeam && _fuzz(_np(m.mvpTeam), teamN)) {
+            var hadMvp = (m.evts||[]).some(function(e){return e && e.type==='mvp';});
+            if (!hadMvp) _get(_np(m.mvpName)).mvp++;
+          }
+        });
+      } catch(_){}
+      try {
+        var raw2 = localStorage.getItem('ef_liga38_v4');
+        if (raw2) {
+          var resAll2 = JSON.parse(raw2) || {};
+          Object.keys(resAll2).forEach(function(rk){
+            if (processedKeys[rk]) return;
+            var parts = rk.split('|');
+            if (parts.length < 3) return;
+            var nA = _np(parts[1]||''), nB = _np(parts[2]||'');
+            var matchA = _fuzz(nA, teamN), matchB = _fuzz(nB, teamN);
+            if (!matchA && !matchB) return;
+            var r = resAll2[rk]; if (!r) return;
+            var mySide = matchA ? 'a' : 'b';
+            (r.events || []).forEach(function(ev){
+              if (!ev) return;
+              if (ev.team !== mySide) return;
+              _ingest(ev);
+            });
+            if (r.mvp && r.mvpTeam && _fuzz(_np(r.mvpTeam), teamN)) {
+              var hadMvp2 = (r.events||[]).some(function(e){return e && e.type==='mvp';});
+              if (!hadMvp2) _get(_np(r.mvp)).mvp++;
+            }
+          });
+        }
+      } catch(_){}
+    }
+    return { teamPJ: teamPJ, liveStats: liveStats };
+  };
+
+  /* Hidrata UN jugador con stats limpias. Aplica la cascada:
+       1. liveStats (eventos reales)
+       2. liveHasAny=true & sin entrada propia → 0 (no jugó/no marcó)
+       3. ef_player_stats_v1 vía getPlayerStats (validando ps.pj === teamPJ)
+       4. p.{stats} del objeto del jugador (validando p.pj === teamPJ)
+       5. 0
+     Devuelve un objeto con los stats limpios; NO muta `p` (eso lo
+     hace el caller para preservar otros campos). */
+  window._lextHydratePlayerStats = function(team, p, real){
+    var _np = (typeof _normPS === 'function') ? _normPS
+            : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
+            : function(s){ return String(s||'').toLowerCase(); };
+    var teamPJ = (real && real.teamPJ) || 0;
+    var liveStats = (real && real.liveStats) || {};
+    var liveHasAny = Object.keys(liveStats).length > 0;
+    var out = {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};
+    if (teamPJ === 0) return out;
+    out.pj = teamPJ;
+    if (!p || !p.name) return out;
+    var nameKey = _np(p.name);
+    var live = liveStats[nameKey];
+    if (live) {
+      out.gol      = Number(live.gol)||0;
+      out.pen      = Number(live.pen)||0;
+      out.fk       = Number(live.fk)||0;
+      out.mvp      = Math.min(Number(live.mvp)||0, teamPJ);
+      out.ta       = Number(live.ta)||0;
+      out.tr       = Number(live.tr)||0;
+      out.imbat    = Math.min(Number(live.imbat)||0, teamPJ);
+      out.penSaved = Number(live.penSaved)||0;
+      return out;
+    }
+    if (liveHasAny) {
+      /* Eventos para el equipo pero no este jugador → no marcó. */
+      return out;
+    }
+    /* Sin eventos → intentar ef_player_stats_v1 con validación. */
+    var ps = null;
+    try {
+      if (typeof window.getPlayerStats === 'function' && team && team.name) {
+        ps = window.getPlayerStats(team.name, p.name);
+      }
+    } catch(_){}
+    var psPj = ps ? Number(ps.pj||0) : -1;
+    if (ps && (psPj === teamPJ || psPj === 0)) {
+      out.gol      = Number(ps.gol||0);
+      out.pen      = Number(ps.pen||0);
+      out.fk       = Number(ps.fk||0);
+      out.mvp      = Math.min(Number(ps.mvp||0), teamPJ);
+      out.ta       = Number(ps.ta||0);
+      out.tr       = Number(ps.tr||0);
+      out.imbat    = Math.min(Number(ps.imbat||0), teamPJ);
+      out.penSaved = Number(ps.penSaved||0);
+      return out;
+    }
+    /* Fallback al objeto del jugador (Resto de Ligas vía
+       applyMatchStats), también validando contra stale. */
+    var ownPj = Number((p && p.pj)||0);
+    if (ownPj === teamPJ) {
+      out.gol      = Number(p.gol||0);
+      out.pen      = Number(p.pen||0);
+      out.fk       = Number(p.fk||0);
+      out.mvp      = Math.min(Number(p.mvp||0), teamPJ);
+      out.ta       = Number(p.ta||0);
+      out.tr       = Number(p.tr||0);
+      out.imbat    = Math.min(Number(p.imbat||0), teamPJ);
+      out.penSaved = Number(p.penSaved||0);
+      return out;
+    }
+    /* Datos stale en todas las fuentes → 0 limpio (excepto pj=teamPJ). */
+    return out;
+  };
 })();
 </script>
 
@@ -11588,32 +11896,32 @@ Tottenham
     if (!row) row = {pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0};
     var pct = row.pj > 0 ? Math.round((row.v / row.pj) * 100) : 0;
 
-    /* ── 2. Líderes del equipo (sobre t.players) ── */
+    /* ── 2. Líderes del equipo (sobre t.players) ──
+       Hidratamos vía el HELPER COMPARTIDO `_lextHydratePlayerStats`
+       — la MISMA fuente que la tabla per-jugador en `renderSquadList`.
+       Antes este bloque tenía su propia hidratación con prioridad
+       `ps || p.*` que mostraba datos stale (Ayoze 14 goles aunque
+       el equipo solo tuviera 5 goles totales). Ahora ambos lados
+       (header y filas) leen los mismos números — coherencia total. */
     var players = Array.isArray(team.players) ? team.players : [];
-    /* Hidratamos stats con getPlayerStats. Necesario porque esta
-       función se llama ANTES que renderSquadList → los players
-       todavía no traen .gol/.mvp/.pj/etc. Hidratamos TODO el set de
-       stats que `computePlayerRating` consume (pj, gol, pen, fk,
-       mvp, imbat, penSaved) además de pos para el cálculo por
-       posición. */
+    var _realLeaders = (typeof window._lextComputeRealStats === 'function')
+      ? window._lextComputeRealStats(team, (typeof loadData === 'function' ? loadData(CURRENT_KEY) : null))
+      : { teamPJ: 0, liveStats: {} };
     var hydrated = players.map(function(p){
       if (!p || !p.name) return null;
-      var ps = null;
-      try {
-        if (typeof window.getPlayerStats === 'function') {
-          ps = window.getPlayerStats(team.name, p.name);
-        }
-      } catch(_) {}
+      var clean = (typeof window._lextHydratePlayerStats === 'function')
+        ? window._lextHydratePlayerStats(team, p, _realLeaders)
+        : {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};
       return {
         name:     p.name,
         pos:      p.pos || 'MED',
-        pj:       Number((ps && ps.pj))       || Number(p.pj)       || 0,
-        gol:      Number((ps && ps.gol))      || Number(p.gol)      || 0,
-        pen:      Number((ps && ps.pen))      || Number(p.pen)      || 0,
-        fk:       Number((ps && ps.fk))       || Number(p.fk)       || 0,
-        mvp:      Number((ps && ps.mvp))      || Number(p.mvp)      || 0,
-        imbat:    Number((ps && ps.imbat))    || Number(p.imbat)    || 0,
-        penSaved: Number((ps && ps.penSaved)) || Number(p.penSaved) || 0
+        pj:       clean.pj,
+        gol:      clean.gol,
+        pen:      clean.pen,
+        fk:       clean.fk,
+        mvp:      clean.mvp,
+        imbat:    clean.imbat,
+        penSaved: clean.penSaved
       };
     }).filter(Boolean);
 
@@ -11819,166 +12127,43 @@ Tottenham
     var LABEL = {POR:'🧤 PORTEROS',DEF:'🛡 DEFENSAS',MED:'⚙ CENTROCAMPISTAS',DEL:'⚽ DELANTEROS'};
     var byPos = {POR:[],DEF:[],MED:[],DEL:[]};
 
-    /* Pre-computar goles DISJUNTOS (gol regular / pen / falta) desde
-       LIGA_PLAYER_MATCH_STORE en vivo para este equipo. Bypass total
-       de ef_player_stats_v1 — si ese storage tiene datos stale o
-       inflados de versiones antiguas, los sobrescribimos con el
-       recuento real basado en eventos del acta. */
-    var _liveCounts = {};  // norm(name) → {gol, pen, fk}
-    (function(){
-      try {
-        var store = window.LIGA_PLAYER_MATCH_STORE || {};
-        var teamNorm = _np(t.name || '');
-        if (!teamNorm) return;
-        /* Fuzzy match de equipo: aceptamos cuando el nombre buscado
-           es subcadena del nombre almacenado o viceversa. Necesario
-           porque la sim usa nombres canónicos de TEAMS (p.ej.
-           "Deportivo Alavés", "Celta de Vigo", "Valencia CF") y la
-           plantilla del editor puede tener variantes ("Alavés",
-           "Celta", "Valencia"). Sin esto los goles del partido no
-           se atribuían al jugador en la plantilla. */
-        function _teamMatch(a){
-          if (!a) return false;
-          if (a === teamNorm) return true;
-          return a.indexOf(teamNorm) !== -1 || teamNorm.indexOf(a) !== -1;
-        }
-        Object.keys(store).forEach(function(mk){
-          var m = store[mk]; if (!m) return;
-          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
-          var matchA = _teamMatch(tA), matchB = _teamMatch(tB);
-          if (!matchA && !matchB) return;
-          var mySide = matchA ? 'a' : 'b';
-          (m.evts || []).forEach(function(ev){
-            if (!ev) return;
-            var evSide = ev.team;
-            if (ev.realTeam) {
-              evSide = _teamMatch(_np(ev.realTeam)) ? 'self' : 'other';
-              if (evSide !== 'self') return;
-            } else if (evSide !== mySide) {
-              return;
-            }
-            var nm = '';
-            if (Array.isArray(ev.player)) nm = ev.player[1] || ev.player[0] || '';
-            else if (typeof ev.player === 'string') nm = ev.player;
-            else nm = ev.name || ev.playerName || '';
-            nm = String(nm || '').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
-            if (!nm) return;
-            var key = _np(nm);
-            var rec = _liveCounts[key] || {gol:0, pen:0, fk:0};
-            var ty = ev.type || '';
-            if (ty === 'gol') rec.gol++;
-            else if (ty === 'pen-gol') rec.pen++;
-            else if (ty === 'falta-gol') rec.fk++;
-            _liveCounts[key] = rec;
-          });
-        });
-      } catch(_){}
-    })();
+    /* ════════════════════════════════════════════════════════════════
+       REGLA "FUENTE DE LA VERDAD" (2026-05-04)
+       ════════════════════════════════════════════════════════════════
+       Las stats per-jugador DEBEN coincidir con lo que pasó de verdad
+       en los partidos. Lógica centralizada en `_lextComputeRealStats`
+       y `_lextHydratePlayerStats` (ver IIFE de ef_player_stats_v1):
 
-    /* Defensa contra datos rancios tras un reset incompleto: el equipo
-       puede haber jugado partidos en `data.results` (Resto de Ligas)
-       O en `ef_liga38_v4` (Liga EA Sports) O en eventos del bundle
-       (Hypermotion / Primera Fed → `LIGA_PLAYER_MATCH_STORE`). Si no
-       aparece en NINGUNA de las tres fuentes, asumimos que la liga
-       está virgen y la plantilla debe verse a 0. Antes solo mirábamos
-       `data.results` y eso fallaba para Liga EA Sports — donde los
-       resultados viven en `ef_liga38_v4`, no en `ligaExt_<slug>` —
-       provocando que la plantilla del equipo NO actualizara sus
-       contadores aunque hubiera jugado 28 jornadas (reportado
-       2026-05-04 para Osasuna/Celta/Valencia/Alavés). */
-    var _teamHasResults = (function(){
-      try {
-        if (data && Array.isArray(data.results) && data.results.length) {
-          for (var ri = 0; ri < data.results.length; ri++) {
-            var r = data.results[ri];
-            if (r && (r.h === t.id || r.a === t.id)) return true;
-          }
-        }
-      } catch(_){}
-      try {
-        var teamN = _np(t.name||'');
-        if (teamN) {
-          var raw = localStorage.getItem('ef_liga38_v4');
-          if (raw) {
-            var resAll = JSON.parse(raw) || {};
-            var keys = Object.keys(resAll);
-            for (var i = 0; i < keys.length; i++) {
-              var parts = keys[i].split('|');
-              if (parts.length < 3) continue;
-              if (_np(parts[1]) === teamN || _np(parts[2]) === teamN) return true;
-              /* Fuzzy: el storage canoniza por nombre de TEAMS y la
-                 plantilla del editor puede tener variantes. */
-              if (_np(parts[1]).indexOf(teamN) !== -1
-               || _np(parts[2]).indexOf(teamN) !== -1
-               || teamN.indexOf(_np(parts[1])) !== -1
-               || teamN.indexOf(_np(parts[2])) !== -1) return true;
-            }
-          }
-          var pmStore = window.LIGA_PLAYER_MATCH_STORE || {};
-          var mks = Object.keys(pmStore);
-          for (var mi = 0; mi < mks.length; mi++) {
-            var m = pmStore[mks[mi]]; if (!m) continue;
-            var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
-            if (tA === teamN || tB === teamN) return true;
-            if ((tA && (tA.indexOf(teamN)!==-1 || teamN.indexOf(tA)!==-1)) ||
-                (tB && (tB.indexOf(teamN)!==-1 || teamN.indexOf(tB)!==-1))) return true;
-          }
-        }
-      } catch(_){}
-      return false;
-    })();
+         · teamPJ = partidos REALES (data.results + ef_liga38_v4 +
+           LIGA_PLAYER_MATCH_STORE), nunca lo que diga un cache.
+         · Si teamPJ === 0 → todo a 0 sin mirar caches.
+         · Stats per-jugador desde EVENTOS reales primero; ps/p.* solo
+           con validación anti-stale (psPj === teamPJ o p.pj === teamPJ).
+         · mvp/imbat capados a teamPJ.
 
+       Antes el render fiaba ciegamente en ef_player_stats_v1 + p.*
+       y un reset parcial dejaba "Alfon 29 PJ pero equipo PJ=3" o
+       "Ayoze 14 goles pero G+ del equipo = 5". El helper centralizado
+       impide que eso vuelva a pasar — todos los lectores (tabla,
+       cabecera de líderes) usan los mismos números. */
+    var _real = (typeof window._lextComputeRealStats === 'function')
+      ? window._lextComputeRealStats(t, data)
+      : { teamPJ: 0, liveStats: {} };
+    var _teamPJ = _real.teamPJ;
     t.players.forEach(function(p){
       try { ensurePlayerStats(p); } catch(_){}
-      /* Fallback per-jugador alineado con el bloque de líderes
-         (`_lextRenderSquadStatsHeader`):
-           1º intentamos ef_player_stats_v1 vía getPlayerStats
-              (Liga EA Sports / Hypermotion / Primera Fed),
-           2º caemos al objeto del jugador (Resto de Ligas, donde
-              applyMatchStats escribe directamente p.pj/p.gol/…),
-           3º último recurso, 0.
-         Antes había un gate `_teamHasResults && p.pj > 0` que
-         desactivaba el fallback (2º) cuando data.results estaba
-         vacío. Para Liga EA Sports `data.results` SIEMPRE está
-         vacío (los resultados viven en `ef_liga38_v4`), así que
-         el gate hacía que ps=null tirara la celda a 0 en vez de
-         caer al objeto del jugador. */
-      var ps = null;
-      try {
-        if (typeof window.getPlayerStats === 'function' && t.name) {
-          ps = window.getPlayerStats(t.name, p.name);
-        }
-      } catch(_) { ps = null; }
-      function _pickStat(field){
-        if (ps && ps[field] != null && Number(ps[field]) > 0) return Number(ps[field]);
-        if (_teamHasResults && p && p[field] != null && Number(p[field]) > 0) return Number(p[field]);
-        if (ps && ps[field] != null) return Number(ps[field]) || 0;
-        return 0;
-      }
-      p.pj       = _pickStat('pj');
-      /* gol/pen/fk vienen del recuento LIVE desde eventos si existe;
-         si no, caemos a la cadena ps → p[field] → 0. Solo aceptamos
-         el live count si tiene valor real (>0) — un live={0,0,0}
-         significa que el jugador apareció en eventos no-gol (mvp,
-         tarjeta, sustitución) y no debe pisar a ps que sí tiene
-         goles. */
-      var liveKey = _np(p.name);
-      var live = _liveCounts[liveKey];
-      var liveHas = !!(live && (live.gol > 0 || live.pen > 0 || live.fk > 0));
-      if (liveHas) {
-        p.gol = live.gol;
-        p.pen = live.pen;
-        p.fk  = live.fk;
-      } else {
-        p.gol = _pickStat('gol');
-        p.pen = _pickStat('pen');
-        p.fk  = _pickStat('fk');
-      }
-      p.mvp      = _pickStat('mvp');
-      p.ta       = _pickStat('ta');
-      p.tr       = _pickStat('tr');
-      p.imbat    = _pickStat('imbat');
-      p.penSaved = _pickStat('penSaved');
+      var clean = (typeof window._lextHydratePlayerStats === 'function')
+        ? window._lextHydratePlayerStats(t, p, _real)
+        : {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};
+      p.pj       = clean.pj;
+      p.gol      = clean.gol;
+      p.pen      = clean.pen;
+      p.fk       = clean.fk;
+      p.mvp      = clean.mvp;
+      p.ta       = clean.ta;
+      p.tr       = clean.tr;
+      p.imbat    = clean.imbat;
+      p.penSaved = clean.penSaved;
       (byPos[p.pos]||byPos.MED).push(p);
     });
 
@@ -12198,6 +12383,16 @@ Tottenham
        entre save y render — al recargar desde localStorage vemos SIEMPRE
        lo que acabamos de guardar. */
     try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
+    /* CRÍTICO: refrescar SQUAD_REGISTRY del motor de simulación tras
+       pegar la plantilla. Sin esto, el event picker (gen-pl-list,
+       mlShowPl_jXmY, etc.) sigue mostrando los nombres VIEJOS porque
+       sqFromRegistryFull lee de window.SQUAD_REGISTRY y nadie lo
+       actualizó tras el save. Reportado 2026-05-04: el admin renombró
+       "Giuliano" → "20. Giuliano Simeone 84" pero al añadir un evento
+       en cualquier partido la lista seguía mostrando "Giuliano". */
+    if(typeof window.applyEngineOverrides === 'function'){
+      try { window.applyEngineOverrides(); } catch(_){}
+    }
     ta.value = '';
     // Cerrar el details
     var d = document.getElementById('lext-squad-paste-details');

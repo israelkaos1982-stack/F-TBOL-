@@ -7911,22 +7911,6 @@ window._showSimProgress = function(opts, onDone){
   <button class="restoligas-btn restoligas-btn-res" onclick="window.pG(function(){window._restoLigasResAll&&window._restoLigasResAll();})"><span class="restoligas-ico">♻️</span><span>Res</span></button>
   <button class="restoligas-btn restoligas-btn-stats" onclick="window._restoLigasShowStats&&window._restoLigasShowStats()"><span class="restoligas-ico">📈</span><span>Estadísticas</span></button>
 </div>
-<!-- Botón "Enviar a Europa" (PIN admin 747). Petición usuario
-     2026-05-02: tras simular las 51 ligas, los equipos que clasificaban
-     a competiciones europeas se calculaban en vivo cada vez que el
-     admin abría la pantalla, lo que metía equipos con pj=0 al inicio
-     mientras las escrituras async terminaban. Este botón hace una
-     SNAPSHOT manual de los pools (UCL, Previa, OQ, Wild Card, UEL,
-     UECL) cuando el admin decide que las clasificaciones están
-     listas. Las pantallas europeas leen del snapshot si existe. -->
-<div class="restoligas-actions" style="margin-top:-4px;">
-  <button class="restoligas-btn restoligas-btn-commit"
-          onclick="window.pG(function(){window._restoLigasCommitEurope&&window._restoLigasCommitEurope();})"
-          style="flex:1 1 auto;">
-    <span class="restoligas-ico">📤</span>
-    <span>Enviar realidad de cada equipo a su Europa (admin)</span>
-  </button>
-</div>
 <style>
 .restoligas-actions{display:flex;gap:6px;padding:0 14px 12px;align-items:stretch;flex-wrap:nowrap;}
 .restoligas-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 8px;border-radius:8px;font-family:'Oswald',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;background:rgba(255,255,255,.04);color:#fff;transition:filter .15s,transform .1s;white-space:nowrap;}
@@ -8024,6 +8008,21 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce2028,#f7e117,#ce2028);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Maced.</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#cf0921,#fff,#cf0921);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Malta</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#244aa5,#e4aa3c,#244aa5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇽🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kosovo</span></div>
+</div>
+<!-- Botón "Enviar a Europa" (PIN admin 747). Va al FINAL de la lista
+     de ligas — debajo de Kosovo (la última) — para que el admin lo
+     pulse cuando haya simulado todas las ligas. Petición usuario
+     2026-05-02. Snapshot manual de los 6 pools (UCL, Previa, OQ,
+     Wild Card, UEL, UECL); las pantallas europeas leen del snapshot
+     si existe (evita race condition con escrituras async tras Sim
+     batched). -->
+<div class="restoligas-actions" style="margin-top:14px;">
+  <button class="restoligas-btn restoligas-btn-commit"
+          onclick="window.pG(function(){window._restoLigasCommitEurope&&window._restoLigasCommitEurope();})"
+          style="flex:1 1 auto;">
+    <span class="restoligas-ico">📤</span>
+    <span>Enviar realidad de cada equipo a su Europa (admin)</span>
+  </button>
 </div>
 </div>
 

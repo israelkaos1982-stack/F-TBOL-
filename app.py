@@ -813,36 +813,74 @@ def forma_counter_save():
     save_global_state(data)
     return jsonify({"ok": True, "counters": cleaned})
 
+COPA_TWO_LEG = ("r16", "oct", "cua", "sf")  # ida+vuelta. r1/r2/fin = single-leg.
+COPA_NEXT_PHASE = {"r1": "r2", "r2": "r16", "r16": "oct",
+                   "oct": "cua", "cua": "sf", "sf": "fin", "fin": "campeon"}
+
+
 @app.route("/api/copa/sorteo", methods=["POST"])
 def copa_sorteo():
+    """Sortear una ronda de Copa del Rey.
+
+    Spec usuario (2026-05-04):
+      - 82 equipos = Liga EA (20) + Hypermotion (22) + Primera Fed (40)
+      - r1 (1ª Ronda): 36 equipos = 5 humanos + 31 random Primera Fed
+        → 18 ties single-leg, local = MENOR nivel, ET+pen si empate.
+      - r2 (2ª Ronda): 64 equipos = 18 ganadores r1 + 46 pre-clasificados
+        → 32 ties single-leg, mismo formato.
+      - r16/oct/cua/sf: ida+vuelta, vuelta SIEMPRE en campo del menor.
+      - fin: partido único en sede neutral.
+
+    El cliente (copa-engine.js) conoce los 82 equipos y sus niveles, así
+    que envía `pairs` ya emparejados con local=menor (o local=mayor en
+    two-leg para que la vuelta caiga en el menor). El backend solo
+    persiste lo recibido. Para retrocompatibilidad, si `pairs` no viene,
+    cae al COPA_SEEDING viejo.
+    """
     payload = request.get_json(silent=True) or {}
     ronda = payload.get("ronda")
+    if ronda not in ("r1", "r2", "r16", "oct", "cua", "sf", "fin"):
+        return jsonify({"ok": False, "error": "Ronda inválida"}), 400
     data = load_global_state()
     copa = data.get("copa_state") or {"fase": "r1", "sorteo": {}, "resultados": {}, "clasificados": {}}
     sorteo = copa.get("sorteo", {})
     clasificados = copa.get("clasificados", {})
-    if ronda == "r1":
-        teams = COPA_SEEDING["r1"][:]
-        random.shuffle(teams)
-    elif ronda == "r2":
-        teams = clasificados.get("r1", []) + COPA_SEEDING["r2_direct"][:]
-        random.shuffle(teams)
-    elif ronda == "r16":
-        teams = clasificados.get("r2", []) + COPA_SEEDING["r16_direct"][:]
-        random.shuffle(teams)
-    elif ronda in ("oct", "cua"):
-        prev = {"oct": "r16", "cua": "oct"}[ronda]
-        teams = clasificados.get(prev, [])[:]
-        random.shuffle(teams)
-    elif ronda == "fin":
-        teams = clasificados.get("cua", [])
-        if len(teams) < 2:
-            return jsonify({"ok": False, "error": "No hay 2 finalistas"}), 400
+
+    pairs_in = payload.get("pairs")
+    if isinstance(pairs_in, list) and pairs_in:
+        # Cliente envía emparejamientos ya resueltos (camino nuevo).
+        matches = []
+        for p in pairs_in:
+            if not isinstance(p, dict): continue
+            l = str(p.get("l", "")).strip()
+            v = str(p.get("v", "")).strip()
+            if l and v:
+                matches.append({"l": l, "v": v})
+        if not matches:
+            return jsonify({"ok": False, "error": "pairs vacío o inválido"}), 400
     else:
-        return jsonify({"ok": False, "error": "Ronda inválida"}), 400
-    if len(teams) % 2 != 0:
-        return jsonify({"ok": False, "error": f"Número impar de equipos ({len(teams)})"}), 400
-    matches = [{"l": teams[i], "v": teams[i+1]} for i in range(0, len(teams), 2)]
+        # Fallback legacy: usa COPA_SEEDING hardcoded (estructura antigua).
+        if ronda == "r1":
+            teams = COPA_SEEDING["r1"][:]
+            random.shuffle(teams)
+        elif ronda == "r2":
+            teams = clasificados.get("r1", []) + COPA_SEEDING["r2_direct"][:]
+            random.shuffle(teams)
+        elif ronda == "r16":
+            teams = clasificados.get("r2", []) + COPA_SEEDING["r16_direct"][:]
+            random.shuffle(teams)
+        elif ronda in ("oct", "cua", "sf"):
+            prev = {"oct": "r16", "cua": "oct", "sf": "cua"}[ronda]
+            teams = clasificados.get(prev, [])[:]
+            random.shuffle(teams)
+        elif ronda == "fin":
+            teams = clasificados.get("sf", []) or clasificados.get("cua", [])
+            if len(teams) < 2:
+                return jsonify({"ok": False, "error": "No hay 2 finalistas"}), 400
+        if len(teams) % 2 != 0:
+            return jsonify({"ok": False, "error": f"Número impar de equipos ({len(teams)})"}), 400
+        matches = [{"l": teams[i], "v": teams[i+1]} for i in range(0, len(teams), 2)]
+
     sorteo[ronda] = matches
     copa["sorteo"] = sorteo
     copa["fase"] = ronda
@@ -864,7 +902,7 @@ def copa_simular_ia():
     match = sorteo_ronda[idx]
     local, visitante = match["l"], match["v"]
     resultados = copa.get("resultados", {})
-    two_leg = ronda in ("oct", "cua")
+    two_leg = ronda in COPA_TWO_LEG
     if two_leg:
         key_ida = ronda + "_ida"
         key_vta = ronda + "_vta"
@@ -923,7 +961,7 @@ def copa_guardar_resultado():
     match = sorteo_ronda[idx] if idx < len(sorteo_ronda) else {}
     local_orig, visit_orig = match.get("l", ""), match.get("v", "")
     resultados = copa.get("resultados", {})
-    two_leg = ronda in ("oct", "cua")
+    two_leg = ronda in COPA_TWO_LEG
     res = {"gl": gl, "gv": gv, "et_gl": et_gl, "et_gv": et_gv,
            "pen_winner": pen_winner, "pen_score": pen_score, "mvp": mvp,
            "events": events, "injuries": injuries, "summary": summary,
@@ -972,7 +1010,7 @@ def copa_clasificar():
     copa = data.get("copa_state") or {"sorteo": {}, "resultados": {}, "clasificados": {}}
     resultados = copa.get("resultados", {})
     clasificados = copa.get("clasificados", {})
-    two_leg = ronda in ("oct", "cua")
+    two_leg = ronda in COPA_TWO_LEG
     if two_leg:
         res_list = resultados.get(ronda + "_vta", [])
     else:
@@ -982,8 +1020,7 @@ def copa_clasificar():
     if ronda == "fin" and winners:
         clasificados["campeon"] = winners[0]
     copa["clasificados"] = clasificados
-    next_phase = {"r1": "r2", "r2": "r16", "r16": "oct", "oct": "cua", "cua": "fin", "fin": "campeon"}
-    copa["fase"] = next_phase.get(ronda, copa.get("fase", "r1"))
+    copa["fase"] = COPA_NEXT_PHASE.get(ronda, copa.get("fase", "r1"))
     data["copa_state"] = copa
     save_global_state(data)
     return jsonify({"ok": True, "clasificados": winners, "copa": copa})

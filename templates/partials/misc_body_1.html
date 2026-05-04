@@ -5463,43 +5463,41 @@ window._showSimProgress = function(opts, onDone){
            por encima del wildcard. Sin esto el ranking sintético por
            poder pondría al campeón de la liga como wildcard. */
         if(isWcAuto && skip === 0) skip = 3;
-        /* ── REGLA ESTRICTA (usuario, 2026-05-02, refinada 2× por
+        /* ── REGLA ESTRICTA (usuario, 2026-05-02, refinada 3× por
            feedback del propio usuario):
            Para que un equipo vaya a una competición europea DIRECTA
-           (UCL fase de liga, Previa Champions, UEL, UECL) ese equipo
-           DEBE haber jugado todos sus partidos de liga
-           (`pj === 2·(N−1)` resultados que le incluyan). El check es
-           PER-TEAM, no per-liga: una liga con resultados parciales
-           SÍ puede contribuir a Europa con sus equipos top SI esos
-           equipos tienen pj completo, pero los equipos con pj < expected
-           se SALTAN y se avanza al siguiente del ranking.
+           (UCL fase de liga, Previa Champions, UEL, UECL):
+             - Si la liga tiene rN === 0 → ranking por power
+               (`_rankByPower`), todos los teams aceptados (es la única
+               señal). Igual que siempre se hizo para Wild Card.
+             - Si la liga tiene rN > 0 → ranking por resultados
+               (`_standingsFromResults`); descartamos SOLO los teams
+               con `pj === 0` (race condition tras Sim batched: estos
+               equipos ordenan al top por desempate alfabético sobre
+               pts=0 sin haber jugado nada).
            Excepciones absolutas:
              - Liga EA Sports / Hypermotion / 1ª RFEF → bloqueadas
                por EUROPE_BLACKLIST (manual-only via "EA Sports →
                Europa").
              - Wild Card auto-cupo y Open Qualifier (uclQual) →
                feeders permisivos: aceptan rN=0 (rank-by-power) y
-               standings parciales sin filtro per-team. NO clasifican
-               directo a Europa, alimentan al OQ.
+               teams con pj=0. NO clasifican directo a Europa,
+               alimentan al OQ.
 
-           Bug histórico que motivó la regla per-team: tras pulsar Sim
-           en una liga, la escritura de resultados era batched/asíncrona.
-           Durante esa ventana algunos equipos tenían pj=0 en
-           _standingsFromResults pero se sortaban al top por desempate
+           Bug histórico que motivó la regla: tras pulsar Sim en una
+           liga, la escritura de resultados era batched/asíncrona.
+           Durante esa ventana algunos teams tenían pj=0 en
+           _standingsFromResults pero sortaban al top por desempate
            alfabético sobre pts=0 → el código los enviaba a Europa con
-           0 partidos jugados. La defensa per-team `pj < expectedPj`
-           los salta y avanza al siguiente.
+           0 partidos jugados.
 
-           Por qué se quitó el gate de liga (`rN < needed → skip`):
-           era demasiado coarse — si el admin no había completado todas
-           las jornadas (caso típico cuando el motor de Sim batch toma
-           varios segundos), la liga entera se descartaba y el pool de
-           Previa Champions caía a ~14 equipos reales + 49 placeholders
-           TBD-OQ-XX (reportado 2026-05-02, fotos del usuario). El
-           per-team check ya cubre el caso edge: sin gate de liga, las
-           ligas parciales contribuyen sus equipos fully-played y los
-           pj=0 quedan filtrados. */
-        var expectedPj = 2 * (N - 1);
+           Por qué se descartó el gate de liga (`rN < needed → skip`)
+           y por qué se relajó el per-team de `pj < expectedPj` a
+           `pj === 0`: ambas reglas más estrictas dejaban el pool de
+           Previa Champions con muchos TBD-50..63 cuando las ligas
+           estaban parcialmente simuladas (caso típico). El filtro
+           pj===0 captura el race-condition exacto sin descartar
+           teams legítimos que han jugado al menos 1 partido. */
         var isFeederZone = (zoneKey === 'uclQual') || (zoneKey === 'wildcard');
         /* Ranking sintético por poder cuando rN=0 (solo zonas feeder:
            Wild Card auto-cupo y Open Qualifier). Para zonas directas
@@ -5523,14 +5521,23 @@ window._showSimProgress = function(opts, onDone){
           if(spanishTeamBanned && _isSpanishTeamBanned(teamName, spanishTeamBanned)){
             continue; /* equipo español colado — saltar y avanzar */
           }
-          /* DEFENSA EXTRA: aunque rN === needed, si el equipo concreto
-             tiene pj < expectedPj significa que faltan resultados que
-             le incluyan (data.results desincronizada con data.teams).
-             Saltamos a este equipo — no lo enviamos a Europa con
-             plantilla parcial. No aplica a zonas feeder (Wild Card y
-             Open Qualifier, donde pj=0 es el caso normal del
-             rank-by-power y los standings parciales son aceptables). */
-          if(!isFeederZone && Number(rj.pj || 0) < expectedPj){
+          /* DEFENSA per-team: el bug original (race tras Sim) era que
+             equipos con pj=0 sorteaban al top por desempate alfabético
+             sobre pts=0 y se enviaban a Europa con 0 partidos jugados.
+             Solo descartamos teams con `pj === 0` cuando hay results
+             parciales (rN > 0). Antes (commit `3fb9247`) usábamos
+             `pj < expectedPj` que era demasiado estricto: descartaba
+             equipos que SÍ habían jugado pero la liga estaba a medias,
+             dejando el pool de Previa Champions con TBD-50..63
+             (reportado 2026-05-02 con fotos). Casos:
+               - rN === 0 (rank-by-power): todos los teams tienen pj=0;
+                 NO los descartamos (es la única señal disponible).
+               - rN > 0 (standings reales): solo skip si pj === 0
+                 (race / data stale). Teams con pj > 0 son "reales"
+                 aunque no hayan completado todos sus partidos.
+             Las zonas feeder (uclQual / wildcard) no aplican el filtro
+             y siempre admiten pj=0. */
+          if(!isFeederZone && rN > 0 && Number(rj.pj || 0) === 0){
             continue;
           }
           out.push({

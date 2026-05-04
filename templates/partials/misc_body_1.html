@@ -2827,29 +2827,74 @@ window._showSimProgress = function(opts, onDone){
     if(pos <= (c += z.uecl))    return 'zone-conf';
     return '';
   };
-  // ── ESCUDOS CUSTOM: alimenta window._ligaEaShields para que
-  // getTeamLogoUrl (bundle.js) devuelva el escudo del editor en lugar
-  // del hardcodeado cuando el admin ha puesto una URL nueva.
-  // Cubre Liga EA Sports, Hypermotion y Primera Federación.
+  // ── ESCUDOS CUSTOM + FLAGS HUMANOS GLOBALES ────────────────────
+  // Petición usuario 2026-05-04: PSG vive en `ligaExt_francia` con su
+  // escudo + plantilla + isHuman/humanEmoji 🦆. Cuando el admin lo
+  // añade al pool manual EA→Europa (Superliga, etc.) o aparece en
+  // cualquier otra competición, debe MERGE-arse con esa fuente — no
+  // perder el escudo ni el flag humano.
+  //
+  // Por eso `refreshLigaEaShields` escanea TODAS las claves
+  // `ligaExt_*` (no solo Liga EA / Hypermotion / Primera Fed) y
+  // alimenta a la vez:
+  //   · `window._ligaEaShields[name]` → escudo (lo consume
+  //     getTeamLogoUrl en bundle.js).
+  //   · `window._LIGA_HUMAN_FLAGS[name]` → {isHuman, humanEmoji}
+  //     (lo consume `standings()` como fallback cuando un equipo de
+  //     una liga manual no tiene el flag pero sí lo tiene en la liga
+  //     "fuente" — p.ej. PSG en Superliga hereda el 🦆 de Francia).
+  // Las ligas con prioridad más baja NO pisan a las más altas:
+  // Liga EA Sports primero, luego Hypermotion / Primera Fed, luego
+  // las 51 extranjeras en el orden que las devuelva localStorage.
   function refreshLigaEaShields(){
     var shields = {};
-    var slugs = ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion'];
-    slugs.forEach(function(slug){
+    var humanFlags = {};
+    /* Slugs prioritarios (se procesan primero, no se sobreescriben luego). */
+    var prioritySlugs = ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion'];
+    function _scan(slug){
       try {
         var raw = localStorage.getItem('ligaExt_'+slug);
         if(!raw) return;
         var data = JSON.parse(raw);
         if(!data || !Array.isArray(data.teams)) return;
         data.teams.forEach(function(t){
-          if(t && t.name && t.shield){
-            shields[t.name] = t.shield;
-            var norm = _normName(t.name);
-            if(norm) shields[norm] = t.shield;
+          if(!t || !t.name) return;
+          var nm = String(t.name).trim();
+          if(!nm) return;
+          if(t.shield){
+            if(!shields[nm]) shields[nm] = t.shield;
+            var norm = _normName(nm);
+            if(norm && !shields[norm]) shields[norm] = t.shield;
+          }
+          if(t.isHuman){
+            if(!humanFlags[nm]){
+              humanFlags[nm] = {isHuman:true, humanEmoji:t.humanEmoji||'👤'};
+              var nrm = _normName(nm);
+              if(nrm && !humanFlags[nrm]) humanFlags[nrm] = humanFlags[nm];
+            }
           }
         });
       } catch(_){}
-    });
+    }
+    /* 1) Spanish tiers primero (prioridad) */
+    prioritySlugs.forEach(_scan);
+    /* 2) Resto de ligaExt_* en orden alfabético — incluye las 51
+          extranjeras (francia, inglaterra, alemania, …) y las ligas
+          custom que el admin haya creado (superliga, etc.). */
+    try {
+      var allSlugs = [];
+      for(var i=0;i<localStorage.length;i++){
+        var k = localStorage.key(i);
+        if(!k || k.indexOf('ligaExt_')!==0) continue;
+        if(k.indexOf('_backup')!==-1 || k.indexOf('_snap_')!==-1 || k.indexOf('_protected')!==-1) continue;
+        var slug = k.substring('ligaExt_'.length);
+        if(prioritySlugs.indexOf(slug)!==-1) continue;
+        allSlugs.push(slug);
+      }
+      allSlugs.sort().forEach(_scan);
+    } catch(_){}
     window._ligaEaShields = shields;
+    window._LIGA_HUMAN_FLAGS = humanFlags;
   }
   // Ejecutar al cargar para que getTeamLogoUrl ya los vea desde el
   // primer render de buildLigaClas. Se refresca también tras cada save
@@ -7150,7 +7195,12 @@ window._showSimProgress = function(opts, onDone){
         rows = '<div class="mea-empty">Sin equipos añadidos. Añade abajo.</div>';
       } else {
         rows = teams.map(function(t){
-          var logo = t.logo || _logoFor(t.name);
+          /* Preferimos el escudo "vivo" — `_logoFor` consulta
+             `_ligaEaShields` que ahora incluye TODAS las ligas
+             extranjeras (PSG en Liga Francesa, etc.). El logo
+             guardado en t.logo solo se usa como fallback histórico
+             para teams que ya no estén en ningún editor. */
+          var logo = _logoFor(t.name) || t.logo || '';
           var img = logo ? '<img src="'+_esc(logo)+'" alt="" onerror="this.style.display=\'none\'">' : '';
           /* Botón quitar: data-attributes en lugar de onclick inline
              para evitar el infierno de escapes de comillas con
@@ -9664,8 +9714,23 @@ Tottenham
 
   function standings(data){
     var map = {};
+    /* Merge con registros globales: si el team object de ESTA liga
+       no tiene shield / isHuman / humanEmoji pero el equipo SÍ existe
+       en otra liga (p.ej. PSG en Liga Francesa con 🦆), pulamos esos
+       valores desde `_ligaEaShields` y `_LIGA_HUMAN_FLAGS`.
+       Petición usuario 2026-05-04: el PSG añadido al pool manual de
+       Superliga debe heredar escudo + bandera humana de su entrada
+       canónica en Liga Francesa, no aparecer pelado. */
+    var gShields = window._ligaEaShields || {};
+    var gHuman   = window._LIGA_HUMAN_FLAGS || {};
     data.teams.forEach(function(t){
-      map[t.id] = {id:t.id,name:t.name,shield:t.shield,power:Number(t.power)||50,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0,isHuman:!!t.isHuman,humanEmoji:t.humanEmoji||''};
+      var nm = t.name || '';
+      var nrm = (typeof _normName === 'function') ? _normName(nm) : nm.toLowerCase();
+      var sh = t.shield || gShields[nm] || gShields[nrm] || '';
+      var hf = (t.isHuman || t.humanEmoji)
+                 ? {isHuman:!!t.isHuman, humanEmoji:t.humanEmoji||''}
+                 : (gHuman[nm] || gHuman[nrm] || {isHuman:false, humanEmoji:''});
+      map[t.id] = {id:t.id,name:nm,shield:sh,power:Number(t.power)||50,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0,isHuman:!!hf.isHuman,humanEmoji:hf.humanEmoji||''};
     });
     (data.results||[]).forEach(function(r){
       var H = map[r.h], A = map[r.a]; if(!H||!A) return;

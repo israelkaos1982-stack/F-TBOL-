@@ -3833,10 +3833,17 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
 
-    // Hash rápido para no re-aplicar si nada cambió
-    var hash = bridge.meta.teamsCount + ':' + bridge.meta.playersCount + ':' + bridge.meta.humansCount + ':' + bridge.meta.generatedAt;
-    if(hash === _lastAppliedHash) return;
-    _lastAppliedHash = hash;
+    /* Hash check ELIMINADO (2026-05-05). Antes esto saltaba la
+       re-aplicación cuando el hash no cambiaba. Pero el hash incluye
+       `generatedAt = new Date().toISOString()` que SIEMPRE cambia, así
+       que el check no aportaba pero podía bloquear casos edge (dos
+       saves dentro del mismo ms). Reportado: tras renombrar
+       "Giuliano" → "Giuliano Simeone" desde el editor de equipo, el
+       cambio NO aparecía en el event picker de un partido en jornada
+       ≥ 2 aunque applyEngineOverrides fuera invocado. Sin el gate
+       siempre rebuild → SQUAD_REGISTRY refresca sin condiciones. */
+    _lastAppliedHash = ''; /* (variable conservada por compatibilidad
+                              con código que la inspeccione externamente) */
 
     // ── 1. TEAM_RATINGS ──────────────────────────────────────────
     if(window.TEAM_RATINGS){
@@ -3985,6 +3992,196 @@ window._showSimProgress = function(opts, onDone){
     });
   }
   window._lextRefreshJ1Pickers = _lextRefreshJ1Pickers;
+
+  /* ════════════════════════════════════════════════════════════════
+     WRAPPER de sqFromRegistryFull / sqFromRegistry: LEER DEL EDITOR
+     PRIMERO (2026-05-05)
+     ════════════════════════════════════════════════════════════════
+     Cualquier rename / edición del admin en `ligaExt_<slug>` se debe
+     ver INMEDIATAMENTE en el event picker de cualquier partido,
+     sin depender de que applyEngineOverrides haya corrido o de que
+     SQUAD_REGISTRY esté actualizado.
+
+     Estrategia: envolvemos `sqFromRegistryFull` (y su hermano corto
+     `sqFromRegistry`) para que, ANTES de leer SQUAD_REGISTRY, busque
+     el equipo en TODAS las claves `ligaExt_*` del localStorage. La
+     primera con `players.length > 0` gana, con preferencia
+     `ligaExt_liga-ea-sports`. Si no encuentra nada, delegamos al
+     wrapper anterior (que sigue mirando SQUAD_REGISTRY + BAJA_STORE
+     etc.).
+
+     Reportado 2026-05-05: tras renombrar "Giuliano" → "20. Giuliano
+     Simeone 84" en el editor del Atlético Madrid, el picker en un
+     partido de jornada 3 seguía mostrando "Giuliano". Causa: el
+     bundle hardcodea SQUAD_REGISTRY['Atlético Madrid'] al cargar
+     y, según algunas rutas, lo lee antes de que applyEngineOverrides
+     lo refresque. Con este wrapper ya da igual el orden — siempre
+     ganamos los datos del editor. */
+  function _lextNormForLookup(s){
+    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+  }
+  function _lextFindTeamInAnyLigaExt(teamName){
+    if (!teamName) return null;
+    var aliases = window.TEAM_ALIASES || {};
+    var raw = String(teamName).trim();
+    var rawLower = raw.toLowerCase();
+    var resolvedAlias = aliases[rawLower] || raw;
+    var targets = [_lextNormForLookup(raw)];
+    var resN = _lextNormForLookup(resolvedAlias);
+    if (resN && targets.indexOf(resN) === -1) targets.push(resN);
+    /* Liga EA Sports tiene preferencia (es el slug "principal" de
+       todos los partidos de Liga EA, Champions, etc.). Si no está
+       ahí, usamos cualquier ligaExt_<slug> como fallback. */
+    var preferred = null, fallback = null;
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup') !== -1) continue;
+        if (k.indexOf('_snap_') !== -1) continue;
+        if (k.indexOf('_protected') !== -1) continue;
+        var rawData = localStorage.getItem(k); if (!rawData) continue;
+        var data; try { data = JSON.parse(rawData); } catch(_) { continue; }
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        for (var j = 0; j < teams.length; j++) {
+          var t = teams[j];
+          if (!t || !t.name) continue;
+          var nm = _lextNormForLookup(t.name);
+          var hit = false;
+          for (var ti = 0; ti < targets.length; ti++) {
+            if (nm === targets[ti]) { hit = true; break; }
+          }
+          if (!hit) continue;
+          if (!Array.isArray(t.players) || !t.players.length) continue;
+          if (k === 'ligaExt_liga-ea-sports') {
+            preferred = t;
+            break; /* Liga EA gana sin más */
+          } else if (!fallback) {
+            fallback = t;
+          }
+        }
+        if (preferred) break;
+      }
+    } catch(_){}
+    return preferred || fallback;
+  }
+  function _lextBuildSqFromTeam(t){
+    if (!t || !Array.isArray(t.players) || !t.players.length) return [];
+    var POS_MAP = {POR:'P', DEF:'D', MED:'M', DEL:'F'};
+    var POS_ORDER = ['P','D','M','F'];
+    var byPos = {P:[], D:[], M:[], F:[]};
+    t.players.forEach(function(p){
+      if (!p || !p.name) return;
+      var pos = POS_MAP[p.pos] || 'M';
+      byPos[pos].push(p);
+    });
+    var out = [];
+    POS_ORDER.forEach(function(pos){
+      var pool = byPos[pos];
+      if (!pool.length) return;
+      pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+      pool.forEach(function(p){
+        var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+        /* Formato extendido (igual que sqFromRegistryFull): cada
+           entry es [num, name, pos, power]. */
+        var row = [String(p.num || ''), String(p.name||'?'), pos, pw];
+        if (p.elite)      row.elite      = true;
+        if (p.natGoal)    row.natGoal    = true;
+        if (p.natGoalPro) row.natGoalPro = true;
+        if (p.captain)    row.captain    = true;
+        if (p.freeKick)   row.freeKick   = true;
+        if (p.penalty)    row.penalty    = true;
+        out.push(row);
+      });
+    });
+    return out;
+  }
+  function _lextBuildSqShortFromTeam(t){
+    /* Formato CORTO (sqFromRegistry): [num, name, pos, power] con
+       headers `{h:'🧤 PORTEROS'}` etc. entre líneas. */
+    if (!t || !Array.isArray(t.players) || !t.players.length) return [];
+    var POS_MAP = {POR:'P', DEF:'D', MED:'M', DEL:'F'};
+    var POS_HEADERS = {P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS'};
+    var POS_ORDER = ['P','D','M','F'];
+    var byPos = {P:[], D:[], M:[], F:[]};
+    t.players.forEach(function(p){
+      if (!p || !p.name) return;
+      var pos = POS_MAP[p.pos] || 'M';
+      byPos[pos].push(p);
+    });
+    var out = [];
+    POS_ORDER.forEach(function(pos){
+      var pool = byPos[pos];
+      if (!pool.length) return;
+      pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+      out.push({h: POS_HEADERS[pos]});
+      pool.forEach(function(p){
+        var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+        var entry = [String(p.num || ''), String(p.name||'?'), pos, pw];
+        if (p.elite)      entry.elite      = true;
+        if (p.natGoal)    entry.natGoal    = true;
+        if (p.natGoalPro) entry.natGoalPro = true;
+        if (p.captain)    entry.captain    = true;
+        if (p.freeKick)   entry.freeKick   = true;
+        if (p.penalty)    entry.penalty    = true;
+        out.push(entry);
+      });
+    });
+    return out;
+  }
+  /* Aplazamos el wrap a DOMContentLoaded + setTimeout pequeños para
+     asegurar que ya se cargó el bundle Y los wrappers de BAJA_STORE
+     (línea 6082 del bundle). Así envolvemos por encima de TODO sin
+     romper la cadena. */
+  function _wrapSqFromRegistry(){
+    if (window._lextSqWrapped) return;
+    var origFull  = window.sqFromRegistryFull;
+    var origShort = window.sqFromRegistry;
+    if (typeof origFull === 'function') {
+      window.sqFromRegistryFull = function(teamName){
+        try {
+          var t = _lextFindTeamInAnyLigaExt(teamName);
+          if (t) {
+            var built = _lextBuildSqFromTeam(t);
+            if (built && built.length) return built;
+          }
+        } catch(_){}
+        return origFull.apply(this, arguments);
+      };
+    }
+    if (typeof origShort === 'function') {
+      window.sqFromRegistry = function(teamName, opts){
+        try {
+          var t = _lextFindTeamInAnyLigaExt(teamName);
+          if (t) {
+            var built = _lextBuildSqShortFromTeam(t);
+            if (built && built.length) {
+              /* Respeta el filtro `opts.excluded` (lesionados/sancionados)
+                 que el caller pase. Igual que el original. */
+              if (opts && Array.isArray(opts.excluded) && opts.excluded.length) {
+                var exNorm = {};
+                opts.excluded.forEach(function(n){ exNorm[_lextNormForLookup(n)] = true; });
+                built = built.filter(function(e){
+                  if (e && e.h) return true;
+                  return !exNorm[_lextNormForLookup(e[1]||'')];
+                });
+              }
+              return built;
+            }
+          }
+        } catch(_){}
+        return origShort.apply(this, arguments);
+      };
+    }
+    window._lextSqWrapped = true;
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){
+      setTimeout(_wrapSqFromRegistry, 200);
+    });
+  } else {
+    setTimeout(_wrapSqFromRegistry, 200);
+  }
 
   function _importOtherLeaguesIntoEngine(){
     var POS_MAP = { POR:'P', DEF:'D', MED:'M', DEL:'F' };
@@ -11842,10 +12039,20 @@ Tottenham
     lextClearTeamForm();
     renderTeamsList();
     renderTable();
-    // Fase 2: re-aplicar overrides del motor tras cada save para que
-    // TEAM_RATINGS, SQUAD_REGISTRY y LIGA_SCHEDULE reflejen el cambio.
+    /* Re-aplicar overrides del motor INMEDIATAMENTE (sin setTimeout)
+       tras cada save. SQUAD_REGISTRY del motor (que usan los pickers
+       de evento de cualquier partido) se reescribe AHORA con los
+       nombres editados. Antes aplicábamos en setTimeout(100), lo que
+       creaba una ventana en la que el admin podía abrir un partido y
+       ver nombres viejos. Reportado 2026-05-05: rename "Giuliano" →
+       "Giuliano Simeone" no aparecía en el picker.
+       Además invalidamos el cache de la liga ANTES de aplicar para
+       que `ligaEaBuildEngineOverrides` lea localStorage fresco — sin
+       este reset, una lectura paralela podía devolver la versión
+       previa de LIGA_CACHE. */
+    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
     if(typeof window.applyEngineOverrides === 'function'){
-      setTimeout(window.applyEngineOverrides, 100);
+      try { window.applyEngineOverrides(); } catch(_){}
     }
   };
 

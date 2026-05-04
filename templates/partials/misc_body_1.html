@@ -2077,14 +2077,22 @@ window._showSimProgress = function(opts, onDone){
     var row = t.closest('.clas-row');
     if(!row) return;
     var scope = row.closest('#s-liga-clas');
-    // También funciona en Hypermotion y Primera Federación
+    // También funciona en Hypermotion, Primera Federación y Superliga.
+    // Para Superliga el slug por defecto es liga-ea-sports — los
+    // 6 equipos pueden venir de cualquier liga (LaLiga + Bundesliga +
+    // Premier + Ligue 1…), pero la cadena de fallbacks (Pasadas 3-4)
+    // ya escanea TODOS los `ligaExt_*` del localStorage hasta dar con
+    // el equipo, así que el slug "principal" sólo controla qué
+    // contexto/storage se usa para cachear el resultado.
     var slugMap = {
-      's-liga-clas':     'liga-ea-sports',
-      's-segunda-clas':  'liga-hypermotion',
-      's-primf-clas':    'liga-primera-federacion'
+      's-liga-clas':       'liga-ea-sports',
+      's-segunda-clas':    'liga-hypermotion',
+      's-primf-clas':      'liga-primera-federacion',
+      's-superliga-clas':  'liga-ea-sports'
     };
     if(!scope) scope = row.closest('#s-segunda-clas');
     if(!scope) scope = row.closest('#s-primf-clas');
+    if(!scope) scope = row.closest('#s-superliga-clas');
     if(!scope) return;
     var slug = slugMap[scope.id] || 'liga-ea-sports';
     var nameEl = row.querySelector('.clas-team-name');

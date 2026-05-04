@@ -873,6 +873,10 @@
 #s-superliga-clas .jbtn.c-superliga.done{background:linear-gradient(135deg,#1a1400,#3a2c00,#5a4400,#3a2c00,#1a1400);border-left:3px solid #F1C40F;}
 #s-superliga-clas .mn{display:flex;align-items:center;gap:6px;min-width:0;}
 #s-superliga-clas .mn.r{justify-content:flex-end;}
+/* Filas clicables → abren el overlay de plantilla del equipo (mismo
+   handler que Liga EA Sports). Cursor + hover para feedback visual. */
+#s-superliga-clas .clas-row{cursor:pointer;}
+#s-superliga-clas .clas-row:hover{filter:brightness(1.25);}
 /* Caja "Estadísticas" en cabecera — atajo a s-superliga-stats. */
 #s-superliga-clas .sl-stats-cta{display:flex;align-items:center;gap:10px;margin:6px 12px 12px;padding:11px 14px;background:linear-gradient(135deg,#1c0f30,#3d1a66 50%,#7e22ce 100%);border:1px solid rgba(168,85,247,.5);border-radius:10px;cursor:pointer;font-family:Oswald,sans-serif;color:#fff;letter-spacing:1.4px;font-weight:700;font-size:13px;box-shadow:0 0 14px rgba(168,85,247,.18);transition:filter .16s,transform .16s;}
 #s-superliga-clas .sl-stats-cta:hover{filter:brightness(1.18);transform:translateY(-1px);}
@@ -1233,6 +1237,14 @@
     };
     saveResults(results);
     buildClas();
+    /* Refresca el dashboard de estadísticas si ya existe (puede no
+       haberse construido aún si el usuario no ha entrado nunca a
+       s-superliga-stats — en ese caso buildClas no le afecta). */
+    try {
+      if (typeof window._superligaStatsRebuild === 'function') {
+        window._superligaStatsRebuild();
+      }
+    } catch(_){}
     /* Si la pantalla DERBYS está abierta, refresca para reflejar el
        nuevo estado/marcador de la card de Superliga. */
     try {
@@ -1281,8 +1293,14 @@
   });
   /* Hook ligero en el `go()` para refrescar al entrar a la pantalla
      (cubre el caso de cambios hechos por código que no dispara
-     `storage` — los `localStorage.setItem` mismo-tab no lo emiten). */
-  (function(){
+     `storage` — los `localStorage.setItem` mismo-tab no lo emiten).
+     IMPORTANTE: el bundle.js que define `window.go` carga DESPUÉS de
+     este partial (ver index.html), así que diferimos el patch hasta
+     DOMContentLoaded para que `window.go` ya exista cuando intentamos
+     envolverlo. Antes ese código se ejecutaba inline durante el parseo
+     y devolvía early → la pantalla nunca se refrescaba al re-entrar
+     y los resultados nuevos no se reflejaban. */
+  function _patchGoForClas(){
     var orig = window.go;
     if(typeof orig !== 'function' || orig._superligaPatched) return;
     var patched = function(id){
@@ -1290,9 +1308,15 @@
       if(id === 's-superliga-clas') buildClas();
       return r;
     };
+    Object.keys(orig).forEach(function(k){ patched[k] = orig[k]; });
     patched._superligaPatched = true;
     window.go = patched;
-  })();
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _patchGoForClas);
+  } else {
+    _patchGoForClas();
+  }
 })();
 </script>
 </div>
@@ -1569,8 +1593,13 @@
   window._superligaStatsRebuild = build;
 
   document.addEventListener('DOMContentLoaded', build);
-  /* Refresca al entrar a la pantalla. Hook ligero sobre go(). */
-  (function(){
+  /* Refresca al entrar a la pantalla. Hook ligero sobre go(). El
+     bundle.js (que define `window.go`) carga DESPUÉS de este partial,
+     así que diferimos hasta DOMContentLoaded — antes el patch se
+     ejecutaba inline cuando window.go aún era undefined y la pantalla
+     no se refrescaba al re-entrar (reportado 2026-05-04: "no se están
+     subiendo las estadísticas"). */
+  function _patchGoForStats(){
     var orig = window.go;
     if(typeof orig !== 'function' || orig._superligaStatsPatched) return;
     var patched = function(id){
@@ -1578,9 +1607,15 @@
       if(id === 's-superliga-stats') build();
       return r;
     };
+    Object.keys(orig).forEach(function(k){ patched[k] = orig[k]; });
     patched._superligaStatsPatched = true;
     window.go = patched;
-  })();
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _patchGoForStats);
+  } else {
+    _patchGoForStats();
+  }
 })();
 </script>
 </div>

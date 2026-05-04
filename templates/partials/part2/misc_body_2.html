@@ -1200,6 +1200,15 @@
     };
     saveResults(results);
     buildClas();
+    /* Si la pantalla DERBYS está abierta, refresca para reflejar el
+       nuevo estado/marcador de la card de Superliga. */
+    try {
+      var dscr = document.getElementById('s-derbys');
+      if (dscr && dscr.classList.contains('active') &&
+          typeof window._buildDerbysList === 'function') {
+        window._buildDerbysList();
+      }
+    } catch(_){}
   };
 
   /* Abre el flujo Previa → gmOpen para un partido HvH de Superliga. */
@@ -14535,6 +14544,11 @@ window.goLiveMatches = function() {
     'cal-mu':   { name:'Mundial',            ico:'🌍', color:'#c8a000', jornadaLabel:'Fase'    },
     'cal-mf':   { name:'Mundial',            ico:'🌍', color:'#c8a000', jornadaLabel:'Fase'    }
   };
+  /* Info de Superliga (no entra en COMP_INFO porque su scanner es
+     directo desde localStorage, no via prefijo `cal-*`). Se usa para
+     etiquetar las cards en la pantalla DERBYS y enrutar los clicks
+     pending al flujo previa específico de Superliga. */
+  var SUPERLIGA_COMP = { name:'Superliga', ico:'⭐', color:'#a855f7', jornadaLabel:'Jornada' };
 
   function _compInfoFromWrap(wrap) {
     var el = wrap;
@@ -14671,11 +14685,17 @@ window.goLiveMatches = function() {
       /* Exclusión de amistosos */
       var p = w;
       var isAmistoso = false;
+      var isSuperliga = false;
       while (p && p.parentElement) {
         if (p.id === 'ams-match-container' || p.id === 's-amistosos') { isAmistoso = true; break; }
+        /* Las cards que el render de Superliga inserta dentro de
+           `#sl-jornadas` también son `.match-live-wrap`. Las saltamos
+           aquí porque la fuente (4) las recoge directamente desde
+           localStorage con info de competición correcta. */
+        if (p.id === 'sl-jornadas' || p.id === 's-superliga-clas') { isSuperliga = true; break; }
         p = p.parentElement;
       }
-      if (isAmistoso) return;
+      if (isAmistoso || isSuperliga) return;
       var teams = _teamsFromWrap(w);
       var home = _normalizeHumanName(teams.home);
       var away = _normalizeHumanName(teams.away);
@@ -14780,6 +14800,60 @@ window.goLiveMatches = function() {
           });
         });
       });
+    } catch(_){}
+
+    /* (4) Scan de Superliga — todos los partidos del calendario
+           guardado en `superliga_calendar_v1` son HvH por definición
+           (los 6 equipos los selecciona el admin en EA Sports → Europa
+           y el motor los abre como humanos). No depende del DOM:
+           lee directamente el calendario y los resultados de
+           `superliga_results_v1`. Source name 'superliga'. */
+    try {
+      var slCalRaw = localStorage.getItem('superliga_calendar_v1');
+      var slResRaw = localStorage.getItem('superliga_results_v1');
+      var slCal = slCalRaw ? JSON.parse(slCalRaw) : null;
+      var slRes = slResRaw ? (JSON.parse(slResRaw) || {}) : {};
+      if (slCal && Array.isArray(slCal.schedule)) {
+        slCal.schedule.forEach(function(round, idx){
+          if (!Array.isArray(round)) return;
+          var j = idx + 1;
+          round.forEach(function(m){
+            if (!Array.isArray(m) || m.length < 2) return;
+            var home = String(m[0] || '').trim();
+            var away = String(m[1] || '').trim();
+            if (!home || !away) return;
+            var rk = j + '|' + home + '|' + away;
+            var res = slRes[rk];
+            var state = 'pending';
+            var score = { a:'0', b:'0' };
+            if (res && (typeof res.gh === 'number' || typeof res.ga === 'number')) {
+              state = 'finished';
+              score = { a: String(res.gh || 0), b: String(res.ga || 0) };
+            }
+            /* Si el partido está en el gm-modal vivo en este momento,
+               lo marcamos como 'playing' para que aparezca arriba con
+               el badge rojo. */
+            try {
+              var gm = window.__GM_LIVE;
+              if (gm && !gm.finished && gm.kickoffDone &&
+                  gm.comp === 'superliga' && gm.j === j &&
+                  String(gm.home||'').trim() === home &&
+                  String(gm.away||'').trim() === away) {
+                state = 'playing';
+                if (gm.sc) score = { a: String(gm.sc.a||0), b: String(gm.sc.b||0) };
+              }
+            } catch(_){}
+            _addUnique({
+              source: 'superliga',
+              home: home, away: away,
+              j: j,
+              comp: SUPERLIGA_COMP,
+              state: state,
+              score: score
+            });
+          });
+        });
+      }
     } catch(_){}
 
     return out;
@@ -14900,6 +14974,11 @@ window.goLiveMatches = function() {
           }
           return;
         }
+        /* Superliga finalizada: lleva a la pantalla de Clasificación
+           (showMatchActaModal lee de la tabla de Liga, no aplica). */
+        if (item.source === 'superliga' && typeof go === 'function') {
+          try { go('s-superliga-clas'); return; } catch(_){}
+        }
         /* Schedule/mrow sin wrap — abrir acta modal si es Liga finalizada */
         if (typeof window.showMatchActaModal === 'function' && item.j) {
           try { window.showMatchActaModal(item.j, home, away); return; } catch(_){}
@@ -14909,7 +14988,15 @@ window.goLiveMatches = function() {
       /* Partido nuevo (pending): los derbys son HvH por definición,
          así que SIEMPRE pasan por la previa (Twitch, balón, panel de
          sancionados/lesionados, compartir WhatsApp). Sin esta llamada
-         la tarjeta saltaba directa al partido — petición usuario. */
+         la tarjeta saltaba directa al partido — petición usuario.
+
+         IMPORTANTE: Superliga tiene su propio handler porque guarda
+         los resultados en `superliga_results_v1` (no en la tabla
+         de Liga). Sin este routing, la card abriría la previa
+         de Liga y el resultado iría a la tabla equivocada. */
+      if (item.source === 'superliga' && typeof window._openSuperligaMatch === 'function') {
+        try { window._openSuperligaMatch(item.j || 0, home, away); return; } catch(_){}
+      }
       if (typeof window._openMatchWithPrevia === 'function') {
         try { window._openMatchWithPrevia(item.j || 0, home, away); return; } catch(_){}
       }

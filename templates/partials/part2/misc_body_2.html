@@ -822,9 +822,9 @@
 #s-superliga-clas .clas-scroll-outer{position:relative;}
 #s-superliga-clas .clas-hdr-scroll{overflow:hidden;position:sticky;top:44px;z-index:20;}
 #s-superliga-clas .clas-scroll{overflow-x:auto;padding-top:6px;}
-#s-superliga-clas .clas-table{width:100%;display:flex;flex-direction:column;gap:0;min-width:500px;}
+#s-superliga-clas .clas-table{width:100%;display:flex;flex-direction:column;gap:0;min-width:560px;}
 #s-superliga-clas .clas-hdr,
-#s-superliga-clas .clas-row{display:grid;grid-template-columns:minmax(120px,1.4fr) 36px 28px 24px 24px 24px 28px 28px 30px 32px 34px 72px;gap:2px;align-items:center;}
+#s-superliga-clas .clas-row{display:grid;grid-template-columns:minmax(190px,2.4fr) 36px 28px 24px 24px 24px 28px 28px 30px 32px 72px;gap:2px;align-items:center;}
 #s-superliga-clas .clas-hdr{padding:8px 6px 8px 0;background:linear-gradient(90deg,#1c0f30,#3d1a66);border-bottom:2px solid rgba(168,85,247,.55);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.62);font-weight:700;text-align:center;}
 #s-superliga-clas .clas-hdr-team{position:sticky;left:0;z-index:21;background:linear-gradient(90deg,#1c0f30,#3d1a66);padding:8px 6px;text-align:left;color:rgba(255,255,255,.92);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;font-weight:700;}
 #s-superliga-clas .clas-row{padding:6px 6px 6px 0;border-bottom:1px solid rgba(255,255,255,.05);transition:background .12s;border-left:3px solid transparent;}
@@ -832,7 +832,7 @@
 #s-superliga-clas .clas-row.zone-champ{background:rgba(240,192,64,.12);border-left-color:#f0c040;}
 #s-superliga-clas .clas-row.zone-top{background:rgba(168,85,247,.12);border-left-color:#a855f7;}
 #s-superliga-clas .clas-row.zone-bot{background:rgba(224,60,60,.12);border-left-color:#e03c3c;}
-#s-superliga-clas .clas-team-cell{position:sticky;left:0;z-index:5;display:flex;align-items:center;gap:4px;padding:0 4px;background:#0a0414;}
+#s-superliga-clas .clas-team-cell{position:sticky;left:0;z-index:5;display:flex;align-items:center;gap:5px;padding:0 4px;background:#0a0414;min-width:0;}
 #s-superliga-clas .clas-row.zone-champ .clas-team-cell{background:#1a1300;}
 #s-superliga-clas .clas-row.zone-top .clas-team-cell{background:#15082a;}
 #s-superliga-clas .clas-row.zone-bot .clas-team-cell{background:#180606;}
@@ -840,8 +840,9 @@
 #s-superliga-clas .zone-champ .clas-pos-n{color:#f0c040;}
 #s-superliga-clas .zone-top .clas-pos-n{color:#c89bff;}
 #s-superliga-clas .zone-bot .clas-pos-n{color:#ff7070;}
-#s-superliga-clas .clas-team-name{font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px;}
-#s-superliga-clas .clas-team-shield{width:18px;height:18px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 2px rgba(0,0,0,.55));}
+/* Permitimos que el nombre completo del equipo se vea sin truncar
+   (override del global que aplica text-overflow:ellipsis). */
+#s-superliga-clas .clas-team-name-text{white-space:nowrap;overflow:visible;text-overflow:clip;}
 #s-superliga-clas .clas-pct{font-family:"Bebas Neue",sans-serif;font-size:14px;color:#c0a0ff;text-align:center;}
 #s-superliga-clas .clas-pts{font-family:"Bebas Neue",sans-serif;font-size:18px;color:#f0c040;text-align:center;font-weight:700;}
 #s-superliga-clas .clas-pj,
@@ -1043,7 +1044,6 @@
     }
     var results = loadResults();
     var list = collectStandings(cal, results);
-    var humanIcon = (typeof window.humanIcon === 'function') ? window.humanIcon : function(){ return ''; };
 
     var html = ''
       + '<div class="clas-scroll-outer">'
@@ -1052,7 +1052,7 @@
       +       '<div class="clas-hdr">'
       +         '<span class="clas-hdr-team">Equipo</span>'
       +         '<span>PTS</span><span>PJ</span><span>V</span><span>E</span><span>P</span>'
-      +         '<span>GF</span><span>GC</span><span>DG</span><span>%</span><span>Últ. 5</span><span></span>'
+      +         '<span>GF</span><span>GC</span><span>DG</span><span>%</span><span>Últ. 5</span>'
       +       '</div>'
       +     '</div>'
       +   '</div>'
@@ -1062,15 +1062,25 @@
       var pos = idx + 1;
       var dgClass = 'clas-val dg ' + (t.dg > 0 ? 'pos' : t.dg < 0 ? 'neg' : 'zer');
       var pct = t.pj > 0 ? Math.round((t.v / t.pj) * 100) : 0;
-      var shield = _logoFor(t.name);
-      var shieldHtml = shield
-        ? '<img class="clas-team-shield" src="' + _esc(shield) + '" alt="' + _esc(t.name) + '" loading="lazy" decoding="async">'
-        : '';
+      // Escudo: prioriza el helper global (idéntico a Liga EA Sports —
+      // gestiona alias, fallback a hexágono con iniciales, etc.).
+      var badgeHtml = (typeof window.getTeamBadgeHtml === 'function')
+        ? window.getTeamBadgeHtml(t.name)
+        : (function(){
+            var l = _logoFor(t.name);
+            return l ? '<img class="clas-team-logo" src="' + _esc(l) + '" alt="' + _esc(t.name) + '" onerror="this.style.display=\'none\'">' : '';
+          })();
+      // Emoji de equipo humano (🐭/✏️/🔨/💡/👿…) AL FINAL del nombre.
+      // humanIcon devuelve "X " o "" — usamos solo el emoji.
+      var rawIcon = (typeof window.humanIcon === 'function') ? window.humanIcon(t.name) : '';
+      var humanEmoji = rawIcon ? rawIcon.replace(/ /g, '').trim() : '';
+      var suffixHtml = humanEmoji ? '<span class="clas-team-human-suffix">' + humanEmoji + '</span>' : '';
       html += ''
         + '<div class="clas-row ' + rowZone(pos) + '">'
         +   '<div class="clas-team-cell">'
         +     '<span class="clas-pos-n">' + pos + '</span>'
-        +     '<span class="clas-team-name">' + shieldHtml + humanIcon(t.name) + _esc(t.name) + '</span>'
+        +     badgeHtml
+        +     '<span class="clas-team-name"><span class="clas-team-name-text">' + _esc(t.name) + '</span>' + suffixHtml + '</span>'
         +   '</div>'
         +   '<div class="clas-pts">' + t.pts + '</div>'
         +   '<div class="clas-pj">' + t.pj + '</div>'
@@ -1082,7 +1092,6 @@
         +   '<div class="' + dgClass + '">' + (t.dg > 0 ? '+' : '') + t.dg + '</div>'
         +   '<div class="clas-pct">' + pct + '%</div>'
         +   '<div class="clas-form">' + formHtml(t.form) + '</div>'
-        +   '<div></div>'
         + '</div>';
     });
     html += '    </div></div></div>';
@@ -1100,9 +1109,13 @@
     var shieldHtml = shield
       ? '<img class="sl-j-shield" src="' + _esc(shield) + '" alt="' + _esc(name) + '" loading="lazy" decoding="async">'
       : '';
-    var humanIcon = (typeof window.humanIcon === 'function') ? window.humanIcon : function(){ return ''; };
-    var nameHtml = '<span class="sl-j-team-name">' + humanIcon(name) + _esc(name) + '</span>';
-    return isRight ? (nameHtml + shieldHtml) : (shieldHtml + nameHtml);
+    /* Emoji humano AL FINAL del nombre (consistente con la clasificación). */
+    var rawIcon = (typeof window.humanIcon === 'function') ? window.humanIcon(name) : '';
+    var humanEmoji = rawIcon ? rawIcon.replace(/ /g, '').trim() : '';
+    var iconHtml = humanEmoji ? '<span class="clas-team-human-suffix">' + humanEmoji + '</span>' : '';
+    var nameHtml = '<span class="sl-j-team-name">' + _esc(name) + '</span>';
+    var nameWithIcon = isRight ? (iconHtml + nameHtml) : (nameHtml + iconHtml);
+    return isRight ? (nameWithIcon + shieldHtml) : (shieldHtml + nameWithIcon);
   }
   function scoreCellHtml(j, home, away, res){
     if(res){ return '<div class="ms">' + res.gh + '–' + res.ga + '</div>'; }
@@ -3307,10 +3320,14 @@
       // Escudo del equipo (igual que Liga EA Sports)
       var badgeHtml = (typeof window.getTeamBadgeHtml === 'function') ? window.getTeamBadgeHtml(team.name) : '';
       var displayName = esc(team.short||team.name);
+      // Emoji humano AL FINAL del nombre (mismo formato que Liga EA Sports)
+      var rawIcon = humanIcon(team.name) || '';
+      var humanEmoji = rawIcon ? rawIcon.replace(/ /g, '').trim() : '';
+      var humanSuffix = humanEmoji ? '<span class="clas-team-human-suffix">'+humanEmoji+'</span>' : '';
       html+='<div class="clas-row '+(zoneFn?zoneFn(pos,table.length):'')+'" style="cursor:pointer;">'
         +'<div class="clas-team-cell"><span class="clas-pos-n">'+pos+'</span>'
         +badgeHtml
-        +'<span class="clas-team-name"><span class="clas-team-name-text">'+humanIcon(team.name)+displayName+'</span></span></div>'
+        +'<span class="clas-team-name"><span class="clas-team-name-text">'+displayName+'</span>'+humanSuffix+'</span></div>'
         +'<div class="clas-pts">'+team.pts+'</div><div class="clas-pj">'+team.pj+'</div><div class="clas-val">'+team.v+'</div><div class="clas-val">'+team.e+'</div><div class="clas-val">'+team.p+'</div><div class="clas-val gf">'+team.gf+'</div><div class="clas-val gc">'+team.gc+'</div><div class="'+dgClass+'">'+(team.dg>0?'+':'')+team.dg+'</div><div class="clas-val ta">'+team.ta+'</div><div class="clas-val tr">'+team.tr+'</div><div class="clas-mvp">'+team.mvp+'</div><div class="clas-pct">'+(team.pj?Math.round((team.v/team.pj)*100):0)+'%</div></div>';
     });
     html+='</div></div></div>';
@@ -3370,9 +3387,13 @@
       if(t.shield){
         shieldHtml = '<img class="clas-team-logo" src="'+String(t.shield).replace(/"/g,'&quot;')+'" onerror="this.style.display=\'none\'" alt=""/>';
       }
+      // Emoji humano AL FINAL del nombre (igual que Liga EA Sports).
+      var _rawIcon = (typeof humanIcon === 'function') ? humanIcon(t.name) : '';
+      var _humanEmoji = _rawIcon ? _rawIcon.replace(/ /g, '').trim() : '';
+      var _humanSuffix = _humanEmoji ? '<span class="clas-team-human-suffix">'+_humanEmoji+'</span>' : '';
       bodyTable.insertAdjacentHTML('beforeend',
         '<div class="clas-row">'
-        +'<div class="clas-team-cell"><span class="clas-pos-n">'+startPos+'</span>'+shieldHtml+'<span class="clas-team-name"><span class="clas-team-name-text">'+safe+'</span></span></div>'
+        +'<div class="clas-team-cell"><span class="clas-pos-n">'+startPos+'</span>'+shieldHtml+'<span class="clas-team-name"><span class="clas-team-name-text">'+safe+'</span>'+_humanSuffix+'</span></div>'
         +'<div class="clas-pts">0</div>'
         +'<div class="clas-pj">0</div>'
         +'<div class="clas-val">0</div>'

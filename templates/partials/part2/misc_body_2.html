@@ -3719,8 +3719,49 @@
     'Athletic Club','Real Betis','Sevilla'
   ];
   var HUMAN_ICONS = {'Bayern Munich':'💡','Arsenal':'🐭','Atlético Madrid':'✏️','Real Madrid':'🔨','FC Barcelona':'👿'};
-  function humanIcon(name){ return HUMAN_ICONS[name] ? HUMAN_ICONS[name]+'\u00a0' : ''; }
+  /* Aliases para resolver el icono humano cuando el nombre llega en
+     forma corta o con variaciones (Champions, Superliga, sin acentos…).
+     Mapea cada variante normalizada a la clave canónica de HUMAN_ICONS. */
+  var HUMAN_ALIAS = {
+    'bayern':'Bayern Munich','fc bayern':'Bayern Munich','fc bayern munich':'Bayern Munich','bayern munchen':'Bayern Munich',
+    'arsenal fc':'Arsenal',
+    'atletico':'Atlético Madrid','atletico madrid':'Atlético Madrid','atletico de madrid':'Atlético Madrid','atl madrid':'Atlético Madrid','club atletico de madrid':'Atlético Madrid','atletico madrid cf':'Atlético Madrid',
+    'real madrid cf':'Real Madrid',
+    'barcelona':'FC Barcelona','fc barcelona':'FC Barcelona','futbol club barcelona':'FC Barcelona','fcbarcelona':'FC Barcelona','barca':'FC Barcelona'
+  };
+  function _humanNorm(s){
+    return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+  /* Devuelve el emoji humano para `name` (con NBSP suffix por compat
+     con callers legacy que lo concatenaban directamente al nombre).
+     Resolución:
+       1. Match exacto en HUMAN_ICONS (forma canónica).
+       2. Match por alias normalizado (e.g. "Bayern" → "Bayern Munich").
+       3. Match normalizado contra las claves canónicas (sin acentos /
+          case-insensitive).
+     Devuelve "" si el equipo no es humano. Las clasificaciones nuevas
+     usan `clas-team-human-suffix` y .replace(/\u00a0|\s/g,'').trim()
+     para quedarse solo con el emoji. */
+  function humanIcon(name){
+    if(!name) return '';
+    if(HUMAN_ICONS[name]) return HUMAN_ICONS[name]+'\u00a0';
+    var norm = _humanNorm(name);
+    if(!norm) return '';
+    if(HUMAN_ALIAS[norm] && HUMAN_ICONS[HUMAN_ALIAS[norm]]) return HUMAN_ICONS[HUMAN_ALIAS[norm]]+'\u00a0';
+    var keys = Object.keys(HUMAN_ICONS);
+    for(var i=0;i<keys.length;i++){
+      if(_humanNorm(keys[i]) === norm) return HUMAN_ICONS[keys[i]]+'\u00a0';
+    }
+    return '';
+  }
   window.humanIcon = humanIcon;
+  /* Atajo: emoji bare (sin NBSP) — usado por las clasificaciones que
+     envuelven el icono en un span aparte. */
+  window.humanEmojiFor = function(name){
+    var s = humanIcon(name);
+    return s ? s.replace(/\u00a0|\s/g,'').trim() : '';
+  };
   var LS_KEY  = 'ef_liga38_v4';
   var LS_SCHEDULE_KEY = 'ef_liga38_schedule_v2';
   var sharedLigaResultsCache = null;

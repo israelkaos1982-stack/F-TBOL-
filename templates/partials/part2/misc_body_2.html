@@ -9387,6 +9387,28 @@
           window._wprevSaveHumanResult(_gm._wprevGi, _gm._wprevJ, _gm.sc.a, _gm.sc.b);
         }
       } catch(_e){}
+    } else if (_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin') {
+      /* Copa del Rey: persistimos en /api/copa/guardar_resultado vía
+         _copaSaveHumanResult (no toca la tabla de Liga). Incluimos
+         prórroga + penaltis si los hubo. */
+      try {
+        var _cpMvp = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+        var _cpPenWin = null;
+        var _cpPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
+        if (_cpPenEv) _cpPenWin = _cpPenEv.team === 'a' ? _gm.home : _gm.away;
+        var _cpEt = _gm.etScores || {};
+        if (typeof window._copaSaveHumanResult === 'function') {
+          window._copaSaveHumanResult(
+            _gm._copaRonda, _gm._copaIdx, _gm._copaVuelta,
+            _gm.sc.a, _gm.sc.b,
+            _cpEt.a || 0, _cpEt.b || 0,
+            _cpPenWin,
+            _cpMvp ? (_cpMvp.player || _cpMvp.name || '') : '',
+            _gm.events || [],
+            _gm.home, _gm.away
+          );
+        }
+      } catch(_e){}
     } else if (_gm._isSuperliga || _gm.comp === 'superliga') {
       /* Superliga (6 equipos humanos): persistimos en superliga_results_v1
          vía _superSaveHumanResult — no toca la tabla de Liga ni el
@@ -10196,6 +10218,58 @@
     gmOpen(j, home, away, isHvH, '', true, false); /* noET=true: liga no tiene prórroga */
   };
 
+  /* Copa del Rey: abre gm-modal con flag _isCopa para que gmEndMatch
+     persista el resultado en /api/copa/guardar_resultado en lugar de
+     ir a la tabla de Liga. noET=false → la Copa SÍ tiene prórroga +
+     penaltis (CLAUDE.md). comp='copa' alimenta el label de WhatsApp /
+     códigos de competición. ronda/idx/esVuelta se guardan en _gm para
+     que el persistor sepa dónde guardar el resultado. */
+  window.abrirCopa = function (ronda, idx, esVuelta, home, away) {
+    var isHvH = esHumano(home) && esHumano(away);
+    var compKey = (ronda === 'fin') ? 'copa-fin' : 'copa';
+    gmOpen(0, home, away, isHvH, compKey, false, false);
+    try {
+      if (window.__GM_LIVE) {
+        window.__GM_LIVE._isCopa = true;
+        window.__GM_LIVE._copaRonda = ronda;
+        window.__GM_LIVE._copaIdx = idx;
+        window.__GM_LIVE._copaVuelta = !!esVuelta;
+        window.__GM_LIVE.comp = compKey;
+      }
+    } catch(_){}
+  };
+
+  /* Persiste un resultado humano de Copa del Rey. Llamado desde
+     gmEndMatch cuando _gm._isCopa === true. Posta a
+     /api/copa/guardar_resultado con los datos del partido (incluido
+     prórroga + penaltis) y refresca la pantalla de Copa después. */
+  window._copaSaveHumanResult = function (ronda, idx, esVuelta, gh, ga, et_gh, et_ga, pen_winner, mvp, events, home, away) {
+    var payload = {
+      ronda: ronda, idx: idx, es_vuelta: !!esVuelta,
+      gl: gh, gv: ga,
+      et_gl: et_gh || 0, et_gv: et_ga || 0,
+      pen_winner: pen_winner || null,
+      mvp: mvp || '',
+      events: events || [],
+      summary: '',
+      team_a: home || '', team_b: away || ''
+    };
+    try {
+      fetch('/api/copa/guardar_resultado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function(r){ return r.json(); })
+        .then(function(d){
+          /* Re-render de Copa al volver a la pantalla. */
+          try {
+            if (typeof window.copaInit === 'function') window.copaInit();
+            else if (typeof window.copaRender === 'function' && d && d.copa) window.copaRender(d.copa);
+          } catch(_){}
+        }).catch(function(){});
+    } catch(_){}
+  };
+
   /* Superliga: abre el gm-modal en modo HvH (todos los equipos son humanos
      porque salen de "EA Sports → Europa"). Marca _gm con _isSuperliga
      para que gmEndMatch persista en superliga_results_v1 vía
@@ -10803,23 +10877,37 @@
         /* Save result. Conservamos los eventos anulados con _varAnulado=true para
            que el acta los pueda mostrar como "ANULADA POR VAR", pero los excluimos
            del cálculo de estadísticas (player stats, tarjetas, goleadores). */
-        var results = loadResults();
-        var key = rKey(j, home, away);
-        results[key] = { gh: scA, ga: scB, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
-        saveResults(results);
-        if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
-          var statsEvents = evtData.events.filter(function(e){ return !e._varAnulado; });
-          window.registrarLigaPlayerStats(key, home, away, statsEvents, evtData.mvp, evtData.mvpTeam);
+        /* Hook genérico: si el mk empieza por "copa_", redirigimos la
+           persistencia a Copa del Rey (no a la tabla de Liga). El
+           formato del mk está documentado en window.copaSimLive. */
+        var __isCopaSim = typeof mk === 'string' && mk.indexOf('copa_') === 0;
+        if (__isCopaSim && typeof window._copaSimLivePersist === 'function') {
+          try {
+            window._copaSimLivePersist(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam);
+          } catch(_e) { try { console.error('[copaSimLive persist]', _e); } catch(__){} }
+        } else {
+          var results = loadResults();
+          var key = rKey(j, home, away);
+          results[key] = { gh: scA, ga: scB, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
+          saveResults(results);
+          if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
+            var statsEvents = evtData.events.filter(function(e){ return !e._varAnulado; });
+            window.registrarLigaPlayerStats(key, home, away, statsEvents, evtData.mvp, evtData.mvpTeam);
+          }
+          actualizarDom('l-j' + j, home, away, scA, scB);
+          if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
         }
-        actualizarDom('l-j' + j, home, away, scA, scB);
-        if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
         /* Lesiones IA vs IA: solo registrar en acta, NO mostrar overlay flash */
         /* Decrementar contador y reconstruir solo si no hay otras simulaciones activas */
         window._iaRunningCount = Math.max(0, (window._iaRunningCount || 1) - 1);
         setTimeout(function() {
           if (!window._iaRunningCount) {
-            if (typeof window.buildIAresults === 'function') window.buildIAresults();
-            if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
+            if (__isCopaSim) {
+              if (typeof window.copaInit === 'function') window.copaInit();
+            } else {
+              if (typeof window.buildIAresults === 'function') window.buildIAresults();
+              if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
+            }
           }
         }, 600);
       }

@@ -2187,39 +2187,48 @@
     };
     if (typeof window.showPrePartidoOverlay === 'function') {
       window.showPrePartidoOverlay(matchKey, compKey, 'Sí', duracion, isHvH);
-      /* Banner del reglamento de Copa + 2 items extra de confirmación
-         (Prórroga / Penaltis) que el usuario debe marcar antes de
-         poder pulsar CONFIRMAR CONFIGURACIÓN. Imitan el formato de
-         `_renderList` del bundle (.pp-item) pero los toggleamos con
-         un map local porque `_ppItems` es privado del IIFE. */
       try { _copaInjectExtraConfirms(ronda); } catch(_){}
+      /* La fecha del partido tiene que coincidir con la del calendario
+         (s-calendario.html). El bundle pone "hoy" porque _mmCalLabel
+         solo cubre 'copa' = 1/128. Sobrescribimos a mano leyendo el
+         dateMap del calendario (.ag-r). El delay 80ms da tiempo a que
+         `_mmInjectEnv` haya rellenado el #pp-env primero. */
+      setTimeout(function () {
+        try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){}
+      }, 80);
+      setTimeout(function () {
+        try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){}
+      }, 240);
     } else {
       alert('No se pudo abrir la previa: showPrePartidoOverlay no disponible.');
     }
   };
 
   /* Estado local de los 2 toggles de Copa (Prórroga / Penaltis). Vacío
-     significa "no marcado". */
+     significa "no marcado". El bundle usa `_ppChecked[id]` para
+     Balón; nosotros usamos esto en paralelo para los 2 ids extra,
+     porque `_ppItems` y `_ppChecked` son privados del IIFE. */
   var _copaConfirmState = { prorroga: false, penaltis: false };
+
   /* Wrapper sobre `_ppRefreshUnlock` que también requiere los 2
      toggles de Copa antes de habilitar el botón CONFIRMAR. */
-  var _origPpRefreshUnlock = null;
   function _copaWrapPpRefreshUnlock() {
     if (typeof window._ppRefreshUnlock !== 'function') return;
     if (window._ppRefreshUnlock.__copaWrapped) return;
     var orig = window._ppRefreshUnlock;
-    _origPpRefreshUnlock = orig;
     var wrapped = function () {
       var ret = orig.apply(this, arguments);
       try {
         var btn = document.getElementById('pp-confirm-btn');
         if (!btn) return ret;
-        /* Solo aplicamos la regla si la previa actual es de Copa
-           (detectado por la presencia del banner data-copa-rules). */
+        /* Solo aplicamos la regla si la previa actual es de Copa. */
         var rulesEl = document.querySelector('#pp-alerts [data-copa-rules]');
         if (!rulesEl) return ret;
         if (!_copaConfirmState.prorroga || !_copaConfirmState.penaltis) {
-          btn.setAttribute('disabled', '');
+          btn.disabled = true;
+          if (btn.getAttribute('data-pp-stage') !== '2') {
+            btn.textContent = '🔒 CONFIRMA PRÓRROGA Y PENALTIS';
+          }
         }
       } catch(_){}
       return ret;
@@ -2228,10 +2237,38 @@
     window._ppRefreshUnlock = wrapped;
   }
 
-  function _copaToggleConfirm(key) {
-    _copaConfirmState[key] = !_copaConfirmState[key];
-    _copaRenderExtraConfirms();
-    if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
+  /* Wrap `_ppToggle` para que cuando el id sea 'prorroga' o 'penaltis'
+     (nuestros 2 items extra) actualice nuestro estado local en lugar
+     de tocar `_ppChecked` del bundle (que no los conoce). Para los
+     ids estándar (Balón) delega al original.
+
+     Además, después de que el bundle re-renderice `_renderList`
+     (cualquier toggle redibuja toda la lista del bundle, perdiendo
+     nuestros items), reinyectamos Prórroga + Penaltis. */
+  function _copaWrapPpToggle() {
+    if (typeof window._ppToggle !== 'function') return;
+    if (window._ppToggle.__copaWrapped) return;
+    var orig = window._ppToggle;
+    var wrapped = function (id) {
+      var copaIds = { prorroga: 1, penaltis: 1 };
+      if (copaIds[id]) {
+        /* Toggle local — NO llamamos al bundle. */
+        _copaConfirmState[id] = !_copaConfirmState[id];
+        _copaRenderExtraConfirms();
+        if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
+        return;
+      }
+      var ret = orig.apply(this, arguments);
+      try {
+        if (document.querySelector('#pp-alerts [data-copa-rules]')) {
+          _copaRenderExtraConfirms();
+          if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
+        }
+      } catch(_){}
+      return ret;
+    };
+    wrapped.__copaWrapped = true;
+    window._ppToggle = wrapped;
   }
 
   function _copaRenderExtraConfirms() {
@@ -2248,44 +2285,30 @@
       var div = document.createElement('div');
       div.className = 'pp-item' + (checked ? ' checked' : '');
       div.setAttribute('data-copa-confirm', it.key);
+      /* `data-ppid` para que la binding nativa del bundle también
+         enrute el click a `window._ppToggle(id)` (que ya sabemos
+         redirigir a nuestro toggle local). Así, aunque la binding
+         del bundle reemplace nuestra propia binding tras un re-render,
+         el flujo sigue siendo correcto. */
+      div.setAttribute('data-ppid', it.key);
+      div.style.cursor = 'pointer';
       div.innerHTML = ''
         + '<span class="pp-item-lbl"><span class="pp-ico">' + it.ico + '</span>' + escapeHtml(it.lbl) + '</span>'
         + '<span class="pp-item-val">' + escapeHtml(it.val) + '</span>'
         + '<span class="pp-check">' + (checked ? '✅' : '\u{1F533}') + '</span>';
-      div.addEventListener('click', function () { _copaToggleConfirm(it.key); });
+      div.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (typeof window._ppToggle === 'function') window._ppToggle(it.key);
+      });
       list.appendChild(div);
     });
-  }
-
-  /* Wrap `_ppToggle` para reinyectar Prórroga/Penaltis después de que
-     el bundle re-renderice `#pp-list` (cada vez que el user toca un
-     item, la lista se redibuja entera y borra nuestros 2 items). */
-  function _copaWrapPpToggle() {
-    if (typeof window._ppToggle !== 'function') return;
-    if (window._ppToggle.__copaWrapped) return;
-    var orig = window._ppToggle;
-    var wrapped = function (id) {
-      var ret = orig.apply(this, arguments);
-      try {
-        if (document.querySelector('#pp-alerts [data-copa-rules]')) {
-          _copaRenderExtraConfirms();
-          if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
-        }
-      } catch(_){}
-      return ret;
-    };
-    wrapped.__copaWrapped = true;
-    window._ppToggle = wrapped;
   }
 
   function _copaInjectExtraConfirms(ronda) {
     /* Reset del estado al abrir cada previa nueva. */
     _copaConfirmState = { prorroga: false, penaltis: false };
     /* Marcador invisible para que `_copaWrapPpRefreshUnlock` /
-       `_copaWrapPpToggle` detecten que la previa activa es de Copa.
-       El usuario pidió que NO salga el cartel "🏆 N · COPA DEL REY ·
-       Reglas obligatorias" — los 3 items confirmables (Balón, Prórroga,
-       Penaltis) ya cubren la información del reglamento. */
+       `_copaWrapPpToggle` detecten que la previa activa es de Copa. */
     var alerts = document.getElementById('pp-alerts');
     if (alerts) {
       var prev = alerts.querySelector('[data-copa-rules]');
@@ -2300,6 +2323,85 @@
     _copaWrapPpToggle();
     /* Tras meter los items, re-evaluamos el botón. */
     if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
+  }
+
+  /* Sincroniza la fecha del partido en `#pp-env` con la fecha que viene
+     del calendario (s-calendario.html, .ag-r rows). El usuario quiere
+     que la previa muestre la fecha del calendario, NO la fecha del
+     día actual. Mapeo ronda → label del calendario:
+       r1   → "Copa del Rey - 1/128"
+       r2   → "Copa del Rey - 1/64" o "1/32" (según calendario)
+       r16  → "Copa del Rey - Dieciseisavos"
+       oct  → "Copa del Rey - Octavos (Ida)" para ida; (Vuelta) para vta
+       cua  → idem
+       sf   → "Copa del Rey - Semis (Ida/Vuelta)"
+       fin  → "Final Copa del Rey"
+     Si encontramos varias entradas (Ida + Vuelta), usamos la que
+     corresponda al `esVuelta` actual. */
+  var _COPA_CAL_LABELS = {
+    r1:  ['Copa del Rey - 1/128', 'Copa del Rey — 1/128'],
+    r2:  ['Copa del Rey - 1/64', 'Copa del Rey — 1/64', 'Copa del Rey - 1/32', 'Copa del Rey — 1/32'],
+    r16: ['Copa del Rey - Dieciseisavos', 'Copa del Rey — Dieciseisavos', 'Copa del Rey - 1/16', 'Copa del Rey — 1/16'],
+    oct_ida: ['Copa del Rey - Octavos (Ida)', 'Copa del Rey — Octavos (Ida)', 'Copa del Rey - Octavos'],
+    oct_vta: ['Copa del Rey - Octavos (Vuelta)', 'Copa del Rey — Octavos (Vuelta)'],
+    cua_ida: ['Copa del Rey - Cuartos (Ida)', 'Copa del Rey — Cuartos (Ida)', 'Copa del Rey - Cuartos'],
+    cua_vta: ['Copa del Rey - Cuartos (Vuelta)', 'Copa del Rey — Cuartos (Vuelta)'],
+    sf_ida:  ['Copa del Rey - Semis (Ida)',   'Copa del Rey — Semis (Ida)', 'Copa del Rey - Semis'],
+    sf_vta:  ['Copa del Rey - Semis (Vuelta)', 'Copa del Rey — Semis (Vuelta)'],
+    fin: ['Final Copa del Rey', 'Copa del Rey - Final', 'Copa del Rey — Final']
+  };
+
+  function _copaCalDateForRound(ronda, esVuelta) {
+    var keys;
+    if (TWO_LEG[ronda] && (ronda === 'oct' || ronda === 'cua' || ronda === 'sf')) {
+      keys = _COPA_CAL_LABELS[ronda + (esVuelta ? '_vta' : '_ida')] || [];
+    } else {
+      keys = _COPA_CAL_LABELS[ronda] || [];
+    }
+    var rows = document.querySelectorAll('.ag-r');
+    for (var i = 0; i < rows.length; i++) {
+      var l = rows[i].querySelector('.ag-lbl');
+      var d = rows[i].querySelector('.ag-date');
+      if (!l || !d) continue;
+      var lblTxt = l.textContent.trim().split(' · ')[0].trim();
+      for (var k = 0; k < keys.length; k++) {
+        if (lblTxt === keys[k]) {
+          return d.textContent.trim(); /* p.ej. "28 Sep" */
+        }
+      }
+    }
+    return '';
+  }
+
+  var _MONTH_FULL_ES = {
+    'Ene':'Enero','Feb':'Febrero','Mar':'Marzo','Abr':'Abril',
+    'May':'Mayo','Jun':'Junio','Jul':'Julio','Ago':'Agosto',
+    'Sep':'Septiembre','Oct':'Octubre','Nov':'Noviembre','Dic':'Diciembre'
+  };
+
+  function _copaOverridePrevDate(ronda, esVuelta) {
+    var rawDate = _copaCalDateForRound(ronda, esVuelta);
+    if (!rawDate) return;
+    var parts = rawDate.split(' ');
+    if (parts.length < 2) return;
+    var day = parseInt(parts[0], 10) || 0;
+    var monthName = _MONTH_FULL_ES[parts[1]] || parts[1];
+    var envEl = document.getElementById('pp-env');
+    if (!envEl) return;
+    /* Buscamos la línea con 📅 o `de ` + mes y la sustituimos. */
+    var lines = envEl.querySelectorAll('.pp-env-line');
+    for (var i = 0; i < lines.length; i++) {
+      var txt = lines[i].textContent || '';
+      if (txt.indexOf('📅') !== -1 || /\d+\s+de\s+/.test(txt)) {
+        /* Sustituimos solo el bloque "<num> de <Mes>" preservando el
+           resto (separador "|" + label de la competición que añade
+           _mmInjectEnv). */
+        var html = lines[i].innerHTML;
+        html = html.replace(/<b>\d+\s+de\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]+<\/b>/, '<b>' + day + ' de ' + monthName + '</b>');
+        lines[i].innerHTML = html;
+        return;
+      }
+    }
   }
 
   /* IA-vs-IA → live tick + acta usando el mismo motor de Liga EA

@@ -1435,10 +1435,21 @@
     return tc.bg || '#1a2a4a';
   }
 
+  /* mk-key estable que iaSimLive usa para encontrar los nodos DOM y
+     que el persistor de Copa parsea para saber dónde guardar. Formato:
+       copa_<ronda>_<idx>_<leg>   (leg = 'i' ida, 'v' vuelta)
+     Si en el futuro se añaden caracteres no-alfanuméricos al ronda,
+     hay que actualizar el regex en _copaSimLivePersist. */
+  function _copaSimMk(ronda, idx, esVuelta) {
+    return 'copa_' + ronda + '_' + idx + '_' + (esVuelta ? 'v' : 'i');
+  }
+
   /* Botón estilo Liga EA Sports:
        - Human vs IA / Human vs Human → 📋 PREVIA (rojo, abre pantalla
          de previa con showPrePartidoOverlay).
-       - IA vs IA → ▶ SIMULAR (verde, dispara la sim del backend).
+       - IA vs IA → ▶ SIMULAR (verde): re-usa el motor iaSimLive de
+         Liga EA Sports (cronómetro real + acta en vivo). El hook
+         _copaSimLivePersist redirige el guardado al backend de Copa.
      Cuando el partido ya está jugado, no devuelve botón (se muestra el
      marcador y el "🏁 FIN"). */
   function _matchActionButton(ronda, idx, esVuelta, m) {
@@ -1449,21 +1460,30 @@
         + 'onclick="window.copaAbrirPrevia(\'' + ronda + '\',' + idx + ',' + leg + ')">'
         + '📋 PREVIA</button>';
     }
-    return '<button class="copa-btn-sim-rich" '
-      + 'onclick="window.copaSimIA(\'' + ronda + '\',' + idx + ',' + leg + ')">'
+    var mk = _copaSimMk(ronda, idx, !!esVuelta);
+    var local = esVuelta ? m.v : m.l;
+    var visit = esVuelta ? m.l : m.v;
+    var hEsc = local.replace(/'/g, "\\'");
+    var aEsc = visit.replace(/'/g, "\\'");
+    return '<button id="ia-sim-btn-' + mk + '" class="copa-btn-sim-rich" '
+      + 'onclick="window.copaSimLive(\'' + ronda + '\',' + idx + ',' + leg + ')">'
       + '▶ SIMULAR</button>';
   }
 
   /* Render de un partido SINGLE-LEG (1ª, 2ª, FINAL) o de un sub-row
      (Ida/Vuelta/Global) DENTRO de una tie.
      `score`: { gl, gv, et_gl, et_gv, pen_winner, jugado } o null.
-     `actionBtn`: html del botón (o '' para sub-rows leg). */
+     `actionBtn`: html del botón (o '' para sub-rows leg).
+     `simMk`: si está presente, expone IDs `ia-sc-<mk>-a/b` y
+       `ia-acta-<mk>` para que window.iaSimLive (Liga EA) pueda animar
+       el partido en vivo desde la card de Copa. */
   function _renderMatchCard(opts) {
     var local = opts.local, visit = opts.visit;
     var score = opts.score;
     var actionBtn = opts.actionBtn || '';
     var legLabel = opts.legLabel || '';
     var subtle = !!opts.subtle;
+    var simMk = opts.simMk || '';
     var hLog = _shieldImg(local), vLog = _shieldImg(visit);
     var hIco = _humanIco(local), vIco = _humanIco(visit);
     var hHum = HUMAN_TEAMS.indexOf(canonicalTeam(local)) !== -1;
@@ -1487,6 +1507,12 @@
       scoreTxt = '<span class="copa-card-score-num">' + (score.gl||0) + ' – ' + (score.gv||0) + '</span>';
       if ((score.et_gl||0) || (score.et_gv||0)) extras += '<div class="copa-card-meta">pr ' + (Number(score.gl||0)+Number(score.et_gl||0)) + '-' + (Number(score.gv||0)+Number(score.et_gv||0)) + '</div>';
       if (score.pen_winner) extras += '<div class="copa-card-meta" style="color:#4fd87a">PEN · ' + escapeHtml(score.pen_winner) + '</div>';
+    } else if (simMk) {
+      /* Pendiente IA-vs-IA: usamos los IDs que window.iaSimLive necesita
+         para tickear el marcador en vivo (`ia-sc-<mk>-a/b`). */
+      scoreTxt = '<span id="ia-sc-' + simMk + '-a" class="copa-card-score-pending">–</span>'
+        + '<span class="copa-card-score-pending" style="margin:0 4px">–</span>'
+        + '<span id="ia-sc-' + simMk + '-b" class="copa-card-score-pending">–</span>';
     } else {
       scoreTxt = '<span class="copa-card-score-pending">– – –</span>';
     }
@@ -1502,7 +1528,16 @@
     if (legLabel) {
       legHdr = '<div class="copa-card-leghdr">' + escapeHtml(legLabel) + '</div>';
     }
+    /* Acta vacía pero con el id que iaSimLive busca para inyectar
+       eventos durante la simulación en vivo. La hacemos visible solo
+       cuando hay eventos. */
+    var actaEl = simMk
+      ? '<div id="ia-acta-' + simMk + '" class="copa-card-acta" style="display:none"></div>'
+      : '';
     var wrapClass = 'copa-card-rich' + (subtle ? ' copa-card-leg' : '');
+    /* Añadimos `ml-score` a la clase del score wrapper para que el
+       `closest(".ml-score")` de iaSimLive lo encuentre y aplique las
+       clases state-playing/state-finished. */
     return ''
       + '<div class="' + wrapClass + '" style="' + wrapStyle + '">'
       + bgShieldL + bgShieldV
@@ -1513,7 +1548,7 @@
       +   '<div class="copa-card-name">' + hIco + escapeHtml(local) + '</div>'
       + '</div>'
       + '<div class="copa-card-center">'
-      +   '<div class="copa-card-score">' + scoreTxt + '</div>'
+      +   '<div class="copa-card-score ml-score">' + scoreTxt + '</div>'
       +   bottomBtn
       +   extras
       + '</div>'
@@ -1522,6 +1557,7 @@
       +   '<div class="copa-card-name">' + vIco + escapeHtml(visit) + '</div>'
       + '</div>'
       + '</div>'
+      + actaEl
       + '</div>';
   }
 
@@ -1542,8 +1578,9 @@
       matches.forEach(function (m, idx) {
         var res = resList[idx];
         var actionBtn = (res && res.jugado) ? '' : _matchActionButton(ronda, idx, false, m);
+        var simMk = (!isHuman(m.l, m.v) && !(res && res.jugado)) ? _copaSimMk(ronda, idx, false) : '';
         out += _renderMatchCard({
-          local: m.l, visit: m.v, score: res || null, actionBtn: actionBtn
+          local: m.l, visit: m.v, score: res || null, actionBtn: actionBtn, simMk: simMk
         });
       });
       return out;
@@ -1566,14 +1603,16 @@
         btnVta = '';
       }
 
+      var simMkIda = (!isHuman(m.l, m.v) && !(ida && ida.jugado)) ? _copaSimMk(ronda, idx, false) : '';
+      var simMkVta = (!isHuman(m.l, m.v) && (ida && ida.jugado) && !(vta && vta.jugado)) ? _copaSimMk(ronda, idx, true) : '';
       out += '<div class="copa-tie-wrap">';
       out += _renderMatchCard({
         local: m.l, visit: m.v, score: ida || null, actionBtn: btnIda,
-        legLabel: 'Ida', subtle: true
+        legLabel: 'Ida', subtle: true, simMk: simMkIda
       });
       out += _renderMatchCard({
         local: m.v, visit: m.l, score: vta || null, actionBtn: btnVta,
-        legLabel: 'Vuelta', subtle: true
+        legLabel: 'Vuelta', subtle: true, simMk: simMkVta
       });
       if (ida && ida.jugado && vta && vta.jugado) {
         var sumL = Number(ida.gl||0) + Number(vta.gv||0);
@@ -2087,14 +2126,100 @@
     window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: compKey, ronda: ronda, idx: idx, esVuelta: !!esVuelta };
     window._ppCustomCallback = function () {
       window._ppPreviaTeams = null;
-      /* Tras el partido, refrescar la pantalla de la ronda. */
+      /* Tras "▶ COMENZAR PARTIDO" en la previa, abrimos el gm-modal de
+         Copa del Rey (igual flujo que Liga EA via abrirResultadoLiga).
+         abrirCopa cablea el flag _isCopa para que gmEndMatch persista
+         el resultado vía /api/copa/guardar_resultado y refresque la
+         pantalla de la ronda al terminar. */
+      if (typeof window.abrirCopa === 'function') {
+        try { window.abrirCopa(ronda, idx, !!esVuelta, local, visit); }
+        catch(e) { try { console.error('[copa] abrirCopa', e); } catch(_){} }
+      }
       try { copaInit(); } catch(_){}
     };
     if (typeof window.showPrePartidoOverlay === 'function') {
       window.showPrePartidoOverlay(matchKey, compKey, 'Sí', duracion, isHvH);
+      /* Inyectar el chip "Prórroga + Penaltis" en el bloque de alertas
+         de la previa, ya que `_buildItems` (bundle) solo muestra "Balón"
+         como item y el reglamento de Copa exige el aviso explícito. */
+      try {
+        var alerts = document.getElementById('pp-alerts');
+        if (alerts) {
+          var prev = alerts.querySelector('[data-copa-rules]');
+          if (prev) prev.remove();
+          var chip = document.createElement('div');
+          chip.setAttribute('data-copa-rules', '1');
+          chip.style.cssText = 'display:flex;flex-direction:column;gap:4px;background:linear-gradient(135deg,rgba(180,120,40,.18),rgba(220,170,80,.06));border:1px solid rgba(220,170,80,.55);border-radius:8px;padding:8px 12px;margin:6px 0;font-family:Rajdhani,sans-serif;font-size:12px;color:#ffd54a;letter-spacing:.6px;';
+          chip.innerHTML = ''
+            + '<div style="font-weight:700;letter-spacing:1.2px;text-transform:uppercase;font-size:11px;color:#f0c45c">🏆 ' + escapeHtml(ROUND_LABEL[ronda] || ronda) + ' · COPA DEL REY</div>'
+            + '<div>⏱ Prórroga: <b style="color:#5fe08a">SÍ</b> &nbsp;·&nbsp; 🥅 Penaltis: <b style="color:#5fe08a">SÍ</b> (si empate)</div>';
+          alerts.appendChild(chip);
+        }
+      } catch(_){}
     } else {
       alert('No se pudo abrir la previa: showPrePartidoOverlay no disponible.');
     }
+  };
+
+  /* IA-vs-IA → live tick + acta usando el mismo motor de Liga EA
+     (iaSimLive). El hook `window._copaSimLivePersist` (registrado más
+     abajo) se dispara dentro de iaSimLive cuando el mk empieza por
+     `copa_` y redirige el guardado al backend de Copa. */
+  window.copaSimLive = function (ronda, idx, esVuelta) {
+    var sorteo = (_copa && _copa.sorteo) || {};
+    var matches = sorteo[ronda] || [];
+    var m = matches[idx];
+    if (!m) return;
+    var local = esVuelta ? m.v : m.l;
+    var visit = esVuelta ? m.l : m.v;
+    var mk = _copaSimMk(ronda, idx, !!esVuelta);
+    if (typeof window.iaSimLive === 'function') {
+      window.iaSimLive(mk, local, visit, 0);
+    } else {
+      /* Sin motor live disponible: caemos al backend instantáneo. */
+      window.copaSimIA(ronda, idx, esVuelta ? 1 : 0);
+    }
+  };
+
+  /* Persistor de iaSimLive cuando el mk pertenece a Copa. Postea al
+     endpoint /api/copa/guardar_resultado y refresca la pantalla.
+     Llamado desde misc_body_2.html en la rama __isCopaSim. */
+  window._copaSimLivePersist = function (mk, home, away, scA, scB, events, mvp, mvpTeam) {
+    /* mk format: copa_<ronda>_<idx>_<i|v> */
+    var match = /^copa_([^_]+)_([0-9]+)_([iv])$/.exec(String(mk));
+    if (!match) return;
+    var ronda = match[1];
+    var idx = parseInt(match[2], 10);
+    var esVuelta = match[3] === 'v';
+    /* Detección de penaltis a partir de los eventos. */
+    var penEv = (events || []).find(function (e) {
+      return e && (e.type === 'pen-result' || e.type === 'pen-winner');
+    });
+    var penWin = penEv ? (penEv.team === 'a' ? home : away) : null;
+    var payload = {
+      ronda: ronda, idx: idx, es_vuelta: esVuelta,
+      gl: scA, gv: scB,
+      et_gl: 0, et_gv: 0,
+      pen_winner: penWin,
+      mvp: mvp || '',
+      events: events || [],
+      summary: '',
+      team_a: home || '', team_b: away || ''
+    };
+    try {
+      fetch('/api/copa/guardar_resultado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function (r) { return r.json(); })
+        .then(function (d) {
+          /* No re-renderizamos inmediatamente — iaSimLive ya hace
+             setTimeout 600ms a copaInit() (rama __isCopaSim) — pero
+             actualizamos _copa local con la respuesta para que el
+             siguiente render encuentre el resultado. */
+          try { if (d && d.copa) _copa = d.copa; } catch(_){}
+        }).catch(function () {});
+    } catch(_){}
   };
 
   /* Devuelve la lista de IDs de pantalla de ronda. Si el script `go()`

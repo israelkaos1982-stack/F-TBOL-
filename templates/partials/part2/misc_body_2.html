@@ -19326,6 +19326,89 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  /* ── Panel de diagnóstico del pool (admin) ─────────────────────
+     Petición usuario 2026-05-02: ver de un vistazo qué fuentes
+     contribuyen al pool de Previa Champions y por qué algunas ligas
+     no aportan equipos. Lee window._lastQualDiag (que rellena
+     `_computeQualifiedFromLeagues` en su última invocación) y se
+     refresca al re-renderizar la pantalla. */
+  function _wprevRenderDiag(){
+    var body = document.getElementById('wprev-diag-body');
+    if(!body) return;
+    /* Forzamos un cómputo fresco para que _lastQualDiag refleje la
+       situación actual (no la del último render que pudo haber sido
+       hace minutos). */
+    var prevTeams = [];
+    try {
+      if(typeof window.computeUclPrevTeams === 'function'){
+        prevTeams = window.computeUclPrevTeams() || [];
+      }
+    } catch(_){}
+    var diag = (window._lastQualDiag || []).slice();
+    /* Conteos por fuente */
+    var manualCount = 0, oqCount = 0, leagueCount = 0;
+    prevTeams.forEach(function(t){
+      var lg = t && t.league;
+      if(lg === 'ea-sports-manual') manualCount++;
+      else if(lg === 'open-qualifier') oqCount++;
+      else leagueCount++;
+    });
+    /* OQ count adicional desde la fuente directa por si computeUclPrevTeams
+       todavía no se haya hidratado tras un Sim. */
+    try {
+      if(oqCount === 0){
+        var raw = localStorage.getItem('oq_to_previa_v1');
+        if(raw){
+          var d = JSON.parse(raw);
+          if(d && Array.isArray(d.teams)) oqCount = d.teams.length;
+        }
+      }
+    } catch(_){}
+    var total = manualCount + oqCount + leagueCount;
+    var faltan = Math.max(0, 63 - total);
+    var summaryClass = faltan === 0 ? 'ok' : (faltan <= 5 ? 'warn' : 'err');
+    var summary = '<div class="wprev-diag-summary">'
+      + '<b>Pool actual:</b> <span class="'+summaryClass+'">'+total+' / 63</span>'
+      + (faltan > 0 ? ' · faltan <b class="err">'+faltan+'</b> plazas (TBD)' : ' <span class="ok">✓ pool completo</span>')
+      + '<br>'
+      + '🎮 Manual EA Sports → Europa: <b>'+manualCount+'</b>'
+      + ' · 🟡 Open Qualifier: <b>'+oqCount+'</b> / 35 esperados'
+      + ' · 🌍 Resto de Ligas: <b>'+leagueCount+'</b>'
+      + '</div>';
+    /* Tabla detallada per-liga */
+    var rows = '<div class="wprev-diag-row h">'
+      + '<span>Liga</span><span>Estado</span><span>Detalle</span>'
+      + '</div>';
+    /* Orden: ok → sin-plazas → blacklist → duplicada → otros. Dentro
+       de cada grupo, alfabético. */
+    var ORDER = { ok:0, 'sin-plazas':1, blacklist:2, duplicada:3 };
+    diag.sort(function(a,b){
+      var ka = ORDER[a.status] != null ? ORDER[a.status] : 4;
+      var kb = ORDER[b.status] != null ? ORDER[b.status] : 4;
+      if(ka !== kb) return ka - kb;
+      return String(a.slug||'').localeCompare(String(b.slug||''),'es');
+    });
+    function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    diag.forEach(function(d){
+      var statusClass = (d.status === 'ok') ? 'ok'
+                      : (d.status === 'blacklist') ? 'bl'
+                      : 'skip';
+      var statusLabel = ({
+        ok:'OK', 'sin-plazas':'sin cupo', blacklist:'manual', duplicada:'dup',
+        'no-lista':'incomp.', skip:'skip', error:'err'
+      })[d.status] || d.status || '?';
+      rows += '<div class="wprev-diag-row">'
+        + '<span class="slug">'+_esc(d.slug||'')+'</span>'
+        + '<span class="badge '+statusClass+'">'+_esc(statusLabel)+'</span>'
+        + '<span class="note" title="'+_esc(d.note||'')+'">'+_esc(d.note||'')+'</span>'
+        + '</div>';
+    });
+    if(!diag.length){
+      rows += '<div class="wprev-diag-row"><span class="note" style="grid-column:1/-1;text-align:center;">Sin datos de diag — ejecuta Sim para que se computen las clasificaciones.</span></div>';
+    }
+    body.innerHTML = summary + rows;
+  }
+
   function buildUclPrevClas(){
     var host = document.getElementById('wprev-groups-container');
     if(!host) return;
@@ -19370,8 +19453,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     host.innerHTML = rfHtml;
     renderRound1(s);
+    /* Panel de diagnóstico del pool — siempre visible (colapsado por
+       defecto). Lo refrescamos en cada render para que refleje la
+       última snapshot tras Sim/Reset. */
+    try { _wprevRenderDiag(); } catch(_){}
   }
   window.buildUclPrevClas = buildUclPrevClas;
+  /* Wire para el botón colapsable del diag y persistencia del estado
+     entre cargas (mismo patrón que Ronda 1). */
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){
+      var tgl = document.getElementById('wprev-diag-toggle');
+      var root = document.getElementById('wprev-diag-root');
+      if(!tgl || !root || tgl.__wired) return;
+      tgl.__wired = true;
+      try {
+        if(localStorage.getItem('wprev_diag_collapsed') === '0'){
+          root.classList.remove('collapsed');
+        }
+      } catch(_){}
+      tgl.addEventListener('click', function(){
+        var isCol = root.classList.toggle('collapsed');
+        try { localStorage.setItem('wprev_diag_collapsed', isCol ? '1' : '0'); } catch(_){}
+      });
+    }, 300);
+  });
 
   /* Botón contextual: cada pulsación avanza UNA fase.
        - sin estado          → sortear cruces (init), phase='paired'

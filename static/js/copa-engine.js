@@ -1332,6 +1332,19 @@
       + '.copa-card-btn{margin-top:2px}'
       + '.copa-card-meta{font-size:10.5px;color:rgba(255,200,120,.85);font-family:Rajdhani,sans-serif;letter-spacing:.4px}'
       + '.copa-tie-wrap{background:linear-gradient(180deg,rgba(40,20,5,.55),rgba(20,10,3,.85));border:1px solid rgba(220,170,80,.45);border-radius:12px;margin:8px 6px;padding:10px}'
+      /* Botones rich (Liga EA-style) */
+      + '.copa-card-rich{position:relative;overflow:hidden}'
+      + '.copa-card-bgshield{position:absolute;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0}'
+      + '.copa-card-bgshield-l{left:-4px}'
+      + '.copa-card-bgshield-r{right:-4px}'
+      + '.copa-card-rich > .copa-card-leghdr,.copa-card-rich > .copa-card-row{position:relative;z-index:1}'
+      + '.copa-btn-previa-rich{display:inline-block;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.2px;color:#ff7a8a;background:rgba(255,40,80,.06);border:1px solid rgba(255,80,120,.55);border-radius:6px;padding:5px 14px;cursor:pointer;text-transform:uppercase}'
+      + '.copa-btn-previa-rich:active{background:rgba(255,40,80,.15)}'
+      + '.copa-btn-sim-rich{display:inline-block;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:#5fe08a;background:rgba(60,210,120,.06);border:1px solid rgba(95,224,138,.55);border-radius:6px;padding:5px 14px;cursor:pointer;text-transform:uppercase}'
+      + '.copa-btn-sim-rich:active{background:rgba(60,210,120,.18)}'
+      + '.copa-card-fin{display:inline-block;font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:1.5px;color:#ffd54a;border:1px solid rgba(255,213,74,.45);border-radius:6px;padding:4px 12px;background:rgba(255,213,74,.04)}'
+      + '.copa-card-score-num{color:#5fe08a;font-family:\'Bebas Neue\',sans-serif;font-size:30px;letter-spacing:2px;line-height:1}'
+      + '.copa-card-score-pending{color:rgba(255,255,255,.5);font-family:\'Bebas Neue\',sans-serif;font-size:24px;letter-spacing:3px;line-height:1}'
       + '.copa-mrow-done{margin-bottom:0}'
       + '.copa-sim-all{margin-left:8px}'
       + '.chp-event-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}'
@@ -1417,10 +1430,32 @@
     return '';
   }
 
+  function _teamColorBg(name) {
+    var tc = (window.getTeamColors && window.getTeamColors(name)) || { bg: '#1a2a4a' };
+    return tc.bg || '#1a2a4a';
+  }
+
+  /* Botón estilo Liga EA Sports:
+       - Human vs IA / Human vs Human → 📋 PREVIA (rojo, abre pantalla
+         de previa con showPrePartidoOverlay).
+       - IA vs IA → ▶ SIMULAR (verde, dispara la sim del backend).
+     Cuando el partido ya está jugado, no devuelve botón (se muestra el
+     marcador y el "🏁 FIN"). */
+  function _matchActionButton(ronda, idx, esVuelta, m) {
+    var human = isHuman(m.l, m.v);
+    var leg = esVuelta ? 1 : 0;
+    if (human) {
+      return '<button class="ml-previa-btn copa-btn-previa-rich" '
+        + 'onclick="window.copaAbrirPrevia(\'' + ronda + '\',' + idx + ',' + leg + ')">'
+        + '📋 PREVIA</button>';
+    }
+    return '<button class="copa-btn-sim-rich" '
+      + 'onclick="window.copaSimIA(\'' + ronda + '\',' + idx + ',' + leg + ')">'
+      + '▶ SIMULAR</button>';
+  }
+
   /* Render de un partido SINGLE-LEG (1ª, 2ª, FINAL) o de un sub-row
-     (Ida/Vuelta/Global) DENTRO de una tie. `mode`:
-       'single'   → card grande con botón Jugar/Sim/score.
-       'leg'      → sub-row dentro de tie two-leg, label arriba (Ida/Vuelta/Global).
+     (Ida/Vuelta/Global) DENTRO de una tie.
      `score`: { gl, gv, et_gl, et_gv, pen_winner, jugado } o null.
      `actionBtn`: html del botón (o '' para sub-rows leg). */
   function _renderMatchCard(opts) {
@@ -1431,16 +1466,37 @@
     var subtle = !!opts.subtle;
     var hLog = _shieldImg(local), vLog = _shieldImg(visit);
     var hIco = _humanIco(local), vIco = _humanIco(visit);
+    var hHum = HUMAN_TEAMS.indexOf(canonicalTeam(local)) !== -1;
+    var vHum = HUMAN_TEAMS.indexOf(canonicalTeam(visit)) !== -1;
+    var anyHum = hHum || vHum;
+    var bgL = _teamColorBg(local);
+    var bgV = _teamColorBg(visit);
+    /* Fondos: si hay humano la card va con borde de su color. Gradient
+       horizontal con los colores de los dos equipos (estilo Liga EA). */
+    var wrapStyle = 'background:linear-gradient(to right,'+bgL+'2e 0%,transparent 44%,transparent 56%,'+bgV+'2e 100%);';
+    if (anyHum) {
+      var humBorder = hHum ? bgL : bgV;
+      wrapStyle += 'border:1px solid ' + humBorder + 'aa;box-shadow:0 0 14px ' + humBorder + '55,inset 0 0 0 1px ' + humBorder + '40;';
+    }
+    /* Escudo del humano como fondo difuso (igual que Liga EA). */
+    var bgShieldL = hHum ? '<img src="" data-team="'+escapeHtml(local)+'" alt="" class="copa-card-bgshield copa-card-bgshield-l">' : '';
+    var bgShieldV = vHum ? '<img src="" data-team="'+escapeHtml(visit)+'" alt="" class="copa-card-bgshield copa-card-bgshield-r">' : '';
     var scoreTxt;
     var extras = '';
     if (score && score.jugado) {
-      var totalL = Number(score.gl||0) + Number(score.et_gl||0);
-      var totalV = Number(score.gv||0) + Number(score.et_gv||0);
-      scoreTxt = '<span style="color:#ff5050;font-family:\'Bebas Neue\',sans-serif;font-size:26px;letter-spacing:1.5px;">' + (score.gl||0) + ' – ' + (score.gv||0) + '</span>';
-      if ((score.et_gl||0) || (score.et_gv||0)) extras += '<div class="copa-card-meta"><span style="color:#ffaa55">' + totalL + '-' + totalV + ' (pr)</span></div>';
-      if (score.pen_winner) extras += '<div class="copa-card-meta"><span style="color:#4fd87a">PEN · ' + escapeHtml(score.pen_winner) + '</span></div>';
+      scoreTxt = '<span class="copa-card-score-num">' + (score.gl||0) + ' – ' + (score.gv||0) + '</span>';
+      if ((score.et_gl||0) || (score.et_gv||0)) extras += '<div class="copa-card-meta">pr ' + (Number(score.gl||0)+Number(score.et_gl||0)) + '-' + (Number(score.gv||0)+Number(score.et_gv||0)) + '</div>';
+      if (score.pen_winner) extras += '<div class="copa-card-meta" style="color:#4fd87a">PEN · ' + escapeHtml(score.pen_winner) + '</div>';
     } else {
-      scoreTxt = '<span style="color:rgba(255,255,255,.55);font-family:\'Bebas Neue\',sans-serif;font-size:24px;letter-spacing:2px;">– – –</span>';
+      scoreTxt = '<span class="copa-card-score-pending">– – –</span>';
+    }
+    /* Si el partido ya está jugado, sustituimos el botón por el chip
+       "🏁 FIN" (igual que Liga EA Sports). */
+    var bottomBtn;
+    if (score && score.jugado) {
+      bottomBtn = '<div class="copa-card-fin">🏁 FIN</div>';
+    } else {
+      bottomBtn = actionBtn ? '<div class="copa-card-btn">' + actionBtn + '</div>' : '';
     }
     var legHdr = '';
     if (legLabel) {
@@ -1448,7 +1504,8 @@
     }
     var wrapClass = 'copa-card-rich' + (subtle ? ' copa-card-leg' : '');
     return ''
-      + '<div class="' + wrapClass + '">'
+      + '<div class="' + wrapClass + '" style="' + wrapStyle + '">'
+      + bgShieldL + bgShieldV
       + legHdr
       + '<div class="copa-card-row">'
       + '<div class="copa-card-team">'
@@ -1457,7 +1514,7 @@
       + '</div>'
       + '<div class="copa-card-center">'
       +   '<div class="copa-card-score">' + scoreTxt + '</div>'
-      +   (actionBtn ? '<div class="copa-card-btn">' + actionBtn + '</div>' : '')
+      +   bottomBtn
       +   extras
       + '</div>'
       + '<div class="copa-card-team">'
@@ -1469,14 +1526,13 @@
   }
 
   /* Construye el HTML de partidos de UNA ronda concreta para inyectarlo
-     dentro del <div class="jmatches" id="copa-Xr"> estático.
+     dentro del <div id="copa-rd-XX-body"> de la pantalla dedicada.
      Single-leg (r1/r2/fin): un card por match.
-     Two-leg (r16/oct/cua/sf): un BLOQUE por tie con 3 sub-cards
-     (Ida + Vuelta + Global), apilados verticalmente — coincide
-     exactamente con el ejemplo del usuario. */
+     Two-leg (r16/oct/cua/sf): un wrapper por tie con 3 sub-cards
+     (Ida + Vuelta + Global), apilados verticalmente. */
   function _innerHtmlForRound(matches, ronda) {
     if (!matches || !matches.length) {
-      return '<div style="padding:14px;text-align:center;color:rgba(255,255,255,.4);font-style:italic;font-family:Rajdhani,sans-serif;">Pendiente de sorteo</div>';
+      return '<div style="padding:24px 14px;text-align:center;color:rgba(255,255,255,.45);font-style:italic;font-family:Rajdhani,sans-serif;font-size:14px;">Pendiente de sorteo</div>';
     }
     var resultados = (_copa && _copa.resultados) || {};
     var twoLeg = !!TWO_LEG[ronda];
@@ -1484,14 +1540,8 @@
     if (!twoLeg) {
       var resList = resultados[ronda] || [];
       matches.forEach(function (m, idx) {
-        var matchHuman = isHuman(m.l, m.v);
         var res = resList[idx];
-        var actionBtn = '';
-        if (!(res && res.jugado)) {
-          actionBtn = matchHuman
-            ? '<button class="copa-btn-play" onclick="window.copaJugar(\'' + ronda + '\',' + idx + ',0)">▶ Jugar</button>'
-            : '<button class="copa-btn-sim" onclick="window.copaSimIA(\'' + ronda + '\',' + idx + ',0)">⚡ Sim 30s</button>';
-        }
+        var actionBtn = (res && res.jugado) ? '' : _matchActionButton(ronda, idx, false, m);
         out += _renderMatchCard({
           local: m.l, visit: m.v, score: res || null, actionBtn: actionBtn
         });
@@ -1504,24 +1554,16 @@
     var idaList = resultados[ronda + '_ida'] || [];
     var vtaList = resultados[ronda + '_vta'] || [];
     matches.forEach(function (m, idx) {
-      var humanTie = isHuman(m.l, m.v);
-      var ida = idaList[idx]; /* local=m.l, visit=m.v */
-      var vta = vtaList[idx]; /* local=m.v, visit=m.l (campo invertido) */
-      /* IDA */
-      var btnIda = '';
-      if (!(ida && ida.jugado)) {
-        btnIda = humanTie
-          ? '<button class="copa-btn-play" onclick="window.copaJugar(\'' + ronda + '\',' + idx + ',0)">▶ Jugar</button>'
-          : '<button class="copa-btn-sim" onclick="window.copaSimIA(\'' + ronda + '\',' + idx + ',0)">⚡ Sim 30s</button>';
-      }
-      /* VUELTA — solo se desbloquea si la ida está jugada */
-      var btnVta = '';
+      var ida = idaList[idx];
+      var vta = vtaList[idx];
+      var btnIda = (ida && ida.jugado) ? '' : _matchActionButton(ronda, idx, false, m);
+      var btnVta;
       if (ida && ida.jugado && !(vta && vta.jugado)) {
-        btnVta = humanTie
-          ? '<button class="copa-btn-play" onclick="window.copaJugar(\'' + ronda + '\',' + idx + ',1)">▶ Jugar</button>'
-          : '<button class="copa-btn-sim" onclick="window.copaSimIA(\'' + ronda + '\',' + idx + ',1)">⚡ Sim 30s</button>';
+        btnVta = _matchActionButton(ronda, idx, true, m);
       } else if (!(ida && ida.jugado) && !(vta && vta.jugado)) {
-        btnVta = '<span style="font-size:11px;color:rgba(255,255,255,.35);font-family:Rajdhani,sans-serif;">Tras la ida</span>';
+        btnVta = '<span style="font-size:11px;color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;">Tras la ida</span>';
+      } else {
+        btnVta = '';
       }
 
       out += '<div class="copa-tie-wrap">';
@@ -1533,11 +1575,9 @@
         local: m.v, visit: m.l, score: vta || null, actionBtn: btnVta,
         legLabel: 'Vuelta', subtle: true
       });
-      /* Global: solo se muestra si AMBAS están jugadas. */
       if (ida && ida.jugado && vta && vta.jugado) {
-        var sumL = Number(ida.gl||0) + Number(vta.gv||0); /* m.l total */
-        var sumV = Number(ida.gv||0) + Number(vta.gl||0); /* m.v total */
-        /* Ganador: el de más goles globales. Empate → pen_winner de la vuelta. */
+        var sumL = Number(ida.gl||0) + Number(vta.gv||0);
+        var sumV = Number(ida.gv||0) + Number(vta.gl||0);
         var winner;
         if (sumL > sumV)      winner = m.l;
         else if (sumV > sumL) winner = m.v;
@@ -1555,28 +1595,25 @@
           legLabel: 'Global', subtle: true
         });
       } else {
-        /* Placeholder global vacío para mantener la altura visual */
         out += _renderMatchCard({
           local: m.l, visit: m.v, score: null, actionBtn: '',
           legLabel: 'Global', subtle: true
         });
       }
-      out += '</div>'; /* /copa-tie-wrap */
+      out += '</div>';
     });
     return out;
   }
 
-  /* Mapeo de qué `<div class="jmatches" id="…">` estático rellena cada
-     ronda. Tras consolidar (2026-05-04), las two-leg usan UN solo card
-     desplegable que muestra Ida+Vuelta+Global juntos. */
+  /* Mapeo ronda → id de pantalla dedicada (s-copa-rd-XX) y su body. */
   var _S_COPA_ID = {
-    r1:  'copa-1r',
-    r2:  'copa-2r',
-    r16: 'copa-16',
-    oct: 'copa-8',
-    cua: 'copa-4',
-    sf:  'copa-2',
-    fin: 'copa-fin'
+    r1:  'copa-rd-r1-body',
+    r2:  'copa-rd-r2-body',
+    r16: 'copa-rd-r16-body',
+    oct: 'copa-rd-oct-body',
+    cua: 'copa-rd-cua-body',
+    sf:  'copa-rd-sf-body',
+    fin: 'copa-rd-fin-body'
   };
 
   function copaRender(copa) {
@@ -1618,59 +1655,59 @@
     }
     banner.innerHTML = bannerHtml;
 
-    /* Vaciar cada card estático con los matches de su ronda. */
+    /* Pintar cada pantalla dedicada con sus partidos. */
     ROUNDS.forEach(function (ronda) {
       var domId = _S_COPA_ID[ronda];
-      var card = document.getElementById(domId);
-      if (!card) return;
+      var body = document.getElementById(domId);
+      if (!body) return;
       var matches = sorteo[ronda] || [];
-      card.innerHTML = _innerHtmlForRound(matches, ronda);
-      /* Botones de simular IA + confirmar clasificados, como hermano
-         del card en el mismo jblock. Para no acumular, marcamos con
-         data-copa-actions y los reemplazamos en cada render. */
+      var actionsHtml = '';
       if (matches.length) {
-        var jblock = card.parentNode;
-        if (jblock && jblock.classList.contains('jblock')) {
-          var prevs = jblock.querySelectorAll('[data-copa-actions]');
-          prevs.forEach(function (p) { p.remove(); });
-          var twoLeg = !!TWO_LEG[ronda];
-          var idaList = resultados[twoLeg ? ronda + '_ida' : ronda] || [];
-          var vtaList = resultados[ronda + '_vta'] || [];
-          /* Simular IA Ida */
-          var pendingIA_ida = false, pendingIA_vta = false;
-          for (var m = 0; m < matches.length; m++) {
-            var match = matches[m];
-            if (isHuman(match.l, match.v)) continue;
-            if (!(idaList[m] && idaList[m].jugado)) pendingIA_ida = true;
-            if (twoLeg && idaList[m] && idaList[m].jugado && !(vtaList[m] && vtaList[m].jugado)) pendingIA_vta = true;
-          }
-          var actHtml = '';
-          if (pendingIA_ida) {
-            var lbl = twoLeg ? 'Ida' : (ROUND_LABEL[ronda] || ronda);
-            actHtml += '<button class="copa-btn-sim copa-sim-all" onclick="window.copaSimTodosIA(\'' + ronda + '\',0)">⚡ Simular IA ' + escapeHtml(lbl) + '</button>';
-          }
-          if (pendingIA_vta) {
-            actHtml += '<button class="copa-btn-sim copa-sim-all" onclick="window.copaSimTodosIA(\'' + ronda + '\',1)">⚡ Simular IA Vuelta</button>';
-          }
-          if (actHtml) {
-            var actBtn = document.createElement('div');
-            actBtn.setAttribute('data-copa-actions', '1');
-            actBtn.style.cssText = 'padding:6px 8px;display:flex;gap:6px;flex-wrap:wrap';
-            actBtn.innerHTML = actHtml;
-            jblock.appendChild(actBtn);
-          }
-          /* Confirmar clasificados cuando la ronda está completa. */
-          var done = isRoundComplete(ronda, matches, resultados);
-          var clas = clasificados[ronda] || [];
-          if (done && !clas.length) {
-            var conf = document.createElement('div');
-            conf.setAttribute('data-copa-actions', '1');
-            conf.style.cssText = 'padding:6px 8px';
-            conf.innerHTML = '<button class="copa-btn-avanzar" onclick="window.copaClasificar(\'' + ronda + '\')">✅ Confirmar clasificados — ' + escapeHtml(ROUND_LABEL[ronda] || ronda) + '</button>';
-            jblock.appendChild(conf);
-          }
+        var twoLeg = !!TWO_LEG[ronda];
+        var idaList = resultados[twoLeg ? ronda + '_ida' : ronda] || [];
+        var vtaList = resultados[ronda + '_vta'] || [];
+        var pendingIA_ida = false, pendingIA_vta = false;
+        for (var m = 0; m < matches.length; m++) {
+          var match = matches[m];
+          if (isHuman(match.l, match.v)) continue;
+          if (!(idaList[m] && idaList[m].jugado)) pendingIA_ida = true;
+          if (twoLeg && idaList[m] && idaList[m].jugado && !(vtaList[m] && vtaList[m].jugado)) pendingIA_vta = true;
+        }
+        var btnsHtml = '';
+        if (pendingIA_ida) {
+          var lbl = twoLeg ? 'Ida' : (ROUND_LABEL[ronda] || ronda);
+          btnsHtml += '<button class="copa-btn-sim copa-sim-all" onclick="window.copaSimTodosIA(\'' + ronda + '\',0)">⚡ Simular IA ' + escapeHtml(lbl) + '</button>';
+        }
+        if (pendingIA_vta) {
+          btnsHtml += '<button class="copa-btn-sim copa-sim-all" onclick="window.copaSimTodosIA(\'' + ronda + '\',1)">⚡ Simular IA Vuelta</button>';
+        }
+        var done = isRoundComplete(ronda, matches, resultados);
+        var clas = clasificados[ronda] || [];
+        if (done && !clas.length) {
+          btnsHtml += '<button class="copa-btn-avanzar" onclick="window.copaClasificar(\'' + ronda + '\')">✅ Confirmar clasificados</button>';
+        }
+        if (btnsHtml) {
+          actionsHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:10px 8px 6px;">' + btnsHtml + '</div>';
         }
       }
+      body.innerHTML = actionsHtml + _innerHtmlForRound(matches, ronda);
+      /* Hidratar las imágenes de fondo (escudos de humanos): el HTML
+         las inserta con src vacío + data-team para evitar parsear el
+         alias dos veces; aquí ponemos el src real. */
+      try {
+        body.querySelectorAll('img.copa-card-bgshield').forEach(function (img) {
+          var team = img.getAttribute('data-team') || '';
+          var url = '';
+          if (typeof window.getTeamLogoUrl === 'function') {
+            try { url = window.getTeamLogoUrl(team) || ''; } catch(_){}
+          }
+          if (!url && typeof window.getLogoEquipo === 'function') {
+            try { url = window.getLogoEquipo(team) || ''; } catch(_){}
+          }
+          if (url) img.src = url;
+          else img.style.display = 'none';
+        });
+      } catch(_){}
     });
 
     syncCalendar(_copa);
@@ -2026,12 +2063,52 @@
     if (ev.target && ev.target.id === 'chp-evt-team') refreshHumanPlayerSelect();
   });
 
+  /* PREVIA de Copa: dispara la pantalla de pre-partido (igual que en
+     Liga EA) con compKey='copa' para que use la pelota Tsubasa J Pro
+     y prórroga + penaltis automáticos (showPrePartidoOverlay del
+     index.bundle.js ya lo cablea). */
+  window.copaAbrirPrevia = function (ronda, idx, esVuelta) {
+    var sorteo = (_copa && _copa.sorteo) || {};
+    var matches = sorteo[ronda] || [];
+    var m = matches[idx];
+    if (!m) return;
+    var local = esVuelta ? m.v : m.l;
+    var visit = esVuelta ? m.l : m.v;
+    var isHvH = (typeof esHumano === 'function')
+      ? (esHumano(local) && esHumano(visit))
+      : (HUMAN_TEAMS.indexOf(canonicalTeam(local)) !== -1 && HUMAN_TEAMS.indexOf(canonicalTeam(visit)) !== -1);
+    var compKey = (ronda === 'fin') ? 'copa-fin' : 'copa';
+    var matchKey = 'copa_' + ronda + '_' + idx + (esVuelta ? '_v' : '_i');
+    var duracion = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
+      : (isHvH ? '16.5 min' : '13.5 min');
+    /* Memo para que showPrePartidoOverlay rellene el meta con los
+       equipos correctos (igual que Liga EA hace con _ppPreviaTeams). */
+    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: compKey, ronda: ronda, idx: idx, esVuelta: !!esVuelta };
+    window._ppCustomCallback = function () {
+      window._ppPreviaTeams = null;
+      /* Tras el partido, refrescar la pantalla de la ronda. */
+      try { copaInit(); } catch(_){}
+    };
+    if (typeof window.showPrePartidoOverlay === 'function') {
+      window.showPrePartidoOverlay(matchKey, compKey, 'Sí', duracion, isHvH);
+    } else {
+      alert('No se pudo abrir la previa: showPrePartidoOverlay no disponible.');
+    }
+  };
+
+  /* Devuelve la lista de IDs de pantalla de ronda. Si el script `go()`
+     navega a una de ellas, repintamos el body de esa ronda. */
+  function _isRoundScreen(id) {
+    return /^s-copa-rd-(r1|r2|r16|oct|cua|sf|fin)$/.test(String(id || ''));
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     ensureHumanPanelEnhancements();
     var origGo = window.go;
     window.go = function (screenId) {
       if (typeof origGo === 'function') origGo.apply(this, arguments);
-      if (screenId === 's-copa' || screenId === 's-calendario' || screenId === 's-copa-cuadro') init();
+      if (screenId === 's-copa' || screenId === 's-calendario' || screenId === 's-copa-cuadro' || _isRoundScreen(screenId)) init();
     };
     init();
   });

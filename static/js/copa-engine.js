@@ -314,7 +314,7 @@
     return idx;
   }
 
-  function applyPlayerEvents(teamA, teamB, evts) {
+  function applyPlayerEvents(teamA, teamB, evts, matchKey, mvpName, mvpTeam) {
     var roster = getRosterIndex();
     (evts || []).forEach(function (ev) {
       var type = ev && ev.type;
@@ -339,6 +339,20 @@
         setPlayerStat(row, 'red', 1, PLAYER_STORE_KEY);
       }
     });
+    /* Publicar al store de Liga EA Sports (2026-05-04). Petición usuario:
+       las stats de Copa del Rey se SUMAN a las de Liga EA Sports en la
+       caja de estadísticas y en cada plantilla. Aquí emitimos los mismos
+       eventos a LIGA_PLAYER_MATCH_STORE con `competition='copa'` para
+       que `rebuildPlayerStatsStore` los agregue al cache
+       `ef_player_stats_v1` (Liga + Copa unidas). El matchKey debe ser
+       único por partido de Copa para que no se acumulen en re-renders
+       (el store mismo dedupea por key). */
+    if (matchKey && typeof window.registrarLigaPlayerStats === 'function') {
+      var copaKey = String(matchKey).indexOf('copa-') === 0 ? matchKey : ('copa-' + matchKey);
+      try {
+        window.registrarLigaPlayerStats(copaKey, teamA || '', teamB || '', evts || [], mvpName || '', mvpTeam || '', 'copa');
+      } catch(_){}
+    }
   }
 
   function ensureStoreCounters(name, teamName, partidos) {
@@ -817,7 +831,10 @@
         if (!res || !res.jugado || !res.events) return;
         var sig = key + '::' + idx + '::' + (res.summary || '') + '::' + (res.pen_score || '');
         if (_appliedMeta[sig]) return;
-        applyPlayerEvents(res.team_a || '', res.team_b || '', res.events);
+        /* Pasamos el sig como matchKey: es estable por partido y
+           sobrevive recargas, así LIGA_PLAYER_MATCH_STORE no acumula
+           el mismo partido dos veces. mvp viene del payload si existe. */
+        applyPlayerEvents(res.team_a || '', res.team_b || '', res.events, sig, res.mvp || '', res.mvpTeam || '');
         registerCopaInjuries(res.injuries || []);
         _appliedMeta[sig] = true;
       });
@@ -1162,7 +1179,16 @@
   }
 
   function applyHumanResultMeta(payload, local, visitante) {
-    applyPlayerEvents(local, visitante, payload.events || []);
+    /* matchKey estable: ronda + tie_id (o local-visitante como fallback)
+       + leg para ida/vuelta. Sin esto no se distinguen ida y vuelta
+       de la misma eliminatoria en LIGA_PLAYER_MATCH_STORE. */
+    var ronda = payload && (payload.ronda || payload.round) || '';
+    var leg   = payload && (payload.leg   || payload.partido_idx) || '';
+    var tieId = payload && (payload.tie_id || payload.match_id) || (local + '|' + visitante);
+    var mk = 'copa-' + ronda + '|' + tieId + (leg ? '|' + leg : '');
+    applyPlayerEvents(local, visitante, payload.events || [], mk,
+                      payload && (payload.mvp || payload.mvpName) || '',
+                      payload && (payload.mvpTeam || ''));
     registerCopaInjuries(payload.injuries || []);
     decrementCompetitionBajas('copa', local, visitante);
   }

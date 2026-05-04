@@ -138,32 +138,32 @@ solo `elite`/`natGoal`.
 ## Clasificación a competiciones europeas (obligatorio, 2026-05-02)
 
 Para que un equipo de Resto de Ligas vaya a una competición europea
-**directa** (UCL fase de liga, Previa Champions, UEL, UECL) ese equipo
-debe haber jugado todos sus partidos de liga (`pj === 2·(N−1)`
-resultados que le incluyan). El check es **per-team**, no per-liga:
-una liga con resultados parciales SÍ puede contribuir con sus equipos
-top SIEMPRE QUE tengan el `pj` completo. Los equipos con pj
-incompleto se saltan y se avanza al siguiente del ranking.
+**directa** (UCL fase de liga, Previa Champions, UEL, UECL) basta con
+que haya jugado **al menos 1 partido** en su liga. El check per-team
+es: `pj === 0` (cuando hay resultados parciales) → SKIP ese equipo y
+avanzar al siguiente del ranking. Esto cubre exactamente el bug
+original — equipos sin partido jugado que sorteaban al top por
+desempate alfabético sobre `pts=0` tras una Sim batched/asíncrona.
+
+Filosofía: una liga parcialmente simulada SÍ debe contribuir sus
+equipos "reales" (los que han jugado al menos algo), no solo los
+fully-played. Una liga sin simular nada (rN=0) usa `_rankByPower`
+como siempre — todos los teams tienen pj=0 pero es la única señal
+disponible.
 
 Las zonas **feeder** (`uclQual` = Open Qualifier, `wildcard`) son
 permisivas a propósito — alimentan al OQ y al pool de Previa
 Champions, NO clasifican directo a una competición europea. Aceptan
-standings parciales y rank-by-power sin filtro per-team, para no
-dejar plazas TBD-OQ-XX en el bracket de 7×14.
+teams con pj=0 sin filtro, para no dejar plazas TBD-OQ-XX.
 
 Lógica en `_computeQualifiedFromLeagues(zoneKey)` (`misc_body_1.html`):
 
-1. Para zonas directas (`ucl`/`uclPrev`/`uel`/`uecl`), al iterar el
-   ranking de la liga, los equipos con `pj < 2·(N−1)` se SALTAN y
-   se avanza al siguiente. Una liga 100 % terminada contribuye su
-   cuota completa; una liga parcial contribuye solo sus equipos
-   fully-played; una liga sin simular contribuye 0 (todos tienen
-   pj=0).
-2. Para zonas feeder (`uclQual`/`wildcard`), no se aplica el filtro
-   per-team. Si rN=0 se usa `_rankByPower(teams)` para devolver un
-   ranking sintético; si rN>0 se usa `_standingsFromResults` con lo
-   que haya. Garantiza que el bracket 7×14 del OQ y los 40 slugs de
-   WC siempre se llenen.
+1. Para zonas directas (`ucl`/`uclPrev`/`uel`/`uecl`):
+   - Si `rN === 0` → ranking por power (rank-by-power), sin filtro.
+   - Si `rN > 0` → ranking por resultados (standings); descartamos
+     SOLO los teams con `pj === 0` (race condition / data stale).
+2. Para zonas feeder (`uclQual`/`wildcard`), no se aplica filtro.
+   Aceptan rank-by-power y standings parciales tal cual.
 3. Excepciones absolutas (cualquier zona):
    - **Liga EA Sports / Hypermotion / 1ª RFEF** → bloqueadas en
      `EUROPE_BLACKLIST` (manual-only vía pantalla "EA Sports → Europa").
@@ -175,15 +175,16 @@ ventana el admin abría la pantalla de Europa y
 varios equipos. Esos equipos empataban a `pts=0` y sorteaban a las
 primeras posiciones por desempate alfabético sobre el nombre — el
 código los enviaba a Europa con 0 partidos jugados. El check
-`pj < expectedPj → continue` los descarta.
+`pj === 0 → continue` los descarta.
 
-Por qué NO hay también un gate de liga (`rN < needed → skip whole
-league`): se intentó el 2026-05-02 (commit `c983a56`) pero resultó
-demasiado coarse — descartaba ligas parciales enteras y el pool de
-Previa Champions caía a ~14 equipos reales + 49 placeholders TBD
-(reportado por el usuario con fotos). El per-team check ya cubre el
-caso edge sin destruir las contribuciones legítimas de ligas
-parciales.
+Por qué NO hay gate de liga (`rN < needed → skip whole league`) ni
+gate per-team estricto (`pj < expectedPj`): ambos se intentaron en
+los commits `c983a56` y `3fb9247` pero resultaron demasiado coarse —
+descartaban ligas parciales enteras o teams legítimos que habían
+jugado varios partidos pero la liga seguía a medias, dejando el pool
+de Previa Champions con TBD-50..63 (reportado por el usuario con
+fotos). El check `pj === 0` es exactamente la condición del bug
+original sin destruir contribuciones legítimas.
 
 ## EXENTOS Previa Champions (obligatorio, 2026-05-02)
 

@@ -5,18 +5,25 @@
    - Registro cruzado de stats/bajas en fichas de jugador
    ================================================================ */
 (function () {
-  var HUMAN_TEAMS = ['Real Madrid', 'FC Barcelona', 'Bayern Munich', 'Arsenal', 'Sporting CP'];
+  /* 5 equipos humanos (los 5 del usuario, todos en Liga EA Sports).
+     Real Madrid 🔨 / FC Barcelona 👿 / Atlético Madrid ✏️ / Arsenal 🐭
+     / Bayern Munich 💡. Estos 5 SIEMPRE juegan la 1ª Ronda de Copa. */
+  var HUMAN_TEAMS = ['Real Madrid', 'FC Barcelona', 'Atlético Madrid', 'Arsenal', 'Bayern Munich'];
   var ROUND_LABEL = {
     r1: '1ª Ronda',
     r2: '2ª Ronda',
     r16: 'Dieciseisavos',
     oct: 'Octavos',
     cua: 'Cuartos',
+    sf:  'Semis',
     fin: 'Final'
   };
-  var TWO_LEG = { oct: true, cua: true };
-  var ROUNDS = ['r1', 'r2', 'r16', 'oct', 'cua', 'fin'];
-  var NEXT_ROUND = { r1: 'r2', r2: 'r16', r16: 'oct', oct: 'cua', cua: 'fin' };
+  /* Ida+vuelta desde Dieciseisavos hasta Semis. La Final es a partido único
+     (estadio neutro). 1ª y 2ª Ronda son a partido único en campo del
+     equipo de menor nivel (con prórroga + penaltis si hay empate). */
+  var TWO_LEG = { r16: true, oct: true, cua: true, sf: true };
+  var ROUNDS = ['r1', 'r2', 'r16', 'oct', 'cua', 'sf', 'fin'];
+  var NEXT_ROUND = { r1: 'r2', r2: 'r16', r16: 'oct', oct: 'cua', cua: 'sf', sf: 'fin' };
   var CAL_IDS = {
     r1: 'cal-copa-1r',
     r2: 'cal-copa-2r',
@@ -25,8 +32,15 @@
     oct_vta: 'cal-copa-8v',
     cua_ida: 'cal-copa-4i',
     cua_vta: 'cal-copa-4v',
+    sf_ida:  'cal-copa-2i',
+    sf_vta:  'cal-copa-2v',
     fin: 'cal-copa-fin'
   };
+  /* Slugs de las 3 ligas españolas que componen la Copa del Rey. El total
+     son 82 equipos (20 + 22 + 40). De ellos, 36 juegan 1ª Ronda
+     (5 humanos + 31 al azar de Primera Federación) y los otros 46 entran
+     directos a 2ª Ronda. */
+  var COPA_LEAGUE_SLUGS = ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion'];
   var PLAYER_STORE_KEY = 'copa';
   var _copa = {};
   var _simTimers = {};
@@ -52,6 +66,114 @@
   function isHuman(a, b) {
     return HUMAN_TEAMS.indexOf(canonicalTeam(a)) !== -1 || HUMAN_TEAMS.indexOf(canonicalTeam(b)) !== -1;
   }
+
+  /* ════════════════════════════════════════════════════════════════
+     RECOLECCIÓN DE LOS 82 EQUIPOS DE LA COPA DEL REY
+     Lee los 3 storages (`ligaExt_liga-ea-sports`, `…hypermotion`,
+     `…primera-federacion`) y devuelve [{name, league, power, isHuman}].
+     Si una liga no tiene equipos creados todavía, usa fallback estático
+     (TEAM_RATINGS / LIGA_EA_TEAMS_DEFAULT) para no dejar huecos.
+     ════════════════════════════════════════════════════════════════ */
+  function _readLigaTeams(slug) {
+    if (typeof window.loadData === 'function') {
+      var d = window.loadData(slug);
+      if (d && Array.isArray(d.teams) && d.teams.length) {
+        return d.teams.map(function (t) {
+          return {
+            name: String(t && t.name || '').trim(),
+            league: slug,
+            power: Math.max(1, Math.min(99, Number(t && t.power) || 75)),
+            isHuman: HUMAN_TEAMS.indexOf(String(t && t.name || '').trim()) !== -1
+          };
+        }).filter(function (t) { return t.name; });
+      }
+    }
+    return [];
+  }
+
+  function _collectCopaTeams() {
+    var all = [];
+    var seen = {};
+    COPA_LEAGUE_SLUGS.forEach(function (slug) {
+      _readLigaTeams(slug).forEach(function (t) {
+        if (seen[t.name]) return;
+        seen[t.name] = true;
+        all.push(t);
+      });
+    });
+    return all;
+  }
+
+  /* Reparte 36 equipos para 1ª Ronda: 5 humanos + 31 al azar de Primera
+     Federación (excluyendo a los humanos para no contarlos dos veces).
+     Devuelve {participants:[name…], levels:{name:power}} o null si no
+     hay equipos suficientes. */
+  function _buildR1Participants() {
+    var all = _collectCopaTeams();
+    if (!all.length) return null;
+    var humanos = all.filter(function (t) { return t.isHuman; });
+    var primeraFedNoHum = all.filter(function (t) {
+      return t.league === 'liga-primera-federacion' && !t.isHuman;
+    });
+    /* Mezclar y coger los primeros 31. Si no hay 31 disponibles,
+       cogemos los que haya (la 1ª Ronda quedará con menos partidos). */
+    var pool = primeraFedNoHum.slice();
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    var random31 = pool.slice(0, 31);
+    var participants = humanos.concat(random31);
+    var levels = {};
+    all.forEach(function (t) { levels[t.name] = t.power; });
+    return {
+      participants: participants.map(function (t) { return t.name; }),
+      levels: levels,
+      humanos: humanos.map(function (t) { return t.name; }),
+      preClasificados: all
+        .filter(function (t) {
+          return participants.indexOf(t) === -1; /* los 46 restantes */
+        })
+        .map(function (t) { return t.name; })
+    };
+  }
+
+  /* Empareja una lista de N equipos (par) en N/2 emparejamientos al azar.
+     `hostIsLower=true` (1ª/2ª Ronda y Final) → m.l = equipo de MENOR
+     nivel, juega en su campo a partido único.
+     `hostIsLower=false` (16avos/Octavos/Cuartos/Semis) → m.l = equipo
+     de MAYOR nivel: la IDA se juega en su campo, y el swap automático
+     del engine (`esVuelta ? m.v : m.l`) lleva la VUELTA al campo del de
+     MENOR nivel — exactamente lo que pide el usuario.
+     Empate de nivel → desempate alfabético para que el local sea
+     determinista (no se invierte entre recargas). */
+  function _pairTeams(names, levels, hostIsLower) {
+    var arr = (names || []).slice();
+    if (arr.length % 2 !== 0) arr.pop(); /* impar: descarta el último */
+    /* Shuffle */
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    var matches = [];
+    for (var k = 0; k < arr.length; k += 2) {
+      var a = arr[k], b = arr[k + 1];
+      var pa = (levels && typeof levels[a] === 'number') ? levels[a] : 75;
+      var pb = (levels && typeof levels[b] === 'number') ? levels[b] : 75;
+      var aIsHost;
+      if (hostIsLower) {
+        aIsHost = pa < pb || (pa === pb && a < b);
+      } else {
+        aIsHost = pa > pb || (pa === pb && a < b);
+      }
+      matches.push(aIsHost ? { l: a, v: b } : { l: b, v: a });
+    }
+    return matches;
+  }
+  /* Exponer para tests/debug. */
+  window._copaCollectTeams = _collectCopaTeams;
+  window._copaBuildR1 = _buildR1Participants;
+  window._copaPairTeams = _pairTeams;
 
   function allPlayed(resList, n) {
     if (!resList || resList.length < n) return false;
@@ -671,13 +793,18 @@
   function syncCalendar(copa) {
     var sorteo = (copa && copa.sorteo) || {};
     var resultados = (copa && copa.resultados) || {};
-    syncRoundToCalendar('r1', sorteo.r1 || [], resultados.r1 || [], false);
-    syncRoundToCalendar('r2', sorteo.r2 || [], resultados.r2 || [], false);
-    syncRoundToCalendar('r16', sorteo.r16 || [], resultados.r16 || [], false);
+    syncRoundToCalendar('r1',  sorteo.r1  || [], resultados.r1       || [], false);
+    syncRoundToCalendar('r2',  sorteo.r2  || [], resultados.r2       || [], false);
+    /* Dieciseisavos: ahora ida+vuelta. El calendario solo tiene un id
+       (`cal-copa-16`) para 1/16, así que mostramos ahí la IDA y dejamos
+       la VUELTA viva en s-copa-cuadro (que es el cuadro real). */
+    syncRoundToCalendar('r16', sorteo.r16 || [], resultados.r16_ida  || [], false);
     syncRoundToCalendar('oct_ida', sorteo.oct || [], resultados.oct_ida || [], false);
     syncRoundToCalendar('oct_vta', sorteo.oct || [], resultados.oct_vta || [], true);
     syncRoundToCalendar('cua_ida', sorteo.cua || [], resultados.cua_ida || [], false);
     syncRoundToCalendar('cua_vta', sorteo.cua || [], resultados.cua_vta || [], true);
+    syncRoundToCalendar('sf_ida',  sorteo.sf  || [], resultados.sf_ida  || [], false);
+    syncRoundToCalendar('sf_vta',  sorteo.sf  || [], resultados.sf_vta  || [], true);
     syncRoundToCalendar('fin', sorteo.fin || [], resultados.fin || [], false);
     /* Trigger universal jornada completion check */
     if (typeof window._updateAllJornadaStatus === 'function') setTimeout(window._updateAllJornadaStatus, 100);
@@ -788,11 +915,12 @@
 
   function buildPlaceholderParticipants(copa, ronda, slots) {
     if (ronda === 'r1') return makePlaceholderList('Plaza Copa', slots * 2);
-    if (ronda === 'r2') return getRoundAdvancers(copa, 'r1', 2).concat(makePlaceholderList('Cabeza de serie R2', (slots * 2) - 2));
-    if (ronda === 'r16') return getRoundAdvancers(copa, 'r2', 4).concat(makePlaceholderList('Cabeza de serie Dieciseisavos', (slots * 2) - 4));
+    if (ronda === 'r2') return getRoundAdvancers(copa, 'r1', 18).concat(makePlaceholderList('Cabeza de serie R2', (slots * 2) - 18));
+    if (ronda === 'r16') return getRoundAdvancers(copa, 'r2', slots * 2);
     if (ronda === 'oct') return getRoundAdvancers(copa, 'r16', slots * 2);
     if (ronda === 'cua') return getRoundAdvancers(copa, 'oct', slots * 2);
-    if (ronda === 'fin') return getRoundAdvancers(copa, 'cua', slots * 2);
+    if (ronda === 'sf')  return getRoundAdvancers(copa, 'cua', slots * 2);
+    if (ronda === 'fin') return getRoundAdvancers(copa, 'sf', slots * 2);
     return makePlaceholderList('Por definir', slots * 2);
   }
 
@@ -830,12 +958,13 @@
     var summary = document.getElementById('copa-bracket-summary');
     if (!root) return;
     var roundMeta = [
-      { key: 'r1', label: '1ª Ronda', subtitle: 'Arranque del torneo', slots: 2, rowSpan: 4 },
-      { key: 'r2', label: '2ª Ronda', subtitle: 'Se suman nuevos equipos', slots: 4, rowSpan: 2 },
-      { key: 'r16', label: 'Dieciseisavos', subtitle: 'Cuadro principal', slots: 8, rowSpan: 1 },
-      { key: 'oct', label: 'Octavos', subtitle: 'Ida y vuelta', slots: 4, rowSpan: 2 },
-      { key: 'cua', label: 'Cuartos', subtitle: 'Ida y vuelta', slots: 2, rowSpan: 4 },
-      { key: 'fin', label: 'Final', subtitle: 'Partido único · sede neutral', slots: 1, rowSpan: 8 }
+      { key: 'r1',  label: '1ª Ronda',     subtitle: '36 equipos · partido único · campo del menor', slots: 18, rowSpan: 1 },
+      { key: 'r2',  label: '2ª Ronda',     subtitle: '64 equipos · partido único · campo del menor', slots: 32, rowSpan: 1 },
+      { key: 'r16', label: 'Dieciseisavos',subtitle: 'Ida y vuelta · vuelta en campo del menor',     slots: 16, rowSpan: 1 },
+      { key: 'oct', label: 'Octavos',      subtitle: 'Ida y vuelta · vuelta en campo del menor',     slots: 8,  rowSpan: 2 },
+      { key: 'cua', label: 'Cuartos',      subtitle: 'Ida y vuelta · vuelta en campo del menor',     slots: 4,  rowSpan: 4 },
+      { key: 'sf',  label: 'Semis',        subtitle: 'Ida y vuelta · vuelta en campo del menor',     slots: 2,  rowSpan: 8 },
+      { key: 'fin', label: 'Final',        subtitle: 'Partido único · sede neutral',                 slots: 1,  rowSpan: 16 }
     ];
     var clasificados = (copa && copa.clasificados) || {};
     if (summary) {
@@ -889,6 +1018,12 @@
   function renderBlock(blockId, label, matches, results, ronda, esVuelta) {
     var inner = '';
     var hasResults = results && results.some(function (r) { return r && r.jugado; });
+    /* Para la VUELTA leemos también la IDA para mostrar el global X-Y
+       en cada fila (petición usuario: "en las idas y vueltas salen
+       ambos resultados y el global"). */
+    var idaResults = (esVuelta && TWO_LEG[ronda])
+      ? ((_copa.resultados || {})[ronda + '_ida'] || [])
+      : null;
     if (!matches || !matches.length) {
       inner = '<div class="mrow"><div class="mn" style="color:rgba(255,255,255,.28);font-style:italic">Pendiente de sorteo</div></div>';
     } else {
@@ -902,11 +1037,32 @@
           var totalV = Number(res.gv || 0) + Number(res.et_gv || 0);
           var etTxt = ((res.et_gl || 0) || (res.et_gv || 0)) ? ' <span class="copa-et">(' + totalL + '-' + totalV + ' ET)</span>' : '';
           var penTxt = res.pen_winner ? ' <span class="copa-pen">PEN</span>' : '';
+          /* Línea de global IDA + VUELTA. m.l es siempre el equipo
+             original "primary" del par (el que jugó como local en IDA).
+             En la VUELTA se invierte el campo, así que para sumar los
+             goles "que cada equipo marcó en total":
+               m.l_total = ida.gl + vuelta.gv
+               m.v_total = ida.gv + vuelta.gl
+             Si pen_winner está, se anota junto al global. */
+          var aggLine = '';
+          if (esVuelta && idaResults && idaResults[idx] && idaResults[idx].jugado) {
+            var ida = idaResults[idx];
+            var sumOrig_l = Number(ida.gl || 0) + Number(res.gv || 0);
+            var sumOrig_v = Number(ida.gv || 0) + Number(res.gl || 0);
+            var penGlob = res.pen_winner ? ' · pen ' + escapeHtml(res.pen_winner) : '';
+            aggLine = '<div class="copa-row-note copa-row-agg">'
+              + 'Ida: <b>' + ida.gl + '-' + ida.gv + '</b> · '
+              + 'Vuelta: <b>' + res.gl + '-' + res.gv + '</b> · '
+              + 'Global: <b>' + escapeHtml(m.l) + ' ' + sumOrig_l + '-' + sumOrig_v + ' ' + escapeHtml(m.v) + '</b>'
+              + penGlob
+              + '</div>';
+          }
           inner += '<div class="mrow copa-mrow copa-mrow-done" data-done="1">'
             + '<div class="mn">' + escapeHtml(local) + '</div>'
             + '<div class="ms copa-sc">' + res.gl + ' – ' + res.gv + etTxt + penTxt + '</div>'
             + '<div class="mn r">' + escapeHtml(visit) + '</div>'
             + '</div>'
+            + aggLine
             + renderResultExtra(res);
         } else {
           var btn = human
@@ -1088,6 +1244,7 @@
       + '.copa-jblock .jmatches{border-color:rgba(240,192,64,.18)}'
       + '.copa-row-note{font-size:11px;color:rgba(255,255,255,.64);padding:2px 10px 8px 10px;line-height:1.4}'
       + '.copa-row-inj{color:#f4c970}'
+      + '.copa-row-agg{color:#ffd54a;font-size:11.5px;font-weight:600;letter-spacing:.2px;background:linear-gradient(90deg,rgba(255,213,74,.07),rgba(255,213,74,.02));border-left:2px solid rgba(255,213,74,.45);padding:4px 10px 4px 10px;margin:2px 8px 6px 8px;border-radius:6px}'
       + '.copa-mrow-done{margin-bottom:0}'
       + '.copa-sim-all{margin-left:8px}'
       + '.chp-event-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}'
@@ -1202,11 +1359,62 @@
     renderBracket(_copa);
   }
 
+  /* Construye el payload de emparejamientos para una ronda dada. El
+     cliente conoce a los 82 equipos (ligaExt_*) y sus niveles, así que
+     decide aquí mismo: (1) qué equipos juegan, (2) cómo se emparejan
+     y (3) quién es local (siempre el de menor power). El backend
+     simplemente persiste lo que el cliente le pasa.
+
+     ronda='r1' → 36 equipos (5 humanos + 31 random Primera Fed) → 18 ties
+     ronda='r2' → 64 equipos (18 ganadores r1 + 46 pre-clasificados) → 32 ties
+     ronda='r16'+ → ties = ganadores de la ronda previa, ya pares. */
+  function _computeSorteoPayload(ronda) {
+    var clasificados = (_copa && _copa.clasificados) || {};
+    var levels = {};
+    var teams = [];
+    if (ronda === 'r1') {
+      var built = _buildR1Participants();
+      if (!built) return null;
+      teams = built.participants.slice();
+      levels = built.levels;
+    } else if (ronda === 'r2') {
+      /* 18 ganadores + 46 pre-clasificados (todo el resto que NO jugó r1) */
+      var all = _collectCopaTeams();
+      all.forEach(function (t) { levels[t.name] = t.power; });
+      var r1Sorteo = ((_copa.sorteo || {}).r1 || []);
+      var jugaronR1 = {};
+      r1Sorteo.forEach(function (m) { jugaronR1[m.l] = true; jugaronR1[m.v] = true; });
+      var preClasif = all.filter(function (t) { return !jugaronR1[t.name]; })
+                          .map(function (t) { return t.name; });
+      var winnersR1 = (clasificados.r1 || []).slice();
+      teams = winnersR1.concat(preClasif);
+    } else {
+      /* r16, oct, cua, sf, fin: usan los ganadores de la ronda previa.
+         Para nivel, leemos los 82 (los nombres ya se conocen). */
+      var allX = _collectCopaTeams();
+      allX.forEach(function (t) { levels[t.name] = t.power; });
+      var prev = { r16: 'r2', oct: 'r16', cua: 'oct', sf: 'cua', fin: 'sf' }[ronda];
+      teams = (clasificados[prev] || []).slice();
+      if (ronda === 'fin' && teams.length < 2) return null;
+    }
+    if (!teams.length || teams.length % 2 !== 0) return null;
+    /* Single-leg (r1/r2/fin) → host = menor nivel. Two-leg → host (ida) =
+       mayor nivel para que la vuelta caiga en el menor nivel. */
+    var hostIsLower = !TWO_LEG[ronda];
+    var pairs = _pairTeams(teams, levels, hostIsLower);
+    return { ronda: ronda, participants: teams, pairs: pairs, levels: levels };
+  }
+
   window.copaSortear = function (ronda) {
+    var payload = _computeSorteoPayload(ronda);
+    if (!payload) {
+      alert('❌ No hay equipos suficientes en las 3 ligas para sortear ' + (ROUND_LABEL[ronda] || ronda) + '.');
+      return;
+    }
     fetch('/api/copa/sorteo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ronda: ronda })
+      body: JSON.stringify(payload)
     }).then(function (r) { return r.json(); })
       .then(function (d) {
         if (d.ok) copaRender(d.copa);

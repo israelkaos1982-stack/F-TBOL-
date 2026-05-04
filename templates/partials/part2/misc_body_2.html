@@ -822,9 +822,9 @@
 #s-superliga-clas .clas-scroll-outer{position:relative;}
 #s-superliga-clas .clas-hdr-scroll{overflow:hidden;position:sticky;top:44px;z-index:20;}
 #s-superliga-clas .clas-scroll{overflow-x:auto;padding-top:6px;}
-#s-superliga-clas .clas-table{width:100%;display:flex;flex-direction:column;gap:0;min-width:560px;}
+#s-superliga-clas .clas-table{width:100%;display:flex;flex-direction:column;gap:0;min-width:540px;}
 #s-superliga-clas .clas-hdr,
-#s-superliga-clas .clas-row{display:grid;grid-template-columns:minmax(190px,2.4fr) 36px 28px 24px 24px 24px 28px 28px 30px 32px 72px;gap:2px;align-items:center;}
+#s-superliga-clas .clas-row{display:grid;grid-template-columns:minmax(170px,1fr) 36px 28px 24px 24px 24px 28px 28px 30px 32px 72px;gap:2px;align-items:center;}
 #s-superliga-clas .clas-hdr{padding:8px 6px 8px 0;background:linear-gradient(90deg,#1c0f30,#3d1a66);border-bottom:2px solid rgba(168,85,247,.55);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.62);font-weight:700;text-align:center;}
 #s-superliga-clas .clas-hdr-team{position:sticky;left:0;z-index:21;background:linear-gradient(90deg,#1c0f30,#3d1a66);padding:8px 6px;text-align:left;color:rgba(255,255,255,.92);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;font-weight:700;}
 #s-superliga-clas .clas-row{padding:6px 6px 6px 0;border-bottom:1px solid rgba(255,255,255,.05);transition:background .12s;border-left:3px solid transparent;}
@@ -1101,29 +1101,62 @@
     if(hdrScroll && bodyScroll){
       bodyScroll.addEventListener('scroll', function(){ hdrScroll.scrollLeft = bodyScroll.scrollLeft; });
     }
-    buildJornadas(cal, results);
+    /* Conserva las jornadas abiertas por el usuario al re-renderizar. */
+    var openSet = _captureOpenJornadas();
+    buildJornadas(cal, results, openSet);
   }
 
-  function teamCellInner(name, isRight){
-    var shield = _logoFor(name);
-    var shieldHtml = shield
-      ? '<img class="sl-j-shield" src="' + _esc(shield) + '" alt="' + _esc(name) + '" loading="lazy" decoding="async">'
-      : '';
-    /* Emoji humano AL FINAL del nombre (consistente con la clasificación). */
-    var rawIcon = (typeof window.humanIcon === 'function') ? window.humanIcon(name) : '';
-    var humanEmoji = rawIcon ? rawIcon.replace(/ /g, '').trim() : '';
-    var iconHtml = humanEmoji ? '<span class="clas-team-human-suffix">' + humanEmoji + '</span>' : '';
-    var nameHtml = '<span class="sl-j-team-name">' + _esc(name) + '</span>';
-    var nameWithIcon = isRight ? (iconHtml + nameHtml) : (nameHtml + iconHtml);
-    return isRight ? (nameWithIcon + shieldHtml) : (shieldHtml + nameWithIcon);
+  /* Card grande tipo Liga EA Sports — usa las clases globales
+     `.match-live-wrap` / `.ml-header` / `.ml-team` / `.ml-shield-wrap`
+     / `.ml-team-name` / `.ml-score` / `.ml-previa-btn` para que se vea
+     idéntico al patrón de Liga (escudo grande + nombre completo
+     debajo + score/previa centrado). */
+  function _superMatchCard(j, home, away, res){
+    var hEsc = String(home).replace(/'/g,"\\'");
+    var aEsc = String(away).replace(/'/g,"\\'");
+    function _shieldImg(name){
+      var l = _logoFor(name);
+      if(!l) return '';
+      return '<img src="' + _esc(l) + '" alt="' + _esc(name) + '" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;">';
+    }
+    function _humanSuffix(name){
+      var raw = (typeof window.humanIcon === 'function') ? window.humanIcon(name) : '';
+      var emoji = raw ? raw.replace(/ |\s/g,'').trim() : '';
+      return emoji ? ' <span class="clas-team-human-suffix" style="display:inline;font-size:11px;">' + emoji + '</span>' : '';
+    }
+    var center = res
+      ? '<div class="ml-score">' + res.gh + '–' + res.ga + '</div>'
+      : '<div class="ml-score">–</div>'
+        + '<button class="ml-previa-btn" onclick="window._openSuperligaMatch(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">📋 PREVIA</button>';
+    return '<div class="match-live-wrap" style="margin:6px 8px;background:linear-gradient(135deg,#15082a,#3d1a66 50%,#15082a);border-color:rgba(168,85,247,.45);">'
+      + '<div class="ml-header">'
+      +   '<div class="ml-team">'
+      +     '<div class="ml-shield-wrap">' + _shieldImg(home) + '</div>'
+      +     '<div class="ml-team-name">' + _esc(home) + _humanSuffix(home) + '</div>'
+      +   '</div>'
+      +   '<div class="ml-score-wrap">' + center + '</div>'
+      +   '<div class="ml-team">'
+      +     '<div class="ml-shield-wrap">' + _shieldImg(away) + '</div>'
+      +     '<div class="ml-team-name">' + _esc(away) + _humanSuffix(away) + '</div>'
+      +   '</div>'
+      + '</div>'
+      + '</div>';
   }
-  function scoreCellHtml(j, home, away, res){
-    if(res){ return '<div class="ms">' + res.gh + '–' + res.ga + '</div>'; }
-    var hEsc = String(home).replace(/'/g, "\\'");
-    var aEsc = String(away).replace(/'/g, "\\'");
-    return '<div class="ms p previa" style="cursor:pointer;" onclick="window._openSuperligaMatch(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')">📋 Previa</div>';
+
+  /* Captura las jornadas que el usuario ha desplegado para poder
+     restaurarlas tras un re-render. Sin esto, cada `buildClas` cierra
+     el despliegue y obliga al usuario a volver a abrirlo. */
+  function _captureOpenJornadas(){
+    var open = {};
+    var host = document.getElementById('sl-jornadas');
+    if(!host) return open;
+    host.querySelectorAll('.jmatches.open').forEach(function(el){
+      if(el.id) open[el.id] = true;
+    });
+    return open;
   }
-  function buildJornadas(cal, results){
+
+  function buildJornadas(cal, results, openSet){
     var host = document.getElementById('sl-jornadas');
     if(!host) return;
     var html = '';
@@ -1131,18 +1164,15 @@
       var j = idx + 1;
       var jid = 'sl-j' + j;
       var allDone = round.every(function(m){ return !!results[_rKey(j, m[0], m[1])]; });
+      var openCls = (openSet && openSet[jid]) ? ' open' : '';
       html += '<div class="jblock">';
       html += '<button class="jbtn c-superliga' + (allDone ? ' done' : '') + '" onclick="tog(\'' + jid + '\')">'
         + '<div class="pdot">' + (allDone ? '✅' : '▶') + '</div>'
         + '⭐ <b>Superliga</b>&nbsp; Jornada ' + j + '</button>';
-      html += '<div class="jmatches" id="' + jid + '">';
+      html += '<div class="jmatches' + openCls + '" id="' + jid + '">';
       round.forEach(function(m){
         var res = results[_rKey(j, m[0], m[1])];
-        html += '<div class="mrow">'
-          + '<div class="mn" data-team="' + _esc(m[0]) + '">' + teamCellInner(m[0], false) + '</div>'
-          + scoreCellHtml(j, m[0], m[1], res)
-          + '<div class="mn r" data-team="' + _esc(m[1]) + '">' + teamCellInner(m[1], true) + '</div>'
-          + '</div>';
+        html += _superMatchCard(j, m[0], m[1], res);
       });
       html += '</div></div>';
     });
@@ -1195,12 +1225,32 @@
 
   window._superligaRebuild = buildClas;
 
+  /* Re-render dirigido por eventos, NO por polling. El polling cada 4s
+     destruía las jornadas que el usuario había desplegado (innerHTML
+     reset), reportado 2026-05-04. Ahora sólo redibuja cuando algo
+     cambió de verdad: storage de equipos manuales o resultados de
+     Superliga. */
   document.addEventListener('DOMContentLoaded', function(){ buildClas(); });
-  /* Refresco cuando el usuario abre la pantalla por cualquier ruta. */
-  setInterval(function(){
-    var sc = document.getElementById('s-superliga-clas');
-    if(sc && sc.classList.contains('active')) buildClas();
-  }, 4000);
+  window.addEventListener('storage', function(ev){
+    if(!ev || !ev.key) return;
+    if(ev.key === STORAGE_KEY_TEAMS || ev.key === STORAGE_KEY_RESULTS || ev.key === STORAGE_KEY_CALENDAR){
+      buildClas();
+    }
+  });
+  /* Hook ligero en el `go()` para refrescar al entrar a la pantalla
+     (cubre el caso de cambios hechos por código que no dispara
+     `storage` — los `localStorage.setItem` mismo-tab no lo emiten). */
+  (function(){
+    var orig = window.go;
+    if(typeof orig !== 'function' || orig._superligaPatched) return;
+    var patched = function(id){
+      var r = orig.apply(this, arguments);
+      if(id === 's-superliga-clas') buildClas();
+      return r;
+    };
+    patched._superligaPatched = true;
+    window.go = patched;
+  })();
 })();
 </script>
 </div>

@@ -4684,6 +4684,44 @@ window._showSimProgress = function(opts, onDone){
   function loadIcons(){
     try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(_){ return {}; }
   }
+  /* Sync con servidor (GlobalState): los iconos custom se persisten
+     también en /api/kv/comp_icons_v1 desde 2026-05-02 — antes vivían
+     SOLO en localStorage y se perdían si el navegador limpiaba caché
+     o el usuario cambiaba de dispositivo (reportado por el usuario
+     con foto). Estrategia:
+       - Al guardar: localStorage primero (cache rápido) + POST async
+         al server (best-effort).
+       - Al cargar: si localStorage está vacío, GET del server y
+         volcar a localStorage para futuras lecturas. */
+  function _saveIconsServer(icons){
+    try {
+      fetch('/api/kv/comp_icons_v1', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({value: icons || {}})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function _hydrateIconsFromServer(cb){
+    /* Solo ejecuta GET si el localStorage está vacío. No queremos
+       sobrescribir cambios locales recientes con datos del server. */
+    var localRaw;
+    try { localRaw = localStorage.getItem(KEY); } catch(_){}
+    if(localRaw && localRaw !== '{}' && localRaw !== 'null'){
+      if(typeof cb === 'function') cb(false);
+      return;
+    }
+    try {
+      fetch('/api/kv/comp_icons_v1', {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(!j || !j.ok || !j.value) { if(typeof cb === 'function') cb(false); return; }
+          try { localStorage.setItem(KEY, JSON.stringify(j.value)); } catch(_){}
+          if(typeof cb === 'function') cb(true);
+        }).catch(function(){ if(typeof cb === 'function') cb(false); });
+    } catch(_) { if(typeof cb === 'function') cb(false); }
+  }
   function saveIcons(icons){
     /* Detección de quota: el setItem se hace dentro de try/catch y, si
        falla, devolvemos false para que el caller pueda revertir/avisar.
@@ -4692,14 +4730,23 @@ window._showSimProgress = function(opts, onDone){
        2026-05-02). */
     var payload;
     try { payload = JSON.stringify(icons || {}); } catch(_){ return false; }
-    try { localStorage.setItem(KEY, payload); return true; }
+    var localOk = true;
+    try { localStorage.setItem(KEY, payload); }
     catch(err){
+      localOk = false;
       var isQuota = err && (
         err.code === 22 || err.code === 1014 ||
         err.name === 'QuotaExceededError' ||
         err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+      /* Aunque localStorage falle, intentamos persistir en server
+         para que el dato no se pierda (la próxima recarga lo bajará
+         del server al localStorage). */
+      _saveIconsServer(icons);
       return isQuota ? 'quota' : false;
     }
+    /* localStorage OK → también al server, async best-effort. */
+    if(localOk) _saveIconsServer(icons);
+    return true;
   }
   function cardLabel(card){
     var lbl = card.querySelector('.sc-label');
@@ -4867,7 +4914,16 @@ window._showSimProgress = function(opts, onDone){
      monte los `[data-bg-enhanced]`. Lo hacemos al cargar la página y
      también al entrar a s-competiciones por si el usuario importa el
      state desde otra ruta. */
-  function init(){ setTimeout(applyAllOverrides, 120); }
+  function init(){
+    /* Primero intenta hidratar desde el server si localStorage está
+       vacío (caso típico tras limpiar caché o cambiar de dispositivo).
+       Tras hidratar, aplica los overrides. Si no hay datos en el
+       server o ya teníamos en localStorage, applyAllOverrides corre
+       con lo que haya. */
+    _hydrateIconsFromServer(function(hydrated){
+      setTimeout(applyAllOverrides, hydrated ? 60 : 120);
+    });
+  }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', init);
   } else { init(); }
@@ -4875,7 +4931,15 @@ window._showSimProgress = function(opts, onDone){
   if(typeof _origGoComp === 'function'){
     window.go = function(id){
       var r = _origGoComp.apply(this, arguments);
-      if(id === 's-competiciones') setTimeout(applyAllOverrides, 50);
+      if(id === 's-competiciones'){
+        /* Al entrar a s-competiciones, re-hidratamos por si el server
+           tiene cambios desde otro dispositivo. Si nuestro localStorage
+           tiene contenido, _hydrateIconsFromServer lo respeta y no hace
+           GET (evita pisar cambios locales no sincronizados todavía). */
+        _hydrateIconsFromServer(function(){
+          setTimeout(applyAllOverrides, 50);
+        });
+      }
       return r;
     };
   }
@@ -6967,6 +7031,38 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     return [];
   }
+  /* Sync con servidor (GlobalState): persistimos también a
+     /api/kv/manual_ea_<slug>_v1 desde 2026-05-02. Antes vivía SOLO
+     en localStorage y el usuario perdía sus inyecciones EA → Europa
+     al limpiar caché o cambiar de dispositivo (foto reportada). */
+  function _saveServer(slug, list){
+    try {
+      fetch('/api/kv/'+_key(slug), {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({value: {teams:list, ts:Date.now()}})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function _hydrateFromServer(slug, cb){
+    /* Solo GET si localStorage está vacío para esa clave: si ya
+       tenemos contenido local, no queremos sobrescribir cambios
+       no sincronizados. */
+    var localRaw;
+    try { localRaw = localStorage.getItem(_key(slug)); } catch(_){}
+    if(localRaw){ if(typeof cb === 'function') cb(false); return; }
+    try {
+      fetch('/api/kv/'+_key(slug), {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(j && j.ok && j.value){
+            try { localStorage.setItem(_key(slug), JSON.stringify(j.value)); } catch(_){}
+            if(typeof cb === 'function') cb(true);
+          } else { if(typeof cb === 'function') cb(false); }
+        }).catch(function(){ if(typeof cb === 'function') cb(false); });
+    } catch(_) { if(typeof cb === 'function') cb(false); }
+  }
   function _save(slug, list){
     /* Devuelve true | 'quota' | false. Antes el catch era vacío y el
        admin veía el equipo añadido en pantalla (por el render(), que
@@ -6977,12 +7073,19 @@ window._showSimProgress = function(opts, onDone){
        guardan al recargar". */
     var payload;
     try { payload = JSON.stringify({teams:list, ts:Date.now()}); } catch(_){ return false; }
-    try { localStorage.setItem(_key(slug), payload); return true; }
+    try {
+      localStorage.setItem(_key(slug), payload);
+      _saveServer(slug, list);
+      return true;
+    }
     catch(err){
       var isQuota = err && (
         err.code === 22 || err.code === 1014 ||
         err.name === 'QuotaExceededError' ||
         err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+      /* Aunque localStorage falle, persistimos al server — la próxima
+         recarga lo bajará al localStorage y el dato no se pierde. */
+      _saveServer(slug, list);
       return isQuota ? 'quota' : false;
     }
   }
@@ -7161,19 +7264,43 @@ window._showSimProgress = function(opts, onDone){
     else _doRm();
   };
 
+  /* Hidrata desde el server (en orden) los slugs que tengan
+     localStorage vacío. Esto cubre el caso de cambio de dispositivo
+     o limpieza de caché — el server tiene la última snapshot. Tras
+     bajar todos los valores, re-renderiza si ya estamos en s-ea-manual. */
+  function _hydrateAllFromServer(done){
+    var pending = EVENTS.length;
+    if(!pending){ if(typeof done === 'function') done(false); return; }
+    var anyHydrated = false;
+    EVENTS.forEach(function(ev){
+      _hydrateFromServer(ev.slug, function(hyd){
+        if(hyd) anyHydrated = true;
+        pending--;
+        if(pending <= 0 && typeof done === 'function') done(anyHydrated);
+      });
+    });
+  }
   /* Re-render al entrar a la pantalla. */
   var _origGoMea = window.go;
   if(typeof _origGoMea === 'function'){
     window.go = function(id){
       var r = _origGoMea.apply(this, arguments);
       if(id === 's-ea-manual'){
-        try { setTimeout(render, 30); } catch(_){}
+        try {
+          /* Re-hidratamos por si el server tiene cambios desde otro
+             dispositivo. Para slugs que ya tengan localStorage no
+             nuevo, _hydrateFromServer no hace GET. */
+          _hydrateAllFromServer(function(){ setTimeout(render, 30); });
+        } catch(_){ try { setTimeout(render, 30); } catch(__){} }
       }
       return r;
     };
   }
   document.addEventListener('DOMContentLoaded', function(){
-    setTimeout(render, 250);
+    /* Al cargar la página, hidratamos todos los slugs y luego
+       renderizamos. Si todo el localStorage ya tenía valor, el GET
+       no se hace y la hidratación termina inmediatamente. */
+    _hydrateAllFromServer(function(){ setTimeout(render, 250); });
   });
 })();
 </script>

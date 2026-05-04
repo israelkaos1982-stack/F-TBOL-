@@ -5763,19 +5763,24 @@ window._showSimProgress = function(opts, onDone){
       else if(i<=24) zone = 'zone-ucl-qual'; // playoff de 16vos
       else zone = 'zone-desc';               // eliminados
       var team = classified[i-1];
-      var nameHtml, logoHtml = '';
+      var nameHtml, logoHtml = '', suffixHtml = '';
       if(team){
         if(team.logo){
           logoHtml = '<img class="clas-team-logo" src="' + _esc(team.logo) + '" alt="" onerror="this.style.display=\'none\'">';
         }
         nameHtml = '<span class="clas-team-name-text">' + _esc(team.name) + '</span>';
+        // Emoji de equipo humano (🐭/✏️/🔨/💡/👿…) AL FINAL del nombre,
+        // mismo formato que la clasificación de Liga EA Sports.
+        var rawIcon = (typeof window.humanIcon === 'function') ? window.humanIcon(team.name) : '';
+        var humanEmoji = rawIcon ? rawIcon.replace(/ /g, '').trim() : '';
+        if(humanEmoji) suffixHtml = '<span class="clas-team-human-suffix">' + humanEmoji + '</span>';
       } else {
         nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
       }
       html += '<div class="clas-row ' + zone + '">'
         + '<div class="clas-team-cell">'
         +   '<span class="clas-pos-n">' + i + '</span>'
-        +   '<span class="clas-team-name">' + logoHtml + nameHtml + '</span>'
+        +   '<span class="clas-team-name">' + logoHtml + nameHtml + suffixHtml + '</span>'
         + '</div>'
         + '<div class="clas-pts">0</div>'
         + '<div class="clas-pj">0</div>'
@@ -6530,12 +6535,15 @@ window._showSimProgress = function(opts, onDone){
         var rowZone = '', borderColor = 'transparent';
         if(i < QUALIFY_TOP){ rowZone = 'background:rgba(168,85,247,.10);'; borderColor = '#a855f7'; }
         else { rowZone = ''; borderColor = 'rgba(255,255,255,.05)'; }
-        var nameHtml, logoHtml = '';
+        var nameHtml, logoHtml = '', suffixHtml = '';
         if(team && team.name){
           if(team.logo){
             logoHtml = '<img class="clas-team-logo" src="' + _esc(team.logo) + '" alt="" onerror="this.style.display=\'none\'">';
           }
           nameHtml = '<span class="clas-team-name-text">' + _esc(team.name) + '</span>';
+          var rawIcon = (typeof window.humanIcon === 'function') ? window.humanIcon(team.name) : '';
+          var humanEmoji = rawIcon ? rawIcon.replace(/ /g, '').trim() : '';
+          if(humanEmoji) suffixHtml = '<span class="clas-team-human-suffix">' + humanEmoji + '</span>';
         } else {
           nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
         }
@@ -6547,7 +6555,7 @@ window._showSimProgress = function(opts, onDone){
         html += '<div class="clas-row" style="grid-template-columns:minmax(150px,1.6fr) 30px 26px 22px 22px 22px 26px 26px 28px;border-left:3px solid ' + borderColor + ';' + rowZone + '">'
           + '<div class="clas-team-cell">'
           +   '<span class="clas-pos-n">' + (i+1) + '</span>'
-          +   '<span class="clas-team-name">' + logoHtml + nameHtml + '</span>'
+          +   '<span class="clas-team-name">' + logoHtml + nameHtml + suffixHtml + '</span>'
           + '</div>'
           + '<div class="clas-pts">' + (team?team.pts:0) + '</div>'
           + '<div class="clas-pj">' + (team?team.pj:0) + '</div>'
@@ -7236,19 +7244,24 @@ window._showSimProgress = function(opts, onDone){
       if(i<=8) zone = 'zone-uel';
       else if(i>24) zone = 'zone-desc';
       var team = classified[i-1];
-      var nameHtml, logoHtml = '';
+      var nameHtml, logoHtml = '', suffixHtml = '';
       if(team){
         if(team.logo){
           logoHtml = '<img class="clas-team-logo" src="' + _esc(team.logo) + '" alt="" onerror="this.style.display=\'none\'">';
         }
         nameHtml = '<span class="clas-team-name-text">' + _esc(team.name) + '</span>';
+        // Emoji de equipo humano (🐭/✏️/🔨/💡/👿…) AL FINAL del nombre,
+        // mismo formato que la clasificación de Liga EA Sports.
+        var rawIcon = (typeof window.humanIcon === 'function') ? window.humanIcon(team.name) : '';
+        var humanEmoji = rawIcon ? rawIcon.replace(/ /g, '').trim() : '';
+        if(humanEmoji) suffixHtml = '<span class="clas-team-human-suffix">' + humanEmoji + '</span>';
       } else {
         nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
       }
       html += '<div class="clas-row ' + zone + '">'
         + '<div class="clas-team-cell">'
         +   '<span class="clas-pos-n">' + i + '</span>'
-        +   '<span class="clas-team-name">' + logoHtml + nameHtml + '</span>'
+        +   '<span class="clas-team-name">' + logoHtml + nameHtml + suffixHtml + '</span>'
         + '</div>'
         + '<div class="clas-pts">0</div>'
         + '<div class="clas-pj">0</div>'
@@ -7476,19 +7489,24 @@ window._showSimProgress = function(opts, onDone){
       if(i<=8) zone = 'zone-conf';
       else if(i>24) zone = 'zone-desc';
       var team = classified[i-1];
-      var nameHtml, logoHtml = '';
+      var nameHtml, logoHtml = '', suffixHtml = '';
       if(team){
         if(team.logo){
           logoHtml = '<img class="clas-team-logo" src="' + _esc(team.logo) + '" alt="" onerror="this.style.display=\'none\'">';
         }
         nameHtml = '<span class="clas-team-name-text">' + _esc(team.name) + '</span>';
+        // Emoji de equipo humano (🐭/✏️/🔨/💡/👿…) AL FINAL del nombre,
+        // mismo formato que la clasificación de Liga EA Sports.
+        var rawIcon = (typeof window.humanIcon === 'function') ? window.humanIcon(team.name) : '';
+        var humanEmoji = rawIcon ? rawIcon.replace(/ /g, '').trim() : '';
+        if(humanEmoji) suffixHtml = '<span class="clas-team-human-suffix">' + humanEmoji + '</span>';
       } else {
         nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
       }
       html += '<div class="clas-row ' + zone + '">'
         + '<div class="clas-team-cell">'
         +   '<span class="clas-pos-n">' + i + '</span>'
-        +   '<span class="clas-team-name">' + logoHtml + nameHtml + '</span>'
+        +   '<span class="clas-team-name">' + logoHtml + nameHtml + suffixHtml + '</span>'
         + '</div>'
         + '<div class="clas-pts">0</div>'
         + '<div class="clas-pj">0</div>'

@@ -829,16 +829,20 @@
 #s-superliga-clas .clas-hdr-team{position:sticky;left:0;z-index:21;background:linear-gradient(90deg,#1c0f30,#3d1a66);padding:8px 6px;text-align:left;color:rgba(255,255,255,.92);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;font-weight:700;}
 #s-superliga-clas .clas-row{padding:6px 6px 6px 0;border-bottom:1px solid rgba(255,255,255,.05);transition:background .12s;border-left:3px solid transparent;}
 #s-superliga-clas .clas-row:hover{filter:brightness(1.15);}
-#s-superliga-clas .clas-row.zone-champ{background:rgba(240,192,64,.12);border-left-color:#f0c040;}
-#s-superliga-clas .clas-row.zone-top{background:rgba(168,85,247,.12);border-left-color:#a855f7;}
-#s-superliga-clas .clas-row.zone-bot{background:rgba(224,60,60,.12);border-left-color:#e03c3c;}
+/* Petición usuario 2026-05-04: 1º y 2º AMARILLO (zona campeonato),
+   3º VERDE, 6º ROJO. Mantenemos los nombres de clase legacy
+   (zone-champ / zone-third / zone-bot) para no romper otras
+   pantallas que comparten estos selectores. */
+#s-superliga-clas .clas-row.zone-champ{background:rgba(240,192,64,.14);border-left-color:#f0c040;}
+#s-superliga-clas .clas-row.zone-third{background:rgba(60,200,120,.13);border-left-color:#3cc878;}
+#s-superliga-clas .clas-row.zone-bot{background:rgba(224,60,60,.14);border-left-color:#e03c3c;}
 #s-superliga-clas .clas-team-cell{position:sticky;left:0;z-index:5;display:flex;align-items:center;gap:5px;padding:0 4px;background:#0a0414;min-width:0;}
 #s-superliga-clas .clas-row.zone-champ .clas-team-cell{background:#1a1300;}
-#s-superliga-clas .clas-row.zone-top .clas-team-cell{background:#15082a;}
+#s-superliga-clas .clas-row.zone-third .clas-team-cell{background:#071510;}
 #s-superliga-clas .clas-row.zone-bot .clas-team-cell{background:#180606;}
 #s-superliga-clas .clas-pos-n{font-family:"Bebas Neue",sans-serif;font-size:15px;color:rgba(255,255,255,.45);min-width:16px;text-align:center;flex-shrink:0;}
 #s-superliga-clas .zone-champ .clas-pos-n{color:#f0c040;}
-#s-superliga-clas .zone-top .clas-pos-n{color:#c89bff;}
+#s-superliga-clas .zone-third .clas-pos-n{color:#50d898;}
 #s-superliga-clas .zone-bot .clas-pos-n{color:#ff7070;}
 /* Permitimos que el nombre completo del equipo se vea sin truncar
    (override del global que aplica text-overflow:ellipsis). */
@@ -1019,8 +1023,9 @@
     }).join('');
   }
   function rowZone(pos){
-    if(pos === 1) return 'zone-champ';
-    if(pos === 2 || pos === 3) return 'zone-top';
+    /* 1º y 2º amarillo (zona campeonato), 3º verde, 6º rojo. */
+    if(pos === 1 || pos === 2) return 'zone-champ';
+    if(pos === 3) return 'zone-third';
     if(pos === 6) return 'zone-bot';
     return '';
   }
@@ -3777,7 +3782,7 @@
     'Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid',
     'Athletic Club','Real Betis','Sevilla'
   ];
-  var HUMAN_ICONS = {'Bayern Munich':'💡','Arsenal':'🐭','Atlético Madrid':'✏️','Real Madrid':'🔨','FC Barcelona':'👿'};
+  var HUMAN_ICONS = {'Bayern Munich':'💡','Arsenal':'🐭','Atlético Madrid':'✏️','Real Madrid':'🔨','FC Barcelona':'👿','PSG':'🦆'};
   /* Aliases para resolver el icono humano cuando el nombre llega en
      forma corta o con variaciones (Champions, Superliga, sin acentos…).
      Mapea cada variante normalizada a la clave canónica de HUMAN_ICONS. */
@@ -3786,7 +3791,8 @@
     'arsenal fc':'Arsenal',
     'atletico':'Atlético Madrid','atletico madrid':'Atlético Madrid','atletico de madrid':'Atlético Madrid','atl madrid':'Atlético Madrid','club atletico de madrid':'Atlético Madrid','atletico madrid cf':'Atlético Madrid',
     'real madrid cf':'Real Madrid',
-    'barcelona':'FC Barcelona','fc barcelona':'FC Barcelona','futbol club barcelona':'FC Barcelona','fcbarcelona':'FC Barcelona','barca':'FC Barcelona'
+    'barcelona':'FC Barcelona','fc barcelona':'FC Barcelona','futbol club barcelona':'FC Barcelona','fcbarcelona':'FC Barcelona','barca':'FC Barcelona',
+    'psg':'PSG','paris':'PSG','paris sg':'PSG','paris saint germain':'PSG','paris saint-germain':'PSG','paris saintgermain':'PSG'
   };
   function _humanNorm(s){
     return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -15020,10 +15026,59 @@ window.goLiveMatches = function() {
     if (item.j) {
       jLabel = (comp.jornadaLabel || 'Jornada') + ' ' + item.j;
     }
+    /* Color por competición — petición usuario 2026-05-04: cada comp
+       pinta sus cards con su color (Liga rojo, Superliga morado,
+       Copa marrón, …). Aplicamos comp.color al borde, al gradiente
+       de fondo, al "VS" y al chip de estado. Para `playing` y
+       `finished` mantenemos los acentos rojo/grises del CSS general
+       — la pelea por la atención del usuario manda sobre el color
+       de comp. */
+    var compColor = comp.color || '#a855f7';
+    function _hexToRgba(hex, a){
+      var h = String(hex||'').replace('#','').trim();
+      if(h.length === 3) h = h.split('').map(function(c){return c+c;}).join('');
+      if(h.length !== 6) return 'rgba(168,85,247,'+a+')';
+      var r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      if(isNaN(r)||isNaN(g)||isNaN(b)) return 'rgba(168,85,247,'+a+')';
+      return 'rgba('+r+','+g+','+b+','+a+')';
+    }
+    var compBg     = _hexToRgba(compColor, .18);
+    var compBgDeep = _hexToRgba(compColor, .10);
+    var compBorder = _hexToRgba(compColor, .55);
+    var compGlow   = _hexToRgba(compColor, .25);
     var card = document.createElement('div');
     card.className = 'derby-card ' + state;
     card.setAttribute('data-derby-source', item.source || '');
+    card.setAttribute('data-derby-comp', comp.name || '');
     if (item.wrap && item.wrap.id) card.setAttribute('data-derby-wrap-id', item.wrap.id);
+    /* Sólo override de color cuando el partido NO está playing — para
+       playing dejamos el tono rojo del CSS general. Para finished
+       atenuamos respecto al estado pending. */
+    if (state !== 'playing') {
+      var bgGrad   = 'linear-gradient(135deg,' + compBg + ',' + compBgDeep + ')';
+      var fgBorder = compBorder;
+      var fgGlow   = compGlow;
+      if (state === 'finished') {
+        bgGrad   = 'linear-gradient(135deg,' + _hexToRgba(compColor, .07) + ',rgba(255,255,255,.02))';
+        fgBorder = _hexToRgba(compColor, .30);
+        fgGlow   = 'transparent';
+      }
+      card.style.background   = bgGrad;
+      card.style.borderColor  = fgBorder;
+      card.style.boxShadow    = '0 0 14px ' + fgGlow;
+      /* Mata la animación derbyPulse (que ancla el color púrpura) si
+         no es playing; el CSS la deja activa por defecto en estado
+         pending. */
+      card.style.animation    = 'none';
+    }
+    /* Estilo inline para el VS y chip de estado en estado pending —
+       así el "VS" y el chip "POR JUGAR" tiñen al color de la comp. */
+    var vsExtraStyle = (state === 'pending')
+      ? ' style="color:' + compColor + ';text-shadow:0 0 10px ' + _hexToRgba(compColor,.55) + ';"'
+      : '';
+    var statusExtraStyle = (state === 'pending')
+      ? ' style="background:' + _hexToRgba(compColor,.20) + ';color:' + compColor + ';border-color:' + _hexToRgba(compColor,.55) + ';"'
+      : '';
     card.innerHTML =
         '<div class="derby-teams">'
       +   (jLabel ? '<div class="derby-jlabel" style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.4px;color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:2px;">' + _escHtml(jLabel) + '</div>' : '')
@@ -15036,8 +15091,8 @@ window.goLiveMatches = function() {
       +     '<span>' + _escHtml(away) + '</span>'
       +   '</div>'
       + '</div>'
-      + '<div class="derby-vs ' + state + '">' + _escHtml(vsText) + '</div>'
-      + '<span class="derby-status ' + state + '">' + statusLabel + '</span>';
+      + '<div class="derby-vs ' + state + '"' + vsExtraStyle + '>' + _escHtml(vsText) + '</div>'
+      + '<span class="derby-status ' + state + '"' + statusExtraStyle + '>' + statusLabel + '</span>';
     card.addEventListener('click', function(){
       /* Si el partido está en directo en el gm-modal activo, reabrirlo. */
       if (state === 'playing' && window.__GM_LIVE && !window.__GM_LIVE.finished &&

@@ -2076,17 +2076,65 @@ window._showSimProgress = function(opts, onDone){
     if(!t || typeof t.closest !== 'function') return;
     var row = t.closest('.clas-row');
     if(!row) return;
-    var scope = row.closest('#s-liga-clas');
-    // También funciona en Hypermotion y Primera Federación
+    /* Mapeo screen → slug + competición. La COMPETICIÓN determina
+       qué stats ve el usuario en el modal:
+         · liga-ea-sports → ['liga','copa']  (vista "EA Sports", suma)
+         · liga-hypermotion → ['liga','copa'] (cae al mismo cache)
+         · liga-primera-federacion → ['liga','copa'] (idem)
+         · superliga → ['superliga']  (aislado)
+         · champions → ['ucl']  (aislado)
+         · uel → ['uel']        (aislado)
+         · uecl → ['uecl']      (aislado)
+       Petición usuario 2026-05-04. */
     var slugMap = {
       's-liga-clas':     'liga-ea-sports',
       's-segunda-clas':  'liga-hypermotion',
-      's-primf-clas':    'liga-primera-federacion'
+      's-primf-clas':    'liga-primera-federacion',
+      's-superliga-clas':'liga-ea-sports',
+      's-superliga':     'liga-ea-sports',
+      's-champions':     'liga-ea-sports',
+      's-ucl-grupos':    'liga-ea-sports',
+      's-ucl-playoffs':  'liga-ea-sports',
+      's-uel':           'liga-ea-sports',
+      's-uel-grupos':    'liga-ea-sports',
+      's-uel-playoffs':  'liga-ea-sports',
+      's-uecl':          'liga-ea-sports',
+      's-uecl-grupos':   'liga-ea-sports',
+      's-uecl-playoffs': 'liga-ea-sports'
     };
+    var compMap = {
+      's-liga-clas':     ['liga','copa'],
+      's-segunda-clas':  ['liga','copa'],
+      's-primf-clas':    ['liga','copa'],
+      's-superliga-clas':['superliga'],
+      's-superliga':     ['superliga'],
+      's-champions':     ['ucl'],
+      's-ucl-grupos':    ['ucl'],
+      's-ucl-playoffs':  ['ucl'],
+      's-uel':           ['uel'],
+      's-uel-grupos':    ['uel'],
+      's-uel-playoffs':  ['uel'],
+      's-uecl':          ['uecl'],
+      's-uecl-grupos':   ['uecl'],
+      's-uecl-playoffs': ['uecl']
+    };
+    var scope = row.closest('#s-liga-clas');
     if(!scope) scope = row.closest('#s-segunda-clas');
     if(!scope) scope = row.closest('#s-primf-clas');
+    if(!scope) scope = row.closest('#s-superliga-clas');
+    if(!scope) scope = row.closest('#s-superliga');
+    if(!scope) scope = row.closest('#s-champions');
+    if(!scope) scope = row.closest('#s-ucl-grupos');
+    if(!scope) scope = row.closest('#s-ucl-playoffs');
+    if(!scope) scope = row.closest('#s-uel');
+    if(!scope) scope = row.closest('#s-uel-grupos');
+    if(!scope) scope = row.closest('#s-uel-playoffs');
+    if(!scope) scope = row.closest('#s-uecl');
+    if(!scope) scope = row.closest('#s-uecl-grupos');
+    if(!scope) scope = row.closest('#s-uecl-playoffs');
     if(!scope) return;
     var slug = slugMap[scope.id] || 'liga-ea-sports';
+    var clickComps = compMap[scope.id] || ['liga','copa'];
     var nameEl = row.querySelector('.clas-team-name');
     if(!nameEl) return;
     /* Preferimos el span interno `.clas-team-name-text` que contiene SOLO
@@ -2705,12 +2753,13 @@ window._showSimProgress = function(opts, onDone){
         }
       }
 
-      /* 3. Abrir el overlay pasándole el TEAM OBJECT completo — así
-            lextOpenSquad no tiene que buscarlo por id (que puede
-            fallar si la cache está desincronizada con localStorage). */
+      /* 3. Abrir el overlay pasándole el TEAM OBJECT completo + el
+            contexto de competiciones que toca según la pantalla
+            origen (Liga+Copa para EA Sports, aislado para Superliga
+            y europeas). */
       if (typeof window.lextOpenSquad === 'function') {
         try {
-          window.lextOpenSquad(found);
+          window.lextOpenSquad(found, { competitions: clickComps });
         } catch(errLs) {
           alert('⚠️ Error al abrir el editor de «' + found.name + '»:\n' + (errLs && errLs.message || errLs));
           return;
@@ -4104,6 +4153,127 @@ window._showSimProgress = function(opts, onDone){
     if (comp === 'uel')       return COMP_CACHE_KEYS.uel;
     if (comp === 'uecl')      return COMP_CACHE_KEYS.uecl;
     return PLAYER_STATS_KEY; /* liga + copa */
+  };
+
+  /* Renderiza un dashboard de estadísticas a partir de UNO de los
+     caches `ef_player_stats_<comp>_v1`. Mismo look & feel que el
+     dashboard de Liga EA Sports (s-liga-stats) — paleta verde,
+     mismo CSS — pero alimentado desde el cache aislado de la
+     competición.
+
+     `rootId`   → id del contenedor donde inyectar el HTML.
+     `statsKey` → clave de localStorage del cache (ej.
+                  'ef_player_stats_superliga_v1').
+
+     Petición usuario 2026-05-04: cada competición tiene su propia
+     caja de estadísticas, EXCEPTO Liga EA Sports + Copa que van
+     unidas y siguen rendereadas por buildLigaStatsDashboard del
+     screen s-liga-clas.                                          */
+  var COMP_STATS_CATEGORIES = [
+    { key:'goles-total', title:'Goleadores',          icon:'⚽️' },
+    { key:'cs',          title:'Portería imbatida',   icon:'🧤' },
+    { key:'yel',         title:'Tarjetas amarillas',  icon:'🟨' },
+    { key:'red',         title:'Tarjetas rojas',      icon:'🟥' },
+    { key:'pen-gol',     title:'Goles de penalti',    icon:'🥅' },
+    { key:'pen-parado',  title:'Penaltis parados',    icon:'🖐' },
+    { key:'falta-gol',   title:'Goles de falta',      icon:'🎯' },
+    { key:'mvp',         title:'MVP',                 icon:'⭐️' }
+  ];
+  function _escHtmlPS(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+  window._lextBuildCompStatsDashboard = function(rootId, statsKey){
+    var root = document.getElementById(rootId);
+    if (!root) return;
+    var raw = null;
+    try { raw = localStorage.getItem(statsKey); } catch(_){}
+    var stats = {};
+    if (raw) { try { stats = JSON.parse(raw) || {}; } catch(_){ stats = {}; } }
+    var keys = Object.keys(stats);
+    if (!keys.length) {
+      root.innerHTML = '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
+      return;
+    }
+    /* Convertir el cache (`teamNorm::playerNorm` → counters) a la
+       lista de jugadores. Como los nombres están normalizados,
+       capitalizamos para presentación. */
+    function _titleCase(s){
+      return String(s||'').split(/\s+/).map(function(w){
+        return w ? w.charAt(0).toUpperCase() + w.slice(1) : '';
+      }).join(' ').trim();
+    }
+    var players = keys.map(function(k){
+      var sep = k.indexOf('::');
+      if (sep < 0) return null;
+      var teamN = k.slice(0, sep);
+      var playerN = k.slice(sep + 2);
+      var s = stats[k] || {};
+      var golTotal = Number(s.gol||0) + Number(s.pen||0) + Number(s.fk||0);
+      return {
+        team: _titleCase(teamN),
+        name: _titleCase(playerN),
+        stats: {
+          'goles-total': golTotal,
+          'cs':          Number(s.imbat||0),
+          'yel':         Number(s.ta||0),
+          'red':         Number(s.tr||0),
+          'pen-gol':     Number(s.pen||0),
+          'pen-parado':  Number(s.penSaved||0),
+          'falta-gol':   Number(s.fk||0),
+          'mvp':         Number(s.mvp||0)
+        }
+      };
+    }).filter(Boolean);
+    function _topBy(field){
+      return players.map(function(p){
+        return { name:p.name, team:p.team, value:Number(p.stats[field]||0) };
+      }).filter(function(x){ return x.value > 0; })
+        .sort(function(a,b){
+          if (b.value !== a.value) return b.value - a.value;
+          if (a.team !== b.team) return a.team.localeCompare(b.team,'es');
+          return a.name.localeCompare(b.name,'es');
+        });
+    }
+    function _renderRows(rows, startIndex){
+      return rows.map(function(item, idx){
+        return '<div class="liga-stat-row">'
+             +   '<div class="liga-stat-rank">' + (startIndex + idx) + '</div>'
+             +   '<div class="liga-stat-player">'
+             +     '<div class="liga-stat-name">' + _escHtmlPS(item.name) + '</div>'
+             +     '<div class="liga-stat-team">' + _escHtmlPS(item.team) + '</div>'
+             +   '</div>'
+             +   '<div class="liga-stat-value">' + item.value + '</div>'
+             + '</div>';
+      }).join('');
+    }
+    var html = '';
+    COMP_STATS_CATEGORIES.forEach(function(cat){
+      var allRows = _topBy(cat.key);
+      var top  = allRows.slice(0, 6);
+      var rest = allRows.slice(6);
+      html += '<div class="liga-stat-card">'
+           +    '<div class="liga-stat-head">'
+           +      '<div class="liga-stat-ico">' + cat.icon + '</div>'
+           +      '<div class="liga-stat-title">' + cat.title + '</div>'
+           +    '</div>'
+           +    '<div class="liga-stat-body">';
+      if (!allRows.length) {
+        html += '<div class="liga-stat-empty">Sin datos todavía</div>';
+      } else {
+        html += _renderRows(top, 1);
+        if (rest.length) {
+          html += '<details class="liga-stat-more">'
+               +    '<summary>Ver todos (' + allRows.length + ')</summary>'
+               +    '<div class="liga-stat-more-list">' + _renderRows(rest, 7) + '</div>'
+               +  '</details>';
+        }
+      }
+      html += '</div></div>';
+    });
+    root.innerHTML = html;
   };
 
   function _normPS(s){
@@ -7869,11 +8039,9 @@ window._showSimProgress = function(opts, onDone){
 })();
 </script>
 
-<div class="screen" id="s-ucl-stats">
-<button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
-<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" onerror="this.style.display='none'" alt="UCL"/><h2>UCL · Estadísticas</h2></div>
-<div class="empty-ph">Estadísticas — próximamente</div>
-</div>
+<!-- s-ucl-stats real (con dashboard funcional) está embedded más abajo
+     en misc_body_2.html (aprox. línea 1325). Aquí solo dejamos el
+     comentario para evitar duplicar el ID. -->
 <div class="screen" id="s-uel">
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Europa_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UEL"/><h2>Europa League</h2></div>
@@ -7883,6 +8051,9 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="submenu-card sc-uel2" onclick="go('s-uel-grupos')">
 <span class="sc-emoji">🟠</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
+</div>
+<div class="submenu-card sc-uel-stats" style="background:linear-gradient(135deg,#3a1a00,#7a3a00,#cc6a00,#7a3a00,#3a1a00) !important;border-color:#ff9040 !important;" onclick="go('s-uel-stats')">
+<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
 </div>
 </div>
 </div>
@@ -8128,6 +8299,9 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="submenu-card sc-uecl2" onclick="go('s-uecl-grupos')">
 <span class="sc-emoji">🟢</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
+</div>
+<div class="submenu-card sc-uecl-stats" style="background:linear-gradient(135deg,#003820,#016a40,#018850,#016a40,#003820) !important;border-color:#3dcc8e !important;" onclick="go('s-uecl-stats')">
+<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
 </div>
 </div>
 </div>

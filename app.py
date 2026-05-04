@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 import random
 import os
 import json
+import re
 import unicodedata
 import uuid
 from datetime import datetime, timezone
@@ -2064,6 +2065,86 @@ def api_liga_ext_post(slug):
         "slug": _liga_ext_slug(slug),
         "updated_at": row.updated_at or "",
     })
+
+# ══════════════════════════════════════════════════════════════════
+# KV genérico (estado del cliente que debe sobrevivir al navegador)
+# ══════════════════════════════════════════════════════════════════
+# Reportado 2026-05-02 con foto: el usuario perdió tanto los iconos
+# personalizados de Competiciones (`comp_icons_v1`) como las
+# inyecciones manuales de Liga EA Sports → Europa
+# (`manual_ea_<slug>_v1`). Ambos vivían SOLO en localStorage del
+# navegador y se perdían si el browser limpiaba caché o si el usuario
+# cambiaba de dispositivo. Con este endpoint sincronizamos esos
+# blobs al servidor (GlobalState) — localStorage sigue siendo cache
+# rápido de primera lectura, pero el server es la fuente de verdad
+# que sobrevive entre sesiones.
+#
+# Whitelist (no permitimos escribir cualquier clave arbitraria):
+#   - comp_icons_v1
+#   - manual_ea_<slug>_v1   con slug ∈ {ucl, uclPrev, uclQual,
+#                                       wildcard, uel, uecl,
+#                                       recopa, supercopa,
+#                                       intercontinental, superliga,
+#                                       verano}
+# Cualquier otra clave devuelve 400.
+_KV_ALLOWED_EXACT = {"comp_icons_v1"}
+_KV_ALLOWED_REGEX = re.compile(
+    r"^manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)_v1$"
+)
+_KV_MAX_BYTES = 2 * 1024 * 1024  # 2 MB por clave (alineado con CLAUDE.md)
+
+
+def _kv_is_allowed(key):
+    if not key:
+        return False
+    if key in _KV_ALLOWED_EXACT:
+        return True
+    return bool(_KV_ALLOWED_REGEX.match(key))
+
+
+@app.route("/api/kv/<key>", methods=["GET"])
+def api_kv_get(key):
+    if not _kv_is_allowed(key):
+        return jsonify({"ok": False, "error": "key no permitida"}), 400
+    row = GlobalState.query.filter_by(clave=key).first()
+    if not row or not row.valor_json:
+        return jsonify({"ok": True, "key": key, "value": None, "updated_at": ""})
+    try:
+        value = json.loads(row.valor_json)
+    except Exception:
+        value = None
+    return jsonify({
+        "ok": True,
+        "key": key,
+        "value": value,
+        "updated_at": row.updated_at or "",
+    })
+
+
+@app.route("/api/kv/<key>", methods=["POST"])
+def api_kv_set(key):
+    if not _kv_is_allowed(key):
+        return jsonify({"ok": False, "error": "key no permitida"}), 400
+    body = request.get_json(silent=True) or {}
+    if "value" not in body:
+        return jsonify({"ok": False, "error": "falta `value`"}), 400
+    value = body.get("value")
+    try:
+        payload = json.dumps(value, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "value no serializable"}), 400
+    if len(payload.encode("utf-8")) > _KV_MAX_BYTES:
+        return jsonify({"ok": False, "error": "payload supera 2 MB"}), 413
+    now = utc_now_iso()
+    row = GlobalState.query.filter_by(clave=key).first()
+    if row:
+        row.valor_json = payload
+        row.updated_at = now
+    else:
+        row = GlobalState(clave=key, valor_json=payload, updated_at=now)
+        db.session.add(row)
+    db.session.commit()
+    return jsonify({"ok": True, "key": key, "updated_at": now})
 
 # ══════════════════════════════════════════════════════════════════
 # JUGADORES HARDCODED — fuente de última recuperación

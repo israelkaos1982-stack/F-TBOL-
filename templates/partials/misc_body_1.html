@@ -4522,26 +4522,59 @@ window._showSimProgress = function(opts, onDone){
 <div class="screen" id="s-copa">
 <button class="back-btn" onclick="go('s-espana')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Copa del Rey</h2></div>
-<!-- Estructura de Copa del Rey (2026-05-04, restaurada).
-     Las 10 rondas se mantienen como cards desplegables (igual que las
-     jornadas de Liga EA Sports). El motor copa-engine.js LLENA cada
-     <div class="jmatches" id="copa-Xr"> con los partidos reales tras
-     pulsar el botón "🎯 Iniciar Copa" o tras una recarga si ya hay
-     sorteo persistido en /api/copa/state. -->
+<!-- Copa del Rey · pantalla principal (2026-05-04, restructura nº2).
+     Cada ronda ya NO es un desplegable; es un BOTÓN que navega a su
+     propia pantalla (s-copa-rd-XX) con los partidos en cards estilo
+     Liga EA Sports. Igual que las jornadas 1..38 de Liga EA. -->
 <div id="copa-human-panel"></div>
 <div id="copa-banner" style="display:flex;flex-direction:column;gap:8px;align-items:center;margin:6px 0 10px;"></div>
 <div class="jlist">
-<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-1r')"><div class="pdot">▶</div>🏆 <b>Copa</b>  1ª Ronda</button><div class="jmatches" id="copa-1r"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
-<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-2r')"><div class="pdot">▶</div>🏆 <b>Copa</b>  2ª Ronda</button><div class="jmatches" id="copa-2r"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
-<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-16')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Dieciseisavos</button><div class="jmatches" id="copa-16"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
-<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-8')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Octavos de Final</button><div class="jmatches" id="copa-8"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
-<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-4')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Cuartos de Final</button><div class="jmatches" id="copa-4"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
-<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-2')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Semifinales</button><div class="jmatches" id="copa-2"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
-<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-fin')"><div class="pdot">▶</div>🏆 <b>Copa</b>  FINAL</button><div class="jmatches" id="copa-fin"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="go('s-copa-rd-r1')"><div class="pdot">▶</div>🏆 <b>Copa</b>  1ª Ronda</button></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="go('s-copa-rd-r2')"><div class="pdot">▶</div>🏆 <b>Copa</b>  2ª Ronda</button></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="go('s-copa-rd-r16')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Dieciseisavos</button></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="go('s-copa-rd-oct')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Octavos de Final</button></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="go('s-copa-rd-cua')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Cuartos de Final</button></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="go('s-copa-rd-sf')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Semifinales</button></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="go('s-copa-rd-fin')"><div class="pdot">▶</div>🏆 <b>Copa</b>  FINAL</button></div>
 <div class="submenu-card" onclick="go('s-copa-cuadro')" style="margin-top:10px;">
 <span class="sc-emoji">🗂️</span><span class="sc-label">Cuadro de Eliminatorias</span><span class="sc-arr">▶</span>
 </div>
 </div>
+</div>
+<div class="screen" id="s-copa-rd-r1">
+<button class="back-btn" onclick="go('s-copa')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Copa del Rey · 1ª Ronda</h2></div>
+<div id="copa-rd-r1-body" style="padding:0 4px 20px;"></div>
+</div>
+<div class="screen" id="s-copa-rd-r2">
+<button class="back-btn" onclick="go('s-copa')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Copa del Rey · 2ª Ronda</h2></div>
+<div id="copa-rd-r2-body" style="padding:0 4px 20px;"></div>
+</div>
+<div class="screen" id="s-copa-rd-r16">
+<button class="back-btn" onclick="go('s-copa')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Copa del Rey · Dieciseisavos</h2></div>
+<div id="copa-rd-r16-body" style="padding:0 4px 20px;"></div>
+</div>
+<div class="screen" id="s-copa-rd-oct">
+<button class="back-btn" onclick="go('s-copa')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Copa del Rey · Octavos de Final</h2></div>
+<div id="copa-rd-oct-body" style="padding:0 4px 20px;"></div>
+</div>
+<div class="screen" id="s-copa-rd-cua">
+<button class="back-btn" onclick="go('s-copa')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Copa del Rey · Cuartos de Final</h2></div>
+<div id="copa-rd-cua-body" style="padding:0 4px 20px;"></div>
+</div>
+<div class="screen" id="s-copa-rd-sf">
+<button class="back-btn" onclick="go('s-copa')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Copa del Rey · Semifinales</h2></div>
+<div id="copa-rd-sf-body" style="padding:0 4px 20px;"></div>
+</div>
+<div class="screen" id="s-copa-rd-fin">
+<button class="back-btn" onclick="go('s-copa')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Copa del Rey · FINAL</h2></div>
+<div id="copa-rd-fin-body" style="padding:0 4px 20px;"></div>
 </div>
 <div class="screen" id="s-copa-cuadro">
 <button class="back-btn" onclick="go('s-copa')">◀ Volver</button>

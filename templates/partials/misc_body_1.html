@@ -9683,7 +9683,7 @@ Tottenham
   function standings(data){
     var map = {};
     data.teams.forEach(function(t){
-      map[t.id] = {id:t.id,name:t.name,shield:t.shield,power:Number(t.power)||50,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0};
+      map[t.id] = {id:t.id,name:t.name,shield:t.shield,power:Number(t.power)||50,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0,isHuman:!!t.isHuman,humanEmoji:t.humanEmoji||''};
     });
     (data.results||[]).forEach(function(r){
       var H = map[r.h], A = map[r.a]; if(!H||!A) return;
@@ -9768,9 +9768,17 @@ Tottenham
       var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
       var pct = r.pj>0 ? Math.round((r.v/r.pj)*100) : 0;
       var pctCls = pct>=60?'pct-hi':(pct>=40?'pct-mid':'pct-lo');
+      /* Emoji humano detrás del nombre — fuente única `t.isHuman` +
+         `t.humanEmoji` del editor de plantilla. Aparece SIEMPRE que el
+         equipo esté marcado como humano en CUALQUIER liga (Francia,
+         Superliga, Inglaterra…), independiente de cómo se llame
+         (PSG / Paris Saint-Germain): no hay name-based lookup. */
+      var humanSfx = (r.isHuman && r.humanEmoji)
+        ? '<span class="clas-team-human-suffix">'+r.humanEmoji+'</span>'
+        : '';
       return '<div class="lext-row '+z+'" onclick="lextOpenSquad(\''+r.id+'\')">'
         +'<span class="lext-pos">'+pos+'</span>'
-        +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span></span>'
+        +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span>'+humanSfx+'</span>'
         +'<span class="lext-pts">'+r.pts+'</span>'
         +'<span class="lext-cell">'+r.pj+'</span>'
         +'<span class="lext-cell">'+r.v+'</span>'

@@ -5655,10 +5655,52 @@ window._showSimProgress = function(opts, onDone){
     return out;
   }
 
+  /* ── SNAPSHOT MANUAL DE POOLS EUROPEOS ───────────────────────────
+     Petición usuario 2026-05-02: tras el botón "📤 Enviar realidad
+     de cada equipo a su Europa", los compute*Classified() devuelven
+     la snapshot congelada (`europe_committed_v1`) en lugar de
+     recomputar en vivo desde standings. Eso elimina el race condition
+     de las escrituras async tras Sim batched: el admin pulsa el
+     botón cuando las ligas están listas, y a partir de ahí los
+     pools europeos quedan estables.
+     Si la snapshot no existe (admin nunca pulsó el botón) o no tiene
+     la zona pedida, caemos al cómputo dinámico — preserva la UX para
+     usuarios que no usan el botón. */
+  function _europeFrozenFor(zone){
+    try {
+      var raw = localStorage.getItem('europe_committed_v1');
+      if(!raw) return null;
+      var blob = JSON.parse(raw);
+      if(!blob || !Array.isArray(blob[zone]) || !blob[zone].length) return null;
+      return blob[zone];
+    } catch(_){ return null; }
+  }
+  /* Hidrata la snapshot desde el server si localStorage está vacío
+     (cambio de dispositivo o limpieza de caché). Async fire-and-forget;
+     la siguiente apertura de pantalla europea usará la snapshot. */
+  (function _hydrateEuropeCommit(){
+    var local;
+    try { local = localStorage.getItem('europe_committed_v1'); } catch(_){}
+    if(local) return;
+    try {
+      fetch('/api/kv/europe_committed_v1', {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(j && j.ok && j.value){
+            try { localStorage.setItem('europe_committed_v1', JSON.stringify(j.value)); } catch(_){}
+          }
+        }).catch(function(){});
+    } catch(_){}
+  })();
+
   function computeUclClassified(){
+    var frozen = _europeFrozenFor('ucl');
+    if(frozen) return frozen.slice();
     return _prependManualEa(_computeQualifiedFromLeagues('ucl'), 'ucl');
   }
   function computeUclPrevTeams(){
+    var frozen = _europeFrozenFor('uclPrev');
+    if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uclPrev');
     /* Los TOP-5 de cada grupo del Open Qualifier (7 grupos × 5 = 35
        plazas, formato 7×14 desde 2026-04-30) se añaden a la Previa
@@ -5682,6 +5724,8 @@ window._showSimProgress = function(opts, onDone){
   }
   window.computeUclPrevTeams = computeUclPrevTeams;
   function computeUelClassified(){
+    var frozen = _europeFrozenFor('uel');
+    if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uel');
     /* Los 22 finalistas (2º + 3º × 11 grupos) de la Ronda Final de la
        Previa de Champions entran como plazas extra a la Europa League
@@ -5704,6 +5748,8 @@ window._showSimProgress = function(opts, onDone){
     return _prependManualEa(arr, 'uel');
   }
   function computeUeclClassified(){
+    var frozen = _europeFrozenFor('uecl');
+    if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uecl');
     /* Los 30 perdedores de la Ronda 1 de la Previa de Champions entran
        como plazas extra a la Conference League en la MISMA temporada.
@@ -5741,6 +5787,8 @@ window._showSimProgress = function(opts, onDone){
     return _prependManualEa(arr, 'uecl');
   }
   function computeOpenQualifierTeams(){
+    var frozen = _europeFrozenFor('uclQual');
+    if(frozen) return frozen.slice();
     /* Pool del Open Qualifier (cap a 98 = 7 grupos × 14). Composición
        objetivo: 80 plazas de zonas `uclQual` de ligas + 18 ganadores
        Wild Card. Reserva dinámica:
@@ -5799,6 +5847,8 @@ window._showSimProgress = function(opts, onDone){
     return arr;
   }
   function computeWildCardClassified(){
+    var frozen = _europeFrozenFor('wildcard');
+    if(frozen) return frozen.slice();
     return _prependManualEa(_computeQualifiedFromLeagues('wildcard'), 'wildcard');
   }
   window.computeUclClassified = computeUclClassified;
@@ -7861,6 +7911,22 @@ window._showSimProgress = function(opts, onDone){
   <button class="restoligas-btn restoligas-btn-res" onclick="window.pG(function(){window._restoLigasResAll&&window._restoLigasResAll();})"><span class="restoligas-ico">♻️</span><span>Res</span></button>
   <button class="restoligas-btn restoligas-btn-stats" onclick="window._restoLigasShowStats&&window._restoLigasShowStats()"><span class="restoligas-ico">📈</span><span>Estadísticas</span></button>
 </div>
+<!-- Botón "Enviar a Europa" (PIN admin 747). Petición usuario
+     2026-05-02: tras simular las 51 ligas, los equipos que clasificaban
+     a competiciones europeas se calculaban en vivo cada vez que el
+     admin abría la pantalla, lo que metía equipos con pj=0 al inicio
+     mientras las escrituras async terminaban. Este botón hace una
+     SNAPSHOT manual de los pools (UCL, Previa, OQ, Wild Card, UEL,
+     UECL) cuando el admin decide que las clasificaciones están
+     listas. Las pantallas europeas leen del snapshot si existe. -->
+<div class="restoligas-actions" style="margin-top:-4px;">
+  <button class="restoligas-btn restoligas-btn-commit"
+          onclick="window.pG(function(){window._restoLigasCommitEurope&&window._restoLigasCommitEurope();})"
+          style="flex:1 1 auto;">
+    <span class="restoligas-ico">📤</span>
+    <span>Enviar realidad de cada equipo a su Europa (admin)</span>
+  </button>
+</div>
 <style>
 .restoligas-actions{display:flex;gap:6px;padding:0 14px 12px;align-items:stretch;flex-wrap:nowrap;}
 .restoligas-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 8px;border-radius:8px;font-family:'Oswald',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;background:rgba(255,255,255,.04);color:#fff;transition:filter .15s,transform .1s;white-space:nowrap;}
@@ -7871,6 +7937,8 @@ window._showSimProgress = function(opts, onDone){
 .restoligas-btn-sim{border:1px solid rgba(61,204,110,.55);color:#7df0a0;background:rgba(61,204,110,.10);}
 .restoligas-btn-res{border:1px solid rgba(255,90,90,.55);color:#ff9b9b;background:rgba(255,90,90,.10);}
 .restoligas-btn-stats{border:1px solid rgba(94,182,228,.55);color:#9fdcff;background:rgba(94,182,228,.10);}
+.restoligas-btn-commit{border:1px solid rgba(240,192,64,.65);color:#ffe489;background:linear-gradient(135deg,rgba(240,192,64,.10),rgba(197,15,31,.06));text-shadow:0 0 6px rgba(240,192,64,.3);}
+.restoligas-btn-commit:hover{filter:brightness(1.25);}
 .restoligas-ico{font-size:13px;line-height:1;}
 /* Modal compartido para las estadísticas agregadas. */
 #restoligas-stats-ov{display:none;position:fixed;inset:0;z-index:10050;background:rgba(0,0,6,.93);overflow-y:auto;padding:18px 12px 30px;}
@@ -8126,7 +8194,105 @@ window._showSimProgress = function(opts, onDone){
       var slug = _slugify(name);
       try { if(window.ligaExtReiniciarSlug(slug)) ok++; } catch(_){ }
     });
-    alert('Reseteadas: ' + ok + ' liga' + (ok===1?'':'s') + '.');
+    /* También limpiamos la snapshot manual de pools europeos
+       (`europe_committed_v1`): si el admin reseteó las ligas, la
+       snapshot anterior queda obsoleta. La próxima vez que abra
+       una pantalla europea, el cómputo dinámico volverá a correr
+       con los standings 0 nuevos hasta que vuelva a pulsar
+       "📤 Enviar a Europa" tras simular. */
+    try { localStorage.removeItem('europe_committed_v1'); } catch(_){}
+    try {
+      fetch('/api/kv/europe_committed_v1', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({value: null})
+      }).catch(function(){});
+    } catch(_){}
+    alert('Reseteadas: ' + ok + ' liga' + (ok===1?'':'s') + '.\n\nLa snapshot de Europa también se ha borrado — vuelve a pulsar "📤 Enviar a Europa" tras simular las ligas.');
+  };
+
+  /* ── Enviar realidad de cada equipo a su Europa ──────────────────
+     Petición usuario 2026-05-02: tras simular las 51 ligas, los
+     equipos clasificados a competiciones europeas se calculaban en
+     vivo cada vez que se abría la pantalla. Como las escrituras tras
+     el Sim son async/batched, el cálculo veía a algunos equipos con
+     pj=0 ordenados al top por desempate alfabético sobre pts=0 y los
+     enviaba a Europa con 0 partidos jugados.
+
+     Este botón hace una SNAPSHOT manual de los pools cuando el admin
+     decide que las ligas están listas. La snapshot se guarda en
+     localStorage `europe_committed_v1` + server `/api/kv/...` y las
+     pantallas europeas (Champions, Previa, OQ, Wild Card, UEL, UECL)
+     leen de aquí PREFERENTEMENTE — el cálculo dinámico solo corre si
+     el admin no ha pulsado nunca el botón.
+
+     compute*Classified() en este mismo archivo ya tiene el hook
+     necesario (`_europeFrozenFor`); aquí solo construimos el blob. */
+  var EUROPE_COMMIT_KEY = 'europe_committed_v1';
+  function _saveEuropeCommitServer(blob){
+    try {
+      fetch('/api/kv/'+EUROPE_COMMIT_KEY, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({value: blob})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  window._restoLigasCommitEurope = function(){
+    if(typeof window._computeQualifiedFromLeagues !== 'function'
+       && typeof window.computeUclClassified !== 'function'){
+      alert('Motor de clasificación no disponible. Recarga la página.');
+      return;
+    }
+    if(!confirm('¿Enviar la realidad de cada liga a su competición europea?\n\n'
+              +'Se hace una snapshot AHORA mismo de:\n'
+              +'  · Champions League (UCL fase de liga)\n'
+              +'  · Europa League\n'
+              +'  · Conference League\n'
+              +'  · Previa de Champions\n'
+              +'  · Open Qualifier (alimenta Previa)\n'
+              +'  · Wild Card (alimenta Open Qualifier)\n\n'
+              +'A partir de aquí las pantallas europeas usarán esta snapshot, no el cálculo en vivo.\n\n'
+              +'⚠️ Solo pulsa esto cuando todas las ligas estén SIMULADAS al 100 %.')) return;
+    function _safeCompute(fn){
+      try { return (typeof fn === 'function') ? (fn() || []) : []; }
+      catch(_){ return []; }
+    }
+    /* Mapamos cada función. Cada una devuelve array de
+       {name, logo, league}. Lo guardamos tal cual. */
+    var blob = {
+      ucl:      _safeCompute(window.computeUclClassified),
+      uclPrev:  _safeCompute(window.computeUclPrevTeams),
+      uel:      _safeCompute(window.computeUelClassified),
+      uecl:     _safeCompute(window.computeUeclClassified),
+      uclQual:  _safeCompute(window.computeOpenQualifierTeams),
+      wildcard: _safeCompute(window.computeWildCardClassified),
+      ts:       Date.now()
+    };
+    var totalUcl  = blob.ucl.length;
+    var totalPrev = blob.uclPrev.length;
+    var totalUel  = blob.uel.length;
+    var totalUecl = blob.uecl.length;
+    var totalOq   = blob.uclQual.length;
+    var totalWc   = blob.wildcard.length;
+    var totalSum  = totalUcl + totalPrev + totalUel + totalUecl + totalOq + totalWc;
+    if(totalSum === 0){
+      alert('⚠️ No se pudo calcular ningún equipo. Verifica que las ligas estén simuladas y vuelve a intentarlo.');
+      return;
+    }
+    /* Persistir en localStorage + server (fire-and-forget). */
+    try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
+    _saveEuropeCommitServer(blob);
+    alert('✅ Pools europeos congelados:\n\n'
+        + '🔵 Champions League: ' + totalUcl + ' equipos\n'
+        + '🇪🇺 Previa de Champions: ' + totalPrev + ' equipos\n'
+        + '🟡 Open Qualifier: ' + totalOq + ' equipos\n'
+        + '🎟️ Wild Card: ' + totalWc + ' equipos\n'
+        + '🟠 Europa League: ' + totalUel + ' equipos\n'
+        + '🟢 Conference League: ' + totalUecl + ' equipos\n\n'
+        + 'A partir de ahora estas pantallas usarán esta snapshot. Si vuelves a simular las ligas, pulsa este botón otra vez para refrescar.');
   };
 
   /* ── Estadísticas agregadas ──────────────────────────────────── */

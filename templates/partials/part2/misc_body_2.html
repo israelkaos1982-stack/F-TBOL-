@@ -829,16 +829,20 @@
 #s-superliga-clas .clas-hdr-team{position:sticky;left:0;z-index:21;background:linear-gradient(90deg,#1c0f30,#3d1a66);padding:8px 6px;text-align:left;color:rgba(255,255,255,.92);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;font-weight:700;}
 #s-superliga-clas .clas-row{padding:6px 6px 6px 0;border-bottom:1px solid rgba(255,255,255,.05);transition:background .12s;border-left:3px solid transparent;}
 #s-superliga-clas .clas-row:hover{filter:brightness(1.15);}
-#s-superliga-clas .clas-row.zone-champ{background:rgba(240,192,64,.12);border-left-color:#f0c040;}
-#s-superliga-clas .clas-row.zone-top{background:rgba(168,85,247,.12);border-left-color:#a855f7;}
-#s-superliga-clas .clas-row.zone-bot{background:rgba(224,60,60,.12);border-left-color:#e03c3c;}
+/* Petición usuario 2026-05-04: 1º y 2º AMARILLO (zona campeonato),
+   3º VERDE, 6º ROJO. Mantenemos los nombres de clase legacy
+   (zone-champ / zone-third / zone-bot) para no romper otras
+   pantallas que comparten estos selectores. */
+#s-superliga-clas .clas-row.zone-champ{background:rgba(240,192,64,.14);border-left-color:#f0c040;}
+#s-superliga-clas .clas-row.zone-third{background:rgba(60,200,120,.13);border-left-color:#3cc878;}
+#s-superliga-clas .clas-row.zone-bot{background:rgba(224,60,60,.14);border-left-color:#e03c3c;}
 #s-superliga-clas .clas-team-cell{position:sticky;left:0;z-index:5;display:flex;align-items:center;gap:5px;padding:0 4px;background:#0a0414;min-width:0;}
 #s-superliga-clas .clas-row.zone-champ .clas-team-cell{background:#1a1300;}
-#s-superliga-clas .clas-row.zone-top .clas-team-cell{background:#15082a;}
+#s-superliga-clas .clas-row.zone-third .clas-team-cell{background:#071510;}
 #s-superliga-clas .clas-row.zone-bot .clas-team-cell{background:#180606;}
 #s-superliga-clas .clas-pos-n{font-family:"Bebas Neue",sans-serif;font-size:15px;color:rgba(255,255,255,.45);min-width:16px;text-align:center;flex-shrink:0;}
 #s-superliga-clas .zone-champ .clas-pos-n{color:#f0c040;}
-#s-superliga-clas .zone-top .clas-pos-n{color:#c89bff;}
+#s-superliga-clas .zone-third .clas-pos-n{color:#50d898;}
 #s-superliga-clas .zone-bot .clas-pos-n{color:#ff7070;}
 /* Permitimos que el nombre completo del equipo se vea sin truncar
    (override del global que aplica text-overflow:ellipsis). */
@@ -869,8 +873,22 @@
 #s-superliga-clas .jbtn.c-superliga.done{background:linear-gradient(135deg,#1a1400,#3a2c00,#5a4400,#3a2c00,#1a1400);border-left:3px solid #F1C40F;}
 #s-superliga-clas .mn{display:flex;align-items:center;gap:6px;min-width:0;}
 #s-superliga-clas .mn.r{justify-content:flex-end;}
+/* Filas clicables → abren el overlay de plantilla del equipo (mismo
+   handler que Liga EA Sports). Cursor + hover para feedback visual. */
+#s-superliga-clas .clas-row{cursor:pointer;}
+#s-superliga-clas .clas-row:hover{filter:brightness(1.25);}
+/* Caja "Estadísticas" en cabecera — atajo a s-superliga-stats. */
+#s-superliga-clas .sl-stats-cta{display:flex;align-items:center;gap:10px;margin:6px 12px 12px;padding:11px 14px;background:linear-gradient(135deg,#1c0f30,#3d1a66 50%,#7e22ce 100%);border:1px solid rgba(168,85,247,.5);border-radius:10px;cursor:pointer;font-family:Oswald,sans-serif;color:#fff;letter-spacing:1.4px;font-weight:700;font-size:13px;box-shadow:0 0 14px rgba(168,85,247,.18);transition:filter .16s,transform .16s;}
+#s-superliga-clas .sl-stats-cta:hover{filter:brightness(1.18);transform:translateY(-1px);}
+#s-superliga-clas .sl-stats-cta .sl-stats-ico{font-size:18px;line-height:1;}
+#s-superliga-clas .sl-stats-cta .sl-stats-arr{margin-left:auto;color:rgba(255,255,255,.55);font-size:14px;}
 </style>
 <div class="clas-wrap">
+<div class="sl-stats-cta" onclick="go('s-superliga-stats')">
+  <span class="sl-stats-ico">📈</span>
+  <span>SUPERLIGA · ESTADÍSTICAS</span>
+  <span class="sl-stats-arr">▶</span>
+</div>
 <div id="sl-clas-content">
 <div class="clas-empty">Cargando clasificación…</div>
 </div>
@@ -1019,8 +1037,9 @@
     }).join('');
   }
   function rowZone(pos){
-    if(pos === 1) return 'zone-champ';
-    if(pos === 2 || pos === 3) return 'zone-top';
+    /* 1º y 2º amarillo (zona campeonato), 3º verde, 6º rojo. */
+    if(pos === 1 || pos === 2) return 'zone-champ';
+    if(pos === 3) return 'zone-third';
     if(pos === 6) return 'zone-bot';
     return '';
   }
@@ -1180,8 +1199,12 @@
   }
 
   /* Persiste un resultado humano de Superliga. Llamado desde gmEndMatch
-     cuando _gm._isSuperliga === true (rama dedicada en misc_body_2). */
-  window._superSaveHumanResult = function(j, home, away, gh, ga, events, mvpName, mvpTeamId){
+     cuando _gm._isSuperliga === true (rama dedicada en misc_body_2).
+     `matchStats` opcional ({a:{posesion,remates,tiros,corners,paradas},
+     b:{...}}) llega del overlay de stats post-partido. Se guarda con
+     el resultado para alimentar el dashboard "Superliga · Estadísticas"
+     (medias por equipo de posesión, sumatorios de remates, tiros, etc.). */
+  window._superSaveHumanResult = function(j, home, away, gh, ga, events, mvpName, mvpTeamId, matchStats){
     if(!j || !home || !away) return;
     var results = loadResults();
     var k = _rKey(j, home, away);
@@ -1191,15 +1214,37 @@
       var lbl = (e.num && e.num !== '0' ? e.num + '. ' : '') + nm;
       return { id:e.id, type:e.type, team:e.team, min:e.min, player:lbl };
     });
+    /* Sanea matchStats: solo conservamos las claves que el dashboard
+       sabe agregar (posesion / remates / tiros / corners / paradas /
+       amar / roj). Numeric-cast obligatorio. */
+    function _safeStatsSide(s){
+      var out = {};
+      if(!s || typeof s !== 'object') return out;
+      ['posesion','remates','tiros','corners','paradas','amar','roj'].forEach(function(k){
+        var v = Number(s[k]);
+        if(isFinite(v) && v >= 0) out[k] = v;
+      });
+      return out;
+    }
+    var safeStats = matchStats ? { a: _safeStatsSide(matchStats.a), b: _safeStatsSide(matchStats.b) } : (prev.matchStats || null);
     results[k] = {
       gh: gh, ga: ga,
       events: safeEvents,
       mvp: mvpName || prev.mvp || '',
       mvpTeam: (mvpTeamId === 'a' ? home : mvpTeamId === 'b' ? away : (prev.mvpTeam || '')),
+      matchStats: safeStats,
       ts: Date.now()
     };
     saveResults(results);
     buildClas();
+    /* Refresca el dashboard de estadísticas si ya existe (puede no
+       haberse construido aún si el usuario no ha entrado nunca a
+       s-superliga-stats — en ese caso buildClas no le afecta). */
+    try {
+      if (typeof window._superligaStatsRebuild === 'function') {
+        window._superligaStatsRebuild();
+      }
+    } catch(_){}
     /* Si la pantalla DERBYS está abierta, refresca para reflejar el
        nuevo estado/marcador de la card de Superliga. */
     try {
@@ -1248,8 +1293,14 @@
   });
   /* Hook ligero en el `go()` para refrescar al entrar a la pantalla
      (cubre el caso de cambios hechos por código que no dispara
-     `storage` — los `localStorage.setItem` mismo-tab no lo emiten). */
-  (function(){
+     `storage` — los `localStorage.setItem` mismo-tab no lo emiten).
+     IMPORTANTE: el bundle.js que define `window.go` carga DESPUÉS de
+     este partial (ver index.html), así que diferimos el patch hasta
+     DOMContentLoaded para que `window.go` ya exista cuando intentamos
+     envolverlo. Antes ese código se ejecutaba inline durante el parseo
+     y devolvía early → la pantalla nunca se refrescaba al re-entrar
+     y los resultados nuevos no se reflejaban. */
+  function _patchGoForClas(){
     var orig = window.go;
     if(typeof orig !== 'function' || orig._superligaPatched) return;
     var patched = function(id){
@@ -1257,64 +1308,314 @@
       if(id === 's-superliga-clas') buildClas();
       return r;
     };
+    Object.keys(orig).forEach(function(k){ patched[k] = orig[k]; });
     patched._superligaPatched = true;
     window.go = patched;
-  })();
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _patchGoForClas);
+  } else {
+    _patchGoForClas();
+  }
 })();
 </script>
 </div>
 <div class="screen" id="s-superliga-stats">
-<button class="back-btn" onclick="go('s-superliga')">◀ Volver</button>
+<button class="back-btn" onclick="go('s-superliga-clas')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">📈</span><h2>Superliga · Estadísticas</h2></div>
 <style>
-  /* Mismo look & feel que s-liga-stats con paleta púrpura (Superliga). */
-  #s-superliga-stats .liga-stats-wrap{padding:0 18px 28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;}
-  #s-superliga-stats .liga-stat-card{background:linear-gradient(180deg,#101622 0%,#0b1018 100%);border:1px solid rgba(168,85,247,.22);border-radius:10px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.35);}
-  #s-superliga-stats .liga-stat-head{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(90deg,#2a0f4a,#5a2890);border-bottom:1px solid rgba(168,85,247,.30);}
-  #s-superliga-stats .liga-stat-ico{font-size:20px;line-height:1;}
-  #s-superliga-stats .liga-stat-title{font-family:'Oswald',sans-serif;font-size:13px;letter-spacing:1.5px;color:#fff;text-transform:uppercase;font-weight:700;}
-  #s-superliga-stats .liga-stat-body{padding:8px 10px 10px;}
-  #s-superliga-stats .liga-stat-row{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);}
-  #s-superliga-stats .liga-stat-row:last-child{border-bottom:none;}
-  #s-superliga-stats .liga-stat-rank{font-family:'Bebas Neue',sans-serif;font-size:20px;color:rgba(168,85,247,.95);text-align:center;}
-  #s-superliga-stats .liga-stat-player{min-width:0;display:flex;flex-direction:column;gap:2px;}
-  #s-superliga-stats .liga-stat-name{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  #s-superliga-stats .liga-stat-team{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.4px;color:rgba(255,255,255,.45);text-transform:uppercase;}
-  #s-superliga-stats .liga-stat-value{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#c084fc;min-width:34px;text-align:right;letter-spacing:1px;}
-  #s-superliga-stats .liga-stat-empty{padding:16px 10px;text-align:center;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.28);}
-  #s-superliga-stats .liga-stat-more{margin-top:8px;border-top:1px solid rgba(255,255,255,.06);}
-  #s-superliga-stats .liga-stat-more summary{list-style:none;cursor:pointer;padding:10px 6px 4px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1.8px;color:rgba(168,85,247,.9);text-transform:uppercase;}
-  #s-superliga-stats .liga-stat-more summary::-webkit-details-marker{display:none;}
-  #s-superliga-stats .liga-stat-more-list{margin-top:4px;border-top:1px solid rgba(255,255,255,.04);}
-  #s-superliga-stats .liga-stat-more .liga-stat-row{padding-top:8px;padding-bottom:8px;}
+#s-superliga-stats .sl-stats-section-title{font-family:'Bebas Neue',Oswald,sans-serif;font-size:22px;letter-spacing:3px;color:#a855f7;text-shadow:0 0 18px rgba(168,85,247,.55);padding:14px 14px 6px;margin-top:6px;border-top:1px solid rgba(168,85,247,.20);}
+#s-superliga-stats .sl-stats-section-title.first{border-top:none;margin-top:0;}
+#s-superliga-stats .sl-stats-empty{padding:32px 14px;text-align:center;color:rgba(255,255,255,.4);font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;}
+/* Las tarjetas reusan .liga-stat-card; las teñimos en morado para
+   distinguir al usuario que está en Superliga (no Liga). */
+#s-superliga-stats .liga-stat-card{border-color:rgba(168,85,247,.45)!important;box-shadow:0 0 26px rgba(120,40,200,.14),0 8px 28px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05)!important;background:linear-gradient(145deg,#0f0420 0%,#1c0a36 45%,#0a0418 100%)!important;}
+#s-superliga-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(168,85,247,.7),rgba(220,150,255,1),rgba(168,85,247,.7),transparent)!important;}
+#s-superliga-stats .liga-stat-card::after{border-color:rgba(168,85,247,.45)!important;}
+#s-superliga-stats .liga-stat-head{background:linear-gradient(90deg,rgba(60,15,110,.6),rgba(120,40,200,.22),rgba(60,15,110,.12))!important;border-bottom-color:rgba(168,85,247,.32)!important;}
+#s-superliga-stats .liga-stat-title{color:#d0a8ff!important;text-shadow:0 0 18px rgba(220,150,255,.7),0 0 6px rgba(180,100,240,.4)!important;}
+#s-superliga-stats .liga-stat-rank{color:rgba(220,150,255,.85)!important;text-shadow:0 0 12px rgba(168,85,247,.5)!important;}
 </style>
-<div class="liga-stats-wrap" id="superliga-stats-dashboard">
-<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>
-</div>
+<div id="sl-stats-team-wrap"></div>
+<div id="sl-stats-player-wrap"></div>
 <script>
 (function(){
-  function _renderSuperligaStats(){
-    if (typeof window._lextBuildCompStatsDashboard === 'function') {
-      window._lextBuildCompStatsDashboard('superliga-stats-dashboard', 'ef_player_stats_superliga_v1');
-    }
+  'use strict';
+  var STORAGE_KEY_RESULTS  = 'superliga_results_v1';
+  var STORAGE_KEY_CALENDAR = 'superliga_calendar_v1';
+
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function _load(key){
+    try { var raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }
+    catch(_){ return null; }
   }
-  window._renderSuperligaStats = _renderSuperligaStats;
-  document.addEventListener('DOMContentLoaded', _renderSuperligaStats);
-  /* Repintar al entrar al screen via go() — observamos la clase 'active'
-     que el router de pantallas pone/quita. */
-  try {
-    var el = document.getElementById('s-superliga-stats');
-    if (el && typeof MutationObserver !== 'undefined') {
-      new MutationObserver(function(muts){
-        for (var i = 0; i < muts.length; i++) {
-          var m = muts[i];
-          if (m.type === 'attributes' && (m.attributeName === 'class' || m.attributeName === 'style')) {
-            if (el.classList && el.classList.contains('active')) _renderSuperligaStats();
-          }
-        }
-      }).observe(el, { attributes:true });
+
+  /* Categorías de equipo (suma o media según corresponda). */
+  var TEAM_CATS = [
+    { key:'gf',       title:'Goles marcados',     icon:'⚽', mode:'sum' },
+    { key:'amar',     title:'Tarjetas amarillas', icon:'🟨', mode:'sum' },
+    { key:'roj',      title:'Tarjetas rojas',     icon:'🟥', mode:'sum' },
+    { key:'posesion', title:'% posesión (media)', icon:'➗', mode:'avg', sfx:'%' },
+    { key:'remates',  title:'Remates realizados', icon:'👟', mode:'sum' },
+    { key:'tiros',    title:'Tiros a puerta',     icon:'🚪', mode:'sum' },
+    { key:'corners',  title:'Córners a favor',    icon:'⛳', mode:'sum' }
+  ];
+
+  /* Categorías de jugador — mismas que Liga EA Sports. */
+  var PLAYER_CATS = [
+    { key:'goles-total', title:'Goleadores',          icon:'⚽' },
+    { key:'cs',          title:'Portería imbatida',   icon:'🧤' },
+    { key:'yel',         title:'Tarjetas amarillas',  icon:'🟨' },
+    { key:'red',         title:'Tarjetas rojas',      icon:'🟥' },
+    { key:'pen-prov',    title:'Penaltis provocados', icon:'🤦‍♂️🥅' },
+    { key:'pen-gol',     title:'Goles de penalti',    icon:'⚽🥅' },
+    { key:'pen-fallado', title:'Penaltis fallados',   icon:'❌🥅' },
+    { key:'pen-parado',  title:'Penaltis parados',    icon:'🖐🥅' },
+    { key:'falta-gol',   title:'Goles de falta',      icon:'⚽🎯' },
+    { key:'propia',      title:'Autogoles',           icon:'⚽🚫' },
+    { key:'mvp',         title:'MVP',                 icon:'⭐' }
+  ];
+
+  function _typeFromEvent(ev){
+    if(!ev || !ev.type) return null;
+    var t = String(ev.type);
+    if(t === 'gol' || t === 'pen-gol' || t === 'falta-gol') return ['goles-total', t];
+    if(t === 'amarilla') return ['yel'];
+    if(t === 'roja' || t === 'd-amarilla') return ['red'];
+    if(t === 'pen-prov')    return ['pen-prov'];
+    if(t === 'pen-fallo' || t === 'pen-fallado') return ['pen-fallado'];
+    if(t === 'pen-parado')  return ['pen-parado'];
+    if(t === 'propia')      return ['propia'];
+    if(t === 'imbat')       return ['cs'];
+    if(t === 'mvp')         return ['mvp'];
+    return null;
+  }
+
+  function _stripNum(s){
+    return String(s||'').replace(/^\s*\d+\.?\s*/, '').trim();
+  }
+
+  function _buildTeamStats(cal, results){
+    var teams = {};
+    if(cal && Array.isArray(cal.teams)){
+      cal.teams.forEach(function(n){
+        teams[n] = { name:n, gf:0, amar:0, roj:0, posesion:0, posesionN:0, remates:0, tiros:0, corners:0 };
+      });
     }
-  } catch(_){}
+    function _ensure(name){
+      if(!teams[name]) teams[name] = { name:name, gf:0, amar:0, roj:0, posesion:0, posesionN:0, remates:0, tiros:0, corners:0 };
+      return teams[name];
+    }
+    Object.keys(results).forEach(function(k){
+      var parts = k.split('|');
+      if(parts.length < 3) return;
+      var home = parts[1], away = parts[2];
+      var res = results[k];
+      if(!res) return;
+      var H = _ensure(home), A = _ensure(away);
+      H.gf += Number(res.gh) || 0;
+      A.gf += Number(res.ga) || 0;
+      (res.events || []).forEach(function(ev){
+        if(!ev) return;
+        var rec = ev.team === 'a' ? H : ev.team === 'b' ? A : null;
+        if(!rec) return;
+        if(ev.type === 'amarilla') rec.amar++;
+        else if(ev.type === 'd-amarilla') { rec.amar++; rec.roj++; }
+        else if(ev.type === 'roja') rec.roj++;
+      });
+      if(res.matchStats){
+        var sa = res.matchStats.a || {}, sb = res.matchStats.b || {};
+        H.remates += Number(sa.remates)||0; A.remates += Number(sb.remates)||0;
+        H.tiros   += Number(sa.tiros)  ||0; A.tiros   += Number(sb.tiros)  ||0;
+        H.corners += Number(sa.corners)||0; A.corners += Number(sb.corners)||0;
+        if(typeof sa.posesion === 'number'){ H.posesion += sa.posesion; H.posesionN++; }
+        if(typeof sb.posesion === 'number'){ A.posesion += sb.posesion; A.posesionN++; }
+      }
+    });
+    return Object.keys(teams).map(function(n){ return teams[n]; });
+  }
+
+  function _renderTeamCard(cat, teamArr){
+    var rows = teamArr.map(function(t){
+      var v = cat.mode === 'avg'
+        ? (t.posesionN > 0 ? Math.round(t[cat.key] / t.posesionN) : 0)
+        : Number(t[cat.key] || 0);
+      return { name:t.name, value:v };
+    }).filter(function(r){ return r.value > 0; });
+    rows.sort(function(a,b){
+      if(b.value !== a.value) return b.value - a.value;
+      return a.name.localeCompare(b.name, 'es');
+    });
+    var sfx = cat.sfx || '';
+    var html = '<div class="liga-stat-card" data-cat="' + cat.key + '">'
+      + '<div class="liga-stat-head"><div class="liga-stat-ico">' + cat.icon + '</div>'
+      +   '<div class="liga-stat-title">' + _esc(cat.title) + '</div>'
+      + '</div>'
+      + '<div class="liga-stat-body">';
+    if(!rows.length){
+      html += '<div class="liga-stat-empty">Sin datos todavía</div>';
+    } else {
+      var top = rows.slice(0, 6), rest = rows.slice(6);
+      html += top.map(function(r, i){
+        return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (i+1) + '</div>'
+          + '<div class="liga-stat-player"><div class="liga-stat-name">' + _esc(r.name) + '</div></div>'
+          + '<div class="liga-stat-value">' + r.value + sfx + '</div></div>';
+      }).join('');
+      if(rest.length){
+        html += '<details class="liga-stat-more"><summary>Ver todos (' + rows.length + ')</summary><div class="liga-stat-more-list">'
+          + rest.map(function(r, i){
+              return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (i+7) + '</div>'
+                + '<div class="liga-stat-player"><div class="liga-stat-name">' + _esc(r.name) + '</div></div>'
+                + '<div class="liga-stat-value">' + r.value + sfx + '</div></div>';
+            }).join('')
+          + '</div></details>';
+      }
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function _buildPlayerStats(results){
+    /* Agrupa por team::nombre (case-insensitive normalized) y suma
+       cada categoría a partir de los eventos guardados. */
+    function _norm(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim().toLowerCase(); }
+    var byKey = {};
+    function _ensure(team, name){
+      var key = _norm(team) + '::' + _norm(name);
+      if(!byKey[key]){
+        var stats = {};
+        PLAYER_CATS.forEach(function(c){ stats[c.key] = 0; });
+        byKey[key] = { team: team, name: _stripNum(name), stats: stats };
+      } else if(_stripNum(name).length > byKey[key].name.length){
+        byKey[key].name = _stripNum(name);
+      }
+      return byKey[key];
+    }
+    Object.keys(results).forEach(function(k){
+      var parts = k.split('|');
+      if(parts.length < 3) return;
+      var home = parts[1], away = parts[2];
+      var res = results[k];
+      if(!res) return;
+      (res.events || []).forEach(function(ev){
+        if(!ev) return;
+        var teamName = ev.team === 'a' ? home : ev.team === 'b' ? away : '';
+        if(!teamName) return;
+        var pn = _stripNum(ev.player || ev.name || '');
+        if(!pn) return;
+        var mapped = _typeFromEvent(ev);
+        if(!mapped) return;
+        var rec = _ensure(teamName, pn);
+        mapped.forEach(function(stKey){ rec.stats[stKey]++; });
+      });
+      /* Imbat (portería imbatida): el evento ya viene en res.events
+         con type='imbat'. Si no hubiera, podríamos derivarlo del
+         resultado, pero `gmEndMatch` la fuerza siempre que algún
+         equipo encaja 0. */
+    });
+    return Object.keys(byKey).map(function(k){ return byKey[k]; });
+  }
+
+  function _topPlayersByStat(players, key){
+    return players.map(function(p){
+      return { name:p.name, team:p.team, value: Number(p.stats[key] || 0) };
+    }).filter(function(r){ return r.value > 0; })
+      .sort(function(a,b){
+        if(b.value !== a.value) return b.value - a.value;
+        if(a.team !== b.team) return a.team.localeCompare(b.team, 'es');
+        return a.name.localeCompare(b.name, 'es');
+      });
+  }
+
+  function _renderPlayerCard(cat, players){
+    var rows = _topPlayersByStat(players, cat.key);
+    var html = '<div class="liga-stat-card" data-cat="' + cat.key + '">'
+      + '<div class="liga-stat-head"><div class="liga-stat-ico">' + cat.icon + '</div>'
+      +   '<div class="liga-stat-title">' + _esc(cat.title) + '</div>'
+      + '</div>'
+      + '<div class="liga-stat-body">';
+    if(!rows.length){
+      html += '<div class="liga-stat-empty">Sin datos todavía</div>';
+    } else {
+      var top = rows.slice(0, 6), rest = rows.slice(6);
+      html += top.map(function(r, i){
+        return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (i+1) + '</div>'
+          + '<div class="liga-stat-player"><div class="liga-stat-name">' + _esc(r.name) + '</div>'
+          + '<div class="liga-stat-team">' + _esc(r.team) + '</div></div>'
+          + '<div class="liga-stat-value">' + r.value + '</div></div>';
+      }).join('');
+      if(rest.length){
+        html += '<details class="liga-stat-more"><summary>Ver todos (' + rows.length + ')</summary><div class="liga-stat-more-list">'
+          + rest.map(function(r, i){
+              return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (i+7) + '</div>'
+                + '<div class="liga-stat-player"><div class="liga-stat-name">' + _esc(r.name) + '</div>'
+                + '<div class="liga-stat-team">' + _esc(r.team) + '</div></div>'
+                + '<div class="liga-stat-value">' + r.value + '</div></div>';
+            }).join('')
+          + '</div></details>';
+      }
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function build(){
+    var teamHost = document.getElementById('sl-stats-team-wrap');
+    var playerHost = document.getElementById('sl-stats-player-wrap');
+    if(!teamHost || !playerHost) return;
+    var cal = _load(STORAGE_KEY_CALENDAR);
+    var results = _load(STORAGE_KEY_RESULTS) || {};
+    var hasAny = Object.keys(results).length > 0;
+    /* TEAM section */
+    var teamArr = _buildTeamStats(cal, results);
+    var teamHtml = '<div class="sl-stats-section-title first">📊 Equipos</div>';
+    if(!hasAny || !teamArr.length){
+      teamHtml += '<div class="sl-stats-empty">Aún no hay partidos jugados.</div>';
+    } else {
+      teamHtml += '<div class="liga-stats-wrap">';
+      TEAM_CATS.forEach(function(cat){ teamHtml += _renderTeamCard(cat, teamArr); });
+      teamHtml += '</div>';
+    }
+    teamHost.innerHTML = teamHtml;
+    /* PLAYER section */
+    var players = _buildPlayerStats(results);
+    var playerHtml = '<div class="sl-stats-section-title">👤 Jugadores</div>';
+    if(!hasAny || !players.length){
+      playerHtml += '<div class="sl-stats-empty">Aún no hay partidos jugados.</div>';
+    } else {
+      playerHtml += '<div class="liga-stats-wrap">';
+      PLAYER_CATS.forEach(function(cat){ playerHtml += _renderPlayerCard(cat, players); });
+      playerHtml += '</div>';
+    }
+    playerHost.innerHTML = playerHtml;
+  }
+
+  window._superligaStatsRebuild = build;
+
+  document.addEventListener('DOMContentLoaded', build);
+  /* Refresca al entrar a la pantalla. Hook ligero sobre go(). El
+     bundle.js (que define `window.go`) carga DESPUÉS de este partial,
+     así que diferimos hasta DOMContentLoaded — antes el patch se
+     ejecutaba inline cuando window.go aún era undefined y la pantalla
+     no se refrescaba al re-entrar (reportado 2026-05-04: "no se están
+     subiendo las estadísticas"). */
+  function _patchGoForStats(){
+    var orig = window.go;
+    if(typeof orig !== 'function' || orig._superligaStatsPatched) return;
+    var patched = function(id){
+      var r = orig.apply(this, arguments);
+      if(id === 's-superliga-stats') build();
+      return r;
+    };
+    Object.keys(orig).forEach(function(k){ patched[k] = orig[k]; });
+    patched._superligaStatsPatched = true;
+    window.go = patched;
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _patchGoForStats);
+  } else {
+    _patchGoForStats();
+  }
 })();
 </script>
 </div>
@@ -1486,6 +1787,7 @@
 })();
 </script>
 </div>
+
 <div id="ucl-intro">
 <div id="ucl-ball-anim">🏆</div>
 <div id="ucl-stars">★ ★ ★ UEFA CHAMPIONS LEAGUE ★ ★ ★</div>
@@ -2850,6 +3152,15 @@
     g2: DEFAULT_PRIMERA_G2.map(function(t){ return t.name; })
   };
 
+  /* Expuestos en window para que copa-engine.js (Copa del Rey) los use
+     como fallback si el storage `ligaExt_liga-hypermotion` /
+     `ligaExt_liga-primera-federacion` está vacío (admin no abrió el
+     editor todavía). Sin esto, el sorteo de 1ª Ronda fallaba con
+     "❌ No hay equipos suficientes en las 3 ligas". */
+  window.DEFAULT_SEGUNDA_TEAMS = DEFAULT_SEGUNDA_TEAMS;
+  window.DEFAULT_PRIMERA_G1    = DEFAULT_PRIMERA_G1;
+  window.DEFAULT_PRIMERA_G2    = DEFAULT_PRIMERA_G2;
+
   /* Exposición pública de los nombres+medias de los 3 tiers
      españoles para que el buscador del panel "EA Sports → Europa"
      (s-ea-manual, misc_body_1.html) pueda autocompletar. La estructura
@@ -3995,7 +4306,7 @@
     'Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid',
     'Athletic Club','Real Betis','Sevilla'
   ];
-  var HUMAN_ICONS = {'Bayern Munich':'💡','Arsenal':'🐭','Atlético Madrid':'✏️','Real Madrid':'🔨','FC Barcelona':'👿'};
+  var HUMAN_ICONS = {'Bayern Munich':'💡','Arsenal':'🐭','Atlético Madrid':'✏️','Real Madrid':'🔨','FC Barcelona':'👿','PSG':'🦆'};
   /* Aliases para resolver el icono humano cuando el nombre llega en
      forma corta o con variaciones (Champions, Superliga, sin acentos…).
      Mapea cada variante normalizada a la clave canónica de HUMAN_ICONS. */
@@ -4004,7 +4315,8 @@
     'arsenal fc':'Arsenal',
     'atletico':'Atlético Madrid','atletico madrid':'Atlético Madrid','atletico de madrid':'Atlético Madrid','atl madrid':'Atlético Madrid','club atletico de madrid':'Atlético Madrid','atletico madrid cf':'Atlético Madrid',
     'real madrid cf':'Real Madrid',
-    'barcelona':'FC Barcelona','fc barcelona':'FC Barcelona','futbol club barcelona':'FC Barcelona','fcbarcelona':'FC Barcelona','barca':'FC Barcelona'
+    'barcelona':'FC Barcelona','fc barcelona':'FC Barcelona','futbol club barcelona':'FC Barcelona','fcbarcelona':'FC Barcelona','barca':'FC Barcelona',
+    'psg':'PSG','paris':'PSG','paris sg':'PSG','paris saint germain':'PSG','paris saint-germain':'PSG','paris saintgermain':'PSG'
   };
   function _humanNorm(s){
     return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -9657,6 +9969,28 @@
           window._wprevSaveHumanResult(_gm._wprevGi, _gm._wprevJ, _gm.sc.a, _gm.sc.b);
         }
       } catch(_e){}
+    } else if (_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin') {
+      /* Copa del Rey: persistimos en /api/copa/guardar_resultado vía
+         _copaSaveHumanResult (no toca la tabla de Liga). Incluimos
+         prórroga + penaltis si los hubo. */
+      try {
+        var _cpMvp = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+        var _cpPenWin = null;
+        var _cpPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
+        if (_cpPenEv) _cpPenWin = _cpPenEv.team === 'a' ? _gm.home : _gm.away;
+        var _cpEt = _gm.etScores || {};
+        if (typeof window._copaSaveHumanResult === 'function') {
+          window._copaSaveHumanResult(
+            _gm._copaRonda, _gm._copaIdx, _gm._copaVuelta,
+            _gm.sc.a, _gm.sc.b,
+            _cpEt.a || 0, _cpEt.b || 0,
+            _cpPenWin,
+            _cpMvp ? (_cpMvp.player || _cpMvp.name || '') : '',
+            _gm.events || [],
+            _gm.home, _gm.away
+          );
+        }
+      } catch(_e){}
     } else if (_gm._isSuperliga || _gm.comp === 'superliga') {
       /* Superliga (6 equipos humanos): persistimos en superliga_results_v1
          vía _superSaveHumanResult — no toca la tabla de Liga ni el
@@ -9668,7 +10002,8 @@
             _gm.j, _gm.home, _gm.away, _gm.sc.a, _gm.sc.b,
             _gm.events || [],
             _slMvp ? (_slMvp.player || _slMvp.name || '') : '',
-            _slMvp ? _slMvp.team : ''
+            _slMvp ? _slMvp.team : '',
+            _gm.matchStats || null
           );
         }
       } catch(_e){}
@@ -10466,6 +10801,58 @@
     gmOpen(j, home, away, isHvH, '', true, false); /* noET=true: liga no tiene prórroga */
   };
 
+  /* Copa del Rey: abre gm-modal con flag _isCopa para que gmEndMatch
+     persista el resultado en /api/copa/guardar_resultado en lugar de
+     ir a la tabla de Liga. noET=false → la Copa SÍ tiene prórroga +
+     penaltis (CLAUDE.md). comp='copa' alimenta el label de WhatsApp /
+     códigos de competición. ronda/idx/esVuelta se guardan en _gm para
+     que el persistor sepa dónde guardar el resultado. */
+  window.abrirCopa = function (ronda, idx, esVuelta, home, away) {
+    var isHvH = esHumano(home) && esHumano(away);
+    var compKey = (ronda === 'fin') ? 'copa-fin' : 'copa';
+    gmOpen(0, home, away, isHvH, compKey, false, false);
+    try {
+      if (window.__GM_LIVE) {
+        window.__GM_LIVE._isCopa = true;
+        window.__GM_LIVE._copaRonda = ronda;
+        window.__GM_LIVE._copaIdx = idx;
+        window.__GM_LIVE._copaVuelta = !!esVuelta;
+        window.__GM_LIVE.comp = compKey;
+      }
+    } catch(_){}
+  };
+
+  /* Persiste un resultado humano de Copa del Rey. Llamado desde
+     gmEndMatch cuando _gm._isCopa === true. Posta a
+     /api/copa/guardar_resultado con los datos del partido (incluido
+     prórroga + penaltis) y refresca la pantalla de Copa después. */
+  window._copaSaveHumanResult = function (ronda, idx, esVuelta, gh, ga, et_gh, et_ga, pen_winner, mvp, events, home, away) {
+    var payload = {
+      ronda: ronda, idx: idx, es_vuelta: !!esVuelta,
+      gl: gh, gv: ga,
+      et_gl: et_gh || 0, et_gv: et_ga || 0,
+      pen_winner: pen_winner || null,
+      mvp: mvp || '',
+      events: events || [],
+      summary: '',
+      team_a: home || '', team_b: away || ''
+    };
+    try {
+      fetch('/api/copa/guardar_resultado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).then(function(r){ return r.json(); })
+        .then(function(d){
+          /* Re-render de Copa al volver a la pantalla. */
+          try {
+            if (typeof window.copaInit === 'function') window.copaInit();
+            else if (typeof window.copaRender === 'function' && d && d.copa) window.copaRender(d.copa);
+          } catch(_){}
+        }).catch(function(){});
+    } catch(_){}
+  };
+
   /* Superliga: abre el gm-modal en modo HvH (todos los equipos son humanos
      porque salen de "EA Sports → Europa"). Marca _gm con _isSuperliga
      para que gmEndMatch persista en superliga_results_v1 vía
@@ -11073,23 +11460,37 @@
         /* Save result. Conservamos los eventos anulados con _varAnulado=true para
            que el acta los pueda mostrar como "ANULADA POR VAR", pero los excluimos
            del cálculo de estadísticas (player stats, tarjetas, goleadores). */
-        var results = loadResults();
-        var key = rKey(j, home, away);
-        results[key] = { gh: scA, ga: scB, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
-        saveResults(results);
-        if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
-          var statsEvents = evtData.events.filter(function(e){ return !e._varAnulado; });
-          window.registrarLigaPlayerStats(key, home, away, statsEvents, evtData.mvp, evtData.mvpTeam);
+        /* Hook genérico: si el mk empieza por "copa_", redirigimos la
+           persistencia a Copa del Rey (no a la tabla de Liga). El
+           formato del mk está documentado en window.copaSimLive. */
+        var __isCopaSim = typeof mk === 'string' && mk.indexOf('copa_') === 0;
+        if (__isCopaSim && typeof window._copaSimLivePersist === 'function') {
+          try {
+            window._copaSimLivePersist(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam);
+          } catch(_e) { try { console.error('[copaSimLive persist]', _e); } catch(__){} }
+        } else {
+          var results = loadResults();
+          var key = rKey(j, home, away);
+          results[key] = { gh: scA, ga: scB, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
+          saveResults(results);
+          if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
+            var statsEvents = evtData.events.filter(function(e){ return !e._varAnulado; });
+            window.registrarLigaPlayerStats(key, home, away, statsEvents, evtData.mvp, evtData.mvpTeam);
+          }
+          actualizarDom('l-j' + j, home, away, scA, scB);
+          if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
         }
-        actualizarDom('l-j' + j, home, away, scA, scB);
-        if (typeof window.buildLigaClas === 'function') window.buildLigaClas();
         /* Lesiones IA vs IA: solo registrar en acta, NO mostrar overlay flash */
         /* Decrementar contador y reconstruir solo si no hay otras simulaciones activas */
         window._iaRunningCount = Math.max(0, (window._iaRunningCount || 1) - 1);
         setTimeout(function() {
           if (!window._iaRunningCount) {
-            if (typeof window.buildIAresults === 'function') window.buildIAresults();
-            if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
+            if (__isCopaSim) {
+              if (typeof window.copaInit === 'function') window.copaInit();
+            } else {
+              if (typeof window.buildIAresults === 'function') window.buildIAresults();
+              if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
+            }
           }
         }, 600);
       }
@@ -15238,10 +15639,59 @@ window.goLiveMatches = function() {
     if (item.j) {
       jLabel = (comp.jornadaLabel || 'Jornada') + ' ' + item.j;
     }
+    /* Color por competición — petición usuario 2026-05-04: cada comp
+       pinta sus cards con su color (Liga rojo, Superliga morado,
+       Copa marrón, …). Aplicamos comp.color al borde, al gradiente
+       de fondo, al "VS" y al chip de estado. Para `playing` y
+       `finished` mantenemos los acentos rojo/grises del CSS general
+       — la pelea por la atención del usuario manda sobre el color
+       de comp. */
+    var compColor = comp.color || '#a855f7';
+    function _hexToRgba(hex, a){
+      var h = String(hex||'').replace('#','').trim();
+      if(h.length === 3) h = h.split('').map(function(c){return c+c;}).join('');
+      if(h.length !== 6) return 'rgba(168,85,247,'+a+')';
+      var r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+      if(isNaN(r)||isNaN(g)||isNaN(b)) return 'rgba(168,85,247,'+a+')';
+      return 'rgba('+r+','+g+','+b+','+a+')';
+    }
+    var compBg     = _hexToRgba(compColor, .18);
+    var compBgDeep = _hexToRgba(compColor, .10);
+    var compBorder = _hexToRgba(compColor, .55);
+    var compGlow   = _hexToRgba(compColor, .25);
     var card = document.createElement('div');
     card.className = 'derby-card ' + state;
     card.setAttribute('data-derby-source', item.source || '');
+    card.setAttribute('data-derby-comp', comp.name || '');
     if (item.wrap && item.wrap.id) card.setAttribute('data-derby-wrap-id', item.wrap.id);
+    /* Sólo override de color cuando el partido NO está playing — para
+       playing dejamos el tono rojo del CSS general. Para finished
+       atenuamos respecto al estado pending. */
+    if (state !== 'playing') {
+      var bgGrad   = 'linear-gradient(135deg,' + compBg + ',' + compBgDeep + ')';
+      var fgBorder = compBorder;
+      var fgGlow   = compGlow;
+      if (state === 'finished') {
+        bgGrad   = 'linear-gradient(135deg,' + _hexToRgba(compColor, .07) + ',rgba(255,255,255,.02))';
+        fgBorder = _hexToRgba(compColor, .30);
+        fgGlow   = 'transparent';
+      }
+      card.style.background   = bgGrad;
+      card.style.borderColor  = fgBorder;
+      card.style.boxShadow    = '0 0 14px ' + fgGlow;
+      /* Mata la animación derbyPulse (que ancla el color púrpura) si
+         no es playing; el CSS la deja activa por defecto en estado
+         pending. */
+      card.style.animation    = 'none';
+    }
+    /* Estilo inline para el VS y chip de estado en estado pending —
+       así el "VS" y el chip "POR JUGAR" tiñen al color de la comp. */
+    var vsExtraStyle = (state === 'pending')
+      ? ' style="color:' + compColor + ';text-shadow:0 0 10px ' + _hexToRgba(compColor,.55) + ';"'
+      : '';
+    var statusExtraStyle = (state === 'pending')
+      ? ' style="background:' + _hexToRgba(compColor,.20) + ';color:' + compColor + ';border-color:' + _hexToRgba(compColor,.55) + ';"'
+      : '';
     card.innerHTML =
         '<div class="derby-teams">'
       +   (jLabel ? '<div class="derby-jlabel" style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.4px;color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:2px;">' + _escHtml(jLabel) + '</div>' : '')
@@ -15254,8 +15704,8 @@ window.goLiveMatches = function() {
       +     '<span>' + _escHtml(away) + '</span>'
       +   '</div>'
       + '</div>'
-      + '<div class="derby-vs ' + state + '">' + _escHtml(vsText) + '</div>'
-      + '<span class="derby-status ' + state + '">' + statusLabel + '</span>';
+      + '<div class="derby-vs ' + state + '"' + vsExtraStyle + '>' + _escHtml(vsText) + '</div>'
+      + '<span class="derby-status ' + state + '"' + statusExtraStyle + '>' + statusLabel + '</span>';
     card.addEventListener('click', function(){
       /* Si el partido está en directo en el gm-modal activo, reabrirlo. */
       if (state === 'playing' && window.__GM_LIVE && !window.__GM_LIVE.finished &&

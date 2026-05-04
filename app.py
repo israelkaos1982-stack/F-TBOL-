@@ -2081,13 +2081,16 @@ def api_liga_ext_post(slug):
 #
 # Whitelist (no permitimos escribir cualquier clave arbitraria):
 #   - comp_icons_v1
+#   - europe_committed_v1   (snapshot manual de pools europeos —
+#                            usuario pulsa "📤 Enviar a Europa" cuando
+#                            todas las 51 ligas están terminadas)
 #   - manual_ea_<slug>_v1   con slug ∈ {ucl, uclPrev, uclQual,
 #                                       wildcard, uel, uecl,
 #                                       recopa, supercopa,
 #                                       intercontinental, superliga,
 #                                       verano}
 # Cualquier otra clave devuelve 400.
-_KV_ALLOWED_EXACT = {"comp_icons_v1"}
+_KV_ALLOWED_EXACT = {"comp_icons_v1", "europe_committed_v1"}
 _KV_ALLOWED_REGEX = re.compile(
     r"^manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)_v1$"
 )

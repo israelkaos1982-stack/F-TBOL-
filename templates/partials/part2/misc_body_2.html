@@ -2948,6 +2948,15 @@
     g2: DEFAULT_PRIMERA_G2.map(function(t){ return t.name; })
   };
 
+  /* Expuestos en window para que copa-engine.js (Copa del Rey) los use
+     como fallback si el storage `ligaExt_liga-hypermotion` /
+     `ligaExt_liga-primera-federacion` está vacío (admin no abrió el
+     editor todavía). Sin esto, el sorteo de 1ª Ronda fallaba con
+     "❌ No hay equipos suficientes en las 3 ligas". */
+  window.DEFAULT_SEGUNDA_TEAMS = DEFAULT_SEGUNDA_TEAMS;
+  window.DEFAULT_PRIMERA_G1    = DEFAULT_PRIMERA_G1;
+  window.DEFAULT_PRIMERA_G2    = DEFAULT_PRIMERA_G2;
+
   /* Exposición pública de los nombres+medias de los 3 tiers
      españoles para que el buscador del panel "EA Sports → Europa"
      (s-ea-manual, misc_body_1.html) pueda autocompletar. La estructura

@@ -4488,20 +4488,25 @@ window._showSimProgress = function(opts, onDone){
 <div class="screen" id="s-copa">
 <button class="back-btn" onclick="go('s-espana')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Copa del Rey</h2></div>
-<!-- Mount points del motor copa-engine.js (2026-05-04). Antes había 10
-     placeholders estáticos "Por definir" que ocultaban el sortear real
-     porque el engine necesita estos dos divs para renderizar:
-       · #copa-human-panel = panel del partido humano del usuario.
-       · #copa-jlist       = lista completa de rondas + botón
-                              "🎯 Iniciar Copa — Sortear 1ª Ronda".
-     Si el sorteo aún no se ha hecho, copa-engine.js solo pinta el botón.
-     Tras pulsarlo, lee los 82 equipos de los 3 ligaExt_*, separa los 5
-     humanos (Real Madrid, FC Barcelona, Atlético Madrid, Arsenal,
-     Bayern Munich) + 31 al azar de Primera Federación y emparejarlos
-     con local = menor nivel global. -->
+<!-- Estructura de Copa del Rey (2026-05-04, restaurada).
+     Las 10 rondas se mantienen como cards desplegables (igual que las
+     jornadas de Liga EA Sports). El motor copa-engine.js LLENA cada
+     <div class="jmatches" id="copa-Xr"> con los partidos reales tras
+     pulsar el botón "🎯 Iniciar Copa" o tras una recarga si ya hay
+     sorteo persistido en /api/copa/state. -->
 <div id="copa-human-panel"></div>
+<div id="copa-banner" style="display:flex;flex-direction:column;gap:8px;align-items:center;margin:6px 0 10px;"></div>
 <div class="jlist">
-<div id="copa-jlist"></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-1r')"><div class="pdot">▶</div>🏆 <b>Copa</b>  1ª Ronda</button><div class="jmatches" id="copa-1r"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-2r')"><div class="pdot">▶</div>🏆 <b>Copa</b>  2ª Ronda</button><div class="jmatches" id="copa-2r"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-16')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Dieciseisavos</button><div class="jmatches" id="copa-16"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-8i')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Octavos Ida</button><div class="jmatches" id="copa-8i"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-8v')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Octavos Vuelta</button><div class="jmatches" id="copa-8v"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-4i')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Cuartos Ida</button><div class="jmatches" id="copa-4i"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-4v')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Cuartos Vuelta</button><div class="jmatches" id="copa-4v"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-2i')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Semis Ida</button><div class="jmatches" id="copa-2i"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-2v')"><div class="pdot">▶</div>🏆 <b>Copa</b>  Semis Vuelta</button><div class="jmatches" id="copa-2v"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
+<div class="jblock"><button class="jbtn c-copa" onclick="tog('copa-fin')"><div class="pdot">▶</div>🏆 <b>Copa</b>  FINAL</button><div class="jmatches" id="copa-fin"><div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div></div></div>
 <div class="submenu-card" onclick="go('s-copa-cuadro')" style="margin-top:10px;">
 <span class="sc-emoji">🗂️</span><span class="sc-label">Cuadro de Eliminatorias</span><span class="sc-arr">▶</span>
 </div>

@@ -91,15 +91,86 @@
     return [];
   }
 
+  /* Fallback: si el storage de una liga está vacío, usamos los nombres
+     hardcoded del bundle (DEFAULT_SEGUNDA_TEAMS, DEFAULT_PRIMERA_G1/G2)
+     y para Liga EA Sports tiramos de TEAM_RATINGS. Power por defecto:
+     entry.media (Hyp/PF) o el rating numérico (Liga EA). */
+  function _ligaEaFallback() {
+    var ratings = window.TEAM_RATINGS || {};
+    var humanos = HUMAN_TEAMS.slice();
+    /* Lista canónica de los 20 Liga EA. Usamos los nombres tal cual
+       aparecen en LIGA_EA_TEAMS_DEFAULT (app.py). */
+    var EA20 = [
+      'Real Madrid','Athletic Club','Real Sociedad','Sevilla','Villarreal',
+      'Mallorca','Valencia CF','Espanyol','Bayern Munich','Celta de Vigo',
+      'Deportivo Alavés','Osasuna','Getafe CF','Arsenal','Girona FC',
+      'Elche CF','Atlético Madrid','Rayo Vallecano','Real Betis','FC Barcelona'
+    ];
+    return EA20.map(function (name) {
+      var entry = ratings[name];
+      var pw = (typeof entry === 'number') ? entry
+             : (entry && typeof entry.media === 'number') ? entry.media : 75;
+      return {
+        name: name, league: 'liga-ea-sports', power: pw,
+        isHuman: humanos.indexOf(name) !== -1
+      };
+    });
+  }
+  function _hypermotionFallback() {
+    var arr = window.DEFAULT_SEGUNDA_TEAMS || [];
+    return arr.map(function (t) {
+      return {
+        name: String(t && t.name || '').trim(),
+        league: 'liga-hypermotion',
+        power: Math.max(1, Math.min(99, Number(t && t.media) || 70)),
+        isHuman: HUMAN_TEAMS.indexOf(String(t && t.name || '').trim()) !== -1
+      };
+    });
+  }
+  function _primeraFedFallback() {
+    var g1 = window.DEFAULT_PRIMERA_G1 || [];
+    var g2 = window.DEFAULT_PRIMERA_G2 || [];
+    return g1.concat(g2).map(function (t) {
+      return {
+        name: String(t && t.name || '').trim(),
+        league: 'liga-primera-federacion',
+        power: Math.max(1, Math.min(99, Number(t && t.media) || 60)),
+        isHuman: HUMAN_TEAMS.indexOf(String(t && t.name || '').trim()) !== -1
+      };
+    });
+  }
+
   function _collectCopaTeams() {
     var all = [];
     var seen = {};
+    var FALLBACK = {
+      'liga-ea-sports':          _ligaEaFallback,
+      'liga-hypermotion':        _hypermotionFallback,
+      'liga-primera-federacion': _primeraFedFallback
+    };
     COPA_LEAGUE_SLUGS.forEach(function (slug) {
-      _readLigaTeams(slug).forEach(function (t) {
-        if (seen[t.name]) return;
+      var teams = _readLigaTeams(slug);
+      if (!teams.length && typeof FALLBACK[slug] === 'function') {
+        teams = FALLBACK[slug]();
+      }
+      teams.forEach(function (t) {
+        if (!t.name || seen[t.name]) return;
         seen[t.name] = true;
         all.push(t);
       });
+    });
+    /* Garantizar que los 5 humanos estén presentes aunque ninguno de
+       los storages los traiga (caso raro: el editor de Liga EA quedó
+       sin guardar). Sin esto, el filtro `humanos = all.filter(isHuman)`
+       devolvería 0 y la 1ª Ronda se quedaría sin los humanos. */
+    HUMAN_TEAMS.forEach(function (name) {
+      if (seen[name]) return;
+      var ratings = window.TEAM_RATINGS || {};
+      var entry = ratings[name];
+      var pw = (typeof entry === 'number') ? entry
+             : (entry && typeof entry.media === 'number') ? entry.media : 80;
+      all.push({ name: name, league: 'liga-ea-sports', power: pw, isHuman: true });
+      seen[name] = true;
     });
     return all;
   }
@@ -1296,65 +1367,180 @@
     document.head.appendChild(style);
   }
 
+  /* Construye el HTML de partidos de UNA ronda concreta para inyectarlo
+     dentro del <div class="jmatches" id="copa-Xr"> estático. Sin botón
+     ni cabecera — solo las filas .mrow. */
+  function _innerHtmlForRound(matches, results, ronda, esVuelta) {
+    if (!matches || !matches.length) {
+      return '<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>';
+    }
+    var idaResults = (esVuelta && TWO_LEG[ronda])
+      ? ((_copa.resultados || {})[ronda + '_ida'] || [])
+      : null;
+    var blockId = (TWO_LEG[ronda] ? ronda + (esVuelta ? '_vta' : '_ida') : ronda);
+    var human = false; /* botón Sim vs Jugar se decide por cada match */
+    var out = '';
+    matches.forEach(function (m, idx) {
+      var local = esVuelta ? m.v : m.l;
+      var visit = esVuelta ? m.l : m.v;
+      var res = results && results[idx];
+      var matchHuman = isHuman(m.l, m.v);
+      if (res && res.jugado) {
+        var totalL = Number(res.gl || 0) + Number(res.et_gl || 0);
+        var totalV = Number(res.gv || 0) + Number(res.et_gv || 0);
+        var etTxt = ((res.et_gl || 0) || (res.et_gv || 0)) ? ' <span class="copa-et">(' + totalL + '-' + totalV + ' ET)</span>' : '';
+        var penTxt = res.pen_winner ? ' <span class="copa-pen">PEN</span>' : '';
+        var aggLine = '';
+        if (esVuelta && idaResults && idaResults[idx] && idaResults[idx].jugado) {
+          var ida = idaResults[idx];
+          var sumOrig_l = Number(ida.gl || 0) + Number(res.gv || 0);
+          var sumOrig_v = Number(ida.gv || 0) + Number(res.gl || 0);
+          var penGlob = res.pen_winner ? ' · pen ' + escapeHtml(res.pen_winner) : '';
+          aggLine = '<div class="copa-row-note copa-row-agg">'
+            + 'Ida: <b>' + ida.gl + '-' + ida.gv + '</b> · '
+            + 'Vuelta: <b>' + res.gl + '-' + res.gv + '</b> · '
+            + 'Global: <b>' + escapeHtml(m.l) + ' ' + sumOrig_l + '-' + sumOrig_v + ' ' + escapeHtml(m.v) + '</b>'
+            + penGlob
+            + '</div>';
+        }
+        out += '<div class="mrow copa-mrow copa-mrow-done" data-done="1">'
+          + '<div class="mn">' + escapeHtml(local) + '</div>'
+          + '<div class="ms copa-sc">' + res.gl + ' – ' + res.gv + etTxt + penTxt + '</div>'
+          + '<div class="mn r">' + escapeHtml(visit) + '</div>'
+          + '</div>'
+          + aggLine
+          + renderResultExtra(res);
+      } else {
+        var btn = matchHuman
+          ? '<button class="copa-btn-play" onclick="window.copaJugar(\'' + ronda + '\',' + idx + ',' + (esVuelta ? 1 : 0) + ')">▶ Jugar</button>'
+          : '<button class="copa-btn-sim" onclick="window.copaSimIA(\'' + ronda + '\',' + idx + ',' + (esVuelta ? 1 : 0) + ')">⚡ Sim 30s</button>';
+        out += '<div class="mrow copa-mrow">'
+          + '<div class="mn">' + escapeHtml(local) + '</div>'
+          + '<div class="ms p copa-sc-pen" id="csc-' + blockId + '-' + idx + '">vs</div>'
+          + '<div class="mn r">' + escapeHtml(visit) + '</div>'
+          + '<div class="copa-act">' + btn + '</div>'
+          + '</div>';
+      }
+    });
+    return out;
+  }
+
+  /* Mapeo de qué `<div class="jmatches" id="…">` estático rellena cada
+     ronda. Las single-leg usan `id="copa-Xr"` directo; las two-leg
+     usan `copa-Xi` para la ida y `copa-Xv` para la vuelta. */
+  var _S_COPA_ID = {
+    r1:      ['copa-1r', null,      false, false],
+    r2:      ['copa-2r', null,      false, false],
+    r16:     ['copa-16', null,      false, false], /* solo IDA en s-copa */
+    oct_ida: ['copa-8i', null,      false, true ],
+    oct_vta: ['copa-8v', null,      true,  true ],
+    cua_ida: ['copa-4i', null,      false, true ],
+    cua_vta: ['copa-4v', null,      true,  true ],
+    sf_ida:  ['copa-2i', null,      false, true ],
+    sf_vta:  ['copa-2v', null,      true,  true ],
+    fin:     ['copa-fin',null,      false, false]
+  };
+
   function copaRender(copa) {
-    var container = document.getElementById('copa-jlist');
-    if (!container) return;
+    /* Rellena el banner #copa-banner con el botón "Iniciar Copa" o
+       "Reiniciar Copa", y vuelca los matches en cada <div jmatches>
+       estático. NO sustituye toda la pantalla — así se mantiene el
+       formato desplegable que el usuario quiere (igual a la liga EA). */
+    var banner = document.getElementById('copa-banner');
+    if (!banner) return;
     _copa = copa || {};
     applyStoredResultMeta(_copa);
     var sorteo = _copa.sorteo || {};
     var resultados = _copa.resultados || {};
     var clasificados = _copa.clasificados || {};
-    var html = '';
 
+    /* Banner: Sortear 1ª Ronda · Sortear siguiente ronda (si hace
+       falta) · Reiniciar (siempre disponible). */
+    var bannerHtml = '<p class="copa-info" style="text-align:center;color:#c5a058;font-family:Rajdhani,sans-serif;letter-spacing:1px;margin:0;">🏆 Copa del Rey — Temporada 2025/26</p>';
     if (!sorteo.r1 || !sorteo.r1.length) {
-      html = '<div class="copa-start-wrap">'
-        + '<p class="copa-info">🏆 Copa del Rey — Temporada 2025/26</p>'
-        + '<button class="copa-btn-sortear" onclick="window.copaSortear(\'r1\')">🎯 Iniciar Copa — Sortear 1ª Ronda</button>'
-        + '</div>';
-      container.innerHTML = html;
-      syncCalendar(_copa);
-      renderBracket(_copa);
-      return;
+      bannerHtml += '<button class="copa-btn-sortear" onclick="window.copaSortear(\'r1\')">🎯 Iniciar Copa — Sortear 1ª Ronda</button>';
+    } else {
+      /* Si la ronda actual ya está confirmada y la siguiente no se ha
+         sorteado, mostramos botón para sortearla. */
+      for (var i = 0; i < ROUNDS.length - 1; i++) {
+        var rd = ROUNDS[i];
+        var nx = NEXT_ROUND[rd];
+        if (!nx) break;
+        var clasif = clasificados[rd] || [];
+        var nextHasMatches = sorteo[nx] && sorteo[nx].length;
+        if (clasif.length && !nextHasMatches) {
+          bannerHtml += '<button class="copa-btn-sortear" onclick="window.copaSortear(\'' + nx + '\')">🎯 Sortear ' + escapeHtml(ROUND_LABEL[nx] || nx) + '</button>';
+        }
+      }
+      bannerHtml += '<button class="copa-btn-reset" onclick="window.copaReiniciar()" style="opacity:.6">🔄 Reiniciar Copa</button>';
     }
+    if (clasificados.campeon) {
+      bannerHtml += '<div class="copa-champion" style="margin-top:8px"><div class="copa-champion-trophy">🏆</div><div class="copa-champion-name">'
+        + escapeHtml(clasificados.campeon) + '</div><div class="copa-champion-label">CAMPEÓN DE LA COPA DEL REY</div></div>';
+    }
+    banner.innerHTML = bannerHtml;
 
-    ROUNDS.forEach(function (ronda) {
+    /* Vaciar cada card estático con los matches de su ronda. */
+    Object.keys(_S_COPA_ID).forEach(function (key) {
+      var spec = _S_COPA_ID[key];
+      var domId = spec[0];
+      var esVuelta = spec[2];
+      var twoLeg = spec[3];
+      var ronda = key.split('_')[0]; /* 'oct_ida' → 'oct' */
       var matches = sorteo[ronda] || [];
-      var label = ROUND_LABEL[ronda] || ronda;
-      var clasif = clasificados[ronda] || [];
-      if (TWO_LEG[ronda]) {
-        html += renderBlock(ronda + '_ida', label + ' — Ida', matches, resultados[ronda + '_ida'], ronda, false);
-        html += renderBlock(ronda + '_vta', label + ' — Vuelta', matches, resultados[ronda + '_vta'], ronda, true);
-        html += '<div class="copa-btn-row">'
-          + '<button class="copa-btn-sim copa-sim-all" onclick="window.copaSimTodosIA(\'' + ronda + '\',0)">⚡ Simular IA Ida</button>'
-          + '<button class="copa-btn-sim copa-sim-all" onclick="window.copaSimTodosIA(\'' + ronda + '\',1)">⚡ Simular IA Vuelta</button>'
-          + '</div>';
+      var resKey;
+      if (twoLeg) {
+        resKey = ronda + (esVuelta ? '_vta' : '_ida');
+      } else if (TWO_LEG[ronda]) {
+        /* r16 single-card: mostramos la IDA en el card único de
+           Dieciseisavos (la VUELTA queda solo en el bracket). */
+        resKey = ronda + '_ida';
       } else {
-        html += renderBlock(ronda, label, matches, resultados[ronda], ronda, false);
-        html += '<div class="copa-btn-row"><button class="copa-btn-sim copa-sim-all" onclick="window.copaSimTodosIA(\'' + ronda + '\',0)">⚡ Simular IA ' + label + '</button></div>';
+        resKey = ronda;
       }
-      if (matches.length && isRoundComplete(ronda, matches, resultados) && !clasif.length) {
-        html += '<div class="copa-round-action"><button class="copa-btn-avanzar" onclick="window.copaClasificar(\'' + ronda + '\')">✅ Confirmar clasificados — ' + label + '</button></div>';
-      }
-      if (clasif.length) {
-        html += '<div class="copa-clasificados"><span class="copa-clas-title">Clasificados ' + label + ':</span> '
-          + clasif.map(function (t) {
-            return '<span class="copa-clas-team' + (isHuman(t, '') ? ' human' : '') + '">' + escapeHtml(t) + '</span>';
-          }).join('')
-          + '</div>';
-      }
-      var nextRound = NEXT_ROUND[ronda];
-      if (nextRound && clasif.length && !(sorteo[nextRound] && sorteo[nextRound].length)) {
-        html += '<div class="copa-round-action"><button class="copa-btn-sortear" onclick="window.copaSortear(\'' + nextRound + '\')">🎯 Sortear ' + ROUND_LABEL[nextRound] + '</button></div>';
+      var rowsHtml = _innerHtmlForRound(matches, resultados[resKey] || [], ronda, esVuelta);
+      var card = document.getElementById(domId);
+      if (card) card.innerHTML = rowsHtml;
+      /* Botones de simular IA bajo el card si la ronda tiene partidos
+         pendientes IA. Se inyectan como hermano del card (en el mismo
+         jblock). Para no acumular múltiples botones, los marcamos con
+         data-copa-actions y los reemplazamos en cada render. */
+      if (card && matches.length) {
+        var jblock = card.parentNode;
+        if (jblock && jblock.classList.contains('jblock')) {
+          var prev = jblock.querySelector('[data-copa-actions]');
+          if (prev) prev.remove();
+          var resList = resultados[resKey] || [];
+          var pendingIA = false;
+          for (var m = 0; m < matches.length; m++) {
+            var match = matches[m];
+            if (resList[m] && resList[m].jugado) continue;
+            if (!isHuman(match.l, match.v)) { pendingIA = true; break; }
+          }
+          if (pendingIA) {
+            var actLabel = twoLeg ? (esVuelta ? 'Vuelta' : 'Ida') : (ROUND_LABEL[ronda] || ronda);
+            var actBtn = document.createElement('div');
+            actBtn.setAttribute('data-copa-actions', '1');
+            actBtn.style.cssText = 'padding:6px 8px';
+            actBtn.innerHTML = '<button class="copa-btn-sim copa-sim-all" onclick="window.copaSimTodosIA(\'' + ronda + '\',' + (esVuelta ? 1 : 0) + ')">⚡ Simular IA ' + escapeHtml(actLabel) + '</button>';
+            jblock.appendChild(actBtn);
+          }
+          /* Confirmar clasificados cuando la ronda está completa. */
+          if (!twoLeg || esVuelta) {
+            var done = isRoundComplete(ronda, matches, resultados);
+            var clas = clasificados[ronda] || [];
+            if (done && !clas.length) {
+              var conf = document.createElement('div');
+              conf.setAttribute('data-copa-actions', '1');
+              conf.style.cssText = 'padding:6px 8px';
+              conf.innerHTML = '<button class="copa-btn-avanzar" onclick="window.copaClasificar(\'' + ronda + '\')">✅ Confirmar clasificados — ' + escapeHtml(ROUND_LABEL[ronda] || ronda) + '</button>';
+              jblock.appendChild(conf);
+            }
+          }
+        }
       }
     });
 
-    if (clasificados.campeon) {
-      html += '<div class="copa-champion"><div class="copa-champion-trophy">🏆</div><div class="copa-champion-name">'
-        + escapeHtml(clasificados.campeon) + '</div><div class="copa-champion-label">CAMPEÓN DE LA COPA DEL REY</div></div>';
-    }
-
-    html += '<div class="copa-round-action" style="margin-top:18px;opacity:.6"><button class="copa-btn-reset" onclick="window.copaReiniciar()">🔄 Reiniciar Copa</button></div>';
-    container.innerHTML = html;
     syncCalendar(_copa);
     renderBracket(_copa);
   }

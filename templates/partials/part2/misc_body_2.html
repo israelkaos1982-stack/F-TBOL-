@@ -4957,7 +4957,7 @@
       +'<div class="ml-action-row" id="ml-action-row-'+mk+'" style="display:none;">'
         +'<button class="ml-action-add" id="ml-add-btn-'+mk+'" onclick="mlTogglePanelGen(\''+emk+'\')">＋ AÑADIR EVENTO</button>'
         +'<button class="ml-action-ht" id="ml-btn-ht-'+mk+'" onclick="window.mlForceHalftimeGen(\''+emk+'\')" style="display:none;">🛌 DESCANSO</button>'
-        +'<button class="ml-action-end" id="ml-btn-end-'+mk+'" onclick="mlEndMatchGen(\''+emk+'\')">🏁 FINALIZAR</button>'
+        +'<button class="ml-action-end" id="ml-btn-end-'+mk+'" onclick="window._mlConfirmEnd(function(){ mlEndMatchGen(\''+emk+'\'); })">🏁 FINALIZAR</button>'
       +'</div>'
       +'<div class="ml-acta">'
         +'<button class="ml-acta-toggle" id="acta-toggle-'+mk+'" onclick="actaTog(\''+emk+'\')">'
@@ -6284,6 +6284,58 @@
     var medBtn = document.getElementById('ath-med-icon');
     if (medBtn) medBtn.addEventListener('click', function(ev){ ev.stopPropagation(); window.athOpenMedicalMenu(); });
   }, 30);
+
+  /* ── Confirmación antes de FINALIZAR ────────────────────────────
+     Petición usuario 2026-05-04: por error pulsar 🏁 FINALIZAR
+     dispara el overlay de stats obligatorio (HvH/HvIA). Si el
+     usuario cierra ese overlay con "Volver", `st.matchStats` queda
+     sin definir pero el siguiente FINALIZAR (natural o no) tampoco
+     repite el overlay limpio — el flujo se desincroniza. La forma
+     robusta de evitarlo es bloquear el click accidental con una
+     pantalla de confirmación SI/NO antes de tocar nada.
+     Usa `window._mlConfirmEnd(yesCb)` desde cualquier botón
+     FINALIZAR (ml-action-end inline + gm-btn-end del modal). El
+     callback se ejecuta solo si el usuario pulsa SÍ. */
+  window._mlConfirmEnd = function(yesCb){
+    if(typeof yesCb !== 'function') return;
+    /* El click en FINALIZAR ya activó el spinner global "Procesando
+       partido…" (delegación de body al final del archivo). Lo ocultamos
+       mientras el usuario decide; si confirma con SÍ lo volvemos a
+       lanzar antes del callback. */
+    if(typeof window._mlHideLoading === 'function') window._mlHideLoading();
+    var existing = document.getElementById('ml-confirm-end-ov');
+    if(existing){ try{ existing.remove(); }catch(_){} }
+    var ov = document.createElement('div');
+    ov.id = 'ml-confirm-end-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:1000099;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:20px;animation:mlConfirmFade .15s ease-out;';
+    ov.innerHTML = ''
+      + '<style>@keyframes mlConfirmFade{from{opacity:0}to{opacity:1}}'
+      + '#ml-confirm-end-ov button:active{transform:scale(.96)}'
+      + '#ml-confirm-end-yes:hover{background:rgba(220,40,40,.4)!important;}'
+      + '#ml-confirm-end-no:hover{background:rgba(60,200,120,.28)!important;}</style>'
+      + '<div style="background:linear-gradient(160deg,#1a0a0a,#2a0606);border:2px solid rgba(255,80,80,.55);border-radius:14px;padding:22px 22px 16px;max-width:380px;width:100%;box-shadow:0 0 40px rgba(255,80,80,.28),0 8px 22px rgba(0,0,0,.7);text-align:center;">'
+      +   '<div style="font-family:Oswald,sans-serif;font-size:18px;letter-spacing:1.5px;color:#ff8080;margin-bottom:6px;">🏁 FINALIZAR PARTIDO</div>'
+      +   '<div style="font-family:Rajdhani,sans-serif;font-size:15px;color:#fff;margin-bottom:20px;line-height:1.4;">¿Seguro que quieres finalizar el partido?</div>'
+      +   '<div style="display:flex;gap:10px;justify-content:center;margin-bottom:10px;">'
+      +     '<button id="ml-confirm-end-yes" style="flex:1;max-width:130px;padding:12px;border-radius:8px;border:1px solid rgba(255,80,80,.6);background:rgba(180,30,30,.3);color:#ff9090;font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;font-weight:700;cursor:pointer;transition:transform .1s,background .12s;">SÍ</button>'
+      +     '<button id="ml-confirm-end-no" style="flex:1;max-width:130px;padding:12px;border-radius:8px;border:1px solid rgba(140,200,120,.55);background:rgba(60,200,120,.18);color:#9fe3a8;font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;font-weight:700;cursor:pointer;transition:transform .1s,background .12s;">NO</button>'
+      +   '</div>'
+      +   '<button id="ml-confirm-end-back" style="background:none;border:none;color:rgba(255,255,255,.6);font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;cursor:pointer;padding:6px 12px;">◀ Volver</button>'
+      + '</div>';
+    document.body.appendChild(ov);
+    function close(){ try{ ov.remove(); }catch(_){} }
+    document.getElementById('ml-confirm-end-no').onclick = close;
+    document.getElementById('ml-confirm-end-back').onclick = close;
+    /* Click en el fondo (fuera del cuadro) cancela también. */
+    ov.addEventListener('click', function(e){ if(e.target === ov) close(); });
+    document.getElementById('ml-confirm-end-yes').onclick = function(){
+      close();
+      /* Restaurar el spinner ahora que el usuario confirmó —
+         el callback finaliza el partido y dispara stats/MVP/post. */
+      if(typeof window._mlShowLoading === 'function') window._mlShowLoading('Procesando partido…');
+      try { yesCb(); } catch(_){}
+    };
+  };
 
   window.mlEndMatchGen = function(mk, winner) {
     var st=_mlSt(mk);
@@ -11484,7 +11536,7 @@
                font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">
         ⏱ PRÓRROGA
       </button>
-      <button id="gm-btn-end" onclick="window.gmEndMatch()"
+      <button id="gm-btn-end" onclick="window._mlConfirmEnd(window.gmEndMatch)"
         style="flex:1;padding:10px 4px;border-radius:6px;border:1px solid rgba(255,80,80,.3);
                background:rgba(180,30,30,.2);color:#ff8080;font-size:14px;font-weight:700;
                font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;">

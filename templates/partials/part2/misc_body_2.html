@@ -11076,8 +11076,8 @@
             if (typeof window.copaInit === 'function') window.copaInit();
             else if (typeof window.copaRender === 'function' && d && d.copa) window.copaRender(d.copa);
             /* Tras guardar, resolvemos TBDs de rondas posteriores si
-               este partido era single-leg (r1/r2/fin). */
-            if (_copaWinName && (ronda === 'r1' || ronda === 'r2' || ronda === 'fin') && typeof window._copaResolveTbdExternal === 'function') {
+               este partido era single-leg (r1/r2/r16/fin tras 2026-05-05). */
+            if (_copaWinName && (ronda === 'r1' || ronda === 'r2' || ronda === 'r16' || ronda === 'fin') && typeof window._copaResolveTbdExternal === 'function') {
               window._copaResolveTbdExternal(ronda, idx, _copaWinName);
             }
           } catch(_){}
@@ -11525,7 +11525,7 @@
     var _etTopMin = 90 + _stopFirst + _stopSecond;
     var _copaParts = (typeof mk === 'string' && mk.indexOf('copa_') === 0)
       ? /^copa_([^_]+)_(\d+)_([iv])$/.exec(mk) : null;
-    var _isCopaSingleLeg = _copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'fin');
+    var _isCopaSingleLeg = _copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin');
     var _copaET = { et_gl: 0, et_gv: 0, pen_winner: null };
 
     /* COPA SINGLE-LEG con empate previsto al 90': el partido va a

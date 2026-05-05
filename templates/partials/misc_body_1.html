@@ -5721,18 +5721,481 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-supercopa">
 <button class="back-btn" onclick="go('s-espana')">◀ Volver</button>
-<div class="sec-hdr"><img alt="Supercopa" class="sec-ico" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj4KICA8cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgcng9IjEwIiBmaWxsPSIjQUExNTFCIi8+CiAgPHJlY3QgeT0iMjUiIHdpZHRoPSIxMDAiIGhlaWdodD0iNTAiIGZpbGw9IiNGMUJGMDAiLz4KICA8dGV4dCB4PSI1MCIgeT0iMTgiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjayxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjgiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5TVVBFUkNPUEE8L3RleHQ+CiAgPHRleHQgeD0iNTAiIHk9IjI4IiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9IjkwMCIgZm9udC1zaXplPSI4IiBmaWxsPSIjQUExNTFCIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5ERSBFU1BBTkE8L3RleHQ+CiAgPHBhdGggZD0iTTQyIDM4IFEzNSAzOCAzNSA0NiBRMzUgNTQgNDIgNTQgTDQyIDU3IEwzOSA1OSBMNjEgNTkgTDU4IDU3IEw1OCA1NCBRNjUgNTQgNjUgNDYgUTY1IDM4IDU4IDM4IFoiIGZpbGw9IiNBQTE1MUIiLz4KICA8cmVjdCB4PSI0NSIgeT0iMzYiIHdpZHRoPSIxMCIgaGVpZ2h0PSIyMSIgZmlsbD0iI0FBMTUxQiIgcng9IjEiLz4KICA8cmVjdCB4PSIzOSIgeT0iMzQiIHdpZHRoPSIyMiIgaGVpZ2h0PSI2IiBmaWxsPSIjQUExNTFCIiByeD0iMiIvPgogIDxyZWN0IHg9IjQyIiB5PSI1NyIgd2lkdGg9IjE2IiBoZWlnaHQ9IjQiIGZpbGw9IiNBQTE1MUIiIHJ4PSIxIi8+CiAgPHJlY3QgeD0iMzgiIHk9IjYwIiB3aWR0aD0iMjQiIGhlaWdodD0iNCIgZmlsbD0iI0FBMTUxQiIgcng9IjEiLz4KICA8dGV4dCB4PSI1MCIgeT0iNzgiIGZvbnQtZmFtaWx5PSJBcmlhbCBCbGFjayxzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjgiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5FU1BBTkE8L3RleHQ+CiAgPHRleHQgeD0iNTAiIHk9IjkwIiBmb250LWZhbWlseT0iQXJpYWwgQmxhY2ssc2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9IjkwMCIgZm9udC1zaXplPSI4IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+MjAyNjwvdGV4dD4KPC9zdmc+"/><h2>Supercopa de España</h2></div>
-<div class="jlist">
-<div class="jblock"><button class="jbtn c-super" onclick="tog('sc-semis')"><div class="pdot">▶</div>🏆 <b>Supercopa</b>  Semifinales</button>
-<div class="jmatches" id="sc-semis">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-super" onclick="tog('sc-final')"><div class="pdot">▶</div>🏆 <b>Supercopa</b>  Final</button>
-<div class="jmatches" id="sc-final">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
+<div class="sec-hdr"><img alt="Supercopa" class="sec-ico" src="/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg" style="width:38px;height:38px;object-fit:contain;"/><h2>Supercopa de España</h2></div>
+<!-- Banner dinámico — si no hay state, muestra "Configurar Supercopa".
+     Si está configurada, muestra "Reiniciar" + estadio neutral. -->
+<div id="sc-banner" style="padding:8px 14px 4px;"></div>
+<!-- Cards (Semis + Final) generadas por window._scRender(). Mismo
+     formato que Copa del Rey single-leg con prórroga + penaltis. -->
+<div id="sc-content" style="padding:0 4px 24px;"></div>
+<style>
+#s-supercopa .sc-banner-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border-radius:10px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid;background:linear-gradient(135deg,rgba(170,0,255,.15),rgba(60,0,120,.25));color:#e8c8ff;border-color:rgba(170,0,255,.55);box-shadow:0 0 14px rgba(170,0,255,.25);}
+#s-supercopa .sc-banner-btn.sc-reset{background:linear-gradient(135deg,rgba(255,80,80,.12),rgba(80,20,20,.25));color:#ffb0b0;border-color:rgba(255,80,80,.55);box-shadow:none;font-size:11px;padding:8px;}
+#s-supercopa .sc-stadium-badge{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.65);text-align:center;padding:6px 8px;letter-spacing:.5px;}
+#s-supercopa .sc-rondhdr{padding:10px 14px 6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.5px;color:rgba(168,85,247,.95);font-weight:700;}
+#s-supercopa .sc-card{margin:8px 10px;background:linear-gradient(135deg,#15082a,#3d1a66 50%,#15082a);border:1px solid rgba(170,0,255,.45);border-radius:12px;overflow:hidden;}
+#s-supercopa .sc-card.is-hvh{border-color:rgba(255,90,170,.7);box-shadow:0 0 14px rgba(255,80,160,.25);}
+#s-supercopa .sc-card.is-hvia{border-color:rgba(255,255,255,.5);}
+#s-supercopa .sc-card.is-iaia{border-color:rgba(180,180,200,.35);}
+#s-supercopa .sc-card-row{display:flex;align-items:center;padding:10px 12px;gap:6px;}
+#s-supercopa .sc-team{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}
+#s-supercopa .sc-team-shield{width:48px;height:48px;object-fit:contain;flex-shrink:0;}
+#s-supercopa .sc-team-name{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.5px;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-weight:700;}
+#s-supercopa .sc-team-name.win{color:#5fe08a;text-shadow:0 0 12px rgba(95,224,138,.7);animation:scWinFlash 1.4s ease-in-out infinite;}
+#s-supercopa .sc-team-name.lose{color:#ff7070;text-decoration:line-through;text-decoration-color:rgba(255,112,112,.5);opacity:.75;}
+#s-supercopa .sc-elim{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:#ff5050;font-weight:700;margin-top:2px;}
+#s-supercopa .sc-passa{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:#5fe08a;font-weight:700;margin-top:2px;}
+@keyframes scWinFlash{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5) drop-shadow(0 0 10px #5fe08a)}}
+#s-supercopa .sc-center{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px;flex-shrink:0;}
+#s-supercopa .sc-score{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#fff;letter-spacing:2px;line-height:1;background:rgba(0,0,0,.4);border-radius:8px;padding:4px 14px;border:1px solid rgba(255,255,255,.15);}
+#s-supercopa .sc-score.played{color:#f0c040;}
+#s-supercopa .sc-pen-tag{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:#ffd080;background:rgba(255,160,40,.15);border:1px solid rgba(255,160,40,.4);border-radius:4px;padding:1px 5px;}
+#s-supercopa .sc-action{padding:4px 10px;border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;}
+#s-supercopa .sc-action.previa{background:rgba(255,90,170,.15);color:#ff80b0;border-color:rgba(255,90,170,.6);}
+#s-supercopa .sc-action.simular{background:rgba(60,200,120,.15);color:#7df0a0;border-color:rgba(60,200,120,.6);}
+#s-supercopa .sc-action.tbd{background:rgba(255,255,255,.05);color:rgba(255,255,255,.45);border-color:rgba(255,255,255,.18);cursor:not-allowed;}
+/* Setup overlay */
+#sc-setup-ov{display:none;position:fixed;inset:0;z-index:99980;background:rgba(0,0,8,.94);overflow-y:auto;padding:20px 14px;}
+#sc-setup-ov.show{display:block;}
+#sc-setup-ov .sc-setup-card{max-width:480px;margin:0 auto;background:linear-gradient(180deg,#15082a,#0a0414);border:1px solid rgba(170,0,255,.55);border-radius:14px;padding:18px 16px;box-shadow:0 0 30px rgba(170,0,255,.25);}
+#sc-setup-ov h3{font-family:Oswald,sans-serif;font-size:18px;color:#e8c8ff;letter-spacing:2px;margin-bottom:6px;}
+#sc-setup-ov .sc-setup-sub{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);margin-bottom:14px;}
+#sc-setup-ov label{display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(168,85,247,.85);margin:10px 0 4px;}
+#sc-setup-ov select{width:100%;padding:10px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;}
+#sc-setup-ov .sc-setup-btns{display:flex;gap:8px;margin-top:18px;}
+#sc-setup-ov .sc-setup-btns button{flex:1;padding:12px;border-radius:8px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid;}
+#sc-setup-ov .sc-setup-ok{background:rgba(60,200,120,.18);color:#7df0a0;border-color:rgba(60,200,120,.55);}
+#sc-setup-ov .sc-setup-cancel{background:rgba(255,255,255,.06);color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.2);}
+</style>
+<!-- Setup overlay para configurar las semis (4 equipos + estadio neutral) -->
+<div id="sc-setup-ov">
+  <div class="sc-setup-card">
+    <h3>🏆 Configurar Supercopa</h3>
+    <div class="sc-setup-sub">Elige los 4 equipos de las Semifinales y el estadio neutral. Bracket: SF1 = T1 vs T2 · SF2 = T3 vs T4 · Final = ganadores.</div>
+    <label>EQUIPO 1 (SF1 LOCAL)</label>
+    <select id="sc-pick-1"></select>
+    <label>EQUIPO 2 (SF1 VISITANTE)</label>
+    <select id="sc-pick-2"></select>
+    <label>EQUIPO 3 (SF2 LOCAL)</label>
+    <select id="sc-pick-3"></select>
+    <label>EQUIPO 4 (SF2 VISITANTE)</label>
+    <select id="sc-pick-4"></select>
+    <label>ESTADIO NEUTRAL (Sudamérica · Asia · Oceanía)</label>
+    <select id="sc-pick-stadium"></select>
+    <div class="sc-setup-btns">
+      <button class="sc-setup-cancel" onclick="window._scCancelSetup&&window._scCancelSetup()">CANCELAR</button>
+      <button class="sc-setup-ok" onclick="window._scConfirmSetup&&window._scConfirmSetup()">✅ CONFIRMAR</button>
+    </div>
+  </div>
 </div>
+<script>
+(function(){
+  'use strict';
+  /* ════════════════════════════════════════════════════════════════
+     SUPERCOPA DE ESPAÑA — Semifinales + Final (single-leg, ET+pen).
+     2026-05-05: petición usuario.
+       · 4 equipos elegidos manualmente (Liga EA + Hyper + Primera Fed).
+       · SF1, SF2 y Final en partido único, campo neutral
+         (Sudamérica/Asia/Oceanía).
+       · Humanos → 📋 PREVIA · IA → ▶ SIMULAR.
+       · Empate al 90' → prórroga + penaltis (regla Copa SL).
+       · Ganador en verde con destellos, perdedor rojo "ELIMINADO".
+       · Balón: Puma Orbita MFL 1 (ya mapeado en bundle COMP_BALL).
+     ════════════════════════════════════════════════════════════════ */
+  var STORE_KEY = 'sc_state_v1';
+  var STADIUMS = [
+    'Maracanã (Río de Janeiro · Brasil)',
+    'Estadio Monumental (Buenos Aires · Argentina)',
+    'Estadio Centenario (Montevideo · Uruguay)',
+    'Estadio Nacional (Santiago · Chile)',
+    'Atahualpa (Quito · Ecuador)',
+    'Hernando Siles (La Paz · Bolivia)',
+    'Estadio Defensores del Chaco (Asunción · Paraguay)',
+    'Estadio Metropolitano de Lara (Venezuela)',
+    'Tokio National Stadium (Japón)',
+    'Saitama Stadium 2002 (Japón)',
+    'Seoul World Cup Stadium (Corea del Sur)',
+    'Bukit Jalil National Stadium (Kuala Lumpur · Malasia)',
+    'Rajamangala Stadium (Bangkok · Tailandia)',
+    'King Fahd International Stadium (Riyadh · Arabia Saudí)',
+    'Lusail Iconic Stadium (Doha · Qatar)',
+    'Khalifa International Stadium (Doha · Qatar)',
+    'Mohammed Bin Zayed Stadium (Abu Dhabi · EAU)',
+    'Allianz Stadium (Sídney · Australia)',
+    'Marvel Stadium (Melbourne · Australia)',
+    'Eden Park (Auckland · Nueva Zelanda)'
+  ];
+
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+  function _load(){
+    try { var raw = localStorage.getItem(STORE_KEY); if(!raw) return null; return JSON.parse(raw); }
+    catch(_){ return null; }
+  }
+  function _save(s){
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch(_){}
+  }
+  function _logoFor(name){
+    if(typeof window.getTeamLogoUrl === 'function'){
+      try { var l = window.getTeamLogoUrl(name); if(l) return l; } catch(_){}
+    }
+    return '';
+  }
+  function _isHuman(name){
+    if(!name) return false;
+    try { if(typeof window.esHumano === 'function') return !!window.esHumano(name); } catch(_){}
+    return false;
+  }
+  /* Equipos disponibles para el setup: lee de Liga EA, Hyper y
+     Primera Fed (las 3 ligaExt prioritarias). */
+  function _availableTeams(){
+    var slugs = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion'];
+    var out = [];
+    var seen = {};
+    slugs.forEach(function(slug){
+      var raw = null;
+      try { raw = localStorage.getItem('ligaExt_'+slug) || localStorage.getItem('ligaExt_'+slug+'_protected'); } catch(_){}
+      if(!raw) return;
+      try {
+        var d = JSON.parse(raw);
+        var teams = (d && Array.isArray(d.teams)) ? d.teams : [];
+        teams.forEach(function(t){
+          if(!t || !t.name) return;
+          if(seen[t.name]) return;
+          seen[t.name] = true;
+          var compLbl = slug === 'liga-ea-sports' ? '🇪🇸 EA'
+                      : slug === 'liga-hypermotion' ? '🇪🇸 Hyper'
+                      : '🇪🇸 Primera Fed';
+          out.push({name:t.name, label:t.name + ' · ' + compLbl});
+        });
+      } catch(_){}
+    });
+    return out;
+  }
+
+  /* ── BANNER ── */
+  function _renderBanner(){
+    var el = document.getElementById('sc-banner');
+    if(!el) return;
+    var s = _load();
+    if(!s){
+      el.innerHTML = '<button class="sc-banner-btn" onclick="window._scOpenSetup&&window._scOpenSetup()">🏆 CONFIGURAR SUPERCOPA — ELEGIR 4 EQUIPOS</button>';
+      return;
+    }
+    el.innerHTML =
+        '<div class="sc-stadium-badge">🏟 <b>' + _esc(s.stadium || '') + '</b> · ⚽ <b>Puma Orbita MFL 1</b></div>'
+      + '<button class="sc-banner-btn sc-reset" onclick="window._scReset&&window._scReset()">♻️ Reiniciar Supercopa (vuelve a elegir 4 equipos)</button>';
+  }
+
+  /* ── SETUP OVERLAY ── */
+  window._scOpenSetup = function(){
+    var teams = _availableTeams();
+    if(teams.length < 4){
+      alert('Hace falta tener al menos 4 equipos guardados entre Liga EA Sports, Hypermotion y Primera Federación. Usa el editor antes de configurar la Supercopa.');
+      return;
+    }
+    var optsTeams = '<option value="">— elegir —</option>' + teams.map(function(t){
+      return '<option value="' + _esc(t.name) + '">' + _esc(t.label) + '</option>';
+    }).join('');
+    [1,2,3,4].forEach(function(i){
+      var sel = document.getElementById('sc-pick-' + i);
+      if(sel) sel.innerHTML = optsTeams;
+    });
+    var stSel = document.getElementById('sc-pick-stadium');
+    if(stSel) stSel.innerHTML = STADIUMS.map(function(st){
+      return '<option value="' + _esc(st) + '">' + _esc(st) + '</option>';
+    }).join('');
+    var ov = document.getElementById('sc-setup-ov');
+    if(ov) ov.classList.add('show');
+  };
+  window._scCancelSetup = function(){
+    var ov = document.getElementById('sc-setup-ov');
+    if(ov) ov.classList.remove('show');
+  };
+  window._scConfirmSetup = function(){
+    var picks = [];
+    for(var i=1;i<=4;i++){
+      var sel = document.getElementById('sc-pick-' + i);
+      var v = sel ? sel.value : '';
+      if(!v){ alert('Falta elegir el equipo ' + i + '.'); return; }
+      if(picks.indexOf(v) !== -1){ alert('Equipo repetido: ' + v + '. Elige 4 distintos.'); return; }
+      picks.push(v);
+    }
+    var stadium = (document.getElementById('sc-pick-stadium')||{}).value || STADIUMS[0];
+    var s = {
+      teams: picks,
+      stadium: stadium,
+      semis: [
+        { home:picks[0], away:picks[1], gh:null, ga:null, etGh:null, etGa:null, penWinner:null, played:false, events:[] },
+        { home:picks[2], away:picks[3], gh:null, ga:null, etGh:null, etGa:null, penWinner:null, played:false, events:[] }
+      ],
+      final: null,
+      ts: Date.now()
+    };
+    _save(s);
+    _scCancelSetup();
+    _renderBanner();
+    _renderContent();
+  };
+  window._scReset = function(){
+    if(!confirm('¿Reiniciar Supercopa? Se perderán los partidos jugados.')) return;
+    try { localStorage.removeItem(STORE_KEY); } catch(_){}
+    _renderBanner();
+    _renderContent();
+  };
+
+  /* ── CARDS ── */
+  function _winnerOf(m){
+    if(!m || !m.played) return null;
+    if(m.penWinner === 'a') return m.home;
+    if(m.penWinner === 'b') return m.away;
+    var totA = (m.gh||0) + (m.etGh||0);
+    var totB = (m.ga||0) + (m.etGa||0);
+    if(totA > totB) return m.home;
+    if(totB > totA) return m.away;
+    return null;
+  }
+  function _shieldHtml(name, sz){
+    sz = sz || 48;
+    var l = _logoFor(name);
+    if(!l) return '<div class="sc-team-shield" style="background:rgba(255,255,255,.06);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:18px;">🛡</div>';
+    return '<img class="sc-team-shield" src="' + _esc(l) + '" alt="" style="width:' + sz + 'px;height:' + sz + 'px;">';
+  }
+  function _humanIco(name){
+    try { if(typeof window.humanIcon === 'function') return window.humanIcon(name) || ''; } catch(_){}
+    return '';
+  }
+  function _renderMatchCard(opts){
+    var m = opts.match, key = opts.key, label = opts.label, idx = opts.idx;
+    if(!m || !m.home || !m.away){
+      return '<div class="sc-card"><div class="sc-card-row"><div class="sc-team"><div class="sc-team-name" style="color:rgba(255,255,255,.4);">Por definir</div></div><div class="sc-center"><div class="sc-score">–</div></div><div class="sc-team"><div class="sc-team-name" style="color:rgba(255,255,255,.4);">Por definir</div></div></div></div>';
+    }
+    var hHum = _isHuman(m.home), aHum = _isHuman(m.away);
+    var cls = 'sc-card';
+    if(hHum && aHum) cls += ' is-hvh';
+    else if(hHum || aHum) cls += ' is-hvia';
+    else cls += ' is-iaia';
+
+    var win = _winnerOf(m);
+    var lose = (win ? (win === m.home ? m.away : m.home) : null);
+    function teamCls(name){
+      if(!m.played) return '';
+      if(name === win) return ' win';
+      if(name === lose) return ' lose';
+      return '';
+    }
+    function teamSuffix(name){
+      if(!m.played) return '';
+      if(name === win) return '<div class="sc-passa">✅ PASA A FINAL</div>';
+      if(name === lose) return '<div class="sc-elim">❌ ELIMINADO</div>';
+      return '';
+    }
+
+    var center;
+    if(m.played){
+      var totA = (m.gh||0) + (m.etGh||0);
+      var totB = (m.ga||0) + (m.etGa||0);
+      var sc = '<div class="sc-score played">' + totA + '–' + totB + '</div>';
+      var pen = (m.penWinner)
+        ? '<div class="sc-pen-tag">PEN ' + (m.penWinner==='a'?m.home:m.away).split(' ')[0] + '</div>'
+        : '';
+      center = sc + pen;
+    } else {
+      var act;
+      if(hHum || aHum){
+        act = '<button class="sc-action previa" onclick="window._scOpenMatch(\'' + key + '\',' + idx + ')">📋 PREVIA</button>';
+      } else {
+        act = '<button class="sc-action simular" onclick="window._scSimMatch(\'' + key + '\',' + idx + ')">▶ SIMULAR</button>';
+      }
+      center = '<div class="sc-score">–</div>' + act;
+    }
+
+    return '<div class="' + cls + '">'
+      + '<div class="sc-card-row">'
+      +   '<div class="sc-team">'
+      +     _shieldHtml(m.home)
+      +     '<div class="sc-team-name' + teamCls(m.home) + '">' + _humanIco(m.home) + _esc(m.home) + '</div>'
+      +     teamSuffix(m.home)
+      +   '</div>'
+      +   '<div class="sc-center">' + center + '</div>'
+      +   '<div class="sc-team">'
+      +     _shieldHtml(m.away)
+      +     '<div class="sc-team-name' + teamCls(m.away) + '">' + _humanIco(m.away) + _esc(m.away) + '</div>'
+      +     teamSuffix(m.away)
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+  }
+  function _renderContent(){
+    var host = document.getElementById('sc-content');
+    if(!host) return;
+    var s = _load();
+    if(!s){
+      host.innerHTML = '';
+      return;
+    }
+    /* ¿Final desbloqueada? Cuando ambas semis están jugadas. */
+    var sf1Win = _winnerOf(s.semis[0]);
+    var sf2Win = _winnerOf(s.semis[1]);
+    if(sf1Win && sf2Win){
+      if(!s.final){
+        s.final = { home:sf1Win, away:sf2Win, gh:null, ga:null, etGh:null, etGa:null, penWinner:null, played:false, events:[] };
+        _save(s);
+      } else if(s.final.home !== sf1Win || s.final.away !== sf2Win){
+        /* Si los winners cambian (re-edit del acta), reseteamos final. */
+        s.final = { home:sf1Win, away:sf2Win, gh:null, ga:null, etGh:null, etGa:null, penWinner:null, played:false, events:[] };
+        _save(s);
+      }
+    }
+    var html = ''
+      + '<div class="sc-rondhdr">⚔️ SEMIFINALES — partido único · prórroga + penaltis si empate</div>'
+      + _renderMatchCard({match:s.semis[0], key:'sf', idx:0, label:'SF1'})
+      + _renderMatchCard({match:s.semis[1], key:'sf', idx:1, label:'SF2'})
+      + '<div class="sc-rondhdr">🏆 FINAL — partido único · campo neutral</div>'
+      + _renderMatchCard({match:s.final, key:'fin', idx:0, label:'Final'});
+    host.innerHTML = html;
+  }
+  window._scRender = function(){ _renderBanner(); _renderContent(); };
+
+  /* ── ACCIONES PARTIDO ── */
+  window._scOpenMatch = function(key, idx){
+    var s = _load();
+    if(!s) return;
+    var m = key === 'fin' ? s.final : s.semis[idx];
+    if(!m || m.played) return;
+    /* Setear estadio + balón vía _ppDurationMin patch del bundle:
+       _ppDurationMin lo dejamos al default HvH/HvIA. La clave es
+       comp:'sc' en gmOpen → bundle leerá "Puma Orbita MFL 1" del
+       COMP_BALL. */
+    var hHum = _isHuman(m.home), aHum = _isHuman(m.away);
+    var isHvH = hHum && aHum;
+    if(typeof window.gmOpen === 'function'){
+      window.gmOpen(0, m.home, m.away, isHvH, 'sc', false, false);
+      try {
+        if(window.__GM_LIVE){
+          window.__GM_LIVE._isSc = true;
+          window.__GM_LIVE._scKey = key;
+          window.__GM_LIVE._scIdx = idx;
+          window.__GM_LIVE._scStadium = s.stadium || '';
+          window.__GM_LIVE.comp = 'sc';
+        }
+      } catch(_){}
+    } else {
+      alert('Motor de partidos no disponible. Recarga la página.');
+    }
+  };
+  window._scSimMatch = function(key, idx){
+    var s = _load();
+    if(!s) return;
+    var m = key === 'fin' ? s.final : s.semis[idx];
+    if(!m || m.played) return;
+    /* Reusa iaSimLive con un mk especial — el persistor abajo
+       detecta el prefijo "sc_" y guarda en sc_state_v1. */
+    if(typeof window.iaSimLive !== 'function'){ alert('Motor IA no disponible.'); return; }
+    var mk = 'sc_' + key + '_' + idx;
+    /* Pre-renderiza la card live (necesita ml-shield, etc.). El
+       iaSimLive lee del DOM, así que necesitamos un wrap mínimo. */
+    var host = document.getElementById('sc-content');
+    if(!host) return;
+    /* Inserta un wrap temporal — el card normal no tiene los IDs que
+       iaSimLive busca (ia-sc-{mk}-a, ia-acta-{mk}, ia-sim-btn-{mk}…).
+       Usamos un wrap escondido como fallback persistor y dejamos que
+       iaSimLive corra; al terminar, _scPersistFromIa lo guarda en
+       sc_state_v1 y _scRender vuelve a pintar. */
+    var sandbox = document.createElement('div');
+    sandbox.id = 'sc-sandbox-' + mk;
+    sandbox.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;';
+    sandbox.innerHTML =
+        '<button id="ia-sim-btn-' + mk + '">▶</button>'
+      + '<span id="ia-sc-' + mk + '-a">0</span>'
+      + '<span id="ia-sc-' + mk + '-b">0</span>'
+      + '<div id="ia-acta-' + mk + '"></div>';
+    document.body.appendChild(sandbox);
+    /* Hook de persistencia: mk con prefijo sc_ */
+    window._scPendingPersist = { key: key, idx: idx, mk: mk };
+    try {
+      window.iaSimLive(mk, m.home, m.away, 0);
+    } catch(e){
+      alert('Error simulando: ' + (e && e.message || e));
+    }
+  };
+
+  /* iaSimLive guarda automáticamente en `results` de Liga si no detecta
+     copa_ ni superliga en el mk. Para sc_ interceptamos vía wrap del
+     persistor — usamos el mismo patrón que copa: el bundle persiste
+     a "Liga results" pero nosotros añadimos un MutationObserver
+     simple que detecta cuando el btn cambia a "🏁 FIN" para extraer
+     el resultado. Más simple: poll del btn cada 200 ms hasta FIN. */
+  /* Llamado por iaSimLive cuando el mk pertenece a Supercopa (prefijo
+     `sc_`). Recibe scA/scB (incluyen ET goals porque iaSimLive los
+     suma al marcador) + el objeto _copaET={et_gl,et_gv,pen_winner}.
+     Reusamos esa estructura para no duplicar lógica ET+pen. */
+  window._scPersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam, copaET){
+    var m2 = /^sc_(sf|fin)_(\d+)$/.exec(String(mk||''));
+    var pending = window._scPendingPersist;
+    var key, idx;
+    if(m2){ key = m2[1]; idx = parseInt(m2[2],10) || 0; }
+    else if(pending && pending.mk === mk){ key = pending.key; idx = pending.idx; }
+    else { return; }
+    var s = _load();
+    if(!s) return;
+    var m = key === 'fin' ? s.final : s.semis[idx];
+    if(!m) return;
+    var et = copaET || {};
+    var totA = Number(scA)||0;
+    var totB = Number(scB)||0;
+    var etA = Number(et.et_gl)||0;
+    var etB = Number(et.et_gv)||0;
+    m.gh = Math.max(0, totA - etA);
+    m.ga = Math.max(0, totB - etB);
+    m.etGh = etA;
+    m.etGa = etB;
+    m.penWinner = et.pen_winner
+      ? (et.pen_winner === home ? 'a' : (et.pen_winner === away ? 'b' : null))
+      : null;
+    m.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    m.played = true;
+    m.ts = Date.now();
+    var sb = document.getElementById('sc-sandbox-' + mk);
+    if(sb && sb.parentNode) sb.parentNode.removeChild(sb);
+    window._scPendingPersist = null;
+    _save(s);
+    _renderContent();
+  };
+
+  /* ── HOOK gmEndMatch para humanos (rama _isSc) ──
+     Se llama desde misc_body_2.html (gmEndMatch detecta _gm._isSc y
+     llama a _scSaveHumanResult). */
+  window._scSaveHumanResult = function(key, idx, gh, ga, etGh, etGa, penWinner, events){
+    var s = _load();
+    if(!s) return;
+    var m = key === 'fin' ? s.final : s.semis[idx];
+    if(!m) return;
+    m.gh = Number(gh)||0;
+    m.ga = Number(ga)||0;
+    m.etGh = Number(etGh)||0;
+    m.etGa = Number(etGa)||0;
+    m.penWinner = penWinner || null;
+    m.played = true;
+    m.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    m.ts = Date.now();
+    _save(s);
+    _renderContent();
+  };
+
+  /* Render inicial + hook al go() */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(window._scRender, 50); });
+  (function(){
+    var orig = window.go;
+    if(typeof orig !== 'function' || orig._scPatched) return;
+    window.go = function(id){
+      var r = orig.apply(this, arguments);
+      if(id === 's-supercopa') setTimeout(window._scRender, 30);
+      return r;
+    };
+    window.go._scPatched = true;
+  })();
+})();
+</script>
 </div>
 <div class="screen" id="s-competiciones">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>

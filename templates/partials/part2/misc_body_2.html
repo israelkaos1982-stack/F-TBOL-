@@ -18639,9 +18639,17 @@ document.addEventListener('DOMContentLoaded', function() {
      ══════════════════════════════════════════════════ -->
 <style>
 .ftbol-load-ov{
+  /* Theme defaults — sobrescritos por setTheme(). Cada competición tiene
+     su par primario/secundario + dos tonos de fondo del card. La capa
+     final usa estas vars en lugar de hex, así basta con cambiar 4
+     valores para teñir todo el overlay. */
+  --ft-load-c1:#dc052d;            /* primario (texto / borde / glow) */
+  --ft-load-c2:#ff5060;             /* secundario (highlight de la barra) */
+  --ft-load-bg1:#1a0008;           /* card fondo arriba */
+  --ft-load-bg2:#0a0004;           /* card fondo abajo */
   position:fixed;inset:0;z-index:99999;
   display:none;align-items:center;justify-content:center;
-  background:radial-gradient(ellipse at center,rgba(8,18,8,.94),rgba(0,4,0,.98));
+  background:radial-gradient(ellipse at center,rgba(8,4,8,.94),rgba(0,0,0,.98));
   backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
   font-family:Oswald,sans-serif;
   -webkit-user-select:none;user-select:none;
@@ -18651,23 +18659,24 @@ document.addEventListener('DOMContentLoaded', function() {
 .ftbol-load-card{
   width:min(360px,86vw);
   padding:30px 28px 22px;
-  background:linear-gradient(180deg,#0a1f0a 0%,#062006 60%,#040d04 100%);
-  border:1px solid rgba(204,255,0,.35);
+  background:linear-gradient(180deg,var(--ft-load-bg1) 0%,var(--ft-load-bg2) 100%);
+  border:1px solid var(--ft-load-c1);
   border-radius:16px;
-  box-shadow:0 22px 70px rgba(0,0,0,.7),0 0 32px rgba(204,255,0,.18);
+  box-shadow:0 22px 70px rgba(0,0,0,.7),0 0 32px var(--ft-load-c1);
   text-align:center;
   position:relative;overflow:hidden;
 }
 .ftbol-load-card::before{
   content:'';position:absolute;inset:0;
-  background:repeating-linear-gradient(135deg,rgba(204,255,0,.04) 0 12px,transparent 12px 24px);
+  background:repeating-linear-gradient(135deg,rgba(255,255,255,.04) 0 12px,transparent 12px 24px);
   pointer-events:none;
 }
 .ftbol-load-title{
   position:relative;
   font-size:14px;letter-spacing:3px;font-weight:700;
-  color:#ccff00;text-transform:uppercase;
+  color:var(--ft-load-c2);text-transform:uppercase;
   margin-bottom:18px;
+  text-shadow:0 0 10px var(--ft-load-c1);
 }
 .ftbol-load-ball-wrap{
   position:relative;
@@ -18710,12 +18719,12 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 .ftbol-load-bar{
   height:100%;width:0%;
-  background:linear-gradient(90deg,#88dd00 0%,#ccff00 50%,#88dd00 100%);
+  background:linear-gradient(90deg,var(--ft-load-c1) 0%,var(--ft-load-c2) 50%,var(--ft-load-c1) 100%);
   background-size:200% 100%;
   border-radius:6px;
   transition:width .25s ease-out;
   animation:ftbolBarShine 1.2s linear infinite;
-  box-shadow:0 0 8px rgba(204,255,0,.5);
+  box-shadow:0 0 8px var(--ft-load-c2);
 }
 @keyframes ftbolBarShine{
   from{background-position:200% 0;} to{background-position:0 0;}
@@ -18723,9 +18732,9 @@ document.addEventListener('DOMContentLoaded', function() {
 .ftbol-load-pct{
   font-family:Bebas Neue,Oswald,sans-serif;
   font-size:30px;line-height:1;
-  color:#ccff00;letter-spacing:2px;
+  color:var(--ft-load-c2);letter-spacing:2px;
   margin-bottom:4px;
-  text-shadow:0 0 12px rgba(204,255,0,.5);
+  text-shadow:0 0 12px var(--ft-load-c1);
 }
 .ftbol-load-sub{
   font-size:11px;letter-spacing:1.5px;
@@ -18749,13 +18758,78 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <script>
-/* Loader API + envoltorios async para las 3 simulaciones lentas. */
+/* Loader API + envoltorios async para las simulaciones lentas.
+   2026-05-05: añadido theme por competición — cada call pasa
+   `theme:'liga-ea'|'copa'|'ucl'|...` y el overlay aplica los colores
+   oficiales de esa competición. Los timings se acortaron a la mitad
+   (factor SPEED) para que la simulación sea más rápida. */
 (function(){
   function $(id){ return document.getElementById(id); }
   var _shown = false;
 
-  function show(title, sub){
+  /* Mapa de temas: cada uno define [primario, secundario, bg1, bg2]
+     basado en los colores oficiales de cada competición (los mismos
+     gradientes que ya usan las cajas de submenu). Si una llamada no
+     pasa theme, se infiere del título. */
+  var THEMES = {
+    'liga-ea':    ['#dc052d','#ff5060','#1a0008','#0a0004'],
+    'hyper':      ['#0066ff','#42a5f5','#000a20','#020714'],
+    'primf':      ['#147828','#4fc86a','#021006','#000604'],
+    'resto':      ['#f0c040','#ffe080','#1a1400','#0a0800'],
+    'copa':       ['#c85000','#ff9040','#1a0800','#0a0400'],
+    'sc':         ['#aa00ff','#d060ff','#0a0018','#040008'],
+    'ucl':        ['#1538a0','#88aaff','#060f2a','#02061a'],
+    'uel':        ['#e06000','#ffaa55','#1a0800','#0a0400'],
+    'uecl':       ['#20a060','#5fe08a','#062018','#02100a'],
+    'usc':        ['#888888','#cccccc','#141414','#080808'],
+    'recopa':     ['#7a3c00','#cc8040','#2a1400','#180a00'],
+    'inter':      ['#bf913e','#f0c040','#201200','#100800'],
+    'superliga':  ['#7e22ce','#c084fc','#15082a','#0a0414'],
+    'sel':        ['#008a55','#5fe0a0','#003820','#001810'],
+    'wildcard':   ['#9aaab8','#e0e8f0','#101820','#06080c'],
+    'oq':         ['#5aa9ff','#a0d0ff','#0a1a2e','#04101a'],
+    'previa':     ['#1538a0','#88aaff','#060f2a','#02061a'],
+    'amistoso':   ['#888888','#cccccc','#1a1a1a','#0a0a0a']
+  };
+
+  /* Inferencia perezosa del theme a partir del título cuando el caller
+     no lo especifica. Mantiene compatibilidad retroactiva con calls
+     antiguos sin obligar a tocarlos todos a la vez. */
+  function _inferTheme(title){
+    var t = String(title||'').toUpperCase();
+    if(t.indexOf('LIGA EA')      !== -1) return 'liga-ea';
+    if(t.indexOf('HYPERMOTION')  !== -1) return 'hyper';
+    if(t.indexOf('PRIMERA FED')  !== -1) return 'primf';
+    if(t.indexOf('RESTO DE LIG') !== -1) return 'resto';
+    if(t.indexOf('COPA DEL REY') !== -1) return 'copa';
+    if(t.indexOf('SUPERCOPA DE ESPA') !== -1) return 'sc';
+    if(t.indexOf('SUPER CUP') !== -1 || t.indexOf('SUPERCOPA DE EUR') !== -1) return 'usc';
+    if(t.indexOf('CHAMPIONS') !== -1 || t.indexOf('UCL') !== -1) return 'ucl';
+    if(t.indexOf('EUROPA LEAGUE') !== -1 || t.indexOf('UEL') !== -1) return 'uel';
+    if(t.indexOf('CONFERENCE')   !== -1 || t.indexOf('UECL') !== -1) return 'uecl';
+    if(t.indexOf('RECOPA')       !== -1) return 'recopa';
+    if(t.indexOf('INTERCONTI')   !== -1) return 'inter';
+    if(t.indexOf('SUPERLIGA')    !== -1) return 'superliga';
+    if(t.indexOf('OPEN QUALIF')  !== -1) return 'oq';
+    if(t.indexOf('WILD CARD')    !== -1) return 'wildcard';
+    if(t.indexOf('PREVIA')       !== -1) return 'previa';
+    if(t.indexOf('AMISTOSO')     !== -1) return 'amistoso';
+    return 'liga-ea'; /* default razonable: Liga EA Sports (rojo) */
+  }
+
+  function _setTheme(theme, title){
     var ov = $('ftbol-load-ov'); if(!ov) return;
+    var key = theme || _inferTheme(title);
+    var t = THEMES[key] || THEMES['liga-ea'];
+    ov.style.setProperty('--ft-load-c1',  t[0]);
+    ov.style.setProperty('--ft-load-c2',  t[1]);
+    ov.style.setProperty('--ft-load-bg1', t[2]);
+    ov.style.setProperty('--ft-load-bg2', t[3]);
+  }
+
+  function show(title, sub, theme){
+    var ov = $('ftbol-load-ov'); if(!ov) return;
+    _setTheme(theme, title);
     if(title) { var t=$('ftbol-load-title'); if(t) t.textContent=title; }
     if(sub != null){ var s=$('ftbol-load-sub'); if(s) s.textContent=sub; }
     var bar=$('ftbol-load-bar'); if(bar) bar.style.width='0%';
@@ -18777,12 +18851,20 @@ document.addEventListener('DOMContentLoaded', function() {
     ov.setAttribute('aria-hidden','true');
     _shown = false;
   }
+  /* SPEED: factor global (0..1) que escala los timings artificiales
+     del fake-progress y del minMs de cada call. 0.5 = mitad de tiempo.
+     Si en el futuro queremos volver al ritmo anterior basta con
+     cambiar este valor a 1. Cualquier consumidor puede leer este
+     valor con window.ftbolLoaderSpeed. */
+  var SPEED = 0.5;
+  function _scale(ms){ return Math.max(20, Math.round((ms||0) * SPEED)); }
+
   /* run(opts, runner) — runner recibe {progress(p,sub)} y devuelve void/Promise.
-     opts: { title, sub, minMs (default 600) } */
+     opts: { title, sub, theme, minMs (default 600) } */
   function run(opts, runner){
     opts = opts || {};
-    show(opts.title || 'SIMULANDO…', opts.sub || 'Preparando…');
-    var minMs = opts.minMs != null ? opts.minMs : 600;
+    show(opts.title || 'SIMULANDO…', opts.sub || 'Preparando…', opts.theme);
+    var minMs = _scale(opts.minMs != null ? opts.minMs : 600);
     var t0 = Date.now();
     return new Promise(function(resolve, reject){
       /* Damos un frame para que el overlay pinte ANTES del trabajo
@@ -18812,6 +18894,11 @@ document.addEventListener('DOMContentLoaded', function() {
   window.ftbolLoaderProgress = progress;
   window.ftbolLoaderHide = hide;
   window.ftbolLoaderRun = run;
+  window.ftbolLoaderSetTheme = _setTheme;
+  window.ftbolLoaderSpeed = SPEED;
+  /* Helper expuesto para que los wrappers escalen sus propios timings
+     (phases.ms, etc.) por SPEED sin re-implementar el cálculo. */
+  window.ftbolLoaderScale = _scale;
 })();
 
 /* ── Wrappers de overlay para las 4 simulaciones lentas ──
@@ -18843,8 +18930,16 @@ document.addEventListener('DOMContentLoaded', function() {
   window._ftbolRefreshOpenSquadAfterSim = _refreshOpenSquadAfterSim;
 
   function _runFakeProgress(opts, work){
+    /* Escalado por SPEED: las phases.ms también se acortan para que la
+       reducción global del minMs no quede desincronizada con la
+       progresión visual. Usamos window.ftbolLoaderScale para que un
+       único factor controle todo el sistema. */
+    var scale = (typeof window.ftbolLoaderScale === 'function')
+      ? window.ftbolLoaderScale
+      : function(x){ return x; };
     return window.ftbolLoaderRun({
-      title: opts.title, sub: opts.sub || 'Inicializando equipos…', minMs: opts.minMs||1200
+      title: opts.title, sub: opts.sub || 'Inicializando equipos…',
+      theme: opts.theme, minMs: opts.minMs||1200
     }, function(ctx){
       return new Promise(function(resolve){
         var phases = opts.phases || [
@@ -18863,12 +18958,12 @@ document.addEventListener('DOMContentLoaded', function() {
               try { work(); } catch(e){ try{console.error(e);}catch(_){} }
               ctx.progress(100, 'Hecho');
               resolve();
-            }, 40);
+            }, scale(40));
             return;
           }
           var ph = phases[i++];
           ctx.progress(ph.pct, ph.sub);
-          setTimeout(nextPhase, ph.ms);
+          setTimeout(nextPhase, scale(ph.ms));
         }
         nextPhase();
       });
@@ -18920,7 +19015,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return window.ftbolLoaderRun(
-        { title:'LIGA EA SPORTS · J1 → J38', sub:'Iniciando simulación…', minMs: 700 },
+        { title:'LIGA EA SPORTS · J1 → J38', sub:'Iniciando simulación…', theme:'liga-ea', minMs: 700 },
         function(ctx){
           return window.simularTodasJornadasIAAsync(function(pct, sub){
             ctx.progress(pct, sub);
@@ -18939,7 +19034,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'LIGA HYPERMOTION', sub:'Preparando…', minMs:1400 },
+        { title:'LIGA HYPERMOTION', sub:'Preparando…', theme:'hyper', minMs:1400 },
         function(){ if(typeof origSeg === 'function') origSeg(); }
       ).then(function(){ _refreshOpenSquadAfterSim('liga-hypermotion'); });
     };
@@ -18950,7 +19045,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'PRIMERA FEDERACIÓN · G'+(n||1), sub:'Preparando…', minMs:1300 },
+        { title:'PRIMERA FEDERACIÓN · G'+(n||1), sub:'Preparando…', theme:'primf', minMs:1300 },
         function(){ if(typeof origPg === 'function') origPg(n); }
       ).then(function(){ _refreshOpenSquadAfterSim('liga-primera-federacion'); });
     };
@@ -18961,7 +19056,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'PRIMERA FEDERACIÓN · G1+G2', sub:'Preparando…', minMs:1700,
+        { title:'PRIMERA FEDERACIÓN · G1+G2', sub:'Preparando…', theme:'primf', minMs:1700,
           phases:[
             { pct:14, sub:'Cargando plantillas G1…', ms:140 },
             { pct:36, sub:'Simulando G1…',           ms:220 },
@@ -18984,8 +19079,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if(typeof window.ftbolLoaderRun !== 'function'){
           return origSjiaSingle(j);
         }
+        var _scaleFn = (typeof window.ftbolLoaderScale === 'function')
+          ? window.ftbolLoaderScale : function(x){ return x; };
         return window.ftbolLoaderRun(
-          { title:'LIGA EA SPORTS · JORNADA '+j, sub:'Simulando partidos…', minMs:600 },
+          { title:'LIGA EA SPORTS · JORNADA '+j, sub:'Simulando partidos…', theme:'liga-ea', minMs:600 },
           function(ctx){
             return new Promise(function(resolve){
               ctx.progress(20, 'Cargando plantillas…');
@@ -18993,9 +19090,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(function(){
                   try { origSjiaSingle(j); } catch(_){}
                   ctx.progress(95, 'Volcando resultados…');
-                  setTimeout(function(){ ctx.progress(100,'Hecho'); resolve(); }, 60);
-                }, 80);
-              }, 80);
+                  setTimeout(function(){ ctx.progress(100,'Hecho'); resolve(); }, _scaleFn(60));
+                }, _scaleFn(80));
+              }, _scaleFn(80));
             });
           }
         );
@@ -19021,7 +19118,7 @@ document.addEventListener('DOMContentLoaded', function() {
           return origSimOQ();
         }
         return _runFakeProgress(
-          { title:'OPEN QUALIFIER · 6 GRUPOS', sub:'Preparando…', minMs:1500,
+          { title:'OPEN QUALIFIER · 6 GRUPOS', sub:'Preparando…', theme:'oq', minMs:1500,
             phases:[
               { pct:18, sub:'Cargando plantillas…',     ms:140 },
               { pct:42, sub:'Generando jornadas…',      ms:200 },
@@ -19057,7 +19154,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if(ck) title = ck.replace(/-/g,' ').toUpperCase();
         } catch(_){}
         return _runFakeProgress(
-          { title: title, sub:'Preparando…', minMs:1100,
+          { title: title, sub:'Preparando…', theme:'resto', minMs:1100,
             phases:[
               { pct:22, sub:'Cargando plantillas…',     ms:130 },
               { pct:48, sub:'Generando jornadas…',      ms:180 },
@@ -19104,7 +19201,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         try {
           return _runFakeProgress(
-            { title: 'WILD CARD · SEMIFINAL + RONDA FINAL', sub:'Preparando…', minMs:1300, phases: phases },
+            { title: 'WILD CARD · SEMIFINAL + RONDA FINAL', sub:'Preparando…', theme:'wildcard', minMs:1300, phases: phases },
             function(){ if(typeof origWcSim === 'function') origWcSim(); }
           );
         } catch(e){
@@ -19126,7 +19223,7 @@ document.addEventListener('DOMContentLoaded', function() {
           return origWcDraw();
         }
         return _runFakeProgress(
-          { title: 'WILD CARD · SORTEO', sub:'Preparando…', minMs:900,
+          { title: 'WILD CARD · SORTEO', sub:'Preparando…', theme:'wildcard', minMs:900,
             phases:[
               { pct:30, sub:'Eligiendo 8 equipos para semis…', ms:120 },
               { pct:60, sub:'Aplicando restricciones de país…',ms:140 },
@@ -21564,8 +21661,10 @@ document.addEventListener('DOMContentLoaded', function() {
         phases = [{ pct:90, sub:'Refrescando…', ms:80 }];
         minMs = 200;
       }
+      var _scaleFn2 = (typeof window.ftbolLoaderScale === 'function')
+        ? window.ftbolLoaderScale : function(x){ return x; };
       return window.ftbolLoaderRun(
-        { title: title, sub:'Preparando…', minMs: minMs },
+        { title: title, sub:'Preparando…', theme:'ucl', minMs: minMs },
         function(ctx){
           return new Promise(function(resolve){
             var i = 0;
@@ -21576,12 +21675,12 @@ document.addEventListener('DOMContentLoaded', function() {
                   try { orig(); } catch(e){ try{console.error(e);}catch(_){} }
                   ctx.progress(100, 'Hecho');
                   resolve();
-                }, 40);
+                }, _scaleFn2(40));
                 return;
               }
               var ph = phases[i++];
               ctx.progress(ph.pct, ph.sub);
-              setTimeout(next, ph.ms);
+              setTimeout(next, _scaleFn2(ph.ms));
             }
             next();
           });
@@ -21594,7 +21693,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if(typeof origWprevDraw === 'function' && typeof window.ftbolLoaderRun === 'function'){
       window._wprevDraw = function(){
         return window.ftbolLoaderRun(
-          { title:'PREVIA · SORTEO RONDA FINAL', sub:'Preparando…', minMs:900 },
+          { title:'PREVIA · SORTEO RONDA FINAL', sub:'Preparando…', theme:'ucl', minMs:900 },
           function(ctx){
             return new Promise(function(resolve){
               var phases = [

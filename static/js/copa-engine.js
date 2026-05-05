@@ -295,9 +295,11 @@
   }
   function _copaSyntheticSquad(teamName, basePower) {
     var pw = Math.max(40, Math.min(85, Number(basePower) || 65));
-    /* 1 portero + 4 defensas + 4 medios + 3 delanteros + 6 suplentes
-       (todos como titulares al principio porque el motor de eventos
-       de iaSimLive usa p[4]==='titular' para el pool activo). */
+    /* 11 titulares (1P + 4D + 3M + 3F = 4-3-3, formación estándar de
+       fútbol) + 7 suplentes en banco. Marcados con p[4]='titular' /
+       'suplente' para que iaSimLive use el pool correcto y el motor
+       de sustituciones automáticas pueda sacar suplentes desde el
+       min 46. */
     var sq = [
       { h: '🧤 PORTEROS' },
       [String(1), _copaSyntheticName(teamName, 0), 'P', pw, 'titular']
@@ -306,16 +308,24 @@
     var dNums = [2, 3, 4, 5];
     for (var d = 0; d < 4; d++) sq.push([String(dNums[d]), _copaSyntheticName(teamName, 1 + d), 'D', pw - 2, 'titular']);
     sq.push({ h: '⚙️ MEDIOS' });
-    var mNums = [6, 7, 8, 10];
-    for (var m = 0; m < 4; m++) sq.push([String(mNums[m]), _copaSyntheticName(teamName, 5 + m), 'M', pw, 'titular']);
+    var mNums = [6, 8, 10];
+    for (var m = 0; m < 3; m++) sq.push([String(mNums[m]), _copaSyntheticName(teamName, 5 + m), 'M', pw, 'titular']);
     sq.push({ h: '⚡ DELANTEROS' });
-    var fNums = [9, 11, 17];
-    for (var f = 0; f < 3; f++) sq.push([String(fNums[f]), _copaSyntheticName(teamName, 9 + f), 'F', pw + 2, 'titular']);
-    /* Banco. Si los registramos como suplente, el sustitutor automático
-       puede sacarlos al campo desde el min 46. */
-    var benchNums = [12, 13, 14, 15, 16, 18];
-    var benchPos = ['D', 'M', 'M', 'F', 'D', 'M'];
-    for (var b = 0; b < 6; b++) sq.push([String(benchNums[b]), _copaSyntheticName(teamName, 12 + b), benchPos[b], pw - 5, 'suplente']);
+    var fNums = [7, 9, 11];
+    for (var f = 0; f < 3; f++) sq.push([String(fNums[f]), _copaSyntheticName(teamName, 8 + f), 'F', pw + 2, 'titular']);
+    /* Banco: 1 portero suplente + 2 defensas + 2 medios + 2 delanteros = 7. */
+    var benchSpec = [
+      { num:13, pos:'P' },
+      { num:14, pos:'D' },
+      { num:15, pos:'D' },
+      { num:16, pos:'M' },
+      { num:17, pos:'M' },
+      { num:18, pos:'F' },
+      { num:19, pos:'F' }
+    ];
+    benchSpec.forEach(function (b, i) {
+      sq.push([String(b.num), _copaSyntheticName(teamName, 11 + i), b.pos, pw - 5, 'suplente']);
+    });
     return sq;
   }
   function _copaEnsureSquads() {

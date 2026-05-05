@@ -242,6 +242,47 @@
     return matches;
   }
 
+  /* ── TBD (To Be Determined) — cuando una ronda se confirma con
+     clasificación parcial, los partidos pendientes dejan un
+     placeholder `@<ronda>#<idx>` en `clasificados[ronda]`. Estos
+     placeholders propagan a `sorteo` de rondas posteriores como
+     `m.l` o `m.v` y aquí los detectamos para renderizar "Esperando
+     Rival" y aplicar constraints especiales (TBD que viene de
+     un partido con humano se trata como "potencialmente humano"). */
+  function _tbdParse(name) {
+    var m = /^@([a-z0-9]+)#(\d+)$/.exec(String(name || ''));
+    if (!m) return null;
+    return { ronda: m[1], idx: parseInt(m[2], 10), key: name };
+  }
+  function _tbdMayBeHuman(tbd) {
+    if (!tbd) return false;
+    var sorteoR = ((_copa && _copa.sorteo) || {})[tbd.ronda] || [];
+    var match = sorteoR[tbd.idx];
+    if (!match) return true; /* sin info → conservador */
+    var hHum = HUMAN_TEAMS.indexOf(canonicalTeam(match.l)) !== -1;
+    var vHum = HUMAN_TEAMS.indexOf(canonicalTeam(match.v)) !== -1;
+    return hHum || vHum;
+  }
+  /* Devuelve el nombre del equipo IA "ya clasificado" si la pareja
+     R1 era HUMANO vs IA: el IA gana si pierde el humano (lo cual no
+     suele pasar) — pero aún si no podemos saberlo, mostramos el
+     escudo del equipo IA como referencia. Si la pareja era IA vs IA
+     no hay un IA "definitivo". */
+  function _tbdHintInfo(tbd) {
+    if (!tbd) return { hint: 'Esperando Rival', shieldTeam: '' };
+    var sorteoR = ((_copa && _copa.sorteo) || {})[tbd.ronda] || [];
+    var match = sorteoR[tbd.idx];
+    if (!match) return { hint: 'Esperando Rival', shieldTeam: '' };
+    var hHum = HUMAN_TEAMS.indexOf(canonicalTeam(match.l)) !== -1;
+    var vHum = HUMAN_TEAMS.indexOf(canonicalTeam(match.v)) !== -1;
+    /* Si SOLO un lado es humano, el otro lado IA está "esperando" al
+       resultado. Mostramos su escudo como referencia. */
+    if (hHum && !vHum) return { hint: 'Esperando Rival', shieldTeam: match.v, opponents: [match.l, match.v] };
+    if (vHum && !hHum) return { hint: 'Esperando Rival', shieldTeam: match.l, opponents: [match.l, match.v] };
+    /* IA vs IA → el ganador es uno de los 2; no podemos previsualizar. */
+    return { hint: 'Esperando Rival', shieldTeam: '', opponents: [match.l, match.v] };
+  }
+
   /* Empareja con CONSTRAINTS por ronda (regla del usuario 2026-05-04):
      · r1, r2: humanos SOLO vs equipos de Primera Federación.
      · r16:    humanos vs PF (si quedan), si no Hypermotion, último
@@ -274,15 +315,19 @@
       return arr;
     }
     function _canPair(humanT, oppT) {
-      if (oppT.isHuman) {
-        /* Humano vs humano: solo desde cuartos en adelante. */
+      var oppMaybeHum = !!oppT.isHuman || (oppT.isTbd && oppT.tbdMayBeHuman);
+      if (oppMaybeHum) {
+        /* Humano vs humano (o TBD potencial humano) solo desde cuartos. */
         return ronda === 'cua' || ronda === 'sf' || ronda === 'fin';
       }
       if (ronda === 'r1' || ronda === 'r2') {
+        /* TBD que viene de R1 IA-vs-IA → el ganador será un PF (R1
+           IA-vs-IA solo enfrenta PF entre sí). Permitido en R2. */
+        if (oppT.isTbd && !oppT.tbdMayBeHuman) return true;
         return oppT.league === 'liga-primera-federacion';
       }
       if (ronda === 'r16' || ronda === 'oct') {
-        return true; /* cualquier no-humano */
+        return true; /* cualquier no-humano (incluido TBD-IA) */
       }
       return true; /* cua/sf/fin: cualquiera */
     }
@@ -1568,6 +1613,8 @@
       + '.copa-card-winner-name{color:#5fe08a !important;text-shadow:0 0 8px rgba(95,224,138,.7),0 0 16px rgba(95,224,138,.45);animation:copaWinPulse 1.6s ease-in-out infinite;}'
       + '.copa-card-loser-name{color:#ff5c70 !important;opacity:.78;text-decoration:line-through;text-decoration-color:rgba(255,92,112,.45);}'
       + '@keyframes copaWinPulse{0%,100%{text-shadow:0 0 6px rgba(95,224,138,.45),0 0 12px rgba(95,224,138,.25);}50%{text-shadow:0 0 14px rgba(95,224,138,.95),0 0 24px rgba(95,224,138,.55),0 0 36px rgba(95,224,138,.25);}}'
+      /* TBD ("Esperando Rival") en cards con clasif parcial. */
+      + '.copa-card-tbd{color:rgba(255,213,74,.85)!important;font-style:italic;letter-spacing:.6px;}'
       + '.copa-card-center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:90px}'
       + '.copa-card-score{display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:4px 12px;min-width:80px;text-align:center}'
       + '.copa-card-rich.copa-card-leg .copa-card-score{padding:2px 10px;min-width:70px}'
@@ -1700,6 +1747,12 @@
      Cuando el partido ya está jugado, no devuelve botón (se muestra el
      marcador y el "🏁 FIN"). */
   function _matchActionButton(ronda, idx, esVuelta, m) {
+    /* Si cualquiera de los 2 lados es TBD, no se puede simular ni
+       jugar — el partido pendiente que aporta el rival debe
+       resolverse antes. Mostramos un badge informativo. */
+    if (_tbdParse(m.l) || _tbdParse(m.v)) {
+      return '<span style="font-size:11px;color:rgba(255,213,74,.7);font-family:Rajdhani,sans-serif;font-style:italic;letter-spacing:.4px;">⏳ Esperando Rival</span>';
+    }
     var human = isHuman(m.l, m.v);
     var leg = esVuelta ? 1 : 0;
     if (human) {
@@ -1730,8 +1783,32 @@
     var actionBtn = opts.actionBtn || '';
     var legLabel = opts.legLabel || '';
     var subtle = !!opts.subtle;
+    /* Detección de TBD: si local/visit es un placeholder
+       `@<ronda>#<idx>`, lo renderizamos como "Esperando Rival" sin
+       escudo (o con el escudo del IA-clasificado si pudiéramos
+       inferirlo). El cuadro queda visible pero sin acción hasta que
+       el partido pendiente termine. */
+    var tbdL = _tbdParse(local);
+    var tbdV = _tbdParse(visit);
+    var localDisplay = local;
+    var visitDisplay = visit;
+    if (tbdL) localDisplay = '⏳ Esperando Rival';
+    if (tbdV) visitDisplay = '⏳ Esperando Rival';
     var simMk = opts.simMk || '';
-    var hLog = _shieldImg(local), vLog = _shieldImg(visit);
+    /* Escudos: si es TBD intentamos pintar el escudo del IA-rival
+       conocido como referencia (cuando sabemos cuál de los 2 lados
+       será el ganador-IA, ej: HvIA). Si no, escudo "?". */
+    var hShieldName = local, vShieldName = visit;
+    if (tbdL) {
+      var hintL = _tbdHintInfo(tbdL);
+      hShieldName = hintL.shieldTeam || '';
+    }
+    if (tbdV) {
+      var hintV = _tbdHintInfo(tbdV);
+      vShieldName = hintV.shieldTeam || '';
+    }
+    var hLog = hShieldName ? _shieldImg(hShieldName) : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,213,74,.65);font-size:24px;">⏳</div>';
+    var vLog = vShieldName ? _shieldImg(vShieldName) : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,213,74,.65);font-size:24px;">⏳</div>';
     var hIco = _humanIco(local), vIco = _humanIco(visit);
     var hHum = HUMAN_TEAMS.indexOf(canonicalTeam(local)) !== -1;
     var vHum = HUMAN_TEAMS.indexOf(canonicalTeam(visit)) !== -1;
@@ -1843,7 +1920,7 @@
       + '<div class="copa-card-row">'
       + '<div class="copa-card-team">'
       +   '<div class="copa-card-shield">' + hLog + '</div>'
-      +   '<div class="copa-card-name' + hNameClass + '">' + hIco + escapeHtml(local) + '</div>'
+      +   '<div class="copa-card-name' + hNameClass + (tbdL ? ' copa-card-tbd' : '') + '">' + hIco + escapeHtml(localDisplay) + '</div>'
       + '</div>'
       + '<div class="copa-card-center">'
       +   '<div class="copa-card-score ml-score">' + scoreTxt + '</div>'
@@ -1852,7 +1929,7 @@
       + '</div>'
       + '<div class="copa-card-team">'
       +   '<div class="copa-card-shield">' + vLog + '</div>'
-      +   '<div class="copa-card-name' + vNameClass + '">' + vIco + escapeHtml(visit) + '</div>'
+      +   '<div class="copa-card-name' + vNameClass + (tbdV ? ' copa-card-tbd' : '') + '">' + vIco + escapeHtml(visitDisplay) + '</div>'
       + '</div>'
       + '</div>'
       + actaEl
@@ -2182,10 +2259,27 @@
         if (pendingIA_vta) {
           btnsHtml += '<button class="copa-btn-sim copa-sim-all" onclick="window.copaSimTodosIA(\'' + ronda + '\',1)">⚡ Simular IA Vuelta</button>';
         }
+        /* Botón Confirmar clasificados:
+             - Si la ronda está COMPLETA (todos jugados) y aún no hay
+               clasif → "✅ Confirmar clasificados".
+             - Si la ronda NO está completa pero ya hay AL MENOS un
+               partido jugado, ofrecemos "✅ Confirmar parcial ·
+               clasificar lo jugado y dejar TBD" para que el usuario
+               pueda sortear la siguiente ronda con los pendientes
+               como "Esperando Rival". */
         var done = isRoundComplete(ronda, matches, resultados);
         var clas = clasificados[ronda] || [];
+        var idaArr = resultados[twoLeg ? ronda + '_ida' : ronda] || [];
+        var vtaArr = resultados[ronda + '_vta'] || [];
+        var anyPlayed = false;
+        for (var k = 0; k < matches.length; k++) {
+          if (idaArr[k] && idaArr[k].jugado) { anyPlayed = true; break; }
+          if (twoLeg && vtaArr[k] && vtaArr[k].jugado) { anyPlayed = true; break; }
+        }
         if (done && !clas.length) {
           btnsHtml += '<button class="copa-btn-avanzar" onclick="window.copaClasificar(\'' + ronda + '\')">✅ Confirmar clasificados</button>';
+        } else if (!done && anyPlayed && !clas.length) {
+          btnsHtml += '<button class="copa-btn-avanzar" onclick="window.copaClasificar(\'' + ronda + '\')" style="background:rgba(255,213,74,.12);border-color:rgba(255,213,74,.7);color:#ffd54a;">✅ Confirmar parcial (TBD pendientes)</button>';
         }
         if (btnsHtml) {
           actionsHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding:10px 8px 6px;">' + btnsHtml + '</div>';
@@ -2234,6 +2328,18 @@
     var allMap = {};
     _collectCopaTeams().forEach(function (t) { allMap[t.name] = t; });
     function _resolve(name) {
+      /* TBD `@<ronda>#<idx>` → team object virtual con flag isTbd. */
+      var tbd = _tbdParse(name);
+      if (tbd) {
+        return {
+          name: name,
+          league: 'tbd',
+          power: 60,
+          isHuman: false,
+          isTbd: true,
+          tbdMayBeHuman: _tbdMayBeHuman(tbd)
+        };
+      }
       return allMap[name] || { name: name, league: '', power: 75, isHuman: HUMAN_TEAMS.indexOf(canonicalTeam(name)) !== -1 };
     }
     var teams = [];
@@ -2929,6 +3035,53 @@
     }
   }
 
+  /* Reemplaza un TBD `@<ronda>#<idx>` por el nombre del ganador real
+     en `_copa.clasificados[ronda]` y en cualquier `_copa.sorteo[X]`
+     posterior. Tras la mutación local, postea el state al backend
+     para mantener sincronía y refresca la UI de Copa.
+
+     Uso: tras `_copaSimLivePersist` o `_copaSaveHumanResult` cuando
+     conocemos el ganador del partido `(ronda, idx)` que estaba
+     pendiente. Si no había TBD para esa ronda+idx, no hace nada. */
+  function _copaResolveTbd(ronda, idx, winnerName) {
+    if (!winnerName) return;
+    var tbdKey = '@' + ronda + '#' + idx;
+    var changed = false;
+    if (!_copa) _copa = {};
+    if (!_copa.clasificados) _copa.clasificados = {};
+    if (!_copa.sorteo) _copa.sorteo = {};
+    /* Reemplazar en clasificados[ronda] */
+    var clasif = _copa.clasificados[ronda] || [];
+    for (var i = 0; i < clasif.length; i++) {
+      if (clasif[i] === tbdKey) { clasif[i] = winnerName; changed = true; }
+    }
+    /* Reemplazar en sorteo de TODAS las rondas (defensivo). */
+    Object.keys(_copa.sorteo).forEach(function (rk) {
+      var arr = _copa.sorteo[rk] || [];
+      for (var j = 0; j < arr.length; j++) {
+        var m = arr[j];
+        if (!m) continue;
+        if (m.l === tbdKey) { m.l = winnerName; changed = true; }
+        if (m.v === tbdKey) { m.v = winnerName; changed = true; }
+      }
+    });
+    if (!changed) return;
+    /* Push al backend para sincronizar otros dispositivos. */
+    try {
+      fetch('/api/copa/state_set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ copa: _copa })
+      }).catch(function(){});
+    } catch(_){}
+    /* Refrescar UI: las cards posteriores que tenían placeholder
+       ahora muestran el nombre real. */
+    setTimeout(function () { try { copaInit(); } catch(_){} }, 200);
+  }
+  /* Expuesto para que misc_body_2.html (gm-modal humano) pueda
+     llamarlo tras `_copaSaveHumanResult`. */
+  window._copaResolveTbdExternal = _copaResolveTbd;
+
   /* IA-vs-IA → live tick + acta usando el mismo motor de Liga EA
      (iaSimLive). El hook `window._copaSimLivePersist` (registrado más
      abajo) se dispara dentro de iaSimLive cuando el mk empieza por
@@ -2992,6 +3145,15 @@
       summary: '',
       team_a: home || '', team_b: away || ''
     };
+    /* Computar el GANADOR localmente para poder resolver TBDs sin
+       esperar a que el backend responda. Si pen_winner está, ese gana;
+       si no, el de más goles (regular + ET). En two-leg legs (Ida/
+       Vuelta), no resolvemos TBD aquí — la resolución se hace al
+       confirmar la ronda completa con copaClasificar. */
+    var winnerName = null;
+    if (penWin) winnerName = penWin;
+    else if (scA > scB) winnerName = home;
+    else if (scB > scA) winnerName = away;
     try {
       fetch('/api/copa/guardar_resultado', {
         method: 'POST',
@@ -2999,14 +3161,14 @@
         body: JSON.stringify(payload)
       }).then(function (r) { return r.json(); })
         .then(function (d) {
-          try { if (d && d.copa) _copa = d.copa; } catch(_){}
+          try {
+            if (d && d.copa) _copa = d.copa;
+            /* Tras guardar, si esta ronda es single-leg y conocemos el
+               ganador, intentamos resolver TBDs de rondas posteriores. */
+            if (winnerName) _copaResolveTbd(ronda, idx, winnerName);
+          } catch(_){}
         }).catch(function () {});
     } catch(_){}
-    /* Sumar al store de stats de Liga EA (LIGA_PLAYER_MATCH_STORE) con
-       compKey='copa' para que los goles cuenten en la plantilla del
-       equipo (cuadrícula PJ/G/E/P/G+/G-) y en "Liga · Estadísticas"
-       (top goleadores). Sin esto los goles de Copa no sumaban en
-       ningún sitio agregado, solo se veían en el acta del partido. */
     try {
       if (typeof window.registrarLigaPlayerStats === 'function') {
         var statsEvents = (events || []).filter(function (e) {

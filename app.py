@@ -1003,10 +1003,17 @@ def copa_guardar_resultado():
 
 @app.route("/api/copa/clasificar", methods=["POST"])
 def copa_clasificar():
+    """Calcula los `clasificados` de la ronda. Permite clasificación
+    PARCIAL: para los partidos que aún no se han jugado, añade un
+    placeholder TBD `@<ronda>#<idx>` que luego se reemplazará por el
+    ganador real cuando ese partido finalice (vía /api/copa/state_set
+    desde el cliente). Esto deja al usuario sortear la siguiente
+    ronda aunque queden humanos pendientes de jugar la actual."""
     payload = request.get_json(silent=True) or {}
     ronda = payload.get("ronda")
     data = load_global_state()
     copa = data.get("copa_state") or {"sorteo": {}, "resultados": {}, "clasificados": {}}
+    sorteo_ronda = copa.get("sorteo", {}).get(ronda, [])
     resultados = copa.get("resultados", {})
     clasificados = copa.get("clasificados", {})
     two_leg = ronda in COPA_TWO_LEG
@@ -1014,15 +1021,39 @@ def copa_clasificar():
         res_list = resultados.get(ronda + "_vta", [])
     else:
         res_list = resultados.get(ronda, [])
-    winners = [r.get("winner") for r in (res_list or []) if r and r.get("winner")]
+    winners = []
+    for idx, match in enumerate(sorteo_ronda):
+        res = res_list[idx] if (res_list and idx < len(res_list)) else None
+        if res and res.get("winner"):
+            winners.append(res["winner"])
+        else:
+            winners.append("@" + ronda + "#" + str(idx))
     clasificados[ronda] = winners
-    if ronda == "fin" and winners:
+    if ronda == "fin" and winners and not winners[0].startswith("@"):
         clasificados["campeon"] = winners[0]
     copa["clasificados"] = clasificados
     copa["fase"] = COPA_NEXT_PHASE.get(ronda, copa.get("fase", "r1"))
     data["copa_state"] = copa
     save_global_state(data)
     return jsonify({"ok": True, "clasificados": winners, "copa": copa})
+
+
+@app.route("/api/copa/state_set", methods=["POST"])
+def copa_state_set():
+    """Acepta el `copa_state` completo y lo persiste tal cual. Usado por
+    el cliente cuando, tras finalizar un partido pendiente, reemplaza
+    los TBD `@<ronda>#<idx>` por el ganador real en `sorteo` y
+    `clasificados` para que la UI siga sincronizada. La validación
+    delegada al cliente — esto es solo storage."""
+    payload = request.get_json(silent=True) or {}
+    new_state = payload.get("copa")
+    if not isinstance(new_state, dict):
+        return jsonify({"ok": False, "error": "payload.copa requerido"}), 400
+    data = load_global_state()
+    data["copa_state"] = new_state
+    save_global_state(data)
+    return jsonify({"ok": True, "copa": new_state})
+
 
 @app.route("/api/copa/reiniciar", methods=["POST"])
 def copa_reiniciar():

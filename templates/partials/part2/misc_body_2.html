@@ -10313,6 +10313,23 @@
           } catch(_){}
         }).catch(function(){});
     } catch(_){}
+    /* Sumar al store de stats de Liga EA con compKey='copa' (storeKey
+       diferenciado) para que goles/tarjetas/MVP de partidos humanos de
+       Copa cuenten en la plantilla del equipo y en el dashboard de
+       "Liga · Estadísticas". Coherente con la rama de IA-vs-IA en
+       _copaSimLivePersist. */
+    try {
+      if (typeof window.registrarLigaPlayerStats === 'function') {
+        var _mvpTeamName = '';
+        var _mvpEv = (events || []).find(function (e) { return e && e.type === 'mvp'; });
+        if (_mvpEv) _mvpTeamName = _mvpEv.team === 'a' ? home : (_mvpEv.team === 'b' ? away : '');
+        var _statsEv = (events || []).filter(function (e) {
+          return e && e.type !== 'pen-result' && !e._varAnulado;
+        });
+        var _copaMk = 'copa_' + ronda + '_' + idx + '_' + (esVuelta ? 'v' : 'i');
+        window.registrarLigaPlayerStats(_copaMk, home, away, _statsEv, mvp || '', _mvpTeamName, 'copa');
+      }
+    } catch(_){}
   };
 
   /* Superliga: abre el gm-modal en modo HvH (todos los equipos son humanos

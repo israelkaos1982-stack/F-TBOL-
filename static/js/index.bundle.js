@@ -1844,7 +1844,7 @@ var STAT_CLASS_MAP = {
     buildLigaStatsDashboard();
   }
 
-  window.registrarLigaPlayerStats = function(matchKey, teamA, teamB, evts, mvpName, mvpTeam){
+  window.registrarLigaPlayerStats = function(matchKey, teamA, teamB, evts, mvpName, mvpTeam, compKey){
     /* Clave canónica por pareja (home|away canónicos) en vez de usar
        el matchKey tal cual viene del caller. Distintos flujos producen
        claves distintas para el MISMO partido:
@@ -1860,7 +1860,15 @@ var STAT_CLASS_MAP = {
        jornada vuela con home/away invertidos → claves distintas. */
     var canonA = canonicalTeamName(teamA);
     var canonB = canonicalTeamName(teamB);
-    var storeKey = (canonA && canonB) ? (canonA + '|' + canonB) : matchKey;
+    /* Si el caller indica una competición distinta (p.ej. compKey='copa'
+       desde Copa del Rey), añadimos un sufijo único al storeKey para
+       que NO colisione con la entrada de Liga del mismo enfrentamiento.
+       Ejemplo: Real Madrid vs Atlético en Liga J5 y en Copa 1ª Ronda
+       → 2 entradas distintas → ambos goles cuentan en plantilla y
+       dashboard. Liga sigue usando "canonA|canonB" (sin sufijo) →
+       sin double-counting con la rama existente. */
+    var compTag = compKey ? ('|' + compKey + '|' + (matchKey || 'm')) : '';
+    var storeKey = (canonA && canonB) ? (canonA + '|' + canonB + compTag) : matchKey;
     LIGA_PLAYER_MATCH_STORE[storeKey] = {
       teamA: canonA,
       teamB: canonB,

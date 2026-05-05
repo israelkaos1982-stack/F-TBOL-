@@ -10663,6 +10663,17 @@
     var _varActive = false; /* true while VAR 3-second review is playing */
     var _varActiveSince = 0; /* watchdog: si VAR tarda > 5 s, lo desbloqueamos */
     var TICK_MS = 1000; /* 15s por parte (3' por tick) */
+    /* Cuando un partido de Copa SINGLE-LEG (1ª/2ª/Final) acaba en
+       empate al 90', extendemos el reloj a la prórroga (90→120, 15 s
+       por parte adicional). Si sigue empate al 120', pre-rolleamos
+       el ganador en penaltis. Se activa solo si el `mk` empieza por
+       "copa_" y la ronda parseada no es de las two-leg. */
+    var _etActive = false;
+    var _etTopMin = 90;
+    var _copaParts = (typeof mk === 'string' && mk.indexOf('copa_') === 0)
+      ? /^copa_([^_]+)_(\d+)_([iv])$/.exec(mk) : null;
+    var _isCopaSingleLeg = _copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'fin');
+    var _copaET = { et_gl: 0, et_gv: 0, pen_winner: null };
 
     var interval = setInterval(function() {
       /* Watchdog: si _varActive lleva más de 5 s, lo forzamos a false.
@@ -10673,14 +10684,19 @@
         _varActive = false; _varActiveSince = 0;
       }
       if (_varActive) return; /* VAR review in progress – freeze tick */
-      curMin = Math.min(curMin + 3, 90);
+      curMin = Math.min(curMin + 3, _etTopMin);
       /* Actualizar PRIMERO el label visible. Antes esto estaba al final
          del tick — si una excepción saltaba dentro del while (procesado
          de eventos, VAR, sustitución, etc.), curMin avanzaba internamente
          pero btn.textContent nunca se refrescaba y el botón quedaba
          eternamente en "⏳ 0'". Ahora la UI siempre tickea aunque algo
          más abajo falle. */
-      if (btn) btn.textContent = curMin >= 90 ? '🏁 FIN' : '⏳ ' + curMin + '\'';
+      if (btn) {
+        if (_etActive && curMin > 90 && curMin < 120)      btn.textContent = '⏱ ' + curMin + '\' ET';
+        else if (_etActive && curMin >= 120)               btn.textContent = '🏁 FIN ET';
+        else if (curMin >= 90)                             btn.textContent = '🏁 FIN';
+        else                                               btn.textContent = '⏳ ' + curMin + '\'';
+      }
       try {
       /* Fire events that have reached curMin */
       while (evtIdx < evts.length && evts[evtIdx].min <= curMin) {
@@ -10833,7 +10849,85 @@
         try { if (typeof console !== 'undefined') console.warn('iaSimLive tick:', _eTick); } catch(_){}
       }
 
-      if (curMin >= 90 && !_varActive) {
+      if (curMin >= _etTopMin && !_varActive) {
+        /* PRÓRROGA: si es Copa single-leg y empate al 90, extendemos
+           a 120 (15 s extra por parte) generando ET goals on-the-fly.
+           Si sigue empate al 120, pre-rolleamos el ganador en penaltis
+           y emitimos un evento "pen-result" para el acta. */
+        if (_isCopaSingleLeg && curMin === 90 && !_etActive && scA === scB) {
+          _etActive = true;
+          _etTopMin = 120;
+          /* Generar goles de ET con Poisson (lambda 0.5 cada lado) y
+             elegir scorers de la plantilla activa. Probabilidad de
+             0-0 ≈ 36%, 1-0 ≈ 22%, etc. Rango clamp [0..3]. */
+          (function _genCopaET() {
+            function pois(L){ var e=Math.exp(-L), k=0, p=1; do{k++; p*=Math.random();}while(p>e); return k-1; }
+            var et_gh = Math.min(3, pois(0.5));
+            var et_gv = Math.min(3, pois(0.5));
+            _copaET.et_gl = et_gh;
+            _copaET.et_gv = et_gv;
+            var sqA0 = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(home)) || [];
+            var sqB0 = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(away)) || [];
+            var outA = sqA0.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
+            var outB = sqB0.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
+            if (!outA.length) outA = [['','Jugador A','F',70]];
+            if (!outB.length) outB = [['','Jugador B','F',70]];
+            function _rndETMin(){ return 91 + Math.floor(Math.random()*29); } /* 91..119 */
+            function _pickScorer(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+            var newEv = [];
+            for (var i = 0; i < et_gh; i++){
+              var p = _pickScorer(outA);
+              newEv.push({type:'gol', min:_rndETMin(), num:p[0]||'', player:p[1]||'?', team:'a', _et:true});
+            }
+            for (var j2 = 0; j2 < et_gv; j2++){
+              var p2 = _pickScorer(outB);
+              newEv.push({type:'gol', min:_rndETMin(), num:p2[0]||'', player:p2[1]||'?', team:'b', _et:true});
+            }
+            /* Insertar al final del array de eventos manteniendo orden
+               por minuto. Como evtIdx ya está en evts.length, los
+               nuevos quedarán a continuación y el while los procesará. */
+            newEv.sort(function(a,b){ return a.min - b.min; });
+            newEv.forEach(function(ne){ evts.push(ne); });
+          })();
+          /* Header "PRÓRROGA" en el acta (igual visual que la cabecera
+             de descanso de Liga). */
+          if (actaEl) {
+            var etHdr = document.createElement('div');
+            etHdr.style.cssText = 'padding:6px 12px;font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#f0c040;text-align:center;border-top:1px solid rgba(240,192,64,.35);border-bottom:1px solid rgba(240,192,64,.35);background:rgba(240,192,64,.05);letter-spacing:1.5px;';
+            etHdr.textContent = '⏱ PRÓRROGA';
+            actaEl.appendChild(etHdr);
+          }
+          /* Overlay flash sobre el marcador */
+          if (scoreWrapEl) {
+            var _ovET = document.createElement('div');
+            _ovET.className = 'var-overlay';
+            var _txET = document.createElement('div');
+            _txET.className = 'gol-overlay-text';
+            _txET.textContent = '⏱ PRÓRROGA';
+            _ovET.appendChild(_txET);
+            scoreWrapEl.style.position = 'relative';
+            scoreWrapEl.appendChild(_ovET);
+            setTimeout(function(){ if (_ovET.parentNode) _ovET.parentNode.removeChild(_ovET); }, 1700);
+          }
+          /* No clearInterval: el tick sigue hasta 120. */
+          return;
+        }
+        /* Penaltis si tras 120' sigue el empate (Copa single-leg). */
+        if (_isCopaSingleLeg && _etActive && curMin >= 120 && scA === scB) {
+          var _penTeam = Math.random() < 0.5 ? 'a' : 'b';
+          var _penWinName = _penTeam === 'a' ? home : away;
+          _copaET.pen_winner = _penWinName;
+          /* Anotamos en evtData.events un evento pen-result para que
+             el persistor (_copaSimLivePersist) lo detecte como
+             pen_winner. */
+          evtData.events.push({type:'pen-result', min: 121, player: _penWinName, team: _penTeam});
+          if (actaEl) {
+            var penHdr = document.createElement('div');
+            penHdr.style.cssText = 'padding:6px 12px;font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#5fe08a;text-align:center;border-top:1px solid rgba(95,224,138,.35);background:rgba(95,224,138,.06);letter-spacing:1.5px;';
+            penHdr.innerHTML = '🥅 PENALTIS · gana <b>' + _penWinName + '</b>';
+            actaEl.appendChild(penHdr);
+          }
+        }
         clearInterval(interval);
         btn.style.background = '#0d0d3a';
         btn.style.color = '#4a8aff';

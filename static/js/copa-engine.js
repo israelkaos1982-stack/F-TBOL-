@@ -2528,7 +2528,9 @@
 
   /* Persistor de iaSimLive cuando el mk pertenece a Copa. Postea al
      endpoint /api/copa/guardar_resultado y refresca la pantalla.
-     Llamado desde misc_body_2.html en la rama __isCopaSim. */
+     Llamado desde misc_body_2.html en la rama __isCopaSim. Detecta
+     prórroga (eventos `gol` con min > 90 marcados con `_et=true`) y
+     penaltis (evento `pen-result`) en el array de events. */
   window._copaSimLivePersist = function (mk, home, away, scA, scB, events, mvp, mvpTeam) {
     /* mk format: copa_<ronda>_<idx>_<i|v> */
     var match = /^copa_([^_]+)_([0-9]+)_([iv])$/.exec(String(mk));
@@ -2536,15 +2538,31 @@
     var ronda = match[1];
     var idx = parseInt(match[2], 10);
     var esVuelta = match[3] === 'v';
-    /* Detección de penaltis a partir de los eventos. */
+    /* ET goals: cuentan los goals con flag _et=true (los que iaSimLive
+       generó al pasar a prórroga). Si no hay flag pero algún gol es
+       min > 90 + < 121, lo contamos también — fallback robusto. */
+    var et_gh = 0, et_gv = 0;
+    (events || []).forEach(function (e) {
+      if (!e || e.type !== 'gol') return;
+      var isET = e._et === true || (e.min > 90 && e.min < 121);
+      if (!isET) return;
+      if (e.team === 'a') et_gh++;
+      else if (e.team === 'b') et_gv++;
+    });
+    /* scA / scB ya incluyen ET goals porque iaSimLive los suma al
+       gol. Para enviar al backend, restamos para obtener gh/gv del
+       tiempo regular. */
+    var gh = Math.max(0, scA - et_gh);
+    var gv = Math.max(0, scB - et_gv);
+    /* Pen winner: evento pen-result añadido por iaSimLive a 121'. */
     var penEv = (events || []).find(function (e) {
       return e && (e.type === 'pen-result' || e.type === 'pen-winner');
     });
     var penWin = penEv ? (penEv.team === 'a' ? home : away) : null;
     var payload = {
       ronda: ronda, idx: idx, es_vuelta: esVuelta,
-      gl: scA, gv: scB,
-      et_gl: 0, et_gv: 0,
+      gl: gh, gv: gv,
+      et_gl: et_gh, et_gv: et_gv,
       pen_winner: penWin,
       mvp: mvp || '',
       events: events || [],
@@ -2558,10 +2576,6 @@
         body: JSON.stringify(payload)
       }).then(function (r) { return r.json(); })
         .then(function (d) {
-          /* No re-renderizamos inmediatamente — iaSimLive ya hace
-             setTimeout 600ms a copaInit() (rama __isCopaSim) — pero
-             actualizamos _copa local con la respuesta para que el
-             siguiente render encuentre el resultado. */
           try { if (d && d.copa) _copa = d.copa; } catch(_){}
         }).catch(function () {});
     } catch(_){}

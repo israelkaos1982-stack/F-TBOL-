@@ -1509,6 +1509,21 @@ window._showSimProgress = function(opts, onDone){
       </div>
     </div>
 
+    <!-- TIPO DE PARTIDO (2026-05-05): el usuario elige si el amistoso
+         se juega como partido único (puede acabar empate), eliminatoria
+         (forzar prórroga + penaltis si empate al 90' / 120') o doble
+         partido (ida + vuelta con resultado global; si global empate
+         tras vuelta → prórroga + penaltis en la vuelta). -->
+    <div class="ams-mtype-row">
+      <label class="ams-label">TIPO DE PARTIDO</label>
+      <div class="ams-mtype-toggle" id="ams-mtype-toggle">
+        <button type="button" class="ams-mtype-btn active" data-mt="unico" onclick="window._amsSetMatchType('unico')">📅 ÚNICO</button>
+        <button type="button" class="ams-mtype-btn" data-mt="elim" onclick="window._amsSetMatchType('elim')">🔥 ELIMINATORIA</button>
+        <button type="button" class="ams-mtype-btn" data-mt="doble" onclick="window._amsSetMatchType('doble')">🔄 IDA + VUELTA</button>
+      </div>
+      <div class="ams-mtype-hint" id="ams-mtype-hint">90 min · puede acabar en empate.</div>
+    </div>
+
     <button class="ams-play-btn" id="ams-play-btn" disabled onclick="window._amsCreateMatch()">⚽ CREAR PARTIDO AMISTOSO</button>
   </div>
 
@@ -1558,6 +1573,29 @@ window._showSimProgress = function(opts, onDone){
   .ams-dur-btn{flex:1;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.55);font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.5px;padding:9px 4px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;}
   .ams-dur-btn.active{background:rgba(240,192,64,.18);color:#f0c040;border-color:rgba(240,192,64,.45);}
   .ams-dur-btn:active{transform:scale(.97);}
+  /* TIPO DE PARTIDO toggle (2026-05-05) */
+  .ams-mtype-row{margin:10px 0 4px;}
+  .ams-mtype-toggle{display:flex;gap:6px;}
+  .ams-mtype-btn{flex:1;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.55);font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;padding:9px 4px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;}
+  .ams-mtype-btn.active[data-mt="unico"]{background:rgba(120,180,255,.18);color:#9ed0ff;border-color:rgba(120,180,255,.45);}
+  .ams-mtype-btn.active[data-mt="elim"]{background:rgba(255,90,90,.18);color:#ff8080;border-color:rgba(255,90,90,.45);}
+  .ams-mtype-btn.active[data-mt="doble"]{background:rgba(155,90,255,.18);color:#c8a0ff;border-color:rgba(155,90,255,.45);}
+  .ams-mtype-btn:active{transform:scale(.97);}
+  .ams-mtype-hint{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.45);letter-spacing:.3px;margin-top:6px;font-style:italic;}
+  /* Tarjeta de amistoso: nombres más pequeños y centrados (la card usa
+     el mismo layout que Liga EA Sports pero con teams con texto largo
+     se descuadraba; petición usuario 2026-05-05). */
+  #ams-match-container .ml-team-name{
+    font-size:13px !important;
+    letter-spacing:.6px !important;
+    line-height:1.15 !important;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width:100%;
+    text-align:center;
+  }
+  #ams-match-container .ml-team{flex:1;min-width:0;align-items:center;}
   .ams-form-dropdown{position:fixed;z-index:9999;background:rgba(10,10,24,.98);border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:180px;}
   .ams-form-opt{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-radius:6px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;}
   .ams-form-opt:hover{background:rgba(255,255,255,.08);}

@@ -3024,6 +3024,145 @@
      Se desconecta cuando se cierra el overlay (display:none) o cuando
      navega fuera. */
   var _copaEnvObserver = null;
+  /* Wrapper GLOBAL sobre `showPrePartidoOverlay`: aplica el reemplazo
+     del alias (🎮 texto largo → ❓ animado + overlay) y la
+     sincronización de fecha del calendario para CUALQUIER previa que
+     no sea Liga (Copa, Champions, Europa, Supercopa, Intercontinental,
+     etc.). Antes solo se aplicaba dentro de `copaAbrirPrevia` así
+     que el bug del alias truncado en Champions seguía. */
+  function _copaWrapShowPrePartidoOverlay() {
+    if (typeof window.showPrePartidoOverlay !== 'function') return;
+    if (window.showPrePartidoOverlay.__copaPostHooked) return;
+    var orig = window.showPrePartidoOverlay;
+    var wrapped = function (matchKey, compKey, prorroga, duracion, isHvH) {
+      var ret = orig.apply(this, arguments);
+      var isLiga = !compKey || compKey === 'liga' || compKey === 'liga-2';
+      if (isLiga) return ret;
+      /* Alias → ❓ + overlay (idempotente; observer ya se reaplica). */
+      try {
+        setTimeout(function () { _copaReplaceAliasText(); }, 80);
+        setTimeout(function () { _copaReplaceAliasText(); }, 240);
+        setTimeout(function () { _copaReplaceAliasText(); }, 600);
+        _copaInstallVsObserver();
+      } catch(_){}
+      /* Fecha: parsear matchKey/compKey para encontrar la fila del
+         calendario correcta. */
+      try {
+        setTimeout(function () { _copaOverrideAnyPrevDate(matchKey, compKey); }, 80);
+        setTimeout(function () { _copaOverrideAnyPrevDate(matchKey, compKey); }, 240);
+        setTimeout(function () { _copaOverrideAnyPrevDate(matchKey, compKey); }, 600);
+        _copaInstallAnyEnvObserver(matchKey, compKey);
+      } catch(_){}
+      return ret;
+    };
+    wrapped.__copaPostHooked = true;
+    window.showPrePartidoOverlay = wrapped;
+  }
+  /* Aplica al cargar y un par de retries (el bundle inicializa
+     `window.showPrePartidoOverlay` en script block 28 que puede
+     correr después que copa-engine.js). */
+  try { _copaWrapShowPrePartidoOverlay(); } catch(_){}
+  setTimeout(function () { try { _copaWrapShowPrePartidoOverlay(); } catch(_){} }, 200);
+  setTimeout(function () { try { _copaWrapShowPrePartidoOverlay(); } catch(_){} }, 1500);
+
+  /* Detecta el label del calendario para cualquier previa, basándose
+     en compKey + matchKey. Devuelve la fecha cruda del calendario
+     ("28 Sep") o '' si no se encuentra. */
+  function _copaCalDateGeneric(matchKey, compKey) {
+    var rows = document.querySelectorAll('.ag-r');
+    if (!rows.length) return '';
+    /* Champions previa fase: `wprev-G<gi>-J<j>` → Jornada (j+1) de
+       fase de liga / previa. */
+    var wprev = /^wprev-G(\d+)-J(\d+)$/.exec(String(matchKey || ''));
+    var jNum = null, kindHints = null;
+    if (wprev) {
+      jNum = parseInt(wprev[2], 10) + 1; /* state es 0-indexed */
+      kindHints = ['Champions', 'UCL', 'Europa']; /* el bundle tipea
+        `ucl` para tanto Champions como Europa Previa según contexto */
+    } else if (compKey === 'copa' || compKey === 'copa-fin') {
+      /* Copa ya está cubierto por `_copaCalDateForRound` desde
+         copaAbrirPrevia — no hace falta repetir. */
+      return '';
+    } else if (compKey === 'ucl-fin' || compKey === 'uel-fin' || compKey === 'uecl-fin') {
+      kindHints = ['Final', 'UCL', 'UEL', 'UECL', 'Europa'];
+    } else if (compKey === 'sc' || compKey === 'sc-final') {
+      kindHints = compKey === 'sc-final' ? ['Supercopa', 'España', 'FINAL'] : ['Supercopa', 'España'];
+    } else if (compKey === 'usc' || compKey === 'usc-fin') {
+      kindHints = ['Supercopa', 'Europa'];
+    } else if (compKey === 'inter' || compKey === 'inter-fin') {
+      kindHints = compKey === 'inter-fin' ? ['Intercontinental', 'FINAL'] : ['Intercontinental'];
+    }
+    if (!kindHints) return '';
+    function lblMatches(label) {
+      if (!label) return false;
+      var hits = 0;
+      for (var i = 0; i < kindHints.length; i++) {
+        if (label.indexOf(kindHints[i]) !== -1) { hits++; }
+      }
+      if (hits === 0) return false;
+      if (jNum != null) {
+        var j = label.match(/J\s*(\d+)/);
+        if (!j || parseInt(j[1], 10) !== jNum) return false;
+      }
+      return true;
+    }
+    for (var i = 0; i < rows.length; i++) {
+      var l = rows[i].querySelector('.ag-lbl');
+      var d = rows[i].querySelector('.ag-date');
+      if (!l || !d) continue;
+      var lblTxt = l.textContent.trim().split(' · ')[0].trim();
+      if (lblMatches(lblTxt)) return d.textContent.trim();
+    }
+    return '';
+  }
+
+  function _copaOverrideAnyPrevDate(matchKey, compKey) {
+    var rawDate = _copaCalDateGeneric(matchKey, compKey);
+    if (!rawDate) return;
+    var parts = rawDate.split(' ');
+    if (parts.length < 2) return;
+    var day = parseInt(parts[0], 10) || 0;
+    var monthName = (_MONTH_FULL_ES && _MONTH_FULL_ES[parts[1]]) || parts[1];
+    var envEl = document.getElementById('pp-env');
+    if (!envEl) return;
+    var lines = envEl.querySelectorAll('.pp-env-line');
+    for (var i = 0; i < lines.length; i++) {
+      var txt = lines[i].textContent || '';
+      if (txt.indexOf('📅') !== -1 || /\d+\s+de\s+/.test(txt)) {
+        lines[i].innerHTML = lines[i].innerHTML.replace(/<b>\d+\s+de\s+[A-Za-zÁÉÍÓÚáéíóúñÑ]+<\/b>/, '<b>' + day + ' de ' + monthName + '</b>');
+        return;
+      }
+    }
+  }
+
+  /* Observer que reaplica fecha + alias para cualquier previa. */
+  var _copaAnyEnvObserver = null;
+  function _copaInstallAnyEnvObserver(matchKey, compKey) {
+    var envEl = document.getElementById('pp-env');
+    if (!envEl || typeof MutationObserver !== 'function') return;
+    if (_copaAnyEnvObserver) {
+      try { _copaAnyEnvObserver.disconnect(); } catch(_){}
+      _copaAnyEnvObserver = null;
+    }
+    var ticking = false;
+    _copaAnyEnvObserver = new MutationObserver(function () {
+      if (ticking) return;
+      ticking = true;
+      setTimeout(function () {
+        try { _copaOverrideAnyPrevDate(matchKey, compKey); } catch(_){}
+        ticking = false;
+        var ov = document.getElementById('prepartido-overlay');
+        if (!ov || !ov.classList.contains('show')) {
+          if (_copaAnyEnvObserver) {
+            try { _copaAnyEnvObserver.disconnect(); } catch(_){}
+            _copaAnyEnvObserver = null;
+          }
+        }
+      }, 30);
+    });
+    _copaAnyEnvObserver.observe(envEl, { childList: true, subtree: true, characterData: true });
+  }
+
   /* Reemplaza los divs del alias eFootball "🎮 <texto>" en `#pp-vs`
      por un botón ❓ animado. El alias completo se guarda en
      `data-copa-alias-full` para mostrarlo al pulsar. Es idempotente:

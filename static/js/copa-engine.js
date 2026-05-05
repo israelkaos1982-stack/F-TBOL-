@@ -2573,6 +2573,15 @@
      porque `_ppItems` y `_ppChecked` son privados del IIFE. */
   var _copaConfirmState = { prorroga: false, penaltis: false };
 
+  /* Flag que indica si la PREVIA actualmente abierta es de Copa.
+     Usábamos un marcador DOM `[data-copa-rules]` en `#pp-alerts`,
+     pero el bundle hace `alerts.innerHTML = ...` cada vez que toggle-
+     amos un item (línea 5373 del index.bundle.js, parte de
+     `_renderPreviaMeta`), así que el marcador se BORRA al primer
+     click en Balón → mis Prórroga/Penaltis no se re-inyectaban. Una
+     variable de módulo es robusta a esos re-renders. */
+  var _copaPreviaActive = false;
+
   /* Wrapper sobre `_ppRefreshUnlock` que también requiere los 2
      toggles de Copa antes de habilitar el botón CONFIRMAR. */
   function _copaWrapPpRefreshUnlock() {
@@ -2585,8 +2594,7 @@
         var btn = document.getElementById('pp-confirm-btn');
         if (!btn) return ret;
         /* Solo aplicamos la regla si la previa actual es de Copa. */
-        var rulesEl = document.querySelector('#pp-alerts [data-copa-rules]');
-        if (!rulesEl) return ret;
+        if (!_copaPreviaActive) return ret;
         if (!_copaConfirmState.prorroga || !_copaConfirmState.penaltis) {
           btn.disabled = true;
           if (btn.getAttribute('data-pp-stage') !== '2') {
@@ -2623,7 +2631,10 @@
       }
       var ret = orig.apply(this, arguments);
       try {
-        if (document.querySelector('#pp-alerts [data-copa-rules]')) {
+        /* Tras el toggle de Balón el bundle re-renderiza pp-list (que
+           borra mis 2 items) y pp-alerts (sub _renderPreviaMeta). Aquí
+           re-inyecto si la previa activa es de Copa. */
+        if (_copaPreviaActive) {
           _copaRenderExtraConfirms();
           if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
         }
@@ -2670,22 +2681,39 @@
   function _copaInjectExtraConfirms(ronda) {
     /* Reset del estado al abrir cada previa nueva. */
     _copaConfirmState = { prorroga: false, penaltis: false };
-    /* Marcador invisible para que `_copaWrapPpRefreshUnlock` /
-       `_copaWrapPpToggle` detecten que la previa activa es de Copa. */
-    var alerts = document.getElementById('pp-alerts');
-    if (alerts) {
-      var prev = alerts.querySelector('[data-copa-rules]');
-      if (prev) prev.remove();
-      var chip = document.createElement('div');
-      chip.setAttribute('data-copa-rules', '1');
-      chip.style.cssText = 'display:none';
-      alerts.appendChild(chip);
-    }
+    /* Activamos el flag — los wrappers de `_ppToggle` y
+       `_ppRefreshUnlock` lo consultan en cada tick. Robusto al
+       re-render que el bundle hace de `#pp-alerts` (que antes
+       borraba el marcador DOM). */
+    _copaPreviaActive = true;
     _copaRenderExtraConfirms();
     _copaWrapPpRefreshUnlock();
     _copaWrapPpToggle();
+    /* Reset del flag cuando el usuario cierra la previa o navega
+       fuera. Hookeamos el botón VOLVER + el confirm definitivo. */
+    _copaInstallPreviaCloseHooks();
     /* Tras meter los items, re-evaluamos el botón. */
     if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
+  }
+
+  /* Resetea `_copaPreviaActive` cuando la previa se cierra. */
+  function _copaInstallPreviaCloseHooks() {
+    var ov = document.getElementById('prepartido-overlay');
+    if (!ov || ov.__copaCloseHooked) return;
+    ov.__copaCloseHooked = true;
+    var back = ov.querySelector('.pp-back-btn');
+    if (back) {
+      back.addEventListener('click', function () { _copaPreviaActive = false; });
+    }
+    /* También reseteamos cuando el usuario pulsa COMENZAR PARTIDO
+       (etapa 2 del confirm) — el wrapper de `_ppCustomCallback` ya
+       gestiona la transición a abrirCopa. */
+    var conf = ov.querySelector('#pp-confirm-btn');
+    if (conf) {
+      conf.addEventListener('click', function () {
+        if (conf.getAttribute('data-pp-stage') === '2') _copaPreviaActive = false;
+      });
+    }
   }
 
   /* Sincroniza la fecha del partido en `#pp-env` con la fecha que viene

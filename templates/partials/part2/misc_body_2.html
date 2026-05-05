@@ -9967,6 +9967,8 @@
        el match termina empatado y forzamos la siguiente fase. */
     var _isCopaSL = (!!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin')
                   && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
+    /* Supercopa de España (sc): single-leg con ET+pen igual que Copa. */
+    var _isScSL = !!_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final';
     /* Amistoso ELIMINATORIA: misma regla que Copa single-leg — empate
        al 90' fuerza prórroga, empate al 120' fuerza penaltis (petición
        usuario 2026-05-05). */
@@ -9987,6 +9989,7 @@
       _amsDobleTied = (globalA === globalB);
     }
     var _shouldForceET = (_isCopaSL && _gm.sc.a === _gm.sc.b)
+                       || (_isScSL && _gm.sc.a === _gm.sc.b)
                        || (_isAmsElim && _gm.sc.a === _gm.sc.b)
                        || (_isAmsDobleVuelta && _amsDobleTied);
     if (_shouldForceET && !_gm.penDone) {
@@ -10209,6 +10212,42 @@
             _slMvp ? _slMvp.team : '',
             _gm.matchStats || null
           );
+        }
+      } catch(_e){}
+    } else if (_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final') {
+      /* Supercopa de España: persistimos en sc_state_v1 vía
+         _scSaveHumanResult (definido en s-supercopa). El score base
+         viene de _gm.sc; el desglose de prórroga (etScores) y el
+         penWinner ya se rellenan durante gmEndMatch. */
+      try {
+        var _scEt = _gm.etScores || {};
+        var _scPenWin = _gm.penWinner || null;
+        if (!_scPenWin) {
+          var _scPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
+          if (_scPenEv) _scPenWin = _scPenEv.team === 'a' ? 'a' : 'b';
+        } else if (_scPenWin === _gm.home) _scPenWin = 'a';
+        else if (_scPenWin === _gm.away) _scPenWin = 'b';
+        if (typeof window._scSaveHumanResult === 'function') {
+          window._scSaveHumanResult(
+            _gm._scKey || 'sf', _gm._scIdx || 0,
+            _gm.sc.a, _gm.sc.b,
+            _scEt.a || 0, _scEt.b || 0,
+            _scPenWin,
+            _gm.events || []
+          );
+        }
+        /* Sumar al store de stats de Liga EA con compKey='sc' para
+           que goles/tarjetas/MVP cuenten en plantilla del equipo y
+           dashboard. Coherente con Copa/Superliga. */
+        if (typeof window.registrarLigaPlayerStats === 'function') {
+          var _scMvpEv = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+          var _scMvpName = _scMvpEv ? (_scMvpEv.player || _scMvpEv.name || '') : '';
+          var _scMvpTeam = _scMvpEv ? (_scMvpEv.team === 'a' ? _gm.home : (_scMvpEv.team === 'b' ? _gm.away : '')) : '';
+          var _scStatsEv = (_gm.events || []).filter(function(e){
+            return e && e.type !== 'pen-result' && !e._varAnulado;
+          });
+          var _scMk = 'sc_' + (_gm._scKey || 'sf') + '_' + (_gm._scIdx || 0);
+          window.registrarLigaPlayerStats(_scMk, _gm.home, _gm.away, _scStatsEv, _scMvpName, _scMvpTeam, 'sc');
         }
       } catch(_e){}
     } else if (!_gm.isFriendly) {
@@ -11593,7 +11632,12 @@
     var _etTopMin = 90 + _stopFirst + _stopSecond;
     var _copaParts = (typeof mk === 'string' && mk.indexOf('copa_') === 0)
       ? /^copa_([^_]+)_(\d+)_([iv])$/.exec(mk) : null;
-    var _isCopaSingleLeg = _copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin');
+    /* Supercopa de España (sc_<sf|fin>_<idx>): mismo comportamiento
+       que Copa SL (ET + penaltis si empate al 90'/120'). Detectamos
+       el prefijo `sc_` para reusar el flujo single-leg sin tocar
+       más nada. */
+    var _isScSim = typeof mk === 'string' && mk.indexOf('sc_') === 0;
+    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim;
     var _copaET = { et_gl: 0, et_gv: 0, pen_winner: null };
 
     /* COPA SINGLE-LEG con empate previsto al 90': el partido va a
@@ -11965,10 +12009,18 @@
            persistencia a Copa del Rey (no a la tabla de Liga). El
            formato del mk está documentado en window.copaSimLive. */
         var __isCopaSim = typeof mk === 'string' && mk.indexOf('copa_') === 0;
+        /* Supercopa de España: mk con prefijo sc_ → persistir en
+           sc_state_v1 vía window._scPersistAfterIa (definido en
+           el IIFE de s-supercopa). 2026-05-05. */
+        var __isScSimPersist = typeof mk === 'string' && mk.indexOf('sc_') === 0;
         if (__isCopaSim && typeof window._copaSimLivePersist === 'function') {
           try {
             window._copaSimLivePersist(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam);
           } catch(_e) { try { console.error('[copaSimLive persist]', _e); } catch(__){} }
+        } else if (__isScSimPersist && typeof window._scPersistAfterIa === 'function') {
+          try {
+            window._scPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
+          } catch(_e) { try { console.error('[scSimLive persist]', _e); } catch(__){} }
         } else {
           var results = loadResults();
           var key = rKey(j, home, away);

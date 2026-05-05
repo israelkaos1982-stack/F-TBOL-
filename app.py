@@ -813,7 +813,7 @@ def forma_counter_save():
     save_global_state(data)
     return jsonify({"ok": True, "counters": cleaned})
 
-COPA_TWO_LEG = ("r16", "oct", "cua", "sf")  # ida+vuelta. r1/r2/fin = single-leg.
+COPA_TWO_LEG = ("oct", "cua", "sf")  # ida+vuelta. r1/r2/r16/fin = single-leg.
 COPA_NEXT_PHASE = {"r1": "r2", "r2": "r16", "r16": "oct",
                    "oct": "cua", "cua": "sf", "sf": "fin", "fin": "campeon"}
 

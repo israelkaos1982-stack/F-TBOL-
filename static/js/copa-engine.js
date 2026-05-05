@@ -18,10 +18,13 @@
     sf:  'Semis',
     fin: 'Final'
   };
-  /* Ida+vuelta desde Dieciseisavos hasta Semis. La Final es a partido único
-     (estadio neutro). 1ª y 2ª Ronda son a partido único en campo del
-     equipo de menor nivel (con prórroga + penaltis si hay empate). */
-  var TWO_LEG = { r16: true, oct: true, cua: true, sf: true };
+  /* Single-leg: 1ª Ronda, 2ª Ronda, Dieciseisavos y Final. Ida+vuelta:
+     Octavos, Cuartos, Semis. Petición usuario 2026-05-05: r16 baja a
+     single-leg para acortar la fase preliminar — los humanos siguen
+     viajando como visitantes contra rivales de Primera Federación
+     (o Hypermotion en su defecto). La final es a partido único en
+     estadio neutro. Humanos vs humanos solo desde Cuartos. */
+  var TWO_LEG = { oct: true, cua: true, sf: true };
   var ROUNDS = ['r1', 'r2', 'r16', 'oct', 'cua', 'sf', 'fin'];
   var NEXT_ROUND = { r1: 'r2', r2: 'r16', r16: 'oct', oct: 'cua', cua: 'sf', sf: 'fin' };
   var CAL_IDS = {
@@ -317,29 +320,46 @@
     function _canPair(humanT, oppT) {
       var oppMaybeHum = !!oppT.isHuman || (oppT.isTbd && oppT.tbdMayBeHuman);
       if (oppMaybeHum) {
-        /* Humano vs humano (o TBD potencial humano) solo desde cuartos. */
+        /* Humano vs humano (o TBD potencial humano) solo desde Cuartos.
+           Preferible en Cuartos / Semis — la elección final la hace
+           _preferenceFor priorizando NO-humanos en Cuartos para que
+           el primer enfrentamiento humano-humano caiga en Semis. */
         return ronda === 'cua' || ronda === 'sf' || ronda === 'fin';
       }
       if (ronda === 'r1' || ronda === 'r2') {
-        /* TBD que viene de R1 IA-vs-IA → el ganador será un PF (R1
-           IA-vs-IA solo enfrenta PF entre sí). Permitido en R2. */
+        /* TBD que viene de R1 IA-vs-IA → el ganador será un PF. */
         if (oppT.isTbd && !oppT.tbdMayBeHuman) return true;
         return oppT.league === 'liga-primera-federacion';
       }
-      if (ronda === 'r16' || ronda === 'oct') {
+      if (ronda === 'r16') {
+        /* Petición usuario: humanos solo contra Primera Federación (o
+           Hypermotion en su defecto). Sin Liga EA-no-humano como
+           rival. _preferenceFor refuerza la jerarquía PF → Hyp. */
+        if (oppT.isTbd && !oppT.tbdMayBeHuman) return true;
+        return oppT.league === 'liga-primera-federacion'
+            || oppT.league === 'liga-hypermotion';
+      }
+      if (ronda === 'oct') {
         return true; /* cualquier no-humano (incluido TBD-IA) */
       }
       return true; /* cua/sf/fin: cualquiera */
     }
     function _preferenceFor(humanT, candidates) {
-      /* r16: prioridad PF > Hyp > Liga EA. Otras rondas: sin filtro. */
+      /* r16: prioridad PF > Hyp (Liga EA queda fuera por _canPair). */
       if (ronda === 'r16') {
         var pf = candidates.filter(function (c) { return c.league === 'liga-primera-federacion'; });
         if (pf.length) return pf;
         var hy = candidates.filter(function (c) { return c.league === 'liga-hypermotion'; });
         if (hy.length) return hy;
-        var ea = candidates.filter(function (c) { return c.league === 'liga-ea-sports' && !c.isHuman; });
-        if (ea.length) return ea;
+      }
+      /* Cuartos: si quedan no-humanos disponibles, priorizar para
+         demorar el primer cruce humano-humano hasta Semifinales. El
+         usuario lo prefiere así — si en Cuartos no hay no-humanos
+         posibles, sí se permite humano-humano (vía _canPair que ya
+         lo permite). */
+      if (ronda === 'cua') {
+        var noHum = candidates.filter(function (c) { return !c.isHuman && !(c.isTbd && c.tbdMayBeHuman); });
+        if (noHum.length) return noHum;
       }
       return candidates;
     }
@@ -2408,20 +2428,84 @@
   }
 
   window.copaSortear = function (ronda) {
-    var payload = _computeSorteoPayload(ronda);
-    if (!payload) {
-      alert('❌ No hay equipos suficientes en las 3 ligas para sortear ' + (ROUND_LABEL[ronda] || ronda) + '.');
+    /* Petición usuario 2026-05-05: el sorteo es admin-only. PIN 747.
+       Aplica a TODAS las rondas (r1 → fin), no solo a "Iniciar Copa".
+       Si la sesión ya está desbloqueada (window._adm === true) saltamos
+       el prompt — coherente con _ppAdminGate. */
+    function _runSorteo(){
+      var payload = _computeSorteoPayload(ronda);
+      if (!payload) {
+        alert('❌ No hay equipos suficientes en las 3 ligas para sortear ' + (ROUND_LABEL[ronda] || ronda) + '.');
+        return;
+      }
+      function _doFetch(){
+        return fetch('/api/copa/sorteo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d.ok) copaRender(d.copa);
+            else alert('❌ Error sorteo: ' + (d.error || ''));
+          });
+      }
+      /* Overlay del balón con tema Copa del Rey (naranja-marrón). El
+         usuario quiere que el sorteo sea VISIBLE y RÁPIDO — minMs:600
+         + factor SPEED del loader hace que dure ~300 ms reales. */
+      if (typeof window.ftbolLoaderRun === 'function') {
+        var lbl = ROUND_LABEL[ronda] || ronda;
+        window.ftbolLoaderRun(
+          {
+            title: 'COPA DEL REY · SORTEO ' + String(lbl).toUpperCase(),
+            sub: 'Preparando bombos…', theme: 'copa', minMs: 600,
+            phases: [
+              { pct: 30, sub: 'Sembrando equipos por nivel…',         ms: 100 },
+              { pct: 60, sub: 'Aplicando restricciones humano vs IA…', ms: 120 },
+              { pct: 88, sub: 'Cuadrando cruces…',                    ms: 100 }
+            ]
+          },
+          function(ctx){
+            return new Promise(function(resolve){
+              var i = 0;
+              var phases = [
+                { pct: 30 }, { pct: 60 }, { pct: 88 }
+              ];
+              function next(){
+                if (i >= phases.length){
+                  ctx.progress(95, 'Lanzando sorteo…');
+                  _doFetch().then(function(){
+                    ctx.progress(100, 'Hecho');
+                    resolve();
+                  }).catch(function(){
+                    ctx.progress(100, 'Error');
+                    resolve();
+                  });
+                  return;
+                }
+                ctx.progress(phases[i++].pct);
+                setTimeout(next, 80);
+              }
+              next();
+            });
+          }
+        );
+      } else {
+        _doFetch();
+      }
+    }
+    if (window._adm === true) {
+      _runSorteo();
       return;
     }
-    fetch('/api/copa/sorteo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (d.ok) copaRender(d.copa);
-        else alert('❌ Error sorteo: ' + (d.error || ''));
-      });
+    var pass;
+    try { pass = window.prompt('🔐 Contraseña admin para sortear ' + (ROUND_LABEL[ronda] || ronda) + ':'); }
+    catch(_){ pass = null; }
+    if (pass === null) return; /* cancelado */
+    if (String(pass).trim() !== '747') {
+      alert('❌ Contraseña incorrecta.');
+      return;
+    }
+    _runSorteo();
   };
 
   window.copaSimIA = function (ronda, idx, esVuelta) {

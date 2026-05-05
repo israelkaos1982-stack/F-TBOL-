@@ -1210,9 +1210,9 @@
     var k = _rKey(j, home, away);
     var prev = results[k] || {};
     var safeEvents = (events || []).filter(function(e){ return e && e.type !== 'pen-result'; }).map(function(e){
+      /* Solo nombre del jugador (dorsal va aparte en `num`). */
       var nm = e.player || e.name || '';
-      var lbl = (e.num && e.num !== '0' ? e.num + '. ' : '') + nm;
-      return { id:e.id, type:e.type, team:e.team, min:e.min, player:lbl };
+      return { id:e.id, type:e.type, team:e.team, min:e.min, num:e.num||'', player:nm };
     });
     /* Sanea matchStats: solo conservamos las claves que el dashboard
        sabe agregar (posesion / remates / tiros / corners / paradas /
@@ -6286,7 +6286,7 @@
     var _shortTeam = teamLabel.length > 16 ? teamLabel.substring(0,14)+'\u2026' : teamLabel;
     row.innerHTML = '<span class="ml-evt-min">'+min+"'</span>"
       +'<span class="ml-evt-ico">'+ico+'</span>'
-      +'<span class="ml-evt-name">'+(num?num+'. ':'')+name+'</span>'
+      +'<span class="ml-evt-name">'+name+'</span>'
       +'<span class="ml-evt-team">'+escapeHtml(_shortTeam)+'</span>'
       +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\',\''+id+'\')" title="Editar">🖍</button>'
       +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\'](\''+id+'\')">✕</button>';
@@ -7477,7 +7477,7 @@
           scoreA: st.sc.a, scoreB: st.sc.b,
           mvp: mvpName,
           events: evts.filter(function(e){return e.type!=='pen-result';}).map(function(e){
-            return {type:e.type, min:e.min, player:(e.num&&e.num!=='0'?e.num+'. ':'')+e.name, team:e.team, ico:e.ico};
+            return {type:e.type, min:e.min, num:e.num||'', player: e.name || '', team:e.team, ico:e.ico};
           })
         });
         if (hist.length > 50) hist = hist.slice(0, 50);
@@ -7521,17 +7521,19 @@
       var _r2 = loadResults();
       if (_r2[_rk]) {
         _r2[_rk].events = evts.filter(function(e){return e.type!=='pen-result';}).map(function(e){
+          /* Persistimos solo el nombre (sin dorsal) en `player` y
+             dejamos el dorsal en `num`. Acta visible no rompe a 2
+             líneas con nombres largos. */
           var out = {
             type:e.type,
             min:e.min,
-            player:(e.num&&e.num!=='0'?e.num+'. ':'')+e.name,
+            num:e.num || '',
+            player: e.name || '',
             team:e.team
           };
-          /* Para sustituciones guardamos también al jugador saliente
-             (aunque en el acta queden ocultas, lo mantenemos por si se
-             decide enseñarlas en algún sitio). */
           if (e.type === 'sust' && (e.playerOut || e.numOut)) {
-            out.playerOut = (e.numOut && e.numOut!=='0'?e.numOut+'. ':'') + (e.playerOut||'');
+            out.numOut = e.numOut || '';
+            out.playerOut = e.playerOut || '';
           }
           /* VAR: preservamos los flags para que el acta finalizada
              muestre "ANULADA POR VAR" o "Confirmado por VAR" al recargar
@@ -8828,7 +8830,7 @@
       row.setAttribute('data-id',id);
       row.innerHTML='<span class="ml-evt-min">'+min+"'</span>"
         +'<span class="ml-evt-ico">'+ico+'</span>'
-        +'<span class="ml-evt-name">'+(num&&num!=='0'?num+'. ':'')+name+'</span>'
+        +'<span class="ml-evt-name">'+name+'</span>'
         +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\',\''+id+'\')" title="Editar">🖍</button>'
         +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\'](\''+id+'\')">✕</button>';
       // Insert in sorted minute order
@@ -8892,7 +8894,7 @@
         row.setAttribute('data-id',id);
         row.innerHTML = '<span class="ml-evt-min">'+min+"'</span>"
           +'<span class="ml-evt-ico">'+ico+'</span>'
-          +'<span class="ml-evt-name">'+(num&&num!=='0'?num+'. ':'')+(name||'')+'</span>'
+          +'<span class="ml-evt-name">'+(name||'')+'</span>'
           +'<span class="ml-evt-team">'+escapeHtml(_shortTeam)+'</span>'
           +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\',\''+id+'\')" title="Editar">🖍</button>'
           +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\'](\''+id+'\')">✕</button>';
@@ -9425,7 +9427,7 @@
         var eidEsc = String(evId).replace(/'/g,"\\'");
         li.innerHTML = '<span class="ml-evt-min">' + min + "'</span>"
           + '<span class="ml-evt-ico">' + ico + '</span>'
-          + '<span class="ml-evt-name">' + (num && num !== '0' ? num + '. ' : '') + (name || '') + '</span>'
+          + '<span class="ml-evt-name">' + (name || '') + '</span>'
           + '<span class="ml-evt-team">' + teamLabel + '</span>'
           + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + eidEsc + '\')" title="Editar">✏️</button>'
           + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + eidEsc + '\')" title="Eliminar">✕</button>';
@@ -9797,9 +9799,13 @@
         var row = list.querySelector(sel);
         if (row) {
           var teamLabel = newTeam === 'a' ? _gm.home : _gm.away;
+          /* Acta visible: solo nombre del jugador, sin dorsal — el
+             dorsal sigue en `ev.num` para los registros de stats. Si
+             ponemos "22. Lookman" el evento se va a 2 líneas cuando
+             el nombre es largo. */
           var displayName = newType === 'mvp'
             ? ('MVP — ' + newName)
-            : ((newNum && newNum !== '0' ? newNum + '. ' : '') + newName);
+            : newName;
           var _eidEsc = _gmEditId.replace(/'/g,"\\'");
           row.setAttribute('data-team', newTeam);
           row.setAttribute('data-type', newType);
@@ -9810,6 +9816,25 @@
             + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _eidEsc + '\')" title="Editar">✏️</button>'
             + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _eidEsc + '\')" title="Eliminar">✕</button>';
         }
+      }
+      /* Re-registrar stats con los eventos actualizados — si el match
+         ya está finalizado, sus stats viven en LIGA_PLAYER_MATCH_STORE
+         con los datos viejos (con el nombre/dorsal anterior), así que
+         el dashboard "Liga · Estadísticas" y la plantilla del equipo
+         no reflejarían el cambio hasta el próximo partido. Re-llamar
+         con los events actuales sobreescribe la entrada (el storeKey
+         es canon home|away, ver bundle line 1863). Solo lo hacemos si
+         hay registrarLigaPlayerStats expuesto y el _gm está finalizado. */
+      if (_gm && _gm.finished && typeof window.registrarLigaPlayerStats === 'function') {
+        try {
+          var _mvpEv = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+          var _mvpName = _mvpEv ? (_mvpEv.player || _mvpEv.name || '') : '';
+          var _mvpTeam = _mvpEv ? (_mvpEv.team === 'a' ? _gm.home : _gm.away) : '';
+          var _mk = 'mlw-j' + (_gm.j || 0) + '-' + (_gm.home || '') + '-' + (_gm.away || '');
+          window.registrarLigaPlayerStats(_mk, _gm.home, _gm.away,
+            (_gm.events || []).filter(function(e){ return e && e.type !== 'pen-result'; }),
+            _mvpName, _mvpTeam);
+        } catch(_){}
       }
       window._gmCloseEditModal();
     };
@@ -9832,6 +9857,19 @@
         if (!list.querySelector('.ml-evt-item')) {
           list.innerHTML = '<div class="ml-acta-empty" style="padding:8px;color:#555;font-size:11px;text-align:center;">Sin eventos aún</div>';
         }
+      }
+      /* Re-registrar stats si el match ya está finalizado (mismo motivo
+         que en _gmSaveEditModal). */
+      if (_gm && _gm.finished && typeof window.registrarLigaPlayerStats === 'function') {
+        try {
+          var _mvpEv2 = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+          var _mvpName2 = _mvpEv2 ? (_mvpEv2.player || _mvpEv2.name || '') : '';
+          var _mvpTeam2 = _mvpEv2 ? (_mvpEv2.team === 'a' ? _gm.home : _gm.away) : '';
+          var _mk2 = 'mlw-j' + (_gm.j || 0) + '-' + (_gm.home || '') + '-' + (_gm.away || '');
+          window.registrarLigaPlayerStats(_mk2, _gm.home, _gm.away,
+            (_gm.events || []).filter(function(e){ return e && e.type !== 'pen-result'; }),
+            _mvpName2, _mvpTeam2);
+        } catch(_){}
       }
     };
   })();
@@ -10020,14 +10058,19 @@
           _r[_k].events = (_gm.events || [])
             .filter(function(e){ return e && e.type !== 'pen-result'; })
             .map(function(e){
+              /* Persistimos `player` SOLO con el nombre (sin "22. ").
+                 El dorsal va aparte en `num` para que las stats puedan
+                 desambiguar tocayos sin romper la canonicalización
+                 por nombre. Esto hace que renders posteriores del acta
+                 (`_iaEventsHtml`) no rompan a 2 líneas con dorsal. */
               var _nm = e.player || e.name || '';
-              var _lbl = (e.num && e.num !== '0' ? e.num + '. ' : '') + _nm;
               return {
                 id: e.id,
                 type: e.type,
                 team: e.team,
                 min: e.min,
-                player: _lbl
+                num: e.num || '',
+                player: _nm
               };
             });
           var _mvpGm = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
@@ -10050,8 +10093,8 @@
           scoreA: _gm.sc.a, scoreB: _gm.sc.b,
           mvp: _mvpName,
           events: (_gm.events || []).filter(function(e){ return e && e.type !== 'pen-result'; }).map(function(e){
-            var _nm = e.player || e.name || '';
-            return {type:e.type, min:e.min, player:(e.num && e.num !== '0' ? e.num + '. ' : '') + _nm, team:e.team, ico:e.ico};
+            /* friendlyMatchHistory: solo nombre (sin dorsal). */
+            return {type:e.type, min:e.min, num:e.num || '', player: e.player || e.name || '', team:e.team, ico:e.ico};
           })
         });
         if (_hist.length > 50) _hist = _hist.slice(0, 50);
@@ -10323,8 +10366,10 @@
         if (!ev.id) ev.id = window._evtId();
         var tName = ev.team === 'a' ? _gm.home : _gm.away;
         var ico = ev.ico || _icoMap2[ev.type] || '📋';
-        var pLabel = (ev.num && String(ev.num).trim() && String(ev.num) !== '0' ? ev.num + '. ' : '')
-                    + (ev.player || ev.name || '');
+        /* Acta visible: solo nombre del jugador (ev.num se conserva en
+           el evento para stats pero NO se renderiza para que el evento
+           no se parta a 2 líneas con nombres largos). */
+        var pLabel = (ev.player || ev.name || '');
         var div = document.createElement('div');
         div.className = 'ml-evt-item';
         div.setAttribute('data-id', ev.id);
@@ -10599,8 +10644,8 @@
           if (!ev.id) ev.id = window._evtId();
           var tName = ev.team === 'a' ? _gm.home : _gm.away;
           var ico = (ev.ico) || _icoMapGm[ev.type] || '📋';
-          var pLabel = (ev.num && String(ev.num).trim() && String(ev.num) !== '0' ? ev.num + '. ' : '')
-                      + (ev.player || ev.name || '');
+          /* Solo nombre del jugador en el acta visible (sin dorsal). */
+          var pLabel = (ev.player || ev.name || '');
           var li = document.createElement('div');
           li.className = 'ml-evt-item';
           li.setAttribute('data-id', ev.id);

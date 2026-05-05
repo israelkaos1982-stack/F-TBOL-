@@ -1615,6 +1615,11 @@
       + '@keyframes copaWinPulse{0%,100%{text-shadow:0 0 6px rgba(95,224,138,.45),0 0 12px rgba(95,224,138,.25);}50%{text-shadow:0 0 14px rgba(95,224,138,.95),0 0 24px rgba(95,224,138,.55),0 0 36px rgba(95,224,138,.25);}}'
       /* TBD ("Esperando Rival") en cards con clasif parcial. */
       + '.copa-card-tbd{color:rgba(255,213,74,.85)!important;font-style:italic;letter-spacing:.6px;}'
+      /* ❓ animado bajo el escudo cuando el equipo IA tiene alias
+         eFootball (equipo SIMIL para juegos sin licencia). Click →
+         overlay con alias completo. */
+      + '.copa-alias-help{filter:drop-shadow(0 0 4px rgba(255,213,74,.6));}'
+      + '@keyframes copaAliasPulse{0%,100%{transform:scale(1);opacity:.85;text-shadow:0 0 4px rgba(255,213,74,.4);}50%{transform:scale(1.22);opacity:1;text-shadow:0 0 10px rgba(255,213,74,.95),0 0 18px rgba(255,213,74,.55);}}'
       + '.copa-card-center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:90px}'
       + '.copa-card-score{display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:4px 12px;min-width:80px;text-align:center}'
       + '.copa-card-rich.copa-card-leg .copa-card-score{padding:2px 10px;min-width:70px}'
@@ -2755,6 +2760,16 @@
         try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){}
       }, 600);
       _copaInstallEnvObserver(ronda, !!esVuelta);
+      /* Reemplazar el texto del alias eFootball ("🎮 Nassaji Mazan…")
+         por un botón ❓ animado bajo el nombre del equipo. Al pulsarlo
+         emerge un overlay con el alias completo en grande. Esto resuelve
+         el problema de truncamiento cuando el alias es largo (foto del
+         usuario 2026-05-04). El observer del overlay reaplica esto en
+         cada repaint de `#pp-vs`. */
+      setTimeout(function () { try { _copaReplaceAliasText(); } catch(_){} }, 80);
+      setTimeout(function () { try { _copaReplaceAliasText(); } catch(_){} }, 240);
+      setTimeout(function () { try { _copaReplaceAliasText(); } catch(_){} }, 600);
+      _copaInstallVsObserver();
     } else {
       alert('No se pudo abrir la previa: showPrePartidoOverlay no disponible.');
     }
@@ -2983,6 +2998,91 @@
      Se desconecta cuando se cierra el overlay (display:none) o cuando
      navega fuera. */
   var _copaEnvObserver = null;
+  /* Reemplaza los divs del alias eFootball "🎮 <texto>" en `#pp-vs`
+     por un botón ❓ animado. El alias completo se guarda en
+     `data-copa-alias-full` para mostrarlo al pulsar. Es idempotente:
+     si el div ya tiene `data-copa-alias-replaced`, lo deja como está. */
+  function _copaReplaceAliasText() {
+    var vs = document.getElementById('pp-vs');
+    if (!vs) return;
+    var divs = vs.querySelectorAll('div');
+    for (var i = 0; i < divs.length; i++) {
+      var d = divs[i];
+      if (d.getAttribute('data-copa-alias-replaced') === '1') continue;
+      var text = (d.textContent || '').trim();
+      /* El bundle pone "🎮 ..." con un emoji + espacio. Detección
+         tolerante por presencia del emoji al principio. */
+      if (text.length >= 3 && text.indexOf('🎮') === 0) {
+        var aliasFull = text.replace(/^🎮\s*/, '').trim();
+        if (!aliasFull) continue;
+        d.setAttribute('data-copa-alias-replaced', '1');
+        d.setAttribute('data-copa-alias-full', aliasFull);
+        d.innerHTML = '<button type="button" class="copa-alias-help" '
+          + 'onclick="window._copaShowAlias(this)" '
+          + 'data-copa-alias-full="' + escapeHtml(aliasFull) + '" '
+          + 'aria-label="Ver alias eFootball completo" '
+          + 'style="background:none;border:none;color:#ffd54a;font-size:20px;cursor:pointer;padding:2px 8px;line-height:1;animation:copaAliasPulse 1.4s ease-in-out infinite;">❓</button>';
+      }
+    }
+  }
+
+  /* Overlay full-screen con el alias completo cuando el usuario pulsa
+     el ❓. Texto grande, con color llamativo dorado, fondo oscuro
+     semitransparente. Click fuera o en la X cierra. */
+  window._copaShowAlias = function (btn) {
+    if (!btn) return;
+    var alias = btn.getAttribute('data-copa-alias-full') || '';
+    if (!alias) return;
+    var ov = document.getElementById('_copaAliasOv');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = '_copaAliasOv';
+      ov.style.cssText = 'display:flex;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.94);align-items:center;justify-content:center;padding:24px;cursor:pointer;';
+      ov.innerHTML = ''
+        + '<div style="background:linear-gradient(180deg,#1a0d04,#0a0502);border:2px solid #ffd54a;border-radius:14px;padding:24px 20px;max-width:520px;width:100%;text-align:center;box-shadow:0 0 50px rgba(255,213,74,.55),0 0 80px rgba(255,213,74,.25);position:relative;cursor:default;" onclick="event.stopPropagation();">'
+        +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:14px;letter-spacing:3px;color:#ffd54a;margin-bottom:14px;opacity:.85;">🎮 EQUIPO eFOOTBALL</div>'
+        +   '<div id="_copaAliasText" style="font-family:Rajdhani,sans-serif;font-size:22px;font-weight:800;letter-spacing:.6px;color:#ffec99;line-height:1.35;text-shadow:0 0 12px rgba(255,213,74,.5);margin-bottom:18px;word-break:break-word;"></div>'
+        +   '<button type="button" onclick="document.getElementById(\'_copaAliasOv\').style.display=\'none\';" style="padding:10px 22px;border-radius:8px;border:1px solid rgba(255,213,74,.5);background:rgba(255,213,74,.08);color:#ffd54a;font-family:\'Bebas Neue\',sans-serif;font-size:14px;letter-spacing:2px;cursor:pointer;">CERRAR</button>'
+        + '</div>';
+      ov.addEventListener('click', function (e) {
+        if (e.target === ov) ov.style.display = 'none';
+      });
+      document.body.appendChild(ov);
+    }
+    document.getElementById('_copaAliasText').textContent = alias;
+    ov.style.display = 'flex';
+  };
+
+  /* Observer sobre `#pp-vs`: cada vez que el bundle re-renderiza el
+     bloque (al togglear un item del previa), reaplicamos el reemplazo
+     ❓. Coalescencia con flag para evitar bucles. */
+  var _copaVsObserver = null;
+  function _copaInstallVsObserver() {
+    var vsEl = document.getElementById('pp-vs');
+    if (!vsEl || typeof MutationObserver !== 'function') return;
+    if (_copaVsObserver) {
+      try { _copaVsObserver.disconnect(); } catch(_){}
+      _copaVsObserver = null;
+    }
+    var ticking = false;
+    _copaVsObserver = new MutationObserver(function () {
+      if (ticking) return;
+      ticking = true;
+      setTimeout(function () {
+        try { _copaReplaceAliasText(); } catch(_){}
+        ticking = false;
+        var ov = document.getElementById('prepartido-overlay');
+        if (!ov || !ov.classList.contains('show')) {
+          if (_copaVsObserver) {
+            try { _copaVsObserver.disconnect(); } catch(_){}
+            _copaVsObserver = null;
+          }
+        }
+      }, 30);
+    });
+    _copaVsObserver.observe(vsEl, { childList: true, subtree: true, characterData: true });
+  }
+
   function _copaInstallEnvObserver(ronda, esVuelta) {
     var envEl = document.getElementById('pp-env');
     if (!envEl || typeof MutationObserver !== 'function') return;

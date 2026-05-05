@@ -1562,6 +1562,12 @@
       + '.copa-card-rich.copa-card-leg .copa-card-shield{width:34px;height:34px}'
       + '.copa-card-name{font-family:Rajdhani,sans-serif;font-size:12.5px;font-weight:700;color:#fff;text-align:center;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}'
       + '.copa-card-rich.copa-card-leg .copa-card-name{font-size:11.5px}'
+      /* Clasificación visual: ganador (clasifica a siguiente ronda) en
+         VERDE con destellos pulsantes; perdedor (eliminado) en ROJO
+         atenuado. Solo aplica en single-leg y en sub-card "Global". */
+      + '.copa-card-winner-name{color:#5fe08a !important;text-shadow:0 0 8px rgba(95,224,138,.7),0 0 16px rgba(95,224,138,.45);animation:copaWinPulse 1.6s ease-in-out infinite;}'
+      + '.copa-card-loser-name{color:#ff5c70 !important;opacity:.78;text-decoration:line-through;text-decoration-color:rgba(255,92,112,.45);}'
+      + '@keyframes copaWinPulse{0%,100%{text-shadow:0 0 6px rgba(95,224,138,.45),0 0 12px rgba(95,224,138,.25);}50%{text-shadow:0 0 14px rgba(95,224,138,.95),0 0 24px rgba(95,224,138,.55),0 0 36px rgba(95,224,138,.25);}}'
       + '.copa-card-center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:90px}'
       + '.copa-card-score{display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:4px 12px;min-width:80px;text-align:center}'
       + '.copa-card-rich.copa-card-leg .copa-card-score{padding:2px 10px;min-width:70px}'
@@ -1802,6 +1808,30 @@
     var actaEl = simMk
       ? '<div id="ia-acta-' + simMk + '" class="copa-card-acta" style="display:none"></div>'
       : '';
+    /* CLASIFICACIÓN visual: ganador en VERDE con destellos + perdedor
+       en ROJO atenuado. Solo se aplica en cards donde el GANADOR ya
+       define la clasificación a la siguiente ronda:
+         - Single-leg jugado (legLabel === '' → r1, r2, fin).
+         - Sub-card "Global" de las eliminatorias two-leg (16avos+).
+       En las sub-cards "Ida" / "Vuelta" NO aplicamos color, porque
+       ganar la ida no clasifica todavía — depende del aggregate.
+       En empate (sin pen_winner) tampoco aplicamos color (caso teórico
+       de aggregate empatado en two-leg sin tanda). */
+    var winName = '';
+    if (score && score.jugado && (legLabel === '' || legLabel === 'Global')) {
+      if (score.pen_winner) {
+        winName = score.pen_winner;
+      } else {
+        var totL = Number(score.gl||0) + Number(score.et_gl||0);
+        var totV = Number(score.gv||0) + Number(score.et_gv||0);
+        if (totL > totV) winName = local;
+        else if (totV > totL) winName = visit;
+      }
+    }
+    var hNameClass = '';
+    var vNameClass = '';
+    if (winName === local) { hNameClass = ' copa-card-winner-name'; vNameClass = ' copa-card-loser-name'; }
+    else if (winName === visit) { vNameClass = ' copa-card-winner-name'; hNameClass = ' copa-card-loser-name'; }
     var wrapClass = 'copa-card-rich' + (subtle ? ' copa-card-leg' : '');
     /* Añadimos `ml-score` a la clase del score wrapper para que el
        `closest(".ml-score")` de iaSimLive lo encuentre y aplique las
@@ -1813,7 +1843,7 @@
       + '<div class="copa-card-row">'
       + '<div class="copa-card-team">'
       +   '<div class="copa-card-shield">' + hLog + '</div>'
-      +   '<div class="copa-card-name">' + hIco + escapeHtml(local) + '</div>'
+      +   '<div class="copa-card-name' + hNameClass + '">' + hIco + escapeHtml(local) + '</div>'
       + '</div>'
       + '<div class="copa-card-center">'
       +   '<div class="copa-card-score ml-score">' + scoreTxt + '</div>'
@@ -1822,7 +1852,7 @@
       + '</div>'
       + '<div class="copa-card-team">'
       +   '<div class="copa-card-shield">' + vLog + '</div>'
-      +   '<div class="copa-card-name">' + vIco + escapeHtml(visit) + '</div>'
+      +   '<div class="copa-card-name' + vNameClass + '">' + vIco + escapeHtml(visit) + '</div>'
       + '</div>'
       + '</div>'
       + actaEl

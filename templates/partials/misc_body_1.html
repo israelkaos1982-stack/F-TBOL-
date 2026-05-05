@@ -111,7 +111,7 @@ window._showSimProgress = function(opts, onDone){
 <p>Temporada 32-33</p>
 </div>
 <div class="hdr-btns">
-<button id="guardar-all-btn" onclick="window.guardarTodoProtegido&&window.guardarTodoProtegido()" title="Guardar TODAS las plantillas (protegidas de borrado accidental)" aria-label="Guardar">
+<button id="guardar-all-btn" onclick="window.guardarTodoProtegido&&window.guardarTodoProtegido()" title="💾 Guardar partida (sube TODA la web al servidor)" aria-label="Guardar partida">
 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
 </button>
 <button id="buscar-enfr-btn" onclick="goAmistosos()" title="Buscar Enfrentamientos">🔍</button>
@@ -3359,16 +3359,31 @@ window._showSimProgress = function(opts, onDone){
   });
 
   window.guardarTodoProtegido = function(){
-    /* 1. Descargar .json completo (misma lógica que lextExportBackup) */
-    try {
-      if (typeof window.lextExportBackup === 'function') {
-        window.lextExportBackup();
-      }
-    } catch(_){}
-    /* 2. Activar lock */
+    /* Petición usuario 2026-05-05: el botón disco arriba a la derecha
+       debe guardar TODA la web entera al servidor cada vez que se
+       pulsa, como una partida de videojuego. Una sola pulsación =
+       todo persistido remotamente.
+
+       Estrategia (tres frentes en paralelo):
+         1. Forzar push de `competition_state` (10 claves de Wild Card,
+            Open Qualifier, Previa Champions, etc.) vía
+            window._compStateSyncPush — ya hace POST /api/state.
+         2. Re-subir TODAS las plantillas `ligaExt_<slug>` a su
+            endpoint dedicado /api/liga-ext/<slug>.
+         3. Empujar el resto de claves importantes (liga_results,
+            liga_schedule, copa_state, superliga_*, ef_liga38_*,
+            comp_icons_v1, friendly_match_history…) a
+            /api/state.competition_state como respaldo genérico.
+         4. Activar lock + mirror de cada ligaExt_* a `_protected`
+            (mismo comportamiento de "protección anti-wipe" que ya
+            tenía el botón).
+       Mientras los 3 fetches viajan, mostramos un toast "Guardando…"
+       que pasa a "✅ Partida guardada (N claves)" al terminar todos. */
+    var startedAt = Date.now();
+    var keysPushed = { compState: 0, ligaExt: 0, generic: 0 };
+
+    /* === 0. Activar lock + mirror local — comportamiento antiguo === */
     try { localStorage.setItem(_LOCK_KEY, '1'); } catch(_){}
-    /* 3. Copiar CADA ligaExt_<slug> a una clave `_protected` que
-          sobrevive a cualquier wipe de resets. */
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
@@ -3386,6 +3401,128 @@ window._showSimProgress = function(opts, onDone){
       }
     } catch(_){}
     _updateLockBadge();
+
+    /* === Toast inicial === */
+    var toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed;left:50%;top:60px;transform:translateX(-50%);'
+      + 'background:rgba(8,32,16,.96);border:1px solid rgba(60,200,120,.6);'
+      + 'border-radius:10px;padding:12px 22px;color:#7df0a0;font-family:Oswald,sans-serif;'
+      + 'font-size:14px;letter-spacing:1.5px;font-weight:700;box-shadow:0 8px 32px rgba(0,0,0,.6);'
+      + 'z-index:2147483640;display:flex;align-items:center;gap:10px;';
+    toast.innerHTML = '<span style="font-size:18px;animation:diskSpin 1s linear infinite;display:inline-block;">💾</span>'
+      + '<span>GUARDANDO PARTIDA…</span>';
+    /* Spinner CSS inline para que el balón gire mientras dura el save. */
+    if(!document.getElementById('_diskSpinKf')){
+      var st = document.createElement('style');
+      st.id = '_diskSpinKf';
+      st.textContent = '@keyframes diskSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}';
+      document.head.appendChild(st);
+    }
+    document.body.appendChild(toast);
+
+    /* === 1. Push competition_state (Wild Card, OQ, Previa, etc.) === */
+    var p1 = Promise.resolve();
+    try {
+      if (typeof window._compStateSyncPush === 'function') {
+        window._compStateSyncPush();
+        keysPushed.compState = 10; /* aproximado — lista en comp-state-sync */
+      }
+    } catch(_){}
+
+    /* === 2. Re-subir cada ligaExt_<slug> al endpoint dedicado === */
+    var ligaExtKeys = [];
+    try {
+      for (var j = 0; j < localStorage.length; j++) {
+        var lk = localStorage.key(j);
+        if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+        if (lk.indexOf('_snap_') !== -1 || lk.indexOf('_backup') !== -1 || lk.indexOf('_protected') !== -1) continue;
+        ligaExtKeys.push(lk);
+      }
+    } catch(_){}
+    var p2 = Promise.all(ligaExtKeys.map(function(lk){
+      var slug = lk.substring('ligaExt_'.length);
+      var raw = null;
+      try { raw = localStorage.getItem(lk); } catch(_){}
+      if (!raw) return Promise.resolve();
+      var data;
+      try { data = JSON.parse(raw); } catch(_){ return Promise.resolve(); }
+      return fetch('/api/liga-ext/' + encodeURIComponent(slug), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: data })
+      }).then(function(r){
+        if (r && r.ok) keysPushed.ligaExt++;
+      }).catch(function(){});
+    }));
+
+    /* === 3. Otras claves importantes a competition_state (genérico) ===
+       Lista mantenida acotada — solo lo que tiene sentido recuperar
+       en otro dispositivo. Si añades una competición nueva con su
+       propia clave de localStorage, mete el prefijo aquí. */
+    var GENERIC_KEYS = [];
+    var GENERIC_PREFIXES = [
+      'ef_liga38_',         /* schedule + results de Liga EA */
+      'liga_',              /* otros estados de Liga */
+      'superliga_',         /* Superliga */
+      'manual_ea_',         /* manual EA → Europa */
+      'wprev_',             /* Previa Champions (extra al sync) */
+      'wc_',                /* Wild Card (extra al sync) */
+      'oq_',                /* Open Qualifier (extra al sync) */
+      'europe_',            /* commits de zonas europeas */
+      'comp_icons',         /* iconos custom de Competiciones */
+      'friendlyMatchHistory'/* historial amistosos */
+    ];
+    try {
+      for (var m = 0; m < localStorage.length; m++) {
+        var gk = localStorage.key(m);
+        if (!gk) continue;
+        var match = GENERIC_PREFIXES.some(function(pf){
+          return gk === pf || gk.indexOf(pf) === 0;
+        });
+        if (match && GENERIC_KEYS.indexOf(gk) === -1) GENERIC_KEYS.push(gk);
+      }
+    } catch(_){}
+    var compPatch = {};
+    GENERIC_KEYS.forEach(function(gk){
+      try {
+        var v = localStorage.getItem(gk);
+        if (v != null) {
+          /* Cap individual: 1 MB por clave para no romper el JSON
+             del row global. Si una clave es > 1 MB la saltamos
+             (probablemente datos masivos que ya viven en otro lado). */
+          if (v.length <= 1024 * 1024) compPatch[gk] = v;
+        }
+      } catch(_){}
+    });
+    var p3 = (Object.keys(compPatch).length === 0)
+      ? Promise.resolve()
+      : fetch('/api/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ competition_state: compPatch })
+        }).then(function(r){
+          if (r && r.ok) keysPushed.generic = Object.keys(compPatch).length;
+        }).catch(function(){});
+
+    /* === Esperar a los 3 frentes y mostrar resumen === */
+    Promise.all([p1, p2, p3]).then(function(){
+      var elapsed = Math.round((Date.now() - startedAt) / 100) / 10;
+      var total = keysPushed.compState + keysPushed.ligaExt + keysPushed.generic;
+      toast.innerHTML = '<span style="font-size:18px;">✅</span>'
+        + '<span>PARTIDA GUARDADA · ' + total + ' CLAVES · ' + elapsed.toFixed(1) + ' s</span>';
+      toast.style.borderColor = 'rgba(60,200,120,.85)';
+      setTimeout(function(){
+        try { document.body.removeChild(toast); } catch(_){}
+      }, 2400);
+    }, function(){
+      toast.innerHTML = '<span style="font-size:18px;">⚠️</span>'
+        + '<span>GUARDADO PARCIAL · revisa conexión</span>';
+      toast.style.color = '#ffd0a0';
+      toast.style.borderColor = 'rgba(255,160,80,.85)';
+      setTimeout(function(){
+        try { document.body.removeChild(toast); } catch(_){}
+      }, 3500);
+    });
   };
 
   /* Watcher: si el lock está activo y algún flujo intenta escribir

@@ -2464,11 +2464,13 @@
       alert('No hay partidos IA pendientes en esta fase.');
       return;
     }
-    /* Lanzamos TODOS en paralelo (igual que Liga EA Sports al pulsar
-       SIM J{j} con varios IA-vs-IA pending). Stagger de 120 ms entre
-       cada uno para evitar que el motor de eventos rompa por
-       contención. iaSimLive tickea ~30 s por partido → todos terminan
-       en ~30 s total, no en 18 × 31 s = 9 minutos como antes. */
+    /* Lanzamos TODOS en paralelo (petición usuario 2026-05-05).
+       Stagger micro de 10 ms entre arranques solo para que cada
+       iaSimLive tenga su frame de pintura antes del siguiente —
+       sin esto los timers internos del motor de eventos se podían
+       solapar y romper la contención. iaSimLive tickea 1 game-min
+       = 1 sec real → todos terminan en ~90 s total (paralelos),
+       no en 18 × 90 s = 27 minutos. */
     var i = 0;
     function next() {
       if (i >= pending.length) return;
@@ -2480,7 +2482,7 @@
           window.copaSimIA(ronda, idx, !!esVuelta);
         }
       } catch(_){}
-      setTimeout(next, 120);
+      setTimeout(next, 10);
     }
     next();
   };

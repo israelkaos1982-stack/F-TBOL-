@@ -11499,14 +11499,30 @@
     var halfAnnounced = false;
     var _varActive = false; /* true while VAR 3-second review is playing */
     var _varActiveSince = 0; /* watchdog: si VAR tarda > 5 s, lo desbloqueamos */
-    var TICK_MS = 1000; /* 15s por parte (3' por tick) */
+    /* Spec usuario 2026-05-05: TODA simulación IA-vs-IA (Liga, Copa, UCL,
+       UEL, UECL, Recopa, USC, Inter, Torneos verano, amistosos…) corre
+       a 1 game-minute = 1 segundo real. TICK_MS=1000 + curMin+=1 lo
+       garantiza para todas las competiciones que pasan por iaSimLive. */
+    var TICK_MS = 1000;
+    /* Stoppage dinámico — petición usuario: cada evento del acta suma
+       1 game-minute (= 1 sec real) al tope de SU parte. Como iaSimLive
+       no pausa en HT, aplicamos la suma agregada al final del partido:
+       _etTopMin = 90 + #eventos<45 + #eventos[45,90).
+       Display: cuando curMin > 90 y !etActive mostramos "90+N".
+       Cuando curMin > 45 y curMin ≤ 45+stopFirst mostramos "45+N". */
+    function _evIsField(e){
+      return e && typeof e.min === 'number' &&
+        e.type !== 'mvp' && e.type !== 'played' && e.type !== 'sust';
+    }
+    var _stopFirst  = evts.filter(function(e){ return _evIsField(e) && e.min < 45; }).length;
+    var _stopSecond = evts.filter(function(e){ return _evIsField(e) && e.min >= 45 && e.min < 90; }).length;
     /* Cuando un partido de Copa SINGLE-LEG (1ª/2ª/Final) acaba en
-       empate al 90', extendemos el reloj a la prórroga (90→120, 15 s
-       por parte adicional). Si sigue empate al 120', pre-rolleamos
-       el ganador en penaltis. Se activa solo si el `mk` empieza por
-       "copa_" y la ronda parseada no es de las two-leg. */
+       empate al 90', extendemos el reloj a la prórroga (90→120, 30 s
+       adicionales = 30 game-min × 1 sec). Si sigue empate al 120',
+       pre-rolleamos el ganador en penaltis. Se activa solo si el `mk`
+       empieza por "copa_" y la ronda parseada no es de las two-leg. */
     var _etActive = false;
-    var _etTopMin = 90;
+    var _etTopMin = 90 + _stopFirst + _stopSecond;
     var _copaParts = (typeof mk === 'string' && mk.indexOf('copa_') === 0)
       ? /^copa_([^_]+)_(\d+)_([iv])$/.exec(mk) : null;
     var _isCopaSingleLeg = _copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'fin');
@@ -11536,7 +11552,7 @@
         _varActive = false; _varActiveSince = 0;
       }
       if (_varActive) return; /* VAR review in progress – freeze tick */
-      curMin = Math.min(curMin + 3, _etTopMin);
+      curMin = Math.min(curMin + 1, _etTopMin);
       /* Actualizar PRIMERO el label visible. Antes esto estaba al final
          del tick — si una excepción saltaba dentro del while (procesado
          de eventos, VAR, sustitución, etc.), curMin avanzaba internamente
@@ -11546,7 +11562,8 @@
       if (btn) {
         if (_etActive && curMin > 90 && curMin < 120)      btn.textContent = '⏱ ' + curMin + '\' ET';
         else if (_etActive && curMin >= 120)               btn.textContent = '🏁 FIN ET';
-        else if (curMin >= 90)                             btn.textContent = '🏁 FIN';
+        else if (!_etActive && curMin > 90 && curMin < _etTopMin) btn.textContent = '⏳ 90+' + (curMin - 90) + '\'';
+        else if (!_etActive && curMin >= _etTopMin && curMin >= 90) btn.textContent = '🏁 FIN';
         else                                               btn.textContent = '⏳ ' + curMin + '\'';
       }
       try {
@@ -11701,9 +11718,22 @@
         try { if (typeof console !== 'undefined') console.warn('iaSimLive tick:', _eTick); } catch(_){}
       }
 
+      /* ET activación: tiene que dispararse EXACTAMENTE al min 90 (antes
+         del stoppage) para que el partido pase de 90'→120' en lugar de
+         quedarse en 90+stops y terminar. Antes del cambio a "1 game-min
+         = 1 sec real" + stoppage agregado al final, _etTopMin = 90 y la
+         comprobación `curMin >= _etTopMin` se hacía exactamente al 90.
+         Ahora _etTopMin puede ser 95+, así que separamos la rama ET. */
+      if (curMin === 90 && _isCopaSingleLeg && !_etActive && scA === scB && !_varActive) {
+        /* fallthrough: el bloque ET de abajo se ejecuta vía la siguiente
+           condición porque cae en curMin >= _etTopMin solo si _etTopMin=90.
+           Por simetría con el código existente, lo restauramos a 90 al
+           detectar que vamos a ET — así el bloque heredado se mantiene. */
+        _etTopMin = 90;
+      }
       if (curMin >= _etTopMin && !_varActive) {
         /* PRÓRROGA: si es Copa single-leg y empate al 90, extendemos
-           a 120 (15 s extra por parte) generando ET goals on-the-fly.
+           a 120 (30 s extra a 1 game-min/sec) generando ET goals on-the-fly.
            Si sigue empate al 120, pre-rolleamos el ganador en penaltis
            y emitimos un evento "pen-result" para el acta. */
         if (_isCopaSingleLeg && curMin === 90 && !_etActive && scA === scB) {
@@ -11897,7 +11927,7 @@
           }
         }, 600);
       }
-    }, TICK_MS); /* 1 real second = 3 game minutes → 30 sec (15s + 15s) */
+    }, TICK_MS); /* 1 game-min = 1 sec real → 90 s + stoppage + ET (Copa SL) */
   };
 
   /* ── PODER-VALOR: peso de gol por posición y poder individual ── */

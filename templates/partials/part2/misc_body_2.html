@@ -9889,6 +9889,36 @@
 
   window.gmEndMatch = function () {
     if (_gm.finished) return;
+    /* ── COPA SINGLE-LEG: empate al 90' / 120' ─────────────────────
+       Reglamento del usuario: en partidos a partido único de Copa
+       del Rey (1ª Ronda, 2ª Ronda, FINAL), si hay empate al final
+       del tiempo regular se juega prórroga (30 game-min). Si sigue
+       el empate al final de la prórroga, se va a penaltis. SIEMPRE
+       tiene que haber un ganador. Aquí bloqueamos el FINALIZAR si
+       el match termina empatado y forzamos la siguiente fase. */
+    var _isCopaSL = (!!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin')
+                  && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
+    if (_isCopaSL && _gm.sc.a === _gm.sc.b && !_gm.penDone) {
+      if (!_gm.etDone) {
+        var minNow = Math.floor((_gm.timerSec || 0) / 60);
+        alert('⏱ EMPATE al ' + minNow + '\' — la Copa exige PRÓRROGA.\n\n'
+            + 'Se han añadido 30 minutos extra (15 cada parte).\n'
+            + 'Pulsa ▶ para reanudar el cronómetro.');
+        window.gmActivateET();
+        return;
+      }
+      if (_gm.timerSec >= GM_MAX_ET) {
+        /* 120' empate persistente → tanda de penaltis. */
+        if (typeof window._gmCopaShowPenShootout === 'function') {
+          window._gmCopaShowPenShootout();
+        }
+        return;
+      }
+      /* ET activa pero aún no llegó a 120 — el usuario pulsó
+         FINALIZAR antes de tiempo. Bloqueo defensivo. */
+      alert('⏱ Aún no se han jugado los 120 minutos completos de la prórroga. Continúa el partido.');
+      return;
+    }
     // ── Portería imbatida obligatoria antes del MVP ──
     // Si algún equipo ha encajado 0 goles, se fuerza el registro del
     // portero (humano: overlay · IA: auto con el GK de mayor poder).
@@ -10013,9 +10043,11 @@
          prórroga + penaltis si los hubo. */
       try {
         var _cpMvp = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
-        var _cpPenWin = null;
-        var _cpPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
-        if (_cpPenEv) _cpPenWin = _cpPenEv.team === 'a' ? _gm.home : _gm.away;
+        var _cpPenWin = _gm.penWinner || null;
+        if (!_cpPenWin) {
+          var _cpPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
+          if (_cpPenEv) _cpPenWin = _cpPenEv.team === 'a' ? _gm.home : _gm.away;
+        }
         var _cpEt = _gm.etScores || {};
         if (typeof window._copaSaveHumanResult === 'function') {
           window._copaSaveHumanResult(
@@ -10676,7 +10708,15 @@
          serializado `noET` (volvía a aparecer el botón al reabrir
          desde la caja Derbys). */
       var _isLiga = !_gm.comp;
-      var _showET = _gm.isHvH && !_gm.noET && !_isLiga;
+      /* PRÓRROGA visible siempre que: (a) sea HvH y no esté forbidden,
+         o (b) sea Copa del Rey (HvIA o HvH) en eliminatoria a partido
+         único — el reglamento del usuario exige prórroga + penaltis
+         si hay empate. Para 2-leg de Copa (16avos/Octavos/Cuartos/Semis)
+         no hace falta porque la prórroga del aggregate la maneja el
+         engine de Copa al confirmar la vuelta. */
+      var _isCopa = !!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin';
+      var _isCopaSingleLeg = _isCopa && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
+      var _showET = (_gm.isHvH && !_gm.noET && !_isLiga) || _isCopaSingleLeg;
       etBtn.style.display = _showET ? '' : 'none';
       etBtn.disabled = !!_gm.etDone;
       etBtn.style.opacity = _gm.etDone ? '0.35' : '1';
@@ -10845,6 +10885,70 @@
     var isHvH = esHumano(home) && esHumano(away);
     gmOpen(j, home, away, isHvH, '', true, false); /* noET=true: liga no tiene prórroga */
   };
+
+  /* ── COPA · TANDA DE PENALTIS (overlay del gm-modal) ────────────
+     Se muestra cuando un partido humano de Copa single-leg termina
+     empatado al 120'. El usuario indica el resultado de la tanda
+     (Local 5 - 4 Visitante, etc.) y al confirmar:
+       1. Inserta un evento type='pen-result' en _gm.events con el
+          team del ganador (a/b) y un texto "tanda 5-4".
+       2. Marca _gm.penDone=true para desbloquear gmEndMatch.
+       3. Llama de nuevo a gmEndMatch para continuar con MVP +
+          guardado normal en /api/copa/guardar_resultado. */
+  window._gmCopaShowPenShootout = function () {
+    var ov = document.getElementById('_gmCopaPenOv');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = '_gmCopaPenOv';
+      ov.style.cssText = 'display:flex;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:18px;';
+      ov.innerHTML = ''
+        + '<div style="background:linear-gradient(180deg,#1a0d04,#0a0502);border:2px solid #ffd54a;border-radius:14px;padding:18px 16px;max-width:380px;width:100%;text-align:center;box-shadow:0 0 36px rgba(255,213,74,.35);">'
+        +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;letter-spacing:2px;color:#ffd54a;margin-bottom:6px;">🥅 TANDA DE PENALTIS</div>'
+        +   '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.7);letter-spacing:.5px;margin-bottom:16px;">El partido acabó empatado al 120\'. Indica el resultado de la tanda.</div>'
+        +   '<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;">'
+        +     '<div id="_gmCopaPenHomeName" style="flex:1;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#fff;text-align:right;"></div>'
+        +     '<input id="_gmCopaPenA" type="number" min="0" max="20" value="0" style="width:54px;font-size:22px;font-family:\'Bebas Neue\',sans-serif;text-align:center;background:#000;color:#5fe08a;border:1px solid rgba(95,224,138,.5);border-radius:6px;padding:4px;"/>'
+        +     '<span style="color:#fff;font-size:18px;">–</span>'
+        +     '<input id="_gmCopaPenB" type="number" min="0" max="20" value="0" style="width:54px;font-size:22px;font-family:\'Bebas Neue\',sans-serif;text-align:center;background:#000;color:#5fe08a;border:1px solid rgba(95,224,138,.5);border-radius:6px;padding:4px;"/>'
+        +     '<div id="_gmCopaPenAwayName" style="flex:1;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#fff;text-align:left;"></div>'
+        +   '</div>'
+        +   '<button id="_gmCopaPenConfirm" style="width:100%;padding:12px;border-radius:8px;border:1px solid rgba(95,224,138,.7);background:linear-gradient(135deg,rgba(61,204,110,.28),rgba(40,180,90,.18));color:#5fe08a;font-family:\'Bebas Neue\',sans-serif;font-size:16px;letter-spacing:2px;cursor:pointer;">✓ CONFIRMAR TANDA</button>'
+        + '</div>';
+      document.body.appendChild(ov);
+      document.getElementById('_gmCopaPenConfirm').addEventListener('click', function () {
+        var pa = parseInt(document.getElementById('_gmCopaPenA').value, 10) || 0;
+        var pb = parseInt(document.getElementById('_gmCopaPenB').value, 10) || 0;
+        if (pa === pb) {
+          alert('❗ La tanda no puede acabar empatada — debe haber un ganador.');
+          return;
+        }
+        var winTeam = pa > pb ? 'a' : 'b';
+        var winName = winTeam === 'a' ? _gm.home : _gm.away;
+        _gm.events.push({
+          id: window._evtId(),
+          type: 'pen-result',
+          team: winTeam,
+          min: 121,
+          player: winName,
+          ico: '🥅',
+          label: 'Tanda ' + pa + '-' + pb
+        });
+        _gm.penDone = true;
+        _gm.penWinner = winName;
+        _gm.penScore = pa + '-' + pb;
+        var ovEl = document.getElementById('_gmCopaPenOv');
+        if (ovEl) ovEl.style.display = 'none';
+        /* Continúa el flujo normal de gmEndMatch ahora que penDone=true. */
+        window.gmEndMatch();
+      });
+    }
+    document.getElementById('_gmCopaPenHomeName').textContent = (_gm.home || '');
+    document.getElementById('_gmCopaPenAwayName').textContent = (_gm.away || '');
+    document.getElementById('_gmCopaPenA').value = '0';
+    document.getElementById('_gmCopaPenB').value = '0';
+    ov.style.display = 'flex';
+  };
+
 
   /* Copa del Rey: abre gm-modal con flag _isCopa para que gmEndMatch
      persista el resultado en /api/copa/guardar_resultado en lugar de

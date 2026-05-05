@@ -10846,6 +10846,21 @@
     var _isCopaSingleLeg = _copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'fin');
     var _copaET = { et_gl: 0, et_gv: 0, pen_winner: null };
 
+    /* COPA SINGLE-LEG con empate previsto al 90': el partido va a
+       prórroga, así que la portería imbatida NO se decide al 90'.
+       Filtramos los imbat-at-90 que `genMatchEventsEnhanced` haya
+       emitido. La imbat se re-emitirá al 120' (después de la
+       prórroga) para los equipos que SIGAN sin encajar gol. Si tras
+       penaltis... bueno, los penaltis no cuentan para imbat (regla
+       estándar de fútbol — la imbatida solo aplica al tiempo
+       reglamentario + prórroga). */
+    if (_isCopaSingleLeg && simScore.gh === simScore.ga) {
+      evts = evts.filter(function (e) { return !(e && e.type === 'imbat'); });
+      if (evtData && Array.isArray(evtData.events)) {
+        evtData.events = evtData.events.filter(function (e) { return !(e && e.type === 'imbat'); });
+      }
+    }
+
     var interval = setInterval(function() {
       /* Watchdog: si _varActive lleva más de 5 s, lo forzamos a false.
          Antes, si la setTimeout del VAR fallaba (excepción al actualizar
@@ -11082,6 +11097,46 @@
           }
           /* No clearInterval: el tick sigue hasta 120. */
           return;
+        }
+        /* Imbatida tras la prórroga (120'): si fue Copa single-leg con
+           ET, la imbatida se decide AHORA según el marcador final
+           (regular + ET, sin contar la tanda de penaltis). Para el
+           equipo que mantenga 0 goles encajados, se emite el evento
+           de portería imbatida en min=120. Antes esto se hacía a 90'
+           y se quedaba "anclada" aunque el equipo encajase en la
+           prórroga, dando una imbatida falsa. */
+        if (_isCopaSingleLeg && _etActive && curMin >= 120) {
+          function _topGkSafe(teamName) {
+            var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
+            var gks = sq.filter(function(p){ return Array.isArray(p) && p[2] === 'P'; })
+                        .sort(function(a,b){ return (Number(b[3])||0) - (Number(a[3])||0); });
+            return gks.length ? gks[0] : null;
+          }
+          function _appendImbatActa(player, teamName, side) {
+            if (!actaEl) return;
+            var row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);';
+            row.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">120\'</span>'
+              + '<span style="font-size:14px;">🧤</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + (player || '?') + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + teamName + '</span>';
+            actaEl.appendChild(row);
+          }
+          /* Si el equipo A (local) no encajó goles en regular+ET → imbatida del portero A */
+          if (scB === 0) {
+            var gkAfin = _topGkSafe(home);
+            if (gkAfin && evtData && evtData.events) {
+              evtData.events.push({ type:'imbat', ico:'🧤', min:120, team:'a', num:gkAfin[0]||'', player:gkAfin[1]||'?' });
+              _appendImbatActa(gkAfin[1] || '?', home, 'a');
+            }
+          }
+          if (scA === 0) {
+            var gkBfin = _topGkSafe(away);
+            if (gkBfin && evtData && evtData.events) {
+              evtData.events.push({ type:'imbat', ico:'🧤', min:120, team:'b', num:gkBfin[0]||'', player:gkBfin[1]||'?' });
+              _appendImbatActa(gkBfin[1] || '?', away, 'b');
+            }
+          }
         }
         /* Penaltis si tras 120' sigue el empate (Copa single-leg). */
         if (_isCopaSingleLeg && _etActive && curMin >= 120 && scA === scB) {

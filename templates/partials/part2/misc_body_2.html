@@ -10070,10 +10070,15 @@
       ? window.getTeamEfootballAlias : function(){ return ''; };
     var _gmHomeAliasTxt = (_gmHumB && !_gmHumA) ? _gmAliasFor(home) : '';
     var _gmAwayAliasTxt = (_gmHumA && !_gmHumB) ? _gmAliasFor(away) : '';
-    function _gmAliasHtml(txt){
-      if(!txt) return '';
-      return '<div class="gm-team-alias" style="font-family:Rajdhani,sans-serif;font-size:10px;font-weight:600;letter-spacing:.5px;color:rgba(255,255,255,.65);text-align:center;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;">🎮 '+String(txt).replace(/[<>]/g,'')+'</div>';
-    }
+    /* Alias eFootball — petición usuario 2026-05-04: el alias debe
+       aparecer ÚNICAMENTE en la pantalla de PREVIA (donde el usuario
+       confirma con qué equipo eFootball juega). Una vez el partido
+       arranca y entramos al gm-modal, el alias estorba: descoloca
+       escudos y rompe la organización del header. Por eso aquí lo
+       devolvemos vacío. La info sigue persistida en
+       `getTeamEfootballAlias` por si otros consumidores la
+       necesitan. */
+    function _gmAliasHtml(txt){ return ''; }
     var elA = document.getElementById('gm-team-a-name');
     var elB = document.getElementById('gm-team-b-name');
     if (elA) elA.innerHTML = shA + '<span>' + home + '</span>' + _gmAliasHtml(_gmHomeAliasTxt);

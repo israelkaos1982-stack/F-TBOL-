@@ -1130,7 +1130,7 @@
      / `.ml-team-name` / `.ml-score` / `.ml-previa-btn` para que se vea
      idéntico al patrón de Liga (escudo grande + nombre completo
      debajo + score/previa centrado). */
-  function _superMatchCard(j, home, away, res){
+  function _superMatchCard(j, idx, home, away, res){
     var hEsc = String(home).replace(/'/g,"\\'");
     var aEsc = String(away).replace(/'/g,"\\'");
     function _shieldImg(name){
@@ -1159,6 +1159,31 @@
       +     '<div class="ml-team-name">' + _esc(away) + _humanSuffix(away) + '</div>'
       +   '</div>'
       + '</div>'
+      + _superActaHtml(j, idx, home, away, res)
+      + '</div>';
+  }
+
+  /* Si el partido ha terminado, añade el desplegable "ACTA DEL PARTIDO"
+     reutilizando window._iaEventsHtml + window.iaActaTog (idénticos a la
+     pantalla de Liga · Resultados IA). cid sigue el patrón
+     'slj{j}m{idx}' para que el toggle sea único por partido. */
+  function _superActaHtml(j, idx, home, away, res){
+    if(!res) return '';
+    var cid = 'slj' + j + 'm' + idx;
+    var evObj = { home: home, away: away, gh: res.gh, ga: res.ga, events: res.events || [] };
+    var evHtml = '';
+    if(typeof window._iaEventsHtml === 'function'){
+      try { evHtml = window._iaEventsHtml(evObj); } catch(_){ evHtml = ''; }
+    }
+    if(!evHtml){
+      evHtml = '<div style="padding:10px 12px;color:#555;font-size:11px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1px;">SIN ACTA DISPONIBLE</div>';
+    }
+    return '<div class="ml-acta" data-ia="1">'
+      + '<button class="ml-acta-toggle" onclick="window.iaActaTog(\'' + cid + '\')">'
+      +   '<span class="acta-ia-lbl">📋 ACTA DEL PARTIDO</span>'
+      +   '<span class="acta-arr" id="ia-arr-' + cid + '">▼</span>'
+      + '</button>'
+      + '<div class="ml-acta-body" id="ia-acta-' + cid + '"><div class="ml-evlist">' + evHtml + '</div></div>'
       + '</div>';
   }
 
@@ -1189,9 +1214,9 @@
         + '<div class="pdot">' + (allDone ? '✅' : '▶') + '</div>'
         + '⭐ <b>Superliga</b>&nbsp; Jornada ' + j + '</button>';
       html += '<div class="jmatches' + openCls + '" id="' + jid + '">';
-      round.forEach(function(m){
+      round.forEach(function(m, mIdx){
         var res = results[_rKey(j, m[0], m[1])];
-        html += _superMatchCard(j, m[0], m[1], res);
+        html += _superMatchCard(j, mIdx, m[0], m[1], res);
       });
       html += '</div></div>';
     });
@@ -1214,6 +1239,7 @@
       var nm = e.player || e.name || '';
       return { id:e.id, type:e.type, team:e.team, min:e.min, num:e.num||'', player:nm };
     });
+    var mvpTeamName = (mvpTeamId === 'a' ? home : mvpTeamId === 'b' ? away : (prev.mvpTeam || ''));
     /* Sanea matchStats: solo conservamos las claves que el dashboard
        sabe agregar (posesion / remates / tiros / corners / paradas /
        amar / roj). Numeric-cast obligatorio. */
@@ -1231,11 +1257,27 @@
       gh: gh, ga: ga,
       events: safeEvents,
       mvp: mvpName || prev.mvp || '',
-      mvpTeam: (mvpTeamId === 'a' ? home : mvpTeamId === 'b' ? away : (prev.mvpTeam || '')),
+      mvpTeam: mvpTeamName,
       matchStats: safeStats,
       ts: Date.now()
     };
     saveResults(results);
+    /* Sumar al store de stats de Liga EA con compKey='superliga' (storeKey
+       diferenciado) para que goles/tarjetas/MVP de partidos humanos de
+       Superliga cuenten en la plantilla del equipo (PG/PS/Tarjetas
+       individuales) y en el dashboard "Liga · Estadísticas". El cuadro
+       propio "Superliga · Estadísticas" sigue calculándose desde
+       superliga_results_v1; no hay double-counting porque cada cuadro
+       lee su propia fuente. */
+    try {
+      if(typeof window.registrarLigaPlayerStats === 'function'){
+        var statsEv = (events || []).filter(function(e){
+          return e && e.type !== 'pen-result' && !e._varAnulado;
+        });
+        var slMk = 'superliga_j' + j + '_' + String(home).replace(/\s+/g,'') + '_' + String(away).replace(/\s+/g,'');
+        window.registrarLigaPlayerStats(slMk, home, away, statsEv, mvpName || '', mvpTeamName, 'superliga');
+      }
+    } catch(_){}
     buildClas();
     /* Refresca el dashboard de estadísticas si ya existe (puede no
        haberse construido aún si el usuario no ha entrado nunca a
@@ -1256,15 +1298,39 @@
     } catch(_){}
   };
 
+  /* Patch one-shot de _ppResetFormStates: el reset interno de
+     showPrePartidoOverlay borra _ppDurationMin a null al abrir cada
+     previa. Para Superliga (HvH) la duración por defecto debe ser 10 min
+     en lugar de los 15:45 estándar de HvH. Esquema:
+       1. _openSuperligaMatch fija _slPendingDur = 10
+       2. showPrePartidoOverlay corre _ppResetFormStates() que borra todo
+       3. nuestro patch lee _slPendingDur y vuelve a poner _ppDurationMin
+       4. _buildItems / _renderPreviaMeta leen _ppDurationMin = 10
+     El usuario sigue pudiendo editar la duración con ✏️ — al cambiarla
+     re-renderiza con el nuevo valor. */
+  (function(){
+    var orig = window._ppResetFormStates;
+    if(typeof orig !== 'function' || orig._slPatched) return;
+    window._ppResetFormStates = function(){
+      orig.apply(this, arguments);
+      if(window._slPendingDur != null){
+        window._ppDurationMin = window._slPendingDur;
+        window._slPendingDur = null;
+      }
+    };
+    window._ppResetFormStates._slPatched = true;
+  })();
+
   /* Abre el flujo Previa → gmOpen para un partido HvH de Superliga. */
   window._openSuperligaMatch = function(j, home, away){
     var cal = ensureCalendar();
     if(!cal) return;
     var results = loadResults();
     if(results[_rKey(j, home, away)]) return; /* ya jugado */
-    var duracion = (typeof window._mlRealDurationLabel === 'function')
-      ? window._mlRealDurationLabel({ isHvH: true, humanInvolved: true })
-      : '15 min 45 s';
+    /* Duración por defecto: 10 min reales (todos los partidos son HvH).
+       El usuario puede editarlo en la previa con ✏️. */
+    window._slPendingDur = 10;
+    var duracion = '10 min';
     window._ppPreviaTeams = { home: home, away: away, j: j, comp: 'superliga' };
     window._ppCustomCallback = function(){
       window._ppPreviaTeams = null;

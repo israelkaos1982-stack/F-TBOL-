@@ -6614,10 +6614,10 @@
     var rojasPush = [];
     /* Pools de jugadores fuera de la portería para ambos equipos */
     var sqAa = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(st.home)) || [];
-    var outAa = sqAa.filter(function(p){ return p && p[2] !== 'P'; });
+    var outAa = sqAa.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
     if (!outAa.length) outAa = [['', 'Jugador', 'F', 76]];
     var sqBa = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(st.away)) || [];
-    var outBa = sqBa.filter(function(p){ return p && p[2] !== 'P'; });
+    var outBa = sqBa.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
     if (!outBa.length) outBa = [['', 'Jugador', 'F', 76]];
     /* Mapas de jugadores expulsados (nombre → minuto) y de amarillas ya
        repartidas, para evitar 2 amarillas al mismo jugador sin expulsión. */
@@ -6756,7 +6756,7 @@
     var r = typeof simSimple === 'function' ? simSimple(humanA ? humRat : aiRat, humanA ? aiRat : humRat) : {gh:1,ga:1};
     var aiGoals = humanA ? r.ga : r.gh;
     var sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(aiTeamName)) || [];
-    var out = sq.filter(function(p){ return p[2] !== 'P'; });
+    var out = sq.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
     if (!out.length) out = [['','Jugador IA','F',76]];
     st.pendingAIEvents = [];
     var mins = [];
@@ -10796,8 +10796,8 @@
     if (!ev.events || !ev.events.length) {
       var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(_gm.home)) || [];
       var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(_gm.away)) || [];
-      var outA = sqA.filter(function(p){ return p && p[2] !== 'P'; });
-      var outB = sqB.filter(function(p){ return p && p[2] !== 'P'; });
+      var outA = sqA.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
+      var outB = sqB.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
       if (!outA.length) outA = [['','Jugador A','F',76]];
       if (!outB.length) outB = [['','Jugador B','F',76]];
       var tmpEvents = [];
@@ -11167,10 +11167,15 @@
     var evts = base.events;
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
-    var outA = sqA.filter(function(p){ return p[2] !== 'P'; });
-    var outB = sqB.filter(function(p){ return p[2] !== 'P'; });
-    var gkA  = sqA.filter(function(p){ return p[2] === 'P'; });
-    var gkB  = sqB.filter(function(p){ return p[2] === 'P'; });
+    /* Excluir headers de sección {h:'🧤 PORTEROS'} con `Array.isArray`.
+       Antes el filtro `p[2] !== 'P'` los DEJABA pasar (p[2] de un
+       header es undefined, undefined !== 'P' es true), así que rndSq
+       a veces elegía un header y `header[1]` era undefined → en el
+       acta salía "?" como nombre de jugador. */
+    var outA = sqA.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
+    var outB = sqB.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
+    var gkA  = sqA.filter(function(p){ return Array.isArray(p) && p[2] === 'P'; });
+    var gkB  = sqB.filter(function(p){ return Array.isArray(p) && p[2] === 'P'; });
     if (!outA.length) outA = [['','Jugador A','F',76]];
     if (!outB.length) outB = [['','Jugador B','F',76]];
     if (!gkA.length) gkA = [['1','Portero A','P',76]];
@@ -11812,16 +11817,22 @@
     var sqA = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamA)) || [];
     var sqB = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamB)) || [];
 
-    // Split into titulares (active) and suplentes (bench) — p[4] field
-    var activeA = sqA.filter(function(p){ return p[4] === 'titular'; });
-    var activeB = sqB.filter(function(p){ return p[4] === 'titular'; });
-    var benA    = sqA.filter(function(p){ return p[4] === 'suplente'; });
-    var benB    = sqB.filter(function(p){ return p[4] === 'suplente'; });
-    if (!activeA.length) activeA = sqA.slice();
-    if (!activeB.length) activeB = sqB.slice();
+    // Split into titulares (active) and suplentes (bench) — p[4] field.
+    // Array.isArray(p) excluye los {h:'…'} headers (que tienen p[4]
+    // undefined). Sin esto, p[4]==='titular' ya los filtra, pero el
+    // fallback `sqA.slice()` los re-incluiría → mejor hacer el filtro
+    // explícito en TODOS los casos.
+    var activeA = sqA.filter(function(p){ return Array.isArray(p) && p[4] === 'titular'; });
+    var activeB = sqB.filter(function(p){ return Array.isArray(p) && p[4] === 'titular'; });
+    var benA    = sqA.filter(function(p){ return Array.isArray(p) && p[4] === 'suplente'; });
+    var benB    = sqB.filter(function(p){ return Array.isArray(p) && p[4] === 'suplente'; });
+    if (!activeA.length) activeA = sqA.filter(function(p){ return Array.isArray(p); });
+    if (!activeB.length) activeB = sqB.filter(function(p){ return Array.isArray(p); });
 
-    // Outfield scorers (no GK). Built from active so injuries affect who can score
-    function getOutfield(active) { return active.filter(function(p){ return p[2] !== 'P'; }); }
+    // Outfield scorers (no GK). Built from active so injuries affect who can score.
+    // Array.isArray(p) excluye los headers de sección {h:'⚡ DELANTEROS'} —
+    // sin esto rndSq podría elegir un header y meter "?" en el acta.
+    function getOutfield(active) { return active.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; }); }
     var outA = getOutfield(activeA);
     var outB = getOutfield(activeB);
     if (!outA.length) outA = [['','Jugador A','F',76,'titular']];
@@ -11876,8 +11887,8 @@
       m.sort(function(a,b){ return a - b; });
       return m;
     }
-    var benAOut = benA.filter(function(p){ return p[2] !== 'P'; });
-    var benBOut = benB.filter(function(p){ return p[2] !== 'P'; });
+    var benAOut = benA.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
+    var benBOut = benB.filter(function(p){ return Array.isArray(p) && p[2] !== 'P'; });
     var plannedSubsA = Math.min(maxSubs, benAOut.length);
     var plannedSubsB = Math.min(maxSubs, benBOut.length);
     var subMinsA = _rollSubMins(plannedSubsA, 46, 85);
@@ -12075,7 +12086,7 @@
     function _topGk(teamNameLocal) {
       if (typeof window.sqFromRegistryFull === 'function') {
         var full = window.sqFromRegistryFull(teamNameLocal) || [];
-        var gks = full.filter(function(p){ return p[2] === 'P'; })
+        var gks = full.filter(function(p){ return Array.isArray(p) && p[2] === 'P'; })
                       .sort(function(a,b){ return (b[3]||0) - (a[3]||0); });
         if (gks.length) return { num: gks[0][0] || '', name: gks[0][1] || '' };
       }

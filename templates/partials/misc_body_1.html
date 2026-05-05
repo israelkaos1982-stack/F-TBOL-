@@ -9471,10 +9471,34 @@ window._showSimProgress = function(opts, onDone){
        penSaved). */
     var teamFlag = {};   /* normNm(teamName) -> flag emoji */
     var byPlayer = {};   /* "team::name" -> {name,team,flag,gol,pen,fk,mvp,imbat,penSaved,ta,tr} */
+    /* Diagnóstico (2026-05-05): el usuario reportó que las stats de
+       la Liga Inglesa NO aparecían en "Resto de Ligas · Estadísticas"
+       aunque los jugadores SÍ tenían stats en su plantilla individual.
+       Sospecha: mismatch entre el slug de la menu-card (`_slugify(name)`)
+       y la clave real en localStorage (`ligaExt_<slug>`). Loguear lo
+       inspeccionado nos permite ver desde consola qué pasó exactamente. */
+    var _diag = [];
     _eachLeagueCard(function(name, flag){
       var slug = _slugify(name);
       var data = _readLigaData(slug);
-      if(!data || !Array.isArray(data.teams)) return;
+      if(!data || !Array.isArray(data.teams)){
+        _diag.push({slug:slug, name:name, status:'sin-data'});
+        return;
+      }
+      var nTeams = data.teams.length;
+      var nPlayers = 0, sumGol = 0, sumPj = 0;
+      data.teams.forEach(function(_t){
+        if(_t && Array.isArray(_t.players)){
+          nPlayers += _t.players.length;
+          _t.players.forEach(function(_p){
+            if(!_p) return;
+            sumGol += Number(_p.gol||0);
+            sumPj  += Number(_p.pj||0);
+          });
+        }
+      });
+      _diag.push({slug:slug, name:name, status:'ok', teams:nTeams,
+                  players:nPlayers, gol:sumGol, pj:sumPj});
       data.teams.forEach(function(t){
         if(!t || !t.name) return;
         teamFlag[_normNm(t.name)] = flag;
@@ -9512,6 +9536,12 @@ window._showSimProgress = function(opts, onDone){
         });
       return list.slice(0, n);
     }
+    /* Expone el diagnóstico para que el admin pueda revisar desde
+       consola: window._lastRestoStatsDiag. Si una liga reporta
+       'sin-data' o 0 jugadores, o si gol=0 cuando se sabe que
+       hubo partidos, ahí hay un slug roto / data perdida. */
+    try { window._lastRestoStatsDiag = _diag; } catch(_){}
+    try { console.log('[restoLigas-stats] inspeccionadas', _diag.length, 'ligas — ver window._lastRestoStatsDiag'); } catch(_){}
     return {
       goleadores:    topBy('gol',      15),
       penaltis:      topBy('pen',      15),
@@ -10567,12 +10597,22 @@ Tottenham
           catch(_) { return false; }
         }
         try {
-          var snaps = [], backups = [];
+          var snaps = [], backups = [], protectedKeys = [];
+          /* Slug actual extraído del key — para EVITAR borrar el
+             _protected de la liga que estamos guardando ahora mismo
+             (sería pegarse un tiro en el pie). */
+          var currentSlug = '';
+          var _ksm = /^ligaExt_([^_]+(?:_[^_]+)*)$/.exec(key);
+          if(_ksm) currentSlug = _ksm[1].replace(/(_protected|_backup|_snap_\d+)$/, '');
           for(var i=0; i<localStorage.length; i++){
             var kk = localStorage.key(i);
             if(!kk) continue;
             if(/^ligaExt_.+_snap_\d+$/.test(kk)) snaps.push(kk);
             else if(/^ligaExt_.+_backup$/.test(kk)) backups.push(kk);
+            else {
+              var pmatch = /^ligaExt_(.+)_protected$/.exec(kk);
+              if(pmatch && pmatch[1] !== currentSlug) protectedKeys.push(kk);
+            }
           }
           /* Paso 1: snapshots ordenados ascendentemente (más antiguo
              primero). */
@@ -10587,6 +10627,26 @@ Tottenham
             try { localStorage.removeItem(backups[b]); } catch(_){}
             if(_retry()) return true;
           }
+          /* Paso 3 (último recurso, 2026-05-05): _protected de OTRAS
+             ligas. Sus datos viven en el servidor (loadData hace XHR
+             a /api/liga-ext/<slug> cuando local está vacío), así que
+             borrarlos no pierde info — solo fuerza una re-descarga
+             la próxima vez que se abra esa liga. NO tocamos el
+             _protected de la liga actual: es la copia de seguridad
+             que está guardando _saveData. */
+          for(var p=0; p<protectedKeys.length; p++){
+            try { localStorage.removeItem(protectedKeys[p]); } catch(_){}
+            if(_retry()) return true;
+          }
+          /* Paso 4: comp_icons_v1 (iconos custom de competiciones)
+             pueden pesar 100-500 KB cada uno. Si seguimos sin espacio,
+             los liberamos — el admin tendrá que volver a subirlos. */
+          try {
+            if(localStorage.getItem('comp_icons_v1')){
+              localStorage.removeItem('comp_icons_v1');
+              if(_retry()) return true;
+            }
+          } catch(_){}
         } catch(_){}
         return false;
       }
@@ -10617,13 +10677,34 @@ Tottenham
       }
     }
     /* Si la clave principal NO se pudo escribir (quota lleno tras
-       limpieza), avisamos UNA vez al usuario con un alert claro. La
-       data viva en LIGA_CACHE y el server (POST de abajo), así que
-       el partido en curso sigue funcionando, pero al recargar la
-       página podría perderse si el servidor también falla. */
+       limpieza), avisamos al usuario UNA vez con un toast NO
+       bloqueante (antes usábamos alert() — pausaba la simulación
+       en mitad del bucle de las 51 ligas, las 4-5 últimas se
+       quedaban sin simular hasta que el usuario clicaba Aceptar).
+       La data viva sigue en LIGA_CACHE y se sube al servidor (POST
+       de abajo), así que el partido en curso sigue funcionando.
+       Reportado por usuario 2026-05-05. */
     if (!_saveOk && !window._lextQuotaWarned) {
       window._lextQuotaWarned = true;
-      try { alert('⚠️ El navegador está sin espacio (localStorage lleno) y no he podido guardar la plantilla en local.\n\nLos cambios se han subido al servidor, pero conviene cerrar otras pestañas o limpiar caché para que el guardado local funcione de nuevo.'); } catch(_){}
+      try { console.warn('[saveData] localStorage lleno tras limpieza — datos en servidor, local desactivado para esta sesión.'); } catch(_){}
+      try {
+        /* Toast simple con auto-dismiss a los 8 s. Se inserta en
+           document.body con z-index alto para que quede visible sobre
+           el overlay de progreso del balón. */
+        var tEl = document.createElement('div');
+        tEl.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
+          + 'background:rgba(40,16,4,.96);border:1px solid rgba(240,160,80,.5);'
+          + 'border-radius:10px;padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;'
+          + 'font-size:13px;letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
+          + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
+        tEl.innerHTML = '⚠️ Navegador sin espacio. Los cambios se '
+          + '<b>siguen subiendo al servidor</b>, pero conviene limpiar '
+          + 'caché para reactivar el guardado local.';
+        document.body.appendChild(tEl);
+        setTimeout(function(){
+          try { document.body.removeChild(tEl); } catch(_){}
+        }, 8000);
+      } catch(_){}
     }
     /* ── BACKUPS AUTOMÁTICOS ──
        Snapshots datados (_snap_<ts>) hasta 2 más recientes. El

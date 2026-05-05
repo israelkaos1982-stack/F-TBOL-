@@ -6789,7 +6789,30 @@ window._showSimProgress = function(opts, onDone){
   function computeUclClassified(){
     var frozen = _europeFrozenFor('ucl');
     if(frozen) return frozen.slice();
-    return _prependManualEa(_computeQualifiedFromLeagues('ucl'), 'ucl');
+    var arr = _computeQualifiedFromLeagues('ucl');
+    /* Los 11 ganadores de los 11 grupos de la Ronda Final de la Previa
+       de Champions entran AUTOMÁTICAMENTE como plazas extra a la Fase
+       de Grupos en la MISMA temporada (petición usuario 2026-05-05).
+       Total objetivo del pool UCL: 29 directos por liga + 11 de Previa
+       = 40 equipos. Los 11 los persiste el módulo de la Previa en
+       `wprev_to_fase_grupos_v1` cuando todas las jornadas terminan.
+       Dedupe por nombre — si un equipo ya está clasificado directo
+       por su liga, no se duplica. */
+    try {
+      var raw = localStorage.getItem('wprev_to_fase_grupos_v1');
+      if(raw){
+        var data = JSON.parse(raw);
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        var seen = {};
+        arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+        teams.forEach(function(t){
+          if(!t || !t.name || seen[t.name]) return;
+          seen[t.name] = true;
+          arr.push({name:t.name, logo:t.logo||'', league:'previa-champions'});
+        });
+      }
+    } catch(_){}
+    return _prependManualEa(arr, 'ucl');
   }
   function computeUclPrevTeams(){
     var frozen = _europeFrozenFor('uclPrev');
@@ -15941,6 +15964,11 @@ Tottenham
     if(oq) oq.classList.toggle('is-done', _oqDone());
     if(prev) prev.classList.toggle('is-done', _wprevDone());
   }
+  /* Expuesto para que el módulo de Previa Champions (otro IIFE)
+     pueda forzar el refresh inmediato cuando la liguilla termina —
+     sin esto el usuario tenía que salir y volver a s-champions
+     para ver la caja en gris. */
+  window._refreshChampionsDoneFlags = refresh;
   var _origGoChamp = window.go;
   if(typeof _origGoChamp === 'function'){
     window.go = function(id){

@@ -20899,6 +20899,26 @@ document.addEventListener('DOMContentLoaded', function() {
     _persistChampionsAndEuropa(state);
     state.phase = 'done';
     state.ts = Date.now();
+    /* Avisa al hub de Champions para que la caja "Previa Champions"
+       pase al estado COMPLETADA (gris) sin necesidad de navegar
+       fuera y volver. _refreshChampionsDoneFlags es un helper
+       expuesto por el IIFE de s-champions. */
+    try {
+      if(typeof window._refreshChampionsDoneFlags === 'function'){
+        window._refreshChampionsDoneFlags();
+      }
+    } catch(_){}
+    /* Re-render del pool UCL fase de grupos: el localStorage de
+       wprev_to_fase_grupos_v1 acaba de actualizarse con los 11
+       ganadores, así que la pantalla de clasificación UCL ahora
+       suma 29 directos + 11 = 40 equipos. Si el usuario está
+       mirando esa pantalla, lo refrescamos sin esperar a su
+       siguiente navegación. */
+    try {
+      if(typeof window.buildUclGruposClas === 'function'){
+        window.buildUclGruposClas();
+      }
+    } catch(_){}
     return true;
   }
   /* Devuelve el índice (0..5) de la PRÓXIMA jornada con partidos

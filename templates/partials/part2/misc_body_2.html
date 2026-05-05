@@ -21786,3 +21786,180 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 400);
 })();
 </script>
+
+<!-- ══════════════════════════════════════════════════
+     SYNC SERVIDOR DE COMPETICIONES (2026-05-05)
+     Reportado por usuario: tras volver al navegador 3 horas después
+     se habían reseteado Wild Card, Open Qualifier y Previa de Champions
+     (con 4 partidos del Atlético Madrid jugados a mano). Esos estados
+     vivían SOLO en localStorage → modo incógnito, otra pestaña, cuota
+     llena, otro dispositivo o limpieza de caché → datos perdidos.
+
+     Solución: espejo en `competition_state` del row global del servidor.
+       · Push (debounced) cada 3 s si alguna clave clave ha cambiado.
+       · Hidratación al cargar la app: si la clave está en server pero
+         falta localmente, restaura. Si ambas existen y server.ts >
+         local.ts (o local no parsea), también restaura. Si local es
+         más reciente, gana local — el siguiente poll empuja al server.
+     Esto NO sustituye al "Backup TOTAL" descargable, que sigue siendo
+     el respaldo último: este sync mantiene 1 instalación en pie. Si
+     el usuario quiere mover de un navegador a otro, el JSON exportado
+     sigue siendo el camino. ══════════════════════════════════════════════════ -->
+<script>
+(function(){
+  /* Claves que NO viven aún en /api/state. Si añades una nueva
+     competición que use localStorage como fuente de verdad,
+     mete el key aquí — el sync se encarga del resto. */
+  var SYNC_KEYS = [
+    'wprev_state_v1',                /* Previa Champions (estado completo) */
+    'wc_state_v1',                   /* Wild Card */
+    'oq_simulation_v1',              /* Open Qualifier */
+    'wc_to_open_qualifier_v1',       /* 18 ganadores WC → OQ */
+    'oq_to_previa_v1',               /* 35 → Previa */
+    'wprev_to_fase_grupos_v1',       /* 11 → UCL fase grupos */
+    'wprev_to_europa_v1',            /* 22 → Europa League */
+    'wprev_r1_to_conference_v1',     /* 30 → Conference League */
+    'oq_to_conference_v1',           /* legacy fallback */
+    'wc_to_conference_v1'            /* legacy fallback */
+  ];
+
+  function _readLs(k){
+    try { return localStorage.getItem(k); } catch(_){ return null; }
+  }
+  function _writeLs(k, v){
+    try { localStorage.setItem(k, v); return true; } catch(_){ return false; }
+  }
+  function _ts(jsonStr){
+    if(!jsonStr) return 0;
+    try {
+      var o = JSON.parse(jsonStr);
+      var t = o && (o.ts || o.updated_at);
+      if(typeof t === 'number') return t;
+      if(typeof t === 'string'){
+        var n = Date.parse(t);
+        return isFinite(n) ? n : 0;
+      }
+    } catch(_){}
+    return 0;
+  }
+
+  function hydrateFromServer(){
+    return fetch('/api/state', { cache: 'no-store' })
+      .then(function(r){ return r && r.ok ? r.json() : null; })
+      .then(function(payload){
+        if(!payload || !payload.state) return;
+        var srvComp = payload.state.competition_state || {};
+        var restored = [];
+        SYNC_KEYS.forEach(function(k){
+          var srv = srvComp[k];
+          if(typeof srv !== 'string' || !srv) return;
+          var local = _readLs(k);
+          var doRestore = false;
+          if(!local){
+            doRestore = true; /* local no existe → restaurar siempre */
+          } else if(local !== srv){
+            /* Desempate por timestamp: gana el más reciente. Si los
+               JSON no tienen `ts`, conservamos local (regla "user wins
+               on conflict") — el push siguiente lo subirá al server. */
+            var ls = _ts(local), ss = _ts(srv);
+            if(ss > ls) doRestore = true;
+          }
+          if(doRestore && _writeLs(k, srv)){
+            restored.push(k);
+            _lastSnapshot[k] = srv; /* evita re-push inmediato */
+          } else {
+            _lastSnapshot[k] = local; /* sembramos snapshot inicial */
+          }
+        });
+        /* Re-render pantallas que dependan de estas claves. Llamadas
+           defensivas con typeof check — algunas funciones se definen
+           en IIFEs que pueden no haber corrido aún. */
+        if(restored.length){
+          try { console.log('[comp-sync] hidratado desde server:', restored.join(', ')); } catch(_){}
+          try { if(typeof window.buildUclPrevClas === 'function') window.buildUclPrevClas(); } catch(_){}
+          try { if(typeof window.buildUclGruposClas === 'function') window.buildUclGruposClas(); } catch(_){}
+          try { if(typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
+          try { if(typeof window._wcRender === 'function') window._wcRender(); } catch(_){}
+          try { if(typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
+        }
+      })
+      .catch(function(){});
+  }
+
+  /* Snapshot por clave para detectar cambios sin re-leer el server.
+     Inicializado al final de hydrateFromServer con los valores actuales
+     de localStorage tras la posible restauración. */
+  var _lastSnapshot = {};
+  var _pushTimer = null;
+
+  function pushPendingChanges(){
+    var changes = {};
+    SYNC_KEYS.forEach(function(k){
+      var v = _readLs(k);
+      if(v === null) return;
+      if(_lastSnapshot[k] === v) return; /* sin cambios */
+      changes[k] = v;
+      _lastSnapshot[k] = v;
+    });
+    if(!Object.keys(changes).length) return;
+    fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ competition_state: changes })
+    }).catch(function(){});
+  }
+
+  function startPolling(){
+    /* Cada 3 s: leer SYNC_KEYS, comparar contra snapshot, empujar
+       diferencias. Latencia máxima del sync = 3 s, que es suficiente
+       para una competición que el usuario juega de forma puntual.
+       Coste por tick: 10 lecturas localStorage + 1 fetch solo si hay
+       cambios. */
+    if(_pushTimer) return;
+    _pushTimer = setInterval(pushPendingChanges, 3000);
+    /* También escuchamos el storage event (cambios en otras pestañas
+       del mismo origen) para empujar más rápido en multi-pestaña. */
+    window.addEventListener('storage', function(ev){
+      if(!ev || !ev.key) return;
+      if(SYNC_KEYS.indexOf(ev.key) === -1) return;
+      pushPendingChanges();
+    });
+    /* Push final cuando el usuario sale — best effort vía sendBeacon
+       (no bloquea la navegación). */
+    window.addEventListener('pagehide', function(){
+      try {
+        var changes = {};
+        SYNC_KEYS.forEach(function(k){
+          var v = _readLs(k);
+          if(v === null) return;
+          if(_lastSnapshot[k] === v) return;
+          changes[k] = v;
+        });
+        if(!Object.keys(changes).length) return;
+        if(typeof navigator !== 'undefined' && navigator.sendBeacon){
+          var body = new Blob(
+            [JSON.stringify({ competition_state: changes })],
+            { type: 'application/json' }
+          );
+          navigator.sendBeacon('/api/state', body);
+        }
+      } catch(_){}
+    });
+  }
+
+  /* Arranque: hidratar primero, luego empezar el polling. Si la
+     hidratación falla (offline, server caído) seguimos polling igual
+     — el push servirá cuando vuelva la conexión. */
+  function boot(){
+    hydrateFromServer().then(startPolling, startPolling);
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 200); });
+  } else {
+    setTimeout(boot, 200);
+  }
+  /* API expuesta para forzar push manual (debug y botones admin). */
+  window._compStateSyncPush = pushPendingChanges;
+  window._compStateSyncHydrate = hydrateFromServer;
+})();
+</script>

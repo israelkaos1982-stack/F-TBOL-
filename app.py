@@ -249,7 +249,21 @@ DEFAULT_GLOBAL_STATE = {
         "g2": []
     },
     "transition_preview": None,
-    "segunda_simple_state": {}
+    "segunda_simple_state": {},
+    # competition_state: espejo en servidor de las claves de localStorage
+    # que el navegador puede perder (modo incógnito, cache clear, cuota
+    # excedida, otro dispositivo). El cliente sincroniza:
+    #   - wprev_state_v1            (Previa Champions)
+    #   - wc_state_v1               (Wild Card)
+    #   - oq_simulation_v1          (Open Qualifier)
+    #   - wc_to_open_qualifier_v1   (18 ganadores WC → OQ)
+    #   - oq_to_previa_v1           (35 → Previa)
+    #   - wprev_to_fase_grupos_v1   (11 → UCL)
+    #   - wprev_to_europa_v1        (22 → UEL)
+    #   - wprev_r1_to_conference_v1 (30 → UECL)
+    #   - oq_to_conference_v1       (legacy fallback)
+    # Cada valor es el JSON crudo (string) tal como vive en localStorage.
+    "competition_state": {}
 }
 
 def utc_now_iso():

@@ -4571,6 +4571,58 @@ window._showSimProgress = function(opts, onDone){
 </div>
 </div>
 
+<!-- ═══ ICONOS REDONDOS / INTEGRADOS EN s-competiciones ═══
+     Petición usuario 2026-05-05: los iconos (img y emoji) de las cajas
+     de Competiciones tienen que verse redondos, del mismo tamaño y como
+     "incrustados" en la caja (no pegados encima). Se aplica un fondo
+     oscuro semitransparente, borde sutil, sombra exterior y dos sombras
+     interiores (una superior clara y otra inferior oscura) para dar
+     sensación de relieve embebido. Ámbito: SOLO #s-competiciones — no
+     toca s-liga, s-copa ni cajas de jornadas, que mantienen su estilo
+     propio. Las animaciones iconFloat/Pulse/Bounce/Wobble que ya
+     existían en .sc-emoji se respetan (el usuario aceptó dejarlas si
+     no son costosas). -->
+<style>
+#s-competiciones .submenu-card .sc-comp-img,
+#s-competiciones .submenu-card .sc-emoji{
+  width:38px;
+  height:38px;
+  border-radius:50%;
+  background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.10) 0%,rgba(0,0,0,.55) 70%);
+  border:1.5px solid rgba(255,255,255,.18);
+  box-shadow:
+    0 2px 6px rgba(0,0,0,.55),
+    inset 0 1px 1px rgba(255,255,255,.18),
+    inset 0 -3px 6px rgba(0,0,0,.45);
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+  padding:5px;
+  box-sizing:border-box;
+  overflow:hidden;
+}
+#s-competiciones .submenu-card .sc-comp-img{
+  object-fit:contain;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));
+}
+#s-competiciones .submenu-card .sc-emoji{
+  font-size:22px;
+  line-height:1;
+  padding:0;
+}
+@media (min-width:480px){
+  #s-competiciones .submenu-card .sc-comp-img,
+  #s-competiciones .submenu-card .sc-emoji{
+    width:42px;
+    height:42px;
+  }
+  #s-competiciones .submenu-card .sc-emoji{
+    font-size:24px;
+  }
+}
+</style>
+
 <!-- ═══ EDITOR DE ICONOS — COMPETICIONES (admin PIN 747) ═══
      El usuario quería poner los logos oficiales en cada caja del menú
      de Competiciones. El botón ✏️ del header `.sec-hdr` invoca a

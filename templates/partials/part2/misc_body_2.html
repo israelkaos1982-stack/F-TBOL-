@@ -7457,7 +7457,10 @@
        aunque el equipo hubiera jugado decenas de partidos. */
     var _isHumanInvolved = st.isHvH
       || (typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away)));
-    if (_isHumanInvolved) {
+    /* Petición usuario 2026-05-05: en partidos AMISTOSOS no se elige
+       MVP (no aparecen jugadores de plantilla). El amistoso no
+       alimenta clasificaciones, así que el MVP es opcional. */
+    if (_isHumanInvolved && !st.isFriendly) {
       var hasMvp=st.events.some(function(e){return e.type==='mvp';});
       if (!hasMvp) {
         var sqA=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.home])||[];
@@ -9964,10 +9967,35 @@
        el match termina empatado y forzamos la siguiente fase. */
     var _isCopaSL = (!!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin')
                   && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
-    if (_isCopaSL && _gm.sc.a === _gm.sc.b && !_gm.penDone) {
+    /* Amistoso ELIMINATORIA: misma regla que Copa single-leg — empate
+       al 90' fuerza prórroga, empate al 120' fuerza penaltis (petición
+       usuario 2026-05-05). */
+    var _isAmsElim = !!_gm.isFriendly && _gm.matchType === 'elim';
+    /* Amistoso DOBLE · VUELTA: si el global (ida + vuelta) está empate
+       al 90', forzar prórroga; al 120' empate, penaltis. La ida se
+       persiste en _gm.dobleIda. */
+    var _isAmsDobleVuelta = !!_gm.isFriendly && _gm.matchType === 'doble' && _gm.dobleLeg === 'vuelta';
+    var _amsDobleTied = false;
+    if (_isAmsDobleVuelta && _gm.dobleIda) {
+      var idaA = Number(_gm.dobleIda.gh) || 0; /* goles del local de la ida */
+      var idaB = Number(_gm.dobleIda.ga) || 0;
+      /* En la vuelta los teams están invertidos: el visitor en la ida
+         es ahora local. Sumamos cruzado: globalA = idaA + scB,
+         globalB = idaB + scA. */
+      var globalA = idaA + (Number(_gm.sc.b) || 0);
+      var globalB = idaB + (Number(_gm.sc.a) || 0);
+      _amsDobleTied = (globalA === globalB);
+    }
+    var _shouldForceET = (_isCopaSL && _gm.sc.a === _gm.sc.b)
+                       || (_isAmsElim && _gm.sc.a === _gm.sc.b)
+                       || (_isAmsDobleVuelta && _amsDobleTied);
+    if (_shouldForceET && !_gm.penDone) {
       if (!_gm.etDone) {
         var minNow = Math.floor((_gm.timerSec || 0) / 60);
-        alert('⏱ EMPATE al ' + minNow + '\' — la Copa exige PRÓRROGA.\n\n'
+        var _etReason = _isCopaSL ? 'la Copa exige'
+                       : _isAmsDobleVuelta ? 'el global está empate, exige'
+                       : 'la eliminatoria exige';
+        alert('⏱ EMPATE al ' + minNow + '\' — ' + _etReason + ' PRÓRROGA.\n\n'
             + 'Se han añadido 30 minutos extra (15 cada parte).\n'
             + 'Pulsa ▶ para reanudar el cronómetro.');
         window.gmActivateET();
@@ -10033,11 +10061,51 @@
       _mlShowStatsOverlay(_gm, function(){ window.gmEndMatch(); });
       return;
     }
+    /* MVP opcional en amistosos (petición usuario 2026-05-05) — no
+       hay plantillas reales seleccionadas, así que forzar la elección
+       solo bloquea el flujo. Para Liga / Copa / etc. sigue siendo
+       obligatorio. */
     var mvpExists = _gm.events.some(function(e){ return e && e.type === 'mvp'; });
-    if (!mvpExists) {
+    if (!mvpExists && !_gm.isFriendly) {
       alert('⭐ Debes elegir MVP antes de finalizar el acta.');
       window.gmPickEvent('MVP del Partido','mvp');
       return;
+    }
+    /* Amistoso DOBLE · IDA: al terminar la ida, persistimos el resultado
+       en window._amsPendingDoble para que la VUELTA pueda auto-cargarlo
+       (teams invertidos). El usuario verá un aviso recordándole que
+       cree la vuelta desde el setup. */
+    if (_gm.isFriendly && _gm.matchType === 'doble' && _gm.dobleLeg === 'ida') {
+      try {
+        window._amsPendingDoble = {
+          home: _gm.home, away: _gm.away,
+          score: { gh: _gm.sc.a, ga: _gm.sc.b }
+        };
+        setTimeout(function(){
+          alert('🔄 IDA finalizada (' + _gm.sc.a + '–' + _gm.sc.b + ').\n\n'
+              + 'Crea ahora la VUELTA desde Buscar Enfrentamientos seleccionando '
+              + _gm.away + ' como local y ' + _gm.home + ' como visitante. '
+              + 'El sistema sumará los goles para el global y forzará '
+              + 'prórroga + penaltis si el global queda empate.');
+        }, 80);
+      } catch(_){}
+    }
+    /* Amistoso DOBLE · VUELTA: persistimos el global para mostrarlo en
+       el historial. Como el motor solo guarda el score de UN partido,
+       añadimos un evento "global" sintético en el acta. */
+    if (_gm.isFriendly && _gm.matchType === 'doble' && _gm.dobleLeg === 'vuelta' && _gm.dobleIda) {
+      var _idaA = Number(_gm.dobleIda.gh) || 0;
+      var _idaB = Number(_gm.dobleIda.ga) || 0;
+      var _gA = _idaA + (Number(_gm.sc.b) || 0);
+      var _gB = _idaB + (Number(_gm.sc.a) || 0);
+      try {
+        _gm.events.push({
+          id: window._evtId(), type: 'doble-global', label: 'Global',
+          team: '', min: 90, num: '',
+          player: 'Global ' + _gm.away + ' ' + _gA + '–' + _gB + ' ' + _gm.home,
+          ico: '🔄'
+        });
+      } catch(_){}
     }
     _gm.finished = true;
     /* Arrancar el grace period de propagación: el snapshot seguirá
@@ -17752,6 +17820,12 @@ document.addEventListener('DOMContentLoaded', function() {
   var _selA_human = null, _selB_human = null; /* true=Humano, false=IA */
   var _selA_form  = '🎲', _selB_form  = '🎲'; /* estado de forma */
   var _amsDur     = 'auto'; /* 'auto' | 8 | 10 — minutos reales */
+  /* Tipo de partido (2026-05-05): 'unico' = 90' fijo (puede empate),
+     'elim' = forzar prórroga + penaltis si empate al 90' / 120',
+     'doble' = ida + vuelta con resultado global (segunda pata se
+     crea como un nuevo amistoso con teams swap; si global empate
+     tras la vuelta, prórroga + penaltis en la vuelta). */
+  var _amsMtype   = 'unico';
   var _AMS_FORM_VARIANTS = [
     { ico: '🎲', name: 'Al azar',   color: 'rgba(255,255,255,.85)' },
     { ico: '⬆️', name: 'Excelente', color: '#5aa9ff' },
@@ -18015,6 +18089,29 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   };
 
+  /* Selector tipo de partido (2026-05-05). Valida y actualiza UI +
+     hint con el comportamiento esperado. */
+  window._amsSetMatchType = function(mt){
+    var validMts = { unico:1, elim:1, doble:1 };
+    if (!validMts[mt]) mt = 'unico';
+    _amsMtype = mt;
+    var wrap = document.getElementById('ams-mtype-toggle');
+    if (wrap) {
+      wrap.querySelectorAll('.ams-mtype-btn').forEach(function(btn){
+        btn.classList.toggle('active', btn.getAttribute('data-mt') === mt);
+      });
+    }
+    var hint = document.getElementById('ams-mtype-hint');
+    if (hint) {
+      var msgs = {
+        'unico': '90 min · puede acabar en empate.',
+        'elim':  'Si empate al 90′ → prórroga (30 min). Si sigue empate al 120′ → penaltis. Siempre hay ganador.',
+        'doble': 'Ida + vuelta. La vuelta se crea automáticamente al finalizar la ida (con teams invertidos). Si global empate tras vuelta → prórroga + penaltis en la vuelta.'
+      };
+      hint.textContent = msgs[mt] || msgs.unico;
+    }
+  };
+
   window._amsOpenFormDropdown = function(side) {
     var existing = document.getElementById('ams-form-dropdown');
     if (existing) existing.remove();
@@ -18188,6 +18285,27 @@ document.addEventListener('DOMContentLoaded', function() {
     st.homeIsHuman   = !!isHomeHuman;
     st.awayIsHuman   = !!isAwayHuman;
     st.humanInvolved = !!(isHomeHuman || isAwayHuman);
+    /* Tipo de partido elegido en el setup (petición usuario 2026-05-05).
+       'unico' (default): puede acabar empate.
+       'elim': prórroga + penaltis si empate.
+       'doble': ida + vuelta — al cerrar la ida con _amsLegInfo, se
+       guarda en window._amsPendingDoble para que al crear el siguiente
+       amistoso lo proponga con teams invertidos y resultado de la ida
+       precargado. */
+    st.matchType = _amsMtype;
+    /* Si el usuario está creando la VUELTA de un doble pendiente, la
+       enlazamos con la ida vía _amsPendingDoble. */
+    if (window._amsPendingDoble &&
+        window._amsPendingDoble.home === _selB &&
+        window._amsPendingDoble.away === _selA) {
+      st.matchType = 'doble';
+      st.dobleLeg = 'vuelta';
+      st.dobleIda = window._amsPendingDoble.score; /* { gh, ga } de la ida */
+      window._amsPendingDoble = null; /* consumido */
+    } else if (st.matchType === 'doble') {
+      st.dobleLeg = 'ida';
+      st.dobleIda = null;
+    }
     /* ── IA vs IA: saltarse la previa por completo ─────────────────────
        Como en las simulaciones de Liga IA-vs-IA, el usuario solo tiene
        que pulsar ▶ y el partido se auto-simula con eventos generados a
@@ -18285,6 +18403,15 @@ document.addEventListener('DOMContentLoaded', function() {
     _selA_human = null; _selB_human = null;
     _selA_form = '🎲'; _selB_form = '🎲';
     _amsDur = 'auto';
+    _amsMtype = 'unico';
+    var mtypeWrap = document.getElementById('ams-mtype-toggle');
+    if (mtypeWrap) {
+      mtypeWrap.querySelectorAll('.ams-mtype-btn').forEach(function(b){
+        b.classList.toggle('active', b.getAttribute('data-mt') === 'unico');
+      });
+    }
+    var mtypeHint = document.getElementById('ams-mtype-hint');
+    if (mtypeHint) mtypeHint.textContent = '90 min · puede acabar en empate.';
     var durResetWrap = document.getElementById('ams-dur-toggle');
     if (durResetWrap) {
       durResetWrap.querySelectorAll('.ams-dur-btn').forEach(function(b){

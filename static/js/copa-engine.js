@@ -1739,23 +1739,32 @@
          dorado-pulse para que destaque entre los IA-vs-IA).
        - Humano vs Humano (cuartos+) → mismo estilo doble-glow con
          ambos colores y borde dorado-rosa. */
+    /* BORDES DE LAS CARDS (regla del usuario, foto 2026-05-04):
+         - Humano vs Humano  → BORDE ROSA   (#ff5fb0)
+         - Humano vs IA      → BORDE BLANCO (#ffffff)
+         - IA vs IA          → BORDE GRIS   (rgba(255,255,255,.22))
+       El gradient interior sigue usando los colores de los dos
+       equipos para no perder identidad visual. */
     var wrapStyle;
     if (hHum && vHum) {
-      /* Doble humano: gradient saturado de los 2 colores + borde rosa-dorado. */
+      /* Humano vs Humano: gradient saturado dual + borde ROSA. */
       wrapStyle = 'background:linear-gradient(120deg,'+bgL+'80 0%,'+bgL+'40 40%,'+bgV+'40 60%,'+bgV+'80 100%);'
-        + 'border:2px solid #ff90c8;'
-        + 'box-shadow:0 0 22px rgba(255,144,200,.5),0 0 40px rgba(255,213,74,.25),inset 0 0 0 1px rgba(255,213,74,.6);';
+        + 'border:2px solid #ff5fb0;'
+        + 'box-shadow:0 0 18px rgba(255,95,176,.55),0 0 36px rgba(255,213,74,.22),inset 0 0 0 1px rgba(255,95,176,.55);';
     } else if (anyHum) {
-      var humSide = hHum ? bgL : bgV;
       /* Humano vs IA: gradient lateral fuerte hacia el humano + borde
-         con su color al 100% + sombra dorada y de su color. */
+         BLANCO. Sombra blanca suave para que destaque entre los IA. */
+      var humSide = hHum ? bgL : bgV;
       wrapStyle = (hHum
         ? 'background:linear-gradient(to right,'+humSide+'88 0%,'+humSide+'30 40%,transparent 60%,'+bgV+'25 100%);'
         : 'background:linear-gradient(to right,'+bgL+'25 0%,transparent 40%,'+humSide+'30 60%,'+humSide+'88 100%);')
-        + 'border:2px solid ' + humSide + ';'
-        + 'box-shadow:0 0 18px ' + humSide + 'aa,0 0 32px rgba(255,213,74,.18),inset 0 0 0 1px ' + humSide + 'b0;';
+        + 'border:2px solid #ffffff;'
+        + 'box-shadow:0 0 14px rgba(255,255,255,.45),0 0 28px ' + humSide + '55,inset 0 0 0 1px rgba(255,255,255,.6);';
     } else {
-      wrapStyle = 'background:linear-gradient(to right,'+bgL+'2e 0%,transparent 44%,transparent 56%,'+bgV+'2e 100%);';
+      /* IA vs IA: gradient suave + borde GRIS sutil. */
+      wrapStyle = 'background:linear-gradient(to right,'+bgL+'2e 0%,transparent 44%,transparent 56%,'+bgV+'2e 100%);'
+        + 'border:1px solid rgba(255,255,255,.22);'
+        + 'box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);';
     }
     /* Escudo del humano como fondo difuso (igual que Liga EA). */
     var bgShieldL = hHum ? '<img src="" data-team="'+escapeHtml(local)+'" alt="" class="copa-card-bgshield copa-card-bgshield-l">' : '';

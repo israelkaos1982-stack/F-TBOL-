@@ -443,6 +443,45 @@
   setTimeout(function () { try { _copaEnsureSquads(); } catch(_){} }, 300);
   setTimeout(function () { try { _copaEnsureSquads(); } catch(_){} }, 1500);
 
+  /* Wrap `getTeamEfootballAlias` para que ALSO consulte el MAP
+     hardcoded de `primera-rfef-data.js` (window.getPrimeraRFEFAlias)
+     como fallback. Antes solo leía localStorage `ligaExt_*`, así que
+     si el usuario no había abierto el editor de Primera Federación
+     (caso típico cuando el sorteo de Copa usa los DEFAULT_PRIMERA_*
+     sintéticos), el alias eFootball NUNCA aparecía bajo el nombre
+     de los equipos sin licencia (Hércules, Mirandés, Cultural, etc.).
+
+     Pirámide de resolución del alias:
+       1. Editor user-facing (ligaExt_*.efootballAlias) — máxima
+          prioridad: si el admin lo definió a mano, gana.
+       2. MAP hardcoded de primera-rfef-data.js — fallback automático
+          para equipos de Primera Fed sin alias custom.
+     El wrap es idempotente; si el wrapping ya ocurrió no se repite. */
+  function _copaWrapTeamAlias() {
+    if (typeof window.getTeamEfootballAlias !== 'function') return;
+    if (window.getTeamEfootballAlias.__copaFallback) return;
+    var orig = window.getTeamEfootballAlias;
+    var wrapped = function (teamName) {
+      var v = '';
+      try { v = orig.apply(this, arguments) || ''; } catch(_){ v = ''; }
+      if (v) return v;
+      if (typeof window.getPrimeraRFEFAlias === 'function') {
+        try {
+          var alt = window.getPrimeraRFEFAlias(teamName);
+          if (alt) return alt;
+        } catch(_){}
+      }
+      return '';
+    };
+    wrapped.__copaFallback = true;
+    window.getTeamEfootballAlias = wrapped;
+  }
+  /* Aplicamos el wrap al cargar y un par de retries por si
+     primera-rfef-data.js carga después que nosotros. */
+  try { _copaWrapTeamAlias(); } catch(_){}
+  setTimeout(function () { try { _copaWrapTeamAlias(); } catch(_){} }, 200);
+  setTimeout(function () { try { _copaWrapTeamAlias(); } catch(_){} }, 1500);
+
   function allPlayed(resList, n) {
     if (!resList || resList.length < n) return false;
     for (var i = 0; i < n; i++) {
@@ -2556,12 +2595,21 @@
          solo cubre 'copa' = 1/128. Sobrescribimos a mano leyendo el
          dateMap del calendario (.ag-r). El delay 80ms da tiempo a que
          `_mmInjectEnv` haya rellenado el #pp-env primero. */
+      /* La fecha se aplica con TRES retries (80/240/600 ms) y un
+         MutationObserver que vigila #pp-env: si el bundle re-pinta
+         el envelope (p.ej. al togglear un item), volvemos a poner
+         la fecha del calendario. Se desconecta cuando la previa se
+         cierra. */
       setTimeout(function () {
         try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){}
       }, 80);
       setTimeout(function () {
         try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){}
       }, 240);
+      setTimeout(function () {
+        try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){}
+      }, 600);
+      _copaInstallEnvObserver(ronda, !!esVuelta);
     } else {
       alert('No se pudo abrir la previa: showPrePartidoOverlay no disponible.');
     }
@@ -2719,46 +2767,60 @@
   /* Sincroniza la fecha del partido en `#pp-env` con la fecha que viene
      del calendario (s-calendario.html, .ag-r rows). El usuario quiere
      que la previa muestre la fecha del calendario, NO la fecha del
-     día actual. Mapeo ronda → label del calendario:
-       r1   → "Copa del Rey - 1/128"
-       r2   → "Copa del Rey - 1/64" o "1/32" (según calendario)
-       r16  → "Copa del Rey - Dieciseisavos"
-       oct  → "Copa del Rey - Octavos (Ida)" para ida; (Vuelta) para vta
-       cua  → idem
-       sf   → "Copa del Rey - Semis (Ida/Vuelta)"
-       fin  → "Final Copa del Rey"
-     Si encontramos varias entradas (Ida + Vuelta), usamos la que
-     corresponda al `esVuelta` actual. */
-  var _COPA_CAL_LABELS = {
-    r1:  ['Copa del Rey - 1/128', 'Copa del Rey — 1/128'],
-    r2:  ['Copa del Rey - 1/64', 'Copa del Rey — 1/64', 'Copa del Rey - 1/32', 'Copa del Rey — 1/32'],
-    r16: ['Copa del Rey - Dieciseisavos', 'Copa del Rey — Dieciseisavos', 'Copa del Rey - 1/16', 'Copa del Rey — 1/16'],
-    oct_ida: ['Copa del Rey - Octavos (Ida)', 'Copa del Rey — Octavos (Ida)', 'Copa del Rey - Octavos'],
-    oct_vta: ['Copa del Rey - Octavos (Vuelta)', 'Copa del Rey — Octavos (Vuelta)'],
-    cua_ida: ['Copa del Rey - Cuartos (Ida)', 'Copa del Rey — Cuartos (Ida)', 'Copa del Rey - Cuartos'],
-    cua_vta: ['Copa del Rey - Cuartos (Vuelta)', 'Copa del Rey — Cuartos (Vuelta)'],
-    sf_ida:  ['Copa del Rey - Semis (Ida)',   'Copa del Rey — Semis (Ida)', 'Copa del Rey - Semis'],
-    sf_vta:  ['Copa del Rey - Semis (Vuelta)', 'Copa del Rey — Semis (Vuelta)'],
-    fin: ['Final Copa del Rey', 'Copa del Rey - Final', 'Copa del Rey — Final']
+     día actual. Estrategia robusta:
+       - Match por SUBSTRING / KEYWORDS contra .ag-lbl (no comparación
+         exacta), porque el calendario puede usar varios formatos
+         ("Copa del Rey - 1/128", "Copa del Rey - 1ª Ronda 1/128",
+          etc.).
+       - Cada ronda tiene un set de keywords, todos deben coincidir
+         (o al menos uno crítico).
+       - Para ida/vuelta de two-leg, el keyword adicional "(Ida)" /
+         "(Vuelta)" desambigua.
+     Si NO encuentra fecha en el calendario, no hace nada (el bundle
+     dejará la fecha por defecto). */
+  var _COPA_RONDA_KEYWORDS = {
+    r1:      [['1/128', '1ª Ronda', 'Primera Ronda']],   /* primera ronda */
+    r2:      [['1/64', '2ª Ronda', 'Segunda Ronda']],
+    r16:     [['Dieciseisavos', '1/16', '16avos']],
+    oct_ida: [['Octavos'], ['Ida']],
+    oct_vta: [['Octavos'], ['Vuelta']],
+    cua_ida: [['Cuartos'], ['Ida']],
+    cua_vta: [['Cuartos'], ['Vuelta']],
+    sf_ida:  [['Semis', 'Semifinales'], ['Ida']],
+    sf_vta:  [['Semis', 'Semifinales'], ['Vuelta']],
+    fin:     [['Final', 'FINAL']]
   };
-
-  function _copaCalDateForRound(ronda, esVuelta) {
-    var keys;
+  function _copaLabelMatchesRound(label, ronda, esVuelta) {
+    if (!label) return false;
+    /* Debe contener "Copa" para evitar falsos positivos con Liga
+       (que también puede tener una jornada con "1/128" en alguna
+       extensión hipotética). */
+    if (label.indexOf('Copa') === -1 && label.indexOf('COPA') === -1) return false;
+    var key = ronda;
     if (TWO_LEG[ronda] && (ronda === 'oct' || ronda === 'cua' || ronda === 'sf')) {
-      keys = _COPA_CAL_LABELS[ronda + (esVuelta ? '_vta' : '_ida')] || [];
-    } else {
-      keys = _COPA_CAL_LABELS[ronda] || [];
+      key = ronda + (esVuelta ? '_vta' : '_ida');
     }
+    var groups = _COPA_RONDA_KEYWORDS[key];
+    if (!groups) return false;
+    /* Cada grupo es un OR, todos los grupos juntos AND. */
+    for (var g = 0; g < groups.length; g++) {
+      var any = false;
+      for (var k = 0; k < groups[g].length; k++) {
+        if (label.indexOf(groups[g][k]) !== -1) { any = true; break; }
+      }
+      if (!any) return false;
+    }
+    return true;
+  }
+  function _copaCalDateForRound(ronda, esVuelta) {
     var rows = document.querySelectorAll('.ag-r');
     for (var i = 0; i < rows.length; i++) {
       var l = rows[i].querySelector('.ag-lbl');
       var d = rows[i].querySelector('.ag-date');
       if (!l || !d) continue;
       var lblTxt = l.textContent.trim().split(' · ')[0].trim();
-      for (var k = 0; k < keys.length; k++) {
-        if (lblTxt === keys[k]) {
-          return d.textContent.trim(); /* p.ej. "28 Sep" */
-        }
+      if (_copaLabelMatchesRound(lblTxt, ronda, esVuelta)) {
+        return d.textContent.trim();
       }
     }
     return '';
@@ -2769,6 +2831,39 @@
     'May':'Mayo','Jun':'Junio','Jul':'Julio','Ago':'Agosto',
     'Sep':'Septiembre','Oct':'Octubre','Nov':'Noviembre','Dic':'Diciembre'
   };
+
+  /* MutationObserver sobre #pp-env: cada vez que el bundle re-pinta
+     el envelope (p.ej. al togglear un item desde _mmInjectEnv), volvemos
+     a aplicar la fecha del calendario. Se instala una vez por previa.
+     Se desconecta cuando se cierra el overlay (display:none) o cuando
+     navega fuera. */
+  var _copaEnvObserver = null;
+  function _copaInstallEnvObserver(ronda, esVuelta) {
+    var envEl = document.getElementById('pp-env');
+    if (!envEl || typeof MutationObserver !== 'function') return;
+    if (_copaEnvObserver) {
+      try { _copaEnvObserver.disconnect(); } catch(_){}
+      _copaEnvObserver = null;
+    }
+    var ticking = false;
+    _copaEnvObserver = new MutationObserver(function () {
+      if (ticking) return;
+      ticking = true;
+      setTimeout(function () {
+        try { _copaOverridePrevDate(ronda, esVuelta); } catch(_){}
+        ticking = false;
+        /* Si el overlay ya no está visible, autodesconecta. */
+        var ov = document.getElementById('prepartido-overlay');
+        if (!ov || !ov.classList.contains('show')) {
+          if (_copaEnvObserver) {
+            try { _copaEnvObserver.disconnect(); } catch(_){}
+            _copaEnvObserver = null;
+          }
+        }
+      }, 30);
+    });
+    _copaEnvObserver.observe(envEl, { childList: true, subtree: true, characterData: true });
+  }
 
   function _copaOverridePrevDate(ronda, esVuelta) {
     var rawDate = _copaCalDateForRound(ronda, esVuelta);

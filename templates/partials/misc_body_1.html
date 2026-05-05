@@ -2076,17 +2076,69 @@ window._showSimProgress = function(opts, onDone){
     if(!t || typeof t.closest !== 'function') return;
     var row = t.closest('.clas-row');
     if(!row) return;
-    var scope = row.closest('#s-liga-clas');
-    // También funciona en Hypermotion y Primera Federación
+    /* Mapeo screen → slug + competición. El slug controla de qué
+       `ligaExt_<slug>` se carga el roster (los equipos de Superliga
+       y europeas suelen venir de Liga EA / Hypermotion / Premier /
+       Ligue 1, así que apuntamos a 'liga-ea-sports' como cache base
+       y la cadena de fallbacks Pasadas 3-4 escanea todos los
+       `ligaExt_*` hasta dar con el equipo).
+
+       La COMPETICIÓN determina qué STATS ve el usuario en el modal:
+         · liga-ea-sports / hypermotion / primera-fed → ['liga','copa']
+         · superliga → ['superliga']  (aislado)
+         · champions → ['ucl']        (aislado)
+         · uel → ['uel']              (aislado)
+         · uecl → ['uecl']            (aislado)
+       Petición usuario 2026-05-04. */
     var slugMap = {
       's-liga-clas':     'liga-ea-sports',
       's-segunda-clas':  'liga-hypermotion',
-      's-primf-clas':    'liga-primera-federacion'
+      's-primf-clas':    'liga-primera-federacion',
+      's-superliga-clas':'liga-ea-sports',
+      's-superliga':     'liga-ea-sports',
+      's-champions':     'liga-ea-sports',
+      's-ucl-grupos':    'liga-ea-sports',
+      's-ucl-playoffs':  'liga-ea-sports',
+      's-uel':           'liga-ea-sports',
+      's-uel-grupos':    'liga-ea-sports',
+      's-uel-playoffs':  'liga-ea-sports',
+      's-uecl':          'liga-ea-sports',
+      's-uecl-grupos':   'liga-ea-sports',
+      's-uecl-playoffs': 'liga-ea-sports'
     };
+    var compMap = {
+      's-liga-clas':     ['liga','copa'],
+      's-segunda-clas':  ['liga','copa'],
+      's-primf-clas':    ['liga','copa'],
+      's-superliga-clas':['superliga'],
+      's-superliga':     ['superliga'],
+      's-champions':     ['ucl'],
+      's-ucl-grupos':    ['ucl'],
+      's-ucl-playoffs':  ['ucl'],
+      's-uel':           ['uel'],
+      's-uel-grupos':    ['uel'],
+      's-uel-playoffs':  ['uel'],
+      's-uecl':          ['uecl'],
+      's-uecl-grupos':   ['uecl'],
+      's-uecl-playoffs': ['uecl']
+    };
+    var scope = row.closest('#s-liga-clas');
     if(!scope) scope = row.closest('#s-segunda-clas');
     if(!scope) scope = row.closest('#s-primf-clas');
+    if(!scope) scope = row.closest('#s-superliga-clas');
+    if(!scope) scope = row.closest('#s-superliga');
+    if(!scope) scope = row.closest('#s-champions');
+    if(!scope) scope = row.closest('#s-ucl-grupos');
+    if(!scope) scope = row.closest('#s-ucl-playoffs');
+    if(!scope) scope = row.closest('#s-uel');
+    if(!scope) scope = row.closest('#s-uel-grupos');
+    if(!scope) scope = row.closest('#s-uel-playoffs');
+    if(!scope) scope = row.closest('#s-uecl');
+    if(!scope) scope = row.closest('#s-uecl-grupos');
+    if(!scope) scope = row.closest('#s-uecl-playoffs');
     if(!scope) return;
     var slug = slugMap[scope.id] || 'liga-ea-sports';
+    var clickComps = compMap[scope.id] || ['liga','copa'];
     var nameEl = row.querySelector('.clas-team-name');
     if(!nameEl) return;
     /* Preferimos el span interno `.clas-team-name-text` que contiene SOLO
@@ -2705,12 +2757,13 @@ window._showSimProgress = function(opts, onDone){
         }
       }
 
-      /* 3. Abrir el overlay pasándole el TEAM OBJECT completo — así
-            lextOpenSquad no tiene que buscarlo por id (que puede
-            fallar si la cache está desincronizada con localStorage). */
+      /* 3. Abrir el overlay pasándole el TEAM OBJECT completo + el
+            contexto de competiciones que toca según la pantalla
+            origen (Liga+Copa para EA Sports, aislado para Superliga
+            y europeas). */
       if (typeof window.lextOpenSquad === 'function') {
         try {
-          window.lextOpenSquad(found);
+          window.lextOpenSquad(found, { competitions: clickComps });
         } catch(errLs) {
           alert('⚠️ Error al abrir el editor de «' + found.name + '»:\n' + (errLs && errLs.message || errLs));
           return;
@@ -2827,29 +2880,74 @@ window._showSimProgress = function(opts, onDone){
     if(pos <= (c += z.uecl))    return 'zone-conf';
     return '';
   };
-  // ── ESCUDOS CUSTOM: alimenta window._ligaEaShields para que
-  // getTeamLogoUrl (bundle.js) devuelva el escudo del editor en lugar
-  // del hardcodeado cuando el admin ha puesto una URL nueva.
-  // Cubre Liga EA Sports, Hypermotion y Primera Federación.
+  // ── ESCUDOS CUSTOM + FLAGS HUMANOS GLOBALES ────────────────────
+  // Petición usuario 2026-05-04: PSG vive en `ligaExt_francia` con su
+  // escudo + plantilla + isHuman/humanEmoji 🦆. Cuando el admin lo
+  // añade al pool manual EA→Europa (Superliga, etc.) o aparece en
+  // cualquier otra competición, debe MERGE-arse con esa fuente — no
+  // perder el escudo ni el flag humano.
+  //
+  // Por eso `refreshLigaEaShields` escanea TODAS las claves
+  // `ligaExt_*` (no solo Liga EA / Hypermotion / Primera Fed) y
+  // alimenta a la vez:
+  //   · `window._ligaEaShields[name]` → escudo (lo consume
+  //     getTeamLogoUrl en bundle.js).
+  //   · `window._LIGA_HUMAN_FLAGS[name]` → {isHuman, humanEmoji}
+  //     (lo consume `standings()` como fallback cuando un equipo de
+  //     una liga manual no tiene el flag pero sí lo tiene en la liga
+  //     "fuente" — p.ej. PSG en Superliga hereda el 🦆 de Francia).
+  // Las ligas con prioridad más baja NO pisan a las más altas:
+  // Liga EA Sports primero, luego Hypermotion / Primera Fed, luego
+  // las 51 extranjeras en el orden que las devuelva localStorage.
   function refreshLigaEaShields(){
     var shields = {};
-    var slugs = ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion'];
-    slugs.forEach(function(slug){
+    var humanFlags = {};
+    /* Slugs prioritarios (se procesan primero, no se sobreescriben luego). */
+    var prioritySlugs = ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion'];
+    function _scan(slug){
       try {
         var raw = localStorage.getItem('ligaExt_'+slug);
         if(!raw) return;
         var data = JSON.parse(raw);
         if(!data || !Array.isArray(data.teams)) return;
         data.teams.forEach(function(t){
-          if(t && t.name && t.shield){
-            shields[t.name] = t.shield;
-            var norm = _normName(t.name);
-            if(norm) shields[norm] = t.shield;
+          if(!t || !t.name) return;
+          var nm = String(t.name).trim();
+          if(!nm) return;
+          if(t.shield){
+            if(!shields[nm]) shields[nm] = t.shield;
+            var norm = _normName(nm);
+            if(norm && !shields[norm]) shields[norm] = t.shield;
+          }
+          if(t.isHuman){
+            if(!humanFlags[nm]){
+              humanFlags[nm] = {isHuman:true, humanEmoji:t.humanEmoji||'👤'};
+              var nrm = _normName(nm);
+              if(nrm && !humanFlags[nrm]) humanFlags[nrm] = humanFlags[nm];
+            }
           }
         });
       } catch(_){}
-    });
+    }
+    /* 1) Spanish tiers primero (prioridad) */
+    prioritySlugs.forEach(_scan);
+    /* 2) Resto de ligaExt_* en orden alfabético — incluye las 51
+          extranjeras (francia, inglaterra, alemania, …) y las ligas
+          custom que el admin haya creado (superliga, etc.). */
+    try {
+      var allSlugs = [];
+      for(var i=0;i<localStorage.length;i++){
+        var k = localStorage.key(i);
+        if(!k || k.indexOf('ligaExt_')!==0) continue;
+        if(k.indexOf('_backup')!==-1 || k.indexOf('_snap_')!==-1 || k.indexOf('_protected')!==-1) continue;
+        var slug = k.substring('ligaExt_'.length);
+        if(prioritySlugs.indexOf(slug)!==-1) continue;
+        allSlugs.push(slug);
+      }
+      allSlugs.sort().forEach(_scan);
+    } catch(_){}
     window._ligaEaShields = shields;
+    window._LIGA_HUMAN_FLAGS = humanFlags;
   }
   // Ejecutar al cargar para que getTeamLogoUrl ya los vea desde el
   // primer render de buildLigaClas. Se refresca también tras cada save
@@ -2920,25 +3018,85 @@ window._showSimProgress = function(opts, onDone){
      }
   */
   window.lextExportBackup = function(){
-    var out = { format:'ftbol-backup-v1', createdAt: new Date().toISOString(), ligas:{}, flags:{} };
+    /* Backup TOTAL (2026-05-05). Antes solo guardaba `ligaExt_*` →
+       las competiciones (Liga EA jornadas en `ef_liga38_v4`, Superliga
+       en `superliga_*`, Champions/UEL/UECL en `wprev_*`, Copa en
+       `copa_*`, stats por jugador en `ef_player_stats_*_v1`,
+       eventos en LIGA_PLAYER_MATCH_STORE, lesiones en BAJA_STORE…)
+       NO se guardaban. Petición del usuario: "guardar absolutamente
+       todo por si ocurre una catástrofe".
+
+       Formato v2:
+         · storage      → TODO el localStorage (clave → valor crudo).
+         · windowState  → globales window que se persistan en memoria
+                          y no estén en localStorage (LIGA_PLAYER_MATCH_STORE,
+                          LIGA_J1_RESULTS, BAJA_STORE, LESION_STORE,
+                          _LIGA_EA_PLAYER_FLAGS, _LIGA_EA_TEAM_STATS, etc.).
+         · ligas        → back-compat con v1 (subset de storage filtrado
+                          a ligaExt_*).
+         · flags        → back-compat con v1.
+
+       Importar acepta tanto v1 como v2. */
+    var out = {
+      format: 'ftbol-backup-v2',
+      createdAt: new Date().toISOString(),
+      ligas: {},
+      flags: {},
+      storage: {},
+      windowState: {}
+    };
+    /* 1. TODO localStorage. Sin filtros — incluso entradas con
+          prefijos desconocidos se preservan, así futuros features
+          quedan respaldados sin tener que actualizar este código. */
+    var skippedSize = 0;
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
         if (!k) continue;
+        var v;
+        try { v = localStorage.getItem(k); } catch(_){ continue; }
+        if (v == null) continue;
+        out.storage[k] = v;
+        /* Compat v1: ligaExt_* también en .ligas (parseado). */
         if (k.indexOf('ligaExt_') === 0) {
-          try { out.ligas[k] = JSON.parse(localStorage.getItem(k)); } catch(_){}
+          try { out.ligas[k] = JSON.parse(v); } catch(_){}
         }
       }
     } catch(_){}
+    /* 2. Window globals importantes que se calculan en memoria y NO
+          se persisten siempre en localStorage. Si alguno es muy grande,
+          lo intentamos pero si falla la serialización seguimos. */
+    var WINDOW_KEYS_TO_SAVE = [
+      'LIGA_PLAYER_MATCH_STORE',
+      'LIGA_J1_RESULTS',
+      'BAJA_STORE',
+      'LESION_STORE',
+      'LIGA_EXTRAS',
+      '_LIGA_EA_PLAYER_FLAGS',
+      '_LIGA_EA_TEAM_STATS',
+      'MVP_TRACKER',
+      'TEAM_STADIUMS_OVERRIDE',
+      'COMP_ICON_OVERRIDE'
+    ];
+    WINDOW_KEYS_TO_SAVE.forEach(function(wk){
+      try {
+        var val = window[wk];
+        if (val == null) return;
+        var ser = JSON.stringify(val);
+        if (ser != null) out.windowState[wk] = ser;
+      } catch(_){}
+    });
+    /* 3. Compat v1: flags. */
     try {
       if (window._LIGA_EA_PLAYER_FLAGS) out.flags = JSON.parse(JSON.stringify(window._LIGA_EA_PLAYER_FLAGS));
     } catch(_){}
+    /* 4. Descargar. */
     try {
-      var blob = new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
+      var blob = new Blob([JSON.stringify(out)], {type:'application/json'});
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      a.download = 'ftbol-plantillas-' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.json';
+      a.download = 'ftbol-backup-' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.json';
       document.body.appendChild(a); a.click();
       setTimeout(function(){ try { document.body.removeChild(a); URL.revokeObjectURL(url); } catch(_){} }, 500);
       var nLigas = Object.keys(out.ligas).length;
@@ -2949,7 +3107,37 @@ window._showSimProgress = function(opts, onDone){
           d.teams.forEach(function(t){ if (t && Array.isArray(t.players)) nPlayers += t.players.length; });
         }
       });
-      alert('✅ Backup descargado.\n\n• Ligas:    '+nLigas+'\n• Equipos: '+nTeams+'\n• Jugadores: '+nPlayers+'\n• Flags C/F/P/⭐/⚾: '+Object.keys(out.flags).length+'\n\nGuarda ese .json en sitio seguro. Lo puedes re-importar con 📂.');
+      var nKeys = Object.keys(out.storage).length;
+      /* Resumen por familia para que el admin sepa qué se incluye. */
+      var families = {liga:0, copa:0, super:0, ucl:0, uel:0, uecl:0, ligaExt:0, otros:0};
+      Object.keys(out.storage).forEach(function(k){
+        if (k.indexOf('ligaExt_') === 0) families.ligaExt++;
+        else if (k.indexOf('superliga_') === 0 || k === 'manual_ea_superliga_v1') families.super++;
+        else if (k.indexOf('wprev_') === 0 || k.indexOf('_ucl_') !== -1) families.ucl++;
+        else if (k.indexOf('_uel_') !== -1) families.uel++;
+        else if (k.indexOf('_uecl_') !== -1) families.uecl++;
+        else if (k === 'ef_liga38_v4' || k === 'ef_liga_schedule_v1' || k.indexOf('liga_') === 0) families.liga++;
+        else if (k.indexOf('copa') !== -1) families.copa++;
+        else families.otros++;
+      });
+      var nWin = Object.keys(out.windowState).length;
+      alert(
+        '✅ Backup TOTAL descargado\n\n' +
+        '• Total claves localStorage: ' + nKeys + '\n' +
+        '   - ligaExt_*  (plantillas): ' + families.ligaExt + '\n' +
+        '   - Liga EA Sports:           ' + families.liga + '\n' +
+        '   - Copa del Rey:             ' + families.copa + '\n' +
+        '   - Superliga:                ' + families.super + '\n' +
+        '   - Champions / Previa:       ' + families.ucl + '\n' +
+        '   - Europa League:            ' + families.uel + '\n' +
+        '   - Conference:               ' + families.uecl + '\n' +
+        '   - Otros:                    ' + families.otros + '\n' +
+        '• Equipos:    ' + nTeams + '\n' +
+        '• Jugadores:  ' + nPlayers + '\n' +
+        '• Flags C/F/P/⭐/⚾/🏀: ' + Object.keys(out.flags).length + '\n' +
+        '• Estado en memoria (eventos, lesiones…): ' + nWin + ' bloques\n\n' +
+        'Guarda este .json en sitio seguro. Lo puedes re-importar con 📂.'
+      );
     } catch(errE){
       alert('⚠️ No se pudo crear el backup: ' + (errE && errE.message || errE));
     }
@@ -2965,40 +3153,107 @@ window._showSimProgress = function(opts, onDone){
         alert('⚠️ El archivo no es un JSON válido.\n'+(errP && errP.message));
         return;
       }
-      if (!payload || !payload.ligas || typeof payload.ligas !== 'object') {
-        alert('⚠️ El archivo no es un backup de F-TBOL (falta la sección "ligas").');
+      if (!payload || (typeof payload.ligas !== 'object' && typeof payload.storage !== 'object')) {
+        alert('⚠️ El archivo no es un backup de F-TBOL (falta la sección "ligas" o "storage").');
         return;
       }
-      if (!confirm('⚠️ Vas a reemplazar TODAS las plantillas actuales con las del backup.\n\nBackup creado: '+(payload.createdAt||'?')+'\nLigas en backup: '+Object.keys(payload.ligas).length+'\n\n¿Continuar?')) return;
-      var restoredLigas = 0, restoredTeams = 0, restoredPlayers = 0;
-      Object.keys(payload.ligas).forEach(function(lk){
-        try {
-          var d = payload.ligas[lk];
-          if (!d || !Array.isArray(d.teams)) return;
-          localStorage.setItem(lk, JSON.stringify(d));
-          restoredLigas++;
-          restoredTeams += d.teams.length;
-          d.teams.forEach(function(t){ if (t && Array.isArray(t.players)) restoredPlayers += t.players.length; });
-          /* Re-subir al server — solo el main (sin sufijos _snap_, _backup ni _protected). */
-          if (lk.indexOf('_snap_') === -1 && lk.indexOf('_backup') === -1 && lk.indexOf('_protected') === -1) {
-            var slugK = lk.replace(/^ligaExt_/,'');
-            try {
-              fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({data: d})
-              }).catch(function(){});
-            } catch(_){}
-          }
-        } catch(_){}
-      });
+      var isV2 = (payload.format === 'ftbol-backup-v2') || (payload.storage && typeof payload.storage === 'object');
+      var nLigas = payload.ligas ? Object.keys(payload.ligas).length : 0;
+      var nKeys  = payload.storage ? Object.keys(payload.storage).length : nLigas;
+      if (!confirm(
+        '⚠️ Vas a REEMPLAZAR todo el estado actual con el backup.\n\n' +
+        'Formato: ' + (payload.format || 'v1') + '\n' +
+        'Backup creado: ' + (payload.createdAt||'?') + '\n' +
+        (isV2
+          ? ('Claves en backup: ' + nKeys + ' (storage completo)')
+          : ('Ligas en backup: ' + nLigas + ' (solo plantillas)')) +
+        '\n\n¿Continuar?'
+      )) return;
+      var restoredKeys = 0, restoredLigas = 0, restoredTeams = 0, restoredPlayers = 0;
+      /* 1. Restaurar TODO storage si v2. */
+      if (isV2 && payload.storage) {
+        Object.keys(payload.storage).forEach(function(k){
+          try {
+            localStorage.setItem(k, payload.storage[k]);
+            restoredKeys++;
+            if (k.indexOf('ligaExt_') === 0
+                && k.indexOf('_snap_') === -1
+                && k.indexOf('_backup') === -1
+                && k.indexOf('_protected') === -1) {
+              try {
+                var dd = JSON.parse(payload.storage[k]);
+                if (dd && Array.isArray(dd.teams)) {
+                  restoredLigas++;
+                  restoredTeams += dd.teams.length;
+                  dd.teams.forEach(function(t){
+                    if (t && Array.isArray(t.players)) restoredPlayers += t.players.length;
+                  });
+                  /* Re-subir al server (idempotente). */
+                  var slugK = k.replace(/^ligaExt_/,'');
+                  try {
+                    fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
+                      method:'POST',
+                      headers:{'Content-Type':'application/json'},
+                      body: payload.storage[k] /* ya es JSON string */
+                    }).catch(function(){});
+                  } catch(_){}
+                }
+              } catch(_){}
+            }
+          } catch(_){}
+        });
+      } else if (payload.ligas) {
+        /* Compat v1: solo ligaExt_*. */
+        Object.keys(payload.ligas).forEach(function(lk){
+          try {
+            var d = payload.ligas[lk];
+            if (!d || !Array.isArray(d.teams)) return;
+            localStorage.setItem(lk, JSON.stringify(d));
+            restoredKeys++;
+            restoredLigas++;
+            restoredTeams += d.teams.length;
+            d.teams.forEach(function(t){ if (t && Array.isArray(t.players)) restoredPlayers += t.players.length; });
+            if (lk.indexOf('_snap_') === -1 && lk.indexOf('_backup') === -1 && lk.indexOf('_protected') === -1) {
+              var slugK = lk.replace(/^ligaExt_/,'');
+              try {
+                fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
+                  method:'POST',
+                  headers:{'Content-Type':'application/json'},
+                  body: JSON.stringify({data: d})
+                }).catch(function(){});
+              } catch(_){}
+            }
+          } catch(_){}
+        });
+      }
+      /* 2. Restaurar window globals (v2 solo). */
+      var nWin = 0;
+      if (isV2 && payload.windowState && typeof payload.windowState === 'object') {
+        Object.keys(payload.windowState).forEach(function(wk){
+          try {
+            var v = payload.windowState[wk];
+            if (typeof v === 'string') v = JSON.parse(v);
+            window[wk] = v;
+            nWin++;
+          } catch(_){}
+        });
+      }
+      /* 3. Compat v1: flags. */
       try {
         if (payload.flags && typeof payload.flags === 'object') {
           window._LIGA_EA_PLAYER_FLAGS = payload.flags;
         }
       } catch(_){}
       try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(); } catch(_){}
-      alert('✅ Backup importado.\n\n• Ligas/snaps: '+restoredLigas+'\n• Equipos: '+restoredTeams+'\n• Jugadores: '+restoredPlayers+'\n\nRecargando…');
+      alert(
+        '✅ Backup importado\n\n' +
+        '• Claves restauradas: ' + restoredKeys + '\n' +
+        '• Ligas: ' + restoredLigas + '\n' +
+        '• Equipos: ' + restoredTeams + '\n' +
+        '• Jugadores: ' + restoredPlayers + '\n' +
+        (nWin ? '• Estado en memoria: ' + nWin + ' bloques\n' : '') +
+        '\nRecargando…'
+      );
       setTimeout(function(){ location.reload(); }, 400);
     };
     reader.onerror = function(){ alert('⚠️ Error al leer el archivo.'); };
@@ -3721,21 +3976,31 @@ window._showSimProgress = function(opts, onDone){
     if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
     var bridge = window.ligaEaBuildEngineOverrides();
 
-    /* Si Liga EA está vacía, todavía queremos importar las demás
-       ligas del editor al motor (Hypermotion, Primera Fed y las 51
-       externas). Sin esto, un admin que solo haya creado equipos
-       en Hypermotion no podía jugar amistosos con su plantilla real:
-       `sqFromRegistry('Racing')` volvía al placeholder. */
+    /* SIEMPRE volcamos también las demás ligas del editor (Hypermotion,
+       Primera Fed y las 51 externas) al motor. Antes solo lo hacíamos
+       si Liga EA estaba vacía → cualquier rename/edit en otras ligas
+       NO llegaba al motor. Reportado 2026-05-04: rename de jugador en
+       Resto de Ligas no aparecía en el event picker del partido. Lo
+       hacemos al final (línea ~3870 vía finally) para no doblar el
+       trabajo cuando el bridge YA cubre Liga EA. */
     if(!bridge || bridge.meta.teamsCount === 0){
       _importOtherLeaguesIntoEngine();
       if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
+      _lextRefreshJ1Pickers();
       return;
     }
 
-    // Hash rápido para no re-aplicar si nada cambió
-    var hash = bridge.meta.teamsCount + ':' + bridge.meta.playersCount + ':' + bridge.meta.humansCount + ':' + bridge.meta.generatedAt;
-    if(hash === _lastAppliedHash) return;
-    _lastAppliedHash = hash;
+    /* Hash check ELIMINADO (2026-05-05). Antes esto saltaba la
+       re-aplicación cuando el hash no cambiaba. Pero el hash incluye
+       `generatedAt = new Date().toISOString()` que SIEMPRE cambia, así
+       que el check no aportaba pero podía bloquear casos edge (dos
+       saves dentro del mismo ms). Reportado: tras renombrar
+       "Giuliano" → "Giuliano Simeone" desde el editor de equipo, el
+       cambio NO aparecía en el event picker de un partido en jornada
+       ≥ 2 aunque applyEngineOverrides fuera invocado. Sin el gate
+       siempre rebuild → SQUAD_REGISTRY refresca sin condiciones. */
+    _lastAppliedHash = ''; /* (variable conservada por compatibilidad
+                              con código que la inspeccione externamente) */
 
     // ── 1. TEAM_RATINGS ──────────────────────────────────────────
     if(window.TEAM_RATINGS){
@@ -3823,6 +4088,256 @@ window._showSimProgress = function(opts, onDone){
 
     // ── 5. Refrescar escudos y clasificación ─────────────────────
     if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
+
+    // ── 6. Refrescar cachés del picker en partidos j1m* del bundle ─
+    // Los matches j1m1..j1m10 del bundle inicializan _sqA_jXmY /
+    // _sqB_jXmY UNA SOLA VEZ via IIFE al cargar la página. Tras un
+    // rename/paste de plantilla, esas cachés quedan stale aunque
+    // SQUAD_REGISTRY ya esté actualizado. Mutamos cada array EN
+    // SITIO (sin reasignar) para que la closure original las vea.
+    _lextRefreshJ1Pickers();
+  }
+
+  /* Reconstruye `window._sqA_jXmY` / `window._sqB_jXmY` (cachés que
+     usan los matches estáticos del bundle, p.ej. Real Madrid·Barça
+     en j1m1) leyendo de SQUAD_REGISTRY. Mutación in-place para que
+     la closure capturada al cargar el bundle siga apuntando al mismo
+     array — así un rename del editor llega al picker sin recargar
+     la página. Reportado 2026-05-04 (rename "Giuliano" → "Giuliano
+     Simeone" no aparecía en el event picker). */
+  function _lextRefreshJ1Pickers(){
+    if (typeof window === 'undefined') return;
+    var SCHEDULE = window.LIGA_SCHEDULE;
+    if (!Array.isArray(SCHEDULE) || !Array.isArray(SCHEDULE[0])) return;
+    var POS_LABELS = {P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS'};
+    function _toOverlayFmt(sq){
+      if (!Array.isArray(sq) || !sq.length) return [];
+      var out = [];
+      var curPos = null;
+      sq.forEach(function(p){
+        if (!p) return;
+        /* sqFromRegistryFull devuelve [num, name, pos, power] (pos en
+           p[2]). El formato del overlay es {h:label} + [num, name]. */
+        if (p[2] !== curPos){
+          curPos = p[2];
+          out.push({h: POS_LABELS[curPos] || curPos});
+        }
+        out.push([p[0], p[1]]);
+      });
+      return out;
+    }
+    SCHEDULE[0].forEach(function(match, idx){
+      if (!Array.isArray(match) || match.length < 2) return;
+      var mid = 'j1m' + (idx + 1);
+      var sqAArr = window['_sqA_' + mid];
+      var sqBArr = window['_sqB_' + mid];
+      if (!Array.isArray(sqAArr) && !Array.isArray(sqBArr)) return;
+      var sqAFresh = (typeof window.sqFromRegistryFull === 'function')
+        ? window.sqFromRegistryFull(match[0]) : null;
+      var sqBFresh = (typeof window.sqFromRegistryFull === 'function')
+        ? window.sqFromRegistryFull(match[1]) : null;
+      var fmtA = _toOverlayFmt(sqAFresh || []);
+      var fmtB = _toOverlayFmt(sqBFresh || []);
+      if (Array.isArray(sqAArr) && fmtA.length){
+        sqAArr.length = 0;
+        fmtA.forEach(function(p){ sqAArr.push(p); });
+      }
+      if (Array.isArray(sqBArr) && fmtB.length){
+        sqBArr.length = 0;
+        fmtB.forEach(function(p){ sqBArr.push(p); });
+      }
+    });
+  }
+  window._lextRefreshJ1Pickers = _lextRefreshJ1Pickers;
+
+  /* ════════════════════════════════════════════════════════════════
+     WRAPPER de sqFromRegistryFull / sqFromRegistry: LEER DEL EDITOR
+     PRIMERO (2026-05-05)
+     ════════════════════════════════════════════════════════════════
+     Cualquier rename / edición del admin en `ligaExt_<slug>` se debe
+     ver INMEDIATAMENTE en el event picker de cualquier partido,
+     sin depender de que applyEngineOverrides haya corrido o de que
+     SQUAD_REGISTRY esté actualizado.
+
+     Estrategia: envolvemos `sqFromRegistryFull` (y su hermano corto
+     `sqFromRegistry`) para que, ANTES de leer SQUAD_REGISTRY, busque
+     el equipo en TODAS las claves `ligaExt_*` del localStorage. La
+     primera con `players.length > 0` gana, con preferencia
+     `ligaExt_liga-ea-sports`. Si no encuentra nada, delegamos al
+     wrapper anterior (que sigue mirando SQUAD_REGISTRY + BAJA_STORE
+     etc.).
+
+     Reportado 2026-05-05: tras renombrar "Giuliano" → "20. Giuliano
+     Simeone 84" en el editor del Atlético Madrid, el picker en un
+     partido de jornada 3 seguía mostrando "Giuliano". Causa: el
+     bundle hardcodea SQUAD_REGISTRY['Atlético Madrid'] al cargar
+     y, según algunas rutas, lo lee antes de que applyEngineOverrides
+     lo refresque. Con este wrapper ya da igual el orden — siempre
+     ganamos los datos del editor. */
+  function _lextNormForLookup(s){
+    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+  }
+  function _lextFindTeamInAnyLigaExt(teamName){
+    if (!teamName) return null;
+    var aliases = window.TEAM_ALIASES || {};
+    var raw = String(teamName).trim();
+    var rawLower = raw.toLowerCase();
+    var resolvedAlias = aliases[rawLower] || raw;
+    var targets = [_lextNormForLookup(raw)];
+    var resN = _lextNormForLookup(resolvedAlias);
+    if (resN && targets.indexOf(resN) === -1) targets.push(resN);
+    /* Liga EA Sports tiene preferencia (es el slug "principal" de
+       todos los partidos de Liga EA, Champions, etc.). Si no está
+       ahí, usamos cualquier ligaExt_<slug> como fallback. */
+    var preferred = null, fallback = null;
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup') !== -1) continue;
+        if (k.indexOf('_snap_') !== -1) continue;
+        if (k.indexOf('_protected') !== -1) continue;
+        var rawData = localStorage.getItem(k); if (!rawData) continue;
+        var data; try { data = JSON.parse(rawData); } catch(_) { continue; }
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        for (var j = 0; j < teams.length; j++) {
+          var t = teams[j];
+          if (!t || !t.name) continue;
+          var nm = _lextNormForLookup(t.name);
+          var hit = false;
+          for (var ti = 0; ti < targets.length; ti++) {
+            if (nm === targets[ti]) { hit = true; break; }
+          }
+          if (!hit) continue;
+          if (!Array.isArray(t.players) || !t.players.length) continue;
+          if (k === 'ligaExt_liga-ea-sports') {
+            preferred = t;
+            break; /* Liga EA gana sin más */
+          } else if (!fallback) {
+            fallback = t;
+          }
+        }
+        if (preferred) break;
+      }
+    } catch(_){}
+    return preferred || fallback;
+  }
+  function _lextBuildSqFromTeam(t){
+    if (!t || !Array.isArray(t.players) || !t.players.length) return [];
+    var POS_MAP = {POR:'P', DEF:'D', MED:'M', DEL:'F'};
+    var POS_ORDER = ['P','D','M','F'];
+    var byPos = {P:[], D:[], M:[], F:[]};
+    t.players.forEach(function(p){
+      if (!p || !p.name) return;
+      var pos = POS_MAP[p.pos] || 'M';
+      byPos[pos].push(p);
+    });
+    var out = [];
+    POS_ORDER.forEach(function(pos){
+      var pool = byPos[pos];
+      if (!pool.length) return;
+      pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+      pool.forEach(function(p){
+        var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+        /* Formato extendido (igual que sqFromRegistryFull): cada
+           entry es [num, name, pos, power]. */
+        var row = [String(p.num || ''), String(p.name||'?'), pos, pw];
+        if (p.elite)      row.elite      = true;
+        if (p.natGoal)    row.natGoal    = true;
+        if (p.natGoalPro) row.natGoalPro = true;
+        if (p.captain)    row.captain    = true;
+        if (p.freeKick)   row.freeKick   = true;
+        if (p.penalty)    row.penalty    = true;
+        out.push(row);
+      });
+    });
+    return out;
+  }
+  function _lextBuildSqShortFromTeam(t){
+    /* Formato CORTO (sqFromRegistry): [num, name, pos, power] con
+       headers `{h:'🧤 PORTEROS'}` etc. entre líneas. */
+    if (!t || !Array.isArray(t.players) || !t.players.length) return [];
+    var POS_MAP = {POR:'P', DEF:'D', MED:'M', DEL:'F'};
+    var POS_HEADERS = {P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS'};
+    var POS_ORDER = ['P','D','M','F'];
+    var byPos = {P:[], D:[], M:[], F:[]};
+    t.players.forEach(function(p){
+      if (!p || !p.name) return;
+      var pos = POS_MAP[p.pos] || 'M';
+      byPos[pos].push(p);
+    });
+    var out = [];
+    POS_ORDER.forEach(function(pos){
+      var pool = byPos[pos];
+      if (!pool.length) return;
+      pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+      out.push({h: POS_HEADERS[pos]});
+      pool.forEach(function(p){
+        var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+        var entry = [String(p.num || ''), String(p.name||'?'), pos, pw];
+        if (p.elite)      entry.elite      = true;
+        if (p.natGoal)    entry.natGoal    = true;
+        if (p.natGoalPro) entry.natGoalPro = true;
+        if (p.captain)    entry.captain    = true;
+        if (p.freeKick)   entry.freeKick   = true;
+        if (p.penalty)    entry.penalty    = true;
+        out.push(entry);
+      });
+    });
+    return out;
+  }
+  /* Aplazamos el wrap a DOMContentLoaded + setTimeout pequeños para
+     asegurar que ya se cargó el bundle Y los wrappers de BAJA_STORE
+     (línea 6082 del bundle). Así envolvemos por encima de TODO sin
+     romper la cadena. */
+  function _wrapSqFromRegistry(){
+    if (window._lextSqWrapped) return;
+    var origFull  = window.sqFromRegistryFull;
+    var origShort = window.sqFromRegistry;
+    if (typeof origFull === 'function') {
+      window.sqFromRegistryFull = function(teamName){
+        try {
+          var t = _lextFindTeamInAnyLigaExt(teamName);
+          if (t) {
+            var built = _lextBuildSqFromTeam(t);
+            if (built && built.length) return built;
+          }
+        } catch(_){}
+        return origFull.apply(this, arguments);
+      };
+    }
+    if (typeof origShort === 'function') {
+      window.sqFromRegistry = function(teamName, opts){
+        try {
+          var t = _lextFindTeamInAnyLigaExt(teamName);
+          if (t) {
+            var built = _lextBuildSqShortFromTeam(t);
+            if (built && built.length) {
+              /* Respeta el filtro `opts.excluded` (lesionados/sancionados)
+                 que el caller pase. Igual que el original. */
+              if (opts && Array.isArray(opts.excluded) && opts.excluded.length) {
+                var exNorm = {};
+                opts.excluded.forEach(function(n){ exNorm[_lextNormForLookup(n)] = true; });
+                built = built.filter(function(e){
+                  if (e && e.h) return true;
+                  return !exNorm[_lextNormForLookup(e[1]||'')];
+                });
+              }
+              return built;
+            }
+          }
+        } catch(_){}
+        return origShort.apply(this, arguments);
+      };
+    }
+    window._lextSqWrapped = true;
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){
+      setTimeout(_wrapSqFromRegistry, 200);
+    });
+  } else {
+    setTimeout(_wrapSqFromRegistry, 200);
   }
 
   function _importOtherLeaguesIntoEngine(){
@@ -3955,19 +4470,169 @@ window._showSimProgress = function(opts, onDone){
   }
 
   // ══════════════════════════════════════════════════════════════════
-  // SISTEMA DE STATS SEGURO — storage SEPARADO de equipos
+  // SISTEMA DE STATS POR COMPETICIÓN — caches separados (2026-05-04)
   // ══════════════════════════════════════════════════════════════════
-  // Las stats de jugadores (goles, tarjetas, MVPs) viven en su propio
-  // localStorage key: ef_player_stats_v1
-  // JAMÁS lee ni escribe a ligaExt_liga-ea-sports (donde viven los
-  // equipos y plantillas del usuario).
+  // Cada competición vive en su propia clave de localStorage para que
+  // las plantillas/dashboards muestren SOLO lo que pasó ahí dentro:
   //
-  // Estructura: { 'teamNorm::playerNorm': {gol,pen,fk,mvp,ta,tr,pj,...} }
-  // Se recalcula desde cero cada vez que se llama, leyendo de:
-  //   - LIGA_PLAYER_MATCH_STORE (eventos del bundle)
-  //   - ef_liga38_v4 (resultados guardados)
+  //   ef_player_stats_v1            → Liga EA Sports + Copa del Rey
+  //                                   (las dos se SUMAN como pidió el
+  //                                    usuario; vista "EA Sports").
+  //   ef_player_stats_superliga_v1  → Superliga (aislada).
+  //   ef_player_stats_ucl_v1        → Champions League (aislada).
+  //   ef_player_stats_uel_v1        → Europa League (aislada).
+  //   ef_player_stats_uecl_v1       → Conference (aislada).
+  //
+  // Estructura común: { 'teamNorm::playerNorm': {gol,pen,fk,mvp,ta,tr,pj,...} }
+  // Se reconstruye desde cero cada vez que se llama, leyendo de:
+  //   - LIGA_PLAYER_MATCH_STORE (eventos taggeados con `competition`)
+  //   - ef_liga38_v4 (resultados Liga EA solo)
+  // El tag de competición lo pone `registrarLigaPlayerStats` en
+  // s-liga-clas.html via `_inferMatchCompetition` o un parámetro
+  // explícito. Eventos sin tag → 'liga' (back-compat).
   // ══════════════════════════════════════════════════════════════════
   var PLAYER_STATS_KEY = 'ef_player_stats_v1';
+  /* Mapping competición → clave de cache. La cache "liga" se usa para
+     ef_player_stats_v1 (que también acumula 'copa'); las demás son
+     stores aislados que se usan solo cuando se abre la plantilla en
+     esa competición concreta o su dashboard. */
+  var COMP_CACHE_KEYS = {
+    superliga: 'ef_player_stats_superliga_v1',
+    ucl:       'ef_player_stats_ucl_v1',
+    uel:       'ef_player_stats_uel_v1',
+    uecl:      'ef_player_stats_uecl_v1'
+  };
+  /* Mapeo inverso: dado un nombre de competición → clave del store.
+     Para 'liga' y 'copa' devuelve el cache de Liga EA Sports porque
+     ambas se SUMAN en una sola vista. */
+  window._lextStatsKeyForCompetition = function(comp){
+    if (comp === 'superliga') return COMP_CACHE_KEYS.superliga;
+    if (comp === 'ucl')       return COMP_CACHE_KEYS.ucl;
+    if (comp === 'uel')       return COMP_CACHE_KEYS.uel;
+    if (comp === 'uecl')      return COMP_CACHE_KEYS.uecl;
+    return PLAYER_STATS_KEY; /* liga + copa */
+  };
+
+  /* Renderiza un dashboard de estadísticas a partir de UNO de los
+     caches `ef_player_stats_<comp>_v1`. Mismo look & feel que el
+     dashboard de Liga EA Sports (s-liga-stats) — paleta verde,
+     mismo CSS — pero alimentado desde el cache aislado de la
+     competición.
+
+     `rootId`   → id del contenedor donde inyectar el HTML.
+     `statsKey` → clave de localStorage del cache (ej.
+                  'ef_player_stats_superliga_v1').
+
+     Petición usuario 2026-05-04: cada competición tiene su propia
+     caja de estadísticas, EXCEPTO Liga EA Sports + Copa que van
+     unidas y siguen rendereadas por buildLigaStatsDashboard del
+     screen s-liga-clas.                                          */
+  var COMP_STATS_CATEGORIES = [
+    { key:'goles-total', title:'Goleadores',          icon:'⚽️' },
+    { key:'cs',          title:'Portería imbatida',   icon:'🧤' },
+    { key:'yel',         title:'Tarjetas amarillas',  icon:'🟨' },
+    { key:'red',         title:'Tarjetas rojas',      icon:'🟥' },
+    { key:'pen-gol',     title:'Goles de penalti',    icon:'🥅' },
+    { key:'pen-parado',  title:'Penaltis parados',    icon:'🖐' },
+    { key:'falta-gol',   title:'Goles de falta',      icon:'🎯' },
+    { key:'mvp',         title:'MVP',                 icon:'⭐️' }
+  ];
+  function _escHtmlPS(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+  window._lextBuildCompStatsDashboard = function(rootId, statsKey){
+    var root = document.getElementById(rootId);
+    if (!root) return;
+    var raw = null;
+    try { raw = localStorage.getItem(statsKey); } catch(_){}
+    var stats = {};
+    if (raw) { try { stats = JSON.parse(raw) || {}; } catch(_){ stats = {}; } }
+    var keys = Object.keys(stats);
+    if (!keys.length) {
+      root.innerHTML = '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
+      return;
+    }
+    /* Convertir el cache (`teamNorm::playerNorm` → counters) a la
+       lista de jugadores. Como los nombres están normalizados,
+       capitalizamos para presentación. */
+    function _titleCase(s){
+      return String(s||'').split(/\s+/).map(function(w){
+        return w ? w.charAt(0).toUpperCase() + w.slice(1) : '';
+      }).join(' ').trim();
+    }
+    var players = keys.map(function(k){
+      var sep = k.indexOf('::');
+      if (sep < 0) return null;
+      var teamN = k.slice(0, sep);
+      var playerN = k.slice(sep + 2);
+      var s = stats[k] || {};
+      var golTotal = Number(s.gol||0) + Number(s.pen||0) + Number(s.fk||0);
+      return {
+        team: _titleCase(teamN),
+        name: _titleCase(playerN),
+        stats: {
+          'goles-total': golTotal,
+          'cs':          Number(s.imbat||0),
+          'yel':         Number(s.ta||0),
+          'red':         Number(s.tr||0),
+          'pen-gol':     Number(s.pen||0),
+          'pen-parado':  Number(s.penSaved||0),
+          'falta-gol':   Number(s.fk||0),
+          'mvp':         Number(s.mvp||0)
+        }
+      };
+    }).filter(Boolean);
+    function _topBy(field){
+      return players.map(function(p){
+        return { name:p.name, team:p.team, value:Number(p.stats[field]||0) };
+      }).filter(function(x){ return x.value > 0; })
+        .sort(function(a,b){
+          if (b.value !== a.value) return b.value - a.value;
+          if (a.team !== b.team) return a.team.localeCompare(b.team,'es');
+          return a.name.localeCompare(b.name,'es');
+        });
+    }
+    function _renderRows(rows, startIndex){
+      return rows.map(function(item, idx){
+        return '<div class="liga-stat-row">'
+             +   '<div class="liga-stat-rank">' + (startIndex + idx) + '</div>'
+             +   '<div class="liga-stat-player">'
+             +     '<div class="liga-stat-name">' + _escHtmlPS(item.name) + '</div>'
+             +     '<div class="liga-stat-team">' + _escHtmlPS(item.team) + '</div>'
+             +   '</div>'
+             +   '<div class="liga-stat-value">' + item.value + '</div>'
+             + '</div>';
+      }).join('');
+    }
+    var html = '';
+    COMP_STATS_CATEGORIES.forEach(function(cat){
+      var allRows = _topBy(cat.key);
+      var top  = allRows.slice(0, 6);
+      var rest = allRows.slice(6);
+      html += '<div class="liga-stat-card">'
+           +    '<div class="liga-stat-head">'
+           +      '<div class="liga-stat-ico">' + cat.icon + '</div>'
+           +      '<div class="liga-stat-title">' + cat.title + '</div>'
+           +    '</div>'
+           +    '<div class="liga-stat-body">';
+      if (!allRows.length) {
+        html += '<div class="liga-stat-empty">Sin datos todavía</div>';
+      } else {
+        html += _renderRows(top, 1);
+        if (rest.length) {
+          html += '<details class="liga-stat-more">'
+               +    '<summary>Ver todos (' + allRows.length + ')</summary>'
+               +    '<div class="liga-stat-more-list">' + _renderRows(rest, 7) + '</div>'
+               +  '</details>';
+        }
+      }
+      html += '</div></div>';
+    });
+    root.innerHTML = html;
+  };
 
   function _normPS(s){
     return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
@@ -3979,49 +4644,61 @@ window._showSimProgress = function(opts, onDone){
   try { if (typeof window !== 'undefined') window._normPS = _normPS; } catch(_){}
 
   function rebuildPlayerStatsStore(){
-    var stats = {}; // 'teamNorm::playerNorm' → counters
+    /* Repartimos eventos en buckets por competición. Las claves del
+       cache ef_player_stats_v1 (Liga EA Sports) suman 'liga' + 'copa'
+       — eso es lo que pidió el usuario: la vista "EA Sports" combina
+       ambas. Los demás buckets quedan aislados y se persisten en sus
+       propias claves localStorage para que cada vista (Superliga,
+       Champions, UEL, Conference) muestre solo SUS números. */
+    var buckets = {
+      liga:      {},
+      copa:      {},
+      superliga: {},
+      ucl:       {},
+      uel:       {},
+      uecl:      {}
+    };
+    var teamPJByComp = {
+      liga:      {},
+      copa:      {},
+      superliga: {},
+      ucl:       {},
+      uel:       {},
+      uecl:      {}
+    };
 
-    function getOrCreate(teamName, playerName){
+    function getOrCreateInBucket(bucket, teamName, playerName){
       var key = _normPS(teamName) + '::' + _normPS(playerName);
-      if(!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
-      return stats[key];
+      if(!bucket[key]) bucket[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+      return bucket[key];
     }
-
-    // Fuzzy team finder for events
-    function findTeamKey(teamName, allTeamKeys){
-      var norm = _normPS(teamName);
-      if(allTeamKeys[norm]) return norm;
-      var keys = Object.keys(allTeamKeys);
-      for(var i=0;i<keys.length;i++){
-        if(keys[i].indexOf(norm)!==-1 || norm.indexOf(keys[i])!==-1) return keys[i];
+    function _competitionFromMatchKey(mk){
+      if (typeof window._inferMatchCompetition === 'function') {
+        try { return window._inferMatchCompetition(mk); } catch(_){}
       }
-      return norm;
+      return 'liga';
+    }
+    function _bucketFor(comp){
+      return buckets[comp] || buckets.liga;
+    }
+    function _pjBucketFor(comp){
+      return teamPJByComp[comp] || teamPJByComp.liga;
     }
 
-    /* PJ por equipo desde la fuente AUTORITATIVA (ef_liga38_v4). Cada
-       clave `j|home|away` ahí representa UN partido de liga → lo
-       contamos una vez por cada equipo. La clasificación en pantalla
-       deriva su PJ de la misma fuente (vía applyMatch), así que el
-       PJ de la plantilla coincidirá siempre con el de la tabla.
-
-       Antes, teamPJ era un set de matchKeys normalizados (`home||away`)
-       acumulado en dos pasadas (LIGA_PLAYER_MATCH_STORE + ef_liga38_v4)
-       con dedup por esa clave. Si los flujos de live-match / IA-sim
-       dejaban copias con nombres no canónicos divergentes (p. ej.
-       un evento con `realTeam: "Bayern"` frente al canónico
-       "Bayern Munich"), la dedup fallaba y los partidos contaban dos
-       veces → la clasificación mostraba 28 PJ pero la plantilla 34. */
-    var teamPJ = {}; // teamNorm → integer count (matches played)
+    /* PJ por equipo desde la fuente AUTORITATIVA (ef_liga38_v4 =
+       Liga EA Sports, una entrada por jornada+home+away). Cada
+       clave la contamos una vez por cada equipo en bucket 'liga'. */
     try {
       var _pjRaw = localStorage.getItem('ef_liga38_v4');
       if(_pjRaw){
         var _pjResults = JSON.parse(_pjRaw);
+        var ligaPJ = teamPJByComp.liga;
         Object.keys(_pjResults||{}).forEach(function(k){
           var parts = k.split('|');
           if(parts.length < 3) return;
           var nA = _normPS(parts[1]||''), nB = _normPS(parts[2]||'');
-          if(nA) teamPJ[nA] = (teamPJ[nA]||0) + 1;
-          if(nB) teamPJ[nB] = (teamPJ[nB]||0) + 1;
+          if(nA) ligaPJ[nA] = (ligaPJ[nA]||0) + 1;
+          if(nB) ligaPJ[nB] = (ligaPJ[nB]||0) + 1;
         });
       }
     } catch(_){}
@@ -4029,14 +4706,31 @@ window._showSimProgress = function(opts, onDone){
     var processedMatches = {};
     function _mkPJ(hA, hB){ return _normPS(hA) + '||' + _normPS(hB); }
 
-    // Source 1: LIGA_PLAYER_MATCH_STORE
+    // Source 1: LIGA_PLAYER_MATCH_STORE (eventos con tag competition)
     var store = window.LIGA_PLAYER_MATCH_STORE;
     if(store && typeof store === 'object'){
       Object.keys(store).forEach(function(matchKey){
         var m = store[matchKey]; if(!m) return;
+        var comp = m.competition || _competitionFromMatchKey(matchKey);
+        if (!buckets[comp]) comp = 'liga';
         var tA = m.teamA||'', tB = m.teamB||'';
         var pjKey = _mkPJ(tA, tB);
-        processedMatches[pjKey] = true;
+        /* dedup PER-competición: el mismo pareja de equipos puede
+           jugar partidos en varias competiciones (Liga vs Copa) y
+           cada uno cuenta en su bucket. Clave compuesta. */
+        var dedupKey = comp + '|' + pjKey;
+        if (processedMatches[dedupKey]) return;
+        processedMatches[dedupKey] = true;
+        var bucket = _bucketFor(comp);
+        var pjBucket = _pjBucketFor(comp);
+        /* PJ del partido para ambos equipos en este bucket. NO lo
+           hacemos para 'liga' porque ya viene de ef_liga38_v4 (más
+           autoritativo); para los demás SÍ contamos cada match. */
+        if (comp !== 'liga') {
+          var nA0 = _normPS(tA), nB0 = _normPS(tB);
+          if (nA0) pjBucket[nA0] = (pjBucket[nA0]||0) + 1;
+          if (nB0) pjBucket[nB0] = (pjBucket[nB0]||0) + 1;
+        }
         (m.evts||[]).forEach(function(ev){
           var team = ev.realTeam || '';
           if(!team){ team = ev.team==='a'?tA:ev.team==='b'?tB:''; }
@@ -4045,7 +4739,7 @@ window._showSimProgress = function(opts, onDone){
           else if(typeof ev.player==='string') player = ev.player;
           else player = ev.name||ev.playerName||'';
           if(!player) return;
-          var p = getOrCreate(team, player);
+          var p = getOrCreateInBucket(bucket, team, player);
           var type = ev.type||'';
           var ico = String(ev.ico||'').replace(/️/g,'').trim();
           if(type==='amarilla') p.ta++;
@@ -4053,76 +4747,68 @@ window._showSimProgress = function(opts, onDone){
           else if(type==='card'){
             if(ico==='🟨') p.ta++; else if(ico==='🟥') p.tr++; else if(ico==='🟨🟥'){p.ta++;p.tr++;}
           }
-          /* Contadores DISJUNTOS: la plantilla muestra 3 columnas
-             independientes (⚽ regular, 🥅 penalti, 🎯 falta). La suma
-             de las 3 = total del jugador y coincide con el GF del
-             equipo en la clasificación. ANTES p.gol incluía pen y fk
-             (p.gol++; p.pen++), lo que inflaba visualmente los totales
-             (reportado: Athletic suma 71 en plantilla vs 53 GF). El
-             dashboard de Estadísticas recalcula `goles-total` aparte
-             vía collectLigaPlayerStatsFromStore, así que no se ve
-             afectado. */
+          /* Contadores DISJUNTOS: gol regular / pen / falta-gol son
+             columnas separadas en la plantilla. La suma de las 3 = GF
+             del equipo en la clasificación. */
           else if(type==='gol') p.gol++;
           else if(type==='falta-gol') p.fk++;
           else if(type==='pen-gol') p.pen++;
           else if(type==='pen-parado') p.penSaved++;
           else if(type==='mvp') p.mvp++;
           else if(type==='imbat') p.imbat++;
-          // 'sust' no incrementa contadores — sólo registra al jugador
-          // entrante (y al saliente) para que ambos reciban PJ.
           if(type==='sust' && ev.playerOut){
-            getOrCreate(team, ev.playerOut);
+            getOrCreateInBucket(bucket, team, ev.playerOut);
           }
         });
         if(m.mvpName && m.mvpTeam){
           var hasMvpEvt = (m.evts||[]).some(function(e){return e.type==='mvp';});
-          if(!hasMvpEvt) getOrCreate(m.mvpTeam, m.mvpName).mvp++;
+          if(!hasMvpEvt) getOrCreateInBucket(bucket, m.mvpTeam, m.mvpName).mvp++;
         }
       });
     }
 
-    // Source 2: ef_liga38_v4 (results from simularJornadaIA)
+    // Source 2: ef_liga38_v4 (Liga EA IA-sims) — siempre bucket 'liga'
     try {
       var resRaw = localStorage.getItem('ef_liga38_v4');
       if(resRaw){
         var results = JSON.parse(resRaw);
+        var ligaBucket = buckets.liga;
         Object.keys(results||{}).forEach(function(key){
           var r = results[key]; if(!r||!r.events) return;
           var parts = key.split('|'); if(parts.length<3) return;
           var tA = parts[1]||'', tB = parts[2]||'';
-          // Skip if already processed from LIGA_PLAYER_MATCH_STORE.
-          // Usamos la misma clave normalizada que Source 1 (home|away
-          // sin jornada) para que los dos formatos de storeKey
-          // (canonHome|canonAway y j|home|away) colisionen y el
-          // partido se cuente UNA sola vez.
           var pjKey2 = _mkPJ(tA, tB);
-          if(processedMatches[pjKey2]) return;
-          processedMatches[pjKey2] = true;
+          var dedupKey2 = 'liga|' + pjKey2;
+          if(processedMatches[dedupKey2]) return;
+          processedMatches[dedupKey2] = true;
           (r.events||[]).forEach(function(ev){
             var team = ev.team==='a'?tA:ev.team==='b'?tB:'';
             var player = typeof ev.player==='string'?ev.player:(Array.isArray(ev.player)?ev.player[1]:'');
             if(!player) return;
-            var p = getOrCreate(team, player);
+            var p = getOrCreateInBucket(ligaBucket, team, player);
             var type = ev.type||'';
             if(type==='amarilla') p.ta++;
             else if(type==='roja'||type==='d-amarilla') p.tr++;
-            /* Contadores DISJUNTOS (ver comentario en Source 1). */
             else if(type==='gol') p.gol++;
             else if(type==='falta-gol') p.fk++;
             else if(type==='pen-gol') p.pen++;
             else if(type==='pen-parado') p.penSaved++;
             else if(type==='mvp') p.mvp++;
             else if(type==='imbat') p.imbat++;
-            // 'sust' — idem fuente 1: sólo registra el PJ del entrante
-            // y del saliente si viene en el evento.
             if(type==='sust' && ev.playerOut){
-              getOrCreate(team, ev.playerOut);
+              getOrCreateInBucket(ligaBucket, team, ev.playerOut);
             }
           });
-          if(r.mvp && r.mvpTeam) getOrCreate(r.mvpTeam, r.mvp).mvp++;
+          if(r.mvp && r.mvpTeam) getOrCreateInBucket(ligaBucket, r.mvpTeam, r.mvp).mvp++;
         });
       }
     } catch(_){}
+
+    /* Para coherencia con el código previo: `stats` y `teamPJ` siguen
+       refiriéndose al bucket de Liga EA Sports (que es lo que escribe
+       en ef_player_stats_v1, ahora SUMADO con Copa más abajo). */
+    var stats  = buckets.liga;
+    var teamPJ = teamPJByComp.liga;
 
     // ── Portero titular: el de MAYOR valoración juega todos los partidos ──
     // Recorremos todas las ligas (ligaExt_*) para localizar al portero con
@@ -4203,37 +4889,105 @@ window._showSimProgress = function(opts, onDone){
       }
     } catch(_){}
 
-    // Save to SEPARATE storage
+    /* ── SUMAR Liga + Copa en el bucket "EA Sports" (PLAYER_STATS_KEY).
+       Petición usuario: "se suman Liga + Copa las estadísticas de
+       cada jugador individualmente" — son la misma vista. */
+    function _mergeBucketInto(target, source){
+      Object.keys(source).forEach(function(k){
+        var src = source[k]; if (!src) return;
+        var dst = target[k] || {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+        dst.gol      = (dst.gol     ||0) + (src.gol     ||0);
+        dst.pen      = (dst.pen     ||0) + (src.pen     ||0);
+        dst.fk       = (dst.fk      ||0) + (src.fk      ||0);
+        dst.mvp      = (dst.mvp     ||0) + (src.mvp     ||0);
+        dst.ta       = (dst.ta      ||0) + (src.ta      ||0);
+        dst.tr       = (dst.tr      ||0) + (src.tr      ||0);
+        dst.imbat    = (dst.imbat   ||0) + (src.imbat   ||0);
+        dst.penSaved = (dst.penSaved||0) + (src.penSaved||0);
+        /* PJ NO se suma jugador a jugador (ya viene del equipo). */
+        target[k] = dst;
+      });
+    }
+    _mergeBucketInto(stats, buckets.copa);
+    /* PJ del equipo en EA Sports = Liga + Copa (sumados). */
+    Object.keys(teamPJByComp.copa || {}).forEach(function(tn){
+      teamPJ[tn] = (teamPJ[tn]||0) + teamPJByComp.copa[tn];
+    });
+
+    /* Persistir cada bucket aislado a su propia clave. Estas vistas
+       las lee `_lextStatsKeyForCompetition` cuando se abre la
+       plantilla en una competición que NO sea EA Sports. */
+    function _persistBucket(bucket, pjBucket, key){
+      var out = {};
+      Object.keys(bucket).forEach(function(k){
+        var rec = bucket[k];
+        var teamN = k.split('::')[0];
+        rec.pj = pjBucket[teamN] || 0;
+        out[k] = rec;
+      });
+      try { localStorage.setItem(key, JSON.stringify(out)); } catch(_){}
+    }
+    _persistBucket(buckets.superliga, teamPJByComp.superliga, COMP_CACHE_KEYS.superliga);
+    _persistBucket(buckets.ucl,       teamPJByComp.ucl,       COMP_CACHE_KEYS.ucl);
+    _persistBucket(buckets.uel,       teamPJByComp.uel,       COMP_CACHE_KEYS.uel);
+    _persistBucket(buckets.uecl,      teamPJByComp.uecl,      COMP_CACHE_KEYS.uecl);
+
+    // Save to SEPARATE storage (Liga + Copa unidas → ef_player_stats_v1)
     try { localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(stats)); } catch(_){}
     return stats;
   }
 
   // Read stats for a player (used by renderSquadList)
-  window.getPlayerStats = function(teamName, playerName){
-    /* Alias bulletproof: si por cualquier motivo (hoisting anómalo,
-       IIFE partial-execution, minificación agresiva) `_normPS` del
-       closure de este IIFE no estuviera disponible, caemos a
-       `window._normPS` (bootstrap global en el primer <script>).
-       Antes una ReferenceError aquí propagaba como "_normPS is not
-       defined" hasta el catch de renderSquadList y dejaba la
-       plantilla en blanco con el mensaje de error. */
+  window.getPlayerStats = function(teamName, playerName, storeKey){
+    /* `storeKey` opcional (2026-05-04): cuando se abre la plantilla
+       en Superliga/Champions/UEL/UECL, el caller pasa la clave de
+       cache de esa competición (`ef_player_stats_<comp>_v1`) para
+       leer SOLO los stats de ese contexto. Si no viene, default a
+       PLAYER_STATS_KEY (Liga + Copa). */
     var _np = (typeof _normPS === 'function') ? _normPS
             : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
             : function(s){ return String(s||'').toLowerCase(); };
-    var key = _np(teamName) + '::' + _np(playerName);
+    var tNorm  = _np(teamName);
+    var pNorm  = _np(playerName);
+    var key    = tNorm + '::' + pNorm;
+    var lsKey  = storeKey || PLAYER_STATS_KEY;
     try {
-      var raw = localStorage.getItem(PLAYER_STATS_KEY);
+      var raw = localStorage.getItem(lsKey);
       if(!raw) return null;
       var stats = JSON.parse(raw);
       if(stats[key]) return stats[key];
-      // Fuzzy fallback
-      var prefix = _np(teamName) + '::';
-      var pNorm = _np(playerName);
+      /* Fuzzy fallback ampliado (2026-05-04). Cubre dos casos:
+         a) Mismo equipo, distinto formato del nombre del jugador
+            ("Budimir" vs "A. Budimir").
+         b) Mismo equipo, distinto formato del nombre del equipo
+            ("Alavés" vs "Deportivo Alavés", "Celta" vs "Celta de
+            Vigo", "Valencia" vs "Valencia CF", "Osasuna" vs "CA
+            Osasuna"). Los eventos de la sim usan nombres canónicos
+            de TEAMS (ver misc_body_2.html · 3749) y la plantilla del
+            editor puede tener nombres más cortos/largos.
+         Estrategia: aceptamos cualquier clave cuyo segmento de
+         equipo CONTENGA o ESTÉ CONTENIDO en el nombre buscado, y
+         cuyo segmento de jugador haga lo mismo con el nombre
+         buscado. Sin esto, los goles del usuario no aparecían en
+         la plantilla aunque el dashboard de Estadísticas sí los
+         mostrara — reportado para Osasuna/Celta/Valencia/Alavés. */
+      if (!tNorm) return null;
       var keys = Object.keys(stats);
       for(var i=0;i<keys.length;i++){
-        if(keys[i].indexOf(prefix)!==0) continue;
-        var storedP = keys[i].slice(prefix.length);
-        if(storedP.indexOf(pNorm)!==-1 || pNorm.indexOf(storedP)!==-1) return stats[keys[i]];
+        var sep = keys[i].indexOf('::');
+        if (sep < 0) continue;
+        var storedT = keys[i].slice(0, sep);
+        var storedP = keys[i].slice(sep + 2);
+        if (!storedT) continue;
+        var teamMatch = (storedT === tNorm)
+          || (tNorm    && storedT.indexOf(tNorm)    !== -1)
+          || (storedT  && tNorm.indexOf(storedT)    !== -1);
+        if (!teamMatch) continue;
+        if (!pNorm) continue;
+        var playerMatch = (storedP === pNorm)
+          || (storedP.indexOf(pNorm) !== -1)
+          || (pNorm.indexOf(storedP) !== -1);
+        if (playerMatch) return stats[keys[i]];
       }
     } catch(_){}
     return null;
@@ -4244,6 +4998,289 @@ window._showSimProgress = function(opts, onDone){
     rebuildPlayerStatsStore();
   }
   window.syncLigaEaPlayerStats = syncLigaEaPlayerStats;
+
+  /* ════════════════════════════════════════════════════════════════
+     HELPER COMPARTIDO: stats per-jugador "fuente de la verdad"
+     ════════════════════════════════════════════════════════════════
+     Devuelve {teamPJ, liveStats} computado desde fuentes vivas:
+       · data.results (Resto de Ligas — applyMatchStats)
+       · ef_liga38_v4 (Liga EA Sports — simularJornadaIA)
+       · LIGA_PLAYER_MATCH_STORE (live HvH/HvIA + sims registrados)
+     Se usa tanto desde renderSquadList (filas per-jugador) como
+     desde _lextRenderSquadStatsHeader (Máximo goleador / MVP /
+     Mejor puntuación) para garantizar que ambos lados muestren
+     los mismos números. Antes el header miraba ef_player_stats_v1
+     directo (que podía estar stale tras un reset parcial) y la
+     tabla otra fuente → datos inconsistentes (Ayoze 14 goles en
+     header vs 0 en tabla, o vice versa).                          */
+  window._lextComputeRealStats = function(team, leagueData, opts){
+    var _np = (typeof _normPS === 'function') ? _normPS
+            : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
+            : function(s){ return String(s||'').toLowerCase(); };
+    var teamN = _np((team && team.name) || '');
+    /* `opts.competitions` (2026-05-04): filtra qué eventos cuentan.
+       Default: ['liga','copa'] para la vista EA Sports (suma ambas).
+       Las vistas de Superliga/Champions/UEL/UECL pasan su única
+       competición para AISLAR los stats. Eventos sin tag de
+       competición se asumen 'liga' (back-compat). */
+    var compFilter = (opts && Array.isArray(opts.competitions) && opts.competitions.length)
+      ? opts.competitions.slice() : ['liga','copa'];
+    var compSet = {};
+    compFilter.forEach(function(c){ compSet[c] = true; });
+    function _eventCompMatches(matchEntry, matchKey){
+      var c = (matchEntry && matchEntry.competition)
+        || (typeof window._inferMatchCompetition === 'function'
+              ? window._inferMatchCompetition(matchKey) : 'liga');
+      return !!compSet[c];
+    }
+    /* Para los fallbacks ef_player_stats_*: cuando la vista pide una
+       competición concreta, leemos del cache aislado. Default = Liga
+       + Copa = `ef_player_stats_v1`. */
+    var statsKey = (typeof window._lextStatsKeyForCompetition === 'function')
+      ? window._lextStatsKeyForCompetition(compFilter[0] || 'liga')
+      : 'ef_player_stats_v1';
+    function _fuzz(a, b){
+      if (!a || !b) return false;
+      if (a === b) return true;
+      return a.indexOf(b) !== -1 || b.indexOf(a) !== -1;
+    }
+    /* — teamPJ desde fuentes vivas, FILTRADO por competiciones — */
+    var teamPJ = 0;
+    /* data.results (Resto de Ligas) cuenta SOLO si la vista pide
+       'liga' (default) o no se pasaron filtros. Las ligas externas
+       no participan en Superliga/Champions/UEL/UECL. */
+    if (compSet.liga) {
+      try {
+        if (leagueData && Array.isArray(leagueData.results) && team && team.id) {
+          for (var ri = 0; ri < leagueData.results.length; ri++) {
+            var r = leagueData.results[ri];
+            if (r && (r.h === team.id || r.a === team.id)) teamPJ++;
+          }
+        }
+      } catch(_){}
+    }
+    /* ef_liga38_v4 = Liga EA Sports SOLO. */
+    if (teamPJ === 0 && teamN && compSet.liga) {
+      try {
+        var raw = localStorage.getItem('ef_liga38_v4');
+        if (raw) {
+          var resAll = JSON.parse(raw) || {};
+          var rkeys = Object.keys(resAll);
+          for (var i = 0; i < rkeys.length; i++) {
+            var parts = rkeys[i].split('|');
+            if (parts.length < 3) continue;
+            var nA = _np(parts[1]||''), nB = _np(parts[2]||'');
+            if (_fuzz(nA, teamN) || _fuzz(nB, teamN)) teamPJ++;
+          }
+        }
+      } catch(_){}
+    }
+    /* LIGA_PLAYER_MATCH_STORE: cuenta solo matches cuya competition
+       está en el filtro. */
+    if (teamN) {
+      try {
+        var pmStore = window.LIGA_PLAYER_MATCH_STORE || {};
+        var mks = Object.keys(pmStore);
+        var seenPJ = {};
+        for (var mi = 0; mi < mks.length; mi++) {
+          var m = pmStore[mks[mi]]; if (!m) continue;
+          if (!_eventCompMatches(m, mks[mi])) continue;
+          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
+          if (_fuzz(tA, teamN) || _fuzz(tB, teamN)) {
+            var seenKey = (m.competition || 'liga') + '|' + mks[mi];
+            if (!seenPJ[seenKey]) { teamPJ++; seenPJ[seenKey] = true; }
+          }
+        }
+      } catch(_){}
+    }
+    /* Fallback Hypermotion/Primera Fed: solo aplica si pedimos
+       'liga' (esas ligas viven en la vista EA Sports). */
+    if (teamPJ === 0 && teamN && compSet.liga) {
+      try {
+        var psRaw = localStorage.getItem(statsKey);
+        if (psRaw) {
+          var psAll = JSON.parse(psRaw) || {};
+          var maxPj = 0;
+          Object.keys(psAll).forEach(function(k){
+            var sep = k.indexOf('::');
+            if (sep < 0) return;
+            var storedT = k.slice(0, sep);
+            if (!_fuzz(storedT, teamN)) return;
+            var pj = Number((psAll[k] && psAll[k].pj) || 0);
+            if (pj > maxPj) maxPj = pj;
+          });
+          teamPJ = maxPj;
+        }
+      } catch(_){}
+    }
+    /* — liveStats per-jugador desde EVENTOS reales — */
+    var liveStats = {};
+    function _get(k){
+      if (!liveStats[k]) liveStats[k] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+      return liveStats[k];
+    }
+    function _ingest(ev){
+      var nm = '';
+      if (Array.isArray(ev.player)) nm = ev.player[1] || ev.player[0] || '';
+      else if (typeof ev.player === 'string') nm = ev.player;
+      else nm = ev.name || ev.playerName || '';
+      nm = String(nm || '').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
+      if (!nm) return;
+      var key = _np(nm);
+      var rec = _get(key);
+      var ty = ev.type || '';
+      var ico = String(ev.ico||'').replace(/️/g,'').trim();
+      if (ty === 'gol')                        rec.gol++;
+      else if (ty === 'pen-gol')               rec.pen++;
+      else if (ty === 'falta-gol')             rec.fk++;
+      else if (ty === 'amarilla')              rec.ta++;
+      else if (ty === 'roja' || ty === 'd-amarilla') rec.tr++;
+      else if (ty === 'card') {
+        if (ico === '🟨') rec.ta++;
+        else if (ico === '🟥') rec.tr++;
+        else if (ico === '🟨🟥') { rec.ta++; rec.tr++; }
+      }
+      else if (ty === 'mvp')        rec.mvp++;
+      else if (ty === 'imbat')      rec.imbat++;
+      else if (ty === 'pen-parado') rec.penSaved++;
+    }
+    var processedKeys = {};
+    if (teamPJ > 0 && teamN) {
+      try {
+        var store = window.LIGA_PLAYER_MATCH_STORE || {};
+        Object.keys(store).forEach(function(mk){
+          var m = store[mk]; if (!m) return;
+          /* Filtra por competición — esta es la barrera que separa
+             Liga, Copa, Superliga, Champions, UEL, Conference. */
+          if (!_eventCompMatches(m, mk)) return;
+          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
+          var matchA = _fuzz(tA, teamN), matchB = _fuzz(tB, teamN);
+          if (!matchA && !matchB) return;
+          processedKeys[mk] = true;
+          var mySide = matchA ? 'a' : 'b';
+          (m.evts || []).forEach(function(ev){
+            if (!ev) return;
+            if (ev.realTeam) {
+              if (!_fuzz(_np(ev.realTeam), teamN)) return;
+            } else if (ev.team !== mySide) {
+              return;
+            }
+            _ingest(ev);
+          });
+          if (m.mvpName && m.mvpTeam && _fuzz(_np(m.mvpTeam), teamN)) {
+            var hadMvp = (m.evts||[]).some(function(e){return e && e.type==='mvp';});
+            if (!hadMvp) _get(_np(m.mvpName)).mvp++;
+          }
+        });
+      } catch(_){}
+      /* ef_liga38_v4 = Liga EA Sports SOLO. Lo procesamos únicamente
+         si la vista pide 'liga' (o el default Liga+Copa). */
+      if (compSet.liga) {
+        try {
+          var raw2 = localStorage.getItem('ef_liga38_v4');
+          if (raw2) {
+            var resAll2 = JSON.parse(raw2) || {};
+            Object.keys(resAll2).forEach(function(rk){
+              if (processedKeys[rk]) return;
+              var parts = rk.split('|');
+              if (parts.length < 3) return;
+              var nA = _np(parts[1]||''), nB = _np(parts[2]||'');
+              var matchA = _fuzz(nA, teamN), matchB = _fuzz(nB, teamN);
+              if (!matchA && !matchB) return;
+              var r = resAll2[rk]; if (!r) return;
+              var mySide = matchA ? 'a' : 'b';
+              (r.events || []).forEach(function(ev){
+                if (!ev) return;
+                if (ev.team !== mySide) return;
+                _ingest(ev);
+              });
+              if (r.mvp && r.mvpTeam && _fuzz(_np(r.mvpTeam), teamN)) {
+                var hadMvp2 = (r.events||[]).some(function(e){return e && e.type==='mvp';});
+                if (!hadMvp2) _get(_np(r.mvp)).mvp++;
+              }
+            });
+          }
+        } catch(_){}
+      }
+    }
+    return { teamPJ: teamPJ, liveStats: liveStats, statsKey: statsKey, competitions: compFilter };
+  };
+
+  /* Hidrata UN jugador con stats limpias. Aplica la cascada:
+       1. liveStats (eventos reales)
+       2. liveHasAny=true & sin entrada propia → 0 (no jugó/no marcó)
+       3. ef_player_stats_v1 vía getPlayerStats (validando ps.pj === teamPJ)
+       4. p.{stats} del objeto del jugador (validando p.pj === teamPJ)
+       5. 0
+     Devuelve un objeto con los stats limpios; NO muta `p` (eso lo
+     hace el caller para preservar otros campos). */
+  window._lextHydratePlayerStats = function(team, p, real){
+    var _np = (typeof _normPS === 'function') ? _normPS
+            : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
+            : function(s){ return String(s||'').toLowerCase(); };
+    var teamPJ = (real && real.teamPJ) || 0;
+    var liveStats = (real && real.liveStats) || {};
+    var liveHasAny = Object.keys(liveStats).length > 0;
+    var out = {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};
+    if (teamPJ === 0) return out;
+    out.pj = teamPJ;
+    if (!p || !p.name) return out;
+    var nameKey = _np(p.name);
+    var live = liveStats[nameKey];
+    if (live) {
+      out.gol      = Number(live.gol)||0;
+      out.pen      = Number(live.pen)||0;
+      out.fk       = Number(live.fk)||0;
+      out.mvp      = Math.min(Number(live.mvp)||0, teamPJ);
+      out.ta       = Number(live.ta)||0;
+      out.tr       = Number(live.tr)||0;
+      out.imbat    = Math.min(Number(live.imbat)||0, teamPJ);
+      out.penSaved = Number(live.penSaved)||0;
+      return out;
+    }
+    if (liveHasAny) {
+      /* Eventos para el equipo pero no este jugador → no marcó. */
+      return out;
+    }
+    /* Sin eventos → intentar el cache de stats CORRESPONDIENTE
+       a la competición en curso (real.statsKey) con validación.
+       Para Liga + Copa = ef_player_stats_v1; para Superliga
+       = ef_player_stats_superliga_v1; etc. */
+    var ps = null;
+    try {
+      if (typeof window.getPlayerStats === 'function' && team && team.name) {
+        ps = window.getPlayerStats(team.name, p.name, real && real.statsKey);
+      }
+    } catch(_){}
+    var psPj = ps ? Number(ps.pj||0) : -1;
+    if (ps && (psPj === teamPJ || psPj === 0)) {
+      out.gol      = Number(ps.gol||0);
+      out.pen      = Number(ps.pen||0);
+      out.fk       = Number(ps.fk||0);
+      out.mvp      = Math.min(Number(ps.mvp||0), teamPJ);
+      out.ta       = Number(ps.ta||0);
+      out.tr       = Number(ps.tr||0);
+      out.imbat    = Math.min(Number(ps.imbat||0), teamPJ);
+      out.penSaved = Number(ps.penSaved||0);
+      return out;
+    }
+    /* Fallback al objeto del jugador (Resto de Ligas vía
+       applyMatchStats), también validando contra stale. */
+    var ownPj = Number((p && p.pj)||0);
+    if (ownPj === teamPJ) {
+      out.gol      = Number(p.gol||0);
+      out.pen      = Number(p.pen||0);
+      out.fk       = Number(p.fk||0);
+      out.mvp      = Math.min(Number(p.mvp||0), teamPJ);
+      out.ta       = Number(p.ta||0);
+      out.tr       = Number(p.tr||0);
+      out.imbat    = Math.min(Number(p.imbat||0), teamPJ);
+      out.penSaved = Number(p.penSaved||0);
+      return out;
+    }
+    /* Datos stale en todas las fuentes → 0 limpio (excepto pj=teamPJ). */
+    return out;
+  };
 })();
 </script>
 
@@ -4740,6 +5777,44 @@ window._showSimProgress = function(opts, onDone){
   function loadIcons(){
     try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(_){ return {}; }
   }
+  /* Sync con servidor (GlobalState): los iconos custom se persisten
+     también en /api/kv/comp_icons_v1 desde 2026-05-02 — antes vivían
+     SOLO en localStorage y se perdían si el navegador limpiaba caché
+     o el usuario cambiaba de dispositivo (reportado por el usuario
+     con foto). Estrategia:
+       - Al guardar: localStorage primero (cache rápido) + POST async
+         al server (best-effort).
+       - Al cargar: si localStorage está vacío, GET del server y
+         volcar a localStorage para futuras lecturas. */
+  function _saveIconsServer(icons){
+    try {
+      fetch('/api/kv/comp_icons_v1', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({value: icons || {}})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function _hydrateIconsFromServer(cb){
+    /* Solo ejecuta GET si el localStorage está vacío. No queremos
+       sobrescribir cambios locales recientes con datos del server. */
+    var localRaw;
+    try { localRaw = localStorage.getItem(KEY); } catch(_){}
+    if(localRaw && localRaw !== '{}' && localRaw !== 'null'){
+      if(typeof cb === 'function') cb(false);
+      return;
+    }
+    try {
+      fetch('/api/kv/comp_icons_v1', {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(!j || !j.ok || !j.value) { if(typeof cb === 'function') cb(false); return; }
+          try { localStorage.setItem(KEY, JSON.stringify(j.value)); } catch(_){}
+          if(typeof cb === 'function') cb(true);
+        }).catch(function(){ if(typeof cb === 'function') cb(false); });
+    } catch(_) { if(typeof cb === 'function') cb(false); }
+  }
   function saveIcons(icons){
     /* Detección de quota: el setItem se hace dentro de try/catch y, si
        falla, devolvemos false para que el caller pueda revertir/avisar.
@@ -4748,14 +5823,23 @@ window._showSimProgress = function(opts, onDone){
        2026-05-02). */
     var payload;
     try { payload = JSON.stringify(icons || {}); } catch(_){ return false; }
-    try { localStorage.setItem(KEY, payload); return true; }
+    var localOk = true;
+    try { localStorage.setItem(KEY, payload); }
     catch(err){
+      localOk = false;
       var isQuota = err && (
         err.code === 22 || err.code === 1014 ||
         err.name === 'QuotaExceededError' ||
         err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+      /* Aunque localStorage falle, intentamos persistir en server
+         para que el dato no se pierda (la próxima recarga lo bajará
+         del server al localStorage). */
+      _saveIconsServer(icons);
       return isQuota ? 'quota' : false;
     }
+    /* localStorage OK → también al server, async best-effort. */
+    if(localOk) _saveIconsServer(icons);
+    return true;
   }
   function cardLabel(card){
     var lbl = card.querySelector('.sc-label');
@@ -4923,7 +6007,16 @@ window._showSimProgress = function(opts, onDone){
      monte los `[data-bg-enhanced]`. Lo hacemos al cargar la página y
      también al entrar a s-competiciones por si el usuario importa el
      state desde otra ruta. */
-  function init(){ setTimeout(applyAllOverrides, 120); }
+  function init(){
+    /* Primero intenta hidratar desde el server si localStorage está
+       vacío (caso típico tras limpiar caché o cambiar de dispositivo).
+       Tras hidratar, aplica los overrides. Si no hay datos en el
+       server o ya teníamos en localStorage, applyAllOverrides corre
+       con lo que haya. */
+    _hydrateIconsFromServer(function(hydrated){
+      setTimeout(applyAllOverrides, hydrated ? 60 : 120);
+    });
+  }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', init);
   } else { init(); }
@@ -4931,7 +6024,15 @@ window._showSimProgress = function(opts, onDone){
   if(typeof _origGoComp === 'function'){
     window.go = function(id){
       var r = _origGoComp.apply(this, arguments);
-      if(id === 's-competiciones') setTimeout(applyAllOverrides, 50);
+      if(id === 's-competiciones'){
+        /* Al entrar a s-competiciones, re-hidratamos por si el server
+           tiene cambios desde otro dispositivo. Si nuestro localStorage
+           tiene contenido, _hydrateIconsFromServer lo respeta y no hace
+           GET (evita pisar cambios locales no sincronizados todavía). */
+        _hydrateIconsFromServer(function(){
+          setTimeout(applyAllOverrides, 50);
+        });
+      }
       return r;
     };
   }
@@ -5647,10 +6748,52 @@ window._showSimProgress = function(opts, onDone){
     return out;
   }
 
+  /* ── SNAPSHOT MANUAL DE POOLS EUROPEOS ───────────────────────────
+     Petición usuario 2026-05-02: tras el botón "📤 Enviar realidad
+     de cada equipo a su Europa", los compute*Classified() devuelven
+     la snapshot congelada (`europe_committed_v1`) en lugar de
+     recomputar en vivo desde standings. Eso elimina el race condition
+     de las escrituras async tras Sim batched: el admin pulsa el
+     botón cuando las ligas están listas, y a partir de ahí los
+     pools europeos quedan estables.
+     Si la snapshot no existe (admin nunca pulsó el botón) o no tiene
+     la zona pedida, caemos al cómputo dinámico — preserva la UX para
+     usuarios que no usan el botón. */
+  function _europeFrozenFor(zone){
+    try {
+      var raw = localStorage.getItem('europe_committed_v1');
+      if(!raw) return null;
+      var blob = JSON.parse(raw);
+      if(!blob || !Array.isArray(blob[zone]) || !blob[zone].length) return null;
+      return blob[zone];
+    } catch(_){ return null; }
+  }
+  /* Hidrata la snapshot desde el server si localStorage está vacío
+     (cambio de dispositivo o limpieza de caché). Async fire-and-forget;
+     la siguiente apertura de pantalla europea usará la snapshot. */
+  (function _hydrateEuropeCommit(){
+    var local;
+    try { local = localStorage.getItem('europe_committed_v1'); } catch(_){}
+    if(local) return;
+    try {
+      fetch('/api/kv/europe_committed_v1', {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(j && j.ok && j.value){
+            try { localStorage.setItem('europe_committed_v1', JSON.stringify(j.value)); } catch(_){}
+          }
+        }).catch(function(){});
+    } catch(_){}
+  })();
+
   function computeUclClassified(){
+    var frozen = _europeFrozenFor('ucl');
+    if(frozen) return frozen.slice();
     return _prependManualEa(_computeQualifiedFromLeagues('ucl'), 'ucl');
   }
   function computeUclPrevTeams(){
+    var frozen = _europeFrozenFor('uclPrev');
+    if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uclPrev');
     /* Los TOP-5 de cada grupo del Open Qualifier (7 grupos × 5 = 35
        plazas, formato 7×14 desde 2026-04-30) se añaden a la Previa
@@ -5674,6 +6817,8 @@ window._showSimProgress = function(opts, onDone){
   }
   window.computeUclPrevTeams = computeUclPrevTeams;
   function computeUelClassified(){
+    var frozen = _europeFrozenFor('uel');
+    if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uel');
     /* Los 22 finalistas (2º + 3º × 11 grupos) de la Ronda Final de la
        Previa de Champions entran como plazas extra a la Europa League
@@ -5696,6 +6841,8 @@ window._showSimProgress = function(opts, onDone){
     return _prependManualEa(arr, 'uel');
   }
   function computeUeclClassified(){
+    var frozen = _europeFrozenFor('uecl');
+    if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uecl');
     /* Los 30 perdedores de la Ronda 1 de la Previa de Champions entran
        como plazas extra a la Conference League en la MISMA temporada.
@@ -5733,6 +6880,8 @@ window._showSimProgress = function(opts, onDone){
     return _prependManualEa(arr, 'uecl');
   }
   function computeOpenQualifierTeams(){
+    var frozen = _europeFrozenFor('uclQual');
+    if(frozen) return frozen.slice();
     /* Pool del Open Qualifier (cap a 98 = 7 grupos × 14). Composición
        objetivo: 80 plazas de zonas `uclQual` de ligas + 18 ganadores
        Wild Card. Reserva dinámica:
@@ -5791,6 +6940,8 @@ window._showSimProgress = function(opts, onDone){
     return arr;
   }
   function computeWildCardClassified(){
+    var frozen = _europeFrozenFor('wildcard');
+    if(frozen) return frozen.slice();
     return _prependManualEa(_computeQualifiedFromLeagues('wildcard'), 'wildcard');
   }
   window.computeUclClassified = computeUclClassified;
@@ -7023,6 +8174,38 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     return [];
   }
+  /* Sync con servidor (GlobalState): persistimos también a
+     /api/kv/manual_ea_<slug>_v1 desde 2026-05-02. Antes vivía SOLO
+     en localStorage y el usuario perdía sus inyecciones EA → Europa
+     al limpiar caché o cambiar de dispositivo (foto reportada). */
+  function _saveServer(slug, list){
+    try {
+      fetch('/api/kv/'+_key(slug), {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({value: {teams:list, ts:Date.now()}})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function _hydrateFromServer(slug, cb){
+    /* Solo GET si localStorage está vacío para esa clave: si ya
+       tenemos contenido local, no queremos sobrescribir cambios
+       no sincronizados. */
+    var localRaw;
+    try { localRaw = localStorage.getItem(_key(slug)); } catch(_){}
+    if(localRaw){ if(typeof cb === 'function') cb(false); return; }
+    try {
+      fetch('/api/kv/'+_key(slug), {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(j && j.ok && j.value){
+            try { localStorage.setItem(_key(slug), JSON.stringify(j.value)); } catch(_){}
+            if(typeof cb === 'function') cb(true);
+          } else { if(typeof cb === 'function') cb(false); }
+        }).catch(function(){ if(typeof cb === 'function') cb(false); });
+    } catch(_) { if(typeof cb === 'function') cb(false); }
+  }
   function _save(slug, list){
     /* Devuelve true | 'quota' | false. Antes el catch era vacío y el
        admin veía el equipo añadido en pantalla (por el render(), que
@@ -7033,12 +8216,19 @@ window._showSimProgress = function(opts, onDone){
        guardan al recargar". */
     var payload;
     try { payload = JSON.stringify({teams:list, ts:Date.now()}); } catch(_){ return false; }
-    try { localStorage.setItem(_key(slug), payload); return true; }
+    try {
+      localStorage.setItem(_key(slug), payload);
+      _saveServer(slug, list);
+      return true;
+    }
     catch(err){
       var isQuota = err && (
         err.code === 22 || err.code === 1014 ||
         err.name === 'QuotaExceededError' ||
         err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+      /* Aunque localStorage falle, persistimos al server — la próxima
+         recarga lo bajará al localStorage y el dato no se pierde. */
+      _saveServer(slug, list);
       return isQuota ? 'quota' : false;
     }
   }
@@ -7061,7 +8251,12 @@ window._showSimProgress = function(opts, onDone){
         rows = '<div class="mea-empty">Sin equipos añadidos. Añade abajo.</div>';
       } else {
         rows = teams.map(function(t){
-          var logo = t.logo || _logoFor(t.name);
+          /* Preferimos el escudo "vivo" — `_logoFor` consulta
+             `_ligaEaShields` que ahora incluye TODAS las ligas
+             extranjeras (PSG en Liga Francesa, etc.). El logo
+             guardado en t.logo solo se usa como fallback histórico
+             para teams que ya no estén en ningún editor. */
+          var logo = _logoFor(t.name) || t.logo || '';
           var img = logo ? '<img src="'+_esc(logo)+'" alt="" onerror="this.style.display=\'none\'">' : '';
           /* Botón quitar: data-attributes en lugar de onclick inline
              para evitar el infierno de escapes de comillas con
@@ -7217,28 +8412,50 @@ window._showSimProgress = function(opts, onDone){
     else _doRm();
   };
 
+  /* Hidrata desde el server (en orden) los slugs que tengan
+     localStorage vacío. Esto cubre el caso de cambio de dispositivo
+     o limpieza de caché — el server tiene la última snapshot. Tras
+     bajar todos los valores, re-renderiza si ya estamos en s-ea-manual. */
+  function _hydrateAllFromServer(done){
+    var pending = EVENTS.length;
+    if(!pending){ if(typeof done === 'function') done(false); return; }
+    var anyHydrated = false;
+    EVENTS.forEach(function(ev){
+      _hydrateFromServer(ev.slug, function(hyd){
+        if(hyd) anyHydrated = true;
+        pending--;
+        if(pending <= 0 && typeof done === 'function') done(anyHydrated);
+      });
+    });
+  }
   /* Re-render al entrar a la pantalla. */
   var _origGoMea = window.go;
   if(typeof _origGoMea === 'function'){
     window.go = function(id){
       var r = _origGoMea.apply(this, arguments);
       if(id === 's-ea-manual'){
-        try { setTimeout(render, 30); } catch(_){}
+        try {
+          /* Re-hidratamos por si el server tiene cambios desde otro
+             dispositivo. Para slugs que ya tengan localStorage no
+             nuevo, _hydrateFromServer no hace GET. */
+          _hydrateAllFromServer(function(){ setTimeout(render, 30); });
+        } catch(_){ try { setTimeout(render, 30); } catch(__){} }
       }
       return r;
     };
   }
   document.addEventListener('DOMContentLoaded', function(){
-    setTimeout(render, 250);
+    /* Al cargar la página, hidratamos todos los slugs y luego
+       renderizamos. Si todo el localStorage ya tenía valor, el GET
+       no se hace y la hidratación termina inmediatamente. */
+    _hydrateAllFromServer(function(){ setTimeout(render, 250); });
   });
 })();
 </script>
 
-<div class="screen" id="s-ucl-stats">
-<button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
-<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" onerror="this.style.display='none'" alt="UCL"/><h2>UCL · Estadísticas</h2></div>
-<div class="empty-ph">Estadísticas — próximamente</div>
-</div>
+<!-- s-ucl-stats real (con dashboard funcional) está embedded más abajo
+     en misc_body_2.html (aprox. línea 1325). Aquí solo dejamos el
+     comentario para evitar duplicar el ID. -->
 <div class="screen" id="s-uel">
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Europa_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UEL"/><h2>Europa League</h2></div>
@@ -7248,6 +8465,9 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="submenu-card sc-uel2" onclick="go('s-uel-grupos')">
 <span class="sc-emoji">🟠</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
+</div>
+<div class="submenu-card sc-uel-stats" style="background:linear-gradient(135deg,#3a1a00,#7a3a00,#cc6a00,#7a3a00,#3a1a00) !important;border-color:#ff9040 !important;" onclick="go('s-uel-stats')">
+<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
 </div>
 </div>
 </div>
@@ -7493,6 +8713,9 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="submenu-card sc-uecl2" onclick="go('s-uecl-grupos')">
 <span class="sc-emoji">🟢</span><span class="sc-label">Fase Grupos</span><span class="sc-arr">▶</span>
+</div>
+<div class="submenu-card sc-uecl-stats" style="background:linear-gradient(135deg,#003820,#016a40,#018850,#016a40,#003820) !important;border-color:#3dcc8e !important;" onclick="go('s-uecl-stats')">
+<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
 </div>
 </div>
 </div>
@@ -7800,6 +9023,8 @@ window._showSimProgress = function(opts, onDone){
 .restoligas-btn-sim{border:1px solid rgba(61,204,110,.55);color:#7df0a0;background:rgba(61,204,110,.10);}
 .restoligas-btn-res{border:1px solid rgba(255,90,90,.55);color:#ff9b9b;background:rgba(255,90,90,.10);}
 .restoligas-btn-stats{border:1px solid rgba(94,182,228,.55);color:#9fdcff;background:rgba(94,182,228,.10);}
+.restoligas-btn-commit{border:1px solid rgba(240,192,64,.65);color:#ffe489;background:linear-gradient(135deg,rgba(240,192,64,.10),rgba(197,15,31,.06));text-shadow:0 0 6px rgba(240,192,64,.3);}
+.restoligas-btn-commit:hover{filter:brightness(1.25);}
 .restoligas-ico{font-size:13px;line-height:1;}
 /* Modal compartido para las estadísticas agregadas. */
 #restoligas-stats-ov{display:none;position:fixed;inset:0;z-index:10050;background:rgba(0,0,6,.93);overflow-y:auto;padding:18px 12px 30px;}
@@ -7885,6 +9110,21 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce2028,#f7e117,#ce2028);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Maced.</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#cf0921,#fff,#cf0921);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Malta</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#244aa5,#e4aa3c,#244aa5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇽🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kosovo</span></div>
+</div>
+<!-- Botón "Enviar a Europa" (PIN admin 747). Va al FINAL de la lista
+     de ligas — debajo de Kosovo (la última) — para que el admin lo
+     pulse cuando haya simulado todas las ligas. Petición usuario
+     2026-05-02. Snapshot manual de los 6 pools (UCL, Previa, OQ,
+     Wild Card, UEL, UECL); las pantallas europeas leen del snapshot
+     si existe (evita race condition con escrituras async tras Sim
+     batched). -->
+<div class="restoligas-actions" style="margin-top:14px;">
+  <button class="restoligas-btn restoligas-btn-commit"
+          onclick="window.pG(function(){window._restoLigasCommitEurope&&window._restoLigasCommitEurope();})"
+          style="flex:1 1 auto;">
+    <span class="restoligas-ico">📤</span>
+    <span>Enviar realidad de cada equipo a su Europa (admin)</span>
+  </button>
 </div>
 </div>
 
@@ -8055,7 +9295,105 @@ window._showSimProgress = function(opts, onDone){
       var slug = _slugify(name);
       try { if(window.ligaExtReiniciarSlug(slug)) ok++; } catch(_){ }
     });
-    alert('Reseteadas: ' + ok + ' liga' + (ok===1?'':'s') + '.');
+    /* También limpiamos la snapshot manual de pools europeos
+       (`europe_committed_v1`): si el admin reseteó las ligas, la
+       snapshot anterior queda obsoleta. La próxima vez que abra
+       una pantalla europea, el cómputo dinámico volverá a correr
+       con los standings 0 nuevos hasta que vuelva a pulsar
+       "📤 Enviar a Europa" tras simular. */
+    try { localStorage.removeItem('europe_committed_v1'); } catch(_){}
+    try {
+      fetch('/api/kv/europe_committed_v1', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({value: null})
+      }).catch(function(){});
+    } catch(_){}
+    alert('Reseteadas: ' + ok + ' liga' + (ok===1?'':'s') + '.\n\nLa snapshot de Europa también se ha borrado — vuelve a pulsar "📤 Enviar a Europa" tras simular las ligas.');
+  };
+
+  /* ── Enviar realidad de cada equipo a su Europa ──────────────────
+     Petición usuario 2026-05-02: tras simular las 51 ligas, los
+     equipos clasificados a competiciones europeas se calculaban en
+     vivo cada vez que se abría la pantalla. Como las escrituras tras
+     el Sim son async/batched, el cálculo veía a algunos equipos con
+     pj=0 ordenados al top por desempate alfabético sobre pts=0 y los
+     enviaba a Europa con 0 partidos jugados.
+
+     Este botón hace una SNAPSHOT manual de los pools cuando el admin
+     decide que las ligas están listas. La snapshot se guarda en
+     localStorage `europe_committed_v1` + server `/api/kv/...` y las
+     pantallas europeas (Champions, Previa, OQ, Wild Card, UEL, UECL)
+     leen de aquí PREFERENTEMENTE — el cálculo dinámico solo corre si
+     el admin no ha pulsado nunca el botón.
+
+     compute*Classified() en este mismo archivo ya tiene el hook
+     necesario (`_europeFrozenFor`); aquí solo construimos el blob. */
+  var EUROPE_COMMIT_KEY = 'europe_committed_v1';
+  function _saveEuropeCommitServer(blob){
+    try {
+      fetch('/api/kv/'+EUROPE_COMMIT_KEY, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({value: blob})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  window._restoLigasCommitEurope = function(){
+    if(typeof window._computeQualifiedFromLeagues !== 'function'
+       && typeof window.computeUclClassified !== 'function'){
+      alert('Motor de clasificación no disponible. Recarga la página.');
+      return;
+    }
+    if(!confirm('¿Enviar la realidad de cada liga a su competición europea?\n\n'
+              +'Se hace una snapshot AHORA mismo de:\n'
+              +'  · Champions League (UCL fase de liga)\n'
+              +'  · Europa League\n'
+              +'  · Conference League\n'
+              +'  · Previa de Champions\n'
+              +'  · Open Qualifier (alimenta Previa)\n'
+              +'  · Wild Card (alimenta Open Qualifier)\n\n'
+              +'A partir de aquí las pantallas europeas usarán esta snapshot, no el cálculo en vivo.\n\n'
+              +'⚠️ Solo pulsa esto cuando todas las ligas estén SIMULADAS al 100 %.')) return;
+    function _safeCompute(fn){
+      try { return (typeof fn === 'function') ? (fn() || []) : []; }
+      catch(_){ return []; }
+    }
+    /* Mapamos cada función. Cada una devuelve array de
+       {name, logo, league}. Lo guardamos tal cual. */
+    var blob = {
+      ucl:      _safeCompute(window.computeUclClassified),
+      uclPrev:  _safeCompute(window.computeUclPrevTeams),
+      uel:      _safeCompute(window.computeUelClassified),
+      uecl:     _safeCompute(window.computeUeclClassified),
+      uclQual:  _safeCompute(window.computeOpenQualifierTeams),
+      wildcard: _safeCompute(window.computeWildCardClassified),
+      ts:       Date.now()
+    };
+    var totalUcl  = blob.ucl.length;
+    var totalPrev = blob.uclPrev.length;
+    var totalUel  = blob.uel.length;
+    var totalUecl = blob.uecl.length;
+    var totalOq   = blob.uclQual.length;
+    var totalWc   = blob.wildcard.length;
+    var totalSum  = totalUcl + totalPrev + totalUel + totalUecl + totalOq + totalWc;
+    if(totalSum === 0){
+      alert('⚠️ No se pudo calcular ningún equipo. Verifica que las ligas estén simuladas y vuelve a intentarlo.');
+      return;
+    }
+    /* Persistir en localStorage + server (fire-and-forget). */
+    try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
+    _saveEuropeCommitServer(blob);
+    alert('✅ Pools europeos congelados:\n\n'
+        + '🔵 Champions League: ' + totalUcl + ' equipos\n'
+        + '🇪🇺 Previa de Champions: ' + totalPrev + ' equipos\n'
+        + '🟡 Open Qualifier: ' + totalOq + ' equipos\n'
+        + '🎟️ Wild Card: ' + totalWc + ' equipos\n'
+        + '🟠 Europa League: ' + totalUel + ' equipos\n'
+        + '🟢 Conference League: ' + totalUecl + ' equipos\n\n'
+        + 'A partir de ahora estas pantallas usarán esta snapshot. Si vuelves a simular las ligas, pulsa este botón otra vez para refrescar.');
   };
 
   /* ── Estadísticas agregadas ──────────────────────────────────── */
@@ -9446,8 +10784,23 @@ Tottenham
 
   function standings(data){
     var map = {};
+    /* Merge con registros globales: si el team object de ESTA liga
+       no tiene shield / isHuman / humanEmoji pero el equipo SÍ existe
+       en otra liga (p.ej. PSG en Liga Francesa con 🦆), pulamos esos
+       valores desde `_ligaEaShields` y `_LIGA_HUMAN_FLAGS`.
+       Petición usuario 2026-05-04: el PSG añadido al pool manual de
+       Superliga debe heredar escudo + bandera humana de su entrada
+       canónica en Liga Francesa, no aparecer pelado. */
+    var gShields = window._ligaEaShields || {};
+    var gHuman   = window._LIGA_HUMAN_FLAGS || {};
     data.teams.forEach(function(t){
-      map[t.id] = {id:t.id,name:t.name,shield:t.shield,power:Number(t.power)||50,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0};
+      var nm = t.name || '';
+      var nrm = (typeof _normName === 'function') ? _normName(nm) : nm.toLowerCase();
+      var sh = t.shield || gShields[nm] || gShields[nrm] || '';
+      var hf = (t.isHuman || t.humanEmoji)
+                 ? {isHuman:!!t.isHuman, humanEmoji:t.humanEmoji||''}
+                 : (gHuman[nm] || gHuman[nrm] || {isHuman:false, humanEmoji:''});
+      map[t.id] = {id:t.id,name:nm,shield:sh,power:Number(t.power)||50,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0,isHuman:!!hf.isHuman,humanEmoji:hf.humanEmoji||''};
     });
     (data.results||[]).forEach(function(r){
       var H = map[r.h], A = map[r.a]; if(!H||!A) return;
@@ -9532,9 +10885,17 @@ Tottenham
       var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
       var pct = r.pj>0 ? Math.round((r.v/r.pj)*100) : 0;
       var pctCls = pct>=60?'pct-hi':(pct>=40?'pct-mid':'pct-lo');
+      /* Emoji humano detrás del nombre — fuente única `t.isHuman` +
+         `t.humanEmoji` del editor de plantilla. Aparece SIEMPRE que el
+         equipo esté marcado como humano en CUALQUIER liga (Francia,
+         Superliga, Inglaterra…), independiente de cómo se llame
+         (PSG / Paris Saint-Germain): no hay name-based lookup. */
+      var humanSfx = (r.isHuman && r.humanEmoji)
+        ? '<span class="clas-team-human-suffix">'+r.humanEmoji+'</span>'
+        : '';
       return '<div class="lext-row '+z+'" onclick="lextOpenSquad(\''+r.id+'\')">'
         +'<span class="lext-pos">'+pos+'</span>'
-        +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span></span>'
+        +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span>'+humanSfx+'</span>'
         +'<span class="lext-pts">'+r.pts+'</span>'
         +'<span class="lext-cell">'+r.pj+'</span>'
         +'<span class="lext-cell">'+r.v+'</span>'
@@ -10903,10 +12264,20 @@ Tottenham
     lextClearTeamForm();
     renderTeamsList();
     renderTable();
-    // Fase 2: re-aplicar overrides del motor tras cada save para que
-    // TEAM_RATINGS, SQUAD_REGISTRY y LIGA_SCHEDULE reflejen el cambio.
+    /* Re-aplicar overrides del motor INMEDIATAMENTE (sin setTimeout)
+       tras cada save. SQUAD_REGISTRY del motor (que usan los pickers
+       de evento de cualquier partido) se reescribe AHORA con los
+       nombres editados. Antes aplicábamos en setTimeout(100), lo que
+       creaba una ventana en la que el admin podía abrir un partido y
+       ver nombres viejos. Reportado 2026-05-05: rename "Giuliano" →
+       "Giuliano Simeone" no aparecía en el picker.
+       Además invalidamos el cache de la liga ANTES de aplicar para
+       que `ligaEaBuildEngineOverrides` lea localStorage fresco — sin
+       este reset, una lectura paralela podía devolver la versión
+       previa de LIGA_CACHE. */
+    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
     if(typeof window.applyEngineOverrides === 'function'){
-      setTimeout(window.applyEngineOverrides, 100);
+      try { window.applyEngineOverrides(); } catch(_){}
     }
   };
 
@@ -10941,6 +12312,15 @@ Tottenham
      volver a habilitar el alta/edición de jugadores individuales. */
   window.lextOpenSquad = function(idOrTeam, opts){
     opts = opts || {};
+    /* Contexto de competición (2026-05-04). Las stats que pinta el
+       modal salen de `_lextComputeRealStats` filtrado por estas
+       competiciones. Default = ['liga','copa'] = vista "EA Sports"
+       que SUMA Liga + Copa. Para Superliga/Champions/UEL/UECL el
+       caller (clic en clasificación) pasa la competición concreta
+       para AISLAR los stats. */
+    var _comps = (opts && Array.isArray(opts.competitions) && opts.competitions.length)
+      ? opts.competitions.slice() : ['liga','copa'];
+    window.CURRENT_SQUAD_COMPETITIONS = _comps;
     if(typeof window.syncLigaEaPlayerStats === 'function'){
       try { window.syncLigaEaPlayerStats(); } catch(_){}
     }
@@ -11257,32 +12637,36 @@ Tottenham
     if (!row) row = {pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0};
     var pct = row.pj > 0 ? Math.round((row.v / row.pj) * 100) : 0;
 
-    /* ── 2. Líderes del equipo (sobre t.players) ── */
+    /* ── 2. Líderes del equipo (sobre t.players) ──
+       Hidratamos vía el HELPER COMPARTIDO `_lextHydratePlayerStats`
+       — la MISMA fuente que la tabla per-jugador en `renderSquadList`.
+       Antes este bloque tenía su propia hidratación con prioridad
+       `ps || p.*` que mostraba datos stale (Ayoze 14 goles aunque
+       el equipo solo tuviera 5 goles totales). Ahora ambos lados
+       (header y filas) leen los mismos números — coherencia total. */
     var players = Array.isArray(team.players) ? team.players : [];
-    /* Hidratamos stats con getPlayerStats. Necesario porque esta
-       función se llama ANTES que renderSquadList → los players
-       todavía no traen .gol/.mvp/.pj/etc. Hidratamos TODO el set de
-       stats que `computePlayerRating` consume (pj, gol, pen, fk,
-       mvp, imbat, penSaved) además de pos para el cálculo por
-       posición. */
+    var _compsHdr = (typeof window.CURRENT_SQUAD_COMPETITIONS !== 'undefined' && window.CURRENT_SQUAD_COMPETITIONS)
+      ? window.CURRENT_SQUAD_COMPETITIONS : ['liga','copa'];
+    var _realLeaders = (typeof window._lextComputeRealStats === 'function')
+      ? window._lextComputeRealStats(team,
+          (typeof loadData === 'function' ? loadData(CURRENT_KEY) : null),
+          { competitions: _compsHdr })
+      : { teamPJ: 0, liveStats: {} };
     var hydrated = players.map(function(p){
       if (!p || !p.name) return null;
-      var ps = null;
-      try {
-        if (typeof window.getPlayerStats === 'function') {
-          ps = window.getPlayerStats(team.name, p.name);
-        }
-      } catch(_) {}
+      var clean = (typeof window._lextHydratePlayerStats === 'function')
+        ? window._lextHydratePlayerStats(team, p, _realLeaders)
+        : {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};
       return {
         name:     p.name,
         pos:      p.pos || 'MED',
-        pj:       Number((ps && ps.pj))       || Number(p.pj)       || 0,
-        gol:      Number((ps && ps.gol))      || Number(p.gol)      || 0,
-        pen:      Number((ps && ps.pen))      || Number(p.pen)      || 0,
-        fk:       Number((ps && ps.fk))       || Number(p.fk)       || 0,
-        mvp:      Number((ps && ps.mvp))      || Number(p.mvp)      || 0,
-        imbat:    Number((ps && ps.imbat))    || Number(p.imbat)    || 0,
-        penSaved: Number((ps && ps.penSaved)) || Number(p.penSaved) || 0
+        pj:       clean.pj,
+        gol:      clean.gol,
+        pen:      clean.pen,
+        fk:       clean.fk,
+        mvp:      clean.mvp,
+        imbat:    clean.imbat,
+        penSaved: clean.penSaved
       };
     }).filter(Boolean);
 
@@ -11488,119 +12872,45 @@ Tottenham
     var LABEL = {POR:'🧤 PORTEROS',DEF:'🛡 DEFENSAS',MED:'⚙ CENTROCAMPISTAS',DEL:'⚽ DELANTEROS'};
     var byPos = {POR:[],DEF:[],MED:[],DEL:[]};
 
-    /* Pre-computar goles DISJUNTOS (gol regular / pen / falta) desde
-       LIGA_PLAYER_MATCH_STORE en vivo para este equipo. Bypass total
-       de ef_player_stats_v1 — si ese storage tiene datos stale o
-       inflados de versiones antiguas, los sobrescribimos con el
-       recuento real basado en eventos del acta. */
-    var _liveCounts = {};  // norm(name) → {gol, pen, fk}
-    (function(){
-      try {
-        var store = window.LIGA_PLAYER_MATCH_STORE || {};
-        var teamNorm = _np(t.name || '');
-        Object.keys(store).forEach(function(mk){
-          var m = store[mk]; if (!m) return;
-          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
-          if (tA !== teamNorm && tB !== teamNorm) return;
-          var mySide = (tA === teamNorm) ? 'a' : 'b';
-          (m.evts || []).forEach(function(ev){
-            if (!ev) return;
-            var evSide = ev.team;
-            if (ev.realTeam) {
-              evSide = (_np(ev.realTeam) === teamNorm) ? 'self' : 'other';
-              if (evSide !== 'self') return;
-            } else if (evSide !== mySide) {
-              return;
-            }
-            var nm = '';
-            if (Array.isArray(ev.player)) nm = ev.player[1] || ev.player[0] || '';
-            else if (typeof ev.player === 'string') nm = ev.player;
-            else nm = ev.name || ev.playerName || '';
-            nm = String(nm || '').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
-            if (!nm) return;
-            var key = _np(nm);
-            var rec = _liveCounts[key] || {gol:0, pen:0, fk:0};
-            var ty = ev.type || '';
-            if (ty === 'gol') rec.gol++;
-            else if (ty === 'pen-gol') rec.pen++;
-            else if (ty === 'falta-gol') rec.fk++;
-            _liveCounts[key] = rec;
-          });
-        });
-      } catch(_){}
-    })();
+    /* ════════════════════════════════════════════════════════════════
+       REGLA "FUENTE DE LA VERDAD" (2026-05-04)
+       ════════════════════════════════════════════════════════════════
+       Las stats per-jugador DEBEN coincidir con lo que pasó de verdad
+       en los partidos. Lógica centralizada en `_lextComputeRealStats`
+       y `_lextHydratePlayerStats` (ver IIFE de ef_player_stats_v1):
 
-    /* Defensa contra datos rancios tras un reset incompleto: si el
-       equipo NO tiene resultados en `data.results` consideramos que
-       no ha jugado partidos en esta liga, así que ignoramos los
-       contadores per-jugador (p.pj/p.gol/...) aunque sigan ahí. Esto
-       cubre stats stale de versiones anteriores donde el botón "Res"
-       solo limpiaba data.results y dejaba los contadores por jugador
-       sin tocar — el usuario veía PJ del equipo en 0 pero jugadores
-       con 14 PJ y 15 goles. */
-    var _teamHasResults = (function(){
-      try {
-        if (!data || !Array.isArray(data.results) || !data.results.length) return false;
-        for (var ri = 0; ri < data.results.length; ri++) {
-          var r = data.results[ri];
-          if (r && (r.h === t.id || r.a === t.id)) return true;
-        }
-      } catch(_){}
-      return false;
-    })();
+         · teamPJ = partidos REALES (data.results + ef_liga38_v4 +
+           LIGA_PLAYER_MATCH_STORE), nunca lo que diga un cache.
+         · Si teamPJ === 0 → todo a 0 sin mirar caches.
+         · Stats per-jugador desde EVENTOS reales primero; ps/p.* solo
+           con validación anti-stale (psPj === teamPJ o p.pj === teamPJ).
+         · mvp/imbat capados a teamPJ.
 
+       Antes el render fiaba ciegamente en ef_player_stats_v1 + p.*
+       y un reset parcial dejaba "Alfon 29 PJ pero equipo PJ=3" o
+       "Ayoze 14 goles pero G+ del equipo = 5". El helper centralizado
+       impide que eso vuelva a pasar — todos los lectores (tabla,
+       cabecera de líderes) usan los mismos números. */
+    var _comps = (typeof window.CURRENT_SQUAD_COMPETITIONS !== 'undefined' && window.CURRENT_SQUAD_COMPETITIONS)
+      ? window.CURRENT_SQUAD_COMPETITIONS : ['liga','copa'];
+    var _real = (typeof window._lextComputeRealStats === 'function')
+      ? window._lextComputeRealStats(t, data, { competitions: _comps })
+      : { teamPJ: 0, liveStats: {} };
+    var _teamPJ = _real.teamPJ;
     t.players.forEach(function(p){
       try { ensurePlayerStats(p); } catch(_){}
-      /* Fallback para Resto de Ligas (51 ligas IA): el simulador
-         `ligaExtSimular` llama a `applyMatchStats` que escribe los
-         contadores DIRECTAMENTE sobre el objeto del jugador
-         (p.pj/p.gol/p.pen/p.fk/p.mvp/p.ta/p.tr/p.imbat/p.penSaved) y
-         los persiste en `ligaExt_<slug>`. Liga EA Sports en cambio
-         escribe en el store global `ef_player_stats_v1`.
-         Capturamos esos contadores propios ANTES de pisarlos por la
-         vía global. Los gateamos con p.pj>0 Y _teamHasResults para
-         que tras un reset (incompleto o no) la plantilla se vea
-         limpia sin arrastrar valores stale. */
-      var hasOwnStats = _teamHasResults && (p.pj || 0) > 0;
-      var own = hasOwnStats ? {
-        pj: p.pj || 0, gol: p.gol || 0, pen: p.pen || 0, fk: p.fk || 0,
-        mvp: p.mvp || 0, ta: p.ta || 0, tr: p.tr || 0,
-        imbat: p.imbat || 0, penSaved: p.penSaved || 0
-      } : null;
-      /* Stats de Liga EA Sports SIEMPRE derivan de ef_player_stats_v1
-         (fuente única: viene de los eventos match-by-match). Si no
-         hay entrada para el jugador, cae al snapshot `own` (ligas
-         externas) y, si tampoco, a 0. */
-      var ps = null;
-      try {
-        if (typeof window.getPlayerStats === 'function' && t.name) {
-          ps = window.getPlayerStats(t.name, p.name);
-        }
-      } catch(_) { ps = null; }
-      function _pickStat(field){
-        if (ps && ps[field] != null) return ps[field];
-        if (own && own[field] != null) return own[field];
-        return 0;
-      }
-      p.pj       = _pickStat('pj');
-      /* gol/pen/fk vienen del recuento LIVE desde eventos si existe,
-         si no caemos al ef_player_stats_v1 → snapshot propio → 0. */
-      var liveKey = _np(p.name);
-      var live = _liveCounts[liveKey];
-      if (live) {
-        p.gol = live.gol;
-        p.pen = live.pen;
-        p.fk  = live.fk;
-      } else {
-        p.gol = _pickStat('gol');
-        p.pen = _pickStat('pen');
-        p.fk  = _pickStat('fk');
-      }
-      p.mvp      = _pickStat('mvp');
-      p.ta       = _pickStat('ta');
-      p.tr       = _pickStat('tr');
-      p.imbat    = _pickStat('imbat');
-      p.penSaved = _pickStat('penSaved');
+      var clean = (typeof window._lextHydratePlayerStats === 'function')
+        ? window._lextHydratePlayerStats(t, p, _real)
+        : {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};
+      p.pj       = clean.pj;
+      p.gol      = clean.gol;
+      p.pen      = clean.pen;
+      p.fk       = clean.fk;
+      p.mvp      = clean.mvp;
+      p.ta       = clean.ta;
+      p.tr       = clean.tr;
+      p.imbat    = clean.imbat;
+      p.penSaved = clean.penSaved;
       (byPos[p.pos]||byPos.MED).push(p);
     });
 
@@ -11820,6 +13130,16 @@ Tottenham
        entre save y render — al recargar desde localStorage vemos SIEMPRE
        lo que acabamos de guardar. */
     try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
+    /* CRÍTICO: refrescar SQUAD_REGISTRY del motor de simulación tras
+       pegar la plantilla. Sin esto, el event picker (gen-pl-list,
+       mlShowPl_jXmY, etc.) sigue mostrando los nombres VIEJOS porque
+       sqFromRegistryFull lee de window.SQUAD_REGISTRY y nadie lo
+       actualizó tras el save. Reportado 2026-05-04: el admin renombró
+       "Giuliano" → "20. Giuliano Simeone 84" pero al añadir un evento
+       en cualquier partido la lista seguía mostrando "Giuliano". */
+    if(typeof window.applyEngineOverrides === 'function'){
+      try { window.applyEngineOverrides(); } catch(_){}
+    }
     ta.value = '';
     // Cerrar el details
     var d = document.getElementById('lext-squad-paste-details');

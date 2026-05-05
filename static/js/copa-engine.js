@@ -241,6 +241,99 @@
     }
     return matches;
   }
+
+  /* Empareja con CONSTRAINTS por ronda (regla del usuario 2026-05-04):
+     · r1, r2: humanos SOLO vs equipos de Primera Federación.
+     · r16:    humanos vs PF (si quedan), si no Hypermotion, último
+               recurso Liga EA. Nunca humano vs humano.
+     · oct:    humanos vs cualquier IA (cualquier liga). Nunca H vs H.
+     · cua/sf/fin: libre — humano vs humano permitido si toca.
+
+     Estrategia: separa humanos del resto, empareja cada humano con un
+     oponente válido siguiendo la prioridad de la ronda, y luego empareja
+     el resto al azar. El cálculo de local sigue la misma regla
+     (hostIsLower=true para single-leg, false para two-leg). */
+  function _pairTeamsConstrained(teamObjs, hostIsLower, ronda) {
+    var available = (teamObjs || []).slice();
+    if (available.length % 2 !== 0) available.pop();
+    var pairs = [];
+    var assigned = {};
+
+    function _orderPair(a, b) {
+      var pa = a.power, pb = b.power;
+      var aIsHost;
+      if (hostIsLower) aIsHost = pa < pb || (pa === pb && a.name < b.name);
+      else             aIsHost = pa > pb || (pa === pb && a.name < b.name);
+      return aIsHost ? { l: a.name, v: b.name } : { l: b.name, v: a.name };
+    }
+    function _shuffle(arr) {
+      for (var i = arr.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+      }
+      return arr;
+    }
+    function _canPair(humanT, oppT) {
+      if (oppT.isHuman) {
+        /* Humano vs humano: solo desde cuartos en adelante. */
+        return ronda === 'cua' || ronda === 'sf' || ronda === 'fin';
+      }
+      if (ronda === 'r1' || ronda === 'r2') {
+        return oppT.league === 'liga-primera-federacion';
+      }
+      if (ronda === 'r16' || ronda === 'oct') {
+        return true; /* cualquier no-humano */
+      }
+      return true; /* cua/sf/fin: cualquiera */
+    }
+    function _preferenceFor(humanT, candidates) {
+      /* r16: prioridad PF > Hyp > Liga EA. Otras rondas: sin filtro. */
+      if (ronda === 'r16') {
+        var pf = candidates.filter(function (c) { return c.league === 'liga-primera-federacion'; });
+        if (pf.length) return pf;
+        var hy = candidates.filter(function (c) { return c.league === 'liga-hypermotion'; });
+        if (hy.length) return hy;
+        var ea = candidates.filter(function (c) { return c.league === 'liga-ea-sports' && !c.isHuman; });
+        if (ea.length) return ea;
+      }
+      return candidates;
+    }
+
+    /* Lista mezclada de humanos para que al elegir oponentes haya
+       variedad entre temporadas. */
+    var humanos = _shuffle(available.filter(function (t) { return t.isHuman; }).slice());
+    humanos.forEach(function (h) {
+      if (assigned[h.name]) return;
+      var pool = available.filter(function (t) {
+        return !assigned[t.name] && t.name !== h.name && _canPair(h, t);
+      });
+      pool = _preferenceFor(h, pool);
+      if (!pool.length) {
+        /* Fallback: cualquier no-humano disponible. */
+        pool = available.filter(function (t) {
+          return !assigned[t.name] && t.name !== h.name && !t.isHuman;
+        });
+      }
+      if (!pool.length) {
+        /* Último recurso: cualquiera disponible (incluso humano). */
+        pool = available.filter(function (t) {
+          return !assigned[t.name] && t.name !== h.name;
+        });
+      }
+      if (!pool.length) return;
+      var opp = pool[Math.floor(Math.random() * pool.length)];
+      pairs.push(_orderPair(h, opp));
+      assigned[h.name] = true;
+      assigned[opp.name] = true;
+    });
+
+    /* Empareja al resto al azar. */
+    var resto = _shuffle(available.filter(function (t) { return !assigned[t.name]; }));
+    for (var k = 0; k < resto.length - 1; k += 2) {
+      pairs.push(_orderPair(resto[k], resto[k + 1]));
+    }
+    return pairs;
+  }
   /* Exponer para tests/debug. */
   window._copaCollectTeams = _collectCopaTeams;
   window._copaBuildR1 = _buildR1Participants;
@@ -1626,12 +1719,30 @@
     var anyHum = hHum || vHum;
     var bgL = _teamColorBg(local);
     var bgV = _teamColorBg(visit);
-    /* Fondos: si hay humano la card va con borde de su color. Gradient
-       horizontal con los colores de los dos equipos (estilo Liga EA). */
-    var wrapStyle = 'background:linear-gradient(to right,'+bgL+'2e 0%,transparent 44%,transparent 56%,'+bgV+'2e 100%);';
-    if (anyHum) {
-      var humBorder = hHum ? bgL : bgV;
-      wrapStyle += 'border:1px solid ' + humBorder + 'aa;box-shadow:0 0 14px ' + humBorder + '55,inset 0 0 0 1px ' + humBorder + '40;';
+    /* Fondos:
+       - IA vs IA → gradient suave con los colores de ambos equipos.
+       - Humano vs IA → gradient mucho más llamativo (alpha del color
+         del humano subido, sombra exterior intensa, borde de 2 px
+         dorado-pulse para que destaque entre los IA-vs-IA).
+       - Humano vs Humano (cuartos+) → mismo estilo doble-glow con
+         ambos colores y borde dorado-rosa. */
+    var wrapStyle;
+    if (hHum && vHum) {
+      /* Doble humano: gradient saturado de los 2 colores + borde rosa-dorado. */
+      wrapStyle = 'background:linear-gradient(120deg,'+bgL+'80 0%,'+bgL+'40 40%,'+bgV+'40 60%,'+bgV+'80 100%);'
+        + 'border:2px solid #ff90c8;'
+        + 'box-shadow:0 0 22px rgba(255,144,200,.5),0 0 40px rgba(255,213,74,.25),inset 0 0 0 1px rgba(255,213,74,.6);';
+    } else if (anyHum) {
+      var humSide = hHum ? bgL : bgV;
+      /* Humano vs IA: gradient lateral fuerte hacia el humano + borde
+         con su color al 100% + sombra dorada y de su color. */
+      wrapStyle = (hHum
+        ? 'background:linear-gradient(to right,'+humSide+'88 0%,'+humSide+'30 40%,transparent 60%,'+bgV+'25 100%);'
+        : 'background:linear-gradient(to right,'+bgL+'25 0%,transparent 40%,'+humSide+'30 60%,'+humSide+'88 100%);')
+        + 'border:2px solid ' + humSide + ';'
+        + 'box-shadow:0 0 18px ' + humSide + 'aa,0 0 32px rgba(255,213,74,.18),inset 0 0 0 1px ' + humSide + 'b0;';
+    } else {
+      wrapStyle = 'background:linear-gradient(to right,'+bgL+'2e 0%,transparent 44%,transparent 56%,'+bgV+'2e 100%);';
     }
     /* Escudo del humano como fondo difuso (igual que Liga EA). */
     var bgShieldL = hHum ? '<img src="" data-team="'+escapeHtml(local)+'" alt="" class="copa-card-bgshield copa-card-bgshield-l">' : '';
@@ -1802,7 +1913,19 @@
     var out = '';
     if (!twoLeg) {
       var resList = resultados[ronda] || [];
-      matches.forEach(function (m, idx) {
+      /* Orden de las cards: primero los partidos con humano (para que
+         el usuario los encuentre rápido), luego el resto. Mantenemos
+         el `idx` original para que las llamadas a copaSimIA / Jugar /
+         persistencia sigan apuntando al match correcto. */
+      var ordered = matches.map(function (m, idx) { return { m: m, idx: idx }; });
+      ordered.sort(function (a, b) {
+        var ah = isHuman(a.m.l, a.m.v) ? 0 : 1;
+        var bh = isHuman(b.m.l, b.m.v) ? 0 : 1;
+        if (ah !== bh) return ah - bh;
+        return a.idx - b.idx;
+      });
+      ordered.forEach(function (item) {
+        var m = item.m, idx = item.idx;
         var res = resList[idx];
         var actionBtn = (res && res.jugado) ? '' : _matchActionButton(ronda, idx, false, m);
         var simMk = (!isHuman(m.l, m.v) && !(res && res.jugado)) ? _copaSimMk(ronda, idx, false) : '';
@@ -1821,7 +1944,16 @@
        campo, ventaja del modesto). */
     var idaList = resultados[ronda + '_ida'] || [];
     var vtaList = resultados[ronda + '_vta'] || [];
-    matches.forEach(function (m, idx) {
+    /* Two-leg: tie con humano implicado va arriba. */
+    var orderedTies = matches.map(function (m, idx) { return { m: m, idx: idx }; });
+    orderedTies.sort(function (a, b) {
+      var ah = isHuman(a.m.l, a.m.v) ? 0 : 1;
+      var bh = isHuman(b.m.l, b.m.v) ? 0 : 1;
+      if (ah !== bh) return ah - bh;
+      return a.idx - b.idx;
+    });
+    orderedTies.forEach(function (item) {
+      var m = item.m, idx = item.idx;
       var ida = idaList[idx];
       var vta = vtaList[idx];
       var btnIda = (ida && ida.jugado) ? '' : _matchActionButton(ronda, idx, false, m);
@@ -2042,39 +2174,48 @@
      ronda='r16'+ → ties = ganadores de la ronda previa, ya pares. */
   function _computeSorteoPayload(ronda) {
     var clasificados = (_copa && _copa.clasificados) || {};
-    var levels = {};
+    /* Construimos la lista como ARRAY DE OBJETOS {name,league,power,
+       isHuman} para que `_pairTeamsConstrained` pueda aplicar las
+       reglas (humano vs PF en r1/r2, no human-vs-human hasta cuartos,
+       etc.). El nivel y los nombres se siguen pasando al backend
+       igual que antes. */
+    var allMap = {};
+    _collectCopaTeams().forEach(function (t) { allMap[t.name] = t; });
+    function _resolve(name) {
+      return allMap[name] || { name: name, league: '', power: 75, isHuman: HUMAN_TEAMS.indexOf(canonicalTeam(name)) !== -1 };
+    }
     var teams = [];
     if (ronda === 'r1') {
       var built = _buildR1Participants();
       if (!built) return null;
-      teams = built.participants.slice();
-      levels = built.levels;
+      teams = built.participants.map(_resolve);
     } else if (ronda === 'r2') {
       /* 18 ganadores + 46 pre-clasificados (todo el resto que NO jugó r1) */
       var all = _collectCopaTeams();
-      all.forEach(function (t) { levels[t.name] = t.power; });
       var r1Sorteo = ((_copa.sorteo || {}).r1 || []);
       var jugaronR1 = {};
       r1Sorteo.forEach(function (m) { jugaronR1[m.l] = true; jugaronR1[m.v] = true; });
-      var preClasif = all.filter(function (t) { return !jugaronR1[t.name]; })
-                          .map(function (t) { return t.name; });
-      var winnersR1 = (clasificados.r1 || []).slice();
+      var preClasif = all.filter(function (t) { return !jugaronR1[t.name]; });
+      var winnersR1 = (clasificados.r1 || []).map(_resolve);
       teams = winnersR1.concat(preClasif);
     } else {
-      /* r16, oct, cua, sf, fin: usan los ganadores de la ronda previa.
-         Para nivel, leemos los 82 (los nombres ya se conocen). */
-      var allX = _collectCopaTeams();
-      allX.forEach(function (t) { levels[t.name] = t.power; });
       var prev = { r16: 'r2', oct: 'r16', cua: 'oct', sf: 'cua', fin: 'sf' }[ronda];
-      teams = (clasificados[prev] || []).slice();
+      teams = (clasificados[prev] || []).map(_resolve);
       if (ronda === 'fin' && teams.length < 2) return null;
     }
     if (!teams.length || teams.length % 2 !== 0) return null;
     /* Single-leg (r1/r2/fin) → host = menor nivel. Two-leg → host (ida) =
        mayor nivel para que la vuelta caiga en el menor nivel. */
     var hostIsLower = !TWO_LEG[ronda];
-    var pairs = _pairTeams(teams, levels, hostIsLower);
-    return { ronda: ronda, participants: teams, pairs: pairs, levels: levels };
+    var pairs = _pairTeamsConstrained(teams, hostIsLower, ronda);
+    var levels = {};
+    teams.forEach(function (t) { levels[t.name] = t.power; });
+    return {
+      ronda: ronda,
+      participants: teams.map(function (t) { return t.name; }),
+      pairs: pairs,
+      levels: levels
+    };
   }
 
   window.copaSortear = function (ronda) {
@@ -2112,6 +2253,16 @@
   };
 
   window.copaSimTodosIA = function (ronda, esVuelta) {
+    /* Pedido del usuario: para evitar simulaciones en masa accidentales,
+       el botón "⚡ Simular IA" pide la contraseña admin '747'. */
+    var pass;
+    try { pass = window.prompt('🔐 Contraseña admin para simular la ronda:'); }
+    catch(_){ pass = null; }
+    if (pass === null) return;            /* cancelado */
+    if (String(pass).trim() !== '747') {
+      alert('❌ Contraseña incorrecta.');
+      return;
+    }
     var matches = (_copa.sorteo || {})[ronda] || [];
     var resList = getResultList(ronda, !!esVuelta);
     var pending = [];

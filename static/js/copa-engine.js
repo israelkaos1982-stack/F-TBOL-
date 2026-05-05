@@ -1693,6 +1693,98 @@
       + '</div>'
       + '</div>'
       + actaEl
+      /* Panel ACTA DEL PARTIDO (colapsable). Solo se pinta si el match
+         está jugado y trae events. Ahora la acta SIEMPRE es accesible
+         tras pulsar "🏁 FIN", igual que en Liga EA Sports. */
+      + (score && score.jugado && opts.events && opts.events.length
+          ? _renderActaPanel(opts.events, local, visit, opts.actaUniqueId || (Math.random().toString(36).slice(2,8)))
+          : '')
+      + '</div>';
+  }
+
+  /* Acta del partido (panel colapsable bajo la card una vez el match
+     está jugado). Replica el estilo de Liga EA Sports
+     (`_iaCompletedCard` + `_iaEventsHtml` en misc_body_2.html) — el
+     usuario quiere poder pulsar el toggle y ver minuto+icono+jugador
+     de cada evento. Eventos vienen de `_copa.resultados[ronda…][idx]
+     .events` (persistidos por _copaSimLivePersist o el backend). */
+  var _COPA_EV_ICOS = {
+    'gol':'⚽','pen-gol':'⚽🥅','pen-prov':'🤦','pen-parado':'🖐','pen-fallo':'❌',
+    'falta-gol':'⚽🎯','propia':'⚽🚫','roja':'🟥','amarilla':'🟨',
+    'd-amarilla':'🟨🟥','sust':'🔄','imbat':'🧤','lesion':'🩹','mvp':'⭐',
+    'pen-result':'🥅'
+  };
+  function _renderEventsList(events, home, away) {
+    if (!events || !events.length) {
+      return '<div style="padding:12px;text-align:center;color:rgba(255,255,255,.4);font-style:italic;font-family:Oswald,sans-serif;letter-spacing:1px;">SIN EVENTOS REGISTRADOS</div>';
+    }
+    var sorted = events.slice().sort(function (a, b) {
+      return (Number(a.min) || 0) - (Number(b.min) || 0);
+    });
+    var rows = '';
+    sorted.forEach(function (ev) {
+      if (!ev) return;
+      if (ev.type === 'mvp')    return;  /* MVP a parte abajo */
+      if (ev.type === 'played') return;  /* contador interno PJ */
+      if (ev.type === 'sust')   return;  /* sustituciones ocultas */
+      var ico = _COPA_EV_ICOS[ev.type] || '•';
+      if (ev.dbl) ico = '🟨🟥';
+      var pname = ev.player || ev.name || '';
+      /* Desnuda dorsal viejo "22. Lookman" si vino del IA-batch del
+         backend; el flag `num` ya viaja aparte. */
+      pname = String(pname).replace(/^\s*\d+\s*[.\-]?\s*/, '').trim();
+      var team = ev.team === 'a' ? home : (ev.team === 'b' ? away : '');
+      var minLabel = ev.min === 121 ? 'PEN' : (ev.min + '\'');
+      var extra = '';
+      if (ev._varAnulado) {
+        extra = ' <span style="font-size:10px;color:#ff5555;font-weight:700;letter-spacing:.4px">⛔ ANULADA POR 📺 VAR</span>';
+      } else if (ev._varConfirmed) {
+        extra = ' <span style="font-size:10px;color:#4fd87a;font-weight:700">✓ Confirmado por 📺 VAR</span>';
+      }
+      rows += '<div style="display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);">'
+        + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:32px;">' + escapeHtml(minLabel) + '</span>'
+        + '<span style="font-size:14px;">' + ico + '</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + escapeHtml(pname) + extra + '</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + escapeHtml(team) + '</span>'
+        + '</div>';
+    });
+    /* MVP siempre al final si existe */
+    var mvpEv = events.find(function (e) { return e && e.type === 'mvp'; });
+    if (mvpEv) {
+      var mvpName = String(mvpEv.player || mvpEv.name || '').replace(/^\s*\d+\s*[.\-]?\s*/, '').trim();
+      var mvpTeam = mvpEv.team === 'a' ? home : (mvpEv.team === 'b' ? away : '');
+      rows += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid rgba(240,192,64,.25);background:rgba(240,192,64,.03);">'
+        + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#f0c040;min-width:32px;">FIN</span>'
+        + '<span style="font-size:14px;">⭐</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#f0c040;flex:1;">' + escapeHtml(mvpName) + '</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + escapeHtml(mvpTeam) + '</span>'
+        + '</div>';
+    }
+    return rows;
+  }
+
+  /* Toggle expuesto en window para los onclick="..." de la cabecera. */
+  window.copaToggleActa = function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var arr = document.getElementById(id + '-arr');
+    var isOpen = el.style.display !== 'none' && el.style.display !== '';
+    el.style.display = isOpen ? 'none' : 'block';
+    if (arr) arr.textContent = isOpen ? '▼' : '▲';
+  };
+
+  function _renderActaPanel(events, home, away, uniqueId) {
+    if (!events || !events.length) return '';
+    var actaId = 'copa-acta-' + uniqueId;
+    return ''
+      + '<div class="copa-acta-wrap" style="margin-top:6px;border-top:1px solid rgba(220,170,80,.18);">'
+      +   '<button onclick="window.copaToggleActa(\'' + actaId + '\')" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:transparent;border:none;color:rgba(255,213,74,.85);font-family:Oswald,sans-serif;font-size:11.5px;letter-spacing:1.6px;text-transform:uppercase;cursor:pointer;">'
+      +     '<span>📋 Acta del Partido</span>'
+      +     '<span id="' + actaId + '-arr" style="font-size:10px;">▼</span>'
+      +   '</button>'
+      +   '<div id="' + actaId + '" style="display:none;background:rgba(0,0,0,.18);">'
+      +     _renderEventsList(events, home, away)
+      +   '</div>'
       + '</div>';
   }
 
@@ -1715,7 +1807,11 @@
         var actionBtn = (res && res.jugado) ? '' : _matchActionButton(ronda, idx, false, m);
         var simMk = (!isHuman(m.l, m.v) && !(res && res.jugado)) ? _copaSimMk(ronda, idx, false) : '';
         out += _renderMatchCard({
-          local: m.l, visit: m.v, score: res || null, actionBtn: actionBtn, simMk: simMk
+          local: m.l, visit: m.v, score: res || null, actionBtn: actionBtn, simMk: simMk,
+          /* Eventos del acta para toggle "📋 ACTA DEL PARTIDO" en
+             cards FIN. */
+          events: (res && res.events) || [],
+          actaUniqueId: ronda + '-' + idx
         });
       });
       return out;
@@ -1743,11 +1839,15 @@
       out += '<div class="copa-tie-wrap">';
       out += _renderMatchCard({
         local: m.l, visit: m.v, score: ida || null, actionBtn: btnIda,
-        legLabel: 'Ida', subtle: true, simMk: simMkIda
+        legLabel: 'Ida', subtle: true, simMk: simMkIda,
+        events: (ida && ida.events) || [],
+        actaUniqueId: ronda + '-' + idx + '-ida'
       });
       out += _renderMatchCard({
         local: m.v, visit: m.l, score: vta || null, actionBtn: btnVta,
-        legLabel: 'Vuelta', subtle: true, simMk: simMkVta
+        legLabel: 'Vuelta', subtle: true, simMk: simMkVta,
+        events: (vta && vta.events) || [],
+        actaUniqueId: ronda + '-' + idx + '-vta'
       });
       if (ida && ida.jugado && vta && vta.jugado) {
         var sumL = Number(ida.gl||0) + Number(vta.gv||0);
@@ -2614,6 +2714,19 @@
         .then(function (d) {
           try { if (d && d.copa) _copa = d.copa; } catch(_){}
         }).catch(function () {});
+    } catch(_){}
+    /* Sumar al store de stats de Liga EA (LIGA_PLAYER_MATCH_STORE) con
+       compKey='copa' para que los goles cuenten en la plantilla del
+       equipo (cuadrícula PJ/G/E/P/G+/G-) y en "Liga · Estadísticas"
+       (top goleadores). Sin esto los goles de Copa no sumaban en
+       ningún sitio agregado, solo se veían en el acta del partido. */
+    try {
+      if (typeof window.registrarLigaPlayerStats === 'function') {
+        var statsEvents = (events || []).filter(function (e) {
+          return e && e.type !== 'pen-result' && !e._varAnulado;
+        });
+        window.registrarLigaPlayerStats(mk, home, away, statsEvents, mvp || '', mvpTeam || '', 'copa');
+      }
     } catch(_){}
   };
 

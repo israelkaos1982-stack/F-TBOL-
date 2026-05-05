@@ -3018,25 +3018,85 @@ window._showSimProgress = function(opts, onDone){
      }
   */
   window.lextExportBackup = function(){
-    var out = { format:'ftbol-backup-v1', createdAt: new Date().toISOString(), ligas:{}, flags:{} };
+    /* Backup TOTAL (2026-05-05). Antes solo guardaba `ligaExt_*` →
+       las competiciones (Liga EA jornadas en `ef_liga38_v4`, Superliga
+       en `superliga_*`, Champions/UEL/UECL en `wprev_*`, Copa en
+       `copa_*`, stats por jugador en `ef_player_stats_*_v1`,
+       eventos en LIGA_PLAYER_MATCH_STORE, lesiones en BAJA_STORE…)
+       NO se guardaban. Petición del usuario: "guardar absolutamente
+       todo por si ocurre una catástrofe".
+
+       Formato v2:
+         · storage      → TODO el localStorage (clave → valor crudo).
+         · windowState  → globales window que se persistan en memoria
+                          y no estén en localStorage (LIGA_PLAYER_MATCH_STORE,
+                          LIGA_J1_RESULTS, BAJA_STORE, LESION_STORE,
+                          _LIGA_EA_PLAYER_FLAGS, _LIGA_EA_TEAM_STATS, etc.).
+         · ligas        → back-compat con v1 (subset de storage filtrado
+                          a ligaExt_*).
+         · flags        → back-compat con v1.
+
+       Importar acepta tanto v1 como v2. */
+    var out = {
+      format: 'ftbol-backup-v2',
+      createdAt: new Date().toISOString(),
+      ligas: {},
+      flags: {},
+      storage: {},
+      windowState: {}
+    };
+    /* 1. TODO localStorage. Sin filtros — incluso entradas con
+          prefijos desconocidos se preservan, así futuros features
+          quedan respaldados sin tener que actualizar este código. */
+    var skippedSize = 0;
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
         if (!k) continue;
+        var v;
+        try { v = localStorage.getItem(k); } catch(_){ continue; }
+        if (v == null) continue;
+        out.storage[k] = v;
+        /* Compat v1: ligaExt_* también en .ligas (parseado). */
         if (k.indexOf('ligaExt_') === 0) {
-          try { out.ligas[k] = JSON.parse(localStorage.getItem(k)); } catch(_){}
+          try { out.ligas[k] = JSON.parse(v); } catch(_){}
         }
       }
     } catch(_){}
+    /* 2. Window globals importantes que se calculan en memoria y NO
+          se persisten siempre en localStorage. Si alguno es muy grande,
+          lo intentamos pero si falla la serialización seguimos. */
+    var WINDOW_KEYS_TO_SAVE = [
+      'LIGA_PLAYER_MATCH_STORE',
+      'LIGA_J1_RESULTS',
+      'BAJA_STORE',
+      'LESION_STORE',
+      'LIGA_EXTRAS',
+      '_LIGA_EA_PLAYER_FLAGS',
+      '_LIGA_EA_TEAM_STATS',
+      'MVP_TRACKER',
+      'TEAM_STADIUMS_OVERRIDE',
+      'COMP_ICON_OVERRIDE'
+    ];
+    WINDOW_KEYS_TO_SAVE.forEach(function(wk){
+      try {
+        var val = window[wk];
+        if (val == null) return;
+        var ser = JSON.stringify(val);
+        if (ser != null) out.windowState[wk] = ser;
+      } catch(_){}
+    });
+    /* 3. Compat v1: flags. */
     try {
       if (window._LIGA_EA_PLAYER_FLAGS) out.flags = JSON.parse(JSON.stringify(window._LIGA_EA_PLAYER_FLAGS));
     } catch(_){}
+    /* 4. Descargar. */
     try {
-      var blob = new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
+      var blob = new Blob([JSON.stringify(out)], {type:'application/json'});
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      a.download = 'ftbol-plantillas-' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.json';
+      a.download = 'ftbol-backup-' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.json';
       document.body.appendChild(a); a.click();
       setTimeout(function(){ try { document.body.removeChild(a); URL.revokeObjectURL(url); } catch(_){} }, 500);
       var nLigas = Object.keys(out.ligas).length;
@@ -3047,7 +3107,37 @@ window._showSimProgress = function(opts, onDone){
           d.teams.forEach(function(t){ if (t && Array.isArray(t.players)) nPlayers += t.players.length; });
         }
       });
-      alert('✅ Backup descargado.\n\n• Ligas:    '+nLigas+'\n• Equipos: '+nTeams+'\n• Jugadores: '+nPlayers+'\n• Flags C/F/P/⭐/⚾: '+Object.keys(out.flags).length+'\n\nGuarda ese .json en sitio seguro. Lo puedes re-importar con 📂.');
+      var nKeys = Object.keys(out.storage).length;
+      /* Resumen por familia para que el admin sepa qué se incluye. */
+      var families = {liga:0, copa:0, super:0, ucl:0, uel:0, uecl:0, ligaExt:0, otros:0};
+      Object.keys(out.storage).forEach(function(k){
+        if (k.indexOf('ligaExt_') === 0) families.ligaExt++;
+        else if (k.indexOf('superliga_') === 0 || k === 'manual_ea_superliga_v1') families.super++;
+        else if (k.indexOf('wprev_') === 0 || k.indexOf('_ucl_') !== -1) families.ucl++;
+        else if (k.indexOf('_uel_') !== -1) families.uel++;
+        else if (k.indexOf('_uecl_') !== -1) families.uecl++;
+        else if (k === 'ef_liga38_v4' || k === 'ef_liga_schedule_v1' || k.indexOf('liga_') === 0) families.liga++;
+        else if (k.indexOf('copa') !== -1) families.copa++;
+        else families.otros++;
+      });
+      var nWin = Object.keys(out.windowState).length;
+      alert(
+        '✅ Backup TOTAL descargado\n\n' +
+        '• Total claves localStorage: ' + nKeys + '\n' +
+        '   - ligaExt_*  (plantillas): ' + families.ligaExt + '\n' +
+        '   - Liga EA Sports:           ' + families.liga + '\n' +
+        '   - Copa del Rey:             ' + families.copa + '\n' +
+        '   - Superliga:                ' + families.super + '\n' +
+        '   - Champions / Previa:       ' + families.ucl + '\n' +
+        '   - Europa League:            ' + families.uel + '\n' +
+        '   - Conference:               ' + families.uecl + '\n' +
+        '   - Otros:                    ' + families.otros + '\n' +
+        '• Equipos:    ' + nTeams + '\n' +
+        '• Jugadores:  ' + nPlayers + '\n' +
+        '• Flags C/F/P/⭐/⚾/🏀: ' + Object.keys(out.flags).length + '\n' +
+        '• Estado en memoria (eventos, lesiones…): ' + nWin + ' bloques\n\n' +
+        'Guarda este .json en sitio seguro. Lo puedes re-importar con 📂.'
+      );
     } catch(errE){
       alert('⚠️ No se pudo crear el backup: ' + (errE && errE.message || errE));
     }
@@ -3063,40 +3153,107 @@ window._showSimProgress = function(opts, onDone){
         alert('⚠️ El archivo no es un JSON válido.\n'+(errP && errP.message));
         return;
       }
-      if (!payload || !payload.ligas || typeof payload.ligas !== 'object') {
-        alert('⚠️ El archivo no es un backup de F-TBOL (falta la sección "ligas").');
+      if (!payload || (typeof payload.ligas !== 'object' && typeof payload.storage !== 'object')) {
+        alert('⚠️ El archivo no es un backup de F-TBOL (falta la sección "ligas" o "storage").');
         return;
       }
-      if (!confirm('⚠️ Vas a reemplazar TODAS las plantillas actuales con las del backup.\n\nBackup creado: '+(payload.createdAt||'?')+'\nLigas en backup: '+Object.keys(payload.ligas).length+'\n\n¿Continuar?')) return;
-      var restoredLigas = 0, restoredTeams = 0, restoredPlayers = 0;
-      Object.keys(payload.ligas).forEach(function(lk){
-        try {
-          var d = payload.ligas[lk];
-          if (!d || !Array.isArray(d.teams)) return;
-          localStorage.setItem(lk, JSON.stringify(d));
-          restoredLigas++;
-          restoredTeams += d.teams.length;
-          d.teams.forEach(function(t){ if (t && Array.isArray(t.players)) restoredPlayers += t.players.length; });
-          /* Re-subir al server — solo el main (sin sufijos _snap_, _backup ni _protected). */
-          if (lk.indexOf('_snap_') === -1 && lk.indexOf('_backup') === -1 && lk.indexOf('_protected') === -1) {
-            var slugK = lk.replace(/^ligaExt_/,'');
-            try {
-              fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({data: d})
-              }).catch(function(){});
-            } catch(_){}
-          }
-        } catch(_){}
-      });
+      var isV2 = (payload.format === 'ftbol-backup-v2') || (payload.storage && typeof payload.storage === 'object');
+      var nLigas = payload.ligas ? Object.keys(payload.ligas).length : 0;
+      var nKeys  = payload.storage ? Object.keys(payload.storage).length : nLigas;
+      if (!confirm(
+        '⚠️ Vas a REEMPLAZAR todo el estado actual con el backup.\n\n' +
+        'Formato: ' + (payload.format || 'v1') + '\n' +
+        'Backup creado: ' + (payload.createdAt||'?') + '\n' +
+        (isV2
+          ? ('Claves en backup: ' + nKeys + ' (storage completo)')
+          : ('Ligas en backup: ' + nLigas + ' (solo plantillas)')) +
+        '\n\n¿Continuar?'
+      )) return;
+      var restoredKeys = 0, restoredLigas = 0, restoredTeams = 0, restoredPlayers = 0;
+      /* 1. Restaurar TODO storage si v2. */
+      if (isV2 && payload.storage) {
+        Object.keys(payload.storage).forEach(function(k){
+          try {
+            localStorage.setItem(k, payload.storage[k]);
+            restoredKeys++;
+            if (k.indexOf('ligaExt_') === 0
+                && k.indexOf('_snap_') === -1
+                && k.indexOf('_backup') === -1
+                && k.indexOf('_protected') === -1) {
+              try {
+                var dd = JSON.parse(payload.storage[k]);
+                if (dd && Array.isArray(dd.teams)) {
+                  restoredLigas++;
+                  restoredTeams += dd.teams.length;
+                  dd.teams.forEach(function(t){
+                    if (t && Array.isArray(t.players)) restoredPlayers += t.players.length;
+                  });
+                  /* Re-subir al server (idempotente). */
+                  var slugK = k.replace(/^ligaExt_/,'');
+                  try {
+                    fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
+                      method:'POST',
+                      headers:{'Content-Type':'application/json'},
+                      body: payload.storage[k] /* ya es JSON string */
+                    }).catch(function(){});
+                  } catch(_){}
+                }
+              } catch(_){}
+            }
+          } catch(_){}
+        });
+      } else if (payload.ligas) {
+        /* Compat v1: solo ligaExt_*. */
+        Object.keys(payload.ligas).forEach(function(lk){
+          try {
+            var d = payload.ligas[lk];
+            if (!d || !Array.isArray(d.teams)) return;
+            localStorage.setItem(lk, JSON.stringify(d));
+            restoredKeys++;
+            restoredLigas++;
+            restoredTeams += d.teams.length;
+            d.teams.forEach(function(t){ if (t && Array.isArray(t.players)) restoredPlayers += t.players.length; });
+            if (lk.indexOf('_snap_') === -1 && lk.indexOf('_backup') === -1 && lk.indexOf('_protected') === -1) {
+              var slugK = lk.replace(/^ligaExt_/,'');
+              try {
+                fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
+                  method:'POST',
+                  headers:{'Content-Type':'application/json'},
+                  body: JSON.stringify({data: d})
+                }).catch(function(){});
+              } catch(_){}
+            }
+          } catch(_){}
+        });
+      }
+      /* 2. Restaurar window globals (v2 solo). */
+      var nWin = 0;
+      if (isV2 && payload.windowState && typeof payload.windowState === 'object') {
+        Object.keys(payload.windowState).forEach(function(wk){
+          try {
+            var v = payload.windowState[wk];
+            if (typeof v === 'string') v = JSON.parse(v);
+            window[wk] = v;
+            nWin++;
+          } catch(_){}
+        });
+      }
+      /* 3. Compat v1: flags. */
       try {
         if (payload.flags && typeof payload.flags === 'object') {
           window._LIGA_EA_PLAYER_FLAGS = payload.flags;
         }
       } catch(_){}
       try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(); } catch(_){}
-      alert('✅ Backup importado.\n\n• Ligas/snaps: '+restoredLigas+'\n• Equipos: '+restoredTeams+'\n• Jugadores: '+restoredPlayers+'\n\nRecargando…');
+      alert(
+        '✅ Backup importado\n\n' +
+        '• Claves restauradas: ' + restoredKeys + '\n' +
+        '• Ligas: ' + restoredLigas + '\n' +
+        '• Equipos: ' + restoredTeams + '\n' +
+        '• Jugadores: ' + restoredPlayers + '\n' +
+        (nWin ? '• Estado en memoria: ' + nWin + ' bloques\n' : '') +
+        '\nRecargando…'
+      );
       setTimeout(function(){ location.reload(); }, 400);
     };
     reader.onerror = function(){ alert('⚠️ Error al leer el archivo.'); };

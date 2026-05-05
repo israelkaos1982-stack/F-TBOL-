@@ -10986,6 +10986,14 @@
       summary: '',
       team_a: home || '', team_b: away || ''
     };
+    /* Computar el ganador para resolver TBDs en rondas posteriores
+       (auto-fill de "Esperando Rival" → ganador real). Solo aplica
+       a rondas single-leg (la 2-leg se resuelve al confirmar la
+       ronda completa via copaClasificar). */
+    var _copaWinName = null;
+    if (pen_winner) _copaWinName = pen_winner;
+    else if (gh > ga) _copaWinName = home;
+    else if (ga > gh) _copaWinName = away;
     try {
       fetch('/api/copa/guardar_resultado', {
         method: 'POST',
@@ -10993,10 +11001,14 @@
         body: JSON.stringify(payload)
       }).then(function(r){ return r.json(); })
         .then(function(d){
-          /* Re-render de Copa al volver a la pantalla. */
           try {
             if (typeof window.copaInit === 'function') window.copaInit();
             else if (typeof window.copaRender === 'function' && d && d.copa) window.copaRender(d.copa);
+            /* Tras guardar, resolvemos TBDs de rondas posteriores si
+               este partido era single-leg (r1/r2/fin). */
+            if (_copaWinName && (ronda === 'r1' || ronda === 'r2' || ronda === 'fin') && typeof window._copaResolveTbdExternal === 'function') {
+              window._copaResolveTbdExternal(ronda, idx, _copaWinName);
+            }
           } catch(_){}
         }).catch(function(){});
     } catch(_){}

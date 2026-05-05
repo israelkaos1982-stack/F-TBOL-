@@ -246,6 +246,100 @@
   window._copaBuildR1 = _buildR1Participants;
   window._copaPairTeams = _pairTeams;
 
+  /* ════════════════════════════════════════════════════════════════
+     PRE-POBLACIÓN DE PLANTILLAS PARA FILIALES Y EQUIPOS SIN ROSTER
+     Sin esto, sqFromRegistry busca en localStorage y, si no encuentra
+     match exacto, hace una segunda pasada por SUBSTRING que equipara
+     "Real Madrid Castilla" con "Real Madrid" → genMatchEvents acaba
+     usando Mbappé/Vinicius para Castilla. Igual con Betis Deportivo,
+     Celta Fortuna, Bilbao Ath., Sevilla At., Atlético Madrileño,
+     Villarreal B, etc. (todos los filiales de Primera Federación).
+
+     Solución: para CADA equipo de Hypermotion + Primera Federación
+     (los que viven en DEFAULT_SEGUNDA_TEAMS / G1 / G2), generamos una
+     plantilla sintética (1 portero + 4 def + 4 med + 3 del = 12
+     titulares · semilla determinista por nombre de equipo) y la
+     registramos en SQUAD_REGISTRY tras `applyEngineOverrides`. Así el
+     primer pass de sqFromRegistry encuentra match exacto y nunca cae
+     al substring. ════════════════════════════════════════════════ */
+  var _COPA_FIRST_NAMES = [
+    'Carlos','Daniel','Sergio','Pablo','David','Adrián','Iván','Marco','Hugo','Joel',
+    'Aitor','Mario','Álvaro','Lucas','Diego','Jaime','Marcos','Andrés','Roberto','Manuel',
+    'Antonio','José','Javier','Luis','Miguel','Raúl','Rubén','Pedro','Borja','Iker',
+    'Asier','Mikel','Jon','Aimar','Beñat','Unai','Gorka','Xabi','Markel','Imanol',
+    'Bruno','Adriá','Ferran','Pol','Aleix','Albert','Marc','Roger','Sergi','Joan',
+    'Nico','Pau','Cristian','Saúl','Juanjo','Tomás','Lautaro','Cristóbal'
+  ];
+  var _COPA_LAST_NAMES = [
+    'García','Martínez','López','Sánchez','Pérez','González','Rodríguez','Fernández',
+    'Ramos','Ruiz','Torres','Vázquez','Castro','Ortega','Romero','Navarro','Suárez',
+    'Iglesias','Domínguez','Vidal','Méndez','Crespo','Calvo','Gallardo','Cabrera',
+    'Reyes','Aguilar','Soler','Carrasco','Padilla','Barragán','Beltrán','Ibáñez',
+    'Esteban','Mora','Gil','Cortés','Pardo','Ferrer','Colomer','Boix','Sabater',
+    'Cuevas','Heras','Rincón','Vila','Galán','Santos','Linares','Pascual','Ríos',
+    'Mendoza','Salas','Vega','Rivas','Quintana','Aznar','Cordero','Bravo','Hernández'
+  ];
+  function _copaSeedHash(s) {
+    var h = 2166136261;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = (h * 16777619) >>> 0;
+    }
+    return h;
+  }
+  function _copaSyntheticName(team, idx) {
+    var seed = _copaSeedHash(team + '|' + idx);
+    var f = _COPA_FIRST_NAMES[seed % _COPA_FIRST_NAMES.length];
+    var l = _COPA_LAST_NAMES[(seed >>> 8) % _COPA_LAST_NAMES.length];
+    return f + ' ' + l;
+  }
+  function _copaSyntheticSquad(teamName, basePower) {
+    var pw = Math.max(40, Math.min(85, Number(basePower) || 65));
+    /* 1 portero + 4 defensas + 4 medios + 3 delanteros + 6 suplentes
+       (todos como titulares al principio porque el motor de eventos
+       de iaSimLive usa p[4]==='titular' para el pool activo). */
+    var sq = [
+      { h: '🧤 PORTEROS' },
+      [String(1), _copaSyntheticName(teamName, 0), 'P', pw, 'titular']
+    ];
+    sq.push({ h: '🛡 DEFENSAS' });
+    var dNums = [2, 3, 4, 5];
+    for (var d = 0; d < 4; d++) sq.push([String(dNums[d]), _copaSyntheticName(teamName, 1 + d), 'D', pw - 2, 'titular']);
+    sq.push({ h: '⚙️ MEDIOS' });
+    var mNums = [6, 7, 8, 10];
+    for (var m = 0; m < 4; m++) sq.push([String(mNums[m]), _copaSyntheticName(teamName, 5 + m), 'M', pw, 'titular']);
+    sq.push({ h: '⚡ DELANTEROS' });
+    var fNums = [9, 11, 17];
+    for (var f = 0; f < 3; f++) sq.push([String(fNums[f]), _copaSyntheticName(teamName, 9 + f), 'F', pw + 2, 'titular']);
+    /* Banco. Si los registramos como suplente, el sustitutor automático
+       puede sacarlos al campo desde el min 46. */
+    var benchNums = [12, 13, 14, 15, 16, 18];
+    var benchPos = ['D', 'M', 'M', 'F', 'D', 'M'];
+    for (var b = 0; b < 6; b++) sq.push([String(benchNums[b]), _copaSyntheticName(teamName, 12 + b), benchPos[b], pw - 5, 'suplente']);
+    return sq;
+  }
+  function _copaEnsureSquads() {
+    if (!window.SQUAD_REGISTRY) window.SQUAD_REGISTRY = {};
+    var pools = [
+      window.DEFAULT_SEGUNDA_TEAMS || [],
+      window.DEFAULT_PRIMERA_G1   || [],
+      window.DEFAULT_PRIMERA_G2   || []
+    ];
+    pools.forEach(function (pool) {
+      pool.forEach(function (t) {
+        if (!t || !t.name) return;
+        var nm = String(t.name).trim();
+        if (window.SQUAD_REGISTRY[nm] && Array.isArray(window.SQUAD_REGISTRY[nm]) && window.SQUAD_REGISTRY[nm].length) return;
+        window.SQUAD_REGISTRY[nm] = _copaSyntheticSquad(nm, t.media || 65);
+      });
+    });
+  }
+  /* Ejecutar al cargar y tras un setTimeout breve por si SQUAD_REGISTRY
+     se inicializa en applyEngineOverrides después que nosotros. */
+  try { _copaEnsureSquads(); } catch(_){}
+  setTimeout(function () { try { _copaEnsureSquads(); } catch(_){} }, 300);
+  setTimeout(function () { try { _copaEnsureSquads(); } catch(_){} }, 1500);
+
   function allPlayed(resList, n) {
     if (!resList || resList.length < n) return false;
     for (var i = 0; i < n; i++) {
@@ -1894,15 +1988,23 @@
       alert('No hay partidos IA pendientes en esta fase.');
       return;
     }
+    /* Lanzamos TODOS en paralelo (igual que Liga EA Sports al pulsar
+       SIM J{j} con varios IA-vs-IA pending). Stagger de 120 ms entre
+       cada uno para evitar que el motor de eventos rompa por
+       contención. iaSimLive tickea ~30 s por partido → todos terminan
+       en ~30 s total, no en 18 × 31 s = 9 minutos como antes. */
     var i = 0;
     function next() {
       if (i >= pending.length) return;
       var idx = pending[i++];
-      window.copaSimIA(ronda, idx, !!esVuelta);
-      var domId = 'csc-' + getResultKey(ronda, !!esVuelta) + '-' + idx;
-      var timer = _simTimers[domId];
-      var wait = timer ? 1000 : 31000;
-      setTimeout(next, wait + 500);
+      try {
+        if (typeof window.copaSimLive === 'function') {
+          window.copaSimLive(ronda, idx, !!esVuelta);
+        } else {
+          window.copaSimIA(ronda, idx, !!esVuelta);
+        }
+      } catch(_){}
+      setTimeout(next, 120);
     }
     next();
   };

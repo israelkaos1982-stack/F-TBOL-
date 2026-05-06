@@ -11224,6 +11224,23 @@
     } catch(_){}
   };
 
+  /* Supercopa de España: abre el gm-modal con comp='sc' (single-leg
+     con prórroga + penaltis si empate al 90'/120'). Marca _gm con
+     _isSc + _scKey + _scIdx para que gmEndMatch persista en
+     sc_state_v1 vía _scSaveHumanResult. 2026-05-05. */
+  window.abrirSc = function (home, away, isHvH, key, idx, stadium) {
+    gmOpen(0, home, away, !!isHvH, 'sc', false, false);
+    try {
+      if (window.__GM_LIVE) {
+        window.__GM_LIVE._isSc = true;
+        window.__GM_LIVE._scKey = key || 'sf';
+        window.__GM_LIVE._scIdx = idx || 0;
+        window.__GM_LIVE._scStadium = stadium || '';
+        window.__GM_LIVE.comp = 'sc';
+      }
+    } catch(_){}
+  };
+
   window.abrirAmistoso = function (home, away) {
     var isHvH = esHumano(home) && esHumano(away);
     gmOpen(0, home, away, isHvH, 'Amistoso', false, true); /* noET=false: amistosos pueden tener ET si HvH */
@@ -15810,6 +15827,11 @@ window.goLiveMatches = function() {
      etiquetar las cards en la pantalla DERBYS y enrutar los clicks
      pending al flujo previa específico de Superliga. */
   var SUPERLIGA_COMP = { name:'Superliga', ico:'⭐', color:'#a855f7', jornadaLabel:'Jornada' };
+  /* Info Supercopa de España para el scanner de derbys (sc_state_v1
+     no es un cal-* por lo que requiere un scanner ad-hoc).
+     2026-05-05: petición usuario — los SC humano-vs-humano son
+     "derbys" y deben aparecer en la pantalla DERBYS. */
+  var SC_DERBY_COMP = { name:'Supercopa de España', ico:'🏆', color:'#9900ee', jornadaLabel:'Ronda' };
 
   function _compInfoFromWrap(wrap) {
     var el = wrap;
@@ -16112,6 +16134,56 @@ window.goLiveMatches = function() {
               state: state,
               score: score
             });
+          });
+        });
+      }
+    } catch(_){}
+
+    /* (5) Scan de Supercopa de España — partidos de sc_state_v1
+           cuyos teams sean ambos humanos. Petición usuario 2026-05-05:
+           SC HvH son DERBYS y deben aparecer en la pantalla DERBYS.
+           Estado: pending si no jugado, finished si tiene gh/ga,
+           playing si __GM_LIVE coincide con el match. */
+    try {
+      var scRaw = localStorage.getItem('sc_state_v1');
+      var scSt = scRaw ? JSON.parse(scRaw) : null;
+      if (scSt) {
+        var scMatches = [];
+        if (scSt.semis && scSt.semis[0]) scMatches.push({ key:'sf', idx:0, m:scSt.semis[0], j:1 });
+        if (scSt.semis && scSt.semis[1]) scMatches.push({ key:'sf', idx:1, m:scSt.semis[1], j:1 });
+        if (scSt.final)                  scMatches.push({ key:'fin', idx:0, m:scSt.final,    j:2 });
+        scMatches.forEach(function(it){
+          var m = it.m;
+          if (!m || !m.home || !m.away) return;
+          var home = _normalizeHumanName(m.home);
+          var away = _normalizeHumanName(m.away);
+          /* Si CUALQUIER team no es humano, no es derby. */
+          if (!home || !away) return;
+          var state = 'pending';
+          var score = { a:'0', b:'0' };
+          if (m.played) {
+            state = 'finished';
+            var totA = (Number(m.gh)||0) + (Number(m.etGh)||0);
+            var totB = (Number(m.ga)||0) + (Number(m.etGa)||0);
+            score = { a: String(totA), b: String(totB) };
+          }
+          try {
+            var gm = window.__GM_LIVE;
+            if (gm && !gm.finished && gm.kickoffDone &&
+                (gm._isSc || gm.comp === 'sc') &&
+                String(gm.home||'').trim() === home &&
+                String(gm.away||'').trim() === away) {
+              state = 'playing';
+              if (gm.sc) score = { a: String(gm.sc.a||0), b: String(gm.sc.b||0) };
+            }
+          } catch(_){}
+          _addUnique({
+            source: 'sc',
+            home: home, away: away,
+            j: it.j,
+            comp: SC_DERBY_COMP,
+            state: state,
+            score: score
           });
         });
       }

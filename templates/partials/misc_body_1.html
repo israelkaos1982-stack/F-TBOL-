@@ -5478,7 +5478,18 @@ window._showSimProgress = function(opts, onDone){
       }
     } catch(_){}
     var psPj = ps ? Number(ps.pj||0) : -1;
-    if (ps && (psPj === teamPJ || psPj === 0)) {
+    /* 2026-05-06 fix Manchester City Cup: la rama `psPj === 0` mataba
+       las stats de Resto de Ligas + Copa. Si `ef_player_stats_v1`
+       tenía un entry stale `{pj:0, gol:0}` para "Manchester City ::
+       E. Haaland" (entry vacío de un sync previo), la condición
+       `psPj === teamPJ || psPj === 0` aceptaba el `psPj===0` y
+       devolvía `out.gol = ps.gol = 0` SIN intentar el fallback a
+       p.gol (que sí tenía los goles del cup). Resultado: el render
+       sobreescribía `p.gol = 0` y se perdían las stats.
+       Ahora: solo aceptamos `ps` cuando tiene datos REALES
+       (`psPj === teamPJ` Y `psPj > 0`). Si está vacío, fall-through
+       al objeto del jugador. */
+    if (ps && psPj === teamPJ && psPj > 0) {
       out.gol      = Number(ps.gol||0);
       out.pen      = Number(ps.pen||0);
       out.fk       = Number(ps.fk||0);

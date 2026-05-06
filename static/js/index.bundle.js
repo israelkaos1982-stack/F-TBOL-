@@ -5229,7 +5229,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       return;
     }
     var env = document.getElementById('pp-env');
-    var _ppStadium = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || 'eFootball Stadium') : 'eFootball Stadium';
+    /* Supercopa España (_ppCompKey 'sc'/'sc-final'): campo NEUTRAL
+       elegido por el admin en sc_state_v1.stadium — pasado vía
+       _ppPreviaTeams.stadium. NO usar el local. */
+    var _ppStadium;
+    if ((_ppCompKey === 'sc' || _ppCompKey === 'sc-final') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
+      _ppStadium = window._ppPreviaTeams.stadium;
+    } else {
+      _ppStadium = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || 'eFootball Stadium') : 'eFootball Stadium';
+    }
     /* Solo pintamos el estadio aquí — la estación (Verano/Invierno) y el
        clima (Sol/Lluvia/Nieve) los rellena `_mmInjectEnv()` 60 ms después
        a partir de la fecha real del calendario. Antes esta línea los
@@ -5466,7 +5474,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
     var COMP_LABELS = {
       'liga':'Liga EA Sports','copa':'Copa del Rey','copa-fin':'Copa del Rey · Final',
-      'sc':'Supercopa de España','sc-final':'Supercopa · Final',
+      'sc':'🏆 Semis Supercopa España','sc-final':'🏆 Final Supercopa España',
       'usc':'UEFA Super Cup','usc-fin':'UEFA Super Cup · Final',
       'ucl':'Champions League','ucl-fin':'Champions League · Final',
       'uel':'Europa League','uel-fin':'Europa League · Final',
@@ -9400,7 +9408,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   var MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   var COMP_LABELS_MM = {
     'liga':'Liga EA Sports','copa':'Copa del Rey','copa-fin':'Copa del Rey · Final',
-    'sc':'Supercopa de España','sc-final':'Supercopa · Final',
+    'sc':'🏆 Semis Supercopa España','sc-final':'🏆 Final Supercopa España',
     'usc':'UEFA Super Cup','usc-fin':'UEFA Super Cup · Final',
     'ucl':'Champions League','ucl-fin':'Champions League · Final',
     'uel':'Europa League','uel-fin':'Europa League · Final',

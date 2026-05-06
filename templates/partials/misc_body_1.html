@@ -10472,8 +10472,12 @@ window._showSimProgress = function(opts, onDone){
         + '<div class="restoligas-stats-val">' + (p[valLabel.field]||0) + '</div>'
         + '</div>';
     }
-    var visible = list.slice(0, 15).map(_row).join('');
-    var hidden  = list.slice(15).map(_row).join('');
+    var visible = list.slice(0, 15).map(function(p, i){ return _row(p, i); }).join('');
+    /* Pasamos `i + 15` para que la numeración del bloque oculto
+       continúe en 16, 17, 18… en vez de reiniciar en 1 (bug
+       reportado por el usuario 2026-05-06: el TOP 50 empezaba a
+       contar de cero al desplegar). */
+    var hidden  = list.slice(15).map(function(p, i){ return _row(p, i + 15); }).join('');
     var moreHtml = '';
     if(hidden){
       var sid = 'rls-' + String(valLabel.field || title).replace(/[^A-Za-z0-9_-]/g,'-');

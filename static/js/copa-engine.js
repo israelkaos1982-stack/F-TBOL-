@@ -2221,16 +2221,42 @@
     if (!sorteo.r1 || !sorteo.r1.length) {
       bannerHtml += '<button class="copa-btn-sortear" onclick="window.copaSortear(\'r1\')">🎯 Iniciar Copa — Sortear 1ª Ronda</button>';
     } else {
-      /* Si la ronda actual ya está confirmada y la siguiente no se ha
-         sorteado, mostramos botón para sortearla. */
+      /* helper local: ¿hay AL MENOS UN partido jugado en esta ronda?
+         (ida o vuelta para 2-leg, único para single-leg) */
+      function _anyPlayedIn(rd){
+        var ms = sorteo[rd] || [];
+        var twoLeg = !!TWO_LEG[rd];
+        var idaR = resultados[twoLeg ? rd + '_ida' : rd] || [];
+        var vtaR = resultados[rd + '_vta'] || [];
+        for (var k = 0; k < ms.length; k++) {
+          if (idaR[k] && idaR[k].jugado) return true;
+          if (twoLeg && vtaR[k] && vtaR[k].jugado) return true;
+        }
+        return false;
+      }
+      /* Botón "Sortear siguiente":
+           - Si la ronda actual YA está confirmada (`clasif.length > 0`)
+             y la siguiente no se ha sorteado → botón normal.
+           - Si la ronda NO está confirmada PERO tiene al menos 1 partido
+             jugado → botón especial (parcial · TBD pendientes) que
+             primero confirma parcialmente la ronda actual (creando
+             TBDs `@<rd>#N` para los matches no jugados) y luego sortea
+             la siguiente. Petición usuario 2026-05-06: las eliminatorias
+             siempre se pueden sortear aunque haya humanos pendientes
+             — el rival "está esperándole" como TBD en la siguiente
+             ronda. */
       for (var i = 0; i < ROUNDS.length - 1; i++) {
         var rd = ROUNDS[i];
         var nx = NEXT_ROUND[rd];
         if (!nx) break;
         var clasif = clasificados[rd] || [];
         var nextHasMatches = sorteo[nx] && sorteo[nx].length;
-        if (clasif.length && !nextHasMatches) {
+        if (nextHasMatches) continue;
+        if (clasif.length) {
           bannerHtml += '<button class="copa-btn-sortear" onclick="window.copaSortear(\'' + nx + '\')">🎯 Sortear ' + escapeHtml(ROUND_LABEL[nx] || nx) + '</button>';
+        } else if (_anyPlayedIn(rd)) {
+          /* Auto-clasificar parcial + sortear */
+          bannerHtml += '<button class="copa-btn-sortear" onclick="window.copaSortearConParcial(\'' + rd + '\',\'' + nx + '\')" style="background:rgba(255,213,74,.15);border-color:rgba(255,213,74,.7);color:#ffd54a;">🎯 Sortear ' + escapeHtml(ROUND_LABEL[nx] || nx) + ' (TBD pendientes)</button>';
         }
       }
       bannerHtml += '<button class="copa-btn-reset" onclick="window.copaReiniciar()" style="opacity:.6">🔄 Reiniciar Copa</button>';
@@ -2638,6 +2664,43 @@
       body: JSON.stringify({ ronda: ronda })
     }).then(function (r) { return r.json(); })
       .then(function (d) { if (d.ok) copaRender(d.copa); });
+  };
+
+  /* Combo "Confirmar parcial + Sortear siguiente" (2026-05-06).
+     Tras la regla del usuario "siempre se puede sortear ronda
+     siguiente aunque haya humanos pendientes", el banner de la
+     pantalla principal de Copa expone un botón "🎯 Sortear <next>
+     (TBD pendientes)" cuando la ronda actual tiene al menos un
+     partido jugado pero no se ha confirmado clasificados. Este
+     handler:
+       1. POST /api/copa/clasificar (ronda actual) → backend escribe
+          clasificados[rd] con TBDs `@<rd>#N` para matches no jugados.
+       2. Recibido d.copa, actualizamos _copa síncrono.
+       3. Llamamos copaSortear(nextRonda), que ya respeta TBDs vía
+          `_resolve` y `tbdMayBeHuman`.
+     Sin esto, el usuario tenía que ir manualmente a la pantalla
+     de la ronda y pulsar "✅ Confirmar parcial" — un paso extra
+     confuso que el usuario no sabía que existía. */
+  window.copaSortearConParcial = function (rondaActual, rondaSiguiente) {
+    fetch('/api/copa/clasificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ronda: rondaActual })
+    }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) {
+          alert('❌ No se pudo confirmar parcial de ' + (ROUND_LABEL[rondaActual] || rondaActual) + ': ' + (d.error || ''));
+          return;
+        }
+        _copa = d.copa || _copa;
+        copaRender(_copa);
+        /* Pequeño delay para que el usuario vea la ronda confirmada
+           antes de lanzar el overlay del sorteo siguiente. */
+        setTimeout(function(){ window.copaSortear(rondaSiguiente); }, 200);
+      })
+      .catch(function(){
+        alert('❌ Error de red al confirmar parcial. Vuelve a intentarlo.');
+      });
   };
 
   /* Reiniciar Copa requiere PIN admin 747 (petición usuario

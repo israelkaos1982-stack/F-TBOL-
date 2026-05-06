@@ -12007,17 +12007,15 @@
         try { if (typeof console !== 'undefined') console.warn('iaSimLive tick:', _eTick); } catch(_){}
       }
 
-      /* ET activación: tiene que dispararse EXACTAMENTE al min 90 (antes
-         del stoppage) para que el partido pase de 90'→120' en lugar de
-         quedarse en 90+stops y terminar. Antes del cambio a "1 game-min
-         = 1 sec real" + stoppage agregado al final, _etTopMin = 90 y la
-         comprobación `curMin >= _etTopMin` se hacía exactamente al 90.
-         Ahora _etTopMin puede ser 95+, así que separamos la rama ET. */
-      if (curMin === 90 && _isCopaSingleLeg && !_etActive && scA === scB && !_varActive) {
-        /* fallthrough: el bloque ET de abajo se ejecuta vía la siguiente
-           condición porque cae en curMin >= _etTopMin solo si _etTopMin=90.
-           Por simetría con el código existente, lo restauramos a 90 al
-           detectar que vamos a ET — así el bloque heredado se mantiene. */
+      /* ET activación: con curMin derivado del wall-clock, los ticks
+         pueden saltar (p.ej. 89 → 91 si el browser throttlea) — el
+         test estricto `curMin === 90` se perdía y el partido acababa
+         empatado sin prórroga (reportado por usuario 2026-05-05).
+         Ahora detectamos el CRUCE de los 90: cualquier curMin >= 90
+         con el match aún sin ET activada y empate dispara la
+         prórroga. _etTopMin se baja a 90 para que el bloque heredado
+         de ET también lo capte. */
+      if (curMin >= 90 && _isCopaSingleLeg && !_etActive && scA === scB && !_varActive) {
         _etTopMin = 90;
       }
       if (curMin >= _etTopMin && !_varActive) {
@@ -12025,7 +12023,7 @@
            a 120 (30 s extra a 1 game-min/sec) generando ET goals on-the-fly.
            Si sigue empate al 120, pre-rolleamos el ganador en penaltis
            y emitimos un evento "pen-result" para el acta. */
-        if (_isCopaSingleLeg && curMin === 90 && !_etActive && scA === scB) {
+        if (_isCopaSingleLeg && curMin >= 90 && curMin < 120 && !_etActive && scA === scB) {
           _etActive = true;
           _etTopMin = 120;
           /* Generar goles de ET con Poisson (lambda 0.5 cada lado) y

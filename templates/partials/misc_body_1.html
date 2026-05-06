@@ -5740,6 +5740,12 @@ window._showSimProgress = function(opts, onDone){
    semis o final, con el header en la parte superior. */
 #s-supercopa .sc-group{margin:10px 8px;padding:4px 4px 8px;border:1px solid rgba(240,192,64,.5);border-radius:14px;background:linear-gradient(180deg,rgba(240,192,64,.04),transparent 80%);box-shadow:0 0 18px rgba(240,192,64,.10);}
 #s-supercopa .sc-group .sc-card{margin:6px 6px;}
+/* Modificador para la FINAL: borde dorado más grueso, glow más
+   intenso y un pulse sutil para diferenciar la final de las semis. */
+#s-supercopa .sc-group.is-final{border:2px solid #ffd700;background:linear-gradient(180deg,rgba(255,215,0,.10),transparent 80%);box-shadow:0 0 28px rgba(255,215,0,.45),inset 0 0 18px rgba(255,215,0,.10);animation:scFinalPulse 2.4s ease-in-out infinite;}
+#s-supercopa .sc-group.is-final .sc-rondhdr{color:#ffd700;text-shadow:0 0 10px rgba(255,215,0,.6);}
+#s-supercopa .sc-group.is-final .sc-card{border:1.5px solid rgba(255,215,0,.85);box-shadow:0 0 14px rgba(255,215,0,.18);}
+@keyframes scFinalPulse{0%,100%{box-shadow:0 0 22px rgba(255,215,0,.40),inset 0 0 14px rgba(255,215,0,.08)}50%{box-shadow:0 0 36px rgba(255,215,0,.65),inset 0 0 22px rgba(255,215,0,.14)}}
 #s-supercopa .sc-card{margin:8px 10px;background:linear-gradient(135deg,#1a1400,#3a2c00 50%,#1a1400);border:1px solid rgba(240,192,64,.55);border-radius:12px;overflow:hidden;}
 #s-supercopa .sc-card.is-hvh{border-color:rgba(255,90,170,.7);box-shadow:0 0 14px rgba(255,80,160,.25);}
 #s-supercopa .sc-card.is-hvia{border-color:rgba(255,255,255,.5);}
@@ -5750,8 +5756,17 @@ window._showSimProgress = function(opts, onDone){
 #s-supercopa .sc-team-name{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.5px;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-weight:700;}
 #s-supercopa .sc-team-name.win{color:#5fe08a;text-shadow:0 0 12px rgba(95,224,138,.7);animation:scWinFlash 1.4s ease-in-out infinite;}
 #s-supercopa .sc-team-name.lose{color:#ff7070;text-decoration:line-through;text-decoration-color:rgba(255,112,112,.5);opacity:.75;}
-#s-supercopa .sc-elim{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:#ff5050;font-weight:700;margin-top:2px;}
-#s-supercopa .sc-passa{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:#5fe08a;font-weight:700;margin-top:2px;}
+/* Overlay champion full-screen: escudo grande + nombre + título + fuegos.
+   z-index 9997 < fireworks-canvas (9999) < celebracion-overlay (9998),
+   así los fuegos vuelan POR ENCIMA del escudo del campeón. */
+#sc-champion-ov{display:none;position:fixed;inset:0;z-index:9997;background:radial-gradient(circle at 50% 40%,rgba(255,215,0,.18) 0%,rgba(0,0,0,.92) 70%);align-items:center;justify-content:center;flex-direction:column;gap:18px;animation:scChampFade .35s ease-out;}
+#sc-champion-ov.show{display:flex;}
+#sc-champion-ov .sc-champ-shield{animation:scChampPop .8s cubic-bezier(.2,1.4,.6,1);filter:drop-shadow(0 0 24px rgba(255,215,0,.7));}
+#sc-champion-ov .sc-champ-shield img{width:140px;height:140px;object-fit:contain;}
+#sc-champion-ov .sc-champ-name{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:3px;color:#fff;text-shadow:0 0 18px rgba(255,215,0,.7);text-align:center;padding:0 16px;}
+#sc-champion-ov .sc-champ-title{font-family:Oswald,sans-serif;font-size:18px;letter-spacing:4px;color:#ffd700;text-shadow:0 0 10px rgba(255,215,0,.6);}
+@keyframes scChampFade{from{opacity:0}to{opacity:1}}
+@keyframes scChampPop{0%{transform:scale(.2);opacity:0}60%{transform:scale(1.15);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes scWinFlash{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5) drop-shadow(0 0 10px #5fe08a)}}
 #s-supercopa .sc-center{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px;flex-shrink:0;}
 #s-supercopa .sc-score{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#fff;letter-spacing:2px;line-height:1;background:rgba(0,0,0,.4);border-radius:8px;padding:4px 14px;border:1px solid rgba(255,255,255,.15);}
@@ -6020,6 +6035,38 @@ window._showSimProgress = function(opts, onDone){
     try { if(typeof window.humanIcon === 'function') return window.humanIcon(name) || ''; } catch(_){}
     return '';
   }
+  /* Petición usuario 2026-05-06: cuando un equipo se proclama campeón
+     de la Supercopa, saltan fuegos artificiales 3 s + overlay con
+     escudo grande + nombre del equipo + título ganado. Reutiliza
+     `lanzarFuegos` (canvas full-screen ya disponible globalmente). */
+  function _scShowChampionOv(name){
+    if(!name) return;
+    var ov = document.getElementById('sc-champion-ov');
+    if(!ov){
+      ov = document.createElement('div');
+      ov.id = 'sc-champion-ov';
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML = ''
+      + '<div class="sc-champ-shield">' + _shieldHtml(name, 140) + '</div>'
+      + '<div class="sc-champ-name">' + _humanIco(name) + _esc(name) + '</div>'
+      + '<div class="sc-champ-title">🏆 CAMPEÓN SUPERCOPA DE ESPAÑA</div>';
+    ov.classList.add('show');
+    /* Limpiar el texto por defecto del celebracion-overlay (que pone
+       "🏆 OBJETIVO CONSEGUIDO 🏆" en colores Bayern) durante la
+       celebración SC, para que no se mezcle con nuestro escudo +
+       título dorados. Se restaura después. */
+    var _bavTxt = document.getElementById('celebracion-txt');
+    var _prevTxt = '';
+    if(_bavTxt){ _prevTxt = _bavTxt.textContent; _bavTxt.textContent = ''; }
+    try { if(typeof window.lanzarFuegos === 'function') window.lanzarFuegos(3000); } catch(_){}
+    setTimeout(function(){
+      ov.classList.remove('show');
+      ov.innerHTML = '';
+      if(_bavTxt) _bavTxt.textContent = _prevTxt;
+    }, 4500);
+  }
+  window._scShowChampionOv = _scShowChampionOv;
   function _renderMatchCard(opts){
     var m = opts.match, key = opts.key, label = opts.label, idx = opts.idx;
     if(!m || !m.home || !m.away){
@@ -6040,9 +6087,9 @@ window._showSimProgress = function(opts, onDone){
       return '';
     }
     function teamSuffix(name){
-      if(!m.played) return '';
-      if(name === win) return '<div class="sc-passa">✅ PASA A FINAL</div>';
-      if(name === lose) return '<div class="sc-elim">❌ ELIMINADO</div>';
+      /* Petición usuario 2026-05-06: las labels "✅ PASA A FINAL" /
+         "❌ ELIMINADO" no son necesarias — el resultado y los
+         eventos ya cuentan la historia. Devolvemos string vacío. */
       return '';
     }
 
@@ -6158,7 +6205,7 @@ window._showSimProgress = function(opts, onDone){
       +   _renderMatchCard({match:s.semis[0], key:'sf', idx:0, label:'SF1'})
       +   _renderMatchCard({match:s.semis[1], key:'sf', idx:1, label:'SF2'})
       + '</div>'
-      + '<div class="sc-group">'
+      + '<div class="sc-group is-final">'
       +   '<div class="sc-rondhdr">🏆 FINAL SUPERCOPA ESPAÑA</div>'
       +   _renderMatchCard({match:s.final, key:'fin', idx:0, label:'Final'})
       + '</div>';
@@ -6365,6 +6412,13 @@ window._showSimProgress = function(opts, onDone){
     if(sb && sb.parentNode) sb.parentNode.removeChild(sb);
     window._scPendingPersist = null;
     _save(s);
+    /* Si la final acaba de terminar, dispara la celebración del
+       campeón (fuegos + escudo + título) — petición usuario
+       2026-05-06. */
+    if(key === 'fin'){
+      var champIa = _winnerOf(s.final);
+      if(champIa) _scShowChampionOv(champIa);
+    }
     _renderContent();
   };
 
@@ -6385,6 +6439,12 @@ window._showSimProgress = function(opts, onDone){
     m.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
     m.ts = Date.now();
     _save(s);
+    /* Petición usuario 2026-05-06: celebración del campeón al ganar
+       la final (humano). Misma rama que en _scPersistAfterIa. */
+    if(key === 'fin'){
+      var champHum = _winnerOf(s.final);
+      if(champHum) _scShowChampionOv(champHum);
+    }
     _renderContent();
   };
 

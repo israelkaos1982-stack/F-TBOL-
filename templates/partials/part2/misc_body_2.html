@@ -7739,8 +7739,10 @@
     var ov = document.getElementById('ml-stats-ov');
     if (!ov) { _mlStatsCallback(); return; }
     /* Cabecera: escudos, nombres, marcador */
-    document.getElementById('ml-stats-name-a').textContent = st.home;
-    document.getElementById('ml-stats-name-b').textContent = st.away;
+    var _hiSa = (typeof window.humanIcon === 'function') ? (window.humanIcon(st.home)||'') : '';
+    var _hiSb = (typeof window.humanIcon === 'function') ? (window.humanIcon(st.away)||'') : '';
+    document.getElementById('ml-stats-name-a').textContent = _hiSa + st.home;
+    document.getElementById('ml-stats-name-b').textContent = _hiSb + st.away;
     document.getElementById('ml-stats-sc-a').textContent = st.sc.a;
     document.getElementById('ml-stats-sc-b').textContent = st.sc.b;
     var lgo = typeof getLogoEquipo === 'function' ? getLogoEquipo : function(){return '';};
@@ -8626,8 +8628,12 @@
     var ov = document.getElementById('gm-ht-ov');
     if (!ov) return;
     document.getElementById('gm-ht-score').textContent = _gm.sc.a + ' - ' + _gm.sc.b;
-    document.getElementById('gm-ht-name-a').textContent = _gm.home;
-    document.getElementById('gm-ht-name-b').textContent = _gm.away;
+    /* Petición usuario 2026-05-06: prefijar nombre con icono humano
+       (vía window.humanIcon → 👿 FC Barcelona, etc.). */
+    var _hiHa = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.home)||'') : '';
+    var _hiHb = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.away)||'') : '';
+    document.getElementById('gm-ht-name-a').textContent = _hiHa + _gm.home;
+    document.getElementById('gm-ht-name-b').textContent = _hiHb + _gm.away;
     var logoA = document.getElementById('gm-ht-logo-a');
     var logoB = document.getElementById('gm-ht-logo-b');
     if (logoA) { logoA.src = _gmLogoUrl(_gm.home) || ''; }
@@ -8683,8 +8689,10 @@
       return;
     }
     document.getElementById('gm-fin-score').textContent = _gm.sc.a + ' - ' + _gm.sc.b;
-    document.getElementById('gm-fin-name-a').textContent = _gm.home;
-    document.getElementById('gm-fin-name-b').textContent = _gm.away;
+    var _hiFa = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.home)||'') : '';
+    var _hiFb = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.away)||'') : '';
+    document.getElementById('gm-fin-name-a').textContent = _hiFa + _gm.home;
+    document.getElementById('gm-fin-name-b').textContent = _hiFb + _gm.away;
     var logoA = document.getElementById('gm-fin-logo-a');
     var logoB = document.getElementById('gm-fin-logo-b');
     if (logoA) { logoA.src = _gmLogoUrl(_gm.home) || ''; }
@@ -10623,7 +10631,9 @@
   window.gmAplazarConfirm = function () {
     var min = Math.floor(_gm.timerSec / 60);
     var el = document.getElementById('gm-aplazar-modal');
-    document.getElementById('gm-aplazar-modal-teams').textContent = _gm.home + ' vs ' + _gm.away;
+    var _hiAa = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.home)||'') : '';
+    var _hiAb = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.away)||'') : '';
+    document.getElementById('gm-aplazar-modal-teams').textContent = _hiAa + _gm.home + ' vs ' + _hiAb + _gm.away;
     document.getElementById('gm-aplazar-modal-sc').textContent = _gm.sc.a + '-' + _gm.sc.b;
     document.getElementById('gm-aplazar-modal-min').textContent = min + "'";
     if (el) el.style.display = 'flex';
@@ -10651,7 +10661,9 @@
     var te = document.getElementById('gm-aplazar-modal-teams');
     var se = document.getElementById('gm-aplazar-modal-sc');
     var me = document.getElementById('gm-aplazar-modal-min');
-    if (te) te.textContent = (st.home || '?') + ' vs ' + (st.away || '?');
+    var _hiMa = (typeof window.humanIcon === 'function' && st.home) ? (window.humanIcon(st.home)||'') : '';
+    var _hiMb = (typeof window.humanIcon === 'function' && st.away) ? (window.humanIcon(st.away)||'') : '';
+    if (te) te.textContent = _hiMa + (st.home || '?') + ' vs ' + _hiMb + (st.away || '?');
     if (se) se.textContent = (st.sc ? st.sc.a : 0) + '-' + (st.sc ? st.sc.b : 0);
     if (me) me.textContent = min + "'";
     _aplazarMk = mk;
@@ -10764,8 +10776,10 @@
     }
     container.innerHTML = aplazados.map(function (p, i) {
       var min = Math.floor((p.timerSec || 0) / 60);
+      var _hiPa = (typeof window.humanIcon === 'function') ? (window.humanIcon(p.home)||'') : '';
+      var _hiPb = (typeof window.humanIcon === 'function') ? (window.humanIcon(p.away)||'') : '';
       return '<div class="gm-pend-card">'
-        + '<div class="gm-pend-teams">' + p.home + ' <span class="gm-pend-vs">vs</span> ' + p.away + '</div>'
+        + '<div class="gm-pend-teams">' + _hiPa + p.home + ' <span class="gm-pend-vs">vs</span> ' + _hiPb + p.away + '</div>'
         + '<div class="gm-pend-info">'
         + '<span class="gm-pend-sc">⚽ ' + p.sc.a + ' – ' + p.sc.b + '</span>'
         + '<span class="gm-pend-min">⏱ ' + min + "'</span>"
@@ -17301,7 +17315,9 @@ window.goLiveMatches = function() {
             var oldSet = _oldIds.gmBg[k] || {};
             var newEvents = window._mlNewEventsSinceLocal(bgSnap.events, oldSet);
             if (newEvents.length) {
-              var matchLbl = (bgSnap.home || '?') + ' vs ' + (bgSnap.away || '?');
+              var _hiBgA = (typeof window.humanIcon === 'function' && bgSnap.home) ? (window.humanIcon(bgSnap.home)||'') : '';
+              var _hiBgB = (typeof window.humanIcon === 'function' && bgSnap.away) ? (window.humanIcon(bgSnap.away)||'') : '';
+              var matchLbl = _hiBgA + (bgSnap.home || '?') + ' vs ' + _hiBgB + (bgSnap.away || '?');
               newEvents.forEach(function(ev){
                 var teamName = ev.team === 'a' ? bgSnap.home : bgSnap.away;
                 window._mlShowRemoteEventToast(ev, teamName, matchLbl);

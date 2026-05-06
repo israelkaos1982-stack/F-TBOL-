@@ -5376,9 +5376,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         + '<div class="pp-vs-mid" style="padding:10px 0 0;font-size:28px;">VS</div>'
         + durHtml
         + '</div>';
-      vs.innerHTML = '<div style="flex:1;text-align:center;min-width:0;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+home.toUpperCase()+'</div>'+_ppHomeAliasHtml+_formBtnHtml('home')+'</div>'
+      var _hiPvA = (typeof window.humanIcon === 'function') ? (window.humanIcon(home)||'') : '';
+      var _hiPvB = (typeof window.humanIcon === 'function') ? (window.humanIcon(away)||'') : '';
+      vs.innerHTML = '<div style="flex:1;text-align:center;min-width:0;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+_hiPvA+home.toUpperCase()+'</div>'+_ppHomeAliasHtml+_formBtnHtml('home')+'</div>'
         + centerHtml
-        + '<div style="flex:1;text-align:center;min-width:0;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+away.toUpperCase()+'</div>'+_ppAwayAliasHtml+_formBtnHtml('away')+'</div>';
+        + '<div style="flex:1;text-align:center;min-width:0;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+_hiPvB+away.toUpperCase()+'</div>'+_ppAwayAliasHtml+_formBtnHtml('away')+'</div>';
       /* Wire form buttons via addEventListener (more reliable on mobile than inline onclick) */
       ['home','away'].forEach(function(side) {
         var b = document.getElementById('pp-form-' + side);
@@ -9875,12 +9877,14 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var lA = _wizLogoUrl(teams.home);
     var lB = _wizLogoUrl(teams.away);
     var cardStyle = 'flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.15);border-radius:14px;padding:24px 12px 20px;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:Oswald,sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;color:#fff;text-align:center;';
+    var _hiTcA = (typeof window.humanIcon === 'function') ? (window.humanIcon(teams.home)||'') : '';
+    var _hiTcB = (typeof window.humanIcon === 'function') ? (window.humanIcon(teams.away)||'') : '';
     var teamCardA = '<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'a\')" style="'+cardStyle+'">'
       + (lA ? '<img src="'+lA+'" alt="'+teams.home+'" style="width:72px;height:72px;object-fit:contain;"/>' : '<span style="font-size:54px;line-height:1;">🛡️</span>')
-      + '<div>' + teams.home.toUpperCase() + '</div></div>';
+      + '<div>' + _hiTcA + teams.home.toUpperCase() + '</div></div>';
     var teamCardB = '<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'b\')" style="'+cardStyle+'">'
       + (lB ? '<img src="'+lB+'" alt="'+teams.away+'" style="width:72px;height:72px;object-fit:contain;"/>' : '<span style="font-size:54px;line-height:1;">🛡️</span>')
-      + '<div>' + teams.away.toUpperCase() + '</div></div>';
+      + '<div>' + _hiTcB + teams.away.toUpperCase() + '</div></div>';
     return teamCardA + teamCardB;
   }
 

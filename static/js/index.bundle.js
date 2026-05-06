@@ -973,13 +973,19 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
           if (!sideOk) return;
           var t = ev.type;
           if (t === 'amarilla') ta++;
-          else if (t === 'roja' || t === 'd-amarilla') tr++;
+          /* Doble amarilla = 2ª amarilla + roja por expulsión. Suma
+             a AMBOS contadores (petición usuario 2026-05-05): el
+             jugador se lleva 2 tarjetas en su acta personal. */
+          else if (t === 'd-amarilla') { ta++; tr++; }
+          else if (t === 'roja') tr++;
           else if (t === 'mvp') { mvp++; hasMvpInEvts = true; }
           else if (t === 'card') {
             /* Bundled flow legacy mapea amarilla/roja/d-amarilla → 'card'
-               + ico distintivo. 🟨 = amarilla; 🟥 / 🟨🟥 = roja. */
+               + ico distintivo. 🟨 = amarilla; 🟥 = roja directa;
+               🟨🟥 = doble amarilla (suma 1 amarilla + 1 roja). */
             var ico = String(ev.ico || '');
             if (ico === '🟨') ta++;
+            else if (ico === '🟨🟥') { ta++; tr++; }
             else tr++;
           }
         });

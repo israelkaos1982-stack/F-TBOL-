@@ -1447,7 +1447,11 @@
     var t = String(ev.type);
     if(t === 'gol' || t === 'pen-gol' || t === 'falta-gol') return ['goles-total', t];
     if(t === 'amarilla') return ['yel'];
-    if(t === 'roja' || t === 'd-amarilla') return ['red'];
+    /* Doble amarilla cuenta como amarilla + roja en stats del jugador
+       (petición usuario 2026-05-05). El jugador recibe 2 amarillas
+       y queda expulsado: ambas tarjetas suman al historial. */
+    if(t === 'd-amarilla') return ['yel', 'red'];
+    if(t === 'roja') return ['red'];
     if(t === 'pen-prov')    return ['pen-prov'];
     if(t === 'pen-fallo' || t === 'pen-fallado') return ['pen-fallado'];
     if(t === 'pen-parado')  return ['pen-parado'];
@@ -7683,18 +7687,30 @@
       for (var i=0;i<ev.length;i++){ if (ev[i] && ev[i].team===team && fn(ev[i])) n++; }
       return n;
     }
+    /* Doble amarilla = 2 tarjetas en la misma jugada (la 2ª amarilla
+       que el árbitro saca al jugador, lo que produce su expulsión).
+       Por tanto cuenta como +1 amarilla Y +1 roja en las stats del
+       equipo. Petición usuario 2026-05-05: TODAS las estadísticas
+       deben sumar la doble-amarilla como roja (antes el contador
+       de amarillas la ignoraba; el de rojas sí la cogía). */
+    function _isYellow(e){
+      return e && (e.type === 'amarilla' || e.type === 'd-amarilla' || e.dbl);
+    }
+    function _isRed(e){
+      return e && (e.type === 'roja' || e.type === 'd-amarilla' || e.dbl);
+    }
     return {
       a: {
         penGol:    by('a', function(e){ return e.type==='pen-gol'; }),
         faltaGol:  by('a', function(e){ return e.type==='falta-gol'; }),
-        amarillas: by('a', function(e){ return e.type==='amarilla'; }),
-        rojas:     by('a', function(e){ return e.type==='roja' || e.type==='d-amarilla'; })
+        amarillas: by('a', _isYellow),
+        rojas:     by('a', _isRed)
       },
       b: {
         penGol:    by('b', function(e){ return e.type==='pen-gol'; }),
         faltaGol:  by('b', function(e){ return e.type==='falta-gol'; }),
-        amarillas: by('b', function(e){ return e.type==='amarilla'; }),
-        rojas:     by('b', function(e){ return e.type==='roja' || e.type==='d-amarilla'; })
+        amarillas: by('b', _isYellow),
+        rojas:     by('b', _isRed)
       }
     };
   }

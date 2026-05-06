@@ -10894,7 +10894,12 @@
          engine de Copa al confirmar la vuelta. */
       var _isCopa = !!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin';
       var _isCopaSingleLeg = _isCopa && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
-      var _showET = (_gm.isHvH && !_gm.noET && !_isLiga) || _isCopaSingleLeg;
+      /* Supercopa España: el botón PRÓRROGA NO se muestra. El sistema
+         fuerza prórroga + penaltis automáticamente cuando hay empate
+         al pulsar FINALIZAR (rama _isScSL en gmEndMatch). Petición
+         usuario 2026-05-05: interface limpia como Copa HvIA. */
+      var _isScSL = !!_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final';
+      var _showET = ((_gm.isHvH && !_gm.noET && !_isLiga && !_isScSL) || _isCopaSingleLeg);
       etBtn.style.display = _showET ? '' : 'none';
       etBtn.disabled = !!_gm.etDone;
       etBtn.style.opacity = _gm.etDone ? '0.35' : '1';
@@ -10914,9 +10919,19 @@
     try {
       var stadEl = document.getElementById('gm-venue-stadium');
       if (stadEl) {
-        var stad = (typeof window.getTeamStadium === 'function')
-          ? (window.getTeamStadium(_gm.home) || 'eFootball Stadium')
-          : 'eFootball Stadium';
+        /* Supercopa de España: el partido se juega en CAMPO NEUTRAL
+           que el admin eligió en el setup (sc_state_v1.stadium).
+           Petición usuario 2026-05-05: NO mostrar el estadio del
+           local — esto es campo neutral. _gm._scStadium se rellena
+           desde abrirSc() vía window._gm._scStadium. */
+        var stad;
+        if (_gm._isSc && _gm._scStadium) {
+          stad = _gm._scStadium;
+        } else {
+          stad = (typeof window.getTeamStadium === 'function')
+            ? (window.getTeamStadium(_gm.home) || 'eFootball Stadium')
+            : 'eFootball Stadium';
+        }
         stadEl.textContent = stad;
       }
     } catch(_) {}

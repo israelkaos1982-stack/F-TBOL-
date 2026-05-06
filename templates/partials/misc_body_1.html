@@ -6037,16 +6037,19 @@ window._showSimProgress = function(opts, onDone){
     } else {
       var act;
       if(hHum || aHum){
-        act = '<button class="sc-action previa" onclick="window._scOpenMatch(\'' + key + '\',' + idx + ')">📋 PREVIA</button>';
+        act = '<button class="sc-action previa" onclick="window._scAbrirPrevia(\'' + key + '\',' + idx + ')">📋 PREVIA</button>';
         center = '<div class="sc-score">–</div>' + act;
       } else {
         /* IA vs IA: la card lleva los IDs que iaSimLive necesita
            (ia-sim-btn / ia-sc-...-a/b / ia-acta-...) para que el
            cronómetro suba EN VIVO igual que Liga EA Sports. El
            persistor (_scPersistAfterIa) se dispara automáticamente
-           desde el bundle al detectar el prefijo sc_. */
+           desde el bundle al detectar el prefijo sc_.
+           El click va a _scAbrirPrevia (igual que humanos) — la
+           previa muestra balón/canal Twitch/duración antes de
+           arrancar la sim, petición usuario 2026-05-05. */
         act = '<button class="sc-action simular" id="ia-sim-btn-' + mk
-            + '" onclick="window._scSimMatch(\'' + key + '\',' + idx + ')">▶ SIMULAR</button>';
+            + '" onclick="window._scAbrirPrevia(\'' + key + '\',' + idx + ')">▶ SIMULAR</button>';
         center = '<div class="sc-score">'
                +   '<span id="ia-sc-' + mk + '-a">0</span>–<span id="ia-sc-' + mk + '-b">0</span>'
                + '</div>' + act;
@@ -6132,60 +6135,90 @@ window._showSimProgress = function(opts, onDone){
   }
   window._scRender = function(){ _renderBanner(); _renderContent(); };
 
-  /* ── ACCIONES PARTIDO ── */
-  window._scOpenMatch = function(key, idx){
+  /* ── ACCIONES PARTIDO ──
+     Petición usuario 2026-05-05: TODOS los partidos de Supercopa
+     (IA-vs-IA, HvIA, HvH) pasan PRIMERO por la pantalla de PREVIA
+     (showPrePartidoOverlay del bundle) para confirmar Twitch /
+     balón / duración / forma. Tras pulsar "▶ COMENZAR PARTIDO":
+       · IA vs IA   → iaSimLive en vivo (mismo motor que Liga / Copa)
+       · HvIA / HvH → gm-modal vía window.abrirSc.
+     Patrón clonado de copaAbrirPrevia (copa-engine.js). */
+  window._scAbrirPrevia = function(key, idx){
     var s = _load();
     if(!s) return;
     var m = key === 'fin' ? s.final : s.semis[idx];
     if(!m || m.played) return;
     var hHum = _isHuman(m.home), aHum = _isHuman(m.away);
     var isHvH = hHum && aHum;
-    /* abrirSc vive en misc_body_2.html (mismo IIFE que gmOpen). Si la
-       pantalla se renderiza antes que ese IIFE termine, reintento hasta
-       1 s con backoff antes de avisar al usuario. */
-    var tries = 0;
-    function _try(){
-      if(typeof window.abrirSc === 'function'){
-        try { window.abrirSc(m.home, m.away, isHvH, key, idx, s.stadium || ''); }
-        catch(e){ try{console.error('[sc] abrirSc falló', e);}catch(_){} }
-        return;
-      }
-      if(tries++ < 6){
-        setTimeout(_try, 150 * tries);
+    var anyHuman = hHum || aHum;
+    var mk = 'sc_' + key + '_' + idx;
+    var compKey = (key === 'fin') ? 'sc-final' : 'sc';
+    var duracion = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
+      : (isHvH ? '15 min 45 s' : '9 min 45 s');
+
+    /* Memo para que showPrePartidoOverlay rellene el meta con los
+       equipos correctos. Igual que Liga/Copa. */
+    window._ppPreviaTeams = { home: m.home, away: m.away, j: 0, comp: compKey, scKey: key, scIdx: idx };
+    window._ppCustomCallback = function(){
+      window._ppPreviaTeams = null;
+      if(anyHuman){
+        /* Humano vs IA / Humano vs Humano: gm-modal full-screen
+           (abrirSc cablea _isSc / _scKey / _scIdx para que la rama
+           _isSc de gmEndMatch persista en sc_state_v1). */
+        var tries = 0;
+        function _go(){
+          if(typeof window.abrirSc === 'function'){
+            try { window.abrirSc(m.home, m.away, isHvH, key, idx, s.stadium || ''); }
+            catch(e){ try{console.error('[sc] abrirSc', e);}catch(_){} }
+            return;
+          }
+          if(tries++ < 6) setTimeout(_go, 150 * tries);
+          else alert('Motor de partidos no disponible. Recarga la página.');
+        }
+        _go();
       } else {
-        alert('Motor de partidos no disponible. Recarga la página.');
+        /* IA vs IA: iaSimLive en vivo sobre la card existente. El
+           render ya inyectó los IDs (ia-sim-btn-<mk>, ia-sc-<mk>-a/b,
+           ia-acta-<mk>). Persistencia automática vía la rama
+           __isScSimPersist del bundle → window._scPersistAfterIa. */
+        var actaEl = document.getElementById('ia-acta-' + mk);
+        if(actaEl) actaEl.style.display = 'block';
+        if(typeof window.iaSimLive === 'function'){
+          try { window.iaSimLive(mk, m.home, m.away, 0); return; }
+          catch(e){ try { console.warn('[sc] iaSimLive falló', e); } catch(_){} }
+        }
+        /* Fallback síncrono si iaSimLive no estuviera. */
+        if(typeof window._scSyncFallback === 'function'){
+          window._scSyncFallback(key, idx);
+        }
+      }
+    };
+
+    if(typeof window.showPrePartidoOverlay === 'function'){
+      window.showPrePartidoOverlay(mk, compKey, 'Sí', duracion, isHvH);
+    } else {
+      /* Sin overlay disponible — ejecutar callback directamente. */
+      if(typeof window._ppCustomCallback === 'function'){
+        var cb = window._ppCustomCallback;
+        window._ppCustomCallback = null;
+        cb();
       }
     }
-    _try();
   };
-  /* Simulación EN VIVO para Supercopa IA-vs-IA — usa el motor
-     iaSimLive de Liga EA Sports / Copa (cronómetro y eventos
-     visibles). El render de la card ya inserta los IDs que iaSimLive
-     necesita (ia-sim-btn-<mk>, ia-sc-<mk>-a/b, ia-acta-<mk>). El
-     persistor del bundle detecta el prefijo sc_ y llama a
-     window._scPersistAfterIa al terminar. Petición usuario
-     2026-05-05 ("la simulación como EA Sports / Copa").
-     Fallback síncrono si iaSimLive aún no está cargado al click. */
-  window._scSimMatch = function(key, idx){
+
+  /* Compat: handlers antiguos delegan al nuevo flujo previa-first. */
+  window._scOpenMatch = function(key, idx){ window._scAbrirPrevia(key, idx); };
+  window._scSimMatch  = function(key, idx){ window._scAbrirPrevia(key, idx); };
+
+  /* Fallback síncrono — solo se usa si iaSimLive no está disponible
+     (caso raro). Mismo cómputo que en el commit anterior: 90' Poisson
+     + ET on-the-fly + penaltis si sigue empate. */
+  window._scSyncFallback = function(key, idx){
     var s = _load();
     if(!s) return;
     var m = key === 'fin' ? s.final : s.semis[idx];
     if(!m || m.played) return;
-    var mk = 'sc_' + key + '_' + idx;
-    /* Reveal acta div ANTES de llamar a iaSimLive (el bundle lo
-       busca con display:'block' implícito al añadir filas). */
-    var actaEl = document.getElementById('ia-acta-' + mk);
-    if(actaEl) actaEl.style.display = 'block';
-    /* Si iaSimLive existe, ejecútalo en vivo. */
-    if(typeof window.iaSimLive === 'function'){
-      try {
-        window.iaSimLive(mk, m.home, m.away, 0);
-        return;
-      } catch(e){
-        try { console.warn('[sc] iaSimLive falló, cae a sync', e); } catch(_){}
-      }
-    }
-    /* Fallback: sim síncrona (si iaSimLive no está disponible). */
     /* 1. Score 90'. */
     var sim90;
     try {

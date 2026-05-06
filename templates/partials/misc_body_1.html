@@ -10850,8 +10850,11 @@ window._showSimProgress = function(opts, onDone){
 .lec-tie-leg b{font-family:'Bebas Neue',sans-serif;font-size:15px;color:#f0c040;text-align:center;letter-spacing:1px;}
 .lec-tie-leg span:nth-child(2){text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .lec-tie-leg span:nth-child(4){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.lec-tie-agg{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 4px 0;border-top:1px dashed rgba(255,255,255,.10);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);}
-.lec-tie-agg b{font-family:'Bebas Neue',sans-serif;font-size:18px;color:#5fe08a;letter-spacing:1.5px;}
+.lec-tie-agg{display:grid;grid-template-columns:36px 1fr 70px 1fr;align-items:center;gap:6px;margin-top:6px;padding:6px 0 2px;border-top:1px dashed rgba(255,255,255,.10);font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.85);}
+.lec-tie-agg .lec-tie-lbl{color:rgba(95,224,138,.75);}
+.lec-tie-agg span:nth-child(2){text-align:right;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lec-tie-agg span:nth-child(4){font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lec-tie-agg b{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#5fe08a;letter-spacing:1.5px;text-align:center;}
 .lec-tie-et,.lec-tie-pen{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:#ffd54a;text-align:center;padding:2px 0;}
 .lec-tie-winner{margin-top:4px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#5fe08a;text-align:center;font-weight:700;}
 .lec-final-card{margin:8px;padding:14px 12px;background:linear-gradient(135deg,#1a1400,#3a2c00 50%,#1a1400);border:1.5px solid rgba(240,192,64,.55);border-radius:12px;}
@@ -15683,10 +15686,16 @@ Tottenham
   function _lecRenderTie2Leg(c){
     var penTxt = c.pen ? '<div class="lec-tie-pen">PEN ' + _lecEsc(c.pen) + '</div>' : '';
     var etTxt = (c.et && (c.et.a || c.et.b)) ? '<div class="lec-tie-et">PRÓRROGA · ' + c.et.a + '–' + c.et.b + '</div>' : '';
+    /* GLOBAL muestra los nombres explícitos (petición usuario
+       2026-05-06). aggH=goles totales del tieHome (1º de grupo,
+       local en la VUELTA). aggA=goles totales del tieAway (2º del
+       otro grupo, local en la IDA). El orden de la fila es
+       `tieHome  aggH-aggA  tieAway` para que case con la VUELTA
+       (que es la última jugada y donde se decidió la eliminatoria). */
     return '<div class="lec-tie-card">'
       + '<div class="lec-tie-leg"><span class="lec-tie-lbl">IDA</span><span>' + _lecEsc(c.tieAway) + '</span><b>' + c.ida.gh + '–' + c.ida.ga + '</b><span>' + _lecEsc(c.tieHome) + '</span></div>'
       + '<div class="lec-tie-leg"><span class="lec-tie-lbl">VTA</span><span>' + _lecEsc(c.tieHome) + '</span><b>' + c.vta.gh + '–' + c.vta.ga + '</b><span>' + _lecEsc(c.tieAway) + '</span></div>'
-      + '<div class="lec-tie-agg"><span>GLOBAL</span><b>' + (c.aggH) + '–' + (c.aggA) + '</b></div>'
+      + '<div class="lec-tie-agg"><span class="lec-tie-lbl">GLOBAL</span><span>' + _lecEsc(c.tieHome) + '</span><b>' + (c.aggH) + '–' + (c.aggA) + '</b><span>' + _lecEsc(c.tieAway) + '</span></div>'
       + etTxt + penTxt
       + '<div class="lec-tie-winner">🏆 ' + _lecEsc(c.winner) + ' clasifica</div>'
       + '</div>';
@@ -15800,8 +15809,27 @@ Tottenham
     }
   };
   window.lextCopaOpen = function(){
+    /* 2026-05-06 flash-fix: el patrón previo `go(); setTimeout(render,30)`
+       dejaba ver durante ~30 ms (y a veces mucho más en móvil
+       lento) la pantalla con los datos de la COPA ANTERIOR (p.ej.
+       inglesa) antes de re-renderizarse con los de la actual
+       (italiana). Solución:
+         1. Limpiar el body de cualquier render anterior.
+         2. Resetear título/logo a placeholder.
+         3. Renderizar SÍNCRONO con CURRENT_KEY ya apuntando a la
+            liga activa (lo establece openLigaExt al entrar).
+         4. Solo después llamar a go() para pintar la pantalla.
+       Así el usuario nunca ve la copa de otra liga. */
+    var body = document.getElementById('lec-body');
+    if(body) body.innerHTML = '';
+    var rb = document.getElementById('lec-reglas-body');
+    if(rb){ rb.style.display = 'none'; rb.innerHTML = ''; }
+    var title = document.getElementById('lec-cup-title');
+    var logo = document.getElementById('lec-cup-logo');
+    if(title) title.textContent = '';
+    if(logo){ logo.src = ''; logo.style.display = 'none'; }
+    try { _lecRender(); } catch(_){}
     if(typeof window.go === 'function') window.go('s-lext-copa');
-    setTimeout(_lecRender, 30);
   };
 
 })();

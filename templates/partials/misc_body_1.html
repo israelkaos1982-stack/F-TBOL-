@@ -4567,19 +4567,22 @@ window._showSimProgress = function(opts, onDone){
               });
             }
           } catch(_){}
-          /* TEAM_STADIUMS: importar el estadio del equipo si el admin
-             eligió uno en el editor. Sin esto, `getTeamStadium('Backa
-             Topola')` devolvía '' y la barra de venue del gm-modal
-             caía al placeholder "eFootball Stadium". Solo lo seteamos
-             si todavía no hay entrada para no pisar mapeos hardcoded
-             (Liga EA, internacionales). */
+          /* TEAM_STADIUMS: el estadio guardado por el admin en el
+             editor de su liga es la fuente de verdad — DEBE pisar
+             el mapeo hardcoded de index.bundle.js. Antes había un
+             guard `!window.TEAM_STADIUMS[name]` que conservaba los
+             defaults: si el admin cambiaba At. Sanluqueño de
+             "ESTADIO URBANO CALDEIRA" (default) a "Sports Park"
+             (su elección), `getTeamStadium` seguía devolviendo el
+             default y la previa pintaba el equivocado.
+             Petición usuario 2026-05-05: el admin manda. */
           try {
             window.TEAM_STADIUMS = window.TEAM_STADIUMS || {};
             var _stad = (t && t.stadium) ? String(t.stadium).trim() : '';
-            if (_stad && !window.TEAM_STADIUMS[name]) {
+            if (_stad) {
               window.TEAM_STADIUMS[name] = _stad;
               _namesForAlias(name).forEach(function(al){
-                if (!window.TEAM_STADIUMS[al]) window.TEAM_STADIUMS[al] = _stad;
+                window.TEAM_STADIUMS[al] = _stad;
               });
             }
           } catch(_){}

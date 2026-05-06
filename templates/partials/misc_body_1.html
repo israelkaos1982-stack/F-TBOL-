@@ -10895,6 +10895,14 @@ window._showSimProgress = function(opts, onDone){
 .lec-rules{padding:10px 14px;font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.55;color:rgba(255,255,255,.78);background:rgba(176,144,255,.05);border:1px dashed rgba(176,144,255,.30);border-radius:8px;margin:6px 8px 0;}
 .lec-rules h4{font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.8px;color:#b090ff;margin:8px 0 4px;font-weight:700;}
 .lec-rules p{margin:4px 0 8px;}
+.lec-recopa-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;background:rgba(0,0,0,.25);margin:4px 0;-webkit-tap-highlight-color:transparent;}
+.lec-recopa-lbl{flex:1;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,.85);}
+.lec-recopa-val{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;min-width:36px;text-align:center;border-radius:6px;padding:2px 10px;}
+.lec-recopa-val.fixed{color:#5fe08a;background:rgba(95,224,138,.10);border:1px solid rgba(95,224,138,.35);}
+.lec-recopa-val.toggle{cursor:pointer;border:1px dashed rgba(255,255,255,.30);transition:all .14s;}
+.lec-recopa-val.toggle.on{color:#5fe08a;background:rgba(95,224,138,.10);border-color:rgba(95,224,138,.55);border-style:solid;}
+.lec-recopa-val.toggle.off{color:rgba(255,255,255,.45);background:rgba(255,255,255,.04);}
+.lec-recopa-row:hover .lec-recopa-val.toggle{filter:brightness(1.18);}
 #lec-champion-ov{display:none;position:fixed;inset:0;z-index:9997;background:radial-gradient(circle at 50% 40%,rgba(255,215,0,.18) 0%,rgba(0,0,0,.92) 70%);align-items:center;justify-content:center;flex-direction:column;gap:18px;animation:scChampFade .35s ease-out;}
 #lec-champion-ov.show{display:flex;}
 #lec-champion-ov .lec-champ-shield img{filter:drop-shadow(0 0 24px rgba(255,215,0,.7));animation:scChampPop .8s cubic-bezier(.2,1.4,.6,1);}
@@ -15796,29 +15804,58 @@ Tottenham
       saveData(CURRENT_KEY, data);
       _lecRender();
     },
+    /* Alterna 0/1 plazas del subcampeón a Recopa de Europa. Persiste
+       en data.config.recopaSubcampeon (boolean) y re-renderiza solo
+       el bloque de Reglas para reflejar el cambio. */
+    toggleSubcampeon: function(){
+      if(!CURRENT_KEY) return;
+      var data = loadData(CURRENT_KEY);
+      if(!data) return;
+      if(!data.config) data.config = {};
+      data.config.recopaSubcampeon = !data.config.recopaSubcampeon;
+      saveData(CURRENT_KEY, data);
+      _lecRenderReglas();
+    },
     toggleReglas: function(){
       var rb = document.getElementById('lec-reglas-body');
       if(!rb) return;
       var open = rb.style.display && rb.style.display !== 'none';
       if(open){ rb.style.display = 'none'; return; }
-      var data = CURRENT_KEY ? loadData(CURRENT_KEY) : null;
-      var fmt = data ? _lecDetectFormat(data) : 0;
-      rb.innerHTML = '<div class="lec-rules">'
-        + '<h4>📜 Formato</h4>'
-        + '<p>' + _lecFormatBlurb(fmt) + '</p>'
-        + '<h4>⚔️ Eliminatorias</h4>'
-        + '<p>Cuartos y semis (cuando aplican): <b>doble partido</b>; el 1º de grupo juega la VUELTA en su campo. Empate global → prórroga + penaltis en la vuelta.</p>'
-        + '<p>Cuando el formato lleva semis a partido único (Andorra): empate al 90\' → prórroga + penaltis.</p>'
-        + '<h4>🏆 Final</h4>'
-        + '<p>Partido único con simulación IA-vs-IA en directo (1 minuto = 1 segundo real). Si hay empate al 90\' → prórroga + penaltis automáticos.</p>'
-        + '<h4>📊 Stats automáticas</h4>'
-        + '<p>Cada gol, MVP, tarjeta amarilla/roja, imbatida y penalti se suma <b>automáticamente</b> al jugador en su plantilla del ligaExt — la cuenta es <b>una sola</b> con la liga.</p>'
-        + '<h4>🛡 Recopa de Europa</h4>'
-        + '<p>El campeón de cada copa nacional clasifica a la <b>Recopa de Europa</b> (integración con la pantalla "EA Sports → Europa" se hará en una iteración posterior).</p>'
-        + '</div>';
+      _lecRenderReglas();
       rb.style.display = '';
     }
   };
+  /* Reglas compactas (petición usuario 2026-05-06): el bloque largo
+     anterior tenía 5 secciones (Formato, Eliminatorias, Final, Stats
+     automáticas, Recopa de Europa) que el usuario consideró
+     "innecesarias de ver". Ahora solo:
+       1. Una línea con el formato detectado por nº de equipos.
+       2. Plazas a Recopa de Europa: Campeón = 1 (fijo, siempre).
+          Subcampeón = 0 ó 1, configurable por el admin via toggle
+          (persistido en data.config.recopaSubcampeon — booleano).
+     El toggle alterna entre "0" y "1" al pulsar el chip; saveData
+     guarda el cambio inmediatamente en el ligaExt_<slug>. */
+  function _lecRenderReglas(){
+    var rb = document.getElementById('lec-reglas-body');
+    if(!rb) return;
+    var data = CURRENT_KEY ? loadData(CURRENT_KEY) : null;
+    var fmt = data ? _lecDetectFormat(data) : 0;
+    var sub = !!(data && data.config && data.config.recopaSubcampeon);
+    rb.innerHTML = '<div class="lec-rules">'
+      + '<h4>📜 Formato</h4>'
+      + '<p>' + _lecFormatBlurb(fmt) + '</p>'
+      + '<h4>🛡 Recopa de Europa · Plazas</h4>'
+      + '<div class="lec-recopa-row">'
+      +   '<span class="lec-recopa-lbl">🏆 Campeón</span>'
+      +   '<span class="lec-recopa-val fixed">1</span>'
+      + '</div>'
+      + '<div class="lec-recopa-row" onclick="window._lecCopa&&window._lecCopa.toggleSubcampeon&&window._lecCopa.toggleSubcampeon()" style="cursor:pointer;" title="Pulsa para alternar 0 / 1">'
+      +   '<span class="lec-recopa-lbl">🥈 Subcampeón</span>'
+      +   '<span class="lec-recopa-val toggle ' + (sub ? 'on' : 'off') + '" id="lec-recopa-sub-val">' + (sub ? '1' : '0') + '</span>'
+      + '</div>'
+      + '<p style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;">Pulsa el "0/1" del subcampeón para alternar si va a Recopa.</p>'
+      + '</div>';
+  }
   window.lextCopaOpen = function(){
     /* 2026-05-06 flash-fix: el patrón previo `go(); setTimeout(render,30)`
        dejaba ver durante ~30 ms (y a veces mucho más en móvil

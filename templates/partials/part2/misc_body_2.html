@@ -18935,30 +18935,34 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 
-<!-- ── Spinner de "Procesando…" tras FINALIZAR ───────────────────
-     El cierre del partido encadena overlays (stats → MVP → post)
-     y entre uno y otro pueden pasar 1-5 s sin nada visible en
-     pantalla, lo que hacía pensar al usuario que la app se había
-     bloqueado. Mostramos este spinner inmediatamente al pulsar
-     FINALIZAR / CONFIRMAR y lo ocultamos en cuanto aparece
-     cualquier overlay (.show) o tras un timeout de seguridad. -->
+<!-- ── Barra de progreso "Procesando…" tras FINALIZAR ─────────────
+     Reemplaza al spinner antiguo: barra determinista 0→100 % que se
+     llena en ~400 ms reales. El usuario ve avance inmediato en lugar
+     de un spinner indefinido (reportado 2026-05-05: la sensación
+     era de "se ha quedado colgado"). El overlay se auto-cierra al
+     llegar la siguiente pantalla (stats / MVP / post) o al timeout
+     duro a 500 ms — lo que ocurra antes. -->
 <div id="ml-loading-ov" aria-hidden="true">
   <div class="ml-loading-card">
-    <div class="ml-loading-spinner"></div>
     <div class="ml-loading-text" id="ml-loading-text">Procesando partido…</div>
+    <div class="ml-loading-bar-wrap">
+      <div class="ml-loading-bar" id="ml-loading-bar"></div>
+    </div>
+    <div class="ml-loading-pct" id="ml-loading-pct">0%</div>
   </div>
 </div>
 <style>
 #ml-loading-ov{display:none;position:fixed;inset:0;z-index:100020;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:20px;}
 #ml-loading-ov.show{display:flex;}
-#ml-loading-ov .ml-loading-card{display:flex;flex-direction:column;align-items:center;gap:16px;padding:26px 30px;background:linear-gradient(170deg,#0b1320,#101a2e);border:1px solid rgba(240,192,64,.4);border-radius:14px;box-shadow:0 0 32px rgba(0,0,0,.7),0 0 24px rgba(240,192,64,.18);}
-#ml-loading-ov .ml-loading-spinner{width:42px;height:42px;border-radius:50%;border:3px solid rgba(240,192,64,.18);border-top-color:#f0c040;animation:mlLoadSpin .85s linear infinite;}
-@keyframes mlLoadSpin{to{transform:rotate(360deg)}}
+#ml-loading-ov .ml-loading-card{display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px 30px;min-width:260px;background:linear-gradient(170deg,#0b1320,#101a2e);border:1px solid rgba(240,192,64,.4);border-radius:14px;box-shadow:0 0 32px rgba(0,0,0,.7),0 0 24px rgba(240,192,64,.18);}
 #ml-loading-ov .ml-loading-text{font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;color:#f0c040;text-align:center;text-transform:uppercase;}
+#ml-loading-ov .ml-loading-bar-wrap{position:relative;width:240px;height:10px;border-radius:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);overflow:hidden;}
+#ml-loading-ov .ml-loading-bar{height:100%;width:0%;background:linear-gradient(90deg,#88dd00 0%,#f0c040 50%,#ffe080 100%);background-size:200% 100%;border-radius:6px;transition:width .12s linear;box-shadow:0 0 8px rgba(240,192,64,.55);}
+#ml-loading-ov .ml-loading-pct{font-family:'Bebas Neue',Oswald,sans-serif;font-size:18px;line-height:1;color:#f0c040;letter-spacing:1.5px;}
 </style>
 <script>
 (function(){
-  var ov, _safety, _tHide;
+  var ov, _safety, _anim;
   function _el(){ ov = ov || document.getElementById('ml-loading-ov'); return ov; }
   function _show(text){
     var e = _el(); if (!e) return;
@@ -18966,20 +18970,43 @@ document.addEventListener('DOMContentLoaded', function() {
       var tEl = document.getElementById('ml-loading-text');
       if (tEl) tEl.textContent = text;
     }
+    var bar = document.getElementById('ml-loading-bar');
+    var pct = document.getElementById('ml-loading-pct');
+    if (bar) bar.style.width = '0%';
+    if (pct) pct.textContent = '0%';
     e.classList.add('show');
-    /* Timeout de seguridad: si por algún motivo ningún overlay
-       siguiente aparece, cerramos el spinner enseguida. Reportado
-       2026-05-02 por el usuario: el spinner se quedaba pegado hasta
-       20 s en algunos casos; bajamos el safety a 600 ms y el flujo
+    /* Animación de la barra: avanza 0 → 100 % en 400 ms con ticks
+       cada 20 ms (~5 % por tick). Si la siguiente pantalla aparece
+       antes, _hide() corta la animación. Petición usuario: lo más
+       rápido posible — antes el overlay aguantaba hasta 600 ms con
+       un spinner indefinido. */
+    if (_anim) { try { clearInterval(_anim); } catch(_){} _anim = null; }
+    var pctVal = 0;
+    var t0 = Date.now();
+    var DURATION = 400;
+    _anim = setInterval(function(){
+      var elapsed = Date.now() - t0;
+      pctVal = Math.min(100, Math.round((elapsed / DURATION) * 100));
+      if (bar) bar.style.width = pctVal + '%';
+      if (pct) pct.textContent = pctVal + '%';
+      if (pctVal >= 100) {
+        try { clearInterval(_anim); } catch(_){} _anim = null;
+        /* Auto-hide cuando la barra llena, da margen 60 ms para
+           que el usuario vea el 100 %. */
+        setTimeout(_hide, 60);
+      }
+    }, 20);
+    /* Timeout duro de seguridad: 500 ms (antes 600). El flujo
        siguiente debe asegurar que el siguiente overlay aparece
        dentro de ese rango (vía defer-work + más targets). */
     if (_safety) clearTimeout(_safety);
-    _safety = setTimeout(_hide, 600);
+    _safety = setTimeout(_hide, 500);
   }
   function _hide(){
     var e = _el(); if (!e) return;
     e.classList.remove('show');
     if (_safety) { clearTimeout(_safety); _safety = null; }
+    if (_anim) { try { clearInterval(_anim); } catch(_){} _anim = null; }
   }
   window._mlShowLoading = _show;
   window._mlHideLoading = _hide;

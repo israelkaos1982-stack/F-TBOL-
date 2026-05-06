@@ -18016,35 +18016,143 @@ document.addEventListener('DOMContentLoaded', function() {
     }).join('');
   };
 
+  /* Ball Storage editable (petición usuario 2026-05-05).
+     - Cada competición lleva un <select> con TODOS los balones
+       guardados en el inventario. Cambiar el selector persiste
+       en localStorage `ball_by_comp_v1` y los partidos humanos
+       de esa comp pasan a usarlo automáticamente (vía override
+       en bundle COMP_BALL).
+     - Botón "+ Añadir balón" añade un balón al inventario.
+     - Botón "🗑" en cada balón del inventario lo elimina.
+     - El inventario inicial se siembra desde BALL_DB (los 14
+       balones del spec). El admin puede ampliarlo/reducirlo a
+       medida que eFootball publica balones nuevos. */
+  var _BALL_INV_KEY = 'ball_inventory_v1';
+  var _BALL_OVERRIDE_KEY = 'ball_by_comp_v1';
+  function _loadBallInventory(){
+    try {
+      var raw = localStorage.getItem(_BALL_INV_KEY);
+      if (raw) {
+        var arr = JSON.parse(raw);
+        if (Array.isArray(arr) && arr.length) return arr;
+      }
+    } catch(_){}
+    /* Semilla: ids únicos de BALL_DB. */
+    var seed = [];
+    var seen = {};
+    (window.BALL_DB || []).forEach(function(b){
+      if (b && b.id && !seen[b.id]) { seen[b.id] = 1; seed.push(b.id); }
+    });
+    try { localStorage.setItem(_BALL_INV_KEY, JSON.stringify(seed)); } catch(_){}
+    return seed;
+  }
+  function _saveBallInventory(arr){
+    try { localStorage.setItem(_BALL_INV_KEY, JSON.stringify(arr)); } catch(_){}
+  }
+  function _loadBallOverride(){
+    try { var raw = localStorage.getItem(_BALL_OVERRIDE_KEY); if (raw) return JSON.parse(raw)||{}; } catch(_){}
+    return {};
+  }
+  function _saveBallOverride(map){
+    try { localStorage.setItem(_BALL_OVERRIDE_KEY, JSON.stringify(map||{})); } catch(_){}
+  }
+
+  window.adminBallSetForComp = function(compKey, ballId){
+    var ov = _loadBallOverride();
+    if (!ballId) delete ov[compKey];
+    else ov[compKey] = ballId;
+    _saveBallOverride(ov);
+  };
+  window.adminBallAdd = function(){
+    var name = window.prompt('Nuevo balón (ID exacto, formato Nombre_Con_Guiones_Bajos):');
+    if (!name) return;
+    name = String(name).trim().replace(/\s+/g,'_');
+    if (!name) return;
+    var inv = _loadBallInventory();
+    if (inv.indexOf(name) !== -1) { alert('Ese balón ya está en el inventario.'); return; }
+    inv.push(name);
+    _saveBallInventory(inv);
+    window.adminRenderBalls();
+  };
+  window.adminBallDelete = function(ballId){
+    if (!ballId) return;
+    if (!confirm('¿Eliminar el balón "' + ballId + '" del inventario?\n\nLas competiciones que lo tenían asignado caerán al balón por defecto del spec.')) return;
+    var inv = _loadBallInventory();
+    var i = inv.indexOf(ballId);
+    if (i === -1) return;
+    inv.splice(i, 1);
+    _saveBallInventory(inv);
+    /* Limpia el override de las comps que lo tuvieran asignado. */
+    var ov = _loadBallOverride();
+    Object.keys(ov).forEach(function(k){ if (ov[k] === ballId) delete ov[k]; });
+    _saveBallOverride(ov);
+    window.adminRenderBalls();
+  };
+
   window.adminRenderBalls = function () {
     var container = document.getElementById('balls-list');
     if (!container) return;
     var env = window.adminGetEnvironment();
     var snowActive = env.snow;
-    container.innerHTML = '<div class="admin-env-panel" style="margin:0 0 12px;">'
+    var inv = _loadBallInventory();
+    var ov  = _loadBallOverride();
+
+    function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+    var html = '<div class="admin-env-panel" style="margin:0 0 12px;">'
       + '<div class="admin-env-title">ENTORNO HOY · ' + _todayISODate() + '</div>'
       + '<div style="padding:8px 0 0;display:flex;gap:8px;flex-wrap:wrap;">'
       + '<span class="admin-env-badge">' + (env.tod==='SNOW'?'❄️':env.tod==='SOLEADO'?'☀️':'🌙') + ' ' + env.tod + '</span>'
       + (snowActive ? '<span class="admin-env-badge" style="color:#4de;border-color:rgba(40,200,220,.3);">Balón Override: eFootball_MAX_VIS_26</span>' : '')
-      + '</div></div>'
-      + '<div style="border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;">'
-      + window.BALL_DB.map(function (b, i) {
-          var isSnow = snowActive && b.key === 'snow';
-          var bg = isSnow ? 'rgba(40,200,220,.1)' : (i%2===0?'rgba(255,255,255,.03)':'transparent');
-          var ballIco = b.cat.indexOf('❄️')!==-1?'❄️':b.cat.indexOf('🤝')!==-1?'🤝':'⚽';
-          return '<div style="display:flex;align-items:center;gap:0;background:' + bg + ';border-bottom:1px solid rgba(255,255,255,.05);">'
-            + '<div style="padding:10px 10px 10px 12px;font-size:18px;flex-shrink:0;">' + ballIco + '</div>'
-            + '<div style="flex:1;padding:8px 6px;border-left:1px solid rgba(255,255,255,.05);min-width:0;">'
-            + '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.65);">' + b.comp + '</div>'
-            + '<div style="font-family:\'Courier New\',monospace;font-size:10px;color:rgba(80,180,255,.8);word-break:break-all;">' + b.id + '</div>'
-            + '</div>'
-            + '<div style="flex-shrink:0;padding:8px 10px;border-left:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;text-align:right;">'
-            + b.luz
-            + (isSnow ? ' <span style="color:#4de;font-weight:700;">●ACTIVO</span>' : '')
-            + '</div>'
-            + '</div>';
-        }).join('')
-      + '</div>';
+      + '</div></div>';
+
+    /* Lista por competición — cada fila lleva su <select> con todo
+       el inventario disponible. */
+    html += '<div style="border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;">';
+    html += window.BALL_DB.map(function (b, i) {
+      var isSnow = snowActive && b.key === 'snow';
+      var bg = isSnow ? 'rgba(40,200,220,.1)' : (i%2===0?'rgba(255,255,255,.03)':'transparent');
+      var ballIco = b.cat.indexOf('❄️')!==-1?'❄️':b.cat.indexOf('🤝')!==-1?'🤝':'⚽';
+      var current = (ov[b.key] && inv.indexOf(ov[b.key]) !== -1) ? ov[b.key] : b.id;
+      var opts = inv.map(function(it){
+        var sel = (it === current) ? ' selected' : '';
+        return '<option value="' + _esc(it) + '"' + sel + '>' + _esc(it) + '</option>';
+      }).join('');
+      return '<div style="display:flex;align-items:center;gap:0;background:' + bg + ';border-bottom:1px solid rgba(255,255,255,.05);">'
+        + '<div style="padding:10px 10px 10px 12px;font-size:18px;flex-shrink:0;">' + ballIco + '</div>'
+        + '<div style="flex:1;padding:8px 6px;border-left:1px solid rgba(255,255,255,.05);min-width:0;">'
+        +   '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.65);">' + _esc(b.comp) + '</div>'
+        +   '<select onchange="window.adminBallSetForComp(\'' + b.key + '\', this.value)" '
+        +          'style="margin-top:3px;width:100%;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:6px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:11px;padding:4px 6px;">'
+        +     opts
+        +   '</select>'
+        + '</div>'
+        + '<div style="flex-shrink:0;padding:8px 10px;border-left:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;text-align:right;">'
+        +   _esc(b.luz)
+        +   (isSnow ? ' <span style="color:#4de;font-weight:700;">●ACTIVO</span>' : '')
+        + '</div>'
+        + '</div>';
+    }).join('');
+    html += '</div>';
+
+    /* Inventario administrable: lista plana de balones con botón
+       eliminar. Add via prompt. */
+    html += '<div style="margin:18px 0 0;padding:12px;border:1px dashed rgba(240,192,64,.3);border-radius:10px;">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">';
+    html += '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#f0c040;flex:1;">📦 INVENTARIO DE BALONES (' + inv.length + ')</div>';
+    html += '<button onclick="window.adminBallAdd()" style="background:rgba(60,200,120,.18);border:1px solid rgba(60,200,120,.55);color:#7df0a0;border-radius:8px;padding:6px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;">＋ AÑADIR BALÓN</button>';
+    html += '</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:4px;">';
+    html += inv.map(function(it){
+      var iEsc = String(it).replace(/'/g,"\\'");
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(255,255,255,.03);border-radius:6px;">'
+           + '<span style="font-family:\'Courier New\',monospace;font-size:11px;color:#a0d8ff;flex:1;word-break:break-all;">' + _esc(it) + '</span>'
+           + '<button onclick="window.adminBallDelete(\'' + iEsc + '\')" style="background:rgba(255,90,90,.15);border:1px solid rgba(255,90,90,.5);color:#ff8080;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;">🗑</button>'
+           + '</div>';
+    }).join('');
+    html += '</div></div>';
+
+    container.innerHTML = html;
   };
 
   function _adminRefreshEnvStatus() {

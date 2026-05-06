@@ -10550,7 +10550,7 @@ window._showSimProgress = function(opts, onDone){
   </div>
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
     <button class="btn-action lext-btn-compact" onclick="pG(function(){ligaExtReglas()})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
-    <button class="btn-action lext-btn-compact" onclick="ligaExtCopa()" style="border-color:rgba(255,200,80,.4);color:#ffc850;background:rgba(255,200,80,.06);"><span class="btn-action-ico">🏆</span><span id="lext-copa-btn-label">Copa</span></button>
+    <button class="btn-action lext-btn-compact" onclick="window.lextCopaOpen&&window.lextCopaOpen()" style="border-color:rgba(255,200,80,.4);color:#ffc850;background:rgba(255,200,80,.06);"><span class="btn-action-ico">🏆</span><span id="lext-copa-btn-label">Copa</span></button>
   </div>
 </div>
 
@@ -10740,6 +10740,106 @@ window._showSimProgress = function(opts, onDone){
   </div>
 </div>
 </div>
+
+<!-- ═══ COPA NACIONAL DE LIGA EXT (motor completo, 2026-05-06) ═══
+     Pantalla dedicada a la Copa de cada liga de "Resto de Ligas":
+     - Formato auto-detectado por nº de equipos: 20 / 18 / 14 / 12.
+     - Sortea grupos al azar al pulsar Sim.
+     - Simula automáticamente grupos + cuartos + semis (probabilístico,
+       aplicando stats a las plantillas via applyMatchStats).
+     - La FINAL es interactiva: card grande con escudos + nombres +
+       botón "Simular" → arranca iaSimLive con prefijo `lec_<slug>_fin_0`.
+     - Al terminar la final, hook `_lecPersistAfterIa` proclama el
+       campeón, dispara la celebración (escudo + fuegos) y persiste
+       el estado en `ligaExt_<slug>.copa`.
+     - Reset INDEPENDIENTE: solo borra la copa, no toca la liga ni las
+       stats que ya se sumaron a las plantillas. -->
+<div class="screen" id="s-lext-copa">
+<button class="back-btn" onclick="go('s-liga-ext')">◀ Volver</button>
+<div class="sec-hdr" style="position:relative;align-items:center;gap:8px;">
+  <img id="lec-cup-logo" alt="Logo" style="width:36px;height:36px;object-fit:contain;display:none;border-radius:8px;background:#0a0d14;padding:3px;border:1px solid rgba(240,192,64,.3);"/>
+  <span id="lec-cup-flag" style="font-size:24px;">🏆</span>
+  <h2 id="lec-cup-title" style="flex:1;">Copa</h2>
+  <button onclick="window.ligaExtCopa&&window.ligaExtCopa()" title="Editar nombre/logo (admin)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#f0c040;font-size:18px;cursor:pointer;padding:6px;">✏️</button>
+</div>
+<div class="lec-actions">
+  <button class="lec-btn lec-btn-sim" id="lec-btn-sim" onclick="window._lecCopa&&window._lecCopa.simAll()">🎮 SIM Copa</button>
+  <button class="lec-btn lec-btn-rules" onclick="window._lecCopa&&window._lecCopa.toggleReglas()">📜 Reglas</button>
+  <button class="lec-btn lec-btn-reset" onclick="window._lecCopa&&window._lecCopa.reset()">♻️ Reset</button>
+</div>
+<div id="lec-reglas-body" style="display:none;"></div>
+<div id="lec-body" style="padding:0 4px 28px;"></div>
+</div>
+
+<style>
+.lec-actions{display:flex;gap:8px;padding:8px 14px 4px;flex-wrap:nowrap;}
+.lec-btn{flex:1;min-width:0;padding:9px 6px;border-radius:8px;border:1px solid;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:700;cursor:pointer;background:rgba(255,255,255,.04);-webkit-tap-highlight-color:transparent;transition:filter .12s,background .12s;}
+.lec-btn:hover{filter:brightness(1.18);}
+.lec-btn:active{filter:brightness(.9);}
+.lec-btn-sim{color:#5fe08a;border-color:rgba(95,224,138,.55);}
+.lec-btn-sim:hover{background:rgba(95,224,138,.10);}
+.lec-btn-sim:disabled{opacity:.45;cursor:not-allowed;filter:none;}
+.lec-btn-rules{color:#b090ff;border-color:rgba(176,144,255,.45);}
+.lec-btn-reset{color:#ff8888;border-color:rgba(255,90,90,.45);}
+.lec-empty{padding:24px 14px;text-align:center;color:rgba(255,255,255,.7);font-family:Rajdhani,sans-serif;font-size:13px;}
+.lec-section{margin:14px 8px;padding:8px 6px;border:1px solid rgba(240,192,64,.30);border-radius:12px;background:linear-gradient(180deg,rgba(240,192,64,.04),transparent 80%);}
+.lec-section-hdr{font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2.5px;color:#f0c040;text-align:center;padding:6px 0 8px;font-weight:700;}
+.lec-section.is-final{border:2px solid #ffd700;box-shadow:0 0 28px rgba(255,215,0,.40),inset 0 0 18px rgba(255,215,0,.06);}
+.lec-section.is-final .lec-section-hdr{color:#ffd700;text-shadow:0 0 10px rgba(255,215,0,.6);font-size:14px;}
+.lec-section.is-champion{border:1px solid rgba(95,224,138,.50);background:linear-gradient(180deg,rgba(95,224,138,.07),transparent 80%);}
+.lec-group{margin:0 0 10px;background:rgba(0,0,0,.30);border:1px solid rgba(94,182,228,.25);border-radius:8px;overflow:hidden;}
+.lec-group-hdr{font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;color:#9fdcff;background:linear-gradient(90deg,rgba(94,182,228,.18),rgba(94,182,228,.06));padding:6px 10px;text-align:center;font-weight:700;}
+.lec-st-hdr,.lec-st-row{display:grid;grid-template-columns:22px 22px 1fr 26px 22px 22px 22px 30px 30px;align-items:center;gap:3px;padding:5px 6px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);border-bottom:1px solid rgba(255,255,255,.04);}
+.lec-st-hdr{background:rgba(0,0,0,.45);font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.5);text-transform:uppercase;}
+.lec-st-row.lec-cl{background:rgba(95,224,138,.07);border-left:3px solid rgba(95,224,138,.55);padding-left:3px;}
+.lec-st-pos{font-family:'Bebas Neue',sans-serif;font-size:14px;color:#f0c040;text-align:center;}
+.lec-st-shield img{width:18px;height:18px;object-fit:contain;}
+.lec-st-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700;}
+.lec-st-cell{font-family:'Bebas Neue',sans-serif;font-size:13px;color:rgba(255,255,255,.7);text-align:center;}
+.lec-st-pts{font-family:'Bebas Neue',sans-serif;font-size:14px;color:#f0c040;text-align:center;font-weight:700;}
+.lec-tie-card{margin:8px;padding:10px 12px;background:rgba(0,0,0,.40);border:1px solid rgba(240,192,64,.25);border-radius:8px;font-family:Rajdhani,sans-serif;font-size:13px;}
+.lec-tie-leg{display:grid;grid-template-columns:36px 1fr 70px 1fr;align-items:center;gap:6px;padding:4px 0;color:rgba(255,255,255,.85);}
+.lec-tie-lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);}
+.lec-tie-leg b{font-family:'Bebas Neue',sans-serif;font-size:15px;color:#f0c040;text-align:center;letter-spacing:1px;}
+.lec-tie-leg span:nth-child(2){text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lec-tie-leg span:nth-child(4){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lec-tie-agg{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding:6px 4px 0;border-top:1px dashed rgba(255,255,255,.10);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);}
+.lec-tie-agg b{font-family:'Bebas Neue',sans-serif;font-size:18px;color:#5fe08a;letter-spacing:1.5px;}
+.lec-tie-et,.lec-tie-pen{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:#ffd54a;text-align:center;padding:2px 0;}
+.lec-tie-winner{margin-top:4px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#5fe08a;text-align:center;font-weight:700;}
+.lec-final-card{margin:8px;padding:14px 12px;background:linear-gradient(135deg,#1a1400,#3a2c00 50%,#1a1400);border:1.5px solid rgba(240,192,64,.55);border-radius:12px;}
+.lec-final-row{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;}
+.lec-final-side{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}
+.lec-final-side img{width:64px;height:64px;object-fit:contain;}
+.lec-final-name{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#fff;text-align:center;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;}
+.lec-final-vs{display:flex;flex-direction:column;align-items:center;gap:8px;}
+.lec-final-vs .ml-score{display:flex;gap:4px;align-items:center;font-family:'Bebas Neue',sans-serif;font-size:24px;color:#f0c040;letter-spacing:2px;}
+.lec-final-vs .ml-score-num{min-width:18px;text-align:center;}
+.lec-final-sim{padding:9px 18px;border-radius:8px;border:1.5px solid rgba(95,224,138,.7);background:rgba(95,224,138,.10);color:#5fe08a;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.lec-final-sim:disabled{opacity:.5;cursor:not-allowed;}
+.lec-final-score{font-family:'Bebas Neue',sans-serif;font-size:32px;color:#f0c040;letter-spacing:3px;text-align:center;}
+.lec-final-acta{margin-top:10px;border-top:1px solid rgba(240,192,64,.25);padding-top:8px;max-height:240px;overflow-y:auto;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);}
+.lec-final-pen{margin-top:6px;text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:#ffd54a;}
+.lec-champ-row{display:flex;align-items:center;gap:14px;padding:10px;}
+.lec-runner-row{display:flex;align-items:center;gap:14px;padding:6px 10px 10px;opacity:.85;}
+.lec-champ-label,.lec-runner-label{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.5);}
+.lec-champ-name{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#5fe08a;letter-spacing:1px;}
+.lec-runner-name{font-family:Rajdhani,sans-serif;font-size:14px;color:rgba(255,255,255,.8);font-weight:700;}
+.lec-teams-list{margin:14px 8px 0;}
+.lec-teams-list-hdr{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.5);padding:8px 0;text-align:center;}
+.lec-teams-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;}
+.lec-team-chip{display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,.04);border-radius:6px;border:1px solid rgba(255,255,255,.08);}
+.lec-team-chip img{width:18px;height:18px;object-fit:contain;flex-shrink:0;}
+.lec-team-chip span{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.85);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lec-rules{padding:10px 14px;font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.55;color:rgba(255,255,255,.78);background:rgba(176,144,255,.05);border:1px dashed rgba(176,144,255,.30);border-radius:8px;margin:6px 8px 0;}
+.lec-rules h4{font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.8px;color:#b090ff;margin:8px 0 4px;font-weight:700;}
+.lec-rules p{margin:4px 0 8px;}
+#lec-champion-ov{display:none;position:fixed;inset:0;z-index:9997;background:radial-gradient(circle at 50% 40%,rgba(255,215,0,.18) 0%,rgba(0,0,0,.92) 70%);align-items:center;justify-content:center;flex-direction:column;gap:18px;animation:scChampFade .35s ease-out;}
+#lec-champion-ov.show{display:flex;}
+#lec-champion-ov .lec-champ-shield img{filter:drop-shadow(0 0 24px rgba(255,215,0,.7));animation:scChampPop .8s cubic-bezier(.2,1.4,.6,1);}
+#lec-champion-ov .lec-champ-ov-name{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:3px;color:#fff;text-shadow:0 0 18px rgba(255,215,0,.7);text-align:center;padding:0 16px;}
+#lec-champion-ov .lec-champ-ov-title{font-family:Oswald,sans-serif;font-size:16px;letter-spacing:4px;color:#ffd700;text-shadow:0 0 10px rgba(255,215,0,.6);text-align:center;padding:0 16px;}
+</style>
 
 <!-- ═══ MODALES ═══ -->
 <div class="lext-ov" id="lext-ov-teams">
@@ -14972,6 +15072,627 @@ Tottenham
   } else {
     wireLigasExt();
   }
+
+  /* ═══════════════════════════════════════════════════════════════
+     COPA NACIONAL · MOTOR + UI (petición usuario 2026-05-06)
+     Estado por liga en `data.copa = {format,status,groups,cuartos,
+     semis,final,champion,runnerUp}`. Persistencia: misma vía que el
+     resto de ligaExt (saveData, respeta cap 2 MB por carpeta).
+     ═══════════════════════════════════════════════════════════════ */
+
+  function _lecEsc(s){
+    return String(s||'').replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function _lecLogo(name){
+    if(typeof window.getTeamLogoUrl === 'function'){
+      try { return window.getTeamLogoUrl(name) || ''; } catch(_){}
+    }
+    return '';
+  }
+  function _lecShuffle(arr){
+    var a = arr.slice();
+    for(var i=a.length-1;i>0;i--){
+      var j=Math.floor(Math.random()*(i+1));
+      var t=a[i]; a[i]=a[j]; a[j]=t;
+    }
+    return a;
+  }
+  function _lecPower(t){
+    if(!t) return 75;
+    return Math.max(40, Number(t.power || t.global || t.glb || 75));
+  }
+  function _lecPoisson(lambda){
+    var L=Math.exp(-lambda),k=0,p=1;
+    do { k++; p*=Math.random(); } while(p>L);
+    return k-1;
+  }
+  /* Mismo modelo Poisson de simSimple (xG=BASE*(rA/rB)^EXP) reusado
+     localmente porque simSimple no se exporta en window. */
+  function _lecSimScore(rA, rB){
+    var BASE=1.4, EXP=2.5;
+    var safeA=Math.max(30,rA), safeB=Math.max(30,rB);
+    var xa=BASE*Math.pow(safeA/safeB,EXP);
+    var xb=BASE*Math.pow(safeB/safeA,EXP);
+    xa=Math.max(.2,Math.min(4.5,xa));
+    xb=Math.max(.2,Math.min(4.5,xb));
+    var gh=_lecPoisson(xa), ga=_lecPoisson(xb);
+    if(gh>6) gh=6; if(ga>6) ga=6;
+    return {gh:gh, ga:ga};
+  }
+  function _lecSimMatch(data, homeName, awayName){
+    var teams = data.teams || [];
+    var tA = null, tB = null;
+    for(var i=0; i<teams.length; i++){
+      if(teams[i] && teams[i].name === homeName) tA = teams[i];
+      if(teams[i] && teams[i].name === awayName) tB = teams[i];
+    }
+    if(!tA || !tB) return {gh:0, ga:0};
+    var rA = _lecPower(tA) + 3; /* ventaja local */
+    var rB = _lecPower(tB);
+    var sc = _lecSimScore(rA, rB);
+    var ta_h = Math.floor(Math.random()*4) + 1;
+    var ta_v = Math.floor(Math.random()*4) + 1;
+    var tr_h = Math.random()<0.05 ? 1 : 0;
+    var tr_v = Math.random()<0.05 ? 1 : 0;
+    /* Stats van DIRECTAS a la plantilla — tal como lo pidió el
+       usuario: goles, MVP, tarjetas, imbatidas, penaltis, faltas
+       se acumulan en cada jugador del ligaExt. applyMatchStats
+       distribuye goles ponderado por poder/posición y elige MVP. */
+    try { applyMatchStats(tA, sc.gh, sc.ga, ta_h, tr_h); } catch(_){}
+    try { applyMatchStats(tB, sc.ga, sc.gh, ta_v, tr_v); } catch(_){}
+    return { gh: sc.gh, ga: sc.ga };
+  }
+  function _lecEmptyTable(name){
+    return {name:name, pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0};
+  }
+  function _lecBuildGroups(format, teams){
+    var shuffled = _lecShuffle(teams.map(function(t){ return t.name; }));
+    var groups = [];
+    if(format === 20){
+      var ids = ['A','B','C','D'];
+      for(var gi=0; gi<4; gi++){
+        groups.push({ id:ids[gi], teams:shuffled.slice(gi*5, gi*5+5),
+          twoLeg:true, matches:[], standings:[] });
+      }
+    } else if(format === 18){
+      groups.push({ id:'A', teams:shuffled.slice(0,9),  twoLeg:false, matches:[], standings:[] });
+      groups.push({ id:'B', teams:shuffled.slice(9,18), twoLeg:false, matches:[], standings:[] });
+    } else if(format === 14){
+      groups.push({ id:'A', teams:shuffled.slice(0,7),  twoLeg:true,  matches:[], standings:[] });
+      groups.push({ id:'B', teams:shuffled.slice(7,14), twoLeg:true,  matches:[], standings:[] });
+    } else {
+      groups.push({ id:'A', teams:shuffled.slice(0,12), twoLeg:false, matches:[], standings:[] });
+    }
+    groups.forEach(function(g){
+      var n = g.teams.length;
+      var pairs = [];
+      for(var i=0;i<n;i++) for(var j=i+1;j<n;j++) pairs.push([g.teams[i], g.teams[j]]);
+      pairs.forEach(function(p){
+        g.matches.push({home:p[0], away:p[1], leg:'i', gh:null, ga:null, played:false});
+        if(g.twoLeg) g.matches.push({home:p[1], away:p[0], leg:'v', gh:null, ga:null, played:false});
+      });
+      g.standings = g.teams.map(_lecEmptyTable);
+    });
+    return groups;
+  }
+  function _lecUpdateStanding(g, home, away, gh, ga){
+    var th=null, tv=null;
+    for(var i=0;i<g.standings.length;i++){
+      if(g.standings[i].name === home) th = g.standings[i];
+      if(g.standings[i].name === away) tv = g.standings[i];
+    }
+    if(!th || !tv) return;
+    th.pj++; tv.pj++;
+    th.gf+=gh; th.gc+=ga;
+    tv.gf+=ga; tv.gc+=gh;
+    if(gh>ga){ th.g++; tv.p++; th.pts+=3; }
+    else if(ga>gh){ tv.g++; th.p++; tv.pts+=3; }
+    else { th.e++; tv.e++; th.pts++; tv.pts++; }
+    th.dg=th.gf-th.gc; tv.dg=tv.gf-tv.gc;
+  }
+  function _lecSortStandings(g){
+    g.standings.sort(function(a,b){
+      if(b.pts!==a.pts) return b.pts-a.pts;
+      if(b.dg!==a.dg) return b.dg-a.dg;
+      if(b.gf!==a.gf) return b.gf-a.gf;
+      return String(a.name).localeCompare(String(b.name),'es');
+    });
+  }
+  function _lecSimAllGroups(data, copa){
+    copa.groups.forEach(function(g){
+      g.matches.forEach(function(m){
+        if(m.played) return;
+        var sc = _lecSimMatch(data, m.home, m.away);
+        m.gh = sc.gh; m.ga = sc.ga; m.played = true;
+        _lecUpdateStanding(g, m.home, m.away, sc.gh, sc.ga);
+      });
+      _lecSortStandings(g);
+    });
+  }
+  /* Eliminatoria a doble partido. tieHome = mejor clasificado (juega
+     la VUELTA en su campo); tieAway = peor clasificado (local en la
+     IDA). Empate global → prórroga + penaltis en la VUELTA. */
+  function _lecSim2Leg(data, tieAway, tieHome){
+    var ida = _lecSimMatch(data, tieAway, tieHome);
+    var vta = _lecSimMatch(data, tieHome, tieAway);
+    var aggA = ida.gh + vta.ga;
+    var aggH = ida.ga + vta.gh;
+    var winner = null, et = {a:0,b:0}, pen = null;
+    if(aggH > aggA) winner = tieHome;
+    else if(aggA > aggH) winner = tieAway;
+    else {
+      var teams = data.teams || [];
+      var tA = null, tB = null;
+      for(var i=0;i<teams.length;i++){
+        if(teams[i] && teams[i].name === tieHome) tA = teams[i];
+        if(teams[i] && teams[i].name === tieAway) tB = teams[i];
+      }
+      var rA = _lecPower(tA) + 3, rB = _lecPower(tB);
+      /* Prórroga: 30 min de juego, xG reducido. */
+      var sc = _lecSimScore(rA*0.6, rB*0.6);
+      et.a = sc.gh; et.b = sc.ga;
+      var newH = aggH + sc.gh, newA = aggA + sc.ga;
+      if(newH > newA) winner = tieHome;
+      else if(newA > newH) winner = tieAway;
+      else {
+        var pH = (rA/(rA+rB))*0.4 + 0.3; /* 30%-70% según power */
+        winner = (Math.random() < pH) ? tieHome : tieAway;
+        pen = winner;
+      }
+    }
+    return { tieHome:tieHome, tieAway:tieAway, ida:ida, vta:vta,
+             aggH:aggH, aggA:aggA, et:et, pen:pen, winner:winner, played:true };
+  }
+  function _lecSim1Leg(data, home, away){
+    var sc = _lecSimMatch(data, home, away);
+    var winner = null, etGh = 0, etGa = 0, pen = null;
+    if(sc.gh > sc.ga) winner = home;
+    else if(sc.ga > sc.gh) winner = away;
+    else {
+      var teams = data.teams || [];
+      var tA = null, tB = null;
+      for(var i=0;i<teams.length;i++){
+        if(teams[i] && teams[i].name === home) tA = teams[i];
+        if(teams[i] && teams[i].name === away) tB = teams[i];
+      }
+      var rA = _lecPower(tA) + 3, rB = _lecPower(tB);
+      var s2 = _lecSimScore(rA*0.6, rB*0.6);
+      etGh = s2.gh; etGa = s2.ga;
+      if(etGh > etGa) winner = home;
+      else if(etGa > etGh) winner = away;
+      else {
+        var pH = (rA/(rA+rB))*0.4 + 0.3;
+        winner = (Math.random() < pH) ? home : away;
+        pen = winner;
+      }
+    }
+    return { home:home, away:away, gh:sc.gh, ga:sc.ga, etGh:etGh, etGa:etGa,
+             pen:pen, winner:winner, played:true };
+  }
+  /* Sortea cuartos (4 winners × 4 runners). Cada winner enfrenta a un
+     runner DE OTRO grupo. Hasta 50 reintentos shuffle si la
+     restricción no se cumple en un intento concreto. */
+  function _lecDrawCuartos(groups){
+    var winners = groups.map(function(g){ return {name:g.standings[0].name, group:g.id}; });
+    for(var attempt=0; attempt<50; attempt++){
+      var runners = _lecShuffle(groups.map(function(g){ return {name:g.standings[1].name, group:g.id}; }));
+      var rest = runners.slice();
+      var ok = true, pairs = [];
+      for(var wi=0; wi<winners.length; wi++){
+        var w = winners[wi], idx = -1;
+        for(var ri=0; ri<rest.length; ri++){
+          if(rest[ri].group !== w.group){ idx = ri; break; }
+        }
+        if(idx<0){ ok=false; break; }
+        pairs.push({tieHome:w.name, tieAway:rest[idx].name});
+        rest.splice(idx,1);
+      }
+      if(ok) return pairs;
+    }
+    /* Fallback determinista (no debería caer aquí): 1A-2B, 1B-2A, 1C-2D, 1D-2C */
+    return [
+      {tieHome:winners[0].name, tieAway:groups[1].standings[1].name},
+      {tieHome:winners[1].name, tieAway:groups[0].standings[1].name},
+      {tieHome:winners[2].name, tieAway:groups[3].standings[1].name},
+      {tieHome:winners[3].name, tieAway:groups[2].standings[1].name}
+    ];
+  }
+  function _lecDrawSemis(cuartos){
+    var winners = cuartos.map(function(c){ return c.winner; });
+    var sh = _lecShuffle(winners);
+    /* El primero del par juega como tieHome (mejor clasificado teórico).
+       Como ambos vienen de cuartos sin "ranking", asignamos al azar. */
+    return [
+      {tieHome:sh[0], tieAway:sh[1]},
+      {tieHome:sh[2], tieAway:sh[3]}
+    ];
+  }
+  /* Andorra (18): 1ºA vs 2ºB y 1ºB vs 2ºA, partido único. El 1º de
+     grupo juega de local. */
+  function _lecDrawSemisAndorra(groups){
+    var w = groups.map(function(g){ return g.standings[0].name; });
+    var r = groups.map(function(g){ return g.standings[1].name; });
+    return [
+      {home:w[0], away:r[1]},
+      {home:w[1], away:r[0]}
+    ];
+  }
+  function _lecDetectFormat(data){
+    var n = (data.teams||[]).length;
+    if(n >= 20) return 20;
+    if(n >= 18) return 18;
+    if(n >= 14) return 14;
+    if(n >= 12) return 12;
+    return n;
+  }
+  function _lecEnsureCopa(data){
+    if(!data.copa){
+      var fmt = _lecDetectFormat(data);
+      if(fmt < 12) return null;
+      data.copa = {
+        format: fmt,
+        status: 'pending',
+        groups: _lecBuildGroups(fmt, data.teams),
+        cuartos: null,
+        semis: null,
+        final: null,
+        champion: null,
+        runnerUp: null
+      };
+      saveData(CURRENT_KEY, data);
+    }
+    return data.copa;
+  }
+  function _lecRunAllAuto(){
+    if(!CURRENT_KEY){ alert('⚠️ No hay liga activa.'); return; }
+    var data = loadData(CURRENT_KEY);
+    if(!data){ alert('⚠️ No hay datos de la liga.'); return; }
+    var fmt = _lecDetectFormat(data);
+    if(fmt < 12){
+      alert('⚠️ Esta liga tiene ' + ((data.teams||[]).length) + ' equipos. La copa requiere mínimo 12 (Gibraltar).');
+      return;
+    }
+    var copa = _lecEnsureCopa(data);
+    if(!copa) return;
+    if(copa.status === 'final-pending' || copa.status === 'done'){
+      alert('La copa ya está en la fase final. Pulsa ▶ Simular en la card de la FINAL para terminarla, o ♻️ Reset si quieres rehacerla.');
+      return;
+    }
+    /* Simular grupos */
+    _lecSimAllGroups(data, copa);
+    /* KO + final según formato */
+    if(copa.format === 20){
+      var cuartosPairs = _lecDrawCuartos(copa.groups);
+      copa.cuartos = cuartosPairs.map(function(p){
+        return _lecSim2Leg(data, p.tieAway, p.tieHome);
+      });
+      var semisPairs = _lecDrawSemis(copa.cuartos);
+      copa.semis = semisPairs.map(function(p){
+        return _lecSim2Leg(data, p.tieAway, p.tieHome);
+      });
+      copa.final = { home:copa.semis[0].winner, away:copa.semis[1].winner, played:false };
+    } else if(copa.format === 18){
+      var ssA = _lecDrawSemisAndorra(copa.groups);
+      copa.semis = ssA.map(function(p){
+        return _lecSim1Leg(data, p.home, p.away);
+      });
+      copa.final = { home:copa.semis[0].winner, away:copa.semis[1].winner, played:false };
+    } else if(copa.format === 14){
+      var w14 = copa.groups.map(function(g){ return g.standings[0].name; });
+      copa.final = { home:w14[0], away:w14[1], played:false };
+    } else { /* 12 */
+      var s12 = copa.groups[0].standings;
+      copa.final = { home:s12[0].name, away:s12[1].name, played:false };
+    }
+    copa.status = 'final-pending';
+    saveData(CURRENT_KEY, data);
+    _lecRender();
+  }
+  /* Hook llamado desde iaSimLive cuando termina la final. Aplica
+     stats al equipo y proclama campeón/subcampeón. */
+  window._lecPersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam, copaET){
+    var m = /^lec_([^_]+)_fin_0$/.exec(String(mk||''));
+    if(!m) return;
+    var slug = m[1];
+    var data = loadData(slug);
+    if(!data || !data.copa){ return; }
+    var et = copaET || {};
+    var totA = Number(scA)||0, totB = Number(scB)||0;
+    var etA  = Number(et.et_gl)||0, etB = Number(et.et_gv)||0;
+    var penWinName = et.pen_winner || null;
+    /* Stats: tarjetas se cuentan desde events; goles ya están en
+       totA/totB. Disparamos applyMatchStats sobre los teams reales. */
+    var teams = data.teams || [];
+    var tA = null, tB = null;
+    for(var i=0;i<teams.length;i++){
+      if(teams[i] && teams[i].name === home) tA = teams[i];
+      if(teams[i] && teams[i].name === away) tB = teams[i];
+    }
+    var ta_h=0, ta_v=0, tr_h=0, tr_v=0;
+    (events||[]).forEach(function(e){
+      if(!e || e._varAnulado) return;
+      if(e.type === 'amarilla'){ if(e.team==='a') ta_h++; else if(e.team==='b') ta_v++; }
+      else if(e.type === 'roja'){ if(e.team==='a') tr_h++; else if(e.team==='b') tr_v++; }
+      else if(e.type === 'damarilla' || e.type === 'd-amarilla'){
+        if(e.team==='a'){ ta_h++; tr_h++; } else if(e.team==='b'){ ta_v++; tr_v++; }
+      }
+    });
+    try { if(tA) applyMatchStats(tA, totA, totB, ta_h, tr_h); } catch(_){}
+    try { if(tB) applyMatchStats(tB, totB, totA, ta_v, tr_v); } catch(_){}
+    /* Decidir ganador. iaSimLive ya pre-rolea el pen_winner cuando
+       hay empate al 120'. */
+    var winner;
+    if(penWinName){
+      if(penWinName === home || penWinName === 'a') winner = home;
+      else if(penWinName === away || penWinName === 'b') winner = away;
+      else winner = (totA >= totB) ? home : away;
+    } else if(totA > totB) winner = home;
+    else if(totB > totA) winner = away;
+    else winner = home;
+    data.copa.final = {
+      home: home, away: away,
+      gh: Math.max(0, totA - etA), ga: Math.max(0, totB - etB),
+      etGh: etA, etGa: etB,
+      penWinner: penWinName ? (winner === home ? 'a' : 'b') : null,
+      played: true,
+      events: (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; }),
+      mvp: mvp || '', mvpTeam: mvpTeam || ''
+    };
+    data.copa.champion = winner;
+    data.copa.runnerUp = (winner === home) ? away : home;
+    data.copa.status = 'done';
+    saveData(slug, data);
+    /* Celebración campeón a los 600ms (deja respirar al overlay
+       de fuegos del iaSimLive si hubiera uno en vuelo) */
+    setTimeout(function(){ window._lecShowChampion && window._lecShowChampion(winner); }, 500);
+    setTimeout(function(){
+      if(window.CURRENT_KEY === slug && typeof _lecRender === 'function') _lecRender();
+    }, 1200);
+  };
+
+  /* Render principal de la pantalla s-lext-copa */
+  function _lecRender(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var body = document.getElementById('lec-body');
+    var title = document.getElementById('lec-cup-title');
+    var logo = document.getElementById('lec-cup-logo');
+    var simBtn = document.getElementById('lec-btn-sim');
+    if(!body || !data) return;
+    var cfg = data.config || {};
+    if(title) title.textContent = cfg.cupName || 'Copa';
+    if(logo){
+      if(cfg.cupLogo){ logo.src = cfg.cupLogo; logo.style.display = ''; }
+      else { logo.style.display = 'none'; }
+    }
+    var copa = data.copa;
+    var n = (data.teams||[]).length;
+    if(!copa || copa.status === 'pending'){
+      var fmt = _lecDetectFormat(data);
+      if(fmt < 12){
+        body.innerHTML = '<div class="lec-empty">⚠️ Esta liga tiene <b>' + n + '</b> equipos. La copa requiere mínimo <b>12</b> equipos (formato Gibraltar). Añade más clubes desde ✏️ Editar en la pantalla de la liga.</div>';
+        if(simBtn) simBtn.disabled = true;
+        return;
+      }
+      if(simBtn) simBtn.disabled = false;
+      body.innerHTML = '<div class="lec-empty">'
+        + '<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;color:#ffd54a;margin-bottom:10px;">🏆 Copa lista para sortearse</div>'
+        + '<div style="font-size:12px;color:rgba(255,255,255,.6);line-height:1.5;">' + _lecFormatBlurb(fmt) + '</div>'
+        + '<div style="margin-top:14px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.5);">Pulsa <b>🎮 SIM Copa</b> arriba para sortear los grupos y simular automáticamente hasta la final.</div>'
+        + '</div>'
+        + _lecRenderTeamsList(data.teams);
+      return;
+    }
+    var html = '';
+    /* Grupos */
+    if(copa.groups && copa.groups.length){
+      html += '<div class="lec-section"><div class="lec-section-hdr">📋 FASE DE GRUPOS</div>';
+      copa.groups.forEach(function(g){ html += _lecRenderGroup(g); });
+      html += '</div>';
+    }
+    /* Cuartos (formato 20) */
+    if(copa.cuartos && copa.cuartos.length){
+      html += '<div class="lec-section"><div class="lec-section-hdr">🏟 CUARTOS DE FINAL</div>';
+      copa.cuartos.forEach(function(c){ html += _lecRenderTie2Leg(c); });
+      html += '</div>';
+    }
+    /* Semis */
+    if(copa.semis && copa.semis.length){
+      html += '<div class="lec-section"><div class="lec-section-hdr">⚔️ SEMIFINALES</div>';
+      copa.semis.forEach(function(s){
+        html += copa.format === 20 ? _lecRenderTie2Leg(s) : _lecRenderTie1Leg(s);
+      });
+      html += '</div>';
+    }
+    /* Final */
+    if(copa.final){
+      html += '<div class="lec-section is-final"><div class="lec-section-hdr">🏆 FINAL</div>';
+      html += _lecRenderFinal(copa.final, CURRENT_KEY);
+      html += '</div>';
+    }
+    /* Campeón */
+    if(copa.champion){
+      html += '<div class="lec-section is-champion">'
+        + '<div class="lec-champ-row"><span style="font-size:32px;">🏆</span><div><div class="lec-champ-label">CAMPEÓN</div><div class="lec-champ-name">' + _lecEsc(copa.champion) + '</div></div></div>'
+        + '<div class="lec-runner-row"><span style="font-size:20px;">🥈</span><div><div class="lec-runner-label">SUBCAMPEÓN</div><div class="lec-runner-name">' + _lecEsc(copa.runnerUp) + '</div></div></div>'
+        + '</div>';
+    }
+    body.innerHTML = html;
+    if(simBtn) simBtn.disabled = (copa.status === 'final-pending' || copa.status === 'done');
+  }
+  function _lecFormatBlurb(fmt){
+    if(fmt === 20) return '20 equipos · 4 grupos × 5 (ida + vuelta · 8 partidos por equipo) → cuartos doble partido → semis doble partido → FINAL.';
+    if(fmt === 18) return '18 equipos · 2 grupos × 9 (vuelta única · 9 partidos) → semis partido único → FINAL.';
+    if(fmt === 14) return '14 equipos · 2 grupos × 7 (ida + vuelta · 12 partidos) → 1ºA vs 1ºB en la FINAL.';
+    return '12 equipos · 1 grupo × 12 (vuelta única · 11 partidos) → 1º vs 2º en la FINAL.';
+  }
+  function _lecRenderTeamsList(teams){
+    if(!teams || !teams.length) return '';
+    return '<div class="lec-teams-list">'
+      + '<div class="lec-teams-list-hdr">EQUIPOS PARTICIPANTES (' + teams.length + ')</div>'
+      + '<div class="lec-teams-grid">'
+      + teams.map(function(t){
+          var l = _lecLogo(t.name);
+          return '<div class="lec-team-chip">'
+            + (l ? '<img src="' + _lecEsc(l) + '" />' : '<span style="font-size:14px;">🛡</span>')
+            + '<span>' + _lecEsc(t.name) + '</span>'
+            + '</div>';
+        }).join('')
+      + '</div></div>';
+  }
+  function _lecRenderGroup(g){
+    var rows = (g.standings||[]).map(function(s, i){
+      var clas = false;
+      if(g.id === 'A' && (g.standings.length <= 2 || true)){
+        /* Para grupos con 2+ clasificados, marcar los 2 primeros.
+           Para Gibraltar (grupo único de 12) también top 2. */
+        clas = i < 2;
+      } else clas = i < 2;
+      var l = _lecLogo(s.name);
+      return '<div class="lec-st-row ' + (clas ? 'lec-cl' : '') + '">'
+        + '<span class="lec-st-pos">' + (i+1) + '</span>'
+        + '<span class="lec-st-shield">' + (l ? '<img src="' + _lecEsc(l) + '"/>' : '🛡') + '</span>'
+        + '<span class="lec-st-name">' + _lecEsc(s.name) + '</span>'
+        + '<span class="lec-st-cell">' + s.pj + '</span>'
+        + '<span class="lec-st-cell">' + s.g + '</span>'
+        + '<span class="lec-st-cell">' + s.e + '</span>'
+        + '<span class="lec-st-cell">' + s.p + '</span>'
+        + '<span class="lec-st-cell">' + (s.dg>0?'+':'') + s.dg + '</span>'
+        + '<span class="lec-st-pts">' + s.pts + '</span>'
+        + '</div>';
+    }).join('');
+    return '<div class="lec-group">'
+      + '<div class="lec-group-hdr">GRUPO ' + g.id + (g.twoLeg ? ' · IDA+VUELTA' : ' · 1 VUELTA') + '</div>'
+      + '<div class="lec-st-hdr"><span>#</span><span></span><span>EQUIPO</span><span>PJ</span><span>G</span><span>E</span><span>P</span><span>DG</span><span>PTS</span></div>'
+      + rows
+      + '</div>';
+  }
+  function _lecRenderTie2Leg(c){
+    var penTxt = c.pen ? '<div class="lec-tie-pen">PEN ' + _lecEsc(c.pen) + '</div>' : '';
+    var etTxt = (c.et && (c.et.a || c.et.b)) ? '<div class="lec-tie-et">PRÓRROGA · ' + c.et.a + '–' + c.et.b + '</div>' : '';
+    return '<div class="lec-tie-card">'
+      + '<div class="lec-tie-leg"><span class="lec-tie-lbl">IDA</span><span>' + _lecEsc(c.tieAway) + '</span><b>' + c.ida.gh + '–' + c.ida.ga + '</b><span>' + _lecEsc(c.tieHome) + '</span></div>'
+      + '<div class="lec-tie-leg"><span class="lec-tie-lbl">VTA</span><span>' + _lecEsc(c.tieHome) + '</span><b>' + c.vta.gh + '–' + c.vta.ga + '</b><span>' + _lecEsc(c.tieAway) + '</span></div>'
+      + '<div class="lec-tie-agg"><span>GLOBAL</span><b>' + (c.aggH) + '–' + (c.aggA) + '</b></div>'
+      + etTxt + penTxt
+      + '<div class="lec-tie-winner">🏆 ' + _lecEsc(c.winner) + ' clasifica</div>'
+      + '</div>';
+  }
+  function _lecRenderTie1Leg(s){
+    var penTxt = s.pen ? '<div class="lec-tie-pen">PEN ' + _lecEsc(s.pen) + '</div>' : '';
+    var etTxt = (s.etGh || s.etGa) ? '<div class="lec-tie-et">PRÓRROGA · ' + s.etGh + '–' + s.etGa + '</div>' : '';
+    return '<div class="lec-tie-card">'
+      + '<div class="lec-tie-leg"><span class="lec-tie-lbl"></span><span>' + _lecEsc(s.home) + '</span><b>' + s.gh + '–' + s.ga + '</b><span>' + _lecEsc(s.away) + '</span></div>'
+      + etTxt + penTxt
+      + '<div class="lec-tie-winner">🏆 ' + _lecEsc(s.winner) + ' clasifica</div>'
+      + '</div>';
+  }
+  function _lecRenderFinal(f, slug){
+    if(f.played){
+      return '<div class="lec-final-card">'
+        + '<div class="lec-final-row">'
+        +   _lecRenderFinalSide(f.home)
+        +   '<div class="lec-final-vs"><div class="lec-final-score">' + ((f.gh||0) + (f.etGh||0)) + ' – ' + ((f.ga||0) + (f.etGa||0)) + '</div>'
+        +   ((f.etGh||f.etGa) ? '<div class="lec-final-pen">PRÓRROGA</div>' : '')
+        +   '</div>'
+        +   _lecRenderFinalSide(f.away)
+        + '</div>'
+        + (f.penWinner ? '<div class="lec-final-pen">PEN — gana ' + _lecEsc(f.penWinner === 'a' ? f.home : f.away) + '</div>' : '')
+        + '</div>';
+    }
+    var mk = 'lec_' + slug + '_fin_0';
+    var hEsc = _lecEsc(f.home).replace(/'/g, "\\'");
+    var aEsc = _lecEsc(f.away).replace(/'/g, "\\'");
+    return '<div class="lec-final-card">'
+      + '<div class="lec-final-row">'
+      +   _lecRenderFinalSide(f.home)
+      +   '<div class="lec-final-vs">'
+      +     '<div class="ml-score" id="ia-sim-score-' + mk + '"><div id="ia-sc-' + mk + '-a" class="ml-score-num">0</div><span>–</span><div id="ia-sc-' + mk + '-b" class="ml-score-num">0</div></div>'
+      +     '<button class="lec-final-sim" id="ia-sim-btn-' + mk + '" onclick="window.iaSimLive(\'' + mk + '\',\'' + hEsc + '\',\'' + aEsc + '\',0)">▶ Simular</button>'
+      +   '</div>'
+      +   _lecRenderFinalSide(f.away)
+      + '</div>'
+      + '<div id="ia-acta-' + mk + '" class="lec-final-acta" style="display:none;"></div>'
+      + '</div>';
+  }
+  function _lecRenderFinalSide(name){
+    var l = _lecLogo(name);
+    return '<div class="lec-final-side">'
+      + (l ? '<img src="' + _lecEsc(l) + '"/>' : '<span style="font-size:48px;">🛡</span>')
+      + '<div class="lec-final-name">' + _lecEsc(name) + '</div>'
+      + '</div>';
+  }
+  /* Champion celebration overlay (clon del SC) */
+  window._lecShowChampion = function(name){
+    if(!name) return;
+    var ov = document.getElementById('lec-champion-ov');
+    if(!ov){
+      ov = document.createElement('div');
+      ov.id = 'lec-champion-ov';
+      document.body.appendChild(ov);
+    }
+    var l = _lecLogo(name);
+    var data = CURRENT_KEY ? loadData(CURRENT_KEY) : null;
+    var cupName = (data && data.config && data.config.cupName) || 'Copa';
+    ov.innerHTML = ''
+      + '<div class="lec-champ-shield">' + (l ? '<img src="' + _lecEsc(l) + '" style="width:140px;height:140px;object-fit:contain;"/>' : '<span style="font-size:120px;">🛡</span>') + '</div>'
+      + '<div class="lec-champ-ov-name">' + _lecEsc(name) + '</div>'
+      + '<div class="lec-champ-ov-title">🏆 CAMPEÓN ' + _lecEsc(String(cupName).toUpperCase()) + '</div>';
+    ov.classList.add('show');
+    /* Suprimir el texto bávaro del celebracion-overlay durante la
+       celebración (mismo patrón que _scShowChampionOv). */
+    var bav = document.getElementById('celebracion-txt');
+    var prev = '';
+    if(bav){ prev = bav.textContent; bav.textContent = ''; }
+    try { if(typeof window.lanzarFuegos === 'function') window.lanzarFuegos(3000); } catch(_){}
+    setTimeout(function(){
+      ov.classList.remove('show');
+      ov.innerHTML = '';
+      if(bav) bav.textContent = prev;
+    }, 4500);
+  };
+  /* API pública */
+  window._lecCopa = {
+    simAll: _lecRunAllAuto,
+    reset: function(){
+      if(!CURRENT_KEY) return;
+      if(!confirm('¿Reset SOLO de esta copa?\n\nLas estadísticas que ya se sumaron a las plantillas (goles, MVP, tarjetas…) NO se borran — quedan tal como están.\n\nSe rehace solo el sorteo y los partidos.')) return;
+      var data = loadData(CURRENT_KEY);
+      if(!data) return;
+      data.copa = null;
+      saveData(CURRENT_KEY, data);
+      _lecRender();
+    },
+    toggleReglas: function(){
+      var rb = document.getElementById('lec-reglas-body');
+      if(!rb) return;
+      var open = rb.style.display && rb.style.display !== 'none';
+      if(open){ rb.style.display = 'none'; return; }
+      var data = CURRENT_KEY ? loadData(CURRENT_KEY) : null;
+      var fmt = data ? _lecDetectFormat(data) : 0;
+      rb.innerHTML = '<div class="lec-rules">'
+        + '<h4>📜 Formato</h4>'
+        + '<p>' + _lecFormatBlurb(fmt) + '</p>'
+        + '<h4>⚔️ Eliminatorias</h4>'
+        + '<p>Cuartos y semis (cuando aplican): <b>doble partido</b>; el 1º de grupo juega la VUELTA en su campo. Empate global → prórroga + penaltis en la vuelta.</p>'
+        + '<p>Cuando el formato lleva semis a partido único (Andorra): empate al 90\' → prórroga + penaltis.</p>'
+        + '<h4>🏆 Final</h4>'
+        + '<p>Partido único con simulación IA-vs-IA en directo (1 minuto = 1 segundo real). Si hay empate al 90\' → prórroga + penaltis automáticos.</p>'
+        + '<h4>📊 Stats automáticas</h4>'
+        + '<p>Cada gol, MVP, tarjeta amarilla/roja, imbatida y penalti se suma <b>automáticamente</b> al jugador en su plantilla del ligaExt — la cuenta es <b>una sola</b> con la liga.</p>'
+        + '<h4>🛡 Recopa de Europa</h4>'
+        + '<p>El campeón de cada copa nacional clasifica a la <b>Recopa de Europa</b> (integración con la pantalla "EA Sports → Europa" se hará en una iteración posterior).</p>'
+        + '</div>';
+      rb.style.display = '';
+    }
+  };
+  window.lextCopaOpen = function(){
+    if(typeof window.go === 'function') window.go('s-lext-copa');
+    setTimeout(_lecRender, 30);
+  };
+
 })();
 </script>
 <div class="screen" id="s-selecciones">

@@ -6522,19 +6522,43 @@ window._showSimProgress = function(opts, onDone){
      toca s-liga, s-copa ni cajas de jornadas, que mantienen su estilo
      propio. Las animaciones iconFloat/Pulse/Bounce/Wobble que ya
      existían en .sc-emoji se respetan (el usuario aceptó dejarlas si
-     no son costosas). -->
+     no son costosas).
+
+     2026-05-06: el fondo gris radial uniforme y el borde blanco
+     translúcido hacían que los círculos pareciesen "pegatinas
+     pegadas" sobre la caja. Ahora cada tarjeta declara dos CSS vars
+     `--cir-bg` y `--cir-bd` con el color sólido del propio recuadro
+     (la tonalidad principal de su gradiente) y el color del borde
+     del recuadro respectivamente. El círculo del icono lee esos
+     vars → queda integrado con la caja, "enterizo" con su color,
+     sin romper la silueta. Las animaciones siguen como estaban. -->
 <style>
+#s-competiciones .submenu-card{
+  /* Defaults sobrios para tarjetas que no declaren paleta propia. */
+  --cir-bg:rgba(0,0,0,.55);
+  --cir-bd:rgba(255,255,255,.22);
+}
+#s-competiciones .submenu-card.sc-ucl1{--cir-bg:#1538a0;--cir-bd:#2848c8;}
+#s-competiciones .submenu-card.sc-uel1{--cir-bg:#a03a00;--cir-bd:#c04800;}
+#s-competiciones .submenu-card.sc-uecl1{--cir-bg:#186a18;--cir-bd:#28aa28;}
+#s-competiciones .submenu-card.sc-recopa1{--cir-bg:#7a3c00;--cir-bd:#a04a00;}
+#s-competiciones .submenu-card.sc-usc1{--cir-bg:#343434;--cir-bd:#585858;}
+#s-competiciones .submenu-card.sc-inter1{--cir-bg:#7a4a00;--cir-bd:#9a5c00;}
+#s-competiciones .submenu-card.sc-estad-gen{--cir-bg:#2c2c2c;--cir-bd:#5a5a5a;}
+#s-competiciones .submenu-card.sc-superliga-main{--cir-bg:#6020c8;--cir-bd:#9030ee;}
+#s-competiciones .submenu-card.sc-torneos-verano{--cir-bg:#c89020;--cir-bd:#f0c040;}
+#s-competiciones .submenu-card.sc-ea-manual{--cir-bg:#2d6b2d;--cir-bd:#3cc878;}
+
 #s-competiciones .submenu-card .sc-comp-img,
 #s-competiciones .submenu-card .sc-emoji{
   width:38px;
   height:38px;
   border-radius:50%;
-  background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.10) 0%,rgba(0,0,0,.55) 70%);
-  border:1.5px solid rgba(255,255,255,.18);
+  background:var(--cir-bg);
+  border:1.5px solid var(--cir-bd);
   box-shadow:
-    0 2px 6px rgba(0,0,0,.55),
-    inset 0 1px 1px rgba(255,255,255,.18),
-    inset 0 -3px 6px rgba(0,0,0,.45);
+    0 1px 3px rgba(0,0,0,.4),
+    inset 0 1px 1px rgba(255,255,255,.14);
   display:inline-flex;
   align-items:center;
   justify-content:center;

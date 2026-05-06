@@ -11906,7 +11906,12 @@
        el prefijo `sc_` para reusar el flujo single-leg sin tocar
        más nada. */
     var _isScSim = typeof mk === 'string' && mk.indexOf('sc_') === 0;
-    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim;
+    /* Liga Ext Copa (lec_<slug>_fin_0): final de la copa nacional de
+       una liga de "Resto de Ligas". Mismo régimen single-leg que SC
+       (ET + pen si empate al 90'/120'). Stats van a la plantilla del
+       ligaExt vía window._lecPersistAfterIa. 2026-05-06. */
+    var _isLecSim = typeof mk === 'string' && mk.indexOf('lec_') === 0;
+    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim || _isLecSim;
     var _copaET = { et_gl: 0, et_gv: 0, pen_winner: null };
 
     /* COPA SINGLE-LEG con empate previsto al 90': el partido va a
@@ -12303,6 +12308,10 @@
            sc_state_v1 vía window._scPersistAfterIa (definido en
            el IIFE de s-supercopa). 2026-05-05. */
         var __isScSimPersist = typeof mk === 'string' && mk.indexOf('sc_') === 0;
+        /* Liga Ext Copa: mk con prefijo lec_ → persistir en
+           ligaExt_<slug>.copa vía window._lecPersistAfterIa
+           (definido en el IIFE de s-lext-copa). 2026-05-06. */
+        var __isLecSimPersist = typeof mk === 'string' && mk.indexOf('lec_') === 0;
         if (__isCopaSim && typeof window._copaSimLivePersist === 'function') {
           try {
             window._copaSimLivePersist(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam);
@@ -12311,6 +12320,10 @@
           try {
             window._scPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
           } catch(_e) { try { console.error('[scSimLive persist]', _e); } catch(__){} }
+        } else if (__isLecSimPersist && typeof window._lecPersistAfterIa === 'function') {
+          try {
+            window._lecPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
+          } catch(_e) { try { console.error('[lecSimLive persist]', _e); } catch(__){} }
         } else {
           var results = loadResults();
           var key = rKey(j, home, away);
@@ -12330,6 +12343,9 @@
           if (!window._iaRunningCount) {
             if (__isCopaSim) {
               if (typeof window.copaInit === 'function') window.copaInit();
+            } else if (__isScSimPersist || __isLecSimPersist) {
+              /* SC y Lec ya re-renderizan dentro de su propio
+                 persistAfterIa. No tocamos la tabla de Liga. */
             } else {
               if (typeof window.buildIAresults === 'function') window.buildIAresults();
               if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();

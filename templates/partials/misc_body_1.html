@@ -12542,6 +12542,13 @@ Tottenham
       }
     }
     saveData(CURRENT_KEY, data);
+    /* Mantener ef_player_stats_v1 sincronizado tras Sim Liga.
+       Sin esto, si el usuario hizo SIM Copa antes y luego SIM Liga,
+       el cache quedaba con totales viejos (liga + old_cup) y la
+       plantilla mostraba stats stale. Ahora cada vez que se
+       resimula la liga, el cache se reescribe con `pj = leagueOnly +
+       cupAlreadyPlayed`. */
+    try { _lecSyncPlayerStatsCache(data); } catch(_){}
     renderTable();
   }
   window.ligaExtSimular = ligaExtSimular;
@@ -12576,6 +12583,7 @@ Tottenham
       }
     }
     saveData(slug, data);
+    try { _lecSyncPlayerStatsCache(data); } catch(_){}
     /* Si la liga abierta actualmente coincide con la simulada, refrescar. */
     if(slug === CURRENT_KEY){ try { renderTable(); } catch(_){} }
     return true;
@@ -15484,7 +15492,91 @@ Tottenham
     }
     copa.status = 'final-pending';
     saveData(CURRENT_KEY, data);
+    _lecSyncPlayerStatsCache(data);
     _lecRender();
+  }
+
+  /* DEFENSA contra render-stale: tras simular la copa, escribimos
+     manualmente las stats acumuladas (liga + cup) de cada jugador a
+     `ef_player_stats_v1` con el `teamPJ` total. Razón: `renderSquadList`
+     llama a `_lextHydratePlayerStats` que SOBREESCRIBE `p.gol = clean.gol`.
+     Si por cualquier motivo `clean.gol` cae en una rama que devuelve 0
+     (p.ej. cuando un caller alternativo no encuentra eventos en
+     LIGA_PLAYER_MATCH_STORE y los stats del jugador se descartan por
+     mismatch ownPj/teamPJ), las stats se perderían en memoria. Al
+     persistir directo al cache `ef_player_stats_v1` con `pj === teamPJ`,
+     la rama `ps` de `_lextHydratePlayerStats` siempre encuentra los
+     valores correctos. Bug reportado por el usuario 2026-05-06: tras
+     SIM Copa, todos los stats individuales aparecían a 0 aunque PJ
+     subiera bien (38 → 50). */
+  function _lecSyncPlayerStatsCache(data){
+    if(!data || !Array.isArray(data.teams)) return;
+    var stats;
+    try { stats = JSON.parse(localStorage.getItem('ef_player_stats_v1')||'{}') || {}; }
+    catch(_){ stats = {}; }
+    data.teams.forEach(function(t){
+      if(!t || !t.name || !Array.isArray(t.players)) return;
+      /* PJ liga = data.results filtrado por team.id */
+      var ligaPj = 0;
+      if(Array.isArray(data.results)){
+        for(var ri=0; ri<data.results.length; ri++){
+          var rr = data.results[ri];
+          if(rr && (rr.h === t.id || rr.a === t.id)) ligaPj++;
+        }
+      }
+      /* PJ cup = matches played donde el equipo participa (groups +
+         cuartos×2 + semis×{2|1} + final×1, según formato). */
+      var cupPj = 0;
+      var cp = data.copa;
+      if(cp){
+        if(Array.isArray(cp.groups)){
+          cp.groups.forEach(function(g){
+            (g.matches||[]).forEach(function(mm){
+              if(!mm || !mm.played) return;
+              if(mm.home === t.name || mm.away === t.name) cupPj++;
+            });
+          });
+        }
+        if(Array.isArray(cp.cuartos)){
+          cp.cuartos.forEach(function(c){
+            if(!c || !c.played) return;
+            if(c.tieHome === t.name || c.tieAway === t.name) cupPj += 2;
+          });
+        }
+        if(Array.isArray(cp.semis)){
+          cp.semis.forEach(function(s){
+            if(!s || !s.played) return;
+            if(cp.format === 20){
+              if(s.tieHome === t.name || s.tieAway === t.name) cupPj += 2;
+            } else {
+              if(s.home === t.name || s.away === t.name) cupPj += 1;
+            }
+          });
+        }
+        if(cp.final && cp.final.played){
+          if(cp.final.home === t.name || cp.final.away === t.name) cupPj += 1;
+        }
+      }
+      var totalPj = ligaPj + cupPj;
+      if(totalPj === 0) return;  /* no escribir si el equipo no jugó nada */
+      var teamN = _normPS(t.name);
+      t.players.forEach(function(p){
+        if(!p || !p.name) return;
+        var k = teamN + '::' + _normPS(p.name);
+        stats[k] = {
+          pj:       totalPj,
+          gol:      Number(p.gol     ||0),
+          pen:      Number(p.pen     ||0),
+          fk:       Number(p.fk      ||0),
+          mvp:      Number(p.mvp     ||0),
+          ta:       Number(p.ta      ||0),
+          tr:       Number(p.tr      ||0),
+          imbat:    Number(p.imbat   ||0),
+          penSaved: Number(p.penSaved||0)
+        };
+      });
+    });
+    try { localStorage.setItem('ef_player_stats_v1', JSON.stringify(stats)); } catch(_){}
   }
   /* Hook llamado desde iaSimLive cuando termina la final. Aplica
      stats al equipo y proclama campeón/subcampeón. */
@@ -15577,6 +15669,7 @@ Tottenham
     data.copa.runnerUp = (winner === home) ? away : home;
     data.copa.status = 'done';
     saveData(slug, data);
+    _lecSyncPlayerStatsCache(data);
     /* Celebración campeón a los 600ms (deja respirar al overlay
        de fuegos del iaSimLive si hubiera uno en vuelo) */
     setTimeout(function(){ window._lecShowChampion && window._lecShowChampion(winner); }, 500);

@@ -5474,7 +5474,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
     var COMP_LABELS = {
       'liga':'Liga EA Sports','copa':'Copa del Rey','copa-fin':'Copa del Rey · Final',
-      'sc':'🏆 Semis Supercopa España','sc-final':'🏆 Final Supercopa España',
+      'sc':'Semis Supercopa España','sc-final':'Final Supercopa España',
       'usc':'UEFA Super Cup','usc-fin':'UEFA Super Cup · Final',
       'ucl':'Champions League','ucl-fin':'Champions League · Final',
       'uel':'Europa League','uel-fin':'Europa League · Final',
@@ -9408,7 +9408,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   var MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   var COMP_LABELS_MM = {
     'liga':'Liga EA Sports','copa':'Copa del Rey','copa-fin':'Copa del Rey · Final',
-    'sc':'🏆 Semis Supercopa España','sc-final':'🏆 Final Supercopa España',
+    'sc':'Semis Supercopa España','sc-final':'Final Supercopa España',
     'usc':'UEFA Super Cup','usc-fin':'UEFA Super Cup · Final',
     'ucl':'Champions League','ucl-fin':'Champions League · Final',
     'uel':'Europa League','uel-fin':'Europa League · Final',

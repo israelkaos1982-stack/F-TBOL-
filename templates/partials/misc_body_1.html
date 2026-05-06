@@ -6199,6 +6199,17 @@ window._showSimProgress = function(opts, onDone){
 
     if(typeof window.showPrePartidoOverlay === 'function'){
       window.showPrePartidoOverlay(mk, compKey, 'Sí', duracion, isHvH);
+      /* Inyectar items "Prórroga + Penaltis" — la previa exige
+         confirmar ambos antes de habilitar "▶ COMENZAR PARTIDO".
+         Petición usuario 2026-05-05: SC es single-leg con prórroga
+         + penaltis, igual que Copa SL. La función la expone
+         copa-engine.js (_injectProrrogaPenaltisConfirms). */
+      try {
+        if(typeof window._injectProrrogaPenaltisConfirms === 'function'){
+          /* Pequeño delay para que el bundle haya montado pp-list. */
+          setTimeout(window._injectProrrogaPenaltisConfirms, 80);
+        }
+      } catch(_){}
     } else {
       /* Sin overlay disponible — ejecutar callback directamente. */
       if(typeof window._ppCustomCallback === 'function'){

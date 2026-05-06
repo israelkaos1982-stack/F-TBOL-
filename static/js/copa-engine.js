@@ -3015,6 +3015,14 @@
     /* Tras meter los items, re-evaluamos el botón. */
     if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock();
   }
+  /* Exponemos para que otros módulos (Supercopa España, etc.) puedan
+     reusar la misma máquina de "Prórroga + Penaltis obligatorios"
+     en cualquier previa de eliminatoria a partido único. La función
+     es agnóstica de Copa — solo necesita que showPrePartidoOverlay
+     esté abierta. 2026-05-05. */
+  window._injectProrrogaPenaltisConfirms = function () {
+    try { _copaInjectExtraConfirms('sf'); } catch(_){}
+  };
 
   /* Resetea `_copaPreviaActive` cuando la previa se cierra. */
   function _copaInstallPreviaCloseHooks() {

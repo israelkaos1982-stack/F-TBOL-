@@ -2580,11 +2580,24 @@
       .then(function (d) { if (d.ok) copaRender(d.copa); });
   };
 
+  /* Reiniciar Copa requiere PIN admin 747 (petición usuario
+     2026-05-05). Se reusa window.pG (mismo gate que el resto de
+     acciones admin: Sim/Res en Resto de Ligas, Sortear, etc.). Si
+     la sesión admin ya está unlocked, pG ejecuta la callback al
+     instante. Fallback al confirm directo si pG no estuviera
+     disponible por timing raro al boot. */
   window.copaReiniciar = function () {
-    if (!confirm('¿Reiniciar Copa del Rey? Se perderán todos los resultados y bajas de Copa seguirán en ficha hasta agotarse.')) return;
-    fetch('/api/copa/reiniciar', { method: 'POST' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) { if (d.ok) copaRender({}); });
+    function _doReset(){
+      if (!confirm('¿Reiniciar Copa del Rey? Se perderán todos los resultados y bajas de Copa seguirán en ficha hasta agotarse.')) return;
+      fetch('/api/copa/reiniciar', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d.ok) copaRender({}); });
+    }
+    if (typeof window.pG === 'function') {
+      window.pG(_doReset);
+    } else {
+      _doReset();
+    }
   };
 
   window.copaJugar = function (ronda, idx, esVuelta) {

@@ -5733,6 +5733,10 @@ window._showSimProgress = function(opts, onDone){
 #s-supercopa .sc-banner-btn.sc-reset{background:linear-gradient(135deg,rgba(255,80,80,.12),rgba(80,20,20,.25));color:#ffb0b0;border-color:rgba(255,80,80,.55);box-shadow:none;font-size:11px;padding:8px;}
 #s-supercopa .sc-stadium-badge{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.65);text-align:center;padding:6px 8px;letter-spacing:.5px;}
 #s-supercopa .sc-rondhdr{padding:10px 14px 6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.5px;color:rgba(240,192,64,.95);font-weight:700;}
+/* Grupo (petición usuario 2026-05-05): borde dorado que engloba
+   semis o final, con el header en la parte superior. */
+#s-supercopa .sc-group{margin:10px 8px;padding:4px 4px 8px;border:1px solid rgba(240,192,64,.5);border-radius:14px;background:linear-gradient(180deg,rgba(240,192,64,.04),transparent 80%);box-shadow:0 0 18px rgba(240,192,64,.10);}
+#s-supercopa .sc-group .sc-card{margin:6px 6px;}
 #s-supercopa .sc-card{margin:8px 10px;background:linear-gradient(135deg,#1a1400,#3a2c00 50%,#1a1400);border:1px solid rgba(240,192,64,.55);border-radius:12px;overflow:hidden;}
 #s-supercopa .sc-card.is-hvh{border-color:rgba(255,90,170,.7);box-shadow:0 0 14px rgba(255,80,160,.25);}
 #s-supercopa .sc-card.is-hvia{border-color:rgba(255,255,255,.5);}
@@ -5896,9 +5900,14 @@ window._showSimProgress = function(opts, onDone){
       el.innerHTML = '<button class="sc-banner-btn" onclick="window._scGateOpenSetup&&window._scGateOpenSetup()">🏆 CONFIGURAR SUPERCOPA</button>';
       return;
     }
-    el.innerHTML =
-        '<div class="sc-stadium-badge">🏟 <b>' + _esc(s.stadium || '') + '</b> · ⚽ <b>Puma Orbita MFL 1</b></div>'
-      + '<button class="sc-banner-btn sc-reset" onclick="window._scReset&&window._scReset()">♻️ Reiniciar Supercopa (vuelve a elegir 4 equipos)</button>';
+    /* Banner minimalista (petición usuario 2026-05-05): solo botón
+       compacto "♻️ Res" arriba a la derecha. Sin estadio + balón
+       (esa info ya sale en el header de cada card y en la previa)
+       ni texto extra. La acción RESET sigue exigiendo PIN admin. */
+    el.innerHTML = ''
+      + '<div style="display:flex;justify-content:flex-end;">'
+      +   '<button class="sc-banner-btn sc-reset" onclick="window._scResetGate&&window._scResetGate()" style="width:auto;padding:6px 14px;">♻️ Res</button>'
+      + '</div>';
   }
 
   /* Gate admin PIN 747 antes de abrir el setup. Reusa window.pG (la
@@ -5969,6 +5978,16 @@ window._showSimProgress = function(opts, onDone){
     _scCancelSetup();
     _renderBanner();
     _renderContent();
+  };
+  /* Reset gated por PIN admin 747 (petición usuario 2026-05-05). El
+     botón "♻️ Res" en el banner llama a este wrapper; window.pG es
+     la misma puerta que usa Sim/Res en Resto de Ligas y Copa. */
+  window._scResetGate = function(){
+    if(typeof window.pG === 'function'){
+      window.pG(function(){ window._scReset && window._scReset(); });
+    } else {
+      window._scReset && window._scReset();
+    }
   };
   window._scReset = function(){
     if(!confirm('¿Reiniciar Supercopa? Se perderán los partidos jugados.')) return;
@@ -6125,12 +6144,21 @@ window._showSimProgress = function(opts, onDone){
         _save(s);
       }
     }
+    /* Bloques agrupados — petición usuario 2026-05-05: cada grupo
+       (SEMIS / FINAL) lleva su propio borde dorado englobando los
+       partidos. Solo un trofeo en el header (antes ponía dos por
+       error). Sin texto descriptivo extra (se entiende por contexto:
+       single-leg, campo neutral, ET+pen ya conocido). */
     var html = ''
-      + '<div class="sc-rondhdr">🏆 SEMIS SUPERCOPA ESPAÑA — partido único · campo neutral · prórroga + penaltis si empate</div>'
-      + _renderMatchCard({match:s.semis[0], key:'sf', idx:0, label:'SF1'})
-      + _renderMatchCard({match:s.semis[1], key:'sf', idx:1, label:'SF2'})
-      + '<div class="sc-rondhdr">🏆 FINAL SUPERCOPA ESPAÑA — partido único · campo neutral</div>'
-      + _renderMatchCard({match:s.final, key:'fin', idx:0, label:'Final'});
+      + '<div class="sc-group">'
+      +   '<div class="sc-rondhdr">🏆 SEMIS SUPERCOPA ESPAÑA</div>'
+      +   _renderMatchCard({match:s.semis[0], key:'sf', idx:0, label:'SF1'})
+      +   _renderMatchCard({match:s.semis[1], key:'sf', idx:1, label:'SF2'})
+      + '</div>'
+      + '<div class="sc-group">'
+      +   '<div class="sc-rondhdr">🏆 FINAL SUPERCOPA ESPAÑA</div>'
+      +   _renderMatchCard({match:s.final, key:'fin', idx:0, label:'Final'})
+      + '</div>';
     host.innerHTML = html;
   }
   window._scRender = function(){ _renderBanner(); _renderContent(); };

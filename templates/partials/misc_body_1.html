@@ -5236,6 +5236,53 @@ window._showSimProgress = function(opts, onDone){
           }
         }
       } catch(_){}
+      /* Resto de Ligas · COPA NACIONAL (motor _lecCopa, 2026-05-06):
+         contamos los partidos de copa que jugó este equipo —
+         grupos (todas sus matches.played), cuartos (ida + vuelta),
+         semis (ida+vuelta si formato 20, partido único en Andorra),
+         y final (1 partido). Sin esto, p.pj quedaba >>> que
+         leagueData.results.length tras simular la copa, y
+         `ownPj === teamPJ` fallaba → la plantilla mostraba 0 en
+         goles/MVP/tarjetas. Bug reportado por el usuario con foto
+         de Manchester City (8 partidos en grupo, 12 goles Haaland,
+         pero plantilla mostraba 0 en todo). */
+      try {
+        var cp = leagueData && leagueData.copa;
+        if (cp && team && team.name) {
+          var tName = team.name;
+          /* Grupos: cada match.played donde el equipo juega cuenta 1. */
+          if (Array.isArray(cp.groups)) {
+            cp.groups.forEach(function(g){
+              (g.matches||[]).forEach(function(mm){
+                if(!mm || !mm.played) return;
+                if(mm.home === tName || mm.away === tName) teamPJ++;
+              });
+            });
+          }
+          /* Cuartos (formato 20): ida + vuelta = 2 pj si jugó. */
+          if (Array.isArray(cp.cuartos)) {
+            cp.cuartos.forEach(function(c){
+              if(!c || !c.played) return;
+              if(c.tieHome === tName || c.tieAway === tName) teamPJ += 2;
+            });
+          }
+          /* Semis: depende del formato (20 → 2 pj; 18 → 1 pj). */
+          if (Array.isArray(cp.semis)) {
+            cp.semis.forEach(function(s){
+              if(!s || !s.played) return;
+              if (cp.format === 20) {
+                if(s.tieHome === tName || s.tieAway === tName) teamPJ += 2;
+              } else {
+                if(s.home === tName || s.away === tName) teamPJ += 1;
+              }
+            });
+          }
+          /* Final: siempre 1 pj cuando played. */
+          if (cp.final && cp.final.played) {
+            if(cp.final.home === tName || cp.final.away === tName) teamPJ += 1;
+          }
+        }
+      } catch(_){}
     }
     /* ef_liga38_v4 = Liga EA Sports SOLO. */
     if (teamPJ === 0 && teamN && compSet.liga) {
@@ -15129,20 +15176,30 @@ Tottenham
       if(teams[i] && teams[i].name === awayName) tB = teams[i];
     }
     if(!tA || !tB) return {gh:0, ga:0};
-    var rA = _lecPower(tA) + 3; /* ventaja local */
-    var rB = _lecPower(tB);
-    var sc = _lecSimScore(rA, rB);
-    var ta_h = Math.floor(Math.random()*4) + 1;
-    var ta_v = Math.floor(Math.random()*4) + 1;
-    var tr_h = Math.random()<0.05 ? 1 : 0;
-    var tr_v = Math.random()<0.05 ? 1 : 0;
-    /* Stats van DIRECTAS a la plantilla — tal como lo pidió el
-       usuario: goles, MVP, tarjetas, imbatidas, penaltis, faltas
-       se acumulan en cada jugador del ligaExt. applyMatchStats
-       distribuye goles ponderado por poder/posición y elige MVP. */
-    try { applyMatchStats(tA, sc.gh, sc.ga, ta_h, tr_h); } catch(_){}
-    try { applyMatchStats(tB, sc.ga, sc.gh, ta_v, tr_v); } catch(_){}
-    return { gh: sc.gh, ga: sc.ga };
+    /* Reutilizamos el motor REAL `simulateMatch` (4 ejes ATK/MID/DEF/
+       GLOBAL con ventaja local +3, mismo modelo Poisson que la liga).
+       Esto cumple lo que pidió el usuario: valor-poder-nivel del equipo
+       y power+flags del jugador (natGoal, natGoalPro, penalty, freeKick)
+       se RESPETAN en cada partido de copa, idéntico a la simulación de
+       liga. Sin esto, los partidos de copa usaban un Poisson más
+       simple que ignoraba la composición del equipo. */
+    var r = simulateMatch(tA, tB);
+    /* Stats van DIRECTAS a la plantilla — applyMatchStats distribuye
+       goles ponderado por poder/posición y elige scorers desde el
+       roster cacheado. */
+    var infoA = applyMatchStats(tA, r.gh, r.ga, r.tah, r.trh);
+    var infoB = applyMatchStats(tB, r.ga, r.gh, r.taa, r.tra);
+    /* MVP por méritos (igual que ligaExtSimular). Sin esto, el MVP
+       de cada partido de copa nunca se asignaba → todos los players
+       quedaban a mvp=0 después de la copa. */
+    if(infoA && infoB){
+      try {
+        if(r.gh > r.ga)      assignMVP(tA, infoA, tB, infoB, false);
+        else if(r.ga > r.gh) assignMVP(tB, infoB, tA, infoA, false);
+        else                 assignMVP(tA, infoA, tB, infoB, true);
+      } catch(_){}
+    }
+    return { gh: r.gh, ga: r.ga };
   }
   function _lecEmptyTable(name){
     return {name:name, pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0};
@@ -15360,6 +15417,23 @@ Tottenham
       alert('La copa ya está en la fase final. Pulsa ▶ Simular en la card de la FINAL para terminarla, o ♻️ Reset si quieres rehacerla.');
       return;
     }
+    /* Asegurar que los stats existen (pj, gol, mvp, ta, tr, imbat,
+       penSaved, pen, fk) en CADA jugador de TODAS las plantillas.
+       Sin esto, si el admin nunca pulsó Sim Liga, los players llegan
+       sin esos campos y `applyMatchStats` no inicializa porque el
+       `_rosterCache._statsEnsured` está en false → primera ronda OK,
+       siguientes rondas también, pero el roster cache previo de la
+       liga ya estaba marcado y nuestros players nuevos podrían
+       quedarse sin inicializar. Hacemos un ensure global aquí. */
+    (data.teams||[]).forEach(function(t){
+      (t && t.players ? t.players : []).forEach(ensurePlayerStats);
+    });
+    /* Invalidar el roster cache para que applyMatchStats relea
+       cualquier cambio de plantilla (jugadores nuevos, edits) y no
+       reuse el `_statsEnsured` de la última simulación de liga. */
+    if (typeof window._invalidateLineStatsCache === 'function') {
+      try { window._invalidateLineStatsCache(); } catch(_){}
+    }
     /* Simular grupos */
     _lecSimAllGroups(data, copa);
     /* KO + final según formato */
@@ -15419,8 +15493,45 @@ Tottenham
         if(e.team==='a'){ ta_h++; tr_h++; } else if(e.team==='b'){ ta_v++; tr_v++; }
       }
     });
-    try { if(tA) applyMatchStats(tA, totA, totB, ta_h, tr_h); } catch(_){}
-    try { if(tB) applyMatchStats(tB, totB, totA, ta_v, tr_v); } catch(_){}
+    /* Aplicar stats: pj+1 a TODOS, distribución de goles según
+       weightedPick (poder + flags), tarjetas según pickCardie. */
+    var infoA = null, infoB = null;
+    try { if(tA) infoA = applyMatchStats(tA, totA, totB, ta_h, tr_h); } catch(_){}
+    try { if(tB) infoB = applyMatchStats(tB, totB, totA, ta_v, tr_v); } catch(_){}
+    /* MVP: lo que viene de iaSimLive (mvp/mvpTeam) ya es un nombre
+       canónico — buscamos al jugador y le sumamos +1 al mvp directo.
+       Fallback: si no encontramos al jugador con ese nombre, usamos
+       assignMVP(infoA/infoB) para que al menos alguien lo reciba.
+       Esto cumple lo del usuario: "5 partidos MVP Haaland" tras la
+       copa entera (cup matches + final) suma a su contador real. */
+    if(mvp){
+      var mvpTeamObj = (mvpTeam === home || mvpTeam === 'a') ? tA
+                     : (mvpTeam === away || mvpTeam === 'b') ? tB
+                     : null;
+      var mvpPlayer = null;
+      if(mvpTeamObj && Array.isArray(mvpTeamObj.players)){
+        for(var pi=0; pi<mvpTeamObj.players.length; pi++){
+          if(mvpTeamObj.players[pi] && mvpTeamObj.players[pi].name === mvp){
+            mvpPlayer = mvpTeamObj.players[pi]; break;
+          }
+        }
+      }
+      if(mvpPlayer){
+        mvpPlayer.mvp = (Number(mvpPlayer.mvp)||0) + 1;
+      } else if(infoA && infoB){
+        try {
+          if(totA > totB)      assignMVP(tA, infoA, tB, infoB, false);
+          else if(totB > totA) assignMVP(tB, infoB, tA, infoA, false);
+          else                 assignMVP(tA, infoA, tB, infoB, true);
+        } catch(_){}
+      }
+    } else if(infoA && infoB){
+      try {
+        if(totA > totB)      assignMVP(tA, infoA, tB, infoB, false);
+        else if(totB > totA) assignMVP(tB, infoB, tA, infoA, false);
+        else                 assignMVP(tA, infoA, tB, infoB, true);
+      } catch(_){}
+    }
     /* Decidir ganador. iaSimLive ya pre-rolea el pen_winner cuando
        hay empate al 120'. */
     var winner;

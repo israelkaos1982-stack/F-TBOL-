@@ -16328,6 +16328,7 @@ window.goLiveMatches = function() {
             source: 'sc',
             home: home, away: away,
             j: it.j,
+            scKey: it.key, scIdx: it.idx,
             comp: SC_DERBY_COMP,
             state: state,
             score: score
@@ -16525,6 +16526,14 @@ window.goLiveMatches = function() {
          de Liga y el resultado iría a la tabla equivocada. */
       if (item.source === 'superliga' && typeof window._openSuperligaMatch === 'function') {
         try { window._openSuperligaMatch(item.j || 0, home, away); return; } catch(_){}
+      }
+      /* Supercopa España: routing dedicado al flujo previa-first
+         (_scAbrirPrevia). Sin esta rama, la card caía a
+         _openMatchWithPrevia (Liga) y mostraba estadio del local /
+         fecha de Liga / balón de Liga / sin Prórroga+Penaltis —
+         reportado por usuario 2026-05-05. */
+      if (item.source === 'sc' && typeof window._scAbrirPrevia === 'function') {
+        try { window._scAbrirPrevia(item.scKey || 'sf', item.scIdx || 0); return; } catch(_){}
       }
       if (typeof window._openMatchWithPrevia === 'function') {
         try { window._openMatchWithPrevia(item.j || 0, home, away); return; } catch(_){}

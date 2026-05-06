@@ -8670,54 +8670,19 @@
   };
 
   function _gmShowFinalOv() {
-    var ov = document.getElementById('gm-fin-ov');
-    if (!ov) {
-      document.getElementById('gm-modal').style.display = 'none';
-      window.gmShowPost && window.gmShowPost();
-      return;
-    }
-    document.getElementById('gm-fin-score').textContent = _gm.sc.a + ' - ' + _gm.sc.b;
-    document.getElementById('gm-fin-name-a').textContent = _gm.home;
-    document.getElementById('gm-fin-name-b').textContent = _gm.away;
-    var logoA = document.getElementById('gm-fin-logo-a');
-    var logoB = document.getElementById('gm-fin-logo-b');
-    if (logoA) { logoA.src = _gmLogoUrl(_gm.home) || ''; }
-    if (logoB) { logoB.src = _gmLogoUrl(_gm.away) || ''; }
-    var mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });
-    var mvpEl = document.getElementById('gm-fin-mvp');
-    if (mvpEl) {
-      if (mvpEvt) {
-        var _mvpName = mvpEvt.player || mvpEvt.name || '';
-        var _mvpTeam = (mvpEvt.team === 'a') ? (_gm.home || '') : (_gm.away || '');
-        mvpEl.textContent = '⭐ MVP: ' + _mvpName + (_mvpTeam ? ' (' + _mvpTeam + ')' : '');
-      } else {
-        mvpEl.textContent = '';
-      }
-    }
-    var allEvts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp'; });
-    var evList = document.getElementById('gm-fin-events');
-    if (evList) {
-      if (allEvts.length === 0) {
-        evList.innerHTML = '<div style="padding:14px 12px;color:rgba(255,255,255,.3);font-family:Rajdhani,sans-serif;font-size:13px;text-align:center;">Sin eventos registrados</div>';
-      } else {
-        evList.innerHTML = allEvts.map(function(e){ return _gmEvtRow(e, _gm.home, _gm.away); }).join('');
-      }
-    }
-    var exitBtn = document.getElementById('gm-fin-exit-btn');
-    if (exitBtn) exitBtn.style.display = 'none';
-    var shareBtn = document.getElementById('gm-fin-share-btn');
-    if (shareBtn) shareBtn.style.display = '';
-    ov.style.display = 'flex';
-    if (_gm.isHvH) {
-      var finPoll = setInterval(function() {
-        try {
-          if (localStorage.getItem('gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away) === '1') {
-            clearInterval(finPoll);
-            var eb = document.getElementById('gm-fin-exit-btn');
-            if (eb) eb.style.display = '';
-          }
-        } catch(e) { clearInterval(finPoll); }
-      }, 3000);
+    /* Petición usuario 2026-05-05: la pantalla FINAL (counters
+       GOLES/TARJETAS/LESIONES + MVP + CERRAR) era redundante después
+       de la stats overlay y del MVP picker. La info ya viaja al
+       usuario vía la share de WhatsApp obligatoria al final.
+       Auto-disparamos el share + cierre. _gmShareFinal ya programa
+       gmExitFinal a 350 ms tras window.open, así que aquí solo
+       disparamos. Fallback duro (sin gm-fin-ov en DOM) cierra el
+       modal a pelo. */
+    try { window._gmShareFinal && window._gmShareFinal(); }
+    catch(_){
+      var modal = document.getElementById('gm-modal');
+      if (modal) modal.style.display = 'none';
+      if (window.gmShowPost) window.gmShowPost();
     }
   }
 
@@ -8781,6 +8746,15 @@
     if (_gm.isHvH) {
       try { localStorage.setItem('gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
     }
+    /* Auto-cerrar el gm-modal tras compartir (petición usuario
+       2026-05-05): la pantalla FINAL post-share era redundante.
+       350 ms es suficiente para que el window.open pinte la
+       transición a la pestaña de WhatsApp antes de matar este
+       modal — sin parpadeo y sin que el usuario tenga que pulsar
+       "CERRAR" manualmente. */
+    setTimeout(function(){
+      try { window.gmExitFinal && window.gmExitFinal(); } catch(_){}
+    }, 350);
   };
 
   window.gmExitFinal = function() {

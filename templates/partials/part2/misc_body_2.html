@@ -9179,6 +9179,104 @@
     gmRenderTimer();
     _gmShowHalftimeOv();
   }
+  /* HTP — descanso de la prórroga al min 105'. Pausa el cron 10 s
+     reales para que el usuario haga cambios, inyecta marcador en el
+     acta, botón "🟢 COMPARTIR DESCANSO PRÓRROGA" (WhatsApp) y
+     reinicia el cron automáticamente desde 105'00" (game-min 105).
+     Petición usuario 2026-05-05: aplicable a HvH y HvIA en cualquier
+     eliminatoria a partido único (Copa SL / Supercopa / amistoso
+     elim). Idempotente: si ya estamos en HTP, no hace nada. */
+  function _gmEnterHtp() {
+    if (!_gm || _gm.htpDone || _gm.finished) return;
+    _gm.htpDone = true;
+    /* Anclar el cronómetro al inicio del 105' (sin descuentos en ET
+       — la prórroga no tiene tiempo añadido por eventos). */
+    var HTP_SEC = 6300; /* 105 game-min × 60 */
+    if (_gm.timerSec < HTP_SEC) _gm.timerSec = HTP_SEC;
+    if (_gm.timerSec > HTP_SEC) _gm.timerSec = HTP_SEC;
+    try { clearInterval(_gm.timerInterval); } catch(_){}
+    _gm.timerRunning = false;
+    _gm.inDescansoEt = true;
+    /* Marcador + botón share en el acta. */
+    var list = document.getElementById('gm-acta-list');
+    if (list) {
+      var m = document.createElement('div');
+      m.className = 'ml-ht';
+      m.textContent = '— HTP · DESCANSO PRÓRROGA (105 min) —';
+      list.appendChild(m);
+      var waWrap = document.createElement('div');
+      waWrap.className = 'ml-ht-wa-wrap';
+      waWrap.innerHTML = '<button class="ml-ht-wa-btn" onclick="window._gmShareHtp()">'
+        + '<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
+        + ' Compartir descanso prórroga';
+      list.appendChild(waWrap);
+    }
+    /* Overlay de cuenta atrás 10 s reales — al expirar, reanuda el
+       cron al 105'. El usuario puede compartir vía WhatsApp durante
+       esos 10 s. Si toca el botón share, el flujo no se interrumpe
+       (window.open en otro tab). */
+    var ov = document.getElementById('gm-htp-ov');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'gm-htp-ov';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99988;background:rgba(0,0,8,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Oswald,sans-serif;padding:20px;text-align:center;';
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML = ''
+      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:60px;color:#f0c040;letter-spacing:6px;text-shadow:0 0 22px rgba(240,192,64,.6);">HTP</div>'
+      + '<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2.5px;color:rgba(255,255,255,.75);margin-top:6px;">DESCANSO DE LA PRÓRROGA · 105\'</div>'
+      + '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.6);margin-top:18px;max-width:300px;">Tienes 10 s para hacer cambios. Comparte el acta del descanso por WhatsApp si quieres.</div>'
+      + '<button onclick="window._gmShareHtp()" style="margin-top:20px;padding:12px 22px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;cursor:pointer;">🟢 COMPARTIR DESCANSO PRÓRROGA</button>'
+      + '<div id="gm-htp-cd" style="font-family:\'Bebas Neue\',sans-serif;font-size:48px;color:#5fe08a;letter-spacing:4px;margin-top:18px;">10</div>'
+      + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.45);margin-top:4px;">SEGUNDOS · auto-reanudar</div>';
+    ov.style.display = 'flex';
+    var cdEl = document.getElementById('gm-htp-cd');
+    var left = 10;
+    try { if (_gm.htpInterval) clearInterval(_gm.htpInterval); } catch(_){}
+    _gm.htpInterval = setInterval(function(){
+      left--;
+      if (cdEl) cdEl.textContent = String(Math.max(0, left));
+      if (left <= 0) {
+        try { clearInterval(_gm.htpInterval); } catch(_){}
+        _gm.htpInterval = null;
+        _gmResumeAfterHtp();
+      }
+    }, 1000);
+    gmRenderTimer();
+  }
+  /* Reanuda el cronómetro tras los 10 s del HTP. Cierra el overlay
+     y arranca el tick desde 105'. */
+  function _gmResumeAfterHtp() {
+    var ov = document.getElementById('gm-htp-ov');
+    if (ov) ov.style.display = 'none';
+    _gm.inDescansoEt = false;
+    _gm.timerSec = 6300; /* exactly 105' */
+    gmStartTimer();
+  }
+  /* Comparte por WhatsApp el acta del HTP (eventos hasta 105'). */
+  window._gmShareHtp = function() {
+    var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
+                  'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
+    var lines = [];
+    var compLbl = _gm.comp ? (_gm.comp + ' — HTP (descanso prórroga 105\')') : 'HTP (descanso prórroga 105\')';
+    lines.push(compLbl);
+    lines.push('');
+    lines.push(_gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away);
+    lines.push('');
+    lines.push('ACTA HASTA 105\':');
+    var htpEvts = (_gm.events||[]).filter(function(e){ return e && e.min <= 105 && e.type !== 'mvp'; });
+    var _abbr = (typeof window.getTeamAbbr === 'function')
+      ? window.getTeamAbbr
+      : function(s){ return String(s||'').substring(0,3).toUpperCase(); };
+    htpEvts.forEach(function(e){
+      var ico = icoMap[e.type] || '📋';
+      var tName = e.team === 'a' ? _gm.home : _gm.away;
+      lines.push(e.min + "' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + _abbr(tName) + ')');
+    });
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
+    _gm.htpShared = true;
+  };
+
   /* Botón manual: el usuario puede forzar el descanso a partir del
      minuto 37 de la primera parte. Razón: el cronómetro de la app
      no siempre va sincronizado con el partido REAL en eFootball
@@ -9258,6 +9356,18 @@
         || (typeof esHumano === 'function' && (esHumano(_gm.home) || esHumano(_gm.away)));
       if (!_gm.htDone && _gm.timerSec >= gmHalfMax && !_gmHasHuman) {
         _gmEnterHalftime();
+        return;
+      }
+      /* HTP — Half-Time Prórroga (105'). Petición usuario 2026-05-05:
+         en eliminatorias a partido único (Copa SL / Supercopa /
+         amistoso elim) cuando se llega al 105 game-min de la prórroga
+         tiene que aparecer el marcador "HTP", botón obligatorio de
+         compartir por WhatsApp el acta del descanso, esperar 10 s
+         reales para que el usuario haga cambios y luego auto-resume
+         del cron al 105 → 120. Solo se muestra a partidos con
+         humano (gm-modal nunca corre en IAvIA). */
+      if (_gm.etDone && !_gm.htpDone && _gm.timerSec >= 6300) {
+        _gmEnterHtp();
         return;
       }
       /* Tiempo de descuento al llegar al 90:00 — muestra N dinámico */
@@ -11098,16 +11208,38 @@
         + '<div style="background:linear-gradient(180deg,#1a0d04,#0a0502);border:2px solid #ffd54a;border-radius:14px;padding:18px 16px;max-width:380px;width:100%;text-align:center;box-shadow:0 0 36px rgba(255,213,74,.35);">'
         +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;letter-spacing:2px;color:#ffd54a;margin-bottom:6px;">🥅 TANDA DE PENALTIS</div>'
         +   '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.7);letter-spacing:.5px;margin-bottom:16px;">El partido acabó empatado al 120\'. Indica el resultado de la tanda.</div>'
-        +   '<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;">'
-        +     '<div id="_gmCopaPenHomeName" style="flex:1;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#fff;text-align:right;"></div>'
-        +     '<input id="_gmCopaPenA" type="number" min="0" max="20" value="0" style="width:54px;font-size:22px;font-family:\'Bebas Neue\',sans-serif;text-align:center;background:#000;color:#5fe08a;border:1px solid rgba(95,224,138,.5);border-radius:6px;padding:4px;"/>'
-        +     '<span style="color:#fff;font-size:18px;">–</span>'
-        +     '<input id="_gmCopaPenB" type="number" min="0" max="20" value="0" style="width:54px;font-size:22px;font-family:\'Bebas Neue\',sans-serif;text-align:center;background:#000;color:#5fe08a;border:1px solid rgba(95,224,138,.5);border-radius:6px;padding:4px;"/>'
-        +     '<div id="_gmCopaPenAwayName" style="flex:1;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#fff;text-align:left;"></div>'
+        +   '<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:14px;flex-wrap:nowrap;">'
+        +     '<div id="_gmCopaPenHomeName" style="flex:1;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#fff;text-align:right;min-width:0;"></div>'
+        /* Stepper -0+ por equipo (petición usuario 2026-05-05). El
+           input central sigue siendo editable manualmente; los
+           botones – y + permiten seleccionar el número con un toque.
+           Rango clamp 0..20 para evitar entradas absurdas. */
+        +     '<button type="button" data-step="-1" data-target="_gmCopaPenA" class="_gmPenStep" aria-label="Restar local" style="width:32px;height:38px;background:rgba(255,90,90,.15);border:1px solid rgba(255,90,90,.55);color:#ff8080;border-radius:6px;font-family:\'Bebas Neue\',sans-serif;font-size:20px;cursor:pointer;line-height:1;">−</button>'
+        +     '<input id="_gmCopaPenA" type="number" min="0" max="20" value="0" inputmode="numeric" style="width:48px;font-size:22px;font-family:\'Bebas Neue\',sans-serif;text-align:center;background:#000;color:#5fe08a;border:1px solid rgba(95,224,138,.5);border-radius:6px;padding:4px;"/>'
+        +     '<button type="button" data-step="1" data-target="_gmCopaPenA" class="_gmPenStep" aria-label="Sumar local" style="width:32px;height:38px;background:rgba(95,224,138,.15);border:1px solid rgba(95,224,138,.55);color:#7df0a0;border-radius:6px;font-family:\'Bebas Neue\',sans-serif;font-size:20px;cursor:pointer;line-height:1;">+</button>'
+        +     '<span style="color:#fff;font-size:18px;padding:0 4px;">–</span>'
+        +     '<button type="button" data-step="-1" data-target="_gmCopaPenB" class="_gmPenStep" aria-label="Restar visit" style="width:32px;height:38px;background:rgba(255,90,90,.15);border:1px solid rgba(255,90,90,.55);color:#ff8080;border-radius:6px;font-family:\'Bebas Neue\',sans-serif;font-size:20px;cursor:pointer;line-height:1;">−</button>'
+        +     '<input id="_gmCopaPenB" type="number" min="0" max="20" value="0" inputmode="numeric" style="width:48px;font-size:22px;font-family:\'Bebas Neue\',sans-serif;text-align:center;background:#000;color:#5fe08a;border:1px solid rgba(95,224,138,.5);border-radius:6px;padding:4px;"/>'
+        +     '<button type="button" data-step="1" data-target="_gmCopaPenB" class="_gmPenStep" aria-label="Sumar visit" style="width:32px;height:38px;background:rgba(95,224,138,.15);border:1px solid rgba(95,224,138,.55);color:#7df0a0;border-radius:6px;font-family:\'Bebas Neue\',sans-serif;font-size:20px;cursor:pointer;line-height:1;">+</button>'
+        +     '<div id="_gmCopaPenAwayName" style="flex:1;font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#fff;text-align:left;min-width:0;"></div>'
         +   '</div>'
         +   '<button id="_gmCopaPenConfirm" style="width:100%;padding:12px;border-radius:8px;border:1px solid rgba(95,224,138,.7);background:linear-gradient(135deg,rgba(61,204,110,.28),rgba(40,180,90,.18));color:#5fe08a;font-family:\'Bebas Neue\',sans-serif;font-size:16px;letter-spacing:2px;cursor:pointer;">✓ CONFIRMAR TANDA</button>'
         + '</div>';
       document.body.appendChild(ov);
+      /* Wire steppers -/+ → bump el valor del input objetivo con
+         clamp [0..20]. Delegación: un único listener en el overlay
+         maneja los 4 botones. */
+      ov.addEventListener('click', function(ev){
+        var btn = ev.target && ev.target.closest && ev.target.closest('._gmPenStep');
+        if (!btn) return;
+        var step = parseInt(btn.getAttribute('data-step'), 10) || 0;
+        var targetId = btn.getAttribute('data-target');
+        var inp = document.getElementById(targetId);
+        if (!inp) return;
+        var v = parseInt(inp.value, 10) || 0;
+        v = Math.max(0, Math.min(20, v + step));
+        inp.value = String(v);
+      });
       document.getElementById('_gmCopaPenConfirm').addEventListener('click', function () {
         var pa = parseInt(document.getElementById('_gmCopaPenA').value, 10) || 0;
         var pb = parseInt(document.getElementById('_gmCopaPenB').value, 10) || 0;

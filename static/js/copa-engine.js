@@ -2413,32 +2413,60 @@
       if (ronda === 'fin' && teams.length < 2) return null;
     }
     if (!teams.length) return null;
-    /* 2026-05-06 robustez paridad: el chequeo previo `teams.length % 2 !== 0
-       → return null` abortaba el sorteo si el nº de equipos resultaba
-       impar (depende de cuántos equipos PF tenga la liga del usuario y
-       cuántos jugaron r1). El usuario reportó "no hay equipos suficientes"
-       teniendo 20+22+bastantes_PF. Ahora, si la cuenta es impar, en lugar
-       de abortar descartamos UN equipo IA no-humano (preferentemente uno
-       que NO sea TBD, para no perder a ningún humano ni a un ganador
-       pendiente). El equipo descartado simplemente queda fuera de la
-       copa esta temporada — el sorteo procede con el resto. */
+    /* 2026-05-06 robustez paridad respetando reglas humano-vs-IA:
+       el chequeo previo `teams.length % 2 !== 0 → return null` abortaba
+       el sorteo si el nº de equipos resultaba impar. Ahora descartamos
+       1 IA no-humano para hacer la cuenta par y proceder.
+
+       Orden de descarte por ronda (preserva la pool de rivales válidos
+       para los humanos según las reglas del usuario):
+
+         r1/r2  → humanos contra PF SIEMPRE.
+                  Drop: EA-IA → Hyp → PF (último).
+         r16    → humanos prefieren PF, fallback Hyp, último recurso EA.
+                  Drop: EA-IA → Hyp → PF (último).
+         oct+   → cualquiera (sin restricción humano-IA).
+                  Drop: PF → Hyp → EA (descarta los más débiles primero).
+
+       NUNCA descartamos humanos ni TBDs (ganadores pendientes) si hay
+       cualquier IA disponible. Si solo quedan humanos+TBDs (caso edge
+       absurdo), pop el último — pero esto es prácticamente imposible. */
     if (teams.length % 2 !== 0) {
-      try { console.warn('[copa] sortear ' + ronda + ' con ' + teams.length + ' equipos (impar) — descartando 1 IA no-humano'); } catch(_){}
+      var dropOrder;
+      if (ronda === 'r1' || ronda === 'r2' || ronda === 'r16') {
+        dropOrder = ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion'];
+      } else {
+        dropOrder = ['liga-primera-federacion', 'liga-hypermotion', 'liga-ea-sports'];
+      }
+      try { console.warn('[copa] sortear ' + ronda + ' con ' + teams.length + ' equipos (impar) — descartando 1 IA según prioridad ' + dropOrder.join(' → ')); } catch(_){}
       var dropIdx = -1;
-      for (var pi = teams.length - 1; pi >= 0; pi--) {
-        var t = teams[pi];
-        if (t && !t.isHuman && !t.isTbd && t.league !== 'liga-ea-sports') { dropIdx = pi; break; }
+      for (var d = 0; d < dropOrder.length && dropIdx < 0; d++) {
+        var prefLeague = dropOrder[d];
+        for (var pi = teams.length - 1; pi >= 0; pi--) {
+          var t = teams[pi];
+          if (t && !t.isHuman && !t.isTbd && t.league === prefLeague) { dropIdx = pi; break; }
+        }
       }
       if (dropIdx < 0) {
+        /* Sin liga conocida → cualquier IA non-TBD non-humano. */
         for (var qi = teams.length - 1; qi >= 0; qi--) {
           var qt = teams[qi];
           if (qt && !qt.isHuman && !qt.isTbd) { dropIdx = qi; break; }
         }
       }
       if (dropIdx < 0) {
+        /* Solo TBDs disponibles (caso raro): descartamos un TBD que NO
+           pueda ser humano para preservar la posibilidad humana. */
         for (var ri2 = teams.length - 1; ri2 >= 0; ri2--) {
           var rt = teams[ri2];
-          if (rt && !rt.isHuman) { dropIdx = ri2; break; }
+          if (rt && !rt.isHuman && rt.isTbd && !rt.tbdMayBeHuman) { dropIdx = ri2; break; }
+        }
+      }
+      if (dropIdx < 0) {
+        /* Último recurso: cualquier no-humano (incluido TBD-puede-humano). */
+        for (var si = teams.length - 1; si >= 0; si--) {
+          var st = teams[si];
+          if (st && !st.isHuman) { dropIdx = si; break; }
         }
       }
       if (dropIdx >= 0) teams.splice(dropIdx, 1);

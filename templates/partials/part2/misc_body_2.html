@@ -10776,17 +10776,16 @@
   };
 
   window.gmShowPost = function(){
-    var goles = _gm.events.filter(function(e){ return e && ['gol','falta-gol','pen-gol','propia'].indexOf(e.type)!==-1; }).length;
-    var tarjetas = _gm.events.filter(function(e){ return e && ['amarilla','damarilla','roja'].indexOf(e.type)!==-1; }).length;
-    var lesiones = _gm.events.filter(function(e){ return e && e.type==='lesion'; }).length;
-    var mvp = _gm.events.find(function(e){ return e && e.type==='mvp'; });
-    var _mvpTm = mvp ? ((mvp.team === 'a') ? (_gm.home || '') : (_gm.away || '')) : '';
-    var mvpLabel = '⭐ MVP: ' + (mvp ? (((mvp.num||'').trim()?mvp.num+'. ':'') + (mvp.player||'Jugador') + (_mvpTm ? ' (' + _mvpTm + ')' : '')) : '—');
-    var gEl=document.getElementById('gm-st-goles'); if(gEl) gEl.textContent=String(goles);
-    var tEl=document.getElementById('gm-st-tarjetas'); if(tEl) tEl.textContent=String(tarjetas);
-    var lEl=document.getElementById('gm-st-lesiones'); if(lEl) lEl.textContent=String(lesiones);
-    var mEl=document.getElementById('gm-post-mvp'); if(mEl) mEl.textContent=mvpLabel;
-    var ov=document.getElementById('gm-post-ov'); if(ov) ov.classList.add('show');
+    /* Petición usuario 2026-05-06: la pantalla "FINAL · GOLES /
+       TARJETAS / LESIONES · MVP · CERRAR" (gm-post-ov) era
+       redundante — ya se compartió por WhatsApp todo eso (acta +
+       stats + MVP) en el paso anterior. La pantalla no tenía
+       función práctica, solo añadía un click extra al volver al
+       calendario. La eliminamos: gmShowPost deja de renderizar el
+       overlay (no-op). El gm-modal ya está oculto al llegar aquí
+       y la vista del calendario es lo que ve el usuario. */
+    var ov = document.getElementById('gm-post-ov');
+    if (ov) ov.classList.remove('show');
   };
 
   window.gmClosePost = function(){

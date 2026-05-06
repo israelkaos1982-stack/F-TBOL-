@@ -11432,13 +11432,30 @@
       }).then(function(r){ return r.json(); })
         .then(function(d){
           try {
-            if (typeof window.copaInit === 'function') window.copaInit();
-            else if (typeof window.copaRender === 'function' && d && d.copa) window.copaRender(d.copa);
+            /* IMPORTANTE (fix race condition 2026-05-06): actualizamos
+               el `_copa` local SÍNCRONO con `d.copa` (= el estado
+               que el backend acaba de persistir, INCLUYENDO el
+               resultado que enviamos). Sin esto, el `_copaResolveTbd`
+               de abajo operaba sobre el `_copa` viejo (estado de
+               antes del save) y POSTeaba `/api/copa/state_set` con
+               ese estado viejo, sobreescribiendo el resultado
+               recién guardado. El usuario veía el FIN aparecer
+               durante 1 segundo (fetch de copaInit traía el estado
+               correcto) y desaparecer (state_set lo borraba). */
+            if (d && d.copa && typeof window.copaRender === 'function') {
+              window.copaRender(d.copa);
+            }
             /* Tras guardar, resolvemos TBDs de rondas posteriores si
-               este partido era single-leg (r1/r2/r16/fin tras 2026-05-05). */
+               este partido era single-leg (r1/r2/r16/fin tras 2026-05-05).
+               Ahora `_copa` ya tiene el resultado nuevo, así que el
+               state_set que envíe estará completo. */
             if (_copaWinName && (ronda === 'r1' || ronda === 'r2' || ronda === 'r16' || ronda === 'fin') && typeof window._copaResolveTbdExternal === 'function') {
               window._copaResolveTbdExternal(ronda, idx, _copaWinName);
             }
+            /* Refresh defensivo desde el servidor (por si otro
+               cliente hizo cambios). copaInit dispara su fetch
+               async y re-renderiza cuando llegue. */
+            if (typeof window.copaInit === 'function') window.copaInit();
           } catch(_){}
         }).catch(function(){});
     } catch(_){}

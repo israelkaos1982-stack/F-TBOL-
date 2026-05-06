@@ -2412,7 +2412,39 @@
       teams = (clasificados[prev] || []).map(_resolve);
       if (ronda === 'fin' && teams.length < 2) return null;
     }
-    if (!teams.length || teams.length % 2 !== 0) return null;
+    if (!teams.length) return null;
+    /* 2026-05-06 robustez paridad: el chequeo previo `teams.length % 2 !== 0
+       → return null` abortaba el sorteo si el nº de equipos resultaba
+       impar (depende de cuántos equipos PF tenga la liga del usuario y
+       cuántos jugaron r1). El usuario reportó "no hay equipos suficientes"
+       teniendo 20+22+bastantes_PF. Ahora, si la cuenta es impar, en lugar
+       de abortar descartamos UN equipo IA no-humano (preferentemente uno
+       que NO sea TBD, para no perder a ningún humano ni a un ganador
+       pendiente). El equipo descartado simplemente queda fuera de la
+       copa esta temporada — el sorteo procede con el resto. */
+    if (teams.length % 2 !== 0) {
+      try { console.warn('[copa] sortear ' + ronda + ' con ' + teams.length + ' equipos (impar) — descartando 1 IA no-humano'); } catch(_){}
+      var dropIdx = -1;
+      for (var pi = teams.length - 1; pi >= 0; pi--) {
+        var t = teams[pi];
+        if (t && !t.isHuman && !t.isTbd && t.league !== 'liga-ea-sports') { dropIdx = pi; break; }
+      }
+      if (dropIdx < 0) {
+        for (var qi = teams.length - 1; qi >= 0; qi--) {
+          var qt = teams[qi];
+          if (qt && !qt.isHuman && !qt.isTbd) { dropIdx = qi; break; }
+        }
+      }
+      if (dropIdx < 0) {
+        for (var ri2 = teams.length - 1; ri2 >= 0; ri2--) {
+          var rt = teams[ri2];
+          if (rt && !rt.isHuman) { dropIdx = ri2; break; }
+        }
+      }
+      if (dropIdx >= 0) teams.splice(dropIdx, 1);
+      else teams.pop();
+    }
+    if (!teams.length) return null;
     /* Single-leg (r1/r2/fin) → host = menor nivel. Two-leg → host (ida) =
        mayor nivel para que la vuelta caiga en el menor nivel. */
     var hostIsLower = !TWO_LEG[ronda];

@@ -9997,6 +9997,10 @@ window._showSimProgress = function(opts, onDone){
 .restoligas-stats-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .restoligas-stats-team{font-size:11px;color:rgba(255,255,255,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .restoligas-stats-val{font-family:'Bebas Neue',sans-serif;font-size:18px;color:#7df0a0;letter-spacing:1px;font-weight:700;text-align:right;}
+.restoligas-stats-toggle{display:block;width:calc(100% - 16px);margin:6px 8px 8px;padding:8px;border:1px dashed rgba(94,182,228,.45);border-radius:8px;background:rgba(94,182,228,.06);color:#9fdcff;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .14s,border-color .14s;}
+.restoligas-stats-toggle:hover{background:rgba(94,182,228,.14);border-color:rgba(94,182,228,.65);}
+.restoligas-stats-toggle:active{filter:brightness(1.18);}
+.restoligas-stats-more{display:flex;flex-direction:column;border-top:1px dashed rgba(94,182,228,.18);}
 .restoligas-stats-close{display:block;width:100%;margin-top:8px;padding:11px;border:1px solid rgba(255,255,255,.18);border-radius:8px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.7);font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;cursor:pointer;}
 .restoligas-stats-close:hover{background:rgba(255,255,255,.1);color:#fff;}
 </style>
@@ -10433,38 +10437,73 @@ window._showSimProgress = function(opts, onDone){
     try { window._lastRestoStatsDiag = _diag; } catch(_){}
     try { console.log('[restoLigas-stats] inspeccionadas', _diag.length, 'ligas — ver window._lastRestoStatsDiag'); } catch(_){}
     return {
-      goleadores:    topBy('gol',      15),
-      penaltis:      topBy('pen',      15),
-      faltas:        topBy('fk',       15),
-      mvps:          topBy('mvp',      15),
-      porteros:      topBy('imbat',    15),
-      penParados:    topBy('penSaved', 15),
-      amarillas:     topBy('ta',       15),
-      rojas:         topBy('tr',       15)
+      /* Top 50 por categoría — petición usuario 2026-05-06: bajo el
+         15º de cada estadística se muestra un botón "▼ Ver TOP 50"
+         que despliega los 35 restantes (filtrados a >0 ya por topBy).
+         La UI por defecto sigue mostrando los 15 primeros para no
+         sobrecargar la pantalla; el resto está oculto hasta que el
+         usuario pulsa el toggle. */
+      goleadores:    topBy('gol',      50),
+      penaltis:      topBy('pen',      50),
+      faltas:        topBy('fk',       50),
+      mvps:          topBy('mvp',      50),
+      porteros:      topBy('imbat',    50),
+      penParados:    topBy('penSaved', 50),
+      amarillas:     topBy('ta',       50),
+      rojas:         topBy('tr',       50)
     };
   }
   function _renderSection(title, ico, list, valLabel){
-    var rows;
     if(!list.length){
-      rows = '<div class="restoligas-stats-row empty">Sin datos todavía</div>';
-    } else {
-      rows = list.map(function(p, i){
-        return '<div class="restoligas-stats-row">'
-          + '<div class="restoligas-stats-pos">' + (i+1) + '</div>'
-          + '<div class="restoligas-stats-flag">' + (p.flag || '🌍') + '</div>'
-          + '<div class="restoligas-stats-info">'
-          +   '<div class="restoligas-stats-name">' + (p.name||'?') + '</div>'
-          +   '<div class="restoligas-stats-team">' + (p.team||'?') + '</div>'
-          + '</div>'
-          + '<div class="restoligas-stats-val">' + (p[valLabel.field]||0) + '</div>'
-          + '</div>';
-      }).join('');
+      var emptyRow = '<div class="restoligas-stats-row empty">Sin datos todavía</div>';
+      return '<div class="restoligas-stats-section">'
+        + '<div class="restoligas-stats-section-hdr"><span class="restoligas-stats-section-ico">' + ico + '</span><span>' + title + '</span></div>'
+        + '<div class="restoligas-stats-list">' + emptyRow + '</div>'
+        + '</div>';
+    }
+    function _row(p, i){
+      return '<div class="restoligas-stats-row">'
+        + '<div class="restoligas-stats-pos">' + (i+1) + '</div>'
+        + '<div class="restoligas-stats-flag">' + (p.flag || '🌍') + '</div>'
+        + '<div class="restoligas-stats-info">'
+        +   '<div class="restoligas-stats-name">' + (p.name||'?') + '</div>'
+        +   '<div class="restoligas-stats-team">' + (p.team||'?') + '</div>'
+        + '</div>'
+        + '<div class="restoligas-stats-val">' + (p[valLabel.field]||0) + '</div>'
+        + '</div>';
+    }
+    var visible = list.slice(0, 15).map(_row).join('');
+    var hidden  = list.slice(15).map(_row).join('');
+    var moreHtml = '';
+    if(hidden){
+      var sid = 'rls-' + String(valLabel.field || title).replace(/[^A-Za-z0-9_-]/g,'-');
+      moreHtml =
+          '<div class="restoligas-stats-more" id="' + sid + '" style="display:none;">' + hidden + '</div>'
+        + '<button class="restoligas-stats-toggle" data-target="' + sid + '" data-open="0" onclick="window._restoLigasToggleMore(this)">▼ Ver TOP 50</button>';
     }
     return '<div class="restoligas-stats-section">'
       + '<div class="restoligas-stats-section-hdr"><span class="restoligas-stats-section-ico">' + ico + '</span><span>' + title + '</span></div>'
-      + '<div class="restoligas-stats-list">' + rows + '</div>'
+      + '<div class="restoligas-stats-list">' + visible + moreHtml + '</div>'
       + '</div>';
   }
+  /* Toggle del desplegable TOP 50: muestra/oculta los rangos 16-50 de
+     una sección y rota la flecha del botón. Estado guardado en el
+     propio botón vía data-open=0|1. */
+  window._restoLigasToggleMore = function(btn){
+    if(!btn) return;
+    var target = document.getElementById(btn.getAttribute('data-target'));
+    if(!target) return;
+    var open = btn.getAttribute('data-open') === '1';
+    if(open){
+      target.style.display = 'none';
+      btn.setAttribute('data-open','0');
+      btn.innerHTML = '▼ Ver TOP 50';
+    } else {
+      target.style.display = '';
+      btn.setAttribute('data-open','1');
+      btn.innerHTML = '▲ Mostrar solo TOP 15';
+    }
+  };
   window._restoLigasShowStats = function(){
     var ov = document.getElementById('restoligas-stats-ov');
     var holder = document.getElementById('restoligas-stats-content');

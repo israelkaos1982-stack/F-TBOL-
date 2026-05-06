@@ -11809,6 +11809,21 @@
       }
     }
 
+    /* Wall-clock anti-throttling (CLAUDE.md / petición usuario
+       2026-05-05): cuando hay muchos partidos IA-vs-IA simulándose en
+       paralelo (Copa ronda completa = 18 cards), Chrome móvil
+       throttlea cada setInterval — uno tarda 5-12 s en disparar en
+       vez de 1 s. Resultado: 90 game-min duraban 9-12 minutos reales.
+       Fix: en cada tick, calculamos curMin a partir del tiempo REAL
+       transcurrido desde el arranque (Date.now() - _wallStart)
+       multiplicado por la velocidad de juego (1 game-min / 1 sec).
+       Si el browser pausa el tick durante 5 s, al volver curMin
+       avanza 5 game-min de golpe — 1:1 garantizado. Mismo patrón
+       que gmStartTimer del gm-modal. */
+    var _wallStart = Date.now();
+    var _gameMinPerMs = 1 / TICK_MS;        /* 1 game-min por 1000 ms reales */
+    var _varPauseMs = 0;                    /* total ms congelados por VAR */
+    var _varPauseStart = 0;                 /* cuándo empezó la pausa actual */
     var interval = setInterval(function() {
       /* Watchdog: si _varActive lleva más de 5 s, lo forzamos a false.
          Antes, si la setTimeout del VAR fallaba (excepción al actualizar
@@ -11816,9 +11831,15 @@
          congelaba en su minuto actual sin avanzar. */
       if (_varActive && _varActiveSince && (Date.now() - _varActiveSince) > 5000) {
         _varActive = false; _varActiveSince = 0;
+        if (_varPauseStart) { _varPauseMs += Date.now() - _varPauseStart; _varPauseStart = 0; }
       }
       if (_varActive) return; /* VAR review in progress – freeze tick */
-      curMin = Math.min(curMin + 1, _etTopMin);
+      /* curMin derivado del wall-clock REAL, descontando pausas VAR.
+         Inmune al throttling de setInterval cuando hay muchos
+         partidos en paralelo. */
+      var _elapsedMs = Date.now() - _wallStart - _varPauseMs;
+      curMin = Math.min(Math.floor(_elapsedMs * _gameMinPerMs), _etTopMin);
+      if (curMin < 0) curMin = 0;
       /* Actualizar PRIMERO el label visible. Antes esto estaba al final
          del tick — si una excepción saltaba dentro del while (procesado
          de eventos, VAR, sustitución, etc.), curMin avanzaba internamente
@@ -11857,6 +11878,7 @@
         if (ev.var) {
           _varActive = true;
           _varActiveSince = Date.now();
+          _varPauseStart = Date.now(); /* anti-throttling: descontamos los 3 s del VAR */
           /* Veredicto ya decidido en genMatchEventsEnhanced. Si por
              cualquier razón viene sin flag (p.ej. eventos antiguos en
              localStorage) hacemos el 50/50 aquí como fallback. */
@@ -11924,6 +11946,7 @@
               }
               _varActive = false;
               _varActiveSince = 0;
+              if (_varPauseStart) { _varPauseMs += Date.now() - _varPauseStart; _varPauseStart = 0; }
             }, 3000);
           })(ev, ico, _varConfirmed);
           break; /* Exit while loop – VAR is handling this event */

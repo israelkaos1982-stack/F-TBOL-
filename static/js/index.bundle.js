@@ -5166,6 +5166,41 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'amistoso':   "eFootballM Origin",
       'superliga':  "PARADISE Morado"
     };
+    /* Override del admin desde "Ball Storage" (s-admin-balls) — el
+       admin puede elegir un balón distinto por competición y se
+       persiste en localStorage `ball_by_comp_v1`. Petición usuario
+       2026-05-05: hasta que el admin re-edite, ese balón es el que
+       se usa por defecto en cualquier partido humano de esa
+       competición. La key del override coincide con el `key` de
+       BALL_DB (liga / copa / sc / champions / etc.). Mapping
+       compKey → BALL_DB.key para los aliases más comunes. */
+    var _COMP_TO_BDB = {
+      'liga':'liga','copa':'copa','copa-fin':'copa',
+      'sc':'supercopa','sc-final':'supercopa',
+      'ucl':'champions','ucl-fin':'champions',
+      'uel':'uel','uel-fin':'uel',
+      'uecl':'uecl','uecl-fin':'uecl',
+      'recopa':'recopa','recopa-fin':'recopa',
+      'usc':'usc','usc-fin':'usc',
+      'inter':'intercontinental','inter-fin':'intercontinental',
+      'sel':'selecciones','sel-fin':'selecciones',
+      'amistoso':'amistosos',
+      'superliga':'champions',
+      'eur-grupo':'champions','eur-ko':'champions','eur-fin':'champions'
+    };
+    try {
+      var _ovRaw = localStorage.getItem('ball_by_comp_v1');
+      if (_ovRaw) {
+        var _ov = JSON.parse(_ovRaw) || {};
+        var _bdbKey = _COMP_TO_BDB[compKey];
+        var _ovBall = _bdbKey && _ov[_bdbKey];
+        if (_ovBall && typeof _ovBall === 'string') {
+          /* El admin ha guardado un balón distinto para esta comp →
+             gana sobre el default hardcoded. */
+          COMP_BALL[compKey] = _ovBall.replace(/_/g, ' ');
+        }
+      }
+    } catch(_){}
     if (COMP_BALL[compKey]) {
       balon = COMP_BALL[compKey];
     }

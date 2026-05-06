@@ -10136,6 +10136,9 @@
                   && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
     /* Supercopa de España (sc): single-leg con ET+pen igual que Copa. */
     var _isScSL = !!_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final';
+    /* Recopa de Europa: TODAS las rondas son single-leg con ET+pen.
+       Si empate al 90', prórroga; al 120' penaltis. 2026-05-06. */
+    var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa';
     /* Amistoso ELIMINATORIA: misma regla que Copa single-leg — empate
        al 90' fuerza prórroga, empate al 120' fuerza penaltis (petición
        usuario 2026-05-05). */
@@ -10157,6 +10160,7 @@
     }
     var _shouldForceET = (_isCopaSL && _gm.sc.a === _gm.sc.b)
                        || (_isScSL && _gm.sc.a === _gm.sc.b)
+                       || (_isRecopaSL && _gm.sc.a === _gm.sc.b)
                        || (_isAmsElim && _gm.sc.a === _gm.sc.b)
                        || (_isAmsDobleVuelta && _amsDobleTied);
     if (_shouldForceET && !_gm.penDone) {
@@ -10379,6 +10383,43 @@
             _slMvp ? _slMvp.team : '',
             _gm.matchStats || null
           );
+        }
+      } catch(_e){}
+    } else if (_gm._isRecopa || _gm.comp === 'recopa') {
+      /* Recopa de Europa HvIA / HvH: persistimos en recopa_state_v1
+         vía _recopaSaveHumanResult (definido en el IIFE de s-recopa).
+         Single-leg con ET+pen — _gm.etScores y _gm.penWinner ya se
+         rellenan durante gmEndMatch tras la prórroga + penaltis. */
+      try {
+        var _rcEt = _gm.etScores || {};
+        var _rcPenWin = _gm.penWinner || null;
+        if (!_rcPenWin) {
+          var _rcPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
+          if (_rcPenEv) _rcPenWin = _rcPenEv.team === 'a' ? 'a' : 'b';
+        } else if (_rcPenWin === _gm.home) _rcPenWin = 'a';
+        else if (_rcPenWin === _gm.away) _rcPenWin = 'b';
+        var _rcMvpEv = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+        var _rcMvpName = _rcMvpEv ? (_rcMvpEv.player || _rcMvpEv.name || '') : '';
+        var _rcMvpTeam = _rcMvpEv ? (_rcMvpEv.team === 'a' ? _gm.home : (_rcMvpEv.team === 'b' ? _gm.away : '')) : '';
+        if (typeof window._recopaSaveHumanResult === 'function') {
+          window._recopaSaveHumanResult(
+            _gm._recopaPhase, _gm._recopaIdx,
+            _gm.sc.a, _gm.sc.b,
+            _rcEt.a || 0, _rcEt.b || 0,
+            _rcPenWin,
+            _gm.events || [],
+            _rcMvpName, _rcMvpTeam,
+            _gm.home, _gm.away
+          );
+        }
+        /* Sumar al store de stats de Liga EA para que goles/MVP/cards
+           cuenten en plantillas igual que Copa/SC. */
+        if (typeof window.registrarLigaPlayerStats === 'function') {
+          var _rcStatsEv = (_gm.events || []).filter(function(e){
+            return e && e.type !== 'pen-result' && !e._varAnulado;
+          });
+          var _rcMk = 'recopa_' + (_gm._recopaPhase || 'r64') + '_' + (_gm._recopaIdx || 0);
+          window.registrarLigaPlayerStats(_rcMk, _gm.home, _gm.away, _rcStatsEv, _rcMvpName, _rcMvpTeam, 'recopa');
         }
       } catch(_e){}
     } else if (_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final') {
@@ -10870,7 +10911,10 @@
       _isSc: !!_gm._isSc,
       _scKey: _gm._scKey,
       _scIdx: _gm._scIdx,
-      _scStadium: _gm._scStadium
+      _scStadium: _gm._scStadium,
+      _isRecopa: !!_gm._isRecopa,
+      _recopaPhase: _gm._recopaPhase,
+      _recopaIdx: _gm._recopaIdx
     };
   }
   /* Reabre un partido guardado en `window._gmBg`. Invoca `gmOpen` con
@@ -10983,6 +11027,9 @@
     _gm._scKey = saved ? saved._scKey : null;
     _gm._scIdx = saved ? saved._scIdx : null;
     _gm._scStadium = saved ? saved._scStadium : null;
+    _gm._isRecopa = saved ? !!saved._isRecopa : false;
+    _gm._recopaPhase = saved ? saved._recopaPhase : null;
+    _gm._recopaIdx = saved ? saved._recopaIdx : null;
     /* Registro global para el hub PARTIDOS LIVE: expone el estado del
        partido abierto en gm-modal para que buildLiveScreen pueda
        mostrarlo como tarjeta live aunque el usuario navegue a otra
@@ -11109,12 +11156,13 @@
          engine de Copa al confirmar la vuelta. */
       var _isCopa = !!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin';
       var _isCopaSingleLeg = _isCopa && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
+      var _isRecopaCfg = !!_gm._isRecopa || _gm.comp === 'recopa';
       /* Supercopa España: el botón PRÓRROGA NO se muestra. El sistema
          fuerza prórroga + penaltis automáticamente cuando hay empate
          al pulsar FINALIZAR (rama _isScSL en gmEndMatch). Petición
          usuario 2026-05-05: interface limpia como Copa HvIA. */
       var _isScSL = !!_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final';
-      var _showET = ((_gm.isHvH && !_gm.noET && !_isLiga && !_isScSL) || _isCopaSingleLeg);
+      var _showET = ((_gm.isHvH && !_gm.noET && !_isLiga && !_isScSL && !_isRecopaCfg) || _isCopaSingleLeg);
       etBtn.style.display = _showET ? '' : 'none';
       etBtn.disabled = !!_gm.etDone;
       etBtn.style.opacity = _gm.etDone ? '0.35' : '1';
@@ -11474,6 +11522,23 @@
         });
         var _copaMk = 'copa_' + ronda + '_' + idx + '_' + (esVuelta ? 'v' : 'i');
         window.registrarLigaPlayerStats(_copaMk, home, away, _statsEv, mvp || '', _mvpTeamName, 'copa');
+      }
+    } catch(_){}
+  };
+
+  /* Recopa de Europa HvIA / HvH: abre gm-modal con comp='recopa' y los
+     flags _isRecopa/_recopaPhase/_recopaIdx para que gmEndMatch
+     persista vía _recopaSaveHumanResult en recopa_state_v1.
+     Single-leg con ET+pen automático si empate al 90'. 2026-05-06. */
+  window.abrirRecopa = function (phase, idx, home, away) {
+    var isHvH = esHumano(home) && esHumano(away);
+    gmOpen(0, home, away, isHvH, 'recopa', false, false);
+    try {
+      if (window.__GM_LIVE) {
+        window.__GM_LIVE._isRecopa = true;
+        window.__GM_LIVE._recopaPhase = phase;
+        window.__GM_LIVE._recopaIdx = idx;
+        window.__GM_LIVE.comp = 'recopa';
       }
     } catch(_){}
   };
@@ -11928,7 +11993,12 @@
        (ET + pen si empate al 90'/120'). Stats van a la plantilla del
        ligaExt vía window._lecPersistAfterIa. 2026-05-06. */
     var _isLecSim = typeof mk === 'string' && mk.indexOf('lec_') === 0;
-    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim || _isLecSim;
+    /* Recopa de Europa (recopa_<phase>_<idx>): TODAS las rondas son
+       single-leg con ET+pen — partido único en el campo del primer
+       equipo del sorteo, prórroga + penaltis si empate al 90'.
+       Persist vía window._recopaPersistAfterIa. 2026-05-06. */
+    var _isRecopaSim = typeof mk === 'string' && mk.indexOf('recopa_') === 0;
+    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim || _isLecSim || _isRecopaSim;
     var _copaET = { et_gl: 0, et_gv: 0, pen_winner: null };
 
     /* COPA SINGLE-LEG con empate previsto al 90': el partido va a
@@ -12329,6 +12399,9 @@
            ligaExt_<slug>.copa vía window._lecPersistAfterIa
            (definido en el IIFE de s-lext-copa). 2026-05-06. */
         var __isLecSimPersist = typeof mk === 'string' && mk.indexOf('lec_') === 0;
+        /* Recopa de Europa: mk con prefijo recopa_ → persistir en
+           recopa_state_v1 vía window._recopaPersistAfterIa. 2026-05-06. */
+        var __isRecopaSimPersist = typeof mk === 'string' && mk.indexOf('recopa_') === 0;
         if (__isCopaSim && typeof window._copaSimLivePersist === 'function') {
           try {
             window._copaSimLivePersist(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam);
@@ -12341,6 +12414,10 @@
           try {
             window._lecPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
           } catch(_e) { try { console.error('[lecSimLive persist]', _e); } catch(__){} }
+        } else if (__isRecopaSimPersist && typeof window._recopaPersistAfterIa === 'function') {
+          try {
+            window._recopaPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
+          } catch(_e) { try { console.error('[recopaSimLive persist]', _e); } catch(__){} }
         } else {
           var results = loadResults();
           var key = rKey(j, home, away);
@@ -12360,8 +12437,8 @@
           if (!window._iaRunningCount) {
             if (__isCopaSim) {
               if (typeof window.copaInit === 'function') window.copaInit();
-            } else if (__isScSimPersist || __isLecSimPersist) {
-              /* SC y Lec ya re-renderizan dentro de su propio
+            } else if (__isScSimPersist || __isLecSimPersist || __isRecopaSimPersist) {
+              /* SC, Lec y Recopa ya re-renderizan dentro de su propio
                  persistAfterIa. No tocamos la tabla de Liga. */
             } else {
               if (typeof window.buildIAresults === 'function') window.buildIAresults();

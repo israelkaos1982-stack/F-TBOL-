@@ -5780,6 +5780,559 @@ window._showSimProgress = function(opts, onDone){
   </div>
 </div>
 </div>
+
+<!-- ═══ RECOPA DE EUROPA · Pantalla principal + 6 rondas ═══
+     Petición usuario 2026-05-06. Competición europea single-leg
+     con 64 equipos. Pool: campeón + (subcampeón opcional) de cada
+     copa nacional de Resto de Ligas + equipos españoles añadidos
+     manualmente vía "EA Sports → Europa" (slug 'recopa').
+     6 rondas K.O., cada partido a partido único con ET+pen si
+     empate al 90'.
+-->
+<div class="screen" id="s-recopa">
+<button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa de Europa</h2></div>
+<div id="recopa-banner" style="display:flex;flex-direction:column;gap:8px;align-items:center;margin:6px 0 10px;padding:0 8px;"></div>
+<div class="jlist">
+<div class="jblock" id="recopa-rd-r64-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r64')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;1/64</span><span class="recopa-rd-cnt" id="recopa-rd-r64-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+<div class="jblock" id="recopa-rd-r32-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r32')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Dieciseisavos</span><span class="recopa-rd-cnt" id="recopa-rd-r32-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+<div class="jblock" id="recopa-rd-r16-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r16')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Octavos de Final</span><span class="recopa-rd-cnt" id="recopa-rd-r16-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+<div class="jblock" id="recopa-rd-r8-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r8')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Cuartos de Final</span><span class="recopa-rd-cnt" id="recopa-rd-r8-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+<div class="jblock" id="recopa-rd-sf-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-sf')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Semifinales</span><span class="recopa-rd-cnt" id="recopa-rd-sf-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+<div class="jblock" id="recopa-rd-fin-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-fin')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;FINAL</span><span class="recopa-rd-cnt" id="recopa-rd-fin-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+</div>
+</div>
+<div class="screen" id="s-recopa-rd-r64"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · 1/64</h2></div><div id="recopa-rd-r64-body" style="padding:0 4px 20px;"></div></div>
+<div class="screen" id="s-recopa-rd-r32"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Dieciseisavos</h2></div><div id="recopa-rd-r32-body" style="padding:0 4px 20px;"></div></div>
+<div class="screen" id="s-recopa-rd-r16"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Octavos de Final</h2></div><div id="recopa-rd-r16-body" style="padding:0 4px 20px;"></div></div>
+<div class="screen" id="s-recopa-rd-r8"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Cuartos de Final</h2></div><div id="recopa-rd-r8-body" style="padding:0 4px 20px;"></div></div>
+<div class="screen" id="s-recopa-rd-sf"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Semifinales</h2></div><div id="recopa-rd-sf-body" style="padding:0 4px 20px;"></div></div>
+<div class="screen" id="s-recopa-rd-fin"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · FINAL</h2></div><div id="recopa-rd-fin-body" style="padding:0 4px 20px;"></div></div>
+
+<style>
+.c-recopa{background:linear-gradient(90deg,#2a1400,#5a2a00,#8a3c00,#5a2a00,#2a1400) !important;border:1px solid rgba(160,80,0,.55) !important;}
+.c-recopa.copa-rd-done{filter:saturate(.55) brightness(.7);}
+.recopa-card{margin:8px;padding:10px 12px;background:linear-gradient(135deg,#1a0c00 0%,#321a00 50%,#1a0c00 100%);border:1px solid rgba(160,80,0,.5);border-radius:10px;}
+.recopa-card.played{border-color:rgba(95,224,138,.45);}
+.recopa-card-row{display:grid;grid-template-columns:1fr 90px 1fr;align-items:center;gap:8px;}
+.recopa-card-side{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;}
+.recopa-card-side img{width:48px;height:48px;object-fit:contain;}
+.recopa-card-name{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.5px;color:#fff;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;}
+.recopa-card-name.win{color:#5fe08a;text-shadow:0 0 10px rgba(95,224,138,.55);}
+.recopa-card-name.lose{color:rgba(255,255,255,.55);text-decoration:line-through;text-decoration-color:rgba(255,90,90,.4);}
+.recopa-card-mid{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.recopa-card-score{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#f0c040;letter-spacing:2px;background:rgba(0,0,0,.4);border-radius:6px;padding:3px 12px;border:1px solid rgba(255,255,255,.12);}
+.recopa-card-score.played{color:#f0c040;}
+.recopa-card-pen{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.2px;color:#ffd54a;text-align:center;}
+.recopa-card-act{padding:5px 12px;border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;-webkit-tap-highlight-color:transparent;}
+.recopa-card-act.previa{background:rgba(255,90,170,.15);color:#ff80b0;border-color:rgba(255,90,170,.6);}
+.recopa-card-act.simular{background:rgba(60,200,120,.15);color:#7df0a0;border-color:rgba(60,200,120,.6);}
+.recopa-card-act:disabled{opacity:.5;cursor:not-allowed;}
+#recopa-banner button{padding:9px 18px;border-radius:8px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;width:100%;max-width:340px;}
+.recopa-btn-sortear{background:rgba(160,80,0,.18);color:#ffa050;border:1.5px solid rgba(255,160,80,.55);}
+.recopa-btn-sortear:hover{background:rgba(160,80,0,.30);}
+.recopa-btn-reset{background:rgba(255,90,90,.10);color:#ff8080;border:1px solid rgba(255,90,90,.40);opacity:.65;}
+.recopa-banner-info{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.65);text-align:center;line-height:1.4;}
+.recopa-empty{padding:24px 14px;text-align:center;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;}
+.recopa-champ-row{margin:14px 8px;padding:14px 10px;border:2px solid #ffd700;background:linear-gradient(180deg,rgba(255,215,0,.08),transparent 80%);border-radius:12px;display:flex;align-items:center;gap:14px;box-shadow:0 0 24px rgba(255,215,0,.30);}
+.recopa-champ-row .recopa-champ-shield img{width:64px;height:64px;object-fit:contain;}
+.recopa-champ-row .recopa-champ-name{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#ffd700;letter-spacing:2px;}
+.recopa-champ-row .recopa-champ-lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.6);}
+</style>
+
+<script>
+(function(){
+  /* ═══════════════════════════════════════════════════════════════
+     RECOPA DE EUROPA · Motor + UI
+     ═══════════════════════════════════════════════════════════════
+     Estado en localStorage `recopa_state_v1`:
+       { pool: ['Team1', ...],   // 64 equipos al sortear r64
+         sorteo: { r64:[m,...], r32:[...], r16:[...], r8:[...],
+                   sf:[...], fin:[...] },
+         champion: 'Team' | null,
+         runnerUp: 'Team' | null }
+     Cada match: { home, away, played, gh, ga, etGh, etGa, penWinner }.
+     Todas las rondas son a partido único con prórroga + penaltis si
+     empate al 90'.
+     Pool: campeón + (subcampeón si data.config.recopaSubcampeon=true)
+     de cada `ligaExt_<slug>.copa`, más equipos manuales de `_meaTeamsFor('recopa')`.
+     ═══════════════════════════════════════════════════════════════ */
+  var STORE_KEY = 'recopa_state_v1';
+  var PHASES = ['r64','r32','r16','r8','sf','fin'];
+  var PHASE_LABEL = { r64:'1/64', r32:'Dieciseisavos', r16:'Octavos', r8:'Cuartos', sf:'Semifinales', fin:'FINAL' };
+  var PHASE_SIZE  = { r64:32, r32:16, r16:8, r8:4, sf:2, fin:1 }; /* nº de matches */
+  var NEXT_PHASE  = { r64:'r32', r32:'r16', r16:'r8', r8:'sf', sf:'fin', fin:null };
+  var DOM_BODY    = { r64:'recopa-rd-r64-body', r32:'recopa-rd-r32-body', r16:'recopa-rd-r16-body', r8:'recopa-rd-r8-body', sf:'recopa-rd-sf-body', fin:'recopa-rd-fin-body' };
+
+  function _load(){
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)||'null'); } catch(_){ return null; }
+  }
+  function _save(s){
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch(_){}
+  }
+  function _shuffle(a){
+    a = a.slice();
+    for(var i=a.length-1;i>0;i--){
+      var j=Math.floor(Math.random()*(i+1));
+      var t=a[i]; a[i]=a[j]; a[j]=t;
+    }
+    return a;
+  }
+  function _esc(s){
+    return String(s||'').replace(/[&<>"']/g, function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});
+  }
+  function _logo(name){
+    if(typeof window.getTeamLogoUrl==='function'){
+      try { return window.getTeamLogoUrl(name) || ''; } catch(_){}
+    }
+    return '';
+  }
+  function _isHuman(name){
+    if(typeof window.esHumano==='function'){
+      try { return !!window.esHumano(name); } catch(_){}
+    }
+    var H = window.HUMAN_TEAMS || [];
+    return H.indexOf(name) !== -1;
+  }
+
+  /* Construye el pool de 64 equipos a partir de:
+     - Campeón de cada ligaExt_<slug>.copa (1 por liga si existe).
+     - Subcampeón si data.config.recopaSubcampeon === true (0 o 1 más).
+     - Equipos manuales españoles añadidos vía "EA Sports → Europa"
+       slug 'recopa' (window._meaTeamsFor('recopa')).
+     Si hay más de 64, se trunca por ranking aleatorio (shuffle + slice).
+     Si hay menos, se devuelve lo que haya — el sorteo de r64 se hace
+     con los disponibles (las "BYE" no están soportadas por ahora). */
+  function _buildPool(){
+    var pool = [];
+    var seen = {};
+    function _push(name){
+      var nm = String(name||'').trim();
+      if(!nm) return;
+      if(/^@[a-z0-9]+#\d+$/i.test(nm)) return; /* TBD pendiente */
+      if(seen[nm]) return;
+      seen[nm] = true;
+      pool.push(nm);
+    }
+    /* 1. Campeones / subcampeones de Resto de Ligas */
+    try {
+      for(var i=0; i<localStorage.length; i++){
+        var k = localStorage.key(i);
+        if(!k || k.indexOf('ligaExt_') !== 0) continue;
+        if(k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1 || k.indexOf('_snap_') !== -1) continue;
+        var raw = localStorage.getItem(k);
+        if(!raw) continue;
+        var parsed; try { parsed = JSON.parse(raw); } catch(_){ continue; }
+        if(!parsed || !parsed.copa) continue;
+        if(parsed.copa.champion) _push(parsed.copa.champion);
+        if(parsed.config && parsed.config.recopaSubcampeon && parsed.copa.runnerUp){
+          _push(parsed.copa.runnerUp);
+        }
+      }
+    } catch(_){}
+    /* 2. Equipos manuales españoles desde EA Sports → Europa */
+    try {
+      if(typeof window._meaTeamsFor === 'function'){
+        var manual = window._meaTeamsFor('recopa') || [];
+        manual.forEach(function(t){
+          if(t && t.name) _push(t.name);
+        });
+      }
+    } catch(_){}
+    return pool;
+  }
+
+  /* Sortea los 64 (o menos) equipos en 32 partidos aleatorios.
+     Si hay menos de 64, se sortean los disponibles. Si hay impar,
+     se descarta el último (random shuffle ya). */
+  function _drawR64(pool){
+    var sh = _shuffle(pool);
+    if(sh.length % 2 !== 0) sh.pop();
+    var matches = [];
+    for(var i=0; i<sh.length; i+=2){
+      matches.push({home: sh[i], away: sh[i+1], played:false, gh:null, ga:null, etGh:0, etGa:0, penWinner:null});
+    }
+    return matches;
+  }
+  /* Sortea la siguiente ronda con los ganadores de la previa. */
+  function _drawNext(prevMatches){
+    var winners = [];
+    prevMatches.forEach(function(m){
+      if(m && m.played){
+        var w = _winnerOf(m);
+        if(w) winners.push(w);
+      }
+    });
+    var sh = _shuffle(winners);
+    if(sh.length % 2 !== 0) sh.pop();
+    var matches = [];
+    for(var i=0; i<sh.length; i+=2){
+      matches.push({home: sh[i], away: sh[i+1], played:false, gh:null, ga:null, etGh:0, etGa:0, penWinner:null});
+    }
+    return matches;
+  }
+  function _winnerOf(m){
+    if(!m || !m.played) return null;
+    var totA = (m.gh||0) + (m.etGh||0);
+    var totB = (m.ga||0) + (m.etGa||0);
+    if(m.penWinner === 'a') return m.home;
+    if(m.penWinner === 'b') return m.away;
+    if(totA > totB) return m.home;
+    if(totB > totA) return m.away;
+    return null;
+  }
+  function _phaseDone(s, phase){
+    var ms = (s.sorteo && s.sorteo[phase]) || [];
+    if(!ms.length) return false;
+    for(var i=0;i<ms.length;i++) if(!ms[i].played) return false;
+    return true;
+  }
+  function _firstPendingPhase(s){
+    if(!s || !s.sorteo) return null;
+    for(var i=0;i<PHASES.length;i++){
+      var p = PHASES[i];
+      var ms = s.sorteo[p];
+      if(!ms || !ms.length) return p;
+      if(!_phaseDone(s, p)) return p;
+    }
+    return null;
+  }
+
+  /* ── PUBLIC API ───────────────────────────────────────────────── */
+  window._recopaSortear = function(){
+    var s = _load() || {};
+    var phase = s.sorteo ? _firstPhaseToDraw(s) : 'r64';
+    if(phase === 'r64'){
+      var pool = _buildPool();
+      if(pool.length < 2){
+        alert('⚠️ Necesitas al menos 2 equipos para sortear la Recopa.\n\nPool actual: ' + pool.length + '\n\nEl pool se construye con:\n  · Campeones de las copas de Resto de Ligas\n  · Subcampeones (si la copa lo tiene activado en sus Reglas)\n  · Equipos españoles añadidos vía EA Sports → Europa.');
+        return;
+      }
+      var conf = pool.length >= 64 ? '64' : (pool.length + ' (faltan ' + (64-pool.length) + ' para llenar el pool)');
+      if(s.sorteo && s.sorteo.r64 && s.sorteo.r64.length){
+        if(!confirm('Ya hay un sorteo de 1/64 hecho. ¿Re-sortear con los ' + conf + ' equipos del pool actual?\n\nSe perderán los resultados ya jugados de esta edición.')) return;
+      }
+      var newSorteo = { r64:_drawR64(pool), r32:[], r16:[], r8:[], sf:[], fin:[] };
+      s = { pool: pool.slice(0, 64), sorteo: newSorteo, champion:null, runnerUp:null };
+      _save(s);
+      _recopaInit();
+      try { go('s-recopa-rd-r64'); } catch(_){}
+      return;
+    }
+    if(!phase){
+      alert('La Recopa ya tiene campeón. Pulsa ♻️ Reset si quieres rehacerla.');
+      return;
+    }
+    /* Rondas posteriores: sortear con ganadores de la previa. */
+    var prev = PHASES[PHASES.indexOf(phase)-1];
+    if(!prev || !s.sorteo[prev] || !_phaseDone(s, prev)){
+      alert('⚠️ Tienes que terminar todos los partidos de la ronda anterior antes de sortear ' + (PHASE_LABEL[phase]||phase) + '.');
+      return;
+    }
+    s.sorteo[phase] = _drawNext(s.sorteo[prev]);
+    _save(s);
+    _recopaInit();
+    try { go('s-recopa-rd-' + phase); } catch(_){}
+  };
+  function _firstPhaseToDraw(s){
+    /* Devuelve la primera fase que necesita sortear (sus matches están vacíos) */
+    for(var i=0;i<PHASES.length;i++){
+      var p = PHASES[i];
+      var ms = s.sorteo && s.sorteo[p];
+      if(!ms || !ms.length) return p;
+    }
+    return null;
+  }
+
+  window._recopaReiniciar = function(){
+    if(!confirm('¿Reiniciar Recopa de Europa?\n\nSe pierden el sorteo y todos los resultados de esta edición. El pool se reconstruye al pulsar Sortear 1/64.')) return;
+    try { localStorage.removeItem(STORE_KEY); } catch(_){}
+    _recopaInit();
+  };
+
+  /* Persist hook llamado por iaSimLive cuando termina un partido
+     IA-vs-IA con prefijo `recopa_<phase>_<idx>`. */
+  window._recopaPersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam, copaET){
+    var m = /^recopa_([a-z0-9]+)_(\d+)$/.exec(String(mk||''));
+    if(!m) return;
+    var phase = m[1], idx = parseInt(m[2],10)|0;
+    var s = _load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var match = s.sorteo[phase][idx]; if(!match) return;
+    var et = copaET || {};
+    var totA = Number(scA)||0, totB = Number(scB)||0;
+    var etA = Number(et.et_gl)||0, etB = Number(et.et_gv)||0;
+    var penWinName = et.pen_winner || null;
+    match.gh = Math.max(0, totA - etA);
+    match.ga = Math.max(0, totB - etB);
+    match.etGh = etA;
+    match.etGa = etB;
+    match.penWinner = penWinName ? (penWinName === home ? 'a' : (penWinName === away ? 'b' : null)) : null;
+    match.played = true;
+    match.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    match.mvp = mvp || '';
+    match.mvpTeam = mvpTeam || '';
+    if(phase === 'fin'){
+      var champ = _winnerOf(match);
+      if(champ){
+        s.champion = champ;
+        s.runnerUp = (champ === match.home) ? match.away : match.home;
+      }
+    }
+    _save(s);
+    setTimeout(function(){
+      if(phase === 'fin' && s.champion && typeof window._lecShowChampion === 'function'){
+        try { window._lecShowChampion(s.champion); } catch(_){}
+      }
+      _recopaInit();
+      _recopaRenderRound(phase);
+    }, 600);
+  };
+  /* Persist hook llamado desde gmEndMatch cuando _gm._isRecopa.
+     Match HvIA / HvH. */
+  window._recopaSaveHumanResult = function(phase, idx, gh, ga, etGh, etGa, penWinner, events, mvp, mvpTeam, home, away){
+    var s = _load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var match = s.sorteo[phase][idx]; if(!match) return;
+    match.gh = Number(gh)||0;
+    match.ga = Number(ga)||0;
+    match.etGh = Number(etGh)||0;
+    match.etGa = Number(etGa)||0;
+    match.penWinner = penWinner || null;
+    match.played = true;
+    match.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    match.mvp = mvp || '';
+    match.mvpTeam = mvpTeam || '';
+    if(phase === 'fin'){
+      var champ = _winnerOf(match);
+      if(champ){
+        s.champion = champ;
+        s.runnerUp = (champ === match.home) ? match.away : match.home;
+      }
+    }
+    _save(s);
+    setTimeout(function(){
+      if(phase === 'fin' && s.champion && typeof window._lecShowChampion === 'function'){
+        try { window._lecShowChampion(s.champion); } catch(_){}
+      }
+    }, 500);
+    _recopaInit();
+    _recopaRenderRound(phase);
+  };
+
+  /* ── RENDER ────────────────────────────────────────────────────── */
+  function _renderBanner(){
+    var host = document.getElementById('recopa-banner');
+    if(!host) return;
+    var s = _load();
+    var html = '';
+    if(!s || !s.sorteo || !s.sorteo.r64 || !s.sorteo.r64.length){
+      var pool = _buildPool();
+      html += '<div class="recopa-banner-info">🟤 La Recopa de Europa enfrenta a los <b>campeones de copa</b> de las 51 ligas + equipos españoles añadidos manualmente. Pool actual: <b>' + pool.length + '</b> equipos.</div>';
+      html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/64 (' + pool.length + ' equipos)</button>';
+    } else {
+      var phase = _firstPhaseToDraw(s);
+      var done = _phaseDone(s, _prevPhase(phase));
+      if(s.champion){
+        html += '<div class="recopa-banner-info">🏆 Campeón: <b>' + _esc(s.champion) + '</b> · Subcampeón: <b>' + _esc(s.runnerUp||'') + '</b></div>';
+      } else if(phase && phase !== 'r64'){
+        var prev = _prevPhase(phase);
+        if(done){
+          html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + '</button>';
+        } else {
+          html += '<div class="recopa-banner-info">⏳ Termina los partidos de <b>' + (PHASE_LABEL[prev]||prev) + '</b> para sortear la siguiente ronda.</div>';
+        }
+      }
+      html += '<button class="recopa-btn-reset" onclick="window._recopaReiniciar&&window._recopaReiniciar()">♻️ Reiniciar Recopa</button>';
+    }
+    host.innerHTML = html;
+  }
+  function _prevPhase(phase){
+    var i = PHASES.indexOf(phase);
+    return i > 0 ? PHASES[i-1] : null;
+  }
+  function _renderCounters(){
+    var s = _load() || {};
+    PHASES.forEach(function(p){
+      var el = document.getElementById('recopa-rd-' + p + '-cnt');
+      var blk = document.getElementById('recopa-rd-' + p + '-blk');
+      if(!el || !blk) return;
+      var ms = (s.sorteo && s.sorteo[p]) || [];
+      var played = 0;
+      ms.forEach(function(m){ if(m && m.played) played++; });
+      var ico, col;
+      if(!ms.length){ ico='○'; col='rgba(255,255,255,.5)'; }
+      else if(played === 0){ ico='○'; col='rgba(255,255,255,.55)'; }
+      else if(played < ms.length){ ico='⏳'; col='#ffd54a'; }
+      else { ico='✅'; col='#5fe08a'; }
+      el.textContent = ico + ' ' + played + '/' + (ms.length||0);
+      el.style.color = col;
+      if(ms.length && played === ms.length) blk.classList.add('copa-rd-done');
+      else blk.classList.remove('copa-rd-done');
+    });
+  }
+  function _renderRound(phase){
+    var bodyId = DOM_BODY[phase]; if(!bodyId) return;
+    var host = document.getElementById(bodyId); if(!host) return;
+    var s = _load() || {};
+    var ms = (s.sorteo && s.sorteo[phase]) || [];
+    if(!ms.length){
+      host.innerHTML = '<div class="recopa-empty">⚠️ Esta ronda aún no se ha sorteado.<br>Vuelve a la pantalla de Recopa y pulsa <b>🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + '</b>.</div>';
+      return;
+    }
+    var html = '';
+    /* Botón "Simular IA" si hay partidos IA-vs-IA pendientes */
+    var pendingIA = false;
+    ms.forEach(function(m){
+      if(!m || m.played) return;
+      if(!_isHuman(m.home) && !_isHuman(m.away)) pendingIA = true;
+    });
+    if(pendingIA){
+      html += '<div style="display:flex;gap:8px;justify-content:center;padding:10px 8px 4px;flex-wrap:wrap;">'
+            + '<button class="copa-btn-sim copa-sim-all" onclick="window._recopaSimAllIA&&window._recopaSimAllIA(\'' + phase + '\')" style="padding:8px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;background:rgba(255,160,40,.15);color:#ffa050;border:1.5px solid rgba(255,160,40,.55);">⚡ Simular IA ' + (PHASE_LABEL[phase]||phase) + '</button>'
+            + '</div>';
+    }
+    /* Si la fase es FIN y ya hay campeón, mostrar un row campeón */
+    if(phase === 'fin' && s.champion){
+      var l = _logo(s.champion);
+      html += '<div class="recopa-champ-row">'
+            + '<div class="recopa-champ-shield">' + (l ? '<img src="' + _esc(l) + '"/>' : '<span style="font-size:48px;">🏆</span>') + '</div>'
+            + '<div><div class="recopa-champ-lbl">CAMPEÓN RECOPA</div><div class="recopa-champ-name">' + _esc(s.champion) + '</div></div>'
+            + '</div>';
+    }
+    ms.forEach(function(m, i){
+      html += _renderMatchCard(m, phase, i);
+    });
+    host.innerHTML = html;
+  }
+  function _renderMatchCard(m, phase, idx){
+    var played = !!m.played;
+    var totA = (m.gh||0) + (m.etGh||0);
+    var totB = (m.ga||0) + (m.etGa||0);
+    var winner = _winnerOf(m);
+    var loser = winner ? (winner === m.home ? m.away : m.home) : null;
+    var lA = _logo(m.home), lB = _logo(m.away);
+    var humA = _isHuman(m.home), humB = _isHuman(m.away);
+    var bothIA = !humA && !humB;
+    var anyHuman = humA || humB;
+    var mk = 'recopa_' + phase + '_' + idx;
+    function _sideHtml(name, isWin, isLose){
+      var cls = isWin ? 'win' : (isLose ? 'lose' : '');
+      var l = _logo(name);
+      var hi = (typeof window.humanIcon === 'function') ? (window.humanIcon(name)||'') : '';
+      return '<div class="recopa-card-side">'
+        + (l ? '<img src="' + _esc(l) + '"/>' : '<span style="font-size:36px;">🛡</span>')
+        + '<div class="recopa-card-name ' + cls + '">' + hi + _esc(name) + '</div>'
+        + '</div>';
+    }
+    var center;
+    if(played){
+      var penTxt = m.penWinner ? '<div class="recopa-card-pen">PEN ' + _esc(m.penWinner === 'a' ? m.home : m.away) + '</div>' : '';
+      center = '<div class="recopa-card-mid"><div class="recopa-card-score played">' + totA + '–' + totB + '</div>' + penTxt + '</div>';
+    } else if(bothIA){
+      center = '<div class="recopa-card-mid">'
+             + '<div class="ml-score" id="ia-sim-score-' + mk + '"><div id="ia-sc-' + mk + '-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#f0c040;min-width:18px;text-align:center;">0</div><span style="margin:0 4px;color:rgba(255,255,255,.5);">–</span><div id="ia-sc-' + mk + '-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#f0c040;min-width:18px;text-align:center;">0</div></div>'
+             + '<button class="recopa-card-act simular" id="ia-sim-btn-' + mk + '" onclick="window.iaSimLive(\'' + mk + '\',\'' + _esc(m.home).replace(/\x27/g,"\\\x27") + '\',\'' + _esc(m.away).replace(/\x27/g,"\\\x27") + '\',0)">▶ Simular</button>'
+             + '</div>';
+    } else {
+      /* Al menos un humano → previa + gm-modal */
+      center = '<div class="recopa-card-mid"><div class="recopa-card-score">– –</div>'
+             + '<button class="recopa-card-act previa" onclick="window._recopaAbrirPrevia&&window._recopaAbrirPrevia(\'' + phase + '\',' + idx + ')">📋 Previa</button>'
+             + '</div>';
+    }
+    var actaId = 'ia-acta-' + mk;
+    return '<div class="recopa-card ' + (played?'played':'') + '">'
+         + '<div class="recopa-card-row">'
+         + _sideHtml(m.home, winner===m.home, loser===m.home)
+         + center
+         + _sideHtml(m.away, winner===m.away, loser===m.away)
+         + '</div>'
+         + (bothIA && !played ? '<div id="' + actaId + '" style="display:none;border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px;font-family:Rajdhani,sans-serif;font-size:12px;max-height:240px;overflow-y:auto;"></div>' : '')
+         + '</div>';
+  }
+
+  /* Simular en cadena todos los IA pendientes de la fase (1 segundo
+     real por partido aprox., porque iaSimLive ya corre 1 game-min =
+     1 sec real; arrancamos uno tras otro con un pequeño delay). */
+  window._recopaSimAllIA = function(phase){
+    var s = _load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var ms = s.sorteo[phase];
+    var i = 0;
+    function next(){
+      while(i < ms.length){
+        var m = ms[i];
+        if(m && !m.played && !_isHuman(m.home) && !_isHuman(m.away)){
+          var btn = document.getElementById('ia-sim-btn-recopa_' + phase + '_' + i);
+          if(btn && !btn.disabled){
+            try { btn.click(); } catch(_){}
+            i++;
+            /* Pequeño retraso entre arranques para no saturar */
+            setTimeout(next, 200);
+            return;
+          }
+        }
+        i++;
+      }
+    }
+    next();
+  };
+
+  /* Abre previa + gm-modal para HvIA / HvH */
+  window._recopaAbrirPrevia = function(phase, idx){
+    var s = _load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var match = s.sorteo[phase][idx]; if(!match) return;
+    var local = match.home, visit = match.away;
+    var isHvH = _isHuman(local) && _isHuman(visit);
+    var matchKey = 'recopa_' + phase + '_' + idx;
+    var duracion = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
+      : (isHvH ? '16.5 min' : '13.5 min');
+    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: 'recopa', recopaPhase: phase, recopaIdx: idx };
+    window._ppCustomCallback = function(){
+      window._ppPreviaTeams = null;
+      if(typeof window.abrirRecopa === 'function'){
+        try { window.abrirRecopa(phase, idx, local, visit); } catch(_){}
+      }
+    };
+    if(typeof window.showPrePartidoOverlay === 'function'){
+      window.showPrePartidoOverlay(matchKey, 'recopa', 'Sí', duracion, isHvH);
+    }
+  };
+
+  /* ── INIT / refresh externo ─────────────────────────────────── */
+  function _recopaInit(){
+    _renderBanner();
+    _renderCounters();
+  }
+  function _recopaRenderRound(phase){
+    _renderRound(phase);
+  }
+  window._recopaRender = function(){
+    _recopaInit();
+    PHASES.forEach(function(p){
+      if(document.getElementById(DOM_BODY[p])) _renderRound(p);
+    });
+  };
+  /* Render perezoso al entrar en cada pantalla */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(_recopaInit, 80); });
+  /* Hook al go() para re-renderizar cuando entras a una pantalla. */
+  (function(){
+    var orig = window.go;
+    if(typeof orig !== 'function' || orig._recopaPatched) return;
+    window.go = function(id){
+      var ret = orig.apply(this, arguments);
+      try {
+        if(id === 's-recopa') _recopaInit();
+        else if(/^s-recopa-rd-/.test(String(id||''))){
+          var phase = String(id).replace('s-recopa-rd-','');
+          _renderRound(phase);
+        }
+      } catch(_){}
+      return ret;
+    };
+    window.go._recopaPatched = true;
+  })();
+})();
+</script>
+
 <div class="screen" id="s-supercopa">
 <button class="back-btn" onclick="go('s-espana')">◀ Volver</button>
 <div class="sec-hdr"><img alt="Supercopa" class="sec-ico" src="/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg" style="width:38px;height:38px;object-fit:contain;"/><h2>Supercopa de España</h2></div>

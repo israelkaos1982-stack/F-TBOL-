@@ -10849,7 +10849,28 @@
       stoppageMax: _gm.stoppageMax,
       startedAt: _gm.startedAt || null,
       speedMult: _gm.speedMult || 1,
-      matchStats: _gm.matchStats || null
+      matchStats: _gm.matchStats || null,
+      /* Flags de competición específica (Copa / Wprev / Superliga / SC):
+         imprescindibles para que gmEndMatch persista el resultado en
+         el endpoint correcto al RESUMIR un partido desde el hub LIVE.
+         Sin esto, _gm._copaRonda/_copaIdx llegaban undefined al
+         resumir → POST /api/copa/guardar_resultado con ronda=undefined
+         → backend 500 → resultado nunca se guardaba (bug 2026-05-06).
+         _gm.comp sí se preservaba, así que el bug no afectaba al
+         routing de la rama (Copa entraba en su branch) pero sí al
+         payload concreto. */
+      _isCopa: !!_gm._isCopa,
+      _copaRonda: _gm._copaRonda,
+      _copaIdx: _gm._copaIdx,
+      _copaVuelta: !!_gm._copaVuelta,
+      _isWprev: !!_gm._isWprev,
+      _wprevGi: _gm._wprevGi,
+      _wprevJ: _gm._wprevJ,
+      _isSuperliga: !!_gm._isSuperliga,
+      _isSc: !!_gm._isSc,
+      _scKey: _gm._scKey,
+      _scIdx: _gm._scIdx,
+      _scStadium: _gm._scStadium
     };
   }
   /* Reabre un partido guardado en `window._gmBg`. Invoca `gmOpen` con
@@ -10940,6 +10961,28 @@
     _gm.noET = saved ? !!saved.noET : !!noET;
     _gm.isFriendly = saved ? !!saved.isFriendly : !!isFriendly;
     _gm.returnScreen = _returnScreen;
+    /* Flags de competición específica: restaurar desde el snapshot si
+       existe, o resetear a false/null para un partido fresh. Esto
+       garantiza que (a) un Copa backgrounded mantiene `_copaRonda/Idx/
+       Vuelta` al resumir, y (b) un partido de Liga abierto tras un
+       Copa no hereda `_isCopa = true` de la ejecución anterior (sin
+       este reset, gmEndMatch enrutaba el Liga al branch de Copa con
+       ronda/idx stale → POST a /api/copa/guardar_resultado con datos
+       incorrectos). Las funciones abrir{Copa,Sc,Superliga,Wprev}
+       sobreescriben estos flags después de gmOpen para los fresh
+       matches que sí pertenecen a una competición especial. */
+    _gm._isCopa = saved ? !!saved._isCopa : false;
+    _gm._copaRonda = saved ? saved._copaRonda : null;
+    _gm._copaIdx = saved ? saved._copaIdx : null;
+    _gm._copaVuelta = saved ? !!saved._copaVuelta : false;
+    _gm._isWprev = saved ? !!saved._isWprev : false;
+    _gm._wprevGi = saved ? saved._wprevGi : null;
+    _gm._wprevJ = saved ? saved._wprevJ : null;
+    _gm._isSuperliga = saved ? !!saved._isSuperliga : false;
+    _gm._isSc = saved ? !!saved._isSc : false;
+    _gm._scKey = saved ? saved._scKey : null;
+    _gm._scIdx = saved ? saved._scIdx : null;
+    _gm._scStadium = saved ? saved._scStadium : null;
     /* Registro global para el hub PARTIDOS LIVE: expone el estado del
        partido abierto en gm-modal para que buildLiveScreen pueda
        mostrarlo como tarjeta live aunque el usuario navegue a otra

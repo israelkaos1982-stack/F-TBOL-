@@ -9528,7 +9528,15 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       }
     }
     var stadiumName = 'eFootball Stadium';
-    if (typeof window.getTeamStadium === 'function') {
+    /* Supercopa España (compKey 'sc'/'sc-final'): el partido es en
+       campo NEUTRAL elegido por el admin en sc_state_v1.stadium —
+       NO usar el local. _ppPreviaTeams.stadium lo trae rellenado.
+       Sin esta rama _mmInjectEnv pisaba 60 ms después con
+       getTeamStadium(local) → mostraba Camp Nou / Signal Iduna en
+       vez de Maracanã (reportado por usuario 2026-05-05). */
+    if ((compKey === 'sc' || compKey === 'sc-final') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
+      stadiumName = window._ppPreviaTeams.stadium;
+    } else if (typeof window.getTeamStadium === 'function') {
       var s = window.getTeamStadium(homeTeamForStadium);
       if (s) stadiumName = s;
     }

@@ -5803,28 +5803,43 @@ window._showSimProgress = function(opts, onDone){
        · Balón: Puma Orbita MFL 1 (ya mapeado en bundle COMP_BALL).
      ════════════════════════════════════════════════════════════════ */
   var STORE_KEY = 'sc_state_v1';
-  var STADIUMS = [
-    'Maracanã (Río de Janeiro · Brasil)',
-    'Estadio Monumental (Buenos Aires · Argentina)',
-    'Estadio Centenario (Montevideo · Uruguay)',
-    'Estadio Nacional (Santiago · Chile)',
-    'Atahualpa (Quito · Ecuador)',
-    'Hernando Siles (La Paz · Bolivia)',
-    'Estadio Defensores del Chaco (Asunción · Paraguay)',
-    'Estadio Metropolitano de Lara (Venezuela)',
-    'Tokio National Stadium (Japón)',
-    'Saitama Stadium 2002 (Japón)',
-    'Seoul World Cup Stadium (Corea del Sur)',
-    'Bukit Jalil National Stadium (Kuala Lumpur · Malasia)',
-    'Rajamangala Stadium (Bangkok · Tailandia)',
-    'King Fahd International Stadium (Riyadh · Arabia Saudí)',
-    'Lusail Iconic Stadium (Doha · Qatar)',
-    'Khalifa International Stadium (Doha · Qatar)',
-    'Mohammed Bin Zayed Stadium (Abu Dhabi · EAU)',
-    'Allianz Stadium (Sídney · Australia)',
-    'Marvel Stadium (Melbourne · Australia)',
-    'Eden Park (Auckland · Nueva Zelanda)'
-  ];
+  /* Estadios de eFootball — solo los que vienen en el juego (window.STADIUM_DB
+     definida en misc_body_2.html, "Admin Estadios"). Filtramos por
+     ubicación: Sudamérica / Asia / Oceanía (petición usuario 2026-05-05).
+     Si STADIUM_DB no estuviera cargado todavía, fallback a los 4 más
+     emblemáticos para que el dropdown nunca esté vacío. */
+  function _scStadiumPool(){
+    var db = (typeof window !== 'undefined' && Array.isArray(window.STADIUM_DB)) ? window.STADIUM_DB : [];
+    /* Conjunto de ciudades válidas — match exacto contra st.city de
+       STADIUM_DB (vive en misc_body_2.html). Cubrimos:
+         · Sudamérica: São Paulo, Buenos Aires, Porto Alegre, Santos,
+           Brasil, América Latina (regiones genéricas).
+         · Asia: Saitama, Asia.
+         · Oceanía.
+       eFootball™ Stadium (city:'Virtual') se incluye como fallback
+       neutro (estadio de la propia plataforma). */
+    var ALLOWED = {
+      'São Paulo':1, 'Porto Alegre':1, 'Santos':1, 'Buenos Aires':1,
+      'Brasil':1, 'América Latina':1, 'Ciudad de Méx.':1, 'Culiacán':1,
+      'Guadalajara':1, 'Monterrey':1,
+      'Saitama':1, 'Asia':1,
+      'Oceanía':1,
+      'Virtual':1
+    };
+    var out = db.filter(function(s){ return s && ALLOWED[s.city]; });
+    if(!out.length){
+      /* Fallback duro si STADIUM_DB aún no está disponible. */
+      return [
+        { id:'sta22', name:'eFootball™ Stadium', city:'Virtual' },
+        { id:'sta19', name:'Más Monumental',     city:'Buenos Aires' },
+        { id:'sta20', name:'La Bombonera',       city:'Buenos Aires' },
+        { id:'sta17', name:'MorumbIS',           city:'São Paulo' },
+        { id:'sta21', name:'Saitama 2002',       city:'Saitama' },
+        { id:'sta28', name:'Rose Park Stadium',  city:'Oceanía' }
+      ];
+    }
+    return out;
+  }
 
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function _load(){
@@ -5878,13 +5893,27 @@ window._showSimProgress = function(opts, onDone){
     if(!el) return;
     var s = _load();
     if(!s){
-      el.innerHTML = '<button class="sc-banner-btn" onclick="window._scOpenSetup&&window._scOpenSetup()">🏆 CONFIGURAR SUPERCOPA — ELEGIR 4 EQUIPOS</button>';
+      el.innerHTML = '<button class="sc-banner-btn" onclick="window._scGateOpenSetup&&window._scGateOpenSetup()">🏆 CONFIGURAR SUPERCOPA</button>';
       return;
     }
     el.innerHTML =
         '<div class="sc-stadium-badge">🏟 <b>' + _esc(s.stadium || '') + '</b> · ⚽ <b>Puma Orbita MFL 1</b></div>'
       + '<button class="sc-banner-btn sc-reset" onclick="window._scReset&&window._scReset()">♻️ Reiniciar Supercopa (vuelve a elegir 4 equipos)</button>';
   }
+
+  /* Gate admin PIN 747 antes de abrir el setup. Reusa window.pG (la
+     misma función que usa Sim/Res en Resto de Ligas). Si la sesión
+     admin ya está desbloqueada (window._adm===true), pG ejecuta la
+     callback al instante. Petición usuario 2026-05-05. */
+  window._scGateOpenSetup = function(){
+    if(typeof window.pG === 'function'){
+      window.pG(function(){ window._scOpenSetup && window._scOpenSetup(); });
+    } else {
+      /* Fallback: si pG no está disponible (timing raro), cae al
+         abrir directo. El admin verá el setup y podrá cancelar. */
+      window._scOpenSetup && window._scOpenSetup();
+    }
+  };
 
   /* ── SETUP OVERLAY ── */
   window._scOpenSetup = function(){
@@ -5901,9 +5930,13 @@ window._showSimProgress = function(opts, onDone){
       if(sel) sel.innerHTML = optsTeams;
     });
     var stSel = document.getElementById('sc-pick-stadium');
-    if(stSel) stSel.innerHTML = STADIUMS.map(function(st){
-      return '<option value="' + _esc(st) + '">' + _esc(st) + '</option>';
-    }).join('');
+    if(stSel){
+      var pool = _scStadiumPool();
+      stSel.innerHTML = pool.map(function(st){
+        var lbl = st.name + ' · ' + st.city;
+        return '<option value="' + _esc(st.name) + '">' + _esc(lbl) + '</option>';
+      }).join('');
+    }
     var ov = document.getElementById('sc-setup-ov');
     if(ov) ov.classList.add('show');
   };
@@ -5920,7 +5953,8 @@ window._showSimProgress = function(opts, onDone){
       if(picks.indexOf(v) !== -1){ alert('Equipo repetido: ' + v + '. Elige 4 distintos.'); return; }
       picks.push(v);
     }
-    var stadium = (document.getElementById('sc-pick-stadium')||{}).value || STADIUMS[0];
+    var stadium = (document.getElementById('sc-pick-stadium')||{}).value
+                  || (_scStadiumPool()[0] || {name:'eFootball™ Stadium'}).name;
     var s = {
       teams: picks,
       stadium: stadium,
@@ -6062,61 +6096,106 @@ window._showSimProgress = function(opts, onDone){
     if(!s) return;
     var m = key === 'fin' ? s.final : s.semis[idx];
     if(!m || m.played) return;
-    /* Setear estadio + balón vía _ppDurationMin patch del bundle:
-       _ppDurationMin lo dejamos al default HvH/HvIA. La clave es
-       comp:'sc' en gmOpen → bundle leerá "Puma Orbita MFL 1" del
-       COMP_BALL. */
     var hHum = _isHuman(m.home), aHum = _isHuman(m.away);
     var isHvH = hHum && aHum;
-    if(typeof window.gmOpen === 'function'){
-      window.gmOpen(0, m.home, m.away, isHvH, 'sc', false, false);
-      try {
-        if(window.__GM_LIVE){
-          window.__GM_LIVE._isSc = true;
-          window.__GM_LIVE._scKey = key;
-          window.__GM_LIVE._scIdx = idx;
-          window.__GM_LIVE._scStadium = s.stadium || '';
-          window.__GM_LIVE.comp = 'sc';
-        }
-      } catch(_){}
-    } else {
-      alert('Motor de partidos no disponible. Recarga la página.');
+    /* gmOpen vive en misc_body_2.html — si la pantalla se renderiza
+       antes que ese IIFE termine, el botón PREVIA fallaba. Reintento
+       hasta 1 s con backoff antes de avisar al usuario. */
+    var tries = 0;
+    function _try(){
+      if(typeof window.gmOpen === 'function'){
+        try {
+          window.gmOpen(0, m.home, m.away, isHvH, 'sc', false, false);
+          if(window.__GM_LIVE){
+            window.__GM_LIVE._isSc = true;
+            window.__GM_LIVE._scKey = key;
+            window.__GM_LIVE._scIdx = idx;
+            window.__GM_LIVE._scStadium = s.stadium || '';
+            window.__GM_LIVE.comp = 'sc';
+          }
+        } catch(e){ try{console.error('[sc] gmOpen falló', e);}catch(_){} }
+        return;
+      }
+      if(tries++ < 6){
+        setTimeout(_try, 150 * tries);
+      } else {
+        alert('Motor de partidos no disponible. Recarga la página.');
+      }
     }
+    _try();
   };
+  /* Simulación SÍNCRONA para Supercopa IA-vs-IA — igual patrón que
+     `simulateCupMatch` de copa-engine: una llamada a
+     _simIAvsIAWithContext (Poisson con contexto) + ET on-the-fly si
+     empate al 90' + penaltis si sigue empate al 120'. Sin live tick
+     ni sandbox DOM — el resultado aparece al instante en la card.
+     Petición usuario 2026-05-05 (la versión iaSimLive con sandbox
+     fallaba con "Motor de partidos no disponible"). */
   window._scSimMatch = function(key, idx){
     var s = _load();
     if(!s) return;
     var m = key === 'fin' ? s.final : s.semis[idx];
     if(!m || m.played) return;
-    /* Reusa iaSimLive con un mk especial — el persistor abajo
-       detecta el prefijo "sc_" y guarda en sc_state_v1. */
-    if(typeof window.iaSimLive !== 'function'){ alert('Motor IA no disponible.'); return; }
-    var mk = 'sc_' + key + '_' + idx;
-    /* Pre-renderiza la card live (necesita ml-shield, etc.). El
-       iaSimLive lee del DOM, así que necesitamos un wrap mínimo. */
-    var host = document.getElementById('sc-content');
-    if(!host) return;
-    /* Inserta un wrap temporal — el card normal no tiene los IDs que
-       iaSimLive busca (ia-sc-{mk}-a, ia-acta-{mk}, ia-sim-btn-{mk}…).
-       Usamos un wrap escondido como fallback persistor y dejamos que
-       iaSimLive corra; al terminar, _scPersistFromIa lo guarda en
-       sc_state_v1 y _scRender vuelve a pintar. */
-    var sandbox = document.createElement('div');
-    sandbox.id = 'sc-sandbox-' + mk;
-    sandbox.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;';
-    sandbox.innerHTML =
-        '<button id="ia-sim-btn-' + mk + '">▶</button>'
-      + '<span id="ia-sc-' + mk + '-a">0</span>'
-      + '<span id="ia-sc-' + mk + '-b">0</span>'
-      + '<div id="ia-acta-' + mk + '"></div>';
-    document.body.appendChild(sandbox);
-    /* Hook de persistencia: mk con prefijo sc_ */
-    window._scPendingPersist = { key: key, idx: idx, mk: mk };
+    /* 1. Score 90'. */
+    var sim90;
     try {
-      window.iaSimLive(mk, m.home, m.away, 0);
-    } catch(e){
-      alert('Error simulando: ' + (e && e.message || e));
+      if(typeof window._simIAvsIAWithContext === 'function'){
+        sim90 = window._simIAvsIAWithContext(m.home, m.away, 0);
+      } else if(typeof window._fallbackIAvsIAScore === 'function'){
+        sim90 = window._fallbackIAvsIAScore(m.home, m.away);
+      } else {
+        sim90 = { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+      }
+    } catch(_){ sim90 = { gh:0, ga:0 }; }
+    var gh90 = Number(sim90.gh)||0;
+    var ga90 = Number(sim90.ga)||0;
+    /* 2. ET si empate al 90' (Poisson lambda 0.5 cada lado, max 3). */
+    var etGh = 0, etGa = 0, penWin = null;
+    if(gh90 === ga90){
+      function pois(L){ var e=Math.exp(-L), k=0, p=1; do{k++; p*=Math.random();}while(p>e); return k-1; }
+      etGh = Math.min(3, pois(0.5));
+      etGa = Math.min(3, pois(0.5));
+      /* 3. Penaltis si sigue empate al 120'. Coin flip ponderado por
+         power (más fuerte = ligeramente más probable). */
+      if(gh90 + etGh === ga90 + etGa){
+        var rA = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.home] && window.TEAM_RATINGS[m.home].media) || 75;
+        var rB = (window.TEAM_RATINGS && window.TEAM_RATINGS[m.away] && window.TEAM_RATINGS[m.away].media) || 75;
+        var pA = rA / (rA + rB);
+        penWin = (Math.random() < pA) ? 'a' : 'b';
+      }
     }
+    /* 4. Eventos del acta — usamos genMatchEventsEnhanced sobre el
+       score base 90' para que el acta tenga goleadores reales. */
+    var totalA = gh90 + etGh;
+    var totalB = ga90 + etGa;
+    var evtData = { events: [], mvp: '', mvpTeam: '' };
+    try {
+      if(typeof window.genMatchEventsEnhanced === 'function'){
+        evtData = window.genMatchEventsEnhanced(m.home, m.away, totalA, totalB, sim90) || evtData;
+      }
+    } catch(_){ }
+    /* 5. Persistir directamente — sin pasar por iaSimLive. */
+    m.gh = gh90;
+    m.ga = ga90;
+    m.etGh = etGh;
+    m.etGa = etGa;
+    m.penWinner = penWin;
+    m.played = true;
+    m.events = (evtData.events || []).filter(function(e){ return e && e.type !== 'pen-result'; });
+    m.mvp = evtData.mvp || '';
+    m.mvpTeam = evtData.mvpTeam || '';
+    m.ts = Date.now();
+    /* 6. Stats globales para que goleadores cuenten en plantilla y
+       dashboard (mismo patrón que Copa/Superliga). */
+    try {
+      if(typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length){
+        var statsEv = evtData.events.filter(function(e){ return !e._varAnulado; });
+        var mk = 'sc_' + key + '_' + idx;
+        window.registrarLigaPlayerStats(mk, m.home, m.away, statsEv, evtData.mvp, evtData.mvpTeam, 'sc');
+      }
+    } catch(_){}
+    _save(s);
+    _renderContent();
   };
 
   /* iaSimLive guarda automáticamente en `results` de Liga si no detecta

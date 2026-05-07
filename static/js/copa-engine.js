@@ -530,6 +530,21 @@
       var v = '';
       try { v = orig.apply(this, arguments) || ''; } catch(_){ v = ''; }
       if (v) return v;
+      /* Si el equipo existe en cualquier ligaExt_* del editor pero
+         el admin no le puso alias, RESPETAMOS esa decisión y NO
+         aplicamos el MAP de primera-rfef-data.js. Reportado
+         2026-05-07: Cultural Leonesa (Hypermotion, sin alias)
+         mostraba "Seoul E-Land" del MAP. La bandera la setea
+         `window.getTeamEfootballAlias` (misc_body_1.html) cuando
+         encuentra el equipo en ligaExt_*. */
+      try {
+        var nm = (typeof window._aliasNormName === 'function')
+          ? window._aliasNormName(teamName)
+          : String(teamName || '').trim().toLowerCase();
+        if (nm && window.__aliasFoundInEditor && window.__aliasFoundInEditor[nm]) {
+          return '';
+        }
+      } catch(_){}
       if (typeof window.getPrimeraRFEFAlias === 'function') {
         try {
           var alt = window.getPrimeraRFEFAlias(teamName);

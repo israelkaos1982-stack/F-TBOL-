@@ -16632,7 +16632,7 @@ window.goLiveMatches = function() {
       +   '<button class="back-btn" onclick="go(\'s-home\')">◀ Volver</button>'
       +   '<div class="sec-hdr" style="display:flex;align-items:center;gap:10px;">'
       +     '<span class="sec-emoji">🔥</span>'
-      +     '<h2 style="flex:1;margin:0;">Derbys</h2>'
+      +     '<h2 style="margin:0;flex:0 0 auto;">Derbys</h2>'
       +     '<button class="isramax-box" onclick="window._isramaxOpen&&window._isramaxOpen()" title="ISRAMAX · Apuestas Humano vs Humano">'
       +       '<span class="isramax-i">I</span>'
       +       '<span class="isramax-label">ISRAMAX</span>'
@@ -16669,7 +16669,12 @@ window.goLiveMatches = function() {
            glow rojo pulsante para llamar la atención. Petición usuario
            2026-05-07. Función real (apuestas H vs H) próximamente. */
         '@keyframes isramaxPulse{0%,100%{box-shadow:0 0 12px rgba(255,60,80,.55),inset 0 1px 3px rgba(255,255,255,.30),inset 0 -2px 3px rgba(0,0,0,.30)}50%{box-shadow:0 0 22px rgba(255,80,100,.95),inset 0 1px 3px rgba(255,255,255,.45),inset 0 -2px 3px rgba(0,0,0,.30)}}' +
-        '#s-derbys .isramax-box{position:relative;width:56px;height:56px;flex-shrink:0;margin-left:auto;border-radius:11px;background:linear-gradient(135deg,#a01030 0%,#e02040 30%,#ff3b5c 50%,#e02040 70%,#a01030 100%);border:1.5px solid #ffffff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:4px 3px 3px;animation:isramaxPulse 2s ease-in-out infinite;transition:transform .15s;-webkit-tap-highlight-color:transparent;overflow:hidden;}' +
+        /* `order:2` empuja la caja AL FINAL del flex container, después
+           del pseudo `.sec-hdr::after` (línea dorada con flex:1). Así
+           la línea dorada queda EN MEDIO entre el título "Derbys" y
+           la caja ISRAMAX, y la caja se ancla al borde derecho del
+           header. Petición usuario 2026-05-07: "Derbys ----- ISRAMAX". */
+        '#s-derbys .isramax-box{order:2;position:relative;width:56px;height:56px;flex-shrink:0;border-radius:11px;background:linear-gradient(135deg,#a01030 0%,#e02040 30%,#ff3b5c 50%,#e02040 70%,#a01030 100%);border:1.5px solid #ffffff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:4px 3px 3px;animation:isramaxPulse 2s ease-in-out infinite;transition:transform .15s;-webkit-tap-highlight-color:transparent;overflow:hidden;}' +
         '#s-derbys .isramax-box::before{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.30) 0%,transparent 35%,transparent 65%,rgba(255,255,255,.10) 100%);pointer-events:none;}' +
         '#s-derbys .isramax-box:hover{transform:scale(1.06);}' +
         '#s-derbys .isramax-box:active{transform:scale(.96);}' +

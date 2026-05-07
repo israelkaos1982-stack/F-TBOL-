@@ -18424,16 +18424,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         if (/^\d+$/.test(jornadaTxt)) jornadaPretty = 'Jornada ' + jornadaTxt;
         else jornadaPretty = jornadaTxt;
       }
-      /* Limpiar icono prefix del nombre del equipo (bug 2026-05-07:
-         si el usuario tipeó "💡 Atlético Madrid" como nombre de
-         equipo, el render mostraba DOS iconos — el embebido + el
-         que añade humanIcon). _stripLeadingIcon quita cualquier
-         prefijo no-letra antes de mostrar el nombre y antes de
-         pedir el icono humano. */
-      var localClean = _stripLeadingIcon(m.local||'');
-      var visitClean = _stripLeadingIcon(m.visitante||'');
-      var hiL = (typeof window.humanIcon === 'function') ? (window.humanIcon(localClean)||'') : '';
-      var hiV = (typeof window.humanIcon === 'function') ? (window.humanIcon(visitClean)||'') : '';
+      /* Petición usuario 2026-05-07: NO añadir humanIcon automático.
+         El usuario edita los iconos manualmente como parte del
+         nombre del equipo (en su temporada 29-30 él usaba 💡 para
+         Atlético Madrid, no el ✏️ que devuelve humanIcon).
+         Mostramos el nombre del equipo TAL CUAL fue tipeado en el
+         modal "Añadir partido". `_outcomeFor` sigue usando
+         `_stripLeadingIcon` para que la detección W/L/D funcione
+         aunque el nombre lleve emoji prefijo. */
       /* Color del borde + glow basado en la competición (no el outcome).
          Outcome se refleja solo en el color del marcador. */
       var styleAttr = ' style="border-color:' + compClr + ';box-shadow:0 0 12px ' + compClr + '30;"';
@@ -18446,9 +18444,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
            +     '<button class="mderby-del-btn" onclick="window.munichDerbyMatchDelete&amp;&amp;window.munichDerbyMatchDelete(\'' + _esc(m.id) + '\')" title="Eliminar partido">🗑</button>'
            +   '</div>'
            +   '<div class="mderby-match-body">'
-           +     '<span class="mderby-team local">' + (hiL ? '<span class="mderby-hi-inline">' + hiL + '</span>' : '') + _esc(localClean) + '</span>'
+           +     '<span class="mderby-team local">' + _esc(m.local||'?') + '</span>'
            +     '<span class="mderby-score ' + scoreCls + '">' + (Number(m.gl)||0) + '–' + (Number(m.gv)||0) + '</span>'
-           +     '<span class="mderby-team visit">' + (hiV ? '<span class="mderby-hi-inline">' + hiV + '</span>' : '') + _esc(visitClean) + '</span>'
+           +     '<span class="mderby-team visit">' + _esc(m.visitante||'?') + '</span>'
            +   '</div>'
            + '</div>';
     }).join('');

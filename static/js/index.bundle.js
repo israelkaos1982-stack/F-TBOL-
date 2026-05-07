@@ -8550,12 +8550,23 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   function hydrateStoreFromSavedResults(){
     var results = parseSavedResults();
-    /* Reset completo del store para que una re-hidratación no deje entradas
-       antiguas de formatos de key distintos conviviendo con las nuevas.
-       Antes usábamos el `key` crudo (jornada|home|away), pero
-       registrarLigaPlayerStats ahora deduplica por `canonHome|canonAway`,
-       así que tenemos que alinear AMBOS caminos en la misma clave. */
+    /* Reset PARCIAL del store: borramos solo las entradas de LIGA
+       (key formato `<j>|<home>|<away>`) para que una re-hidratación
+       no deje entradas antiguas de formatos distintos. PRESERVAMOS
+       las entradas de Copa/Recopa/SC/Champions/UEL/UECL/Superliga
+       (keys con prefijo `copa_`, `recopa_`, `sc_`, `wprev_`, `slu_`,
+       etc.) — esas no vienen de ef_liga38_v4 y se perderían si
+       hiciéramos un reset total. Reportado 2026-05-07: tras jugar
+       Copa del Rey la plantilla mostraba 0 stats al volver porque
+       hydrateStoreFromSavedResults wipeaba todos los copa_*. */
+    var prevStore = window.LIGA_PLAYER_MATCH_STORE || {};
     var store = (window.LIGA_PLAYER_MATCH_STORE = {});
+    Object.keys(prevStore).forEach(function(pk){
+      /* Liga key = "j|home|away" (al menos 2 pipes). Cualquier otra
+         (con prefijo ASCII + underscore) la consideramos NO-liga y
+         la conservamos. */
+      if (pk && pk.indexOf('|') === -1) store[pk] = prevStore[pk];
+    });
     var _dirtyMigration = false;
     Object.keys(results).forEach(function(key){
       var meta = parseResultKey(key);

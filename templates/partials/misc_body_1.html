@@ -12199,6 +12199,35 @@ Tottenham
     return blk.indexOf(_lextNormName(name)) >= 0;
   };
 
+  /* Normaliza el nombre de un equipo para comparar entre el card del
+     partido y el editor: lower-case, sin acentos, sin espacios extra,
+     y sin prefijos/sufijos típicos del fútbol (AD, CF, FC, CD, UD,
+     RC, RCD, SD, SC, AC, AS). Necesario porque el match card puede
+     usar "Mérida" mientras que el editor lo guarda como "AD Mérida"
+     — sin esta normalización el match exacto falla y caemos al MAP
+     hardcoded de primera-rfef-data.js. Reportado 2026-05-07 con
+     Mérida → "Al-Taawoun" en lugar del alias del editor. */
+  function _aliasNormName(name){
+    if(!name) return '';
+    var s = String(name).trim().toLowerCase();
+    try { s = s.normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]','g'), ''); } catch(_){}
+    s = s.replace(/\s+/g, ' ');
+    var tokens = ['ad','cf','cd','ud','rc','rcd','sd','sc','ac','as','fc','rfc','ssc','ass','sad'];
+    var changed = true;
+    while(changed){
+      changed = false;
+      for(var i=0;i<tokens.length;i++){
+        var tk = tokens[i];
+        var pre = new RegExp('^'+tk+'\\s+');
+        var suf = new RegExp('\\s+'+tk+'$');
+        if(pre.test(s)){ s = s.replace(pre,''); changed = true; }
+        if(suf.test(s)){ s = s.replace(suf,''); changed = true; }
+      }
+    }
+    return s.trim();
+  }
+  window._aliasNormName = _aliasNormName;
+
   // Busca el alias de eFootball de un equipo en CUALQUIER liga guardada
   // en ligaExt_*. Si el equipo no existe o no tiene alias, devuelve "".
   // Lo usan las tarjetas de partido para mostrar el nombre del equipo
@@ -12206,18 +12235,15 @@ Tottenham
   // el juego (p.ej. "Talavera" en Primera Federación → "AZ Alkmaar").
   //
   // 2026-05-07 BUG FIX: el equipo puede aparecer en VARIAS ligaExt_*
-  // (p.ej. Mérida en Hypermotion Y como participante de Copa del Rey).
-  // La versión anterior devolvía el PRIMER match — si esa liga tenía
-  // alias VACÍO o stale, ganaba sobre la versión correcta. El usuario
-  // reportó: alias correcto en editor "América - 🇺🇸USL - Oakland
-  // Roots SC - ⭐⭐⭐" pero en la card aparecía "Al Taewon" (de un edit
-  // antiguo).
-  // Fix: iterar TODOS los ligaExt_* y quedarse con el ÚLTIMO alias
-  // NO VACÍO encontrado (= el edit más reciente, asumiendo que el
-  // usuario re-edita corrigiendo). Si todos están vacíos, devuelve ''.
+  // y bajo distintas variantes ("Mérida" vs "AD Mérida"). Iteramos
+  // TODOS los ligaExt_*, comparamos por nombre normalizado (lower +
+  // sin acentos + sin AD/CF/FC/...) y nos quedamos con el ÚLTIMO
+  // alias NO VACÍO encontrado. Si todos están vacíos, devuelve ''
+  // y el wrap de copa-engine.js cae al MAP hardcoded.
   window.getTeamEfootballAlias = function(teamName){
     if(!teamName) return '';
-    var target = String(teamName).trim().toLowerCase();
+    var targetNorm = _aliasNormName(teamName);
+    if(!targetNorm) return '';
     var best = '';
     try {
       for(var i=0;i<localStorage.length;i++){
@@ -12234,7 +12260,7 @@ Tottenham
           for(var j=0;j<teams.length;j++){
             var t = teams[j];
             if(!t || !t.name) continue;
-            if(String(t.name).trim().toLowerCase() === target){
+            if(_aliasNormName(t.name) === targetNorm){
               var v = String(t.efootballAlias||'').trim();
               if(v) best = v;  /* sobrescribe con el último no-vacío */
             }
@@ -12250,36 +12276,39 @@ Tottenham
      TEAM_STADIUMS del bundle. 2026-05-07 BUG FIX: el usuario tipeaba
      "Sports Park" como estadio de Mérida en Hypermotion pero la card
      mostraba "Estadio Olímpico" (del default hardcoded).
-     Estrategia: iterar TODOS los ligaExt_*, quedarse con el último
-     `t.stadium` NO VACÍO. Si no hay ninguno, fall-back al TEAM_STADIUMS
-     original. */
+     Estrategia: iterar TODOS los ligaExt_*, comparar por nombre
+     normalizado (igual que getTeamEfootballAlias), quedarse con el
+     último `t.stadium` NO VACÍO. Si no hay ninguno, fall-back al
+     TEAM_STADIUMS original. */
   (function(){
     var _origGetStadium = window.getTeamStadium;
     window.getTeamStadium = function(teamName){
       if(!teamName) return (typeof _origGetStadium === 'function') ? (_origGetStadium(teamName) || '') : '';
-      var target = String(teamName).trim().toLowerCase();
+      var targetNorm = _aliasNormName(teamName);
       var best = '';
       try {
-        for(var i=0;i<localStorage.length;i++){
-          var key = localStorage.key(i);
-          if(!key || key.indexOf('ligaExt_') !== 0) continue;
-          if(key.indexOf('_backup') !== -1) continue;
-          if(key.indexOf('_protected') !== -1) continue;
-          if(key.indexOf('_snap_') !== -1) continue;
-          var raw = localStorage.getItem(key);
-          if(!raw) continue;
-          try {
-            var data = JSON.parse(raw);
-            var teams = data && Array.isArray(data.teams) ? data.teams : [];
-            for(var j=0;j<teams.length;j++){
-              var t = teams[j];
-              if(!t || !t.name) continue;
-              if(String(t.name).trim().toLowerCase() === target){
-                var v = String(t.stadium || t.estadio || '').trim();
-                if(v) best = v;
+        if(targetNorm){
+          for(var i=0;i<localStorage.length;i++){
+            var key = localStorage.key(i);
+            if(!key || key.indexOf('ligaExt_') !== 0) continue;
+            if(key.indexOf('_backup') !== -1) continue;
+            if(key.indexOf('_protected') !== -1) continue;
+            if(key.indexOf('_snap_') !== -1) continue;
+            var raw = localStorage.getItem(key);
+            if(!raw) continue;
+            try {
+              var data = JSON.parse(raw);
+              var teams = data && Array.isArray(data.teams) ? data.teams : [];
+              for(var j=0;j<teams.length;j++){
+                var t = teams[j];
+                if(!t || !t.name) continue;
+                if(_aliasNormName(t.name) === targetNorm){
+                  var v = String(t.stadium || t.estadio || '').trim();
+                  if(v) best = v;
+                }
               }
-            }
-          } catch(_){}
+            } catch(_){}
+          }
         }
       } catch(_){}
       if(best) return best;

@@ -4075,6 +4075,109 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     _editState.evId = null;
   };
 
+  /* Añade un jugador escrito manualmente en el acta (campo #_editManual)
+     a la plantilla del equipo correspondiente (`ligaExt_<slug>.teams[i].players`).
+     El jugador queda sin dorsal / posición / valor-nivel — el admin completa
+     esos campos luego desde el editor de plantilla. Si ya existe un jugador
+     con el mismo nombre normalizado, no se duplica. Persiste en localStorage
+     y POSTea al servidor (best-effort). */
+  window._addManualPlayerToRoster = function(teamName, playerName, dorsal) {
+    if (!teamName || !playerName) return false;
+    var nm = String(playerName).trim();
+    if (!nm) return false;
+    var dnum = String(dorsal == null ? '' : dorsal).trim();
+    function _norm(s){
+      try {
+        return String(s||'').toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9]+/g,' ').trim();
+      } catch(_){
+        return String(s||'').toLowerCase().trim();
+      }
+    }
+    var canon = (typeof window.canonicalTeamName === 'function')
+      ? window.canonicalTeamName(teamName) : String(teamName||'').trim();
+    var targets = [_norm(teamName), _norm(canon)];
+    var foundSlug = null, foundData = null, foundTeam = null;
+    for (var i = 0; i < localStorage.length; i++) {
+      var k;
+      try { k = localStorage.key(i); } catch(_){ continue; }
+      if (!k || k.indexOf('ligaExt_') !== 0) continue;
+      if (/(_protected|_backup|_snap_\d+)$/.test(k)) continue;
+      var raw;
+      try { raw = localStorage.getItem(k); } catch(_){ continue; }
+      if (!raw) continue;
+      var data;
+      try { data = JSON.parse(raw); } catch(_){ continue; }
+      if (!data || !Array.isArray(data.teams)) continue;
+      for (var ti = 0; ti < data.teams.length; ti++) {
+        var t = data.teams[ti];
+        if (!t || !t.name) continue;
+        var nt = _norm(t.name);
+        var ntCanon = (typeof window.canonicalTeamName === 'function')
+          ? _norm(window.canonicalTeamName(t.name)) : nt;
+        if (targets.indexOf(nt) !== -1 || targets.indexOf(ntCanon) !== -1) {
+          foundSlug = k.slice('ligaExt_'.length);
+          foundData = data;
+          foundTeam = t;
+          break;
+        }
+      }
+      if (foundTeam) break;
+    }
+    if (!foundTeam) return false;
+    if (!Array.isArray(foundTeam.players)) foundTeam.players = [];
+    var nName = _norm(nm);
+    for (var pi = 0; pi < foundTeam.players.length; pi++) {
+      var p = foundTeam.players[pi];
+      if (p && _norm(p.name) === nName) return false;
+    }
+    var newPlayer = {
+      id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      name: nm,
+      num: dnum,
+      pos: '',
+      power: 0,
+      captain: false,
+      freeKick: false,
+      penalty: false,
+      elite: false,
+      natGoal: false,
+      natGoalPro: false,
+      pj: 0, gol: 0, pen: 0, fk: 0, mvp: 0, ta: 0, tr: 0, imbat: 0, penSaved: 0,
+      manualFromActa: true
+    };
+    foundTeam.players.push(newPlayer);
+    try { localStorage.setItem('ligaExt_' + foundSlug, JSON.stringify(foundData)); } catch(_){}
+    if (foundData.teams && foundData.teams.length > 0) {
+      try { localStorage.setItem('ligaExt_' + foundSlug + '_protected', JSON.stringify(foundData)); } catch(_){}
+    }
+    try {
+      if (typeof fetch === 'function') {
+        fetch('/api/liga-ext/' + encodeURIComponent(foundSlug), {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({data: foundData})
+        }).catch(function(){});
+      }
+    } catch(_){}
+    try {
+      if (window.SQUAD_REGISTRY) {
+        delete window.SQUAD_REGISTRY[foundTeam.name];
+        if (canon) delete window.SQUAD_REGISTRY[canon];
+        delete window.SQUAD_REGISTRY[teamName];
+      }
+    } catch(_){}
+    try { window.__importLeaguesHash = ''; } catch(_){}
+    if (typeof window._invalidateLineStatsCache === 'function') {
+      try { window._invalidateLineStatsCache(); } catch(_){}
+    }
+    if (typeof window.applyEngineOverrides === 'function') {
+      try { window.applyEngineOverrides(); } catch(_){}
+    }
+    return true;
+  };
+
   window._saveEditModal = function() {
     var mid   = _editState.mid;
     var evId  = _editState.evId;
@@ -4096,6 +4199,16 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       newName = manualVal;
     }
     if (!newName) { alert('⚠️ El nombre del jugador es obligatorio.'); return; }
+
+    /* Si el nombre escrito a mano no coincide con ningún jugador de la
+       plantilla, persistirlo: queda guardado para futuros partidos sin
+       tener que reescribirlo. Sin dorsal/pos/power — el admin los
+       completa luego desde el editor. */
+    try {
+      var _sqInfo = getSquadsForMatch(mid);
+      var _teamFullName = newTeam === 'a' ? _sqInfo.nameA : _sqInfo.nameB;
+      if (_teamFullName) window._addManualPlayerToRoster(_teamFullName, newName, newNum);
+    } catch(_){}
 
     var humanMids = ['j1m1','j1m2','j1m3'];
     if (humanMids.indexOf(mid) !== -1) {

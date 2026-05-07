@@ -18436,6 +18436,35 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
          Outcome se refleja solo en el color del marcador. */
       var styleAttr = ' style="border-color:' + compClr + ';box-shadow:0 0 12px ' + compClr + '30;"';
       var compStyleAttr = ' style="color:' + compClr + ';"';
+      /* Iconos humanos en posición INTERIOR (cerca del marcador) —
+         petición usuario 2026-05-07: "FC Barcelona 👿 2-2 💡 Bayern
+         Munich". Si el nombre del equipo ya lleva un emoji embebido
+         (edit manual del usuario), respeta ese; si no, añade el de
+         humanIcon() automáticamente. _hasLeadingIcon detecta si el
+         primer carácter es no-letra (emoji/símbolo). */
+      function _hasLeadingIcon(s){
+        if (!s) return false;
+        var first = String(s).trim().charAt(0);
+        if (!first) return false;
+        return !/[A-Za-zÀ-ɏ]/.test(first);
+      }
+      var localTxt = String(m.local || '?');
+      var visitTxt = String(m.visitante || '?');
+      var localIco = '';
+      var visitIco = '';
+      if (!_hasLeadingIcon(localTxt) && typeof window.humanIcon === 'function'){
+        var hL = window.humanIcon(localTxt);
+        if (hL) localIco = hL.replace(/ /g,'');
+      }
+      if (!_hasLeadingIcon(visitTxt) && typeof window.humanIcon === 'function'){
+        var hV = window.humanIcon(visitTxt);
+        if (hV) visitIco = hV.replace(/ /g,'');
+      }
+      /* Local: nombre + icono (icon AFTER name, cerca del score).
+         Visit: icono + nombre (icon BEFORE name, cerca del score).
+         Si el nombre ya llevaba emoji embebido, no añadimos otro. */
+      var localHtml = _esc(localTxt) + (localIco ? ' <span class="mderby-hi-inline">' + localIco + '</span>' : '');
+      var visitHtml = (visitIco ? '<span class="mderby-hi-inline">' + visitIco + '</span> ' : '') + _esc(visitTxt);
       return '<div class="mderby-match-card ' + rowCls + '"' + styleAttr + '>'
            +   '<div class="mderby-match-top">'
            +     '<span class="mderby-comp-ico">' + compIco + '</span>'
@@ -18444,9 +18473,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
            +     '<button class="mderby-del-btn" onclick="window.munichDerbyMatchDelete&amp;&amp;window.munichDerbyMatchDelete(\'' + _esc(m.id) + '\')" title="Eliminar partido">🗑</button>'
            +   '</div>'
            +   '<div class="mderby-match-body">'
-           +     '<span class="mderby-team local">' + _esc(m.local||'?') + '</span>'
+           +     '<span class="mderby-team local">' + localHtml + '</span>'
            +     '<span class="mderby-score ' + scoreCls + '">' + (Number(m.gl)||0) + '–' + (Number(m.gv)||0) + '</span>'
-           +     '<span class="mderby-team visit">' + _esc(m.visitante||'?') + '</span>'
+           +     '<span class="mderby-team visit">' + visitHtml + '</span>'
            +   '</div>'
            + '</div>';
     }).join('');

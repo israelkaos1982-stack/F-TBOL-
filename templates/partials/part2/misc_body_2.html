@@ -23668,5 +23668,16 @@ document.addEventListener('DOMContentLoaded', function() {
   /* API expuesta para forzar push manual (debug y botones admin). */
   window._compStateSyncPush = pushPendingChanges;
   window._compStateSyncHydrate = hydrateFromServer;
+  /* Exponemos el snapshot interno para que `_resetEuropePoolFeeders`
+     pueda invalidarlo tras un reset — si no, el polling siguiente
+     compara `local=null` contra `_lastSnapshot=oldValue`, ve
+     cambio y re-pushea el oldValue al server (porque sí, el
+     readLs devuelve null y el código actual hace `if(v===null)
+     return;`, pero la trampa es la siguiente: tras el push de
+     "" desde nuestro helper, el server queda limpio; pero el
+     próximo cliente que cargue verá v=null en local + lastSnapshot
+     antiguo, y aunque `if(v===null) return;` lo proteja, mejor
+     dejamos el snapshot a null para que cuadre con la realidad). */
+  window._compStateSyncSnapshot = _lastSnapshot;
 })();
 </script>

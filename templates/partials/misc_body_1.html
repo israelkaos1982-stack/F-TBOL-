@@ -19794,24 +19794,64 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 (function(){
   window._resetEuropePoolFeeders = function(scope){
     scope = scope || 'all';
+    /* Lista de claves a limpiar tanto en localStorage como en
+       el espejo servidor `/api/state.competition_state`. Sin la
+       limpieza servidor el sync (misc_body_2.html línea ~23553)
+       restaura los valores antiguos a los pocos segundos / al
+       siguiente boot, y las cajas WC y OQ vuelven a "✓ COMPLETADA"
+       solas. Reportado usuario 2026-05-07. */
+    var keysToClear = [];
     /* WC keys */
     if (scope === 'all' || scope === 'wc'){
-      try { localStorage.removeItem('wc_state_v1'); } catch(_){}
-      try { localStorage.removeItem('wc_champ_v1'); } catch(_){}
-      try { localStorage.removeItem('wc_to_open_qualifier_v1'); } catch(_){}
+      ['wc_state_v1','wc_champ_v1','wc_to_open_qualifier_v1'].forEach(function(k){
+        try { localStorage.removeItem(k); } catch(_){}
+        keysToClear.push(k);
+      });
     }
     /* OQ keys (cascada desde WC también) */
     if (scope === 'all' || scope === 'wc' || scope === 'oq'){
-      try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
-      try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
-      try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
+      ['oq_simulation_v1','oq_to_previa_v1','oq_to_conference_v1'].forEach(function(k){
+        try { localStorage.removeItem(k); } catch(_){}
+        keysToClear.push(k);
+      });
     }
     /* Previa Champions keys (cascada desde WC u OQ también) */
     if (scope === 'all' || scope === 'wc' || scope === 'oq'){
-      try { localStorage.removeItem('wprev_state_v1'); } catch(_){}
-      try { localStorage.removeItem('wprev_to_fase_grupos_v1'); } catch(_){}
-      try { localStorage.removeItem('wprev_to_europa_v1'); } catch(_){}
-      try { localStorage.removeItem('wprev_r1_to_conference_v1'); } catch(_){}
+      ['wprev_state_v1','wprev_to_fase_grupos_v1','wprev_to_europa_v1','wprev_r1_to_conference_v1'].forEach(function(k){
+        try { localStorage.removeItem(k); } catch(_){}
+        keysToClear.push(k);
+      });
+    }
+    /* También 'previa' debe limpiar el espejo servidor de las
+       wprev_* aunque clearState() ya las haya quitado del local —
+       sin esto el sync server restaura los datos viejos. */
+    if (scope === 'previa'){
+      ['wprev_state_v1','wprev_to_fase_grupos_v1','wprev_to_europa_v1','wprev_r1_to_conference_v1'].forEach(function(k){
+        keysToClear.push(k);
+      });
+    }
+    /* Push al servidor: cadena vacía para cada clave. El sync
+       (`hydrateFromServer`) ignora valores vacíos en
+       `if(typeof srv !== 'string' || !srv) return;`, así que NO
+       restaurarán al boot. También seedeamos `_lastSnapshot` para
+       evitar que el polling siguiente intente re-pushear lo que
+       acabamos de limpiar. */
+    if (keysToClear.length){
+      var patch = {};
+      keysToClear.forEach(function(k){ patch[k] = ''; });
+      try {
+        fetch('/api/state', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',
+          body: JSON.stringify({ competition_state: patch })
+        }).catch(function(){});
+      } catch(_){}
+      try {
+        if (window._compStateSyncSnapshot && typeof window._compStateSyncSnapshot === 'object'){
+          keysToClear.forEach(function(k){ window._compStateSyncSnapshot[k] = null; });
+        }
+      } catch(_){}
     }
     /* Snapshot Europa: cualquier reset la invalida — sin esto
        el frozen list del snapshot sigue mandando teams al UCL/

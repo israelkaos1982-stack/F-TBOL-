@@ -981,6 +981,13 @@ def copa_guardar_resultado():
            "events": events, "injuries": injuries, "summary": summary,
            "team_a": team_a or local_orig, "team_b": team_b or visit_orig,
            "jugado": True}
+    # Init defensivo: en two-leg IDA `winner` no se calcula porque
+    # aún no hay global. Sin este None, el bloque `if winner:` de
+    # más abajo lanzaba NameError → endpoint 500 → frontend no
+    # recibía d.copa → la IDA aparecía como "no jugada" tras volver
+    # al bracket. Reportado 2026-05-07 (Atlético 3-1 Las Palmas IDA
+    # octavos).
+    winner = None
     if two_leg:
         key = ronda + ("_vta" if es_vuelta else "_ida")
         if key not in resultados:

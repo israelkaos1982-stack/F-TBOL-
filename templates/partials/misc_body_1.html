@@ -5956,9 +5956,18 @@ window._showSimProgress = function(opts, onDone){
         if(!raw) continue;
         var parsed; try { parsed = JSON.parse(raw); } catch(_){ continue; }
         if(!parsed || !parsed.copa) continue;
-        if(parsed.copa.champion) _push(parsed.copa.champion);
-        if(parsed.config && parsed.config.recopaSubcampeon && parsed.copa.runnerUp){
-          _push(parsed.copa.runnerUp);
+        var _champion = parsed.copa.champion;
+        var _runnerUp = parsed.copa.runnerUp;
+        /* Fallback: si la final se jugó pero champion no quedó
+           guardado (legacy data antes de 2026-05-07), tomamos
+           winner/loser de la final misma. */
+        if(!_champion && parsed.copa.final && parsed.copa.final.played && parsed.copa.final.winner){
+          _champion = parsed.copa.final.winner;
+          _runnerUp = (_champion === parsed.copa.final.home) ? parsed.copa.final.away : parsed.copa.final.home;
+        }
+        if(_champion) _push(_champion);
+        if(parsed.config && parsed.config.recopaSubcampeon && _runnerUp){
+          _push(_runnerUp);
         }
       }
     } catch(_){}
@@ -7054,13 +7063,21 @@ window._showSimProgress = function(opts, onDone){
     var sb = document.getElementById('sc-sandbox-' + mk);
     if(sb && sb.parentNode) sb.parentNode.removeChild(sb);
     window._scPendingPersist = null;
-    _save(s);
-    /* Si la final acaba de terminar, dispara la celebración del
-       campeón (fuegos + escudo + título) — petición usuario
-       2026-05-06. */
+    /* Si la final acaba de terminar, persistir el campeón en
+       `s.champion` antes de _save(s) para que cualquier consumidor
+       (Recopa pool, panel de competiciones) lo lea. Reportado
+       2026-05-07: el campeón de Supercopa no quedaba guardado. */
     if(key === 'fin'){
       var champIa = _winnerOf(s.final);
-      if(champIa) _scShowChampionOv(champIa);
+      if(champIa){
+        s.champion = champIa;
+        s.runnerUp = (champIa === s.final.home) ? s.final.away : s.final.home;
+      }
+    }
+    _save(s);
+    if(key === 'fin'){
+      var champIa2 = s.champion || _winnerOf(s.final);
+      if(champIa2) _scShowChampionOv(champIa2);
     }
     _renderContent();
   };
@@ -7081,12 +7098,19 @@ window._showSimProgress = function(opts, onDone){
     m.played = true;
     m.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
     m.ts = Date.now();
-    _save(s);
-    /* Petición usuario 2026-05-06: celebración del campeón al ganar
-       la final (humano). Misma rama que en _scPersistAfterIa. */
+    /* Persistir el campeón antes de _save(s) — mismo motivo que en
+       _scPersistAfterIa. Reportado 2026-05-07. */
     if(key === 'fin'){
       var champHum = _winnerOf(s.final);
-      if(champHum) _scShowChampionOv(champHum);
+      if(champHum){
+        s.champion = champHum;
+        s.runnerUp = (champHum === s.final.home) ? s.final.away : s.final.home;
+      }
+    }
+    _save(s);
+    if(key === 'fin'){
+      var champHum2 = s.champion || _winnerOf(s.final);
+      if(champHum2) _scShowChampionOv(champHum2);
     }
     _renderContent();
   };
@@ -16170,7 +16194,20 @@ Tottenham
       var s12 = copa.groups[0].standings;
       copa.final = { home:s12[0].name, away:s12[1].name, played:false };
     }
-    copa.status = 'final-pending';
+    /* Auto-jugar la final para que `copa.champion` quede SIEMPRE
+       seteado tras un Sim Copa. Antes la final se quedaba en
+       `final-pending` y el usuario tenía que pulsar ▶ Simular en
+       la card de la FINAL — si no lo hacía, la Recopa no recibía
+       campeón de esta liga. Reportado 2026-05-07. */
+    if(copa.final && copa.final.home && copa.final.away){
+      var finRes = _lecSim1Leg(data, copa.final.home, copa.final.away);
+      copa.final = finRes;
+      copa.champion = finRes.winner;
+      copa.runnerUp = (finRes.winner === finRes.home) ? finRes.away : finRes.home;
+      copa.status = 'done';
+    } else {
+      copa.status = 'final-pending';
+    }
     saveData(CURRENT_KEY, data);
     _lecSyncPlayerStatsCache(data);
     _lecRender();

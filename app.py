@@ -1036,6 +1036,12 @@ def copa_guardar_resultado():
                 if not isinstance(m, dict): continue
                 if m.get("l") == tbd_key: m["l"] = winner
                 if m.get("v") == tbd_key: m["v"] = winner
+        # 3) Si la final ha acabado, fijamos el campeón en el state.
+        # Reportado 2026-05-07: tras ganar la final no se guardaba.
+        if ronda == "fin":
+            copa["campeon"] = winner
+            loser = visit_orig if winner == local_orig else local_orig
+            copa["subcampeon"] = loser
     data["copa_state"] = copa
     save_global_state(data)
     return jsonify({"ok": True, "copa": copa})

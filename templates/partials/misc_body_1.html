@@ -12204,14 +12204,28 @@ Tottenham
   // Lo usan las tarjetas de partido para mostrar el nombre del equipo
   // que el admin usa en eFootball cuando el equipo real no existe en
   // el juego (p.ej. "Talavera" en Primera Federación → "AZ Alkmaar").
+  //
+  // 2026-05-07 BUG FIX: el equipo puede aparecer en VARIAS ligaExt_*
+  // (p.ej. Mérida en Hypermotion Y como participante de Copa del Rey).
+  // La versión anterior devolvía el PRIMER match — si esa liga tenía
+  // alias VACÍO o stale, ganaba sobre la versión correcta. El usuario
+  // reportó: alias correcto en editor "América - 🇺🇸USL - Oakland
+  // Roots SC - ⭐⭐⭐" pero en la card aparecía "Al Taewon" (de un edit
+  // antiguo).
+  // Fix: iterar TODOS los ligaExt_* y quedarse con el ÚLTIMO alias
+  // NO VACÍO encontrado (= el edit más reciente, asumiendo que el
+  // usuario re-edita corrigiendo). Si todos están vacíos, devuelve ''.
   window.getTeamEfootballAlias = function(teamName){
     if(!teamName) return '';
     var target = String(teamName).trim().toLowerCase();
+    var best = '';
     try {
       for(var i=0;i<localStorage.length;i++){
         var key = localStorage.key(i);
         if(!key || key.indexOf('ligaExt_') !== 0) continue;
         if(key.indexOf('_backup') !== -1) continue;
+        if(key.indexOf('_protected') !== -1) continue;
+        if(key.indexOf('_snap_') !== -1) continue;
         var raw = localStorage.getItem(key);
         if(!raw) continue;
         try {
@@ -12221,14 +12235,62 @@ Tottenham
             var t = teams[j];
             if(!t || !t.name) continue;
             if(String(t.name).trim().toLowerCase() === target){
-              return String(t.efootballAlias||'').trim();
+              var v = String(t.efootballAlias||'').trim();
+              if(v) best = v;  /* sobrescribe con el último no-vacío */
             }
           }
         } catch(_){}
       }
     } catch(_){}
-    return '';
+    return best;
   };
+
+  /* Override de getTeamStadium para PRIORIZAR el estadio que el admin
+     ha tipeado en el editor de cualquier ligaExt_* sobre el hardcoded
+     TEAM_STADIUMS del bundle. 2026-05-07 BUG FIX: el usuario tipeaba
+     "Sports Park" como estadio de Mérida en Hypermotion pero la card
+     mostraba "Estadio Olímpico" (del default hardcoded).
+     Estrategia: iterar TODOS los ligaExt_*, quedarse con el último
+     `t.stadium` NO VACÍO. Si no hay ninguno, fall-back al TEAM_STADIUMS
+     original. */
+  (function(){
+    var _origGetStadium = window.getTeamStadium;
+    window.getTeamStadium = function(teamName){
+      if(!teamName) return (typeof _origGetStadium === 'function') ? (_origGetStadium(teamName) || '') : '';
+      var target = String(teamName).trim().toLowerCase();
+      var best = '';
+      try {
+        for(var i=0;i<localStorage.length;i++){
+          var key = localStorage.key(i);
+          if(!key || key.indexOf('ligaExt_') !== 0) continue;
+          if(key.indexOf('_backup') !== -1) continue;
+          if(key.indexOf('_protected') !== -1) continue;
+          if(key.indexOf('_snap_') !== -1) continue;
+          var raw = localStorage.getItem(key);
+          if(!raw) continue;
+          try {
+            var data = JSON.parse(raw);
+            var teams = data && Array.isArray(data.teams) ? data.teams : [];
+            for(var j=0;j<teams.length;j++){
+              var t = teams[j];
+              if(!t || !t.name) continue;
+              if(String(t.name).trim().toLowerCase() === target){
+                var v = String(t.stadium || t.estadio || '').trim();
+                if(v) best = v;
+              }
+            }
+          } catch(_){}
+        }
+      } catch(_){}
+      if(best) return best;
+      /* Fallback a TEAM_STADIUMS hardcoded del bundle. */
+      if(typeof _origGetStadium === 'function'){
+        try { return _origGetStadium(teamName) || ''; } catch(_){}
+      }
+      if(window.TEAM_STADIUMS) return window.TEAM_STADIUMS[teamName] || window.TEAM_STADIUMS[String(teamName).trim()] || '';
+      return '';
+    };
+  })();
 
   function _countPlayers(d){
     if (!d || !Array.isArray(d.teams)) return 0;

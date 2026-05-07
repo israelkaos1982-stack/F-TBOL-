@@ -407,25 +407,99 @@ window._showSimProgress = function(opts, onDone){
       return b;
     }
 
-    /* Stats globales por jugador. Suma todas las competiciones oficiales
-       que se hayan volcado a `ef_player_stats_v1` (Liga EA Sports,
-       Hypermotion, Primera Fed, y cualquier otra liga ligaExt_*). Los
-       motores de Copa / Champions / Super Liga / Europa que actualicen
-       en vivo los `data-global` de las celdas DOM también se reflejarán
-       — ese sumatorio se aplica `_overlayLiveCounters`. Amistosos y
-       torneos de verano NO se vuelcan al storage, así que quedan fuera. */
+    /* Stats globales por jugador agregadas a través de TODAS las
+       competiciones que juega el Bayern (petición usuario 2026-05-07):
+         · Liga EA Sports + Copa del Rey  → ef_player_stats_v1
+         · Superliga                       → ef_player_stats_superliga_v1
+         · Champions League                → ef_player_stats_ucl_v1
+         · Europa League                   → ef_player_stats_uel_v1
+         · Conference League               → ef_player_stats_uecl_v1
+       Antes solo se leía el primer store (Liga + Copa) → si el Bayern
+       jugaba Champions, esos goles/PJ/MVP no aparecían en la plantilla.
+       Ahora se suman todos.
+
+       PERFORMANCE: los 5 stores se leen UNA vez por render (cache
+       in-memory, _STATS_CACHE) en lugar de hacer fuzzy-search por
+       jugador × store (antes ~150 búsquedas por render = lento). El
+       cache vive 1500 ms para que el doble render (60 ms + 600 ms,
+       que cubre el caso "applyEngineOverrides aún cargando") no rehaga
+       trabajo. `_invalidateBayernStatsCache()` lo expira manualmente
+       cuando los stores cambian. */
+    var _STATS_STORES = [
+      'ef_player_stats_v1',
+      'ef_player_stats_superliga_v1',
+      'ef_player_stats_ucl_v1',
+      'ef_player_stats_uel_v1',
+      'ef_player_stats_uecl_v1'
+    ];
+    var _STATS_FIELDS = ['pj','gol','pen','fk','mvp','ta','tr','imbat','penSaved'];
+    var _STATS_CACHE = null;
+    var _STATS_CACHE_TS = 0;
+    var _STATS_CACHE_MS = 1500;
+    function _normForStats(s){
+      try {
+        return String(s||'').toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g,'')
+          .replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+      } catch(_){
+        return String(s||'').toLowerCase().trim();
+      }
+    }
+    window._invalidateBayernStatsCache = function(){
+      _STATS_CACHE = null;
+      _STATS_CACHE_TS = 0;
+    };
+    function _buildStatsCache(){
+      var now = Date.now();
+      if (_STATS_CACHE && (now - _STATS_CACHE_TS) < _STATS_CACHE_MS) return _STATS_CACHE;
+      var cache = {};
+      var teamNorm = _normForStats('Bayern Munich');
+      _STATS_STORES.forEach(function(lsKey){
+        var raw;
+        try { raw = localStorage.getItem(lsKey); } catch(_){ raw = null; }
+        if (!raw) return;
+        var data;
+        try { data = JSON.parse(raw); } catch(_){ return; }
+        if (!data || typeof data !== 'object') return;
+        Object.keys(data).forEach(function(k){
+          var sep = k.indexOf('::');
+          if (sep < 0) return;
+          var t = k.slice(0, sep);
+          if (!t) return;
+          /* Match equipo: igual normalizado o contains en cualquier
+             dirección (cubre alias "Bayern" / "FC Bayern" / etc.). */
+          var teamMatch = (t === teamNorm) || (t.indexOf(teamNorm) !== -1) || (teamNorm.indexOf(t) !== -1);
+          if (!teamMatch) return;
+          var pName = k.slice(sep + 2);
+          if (!pName) return;
+          var ps = data[k];
+          if (!ps) return;
+          var bucket = cache[pName] = cache[pName] || {pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+          _STATS_FIELDS.forEach(function(f){ bucket[f] += Number(ps[f]||0); });
+        });
+      });
+      _STATS_CACHE = cache;
+      _STATS_CACHE_TS = now;
+      return cache;
+    }
     function _statsFor(playerName){
       var base = {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};
-      try {
-        if (typeof window.getPlayerStats === 'function'){
-          var ps = window.getPlayerStats('Bayern Munich', playerName);
-          if (ps){
-            ['pj','gol','pen','fk','mvp','ta','tr','imbat','penSaved'].forEach(function(k){
-              base[k] = Number(ps[k]||0);
-            });
-          }
+      var cache = _buildStatsCache();
+      if (!cache) return base;
+      var pNorm = _normForStats(playerName);
+      if (cache[pNorm]) return cache[pNorm];
+      /* Fuzzy fallback: jugador con formato distinto (ej. "Müller" vs
+         "T. Müller", "Sané" vs "Leroy Sané"). Misma lógica que el
+         getPlayerStats global pero sobre nuestro cache pre-indexado. */
+      if (!pNorm) return base;
+      var keys = Object.keys(cache);
+      for (var i = 0; i < keys.length; i++){
+        var k = keys[i];
+        if (!k) continue;
+        if (k === pNorm || k.indexOf(pNorm) !== -1 || pNorm.indexOf(k) !== -1){
+          return cache[k];
         }
-      } catch(_){}
+      }
       return base;
     }
 
@@ -501,15 +575,27 @@ window._showSimProgress = function(opts, onDone){
         + '</div>';
     }
 
+    /* `rebuildPlayerStatsStore` es O(matches × events × competitions)
+       y se llamaba 2 veces por entrada a la pantalla (60 ms + 600 ms).
+       Lo limitamos a una vez cada 2 s — suficiente para captar nuevos
+       resultados y evita que el segundo render del par duplique trabajo
+       caro. La invalidación del cache local va de la mano: si NO se
+       hizo sync, el cache 1.5 s sigue siendo bueno y los 30 jugadores
+       leen de memoria. */
+    var _LAST_SYNC_TS = 0;
     window.renderBayernPlantillaScreen = function(){
       var host = document.getElementById('bayern-plantilla-host');
       if (!host) return;
-      /* Forzar reconstrucción del store de stats antes de pintar — si
-         se ha simulado una jornada / partido el storage podía estar
-         stale, igual que hace `renderSquadList` en el modal EA Sports. */
-      try {
-        if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats();
-      } catch(_){}
+      var now = Date.now();
+      if ((now - _LAST_SYNC_TS) > 2000){
+        try {
+          if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats();
+        } catch(_){}
+        _LAST_SYNC_TS = now;
+        /* El sync acaba de re-escribir los 5 stores. Invalidamos cache
+           local para que el siguiente _statsFor lea fresco. */
+        window._invalidateBayernStatsCache();
+      }
       var t = _findBayernRow();
       if (!t || !Array.isArray(t.players) || !t.players.length){
         _renderEmpty(host);

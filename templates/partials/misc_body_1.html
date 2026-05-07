@@ -18204,28 +18204,16 @@ Tottenham
 #s-munich-derby-season .mderby-match-top .mderby-comp-jornada{color:rgba(255,255,255,.65);font-weight:600;}
 #s-munich-derby-season .mderby-match-top .mderby-del-btn{margin-left:auto;background:rgba(197,15,31,.20);border:1px solid rgba(197,15,31,.45);color:#ffb0b0;border-radius:4px;font-size:11px;cursor:pointer;padding:3px 6px;}
 body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
-#s-munich-derby-season .mderby-match-body{display:grid;grid-template-columns:24px 1fr auto 1fr 24px;gap:6px;align-items:center;font-family:Rajdhani,sans-serif;font-size:14px;}
-#s-munich-derby-season .mderby-match-body .mderby-hi{font-size:18px;line-height:1;text-align:center;}
+#s-munich-derby-season .mderby-match-body{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-family:Rajdhani,sans-serif;font-size:14px;}
 #s-munich-derby-season .mderby-match-body .mderby-team{font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #s-munich-derby-season .mderby-match-body .mderby-team.local{text-align:right;}
 #s-munich-derby-season .mderby-match-body .mderby-team.visit{text-align:left;}
-#s-munich-derby-season .mderby-match-body .mderby-score{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.10);border-radius:6px;padding:3px 10px;color:#f0c040;text-align:center;line-height:1;min-width:64px;}
+#s-munich-derby-season .mderby-match-body .mderby-hi-inline{font-size:14px;margin-right:3px;display:inline;}
+#s-munich-derby-season .mderby-match-body .mderby-team.visit .mderby-hi-inline{margin-right:3px;margin-left:0;}
+#s-munich-derby-season .mderby-match-body .mderby-score{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.10);border-radius:6px;padding:3px 12px;color:#f0c040;text-align:center;line-height:1;min-width:64px;}
 #s-munich-derby-season .mderby-match-body .mderby-score.win{color:#5fe08a;border-color:rgba(95,224,138,.45);}
 #s-munich-derby-season .mderby-match-body .mderby-score.lose{color:#ff8080;border-color:rgba(255,128,128,.45);}
 #s-munich-derby-season .mderby-match-body .mderby-score.draw{color:#f0c040;border-color:rgba(240,192,64,.40);}
-/* Layout estrecho: si los nombres no caben, las teams pasan a fila
-   inferior bajo los iconos, igual que en el ejemplo del usuario:
-        💡       vs       👿
-   At Madrid 1-3 FC Barcelona. */
-@media (max-width:380px){
-  #s-munich-derby-season .mderby-match-body{grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto;gap:4px 6px;}
-  #s-munich-derby-season .mderby-match-body .mderby-hi.local{grid-row:1;grid-column:1;}
-  #s-munich-derby-season .mderby-match-body .mderby-score{grid-row:1;grid-column:2;align-self:center;}
-  #s-munich-derby-season .mderby-match-body .mderby-hi.visit{grid-row:1;grid-column:3;}
-  #s-munich-derby-season .mderby-match-body .mderby-team.local{grid-row:2;grid-column:1 / span 1;text-align:center;font-size:12px;}
-  #s-munich-derby-season .mderby-match-body .mderby-team.visit{grid-row:2;grid-column:3 / span 1;text-align:center;font-size:12px;}
-  #s-munich-derby-season .mderby-match-body::after{content:'';grid-row:2;grid-column:2;}
-}
 #s-munich-derby-season .mderby-empty{padding:30px 14px;text-align:center;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;font-style:italic;}
 </style>
 
@@ -18251,6 +18239,25 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     liga:'⚽', copa:'🏆', sc:'🟡', ucl:'🔵', uel:'🟠', uecl:'🟢',
     recopa:'🔴', usc:'⚪', inter:'🟤', superliga:'🟣', amistoso:'🤝',
     torneo:'🌞', seleccion:'🌍'
+  };
+  /* Color característico de cada competición — petición usuario
+     2026-05-07: el borde de cada card de partido se tiñe con este
+     color para que la competición sea identificable de un vistazo
+     ("bordeado de amarillo en Supercopa España" como ejemplo). */
+  var COMP_COLOR = {
+    liga:      '#22c55e',  /* verde Liga EA Sports */
+    copa:      '#e07000',  /* naranja Copa del Rey */
+    sc:        '#f0c040',  /* amarillo Supercopa España */
+    ucl:       '#3160ff',  /* azul Champions */
+    uel:       '#ff8214',  /* naranja Europa League */
+    uecl:      '#3cc878',  /* verde Conference */
+    recopa:    '#c01a1a',  /* rojo Recopa Europa */
+    usc:       '#c0c0c0',  /* plata Supercopa Europa */
+    inter:     '#ff9020',  /* dorado Intercontinental */
+    superliga: '#b040ff',  /* púrpura Superliga */
+    amistoso:  '#9fdcff',  /* azul claro */
+    torneo:    '#f0c040',  /* dorado Torneos Verano */
+    seleccion: '#0078c8'   /* azul Selección */
   };
 
   var _curSeasonId = null;
@@ -18365,7 +18372,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       return;
     }
     var team = s.teamName ? s.teamName : '— sin equipo —';
-    if (titleEl) titleEl.textContent = '📋 Temporada ' + s.season + ' · ' + team;
+    if (titleEl) titleEl.textContent = s.season + ' - ' + team;
     var stats = _summaryForSeason(_curSeasonId);
     if (sumEl){
       sumEl.innerHTML = ''
@@ -18393,32 +18400,35 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var scoreCls = rowCls === 'skip' ? '' : rowCls;
       var compIco = COMP_ICON[m.comp] || '⚽';
       var compLbl = COMP_LABEL[m.comp] || (m.comp || '');
+      var compClr = COMP_COLOR[m.comp] || '#9fdcff';
       /* Etiqueta de jornada: si el campo es numérico → "Jornada N";
-         si es texto (p. ej. "Semis", "FINAL", "Cuartos") → mostrar
-         el texto tal cual sin prefijo. Petición usuario 2026-05-07. */
+         si es texto (p. ej. "Semis", "FINAL") → mostrar el texto. */
       var jornadaTxt = String(m.jornada||'').trim();
       var jornadaPretty = '';
       if (jornadaTxt){
         if (/^\d+$/.test(jornadaTxt)) jornadaPretty = 'Jornada ' + jornadaTxt;
         else jornadaPretty = jornadaTxt;
       }
-      /* Iconos humanos delante de cada nombre de equipo (vía
-         window.humanIcon). Si el equipo no es humano devuelve ''. */
+      /* Iconos humanos INLINE delante del nombre del equipo (no en
+         columna separada — petición usuario 2026-05-07: iconos
+         pequeños "💡Atlético Madrid 1-3 👿FC Barcelona"). */
       var hiL = (typeof window.humanIcon === 'function') ? (window.humanIcon(m.local)||'') : '';
       var hiV = (typeof window.humanIcon === 'function') ? (window.humanIcon(m.visitante)||'') : '';
-      return '<div class="mderby-match-card ' + rowCls + '">'
+      /* Color del borde + glow basado en la competición (no el outcome).
+         Outcome se refleja solo en el color del marcador. */
+      var styleAttr = ' style="border-color:' + compClr + ';box-shadow:0 0 12px ' + compClr + '30;"';
+      var compStyleAttr = ' style="color:' + compClr + ';"';
+      return '<div class="mderby-match-card ' + rowCls + '"' + styleAttr + '>'
            +   '<div class="mderby-match-top">'
            +     '<span class="mderby-comp-ico">' + compIco + '</span>'
-           +     '<span class="mderby-comp-label">' + _esc(compLbl) + '</span>'
+           +     '<span class="mderby-comp-label"' + compStyleAttr + '>' + _esc(compLbl) + '</span>'
            +     (jornadaPretty ? '<span class="mderby-comp-sep">·</span><span class="mderby-comp-jornada">' + _esc(jornadaPretty) + '</span>' : '')
            +     '<button class="mderby-del-btn" onclick="window.munichDerbyMatchDelete&amp;&amp;window.munichDerbyMatchDelete(\'' + _esc(m.id) + '\')" title="Eliminar partido">🗑</button>'
            +   '</div>'
            +   '<div class="mderby-match-body">'
-           +     '<span class="mderby-hi local">' + (hiL || '') + '</span>'
-           +     '<span class="mderby-team local">' + _esc(m.local||'?') + '</span>'
+           +     '<span class="mderby-team local">' + (hiL ? '<span class="mderby-hi-inline">' + hiL + '</span>' : '') + _esc(m.local||'?') + '</span>'
            +     '<span class="mderby-score ' + scoreCls + '">' + (Number(m.gl)||0) + '–' + (Number(m.gv)||0) + '</span>'
-           +     '<span class="mderby-team visit">' + _esc(m.visitante||'?') + '</span>'
-           +     '<span class="mderby-hi visit">' + (hiV || '') + '</span>'
+           +     '<span class="mderby-team visit">' + (hiV ? '<span class="mderby-hi-inline">' + hiV + '</span>' : '') + _esc(m.visitante||'?') + '</span>'
            +   '</div>'
            + '</div>';
     }).join('');

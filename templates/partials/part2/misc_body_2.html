@@ -16612,6 +16612,17 @@ window.goLiveMatches = function() {
     return _scanAllDerbies().filter(function(item){ return item.source === 'wrap'; }).map(function(i){ return i.wrap; });
   }
 
+  /* ISRAMAX · placeholder para el módulo de apuestas Humano vs Humano.
+     Petición usuario 2026-05-07: caja roja-blanca grande con "I" a la
+     derecha del header de Derbys. Por ahora muestra un alert
+     informativo — la lógica real (apuestas, balance, historial) se
+     monta cuando el usuario defina las reglas. */
+  if (typeof window._isramaxOpen !== 'function') {
+    window._isramaxOpen = function(){
+      alert('🎰 ISRAMAX\n\nApuestas sobre nuestros partidos Humano vs Humano.\n\nPróximamente.');
+    };
+  }
+
   /* Crea el div.screen#s-derbys en body si no existe. */
   function _ensureDerbysScreen() {
     var existing = document.getElementById(DERBYS_SCREEN_ID);
@@ -16619,7 +16630,14 @@ window.goLiveMatches = function() {
     var html = ''
       + '<div class="screen" id="' + DERBYS_SCREEN_ID + '">'
       +   '<button class="back-btn" onclick="go(\'s-home\')">◀ Volver</button>'
-      +   '<div class="sec-hdr"><span class="sec-emoji">🔥</span><h2>Derbys · Humano vs Humano</h2></div>'
+      +   '<div class="sec-hdr" style="display:flex;align-items:center;gap:10px;">'
+      +     '<span class="sec-emoji">🔥</span>'
+      +     '<h2 style="flex:1;margin:0;">Derbys</h2>'
+      +     '<button class="isramax-box" onclick="window._isramaxOpen&&window._isramaxOpen()" title="ISRAMAX · Apuestas Humano vs Humano">'
+      +       '<span class="isramax-i">I</span>'
+      +       '<span class="isramax-label">ISRAMAX</span>'
+      +     '</button>'
+      +   '</div>'
       +   '<div id="derbys-list" style="padding:8px 0 24px;min-height:160px;"></div>'
       + '</div>';
     document.body.insertAdjacentHTML('beforeend', html);
@@ -16645,7 +16663,18 @@ window.goLiveMatches = function() {
         '#s-derbys .derby-status.playing{background:rgba(255,60,60,.22);color:#ffd0d0;border:1px solid rgba(255,120,120,.45);}' +
         '#s-derbys .derby-status.finished{background:rgba(120,120,120,.18);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.22);}' +
         '#s-derbys .derby-empty{text-align:center;color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;font-size:15px;padding:50px 10px;letter-spacing:1px;line-height:1.55;}' +
-        '#s-derbys .derby-empty small{display:block;margin-top:10px;font-size:12px;opacity:.7;letter-spacing:.6px;}';
+        '#s-derbys .derby-empty small{display:block;margin-top:10px;font-size:12px;opacity:.7;letter-spacing:.6px;}' +
+        /* ISRAMAX · botón cuadrado rojo+blanco a la derecha del header
+           Derbys. Lleva una "I" grande y la palabra ISRAMAX bajo, con
+           glow rojo pulsante para llamar la atención. Petición usuario
+           2026-05-07. Función real (apuestas H vs H) próximamente. */
+        '@keyframes isramaxPulse{0%,100%{box-shadow:0 0 16px rgba(255,60,80,.55),inset 0 1px 4px rgba(255,255,255,.30),inset 0 -2px 4px rgba(0,0,0,.30)}50%{box-shadow:0 0 28px rgba(255,80,100,.95),inset 0 1px 4px rgba(255,255,255,.45),inset 0 -2px 4px rgba(0,0,0,.30)}}' +
+        '#s-derbys .isramax-box{position:relative;width:74px;height:74px;flex-shrink:0;border-radius:14px;background:linear-gradient(135deg,#a01030 0%,#e02040 30%,#ff3b5c 50%,#e02040 70%,#a01030 100%);border:2px solid #ffffff;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:6px 4px 4px;animation:isramaxPulse 2s ease-in-out infinite;transition:transform .15s;-webkit-tap-highlight-color:transparent;overflow:hidden;}' +
+        '#s-derbys .isramax-box::before{content:"";position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.30) 0%,transparent 35%,transparent 65%,rgba(255,255,255,.10) 100%);pointer-events:none;}' +
+        '#s-derbys .isramax-box:hover{transform:scale(1.06);}' +
+        '#s-derbys .isramax-box:active{transform:scale(.96);}' +
+        '#s-derbys .isramax-i{font-family:"Bebas Neue","Oswald",sans-serif;font-size:42px;line-height:.85;color:#ffffff;font-weight:900;text-shadow:0 2px 3px rgba(0,0,0,.55),0 0 10px rgba(255,255,255,.50);letter-spacing:0;position:relative;z-index:1;}' +
+        '#s-derbys .isramax-label{font-family:"Oswald",sans-serif;font-size:8.5px;letter-spacing:1.6px;color:#ffffff;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.55);position:relative;z-index:1;line-height:1;}';
       document.head.appendChild(css);
     }
     return document.getElementById(DERBYS_SCREEN_ID);

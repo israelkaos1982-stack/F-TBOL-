@@ -5810,8 +5810,23 @@ window._showSimProgress = function(opts, onDone){
 <div class="screen" id="s-recopa-rd-fin"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · FINAL</h2></div><div id="recopa-rd-fin-body" style="padding:0 4px 20px;"></div></div>
 
 <style>
-.c-recopa{background:linear-gradient(90deg,#2a1400,#5a2a00,#8a3c00,#5a2a00,#2a1400) !important;border:1px solid rgba(160,80,0,.55) !important;}
+/* Recopa de Europa (petición usuario 2026-05-06): rojo intenso con
+   acento dorado. Inspiración: trofeo amarillo sobre círculo rojo
+   carmesí (FOTO 2). Aplica a:
+     - Caja principal en Competiciones (`.sc-recopa1`).
+     - Botones de ronda dentro de s-recopa (`.c-recopa`).
+     - Círculo del icono dorado en `--cir-bg/--cir-bd`. */
+.c-recopa{background:linear-gradient(90deg,#4a0808,#8a1010,#c01a1a,#ff3838,#c01a1a,#8a1010,#4a0808) !important;border:1.5px solid rgba(255,215,0,.55) !important;}
 .c-recopa.copa-rd-done{filter:saturate(.55) brightness(.7);}
+/* Intercontinental (petición usuario 2026-05-06): wine oscuro con
+   destello dorado-naranja. Inspiración: trofeo dorado con glow rojo
+   sobre círculo maroon (FOTO 3). Override del bundle CSS que tenía
+   `.c-inter{linear-gradient(...#5c3a00...)}` (marrón apagado). */
+.c-inter{background:linear-gradient(90deg,#1a0404,#3a0a0a,#6a1818,#ff9020,#6a1818,#3a0a0a,#1a0404) !important;border:1.5px solid rgba(255,144,32,.55) !important;}
+/* Override del bundle CSS para `.sc-inter1` (en s-competiciones, la
+   caja Intercontinental). El bundle tenía wine-marrón apagado; ahora
+   wine oscuro con destello dorado-naranja. */
+#s-competiciones .submenu-card.sc-inter1{background:linear-gradient(135deg,#1a0404 0%,#3a0a0a 30%,#6a1818 55%,#ff9020 75%,#6a1818 85%,#1a0404 100%) !important;border-color:#ff9020 !important;box-shadow:0 4px 18px rgba(255,144,32,.22),inset 0 1px 0 rgba(255,255,255,.08) !important;}
 .recopa-card{margin:8px;padding:10px 12px;background:linear-gradient(135deg,#1a0c00 0%,#321a00 50%,#1a0c00 100%);border:1px solid rgba(160,80,0,.5);border-radius:10px;}
 .recopa-card.played{border-color:rgba(95,224,138,.45);}
 .recopa-card-row{display:grid;grid-template-columns:1fr 90px 1fr;align-items:center;gap:8px;}
@@ -7087,13 +7102,13 @@ window._showSimProgress = function(opts, onDone){
 <div class="submenu-card sc-uecl1" onclick="go('s-uecl')">
 <img class="sc-comp-img" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Conference_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UECL"/><span class="sc-label">Conference League</span><span class="sc-arr">▶</span>
 </div>
-<div class="submenu-card sc-recopa1" style="background:linear-gradient(135deg,#2a1400,#5a2a00,#7a3c00,#5a2a00,#2a1400) !important;border-color:#7a3c00 !important;" onclick="go('s-recopa')">
+<div class="submenu-card sc-recopa1" style="background:linear-gradient(135deg,#4a0808 0%,#8a1010 30%,#c01a1a 55%,#ff3838 70%,#c01a1a 85%,#4a0808 100%) !important;border-color:#ffd700 !important;box-shadow:0 4px 18px rgba(192,26,26,.30),inset 0 1px 0 rgba(255,255,255,.08) !important;" onclick="go('s-recopa')">
 <span class="sc-emoji">🟤</span><span class="sc-label">Recopa Europa</span><span class="sc-arr">▶</span>
 </div>
 <div class="submenu-card sc-usc1" onclick="go('s-usc')">
 <img class="sc-comp-img" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Super_Cup_Logo.svg" onerror="this.style.display='none'" alt="USC"/><span class="sc-label">Supercopa Europa</span><span class="sc-arr">▶</span>
 </div>
-<div class="submenu-card sc-inter1" onclick="go('s-intercontinental')">
+<div class="submenu-card sc-inter1" style="background:linear-gradient(135deg,#1a0404 0%,#3a0a0a 30%,#6a1818 55%,#ff9020 75%,#6a1818 85%,#1a0404 100%) !important;border-color:#ff9020 !important;box-shadow:0 4px 18px rgba(255,144,32,.22),inset 0 1px 0 rgba(255,255,255,.08) !important;" onclick="go('s-intercontinental')">
 <span class="sc-emoji">🌐</span><span class="sc-label">Intercontinental</span><span class="sc-arr">▶</span>
 </div>
 <div class="submenu-card sc-estad-gen" style="background:linear-gradient(135deg,#000000,#222222,#434343,#222222,#000000) !important;border-color:#5a5a5a !important;" onclick="go('s-estadisticas-gen')">
@@ -7152,9 +7167,9 @@ window._showSimProgress = function(opts, onDone){
 #s-competiciones .submenu-card.sc-ucl1{--cir-bg:#1538a0;--cir-bd:#2848c8;}
 #s-competiciones .submenu-card.sc-uel1{--cir-bg:#a03a00;--cir-bd:#c04800;}
 #s-competiciones .submenu-card.sc-uecl1{--cir-bg:#186a18;--cir-bd:#28aa28;}
-#s-competiciones .submenu-card.sc-recopa1{--cir-bg:#7a3c00;--cir-bd:#a04a00;}
+#s-competiciones .submenu-card.sc-recopa1{--cir-bg:#c01010;--cir-bd:#ffd700;}
 #s-competiciones .submenu-card.sc-usc1{--cir-bg:#343434;--cir-bd:#585858;}
-#s-competiciones .submenu-card.sc-inter1{--cir-bg:#7a4a00;--cir-bd:#9a5c00;}
+#s-competiciones .submenu-card.sc-inter1{--cir-bg:#3a0a0a;--cir-bd:#ff9020;}
 #s-competiciones .submenu-card.sc-estad-gen{--cir-bg:#2c2c2c;--cir-bd:#5a5a5a;}
 #s-competiciones .submenu-card.sc-superliga-main{--cir-bg:#6020c8;--cir-bd:#9030ee;}
 #s-competiciones .submenu-card.sc-torneos-verano{--cir-bg:#c89020;--cir-bd:#f0c040;}

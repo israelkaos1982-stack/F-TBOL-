@@ -17928,8 +17928,43 @@ Tottenham
     return seed;
   }
 
+  /* Persistencia en SERVIDOR (petición usuario 2026-05-07: "CUANDO
+     AÑADO UN NOMBRE DE EQUIPO O NUEVA TEMPORADA QUE SE GUARDE").
+     Antes solo guardaba en localStorage → al cambiar de dispositivo
+     o limpiar caché del navegador se perdía todo. Ahora cada save
+     hace fire-and-forget POST a /api/state con el patch
+     {bayern_derbys_seasons_v1: arr}. El backend lo mete en
+     data["bayern_derbys_seasons_v1"] junto al resto del estado
+     global. Al cargar (load), si el servidor tiene una versión más
+     reciente la sobrescribe. */
+  function _serverPush(arr){
+    try {
+      fetch('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bayern_derbys_seasons_v1: arr || [] })
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function _serverPull(cb){
+    try {
+      fetch('/api/state', { method: 'GET' })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d){
+          if(!d || !d.state) return;
+          var srv = d.state.bayern_derbys_seasons_v1;
+          if (Array.isArray(srv) && srv.length){
+            try { localStorage.setItem(STORE_KEY, JSON.stringify(srv)); } catch(_){}
+            if (typeof cb === 'function') cb(srv);
+          }
+        })
+        .catch(function(){});
+    } catch(_){}
+  }
+
   function save(arr){
     try { localStorage.setItem(STORE_KEY, JSON.stringify(arr || [])); } catch(_){}
+    _serverPush(arr);
   }
 
   function esc(s){
@@ -18042,11 +18077,18 @@ Tottenham
     if (screen){
       try {
         new MutationObserver(function(){
-          if (screen.classList.contains('active')) render();
+          if (screen.classList.contains('active')){
+            render();
+            /* Hidratar desde servidor cada vez que se entra: si otro
+               dispositivo añadió/editó temporadas, las traemos. */
+            _serverPull(function(){ render(); });
+          }
         }).observe(screen, {attributes:true, attributeFilter:['class']});
       } catch(_){}
     }
     render();
+    /* Pull inicial al cargar la app (no esperar a abrir la pantalla). */
+    _serverPull(function(){ render(); });
   }
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', _wire);

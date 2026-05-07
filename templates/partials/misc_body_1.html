@@ -9574,8 +9574,18 @@ window._showSimProgress = function(opts, onDone){
   }
   function resetOpenQualifier(){
     try { localStorage.removeItem(STORE_KEY); } catch(_){}
-    try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
-    try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
+    /* Cascada centralizada: al resetear OQ también se limpia la
+       Previa de Champions (su pool incluye 35 ganadores del OQ),
+       se invalida la snapshot europe_committed_v1, y se re-pinta
+       UCL/UEL/UECL grupos para que los huecos vuelvan a "Por
+       definir". Petición usuario 2026-05-07. */
+    if (typeof window._resetEuropePoolFeeders === 'function') {
+      window._resetEuropePoolFeeders('oq');
+    } else {
+      /* Fallback minimal si el helper aún no está disponible */
+      try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
+      try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
+    }
     buildOpenQualifierClas();
   }
 
@@ -11001,28 +11011,32 @@ window._showSimProgress = function(opts, onDone){
       alert('Motor de reset no disponible. Recarga la página.');
       return;
     }
-    if(!confirm('¿Resetear las 51 ligas? Las plantillas (jugadores y escudos) se mantienen, pero las estadísticas vuelven a 0.')) return;
+    if(!confirm('¿Resetear las 51 ligas?\n\nLas plantillas (jugadores y escudos) se mantienen, pero las estadísticas vuelven a 0.\n\nTambién se reinician Wild Card, Open Qualifier y Previa de Champions (sus pools dependen de las ligas) y los huecos en UCL/UEL/UECL fase de grupos vuelven a "Por definir".')) return;
     var ok = 0;
     _eachLeagueCard(function(name){
       var slug = _slugify(name);
       try { if(window.ligaExtReiniciarSlug(slug)) ok++; } catch(_){ }
     });
-    /* También limpiamos la snapshot manual de pools europeos
-       (`europe_committed_v1`): si el admin reseteó las ligas, la
-       snapshot anterior queda obsoleta. La próxima vez que abra
-       una pantalla europea, el cómputo dinámico volverá a correr
-       con los standings 0 nuevos hasta que vuelva a pulsar
-       "📤 Enviar a Europa" tras simular. */
-    try { localStorage.removeItem('europe_committed_v1'); } catch(_){}
-    try {
-      fetch('/api/kv/europe_committed_v1', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        credentials:'same-origin',
-        body: JSON.stringify({value: null})
-      }).catch(function(){});
-    } catch(_){}
-    alert('Reseteadas: ' + ok + ' liga' + (ok===1?'':'s') + '.\n\nLa snapshot de Europa también se ha borrado — vuelve a pulsar "📤 Enviar a Europa" tras simular las ligas.');
+    /* Cascada centralizada: limpia WC + OQ + Previa, invalida la
+       snapshot europe_committed_v1 (local + server), y re-renderiza
+       las 5 pantallas europeas. Sin esto los teams que entraron por
+       Previa quedaban "pegados" en las clasificaciones de UCL/UEL/
+       UECL aunque las feeder keys estuvieran vacías. */
+    if (typeof window._resetEuropePoolFeeders === 'function') {
+      window._resetEuropePoolFeeders('all');
+    } else {
+      /* Fallback: al menos invalidar la snapshot Europa. */
+      try { localStorage.removeItem('europe_committed_v1'); } catch(_){}
+      try {
+        fetch('/api/kv/europe_committed_v1', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',
+          body: JSON.stringify({value: null})
+        }).catch(function(){});
+      } catch(_){}
+    }
+    alert('Reseteadas: ' + ok + ' liga' + (ok===1?'':'s') + '.\n\nWild Card, Open Qualifier y Previa de Champions también se han reiniciado, y la snapshot de Europa se ha borrado — vuelve a pulsar "📤 Enviar a Europa" tras simular las ligas.');
   };
 
   /* ── Enviar realidad de cada equipo a su Europa ──────────────────
@@ -19508,6 +19522,87 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   } else {
     setTimeout(refresh, 250);
   }
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════
+     Reset en cascada de los pools europeos (2026-05-07).
+     Las clasificaciones de UCL/UEL/UECL fase de grupos llevan
+     huecos para los equipos que entran vía Previa de Champions
+     (11 UCL, 22 UEL, 30 UECL). Esos equipos viven en feeder keys
+     de localStorage:
+       · `wprev_to_fase_grupos_v1`     → 11 a UCL
+       · `wprev_to_europa_v1`          → 22 a UEL
+       · `wprev_r1_to_conference_v1`   → 30 a UECL
+       · `oq_to_previa_v1`             → 35 a Previa
+       · `oq_to_conference_v1`         → legacy fallback UECL
+       · `wc_to_open_qualifier_v1`     → 18 a OQ
+     Antes los resets (WC, OQ, Previa, 51 ligas) limpiaban claves
+     parciales y NO repintaban las pantallas hijas, así que los
+     equipos del Previa quedaban "pegados" en UCL/UEL/UECL aunque
+     el origen estuviera vacío. Este helper centraliza el reset
+     en cascada y refresca las 5 pantallas afectadas.
+
+     Scopes:
+       · 'all'    → 51 ligas reset (todo abajo desde el origen).
+       · 'wc'     → reset Wild Card (cascada WC → OQ → Previa).
+       · 'oq'     → reset Open Qualifier (cascada OQ → Previa).
+       · 'previa' → reset Previa Champions (clearState ya limpió
+                    las 4 wprev_* keys; aquí solo invalidamos la
+                    snapshot y re-renderizamos).
+     Cualquier reset también limpia la snapshot manual
+     `europe_committed_v1` (local + server) — es la única forma
+     de que el cómputo dinámico vuelva a correr; si la snapshot
+     existe, las funciones compute*Classified la prefieren y los
+     huecos no se vacían.
+     ══════════════════════════════════════════════════ -->
+<script>
+(function(){
+  window._resetEuropePoolFeeders = function(scope){
+    scope = scope || 'all';
+    /* WC keys */
+    if (scope === 'all' || scope === 'wc'){
+      try { localStorage.removeItem('wc_state_v1'); } catch(_){}
+      try { localStorage.removeItem('wc_champ_v1'); } catch(_){}
+      try { localStorage.removeItem('wc_to_open_qualifier_v1'); } catch(_){}
+    }
+    /* OQ keys (cascada desde WC también) */
+    if (scope === 'all' || scope === 'wc' || scope === 'oq'){
+      try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
+      try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
+      try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
+    }
+    /* Previa Champions keys (cascada desde WC u OQ también) */
+    if (scope === 'all' || scope === 'wc' || scope === 'oq'){
+      try { localStorage.removeItem('wprev_state_v1'); } catch(_){}
+      try { localStorage.removeItem('wprev_to_fase_grupos_v1'); } catch(_){}
+      try { localStorage.removeItem('wprev_to_europa_v1'); } catch(_){}
+      try { localStorage.removeItem('wprev_r1_to_conference_v1'); } catch(_){}
+    }
+    /* Snapshot Europa: cualquier reset la invalida — sin esto
+       el frozen list del snapshot sigue mandando teams al UCL/
+       UEL/UECL aunque las feeder keys ya estén vacías. */
+    try { localStorage.removeItem('europe_committed_v1'); } catch(_){}
+    try {
+      fetch('/api/kv/europe_committed_v1', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({value: null})
+      }).catch(function(){});
+    } catch(_){}
+    /* Re-render de las clasificaciones que dependen de los pools.
+       Si una pantalla no está montada todavía, el build hace
+       early-return en `getElementById(container)` — no rompe. */
+    try { if (typeof window.buildUclGruposClas === 'function') window.buildUclGruposClas(); } catch(_){}
+    try { if (typeof window.buildUelGruposClas === 'function') window.buildUelGruposClas(); } catch(_){}
+    try { if (typeof window.buildUeclGruposClas === 'function') window.buildUeclGruposClas(); } catch(_){}
+    try { if (typeof window.buildUclPrevClas === 'function') window.buildUclPrevClas(); } catch(_){}
+    try { if (typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
+    /* Hub Champions: las 3 cajas (Wild Card, Open Qualifier,
+       Previa de Champions) recuperan color sin ✓ COMPLETADA. */
+    try { if (typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
+  };
 })();
 </script>
 

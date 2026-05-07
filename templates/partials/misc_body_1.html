@@ -4516,6 +4516,30 @@ window._showSimProgress = function(opts, onDone){
   }
 
   function _importOtherLeaguesIntoEngine(){
+    /* Cache por hash: si el contenido de ligaExt_* no ha cambiado
+       desde la última vez, saltamos el parseo de ~50 JSONs grandes
+       (~4 MB). Antes esto se ejecutaba en cada applyEngineOverrides
+       (300ms + 1500ms al cargar + cada saveData) → bloqueaba la
+       UI varios segundos en móvil. Reportado 2026-05-07. */
+    var hashParts = [];
+    try {
+      for (var hi = 0; hi < localStorage.length; hi++) {
+        var hk = localStorage.key(hi);
+        if (!hk || hk.indexOf('ligaExt_') !== 0) continue;
+        if (hk === 'ligaExt_liga-ea-sports') continue;
+        if (hk.indexOf('_backup') !== -1) continue;
+        if (hk.indexOf('_snap_') !== -1) continue;
+        if (hk.indexOf('_protected') !== -1) continue;
+        var hraw = localStorage.getItem(hk) || '';
+        hashParts.push(hk + ':' + hraw.length);
+      }
+      hashParts.sort();
+    } catch(_){}
+    var newHash = hashParts.join('|');
+    if (window.__importLeaguesHash === newHash) {
+      return; /* nada cambió */
+    }
+    window.__importLeaguesHash = newHash;
     var POS_MAP = { POR:'P', DEF:'D', MED:'M', DEL:'F' };
     var POS_HEADER = { P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS' };
     var POS_ORDER = ['P','D','M','F'];
@@ -5966,7 +5990,13 @@ window._showSimProgress = function(opts, onDone){
           _runnerUp = (_champion === parsed.copa.final.home) ? parsed.copa.final.away : parsed.copa.final.home;
         }
         if(_champion) _push(_champion);
-        if(parsed.config && parsed.config.recopaSubcampeon && _runnerUp){
+        /* Subcampeón: default = TRUE (el usuario espera campeón +
+           subcampeón siempre). Solo lo excluimos si el admin
+           explícitamente marcó `recopaSubcampeon === false`. Antes
+           el default era undefined → no se incluía y la pool se
+           quedaba en la mitad. Reportado 2026-05-07. */
+        var _includeRunner = !(parsed.config && parsed.config.recopaSubcampeon === false);
+        if(_includeRunner && _runnerUp){
           _push(_runnerUp);
         }
       }
@@ -16614,15 +16644,17 @@ Tottenham
       saveData(CURRENT_KEY, data);
       _lecRender();
     },
-    /* Alterna 0/1 plazas del subcampeón a Recopa de Europa. Persiste
-       en data.config.recopaSubcampeon (boolean) y re-renderiza solo
-       el bloque de Reglas para reflejar el cambio. */
+    /* Alterna 0/1 plazas del subcampeón a Recopa de Europa. Default =
+       TRUE (incluido). Si está sin definir (undefined) lo tratamos
+       como TRUE → primer click apaga (false). Persiste en
+       data.config.recopaSubcampeon y re-renderiza el bloque de Reglas. */
     toggleSubcampeon: function(){
       if(!CURRENT_KEY) return;
       var data = loadData(CURRENT_KEY);
       if(!data) return;
       if(!data.config) data.config = {};
-      data.config.recopaSubcampeon = !data.config.recopaSubcampeon;
+      var current = !(data.config.recopaSubcampeon === false);
+      data.config.recopaSubcampeon = !current;
       saveData(CURRENT_KEY, data);
       _lecRenderReglas();
     },
@@ -16650,7 +16682,9 @@ Tottenham
     if(!rb) return;
     var data = CURRENT_KEY ? loadData(CURRENT_KEY) : null;
     var fmt = data ? _lecDetectFormat(data) : 0;
-    var sub = !!(data && data.config && data.config.recopaSubcampeon);
+    /* Default = TRUE (incluido). Solo es FALSE si el admin lo desactivó
+       explícitamente. Mantiene coherencia con `_buildPool` (Recopa). */
+    var sub = !(data && data.config && data.config.recopaSubcampeon === false);
     rb.innerHTML = '<div class="lec-rules">'
       + '<h4>📜 Formato</h4>'
       + '<p>' + _lecFormatBlurb(fmt) + '</p>'

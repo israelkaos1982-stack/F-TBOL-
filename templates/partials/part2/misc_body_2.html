@@ -21714,26 +21714,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   window._wcReset = function(){
     function _doReset(){
-      if(!confirm('¿Reiniciar el torneo Wild Card?\n\nSe perderán todos los partidos jugados.\n\nTambién se reiniciarán el Open Qualifier y la Previa de Champions: sus pools se construyen desde los ganadores del Wild Card (18 al OQ → 35 a Previa), así que sin WC los datos viejos no encajarían.')) return;
+      if(!confirm('¿Reiniciar el torneo Wild Card?\n\nSe perderán todos los partidos jugados.\n\nTambién se reiniciarán el Open Qualifier y la Previa de Champions: sus pools se construyen desde los ganadores del Wild Card (18 al OQ → 35 a Previa), así que sin WC los datos viejos no encajarían.\n\nLos huecos en la clasificación de Champions (11), Europa League (22) y Conference League (30) volverán a "Por definir".')) return;
       clearState();
-      /* Cascada de reset: al limpiar Wild Card también limpiamos
-         Open Qualifier y Previa Champions para que las 3 cajas del
-         hub Champions vuelvan a estado "no completada" (color, sin
-         ✓ COMPLETADA gris). Sus pools dependen de los ganadores del
-         WC, así que conservar los datos antiguos sería inconsistente.
-         Petición usuario 2026-05-07. */
-      try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
-      try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
-      try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
-      try { localStorage.removeItem('wprev_state_v1'); } catch(_){}
-      try { localStorage.removeItem('wprev_to_fase_grupos_v1'); } catch(_){}
-      try { localStorage.removeItem('wprev_to_europa_v1'); } catch(_){}
-      try { localStorage.removeItem('wprev_to_conference_v1'); } catch(_){}
+      /* Cascada centralizada (helper en misc_body_1.html). Limpia
+         también OQ + Previa Champions, invalida la snapshot
+         europe_committed_v1, y re-renderiza UCL/UEL/UECL grupos
+         para que los huecos vuelvan a "Por definir". */
+      if (typeof window._resetEuropePoolFeeders === 'function') {
+        window._resetEuropePoolFeeders('wc');
+      }
       render();
-      /* Refrescar el hub Champions sin esperar a navegar fuera y
-         volver: las 3 cajas (Wild Card, Open Qualifier, Previa de
-         Champions) se quitan la clase .is-done de inmediato. */
-      try { if(typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
     }
     if(typeof window.pG === 'function'){ window.pG(_doReset); }
     else _doReset();
@@ -23274,8 +23264,14 @@ document.addEventListener('DOMContentLoaded', function() {
     return !s || s.phase === 'paired' || s.phase === 'ida-played';
   };
   window.resetUclPrev = function(){
-    if(!confirm('¿Reiniciar la Previa de Champions? Se perderán todos los partidos jugados.')) return;
+    if(!confirm('¿Reiniciar la Previa de Champions?\n\nSe perderán todos los partidos jugados.\n\nLos huecos en la clasificación de Champions (11), Europa League (22) y Conference League (30) volverán a "Por definir".')) return;
     clearState();
+    /* clearState ya limpió las 4 wprev_* keys. El helper invalida
+       la snapshot europe_committed_v1 y re-renderiza UCL/UEL/UECL
+       grupos para que los huecos vuelvan a "Por definir". */
+    if (typeof window._resetEuropePoolFeeders === 'function') {
+      window._resetEuropePoolFeeders('previa');
+    }
     buildUclPrevClas();
   };
 

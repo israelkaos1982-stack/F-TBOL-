@@ -10015,6 +10015,17 @@
       }
       if (!newName) { alert('⚠️ El nombre del jugador es obligatorio.'); return; }
 
+      /* Si el nombre escrito a mano no coincide con ningún jugador de la
+         plantilla del equipo, persistirlo (sin dorsal / pos / power) para
+         que quede guardado y aparezca en el editor de plantilla. El helper
+         de-duplica por nombre normalizado. */
+      try {
+        var _gmTeamFull = newTeam === 'a' ? _gm.home : _gm.away;
+        if (_gmTeamFull && typeof window._addManualPlayerToRoster === 'function') {
+          window._addManualPlayerToRoster(_gmTeamFull, newName, newNum);
+        }
+      } catch(_){}
+
       _gmScMove(ev.type, ev.team, -1);
       _gmScMove(newType, newTeam, +1);
       var scEl = document.getElementById('gm-score');

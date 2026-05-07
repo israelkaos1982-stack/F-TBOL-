@@ -18271,6 +18271,20 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _newId(){
     return 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7);
   }
+  /* Strip de cualquier emoji/icono al inicio del nombre. Acepta ANY
+     non-letter prefix (emojis, NBSP, espacios) y devuelve el resto.
+     Bug 2026-05-07: el usuario tipeaba "💡 Atlético Madrid" como
+     equipo y el render mostraba DOS iconos (el embebido + el de
+     humanIcon). Esta función limpia el embebido para que solo el
+     de humanIcon aparezca. */
+  function _stripLeadingIcon(name){
+    if (!name) return '';
+    var s = String(name);
+    /* Quita whitespace + cualquier carácter no alfanumérico (cubre
+       emojis, símbolos, separadores) hasta encontrar la 1ª letra. */
+    var m = s.match(/[A-Za-zÀ-ɏͰ-῿Ⰰ-퟿].*$/);
+    return m ? m[0].trim() : s.trim();
+  }
   function _loadAll(){
     try {
       var raw = localStorage.getItem(STORE_KEY);
@@ -18323,12 +18337,13 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   }
   /* Determina W/L/D para `teamName` en este match. Devuelve 'g', 'e',
      'p' o null si la temporada no tiene equipo asignado o si el equipo
-     no participa. */
+     no participa. Usa `_stripLeadingIcon` para tolerar nombres con
+     iconos embebidos ("💡 Atlético Madrid" → "Atlético Madrid"). */
   function _outcomeFor(match, teamName){
     if (!teamName || !match) return null;
-    var t = String(teamName).trim().toLowerCase();
-    var local = String(match.local||'').trim().toLowerCase();
-    var visit = String(match.visitante||'').trim().toLowerCase();
+    var t = _stripLeadingIcon(String(teamName)).toLowerCase();
+    var local = _stripLeadingIcon(String(match.local||'')).toLowerCase();
+    var visit = _stripLeadingIcon(String(match.visitante||'')).toLowerCase();
     var gl = Number(match.gl||0), gv = Number(match.gv||0);
     if (local === t){
       if (gl > gv) return 'g';
@@ -18409,11 +18424,16 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         if (/^\d+$/.test(jornadaTxt)) jornadaPretty = 'Jornada ' + jornadaTxt;
         else jornadaPretty = jornadaTxt;
       }
-      /* Iconos humanos INLINE delante del nombre del equipo (no en
-         columna separada — petición usuario 2026-05-07: iconos
-         pequeños "💡Atlético Madrid 1-3 👿FC Barcelona"). */
-      var hiL = (typeof window.humanIcon === 'function') ? (window.humanIcon(m.local)||'') : '';
-      var hiV = (typeof window.humanIcon === 'function') ? (window.humanIcon(m.visitante)||'') : '';
+      /* Limpiar icono prefix del nombre del equipo (bug 2026-05-07:
+         si el usuario tipeó "💡 Atlético Madrid" como nombre de
+         equipo, el render mostraba DOS iconos — el embebido + el
+         que añade humanIcon). _stripLeadingIcon quita cualquier
+         prefijo no-letra antes de mostrar el nombre y antes de
+         pedir el icono humano. */
+      var localClean = _stripLeadingIcon(m.local||'');
+      var visitClean = _stripLeadingIcon(m.visitante||'');
+      var hiL = (typeof window.humanIcon === 'function') ? (window.humanIcon(localClean)||'') : '';
+      var hiV = (typeof window.humanIcon === 'function') ? (window.humanIcon(visitClean)||'') : '';
       /* Color del borde + glow basado en la competición (no el outcome).
          Outcome se refleja solo en el color del marcador. */
       var styleAttr = ' style="border-color:' + compClr + ';box-shadow:0 0 12px ' + compClr + '30;"';
@@ -18426,9 +18446,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
            +     '<button class="mderby-del-btn" onclick="window.munichDerbyMatchDelete&amp;&amp;window.munichDerbyMatchDelete(\'' + _esc(m.id) + '\')" title="Eliminar partido">🗑</button>'
            +   '</div>'
            +   '<div class="mderby-match-body">'
-           +     '<span class="mderby-team local">' + (hiL ? '<span class="mderby-hi-inline">' + hiL + '</span>' : '') + _esc(m.local||'?') + '</span>'
+           +     '<span class="mderby-team local">' + (hiL ? '<span class="mderby-hi-inline">' + hiL + '</span>' : '') + _esc(localClean) + '</span>'
            +     '<span class="mderby-score ' + scoreCls + '">' + (Number(m.gl)||0) + '–' + (Number(m.gv)||0) + '</span>'
-           +     '<span class="mderby-team visit">' + (hiV ? '<span class="mderby-hi-inline">' + hiV + '</span>' : '') + _esc(m.visitante||'?') + '</span>'
+           +     '<span class="mderby-team visit">' + (hiV ? '<span class="mderby-hi-inline">' + hiV + '</span>' : '') + _esc(visitClean) + '</span>'
            +   '</div>'
            + '</div>';
     }).join('');
@@ -18523,6 +18543,56 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       }
     };
     if (typeof window.pG === 'function') window.pG(doDel); else doDel();
+  };
+
+  /* Auto-log de partidos finalizados al histórico de derbys.
+     Petición usuario 2026-05-07 (FOTO 2/3): "Real Madrid 1-1 Bayern
+     se jugó pero no apareció automáticamente en la caja de Bayern
+     32-33". Cualquier flujo que finalice un partido puede llamar
+     a este helper con los datos básicos; si alguno de los equipos
+     coincide con el `teamName` de la temporada MÁS RECIENTE
+     (arr[0]), se añade automáticamente.
+     Dedup: si ya existe un partido con la misma comp + jornada +
+     local + visit + score, no duplica. */
+  window._munichDerbyAutoLog = function(opts){
+    if (!opts) return;
+    var seasons = _loadSeasons();
+    if (!seasons.length) return;
+    var current = seasons[0]; /* la más reciente está arriba */
+    if (!current || !current.teamName) return;
+    var t = _stripLeadingIcon(current.teamName).toLowerCase();
+    var local = _stripLeadingIcon(opts.local || opts.home || '').toLowerCase();
+    var visit = _stripLeadingIcon(opts.visitante || opts.away || '').toLowerCase();
+    if (local !== t && visit !== t) return; /* el partido no involucra a este equipo */
+    var comp = String(opts.comp || 'liga').trim();
+    var jornada = String(opts.jornada || opts.j || '').trim();
+    var localName = _stripLeadingIcon(opts.local || opts.home || '');
+    var visitName = _stripLeadingIcon(opts.visitante || opts.away || '');
+    var gl = Number(opts.gl != null ? opts.gl : (opts.gh != null ? opts.gh : 0)) || 0;
+    var gv = Number(opts.gv != null ? opts.gv : (opts.ga != null ? opts.ga : 0)) || 0;
+    var all = _loadAll();
+    if (!Array.isArray(all[current.id])) all[current.id] = [];
+    /* Dedup: misma comp + jornada + nombres + score → ya está. */
+    var dup = all[current.id].some(function(m){
+      if (!m) return false;
+      return String(m.comp||'') === comp
+          && String(m.jornada||'') === jornada
+          && _stripLeadingIcon(m.local||'').toLowerCase()    === localName.toLowerCase()
+          && _stripLeadingIcon(m.visitante||'').toLowerCase()=== visitName.toLowerCase()
+          && Number(m.gl||0) === gl && Number(m.gv||0) === gv;
+    });
+    if (dup) return;
+    all[current.id].push({
+      id: _newId(), jornada: jornada, comp: comp,
+      local: localName, gl: gl, gv: gv, visitante: visitName
+    });
+    _saveAll(all);
+    /* Refrescar HUB inmediatamente. */
+    if (typeof window.refreshMunichDerbysHub === 'function'){
+      try { window.refreshMunichDerbysHub(); } catch(_){}
+    }
+    /* Si la sub-pantalla está abierta para esta temporada, re-render. */
+    if (_curSeasonId === current.id) _renderSeason();
   };
 
   /* Helper público para que el HUB de la pantalla principal sume todas

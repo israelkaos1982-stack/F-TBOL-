@@ -10516,6 +10516,36 @@
       } catch(_e){}
     }
 
+    /* AUTO-LOG al Histórico Derbys (petición usuario 2026-05-07):
+       cualquier partido finalizado donde participe un equipo humano
+       cuya temporada activa esté registrada en bayern_derbys_seasons_v1
+       se añade automáticamente a la sub-pantalla de esa temporada. El
+       helper internamente verifica si local/visitante coincide con
+       teamName de la temporada más reciente — si no, no-op. Cubre
+       Liga, Copa, SC, Recopa, Lec, Wprev, Superliga, amistosos. */
+    try {
+      if (typeof window._munichDerbyAutoLog === 'function') {
+        var _adComp = 'liga';
+        if      (_gm._isCopa     || _gm.comp === 'copa' || _gm.comp === 'copa-fin') _adComp = 'copa';
+        else if (_gm._isSc       || _gm.comp === 'sc'   || _gm.comp === 'sc-final') _adComp = 'sc';
+        else if (_gm._isRecopa   || _gm.comp === 'recopa')                          _adComp = 'recopa';
+        else if (_gm._isWprev)                                                       _adComp = 'ucl';
+        else if (_gm._isSuperliga|| _gm.comp === 'superliga')                       _adComp = 'superliga';
+        else if (_gm.isFriendly)                                                     _adComp = 'amistoso';
+        var _adJornada = '';
+        if (_adComp === 'liga')      _adJornada = String(_gm.j || '');
+        else if (_adComp === 'copa') _adJornada = (_gm._copaRonda === 'fin' ? 'FINAL' : (_gm._copaRonda || ''));
+        else if (_adComp === 'sc')   _adJornada = (_gm._scKey === 'fin' ? 'FINAL' : 'Semifinal');
+        else if (_adComp === 'recopa') _adJornada = String(_gm._recopaPhase || '').replace(/^r/i,'1/').replace('1/64','1/64').replace('1/32','Dieciseisavos').replace('1/16','Octavos').replace('1/8','Cuartos').replace('1/4','Semis');
+        window._munichDerbyAutoLog({
+          comp: _adComp,
+          jornada: _adJornada,
+          local: _gm.home, gl: _gm.sc.a,
+          gv: _gm.sc.b, visitante: _gm.away
+        });
+      }
+    } catch(_e){}
+
     /* Rellenar acta de la tarjeta genérica (ml-acta-list-{mk}) con los
        eventos del gm — DIFERIDO: este bucle puede ser pesado cuando
        hay varios match-live-wraps en el DOM. Lo movemos a un

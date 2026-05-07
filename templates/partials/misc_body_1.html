@@ -4688,6 +4688,29 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
   }
 
+  /* One-shot cleanup: borra cualquier entrada de SQUAD_REGISTRY que
+     venga del fallback antiguo con dorsales vacíos (e[0] === ''). La
+     próxima lookup la rebuilda con dorsales auto-numerados. Sin esto
+     el usuario tendría que volver a guardar la plantilla manualmente
+     para ver dorsales correctos. */
+  function _cleanupSquadRegistryBadDorsals(){
+    try {
+      if (!window.SQUAD_REGISTRY) return;
+      Object.keys(window.SQUAD_REGISTRY).forEach(function(tn){
+        var sq = window.SQUAD_REGISTRY[tn];
+        if (!Array.isArray(sq)) return;
+        for (var si = 0; si < sq.length; si++) {
+          var en = sq[si];
+          if (Array.isArray(en) && en.length >= 2 && (en[0] === '' || en[0] == null)) {
+            delete window.SQUAD_REGISTRY[tn];
+            return;
+          }
+        }
+      });
+    } catch(_){}
+  }
+  setTimeout(_cleanupSquadRegistryBadDorsals, 1800);
+
   // Exponer para que lextSaveTeam pueda llamarlo tras guardar
   window.applyEngineOverrides = applyEngineOverrides;
 
@@ -12435,6 +12458,25 @@ Tottenham
        siguiente applyEngineOverrides para que renames/edits se
        propaguen al motor sin esperar al checksum. */
     try { window.__importLeaguesHash = ''; } catch(_){}
+    /* Limpiar entradas de SQUAD_REGISTRY con dorsales vacíos del
+       fallback antiguo de sqFromRegistry. La próxima lookup rebuilda
+       con dorsales auto-numerados. Reportado 2026-05-07. */
+    try {
+      if (window.SQUAD_REGISTRY) {
+        Object.keys(window.SQUAD_REGISTRY).forEach(function(tn){
+          var sq = window.SQUAD_REGISTRY[tn];
+          if (!Array.isArray(sq)) return;
+          var hasEmpty = false;
+          for (var si = 0; si < sq.length; si++) {
+            var en = sq[si];
+            if (Array.isArray(en) && en.length >= 2 && (en[0] === '' || en[0] == null)) {
+              hasEmpty = true; break;
+            }
+          }
+          if (hasEmpty) delete window.SQUAD_REGISTRY[tn];
+        });
+      }
+    } catch(_){}
     /* JSON.stringify cacheado UNA VEZ — antes se serializaba 2-3
        veces el mismo objeto (main + backup + snap). Para una
        plantilla de ~80KB esto es ~80ms × 3 = 240ms ahorrados por

@@ -488,12 +488,37 @@ window.sqFromRegistry = function(teamName, opts) {
         var POS_HEADER_DIRECT = {P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS'};
         var POS_MAP_DIRECT = {POR:'P', DEF:'D', MED:'M', DEL:'F'};
         var POS_ORDER_DIRECT = ['P','D','M','F'];
+        var DEFAULT_NUMS_SQ = {
+          P: [1, 13, 25, 12, 31],
+          D: [2, 3, 4, 5, 15, 16, 22, 24, 23, 18, 26],
+          M: [6, 8, 10, 14, 17, 19, 20, 21, 27, 28],
+          F: [7, 9, 11, 29, 30, 32, 33]
+        };
         var groupsD = {P:[], D:[], M:[], F:[]};
         match.players.forEach(function(p){
           if (!p || !p.name) return;
           var ps = POS_MAP_DIRECT[p.pos] || 'M';
           groupsD[ps].push(p);
         });
+        /* Auto-numerar dorsales — sin esto el picker mostraba sin
+           número. Reportado 2026-05-07. */
+        var usedNumsSQ = {};
+        Object.keys(groupsD).forEach(function(ps){
+          groupsD[ps].forEach(function(p){
+            var n = Number(p.num);
+            if (n > 0 && !usedNumsSQ[n]) usedNumsSQ[n] = true;
+          });
+        });
+        function _nextFreeNumSQ(ps){
+          var pool = DEFAULT_NUMS_SQ[ps] || [];
+          for (var k = 0; k < pool.length; k++) {
+            if (!usedNumsSQ[pool[k]]) { usedNumsSQ[pool[k]] = true; return pool[k]; }
+          }
+          for (var n = 1; n <= 99; n++) {
+            if (!usedNumsSQ[n]) { usedNumsSQ[n] = true; return n; }
+          }
+          return 99;
+        }
         var built = [];
         POS_ORDER_DIRECT.forEach(function(ps){
           var pool = groupsD[ps];
@@ -502,7 +527,8 @@ window.sqFromRegistry = function(teamName, opts) {
           built.push({h: POS_HEADER_DIRECT[ps]});
           pool.forEach(function(p){
             var pw = Math.max(1, Math.min(99, Number(p.power)||70));
-            var entry = [String(p.num || ''), String(p.name || '?'), pw];
+            var num = (Number(p.num) > 0) ? Number(p.num) : _nextFreeNumSQ(ps);
+            var entry = [String(num), String(p.name || '?'), pw];
             if (p.elite)      entry.elite      = true;
             if (p.natGoal)    entry.natGoal    = true;
             if (p.natGoalPro) entry.natGoalPro = true;

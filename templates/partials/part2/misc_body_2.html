@@ -17058,10 +17058,193 @@ window.goLiveMatches = function() {
     }
     _isramaxRender(html);
   }
+  /* ──────────────────────────────────────────────────────────────────
+     CUOTAS H2H · 5 entrenadores (calibradas con histórico real,
+     2026-05-07). Cada entrenador tiene varios equipos en distintas
+     competiciones (Liga / Champions / etc.) y la matriz vive a nivel
+     de PAR DE ENTRENADORES, no de par de equipos. Si un derby pega
+     con un par de la matriz, se usan las cuotas H2H; si no (por
+     ejemplo dos equipos del mismo entrenador, o un par no contemplado),
+     se cae al cálculo Poisson genérico de _isramaxBuildOdds.
+
+     Mapeo equipo → entrenador (incluye alias razonables):
+       💡 tonin   → Athletic Club, Bayern Munich
+       🐭 alvaro  → Real Betis, Arsenal
+       🔨 acsa    → Real Sociedad, Manchester City
+       ✏️ israel → Real Madrid, Vallecas BR (Rayo Vallecano)
+       😈 angel   → FC Barcelona
+
+     La orientación HOME/AWAY se aplica al consultar la matriz: para
+     1X2, doble oportunidad, "Más córners <X>" y "Más TaP <X>" los
+     valores están almacenados por id de entrenador, así que se
+     reordenan según quién juegue de local. El resto (empate, goles,
+     ambos marcan, tarjetas, rojas) son simétricos. */
+  function _isramaxNormName(s){
+    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+  }
+  var _ISRAMAX_TEAM_TO_MANAGER = (function(){
+    var pairs = [
+      ['tonin',  ['Athletic Club','Athletic','Athletic Bilbao','Athletic Club de Bilbao','Bayern Munich','FC Bayern','FC Bayern Munich','Bayern Munchen','Bayern']],
+      ['alvaro', ['Real Betis','Betis','Real Betis Balompie','Arsenal','Arsenal FC']],
+      ['acsa',   ['Real Sociedad','Sociedad','Real Sociedad de Futbol','Manchester City','Man City','Manchester City FC']],
+      ['israel', ['Real Madrid','Real Madrid CF','Vallecas BR','Rayo Vallecano','Rayo','Rayo Vallecano de Madrid']],
+      ['angel',  ['FC Barcelona','Barcelona','Futbol Club Barcelona','Barca','Barça','FCBarcelona']]
+    ];
+    var out = {};
+    pairs.forEach(function(p){
+      var mgr = p[0];
+      p[1].forEach(function(name){ out[_isramaxNormName(name)] = mgr; });
+    });
+    return out;
+  })();
+  function _isramaxManagerForTeam(name){
+    if (!name) return null;
+    return _ISRAMAX_TEAM_TO_MANAGER[_isramaxNormName(name)] || null;
+  }
+  /* Cada entrada usa ids de entrenador como claves para que el lookup
+     por home/away no necesite saber qué emoji va con qué id. */
+  var _ISRAMAX_H2H_MATRIX = {
+    'alvaro|tonin': {
+      win:{tonin:'9.50',alvaro:'1.20'}, draw:'7.10',
+      dblE:{tonin:'4.05',alvaro:'1.05'}, dblAB:'1.05',
+      g1p:{mas15:'2.05',mas25:'4.75',menos15:'1.65',menos25:'1.15'},
+      gtp:{mas35:'1.55',mas45:'3.35',menos35:'2.30',menos45:'1.30'},
+      btts:{si:'1.40',no:'2.75'},
+      cor:{mas35:'2.95',menos45:'1.10',mas:{tonin:'1.85',alvaro:'1.85'}},
+      yel:{mas25:'12.10',menos35:'0.95'},
+      red:{si:'7.90',no:'1.05'},
+      sot:{mas:{tonin:'2.65',alvaro:'1.70'}}
+    },
+    'acsa|tonin': {
+      win:{tonin:'2.65',acsa:'1.90'}, draw:'5.95',
+      dblE:{tonin:'1.80',acsa:'1.45'}, dblAB:'1.10',
+      g1p:{mas15:'2.15',mas25:'5.15',menos15:'1.60',menos25:'1.15'},
+      gtp:{mas35:'1.50',mas45:'2.80',menos35:'2.40',menos45:'1.40'},
+      btts:{si:'1.85',no:'1.85'},
+      cor:{mas35:'2.85',menos45:'1.10',mas:{tonin:'2.00',acsa:'1.70'}},
+      yel:{mas25:'67.90',menos35:'1.00'},
+      red:{si:'8.90',no:'1.05'},
+      sot:{mas:{tonin:'1.20',acsa:'6.50'}}
+    },
+    'israel|tonin': {
+      win:{tonin:'3.90',israel:'1.45'}, draw:'7.10',
+      dblE:{tonin:'2.55',israel:'1.20'}, dblAB:'1.05',
+      g1p:{mas15:'1.45',mas25:'2.50',menos15:'2.60',menos25:'1.45'},
+      gtp:{mas35:'1.20',mas45:'1.35',menos35:'3.90',menos45:'3.00'},
+      btts:{si:'1.40',no:'2.75'},
+      cor:{mas35:'3.10',menos45:'1.10',mas:{tonin:'2.10',israel:'1.65'}},
+      yel:{mas25:'3.35',menos35:'1.05'},
+      red:{si:'2.80',no:'1.40'},
+      sot:{mas:{tonin:'9.15',israel:'1.10'}}
+    },
+    'angel|tonin': {
+      win:{tonin:'4.20',angel:'2.20'}, draw:'2.60',
+      dblE:{tonin:'1.60',angel:'1.20'}, dblAB:'1.45',
+      g1p:{mas15:'1.70',mas25:'3.40',menos15:'2.00',menos25:'1.30'},
+      gtp:{mas35:'1.15',mas45:'2.15',menos35:'5.00',menos45:'1.65'},
+      btts:{si:'1.15',no:'4.60'},
+      cor:{mas35:'3.80',menos45:'1.05',mas:{tonin:'3.10',angel:'1.30'}},
+      yel:{mas25:'14.35',menos35:'0.95'},
+      red:{si:'6.65',no:'1.10'},
+      sot:{mas:{tonin:'1.85',angel:'2.35'}}
+    },
+    'acsa|alvaro': {
+      win:{alvaro:'3.00',acsa:'1.45'}, draw:'16.55',
+      dblE:{alvaro:'2.55',acsa:'1.35'}, dblAB:'1.00',
+      g1p:{mas15:'1.60',mas25:'2.90',menos15:'2.25',menos25:'1.35'},
+      gtp:{mas35:'1.30',mas45:'1.45',menos35:'3.25',menos45:'2.50'},
+      btts:{si:'1.35',no:'3.05'},
+      cor:{mas35:'2.95',menos45:'1.10',mas:{alvaro:'1.85',acsa:'1.85'}},
+      yel:{mas25:'35.35',menos35:'1.00'},
+      red:{si:'26.90',no:'0.95'},
+      sot:{mas:{alvaro:'1.10',acsa:'9.95'}}
+    },
+    'alvaro|israel': {
+      win:{alvaro:'5.20',israel:'1.30'}, draw:'7.70',
+      dblE:{alvaro:'3.10',israel:'1.15'}, dblAB:'1.05',
+      g1p:{mas15:'1.55',mas25:'2.75',menos15:'2.35',menos25:'1.40'},
+      gtp:{mas35:'1.10',mas45:'1.45',menos35:'6.50',menos45:'2.55'},
+      btts:{si:'1.10',no:'6.00'},
+      cor:{mas35:'2.25',menos45:'1.20',mas:{alvaro:'2.40',israel:'1.50'}},
+      yel:{mas25:'2.95',menos35:'1.05'},
+      red:{si:'3.35',no:'1.30'},
+      sot:{mas:{alvaro:'5.95',israel:'1.20'}}
+    },
+    'alvaro|angel': {
+      win:{alvaro:'2.55',angel:'2.10'}, draw:'4.70',
+      dblE:{alvaro:'1.65',angel:'1.45'}, dblAB:'1.15',
+      g1p:{mas15:'1.55',mas25:'2.85',menos15:'2.30',menos25:'1.40'},
+      gtp:{mas35:'1.00',mas45:'1.65',menos35:'14.25',menos45:'2.10'},
+      btts:{si:'1.00',no:'11.85'},
+      cor:{mas35:'2.95',menos45:'1.10',mas:{alvaro:'1.85',angel:'1.85'}},
+      yel:{mas25:'10.30',menos35:'0.95'},
+      red:{si:'12.80',no:'1.00'},
+      sot:{mas:{alvaro:'1.55',angel:'3.10'}}
+    },
+    'acsa|israel': {
+      win:{acsa:'3.75',israel:'1.35'}, draw:'13.25',
+      dblE:{acsa:'2.90',israel:'1.25'}, dblAB:'1.00',
+      g1p:{mas15:'1.40',mas25:'2.40',menos15:'2.65',menos25:'1.50'},
+      gtp:{mas35:'1.20',mas45:'1.40',menos35:'4.00',menos45:'2.75'},
+      btts:{si:'1.50',no:'2.45'},
+      cor:{mas35:'2.95',menos45:'1.10',mas:{acsa:'1.85',israel:'1.85'}},
+      yel:{mas25:'5.05',menos35:'1.00'},
+      red:{si:'3.45',no:'1.25'},
+      sot:{mas:{acsa:'67.45',israel:'0.95'}}
+    },
+    'acsa|angel': {
+      win:{acsa:'3.90',angel:'1.30'}, draw:'16.55',
+      dblE:{acsa:'3.15',angel:'1.20'}, dblAB:'1.00',
+      g1p:{mas15:'1.45',mas25:'2.55',menos15:'2.50',menos25:'1.45'},
+      gtp:{mas35:'1.00',mas45:'1.10',menos35:'10.95',menos45:'5.50'},
+      btts:{si:'1.05',no:'9.15'},
+      cor:{mas35:'2.45',menos45:'1.15',mas:{acsa:'1.95',angel:'1.75'}},
+      yel:{mas25:'47.85',menos35:'1.00'},
+      red:{si:'15.90',no:'1.00'},
+      sot:{mas:{acsa:'5.30',angel:'1.25'}}
+    },
+    'angel|israel': {
+      win:{israel:'1.50',angel:'3.65'}, draw:'7.70',
+      dblE:{israel:'1.25',angel:'2.50'}, dblAB:'1.05',
+      g1p:{mas15:'1.50',mas25:'2.70',menos15:'2.40',menos25:'1.40'},
+      gtp:{mas35:'1.10',mas45:'1.30',menos35:'6.50',menos45:'3.25'},
+      btts:{si:'1.20',no:'4.00'},
+      cor:{mas35:'4.30',menos45:'1.00',mas:{israel:'1.50',angel:'2.45'}},
+      yel:{mas25:'3.15',menos35:'1.05'},
+      red:{si:'3.15',no:'1.30'},
+      sot:{mas:{israel:'1.05',angel:'11.75'}}
+    }
+  };
+  function _isramaxLookupH2H(home, away){
+    var mh = _isramaxManagerForTeam(home);
+    var ma = _isramaxManagerForTeam(away);
+    if (!mh || !ma || mh === ma) return null;
+    var key = [mh, ma].sort().join('|');
+    var e = _ISRAMAX_H2H_MATRIX[key];
+    if (!e) return null;
+    return {
+      onex2:      { home: e.win[mh], draw: e.draw, away: e.win[ma] },
+      doble:      { homeE: e.dblE[mh], awayE: e.dblE[ma], homeA: e.dblAB },
+      goles1p:    { masm15: e.g1p.mas15, masm25: e.g1p.mas25, menos15: e.g1p.menos15, menos25: e.g1p.menos25 },
+      golespart:  { mas35: e.gtp.mas35, mas45: e.gtp.mas45, menos35: e.gtp.menos35, menos45: e.gtp.menos45 },
+      ambosmarcan:{ si: e.btts.si, no: e.btts.no },
+      corners:    { mas35: e.cor.mas35, menos45: e.cor.menos45, maslocal: e.cor.mas[mh], masvisit: e.cor.mas[ma] },
+      tarjetas:   { mas25: e.yel.mas25, menos35: e.yel.menos35 },
+      rojas:      { si: e.red.si, no: e.red.no },
+      tirospuerta:{ maslocal: e.sot.mas[mh], masvisit: e.sot.mas[ma] }
+    };
+  }
+
   /* Tabla de cuotas POR DEFECTO (referencia del usuario 2026-05-07).
      1X2: ajustada por power diff de los teams reales. Resto: estática
      (más adelante se podrán calibrar con historial H2H). */
   function _isramaxBuildOdds(home, away){
+    /* Si el par de equipos pertenece a la matriz H2H de los 5
+       entrenadores, devolver esas cuotas calibradas con el histórico
+       real. El motor genérico de Poisson queda como fallback. */
+    var h2h = _isramaxLookupH2H(home, away);
+    if (h2h) return h2h;
     var ratings = window.TEAM_RATINGS || {};
     function _power(name){
       var e = ratings[name];

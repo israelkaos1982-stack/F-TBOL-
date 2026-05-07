@@ -2397,6 +2397,7 @@
      ronda='r16'+ → ties = ganadores de la ronda previa, ya pares. */
   function _computeSorteoPayload(ronda) {
     var clasificados = (_copa && _copa.clasificados) || {};
+    var resultados = (_copa && _copa.resultados) || {};
     /* Construimos la lista como ARRAY DE OBJETOS {name,league,power,
        isHuman} para que `_pairTeamsConstrained` pueda aplicar las
        reglas (humano vs PF en r1/r2, no human-vs-human hasta cuartos,
@@ -2404,12 +2405,40 @@
        igual que antes. */
     var allMap = {};
     _collectCopaTeams().forEach(function (t) { allMap[t.name] = t; });
-    function _resolve(name) {
-      /* TBD `@<ronda>#<idx>` → team object virtual con flag isTbd. */
+    /* Resuelve un nombre TBD `@<ronda>#<idx>` al ganador real si la
+       ronda anterior ya tiene resultado para ese match.
+       Bug 2026-05-06: el cliente confiaba en `clasificados[prev]` que
+       podía estar stale (state_set fall-back silencioso o no llegaba
+       a sincronizar). Ej: usuario juega r2 con Atlético Madrid
+       (humano) y gana. resultados.r2[idx].winner='Atlético Madrid'.
+       Pero clasificados.r2[idx] sigue como '@r2#idx'. Al sortear r16,
+       Atlético Madrid no aparecía → desaparecía del cuadro.
+       Fix: resolver TBDs leyendo directamente de `resultados`, que
+       es la fuente autoritativa del backend. */
+    function _resolveTbdToWinner(name) {
       var tbd = _tbdParse(name);
+      if (!tbd) return name;
+      var twoLeg = !!TWO_LEG[tbd.ronda];
+      var resList = resultados[twoLeg ? tbd.ronda + '_vta' : tbd.ronda] || [];
+      var r = resList[tbd.idx];
+      if (r && r.winner) return r.winner;
+      /* Two-leg sin vta cerrada → mirar ida (no debería decidir aún,
+         pero conservador). */
+      if (twoLeg) {
+        var idaList = resultados[tbd.ronda + '_ida'] || [];
+        var ri = idaList[tbd.idx];
+        if (ri && ri.winner) return ri.winner;
+      }
+      return name; /* sigue TBD */
+    }
+    function _resolve(name) {
+      /* Primero intentamos resolver TBD → ganador real. Si todavía
+         es TBD, devolvemos el objeto virtual. */
+      var resolved = _resolveTbdToWinner(name);
+      var tbd = _tbdParse(resolved);
       if (tbd) {
         return {
-          name: name,
+          name: resolved,
           league: 'tbd',
           power: 60,
           isHuman: false,
@@ -2417,7 +2446,7 @@
           tbdMayBeHuman: _tbdMayBeHuman(tbd)
         };
       }
-      return allMap[name] || { name: name, league: '', power: 75, isHuman: HUMAN_TEAMS.indexOf(canonicalTeam(name)) !== -1 };
+      return allMap[resolved] || { name: resolved, league: '', power: 75, isHuman: HUMAN_TEAMS.indexOf(canonicalTeam(resolved)) !== -1 };
     }
     var teams = [];
     if (ronda === 'r1') {

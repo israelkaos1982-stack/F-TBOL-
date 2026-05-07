@@ -1012,6 +1012,30 @@ def copa_guardar_resultado():
             resultados[ronda] = [None] * len(sorteo_ronda)
         resultados[ronda][idx] = res
     copa["resultados"] = resultados
+    # Auto-resolución de TBDs (2026-05-06): si esta ronda tenía un
+    # `@<ronda>#<idx>` referenciado en cualquier sorteo o clasificados
+    # posterior, lo reemplazamos por el ganador real ahora. Sin esto
+    # el cliente dependía de `_copaResolveTbdExternal` que hacía
+    # state_set por separado — race conditions hacían que a veces el
+    # TBD no se actualizara y los humanos "desaparecían" del bracket
+    # de Dieciseisavos. Bug reportado: Atlético Madrid ganó r2 pero no
+    # apareció en r16. El backend ahora garantiza la consistencia
+    # transaccional (un solo save).
+    if winner:
+        tbd_key = "@" + ronda + "#" + str(idx)
+        # 1) Reemplazar en clasificados de TODAS las rondas.
+        for r_key, c_list in (copa.get("clasificados") or {}).items():
+            if not isinstance(c_list, list): continue
+            for ci, name in enumerate(c_list):
+                if name == tbd_key:
+                    c_list[ci] = winner
+        # 2) Reemplazar en sorteo de TODAS las rondas.
+        for r_key, m_list in (copa.get("sorteo") or {}).items():
+            if not isinstance(m_list, list): continue
+            for m in m_list:
+                if not isinstance(m, dict): continue
+                if m.get("l") == tbd_key: m["l"] = winner
+                if m.get("v") == tbd_key: m["v"] = winner
     data["copa_state"] = copa
     save_global_state(data)
     return jsonify({"ok": True, "copa": copa})

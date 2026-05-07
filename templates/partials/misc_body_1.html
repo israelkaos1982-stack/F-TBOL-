@@ -17981,15 +17981,20 @@ Tottenham
     var teamHtml = t.teamName
       ? '<div class="derby-season-team">'+esc(t.teamName)+'</div>'
       : '<div class="derby-season-team empty">— sin asignar —</div>';
-    return '<div class="derby-season-card" data-season-id="'+esc(t.id)+'">'
+    /* Card entera clickeable para abrir el sub-screen con los partidos
+       de la temporada. Los botones ✏️ EDITAR y 🗑 paran la propagación
+       para no abrir el sub-screen al editarlos. Petición usuario
+       2026-05-07: "una vez empecemos los partidos derbys finalizados
+       se guardan para siempre en la temporada actual". */
+    return '<div class="derby-season-card" data-season-id="'+esc(t.id)+'" onclick="window.munichDerbyOpenSeason &amp;&amp; window.munichDerbyOpenSeason(\''+esc(t.id)+'\')" style="cursor:pointer;">'
          +   '<div class="derby-season-label">'+esc(t.season)+'</div>'
          +   '<div class="derby-season-info">'
          +     '<div class="derby-season-team-lbl">EQUIPO</div>'
          +     teamHtml
          +   '</div>'
          +   '<div class="derby-season-actions">'
-         +     '<button class="derby-season-btn"     onclick="window.munichDerbysPromptEdit  && window.munichDerbysPromptEdit(\''+esc(t.id)+'\')">✏️ EDITAR</button>'
-         +     '<button class="derby-season-btn del" onclick="window.munichDerbysPromptDelete && window.munichDerbysPromptDelete(\''+esc(t.id)+'\')">🗑</button>'
+         +     '<button class="derby-season-btn"     onclick="event.stopPropagation();window.munichDerbysPromptEdit  && window.munichDerbysPromptEdit(\''+esc(t.id)+'\')">✏️ EDITAR</button>'
+         +     '<button class="derby-season-btn del" onclick="event.stopPropagation();window.munichDerbysPromptDelete && window.munichDerbysPromptDelete(\''+esc(t.id)+'\')">🗑</button>'
          +   '</div>'
          + '</div>';
   }
@@ -18098,6 +18103,450 @@ Tottenham
 })();
 </script>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SUB-PANTALLA POR TEMPORADA · Histórico Derbys (Bayern Munich)
+     ───────────────────────────────────────────────────────────────
+     Se abre al pulsar una card de temporada (s-munich-derbys).
+     Lista los partidos derbys que el admin ha añadido manualmente
+     en esa temporada concreta. Botón "+ Añadir partido" que abre
+     un modal con jornada, competición, local, GL-GV, visitante.
+     Storage `bayern_derbys_matches_v1 = { <seasonId>: [...] }`
+     dual localStorage + servidor.
+     ─────────────────────────────────────────────────────────────── -->
+<div class="screen" id="s-munich-derby-season">
+<button class="back-btn" onclick="go('s-munich-derbys')">◀ Volver</button>
+<div class="sec-hdr" style="position:relative;">
+  <span class="sec-emoji">📋</span>
+  <h2 id="munich-derby-season-title">Temporada</h2>
+</div>
+<div id="munich-derby-season-summary" style="margin:8px 12px 14px;padding:12px;background:linear-gradient(180deg,rgba(96,180,255,.10),rgba(8,16,40,.40));border:1px solid rgba(96,180,255,.40);border-radius:10px;display:flex;justify-content:space-around;align-items:center;font-family:'Bebas Neue',sans-serif;text-align:center;"></div>
+<div id="munich-derby-season-list" style="padding:0 12px 12px;"></div>
+<div style="display:flex;justify-content:center;padding:8px 0 28px;">
+  <button id="munich-derby-add-match-btn" onclick="window.munichDerbyMatchPromptAdd&&window.munichDerbyMatchPromptAdd()"
+    style="background:linear-gradient(145deg,#3a78d8,#1a3e88);border:1px solid rgba(96,180,255,.65);color:#eaf3ff;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;box-shadow:0 0 12px rgba(96,180,255,.35);">
+    ➕ AÑADIR PARTIDO
+  </button>
+</div>
+</div>
+
+<!-- Modal AÑADIR/EDITAR partido derby -->
+<div id="munich-derby-match-modal"
+     style="display:none;position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:14px;"
+     onclick="if(event.target===this)window.munichDerbyMatchClose&&window.munichDerbyMatchClose()">
+  <div style="background:linear-gradient(160deg,#0d1117,#161b22);border:1px solid rgba(96,180,255,.45);border-radius:14px;padding:18px 16px;width:100%;max-width:480px;color:#fff;font-family:Rajdhani,sans-serif;box-shadow:0 0 40px rgba(0,0,0,.7);">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(96,180,255,.20);">
+      <span style="font-size:20px;">📋</span>
+      <div style="font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;color:#9fdcff;flex:1;text-transform:uppercase;" id="munich-derby-match-modal-title">Añadir partido</div>
+      <button onclick="window.munichDerbyMatchClose&&window.munichDerbyMatchClose()" style="background:none;border:1px solid rgba(255,255,255,.20);color:rgba(255,255,255,.70);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;">✕</button>
+    </div>
+    <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;">JORNADA</label>
+    <input id="munich-derby-match-jornada" placeholder="p. ej. 3" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;margin-bottom:10px;"/>
+    <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;">COMPETICIÓN</label>
+    <select id="munich-derby-match-comp" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;margin-bottom:10px;">
+      <option value="liga">Liga EA Sports</option>
+      <option value="copa">Copa del Rey</option>
+      <option value="sc">Supercopa España</option>
+      <option value="ucl">Champions League</option>
+      <option value="uel">Europa League</option>
+      <option value="uecl">Conference League</option>
+      <option value="recopa">Recopa Europa</option>
+      <option value="usc">Supercopa Europa</option>
+      <option value="inter">Intercontinental</option>
+      <option value="superliga">Superliga</option>
+      <option value="amistoso">Amistoso</option>
+      <option value="torneo">Torneo Verano</option>
+      <option value="seleccion">Selección</option>
+    </select>
+    <div style="display:grid;grid-template-columns:1fr 50px 50px 1fr;gap:6px;align-items:end;margin-bottom:10px;">
+      <div>
+        <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;">LOCAL</label>
+        <input id="munich-derby-match-local" placeholder="Equipo local" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;"/>
+      </div>
+      <div>
+        <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;text-align:center;">GL</label>
+        <input id="munich-derby-match-gl" type="number" min="0" max="20" value="0" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 4px;color:#f0c040;font-family:Bebas Neue,sans-serif;font-size:18px;text-align:center;"/>
+      </div>
+      <div>
+        <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;text-align:center;">GV</label>
+        <input id="munich-derby-match-gv" type="number" min="0" max="20" value="0" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 4px;color:#f0c040;font-family:Bebas Neue,sans-serif;font-size:18px;text-align:center;"/>
+      </div>
+      <div>
+        <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;">VISITANTE</label>
+        <input id="munich-derby-match-visit" placeholder="Equipo visitante" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;"/>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button onclick="window.munichDerbyMatchClose&&window.munichDerbyMatchClose()" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.20);color:rgba(255,255,255,.70);padding:9px;border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;cursor:pointer;">CANCELAR</button>
+      <button onclick="window.munichDerbyMatchSave&&window.munichDerbyMatchSave()" style="flex:1;background:linear-gradient(145deg,#3a78d8,#1a3e88);border:1px solid rgba(96,180,255,.65);color:#eaf3ff;padding:9px;border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;cursor:pointer;font-weight:700;">💾 GUARDAR</button>
+    </div>
+  </div>
+</div>
+
+<style>
+#s-munich-derby-season .mderby-summary-cell{flex:1;}
+#s-munich-derby-season .mderby-summary-num{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:1.5px;line-height:1;}
+#s-munich-derby-season .mderby-summary-num.pj{color:#9fdcff;}
+#s-munich-derby-season .mderby-summary-num.g{color:#5fe08a;}
+#s-munich-derby-season .mderby-summary-num.e{color:#f0c040;}
+#s-munich-derby-season .mderby-summary-num.p{color:#ff8080;}
+#s-munich-derby-season .mderby-summary-num.pct{color:#c0a0ff;}
+#s-munich-derby-season .mderby-summary-lbl{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.8px;color:rgba(255,255,255,.55);margin-top:3px;}
+#s-munich-derby-season .mderby-match-row{display:grid;grid-template-columns:38px 1fr 70px 1fr 28px;align-items:center;gap:6px;padding:9px 10px;background:linear-gradient(180deg,rgba(96,180,255,.06),rgba(8,16,40,.30));border:1px solid rgba(96,180,255,.18);border-radius:8px;margin-bottom:6px;font-family:Rajdhani,sans-serif;font-size:13px;}
+#s-munich-derby-season .mderby-match-row.win{border-color:rgba(95,224,138,.40);}
+#s-munich-derby-season .mderby-match-row.lose{border-color:rgba(255,128,128,.40);}
+#s-munich-derby-season .mderby-match-row.draw{border-color:rgba(240,192,64,.40);}
+#s-munich-derby-season .mderby-match-row.skip{border-color:rgba(255,255,255,.10);opacity:.55;}
+#s-munich-derby-season .mderby-match-jornada{font-family:'Bebas Neue',sans-serif;font-size:18px;color:#9fdcff;text-align:center;}
+#s-munich-derby-season .mderby-match-team{color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700;}
+#s-munich-derby-season .mderby-match-team.right{text-align:right;}
+#s-munich-derby-season .mderby-match-score{font-family:'Bebas Neue',sans-serif;font-size:18px;color:#f0c040;letter-spacing:1.5px;background:rgba(0,0,0,.40);border-radius:4px;padding:2px 8px;text-align:center;}
+#s-munich-derby-season .mderby-match-score.win{color:#5fe08a;}
+#s-munich-derby-season .mderby-match-score.lose{color:#ff8080;}
+#s-munich-derby-season .mderby-match-comp{display:block;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.4px;color:rgba(255,255,255,.55);margin-top:2px;text-align:center;}
+#s-munich-derby-season .mderby-del-btn{background:rgba(197,15,31,.20);border:1px solid rgba(197,15,31,.45);color:#ffb0b0;border-radius:4px;font-size:11px;cursor:pointer;padding:4px 6px;}
+body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
+#s-munich-derby-season .mderby-empty{padding:30px 14px;text-align:center;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;font-style:italic;}
+</style>
+
+<script>
+(function(){
+  if (window.__MUNICH_DERBY_MATCHES_READY) return;
+  window.__MUNICH_DERBY_MATCHES_READY = true;
+
+  /* Storage de partidos por temporada (id de la season → array de
+     matches). Persistencia dual localStorage + /api/state, igual que
+     `bayern_derbys_seasons_v1`. Petición usuario 2026-05-07: añadir
+     partidos derbys manualmente, agregación al HUB. */
+  var STORE_KEY = 'bayern_derbys_matches_v1';
+  var SEASONS_KEY = 'bayern_derbys_seasons_v1';
+  var COMP_LABEL = {
+    liga:'Liga EA Sports', copa:'Copa del Rey', sc:'Supercopa España',
+    ucl:'Champions', uel:'Europa League', uecl:'Conference League',
+    recopa:'Recopa Europa', usc:'Supercopa Europa', inter:'Intercontinental',
+    superliga:'Superliga', amistoso:'Amistoso', torneo:'Torneo Verano',
+    seleccion:'Selección'
+  };
+  var COMP_ICON = {
+    liga:'⚽', copa:'🏆', sc:'🟡', ucl:'🔵', uel:'🟠', uecl:'🟢',
+    recopa:'🔴', usc:'⚪', inter:'🟤', superliga:'🟣', amistoso:'🤝',
+    torneo:'🌞', seleccion:'🌍'
+  };
+
+  var _curSeasonId = null;
+  var _editingMatchId = null;
+
+  function _esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function _newId(){
+    return 'm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7);
+  }
+  function _loadAll(){
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (raw){
+        var obj = JSON.parse(raw);
+        if (obj && typeof obj === 'object') return obj;
+      }
+    } catch(_){}
+    return {};
+  }
+  function _saveAll(obj){
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(obj || {})); } catch(_){}
+    try {
+      fetch('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bayern_derbys_matches_v1: obj || {} })
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function _serverPullAll(cb){
+    try {
+      fetch('/api/state', { method: 'GET' })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d){
+          if (!d || !d.state) return;
+          var srv = d.state.bayern_derbys_matches_v1;
+          if (srv && typeof srv === 'object'){
+            try { localStorage.setItem(STORE_KEY, JSON.stringify(srv)); } catch(_){}
+            if (typeof cb === 'function') cb(srv);
+          }
+        }).catch(function(){});
+    } catch(_){}
+  }
+  function _loadSeasons(){
+    try {
+      var raw = localStorage.getItem(SEASONS_KEY);
+      if (raw){ var arr = JSON.parse(raw); if (Array.isArray(arr)) return arr; }
+    } catch(_){}
+    return [];
+  }
+  function _findSeason(id){
+    var arr = _loadSeasons();
+    for (var i=0; i<arr.length; i++) if (arr[i] && arr[i].id === id) return arr[i];
+    return null;
+  }
+  function _matchesFor(seasonId){
+    var all = _loadAll();
+    return Array.isArray(all[seasonId]) ? all[seasonId] : [];
+  }
+  /* Determina W/L/D para `teamName` en este match. Devuelve 'g', 'e',
+     'p' o null si la temporada no tiene equipo asignado o si el equipo
+     no participa. */
+  function _outcomeFor(match, teamName){
+    if (!teamName || !match) return null;
+    var t = String(teamName).trim().toLowerCase();
+    var local = String(match.local||'').trim().toLowerCase();
+    var visit = String(match.visitante||'').trim().toLowerCase();
+    var gl = Number(match.gl||0), gv = Number(match.gv||0);
+    if (local === t){
+      if (gl > gv) return 'g';
+      if (gl < gv) return 'p';
+      return 'e';
+    }
+    if (visit === t){
+      if (gv > gl) return 'g';
+      if (gv < gl) return 'p';
+      return 'e';
+    }
+    return null;
+  }
+  function _summaryForSeason(seasonId){
+    var s = _findSeason(seasonId);
+    var team = s && s.teamName ? s.teamName : '';
+    var ms = _matchesFor(seasonId);
+    var pj=0, g=0, e=0, p=0;
+    ms.forEach(function(m){
+      var o = _outcomeFor(m, team);
+      if (!o) return;
+      pj++;
+      if (o === 'g') g++;
+      else if (o === 'e') e++;
+      else if (o === 'p') p++;
+    });
+    return { pj: pj, g: g, e: e, p: p, pct: pj ? Math.round(g/pj*100) : 0 };
+  }
+
+  /* ── RENDER del sub-screen ────────────────────────────────────── */
+  function _renderSeason(){
+    if (!_curSeasonId) return;
+    var s = _findSeason(_curSeasonId);
+    var titleEl = document.getElementById('munich-derby-season-title');
+    var sumEl   = document.getElementById('munich-derby-season-summary');
+    var listEl  = document.getElementById('munich-derby-season-list');
+    if (!s){
+      if (titleEl) titleEl.textContent = 'Temporada no encontrada';
+      if (sumEl) sumEl.innerHTML = '';
+      if (listEl) listEl.innerHTML = '<div class="mderby-empty">⚠️ Esta temporada ya no existe. Vuelve a Histórico Derbys.</div>';
+      return;
+    }
+    var team = s.teamName ? s.teamName : '— sin equipo —';
+    if (titleEl) titleEl.textContent = '📋 Temporada ' + s.season + ' · ' + team;
+    var stats = _summaryForSeason(_curSeasonId);
+    if (sumEl){
+      sumEl.innerHTML = ''
+        + '<div class="mderby-summary-cell"><div class="mderby-summary-num pj">' + stats.pj + '</div><div class="mderby-summary-lbl">PJ</div></div>'
+        + '<div class="mderby-summary-cell"><div class="mderby-summary-num g">'  + stats.g  + '</div><div class="mderby-summary-lbl">G</div></div>'
+        + '<div class="mderby-summary-cell"><div class="mderby-summary-num e">'  + stats.e  + '</div><div class="mderby-summary-lbl">E</div></div>'
+        + '<div class="mderby-summary-cell"><div class="mderby-summary-num p">'  + stats.p  + '</div><div class="mderby-summary-lbl">P</div></div>'
+        + '<div class="mderby-summary-cell"><div class="mderby-summary-num pct">' + stats.pct + '%</div><div class="mderby-summary-lbl">% VIC</div></div>';
+    }
+    var ms = _matchesFor(_curSeasonId);
+    if (!listEl) return;
+    if (!ms.length){
+      listEl.innerHTML = '<div class="mderby-empty">— Aún no has añadido ningún partido —<br><span style="font-size:11px;">Pulsa <b>➕ AÑADIR PARTIDO</b> para empezar.</span></div>';
+      return;
+    }
+    /* Ordenar por jornada (numéricamente cuando posible). */
+    ms.sort(function(a,b){
+      var na = parseInt(a.jornada,10), nb = parseInt(b.jornada,10);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return String(a.jornada||'').localeCompare(String(b.jornada||''));
+    });
+    listEl.innerHTML = ms.map(function(m){
+      var o = _outcomeFor(m, s.teamName);
+      var rowCls = o === 'g' ? 'win' : o === 'p' ? 'lose' : o === 'e' ? 'draw' : 'skip';
+      var scoreCls = rowCls === 'skip' ? '' : rowCls;
+      var compIco = COMP_ICON[m.comp] || '⚽';
+      var compLbl = COMP_LABEL[m.comp] || (m.comp || '');
+      return '<div class="mderby-match-row ' + rowCls + '">'
+           + '<div class="mderby-match-jornada">J' + _esc(m.jornada || '?') + '<div class="mderby-match-comp">' + compIco + '</div></div>'
+           + '<div class="mderby-match-team right">' + _esc(m.local||'?') + '</div>'
+           + '<div class="mderby-match-score ' + scoreCls + '">' + (Number(m.gl)||0) + '–' + (Number(m.gv)||0) + '</div>'
+           + '<div class="mderby-match-team">' + _esc(m.visitante||'?') + '</div>'
+           + '<button class="mderby-del-btn" onclick="window.munichDerbyMatchDelete &amp;&amp; window.munichDerbyMatchDelete(\'' + _esc(m.id) + '\')" title="Eliminar partido">🗑</button>'
+           + '</div>';
+    }).join('');
+    /* Refrescar HUB de la pantalla principal por si se navega luego. */
+    if (typeof window.refreshMunichDerbysHub === 'function'){
+      try { window.refreshMunichDerbysHub(); } catch(_){}
+    }
+  }
+
+  /* ── API pública ──────────────────────────────────────────────── */
+  window.munichDerbyOpenSeason = function(seasonId){
+    _curSeasonId = seasonId;
+    if (typeof window.go === 'function') window.go('s-munich-derby-season');
+    setTimeout(_renderSeason, 30);
+    /* Pull async para hidratar matches del servidor. */
+    _serverPullAll(function(){ if (_curSeasonId === seasonId) _renderSeason(); });
+  };
+
+  window.munichDerbyMatchPromptAdd = function(){
+    var doAdd = function(){
+      if (!_curSeasonId) return;
+      _editingMatchId = null;
+      var s = _findSeason(_curSeasonId);
+      var defaultTeam = s && s.teamName ? s.teamName : '';
+      var modal = document.getElementById('munich-derby-match-modal');
+      if (!modal) return;
+      document.getElementById('munich-derby-match-modal-title').textContent = '📋 Añadir partido';
+      document.getElementById('munich-derby-match-jornada').value = '';
+      document.getElementById('munich-derby-match-comp').value = 'liga';
+      document.getElementById('munich-derby-match-local').value = defaultTeam;
+      document.getElementById('munich-derby-match-gl').value = '0';
+      document.getElementById('munich-derby-match-gv').value = '0';
+      document.getElementById('munich-derby-match-visit').value = '';
+      modal.style.display = 'flex';
+    };
+    if (typeof window.pG === 'function') window.pG(doAdd); else doAdd();
+  };
+
+  window.munichDerbyMatchClose = function(){
+    var modal = document.getElementById('munich-derby-match-modal');
+    if (modal) modal.style.display = 'none';
+    _editingMatchId = null;
+  };
+
+  window.munichDerbyMatchSave = function(){
+    if (!_curSeasonId) return;
+    var jornada = (document.getElementById('munich-derby-match-jornada').value||'').trim();
+    var comp    = (document.getElementById('munich-derby-match-comp').value||'').trim();
+    var local   = (document.getElementById('munich-derby-match-local').value||'').trim();
+    var gl      = parseInt(document.getElementById('munich-derby-match-gl').value, 10);
+    var gv      = parseInt(document.getElementById('munich-derby-match-gv').value, 10);
+    var visit   = (document.getElementById('munich-derby-match-visit').value||'').trim();
+    if (!jornada || !local || !visit){
+      alert('⚠️ Completa jornada, equipo local y equipo visitante.');
+      return;
+    }
+    if (isNaN(gl) || isNaN(gv) || gl < 0 || gv < 0){
+      alert('⚠️ Los goles deben ser números ≥ 0.');
+      return;
+    }
+    var all = _loadAll();
+    if (!all[_curSeasonId]) all[_curSeasonId] = [];
+    if (_editingMatchId){
+      for (var i=0; i<all[_curSeasonId].length; i++){
+        if (all[_curSeasonId][i].id === _editingMatchId){
+          all[_curSeasonId][i] = { id:_editingMatchId, jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit };
+          break;
+        }
+      }
+    } else {
+      all[_curSeasonId].push({ id:_newId(), jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit });
+    }
+    _saveAll(all);
+    window.munichDerbyMatchClose();
+    _renderSeason();
+    if (typeof window.refreshMunichDerbysHub === 'function'){
+      try { window.refreshMunichDerbysHub(); } catch(_){}
+    }
+  };
+
+  window.munichDerbyMatchDelete = function(matchId){
+    var doDel = function(){
+      if (!_curSeasonId || !matchId) return;
+      if (!confirm('🗑  ¿Eliminar este partido del histórico?')) return;
+      var all = _loadAll();
+      if (!Array.isArray(all[_curSeasonId])) return;
+      all[_curSeasonId] = all[_curSeasonId].filter(function(m){ return m && m.id !== matchId; });
+      _saveAll(all);
+      _renderSeason();
+      if (typeof window.refreshMunichDerbysHub === 'function'){
+        try { window.refreshMunichDerbysHub(); } catch(_){}
+      }
+    };
+    if (typeof window.pG === 'function') window.pG(doDel); else doDel();
+  };
+
+  /* Helper público para que el HUB de la pantalla principal sume todas
+     las temporadas. Devuelve {pj,g,e,p,pct} agregado. */
+  window.munichDerbyAggregateAll = function(){
+    var seasons = _loadSeasons();
+    var all = _loadAll();
+    var pj=0, g=0, e=0, p=0;
+    seasons.forEach(function(s){
+      if (!s || !s.teamName) return;
+      var ms = Array.isArray(all[s.id]) ? all[s.id] : [];
+      ms.forEach(function(m){
+        var o = _outcomeFor(m, s.teamName);
+        if (!o) return;
+        pj++;
+        if (o === 'g') g++;
+        else if (o === 'e') e++;
+        else if (o === 'p') p++;
+      });
+    });
+    return { pj:pj, g:g, e:e, p:p, pct: pj ? Math.round(g/pj*100) : 0 };
+  };
+
+  /* MutationObserver para re-render al volver a la pantalla. */
+  function _wire(){
+    var screen = document.getElementById('s-munich-derby-season');
+    if (screen){
+      try {
+        new MutationObserver(function(){
+          if (screen.classList.contains('active')){
+            _renderSeason();
+            _serverPullAll(function(){ _renderSeason(); });
+          }
+        }).observe(screen, {attributes:true, attributeFilter:['class']});
+      } catch(_){}
+    }
+    /* Pull inicial para hidratar matches al cargar la app — así el
+       HUB de Histórico Derbys ya muestra los totales correctos sin
+       tener que abrir cada temporada. */
+    _serverPullAll(function(){
+      if (typeof window.refreshMunichDerbysHub === 'function'){
+        try { window.refreshMunichDerbysHub(); } catch(_){}
+      }
+    });
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _wire);
+  } else {
+    _wire();
+  }
+})();
+
+/* Override de refreshMunichDerbysHub para usar la nueva agregación
+   en lugar de contar `.derby-match-row` en el DOM (que era 0 porque
+   el screen ya no muestra filas). 2026-05-07. */
+(function(){
+  var origRefresh = window.refreshMunichDerbysHub;
+  window.refreshMunichDerbysHub = function(){
+    if (typeof window.munichDerbyAggregateAll !== 'function') {
+      if (typeof origRefresh === 'function') return origRefresh();
+      return;
+    }
+    var agg = window.munichDerbyAggregateAll();
+    function _setNum(cls, val){
+      var el = document.querySelector('#munich-derbys-stats .hub-derbys-num.' + cls);
+      if (el) el.textContent = String(val|0);
+    }
+    _setNum('pj',  agg.pj);
+    _setNum('g',   agg.g);
+    _setNum('e',   agg.e);
+    _setNum('p',   agg.p);
+    _setNum('pct', agg.pct);
+  };
+})();
+</script>
 
 <!-- Modal reutilizable para ℹ️ de cada torneo de pretemporada. Se
      rellena dinámicamente desde window.muTourInfo(id). -->

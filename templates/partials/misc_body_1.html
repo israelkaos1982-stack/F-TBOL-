@@ -12240,11 +12240,21 @@ Tottenham
   // sin acentos + sin AD/CF/FC/...) y nos quedamos con el ÚLTIMO
   // alias NO VACÍO encontrado. Si todos están vacíos, devuelve ''
   // y el wrap de copa-engine.js cae al MAP hardcoded.
+  //
+  // 2026-05-07 BUG FIX 2: para que un equipo SIN alias en el editor
+  // (p.ej. Cultural Leonesa en Hypermotion) NO termine usando el MAP
+  // de primera-rfef-data.js, marcamos el equipo como "conocido por
+  // el editor" en `window.__aliasFoundInEditor`. El wrap de
+  // copa-engine.js consulta ese set y, si el equipo está, NO aplica
+  // el MAP fallback. Así el editor manda incluso cuando el alias
+  // está vacío a propósito.
+  window.__aliasFoundInEditor = window.__aliasFoundInEditor || {};
   window.getTeamEfootballAlias = function(teamName){
     if(!teamName) return '';
     var targetNorm = _aliasNormName(teamName);
     if(!targetNorm) return '';
     var best = '';
+    var foundTeam = false;
     try {
       for(var i=0;i<localStorage.length;i++){
         var key = localStorage.key(i);
@@ -12261,6 +12271,7 @@ Tottenham
             var t = teams[j];
             if(!t || !t.name) continue;
             if(_aliasNormName(t.name) === targetNorm){
+              foundTeam = true;
               var v = String(t.efootballAlias||'').trim();
               if(v) best = v;  /* sobrescribe con el último no-vacío */
             }
@@ -12268,6 +12279,7 @@ Tottenham
         } catch(_){}
       }
     } catch(_){}
+    if(foundTeam) window.__aliasFoundInEditor[targetNorm] = true;
     return best;
   };
 

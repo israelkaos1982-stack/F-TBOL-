@@ -14544,6 +14544,17 @@
                  background:rgba(240,192,64,0.12);border:1px solid rgba(240,192,64,0.45);
                  color:#f0c040;font-size:18px;width:36px;height:36px;border-radius:50%;
                  cursor:pointer;align-items:center;justify-content:center;">✏️</button>
+  <!-- Lápiz Bayern: solo visible cuando se entra al calendario desde
+       el hub Bayern (body.bayern-cal-on). Pide PIN 747 y abre un
+       modal con checkboxes para elegir las competiciones que juega
+       el Bayern esta temporada → la agenda se filtra a esas. -->
+  <button id="bayern-cal-pencil" type="button"
+          onclick="window._bayernCalOpenSelector&&window._bayernCalOpenSelector()"
+          title="Configurar competiciones del Bayern (PIN 747)"
+          style="display:none;position:absolute;top:50%;right:60px;transform:translateY(-50%);
+                 background:rgba(220,5,45,0.16);border:1px solid rgba(255,120,140,0.50);
+                 color:#ffd5dd;font-size:16px;width:36px;height:36px;border-radius:50%;
+                 cursor:pointer;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">🖍</button>
 </div>
 
 <div id="ag-content">
@@ -14656,6 +14667,36 @@
   body:not(.adm-on) .ag-admin-only{display:none !important;}
   body.adm-on #ag-edit-toggle{display:flex;}
 
+  /* Modo Bayern: cuando se entra al calendario desde el hub Bayern,
+     <body> recibe la clase `bayern-cal-on` y las filas que NO
+     pertenecen a las competiciones seleccionadas se ocultan. La
+     selección se persiste en localStorage `bayern_calendar_comps_v1`
+     y se aplica añadiendo `.bayern-hidden` a cada fila excluida.
+     El lápiz 🖍 (con PIN 747) abre el modal selector. */
+  body.bayern-cal-on #bayern-cal-pencil{display:flex;}
+  body.bayern-cal-on #s-agenda .ag-r.bayern-hidden{display:none !important;}
+  /* Section headers también se ocultan cuando todos sus eventos
+     están filtrados. La marca la aplica el JS al recalcular. */
+  body.bayern-cal-on #s-agenda .ag-season.bayern-hidden{display:none !important;}
+  body.bayern-cal-on #s-agenda .ag-add-row.bayern-hidden{display:none !important;}
+  /* Modal selector */
+  #bayern-cal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:99998;align-items:center;justify-content:center;padding:18px;}
+  #bayern-cal-ov.show{display:flex;}
+  #bayern-cal-ov .bc-box{background:linear-gradient(160deg,#1a0a10 0%,#2a0a18 100%);border:1px solid rgba(220,5,45,.45);border-radius:14px;padding:22px 20px 18px;width:340px;max-width:94vw;box-shadow:0 0 36px rgba(220,5,45,.30);}
+  #bayern-cal-ov .bc-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:22px;letter-spacing:3px;color:#ffb8c4;text-align:center;margin:0 0 14px;text-shadow:0 0 12px rgba(220,5,45,.50);}
+  #bayern-cal-ov .bc-sub{text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.6px;color:rgba(255,212,220,.55);margin-bottom:14px;}
+  #bayern-cal-ov .bc-row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  #bayern-cal-ov .bc-row:last-child{border-bottom:none;}
+  #bayern-cal-ov .bc-row:hover{background:rgba(255,255,255,.04);}
+  #bayern-cal-ov .bc-cb{flex-shrink:0;width:18px;height:18px;border:1.5px solid rgba(255,120,140,.65);border-radius:4px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.3);font-size:13px;line-height:1;color:#ffb8c4;}
+  #bayern-cal-ov .bc-row.checked .bc-cb{background:linear-gradient(145deg,#dc052d,#8e001c);border-color:#ff5575;color:#fff;}
+  #bayern-cal-ov .bc-ico{font-size:18px;line-height:1;width:24px;text-align:center;}
+  #bayern-cal-ov .bc-name{flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;font-weight:600;letter-spacing:.5px;}
+  #bayern-cal-ov .bc-actions{display:flex;gap:8px;justify-content:center;margin-top:14px;}
+  #bayern-cal-ov .bc-btn{padding:9px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid;-webkit-tap-highlight-color:transparent;}
+  #bayern-cal-ov .bc-btn.primary{background:linear-gradient(145deg,#dc052d,#8e001c);color:#fff;border-color:#ff5575;}
+  #bayern-cal-ov .bc-btn.ghost{background:transparent;color:rgba(255,255,255,.70);border-color:rgba(255,255,255,.25);}
+
   /* Modo edición: botones ✏️/🗑 por fila, sólo visibles cuando
      #s-agenda tiene la clase .ag-editing. El "añadir evento" por
      sección respeta el display:block del layout por defecto. */
@@ -14678,6 +14719,270 @@
     background:rgba(255,80,80,.12);border-color:rgba(255,120,120,.35);color:#ffb5b5;
   }
 </style>
+
+<!-- Modal selector de competiciones del Bayern. Se abre desde el
+     lápiz 🖍 (PIN 747) cuando se entra al calendario desde el hub
+     Bayern. La selección se guarda en localStorage y se aplica al
+     instante: las filas .ag-r de competiciones no marcadas reciben
+     la clase `bayern-hidden` y la CSS las oculta. Los entrenamientos
+     y descansos NO son configurables (siempre se muestran). -->
+<div id="bayern-cal-ov">
+  <div class="bc-box">
+    <div class="bc-title">🗓 COMPETICIONES BAYERN</div>
+    <div class="bc-sub">Marca lo que el Bayern juega esta temporada</div>
+    <div id="bayern-cal-list"></div>
+    <div class="bc-actions">
+      <button type="button" class="bc-btn primary" onclick="window._bayernCalSave()">✅ Aplicar</button>
+      <button type="button" class="bc-btn ghost" onclick="window._bayernCalClose()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══ FILTRO BAYERN DEL CALENDARIO ════════════════════════════════
+   El usuario quería que el calendario que ve el Bayern Munich
+   muestre SOLO las competiciones que juega esta temporada (no la
+   agenda global con 75 eventos mezclados). El admin selecciona las
+   competiciones desde el lápiz 🖍 (PIN 747) y la selección se
+   persiste en localStorage para futuras visitas.
+
+   Categorías toggleables (mapeadas a las clases CSS que ya pone
+   `agenda_row_class` en app.py · 1994):
+     · liga    (⚽ Bundesliga)            → ag-liga
+     · copa    (🏆 DFB-Pokal / Supercopa) → ag-copa
+     · eur     (🇪🇺/🔵 Champions/Previa)   → ag-eur
+     · sel     (🌍 Selecciones FIFA)      → ag-sel
+     · amist   (🤝 Amistosos)             → ag-amist
+     · torneo  (🌞 Torneo Pretemporada)   → ag-torneo
+     · recopa  (🟤 Recopa Europa)         → ag-recopa
+     · inter   (🟡 Mundial Clubes/Super)  → ag-inter
+   Entrenamientos (🏃 ag-train) y Descansos (💤 ag-rest) NO son
+   toggleables — siempre visibles cuando el modo Bayern está
+   activo, son la "base" del calendario individual.
+
+   Defaults Bayern (lo más probable que juegue): liga, copa, eur,
+   sel, amist, torneo. recopa e inter desmarcadas (raras).
+   ════════════════════════════════════════════════════════════════ */
+(function(){
+  var KEY = 'bayern_calendar_comps_v1';
+  var COMPS = [
+    { id:'liga',   cls:'ag-liga',   ico:'⚽', name:'Liga (Bundesliga)',          def:true },
+    { id:'copa',   cls:'ag-copa',   ico:'🏆', name:'Copa / Supercopa',           def:true },
+    { id:'eur',    cls:'ag-eur',    ico:'🇪🇺', name:'Champions / Previa',         def:true },
+    { id:'sel',    cls:'ag-sel',    ico:'🌍', name:'Selecciones FIFA',           def:true },
+    { id:'amist',  cls:'ag-amist',  ico:'🤝', name:'Amistosos',                  def:true },
+    { id:'torneo', cls:'ag-torneo', ico:'🌞', name:'Torneo Pretemporada',        def:true },
+    { id:'recopa', cls:'ag-recopa', ico:'🟤', name:'Recopa de Europa',           def:false },
+    { id:'inter',  cls:'ag-inter',  ico:'🟡', name:'Mundial Clubes / Supercopa', def:false }
+  ];
+  function _defaults(){
+    var o = {};
+    COMPS.forEach(function(c){ o[c.id] = !!c.def; });
+    return o;
+  }
+  function _load(){
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw){
+        var d = JSON.parse(raw);
+        if (d && typeof d === 'object'){
+          /* Backfill defaults para nuevas comps que no estuvieran
+             guardadas en versiones anteriores del usuario. */
+          COMPS.forEach(function(c){
+            if (typeof d[c.id] !== 'boolean') d[c.id] = !!c.def;
+          });
+          return d;
+        }
+      }
+    } catch(_){}
+    return _defaults();
+  }
+  function _save(o){
+    try { localStorage.setItem(KEY, JSON.stringify(o||{})); } catch(_){}
+  }
+  function _applyFilter(){
+    var sel = _load();
+    var screen = document.getElementById('s-agenda');
+    if (!screen) return;
+    var rows = screen.querySelectorAll('.ag-r');
+    rows.forEach(function(row){
+      /* Una fila se oculta SOLO si pertenece a una comp toggleable
+         y esa comp está desmarcada. ag-train/ag-rest no entran en
+         COMPS → su `hide` queda en false → siempre visibles. */
+      var hide = false;
+      for (var i = 0; i < COMPS.length; i++){
+        var c = COMPS[i];
+        if (row.classList.contains(c.cls) && !sel[c.id]){
+          hide = true;
+          break;
+        }
+      }
+      row.classList.toggle('bayern-hidden', hide);
+    });
+    /* Recalcular section headers y ag-add-row: si la sección no
+       tiene NINGUNA fila visible tras el filtro, también la
+       ocultamos para no dejar headers huérfanos. */
+    var sections = screen.querySelectorAll('.ag-season');
+    sections.forEach(function(sec){
+      var sib = sec.nextElementSibling;
+      var hasVisible = false;
+      while (sib && !sib.classList.contains('ag-season')){
+        if (sib.classList.contains('ag-r') && !sib.classList.contains('bayern-hidden')){
+          hasVisible = true;
+          break;
+        }
+        sib = sib.nextElementSibling;
+      }
+      sec.classList.toggle('bayern-hidden', !hasVisible);
+      /* Mismo trato para los botones "➕ AÑADIR EVENTO A ESTA SECCIÓN"
+         que pertenecen a la sección — los ocultamos cuando ningún
+         evento de la sección sobrevive al filtro. */
+      var sib2 = sec.nextElementSibling;
+      while (sib2 && !sib2.classList.contains('ag-season')){
+        if (sib2.classList.contains('ag-add-row')){
+          sib2.classList.toggle('bayern-hidden', !hasVisible);
+        }
+        sib2 = sib2.nextElementSibling;
+      }
+    });
+    /* Actualiza los counters de sección para reflejar visible/total
+       en modo Bayern (no toca el dataset original; restauramos al
+       desactivar). */
+    sections.forEach(function(sec){
+      var cnt = sec.querySelector('.ag-section-count');
+      if (!cnt) return;
+      if (typeof cnt.dataset.origText === 'undefined'){
+        cnt.dataset.origText = cnt.textContent || '';
+      }
+      var sib = sec.nextElementSibling;
+      var visible = 0, total = 0;
+      while (sib && !sib.classList.contains('ag-season')){
+        if (sib.classList.contains('ag-r')){
+          total++;
+          if (!sib.classList.contains('bayern-hidden')) visible++;
+        }
+        sib = sib.nextElementSibling;
+      }
+      cnt.textContent = visible + ' / ' + total + ' EVENTOS';
+    });
+  }
+  function _clearFilter(){
+    var screen = document.getElementById('s-agenda');
+    if (!screen) return;
+    screen.querySelectorAll('.bayern-hidden').forEach(function(el){
+      el.classList.remove('bayern-hidden');
+    });
+    /* Restaurar counters originales */
+    screen.querySelectorAll('.ag-section-count').forEach(function(c){
+      if (typeof c.dataset.origText === 'string'){
+        c.textContent = c.dataset.origText;
+      }
+    });
+  }
+  function _renderModalRows(){
+    var sel = _load();
+    var host = document.getElementById('bayern-cal-list');
+    if (!host) return;
+    host.innerHTML = COMPS.map(function(c){
+      return '<div class="bc-row ' + (sel[c.id] ? 'checked' : '') + '" data-id="' + c.id + '" '
+           +     'onclick="window._bayernCalToggle(\'' + c.id + '\')">'
+           +   '<span class="bc-cb">' + (sel[c.id] ? '✓' : '') + '</span>'
+           +   '<span class="bc-ico">' + c.ico + '</span>'
+           +   '<span class="bc-name">' + c.name + '</span>'
+           + '</div>';
+    }).join('');
+  }
+  /* Estado en memoria del modal para que toggle actualice solo el
+     overlay sin re-render completo de la lista (preserva posición
+     de scroll si la hubiera). */
+  var _modalSel = null;
+  window._bayernCalToggle = function(id){
+    if (!_modalSel) _modalSel = _load();
+    _modalSel[id] = !_modalSel[id];
+    var host = document.getElementById('bayern-cal-list');
+    if (!host) return;
+    var row = host.querySelector('.bc-row[data-id="' + id + '"]');
+    if (!row) return;
+    row.classList.toggle('checked', !!_modalSel[id]);
+    var cb = row.querySelector('.bc-cb');
+    if (cb) cb.textContent = _modalSel[id] ? '✓' : '';
+  };
+  window._bayernCalOpenSelector = function(){
+    function _doOpen(){
+      _modalSel = _load();
+      _renderModalRows();
+      var ov = document.getElementById('bayern-cal-ov');
+      if (ov) ov.classList.add('show');
+    }
+    if (typeof window.pG === 'function') window.pG(_doOpen);
+    else _doOpen();
+  };
+  window._bayernCalClose = function(){
+    var ov = document.getElementById('bayern-cal-ov');
+    if (ov) ov.classList.remove('show');
+    _modalSel = null;
+  };
+  window._bayernCalSave = function(){
+    if (_modalSel) _save(_modalSel);
+    _modalSel = null;
+    _applyFilter();
+    var ov = document.getElementById('bayern-cal-ov');
+    if (ov) ov.classList.remove('show');
+  };
+  /* API expuesta para que el flujo "entrar al calendario desde el
+     hub Bayern" pueda activar/desactivar el modo. */
+  window._bayernCalActivate = function(){
+    document.body.classList.add('bayern-cal-on');
+    /* Espera al siguiente tick para que el screen ya esté visible
+     y los nodos consultables. */
+    setTimeout(_applyFilter, 30);
+  };
+  window._bayernCalDeactivate = function(){
+    document.body.classList.remove('bayern-cal-on');
+    _clearFilter();
+  };
+  /* Hook de activación: cuando s-agenda recibe la clase .active y
+     `_bayernCalContext` está activo, aplicamos el filtro. Cuando
+     pierde .active, lo desactivamos para que la próxima visita
+     no-Bayern vea la agenda completa. */
+  function _wireObserver(){
+    var screen = document.getElementById('s-agenda');
+    if (!screen) return;
+    function _check(){
+      if (screen.classList.contains('active')){
+        if (window._bayernCalContext){
+          window._bayernCalActivate();
+        } else {
+          window._bayernCalDeactivate();
+        }
+      } else {
+        /* Al salir de la pantalla limpiamos también el flag de
+           contexto para que la próxima entrada (no-Bayern) muestre
+           la agenda completa. El flag se restablece desde el card
+           CALENDARIO del hub Bayern al volver a entrar. */
+        if (document.body.classList.contains('bayern-cal-on')){
+          window._bayernCalDeactivate();
+          window._bayernCalContext = false;
+        }
+      }
+    }
+    if (screen.classList.contains('active')) _check();
+    try {
+      var obs = new MutationObserver(function(muts){
+        for (var i=0; i<muts.length; i++){
+          if (muts[i].attributeName === 'class'){ _check(); return; }
+        }
+      });
+      obs.observe(screen, { attributes:true, attributeFilter:['class'] });
+    } catch(_){}
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _wireObserver);
+  } else {
+    _wireObserver();
+  }
+})();
+</script>
 </div>
 
 <script>

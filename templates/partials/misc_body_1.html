@@ -345,7 +345,7 @@ window._showSimProgress = function(opts, onDone){
 </div>
 
 <div class="screen" id="s-bayern-plantilla">
-  <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+  <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
   <div class="sec-hdr"><span class="sec-emoji">👕</span><h2>Plantilla · Gestión de Jugadores</h2></div>
   <!-- La caja del Bayern reusa EXACTAMENTE el mismo layout del modal
        del editor EA Sports (lext-sq-*) y se pinta a partir de la misma
@@ -17288,7 +17288,7 @@ Tottenham
     <span class="hub-plantilla-title">PLANTILLA</span>
     <div class="hub-plantilla-count"><span id="munich-plantilla-count">31</span> <small>jugadores</small></div>
   </button>
-  <button class="hub-card hub-card-calendario" onclick="go('s-agenda')">
+  <button class="hub-card hub-card-calendario" onclick="window._agendaBackTo='s-munich';go('s-agenda')">
     <span class="hub-calendario-emoji">📅</span>
     <span class="hub-calendario-title">CALENDARIO</span>
     <span class="hub-calendario-sub">Agenda de la temporada</span>
@@ -17810,45 +17810,153 @@ Tottenham
 
   window.munichTrofeosRender = render;
 
+  /* Modal de añadir trofeo — antes era una cadena de 3 `prompt()`
+     consecutivos donde el icono SOLO admitía URL (https:// o
+     /static/img/...). El usuario reportó (2026-05-07) que
+     necesitaba poder subir un archivo desde el móvil porque
+     buscar la URL pública de cada icono era engorroso. Este
+     modal admite:
+       · URL pegada (legacy)
+       · Archivo del dispositivo → se guarda como data URL base64
+         dentro del propio `bayern_trofeos_v1`.
+     El resto del flujo (dedupe por nombre, count++, subtítulo
+     opcional) se preserva. */
+  function _ensureTrofeoAddOv(){
+    if (document.getElementById('munich-trof-add-ov')) return;
+    if (!document.getElementById('munich-trof-add-css')){
+      var css = document.createElement('style');
+      css.id = 'munich-trof-add-css';
+      css.textContent = ''
+        + '#munich-trof-add-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:99998;align-items:center;justify-content:center;padding:18px;}'
+        + '#munich-trof-add-ov.show{display:flex;}'
+        + '#munich-trof-add-ov .ta-box{background:linear-gradient(160deg,#1a1408 0%,#2a1a08 100%);border:1px solid rgba(240,192,64,.55);border-radius:14px;padding:20px 18px 16px;width:340px;max-width:94vw;box-shadow:0 0 36px rgba(240,192,64,.30);}'
+        + '#munich-trof-add-ov .ta-title{font-family:"Bebas Neue","Oswald",sans-serif;font-size:22px;letter-spacing:3px;color:#ffd55a;text-align:center;margin:0 0 14px;text-shadow:0 0 12px rgba(240,192,64,.50);}'
+        + '#munich-trof-add-ov .ta-row{display:flex;flex-direction:column;gap:5px;padding:7px 0;}'
+        + '#munich-trof-add-ov .ta-lbl{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,228,168,.85);}'
+        + '#munich-trof-add-ov .ta-input{background:rgba(0,0,0,.45);border:1px solid rgba(240,192,64,.40);border-radius:7px;padding:9px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:14px;width:100%;}'
+        + '#munich-trof-add-ov .ta-input:focus{outline:none;border-color:#ffd55a;box-shadow:0 0 10px rgba(240,192,64,.40);}'
+        + '#munich-trof-add-ov .ta-file-wrap{display:flex;gap:8px;align-items:center;}'
+        + '#munich-trof-add-ov .ta-file-btn{flex:1;padding:9px 10px;background:linear-gradient(145deg,#3a2a08,#5a4010);border:1px solid rgba(240,192,64,.50);border-radius:7px;color:#ffd55a;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;cursor:pointer;text-align:center;-webkit-tap-highlight-color:transparent;}'
+        + '#munich-trof-add-ov .ta-file-btn:hover{filter:brightness(1.15);}'
+        + '#munich-trof-add-ov .ta-preview{display:none;width:48px;height:48px;border-radius:8px;border:1px solid rgba(240,192,64,.50);background:rgba(255,255,255,.92);object-fit:contain;padding:3px;}'
+        + '#munich-trof-add-ov .ta-preview.show{display:block;}'
+        + '#munich-trof-add-ov .ta-or{text-align:center;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.45);margin:6px 0 0;}'
+        + '#munich-trof-add-ov .ta-actions{display:flex;gap:8px;justify-content:center;margin-top:14px;}'
+        + '#munich-trof-add-ov .ta-btn{padding:9px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid;-webkit-tap-highlight-color:transparent;}'
+        + '#munich-trof-add-ov .ta-btn.primary{background:linear-gradient(145deg,#f8c44e,#b88915);color:#1a0800;border-color:#ffd55a;}'
+        + '#munich-trof-add-ov .ta-btn.ghost{background:transparent;color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25);}';
+      document.head.appendChild(css);
+    }
+    var ov = document.createElement('div');
+    ov.id = 'munich-trof-add-ov';
+    ov.innerHTML = ''
+      + '<div class="ta-box">'
+      +   '<div class="ta-title">🏆 AÑADIR TÍTULO</div>'
+      +   '<div class="ta-row">'
+      +     '<label class="ta-lbl">🖼️ Icono · URL o archivo</label>'
+      +     '<input id="munich-trof-icon-url" class="ta-input" type="text" placeholder="https://… o /static/img/logos/…" autocomplete="off"/>'
+      +     '<div class="ta-or">— o —</div>'
+      +     '<div class="ta-file-wrap">'
+      +       '<input id="munich-trof-icon-file" type="file" accept="image/*" style="display:none"/>'
+      +       '<button type="button" class="ta-file-btn" onclick="document.getElementById(\'munich-trof-icon-file\').click()">📂 Subir desde el dispositivo</button>'
+      +       '<img id="munich-trof-icon-preview" class="ta-preview" alt=""/>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="ta-row">'
+      +     '<label class="ta-lbl">🏆 Texto del título</label>'
+      +     '<input id="munich-trof-title" class="ta-input" type="text" placeholder="LIGA EA SPORTS" autocomplete="off"/>'
+      +   '</div>'
+      +   '<div class="ta-row">'
+      +     '<label class="ta-lbl">📝 Subtítulo (opcional)</label>'
+      +     '<input id="munich-trof-sub" class="ta-input" type="text" placeholder="UEFA · Final 25-Mayo-2032" autocomplete="off"/>'
+      +   '</div>'
+      +   '<div class="ta-actions">'
+      +     '<button type="button" class="ta-btn primary" onclick="window._munichTrofAddSave()">✅ Guardar</button>'
+      +     '<button type="button" class="ta-btn ghost" onclick="window._munichTrofAddClose()">Cancelar</button>'
+      +   '</div>'
+      + '</div>';
+    ov.addEventListener('click', function(e){ if (e.target === ov) window._munichTrofAddClose(); });
+    document.body.appendChild(ov);
+    /* Wire del file input: lee el archivo como data URL, lo guarda en
+       un atributo escondido del overlay y muestra la preview. La URL
+       text-input se vacía para que sepa que el archivo prevalece. */
+    var fileInp = document.getElementById('munich-trof-icon-file');
+    if (fileInp){
+      fileInp.addEventListener('change', function(ev){
+        var f = ev.target.files && ev.target.files[0];
+        if (!f) return;
+        var reader = new FileReader();
+        reader.onload = function(e){
+          var dataUrl = e.target.result || '';
+          ov.dataset.iconData = dataUrl;
+          var prev = document.getElementById('munich-trof-icon-preview');
+          if (prev){ prev.src = dataUrl; prev.classList.add('show'); }
+          var urlInp = document.getElementById('munich-trof-icon-url');
+          if (urlInp){ urlInp.value = ''; urlInp.placeholder = '(usando archivo subido)'; }
+        };
+        reader.readAsDataURL(f);
+      });
+    }
+  }
+  window._munichTrofAddOpen = function(existing){
+    _ensureTrofeoAddOv();
+    var ov = document.getElementById('munich-trof-add-ov');
+    if (!ov) return;
+    var urlInp = document.getElementById('munich-trof-icon-url');
+    var titleInp = document.getElementById('munich-trof-title');
+    var subInp = document.getElementById('munich-trof-sub');
+    var prev = document.getElementById('munich-trof-icon-preview');
+    if (urlInp) urlInp.value = (existing && existing.icon && existing.icon.indexOf('data:') !== 0) ? existing.icon : '';
+    if (titleInp) titleInp.value = (existing && existing.title) || '';
+    if (subInp) subInp.value = (existing && existing.sub) || '';
+    if (prev){ prev.src = ''; prev.classList.remove('show'); }
+    ov.dataset.iconData = '';
+    var fileInp = document.getElementById('munich-trof-icon-file');
+    if (fileInp) fileInp.value = '';
+    if (urlInp) urlInp.placeholder = 'https://… o /static/img/logos/…';
+    ov.classList.add('show');
+    setTimeout(function(){ if (urlInp) urlInp.focus(); }, 50);
+  };
+  window._munichTrofAddClose = function(){
+    var ov = document.getElementById('munich-trof-add-ov');
+    if (ov) ov.classList.remove('show');
+  };
+  window._munichTrofAddSave = function(){
+    var ov = document.getElementById('munich-trof-add-ov');
+    if (!ov) return;
+    var urlInp = document.getElementById('munich-trof-icon-url');
+    var titleInp = document.getElementById('munich-trof-title');
+    var subInp = document.getElementById('munich-trof-sub');
+    var dataUrl = ov.dataset.iconData || '';
+    var iconUrl = (urlInp && urlInp.value || '').trim();
+    var iconFinal = dataUrl || iconUrl; /* archivo prevalece sobre URL pegada */
+    var titleTxt = (titleInp && titleInp.value || '').trim();
+    var subTxt = (subInp && subInp.value || '').trim();
+    if (!iconFinal){ alert('⚠️ Pega una URL o sube un archivo para el icono.'); return; }
+    if (!titleTxt){ alert('⚠️ Escribe el nombre del título.'); return; }
+    var arr = load();
+    var key = _normTitle(titleTxt);
+    var existing = arr.filter(function(t){ return t && _normTitle(t.title) === key; })[0];
+    if (existing){
+      existing.count = (existing.count|0) + 1;
+      if (iconFinal) existing.icon = iconFinal;
+      if (subTxt) existing.sub = subTxt;
+    } else {
+      arr.push({
+        id:    _newId(),
+        icon:  iconFinal,
+        title: titleTxt,
+        sub:   subTxt,
+        count: 1
+      });
+    }
+    save(arr);
+    render();
+    window._munichTrofAddClose();
+  };
   window.munichTrofeosPromptAdd = function(){
-    /* Gate admin con PIN 747 reusando el modal global pG. Tras el PIN
-       la sesión admin queda abierta (window._adm = true, body.adm-on)
-       y los siguientes "AÑADIR" / 🗑 no vuelven a pedirlo. */
-    var doAdd = function(){
-      var iconUrl = window.prompt('🖼️  URL del icono del título\n(p. ej. https://… o /static/img/logos/…)\n\nDeja vacío para cancelar.', '');
-      if (!iconUrl) return;
-      iconUrl = String(iconUrl).trim();
-      if (!iconUrl) return;
-      var titleTxt = window.prompt('🏆  Texto del título ganado\n(p. ej. LIGA EA SPORTS)', '');
-      if (!titleTxt) return;
-      titleTxt = String(titleTxt).trim();
-      if (!titleTxt) return;
-      var arr = load();
-      /* Si ya existe un trofeo con el MISMO nombre (normalizado),
-         incrementamos su `count` en vez de crear fila nueva. Esto
-         permite mostrar "LIGA EA SPORTS  4" cuando se ha ganado 4
-         veces, en lugar de 4 filas idénticas. Solo se pide
-         subtítulo cuando es un trofeo nuevo. */
-      var key = _normTitle(titleTxt);
-      var existing = arr.filter(function(t){ return t && _normTitle(t.title) === key; })[0];
-      if (existing){
-        existing.count = (existing.count|0) + 1;
-        /* Si no había icono o lo cambian, lo refrescamos al último
-           que han pegado — el usuario podría querer actualizar la URL. */
-        if (iconUrl) existing.icon = iconUrl;
-      } else {
-        var subTxt = window.prompt('📝  Subtítulo / descripción (opcional)\n(p. ej. UEFA · Final 25-Mayo-2032)\n\nDeja vacío si no quieres subtítulo.', '');
-        arr.push({
-          id:    _newId(),
-          icon:  iconUrl,
-          title: titleTxt,
-          sub:   subTxt ? String(subTxt).trim() : '',
-          count: 1
-        });
-      }
-      save(arr);
-      render();
-    };
+    /* Gate admin con PIN 747 reusando el modal global pG. */
+    var doAdd = function(){ window._munichTrofAddOpen(null); };
     if (typeof window.pG === 'function') window.pG(doAdd); else doAdd();
   };
 

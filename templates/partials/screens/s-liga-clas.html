@@ -612,6 +612,47 @@
   var LIGA_PLAYER_MATCH_STORE = window.LIGA_PLAYER_MATCH_STORE || {};
   window.LIGA_PLAYER_MATCH_STORE = LIGA_PLAYER_MATCH_STORE;
 
+  /* Restaurar SOLO las entradas no-Liga (Copa, Recopa, SC, Champions,
+     UEL, UECL, Superliga…) desde localStorage. Las entradas de Liga
+     (key con pipes "j|home|away") se rehidratan desde ef_liga38_v4
+     vía hydrateStoreFromSavedResults — no haría falta persistirlas.
+     Reportado 2026-05-07: tras jugar Copa del Rey la plantilla
+     mostraba 0 stats al recargar porque LIGA_PLAYER_MATCH_STORE
+     vivía solo en memoria y se perdía. */
+  try {
+    var _lpmRaw = localStorage.getItem('liga_player_match_store_extra_v1');
+    if (_lpmRaw) {
+      var _lpmObj = JSON.parse(_lpmRaw) || {};
+      Object.keys(_lpmObj).forEach(function(k){
+        if (k && k.indexOf('|') === -1 && !LIGA_PLAYER_MATCH_STORE[k]) {
+          LIGA_PLAYER_MATCH_STORE[k] = _lpmObj[k];
+        }
+      });
+    }
+  } catch(_){}
+
+  /* Persistir las entradas no-Liga del store con un debounce de
+     300 ms para no escribir en localStorage en cada gol. */
+  var _lpmSaveTimer = null;
+  function _persistMatchStoreExtras(){
+    if (_lpmSaveTimer) clearTimeout(_lpmSaveTimer);
+    _lpmSaveTimer = setTimeout(function(){
+      _lpmSaveTimer = null;
+      try {
+        var src = window.LIGA_PLAYER_MATCH_STORE || {};
+        var out = {};
+        Object.keys(src).forEach(function(k){
+          if (k && k.indexOf('|') === -1) out[k] = src[k];
+        });
+        var ser = JSON.stringify(out);
+        if (ser.length <= 1024 * 1024) {
+          localStorage.setItem('liga_player_match_store_extra_v1', ser);
+        }
+      } catch(_){}
+    }, 300);
+  }
+  window._persistMatchStoreExtras = _persistMatchStoreExtras;
+
   /* Inferencia de competición a partir del matchKey (2026-05-04).
      Cada competición usa un prefijo distinto; mapeamos para taggear
      el evento sin tener que tocar todos los callers a la vez. El
@@ -789,6 +830,10 @@
       competition: comp
     };
     rebuildLigaPlayerStats();
+    /* Persistir extras (no-Liga) para que sobrevivan a recarga. */
+    if (typeof window._persistMatchStoreExtras === 'function') {
+      try { window._persistMatchStoreExtras(); } catch(_){}
+    }
   };
 
   function getLigaStatFromRow(row, key){

@@ -16937,6 +16937,7 @@ window.goLiveMatches = function() {
         '#s-derbys .derby-card.playing{border-color:rgba(255,80,80,.75);animation:derbyPulse .9s ease-in-out infinite;}' +
         '#s-derbys .derby-teams{flex:1;display:flex;flex-direction:column;gap:6px;}' +
         '#s-derbys .derby-row{display:flex;align-items:center;gap:9px;font-family:Rajdhani,sans-serif;font-size:15px;font-weight:600;color:#fff;}' +
+        '#s-derbys .derby-hi{display:inline-block;font-size:14px;margin-left:2px;}' +
         '#s-derbys .derby-logo{width:26px;height:26px;object-fit:contain;flex-shrink:0;}' +
         '#s-derbys .derby-vs{min-width:48px;text-align:center;font-family:Oswald,sans-serif;font-size:22px;font-weight:700;color:#ff9bff;letter-spacing:1px;}' +
         '#s-derbys .derby-vs.playing{color:#ff4444;}' +
@@ -17059,11 +17060,11 @@ window.goLiveMatches = function() {
       +   (jLabel ? '<div class="derby-jlabel" style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.4px;color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:2px;">' + _escHtml(jLabel) + '</div>' : '')
       +   '<div class="derby-row">'
       +     (lA ? '<img class="derby-logo" src="' + _escHtml(lA) + '" alt="" onerror="this.style.display=\'none\'">' : '')
-      +     '<span>' + _escHtml(home) + '</span>'
+      +     '<span>' + _escHtml(home) + (typeof window.humanIcon === 'function' && window.humanIcon(home) ? ' <span class="derby-hi">' + window.humanIcon(home).replace(/ /g,'') + '</span>' : '') + '</span>'
       +   '</div>'
       +   '<div class="derby-row">'
       +     (lB ? '<img class="derby-logo" src="' + _escHtml(lB) + '" alt="" onerror="this.style.display=\'none\'">' : '')
-      +     '<span>' + _escHtml(away) + '</span>'
+      +     '<span>' + _escHtml(away) + (typeof window.humanIcon === 'function' && window.humanIcon(away) ? ' <span class="derby-hi">' + window.humanIcon(away).replace(/ /g,'') + '</span>' : '') + '</span>'
       +   '</div>'
       + '</div>'
       + '<div class="derby-vs ' + state + '"' + vsExtraStyle + '>' + _escHtml(vsText) + '</div>'

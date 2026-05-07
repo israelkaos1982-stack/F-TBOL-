@@ -5956,9 +5956,18 @@ window._showSimProgress = function(opts, onDone){
         if(!raw) continue;
         var parsed; try { parsed = JSON.parse(raw); } catch(_){ continue; }
         if(!parsed || !parsed.copa) continue;
-        if(parsed.copa.champion) _push(parsed.copa.champion);
-        if(parsed.config && parsed.config.recopaSubcampeon && parsed.copa.runnerUp){
-          _push(parsed.copa.runnerUp);
+        var _champion = parsed.copa.champion;
+        var _runnerUp = parsed.copa.runnerUp;
+        /* Fallback: si la final se jugó pero champion no quedó
+           guardado (legacy data antes de 2026-05-07), tomamos
+           winner/loser de la final misma. */
+        if(!_champion && parsed.copa.final && parsed.copa.final.played && parsed.copa.final.winner){
+          _champion = parsed.copa.final.winner;
+          _runnerUp = (_champion === parsed.copa.final.home) ? parsed.copa.final.away : parsed.copa.final.home;
+        }
+        if(_champion) _push(_champion);
+        if(parsed.config && parsed.config.recopaSubcampeon && _runnerUp){
+          _push(_runnerUp);
         }
       }
     } catch(_){}
@@ -7054,13 +7063,21 @@ window._showSimProgress = function(opts, onDone){
     var sb = document.getElementById('sc-sandbox-' + mk);
     if(sb && sb.parentNode) sb.parentNode.removeChild(sb);
     window._scPendingPersist = null;
-    _save(s);
-    /* Si la final acaba de terminar, dispara la celebración del
-       campeón (fuegos + escudo + título) — petición usuario
-       2026-05-06. */
+    /* Si la final acaba de terminar, persistir el campeón en
+       `s.champion` antes de _save(s) para que cualquier consumidor
+       (Recopa pool, panel de competiciones) lo lea. Reportado
+       2026-05-07: el campeón de Supercopa no quedaba guardado. */
     if(key === 'fin'){
       var champIa = _winnerOf(s.final);
-      if(champIa) _scShowChampionOv(champIa);
+      if(champIa){
+        s.champion = champIa;
+        s.runnerUp = (champIa === s.final.home) ? s.final.away : s.final.home;
+      }
+    }
+    _save(s);
+    if(key === 'fin'){
+      var champIa2 = s.champion || _winnerOf(s.final);
+      if(champIa2) _scShowChampionOv(champIa2);
     }
     _renderContent();
   };
@@ -7081,12 +7098,19 @@ window._showSimProgress = function(opts, onDone){
     m.played = true;
     m.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
     m.ts = Date.now();
-    _save(s);
-    /* Petición usuario 2026-05-06: celebración del campeón al ganar
-       la final (humano). Misma rama que en _scPersistAfterIa. */
+    /* Persistir el campeón antes de _save(s) — mismo motivo que en
+       _scPersistAfterIa. Reportado 2026-05-07. */
     if(key === 'fin'){
       var champHum = _winnerOf(s.final);
-      if(champHum) _scShowChampionOv(champHum);
+      if(champHum){
+        s.champion = champHum;
+        s.runnerUp = (champHum === s.final.home) ? s.final.away : s.final.home;
+      }
+    }
+    _save(s);
+    if(key === 'fin'){
+      var champHum2 = s.champion || _winnerOf(s.final);
+      if(champHum2) _scShowChampionOv(champHum2);
     }
     _renderContent();
   };
@@ -12228,33 +12252,18 @@ Tottenham
   }
   window._aliasNormName = _aliasNormName;
 
-  // Busca el alias de eFootball de un equipo en CUALQUIER liga guardada
-  // en ligaExt_*. Si el equipo no existe o no tiene alias, devuelve "".
-  // Lo usan las tarjetas de partido para mostrar el nombre del equipo
-  // que el admin usa en eFootball cuando el equipo real no existe en
-  // el juego (p.ej. "Talavera" en Primera Federación → "AZ Alkmaar").
-  //
-  // 2026-05-07 BUG FIX: el equipo puede aparecer en VARIAS ligaExt_*
-  // y bajo distintas variantes ("Mérida" vs "AD Mérida"). Iteramos
-  // TODOS los ligaExt_*, comparamos por nombre normalizado (lower +
-  // sin acentos + sin AD/CF/FC/...) y nos quedamos con el ÚLTIMO
-  // alias NO VACÍO encontrado. Si todos están vacíos, devuelve ''
-  // y el wrap de copa-engine.js cae al MAP hardcoded.
-  //
-  // 2026-05-07 BUG FIX 2: para que un equipo SIN alias en el editor
-  // (p.ej. Cultural Leonesa en Hypermotion) NO termine usando el MAP
-  // de primera-rfef-data.js, marcamos el equipo como "conocido por
-  // el editor" en `window.__aliasFoundInEditor`. El wrap de
-  // copa-engine.js consulta ese set y, si el equipo está, NO aplica
-  // el MAP fallback. Así el editor manda incluso cuando el alias
-  // está vacío a propósito.
-  window.__aliasFoundInEditor = window.__aliasFoundInEditor || {};
-  window.getTeamEfootballAlias = function(teamName){
-    if(!teamName) return '';
-    var targetNorm = _aliasNormName(teamName);
-    if(!targetNorm) return '';
-    var best = '';
-    var foundTeam = false;
+  /* Cache compartido para alias / estadio del editor.
+     Antes cada llamada a getTeamEfootballAlias/getTeamStadium iteraba
+     TODO localStorage y parseaba cada ligaExt_* (~40-50 keys × 80KB
+     JSON). En una pantalla con 32 partidos eso es 32×2×50 = 3200
+     parseos por render → la web se ralentizaba notablemente.
+     Reportado 2026-05-07. Estrategia: build-once map { normName →
+     {alias, stadium} }, invalidar al saveData o a los 3 s. */
+  var _ALIAS_CACHE = null;
+  var _ALIAS_CACHE_TS = 0;
+  var _ALIAS_CACHE_TTL = 3000;
+  function _buildAliasCache(){
+    var map = Object.create(null);
     try {
       for(var i=0;i<localStorage.length;i++){
         var key = localStorage.key(i);
@@ -12270,60 +12279,62 @@ Tottenham
           for(var j=0;j<teams.length;j++){
             var t = teams[j];
             if(!t || !t.name) continue;
-            if(_aliasNormName(t.name) === targetNorm){
-              foundTeam = true;
-              var v = String(t.efootballAlias||'').trim();
-              if(v) best = v;  /* sobrescribe con el último no-vacío */
-            }
+            var nm = _aliasNormName(t.name);
+            if(!nm) continue;
+            var entry = map[nm] || (map[nm] = {alias:'', stadium:''});
+            var a = String(t.efootballAlias||'').trim();
+            if(a) entry.alias = a;
+            var s = String(t.stadium || t.estadio || '').trim();
+            if(s) entry.stadium = s;
           }
         } catch(_){}
       }
     } catch(_){}
-    if(foundTeam) window.__aliasFoundInEditor[targetNorm] = true;
-    return best;
+    return map;
+  }
+  function _aliasCache(){
+    var now = Date.now();
+    if(!_ALIAS_CACHE || (now - _ALIAS_CACHE_TS) > _ALIAS_CACHE_TTL){
+      _ALIAS_CACHE = _buildAliasCache();
+      _ALIAS_CACHE_TS = now;
+    }
+    return _ALIAS_CACHE;
+  }
+  window._invalidateAliasCache = function(){ _ALIAS_CACHE = null; _ALIAS_CACHE_TS = 0; };
+
+  // Busca el alias de eFootball de un equipo en CUALQUIER liga guardada
+  // en ligaExt_*. Si el equipo no existe o no tiene alias, devuelve "".
+  // Lo usan las tarjetas de partido para mostrar el nombre del equipo
+  // que el admin usa en eFootball cuando el equipo real no existe en
+  // el juego (p.ej. "Talavera" en Primera Federación → "AZ Alkmaar").
+  //
+  // Match por nombre normalizado (lower + sin acentos + sin
+  // AD/CF/FC/...) para tolerar variantes ("Mérida" vs "AD Mérida").
+  // Si el equipo está en el editor sin alias, marcamos
+  // window.__aliasFoundInEditor[norm] para que copa-engine.js sepa
+  // que NO debe aplicar el MAP de primera-rfef-data.js.
+  window.__aliasFoundInEditor = window.__aliasFoundInEditor || {};
+  window.getTeamEfootballAlias = function(teamName){
+    if(!teamName) return '';
+    var targetNorm = _aliasNormName(teamName);
+    if(!targetNorm) return '';
+    var entry = _aliasCache()[targetNorm];
+    if(entry) window.__aliasFoundInEditor[targetNorm] = true;
+    return entry ? entry.alias : '';
   };
 
   /* Override de getTeamStadium para PRIORIZAR el estadio que el admin
      ha tipeado en el editor de cualquier ligaExt_* sobre el hardcoded
-     TEAM_STADIUMS del bundle. 2026-05-07 BUG FIX: el usuario tipeaba
-     "Sports Park" como estadio de Mérida en Hypermotion pero la card
-     mostraba "Estadio Olímpico" (del default hardcoded).
-     Estrategia: iterar TODOS los ligaExt_*, comparar por nombre
-     normalizado (igual que getTeamEfootballAlias), quedarse con el
-     último `t.stadium` NO VACÍO. Si no hay ninguno, fall-back al
-     TEAM_STADIUMS original. */
+     TEAM_STADIUMS del bundle. */
   (function(){
     var _origGetStadium = window.getTeamStadium;
     window.getTeamStadium = function(teamName){
       if(!teamName) return (typeof _origGetStadium === 'function') ? (_origGetStadium(teamName) || '') : '';
       var targetNorm = _aliasNormName(teamName);
-      var best = '';
-      try {
-        if(targetNorm){
-          for(var i=0;i<localStorage.length;i++){
-            var key = localStorage.key(i);
-            if(!key || key.indexOf('ligaExt_') !== 0) continue;
-            if(key.indexOf('_backup') !== -1) continue;
-            if(key.indexOf('_protected') !== -1) continue;
-            if(key.indexOf('_snap_') !== -1) continue;
-            var raw = localStorage.getItem(key);
-            if(!raw) continue;
-            try {
-              var data = JSON.parse(raw);
-              var teams = data && Array.isArray(data.teams) ? data.teams : [];
-              for(var j=0;j<teams.length;j++){
-                var t = teams[j];
-                if(!t || !t.name) continue;
-                if(_aliasNormName(t.name) === targetNorm){
-                  var v = String(t.stadium || t.estadio || '').trim();
-                  if(v) best = v;
-                }
-              }
-            } catch(_){}
-          }
-        }
-      } catch(_){}
-      if(best) return best;
+      if(targetNorm){
+        var entry = _aliasCache()[targetNorm];
+        if(entry && entry.stadium) return entry.stadium;
+      }
       /* Fallback a TEAM_STADIUMS hardcoded del bundle. */
       if(typeof _origGetStadium === 'function'){
         try { return _origGetStadium(teamName) || ''; } catch(_){}
@@ -12347,6 +12358,11 @@ Tottenham
        garantiza correctitud. */
     if (typeof window._invalidateLineStatsCache === 'function') {
       try { window._invalidateLineStatsCache(); } catch(_){}
+    }
+    /* Cache de alias/estadio del editor — invalidar al guardar cualquier
+       liga para que el siguiente render lea el valor fresco. */
+    if (typeof window._invalidateAliasCache === 'function') {
+      try { window._invalidateAliasCache(); } catch(_){}
     }
     /* JSON.stringify cacheado UNA VEZ — antes se serializaba 2-3
        veces el mismo objeto (main + backup + snap). Para una
@@ -16178,7 +16194,20 @@ Tottenham
       var s12 = copa.groups[0].standings;
       copa.final = { home:s12[0].name, away:s12[1].name, played:false };
     }
-    copa.status = 'final-pending';
+    /* Auto-jugar la final para que `copa.champion` quede SIEMPRE
+       seteado tras un Sim Copa. Antes la final se quedaba en
+       `final-pending` y el usuario tenía que pulsar ▶ Simular en
+       la card de la FINAL — si no lo hacía, la Recopa no recibía
+       campeón de esta liga. Reportado 2026-05-07. */
+    if(copa.final && copa.final.home && copa.final.away){
+      var finRes = _lecSim1Leg(data, copa.final.home, copa.final.away);
+      copa.final = finRes;
+      copa.champion = finRes.winner;
+      copa.runnerUp = (finRes.winner === finRes.home) ? finRes.away : finRes.home;
+      copa.status = 'done';
+    } else {
+      copa.status = 'final-pending';
+    }
     saveData(CURRENT_KEY, data);
     _lecSyncPlayerStatsCache(data);
     _lecRender();

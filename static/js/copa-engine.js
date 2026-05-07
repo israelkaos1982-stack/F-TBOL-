@@ -522,45 +522,14 @@
        2. MAP hardcoded de primera-rfef-data.js — fallback automático
           para equipos de Primera Fed sin alias custom.
      El wrap es idempotente; si el wrapping ya ocurrió no se repite. */
-  function _copaWrapTeamAlias() {
-    if (typeof window.getTeamEfootballAlias !== 'function') return;
-    if (window.getTeamEfootballAlias.__copaFallback) return;
-    var orig = window.getTeamEfootballAlias;
-    var wrapped = function (teamName) {
-      var v = '';
-      try { v = orig.apply(this, arguments) || ''; } catch(_){ v = ''; }
-      if (v) return v;
-      /* Si el equipo existe en cualquier ligaExt_* del editor pero
-         el admin no le puso alias, RESPETAMOS esa decisión y NO
-         aplicamos el MAP de primera-rfef-data.js. Reportado
-         2026-05-07: Cultural Leonesa (Hypermotion, sin alias)
-         mostraba "Seoul E-Land" del MAP. La bandera la setea
-         `window.getTeamEfootballAlias` (misc_body_1.html) cuando
-         encuentra el equipo en ligaExt_*. */
-      try {
-        var nm = (typeof window._aliasNormName === 'function')
-          ? window._aliasNormName(teamName)
-          : String(teamName || '').trim().toLowerCase();
-        if (nm && window.__aliasFoundInEditor && window.__aliasFoundInEditor[nm]) {
-          return '';
-        }
-      } catch(_){}
-      if (typeof window.getPrimeraRFEFAlias === 'function') {
-        try {
-          var alt = window.getPrimeraRFEFAlias(teamName);
-          if (alt) return alt;
-        } catch(_){}
-      }
-      return '';
-    };
-    wrapped.__copaFallback = true;
-    window.getTeamEfootballAlias = wrapped;
-  }
-  /* Aplicamos el wrap al cargar y un par de retries por si
-     primera-rfef-data.js carga después que nosotros. */
+  /* `getTeamEfootballAlias` ya respeta SIEMPRE lo que el admin tipea
+     en el editor (ligaExt_*). El MAP hardcoded de primera-rfef-data.js
+     QUEDA DESACTIVADO: la regla del usuario (2026-05-07) es que un
+     equipo SIN alias en el editor es un equipo que YA existe en
+     eFootball, así que no debe mostrarse alias automático. Mantenemos
+     la función vacía por compatibilidad con código que la llama. */
+  function _copaWrapTeamAlias() { /* no-op: editor es la única fuente */ }
   try { _copaWrapTeamAlias(); } catch(_){}
-  setTimeout(function () { try { _copaWrapTeamAlias(); } catch(_){} }, 200);
-  setTimeout(function () { try { _copaWrapTeamAlias(); } catch(_){} }, 1500);
 
   function allPlayed(resList, n) {
     if (!resList || resList.length < n) return false;

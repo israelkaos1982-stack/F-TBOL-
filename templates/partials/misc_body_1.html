@@ -4518,9 +4518,10 @@ window._showSimProgress = function(opts, onDone){
   function _importOtherLeaguesIntoEngine(){
     /* Cache por hash: si el contenido de ligaExt_* no ha cambiado
        desde la última vez, saltamos el parseo de ~50 JSONs grandes
-       (~4 MB). Antes esto se ejecutaba en cada applyEngineOverrides
-       (300ms + 1500ms al cargar + cada saveData) → bloqueaba la
-       UI varios segundos en móvil. Reportado 2026-05-07. */
+       (~4 MB). Hash = key + length + checksum rápido (suma de char
+       codes en muestras espaciadas) — sensible a renames/edits sin
+       parsear el JSON entero. saveData también invalida este hash
+       directamente para no depender solo del hash. */
     var hashParts = [];
     try {
       for (var hi = 0; hi < localStorage.length; hi++) {
@@ -4531,7 +4532,13 @@ window._showSimProgress = function(opts, onDone){
         if (hk.indexOf('_snap_') !== -1) continue;
         if (hk.indexOf('_protected') !== -1) continue;
         var hraw = localStorage.getItem(hk) || '';
-        hashParts.push(hk + ':' + hraw.length);
+        /* Checksum por muestreo: 16 puntos espaciados a lo largo del
+           string. Detecta renames/edits aunque el length no cambie
+           (rename "Giuliano Simeone" → "Giuliano X Simeone" mantiene
+           length similar pero distinto contenido). */
+        var cs = 0, step = Math.max(1, Math.floor(hraw.length / 16));
+        for (var hcs = 0; hcs < hraw.length; hcs += step) cs = (cs + hraw.charCodeAt(hcs)) | 0;
+        hashParts.push(hk + ':' + hraw.length + ':' + cs);
       }
       hashParts.sort();
     } catch(_){}
@@ -4619,6 +4626,33 @@ window._showSimProgress = function(opts, onDone){
             var simPos = POS_MAP[p.pos] || 'M';
             byPos[simPos].push(p);
           });
+          /* Auto-numerar dorsales cuando el admin no los asignó —
+             mismo flujo que ligaEaBuildEngineOverrides. Sin esto los
+             jugadores aparecían sin dorsal en el event picker
+             (reportado 2026-05-07). */
+          var DEFAULT_NUMS_OL = {
+            P: [1, 13, 25, 12, 31],
+            D: [2, 3, 4, 5, 15, 16, 22, 24, 23, 18, 26],
+            M: [6, 8, 10, 14, 17, 19, 20, 21, 27, 28],
+            F: [7, 9, 11, 29, 30, 32, 33]
+          };
+          var usedNumsOL = {};
+          Object.keys(byPos).forEach(function(simPos){
+            byPos[simPos].forEach(function(p){
+              var n = Number(p.num);
+              if (n > 0 && !usedNumsOL[n]) usedNumsOL[n] = true;
+            });
+          });
+          function _nextFreeNumOL(simPos){
+            var pool = DEFAULT_NUMS_OL[simPos] || [];
+            for (var i = 0; i < pool.length; i++) {
+              if (!usedNumsOL[pool[i]]) { usedNumsOL[pool[i]] = true; return pool[i]; }
+            }
+            for (var n = 1; n <= 99; n++) {
+              if (!usedNumsOL[n]) { usedNumsOL[n] = true; return n; }
+            }
+            return 99;
+          }
           var simSquad = [];
           POS_ORDER.forEach(function(simPos){
             var pool = byPos[simPos];
@@ -4627,21 +4661,24 @@ window._showSimProgress = function(opts, onDone){
             simSquad.push({h: POS_HEADER[simPos]});
             pool.forEach(function(p){
               var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+              var num = (Number(p.num) > 0) ? Number(p.num) : _nextFreeNumOL(simPos);
               /* Flags a sidecar (C/F/P/⭐/⚾) — mismo formato que Liga EA. */
-              if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal){
+              if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal || p.natGoalPro){
                 var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
                 fmap[name + '::' + String(p.name||'')] = {
-                  captain:  !!p.captain,
-                  freeKick: !!p.freeKick,
-                  penalty:  !!p.penalty,
-                  elite:    !!p.elite,
-                  natGoal:  !!p.natGoal
+                  captain:    !!p.captain,
+                  freeKick:   !!p.freeKick,
+                  penalty:    !!p.penalty,
+                  elite:      !!p.elite,
+                  natGoal:    !!p.natGoal,
+                  natGoalPro: !!p.natGoalPro
                 };
               }
-              /* ⭐ / ⚾ como propiedades del array para los scorers. */
-              var entry = [String(p.num || ''), String(p.name || '?'), pw];
-              if (p.elite)   entry.elite   = true;
-              if (p.natGoal) entry.natGoal = true;
+              /* ⭐ / ⚾ / 🏀 como propiedades del array para los scorers. */
+              var entry = [String(num), String(p.name || '?'), pw];
+              if (p.elite)      entry.elite      = true;
+              if (p.natGoal)    entry.natGoal    = true;
+              if (p.natGoalPro) entry.natGoalPro = true;
               simSquad.push(entry);
             });
           });
@@ -12394,6 +12431,10 @@ Tottenham
     if (typeof window._invalidateAliasCache === 'function') {
       try { window._invalidateAliasCache(); } catch(_){}
     }
+    /* Hash de _importOtherLeaguesIntoEngine — forzar rebuild al
+       siguiente applyEngineOverrides para que renames/edits se
+       propaguen al motor sin esperar al checksum. */
+    try { window.__importLeaguesHash = ''; } catch(_){}
     /* JSON.stringify cacheado UNA VEZ — antes se serializaba 2-3
        veces el mismo objeto (main + backup + snap). Para una
        plantilla de ~80KB esto es ~80ms × 3 = 240ms ahorrados por

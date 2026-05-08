@@ -1907,6 +1907,32 @@
     var bottomBtn;
     if (score && score.jugado) {
       bottomBtn = '<div class="copa-card-fin">🏁 FIN</div>';
+      /* PARCHE EMPATE-SIN-GANADOR (2026-05-08): si el partido es
+         single-leg (legLabel === '') y acabó empatado SIN pen_winner,
+         es un caso de bug histórico — la prórroga + penaltis no se
+         disparó (p.ej. r16 con _isCopaSL roto antes del fix de hoy).
+         Mostramos un botón admin "✏️ MARCAR GANADOR" para que el
+         admin desbloquee la eliminatoria sin tener que volver a jugar
+         el partido. PIN-gated. */
+      var _isTied = false;
+      try {
+        var _totL = Number(score.gl||0) + Number(score.et_gl||0);
+        var _totV = Number(score.gv||0) + Number(score.et_gv||0);
+        _isTied = (_totL === _totV);
+      } catch(_){}
+      if (legLabel === '' && _isTied && !score.pen_winner && opts.forceWinnerCtx) {
+        var _fwc = opts.forceWinnerCtx;
+        var _hEsc = String(local).replace(/'/g,"\\'");
+        var _vEsc = String(visit).replace(/'/g,"\\'");
+        bottomBtn += '<div style="margin-top:6px;">'
+          + '<button onclick="window._copaForceWinner(\''+_fwc.ronda+'\','+_fwc.idx+',\''+_hEsc+'\',\''+_vEsc+'\')" '
+          + 'style="font-family:Oswald,sans-serif;font-size:10.5px;letter-spacing:1.4px;'
+          + 'padding:6px 12px;border-radius:6px;cursor:pointer;'
+          + 'background:linear-gradient(135deg,rgba(255,176,32,.22),rgba(255,80,80,.22));'
+          + 'color:#ffd0a0;border:1px solid rgba(255,176,32,.55);">'
+          + '✏️ MARCAR GANADOR (admin)</button>'
+          + '</div>';
+      }
     } else {
       bottomBtn = actionBtn ? '<div class="copa-card-btn">' + actionBtn + '</div>' : '';
     }
@@ -2038,6 +2064,91 @@
     return rows;
   }
 
+  /* PARCHE EMPATE-SIN-GANADOR (2026-05-08): permite al admin marcar
+     retroactivamente quién pasa de ronda en una eliminatoria
+     single-leg que quedó empatada por un bug del flujo (p.ej. el
+     bug de r16 que se arregló hoy: `_isCopaSL` no incluía 'r16' →
+     la prórroga + penaltis no se disparaba al pulsar FINALIZAR).
+     Sin esto el admin tiene que reiniciar la copa entera o tocar
+     la base de datos a mano.
+     Flujo:
+       1. PIN-gate (admin 747) vía window.pG.
+       2. Modal con dos botones (local / visitante).
+       3. Click → re-POST a /api/copa/guardar_resultado con los
+          mismos scores + `pen_winner` = ganador elegido. El backend
+          actualiza la fila y el copaRender refresca el bracket.
+       4. Si la ronda es single-leg, dispara _copaResolveTbd para
+          que el ganador rellene el TBD de la siguiente ronda.
+     NO toca el resto del estado: events, mvp, etc se preservan. */
+  window._copaForceWinner = function (ronda, idx, home, away) {
+    var doIt = function () {
+      var resultados = (_copa && _copa.resultados) || {};
+      var resList = resultados[ronda] || [];
+      var res = resList[idx];
+      if (!res || !res.jugado) {
+        alert('No se encontró el resultado guardado del partido.');
+        return;
+      }
+      /* Construye overlay nuevo en cada apertura. */
+      var existing = document.getElementById('_copaForceWinnerOv');
+      if (existing) existing.remove();
+      var ov = document.createElement('div');
+      ov.id = '_copaForceWinnerOv';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:18px;';
+      var btnStyle = 'width:100%;padding:14px;border-radius:10px;border:1px solid rgba(255,213,74,.6);background:linear-gradient(135deg,rgba(255,176,32,.20),rgba(255,80,80,.18));color:#ffd0a0;font-family:Oswald,sans-serif;font-size:14px;letter-spacing:1.5px;cursor:pointer;margin-top:10px;text-align:center;';
+      var totL = Number(res.gl||0) + Number(res.et_gl||0);
+      var totV = Number(res.gv||0) + Number(res.et_gv||0);
+      ov.innerHTML = ''
+        + '<div style="background:linear-gradient(180deg,#1a0d04,#0a0502);border:2px solid #ffd54a;border-radius:14px;padding:20px 18px;max-width:380px;width:100%;text-align:center;box-shadow:0 0 36px rgba(255,213,74,.45);">'
+        +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:20px;letter-spacing:2px;color:#ffd54a;margin-bottom:6px;">⚠ ARREGLAR EMPATE</div>'
+        +   '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.65);line-height:1.45;margin-bottom:6px;">El partido <b>' + escapeHtml(home) + ' ' + totL + '–' + totV + ' ' + escapeHtml(away) + '</b> quedó empatado sin ganador.</div>'
+        +   '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.50);margin-bottom:12px;">Indica quién pasa a la siguiente ronda (se registra como ganador de penaltis).</div>'
+        +   '<button data-side="a" style="' + btnStyle + '">' + escapeHtml(home) + ' pasa</button>'
+        +   '<button data-side="b" style="' + btnStyle + '">' + escapeHtml(away) + ' pasa</button>'
+        +   '<button data-side="x" style="margin-top:14px;background:none;border:none;color:rgba(255,255,255,.45);font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;cursor:pointer;padding:6px;">CANCELAR</button>'
+        + '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest && e.target.closest('button');
+        if (!btn) return;
+        var side = btn.getAttribute('data-side');
+        if (!side || side === 'x') { ov.remove(); return; }
+        var winner = side === 'a' ? home : away;
+        var payload = {
+          ronda: ronda,
+          idx: idx,
+          es_vuelta: false,
+          gl: Number(res.gl) || 0,
+          gv: Number(res.gv) || 0,
+          et_gl: Number(res.et_gl) || 0,
+          et_gv: Number(res.et_gv) || 0,
+          pen_winner: winner,
+          mvp: res.mvp || '',
+          events: res.events || [],
+          summary: res.summary || '',
+          team_a: home || '',
+          team_b: away || ''
+        };
+        ov.remove();
+        saveResult(payload).then(function (d) {
+          try {
+            if (d && d.copa) copaRender(d.copa);
+          } catch (_) {}
+          try {
+            if (typeof _copaResolveTbd === 'function') {
+              _copaResolveTbd(ronda, idx, winner);
+            }
+          } catch (_) {}
+          try { if (typeof init === 'function') init(); } catch (_) {}
+        }).catch(function () {
+          alert('Error al guardar — comprueba conexión y reintenta.');
+        });
+      });
+    };
+    if (typeof window.pG === 'function') window.pG(doIt);
+    else doIt();
+  };
+
   /* Toggle expuesto en window para los onclick="..." de la cabecera. */
   window.copaToggleActa = function (id) {
     var el = document.getElementById(id);
@@ -2098,7 +2209,11 @@
           /* Eventos del acta para toggle "📋 ACTA DEL PARTIDO" en
              cards FIN. */
           events: (res && res.events) || [],
-          actaUniqueId: ronda + '-' + idx
+          actaUniqueId: ronda + '-' + idx,
+          /* Contexto para el botón admin "✏️ MARCAR GANADOR" si la
+             eliminatoria quedó empatada sin pen_winner (bug histórico
+             de r16 sin force-ET). */
+          forceWinnerCtx: { ronda: ronda, idx: idx }
         });
       });
       return out;

@@ -1901,10 +1901,51 @@ var STAT_CLASS_MAP = {
        sin double-counting con la rama existente. */
     var compTag = compKey ? ('|' + compKey + '|' + (matchKey || 'm')) : '';
     var storeKey = (canonA && canonB) ? (canonA + '|' + canonB + compTag) : matchKey;
+    /* Fallback de portería imbatida (2026-05-08): si el match terminó
+       con clean sheet para algún equipo y NO hay evento `imbat` para
+       ese lado, sintetizamos uno con el portero de mayor valor del
+       equipo. Cubre los casos donde el flujo del partido humano no
+       llamó a `_ensureImbatEvents` (p.ej. el user cerró el overlay
+       sin elegir, o el flujo de Copa terminó por una rama distinta).
+       Sin esto, el partido 0-2 ganado al rival deja a Neuer con 0
+       imbat aunque haya jugado la final. */
+    var _evtsList = evts || [];
+    var _golA = 0, _golB = 0;
+    var _hasImbA = false, _hasImbB = false;
+    _evtsList.forEach(function(ev){
+      if (!ev) return;
+      var ty = ev.type || '';
+      if (ty === 'gol' || ty === 'pen-gol' || ty === 'falta-gol') {
+        if (ev.team === 'a') _golA++;
+        else if (ev.team === 'b') _golB++;
+      } else if (ty === 'propia') {
+        /* Gol en propia: cuenta para el equipo CONTRARIO. */
+        if (ev.team === 'a') _golB++;
+        else if (ev.team === 'b') _golA++;
+      } else if (ty === 'imbat') {
+        if (ev.team === 'a') _hasImbA = true;
+        else if (ev.team === 'b') _hasImbB = true;
+      }
+    });
+    function _addSyntheticImbat(side, teamName){
+      if (typeof window._getTopGk !== 'function') return;
+      try {
+        var gk = window._getTopGk(teamName);
+        if (!gk || !gk.name) return;
+        _evtsList = _evtsList.concat([{
+          type:'imbat', ico:'🧤', min:90, team:side,
+          num: gk.num, player: gk.name, name: gk.name
+        }]);
+      } catch(_){}
+    }
+    /* scoreA = goles del equipo A (local). Para clean sheet de B:
+       _golA debe ser 0. */
+    if (_golA === 0 && !_hasImbB && canonB) _addSyntheticImbat('b', canonB);
+    if (_golB === 0 && !_hasImbA && canonA) _addSyntheticImbat('a', canonA);
     LIGA_PLAYER_MATCH_STORE[storeKey] = {
       teamA: canonA,
       teamB: canonB,
-      evts: (evts || []).map(function(ev){
+      evts: _evtsList.map(function(ev){
         var copy = {};
         Object.keys(ev || {}).forEach(function(k){ copy[k] = ev[k]; });
         copy.realTeam = canonicalTeamName(ev && ev.team === 'a' ? teamA : ev && ev.team === 'b' ? teamB : (ev && ev.realTeam) || '');

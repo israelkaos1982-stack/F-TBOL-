@@ -6292,6 +6292,25 @@ window._showSimProgress = function(opts, onDone){
 <div class="liga-stats-wrap" id="torneos-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
 </div>
 
+<!-- Pantalla Supercopa de España stats — paleta amarillo-dorado +
+     rojo magenta (logo de la competición: trofeo dorado sobre
+     demonio rojo). Lee de `ef_player_stats_sc_v1` (cache aislado
+     populado por rebuildPlayerStatsStore). -->
+<style>
+#s-sc-stats .liga-stat-card{border-color:rgba(240,192,64,.45)!important;background:linear-gradient(145deg,#1a1100 0%,#2c1f00 45%,#0d0700 100%)!important;}
+#s-sc-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(240,192,64,.7),rgba(255,80,140,1),rgba(240,192,64,.7),transparent)!important;}
+#s-sc-stats .liga-stat-card::after{border-color:rgba(255,220,120,.45)!important;}
+#s-sc-stats .liga-stat-head{background:linear-gradient(90deg,rgba(110,80,0,.55),rgba(220,40,80,.18),rgba(80,40,0,.12))!important;border-bottom:1px solid rgba(240,192,64,.40)!important;}
+#s-sc-stats .liga-stat-title{color:#ffd870!important;text-shadow:0 0 18px rgba(240,192,64,.65),0 0 6px rgba(255,80,140,.3)!important;}
+#s-sc-stats .liga-stat-rank{color:rgba(255,220,120,.85)!important;text-shadow:0 0 12px rgba(240,192,64,.55)!important;}
+#s-sc-stats .liga-stat-value{color:#ff5090!important;text-shadow:0 0 18px rgba(220,40,80,.7)!important;}
+</style>
+<div class="screen" id="s-sc-stats">
+<button class="back-btn" onclick="go('s-supercopa')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Supercopa España · Estadísticas</h2></div>
+<div class="liga-stats-wrap" id="sc-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
+</div>
+
 <script>
 /* Re-render genérico para las pantallas de estadísticas por
    competición. Mismo patrón que `s-copa-stats` arriba: sync los
@@ -6306,7 +6325,8 @@ window._showSimProgress = function(opts, onDone){
     { screenId:'s-usc-stats',     rootId:'usc-stats-dashboard',     storeKey:'ef_player_stats_usc_v1' },
     { screenId:'s-inter-stats',   rootId:'inter-stats-dashboard',   storeKey:'ef_player_stats_inter_v1' },
     { screenId:'s-mundial-stats', rootId:'mundial-stats-dashboard', storeKey:'ef_player_stats_mundial_v1' },
-    { screenId:'s-torneos-stats', rootId:'torneos-stats-dashboard', storeKey:'ef_player_stats_torneos_v1' }
+    { screenId:'s-torneos-stats', rootId:'torneos-stats-dashboard', storeKey:'ef_player_stats_torneos_v1' },
+    { screenId:'s-sc-stats',      rootId:'sc-stats-dashboard',      storeKey:'ef_player_stats_sc_v1' }
   ];
   function _renderOne(cfg){
     if (typeof window.syncLigaEaPlayerStats === 'function') {
@@ -6956,6 +6976,10 @@ window._showSimProgress = function(opts, onDone){
 <style>
 #s-supercopa .sc-banner-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border-radius:10px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid;background:linear-gradient(135deg,rgba(240,192,64,.18),rgba(122,90,0,.30));color:#ffeaa6;border-color:rgba(240,192,64,.65);box-shadow:0 0 14px rgba(240,192,64,.25);}
 #s-supercopa .sc-banner-btn.sc-reset{background:linear-gradient(135deg,rgba(255,80,80,.12),rgba(80,20,20,.25));color:#ffb0b0;border-color:rgba(255,80,80,.55);box-shadow:none;font-size:11px;padding:8px;}
+/* Botón "📊 Stats" — paleta amarillo-dorado + rojo magenta de la
+   Supercopa de España (logo: trofeo dorado sobre demonio rojo).
+   Más compacto que el banner principal. */
+#s-supercopa .sc-banner-btn.sc-stats{background:linear-gradient(135deg,rgba(240,192,64,.20),rgba(220,40,80,.18));color:#ffeaa6;border-color:rgba(240,192,64,.55);box-shadow:0 0 12px rgba(240,192,64,.20);font-size:11px;padding:8px;}
 #s-supercopa .sc-stadium-badge{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.65);text-align:center;padding:6px 8px;letter-spacing:.5px;}
 #s-supercopa .sc-rondhdr{padding:10px 14px 6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.5px;color:rgba(240,192,64,.95);font-weight:700;}
 /* Grupo (petición usuario 2026-05-05): borde dorado que engloba
@@ -7143,10 +7167,14 @@ window._showSimProgress = function(opts, onDone){
     /* Banner minimalista (petición usuario 2026-05-05): solo botón
        compacto "♻️ Res" arriba a la derecha. Sin estadio + balón
        (esa info ya sale en el header de cada card y en la previa)
-       ni texto extra. La acción RESET sigue exigiendo PIN admin. */
+       ni texto extra. La acción RESET sigue exigiendo PIN admin.
+       2026-05-08: añadida caja "📊 Stats" a la derecha de Res que
+       navega a `s-sc-stats` (dashboard de la Supercopa de España
+       con las MISMAS categorías que Liga EA Sports stats). */
     el.innerHTML = ''
-      + '<div style="display:flex;justify-content:flex-end;">'
+      + '<div style="display:flex;justify-content:flex-end;gap:8px;">'
       +   '<button class="sc-banner-btn sc-reset" onclick="window._scResetGate&&window._scResetGate()" style="width:auto;padding:6px 14px;">♻️ Res</button>'
+      +   '<button class="sc-banner-btn sc-stats" onclick="go(\'s-sc-stats\')" style="width:auto;padding:6px 14px;">📊 Stats</button>'
       + '</div>';
   }
 

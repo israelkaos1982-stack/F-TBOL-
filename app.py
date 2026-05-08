@@ -2186,6 +2186,118 @@ def api_liga_ext_post(slug):
     })
 
 # ══════════════════════════════════════════════════════════════════
+# PROTECTED snapshot (server-side, monotónico) — 2026-05-08
+# ══════════════════════════════════════════════════════════════════
+# Bug reportado: al actualizar plantillas de equipos humanos un día y
+# recargar al siguiente, las ediciones se perdieron — el server tenía
+# una versión pre-edit y la cache cliente coincidía con ella, así que
+# el anti-wipe del cliente no detectó el wipe.
+#
+# Defensa de último recurso: además de `liga_ext_<slug>` (que el cliente
+# puede sobrescribir libremente), guardamos `liga_ext_<slug>_protected`
+# que SOLO acepta payloads cuyo total de `players` sea ≥ que el
+# protected actual. Es decir, un POST con menos jugadores que la
+# versión protegida se RECHAZA con 409, salvaguardando las ediciones
+# del admin contra cualquier flujo que intente "limpiar" el server.
+#
+# Cliente:
+#  - En cada saveData (con teams.length > 0), POSTea aquí (best-effort).
+#  - En loadData / anti-wipe, si las fuentes locales fallan, hace GET
+#    aquí como fallback final.
+
+_PROTECTED_KEY_FMT = "liga_ext_{}_protected"
+
+
+def _protected_key(slug):
+    return _PROTECTED_KEY_FMT.format(_liga_ext_slug(slug))
+
+
+def _count_players_payload(data):
+    """Total de players[] sumado entre todos los teams[] del payload."""
+    if not isinstance(data, dict):
+        return 0
+    teams = data.get("teams")
+    if not isinstance(teams, list):
+        return 0
+    total = 0
+    for t in teams:
+        if not isinstance(t, dict):
+            continue
+        players = t.get("players")
+        if isinstance(players, list):
+            total += len(players)
+    return total
+
+
+@app.route("/api/liga-ext-protected/<slug>", methods=["GET"])
+def api_liga_ext_protected_get(slug):
+    key = _protected_key(slug)
+    row = GlobalState.query.filter_by(clave=key).first()
+    if not row or not row.valor_json:
+        return jsonify({"ok": True, "slug": _liga_ext_slug(slug),
+                        "data": None, "players": 0, "updated_at": ""})
+    try:
+        data = json.loads(row.valor_json)
+    except Exception:
+        data = None
+    return jsonify({
+        "ok": True,
+        "slug": _liga_ext_slug(slug),
+        "data": data,
+        "players": _count_players_payload(data) if data else 0,
+        "updated_at": row.updated_at or "",
+    })
+
+
+@app.route("/api/liga-ext-protected/<slug>", methods=["POST"])
+def api_liga_ext_protected_post(slug):
+    payload = request.get_json(silent=True) or {}
+    incoming = payload.get("data", payload)
+    force = bool(payload.get("force"))
+    if not isinstance(incoming, dict):
+        return jsonify({"ok": False, "error": "data inválida"}), 400
+    teams = incoming.get("teams")
+    if not isinstance(teams, list) or not teams:
+        return jsonify({"ok": False, "error": "teams vacío — no se sobreescribe protected"}), 400
+    new_pc = _count_players_payload(incoming)
+    body = json.dumps(incoming, ensure_ascii=False)
+    if len(body.encode("utf-8")) > 2 * 1024 * 1024:
+        return jsonify({"ok": False, "error": "payload supera 2 MB"}), 413
+    key = _protected_key(slug)
+    row = GlobalState.query.filter_by(clave=key).first()
+    if row and not force:
+        try:
+            cur = json.loads(row.valor_json or "{}")
+            cur_pc = _count_players_payload(cur)
+        except Exception:
+            cur_pc = 0
+        # Anti-wipe monotónico: rechazamos cualquier POST con MENOS
+        # jugadores totales que el protected actual. El admin siempre
+        # puede forzar con force=true (p.ej. para corregir un guardado
+        # incorrecto que se quedó pegado en protected).
+        if new_pc < cur_pc:
+            return jsonify({
+                "ok": False,
+                "error": "payload con menos jugadores que protected — rechazado",
+                "current_players": cur_pc,
+                "new_players": new_pc,
+            }), 409
+    now = utc_now_iso()
+    if row:
+        row.valor_json = body
+        row.updated_at = now
+    else:
+        row = GlobalState(clave=key, valor_json=body, updated_at=now)
+        db.session.add(row)
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "slug": _liga_ext_slug(slug),
+        "players": new_pc,
+        "updated_at": now,
+    })
+
+# ══════════════════════════════════════════════════════════════════
 # KV genérico (estado del cliente que debe sobrevivir al navegador)
 # ══════════════════════════════════════════════════════════════════
 # Reportado 2026-05-02 con foto: el usuario perdió tanto los iconos

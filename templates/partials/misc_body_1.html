@@ -13881,10 +13881,50 @@ Tottenham
           var d = resp.data;
           d.teams   = d.teams   || [];
           d.results = d.results || [];
+          /* DEFENSA EN PROFUNDIDAD (2026-05-08): incluso cuando el
+             server devuelve un payload main válido, si existe un
+             snapshot `liga_ext_<slug>_protected` con MÁS jugadores
+             totales (saveData lo escribe en cada confirm), preferimos
+             ese — es el bug "ediciones perdidas al recargar al día
+             siguiente". El protected en server es monotónico: nunca
+             retrocede. */
+          try {
+            var xhrP = new XMLHttpRequest();
+            xhrP.open('GET', '/api/liga-ext-protected/' + encodeURIComponent(k), false);
+            xhrP.send();
+            if (xhrP.status === 200) {
+              var respP = JSON.parse(xhrP.responseText);
+              if (respP && respP.data && Array.isArray(respP.data.teams) && _countPlayers(respP.data) > _countPlayers(d)) {
+                try { console.warn('[ligaExt] '+k+': server-protected tiene '+_countPlayers(respP.data)+' jugadores vs main '+_countPlayers(d)+' — usamos protected.'); } catch(_){}
+                d = respP.data;
+                d.teams = d.teams || [];
+                d.results = d.results || [];
+              }
+            }
+          } catch(_){}
           LIGA_CACHE[k] = d;
           if (resp.updated_at) LIGA_UPDATED[k] = resp.updated_at;
           try { localStorage.setItem(storeKey(k), JSON.stringify(d)); } catch(_){}
           return _applyForcedBlacklist(k, d);
+        }
+      }
+    } catch(_){}
+    /* Última esperanza: server-protected directo (caso main vacío
+       en server pero protected sobrevivió). */
+    try {
+      var xhrPL = new XMLHttpRequest();
+      xhrPL.open('GET', '/api/liga-ext-protected/' + encodeURIComponent(k), false);
+      xhrPL.send();
+      if (xhrPL.status === 200) {
+        var respPL = JSON.parse(xhrPL.responseText);
+        if (respPL && respPL.data && Array.isArray(respPL.data.teams) && respPL.data.teams.length) {
+          var dPL = respPL.data;
+          dPL.teams = dPL.teams || [];
+          dPL.results = dPL.results || [];
+          try { console.warn('[ligaExt] '+k+': main vacío local+server, restaurando desde server-protected ('+_countPlayers(dPL)+' jugadores).'); } catch(_){}
+          LIGA_CACHE[k] = dPL;
+          try { localStorage.setItem(storeKey(k), JSON.stringify(dPL)); } catch(_){}
+          return _applyForcedBlacklist(k, dPL);
         }
       }
     } catch(_){}
@@ -14364,13 +14404,39 @@ Tottenham
         }
       }).catch(function(){});
       /* Backup en server — sólo si hay jugadores, para no
-         sobrescribir un backup válido con un d vacío accidental. */
+         sobrescribir un backup válido con un d vacío accidental.
+         Doble vía:
+           1. /api/liga-ext/<slug>_backup  — legacy, ghost-slug.
+           2. /api/liga-ext-protected/<slug>  — endpoint dedicado
+              MONOTÓNICO (rechaza payloads con menos jugadores que
+              el actual; ver app.py). Es la red de seguridad fuerte
+              contra el bug "ediciones perdidas tras reload": si el
+              POST principal fue corrupto/parcial pero alguno de los
+              posteriores tiene el state completo, queda blindado
+              en `liga_ext_<slug>_protected` y `loadData` lo
+              recupera al día siguiente. */
       if (_countPlayers(d) > 0) {
-        fetch('/api/liga-ext/'+encodeURIComponent(k+'_backup'), {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({data:d})
-        }).catch(function(){});
+        try{
+          fetch('/api/liga-ext/'+encodeURIComponent(k+'_backup'), {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({data:d})
+          }).catch(function(){});
+        }catch(_){}
+        try{
+          fetch('/api/liga-ext-protected/'+encodeURIComponent(k), {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({data:d})
+          }).then(function(r){
+            /* 409 = el server tiene una versión protected con MÁS
+               jugadores. No es un error — es la salvaguarda actuando.
+               Logueamos para diagnóstico pero no rompemos nada. */
+            if (r.status === 409) {
+              try { console.warn('[saveData] '+k+': protected del server tiene más jugadores que el local — POST rechazado por anti-wipe.'); } catch(_){}
+            }
+          }).catch(function(){});
+        }catch(_){}
       }
     }catch(_){}
   }

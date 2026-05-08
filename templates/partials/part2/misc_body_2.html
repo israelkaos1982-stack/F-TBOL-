@@ -6289,12 +6289,35 @@
       var totalTicks = (r.gameMin * 60) / _ML_TICK_SEC;
       tickMs = Math.max(1, Math.round(realMs / totalTicks));
     }
+    /* SLOWDOWN min ≥ 65 (petición usuario 2026-05-08): a partir del
+       minuto 65 los humanos hacen cambios sin parar el cronómetro,
+       así que extendemos cada game-minute en +0.5 s reales para dar
+       margen. Aplica solo a HvH/HvIA (no a IAIA ni a las prórrogas
+       HvH_ET cuyas reglas son aparte). Se traduce a ~+42 ms por
+       tick (500 ms por game-min / 12 ticks). NO se acumula con el
+       override `_ppDurationMin`: si el admin fuerza una duración
+       custom, su valor manda. */
+    if (!override && (type === 'HvH' || type === 'HvIA') &&
+        typeof opts.currentMin === 'number' && opts.currentMin >= 65) {
+      tickMs = tickMs + Math.round(500 / 12);
+    }
     return { type: type, rule: r, tickMs: tickMs, realMs: realMs };
   };
 
-  /* Compatibilidad con llamadas antiguas: st = {isHvH, etDone, home, away}. */
+  /* Compatibilidad con llamadas antiguas: st = {isHvH, etDone, home, away,
+     timerSec}. Si `st.currentMin` no llega explícito, lo derivamos de
+     `st.timerSec` para que `_mlResolveClock` pueda aplicar el slowdown
+     post-min-65. */
   function _mlTickMs(st) {
-    return window._mlResolveClock(st).tickMs;
+    var opts = st || {};
+    if (typeof opts.currentMin !== 'number') {
+      var tSec = (typeof opts.timerSec === 'number') ? opts.timerSec : 0;
+      var clone = {};
+      for (var k in opts) { if (Object.prototype.hasOwnProperty.call(opts, k)) clone[k] = opts[k]; }
+      clone.currentMin = Math.floor(tSec / 60);
+      opts = clone;
+    }
+    return window._mlResolveClock(opts).tickMs;
   }
   window._mlTickMs = _mlTickMs;
 
@@ -6435,7 +6458,39 @@
     ov.className = 'show ' + (cssClass || 'goal');
     if (cssClass === 'goal') _mlPlayUiTone('goal');
     if (cssClass === 'red')  _mlPlayUiTone('red');
-    setTimeout(function(){ ov.className = ''; }, 5000);
+    /* Reducido de 5s → 2s (petición usuario 2026-05-08): el overlay
+       amarillo/rojo opaca el acta durante demasiado tiempo y si llega
+       otro evento la visualización es mínima. La pausa REAL del
+       cronómetro vive aparte (`_mlEventFreezeMs`) y NO está acoplada
+       a la duración visual del flash. */
+    setTimeout(function(){ ov.className = ''; }, 2000);
+  }
+
+  /* Cuánto tiempo (ms reales) debe pausarse el cronómetro tras el
+     evento — independiente de la duración visual del flash.
+     Petición usuario 2026-05-08:
+       gol  / autogol / falta-gol / pen-gol → 10 s
+       amarilla                              →  5 s
+       roja / doble amarilla                →  8 s
+       resto (sustitución / lesión / mvp / pen-fallo / pen-prov…) → 0
+     Si el partido es IAIA (sin humanos) NO pausamos — la auto-sim
+     debe correr fluida. */
+  function _mlEventFreezeMs(evType, isHumanMatch) {
+    if (!isHumanMatch) return 0;
+    if (evType === 'gol' || evType === 'falta-gol' || evType === 'pen-gol' || evType === 'propia') return 10000;
+    if (evType === 'amarilla') return 5000;
+    if (evType === 'roja' || evType === 'd-amarilla' || evType === 'damarilla') return 8000;
+    return 0;
+  }
+  /* Detecta si el cronómetro de un partido `mk` (gen flow) corresponde
+     a HvH o HvIA. Lo usa `_mlEventFreezeMs` para no congelar IAIA. */
+  function _mlIsHumanMatchGen(mk) {
+    try {
+      var st = _mlSt(mk);
+      if (!st) return false;
+      var info = window._mlResolveClock({ isHvH: !!st.isHvH, etDone: !!st.etDone, home: st.home, away: st.away });
+      return info.type === 'HvH' || info.type === 'HvH_ET' || info.type === 'HvIA';
+    } catch(_) { return false; }
   }
 
   /* Toast pequeño no intrusivo para eventos que ENTRAN por sync de
@@ -6971,6 +7026,20 @@
       var elapsedMs = Date.now() - st._wallStart;
       st.timerSec = st._gameSecAtStart + Math.round(elapsedMs * _gameSecPerMs);
       var curMin = Math.floor(st.timerSec/60);
+      /* SLOWDOWN min ≥ 65 (petición usuario 2026-05-08). En cuanto se
+         cruza el minuto 65, re-arm del interval con tickMs nuevo
+         (~+42 ms = +0.5 s real por game-min) para dar tiempo a los
+         humanos a hacer cambios sin tocar el reloj. Solo HvH/HvIA;
+         IAIA y prórrogas no aplican. Re-anclamos `_wallStart` y
+         `_gameSecAtStart` al `timerSec` actual antes de re-armar. */
+      if (curMin >= 65 && !st._slowdownApplied && !st.isIAvsIA && !st.etDone) {
+        st._slowdownApplied = true;
+        st._wallStart = Date.now();
+        st._gameSecAtStart = st.timerSec;
+        clearInterval(st.timerInterval);
+        _mlStartIntervalGen(mk);
+        return;
+      }
       // Fire pending AI events ANTES de comprobar el half-time, así los
       // eventos recién disparados en min 44 ya cuentan para el stoppage
       // de la 1ª parte en esta misma iteración.
@@ -7430,8 +7499,13 @@
     document.getElementById('ml-confirm-end-yes').onclick = function(){
       close();
       /* Restaurar el spinner ahora que el usuario confirmó —
-         el callback finaliza el partido y dispara stats/MVP/post. */
-      if(typeof window._mlShowLoading === 'function') window._mlShowLoading('Procesando partido…');
+         el callback finaliza el partido y dispara stats/MVP/post.
+         Reusamos el `_lastFinalizeCtx` capturado en el click-handler
+         (línea ~21280) para que la barra de progreso muestre los
+         titulares generativos según el resultado. */
+      if(typeof window._mlShowLoading === 'function') {
+        window._mlShowLoading('Procesando partido…', window._lastFinalizeCtx || null);
+      }
       try { yesCb(); } catch(_){}
     };
   };
@@ -7677,8 +7751,9 @@
     { key: 'posesion', ico: '➗', lbl: 'POSESIÓN (%)',     min: 30, max: 70, def: 50, pairSum: 100 },
     { key: 'remates',  ico: '👟', lbl: 'REMATES',          min: 0,  max: 30, def: 10 },
     { key: 'tiros',    ico: '🚪', lbl: 'TIROS A PUERTA',   min: 0,  max: 20, def: 7  },
-    { key: 'corners',  ico: '⛳', lbl: 'CÓRNERS',           min: 0,  max: 10, def: 3  },
-    { key: 'paradas',  ico: '🧤', lbl: 'PARADAS',          min: 0,  max: 15, def: 5  }
+    { key: 'corners',  ico: '⛳', lbl: 'CÓRNERS',           min: 0,  max: 10, def: 3  }
+    /* PARADAS eliminado a petición usuario 2026-05-08 — ya no se
+       solicita al confirmar las estadísticas finales del partido. */
   ];
   var _STAT_DEFS_AUTO = [
     { key: 'penGol',   ico: '🥅', lbl: 'GOLES DE PENALTI', skipIfZero: true },
@@ -7905,7 +7980,7 @@
     appendRow(_STAT_DEFS_AUTO[2], autos.a.amarillas, autos.b.amarillas, true); // amarillas
     appendRow(_STAT_DEFS_AUTO[3], autos.a.rojas,     autos.b.rojas,     true); // rojas
     appendRow(_STAT_DEFS_MANUAL[3], '', '', false); // corners
-    appendRow(_STAT_DEFS_MANUAL[4], '', '', false); // paradas
+    /* paradas removido 2026-05-08 — ya no es parte de _STAT_DEFS_MANUAL */
     ov.classList.add('show');
   }
   window._mlStatsConfirm = function(){
@@ -8974,8 +9049,26 @@
       }
       if(!inserted)list.appendChild(row);
     }
-    /* Resume timer after event confirmed */
-    var _rSt=_mlSt(mk); if(_rSt._pausedForEvent){ _rSt._pausedForEvent=false; _rSt.timerRunning=true; _mlStartIntervalGen(mk); }
+    /* Resume timer after event confirmed — con FREEZE en tiempo real
+       según tipo de evento (gol/amarilla/roja). Solo se aplica a
+       partidos con humano; IAIA reanuda inmediato.
+       2026-05-08 petición usuario: el cronómetro se detiene 10 s
+       tras un gol, 5 s tras una amarilla y 8 s tras una expulsión
+       para que el humano tenga tiempo de leer el acta y celebrar. */
+    var _rSt=_mlSt(mk);
+    if(_rSt._pausedForEvent){
+      var _freezeMs = _mlEventFreezeMs(evt.type, _mlIsHumanMatchGen(mk));
+      var _doResume = function(){
+        var _s = _mlSt(mk);
+        if (!_s || _s.finished) return;
+        if (_s._pausedForEvent) {
+          _s._pausedForEvent=false; _s.timerRunning=true;
+          _mlStartIntervalGen(mk);
+        }
+      };
+      if (_freezeMs > 0) setTimeout(_doResume, _freezeMs);
+      else _doResume();
+    }
   };
   window.genEvClose = function() {
     var ov=document.getElementById('gen-ev-ov'); if(ov)ov.classList.remove('show');
@@ -9371,7 +9464,13 @@
        56 ms → el partido duraba 1 minuto real). */
     var tickMs;
     if (typeof window._mlResolveClock === 'function') {
-      tickMs = window._mlResolveClock({ isHvH: !!_gm.isHvH, etDone: !!_gm.etDone, home: _gm.home, away: _gm.away }).tickMs;
+      /* Pasar `currentMin` para que aplique el slowdown +0.5 s/min
+         desde el min 65 (petición usuario 2026-05-08). */
+      tickMs = window._mlResolveClock({
+        isHvH: !!_gm.isHvH, etDone: !!_gm.etDone,
+        home: _gm.home, away: _gm.away,
+        currentMin: Math.floor((_gm.timerSec || 0) / 60)
+      }).tickMs;
     } else {
       tickMs = _gm.isHvH ? GM_TICK_HVH : GM_TICK_HVIA;
     }
@@ -9403,6 +9502,17 @@
          aunque el browser haya pausado los ticks en segundo plano. */
       var elapsedMs = Date.now() - (_gm._wallStart || Date.now());
       _gm.timerSec = (_gm._secAtStart || 0) + Math.round(elapsedMs * (_gm._gameSecPerMs || 0));
+      /* SLOWDOWN min ≥ 65 (petición usuario 2026-05-08): re-arm del
+         interval con tickMs nuevo para extender cada game-min en
+         +0.5 s real. Solo HvH/HvIA, no en prórroga. La nueva llamada
+         a `gmStartTimer` ya re-resuelve el clock con `currentMin`. */
+      if (Math.floor(_gm.timerSec / 60) >= 65 && !_gm._slowdownApplied && !_gm.etDone) {
+        _gm._slowdownApplied = true;
+        clearInterval(_gm.timerInterval);
+        _gm.timerInterval = null;
+        gmStartTimer();
+        return;
+      }
       /* Descuento dinámico en ambas partes (igual que el flujo ml-…).
          Se recalcula cada tick por si un evento recién añadido lo ha
          movido. */
@@ -9891,8 +10001,21 @@
     list.appendChild(li);
     var modal = document.getElementById('gm-modal');
     if (modal) modal.scrollTop = modal.scrollHeight;
-    if (_gm.timerWasRunning && !_gm.finished && !_gm.inDescanso && _gm.kickoffDone) { gmStartTimer(); }
+    /* Reanudar el cronómetro tras el evento. FREEZE 10/5/8 s real
+       según gol/amarilla/expulsión (petición usuario 2026-05-08).
+       gm-modal siempre tiene humano implicado (HvH o HvIA) → forzamos
+       isHumanMatch=true. Capturamos `wasRunning` aquí y reseteamos el
+       flag inmediatamente — el resume diferido lee la captura, no la
+       variable, para evitar carreras con otros eventos consecutivos. */
+    var _gmFreezeMs = _mlEventFreezeMs(evt.type, true);
+    var _gmWasRunningSnapshot = !!_gm.timerWasRunning;
     _gm.timerWasRunning = false;
+    var _gmDoResume = function(){
+      if (_gm.finished || _gm.inDescanso || !_gm.kickoffDone) return;
+      if (_gmWasRunningSnapshot) gmStartTimer();
+    };
+    if (_gmFreezeMs > 0) setTimeout(_gmDoResume, _gmFreezeMs);
+    else _gmDoResume();
     var empty = list.querySelector('.ml-acta-empty');
     if (empty) empty.remove();
   };
@@ -14244,9 +14367,44 @@
 .ml-action-add,.ml-action-end,.ml-action-ht{flex:1;border:none;border-radius:8px;padding:9px 6px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.2px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:filter .15s,opacity .15s;}
 .ml-action-add{background:linear-gradient(135deg,#1a3a6a,#1e4fa0);color:#a8d0ff;box-shadow:0 2px 8px rgba(30,79,160,.4);}
 .ml-action-ht{background:linear-gradient(135deg,#6a4a1a,#c08c20);color:#ffe2a0;box-shadow:0 2px 8px rgba(192,140,32,.4);}
-.ml-action-end{background:linear-gradient(135deg,#6a1a1a,#b02020);color:#ffd0d0;box-shadow:0 2px 8px rgba(176,32,32,.4);}
+/* Botón FINALIZAR atractivo (2026-05-08): el usuario reportó que tras
+   compartir las estadísticas por WhatsApp, los receptores no sabían
+   cómo continuar — el botón rojo apagado se confundía con el fondo.
+   Ahora pulsa con un halo dorado/rojo neón que llama la atención
+   sin gritar (1.6s ease-in-out, infinito). Mantiene el rojo de
+   "fin de partido" como color base. */
+.ml-action-end{
+  background:linear-gradient(135deg,#a52020,#e84a4a);color:#fff;
+  text-shadow:0 1px 2px rgba(0,0,0,.5);
+  box-shadow:0 2px 8px rgba(176,32,32,.4);
+  animation:flagFinalizarPulse 1.6s ease-in-out infinite;
+}
 .ml-action-add:hover,.ml-action-end:hover,.ml-action-ht:hover{filter:brightness(1.15);}
-.ml-action-add:disabled,.ml-action-end:disabled,.ml-action-ht:disabled{opacity:0.35;cursor:default;filter:none;}
+.ml-action-add:disabled,.ml-action-end:disabled,.ml-action-ht:disabled{opacity:0.35;cursor:default;filter:none;animation:none;}
+@keyframes flagFinalizarPulse{
+  0%,100%{
+    box-shadow:0 0 0 0 rgba(255,176,32,.0),
+               0 0 14px 3px rgba(255,80,80,.55),
+               0 2px 8px rgba(176,32,32,.4);
+  }
+  50%{
+    box-shadow:0 0 0 8px rgba(255,176,32,.0),
+               0 0 28px 8px rgba(255,200,64,.95),
+               0 2px 8px rgba(176,32,32,.4);
+  }
+}
+/* Aplica también al botón FINALIZAR del gm-modal (estilos inline en
+   el HTML, ver línea ~13719). Sobreescribimos sus reglas con !important
+   solo sobre las propiedades de animación + shadow para no romper
+   layout/border/bg que el inline gestiona. */
+#gm-btn-end{
+  animation:flagFinalizarPulse 1.6s ease-in-out infinite !important;
+  background:linear-gradient(135deg,rgba(165,32,32,.85),rgba(232,74,74,.85)) !important;
+  color:#fff !important;
+  border-color:rgba(255,200,64,.55) !important;
+  text-shadow:0 1px 2px rgba(0,0,0,.5);
+}
+#gm-btn-end:disabled{animation:none !important;}
 /* ── Eventos del acta ────────────────────────────────────────── */
 .ml-evt-item{padding-left:10px!important;}
 .ml-evt-team{font-size:11px;color:rgba(255,255,255,.45);font-family:"Rajdhani",sans-serif;white-space:nowrap;}
@@ -21056,28 +21214,149 @@ document.addEventListener('DOMContentLoaded', function() {
 </style>
 <script>
 (function(){
-  var ov, _safety, _anim;
+  var ov, _safety, _anim, _newsAnim;
   function _el(){ ov = ov || document.getElementById('ml-loading-ov'); return ov; }
-  function _show(text){
-    var e = _el(); if (!e) return;
-    if (text) {
-      var tEl = document.getElementById('ml-loading-text');
-      if (tEl) tEl.textContent = text;
+
+  /* ── Generador de titulares post-partido (2026-05-08) ────────────
+     Mientras procesa el partido, mostramos mensajes tipo prensa
+     deportiva para que el wait sea entretenido en vez de sentirlo
+     "colgado". Los mensajes dependen del resultado y de los equipos.
+     Los apodos de los equipos humanos se inyectan cuando el equipo
+     que gana/pierde tiene mote conocido (colchonero, merengue, culé,
+     etc.). Si no, fallback a frases neutras.
+     `ctx` esperado: { home, away, scoreA, scoreB, comp? }. */
+  var _TEAM_NICKS = {
+    'Atlético Madrid':'colchonero','Atlético de Madrid':'colchonero','Atletico Madrid':'colchonero',
+    'Real Madrid':'merengue','FC Barcelona':'culé','Barcelona':'culé',
+    'Athletic Club':'león','Athletic de Bilbao':'león',
+    'Real Betis':'verdiblanco','Sevilla':'sevillista','Valencia':'che',
+    'Villarreal':'submarinista','Real Sociedad':'realista','Espanyol':'periquito',
+    'Bayern Munich':'bávaro','Borussia Dortmund':'aurinegro',
+    'Liverpool':'red','Manchester United':'red devil','Manchester City':'citizen',
+    'Chelsea':'blue','Arsenal':'gunner','Tottenham':'spur',
+    'Juventus':'bianconero','AC Milan':'rossonero','Inter':'nerazzurro',
+    'PSG':'parisino','Olympique de Marseille':'olímpico','Lyon':'lionés'
+  };
+  function _mlPickNick(name){
+    if (!name) return null;
+    var clean = String(name).replace(/^\*+\s*/, '').trim();
+    if (_TEAM_NICKS[clean]) return _TEAM_NICKS[clean];
+    /* match parcial por prefijo conocido */
+    for (var k in _TEAM_NICKS) {
+      if (Object.prototype.hasOwnProperty.call(_TEAM_NICKS, k) &&
+          clean.toLowerCase().indexOf(k.toLowerCase()) === 0) return _TEAM_NICKS[k];
     }
+    return null;
+  }
+  function _shuffleArr(a){
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  function _mlGenNewsLines(ctx){
+    if (!ctx || (typeof ctx.scoreA !== 'number' && typeof ctx.scoreB !== 'number')) {
+      return [
+        'Procesando partido…',
+        'Calculando estadísticas…',
+        'Eligiendo MVP…',
+        'Preparando resumen…'
+      ];
+    }
+    var sa = ctx.scoreA || 0, sb = ctx.scoreB || 0;
+    var diff = sa - sb;
+    var aWin = diff > 0, bWin = diff < 0;
+    var winner = aWin ? ctx.home : (bWin ? ctx.away : '');
+    var loser  = aWin ? ctx.away : (bWin ? ctx.home : '');
+    var winnerNick = _mlPickNick(winner);
+    var loserNick  = _mlPickNick(loser);
+    var lines = [];
+    if (!winner) {
+      /* Empate */
+      var emp = sa + '-' + sb;
+      lines = _shuffleArr([
+        '🤝 Empate '+emp+' entre '+ctx.home+' y '+ctx.away,
+        '⚔️ Reparto de puntos en '+emp,
+        '😐 Tablas a '+sa+' goles',
+        sa === 0 ? '🥶 Cero a cero, sin emociones' : '🔥 Vibrante empate '+emp
+      ]);
+    } else if (Math.abs(diff) >= 4) {
+      /* Goleada */
+      lines = _shuffleArr([
+        '🔥 Goleada del '+winner+'!',
+        '💥 Aplastante triunfo '+winner,
+        '🚀 ' +winner+ ' arrolla al ' +loser,
+        loserNick ? '💢 Bañito '+(winnerNick?winnerNick:'')+' al '+loserNick : ('💢 Paliza al '+loser)
+      ]);
+      if (winnerNick) lines.push('🎉 Fiesta '+winnerNick+' por todo lo alto');
+    } else if (Math.abs(diff) >= 2) {
+      /* Victoria clara */
+      lines = _shuffleArr([
+        '💪 Victoria sólida del '+winner,
+        '🎯 '+winner+' se lleva el partido '+sa+'-'+sb,
+        winnerNick ? '⚡ Triunfo '+winnerNick+' sin sustos' : ('⚡ Triunfo cómodo del '+winner)
+      ]);
+    } else {
+      /* Por la mínima */
+      lines = _shuffleArr([
+        '⚖️ Por la mínima, '+winner+' se impone',
+        '🥵 Sufrido triunfo del '+winner,
+        '😅 '+winner+' gana en un partido apretado',
+        winnerNick ? '🫀 Victoria '+winnerNick+' al filo' : ('🫀 '+winner+' aguanta hasta el final')
+      ]);
+    }
+    /* Mensajes de proceso al final, comunes a cualquier resultado. */
+    lines.push('📋 Calculando estadísticas…');
+    lines.push('⭐ Eligiendo MVP…');
+    return lines;
+  }
+
+  /* Extrae contexto (home, away, score) del estado activo en el
+     momento del FINALIZAR. Para el gm-modal está en `window._gm`;
+     para gen flow lo derivamos del id del botón (ml-btn-end-{mk}). */
+  function _ctxFromBtn(t){
+    if (!t || !t.id) return null;
+    if (t.id === 'gm-btn-end' && window._gm) {
+      var g = window._gm;
+      return {
+        home: g.home || 'Local', away: g.away || 'Visitante',
+        scoreA: (g.sc && g.sc.a) || 0, scoreB: (g.sc && g.sc.b) || 0
+      };
+    }
+    var m = t.id.match(/^ml-btn-end-(.+)$/);
+    if (m && typeof window._mlSt === 'function') {
+      var st = window._mlSt(m[1]);
+      if (st) {
+        return {
+          home: st.home || 'Local', away: st.away || 'Visitante',
+          scoreA: (st.sc && st.sc.a) || 0, scoreB: (st.sc && st.sc.b) || 0
+        };
+      }
+    }
+    return null;
+  }
+
+  function _show(text, ctx){
+    var e = _el(); if (!e) return;
+    var tEl = document.getElementById('ml-loading-text');
+    if (text && tEl) tEl.textContent = text;
     var bar = document.getElementById('ml-loading-bar');
     var pct = document.getElementById('ml-loading-pct');
     if (bar) bar.style.width = '0%';
     if (pct) pct.textContent = '0%';
     e.classList.add('show');
-    /* Animación de la barra: avanza 0 → 100 % en 400 ms con ticks
-       cada 20 ms (~5 % por tick). Si la siguiente pantalla aparece
-       antes, _hide() corta la animación. Petición usuario: lo más
-       rápido posible — antes el overlay aguantaba hasta 600 ms con
-       un spinner indefinido. */
+    /* Animación de la barra: 0 → 100 % en 3000 ms (era 400) con
+       ticks cada 50 ms. Petición usuario 2026-05-08: la barra estaba
+       mucho tiempo en 0 % y luego saltaba a 100 %; ahora avanza en
+       sincronía con un tiempo realista de procesado. Si la siguiente
+       pantalla aparece antes (vía MutationObserver _hide), la
+       animación se interrumpe limpiamente. */
     if (_anim) { try { clearInterval(_anim); } catch(_){} _anim = null; }
+    if (_newsAnim) { try { clearInterval(_newsAnim); } catch(_){} _newsAnim = null; }
     var pctVal = 0;
     var t0 = Date.now();
-    var DURATION = 400;
+    var DURATION = 3000;
     _anim = setInterval(function(){
       var elapsed = Date.now() - t0;
       pctVal = Math.min(100, Math.round((elapsed / DURATION) * 100));
@@ -21085,22 +21364,32 @@ document.addEventListener('DOMContentLoaded', function() {
       if (pct) pct.textContent = pctVal + '%';
       if (pctVal >= 100) {
         try { clearInterval(_anim); } catch(_){} _anim = null;
-        /* Auto-hide cuando la barra llena, da margen 60 ms para
-           que el usuario vea el 100 %. */
-        setTimeout(_hide, 60);
+        setTimeout(_hide, 80);
       }
-    }, 20);
-    /* Timeout duro de seguridad: 500 ms (antes 600). El flujo
-       siguiente debe asegurar que el siguiente overlay aparece
-       dentro de ese rango (vía defer-work + más targets). */
+    }, 50);
+    /* Rotación de titulares cada 700 ms — solo si tenemos contexto
+       suficiente (score). Sin ctx caemos a una secuencia neutra. */
+    var lines = _mlGenNewsLines(ctx);
+    var idx = 0;
+    if (tEl && lines.length) {
+      tEl.textContent = lines[0];
+      _newsAnim = setInterval(function(){
+        idx = (idx + 1) % lines.length;
+        tEl.textContent = lines[idx];
+      }, 700);
+    }
+    /* Timeout duro de seguridad: 3500 ms (antes 500). El observer
+       que vigila la apertura de la siguiente pantalla suele cerrar
+       este overlay mucho antes. */
     if (_safety) clearTimeout(_safety);
-    _safety = setTimeout(_hide, 500);
+    _safety = setTimeout(_hide, 3500);
   }
   function _hide(){
     var e = _el(); if (!e) return;
     e.classList.remove('show');
     if (_safety) { clearTimeout(_safety); _safety = null; }
     if (_anim) { try { clearInterval(_anim); } catch(_){} _anim = null; }
+    if (_newsAnim) { try { clearInterval(_newsAnim); } catch(_){} _newsAnim = null; }
   }
   window._mlShowLoading = _show;
   window._mlHideLoading = _hide;
@@ -21122,7 +21411,14 @@ document.addEventListener('DOMContentLoaded', function() {
     while (t && t !== document.body) {
       if (_isFinalizeBtn(t)) {
         if (t.id === 'ml-post-close-btn') { _hide(); return; }
-        _show('Procesando partido…');
+        /* Pasamos contexto (home/away/score) al modal para que rote
+           titulares de prensa generados según el resultado. Lo
+           guardamos también en `window._lastFinalizeCtx` porque
+           `_mlConfirmEnd` re-llama a _show DESPUÉS de la
+           confirmación (línea ~7503) sin acceso al botón original. */
+        var ctx = _ctxFromBtn(t);
+        try { window._lastFinalizeCtx = ctx; } catch(_){}
+        _show('Procesando partido…', ctx);
         return;
       }
       t = t.parentNode;

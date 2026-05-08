@@ -13881,10 +13881,50 @@ Tottenham
           var d = resp.data;
           d.teams   = d.teams   || [];
           d.results = d.results || [];
+          /* DEFENSA EN PROFUNDIDAD (2026-05-08): incluso cuando el
+             server devuelve un payload main válido, si existe un
+             snapshot `liga_ext_<slug>_protected` con MÁS jugadores
+             totales (saveData lo escribe en cada confirm), preferimos
+             ese — es el bug "ediciones perdidas al recargar al día
+             siguiente". El protected en server es monotónico: nunca
+             retrocede. */
+          try {
+            var xhrP = new XMLHttpRequest();
+            xhrP.open('GET', '/api/liga-ext-protected/' + encodeURIComponent(k), false);
+            xhrP.send();
+            if (xhrP.status === 200) {
+              var respP = JSON.parse(xhrP.responseText);
+              if (respP && respP.data && Array.isArray(respP.data.teams) && _countPlayers(respP.data) > _countPlayers(d)) {
+                try { console.warn('[ligaExt] '+k+': server-protected tiene '+_countPlayers(respP.data)+' jugadores vs main '+_countPlayers(d)+' — usamos protected.'); } catch(_){}
+                d = respP.data;
+                d.teams = d.teams || [];
+                d.results = d.results || [];
+              }
+            }
+          } catch(_){}
           LIGA_CACHE[k] = d;
           if (resp.updated_at) LIGA_UPDATED[k] = resp.updated_at;
           try { localStorage.setItem(storeKey(k), JSON.stringify(d)); } catch(_){}
           return _applyForcedBlacklist(k, d);
+        }
+      }
+    } catch(_){}
+    /* Última esperanza: server-protected directo (caso main vacío
+       en server pero protected sobrevivió). */
+    try {
+      var xhrPL = new XMLHttpRequest();
+      xhrPL.open('GET', '/api/liga-ext-protected/' + encodeURIComponent(k), false);
+      xhrPL.send();
+      if (xhrPL.status === 200) {
+        var respPL = JSON.parse(xhrPL.responseText);
+        if (respPL && respPL.data && Array.isArray(respPL.data.teams) && respPL.data.teams.length) {
+          var dPL = respPL.data;
+          dPL.teams = dPL.teams || [];
+          dPL.results = dPL.results || [];
+          try { console.warn('[ligaExt] '+k+': main vacío local+server, restaurando desde server-protected ('+_countPlayers(dPL)+' jugadores).'); } catch(_){}
+          LIGA_CACHE[k] = dPL;
+          try { localStorage.setItem(storeKey(k), JSON.stringify(dPL)); } catch(_){}
+          return _applyForcedBlacklist(k, dPL);
         }
       }
     } catch(_){}
@@ -13915,9 +13955,12 @@ Tottenham
        habían colado. Además, el usuario reportó (2026-04-29) que la
        tabla de Inglaterra mostraba Hércules, RM Castilla, UD Ibiza
        y Sevilla At. — todos ellos son equipos de Primera Federación
-       (España) y NO pueden estar en la Premier. */
+       (España) y NO pueden estar en la Premier. (2026-05-08) Cacereño
+       y CP Cacereño se añaden por la misma razón — el admin reportó
+       que volvían a aparecer en la clasificación inglesa al simular. */
     'inglaterra':    ['Arsenal', 'Atlético Madrid', 'Atletico Madrid',
                       'Hércules', 'Hércules CF', 'Hercules', 'Hercules CF',
+                      'CP Cacereño', 'CP Cacereno', 'Cacereño', 'Cacereno',
                       'Real Madrid Castilla', 'RM Castilla', 'Castilla',
                       'UD Ibiza', 'Ibiza',
                       'Sevilla At.', 'Sevilla At', 'Sevilla Atlético',
@@ -14361,13 +14404,39 @@ Tottenham
         }
       }).catch(function(){});
       /* Backup en server — sólo si hay jugadores, para no
-         sobrescribir un backup válido con un d vacío accidental. */
+         sobrescribir un backup válido con un d vacío accidental.
+         Doble vía:
+           1. /api/liga-ext/<slug>_backup  — legacy, ghost-slug.
+           2. /api/liga-ext-protected/<slug>  — endpoint dedicado
+              MONOTÓNICO (rechaza payloads con menos jugadores que
+              el actual; ver app.py). Es la red de seguridad fuerte
+              contra el bug "ediciones perdidas tras reload": si el
+              POST principal fue corrupto/parcial pero alguno de los
+              posteriores tiene el state completo, queda blindado
+              en `liga_ext_<slug>_protected` y `loadData` lo
+              recupera al día siguiente. */
       if (_countPlayers(d) > 0) {
-        fetch('/api/liga-ext/'+encodeURIComponent(k+'_backup'), {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({data:d})
-        }).catch(function(){});
+        try{
+          fetch('/api/liga-ext/'+encodeURIComponent(k+'_backup'), {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({data:d})
+          }).catch(function(){});
+        }catch(_){}
+        try{
+          fetch('/api/liga-ext-protected/'+encodeURIComponent(k), {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({data:d})
+          }).then(function(r){
+            /* 409 = el server tiene una versión protected con MÁS
+               jugadores. No es un error — es la salvaguarda actuando.
+               Logueamos para diagnóstico pero no rompemos nada. */
+            if (r.status === 409) {
+              try { console.warn('[saveData] '+k+': protected del server tiene más jugadores que el local — POST rechazado por anti-wipe.'); } catch(_){}
+            }
+          }).catch(function(){});
+        }catch(_){}
       }
     }catch(_){}
   }
@@ -14432,6 +14501,32 @@ Tottenham
             if(raw) localCache = JSON.parse(raw);
           }catch(_){}
         }
+        /* DEFENSA EN PROFUNDIDAD (2026-05-08): bug reportado — admin
+           edita 5 plantillas de equipos humanos un día, al día
+           siguiente las ediciones desaparecen. Hipótesis: durante esa
+           sesión, una respuesta antigua del servidor pisó tanto la
+           cache en memoria como el main key (sin disparar anti-wipe
+           porque el server y el local eran iguales — ambos pre-edit).
+           `_protected` y `_backup` los escribe `saveData` con cada
+           edit confirmada y son más resistentes (no los toca la lógica
+           de fetch). Si CUALQUIERA de los dos tiene MÁS jugadores
+           totales que la cache/main que estamos comparando, lo usamos
+           como fuente de verdad para el anti-wipe — y si dispara, ese
+           backup ASCIENDE a main + cache, restaurando las ediciones. */
+        try {
+          ['_protected','_backup'].forEach(function(sfx){
+            try {
+              var praw = localStorage.getItem(storeKey(k) + sfx);
+              if (!praw) return;
+              var parsed = JSON.parse(praw);
+              if (!parsed || !Array.isArray(parsed.teams)) return;
+              if (_countPlayers(parsed) > _countPlayers(localCache || {teams:[]})) {
+                try{ console.warn('[ligaExt] '+k+': usando '+sfx+' como local-truth para anti-wipe ('+_countPlayers(parsed)+' jugadores vs cache '+_countPlayers(localCache||{teams:[]})+').'); }catch(_){}
+                localCache = parsed;
+              }
+            } catch(_){}
+          });
+        } catch(_){}
         var localTeams = (localCache && Array.isArray(localCache.teams)) ? localCache.teams : [];
         /* Anti-wipe ahora compara TANTO teams como total de players.
            Caso que antes se escapaba: server y local tienen el mismo

@@ -6150,15 +6150,19 @@ window._showSimProgress = function(opts, onDone){
   try {
     var el = document.getElementById('s-copa-stats');
     if (el && typeof MutationObserver !== 'undefined') {
+      /* Bug crítico 2026-05-08: el observer escuchaba class+style. Como
+         `_renderCopaStats` → `syncLigaEaPlayerStats` puede provocar
+         mutaciones de style en el árbol al renderizar, se generaba un
+         loop infinito que congelaba el navegador entero al pulsar
+         cualquier caja. Fix: solo escuchar `class` y disparar SOLO
+         cuando .active acaba de ser AÑADIDO (no en cada mutación). */
+      var _wasActive = el.classList.contains('active');
       var mo = new MutationObserver(function(mutations){
-        for (var i = 0; i < mutations.length; i++) {
-          var m = mutations[i];
-          if (m.type === 'attributes' && (m.attributeName === 'class' || m.attributeName === 'style')) {
-            if (el.classList && el.classList.contains('active')) _renderCopaStats();
-          }
-        }
+        var nowActive = el.classList.contains('active');
+        if (nowActive && !_wasActive) _renderCopaStats();
+        _wasActive = nowActive;
       });
-      mo.observe(el, { attributes:true });
+      mo.observe(el, { attributes:true, attributeFilter:['class'] });
     }
   } catch(_){}
   document.addEventListener('DOMContentLoaded', _renderCopaStats);
@@ -6347,15 +6351,17 @@ window._showSimProgress = function(opts, onDone){
       var el = document.getElementById(cfg.screenId);
       if (!el) return;
       if (typeof MutationObserver !== 'undefined') {
-        var mo = new MutationObserver(function(mutations){
-          for (var i = 0; i < mutations.length; i++) {
-            var m = mutations[i];
-            if (m.type === 'attributes' && (m.attributeName === 'class' || m.attributeName === 'style')) {
-              if (el.classList && el.classList.contains('active')) _renderOne(cfg);
-            }
-          }
+        /* Mismo fix que s-copa-stats: solo escuchar `class` y solo
+           disparar al pasar de inactivo a activo. El listener de
+           class+style provocaba loop infinito porque _renderOne →
+           syncLigaEaPlayerStats podía mutar el style indirectamente. */
+        var _wasActive = el.classList.contains('active');
+        var mo = new MutationObserver(function(){
+          var nowActive = el.classList.contains('active');
+          if (nowActive && !_wasActive) _renderOne(cfg);
+          _wasActive = nowActive;
         });
-        mo.observe(el, { attributes:true });
+        mo.observe(el, { attributes:true, attributeFilter:['class'] });
       }
     } catch(_){}
   });
@@ -18784,15 +18790,18 @@ Tottenham
   function _wire(){
     var screen = document.getElementById('s-munich-trofeos');
     if (screen){
+      /* Solo disparar al pasar de inactivo a activo (evita loops
+         por mutations en cadena). */
+      var _wasActive = screen.classList.contains('active');
       var rerender = function(){
-        if (screen.classList.contains('active')) {
+        var nowActive = screen.classList.contains('active');
+        if (nowActive && !_wasActive) {
           render();
-        } else {
-          /* Al salir de la pantalla, limpiar el flag de edit para
-             que la próxima entrada parta SIEMPRE en modo lectura.
-             Mismo patrón que el calendario Bayern. */
+        } else if (!nowActive && _wasActive && screen.classList.contains('trof-edit-on')) {
+          /* Al salir, limpiar edit flag SOLO si estaba activo. */
           screen.classList.remove('trof-edit-on');
         }
+        _wasActive = nowActive;
       };
       try {
         new MutationObserver(rerender).observe(screen, {attributes:true, attributeFilter:['class']});
@@ -19536,18 +19545,23 @@ Tottenham
     var screen = document.getElementById('s-munich-derbys');
     if (screen){
       try {
+        /* Solo disparar al pasar de inactivo a activo (no en cada
+           mutación). Evita loops por modificaciones en cadena. */
+        var _wasActive = screen.classList.contains('active');
         new MutationObserver(function(){
-          if (screen.classList.contains('active')){
+          var nowActive = screen.classList.contains('active');
+          if (nowActive && !_wasActive){
             render();
             /* Hidratar desde servidor cada vez que se entra: si otro
                dispositivo añadió/editó temporadas, las traemos. */
             _serverPull(function(){ render(); });
-          } else {
-            /* Al salir de la pantalla, limpiar el flag de edit para
-               que la próxima entrada parta SIEMPRE en modo lectura.
-               Mismo patrón que Vitrina/Calendario Bayern. */
+          } else if (!nowActive && _wasActive && screen.classList.contains('derby-edit-on')) {
+            /* Al salir de la pantalla, limpiar el flag de edit. Solo
+               cuando edit-on está activo para evitar disparos
+               innecesarios del observer. */
             screen.classList.remove('derby-edit-on');
           }
+          _wasActive = nowActive;
         }).observe(screen, {attributes:true, attributeFilter:['class']});
       } catch(_){}
     }

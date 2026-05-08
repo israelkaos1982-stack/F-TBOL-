@@ -9233,14 +9233,80 @@
        en descanso final tras prórroga). Durante el juego se queda
        en color normal. Calculamos el max dinámico (ET o regulación
        más stoppage) leyendo `_mlCountStoppageHalves` igual que
-       hacemos abajo para el display. */
+       hacemos abajo para el display.
+
+       LABEL DINÁMICO (2026-05-08, petición usuario):
+         - En Copa SL / Sc / Recopa / Amistoso elim / doble-vuelta
+           empate, cuando el cronómetro alcanza el final de regulación
+           con empate, el botón pasa a decir "▶ PRÓRROGA" para que
+           el usuario sepa que pulsándolo se activa la prórroga. Sin
+           esto el usuario veía FINALIZAR y se llevaba el susto del
+           alert "EMPATE — exige PRÓRROGA".
+         - Cuando termina la prórroga al 120' con empate persistente,
+           el botón pasa a "🥅 PENALTIS".
+         - Desde el min 110 de la prórroga (con empate) habilitamos
+           un atajo: el usuario que ya acabó el partido real puede
+           saltar a penaltis sin esperar al 120'. El botón se muestra
+           como "🥅 PENALTIS" llamativo; al pulsarlo abre la tanda. */
     var _gmEndBtn = document.getElementById('gm-btn-end');
+    var _gmAction = 'finalizar'; /* 'finalizar' | 'prorroga' | 'penaltis' */
     if (_gmEndBtn) {
       var _stops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
       var _normalMax = _gm.etDone ? GM_MAX_ET : GM_MAX_NORMAL;
       var _fullMax = _normalMax + (_stops.second || 0) * 60;
       var _matchOver = !!(_gm.finished || _gm.timerSec >= _fullMax);
-      _gmEndBtn.classList.toggle('is-finishable', _matchOver);
+
+      /* Detectar contexto eliminatoria para PRÓRROGA / PENALTIS. Mismo
+         shape que `gmEndMatch` (línea ~10300). */
+      var _isCopaSL = (!!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin')
+                    && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
+      var _isScSL = !!_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final';
+      var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa';
+      var _isAmsElim = !!_gm.isFriendly && _gm.matchType === 'elim';
+      var _isAmsDobleVuelta = !!_gm.isFriendly && _gm.matchType === 'doble' && _gm.dobleLeg === 'vuelta';
+      var _amsDobleTied = false;
+      if (_isAmsDobleVuelta && _gm.dobleIda) {
+        var _idaA = Number(_gm.dobleIda.gh) || 0;
+        var _idaB = Number(_gm.dobleIda.ga) || 0;
+        var _globalA = _idaA + (Number(_gm.sc.b) || 0);
+        var _globalB = _idaB + (Number(_gm.sc.a) || 0);
+        _amsDobleTied = (_globalA === _globalB);
+      }
+      var _scoreTied = (Number(_gm.sc && _gm.sc.a) || 0) === (Number(_gm.sc && _gm.sc.b) || 0);
+      var _shouldForceET =
+           (_isCopaSL && _scoreTied)
+        || (_isScSL && _scoreTied)
+        || (_isRecopaSL && _scoreTied)
+        || (_isAmsElim && _scoreTied)
+        || (_isAmsDobleVuelta && _amsDobleTied);
+
+      if (_shouldForceET && !_gm.penDone) {
+        if (!_gm.etDone) {
+          /* Empate ANTES de prórroga. Solo cambiamos label cuando ya
+             hemos pasado el final de regulación (90'+stoppage). Antes
+             de eso, mantenemos FINALIZAR — el usuario podría pulsar
+             FINALIZAR temprano y ahí el alert "EMPATE → PRÓRROGA" sigue
+             siendo útil. */
+          if (_gm.timerSec >= GM_MAX_NORMAL + (_stops.second || 0) * 60) {
+            _gmAction = 'prorroga';
+          }
+        } else if (_gm.timerSec >= 110 * 60) {
+          /* En prórroga (etDone). Desde el min 110 ya permitimos saltar
+             a penaltis (petición usuario: el partido real puede acabar
+             antes que el cron interno y no debe obligar a esperar). */
+          _gmAction = 'penaltis';
+        }
+      }
+
+      var _baseClasses = 'is-finishable';
+      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmAction !== 'finalizar');
+      if (_gmAction === 'prorroga') {
+        _gmEndBtn.textContent = '▶ PRÓRROGA';
+      } else if (_gmAction === 'penaltis') {
+        _gmEndBtn.textContent = '🥅 PENALTIS';
+      } else {
+        _gmEndBtn.textContent = '🏁 FINALIZAR';
+      }
     }
     /* Botón ✎ de edición manual del minuto: solo cuando el cronómetro
        está pausado y el partido está en juego (no finalizado, no
@@ -10340,16 +10406,22 @@
         window.gmActivateET();
         return;
       }
-      if (_gm.timerSec >= GM_MAX_ET) {
-        /* 120' empate persistente → tanda de penaltis. */
+      /* Penaltis disponibles desde el min 110 de la prórroga
+         (petición usuario 2026-05-08: "yo he acabado antes que el
+         cronómetro y he tenido que esperar"). El partido en eFootball
+         puede acabar antes del 120 in-app, así que damos margen de
+         10 game-min para saltar a la tanda sin volver a esperar. */
+      var _gmPenSkipMin = 110 * 60;
+      if (_gm.timerSec >= _gmPenSkipMin) {
+        /* Empate persistente al 110+' → tanda de penaltis. */
         if (typeof window._gmCopaShowPenShootout === 'function') {
           window._gmCopaShowPenShootout();
         }
         return;
       }
-      /* ET activa pero aún no llegó a 120 — el usuario pulsó
-         FINALIZAR antes de tiempo. Bloqueo defensivo. */
-      alert('⏱ Aún no se han jugado los 120 minutos completos de la prórroga. Continúa el partido.');
+      /* ET activa pero aún no llegó al min 110 — bloqueo defensivo
+         para que no se cuele un FINALIZAR temprano. */
+      alert('⏱ Aún no se han jugado los 110 minutos mínimos de la prórroga. Continúa el partido — desde el 110\' podrás saltar a penaltis.');
       return;
     }
     // ── Portería imbatida obligatoria antes del MVP ──
@@ -21343,23 +21415,27 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* Extrae contexto (home, away, score) del estado activo en el
      momento del FINALIZAR. Para el gm-modal está en `window._gm`;
-     para gen flow lo derivamos del id del botón (ml-btn-end-{mk}). */
+     para gen flow lo derivamos del id del botón (ml-btn-end-{mk})
+     consultando `window._mlGetState(mk)` (helper público expuesto por
+     el flujo gen — `_mlSt` es local a su IIFE y no llega a window). */
   function _ctxFromBtn(t){
     if (!t || !t.id) return null;
     if (t.id === 'gm-btn-end' && window._gm) {
       var g = window._gm;
       return {
         home: g.home || 'Local', away: g.away || 'Visitante',
-        scoreA: (g.sc && g.sc.a) || 0, scoreB: (g.sc && g.sc.b) || 0
+        scoreA: (g.sc && typeof g.sc.a === 'number') ? g.sc.a : 0,
+        scoreB: (g.sc && typeof g.sc.b === 'number') ? g.sc.b : 0
       };
     }
     var m = t.id.match(/^ml-btn-end-(.+)$/);
-    if (m && typeof window._mlSt === 'function') {
-      var st = window._mlSt(m[1]);
+    if (m && typeof window._mlGetState === 'function') {
+      var st = window._mlGetState(m[1]);
       if (st) {
         return {
           home: st.home || 'Local', away: st.away || 'Visitante',
-          scoreA: (st.sc && st.sc.a) || 0, scoreB: (st.sc && st.sc.b) || 0
+          scoreA: (st.sc && typeof st.sc.a === 'number') ? st.sc.a : 0,
+          scoreB: (st.sc && typeof st.sc.b === 'number') ? st.sc.b : 0
         };
       }
     }

@@ -19232,7 +19232,24 @@ Tottenham
 
 <div class="screen" id="s-munich-derbys">
 <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">👤</span><h2>Histórico Derbys</h2></div>
+<div class="sec-hdr" style="position:relative;">
+  <span class="sec-emoji">👤</span>
+  <h2>Histórico Derbys</h2>
+  <!-- 🖍 ÚNICO botón admin del Histórico Derbys (PIN 747). Pulsar:
+         · 1ª vez → activa modo edit → aparecen ➕ AÑADIR TEMPORADA
+           y ✏️ EDITAR / 🗑 por fila.
+         · 2ª vez → desactiva modo edit. La clase `derby-edit-on`
+       va sobre el propio screen para que sea por pantalla.
+       Mismo patrón que la Vitrina y el calendario Bayern. -->
+  <button id="munich-derby-edit-toggle" type="button"
+          onclick="window._munichDerbyEditMode&&window._munichDerbyEditMode()"
+          title="Modo edición Histórico (PIN 747)"
+          style="position:absolute;top:50%;right:14px;transform:translateY(-50%);
+                 background:rgba(96,180,255,0.16);border:1px solid rgba(96,180,255,0.55);
+                 color:#cfe6ff;font-size:14px;width:30px;height:30px;border-radius:50%;
+                 cursor:pointer;display:flex;align-items:center;justify-content:center;
+                 -webkit-tap-highlight-color:transparent;transition:background .14s;">🖍</button>
+</div>
 <div style="padding:14px 14px 40px;display:flex;flex-direction:column;gap:12px;">
   <!-- Cards de temporada renderizadas dinámicamente por
        `renderMunichDerbysSeasons`. Storage:
@@ -19240,9 +19257,11 @@ Tottenham
        Si está vacío se siembra con 4 temporadas por defecto sin
        equipo, para que el admin solo tenga que rellenar nombres. -->
   <div id="munich-derbys-seasons" style="display:flex;flex-direction:column;gap:10px;"></div>
+  <!-- Botón ➕ oculto por defecto. Solo visible cuando el admin
+       pulsa 🖍 del header + PIN 747 (clase `derby-edit-on`). -->
   <div style="display:flex;justify-content:center;padding:6px 0 0;">
     <button id="munich-derbys-add-btn" onclick="window.munichDerbysPromptAdd && window.munichDerbysPromptAdd()"
-      style="background:linear-gradient(145deg,#3a78d8,#1a3e88);border:1px solid rgba(96,180,255,.65);color:#eaf3ff;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(96,180,255,.35);">
+      style="display:none;background:linear-gradient(145deg,#3a78d8,#1a3e88);border:1px solid rgba(96,180,255,.65);color:#eaf3ff;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(96,180,255,.35);">
       ➕ AÑADIR TEMPORADA
     </button>
   </div>
@@ -19256,9 +19275,20 @@ Tottenham
   #s-munich-derbys .derby-season-team-lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2.2px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;}
   #s-munich-derbys .derby-season-team{font-family:Rajdhani,sans-serif;font-size:16px;font-weight:700;color:#fff;line-height:1.2;word-break:break-word;}
   #s-munich-derbys .derby-season-team.empty{color:rgba(255,255,255,.35);font-style:italic;font-weight:400;}
-  /* Botones de admin solo cuando hay sesión abierta (body.adm-on) */
+  /* Botones por fila ✏️/🗑 OCULTOS por default — visibles solo
+     cuando el screen tiene `derby-edit-on` (toggle del 🖍 del
+     header con PIN 747). Mismo patrón que Vitrina/Calendario Bayern. */
   #s-munich-derbys .derby-season-actions{display:none;flex-direction:column;gap:5px;flex-shrink:0;}
-  body.adm-on #s-munich-derbys .derby-season-actions{display:flex;}
+  #s-munich-derbys.derby-edit-on .derby-season-actions{display:flex;}
+  #s-munich-derbys.derby-edit-on #munich-derbys-add-btn{display:inline-flex !important;align-items:center;}
+  /* El 🖍 del header cambia de color cuando el modo edit está
+     activo (igual que Vitrina/Calendario Bayern). */
+  #s-munich-derbys.derby-edit-on #munich-derby-edit-toggle{
+    background:linear-gradient(145deg,#3a78d8,#1a3e88) !important;
+    border-color:#80c8ff !important;
+    color:#fff !important;
+    box-shadow:0 0 14px rgba(96,180,255,.55);
+  }
   #s-munich-derbys .derby-season-btn{background:rgba(96,180,255,.18);border:1px solid rgba(96,180,255,.5);color:#cfe6ff;border-radius:6px;padding:4px 10px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;cursor:pointer;font-weight:700;}
   #s-munich-derbys .derby-season-btn:hover{background:rgba(96,180,255,.35);color:#fff;}
   #s-munich-derbys .derby-season-btn.del{background:rgba(197,15,31,.25);border-color:rgba(197,15,31,.55);color:#ffb0b0;}
@@ -19448,6 +19478,29 @@ Tottenham
     if (typeof window.pG === 'function') window.pG(doDel); else doDel();
   };
 
+  /* ── Modo edición Histórico Derbys (PIN 747) ─────────────────────
+     ÚNICO botón admin del histórico (🖍 del sec-hdr, petición usuario
+     2026-05-08). Toggle de la clase `derby-edit-on` en el screen
+     `#s-munich-derbys`:
+       · Sin edit: humanos normales SOLO ven la lista de temporadas
+         con equipo, sin ✏️/🗑 por fila ni botón ➕ AÑADIR TEMPORADA.
+       · Con edit (tras PIN 747): aparecen los 3 controles.
+       · 2ª pulsación → desactiva. */
+  window._munichDerbyEditMode = function(){
+    function _toggle(){
+      var screen = document.getElementById('s-munich-derbys');
+      if (screen) screen.classList.toggle('derby-edit-on');
+    }
+    var screen = document.getElementById('s-munich-derbys');
+    var alreadyOn = screen && screen.classList.contains('derby-edit-on');
+    if (typeof window.pG === 'function' && !alreadyOn) {
+      /* Solo pide PIN al ENTRAR. Al salir (segunda pulsación), no. */
+      window.pG(_toggle);
+    } else {
+      _toggle();
+    }
+  };
+
   /* MutationObserver sobre la clase del propio screen — robusto frente
      a cualquier wrap de `window.go` que haga el bundle (mismo patrón
      que la caja Plantilla). */
@@ -19461,6 +19514,11 @@ Tottenham
             /* Hidratar desde servidor cada vez que se entra: si otro
                dispositivo añadió/editó temporadas, las traemos. */
             _serverPull(function(){ render(); });
+          } else {
+            /* Al salir de la pantalla, limpiar el flag de edit para
+               que la próxima entrada parta SIEMPRE en modo lectura.
+               Mismo patrón que Vitrina/Calendario Bayern. */
+            screen.classList.remove('derby-edit-on');
           }
         }).observe(screen, {attributes:true, attributeFilter:['class']});
       } catch(_){}

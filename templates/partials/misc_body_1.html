@@ -2946,6 +2946,72 @@ window._showSimProgress = function(opts, onDone){
         }
       }
 
+      /* 2.d) PROMOCIÓN DESDE `_protected` (2026-05-08): si la copia
+              `_protected` tiene este mismo equipo con MÁS jugadores
+              (o con mejor power) que `found`, la preferimos. `_protected`
+              se actualiza con cada saveData (línea ~12760), así que
+              si admin guardó la plantilla fresca y un fetchData
+              posterior pisó el main con la versión vieja del server,
+              la fresca sobrevive en `_protected`. Caso reportado:
+              "click en Bayern desde Liga EA Sports muestra plantilla
+              de hace semanas; pulsar ✏️ Edit y volver muestra fresca".
+              Esto cubre el caso base (sin esperar al fetch async). */
+      try {
+        var _protRaw = localStorage.getItem('ligaExt_'+slug+'_protected');
+        if (_protRaw) {
+          var _protData = JSON.parse(_protRaw);
+          if (_protData && Array.isArray(_protData.teams)) {
+            var _foundNorm = _normForClick(found.name||'');
+            var _protMatch = null;
+            for (var _pi = 0; _pi < _protData.teams.length; _pi++) {
+              var _pt = _protData.teams[_pi];
+              if (!_pt || !_pt.name) continue;
+              var _pn = _normForClick(_pt.name);
+              var _ok = (_pn === _foundNorm);
+              if (!_ok) {
+                for (var _pa = 0; _pa < targets.length; _pa++) {
+                  if (_pn === targets[_pa]) { _ok = true; break; }
+                }
+              }
+              if (_ok) { _protMatch = _pt; break; }
+            }
+            if (_protMatch && Array.isArray(_protMatch.players) && _protMatch.players.length) {
+              var _foundPC = (found.players && found.players.length) || 0;
+              var _protPC = _protMatch.players.length;
+              /* Preferimos _protected si tiene MÁS players, o el mismo
+                 número pero el `power` total agregado es mayor (admin
+                 subió valoraciones sin cambiar la plantilla). */
+              var _foundPwSum = 0, _protPwSum = 0;
+              try { (found.players||[]).forEach(function(p){ _foundPwSum += Number(p.power)||0; }); } catch(_){}
+              try { _protMatch.players.forEach(function(p){ _protPwSum += Number(p.power)||0; }); } catch(_){}
+              if (_protPC > _foundPC || (_protPC === _foundPC && _protPwSum > _foundPwSum)) {
+                try { console.warn('[ligaExt] click→promoción desde _protected ('+slug+', '+(found.name||'?')+'): main='+_foundPC+'J/'+_foundPwSum+'pw vs prot='+_protPC+'J/'+_protPwSum+'pw'); } catch(_){}
+                /* Adoptamos players y campos editables. Mantenemos id
+                   del `found` para no romper navegación cruzada. */
+                found.players = _protMatch.players.slice();
+                ['power','atk','mid','def','shield','country','rules','isHuman','humanEmoji'].forEach(function(_fk){
+                  if (_protMatch[_fk] != null) found[_fk] = _protMatch[_fk];
+                });
+                /* Persistir en main para que la próxima visita sea
+                   instantáneamente fresca. */
+                try {
+                  if (data && Array.isArray(data.teams)) {
+                    for (var _di = 0; _di < data.teams.length; _di++) {
+                      if (data.teams[_di] && data.teams[_di].id === found.id) {
+                        data.teams[_di] = found;
+                        break;
+                      }
+                    }
+                    localStorage.setItem('ligaExt_'+slug, JSON.stringify(data));
+                    if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
+                  }
+                } catch(_){}
+              }
+            }
+          }
+        }
+      } catch(_){}
+
       /* 3. Abrir el overlay pasándole el TEAM OBJECT completo + el
             contexto de competiciones que toca según la pantalla
             origen (Liga+Copa para EA Sports, aislado para Superliga
@@ -14666,12 +14732,25 @@ Tottenham
             _data.teams[_idx].id = t.id;
             _mustSave = true;
           }
-          /* Si el objeto recibido trae players y el registro no,
-             copiamos para no perder los datos visibles en la
-             clasificación. */
-          if (Array.isArray(t.players) && t.players.length
-              && (!Array.isArray(_data.teams[_idx].players) || !_data.teams[_idx].players.length)) {
+          /* Si `t` (recibido del handler del click → leído de
+             localStorage fresco) trae players, los PREFERIMOS sobre el
+             registro cacheado. Antes la condición exigía que el
+             registro estuviera VACÍO, por lo que cuando el cache
+             LIGA_CACHE estaba stale (sesión anterior + fetchData con
+             versión vieja del servidor), `_data.teams[_idx].players`
+             contenía la versión vieja, NO entrábamos al if y el modal
+             pintaba la plantilla vieja. Bug reportado 2026-05-08:
+             "click en Bayern desde Liga EA Sports muestra plantilla
+             de hace semanas; pulsar ✏️ Edit y volver muestra fresca".
+             Ahora confiamos siempre en lo que trajo el handler. */
+          if (Array.isArray(t.players) && t.players.length) {
             _data.teams[_idx].players = t.players.slice();
+            /* Mismos campos editables del equipo — los lee el handler
+               del mismo localStorage fresco y suelen mutar juntos
+               (admin sube ATQ y reescala players a la vez). */
+            ['power','atk','mid','def','shield','country','rules','isHuman','humanEmoji'].forEach(function(_fk){
+              if (t[_fk] != null) _data.teams[_idx][_fk] = t[_fk];
+            });
             _mustSave = true;
           }
         } else {

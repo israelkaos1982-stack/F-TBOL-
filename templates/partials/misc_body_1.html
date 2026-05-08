@@ -15617,6 +15617,18 @@ Tottenham
       if(!fromServer) return;
       var ov = document.getElementById('lext-ov-teams');
       if(ov && ov.classList.contains('show')) renderTeamsList();
+      /* Si el modal de un equipo (lext-ov-squad) está abierto cuando
+         llega fresh data del servidor, repintamos también — sin esto,
+         el click en una fila de la clasificación pintaba la plantilla
+         stale del localStorage cacheado y no se actualizaba hasta
+         abrir/cerrar (bug 2026-05-08: "modal me sale plantilla de
+         hace semanas"). El editor ✏️ sí se veía fresco porque
+         pasaba por `setXxxContext()` antes y al re-pintarse leía
+         localStorage ya actualizado. */
+      var ovS = document.getElementById('lext-ov-squad');
+      if(ovS && ovS.classList.contains('show') && typeof renderSquadList === 'function'){
+        try { renderSquadList(); } catch(_){}
+      }
     });
   }
   window.openLigaEaEditor = function(){
@@ -15638,6 +15650,18 @@ Tottenham
       if(!fromServer) return;
       var ov = document.getElementById('lext-ov-teams');
       if(ov && ov.classList.contains('show')) renderTeamsList();
+      /* Si el modal de un equipo (lext-ov-squad) está abierto cuando
+         llega fresh data del servidor, repintamos también — sin esto,
+         el click en una fila de la clasificación pintaba la plantilla
+         stale del localStorage cacheado y no se actualizaba hasta
+         abrir/cerrar (bug 2026-05-08: "modal me sale plantilla de
+         hace semanas"). El editor ✏️ sí se veía fresco porque
+         pasaba por `setXxxContext()` antes y al re-pintarse leía
+         localStorage ya actualizado. */
+      var ovS = document.getElementById('lext-ov-squad');
+      if(ovS && ovS.classList.contains('show') && typeof renderSquadList === 'function'){
+        try { renderSquadList(); } catch(_){}
+      }
     });
   }
   window.openHypermotionEditor = function(){
@@ -15659,6 +15683,18 @@ Tottenham
       if(!fromServer) return;
       var ov = document.getElementById('lext-ov-teams');
       if(ov && ov.classList.contains('show')) renderTeamsList();
+      /* Si el modal de un equipo (lext-ov-squad) está abierto cuando
+         llega fresh data del servidor, repintamos también — sin esto,
+         el click en una fila de la clasificación pintaba la plantilla
+         stale del localStorage cacheado y no se actualizaba hasta
+         abrir/cerrar (bug 2026-05-08: "modal me sale plantilla de
+         hace semanas"). El editor ✏️ sí se veía fresco porque
+         pasaba por `setXxxContext()` antes y al re-pintarse leía
+         localStorage ya actualizado. */
+      var ovS = document.getElementById('lext-ov-squad');
+      if(ovS && ovS.classList.contains('show') && typeof renderSquadList === 'function'){
+        try { renderSquadList(); } catch(_){}
+      }
     });
   }
   window.openPrimeraEditor = function(){

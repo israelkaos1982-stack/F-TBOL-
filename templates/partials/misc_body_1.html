@@ -8520,7 +8520,8 @@ window._showSimProgress = function(opts, onDone){
     <div class="tour-ed-row">
       <label>Formato</label>
       <select id="tour-ed-fmt">
-        <option value="ko">Eliminatoria directa</option>
+        <option value="ko">Eliminatoria a un partido</option>
+        <option value="ko-2leg">Eliminatoria a ida y vuelta</option>
         <option value="league">Liga (round-robin)</option>
         <option value="groups-ko">Grupos + Eliminatoria</option>
       </select>
@@ -8735,10 +8736,29 @@ window._showSimProgress = function(opts, onDone){
     qg:'Cuartos de Grupo', tg:'Tercero de Grupo'
   };
   var FORMAT_LABELS = {
-    ko:'Eliminatoria directa',
+    ko:'Eliminatoria a un partido',
+    'ko-2leg':'Eliminatoria a ida y vuelta',
     league:'Liga (round-robin)',
     'groups-ko':'Grupos + Eliminatoria'
   };
+
+  /* Migración (2026-05-08): torneos guardados antes con
+     `format='ko'` + `formatConfig.twoLegs=true` se convierten al
+     nuevo formato dedicado `ko-2leg`. Reusable desde `_tourLoad`. */
+  function _migrateCfg(cfg){
+    if (!cfg || typeof cfg !== 'object') return cfg;
+    if (cfg.format === 'ko' && cfg.formatConfig && cfg.formatConfig.twoLegs) {
+      cfg.format = 'ko-2leg';
+      cfg.formatConfig.awayGoalsX2 = true;
+      delete cfg.formatConfig.twoLegs;
+    }
+    /* Por defecto, la regla "gol fuera × 2" se aplica en `ko-2leg`
+       si el flag no está explícito (petición usuario 2026-05-08). */
+    if (cfg.format === 'ko-2leg' && cfg.formatConfig && typeof cfg.formatConfig.awayGoalsX2 === 'undefined') {
+      cfg.formatConfig.awayGoalsX2 = true;
+    }
+    return cfg;
+  }
 
   function _key(id){ return 'tour_' + id + '_v1'; }
   function _cloneDefault(id){ return JSON.parse(JSON.stringify(DEFAULTS[id] || {})); }
@@ -8751,15 +8771,16 @@ window._showSimProgress = function(opts, onDone){
       if (res.ok) {
         var j = await res.json();
         if (j && j.ok && j.value) {
-          try { localStorage.setItem(_key(id), JSON.stringify(j.value)); } catch(_){}
-          return j.value;
+          var cfg = _migrateCfg(j.value);
+          try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
+          return cfg;
         }
       }
     } catch(_){}
     /* Fallback: cache local. */
     try {
       var raw = localStorage.getItem(_key(id));
-      if (raw) return JSON.parse(raw);
+      if (raw) return _migrateCfg(JSON.parse(raw));
     } catch(_){}
     return null;
   };
@@ -8989,9 +9010,17 @@ window._showSimProgress = function(opts, onDone){
     if (fmt === 'ko') {
       box.innerHTML =
         '<label>Rondas (separadas por coma)</label>' +
+        '<input id="tour-ed-rounds" type="text" value="'+(fc.rounds||['SF','F']).join(',')+'" placeholder="R16,QF,SF,F">';
+    } else if (fmt === 'ko-2leg') {
+      box.innerHTML =
+        '<label>Rondas (separadas por coma)</label>' +
         '<input id="tour-ed-rounds" type="text" value="'+(fc.rounds||['SF','F']).join(',')+'" placeholder="R16,QF,SF,F">' +
-        '<label style="margin-top:8px;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
-        '<input id="tour-ed-twolegs" type="checkbox" style="width:auto;" '+(fc.twoLegs?'checked':'')+'> Ida y vuelta</label>';
+        '<div style="margin-top:8px;padding:8px 10px;background:rgba(60,200,120,.10);border:1px dashed rgba(60,200,120,.45);border-radius:6px;font-size:11px;color:#9ee5a9;line-height:1.4;text-transform:none;letter-spacing:0;">'+
+          '<b>Ida y vuelta</b> · cada cruce se decide a doble partido. '+
+          'Se aplica la <b>regla de gol fuera × 2</b>: los goles marcados '+
+          'como visitante valen el doble en el global. '+
+          '<i>Ejemplo: ida 1-1, vuelta 2-2 → global 5-4 favorable al visitante.</i>'+
+        '</div>';
     } else if (fmt === 'league') {
       box.innerHTML =
         '<label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
@@ -9051,8 +9080,16 @@ window._showSimProgress = function(opts, onDone){
     if (cfg.format === 'ko') {
       var roundsEl = document.getElementById('tour-ed-rounds');
       cfg.formatConfig = {
-        rounds: roundsEl ? roundsEl.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F'],
-        twoLegs: !!document.getElementById('tour-ed-twolegs') && document.getElementById('tour-ed-twolegs').checked
+        rounds: roundsEl ? roundsEl.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F']
+      };
+    } else if (cfg.format === 'ko-2leg') {
+      var roundsEl2 = document.getElementById('tour-ed-rounds');
+      cfg.formatConfig = {
+        rounds: roundsEl2 ? roundsEl2.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F'],
+        /* Doble partido + regla goles fuera × 2 (petición usuario
+           2026-05-08). El motor de simulación (fase 3) leerá este
+           flag al calcular el agregado de cada cruce. */
+        awayGoalsX2: true
       };
     } else if (cfg.format === 'league') {
       cfg.formatConfig = {
@@ -9114,7 +9151,9 @@ window._showSimProgress = function(opts, onDone){
     var fmtTxt = FORMAT_LABELS[cfg.format] || cfg.format || '';
     var fc = cfg.formatConfig || {};
     if (cfg.format === 'ko') {
-      fmtTxt += ': ' + (fc.rounds||[]).join(' → ') + (fc.twoLegs?' (ida y vuelta)':'');
+      fmtTxt += ': ' + (fc.rounds||[]).join(' → ');
+    } else if (cfg.format === 'ko-2leg') {
+      fmtTxt += ': ' + (fc.rounds||[]).join(' → ') + ' · gol fuera × 2';
     } else if (cfg.format === 'league') {
       fmtTxt += ': '+(cfg.numTeams||'?')+' equipos'+(fc.twoLegs?' a doble vuelta':' a una vuelta');
     } else if (cfg.format === 'groups-ko') {
@@ -9198,10 +9237,11 @@ window._showSimProgress = function(opts, onDone){
              '</p>';
     }
 
-    if (cfg.format === 'ko') {
+    if (cfg.format === 'ko' || cfg.format === 'ko-2leg') {
       var rounds = (cfg.formatConfig && cfg.formatConfig.rounds) || [];
       var firstRound = rounds[0] || ('Ronda de '+teams.length);
-      var html = hint + '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">SORTEO · '+firstRound+'</p>';
+      var subtitle = (cfg.format === 'ko-2leg') ? 'IDA Y VUELTA · gol fuera × 2' : 'A UN PARTIDO';
+      var html = hint + '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">SORTEO · '+firstRound+' · <span style="color:rgba(255,255,255,.40);">'+subtitle+'</span></p>';
       html += '<div class="tour-bracket-list">';
       for (var i = 0; i < teams.length; i += 2) {
         var a = teams[i], b = teams[i+1];

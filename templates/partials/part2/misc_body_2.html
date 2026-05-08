@@ -14535,16 +14535,19 @@
 </script>
 
 <div class="screen" id="s-agenda" data-admin="{{ 'true' if is_admin else 'false' }}">
-<button class="back-btn" onclick="(function(){var dest=(window._agendaBackTo||'s-home');window._agendaBackTo=null;go(dest);})()">◀ Volver</button>
+<button class="back-btn" onclick="(function(){var dest=document.body.classList.contains('bayern-cal-on')?'s-munich':(window._agendaBackTo||'s-home');window._agendaBackTo=null;go(dest);})()">◀ Volver</button>
 <div class="sec-hdr" style="position:relative;">
   <span class="sec-emoji">📅</span>
   <!-- Título por defecto (visible solo cuando NO estamos en modo Bayern). -->
   <h2 id="ag-title-default">AGENDA {{ calendario_data.season or '32-33' }}</h2>
-  <!-- Título Bayern editable (visible solo en modo Bayern). El span
-       contiene el texto que el admin elija con 🖍 (default "BAYERN
-       MUNICH"). Persistido en `bayern_calendar_title_v1`. -->
+  <!-- Título Bayern (visible solo en modo Bayern). El span contiene
+       el texto editable; cuando body.bayern-edit-on está activo,
+       el span se vuelve clickable y abre el prompt de editar título.
+       2026-05-08: eliminado el botón 🖍 grande de la cabecera —
+       ahora el ÚNICO botón admin es el 🖍 pequeño de la barra
+       COMPETICIONES (más abajo), que activa todo el modo edit. -->
   <h2 id="ag-title-bayern" style="display:none;">
-    <span id="bayern-cal-title-text">BAYERN MUNICH</span>
+    <span id="bayern-cal-title-text" onclick="document.body.classList.contains('bayern-edit-on')&&window._bayernCalEditTitle&&window._bayernCalEditTitle()">BAYERN MUNICH</span>
   </h2>
   <!-- ✏️ admin global para editar eventos del calendario SSR. Oculto
        en modo Bayern por la regla `body.bayern-cal-on #ag-edit-toggle`. -->
@@ -14555,16 +14558,6 @@
                  background:rgba(240,192,64,0.12);border:1px solid rgba(240,192,64,0.45);
                  color:#f0c040;font-size:18px;width:36px;height:36px;border-radius:50%;
                  cursor:pointer;align-items:center;justify-content:center;">✏️</button>
-  <!-- 🖍 Bayern (PIN 747): edita el TÍTULO del header. Solo visible en
-       modo Bayern. Reemplaza al ✏️ admin (que se oculta en modo Bayern
-       porque las ediciones del calendario van por su propio store). -->
-  <button id="bayern-cal-pencil-title" type="button"
-          onclick="window._bayernCalEditTitle&&window._bayernCalEditTitle()"
-          title="Editar título (PIN 747)"
-          style="display:none;position:absolute;top:50%;right:14px;transform:translateY(-50%);
-                 background:rgba(220,5,45,0.16);border:1px solid rgba(255,120,140,0.50);
-                 color:#ffd5dd;font-size:18px;width:36px;height:36px;border-radius:50%;
-                 cursor:pointer;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">🖍</button>
 </div>
 
 <!-- Barra "COMPETICIONES" (solo modo Bayern). El 🖍 abre el modal con
@@ -14579,14 +14572,21 @@
      font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2.5px;
      color:#ffb8c4;">
   COMPETICIONES
-  <button type="button"
-          onclick="window._bayernCalOpenSelector&&window._bayernCalOpenSelector()"
-          title="Elegir competiciones que juega el Bayern (PIN 747)"
+  <!-- 🖍 ÚNICO botón admin del calendario Bayern (PIN 747). Al
+       pulsarlo activa el modo edit en TODA la pantalla:
+         · El nombre del header se vuelve clickable → editar.
+         · Las filas muestran ✏️🗑 para editar/eliminar.
+         · Se abre el selector de competiciones inmediatamente.
+       Pulsar de nuevo desactiva el modo edit. Sin admin, los
+       humanos normales NO ven ✏️🗑 ni pueden editar título. -->
+  <button id="bayern-cal-edit-toggle" type="button"
+          onclick="window._bayernCalEditMode&&window._bayernCalEditMode()"
+          title="Modo edición Bayern (PIN 747)"
           style="position:absolute;top:50%;right:14px;transform:translateY(-50%);
                  background:rgba(220,5,45,0.16);border:1px solid rgba(255,120,140,0.50);
                  color:#ffd5dd;font-size:14px;width:30px;height:30px;border-radius:50%;
                  cursor:pointer;display:flex;align-items:center;justify-content:center;
-                 -webkit-tap-highlight-color:transparent;">🖍</button>
+                 -webkit-tap-highlight-color:transparent;transition:background .14s;">🖍</button>
 </div>
 
 <div id="ag-content">
@@ -14718,19 +14718,47 @@
   body.bayern-cal-on #s-agenda #ag-title-default{display:none !important;}
   body.bayern-cal-on #s-agenda #ag-title-bayern{display:block !important;}
   body.bayern-cal-on #s-agenda #ag-edit-toggle{display:none !important;}
-  body.bayern-cal-on #s-agenda #bayern-cal-pencil-title{display:flex !important;}
   body.bayern-cal-on #s-agenda #bayern-cal-comps-bar{display:block !important;}
   body.bayern-cal-on #s-agenda #ag-content{display:none !important;}
   body.bayern-cal-on #s-agenda #ag-content-bayern{display:block !important;}
   body:not(.bayern-cal-on) #s-agenda #ag-content-bayern{display:none !important;}
-  /* En modo Bayern los row-actions ✏️🗑 se muestran siempre — el
-     calendario es propio del usuario admin del Bayern y su edición
-     es la operación natural. */
+  /* En modo Bayern, las filas siempre tienen layout flex (para
+     que cuando el ✏️🗑 aparezca no rompa el alineado). */
   body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r{
     display:flex;align-items:center;gap:6px;padding-right:6px;
   }
+  /* Por DEFECTO en modo Bayern los ✏️🗑 individuales y el botón
+     "➕ Añadir evento" están OCULTOS — los humanos normales no
+     necesitan editar el calendario del Bayern. Se revelan solo
+     cuando el admin pulsa el 🖍 de la barra COMPETICIONES y supera
+     el PIN 747 (clase `bayern-edit-on` en body, toggle). */
   body.bayern-cal-on #s-agenda #ag-content-bayern .ag-row-actions{
+    display:none;
+  }
+  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-add-row{
+    display:none;
+  }
+  body.bayern-cal-on.bayern-edit-on #s-agenda #ag-content-bayern .ag-row-actions{
     display:inline-flex;
+  }
+  body.bayern-cal-on.bayern-edit-on #s-agenda #ag-content-bayern .ag-add-row{
+    display:block;
+  }
+  /* En modo edit el título es clickable (cursor pointer, glow
+     dorado) para indicar que se puede editar. Sin edit, no. */
+  body.bayern-cal-on #s-agenda #bayern-cal-title-text{cursor:default;}
+  body.bayern-cal-on.bayern-edit-on #s-agenda #bayern-cal-title-text{
+    cursor:pointer;
+    text-shadow:0 0 12px rgba(255,215,0,.6),0 0 4px rgba(255,215,0,.3);
+    transition:text-shadow .18s;
+  }
+  /* El botón 🖍 cambia de color cuando el modo edit está activo
+     para que el admin sepa que está dentro. */
+  body.bayern-cal-on.bayern-edit-on #s-agenda #bayern-cal-edit-toggle{
+    background:linear-gradient(145deg,#dc052d,#8e001c) !important;
+    border-color:#ff5575 !important;
+    color:#fff !important;
+    box-shadow:0 0 14px rgba(220,5,45,.55);
   }
   /* Modal selector */
   #bayern-cal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:99998;align-items:center;justify-content:center;padding:18px;}
@@ -15315,6 +15343,44 @@
     if (ov) ov.classList.remove('show');
   };
 
+  /* ── Modo edición Bayern (PIN 747) ─────────────────────────────
+     ÚNICO botón admin del calendario Bayern (🖍 de la barra
+     COMPETICIONES). Petición usuario 2026-05-08:
+       · Sin edit: humanos normales SOLO ven el calendario, sin
+         ✏️🗑 ni acceso a la edición del título o competiciones.
+       · Con edit (tras PIN 747): clase `bayern-edit-on` en body,
+         las filas muestran ✏️🗑, el título es clickable para
+         editar, y se abre el selector de competiciones inmediatamente.
+       · Pulsar 🖍 estando ya en modo edit → desactiva (toggle).
+     El selector de competiciones tiene su propia gestión de PIN
+     vía window.pG, pero como ya pasamos por aquí no se vuelve a
+     pedir. */
+  window._bayernCalEditMode = function(){
+    function _toggle(){
+      var on = document.body.classList.toggle('bayern-edit-on');
+      if (on && typeof window._bayernCalOpenSelectorNoPin === 'function') {
+        /* Abrir selector sin re-pedir PIN — ya pasamos PIN al activar
+           el modo edit. */
+        window._bayernCalOpenSelectorNoPin();
+      }
+    }
+    if (typeof window.pG === 'function' && !document.body.classList.contains('bayern-edit-on')) {
+      /* Solo pide PIN al ENTRAR. Al salir (segunda pulsación), no. */
+      window.pG(_toggle);
+    } else {
+      _toggle();
+    }
+  };
+  /* Variante de _bayernCalOpenSelector sin PIN (lo pide el caller
+     que ya autenticó). Usado por _bayernCalEditMode para evitar
+     doble prompt. */
+  window._bayernCalOpenSelectorNoPin = function(){
+    _modalSel = _loadComps();
+    _renderModalRows();
+    var ov = document.getElementById('bayern-cal-ov');
+    if (ov) ov.classList.add('show');
+  };
+
   /* ── Activación / desactivación ───────────────────────────────── */
   window._bayernCalActivate = function(){
     document.body.classList.add('bayern-cal-on');
@@ -15323,6 +15389,11 @@
   };
   window._bayernCalDeactivate = function(){
     document.body.classList.remove('bayern-cal-on');
+    /* Limpiar también el flag de edit para que la próxima entrada
+       parta SIEMPRE en modo lectura (sin ✏️🗑). El admin tiene
+       que volver a pulsar 🖍 + PIN cada vez que vuelva al
+       calendario del Bayern. */
+    document.body.classList.remove('bayern-edit-on');
   };
 
   /* ── Hook: cuando s-agenda recibe .active y _bayernCalContext ── */

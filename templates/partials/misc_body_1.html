@@ -404,6 +404,13 @@ window._showSimProgress = function(opts, onDone){
       if (p.elite)      b += '<span class="lext-badge star"  title="Estrella del equipo">⭐</span>';
       if (p.natGoal)    b += '<span class="lext-badge scorer" title="Goleador nato (~30% goles)">⚾</span>';
       if (p.natGoalPro) b += '<span class="lext-badge scorer" title="Goleador estrella (~45% goles)">🏀</span>';
+      var _les = (window.LESION_STORE || {})[p.name];
+      if (_les && Number(_les.partidos) > 0) {
+        var _ico = _les.gradoEmoji || '🩹';
+        var _n   = Math.max(0, parseInt(_les.partidos) || 0);
+        var _ttl = (_les.gradoNombre||'Lesión') + (_les.descripcion ? ' · ' + _les.descripcion : '') + ' · ' + _n + ' partido(s) restante(s)';
+        b += '<span class="lext-badge injury" title="' + _ttl.replace(/"/g,'&quot;') + '" style="background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;">' + _ico + ' ' + _n + 'P</span>';
+      }
       return b;
     }
 

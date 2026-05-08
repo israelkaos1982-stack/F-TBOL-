@@ -14555,6 +14555,25 @@
                  background:rgba(220,5,45,0.16);border:1px solid rgba(255,120,140,0.50);
                  color:#ffd5dd;font-size:16px;width:36px;height:36px;border-radius:50%;
                  cursor:pointer;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">🖍</button>
+  <!-- Generadores de plantilla del calendario Bayern (solo modo Bayern):
+       🧙 = inserta entrenamientos diarios + partidos del torneo de
+            pretemporada elegido en `munich_summer_tours_v1`.
+       🔄 = wipe del store local y re-seed desde la agenda global
+            filtrado por las comps marcadas. -->
+  <button id="bayern-cal-gen" type="button"
+          onclick="window.bayCalGenPreseason&&window.bayCalGenPreseason()"
+          title="Generar pretemporada (entrenamientos + torneo)"
+          style="display:none;position:absolute;top:50%;right:106px;transform:translateY(-50%);
+                 background:rgba(64,180,120,0.14);border:1px solid rgba(120,220,160,0.50);
+                 color:#c8ffd9;font-size:16px;width:36px;height:36px;border-radius:50%;
+                 cursor:pointer;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">🧙</button>
+  <button id="bayern-cal-rebuild" type="button"
+          onclick="window.bayCalRebuild&&window.bayCalRebuild()"
+          title="Regenerar calendario desde la agenda global"
+          style="display:none;position:absolute;top:50%;right:152px;transform:translateY(-50%);
+                 background:rgba(120,80,200,0.14);border:1px solid rgba(180,140,255,0.50);
+                 color:#e3d4ff;font-size:14px;width:36px;height:36px;border-radius:50%;
+                 cursor:pointer;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;">🔄</button>
 </div>
 
 <div id="ag-content">
@@ -14593,6 +14612,11 @@
   </div>
 {% endfor %}
 </div>
+
+<!-- Contenedor paralelo para el calendario propio del Bayern.
+     Se rellena desde JS al activar `bayern-cal-on`; el SSR de
+     #ag-content queda intacto para el resto de usuarios. -->
+<div id="ag-content-bayern" style="display:none;"></div>
 
 {# La UI de edición se renderiza siempre; la CSS `.ag-admin-only`
    la oculta cuando `<body>` NO tiene clase `adm-on`. #}
@@ -14674,11 +14698,23 @@
      y se aplica añadiendo `.bayern-hidden` a cada fila excluida.
      El lápiz 🖍 (con PIN 747) abre el modal selector. */
   body.bayern-cal-on #bayern-cal-pencil{display:flex;}
-  body.bayern-cal-on #s-agenda .ag-r.bayern-hidden{display:none !important;}
-  /* Section headers también se ocultan cuando todos sus eventos
-     están filtrados. La marca la aplica el JS al recalcular. */
-  body.bayern-cal-on #s-agenda .ag-season.bayern-hidden{display:none !important;}
-  body.bayern-cal-on #s-agenda .ag-add-row.bayern-hidden{display:none !important;}
+  body.bayern-cal-on #bayern-cal-gen{display:flex;}
+  body.bayern-cal-on #bayern-cal-rebuild{display:flex;}
+  /* Modo Bayern (2026-05-08): ya no se filtra el SSR con .bayern-hidden.
+     En su lugar, el SSR (#ag-content) se oculta y se muestra el render
+     paralelo (#ag-content-bayern) que vive en localStorage. */
+  body.bayern-cal-on #s-agenda #ag-content{display:none !important;}
+  body.bayern-cal-on #s-agenda #ag-content-bayern{display:block !important;}
+  body:not(.bayern-cal-on) #s-agenda #ag-content-bayern{display:none !important;}
+  /* En modo Bayern, los row-actions ✏️🗑 se muestran siempre (sin
+     necesidad de pulsar el ✏️ del header) — el calendario es propio
+     del usuario admin del Bayern y su edición es la operación natural. */
+  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r{
+    display:flex;align-items:center;gap:6px;padding-right:6px;
+  }
+  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-row-actions{
+    display:inline-flex;
+  }
   /* Modal selector */
   #bayern-cal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:99998;align-items:center;justify-content:center;padding:18px;}
   #bayern-cal-ov.show{display:flex;}
@@ -14764,7 +14800,16 @@
    sel, amist, torneo. recopa e inter desmarcadas (raras).
    ════════════════════════════════════════════════════════════════ */
 (function(){
-  var KEY = 'bayern_calendar_comps_v1';
+  /* ── Storage ─────────────────────────────────────────────────────
+     · `bayern_calendar_comps_v1`: bitmap de competiciones marcadas.
+     · `bayern_cal_v1`            : calendario PROPIO del Bayern como
+       array de secciones {id, headerHtml, headerClass, headerStyle,
+       events:[{id,date,icon,name,weather,rowClass}]}. Se seedea desde
+       el SSR (`#ag-content`) la primera vez (filtrado por comps); a
+       partir de ahí, las ediciones del modo Bayern (✏️🗑➕) escriben
+       SOLO a este store. El SSR del calendario global queda intacto. */
+  var KEY_COMPS = 'bayern_calendar_comps_v1';
+  var KEY_CAL   = 'bayern_cal_v1';
   var COMPS = [
     { id:'liga',   cls:'ag-liga',   ico:'⚽', name:'Liga (Bundesliga)',          def:true },
     { id:'copa',   cls:'ag-copa',   ico:'🏆', name:'Copa / Supercopa',           def:true },
@@ -14775,19 +14820,17 @@
     { id:'recopa', cls:'ag-recopa', ico:'🟤', name:'Recopa de Europa',           def:false },
     { id:'inter',  cls:'ag-inter',  ico:'🟡', name:'Mundial Clubes / Supercopa', def:false }
   ];
-  function _defaults(){
+  function _defaultsComps(){
     var o = {};
     COMPS.forEach(function(c){ o[c.id] = !!c.def; });
     return o;
   }
-  function _load(){
+  function _loadComps(){
     try {
-      var raw = localStorage.getItem(KEY);
+      var raw = localStorage.getItem(KEY_COMPS);
       if (raw){
         var d = JSON.parse(raw);
         if (d && typeof d === 'object'){
-          /* Backfill defaults para nuevas comps que no estuvieran
-             guardadas en versiones anteriores del usuario. */
           COMPS.forEach(function(c){
             if (typeof d[c.id] !== 'boolean') d[c.id] = !!c.def;
           });
@@ -14795,92 +14838,407 @@
         }
       }
     } catch(_){}
-    return _defaults();
+    return _defaultsComps();
   }
-  function _save(o){
-    try { localStorage.setItem(KEY, JSON.stringify(o||{})); } catch(_){}
+  function _saveComps(o){
+    try { localStorage.setItem(KEY_COMPS, JSON.stringify(o||{})); } catch(_){}
   }
-  function _applyFilter(){
-    var sel = _load();
-    var screen = document.getElementById('s-agenda');
-    if (!screen) return;
-    var rows = screen.querySelectorAll('.ag-r');
-    rows.forEach(function(row){
-      /* Una fila se oculta SOLO si pertenece a una comp toggleable
-         y esa comp está desmarcada. ag-train/ag-rest no entran en
-         COMPS → su `hide` queda en false → siempre visibles. */
-      var hide = false;
-      for (var i = 0; i < COMPS.length; i++){
-        var c = COMPS[i];
-        if (row.classList.contains(c.cls) && !sel[c.id]){
-          hide = true;
+  function _loadCal(){
+    try {
+      var raw = localStorage.getItem(KEY_CAL);
+      if (!raw) return null;
+      var d = JSON.parse(raw);
+      if (d && Array.isArray(d.sections)) return d;
+    } catch(_){}
+    return null;
+  }
+  function _saveCal(d){
+    /* Cap de 2 MB por clave (CLAUDE.md). El calendario es texto
+       ligero (~30-150 eventos), no debería acercarse, pero por
+       seguridad si supera el cap descartamos secciones huérfanas. */
+    try {
+      var s = JSON.stringify(d||{sections:[]});
+      if (s.length > 2*1024*1024) {
+        console.warn('[bayCal] payload >2MB, recortando secciones vacías');
+        d.sections = (d.sections||[]).filter(function(x){ return (x.events||[]).length>0; });
+        s = JSON.stringify(d);
+      }
+      localStorage.setItem(KEY_CAL, s);
+    } catch(_){}
+  }
+  function _wipeCal(){
+    try { localStorage.removeItem(KEY_CAL); } catch(_){}
+  }
+  function _genId(){
+    return 'bay-' + Math.random().toString(36).slice(2,9) + '-' + Date.now().toString(36);
+  }
+  function _esc(s){
+    return String(s==null?'':s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── Seed: parsear el SSR y filtrar por comps marcadas ──────────
+     Invocado solo cuando `bayern_cal_v1` no existe (primera entrada
+     o tras 🔄 Regenerar). Los entrenamientos (ag-train) y descansos
+     (ag-rest) del SSR pasan tal cual — no son toggleables. */
+  function _seedFromSSR(){
+    var sel = _loadComps();
+    var ssr = document.getElementById('ag-content');
+    if (!ssr) return { sections: [], version:1, ts:Date.now() };
+    var sections = [];
+    var cur = null;
+    Array.prototype.forEach.call(ssr.children, function(el){
+      if (el.classList && el.classList.contains('ag-season')){
+        cur = {
+          id: el.getAttribute('data-section-id') || ('sec-' + sections.length),
+          headerHtml: el.innerHTML,
+          headerClass: el.className,
+          headerStyle: el.getAttribute('style') || '',
+          events: []
+        };
+        sections.push(cur);
+      } else if (el.classList && el.classList.contains('ag-r') && cur){
+        var include = true;
+        for (var i=0; i<COMPS.length; i++){
+          if (el.classList.contains(COMPS[i].cls) && !sel[COMPS[i].id]){
+            include = false; break;
+          }
+        }
+        if (!include) return;
+        cur.events.push({
+          id: el.getAttribute('data-event-id') || _genId(),
+          date:    ((el.querySelector('.ag-date')||{}).textContent || '').trim(),
+          icon:    ((el.querySelector('.ag-ico')||{}).textContent  || '').trim(),
+          name:    ((el.querySelector('.ag-lbl')||{}).textContent  || '').trim(),
+          weather: ((el.querySelector('.ag-wx')||{}).textContent   || '').trim(),
+          rowClass: el.className.replace(/\bbayern-hidden\b/g,'').trim()
+        });
+      }
+    });
+    sections = sections.filter(function(s){ return s.events.length>0; });
+    return { sections: sections, version:1, ts: Date.now() };
+  }
+
+  function _ensureCal(){
+    var d = _loadCal();
+    if (!d){
+      d = _seedFromSSR();
+      _saveCal(d);
+    }
+    return d;
+  }
+
+  /* ── Mapeos icono↔clase y orden cronológico (mismos que el editor
+     global, así una fila clonada del SSR mantiene su rowClass) ─── */
+  var ICON_TO_CLASS = {
+    '⚽':'ag-liga', '🏆':'ag-copa', '🇪🇺':'ag-eur', '🔵':'ag-eur',
+    '🌍':'ag-sel',  '🤝':'ag-amist','🟤':'ag-recopa','🟡':'ag-inter',
+    '🌞':'ag-torneo','🏃':'ag-train','💤':'ag-rest'
+  };
+  var WX_TO_CLASS = { '🌧':'ag-rain', '❄️':'ag-snow' };
+  function _rowClassFor(ev){
+    var parts = ['ag-r'];
+    if (ICON_TO_CLASS[ev.icon])  parts.push(ICON_TO_CLASS[ev.icon]);
+    if (WX_TO_CLASS[ev.weather]) parts.push(WX_TO_CLASS[ev.weather]);
+    return parts.join(' ');
+  }
+  var SP_MONTH = {'ene':0,'feb':1,'mar':2,'abr':3,'may':4,'jun':5,
+                  'jul':6,'ago':7,'sep':8,'oct':9,'nov':10,'dic':11};
+  function _parseDate(s){
+    var p = String(s||'').trim().split(/\s+/);
+    if (p.length<2) return null;
+    var d = parseInt(p[0],10);
+    if (isNaN(d)) return null;
+    var m = SP_MONTH[p[1].toLowerCase().replace(/\./g,'').slice(0,3)];
+    if (m==null) return null;
+    return [m, d];
+  }
+  function _sortSection(sec){
+    if (!sec.events || sec.events.length<2) return;
+    var anchor = null;
+    for (var i=0; i<sec.events.length; i++){
+      var p = _parseDate(sec.events[i].date);
+      if (p){ anchor = p[0]; break; }
+    }
+    if (anchor==null) return;
+    sec.events.sort(function(a,b){
+      var pa = _parseDate(a.date) || [99,99];
+      var pb = _parseDate(b.date) || [99,99];
+      var oa = ((pa[0]-anchor)%12 + 12)%12;
+      var ob = ((pb[0]-anchor)%12 + 12)%12;
+      if (oa!==ob) return oa-ob;
+      return pa[1]-pb[1];
+    });
+  }
+
+  /* ── Render del contenedor #ag-content-bayern ─────────────────── */
+  function _renderRow(ev){
+    return '<div class="' + _esc(ev.rowClass||'ag-r') + '" data-event-id="' + _esc(ev.id) + '" data-bayern-event="1">'
+      +   '<span class="ag-date">' + _esc(ev.date) + '</span>'
+      +   '<span class="ag-ico">'  + _esc(ev.icon) + '</span>'
+      +   '<span class="ag-lbl">'  + _esc(ev.name) + '</span>'
+      +   '<span class="ag-wx">'   + _esc(ev.weather) + '</span>'
+      +   '<span class="ag-row-actions">'
+      +     '<button type="button" title="Editar" onclick="window.bayCalEditEvt(\'' + _esc(ev.id) + '\')">✏️</button>'
+      +     '<button type="button" class="ag-del" title="Eliminar" onclick="window.bayCalDelEvt(\'' + _esc(ev.id) + '\')">🗑</button>'
+      +   '</span>'
+      + '</div>';
+  }
+  function _renderAll(){
+    _ensureContainer();
+    var host = document.getElementById('ag-content-bayern');
+    if (!host) return;
+    var d = _ensureCal();
+    if (!d.sections.length){
+      host.innerHTML = '<div style="padding:32px 14px;text-align:center;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;line-height:1.6;">'
+        + '— Calendario del Bayern vacío —<br>'
+        + '<small style="font-size:11px;color:rgba(255,255,255,.4);">Pulsa <b>🖍</b> para elegir competiciones (auto-clona del global)<br>o <b>🧙</b> para generar la pretemporada.</small>'
+        + '</div>';
+      return;
+    }
+    var html = '';
+    d.sections.forEach(function(sec){
+      var styleAttr = sec.headerStyle ? (' style="' + _esc(sec.headerStyle) + '"') : '';
+      html += '<div class="' + _esc(sec.headerClass||'ag-season verano') + '"'
+            + ' data-section-id="' + _esc(sec.id) + '"' + styleAttr + '>'
+            + sec.headerHtml + '</div>';
+      sec.events.forEach(function(ev){ html += _renderRow(ev); });
+      html += '<div class="ag-add-row" data-section-id="' + _esc(sec.id) + '" style="padding:8px 14px;">'
+            +   '<button type="button" onclick="window.bayCalAddForm(\'' + _esc(sec.id) + '\')"'
+            +   ' style="width:100%;padding:8px;border:1px dashed rgba(240,192,64,0.45);'
+            +   ' background:rgba(240,192,64,0.06);color:#f0c040;'
+            +   ' font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;'
+            +   ' border-radius:6px;cursor:pointer;">➕ AÑADIR EVENTO A ESTA SECCIÓN</button>'
+            + '</div>';
+    });
+    host.innerHTML = html;
+    _patchCounters();
+  }
+  function _patchCounters(){
+    var host = document.getElementById('ag-content-bayern');
+    if (!host) return;
+    host.querySelectorAll('.ag-season[data-section-id]').forEach(function(hdr){
+      var n = 0;
+      var sib = hdr.nextElementSibling;
+      while (sib && !sib.classList.contains('ag-season')){
+        if (sib.classList.contains('ag-r')) n++;
+        sib = sib.nextElementSibling;
+      }
+      var cnt = hdr.querySelector('.ag-section-count');
+      if (cnt) cnt.textContent = n + ' EVENTOS';
+    });
+  }
+
+  function _ensureContainer(){
+    if (document.getElementById('ag-content-bayern')) return;
+    var ssr = document.getElementById('ag-content');
+    if (!ssr || !ssr.parentNode) return;
+    var bay = document.createElement('div');
+    bay.id = 'ag-content-bayern';
+    bay.style.display = 'none';
+    ssr.parentNode.insertBefore(bay, ssr.nextSibling);
+  }
+
+  /* ── CRUD del store local ─────────────────────────────────────── */
+  window.bayCalAdd = function(sectionId, ev){
+    var d = _ensureCal();
+    var sec = null;
+    for (var i=0; i<d.sections.length; i++){
+      if (d.sections[i].id === sectionId){ sec = d.sections[i]; break; }
+    }
+    if (!sec){
+      sec = { id: sectionId, headerHtml: sectionId, headerClass:'ag-season verano', headerStyle:'', events:[] };
+      d.sections.push(sec);
+    }
+    var newEv = {
+      id: _genId(),
+      date: ev.date, icon: ev.icon, name: ev.name, weather: ev.weather,
+      rowClass: _rowClassFor(ev)
+    };
+    sec.events.push(newEv);
+    _sortSection(sec);
+    _saveCal(d);
+    _renderAll();
+    return newEv;
+  };
+  window.bayCalEdit = function(eventId, ev){
+    var d = _ensureCal();
+    for (var i=0; i<d.sections.length; i++){
+      var s = d.sections[i];
+      for (var j=0; j<s.events.length; j++){
+        if (s.events[j].id === eventId){
+          s.events[j].date    = ev.date;
+          s.events[j].icon    = ev.icon;
+          s.events[j].name    = ev.name;
+          s.events[j].weather = ev.weather;
+          s.events[j].rowClass= _rowClassFor(ev);
+          _sortSection(s);
+          _saveCal(d);
+          _renderAll();
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  window.bayCalDel = function(eventId){
+    var d = _ensureCal();
+    for (var i=0; i<d.sections.length; i++){
+      var s = d.sections[i];
+      for (var j=0; j<s.events.length; j++){
+        if (s.events[j].id === eventId){
+          s.events.splice(j,1);
+          _saveCal(d);
+          _renderAll();
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  /* ── Modal handlers (reusan #ag-form-ov; un flag global avisa a
+     `agSubmitForm` de que el guardado es local, no servidor) ───── */
+  function _$id(id){ return document.getElementById(id); }
+  window.bayCalAddForm = function(sectionId){
+    window._bayCalEditing = { mode:'add', sectionId: sectionId };
+    _$id('ag-form-title').textContent = '➕ NUEVO EVENTO (BAYERN)';
+    _$id('ag-f-date').value = '';
+    _$id('ag-f-icon').value = '⚽';
+    _$id('ag-f-name').value = '';
+    _$id('ag-f-weather').value = '☀️';
+    _$id('ag-form-ov').style.display = 'flex';
+    setTimeout(function(){ _$id('ag-f-date').focus(); }, 50);
+  };
+  window.bayCalEditEvt = function(eventId){
+    var d = _ensureCal();
+    var found = null;
+    for (var i=0; i<d.sections.length && !found; i++){
+      for (var j=0; j<d.sections[i].events.length; j++){
+        if (d.sections[i].events[j].id === eventId){ found = d.sections[i].events[j]; break; }
+      }
+    }
+    if (!found) return;
+    window._bayCalEditing = { mode:'edit', eventId: eventId };
+    _$id('ag-form-title').textContent = '✏️ EDITAR EVENTO (BAYERN)';
+    _$id('ag-f-date').value    = found.date    || '';
+    _$id('ag-f-icon').value    = found.icon    || '⚽';
+    _$id('ag-f-name').value    = found.name    || '';
+    _$id('ag-f-weather').value = found.weather || '☀️';
+    _$id('ag-form-ov').style.display = 'flex';
+    setTimeout(function(){ _$id('ag-f-date').focus(); }, 50);
+  };
+  window.bayCalDelEvt = function(eventId){
+    var d = _ensureCal();
+    var label = eventId;
+    for (var i=0; i<d.sections.length; i++){
+      for (var j=0; j<d.sections[i].events.length; j++){
+        if (d.sections[i].events[j].id === eventId){
+          label = d.sections[i].events[j].name || eventId;
           break;
         }
       }
-      row.classList.toggle('bayern-hidden', hide);
-    });
-    /* Recalcular section headers y ag-add-row: si la sección no
-       tiene NINGUNA fila visible tras el filtro, también la
-       ocultamos para no dejar headers huérfanos. */
-    var sections = screen.querySelectorAll('.ag-season');
-    sections.forEach(function(sec){
-      var sib = sec.nextElementSibling;
-      var hasVisible = false;
-      while (sib && !sib.classList.contains('ag-season')){
-        if (sib.classList.contains('ag-r') && !sib.classList.contains('bayern-hidden')){
-          hasVisible = true;
-          break;
-        }
-        sib = sib.nextElementSibling;
+    }
+    if (!confirm('¿Eliminar "' + label + '" del calendario del Bayern?')) return;
+    window.bayCalDel(eventId);
+  };
+
+  /* ── Regenerar / generadores de plantilla ─────────────────────── */
+  window.bayCalRebuild = function(){
+    if (!confirm('¿Regenerar el calendario del Bayern desde la agenda global?\nSe perderán los eventos añadidos manualmente.')) return;
+    _wipeCal();
+    _renderAll();
+  };
+
+  /* Generador Pretemporada: lee `munich_summer_tours_v1` y mete
+     entrenamientos diarios + partidos del torneo elegido (foto 5). */
+  var TOUR_DATES = {
+    sct:  [{d:'4 Jul',  n:'🇺🇸 Octavos · Soccer Champions Tour'},
+           {d:'6 Jul',  n:'🇺🇸 Cuartos · Soccer Champions Tour'},
+           {d:'8 Jul',  n:'🇺🇸 Semis · Soccer Champions Tour'},
+           {d:'10 Jul', n:'🇺🇸 Final · Soccer Champions Tour'}],
+    pss:  [{d:'12 Jul', n:'🇬🇧 J1 · Premier Summer Series'},
+           {d:'15 Jul', n:'🇬🇧 J2 · Premier Summer Series'},
+           {d:'18 Jul', n:'🇬🇧 J3 · Premier Summer Series'},
+           {d:'21 Jul', n:'🇬🇧 J4 · Premier Summer Series'},
+           {d:'24 Jul', n:'🇬🇧 J5 · Premier Summer Series'}],
+    jg:   [{d:'24 Jul', n:'🇪🇸 G1 · Trofeo Joan Gamper'},
+           {d:'26 Jul', n:'🇪🇸 G2 · Trofeo Joan Gamper'},
+           {d:'28 Jul', n:'🇪🇸 G3 · Trofeo Joan Gamper'},
+           {d:'30 Jul', n:'🇪🇸 Semis · Trofeo Joan Gamper'},
+           {d:'1 Ago',  n:'🇪🇸 Final · Trofeo Joan Gamper'}],
+    asia: [{d:'14 Jun', n:'🇯🇵 Semis · Asian Tournament'},
+           {d:'17 Jun', n:'🇯🇵 Final · Asian Tournament'}]
+  };
+  window.bayCalGenPreseason = function(){
+    var picks = [];
+    try {
+      var raw = localStorage.getItem('munich_summer_tours_v1');
+      if (raw) picks = JSON.parse(raw) || [];
+    } catch(_){}
+    if (!Array.isArray(picks) || !picks.length){
+      alert('Antes elige los torneos de pretemporada en el Hub Bayern.\n(Botón con las 4 banderas en la pantalla principal del Munich.)');
+      return;
+    }
+    if (!confirm('¿Generar pretemporada?\n\nSe insertarán los partidos del torneo elegido y entrenamientos en los días libres de Julio.\n\nLos eventos previos en la sección "verano/torneo" se mantienen — usa 🔄 para empezar de cero.')) return;
+    var d = _ensureCal();
+    var sec = null;
+    for (var i=0; i<d.sections.length; i++){
+      var hh = String(d.sections[i].headerHtml||'').toLowerCase();
+      if (/torneo|pretemporada|verano|veran/i.test(d.sections[i].id) || /torneo|pretemporada|verano|veran/i.test(hh)){
+        sec = d.sections[i]; break;
       }
-      sec.classList.toggle('bayern-hidden', !hasVisible);
-      /* Mismo trato para los botones "➕ AÑADIR EVENTO A ESTA SECCIÓN"
-         que pertenecen a la sección — los ocultamos cuando ningún
-         evento de la sección sobrevive al filtro. */
-      var sib2 = sec.nextElementSibling;
-      while (sib2 && !sib2.classList.contains('ag-season')){
-        if (sib2.classList.contains('ag-add-row')){
-          sib2.classList.toggle('bayern-hidden', !hasVisible);
-        }
-        sib2 = sib2.nextElementSibling;
-      }
+    }
+    if (!sec){
+      sec = { id:'torneo-verano-bayern',
+              headerHtml:'🌞 PRETEMPORADA · TORNEO DE VERANO <span class="ag-section-count">0 EVENTOS</span>',
+              headerClass:'ag-season verano', headerStyle:'', events:[] };
+      d.sections.unshift(sec);
+    }
+    var matchByDate = {};
+    picks.forEach(function(id){
+      (TOUR_DATES[id]||[]).forEach(function(m){ matchByDate[m.d] = m; });
     });
-    /* Actualiza los counters de sección para reflejar visible/total
-       en modo Bayern (no toca el dataset original; restauramos al
-       desactivar). */
-    sections.forEach(function(sec){
-      var cnt = sec.querySelector('.ag-section-count');
-      if (!cnt) return;
-      if (typeof cnt.dataset.origText === 'undefined'){
-        cnt.dataset.origText = cnt.textContent || '';
+    /* Entrenamientos del 1 al 30 Jul (saltando partidos), + posible
+       1 Ago si el torneo elegido lo cubre. NO duplicamos: si ya
+       existe un evento en esa fecha en la sección, no añadimos
+       entrenamiento — el admin puede haberlo configurado a mano. */
+    var existing = {};
+    sec.events.forEach(function(e){ existing[e.date] = true; });
+    var added = 0;
+    for (var day=1; day<=30; day++){
+      var date = day + ' Jul';
+      if (existing[date]) continue;
+      if (matchByDate[date]){
+        sec.events.push({ id:_genId(), date:date, icon:'🌞', name:matchByDate[date].n, weather:'☀️', rowClass:_rowClassFor({icon:'🌞',weather:'☀️'}) });
+      } else {
+        sec.events.push({ id:_genId(), date:date, icon:'🏃', name:'Entrenamiento', weather:'☀️', rowClass:_rowClassFor({icon:'🏃',weather:'☀️'}) });
       }
-      var sib = sec.nextElementSibling;
-      var visible = 0, total = 0;
-      while (sib && !sib.classList.contains('ag-season')){
-        if (sib.classList.contains('ag-r')){
-          total++;
-          if (!sib.classList.contains('bayern-hidden')) visible++;
-        }
-        sib = sib.nextElementSibling;
-      }
-      cnt.textContent = visible + ' / ' + total + ' EVENTOS';
-    });
-  }
-  function _clearFilter(){
-    var screen = document.getElementById('s-agenda');
-    if (!screen) return;
-    screen.querySelectorAll('.bayern-hidden').forEach(function(el){
-      el.classList.remove('bayern-hidden');
-    });
-    /* Restaurar counters originales */
-    screen.querySelectorAll('.ag-section-count').forEach(function(c){
-      if (typeof c.dataset.origText === 'string'){
-        c.textContent = c.dataset.origText;
-      }
-    });
-  }
+      added++;
+    }
+    if (matchByDate['1 Ago'] && !existing['1 Ago']){
+      sec.events.push({ id:_genId(), date:'1 Ago', icon:'🌞', name:matchByDate['1 Ago'].n, weather:'☀️', rowClass:_rowClassFor({icon:'🌞',weather:'☀️'}) });
+      added++;
+    }
+    if (matchByDate['14 Jun'] && !existing['14 Jun']){
+      sec.events.push({ id:_genId(), date:'14 Jun', icon:'🌞', name:matchByDate['14 Jun'].n, weather:'☀️', rowClass:_rowClassFor({icon:'🌞',weather:'☀️'}) });
+      added++;
+    }
+    if (matchByDate['17 Jun'] && !existing['17 Jun']){
+      sec.events.push({ id:_genId(), date:'17 Jun', icon:'🌞', name:matchByDate['17 Jun'].n, weather:'☀️', rowClass:_rowClassFor({icon:'🌞',weather:'☀️'}) });
+      added++;
+    }
+    _sortSection(sec);
+    _saveCal(d);
+    _renderAll();
+    alert('✅ Pretemporada generada (' + added + ' eventos).');
+  };
+
+  /* ── Modal selector de competiciones ──────────────────────────── */
+  var _modalSel = null;
   function _renderModalRows(){
-    var sel = _load();
+    var sel = _loadComps();
     var host = document.getElementById('bayern-cal-list');
     if (!host) return;
     host.innerHTML = COMPS.map(function(c){
@@ -14892,12 +15250,8 @@
            + '</div>';
     }).join('');
   }
-  /* Estado en memoria del modal para que toggle actualice solo el
-     overlay sin re-render completo de la lista (preserva posición
-     de scroll si la hubiera). */
-  var _modalSel = null;
   window._bayernCalToggle = function(id){
-    if (!_modalSel) _modalSel = _load();
+    if (!_modalSel) _modalSel = _loadComps();
     _modalSel[id] = !_modalSel[id];
     var host = document.getElementById('bayern-cal-list');
     if (!host) return;
@@ -14909,7 +15263,7 @@
   };
   window._bayernCalOpenSelector = function(){
     function _doOpen(){
-      _modalSel = _load();
+      _modalSel = _loadComps();
       _renderModalRows();
       var ov = document.getElementById('bayern-cal-ov');
       if (ov) ov.classList.add('show');
@@ -14923,28 +15277,33 @@
     _modalSel = null;
   };
   window._bayernCalSave = function(){
-    if (_modalSel) _save(_modalSel);
+    if (_modalSel){
+      _saveComps(_modalSel);
+      /* Si hay calendario local, ofrecemos regenerar para que las
+         comps recién marcadas/desmarcadas se reflejen en él. */
+      if (_loadCal()){
+        if (confirm('Comps guardadas.\n\n¿Regenerar el calendario del Bayern desde la agenda global?\n(Los eventos manuales se perderán.)')){
+          _wipeCal();
+        }
+      }
+    }
     _modalSel = null;
-    _applyFilter();
+    _renderAll();
     var ov = document.getElementById('bayern-cal-ov');
     if (ov) ov.classList.remove('show');
   };
-  /* API expuesta para que el flujo "entrar al calendario desde el
-     hub Bayern" pueda activar/desactivar el modo. */
+
+  /* ── Activación / desactivación ───────────────────────────────── */
   window._bayernCalActivate = function(){
     document.body.classList.add('bayern-cal-on');
-    /* Espera al siguiente tick para que el screen ya esté visible
-     y los nodos consultables. */
-    setTimeout(_applyFilter, 30);
+    setTimeout(_renderAll, 30);
   };
   window._bayernCalDeactivate = function(){
     document.body.classList.remove('bayern-cal-on');
-    _clearFilter();
   };
-  /* Hook de activación: cuando s-agenda recibe la clase .active y
-     `_bayernCalContext` está activo, aplicamos el filtro. Cuando
-     pierde .active, lo desactivamos para que la próxima visita
-     no-Bayern vea la agenda completa. */
+
+  /* Hook: cuando s-agenda recibe la clase .active y `_bayernCalContext`
+     está activo, mostramos el render local. */
   function _wireObserver(){
     var screen = document.getElementById('s-agenda');
     if (!screen) return;
@@ -14956,10 +15315,6 @@
           window._bayernCalDeactivate();
         }
       } else {
-        /* Al salir de la pantalla limpiamos también el flag de
-           contexto para que la próxima entrada (no-Bayern) muestre
-           la agenda completa. El flag se restablece desde el card
-           CALENDARIO del hub Bayern al volver a entrar. */
         if (document.body.classList.contains('bayern-cal-on')){
           window._bayernCalDeactivate();
           window._bayernCalContext = false;
@@ -15272,6 +15627,59 @@
   } else {
     applyInitialAdminState();
   }
+})();
+</script>
+
+<script>
+/* ══ WRAP MODO BAYERN: redirige Add/Edit a `bayern_cal_v1` ════════
+   El bloque editor de arriba registra `window.agSubmitForm` y
+   `window.agHideForm` apuntando a `/api/calendario/*` (servidor).
+   En modo Bayern (body.bayern-cal-on) el calendario es local — los
+   handlers `bayCalAddForm`/`bayCalEditEvt` setean `_bayCalEditing`
+   antes de abrir el modal. Aquí envolvemos las funciones existentes
+   para que, si el flag está activo, escriban al store local en lugar
+   de hacer fetch al servidor.
+
+   NOTA: este script DEBE ir DESPUÉS del IIFE del editor, porque
+   `window.agSubmitForm` se asigna durante su ejecución y aquí lo
+   leemos para wrap-encadenarlo. */
+(function(){
+  if (window.__BAY_CAL_WRAP_READY) return;
+  window.__BAY_CAL_WRAP_READY = true;
+
+  var _origSubmit = window.agSubmitForm;
+  var _origHide   = window.agHideForm;
+
+  window.agSubmitForm = function(){
+    var ed = window._bayCalEditing;
+    if (!ed){
+      return (typeof _origSubmit === 'function') ? _origSubmit() : null;
+    }
+    var $ = function(id){ return document.getElementById(id); };
+    var payload = {
+      date:    ($('ag-f-date').value||'').trim(),
+      icon:    $('ag-f-icon').value,
+      name:    ($('ag-f-name').value||'').trim(),
+      weather: $('ag-f-weather').value
+    };
+    if (!payload.date || !payload.name){
+      alert('Rellena fecha y nombre.');
+      return;
+    }
+    if (ed.mode === 'add'){
+      window.bayCalAdd(ed.sectionId, payload);
+    } else if (ed.mode === 'edit'){
+      window.bayCalEdit(ed.eventId, payload);
+    }
+    window.agHideForm();
+  };
+
+  window.agHideForm = function(){
+    window._bayCalEditing = null;
+    if (typeof _origHide === 'function') return _origHide();
+    var ov = document.getElementById('ag-form-ov');
+    if (ov) ov.style.display = 'none';
+  };
 })();
 </script>
 

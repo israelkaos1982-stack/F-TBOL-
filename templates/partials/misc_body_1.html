@@ -434,12 +434,26 @@ window._showSimProgress = function(opts, onDone){
        que cubre el caso "applyEngineOverrides aún cargando") no rehaga
        trabajo. `_invalidateBayernStatsCache()` lo expira manualmente
        cuando los stores cambian. */
+    /* Stores que se SUMAN en la plantilla del Bayern (botón 👕 PLANTILLA
+       del hub Bayern). Petición usuario 2026-05-08: incluir Liga +
+       Copa + Supercopa España (todos en `ef_player_stats_v1` ya
+       agregados), UCL Grupos+Playoffs SOLAMENTE (no Previa/OQ/WC),
+       UEL completa, UECL completa, Recopa, Supercopa Europa,
+       Intercontinental, Mundial Clubes. EXCLUIDOS:
+         · Superliga (no es competición del Bayern).
+         · Amistosos (no cuentan oficialmente).
+         · Torneos de verano (no hay store por torneo todavía).
+         · Previa Champions, Open Qualifier, Wild Card (no son
+           "competición real" según el usuario). */
     var _STATS_STORES = [
-      'ef_player_stats_v1',
-      'ef_player_stats_superliga_v1',
-      'ef_player_stats_ucl_v1',
+      'ef_player_stats_v1',           /* Liga + Copa + Supercopa España */
+      'ef_player_stats_ucl_main_v1',  /* UCL Grupos + Playoffs */
       'ef_player_stats_uel_v1',
-      'ef_player_stats_uecl_v1'
+      'ef_player_stats_uecl_v1',
+      'ef_player_stats_recopa_v1',
+      'ef_player_stats_usc_v1',       /* Supercopa de Europa */
+      'ef_player_stats_inter_v1',     /* Intercontinental */
+      'ef_player_stats_mundial_v1'    /* Mundial Clubes / Mundialito */
     ];
     var _STATS_FIELDS = ['pj','gol','pen','fk','mvp','ta','tr','imbat','penSaved'];
     var _STATS_CACHE = null;
@@ -4982,14 +4996,27 @@ window._showSimProgress = function(opts, onDone){
     uecl:      'ef_player_stats_uecl_v1'
   };
   /* Mapeo inverso: dado un nombre de competición → clave del store.
-     Para 'liga' y 'copa' devuelve el cache de Liga EA Sports porque
-     ambas se SUMAN en una sola vista. */
+     Para 'liga' / 'copa' / 'sc' devuelve el cache de Liga EA Sports
+     porque las 3 (Liga + Copa + Supercopa España) se SUMAN en una
+     sola vista. Para 'ucl' devuelve el store de Grupos+Playoffs
+     SOLAMENTE (no Previa/OQ/WC) — petición usuario 2026-05-08:
+     "cuando vaya a clasificación de Champions y pulse sobre Bayern
+     y mire a Harry Kane tiene que llevar 8 goles" (Grupos + Playoffs). */
   window._lextStatsKeyForCompetition = function(comp){
     if (comp === 'superliga') return COMP_CACHE_KEYS.superliga;
-    if (comp === 'ucl')       return COMP_CACHE_KEYS.ucl;
+    if (comp === 'ucl')       return 'ef_player_stats_ucl_main_v1';  /* Grupos + Playoffs */
+    if (comp === 'ucl-prev')  return 'ef_player_stats_ucl_prev_v1';
+    if (comp === 'ucl-oq')    return 'ef_player_stats_ucl_oq_v1';
+    if (comp === 'ucl-wc')    return 'ef_player_stats_ucl_wc_v1';
     if (comp === 'uel')       return COMP_CACHE_KEYS.uel;
     if (comp === 'uecl')      return COMP_CACHE_KEYS.uecl;
-    return PLAYER_STATS_KEY; /* liga + copa */
+    if (comp === 'recopa')    return 'ef_player_stats_recopa_v1';
+    if (comp === 'usc')       return 'ef_player_stats_usc_v1';
+    if (comp === 'inter')     return 'ef_player_stats_inter_v1';
+    if (comp === 'mundial')   return 'ef_player_stats_mundial_v1';
+    if (comp === 'sel')       return 'ef_player_stats_sel_v1';
+    if (comp === 'amistoso')  return 'ef_player_stats_amistoso_v1';
+    return PLAYER_STATS_KEY; /* liga + copa + sc (EA Sports) */
   };
 
   /* Renderiza un dashboard de estadísticas a partir de UNO de los
@@ -5130,20 +5157,40 @@ window._showSimProgress = function(opts, onDone){
        propias claves localStorage para que cada vista (Superliga,
        Champions, UEL, Conference) muestre solo SUS números. */
     var buckets = {
-      liga:      {},
-      copa:      {},
-      superliga: {},
-      ucl:       {},
-      uel:       {},
-      uecl:      {}
+      liga:       {},
+      copa:       {},
+      sc:         {},   /* Supercopa de España */
+      superliga:  {},
+      ucl:        {},   /* UCL Grupos + Playoffs solamente */
+      'ucl-prev': {},   /* Previa Champions (separada) */
+      'ucl-oq':   {},   /* Open Qualifier (separado) */
+      'ucl-wc':   {},   /* Wild Card (separado) */
+      uel:        {},
+      uecl:       {},
+      recopa:     {},
+      usc:        {},   /* Supercopa de Europa */
+      inter:      {},   /* Intercontinental */
+      mundial:    {},   /* Mundial de Clubes / Mundialito */
+      sel:        {},
+      amistoso:   {}
     };
     var teamPJByComp = {
-      liga:      {},
-      copa:      {},
-      superliga: {},
-      ucl:       {},
-      uel:       {},
-      uecl:      {}
+      liga:       {},
+      copa:       {},
+      sc:         {},
+      superliga:  {},
+      ucl:        {},
+      'ucl-prev': {},
+      'ucl-oq':   {},
+      'ucl-wc':   {},
+      uel:        {},
+      uecl:       {},
+      recopa:     {},
+      usc:        {},
+      inter:      {},
+      mundial:    {},
+      sel:        {},
+      amistoso:   {}
     };
 
     function getOrCreateInBucket(bucket, teamName, playerName){
@@ -5368,9 +5415,10 @@ window._showSimProgress = function(opts, onDone){
       }
     } catch(_){}
 
-    /* ── SUMAR Liga + Copa en el bucket "EA Sports" (PLAYER_STATS_KEY).
-       Petición usuario: "se suman Liga + Copa las estadísticas de
-       cada jugador individualmente" — son la misma vista. */
+    /* ── SUMAR Liga + Copa + Supercopa de España en el bucket
+       "EA Sports" (PLAYER_STATS_KEY). Petición usuario 2026-05-08:
+       las 3 competiciones nacionales se cuentan unidas en la pantalla
+       Liga EA Sports y en el modal del equipo en clasificación. */
     function _mergeBucketInto(target, source){
       Object.keys(source).forEach(function(k){
         var src = source[k]; if (!src) return;
@@ -5388,9 +5436,13 @@ window._showSimProgress = function(opts, onDone){
       });
     }
     _mergeBucketInto(stats, buckets.copa);
-    /* PJ del equipo en EA Sports = Liga + Copa (sumados). */
+    _mergeBucketInto(stats, buckets.sc);
+    /* PJ del equipo en EA Sports = Liga + Copa + Supercopa España. */
     Object.keys(teamPJByComp.copa || {}).forEach(function(tn){
       teamPJ[tn] = (teamPJ[tn]||0) + teamPJByComp.copa[tn];
+    });
+    Object.keys(teamPJByComp.sc || {}).forEach(function(tn){
+      teamPJ[tn] = (teamPJ[tn]||0) + teamPJByComp.sc[tn];
     });
 
     /* Persistir cada bucket aislado a su propia clave. Estas vistas
@@ -5407,9 +5459,59 @@ window._showSimProgress = function(opts, onDone){
       try { localStorage.setItem(key, JSON.stringify(out)); } catch(_){}
     }
     _persistBucket(buckets.superliga, teamPJByComp.superliga, COMP_CACHE_KEYS.superliga);
-    _persistBucket(buckets.ucl,       teamPJByComp.ucl,       COMP_CACHE_KEYS.ucl);
     _persistBucket(buckets.uel,       teamPJByComp.uel,       COMP_CACHE_KEYS.uel);
     _persistBucket(buckets.uecl,      teamPJByComp.uecl,      COMP_CACHE_KEYS.uecl);
+    /* UCL: 4 sub-fases persistidas a 4 claves separadas + 1 clave
+       consolidada `ef_player_stats_ucl_v1` (suma de las 4) para
+       compatibilidad con la plantilla del hub Bayern y otros
+       consumidores. */
+    _persistBucket(buckets.ucl,        teamPJByComp.ucl,         'ef_player_stats_ucl_main_v1'); /* Grupos + Playoffs solamente */
+    _persistBucket(buckets['ucl-prev'],teamPJByComp['ucl-prev'], 'ef_player_stats_ucl_prev_v1');
+    _persistBucket(buckets['ucl-oq'],  teamPJByComp['ucl-oq'],   'ef_player_stats_ucl_oq_v1');
+    _persistBucket(buckets['ucl-wc'],  teamPJByComp['ucl-wc'],   'ef_player_stats_ucl_wc_v1');
+    /* Consolidado UCL: suma de los 4 sub-buckets → conserva el
+       contrato histórico de `ef_player_stats_ucl_v1`. */
+    function _consolidate(bucketIds){
+      var merged = {}, mPJ = {};
+      bucketIds.forEach(function(id){
+        var src = buckets[id] || {};
+        Object.keys(src).forEach(function(k){
+          var s = src[k] || {};
+          var d = merged[k] || {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+          d.gol      = (d.gol     ||0) + (s.gol     ||0);
+          d.pen      = (d.pen     ||0) + (s.pen     ||0);
+          d.fk       = (d.fk      ||0) + (s.fk      ||0);
+          d.mvp      = (d.mvp     ||0) + (s.mvp     ||0);
+          d.ta       = (d.ta      ||0) + (s.ta      ||0);
+          d.tr       = (d.tr      ||0) + (s.tr      ||0);
+          d.imbat    = (d.imbat   ||0) + (s.imbat   ||0);
+          d.penSaved = (d.penSaved||0) + (s.penSaved||0);
+          merged[k] = d;
+        });
+        var pj = teamPJByComp[id] || {};
+        Object.keys(pj).forEach(function(tn){
+          mPJ[tn] = (mPJ[tn]||0) + (pj[tn]||0);
+        });
+      });
+      return { merged: merged, pj: mPJ };
+    }
+    var _uclAll = _consolidate(['ucl','ucl-prev','ucl-oq','ucl-wc']);
+    _persistBucket(_uclAll.merged, _uclAll.pj, COMP_CACHE_KEYS.ucl);
+
+    /* Comps nuevas (2026-05-08): Recopa, Supercopa Europa,
+       Intercontinental, Mundial Clubes, Selecciones, Amistosos.
+       Cada una a su propia clave para que las pantallas
+       individuales (s-recopa-stats, s-inter-stats, etc.) tengan
+       una fuente AISLADA de stats. La plantilla del Bayern leerá
+       el subset que pidió el usuario (todo menos Superliga,
+       amistosos, torneos verano, Previa, OQ, WC). */
+    _persistBucket(buckets.recopa,    teamPJByComp.recopa,    'ef_player_stats_recopa_v1');
+    _persistBucket(buckets.usc,       teamPJByComp.usc,       'ef_player_stats_usc_v1');
+    _persistBucket(buckets.inter,     teamPJByComp.inter,     'ef_player_stats_inter_v1');
+    _persistBucket(buckets.mundial,   teamPJByComp.mundial,   'ef_player_stats_mundial_v1');
+    _persistBucket(buckets.sel,       teamPJByComp.sel,       'ef_player_stats_sel_v1');
+    _persistBucket(buckets.amistoso,  teamPJByComp.amistoso,  'ef_player_stats_amistoso_v1');
+    _persistBucket(buckets.sc,        teamPJByComp.sc,        'ef_player_stats_sc_v1');
 
     // Save to SEPARATE storage (Liga + Copa unidas → ef_player_stats_v1)
     try { localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(stats)); } catch(_){}
@@ -8080,6 +8182,16 @@ window._showSimProgress = function(opts, onDone){
 <div class="submenu-card sc-ucl2" onclick="go('s-ucl-grupos')">
 <span class="sc-emoji">🏆</span><span class="sc-label">Fase de Grupos</span><span class="sc-arr">▶</span>
 </div>
+<!-- Caja ESTADÍSTICAS (2026-05-08): movida AQUÍ — entre Fase de
+     Grupos y Previa de Champions — para separar visualmente la
+     competición principal (Playoffs + Grupos + Estadísticas) de
+     las fases previas (Previa, Open Qualifier, Wild Card). Color
+     verde esmeralda elegido a propósito para que NO se confunda
+     con los azules de la competición ni los naranjas/marrones
+     de las fases previas. -->
+<div class="submenu-card sc-ucl-stats" style="background:linear-gradient(135deg,#052010,#0a3a25,#16a34a,#0a3a25,#052010) !important;border-color:#22c55e !important;" onclick="go('s-ucl-stats')">
+<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
+</div>
 <div class="submenu-card sc-ucl-prev-clas" style="background:linear-gradient(135deg,#0b2a3a,#1e5e7a,#4CA1AF,#2C3E50,#0b2a3a) !important;border-color:#4CA1AF !important;" onclick="go('s-ucl-previa-clas')">
 <span class="sc-emoji">🇪🇺</span><span class="sc-label">Previa de Champions</span><span class="sc-arr">▶</span>
 </div>
@@ -8088,9 +8200,6 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="submenu-card sc-wild-card" style="background:linear-gradient(135deg,#1a0e04,#3a2010,#6a3f1c,#8b5520,#3a2010,#1a0e04) !important;border-color:#8b5520 !important;" onclick="go('s-wild-card')">
 <span class="sc-emoji">🎟️</span><span class="sc-label">Wild Card</span><span class="sc-arr">▶</span>
-</div>
-<div class="submenu-card sc-ucl-stats" style="background:linear-gradient(135deg,#051525,#0a2a4a,#1565C0,#0a2a4a,#051525) !important;border-color:#42a5f5 !important;" onclick="go('s-ucl-stats')">
-<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
 </div>
 </div>
 </div>

@@ -1722,9 +1722,15 @@
 </div>
 <script>
 (function(){
+  /* Pantalla "Champions · Estadísticas" SUMA SOLO Grupos + Playoffs/Final
+     (petición usuario 2026-05-08). Las stats de Previa Champions, Open
+     Qualifier y Wild Card NO se cuentan aquí — viven en stores aparte
+     (`ef_player_stats_ucl_prev_v1`, `_oq_v1`, `_wc_v1`). El store
+     `ef_player_stats_ucl_v1` se mantiene como agregado total UCL
+     (compatibilidad con plantilla Bayern y otros consumidores). */
   function _renderUclStats(){
     if (typeof window._lextBuildCompStatsDashboard === 'function') {
-      window._lextBuildCompStatsDashboard('ucl-stats-dashboard', 'ef_player_stats_ucl_v1');
+      window._lextBuildCompStatsDashboard('ucl-stats-dashboard', 'ef_player_stats_ucl_main_v1');
     }
   }
   window._renderUclStats = _renderUclStats;

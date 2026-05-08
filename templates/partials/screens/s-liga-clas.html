@@ -664,16 +664,66 @@
        · ucl       → Champions / Previa Champions (ucl-*, wprev-*, champ-*)
        · uel       → Europa League (uel-*)
        · uecl      → Conference (uecl-*) */
+  /* Sub-fases UCL (2026-05-08): la pantalla s-ucl-stats SUMA SOLO
+     'ucl' (Grupos + Playoffs / Final). Las fases previas (Previa
+     Champions, Open Qualifier, Wild Card) van a buckets separados
+     ('ucl-prev', 'ucl-oq', 'ucl-wc'). El bucket consolidado lo sigue
+     haciendo `_persistBucket` al escribir `ef_player_stats_ucl_v1`
+     (suma de los 4) para no romper otras pantallas (plantilla
+     Bayern, etc.).
+
+     Comps nuevas (2026-05-08, mismo día):
+       · sc       → Supercopa de España (matchKey empieza con sc-/sc_
+                    o storeKey contiene `|sc|`/`|sc-final|`).
+       · usc      → Supercopa de Europa (usc-/usc_/`|usc|`).
+       · recopa   → Recopa Europa (recopa-/cal-rec-/`|recopa|`).
+       · inter    → Intercontinental (inter-/cal-inter-/`|inter|`).
+       · mundial  → Mundial de Clubes (mundial-/cwc-/`|mundial|`).
+       · sel      → Selecciones FIFA (cal-sel-/cal-mf-/`|sel|`).
+       · amistoso → Amistosos (cal-ams-/`|amistoso|`). */
   function _inferCompetition(matchKey){
     var k = String(matchKey || '').toLowerCase();
     if (!k) return 'liga';
-    if (k.indexOf('uecl') === 0 || k.indexOf('-uecl') !== -1) return 'uecl';
-    if (k.indexOf('uel')  === 0 || k.indexOf('-uel')  !== -1) return 'uel';
+    if (k.indexOf('uecl') === 0 || k.indexOf('-uecl') !== -1 || k.indexOf('|uecl|') !== -1) return 'uecl';
+    if (k.indexOf('uel')  === 0 || k.indexOf('-uel')  !== -1 || k.indexOf('|uel|')  !== -1) return 'uel';
+    /* Sub-fases UCL: evaluar ANTES del catch-all 'ucl' para que el
+       bucket principal solo contenga Grupos + Playoffs. */
+    if (k.indexOf('wprev') !== -1) return 'ucl-prev';
+    if (k.indexOf('oq_') === 0 || k.indexOf('-oq_') !== -1
+        || k.indexOf('oq-') === 0 || k.indexOf('-oq-') !== -1
+        || k.indexOf('|oq|') !== -1) return 'ucl-oq';
+    if (k.indexOf('wc_') === 0 || k.indexOf('-wc_') !== -1
+        || k.indexOf('wc-') === 0 || k.indexOf('-wc-') !== -1
+        || k.indexOf('|wc|') !== -1) return 'ucl-wc';
     if (k.indexOf('ucl')  === 0 || k.indexOf('-ucl')  !== -1
-        || k.indexOf('champ') === 0 || k.indexOf('wprev') !== -1) return 'ucl';
+        || k.indexOf('|ucl|') !== -1 || k.indexOf('|ucl-fin|') !== -1
+        || k.indexOf('champ') === 0) return 'ucl';
+    /* Comps con sub-finales: evaluar `usc` ANTES que `sc` para que
+       "Supercopa Europa" no caiga en Supercopa España. */
+    if (k.indexOf('usc') === 0 || k.indexOf('-usc') !== -1
+        || k.indexOf('|usc|') !== -1 || k.indexOf('|usc-fin|') !== -1) return 'usc';
+    if (k.indexOf('sc-') === 0 || k.indexOf('|sc|') !== -1
+        || k.indexOf('|sc-final|') !== -1
+        || k.indexOf('sc-semis') === 0 || k.indexOf('sc-final') === 0
+        || k.indexOf('-sc-') !== -1) return 'sc';
+    if (k.indexOf('recopa') === 0 || k.indexOf('-recopa') !== -1
+        || k.indexOf('|recopa|') !== -1 || k.indexOf('|recopa-fin|') !== -1
+        || k.indexOf('cal-rec-') !== -1) return 'recopa';
+    if (k.indexOf('inter') === 0 || k.indexOf('-inter') !== -1
+        || k.indexOf('|inter|') !== -1 || k.indexOf('|inter-fin|') !== -1
+        || k.indexOf('cal-inter-') !== -1) return 'inter';
+    if (k.indexOf('mundial') !== -1 || k.indexOf('|mundial|') !== -1
+        || k.indexOf('cwc') === 0 || k.indexOf('-cwc') !== -1
+        || k.indexOf('|cwc|') !== -1) return 'mundial';
+    if (k.indexOf('|sel|') !== -1 || k.indexOf('|sel-fin|') !== -1
+        || k.indexOf('cal-sel') !== -1 || k.indexOf('cal-mf-') !== -1) return 'sel';
+    if (k.indexOf('|amistoso|') !== -1 || k.indexOf('cal-ams') !== -1
+        || k.indexOf('amistoso') === 0) return 'amistoso';
     if (k.indexOf('sl-')  === 0 || k.indexOf('-sl')  !== -1
+        || k.indexOf('|superliga|') !== -1
         || k.indexOf('superliga') !== -1) return 'superliga';
     if (k.indexOf('cdr-') === 0 || k.indexOf('copa-') === 0
+        || k.indexOf('|copa|') !== -1 || k.indexOf('|copa-fin|') !== -1
         || k.indexOf('copa') === 0) return 'copa';
     return 'liga';
   }

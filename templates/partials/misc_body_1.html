@@ -8368,19 +8368,22 @@ window._showSimProgress = function(opts, onDone){
 </style>
 </div>
 
-<!-- ═══ PANTALLAS PLACEHOLDER DE LOS 3 TORNEOS ═══
-     Cada una muestra fee/equipos/fechas/formato/premios. El brackets
-     real (grupos, playoffs, resultados) queda para un commit posterior
-     una vez se defina cómo se guardan las picks de los 5 humanos. -->
+<!-- ═══ PANTALLAS DE LOS 4 TORNEOS DE VERANO (FASE 1, 2026-05-08) ═══
+     Cada pantalla muestra el contenido por defecto (placeholder) y un
+     botón 🖍 admin (PIN 747) que abre el editor para sobrescribir
+     nombre, fechas, equipos, formato y premios. La config se persiste
+     en `tour_<id>_v1` (servidor + cache local) — fase 2 renderizará
+     el bracket; fase 3 conectará el motor de simulación. -->
 <div class="screen" id="s-sct">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🇺🇸</span><h2>Soccer Champions Tour</h2></div>
-<div style="padding:14px 18px;font-family:Rajdhani,sans-serif;font-size:14px;color:#d8e8f8;line-height:1.7;">
-  <p><b style="color:#f0c040;">Participación:</b> 40 🪙 · 16 equipos 👤</p>
-  <p><b style="color:#f0c040;">Fechas:</b> 1 al 10 de Julio</p>
-  <p><b style="color:#f0c040;">Formato:</b> Eliminatoria directa<br>Octavos → Cuartos → Semis → Final (máx. 4 partidos).</p>
-  <p style="margin-top:10px;"><b style="color:#f0c040;">Premios:</b></p>
-  <ul style="margin:4px 0 0 20px;">
+<button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('sct')" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sct">🇺🇸</span><h2 id="tour-title-sct">Soccer Champions Tour</h2></div>
+<div id="tour-info-sct" class="tour-info-box">
+  <p><b>Participación:</b> 40 🪙 · 16 equipos 👤</p>
+  <p><b>Fechas:</b> 1 al 10 de Julio</p>
+  <p><b>Formato:</b> Eliminatoria directa<br>Octavos → Cuartos → Semis → Final (máx. 4 partidos).</p>
+  <p style="margin-top:10px;"><b>Premios:</b></p>
+  <ul>
     <li>Octavos <b>+20 🪙</b></li>
     <li>Cuartos <b>+40 🪙</b></li>
     <li>Semis <b>+60 🪙</b></li>
@@ -8391,13 +8394,14 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-pss">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🇬🇧</span><h2>Premier Summer Series</h2></div>
-<div style="padding:14px 18px;font-family:Rajdhani,sans-serif;font-size:14px;color:#d8e8f8;line-height:1.7;">
-  <p><b style="color:#f0c040;">Participación:</b> 40 🪙 · 6 equipos 👤</p>
-  <p><b style="color:#f0c040;">Fechas:</b> 12 al 24 de Julio</p>
-  <p><b style="color:#f0c040;">Formato:</b> 1 grupo de 6 a ida (5 partidos).</p>
-  <p style="margin-top:10px;"><b style="color:#f0c040;">Premios:</b></p>
-  <ul style="margin:4px 0 0 20px;">
+<button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('pss')" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-pss">🇬🇧</span><h2 id="tour-title-pss">Premier Summer Series</h2></div>
+<div id="tour-info-pss" class="tour-info-box">
+  <p><b>Participación:</b> 40 🪙 · 6 equipos 👤</p>
+  <p><b>Fechas:</b> 12 al 24 de Julio</p>
+  <p><b>Formato:</b> 1 grupo de 6 a ida (5 partidos).</p>
+  <p style="margin-top:10px;"><b>Premios:</b></p>
+  <ul>
     <li>Sexto <b>+15 🪙</b></li>
     <li>Quinto <b>+25 🪙</b></li>
     <li>Cuarto <b>+40 🪙</b></li>
@@ -8409,13 +8413,14 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-jg">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🇪🇸</span><h2>Trofeo Joan Gamper</h2></div>
-<div style="padding:14px 18px;font-family:Rajdhani,sans-serif;font-size:14px;color:#d8e8f8;line-height:1.7;">
-  <p><b style="color:#f0c040;">Participación:</b> 40 🪙 · 8 equipos 👤</p>
-  <p><b style="color:#f0c040;">Fechas:</b> 24 de Julio al 1 de Agosto</p>
-  <p><b style="color:#f0c040;">Formato:</b> 2 grupos de 4 (3 partidos) + Playoffs · Semis / Final.</p>
-  <p style="margin-top:10px;"><b style="color:#f0c040;">Premios:</b></p>
-  <ul style="margin:4px 0 0 20px;">
+<button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('jg')" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-jg">🇪🇸</span><h2 id="tour-title-jg">Trofeo Joan Gamper</h2></div>
+<div id="tour-info-jg" class="tour-info-box">
+  <p><b>Participación:</b> 40 🪙 · 8 equipos 👤</p>
+  <p><b>Fechas:</b> 24 de Julio al 1 de Agosto</p>
+  <p><b>Formato:</b> 2 grupos de 4 (3 partidos) + Playoffs · Semis / Final.</p>
+  <p style="margin-top:10px;"><b>Premios:</b></p>
+  <ul>
     <li>Cuartos de Grupo <b>+20 🪙</b></li>
     <li>Tercero de Grupo <b>+40 🪙</b></li>
     <li>Semis Playoffs <b>+60 🪙</b></li>
@@ -8426,19 +8431,621 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-asia">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🇯🇵</span><h2>Asian Tournament</h2></div>
-<div style="padding:14px 18px;font-family:Rajdhani,sans-serif;font-size:14px;color:#d8e8f8;line-height:1.7;">
-  <p><b style="color:#f0c040;">Participación:</b> 40 🪙 · 4 equipos 👤</p>
-  <p><b style="color:#f0c040;">Fechas:</b> 14 al 17 de Junio</p>
-  <p><b style="color:#f0c040;">Formato:</b> Eliminatoria directa<br>Semis → Final (máx. 2 partidos).</p>
-  <p style="margin-top:10px;"><b style="color:#f0c040;">Premios:</b></p>
-  <ul style="margin:4px 0 0 20px;">
+<button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('asia')" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-asia">🇯🇵</span><h2 id="tour-title-asia">Asian Tournament</h2></div>
+<div id="tour-info-asia" class="tour-info-box">
+  <p><b>Participación:</b> 40 🪙 · 4 equipos 👤</p>
+  <p><b>Fechas:</b> 14 al 17 de Junio</p>
+  <p><b>Formato:</b> Eliminatoria directa<br>Semis → Final (máx. 2 partidos).</p>
+  <p style="margin-top:10px;"><b>Premios:</b></p>
+  <ul>
     <li>Semis <b>+40 🪙</b></li>
     <li>Subcampeón <b>+80 🪙</b></li>
     <li>Campeón <b>+100 🪙</b></li>
   </ul>
 </div>
 </div>
+
+<style>
+  /* Botón 🖍 admin de cada torneo — esquina superior derecha de la
+     pantalla, simétrico al ◀ Volver. PIN-gated; abre _tourOpenEditor. */
+  #s-sct .tour-edit-btn,#s-pss .tour-edit-btn,
+  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn{
+    position:absolute;top:8px;right:10px;z-index:5;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
+    color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;
+    font-size:16px;line-height:1;padding:0;
+    display:flex;align-items:center;justify-content:center;
+    transition:background .15s;
+  }
+  #s-sct .tour-edit-btn:active,#s-pss .tour-edit-btn:active,
+  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active{
+    background:rgba(240,192,64,.35);
+  }
+  /* Caja de info por defecto — antes era estilo inline en cada pantalla.
+     Centralizada para que `_tourRender` pueda sobrescribir su contenido
+     sin perder el aspecto. */
+  .tour-info-box{
+    padding:14px 18px;font-family:Rajdhani,sans-serif;font-size:14px;
+    color:#d8e8f8;line-height:1.7;
+  }
+  .tour-info-box b{color:#f0c040;}
+  .tour-info-box ul{margin:4px 0 0 20px;}
+  /* Sección "Equipos" inyectada por _tourRender cuando hay equipos
+     guardados en la config. */
+  .tour-info-box .tour-teams-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+    gap:6px;margin-top:6px;
+  }
+  .tour-info-box .tour-team-chip{
+    display:flex;align-items:center;gap:6px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
+    border-radius:6px;padding:4px 8px;font-size:12px;
+  }
+  .tour-info-box .tour-team-chip img{width:18px;height:18px;object-fit:contain;}
+  .tour-info-box .tour-team-chip .tag-h{
+    background:#1ea14a;color:#fff;font-size:9px;padding:1px 4px;border-radius:3px;
+    margin-left:auto;letter-spacing:.5px;
+  }
+  .tour-info-box .tour-team-chip .tag-i{
+    background:rgba(255,255,255,.18);color:#ddd;font-size:9px;padding:1px 4px;border-radius:3px;
+    margin-left:auto;letter-spacing:.5px;
+  }
+</style>
+
+<!-- ═══ OVERLAY EDITOR DE TORNEO (compartido por los 4) ═══ -->
+<div id="tour-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999990;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px;">
+  <div id="tour-editor-box" style="background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(255,255,255,.12);border-radius:14px;width:100%;max-width:520px;padding:18px 18px 14px;color:#e8f0ff;font-family:Rajdhani,sans-serif;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-family:Oswald,sans-serif;letter-spacing:2px;font-size:13px;color:#f0c040;" id="tour-editor-title">EDITAR TORNEO</div>
+      <button onclick="window._tourCloseEditor&&window._tourCloseEditor()" style="background:none;border:none;color:rgba(255,255,255,.55);font-size:22px;cursor:pointer;line-height:1;padding:0 4px;">×</button>
+    </div>
+
+    <!-- Identidad -->
+    <div class="tour-ed-row">
+      <label>Nombre</label>
+      <input id="tour-ed-name" type="text" maxlength="40">
+    </div>
+    <div class="tour-ed-row tour-ed-row-2">
+      <div><label>Bandera</label><input id="tour-ed-flag" type="text" maxlength="4" placeholder="🇺🇸"></div>
+      <div><label>Fee 🪙</label><input id="tour-ed-fee" type="number" min="0" max="999"></div>
+    </div>
+    <div class="tour-ed-row tour-ed-row-2">
+      <div><label>Inicio</label><input id="tour-ed-dstart" type="text" maxlength="20" placeholder="1 Jul"></div>
+      <div><label>Fin</label><input id="tour-ed-dend" type="text" maxlength="20" placeholder="10 Jul"></div>
+    </div>
+
+    <!-- Equipos -->
+    <div class="tour-ed-row tour-ed-row-2">
+      <div><label>Nº equipos</label><input id="tour-ed-num" type="number" min="2" max="64"></div>
+      <div><label>Humanos 👤</label><input id="tour-ed-hum" type="number" min="0" max="64"></div>
+    </div>
+    <div class="tour-ed-row tour-ed-row-2">
+      <div><label>Nivel IA mín.</label><input id="tour-ed-aimin" type="number" min="1" max="100"></div>
+      <div><label>Nivel IA máx.</label><input id="tour-ed-aimax" type="number" min="1" max="100"></div>
+    </div>
+
+    <!-- Lupa -->
+    <div class="tour-ed-row">
+      <label>🔍 Buscar equipo (3+ caracteres)</label>
+      <input id="tour-ed-search" type="text" placeholder="Madrid, Barça, Liverpool…">
+      <div id="tour-ed-results" class="tour-ed-results"></div>
+    </div>
+    <div class="tour-ed-row">
+      <label>Equipos seleccionados (<span id="tour-ed-tcount">0</span>)</label>
+      <div id="tour-ed-selected" class="tour-ed-selected"></div>
+    </div>
+
+    <!-- Formato -->
+    <div class="tour-ed-row">
+      <label>Formato</label>
+      <select id="tour-ed-fmt">
+        <option value="ko">Eliminatoria directa</option>
+        <option value="league">Liga (round-robin)</option>
+        <option value="groups-ko">Grupos + Eliminatoria</option>
+      </select>
+    </div>
+    <div class="tour-ed-row" id="tour-ed-fmt-cfg">
+      <!-- subconfig dinámica según el formato -->
+    </div>
+
+    <!-- Premios -->
+    <div class="tour-ed-row">
+      <label>Premios 🪙 (uno por línea, formato `clave:valor`)</label>
+      <textarea id="tour-ed-prizes" rows="5" placeholder="champ:100&#10;sub:80&#10;sf:60"></textarea>
+    </div>
+
+    <!-- Acciones -->
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button id="tour-ed-save" style="flex:1;background:linear-gradient(90deg,#f0c040,#e0a020);color:#1a1a1a;border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;font-weight:700;cursor:pointer;">💾 GUARDAR</button>
+      <button id="tour-ed-reset" style="flex:0 0 auto;background:rgba(255,80,80,.18);color:#ffb0b0;border:1px solid rgba(255,80,80,.35);border-radius:8px;padding:10px 12px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;cursor:pointer;">RESET</button>
+    </div>
+    <div id="tour-ed-feedback" style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px;min-height:14px;text-align:center;"></div>
+  </div>
+</div>
+
+<style>
+  #tour-editor-overlay .tour-ed-row{margin-bottom:10px;}
+  #tour-editor-overlay .tour-ed-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  #tour-editor-overlay label{display:block;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:3px;font-family:Oswald,sans-serif;}
+  #tour-editor-overlay input,#tour-editor-overlay select,#tour-editor-overlay textarea{
+    width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
+    color:#fff;border-radius:6px;padding:7px 9px;font-size:13px;font-family:Rajdhani,sans-serif;
+    box-sizing:border-box;
+  }
+  #tour-editor-overlay input:focus,#tour-editor-overlay select:focus,#tour-editor-overlay textarea:focus{
+    outline:none;border-color:rgba(240,192,64,.55);
+  }
+  .tour-ed-results{
+    margin-top:6px;max-height:160px;overflow-y:auto;
+    border:1px solid rgba(255,255,255,.10);border-radius:6px;
+    background:rgba(0,0,0,.35);
+  }
+  .tour-ed-results:empty{display:none;}
+  .tour-ed-result-row{
+    display:flex;align-items:center;gap:8px;padding:6px 9px;cursor:pointer;
+    border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;
+  }
+  .tour-ed-result-row:hover{background:rgba(240,192,64,.10);}
+  .tour-ed-result-row img{width:20px;height:20px;object-fit:contain;}
+  .tour-ed-result-row .tag{margin-left:auto;font-size:9px;padding:1px 5px;border-radius:3px;letter-spacing:.5px;}
+  .tour-ed-result-row .tag-h{background:#1ea14a;color:#fff;}
+  .tour-ed-result-row .tag-i{background:rgba(255,255,255,.18);color:#ccc;}
+  .tour-ed-selected{
+    display:flex;flex-wrap:wrap;gap:5px;min-height:30px;
+    padding:5px;background:rgba(0,0,0,.25);border-radius:6px;
+    border:1px dashed rgba(255,255,255,.10);
+  }
+  .tour-ed-selected:empty::before{
+    content:'(vacío)';color:rgba(255,255,255,.30);font-size:11px;font-style:italic;padding:3px 6px;
+  }
+  .tour-ed-chip{
+    display:inline-flex;align-items:center;gap:5px;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);
+    border-radius:14px;padding:2px 8px 2px 4px;font-size:11px;
+  }
+  .tour-ed-chip img{width:16px;height:16px;object-fit:contain;}
+  .tour-ed-chip .x{cursor:pointer;color:rgba(255,255,255,.55);font-weight:700;margin-left:3px;}
+  .tour-ed-chip .x:hover{color:#ff7777;}
+  .tour-ed-chip.is-h{background:rgba(30,161,74,.20);border-color:rgba(30,161,74,.45);}
+</style>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   EDITOR DE TORNEOS DE VERANO (Fase 1, 2026-05-08)
+
+   Persiste la config de cada torneo (nombre, fechas, equipos, formato,
+   premios) en el servidor (`tour_<id>_v1` vía /api/kv/) con cache
+   local de respaldo. SOLO guarda — la fase 2 renderizará el bracket
+   y la fase 3 conectará el motor de simulación.
+
+   API expuesta en window:
+     _tourLoad(id)        → Promise<config|null>
+     _tourSave(id, cfg)   → Promise<bool>
+     _tourOpenEditor(id)  → abre overlay (PIN-gated)
+     _tourCloseEditor()   → cierra overlay
+     _tourRender(id)      → aplica config a la pantalla
+     _TOUR_DEFAULTS       → defaults por torneo
+   ══════════════════════════════════════════════════════════════════ */
+(function(){
+  var TOUR_IDS = ['sct','pss','jg','asia'];
+
+  var DEFAULTS = {
+    sct:  { name:'Soccer Champions Tour', flag:'🇺🇸', fee:40, dateStart:'1 Jul', dateEnd:'10 Jul',
+            numTeams:16, numHumans:16, aiLevelMin:70, aiLevelMax:95,
+            format:'ko', formatConfig:{ rounds:['R16','QF','SF','F'], twoLegs:false },
+            prizes:{ r16:20, qf:40, sf:60, sub:80, champ:100 }, teams:[] },
+    pss:  { name:'Premier Summer Series', flag:'🇬🇧', fee:40, dateStart:'12 Jul', dateEnd:'24 Jul',
+            numTeams:6, numHumans:6, aiLevelMin:70, aiLevelMax:95,
+            format:'league', formatConfig:{ twoLegs:false },
+            prizes:{ '6th':15, '5th':25, '4th':40, '3rd':60, sub:80, champ:100 }, teams:[] },
+    jg:   { name:'Trofeo Joan Gamper', flag:'🇪🇸', fee:40, dateStart:'24 Jul', dateEnd:'1 Ago',
+            numTeams:8, numHumans:8, aiLevelMin:70, aiLevelMax:95,
+            format:'groups-ko', formatConfig:{ groups:2, perGroup:4, koRounds:['SF','F'] },
+            prizes:{ qg:20, tg:40, semis:60, sub:80, champ:100 }, teams:[] },
+    asia: { name:'Asian Tournament', flag:'🇯🇵', fee:40, dateStart:'14 Jun', dateEnd:'17 Jun',
+            numTeams:4, numHumans:4, aiLevelMin:70, aiLevelMax:95,
+            format:'ko', formatConfig:{ rounds:['SF','F'], twoLegs:false },
+            prizes:{ sf:40, sub:80, champ:100 }, teams:[] }
+  };
+  window._TOUR_DEFAULTS = DEFAULTS;
+
+  var PRIZE_LABELS = {
+    r16:'Octavos', qf:'Cuartos', sf:'Semis', semis:'Semis',
+    sub:'Subcampeón', champ:'Campeón',
+    '6th':'Sexto', '5th':'Quinto', '4th':'Cuarto', '3rd':'Tercero',
+    qg:'Cuartos de Grupo', tg:'Tercero de Grupo'
+  };
+  var FORMAT_LABELS = {
+    ko:'Eliminatoria directa',
+    league:'Liga (round-robin)',
+    'groups-ko':'Grupos + Eliminatoria'
+  };
+
+  function _key(id){ return 'tour_' + id + '_v1'; }
+  function _cloneDefault(id){ return JSON.parse(JSON.stringify(DEFAULTS[id] || {})); }
+
+  /* ── Persistencia ──────────────────────────────────────── */
+  window._tourLoad = async function(id){
+    if (TOUR_IDS.indexOf(id) === -1) return null;
+    try {
+      var res = await fetch('/api/kv/' + _key(id), { headers:{'Cache-Control':'no-store'} });
+      if (res.ok) {
+        var j = await res.json();
+        if (j && j.ok && j.value) {
+          try { localStorage.setItem(_key(id), JSON.stringify(j.value)); } catch(_){}
+          return j.value;
+        }
+      }
+    } catch(_){}
+    /* Fallback: cache local. */
+    try {
+      var raw = localStorage.getItem(_key(id));
+      if (raw) return JSON.parse(raw);
+    } catch(_){}
+    return null;
+  };
+
+  window._tourSave = async function(id, cfg){
+    if (TOUR_IDS.indexOf(id) === -1) return false;
+    cfg = cfg || {};
+    cfg.id = id;
+    cfg.updatedAt = new Date().toISOString();
+    try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
+    try {
+      var res = await fetch('/api/kv/' + _key(id), {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ value: cfg })
+      });
+      var j = await res.json();
+      return !!(j && j.ok);
+    } catch(_) { return false; }
+  };
+
+  /* ── Lupa de equipos (lee ligaExt_* + SQUAD_REGISTRY) ─── */
+  function _norm(s){
+    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+  }
+  function _shieldOf(name){
+    try { if (typeof window.getTeamLogoUrl === 'function') return window.getTeamLogoUrl(name) || ''; } catch(_){}
+    return '';
+  }
+  function _allTeams(){
+    var out = [], seen = {};
+    function _push(name, isHuman, shield){
+      var clean = String(name||'').trim();
+      if (!clean) return;
+      var k = clean.toLowerCase();
+      if (seen[k]) {
+        if (isHuman) seen[k].isHuman = true;
+        return;
+      }
+      var entry = { name: clean, isHuman: !!isHuman, shield: shield || _shieldOf(clean) };
+      seen[k] = entry;
+      out.push(entry);
+    }
+    try {
+      for (var i = 0; i < localStorage.length; i++){
+        var key = localStorage.key(i);
+        if (!key || key.indexOf('ligaExt_') !== 0) continue;
+        if (key.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(key);
+        if (!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+        if (!data || !Array.isArray(data.teams)) continue;
+        data.teams.forEach(function(t){
+          if (t && t.name) _push(t.name, t.isHuman, t.shield);
+        });
+      }
+    } catch(_){}
+    try {
+      var reg = window.SQUAD_REGISTRY || {};
+      Object.keys(reg).forEach(function(name){ _push(name, false, ''); });
+    } catch(_){}
+    out.sort(function(a,b){ return a.name.localeCompare(b.name,'es'); });
+    return out;
+  }
+
+  /* ── Estado del editor abierto ─────────────────────────── */
+  var _open = null;  /* { id, cfg } */
+
+  function _setFeedback(msg, ok){
+    var el = document.getElementById('tour-ed-feedback');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = ok === true ? '#9ee5a9' : (ok === false ? '#ff9090' : 'rgba(255,255,255,.55)');
+  }
+
+  function _renderSelected(){
+    var box = document.getElementById('tour-ed-selected');
+    var cnt = document.getElementById('tour-ed-tcount');
+    if (!box || !_open) return;
+    var teams = _open.cfg.teams || [];
+    cnt.textContent = String(teams.length);
+    box.innerHTML = teams.map(function(t, idx){
+      var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
+      var cls = t.isHuman ? 'tour-ed-chip is-h' : 'tour-ed-chip';
+      return '<span class="'+cls+'">'+img+'<span>'+t.name+'</span><span class="x" data-i="'+idx+'">×</span></span>';
+    }).join('');
+    box.querySelectorAll('.x').forEach(function(x){
+      x.addEventListener('click', function(){
+        var i = parseInt(this.getAttribute('data-i'), 10);
+        if (!isNaN(i)) {
+          _open.cfg.teams.splice(i, 1);
+          _renderSelected();
+        }
+      });
+    });
+  }
+
+  function _renderResults(query){
+    var box = document.getElementById('tour-ed-results');
+    if (!box) return;
+    var q = _norm(query);
+    if (q.length < 3) { box.innerHTML = ''; return; }
+    var picked = {};
+    (_open.cfg.teams || []).forEach(function(t){ picked[t.name.toLowerCase()] = true; });
+    var matches = _allTeams().filter(function(t){
+      if (picked[t.name.toLowerCase()]) return false;
+      return _norm(t.name).indexOf(q) !== -1;
+    }).slice(0, 12);
+    if (!matches.length) { box.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:rgba(255,255,255,.35);">Sin resultados</div>'; return; }
+    box.innerHTML = matches.map(function(t){
+      var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
+      var tag = t.isHuman ? '<span class="tag tag-h">HUMANO</span>' : '<span class="tag tag-i">IA</span>';
+      return '<div class="tour-ed-result-row" data-name="'+t.name.replace(/"/g,'&quot;')+'" data-h="'+(t.isHuman?1:0)+'" data-s="'+(t.shield||'').replace(/"/g,'&quot;')+'">'+img+'<span>'+t.name+'</span>'+tag+'</div>';
+    }).join('');
+    box.querySelectorAll('.tour-ed-result-row').forEach(function(row){
+      row.addEventListener('click', function(){
+        if (!_open) return;
+        var name = this.getAttribute('data-name');
+        var isH = this.getAttribute('data-h') === '1';
+        var sh = this.getAttribute('data-s') || '';
+        _open.cfg.teams = _open.cfg.teams || [];
+        _open.cfg.teams.push({ name:name, isHuman:isH, shield:sh });
+        _renderSelected();
+        document.getElementById('tour-ed-search').value = '';
+        box.innerHTML = '';
+      });
+    });
+  }
+
+  function _renderFmtCfg(){
+    var box = document.getElementById('tour-ed-fmt-cfg');
+    if (!box || !_open) return;
+    var fmt = _open.cfg.format;
+    var fc = _open.cfg.formatConfig || {};
+    if (fmt === 'ko') {
+      box.innerHTML =
+        '<label>Rondas (separadas por coma)</label>' +
+        '<input id="tour-ed-rounds" type="text" value="'+(fc.rounds||['SF','F']).join(',')+'" placeholder="R16,QF,SF,F">' +
+        '<label style="margin-top:8px;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
+        '<input id="tour-ed-twolegs" type="checkbox" style="width:auto;" '+(fc.twoLegs?'checked':'')+'> Ida y vuelta</label>';
+    } else if (fmt === 'league') {
+      box.innerHTML =
+        '<label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
+        '<input id="tour-ed-twolegs" type="checkbox" style="width:auto;" '+(fc.twoLegs?'checked':'')+'> A doble vuelta</label>';
+    } else if (fmt === 'groups-ko') {
+      box.innerHTML =
+        '<div class="tour-ed-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
+        '<div><label>Nº grupos</label><input id="tour-ed-groups" type="number" min="1" max="16" value="'+(fc.groups||2)+'"></div>' +
+        '<div><label>Equipos / grupo</label><input id="tour-ed-pergroup" type="number" min="2" max="16" value="'+(fc.perGroup||4)+'"></div>' +
+        '</div>' +
+        '<label style="margin-top:8px;">Eliminatoria final (rondas)</label>' +
+        '<input id="tour-ed-rounds" type="text" value="'+(fc.koRounds||['SF','F']).join(',')+'" placeholder="QF,SF,F">';
+    }
+  }
+
+  function _prizesToText(p){
+    return Object.keys(p||{}).map(function(k){ return k+':'+p[k]; }).join('\n');
+  }
+  function _prizesFromText(txt){
+    var out = {};
+    String(txt||'').split(/\r?\n/).forEach(function(line){
+      var m = line.match(/^\s*([A-Za-z0-9_\-]+)\s*:\s*(\d+)\s*$/);
+      if (m) out[m[1]] = parseInt(m[2], 10);
+    });
+    return out;
+  }
+
+  function _populateForm(cfg){
+    document.getElementById('tour-ed-name').value = cfg.name || '';
+    document.getElementById('tour-ed-flag').value = cfg.flag || '';
+    document.getElementById('tour-ed-fee').value = cfg.fee || 0;
+    document.getElementById('tour-ed-dstart').value = cfg.dateStart || '';
+    document.getElementById('tour-ed-dend').value = cfg.dateEnd || '';
+    document.getElementById('tour-ed-num').value = cfg.numTeams || 0;
+    document.getElementById('tour-ed-hum').value = cfg.numHumans || 0;
+    document.getElementById('tour-ed-aimin').value = cfg.aiLevelMin || 70;
+    document.getElementById('tour-ed-aimax').value = cfg.aiLevelMax || 95;
+    document.getElementById('tour-ed-fmt').value = cfg.format || 'ko';
+    document.getElementById('tour-ed-prizes').value = _prizesToText(cfg.prizes);
+    _renderFmtCfg();
+    _renderSelected();
+  }
+
+  function _readForm(cfg){
+    cfg.name       = document.getElementById('tour-ed-name').value.trim() || cfg.name;
+    cfg.flag       = document.getElementById('tour-ed-flag').value.trim() || cfg.flag;
+    cfg.fee        = parseInt(document.getElementById('tour-ed-fee').value, 10) || 0;
+    cfg.dateStart  = document.getElementById('tour-ed-dstart').value.trim();
+    cfg.dateEnd    = document.getElementById('tour-ed-dend').value.trim();
+    cfg.numTeams   = parseInt(document.getElementById('tour-ed-num').value, 10) || 0;
+    cfg.numHumans  = parseInt(document.getElementById('tour-ed-hum').value, 10) || 0;
+    cfg.aiLevelMin = parseInt(document.getElementById('tour-ed-aimin').value, 10) || 70;
+    cfg.aiLevelMax = parseInt(document.getElementById('tour-ed-aimax').value, 10) || 95;
+    cfg.format     = document.getElementById('tour-ed-fmt').value;
+    cfg.formatConfig = cfg.formatConfig || {};
+    if (cfg.format === 'ko') {
+      var roundsEl = document.getElementById('tour-ed-rounds');
+      cfg.formatConfig = {
+        rounds: roundsEl ? roundsEl.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F'],
+        twoLegs: !!document.getElementById('tour-ed-twolegs') && document.getElementById('tour-ed-twolegs').checked
+      };
+    } else if (cfg.format === 'league') {
+      cfg.formatConfig = {
+        twoLegs: !!document.getElementById('tour-ed-twolegs') && document.getElementById('tour-ed-twolegs').checked
+      };
+    } else if (cfg.format === 'groups-ko') {
+      var rEl = document.getElementById('tour-ed-rounds');
+      cfg.formatConfig = {
+        groups: parseInt(document.getElementById('tour-ed-groups').value, 10) || 2,
+        perGroup: parseInt(document.getElementById('tour-ed-pergroup').value, 10) || 4,
+        koRounds: rEl ? rEl.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F']
+      };
+    }
+    cfg.prizes = _prizesFromText(document.getElementById('tour-ed-prizes').value);
+    return cfg;
+  }
+
+  /* ── Apertura / cierre ─────────────────────────────────── */
+  async function _doOpen(id){
+    var saved = await window._tourLoad(id);
+    var cfg = saved || _cloneDefault(id);
+    _open = { id: id, cfg: cfg };
+    document.getElementById('tour-editor-title').textContent = 'EDITAR · ' + (cfg.name || id).toUpperCase();
+    _populateForm(cfg);
+    _setFeedback('');
+    document.getElementById('tour-editor-overlay').style.display = 'flex';
+  }
+
+  window._tourOpenEditor = function(id){
+    if (TOUR_IDS.indexOf(id) === -1) return;
+    if (typeof window.pG === 'function') {
+      window.pG(function(){ _doOpen(id); });
+    } else {
+      _doOpen(id);
+    }
+  };
+
+  window._tourCloseEditor = function(){
+    document.getElementById('tour-editor-overlay').style.display = 'none';
+    _open = null;
+  };
+
+  /* ── Render en pantalla del torneo ─────────────────────── */
+  window._tourRender = async function(id){
+    if (TOUR_IDS.indexOf(id) === -1) return;
+    var cfg = await window._tourLoad(id);
+    if (!cfg) cfg = _cloneDefault(id);
+    var titleEl = document.getElementById('tour-title-'+id);
+    var flagEl  = document.getElementById('tour-flag-'+id);
+    var infoEl  = document.getElementById('tour-info-'+id);
+    if (titleEl && cfg.name) titleEl.textContent = cfg.name;
+    if (flagEl  && cfg.flag) flagEl.textContent  = cfg.flag;
+    if (!infoEl) return;
+    var prizesHtml = Object.keys(cfg.prizes||{}).map(function(k){
+      var label = PRIZE_LABELS[k] || k;
+      return '<li>'+label+' <b>+'+cfg.prizes[k]+' 🪙</b></li>';
+    }).join('');
+    var fmtLabel = FORMAT_LABELS[cfg.format] || cfg.format;
+    var fc = cfg.formatConfig || {};
+    var fmtDetail = '';
+    if (cfg.format === 'ko') {
+      fmtDetail = (fc.rounds||[]).join(' → ') + (fc.twoLegs?' (ida/vuelta)':'');
+    } else if (cfg.format === 'league') {
+      fmtDetail = (cfg.numTeams||'?')+' equipos'+(fc.twoLegs?' a doble vuelta':' a una vuelta');
+    } else if (cfg.format === 'groups-ko') {
+      fmtDetail = (fc.groups||'?')+' grupos de '+(fc.perGroup||'?')+' + '+(fc.koRounds||[]).join('→');
+    }
+    var teamsHtml = '';
+    if (cfg.teams && cfg.teams.length) {
+      teamsHtml = '<p style="margin-top:10px;"><b>Equipos ('+cfg.teams.length+'/'+(cfg.numTeams||'?')+'):</b></p>'+
+        '<div class="tour-teams-grid">' +
+        cfg.teams.map(function(t){
+          var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
+          var tag = t.isHuman ? '<span class="tag-h">H</span>' : '<span class="tag-i">IA</span>';
+          return '<div class="tour-team-chip">'+img+'<span>'+t.name+'</span>'+tag+'</div>';
+        }).join('') + '</div>';
+    }
+    infoEl.innerHTML =
+      '<p><b>Participación:</b> '+(cfg.fee||0)+' 🪙 · '+(cfg.numTeams||0)+' equipos · '+(cfg.numHumans||0)+' 👤</p>'+
+      '<p><b>Fechas:</b> '+(cfg.dateStart||'?')+' al '+(cfg.dateEnd||'?')+'</p>'+
+      '<p><b>Nivel IA:</b> '+(cfg.aiLevelMin||0)+'–'+(cfg.aiLevelMax||0)+'</p>'+
+      '<p><b>Formato:</b> '+fmtLabel+(fmtDetail?'<br><span style="opacity:.75;">'+fmtDetail+'</span>':'')+'</p>'+
+      (prizesHtml ? '<p style="margin-top:10px;"><b>Premios:</b></p><ul>'+prizesHtml+'</ul>' : '')+
+      teamsHtml;
+  };
+
+  /* ── Wire-up del overlay (1 sola vez por carga de página) */
+  function _wire(){
+    var search = document.getElementById('tour-ed-search');
+    if (search) {
+      search.addEventListener('input', function(){ _renderResults(this.value); });
+    }
+    var fmt = document.getElementById('tour-ed-fmt');
+    if (fmt) {
+      fmt.addEventListener('change', function(){
+        if (!_open) return;
+        _open.cfg.format = this.value;
+        _open.cfg.formatConfig = {};
+        _renderFmtCfg();
+      });
+    }
+    var save = document.getElementById('tour-ed-save');
+    if (save) {
+      save.addEventListener('click', async function(){
+        if (!_open) return;
+        _readForm(_open.cfg);
+        _setFeedback('Guardando…');
+        var ok = await window._tourSave(_open.id, _open.cfg);
+        if (ok) {
+          _setFeedback('✓ Guardado en servidor', true);
+          window._tourRender(_open.id);
+          setTimeout(function(){ window._tourCloseEditor(); }, 700);
+        } else {
+          _setFeedback('⚠ Guardado solo en local (sin red)', false);
+        }
+      });
+    }
+    var reset = document.getElementById('tour-ed-reset');
+    if (reset) {
+      reset.addEventListener('click', function(){
+        if (!_open) return;
+        if (!confirm('¿Resetear este torneo a sus valores por defecto?')) return;
+        _open.cfg = _cloneDefault(_open.id);
+        _populateForm(_open.cfg);
+        _setFeedback('');
+      });
+    }
+    var ovl = document.getElementById('tour-editor-overlay');
+    if (ovl) {
+      ovl.addEventListener('click', function(e){
+        if (e.target === ovl) window._tourCloseEditor();
+      });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _wire);
+  } else {
+    _wire();
+  }
+
+  /* ── Hook a `go(id)` para renderizar al entrar en cada pantalla.
+        No reemplazamos `go`; solo añadimos un listener post-hoc. */
+  function _maybeRenderOnNav(){
+    try {
+      var origGo = window.go;
+      if (typeof origGo !== 'function' || origGo._tourPatched) return;
+      window.go = function(target){
+        var r = origGo.apply(this, arguments);
+        if (TOUR_IDS.indexOf(target) !== -1) {
+          try { window._tourRender(target); } catch(_){}
+        }
+        return r;
+      };
+      window.go._tourPatched = true;
+    } catch(_){}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _maybeRenderOnNav);
+  } else {
+    _maybeRenderOnNav();
+  }
+})();
+</script>
 <div class="screen" id="s-champions">
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" onerror="this.style.display='none'" alt="UCL"/><h2>Champions League</h2></div>

@@ -6060,7 +6060,7 @@ window._showSimProgress = function(opts, onDone){
      SupEsp en `ef_player_stats_v1` para que el dashboard EA Sports
      muestre el total agregado; aquí mostramos SOLO Copa para
      análisis aislado por competición. -->
-<div class="submenu-card sc-copa-stats" style="margin-top:10px;background:linear-gradient(135deg,#052010,#0a3a25,#16a34a,#0a3a25,#052010) !important;border-color:#22c55e !important;" onclick="go('s-copa-stats')">
+<div class="submenu-card sc-copa-stats" style="margin-top:10px;background:linear-gradient(135deg,#1a0f00 0%,#5a3a00 25%,#a86018 50%,#f0a020 70%,#a86018 85%,#1a0f00 100%) !important;border:1.5px solid #f0a020 !important;box-shadow:0 4px 18px rgba(240,160,32,.32),inset 0 1px 0 rgba(255,215,0,.15) !important;" onclick="go('s-copa-stats')">
 <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
 </div>
 </div>
@@ -6160,6 +6160,185 @@ window._showSimProgress = function(opts, onDone){
 </script>
 </div>
 
+<!-- ═══ COPA DEL REY stats — paleta naranja-dorado igual que la
+     temática de Copa (sustituye al verde esmeralda anterior, que
+     era genérico). Sobrescribe los defaults cyan de
+     `.liga-stat-card` / `.liga-stat-title` etc.            ═══ -->
+<style>
+#s-copa-stats .liga-stat-card{border-color:rgba(240,160,32,.45)!important;background:linear-gradient(145deg,#180c00 0%,#2c1a00 45%,#0d0600 100%)!important;}
+#s-copa-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(255,160,32,.7),rgba(255,215,100,1),rgba(255,160,32,.7),transparent)!important;}
+#s-copa-stats .liga-stat-card::after{border-color:rgba(255,200,80,.45)!important;}
+#s-copa-stats .liga-stat-head{background:linear-gradient(90deg,rgba(120,70,0,.55),rgba(220,140,20,.20),rgba(80,40,0,.12))!important;border-bottom:1px solid rgba(240,160,32,.40)!important;}
+#s-copa-stats .liga-stat-title{color:#ffc060!important;text-shadow:0 0 18px rgba(240,160,32,.65),0 0 6px rgba(240,200,80,.4)!important;}
+#s-copa-stats .liga-stat-rank{color:rgba(255,180,80,.85)!important;text-shadow:0 0 12px rgba(240,160,32,.55)!important;}
+</style>
+
+<!-- ═══ MUNDIALITO CLUBES · Pantalla principal + 3 sub-pantallas ═══
+     Petición usuario 2026-05-08: 4 cajas (Cuartos, Semis, Final,
+     Estadísticas) con la paleta cian/turquesa que ya distingue al
+     Mundialito en Competiciones (#4dd0e1 borde, gradient azul→cian
+     →azul). El Mundial de Clubes no tiene sorteo todavía — las 3
+     sub-pantallas (cuartos/semis/final) son placeholders esperando
+     a que el motor de bracket se implemente (igual que recopa,
+     intercontinental, etc. en su día). -->
+<div class="screen" id="s-mundial-clubes">
+<button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Mundialito Clubes</h2></div>
+<div class="jlist">
+  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial-cuartos')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Cuartos de Final</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial-semis')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Semifinales</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial-final')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;FINAL</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+  <!-- 📊 Estadísticas -->
+  <div class="submenu-card sc-mundial-stats" style="margin-top:10px;background:linear-gradient(135deg,#001f2a 0%,#003a52 25%,#006080 50%,#00bcd4 70%,#006080 85%,#001f2a 100%) !important;border:1.5px solid #4dd0e1 !important;box-shadow:0 4px 18px rgba(0,188,212,.32),inset 0 1px 0 rgba(255,255,255,.10) !important;" onclick="go('s-mundial-stats')">
+    <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
+  </div>
+</div>
+</div>
+<style>
+/* Botones de ronda Mundialito Clubes — gradient cian/turquesa
+   coherente con la caja principal en s-competiciones. */
+.c-mundial{background:linear-gradient(90deg,#001f2a,#003a52,#006080,#00bcd4,#006080,#003a52,#001f2a) !important;border:1.5px solid rgba(77,208,225,.55) !important;}
+</style>
+<div class="screen" id="s-mundial-cuartos"><button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Mundialito · Cuartos de Final</h2></div><div style="padding:24px 18px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:2px;color:rgba(255,255,255,.5);">Sorteo pendiente</div></div>
+<div class="screen" id="s-mundial-semis"><button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Mundialito · Semifinales</h2></div><div style="padding:24px 18px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:2px;color:rgba(255,255,255,.5);">Sorteo pendiente</div></div>
+<div class="screen" id="s-mundial-final"><button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Mundialito · FINAL</h2></div><div style="padding:24px 18px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:2px;color:rgba(255,255,255,.5);">Sorteo pendiente</div></div>
+
+<!-- ═══ PANTALLAS DE ESTADÍSTICAS POR COMPETICIÓN ═══════════════════
+     Cada una usa el mismo dashboard genérico
+     `_lextBuildCompStatsDashboard(rootId, statsKey)` (mismas categorías
+     que Liga EA Sports stats: Goleadores, Imbat, Tarjetas, Penaltis,
+     Faltas, MVP, Autogoles). El COLOR cambia por pantalla mediante
+     CSS scoped al ID — sobrescribe los defaults cyan/oro del bundle
+     CSS para que el estilo case con la temática de cada competición. -->
+<style>
+/* RECOPA EUROPA stats — rojo intenso + dorado. */
+#s-recopa-stats .liga-stat-card{border-color:rgba(192,26,26,.45)!important;background:linear-gradient(145deg,#1a0404 0%,#2c0808 45%,#0d0202 100%)!important;}
+#s-recopa-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(255,80,80,.7),rgba(255,215,0,1),rgba(255,80,80,.7),transparent)!important;}
+#s-recopa-stats .liga-stat-card::after{border-color:rgba(255,160,160,.45)!important;}
+#s-recopa-stats .liga-stat-head{background:linear-gradient(90deg,rgba(140,0,0,.55),rgba(220,40,40,.20),rgba(80,0,0,.12))!important;border-bottom:1px solid rgba(192,26,26,.40)!important;}
+#s-recopa-stats .liga-stat-title{color:#ff7878!important;text-shadow:0 0 18px rgba(220,40,40,.65)!important;}
+#s-recopa-stats .liga-stat-rank{color:rgba(255,160,160,.85)!important;text-shadow:0 0 12px rgba(220,60,60,.55)!important;}
+#s-recopa-stats .liga-stat-value{color:#ffd700!important;text-shadow:0 0 18px rgba(255,215,0,.6)!important;}
+
+/* SUPERCOPA EUROPA stats — gris/plata/dorado. */
+#s-usc-stats .liga-stat-card{border-color:rgba(192,192,192,.40)!important;background:linear-gradient(145deg,#0a0a0a 0%,#1a1a1a 45%,#050505 100%)!important;}
+#s-usc-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(192,192,192,.7),rgba(240,200,80,1),rgba(192,192,192,.7),transparent)!important;}
+#s-usc-stats .liga-stat-card::after{border-color:rgba(220,220,220,.45)!important;}
+#s-usc-stats .liga-stat-head{background:linear-gradient(90deg,rgba(60,60,60,.55),rgba(140,140,140,.20),rgba(40,40,40,.12))!important;border-bottom:1px solid rgba(192,192,192,.40)!important;}
+#s-usc-stats .liga-stat-title{color:#e8e8e8!important;text-shadow:0 0 18px rgba(255,255,255,.55)!important;}
+#s-usc-stats .liga-stat-rank{color:rgba(220,220,220,.85)!important;text-shadow:0 0 12px rgba(192,192,192,.55)!important;}
+#s-usc-stats .liga-stat-value{color:#f0c840!important;text-shadow:0 0 18px rgba(240,200,64,.6)!important;}
+
+/* INTERCONTINENTAL stats — wine + dorado-naranja. */
+#s-inter-stats .liga-stat-card{border-color:rgba(255,144,32,.42)!important;background:linear-gradient(145deg,#1a0404 0%,#2c0a0a 45%,#0d0202 100%)!important;}
+#s-inter-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(255,144,32,.7),rgba(255,200,80,1),rgba(255,144,32,.7),transparent)!important;}
+#s-inter-stats .liga-stat-card::after{border-color:rgba(255,180,80,.45)!important;}
+#s-inter-stats .liga-stat-head{background:linear-gradient(90deg,rgba(110,40,0,.55),rgba(220,120,20,.20),rgba(80,30,0,.12))!important;border-bottom:1px solid rgba(255,144,32,.40)!important;}
+#s-inter-stats .liga-stat-title{color:#ffb060!important;text-shadow:0 0 18px rgba(255,144,32,.65)!important;}
+#s-inter-stats .liga-stat-rank{color:rgba(255,180,80,.85)!important;text-shadow:0 0 12px rgba(255,144,32,.55)!important;}
+#s-inter-stats .liga-stat-value{color:#ffd700!important;text-shadow:0 0 18px rgba(255,215,0,.6)!important;}
+
+/* MUNDIALITO CLUBES stats — cian/turquesa. */
+#s-mundial-stats .liga-stat-card{border-color:rgba(0,188,212,.45)!important;background:linear-gradient(145deg,#001a25 0%,#002c3e 45%,#000a12 100%)!important;}
+#s-mundial-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(77,208,225,.75),rgba(180,240,255,1),rgba(77,208,225,.75),transparent)!important;}
+#s-mundial-stats .liga-stat-card::after{border-color:rgba(120,220,235,.45)!important;}
+#s-mundial-stats .liga-stat-head{background:linear-gradient(90deg,rgba(0,80,110,.55),rgba(0,140,180,.20),rgba(0,40,60,.12))!important;border-bottom:1px solid rgba(77,208,225,.40)!important;}
+#s-mundial-stats .liga-stat-title{color:#80e0f0!important;text-shadow:0 0 18px rgba(0,188,212,.7)!important;}
+#s-mundial-stats .liga-stat-rank{color:rgba(140,220,235,.85)!important;text-shadow:0 0 12px rgba(0,188,212,.55)!important;}
+#s-mundial-stats .liga-stat-value{color:#fff8b0!important;text-shadow:0 0 18px rgba(255,240,140,.6)!important;}
+
+/* TORNEOS DE VERANO stats — dorado/amarillo. */
+#s-torneos-stats .liga-stat-card{border-color:rgba(240,192,64,.45)!important;background:linear-gradient(145deg,#1a1300 0%,#2c2000 45%,#0d0a00 100%)!important;}
+#s-torneos-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(240,192,64,.7),rgba(255,240,180,1),rgba(240,192,64,.7),transparent)!important;}
+#s-torneos-stats .liga-stat-card::after{border-color:rgba(255,220,120,.45)!important;}
+#s-torneos-stats .liga-stat-head{background:linear-gradient(90deg,rgba(120,80,0,.55),rgba(220,160,20,.20),rgba(80,50,0,.12))!important;border-bottom:1px solid rgba(240,192,64,.40)!important;}
+#s-torneos-stats .liga-stat-title{color:#ffd870!important;text-shadow:0 0 18px rgba(240,192,64,.65)!important;}
+#s-torneos-stats .liga-stat-rank{color:rgba(255,220,120,.85)!important;text-shadow:0 0 12px rgba(240,192,64,.55)!important;}
+#s-torneos-stats .liga-stat-value{color:#ffe890!important;text-shadow:0 0 18px rgba(255,232,144,.6)!important;}
+</style>
+
+<!-- Pantalla Recopa Europa stats -->
+<div class="screen" id="s-recopa-stats">
+<button class="back-btn" onclick="go('s-recopa')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Recopa Europa · Estadísticas</h2></div>
+<div class="liga-stats-wrap" id="recopa-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
+</div>
+
+<!-- Pantalla Supercopa de Europa stats -->
+<div class="screen" id="s-usc-stats">
+<button class="back-btn" onclick="go('s-usc')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Supercopa Europa · Estadísticas</h2></div>
+<div class="liga-stats-wrap" id="usc-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
+</div>
+
+<!-- Pantalla Intercontinental stats -->
+<div class="screen" id="s-inter-stats">
+<button class="back-btn" onclick="go('s-intercontinental')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Intercontinental · Estadísticas</h2></div>
+<div class="liga-stats-wrap" id="inter-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
+</div>
+
+<!-- Pantalla Mundialito Clubes stats -->
+<div class="screen" id="s-mundial-stats">
+<button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Mundialito Clubes · Estadísticas</h2></div>
+<div class="liga-stats-wrap" id="mundial-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
+</div>
+
+<!-- Pantalla Torneos de Verano stats -->
+<div class="screen" id="s-torneos-stats">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Torneos de Verano · Estadísticas</h2></div>
+<div class="liga-stats-wrap" id="torneos-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
+</div>
+
+<script>
+/* Re-render genérico para las pantallas de estadísticas por
+   competición. Mismo patrón que `s-copa-stats` arriba: sync los
+   caches (rebuild desde eventos) y dispara
+   `_lextBuildCompStatsDashboard(rootId, statsKey)`. Se observa la
+   activación de cada pantalla via MutationObserver sobre la clase
+   `.active` para refrescar al entrar (sin esto, los stats quedan
+   stale tras un partido nuevo). */
+(function(){
+  var STATS_SCREENS = [
+    { screenId:'s-recopa-stats',  rootId:'recopa-stats-dashboard',  storeKey:'ef_player_stats_recopa_v1' },
+    { screenId:'s-usc-stats',     rootId:'usc-stats-dashboard',     storeKey:'ef_player_stats_usc_v1' },
+    { screenId:'s-inter-stats',   rootId:'inter-stats-dashboard',   storeKey:'ef_player_stats_inter_v1' },
+    { screenId:'s-mundial-stats', rootId:'mundial-stats-dashboard', storeKey:'ef_player_stats_mundial_v1' },
+    { screenId:'s-torneos-stats', rootId:'torneos-stats-dashboard', storeKey:'ef_player_stats_torneos_v1' }
+  ];
+  function _renderOne(cfg){
+    if (typeof window.syncLigaEaPlayerStats === 'function') {
+      try { window.syncLigaEaPlayerStats(); } catch(_){}
+    }
+    if (typeof window._lextBuildCompStatsDashboard === 'function') {
+      window._lextBuildCompStatsDashboard(cfg.rootId, cfg.storeKey);
+    }
+  }
+  STATS_SCREENS.forEach(function(cfg){
+    try {
+      var el = document.getElementById(cfg.screenId);
+      if (!el) return;
+      if (typeof MutationObserver !== 'undefined') {
+        var mo = new MutationObserver(function(mutations){
+          for (var i = 0; i < mutations.length; i++) {
+            var m = mutations[i];
+            if (m.type === 'attributes' && (m.attributeName === 'class' || m.attributeName === 'style')) {
+              if (el.classList && el.classList.contains('active')) _renderOne(cfg);
+            }
+          }
+        });
+        mo.observe(el, { attributes:true });
+      }
+    } catch(_){}
+  });
+  document.addEventListener('DOMContentLoaded', function(){
+    STATS_SCREENS.forEach(_renderOne);
+  });
+})();
+</script>
+
 <!-- ═══ RECOPA DE EUROPA · Pantalla principal + 6 rondas ═══
      Petición usuario 2026-05-06. Competición europea single-leg
      con 64 equipos. Pool: campeón + (subcampeón opcional) de cada
@@ -6179,6 +6358,13 @@ window._showSimProgress = function(opts, onDone){
 <div class="jblock" id="recopa-rd-r8-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r8')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Cuartos de Final</span><span class="recopa-rd-cnt" id="recopa-rd-r8-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="recopa-rd-sf-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-sf')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Semifinales</span><span class="recopa-rd-cnt" id="recopa-rd-sf-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="recopa-rd-fin-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-fin')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;FINAL</span><span class="recopa-rd-cnt" id="recopa-rd-fin-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+<!-- Caja "📊 Estadísticas" Recopa Europa (2026-05-08): paleta rojo-
+     intenso + dorado igual que la temática de la competición. Lee
+     de `ef_player_stats_recopa_v1` (cache aislado, populado por
+     rebuildPlayerStatsStore). -->
+<div class="submenu-card sc-recopa-stats" style="margin-top:10px;background:linear-gradient(135deg,#1a0404 0%,#4a0808 25%,#8a1010 50%,#c01a1a 70%,#8a1010 85%,#1a0404 100%) !important;border:1.5px solid #ffd700 !important;box-shadow:0 4px 18px rgba(192,26,26,.32),inset 0 1px 0 rgba(255,215,0,.18) !important;" onclick="go('s-recopa-stats')">
+<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
+</div>
 </div>
 </div>
 <div class="screen" id="s-recopa-rd-r64"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · 1/64</h2></div><div id="recopa-rd-r64-body" style="padding:0 4px 20px;"></div></div>
@@ -6552,7 +6738,6 @@ window._showSimProgress = function(opts, onDone){
     var html = '';
     if(!s || !s.sorteo || !s.sorteo.r64 || !s.sorteo.r64.length){
       var pool = _buildPool();
-      html += '<div class="recopa-banner-info">🟤 La Recopa de Europa enfrenta a los <b>campeones de copa</b> de las 51 ligas + equipos españoles añadidos manualmente. Pool actual: <b>' + pool.length + '</b> equipos.</div>';
       html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/64 (' + pool.length + ' equipos)</button>';
     } else {
       var phase = _firstPhaseToDraw(s);
@@ -8056,6 +8241,16 @@ window._showSimProgress = function(opts, onDone){
     <span class="sc-emoji">🇯🇵</span><span class="sc-label">Asian Tournament</span>
     <button type="button" class="sc-info-btn"
             onclick="event.stopPropagation();window.muTourInfo('asia')" title="Info">ℹ️</button>
+    <span class="sc-arr">▶</span>
+  </div>
+  <!-- Caja "📊 Estadísticas" Torneos de Verano (2026-05-08): paleta
+       dorado/amarillo igual que la temática (la caja en s-competiciones
+       es dorada). Lee de `ef_player_stats_torneos_v1` (cache aislado
+       que persistirá la suma de los 4 torneos individuales). -->
+  <div class="submenu-card sc-torneos-stats"
+       style="margin-top:6px;background:linear-gradient(135deg,#2a1f00 0%,#7a5a00 25%,#c89020 50%,#f0c040 70%,#c89020 85%,#2a1f00 100%) !important;border:1.5px solid #f0c040 !important;box-shadow:0 4px 18px rgba(240,192,64,.30),inset 0 1px 0 rgba(255,255,255,.12) !important;"
+       onclick="go('s-torneos-stats')">
+    <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span>
     <span class="sc-arr">▶</span>
   </div>
 </div>
@@ -10985,6 +11180,12 @@ window._showSimProgress = function(opts, onDone){
 <div class="jmatches" id="usc-f">
 <div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
 </div></div>
+<!-- Caja "📊 Estadísticas" Supercopa de Europa (2026-05-08): paleta
+     gris/plata/dorado igual que la temática (la caja en s-competiciones
+     es gris-negro con dorado). Lee de `ef_player_stats_usc_v1`. -->
+<div class="submenu-card sc-usc-stats" style="margin-top:10px;background:linear-gradient(135deg,#0a0a0a 0%,#262626 25%,#5a5a5a 55%,#c0c0c0 70%,#5a5a5a 85%,#0a0a0a 100%) !important;border:1.5px solid #c0c0c0 !important;box-shadow:0 4px 18px rgba(192,192,192,.28),inset 0 1px 0 rgba(255,255,255,.18) !important;" onclick="go('s-usc-stats')">
+<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
+</div>
 </div>
 </div>
 <div class="screen" id="s-intercontinental">
@@ -11018,8 +11219,12 @@ window._showSimProgress = function(opts, onDone){
 <div class="jmatches" id="inter-f">
 <div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
 </div></div>
-<div class="jblock" style="border:1px solid rgba(220,50,50,.5);border-radius:4px;">
-<button class="jbtn" onclick="" style="background:#2a0a0a;color:#e05050;"><div class="pdot" style="border-color:#e05050;">🗂️</div>Cuadro de Eliminatorias — próximamente</button>
+<!-- Caja "📊 Estadísticas" Intercontinental (2026-05-08, sustituye al
+     placeholder "Cuadro de Eliminatorias — próximamente"). Paleta wine
+     oscuro + dorado-naranja igual que la temática (#ff9020 borde). Lee
+     de `ef_player_stats_inter_v1`. -->
+<div class="submenu-card sc-inter-stats" style="margin-top:10px;background:linear-gradient(135deg,#1a0404 0%,#3a0a0a 25%,#6a1818 55%,#ff9020 70%,#6a1818 85%,#1a0404 100%) !important;border:1.5px solid #ff9020 !important;box-shadow:0 4px 18px rgba(255,144,32,.30),inset 0 1px 0 rgba(255,255,255,.10) !important;" onclick="go('s-inter-stats')">
+<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
 </div>
 </div>
 </div>

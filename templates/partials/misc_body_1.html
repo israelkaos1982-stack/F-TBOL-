@@ -14201,17 +14201,26 @@ Tottenham
   /* Normaliza el nombre de un equipo para comparar entre el card del
      partido y el editor: lower-case, sin acentos, sin espacios extra,
      y sin prefijos/sufijos típicos del fútbol (AD, CF, FC, CD, UD,
-     RC, RCD, SD, SC, AC, AS). Necesario porque el match card puede
-     usar "Mérida" mientras que el editor lo guarda como "AD Mérida"
-     — sin esta normalización el match exacto falla y caemos al MAP
-     hardcoded de primera-rfef-data.js. Reportado 2026-05-07 con
-     Mérida → "Al-Taawoun" en lugar del alias del editor. */
+     RC, RCD, SD, SC, AC, AS, CP, CE, PD, EC). Necesario porque el
+     match card puede usar "Mérida" mientras que el editor lo guarda
+     como "AD Mérida" — sin esta normalización el match exacto falla
+     y caemos al MAP hardcoded de primera-rfef-data.js.
+     Historial:
+       - 2026-05-07: Mérida → "Al-Taawoun" en lugar del alias del
+         editor (motivó la creación de esta lista).
+       - 2026-05-08: Cacereño no encontraba su alias eFootball
+         "Asia - Malasia - Melaka FC" porque "CP" (Club Polideportivo)
+         no estaba en la lista de prefijos. Añadidos CP, CE (Club
+         Esportiu, Catalán), PD (Peña Deportiva) y EC (Esporte Clube)
+         para cubrir el resto de variantes habituales en Resto de
+         Ligas. */
   function _aliasNormName(name){
     if(!name) return '';
     var s = String(name).trim().toLowerCase();
     try { s = s.normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]','g'), ''); } catch(_){}
     s = s.replace(/\s+/g, ' ');
-    var tokens = ['ad','cf','cd','ud','rc','rcd','sd','sc','ac','as','fc','rfc','ssc','ass','sad'];
+    var tokens = ['ad','cf','cd','ud','rc','rcd','sd','sc','ac','as','fc','rfc','ssc','ass','sad',
+                  'cp','ce','pd','ec'];
     var changed = true;
     while(changed){
       changed = false;

@@ -2310,9 +2310,9 @@ window._showSimProgress = function(opts, onDone){
       's-uecl-playoffs': 'liga-ea-sports'
     };
     var compMap = {
-      's-liga-clas':     ['liga','copa'],
-      's-segunda-clas':  ['liga','copa'],
-      's-primf-clas':    ['liga','copa'],
+      's-liga-clas':     ['liga','copa','sc'],
+      's-segunda-clas':  ['liga','copa','sc'],
+      's-primf-clas':    ['liga','copa','sc'],
       's-superliga-clas':['superliga'],
       's-superliga':     ['superliga'],
       's-champions':     ['ucl'],
@@ -5603,66 +5603,110 @@ window._showSimProgress = function(opts, onDone){
      directo (que podía estar stale tras un reset parcial) y la
      tabla otra fuente → datos inconsistentes (Ayoze 14 goles en
      header vs 0 en tabla, o vice versa).                          */
+  /* ════════════════════════════════════════════════════════════════
+     SUMA DE CAJAS (refactor 2026-05-08)
+     ════════════════════════════════════════════════════════════════
+     Pedido del usuario: las cajas `ef_player_stats_<comp>_v1` son
+     la SINGLE SOURCE OF TRUTH para las pantallas. Esta función
+     antes iteraba LIGA_PLAYER_MATCH_STORE y ef_liga38_v4 EN VIVO
+     (pipeline paralelo al rebuild) y eso causaba desfases entre
+     Liga EA Sports stats / Modal Bayern / Plantilla Bayern.
+
+     Ahora SÓLO LEE LAS CAJAS:
+       1. Resuelve qué keys de localStorage corresponden a las
+          competiciones pedidas (vía _lextStatsKeyForCompetition).
+          Liga/Copa/SupEsp todas → `ef_player_stats_v1`.
+          UCL → `ef_player_stats_ucl_main_v1`. Etc.
+       2. Lee cada caja, suma stats per-jugador del team, suma
+          teamPJ.
+       3. Devuelve {teamPJ, liveStats, statsKey, statsKeys}
+          con la misma firma que antes para no romper callers.
+
+     `rebuildPlayerStatsStore` sigue siendo el ÚNICO sitio que
+     itera eventos por partido y construye las cajas — un solo
+     pipeline para arreglar bugs.
+
+     Compatibilidad con Resto de Ligas: si compSet.liga y las cajas
+     no aportaron PJ (típico cuando el team está en ligaExt y aún
+     no hubo rebuild), fallback a leagueData.results + leagueData.copa
+     para no romper la vista de ligas externas. */
   window._lextComputeRealStats = function(team, leagueData, opts){
     var _np = (typeof _normPS === 'function') ? _normPS
             : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
             : function(s){ return String(s||'').toLowerCase(); };
     var teamN = _np((team && team.name) || '');
-    /* `opts.competitions` (2026-05-04): filtra qué eventos cuentan.
-       Default: ['liga','copa'] para la vista EA Sports (suma ambas).
-       Las vistas de Superliga/Champions/UEL/UECL pasan su única
-       competición para AISLAR los stats. Eventos sin tag de
-       competición se asumen 'liga' (back-compat). */
     var compFilter = (opts && Array.isArray(opts.competitions) && opts.competitions.length)
       ? opts.competitions.slice() : ['liga','copa'];
     var compSet = {};
     compFilter.forEach(function(c){ compSet[c] = true; });
-    function _eventCompMatches(matchEntry, matchKey){
-      var c = (matchEntry && matchEntry.competition)
-        || (typeof window._inferMatchCompetition === 'function'
-              ? window._inferMatchCompetition(matchKey) : 'liga');
-      return !!compSet[c];
-    }
-    /* Para los fallbacks ef_player_stats_*: cuando la vista pide una
-       competición concreta, leemos del cache aislado. Default = Liga
-       + Copa = `ef_player_stats_v1`. */
-    var statsKey = (typeof window._lextStatsKeyForCompetition === 'function')
-      ? window._lextStatsKeyForCompetition(compFilter[0] || 'liga')
-      : 'ef_player_stats_v1';
     function _fuzz(a, b){
       if (!a || !b) return false;
       if (a === b) return true;
       return a.indexOf(b) !== -1 || b.indexOf(a) !== -1;
     }
-    /* — teamPJ desde fuentes vivas, FILTRADO por competiciones — */
+    /* Resolver claves de localStorage únicas para las comps pedidas. */
+    var keysSeen = {};
+    var statsKeys = [];
+    compFilter.forEach(function(c){
+      var k = (typeof window._lextStatsKeyForCompetition === 'function')
+        ? window._lextStatsKeyForCompetition(c) : 'ef_player_stats_v1';
+      if (k && !keysSeen[k]) {
+        keysSeen[k] = true;
+        statsKeys.push(k);
+      }
+    });
+    /* Leer cada caja y agregar stats per-jugador del team + teamPJ.
+       Cada entry de la caja guarda `pj` = partidos del EQUIPO en
+       esa comp (todos los entries del team del mismo cache tienen
+       el mismo pj — `_persistBucket` lo escribe así). Tomamos el
+       máximo dentro de cada cache para no inflar si hay entries
+       stale, y sumamos entre caches distintos. */
+    var liveStats = {};
     var teamPJ = 0;
-    /* data.results (Resto de Ligas) cuenta SOLO si la vista pide
-       'liga' (default) o no se pasaron filtros. Las ligas externas
-       no participan en Superliga/Champions/UEL/UECL. */
-    if (compSet.liga) {
+    statsKeys.forEach(function(key){
       try {
-        if (leagueData && Array.isArray(leagueData.results) && team && team.id) {
+        var raw = localStorage.getItem(key);
+        if (!raw) return;
+        var dataPS = JSON.parse(raw) || {};
+        var perCacheTeamPJ = 0;
+        Object.keys(dataPS).forEach(function(k){
+          var sep = k.indexOf('::');
+          if (sep < 0) return;
+          var storedT = k.slice(0, sep);
+          if (!_fuzz(storedT, teamN)) return;
+          var ent = dataPS[k] || {};
+          var pj = Number(ent.pj||0);
+          if (pj > perCacheTeamPJ) perCacheTeamPJ = pj;
+          var pn = _np(k.slice(sep + 2));
+          var rec = liveStats[pn] || {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+          rec.gol      += Number(ent.gol)||0;
+          rec.pen      += Number(ent.pen)||0;
+          rec.fk       += Number(ent.fk)||0;
+          rec.mvp      += Number(ent.mvp)||0;
+          rec.ta       += Number(ent.ta)||0;
+          rec.tr       += Number(ent.tr)||0;
+          rec.imbat    += Number(ent.imbat)||0;
+          rec.penSaved += Number(ent.penSaved)||0;
+          liveStats[pn] = rec;
+        });
+        teamPJ += perCacheTeamPJ;
+      } catch(_){}
+    });
+    /* Compatibilidad Resto de Ligas: si la caja Liga no aportó PJ,
+       leer de leagueData.results + leagueData.copa (motor _lecCopa). */
+    if (compSet.liga && teamPJ === 0 && team) {
+      try {
+        if (leagueData && Array.isArray(leagueData.results) && team.id) {
           for (var ri = 0; ri < leagueData.results.length; ri++) {
             var r = leagueData.results[ri];
             if (r && (r.h === team.id || r.a === team.id)) teamPJ++;
           }
         }
       } catch(_){}
-      /* Resto de Ligas · COPA NACIONAL (motor _lecCopa, 2026-05-06):
-         contamos los partidos de copa que jugó este equipo —
-         grupos (todas sus matches.played), cuartos (ida + vuelta),
-         semis (ida+vuelta si formato 20, partido único en Andorra),
-         y final (1 partido). Sin esto, p.pj quedaba >>> que
-         leagueData.results.length tras simular la copa, y
-         `ownPj === teamPJ` fallaba → la plantilla mostraba 0 en
-         goles/MVP/tarjetas. Bug reportado por el usuario con foto
-         de Manchester City (8 partidos en grupo, 12 goles Haaland,
-         pero plantilla mostraba 0 en todo). */
       try {
         var cp = leagueData && leagueData.copa;
-        if (cp && team && team.name) {
+        if (cp && team.name) {
           var tName = team.name;
-          /* Grupos: cada match.played donde el equipo juega cuenta 1. */
           if (Array.isArray(cp.groups)) {
             cp.groups.forEach(function(g){
               (g.matches||[]).forEach(function(mm){
@@ -5671,14 +5715,12 @@ window._showSimProgress = function(opts, onDone){
               });
             });
           }
-          /* Cuartos (formato 20): ida + vuelta = 2 pj si jugó. */
           if (Array.isArray(cp.cuartos)) {
             cp.cuartos.forEach(function(c){
               if(!c || !c.played) return;
               if(c.tieHome === tName || c.tieAway === tName) teamPJ += 2;
             });
           }
-          /* Semis: depende del formato (20 → 2 pj; 18 → 1 pj). */
           if (Array.isArray(cp.semis)) {
             cp.semis.forEach(function(s){
               if(!s || !s.played) return;
@@ -5689,198 +5731,19 @@ window._showSimProgress = function(opts, onDone){
               }
             });
           }
-          /* Final: siempre 1 pj cuando played. */
           if (cp.final && cp.final.played) {
             if(cp.final.home === tName || cp.final.away === tName) teamPJ += 1;
           }
         }
       } catch(_){}
     }
-    /* LIGA_PLAYER_MATCH_STORE: cuenta SIEMPRE primero (incluye Liga
-       humana + Copa + Sup España + cualquier otra). Cada match en
-       este store dedupea por par-sorted+comp para que partidos
-       guardados con teams invertidos NO cuenten 2 veces. */
-    var seenTeamPJPairs = {};
-    if (teamN) {
-      try {
-        var pmStore = window.LIGA_PLAYER_MATCH_STORE || {};
-        var mks = Object.keys(pmStore);
-        for (var mi = 0; mi < mks.length; mi++) {
-          var m = pmStore[mks[mi]]; if (!m) continue;
-          if (!_eventCompMatches(m, mks[mi])) continue;
-          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
-          if (_fuzz(tA, teamN) || _fuzz(tB, teamN)) {
-            var _pjComp = (m.competition
-                || (typeof window._inferMatchCompetition === 'function'
-                      ? window._inferMatchCompetition(mks[mi]) : 'liga'));
-            var _pjPair = (tA < tB ? tA + '||' + tB : tB + '||' + tA);
-            var seenKey = _pjComp + '|' + _pjPair;
-            if (!seenTeamPJPairs[seenKey]) {
-              teamPJ++;
-              seenTeamPJPairs[seenKey] = true;
-            }
-          }
-        }
-      } catch(_){}
-    }
-    /* ef_liga38_v4 = Liga EA Sports SOLO — DESPUÉS de LIGA_PLAYER_MATCH_STORE
-       y SIN double-count. Solo cuenta jornadas que NO están ya en el
-       store (caso típico: simulaciones IA-vs-IA que no tocan
-       LIGA_PLAYER_MATCH_STORE). Fix 2026-05-08 al bug del Bayern:
-       teamPJ contaba 2 veces los partidos humanos de Liga. */
-    if (teamN && compSet.liga) {
-      try {
-        var raw = localStorage.getItem('ef_liga38_v4');
-        if (raw) {
-          var resAll = JSON.parse(raw) || {};
-          var rkeys = Object.keys(resAll);
-          for (var i = 0; i < rkeys.length; i++) {
-            var parts = rkeys[i].split('|');
-            if (parts.length < 3) continue;
-            var nA = _np(parts[1]||''), nB = _np(parts[2]||'');
-            if (!_fuzz(nA, teamN) && !_fuzz(nB, teamN)) continue;
-            var _liPair = (nA < nB ? nA + '||' + nB : nB + '||' + nA);
-            if (seenTeamPJPairs['liga|' + _liPair]) continue;  /* ya contado */
-            teamPJ++;
-            seenTeamPJPairs['liga|' + _liPair] = true;
-          }
-        }
-      } catch(_){}
-    }
-    /* Fallback Hypermotion/Primera Fed: solo aplica si pedimos
-       'liga' (esas ligas viven en la vista EA Sports). */
-    if (teamPJ === 0 && teamN && compSet.liga) {
-      try {
-        var psRaw = localStorage.getItem(statsKey);
-        if (psRaw) {
-          var psAll = JSON.parse(psRaw) || {};
-          var maxPj = 0;
-          Object.keys(psAll).forEach(function(k){
-            var sep = k.indexOf('::');
-            if (sep < 0) return;
-            var storedT = k.slice(0, sep);
-            if (!_fuzz(storedT, teamN)) return;
-            var pj = Number((psAll[k] && psAll[k].pj) || 0);
-            if (pj > maxPj) maxPj = pj;
-          });
-          teamPJ = maxPj;
-        }
-      } catch(_){}
-    }
-    /* — liveStats per-jugador desde EVENTOS reales — */
-    var liveStats = {};
-    function _get(k){
-      if (!liveStats[k]) liveStats[k] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
-      return liveStats[k];
-    }
-    function _ingest(ev){
-      var nm = '';
-      if (Array.isArray(ev.player)) nm = ev.player[1] || ev.player[0] || '';
-      else if (typeof ev.player === 'string') nm = ev.player;
-      else nm = ev.name || ev.playerName || '';
-      nm = String(nm || '').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
-      if (!nm) return;
-      var key = _np(nm);
-      var rec = _get(key);
-      var ty = ev.type || '';
-      var ico = String(ev.ico||'').replace(/️/g,'').trim();
-      if (ty === 'gol')                        rec.gol++;
-      else if (ty === 'pen-gol')               rec.pen++;
-      else if (ty === 'falta-gol')             rec.fk++;
-      else if (ty === 'amarilla')              rec.ta++;
-      else if (ty === 'roja' || ty === 'd-amarilla') rec.tr++;
-      else if (ty === 'card') {
-        if (ico === '🟨') rec.ta++;
-        else if (ico === '🟥') rec.tr++;
-        else if (ico === '🟨🟥') { rec.ta++; rec.tr++; }
-      }
-      else if (ty === 'mvp')        rec.mvp++;
-      else if (ty === 'imbat')      rec.imbat++;
-      else if (ty === 'pen-parado') rec.penSaved++;
-    }
-    var processedKeys = {};
-    /* Pareja-de-teams sorted + comp para dedup cross-source. Bug
-       2026-05-08: Source 1 (LIGA_PLAYER_MATCH_STORE) y Source 2
-       (ef_liga38_v4) tenían claves DISTINTAS para el mismo partido
-       (`Real|Bayern` vs `j1m1|Real|Bayern`), así que el dedup por
-       matchKey exacto no funcionaba → eventos contados 2 veces
-       (Kane pen=2 cuando real=1). El sortPair normaliza el par. */
-    var processedPairs = {};
-    function _sortPair(a, b){
-      var na = _np(a||''), nb = _np(b||'');
-      return na < nb ? na + '||' + nb : nb + '||' + na;
-    }
-    if (teamPJ > 0 && teamN) {
-      try {
-        var store = window.LIGA_PLAYER_MATCH_STORE || {};
-        Object.keys(store).forEach(function(mk){
-          var m = store[mk]; if (!m) return;
-          /* Filtra por competición — esta es la barrera que separa
-             Liga, Copa, Superliga, Champions, UEL, Conference. */
-          if (!_eventCompMatches(m, mk)) return;
-          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
-          var matchA = _fuzz(tA, teamN), matchB = _fuzz(tB, teamN);
-          if (!matchA && !matchB) return;
-          processedKeys[mk] = true;
-          /* Marcar pareja+comp para que Source 2 (ef_liga38_v4) NO
-             la vuelva a procesar aunque tenga otra clave. */
-          var _pComp = (m.competition
-              || (typeof window._inferMatchCompetition === 'function'
-                    ? window._inferMatchCompetition(mk) : 'liga'));
-          processedPairs[_pComp + '|' + _sortPair(m.teamA||'', m.teamB||'')] = true;
-          var mySide = matchA ? 'a' : 'b';
-          (m.evts || []).forEach(function(ev){
-            if (!ev) return;
-            if (ev.realTeam) {
-              if (!_fuzz(_np(ev.realTeam), teamN)) return;
-            } else if (ev.team !== mySide) {
-              return;
-            }
-            _ingest(ev);
-          });
-          if (m.mvpName && m.mvpTeam && _fuzz(_np(m.mvpTeam), teamN)) {
-            var hadMvp = (m.evts||[]).some(function(e){return e && e.type==='mvp';});
-            if (!hadMvp) _get(_np(m.mvpName)).mvp++;
-          }
-        });
-      } catch(_){}
-      /* ef_liga38_v4 = Liga EA Sports SOLO. Lo procesamos únicamente
-         si la vista pide 'liga' (o el default Liga+Copa). */
-      if (compSet.liga) {
-        try {
-          var raw2 = localStorage.getItem('ef_liga38_v4');
-          if (raw2) {
-            var resAll2 = JSON.parse(raw2) || {};
-            Object.keys(resAll2).forEach(function(rk){
-              if (processedKeys[rk]) return;
-              var parts = rk.split('|');
-              if (parts.length < 3) return;
-              var nA = _np(parts[1]||''), nB = _np(parts[2]||'');
-              var matchA = _fuzz(nA, teamN), matchB = _fuzz(nB, teamN);
-              if (!matchA && !matchB) return;
-              /* Dedup cross-source: si el partido (par sorted + 'liga')
-                 ya se procesó desde LIGA_PLAYER_MATCH_STORE, no lo
-                 contemos otra vez aunque la clave de ef_liga38_v4 sea
-                 distinta. Sin esto se duplicaban Kane pen, Upamecano
-                 amarillas, etc. (bug reportado 2026-05-08). */
-              if (processedPairs['liga|' + _sortPair(parts[1]||'', parts[2]||'')]) return;
-              var r = resAll2[rk]; if (!r) return;
-              var mySide = matchA ? 'a' : 'b';
-              (r.events || []).forEach(function(ev){
-                if (!ev) return;
-                if (ev.team !== mySide) return;
-                _ingest(ev);
-              });
-              if (r.mvp && r.mvpTeam && _fuzz(_np(r.mvpTeam), teamN)) {
-                var hadMvp2 = (r.events||[]).some(function(e){return e && e.type==='mvp';});
-                if (!hadMvp2) _get(_np(r.mvp)).mvp++;
-              }
-            });
-          }
-        } catch(_){}
-      }
-    }
-    return { teamPJ: teamPJ, liveStats: liveStats, statsKey: statsKey, competitions: compFilter };
+    return {
+      teamPJ: teamPJ,
+      liveStats: liveStats,
+      statsKey: statsKeys[0] || 'ef_player_stats_v1',
+      statsKeys: statsKeys,
+      competitions: compFilter
+    };
   };
 
   /* Hidrata UN jugador con stats limpias. Aplica la cascada:

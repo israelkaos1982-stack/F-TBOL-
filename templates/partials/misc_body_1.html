@@ -19626,8 +19626,104 @@ Tottenham
     return arr;
   }
 
+  /* Sync con servidor (GlobalState `bayern_trofeos_v1`). Igual patrón
+     que `comp_icons_v1` (línea 8049): localStorage es cache rápido
+     pero el server es la fuente de verdad para que las ediciones de
+     iconos sobrevivan a wipes del navegador y cambios de dispositivo
+     (reportado 2026-05-08: el icono "desaparecía o salía roto" tras
+     guardar — el setItem fallaba en silencio por quota y la próxima
+     lectura caía a defaults). */
+  function _saveTrofServer(arr){
+    try {
+      fetch('/api/kv/bayern_trofeos_v1', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({ value: arr || [] })
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function _hydrateTrofFromServer(cb){
+    /* Solo ejecuta GET si el localStorage está vacío o solo contiene
+       los DEFAULTS originales (caso típico tras limpiar caché o
+       cambiar de dispositivo). No queremos sobreescribir cambios
+       locales recientes. */
+    var localRaw;
+    try { localRaw = localStorage.getItem(STORE_KEY); } catch(_){}
+    var hasMeaningful = false;
+    if (localRaw){
+      try {
+        var parsed = JSON.parse(localRaw);
+        if (Array.isArray(parsed) && parsed.length){
+          /* Heurística: si TODOS los trofeos tienen icon que empieza
+             por '/static/' (defaults) y count===1, asumimos defaults
+             intactos y dejamos que el server se imponga. Si alguno
+             tiene icon `data:` o un count>1, es edición real → no
+             pisar. */
+          hasMeaningful = parsed.some(function(t){
+            if (!t || !t.icon) return false;
+            if (String(t.icon).indexOf('data:') === 0) return true;
+            if ((t.count|0) > 1) return true;
+            return false;
+          });
+        }
+      } catch(_){}
+    }
+    if (hasMeaningful){
+      if (typeof cb === 'function') cb(false);
+      return;
+    }
+    try {
+      fetch('/api/kv/bayern_trofeos_v1', {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if (!j || !j.ok || !Array.isArray(j.value) || !j.value.length){
+            if (typeof cb === 'function') cb(false);
+            return;
+          }
+          try { localStorage.setItem(STORE_KEY, JSON.stringify(j.value)); } catch(_){}
+          if (typeof cb === 'function') cb(true);
+        }).catch(function(){ if (typeof cb === 'function') cb(false); });
+    } catch(_) { if (typeof cb === 'function') cb(false); }
+  }
+
+  /* Salvaguarda contra fallos silenciosos: el setItem original tenía
+     `try{...}catch(_){}` vacío. Si el navegador rebotaba el escritor
+     por quota llena (típico tras subir una foto cruda de móvil), el
+     usuario veía el icono en la preview, pulsaba Guardar, y al
+     recargar el icono "desaparecía". Ahora detectamos QuotaExceeded,
+     intentamos limpieza progresiva (igual que saveData/saveIcons) y
+     subimos al server independientemente para que el dato sobreviva. */
   function save(arr){
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(arr || [])); } catch(_){}
+    var payload;
+    try { payload = JSON.stringify(arr || []); } catch(_){ payload = '[]'; }
+    var localOk = true;
+    try { localStorage.setItem(STORE_KEY, payload); }
+    catch(err){
+      localOk = false;
+      var isQuota = err && (
+        err.code === 22 || err.code === 1014 ||
+        err.name === 'QuotaExceededError' ||
+        err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+      if (isQuota && !window._trofQuotaWarned){
+        window._trofQuotaWarned = true;
+        try {
+          var tEl = document.createElement('div');
+          tEl.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
+            + 'background:rgba(40,16,4,.96);border:1px solid rgba(240,160,80,.5);'
+            + 'border-radius:10px;padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;'
+            + 'font-size:13px;letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
+            + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
+          tEl.innerHTML = '⚠️ Navegador sin espacio. El trofeo se '
+            + '<b>guardó en el servidor</b> pero no en local. '
+            + 'Limpia caché del navegador para reactivar el guardado local.';
+          document.body.appendChild(tEl);
+          setTimeout(function(){ try { document.body.removeChild(tEl); } catch(_){} }, 8000);
+        } catch(_){}
+      }
+    }
+    /* Server-side: siempre, aunque local haya fallado. */
+    _saveTrofServer(arr);
   }
 
   function esc(s){
@@ -19751,26 +19847,95 @@ Tottenham
       + '</div>';
     ov.addEventListener('click', function(e){ if (e.target === ov) window._munichTrofAddClose(); });
     document.body.appendChild(ov);
-    /* Wire del file input: lee el archivo como data URL, lo guarda en
-       un atributo escondido del overlay y muestra la preview. La URL
-       text-input se vacía para que sepa que el archivo prevalece. */
+    /* Wire del file input: lee el archivo como data URL, lo COMPRIME a
+       256×256 (canvas → PNG/JPEG con cap de 100 KB) antes de guardarlo
+       en un atributo escondido del overlay y mostrar la preview. La
+       compresión es la misma estrategia que `comp_icons_v1` (línea
+       7984). Sin comprimir, una foto del móvil de 2-4 MB se guardaba
+       cruda como dataURL en `bayern_trofeos_v1` → JSON.stringify del
+       array entero superaba el cap de 2 MB de localStorage → setItem
+       fallaba silenciosamente y al recargar el icono "desaparecía o
+       salía roto" (reportado 2026-05-08). Tras compresión, un
+       escudo cuadrado pesa ~15-40 KB. La URL text-input se vacía para
+       que sepa que el archivo prevalece. */
     var fileInp = document.getElementById('munich-trof-icon-file');
     if (fileInp){
       fileInp.addEventListener('change', function(ev){
         var f = ev.target.files && ev.target.files[0];
         if (!f) return;
-        var reader = new FileReader();
-        reader.onload = function(e){
-          var dataUrl = e.target.result || '';
+        _compressTrofIcon(f, function(dataUrl, err){
+          if (err || !dataUrl){
+            alert('No se pudo procesar la imagen: '+(err||'desconocido'));
+            try { fileInp.value = ''; } catch(_){}
+            return;
+          }
           ov.dataset.iconData = dataUrl;
           var prev = document.getElementById('munich-trof-icon-preview');
           if (prev){ prev.src = dataUrl; prev.classList.add('show'); }
           var urlInp = document.getElementById('munich-trof-icon-url');
           if (urlInp){ urlInp.value = ''; urlInp.placeholder = '(usando archivo subido)'; }
-        };
-        reader.readAsDataURL(f);
+        });
       });
     }
+  }
+
+  /* Compresión obligatoria del icono antes de guardarlo en
+     `bayern_trofeos_v1`. Mismo enfoque que `comp_icons_v1`:
+       1. FileReader → dataURL crudo
+       2. Image() → canvas 256×256 (manteniendo aspect ratio).
+       3. canvas.toDataURL('image/png') → si ≤ 100 KB, sirve.
+       4. Si pesa más, JPEG calidad 0.85 / 0.70 / 0.55 progresivamente.
+       5. Si ni JPEG calidad 0.55 cabe en 100 KB, error. */
+  var _MAX_TROF_PX = 256;
+  var _TROF_BYTES_HARD_CAP = 100 * 1024;
+  function _approxTrofBytes(dataUrl){
+    if(typeof dataUrl !== 'string') return 0;
+    var i = dataUrl.indexOf(',');
+    var payload = i >= 0 ? dataUrl.slice(i+1) : dataUrl;
+    return Math.ceil(payload.length * 3 / 4);
+  }
+  function _compressTrofIcon(file, cb){
+    var reader = new FileReader();
+    reader.onload = function(){
+      var raw = String(reader.result || '');
+      var img = new Image();
+      img.onload = function(){
+        var w = img.naturalWidth || img.width || _MAX_TROF_PX;
+        var h = img.naturalHeight || img.height || _MAX_TROF_PX;
+        var scale = Math.min(_MAX_TROF_PX / w, _MAX_TROF_PX / h, 1);
+        var dw = Math.round(w * scale);
+        var dh = Math.round(h * scale);
+        var canvas = document.createElement('canvas');
+        canvas.width = _MAX_TROF_PX;
+        canvas.height = _MAX_TROF_PX;
+        var ctx = canvas.getContext('2d');
+        if(!ctx){ cb(null, 'no canvas context'); return; }
+        ctx.clearRect(0,0,_MAX_TROF_PX,_MAX_TROF_PX);
+        ctx.drawImage(img, (_MAX_TROF_PX-dw)/2, (_MAX_TROF_PX-dh)/2, dw, dh);
+        var attempts = [
+          { type:'image/png',  quality: undefined },
+          { type:'image/jpeg', quality: 0.85 },
+          { type:'image/jpeg', quality: 0.70 },
+          { type:'image/jpeg', quality: 0.55 }
+        ];
+        var lastUrl = null;
+        for (var i = 0; i < attempts.length; i++){
+          var a = attempts[i];
+          try {
+            lastUrl = a.quality !== undefined ? canvas.toDataURL(a.type, a.quality) : canvas.toDataURL(a.type);
+          } catch(_){ continue; }
+          if (lastUrl && _approxTrofBytes(lastUrl) <= _TROF_BYTES_HARD_CAP){
+            cb(lastUrl, null);
+            return;
+          }
+        }
+        cb(null, 'la imagen sigue pesando '+Math.round(_approxTrofBytes(lastUrl||raw)/1024)+' KB tras comprimir; prueba con una imagen más pequeña.');
+      };
+      img.onerror = function(){ cb(null, 'no se pudo decodificar la imagen'); };
+      img.src = raw;
+    };
+    reader.onerror = function(){ cb(null, 'no se pudo leer el archivo'); };
+    reader.readAsDataURL(file);
   }
   window._munichTrofAddOpen = function(existing, isEditMode){
     _ensureTrofeoAddOv();
@@ -19984,9 +20149,13 @@ Tottenham
         new MutationObserver(rerender).observe(screen, {attributes:true, attributeFilter:['class']});
       } catch(_){}
     }
-    /* Render inicial: actualiza tanto la pantalla como el contador de
-       la HUB-card (que vive fuera del screen). */
-    render();
+    /* Render inicial: hidratamos desde el servidor PRIMERO (caso
+       limpieza de caché o cambio de dispositivo) y luego renderizamos.
+       Si el localStorage local ya tiene ediciones reales — `data:` en
+       icon o count>1 — `_hydrateTrofFromServer` respeta lo local y
+       no hace GET. Tras la hidratación actualizamos también el
+       contador de la HUB-card que vive fuera del screen. */
+    _hydrateTrofFromServer(function(){ render(); });
   }
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', _wire);

@@ -15386,6 +15386,19 @@
     document.body.classList.add('bayern-cal-on');
     _applyTitle();
     setTimeout(_renderAll, 30);
+    /* El bundle.js intercepta los clicks de .back-btn con
+       `addEventListener('click',...,true)` y usa
+       `routerState.backTarget[screenId]` que se construye via
+       `detectBackTarget`: parsea el onclick buscando un literal
+       `go('XXX')`. Nuestro onclick original es dinámico
+       (`go(dest)`) → el regex no encuentra nada → default 's-home'.
+       Solución: en modo Bayern reescribimos el onclick a un
+       literal `go('s-munich')` para que el router detecte
+       el destino correcto. Bug reportado por el usuario
+       2026-05-08: pulsando Volver desde el calendario Bayern
+       caía a s-home (menú principal) en vez de al HUB Bayern. */
+    var bb = document.querySelector('#s-agenda .back-btn');
+    if (bb) bb.setAttribute('onclick', "go('s-munich')");
   };
   window._bayernCalDeactivate = function(){
     document.body.classList.remove('bayern-cal-on');
@@ -15394,6 +15407,11 @@
        que volver a pulsar 🖍 + PIN cada vez que vuelva al
        calendario del Bayern. */
     document.body.classList.remove('bayern-edit-on');
+    /* Restaurar el back-btn al destino estándar (s-home) — el
+       calendario global se accede desde s-home y debe volver
+       allí cuando NO estamos en modo Bayern. */
+    var bb = document.querySelector('#s-agenda .back-btn');
+    if (bb) bb.setAttribute('onclick', "go('s-home')");
   };
 
   /* ── Hook: cuando s-agenda recibe .active y _bayernCalContext ── */

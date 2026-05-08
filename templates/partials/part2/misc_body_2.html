@@ -14897,6 +14897,13 @@
     var compId = _resolveComp(ev, sel || _loadComps());
     if (compId && _ICONS_BY_COMP[compId]) {
       ev.icon = _ICONS_BY_COMP[compId];
+    } else if (ev.icon === '🇪🇺') {
+      /* Fallback defensivo: si detectComp no clasificó la fila pero el
+         icono es 🇪🇺 (la bandera UE genérica del SSR), default a 🔵
+         (Champions). Sin esto, una fila ag-eur cuyo nombre no matchee
+         ningún detector específico se quedaría con el 🇪🇺 del SSR —
+         exactamente el bug reportado por el usuario 2026-05-08. */
+      ev.icon = '🔵';
     }
     return ev;
   }

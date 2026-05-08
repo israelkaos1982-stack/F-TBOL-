@@ -18272,7 +18272,23 @@ Tottenham
 
 <div class="screen" id="s-munich-trofeos">
 <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Vitrina de Trofeos</h2></div>
+<div class="sec-hdr" style="position:relative;">
+  <span class="sec-emoji">🏆</span>
+  <h2>Vitrina de Trofeos</h2>
+  <!-- 🖍 ÚNICO botón admin de la Vitrina (PIN 747). Pulsar:
+         · 1ª vez → activa modo edit → aparecen ➕/🗑 abajo y ✏️ por fila.
+         · 2ª vez → desactiva modo edit. La clase `trof-edit-on` va
+       sobre el propio screen para que sea por pantalla (no global).
+       Mismo patrón que el calendario Bayern. -->
+  <button id="munich-trof-edit-toggle" type="button"
+          onclick="window._munichTrofEditMode&&window._munichTrofEditMode()"
+          title="Modo edición Vitrina (PIN 747)"
+          style="position:absolute;top:50%;right:14px;transform:translateY(-50%);
+                 background:rgba(240,192,64,0.14);border:1px solid rgba(240,192,64,0.50);
+                 color:#ffd55a;font-size:14px;width:30px;height:30px;border-radius:50%;
+                 cursor:pointer;display:flex;align-items:center;justify-content:center;
+                 -webkit-tap-highlight-color:transparent;transition:background .14s;">🖍</button>
+</div>
 <div style="padding:18px 18px 40px;display:flex;flex-direction:column;gap:14px;">
   <div style="text-align:center;padding:10px 0 4px;">
     <span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.35);">TEMPORADA 31–32</span>
@@ -18287,13 +18303,12 @@ Tottenham
   </div>
   <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;padding:6px 0 0;">
     <button id="munich-trofeos-add-btn" onclick="window.munichTrofeosPromptAdd && window.munichTrofeosPromptAdd()"
-      style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(255,198,77,.35);">
+      style="display:none;background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(255,198,77,.35);">
       ➕ AÑADIR TÍTULO
     </button>
-    <!-- "ELIMINAR TÍTULO" solo visible cuando hay sesión admin abierta
-         (`<body class="adm-on">` lo activa `window.pinOk` tras el PIN
-         747). Al pulsar "AÑADIR" sin sesión, pG dispara el modal del
-         PIN, y una vez introducido este botón aparece automáticamente. -->
+    <!-- ➕/🗑 ocultos por default. Solo visibles cuando el admin
+         pulsa 🖍 del header + PIN 747 (clase `trof-edit-on` en
+         #s-munich-trofeos). Mismo patrón que el calendario Bayern. -->
     <button id="munich-trofeos-del-btn" onclick="window.munichTrofeosPromptDelete && window.munichTrofeosPromptDelete()"
       style="display:none;background:linear-gradient(145deg,#a02030,#5e0c1a);border:1px solid rgba(255,90,90,.55);color:#ffe0e0;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(220,40,60,.35);">
       🗑 ELIMINAR TÍTULO
@@ -18324,9 +18339,10 @@ Tottenham
   #s-munich-trofeos .ath-titulo-sub{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;}
   #s-munich-trofeos .ath-titulo-n{font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;}
   /* Botón ✏️ inline para editar UN título (icono+texto+sub) sin
-     incrementar el contador. Solo visible con sesión admin
-     (`body.adm-on`). Al pulsarlo abre el modal de Añadir prefilled
-     con los valores del trofeo en modo "edit". */
+     incrementar el contador. OCULTO por default — solo visible
+     cuando #s-munich-trofeos tiene la clase `trof-edit-on` (que
+     activa el 🖍 del header tras PIN 747). Mismo patrón que el
+     calendario Bayern: el modo edit es por pantalla, no global. */
   #s-munich-trofeos .ath-titulo-edit{
     display:none;flex-shrink:0;width:30px;height:30px;border-radius:7px;
     background:rgba(240,192,64,.14);border:1px solid rgba(240,192,64,.45);
@@ -18334,12 +18350,21 @@ Tottenham
     margin-left:6px;-webkit-tap-highlight-color:transparent;transition:all .15s;padding:0;
   }
   #s-munich-trofeos .ath-titulo-edit:hover{background:rgba(240,192,64,.30);}
-  body.adm-on #s-munich-trofeos .ath-titulo-edit{display:inline-flex;}
-  /* "ELIMINAR TÍTULO" del pie SOLO visible cuando hay sesión admin
-     abierta (`<body class="adm-on">` lo activa `window.pinOk` tras el
-     PIN 747). Sin sesión admin → no se ve, así nada tapa el contador
-     a la derecha de cada fila. */
-  body.adm-on #s-munich-trofeos #munich-trofeos-del-btn{display:inline-flex !important;align-items:center;}
+  /* En modo edit (toggle del 🖍 del header con PIN 747): muestra
+     los botones ➕/🗑 del pie y los ✏️ inline por fila. Cuando
+     se sale de la pantalla, `trof-edit-on` se limpia → próxima
+     entrada parte SIEMPRE en modo lectura. */
+  #s-munich-trofeos.trof-edit-on .ath-titulo-edit{display:inline-flex;}
+  #s-munich-trofeos.trof-edit-on #munich-trofeos-add-btn{display:inline-flex !important;align-items:center;}
+  #s-munich-trofeos.trof-edit-on #munich-trofeos-del-btn{display:inline-flex !important;align-items:center;}
+  /* El botón 🖍 del header cambia de color cuando el modo edit
+     está activo (igual que en el calendario Bayern). */
+  #s-munich-trofeos.trof-edit-on #munich-trof-edit-toggle{
+    background:linear-gradient(145deg,#f8c44e,#b88915) !important;
+    border-color:#ffd55a !important;
+    color:#1a0e00 !important;
+    box-shadow:0 0 14px rgba(255,198,77,.55);
+  }
 </style>
 
 <script>
@@ -18662,6 +18687,29 @@ Tottenham
     if (typeof window.pG === 'function') window.pG(doEdit); else doEdit();
   };
 
+  /* ── Modo edición Vitrina (PIN 747) ─────────────────────────────
+     ÚNICO botón admin de la Vitrina (🖍 del sec-hdr, petición
+     usuario 2026-05-08). Toggle de la clase `trof-edit-on` en el
+     screen `#s-munich-trofeos`:
+       · Sin edit: humanos normales SOLO ven la lista de títulos,
+         sin ✏️ por fila ni botones ➕/🗑 abajo.
+       · Con edit (tras PIN 747): aparecen los 3 controles.
+       · 2ª pulsación → desactiva. */
+  window._munichTrofEditMode = function(){
+    function _toggle(){
+      var screen = document.getElementById('s-munich-trofeos');
+      if (screen) screen.classList.toggle('trof-edit-on');
+    }
+    var screen = document.getElementById('s-munich-trofeos');
+    var alreadyOn = screen && screen.classList.contains('trof-edit-on');
+    if (typeof window.pG === 'function' && !alreadyOn) {
+      /* Solo pide PIN al ENTRAR. Al salir (segunda pulsación), no. */
+      window.pG(_toggle);
+    } else {
+      _toggle();
+    }
+  };
+
   /* Flujo de eliminación: el admin pulsa "🗑 ELIMINAR TÍTULO" (visible
      solo tras el PIN 747). Se muestra una lista numerada de los
      trofeos en vitrina y el admin teclea el número del que quiere
@@ -18709,7 +18757,14 @@ Tottenham
     var screen = document.getElementById('s-munich-trofeos');
     if (screen){
       var rerender = function(){
-        if (screen.classList.contains('active')) render();
+        if (screen.classList.contains('active')) {
+          render();
+        } else {
+          /* Al salir de la pantalla, limpiar el flag de edit para
+             que la próxima entrada parta SIEMPRE en modo lectura.
+             Mismo patrón que el calendario Bayern. */
+          screen.classList.remove('trof-edit-on');
+        }
       };
       try {
         new MutationObserver(rerender).observe(screen, {attributes:true, attributeFilter:['class']});

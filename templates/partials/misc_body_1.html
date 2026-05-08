@@ -8378,28 +8378,48 @@ window._showSimProgress = function(opts, onDone){
      Fase 2: render del bracket; fase 3: motor de simulación. -->
 <div class="screen" id="s-sct">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
-<button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('sct')" title="Editar torneo">🖍</button>
+<button class="tour-edit-btn" data-tour="sct" title="Editar torneo">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sct">🇺🇸</span><h2 id="tour-title-sct">Soccer Champions Tour</h2></div>
 <div id="tour-info-sct" class="tour-info-box"></div>
 </div>
 <div class="screen" id="s-pss">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
-<button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('pss')" title="Editar torneo">🖍</button>
+<button class="tour-edit-btn" data-tour="pss" title="Editar torneo">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-pss">🇬🇧</span><h2 id="tour-title-pss">Premier Summer Series</h2></div>
 <div id="tour-info-pss" class="tour-info-box"></div>
 </div>
 <div class="screen" id="s-jg">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
-<button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('jg')" title="Editar torneo">🖍</button>
+<button class="tour-edit-btn" data-tour="jg" title="Editar torneo">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-jg">🇪🇸</span><h2 id="tour-title-jg">Trofeo Joan Gamper</h2></div>
 <div id="tour-info-jg" class="tour-info-box"></div>
 </div>
 <div class="screen" id="s-asia">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
-<button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('asia')" title="Editar torneo">🖍</button>
+<button class="tour-edit-btn" data-tour="asia" title="Editar torneo">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-asia">🇯🇵</span><h2 id="tour-title-asia">Asian Tournament</h2></div>
 <div id="tour-info-asia" class="tour-info-box"></div>
 </div>
+
+<!-- Wire-up del botón 🖍 — vive FUERA del IIFE grande para que el
+     click siempre tenga respuesta. Si el módulo no se ha cargado
+     todavía (por la razón que sea), mostramos alert visible al
+     usuario en lugar de fallar en silencio. -->
+<script>
+(function(){
+  document.addEventListener('click', function(ev){
+    var btn = ev.target && ev.target.closest && ev.target.closest('.tour-edit-btn');
+    if (!btn) return;
+    var id = btn.getAttribute('data-tour');
+    if (!id) return;
+    if (typeof window._tourOpenEditor !== 'function') {
+      alert('⚠ El editor de torneos no se ha cargado. Recarga la página (Ctrl+Shift+R o tirando hacia abajo en móvil).');
+      return;
+    }
+    window._tourOpenEditor(id);
+  }, true);
+})();
+</script>
 
 <style>
   /* Botón 🖍 admin de cada torneo — esquina superior derecha de la

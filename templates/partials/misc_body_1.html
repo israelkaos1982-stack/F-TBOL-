@@ -404,13 +404,15 @@ window._showSimProgress = function(opts, onDone){
       if (p.elite)      b += '<span class="lext-badge star"  title="Estrella del equipo">⭐</span>';
       if (p.natGoal)    b += '<span class="lext-badge scorer" title="Goleador nato (~30% goles)">⚾</span>';
       if (p.natGoalPro) b += '<span class="lext-badge scorer" title="Goleador estrella (~45% goles)">🏀</span>';
-      var _les = (window.LESION_STORE || {})[p.name];
-      if (_les && Number(_les.partidos) > 0) {
-        var _ico = _les.gradoEmoji || '🩹';
-        var _n   = Math.max(0, parseInt(_les.partidos) || 0);
-        var _ttl = (_les.gradoNombre||'Lesión') + (_les.descripcion ? ' · ' + _les.descripcion : '') + ' · ' + _n + ' partido(s) restante(s)';
-        b += '<span class="lext-badge injury" title="' + _ttl.replace(/"/g,'&quot;') + '" style="background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;">' + _ico + ' ' + _n + 'P</span>';
-      }
+      try {
+        var _les = (window.LESION_STORE || {})[p && p.name];
+        if (_les && Number(_les.partidos) > 0) {
+          var _ico = _les.gradoEmoji || '🩹';
+          var _n   = Math.max(0, parseInt(_les.partidos) || 0);
+          var _ttl = (_les.gradoNombre||'Lesión') + (_les.descripcion ? ' · ' + _les.descripcion : '') + ' · ' + _n + ' partido(s) restante(s)';
+          b += '<span class="lext-badge injury" title="' + _ttl.replace(/"/g,'&quot;') + '" style="background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;">' + _ico + ' ' + _n + 'P</span>';
+        }
+      } catch(_){}
       return b;
     }
 
@@ -590,36 +592,48 @@ window._showSimProgress = function(opts, onDone){
        hizo sync, el cache 1.5 s sigue siendo bueno y los 30 jugadores
        leen de memoria. */
     var _LAST_SYNC_TS = 0;
+    /* Wrap defensivo (2026-05-08): si cualquier paso del render tira
+       excepción (sync de stats, _findBayernRow, _section...), el host
+       quedaba vacío y el usuario veía solo el borde rojo de la caja —
+       sin "— Sin jugadores —" ni mensaje de error. Ahora capturamos
+       y pintamos un placeholder con el mensaje del error para poder
+       diagnosticar en lugar de adivinar. */
     window.renderBayernPlantillaScreen = function(){
       var host = document.getElementById('bayern-plantilla-host');
       if (!host) return;
-      var now = Date.now();
-      if ((now - _LAST_SYNC_TS) > 2000){
-        try {
-          if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats();
-        } catch(_){}
-        _LAST_SYNC_TS = now;
-        /* El sync acaba de re-escribir los 5 stores. Invalidamos cache
-           local para que el siguiente _statsFor lea fresco. */
-        window._invalidateBayernStatsCache();
+      try {
+        var now = Date.now();
+        if ((now - _LAST_SYNC_TS) > 2000){
+          try {
+            if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats();
+          } catch(_){}
+          _LAST_SYNC_TS = now;
+          try { window._invalidateBayernStatsCache && window._invalidateBayernStatsCache(); } catch(_){}
+        }
+        var t = _findBayernRow();
+        if (!t || !Array.isArray(t.players) || !t.players.length){
+          _renderEmpty(host);
+          return;
+        }
+        var by = {POR:[], DEF:[], MED:[], DEL:[]};
+        t.players.forEach(function(p){
+          if (!p || !p.name) return;
+          (by[p.pos] || by.MED).push(p);
+        });
+        var html = ''
+          + _section('🧤 PORTEROS',     by.POR, true)
+          + _section('🛡 DEFENSAS',     by.DEF, false)
+          + _section('⚙ CENTROCAMPISTAS', by.MED, false)
+          + _section('⚽ DELANTEROS',    by.DEL, false);
+        host.innerHTML = html || '';
+        if (!html) _renderEmpty(host);
+      } catch(err){
+        try { if (typeof console !== 'undefined') console.error('[bayernPlantilla] render error:', err); } catch(_){}
+        host.innerHTML = '<div style="padding:24px 14px;text-align:center;color:#ffb5b5;font-family:Rajdhani,sans-serif;line-height:1.55;">'
+          + '⚠️ Error al renderizar la plantilla<br>'
+          + '<small style="font-size:11px;color:rgba(255,180,180,.7);">' + String((err && err.message) || err).replace(/[<>&]/g, function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}) + '</small>'
+          + '</div>';
       }
-      var t = _findBayernRow();
-      if (!t || !Array.isArray(t.players) || !t.players.length){
-        _renderEmpty(host);
-        return;
-      }
-      var by = {POR:[], DEF:[], MED:[], DEL:[]};
-      t.players.forEach(function(p){
-        if (!p || !p.name) return;
-        (by[p.pos] || by.MED).push(p);
-      });
-      var html = ''
-        + _section('🧤 PORTEROS',     by.POR, true)
-        + _section('🛡 DEFENSAS',     by.DEF, false)
-        + _section('⚙ CENTROCAMPISTAS', by.MED, false)
-        + _section('⚽ DELANTEROS',    by.DEL, false);
-      host.innerHTML = html || '';
-      if (!html) _renderEmpty(host);
     };
 
     /* Re-pintar cada vez que se abre la pantalla. NO podemos envolver

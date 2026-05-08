@@ -14812,78 +14812,91 @@
   var KEY_TITLE = 'bayern_calendar_title_v1';
   var DEFAULT_TITLE = 'BAYERN MUNICH';
 
-  /* COMPS — el detector recibe { rowClass, name } y devuelve true si
-     la fila pertenece a esa comp. Los detectores específicos (Supercopa
-     España) van ANTES que los genéricos (Copa) — el primero que
-     matchea define la comp. */
+  /* COMPS — orden VISUAL del modal (lo que el usuario ve en el
+     selector). Cada entrada lleva el icono propio del juego para
+     identificarla. La lógica de detección NO usa el orden de COMPS;
+     ver `_detectComp` que aplica las reglas en orden de prioridad
+     (específicas antes que catch-alls).                             */
   var COMPS = [
-    { id:'sup-esp', ico:'🏆', name:'Supercopa de España', def:true,
-      detect: function(ev){ return /supercopa.*(espa|spain)/i.test(ev.name); } },
-    { id:'sup-eur', ico:'🏆', name:'Supercopa de Europa', def:false,
-      detect: function(ev){ return /supercopa.*europa/i.test(ev.name) || /uefa\s*supercup/i.test(ev.name); } },
-    { id:'prevch',  ico:'🔵', name:'Previa Champions',     def:false,
-      detect: function(ev){ return /previa/i.test(ev.name) && /champ|UCL/i.test(ev.name); } },
-    { id:'uel',     ico:'🇪🇺', name:'Europa League',        def:false,
-      detect: function(ev){ return /europa\s*league|UEL\b/i.test(ev.name); } },
-    { id:'uecl',    ico:'🇪🇺', name:'Conference League',    def:false,
-      detect: function(ev){ return /conference\s*league|UECL\b/i.test(ev.name); } },
-    { id:'liga',    ico:'⚽', name:'Liga (Bundesliga)',     def:true,
-      detect: function(ev){ return /\bag-liga\b/.test(ev.rowClass); } },
-    { id:'copa',    ico:'🏆', name:'Copa del Rey / DFB',    def:true,
-      detect: function(ev){ return /\bag-copa\b/.test(ev.rowClass); } },
-    { id:'champ',   ico:'🏆', name:'Champions League',      def:true,
-      detect: function(ev){ return /\bag-eur\b/.test(ev.rowClass); } },
-    { id:'recopa',  ico:'🟤', name:'Recopa de Europa',      def:false,
-      detect: function(ev){ return /\bag-recopa\b/.test(ev.rowClass) || /recopa/i.test(ev.name); } },
-    { id:'inter',   ico:'🟡', name:'Mundial de Clubes',     def:false,
-      detect: function(ev){ return /\bag-inter\b/.test(ev.rowClass) || /mundial.*club|intercontinental/i.test(ev.name); } },
-    { id:'sel',     ico:'🌍', name:'Selecciones FIFA',      def:true,
-      detect: function(ev){ return /\bag-sel\b/.test(ev.rowClass); } },
-    { id:'amist',   ico:'🤝', name:'Amistosos',             def:true,
-      detect: function(ev){ return /\bag-amist\b/.test(ev.rowClass); } },
-    { id:'torneo',  ico:'🌞', name:'Torneo de Verano',      def:true,
-      detect: function(ev){ return /\bag-torneo\b/.test(ev.rowClass); } }
+    { id:'liga',    ico:'🇪🇸', name:'Liga (EA Sports)',      def:true  },
+    { id:'copa',    ico:'🏆', name:'Copa (del Rey)',         def:true  },
+    { id:'sup-esp', ico:'🇪🇸', name:'Supercopa de España',    def:true  },
+    { id:'champ',   ico:'🔵', name:'Champions League',       def:true  },
+    { id:'prevch',  ico:'🟣', name:'Previa Champions',       def:false },
+    { id:'uel',     ico:'🟠', name:'Europa League',          def:false },
+    { id:'uecl',    ico:'🟢', name:'Conference League',      def:false },
+    { id:'recopa',  ico:'🔴', name:'Recopa de Europa',       def:false },
+    { id:'sup-eur', ico:'⚫️', name:'Supercopa de Europa',    def:false },
+    { id:'inter',   ico:'🟤', name:'Intercontinental',       def:false },
+    { id:'mundial', ico:'🟡', name:'Mundial de Clubes',      def:false },
+    { id:'sel',     ico:'🌐', name:'Selecciones FIFA',       def:true  },
+    { id:'torneo',  ico:'🌞', name:'Torneo de Verano',       def:true  },
+    { id:'amist',   ico:'🤝', name:'Amistosos',              def:true  }
   ];
   /* `_isAlwaysOn`: filas que NUNCA se transforman a Entrenamiento.
      Incluye:
        · `ag-train` y `ag-rest` (entrenamientos y descansos del SSR
          son la base — siempre se respetan).
-       · `ag-sel` (Selecciones FIFA): el usuario pidió 2026-05-08 que
-         la sección final "🌍 FASE FINAL SELECCIONES" y las ventanas
-         FIFA durante la temporada aparezcan TAL CUAL en el calendario
-         Bayern, independientemente del toggle. Lógica: cuando los
-         nacionales del Bayern están con sus selecciones, el club no
-         juega — es un estado inherente, no una "competición del
-         Bayern". `Selecciones FIFA` se queda en COMPS solo para mostrar
-         el item en el modal (informativo) pero el detect no lo activa
-         como toggleable. */
+       · `ag-sel` (Selecciones FIFA): pedido del usuario 2026-05-08 —
+         la sección final "🌐 FASE FINAL SELECCIONES" y las ventanas
+         FIFA aparecen tal cual aunque el toggle esté desmarcado. */
   function _isAlwaysOn(ev){
     return /\bag-train\b/.test(ev.rowClass)
         || /\bag-rest\b/.test(ev.rowClass)
         || /\bag-sel\b/.test(ev.rowClass);
   }
+  /* Detección de competición. Reglas evaluadas en orden de prioridad —
+     específicas (Supercopa España, Previa Champions, Europa League,
+     etc.) ANTES que los catch-alls (Champions = ag-eur cualquiera,
+     Mundial Clubes = ag-inter cualquiera). El SSR usa 🇪🇺 / 🔵 para
+     todas las europeas combinadas; aquí las separamos por nombre. */
   function _detectComp(ev){
-    for (var i=0; i<COMPS.length; i++){
-      try { if (COMPS[i].detect(ev)) return COMPS[i].id; } catch(_){}
-    }
+    var n = String(ev.name || '');
+    var c = String(ev.rowClass || '');
+    if (/supercopa.*(espa|spain)/i.test(n)) return 'sup-esp';
+    if (/supercopa.*europa/i.test(n) || /uefa\s*supercup/i.test(n)) return 'sup-eur';
+    if (/previa/i.test(n) && /champ|UCL/i.test(n)) return 'prevch';
+    if (/europa\s*league|UEL\b/i.test(n)) return 'uel';
+    if (/conference\s*league|UECL\b/i.test(n)) return 'uecl';
+    if (/intercontinental/i.test(n)) return 'inter';
+    if (/mundial.*club|club.*world/i.test(n)) return 'mundial';
+    if (/recopa/i.test(n)) return 'recopa';
+    if (/\bag-liga\b/.test(c)) return 'liga';
+    if (/\bag-copa\b/.test(c)) return 'copa';
+    if (/\bag-eur\b/.test(c)) return 'champ';        // catch-all europeo
+    if (/\bag-recopa\b/.test(c)) return 'recopa';
+    if (/\bag-inter\b/.test(c)) return 'mundial';    // catch-all clubes
+    if (/\bag-torneo\b/.test(c)) return 'torneo';
+    if (/\bag-amist\b/.test(c)) return 'amist';
+    if (/\bag-sel\b/.test(c)) return 'sel';
     return null;
   }
-  /* `_applyIconColors`: convención de colores que pidió el usuario:
-       · 🟣 = Previa Champions (antes 🔵 en el SSR).
-       · 🔵 = Champions League (antes 🇪🇺 generic en el SSR).
-     El SSR usa `🇪🇺` para "Europa" agrupando Champions+UEL+UECL (todas
-     juegan los mismos días). En modo Bayern, asumimos Champions por
-     default — más adelante se puede ampliar con un toggle si el club
-     juega UEL/UECL. Aplicamos la corrección en el render del modo
-     Bayern, sin tocar el SSR global. */
-  function _applyIconColors(ev){
-    if (!ev || !ev.icon) return ev;
-    if (/previa/i.test(ev.name) && /champ|UCL/i.test(ev.name)) {
-      ev.icon = '🟣';
-    } else if (ev.icon === '🇪🇺') {
-      ev.icon = '🔵';
-    } else if (ev.icon === '🔵' && /previa/i.test(ev.name) && /champ|UCL/i.test(ev.name)) {
-      ev.icon = '🟣';
+  /* `_resolveComp`: si el SSR clasifica una fila como 'champ' (catch-all
+     ag-eur) pero admin tiene Champions DESmarcado y UEL o UECL marcado,
+     reasignamos esa fila a UEL/UECL — útil cuando el club juega Europa
+     League pero no Champions. Sin esto, las jornadas se transformarían
+     a Entrenamiento al desmarcar Champions. */
+  function _resolveComp(ev, sel){
+    var compId = _detectComp(ev);
+    if (compId === 'champ' && sel) {
+      if (sel.champ === false) {
+        if (sel.uel === true)  return 'uel';
+        if (sel.uecl === true) return 'uecl';
+      }
+    }
+    return compId;
+  }
+  /* `_applyIconColors`: tras detectar la comp, aplicamos el icono
+     definido en COMPS — esto convierte ⚽ → 🇪🇸 (Liga), 🇪🇺 → 🔵
+     (Champions), 🔵 → 🟣 (Previa Champions), 🟡 → 🟤 (Intercontinental),
+     etc. en el render del modo Bayern, sin tocar el SSR global. */
+  var _ICONS_BY_COMP = {};
+  COMPS.forEach(function(c){ _ICONS_BY_COMP[c.id] = c.ico; });
+  function _applyIconColors(ev, sel){
+    if (!ev) return ev;
+    var compId = _resolveComp(ev, sel || _loadComps());
+    if (compId && _ICONS_BY_COMP[compId]) {
+      ev.icon = _ICONS_BY_COMP[compId];
     }
     return ev;
   }
@@ -15039,12 +15052,12 @@
           if (ed.rowClass!= null) ev.rowClass= ed.rowClass;
         }
         if (!_isAlwaysOn(ev)) {
-          var compId = _detectComp(ev);
+          var compId = _resolveComp(ev, sel);
           if (compId && sel[compId] === false) {
             ev = _transformToTraining(ev);
           }
         }
-        ev = _applyIconColors(ev);
+        ev = _applyIconColors(ev, sel);
         _eventCache[ev.id] = ev;
         html += _renderRow(ev);
       } else if (el.classList.contains('ag-add-row')) {
@@ -15056,7 +15069,7 @@
                 if (ed2[k] != null) addEv[k] = ed2[k];
               });
             }
-            addEv = _applyIconColors(addEv);
+            addEv = _applyIconColors(addEv, sel);
             _eventCache[addEv.id] = addEv;
             html += _renderRow(addEv);
           });

@@ -14844,14 +14844,48 @@
     { id:'torneo',  ico:'🌞', name:'Torneo de Verano',      def:true,
       detect: function(ev){ return /\bag-torneo\b/.test(ev.rowClass); } }
   ];
+  /* `_isAlwaysOn`: filas que NUNCA se transforman a Entrenamiento.
+     Incluye:
+       · `ag-train` y `ag-rest` (entrenamientos y descansos del SSR
+         son la base — siempre se respetan).
+       · `ag-sel` (Selecciones FIFA): el usuario pidió 2026-05-08 que
+         la sección final "🌍 FASE FINAL SELECCIONES" y las ventanas
+         FIFA durante la temporada aparezcan TAL CUAL en el calendario
+         Bayern, independientemente del toggle. Lógica: cuando los
+         nacionales del Bayern están con sus selecciones, el club no
+         juega — es un estado inherente, no una "competición del
+         Bayern". `Selecciones FIFA` se queda en COMPS solo para mostrar
+         el item en el modal (informativo) pero el detect no lo activa
+         como toggleable. */
   function _isAlwaysOn(ev){
-    return /\bag-train\b/.test(ev.rowClass) || /\bag-rest\b/.test(ev.rowClass);
+    return /\bag-train\b/.test(ev.rowClass)
+        || /\bag-rest\b/.test(ev.rowClass)
+        || /\bag-sel\b/.test(ev.rowClass);
   }
   function _detectComp(ev){
     for (var i=0; i<COMPS.length; i++){
       try { if (COMPS[i].detect(ev)) return COMPS[i].id; } catch(_){}
     }
     return null;
+  }
+  /* `_applyIconColors`: convención de colores que pidió el usuario:
+       · 🟣 = Previa Champions (antes 🔵 en el SSR).
+       · 🔵 = Champions League (antes 🇪🇺 generic en el SSR).
+     El SSR usa `🇪🇺` para "Europa" agrupando Champions+UEL+UECL (todas
+     juegan los mismos días). En modo Bayern, asumimos Champions por
+     default — más adelante se puede ampliar con un toggle si el club
+     juega UEL/UECL. Aplicamos la corrección en el render del modo
+     Bayern, sin tocar el SSR global. */
+  function _applyIconColors(ev){
+    if (!ev || !ev.icon) return ev;
+    if (/previa/i.test(ev.name) && /champ|UCL/i.test(ev.name)) {
+      ev.icon = '🟣';
+    } else if (ev.icon === '🇪🇺') {
+      ev.icon = '🔵';
+    } else if (ev.icon === '🔵' && /previa/i.test(ev.name) && /champ|UCL/i.test(ev.name)) {
+      ev.icon = '🟣';
+    }
+    return ev;
   }
 
   /* ── Storage helpers ──────────────────────────────────────────── */
@@ -15010,6 +15044,7 @@
             ev = _transformToTraining(ev);
           }
         }
+        ev = _applyIconColors(ev);
         _eventCache[ev.id] = ev;
         html += _renderRow(ev);
       } else if (el.classList.contains('ag-add-row')) {
@@ -15021,6 +15056,7 @@
                 if (ed2[k] != null) addEv[k] = ed2[k];
               });
             }
+            addEv = _applyIconColors(addEv);
             _eventCache[addEv.id] = addEv;
             html += _renderRow(addEv);
           });

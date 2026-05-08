@@ -9302,26 +9302,48 @@ window._showSimProgress = function(opts, onDone){
     _wire();
   }
 
-  /* ── Hook a `go(id)` para renderizar al entrar en cada pantalla.
-        No reemplazamos `go`; solo añadimos un listener post-hoc. */
-  function _maybeRenderOnNav(){
-    try {
-      var origGo = window.go;
-      if (typeof origGo !== 'function' || origGo._tourPatched) return;
-      window.go = function(target){
-        var r = origGo.apply(this, arguments);
-        if (TOUR_IDS.indexOf(target) !== -1) {
-          try { window._tourRender(target); } catch(_){}
-        }
-        return r;
-      };
-      window.go._tourPatched = true;
-    } catch(_){}
+  /* ── Detección de pantalla activa ───────────────────────
+        El bug "no se queda guardado" (2026-05-08) NO era un fallo de
+        persistencia: `_tourSave` SÍ escribía a server + localStorage.
+        El fallo era en RECARGA: tras cerrar y reabrir la pestaña, el
+        navegador restauraba la pantalla `s-sct` directamente añadiéndole
+        `.active` SIN pasar por `window.go(id)` (o pasando por una
+        versión de `go` que `bundle.js` redefine 8+ veces, rompiendo la
+        cadena de wraps). Resultado: `_tourRender` nunca se invocaba y
+        la pantalla quedaba con el HTML estático (título + 🖍 vacíos).
+
+        Solución robusta (patrón usado en otras partes del archivo):
+        un MutationObserver por cada `s-<tour>` que vigila el atributo
+        `class`. Cuando la pantalla pasa de no-activa a activa, se llama
+        a `_tourRender(id)`. Esto sobrevive a cualquier redefinición de
+        `window.go` y a la restauración de pestaña al recargar. */
+  function _watchScreens(){
+    TOUR_IDS.forEach(function(id){
+      var el = document.getElementById('s-' + id);
+      if (!el) return;
+      var wasActive = el.classList.contains('active');
+      /* Render inicial si la pantalla ya está activa (caso reload con
+         pestaña restaurada en este screen). */
+      if (wasActive) {
+        try { window._tourRender(id); } catch(_){}
+      }
+      if (typeof MutationObserver !== 'function') return;
+      try {
+        var obs = new MutationObserver(function(){
+          var nowActive = el.classList.contains('active');
+          if (nowActive && !wasActive) {
+            try { window._tourRender(id); } catch(_){}
+          }
+          wasActive = nowActive;
+        });
+        obs.observe(el, { attributes: true, attributeFilter: ['class'] });
+      } catch(_){}
+    });
   }
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _maybeRenderOnNav);
+    document.addEventListener('DOMContentLoaded', _watchScreens);
   } else {
-    _maybeRenderOnNav();
+    _watchScreens();
   }
 
   /* ── Hidratación inicial del cache (sin bloquear la carga).

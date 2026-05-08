@@ -5130,20 +5130,26 @@ window._showSimProgress = function(opts, onDone){
        propias claves localStorage para que cada vista (Superliga,
        Champions, UEL, Conference) muestre solo SUS números. */
     var buckets = {
-      liga:      {},
-      copa:      {},
-      superliga: {},
-      ucl:       {},
-      uel:       {},
-      uecl:      {}
+      liga:       {},
+      copa:       {},
+      superliga:  {},
+      ucl:        {},   /* UCL Grupos + Playoffs solamente */
+      'ucl-prev': {},   /* Previa Champions (separada) */
+      'ucl-oq':   {},   /* Open Qualifier (separado) */
+      'ucl-wc':   {},   /* Wild Card (separado) */
+      uel:        {},
+      uecl:       {}
     };
     var teamPJByComp = {
-      liga:      {},
-      copa:      {},
-      superliga: {},
-      ucl:       {},
-      uel:       {},
-      uecl:      {}
+      liga:       {},
+      copa:       {},
+      superliga:  {},
+      ucl:        {},
+      'ucl-prev': {},
+      'ucl-oq':   {},
+      'ucl-wc':   {},
+      uel:        {},
+      uecl:       {}
     };
 
     function getOrCreateInBucket(bucket, teamName, playerName){
@@ -5407,9 +5413,44 @@ window._showSimProgress = function(opts, onDone){
       try { localStorage.setItem(key, JSON.stringify(out)); } catch(_){}
     }
     _persistBucket(buckets.superliga, teamPJByComp.superliga, COMP_CACHE_KEYS.superliga);
-    _persistBucket(buckets.ucl,       teamPJByComp.ucl,       COMP_CACHE_KEYS.ucl);
     _persistBucket(buckets.uel,       teamPJByComp.uel,       COMP_CACHE_KEYS.uel);
     _persistBucket(buckets.uecl,      teamPJByComp.uecl,      COMP_CACHE_KEYS.uecl);
+    /* UCL: 4 sub-fases persistidas a 4 claves separadas + 1 clave
+       consolidada `ef_player_stats_ucl_v1` (suma de las 4) para
+       compatibilidad con la plantilla del hub Bayern y otros
+       consumidores. Petición usuario 2026-05-08: la pantalla
+       s-ucl-stats SOLO suma Grupos + Playoffs. */
+    _persistBucket(buckets.ucl,        teamPJByComp.ucl,         'ef_player_stats_ucl_main_v1'); /* Grupos + Playoffs solamente */
+    _persistBucket(buckets['ucl-prev'],teamPJByComp['ucl-prev'], 'ef_player_stats_ucl_prev_v1');
+    _persistBucket(buckets['ucl-oq'],  teamPJByComp['ucl-oq'],   'ef_player_stats_ucl_oq_v1');
+    _persistBucket(buckets['ucl-wc'],  teamPJByComp['ucl-wc'],   'ef_player_stats_ucl_wc_v1');
+    /* Consolidado: suma de los 4 sub-buckets UCL → conserva el contrato
+       histórico de `ef_player_stats_ucl_v1` (TODO UCL agregado). */
+    var _uclMerged = {};
+    var _uclPJ = {};
+    function _mergeIntoConsolidated(srcBucket, srcPJ){
+      Object.keys(srcBucket).forEach(function(k){
+        var src = srcBucket[k] || {};
+        var dst = _uclMerged[k] || {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+        dst.gol      = (dst.gol     ||0) + (src.gol     ||0);
+        dst.pen      = (dst.pen     ||0) + (src.pen     ||0);
+        dst.fk       = (dst.fk      ||0) + (src.fk      ||0);
+        dst.mvp      = (dst.mvp     ||0) + (src.mvp     ||0);
+        dst.ta       = (dst.ta      ||0) + (src.ta      ||0);
+        dst.tr       = (dst.tr      ||0) + (src.tr      ||0);
+        dst.imbat    = (dst.imbat   ||0) + (src.imbat   ||0);
+        dst.penSaved = (dst.penSaved||0) + (src.penSaved||0);
+        _uclMerged[k] = dst;
+      });
+      Object.keys(srcPJ || {}).forEach(function(tn){
+        _uclPJ[tn] = (_uclPJ[tn]||0) + (srcPJ[tn]||0);
+      });
+    }
+    _mergeIntoConsolidated(buckets.ucl,         teamPJByComp.ucl);
+    _mergeIntoConsolidated(buckets['ucl-prev'], teamPJByComp['ucl-prev']);
+    _mergeIntoConsolidated(buckets['ucl-oq'],   teamPJByComp['ucl-oq']);
+    _mergeIntoConsolidated(buckets['ucl-wc'],   teamPJByComp['ucl-wc']);
+    _persistBucket(_uclMerged, _uclPJ, COMP_CACHE_KEYS.ucl);
 
     // Save to SEPARATE storage (Liga + Copa unidas → ef_player_stats_v1)
     try { localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(stats)); } catch(_){}

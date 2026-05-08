@@ -2208,10 +2208,16 @@ def api_liga_ext_post(slug):
 #                                       recopa, supercopa,
 #                                       intercontinental, superliga,
 #                                       verano}
+#   - tour_<slug>_v1        config editable de cada torneo de verano
+#                           con slug ∈ {sct, pss, jg, asia} —
+#                           compartido entre dispositivos (2026-05-08)
 # Cualquier otra clave devuelve 400.
 _KV_ALLOWED_EXACT = {"comp_icons_v1", "europe_committed_v1"}
 _KV_ALLOWED_REGEX = re.compile(
-    r"^manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)_v1$"
+    r"^("
+    r"manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)"
+    r"|tour_(sct|pss|jg|asia)"
+    r")_v1$"
 )
 _KV_MAX_BYTES = 2 * 1024 * 1024  # 2 MB por clave (alineado con CLAUDE.md)
 

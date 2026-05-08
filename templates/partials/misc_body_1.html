@@ -8500,6 +8500,14 @@ window._showSimProgress = function(opts, onDone){
       <div><label>Nivel IA máx.</label><input id="tour-ed-aimax" type="number" min="1" max="100"></div>
     </div>
 
+    <!-- Excluir ligas del sorteo (multi-checkbox). Cada toggle marca
+         una liga (`ligaExt_<slug>`) cuyos equipos quedan fuera del
+         pool. Persiste en `cfg.excludedLeagues`. -->
+    <div class="tour-ed-row">
+      <label>Excluir ligas del sorteo</label>
+      <div id="tour-ed-leagues" class="tour-ed-leagues"></div>
+    </div>
+
     <!-- Pool de equipos disponibles (informativo, se actualiza al cambiar nivel) -->
     <div class="tour-ed-row">
       <label>Pool de equipos en el rango</label>
@@ -8558,6 +8566,33 @@ window._showSimProgress = function(opts, onDone){
   .tour-ed-pool-stat b{color:#fff;}
   .tour-ed-pool-stat.is-ok{border-color:rgba(30,161,74,.50);background:rgba(30,161,74,.10);}
   .tour-ed-pool-stat.is-bad{border-color:rgba(255,90,90,.55);background:rgba(255,90,90,.08);}
+  /* Lista de checkboxes de ligas (multi-select pill list). */
+  .tour-ed-leagues{
+    display:flex;flex-wrap:wrap;gap:4px;
+    max-height:140px;overflow-y:auto;
+    padding:6px;background:rgba(0,0,0,.25);border-radius:6px;
+    border:1px dashed rgba(255,255,255,.10);
+  }
+  .tour-ed-leg-row{
+    display:inline-flex;align-items:center;gap:5px;
+    padding:3px 8px;border-radius:14px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);
+    font-size:11px;cursor:pointer;
+    text-transform:none;letter-spacing:0;color:#fff;margin:0;
+  }
+  .tour-ed-leg-row input[type=checkbox]{
+    width:auto !important;margin:0;cursor:pointer;
+  }
+  .tour-ed-leg-row .tour-ed-leg-count{
+    background:rgba(255,255,255,.10);padding:1px 5px;border-radius:8px;
+    font-size:10px;color:rgba(255,255,255,.55);
+  }
+  .tour-ed-leg-row.is-excluded{
+    background:rgba(255,90,90,.12);border-color:rgba(255,90,90,.40);
+  }
+  .tour-ed-leg-row.is-excluded .tour-ed-leg-label{
+    color:#ff9090;text-decoration:line-through;
+  }
 </style>
 
 <!-- CSS de bracket / lista de equipos sorteados (rendered en
@@ -8580,10 +8615,76 @@ window._showSimProgress = function(opts, onDone){
   .tour-bracket-team img{width:18px;height:18px;object-fit:contain;flex-shrink:0;}
   .tour-bracket-team span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .tour-bracket-team.is-pending{color:#f0c040;font-style:italic;}
+  .tour-bracket-team.is-pickable{
+    cursor:pointer;border-radius:6px;padding:2px 4px;
+    transition:background .15s;
+  }
+  .tour-bracket-team.is-pickable:hover{background:rgba(240,192,64,.15);}
+  .tour-bracket-team.is-pickable.is-pending{
+    background:rgba(240,192,64,.10);border:1px dashed rgba(240,192,64,.55);
+  }
+  .tour-bracket-team.is-pickable.is-human:not(.is-pending){
+    background:rgba(30,161,74,.18);border:1px solid rgba(30,161,74,.50);
+  }
+  .tour-team-chip.is-pickable{cursor:pointer;}
+  .tour-team-chip.is-pickable:hover{background:rgba(240,192,64,.15);}
+  .tour-team-chip.is-pickable.is-pending{
+    background:rgba(240,192,64,.10);border:1px dashed rgba(240,192,64,.55);
+  }
+  .tour-team-chip.is-pickable.is-pending span:first-of-type{
+    color:#f0c040;font-style:italic;
+  }
+  .tour-team-chip.is-pickable.is-human:not(.is-pending){
+    background:rgba(30,161,74,.18);border:1px solid rgba(30,161,74,.50);
+  }
   .tour-group-block{margin-top:8px;}
   .tour-group-block h4{
     font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;
     color:#f0c040;margin:0 0 4px;
+  }
+</style>
+
+<!-- ═══ OVERLAY PICKER DE EQUIPO HUMANO ═══
+     Cuando el humano toca un slot PENDIENTE (o uno suyo ya asignado
+     para cambiar equipo), abrimos este picker. Filtra el pool por el
+     mismo nivel IA y ligas excluidas que el sorteo. NO es PIN-gated:
+     el humano elige su propio equipo libremente. -->
+<div id="tour-pick-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999991;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px;">
+  <div id="tour-pick-box" style="background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(255,255,255,.12);border-radius:14px;width:100%;max-width:440px;padding:18px 18px 14px;color:#e8f0ff;font-family:Rajdhani,sans-serif;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-family:Oswald,sans-serif;letter-spacing:2px;font-size:13px;color:#1ea14a;">👤 ELIGE TU EQUIPO</div>
+      <button onclick="window._tourClosePicker&&window._tourClosePicker()" style="background:none;border:none;color:rgba(255,255,255,.55);font-size:22px;cursor:pointer;line-height:1;padding:0 4px;">×</button>
+    </div>
+    <div id="tour-pick-info" style="font-size:11px;color:rgba(255,255,255,.50);margin-bottom:8px;"></div>
+    <input id="tour-pick-search" type="text" placeholder="Buscar equipo (3+ caracteres)…" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:6px;padding:8px 10px;font-size:13px;font-family:Rajdhani,sans-serif;box-sizing:border-box;">
+    <div id="tour-pick-results" class="tour-pick-results"></div>
+    <div id="tour-pick-feedback" style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px;min-height:14px;text-align:center;"></div>
+  </div>
+</div>
+
+<style>
+  .tour-pick-results{
+    margin-top:8px;max-height:300px;overflow-y:auto;
+    border:1px solid rgba(255,255,255,.10);border-radius:6px;
+    background:rgba(0,0,0,.30);
+  }
+  .tour-pick-results:empty{display:none;}
+  .tour-pick-row{
+    display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;
+    border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;
+  }
+  .tour-pick-row:hover{background:rgba(30,161,74,.10);}
+  .tour-pick-row img{width:22px;height:22px;object-fit:contain;}
+  .tour-pick-row .pw{
+    margin-left:auto;font-size:10px;letter-spacing:1px;
+    background:rgba(255,255,255,.10);padding:2px 6px;border-radius:8px;
+    color:rgba(255,255,255,.65);
+  }
+  .tour-pick-row.is-taken{opacity:.45;cursor:not-allowed;}
+  .tour-pick-row.is-taken:hover{background:transparent;}
+  .tour-pick-row.is-taken::after{
+    content:'(ya en bracket)';margin-left:6px;font-size:10px;
+    color:rgba(255,90,90,.75);font-style:italic;
   }
 </style>
 
@@ -8694,9 +8795,40 @@ window._showSimProgress = function(opts, onDone){
     try { if (typeof window.getTeamLogoUrl === 'function') return window.getTeamLogoUrl(name) || ''; } catch(_){}
     return '';
   }
+  /* Convierte un slug "primera-rfef" → "Primera Rfef". Cada palabra
+     capitalizada; los guiones se vuelven espacios. */
+  function _humanizeSlug(slug){
+    return String(slug||'').replace(/-/g,' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+  }
+
+  /* Devuelve la lista de ligas disponibles (slugs `ligaExt_*` con
+     equipos guardados). Cada entrada: {slug, label, count}. Usado
+     por el editor para renderizar los checkboxes de "Excluir ligas". */
+  function _availableLeagues(){
+    var leagues = {};
+    try {
+      for (var i = 0; i < localStorage.length; i++){
+        var key = localStorage.key(i);
+        if (!key || key.indexOf('ligaExt_') !== 0) continue;
+        if (key.indexOf('_backup') !== -1) continue;
+        if (key.indexOf('_protected') !== -1) continue;
+        if (key.indexOf('_snap_') !== -1) continue;
+        var slug = key.substring('ligaExt_'.length);
+        var raw = localStorage.getItem(key);
+        if (!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+        if (!data || !Array.isArray(data.teams)) continue;
+        var withTeams = data.teams.filter(function(t){ return t && t.name; }).length;
+        if (withTeams === 0) continue;
+        leagues[slug] = { slug: slug, label: data.name || _humanizeSlug(slug), count: withTeams };
+      }
+    } catch(_){}
+    return Object.keys(leagues).sort().map(function(k){ return leagues[k]; });
+  }
+
   function _allTeams(){
     var out = [], seen = {};
-    function _push(name, power, shield){
+    function _push(name, power, shield, league){
       var clean = String(name||'').trim();
       if (!clean) return;
       var k = clean.toLowerCase();
@@ -8704,9 +8836,10 @@ window._showSimProgress = function(opts, onDone){
       if (!isFinite(pw) || pw <= 0) pw = 70;
       if (seen[k]) {
         if (pw > seen[k].power) seen[k].power = pw;
+        if (!seen[k]._league && league) seen[k]._league = league;
         return;
       }
-      var entry = { name: clean, power: pw, shield: shield || _shieldOf(clean) };
+      var entry = { name: clean, power: pw, shield: shield || _shieldOf(clean), _league: league || '' };
       seen[k] = entry;
       out.push(entry);
     }
@@ -8715,18 +8848,21 @@ window._showSimProgress = function(opts, onDone){
         var key = localStorage.key(i);
         if (!key || key.indexOf('ligaExt_') !== 0) continue;
         if (key.indexOf('_backup') !== -1) continue;
+        if (key.indexOf('_protected') !== -1) continue;
+        if (key.indexOf('_snap_') !== -1) continue;
+        var slug = key.substring('ligaExt_'.length);
         var raw = localStorage.getItem(key);
         if (!raw) continue;
         var data; try { data = JSON.parse(raw); } catch(_){ continue; }
         if (!data || !Array.isArray(data.teams)) continue;
         data.teams.forEach(function(t){
-          if (t && t.name) _push(t.name, t.power || t.media, t.shield);
+          if (t && t.name) _push(t.name, t.power || t.media, t.shield, slug);
         });
       }
     } catch(_){}
     try {
       var reg = window.SQUAD_REGISTRY || {};
-      Object.keys(reg).forEach(function(name){ _push(name, 0, ''); });
+      Object.keys(reg).forEach(function(name){ _push(name, 0, '', ''); });
     } catch(_){}
     out.sort(function(a,b){ return a.name.localeCompare(b.name,'es'); });
     return out;
@@ -8750,12 +8886,14 @@ window._showSimProgress = function(opts, onDone){
   function _drawTeams(cfg){
     var aimin = cfg.aiLevelMin || 1;
     var aimax = cfg.aiLevelMax || 100;
+    var excluded = cfg.excludedLeagues || [];
     var pool = _allTeams().filter(function(t){
+      if (excluded.indexOf(t._league) !== -1) return false;
       return t.power >= aimin && t.power <= aimax;
     });
     var needed = Math.max(0, (cfg.numTeams || 0) - (cfg.numHumans || 0));
     if (pool.length < needed) {
-      return { ok:false, error: 'Solo hay '+pool.length+' equipos en el rango '+aimin+'–'+aimax+'. Necesitas '+needed+'.' };
+      return { ok:false, error: 'Solo hay '+pool.length+' equipos en el rango '+aimin+'–'+aimax+(excluded.length?' (excluyendo '+excluded.length+' liga'+(excluded.length===1?'':'s')+')':'')+'. Necesitas '+needed+'.' };
     }
     _shuffle(pool);
     var teams = pool.slice(0, needed).map(function(t){
@@ -8788,7 +8926,9 @@ window._showSimProgress = function(opts, onDone){
     var aimax = parseInt(document.getElementById('tour-ed-aimax').value, 10) || 100;
     var numT  = parseInt(document.getElementById('tour-ed-num').value, 10) || 0;
     var numH  = parseInt(document.getElementById('tour-ed-hum').value, 10) || 0;
+    var excluded = (_open && _open.cfg && _open.cfg.excludedLeagues) || [];
     var pool = _allTeams().filter(function(t){
+      if (excluded.indexOf(t._league) !== -1) return false;
       return t.power >= aimin && t.power <= aimax;
     });
     var needed = Math.max(0, numT - numH);
@@ -8797,13 +8937,48 @@ window._showSimProgress = function(opts, onDone){
       stat.textContent = 'Define el nº de equipos para ver el sorteo necesario.';
       return;
     }
+    var exTxt = excluded.length ? ' (excluyendo '+excluded.length+' liga'+(excluded.length===1?'':'s')+')' : '';
     if (pool.length < needed) {
       stat.classList.add('is-bad');
-      stat.innerHTML = '⚠ Solo hay <b>'+pool.length+'</b> equipos en el rango <b>'+aimin+'–'+aimax+'</b>. Necesitas <b>'+needed+'</b> (+ '+numH+' humano'+(numH===1?'':'s')+' = '+numT+').';
+      stat.innerHTML = '⚠ Solo hay <b>'+pool.length+'</b> equipos en el rango <b>'+aimin+'–'+aimax+'</b>'+exTxt+'. Necesitas <b>'+needed+'</b> (+ '+numH+' humano'+(numH===1?'':'s')+' = '+numT+').';
     } else {
       stat.classList.add('is-ok');
-      stat.innerHTML = '✓ <b>'+pool.length+'</b> equipos en el rango <b>'+aimin+'–'+aimax+'</b>. Se sortearán <b>'+needed+'</b> al azar (+ '+numH+' humano'+(numH===1?'':'s')+' = '+numT+').';
+      stat.innerHTML = '✓ <b>'+pool.length+'</b> equipos en el rango <b>'+aimin+'–'+aimax+'</b>'+exTxt+'. Se sortearán <b>'+needed+'</b> al azar (+ '+numH+' humano'+(numH===1?'':'s')+' = '+numT+').';
     }
+  }
+
+  /* Renderiza la lista de checkboxes para excluir ligas. Se llama al
+     abrir el editor (en `_populateForm`) y refresca al togglear. */
+  function _renderLeagueChecks(){
+    var box = document.getElementById('tour-ed-leagues');
+    if (!box || !_open) return;
+    var excluded = _open.cfg.excludedLeagues || [];
+    var leagues = _availableLeagues();
+    if (!leagues.length) {
+      box.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,.45);font-style:italic;padding:6px 8px;">No hay ligas con equipos guardados todav\u00eda.</div>';
+      return;
+    }
+    box.innerHTML = leagues.map(function(L){
+      var checked = excluded.indexOf(L.slug) !== -1 ? ' is-excluded' : '';
+      var ck = excluded.indexOf(L.slug) !== -1 ? 'checked' : '';
+      return '<label class="tour-ed-leg-row'+checked+'">'+
+        '<input type="checkbox" data-slug="'+L.slug+'" '+ck+'>'+
+        '<span class="tour-ed-leg-label">'+L.label+'</span>'+
+        '<span class="tour-ed-leg-count">'+L.count+'</span>'+
+      '</label>';
+    }).join('');
+    box.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+      cb.addEventListener('change', function(){
+        if (!_open) return;
+        var slug = this.getAttribute('data-slug');
+        _open.cfg.excludedLeagues = _open.cfg.excludedLeagues || [];
+        var idx = _open.cfg.excludedLeagues.indexOf(slug);
+        if (this.checked && idx === -1) _open.cfg.excludedLeagues.push(slug);
+        if (!this.checked && idx !== -1) _open.cfg.excludedLeagues.splice(idx, 1);
+        this.parentElement.classList.toggle('is-excluded', this.checked);
+        _updatePoolStat();
+      });
+    });
   }
 
   function _renderFmtCfg(){
@@ -8857,6 +9032,7 @@ window._showSimProgress = function(opts, onDone){
     document.getElementById('tour-ed-fmt').value = cfg.format || 'ko';
     document.getElementById('tour-ed-prizes').value = _prizesToText(cfg.prizes);
     _renderFmtCfg();
+    _renderLeagueChecks();
     _updatePoolStat();
   }
 
@@ -8962,10 +9138,33 @@ window._showSimProgress = function(opts, onDone){
   /* HTML para un equipo dentro del bracket (KO) o de un grupo. Los
      "PENDIENTE" (placeholders humanos) se pintan en dorado y cursiva
      para diferenciarlos de los equipos IA ya sorteados. */
-  function _bracketTeamHtml(t){
+  /* Renderiza un equipo dentro del bracket. Si es humano (PENDIENTE
+     o ya con equipo elegido) se marca como clickable (`is-pickable`)
+     con `data-tour` + `data-slot` para que el handler delegado abra
+     el picker. Los IA son visualmente neutros, no clickables. */
+  function _bracketTeamHtml(t, tourId, slotIdx){
     var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
-    var cls = t.isHuman ? 'tour-bracket-team is-pending' : 'tour-bracket-team';
-    return '<div class="'+cls+'">'+img+'<span>'+(t.name||'?')+'</span></div>';
+    var classes = ['tour-bracket-team'];
+    if (t.isHuman) {
+      classes.push('is-pickable');
+      if (t.name === 'PENDIENTE') classes.push('is-pending');
+      else classes.push('is-human');
+    }
+    var data = t.isHuman ? ' data-tour="'+tourId+'" data-slot="'+slotIdx+'"' : '';
+    return '<div class="'+classes.join(' ')+'"'+data+'>'+img+'<span>'+(t.name||'?')+'</span></div>';
+  }
+
+  /* Equivalente para la lista de Liga / Grupos (chip plano). */
+  function _teamChipHtml(t, tourId, slotIdx){
+    var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
+    var classes = ['tour-team-chip'];
+    if (t.isHuman) {
+      classes.push('is-pickable');
+      classes.push(t.name === 'PENDIENTE' ? 'is-pending' : 'is-human');
+    }
+    var data = t.isHuman ? ' data-tour="'+tourId+'" data-slot="'+slotIdx+'"' : '';
+    var tag = t.isHuman ? '<span class="tag-h">'+(t.name==='PENDIENTE'?'PEND':'TÚ')+'</span>' : '';
+    return '<div class="'+classes.join(' ')+'"'+data+'>'+img+'<span>'+t.name+'</span>'+tag+'</div>';
   }
 
   /* Render dentro de la pantalla del torneo. Cabecera (nombre +
@@ -8989,43 +9188,45 @@ window._showSimProgress = function(opts, onDone){
     var teams = cfg.teams || [];
     if (!teams.length) { infoEl.innerHTML = ''; return; }
 
+    /* Hint encima del listado para que el usuario vea cómo elegir
+       su equipo antes de mirar el sorteo. */
+    var pendingCount = teams.filter(function(t){ return t.isHuman && t.name === 'PENDIENTE'; }).length;
+    var hint = '';
+    if (pendingCount) {
+      hint = '<p style="margin:0 0 8px;padding:6px 10px;background:rgba(240,192,64,.10);border:1px dashed rgba(240,192,64,.45);border-radius:6px;font-size:12px;color:#f0c040;">' +
+             '👤 Toca el slot <b>PENDIENTE</b> en dorado para elegir tu equipo (' + pendingCount + ' por asignar).' +
+             '</p>';
+    }
+
     if (cfg.format === 'ko') {
       var rounds = (cfg.formatConfig && cfg.formatConfig.rounds) || [];
       var firstRound = rounds[0] || ('Ronda de '+teams.length);
-      var html = '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">SORTEO · '+firstRound+'</p>';
+      var html = hint + '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">SORTEO · '+firstRound+'</p>';
       html += '<div class="tour-bracket-list">';
       for (var i = 0; i < teams.length; i += 2) {
         var a = teams[i], b = teams[i+1];
         if (!b) break;
-        html += '<div class="tour-match">' + _bracketTeamHtml(a) + '<span class="vs">vs</span>' + _bracketTeamHtml(b) + '</div>';
+        html += '<div class="tour-match">' + _bracketTeamHtml(a, id, i) + '<span class="vs">vs</span>' + _bracketTeamHtml(b, id, i+1) + '</div>';
       }
       html += '</div>';
       infoEl.innerHTML = html;
     } else if (cfg.format === 'league') {
-      var html = '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">PARTICIPANTES · '+teams.length+'</p>';
+      var html = hint + '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">PARTICIPANTES · '+teams.length+'</p>';
       html += '<div class="tour-teams-grid">';
-      teams.forEach(function(t){
-        var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
-        var tag = t.isHuman ? '<span class="tag-h">PEND</span>' : '';
-        html += '<div class="tour-team-chip">'+img+'<span>'+t.name+'</span>'+tag+'</div>';
-      });
+      teams.forEach(function(t, idx){ html += _teamChipHtml(t, id, idx); });
       html += '</div>';
       infoEl.innerHTML = html;
     } else if (cfg.format === 'groups-ko') {
       var fc = cfg.formatConfig || {};
       var groups = fc.groups || 1;
       var per    = fc.perGroup || Math.ceil(teams.length / groups);
-      var html = '';
+      var html = hint;
       for (var g = 0; g < groups; g++) {
         var slice = teams.slice(g*per, (g+1)*per);
         if (!slice.length) break;
         html += '<div class="tour-group-block"><h4>GRUPO '+String.fromCharCode(65+g)+'</h4>';
         html += '<div class="tour-teams-grid">';
-        slice.forEach(function(t){
-          var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
-          var tag = t.isHuman ? '<span class="tag-h">PEND</span>' : '';
-          html += '<div class="tour-team-chip">'+img+'<span>'+t.name+'</span>'+tag+'</div>';
-        });
+        slice.forEach(function(t, j){ html += _teamChipHtml(t, id, g*per + j); });
         html += '</div></div>';
       }
       infoEl.innerHTML = html;
@@ -9137,6 +9338,130 @@ window._showSimProgress = function(opts, onDone){
     document.addEventListener('DOMContentLoaded', _hydrateCache);
   } else {
     _hydrateCache();
+  }
+
+  /* ── Picker de equipo humano ─────────────────────────────
+     Cuando el usuario toca un slot PENDIENTE (o un slot suyo ya
+     asignado para cambiarlo), abrimos un overlay independiente del
+     editor admin. NO requiere PIN — el humano elige libremente
+     dentro del rango de nivel IA y ligas no excluidas que el admin
+     definió en la config. */
+  var _picker = null;  /* { tourId, slotIdx } */
+
+  function _setPickFeedback(msg, ok){
+    var el = document.getElementById('tour-pick-feedback');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.style.color = ok === true ? '#9ee5a9' : (ok === false ? '#ff9090' : 'rgba(255,255,255,.55)');
+  }
+
+  function _renderPickerResults(query){
+    var box = document.getElementById('tour-pick-results');
+    if (!box || !_picker) return;
+    var cfg = (window._TOUR_CACHE || {})[_picker.tourId];
+    if (!cfg) { box.innerHTML = ''; return; }
+    var q = _norm(query);
+    if (q.length < 3) { box.innerHTML = ''; return; }
+    var aimin = cfg.aiLevelMin || 1;
+    var aimax = cfg.aiLevelMax || 100;
+    var excluded = cfg.excludedLeagues || [];
+    /* Map de equipos ya en el bracket (excluyendo el slot que se
+       está editando) para marcarlos como "ya en bracket". */
+    var taken = {};
+    (cfg.teams || []).forEach(function(t, i){
+      if (i === _picker.slotIdx) return;
+      if (t && t.name && t.name !== 'PENDIENTE') taken[t.name.toLowerCase()] = true;
+    });
+    var matches = _allTeams().filter(function(t){
+      if (excluded.indexOf(t._league) !== -1) return false;
+      if (t.power < aimin || t.power > aimax) return false;
+      return _norm(t.name).indexOf(q) !== -1;
+    }).slice(0, 20);
+    if (!matches.length) {
+      box.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:rgba(255,255,255,.45);">Sin resultados en el rango '+aimin+'–'+aimax+'.</div>';
+      return;
+    }
+    box.innerHTML = matches.map(function(t){
+      var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
+      var isT = !!taken[t.name.toLowerCase()];
+      var cls = isT ? 'tour-pick-row is-taken' : 'tour-pick-row';
+      return '<div class="'+cls+'" data-name="'+t.name.replace(/"/g,'&quot;')+'" data-s="'+(t.shield||'').replace(/"/g,'&quot;')+'" data-pw="'+t.power+'">'+
+        img + '<span>'+t.name+'</span>' +
+        '<span class="pw">'+t.power+'</span>' +
+      '</div>';
+    }).join('');
+    box.querySelectorAll('.tour-pick-row').forEach(function(row){
+      row.addEventListener('click', async function(){
+        if (!_picker) return;
+        if (this.classList.contains('is-taken')) return;
+        var name = this.getAttribute('data-name');
+        var sh   = this.getAttribute('data-s') || '';
+        var pw   = parseInt(this.getAttribute('data-pw'), 10) || 0;
+        var cfg2 = (window._TOUR_CACHE || {})[_picker.tourId];
+        if (!cfg2 || !cfg2.teams || !cfg2.teams[_picker.slotIdx]) return;
+        cfg2.teams[_picker.slotIdx] = { name: name, isHuman: true, shield: sh, power: pw };
+        _setPickFeedback('Guardando…');
+        var ok = await window._tourSave(_picker.tourId, cfg2);
+        if (ok) {
+          _setPickFeedback('✓ Equipo asignado', true);
+          window._tourRender(_picker.tourId);
+          setTimeout(function(){ window._tourClosePicker(); }, 500);
+        } else {
+          _setPickFeedback('⚠ Guardado solo en local (sin red)', false);
+        }
+      });
+    });
+  }
+
+  window._tourOpenPicker = function(tourId, slotIdx){
+    if (TOUR_IDS.indexOf(tourId) === -1) return;
+    var cfg = (window._TOUR_CACHE || {})[tourId];
+    if (!cfg || !cfg.teams || !cfg.teams[slotIdx]) return;
+    _picker = { tourId: tourId, slotIdx: slotIdx };
+    var info = document.getElementById('tour-pick-info');
+    if (info) info.textContent = 'Slot ' + (slotIdx+1) + ' · Nivel IA ' + (cfg.aiLevelMin||1) + '–' + (cfg.aiLevelMax||100);
+    var search = document.getElementById('tour-pick-search');
+    if (search) { search.value = ''; setTimeout(function(){ search.focus(); }, 50); }
+    var results = document.getElementById('tour-pick-results');
+    if (results) results.innerHTML = '';
+    _setPickFeedback('');
+    document.getElementById('tour-pick-overlay').style.display = 'flex';
+  };
+
+  window._tourClosePicker = function(){
+    var ovl = document.getElementById('tour-pick-overlay');
+    if (ovl) ovl.style.display = 'none';
+    _picker = null;
+  };
+
+  /* Wire-up del picker (1 sola vez por carga). */
+  function _wirePicker(){
+    var search = document.getElementById('tour-pick-search');
+    if (search) search.addEventListener('input', function(){ _renderPickerResults(this.value); });
+    var ovl = document.getElementById('tour-pick-overlay');
+    if (ovl) {
+      ovl.addEventListener('click', function(e){
+        if (e.target === ovl) window._tourClosePicker();
+      });
+    }
+    /* Click delegation: cualquier `.is-pickable` en una pantalla de
+       torneo abre el picker con (tourId, slotIdx). */
+    document.addEventListener('click', function(e){
+      var el = e.target && e.target.closest && e.target.closest('.is-pickable');
+      if (!el) return;
+      var tourId = el.getAttribute('data-tour');
+      var slot   = parseInt(el.getAttribute('data-slot'), 10);
+      if (tourId && !isNaN(slot)) {
+        e.preventDefault();
+        e.stopPropagation();
+        window._tourOpenPicker(tourId, slot);
+      }
+    }, true);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _wirePicker);
+  } else {
+    _wirePicker();
   }
 })();
 </script>

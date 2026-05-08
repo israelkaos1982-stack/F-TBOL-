@@ -14806,17 +14806,39 @@
         toggleables).
 
    Ediciones manuales (✏️➕🗑) se persisten en localStorage
-   `bayern_cal_v1` con tres buckets: { added: { secId: [evs] },
+   `bayern_cal_v2` con tres buckets: { added: { secId: [evs] },
    edits: { evId: {fields} }, deleted: { evId: true } }.
+
+   Reset 2026-05-08: el usuario reportó que el calendario del Bayern
+   mostraba fechas viejas (Torneos Verano repartidos, Previa Champions
+   formateada como "Jornada 1..4", Copa del Rey 1/128 el 29-Ago, etc.)
+   mientras el calendario GLOBAL ya estaba corregido. Causa: ediciones
+   manuales antiguas en `bayern_cal_v1` (overrides locales) hechas
+   cuando el global tenía esos errores. Bumpear la clave a `_v2`
+   descarta esos overrides obsoletos en el navegador y el modo Bayern
+   parte del SSR del calendario global. La selección de competiciones
+   (`bayern_calendar_comps_v1`) se conserva — el usuario solo perdería
+   ediciones manuales por evento, que es exactamente lo que pidió.
 
    Selección de comps en `bayern_calendar_comps_v1`. Título del
    header en `bayern_calendar_title_v1` (default "BAYERN MUNICH",
    editable con 🖍 + PIN 747). */
 (function(){
   var KEY_COMPS = 'bayern_calendar_comps_v1';
-  var KEY_CAL   = 'bayern_cal_v1';
+  var KEY_CAL   = 'bayern_cal_v2';   /* bump 2026-05-08: descarta overrides v1 obsoletos */
+  var KEY_CAL_LEGACY = 'bayern_cal_v1';
   var KEY_TITLE = 'bayern_calendar_title_v1';
   var DEFAULT_TITLE = 'BAYERN MUNICH';
+
+  /* Cleanup defensivo: borra el store v1 una sola vez por navegador
+     (cuando aún no exista v2). Evita que la entry vieja siga
+     ocupando espacio del namespace de localStorage indefinidamente. */
+  try {
+    if (localStorage.getItem(KEY_CAL_LEGACY) != null
+        && localStorage.getItem(KEY_CAL) == null) {
+      localStorage.removeItem(KEY_CAL_LEGACY);
+    }
+  } catch(_){}
 
   /* COMPS — orden VISUAL del modal (lo que el usuario ve en el
      selector). Cada entrada lleva el icono propio del juego para
@@ -15631,7 +15653,7 @@
 </script>
 
 <script>
-/* ══ WRAP MODO BAYERN: redirige Add/Edit a `bayern_cal_v1` ════════
+/* ══ WRAP MODO BAYERN: redirige Add/Edit a `bayern_cal_v2` ════════
    El bloque editor de arriba registra `window.agSubmitForm` y
    `window.agHideForm` apuntando a `/api/calendario/*` (servidor).
    En modo Bayern (body.bayern-cal-on) el calendario es local — los

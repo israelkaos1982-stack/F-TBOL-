@@ -5230,7 +5230,16 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
 
     var processedMatches = {};
-    function _mkPJ(hA, hB){ return _normPS(hA) + '||' + _normPS(hB); }
+    /* Sort teams para que el dedup funcione cuando ef_liga38_v4 y
+       LIGA_PLAYER_MATCH_STORE guardan el partido con home/away
+       invertidos. Bug reportado 2026-05-08 (Bayern J1 humano):
+       el partido se guardaba como "Real|Bayern" en uno y "Bayern|Real"
+       en el otro → dedupKey distinto → eventos contados 2 veces
+       (Kane pen = 2 cuando real = 1, etc.). Sortear normaliza el par. */
+    function _mkPJ(hA, hB){
+      var a = _normPS(hA), b = _normPS(hB);
+      return (a < b ? a + '||' + b : b + '||' + a);
+    }
 
     // Source 1: LIGA_PLAYER_MATCH_STORE (eventos con tag competition)
     var store = window.LIGA_PLAYER_MATCH_STORE;
@@ -5687,8 +5696,39 @@ window._showSimProgress = function(opts, onDone){
         }
       } catch(_){}
     }
-    /* ef_liga38_v4 = Liga EA Sports SOLO. */
-    if (teamPJ === 0 && teamN && compSet.liga) {
+    /* LIGA_PLAYER_MATCH_STORE: cuenta SIEMPRE primero (incluye Liga
+       humana + Copa + Sup España + cualquier otra). Cada match en
+       este store dedupea por par-sorted+comp para que partidos
+       guardados con teams invertidos NO cuenten 2 veces. */
+    var seenTeamPJPairs = {};
+    if (teamN) {
+      try {
+        var pmStore = window.LIGA_PLAYER_MATCH_STORE || {};
+        var mks = Object.keys(pmStore);
+        for (var mi = 0; mi < mks.length; mi++) {
+          var m = pmStore[mks[mi]]; if (!m) continue;
+          if (!_eventCompMatches(m, mks[mi])) continue;
+          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
+          if (_fuzz(tA, teamN) || _fuzz(tB, teamN)) {
+            var _pjComp = (m.competition
+                || (typeof window._inferMatchCompetition === 'function'
+                      ? window._inferMatchCompetition(mks[mi]) : 'liga'));
+            var _pjPair = (tA < tB ? tA + '||' + tB : tB + '||' + tA);
+            var seenKey = _pjComp + '|' + _pjPair;
+            if (!seenTeamPJPairs[seenKey]) {
+              teamPJ++;
+              seenTeamPJPairs[seenKey] = true;
+            }
+          }
+        }
+      } catch(_){}
+    }
+    /* ef_liga38_v4 = Liga EA Sports SOLO — DESPUÉS de LIGA_PLAYER_MATCH_STORE
+       y SIN double-count. Solo cuenta jornadas que NO están ya en el
+       store (caso típico: simulaciones IA-vs-IA que no tocan
+       LIGA_PLAYER_MATCH_STORE). Fix 2026-05-08 al bug del Bayern:
+       teamPJ contaba 2 veces los partidos humanos de Liga. */
+    if (teamN && compSet.liga) {
       try {
         var raw = localStorage.getItem('ef_liga38_v4');
         if (raw) {
@@ -5698,25 +5738,11 @@ window._showSimProgress = function(opts, onDone){
             var parts = rkeys[i].split('|');
             if (parts.length < 3) continue;
             var nA = _np(parts[1]||''), nB = _np(parts[2]||'');
-            if (_fuzz(nA, teamN) || _fuzz(nB, teamN)) teamPJ++;
-          }
-        }
-      } catch(_){}
-    }
-    /* LIGA_PLAYER_MATCH_STORE: cuenta solo matches cuya competition
-       está en el filtro. */
-    if (teamN) {
-      try {
-        var pmStore = window.LIGA_PLAYER_MATCH_STORE || {};
-        var mks = Object.keys(pmStore);
-        var seenPJ = {};
-        for (var mi = 0; mi < mks.length; mi++) {
-          var m = pmStore[mks[mi]]; if (!m) continue;
-          if (!_eventCompMatches(m, mks[mi])) continue;
-          var tA = _np(m.teamA||''), tB = _np(m.teamB||'');
-          if (_fuzz(tA, teamN) || _fuzz(tB, teamN)) {
-            var seenKey = (m.competition || 'liga') + '|' + mks[mi];
-            if (!seenPJ[seenKey]) { teamPJ++; seenPJ[seenKey] = true; }
+            if (!_fuzz(nA, teamN) && !_fuzz(nB, teamN)) continue;
+            var _liPair = (nA < nB ? nA + '||' + nB : nB + '||' + nA);
+            if (seenTeamPJPairs['liga|' + _liPair]) continue;  /* ya contado */
+            teamPJ++;
+            seenTeamPJPairs['liga|' + _liPair] = true;
           }
         }
       } catch(_){}
@@ -5773,6 +5799,17 @@ window._showSimProgress = function(opts, onDone){
       else if (ty === 'pen-parado') rec.penSaved++;
     }
     var processedKeys = {};
+    /* Pareja-de-teams sorted + comp para dedup cross-source. Bug
+       2026-05-08: Source 1 (LIGA_PLAYER_MATCH_STORE) y Source 2
+       (ef_liga38_v4) tenían claves DISTINTAS para el mismo partido
+       (`Real|Bayern` vs `j1m1|Real|Bayern`), así que el dedup por
+       matchKey exacto no funcionaba → eventos contados 2 veces
+       (Kane pen=2 cuando real=1). El sortPair normaliza el par. */
+    var processedPairs = {};
+    function _sortPair(a, b){
+      var na = _np(a||''), nb = _np(b||'');
+      return na < nb ? na + '||' + nb : nb + '||' + na;
+    }
     if (teamPJ > 0 && teamN) {
       try {
         var store = window.LIGA_PLAYER_MATCH_STORE || {};
@@ -5785,6 +5822,12 @@ window._showSimProgress = function(opts, onDone){
           var matchA = _fuzz(tA, teamN), matchB = _fuzz(tB, teamN);
           if (!matchA && !matchB) return;
           processedKeys[mk] = true;
+          /* Marcar pareja+comp para que Source 2 (ef_liga38_v4) NO
+             la vuelva a procesar aunque tenga otra clave. */
+          var _pComp = (m.competition
+              || (typeof window._inferMatchCompetition === 'function'
+                    ? window._inferMatchCompetition(mk) : 'liga'));
+          processedPairs[_pComp + '|' + _sortPair(m.teamA||'', m.teamB||'')] = true;
           var mySide = matchA ? 'a' : 'b';
           (m.evts || []).forEach(function(ev){
             if (!ev) return;
@@ -5815,6 +5858,12 @@ window._showSimProgress = function(opts, onDone){
               var nA = _np(parts[1]||''), nB = _np(parts[2]||'');
               var matchA = _fuzz(nA, teamN), matchB = _fuzz(nB, teamN);
               if (!matchA && !matchB) return;
+              /* Dedup cross-source: si el partido (par sorted + 'liga')
+                 ya se procesó desde LIGA_PLAYER_MATCH_STORE, no lo
+                 contemos otra vez aunque la clave de ef_liga38_v4 sea
+                 distinta. Sin esto se duplicaban Kane pen, Upamecano
+                 amarillas, etc. (bug reportado 2026-05-08). */
+              if (processedPairs['liga|' + _sortPair(parts[1]||'', parts[2]||'')]) return;
               var r = resAll2[rk]; if (!r) return;
               var mySide = matchA ? 'a' : 'b';
               (r.events || []).forEach(function(ev){

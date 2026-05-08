@@ -12651,6 +12651,29 @@ Tottenham
     else LIGA_CACHE = {};
   };
 
+  /* Sanitize de nombres de equipo (2026-05-08): el usuario reportó
+     que algunos equipos de Primera Preferente aparecían con un `*`
+     prefijo en el nombre (`*Torremolinos…`, `*Betis Deportivo…`,
+     etc.) tras crear/editar plantillas. Origen exacto desconocido
+     — posiblemente un parser de pegado de plantilla que tomó la
+     primera línea con un bullet `* ` como nombre, o un export
+     mal-parseado. La limpieza al cargar quita el bug visual y
+     persiste el nombre limpio en main para que no vuelva a
+     aparecer. */
+  function _sanitizeLigaTeamNames(d){
+    if (!d || !Array.isArray(d.teams)) return false;
+    var dirty = false;
+    d.teams.forEach(function(t){
+      if (!t || typeof t.name !== 'string') return;
+      var clean = t.name.replace(/^[\*\s]+/, '').trim();
+      if (clean !== t.name) {
+        t.name = clean;
+        dirty = true;
+      }
+    });
+    return dirty;
+  }
+
   function loadData(k){
     if(LIGA_CACHE[k]) return _applyForcedBlacklist(k, LIGA_CACHE[k]);
     /* Lectura del main, pero CON DETECCIÓN DE WIPE: si el main
@@ -12679,6 +12702,11 @@ Tottenham
               return _applyForcedBlacklist(k, protPX);
             }
           }
+        }
+        /* Sanitize pre-cache: si algún name tenía `*` prefijo, se
+           limpia y persiste en main para que no vuelva a aparecer. */
+        if (_sanitizeLigaTeamNames(parsed)) {
+          try { localStorage.setItem(storeKey(k), JSON.stringify(parsed)); } catch(_){}
         }
         LIGA_CACHE[k] = parsed;
         return _applyForcedBlacklist(k, LIGA_CACHE[k]);
@@ -13555,7 +13583,7 @@ Tottenham
       var z = zoneClass(pos,total,cfg.zones);
       var dgSign = r.dg>0?'+'+r.dg:(r.dg<0?r.dg:'0');
       var dgCls = r.dg>0?'pos':(r.dg<0?'neg':'');
-      var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
+      var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
       var pct = r.pj>0 ? Math.round((r.v/r.pj)*100) : 0;
       var pctCls = pct>=60?'pct-hi':(pct>=40?'pct-mid':'pct-lo');
       /* Emoji humano detrás del nombre — fuente única `t.isHuman` +
@@ -14607,7 +14635,7 @@ Tottenham
     refreshLigaEaCounter();
     if(!data.teams.length){ host.innerHTML = '<div class="lext-sub">— Sin equipos —</div>'; return; }
     host.innerHTML = data.teams.map(function(t){
-      var sh = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'"/>' : '';
+      var sh = t.shield ? '<img src="'+t.shield+'" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.style.display=\'none\'"/>' : '';
       var ls = computeLineStats(t);
       var budStr = t.budget ? formatBudget(t.budget) : '';
       var tTone = poderToneLocal(ls.glob);

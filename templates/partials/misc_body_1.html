@@ -8369,81 +8369,36 @@ window._showSimProgress = function(opts, onDone){
 </div>
 
 <!-- ═══ PANTALLAS DE LOS 4 TORNEOS DE VERANO (FASE 1, 2026-05-08) ═══
-     Cada pantalla muestra el contenido por defecto (placeholder) y un
-     botón 🖍 admin (PIN 747) que abre el editor para sobrescribir
-     nombre, fechas, equipos, formato y premios. La config se persiste
-     en `tour_<id>_v1` (servidor + cache local) — fase 2 renderizará
-     el bracket; fase 3 conectará el motor de simulación. -->
+     Cada pantalla está VACÍA — la info de participación / fechas /
+     formato / premios vive en el modal `muTourInfo` que se abre desde
+     la ℹ de las cajas (s-torneos-verano). Aquí solo queda el botón
+     🖍 admin (PIN 747) para editar la config completa del torneo.
+     La config se persiste en `tour_<id>_v1` (servidor + cache local)
+     y `muTourInfo` también la lee para mostrar lo último guardado.
+     Fase 2: render del bracket; fase 3: motor de simulación. -->
 <div class="screen" id="s-sct">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
 <button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('sct')" title="Editar torneo">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sct">🇺🇸</span><h2 id="tour-title-sct">Soccer Champions Tour</h2></div>
-<div id="tour-info-sct" class="tour-info-box">
-  <p><b>Participación:</b> 40 🪙 · 16 equipos 👤</p>
-  <p><b>Fechas:</b> 1 al 10 de Julio</p>
-  <p><b>Formato:</b> Eliminatoria directa<br>Octavos → Cuartos → Semis → Final (máx. 4 partidos).</p>
-  <p style="margin-top:10px;"><b>Premios:</b></p>
-  <ul>
-    <li>Octavos <b>+20 🪙</b></li>
-    <li>Cuartos <b>+40 🪙</b></li>
-    <li>Semis <b>+60 🪙</b></li>
-    <li>Subcampeón <b>+80 🪙</b></li>
-    <li>Campeón <b>+100 🪙</b></li>
-  </ul>
-</div>
+<div id="tour-info-sct" class="tour-info-box"></div>
 </div>
 <div class="screen" id="s-pss">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
 <button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('pss')" title="Editar torneo">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-pss">🇬🇧</span><h2 id="tour-title-pss">Premier Summer Series</h2></div>
-<div id="tour-info-pss" class="tour-info-box">
-  <p><b>Participación:</b> 40 🪙 · 6 equipos 👤</p>
-  <p><b>Fechas:</b> 12 al 24 de Julio</p>
-  <p><b>Formato:</b> 1 grupo de 6 a ida (5 partidos).</p>
-  <p style="margin-top:10px;"><b>Premios:</b></p>
-  <ul>
-    <li>Sexto <b>+15 🪙</b></li>
-    <li>Quinto <b>+25 🪙</b></li>
-    <li>Cuarto <b>+40 🪙</b></li>
-    <li>Tercero <b>+60 🪙</b></li>
-    <li>Subcampeón <b>+80 🪙</b></li>
-    <li>Campeón <b>+100 🪙</b></li>
-  </ul>
-</div>
+<div id="tour-info-pss" class="tour-info-box"></div>
 </div>
 <div class="screen" id="s-jg">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
 <button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('jg')" title="Editar torneo">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-jg">🇪🇸</span><h2 id="tour-title-jg">Trofeo Joan Gamper</h2></div>
-<div id="tour-info-jg" class="tour-info-box">
-  <p><b>Participación:</b> 40 🪙 · 8 equipos 👤</p>
-  <p><b>Fechas:</b> 24 de Julio al 1 de Agosto</p>
-  <p><b>Formato:</b> 2 grupos de 4 (3 partidos) + Playoffs · Semis / Final.</p>
-  <p style="margin-top:10px;"><b>Premios:</b></p>
-  <ul>
-    <li>Cuartos de Grupo <b>+20 🪙</b></li>
-    <li>Tercero de Grupo <b>+40 🪙</b></li>
-    <li>Semis Playoffs <b>+60 🪙</b></li>
-    <li>Subcampeón <b>+80 🪙</b></li>
-    <li>Campeón <b>+100 🪙</b></li>
-  </ul>
-</div>
+<div id="tour-info-jg" class="tour-info-box"></div>
 </div>
 <div class="screen" id="s-asia">
 <button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
 <button class="tour-edit-btn" onclick="window._tourOpenEditor&&window._tourOpenEditor('asia')" title="Editar torneo">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-asia">🇯🇵</span><h2 id="tour-title-asia">Asian Tournament</h2></div>
-<div id="tour-info-asia" class="tour-info-box">
-  <p><b>Participación:</b> 40 🪙 · 4 equipos 👤</p>
-  <p><b>Fechas:</b> 14 al 17 de Junio</p>
-  <p><b>Formato:</b> Eliminatoria directa<br>Semis → Final (máx. 2 partidos).</p>
-  <p style="margin-top:10px;"><b>Premios:</b></p>
-  <ul>
-    <li>Semis <b>+40 🪙</b></li>
-    <li>Subcampeón <b>+80 🪙</b></li>
-    <li>Campeón <b>+100 🪙</b></li>
-  </ul>
-</div>
+<div id="tour-info-asia" class="tour-info-box"></div>
 </div>
 
 <style>
@@ -8692,6 +8647,9 @@ window._showSimProgress = function(opts, onDone){
     cfg.id = id;
     cfg.updatedAt = new Date().toISOString();
     try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
+    /* Refresca cache sincrónico para `_tourMuInfoData` / `muTourInfo`. */
+    window._TOUR_CACHE = window._TOUR_CACHE || {};
+    window._TOUR_CACHE[id] = cfg;
     try {
       var res = await fetch('/api/kv/' + _key(id), {
         method:'POST',
@@ -8705,7 +8663,7 @@ window._showSimProgress = function(opts, onDone){
 
   /* ── Lupa de equipos (lee ligaExt_* + SQUAD_REGISTRY) ─── */
   function _norm(s){
-    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+    return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
   }
   function _shieldOf(name){
     try { if (typeof window.getTeamLogoUrl === 'function') return window.getTeamLogoUrl(name) || ''; } catch(_){}
@@ -8925,47 +8883,68 @@ window._showSimProgress = function(opts, onDone){
   };
 
   /* ── Render en pantalla del torneo ─────────────────────── */
+  /* Cache sincrónico para que `muTourInfo` (modal ℹ) lea la última
+     config sin esperar al fetch. Se hidrata al cargar la página y
+     se actualiza tras cada save. */
+  window._TOUR_CACHE = window._TOUR_CACHE || {};
+
+  /* Forma "SUMMER_TOURS" (la que espera muTourInfo): {flag, name, fee,
+     teams, dates, format (string), prizes (array de [label,value])}.
+     Devuelve null si aún no hay config custom para este id (entonces
+     muTourInfo cae al objeto hardcoded). */
+  window._tourMuInfoData = function(id){
+    var cfg = (window._TOUR_CACHE || {})[id];
+    if (!cfg) return null;
+    var prizes = Object.keys(cfg.prizes||{}).map(function(k){
+      return [PRIZE_LABELS[k] || k, cfg.prizes[k]];
+    });
+    var fmtTxt = FORMAT_LABELS[cfg.format] || cfg.format || '';
+    var fc = cfg.formatConfig || {};
+    if (cfg.format === 'ko') {
+      fmtTxt += ': ' + (fc.rounds||[]).join(' → ') + (fc.twoLegs?' (ida y vuelta)':'');
+    } else if (cfg.format === 'league') {
+      fmtTxt += ': '+(cfg.numTeams||'?')+' equipos'+(fc.twoLegs?' a doble vuelta':' a una vuelta');
+    } else if (cfg.format === 'groups-ko') {
+      fmtTxt += ': '+(fc.groups||'?')+' grupos de '+(fc.perGroup||'?')+' + '+(fc.koRounds||[]).join(' → ');
+    }
+    return {
+      flag: cfg.flag || '',
+      name: cfg.name || id,
+      fee:  cfg.fee  || 0,
+      teams: cfg.numTeams || 0,
+      dates: (cfg.dateStart||'') + (cfg.dateEnd ? ' al ' + cfg.dateEnd : ''),
+      format: fmtTxt,
+      prizes: prizes
+    };
+  };
+
+  /* Render dentro de la pantalla del torneo. Las cabeceras (nombre +
+     bandera) salen de la config custom; el cuerpo solo muestra el
+     grid de equipos seleccionados — la info redundante (fee, fechas,
+     formato, premios) se ve en el modal ℹ desde `s-torneos-verano`. */
   window._tourRender = async function(id){
     if (TOUR_IDS.indexOf(id) === -1) return;
     var cfg = await window._tourLoad(id);
     if (!cfg) cfg = _cloneDefault(id);
+    window._TOUR_CACHE[id] = cfg;
     var titleEl = document.getElementById('tour-title-'+id);
     var flagEl  = document.getElementById('tour-flag-'+id);
     var infoEl  = document.getElementById('tour-info-'+id);
     if (titleEl && cfg.name) titleEl.textContent = cfg.name;
     if (flagEl  && cfg.flag) flagEl.textContent  = cfg.flag;
     if (!infoEl) return;
-    var prizesHtml = Object.keys(cfg.prizes||{}).map(function(k){
-      var label = PRIZE_LABELS[k] || k;
-      return '<li>'+label+' <b>+'+cfg.prizes[k]+' 🪙</b></li>';
-    }).join('');
-    var fmtLabel = FORMAT_LABELS[cfg.format] || cfg.format;
-    var fc = cfg.formatConfig || {};
-    var fmtDetail = '';
-    if (cfg.format === 'ko') {
-      fmtDetail = (fc.rounds||[]).join(' → ') + (fc.twoLegs?' (ida/vuelta)':'');
-    } else if (cfg.format === 'league') {
-      fmtDetail = (cfg.numTeams||'?')+' equipos'+(fc.twoLegs?' a doble vuelta':' a una vuelta');
-    } else if (cfg.format === 'groups-ko') {
-      fmtDetail = (fc.groups||'?')+' grupos de '+(fc.perGroup||'?')+' + '+(fc.koRounds||[]).join('→');
-    }
-    var teamsHtml = '';
     if (cfg.teams && cfg.teams.length) {
-      teamsHtml = '<p style="margin-top:10px;"><b>Equipos ('+cfg.teams.length+'/'+(cfg.numTeams||'?')+'):</b></p>'+
+      infoEl.innerHTML =
+        '<p style="margin:0 0 6px;opacity:.85;"><b>Equipos ('+cfg.teams.length+'/'+(cfg.numTeams||'?')+')</b></p>'+
         '<div class="tour-teams-grid">' +
         cfg.teams.map(function(t){
           var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
           var tag = t.isHuman ? '<span class="tag-h">H</span>' : '<span class="tag-i">IA</span>';
           return '<div class="tour-team-chip">'+img+'<span>'+t.name+'</span>'+tag+'</div>';
         }).join('') + '</div>';
+    } else {
+      infoEl.innerHTML = '';
     }
-    infoEl.innerHTML =
-      '<p><b>Participación:</b> '+(cfg.fee||0)+' 🪙 · '+(cfg.numTeams||0)+' equipos · '+(cfg.numHumans||0)+' 👤</p>'+
-      '<p><b>Fechas:</b> '+(cfg.dateStart||'?')+' al '+(cfg.dateEnd||'?')+'</p>'+
-      '<p><b>Nivel IA:</b> '+(cfg.aiLevelMin||0)+'–'+(cfg.aiLevelMax||0)+'</p>'+
-      '<p><b>Formato:</b> '+fmtLabel+(fmtDetail?'<br><span style="opacity:.75;">'+fmtDetail+'</span>':'')+'</p>'+
-      (prizesHtml ? '<p style="margin-top:10px;"><b>Premios:</b></p><ul>'+prizesHtml+'</ul>' : '')+
-      teamsHtml;
   };
 
   /* ── Wire-up del overlay (1 sola vez por carga de página) */
@@ -9043,6 +9022,22 @@ window._showSimProgress = function(opts, onDone){
     document.addEventListener('DOMContentLoaded', _maybeRenderOnNav);
   } else {
     _maybeRenderOnNav();
+  }
+
+  /* ── Hidratación inicial del cache (sin bloquear la carga).
+        Trae las 4 configs guardadas para que `muTourInfo` muestre lo
+        último editado en cuanto el usuario abra la ℹ. */
+  function _hydrateCache(){
+    TOUR_IDS.forEach(function(id){
+      window._tourLoad(id).then(function(cfg){
+        if (cfg) window._TOUR_CACHE[id] = cfg;
+      }).catch(function(){});
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _hydrateCache);
+  } else {
+    _hydrateCache();
   }
 })();
 </script>
@@ -21011,7 +21006,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   };
 
   window.muTourInfo = function(id) {
-    var t = SUMMER_TOURS[id];
+    /* Si el admin ha editado este torneo (botón 🖍 en s-sct/s-pss/s-jg/s-asia),
+       `_tourMuInfoData` devuelve la config custom convertida al formato de
+       SUMMER_TOURS. Si no, fallback al objeto hardcoded. */
+    var t = (typeof window._tourMuInfoData === 'function' && window._tourMuInfoData(id))
+            || SUMMER_TOURS[id];
     if (!t) return;
     var box = getEl('munich-tour-ov-box');
     if (!box) return;

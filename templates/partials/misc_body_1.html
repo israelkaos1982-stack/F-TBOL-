@@ -18225,6 +18225,10 @@ Tottenham
     else window._bayernEditValuesOpen();
   };
   function boot(){ apply(); setupObservers(); }
+  /* Expuesto para que otros módulos (athObjCount post-patch,
+     activate de s-munich, etc.) puedan re-aplicar los overrides
+     después de que el HUD haya sido reescrito por la cadena legacy. */
+  window._bayernHudReapply = apply;
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 200); });
   } else {
@@ -18300,11 +18304,37 @@ Tottenham
 
 <style>
   #s-munich-trofeos .ath-titulo-row{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:16px 18px;position:relative;}
-  #s-munich-trofeos .ath-titulo-row img{width:44px;height:44px;object-fit:contain;background:#ffffffd0;border-radius:8px;padding:4px;flex-shrink:0;}
+  /* Icono del título — círculo incrustado en la caja, mismo estilo
+     que las cajas de #s-competiciones. Fondo radial con sombra
+     interior + borde dorado tenue. La <img> se centra dentro del
+     círculo manteniendo proporción (object-fit:contain). */
+  #s-munich-trofeos .ath-titulo-icon{
+    flex-shrink:0;width:46px;height:46px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 35% 30%,rgba(80,30,5,.85) 0%,rgba(20,8,2,.95) 80%);
+    border:1.5px solid rgba(240,192,64,.55);
+    box-shadow:0 2px 6px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08),inset 0 -2px 6px rgba(0,0,0,.5);
+    overflow:hidden;
+  }
+  #s-munich-trofeos .ath-titulo-icon img{width:32px;height:32px;object-fit:contain;display:block;}
+  /* Nombre del título — respeta mayúsculas/minúsculas del usuario
+     (antes forzaba uppercase). Petición usuario 2026-05-08. */
   #s-munich-trofeos .ath-titulo-info{flex:1;min-width:0;}
-  #s-munich-trofeos .ath-titulo-name{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;color:#f0c040;text-transform:uppercase;}
+  #s-munich-trofeos .ath-titulo-name{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;letter-spacing:1.5px;color:#f0c040;}
   #s-munich-trofeos .ath-titulo-sub{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px;margin-top:2px;}
   #s-munich-trofeos .ath-titulo-n{font-family:'Bebas Neue',sans-serif;font-size:48px;color:#f0c040;line-height:1;}
+  /* Botón ✏️ inline para editar UN título (icono+texto+sub) sin
+     incrementar el contador. Solo visible con sesión admin
+     (`body.adm-on`). Al pulsarlo abre el modal de Añadir prefilled
+     con los valores del trofeo en modo "edit". */
+  #s-munich-trofeos .ath-titulo-edit{
+    display:none;flex-shrink:0;width:30px;height:30px;border-radius:7px;
+    background:rgba(240,192,64,.14);border:1px solid rgba(240,192,64,.45);
+    color:#ffd55a;font-size:14px;cursor:pointer;align-items:center;justify-content:center;
+    margin-left:6px;-webkit-tap-highlight-color:transparent;transition:all .15s;padding:0;
+  }
+  #s-munich-trofeos .ath-titulo-edit:hover{background:rgba(240,192,64,.30);}
+  body.adm-on #s-munich-trofeos .ath-titulo-edit{display:inline-flex;}
   /* "ELIMINAR TÍTULO" del pie SOLO visible cuando hay sesión admin
      abierta (`<body class="adm-on">` lo activa `window.pinOk` tras el
      PIN 747). Sin sesión admin → no se ve, así nada tapa el contador
@@ -18375,15 +18405,20 @@ Tottenham
   }
 
   function _rowHtml(t){
-    /* Sin botón 🗑 inline — antes tapaba el número de la derecha. La
-       eliminación se hace ahora desde "🗑 ELIMINAR TÍTULO" del pie,
-       que solo aparece cuando hay sesión admin abierta. */
+    /* Icono envuelto en `.ath-titulo-icon` (círculo incrustado, mismo
+       estilo que cajas de Competiciones). Botón ✏️ visible solo con
+       sesión admin (CSS `body.adm-on .ath-titulo-edit{display:flex}`).
+       La eliminación va por el botón "🗑 ELIMINAR TÍTULO" del pie. */
     return '<div class="ath-titulo-row" data-trofeo-id="'+esc(t.id)+'">'
-         +   '<img src="'+esc(t.icon)+'" alt="'+esc(t.title)+'" onerror="this.style.visibility=\'hidden\'">'
+         +   '<div class="ath-titulo-icon">'
+         +     '<img src="'+esc(t.icon)+'" alt="'+esc(t.title)+'" onerror="this.style.visibility=\'hidden\'">'
+         +   '</div>'
          +   '<div class="ath-titulo-info">'
          +     '<div class="ath-titulo-name">'+esc(t.title)+'</div>'
          +     (t.sub ? '<div class="ath-titulo-sub">'+esc(t.sub)+'</div>' : '')
          +   '</div>'
+         +   '<button type="button" class="ath-titulo-edit" title="Editar título"'
+         +     ' onclick="window.munichTrofeosPromptEdit&&window.munichTrofeosPromptEdit(\''+esc(t.id)+'\')">✏️</button>'
          +   '<span class="ath-titulo-n">'+(t.count|0)+'</span>'
          + '</div>';
   }
@@ -18501,7 +18536,7 @@ Tottenham
       });
     }
   }
-  window._munichTrofAddOpen = function(existing){
+  window._munichTrofAddOpen = function(existing, isEditMode){
     _ensureTrofeoAddOv();
     var ov = document.getElementById('munich-trof-add-ov');
     if (!ov) return;
@@ -18512,11 +18547,31 @@ Tottenham
     if (urlInp) urlInp.value = (existing && existing.icon && existing.icon.indexOf('data:') !== 0) ? existing.icon : '';
     if (titleInp) titleInp.value = (existing && existing.title) || '';
     if (subInp) subInp.value = (existing && existing.sub) || '';
-    if (prev){ prev.src = ''; prev.classList.remove('show'); }
-    ov.dataset.iconData = '';
+    /* En modo edit, si el icono es data: (archivo subido antes), lo
+       precargamos como preview para que el usuario sepa que ya tiene
+       icono y solo cambie lo que quiera. */
+    if (prev){
+      if (isEditMode && existing && existing.icon && existing.icon.indexOf('data:') === 0){
+        prev.src = existing.icon;
+        prev.classList.add('show');
+        ov.dataset.iconData = existing.icon;
+        if (urlInp) urlInp.placeholder = '(usando archivo subido — sustituye o sube otro)';
+      } else {
+        prev.src = '';
+        prev.classList.remove('show');
+        ov.dataset.iconData = '';
+        if (urlInp) urlInp.placeholder = 'https://… o /static/img/logos/…';
+      }
+    }
     var fileInp = document.getElementById('munich-trof-icon-file');
     if (fileInp) fileInp.value = '';
-    if (urlInp) urlInp.placeholder = 'https://… o /static/img/logos/…';
+    /* Marcamos el modo y guardamos el id para que `_munichTrofAddSave`
+       sepa si UPDATE o CREATE. */
+    ov.dataset.editMode = isEditMode ? '1' : '';
+    ov.dataset.editId   = (isEditMode && existing && existing.id) ? existing.id : '';
+    /* Cambiar el título del modal según el modo. */
+    var titleEl = ov.querySelector('.ta-title');
+    if (titleEl) titleEl.textContent = isEditMode ? '✏️ EDITAR TÍTULO' : '🏆 AÑADIR TÍTULO';
     ov.classList.add('show');
     setTimeout(function(){ if (urlInp) urlInp.focus(); }, 50);
   };
@@ -18535,9 +18590,36 @@ Tottenham
     var iconFinal = dataUrl || iconUrl; /* archivo prevalece sobre URL pegada */
     var titleTxt = (titleInp && titleInp.value || '').trim();
     var subTxt = (subInp && subInp.value || '').trim();
+    var isEdit  = ov.dataset.editMode === '1';
+    var editId  = ov.dataset.editId || '';
     if (!iconFinal){ alert('⚠️ Pega una URL o sube un archivo para el icono.'); return; }
     if (!titleTxt){ alert('⚠️ Escribe el nombre del título.'); return; }
     var arr = load();
+    /* MODO EDIT (✏️): localizamos el trofeo por su id (no por título)
+       y actualizamos icono/título/subtítulo SIN tocar el contador.
+       Petición usuario 2026-05-08: al editar el sub a
+       "💡At. Madrid 3-2 Las Palmas" la info no se quedaba guardada.
+       El modal Add detectaba el título existente y solo incrementaba
+       count + sobrescribía sub si tenía algo, sin un flujo limpio
+       de edición. Ahora UPDATE in-place sin efectos colaterales. */
+    if (isEdit && editId){
+      var found = null;
+      for (var ei = 0; ei < arr.length; ei++){
+        if (arr[ei] && arr[ei].id === editId){ found = arr[ei]; break; }
+      }
+      if (found){
+        found.icon  = iconFinal;
+        found.title = titleTxt;
+        found.sub   = subTxt;  /* permite vaciar el sub poniendo "" */
+        save(arr);
+        render();
+        window._munichTrofAddClose();
+        return;
+      }
+      /* Si no encontramos el id (edge case: borrado entre tanto),
+         caemos al flujo Add normal. */
+    }
+    /* MODO ADD: dedupe por título, incrementa count si ya existe. */
     var key = _normTitle(titleTxt);
     var existing = arr.filter(function(t){ return t && _normTitle(t.title) === key; })[0];
     if (existing){
@@ -18559,8 +18641,25 @@ Tottenham
   };
   window.munichTrofeosPromptAdd = function(){
     /* Gate admin con PIN 747 reusando el modal global pG. */
-    var doAdd = function(){ window._munichTrofAddOpen(null); };
+    var doAdd = function(){ window._munichTrofAddOpen(null, false); };
     if (typeof window.pG === 'function') window.pG(doAdd); else doAdd();
+  };
+  /* Edit individual de un título existente — abre el mismo modal de
+     Add con los valores prefilled y flag isEditMode=true. Petición
+     usuario 2026-05-08: poder cambiar icono/nombre/subtítulo de un
+     título sin tener que añadir uno nuevo (que incrementaba el
+     contador y obligaba a borrar el viejo). */
+  window.munichTrofeosPromptEdit = function(id){
+    var doEdit = function(){
+      var arr = load();
+      var t = null;
+      for (var i = 0; i < arr.length; i++){
+        if (arr[i] && arr[i].id === id){ t = arr[i]; break; }
+      }
+      if (!t){ alert('Título no encontrado.'); return; }
+      window._munichTrofAddOpen(t, true);
+    };
+    if (typeof window.pG === 'function') window.pG(doEdit); else doEdit();
   };
 
   /* Flujo de eliminación: el admin pulsa "🗑 ELIMINAR TÍTULO" (visible
@@ -19043,12 +19142,24 @@ Tottenham
     } catch(e){}
   }
 
-  /* ── Patch athObjCount to also persist state ── */
+  /* ── Patch athObjCount to also persist state and re-apply HUD
+     overrides después de que reescriba `ath-pts-val` / `ath-money-val`.
+     Bug 2026-05-08: el usuario abría 🖍 EDITAR HUD, ponía valores
+     (e.g. valoración 5.50), pulsaba Guardar, pero al marcar/desmarcar
+     un objetivo athObjCount sobrescribía esos spans con la fórmula
+     automática (done × 0.40), pisando el override. La reapplicación
+     vía MutationObserver existía pero no garantizaba el orden — a
+     veces el span quedaba con el valor automático. Llamando a
+     `_bayernHudReapply()` (apply de los overrides) directamente
+     después de athObjCount aseguramos que el override siempre gana. */
   function patchAthObjCount(){
     var orig = window.athObjCount;
     window.athObjCount = function(){
       if (orig) orig.apply(this, arguments);
       saveObjState();
+      if (typeof window._bayernHudReapply === 'function') {
+        try { window._bayernHudReapply(); } catch(_){}
+      }
     };
   }
 
@@ -20374,6 +20485,15 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         }
       } catch(_){}
       isramaxBetsEl.textContent = String(openCount);
+    }
+    /* Re-aplicar overrides del HUD (presupuesto/valoración/PI custom)
+       después de que esta función haya reescrito los spans con los
+       valores automáticos. Sin esto, el módulo HUD-overrides solo
+       reaccionaba via MutationObserver y a veces el orden no
+       garantizaba que el override quedase último. Llamar al final
+       garantiza idempotencia. */
+    if (typeof window._bayernHudReapply === 'function') {
+      try { window._bayernHudReapply(); } catch(_){}
     }
   }
 

@@ -12243,6 +12243,15 @@ Tottenham
   // servidor está caído o tarda, renderizamos igual desde la cache.
   var LIGA_CACHE = {}; // slug → data
   var LIGA_UPDATED = {}; // slug → iso
+  /* Flag "tengo cambios locales pendientes de confirmar por el server"
+     (2026-05-08). Cada `saveData(k, d)` lo setea a Date.now(); el POST
+     async lo limpia cuando el server confirma. Mientras el flag está
+     vivo, `fetchData` conserva LA VERSIÓN LOCAL aunque el server traiga
+     otra cosa — porque el server puede tener todavía la versión PRE
+     edit (POST en vuelo, retry, sin red). Sin esto, un admin que edita
+     la plantilla y al instante navega a Clasificación EA Sports veía
+     la versión vieja del server pisar su edición fresca. */
+  var LIGA_LOCAL_DIRTY_AT = {}; // slug → ms
 
   // Exponer invalidación de cache para que syncLigaEaPlayerStats
   // (que escribe directamente a localStorage) pueda forzar una
@@ -12823,6 +12832,11 @@ Tottenham
         }
       } catch(_){}
     }
+    /* Marcar el slug como "tengo cambios locales pendientes" — flag
+       que respeta `fetchData` para no sobreescribir local con server
+       hasta que el POST de abajo confirme (2026-05-08). */
+    var _dirtyAt = Date.now();
+    LIGA_LOCAL_DIRTY_AT[k] = _dirtyAt;
     /* Write-back al servidor (async, best-effort). Ahora también
        se sube a una KEY de backup en el server — si el server
        wipea el main por alguna razón, queda el backup. */
@@ -12833,6 +12847,12 @@ Tottenham
         body:JSON.stringify({data:d})
       }).then(function(r){return r.ok?r.json():null;}).then(function(j){
         if(j && j.updated_at) LIGA_UPDATED[k] = j.updated_at;
+        /* Solo limpiamos el flag dirty si NO hubo otro saveData mientras
+           el POST estaba en vuelo. Si hubo, el flag tendrá un timestamp
+           más nuevo y dejamos que el siguiente POST lo limpie. */
+        if (LIGA_LOCAL_DIRTY_AT[k] === _dirtyAt) {
+          delete LIGA_LOCAL_DIRTY_AT[k];
+        }
       }).catch(function(){});
       /* Backup en server — sólo si hay jugadores, para no
          sobrescribir un backup válido con un d vacío accidental. */
@@ -12918,8 +12938,45 @@ Tottenham
         var serverPlayerCount = _countPlayers(data);
         var teamsWipe  = localTeams.length       > (data.teams ? data.teams.length : 0);
         var playersWipe = localPlayerCount > 0 && serverPlayerCount < localPlayerCount;
-        if (teamsWipe || playersWipe) {
-          try{ console.warn('[ligaExt] anti-wipe activado ('+k+'): local='+localTeams.length+'T/'+localPlayerCount+'J vs server='+(data.teams||[]).length+'T/'+serverPlayerCount+'J. Conservando local y re-subiendo.'); }catch(_){}
+        /* Anti-wipe PER-TEAM (2026-05-08): el comparativo del TOTAL de
+           players se queda corto si el admin añade jugadores a un
+           equipo concreto y otros equipos del slug tienen sus rosters
+           grandes — el delta total puede ser cero o positivo aunque
+           ESE equipo concreto haya sufrido un wipe en el server. Bug
+           reportado: usuario edita el Bayern (sube power/cambia
+           jugadores), el POST aún no confirma o llega un GET con la
+           versión anterior, el total cuadra y se aplica el server
+           — el modal de Clasificación EA Sports pinta jugadores
+           viejos. Ahora si CUALQUIER equipo del local tiene más
+           jugadores que el mismo equipo en el server, conservamos
+           local (probablemente el POST aún no replicó). */
+        var perTeamWipe = false;
+        try {
+          if (localTeams.length) {
+            var _srvByName = {};
+            (data.teams || []).forEach(function(st){
+              if (st && st.name) _srvByName[String(st.name).toLowerCase().trim()] = st;
+            });
+            for (var _iLT = 0; _iLT < localTeams.length; _iLT++) {
+              var _lt = localTeams[_iLT];
+              if (!_lt || !_lt.name) continue;
+              var _localPC = (_lt.players && _lt.players.length) || 0;
+              if (_localPC === 0) continue;
+              var _st = _srvByName[String(_lt.name).toLowerCase().trim()];
+              var _serverPC = (_st && _st.players && _st.players.length) || 0;
+              if (_serverPC < _localPC){ perTeamWipe = true; break; }
+            }
+          }
+        } catch(_){}
+        /* DIRTY FLAG: si hay un saveData pendiente de confirmar en el
+           server (POST en vuelo o sin red), conservamos local SIEMPRE
+           — el server puede estar devolviendo la versión PRE edit. Sin
+           este flag los conteos podían cuadrar (admin renombra player
+           sin cambiar nº total, o sube power) y el server pisaba el
+           local fresco silenciosamente. */
+        var localDirty = !!LIGA_LOCAL_DIRTY_AT[k];
+        if (teamsWipe || playersWipe || perTeamWipe || localDirty) {
+          try{ console.warn('[ligaExt] anti-wipe activado ('+k+'): local='+localTeams.length+'T/'+localPlayerCount+'J vs server='+(data.teams||[]).length+'T/'+serverPlayerCount+'J'+(perTeamWipe?' (per-team)':'')+(localDirty?' (dirty)':'')+'. Conservando local y re-subiendo.'); }catch(_){}
           // Conservamos la versión local en memoria y disco.
           LIGA_CACHE[k] = localCache;
           try{ localStorage.setItem(storeKey(k), JSON.stringify(localCache)); }catch(_){}

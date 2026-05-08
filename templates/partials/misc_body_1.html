@@ -5521,6 +5521,11 @@ window._showSimProgress = function(opts, onDone){
     _persistBucket(buckets.sel,       teamPJByComp.sel,       'ef_player_stats_sel_v1');
     _persistBucket(buckets.amistoso,  teamPJByComp.amistoso,  'ef_player_stats_amistoso_v1');
     _persistBucket(buckets.sc,        teamPJByComp.sc,        'ef_player_stats_sc_v1');
+    /* Cache AISLADO de Copa del Rey (2026-05-08): la pantalla
+       `s-copa-stats` lee de aquí. La caja Liga EA Sports
+       (`ef_player_stats_v1`) sigue mergeando Liga+Copa+SupEsp para
+       el total agregado, pero esta clave permite ver SOLO Copa. */
+    _persistBucket(buckets.copa,      teamPJByComp.copa,      'ef_player_stats_copa_v1');
 
     // Save to SEPARATE storage (Liga + Copa unidas → ef_player_stats_v1)
     try { localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(stats)); } catch(_){}
@@ -6045,8 +6050,18 @@ window._showSimProgress = function(opts, onDone){
 <div class="jblock" id="copa-rd-cua-blk"><button class="jbtn c-copa" onclick="go('s-copa-rd-cua')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Copa</b>&nbsp;&nbsp;Cuartos de Final</span><span class="copa-rd-cnt" id="copa-rd-cua-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="copa-rd-sf-blk"><button class="jbtn c-copa" onclick="go('s-copa-rd-sf')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Copa</b>&nbsp;&nbsp;Semifinales</span><span class="copa-rd-cnt" id="copa-rd-sf-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="copa-rd-fin-blk"><button class="jbtn c-copa" onclick="go('s-copa-rd-fin')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Copa</b>&nbsp;&nbsp;FINAL</span><span class="copa-rd-cnt" id="copa-rd-fin-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
-<div class="submenu-card" onclick="go('s-copa-cuadro')" style="margin-top:10px;">
-<span class="sc-emoji">🗂️</span><span class="sc-label">Cuadro de Eliminatorias</span><span class="sc-arr">▶</span>
+<!-- Caja "📊 Estadísticas" de Copa del Rey (2026-05-08, sustituye al
+     antiguo "Cuadro de Eliminatorias" que el usuario decidió quitar).
+     Usa la misma paleta verde-esmeralda que `s-ucl-stats` para que
+     todas las pantallas de Estadísticas de competiciones tengan
+     identidad coherente. Lee de `ef_player_stats_copa_v1` (cache
+     AISLADO de Copa, persistido por `rebuildPlayerStatsStore`).
+     La caja Liga EA Sports stats SIGUE incluyendo Liga + Copa +
+     SupEsp en `ef_player_stats_v1` para que el dashboard EA Sports
+     muestre el total agregado; aquí mostramos SOLO Copa para
+     análisis aislado por competición. -->
+<div class="submenu-card sc-copa-stats" style="margin-top:10px;background:linear-gradient(135deg,#052010,#0a3a25,#16a34a,#0a3a25,#052010) !important;border-color:#22c55e !important;" onclick="go('s-copa-stats')">
+<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
 </div>
 </div>
 </div>
@@ -6094,6 +6109,55 @@ window._showSimProgress = function(opts, onDone){
     <div class="copa-bracket-empty">Cargando cuadro de Copa…</div>
   </div>
 </div>
+</div>
+
+<!-- ═══ COPA DEL REY · ESTADÍSTICAS (2026-05-08) ═══════════════════
+     Dashboard SOLO de Copa, mismo modelo que `s-liga-stats` /
+     `s-ucl-stats`: lo construye `_lextBuildCompStatsDashboard`
+     leyendo del cache aislado `ef_player_stats_copa_v1` que pobla
+     `rebuildPlayerStatsStore` en cada sync. Los partidos de Copa
+     SUMAN también en la caja Liga EA Sports (que merge Liga+Copa+
+     SupEsp en `ef_player_stats_v1`); aquí se ven AISLADOS para
+     análisis por competición. Paleta verde-esmeralda igual que
+     s-ucl-stats para coherencia visual entre todas las cajas
+     "Estadísticas" del proyecto. -->
+<div class="screen" id="s-copa-stats">
+<button class="back-btn" onclick="go('s-copa')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Copa del Rey · Estadísticas</h2></div>
+<div class="liga-stats-wrap" id="copa-stats-dashboard">
+<div class="liga-stat-empty">Calculando estadísticas...</div>
+</div>
+<script>
+(function(){
+  function _renderCopaStats(){
+    if (typeof window.syncLigaEaPlayerStats === 'function') {
+      try { window.syncLigaEaPlayerStats(); } catch(_){}
+    }
+    if (typeof window._lextBuildCompStatsDashboard === 'function') {
+      window._lextBuildCompStatsDashboard('copa-stats-dashboard', 'ef_player_stats_copa_v1');
+    }
+  }
+  window._renderCopaStats = _renderCopaStats;
+  /* Repintar al activar la pantalla — el sistema `go(id)` añade la
+     clase `.active`. Sin re-render al entrar, los stats quedaban
+     stale tras volver al hub y simular un partido. */
+  try {
+    var el = document.getElementById('s-copa-stats');
+    if (el && typeof MutationObserver !== 'undefined') {
+      var mo = new MutationObserver(function(mutations){
+        for (var i = 0; i < mutations.length; i++) {
+          var m = mutations[i];
+          if (m.type === 'attributes' && (m.attributeName === 'class' || m.attributeName === 'style')) {
+            if (el.classList && el.classList.contains('active')) _renderCopaStats();
+          }
+        }
+      });
+      mo.observe(el, { attributes:true });
+    }
+  } catch(_){}
+  document.addEventListener('DOMContentLoaded', _renderCopaStats);
+})();
+</script>
 </div>
 
 <!-- ═══ RECOPA DE EUROPA · Pantalla principal + 6 rondas ═══

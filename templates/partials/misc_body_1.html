@@ -13801,18 +13801,49 @@ Tottenham
     else LIGA_CACHE = {};
   };
 
-  /* Sanitize de nombres de equipo (2026-05-08): el usuario reportó
-     que algunos equipos de Primera Preferente aparecían con un `*`
-     prefijo en el nombre (`*Torremolinos…`, `*Betis Deportivo…`,
-     etc.) tras crear/editar plantillas. Origen exacto desconocido
-     — posiblemente un parser de pegado de plantilla que tomó la
-     primera línea con un bullet `* ` como nombre, o un export
-     mal-parseado. La limpieza al cargar quita el bug visual y
-     persiste el nombre limpio en main para que no vuelva a
-     aparecer. */
+  /* Sanitize de nombres de equipo (2026-05-08, ampliado el mismo día):
+     el usuario reportó que algunos equipos de Primera Federación
+     aparecían con un `*` prefijo en el nombre y, peor aún, que tras
+     editar/borrar/recrear esos equipos VOLVÍAN a salir con `*` y
+     stats default 75/75/75 — había repetido la edición 15+ veces sin
+     éxito. El `*` es un marcador histórico ("sin escudo concreto")
+     que se quedó persistido en alguna copia (cache server / _protected
+     / _backup) de versiones antiguas. Cada sync tiraba esa copia
+     contra la versión limpia que el admin acababa de guardar.
+
+     Nuevo flujo:
+       1. Strip del `*` y espacios delante.
+       2. DEDUP por nombre normalizado (case-insensitive). Si hay 2
+          entradas para "Torremolinos" — una `*Torremolinos` con stats
+          default 75/75/75 y otra `Torremolinos` con stats custom y
+          plantilla — sobrevive la que tenga MÁS edición real (score
+          basado en nº jugadores, stats no-default, escudo, estadio,
+          alias y budget). Sin esto, las dos coexistían en
+          `data.teams[]` y el admin no podía librarse de la sucia.
+
+     `_editScore(t)` cuantifica cuán "editado" está un equipo. Sirve
+     para elegir entre duplicados; cuanto mayor el score, más
+     información valiosa hay que preservar. */
+  function _editScore(t){
+    if (!t) return 0;
+    var s = 0;
+    if (Array.isArray(t.players)) s += t.players.length * 100;
+    var atk = +t.atk || 0, mid = +t.mid || 0, def = +t.def || 0, pw = +t.power || 0;
+    if (atk && atk !== 75) s += 1;
+    if (mid && mid !== 75) s += 1;
+    if (def && def !== 75) s += 1;
+    if (pw  && pw  !== 75) s += 1;
+    if (t.shield) s += 5;
+    if (t.stadium) s += 5;
+    if (t.efootballAlias) s += 3;
+    if (t.budget) s += 2;
+    if (t.isHuman) s += 50; /* humanos NUNCA deben perderse contra IAs sin editar */
+    return s;
+  }
   function _sanitizeLigaTeamNames(d){
     if (!d || !Array.isArray(d.teams)) return false;
     var dirty = false;
+    /* Phase 1: strip `*` y espacios delante. */
     d.teams.forEach(function(t){
       if (!t || typeof t.name !== 'string') return;
       var clean = t.name.replace(/^[\*\s]+/, '').trim();
@@ -13821,11 +13852,60 @@ Tottenham
         dirty = true;
       }
     });
+    /* Phase 2: dedup. Construimos un map nombre-normalizado → mejor
+       candidato. Recorremos todos y nos quedamos con la entrada de
+       mayor `_editScore`. Las desechadas se marcan para eliminación
+       y se eliminan en una sola pasada al final. */
+    var byKey = {};
+    var keepIdx = [];
+    var dropMask = new Array(d.teams.length);
+    for (var i = 0; i < d.teams.length; i++) {
+      var t = d.teams[i];
+      if (!t || !t.name) { keepIdx.push(i); continue; }
+      var key = String(t.name).toLowerCase().trim();
+      if (!key) { keepIdx.push(i); continue; }
+      var prevIdx = byKey[key];
+      if (prevIdx === undefined) {
+        byKey[key] = i;
+        keepIdx.push(i);
+        continue;
+      }
+      var prev = d.teams[prevIdx];
+      var prevS = _editScore(prev);
+      var curS  = _editScore(t);
+      if (curS > prevS) {
+        /* La entrada actual es mejor → dropea la previa, sube la
+           actual al map y a keepIdx (en lugar de la previa). */
+        dropMask[prevIdx] = true;
+        var ki = keepIdx.indexOf(prevIdx);
+        if (ki !== -1) keepIdx.splice(ki, 1);
+        byKey[key] = i;
+        keepIdx.push(i);
+        dirty = true;
+      } else {
+        /* La actual es peor → dropea la actual. */
+        dropMask[i] = true;
+        dirty = true;
+      }
+    }
+    if (dirty) {
+      d.teams = d.teams.filter(function(_, i){ return !dropMask[i]; });
+    }
     return dirty;
   }
 
   function loadData(k){
-    if(LIGA_CACHE[k]) return _applyForcedBlacklist(k, LIGA_CACHE[k]);
+    if(LIGA_CACHE[k]) {
+      /* Sanitize en cada cache-hit: barato cuando ya está limpio (la
+         segunda pasada de _sanitizeLigaTeamNames es O(N) y no
+         persiste si dirty=false), pero garantiza que `*` y duplicados
+         no se cuelen aunque la cache se llenase desde una ruta que
+         no sanitiza (fetchData async, etc.). */
+      if (_sanitizeLigaTeamNames(LIGA_CACHE[k])) {
+        try { localStorage.setItem(storeKey(k), JSON.stringify(LIGA_CACHE[k])); } catch(_){}
+      }
+      return _applyForcedBlacklist(k, LIGA_CACHE[k]);
+    }
     /* Lectura del main, pero CON DETECCIÓN DE WIPE: si el main
        existe pero tiene `teams: []` y `_protected` (escrito por
        saveData en cada guardado con equipos) tiene equipos, asumimos
@@ -13846,8 +13926,9 @@ Tottenham
           if (protRawX) {
             var protPX = JSON.parse(protRawX);
             if (protPX && Array.isArray(protPX.teams) && protPX.teams.length > 0) {
+              _sanitizeLigaTeamNames(protPX);
               LIGA_CACHE[k] = protPX;
-              try { localStorage.setItem(storeKey(k), protRawX); } catch(_){}
+              try { localStorage.setItem(storeKey(k), JSON.stringify(protPX)); } catch(_){}
               try { console.warn('[ligaExt] '+k+' main vacío pero _protected tenía '+protPX.teams.length+' equipos — restaurado.'); } catch(_){}
               return _applyForcedBlacklist(k, protPX);
             }
@@ -13877,10 +13958,12 @@ Tottenham
       if (protRaw) {
         var pdata = JSON.parse(protRaw);
         if (pdata && Array.isArray(pdata.teams) && pdata.teams.length) {
+          /* Sanitize antes de promover: si la copia _protected tenía
+             `*Torremolinos` + `Torremolinos` duplicados de sesiones
+             antiguas, los unificamos. */
+          _sanitizeLigaTeamNames(pdata);
           LIGA_CACHE[k] = pdata;
-          /* Promover la copia protegida a la clave principal para que
-             la lectura siguiente la encuentre directamente. */
-          try { localStorage.setItem(storeKey(k), protRaw); } catch(_){}
+          try { localStorage.setItem(storeKey(k), JSON.stringify(pdata)); } catch(_){}
           try { console.warn('[ligaExt] restaurado '+k+' desde _protected ('+pdata.teams.length+' equipos).'); } catch(_){}
           return _applyForcedBlacklist(k, pdata);
         }
@@ -13897,8 +13980,9 @@ Tottenham
       if (bRaw) {
         var bData = JSON.parse(bRaw);
         if (bData && Array.isArray(bData.teams) && bData.teams.length) {
+          _sanitizeLigaTeamNames(bData);
           LIGA_CACHE[k] = bData;
-          try { localStorage.setItem(storeKey(k), bRaw); } catch(_){}
+          try { localStorage.setItem(storeKey(k), JSON.stringify(bData)); } catch(_){}
           try { console.warn('[ligaExt] restaurado '+k+' desde _backup ('+bData.teams.length+' equipos).'); } catch(_){}
           return _applyForcedBlacklist(k, bData);
         }
@@ -13918,8 +14002,9 @@ Tottenham
         try {
           var sData = JSON.parse(sRaw);
           if (sData && Array.isArray(sData.teams) && sData.teams.length) {
+            _sanitizeLigaTeamNames(sData);
             LIGA_CACHE[k] = sData;
-            try { localStorage.setItem(storeKey(k), sRaw); } catch(_){}
+            try { localStorage.setItem(storeKey(k), JSON.stringify(sData)); } catch(_){}
             try { console.warn('[ligaExt] restaurado '+k+' desde '+snapKeys[sj]+' ('+sData.teams.length+' equipos).'); } catch(_){}
             return _applyForcedBlacklist(k, sData);
           }
@@ -13964,6 +14049,20 @@ Tottenham
               }
             }
           } catch(_){}
+          /* Sanitize antes de cachear: cualquier `*` o duplicado
+             que vivía en el server queda limpio. Si el sanitize
+             cambia algo, re-empujamos al server async para que el
+             estado sucio desaparezca de la copia compartida. */
+          var dDirty = _sanitizeLigaTeamNames(d);
+          if (dDirty) {
+            try {
+              fetch('/api/liga-ext/'+encodeURIComponent(k), {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({data:d})
+              }).catch(function(){});
+            } catch(_){}
+          }
           LIGA_CACHE[k] = d;
           if (resp.updated_at) LIGA_UPDATED[k] = resp.updated_at;
           try { localStorage.setItem(storeKey(k), JSON.stringify(d)); } catch(_){}
@@ -13983,6 +14082,7 @@ Tottenham
           var dPL = respPL.data;
           dPL.teams = dPL.teams || [];
           dPL.results = dPL.results || [];
+          _sanitizeLigaTeamNames(dPL);
           try { console.warn('[ligaExt] '+k+': main vacío local+server, restaurando desde server-protected ('+_countPlayers(dPL)+' jugadores).'); } catch(_){}
           LIGA_CACHE[k] = dPL;
           try { localStorage.setItem(storeKey(k), JSON.stringify(dPL)); } catch(_){}
@@ -14226,6 +14326,12 @@ Tottenham
     return n;
   }
   function saveData(k,d){
+    /* Sanitize de entrada (2026-05-08): si el admin acaba de tocar
+       el editor con un equipo cuyo nombre tenía `*` o el formulario
+       creó accidentalmente un duplicado, lo limpiamos antes de
+       persistir. Garantiza que `*` y dups NUNCA llegan a localStorage,
+       _protected, _backup ni al server. */
+    try { _sanitizeLigaTeamNames(d); } catch(_){}
     LIGA_CACHE[k] = d;
     /* Invalidar cache de computeLineStats / roster — si admin editó
        una plantilla y mutó power de jugadores, los stats cacheados
@@ -14656,6 +14762,22 @@ Tottenham
           }catch(_){}
           cb && cb(localCache, false);
           return;
+        }
+        /* Sanitize antes de aceptar el payload del server: limpia
+           prefijos `*` y dedupea duplicados que podían venir de
+           sesiones antiguas. Si dirty=true, re-empujamos la versión
+           limpia al server para que las otras rutas (otros
+           dispositivos del admin) reciban la versión sin basura.
+           Sin esto, el bug "los 5 equipos vuelven con `*`" persistía
+           porque cada GET refrescaba la copia sucia. */
+        if (_sanitizeLigaTeamNames(data)) {
+          try {
+            fetch('/api/liga-ext/'+encodeURIComponent(k), {
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({data:data})
+            }).catch(function(){});
+          } catch(_){}
         }
         LIGA_CACHE[k] = data;
         LIGA_UPDATED[k] = j.updated_at || '';

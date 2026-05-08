@@ -6673,6 +6673,17 @@
     var halfMax = 2700 + (stops.first || 0) * 60;   // 1ª parte finaliza aquí (min 45 + stoppage)
     var fullMax = normalMax + (stops.second || 0) * 60;
     var min = Math.floor(rawSec/60);
+    /* Toggle del botón FINALIZAR pulsante (2026-05-08): solo cuando
+       el partido haya terminado de verdad (cron al `fullMax`,
+       `st.matchFinished` o `st.finished`). Durante el juego o el
+       descanso se queda en color normal sin halo. Lo aplicamos AQUÍ
+       para que también se cumpla en las ramas con `return` de abajo
+       (st.finished / st.inDescanso). */
+    var endBtn = document.getElementById('ml-btn-end-'+mk);
+    if (endBtn) {
+      var matchOver = !!(st.matchFinished || st.finished || rawSec >= fullMax);
+      endBtn.classList.toggle('is-finishable', matchOver);
+    }
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
     if (st.inDescanso) { btn.textContent='⏸ HT'; btn.className='ml-timer running'; return; }
     var lbl = st.timerRunning ? '⏸ ' : (rawSec>=fullMax ? '🔁 ' : '▶ ');
@@ -9217,6 +9228,20 @@
     if (!btn) return;
     var row = document.getElementById('gm-timer-row');
     var min = Math.floor(_gm.timerSec / 60);
+    /* Toggle del botón FINALIZAR pulsante (2026-05-08): solo brilla
+       cuando el partido ha terminado (clock al máximo, finished o
+       en descanso final tras prórroga). Durante el juego se queda
+       en color normal. Calculamos el max dinámico (ET o regulación
+       más stoppage) leyendo `_mlCountStoppageHalves` igual que
+       hacemos abajo para el display. */
+    var _gmEndBtn = document.getElementById('gm-btn-end');
+    if (_gmEndBtn) {
+      var _stops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
+      var _normalMax = _gm.etDone ? GM_MAX_ET : GM_MAX_NORMAL;
+      var _fullMax = _normalMax + (_stops.second || 0) * 60;
+      var _matchOver = !!(_gm.finished || _gm.timerSec >= _fullMax);
+      _gmEndBtn.classList.toggle('is-finishable', _matchOver);
+    }
     /* Botón ✎ de edición manual del minuto: solo cuando el cronómetro
        está pausado y el partido está en juego (no finalizado, no
        descanso). Pulsarlo abre _gmOpenTimerEdit que ya existía. */
@@ -14370,13 +14395,17 @@
 /* Botón FINALIZAR atractivo (2026-05-08): el usuario reportó que tras
    compartir las estadísticas por WhatsApp, los receptores no sabían
    cómo continuar — el botón rojo apagado se confundía con el fondo.
-   Ahora pulsa con un halo dorado/rojo neón que llama la atención
-   sin gritar (1.6s ease-in-out, infinito). Mantiene el rojo de
-   "fin de partido" como color base. */
+   La animación pulsante SOLO debe aparecer cuando el partido haya
+   terminado de verdad (cronómetro al máximo / `finished`). Durante
+   el juego (min 1-89) el botón se queda en su rojo normal sin halo
+   para no distraer del acta. La clase `is-finishable` la activan
+   `_mlRenderTimerGen` (gen flow) y `gmRenderTimer` (gm-modal). */
 .ml-action-end{
   background:linear-gradient(135deg,#a52020,#e84a4a);color:#fff;
   text-shadow:0 1px 2px rgba(0,0,0,.5);
   box-shadow:0 2px 8px rgba(176,32,32,.4);
+}
+.ml-action-end.is-finishable{
   animation:flagFinalizarPulse 1.6s ease-in-out infinite;
 }
 .ml-action-add:hover,.ml-action-end:hover,.ml-action-ht:hover{filter:brightness(1.15);}
@@ -14393,11 +14422,11 @@
                0 2px 8px rgba(176,32,32,.4);
   }
 }
-/* Aplica también al botón FINALIZAR del gm-modal (estilos inline en
-   el HTML, ver línea ~13719). Sobreescribimos sus reglas con !important
-   solo sobre las propiedades de animación + shadow para no romper
-   layout/border/bg que el inline gestiona. */
-#gm-btn-end{
+/* gm-modal FINALIZAR — el inline-style del HTML pinta rojo apagado.
+   Mantenemos ese aspecto durante el partido y solo aplicamos el
+   pulso + colores brillantes cuando la clase `is-finishable` se
+   añade desde `gmRenderTimer`. */
+#gm-btn-end.is-finishable{
   animation:flagFinalizarPulse 1.6s ease-in-out infinite !important;
   background:linear-gradient(135deg,rgba(165,32,32,.85),rgba(232,74,74,.85)) !important;
   color:#fff !important;

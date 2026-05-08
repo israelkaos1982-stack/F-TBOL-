@@ -8492,23 +8492,20 @@ window._showSimProgress = function(opts, onDone){
 
     <!-- Equipos -->
     <div class="tour-ed-row tour-ed-row-2">
-      <div><label>Nº equipos</label><input id="tour-ed-num" type="number" min="2" max="64"></div>
-      <div><label>Humanos 👤</label><input id="tour-ed-hum" type="number" min="0" max="64"></div>
+      <div><label>Nº equipos</label><input id="tour-ed-num" type="number" min="2" max="128"></div>
+      <div><label>Humanos 👤</label><input id="tour-ed-hum" type="number" min="0" max="128"></div>
     </div>
     <div class="tour-ed-row tour-ed-row-2">
       <div><label>Nivel IA mín.</label><input id="tour-ed-aimin" type="number" min="1" max="100"></div>
       <div><label>Nivel IA máx.</label><input id="tour-ed-aimax" type="number" min="1" max="100"></div>
     </div>
 
-    <!-- Lupa -->
+    <!-- Pool de equipos disponibles (informativo, se actualiza al cambiar nivel) -->
     <div class="tour-ed-row">
-      <label>🔍 Buscar equipo (3+ caracteres)</label>
-      <input id="tour-ed-search" type="text" placeholder="Madrid, Barça, Liverpool…">
-      <div id="tour-ed-results" class="tour-ed-results"></div>
-    </div>
-    <div class="tour-ed-row">
-      <label>Equipos seleccionados (<span id="tour-ed-tcount">0</span>)</label>
-      <div id="tour-ed-selected" class="tour-ed-selected"></div>
+      <label>Pool de equipos en el rango</label>
+      <div id="tour-ed-pool-stat" class="tour-ed-pool-stat">
+        Define nivel IA mín./máx. para ver el pool disponible.
+      </div>
     </div>
 
     <!-- Formato -->
@@ -8532,7 +8529,7 @@ window._showSimProgress = function(opts, onDone){
 
     <!-- Acciones -->
     <div style="display:flex;gap:8px;margin-top:12px;">
-      <button id="tour-ed-save" style="flex:1;background:linear-gradient(90deg,#f0c040,#e0a020);color:#1a1a1a;border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;font-weight:700;cursor:pointer;">💾 GUARDAR</button>
+      <button id="tour-ed-save" style="flex:1;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;font-weight:700;cursor:pointer;">✅ CONFIRMAR Y SORTEAR</button>
       <button id="tour-ed-reset" style="flex:0 0 auto;background:rgba(255,80,80,.18);color:#ffb0b0;border:1px solid rgba(255,80,80,.35);border-radius:8px;padding:10px 12px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;cursor:pointer;">RESET</button>
     </div>
     <div id="tour-ed-feedback" style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px;min-height:14px;text-align:center;"></div>
@@ -8551,38 +8548,43 @@ window._showSimProgress = function(opts, onDone){
   #tour-editor-overlay input:focus,#tour-editor-overlay select:focus,#tour-editor-overlay textarea:focus{
     outline:none;border-color:rgba(240,192,64,.55);
   }
-  .tour-ed-results{
-    margin-top:6px;max-height:160px;overflow-y:auto;
-    border:1px solid rgba(255,255,255,.10);border-radius:6px;
-    background:rgba(0,0,0,.35);
+  /* Stat box que muestra cuántos equipos hay en el rango de nivel IA. */
+  .tour-ed-pool-stat{
+    font-size:12px;line-height:1.4;
+    padding:8px 10px;border-radius:6px;
+    background:rgba(0,0,0,.30);border:1px dashed rgba(255,255,255,.12);
+    color:rgba(255,255,255,.65);
   }
-  .tour-ed-results:empty{display:none;}
-  .tour-ed-result-row{
-    display:flex;align-items:center;gap:8px;padding:6px 9px;cursor:pointer;
-    border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;
+  .tour-ed-pool-stat b{color:#fff;}
+  .tour-ed-pool-stat.is-ok{border-color:rgba(30,161,74,.50);background:rgba(30,161,74,.10);}
+  .tour-ed-pool-stat.is-bad{border-color:rgba(255,90,90,.55);background:rgba(255,90,90,.08);}
+</style>
+
+<!-- CSS de bracket / lista de equipos sorteados (rendered en
+     `_tourRender`, dentro de cada pantalla de torneo). -->
+<style>
+  .tour-bracket-list{display:flex;flex-direction:column;gap:6px;margin-top:4px;}
+  .tour-match{
+    display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);
+    border-radius:8px;padding:6px 8px;
   }
-  .tour-ed-result-row:hover{background:rgba(240,192,64,.10);}
-  .tour-ed-result-row img{width:20px;height:20px;object-fit:contain;}
-  .tour-ed-result-row .tag{margin-left:auto;font-size:9px;padding:1px 5px;border-radius:3px;letter-spacing:.5px;}
-  .tour-ed-result-row .tag-h{background:#1ea14a;color:#fff;}
-  .tour-ed-result-row .tag-i{background:rgba(255,255,255,.18);color:#ccc;}
-  .tour-ed-selected{
-    display:flex;flex-wrap:wrap;gap:5px;min-height:30px;
-    padding:5px;background:rgba(0,0,0,.25);border-radius:6px;
-    border:1px dashed rgba(255,255,255,.10);
+  .tour-match .vs{
+    font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;
+    color:rgba(255,255,255,.45);
   }
-  .tour-ed-selected:empty::before{
-    content:'(vacío)';color:rgba(255,255,255,.30);font-size:11px;font-style:italic;padding:3px 6px;
+  .tour-bracket-team{
+    display:flex;align-items:center;gap:6px;font-size:12px;min-width:0;
   }
-  .tour-ed-chip{
-    display:inline-flex;align-items:center;gap:5px;
-    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);
-    border-radius:14px;padding:2px 8px 2px 4px;font-size:11px;
+  .tour-bracket-team:last-child{justify-content:flex-end;text-align:right;}
+  .tour-bracket-team img{width:18px;height:18px;object-fit:contain;flex-shrink:0;}
+  .tour-bracket-team span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tour-bracket-team.is-pending{color:#f0c040;font-style:italic;}
+  .tour-group-block{margin-top:8px;}
+  .tour-group-block h4{
+    font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;
+    color:#f0c040;margin:0 0 4px;
   }
-  .tour-ed-chip img{width:16px;height:16px;object-fit:contain;}
-  .tour-ed-chip .x{cursor:pointer;color:rgba(255,255,255,.55);font-weight:700;margin-left:3px;}
-  .tour-ed-chip .x:hover{color:#ff7777;}
-  .tour-ed-chip.is-h{background:rgba(30,161,74,.20);border-color:rgba(30,161,74,.45);}
 </style>
 
 <script>
@@ -8681,7 +8683,10 @@ window._showSimProgress = function(opts, onDone){
     } catch(_) { return false; }
   };
 
-  /* ── Lupa de equipos (lee ligaExt_* + SQUAD_REGISTRY) ─── */
+  /* ── Pool de equipos (lee ligaExt_* + SQUAD_REGISTRY) ───
+     Devuelve cada equipo con su `power` (GLOBAL del editor) para
+     poder filtrar por rango de nivel IA al sortear. Si un equipo no
+     tiene power, default 70. */
   function _norm(s){
     return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
   }
@@ -8691,15 +8696,17 @@ window._showSimProgress = function(opts, onDone){
   }
   function _allTeams(){
     var out = [], seen = {};
-    function _push(name, isHuman, shield){
+    function _push(name, power, shield){
       var clean = String(name||'').trim();
       if (!clean) return;
       var k = clean.toLowerCase();
+      var pw = Number(power);
+      if (!isFinite(pw) || pw <= 0) pw = 70;
       if (seen[k]) {
-        if (isHuman) seen[k].isHuman = true;
+        if (pw > seen[k].power) seen[k].power = pw;
         return;
       }
-      var entry = { name: clean, isHuman: !!isHuman, shield: shield || _shieldOf(clean) };
+      var entry = { name: clean, power: pw, shield: shield || _shieldOf(clean) };
       seen[k] = entry;
       out.push(entry);
     }
@@ -8713,16 +8720,52 @@ window._showSimProgress = function(opts, onDone){
         var data; try { data = JSON.parse(raw); } catch(_){ continue; }
         if (!data || !Array.isArray(data.teams)) continue;
         data.teams.forEach(function(t){
-          if (t && t.name) _push(t.name, t.isHuman, t.shield);
+          if (t && t.name) _push(t.name, t.power || t.media, t.shield);
         });
       }
     } catch(_){}
     try {
       var reg = window.SQUAD_REGISTRY || {};
-      Object.keys(reg).forEach(function(name){ _push(name, false, ''); });
+      Object.keys(reg).forEach(function(name){ _push(name, 0, ''); });
     } catch(_){}
     out.sort(function(a,b){ return a.name.localeCompare(b.name,'es'); });
     return out;
+  }
+
+  /* Mezcla in-place tipo Fisher-Yates. */
+  function _shuffle(arr){
+    for (var i = arr.length - 1; i > 0; i--){
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  /* Sortea equipos al azar dentro del rango [aiLevelMin, aiLevelMax].
+     Devuelve {ok:true, teams:[...]} o {ok:false, error:'...'}.
+     `cfg.numHumans` placeholders "PENDIENTE" se añaden marcados con
+     `isHuman:true`; el resto son IA del pool. La lista final se
+     mezcla para distribuir humanos en posiciones aleatorias del
+     bracket / grupos. */
+  function _drawTeams(cfg){
+    var aimin = cfg.aiLevelMin || 1;
+    var aimax = cfg.aiLevelMax || 100;
+    var pool = _allTeams().filter(function(t){
+      return t.power >= aimin && t.power <= aimax;
+    });
+    var needed = Math.max(0, (cfg.numTeams || 0) - (cfg.numHumans || 0));
+    if (pool.length < needed) {
+      return { ok:false, error: 'Solo hay '+pool.length+' equipos en el rango '+aimin+'–'+aimax+'. Necesitas '+needed+'.' };
+    }
+    _shuffle(pool);
+    var teams = pool.slice(0, needed).map(function(t){
+      return { name: t.name, isHuman: false, shield: t.shield, power: t.power };
+    });
+    for (var h = 0; h < (cfg.numHumans || 0); h++){
+      teams.push({ name: 'PENDIENTE', isHuman: true, shield: '', power: 0 });
+    }
+    _shuffle(teams);
+    return { ok:true, teams: teams };
   }
 
   /* ── Estado del editor abierto ─────────────────────────── */
@@ -8735,58 +8778,32 @@ window._showSimProgress = function(opts, onDone){
     el.style.color = ok === true ? '#9ee5a9' : (ok === false ? '#ff9090' : 'rgba(255,255,255,.55)');
   }
 
-  function _renderSelected(){
-    var box = document.getElementById('tour-ed-selected');
-    var cnt = document.getElementById('tour-ed-tcount');
-    if (!box || !_open) return;
-    var teams = _open.cfg.teams || [];
-    cnt.textContent = String(teams.length);
-    box.innerHTML = teams.map(function(t, idx){
-      var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
-      var cls = t.isHuman ? 'tour-ed-chip is-h' : 'tour-ed-chip';
-      return '<span class="'+cls+'">'+img+'<span>'+t.name+'</span><span class="x" data-i="'+idx+'">×</span></span>';
-    }).join('');
-    box.querySelectorAll('.x').forEach(function(x){
-      x.addEventListener('click', function(){
-        var i = parseInt(this.getAttribute('data-i'), 10);
-        if (!isNaN(i)) {
-          _open.cfg.teams.splice(i, 1);
-          _renderSelected();
-        }
-      });
+  /* Recalcula el stat del pool (cuántos equipos hay en el rango de
+     nivel IA actual y si bastan para el sorteo). Se llama al abrir
+     el editor y tras cambiar nivel mín/máx, nº equipos o nº humanos. */
+  function _updatePoolStat(){
+    var stat = document.getElementById('tour-ed-pool-stat');
+    if (!stat) return;
+    var aimin = parseInt(document.getElementById('tour-ed-aimin').value, 10) || 1;
+    var aimax = parseInt(document.getElementById('tour-ed-aimax').value, 10) || 100;
+    var numT  = parseInt(document.getElementById('tour-ed-num').value, 10) || 0;
+    var numH  = parseInt(document.getElementById('tour-ed-hum').value, 10) || 0;
+    var pool = _allTeams().filter(function(t){
+      return t.power >= aimin && t.power <= aimax;
     });
-  }
-
-  function _renderResults(query){
-    var box = document.getElementById('tour-ed-results');
-    if (!box) return;
-    var q = _norm(query);
-    if (q.length < 3) { box.innerHTML = ''; return; }
-    var picked = {};
-    (_open.cfg.teams || []).forEach(function(t){ picked[t.name.toLowerCase()] = true; });
-    var matches = _allTeams().filter(function(t){
-      if (picked[t.name.toLowerCase()]) return false;
-      return _norm(t.name).indexOf(q) !== -1;
-    }).slice(0, 12);
-    if (!matches.length) { box.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:rgba(255,255,255,.35);">Sin resultados</div>'; return; }
-    box.innerHTML = matches.map(function(t){
-      var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
-      var tag = t.isHuman ? '<span class="tag tag-h">HUMANO</span>' : '<span class="tag tag-i">IA</span>';
-      return '<div class="tour-ed-result-row" data-name="'+t.name.replace(/"/g,'&quot;')+'" data-h="'+(t.isHuman?1:0)+'" data-s="'+(t.shield||'').replace(/"/g,'&quot;')+'">'+img+'<span>'+t.name+'</span>'+tag+'</div>';
-    }).join('');
-    box.querySelectorAll('.tour-ed-result-row').forEach(function(row){
-      row.addEventListener('click', function(){
-        if (!_open) return;
-        var name = this.getAttribute('data-name');
-        var isH = this.getAttribute('data-h') === '1';
-        var sh = this.getAttribute('data-s') || '';
-        _open.cfg.teams = _open.cfg.teams || [];
-        _open.cfg.teams.push({ name:name, isHuman:isH, shield:sh });
-        _renderSelected();
-        document.getElementById('tour-ed-search').value = '';
-        box.innerHTML = '';
-      });
-    });
+    var needed = Math.max(0, numT - numH);
+    stat.classList.remove('is-ok','is-bad');
+    if (needed === 0) {
+      stat.textContent = 'Define el nº de equipos para ver el sorteo necesario.';
+      return;
+    }
+    if (pool.length < needed) {
+      stat.classList.add('is-bad');
+      stat.innerHTML = '⚠ Solo hay <b>'+pool.length+'</b> equipos en el rango <b>'+aimin+'–'+aimax+'</b>. Necesitas <b>'+needed+'</b> (+ '+numH+' humano'+(numH===1?'':'s')+' = '+numT+').';
+    } else {
+      stat.classList.add('is-ok');
+      stat.innerHTML = '✓ <b>'+pool.length+'</b> equipos en el rango <b>'+aimin+'–'+aimax+'</b>. Se sortearán <b>'+needed+'</b> al azar (+ '+numH+' humano'+(numH===1?'':'s')+' = '+numT+').';
+    }
   }
 
   function _renderFmtCfg(){
@@ -8840,7 +8857,7 @@ window._showSimProgress = function(opts, onDone){
     document.getElementById('tour-ed-fmt').value = cfg.format || 'ko';
     document.getElementById('tour-ed-prizes').value = _prizesToText(cfg.prizes);
     _renderFmtCfg();
-    _renderSelected();
+    _updatePoolStat();
   }
 
   function _readForm(cfg){
@@ -8934,14 +8951,30 @@ window._showSimProgress = function(opts, onDone){
       teams: cfg.numTeams || 0,
       dates: (cfg.dateStart||'') + (cfg.dateEnd ? ' al ' + cfg.dateEnd : ''),
       format: fmtTxt,
-      prizes: prizes
+      prizes: prizes,
+      /* Campos extra para `muTourInfo` cuando hay config custom. */
+      humans: cfg.numHumans || 0,
+      aiMin:  cfg.aiLevelMin || 0,
+      aiMax:  cfg.aiLevelMax || 0
     };
   };
 
-  /* Render dentro de la pantalla del torneo. Las cabeceras (nombre +
-     bandera) salen de la config custom; el cuerpo solo muestra el
-     grid de equipos seleccionados — la info redundante (fee, fechas,
-     formato, premios) se ve en el modal ℹ desde `s-torneos-verano`. */
+  /* HTML para un equipo dentro del bracket (KO) o de un grupo. Los
+     "PENDIENTE" (placeholders humanos) se pintan en dorado y cursiva
+     para diferenciarlos de los equipos IA ya sorteados. */
+  function _bracketTeamHtml(t){
+    var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
+    var cls = t.isHuman ? 'tour-bracket-team is-pending' : 'tour-bracket-team';
+    return '<div class="'+cls+'">'+img+'<span>'+(t.name||'?')+'</span></div>';
+  }
+
+  /* Render dentro de la pantalla del torneo. Cabecera (nombre +
+     bandera) sale de la config custom; el cuerpo muestra el sorteo
+     ya hecho:
+       - KO         → emparejamientos de la 1ª ronda.
+       - Liga       → lista plana de equipos.
+       - Grupos+KO  → equipos repartidos por grupos A, B, C…
+     La info de fechas/fee/formato/premios queda en el modal ℹ. */
   window._tourRender = async function(id){
     if (TOUR_IDS.indexOf(id) === -1) return;
     var cfg = await window._tourLoad(id);
@@ -8953,15 +8986,49 @@ window._showSimProgress = function(opts, onDone){
     if (titleEl && cfg.name) titleEl.textContent = cfg.name;
     if (flagEl  && cfg.flag) flagEl.textContent  = cfg.flag;
     if (!infoEl) return;
-    if (cfg.teams && cfg.teams.length) {
-      infoEl.innerHTML =
-        '<p style="margin:0 0 6px;opacity:.85;"><b>Equipos ('+cfg.teams.length+'/'+(cfg.numTeams||'?')+')</b></p>'+
-        '<div class="tour-teams-grid">' +
-        cfg.teams.map(function(t){
+    var teams = cfg.teams || [];
+    if (!teams.length) { infoEl.innerHTML = ''; return; }
+
+    if (cfg.format === 'ko') {
+      var rounds = (cfg.formatConfig && cfg.formatConfig.rounds) || [];
+      var firstRound = rounds[0] || ('Ronda de '+teams.length);
+      var html = '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">SORTEO · '+firstRound+'</p>';
+      html += '<div class="tour-bracket-list">';
+      for (var i = 0; i < teams.length; i += 2) {
+        var a = teams[i], b = teams[i+1];
+        if (!b) break;
+        html += '<div class="tour-match">' + _bracketTeamHtml(a) + '<span class="vs">vs</span>' + _bracketTeamHtml(b) + '</div>';
+      }
+      html += '</div>';
+      infoEl.innerHTML = html;
+    } else if (cfg.format === 'league') {
+      var html = '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">PARTICIPANTES · '+teams.length+'</p>';
+      html += '<div class="tour-teams-grid">';
+      teams.forEach(function(t){
+        var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
+        var tag = t.isHuman ? '<span class="tag-h">PEND</span>' : '';
+        html += '<div class="tour-team-chip">'+img+'<span>'+t.name+'</span>'+tag+'</div>';
+      });
+      html += '</div>';
+      infoEl.innerHTML = html;
+    } else if (cfg.format === 'groups-ko') {
+      var fc = cfg.formatConfig || {};
+      var groups = fc.groups || 1;
+      var per    = fc.perGroup || Math.ceil(teams.length / groups);
+      var html = '';
+      for (var g = 0; g < groups; g++) {
+        var slice = teams.slice(g*per, (g+1)*per);
+        if (!slice.length) break;
+        html += '<div class="tour-group-block"><h4>GRUPO '+String.fromCharCode(65+g)+'</h4>';
+        html += '<div class="tour-teams-grid">';
+        slice.forEach(function(t){
           var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
-          var tag = t.isHuman ? '<span class="tag-h">H</span>' : '<span class="tag-i">IA</span>';
-          return '<div class="tour-team-chip">'+img+'<span>'+t.name+'</span>'+tag+'</div>';
-        }).join('') + '</div>';
+          var tag = t.isHuman ? '<span class="tag-h">PEND</span>' : '';
+          html += '<div class="tour-team-chip">'+img+'<span>'+t.name+'</span>'+tag+'</div>';
+        });
+        html += '</div></div>';
+      }
+      infoEl.innerHTML = html;
     } else {
       infoEl.innerHTML = '';
     }
@@ -8969,10 +9036,12 @@ window._showSimProgress = function(opts, onDone){
 
   /* ── Wire-up del overlay (1 sola vez por carga de página) */
   function _wire(){
-    var search = document.getElementById('tour-ed-search');
-    if (search) {
-      search.addEventListener('input', function(){ _renderResults(this.value); });
-    }
+    /* Inputs que afectan al pool stat: nº equipos, humanos, nivel
+       IA mín./máx. Cualquier cambio recalcula el contador. */
+    ['tour-ed-num','tour-ed-hum','tour-ed-aimin','tour-ed-aimax'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', _updatePoolStat);
+    });
     var fmt = document.getElementById('tour-ed-fmt');
     if (fmt) {
       fmt.addEventListener('change', function(){
@@ -8982,17 +9051,27 @@ window._showSimProgress = function(opts, onDone){
         _renderFmtCfg();
       });
     }
+    /* Botón principal: ✅ CONFIRMAR Y SORTEAR. Lee el formulario,
+       sortea equipos en el rango de nivel pedido, mete los humanos
+       como PENDIENTE y persiste todo. Si el pool no llega para los
+       slots IA pedidos, abortamos con error visible. */
     var save = document.getElementById('tour-ed-save');
     if (save) {
       save.addEventListener('click', async function(){
         if (!_open) return;
         _readForm(_open.cfg);
-        _setFeedback('Guardando…');
+        var draw = _drawTeams(_open.cfg);
+        if (!draw.ok) {
+          _setFeedback('⚠ ' + draw.error, false);
+          return;
+        }
+        _open.cfg.teams = draw.teams;
+        _setFeedback('Sorteando y guardando…');
         var ok = await window._tourSave(_open.id, _open.cfg);
         if (ok) {
-          _setFeedback('✓ Guardado en servidor', true);
+          _setFeedback('✅ Sorteo confirmado · '+draw.teams.length+' equipos', true);
           window._tourRender(_open.id);
-          setTimeout(function(){ window._tourCloseEditor(); }, 700);
+          setTimeout(function(){ window._tourCloseEditor(); }, 900);
         } else {
           _setFeedback('⚠ Guardado solo en local (sin red)', false);
         }
@@ -21037,12 +21116,31 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var prizesHtml = t.prizes.map(function(p){
       return '<li><b>' + p[0] + ':</b> +' + p[1] + ' 🪙</li>';
     }).join('');
+    /* Bloques extra que solo aparecen si la config custom los aporta
+       (humanos / nivel IA). Si no, fallback al objeto hardcoded que no
+       tiene esos campos → no se renderizan. */
+    var extraHtml = '';
+    if (typeof t.humans !== 'undefined') {
+      extraHtml +=
+        '<div class="munich-tour-ov-section">' +
+          '<div class="munich-tour-ov-lbl">Humanos</div>' +
+          t.humans + ' 👤' +
+        '</div>';
+    }
+    if (typeof t.aiMin !== 'undefined' && (t.aiMin || t.aiMax)) {
+      extraHtml +=
+        '<div class="munich-tour-ov-section">' +
+          '<div class="munich-tour-ov-lbl">Nivel IA</div>' +
+          t.aiMin + '–' + t.aiMax +
+        '</div>';
+    }
     box.innerHTML =
       '<h3 class="munich-tour-ov-title">' + t.flag + ' ' + t.name + '</h3>' +
       '<div class="munich-tour-ov-section">' +
         '<div class="munich-tour-ov-lbl">Participación</div>' +
-        t.fee + ' 🪙 · ' + t.teams + ' equipos 👤' +
+        t.fee + ' 🪙 · ' + t.teams + ' equipos' +
       '</div>' +
+      extraHtml +
       '<div class="munich-tour-ov-section">' +
         '<div class="munich-tour-ov-lbl">Fechas</div>' + t.dates +
       '</div>' +

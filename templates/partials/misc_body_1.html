@@ -5208,7 +5208,62 @@ window._showSimProgress = function(opts, onDone){
       if (typeof window._inferMatchCompetition === 'function') {
         try { return window._inferMatchCompetition(mk); } catch(_){}
       }
+      /* FALLBACK INLINE (2026-05-08): la definición autoritativa
+         vive en `s-liga-clas.html` pero ese archivo NO se incluye
+         en index.html (es legacy). Sin esta lógica inline, todos
+         los matches caían a 'liga' y los caches por competición
+         (sc, recopa, inter, etc.) quedaban vacíos.
+         Patrón: buscar `|<comp>|` en el storeKey concatenado
+         o un prefijo conocido en la matchKey raw. */
+      var k = String(mk || '').toLowerCase();
+      if (!k) return 'liga';
+      if (k.indexOf('uecl') === 0 || k.indexOf('-uecl') !== -1 || k.indexOf('|uecl|') !== -1) return 'uecl';
+      if (k.indexOf('uel')  === 0 || k.indexOf('-uel')  !== -1 || k.indexOf('|uel|')  !== -1) return 'uel';
+      if (k.indexOf('wprev') !== -1) return 'ucl-prev';
+      if (k.indexOf('oq_') === 0 || k.indexOf('-oq_') !== -1
+          || k.indexOf('oq-') === 0 || k.indexOf('-oq-') !== -1
+          || k.indexOf('|oq|') !== -1) return 'ucl-oq';
+      if (k.indexOf('wc_') === 0 || k.indexOf('-wc_') !== -1
+          || k.indexOf('wc-') === 0 || k.indexOf('-wc-') !== -1
+          || k.indexOf('|wc|') !== -1) return 'ucl-wc';
+      if (k.indexOf('ucl')  === 0 || k.indexOf('-ucl')  !== -1
+          || k.indexOf('|ucl|') !== -1 || k.indexOf('|ucl-fin|') !== -1
+          || k.indexOf('champ') === 0) return 'ucl';
+      if (k.indexOf('usc') === 0 || k.indexOf('-usc') !== -1
+          || k.indexOf('|usc|') !== -1 || k.indexOf('|usc-fin|') !== -1) return 'usc';
+      if (k.indexOf('sc_') === 0 || k.indexOf('sc-') === 0
+          || k.indexOf('|sc|') !== -1 || k.indexOf('|sc-final|') !== -1
+          || k.indexOf('sc-semis') === 0 || k.indexOf('sc-final') === 0
+          || k.indexOf('-sc-') !== -1 || k.indexOf('-sc_') !== -1) return 'sc';
+      if (k.indexOf('recopa') === 0 || k.indexOf('-recopa') !== -1
+          || k.indexOf('|recopa|') !== -1 || k.indexOf('|recopa-fin|') !== -1
+          || k.indexOf('cal-rec-') !== -1) return 'recopa';
+      if (k.indexOf('inter') === 0 || k.indexOf('-inter') !== -1
+          || k.indexOf('|inter|') !== -1 || k.indexOf('|inter-fin|') !== -1
+          || k.indexOf('cal-inter-') !== -1) return 'inter';
+      if (k.indexOf('mundial') !== -1 || k.indexOf('|mundial|') !== -1
+          || k.indexOf('cwc') === 0 || k.indexOf('-cwc') !== -1
+          || k.indexOf('|cwc|') !== -1) return 'mundial';
+      if (k.indexOf('|sel|') !== -1 || k.indexOf('|sel-fin|') !== -1
+          || k.indexOf('cal-sel') !== -1 || k.indexOf('cal-mf-') !== -1) return 'sel';
+      if (k.indexOf('|amistoso|') !== -1 || k.indexOf('cal-ams') !== -1
+          || k.indexOf('amistoso') === 0) return 'amistoso';
+      if (k.indexOf('sl-')  === 0 || k.indexOf('-sl')  !== -1
+          || k.indexOf('|superliga|') !== -1
+          || k.indexOf('superliga') !== -1) return 'superliga';
+      if (k.indexOf('cdr-') === 0 || k.indexOf('copa-') === 0
+          || k.indexOf('copa_') === 0
+          || k.indexOf('|copa|') !== -1 || k.indexOf('|copa-fin|') !== -1
+          || k.indexOf('copa') === 0) return 'copa';
       return 'liga';
+    }
+    /* Exponer globalmente para que `_lextComputeRealStats` y otros
+       módulos lo usen (antes solo lo definía s-liga-clas.html que
+       NO se incluye en index.html). Sin esto, todos los matches
+       caían al default 'liga' y las cajas por competición
+       (sc, recopa, inter, etc.) quedaban vacías. */
+    if (typeof window._inferMatchCompetition !== 'function') {
+      window._inferMatchCompetition = _competitionFromMatchKey;
     }
     function _bucketFor(comp){
       return buckets[comp] || buckets.liga;

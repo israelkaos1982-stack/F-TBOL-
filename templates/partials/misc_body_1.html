@@ -741,19 +741,25 @@ window._showSimProgress = function(opts, onDone){
   .hub-card-plantilla{align-items:center !important;justify-content:center !important;text-align:center;background:radial-gradient(ellipse at center,rgba(80,220,160,.20),rgba(0,0,0,.30) 65%),linear-gradient(160deg,rgba(15,55,40,.6),rgba(0,0,0,.5)) !important;border:1px solid rgba(95,224,138,.55) !important;box-shadow:0 0 14px rgba(95,224,138,.18),inset 0 0 18px rgba(95,224,138,.06) !important;gap:4px !important;}
   .hub-plantilla-emoji{font-size:30px;line-height:1;filter:drop-shadow(0 0 10px rgba(95,224,138,.55));margin-bottom:2px;}
   .hub-plantilla-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:2.2px;color:#bff5d5;text-shadow:0 0 8px rgba(95,224,138,.6),0 1px 0 rgba(0,0,0,.55);white-space:nowrap;}
-  .hub-plantilla-count{font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 8px rgba(95,224,138,.55);letter-spacing:1.5px;}
+  .hub-plantilla-count{font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 8px rgba(95,224,138,.55);letter-spacing:1.5px;display:inline-flex;align-items:center;gap:6px;}
   .hub-plantilla-count small{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.6px;color:rgba(191,245,213,.7);text-transform:uppercase;}
+  /* Tirita 🩹 — alerta de jugador lesionado en la plantilla. Aparece
+     SOLO cuando hay >=1 jugador con lesión activa. Animación de
+     pulse + wobble (subtle shake) para llamar la atención sin ser
+     molesto, igual de discreto que el resto del HUB. */
+  .hub-plantilla-injury{font-size:18px;line-height:1;display:inline-block;animation:plantInjuryPulse 1.6s ease-in-out infinite;filter:drop-shadow(0 0 6px rgba(255,90,90,.55));}
+  @keyframes plantInjuryPulse{0%,100%{transform:rotate(-6deg) scale(1);}25%{transform:rotate(6deg) scale(1.12);}50%{transform:rotate(-4deg) scale(1.04);}75%{transform:rotate(8deg) scale(1.10);}}
   /* HUB · Calendario — videojuego, paleta naranja-ámbar */
   .hub-card-calendario{align-items:center !important;justify-content:center !important;text-align:center;background:radial-gradient(ellipse at center,rgba(243,115,53,.22),rgba(0,0,0,.30) 65%),linear-gradient(160deg,rgba(58,28,0,.6),rgba(0,0,0,.5)) !important;border:1px solid rgba(253,200,48,.55) !important;box-shadow:0 0 14px rgba(243,115,53,.20),inset 0 0 18px rgba(253,200,48,.06) !important;gap:4px !important;}
   .hub-calendario-emoji{font-size:30px;line-height:1;filter:drop-shadow(0 0 10px rgba(253,200,48,.55));margin-bottom:2px;}
   .hub-calendario-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:2.2px;color:#ffd99b;text-shadow:0 0 8px rgba(253,200,48,.6),0 1px 0 rgba(0,0,0,.55);white-space:nowrap;}
-  .hub-calendario-sub{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.8px;color:rgba(255,217,155,.7);text-transform:uppercase;}
+  .hub-calendario-sub{font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 8px rgba(253,200,48,.55);letter-spacing:1.5px;}
   /* HUB · ISRAMAX — videojuego, paleta rosa-magenta como la caja
      ISRAMAX de #s-derbys. La I central es el logo de apuestas. */
   .hub-card-isramax{align-items:center !important;justify-content:center !important;text-align:center;background:radial-gradient(ellipse at center,rgba(255,80,100,.22),rgba(0,0,0,.30) 65%),linear-gradient(160deg,rgba(80,8,28,.6),rgba(0,0,0,.5)) !important;border:1px solid rgba(255,90,120,.55) !important;box-shadow:0 0 14px rgba(255,80,100,.22),inset 0 0 18px rgba(255,80,100,.06) !important;gap:4px !important;}
   .hub-isramax-i{font-family:'Bebas Neue','Oswald',sans-serif;font-size:36px;line-height:.85;color:#ffffff;font-weight:900;text-shadow:0 0 12px rgba(255,80,100,.65),0 1px 2px rgba(0,0,0,.55);letter-spacing:0;background:linear-gradient(135deg,#a01030,#e02040,#ff3b5c,#e02040,#a01030);width:46px;height:46px;border-radius:10px;border:1.5px solid #ffffff;display:flex;align-items:center;justify-content:center;margin-bottom:2px;}
   .hub-isramax-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:2.2px;color:#ffc0cf;text-shadow:0 0 8px rgba(255,80,100,.65),0 1px 0 rgba(0,0,0,.55);white-space:nowrap;}
-  .hub-isramax-sub{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.8px;color:rgba(255,192,207,.75);text-transform:uppercase;}
+  .hub-isramax-sub{font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 8px rgba(255,80,100,.65);letter-spacing:1.5px;}
   /* HUD edit · 🖍 lápiz junto a TOÑÍN — admin PIN 747 abre modal con
      5 inputs (rating, target, money, target, PI). El override
      persiste en localStorage y se re-aplica vía MutationObserver
@@ -17862,7 +17868,7 @@ Tottenham
   <button class="hub-card hub-card-trofeos" onclick="go('s-munich-trofeos')">
     <span class="hub-trofeos-emoji">🏆</span>
     <span class="hub-trofeos-title">VITRINA TROFEOS</span>
-    <span class="hub-trofeos-count" id="munich-trofeos-count">0 títulos oficiales</span>
+    <span class="hub-trofeos-count" id="munich-trofeos-count">0</span>
   </button>
   <button class="hub-card hub-card-derbys" onclick="go('s-munich-derbys')">
     <span class="hub-derbys-emoji">⚔️</span>
@@ -17878,22 +17884,22 @@ Tottenham
   <button class="hub-card hub-card-objetivos" onclick="go('s-munich-objetivos')">
     <span class="hub-objetivos-emoji">🎯</span>
     <span class="hub-objetivos-title">OBJETIVOS DEL CLUB</span>
-    <div class="hub-objetivos-progress" id="munich-obj-count-wrap"><span id="munich-obj-count">0 / 33</span> <small>completados</small></div>
+    <div class="hub-objetivos-progress" id="munich-obj-count-wrap"><span id="munich-obj-count">0 / 33</span></div>
   </button>
   <button class="hub-card hub-card-plantilla" onclick="go('s-bayern-plantilla')">
     <span class="hub-plantilla-emoji">👕</span>
     <span class="hub-plantilla-title">PLANTILLA</span>
-    <div class="hub-plantilla-count"><span id="munich-plantilla-count">31</span> <small>jugadores</small></div>
+    <div class="hub-plantilla-count"><span id="munich-plantilla-count">31</span><span id="munich-plantilla-injury" class="hub-plantilla-injury" style="display:none;">🩹</span></div>
   </button>
   <button class="hub-card hub-card-calendario" onclick="window._agendaBackTo='s-munich';window._bayernCalContext=true;go('s-agenda')">
     <span class="hub-calendario-emoji">📅</span>
     <span class="hub-calendario-title">CALENDARIO</span>
-    <span class="hub-calendario-sub">Agenda de la temporada</span>
+    <span class="hub-calendario-sub" id="munich-cal-fecha">01 Jul</span>
   </button>
   <button class="hub-card hub-card-isramax" onclick="window._isramaxOpen&&window._isramaxOpen()">
     <span class="hub-isramax-i">I</span>
     <span class="hub-isramax-title">ISRAMAX</span>
-    <span class="hub-isramax-sub">Apuestas Humano vs Humano</span>
+    <span class="hub-isramax-sub" id="munich-isramax-bets">0</span>
   </button>
 </section>
 <section class="hub-match-engine">
@@ -18402,7 +18408,7 @@ Tottenham
     var totEl = document.getElementById('munich-trofeos-total');
     if (totEl) totEl.textContent = 'TOTAL: ' + total;
     var hubCnt = document.getElementById('munich-trofeos-count');
-    if (hubCnt) hubCnt.textContent = total + (total === 1 ? ' título oficial' : ' títulos oficiales');
+    if (hubCnt) hubCnt.textContent = String(total);
   }
 
   window.munichTrofeosRender = render;
@@ -20308,6 +20314,66 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     } else {
       if (warnEl)  warnEl.textContent = '';
       if (medIcon) medIcon.classList.remove('blink');
+    }
+
+    /* \u2500\u2500 HUB cards: fecha del Calendario, badge tirita en Plantilla
+       y contador de apuestas abiertas en ISRAMAX. Se actualizan en
+       cada updateHud() para que el HUB refleje el estado vivo. */
+    /* CALENDARIO: fecha del evento actual del Bayern (date string del
+       parseAgenda, p.ej. "15 Jul"). Si la temporada termin\u00f3 o a\u00fan
+       no hay events, default "01 Jul" (inicio de temporada). */
+    var calFechaEl = getEl('munich-cal-fecha');
+    if (calFechaEl) {
+      var curEvt = state.events && state.events[state.eventIdx];
+      calFechaEl.textContent = (curEvt && curEvt.date) ? curEvt.date : '01 Jul';
+    }
+    /* PLANTILLA \u00b7 badge tirita: visible solo si hay >=1 jugador del
+       Bayern con LESION_STORE activa (partidos > 0). LESION_STORE
+       lo poblan los partidos al ocurrir una lesi\u00f3n (gen\u00e9rico, no
+       distingue equipo) \u2014 filtramos por nombre del jugador con la
+       plantilla del Bayern (v\u00eda CURRENT_SQUAD_TEAM/sqFromRegistry). */
+    var injuryBadgeEl = getEl('munich-plantilla-injury');
+    if (injuryBadgeEl) {
+      var hasInjury = false;
+      try {
+        var lesionStore = window.LESION_STORE || {};
+        /* Liga la lista de nombres de jugadores del Bayern para
+           filtrar el LESION_STORE (que es global a toda la liga). */
+        var bayernNames = {};
+        if (typeof window.sqFromRegistry === 'function') {
+          var sq = window.sqFromRegistry('Bayern Munich') || [];
+          sq.forEach(function(p){
+            var nm = (p && (p.name || (Array.isArray(p)?p[1]:''))) || '';
+            if (nm) bayernNames[nm] = true;
+          });
+        }
+        Object.keys(lesionStore).forEach(function(playerName){
+          var l = lesionStore[playerName];
+          if (l && Number(l.partidos) > 0 && bayernNames[playerName]) {
+            hasInjury = true;
+          }
+        });
+      } catch(_){}
+      injuryBadgeEl.style.display = hasInjury ? 'inline-block' : 'none';
+    }
+    /* ISRAMAX: n\u00famero de apuestas con status='open' del usuario
+       'tonin' (To\u00f1\u00edn, due\u00f1o del Bayern). Lee de localStorage
+       `isramax_v1` que actualiza el modal de apuestas. */
+    var isramaxBetsEl = getEl('munich-isramax-bets');
+    if (isramaxBetsEl) {
+      var openCount = 0;
+      try {
+        var raw = localStorage.getItem('isramax_v1');
+        if (raw) {
+          var data = JSON.parse(raw) || {};
+          var bets = (data.bets || []);
+          for (var bi = 0; bi < bets.length; bi++) {
+            var b = bets[bi];
+            if (b && b.userId === 'tonin' && b.status === 'open') openCount++;
+          }
+        }
+      } catch(_){}
+      isramaxBetsEl.textContent = String(openCount);
     }
   }
 

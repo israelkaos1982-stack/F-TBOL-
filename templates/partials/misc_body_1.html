@@ -20350,9 +20350,20 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
   }
 
+  /* Debounce per-id contra double-click accidental en móvil:
+     algunos navegadores móviles disparan clicks duplicados muy
+     rápidos (touchstart + click) — un toggle doble convertía
+     un push en push+splice, dejándolo todo en 0. Bug reportado
+     2026-05-08 ("Solo se elije 1 torneo de los 4 disponibles").
+     150 ms es suficiente para diferenciar clicks reales de un
+     bounce, sin afectar a la UX del usuario que toca rápido. */
+  var _muTourLastTap = {};
   window.muTourToggle = function(id, ev) {
     if (ev && ev.target && ev.target.classList.contains('munich-tour-info-btn')) return;
     if (!SUMMER_TOURS[id]) return;
+    var now = Date.now();
+    if (_muTourLastTap[id] && (now - _muTourLastTap[id]) < 150) return;
+    _muTourLastTap[id] = now;
     var idx = state.tempPicks.indexOf(id);
     if (idx !== -1) {
       state.tempPicks.splice(idx, 1);

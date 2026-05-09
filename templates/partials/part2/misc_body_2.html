@@ -10919,7 +10919,9 @@
          single-leg y el partido acabó empatado, el penWinner viene
          del mecanismo de penaltis del modal. _tourSaveHumanResult
          se encarga de re-renderizar y, si el torneo termina, de
-         acreditar premios a las cajas humanas. */
+         acreditar premios a las cajas humanas. Pasamos también el
+         acta (events + MVP) para que el visor 📋 ACTA del torneo
+         pueda mostrar el desglose minuto-a-minuto del partido. */
       try {
         var _tourPenWin = _gm.penWinner || null;
         if (!_tourPenWin) {
@@ -10927,8 +10929,22 @@
           if (_tourPenEv) _tourPenWin = _tourPenEv.team === 'a' ? 'a' : 'b';
         } else if (_tourPenWin === _gm.home) _tourPenWin = 'a';
         else if (_tourPenWin === _gm.away) _tourPenWin = 'b';
+        var _tourMvpEv = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+        var _tourExtra = {
+          events: (_gm.events || []).filter(function(e){ return e && e.type !== 'pen-result'; }).map(function(e){
+            return { type:e.type, min:e.min, num:e.num || '', player:e.player || e.name || '', team:e.team, ico:e.ico,
+                     playerOut:e.playerOut, numOut:e.numOut,
+                     gradoNombre:e.gradoNombre, gradoEmoji:e.gradoEmoji, partidos:e.partidos, grave:e.grave,
+                     lesGrado:e.lesGrado, lesDesc:e.lesDesc, lesPartidos:e.lesPartidos,
+                     _varAnulado:!!e._varAnulado, _varConfirmed:!!e._varConfirmed };
+          }),
+          mvp: _tourMvpEv ? (_tourMvpEv.player || _tourMvpEv.name || '') : '',
+          mvpTeam: _tourMvpEv ? (_tourMvpEv.team === 'a' ? _gm.home : (_tourMvpEv.team === 'b' ? _gm.away : '')) : '',
+          home: _gm.home,
+          away: _gm.away
+        };
         if (typeof window._tourSaveHumanResult === 'function') {
-          window._tourSaveHumanResult(_gm._tourId, _gm._tourKey, _gm.sc.a, _gm.sc.b, _tourPenWin);
+          window._tourSaveHumanResult(_gm._tourId, _gm._tourKey, _gm.sc.a, _gm.sc.b, _tourPenWin, _tourExtra);
         }
       } catch(_e){}
     } else if (_gm._isWprev) {
@@ -12640,6 +12656,11 @@
     evts.sort(function(a,b){ return a.min - b.min; });
     return { events:evts, mvp:base.mvp, mvpTeam:base.mvpTeam };
   }
+  /* Expuesto para que la simulación de torneos de verano (otro IIFE
+     en misc_body_1.html) pueda generar el acta sintética cuando se
+     auto-simula un partido (admin override). Retorna {events, mvp,
+     mvpTeam} en el mismo formato que el resto de competiciones. */
+  try { window.genMatchEventsEnhanced = genMatchEventsEnhanced; } catch(_){}
 
   /* ── VAR: inject animation CSS once ── */
   (function(){

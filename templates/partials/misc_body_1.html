@@ -22293,7 +22293,17 @@ Tottenham
     return {};
   }
   function save(o){
-    try { localStorage.setItem(KEY, JSON.stringify(o||{})); } catch(_){}
+    /* Detectar fallo de localStorage (quota / permission denied / safari
+       privacy mode) y avisar al usuario en vez de tragar el error. Es
+       lo que rompía el flujo "edito y no se queda guardado" — el setItem
+       fallaba en silencio. Petición usuario 2026-05-09. */
+    try {
+      localStorage.setItem(KEY, JSON.stringify(o||{}));
+      return true;
+    } catch(e) {
+      try { alert('⚠ No se pudieron guardar los valores del HUD.\nMotivo: ' + (e && e.message || 'error desconocido') + '\n(Quizá no queda espacio en el navegador. Cierra el editor del torneo o resetea torneos antiguos para liberar espacio.)'); } catch(_){}
+      return false;
+    }
   }
   function _smallTarget(parentSel){
     var p = document.querySelector(parentSel);
@@ -22409,8 +22419,26 @@ Tottenham
     if (ov) ov.classList.remove('show');
   };
   window._bayernEditValuesSave = function(){
-    function num(id){ var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; }
-    function intg(id){ var v = parseInt(document.getElementById(id).value, 10); return isNaN(v) ? null : v; }
+    /* Locale-tolerant parsers: aceptan coma como separador decimal (ES)
+       además de punto. Antes "8,8" → parseFloat → 8 → ratingTarget se
+       guardaba mal y al re-aplicar caía al default 9.10. Bug FOTO 1-3
+       reportado por el usuario 2026-05-09. */
+    function num(id){
+      var raw = document.getElementById(id).value;
+      if (raw == null) return null;
+      var s = String(raw).replace(/,/g, '.').trim();
+      if (!s) return null;
+      var v = parseFloat(s);
+      return isNaN(v) ? null : v;
+    }
+    function intg(id){
+      var raw = document.getElementById(id).value;
+      if (raw == null) return null;
+      var s = String(raw).replace(/,/g, '.').trim();
+      if (!s) return null;
+      var v = parseInt(s, 10);
+      return isNaN(v) ? null : v;
+    }
     var o = {
       rating:       num('me-rating'),
       ratingTarget: num('me-rating-target'),
@@ -22418,7 +22446,16 @@ Tottenham
       moneyTarget:  intg('me-money-target'),
       pi:           intg('me-pi')
     };
-    save(o);
+    /* Sanity check: si TODOS los campos son null (parser falló por
+       completo, p.ej. inputs vacíos), no machaques el override
+       previo — sería como hacer un Reset accidental. */
+    var allNull = Object.keys(o).every(function(k){ return o[k] == null; });
+    if (allNull) {
+      alert('⚠ No se ha podido leer ningún valor. Revisa los campos antes de guardar.');
+      return;
+    }
+    var ok = save(o);
+    if (!ok) return;  /* alert ya mostrado en save() */
     apply();
     window._bayernEditValuesClose();
   };

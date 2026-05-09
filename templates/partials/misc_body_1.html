@@ -18565,6 +18565,200 @@ Tottenham
     return true;
   }
 
+  /* Parser de la "Plantilla Maestra" del usuario (2026-05-09):
+     extrae los campos de CABECERA cuando se pega un boceto entero
+     (no solo la lista de jugadores). El usuario quiere copiar el
+     mismo template para cada equipo y que el editor rellene name +
+     4 ejes + agresividad + presupuesto + estadio + alias eFootball
+     + escudo en los inputs correspondientes. La detección es
+     permisiva (acepta variaciones de capitalización, separadores
+     `/`, `·`, `,`, comas, espacios, paréntesis, markdown bold).
+
+     Devuelve un objeto con SOLO los campos detectados. Los campos no
+     encontrados no aparecen en el objeto — el caller decide si
+     pisar valores existentes o no.
+
+     Para no chocar con la lista de jugadores, la cabecera se asume
+     ANTES de la primera sección de plantilla (porteros / defensas /
+     etc.). Encontrada esa sección, deja de buscar cabecera. */
+  function parseMasterCabecera(text){
+    if(!text) return {};
+    var out = {};
+    var lines = String(text).split(/\r?\n/);
+    function strip(s){ return String(s||'').replace(/\*\*/g,'').replace(/__/g,'').replace(/^[\s*\-•·]+/,'').trim(); }
+    /* Etiquetas que NO son nombre de equipo aunque vengan en bold. */
+    var FIELD_LABELS = /^(VALORES?\s*(DE\s*PODER)?|NIVEL\s*(DE\s*ESTRELLAS)?|AGRESIVIDAD|PRESUPUESTO|ESTADIO(\s*LOCAL)?|EQUIPO\s*S[IÍ]MIL\s*EFOOTBALL|S[IÍ]MIL\s*EFOOTBALL|ALIAS|ESCUDO|GLOBAL|ATAQUE|MEDIO|DEFENSA|NOMBRE\s*(DEL\s*EQUIPO)?|11\s*IDEAL|9\s*MEJORES\s*RESERVAS|GOLEADOR\s*DE\s*ELITE\s*MUNDIAL|PORTEROS|DEFENSAS|CENTROCAMPISTAS|MEDIOS|DELANTEROS)$/i;
+    /* Marca el final de la cabecera: cualquier línea con encabezado
+       de sección de plantilla la frena. */
+    var SECTION_BOUNDARY = /(porter|goalkeep|\bgk\b|\bpor\b|🧤|defens|\bdef\b|\bdf\b|🛡|centrocamp|\bmedio?s?\b|midfi|\bmed\b|\bmid\b|\bmf\b|⚙|delante|forward|attack|stri|\bdel\b|\bfwd\b|\batt\b|⚽|⚡)/i;
+    for(var i = 0; i < lines.length; i++){
+      var raw = lines[i];
+      var s = strip(raw);
+      if(!s) continue;
+      /* ¿Frontera de plantilla? Para no interpretar "**🧤 PORTEROS**"
+         como nombre de equipo. La línea SOLO es frontera real si no
+         tiene dígitos (las líneas de jugadores y la de "Valores de
+         Poder: GLOBAL 76 / DEFENSA 77" tienen dígitos y mencionan
+         "MEDIO"/"DEFENSA" sin ser cabeceras de sección). Permitimos
+         conteos en paréntesis tipo "Defensas (15)" o "n=15". */
+      var probe = s.replace(/\(\s*\d+\s*\)/g,'').replace(/\bn\s*=\s*\d+\b/ig,'');
+      if(!/\d/.test(probe) && SECTION_BOUNDARY.test(probe)) break;
+      /* GLOBAL / ATAQUE / MEDIO / DEFENSA — formato combinado o suelto. */
+      var pwAll = s.match(/GLOBAL[\s:]*(\d{1,3})[\s\/.,·\-|]+ATAQUE[\s:]*(\d{1,3})[\s\/.,·\-|]+(?:MEDIO|MID)[\s:]*(\d{1,3})[\s\/.,·\-|]+DEFENSA[\s:]*(\d{1,3})/i);
+      if(pwAll){
+        out.power = +pwAll[1]; out.atk = +pwAll[2]; out.mid = +pwAll[3]; out.def = +pwAll[4];
+      } else {
+        var mG = s.match(/GLOBAL[\s:]+(\d{1,3})/i); if(mG && out.power == null) out.power = +mG[1];
+        var mA = s.match(/ATAQUE[\s:]+(\d{1,3})/i); if(mA && out.atk == null) out.atk = +mA[1];
+        var mM = s.match(/(?:MEDIO|MID)[\s:]+(\d{1,3})/i); if(mM && out.mid == null) out.mid = +mM[1];
+        var mD = s.match(/DEFENSA[\s:]+(\d{1,3})/i); if(mD && out.def == null) out.def = +mD[1];
+      }
+      /* Agresividad. */
+      var mAg = s.match(/agresivid[a-zñ]*[\s:]+(\d{1,3})/i);
+      if(mAg && out.aggr == null) out.aggr = +mAg[1];
+      /* Presupuesto: acepta números con puntos/comas como separador
+         de miles ("1.200.000" → 1200000). */
+      var mPr = s.match(/presupues?t[a-zñ]*[\s:€$]+([\d.,]+)/i);
+      if(mPr && out.budget == null){
+        var raw2 = mPr[1].replace(/[.,\s]/g,'');
+        if(raw2) out.budget = parseInt(raw2, 10);
+      }
+      /* Estadio (con o sin "Local"). */
+      var mEst = s.match(/estadio(?:\s+local)?[\s:]+(.+?)$/i);
+      if(mEst && out.stadium == null){
+        var v = mEst[1].replace(/^[\(\)]+|[\(\)]+$/g,'').trim();
+        if(v && !/recinto\s+asignado/i.test(v)) out.stadium = v;
+      }
+      /* Equipo Símil eFootball / Alias eFootball. */
+      var mAl = s.match(/(?:equipo\s+s[ií]mil\s+efootball|s[ií]mil\s+efootball|alias\s+(?:en\s+)?efootball)[\s:]+(.+?)$/i);
+      if(mAl && out.alias == null){
+        var av = mAl[1].replace(/^[\(\)]+|[\(\)]+$/g,'').trim();
+        if(av && !/equipo\s+base/i.test(av)) out.alias = av;
+      }
+      /* Escudo URL: en la misma línea o en la siguiente. */
+      var mShUrl = s.match(/escudo[\s\(\)A-Za-z]*[:\s]+(\S+\.\S+)$/i);
+      if(mShUrl && out.shield == null){
+        var u = mShUrl[1].trim();
+        if(/^https?:\/\//i.test(u) || /\.(png|jpg|jpeg|svg|webp)/i.test(u)) out.shield = u;
+      } else if(/^escudo/i.test(s) && out.shield == null && i + 1 < lines.length){
+        var next = strip(lines[i+1]);
+        if(/^https?:\/\//i.test(next)) out.shield = next;
+      }
+      /* Nombre del equipo: línea bold que NO sea una etiqueta. */
+      if(out.name == null){
+        var bold = raw.match(/\*\*([^*]+?)\*\*/);
+        if(bold){
+          var bv = bold[1].trim();
+          if(!FIELD_LABELS.test(bv) && /[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(bv) && bv.length >= 3 && bv.length <= 60){
+            /* Filtra "Valores de Poder:" etc. Las etiquetas con `:` final
+               las descartamos también. */
+            if(!/^[A-ZÁÉÍÓÚÑa-záéíóúñ\s]+:$/.test(bv)){
+              out.name = bv.replace(/\s+/g,' ').trim();
+            }
+          }
+        }
+        /* Forma alternativa: línea con prefijo "Nombre:" */
+        var mNm = s.match(/^nombre(?:\s+del\s+equipo)?[\s:]+(.+?)$/i);
+        if(mNm && out.name == null){
+          var nv = mNm[1].replace(/^[\(\)]+|[\(\)]+$/g,'').trim();
+          if(nv) out.name = nv;
+        }
+      }
+    }
+    return out;
+  }
+  window._parseMasterCabecera = parseMasterCabecera;
+
+  /* Cuando el admin pega la Plantilla Maestra entera (cabecera +
+     bloque de jugadores) en el textarea `lext-team-squad-paste`,
+     extraemos los campos de cabecera y rellenamos los inputs del
+     formulario que estén VACÍOS — nunca pisamos lo que el admin
+     haya escrito a mano. Petición usuario 2026-05-09. */
+  function _applyMasterCabeceraToForm(text){
+    if(!text) return false;
+    var c = parseMasterCabecera(text);
+    if(!c || !Object.keys(c).length) return false;
+    var filled = [];
+    function _setIfEmpty(id, v){
+      if(v == null || v === '') return;
+      var el = document.getElementById(id);
+      if(!el) return;
+      var cur = String(el.value||'').trim();
+      /* Para los 4 ejes de poder + agresividad, los inputs llegan con
+         un default 75/50. Tratamos esos defaults como "vacíos" para
+         poder pisarlos al pegar. Si el admin ya editó manualmente
+         a otro valor, NO se pisa. */
+      var isDefaultPow = (id === 'lext-team-pw-glob' || id === 'lext-team-pw-atk' || id === 'lext-team-pw-mid' || id === 'lext-team-pw-def') && cur === '75';
+      var isDefaultAggr = (id === 'lext-team-aggr') && cur === '50';
+      if(cur && !isDefaultPow && !isDefaultAggr) return;
+      el.value = String(v);
+      filled.push(id);
+    }
+    _setIfEmpty('lext-team-name', c.name);
+    _setIfEmpty('lext-team-pw-glob', c.power);
+    _setIfEmpty('lext-team-pw-atk', c.atk);
+    _setIfEmpty('lext-team-pw-mid', c.mid);
+    _setIfEmpty('lext-team-pw-def', c.def);
+    _setIfEmpty('lext-team-aggr', c.aggr);
+    _setIfEmpty('lext-team-budget', c.budget);
+    _setIfEmpty('lext-team-shield', c.shield);
+    _setIfEmpty('lext-team-efootball-alias', c.alias);
+    /* Estadio: el input es <select>. Solo lo seteamos si el valor
+       coincide con alguna option existente (case-insensitive). Si no
+       coincide, dejamos el select como está y el admin elige a mano. */
+    if(c.stadium){
+      var sel = document.getElementById('lext-team-stadium');
+      if(sel && sel.options){
+        var want = c.stadium.toLowerCase().replace(/\s+/g,' ').trim();
+        for(var oi = 0; oi < sel.options.length; oi++){
+          var optTxt = String(sel.options[oi].text || '').toLowerCase().replace(/\s+/g,' ').trim();
+          var optVal = String(sel.options[oi].value || '').toLowerCase().replace(/\s+/g,' ').trim();
+          if(optTxt === want || optVal === want || optTxt.indexOf(want) === 0 || want.indexOf(optTxt) === 0){
+            sel.selectedIndex = oi;
+            filled.push('lext-team-stadium');
+            break;
+          }
+        }
+      }
+    }
+    return filled.length > 0 ? filled : false;
+  }
+
+  /* Wire-up: input listener en el textarea de paste. Solo se monta
+     una vez (idempotente vía flag). Toast breve al detectar cabecera. */
+  function _wireMasterCabeceraListener(){
+    var ta = document.getElementById('lext-team-squad-paste');
+    if(!ta || ta.__masterWired) return;
+    ta.__masterWired = true;
+    ta.addEventListener('input', function(){
+      try {
+        var filled = _applyMasterCabeceraToForm(ta.value);
+        if(filled && filled.length){
+          var msg = '✓ Cabecera detectada · ' + filled.length + ' campo' + (filled.length===1?'':'s') + ' rellenado' + (filled.length===1?'':'s');
+          _showMasterCabeceraToast(msg);
+        }
+      } catch(_){}
+    });
+  }
+  function _showMasterCabeceraToast(msg){
+    var prev = document.getElementById('lext-master-cab-toast');
+    if(prev) try { prev.remove(); } catch(_){}
+    var t = document.createElement('div');
+    t.id = 'lext-master-cab-toast';
+    t.textContent = msg;
+    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(60,200,120,.92);color:#0a1408;padding:8px 14px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;font-weight:700;z-index:1000099;box-shadow:0 4px 18px rgba(0,0,0,.45);';
+    document.body.appendChild(t);
+    setTimeout(function(){ try { t.remove(); } catch(_){} }, 2200);
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _wireMasterCabeceraListener);
+  } else {
+    _wireMasterCabeceraListener();
+  }
+  /* Re-intentar tras un pequeño delay por si el textarea aún no está
+     en el DOM cuando este IIFE corre (algunos rebuilds dinámicos). */
+  setTimeout(_wireMasterCabeceraListener, 600);
+
   function parseSquadPaste(text){
     if(!text) return [];
     var lines = String(text).split(/\r?\n/);

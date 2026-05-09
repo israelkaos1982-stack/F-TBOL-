@@ -1907,7 +1907,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="btn-action-bar" style="flex-direction:column;gap:6px;">
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
     <button class="btn-action btn-action-rst lext-btn-compact" onclick="pG(function(){window.reiniciarLigaEA&&window.reiniciarLigaEA()})"><span class="btn-action-ico">♻️</span>Res</button>
-    <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openLigaEaEditor&&window.openLigaEaEditor()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">✏️</span>Edit</button>
+    <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openLigaEaEditor&&window.openLigaEaEditor()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">🖍</span>Edit</button>
     <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openLigaEaReglas&&window.openLigaEaReglas()})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
   </div>
   <!-- Restaurar / Descargar / Importar movidos al Panel Admin (⚙️ →
@@ -2244,7 +2244,7 @@ window._showSimProgress = function(opts, onDone){
       html += '<li>SQUAD_REGISTRY (memoria sesión)</li>';
       html += '<li>ef_player_stats_v1 (stats acumuladas)</li>';
       html += '</ul>';
-      html += '<p style="margin-top:16px;">Usa <b>✏️ Edit</b> para crear el equipo o pega su plantilla.</p>';
+      html += '<p style="margin-top:16px;">Usa <b>🖍 Edit</b> para crear el equipo o pega su plantilla.</p>';
       html += '</div>';
     } else {
       var byPos = {POR:[],DEF:[],MED:[],DEL:[]};
@@ -2284,7 +2284,7 @@ window._showSimProgress = function(opts, onDone){
   };
   // Delegación: cada click sobre una fila de la clasificación de Liga
   // EA Sports abre la plantilla (overlay lext-ov-squad) del equipo
-  // correspondiente, recuperando los datos creados desde ✏️ Edit.
+  // correspondiente, recuperando los datos creados desde 🖍 Edit.
   document.addEventListener('click', function(ev){
     var t = ev.target;
     if(!t || typeof t.closest !== 'function') return;
@@ -2547,7 +2547,7 @@ window._showSimProgress = function(opts, onDone){
           'Equipos guardados (' + teams.length + '):\n' +
           teams.slice(0, 15).map(function(t){ return '• ' + (t && t.name); }).join('\n') +
           (teams.length > 15 ? '\n• …' : '') +
-          '\n\nVerifica en ✏️ Edit que el equipo se llama exactamente igual que en la clasificación.'
+          '\n\nVerifica en 🖍 Edit que el equipo se llama exactamente igual que en la clasificación.'
         );
         return;
       }
@@ -2953,7 +2953,7 @@ window._showSimProgress = function(opts, onDone){
           alert(
             '⚠️ No se han encontrado jugadores de «' + displayName + '» en ninguna fuente:\n\n' +
             diag +
-            '\nSi viste sus jugadores en simulación de ESTE mismo navegador hoy, puede que estén ahí pero no seamos capaces de localizarlos por el nombre — dime el nombre EXACTO que pone el equipo en ✏️ Edit (ej: «Athletic de Bilbao» vs «Athletic Club») y ajusto el alias.'
+            '\nSi viste sus jugadores en simulación de ESTE mismo navegador hoy, puede que estén ahí pero no seamos capaces de localizarlos por el nombre — dime el nombre EXACTO que pone el equipo en 🖍 Edit (ej: «Athletic de Bilbao» vs «Athletic Club») y ajusto el alias.'
           );
         }
 
@@ -2979,7 +2979,7 @@ window._showSimProgress = function(opts, onDone){
               posterior pisó el main con la versión vieja del server,
               la fresca sobrevive en `_protected`. Caso reportado:
               "click en Bayern desde Liga EA Sports muestra plantilla
-              de hace semanas; pulsar ✏️ Edit y volver muestra fresca".
+              de hace semanas; pulsar 🖍 Edit y volver muestra fresca".
               Esto cubre el caso base (sin esperar al fetch async). */
       try {
         var _protRaw = localStorage.getItem('ligaExt_'+slug+'_protected');
@@ -3086,7 +3086,7 @@ window._showSimProgress = function(opts, onDone){
   }, false);
 
   // ── Integración con el editor de equipos ────────────────
-  // Cuando el admin añade/edita un equipo en ✏️ Edit (CURRENT_KEY
+  // Cuando el admin añade/edita un equipo en 🖍 Edit (CURRENT_KEY
   // 'liga-ea-sports'), ese equipo se guarda en ligaExt_liga-ea-sports
   // del localStorage. La clasificación, sin embargo, la construye
   // buildLigaClas() a partir del listado hardcodeado del bundle, así
@@ -4306,7 +4306,7 @@ window._showSimProgress = function(opts, onDone){
       banner.style.border = '1px solid rgba(255,255,255,.12)';
       banner.style.color = 'rgba(255,255,255,.62)';
       if(icon) icon.textContent = '🔧';
-      if(text) text.innerHTML = 'Motor: <b>hardcodeado (20 equipos default)</b>. Pulsa ✏️ Edit para empezar a crear los tuyos.';
+      if(text) text.innerHTML = 'Motor: <b>hardcodeado (20 equipos default)</b>. Pulsa 🖍 Edit para empezar a crear los tuyos.';
     } else if(n < 20){
       banner.style.background = 'rgba(240,192,64,.08)';
       banner.style.border = '1px solid rgba(240,192,64,.4)';
@@ -5966,7 +5966,7 @@ window._showSimProgress = function(opts, onDone){
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
     <button class="btn-action btn-action-sim lext-btn-compact" onclick="pG(function(){window.simularLigaSegundaMenu&&window.simularLigaSegundaMenu()})"><span class="btn-action-ico">🎮</span>Sim</button>
     <button class="btn-action btn-action-rst lext-btn-compact" onclick="pG(function(){window.reiniciarLigaSegundaMenu&&window.reiniciarLigaSegundaMenu()})"><span class="btn-action-ico">♻️</span>Res</button>
-    <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openHypermotionEditor&&window.openHypermotionEditor()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">✏️</span>Edit</button>
+    <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openHypermotionEditor&&window.openHypermotionEditor()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">🖍</span>Edit</button>
     <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openSimpleRules&&window.openSimpleRules('hypermotion')})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
   </div>
 </div>
@@ -7809,7 +7809,7 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-competiciones">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
-<div class="sec-hdr" style="position:relative;"><span class="sec-emoji">🏅</span><h2>Competiciones</h2><button id="comp-edit-btn" onclick="window._compToggleEditMode&&window._compToggleEditMode()" title="Editar iconos (admin)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:22px;cursor:pointer;padding:4px 8px;line-height:1;opacity:.85;color:#f0c040;">✏️</button></div>
+<div class="sec-hdr" style="position:relative;"><span class="sec-emoji">🏅</span><h2>Competiciones</h2><button id="comp-edit-btn" onclick="window._compToggleEditMode&&window._compToggleEditMode()" title="Editar iconos (admin)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:22px;cursor:pointer;padding:4px 8px;line-height:1;opacity:.85;color:#f0c040;">🖍</button></div>
 <div class="submenu-list">
 <div class="submenu-card sc-ucl1" onclick="go('s-champions')">
 <img class="sc-comp-img" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" onerror="this.style.display='none'" alt="UCL"/><span class="sc-label">Champions League</span><span class="sc-arr">▶</span>
@@ -8260,7 +8260,7 @@ window._showSimProgress = function(opts, onDone){
     });
     var editBtn = document.getElementById('comp-edit-btn');
     if(editBtn){
-      editBtn.textContent = on ? '✓' : '✏️';
+      editBtn.textContent = on ? '✓' : '🖍';
       editBtn.title = on ? 'Salir del modo edición' : 'Editar iconos (admin)';
       editBtn.style.color = on ? '#3cc878' : '#f0c040';
     }
@@ -13028,7 +13028,7 @@ window._showSimProgress = function(opts, onDone){
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
     <button class="btn-action btn-action-sim lext-btn-compact" onclick="pG(function(){ligaExtSimular()})"><span class="btn-action-ico">🎮</span>Sim</button>
     <button class="btn-action btn-action-rst lext-btn-compact" onclick="pG(function(){ligaExtReiniciar()})"><span class="btn-action-ico">♻️</span>Res</button>
-    <button class="btn-action lext-btn-compact" onclick="pG(function(){ligaExtEditar()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">✏️</span>Edit</button>
+    <button class="btn-action lext-btn-compact" onclick="pG(function(){ligaExtEditar()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">🖍</span>Edit</button>
   </div>
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
     <button class="btn-action lext-btn-compact" onclick="pG(function(){ligaExtReglas()})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
@@ -13217,7 +13217,7 @@ window._showSimProgress = function(opts, onDone){
       <span>#</span><span>EQUIPO</span><span>PTS</span><span>PJ</span><span>G</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>%VIC</span>
     </div>
     <div id="lext-body">
-      <div class="lext-empty">No hay equipos. Usa ✏️ Editar para añadir clubes.</div>
+      <div class="lext-empty">No hay equipos. Usa 🖍 Editar para añadir clubes.</div>
     </div>
   </div>
 </div>
@@ -13242,7 +13242,7 @@ window._showSimProgress = function(opts, onDone){
   <img id="lec-cup-logo" alt="Logo" style="width:36px;height:36px;object-fit:contain;display:none;border-radius:8px;background:#0a0d14;padding:3px;border:1px solid rgba(240,192,64,.3);"/>
   <span id="lec-cup-flag" style="font-size:24px;">🏆</span>
   <h2 id="lec-cup-title" style="flex:1;">Copa</h2>
-  <button onclick="window.ligaExtCopa&&window.ligaExtCopa()" title="Editar nombre/logo (admin)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#f0c040;font-size:18px;cursor:pointer;padding:6px;">✏️</button>
+  <button onclick="window.ligaExtCopa&&window.ligaExtCopa()" title="Editar nombre/logo (admin)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#f0c040;font-size:18px;cursor:pointer;padding:6px;">🖍</button>
 </div>
 <div class="lec-actions">
   <button class="lec-btn lec-btn-sim" id="lec-btn-sim" onclick="window._lecCopa&&window._lecCopa.simAll()">🎮 SIM Copa</button>
@@ -13338,7 +13338,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="lext-ov" id="lext-ov-teams">
   <div class="lext-ov-box">
     <div class="lext-ov-head">
-      <div class="lext-ov-title" id="lext-ov-teams-title">✏️ Editar Equipos</div>
+      <div class="lext-ov-title" id="lext-ov-teams-title">🖍 Editar Equipos</div>
       <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-teams')">✕</button>
     </div>
     <div id="lext-teams-form">
@@ -14968,7 +14968,7 @@ Tottenham
     var body = document.getElementById('lext-body');
     if(!body) return;
     if(!data.teams.length){
-      body.innerHTML = '<div class="lext-empty">No hay equipos. Usa ✏️ Editar para añadir clubes.</div>';
+      body.innerHTML = '<div class="lext-empty">No hay equipos. Usa 🖍 Editar para añadir clubes.</div>';
       return;
     }
     var rows = standings(data);
@@ -15689,7 +15689,7 @@ Tottenham
   function ligaExtEditar(){
     if(!CURRENT_KEY) return;
     EDITING_TEAM_ID = null;
-    document.getElementById('lext-ov-teams-title').textContent = '✏️ Editar · '+CURRENT_NAME;
+    document.getElementById('lext-ov-teams-title').textContent = '🖍 Editar · '+CURRENT_NAME;
     lextClearTeamForm();
     populateStadiumsDatalist();
     renderTeamsList();
@@ -16050,7 +16050,7 @@ Tottenham
           + '<div class="lext-li-name" data-team-power="'+ls.glob+'" data-team-power-tone="'+tTone+'">'+t.name+tipoBadge+'</div>'
           + '<div class="lext-sub" style="margin:1px 0 0;">ATK '+ls.atk+' · MED '+ls.mid+' · DEF '+ls.def+(budStr?(' · '+budStr):'')+'</div>'
         +'</div>'
-        + '<button class="lext-li-btn" onclick="lextEditTeam(\''+t.id+'\')">✏️</button>'
+        + '<button class="lext-li-btn" onclick="lextEditTeam(\''+t.id+'\')">🖍</button>'
         + '<button class="lext-li-btn" onclick="lextOpenSquad(\''+t.id+'\',{editable:true})">🛡</button>'
         + '<button class="lext-li-btn" onclick="lextDeleteTeam(\''+t.id+'\')">🗑</button>'
       +'</div>';
@@ -16070,7 +16070,7 @@ Tottenham
       t = _lextFindTeamRow(data, id, null);
     }
     if(!t){
-      alert('⚠️ No encuentro este equipo en la liga actual. Prueba a recargar la página o revisa ✏️ Edit.');
+      alert('⚠️ No encuentro este equipo en la liga actual. Prueba a recargar la página o revisa 🖍 Edit.');
       return;
     }
     EDITING_TEAM_ID = t.id || id;
@@ -16413,7 +16413,7 @@ Tottenham
      dos <details> superiores (Pegar plantilla + Añadir jugador). Por
      defecto (clic desde la fila de la clasificación) la modal queda
      en modo SOLO LECTURA: solo cabecera de stats + lista de jugadores.
-     El flujo ✏️ Edit (lext-ov-edit → 🛡 botón) pasa editable=true para
+     El flujo 🖍 Edit (lext-ov-edit → 🛡 botón) pasa editable=true para
      volver a habilitar el alta/edición de jugadores individuales. */
   window.lextOpenSquad = function(idOrTeam, opts){
     opts = opts || {};
@@ -16489,7 +16489,7 @@ Tottenham
              contenía la versión vieja, NO entrábamos al if y el modal
              pintaba la plantilla vieja. Bug reportado 2026-05-08:
              "click en Bayern desde Liga EA Sports muestra plantilla
-             de hace semanas; pulsar ✏️ Edit y volver muestra fresca".
+             de hace semanas; pulsar 🖍 Edit y volver muestra fresca".
              Ahora confiamos siempre en lo que trajo el handler. */
           if (Array.isArray(t.players) && t.players.length) {
             _data.teams[_idx].players = t.players.slice();
@@ -16510,11 +16510,11 @@ Tottenham
              aunque pulse papelera". Ahora, si el nombre está en la
              blacklist `data.deletedTeamNames`, NO se re-añade y
              salimos con un aviso. El admin puede revivir el equipo
-             creándolo explícitamente desde ✏️ Edit. */
+             creándolo explícitamente desde 🖍 Edit. */
           var _normNm = _lextNormName(t.name);
           var _blk = Array.isArray(_data.deletedTeamNames) ? _data.deletedTeamNames : [];
           if (_normNm && _blk.indexOf(_normNm) >= 0) {
-            try { alert('⚠️ «'+(t.name||'?')+'» fue eliminado de esta liga. Créalo de nuevo desde ✏️ Edit si quieres recuperarlo.'); } catch(_){}
+            try { alert('⚠️ «'+(t.name||'?')+'» fue eliminado de esta liga. Créalo de nuevo desde 🖍 Edit si quieres recuperarlo.'); } catch(_){}
             return;
           }
           _data.teams.push(t);
@@ -16578,7 +16578,7 @@ Tottenham
        4-ejes auto-derivados. */
     try { _lextRenderSquadStatsHeader(t); } catch(_){}
 
-    /* Modo editable (✏️ Edit → 🛡): mostrar Pegar plantilla y Añadir
+    /* Modo editable (🖍 Edit → 🛡): mostrar Pegar plantilla y Añadir
        jugador individual. Modo lectura (clasificación): mantenerlos
        ocultos. Al volver a abrir desde el otro flujo se vuelve a
        sobrescribir, así que no quedan restos. */
@@ -16932,7 +16932,7 @@ Tottenham
             : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
             : function(s){ return String(s||'').toLowerCase(); };
     if(!CURRENT_SQUAD_TEAM) {
-      if (_dbgHost) _dbgHost.innerHTML = '<div class="lext-sub" style="text-align:center;padding:14px;color:#ff9860;">⚠️ No hay equipo activo (CURRENT_SQUAD_TEAM=null). Cierra la plantilla y vuelve a abrirla desde ✏️ Edit.</div>';
+      if (_dbgHost) _dbgHost.innerHTML = '<div class="lext-sub" style="text-align:center;padding:14px;color:#ff9860;">⚠️ No hay equipo activo (CURRENT_SQUAD_TEAM=null). Cierra la plantilla y vuelve a abrirla desde 🖍 Edit.</div>';
       return;
     }
     /* Forzamos reconstrucción de ef_player_stats_v1 desde
@@ -16980,7 +16980,7 @@ Tottenham
          problema es que no encontramos el equipo (id/nombre) o que
          el equipo está realmente vacío. */
       if (!t) {
-        host.innerHTML='<div class="lext-sub" style="text-align:center;padding:14px;color:#ff9860;">⚠️ No encuentro el equipo «'+(_fbRS||'?')+'» en ligaExt_'+String(CURRENT_KEY||'?')+' (ni por id «'+String(CURRENT_SQUAD_TEAM||'?')+'» ni por nombre).<br><br>Guárdalo desde ✏️ Edit antes de añadir plantilla.</div>';
+        host.innerHTML='<div class="lext-sub" style="text-align:center;padding:14px;color:#ff9860;">⚠️ No encuentro el equipo «'+(_fbRS||'?')+'» en ligaExt_'+String(CURRENT_KEY||'?')+' (ni por id «'+String(CURRENT_SQUAD_TEAM||'?')+'» ni por nombre).<br><br>Guárdalo desde 🖍 Edit antes de añadir plantilla.</div>';
       } else {
         host.innerHTML='<div class="lext-sub" style="text-align:center;padding:16px 8px;line-height:1.6;">— Sin jugadores —<br><span style="color:rgba(255,255,255,.55);">Usa <b>📋 Pegar plantilla completa</b> arriba para añadir toda la plantilla de una vez, o <b>➕ Añadir jugador individual</b> para ir uno por uno.</span></div>';
       }
@@ -17093,7 +17093,7 @@ Tottenham
         + cells
         + '<span class="lext-sq-actions">'
         + tog
-        + '<button class="lext-sq-mini" onclick="pG(function(){lextEditPlayer(\''+p.id+'\')})" title="Editar jugador · requiere PIN 747">✏️</button>'
+        + '<button class="lext-sq-mini" onclick="pG(function(){lextEditPlayer(\''+p.id+'\')})" title="Editar jugador · requiere PIN 747">🖍</button>'
         + '<button class="lext-sq-mini" onclick="pG(function(){lextDeletePlayer(\''+p.id+'\')})" title="Eliminar · requiere PIN 747">🗑</button>'
         + '</span>'
         + '</div>';
@@ -17228,7 +17228,7 @@ Tottenham
     } catch(_){}
     var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fallbackName);
     if(!t){
-      alert('⚠️ No encuentro este equipo en la liga actual. Abre ✏️ Edit y guárdalo antes de pegar la plantilla.');
+      alert('⚠️ No encuentro este equipo en la liga actual. Abre 🖍 Edit y guárdalo antes de pegar la plantilla.');
       return;
     }
     if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
@@ -17314,7 +17314,7 @@ Tottenham
     } catch(_){}
     var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fallbackNamePl);
     if(!t){
-      alert('⚠️ No encuentro este equipo en la liga actual. Abre ✏️ Edit y guárdalo antes de añadir jugadores.');
+      alert('⚠️ No encuentro este equipo en la liga actual. Abre 🖍 Edit y guárdalo antes de añadir jugadores.');
       return;
     }
     if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
@@ -17400,7 +17400,7 @@ Tottenham
     if(starChk)   starChk.checked   = !!target.elite;
     if(scorerChk) scorerChk.checked = !!target.natGoal;
     var sum = document.getElementById('lext-pl-summary');
-    if(sum) sum.textContent = '✏️ Editando: ' + (target.name || '?');
+    if(sum) sum.textContent = '🖍 Editando: ' + (target.name || '?');
     var btn = document.getElementById('lext-pl-save-btn');
     if(btn) btn.innerHTML = '💾 Guardar cambios';
     var cancel = document.getElementById('lext-pl-cancel-btn');
@@ -17506,7 +17506,7 @@ Tottenham
          el click en una fila de la clasificación pintaba la plantilla
          stale del localStorage cacheado y no se actualizaba hasta
          abrir/cerrar (bug 2026-05-08: "modal me sale plantilla de
-         hace semanas"). El editor ✏️ sí se veía fresco porque
+         hace semanas"). El editor 🖍 sí se veía fresco porque
          pasaba por `setXxxContext()` antes y al re-pintarse leía
          localStorage ya actualizado. */
       var ovS = document.getElementById('lext-ov-squad');
@@ -17539,7 +17539,7 @@ Tottenham
          el click en una fila de la clasificación pintaba la plantilla
          stale del localStorage cacheado y no se actualizaba hasta
          abrir/cerrar (bug 2026-05-08: "modal me sale plantilla de
-         hace semanas"). El editor ✏️ sí se veía fresco porque
+         hace semanas"). El editor 🖍 sí se veía fresco porque
          pasaba por `setXxxContext()` antes y al re-pintarse leía
          localStorage ya actualizado. */
       var ovS = document.getElementById('lext-ov-squad');
@@ -17572,7 +17572,7 @@ Tottenham
          el click en una fila de la clasificación pintaba la plantilla
          stale del localStorage cacheado y no se actualizaba hasta
          abrir/cerrar (bug 2026-05-08: "modal me sale plantilla de
-         hace semanas"). El editor ✏️ sí se veía fresco porque
+         hace semanas"). El editor 🖍 sí se veía fresco porque
          pasaba por `setXxxContext()` antes y al re-pintarse leía
          localStorage ya actualizado. */
       var ovS = document.getElementById('lext-ov-squad');
@@ -17937,7 +17937,7 @@ Tottenham
         msg += '\nEquipos guardados ('+_known.length+'):\n• ' + _known.slice(0, 20).join('\n• ');
         if (_known.length > 20) msg += '\n• …';
       } else {
-        msg += '\nEl editor de «'+CURRENT_NAME+'» está vacío. Pulsa ✏️ Edit y añade el equipo.';
+        msg += '\nEl editor de «'+CURRENT_NAME+'» está vacío. Pulsa 🖍 Edit y añade el equipo.';
       }
       alert(msg);
     });
@@ -17958,7 +17958,7 @@ Tottenham
     // los datos existen allí pero aún no se habían descargado.
     fetchData(CURRENT_KEY, function(){
       if(tryOpen()) return;
-      alert('«'+displayName+'» todavía no tiene plantilla.\n\nPulsa ✏️ Edit y crea el equipo con ese nombre (o pégale la plantilla) para ver aquí todas sus estadísticas.');
+      alert('«'+displayName+'» todavía no tiene plantilla.\n\nPulsa 🖍 Edit y crea el equipo con ese nombre (o pégale la plantilla) para ver aquí todas sus estadísticas.');
     });
   };
 
@@ -18613,7 +18613,7 @@ Tottenham
     if(!copa || copa.status === 'pending'){
       var fmt = _lecDetectFormat(data);
       if(fmt < 12){
-        body.innerHTML = '<div class="lec-empty">⚠️ Esta liga tiene <b>' + n + '</b> equipos. La copa requiere mínimo <b>12</b> equipos (formato Gibraltar). Añade más clubes desde ✏️ Editar en la pantalla de la liga.</div>';
+        body.innerHTML = '<div class="lec-empty">⚠️ Esta liga tiene <b>' + n + '</b> equipos. La copa requiere mínimo <b>12</b> equipos (formato Gibraltar). Añade más clubes desde 🖍 Editar en la pantalla de la liga.</div>';
         if(simBtn) simBtn.disabled = true;
         return;
       }
@@ -19963,7 +19963,7 @@ Tottenham
          +     (t.sub ? '<div class="ath-titulo-sub">'+esc(t.sub)+'</div>' : '')
          +   '</div>'
          +   '<button type="button" class="ath-titulo-edit" title="Editar título"'
-         +     ' onclick="window.munichTrofeosPromptEdit&&window.munichTrofeosPromptEdit(\''+esc(t.id)+'\')">✏️</button>'
+         +     ' onclick="window.munichTrofeosPromptEdit&&window.munichTrofeosPromptEdit(\''+esc(t.id)+'\')">🖍</button>'
          +   '<span class="ath-titulo-n">'+(t.count|0)+'</span>'
          + '</div>';
   }
@@ -20185,7 +20185,7 @@ Tottenham
     ov.dataset.editId   = (isEditMode && existing && existing.id) ? existing.id : '';
     /* Cambiar el título del modal según el modo. */
     var titleEl = ov.querySelector('.ta-title');
-    if (titleEl) titleEl.textContent = isEditMode ? '✏️ EDITAR TÍTULO' : '🏆 AÑADIR TÍTULO';
+    if (titleEl) titleEl.textContent = isEditMode ? '🖍 EDITAR TÍTULO' : '🏆 AÑADIR TÍTULO';
     ov.classList.add('show');
     setTimeout(function(){ if (urlInp) urlInp.focus(); }, 50);
   };
@@ -20833,7 +20833,7 @@ Tottenham
   <h2>Histórico Derbys</h2>
   <!-- 🖍 ÚNICO botón admin del Histórico Derbys (PIN 747). Pulsar:
          · 1ª vez → activa modo edit → aparecen ➕ AÑADIR TEMPORADA
-           y ✏️ EDITAR / 🗑 por fila.
+           y 🖍 EDITAR / 🗑 por fila.
          · 2ª vez → desactiva modo edit. La clase `derby-edit-on`
        va sobre el propio screen para que sea por pantalla.
        Mismo patrón que la Vitrina y el calendario Bayern. -->
@@ -20900,7 +20900,7 @@ Tottenham
    la más reciente, así "AÑADIR TEMPORADA" la coloca arriba.
 
    Edición / añadido / borrado: PIN admin 747 vía `pG()`. Una vez
-   abierta la sesión, los botones "✏️ EDITAR" y "🗑" aparecen al
+   abierta la sesión, los botones "🖍 EDITAR" y "🗑" aparecen al
    lado de cada card (CSS `body.adm-on`).
    ─────────────────────────────────────────────────────────────── */
 (function(){
@@ -20982,7 +20982,7 @@ Tottenham
       ? '<div class="derby-season-team">'+esc(t.teamName)+'</div>'
       : '<div class="derby-season-team empty">— sin asignar —</div>';
     /* Card entera clickeable para abrir el sub-screen con los partidos
-       de la temporada. Los botones ✏️ EDITAR y 🗑 paran la propagación
+       de la temporada. Los botones 🖍 EDITAR y 🗑 paran la propagación
        para no abrir el sub-screen al editarlos. Petición usuario
        2026-05-07: "una vez empecemos los partidos derbys finalizados
        se guardan para siempre en la temporada actual". */
@@ -20993,7 +20993,7 @@ Tottenham
          +     teamHtml
          +   '</div>'
          +   '<div class="derby-season-actions">'
-         +     '<button class="derby-season-btn"     onclick="event.stopPropagation();window.munichDerbysPromptEdit  && window.munichDerbysPromptEdit(\''+esc(t.id)+'\')">✏️ EDITAR</button>'
+         +     '<button class="derby-season-btn"     onclick="event.stopPropagation();window.munichDerbysPromptEdit  && window.munichDerbysPromptEdit(\''+esc(t.id)+'\')">🖍 EDITAR</button>'
          +     '<button class="derby-season-btn del" onclick="event.stopPropagation();window.munichDerbysPromptDelete && window.munichDerbysPromptDelete(\''+esc(t.id)+'\')">🗑</button>'
          +   '</div>'
          + '</div>';

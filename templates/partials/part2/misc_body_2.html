@@ -2702,7 +2702,7 @@
 <script>/* doc */</script>
 <div id="_editModal" style="display:none">
 <div id="_editModal-box">
-<div id="_editModal-title">✏️ EDITAR EVENTO</div>
+<div id="_editModal-title">🖍 EDITAR EVENTO</div>
 <label>MINUTO</label>
 <input id="_editMin" max="120" min="1" type="number" value="1"/>
 <label>TIPO</label>
@@ -3283,7 +3283,7 @@
   function saveJSON(key,val){localStorage.setItem(key,JSON.stringify(val));}
 
   function getSegundaTeams(){
-    // Si el admin ha creado equipos en el editor (✏️ Edit de Hypermotion),
+    // Si el admin ha creado equipos en el editor (🖍 Edit de Hypermotion),
     // esos REEMPLAZAN a los hardcodeados. Cuando no hay equipos en el
     // editor, se usan los DEFAULT_SEGUNDA_TEAMS de siempre.
     try {
@@ -3399,7 +3399,7 @@
       return { g1: g1, g2: g2 };
     }
 
-    /* Prioridad 1: editor ligaExt (lo que ve el usuario en ✏️ Edit). */
+    /* Prioridad 1: editor ligaExt (lo que ve el usuario en 🖍 Edit). */
     try {
       var raw = localStorage.getItem('ligaExt_liga-primera-federacion');
       if(raw){
@@ -4084,7 +4084,7 @@
     var legend='<div class="clas-legend"><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#9c3cdc"></span>🟣 Ascenso a LaLiga</span><span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso a Primera Federación</span></div>';
     renderTable('clas-segunda-content', (st.table && st.table.length) ? st.table : initialTable, legend, rowZoneClassSegunda, 'No hay equipos cargados todavía.');
     renderStats('segunda-stats-dashboard', st.players, 'Sin datos todavía');
-    // Append equipos creados en el editor ✏️ que no estén ya en la tabla
+    // Append equipos creados en el editor 🖍 que no estén ya en la tabla
     _appendLigaExtTeams('clas-segunda-content', 'liga-hypermotion');
   }
 
@@ -4228,7 +4228,7 @@
     +'<div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">'
     +'<button class="btn-action btn-action-sim lext-btn-compact" onclick="pG(function(){simularAmbosPrimera()})"><span class="btn-action-ico">🎮</span>Sim</button>'
     +'<button class="btn-action btn-action-rst lext-btn-compact" onclick="pG(function(){reiniciarAmbosPrimera()})"><span class="btn-action-ico">♻️</span>Res</button>'
-    +'<button class="btn-action lext-btn-compact" onclick="pG(function(){window.openPrimeraEditor&&window.openPrimeraEditor()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">✏️</span>Edit</button>'
+    +'<button class="btn-action lext-btn-compact" onclick="pG(function(){window.openPrimeraEditor&&window.openPrimeraEditor()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">🖍</span>Edit</button>'
     +'<button class="btn-action lext-btn-compact" onclick="pG(function(){window.openSimpleRules&&window.openSimpleRules(\'primera\')})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>'
     +'</div>'
     +'</div>'
@@ -9879,7 +9879,7 @@
           + '<span class="ml-evt-ico">' + ico + '</span>'
           + '<span class="ml-evt-name">' + (name || '') + '</span>'
           + '<span class="ml-evt-team">' + teamLabel + '</span>'
-          + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + eidEsc + '\')" title="Editar">✏️</button>'
+          + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + eidEsc + '\')" title="Editar">🖍</button>'
           + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + eidEsc + '\')" title="Eliminar">✕</button>';
         list.appendChild(li);
       }
@@ -10093,7 +10093,7 @@
       + '<span class="ml-evt-ico">' + ico + '</span>'
       + '<span class="ml-evt-name">' + gmDisplayName + '</span>'
       + '<span class="ml-evt-team">' + teamName + '</span>'
-      + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _evIdEsc + '\')" title="Editar">✏️</button>'
+      + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _evIdEsc + '\')" title="Editar">🖍</button>'
       + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _evIdEsc + '\')" title="Eliminar">✕</button>';
     var list = document.getElementById('gm-acta-list');
     list.appendChild(li);
@@ -10287,7 +10287,7 @@
             + '<span class="ml-evt-ico">' + ev.ico + '</span>'
             + '<span class="ml-evt-name">' + displayName + '</span>'
             + '<span class="ml-evt-team">' + teamLabel + '</span>'
-            + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _eidEsc + '\')" title="Editar">✏️</button>'
+            + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _eidEsc + '\')" title="Editar">🖍</button>'
             + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _eidEsc + '\')" title="Eliminar">✕</button>';
         }
       }
@@ -10460,7 +10460,7 @@
               + '<span class="ml-evt-ico">🧤</span>'
               + '<span class="ml-evt-name">Portería Imbatida — ' + ev.player + '</span>'
               + '<span class="ml-evt-team">' + (ev.team === 'a' ? _gm.home : _gm.away) + '</span>'
-              + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _imbEidEsc + '\')" title="Editar">✏️</button>'
+              + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _imbEidEsc + '\')" title="Editar">🖍</button>'
               + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _imbEidEsc + '\')" title="Eliminar">✕</button>';
             list.appendChild(li);
           }
@@ -11071,7 +11071,7 @@
                       + '<span class="ml-evt-ico">' + ico + '</span>'
                       + '<span class="ml-evt-name">' + pLabel + '</span>'
                       + '<span class="ml-evt-team">' + tName + '</span>'
-                      + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _evIdEsc3 + '\')" title="Editar">✏️</button>'
+                      + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _evIdEsc3 + '\')" title="Editar">🖍</button>'
                       + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _evIdEsc3 + '\')" title="Eliminar">✕</button>';
         actaList.appendChild(div);
       });
@@ -11402,7 +11402,7 @@
                         + '<span class="ml-evt-ico">' + ico + '</span>'
                         + '<span class="ml-evt-name">' + pLabel + '</span>'
                         + '<span class="ml-evt-team">' + tName + '</span>'
-                        + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _evIdEsc2 + '\')" title="Editar">✏️</button>'
+                        + '<button class="ml-evt-edit" onclick="window._gmOpenEditModal(\'' + _evIdEsc2 + '\')" title="Editar">🖍</button>'
                         + '<button class="ml-evt-del" onclick="window._gmDelEvt(\'' + _evIdEsc2 + '\')" title="Eliminar">✕</button>';
           _actaListEl.appendChild(li);
         });
@@ -14916,7 +14916,7 @@
           style="position:absolute;top:50%;right:14px;transform:translateY(-50%);
                  background:rgba(240,192,64,0.12);border:1px solid rgba(240,192,64,0.45);
                  color:#f0c040;font-size:18px;width:36px;height:36px;border-radius:50%;
-                 cursor:pointer;align-items:center;justify-content:center;">✏️</button>
+                 cursor:pointer;align-items:center;justify-content:center;">🖍</button>
 </div>
 
 <!-- Barra "COMPETICIONES" (solo modo Bayern). El 🖍 abre el modal con
@@ -15424,7 +15424,7 @@
       +   '<span class="ag-lbl">'  + _esc(ev.name) + '</span>'
       +   '<span class="ag-wx">'   + _esc(ev.weather) + '</span>'
       +   '<span class="ag-row-actions">'
-      +     '<button type="button" title="Editar" onclick="window.bayCalEditEvt(\'' + _esc(ev.id) + '\')">✏️</button>'
+      +     '<button type="button" title="Editar" onclick="window.bayCalEditEvt(\'' + _esc(ev.id) + '\')">🖍</button>'
       +     '<button type="button" class="ag-del" title="Eliminar" onclick="window.bayCalDelEvt(\'' + _esc(ev.id) + '\')">🗑</button>'
       +   '</span>'
       + '</div>';
@@ -15619,7 +15619,7 @@
     var ev = _eventCache[eventId];
     if (!ev) return;
     window._bayCalEditing = { mode:'edit', eventId: eventId };
-    _$id('ag-form-title').textContent = '✏️ EDITAR EVENTO (BAYERN)';
+    _$id('ag-form-title').textContent = '🖍 EDITAR EVENTO (BAYERN)';
     _$id('ag-f-date').value    = ev.date    || '';
     _$id('ag-f-icon').value    = ev.icon    || '⚽';
     _$id('ag-f-name').value    = ev.name    || '';
@@ -15869,7 +15869,7 @@
       + '<span class="ag-wx">'   + escHtml(event.weather) + '</span>'
       + '<span class="ag-row-actions">'
       +   '<button type="button" title="Editar"'
-      +   ' onclick="window.agEditEvt(\'' + event.id + '\')">✏️</button>'
+      +   ' onclick="window.agEditEvt(\'' + event.id + '\')">🖍</button>'
       +   '<button type="button" class="ag-del" title="Eliminar"'
       +   ' onclick="window.agDelEvt(\'' + event.id + '\')">🗑</button>'
       + '</span>';
@@ -15899,7 +15899,7 @@
       wrap.className = 'ag-row-actions';
       wrap.innerHTML =
         '<button type="button" title="Editar"'+
-        ' onclick="window.agEditEvt(\''+evId+'\')">✏️</button>'+
+        ' onclick="window.agEditEvt(\''+evId+'\')">🖍</button>'+
         '<button type="button" class="ag-del" title="Eliminar"'+
         ' onclick="window.agDelEvt(\''+evId+'\')">🗑</button>';
       r.appendChild(wrap);
@@ -15925,7 +15925,7 @@
     var name = (row.querySelector('.ag-lbl')||{}).textContent  || '';
     var wx   = (row.querySelector('.ag-wx')||{}).textContent   || '';
     _form = { mode:'edit', sectionId:null, eventId:eventId };
-    $('ag-form-title').textContent = '✏️ EDITAR EVENTO';
+    $('ag-form-title').textContent = '🖍 EDITAR EVENTO';
     $('ag-f-date').value = date.trim();
     $('ag-f-icon').value = icon.trim() || '⚽';
     $('ag-f-name').value = name.trim();

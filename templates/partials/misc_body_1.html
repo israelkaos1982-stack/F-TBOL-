@@ -8760,30 +8760,52 @@ window._showSimProgress = function(opts, onDone){
   var TOUR_IDS = ['sct','pss','jg','asia'];
 
   var DEFAULTS = {
+    /* 1️⃣ Soccer Champions Tour — KO desde 1/64 hasta final.
+       128 equipos (la primera ronda son 64 emparejamientos = "1/64"),
+       7 partidos máximos para el campeón. */
     sct:  { name:'Soccer Champions Tour', flag:'🇺🇸', fee:40, dateStart:'1 Jul', dateEnd:'10 Jul',
-            numTeams:16, numHumans:16, aiLevelMin:70, aiLevelMax:95,
-            format:'ko', formatConfig:{ rounds:['R16','QF','SF','F'], twoLegs:false },
-            prizes:{ r16:20, qf:40, sf:60, sub:80, champ:100 }, teams:[] },
+            numTeams:128, numHumans:128, aiLevelMin:55, aiLevelMax:88,
+            format:'ko', formatConfig:{ rounds:['1/64','1/32','1/16','Octavos','Cuartos','Semis','Final'], twoLegs:false },
+            prizes:{ r128:10, r64:30, r32:60, r16:110, qf:190, sf:310, sub:370, champ:490 }, teams:[] },
+    /* 2️⃣ Premier Summer Series — KO 16 equipos. Octavos, Cuartos
+       y Semis a IDA Y VUELTA; Final a partido único.
+       7 partidos máximos para el campeón (2+2+2+1). */
     pss:  { name:'Premier Summer Series', flag:'🇬🇧', fee:40, dateStart:'12 Jul', dateEnd:'24 Jul',
-            numTeams:6, numHumans:6, aiLevelMin:70, aiLevelMax:95,
-            format:'league', formatConfig:{ twoLegs:false },
-            prizes:{ '6th':15, '5th':25, '4th':40, '3rd':60, sub:80, champ:100 }, teams:[] },
+            numTeams:16, numHumans:16, aiLevelMin:64, aiLevelMax:82,
+            format:'ko-2leg', formatConfig:{ rounds:['Octavos','Cuartos','Semis','Final'], awayGoalsX2:true, singleLegLastRound:true },
+            prizes:{ r16:50, qf:120, sf:220, sub:270, champ:370 }, teams:[] },
+    /* 3️⃣ Trofeo Joan Gamper — Liguilla a 1 vuelta, 8 equipos.
+       7 partidos por equipo. Premio por partido + bonus por posición
+       final. */
     jg:   { name:'Trofeo Joan Gamper', flag:'🇪🇸', fee:40, dateStart:'24 Jul', dateEnd:'1 Ago',
-            numTeams:8, numHumans:8, aiLevelMin:70, aiLevelMax:95,
-            format:'groups-ko', formatConfig:{ groups:2, perGroup:4, koRounds:['SF','F'] },
-            prizes:{ qg:20, tg:40, semis:60, sub:80, champ:100 }, teams:[] },
+            numTeams:8, numHumans:8, aiLevelMin:69, aiLevelMax:78,
+            format:'league', formatConfig:{ twoLegs:false },
+            prizes:{ perWin:10, perDraw:5, perLoss:0,
+                     pos1:200, pos2:100, pos3:70, pos4:50, pos5:30, pos6:20, pos7:10, pos8:0 }, teams:[] },
+    /* 4️⃣ Asian Tournament — 4 grupos de 5 equipos a 1 vuelta
+       (4 partidos por equipo en grupos) + Cuartos, Semis, Final a
+       muerte súbita. Top 2 de cada grupo (8 → cuartos).
+       7 partidos máximos para el campeón perfecto (4+1+1+1). */
     asia: { name:'Asian Tournament', flag:'🇯🇵', fee:40, dateStart:'14 Jun', dateEnd:'17 Jun',
-            numTeams:4, numHumans:4, aiLevelMin:70, aiLevelMax:95,
-            format:'ko', formatConfig:{ rounds:['SF','F'], twoLegs:false },
-            prizes:{ sf:40, sub:80, champ:100 }, teams:[] }
+            numTeams:20, numHumans:20, aiLevelMin:60, aiLevelMax:85,
+            format:'groups-ko', formatConfig:{ groups:4, perGroup:5, advancePerGroup:2,
+                                                koRounds:['Cuartos','Semis','Final'] },
+            prizes:{ perWin:15, perDraw:5, perLoss:0,
+                     advCuartos:40, advSemis:60, advFinal:80, sub:50, champ:150 }, teams:[] }
   };
   window._TOUR_DEFAULTS = DEFAULTS;
 
   var PRIZE_LABELS = {
-    r16:'Octavos', qf:'Cuartos', sf:'Semis', semis:'Semis',
+    r128:'Eliminado en 1/64', r64:'Eliminado en 1/32', r32:'Eliminado en 1/16',
+    r16:'Eliminado en Octavos', qf:'Eliminado en Cuartos',
+    sf:'Eliminado en Semis', semis:'Eliminado en Semis',
     sub:'Subcampeón', champ:'Campeón',
     '6th':'Sexto', '5th':'Quinto', '4th':'Cuarto', '3rd':'Tercero',
-    qg:'Cuartos de Grupo', tg:'Tercero de Grupo'
+    qg:'Cuartos de Grupo', tg:'Tercero de Grupo',
+    perWin:'Por victoria', perDraw:'Por empate', perLoss:'Por derrota',
+    pos1:'1º (Campeón)', pos2:'2º (Subcampeón)', pos3:'3º', pos4:'4º',
+    pos5:'5º', pos6:'6º', pos7:'7º', pos8:'8º',
+    advCuartos:'Pasar a Cuartos', advSemis:'Pasar a Semis', advFinal:'Pasar a Final'
   };
   var FORMAT_LABELS = {
     ko:'Eliminatoria a un partido',
@@ -9641,8 +9663,13 @@ window._showSimProgress = function(opts, onDone){
     if (!teamA || !teamB) return null;
     var simFn = (typeof window.simulateMatch === 'function') ? window.simulateMatch : null;
     if (!simFn) return null;
-    var legA, legB;
-    if (cfg.format === 'ko-2leg') {
+    /* PSS: la última ronda (Final) en `ko-2leg` es a partido único
+       si `cfg.formatConfig.singleLegLastRound` está activo. */
+    var fc = cfg.formatConfig || {};
+    var totalRounds = (fc.rounds && fc.rounds.length) || 0;
+    var isLastRound = (totalRounds > 0 && roundIdx === (totalRounds - 1));
+    var useSingleLeg = (cfg.format !== 'ko-2leg') || (isLastRound && fc.singleLegLastRound);
+    if (!useSingleLeg) {
       /* Ida en casa de A, vuelta en casa de B. Sumamos goles totales;
          si empate, gol fuera de B (en la ida) cuenta x2 si activo. */
       var leg1 = simFn(teamA, teamB);   /* A local */
@@ -9666,7 +9693,9 @@ window._showSimProgress = function(opts, onDone){
       return { a: totalA, b: totalB, winner: winner, played: true,
                legs:[{a:leg1.gh,b:leg1.ga},{a:leg2.gh,b:leg2.ga}] };
     }
-    /* Single leg. Random toss para decidir local. */
+    /* Single leg (formato `ko` SIEMPRE, o `ko-2leg` con final
+       single-leg activado en la última ronda). Random toss para decidir
+       local. */
     var aHome = (Math.random() < 0.5);
     var r = aHome ? simFn(teamA, teamB) : simFn(teamB, teamA);
     var ga = aHome ? r.gh : r.ga;

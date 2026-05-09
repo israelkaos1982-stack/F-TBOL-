@@ -8783,6 +8783,29 @@ window._showSimProgress = function(opts, onDone){
   function _key(id){ return 'tour_' + id + '_v1'; }
   function _cloneDefault(id){ return JSON.parse(JSON.stringify(DEFAULTS[id] || {})); }
 
+  /* Lectura SINCRÓNICA del torneo desde memoria → localStorage →
+     defaults. NO toca el servidor — para usar cuando queremos
+     pintar/abrir el editor sin esperar (petición usuario 2026-05-08:
+     "tarda más de 7 s en mergear / 10 s en abrir el editor"). El
+     fetch al servidor lo hace `_tourLoad` en paralelo y refresca
+     después. */
+  function _tourLoadCachedSync(id){
+    if (TOUR_IDS.indexOf(id) === -1) return null;
+    try {
+      window._TOUR_CACHE = window._TOUR_CACHE || {};
+      if (window._TOUR_CACHE[id]) return window._TOUR_CACHE[id];
+    } catch(_){}
+    try {
+      var raw = localStorage.getItem(_key(id));
+      if (raw) {
+        var cfg = _migrateCfg(JSON.parse(raw));
+        try { window._TOUR_CACHE[id] = cfg; } catch(_){}
+        return cfg;
+      }
+    } catch(_){}
+    return null;
+  }
+
   /* ── Persistencia ──────────────────────────────────────── */
   window._tourLoad = async function(id){
     if (TOUR_IDS.indexOf(id) === -1) return null;
@@ -8793,6 +8816,7 @@ window._showSimProgress = function(opts, onDone){
         if (j && j.ok && j.value) {
           var cfg = _migrateCfg(j.value);
           try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
+          try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = cfg; } catch(_){}
           return cfg;
         }
       }
@@ -9128,14 +9152,36 @@ window._showSimProgress = function(opts, onDone){
   }
 
   /* ── Apertura / cierre ─────────────────────────────────── */
-  async function _doOpen(id){
-    var saved = await window._tourLoad(id);
-    var cfg = saved || _cloneDefault(id);
+  /* Apertura INSTANTÁNEA del editor (petición usuario 2026-05-08:
+     "tarda más de 10 segundos en abrirse"). Antes hacía
+     `await _tourLoad` que esperaba el fetch al servidor antes de
+     abrir el overlay. Ahora abrimos con cache + localStorage al
+     primer click y refrescamos en segundo plano si el server
+     devuelve algo más nuevo. */
+  function _doOpen(id){
+    /* Guard contra re-entrada: si el usuario tap-tap rápido, no
+       reabrimos. */
+    if (_open && _open.id === id) return;
+    var cached = _tourLoadCachedSync(id);
+    var cfg = cached || _cloneDefault(id);
     _open = { id: id, cfg: cfg };
     document.getElementById('tour-editor-title').textContent = 'EDITAR · ' + (cfg.name || id).toUpperCase();
     _populateForm(cfg);
     _setFeedback('');
     document.getElementById('tour-editor-overlay').style.display = 'flex';
+    /* Refresco en segundo plano: si el server tiene una versión más
+       reciente y el usuario aún no ha tocado el formulario, repinta. */
+    try {
+      window._tourLoad(id).then(function(serverCfg){
+        if (!serverCfg || !_open || _open.id !== id) return;
+        var sUpd = serverCfg.updatedAt || '';
+        var lUpd = (cached && cached.updatedAt) || '';
+        if (sUpd && sUpd > lUpd) {
+          _open.cfg = serverCfg;
+          _populateForm(serverCfg);
+        }
+      }).catch(function(){});
+    } catch(_){}
   }
 
   window._tourOpenEditor = function(id){
@@ -9232,12 +9278,13 @@ window._showSimProgress = function(opts, onDone){
        - KO         → emparejamientos de la 1ª ronda.
        - Liga       → lista plana de equipos.
        - Grupos+KO  → equipos repartidos por grupos A, B, C…
-     La info de fechas/fee/formato/premios queda en el modal ℹ. */
-  window._tourRender = async function(id){
-    if (TOUR_IDS.indexOf(id) === -1) return;
-    var cfg = await window._tourLoad(id);
-    if (!cfg) cfg = _cloneDefault(id);
-    window._TOUR_CACHE[id] = cfg;
+     La info de fechas/fee/formato/premios queda en el modal ℹ.
+     Cache-first (petición usuario 2026-05-08: "tarda más de 7 s en
+     mergear"). Antes hacía `await _tourLoad` que esperaba el fetch
+     al servidor antes de pintar nada. Ahora pintamos con la cache
+     local INSTANTÁNEAMENTE y refrescamos en bg si el server tiene
+     una versión más nueva. */
+  function _paintTourScreen(id, cfg){
     var titleEl = document.getElementById('tour-title-'+id);
     var flagEl  = document.getElementById('tour-flag-'+id);
     var infoEl  = document.getElementById('tour-info-'+id);
@@ -9293,6 +9340,30 @@ window._showSimProgress = function(opts, onDone){
     } else {
       infoEl.innerHTML = '';
     }
+  }
+
+  /* Wrapper público: pinta INMEDIATAMENTE con cache + lanza fetch
+     async para refrescar si el server tiene algo más nuevo. */
+  window._tourRender = function(id){
+    if (TOUR_IDS.indexOf(id) === -1) return;
+    var cached = _tourLoadCachedSync(id) || _cloneDefault(id);
+    window._TOUR_CACHE = window._TOUR_CACHE || {};
+    window._TOUR_CACHE[id] = cached;
+    /* Pintado instantáneo. */
+    try { _paintTourScreen(id, cached); } catch(_){}
+    /* Refresco en bg: si el server devuelve algo más nuevo,
+       repintamos sin bloquear la UI. */
+    try {
+      window._tourLoad(id).then(function(srv){
+        if (!srv) return;
+        var sUpd = srv.updatedAt || '';
+        var lUpd = (cached && cached.updatedAt) || '';
+        if (sUpd && sUpd > lUpd) {
+          window._TOUR_CACHE[id] = srv;
+          try { _paintTourScreen(id, srv); } catch(_){}
+        }
+      }).catch(function(){});
+    } catch(_){}
   };
 
   /* ── Wire-up del overlay (1 sola vez por carga de página) */

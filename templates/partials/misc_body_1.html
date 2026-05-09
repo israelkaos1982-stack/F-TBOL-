@@ -13131,6 +13131,18 @@ window._showSimProgress = function(opts, onDone){
   }
   function _collectDuplicates(){
     var seen = Object.create(null);
+    /* Normalizador (2026-05-08, mejorado): el usuario reportó muchos
+       duplicados con prefijos distintos ("Eibar" vs "SD Eibar",
+       "Marbella" vs "Marbella FC"). Antes comparábamos
+       `name.toLowerCase().trim()` que NO los unía. Ahora usamos
+       `window._aliasNormName` (definido en la zona de
+       ligaExt-editor) que strippea AD, CF, CD, UD, RC, RCD, SD, SC,
+       AC, AS, FC, RFC, SSC, ASS, SAD, CP, CE, PD, EC tanto al
+       inicio como al final del nombre. Así "SD Eibar" y "Eibar"
+       caen en la misma key "eibar" y se ven como duplicados. */
+    var nrm = (typeof window._aliasNormName === 'function')
+      ? window._aliasNormName
+      : function(s){ return String(s||'').toLowerCase().trim(); };
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var key = localStorage.key(i);
@@ -13149,9 +13161,11 @@ window._showSimProgress = function(opts, onDone){
           if (!t || !t.name) return;
           var clean = String(t.name).trim();
           if (!clean) return;
-          var k = clean.toLowerCase();
+          var k = nrm(clean);
+          if (!k) return;
           var pw = (typeof t.power === 'number') ? t.power : (typeof t.media === 'number' ? t.media : 0);
           var copy = {
+            name: clean, /* nombre real almacenado en este slug */
             slug: slug,
             label: label,
             players: (Array.isArray(t.players) ? t.players.length : 0),
@@ -13160,14 +13174,21 @@ window._showSimProgress = function(opts, onDone){
             isHuman: !!t.isHuman,
             shield: t.shield || ''
           };
-          if (!seen[k]) seen[k] = { name: clean, copies: [] };
+          if (!seen[k]) seen[k] = { key: k, copies: [], allNames: [] };
           seen[k].copies.push(copy);
+          if (seen[k].allNames.indexOf(clean) === -1) seen[k].allNames.push(clean);
         });
       }
     } catch(_){}
     var dups = [];
     for (var k2 in seen) {
-      if (seen[k2].copies.length >= 2) dups.push(seen[k2]);
+      if (seen[k2].copies.length >= 2) {
+        /* Conservamos el nombre "principal" como el primero que vimos
+           para retro-compatibilidad. La UI muestra `allNames` con
+           todas las variantes ("Eibar / SD Eibar"). */
+        seen[k2].name = seen[k2].allNames[0] || seen[k2].copies[0].name;
+        dups.push(seen[k2]);
+      }
     }
     /* Orden: más copias primero, luego alfabético. */
     dups.sort(function(a,b){
@@ -13177,7 +13198,7 @@ window._showSimProgress = function(opts, onDone){
     return dups;
   }
 
-  function _renderAuditCopy(c, isCanonical){
+  function _renderAuditCopy(c, isCanonical, showActualName){
     var statsBits = [];
     statsBits.push(c.players + ' jug');
     if (c.power) statsBits.push('GLOB ' + c.power);
@@ -13185,8 +13206,10 @@ window._showSimProgress = function(opts, onDone){
       statsBits.push('A' + (c.atk||0) + '/M' + (c.mid||0) + '/D' + (c.def||0));
     }
     if (c.isHuman) statsBits.push('👤');
+    var nameLine = showActualName ? '<div class="audit-copy-name">«' + escapeHtmlAudit(c.name) + '»</div>' : '';
     return '<div class="audit-copy' + (isCanonical ? ' is-canonical' : '') + '">'
       +   '<div class="audit-copy-liga">' + (isCanonical ? '★ ' : '') + escapeHtmlAudit(c.label) + ' <span class="audit-copy-slug">(' + escapeHtmlAudit(c.slug) + ')</span></div>'
+      +   nameLine
       +   '<div class="audit-copy-meta">' + statsBits.join(' · ') + '</div>'
       + '</div>';
   }
@@ -13232,7 +13255,11 @@ window._showSimProgress = function(opts, onDone){
      {removed, errors, slugsTouched}. NO confirma — espera que el caller
      ya haya pasado un PIN + confirmación. */
   function _executeCleanup(dups){
-    /* 1. Plan: mapa slug → set de nombres a quitar de ese slug. */
+    /* 1. Plan: mapa slug → set de NOMBRES REALES a quitar de ese
+       slug. Usamos `c.name` (no `t.name`) porque la copia puede
+       estar guardada con un nombre distinto al del grupo
+       (p.ej. group "Eibar" pero la copia en Liga EA es "SD Eibar"
+       — necesitamos borrar EXACTAMENTE "SD Eibar" en esa liga). */
     var plan = {};
     var totalRemove = 0;
     dups.forEach(function(t){
@@ -13240,7 +13267,7 @@ window._showSimProgress = function(opts, onDone){
       t.copies.forEach(function(c, i){
         if (i === canonicalIdx) return;
         if (!plan[c.slug]) plan[c.slug] = [];
-        plan[c.slug].push(t.name);
+        plan[c.slug].push(c.name);
         totalRemove++;
       });
     });
@@ -13371,9 +13398,15 @@ window._showSimProgress = function(opts, onDone){
     } else {
       list.innerHTML = dups.map(function(t){
         var canonicalIdx = _pickCanonicalIdx(t.copies);
-        var rows = t.copies.map(function(c, i){ return _renderAuditCopy(c, i === canonicalIdx); }).join('');
+        /* Si las copias usan distintos nombres (p.ej. "Eibar" en
+           Liga EA y "SD Eibar" en Hypermotion), mostramos el nombre
+           literal de cada copia bajo su liga para que el admin vea
+           qué se va a borrar en cada caso. */
+        var hasVariants = t.allNames && t.allNames.length > 1;
+        var rows = t.copies.map(function(c, i){ return _renderAuditCopy(c, i === canonicalIdx, hasVariants); }).join('');
+        var displayName = hasVariants ? t.allNames.join(' / ') : t.name;
         return '<div class="audit-row">'
-          +    '<div class="audit-row-name">' + escapeHtmlAudit(t.name)
+          +    '<div class="audit-row-name">' + escapeHtmlAudit(displayName)
           +      ' <span class="audit-row-count">en ' + t.copies.length + ' ligas</span>'
           +    '</div>'
           +    '<div class="audit-row-copies">' + rows + '</div>'
@@ -13425,6 +13458,7 @@ window._showSimProgress = function(opts, onDone){
 #restoligas-audit-ov .audit-copy-liga{font-size:12px;font-weight:700;color:#fff;}
 #restoligas-audit-ov .audit-copy.is-canonical .audit-copy-liga{color:#9ee5a9;}
 #restoligas-audit-ov .audit-copy-slug{font-size:10px;color:rgba(255,255,255,.40);font-weight:400;letter-spacing:.4px;}
+#restoligas-audit-ov .audit-copy-name{font-size:11px;color:rgba(255,213,170,.85);margin-top:1px;font-style:italic;letter-spacing:.2px;}
 #restoligas-audit-ov .audit-copy-meta{font-size:11px;color:rgba(255,255,255,.55);margin-top:2px;letter-spacing:.3px;}
 </style>
 

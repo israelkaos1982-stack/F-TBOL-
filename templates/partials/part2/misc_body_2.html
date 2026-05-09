@@ -8367,8 +8367,17 @@
       });
     }
     var lines = [];
-    lines.push('🏆 ' + compLabel);
-    lines.push('⚽ ' + home + ' vs ' + away);
+    /* Cabecera nueva (2026-05-09): 📅 fecha + icono comp + label + ronda
+       + "home vs away" + 🟢 INICIO. Reusa _waBuildHeaderLines para
+       cuadrar con descanso/final/prórroga/penaltis. */
+    var _ppCompKey = window._ppCompKey || 'liga';
+    _waBuildHeaderLines({
+      comp: _ppCompKey, j: jornada,
+      copaRonda: window._ppCopaRonda, copaVuelta: window._ppCopaVuelta,
+      home: home, away: away,
+      scA: null, scB: null, /* sin marcador → se renderiza "vs" */
+      eventType: 'kickoff'
+    }).forEach(function(l){ lines.push(l); });
     if (humanTeam) {
       lines.push('');
       if (bajaLines.length) {
@@ -8383,7 +8392,8 @@
       lines.push('');
       lines.push('📺 En directo: https://twitch.tv/' + twitch);
     }
-    try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
+    /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
+    _waShareToGroup(lines.join('\n'));
   };
 
   // Compartir marcador en el DESCANSO (45 min) de partidos genéricos
@@ -8584,7 +8594,9 @@
   /* Construye el bloque de cabecera (líneas pre-acta) según las nuevas
      reglas. Devuelve un array de líneas; el caller añade lo demás. */
   function _waBuildHeaderLines(opts) {
-    /* opts: {comp, j, copaRonda, copaVuelta, home, away, scA, scB, eventType} */
+    /* opts: {comp, j, copaRonda, copaVuelta, home, away, scA, scB, eventType}
+       Si scA y scB son null/undefined → línea de marcador queda como
+       "[home] vs [away]" (caso INICIO de partido, no hay score aún). */
     var meta = _waCompMeta(opts);
     var lines = [];
     var date = _waCalDate(meta, opts.j);
@@ -8593,7 +8605,12 @@
     if (meta.round) compLine += ' - ' + meta.round;
     lines.push(compLine);
     lines.push('');
-    lines.push((opts.home||'?') + ' ' + (opts.scA != null ? opts.scA : 0) + ' - ' + (opts.scB != null ? opts.scB : 0) + ' ' + (opts.away||'?'));
+    var hasScore = (opts.scA != null) || (opts.scB != null);
+    if (hasScore) {
+      lines.push((opts.home||'?') + ' ' + (opts.scA != null ? opts.scA : 0) + ' - ' + (opts.scB != null ? opts.scB : 0) + ' ' + (opts.away||'?'));
+    } else {
+      lines.push((opts.home||'?') + ' vs ' + (opts.away||'?'));
+    }
     var evLine = _waEventLine(opts.eventType);
     if (evLine) lines.push(evLine);
     return lines;
@@ -8604,6 +8621,53 @@
     window._waEventLine       = _waEventLine;
     window._waCalDate         = _waCalDate;
     window._waBuildHeaderLines = _waBuildHeaderLines;
+  } catch(_){}
+
+  /* ════════════════════════════════════════════════════════════════
+     ENVÍO ÚNICO AL GRUPO DE WHATSAPP (2026-05-09)
+     ════════════════════════════════════════════════════════════════
+     Petición usuario: TODOS los share (inicio · descanso · final ·
+     prórroga · penaltis) van al MISMO grupo de WhatsApp:
+       https://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX
+     Como WhatsApp no acepta `?text=` con un enlace de grupo (solo
+     `wa.me/<phone>?text=`), copiamos el texto al portapapeles y
+     abrimos el grupo en pestaña nueva. El usuario pega (Ctrl+V) y
+     envía. Mismo flujo que ya usaba `_gmShareFinal`, ahora reusable
+     para cualquier momento del partido. */
+  var _WA_GROUP_URL = 'https://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX';
+  function _waShareToGroup(text) {
+    /* 0. Si hay un Twitch seleccionado para la previa, auto-append
+       del sufijo "— Visto en el Twitch de <streamer>" — antes lo
+       interceptaba un wrap de window.open en el bundle, pero ahora
+       la URL ya no es wa.me/?text= sino chat.whatsapp.com/<token>
+       (el texto va por clipboard). */
+    try {
+      var _twitch = window._ppSelectedTwitch;
+      if (_twitch && String(text).indexOf('Twitch de ' + _twitch) === -1) {
+        text = text + '\n\n📺 Visto en el Twitch de ' + _twitch;
+      }
+    } catch(_){}
+    /* 1. Copiar al portapapeles (best-effort en ambas APIs). */
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).catch(function(){});
+      } else {
+        var _ta = document.createElement('textarea');
+        _ta.value = text;
+        _ta.style.position = 'fixed';
+        _ta.style.opacity = '0';
+        document.body.appendChild(_ta);
+        _ta.select();
+        try { document.execCommand('copy'); } catch(_){}
+        document.body.removeChild(_ta);
+      }
+    } catch(_){}
+    /* 2. Abrir el grupo en pestaña nueva. */
+    try { window.open(_WA_GROUP_URL, '_blank'); } catch(_){}
+  }
+  try {
+    window._WA_GROUP_URL  = _WA_GROUP_URL;
+    window._waShareToGroup = _waShareToGroup;
   } catch(_){}
 
   /* Build the standard WA message and open WhatsApp */
@@ -8698,7 +8762,9 @@
         lines.push(va + d.sfx + '  ' + d.lbl + '  ' + vb + d.sfx);
       });
     }
-    try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
+    /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09).
+       _waShareToGroup copia al portapapeles y abre el chat de grupo. */
+    _waShareToGroup(lines.join('\n'));
   }
 
   /* Entrada al descanso compartida por la ruta manual (botón
@@ -8866,7 +8932,8 @@
       var tName = e.team === 'a' ? _gm.home : _gm.away;
       lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + _abbr1(tName) + ')');
     });
-    try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
+    /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
+    _waShareToGroup(lines.join('\n'));
     _gm.htShared = true;
     var continueBtn = document.getElementById('gm-ht-continue-btn');
     if (continueBtn) continueBtn.style.display = '';
@@ -9066,29 +9133,11 @@
       lines.push('');
       lines.push('⭐ MVP: ' + (mvpEvt.player || mvpEvt.name || ''));
     }
-    /* Petición usuario 2026-05-06: el share del partido finalizado
-       SIEMPRE va al grupo de WhatsApp del juego, no a "elegir
-       contacto". Como WhatsApp no acepta texto pre-rellenado en un
-       enlace de grupo (chat.whatsapp.com/<token>), copiamos el acta
-       al portapapeles antes de abrir la pestaña — así el usuario
-       solo tiene que pegar (Ctrl+V) y enviar. */
-    var _fullText = lines.join('\n');
-    var _grpUrl = 'https://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX';
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(_fullText).catch(function(){});
-      } else {
-        var _ta = document.createElement('textarea');
-        _ta.value = _fullText;
-        _ta.style.position = 'fixed';
-        _ta.style.opacity = '0';
-        document.body.appendChild(_ta);
-        _ta.select();
-        try { document.execCommand('copy'); } catch(_){}
-        document.body.removeChild(_ta);
-      }
-    } catch(_){}
-    try { window.open(_grpUrl, '_blank'); } catch(_){}
+    /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09).
+       El helper compartido `_waShareToGroup` copia al portapapeles
+       y abre el chat de grupo (mismo flujo que tenía hardcodeado
+       aquí desde 2026-05-06, ahora unificado). */
+    _waShareToGroup(lines.join('\n'));
     _gm.finalShared = true;
     var shareBtn2 = document.getElementById('gm-fin-share-btn');
     if (shareBtn2) {
@@ -9715,7 +9764,8 @@
       var tName = e.team === 'a' ? _gm.home : _gm.away;
       lines.push(e.min + "' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + _abbr(tName) + ')');
     });
-    try { window.open('https://wa.me/?text=' + encodeURIComponent(lines.join('\n')), '_blank'); } catch(_){}
+    /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
+    _waShareToGroup(lines.join('\n'));
     _gm.htpShared = true;
   };
 
@@ -11312,8 +11362,9 @@
   window.gmShareWhatsApp = function(){
     var msg = '¡Mira el resultado de mi partido: '
       + _gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away + '!';
-    var url = 'https://wa.me/?text=' + encodeURIComponent(msg);
-    try { window.open(url, '_blank'); } catch(e) {}
+    /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
+    if (typeof _waShareToGroup === 'function') _waShareToGroup(msg);
+    else { try { window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank'); } catch(e) {} }
   };
 
   /* ── BACKGROUND MATCH STORE (multi-live gm-modal) ────────────────

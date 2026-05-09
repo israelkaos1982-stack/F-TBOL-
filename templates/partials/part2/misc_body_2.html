@@ -20771,14 +20771,30 @@ document.addEventListener('DOMContentLoaded', function() {
     return seed;
   }
   function _saveBallInventory(arr){
-    try { localStorage.setItem(_BALL_INV_KEY, JSON.stringify(arr)); } catch(_){}
+    /* Detecta fallo de quota/permission y avisa. Antes el setItem
+       fallaba en silencio si el localStorage estaba lleno → la UI
+       re-renderizaba leyendo del storage viejo y la entrada nueva
+       "se borraba". Bug FOTO 4 reportado 2026-05-09. */
+    try {
+      localStorage.setItem(_BALL_INV_KEY, JSON.stringify(arr));
+      return true;
+    } catch(e) {
+      try { alert('⚠ No se pudo guardar el inventario de balones.\nMotivo: ' + (e && e.message || 'error desconocido') + '\n(Quizá no queda espacio. Resetea torneos viejos para liberar localStorage.)'); } catch(_){}
+      return false;
+    }
   }
   function _loadBallOverride(){
     try { var raw = localStorage.getItem(_BALL_OVERRIDE_KEY); if (raw) return JSON.parse(raw)||{}; } catch(_){}
     return {};
   }
   function _saveBallOverride(map){
-    try { localStorage.setItem(_BALL_OVERRIDE_KEY, JSON.stringify(map||{})); } catch(_){}
+    try {
+      localStorage.setItem(_BALL_OVERRIDE_KEY, JSON.stringify(map||{}));
+      return true;
+    } catch(e) {
+      try { alert('⚠ No se pudo guardar el balón por competición.\n' + (e && e.message || '')); } catch(_){}
+      return false;
+    }
   }
 
   window.adminBallSetForComp = function(compKey, ballId){
@@ -20788,15 +20804,49 @@ document.addEventListener('DOMContentLoaded', function() {
     _saveBallOverride(ov);
   };
   window.adminBallAdd = function(){
-    var name = window.prompt('Nuevo balón (ID exacto, formato Nombre_Con_Guiones_Bajos):');
-    if (!name) return;
-    name = String(name).trim().replace(/\s+/g,'_');
-    if (!name) return;
-    var inv = _loadBallInventory();
-    if (inv.indexOf(name) !== -1) { alert('Ese balón ya está en el inventario.'); return; }
-    inv.push(name);
-    _saveBallInventory(inv);
-    window.adminRenderBalls();
+    /* Modal en lugar de window.prompt(): el prompt nativo se bloquea
+       o se cancela en algunos navegadores móviles (Chrome con
+       "block-prompts" activo, Safari iOS dentro de PWA), devolviendo
+       null en silencio → el balón "se borraba" sin avisar. El modal
+       garantiza que el input siempre se muestre. Bug FOTO 4. */
+    var ovId = 'ball-add-ov';
+    var prev = document.getElementById(ovId);
+    if (prev) prev.remove();
+    var ov = document.createElement('div');
+    ov.id = ovId;
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.innerHTML = ''
+      + '<div style="background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(60,200,120,.45);border-radius:14px;padding:18px 18px 14px;width:100%;max-width:400px;color:#e8f0ff;font-family:Rajdhani,sans-serif;box-shadow:0 0 30px rgba(60,200,120,.20);">'
+      +   '<div style="font-family:Oswald,sans-serif;letter-spacing:2px;font-size:13px;color:#7df0a0;margin-bottom:6px;">＋ AÑADIR BALÓN</div>'
+      +   '<div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:10px;">Formato: <code style="background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;">Nombre_Con_Guiones_Bajos</code></div>'
+      +   '<input id="ball-add-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:8px;padding:10px 12px;font-family:\'Courier New\',monospace;font-size:13px;box-sizing:border-box;" placeholder="Ej: PUMA_NEW_2027">'
+      +   '<div id="ball-add-err" style="font-size:11px;color:#ff8080;margin-top:6px;min-height:14px;"></div>'
+      +   '<div style="display:flex;gap:8px;margin-top:10px;">'
+      +     '<button type="button" id="ball-add-ok" style="flex:1;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;font-weight:700;cursor:pointer;">✅ AÑADIR</button>'
+      +     '<button type="button" id="ball-add-cancel" style="flex:0 0 auto;background:rgba(255,255,255,.06);color:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:10px 14px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;cursor:pointer;">CANCELAR</button>'
+      +   '</div>'
+      + '</div>';
+    document.body.appendChild(ov);
+    var input = document.getElementById('ball-add-input');
+    var errEl = document.getElementById('ball-add-err');
+    setTimeout(function(){ if (input) input.focus(); }, 50);
+    function close(){ try { ov.remove(); } catch(_){} }
+    function submit(){
+      var raw = input ? input.value : '';
+      var name = String(raw||'').trim().replace(/\s+/g,'_');
+      if (!name) { errEl.textContent = 'Escribe un nombre antes de añadir.'; return; }
+      var inv = _loadBallInventory();
+      if (inv.indexOf(name) !== -1) { errEl.textContent = 'Ese balón ya está en el inventario.'; return; }
+      inv.push(name);
+      var ok = _saveBallInventory(inv);
+      if (!ok) { return; }  /* alert ya mostrado en _saveBallInventory */
+      close();
+      window.adminRenderBalls();
+    }
+    document.getElementById('ball-add-ok').addEventListener('click', submit);
+    document.getElementById('ball-add-cancel').addEventListener('click', close);
+    if (input) input.addEventListener('keydown', function(e){ if (e.key === 'Enter') submit(); else if (e.key === 'Escape') close(); });
+    ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
   };
   window.adminBallDelete = function(ballId){
     if (!ballId) return;

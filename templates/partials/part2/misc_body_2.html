@@ -6465,8 +6465,13 @@
        amarillo/rojo opaca el acta durante demasiado tiempo y si llega
        otro evento la visualización es mínima. La pausa REAL del
        cronómetro vive aparte (`_mlEventFreezeMs`) y NO está acoplada
-       a la duración visual del flash. */
-    setTimeout(function(){ ov.className = ''; }, 2000);
+       a la duración visual del flash.
+       2026-05-09: clearTimeout previo para que dos eventos seguidos
+       (p.ej. gol + roja en pocas décimas) no se corten entre sí. Sin
+       esto, el primer setTimeout cerraba el overlay del segundo evento
+       antes de los 2 s. */
+    if (ov._fxTimer) clearTimeout(ov._fxTimer);
+    ov._fxTimer = setTimeout(function(){ ov.className = ''; ov._fxTimer = null; }, 2000);
   }
 
   /* Cuánto tiempo (ms reales) debe pausarse el cronómetro tras el

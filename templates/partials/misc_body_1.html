@@ -8685,6 +8685,17 @@ window._showSimProgress = function(opts, onDone){
   .tour-match.tour-match-played{background:rgba(255,255,255,.025);}
   .tour-match.tour-match-pickable{cursor:pointer;transition:background .14s;}
   .tour-match.tour-match-pickable:hover{background:rgba(240,192,64,.06);}
+  /* Partido con AL MENOS un humano: borde blanco llamativo + glow.
+     Petición usuario 2026-05-09 (FOTO 2). */
+  .tour-match.tour-match-has-human{
+    border:1.5px solid #ffffff;
+    box-shadow:0 0 12px rgba(255,255,255,.35), inset 0 0 6px rgba(255,255,255,.10);
+    background:rgba(255,255,255,.04);
+  }
+  .tour-match.tour-match-has-human.tour-match-pickable:hover{
+    background:rgba(255,255,255,.08);
+    box-shadow:0 0 18px rgba(255,255,255,.55), inset 0 0 8px rgba(255,255,255,.18);
+  }
   .tour-bracket-team.is-winner span{color:#5fe08a;font-weight:700;text-shadow:0 0 6px rgba(95,224,138,.4);}
   .tour-bracket-team.is-loser span{color:rgba(255,92,112,.65);text-decoration:line-through;text-decoration-color:rgba(255,92,112,.4);}
   .tour-score{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;color:rgba(255,255,255,.75);}
@@ -9060,6 +9071,18 @@ window._showSimProgress = function(opts, onDone){
     return false;
   }
 
+  /* Equipos reservados al usuario (humano): JAMÁS aparecen en el
+     sorteo automático de IAs de un torneo. El humano puede elegirlos
+     desde el picker. Petición usuario 2026-05-09 (FOTO 4 sobre
+     Atlético Madrid; Bayern Munich ya tenía caja propia). Mantengo
+     varias variantes de nombre para cubrir capitalizaciones / acentos. */
+  var HUMAN_ONLY_TEAMS = ['bayern','bayern munich','bayern muenchen','bayern munchen','fc bayern','fc bayern munchen','atletico madrid','atletico de madrid','atletico'];
+  function _isHumanOnlyTeam(name){
+    if (!name) return false;
+    var n = String(name).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+    return HUMAN_ONLY_TEAMS.indexOf(n) !== -1;
+  }
+
   /* Mezcla in-place tipo Fisher-Yates. */
   function _shuffle(arr){
     for (var i = arr.length - 1; i > 0; i--){
@@ -9081,6 +9104,7 @@ window._showSimProgress = function(opts, onDone){
     var excluded = cfg.excludedLeagues || [];
     var pool = _allTeams().filter(function(t){
       if (_teamInExcludedLeagues(t, excluded)) return false;
+      if (_isHumanOnlyTeam(t.name)) return false;
       return t.power >= aimin && t.power <= aimax;
     });
     var needed = Math.max(0, (cfg.numTeams || 0) - (cfg.numHumans || 0));
@@ -9383,13 +9407,20 @@ window._showSimProgress = function(opts, onDone){
     var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
     var classes = ['tour-bracket-team'];
     if (t.isHuman) {
-      classes.push('is-pickable');
-      if (t.name === 'PENDIENTE') classes.push('is-pending');
-      else classes.push('is-human');
+      /* Solo PENDIENTE es pickable: tocar abre el picker para asignar
+         equipo. Una vez asignado, el chip queda is-human (verde) pero
+         NO clickable — el click cae al row (.tour-match-pickable) que
+         abre el gm-modal. Para cambiar de equipo: editor → reset. */
+      if (t.name === 'PENDIENTE') {
+        classes.push('is-pickable');
+        classes.push('is-pending');
+      } else {
+        classes.push('is-human');
+      }
     }
     if (isWinner) classes.push('is-winner');
     if (isLoser)  classes.push('is-loser');
-    var data = t.isHuman ? ' data-tour="'+tourId+'" data-slot="'+slotIdx+'"' : '';
+    var data = (t.isHuman && t.name === 'PENDIENTE') ? ' data-tour="'+tourId+'" data-slot="'+slotIdx+'"' : '';
     return '<div class="'+classes.join(' ')+'"'+data+'>'+img+'<span>'+(t.name||'?')+'</span></div>';
   }
 
@@ -9398,10 +9429,14 @@ window._showSimProgress = function(opts, onDone){
     var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
     var classes = ['tour-team-chip'];
     if (t.isHuman) {
-      classes.push('is-pickable');
-      classes.push(t.name === 'PENDIENTE' ? 'is-pending' : 'is-human');
+      if (t.name === 'PENDIENTE') {
+        classes.push('is-pickable');
+        classes.push('is-pending');
+      } else {
+        classes.push('is-human');
+      }
     }
-    var data = t.isHuman ? ' data-tour="'+tourId+'" data-slot="'+slotIdx+'"' : '';
+    var data = (t.isHuman && t.name === 'PENDIENTE') ? ' data-tour="'+tourId+'" data-slot="'+slotIdx+'"' : '';
     var tag = t.isHuman ? '<span class="tag-h">'+(t.name==='PENDIENTE'?'PEND':'TÚ')+'</span>' : '';
     return '<div class="'+classes.join(' ')+'"'+data+'>'+img+'<span>'+t.name+'</span>'+tag+'</div>';
   }
@@ -9445,6 +9480,14 @@ window._showSimProgress = function(opts, onDone){
       cfg.bracket = cfg.bracket || [teams.slice()];
       /* Asegurar que el bracket tiene la ronda 0 con los teams iniciales. */
       if (!cfg.bracket[0] || !cfg.bracket[0].length) cfg.bracket[0] = teams.slice();
+      /* Fallback: si por alguna razón cfg.currentRound apunta a una
+         ronda vacía/inexistente del bracket (bug histórico cuando se
+         avanza con todos los partidos saltados como humanos no jugados),
+         volvemos a la última ronda con teams para que la pantalla no
+         quede en blanco. */
+      while (cfg.currentRound > 0 && (!cfg.bracket[cfg.currentRound] || !cfg.bracket[cfg.currentRound].length)) {
+        cfg.currentRound--;
+      }
       var curR = cfg.currentRound;
       var curTeams = cfg.bracket[curR] || [];
       var roundLbl = rounds[curR] || ('Ronda de '+curTeams.length);
@@ -9462,6 +9505,7 @@ window._showSimProgress = function(opts, onDone){
         if (!played) allPlayed = false;
         var dataAttrs = ' data-tour="'+id+'" data-match-key="'+matchKey+'"';
         var rowClass = played ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
+        if (_tourPairHasHuman(curTeams, i)) rowClass += ' tour-match-has-human';
         if (played) {
           var aWin = res.winner === 'a', bWin = res.winner === 'b';
           var sA = '<span class="tour-score'+(aWin?' tour-score-win':'')+'">'+res.a+'</span>';
@@ -9578,6 +9622,7 @@ window._showSimProgress = function(opts, onDone){
         if (played) rowCls += ' tour-match-played';
         else if (isCurrent) rowCls += ' tour-match-pickable';
         else rowCls += ' is-locked';
+        if (_tourLeagueMatchHasHuman(teams, m)) rowCls += ' tour-match-has-human';
         var dataAttrs = ' data-tour="'+tourId+'" data-league-key="'+key+'"';
         if (played) {
           var aWin = res.a > res.b, bWin = res.b > res.a;
@@ -9750,6 +9795,7 @@ window._showSimProgress = function(opts, onDone){
         var kPlayed = !!(kRes && kRes.played);
         if (!kPlayed) koAllPlayed = false;
         var kRowCls = kPlayed ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
+        if (_tourPairHasHuman(curT, i)) kRowCls += ' tour-match-has-human';
         var kAttrs = ' data-tour="'+tourId+'" data-ko-key="'+kKey+'"';
         if (kPlayed) {
           var aW = kRes.winner === 'a', bW = kRes.winner === 'b';
@@ -10662,18 +10708,28 @@ window._showSimProgress = function(opts, onDone){
   }
 
   function _tourBuildNextRound(cfg) {
-    /* Construye cfg.bracket[curR+1] con los ganadores de curR. */
+    /* Construye cfg.bracket[curR+1] con los ganadores de curR.
+       Guardia 2026-05-09: si quedan partidos sin jugar (todos los
+       humanos saltados, p.ej.), no avanzamos — devolveríamos un
+       round vacío que rompe la UI. El caller debe haber comprobado
+       allPlayed pero por seguridad lo verificamos aquí también. */
     var curR = cfg.currentRound || 0;
     var teams = cfg.bracket[curR] || [];
     var winners = [];
+    var pairs = 0, played = 0;
     for (var i = 0; i < teams.length; i += 2) {
+      if (!teams[i+1]) break;
+      pairs++;
       var key = curR + '_' + (i/2);
       var res = cfg.results[key];
       if (!res || !res.played) continue;
+      played++;
       winners.push(res.winner === 'a' ? teams[i] : teams[i+1]);
     }
+    if (pairs === 0 || played < pairs) return false;  /* aborta */
     cfg.bracket[curR + 1] = winners;
     cfg.currentRound = curR + 1;
+    return true;
   }
 
   function _tourSaveAndRender(id, cfg) {
@@ -11077,7 +11133,9 @@ window._showSimProgress = function(opts, onDone){
     });
     var matches = _allTeams().filter(function(t){
       if (_teamInExcludedLeagues(t, excluded)) return false;
-      if (t.power < aimin || t.power > aimax) return false;
+      /* Petición usuario 2026-05-09: el HUMANO puede elegir CUALQUIER
+         equipo del pool, sin importar el rango de nivel IA. El rango
+         solo aplica al sorteo automático de IAs. */
       return _norm(t.name).indexOf(q) !== -1;
     }).slice(0, 20);
     if (!matches.length) {
@@ -11122,7 +11180,7 @@ window._showSimProgress = function(opts, onDone){
     if (!cfg || !cfg.teams || !cfg.teams[slotIdx]) return;
     _picker = { tourId: tourId, slotIdx: slotIdx };
     var info = document.getElementById('tour-pick-info');
-    if (info) info.textContent = 'Slot ' + (slotIdx+1) + ' · Nivel IA ' + (cfg.aiLevelMin||1) + '–' + (cfg.aiLevelMax||100);
+    if (info) info.textContent = 'Slot ' + (slotIdx+1) + ' · Elige cualquier equipo (el rango IA solo limita el sorteo automático).';
     var search = document.getElementById('tour-pick-search');
     if (search) { search.value = ''; setTimeout(function(){ search.focus(); }, 50); }
     var results = document.getElementById('tour-pick-results');

@@ -15021,6 +15021,20 @@ window._showSimProgress = function(opts, onDone){
           if(idx >= total){ resolve(); return; }
           var name = leagues[idx];
           var slug = _slugify(name);
+          /* Pre-hidratar desde server si la cache local está vacía o
+             tiene menos de 2 equipos. Sin este paso (2026-05-09), ligas
+             que el usuario completó en otro dispositivo y nunca se han
+             abierto en este se quedaban con teams=[] en local y
+             `ligaExtSimularSlug` las saltaba con "sin equipos
+             suficientes" (caso reportado: 49 ligas simuladas, 2
+             saltadas — italia y escocia — al simular desde un móvil
+             nuevo). `_readLigaData` hace XHR síncrono a /api/liga-ext
+             y persiste el resultado en localStorage antes de simular.
+             Tras la hidratación invalidamos `LIGA_CACHE[slug]` para que
+             `loadData` (editor) re-lea localStorage en vez de devolver
+             un cache vacío anterior. */
+          try { _readLigaData(slug); } catch(_){}
+          try { if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
           try {
             if(window.ligaExtSimularSlug(slug, name)){
               ok++;

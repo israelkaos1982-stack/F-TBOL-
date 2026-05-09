@@ -8693,6 +8693,36 @@ window._showSimProgress = function(opts, onDone){
     font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;
     color:#f0c040;margin:0 0 4px;
   }
+  /* Tabla de clasificación (Liga + Grupos). */
+  .tour-st-table{width:100%;border-collapse:collapse;font-size:11px;margin:4px 0 8px;}
+  .tour-st-table th{
+    font-family:Oswald,sans-serif;letter-spacing:1px;font-weight:600;
+    color:rgba(255,255,255,.45);padding:4px 3px;text-align:center;
+    border-bottom:1px solid rgba(255,255,255,.10);font-size:10px;
+  }
+  .tour-st-table td{
+    padding:3px;text-align:center;color:rgba(255,255,255,.75);
+    border-bottom:1px solid rgba(255,255,255,.05);
+  }
+  .tour-st-table td.nm{text-align:left;color:#fff;}
+  .tour-st-table td.pos{color:rgba(255,255,255,.45);font-family:'Bebas Neue',sans-serif;}
+  .tour-st-table td.pts{font-weight:700;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.5px;}
+  .tour-st-row.is-adv{background:rgba(95,224,138,.05);}
+  .tour-st-row.is-adv td.pos{color:#5fe08a;}
+  .tour-st-row.is-hum td.nm{color:#5fe08a;}
+  /* Jornadas. */
+  .tour-jor{
+    margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);
+    border:1px solid rgba(255,255,255,.06);border-radius:8px;
+  }
+  .tour-jor.is-current{border-color:rgba(240,192,64,.35);background:rgba(240,192,64,.04);}
+  .tour-jor.is-future{opacity:.45;}
+  .tour-jor-h{
+    font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;
+    color:rgba(255,255,255,.55);margin-bottom:4px;
+  }
+  .tour-jor.is-current .tour-jor-h{color:#f0c040;}
+  .tour-match.is-locked{opacity:.55;cursor:not-allowed;}
 </style>
 
 <!-- ═══ OVERLAY PICKER DE EQUIPO HUMANO ═══
@@ -9450,14 +9480,12 @@ window._showSimProgress = function(opts, onDone){
             + '🏆 AVANZAR A ' + (rounds[curR+1] || 'SIGUIENTE RONDA').toUpperCase()
             + '</button></div>';
         } else if (allPlayed && curR >= (rounds.length - 1)) {
-          /* Final jugada — mostrar campeón. */
+          /* Final jugada — mostrar campeón + payouts. */
           var lastRes = cfg.results[curR + '_0'];
           if (lastRes && lastRes.played) {
             var champTeam = (lastRes.winner === 'a') ? curTeams[0] : curTeams[1];
-            html += '<div style="margin-top:14px;text-align:center;padding:14px;background:linear-gradient(135deg,rgba(240,192,64,.12),rgba(220,5,45,.12));border:1px solid rgba(240,192,64,.5);border-radius:12px;">'
-              + '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.55);">🏆 CAMPEÓN</div>'
-              + '<div style="font-family:Oswald,sans-serif;font-size:20px;letter-spacing:2px;color:#f0c040;margin-top:4px;">'+(champTeam && champTeam.name || '?')+'</div>'
-              + '</div>';
+            html += _championBoxHtml(champTeam);
+            html += _renderKOPayouts(cfg);
           }
         }
         if (curR > 0 || allPlayed) {
@@ -9470,28 +9498,477 @@ window._showSimProgress = function(opts, onDone){
       }
       infoEl.innerHTML = html;
     } else if (cfg.format === 'league') {
-      var html = hint + '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">PARTICIPANTES · '+teams.length+'</p>';
-      html += '<div class="tour-teams-grid">';
-      teams.forEach(function(t, idx){ html += _teamChipHtml(t, id, idx); });
-      html += '</div>';
-      infoEl.innerHTML = html;
+      infoEl.innerHTML = hint + _renderLeague(cfg, id, teams);
     } else if (cfg.format === 'groups-ko') {
-      var fc = cfg.formatConfig || {};
-      var groups = fc.groups || 1;
-      var per    = fc.perGroup || Math.ceil(teams.length / groups);
-      var html = hint;
-      for (var g = 0; g < groups; g++) {
-        var slice = teams.slice(g*per, (g+1)*per);
-        if (!slice.length) break;
-        html += '<div class="tour-group-block"><h4>GRUPO '+String.fromCharCode(65+g)+'</h4>';
-        html += '<div class="tour-teams-grid">';
-        slice.forEach(function(t, j){ html += _teamChipHtml(t, id, g*per + j); });
-        html += '</div></div>';
-      }
-      infoEl.innerHTML = html;
+      infoEl.innerHTML = hint + _renderGroupsKO(cfg, id, teams);
     } else {
       infoEl.innerHTML = '';
     }
+  }
+
+  /* ─── Renderers Liga / Grupos+KO ───────────────────────── */
+
+  function _stTeamCellHtml(row) {
+    var humanTag = row.isHuman ? ' 👤' : '';
+    var img = row.shield ? '<img src="'+row.shield+'" style="width:14px;height:14px;object-fit:contain;flex-shrink:0;">' : '';
+    return '<span style="display:inline-flex;align-items:center;gap:5px;">'+img+row.name+humanTag+'</span>';
+  }
+
+  function _standingsTableHtml(rows, advanceCount) {
+    var h = '<table class="tour-st-table"><thead><tr>'
+      + '<th>#</th><th style="text-align:left;">Equipo</th>'
+      + '<th>PJ</th><th>G</th><th>E</th><th>P</th>'
+      + '<th>GF</th><th>GC</th><th>DIF</th><th>PTS</th></tr></thead><tbody>';
+    rows.forEach(function(r, i){
+      var pos = i + 1;
+      var advCls = (advanceCount && pos <= advanceCount) ? ' is-adv' : '';
+      var humCls = r.isHuman ? ' is-hum' : '';
+      h += '<tr class="tour-st-row'+advCls+humCls+'">'
+        + '<td class="pos">'+pos+'</td>'
+        + '<td class="nm">'+_stTeamCellHtml(r)+'</td>'
+        + '<td>'+r.pj+'</td><td>'+r.pg+'</td><td>'+r.pe+'</td><td>'+r.pp+'</td>'
+        + '<td>'+r.gf+'</td><td>'+r.gc+'</td><td>'+(r.dif>0?'+':'')+r.dif+'</td>'
+        + '<td class="pts">'+r.pts+'</td></tr>';
+    });
+    h += '</tbody></table>';
+    return h;
+  }
+
+  function _fixtureCardsHtml(teams, fixture, results, keyPrefix, tourId, jornadaIdx, opts) {
+    /* Pinta TODAS las jornadas del fixture. La actual (jornadaIdx) se
+       pinta interactiva (cards clickables + botón ▶ Sim ronda). Las
+       futuras se pintan bloqueadas y las pasadas como histórico. */
+    opts = opts || {};
+    var prefix = keyPrefix || '';
+    var html = '';
+    fixture.forEach(function(jor, j){
+      var isCurrent = (j === jornadaIdx);
+      var isFuture = (j > jornadaIdx);
+      var lblTxt = (opts.shortLabel ? 'J' : 'Jornada ') + (j+1);
+      var cls = 'tour-jor';
+      if (isCurrent) cls += ' is-current';
+      if (isFuture) cls += ' is-future';
+      html += '<div class="'+cls+'"><div class="tour-jor-h">'+lblTxt+'</div>';
+      var allPlayedJ = true;
+      jor.forEach(function(m, mi){
+        var key = prefix + j + '_' + mi;
+        var res = results[key];
+        var played = !!(res && res.played);
+        if (!played) allPlayedJ = false;
+        var th = teams[m.home] || {name:'?'};
+        var ta = teams[m.away] || {name:'?'};
+        var rowCls = 'tour-match';
+        if (played) rowCls += ' tour-match-played';
+        else if (isCurrent) rowCls += ' tour-match-pickable';
+        else rowCls += ' is-locked';
+        var dataAttrs = ' data-tour="'+tourId+'" data-league-key="'+key+'"';
+        if (played) {
+          var aWin = res.a > res.b, bWin = res.b > res.a;
+          var sH = '<span class="tour-score'+(aWin?' tour-score-win':'')+'">'+res.a+'</span>';
+          var sA = '<span class="tour-score'+(bWin?' tour-score-win':'')+'">'+res.b+'</span>';
+          html += '<div class="'+rowCls+'"'+dataAttrs+'>'
+            + _bracketTeamHtml(th, tourId, m.home, aWin, bWin)
+            + '<span class="vs tour-score-wrap">'+sH+' - '+sA+'</span>'
+            + _bracketTeamHtml(ta, tourId, m.away, bWin, aWin)
+            + '</div>';
+        } else {
+          html += '<div class="'+rowCls+'"'+dataAttrs+'>'
+            + _bracketTeamHtml(th, tourId, m.home)
+            + '<span class="vs">vs</span>'
+            + _bracketTeamHtml(ta, tourId, m.away)
+            + '</div>';
+        }
+      });
+      if (isCurrent && !allPlayedJ) {
+        html += '<div style="display:flex;justify-content:center;margin-top:8px;">'
+          + '<button type="button" class="tour-sim-jor-btn" data-tour="'+tourId+'" data-key-prefix="'+prefix+'" data-jor="'+j+'" '
+          + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
+          + '▶ SIMULAR JORNADA'
+          + '</button></div>';
+      }
+      html += '</div>';
+    });
+    return html;
+  }
+
+  function _renderLeague(cfg, tourId, teams) {
+    cfg.results = cfg.results || {};
+    cfg.fixture = cfg.fixture || _tourBuildRoundRobin(teams.map(function(_,i){return i;}));
+    cfg.currentJornada = (typeof cfg.currentJornada === 'number') ? cfg.currentJornada : 0;
+    var rows = _tourComputeStandings(teams, cfg.fixture, cfg.results, '');
+    var prog = _tourFixtureProgress(cfg.fixture, cfg.results, '');
+    var html = '';
+    html += '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">CLASIFICACIÓN · '+prog.done+' / '+prog.tot+' partidos</p>';
+    html += _standingsTableHtml(rows);
+    html += '<p style="margin:14px 0 4px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">CALENDARIO</p>';
+    /* Avanzar jornada current si la actual ya está completa pero
+       quedan jornadas. */
+    var curJ = cfg.currentJornada;
+    if (curJ < cfg.fixture.length) {
+      var jProg = (function(){
+        var done=0, tot=0;
+        (cfg.fixture[curJ]||[]).forEach(function(_, mi){
+          tot++; if ((cfg.results[curJ+'_'+mi]||{}).played) done++;
+        });
+        return { done:done, tot:tot, allDone: done===tot && tot>0 };
+      })();
+      if (jProg.allDone && curJ < cfg.fixture.length - 1) {
+        html += '<div style="display:flex;justify-content:center;margin-bottom:8px;">'
+          + '<button type="button" class="tour-adv-jor-btn" data-tour="'+tourId+'" '
+          + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
+          + '🏆 AVANZAR A JORNADA '+(curJ+2)
+          + '</button></div>';
+      }
+    }
+    html += _fixtureCardsHtml(teams, cfg.fixture, cfg.results, '', tourId, curJ, {});
+    if (prog.allDone) {
+      html += _renderLeagueChampionAndPayouts(cfg, rows);
+    }
+    if (cfg.currentJornada > 0 || prog.done > 0) {
+      html += '<div style="display:flex;justify-content:center;margin-top:10px;">'
+        + '<button type="button" class="tour-reset-btn" data-tour="'+tourId+'" '
+        + 'style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
+        + '↺ Reset liga'
+        + '</button></div>';
+    }
+    return html;
+  }
+
+  function _renderGroupsKO(cfg, tourId, teams) {
+    var fc = cfg.formatConfig || {};
+    var nGroups = fc.groups || 1;
+    var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
+    var advancePerGroup = fc.advancePerGroup || 2;
+    cfg.results = cfg.results || {};
+    /* Construir fixtures por grupo si no existen. */
+    cfg.groupFixtures = cfg.groupFixtures || {};
+    cfg.currentJornadaByGroup = cfg.currentJornadaByGroup || {};
+    var html = '';
+    var allGroupsDone = true;
+    var slices = [];
+    for (var g = 0; g < nGroups; g++) {
+      var slice = teams.slice(g*perGroup, (g+1)*perGroup);
+      if (!slice.length) break;
+      slices.push(slice);
+      var gKey = 'g'+g+'_';
+      if (!cfg.groupFixtures[g]) {
+        cfg.groupFixtures[g] = _tourBuildRoundRobin(slice.map(function(_,i){return i;}));
+      }
+      if (typeof cfg.currentJornadaByGroup[g] !== 'number') cfg.currentJornadaByGroup[g] = 0;
+      var fix = cfg.groupFixtures[g];
+      var rows = _tourComputeStandings(slice, fix, cfg.results, gKey);
+      var prog = _tourFixtureProgress(fix, cfg.results, gKey);
+      if (!prog.allDone) allGroupsDone = false;
+      var letter = String.fromCharCode(65+g);
+      html += '<div class="tour-group-block"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
+      html += _standingsTableHtml(rows, advancePerGroup);
+      var curJg = cfg.currentJornadaByGroup[g];
+      var jProg = (function(){
+        var done=0, tot=0;
+        (fix[curJg]||[]).forEach(function(_, mi){
+          tot++; if ((cfg.results[gKey+curJg+'_'+mi]||{}).played) done++;
+        });
+        return { done:done, tot:tot, allDone: done===tot && tot>0 };
+      })();
+      if (jProg.allDone && curJg < fix.length - 1) {
+        html += '<div style="display:flex;justify-content:center;margin:6px 0 4px;">'
+          + '<button type="button" class="tour-adv-jor-btn" data-tour="'+tourId+'" data-group="'+g+'" '
+          + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:7px;padding:5px 11px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
+          + '🏆 J'+(curJg+2)
+          + '</button></div>';
+      }
+      html += _fixtureCardsHtml(slice, fix, cfg.results, gKey, tourId, curJg, {shortLabel:true});
+      html += '</div>';
+    }
+    /* Si todos los grupos terminaron, generar / renderizar fase KO. */
+    if (allGroupsDone) {
+      cfg.koBracket = cfg.koBracket || (function(){
+        /* Cruce clásico A1-B2, B1-A2, C1-D2, D1-C2... lo
+           generalizamos: groups par-impar se cruzan, dentro del par
+           el 1º del par par juega contra el 2º del impar y viceversa.
+           Para 4 grupos con advance=2: A1-B2, B1-A2, C1-D2, D1-C2. */
+        var qualifiers = [];
+        for (var gi = 0; gi < slices.length; gi++) {
+          var rs = _tourComputeStandings(slices[gi], cfg.groupFixtures[gi], cfg.results, 'g'+gi+'_');
+          for (var p = 0; p < advancePerGroup; p++) {
+            qualifiers.push({ groupIdx: gi, pos: p+1, team: slices[gi][rs[p].idx] });
+          }
+        }
+        /* Construir round 0 con cross. Asumimos advancePerGroup=2 y
+           grupos par-impar (A-B, C-D). */
+        var round0 = [];
+        for (var pair = 0; pair < slices.length; pair += 2) {
+          var gA = pair, gB = pair + 1;
+          if (gB >= slices.length) {
+            /* Grupo solitario: 1 vs 2 directo. */
+            var qs = qualifiers.filter(function(q){return q.groupIdx===gA;});
+            for (var x = 0; x < qs.length; x += 2) {
+              if (qs[x+1]) round0.push(qs[x].team, qs[x+1].team);
+            }
+            continue;
+          }
+          var qA1 = qualifiers.filter(function(q){return q.groupIdx===gA && q.pos===1;})[0];
+          var qA2 = qualifiers.filter(function(q){return q.groupIdx===gA && q.pos===2;})[0];
+          var qB1 = qualifiers.filter(function(q){return q.groupIdx===gB && q.pos===1;})[0];
+          var qB2 = qualifiers.filter(function(q){return q.groupIdx===gB && q.pos===2;})[0];
+          if (qA1 && qB2) round0.push(qA1.team, qB2.team);
+          if (qB1 && qA2) round0.push(qB1.team, qA2.team);
+        }
+        return [round0];
+      })();
+      cfg.koCurrentRound = (typeof cfg.koCurrentRound === 'number') ? cfg.koCurrentRound : 0;
+      var koRounds = fc.koRounds || ['Cuartos','Semis','Final'];
+      var curR = cfg.koCurrentRound;
+      var curT = cfg.koBracket[curR] || [];
+      var roundLbl = koRounds[curR] || ('Ronda KO '+(curR+1));
+      html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(240,192,64,.25);">';
+      html += '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:#f0c040;">FASE FINAL · '+roundLbl.toUpperCase()+'</p>';
+      html += '<div class="tour-bracket-list">';
+      var koAllPlayed = true, koPairCount = 0;
+      for (var i = 0; i < curT.length; i += 2) {
+        var a = curT[i], b = curT[i+1];
+        if (!b) break;
+        var kKey = 'ko_'+curR+'_'+(i/2);
+        var kRes = cfg.results[kKey];
+        var kPlayed = !!(kRes && kRes.played);
+        if (!kPlayed) koAllPlayed = false;
+        var kRowCls = kPlayed ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
+        var kAttrs = ' data-tour="'+tourId+'" data-ko-key="'+kKey+'"';
+        if (kPlayed) {
+          var aW = kRes.winner === 'a', bW = kRes.winner === 'b';
+          var sA = '<span class="tour-score'+(aW?' tour-score-win':'')+'">'+kRes.a+'</span>';
+          var sB = '<span class="tour-score'+(bW?' tour-score-win':'')+'">'+kRes.b+'</span>';
+          var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
+          html += '<div class="'+kRowCls+'"'+kAttrs+'>'
+            + _bracketTeamHtml(a, tourId, i, aW, bW)
+            + '<span class="vs tour-score-wrap">'+sA+' - '+sB+pensTxt+'</span>'
+            + _bracketTeamHtml(b, tourId, i+1, bW, aW)
+            + '</div>';
+        } else {
+          html += '<div class="'+kRowCls+'"'+kAttrs+'>'
+            + _bracketTeamHtml(a, tourId, i)
+            + '<span class="vs">vs</span>'
+            + _bracketTeamHtml(b, tourId, i+1)
+            + '</div>';
+        }
+        koPairCount++;
+      }
+      html += '</div>';
+      if (curT.length > 1) {
+        if (!koAllPlayed && koPairCount > 0) {
+          html += '<div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">'
+            + '<button type="button" class="tour-sim-ko-btn" data-tour="'+tourId+'" '
+            + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:10px;padding:9px 16px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
+            + '▶ SIMULAR '+(roundLbl).toUpperCase()
+            + '</button></div>';
+        } else if (koAllPlayed && curR < koRounds.length - 1) {
+          html += '<div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">'
+            + '<button type="button" class="tour-adv-ko-btn" data-tour="'+tourId+'" '
+            + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:9px 16px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
+            + '🏆 AVANZAR A '+(koRounds[curR+1]||'').toUpperCase()
+            + '</button></div>';
+        } else if (koAllPlayed && curR >= koRounds.length - 1) {
+          var lastRes = cfg.results['ko_'+curR+'_0'];
+          if (lastRes && lastRes.played) {
+            var champTeam = (lastRes.winner === 'a') ? curT[0] : curT[1];
+            var subTeam   = (lastRes.winner === 'a') ? curT[1] : curT[0];
+            html += _championBoxHtml(champTeam);
+            html += _renderGroupsKOPayouts(cfg, slices, champTeam, subTeam);
+          }
+        }
+      }
+      html += '</div>';  /* fin fase final */
+    }
+    if (Object.keys(cfg.results).length > 0) {
+      html += '<div style="display:flex;justify-content:center;margin-top:10px;">'
+        + '<button type="button" class="tour-reset-btn" data-tour="'+tourId+'" '
+        + 'style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
+        + '↺ Reset torneo'
+        + '</button></div>';
+    }
+    return html;
+  }
+
+  function _championBoxHtml(champTeam) {
+    return '<div style="margin-top:14px;text-align:center;padding:14px;background:linear-gradient(135deg,rgba(240,192,64,.12),rgba(220,5,45,.12));border:1px solid rgba(240,192,64,.5);border-radius:12px;">'
+      + '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.55);">🏆 CAMPEÓN</div>'
+      + '<div style="font-family:Oswald,sans-serif;font-size:20px;letter-spacing:2px;color:#f0c040;margin-top:4px;">'+(champTeam && champTeam.name || '?')+'</div>'
+      + '</div>';
+  }
+
+  /* ─── Cálculo de premios (monedas) ─────────────────────── */
+
+  function _payoutRow(label, coins, isHuman) {
+    var clr = isHuman ? '#5fe08a' : 'rgba(255,255,255,.7)';
+    return '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;color:'+clr+';">'
+      + '<span>'+label+'</span><span style="font-family:\'Bebas Neue\',sans-serif;letter-spacing:1px;">🪙 '+coins+'</span>'
+      + '</div>';
+  }
+
+  function _payoutsHeaderHtml() {
+    return '<p style="margin:14px 0 4px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:#f0c040;">💰 PREMIOS · MONEDAS GANADAS</p>';
+  }
+
+  function _renderLeagueChampionAndPayouts(cfg, rows) {
+    /* Liga JG: bonus por posición + por partido (perWin/perDraw/perLoss).
+       rows ya viene ordenado por puntos. */
+    var prizes = cfg.prizes || {};
+    var champTeam = rows[0];
+    var html = _championBoxHtml(champTeam);
+    html += _payoutsHeaderHtml();
+    html += '<div style="background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;">';
+    rows.forEach(function(r, i){
+      var pos = i + 1;
+      var perW = (prizes.perWin  || 0) * r.pg;
+      var perE = (prizes.perDraw || 0) * r.pe;
+      var perL = (prizes.perLoss || 0) * r.pp;
+      var posKey = 'pos'+pos;
+      var posBonus = prizes[posKey] || 0;
+      var total = perW + perE + perL + posBonus;
+      var detail = pos+'º · '+r.name+(r.isHuman?' 👤':'');
+      var sub = ' <span style="font-size:10px;color:rgba(255,255,255,.45);">('+r.pg+'G+'+r.pe+'E+'+r.pp+'P · bonus '+posBonus+')</span>';
+      html += _payoutRow(detail+sub, total, r.isHuman);
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function _renderGroupsKOPayouts(cfg, slices, champTeam, subTeam) {
+    /* Asia: bonus por partido en grupos + bonus por avance de fase
+       + sub/champ. */
+    var prizes = cfg.prizes || {};
+    var fc = cfg.formatConfig || {};
+    var advancePerGroup = fc.advancePerGroup || 2;
+    var koRounds = fc.koRounds || ['Cuartos','Semis','Final'];
+    /* Recolectar todos los teams + sus stats de grupo. */
+    var allRows = [];
+    slices.forEach(function(slice, g){
+      var fix = cfg.groupFixtures[g];
+      var rs = _tourComputeStandings(slice, fix, cfg.results, 'g'+g+'_');
+      rs.forEach(function(r, i){
+        r.groupPos = i + 1;
+        r.groupLetter = String.fromCharCode(65+g);
+        r.team = slice[r.idx];
+        allRows.push(r);
+      });
+    });
+    /* Determinar hasta qué ronda llegó cada team. Recorrer koBracket
+       y resultados. */
+    var maxRoundFor = {};   /* name → idx ronda alcanzada (0=cuartos,1=sf,2=final) */
+    var champNames = champTeam ? [champTeam.name] : [];
+    var subNames = subTeam ? [subTeam.name] : [];
+    (cfg.koBracket || []).forEach(function(roundTeams, r){
+      roundTeams.forEach(function(t){
+        if (!t || !t.name) return;
+        if (typeof maxRoundFor[t.name] === 'undefined' || maxRoundFor[t.name] < r) {
+          maxRoundFor[t.name] = r;
+        }
+      });
+    });
+    var html = _payoutsHeaderHtml();
+    html += '<div style="background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;">';
+    /* Ordenar por monedas totales desc para mostrar los humanos
+       arriba si aplica. */
+    var rendered = allRows.map(function(r){
+      var perW = (prizes.perWin  || 0) * r.pg;
+      var perE = (prizes.perDraw || 0) * r.pe;
+      var perL = (prizes.perLoss || 0) * r.pp;
+      var coins = perW + perE + perL;
+      var stages = [];
+      var advKeys = ['advCuartos','advSemis','advFinal'];
+      var reached = (typeof maxRoundFor[r.team.name] === 'number') ? maxRoundFor[r.team.name] : -1;
+      for (var s = 0; s <= reached; s++) {
+        var k = advKeys[s];
+        if (k && prizes[k]) {
+          coins += prizes[k];
+          stages.push(koRounds[s]+'(+'+prizes[k]+')');
+        }
+      }
+      var role = '';
+      if (champNames.indexOf(r.team.name) >= 0) {
+        coins += (prizes.champ || 0);
+        role = ' 🏆';
+      } else if (subNames.indexOf(r.team.name) >= 0) {
+        coins += (prizes.sub || 0);
+        role = ' 🥈';
+      }
+      var detail = r.groupLetter+r.groupPos+' · '+r.name+(r.isHuman?' 👤':'')+role;
+      var sub = ' <span style="font-size:10px;color:rgba(255,255,255,.45);">('+r.pg+'G+'+r.pe+'E+'+r.pp+'P'+(stages.length?' · '+stages.join(' '):'')+')</span>';
+      return { html:_payoutRow(detail+sub, coins, r.isHuman), coins:coins, isHuman:r.isHuman };
+    });
+    rendered.sort(function(x,y){
+      if (x.isHuman !== y.isHuman) return x.isHuman ? -1 : 1;
+      return y.coins - x.coins;
+    });
+    rendered.forEach(function(r){ html += r.html; });
+    html += '</div>';
+    return html;
+  }
+
+  /* Para KO directo (SCT, PSS) — payouts cuando hay campeón. Se llama
+     desde el render de KO al detectar final jugada. */
+  function _renderKOPayouts(cfg) {
+    var prizes = cfg.prizes || {};
+    var rounds = (cfg.formatConfig && cfg.formatConfig.rounds) || [];
+    /* Cada team alcanza una ronda Rmax. Se le paga el premio asociado
+       a Rmax (eliminado en X) o sub/champ si está en la final. */
+    var bracket = cfg.bracket || [];
+    if (!bracket.length) return '';
+    /* Mapear team.name → ronda más alta donde apareció. */
+    var maxR = {}, lookup = {};
+    bracket.forEach(function(rt, ri){
+      rt.forEach(function(t){
+        if (!t || !t.name) return;
+        lookup[t.name] = t;
+        if (typeof maxR[t.name] === 'undefined' || maxR[t.name] < ri) maxR[t.name] = ri;
+      });
+    });
+    /* Premio por ronda alcanzada. Mapeo según rounds.length:
+       - 7 rondas (1/64 → Final): r128, r64, r32, r16, qf, sf, sub/champ
+       - 4 rondas (Octavos → Final): r16, qf, sf, sub/champ
+       - 3 rondas (Cuartos → Final): qf, sf, sub/champ
+       Asume orden estándar. */
+    var ROUND_KEY_MAP = {
+      7: ['r128','r64','r32','r16','qf','sf'],
+      6: ['r64','r32','r16','qf','sf'],
+      5: ['r32','r16','qf','sf'],
+      4: ['r16','qf','sf'],
+      3: ['qf','sf'],
+      2: ['sf']
+    };
+    var keyByRound = ROUND_KEY_MAP[rounds.length] || [];
+    var lastRoundIdx = rounds.length - 1;
+    /* Final jugada → ganador y subcampeón. */
+    var finalRes = (cfg.results || {})[lastRoundIdx + '_0'];
+    if (!finalRes || !finalRes.played) return '';
+    var finalTeams = bracket[lastRoundIdx] || [];
+    var champ = (finalRes.winner === 'a') ? finalTeams[0] : finalTeams[1];
+    var sub   = (finalRes.winner === 'a') ? finalTeams[1] : finalTeams[0];
+    var html = _payoutsHeaderHtml();
+    html += '<div style="background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;">';
+    /* Recolectar todos los teams del torneo (round 0). */
+    var rowsArr = (bracket[0] || []).map(function(t){
+      var nm = t && t.name;
+      var rMax = (typeof maxR[nm] === 'number') ? maxR[nm] : 0;
+      var coins = 0, label;
+      if (champ && champ.name === nm) { coins = prizes.champ || 0; label = 'Campeón 🏆 · '+nm; }
+      else if (sub && sub.name === nm) { coins = prizes.sub || 0; label = 'Subcampeón 🥈 · '+nm; }
+      else {
+        var k = keyByRound[rMax];
+        coins = (k && prizes[k]) || 0;
+        var roundName = rounds[rMax] || '?';
+        label = 'Eliminado en '+roundName+' · '+nm;
+      }
+      if (t && t.isHuman) label += ' 👤';
+      return { html:_payoutRow(label, coins, !!(t && t.isHuman)), coins:coins, isHuman:!!(t && t.isHuman) };
+    });
+    rowsArr.sort(function(x,y){
+      if (x.isHuman !== y.isHuman) return x.isHuman ? -1 : 1;
+      return y.coins - x.coins;
+    });
+    rowsArr.forEach(function(r){ html += r.html; });
+    html += '</div>';
+    return html;
   }
 
   /* Wrapper público: pinta INMEDIATAMENTE con cache + lanza fetch
@@ -9650,12 +10127,56 @@ window._showSimProgress = function(opts, onDone){
     return t;
   }
 
+  /* ─── Tanda de penaltis (Fase 2) ─────────────────────────
+     Se llama SOLO cuando un KO single-leg termina empatado en el 90'.
+     Modelo simple: 5 lanzamientos por equipo + muerte súbita. La
+     probabilidad de meter cada penalti se basa en ATQ del equipo que
+     lanza vs DEF del rival. No requiere flag `penalty` (ya hay flag
+     soft en CLAUDE.md pero el motor genérico aquí tampoco distingue
+     lanzador concreto). Devuelve {a, b}. */
+  function _tourSimPenalties(teamA, teamB) {
+    function _pProb(atk, defOpp) {
+      /* Baseline ~0.75. Diferencial ATQ-DEFopp en [-30,+30] aprox.
+         Cap en [0.55, 0.92] para no romper la suspense. */
+      var p = 0.75 + (atk - defOpp) * 0.005;
+      return Math.max(0.55, Math.min(0.92, p));
+    }
+    var atkA = teamA.atk || teamA.power || 70;
+    var atkB = teamB.atk || teamB.power || 70;
+    var defA = teamA.def || teamA.power || 70;
+    var defB = teamB.def || teamB.power || 70;
+    var pA = _pProb(atkA, defB);
+    var pB = _pProb(atkB, defA);
+    var sA = 0, sB = 0, n = 0, MAX = 50;
+    /* 5 alternos. */
+    for (var k = 0; k < 5; k++) {
+      if (Math.random() < pA) sA++;
+      if (Math.random() < pB) sB++;
+      n++;
+      /* Early-out si matemáticamente imposible voltear (5 vs 1 al
+         tirar el 4º del lado bajo, etc.). Mantengo simple — no
+         mueve mucho la aguja. */
+    }
+    /* Muerte súbita: lanzan ambos y se compara al final de la pareja. */
+    while (sA === sB && n < MAX) {
+      var hA = (Math.random() < pA) ? 1 : 0;
+      var hB = (Math.random() < pB) ? 1 : 0;
+      sA += hA; sB += hB;
+      n++;
+    }
+    if (sA === sB) {
+      /* Defensa: si tras 50 rondas siguen empatados, coin flip. */
+      if (Math.random() < 0.5) sA++; else sB++;
+    }
+    return { a: sA, b: sB };
+  }
+
   function _tourSimMatch(cfg, roundIdx, matchIdx) {
     /* Simula UN partido del bracket usando `simulateMatch` global
        (motor 4-ejes de la liga). Devuelve {a, b, winner, played:true}.
        Para ko-2leg (ida+vuelta) simula los DOS legs y aplica gol-fuera×2
-       en empate; para ko (single leg) si hay empate elige ganador
-       random ponderado por GLOBAL — placeholder hasta Fase 2 (penaltis). */
+       en empate; para ko (single leg) si hay empate, tanda de penaltis
+       (Fase 2). */
     var teams = cfg.bracket[roundIdx];
     var i = matchIdx * 2;
     var teamA = _tourFindTeam(teams[i]);
@@ -9676,7 +10197,7 @@ window._showSimProgress = function(opts, onDone){
       var leg2 = simFn(teamB, teamA);   /* B local */
       var totalA = leg1.gh + leg2.ga;
       var totalB = leg1.ga + leg2.gh;
-      var winner;
+      var winner, pens = null;
       if (totalA > totalB) winner = 'a';
       else if (totalB > totalA) winner = 'b';
       else {
@@ -9685,13 +10206,19 @@ window._showSimProgress = function(opts, onDone){
           /* B fuera (en ida) vs A fuera (en vuelta). */
           if (leg1.ga > leg2.ga) winner = 'b';
           else if (leg2.ga > leg1.ga) winner = 'a';
-          else winner = (Math.random() < 0.5 ? 'a' : 'b');
+          else {
+            pens = _tourSimPenalties(teamA, teamB);
+            winner = (pens.a > pens.b) ? 'a' : 'b';
+          }
         } else {
-          winner = (Math.random() < 0.5 ? 'a' : 'b');
+          pens = _tourSimPenalties(teamA, teamB);
+          winner = (pens.a > pens.b) ? 'a' : 'b';
         }
       }
-      return { a: totalA, b: totalB, winner: winner, played: true,
-               legs:[{a:leg1.gh,b:leg1.ga},{a:leg2.gh,b:leg2.ga}] };
+      var out2 = { a: totalA, b: totalB, winner: winner, played: true,
+                   legs:[{a:leg1.gh,b:leg1.ga},{a:leg2.gh,b:leg2.ga}] };
+      if (pens) out2.pens = pens;
+      return out2;
     }
     /* Single leg (formato `ko` SIEMPRE, o `ko-2leg` con final
        single-leg activado en la última ronda). Random toss para decidir
@@ -9700,16 +10227,115 @@ window._showSimProgress = function(opts, onDone){
     var r = aHome ? simFn(teamA, teamB) : simFn(teamB, teamA);
     var ga = aHome ? r.gh : r.ga;
     var gb = aHome ? r.ga : r.gh;
-    var winner;
-    if (ga > gb) winner = 'a';
-    else if (gb > ga) winner = 'b';
+    var winner1, pens1 = null;
+    if (ga > gb) winner1 = 'a';
+    else if (gb > ga) winner1 = 'b';
     else {
-      /* Empate sin penaltis (Fase 1) — winner por GLOBAL ponderado. */
-      var pwA = teamA.power || 70, pwB = teamB.power || 70;
-      var roll = Math.random() * (pwA + pwB);
-      winner = (roll < pwA) ? 'a' : 'b';
+      pens1 = _tourSimPenalties(teamA, teamB);
+      winner1 = (pens1.a > pens1.b) ? 'a' : 'b';
     }
-    return { a: ga, b: gb, winner: winner, played: true };
+    var out1 = { a: ga, b: gb, winner: winner1, played: true };
+    if (pens1) out1.pens = pens1;
+    return out1;
+  }
+
+  /* ─── Round-robin (Liga + fase de grupos) ─────────────────
+     Algoritmo "circle" estándar: con n equipos pares, fija el primero
+     y rota los demás. Si n es impar añadimos un BYE invisible. La
+     salida es un array de jornadas; cada jornada es un array de
+     `{home, away}` con índices SOBRE EL ARRAY DE TEAMS QUE SE PASA.
+     Genera 1 sola vuelta (n-1 jornadas). */
+  function _tourBuildRoundRobin(teamIdxs) {
+    var arr = teamIdxs.slice();
+    var bye = false;
+    if (arr.length % 2 === 1) { arr.push(-1); bye = true; }
+    var n = arr.length;
+    var rounds = n - 1;
+    var fixture = [];
+    for (var r = 0; r < rounds; r++) {
+      var jornada = [];
+      for (var k = 0; k < n / 2; k++) {
+        var h = arr[k];
+        var a = arr[n - 1 - k];
+        if (h === -1 || a === -1) continue;  /* BYE */
+        /* Alternar local/visitante para que cada equipo no juegue
+           siempre del mismo lado. */
+        if (r % 2 === 1 && k !== 0) {
+          jornada.push({ home: a, away: h });
+        } else {
+          jornada.push({ home: h, away: a });
+        }
+      }
+      fixture.push(jornada);
+      /* Rotación: el primero queda fijo, el resto rota CW. */
+      var fixed = arr[0];
+      var rest = arr.slice(1);
+      rest.unshift(rest.pop());
+      arr = [fixed].concat(rest);
+    }
+    return fixture;
+  }
+
+  /* ─── Standings de un grupo o liga ────────────────────────
+     `teams` = array de teamObjs (con .name).
+     `fixture` = array de jornadas tal y como devuelve _tourBuildRoundRobin.
+     `results` = mapa `${j}_${m}` → {a,b,played} (a=home, b=away).
+     Devuelve array ordenado de filas:
+       {idx, name, pj, pg, pe, pp, gf, gc, dif, pts, isHuman}
+     ordenado pts desc, dif desc, gf desc. */
+  function _tourComputeStandings(teams, fixture, results, keyPrefix) {
+    var rows = teams.map(function(t, idx){
+      return { idx:idx, name:t.name, isHuman:!!t.isHuman, shield:t.shield||'',
+               pj:0, pg:0, pe:0, pp:0, gf:0, gc:0, dif:0, pts:0 };
+    });
+    fixture.forEach(function(jor, j){
+      jor.forEach(function(m, mi){
+        var key = (keyPrefix||'') + j + '_' + mi;
+        var res = results[key];
+        if (!res || !res.played) return;
+        var rH = rows[m.home], rA = rows[m.away];
+        if (!rH || !rA) return;
+        rH.pj++; rA.pj++;
+        rH.gf += res.a; rH.gc += res.b;
+        rA.gf += res.b; rA.gc += res.a;
+        if (res.a > res.b) { rH.pg++; rH.pts += 3; rA.pp++; }
+        else if (res.b > res.a) { rA.pg++; rA.pts += 3; rH.pp++; }
+        else { rH.pe++; rA.pe++; rH.pts++; rA.pts++; }
+      });
+    });
+    rows.forEach(function(r){ r.dif = r.gf - r.gc; });
+    rows.sort(function(x,y){
+      if (y.pts !== x.pts) return y.pts - x.pts;
+      if (y.dif !== x.dif) return y.dif - x.dif;
+      return y.gf - x.gf;
+    });
+    return rows;
+  }
+
+  /* Total de partidos jugados en un fixture vs total esperado. */
+  function _tourFixtureProgress(fixture, results, keyPrefix) {
+    var done = 0, tot = 0;
+    fixture.forEach(function(jor, j){
+      jor.forEach(function(m, mi){
+        tot++;
+        var k = (keyPrefix||'') + j + '_' + mi;
+        if (results[k] && results[k].played) done++;
+      });
+    });
+    return { done:done, tot:tot, allDone: (done === tot && tot > 0) };
+  }
+
+  /* Sim de un partido de liga/grupo. Reusa simulateMatch directamente:
+     home siempre local, no hay ko-2leg. Sin penaltis (los empates son
+     legítimos en liga/grupos). */
+  function _tourSimLeagueMatch(cfg, teams, m) {
+    var home = _tourFindTeam(teams[m.home]);
+    var away = _tourFindTeam(teams[m.away]);
+    if (!home || !away) return null;
+    var simFn = window.simulateMatch;
+    if (!simFn) return null;
+    var r = simFn(home, away);
+    return { a: r.gh, b: r.ga, played: true };
   }
 
   function _tourBuildNextRound(cfg) {
@@ -9745,29 +10371,96 @@ window._showSimProgress = function(opts, onDone){
     var target = ev.target;
     if (!target || typeof target.closest !== 'function') return;
 
-    /* a) Click en una card de partido (KO solo, no jugada todavía). */
+    /* a) Click en una card de partido. Tres tipos:
+         · data-match-key   → KO directo (SCT/PSS).
+         · data-league-key  → Liga JG o jornada de grupo Asia.
+         · data-ko-key      → Fase KO de Grupos+KO (Asia).        */
     var matchEl = target.closest('.tour-match-pickable');
     if (matchEl) {
       var tid = matchEl.getAttribute('data-tour');
-      var mk = matchEl.getAttribute('data-match-key');
-      if (!tid || !mk || TOUR_IDS.indexOf(tid) === -1) return;
+      if (!tid || TOUR_IDS.indexOf(tid) === -1) return;
       var cfg = _tourLoadCachedSync(tid);
       if (!cfg) return;
-      var parts = mk.split('_');
-      var roundIdx = parseInt(parts[0], 10);
-      var matchIdx = parseInt(parts[1], 10);
-      if (isNaN(roundIdx) || isNaN(matchIdx)) return;
       cfg.results = cfg.results || {};
-      if (cfg.results[mk] && cfg.results[mk].played) return; /* ya jugado */
-      var r = _tourSimMatch(cfg, roundIdx, matchIdx);
-      if (!r) return;
-      cfg.results[mk] = r;
-      _tourSaveAndRender(tid, cfg);
-      ev.stopPropagation();
-      return;
+
+      /* a.1) KO directo. */
+      var mk = matchEl.getAttribute('data-match-key');
+      if (mk) {
+        var parts = mk.split('_');
+        var roundIdx = parseInt(parts[0], 10);
+        var matchIdx = parseInt(parts[1], 10);
+        if (isNaN(roundIdx) || isNaN(matchIdx)) return;
+        if (cfg.results[mk] && cfg.results[mk].played) return;
+        var r = _tourSimMatch(cfg, roundIdx, matchIdx);
+        if (!r) return;
+        cfg.results[mk] = r;
+        _tourSaveAndRender(tid, cfg);
+        ev.stopPropagation();
+        return;
+      }
+
+      /* a.2) Liga / jornada de grupo. La key tiene la forma
+             `${prefix}${j}_${m}` donde prefix='' para liga o
+             prefix='g${idx}_' para grupo. */
+      var lk = matchEl.getAttribute('data-league-key');
+      if (lk) {
+        if (cfg.results[lk] && cfg.results[lk].played) return;
+        /* Parseamos el prefix (todo lo que esté antes del último 'j_m'). */
+        var lastUnder = lk.lastIndexOf('_');
+        var midUnder = lk.lastIndexOf('_', lastUnder - 1);
+        var prefix = (midUnder >= 0) ? lk.substring(0, midUnder + 1) : '';
+        var jIdx = parseInt(lk.substring(midUnder + 1, lastUnder), 10);
+        var mIdx = parseInt(lk.substring(lastUnder + 1), 10);
+        if (isNaN(jIdx) || isNaN(mIdx)) return;
+        var teamsForMatch, fixForMatch;
+        if (prefix.indexOf('g') === 0) {
+          var gIdx = parseInt(prefix.substring(1), 10);
+          var sliceLen = (cfg.formatConfig && cfg.formatConfig.perGroup) || 5;
+          teamsForMatch = (cfg.teams||[]).slice(gIdx*sliceLen, (gIdx+1)*sliceLen);
+          fixForMatch = cfg.groupFixtures && cfg.groupFixtures[gIdx];
+        } else {
+          teamsForMatch = cfg.teams || [];
+          fixForMatch = cfg.fixture;
+        }
+        if (!fixForMatch || !fixForMatch[jIdx] || !fixForMatch[jIdx][mIdx]) return;
+        var rL = _tourSimLeagueMatch(cfg, teamsForMatch, fixForMatch[jIdx][mIdx]);
+        if (!rL) return;
+        cfg.results[lk] = rL;
+        _tourSaveAndRender(tid, cfg);
+        ev.stopPropagation();
+        return;
+      }
+
+      /* a.3) KO de Grupos+KO. */
+      var kk = matchEl.getAttribute('data-ko-key');
+      if (kk) {
+        if (cfg.results[kk] && cfg.results[kk].played) return;
+        var kpts = kk.split('_'); /* ['ko', roundIdx, matchIdx] */
+        var krI = parseInt(kpts[1], 10);
+        var kmI = parseInt(kpts[2], 10);
+        if (isNaN(krI) || isNaN(kmI)) return;
+        var koTeams = (cfg.koBracket || [])[krI] || [];
+        var ka = _tourFindTeam(koTeams[kmI*2]);
+        var kb = _tourFindTeam(koTeams[kmI*2 + 1]);
+        if (!ka || !kb || !window.simulateMatch) return;
+        var rkk = window.simulateMatch(ka, kb);
+        var ga = rkk.gh, gb = rkk.ga, winner, pens = null;
+        if (ga > gb) winner = 'a';
+        else if (gb > ga) winner = 'b';
+        else {
+          pens = _tourSimPenalties(ka, kb);
+          winner = (pens.a > pens.b) ? 'a' : 'b';
+        }
+        var koOut = { a:ga, b:gb, winner:winner, played:true };
+        if (pens) koOut.pens = pens;
+        cfg.results[kk] = koOut;
+        _tourSaveAndRender(tid, cfg);
+        ev.stopPropagation();
+        return;
+      }
     }
 
-    /* b) Botón ▶ SIMULAR RONDA. */
+    /* b) Botón ▶ SIMULAR RONDA (KO directo). */
     var simBtn = target.closest('.tour-sim-round-btn');
     if (simBtn) {
       var tid2 = simBtn.getAttribute('data-tour');
@@ -9790,7 +10483,71 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
 
-    /* c) Botón 🏆 AVANZAR a la siguiente ronda. */
+    /* b.2) Botón ▶ SIMULAR JORNADA (liga o grupo). */
+    var simJorBtn = target.closest('.tour-sim-jor-btn');
+    if (simJorBtn) {
+      var jtid = simJorBtn.getAttribute('data-tour');
+      if (!jtid || TOUR_IDS.indexOf(jtid) === -1) return;
+      var jcfg = _tourLoadCachedSync(jtid);
+      if (!jcfg) return;
+      jcfg.results = jcfg.results || {};
+      var prefixJ = simJorBtn.getAttribute('data-key-prefix') || '';
+      var jorIdx = parseInt(simJorBtn.getAttribute('data-jor'), 10);
+      if (isNaN(jorIdx)) return;
+      var teamsJ, fixJ;
+      if (prefixJ.indexOf('g') === 0) {
+        var gIdx2 = parseInt(prefixJ.substring(1), 10);
+        var slLen = (jcfg.formatConfig && jcfg.formatConfig.perGroup) || 5;
+        teamsJ = (jcfg.teams||[]).slice(gIdx2*slLen, (gIdx2+1)*slLen);
+        fixJ = jcfg.groupFixtures && jcfg.groupFixtures[gIdx2];
+      } else {
+        teamsJ = jcfg.teams || [];
+        fixJ = jcfg.fixture;
+      }
+      if (!fixJ || !fixJ[jorIdx]) return;
+      fixJ[jorIdx].forEach(function(m, mi){
+        var key = prefixJ + jorIdx + '_' + mi;
+        if (jcfg.results[key] && jcfg.results[key].played) return;
+        var rL = _tourSimLeagueMatch(jcfg, teamsJ, m);
+        if (rL) jcfg.results[key] = rL;
+      });
+      _tourSaveAndRender(jtid, jcfg);
+      ev.stopPropagation();
+      return;
+    }
+
+    /* b.3) Botón ▶ SIMULAR KO (fase final de Grupos+KO). */
+    var simKoBtn = target.closest('.tour-sim-ko-btn');
+    if (simKoBtn) {
+      var ktid = simKoBtn.getAttribute('data-tour');
+      if (!ktid || TOUR_IDS.indexOf(ktid) === -1) return;
+      var kcfg = _tourLoadCachedSync(ktid);
+      if (!kcfg) return;
+      kcfg.results = kcfg.results || {};
+      var kCurR = kcfg.koCurrentRound || 0;
+      var kCurT = (kcfg.koBracket || [])[kCurR] || [];
+      for (var kk2 = 0; kk2 < kCurT.length; kk2 += 2) {
+        if (!kCurT[kk2+1]) break;
+        var koKey = 'ko_' + kCurR + '_' + (kk2/2);
+        if (kcfg.results[koKey] && kcfg.results[koKey].played) continue;
+        var ka2 = _tourFindTeam(kCurT[kk2]);
+        var kb2 = _tourFindTeam(kCurT[kk2+1]);
+        if (!ka2 || !kb2 || !window.simulateMatch) continue;
+        var rk2 = window.simulateMatch(ka2, kb2);
+        var ga2 = rk2.gh, gb2 = rk2.ga, w2, pens2 = null;
+        if (ga2 > gb2) w2 = 'a';
+        else if (gb2 > ga2) w2 = 'b';
+        else { pens2 = _tourSimPenalties(ka2, kb2); w2 = (pens2.a > pens2.b) ? 'a' : 'b'; }
+        var ko2 = { a:ga2, b:gb2, winner:w2, played:true };
+        if (pens2) ko2.pens = pens2;
+        kcfg.results[koKey] = ko2;
+      }
+      _tourSaveAndRender(ktid, kcfg);
+      ev.stopPropagation();
+      return;
+    }
+
+    /* c) Botón 🏆 AVANZAR a la siguiente ronda (KO directo). */
     var advBtn = target.closest('.tour-advance-btn');
     if (advBtn) {
       var tid3 = advBtn.getAttribute('data-tour');
@@ -9803,17 +10560,70 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
 
-    /* d) Botón ↺ Reset bracket. */
+    /* c.2) Botón 🏆 AVANZAR JORNADA (liga o grupo). */
+    var advJorBtn = target.closest('.tour-adv-jor-btn');
+    if (advJorBtn) {
+      var jtid2 = advJorBtn.getAttribute('data-tour');
+      if (!jtid2 || TOUR_IDS.indexOf(jtid2) === -1) return;
+      var jcfg2 = _tourLoadCachedSync(jtid2);
+      if (!jcfg2) return;
+      var groupAttr = advJorBtn.getAttribute('data-group');
+      if (groupAttr !== null) {
+        var gIdx3 = parseInt(groupAttr, 10);
+        jcfg2.currentJornadaByGroup = jcfg2.currentJornadaByGroup || {};
+        jcfg2.currentJornadaByGroup[gIdx3] = (jcfg2.currentJornadaByGroup[gIdx3] || 0) + 1;
+      } else {
+        jcfg2.currentJornada = (jcfg2.currentJornada || 0) + 1;
+      }
+      _tourSaveAndRender(jtid2, jcfg2);
+      ev.stopPropagation();
+      return;
+    }
+
+    /* c.3) Botón 🏆 AVANZAR KO (fase final). */
+    var advKoBtn = target.closest('.tour-adv-ko-btn');
+    if (advKoBtn) {
+      var ktid2 = advKoBtn.getAttribute('data-tour');
+      if (!ktid2 || TOUR_IDS.indexOf(ktid2) === -1) return;
+      var kcfg2 = _tourLoadCachedSync(ktid2);
+      if (!kcfg2) return;
+      var curR3 = kcfg2.koCurrentRound || 0;
+      var curT3 = (kcfg2.koBracket || [])[curR3] || [];
+      var winners = [];
+      for (var w0 = 0; w0 < curT3.length; w0 += 2) {
+        var k3 = 'ko_' + curR3 + '_' + (w0/2);
+        var r3 = kcfg2.results[k3];
+        if (!r3 || !r3.played) continue;
+        winners.push(r3.winner === 'a' ? curT3[w0] : curT3[w0+1]);
+      }
+      kcfg2.koBracket[curR3 + 1] = winners;
+      kcfg2.koCurrentRound = curR3 + 1;
+      _tourSaveAndRender(ktid2, kcfg2);
+      ev.stopPropagation();
+      return;
+    }
+
+    /* d) Botón ↺ Reset (bracket / liga / grupos+ko). */
     var resetBtn = target.closest('.tour-reset-btn');
     if (resetBtn) {
       var tid4 = resetBtn.getAttribute('data-tour');
       if (!tid4 || TOUR_IDS.indexOf(tid4) === -1) return;
-      if (!confirm('¿Resetear el bracket a la ronda 1? Se borran todos los resultados (el sorteo de equipos NO cambia).')) return;
+      if (!confirm('¿Resetear el torneo? Se borran todos los resultados (el sorteo de equipos NO cambia).')) return;
       var cfg4 = _tourLoadCachedSync(tid4);
       if (!cfg4) return;
       cfg4.results = {};
-      cfg4.bracket = [(cfg4.teams||[]).slice()];
-      cfg4.currentRound = 0;
+      if (cfg4.format === 'ko' || cfg4.format === 'ko-2leg') {
+        cfg4.bracket = [(cfg4.teams||[]).slice()];
+        cfg4.currentRound = 0;
+      } else if (cfg4.format === 'league') {
+        cfg4.fixture = null;
+        cfg4.currentJornada = 0;
+      } else if (cfg4.format === 'groups-ko') {
+        cfg4.groupFixtures = {};
+        cfg4.currentJornadaByGroup = {};
+        cfg4.koBracket = null;
+        cfg4.koCurrentRound = 0;
+      }
       _tourSaveAndRender(tid4, cfg4);
       ev.stopPropagation();
       return;

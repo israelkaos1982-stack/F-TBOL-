@@ -11917,27 +11917,43 @@
   }
 
   /* Genera y vuelca instantáneamente un partido IA-vs-IA en el gm-modal.
-     Usa simSimple (basado en TEAM_RATINGS, ventaja local 1.10) para el
-     marcador y genMatchEvents (selección ponderada por poder de jugador
-     vía _weightedScorerPick + calculateGoalProbability) para los eventos. */
+     Usa `_simIAvsIAWithContext` (motor 4 ejes ATK/MID/DEF/GLOBAL — la
+     misma simulación que Liga EA Sports). Petición usuario 2026-05-09:
+     que TODA simulación IA-vs-IA (Champions, Europa League, Conference,
+     Recopa, Supercopa de Europa, Intercontinental, Liga, Copa, amistosos…)
+     comparta el motor de Liga EA Sports y produzca resultados coherentes
+     con los 4 valores manuales del editor. Solo si el motor 4-ejes no
+     está disponible (caso edge en arranque) caemos al legacy simSimple
+     basado en TEAM_RATINGS escalar. */
   function _gmAutoSimulateIAvsIA() {
-    var rat = window.TEAM_RATINGS || {};
-    function _resolveRating(name) {
-      var v = rat[name];
-      if (typeof v === 'number') return v;
-      if (v && typeof v.rating === 'number') return v.rating;
-      return 76;
+    var score = null;
+    if (typeof _simIAvsIAWithContext === 'function') {
+      try {
+        var ctx = _simIAvsIAWithContext(_gm.home, _gm.away, 0);
+        if (ctx && typeof ctx === 'object' && isFinite(Number(ctx.gh)) && isFinite(Number(ctx.ga))) {
+          score = { gh: Math.max(0, Math.round(Number(ctx.gh))),
+                    ga: Math.max(0, Math.round(Number(ctx.ga))) };
+        }
+      } catch(_) {}
     }
-    var rA = _resolveRating(_gm.home);
-    var rB = _resolveRating(_gm.away);
-    /* Ventaja de local */
-    var rAeff = Math.round(rA * 1.10);
-    var rBeff = Math.round(rB);
-    var score;
-    if (typeof simSimple === 'function') {
-      score = simSimple(rAeff, rBeff);
-    } else {
-      score = { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+    if (!score) {
+      /* Fallback: simSimple sobre TEAM_RATINGS con ventaja local ×1.10. */
+      var rat = window.TEAM_RATINGS || {};
+      function _resolveRating(name) {
+        var v = rat[name];
+        if (typeof v === 'number') return v;
+        if (v && typeof v.rating === 'number') return v.rating;
+        return 76;
+      }
+      var rA = _resolveRating(_gm.home);
+      var rB = _resolveRating(_gm.away);
+      var rAeff = Math.round(rA * 1.10);
+      var rBeff = Math.round(rB);
+      if (typeof simSimple === 'function') {
+        score = simSimple(rAeff, rBeff);
+      } else {
+        score = { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+      }
     }
     var ev = { events: [], mvp: '', mvpTeam: '' };
     if (typeof genMatchEvents === 'function') {

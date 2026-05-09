@@ -60,6 +60,54 @@ descarta 1 IA respetando estas reglas:
 - oct+: drop PF → Hyp → EA. Descartamos a los más débiles primero.
 - NUNCA descartamos humanos ni TBDs (ganadores pendientes).
 
+## Motor único de simulación IA-vs-IA (obligatorio, 2026-05-09)
+
+**Toda simulación IA-vs-IA del proyecto** (independientemente de la
+competición — Liga EA Sports, Copa del Rey, Champions League, Europa
+League, Conference League, Recopa, Supercopa de Europa, Supercopa de
+España, Intercontinental, Mundialito Clubes, Torneos de Verano,
+amistosos, Liga Hypermotion, Primera Federación, ligas externas…)
+**debe usar el motor 4-ejes de Liga EA Sports** (`_simIAvsIAWithContext`)
+para que los resultados sean coherentes con los valores manuales que
+el admin pone en el editor (GLOBAL/ATAQUE/MEDIO/DEFENSA + capitán).
+
+Camino canónico:
+1. **Live IA-vs-IA**: `iaSimLive(mk, home, away, j[, j1fn])` →
+   internamente llama `_simIAvsIAWithContext(home, away, j)`.
+2. **Batch IA-vs-IA Liga EA**: `simularJornadaIA(j)` →
+   `_simIAvsIAWithContext`.
+3. **Auto-sim IA-vs-IA en gm-modal** (amistosos & equivalents):
+   `_gmAutoSimulateIAvsIA()` → `_simIAvsIAWithContext`.
+4. **Fallback**: `_fallbackIAvsIAScore` (legacy `simSimple` sobre
+   TEAM_RATINGS escalar) **solo** si el motor 4-ejes no está disponible
+   en el arranque. Nunca llamar directamente a `simSimple` desde rutas
+   nuevas.
+
+Reglas a respetar:
+- **Prohibido** añadir nuevos paths que llamen `simSimple(rA, rB)` con
+  ratings escalares como motor primario. Usar `_simIAvsIAWithContext`
+  o, en su defecto, el wrapper `iaSimLive`.
+- Las cajas de Champions/EL/ECL/Recopa/USC/Inter cuando reciban su
+  módulo de simulación deben hookear `iaSimLive` con prefijo `mk` y
+  registrar el persistor en la cadena `__is*SimPersist` de
+  `iaSimLive` (igual patrón que Recopa con `recopa_*` o Supercopa de
+  España con `sc_*`).
+- HvH y HvIA (con humano) NO se simulan — el humano juega en vivo en
+  gm-modal o calendar cards. El AI pre-roll de HvIA en Liga EA usa
+  `simSimple` (legacy, conservado por el comportamiento histórico
+  documentado del flag `_pendingAIEvents`).
+
+Helpers a reutilizar (todos en `window.*`):
+- `_simIAvsIAWithContext(home, away, j)` → motor 4-ejes con
+  rojas pre-roll, capitán ×1.05, localía variable seeded.
+- `_teamOffense(name)` / `_teamDefense(name)` → 60% atk/def + 40%
+  mid, leen `ligaExt_*` o `TEAM_RATINGS`.
+- `_captainBonus(name)` → 1.05 si hay C titular, 1.0 si no.
+- `_aggressivenessFactor(name)` → 0.5–1.49 para densidad de tarjetas.
+- `genMatchEventsEnhanced(teamA, teamB, gh, ga, simCtx)` → eventos
+  del acta (goles, tarjetas, lesiones, MVP) consistentes con el
+  marcador resultante.
+
 ## Iconos del equipo y del jugador en la simulación (obligatorio, siempre)
 
 Cada vez que se simule un partido (Liga, Copa, competiciones europeas,

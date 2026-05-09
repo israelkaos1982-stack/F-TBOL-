@@ -8893,6 +8893,16 @@ window._showSimProgress = function(opts, onDone){
 
   function _allTeams(){
     var out = [], seen = {};
+    /* Trackeamos TODAS las ligas en las que aparece cada equipo
+       (2026-05-08, fix: el usuario excluyó Hypermotion + Primera
+       Federación pero seguían saliendo equipos como SD Eibar y
+       Córdoba CF). Causa: un equipo puede estar duplicado en varios
+       `ligaExt_*` y antes solo guardábamos el `_league` del PRIMER
+       push — el resto (incluyendo el que el usuario quiere excluir)
+       se perdía. Ahora usamos un array `_leagues` y al filtrar
+       basta con que CUALQUIER liga del equipo esté excluida para
+       descartarlo. Mantenemos `_league` como alias de la primera
+       liga por compatibilidad con código antiguo. */
     function _push(name, power, shield, league){
       var clean = String(name||'').trim();
       if (!clean) return;
@@ -8901,10 +8911,19 @@ window._showSimProgress = function(opts, onDone){
       if (!isFinite(pw) || pw <= 0) pw = 70;
       if (seen[k]) {
         if (pw > seen[k].power) seen[k].power = pw;
-        if (!seen[k]._league && league) seen[k]._league = league;
+        if (league && seen[k]._leagues.indexOf(league) === -1) {
+          seen[k]._leagues.push(league);
+          if (!seen[k]._league) seen[k]._league = league;
+        }
         return;
       }
-      var entry = { name: clean, power: pw, shield: shield || _shieldOf(clean), _league: league || '' };
+      var leagues = league ? [league] : [];
+      var entry = {
+        name: clean, power: pw,
+        shield: shield || _shieldOf(clean),
+        _leagues: leagues,
+        _league: league || ''
+      };
       seen[k] = entry;
       out.push(entry);
     }
@@ -8933,6 +8952,19 @@ window._showSimProgress = function(opts, onDone){
     return out;
   }
 
+  /* Helper: ¿está alguna de las ligas del equipo en el set excluido?
+     Si el equipo aparece en >1 ligaExt_* (p.ej. SD Eibar en
+     `liga-hypermotion` y `liga-ea-sports`), basta con que el admin
+     haya marcado UNA cualquiera de las dos para descartarlo. */
+  function _teamInExcludedLeagues(team, excluded){
+    if (!team || !excluded || !excluded.length) return false;
+    var leagues = (team._leagues && team._leagues.length) ? team._leagues : [team._league || ''];
+    for (var i = 0; i < leagues.length; i++) {
+      if (excluded.indexOf(leagues[i]) !== -1) return true;
+    }
+    return false;
+  }
+
   /* Mezcla in-place tipo Fisher-Yates. */
   function _shuffle(arr){
     for (var i = arr.length - 1; i > 0; i--){
@@ -8953,7 +8985,7 @@ window._showSimProgress = function(opts, onDone){
     var aimax = cfg.aiLevelMax || 100;
     var excluded = cfg.excludedLeagues || [];
     var pool = _allTeams().filter(function(t){
-      if (excluded.indexOf(t._league) !== -1) return false;
+      if (_teamInExcludedLeagues(t, excluded)) return false;
       return t.power >= aimin && t.power <= aimax;
     });
     var needed = Math.max(0, (cfg.numTeams || 0) - (cfg.numHumans || 0));
@@ -8993,7 +9025,7 @@ window._showSimProgress = function(opts, onDone){
     var numH  = parseInt(document.getElementById('tour-ed-hum').value, 10) || 0;
     var excluded = (_open && _open.cfg && _open.cfg.excludedLeagues) || [];
     var pool = _allTeams().filter(function(t){
-      if (excluded.indexOf(t._league) !== -1) return false;
+      if (_teamInExcludedLeagues(t, excluded)) return false;
       return t.power >= aimin && t.power <= aimax;
     });
     var needed = Math.max(0, numT - numH);
@@ -9526,7 +9558,7 @@ window._showSimProgress = function(opts, onDone){
       if (t && t.name && t.name !== 'PENDIENTE') taken[t.name.toLowerCase()] = true;
     });
     var matches = _allTeams().filter(function(t){
-      if (excluded.indexOf(t._league) !== -1) return false;
+      if (_teamInExcludedLeagues(t, excluded)) return false;
       if (t.power < aimin || t.power > aimax) return false;
       return _norm(t.name).indexOf(q) !== -1;
     }).slice(0, 20);

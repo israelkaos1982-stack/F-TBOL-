@@ -5054,7 +5054,12 @@ window._showSimProgress = function(opts, onDone){
     if (comp === 'inter')     return 'ef_player_stats_inter_v1';
     if (comp === 'mundial')   return 'ef_player_stats_mundial_v1';
     if (comp === 'sel')       return 'ef_player_stats_sel_v1';
-    if (comp === 'amistoso')  return 'ef_player_stats_amistoso_v1';
+    /* Petición usuario 2026-05-09: amistosos y torneos de verano (SCT,
+       PSS, JG, Asia) comparten una sola caja de stats — la pantalla
+       `s-torneos-stats` que está debajo de los 4 torneos en el menú
+       de Competiciones — y NO se vuelcan a la plantilla global. */
+    if (comp === 'torneos' || comp === 'torneo' ||
+        comp === 'amistoso')  return 'ef_player_stats_torneos_v1';
     return PLAYER_STATS_KEY; /* liga + copa + sc (EA Sports) */
   };
 
@@ -5211,7 +5216,10 @@ window._showSimProgress = function(opts, onDone){
       inter:      {},   /* Intercontinental */
       mundial:    {},   /* Mundial de Clubes / Mundialito */
       sel:        {},
-      amistoso:   {}
+      /* `torneos` agrupa torneos de verano (SCT/PSS/JG/Asia) +
+         amistosos. Su key matchKey se infiere de `tour_*` o
+         `amistoso*`/`cal-ams*`. Petición usuario 2026-05-09. */
+      torneos:    {}
     };
     var teamPJByComp = {
       liga:       {},
@@ -5229,7 +5237,7 @@ window._showSimProgress = function(opts, onDone){
       inter:      {},
       mundial:    {},
       sel:        {},
-      amistoso:   {}
+      torneos:    {}
     };
 
     function getOrCreateInBucket(bucket, teamName, playerName){
@@ -5279,8 +5287,11 @@ window._showSimProgress = function(opts, onDone){
           || k.indexOf('|cwc|') !== -1) return 'mundial';
       if (k.indexOf('|sel|') !== -1 || k.indexOf('|sel-fin|') !== -1
           || k.indexOf('cal-sel') !== -1 || k.indexOf('cal-mf-') !== -1) return 'sel';
+      /* Torneos de verano + amistosos → bucket único `torneos`
+         (s-torneos-stats). Petición usuario 2026-05-09. */
+      if (k.indexOf('tour_') === 0 || k.indexOf('|torneo|') !== -1) return 'torneos';
       if (k.indexOf('|amistoso|') !== -1 || k.indexOf('cal-ams') !== -1
-          || k.indexOf('amistoso') === 0) return 'amistoso';
+          || k.indexOf('amistoso') === 0) return 'torneos';
       if (k.indexOf('sl-')  === 0 || k.indexOf('-sl')  !== -1
           || k.indexOf('|superliga|') !== -1
           || k.indexOf('superliga') !== -1) return 'superliga';
@@ -5613,7 +5624,9 @@ window._showSimProgress = function(opts, onDone){
     _persistBucket(buckets.inter,     teamPJByComp.inter,     'ef_player_stats_inter_v1');
     _persistBucket(buckets.mundial,   teamPJByComp.mundial,   'ef_player_stats_mundial_v1');
     _persistBucket(buckets.sel,       teamPJByComp.sel,       'ef_player_stats_sel_v1');
-    _persistBucket(buckets.amistoso,  teamPJByComp.amistoso,  'ef_player_stats_amistoso_v1');
+    /* `torneos` recoge torneos de verano + amistosos → la caja
+       `s-torneos-stats` debajo de los 4 torneos en el menú. */
+    _persistBucket(buckets.torneos,   teamPJByComp.torneos,   'ef_player_stats_torneos_v1');
     _persistBucket(buckets.sc,        teamPJByComp.sc,        'ef_player_stats_sc_v1');
     /* Cache AISLADO de Copa del Rey (2026-05-08): la pantalla
        `s-copa-stats` lee de aquí. La caja Liga EA Sports
@@ -9478,8 +9491,18 @@ window._showSimProgress = function(opts, onDone){
       cfg.currentRound = (typeof cfg.currentRound === 'number') ? cfg.currentRound : 0;
       cfg.results = cfg.results || {};
       cfg.bracket = cfg.bracket || [teams.slice()];
-      /* Asegurar que el bracket tiene la ronda 0 con los teams iniciales. */
-      if (!cfg.bracket[0] || !cfg.bracket[0].length) cfg.bracket[0] = teams.slice();
+      /* Resincronizar siempre la ronda 0 con cfg.teams. Bug 2026-05-09:
+         tras un pick humano, cfg.teams[slot] cambia pero
+         cfg.bracket[0][slot] mantenía la referencia vieja
+         (PENDIENTE) → al re-renderizar el bracket seguía mostrando
+         PENDIENTE aunque el chip ya estuviera asignado. Como teams
+         no se reordena tras picks, resync por orden es seguro y no
+         destruye results (los keys son `roundIdx_matchIdx`). */
+      if (!cfg.bracket[0] || cfg.bracket[0].length !== teams.length) {
+        cfg.bracket[0] = teams.slice();
+      } else {
+        for (var _bs = 0; _bs < teams.length; _bs++) cfg.bracket[0][_bs] = teams[_bs];
+      }
       /* Fallback: si por alguna razón cfg.currentRound apunta a una
          ronda vacía/inexistente del bracket (bug histórico cuando se
          avanza con todos los partidos saltados como humanos no jugados),
@@ -9522,6 +9545,12 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs">vs</span>'
             + _bracketTeamHtml(b, id, i+1)
             + '</div>';
+          /* Botón 🤖 SIM IA: solo aparece si la pareja tiene humano y
+             el partido NO ha sido jugado. Permite saltarse la
+             obligación de jugarlo a mano cuando el usuario quiere. */
+          if (_tourPairHasHuman(curTeams, i)) {
+            html += _tourSimAiBtnHtml(id, 'match', matchKey);
+          }
         }
         pairCount++;
       }
@@ -9641,6 +9670,9 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs">vs</span>'
             + _bracketTeamHtml(ta, tourId, m.away)
             + '</div>';
+          if (isCurrent && _tourLeagueMatchHasHuman(teams, m)) {
+            html += _tourSimAiBtnHtml(tourId, 'league', key);
+          }
         }
       });
       if (isCurrent && !allPlayedJ) {
@@ -9816,6 +9848,9 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs">vs</span>'
             + _bracketTeamHtml(b, tourId, i+1)
             + '</div>';
+          if (_tourPairHasHuman(curT, i)) {
+            html += _tourSimAiBtnHtml(tourId, 'ko', kKey);
+          }
         }
         koPairCount++;
       }
@@ -9888,6 +9923,19 @@ window._showSimProgress = function(opts, onDone){
       + '<div id="'+actaId+'" class="tour-acta-body" style="display:none;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin:0 4px 6px;overflow:hidden;">'
       + inner + '</div>';
     return html;
+  }
+
+  /* Botón 🤖 SIM IA per-match. Permite forzar la simulación
+     automática de un partido con humano sin tener que activar el
+     override admin del torneo entero. Petición usuario 2026-05-09
+     punto 3: "haz que pueda simular humano como IA los partidos de
+     las rondas de los torneos como se quiera, individual". */
+  function _tourSimAiBtnHtml(tourId, kind, matchKey) {
+    return '<div style="display:flex;justify-content:center;margin-top:-2px;margin-bottom:6px;">'
+      + '<button type="button" class="tour-sim-ai-btn" '
+      + 'data-tour="'+tourId+'" data-kind="'+kind+'" data-key="'+matchKey+'" '
+      + 'style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.30);color:rgba(255,255,255,.80);border-radius:6px;padding:3px 10px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
+      + '🤖 SIM IA</button></div>';
   }
 
   function _championBoxHtml(champTeam) {
@@ -10173,6 +10221,15 @@ window._showSimProgress = function(opts, onDone){
       if (extra.away)    out.away = extra.away;
     }
     cfg.results[key] = out;
+    /* Acumular stats al store de torneos (s-torneos-stats), igual
+       que los partidos auto-simulados. NO toca la plantilla global. */
+    if (out.events && out.events.length && typeof window.registrarLigaPlayerStats === 'function') {
+      try {
+        window.registrarLigaPlayerStats('tour_' + tourId + '_' + key,
+          out.home || '', out.away || '',
+          out.events, out.mvp || '', out.mvpTeam || '', 'torneos');
+      } catch(_){}
+    }
     _tourSaveAndRender(tourId, cfg);
     /* Si esto cierra el torneo → acreditar premios a wallets humanas. */
     setTimeout(function(){ _tourMaybeCreditPrizes(tourId); }, 200);
@@ -10532,11 +10589,12 @@ window._showSimProgress = function(opts, onDone){
      Usa `window.genMatchEventsEnhanced` (definido en misc_body_2.html)
      que produce eventos minuto-a-minuto coherentes con el resto de
      competiciones (mismo formato que el visor `_iaEventsHtml` espera).
-     Si los goles del acta sintética no coinciden con el marcador
-     pasado, ajustamos los goles del result para que cuadren — la
-     fuente de verdad pasa a ser el acta porque es la que ven los
-     ojos del usuario. Petición usuario 2026-05-09 (FOTO 2). */
-  function _tourAttachActa(out, teamA, teamB, gh, ga) {
+     Si `tourId`+`matchKey` se pasan, también acumula stats al store
+     `ef_player_stats_torneos_v1` (visible en s-torneos-stats) vía
+     `registrarLigaPlayerStats(matchKey, ..., 'torneos')`. NO toca el
+     store global ef_player_stats_v1 (los torneos NO cuentan en
+     plantilla). Petición usuario 2026-05-09 (FOTO 2 + punto 2). */
+  function _tourAttachActa(out, teamA, teamB, gh, ga, tourId, matchKey) {
     if (!out || !teamA || !teamB) return;
     if (typeof window.genMatchEventsEnhanced !== 'function') return;
     var nameA = teamA.name || teamA;
@@ -10550,6 +10608,15 @@ window._showSimProgress = function(opts, onDone){
       if (ev.mvpTeam) out.mvpTeam = ev.mvpTeam;
       out.home = nameA;
       out.away = nameB;
+      /* Acumular stats al store de torneos. Pasamos competition
+         explícito para evitar la inferencia desde matchKey. */
+      if (tourId && matchKey && typeof window.registrarLigaPlayerStats === 'function') {
+        var statsKey = 'tour_' + tourId + '_' + matchKey;
+        try {
+          window.registrarLigaPlayerStats(statsKey, nameA, nameB,
+            out.events, out.mvp || '', out.mvpTeam || '', 'torneos');
+        } catch(_){}
+      }
     } catch(_){}
   }
 
@@ -10657,7 +10724,7 @@ window._showSimProgress = function(opts, onDone){
       var out2 = { a: totalA, b: totalB, winner: winner, played: true,
                    legs:[{a:leg1.gh,b:leg1.ga},{a:leg2.gh,b:leg2.ga}] };
       if (pens) out2.pens = pens;
-      _tourAttachActa(out2, teamA, teamB, totalA, totalB);
+      _tourAttachActa(out2, teamA, teamB, totalA, totalB, cfg.id, roundIdx + '_' + matchIdx);
       return out2;
     }
     /* Single leg (formato `ko` SIEMPRE, o `ko-2leg` con final
@@ -10676,7 +10743,7 @@ window._showSimProgress = function(opts, onDone){
     }
     var out1 = { a: ga, b: gb, winner: winner1, played: true };
     if (pens1) out1.pens = pens1;
-    _tourAttachActa(out1, teamA, teamB, ga, gb);
+    _tourAttachActa(out1, teamA, teamB, ga, gb, cfg.id, roundIdx + '_' + matchIdx);
     return out1;
   }
 
@@ -10770,7 +10837,7 @@ window._showSimProgress = function(opts, onDone){
      home siempre local, no hay ko-2leg. Sin penaltis (los empates son
      legítimos en liga/grupos).
      Fase 3: bloqueo de humanos a menos que cfg._adminAllowAutoSim. */
-  function _tourSimLeagueMatch(cfg, teams, m) {
+  function _tourSimLeagueMatch(cfg, teams, m, matchKey) {
     if (_tourLeagueMatchHasHuman(teams, m) && !cfg._adminAllowAutoSim) {
       return { blockedHuman: true };
     }
@@ -10781,7 +10848,7 @@ window._showSimProgress = function(opts, onDone){
     if (!simFn) return null;
     var r = simFn(home, away);
     var out = { a: r.gh, b: r.ga, played: true };
-    _tourAttachActa(out, home, away, r.gh, r.ga);
+    _tourAttachActa(out, home, away, r.gh, r.ga, cfg.id, matchKey);
     return out;
   }
 
@@ -10827,6 +10894,86 @@ window._showSimProgress = function(opts, onDone){
   document.addEventListener('click', function(ev){
     var target = ev.target;
     if (!target || typeof target.closest !== 'function') return;
+
+    /* a.-1) Botón 🤖 SIM IA per-match. Forza la simulación auto de un
+       partido con humano sin tener que activar el override admin del
+       torneo entero. Petición usuario 2026-05-09. */
+    var simAiBtn = target.closest('.tour-sim-ai-btn');
+    if (simAiBtn) {
+      var aitid = simAiBtn.getAttribute('data-tour');
+      var aikind = simAiBtn.getAttribute('data-kind');
+      var aikey  = simAiBtn.getAttribute('data-key');
+      if (!aitid || TOUR_IDS.indexOf(aitid) === -1) return;
+      if (!confirm('¿Simular este partido con la IA aunque haya humano? El resultado será automático.')) {
+        ev.stopPropagation();
+        return;
+      }
+      var aicfg = _tourLoadCachedSync(aitid);
+      if (!aicfg) return;
+      aicfg.results = aicfg.results || {};
+      if (aicfg.results[aikey] && aicfg.results[aikey].played) { ev.stopPropagation(); return; }
+      var aiOk = false;
+      if (aikind === 'match') {
+        /* KO directo (SCT/PSS). */
+        var aiParts = aikey.split('_');
+        var aiR = parseInt(aiParts[0],10), aiM = parseInt(aiParts[1],10);
+        if (!isNaN(aiR) && !isNaN(aiM)) {
+          var aiBackup = aicfg._adminAllowAutoSim;
+          aicfg._adminAllowAutoSim = true;
+          var aiR0 = _tourSimMatch(aicfg, aiR, aiM);
+          aicfg._adminAllowAutoSim = aiBackup;
+          if (aiR0 && !aiR0.blockedHuman) { aicfg.results[aikey] = aiR0; aiOk = true; }
+        }
+      } else if (aikind === 'league') {
+        /* Liga / jornada de grupo. */
+        var aiLast = aikey.lastIndexOf('_');
+        var aiMid  = aikey.lastIndexOf('_', aiLast - 1);
+        var aiPrefix = (aiMid >= 0) ? aikey.substring(0, aiMid + 1) : '';
+        var aiJ = parseInt(aikey.substring(aiMid + 1, aiLast), 10);
+        var aiMi = parseInt(aikey.substring(aiLast + 1), 10);
+        var aiTeams, aiFix;
+        if (aiPrefix.indexOf('g') === 0) {
+          var aiG = parseInt(aiPrefix.substring(1), 10);
+          var aiPg = (aicfg.formatConfig && aicfg.formatConfig.perGroup) || 5;
+          aiTeams = (aicfg.teams||[]).slice(aiG*aiPg, (aiG+1)*aiPg);
+          aiFix = aicfg.groupFixtures && aicfg.groupFixtures[aiG];
+        } else {
+          aiTeams = aicfg.teams || [];
+          aiFix = aicfg.fixture;
+        }
+        if (aiFix && aiFix[aiJ] && aiFix[aiJ][aiMi]) {
+          var aiBackup2 = aicfg._adminAllowAutoSim;
+          aicfg._adminAllowAutoSim = true;
+          var aiR1 = _tourSimLeagueMatch(aicfg, aiTeams, aiFix[aiJ][aiMi], aikey);
+          aicfg._adminAllowAutoSim = aiBackup2;
+          if (aiR1 && !aiR1.blockedHuman) { aicfg.results[aikey] = aiR1; aiOk = true; }
+        }
+      } else if (aikind === 'ko') {
+        /* KO de Grupos+KO. Same logic que el inline handler. */
+        var aiKp = aikey.split('_');
+        var aiKr = parseInt(aiKp[1],10), aiKm = parseInt(aiKp[2],10);
+        if (!isNaN(aiKr) && !isNaN(aiKm)) {
+          var aiKt = (aicfg.koBracket || [])[aiKr] || [];
+          var aiKa = _tourFindTeam(aiKt[aiKm*2]);
+          var aiKb = _tourFindTeam(aiKt[aiKm*2 + 1]);
+          if (aiKa && aiKb && window.simulateMatch) {
+            var aiR2 = window.simulateMatch(aiKa, aiKb);
+            var aiGa = aiR2.gh, aiGb = aiR2.ga, aiW, aiPens = null;
+            if (aiGa > aiGb) aiW = 'a';
+            else if (aiGb > aiGa) aiW = 'b';
+            else { aiPens = _tourSimPenalties(aiKa, aiKb); aiW = (aiPens.a > aiPens.b) ? 'a' : 'b'; }
+            var aiOut = { a:aiGa, b:aiGb, winner:aiW, played:true };
+            if (aiPens) aiOut.pens = aiPens;
+            _tourAttachActa(aiOut, aiKa, aiKb, aiGa, aiGb, aitid, aikey);
+            aicfg.results[aikey] = aiOut;
+            aiOk = true;
+          }
+        }
+      }
+      if (aiOk) _tourSaveAndRender(aitid, aicfg);
+      ev.stopPropagation();
+      return;
+    }
 
     /* a.0) Toggle del 📋 ACTA. Antes que el handler de la card para
        que un click en el botón no dispare también el modal del
@@ -10910,7 +11057,7 @@ window._showSimProgress = function(opts, onDone){
           ev.stopPropagation();
           return;
         }
-        var rL = _tourSimLeagueMatch(cfg, teamsForMatch, mObj);
+        var rL = _tourSimLeagueMatch(cfg, teamsForMatch, mObj, lk);
         if (!rL || rL.blockedHuman) return;
         cfg.results[lk] = rL;
         _tourSaveAndRender(tid, cfg);
@@ -10945,7 +11092,7 @@ window._showSimProgress = function(opts, onDone){
         }
         var koOut = { a:ga, b:gb, winner:winner, played:true };
         if (pens) koOut.pens = pens;
-        _tourAttachActa(koOut, ka, kb, ga, gb);
+        _tourAttachActa(koOut, ka, kb, ga, gb, tid, kk);
         cfg.results[kk] = koOut;
         _tourSaveAndRender(tid, cfg);
         ev.stopPropagation();
@@ -11006,7 +11153,7 @@ window._showSimProgress = function(opts, onDone){
       fixJ[jorIdx].forEach(function(m, mi){
         var key = prefixJ + jorIdx + '_' + mi;
         if (jcfg.results[key] && jcfg.results[key].played) return;
-        var rL = _tourSimLeagueMatch(jcfg, teamsJ, m);
+        var rL = _tourSimLeagueMatch(jcfg, teamsJ, m, key);
         if (!rL) return;
         if (rL.blockedHuman) { skippedJ++; return; }
         jcfg.results[key] = rL;
@@ -11043,7 +11190,7 @@ window._showSimProgress = function(opts, onDone){
         else { pens2 = _tourSimPenalties(ka2, kb2); w2 = (pens2.a > pens2.b) ? 'a' : 'b'; }
         var ko2 = { a:ga2, b:gb2, winner:w2, played:true };
         if (pens2) ko2.pens = pens2;
-        _tourAttachActa(ko2, ka2, kb2, ga2, gb2);
+        _tourAttachActa(ko2, ka2, kb2, ga2, gb2, ktid, koKey);
         kcfg.results[koKey] = ko2;
       }
       _tourSaveAndRender(ktid, kcfg);

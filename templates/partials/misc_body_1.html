@@ -8577,6 +8577,19 @@ window._showSimProgress = function(opts, onDone){
       <textarea id="tour-ed-prizes" rows="5" placeholder="champ:100&#10;sub:80&#10;sf:60"></textarea>
     </div>
 
+    <!-- Auto-sim humanos (admin override). Por defecto OFF: cuando hay
+         humanos en un partido, OBLIGA a jugarlo a mano (gm-modal).
+         Marcar este check permite saltarse esa regla y simular con la
+         IA decidiendo. Sólo accesible vía PIN admin 747 (el editor
+         entero ya está PIN-gated). -->
+    <div class="tour-ed-row" style="display:flex;align-items:center;gap:8px;background:rgba(240,192,64,.06);border:1px dashed rgba(240,192,64,.35);border-radius:8px;padding:8px 10px;">
+      <input id="tour-ed-allow-autosim" type="checkbox" style="width:auto !important;margin:0;cursor:pointer;">
+      <label for="tour-ed-allow-autosim" style="margin:0;text-transform:none;font-size:11px;letter-spacing:.5px;color:#f0c040;cursor:pointer;flex:1;">
+        🖍 <b>Auto-simular partidos con humano</b><br>
+        <span style="font-size:10px;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;">Por defecto los partidos con humano se juegan a mano. Activar sólo para tests.</span>
+      </label>
+    </div>
+
     <!-- Acciones -->
     <div style="display:flex;gap:8px;margin-top:12px;">
       <button id="tour-ed-save" style="flex:1;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;font-weight:700;cursor:pointer;">✅ CONFIRMAR Y SORTEAR</button>
@@ -9218,6 +9231,8 @@ window._showSimProgress = function(opts, onDone){
     document.getElementById('tour-ed-aimax').value = cfg.aiLevelMax || 95;
     document.getElementById('tour-ed-fmt').value = cfg.format || 'ko';
     document.getElementById('tour-ed-prizes').value = _prizesToText(cfg.prizes);
+    var asEl = document.getElementById('tour-ed-allow-autosim');
+    if (asEl) asEl.checked = !!cfg._adminAllowAutoSim;
     _renderFmtCfg();
     _renderLeagueChecks();
     _updatePoolStat();
@@ -9262,6 +9277,8 @@ window._showSimProgress = function(opts, onDone){
       };
     }
     cfg.prizes = _prizesFromText(document.getElementById('tour-ed-prizes').value);
+    var asEl2 = document.getElementById('tour-ed-allow-autosim');
+    cfg._adminAllowAutoSim = !!(asEl2 && asEl2.checked);
     return cfg;
   }
 
@@ -9971,6 +9988,288 @@ window._showSimProgress = function(opts, onDone){
     return html;
   }
 
+  /* ─── Fase 3: gm-modal HvH/HvIA + wallet humano ──────────
+     Cuando un partido tiene humano(s), el flujo es:
+       1. Card → _tourOpenHumanMatch(tourId, key, teamA, teamB).
+       2. Lanza previa (showPrePartidoOverlay) y luego el gm-modal
+          full-screen (window.abrirTorneo, definida en misc_body_2).
+       3. Al terminar el partido, gmEndMatch detecta `_isTour` y
+          llama a window._tourSaveHumanResult, que persiste el
+          resultado en cfg.results[key] y, si la última ronda está
+          jugada, distribuye los premios a las cajas humanas vía
+          _tourCreditPrizes.
+     Override admin: si cfg._adminAllowAutoSim está activo, se salta
+     el bloqueo y los handlers de auto-sim funcionan normalmente. */
+
+  function _tourOpenHumanMatch(tourId, matchKey, teamAObj, teamBObj) {
+    if (!teamAObj || !teamBObj) return;
+    var nameA = teamAObj.name || '?';
+    var nameB = teamBObj.name || '?';
+    if (nameA === 'PENDIENTE' || nameB === 'PENDIENTE') {
+      alert('🎮 Hay un slot humano sin asignar (PENDIENTE). Tócalo primero para elegir tu equipo.');
+      return;
+    }
+    var isHvH = !!teamAObj.isHuman && !!teamBObj.isHuman;
+    var humanInvolved = !!teamAObj.isHuman || !!teamBObj.isHuman;
+    var duracion = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: humanInvolved })
+      : (isHvH ? '15 min 45 s' : '9 min 45 s');
+    var prePartidoKey = 'tour_' + tourId + '_' + matchKey;
+    /* Marcamos el contexto previo a la previa para que `_ppCustomCallback`
+       sepa abrir abrirTorneo con los datos correctos. */
+    window._ppPreviaTeams = { home: nameA, away: nameB, j: 0, comp: 'torneo',
+                              tourId: tourId, tourKey: matchKey };
+    window._ppCustomCallback = function(){
+      window._ppPreviaTeams = null;
+      if (typeof window.abrirTorneo === 'function') {
+        try { window.abrirTorneo(nameA, nameB, isHvH, tourId, matchKey); } catch(_){}
+      } else {
+        alert('Falta window.abrirTorneo (Fase 3 incompleta).');
+      }
+    };
+    if (typeof window.showPrePartidoOverlay === 'function') {
+      window.showPrePartidoOverlay(prePartidoKey, 'torneo', 'Sí', duracion, isHvH);
+    } else {
+      /* Fallback: si no hay previa, abrir directo. */
+      if (typeof window.abrirTorneo === 'function') {
+        try { window.abrirTorneo(nameA, nameB, isHvH, tourId, matchKey); } catch(_){}
+      }
+    }
+  }
+  window._tourOpenHumanMatch = _tourOpenHumanMatch;
+
+  /* Mensaje breve cuando un sim-batch saltó N partidos humanos. Se
+     pinta sobre el feedback del torneo. No bloqueante. */
+  function _tourFlashHumanNotice(tourId, n) {
+    try {
+      var box = document.getElementById('s-' + tourId);
+      if (!box) return;
+      var f = document.createElement('div');
+      f.textContent = '🎮 ' + n + ' partido' + (n===1?'':'s') + ' con humano se han SALTADO. Tócalo'+(n===1?'':'s')+' para jugarlo'+(n===1?'':'s')+' a mano.';
+      f.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(240,192,64,.95);color:#1a0e00;padding:10px 16px;border-radius:10px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;font-weight:700;z-index:99999;box-shadow:0 4px 18px rgba(0,0,0,.45);max-width:90vw;text-align:center;';
+      document.body.appendChild(f);
+      setTimeout(function(){ try { f.remove(); } catch(_){} }, 4500);
+    } catch(_){}
+  }
+
+  /* Persistencia desde gmEndMatch (misc_body_2.html) cuando termina
+     un partido humano de torneo. Reconstruye el `result` con la misma
+     forma que `_tourSimMatch` y dispara el render + acreditación de
+     premios si la final acaba de jugarse. */
+  window._tourSaveHumanResult = function(tourId, key, gh, ga, penWinner) {
+    if (!tourId || !key || TOUR_IDS.indexOf(tourId) === -1) return;
+    var cfg = _tourLoadCachedSync(tourId);
+    if (!cfg) return;
+    cfg.results = cfg.results || {};
+    var out = { a: gh|0, b: ga|0, played: true };
+    /* Determinar si esta key es KO single-leg (necesita winner). */
+    var isKO = (key.indexOf('_') === key.lastIndexOf('_'));   /* "0_2" → 1 underscore */
+    var isKoG = (key.indexOf('ko_') === 0);                    /* "ko_0_1" */
+    if (isKO || isKoG) {
+      var winner;
+      if (out.a > out.b) winner = 'a';
+      else if (out.b > out.a) winner = 'b';
+      else {
+        /* Empate: usa penWinner si vino, si no coin flip — el modal
+           DEBE haberlo resuelto. */
+        if (penWinner === 'a' || penWinner === 'b') winner = penWinner;
+        else winner = (Math.random() < 0.5 ? 'a' : 'b');
+      }
+      out.winner = winner;
+    }
+    cfg.results[key] = out;
+    _tourSaveAndRender(tourId, cfg);
+    /* Si esto cierra el torneo → acreditar premios a wallets humanas. */
+    setTimeout(function(){ _tourMaybeCreditPrizes(tourId); }, 200);
+  };
+
+  /* Detecta si el torneo está completo (campeón decidido) y, si
+     procede, distribuye monedas a las cajas humanas. Usa una
+     guardia (`cfg._prizesPaid`) para evitar pagar dos veces. */
+  function _tourMaybeCreditPrizes(tourId) {
+    var cfg = _tourLoadCachedSync(tourId);
+    if (!cfg || cfg._prizesPaid) return;
+    var humanPayouts = _tourComputeHumanPayouts(cfg);
+    if (!humanPayouts.complete) return;  /* aún no terminó */
+    cfg._prizesPaid = true;
+    humanPayouts.payouts.forEach(function(p){
+      if (p.coins > 0) _walletCredit(p.name, p.coins);
+    });
+    try {
+      window._TOUR_CACHE[tourId] = cfg;
+      localStorage.setItem(_key(tourId), JSON.stringify(cfg));
+    } catch(_){}
+    if (typeof window._tourSave === 'function') {
+      try { window._tourSave(tourId, cfg); } catch(_){}
+    }
+  }
+
+  /* Para cada team humano del torneo, calcula cuántas monedas le
+     corresponden. Devuelve {complete:bool, payouts:[{name, coins}]}.
+     `complete` = true sólo cuando hay campeón decidido. */
+  function _tourComputeHumanPayouts(cfg) {
+    var prizes = cfg.prizes || {};
+    var teams = cfg.teams || [];
+    var humanIdxs = [];
+    teams.forEach(function(t, i){ if (t && t.isHuman) humanIdxs.push(i); });
+    if (!humanIdxs.length) return { complete:false, payouts:[] };
+    var payouts = humanIdxs.map(function(i){ return { name:teams[i].name, coins:0 }; });
+    function _bumpByName(nm, c){
+      for (var p = 0; p < payouts.length; p++) if (payouts[p].name === nm) { payouts[p].coins += c; return; }
+    }
+    var complete = false;
+    if (cfg.format === 'ko' || cfg.format === 'ko-2leg') {
+      var rounds = (cfg.formatConfig && cfg.formatConfig.rounds) || [];
+      var lastIdx = rounds.length - 1;
+      var lastRes = (cfg.results || {})[lastIdx + '_0'];
+      if (!lastRes || !lastRes.played) return { complete:false, payouts:payouts };
+      complete = true;
+      var bracket = cfg.bracket || [];
+      /* Misma lógica que _renderKOPayouts. */
+      var ROUND_KEY_MAP = { 7:['r128','r64','r32','r16','qf','sf'],
+                            6:['r64','r32','r16','qf','sf'],
+                            5:['r32','r16','qf','sf'],
+                            4:['r16','qf','sf'],
+                            3:['qf','sf'], 2:['sf'] };
+      var keyByRound = ROUND_KEY_MAP[rounds.length] || [];
+      var maxR = {};
+      bracket.forEach(function(rt, ri){
+        rt.forEach(function(t){
+          if (!t || !t.name) return;
+          if (typeof maxR[t.name] === 'undefined' || maxR[t.name] < ri) maxR[t.name] = ri;
+        });
+      });
+      var finalT = bracket[lastIdx] || [];
+      var champ = (lastRes.winner === 'a') ? finalT[0] : finalT[1];
+      var sub   = (lastRes.winner === 'a') ? finalT[1] : finalT[0];
+      humanIdxs.forEach(function(i){
+        var t = teams[i];
+        if (!t || !t.name) return;
+        if (champ && champ.name === t.name) _bumpByName(t.name, prizes.champ || 0);
+        else if (sub && sub.name === t.name) _bumpByName(t.name, prizes.sub || 0);
+        else {
+          var rMax = (typeof maxR[t.name] === 'number') ? maxR[t.name] : 0;
+          var k = keyByRound[rMax];
+          if (k && prizes[k]) _bumpByName(t.name, prizes[k]);
+        }
+      });
+    } else if (cfg.format === 'league') {
+      if (!cfg.fixture) return { complete:false, payouts:payouts };
+      var prog = _tourFixtureProgress(cfg.fixture, cfg.results, '');
+      if (!prog.allDone) return { complete:false, payouts:payouts };
+      complete = true;
+      var rows = _tourComputeStandings(teams, cfg.fixture, cfg.results, '');
+      rows.forEach(function(r, idx){
+        if (!r.isHuman) return;
+        var pos = idx + 1;
+        var coins = (prizes.perWin||0)*r.pg + (prizes.perDraw||0)*r.pe + (prizes.perLoss||0)*r.pp;
+        var posKey = 'pos'+pos;
+        coins += (prizes[posKey] || 0);
+        _bumpByName(r.name, coins);
+      });
+    } else if (cfg.format === 'groups-ko') {
+      var fc = cfg.formatConfig || {};
+      var nGroups = fc.groups || 1;
+      var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
+      var koRounds = fc.koRounds || ['Cuartos','Semis','Final'];
+      var koLastIdx = koRounds.length - 1;
+      var koLastRes = (cfg.results || {})['ko_' + koLastIdx + '_0'];
+      if (!koLastRes || !koLastRes.played) return { complete:false, payouts:payouts };
+      complete = true;
+      /* Bonus por partido en grupos. */
+      var slices = [];
+      for (var g = 0; g < nGroups; g++) {
+        var slice = teams.slice(g*perGroup, (g+1)*perGroup);
+        if (!slice.length) break;
+        slices.push(slice);
+        var fix = (cfg.groupFixtures || {})[g];
+        if (!fix) continue;
+        var rs = _tourComputeStandings(slice, fix, cfg.results, 'g'+g+'_');
+        rs.forEach(function(r){
+          if (!r.isHuman) return;
+          var c = (prizes.perWin||0)*r.pg + (prizes.perDraw||0)*r.pe + (prizes.perLoss||0)*r.pp;
+          _bumpByName(r.name, c);
+        });
+      }
+      /* Bonus por avance + sub/champ. */
+      var maxKoR = {};
+      (cfg.koBracket || []).forEach(function(rt, ri){
+        rt.forEach(function(t){
+          if (!t || !t.name) return;
+          if (typeof maxKoR[t.name] === 'undefined' || maxKoR[t.name] < ri) maxKoR[t.name] = ri;
+        });
+      });
+      var koFinalT = (cfg.koBracket || [])[koLastIdx] || [];
+      var koChamp = (koLastRes.winner === 'a') ? koFinalT[0] : koFinalT[1];
+      var koSub   = (koLastRes.winner === 'a') ? koFinalT[1] : koFinalT[0];
+      var advKeys = ['advCuartos','advSemis','advFinal'];
+      humanIdxs.forEach(function(i){
+        var t = teams[i];
+        if (!t || !t.name) return;
+        var reached = (typeof maxKoR[t.name] === 'number') ? maxKoR[t.name] : -1;
+        for (var s = 0; s <= reached; s++) {
+          if (advKeys[s] && prizes[advKeys[s]]) _bumpByName(t.name, prizes[advKeys[s]]);
+        }
+        if (koChamp && koChamp.name === t.name) _bumpByName(t.name, prizes.champ || 0);
+        else if (koSub && koSub.name === t.name) _bumpByName(t.name, prizes.sub || 0);
+      });
+    }
+    return { complete:complete, payouts:payouts };
+  }
+
+  /* Caja (wallet) por team humano. Bayern Munich tiene HUD propio
+     que sincroniza vía `bayern_hud_overrides_v1.money`. Para los demás
+     teams humanos se persiste en `tour_human_wallets_v1` (mapa
+     normalizado-name → coins). El balance es ACUMULATIVO; no se
+     resetea entre torneos. */
+  var WALLET_KEY = 'tour_human_wallets_v1';
+  var BAYERN_HUD_KEY = 'bayern_hud_overrides_v1';
+
+  function _walletNorm(nm) {
+    return String(nm||'').trim().toLowerCase().replace(/\s+/g,' ');
+  }
+
+  function _walletGetAll() {
+    try {
+      var r = localStorage.getItem(WALLET_KEY);
+      if (!r) return {};
+      return JSON.parse(r) || {};
+    } catch(_) { return {}; }
+  }
+
+  function _walletSetAll(o) {
+    try { localStorage.setItem(WALLET_KEY, JSON.stringify(o||{})); } catch(_){}
+  }
+
+  function _walletIsBayern(nm) {
+    var n = _walletNorm(nm);
+    return n === 'bayern' || n === 'bayern munich' || n === 'bayern münchen' || n === 'bayern muenchen' || n === 'fc bayern' || n === 'fc bayern münchen';
+  }
+
+  function _walletCredit(nm, coins) {
+    if (!nm || !coins || coins <= 0) return;
+    if (_walletIsBayern(nm)) {
+      /* Sincroniza con la caja del Bayern (HUD del s-munich). Si
+         hay ya money en overrides, sumamos; si no, partimos de 0. */
+      try {
+        var raw = localStorage.getItem(BAYERN_HUD_KEY);
+        var o = raw ? (JSON.parse(raw) || {}) : {};
+        var prev = (o.money != null) ? (parseInt(o.money,10) || 0) : 0;
+        o.money = prev + coins;
+        localStorage.setItem(BAYERN_HUD_KEY, JSON.stringify(o));
+      } catch(_){}
+      return;
+    }
+    /* Otros teams: persistencia genérica. */
+    var all = _walletGetAll();
+    var k = _walletNorm(nm);
+    all[k] = (all[k] || 0) + coins;
+    _walletSetAll(all);
+  }
+  /* Expuesto por si el HUD del Bayern (u otras cajas) quiere leer. */
+  window._tourWalletGetAll = _walletGetAll;
+  window._tourWalletCredit = _walletCredit;
+
   /* Wrapper público: pinta INMEDIATAMENTE con cache + lanza fetch
      async para refrescar si el server tiene algo más nuevo. */
   window._tourRender = function(id){
@@ -10171,14 +10470,34 @@ window._showSimProgress = function(opts, onDone){
     return { a: sA, b: sB };
   }
 
+  /* Devuelve true si AL MENOS UNO de los dos slots de una pareja del
+     bracket KO directo está marcado isHuman. */
+  function _tourPairHasHuman(teams, i) {
+    var a = teams[i], b = teams[i+1];
+    return !!((a && a.isHuman) || (b && b.isHuman));
+  }
+  /* Devuelve true si el partido m={home,away} en `teams` (índices)
+     involucra al menos a un humano. */
+  function _tourLeagueMatchHasHuman(teams, m) {
+    var h = teams[m.home], a = teams[m.away];
+    return !!((h && h.isHuman) || (a && a.isHuman));
+  }
+
   function _tourSimMatch(cfg, roundIdx, matchIdx) {
     /* Simula UN partido del bracket usando `simulateMatch` global
        (motor 4-ejes de la liga). Devuelve {a, b, winner, played:true}.
        Para ko-2leg (ida+vuelta) simula los DOS legs y aplica gol-fuera×2
        en empate; para ko (single leg) si hay empate, tanda de penaltis
-       (Fase 2). */
+       (Fase 2).
+       Fase 3: si hay humano(s) y el admin NO ha activado auto-sim,
+       devolvemos `{blockedHuman:true}` para que el caller decida (el
+       click handler abre el gm-modal en su lugar; los botones de
+       "simular ronda/jornada" saltan el partido). */
     var teams = cfg.bracket[roundIdx];
     var i = matchIdx * 2;
+    if (_tourPairHasHuman(teams, i) && !cfg._adminAllowAutoSim) {
+      return { blockedHuman: true };
+    }
     var teamA = _tourFindTeam(teams[i]);
     var teamB = _tourFindTeam(teams[i+1]);
     if (!teamA || !teamB) return null;
@@ -10327,8 +10646,12 @@ window._showSimProgress = function(opts, onDone){
 
   /* Sim de un partido de liga/grupo. Reusa simulateMatch directamente:
      home siempre local, no hay ko-2leg. Sin penaltis (los empates son
-     legítimos en liga/grupos). */
+     legítimos en liga/grupos).
+     Fase 3: bloqueo de humanos a menos que cfg._adminAllowAutoSim. */
   function _tourSimLeagueMatch(cfg, teams, m) {
+    if (_tourLeagueMatchHasHuman(teams, m) && !cfg._adminAllowAutoSim) {
+      return { blockedHuman: true };
+    }
     var home = _tourFindTeam(teams[m.home]);
     var away = _tourFindTeam(teams[m.away]);
     if (!home || !away) return null;
@@ -10391,8 +10714,16 @@ window._showSimProgress = function(opts, onDone){
         var matchIdx = parseInt(parts[1], 10);
         if (isNaN(roundIdx) || isNaN(matchIdx)) return;
         if (cfg.results[mk] && cfg.results[mk].played) return;
+        var teamsRound = (cfg.bracket && cfg.bracket[roundIdx]) || [];
+        var iSlot = matchIdx * 2;
+        if (_tourPairHasHuman(teamsRound, iSlot) && !cfg._adminAllowAutoSim) {
+          /* Humano implicado → abrir gm-modal en vez de auto-simular. */
+          _tourOpenHumanMatch(tid, mk, teamsRound[iSlot], teamsRound[iSlot+1]);
+          ev.stopPropagation();
+          return;
+        }
         var r = _tourSimMatch(cfg, roundIdx, matchIdx);
-        if (!r) return;
+        if (!r || r.blockedHuman) return;
         cfg.results[mk] = r;
         _tourSaveAndRender(tid, cfg);
         ev.stopPropagation();
@@ -10423,8 +10754,14 @@ window._showSimProgress = function(opts, onDone){
           fixForMatch = cfg.fixture;
         }
         if (!fixForMatch || !fixForMatch[jIdx] || !fixForMatch[jIdx][mIdx]) return;
-        var rL = _tourSimLeagueMatch(cfg, teamsForMatch, fixForMatch[jIdx][mIdx]);
-        if (!rL) return;
+        var mObj = fixForMatch[jIdx][mIdx];
+        if (_tourLeagueMatchHasHuman(teamsForMatch, mObj) && !cfg._adminAllowAutoSim) {
+          _tourOpenHumanMatch(tid, lk, teamsForMatch[mObj.home], teamsForMatch[mObj.away]);
+          ev.stopPropagation();
+          return;
+        }
+        var rL = _tourSimLeagueMatch(cfg, teamsForMatch, mObj);
+        if (!rL || rL.blockedHuman) return;
         cfg.results[lk] = rL;
         _tourSaveAndRender(tid, cfg);
         ev.stopPropagation();
@@ -10440,6 +10777,11 @@ window._showSimProgress = function(opts, onDone){
         var kmI = parseInt(kpts[2], 10);
         if (isNaN(krI) || isNaN(kmI)) return;
         var koTeams = (cfg.koBracket || [])[krI] || [];
+        if (_tourPairHasHuman(koTeams, kmI*2) && !cfg._adminAllowAutoSim) {
+          _tourOpenHumanMatch(tid, kk, koTeams[kmI*2], koTeams[kmI*2+1]);
+          ev.stopPropagation();
+          return;
+        }
         var ka = _tourFindTeam(koTeams[kmI*2]);
         var kb = _tourFindTeam(koTeams[kmI*2 + 1]);
         if (!ka || !kb || !window.simulateMatch) return;
@@ -10471,14 +10813,18 @@ window._showSimProgress = function(opts, onDone){
       cfg2.bracket = cfg2.bracket || [(cfg2.teams||[]).slice()];
       var curR2 = cfg2.currentRound || 0;
       var curTeams2 = cfg2.bracket[curR2] || [];
+      var skippedH = 0;
       for (var k = 0; k < curTeams2.length; k += 2) {
         if (!curTeams2[k+1]) break;
         var key2 = curR2 + '_' + (k/2);
         if (cfg2.results[key2] && cfg2.results[key2].played) continue;
         var rr = _tourSimMatch(cfg2, curR2, k/2);
-        if (rr) cfg2.results[key2] = rr;
+        if (!rr) continue;
+        if (rr.blockedHuman) { skippedH++; continue; }
+        cfg2.results[key2] = rr;
       }
       _tourSaveAndRender(tid2, cfg2);
+      if (skippedH) _tourFlashHumanNotice(tid2, skippedH);
       ev.stopPropagation();
       return;
     }
@@ -10505,13 +10851,17 @@ window._showSimProgress = function(opts, onDone){
         fixJ = jcfg.fixture;
       }
       if (!fixJ || !fixJ[jorIdx]) return;
+      var skippedJ = 0;
       fixJ[jorIdx].forEach(function(m, mi){
         var key = prefixJ + jorIdx + '_' + mi;
         if (jcfg.results[key] && jcfg.results[key].played) return;
         var rL = _tourSimLeagueMatch(jcfg, teamsJ, m);
-        if (rL) jcfg.results[key] = rL;
+        if (!rL) return;
+        if (rL.blockedHuman) { skippedJ++; return; }
+        jcfg.results[key] = rL;
       });
       _tourSaveAndRender(jtid, jcfg);
+      if (skippedJ) _tourFlashHumanNotice(jtid, skippedJ);
       ev.stopPropagation();
       return;
     }
@@ -10526,10 +10876,12 @@ window._showSimProgress = function(opts, onDone){
       kcfg.results = kcfg.results || {};
       var kCurR = kcfg.koCurrentRound || 0;
       var kCurT = (kcfg.koBracket || [])[kCurR] || [];
+      var skippedK = 0;
       for (var kk2 = 0; kk2 < kCurT.length; kk2 += 2) {
         if (!kCurT[kk2+1]) break;
         var koKey = 'ko_' + kCurR + '_' + (kk2/2);
         if (kcfg.results[koKey] && kcfg.results[koKey].played) continue;
+        if (_tourPairHasHuman(kCurT, kk2) && !kcfg._adminAllowAutoSim) { skippedK++; continue; }
         var ka2 = _tourFindTeam(kCurT[kk2]);
         var kb2 = _tourFindTeam(kCurT[kk2+1]);
         if (!ka2 || !kb2 || !window.simulateMatch) continue;
@@ -10543,6 +10895,7 @@ window._showSimProgress = function(opts, onDone){
         kcfg.results[koKey] = ko2;
       }
       _tourSaveAndRender(ktid, kcfg);
+      if (skippedK) _tourFlashHumanNotice(ktid, skippedK);
       ev.stopPropagation();
       return;
     }

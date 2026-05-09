@@ -10913,7 +10913,25 @@
     if (addBtn) { addBtn.disabled = true; }
     document.getElementById('gm-event-panel').style.display = 'none';
     document.getElementById('gm-team-pick').style.display = 'none';
-    if (_gm._isWprev) {
+    if (_gm._isTour) {
+      /* Torneos de verano (SCT, PSS, JG, Asia): persistimos en
+         TOUR_CACHE[_tourId].results[_tourKey]. Si esa key es de KO
+         single-leg y el partido acabó empatado, el penWinner viene
+         del mecanismo de penaltis del modal. _tourSaveHumanResult
+         se encarga de re-renderizar y, si el torneo termina, de
+         acreditar premios a las cajas humanas. */
+      try {
+        var _tourPenWin = _gm.penWinner || null;
+        if (!_tourPenWin) {
+          var _tourPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
+          if (_tourPenEv) _tourPenWin = _tourPenEv.team === 'a' ? 'a' : 'b';
+        } else if (_tourPenWin === _gm.home) _tourPenWin = 'a';
+        else if (_tourPenWin === _gm.away) _tourPenWin = 'b';
+        if (typeof window._tourSaveHumanResult === 'function') {
+          window._tourSaveHumanResult(_gm._tourId, _gm._tourKey, _gm.sc.a, _gm.sc.b, _tourPenWin);
+        }
+      } catch(_e){}
+    } else if (_gm._isWprev) {
       /* Previa Champions · Ronda Final: persistimos en wprev_state_v1
          (no en la tabla de Liga). _wprevSaveHumanResult re-renderiza
          buildUclPrevClas tras guardar, así la fila de la jornada pasa
@@ -11523,7 +11541,10 @@
       _scStadium: _gm._scStadium,
       _isRecopa: !!_gm._isRecopa,
       _recopaPhase: _gm._recopaPhase,
-      _recopaIdx: _gm._recopaIdx
+      _recopaIdx: _gm._recopaIdx,
+      _isTour: !!_gm._isTour,
+      _tourId: _gm._tourId,
+      _tourKey: _gm._tourKey
     };
   }
   /* Reabre un partido guardado en `window._gmBg`. Invoca `gmOpen` con
@@ -11639,6 +11660,9 @@
     _gm._isRecopa = saved ? !!saved._isRecopa : false;
     _gm._recopaPhase = saved ? saved._recopaPhase : null;
     _gm._recopaIdx = saved ? saved._recopaIdx : null;
+    _gm._isTour = saved ? !!saved._isTour : false;
+    _gm._tourId = saved ? saved._tourId : null;
+    _gm._tourKey = saved ? saved._tourKey : null;
     /* Registro global para el hub PARTIDOS LIVE: expone el estado del
        partido abierto en gm-modal para que buildLiveScreen pueda
        mostrarlo como tarjeta live aunque el usuario navegue a otra
@@ -12296,6 +12320,24 @@
         window.__GM_LIVE._isWprev = true;
         window.__GM_LIVE._wprevGi = gi;
         window.__GM_LIVE._wprevJ  = j;
+      }
+    } catch(_){}
+  };
+
+  /* Torneos de verano (SCT, PSS, JG, Asia): abre el gm-modal con
+     comp='torneo' (single-leg con penaltis si HvH/HvIA empatan al
+     90'). Marca _gm con _isTour/_tourId/_tourKey para que
+     gmEndMatch llame a window._tourSaveHumanResult, que persiste
+     en TOUR_CACHE[tourId].results[matchKey] y dispara el render
+     + acreditación de premios. noET=false: empate NO permitido
+     (los KO single-leg necesitan ganador → penaltis). 2026-05-09. */
+  window.abrirTorneo = function (home, away, isHvH, tourId, matchKey) {
+    gmOpen(0, home, away, !!isHvH, 'torneo', false, false);
+    try {
+      if (window.__GM_LIVE) {
+        window.__GM_LIVE._isTour = true;
+        window.__GM_LIVE._tourId = tourId;
+        window.__GM_LIVE._tourKey = matchKey;
       }
     } catch(_){}
   };

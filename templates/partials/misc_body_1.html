@@ -3057,7 +3057,17 @@ window._showSimProgress = function(opts, onDone){
             default "🛡 Plantilla" (lextOpenSquad hizo early-return por
             mismatch de id), lo inicializamos A MANO con el team que
             ya tenemos en `found`. Así es imposible que el overlay
-            quede vacío o con título default. */
+            quede vacío o con título default.
+
+            REGLA (2026-05-09): SOLO actuar si el título sigue siendo
+            la cadena default. Antes la condición incluía
+            `titleText.indexOf(found.name) === -1`, lo que provocaba
+            un BUCLE de cambios de nombre cuando el usuario clicaba
+            dos equipos seguidos: el timer del primer click veía el
+            título del segundo equipo, no contenía el primer nombre,
+            y lo SOBRESCRIBÍA — y el timer del segundo click hacía lo
+            simétrico, etc. Reportado: "los nombres de los equipos
+            cambian dentro de las plantillas" (2026-05-08). */
       setTimeout(function(){
         var ov = document.getElementById('lext-ov-squad');
         if (!ov) return;
@@ -3067,8 +3077,11 @@ window._showSimProgress = function(opts, onDone){
         }
         var titleEl = document.getElementById('lext-ov-squad-title');
         var titleText = titleEl ? (titleEl.textContent || '').trim().toLowerCase() : '';
-        /* El default es "🛡 Plantilla". Si eso es lo que hay, reintentamos. */
-        if (titleEl && (titleText === 'plantilla' || titleText === '🛡 plantilla' || titleText.indexOf(String(found.name).toLowerCase()) === -1)) {
+        /* SOLO si el título sigue siendo el placeholder default. Si
+           ya tiene un nombre de equipo (cualquiera), lextOpenSquad
+           hizo su trabajo — no lo pisamos. */
+        var isDefault = (titleText === '' || titleText === 'plantilla' || titleText === '🛡 plantilla');
+        if (titleEl && isDefault) {
           try {
             var tp = Number(found.power)||0;
             titleEl.innerHTML = '🛡 <span data-team-power="'+tp+'">'+found.name+'</span>';

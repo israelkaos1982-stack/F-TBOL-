@@ -11665,6 +11665,20 @@
     _gm._copaRonda = saved ? saved._copaRonda : null;
     _gm._copaIdx = saved ? saved._copaIdx : null;
     _gm._copaVuelta = saved ? !!saved._copaVuelta : false;
+    /* Consumir contexto Copa pre-seteado por abrirCopa. Antes el flag
+       _isCopa se ponía DESPUÉS de gmOpen (vía window.__GM_LIVE), lo
+       que dejaba una ventana donde gmEndMatch (disparada por el
+       timer-auto al llegar a 90' empate) veía _gm.comp='copa' pero
+       _isCopa=false / _copaRonda=null → _isCopaSL=false → no se
+       forzaba PRÓRROGA. El usuario tenía que cerrar y reabrir desde
+       la previa para que el saved state arrastrase los flags
+       correctos. Bug FOTO 2026-05-09. */
+    if (window._gmPendingCopa && (comp === 'copa' || comp === 'copa-fin')) {
+      _gm._isCopa = true;
+      if (window._gmPendingCopa.ronda != null) _gm._copaRonda = window._gmPendingCopa.ronda;
+      if (window._gmPendingCopa.idx != null) _gm._copaIdx = window._gmPendingCopa.idx;
+      _gm._copaVuelta = !!window._gmPendingCopa.esVuelta;
+    }
     _gm._isWprev = saved ? !!saved._isWprev : false;
     _gm._wprevGi = saved ? saved._wprevGi : null;
     _gm._wprevJ = saved ? saved._wprevJ : null;
@@ -12179,8 +12193,17 @@
   window.abrirCopa = function (ronda, idx, esVuelta, home, away) {
     var isHvH = esHumano(home) && esHumano(away);
     var compKey = (ronda === 'fin') ? 'copa-fin' : 'copa';
-    gmOpen(0, home, away, isHvH, compKey, false, false);
+    /* Pre-cargar contexto Copa para que gmOpen lo consuma DENTRO del
+       reset de flags (en lugar de depender del post-set vía
+       __GM_LIVE, que dejaba una ventana de race en la primera
+       apertura — bug 2ª Ronda 2026-05-09: empate 2-2 al 90' no
+       disparaba PRÓRROGA hasta cerrar y reabrir la previa). */
+    window._gmPendingCopa = { ronda: ronda, idx: idx, esVuelta: !!esVuelta };
     try {
+      gmOpen(0, home, away, isHvH, compKey, false, false);
+      /* Doble seguridad: post-set también, por si gmOpen no consumió
+         el pending (paths que reusan _gm sin reset, e.g. early-return
+         cuando ya hay un partido vivo con mismos teams). */
       if (window.__GM_LIVE) {
         window.__GM_LIVE._isCopa = true;
         window.__GM_LIVE._copaRonda = ronda;
@@ -12189,6 +12212,7 @@
         window.__GM_LIVE.comp = compKey;
       }
     } catch(_){}
+    finally { window._gmPendingCopa = null; }
   };
 
   /* Persiste un resultado humano de Copa del Rey. Llamado desde

@@ -2485,59 +2485,65 @@ window._showSimProgress = function(opts, onDone){
       }
 
       if (!found) {
-        /* Pasada 3 (rescate): buscar el equipo en CUALQUIER `ligaExt_*`
-           del localStorage. Caso típico: la clasificación viene del
-           estado simulado (`ef_segunda_state_v1` / `ef_primera_fed_state_v1`)
-           cuyo nombre canónico (p.ej. "Cultural") difiere del nombre
-           guardado en el slug actual ("Cultural Leonesa", "C. Leonesa",
-           etc.) o del nombre original cuando el admin renombró el
-           equipo. Antes esto disparaba el alert "No encuentro" — ahora
-           buscamos en todos los slugs y, si encontramos un único match,
-           lo importamos al slug actual. */
+        /* Pasada 3 (rescate WITHIN-SLUG): buscar el equipo SOLO en
+           el slug actual con normalización menos estricta (sin/con
+           prefijos `de`, `CF`, `FC`, etc.). Antes este bloque buscaba
+           en TODOS los `ligaExt_*` y, si encontraba match en otro slug,
+           se lo llevaba — eso provocó la corrupción reportada
+           2026-05-09: clicar en filas de la clasificación de Hypermotion
+           que mostraban nombres de Primera Federación (race con
+           `appendLigaEaExtras` o estado simulado stale) IMPORTABA esos
+           equipos a Hypermotion una a una, hasta sumar 61 equipos en
+           Hypermotion (debían ser 22) y dejar Primera Federación con
+           solo 1 (de 40, porque después un cleanup las marcó como
+           duplicadas y borró las copias del slug "menor"). Ahora la
+           pasada 3 NO toca otros slugs. Si el equipo no está en este
+           slug y la clasificación lo lista, caemos a la pasada 4
+           (SQUAD_REGISTRY → fila virtual) que SOLO se usa para
+           visualizar y no contamina otras ligas. */
         try {
-          for (var _lk = 0; _lk < localStorage.length && !found; _lk++) {
-            var _K = localStorage.key(_lk);
-            if (!_K || _K.indexOf('ligaExt_') !== 0) continue;
-            if (_K.indexOf('_backup') !== -1) continue;
-            if (_K.indexOf('_snap_') !== -1) continue;
-            if (_K.indexOf('_protected') !== -1) continue;
-            if (_K === 'ligaExt_'+slug) continue;
-            var _raw2; try { _raw2 = localStorage.getItem(_K); } catch(_){ continue; }
-            if (!_raw2) continue;
-            var _d2; try { _d2 = JSON.parse(_raw2); } catch(_){ continue; }
-            var _tt2 = (_d2 && Array.isArray(_d2.teams)) ? _d2.teams : [];
-            for (var _i2 = 0; _i2 < _tt2.length && !found; _i2++) {
-              var _ee = _tt2[_i2];
-              if (!_ee || !_ee.name) continue;
-              var _nn2 = _normForClick(_ee.name);
-              for (var _b2 = 0; _b2 < targets.length; _b2++) {
-                if (_nn2 === targets[_b2] ||
-                    (target.length >= 4 && (_nn2.indexOf(targets[_b2]) !== -1 || targets[_b2].indexOf(_nn2) !== -1))) {
-                  found = _ee; break;
-                }
+          var _stripPrefix = function(s){
+            return String(s||'').toLowerCase().trim()
+              .replace(/^(rcd|rc|cd|ud|cf|fc|sd|sc|ad|ac|as|rfc|ssc|ass|sad|cp|ce|pd|ec|real|deportivo|club)\s+/i, '')
+              .trim();
+          };
+          var _stripSuffix = function(s){
+            return String(s||'').toLowerCase().trim()
+              .replace(/\s+(cf|fc|sd|sc|ad|cp|ce|pd|ec|sad)$/i, '')
+              .trim();
+          };
+          for (var _i3 = 0; _i3 < teams.length && !found; _i3++) {
+            var _et3 = teams[_i3];
+            if (!_et3 || !_et3.name) continue;
+            var _ntS = _stripPrefix(_normForClick(_et3.name));
+            var _ntE = _stripSuffix(_normForClick(_et3.name));
+            for (var _b3 = 0; _b3 < targets.length; _b3++) {
+              var _ttS = _stripPrefix(targets[_b3]);
+              var _ttE = _stripSuffix(targets[_b3]);
+              if (_ntS && (_ntS === _ttS || _ntE === _ttE)) {
+                found = _et3; break;
               }
             }
           }
         } catch(_){}
-        /* Pasada 4 (último intento): clonar la fila desde la tabla
-           clasificación y abrir la plantilla con SQUAD_REGISTRY directo,
-           SIN tocar el storage del slug. Así el usuario al menos ve los
-           jugadores aunque no haya entry en `data.teams`. */
+        /* Pasada 4 (último intento): si SQUAD_REGISTRY conoce el
+           equipo, abrimos la plantilla con la versión virtual SIN
+           persistirla en el storage del slug. Antes la añadíamos a
+           `data.teams` y `localStorage.setItem`, pero combinado con
+           el rescate cross-slug eso provocó corrupción masiva
+           (Hypermotion → 61 equipos / Primera Federación → 1 tras
+           clicks repetidos en filas que el clasificador mostraba
+           pero que NO estaban en el roster del slug). El flag
+           `_virtualForClick` le dice a lextOpenSquad que no haga
+           `data.teams.push(t)` ni `saveData`. Si el admin quiere
+           mantener el equipo en este slug, debe crearlo
+           explícitamente desde 🖍 Edit. */
         if (!found && typeof window.sqFromRegistry === 'function') {
           var sqFR = null;
           try { sqFR = window.sqFromRegistry(displayName) || []; } catch(_){}
           if (sqFR && sqFR.length) {
-            found = { name: displayName, players: [] };
-            /* Insertamos el equipo en `data.teams` para que
-               renderSquadList lo encuentre. La plantilla se hidratará
-               desde SQUAD_REGISTRY automáticamente. */
-            if (!Array.isArray(data && data.teams)) {
-              data = data || { teams: [] };
-              data.teams = data.teams || [];
-            }
+            found = { name: displayName, players: [], _virtualForClick: true };
             found.id = 't_'+_normForClick(displayName).replace(/\s+/g,'_')+'_'+Date.now().toString(36);
-            data.teams.push(found);
-            try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
           }
         }
       }
@@ -3057,7 +3063,17 @@ window._showSimProgress = function(opts, onDone){
             default "🛡 Plantilla" (lextOpenSquad hizo early-return por
             mismatch de id), lo inicializamos A MANO con el team que
             ya tenemos en `found`. Así es imposible que el overlay
-            quede vacío o con título default. */
+            quede vacío o con título default.
+
+            REGLA (2026-05-09): SOLO actuar si el título sigue siendo
+            la cadena default. Antes la condición incluía
+            `titleText.indexOf(found.name) === -1`, lo que provocaba
+            un BUCLE de cambios de nombre cuando el usuario clicaba
+            dos equipos seguidos: el timer del primer click veía el
+            título del segundo equipo, no contenía el primer nombre,
+            y lo SOBRESCRIBÍA — y el timer del segundo click hacía lo
+            simétrico, etc. Reportado: "los nombres de los equipos
+            cambian dentro de las plantillas" (2026-05-08). */
       setTimeout(function(){
         var ov = document.getElementById('lext-ov-squad');
         if (!ov) return;
@@ -3067,8 +3083,11 @@ window._showSimProgress = function(opts, onDone){
         }
         var titleEl = document.getElementById('lext-ov-squad-title');
         var titleText = titleEl ? (titleEl.textContent || '').trim().toLowerCase() : '';
-        /* El default es "🛡 Plantilla". Si eso es lo que hay, reintentamos. */
-        if (titleEl && (titleText === 'plantilla' || titleText === '🛡 plantilla' || titleText.indexOf(String(found.name).toLowerCase()) === -1)) {
+        /* SOLO si el título sigue siendo el placeholder default. Si
+           ya tiene un nombre de equipo (cualquiera), lextOpenSquad
+           hizo su trabajo — no lo pisamos. */
+        var isDefault = (titleText === '' || titleText === 'plantilla' || titleText === '🛡 plantilla');
+        if (titleEl && isDefault) {
           try {
             var tp = Number(found.power)||0;
             titleEl.innerHTML = '🛡 <span data-team-power="'+tp+'">'+found.name+'</span>';
@@ -14054,6 +14073,30 @@ Tottenham
           <button class="lext-btn" onclick="document.getElementById('lext-bulk-names').value='';">🗑 Limpiar lista</button>
         </div>
       </div>
+
+      <!-- ═══ RESTAURAR LIGA DESDE BACKUP PROTEGIDO (2026-05-09) ═══
+           Reportado: tras un bug de rescate cross-slug, Hypermotion
+           creció a 61 equipos (de 22) y Primera Federación quedó con 1
+           (de 40). El server guarda un snapshot `_protected` que SOLO
+           acepta POSTs con MÁS jugadores (anti-wipe monotónico), así
+           que conserva la versión "buena" antes de la corrupción.
+           Este botón llama a /api/liga-ext-restore/<slug> que promueve
+           ese snapshot al main, deshaciendo cualquier corrupción del
+           roster del slug actual. -->
+      <div style="margin-top:18px;padding:12px;border:1px solid rgba(255,140,90,.4);border-radius:8px;background:rgba(255,140,90,.06);">
+        <label class="lext-label" style="margin-top:0;color:#ff9a6c;">🩹 Recuperar esta liga desde backup protegido</label>
+        <div class="lext-sub" style="line-height:1.55;">
+          Si el roster de esta liga se corrompió (faltan equipos, o
+          aparecen equipos de otra liga), pulsa para restaurar el
+          snapshot <b>_protected</b> guardado en el servidor.
+          Se sustituye TODO el contenido del slug actual.
+        </div>
+        <div class="lext-btn-row">
+          <button class="lext-btn" type="button" onclick="lextRestoreFromProtected()" style="background:rgba(255,140,90,.18);color:#ffb38c;border-color:rgba(255,140,90,.55);">
+            🩹 Restaurar liga
+          </button>
+        </div>
+      </div>
     </div>
     <div class="lext-sub" style="margin-top:14px;">EQUIPOS ACTUALES (toca para editar / ver plantilla)</div>
     <div class="lext-list" id="lext-teams-list"></div>
@@ -16837,6 +16880,72 @@ Tottenham
     if(added) ta.value = '';
   };
 
+  /* Restaurar la liga actual desde el snapshot `_protected` del server.
+     Pensado para casos de corrupción: rosters con equipos que no
+     pertenecen a este slug, o pérdida masiva de equipos. El snapshot
+     `_protected` es monotónico (server rechaza POSTs con menos
+     jugadores), así que normalmente conserva la versión "buena". */
+  window.lextRestoreFromProtected = function(){
+    if (!CURRENT_KEY) { alert('Abre una liga primero.'); return; }
+    var doRestore = function(){
+      /* Paso 1: ver cuántos equipos hay actualmente vs en el backup. */
+      fetch('/api/liga-ext-protected/' + encodeURIComponent(CURRENT_KEY))
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if (!j || !j.data || !Array.isArray(j.data.teams) || !j.data.teams.length) {
+            alert('⚠️ No hay backup protegido para esta liga.\n\nEl snapshot `_protected` solo se crea tras al menos un guardado válido. Si la liga es nueva o nunca se guardó, no hay nada que restaurar.');
+            return;
+          }
+          var protTeams = j.data.teams.length;
+          var protPlayers = (j.players != null) ? j.players : 0;
+          var data = loadData(CURRENT_KEY) || {teams:[],results:[]};
+          var curTeams = (data.teams || []).length;
+          var curPlayers = 0;
+          (data.teams || []).forEach(function(t){
+            curPlayers += (t && t.players && t.players.length) || 0;
+          });
+          var msg =
+            'BACKUP DEL SERVER:\n' +
+            '   • ' + protTeams + ' equipos\n' +
+            '   • ' + protPlayers + ' jugadores totales\n\n' +
+            'LIGA ACTUAL (lo que hay ahora):\n' +
+            '   • ' + curTeams + ' equipos\n' +
+            '   • ' + curPlayers + ' jugadores totales\n\n' +
+            '¿Sustituir TODO el contenido de "' + (CURRENT_NAME || CURRENT_KEY) + '" por el backup?\n\n' +
+            'No se puede deshacer (se pierden las ediciones posteriores al backup).';
+          if (!confirm(msg)) return;
+          /* Paso 2: pedir al server que promueva _protected → main. */
+          fetch('/api/liga-ext-restore/' + encodeURIComponent(CURRENT_KEY), { method: 'POST' })
+            .then(function(r){ return r.json().then(function(jj){ return {ok:r.ok, body:jj}; }); })
+            .then(function(res){
+              if (!res.ok || !res.body || !res.body.ok) {
+                alert('⚠️ El server rechazó la restauración:\n' + ((res.body && res.body.error) || 'desconocido'));
+                return;
+              }
+              /* Paso 3: actualizar local con el data del backup, invalidar
+                 cache y re-renderizar. */
+              try { LIGA_CACHE[CURRENT_KEY] = j.data; } catch(_){}
+              try { localStorage.setItem('ligaExt_'+CURRENT_KEY, JSON.stringify(j.data)); } catch(_){}
+              try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
+              try { renderTeamsList(); } catch(_){}
+              try { renderTable(); } catch(_){}
+              try {
+                if (typeof window.applyEngineOverrides === 'function') window.applyEngineOverrides();
+              } catch(_){}
+              alert('✅ Liga restaurada.\n\n' + res.body.teams_in_protected + ' equipos · ' + res.body.players_in_protected + ' jugadores.\n\nRecarga la página para ver los cambios reflejados en todas las pantallas.');
+            })
+            .catch(function(err){
+              alert('⚠️ Error de red al restaurar: ' + (err && err.message || err));
+            });
+        })
+        .catch(function(err){
+          alert('⚠️ Error de red al consultar backup: ' + (err && err.message || err));
+        });
+    };
+    if (typeof window.pG === 'function') window.pG(doRestore);
+    else doRestore();
+  };
+
   window.lextSaveTeam = function(){
     var name = document.getElementById('lext-team-name').value.trim();
     if(!name){ alert('Falta el nombre del equipo.'); return; }
@@ -17107,15 +17216,31 @@ Tottenham
              aunque pulse papelera". Ahora, si el nombre está en la
              blacklist `data.deletedTeamNames`, NO se re-añade y
              salimos con un aviso. El admin puede revivir el equipo
-             creándolo explícitamente desde 🖍 Edit. */
+             creándolo explícitamente desde 🖍 Edit.
+
+             FLAG `_virtualForClick` (2026-05-09): si el caller marcó
+             el team como virtual (Pasada 4 del click handler — fila
+             reconstruida desde SQUAD_REGISTRY que NO debe persistirse
+             en el slug), abrimos el modal en memoria SIN escribir a
+             `data.teams`. Esto previene la corrupción reportada
+             (Hypermotion creció a 61 equipos al clicar repetidamente
+             filas que no estaban en su roster). */
           var _normNm = _lextNormName(t.name);
           var _blk = Array.isArray(_data.deletedTeamNames) ? _data.deletedTeamNames : [];
           if (_normNm && _blk.indexOf(_normNm) >= 0) {
             try { alert('⚠️ «'+(t.name||'?')+'» fue eliminado de esta liga. Créalo de nuevo desde 🖍 Edit si quieres recuperarlo.'); } catch(_){}
             return;
           }
-          _data.teams.push(t);
-          _mustSave = true;
+          if (t._virtualForClick) {
+            /* No tocamos `data.teams` ni `saveData`. El render leerá
+               el equipo via `t` directamente cuando renderSquadList
+               busque por id (ver fallback en renderSquadList: si no
+               encuentra el id en `_data.teams`, cae a fallback name —
+               y el título ya quedó escrito en lextOpenSquad). */
+          } else {
+            _data.teams.push(t);
+            _mustSave = true;
+          }
         }
         /* Si la fila (ya sea la existente o la recién insertada) sigue
            sin jugadores, hidratamos desde SQUAD_REGISTRY — la misma

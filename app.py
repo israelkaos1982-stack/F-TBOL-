@@ -2297,6 +2297,58 @@ def api_liga_ext_protected_post(slug):
         "updated_at": now,
     })
 
+
+@app.route("/api/liga-ext-restore/<slug>", methods=["POST"])
+def api_liga_ext_restore(slug):
+    """Promociona el snapshot `_protected` al main `liga_ext_<slug>`.
+
+    Reportado 2026-05-09 (corrupción cross-liga): tras un rescate
+    cross-slug bugged, Hypermotion acumuló 61 equipos (de 22) y
+    Primera Federación quedó con 1 (de 40). Para recuperar, este
+    endpoint copia el `_protected` (que el cliente SOLO acepta
+    POSTs con MÁS jugadores → preserva la versión "buena") al main
+    sobreescribiendo la versión corrupta.
+
+    Devuelve {restored, players_in_protected, current_main_players}.
+    Si no hay protected → 404.
+    """
+    pkey = _protected_key(slug)
+    prow = GlobalState.query.filter_by(clave=pkey).first()
+    if not prow or not prow.valor_json:
+        return jsonify({
+            "ok": False,
+            "error": "no hay snapshot protected para este slug",
+            "slug": _liga_ext_slug(slug),
+        }), 404
+    try:
+        pdata = json.loads(prow.valor_json)
+    except Exception:
+        return jsonify({"ok": False, "error": "protected corrupto"}), 500
+    if not isinstance(pdata, dict) or not isinstance(pdata.get("teams"), list):
+        return jsonify({"ok": False, "error": "protected sin teams"}), 500
+    # Backup del main actual antes de sobreescribir (por si el admin
+    # quiere undo manual).
+    mkey = _liga_ext_key(slug)
+    mrow = GlobalState.query.filter_by(clave=mkey).first()
+    cur_pc = 0
+    if mrow and mrow.valor_json:
+        try:
+            cur_pc = _count_players_payload(json.loads(mrow.valor_json))
+        except Exception:
+            cur_pc = 0
+    new_pc = _count_players_payload(pdata)
+    pdata.setdefault("results", [])
+    _liga_ext_save(slug, pdata)
+    return jsonify({
+        "ok": True,
+        "slug": _liga_ext_slug(slug),
+        "restored": True,
+        "players_in_protected": new_pc,
+        "current_main_players": cur_pc,
+        "teams_in_protected": len(pdata.get("teams", [])),
+    })
+
+
 # ══════════════════════════════════════════════════════════════════
 # KV genérico (estado del cliente que debe sobrevivir al navegador)
 # ══════════════════════════════════════════════════════════════════

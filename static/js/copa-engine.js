@@ -3129,15 +3129,13 @@
          el envelope (p.ej. al togglear un item), volvemos a poner
          la fecha del calendario. Se desconecta cuando la previa se
          cierra. */
-      setTimeout(function () {
-        try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){}
-      }, 80);
-      setTimeout(function () {
-        try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){}
-      }, 240);
-      setTimeout(function () {
-        try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){}
-      }, 600);
+      /* Cobertura ampliada (0..2.4 s) para que la fecha aparezca en
+         ≤ 50 ms tras el primer pintado del bundle. 2026-05-08. */
+      setTimeout(function () { try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){} }, 0);
+      setTimeout(function () { try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){} }, 50);
+      setTimeout(function () { try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){} }, 200);
+      setTimeout(function () { try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){} }, 600);
+      setTimeout(function () { try { _copaOverridePrevDate(ronda, !!esVuelta); } catch(_){} }, 1500);
       _copaInstallEnvObserver(ronda, !!esVuelta);
       /* Reemplazar el texto del alias eFootball ("🎮 Nassaji Mazan…")
          por un botón ❓ animado bajo el nombre del equipo. Al pulsarlo
@@ -3427,11 +3425,14 @@
         _copaInstallVsObserver();
       } catch(_){}
       /* Fecha: parsear matchKey/compKey para encontrar la fila del
-         calendario correcta. */
+         calendario correcta. Cobertura ampliada (0..2.4 s) +
+         observer instalado lo antes posible. 2026-05-08. */
       try {
-        setTimeout(function () { _copaOverrideAnyPrevDate(matchKey, compKey); }, 80);
-        setTimeout(function () { _copaOverrideAnyPrevDate(matchKey, compKey); }, 240);
+        setTimeout(function () { _copaOverrideAnyPrevDate(matchKey, compKey); }, 0);
+        setTimeout(function () { _copaOverrideAnyPrevDate(matchKey, compKey); }, 50);
+        setTimeout(function () { _copaOverrideAnyPrevDate(matchKey, compKey); }, 200);
         setTimeout(function () { _copaOverrideAnyPrevDate(matchKey, compKey); }, 600);
+        setTimeout(function () { _copaOverrideAnyPrevDate(matchKey, compKey); }, 1500);
         _copaInstallAnyEnvObserver(matchKey, compKey);
       } catch(_){}
       return ret;
@@ -3525,11 +3526,15 @@
       try { _copaAnyEnvObserver.disconnect(); } catch(_){}
       _copaAnyEnvObserver = null;
     }
+    /* Debounce con requestAnimationFrame (~16 ms a 60 Hz) en lugar de
+       setTimeout(30) — petición usuario 2026-05-08 "todo merge en
+       ≤50 ms". El flag `data-copa-date-applied` evita bucles. */
     var ticking = false;
+    var _raf = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : function(fn){ return setTimeout(fn, 16); };
     _copaAnyEnvObserver = new MutationObserver(function () {
       if (ticking) return;
       ticking = true;
-      setTimeout(function () {
+      _raf(function () {
         try { _copaOverrideAnyPrevDate(matchKey, compKey); } catch(_){}
         ticking = false;
         var ov = document.getElementById('prepartido-overlay');
@@ -3539,7 +3544,7 @@
             _copaAnyEnvObserver = null;
           }
         }
-      }, 30);
+      });
     });
     _copaAnyEnvObserver.observe(envEl, { childList: true, subtree: true, characterData: true });
   }
@@ -3646,10 +3651,11 @@
       _copaEnvObserver = null;
     }
     var ticking = false;
+    var _raf2 = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : function(fn){ return setTimeout(fn, 16); };
     _copaEnvObserver = new MutationObserver(function () {
       if (ticking) return;
       ticking = true;
-      setTimeout(function () {
+      _raf2(function () {
         try { _copaOverridePrevDate(ronda, esVuelta); } catch(_){}
         ticking = false;
         /* Si el overlay ya no está visible, autodesconecta. */
@@ -3660,7 +3666,7 @@
             _copaEnvObserver = null;
           }
         }
-      }, 30);
+      });
     });
     _copaEnvObserver.observe(envEl, { childList: true, subtree: true, characterData: true });
   }

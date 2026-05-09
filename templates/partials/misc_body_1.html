@@ -9515,6 +9515,7 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs tour-score-wrap">'+sA+' - '+sB+'</span>'
             + _bracketTeamHtml(b, id, i+1, bWin, aWin && !bWin)
             + '</div>';
+          html += _tourActaPanelHtml(id, matchKey, res);
         } else {
           html += '<div class="'+rowClass+'"'+dataAttrs+'>'
             + _bracketTeamHtml(a, id, i)
@@ -9633,6 +9634,7 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs tour-score-wrap">'+sH+' - '+sA+'</span>'
             + _bracketTeamHtml(ta, tourId, m.away, bWin, aWin)
             + '</div>';
+          html += _tourActaPanelHtml(tourId, key, res);
         } else {
           html += '<div class="'+rowCls+'"'+dataAttrs+'>'
             + _bracketTeamHtml(th, tourId, m.home)
@@ -9807,6 +9809,7 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs tour-score-wrap">'+sA+' - '+sB+pensTxt+'</span>'
             + _bracketTeamHtml(b, tourId, i+1, bW, aW)
             + '</div>';
+          html += _tourActaPanelHtml(tourId, kKey, kRes);
         } else {
           html += '<div class="'+kRowCls+'"'+kAttrs+'>'
             + _bracketTeamHtml(a, tourId, i)
@@ -9849,6 +9852,41 @@ window._showSimProgress = function(opts, onDone){
         + '↺ Reset torneo'
         + '</button></div>';
     }
+    return html;
+  }
+
+  /* Acta expandible que cuelga de cada card de partido jugado. Si el
+     resultado tiene `events` (auto-simulación o partido humano),
+     reusa `window._iaEventsHtml` para pintar los eventos minuto-a-
+     minuto. El botón 📋 se pinta inline para no estorbar la card.
+     2026-05-09 (FOTO 2 acta auto-sim). */
+  function _tourActaPanelHtml(tourId, matchKey, res) {
+    if (!res || !res.events || !res.events.length) return '';
+    var actaId = 'tour-acta-' + tourId + '-' + matchKey.replace(/[^A-Za-z0-9_-]/g,'_');
+    var btnId  = actaId + '-btn';
+    /* `m` con la forma que espera _iaEventsHtml. */
+    var m = { home: res.home || '', away: res.away || '',
+              gh: res.a, ga: res.b, events: res.events,
+              mvp: res.mvp || '', mvpTeam: res.mvpTeam || '' };
+    var inner = '';
+    try {
+      if (typeof window._iaEventsHtml === 'function') {
+        inner = window._iaEventsHtml(m);
+      } else {
+        inner = res.events.map(function(e){
+          return '<div style="padding:4px 10px;font-size:12px;color:#fff;">'
+            + (e.min||'?') + "' " + (e.ico||'') + ' '
+            + (e.player||e.name||'?') + ' · ' + (e.team==='a'?(m.home||'A'):(m.away||'B'))
+            + '</div>';
+        }).join('');
+      }
+    } catch(_) { inner = ''; }
+    var html = '<div style="display:flex;justify-content:center;margin-top:-2px;margin-bottom:6px;">'
+      + '<button type="button" id="'+btnId+'" class="tour-acta-toggle" data-target="'+actaId+'" '
+      + 'style="background:rgba(95,224,138,.10);border:1px solid rgba(95,224,138,.40);color:#9ee5a9;border-radius:6px;padding:3px 10px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
+      + '📋 ACTA</button></div>'
+      + '<div id="'+actaId+'" class="tour-acta-body" style="display:none;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin:0 4px 6px;overflow:hidden;">'
+      + inner + '</div>';
     return html;
   }
 
@@ -10102,7 +10140,7 @@ window._showSimProgress = function(opts, onDone){
      un partido humano de torneo. Reconstruye el `result` con la misma
      forma que `_tourSimMatch` y dispara el render + acreditación de
      premios si la final acaba de jugarse. */
-  window._tourSaveHumanResult = function(tourId, key, gh, ga, penWinner) {
+  window._tourSaveHumanResult = function(tourId, key, gh, ga, penWinner, extra) {
     if (!tourId || !key || TOUR_IDS.indexOf(tourId) === -1) return;
     var cfg = _tourLoadCachedSync(tourId);
     if (!cfg) return;
@@ -10122,6 +10160,17 @@ window._showSimProgress = function(opts, onDone){
         else winner = (Math.random() < 0.5 ? 'a' : 'b');
       }
       out.winner = winner;
+    }
+    /* Acta del partido humano: events ya vienen del gm-modal en formato
+       canónico (`{type, min, num, player, team, ico}`). El visor del
+       torneo (`_tourActaPanelHtml` → `_iaEventsHtml`) los lee igual que
+       en Liga/Copa/Recopa. */
+    if (extra) {
+      if (extra.events && extra.events.length) out.events = extra.events.slice();
+      if (extra.mvp)     out.mvp = extra.mvp;
+      if (extra.mvpTeam) out.mvpTeam = extra.mvpTeam;
+      if (extra.home)    out.home = extra.home;
+      if (extra.away)    out.away = extra.away;
     }
     cfg.results[key] = out;
     _tourSaveAndRender(tourId, cfg);
@@ -10479,6 +10528,31 @@ window._showSimProgress = function(opts, onDone){
      lanza vs DEF del rival. No requiere flag `penalty` (ya hay flag
      soft en CLAUDE.md pero el motor genérico aquí tampoco distingue
      lanzador concreto). Devuelve {a, b}. */
+  /* Adjunta acta sintética al `result` de un partido auto-simulado.
+     Usa `window.genMatchEventsEnhanced` (definido en misc_body_2.html)
+     que produce eventos minuto-a-minuto coherentes con el resto de
+     competiciones (mismo formato que el visor `_iaEventsHtml` espera).
+     Si los goles del acta sintética no coinciden con el marcador
+     pasado, ajustamos los goles del result para que cuadren — la
+     fuente de verdad pasa a ser el acta porque es la que ven los
+     ojos del usuario. Petición usuario 2026-05-09 (FOTO 2). */
+  function _tourAttachActa(out, teamA, teamB, gh, ga) {
+    if (!out || !teamA || !teamB) return;
+    if (typeof window.genMatchEventsEnhanced !== 'function') return;
+    var nameA = teamA.name || teamA;
+    var nameB = teamB.name || teamB;
+    if (!nameA || !nameB) return;
+    try {
+      var ev = window.genMatchEventsEnhanced(nameA, nameB, gh|0, ga|0, null);
+      if (!ev) return;
+      out.events = (ev.events || []).slice();
+      if (ev.mvp) out.mvp = ev.mvp;
+      if (ev.mvpTeam) out.mvpTeam = ev.mvpTeam;
+      out.home = nameA;
+      out.away = nameB;
+    } catch(_){}
+  }
+
   function _tourSimPenalties(teamA, teamB) {
     function _pProb(atk, defOpp) {
       /* Baseline ~0.75. Diferencial ATQ-DEFopp en [-30,+30] aprox.
@@ -10583,6 +10657,7 @@ window._showSimProgress = function(opts, onDone){
       var out2 = { a: totalA, b: totalB, winner: winner, played: true,
                    legs:[{a:leg1.gh,b:leg1.ga},{a:leg2.gh,b:leg2.ga}] };
       if (pens) out2.pens = pens;
+      _tourAttachActa(out2, teamA, teamB, totalA, totalB);
       return out2;
     }
     /* Single leg (formato `ko` SIEMPRE, o `ko-2leg` con final
@@ -10601,6 +10676,7 @@ window._showSimProgress = function(opts, onDone){
     }
     var out1 = { a: ga, b: gb, winner: winner1, played: true };
     if (pens1) out1.pens = pens1;
+    _tourAttachActa(out1, teamA, teamB, ga, gb);
     return out1;
   }
 
@@ -10704,7 +10780,9 @@ window._showSimProgress = function(opts, onDone){
     var simFn = window.simulateMatch;
     if (!simFn) return null;
     var r = simFn(home, away);
-    return { a: r.gh, b: r.ga, played: true };
+    var out = { a: r.gh, b: r.ga, played: true };
+    _tourAttachActa(out, home, away, r.gh, r.ga);
+    return out;
   }
 
   function _tourBuildNextRound(cfg) {
@@ -10749,6 +10827,22 @@ window._showSimProgress = function(opts, onDone){
   document.addEventListener('click', function(ev){
     var target = ev.target;
     if (!target || typeof target.closest !== 'function') return;
+
+    /* a.0) Toggle del 📋 ACTA. Antes que el handler de la card para
+       que un click en el botón no dispare también el modal del
+       partido (la card es padre del botón). */
+    var actaBtn = target.closest('.tour-acta-toggle');
+    if (actaBtn) {
+      var aTarget = actaBtn.getAttribute('data-target');
+      var aBox = aTarget && document.getElementById(aTarget);
+      if (aBox) {
+        var visible = aBox.style.display !== 'none';
+        aBox.style.display = visible ? 'none' : 'block';
+        actaBtn.textContent = visible ? '📋 ACTA' : '📋 OCULTAR';
+      }
+      ev.stopPropagation();
+      return;
+    }
 
     /* a) Click en una card de partido. Tres tipos:
          · data-match-key   → KO directo (SCT/PSS).
@@ -10851,6 +10945,7 @@ window._showSimProgress = function(opts, onDone){
         }
         var koOut = { a:ga, b:gb, winner:winner, played:true };
         if (pens) koOut.pens = pens;
+        _tourAttachActa(koOut, ka, kb, ga, gb);
         cfg.results[kk] = koOut;
         _tourSaveAndRender(tid, cfg);
         ev.stopPropagation();
@@ -10948,6 +11043,7 @@ window._showSimProgress = function(opts, onDone){
         else { pens2 = _tourSimPenalties(ka2, kb2); w2 = (pens2.a > pens2.b) ? 'a' : 'b'; }
         var ko2 = { a:ga2, b:gb2, winner:w2, played:true };
         if (pens2) ko2.pens = pens2;
+        _tourAttachActa(ko2, ka2, kb2, ga2, gb2);
         kcfg.results[koKey] = ko2;
       }
       _tourSaveAndRender(ktid, kcfg);

@@ -11611,7 +11611,7 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-ucl-grupos">
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
-<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" onerror="this.style.display='none'" alt="UCL"/><h2>UCL · Fase de Grupos</h2></div>
+<div class="sec-hdr" style="position:relative;"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" onerror="this.style.display='none'" alt="UCL"/><h2>UCL · Fase de Grupos</h2><button id="ucl-fase-sortear-btn" type="button" onclick="window._eurFaseSortear&&window._eurFaseSortear('ucl')" title="Sortear fase de liga (admin)" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:linear-gradient(145deg,rgba(48,96,255,.2),rgba(20,32,160,.4));border:1px solid rgba(64,128,255,.6);color:#9bb8ff;font-size:13px;line-height:1;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-weight:700;">🎯 SORTEAR</button></div>
 <div class="submenu-list">
 <div class="submenu-card sc-ucl2" onclick="if(window.buildUclGruposClas)window.buildUclGruposClas();go('s-ucl-grupos-clas')">
 <span class="sc-emoji">📊</span><span class="sc-label">Clasificación</span><span class="sc-arr">▶</span>
@@ -13874,7 +13874,7 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-uel-grupos">
 <button class="back-btn" onclick="go('s-uel')">◀ Volver</button>
-<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Europa_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UEL"/><h2>Europa League · Fase de Grupos</h2></div>
+<div class="sec-hdr" style="position:relative;"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Europa_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UEL"/><h2>Europa League · Fase de Grupos</h2><button id="uel-fase-sortear-btn" type="button" onclick="window._eurFaseSortear&&window._eurFaseSortear('uel')" title="Sortear fase de liga (admin)" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:linear-gradient(145deg,rgba(255,130,20,.2),rgba(160,64,16,.4));border:1px solid rgba(255,130,20,.6);color:#ffb070;font-size:13px;line-height:1;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-weight:700;">🎯 SORTEAR</button></div>
 <div class="submenu-list">
 <div class="submenu-card sc-uel2" onclick="if(window.buildUelGruposClas)window.buildUelGruposClas();go('s-uel-grupos-clas')">
 <span class="sc-emoji">📊</span><span class="sc-label">Clasificación</span><span class="sc-arr">▶</span>
@@ -14122,7 +14122,7 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-uecl-grupos">
 <button class="back-btn" onclick="go('s-uecl')">◀ Volver</button>
-<div class="sec-hdr"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Conference_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UECL"/><h2>Conference League · Fase de Grupos</h2></div>
+<div class="sec-hdr" style="position:relative;"><img class="sec-ico" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Conference_League_logo_%282024_version%29.svg" onerror="this.style.display='none'" alt="UECL"/><h2>Conference League · Fase de Grupos</h2><button id="uecl-fase-sortear-btn" type="button" onclick="window._eurFaseSortear&&window._eurFaseSortear('uecl')" title="Sortear fase de liga (admin)" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:linear-gradient(145deg,rgba(60,200,120,.2),rgba(24,108,72,.4));border:1px solid rgba(60,200,120,.6);color:#88e8b0;font-size:13px;line-height:1;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-weight:700;">🎯 SORTEAR</button></div>
 <div class="submenu-list">
 <div class="submenu-card sc-uecl2" onclick="if(window.buildUeclGruposClas)window.buildUeclGruposClas();go('s-uecl-grupos-clas')">
 <span class="sc-emoji">📊</span><span class="sc-label">Clasificación</span><span class="sc-arr">▶</span>
@@ -14265,6 +14265,386 @@ window._showSimProgress = function(opts, onDone){
     bodyEl.innerHTML = html;
     go('s-uecl-grupos-jornada');
   };
+})();
+</script>
+
+<!-- ════ FASE DE LIGA: UCL / UEL / UECL — sorteo Swiss-format ════
+     Petición usuario 2026-05-09: cada equipo juega 8 partidos
+     (4 local + 4 visitante) en 8 jornadas. Regla obligatoria:
+     dos equipos del mismo país NO pueden enfrentarse. Pool 40
+     equipos por competición → 160 partidos / 20 por jornada.
+
+     Botón 🎯 SORTEAR en el header de cada s-{comp}-grupos
+     (admin PIN 747). Persistencia: `{comp}_phase_v1` con
+     `{ teams, pairs[{home,away,jornada}], drawnAt }`.
+     Sync server vía /api/kv para que sobreviva a borrados de
+     localStorage / cambios de dispositivo. ═════════════════ -->
+<script>
+(function(){
+  var COMPS = {
+    ucl: {
+      label:    'Champions League',
+      key:      'ucl_phase_v1',
+      jornTitleTpl: 'Jornada %j% de UCL · Fase de Grupos',
+      teamsFn:  function(){ return (typeof window.computeUclClassified === 'function') ? window.computeUclClassified() : []; },
+      openFnName: 'openUclGrupoJornada',
+      bodyId:   'ucl-grupos-jornada-body',
+      titleId:  'ucl-grupos-jornada-title',
+      gotoId:   's-ucl-grupos-jornada',
+      btnId:    'ucl-fase-sortear-btn'
+    },
+    uel: {
+      label:    'Europa League',
+      key:      'uel_phase_v1',
+      jornTitleTpl: 'Jornada %j% de UEL · Fase de Grupos',
+      teamsFn:  function(){ return (typeof window.computeUelClassified === 'function') ? window.computeUelClassified() : []; },
+      openFnName: 'openUelGrupoJornada',
+      bodyId:   'uel-grupos-jornada-body',
+      titleId:  'uel-grupos-jornada-title',
+      gotoId:   's-uel-grupos-jornada',
+      btnId:    'uel-fase-sortear-btn'
+    },
+    uecl: {
+      label:    'Conference League',
+      key:      'uecl_phase_v1',
+      jornTitleTpl: 'Jornada %j% de UECL · Fase de Grupos',
+      teamsFn:  function(){ return (typeof window.computeUeclClassified === 'function') ? window.computeUeclClassified() : []; },
+      openFnName: 'openUeclGrupoJornada',
+      bodyId:   'uecl-grupos-jornada-body',
+      titleId:  'uecl-grupos-jornada-title',
+      gotoId:   's-uecl-grupos-jornada',
+      btnId:    'uecl-fase-sortear-btn'
+    }
+  };
+  var POOL_SIZE     = 40;
+  var MATCHES_PER   = 8;       /* partidos totales por equipo */
+  var HOME_PER      = 4;       /* partidos como local */
+  var AWAY_PER      = 4;       /* partidos como visitante */
+  var JORNADAS      = 8;
+  var DRAW_ATTEMPTS = 220;     /* greedy + retries */
+  var JORN_ATTEMPTS = 60;
+
+  function _esc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  function _shuffle(arr){
+    for(var i = arr.length - 1; i > 0; i--){
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+    }
+    return arr;
+  }
+  function loadState(comp){
+    var c = COMPS[comp]; if(!c) return null;
+    try {
+      var raw = localStorage.getItem(c.key);
+      if(!raw) return null;
+      var p = JSON.parse(raw);
+      if(p && Array.isArray(p.teams) && Array.isArray(p.pairs)) return p;
+    } catch(_){}
+    return null;
+  }
+  function _saveServer(comp, state){
+    var c = COMPS[comp]; if(!c) return;
+    try {
+      fetch('/api/kv/' + c.key, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ value: state || {} })
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function saveState(comp, state){
+    var c = COMPS[comp]; if(!c) return false;
+    var payload;
+    try { payload = JSON.stringify(state || {}); } catch(_){ return false; }
+    try { localStorage.setItem(c.key, payload); } catch(_){ _saveServer(comp, state); return false; }
+    _saveServer(comp, state);
+    return true;
+  }
+  function _hydrateFromServer(comp, cb){
+    var c = COMPS[comp]; if(!c){ if(cb) cb(false); return; }
+    var raw;
+    try { raw = localStorage.getItem(c.key); } catch(_){}
+    if(raw && raw !== '{}' && raw !== 'null'){ if(cb) cb(false); return; }
+    try {
+      fetch('/api/kv/' + c.key, { credentials: 'same-origin' })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(j && j.ok && j.value && typeof j.value === 'object'){
+            try { localStorage.setItem(c.key, JSON.stringify(j.value)); } catch(_){}
+          }
+          if(cb) cb(true);
+        }).catch(function(){ if(cb) cb(false); });
+    } catch(_){ if(cb) cb(false); }
+  }
+
+  /* ── Algoritmo de sorteo Swiss-format ──────────────────────────────
+     Cada equipo juega `MATCHES_PER`=8 partidos contra 8 oponentes
+     distintos: 4 como local + 4 como visitante. Regla obligatoria:
+     dos equipos de la misma `league` (país) NO pueden enfrentarse.
+
+     Construimos JORNADA POR JORNADA — en cada una cuadramos un
+     emparejamiento perfecto de los 40 equipos (20 partidos):
+       1. Para cada equipo, calculamos sus oponentes válidos
+          (distinto país, todavía no se han enfrentado, y permite
+          balance 4+4 home/away).
+       2. Ordenamos los equipos por menor número de oponentes
+          posibles (most-constrained first) para evitar callejones
+          sin salida.
+       3. Asignamos pareja al equipo más limitado y la quitamos del
+          pool. Repetimos hasta tener 20 partidos.
+       4. Si nos quedamos sin partner válido, esta jornada fracasa
+          → reiniciamos el sorteo completo (con otro shuffle inicial).
+     En la práctica con 40 equipos / 12-14 países queda en 1-3 intentos. */
+  function _buildJornada(teams, paired, homeC, awayC){
+    var avail = teams.slice();
+    var matches = [];
+    while(avail.length >= 2){
+      /* Calcular candidates por equipo restante. */
+      var bestIdx = -1, bestCount = Infinity, bestList = null;
+      for(var i = 0; i < avail.length; i++){
+        var a = avail[i];
+        var list = [];
+        for(var j = 0; j < avail.length; j++){
+          if(i === j) continue;
+          var b = avail[j];
+          if(a.league && b.league && a.league === b.league) continue;
+          if(paired[a.name][b.name]) continue;
+          var aCanHome = homeC[a.name] < HOME_PER && awayC[b.name] < AWAY_PER;
+          var bCanHome = homeC[b.name] < HOME_PER && awayC[a.name] < AWAY_PER;
+          if(!aCanHome && !bCanHome) continue;
+          list.push(j);
+        }
+        if(list.length < bestCount){
+          bestCount = list.length; bestIdx = i; bestList = list;
+          if(bestCount === 0) break; /* dead-end ya mismo */
+        }
+      }
+      if(bestIdx < 0 || !bestList || !bestList.length) return null;
+      var a = avail[bestIdx];
+      /* Elegir partner dentro de bestList — preferir mismo nivel de
+         "constrained" (los que tengan menos opciones libres tras esta
+         elección). Para no compilar O(N²), simplemente cogemos uno al
+         azar de la lista. La aleatoriedad mezcla los cruces. */
+      var pickIdx = bestList[Math.floor(Math.random() * bestList.length)];
+      var b = avail[pickIdx];
+      /* Decidir local / visitante para mantener balance 4+4. */
+      var aCanHome = homeC[a.name] < HOME_PER && awayC[b.name] < AWAY_PER;
+      var bCanHome = homeC[b.name] < HOME_PER && awayC[a.name] < AWAY_PER;
+      var hName, vName;
+      if(aCanHome && bCanHome){
+        if(homeC[a.name] <= homeC[b.name]){ hName = a.name; vName = b.name; }
+        else                                { hName = b.name; vName = a.name; }
+      } else if(aCanHome){ hName = a.name; vName = b.name; }
+      else                { hName = b.name; vName = a.name; }
+      matches.push({ home: hName, away: vName });
+      homeC[hName]++; awayC[vName]++;
+      paired[a.name][b.name] = true; paired[b.name][a.name] = true;
+      /* Quitar ambos del avail (cuidado con índices). */
+      var first = Math.max(bestIdx, pickIdx), second = Math.min(bestIdx, pickIdx);
+      avail.splice(first, 1); avail.splice(second, 1);
+    }
+    return avail.length === 0 ? matches : null;
+  }
+
+  function drawPairs(teams){
+    if(!teams || teams.length < 2 || teams.length % 2 !== 0) return null;
+    for(var attempt = 0; attempt < DRAW_ATTEMPTS; attempt++){
+      var homeC = {}, awayC = {}, paired = {};
+      teams.forEach(function(t){ homeC[t.name] = 0; awayC[t.name] = 0; paired[t.name] = {}; });
+      var allPairs = [];
+      var ok = true;
+      for(var jor = 1; jor <= JORNADAS; jor++){
+        /* Cada jornada: orden inicial aleatorio para variar entre attempts. */
+        var jorTeams = teams.slice(); _shuffle(jorTeams);
+        var jorMatches = _buildJornada(jorTeams, paired, homeC, awayC);
+        if(!jorMatches || jorMatches.length !== teams.length / 2){ ok = false; break; }
+        jorMatches.forEach(function(m){ m.jornada = jor; allPairs.push(m); });
+      }
+      if(ok){
+        /* Validación final: balance 4+4. */
+        var balanceOk = true;
+        for(var ti = 0; ti < teams.length; ti++){
+          var nm = teams[ti].name;
+          if(homeC[nm] !== HOME_PER || awayC[nm] !== AWAY_PER){ balanceOk = false; break; }
+        }
+        if(balanceOk) return allPairs;
+      }
+    }
+    return null;
+  }
+
+  /* `assignJornadas` queda como no-op porque drawPairs ya devuelve los
+     partidos con `jornada` asignada. Mantenida por compat pública en
+     `window._eurFaseAssign`. */
+  function assignJornadas(pairs/*, teams*/){
+    return Array.isArray(pairs) && pairs[0] && typeof pairs[0].jornada === 'number'
+      ? pairs.slice() : null;
+  }
+
+  /* Loader + ejecución del sorteo (admin PIN 747). */
+  function _runSorteo(comp){
+    var c = COMPS[comp]; if(!c) return;
+    var raw = c.teamsFn() || [];
+    if(raw.length < POOL_SIZE){
+      alert('❌ Aún no hay ' + POOL_SIZE + ' equipos clasificados a ' + c.label + ' (hay ' + raw.length + '). Completa la clasificación antes de sortear.');
+      return;
+    }
+    var teams = raw.slice(0, POOL_SIZE);
+
+    function _doDraw(){
+      var sched = drawPairs(teams);
+      if(!sched){
+        alert('❌ No se ha podido cuadrar el sorteo respetando "no mismo país" y el balance 4+4 de local/visitante. Reintenta — si una federación tiene demasiados equipos en el pool puede no haber solución factible.');
+        return false;
+      }
+      var state = {
+        teams: teams.map(function(t){
+          return { name: t.name, logo: t.logo || '', league: t.league || '' };
+        }),
+        pairs: sched,
+        drawnAt: Date.now()
+      };
+      if(!saveState(comp, state)){
+        alert('⚠️ El sorteo se ha generado pero no se ha podido guardar (storage lleno). Inténtalo de nuevo.');
+        return false;
+      }
+      return true;
+    }
+
+    if(typeof window.ftbolLoaderRun === 'function'){
+      window.ftbolLoaderRun(
+        {
+          title: c.label.toUpperCase() + ' · SORTEO FASE DE LIGA',
+          sub:   'Preparando bombos…',
+          theme: comp === 'ucl' ? 'champions' : (comp === 'uel' ? 'eur-grupo' : 'uecl'),
+          minMs: 700,
+          phases: [
+            { pct: 25, sub: 'Generando parejas válidas (sin mismo país)…', ms: 120 },
+            { pct: 60, sub: 'Equilibrando local / visitante…',              ms: 140 },
+            { pct: 85, sub: 'Distribuyendo en 8 jornadas…',                  ms: 130 }
+          ]
+        },
+        function(ctx){
+          return new Promise(function(resolve){
+            var phaseIdx = 0;
+            var phaseList = [25, 60, 85];
+            function next(){
+              if(phaseIdx >= phaseList.length){
+                ctx.progress(95, 'Cuadrando cruces…');
+                setTimeout(function(){
+                  var ok = _doDraw();
+                  ctx.progress(100, ok ? 'Hecho' : 'Error');
+                  resolve();
+                }, 100);
+                return;
+              }
+              ctx.progress(phaseList[phaseIdx++]);
+              setTimeout(next, 130);
+            }
+            next();
+          });
+        }
+      );
+    } else {
+      _doDraw();
+    }
+  }
+
+  /* Hook público: el header pulsa esto. Pasa por `requireAdmin` (PIN 747). */
+  window._eurFaseSortear = function(comp){
+    if(!COMPS[comp]) return;
+    var c = COMPS[comp];
+    var state = loadState(comp);
+    var hasDraw = state && state.pairs && state.pairs.length > 0;
+    var msg = hasDraw
+      ? '🔄 ' + c.label + ': ya hay un sorteo guardado. ¿Re-sortear (perderás el actual)?'
+      : '🎯 ' + c.label + ': lanzar sorteo de la Fase de Liga (40 equipos · 8 jornadas)?';
+    if(!window.confirm(msg)) return;
+    if(typeof window.requireAdmin === 'function'){
+      window.requireAdmin(function(){ _runSorteo(comp); });
+    } else {
+      _runSorteo(comp);
+    }
+  };
+
+  /* ── Render de jornadas — sustituye los `Por definir` por las
+     parejas del sorteo. Si no hay sorteo, mantenemos el placeholder
+     antiguo para no romper la UI. */
+  function renderJornada(comp, jor){
+    var c = COMPS[comp]; if(!c) return false;
+    var titleEl = document.getElementById(c.titleId);
+    var bodyEl  = document.getElementById(c.bodyId);
+    if(!titleEl || !bodyEl) return false;
+    titleEl.textContent = c.jornTitleTpl.replace('%j%', jor);
+    var state = loadState(comp);
+    var matches = (state && state.pairs)
+      ? state.pairs.filter(function(p){ return p.jornada === jor; })
+      : [];
+    var teamsByName = {};
+    if(state && state.teams){
+      state.teams.forEach(function(t){ teamsByName[t.name] = t; });
+    }
+    var html = '<div class="jlist"><div class="jmatches" style="display:block;">';
+    if(matches.length){
+      matches.forEach(function(m){
+        var ha = teamsByName[m.home] || { name: m.home, logo: '' };
+        var aa = teamsByName[m.away] || { name: m.away, logo: '' };
+        var logoH = ha.logo ? '<img src="' + _esc(ha.logo) + '" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:6px;" onerror="this.style.display=\'none\'">' : '';
+        var logoA = aa.logo ? '<img src="' + _esc(aa.logo) + '" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-left:6px;" onerror="this.style.display=\'none\'">' : '';
+        html += '<div class="mrow">'
+          +   '<div class="mn">' + logoH + _esc(ha.name) + '</div>'
+          +   '<div class="ms p">vs</div>'
+          +   '<div class="mn r">' + _esc(aa.name) + logoA + '</div>'
+          + '</div>';
+      });
+    } else {
+      for(var i = 0; i < 20; i++){
+        html += '<div class="mrow">'
+          +   '<div class="mn">Por definir</div>'
+          +   '<div class="ms p">vs</div>'
+          +   '<div class="mn r">Por definir</div>'
+          + '</div>';
+      }
+    }
+    html += '</div></div>';
+    bodyEl.innerHTML = html;
+    go(c.gotoId);
+    return true;
+  }
+
+  /* Patch los openers existentes para que consuman el state. */
+  Object.keys(COMPS).forEach(function(comp){
+    var c = COMPS[comp];
+    var orig = window[c.openFnName];
+    window[c.openFnName] = function(jor){
+      if(!renderJornada(comp, jor) && typeof orig === 'function'){
+        try { return orig.apply(this, arguments); } catch(_){}
+      }
+    };
+  });
+
+  /* Hidratar desde server al cargar (best-effort). */
+  function _hydrateAll(){
+    Object.keys(COMPS).forEach(function(comp){
+      _hydrateFromServer(comp);
+    });
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _hydrateAll);
+  } else {
+    _hydrateAll();
+  }
+
+  /* Exponer helpers para tests / debug. */
+  window._eurFaseLoad   = loadState;
+  window._eurFaseSave   = saveState;
+  window._eurFaseDraw   = drawPairs;
+  window._eurFaseAssign = assignJornadas;
 })();
 </script>
 </div>

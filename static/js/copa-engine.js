@@ -3114,6 +3114,9 @@
       try { copaInit(); } catch(_){}
     };
     if (typeof window.showPrePartidoOverlay === 'function') {
+      /* Instalar observer ANTES del render del bundle para cazar la
+         primera mutación de pp-vs (alias → ❓ inmediato). 2026-05-08. */
+      try { _copaInstallVsObserver(); } catch(_){}
       window.showPrePartidoOverlay(matchKey, compKey, 'Sí', duracion, isHvH);
       try { _copaInjectExtraConfirms(ronda); } catch(_){}
       /* La fecha del partido tiene que coincidir con la del calendario
@@ -3142,9 +3145,15 @@
          el problema de truncamiento cuando el alias es largo (foto del
          usuario 2026-05-04). El observer del overlay reaplica esto en
          cada repaint de `#pp-vs`. */
+      /* Cobertura ampliada (0..3 s) para que el reemplazo del alias
+         sea inmediato aunque el bundle renderice pp-vs en varias
+         fases. 2026-05-08. */
+      setTimeout(function () { try { _copaReplaceAliasText(); } catch(_){} }, 0);
       setTimeout(function () { try { _copaReplaceAliasText(); } catch(_){} }, 80);
       setTimeout(function () { try { _copaReplaceAliasText(); } catch(_){} }, 240);
       setTimeout(function () { try { _copaReplaceAliasText(); } catch(_){} }, 600);
+      setTimeout(function () { try { _copaReplaceAliasText(); } catch(_){} }, 1200);
+      setTimeout(function () { try { _copaReplaceAliasText(); } catch(_){} }, 2400);
       _copaInstallVsObserver();
     } else {
       alert('No se pudo abrir la previa: showPrePartidoOverlay no disponible.');
@@ -3393,14 +3402,28 @@
     if (window.showPrePartidoOverlay.__copaPostHooked) return;
     var orig = window.showPrePartidoOverlay;
     var wrapped = function (matchKey, compKey, prorroga, duracion, isHvH) {
-      var ret = orig.apply(this, arguments);
       var isLiga = !compKey || compKey === 'liga' || compKey === 'liga-2';
+      /* Instalar el observer ANTES de que el bundle renderice pp-vs
+         (2026-05-08): así la primera mutación dispara el reemplazo en
+         el siguiente frame (~16 ms), sin esperar a los retries fijos
+         posteriores. El observer es idempotente — `_copaInstallVsObserver`
+         se reaplica abajo por si el bundle re-renderiza varias veces. */
+      if (!isLiga) {
+        try { _copaInstallVsObserver(); } catch(_){}
+      }
+      var ret = orig.apply(this, arguments);
       if (isLiga) return ret;
-      /* Alias → ❓ + overlay (idempotente; observer ya se reaplica). */
+      /* Alias → ❓ + overlay (idempotente; observer ya se reaplica).
+         Retries con cobertura amplia (0..3 s) para casos en que el
+         bundle re-renderice en fases o el observer no caza la primera
+         mutación por alguna razón. */
       try {
+        setTimeout(function () { _copaReplaceAliasText(); }, 0);
         setTimeout(function () { _copaReplaceAliasText(); }, 80);
         setTimeout(function () { _copaReplaceAliasText(); }, 240);
         setTimeout(function () { _copaReplaceAliasText(); }, 600);
+        setTimeout(function () { _copaReplaceAliasText(); }, 1200);
+        setTimeout(function () { _copaReplaceAliasText(); }, 2400);
         _copaInstallVsObserver();
       } catch(_){}
       /* Fecha: parsear matchKey/compKey para encontrar la fila del
@@ -3587,11 +3610,20 @@
       try { _copaVsObserver.disconnect(); } catch(_){}
       _copaVsObserver = null;
     }
+    /* Aceleración (2026-05-08): el usuario reportó hasta 5 s entre
+       que aparece el texto "🎮 Asia - …" y se reemplaza por la ❓.
+       Causa: el bundle re-renderizaba pp-vs en varias fases y el
+       debounce de setTimeout(30) introducía un retraso visible cada
+       vez. Lo cambiamos a requestAnimationFrame() para reemplazar
+       en el siguiente frame (~16 ms) tras CADA mutación, sin
+       bucles infinitos — `data-copa-alias-replaced` marca los divs
+       ya procesados. */
     var ticking = false;
+    var _raf = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : function(fn){ return setTimeout(fn, 16); };
     _copaVsObserver = new MutationObserver(function () {
       if (ticking) return;
       ticking = true;
-      setTimeout(function () {
+      _raf(function () {
         try { _copaReplaceAliasText(); } catch(_){}
         ticking = false;
         var ov = document.getElementById('prepartido-overlay');
@@ -3601,7 +3633,7 @@
             _copaVsObserver = null;
           }
         }
-      }, 30);
+      });
     });
     _copaVsObserver.observe(vsEl, { childList: true, subtree: true, characterData: true });
   }

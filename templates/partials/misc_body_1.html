@@ -4964,15 +4964,17 @@ window._showSimProgress = function(opts, onDone){
   //   • Al cargar (300ms + 1.5s para cubrir la inicialización del bundle)
   //   • Tras cada save en el editor (hook en lextSaveTeam)
   function initOverrides(){
-    /* Cobertura ≤ 50 ms tras primer pintado (2026-05-08, petición
-       usuario "todo merge en 50 ms"). Antes 300 + 1500 ms; ahora
-       cascadeo 0/50/200/800/2400 que captura cualquier momento en
-       el que el bundle haya definido TEAM_RATINGS / SQUAD_REGISTRY. */
-    setTimeout(applyEngineOverrides, 0);
-    setTimeout(applyEngineOverrides, 50);
+    /* IMPORTANTE: applyEngineOverrides modifica TEAM_RATINGS y
+       SQUAD_REGISTRY (estado global del motor). Correr esta función
+       MIENTRAS el usuario tiene un modal abierto (p.ej. plantilla de
+       un equipo) puede causar que el modal pinte info del equipo
+       equivocado por race condition entre el modal y el rebuild.
+       Cascada conservadora: 200 ms para que el primer pintado tenga
+       datos frescos; 1500 ms para cubrir bundles que tardan más. SIN
+       el 2400 ms previo (causaba el bug "el nombre de la plantilla
+       cambia 2 s después de abrirla"). 2026-05-08. */
     setTimeout(applyEngineOverrides, 200);
-    setTimeout(applyEngineOverrides, 800);
-    setTimeout(applyEngineOverrides, 2400);
+    setTimeout(applyEngineOverrides, 1500);
   }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', initOverrides);

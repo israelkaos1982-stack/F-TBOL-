@@ -8019,7 +8019,7 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-competiciones">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
-<div class="sec-hdr" style="position:relative;"><span class="sec-emoji">🏅</span><h2>Competiciones</h2><button id="comp-edit-btn" onclick="window._compToggleEditMode&&window._compToggleEditMode()" title="Editar iconos (admin)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:22px;cursor:pointer;padding:4px 8px;line-height:1;opacity:.85;color:#f0c040;">🖍</button></div>
+<div class="sec-hdr" style="position:relative;"><span class="sec-emoji">🏅</span><h2>Competiciones</h2><button id="comp-edit-btn" onclick="window._compToggleEditMode&&window._compToggleEditMode()" title="Editar (admin)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:14px;cursor:pointer;padding:2px 4px;line-height:1;opacity:.85;color:#f0c040;">🖍</button></div>
 <div class="submenu-list">
 <div class="submenu-card sc-ucl1" onclick="go('s-champions')">
 <img class="sc-comp-img" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" onerror="this.style.display='none'" alt="UCL"/><span class="sc-label">Champions League</span><span class="sc-arr">▶</span>
@@ -8381,10 +8381,119 @@ window._showSimProgress = function(opts, onDone){
       if(lbl && icons[lbl]) applyIconToCard(card, icons[lbl]);
     });
   }
+  /* ── CAJAS personalizables (petición usuario 2026-05-09) ───────────
+     Además de cambiar el icono, el modo edit (PIN 747) ahora permite:
+       · Editar el TEXTO de cada caja (✏️ TEXTO).
+       · QUITAR cajas (❌).
+       · AÑADIR cajas nuevas (botón al pie de la lista).
+     Estado en localStorage `comp_cards_v1` + sync server best-effort:
+       { labels: { "<origLabel>": "<custom>" },
+         removed: [ "<origLabel>", … ],
+         added:   [ {id, label, icon, ts}, … ] }
+     `data-orig-label` se sella en cada caja la primera vez que se la
+     toca para tener un id estable aunque el texto visible cambie. */
+  var KEY_CARDS = 'comp_cards_v1';
+  function loadCards(){
+    var s = {};
+    try {
+      var raw = localStorage.getItem(KEY_CARDS);
+      if(raw){ var p = JSON.parse(raw); if(p && typeof p === 'object') s = p; }
+    } catch(_){}
+    if(!s.labels)  s.labels  = {};
+    if(!Array.isArray(s.removed)) s.removed = [];
+    if(!Array.isArray(s.added))   s.added   = [];
+    return s;
+  }
+  function _saveCardsServer(state){
+    try {
+      fetch('/api/kv/comp_cards_v1', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        credentials:'same-origin', body:JSON.stringify({value: state || {}})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function saveCards(state){
+    var payload;
+    try { payload = JSON.stringify(state || {}); } catch(_){ return false; }
+    try { localStorage.setItem(KEY_CARDS, payload); }
+    catch(err){ _saveCardsServer(state); return false; }
+    _saveCardsServer(state);
+    return true;
+  }
+  function _hydrateCardsFromServer(cb){
+    var raw;
+    try { raw = localStorage.getItem(KEY_CARDS); } catch(_){}
+    if(raw && raw !== '{}' && raw !== 'null'){ if(typeof cb === 'function') cb(false); return; }
+    try {
+      fetch('/api/kv/comp_cards_v1', {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(j && j.ok && j.value && typeof j.value === 'object'){
+            try { localStorage.setItem(KEY_CARDS, JSON.stringify(j.value)); } catch(_){}
+          }
+          if(typeof cb === 'function') cb(true);
+        }).catch(function(){ if(typeof cb === 'function') cb(false); });
+    } catch(_){ if(typeof cb === 'function') cb(false); }
+  }
+  function _stampOrigLabel(card){
+    if(card.hasAttribute('data-orig-label')) return card.getAttribute('data-orig-label');
+    var lbl = cardLabel(card);
+    card.setAttribute('data-orig-label', lbl);
+    return lbl;
+  }
+  function _setLabelText(card, txt){
+    var span = card.querySelector('.sc-label');
+    if(!span) return;
+    /* Algunas cajas (EA Sports → Europa) tienen un sub-span "(admin)"
+       dentro del label. Sustituimos solo el primer text-node para
+       conservar ese sufijo. */
+    var first = span.firstChild;
+    if(first && first.nodeType === 3) first.nodeValue = txt;
+    else span.textContent = txt;
+  }
+  function applyCardsState(){
+    var screen = document.getElementById('s-competiciones');
+    if(!screen) return;
+    var list = screen.querySelector('.submenu-list');
+    if(!list) return;
+    var state = loadCards();
+
+    /* 1. Cajas originales — sellar orig-label y aplicar removed/labels. */
+    list.querySelectorAll('.submenu-card:not(.sc-user-added)').forEach(function(c){
+      var orig = _stampOrigLabel(c);
+      if(state.removed && state.removed.indexOf(orig) !== -1){
+        c.style.display = 'none';
+      } else if(c.style.display === 'none'){
+        c.style.display = '';
+      }
+      if(state.labels && state.labels[orig] != null){
+        _setLabelText(c, state.labels[orig]);
+      }
+    });
+
+    /* 2. Cajas añadidas — render placeholder navegable a sí mismo
+       (sin destino real; sirve como espacio reservado por admin). */
+    (state.added || []).forEach(function(ac){
+      if(list.querySelector('.sc-user-added[data-added-id="'+ac.id+'"]')) return;
+      var card = document.createElement('div');
+      card.className = 'submenu-card sc-user-added';
+      card.setAttribute('data-added-id', ac.id);
+      card.style.cssText = 'background:linear-gradient(135deg,#1a1a2a 0%,#3a3a55 30%,#5a5a80 55%,#3a3a55 80%,#1a1a2a 100%) !important;border:1.5px solid #8090b0 !important;box-shadow:0 4px 18px rgba(128,144,176,.30),inset 0 1px 0 rgba(255,255,255,.10) !important;';
+      var lblHtml = '<span class="sc-label">' + (ac.label || 'Sin nombre').replace(/[<>&]/g,'') + '</span>';
+      var icoHtml = ac.icon
+        ? '<img class="sc-comp-img" src="'+ac.icon+'" alt="" onerror="this.style.display=\'none\'"/>'
+        : '<span class="sc-emoji">🆕</span>';
+      card.innerHTML = icoHtml + lblHtml + '<span class="sc-arr">▶</span>';
+      list.appendChild(card);
+    });
+  }
+
   function setEditMode(on){
     var screen = document.getElementById('s-competiciones');
     if(!screen) return;
     screen.classList.toggle('comp-edit-on', on);
+    var list = screen.querySelector('.submenu-list');
+
     screen.querySelectorAll('.submenu-card').forEach(function(card){
       var existing = card.querySelector('.comp-edit-overlay');
       if(on){
@@ -8395,13 +8504,18 @@ window._showSimProgress = function(opts, onDone){
           card.style.cursor = 'default';
         }
         if(existing) return;
-        var lbl = cardLabel(card);
+        _stampOrigLabel(card);
         var overlay = document.createElement('div');
         overlay.className = 'comp-edit-overlay';
-        overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(0,0,0,.6);z-index:5;';
+        overlay.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(0,0,0,.62);z-index:5;flex-wrap:wrap;padding:4px;';
+        var BTN_BASE = 'color:#fff;border:none;border-radius:6px;padding:6px 9px;font-family:Oswald,sans-serif;font-size:10.5px;letter-spacing:1px;font-weight:700;cursor:pointer;line-height:1;';
         overlay.innerHTML = ''
-          + '<button type="button" class="comp-edit-pick" style="background:#3cc878;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:700;cursor:pointer;">📎 CAMBIAR</button>'
-          + '<button type="button" class="comp-edit-clear" style="background:#cc3030;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:700;cursor:pointer;">🗑 RESET</button>';
+          + '<button type="button" class="comp-edit-pick"   title="Cambiar icono" style="'+BTN_BASE+'background:#3cc878;">📎 ICONO</button>'
+          + '<button type="button" class="comp-edit-text"   title="Editar texto" style="'+BTN_BASE+'background:#4080ff;">✏️ TEXTO</button>'
+          + '<button type="button" class="comp-edit-clear"  title="Reset icono" style="'+BTN_BASE+'background:#aa6633;">🗑 ICONO</button>'
+          + '<button type="button" class="comp-edit-remove" title="Quitar caja" style="'+BTN_BASE+'background:#cc3030;">❌ QUITAR</button>';
+
+        /* 1) Cambiar icono */
         overlay.querySelector('.comp-edit-pick').addEventListener('click', function(e){
           e.stopPropagation();
           var input = document.createElement('input');
@@ -8418,11 +8532,19 @@ window._showSimProgress = function(opts, onDone){
                 alert('No se pudo procesar la imagen: '+(err||'desconocido'));
                 return;
               }
+              var lbl = card.getAttribute('data-orig-label') || cardLabel(card);
+              if(card.classList.contains('sc-user-added')){
+                /* Caja añadida → guardamos icon dentro de su entrada en `added`. */
+                var aid = card.getAttribute('data-added-id');
+                var s = loadCards();
+                for(var i=0;i<(s.added||[]).length;i++){
+                  if(s.added[i].id === aid){ s.added[i].icon = dataUrl; break; }
+                }
+                saveCards(s);
+                applyIconToCard(card, dataUrl);
+                return;
+              }
               var icons = loadIcons();
-              /* Pre-check: tamaño total tras añadir/sobreescribir este
-                 icono. Si pasamos de 1.5 MB avisamos antes de intentar
-                 el setItem (que también haría su check pero alertando
-                 más tarde). */
               var probe = {};
               for(var pk in icons){ if(Object.prototype.hasOwnProperty.call(icons,pk)) probe[pk] = icons[pk]; }
               probe[lbl] = dataUrl;
@@ -8445,16 +8567,57 @@ window._showSimProgress = function(opts, onDone){
           });
           input.click();
         });
+
+        /* 2) Editar texto */
+        overlay.querySelector('.comp-edit-text').addEventListener('click', function(e){
+          e.stopPropagation();
+          var orig = card.getAttribute('data-orig-label') || cardLabel(card);
+          var current = (card.querySelector('.sc-label') ? card.querySelector('.sc-label').textContent : '') || orig;
+          var nuevo = window.prompt('Texto de la caja:', String(current).trim());
+          if(nuevo == null) return;
+          nuevo = String(nuevo).trim();
+          if(!nuevo){ alert('El texto no puede quedar vacío.'); return; }
+          var s = loadCards();
+          if(card.classList.contains('sc-user-added')){
+            var aid = card.getAttribute('data-added-id');
+            for(var i=0;i<(s.added||[]).length;i++){
+              if(s.added[i].id === aid){ s.added[i].label = nuevo; break; }
+            }
+          } else {
+            if(nuevo === orig) delete s.labels[orig];
+            else s.labels[orig] = nuevo;
+          }
+          if(saveCards(s)) _setLabelText(card, nuevo);
+          else alert('No se pudo guardar el cambio.');
+        });
+
+        /* 3) Reset icono — borra del storage e icono y emoji vuelven al original (recarga). */
         overlay.querySelector('.comp-edit-clear').addEventListener('click', function(e){
           e.stopPropagation();
+          var lbl = card.getAttribute('data-orig-label') || cardLabel(card);
           var icons = loadIcons();
           if(icons[lbl] != null){
             delete icons[lbl];
             saveIcons(icons);
-            /* La forma más robusta de restaurar el icono original es
-               recargar la pantalla — el bundle script y el HTML
-               estático vuelven a aplicar los iconos originales. */
             location.reload();
+          }
+        });
+
+        /* 4) Quitar caja */
+        overlay.querySelector('.comp-edit-remove').addEventListener('click', function(e){
+          e.stopPropagation();
+          var orig = card.getAttribute('data-orig-label') || cardLabel(card);
+          if(!confirm('¿Quitar la caja "'+orig+'"?')) return;
+          var s = loadCards();
+          if(card.classList.contains('sc-user-added')){
+            var aid = card.getAttribute('data-added-id');
+            s.added = (s.added||[]).filter(function(a){ return a.id !== aid; });
+            if(saveCards(s)) card.remove();
+            else alert('No se pudo guardar el cambio.');
+          } else {
+            if((s.removed||[]).indexOf(orig) === -1) s.removed.push(orig);
+            if(saveCards(s)) card.style.display = 'none';
+            else alert('No se pudo guardar el cambio.');
           }
         });
         card.appendChild(overlay);
@@ -8468,10 +8631,43 @@ window._showSimProgress = function(opts, onDone){
         if(existing) existing.remove();
       }
     });
+
+    /* Botón "+ AÑADIR CAJA" al pie de la lista (solo en modo edit). */
+    var addBtn = list && list.querySelector('.comp-add-btn');
+    if(on){
+      if(list && !addBtn){
+        addBtn = document.createElement('button');
+        addBtn.className = 'comp-add-btn';
+        addBtn.type = 'button';
+        addBtn.textContent = '➕ AÑADIR CAJA';
+        addBtn.style.cssText = 'margin:14px auto 4px;display:block;background:linear-gradient(145deg,#3cc878,#1f7a45);color:#fff;border:none;border-radius:10px;padding:10px 22px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(60,200,120,.35);';
+        addBtn.addEventListener('click', function(e){
+          e.stopPropagation();
+          var lbl = window.prompt('Texto de la nueva caja:');
+          if(lbl == null) return;
+          lbl = String(lbl).trim();
+          if(!lbl){ alert('El texto no puede quedar vacío.'); return; }
+          var s = loadCards();
+          var id = 'u-' + Date.now() + '-' + Math.floor(Math.random()*999);
+          s.added.push({ id:id, label:lbl, icon:'', ts:Date.now() });
+          if(saveCards(s)){
+            applyCardsState();
+            /* Re-aplicar edit mode para que la nueva caja reciba su overlay. */
+            setTimeout(function(){ setEditMode(true); }, 30);
+          } else {
+            alert('No se pudo guardar la nueva caja.');
+          }
+        });
+        list.appendChild(addBtn);
+      }
+    } else if(addBtn) {
+      addBtn.remove();
+    }
+
     var editBtn = document.getElementById('comp-edit-btn');
     if(editBtn){
       editBtn.textContent = on ? '✓' : '🖍';
-      editBtn.title = on ? 'Salir del modo edición' : 'Editar iconos (admin)';
+      editBtn.title = on ? 'Salir del modo edición' : 'Editar (admin)';
       editBtn.style.color = on ? '#3cc878' : '#f0c040';
     }
   }
@@ -8503,6 +8699,12 @@ window._showSimProgress = function(opts, onDone){
       setTimeout(applyAllOverrides, 50);
       setTimeout(applyAllOverrides, 200);
     });
+    /* Cards state (labels/removed/added) — same triple-apply pattern. */
+    _hydrateCardsFromServer(function(){
+      setTimeout(applyCardsState, 0);
+      setTimeout(applyCardsState, 50);
+      setTimeout(applyCardsState, 200);
+    });
   }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', init);
@@ -8514,13 +8716,18 @@ window._showSimProgress = function(opts, onDone){
       if(id === 's-competiciones'){
         /* Al entrar a s-competiciones, re-hidratamos por si el server
            tiene cambios desde otro dispositivo. Si nuestro localStorage
-           tiene contenido, _hydrateIconsFromServer lo respeta y no hace
+           tiene contenido, _hydrate*FromServer lo respeta y no hace
            GET (evita pisar cambios locales no sincronizados todavía). */
         _hydrateIconsFromServer(function(){
           /* Triple aplicación 0/50/200 ms (2026-05-08). */
           setTimeout(applyAllOverrides, 0);
           setTimeout(applyAllOverrides, 50);
           setTimeout(applyAllOverrides, 200);
+        });
+        _hydrateCardsFromServer(function(){
+          setTimeout(applyCardsState, 0);
+          setTimeout(applyCardsState, 50);
+          setTimeout(applyCardsState, 200);
         });
       }
       return r;
@@ -22761,7 +22968,7 @@ Tottenham
     box-shadow:0 2px 6px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08),inset 0 -2px 6px rgba(0,0,0,.5);
     overflow:hidden;
   }
-  #s-munich-trofeos .ath-titulo-icon img{width:32px;height:32px;object-fit:contain;display:block;}
+  #s-munich-trofeos .ath-titulo-icon img{width:100%;height:100%;object-fit:contain;display:block;}
   /* Nombre del título — respeta mayúsculas/minúsculas del usuario
      (antes forzaba uppercase). Petición usuario 2026-05-08. */
   #s-munich-trofeos .ath-titulo-info{flex:1;min-width:0;}

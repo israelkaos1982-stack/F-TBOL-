@@ -2380,7 +2380,7 @@ def api_liga_ext_restore(slug):
 #                           que el usuario sube y compromete persistir
 #                           contra wipes de localStorage — 2026-05-08)
 # Cualquier otra clave devuelve 400.
-_KV_ALLOWED_EXACT = {"comp_icons_v1", "europe_committed_v1", "bayern_trofeos_v1"}
+_KV_ALLOWED_EXACT = {"comp_icons_v1", "comp_cards_v1", "europe_committed_v1", "bayern_trofeos_v1"}
 _KV_ALLOWED_REGEX = re.compile(
     r"^("
     r"manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)"

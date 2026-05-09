@@ -13183,6 +13183,12 @@ window._showSimProgress = function(opts, onDone){
     var dups = [];
     for (var k2 in seen) {
       if (seen[k2].copies.length >= 2) {
+        /* Filtro anti-falso-positivo: descarta grupos cuyas copias
+           estén en países distintos (a menos que uno sea placeholder
+           perfecto). Sin esto, "Sporting CP" (Portugal) y "Sporting"
+           (Hypermotion = Gijón) salen como duplicado y el cleanup
+           borraría el equipo de Portugal. */
+        if (!_copiesAreSameTeam(seen[k2].copies)) continue;
         /* Conservamos el nombre "principal" como el primero que vimos
            para retro-compatibilidad. La UI muestra `allNames` con
            todas las variantes ("Eibar / SD Eibar"). */
@@ -13220,7 +13226,46 @@ window._showSimProgress = function(opts, onDone){
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
-  /* Heurística canónica (regla del usuario 2026-05-08, mejorada):
+  /* Mapeo slug → grupo "país" para evitar falsos positivos cuando un
+     equipo con prefijo común aparece en ligas de países distintos.
+     Las 3 ligas españolas (Liga EA Sports, Hypermotion y Primera
+     Federación) comparten el grupo 'spain' porque un equipo SÍ
+     puede aparecer en varias (descenso, ascenso, filiales, etc).
+     El resto de slugs se mapean al país tal cual (gibraltar, portugal,
+     p-bajos, alemania, etc.) — un "Sporting" en hypermotion NO es lo
+     mismo que un "Sporting CP" en portugal aunque el normalizador
+     strippee CP. (2026-05-08, fix de los falsos positivos Europa /
+     Europa FC y Sporting / Sporting CP detectados por el auditor). */
+  function _slugCountryGroup(slug){
+    if (slug === 'liga-ea-sports' || slug === 'liga-hypermotion' || slug === 'liga-primera-federacion') return 'spain';
+    return slug || '';
+  }
+  /* Comprueba si un grupo de copias representa un duplicado real:
+     todas tienen que estar en el mismo grupo-país (o alguna ser un
+     placeholder claramente vacío que sí podría ser merge). */
+  function _isPlaceholderCopy(c){
+    return c && c.players === 0 && !c.shield
+        && (c.power === 75 || c.power === 0)
+        && c.atk === 75 && c.mid === 75 && c.def === 75;
+  }
+  function _copiesAreSameTeam(copies){
+    if (!copies || copies.length < 2) return false;
+    var firstGroup = _slugCountryGroup(copies[0].slug);
+    for (var i = 1; i < copies.length; i++) {
+      if (_slugCountryGroup(copies[i].slug) !== firstGroup) {
+        /* Distinto país: solo permitimos merge si AMBOS lados están
+           perfectamente vacíos (placeholders) — caso raro. Si uno
+           tiene jugadores/escudo/stats reales y el otro no, casi
+           seguro son DOS equipos distintos con nombres parecidos
+           (Sporting CP Lisboa vs Sporting Gijón, Europa Barcelona
+           vs Europa FC Gibraltar). */
+        if (!_isPlaceholderCopy(copies[i]) || !_isPlaceholderCopy(copies[0])) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
      Sistema de puntuación por copia. La copia con mayor score gana.
      Prioridad ponderada:
        1. ES HUMANO (+100000) — no perder NUNCA la copia de un equipo

@@ -20634,12 +20634,26 @@ document.addEventListener('DOMContentLoaded', function() {
   function _getTeamList() {
     var teams = [];
     var seen = {};
+    /* Dedupe key: usa `_aliasNormName` (definido en misc_body_1.html
+       como `window._aliasNormName`) que strippea prefijos comunes
+       (AD, CF, CD, UD, RC, RCD, SD, SC, AC, AS, FC, RFC, SSC, ASS,
+       SAD, CP, CE, PD, EC) tanto al inicio como al final del nombre.
+       Así "Eibar" y "SD Eibar" caen en la misma key "eibar" y solo
+       el PRIMERO pushado sobrevive. Combina con `_canonAms` que
+       resuelve aliases declarados en TEAM_ALIASES (Barça → FC
+       Barcelona). Petición usuario 2026-05-08: la lupa de amistosos
+       mostraba duplicados ("Eibar" + "SD Eibar", "Marbella" +
+       "Marbella FC") porque la dedup era solo por lowercase. */
+    var nrm = (typeof window._aliasNormName === 'function')
+      ? window._aliasNormName
+      : function(s){ return String(s||'').toLowerCase().trim(); };
     function _pushTeam(name, media, shield, isHuman){
       var canon = _canonAms(name);
       if (!canon) return;
-      var lower = canon.toLowerCase();
-      if (seen[lower]) return;
-      seen[lower] = true;
+      var key = nrm(canon);
+      if (!key) return;
+      if (seen[key]) return;
+      seen[key] = true;
       if (!shield && typeof window.getTeamLogoUrl === 'function') {
         shield = window.getTeamLogoUrl(canon) || '';
       }

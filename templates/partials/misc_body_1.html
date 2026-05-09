@@ -6004,12 +6004,188 @@ window._showSimProgress = function(opts, onDone){
     <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openSimpleRules&&window.openSimpleRules('hypermotion')})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
   </div>
 </div>
+<!-- Banner de reparación: visible solo cuando ligaExt_liga-hypermotion
+     tiene MÁS de 22 equipos (regresión histórica de cross-slug imports
+     antes del commit 2afb997 — sigue afectando a usuarios que tenían
+     la base corrompida cuando se aplicó el fix). Pulsando se ejecuta
+     `_repairHypermotionToCanonical` que conserva los 22 canónicos
+     (DEFAULT_SEGUNDA_TEAMS, definidos en misc_body_2.html) y marca el
+     resto en `deletedTeamNames` para que no vuelvan. PIN-gated. -->
+<div id="hypermotion-repair-banner" style="display:none;margin:0 8px 8px;padding:10px 12px;background:linear-gradient(135deg,rgba(255,80,80,.18),rgba(160,30,30,.12));border:1px solid rgba(255,80,80,.55);border-radius:10px;color:#ffd0d0;font-family:Rajdhani,sans-serif;">
+  <div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#ff8080;margin-bottom:4px;">🚨 ESTADO INCONSISTENTE</div>
+  <div id="hypermotion-repair-count" style="font-size:12px;line-height:1.4;margin-bottom:8px;">Hay <b id="hypermotion-repair-num">?</b> equipos en Hypermotion (esperados <b>22</b>). Pulsa para volver a los 22 canónicos.</div>
+  <button type="button" onclick="window._repairHypermotionGated && window._repairHypermotionGated()" style="background:linear-gradient(145deg,#ff5050,#a00020);color:#fff;border:1px solid rgba(255,160,160,.65);border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;">🛠 REPARAR HYPERMOTION (X → 22)</button>
+</div>
 <div class="clas-wrap">
 <div id="clas-segunda-content">
 <div class="clas-empty">Pulsa <b>Simular</b> para generar la clasificación.</div>
 </div>
 </div>
 </div>
+
+<script>
+/* ── Hypermotion repair tool (regresión histórica) ─────────────
+   Bug 2026-05-09: la base de algunos usuarios tiene 61 equipos en
+   ligaExt_liga-hypermotion (corrupción acumulada de cross-slug
+   imports antes del fix 2afb997). El fix solo PREVINO crecimientos
+   nuevos pero no reparó la base ya corrompida. Este módulo:
+     1. Detecta si ligaExt_liga-hypermotion tiene >22 equipos.
+     2. Pinta un banner rojo en `s-segunda-clas` con el conteo real.
+     3. El botón llama a `_repairHypermotionGated` (PIN 747).
+     4. La reparación: conserva los teams cuyo nombre normalizado
+        coincide con DEFAULT_SEGUNDA_TEAMS (preservando players,
+        power, atk/mid/def, shield del admin), elimina el resto, y
+        añade los nombres eliminados a `deletedTeamNames` para
+        bloquear futuros cross-slug re-imports.
+   La función NO toca otras ligas. NO crea equipos canónicos que
+   falten — solo recorta excedentes.                              */
+(function(){
+  var HYPERMOTION_KEY = 'ligaExt_liga-hypermotion';
+  var EXPECTED = 22;
+
+  function _norm(s){
+    return String(s||'').trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/\s+/g,' ');
+  }
+
+  function _loadHypermotion(){
+    try {
+      var raw = localStorage.getItem(HYPERMOTION_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch(_) { return null; }
+  }
+
+  function _refreshBanner(){
+    var banner = document.getElementById('hypermotion-repair-banner');
+    if (!banner) return;
+    var data = _loadHypermotion();
+    var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+    var n = teams.length;
+    if (n <= EXPECTED) { banner.style.display = 'none'; return; }
+    banner.style.display = 'block';
+    var num = document.getElementById('hypermotion-repair-num');
+    if (num) num.textContent = String(n);
+    var btn = banner.querySelector('button');
+    if (btn) btn.textContent = '🛠 REPARAR HYPERMOTION (' + n + ' → ' + EXPECTED + ')';
+  }
+
+  /* Re-renderiza banner cuando se entra en s-segunda-clas. */
+  function _hookScreenWatch(){
+    var el = document.getElementById('s-segunda-clas');
+    if (!el || typeof MutationObserver !== 'function') return;
+    var wasActive = el.classList.contains('active');
+    if (wasActive) _refreshBanner();
+    try {
+      var obs = new MutationObserver(function(){
+        var nowActive = el.classList.contains('active');
+        if (nowActive && !wasActive) _refreshBanner();
+        wasActive = nowActive;
+      });
+      obs.observe(el, { attributes:true, attributeFilter:['class'] });
+    } catch(_){}
+  }
+
+  window._repairHypermotionToCanonical = function(){
+    var canonical = window.DEFAULT_SEGUNDA_TEAMS;
+    if (!Array.isArray(canonical) || !canonical.length) {
+      alert('⚠ DEFAULT_SEGUNDA_TEAMS no está disponible (espera a que cargue la liga y prueba de nuevo).');
+      return false;
+    }
+    var data = _loadHypermotion();
+    if (!data || !Array.isArray(data.teams)) {
+      alert('No hay datos de Hypermotion en localStorage.');
+      return false;
+    }
+    var canonicalNorms = {};
+    canonical.forEach(function(c){
+      var n = _norm(c.name);
+      if (n) canonicalNorms[n] = true;
+      var ns = _norm(c.short);
+      if (ns) canonicalNorms[ns] = true;
+    });
+
+    var keep = [], remove = [];
+    data.teams.forEach(function(t){
+      if (!t || !t.name) { remove.push(t); return; }
+      var n = _norm(t.name);
+      var ns = _norm(t.short);
+      if ((n && canonicalNorms[n]) || (ns && canonicalNorms[ns])) {
+        keep.push(t);
+      } else {
+        remove.push(t);
+      }
+    });
+
+    if (!remove.length) {
+      alert('No hay equipos no canónicos en Hypermotion. La base ya está limpia (' + keep.length + ' equipos).');
+      return false;
+    }
+
+    var sample = remove.slice(0, 10).map(function(t){ return '• ' + (t && t.name || '?'); }).join('\n');
+    var msg = 'Voy a quitar ' + remove.length + ' equipo' + (remove.length===1?'':'s') + ' de Hypermotion (no canónicos):\n\n'
+            + sample
+            + (remove.length > 10 ? '\n• … y ' + (remove.length - 10) + ' más' : '')
+            + '\n\nQuedarán ' + keep.length + ' equipo' + (keep.length===1?'':'s') + ' canónicos.\n\n¿Continuar?';
+    if (!confirm(msg)) return false;
+
+    /* Bloquear futuros re-imports cross-slug. */
+    if (!Array.isArray(data.deletedTeamNames)) data.deletedTeamNames = [];
+    remove.forEach(function(t){
+      if (!t || !t.name) return;
+      var n = _norm(t.name);
+      if (n && data.deletedTeamNames.indexOf(n) === -1) data.deletedTeamNames.push(n);
+    });
+    data.teams = keep;
+
+    var saved = false;
+    try {
+      if (typeof window.saveData === 'function' && typeof window.setHypermotionContext === 'function') {
+        window.setHypermotionContext();
+        window.saveData('liga-hypermotion', data);
+        saved = true;
+      } else {
+        localStorage.setItem(HYPERMOTION_KEY, JSON.stringify(data));
+        saved = true;
+      }
+    } catch(e) {
+      alert('⚠ No se pudo guardar:\n' + (e && e.message || ''));
+      return false;
+    }
+
+    if (saved) {
+      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-hypermotion'); } catch(_){}
+      try {
+        fetch('/api/liga-ext/liga-hypermotion', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({data: data})
+        }).catch(function(){});
+      } catch(_){}
+      alert('✅ Reparado · ' + keep.length + ' equipos en Hypermotion (' + remove.length + ' eliminados).');
+      _refreshBanner();
+      try { if (typeof window.buildLigaSegundaClas === 'function') window.buildLigaSegundaClas(); } catch(_){}
+    }
+    return saved;
+  };
+
+  window._repairHypermotionGated = function(){
+    if (typeof window.pG === 'function') window.pG(window._repairHypermotionToCanonical);
+    else window._repairHypermotionToCanonical();
+  };
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){
+      _hookScreenWatch();
+      _refreshBanner();
+    });
+  } else {
+    _hookScreenWatch();
+    _refreshBanner();
+  }
+})();
+</script>
 
 <div class="screen" id="s-segunda-stats">
 <button class="back-btn" onclick="go('s-segunda')">◀ Volver</button>

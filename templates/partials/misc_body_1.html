@@ -14097,9 +14097,60 @@ Tottenham
           </button>
         </div>
       </div>
+
+      <!-- ═══ MOVER EQUIPOS A OTRA LIGA (2026-05-09) ═══
+           Para corregir manualmente cuando una liga tiene equipos
+           que pertenecen a otra (típicamente Hypermotion ←→ Primera
+           Federación tras la corrupción cross-slug). El admin
+           selecciona equipos con checkboxes, elige liga destino y
+           pulsa Mover. Los equipos se MUEVEN (eliminados del slug
+           origen, añadidos al slug destino). -->
+      <div style="margin-top:14px;padding:12px;border:1px solid rgba(120,200,255,.4);border-radius:8px;background:rgba(120,200,255,.06);">
+        <label class="lext-label" style="margin-top:0;color:#88c8ff;">🔀 Mover equipos a otra liga</label>
+        <div class="lext-sub" style="line-height:1.55;">
+          Tilda los equipos a mover, elige la liga destino y pulsa Mover.
+          Útil para devolver a Primera Federación los equipos que se
+          colaron en Hypermotion (o viceversa).
+        </div>
+        <div class="lext-btn-row">
+          <button class="lext-btn" type="button" onclick="lextOpenMoveTeams()" style="background:rgba(120,200,255,.18);color:#a8d8ff;border-color:rgba(120,200,255,.55);">
+            🔀 Abrir selector
+          </button>
+        </div>
+      </div>
     </div>
     <div class="lext-sub" style="margin-top:14px;">EQUIPOS ACTUALES (toca para editar / ver plantilla)</div>
     <div class="lext-list" id="lext-teams-list"></div>
+  </div>
+</div>
+
+<!-- ═══ MODAL DE MOVER EQUIPOS ENTRE LIGAS ═══ -->
+<div class="lext-ov" id="lext-ov-move-teams">
+  <div class="lext-ov-box" style="max-width:640px;">
+    <div class="lext-ov-head">
+      <div class="lext-ov-title">🔀 Mover equipos</div>
+      <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-move-teams')">✕</button>
+    </div>
+    <div class="lext-sub" id="lext-mv-source-info" style="margin-bottom:8px;"></div>
+
+    <label class="lext-label" style="margin-top:6px;">Liga destino</label>
+    <select id="lext-mv-dest-slug" class="lext-select" style="width:100%;"></select>
+
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
+      <button class="lext-btn" type="button" onclick="lextMoveTeamsToggleAll(true)" style="font-size:11px;padding:5px 10px;">☑ Todos</button>
+      <button class="lext-btn" type="button" onclick="lextMoveTeamsToggleAll(false)" style="font-size:11px;padding:5px 10px;">☐ Ninguno</button>
+      <input type="text" id="lext-mv-filter" placeholder="🔍 filtrar por nombre…" oninput="lextMoveTeamsApplyFilter()" style="flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.18);color:#fff;padding:5px 9px;border-radius:5px;font-family:Rajdhani,sans-serif;font-size:12px;">
+    </div>
+    <div id="lext-mv-counter" class="lext-sub" style="margin-top:6px;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:1px;color:#a8d8ff;">0 seleccionados de 0</div>
+
+    <div id="lext-mv-list" style="max-height:50vh;overflow-y:auto;margin-top:8px;border-top:1px solid rgba(255,255,255,.08);padding-top:8px;"></div>
+
+    <div class="lext-btn-row" style="margin-top:14px;">
+      <button class="lext-btn green" type="button" onclick="lextExecuteMoveTeams()" style="background:rgba(120,200,255,.22);color:#a8d8ff;border-color:rgba(120,200,255,.6);">
+        🔀 Mover seleccionados
+      </button>
+      <button class="lext-btn" type="button" onclick="lextCloseOv('lext-ov-move-teams')">Cancelar</button>
+    </div>
   </div>
 </div>
 
@@ -16944,6 +16995,225 @@ Tottenham
     };
     if (typeof window.pG === 'function') window.pG(doRestore);
     else doRestore();
+  };
+
+  /* ════════════════════════════════════════════════════════════════
+     MOVER EQUIPOS ENTRE LIGAS (2026-05-09)
+     ════════════════════════════════════════════════════════════════
+     Para corregir manualmente cuando un slug acumula equipos que
+     pertenecen a otro (típico tras corrupción cross-slug).
+
+     Flujo:
+       1. lextOpenMoveTeams — abre modal, lista equipos del CURRENT_KEY
+          con checkboxes y popula select con los demás slugs.
+       2. lextExecuteMoveTeams — para cada equipo seleccionado:
+            · clona el team → push al destino
+            · elimina del origen
+            · saveData en ambos + invalidate cache
+            · POST a /api/liga-ext/<slug> en ambos.
+       3. Cierra modal y re-renderiza. */
+
+  function _lextSlugLabel(slug){
+    if (!slug) return '';
+    if (slug === 'liga-ea-sports')          return '🏆 Liga EA Sports';
+    if (slug === 'liga-hypermotion')        return '⚡ Liga Hypermotion';
+    if (slug === 'liga-primera-federacion') return '🟩 Primera Federación';
+    return '🌍 ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+  }
+
+  function _lextListAllSlugs(){
+    /* Devuelve array de slugs únicos de localStorage (sin _backup,
+       _protected, _snap_). */
+    var seen = {}; var out = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup') !== -1) continue;
+        if (k.indexOf('_protected') !== -1) continue;
+        if (k.indexOf('_snap_') !== -1) continue;
+        var slug = k.slice('ligaExt_'.length);
+        if (!slug || seen[slug]) continue;
+        seen[slug] = true;
+        out.push(slug);
+      }
+    } catch(_){}
+    out.sort();
+    return out;
+  }
+
+  window.lextOpenMoveTeams = function(){
+    if (!CURRENT_KEY) { alert('Abre una liga primero.'); return; }
+    var data = loadData(CURRENT_KEY) || {teams:[]};
+    var teams = (data.teams || []).slice();
+    if (!teams.length) { alert('Esta liga no tiene equipos.'); return; }
+    teams.sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||''), 'es'); });
+
+    var info = document.getElementById('lext-mv-source-info');
+    if (info) {
+      info.innerHTML = 'Origen: <b>'+_lextSlugLabel(CURRENT_KEY)+'</b> · '+teams.length+' equipos';
+    }
+
+    var sel = document.getElementById('lext-mv-dest-slug');
+    if (sel) {
+      var slugs = _lextListAllSlugs();
+      var html = '';
+      slugs.forEach(function(s){
+        if (s === CURRENT_KEY) return;
+        html += '<option value="'+s+'">'+_lextSlugLabel(s)+'</option>';
+      });
+      sel.innerHTML = html;
+      /* Preferencia por defecto: Primera Fed si origen es Hypermotion,
+         y viceversa (caso reportado). */
+      if (CURRENT_KEY === 'liga-hypermotion')        sel.value = 'liga-primera-federacion';
+      else if (CURRENT_KEY === 'liga-primera-federacion') sel.value = 'liga-hypermotion';
+    }
+
+    var list = document.getElementById('lext-mv-list');
+    if (list) {
+      var rowsHtml = teams.map(function(t){
+        var tid = t.id || ('t_unkn_' + Math.random().toString(36).slice(2,8));
+        var pc = (t.players && t.players.length) || 0;
+        var nm = String(t.name||'?').replace(/[<>&]/g, function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});
+        return '<label class="lext-mv-row" data-name-lower="'+nm.toLowerCase()+'" style="display:flex;align-items:center;gap:8px;padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;">'
+          +'<input type="checkbox" class="lext-mv-chk" value="'+tid+'" onchange="lextMoveTeamsUpdateCounter()" style="width:18px;height:18px;flex:0 0 18px;">'
+          +'<span style="flex:1;font-size:13px;color:#fff;">'+nm+'</span>'
+          +'<span style="font-size:11px;color:rgba(255,255,255,.45);">'+pc+'J · '+(Number(t.power)||0)+'pw</span>'
+          +'</label>';
+      }).join('');
+      list.innerHTML = rowsHtml;
+    }
+
+    var f = document.getElementById('lext-mv-filter');
+    if (f) f.value = '';
+    lextMoveTeamsUpdateCounter();
+    if (typeof lextOpenOv === 'function') lextOpenOv('lext-ov-move-teams');
+  };
+
+  window.lextMoveTeamsToggleAll = function(on){
+    var chks = document.querySelectorAll('#lext-mv-list .lext-mv-chk');
+    for (var i = 0; i < chks.length; i++) {
+      var row = chks[i].closest('.lext-mv-row');
+      if (row && row.style.display === 'none') continue;
+      chks[i].checked = !!on;
+    }
+    lextMoveTeamsUpdateCounter();
+  };
+
+  window.lextMoveTeamsApplyFilter = function(){
+    var f = document.getElementById('lext-mv-filter');
+    var q = f ? (f.value||'').toLowerCase().trim() : '';
+    var rows = document.querySelectorAll('#lext-mv-list .lext-mv-row');
+    for (var i = 0; i < rows.length; i++) {
+      var nm = rows[i].getAttribute('data-name-lower') || '';
+      rows[i].style.display = (!q || nm.indexOf(q) !== -1) ? '' : 'none';
+    }
+    lextMoveTeamsUpdateCounter();
+  };
+
+  window.lextMoveTeamsUpdateCounter = function(){
+    var c = document.getElementById('lext-mv-counter');
+    if (!c) return;
+    var chks = document.querySelectorAll('#lext-mv-list .lext-mv-chk');
+    var visible = 0, picked = 0;
+    for (var i = 0; i < chks.length; i++) {
+      var row = chks[i].closest('.lext-mv-row');
+      var hidden = (row && row.style.display === 'none');
+      if (!hidden) visible++;
+      if (chks[i].checked && !hidden) picked++;
+    }
+    c.textContent = picked + ' seleccionados de ' + visible + ' visibles';
+  };
+
+  window.lextExecuteMoveTeams = function(){
+    if (!CURRENT_KEY) return;
+    var dest = document.getElementById('lext-mv-dest-slug');
+    var destSlug = dest ? dest.value : '';
+    if (!destSlug) { alert('Elige una liga destino.'); return; }
+    if (destSlug === CURRENT_KEY) { alert('La liga destino debe ser distinta de la origen.'); return; }
+    var chks = document.querySelectorAll('#lext-mv-list .lext-mv-chk');
+    var selectedIds = {};
+    var pickedCount = 0;
+    for (var i = 0; i < chks.length; i++) {
+      if (chks[i].checked) { selectedIds[chks[i].value] = true; pickedCount++; }
+    }
+    if (!pickedCount) { alert('No has seleccionado ningún equipo.'); return; }
+
+    var doMove = function(){
+      if (!confirm('Vas a mover ' + pickedCount + ' equipo(s) desde "' + _lextSlugLabel(CURRENT_KEY) + '" a "' + _lextSlugLabel(destSlug) + '".\n\n¿Continuar?')) return;
+
+      var srcKey = CURRENT_KEY;
+      var srcData = loadData(srcKey) || {teams:[],results:[]};
+      var dstData = loadData(destSlug) || {teams:[],results:[]};
+      if (!Array.isArray(srcData.teams)) srcData.teams = [];
+      if (!Array.isArray(dstData.teams)) dstData.teams = [];
+
+      /* Index por id en destino para detectar duplicados (no añadimos
+         si ya existe el mismo nombre, normalizado, allá). */
+      var dstByName = {};
+      dstData.teams.forEach(function(t){
+        if (t && t.name) dstByName[_lextNormName(t.name)] = true;
+      });
+
+      var moved = 0, skippedDup = 0;
+      var newSrcTeams = [];
+      srcData.teams.forEach(function(t){
+        if (!t) return;
+        var keep = true;
+        if (t.id && selectedIds[t.id]) {
+          var nrm = _lextNormName(t.name||'');
+          if (dstByName[nrm]) {
+            skippedDup++;
+            /* aún así lo quitamos del origen — el admin lo eligió */
+            keep = false;
+          } else {
+            /* añadir al destino con un id NUEVO para evitar colisiones */
+            var clone = {};
+            Object.keys(t).forEach(function(k){ clone[k] = t[k]; });
+            clone.id = 't_' + (_lextNormName(t.name||'x').replace(/\s+/g,'_')) + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+            dstData.teams.push(clone);
+            dstByName[nrm] = true;
+            moved++;
+            keep = false;
+          }
+        }
+        if (keep) newSrcTeams.push(t);
+      });
+      srcData.teams = newSrcTeams;
+
+      /* Persistir ambos: localStorage + invalidate cache + POST async. */
+      try { saveData(srcKey, srcData); } catch(_){}
+      try { saveData(destSlug, dstData); } catch(_){}
+      try { if (typeof window.invalidateLigaCache === 'function') {
+        window.invalidateLigaCache(srcKey);
+        window.invalidateLigaCache(destSlug);
+      } } catch(_){}
+      try {
+        fetch('/api/liga-ext/' + encodeURIComponent(srcKey), {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({data: srcData})
+        }).catch(function(){});
+      } catch(_){}
+      try {
+        fetch('/api/liga-ext/' + encodeURIComponent(destSlug), {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({data: dstData})
+        }).catch(function(){});
+      } catch(_){}
+
+      try { if (typeof renderTeamsList === 'function') renderTeamsList(); } catch(_){}
+      try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
+      try { if (typeof window.applyEngineOverrides === 'function') window.applyEngineOverrides(); } catch(_){}
+      if (typeof lextCloseOv === 'function') lextCloseOv('lext-ov-move-teams');
+
+      var msg = '✅ ' + moved + ' equipo(s) movido(s) a "' + _lextSlugLabel(destSlug) + '".';
+      if (skippedDup) msg += '\n⚠️ ' + skippedDup + ' duplicados (ya existían en destino) — borrados del origen sin duplicar.';
+      msg += '\n\nRecarga la página para refrescar todas las pantallas.';
+      alert(msg);
+    };
+
+    if (typeof window.pG === 'function') window.pG(doMove);
+    else doMove();
   };
 
   window.lextSaveTeam = function(){

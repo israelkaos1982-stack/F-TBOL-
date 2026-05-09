@@ -8440,7 +8440,11 @@
       });
     });
     if (!activas.length) return '';
-    var header = homeName + ' ' + scoreA + ' - ' + scoreB + ' ' + awayName;
+    /* Nombres cortos también en la cabecera de stats — coherente con
+       la cabecera principal (Atl Madrid 0-0 Valencia). */
+    var hN = (typeof window._waShortName === 'function') ? window._waShortName(homeName) : homeName;
+    var aN = (typeof window._waShortName === 'function') ? window._waShortName(awayName) : awayName;
+    var header = hN + ' ' + scoreA + '-' + scoreB + ' ' + aN;
     var body = activas.map(function(r){
       return r.ico + ' ' + r.lbl + ': ' + r.hv + ' - ' + r.av;
     }).join('\n');
@@ -8475,12 +8479,15 @@
   function _waCompMeta(opts) {
     /* opts: {comp, copaRonda, copaVuelta, j} → {icon, label, round}.
        `comp` es la cadena que el motor guardó en st.comp / _gm.comp.
-       Default: liga ⚽. */
+       Si viene VACÍO, asumimos LIGA EA Sports — es lo más común y el
+       fallback genérico "⚽ PARTIDO" sale feo en el mensaje (reportado
+       2026-05-09). */
     opts = opts || {};
     var c = String(opts.comp || '').toLowerCase().trim();
+    if (!c) c = 'liga'; /* default sensato — sin esto sale "⚽ PARTIDO" */
     var ronda = '';
-    var icon = '⚽';
-    var label = 'PARTIDO';
+    var icon = '🇪🇸';
+    var label = 'Liga EA Sports';
 
     function _copaRonda(){
       var lbl = _COPA_ROUND_LBL[opts.copaRonda] || (opts.copaRonda || '').toString();
@@ -8493,50 +8500,54 @@
 
     if (c === 'copa' || c === 'copa-fin' || c === 'copa-final') {
       icon = '🏆'; label = 'COPA';
-      ronda = _copaRonda() || (opts.j ? ('J' + opts.j) : '');
+      ronda = _copaRonda() || (opts.j ? ('Jornada ' + opts.j) : '');
       if (c === 'copa-fin' || c === 'copa-final' || opts.copaRonda === 'fin') ronda = 'Final';
     } else if (c === 'sc' || c === 'sc-final' || c === 'sc-semis' || c === 'supercopa') {
-      icon = '🏆'; label = 'SUPERCOPA ESPAÑA';
+      icon = '🏆'; label = 'Supercopa España';
       ronda = (c === 'sc-final' || opts.copaRonda === 'fin') ? 'Final' : (c === 'sc-semis' ? 'Semis' : '');
     } else if (c === 'usc' || c === 'supercopa-europa' || c === 'super-cup') {
-      icon = '🏆'; label = 'SUPERCOPA EUROPA';
+      icon = '🏆'; label = 'Supercopa Europa';
     } else if (c === 'recopa') {
-      icon = '🏆'; label = 'RECOPA EUROPA';
+      icon = '🏆'; label = 'Recopa Europa';
       ronda = _copaRonda();
     } else if (c === 'intercontinental' || c === 'mundial-corto' || c.indexOf('intercontinental') !== -1) {
-      icon = '🏆'; label = 'INTERCONTINENTAL';
+      icon = '🏆'; label = 'Intercontinental';
     } else if (c === 'liga' || c.indexOf('liga ea') !== -1 || c.indexOf('hypermotion') !== -1 || c.indexOf('primera federacion') !== -1 || c.indexOf('primera fed') !== -1 || c === 'liga-ea-sports') {
       icon = '🇪🇸';
-      if (c.indexOf('hypermotion') !== -1) label = 'LIGA HYPERMOTION';
-      else if (c.indexOf('primera federacion') !== -1 || c.indexOf('primera fed') !== -1) label = 'LIGA PRIMERA FEDERACIÓN';
-      else label = 'LIGA EA SPORTS';
-      ronda = opts.j ? ('J' + opts.j) : '';
+      if (c.indexOf('hypermotion') !== -1) label = 'Liga Hypermotion';
+      else if (c.indexOf('primera federacion') !== -1 || c.indexOf('primera fed') !== -1) label = 'Primera Federación';
+      else label = 'Liga EA Sports';
+      ronda = opts.j ? ('Jornada ' + opts.j) : '';
     } else if (c === 'champions' || c === 'ucl' || c === 'champions league' || c === 'ucl-previa') {
-      icon = '🇪🇺'; label = 'CHAMPIONS LEAGUE';
+      icon = '🇪🇺'; label = 'Champions League';
       if (c === 'ucl-previa') label += ' · Previa';
+      ronda = opts.j ? ('Jornada ' + opts.j) : '';
     } else if (c === 'uel' || c === 'europa league' || c === 'europa-league') {
-      icon = '🇪🇺'; label = 'EUROPA LEAGUE';
+      icon = '🇪🇺'; label = 'Europa League';
+      ronda = opts.j ? ('Jornada ' + opts.j) : '';
     } else if (c === 'uecl' || c === 'conference league' || c === 'conference-league') {
-      icon = '🇪🇺'; label = 'CONFERENCE LEAGUE';
+      icon = '🇪🇺'; label = 'Conference League';
+      ronda = opts.j ? ('Jornada ' + opts.j) : '';
     } else if (c === 'mundial' || c === 'mundialito' || c === 'mundial-clubes' || c.indexOf('mundialito') !== -1 || c.indexOf('mundial clubes') !== -1) {
-      icon = '🌍'; label = 'MUNDIALITO CLUBES';
+      icon = '🌍'; label = 'Mundialito Clubes';
     } else if (c === 'superliga' || c === 'super-liga') {
-      icon = '🫟'; label = 'SUPERLIGA';
+      icon = '🫟'; label = 'Superliga';
+      ronda = opts.j ? ('Jornada ' + opts.j) : '';
     } else if (c === 'sct' || c === 'pss' || c === 'jg' || c === 'asia' || c.indexOf('verano') !== -1 || c.indexOf('summer') !== -1) {
       icon = '🌞';
-      if (c === 'sct') label = 'SUPER CUP TROPHY';
-      else if (c === 'pss') label = 'PRESEASON SUPER';
-      else if (c === 'jg') label = 'JAPAN GAME';
-      else if (c === 'asia') label = 'ASIA TROPHY';
-      else label = 'TORNEO VERANO';
-    } else if (c) {
-      /* Fallback: usa el string tal cual como label (en mayúsculas)
-         con icono genérico ⚽. */
-      label = String(opts.comp || '').toUpperCase();
-      ronda = opts.j ? ('J' + opts.j) : '';
+      if (c === 'sct') label = 'Super Cup Trophy';
+      else if (c === 'pss') label = 'Preseason Super';
+      else if (c === 'jg') label = 'Japan Game';
+      else if (c === 'asia') label = 'Asia Trophy';
+      else label = 'Torneo Verano';
     } else {
-      label = 'PARTIDO';
-      ronda = opts.j ? ('J' + opts.j) : '';
+      /* Fallback final: si NADA cuadra, dejamos el comp tal cual con
+         el icono ⚽ (caso muy raro — aquí se llega solo con strings
+         desconocidos). Como `c` no está vacío en este punto, no caemos
+         al "PARTIDO" genérico de antes. */
+      icon = '⚽';
+      label = String(opts.comp || '');
+      ronda = opts.j ? ('Jornada ' + opts.j) : '';
     }
     return { icon: icon, label: label, round: ronda };
   }
@@ -8556,43 +8567,117 @@
   function _waCalDate(meta, j) {
     /* Busca la fecha del calendario (DOM `.ag-r` o `.jblock`) que mejor
        cuadre con el comp+round actual. Devuelve "" si no encuentra
-       — el caller omite la línea 📅. */
+       — el caller omite la línea 📅.
+
+       Mejora 2026-05-09 (la fecha no aparecía): además de scanner el
+       DOM, escaneamos cualquier `.ag-r` y `.jblock` del documento (no
+       solo dentro de #s-agenda/#s-calendario) — algunos hubs renderizan
+       en otros wrappers. Dedup por par lbl+date; mejor match es el
+       que cuadra COMPETICIÓN + JORNADA exacta. */
     if (!meta) return '';
+    function _norm(s){
+      return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+    }
     try {
-      var rows = document.querySelectorAll('#s-agenda .ag-r, #s-calendario .jblock');
-      var compNeedles = [];
-      var lab = String(meta.label || '').toLowerCase();
+      var rows = document.querySelectorAll('.ag-r, .jblock');
+      if (!rows.length) return '';
+      var labN = _norm(meta.label || '');
+      var labFirstWord = labN ? labN.split(' ')[0] : '';
       var ico = String(meta.icon  || '');
+      var compNeedles = [];
+      if (labFirstWord) compNeedles.push(labFirstWord); /* "liga", "copa", "champions"… */
       if (ico) compNeedles.push(ico);
-      if (lab) compNeedles.push(lab.split(' ')[0]); /* "liga", "copa", "champions"… */
-      var roundNeedle = String(meta.round || '').toLowerCase().trim();
+      /* Para liga, también aceptamos "ea sports" como needle más
+         específico para evitar match con "Recopa Europa" si "europa"
+         aparece. */
+      if (labN === 'liga ea sports') compNeedles.push('ea sports');
+      else if (labN === 'liga hypermotion') compNeedles.push('hypermotion');
+      else if (labN.indexOf('primera fed') !== -1) compNeedles.push('primera fed');
+      var roundNeedle = _norm(meta.round || '');
       var jNeedle = (j != null && j !== '') ? ('j' + String(j).toLowerCase()) : '';
       var bestDate = '';
+      var bestScore = -1;
       for (var i = 0; i < rows.length; i++) {
         var row = rows[i];
         var lblEl = row.querySelector('.ag-lbl, .jbtn b');
         var dateEl = row.querySelector('.ag-date, .jbtn span:first-child');
         if (!lblEl || !dateEl) continue;
-        var rowLbl = (lblEl.textContent || '').toLowerCase();
+        var rowLbl = _norm(lblEl.textContent);
         var rowDate = (dateEl.textContent || '').replace(/[​-‍]/g,'').trim();
-        if (!rowDate) continue;
+        if (!rowDate || !rowLbl) continue;
         var compHit = false;
         for (var ni = 0; ni < compNeedles.length; ni++) {
-          if (compNeedles[ni] && rowLbl.indexOf(compNeedles[ni]) !== -1) { compHit = true; break; }
+          if (compNeedles[ni] && rowLbl.indexOf(_norm(compNeedles[ni])) !== -1) { compHit = true; break; }
         }
         if (!compHit) continue;
-        var roundHit = !roundNeedle || rowLbl.indexOf(roundNeedle) !== -1;
-        var jHit     = !jNeedle     || rowLbl.indexOf(jNeedle)     !== -1;
-        if (roundHit && jHit) { bestDate = rowDate; break; }
-        if (!bestDate && (roundHit || jHit)) bestDate = rowDate; /* fallback parcial */
+        var score = 1;
+        if (roundNeedle && rowLbl.indexOf(roundNeedle) !== -1) score += 2;
+        if (jNeedle && rowLbl.indexOf(jNeedle) !== -1) score += 4;
+        if (score > bestScore) { bestScore = score; bestDate = rowDate; }
       }
       return bestDate;
     } catch(_){}
     return '';
   }
 
+  /* Helper: nombre corto del equipo para que la línea del marcador
+     entre en una sola línea horizontal en WhatsApp móvil. Reglas
+     pedidas por el usuario (2026-05-09):
+       "Atlético Madrid 0 - 0 Valencia CF" → "Atl Madrid 0-0 Valencia"
+     Mantiene el resto del texto intacto.
+     Estrategia:
+       1. Si TEAM_ALIASES (window.SHORT_NAMES_CANON_TO_DISPLAY) tiene
+          una entrada, usarla.
+       2. Si no, eliminar sufijos comunes (CF, FC, SAD, SC, SD, CD, UD,
+          RC, RCD, AC, AD, AS, RFC, SSC, ASS, CP, CE, PD, EC).
+       3. Si no, devolver tal cual.                                   */
+  var _WA_SHORT_DICT = {
+    'atletico madrid': 'Atl Madrid', 'atlético madrid': 'Atl Madrid',
+    'real madrid': 'Real Madrid',
+    'fc barcelona': 'Barcelona', 'barcelona': 'Barcelona',
+    'valencia cf': 'Valencia',
+    'sevilla fc': 'Sevilla',
+    'bayern munich': 'Bayern', 'bayern': 'Bayern',
+    'celta de vigo': 'Celta', 'rc celta': 'Celta',
+    'elche cf': 'Elche',
+    'rayo vallecano': 'Rayo',
+    'deportivo alavés': 'Alavés', 'deportivo alaves': 'Alavés',
+    'villarreal cf': 'Villarreal',
+    'getafe cf': 'Getafe',
+    'girona fc': 'Girona',
+    'rcd mallorca': 'Mallorca',
+    'rcd espanyol': 'Espanyol',
+    'real betis': 'Betis',
+    'real oviedo': 'Oviedo',
+    'real sociedad': 'Real Sociedad',
+    'athletic club': 'Athletic',
+    'real valladolid': 'Valladolid', 'rcd valladolid': 'Valladolid',
+    'ud las palmas': 'Las Palmas',
+    'cd leganés': 'Leganés', 'cd leganes': 'Leganés',
+    'paris saint-germain': 'PSG', 'psg': 'PSG',
+    'manchester city': 'Man City',
+    'manchester united': 'Man United'
+  };
+  function _waShortName(name) {
+    if (!name) return '';
+    var s = String(name).trim();
+    var key = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+    if (_WA_SHORT_DICT[key]) return _WA_SHORT_DICT[key];
+    /* Strip prefijo común "Real /Deportivo /Club " si la cadena queda
+       mayor de 1 palabra. */
+    var stripped = s.replace(/\s+(CF|FC|SAD|SC|SD|CD|UD|RC|RCD|AC|AD|AS|RFC|SSC|ASS|CP|CE|PD|EC)\b\.?$/i, '').trim();
+    return stripped || s;
+  }
+  try { window._waShortName = _waShortName; } catch(_){}
+
   /* Construye el bloque de cabecera (líneas pre-acta) según las nuevas
-     reglas. Devuelve un array de líneas; el caller añade lo demás. */
+     reglas. Devuelve un array de líneas; el caller añade lo demás.
+
+     FORMATO FINAL (2026-05-09, petición usuario):
+       📅 06 Nov                                  (si hay fecha)
+       🇪🇸 Liga EA Sports Jornada 1                (sin "-" para liga)
+       Atl Madrid 0-0 Valencia                     (nombres cortos)
+       🔚 FINAL                                    (si hay evento)            */
   function _waBuildHeaderLines(opts) {
     /* opts: {comp, j, copaRonda, copaVuelta, home, away, scA, scB, eventType}
        Si scA y scB son null/undefined → línea de marcador queda como
@@ -8601,15 +8686,26 @@
     var lines = [];
     var date = _waCalDate(meta, opts.j);
     if (date) lines.push('📅 ' + date);
+    /* Liga / superliga / champions / uel / uecl / mundial / verano →
+       "Icono Label Jornada N" sin separador.
+       Copa / supercopa / recopa / intercontinental → "Icono Label - Ronda"
+       (la ronda no es numérica, lleva separador para legibilidad). */
     var compLine = meta.icon + ' ' + meta.label;
-    if (meta.round) compLine += ' - ' + meta.round;
+    if (meta.round) {
+      var isJornadaRound = /^Jornada\s/i.test(meta.round);
+      compLine += isJornadaRound ? (' ' + meta.round) : (' - ' + meta.round);
+    }
     lines.push(compLine);
-    lines.push('');
+    /* Marcador / vs sin línea en blanco intermedia — el usuario quiere
+       el bloque compacto. El ACTA del caller va a ir separada con su
+       propio salto. */
+    var sH = _waShortName(opts.home);
+    var sA = _waShortName(opts.away);
     var hasScore = (opts.scA != null) || (opts.scB != null);
     if (hasScore) {
-      lines.push((opts.home||'?') + ' ' + (opts.scA != null ? opts.scA : 0) + ' - ' + (opts.scB != null ? opts.scB : 0) + ' ' + (opts.away||'?'));
+      lines.push(sH + ' ' + (opts.scA != null ? opts.scA : 0) + '-' + (opts.scB != null ? opts.scB : 0) + ' ' + sA);
     } else {
-      lines.push((opts.home||'?') + ' vs ' + (opts.away||'?'));
+      lines.push(sH + ' vs ' + sA);
     }
     var evLine = _waEventLine(opts.eventType);
     if (evLine) lines.push(evLine);

@@ -8437,16 +8437,189 @@
     return header + '\n' + body;
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     HEADER NUEVO PARA WHATSAPP (2026-05-09)
+     ════════════════════════════════════════════════════════════════
+     Petición usuario: el mensaje compartido (inicio · descanso · fin
+     · descanso prórroga · fin prórroga · fin tanda penaltis) debe
+     incluir, antes del marcador, 3 líneas:
+       📅 [fecha del calendario]
+       [icono comp] [LABEL COMP] - [Ronda/Jornada]
+       [home] X - Y [away]
+       [icono evento] [LABEL EVENTO]
+     y luego el ACTA. Iconos definidos por el usuario:
+       🏆 Copa, Supercopa España, Supercopa Europa, Recopa Europa,
+          Intercontinental
+       🇪🇸 Liga
+       🇪🇺 Champions, Europa League, Conference League
+       🌍 Mundialito Clubes
+       🫟 Superliga
+       🌞 Torneos verano (Sct/PSS/JG/Asia)
+     Eventos:
+       🟢 INICIO · 🔜 DESCANSO · 🔚 FINAL
+       ⏺️ PRÓRROGA · 🥅 PENALTIS                                  */
+  var _COPA_ROUND_LBL = {
+    r1: '1ª Ronda', r2: '2ª Ronda', r16: 'Dieciseisavos',
+    oct: 'Octavos', cua: 'Cuartos', sf: 'Semis', fin: 'Final'
+  };
+  function _waCompMeta(opts) {
+    /* opts: {comp, copaRonda, copaVuelta, j} → {icon, label, round}.
+       `comp` es la cadena que el motor guardó en st.comp / _gm.comp.
+       Default: liga ⚽. */
+    opts = opts || {};
+    var c = String(opts.comp || '').toLowerCase().trim();
+    var ronda = '';
+    var icon = '⚽';
+    var label = 'PARTIDO';
+
+    function _copaRonda(){
+      var lbl = _COPA_ROUND_LBL[opts.copaRonda] || (opts.copaRonda || '').toString();
+      if (!lbl) return '';
+      var prefix = '';
+      if (opts.copaVuelta === true)  prefix = 'Vuelta ';
+      else if (opts.copaVuelta === false && (opts.copaRonda === 'oct' || opts.copaRonda === 'cua' || opts.copaRonda === 'sf')) prefix = 'Ida ';
+      return prefix + lbl;
+    }
+
+    if (c === 'copa' || c === 'copa-fin' || c === 'copa-final') {
+      icon = '🏆'; label = 'COPA';
+      ronda = _copaRonda() || (opts.j ? ('J' + opts.j) : '');
+      if (c === 'copa-fin' || c === 'copa-final' || opts.copaRonda === 'fin') ronda = 'Final';
+    } else if (c === 'sc' || c === 'sc-final' || c === 'sc-semis' || c === 'supercopa') {
+      icon = '🏆'; label = 'SUPERCOPA ESPAÑA';
+      ronda = (c === 'sc-final' || opts.copaRonda === 'fin') ? 'Final' : (c === 'sc-semis' ? 'Semis' : '');
+    } else if (c === 'usc' || c === 'supercopa-europa' || c === 'super-cup') {
+      icon = '🏆'; label = 'SUPERCOPA EUROPA';
+    } else if (c === 'recopa') {
+      icon = '🏆'; label = 'RECOPA EUROPA';
+      ronda = _copaRonda();
+    } else if (c === 'intercontinental' || c === 'mundial-corto' || c.indexOf('intercontinental') !== -1) {
+      icon = '🏆'; label = 'INTERCONTINENTAL';
+    } else if (c === 'liga' || c.indexOf('liga ea') !== -1 || c.indexOf('hypermotion') !== -1 || c.indexOf('primera federacion') !== -1 || c.indexOf('primera fed') !== -1 || c === 'liga-ea-sports') {
+      icon = '🇪🇸';
+      if (c.indexOf('hypermotion') !== -1) label = 'LIGA HYPERMOTION';
+      else if (c.indexOf('primera federacion') !== -1 || c.indexOf('primera fed') !== -1) label = 'LIGA PRIMERA FEDERACIÓN';
+      else label = 'LIGA EA SPORTS';
+      ronda = opts.j ? ('J' + opts.j) : '';
+    } else if (c === 'champions' || c === 'ucl' || c === 'champions league' || c === 'ucl-previa') {
+      icon = '🇪🇺'; label = 'CHAMPIONS LEAGUE';
+      if (c === 'ucl-previa') label += ' · Previa';
+    } else if (c === 'uel' || c === 'europa league' || c === 'europa-league') {
+      icon = '🇪🇺'; label = 'EUROPA LEAGUE';
+    } else if (c === 'uecl' || c === 'conference league' || c === 'conference-league') {
+      icon = '🇪🇺'; label = 'CONFERENCE LEAGUE';
+    } else if (c === 'mundial' || c === 'mundialito' || c === 'mundial-clubes' || c.indexOf('mundialito') !== -1 || c.indexOf('mundial clubes') !== -1) {
+      icon = '🌍'; label = 'MUNDIALITO CLUBES';
+    } else if (c === 'superliga' || c === 'super-liga') {
+      icon = '🫟'; label = 'SUPERLIGA';
+    } else if (c === 'sct' || c === 'pss' || c === 'jg' || c === 'asia' || c.indexOf('verano') !== -1 || c.indexOf('summer') !== -1) {
+      icon = '🌞';
+      if (c === 'sct') label = 'SUPER CUP TROPHY';
+      else if (c === 'pss') label = 'PRESEASON SUPER';
+      else if (c === 'jg') label = 'JAPAN GAME';
+      else if (c === 'asia') label = 'ASIA TROPHY';
+      else label = 'TORNEO VERANO';
+    } else if (c) {
+      /* Fallback: usa el string tal cual como label (en mayúsculas)
+         con icono genérico ⚽. */
+      label = String(opts.comp || '').toUpperCase();
+      ronda = opts.j ? ('J' + opts.j) : '';
+    } else {
+      label = 'PARTIDO';
+      ronda = opts.j ? ('J' + opts.j) : '';
+    }
+    return { icon: icon, label: label, round: ronda };
+  }
+
+  function _waEventLine(eventType) {
+    /* eventType: 'kickoff'|'descanso'|'final'|'prorroga-ht'|'prorroga-fin'|'penaltis'|null */
+    if (!eventType) return '';
+    if (eventType === 'kickoff')      return '🟢 INICIO';
+    if (eventType === 'descanso')     return '🔜 DESCANSO';
+    if (eventType === 'final')        return '🔚 FINAL';
+    if (eventType === 'prorroga-ht')  return '⏺️ DESCANSO PRÓRROGA';
+    if (eventType === 'prorroga-fin') return '⏺️ FIN PRÓRROGA';
+    if (eventType === 'penaltis')     return '🥅 FIN TANDA PENALTIS';
+    return '';
+  }
+
+  function _waCalDate(meta, j) {
+    /* Busca la fecha del calendario (DOM `.ag-r` o `.jblock`) que mejor
+       cuadre con el comp+round actual. Devuelve "" si no encuentra
+       — el caller omite la línea 📅. */
+    if (!meta) return '';
+    try {
+      var rows = document.querySelectorAll('#s-agenda .ag-r, #s-calendario .jblock');
+      var compNeedles = [];
+      var lab = String(meta.label || '').toLowerCase();
+      var ico = String(meta.icon  || '');
+      if (ico) compNeedles.push(ico);
+      if (lab) compNeedles.push(lab.split(' ')[0]); /* "liga", "copa", "champions"… */
+      var roundNeedle = String(meta.round || '').toLowerCase().trim();
+      var jNeedle = (j != null && j !== '') ? ('j' + String(j).toLowerCase()) : '';
+      var bestDate = '';
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var lblEl = row.querySelector('.ag-lbl, .jbtn b');
+        var dateEl = row.querySelector('.ag-date, .jbtn span:first-child');
+        if (!lblEl || !dateEl) continue;
+        var rowLbl = (lblEl.textContent || '').toLowerCase();
+        var rowDate = (dateEl.textContent || '').replace(/[​-‍]/g,'').trim();
+        if (!rowDate) continue;
+        var compHit = false;
+        for (var ni = 0; ni < compNeedles.length; ni++) {
+          if (compNeedles[ni] && rowLbl.indexOf(compNeedles[ni]) !== -1) { compHit = true; break; }
+        }
+        if (!compHit) continue;
+        var roundHit = !roundNeedle || rowLbl.indexOf(roundNeedle) !== -1;
+        var jHit     = !jNeedle     || rowLbl.indexOf(jNeedle)     !== -1;
+        if (roundHit && jHit) { bestDate = rowDate; break; }
+        if (!bestDate && (roundHit || jHit)) bestDate = rowDate; /* fallback parcial */
+      }
+      return bestDate;
+    } catch(_){}
+    return '';
+  }
+
+  /* Construye el bloque de cabecera (líneas pre-acta) según las nuevas
+     reglas. Devuelve un array de líneas; el caller añade lo demás. */
+  function _waBuildHeaderLines(opts) {
+    /* opts: {comp, j, copaRonda, copaVuelta, home, away, scA, scB, eventType} */
+    var meta = _waCompMeta(opts);
+    var lines = [];
+    var date = _waCalDate(meta, opts.j);
+    if (date) lines.push('📅 ' + date);
+    var compLine = meta.icon + ' ' + meta.label;
+    if (meta.round) compLine += ' - ' + meta.round;
+    lines.push(compLine);
+    lines.push('');
+    lines.push((opts.home||'?') + ' ' + (opts.scA != null ? opts.scA : 0) + ' - ' + (opts.scB != null ? opts.scB : 0) + ' ' + (opts.away||'?'));
+    var evLine = _waEventLine(opts.eventType);
+    if (evLine) lines.push(evLine);
+    return lines;
+  }
+  /* Exponer para que otros módulos los reusen (gm-modal, copa, etc.). */
+  try {
+    window._waCompMeta        = _waCompMeta;
+    window._waEventLine       = _waEventLine;
+    window._waCalDate         = _waCalDate;
+    window._waBuildHeaderLines = _waBuildHeaderLines;
+  } catch(_){}
+
   /* Build the standard WA message and open WhatsApp */
   function _mlBuildAndShareWA(mk, st, isFinal) {
     var allIco = {gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',porteria:'🧤'};
     var lines = [];
-    /* Header: "Jornada N Liga EA Sports" (usamos st.comp si viene
-       informado, fallback a Liga EA Sports). */
-    var _compML = st.comp || 'Liga EA Sports';
-    lines.push('Jornada ' + st.j + ' ' + _compML);
-    lines.push('');
-    lines.push(st.home + ' ' + st.sc.a + ' - ' + st.sc.b + ' ' + st.away);
+    /* Cabecera nueva (2026-05-09): fecha + icono comp + label + ronda
+       + marcador + icono evento. Sustituye al "Jornada N COMP" antiguo. */
+    _waBuildHeaderLines({
+      comp: st.comp, j: st.j,
+      copaRonda: st._copaRonda || (st.comp === 'copa-fin' ? 'fin' : null),
+      copaVuelta: st._copaVuelta,
+      home: st.home, away: st.away,
+      scA: st.sc.a, scB: st.sc.b,
+      eventType: isFinal ? 'final' : 'descanso'
+    }).forEach(function(l){ lines.push(l); });
     var actaEvts = st.events.filter(function(e){ return allIco[e.type]; });
     if (actaEvts.length) {
       lines.push('');
@@ -8672,12 +8845,16 @@
   window._gmShareHalfTime = function() {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
                   'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
-    var comp = _gm.comp || '';
     var lines = [];
-    if (comp) lines.push(comp + ' - Jornada ' + (_gm.j||''));
-    else lines.push('Jornada ' + (_gm.j||''));
-    lines.push('');
-    lines.push(_gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away);
+    /* Cabecera nueva (2026-05-09): fecha + icono comp + label + ronda
+       + marcador + 🔜 DESCANSO. */
+    _waBuildHeaderLines({
+      comp: _gm.comp, j: _gm.j,
+      copaRonda: _gm._copaRonda, copaVuelta: _gm._copaVuelta,
+      home: _gm.home, away: _gm.away,
+      scA: _gm.sc.a, scB: _gm.sc.b,
+      eventType: 'descanso'
+    }).forEach(function(l){ lines.push(l); });
     lines.push('');
     lines.push('ACTA DEL PARTIDO:');
     var htEvts = (_gm.events||[]).filter(function(e){ return e && e.min <= 45 && e.type !== 'mvp'; });
@@ -8833,14 +9010,20 @@
   window._gmShareFinal = function() {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
                   'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
-    var comp = _gm.comp || 'Liga EA Sports';
     var lines = [];
-    /* Header: "Jornada N Liga EA Sports" (el usuario pidió la
-       competición detrás del número de jornada y, si falta comp,
-       default a Liga EA Sports). */
-    lines.push('Jornada ' + (_gm.j||'') + ' ' + comp);
-    lines.push('');
-    lines.push(_gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away);
+    /* Cabecera nueva (2026-05-09): fecha + icono comp + label + ronda
+       + marcador + 🔚 FINAL. Si el partido tuvo penaltis, el evento es
+       🥅 FIN TANDA PENALTIS. Si terminó en prórroga, ⏺️ FIN PRÓRROGA. */
+    var _evType = 'final';
+    if (_gm.penShootDone || _gm._penWinner != null) _evType = 'penaltis';
+    else if (_gm.etDone) _evType = 'prorroga-fin';
+    _waBuildHeaderLines({
+      comp: _gm.comp, j: _gm.j,
+      copaRonda: _gm._copaRonda, copaVuelta: _gm._copaVuelta,
+      home: _gm.home, away: _gm.away,
+      scA: _gm.sc.a, scB: _gm.sc.b,
+      eventType: _evType
+    }).forEach(function(l){ lines.push(l); });
     lines.push('');
     lines.push('ACTA DEL PARTIDO:');
     var evts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp'; });
@@ -9512,10 +9695,15 @@
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
                   'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
     var lines = [];
-    var compLbl = _gm.comp ? (_gm.comp + ' — HTP (descanso prórroga 105\')') : 'HTP (descanso prórroga 105\')';
-    lines.push(compLbl);
-    lines.push('');
-    lines.push(_gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away);
+    /* Cabecera nueva (2026-05-09): fecha + icono comp + label + ronda
+       + marcador + ⏺️ DESCANSO PRÓRROGA. */
+    _waBuildHeaderLines({
+      comp: _gm.comp, j: _gm.j,
+      copaRonda: _gm._copaRonda, copaVuelta: _gm._copaVuelta,
+      home: _gm.home, away: _gm.away,
+      scA: _gm.sc.a, scB: _gm.sc.b,
+      eventType: 'prorroga-ht'
+    }).forEach(function(l){ lines.push(l); });
     lines.push('');
     lines.push('ACTA HASTA 105\':');
     var htpEvts = (_gm.events||[]).filter(function(e){ return e && e.min <= 105 && e.type !== 'mvp'; });

@@ -8668,6 +8668,15 @@ window._showSimProgress = function(opts, onDone){
   .tour-bracket-team.is-pickable.is-human:not(.is-pending){
     background:rgba(30,161,74,.18);border:1px solid rgba(30,161,74,.50);
   }
+  /* Cards de partido jugado: ganador en verde, perdedor tachado. */
+  .tour-match.tour-match-played{background:rgba(255,255,255,.025);}
+  .tour-match.tour-match-pickable{cursor:pointer;transition:background .14s;}
+  .tour-match.tour-match-pickable:hover{background:rgba(240,192,64,.06);}
+  .tour-bracket-team.is-winner span{color:#5fe08a;font-weight:700;text-shadow:0 0 6px rgba(95,224,138,.4);}
+  .tour-bracket-team.is-loser span{color:rgba(255,92,112,.65);text-decoration:line-through;text-decoration-color:rgba(255,92,112,.4);}
+  .tour-score{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;color:rgba(255,255,255,.75);}
+  .tour-score-win{color:#5fe08a;text-shadow:0 0 8px rgba(95,224,138,.5);}
+  .tour-score-wrap{display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:2px 8px;}
   .tour-team-chip.is-pickable{cursor:pointer;}
   .tour-team-chip.is-pickable:hover{background:rgba(240,192,64,.15);}
   .tour-team-chip.is-pickable.is-pending{
@@ -9300,7 +9309,8 @@ window._showSimProgress = function(opts, onDone){
      o ya con equipo elegido) se marca como clickable (`is-pickable`)
      con `data-tour` + `data-slot` para que el handler delegado abra
      el picker. Los IA son visualmente neutros, no clickables. */
-  function _bracketTeamHtml(t, tourId, slotIdx){
+  function _bracketTeamHtml(t, tourId, slotIdx, isWinner, isLoser){
+    if (!t) return '<div class="tour-bracket-team"><span>?</span></div>';
     var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
     var classes = ['tour-bracket-team'];
     if (t.isHuman) {
@@ -9308,6 +9318,8 @@ window._showSimProgress = function(opts, onDone){
       if (t.name === 'PENDIENTE') classes.push('is-pending');
       else classes.push('is-human');
     }
+    if (isWinner) classes.push('is-winner');
+    if (isLoser)  classes.push('is-loser');
     var data = t.isHuman ? ' data-tour="'+tourId+'" data-slot="'+slotIdx+'"' : '';
     return '<div class="'+classes.join(' ')+'"'+data+'>'+img+'<span>'+(t.name||'?')+'</span></div>';
   }
@@ -9359,16 +9371,81 @@ window._showSimProgress = function(opts, onDone){
 
     if (cfg.format === 'ko' || cfg.format === 'ko-2leg') {
       var rounds = (cfg.formatConfig && cfg.formatConfig.rounds) || [];
-      var firstRound = rounds[0] || ('Ronda de '+teams.length);
+      cfg.currentRound = (typeof cfg.currentRound === 'number') ? cfg.currentRound : 0;
+      cfg.results = cfg.results || {};
+      cfg.bracket = cfg.bracket || [teams.slice()];
+      /* Asegurar que el bracket tiene la ronda 0 con los teams iniciales. */
+      if (!cfg.bracket[0] || !cfg.bracket[0].length) cfg.bracket[0] = teams.slice();
+      var curR = cfg.currentRound;
+      var curTeams = cfg.bracket[curR] || [];
+      var roundLbl = rounds[curR] || ('Ronda de '+curTeams.length);
       var subtitle = (cfg.format === 'ko-2leg') ? 'IDA Y VUELTA · gol fuera × 2' : 'A UN PARTIDO';
-      var html = hint + '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">SORTEO · '+firstRound+' · <span style="color:rgba(255,255,255,.40);">'+subtitle+'</span></p>';
+      var html = hint + '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">'+roundLbl+' · <span style="color:rgba(255,255,255,.40);">'+subtitle+'</span></p>';
       html += '<div class="tour-bracket-list">';
-      for (var i = 0; i < teams.length; i += 2) {
-        var a = teams[i], b = teams[i+1];
+      var allPlayed = true;
+      var pairCount = 0;
+      for (var i = 0; i < curTeams.length; i += 2) {
+        var a = curTeams[i], b = curTeams[i+1];
         if (!b) break;
-        html += '<div class="tour-match">' + _bracketTeamHtml(a, id, i) + '<span class="vs">vs</span>' + _bracketTeamHtml(b, id, i+1) + '</div>';
+        var matchKey = curR + '_' + (i/2);
+        var res = cfg.results[matchKey];
+        var played = !!(res && res.played);
+        if (!played) allPlayed = false;
+        var dataAttrs = ' data-tour="'+id+'" data-match-key="'+matchKey+'"';
+        var rowClass = played ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
+        if (played) {
+          var aWin = res.winner === 'a', bWin = res.winner === 'b';
+          var sA = '<span class="tour-score'+(aWin?' tour-score-win':'')+'">'+res.a+'</span>';
+          var sB = '<span class="tour-score'+(bWin?' tour-score-win':'')+'">'+res.b+'</span>';
+          html += '<div class="'+rowClass+'"'+dataAttrs+'>'
+            + _bracketTeamHtml(a, id, i, aWin, bWin && !aWin)
+            + '<span class="vs tour-score-wrap">'+sA+' - '+sB+'</span>'
+            + _bracketTeamHtml(b, id, i+1, bWin, aWin && !bWin)
+            + '</div>';
+        } else {
+          html += '<div class="'+rowClass+'"'+dataAttrs+'>'
+            + _bracketTeamHtml(a, id, i)
+            + '<span class="vs">vs</span>'
+            + _bracketTeamHtml(b, id, i+1)
+            + '</div>';
+        }
+        pairCount++;
       }
       html += '</div>';
+      /* Botón "▶ Simular ronda" si quedan partidos por jugar; "Avanzar"
+         si todos los de la ronda están jugados y aún no es final. */
+      if (curTeams.length > 1) {
+        if (!allPlayed && pairCount > 0) {
+          html += '<div style="display:flex;gap:8px;margin-top:12px;justify-content:center;flex-wrap:wrap;">'
+            + '<button type="button" class="tour-sim-round-btn" data-tour="'+id+'" '
+            + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;box-shadow:0 0 14px rgba(95,224,138,.35);">'
+            + '▶ SIMULAR RONDA'
+            + '</button></div>';
+        } else if (allPlayed && curR < (rounds.length - 1)) {
+          html += '<div style="display:flex;gap:8px;margin-top:12px;justify-content:center;flex-wrap:wrap;">'
+            + '<button type="button" class="tour-advance-btn" data-tour="'+id+'" '
+            + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(255,198,77,.35);">'
+            + '🏆 AVANZAR A ' + (rounds[curR+1] || 'SIGUIENTE RONDA').toUpperCase()
+            + '</button></div>';
+        } else if (allPlayed && curR >= (rounds.length - 1)) {
+          /* Final jugada — mostrar campeón. */
+          var lastRes = cfg.results[curR + '_0'];
+          if (lastRes && lastRes.played) {
+            var champTeam = (lastRes.winner === 'a') ? curTeams[0] : curTeams[1];
+            html += '<div style="margin-top:14px;text-align:center;padding:14px;background:linear-gradient(135deg,rgba(240,192,64,.12),rgba(220,5,45,.12));border:1px solid rgba(240,192,64,.5);border-radius:12px;">'
+              + '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.55);">🏆 CAMPEÓN</div>'
+              + '<div style="font-family:Oswald,sans-serif;font-size:20px;letter-spacing:2px;color:#f0c040;margin-top:4px;">'+(champTeam && champTeam.name || '?')+'</div>'
+              + '</div>';
+          }
+        }
+        if (curR > 0 || allPlayed) {
+          html += '<div style="display:flex;gap:8px;margin-top:8px;justify-content:center;flex-wrap:wrap;">'
+            + '<button type="button" class="tour-reset-btn" data-tour="'+id+'" '
+            + 'style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
+            + '↺ Reset bracket'
+            + '</button></div>';
+        }
+      }
       infoEl.innerHTML = html;
     } else if (cfg.format === 'league') {
       var html = hint + '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">PARTICIPANTES · '+teams.length+'</p>';
@@ -9485,6 +9562,234 @@ window._showSimProgress = function(opts, onDone){
   } else {
     _wire();
   }
+
+  /* ════════════════════════════════════════════════════════════════
+     SIMULACIÓN DE TORNEOS DE VERANO — FASE 1 (KO)
+     ════════════════════════════════════════════════════════════════
+     Petición usuario 2026-05-09: replicar la simulación de Copa del
+     Rey para los 4 torneos de verano (Sct/PSS/JG/Asia).
+
+     Fase 1 (este PR):
+       · Cards de KO clickables → simula con `simulateMatch` (motor 4-ejes
+         de la liga: ATQ/MED/DEF/GLOB).
+       · Resultado se guarda en `cfg.results[r_m]` y se persiste
+         (localStorage + `_tourSave` async al server).
+       · Cuando todos los partidos de la ronda están jugados, botón
+         🏆 AVANZAR construye la siguiente ronda con los ganadores.
+       · Botón ▶ SIMULAR RONDA juega todos los pendientes a la vez.
+       · Botón ↺ Reset bracket vuelve a la ronda 0 sin tocar el sorteo.
+
+     Fase 2 (próximo PR):
+       · Si hay humano(s) → previa + gm-modal.
+       · Penaltis en empates KO single-leg.
+       · Goles fuera × 2 en KO ida+vuelta.
+       · Liga (round-robin) y Grupos+KO.                              */
+  function _tourFindTeam(teamObj){
+    /* Devuelve el objeto t completo (con power/atk/mid/def) leyendo
+       de ligaExt_* + collectStandings + DEFAULT pools. Si no encuentra,
+       construye uno con power 70 (default) para que `simulateMatch`
+       funcione sin crashear. */
+    if (!teamObj || !teamObj.name) return null;
+    var name = teamObj.name;
+    var pow = Number(teamObj.power) || 0;
+    var t = {
+      id: teamObj.id || ('tour_'+_norm(name).replace(/\s+/g,'_')),
+      name: name,
+      power: pow || 70,
+      atk: Number(teamObj.atk) || pow || 70,
+      mid: Number(teamObj.mid) || pow || 70,
+      def: Number(teamObj.def) || pow || 70,
+      shield: teamObj.shield || ''
+    };
+    /* Si el editor tiene un equipo con el mismo nombre, copia stats
+       reales (sobreescribe el 70 default). */
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1 || k.indexOf('_snap_') !== -1) continue;
+        var raw; try { raw = localStorage.getItem(k); } catch(_){ continue; }
+        if (!raw) continue;
+        var d; try { d = JSON.parse(raw); } catch(_){ continue; }
+        if (!d || !Array.isArray(d.teams)) continue;
+        for (var j = 0; j < d.teams.length; j++) {
+          var et = d.teams[j];
+          if (et && et.name && _norm(et.name) === _norm(name)) {
+            if (et.power) t.power = Number(et.power);
+            if (et.atk)   t.atk   = Number(et.atk);
+            if (et.mid)   t.mid   = Number(et.mid);
+            if (et.def)   t.def   = Number(et.def);
+            if (et.shield) t.shield = et.shield;
+            return t;
+          }
+        }
+      }
+    } catch(_){}
+    return t;
+  }
+
+  function _tourSimMatch(cfg, roundIdx, matchIdx) {
+    /* Simula UN partido del bracket usando `simulateMatch` global
+       (motor 4-ejes de la liga). Devuelve {a, b, winner, played:true}.
+       Para ko-2leg (ida+vuelta) simula los DOS legs y aplica gol-fuera×2
+       en empate; para ko (single leg) si hay empate elige ganador
+       random ponderado por GLOBAL — placeholder hasta Fase 2 (penaltis). */
+    var teams = cfg.bracket[roundIdx];
+    var i = matchIdx * 2;
+    var teamA = _tourFindTeam(teams[i]);
+    var teamB = _tourFindTeam(teams[i+1]);
+    if (!teamA || !teamB) return null;
+    var simFn = (typeof window.simulateMatch === 'function') ? window.simulateMatch : null;
+    if (!simFn) return null;
+    var legA, legB;
+    if (cfg.format === 'ko-2leg') {
+      /* Ida en casa de A, vuelta en casa de B. Sumamos goles totales;
+         si empate, gol fuera de B (en la ida) cuenta x2 si activo. */
+      var leg1 = simFn(teamA, teamB);   /* A local */
+      var leg2 = simFn(teamB, teamA);   /* B local */
+      var totalA = leg1.gh + leg2.ga;
+      var totalB = leg1.ga + leg2.gh;
+      var winner;
+      if (totalA > totalB) winner = 'a';
+      else if (totalB > totalA) winner = 'b';
+      else {
+        var aw = !!(cfg.formatConfig && cfg.formatConfig.awayGoalsX2);
+        if (aw) {
+          /* B fuera (en ida) vs A fuera (en vuelta). */
+          if (leg1.ga > leg2.ga) winner = 'b';
+          else if (leg2.ga > leg1.ga) winner = 'a';
+          else winner = (Math.random() < 0.5 ? 'a' : 'b');
+        } else {
+          winner = (Math.random() < 0.5 ? 'a' : 'b');
+        }
+      }
+      return { a: totalA, b: totalB, winner: winner, played: true,
+               legs:[{a:leg1.gh,b:leg1.ga},{a:leg2.gh,b:leg2.ga}] };
+    }
+    /* Single leg. Random toss para decidir local. */
+    var aHome = (Math.random() < 0.5);
+    var r = aHome ? simFn(teamA, teamB) : simFn(teamB, teamA);
+    var ga = aHome ? r.gh : r.ga;
+    var gb = aHome ? r.ga : r.gh;
+    var winner;
+    if (ga > gb) winner = 'a';
+    else if (gb > ga) winner = 'b';
+    else {
+      /* Empate sin penaltis (Fase 1) — winner por GLOBAL ponderado. */
+      var pwA = teamA.power || 70, pwB = teamB.power || 70;
+      var roll = Math.random() * (pwA + pwB);
+      winner = (roll < pwA) ? 'a' : 'b';
+    }
+    return { a: ga, b: gb, winner: winner, played: true };
+  }
+
+  function _tourBuildNextRound(cfg) {
+    /* Construye cfg.bracket[curR+1] con los ganadores de curR. */
+    var curR = cfg.currentRound || 0;
+    var teams = cfg.bracket[curR] || [];
+    var winners = [];
+    for (var i = 0; i < teams.length; i += 2) {
+      var key = curR + '_' + (i/2);
+      var res = cfg.results[key];
+      if (!res || !res.played) continue;
+      winners.push(res.winner === 'a' ? teams[i] : teams[i+1]);
+    }
+    cfg.bracket[curR + 1] = winners;
+    cfg.currentRound = curR + 1;
+  }
+
+  function _tourSaveAndRender(id, cfg) {
+    /* Persiste + repinta. _tourSave es async pero no esperamos —
+       optimistic UI. */
+    try {
+      window._TOUR_CACHE = window._TOUR_CACHE || {};
+      window._TOUR_CACHE[id] = cfg;
+      localStorage.setItem(_key(id), JSON.stringify(cfg));
+    } catch(_){}
+    try { if (typeof window._tourSave === 'function') window._tourSave(id, cfg); } catch(_){}
+    try { if (typeof window._tourRender === 'function') window._tourRender(id); } catch(_){}
+  }
+
+  /* Click delegation: simular un match individual, simular toda la
+     ronda, avanzar a la siguiente, o resetear el bracket. */
+  document.addEventListener('click', function(ev){
+    var target = ev.target;
+    if (!target || typeof target.closest !== 'function') return;
+
+    /* a) Click en una card de partido (KO solo, no jugada todavía). */
+    var matchEl = target.closest('.tour-match-pickable');
+    if (matchEl) {
+      var tid = matchEl.getAttribute('data-tour');
+      var mk = matchEl.getAttribute('data-match-key');
+      if (!tid || !mk || TOUR_IDS.indexOf(tid) === -1) return;
+      var cfg = _tourLoadCachedSync(tid);
+      if (!cfg) return;
+      var parts = mk.split('_');
+      var roundIdx = parseInt(parts[0], 10);
+      var matchIdx = parseInt(parts[1], 10);
+      if (isNaN(roundIdx) || isNaN(matchIdx)) return;
+      cfg.results = cfg.results || {};
+      if (cfg.results[mk] && cfg.results[mk].played) return; /* ya jugado */
+      var r = _tourSimMatch(cfg, roundIdx, matchIdx);
+      if (!r) return;
+      cfg.results[mk] = r;
+      _tourSaveAndRender(tid, cfg);
+      ev.stopPropagation();
+      return;
+    }
+
+    /* b) Botón ▶ SIMULAR RONDA. */
+    var simBtn = target.closest('.tour-sim-round-btn');
+    if (simBtn) {
+      var tid2 = simBtn.getAttribute('data-tour');
+      if (!tid2 || TOUR_IDS.indexOf(tid2) === -1) return;
+      var cfg2 = _tourLoadCachedSync(tid2);
+      if (!cfg2) return;
+      cfg2.results = cfg2.results || {};
+      cfg2.bracket = cfg2.bracket || [(cfg2.teams||[]).slice()];
+      var curR2 = cfg2.currentRound || 0;
+      var curTeams2 = cfg2.bracket[curR2] || [];
+      for (var k = 0; k < curTeams2.length; k += 2) {
+        if (!curTeams2[k+1]) break;
+        var key2 = curR2 + '_' + (k/2);
+        if (cfg2.results[key2] && cfg2.results[key2].played) continue;
+        var rr = _tourSimMatch(cfg2, curR2, k/2);
+        if (rr) cfg2.results[key2] = rr;
+      }
+      _tourSaveAndRender(tid2, cfg2);
+      ev.stopPropagation();
+      return;
+    }
+
+    /* c) Botón 🏆 AVANZAR a la siguiente ronda. */
+    var advBtn = target.closest('.tour-advance-btn');
+    if (advBtn) {
+      var tid3 = advBtn.getAttribute('data-tour');
+      if (!tid3 || TOUR_IDS.indexOf(tid3) === -1) return;
+      var cfg3 = _tourLoadCachedSync(tid3);
+      if (!cfg3) return;
+      _tourBuildNextRound(cfg3);
+      _tourSaveAndRender(tid3, cfg3);
+      ev.stopPropagation();
+      return;
+    }
+
+    /* d) Botón ↺ Reset bracket. */
+    var resetBtn = target.closest('.tour-reset-btn');
+    if (resetBtn) {
+      var tid4 = resetBtn.getAttribute('data-tour');
+      if (!tid4 || TOUR_IDS.indexOf(tid4) === -1) return;
+      if (!confirm('¿Resetear el bracket a la ronda 1? Se borran todos los resultados (el sorteo de equipos NO cambia).')) return;
+      var cfg4 = _tourLoadCachedSync(tid4);
+      if (!cfg4) return;
+      cfg4.results = {};
+      cfg4.bracket = [(cfg4.teams||[]).slice()];
+      cfg4.currentRound = 0;
+      _tourSaveAndRender(tid4, cfg4);
+      ev.stopPropagation();
+      return;
+    }
+  });
 
   /* ── Detección de pantalla activa ───────────────────────
         El bug "no se queda guardado" (2026-05-08) NO era un fallo de
@@ -15754,6 +16059,9 @@ Tottenham
       tra: poisson(rB) > 0 ? 1 : 0
     };
   }
+  /* Exponemos simulateMatch en window para que la sim de torneos
+     de verano (otro IIFE) pueda llamarlo. */
+  try { window.simulateMatch = simulateMatch; } catch(_){}
 
   // Reparto de stats por jugador para un partido concreto.
   function weightedPick(pool){

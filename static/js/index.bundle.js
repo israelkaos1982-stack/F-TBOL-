@@ -9947,26 +9947,18 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var msg = '¡Mira el resultado de mi partido: '
       + (_gm.home || '') + ' ' + (_gm.sc ? _gm.sc.a : 0) + ' - ' + (_gm.sc ? _gm.sc.b : 0) + ' ' + (_gm.away || '') + '!'
       + mvpLabel + suffix;
-    try { window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank'); } catch(e) {}
+    /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
+    if (typeof window._waShareToGroup === 'function') window._waShareToGroup(msg);
+    else { try { window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank'); } catch(e) {} }
   };
 
-  // Intercept clicks on WA buttons that use window.open (ml-post-wa-btn)
-  document.addEventListener('click', function(e) {
-    var btn = e.target.closest('#ml-post-wa-btn, .ml-post-wa-btn, [data-wa-share]');
-    if (!btn) return;
-    // Check if there's a suffix to add — we do so by wrapping window.open temporarily
-    var suffix = _mmTwitchSuffix();
-    if (!suffix) return;
-    var _origOpen = window.open;
-    window.open = function(url, target) {
-      window.open = _origOpen;
-      if (url && url.indexOf('wa.me') !== -1 && url.indexOf(encodeURIComponent(suffix)) === -1) {
-        url = url + encodeURIComponent(suffix);
-      }
-      return _origOpen.call(this, url, target);
-    };
-    // Let original handler run; window.open will be intercepted
-  }, true);
+  // [Twitch suffix interceptor — DEPRECATED 2026-05-09]
+  // Antes interceptaba el click en los botones WA y añadía el sufijo
+  // "— Visto en el Twitch de X" a la URL `wa.me/?text=...`. Ahora
+  // todos los share van al grupo via _waShareToGroup (definido en
+  // misc_body_2.html), que copia al portapapeles. El sufijo Twitch
+  // se aplica DENTRO de _waShareToGroup leyendo window._ppSelectedTwitch
+  // — ya no hace falta interceptar window.open aquí.
 
   /* ── INIT ─────────────────────────────────────────────────────────── */
   function _mmInit() {

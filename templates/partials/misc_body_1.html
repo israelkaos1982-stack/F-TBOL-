@@ -13196,20 +13196,136 @@ window._showSimProgress = function(opts, onDone){
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
-  /* Heurística: copia "canónica" sugerida = la que tenga más jugadores;
-     desempate por mayor power. Solo es UNA SUGERENCIA visual (★) —
-     no cambia nada. La decisión real la tomará el admin en el paso B. */
+  /* Heurística canónica (regla del usuario 2026-05-08):
+     1º — Si SOLO una copia tiene stats completos GLOB/ATK/MID/DEF
+          (los 4 > 0), esa gana. El sistema 4-stats es el actual; el
+          que solo tiene power viejo o defaults se descarta.
+     2º — Si VARIAS copias tienen stats completos, gana la que tenga
+          más jugadores en plantilla. Desempate por power mayor.
+     3º — Si NINGUNA tiene stats completos, fallback a la regla del
+          paso A: más jugadores → mayor power.
+     Devuelve el índice de la copia ganadora. */
+  function _hasFullStats(c){
+    return !!c && c.power > 0 && c.atk > 0 && c.mid > 0 && c.def > 0;
+  }
   function _pickCanonicalIdx(copies){
-    var bestIdx = 0;
-    for (var i = 1; i < copies.length; i++) {
-      var a = copies[i], b = copies[bestIdx];
-      if (a.players !== b.players) {
-        if (a.players > b.players) bestIdx = i;
-      } else if (a.power !== b.power) {
-        if (a.power > b.power) bestIdx = i;
-      }
+    if (!copies || !copies.length) return 0;
+    /* Phase 1: filtrar las que tienen los 4 stats. */
+    var fullPool = [];
+    for (var i = 0; i < copies.length; i++) {
+      if (_hasFullStats(copies[i])) fullPool.push(i);
     }
-    return bestIdx;
+    /* Si hay al menos UNA con stats completos, restringimos al pool;
+       si NO hay ninguna, usamos todas como pool de desempate. */
+    var pool = fullPool.length ? fullPool : copies.map(function(_, i){ return i; });
+    /* Phase 2 + 3: dentro del pool, gana mayor jugadores → mayor power. */
+    pool.sort(function(a, b){
+      if (copies[a].players !== copies[b].players) return copies[b].players - copies[a].players;
+      return (copies[b].power || 0) - (copies[a].power || 0);
+    });
+    return pool[0];
+  }
+
+  /* Ejecuta el cleanup: para cada equipo duplicado, conserva la copia
+     canónica y BORRA las demás de sus respectivos `ligaExt_*`. Persiste
+     en localStorage + POST async al server. Devuelve un report
+     {removed, errors, slugsTouched}. NO confirma — espera que el caller
+     ya haya pasado un PIN + confirmación. */
+  function _executeCleanup(dups){
+    /* 1. Plan: mapa slug → set de nombres a quitar de ese slug. */
+    var plan = {};
+    var totalRemove = 0;
+    dups.forEach(function(t){
+      var canonicalIdx = _pickCanonicalIdx(t.copies);
+      t.copies.forEach(function(c, i){
+        if (i === canonicalIdx) return;
+        if (!plan[c.slug]) plan[c.slug] = [];
+        plan[c.slug].push(t.name);
+        totalRemove++;
+      });
+    });
+    /* 2. Aplicar por cada slug afectado. */
+    var slugsTouched = 0, errors = 0;
+    Object.keys(plan).forEach(function(slug){
+      try {
+        var key = 'ligaExt_' + slug;
+        var raw = localStorage.getItem(key);
+        if (!raw) { errors++; return; }
+        var data;
+        try { data = JSON.parse(raw); } catch(_){ errors++; return; }
+        if (!data || !Array.isArray(data.teams)) { errors++; return; }
+        var toRemoveLower = {};
+        plan[slug].forEach(function(nm){ toRemoveLower[String(nm).toLowerCase().trim()] = true; });
+        var before = data.teams.length;
+        data.teams = data.teams.filter(function(t){
+          if (!t || !t.name) return true;
+          return !toRemoveLower[String(t.name).toLowerCase().trim()];
+        });
+        var after = data.teams.length;
+        if (after === before) return; /* nada cambió, raro pero seguro */
+        /* También añadir a `deletedTeamNames` para que la blacklist
+           local impida que vuelvan vía fetchData del server. */
+        if (!Array.isArray(data.deletedTeamNames)) data.deletedTeamNames = [];
+        plan[slug].forEach(function(nm){
+          var nrm = (typeof window._lextNormName === 'function') ? window._lextNormName(nm) : String(nm).toLowerCase().trim();
+          if (nrm && data.deletedTeamNames.indexOf(nrm) === -1) data.deletedTeamNames.push(nrm);
+        });
+        /* Persistir local + invalidar caches + POST async al server. */
+        localStorage.setItem(key, JSON.stringify(data));
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        try { if (typeof window.LIGA_CACHE !== 'undefined') window.LIGA_CACHE[slug] = data; } catch(_){}
+        try {
+          fetch('/api/liga-ext/'+encodeURIComponent(slug), {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({data: data})
+          }).catch(function(){});
+        } catch(_){}
+        slugsTouched++;
+      } catch(_){ errors++; }
+    });
+    return { removed: totalRemove, errors: errors, slugsTouched: slugsTouched };
+  }
+
+  /* Pide confirmación + ejecuta el cleanup. Triple safety:
+     1) PIN ya solicitado al abrir el auditor.
+     2) Confirm() del navegador con el contador concreto.
+     3) Tras ejecutar, mostramos report + recarga. */
+  function _confirmAndCleanup(){
+    var dups = _collectDuplicates();
+    if (!dups.length) {
+      alert('✅ No hay duplicados que limpiar.');
+      return;
+    }
+    var planSlugs = {};
+    var totalRemove = 0;
+    dups.forEach(function(t){
+      var canonicalIdx = _pickCanonicalIdx(t.copies);
+      t.copies.forEach(function(c, i){
+        if (i === canonicalIdx) return;
+        planSlugs[c.slug] = (planSlugs[c.slug] || 0) + 1;
+        totalRemove++;
+      });
+    });
+    var perSlug = Object.keys(planSlugs).sort().map(function(s){ return '  • ' + s + ' → -' + planSlugs[s]; }).join('\n');
+    var msg = '⚠ LIMPIAR DUPLICADOS — ACCIÓN IRREVERSIBLE\n\n'
+      + 'Voy a eliminar ' + totalRemove + ' copias en total ('
+      + dups.length + ' equipos duplicados).\n\n'
+      + 'Por liga:\n' + perSlug + '\n\n'
+      + 'Se conserva en cada caso la copia con mayor jerarquía:\n'
+      + '  1º — Stats completos GLOB/ATK/MID/DEF\n'
+      + '  2º — Más jugadores en plantilla\n'
+      + '  3º — Mayor power\n\n'
+      + '¿Continuar?';
+    if (!confirm(msg)) return;
+    var report = _executeCleanup(dups);
+    alert('✅ Limpieza completada.\n\n'
+        + report.removed + ' copias eliminadas\n'
+        + report.slugsTouched + ' ligas modificadas\n'
+        + (report.errors ? ('⚠ ' + report.errors + ' errores (revisa la consola)') : 'Sin errores'));
+    /* Re-render del modal para que el usuario vea el resultado (la
+       lista quedará vacía si todo salió bien). */
+    window._restoLigasAuditDuplicates();
   }
 
   window._restoLigasAuditDuplicates = function(){
@@ -13222,6 +13338,7 @@ window._showSimProgress = function(opts, onDone){
         + '<button type="button" class="audit-close" aria-label="Cerrar" onclick="document.getElementById(\'restoligas-audit-ov\').classList.remove(\'show\');">×</button>'
         + '<div class="audit-hdr"></div>'
         + '<div class="audit-info"></div>'
+        + '<div class="audit-actions" id="audit-actions"></div>'
         + '<div class="audit-list" id="audit-list"></div>'
         + '</div>';
       document.body.appendChild(ov);
@@ -13240,6 +13357,14 @@ window._showSimProgress = function(opts, onDone){
       ? '✅ <b>No hay duplicados.</b> Cada equipo vive en una sola liga.'
       : '<b>' + summary + '</b><br>Probable causa de bugs (stats divididos, plantillas no propagadas, filtros rotos). El ★ marca la copia con más jugadores como sugerencia canónica. <i>Por ahora solo informativo — la limpieza vendrá en el siguiente paso.</i>';
     var list = document.getElementById('audit-list');
+    var actions = document.getElementById('audit-actions');
+    if (actions) {
+      if (dups.length > 0) {
+        actions.innerHTML = '<button type="button" class="audit-btn-clean" onclick="window._restoLigasCleanupDuplicates&&window._restoLigasCleanupDuplicates()">🧹 LIMPIAR DUPLICADOS</button>';
+      } else {
+        actions.innerHTML = '';
+      }
+    }
     if (!list) { ov.classList.add('show'); return; }
     if (dups.length === 0) {
       list.innerHTML = '';
@@ -13257,6 +13382,14 @@ window._showSimProgress = function(opts, onDone){
     }
     ov.classList.add('show');
   };
+
+  /* Wrapper expuesto en window para el botón "🧹 LIMPIAR". */
+  window._restoLigasCleanupDuplicates = function(){
+    /* Re-PIN por defensa en profundidad: el modal ya pasó pG al abrir,
+       pero exigir otro PIN antes de borrar es la decisión segura. */
+    if (typeof window.pG === 'function') window.pG(_confirmAndCleanup);
+    else _confirmAndCleanup();
+  };
 })();
 </script>
 
@@ -13269,6 +13402,19 @@ window._showSimProgress = function(opts, onDone){
 #restoligas-audit-ov .audit-hdr{font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;color:#ffd0a0;text-align:center;text-transform:uppercase;margin-bottom:8px;}
 #restoligas-audit-ov .audit-info{font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.45;color:rgba(255,255,255,.65);margin-bottom:14px;padding:8px 10px;background:rgba(255,176,32,.06);border:1px dashed rgba(255,176,32,.35);border-radius:8px;}
 #restoligas-audit-ov .audit-info b{color:#ffe089;}
+#restoligas-audit-ov .audit-actions{display:flex;justify-content:center;margin-bottom:12px;}
+#restoligas-audit-ov .audit-actions:empty{display:none;}
+#restoligas-audit-ov .audit-btn-clean{
+  font-family:'Bebas Neue','Oswald',sans-serif;font-size:14px;letter-spacing:2.5px;
+  padding:10px 22px;border-radius:8px;cursor:pointer;
+  background:linear-gradient(135deg,rgba(220,80,80,.25),rgba(255,176,32,.18));
+  color:#ffd0a0;border:1px solid rgba(255,160,80,.65);
+  text-shadow:0 0 6px rgba(255,176,32,.35);
+  box-shadow:0 0 14px rgba(255,160,80,.18);
+  transition:filter .15s,transform .1s;
+}
+#restoligas-audit-ov .audit-btn-clean:hover{filter:brightness(1.18);}
+#restoligas-audit-ov .audit-btn-clean:active{transform:scale(.97);}
 #restoligas-audit-ov .audit-list{display:flex;flex-direction:column;gap:8px;}
 #restoligas-audit-ov .audit-row{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:10px 12px;}
 #restoligas-audit-ov .audit-row-name{font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:#fff;margin-bottom:6px;}

@@ -13394,7 +13394,9 @@ window._showSimProgress = function(opts, onDone){
     var actions = document.getElementById('audit-actions');
     if (actions) {
       if (dups.length > 0) {
-        actions.innerHTML = '<button type="button" class="audit-btn-clean" onclick="window._restoLigasCleanupDuplicates&&window._restoLigasCleanupDuplicates()">🧹 LIMPIAR DUPLICADOS</button>';
+        actions.innerHTML = ''
+          + '<button type="button" class="audit-btn-copy" onclick="window._restoLigasCopyAudit&&window._restoLigasCopyAudit()">📋 Copiar lista</button>'
+          + '<button type="button" class="audit-btn-clean" onclick="window._restoLigasCleanupDuplicates&&window._restoLigasCleanupDuplicates()">🧹 LIMPIAR DUPLICADOS</button>';
       } else {
         actions.innerHTML = '';
       }
@@ -13430,6 +13432,87 @@ window._showSimProgress = function(opts, onDone){
     if (typeof window.pG === 'function') window.pG(_confirmAndCleanup);
     else _confirmAndCleanup();
   };
+
+  /* Copia la lista completa de duplicados al portapapeles en formato
+     markdown para que el admin pueda pegarla en el chat con Claude
+     (petición usuario 2026-05-08: \"que me des absolutamente todos los
+     equipos que tengas duplicados\" — pero el sandbox bloquea acceso
+     al server de producción, así que la solución es exportar desde el
+     navegador y pegar). Cada equipo se muestra con todas sus copias,
+     marcando con ★ la canónica que se conservaría al limpiar. */
+  function _buildAuditMarkdown(dups){
+    if (!dups.length) return '✅ Sin duplicados.';
+    var lines = [];
+    lines.push('# Auditoría de duplicados — ' + dups.length + ' equipos');
+    lines.push('');
+    lines.push('Prioridad: HUMANO > stats completos > tiene escudo > más jugadores > mayor power.');
+    lines.push('★ = copia que se conservaría al pulsar 🧹 LIMPIAR.');
+    lines.push('');
+    dups.forEach(function(t){
+      var displayName = (t.allNames && t.allNames.length > 1)
+        ? t.allNames.join(' / ') : t.name;
+      lines.push('## ' + displayName + ' · en ' + t.copies.length + ' ligas');
+      var canonicalIdx = _pickCanonicalIdx(t.copies);
+      t.copies.forEach(function(c, i){
+        var marker = (i === canonicalIdx) ? '★' : ' ';
+        var bits = [];
+        bits.push(c.players + ' jug');
+        if (c.power) bits.push('GLOB ' + c.power);
+        if (c.atk || c.mid || c.def) bits.push('A' + (c.atk||0) + '/M' + (c.mid||0) + '/D' + (c.def||0));
+        bits.push(c.shield ? '🛡' : '⛔');
+        if (c.isHuman) bits.push('👤');
+        lines.push('- ' + marker + ' [' + c.slug + '] «' + c.name + '» — ' + bits.join(' · '));
+      });
+      lines.push('');
+    });
+    return lines.join('\n');
+  }
+  window._restoLigasCopyAudit = function(){
+    var dups = _collectDuplicates();
+    var md = _buildAuditMarkdown(dups);
+    /* Intentar API moderna; fallback a textarea + execCommand. */
+    function _showOk(){
+      var btn = document.querySelector('#restoligas-audit-ov .audit-btn-copy');
+      if (btn) {
+        var orig = btn.textContent;
+        btn.textContent = '✓ Copiado al portapapeles';
+        btn.style.background = 'rgba(60,200,120,.30)';
+        setTimeout(function(){
+          btn.textContent = orig;
+          btn.style.background = '';
+        }, 1800);
+      }
+    }
+    function _showFail(){ alert('No se pudo copiar al portapapeles. Texto:\n\n' + md); }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(md).then(_showOk, function(){
+          /* Fallback. */
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = md;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (ok) _showOk(); else _showFail();
+          } catch(_){ _showFail(); }
+        });
+      } else {
+        var ta2 = document.createElement('textarea');
+        ta2.value = md;
+        ta2.style.position = 'fixed';
+        ta2.style.opacity = '0';
+        document.body.appendChild(ta2);
+        ta2.select();
+        var ok2 = document.execCommand('copy');
+        document.body.removeChild(ta2);
+        if (ok2) _showOk(); else _showFail();
+      }
+    } catch(_){ _showFail(); }
+  };
 })();
 </script>
 
@@ -13442,8 +13525,17 @@ window._showSimProgress = function(opts, onDone){
 #restoligas-audit-ov .audit-hdr{font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;color:#ffd0a0;text-align:center;text-transform:uppercase;margin-bottom:8px;}
 #restoligas-audit-ov .audit-info{font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.45;color:rgba(255,255,255,.65);margin-bottom:14px;padding:8px 10px;background:rgba(255,176,32,.06);border:1px dashed rgba(255,176,32,.35);border-radius:8px;}
 #restoligas-audit-ov .audit-info b{color:#ffe089;}
-#restoligas-audit-ov .audit-actions{display:flex;justify-content:center;margin-bottom:12px;}
+#restoligas-audit-ov .audit-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
 #restoligas-audit-ov .audit-actions:empty{display:none;}
+#restoligas-audit-ov .audit-btn-copy{
+  font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.6px;
+  padding:9px 14px;border-radius:7px;cursor:pointer;
+  background:rgba(94,182,228,.12);color:#9fdcff;
+  border:1px solid rgba(94,182,228,.55);
+  transition:filter .15s,transform .1s,background .15s;
+}
+#restoligas-audit-ov .audit-btn-copy:hover{filter:brightness(1.18);}
+#restoligas-audit-ov .audit-btn-copy:active{transform:scale(.97);}
 #restoligas-audit-ov .audit-btn-clean{
   font-family:'Bebas Neue','Oswald',sans-serif;font-size:14px;letter-spacing:2.5px;
   padding:10px 22px;border-radius:8px;cursor:pointer;

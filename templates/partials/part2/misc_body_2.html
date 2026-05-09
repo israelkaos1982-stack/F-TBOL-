@@ -3025,11 +3025,14 @@
       for (var i = 0; i < muts.length; i++) {
         if (muts[i].attributeName === 'class' && ov.classList.contains('show')) {
           /* Re-render en cada apertura. Hacemos varias pasadas con
-             retraso por si SQUAD_REGISTRY tarda en poblarse. */
+             retraso por si SQUAD_REGISTRY tarda en poblarse.
+             Cobertura ≤ 50 ms tras el primer pintado (2026-05-08). */
           renderForma();
-          setTimeout(renderForma,  80);
-          setTimeout(renderForma, 250);
+          setTimeout(renderForma,  0);
+          setTimeout(renderForma, 50);
+          setTimeout(renderForma, 200);
           setTimeout(renderForma, 600);
+          setTimeout(renderForma, 1500);
           break;
         }
       }
@@ -18968,7 +18971,11 @@ window.goLiveMatches = function() {
     var t = ev.target;
     while (t && t !== document.body) {
       if (t.classList && t.classList.contains('mc-derbys')) {
-        setTimeout(function(){ try { _buildDerbysList(); } catch(_){} }, 60);
+        /* Triple build 0/50/200 ms para que la lista aparezca rápido
+           tras tap en la card "Histórico Derbys" (2026-05-08). */
+        setTimeout(function(){ try { _buildDerbysList(); } catch(_){} }, 0);
+        setTimeout(function(){ try { _buildDerbysList(); } catch(_){} }, 50);
+        setTimeout(function(){ try { _buildDerbysList(); } catch(_){} }, 200);
         return;
       }
       t = t.parentElement;
@@ -21351,15 +21358,19 @@ document.addEventListener('DOMContentLoaded', function() {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function(){
       runAll();
-      setTimeout(runAll, 300);
-      setTimeout(runAll, 1200);
-      setTimeout(runAll, 3000);
+      setTimeout(runAll, 0);
+      setTimeout(runAll, 50);
+      setTimeout(runAll, 200);
+      setTimeout(runAll, 800);
+      setTimeout(runAll, 2400);
     });
   } else {
     runAll();
-    setTimeout(runAll, 300);
-    setTimeout(runAll, 1200);
-    setTimeout(runAll, 3000);
+    setTimeout(runAll, 0);
+    setTimeout(runAll, 50);
+    setTimeout(runAll, 200);
+    setTimeout(runAll, 800);
+    setTimeout(runAll, 2400);
   }
 
   var _tPatch = null;

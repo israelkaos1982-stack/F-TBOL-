@@ -660,8 +660,13 @@ window._showSimProgress = function(opts, onDone){
        cubrir el caso en el que `applyEngineOverrides` aún no ha
        cargado los datos del editor. */
     function _scheduleRender(){
-      setTimeout(window.renderBayernPlantillaScreen, 60);
-      setTimeout(window.renderBayernPlantillaScreen, 600);
+      /* Cobertura ≤ 50 ms tras primer pintado (2026-05-08, petición
+         usuario "todas las pantallas merge en 50 ms"). Antes era
+         60 + 600 ms; ahora cascadeado más fino. */
+      setTimeout(window.renderBayernPlantillaScreen, 0);
+      setTimeout(window.renderBayernPlantillaScreen, 50);
+      setTimeout(window.renderBayernPlantillaScreen, 200);
+      setTimeout(window.renderBayernPlantillaScreen, 800);
     }
 
     function _wireObserver(){
@@ -4959,8 +4964,15 @@ window._showSimProgress = function(opts, onDone){
   //   • Al cargar (300ms + 1.5s para cubrir la inicialización del bundle)
   //   • Tras cada save en el editor (hook en lextSaveTeam)
   function initOverrides(){
-    setTimeout(applyEngineOverrides, 300);
-    setTimeout(applyEngineOverrides, 1500);
+    /* Cobertura ≤ 50 ms tras primer pintado (2026-05-08, petición
+       usuario "todo merge en 50 ms"). Antes 300 + 1500 ms; ahora
+       cascadeo 0/50/200/800/2400 que captura cualquier momento en
+       el que el bundle haya definido TEAM_RATINGS / SQUAD_REGISTRY. */
+    setTimeout(applyEngineOverrides, 0);
+    setTimeout(applyEngineOverrides, 50);
+    setTimeout(applyEngineOverrides, 200);
+    setTimeout(applyEngineOverrides, 800);
+    setTimeout(applyEngineOverrides, 2400);
   }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', initOverrides);
@@ -8272,9 +8284,14 @@ window._showSimProgress = function(opts, onDone){
        vacío (caso típico tras limpiar caché o cambiar de dispositivo).
        Tras hidratar, aplica los overrides. Si no hay datos en el
        server o ya teníamos en localStorage, applyAllOverrides corre
-       con lo que haya. */
-    _hydrateIconsFromServer(function(hydrated){
-      setTimeout(applyAllOverrides, hydrated ? 60 : 120);
+       con lo que haya.
+       Aceleración (2026-05-08): triple aplicación 0/50/200 ms para
+       que los iconos custom aparezcan en ≤ 50 ms tras el primer
+       pintado, sin esperar al delay de 60-120 ms anterior. */
+    _hydrateIconsFromServer(function(){
+      setTimeout(applyAllOverrides, 0);
+      setTimeout(applyAllOverrides, 50);
+      setTimeout(applyAllOverrides, 200);
     });
   }
   if(document.readyState === 'loading'){
@@ -8290,7 +8307,10 @@ window._showSimProgress = function(opts, onDone){
            tiene contenido, _hydrateIconsFromServer lo respeta y no hace
            GET (evita pisar cambios locales no sincronizados todavía). */
         _hydrateIconsFromServer(function(){
+          /* Triple aplicación 0/50/200 ms (2026-05-08). */
+          setTimeout(applyAllOverrides, 0);
           setTimeout(applyAllOverrides, 50);
+          setTimeout(applyAllOverrides, 200);
         });
       }
       return r;

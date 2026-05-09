@@ -18674,7 +18674,7 @@ Tottenham
      extraemos los campos de cabecera y rellenamos los inputs del
      formulario que estén VACÍOS — nunca pisamos lo que el admin
      haya escrito a mano. Petición usuario 2026-05-09. */
-  function _applyMasterCabeceraToForm(text){
+  function _applyMasterCabeceraToForm(text, force){
     if(!text) return false;
     var c = parseMasterCabecera(text);
     if(!c || !Object.keys(c).length) return false;
@@ -18684,13 +18684,17 @@ Tottenham
       var el = document.getElementById(id);
       if(!el) return;
       var cur = String(el.value||'').trim();
-      /* Para los 4 ejes de poder + agresividad, los inputs llegan con
-         un default 75/50. Tratamos esos defaults como "vacíos" para
-         poder pisarlos al pegar. Si el admin ya editó manualmente
-         a otro valor, NO se pisa. */
-      var isDefaultPow = (id === 'lext-team-pw-glob' || id === 'lext-team-pw-atk' || id === 'lext-team-pw-mid' || id === 'lext-team-pw-def') && cur === '75';
-      var isDefaultAggr = (id === 'lext-team-aggr') && cur === '50';
-      if(cur && !isDefaultPow && !isDefaultAggr) return;
+      if(!force){
+        /* Modo conservador (typing manual): solo pisar si está vacío
+           o es un default conocido (75 ejes, 50 agresividad). Si el
+           admin ya escribió a mano otro valor, NO se pisa. */
+        var isDefaultPow = (id === 'lext-team-pw-glob' || id === 'lext-team-pw-atk' || id === 'lext-team-pw-mid' || id === 'lext-team-pw-def') && cur === '75';
+        var isDefaultAggr = (id === 'lext-team-aggr') && cur === '50';
+        if(cur && !isDefaultPow && !isDefaultAggr) return;
+      }
+      /* Modo `force=true` (paste explícito de master template): pisar
+         siempre. La intención del admin al pegar el template entero
+         es aplicarlo todo. */
       el.value = String(v);
       filled.push(id);
     }
@@ -18730,12 +18734,37 @@ Tottenham
     var ta = document.getElementById('lext-team-squad-paste');
     if(!ta || ta.__masterWired) return;
     ta.__masterWired = true;
+    /* PASTE explícito: el admin acaba de pegar (Ctrl+V o long-press →
+       Pegar). Tratamos este caso como "aplica el master template
+       entero": SÍ pisa los inputs (force=true) y reescribe el
+       textarea con SOLO la nómina filtrada para que el admin vea
+       qué se va a guardar. setTimeout 60ms porque el navegador
+       inserta el texto del clipboard de forma asíncrona. */
+    ta.addEventListener('paste', function(){
+      setTimeout(function(){
+        try {
+          var origText = ta.value;
+          var filled = _applyMasterCabeceraToForm(origText, true);
+          var cleanText = _filterMasterTemplate(origText);
+          var changed = (cleanText !== origText);
+          if(changed){
+            ta.value = cleanText.replace(/\n{3,}/g,'\n\n').replace(/^\s+/,'').replace(/\s+$/,'') + '\n';
+          }
+          if((filled && filled.length) || changed){
+            var n = (filled && filled.length) || 0;
+            _showMasterCabeceraToast('✓ Master Template · ' + n + ' campo' + (n===1?'':'s') + ' rellenado' + (n===1?'':'s') + (changed?' · plantilla limpia':''));
+          }
+        } catch(_){}
+      }, 60);
+    });
+    /* INPUT (typing manual o programático): no force, no reescribir
+       texto. Solo aplica cabecera si los inputs estaban vacíos.
+       Evita interferir con la escritura a mano. */
     ta.addEventListener('input', function(){
       try {
-        var filled = _applyMasterCabeceraToForm(ta.value);
+        var filled = _applyMasterCabeceraToForm(ta.value, false);
         if(filled && filled.length){
-          var msg = '✓ Cabecera detectada · ' + filled.length + ' campo' + (filled.length===1?'':'s') + ' rellenado' + (filled.length===1?'':'s');
-          _showMasterCabeceraToast(msg);
+          _showMasterCabeceraToast('✓ Cabecera detectada · ' + filled.length + ' campo' + (filled.length===1?'':'s') + ' rellenado' + (filled.length===1?'':'s'));
         }
       } catch(_){}
     });
@@ -18759,8 +18788,111 @@ Tottenham
      en el DOM cuando este IIFE corre (algunos rebuilds dinámicos). */
   setTimeout(_wireMasterCabeceraListener, 600);
 
+  /* Filtra el texto de un Master Template para dejar SOLO la nómina
+     real (sin cabecera, sin "🏆 11 IDEAL", sin "🪑 9 MEJORES
+     RESERVAS", sin notas tipo "GOLEADOR DE ELITE MUNDIAL").
+     Bug 2026-05-09: el admin pegó la Plantilla Maestra entera y
+     `parseSquadPaste` interpretó "Valores de Poder: (GLOBAL 82 / …
+     DEFENSA 82)" como un jugador llamado "Valores de Poder: (GLOBAL"
+     con power 82 y flag F (la F de DEFENSA). También las líneas de
+     11 IDEAL ("🛡️ DEF: A. Gorosabel 79") y 9 RESERVAS entraban como
+     jugadores duplicados. Filtramos antes de parsear. */
+  function _filterMasterTemplate(text){
+    if(!text) return text || '';
+    var lines = String(text).split(/\r?\n/);
+    var keep = [];
+    var inSkipBlock = false;
+    function _stripDecor(s){
+      return String(s||'').replace(/\*\*/g,'').replace(/__/g,'')
+        .replace(/^[\s*\-•·#>]+/,'').trim();
+    }
+    /* ¿Línea de cabecera (campos del header del template)? */
+    function _isCabeceraLine(s){
+      var t = _stripDecor(s);
+      if(!t) return false;
+      /* Formato múltiple: "GLOBAL 82 / ATAQUE 83 / MEDIO 81 / DEFENSA 82". */
+      if(/GLOBAL[\s:]*\d/i.test(t) && /(ATAQUE|DEFENSA|MEDIO)/i.test(t)) return true;
+      /* Etiquetas de cabecera al inicio de la línea. */
+      var labels = [
+        /^valores?\s+de\s+poder\b/i,
+        /^nivel\s+de\s+estrellas\b/i,
+        /^agresivid[a-zñ]+\b/i,
+        /^presupues?to\b/i,
+        /^estadio(\s+local)?\b/i,
+        /^equipo\s+s[ií]mil\s+efootball\b/i,
+        /^s[ií]mil\s+efootball\b/i,
+        /^alias\s+(en\s+)?efootball\b/i,
+        /^escudo\s*(\(url\)|\b)/i,
+        /^nombre(\s+del\s+equipo)?\b/i
+      ];
+      for(var L = 0; L < labels.length; L++){ if(labels[L].test(t)) return true; }
+      return false;
+    }
+    /* ¿Header de bloque que se salta entero (nota, no nómina)?
+       Permisivo a propósito: detectamos "11 IDEAL" o "9 MEJORES
+       RESERVAS" en cualquier parte de la línea ya decorada. Antes
+       intentamos requerir emoji 🏆/🪑 al inicio con `[🏆]` pero
+       son surrogate pairs y los character classes sin flag `u`
+       no funcionan — el match fallaba en silencio. */
+    function _isSkipBlockStart(s){
+      var t = _stripDecor(s);
+      if(/\b11\s*ideal\b/i.test(t)) return true;
+      if(/\b9\s*(mejores\s*)?reservas?\b/i.test(t)) return true;
+      if(/goleador(es)?\s+de\s+elite\s+mundial/i.test(t)) return true;
+      return false;
+    }
+    /* ¿Header real de sección de plantilla (porteros/defensas/...)? */
+    function _isRealSectionHeader(s){
+      if(_isSkipBlockStart(s)) return false;
+      var t = _stripDecor(s);
+      /* Tiene emoji-cabecera al inicio o palabra clara de sección,
+         y NO contiene dígitos (descarta líneas de cabecera). */
+      if(/\d/.test(t.replace(/\(\s*\d+\s*\)/g,''))) return false;
+      if(/^(🧤|🛡|⚙|⚽|⚡)/.test(t)) return true;
+      if(/^(porteros|defensas|centrocampistas|medios|delanteros)\b/i.test(t)) return true;
+      return false;
+    }
+    /* ¿Línea de cabecera-only-name "# **NAME**"? Solo cuenta si el
+       contenido NO es una sección de plantilla (porteros/defensas/
+       etc.). Antes "### **🛡️ DEFENSAS**" matcheaba como team name
+       y se eliminaba el header de sección de la nómina. */
+    function _isHeadingNameLine(s){
+      if(!/^\s*#+\s*\*\*[^*]+\*\*\s*$/.test(s)) return false;
+      var content = s.replace(/^\s*#+\s*\*\*([^*]+)\*\*\s*$/, '$1').trim();
+      if(/^(🧤|🛡|⚙|⚽|⚡)/.test(content)) return false;
+      if(/^(porteros|defensas|centrocampistas|medios|delanteros)\b/i.test(content)) return false;
+      return true;
+    }
+    for(var i = 0; i < lines.length; i++){
+      var raw = lines[i];
+      var s = raw.trim();
+      if(!s){ keep.push(raw); continue; }
+      if(inSkipBlock){
+        if(_isRealSectionHeader(s)){
+          inSkipBlock = false;
+          keep.push(raw);
+        }
+        continue;
+      }
+      if(_isSkipBlockStart(s)){ inSkipBlock = true; continue; }
+      if(_isCabeceraLine(s)) continue;
+      if(_isHeadingNameLine(s)) continue;
+      keep.push(raw);
+    }
+    return keep.join('\n');
+  }
+  window._filterMasterTemplate = _filterMasterTemplate;
+
   function parseSquadPaste(text){
     if(!text) return [];
+    /* Limpieza previa: quita líneas de cabecera (Valores de Poder,
+       Agresividad, Presupuesto, Estadio, Alias eFootball, Escudo,
+       Nombre del equipo) y los bloques "🏆 11 IDEAL" / "🪑 9 MEJORES
+       RESERVAS" / "GOLEADOR DE ELITE MUNDIAL" que no son jugadores.
+       Bug 2026-05-09: sin esta limpieza, "Valores de Poder: (GLOBAL
+       82 / … / DEFENSA 82)" se interpretaba como jugador "Valores
+       de Poder: (GLOBAL" power 82 con flag F (la de DEFENSA). */
+    text = _filterMasterTemplate(text);
     var lines = String(text).split(/\r?\n/);
     var players = [];
     var currentPos = null;

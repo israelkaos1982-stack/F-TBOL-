@@ -1911,7 +1911,7 @@
          single-leg (legLabel === '') y acabó empatado SIN pen_winner,
          es un caso de bug histórico — la prórroga + penaltis no se
          disparó (p.ej. r16 con _isCopaSL roto antes del fix de hoy).
-         Mostramos un botón admin "✏️ MARCAR GANADOR" para que el
+         Mostramos un botón admin "🖍 WINNER" para que el
          admin desbloquee la eliminatoria sin tener que volver a jugar
          el partido. PIN-gated. */
       var _isTied = false;
@@ -1924,13 +1924,13 @@
         var _fwc = opts.forceWinnerCtx;
         var _hEsc = String(local).replace(/'/g,"\\'");
         var _vEsc = String(visit).replace(/'/g,"\\'");
-        bottomBtn += '<div style="margin-top:6px;">'
+        bottomBtn += '<div style="margin-top:5px;">'
           + '<button onclick="window._copaForceWinner(\''+_fwc.ronda+'\','+_fwc.idx+',\''+_hEsc+'\',\''+_vEsc+'\')" '
-          + 'style="font-family:Oswald,sans-serif;font-size:10.5px;letter-spacing:1.4px;'
-          + 'padding:6px 12px;border-radius:6px;cursor:pointer;'
-          + 'background:linear-gradient(135deg,rgba(255,176,32,.22),rgba(255,80,80,.22));'
-          + 'color:#ffd0a0;border:1px solid rgba(255,176,32,.55);">'
-          + '✏️ MARCAR GANADOR (admin)</button>'
+          + 'style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.1px;'
+          + 'padding:3px 8px;border-radius:4px;cursor:pointer;'
+          + 'background:linear-gradient(135deg,rgba(255,176,32,.18),rgba(255,80,80,.16));'
+          + 'color:#ffd0a0;border:1px solid rgba(255,176,32,.45);">'
+          + '🖍 WINNER</button>'
           + '</div>';
       }
     } else {
@@ -2210,7 +2210,7 @@
              cards FIN. */
           events: (res && res.events) || [],
           actaUniqueId: ronda + '-' + idx,
-          /* Contexto para el botón admin "✏️ MARCAR GANADOR" si la
+          /* Contexto para el botón admin "🖍 WINNER" si la
              eliminatoria quedó empatada sin pen_winner (bug histórico
              de r16 sin force-ET). */
           forceWinnerCtx: { ronda: ronda, idx: idx }

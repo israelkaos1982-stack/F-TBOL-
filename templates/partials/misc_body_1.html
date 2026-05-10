@@ -8956,10 +8956,27 @@ window._showSimProgress = function(opts, onDone){
   .tour-team-chip.is-pickable.is-human:not(.is-pending){
     background:rgba(30,161,74,.18);border:1px solid rgba(30,161,74,.50);
   }
-  .tour-group-block{margin-top:8px;}
+  /* Bloque GRUPO X — borde dorado tipo videojuego, glow y padding
+     interno para que la clasificación + jornadas queden visualmente
+     "encajadas" en una caja propia (petición usuario 2026-05-09). */
+  .tour-group-block{
+    margin-top:14px;
+    padding:12px 12px 14px;
+    background:linear-gradient(180deg,rgba(240,192,64,.05),rgba(0,0,0,.30));
+    border:1.5px solid rgba(240,192,64,.55);
+    border-radius:14px;
+    box-shadow:0 0 14px rgba(240,192,64,.15),inset 0 0 22px rgba(240,192,64,.05);
+  }
   .tour-group-block h4{
-    font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;
-    color:#f0c040;margin:0 0 4px;
+    font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2.5px;
+    color:#f0c040;margin:0 0 8px;
+    text-shadow:0 0 6px rgba(240,192,64,.40);
+  }
+  /* Separador entre clasificación y bloque de jornadas. */
+  .tour-group-block .tour-st-table{
+    margin-bottom:14px;
+    border-bottom:1px dashed rgba(240,192,64,.35);
+    padding-bottom:6px;
   }
   /* Tabla de clasificación (Liga + Grupos). */
   .tour-st-table{width:100%;border-collapse:collapse;font-size:11px;margin:4px 0 8px;}
@@ -8978,18 +8995,41 @@ window._showSimProgress = function(opts, onDone){
   .tour-st-row.is-adv{background:rgba(95,224,138,.05);}
   .tour-st-row.is-adv td.pos{color:#5fe08a;}
   .tour-st-row.is-hum td.nm{color:#5fe08a;}
-  /* Jornadas. */
+  /* Jornadas — cada una en su propia "card" con borde de color según
+     estado (petición usuario 2026-05-09: que se vean separadas y
+     coloridas tipo videojuego). */
   .tour-jor{
-    margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);
-    border:1px solid rgba(255,255,255,.06);border-radius:8px;
+    margin-top:10px;padding:10px 12px;
+    background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(0,0,0,.30));
+    border:2px solid rgba(255,255,255,.08);
+    border-radius:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,.30);
+    position:relative;
   }
-  .tour-jor.is-current{border-color:rgba(240,192,64,.35);background:rgba(240,192,64,.04);}
-  .tour-jor.is-future{opacity:.45;}
+  /* Past (jornadas ya jugadas): borde verde. */
+  .tour-jor.is-past{
+    border-color:rgba(95,224,138,.45);
+    background:linear-gradient(180deg,rgba(95,224,138,.03),rgba(0,0,0,.30));
+    box-shadow:0 2px 8px rgba(95,224,138,.10);
+  }
+  .tour-jor.is-past .tour-jor-h{color:#5fe08a;}
+  /* Current: gold neon — la jornada activa destaca. */
+  .tour-jor.is-current{
+    border-color:rgba(240,192,64,.75);
+    background:linear-gradient(180deg,rgba(240,192,64,.06),rgba(0,0,0,.30));
+    box-shadow:0 0 14px rgba(240,192,64,.30),inset 0 0 12px rgba(240,192,64,.05);
+  }
+  .tour-jor.is-current .tour-jor-h{color:#f0c040;font-size:12px;letter-spacing:2.5px;text-shadow:0 0 8px rgba(240,192,64,.55);}
+  /* Future: borde gris atenuado. */
+  .tour-jor.is-future{
+    opacity:.55;
+    border-color:rgba(140,160,200,.20);
+  }
+  .tour-jor.is-future .tour-jor-h{color:rgba(180,200,230,.55);}
   .tour-jor-h{
-    font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;
-    color:rgba(255,255,255,.55);margin-bottom:4px;
+    font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;
+    color:rgba(255,255,255,.55);margin-bottom:6px;font-weight:700;
   }
-  .tour-jor.is-current .tour-jor-h{color:#f0c040;}
   .tour-match.is-locked{opacity:.55;cursor:not-allowed;}
 </style>
 
@@ -9853,17 +9893,35 @@ window._showSimProgress = function(opts, onDone){
   function _fixtureCardsHtml(teams, fixture, results, keyPrefix, tourId, jornadaIdx, opts) {
     /* Pinta TODAS las jornadas del fixture. La actual (jornadaIdx) se
        pinta interactiva (cards clickables + botón ▶ Sim ronda). Las
-       futuras se pintan bloqueadas y las pasadas como histórico. */
+       futuras se pintan bloqueadas y las pasadas como histórico.
+       2026-05-09: la `jornadaIdx` que recibimos es informativa, pero
+       a efectos de "qué jornada es la verdadera actual" recalculamos
+       aquí: la PRIMERA jornada con partidos sin jugar. Sin esto, si
+       el storage tenía currentJornadaByGroup=2 con J1 a medias, la
+       UI marcaba J3 como current y dejaba J1 sin botón "▶ SIMULAR
+       JORNADA" → el usuario reportaba "J1 no deja simularla". */
     opts = opts || {};
     var prefix = keyPrefix || '';
+    /* Recalcular la jornada actual REAL: la primera con algo sin jugar. */
+    var actualCur = jornadaIdx;
+    for (var ji = 0; ji < fixture.length; ji++) {
+      var anyUnplayed = false;
+      (fixture[ji] || []).forEach(function(_, mi){
+        var k = prefix + ji + '_' + mi;
+        if (!(results[k] && results[k].played)) anyUnplayed = true;
+      });
+      if (anyUnplayed) { actualCur = ji; break; }
+    }
     var html = '';
     fixture.forEach(function(jor, j){
-      var isCurrent = (j === jornadaIdx);
-      var isFuture = (j > jornadaIdx);
+      var isCurrent = (j === actualCur);
+      var isFuture = (j > actualCur);
+      var isPast = (j < actualCur);
       var lblTxt = (opts.shortLabel ? 'J' : 'Jornada ') + (j+1);
       var cls = 'tour-jor';
       if (isCurrent) cls += ' is-current';
       if (isFuture) cls += ' is-future';
+      if (isPast) cls += ' is-past';
       html += '<div class="'+cls+'"><div class="tour-jor-h">'+lblTxt+'</div>';
       var allPlayedJ = true;
       jor.forEach(function(m, mi){
@@ -9875,8 +9933,7 @@ window._showSimProgress = function(opts, onDone){
         var ta = teams[m.away] || {name:'?'};
         var rowCls = 'tour-match';
         if (played) rowCls += ' tour-match-played';
-        else if (isCurrent) rowCls += ' tour-match-pickable';
-        else rowCls += ' is-locked';
+        else rowCls += ' tour-match-pickable';  /* TODO unplayed → pickable, sin importar si la jornada es current/future. El usuario debe poder clickar SIEMPRE el partido humano para abrir la previa, aunque su jornada haya quedado "atrás". */
         if (_tourLeagueMatchHasHuman(teams, m)) rowCls += ' tour-match-has-human';
         var dataAttrs = ' data-tour="'+tourId+'" data-league-key="'+key+'"';
         if (played) {
@@ -10118,19 +10175,40 @@ window._showSimProgress = function(opts, onDone){
     if (!res || !res.events || !res.events.length) return '';
     var actaId = 'tour-acta-' + tourId + '-' + matchKey.replace(/[^A-Za-z0-9_-]/g,'_');
     var btnId  = actaId + '-btn';
+    /* Filtramos los markers internos del motor que NO deben aparecer
+       en la UI del acta:
+         - 'played' (1 entrada por jugador titular/suplente, marker
+           para acumular PJ en stats — no es un evento real).
+         - 'mvp' / 'sust' (se muestran fuera del acta).
+       Sin este filtro, si por race condition `window._iaEventsHtml`
+       no está disponible al render, el fallback inline mostraba TODA
+       la plantilla como eventos `?' #N,Jugador,POS · Equipo` (caso
+       reportado por el usuario 2026-05-09). */
+    var SKIP_TYPES = { played:1, mvp:1, sust:1 };
+    var renderable = (res.events || []).filter(function(e){
+      return e && e.type && !SKIP_TYPES[e.type];
+    });
+    if (!renderable.length) return '';
     /* `m` con la forma que espera _iaEventsHtml. */
     var m = { home: res.home || '', away: res.away || '',
-              gh: res.a, ga: res.b, events: res.events,
+              gh: res.a, ga: res.b, events: renderable,
               mvp: res.mvp || '', mvpTeam: res.mvpTeam || '' };
     var inner = '';
+    function _evPlayerName(e){
+      if (!e) return '?';
+      var p = e.player || e.name;
+      if (Array.isArray(p)) return p[1] || '?';
+      return String(p || '?');
+    }
     try {
       if (typeof window._iaEventsHtml === 'function') {
         inner = window._iaEventsHtml(m);
       } else {
-        inner = res.events.map(function(e){
+        inner = renderable.map(function(e){
+          var min = (e.min != null && e.min !== '') ? e.min : '?';
           return '<div style="padding:4px 10px;font-size:12px;color:#fff;">'
-            + (e.min||'?') + "' " + (e.ico||'') + ' '
-            + (e.player||e.name||'?') + ' · ' + (e.team==='a'?(m.home||'A'):(m.away||'B'))
+            + min + "' " + (e.ico || '') + ' '
+            + _evPlayerName(e) + ' · ' + (e.team === 'a' ? (m.home || 'A') : (m.away || 'B'))
             + '</div>';
         }).join('');
       }

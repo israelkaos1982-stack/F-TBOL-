@@ -6548,6 +6548,38 @@
   }
 
   function _mlShowEventFlash(text, cssClass) {
+    /* Petición usuario 2026-05-09 (FOTO): eliminar el overlay visual
+       "¡¡¡ GOOOOOL !!!" / "EXPULSIÓN" que tapa la pantalla durante
+       segundos en el hub LIVE — cuando hay varios partidos vivos
+       el overlay opaca el acta del que está mirando aunque el gol
+       sea en otro. El timer pausa real del cronómetro
+       (`_mlEventFreezeMs`, 10 s gol / 8 s roja) sigue activo en el
+       partido afectado, así que el feedback no se pierde.
+       Mantenemos el TONO de UI como confirmación auditiva. */
+    if (cssClass === 'goal') _mlPlayUiTone('goal');
+    if (cssClass === 'red')  _mlPlayUiTone('red');
+    /* Petición usuario 2026-05-09 (FOTO): suprimir el overlay
+       "¡¡¡ GOOOOOL !!!" / "EXPULSIÓN" que tapaba el acta del hub
+       LIVE más de 10 s al concatenarse eventos de varios partidos.
+       PERO conservamos los overlays ESPECIALES "HATTRICK" /
+       "REPOQUER" (función `_mlMilestoneCheck` introducida en main
+       desde commit 22c24a3) — son hitos puntuales no recurrentes.
+       Distinguimos por el `text` exacto. */
+    var _isPlainGoalOrRed = /^¡¡¡\s*GOOOOOL\s*!!!$/i.test(text || '') || /^EXPULSI/i.test(text || '');
+    if (_isPlainGoalOrRed) {
+      /* Defensiva: si existiera overlay anterior visible (sesión
+         cargada antes del fix o disparado por código residual), lo
+         ocultamos al vuelo. */
+      var _resOv = document.getElementById('ml-event-fx-overlay');
+      if (_resOv) {
+        if (_resOv._fxTimer) { clearTimeout(_resOv._fxTimer); _resOv._fxTimer = null; }
+        _resOv.className = '';
+      }
+      return;
+    }
+    /* HATTRICK / REPOQUER y futuros hitos: comportamiento estándar
+       con `clearTimeout` previo (commit 35de93b en main) para que
+       dos eventos seguidos no se corten entre sí. */
     var ov = document.getElementById('ml-event-fx-overlay');
     if (!ov) {
       ov = document.createElement('div');
@@ -6558,17 +6590,6 @@
     var tx = document.getElementById('ml-event-fx-text');
     if (tx) tx.textContent = text;
     ov.className = 'show ' + (cssClass || 'goal');
-    if (cssClass === 'goal') _mlPlayUiTone('goal');
-    if (cssClass === 'red')  _mlPlayUiTone('red');
-    /* Reducido de 5s → 2s (petición usuario 2026-05-08): el overlay
-       amarillo/rojo opaca el acta durante demasiado tiempo y si llega
-       otro evento la visualización es mínima. La pausa REAL del
-       cronómetro vive aparte (`_mlEventFreezeMs`) y NO está acoplada
-       a la duración visual del flash.
-       2026-05-09: clearTimeout previo para que dos eventos seguidos
-       (p.ej. gol + roja en pocas décimas) no se corten entre sí. Sin
-       esto, el primer setTimeout cerraba el overlay del segundo evento
-       antes de los 2 s. */
     if (ov._fxTimer) clearTimeout(ov._fxTimer);
     ov._fxTimer = setTimeout(function(){ ov.className = ''; ov._fxTimer = null; }, 2000);
   }

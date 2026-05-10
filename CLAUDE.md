@@ -24,6 +24,90 @@ Reglas a respetar:
    largos) van al servidor (`GlobalState` row con su clave) o se
    compactan/agregan antes de persistir.
 
+## Copa del Rey — sorteo de cruces (obligatorio, 2026-05-09)
+
+Reglas del cuadro de la Copa del Rey (`static/js/copa-engine.js`,
+función `_pairTeamsConstrained`):
+
+1. **EA solo contra PF / Hyp hasta Dieciseisavos.** Cualquier equipo
+   de Liga EA Sports (los 5 humanos + 15 EA-IA) debe enfrentarse a un
+   equipo de Primera Federación o Hypermotion en r1, r2 y r16. Nunca
+   EA-vs-EA antes de Octavos.
+2. **EA-vs-EA permitido desde Octavos**, pero `_preferenceFor` prioriza
+   rivales no-EA cuando el bombo aún tenga PF/Hyp disponibles para
+   demorar el primer EA-vs-EA al máximo.
+3. **Cuartos prefiere no-humano** (regla histórica conservada): el
+   primer humano-vs-humano cae idealmente en Semifinales.
+4. **Local / visitante por nivel** (no se modifica el sistema previo):
+   - Single-leg (r1/r2/r16/fin): `hostIsLower=true` → el equipo de
+     MENOR poder juega en su campo. El de mayor poder es visitante.
+   - Two-leg (oct/cua/sf): `hostIsLower=false` → IDA en campo del de
+     MAYOR poder. La VUELTA, vía el swap del engine
+     (`esVuelta ? m.v : m.l`), cae siempre en el campo del de MENOR
+     poder. Empate de power → desempate alfabético determinista.
+
+Helpers asociados:
+- `_isEa(t)` → considera EA a humanos + `liga-ea-sports` + TBDs cuyo
+  posible ganador pueda ser EA (`tbdMayBeEa`).
+- `_tbdMayBeEa(tbd)` → mira el partido pendiente de la ronda anterior
+  y devuelve `true` si alguno de los 2 contendientes es humano o
+  pertenece a `liga-ea-sports`.
+
+Si el nº de equipos llega impar al sorteo, `_computeSorteoPayload`
+descarta 1 IA respetando estas reglas:
+- r1/r2/r16: drop EA-IA → Hyp → PF (último). Quitar un EA-IA reduce
+  presión sobre el pool no-EA; quitar un PF/Hyp lo deja más justo.
+- oct+: drop PF → Hyp → EA. Descartamos a los más débiles primero.
+- NUNCA descartamos humanos ni TBDs (ganadores pendientes).
+
+## Motor único de simulación IA-vs-IA (obligatorio, 2026-05-09)
+
+**Toda simulación IA-vs-IA del proyecto** (independientemente de la
+competición — Liga EA Sports, Copa del Rey, Champions League, Europa
+League, Conference League, Recopa, Supercopa de Europa, Supercopa de
+España, Intercontinental, Mundialito Clubes, Torneos de Verano,
+amistosos, Liga Hypermotion, Primera Federación, ligas externas…)
+**debe usar el motor 4-ejes de Liga EA Sports** (`_simIAvsIAWithContext`)
+para que los resultados sean coherentes con los valores manuales que
+el admin pone en el editor (GLOBAL/ATAQUE/MEDIO/DEFENSA + capitán).
+
+Camino canónico:
+1. **Live IA-vs-IA**: `iaSimLive(mk, home, away, j[, j1fn])` →
+   internamente llama `_simIAvsIAWithContext(home, away, j)`.
+2. **Batch IA-vs-IA Liga EA**: `simularJornadaIA(j)` →
+   `_simIAvsIAWithContext`.
+3. **Auto-sim IA-vs-IA en gm-modal** (amistosos & equivalents):
+   `_gmAutoSimulateIAvsIA()` → `_simIAvsIAWithContext`.
+4. **Fallback**: `_fallbackIAvsIAScore` (legacy `simSimple` sobre
+   TEAM_RATINGS escalar) **solo** si el motor 4-ejes no está disponible
+   en el arranque. Nunca llamar directamente a `simSimple` desde rutas
+   nuevas.
+
+Reglas a respetar:
+- **Prohibido** añadir nuevos paths que llamen `simSimple(rA, rB)` con
+  ratings escalares como motor primario. Usar `_simIAvsIAWithContext`
+  o, en su defecto, el wrapper `iaSimLive`.
+- Las cajas de Champions/EL/ECL/Recopa/USC/Inter cuando reciban su
+  módulo de simulación deben hookear `iaSimLive` con prefijo `mk` y
+  registrar el persistor en la cadena `__is*SimPersist` de
+  `iaSimLive` (igual patrón que Recopa con `recopa_*` o Supercopa de
+  España con `sc_*`).
+- HvH y HvIA (con humano) NO se simulan — el humano juega en vivo en
+  gm-modal o calendar cards. El AI pre-roll de HvIA en Liga EA usa
+  `simSimple` (legacy, conservado por el comportamiento histórico
+  documentado del flag `_pendingAIEvents`).
+
+Helpers a reutilizar (todos en `window.*`):
+- `_simIAvsIAWithContext(home, away, j)` → motor 4-ejes con
+  rojas pre-roll, capitán ×1.05, localía variable seeded.
+- `_teamOffense(name)` / `_teamDefense(name)` → 60% atk/def + 40%
+  mid, leen `ligaExt_*` o `TEAM_RATINGS`.
+- `_captainBonus(name)` → 1.05 si hay C titular, 1.0 si no.
+- `_aggressivenessFactor(name)` → 0.5–1.49 para densidad de tarjetas.
+- `genMatchEventsEnhanced(teamA, teamB, gh, ga, simCtx)` → eventos
+  del acta (goles, tarjetas, lesiones, MVP) consistentes con el
+  marcador resultante.
+
 ## Iconos del equipo y del jugador en la simulación (obligatorio, siempre)
 
 Cada vez que se simule un partido (Liga, Copa, competiciones europeas,

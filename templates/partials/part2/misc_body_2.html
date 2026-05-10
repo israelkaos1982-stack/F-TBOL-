@@ -6558,10 +6558,74 @@
        Mantenemos el TONO de UI como confirmación auditiva. */
     if (cssClass === 'goal') _mlPlayUiTone('goal');
     if (cssClass === 'red')  _mlPlayUiTone('red');
-    /* Defensiva: si existiera un overlay anterior con la clase
-       `show` (sesiones cargadas antes del fix), lo escondemos. */
+    /* Petición usuario 2026-05-09 (FOTO): suprimir el overlay
+       "¡¡¡ GOOOOOL !!!" / "EXPULSIÓN" que tapaba el acta del hub
+       LIVE más de 10 s al concatenarse eventos de varios partidos.
+       PERO conservamos los overlays ESPECIALES "HATTRICK" /
+       "REPOQUER" (función `_mlMilestoneCheck` introducida en main
+       desde commit 22c24a3) — son hitos puntuales no recurrentes.
+       Distinguimos por el `text` exacto. */
+    var _isPlainGoalOrRed = /^¡¡¡\s*GOOOOOL\s*!!!$/i.test(text || '') || /^EXPULSI/i.test(text || '');
+    if (_isPlainGoalOrRed) {
+      /* Defensiva: si existiera overlay anterior visible (sesión
+         cargada antes del fix o disparado por código residual), lo
+         ocultamos al vuelo. */
+      var _resOv = document.getElementById('ml-event-fx-overlay');
+      if (_resOv) {
+        if (_resOv._fxTimer) { clearTimeout(_resOv._fxTimer); _resOv._fxTimer = null; }
+        _resOv.className = '';
+      }
+      return;
+    }
+    /* HATTRICK / REPOQUER y futuros hitos: comportamiento estándar
+       con `clearTimeout` previo (commit 35de93b en main) para que
+       dos eventos seguidos no se corten entre sí. */
     var ov = document.getElementById('ml-event-fx-overlay');
-    if (ov) ov.className = '';
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'ml-event-fx-overlay';
+      ov.innerHTML = '<div id="ml-event-fx-text"></div>';
+      document.body.appendChild(ov);
+    }
+    var tx = document.getElementById('ml-event-fx-text');
+    if (tx) tx.textContent = text;
+    ov.className = 'show ' + (cssClass || 'goal');
+    if (ov._fxTimer) clearTimeout(ov._fxTimer);
+    ov._fxTimer = setTimeout(function(){ ov.className = ''; ov._fxTimer = null; }, 2000);
+  }
+
+  /* HATTRICK / REPOQUER (petición usuario 2026-05-09): tras un gol,
+     comprueba cuántos lleva ese jugador en el partido. 3 → HATTRICK,
+     4 → REPOQUER. Solo se muestra en HvH o HvIA — en IAIA NO emerge
+     para no estorbar la auto-sim rápida. Da igual si el goleador es
+     del equipo humano o del IA: el flash sale igual.
+
+     Se programa con setTimeout 2 s para que el overlay aparezca DESPUÉS
+     del flash "GOOOOOL" (el clearTimeout interno de _mlShowEventFlash
+     garantiza que el segundo flash dura sus 2 s íntegros sin solapar).
+
+     Autogoles (`propia`) NO cuentan para el récord del jugador — un
+     autogol no es un gol del jugador a efectos de hat-trick. */
+  function _mlMilestoneCheck(events, evtType, team, playerName, isHumanMatch) {
+    if (!isHumanMatch) return;
+    if (!playerName) return;
+    var goalTypes = ['gol', 'falta-gol', 'pen-gol'];
+    if (goalTypes.indexOf(evtType) === -1) return;
+    var clean = String(playerName).trim().toLowerCase();
+    if (!clean) return;
+    var count = 0;
+    for (var i = 0; i < (events || []).length; i++) {
+      var e = events[i];
+      if (!e || goalTypes.indexOf(e.type) === -1) continue;
+      if (e.team !== team) continue;
+      var n = String(e.player || e.name || '').trim().toLowerCase();
+      if (n && n === clean) count++;
+    }
+    var label = '';
+    if (count === 3) label = '¡¡¡ HATTRICK !!!';
+    else if (count === 4) label = '¡¡¡ REPOQUER !!!';
+    if (!label) return;
+    setTimeout(function(){ _mlShowEventFlash(label, 'goal'); }, 2000);
   }
 
   /* Cuánto tiempo (ms reales) debe pausarse el cronómetro tras el
@@ -6829,6 +6893,7 @@
       _mlAddActaRow(mk, ev.min, ev.ico, ev.name, ev.num, tName, ev.type, evId);
       if (ev.type === 'gol' || ev.type === 'falta-gol' || ev.type === 'pen-gol' || ev.type === 'propia') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
       if (ev.type === 'roja' || ev.type === 'd-amarilla') _mlShowEventFlash('EXPULSIÓN','red');
+      _mlMilestoneCheck(st.events, ev.type, ev.team, ev.player || ev.name, _mlIsHumanMatchGen(mk));
     });
   }
 
@@ -9462,6 +9527,7 @@
     st.events.push({type:evt.type,label:evt.label,team:team,num:num,name:name,min:min,ico:ico,id:id});
     if (evt.type === 'gol' || evt.type === 'falta-gol' || evt.type === 'pen-gol' || evt.type === 'propia') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
     if (evt.type === 'roja' || evt.type === 'd-amarilla') _mlShowEventFlash('EXPULSIÓN','red');
+    _mlMilestoneCheck(st.events, evt.type, team, name, _mlIsHumanMatchGen(mk));
     var list=document.getElementById('ml-acta-list-'+mk);
     if(list){
       var emp=list.querySelector('.ml-acta-empty'); if(emp)emp.remove();
@@ -9585,6 +9651,7 @@
       var scA=document.getElementById('sc-'+mk+'-a'); if(scA)scA.textContent=st.sc.a;
       var scB=document.getElementById('sc-'+mk+'-b'); if(scB)scB.textContent=st.sc.b;
       if (typeof _mlShowEventFlash === 'function') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
+      _mlMilestoneCheck(st.events, 'pen-gol', shootSide, wiz.tirador && wiz.tirador.name, _mlIsHumanMatchGen(mk));
     } else if (wiz.resultado === 'fallo') {
       if (wiz.falladoTipo === 'parado' && wiz.portero) {
         _pushEvent('pen-parado', commitSide, wiz.portero.num, wiz.portero.name, '🖐🥅');
@@ -10329,6 +10396,7 @@
       _gm.sc[shootSide]++;
       var sc = document.getElementById('gm-score'); if (sc) sc.textContent = _gm.sc.a + '-' + _gm.sc.b;
       if (typeof _mlShowEventFlash === 'function') _mlShowEventFlash('¡¡¡ GOOOOOL !!!','goal');
+      _mlMilestoneCheck(_gm.events, 'pen-gol', shootSide, wiz.tirador && wiz.tirador.name, true);
     } else if (wiz.resultado === 'fallo') {
       if (wiz.falladoTipo === 'parado' && wiz.portero) {
         _push('pen-parado', commitSide, wiz.portero.num, wiz.portero.name, '🖐🥅', 'Penalti Parado');
@@ -10508,6 +10576,9 @@
     } else if (evt.type === 'lesion') {
       _mlPlayUiTone('injury');
     }
+    /* HATTRICK / REPOQUER — gm-modal siempre es HvH o HvIA (no IAIA),
+       así que pasamos isHumanMatch=true. */
+    _mlMilestoneCheck(_gm.events, evt.type, team, playerName, true);
 
     /* añadir al acta */
     var li = document.createElement('div');
@@ -11980,27 +12051,43 @@
   }
 
   /* Genera y vuelca instantáneamente un partido IA-vs-IA en el gm-modal.
-     Usa simSimple (basado en TEAM_RATINGS, ventaja local 1.10) para el
-     marcador y genMatchEvents (selección ponderada por poder de jugador
-     vía _weightedScorerPick + calculateGoalProbability) para los eventos. */
+     Usa `_simIAvsIAWithContext` (motor 4 ejes ATK/MID/DEF/GLOBAL — la
+     misma simulación que Liga EA Sports). Petición usuario 2026-05-09:
+     que TODA simulación IA-vs-IA (Champions, Europa League, Conference,
+     Recopa, Supercopa de Europa, Intercontinental, Liga, Copa, amistosos…)
+     comparta el motor de Liga EA Sports y produzca resultados coherentes
+     con los 4 valores manuales del editor. Solo si el motor 4-ejes no
+     está disponible (caso edge en arranque) caemos al legacy simSimple
+     basado en TEAM_RATINGS escalar. */
   function _gmAutoSimulateIAvsIA() {
-    var rat = window.TEAM_RATINGS || {};
-    function _resolveRating(name) {
-      var v = rat[name];
-      if (typeof v === 'number') return v;
-      if (v && typeof v.rating === 'number') return v.rating;
-      return 76;
+    var score = null;
+    if (typeof _simIAvsIAWithContext === 'function') {
+      try {
+        var ctx = _simIAvsIAWithContext(_gm.home, _gm.away, 0);
+        if (ctx && typeof ctx === 'object' && isFinite(Number(ctx.gh)) && isFinite(Number(ctx.ga))) {
+          score = { gh: Math.max(0, Math.round(Number(ctx.gh))),
+                    ga: Math.max(0, Math.round(Number(ctx.ga))) };
+        }
+      } catch(_) {}
     }
-    var rA = _resolveRating(_gm.home);
-    var rB = _resolveRating(_gm.away);
-    /* Ventaja de local */
-    var rAeff = Math.round(rA * 1.10);
-    var rBeff = Math.round(rB);
-    var score;
-    if (typeof simSimple === 'function') {
-      score = simSimple(rAeff, rBeff);
-    } else {
-      score = { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+    if (!score) {
+      /* Fallback: simSimple sobre TEAM_RATINGS con ventaja local ×1.10. */
+      var rat = window.TEAM_RATINGS || {};
+      function _resolveRating(name) {
+        var v = rat[name];
+        if (typeof v === 'number') return v;
+        if (v && typeof v.rating === 'number') return v.rating;
+        return 76;
+      }
+      var rA = _resolveRating(_gm.home);
+      var rB = _resolveRating(_gm.away);
+      var rAeff = Math.round(rA * 1.10);
+      var rBeff = Math.round(rB);
+      if (typeof simSimple === 'function') {
+        score = simSimple(rAeff, rBeff);
+      } else {
+        score = { gh: Math.floor(Math.random()*4), ga: Math.floor(Math.random()*4) };
+      }
     }
     var ev = { events: [], mvp: '', mvpTeam: '' };
     if (typeof genMatchEvents === 'function') {
@@ -24367,10 +24454,14 @@ document.addEventListener('DOMContentLoaded', function() {
   /* Persiste los 30 perdedores de Ronda 1 a `wprev_r1_to_conference_v1`
      INMEDIATAMENTE tras la VUELTA — el usuario quiere que al terminar
      ida+vuelta los 30 perdedores ya estén en Conference, sin tener
-     que esperar a simular los grupos RF. */
+     que esperar a simular los grupos RF.
+     2026-05-09: añadimos `league` (slug del país de origen) para que
+     la fase de liga UECL pueda aplicar la regla "no mismo país". Sin
+     este campo, los 30 perdedores compartían `league='previa-champions'`
+     en `computeUeclClassified` y el sorteo no podía cuadrar. */
   function _persistR1Losers(state){
     var confArr = (state.r1Losers||[]).map(function(t){
-      return { name:t.name, logo:t.logo||'', source:'previa-r1-loser' };
+      return { name:t.name, logo:t.logo||'', league:t.league||'', source:'previa-r1-loser' };
     });
     try {
       localStorage.setItem(WPREV_CONF_KEY, JSON.stringify({teams:confArr, ts:Date.now()}));
@@ -24386,7 +24477,11 @@ document.addEventListener('DOMContentLoaded', function() {
       st.forEach(function(row, pos){
         var t = state.groups[gi][row._i];
         if(!t || !t.name) return;
-        var entry = { name:t.name, logo:t.logo||'', source:'previa-rf-g'+(gi+1)+'-pos'+(pos+1) };
+        /* 2026-05-09: persistimos `league` (slug del país) para que la
+           fase de liga UCL/UEL pueda aplicar la regla "no mismo país".
+           Sin este campo todos compartían `league='previa-champions'`
+           y la fase UEL (22 teams) era infeasible. */
+        var entry = { name:t.name, logo:t.logo||'', league:t.league||'', source:'previa-rf-g'+(gi+1)+'-pos'+(pos+1) };
         if(pos === 0)            champArr.push(entry);
         else if(pos === 1 || pos === 2) euroArr.push(entry);
       });

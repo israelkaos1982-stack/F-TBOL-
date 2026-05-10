@@ -9560,17 +9560,22 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         if (goalTypes.indexOf(type) !== -1) {
           window.mmShowFlash('gol', teamName, playerName);
         } else if (redTypes.indexOf(type) !== -1) {
-          _mmFlash('roja', teamName, playerName);
-          /* Si el expulsado es humano, tras los 5 s del flash mostrar
-             la alerta con el sorteo de partidos sancionados. `type`
-             distingue roja directa vs doble amarilla — distribuciones
-             distintas como pidió el usuario. */
+          /* 2026-05-09 — el overlay central antiguo `mm-event-flash`
+             (5 s + animación CSS) NO debe dispararse: el flash visual
+             ya lo gestiona `_mlShowEventFlash('EXPULSIÓN','red')` con
+             su duración nueva de 2 s desde el flujo principal. Antes
+             llamábamos `_mmFlash('roja', …)` directamente aquí, lo
+             cual saltaba el patch de `window.mmShowFlash` y, aunque
+             el CSS lo oculta, el elemento se creaba y a veces se veía
+             un destello del overlay viejo "antes" del nuevo. Solo
+             mantenemos la cadena de sanción al humano (independiente
+             del flash). */
           if (typeof window.esHumano === 'function'
               && window.esHumano(teamName)
               && typeof window._mmTriggerSancionLive === 'function') {
             setTimeout(function(){
               window._mmTriggerSancionLive(type, teamName, playerName);
-            }, 5200);
+            }, 2200);
           }
         } else if (type === 'lesion') {
           var les = window.LESION_STORE && window.LESION_STORE[playerName];

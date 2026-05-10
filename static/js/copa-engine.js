@@ -266,6 +266,27 @@
     var vHum = HUMAN_TEAMS.indexOf(canonicalTeam(match.v)) !== -1;
     return hHum || vHum;
   }
+  /* Igual que _tbdMayBeHuman, pero conservador para "puede acabar siendo
+     un equipo de Liga EA Sports" — incluye humanos (que también son EA)
+     y EA-IA. Se usa en _pairTeamsConstrained para mantener la regla
+     "EA no se enfrentan entre sí hasta Octavos" cuando un TBD pendiente
+     de resolver podría convertirse en un EA. */
+  function _tbdMayBeEa(tbd) {
+    if (!tbd) return false;
+    var sorteoR = ((_copa && _copa.sorteo) || {})[tbd.ronda] || [];
+    var match = sorteoR[tbd.idx];
+    if (!match) return true; /* sin info → conservador */
+    function _isEaName(nm) {
+      var canon = canonicalTeam(nm);
+      if (HUMAN_TEAMS.indexOf(canon) !== -1) return true;
+      var teams = (typeof _collectCopaTeams === 'function') ? _collectCopaTeams() : [];
+      for (var i = 0; i < teams.length; i++) {
+        if (teams[i].name === canon && teams[i].league === 'liga-ea-sports') return true;
+      }
+      return false;
+    }
+    return _isEaName(match.l) || _isEaName(match.v);
+  }
   /* Devuelve el nombre del equipo IA "ya clasificado" si la pareja
      R1 era HUMANO vs IA: el IA gana si pierde el humano (lo cual no
      suele pasar) — pero aún si no podemos saberlo, mostramos el
@@ -286,17 +307,29 @@
     return { hint: 'Esperando Rival', shieldTeam: '', opponents: [match.l, match.v] };
   }
 
-  /* Empareja con CONSTRAINTS por ronda (regla del usuario 2026-05-04):
-     · r1, r2: humanos SOLO vs equipos de Primera Federación.
-     · r16:    humanos vs PF (si quedan), si no Hypermotion, último
-               recurso Liga EA. Nunca humano vs humano.
-     · oct:    humanos vs cualquier IA (cualquier liga). Nunca H vs H.
-     · cua/sf/fin: libre — humano vs humano permitido si toca.
+  /* Empareja con CONSTRAINTS por ronda (regla del usuario 2026-05-09):
+     · TODOS los equipos de Liga EA Sports (humanos y no-humanos) cuando
+       entran en la Copa SOLO pueden enfrentarse a equipos de Primera
+       Federación o Hypermotion hasta Dieciseisavos incluido.
+     · r1: equipos EA (los 5 humanos) SOLO vs Primera Federación.
+     · r2: equipos EA (5 humanos + 15 no-humanos que entran ahora) vs
+           PF o Hypermotion. Nunca EA vs EA.
+     · r16: equipos EA vs PF o Hypermotion. Nunca EA vs EA.
+     · oct (Octavos): EA vs EA permitido — pero si quedan rivales no-EA
+           en el bombo, se priorizan para retrasar EA-vs-EA al máximo.
+     · cua/sf/fin: libre. En Cuartos se sigue prefiriendo no-humano
+           para que el primer humano-vs-humano caiga en Semis.
 
-     Estrategia: separa humanos del resto, empareja cada humano con un
-     oponente válido siguiendo la prioridad de la ronda, y luego empareja
-     el resto al azar. El cálculo de local sigue la misma regla
-     (hostIsLower=true para single-leg, false para two-leg). */
+     Reglas de local/visitante (idénticas a antes, OK con la petición):
+     · single-leg (r1/r2/r16/fin): host = MENOR nivel → mayor nivel
+       juega de visitante.
+     · two-leg (oct/cua/sf): IDA en campo del MAYOR nivel; el swap del
+       engine (`esVuelta ? m.v : m.l`) lleva la VUELTA al campo del de
+       MENOR nivel.
+
+     Estrategia: separa equipos EA (humanos + EA-IA) del resto, empareja
+     cada EA con un oponente válido siguiendo la prioridad de la ronda,
+     y luego empareja el resto al azar. */
   function _pairTeamsConstrained(teamObjs, hostIsLower, ronda) {
     var available = (teamObjs || []).slice();
     if (available.length % 2 !== 0) available.pop();
@@ -317,46 +350,55 @@
       }
       return arr;
     }
-    function _canPair(humanT, oppT) {
-      var oppMaybeHum = !!oppT.isHuman || (oppT.isTbd && oppT.tbdMayBeHuman);
-      if (oppMaybeHum) {
-        /* Humano vs humano (o TBD potencial humano) solo desde Cuartos.
-           Preferible en Cuartos / Semis — la elección final la hace
-           _preferenceFor priorizando NO-humanos en Cuartos para que
-           el primer enfrentamiento humano-humano caiga en Semis. */
-        return ronda === 'cua' || ronda === 'sf' || ronda === 'fin';
+    /* "Equipo de Liga EA Sports" para la regla del usuario: humanos
+       + EA-IA + TBDs cuyos posibles ganadores incluyan a un EA. */
+    function _isEa(t) {
+      if (!t) return false;
+      if (t.isHuman) return true;
+      if (t.league === 'liga-ea-sports') return true;
+      if (t.isTbd && t.tbdMayBeEa) return true;
+      return false;
+    }
+    function _canPair(eaT, oppT) {
+      var oppIsEa = _isEa(oppT);
+      if (oppIsEa) {
+        /* EA vs EA solo desde Octavos. En Cuartos+ totalmente libre.
+           En Octavos lo permite _canPair pero _preferenceFor prioriza
+           no-EA cuando aún haya disponibles. */
+        return ronda === 'oct' || ronda === 'cua' || ronda === 'sf' || ronda === 'fin';
       }
-      if (ronda === 'r1' || ronda === 'r2') {
-        /* TBD que viene de R1 IA-vs-IA → el ganador será un PF. */
-        if (oppT.isTbd && !oppT.tbdMayBeHuman) return true;
+      /* Oponente NO-EA. */
+      if (ronda === 'r1') {
+        /* R1 son solo humanos + PF — Hyp no entra todavía. */
+        if (oppT.isTbd && !oppT.tbdMayBeEa) return true;
         return oppT.league === 'liga-primera-federacion';
       }
-      if (ronda === 'r16') {
-        /* Petición usuario: humanos solo contra Primera Federación (o
-           Hypermotion en su defecto). Sin Liga EA-no-humano como
-           rival. _preferenceFor refuerza la jerarquía PF → Hyp. */
-        if (oppT.isTbd && !oppT.tbdMayBeHuman) return true;
+      if (ronda === 'r2' || ronda === 'r16') {
+        /* EA vs PF o Hypermotion. */
+        if (oppT.isTbd && !oppT.tbdMayBeEa) return true;
         return oppT.league === 'liga-primera-federacion'
             || oppT.league === 'liga-hypermotion';
       }
-      if (ronda === 'oct') {
-        return true; /* cualquier no-humano (incluido TBD-IA) */
-      }
-      return true; /* cua/sf/fin: cualquiera */
+      /* oct/cua/sf/fin: cualquiera. */
+      return true;
     }
-    function _preferenceFor(humanT, candidates) {
-      /* r16: prioridad PF > Hyp (Liga EA queda fuera por _canPair). */
-      if (ronda === 'r16') {
+    function _preferenceFor(eaT, candidates) {
+      /* r2 / r16: prioridad PF > Hyp (Liga EA queda fuera por _canPair). */
+      if (ronda === 'r2' || ronda === 'r16') {
         var pf = candidates.filter(function (c) { return c.league === 'liga-primera-federacion'; });
         if (pf.length) return pf;
         var hy = candidates.filter(function (c) { return c.league === 'liga-hypermotion'; });
         if (hy.length) return hy;
       }
-      /* Cuartos: si quedan no-humanos disponibles, priorizar para
-         demorar el primer cruce humano-humano hasta Semifinales. El
-         usuario lo prefiere así — si en Cuartos no hay no-humanos
-         posibles, sí se permite humano-humano (vía _canPair que ya
-         lo permite). */
+      /* Octavos: si aún hay rivales NO-EA disponibles, priorizar — el
+         usuario quiere que EA-vs-EA se demore al máximo. Si en oct
+         no quedan no-EA, _canPair ya permite EA-vs-EA. */
+      if (ronda === 'oct') {
+        var nonEa = candidates.filter(function (c) { return !_isEa(c); });
+        if (nonEa.length) return nonEa;
+      }
+      /* Cuartos: priorizar no-humano para que humano-vs-humano caiga
+         primero en Semifinales. */
       if (ronda === 'cua') {
         var noHum = candidates.filter(function (c) { return !c.isHuman && !(c.isTbd && c.tbdMayBeHuman); });
         if (noHum.length) return noHum;
@@ -364,23 +406,25 @@
       return candidates;
     }
 
-    /* Lista mezclada de humanos para que al elegir oponentes haya
-       variedad entre temporadas. */
-    var humanos = _shuffle(available.filter(function (t) { return t.isHuman; }).slice());
-    humanos.forEach(function (h) {
+    /* Procesa primero TODOS los equipos EA (humanos + EA-IA + TBDs
+       potencialmente EA). De esta manera cada EA se asegura un rival
+       válido (PF/Hyp) en r1/r2/r16. */
+    var eaTeams = _shuffle(available.filter(_isEa).slice());
+    eaTeams.forEach(function (h) {
       if (assigned[h.name]) return;
       var pool = available.filter(function (t) {
         return !assigned[t.name] && t.name !== h.name && _canPair(h, t);
       });
       pool = _preferenceFor(h, pool);
       if (!pool.length) {
-        /* Fallback: cualquier no-humano disponible. */
+        /* Fallback: cualquier no-EA disponible. */
         pool = available.filter(function (t) {
-          return !assigned[t.name] && t.name !== h.name && !t.isHuman;
+          return !assigned[t.name] && t.name !== h.name && !_isEa(t);
         });
       }
       if (!pool.length) {
-        /* Último recurso: cualquiera disponible (incluso humano). */
+        /* Último recurso: cualquiera disponible (incluso EA — solo
+           ocurre si el bombo no tiene ya rivales no-EA suficientes). */
         pool = available.filter(function (t) {
           return !assigned[t.name] && t.name !== h.name;
         });
@@ -392,7 +436,7 @@
       assigned[opp.name] = true;
     });
 
-    /* Empareja al resto al azar. */
+    /* Empareja al resto (PF, Hyp, TBDs no-EA) al azar entre sí. */
     var resto = _shuffle(available.filter(function (t) { return !assigned[t.name]; }));
     for (var k = 0; k < resto.length - 1; k += 2) {
       pairs.push(_orderPair(resto[k], resto[k + 1]));
@@ -2542,7 +2586,8 @@
           power: 60,
           isHuman: false,
           isTbd: true,
-          tbdMayBeHuman: _tbdMayBeHuman(tbd)
+          tbdMayBeHuman: _tbdMayBeHuman(tbd),
+          tbdMayBeEa: _tbdMayBeEa(tbd)
         };
       }
       return allMap[resolved] || { name: resolved, league: '', power: 75, isHuman: HUMAN_TEAMS.indexOf(canonicalTeam(resolved)) !== -1 };
@@ -2567,19 +2612,19 @@
       if (ronda === 'fin' && teams.length < 2) return null;
     }
     if (!teams.length) return null;
-    /* 2026-05-06 robustez paridad respetando reglas humano-vs-IA:
+    /* 2026-05-09 robustez paridad respetando reglas EA-vs-no-EA:
        el chequeo previo `teams.length % 2 !== 0 → return null` abortaba
        el sorteo si el nº de equipos resultaba impar. Ahora descartamos
        1 IA no-humano para hacer la cuenta par y proceder.
 
        Orden de descarte por ronda (preserva la pool de rivales válidos
-       para los humanos según las reglas del usuario):
+       para los EA según la regla "EA solo contra PF/Hyp hasta r16"):
 
-         r1/r2  → humanos contra PF SIEMPRE.
+         r1/r2/r16 → EA (humanos + EA-IA) solo contra PF o Hyp.
                   Drop: EA-IA → Hyp → PF (último).
-         r16    → humanos prefieren PF, fallback Hyp, último recurso EA.
-                  Drop: EA-IA → Hyp → PF (último).
-         oct+   → cualquiera (sin restricción humano-IA).
+                  · Quitar un EA-IA reduce equipos que NECESITAN no-EA.
+                  · Quitar un PF / Hyp reduce el pool disponible — peor.
+         oct+   → cualquiera (EA-vs-EA permitido).
                   Drop: PF → Hyp → EA (descarta los más débiles primero).
 
        NUNCA descartamos humanos ni TBDs (ganadores pendientes) si hay

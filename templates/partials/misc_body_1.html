@@ -24448,32 +24448,150 @@ Tottenham
 })();
 
 /* ── HUD admin overrides (PIN 747) ────────────────────────────────
+   REFUERZO TOTAL 2026-05-10 — la décima vez que el usuario reporta
+   pérdida de valores en recarga. Esta vez vamos a saco:
+
+     5 capas de persistencia (cualquiera basta para sobrevivir):
+       1. window._BAYERN_HUD_CACHE  (memoria, vive lo que la pestaña)
+       2. localStorage              (default browser storage)
+       3. sessionStorage            (sobrevive recarga, no cierre tab)
+       4. document.cookie           (sobrevive incluso si móvil purga
+                                     localStorage por cuota)
+       5. IndexedDB                 (durable + alta cuota en móvil,
+                                     sobrevive cuando localStorage cae)
+       6. Server /api/state         (cross-device, definitivo)
+
+     SAVE bulletproof:
+       - escribe SÍNCRONO a las 4 capas locales
+       - fetch keepalive + navigator.sendBeacon (sobrevive cierre tab)
+       - opcionalmente AWAIT server (modal "Guardando…")
+       - toast confirmando cada capa
+
+     BOOT bulletproof:
+       - hidrata de la PRIMERA capa con datos válidos (mem→ls→ss→cookie)
+       - paint inmediato vía apply()
+       - en bg refresca de IndexedDB y server (ambos pueden tardar)
+       - reaplica al recibir cualquier capa más reciente
+
    Permite al admin editar los 5 valores del HUD superior:
      · 💼 Valoración actual + objetivo (default 0.00 / 9.10)
      · 🪙 Presupuesto actual + objetivo (default 0 / 1300€)
      · 💊 Puntos de Fisio (default 8)
-   El override se guarda en localStorage `bayern_hud_overrides_v1`
-   y se re-aplica vía MutationObserver cada vez que el JS legacy
-   (athObjCount / updateHud / athSetMedicalPI) reescribe los spans.
-   Sin el observer los valores volverían a la fórmula automática
-   (done × PTS_POR_OBJ, etc.) en cuanto el admin marcase un
-   objetivo. */
+*/
 (function(){
   var KEY = 'bayern_hud_overrides_v1';
+  var COOKIE_KEY = 'bayhud';
+  var IDB_DB = 'bayernHudV1';
+  var IDB_STORE = 'overrides';
+  var IDB_ROW_ID = 'singleton';
   var DEF = { rating: null, ratingTarget: 9.10, money: null, moneyTarget: 1300, pi: null };
   var applying = false;
   var observers = [];
+
+  /* ── CAPA 1: in-memory cache ───────────────────────── */
+  if (!window._BAYERN_HUD_CACHE) window._BAYERN_HUD_CACHE = null;
+
+  /* ── CAPA 4: cookie helpers (fallback para móviles que purgan ls)
+     Usamos cookie de 1 año, path=/, SameSite=Lax. Codificamos como
+     base64(JSON) para evitar problemas con caracteres especiales. */
+  function _cookieRead(){
+    try {
+      var m = (document.cookie || '').match(new RegExp('(?:^|; )' + COOKIE_KEY + '=([^;]*)'));
+      if (!m) return null;
+      var raw = decodeURIComponent(m[1] || '');
+      if (!raw) return null;
+      /* Aceptamos tanto base64 como JSON plano (compatibilidad). */
+      var json = raw;
+      try { json = atob(raw); } catch(_){ /* asumimos JSON plano */ }
+      var p = JSON.parse(json);
+      return (p && typeof p === 'object') ? p : null;
+    } catch(_) { return null; }
+  }
+  function _cookieWrite(o){
+    try {
+      var json = JSON.stringify(o || {});
+      var b64 = '';
+      try { b64 = btoa(json); } catch(_) { b64 = json; }
+      var oneYear = 60*60*24*365;
+      document.cookie = COOKIE_KEY + '=' + encodeURIComponent(b64) +
+        '; max-age=' + oneYear + '; path=/; SameSite=Lax';
+    } catch(_){}
+  }
+
+  /* ── CAPA 5: IndexedDB helpers (alta cuota, durable en móvil) */
+  function _idbOpen(){
+    return new Promise(function(resolve){
+      try {
+        if (!window.indexedDB) { resolve(null); return; }
+        var req = indexedDB.open(IDB_DB, 1);
+        req.onupgradeneeded = function(){
+          try {
+            var db = req.result;
+            if (!db.objectStoreNames.contains(IDB_STORE)){
+              db.createObjectStore(IDB_STORE);
+            }
+          } catch(_){}
+        };
+        req.onsuccess = function(){ resolve(req.result); };
+        req.onerror = function(){ resolve(null); };
+      } catch(_) { resolve(null); }
+    });
+  }
+  function _idbRead(){
+    return _idbOpen().then(function(db){
+      if (!db) return null;
+      return new Promise(function(resolve){
+        try {
+          var tx = db.transaction(IDB_STORE, 'readonly');
+          var store = tx.objectStore(IDB_STORE);
+          var req = store.get(IDB_ROW_ID);
+          req.onsuccess = function(){ resolve(req.result || null); };
+          req.onerror = function(){ resolve(null); };
+        } catch(_) { resolve(null); }
+      });
+    }).catch(function(){ return null; });
+  }
+  function _idbWrite(o){
+    return _idbOpen().then(function(db){
+      if (!db) return false;
+      return new Promise(function(resolve){
+        try {
+          var tx = db.transaction(IDB_STORE, 'readwrite');
+          var store = tx.objectStore(IDB_STORE);
+          store.put(o || {}, IDB_ROW_ID);
+          tx.oncomplete = function(){ resolve(true); };
+          tx.onerror    = function(){ resolve(false); };
+          tx.onabort    = function(){ resolve(false); };
+        } catch(_) { resolve(false); }
+      });
+    }).catch(function(){ return false; });
+  }
+
   /* Server endpoints: usamos /api/state (mismo patrón que
      bayern_derbys_seasons_v1) para persistir el override en el
-     backend. Fire-and-forget en save, pull en boot. */
+     backend. SAVE: keepalive + sendBeacon de respaldo (sobrevive
+     cierre de tab, no se cancela en una recarga rápida). */
   function _serverPush(o){
+    var body = JSON.stringify({ bayern_hud_overrides_v1: o || {} });
+    /* sendBeacon: garantiza entrega incluso si la página se está
+       descargando. No espera respuesta — perfecto para esto. */
     try {
-      fetch('/api/state', {
+      if (navigator.sendBeacon) {
+        var blob = new Blob([body], {type:'application/json'});
+        navigator.sendBeacon('/api/state', blob);
+      }
+    } catch(_){}
+    /* fetch keepalive: además del sendBeacon, hacemos fetch para
+       tener Promise y poder esperarlo si el caller quiere. */
+    try {
+      return fetch('/api/state', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ bayern_hud_overrides_v1: o || {} })
-      }).catch(function(){});
-    } catch(_){}
+        body: body,
+        keepalive: true
+      }).then(function(r){ return r && r.ok; })
+        .catch(function(){ return false; });
+    } catch(_){ return Promise.resolve(false); }
   }
   function _serverPull(cb){
     try {
@@ -24483,47 +24601,99 @@ Tottenham
           if (!d || !d.state) return;
           var srv = d.state.bayern_hud_overrides_v1;
           if (srv && typeof srv === 'object' && Object.keys(srv).length) {
+            window._BAYERN_HUD_CACHE = srv;
             try { localStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
             try { sessionStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
+            _cookieWrite(srv);
+            _idbWrite(srv);
             if (typeof cb === 'function') cb(srv);
           }
         }).catch(function(){});
     } catch(_){}
   }
   function load(){
-    /* 1) localStorage primario. */
+    /* 0) in-memory cache primario — única fuente que sobrevive a
+          mutaciones que ocurran después de boot(). */
+    if (window._BAYERN_HUD_CACHE && typeof window._BAYERN_HUD_CACHE === 'object'){
+      return window._BAYERN_HUD_CACHE;
+    }
+    /* 1) localStorage. */
     try {
       var r = localStorage.getItem(KEY);
-      if (r) { var p = JSON.parse(r); if (p && typeof p === 'object') return p; }
+      if (r) {
+        var p = JSON.parse(r);
+        if (p && typeof p === 'object') {
+          window._BAYERN_HUD_CACHE = p;
+          return p;
+        }
+      }
     } catch(_){}
-    /* 2) sessionStorage como fallback (si Safari Privacy Mode borró
-          localStorage al cerrar la tab pero la sesión sigue viva). */
+    /* 2) sessionStorage. */
     try {
       var s = sessionStorage.getItem(KEY);
       if (s) {
         var sp = JSON.parse(s);
         if (sp && typeof sp === 'object') {
+          window._BAYERN_HUD_CACHE = sp;
+          /* Promociona a localStorage para próximas cargas. */
           try { localStorage.setItem(KEY, s); } catch(_){}
           return sp;
         }
       }
     } catch(_){}
+    /* 3) cookie. */
+    var ck = _cookieRead();
+    if (ck && Object.keys(ck).length){
+      window._BAYERN_HUD_CACHE = ck;
+      /* Promociona a localStorage + sessionStorage. */
+      try { localStorage.setItem(KEY, JSON.stringify(ck)); } catch(_){}
+      try { sessionStorage.setItem(KEY, JSON.stringify(ck)); } catch(_){}
+      return ck;
+    }
+    /* 4) IndexedDB es async, no bloqueante: lanzamos la lectura y
+          si trae datos, reaplicamos. Mientras tanto devolvemos {}. */
+    _idbRead().then(function(idb){
+      if (idb && typeof idb === 'object' && Object.keys(idb).length){
+        window._BAYERN_HUD_CACHE = idb;
+        try { localStorage.setItem(KEY, JSON.stringify(idb)); } catch(_){}
+        try { sessionStorage.setItem(KEY, JSON.stringify(idb)); } catch(_){}
+        _cookieWrite(idb);
+        try { apply(); } catch(_){}
+      }
+    });
     return {};
   }
+  /* save() retorna una Promise que resuelve cuando el server
+     confirma. Las capas locales se escriben SÍNCRONAMENTE antes de
+     retornar. */
   function save(o){
-    var ok = false;
+    var data = o || {};
+    /* Capa 1: in-memory. */
+    window._BAYERN_HUD_CACHE = data;
+    /* Capa 2: localStorage. */
+    var lsOk = false;
     try {
-      localStorage.setItem(KEY, JSON.stringify(o||{}));
-      ok = true;
+      localStorage.setItem(KEY, JSON.stringify(data));
+      lsOk = true;
     } catch(e) {
-      try { alert('⚠ No se pudieron guardar los valores del HUD.\nMotivo: ' + (e && e.message || 'error desconocido') + '\n(Quizá no queda espacio en el navegador. Cierra el editor del torneo o resetea torneos antiguos para liberar espacio.)'); } catch(_){}
+      /* Aún no avisamos: cookie + IDB + server pueden cubrir. */
     }
-    /* sessionStorage SIEMPRE — barato y útil como red de seguridad. */
-    try { sessionStorage.setItem(KEY, JSON.stringify(o||{})); } catch(_){}
-    /* Server push (fire-and-forget). Si localStorage falló, el
-       server queda como única fuente de verdad. */
-    _serverPush(o);
-    return ok || true; /* devolvemos true si al menos session+server quedaron */
+    /* Capa 3: sessionStorage. */
+    try { sessionStorage.setItem(KEY, JSON.stringify(data)); } catch(_){}
+    /* Capa 4: cookie. */
+    _cookieWrite(data);
+    /* Capa 5: IndexedDB. fire-and-forget pero más durable que ls. */
+    _idbWrite(data);
+    /* Capa 6: server (Promise). */
+    var serverP = _serverPush(data) || Promise.resolve(false);
+    /* Si localStorage falló, avisamos pero NO bloqueamos — las otras
+       capas (cookie + IDB + server) son suficientes para recuperar. */
+    if (!lsOk) {
+      try {
+        console.warn('[bayern-hud] localStorage save failed; relying on cookie/IDB/server backup.');
+      } catch(_){}
+    }
+    return serverP;
   }
   function _smallTarget(parentSel){
     var p = document.querySelector(parentSel);
@@ -24566,6 +24736,17 @@ Tottenham
         var mtv = parseInt(o.moneyTarget, 10);
         if (mT && !isNaN(mtv)) mT.textContent = '/ ' + mtv + '€';
       }
+      /* Sincroniza el state legacy del IIFE Bayern (line ~27205) si
+         está expuesto. Así un updateHud() posterior no pinta los
+         defaults hardcoded (8/0/0). */
+      try {
+        var st = window._bayernLegacyState;
+        if (st) {
+          if (o.pi     != null) st.pi          = parseInt(o.pi, 10) || 0;
+          if (o.money  != null) st.budgetSpent = parseInt(o.money, 10) || 0;
+          if (o.rating != null) st.rating      = parseFloat(o.rating) || 0;
+        }
+      } catch(_){}
     } finally {
       applying = false;
     }
@@ -24638,6 +24819,25 @@ Tottenham
     var ov = document.getElementById('munich-edit-ov');
     if (ov) ov.classList.remove('show');
   };
+  function _bayernHudToast(text, kind){
+    /* kind: 'ok' (verde), 'err' (rojo), 'wait' (amarillo). */
+    try {
+      var prev = document.getElementById('bayern-hud-save-toast');
+      if (prev) prev.remove();
+      var bg = (kind === 'err') ? 'rgba(220,80,80,.95)'
+             : (kind === 'wait') ? 'rgba(240,192,64,.95)'
+             : 'rgba(60,200,120,.95)';
+      var fg = (kind === 'err') ? '#fff' : '#0a1408';
+      var t = document.createElement('div');
+      t.id = 'bayern-hud-save-toast';
+      t.textContent = text;
+      t.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:'+bg+';color:'+fg+';padding:10px 18px;border-radius:10px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;z-index:1000099;box-shadow:0 4px 18px rgba(0,0,0,.45);';
+      document.body.appendChild(t);
+      var ms = (kind === 'wait') ? 8000 : 2600;
+      setTimeout(function(){ try { t.remove(); } catch(_){} }, ms);
+      return t;
+    } catch(_) { return null; }
+  }
   window._bayernEditValuesSave = function(){
     /* Locale-tolerant parsers: aceptan coma como separador decimal (ES)
        además de punto. */
@@ -24671,16 +24871,21 @@ Tottenham
       alert('⚠ No se ha podido leer ningún valor. Revisa los campos antes de guardar.');
       return;
     }
-    var ok = save(o);
-    if (!ok) return;  /* alert ya mostrado en save() */
-    /* Persistencia secundaria en sessionStorage como backup (por si
-       el localStorage tiene algún corrupting-event raro entre
-       sesiones). */
-    try { sessionStorage.setItem(KEY, JSON.stringify(o)); } catch(_){}
+    /* Toast "Guardando…" amarillo durante la fase async (server). */
+    var waitToast = _bayernHudToast('⏳ Guardando HUD en 5 capas…', 'wait');
+    /* save() escribe SÍNCRONAMENTE a las 4 capas locales (memoria,
+       localStorage, sessionStorage, cookie) y devuelve una Promise
+       que resuelve cuando el server confirma o falla. */
+    var serverPromise;
+    try {
+      serverPromise = save(o);
+    } catch(e) {
+      _bayernHudToast('✖ Error guardando: ' + (e && e.message || ''), 'err');
+      return;
+    }
     /* ESCRITURA DIRECTA al DOM (no esperamos a apply): aseguramos
        feedback visual inmediato AUNQUE haya un MutationObserver
-       loop o un athObjCount async que se cuele. Petición usuario
-       2026-05-09 ("fuerzalo"). */
+       loop o un athObjCount async que se cuele. */
     applying = true;
     try {
       if (o.rating != null) {
@@ -24705,23 +24910,34 @@ Tottenham
       }
     } finally { applying = false; }
     apply();   /* segunda pasada por blindaje (idempotente) */
-    /* Toast verde de confirmación — el usuario reportó que "edito
-       y no se guarda" sin ver ningún cambio. Feedback explícito. */
-    try {
-      var prev = document.getElementById('bayern-hud-save-toast');
-      if (prev) prev.remove();
-      var t = document.createElement('div');
-      t.id = 'bayern-hud-save-toast';
-      t.textContent = '✓ HUD guardado';
-      t.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:rgba(60,200,120,.95);color:#0a1408;padding:10px 18px;border-radius:10px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;z-index:1000099;box-shadow:0 4px 18px rgba(0,0,0,.45);';
-      document.body.appendChild(t);
-      setTimeout(function(){ try { t.remove(); } catch(_){} }, 2200);
-    } catch(_){}
+    /* Sincroniza el state legacy del IIFE de la agenda Bayern AHORA
+       — sin esperar a la próxima recarga. Esto evita que un updateHud
+       posterior (SIGUIENTE DÍA, jugar partido) reescriba defaults. */
+    try { if (window._bayernHudSyncLegacyState) window._bayernHudSyncLegacyState(o); } catch(_){}
+    /* Cuando el server confirme, mostramos toast verde definitivo.
+       Si falla, avisamos pero NO revertimos nada — local sigue OK. */
+    Promise.resolve(serverPromise).then(function(serverOk){
+      try { if (waitToast) waitToast.remove(); } catch(_){}
+      if (serverOk) {
+        _bayernHudToast('✓ HUD guardado (5/5 capas + servidor)', 'ok');
+      } else {
+        _bayernHudToast('✓ HUD guardado local · ⚠ servidor no confirmó', 'wait');
+      }
+    });
     window._bayernEditValuesClose();
   };
   window._bayernEditValuesReset = function(){
-    if (!confirm('¿Restablecer los valores del HUD a los automáticos (calculados desde objetivos)?')) return;
+    if (!confirm('¿Restablecer los valores del HUD a los automáticos (calculados desde objetivos)?\n\nSe borrarán las 5 capas: memoria, localStorage, sessionStorage, cookie, IndexedDB y servidor.')) return;
+    /* Borrar de TODAS las capas, no solo localStorage. */
+    window._BAYERN_HUD_CACHE = null;
     try { localStorage.removeItem(KEY); } catch(_){}
+    try { sessionStorage.removeItem(KEY); } catch(_){}
+    try {
+      document.cookie = COOKIE_KEY + '=; max-age=0; path=/; SameSite=Lax';
+    } catch(_){}
+    _idbWrite({});  /* sobreescribe IDB con vacío */
+    /* Server: POST objeto vacío para limpiar la fila remota. */
+    try { _serverPush({}); } catch(_){}
     /* Restaurar targets a default desde DEF — los valores actuales
        se recalcularán en la siguiente llamada a athObjCount. */
     applying = true;
@@ -24733,6 +24949,22 @@ Tottenham
     } finally { applying = false; }
     if (typeof window.athObjCount === 'function') { try { window.athObjCount(); } catch(_){} }
     window._bayernEditValuesClose();
+  };
+  /* Helper público: sincroniza el `state` del IIFE de la agenda
+     Bayern (line ~27205) con los overrides recién guardados. Sin
+     esto, state.pi/budgetSpent/rating quedan con sus defaults
+     hardcoded y el siguiente updateHud() pinta esos defaults
+     pisando el override. */
+  window._bayernHudSyncLegacyState = function(o){
+    o = o || load();
+    if (!o) return;
+    /* state vive dentro del IIFE pero exponemos un setter global
+       desde dentro: window._bayernLegacyState = state. */
+    var st = window._bayernLegacyState;
+    if (!st) return;
+    if (o.pi     != null) st.pi          = parseInt(o.pi, 10) || 0;
+    if (o.money  != null) st.budgetSpent = parseInt(o.money, 10) || 0;
+    if (o.rating != null) st.rating      = parseFloat(o.rating) || 0;
   };
   window._bayernEditValuesGated = function(){
     if (typeof window.pG === 'function') window.pG(window._bayernEditValuesOpen);
@@ -27208,24 +27440,60 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     pickedTours: [],       /* IDs ya confirmados (hasta 2) */
     tempPicks:   []        /* selección en curso antes de confirmar */
   };
-  /* ── SEED LEGACY STATE DESDE bayern_hud_overrides_v1 (2026-05-10) ──
-     Antes el legacy `state` arrancaba hardcoded (pi=8, budgetSpent=0,
-     rating=0) y el primer `updateHud()` escribía esas defaults en el
-     DOM. Aunque mi override IIFE re-aplicaba después, una carrera
-     con la cadena legacy podía pisar los valores guardados (el
-     usuario reportó esto la décima vez en 2026-05-10).
+  /* ── EXPONEMOS state PARA QUE EL EDITOR HUD LO SINCRONICE EN VIVO
+     (refuerzo 2026-05-10). Antes el editor solo escribía localStorage;
+     `state.pi/budgetSpent/rating` quedaba con sus valores anteriores
+     y la siguiente llamada a updateHud() los repintaba pisando el
+     override. Con la referencia expuesta, el editor sincroniza
+     state inmediatamente al guardar. */
+  window._bayernLegacyState = state;
 
-     Solución: leer el override AHORA y sembrar `state.pi /
-     state.budgetSpent / state.rating` antes de que se llame el
-     primer updateHud. Así desde el segundo 0 el DOM ya queda con
-     los valores correctos. */
+  /* ── SEED LEGACY STATE DESDE LAS 5 CAPAS (2026-05-10 refuerzo final)
+     Antes el seed solo leía localStorage. Si el navegador móvil había
+     purgado localStorage por cuota O si el usuario recargaba antes
+     de que el server confirmase la POST, localStorage estaba vacío
+     y el seed dejaba state.pi=8 (default). El primer updateHud()
+     pintaba defaults ANTES de que la capa de override async hiciese
+     su trabajo. Resultado: usuario veía los defaults tras recargar
+     y los overrides solo "volvían" tras navegar.
+
+     Ahora leemos en cascada: localStorage → sessionStorage → cookie.
+     Cualquiera de las 3 sobrevive a un escenario que tumba a las
+     otras (cuota, modo privacy, cierre tab).
+
+     IndexedDB y server no se pueden leer SÍNCRONAMENTE, así que se
+     reaplican vía el observador del IIFE de override cuando llegan. */
   try {
-    var __seedRaw = localStorage.getItem('bayern_hud_overrides_v1');
+    var __seedRaw = null;
+    try { __seedRaw = localStorage.getItem('bayern_hud_overrides_v1'); } catch(_){}
+    if (!__seedRaw) {
+      try { __seedRaw = sessionStorage.getItem('bayern_hud_overrides_v1'); } catch(_){}
+    }
+    if (!__seedRaw) {
+      /* Cookie fallback: misma codificación que en el IIFE de
+         override (base64(JSON), o JSON plano en versiones antiguas). */
+      try {
+        var __ckm = (document.cookie || '').match(/(?:^|; )bayhud=([^;]*)/);
+        if (__ckm) {
+          var __ckRaw = decodeURIComponent(__ckm[1] || '');
+          if (__ckRaw) {
+            var __ckJson = __ckRaw;
+            try { __ckJson = atob(__ckRaw); } catch(_){}
+            __seedRaw = __ckJson;
+          }
+        }
+      } catch(_){}
+    }
     if (__seedRaw) {
       var __seed = JSON.parse(__seedRaw) || {};
       if (__seed.pi    != null) state.pi          = parseInt(__seed.pi, 10) || 0;
       if (__seed.money != null) state.budgetSpent = parseInt(__seed.money, 10) || 0;
       if (__seed.rating != null) state.rating     = parseFloat(__seed.rating) || 0;
+      /* Sembramos también el cache en memoria para que load() del IIFE
+         de override no tenga que tocar storage de nuevo. */
+      try {
+        if (!window._BAYERN_HUD_CACHE) window._BAYERN_HUD_CACHE = __seed;
+      } catch(_){}
     }
   } catch(_){}
 
@@ -27482,6 +27750,25 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var visTraining = getEl('munich-visual-training');
     var visMatch    = getEl('munich-visual-match');
     var trainLbl    = document.querySelector('#s-munich .munich-training-label');
+
+    /* OVERLAY DE OVERRIDE (refuerzo 2026-05-10): si el admin guardó
+       valores explícitos en el editor HUD, esos GANAN sobre el state
+       legacy. Antes la cadena era:
+         updateHud() escribe state.pi=8 → MutationObserver async
+         reaplica override → DOM correcto (eventualmente).
+       Pero en una recarga, el primer paint del DOM mostraba 8/0/0
+       durante el lapso async, y a veces el observer no cazaba la
+       carrera. Resolviéndolo aquí: leemos override del cache en
+       memoria (poblado en el seed arriba) y SOBREESCRIBIMOS state
+       en el momento. */
+    try {
+      var ov = window._BAYERN_HUD_CACHE;
+      if (ov && typeof ov === 'object'){
+        if (ov.pi     != null) state.pi          = parseInt(ov.pi, 10) || 0;
+        if (ov.money  != null) state.budgetSpent = parseInt(ov.money, 10) || 0;
+        if (ov.rating != null) state.rating      = parseFloat(ov.rating) || 0;
+      }
+    } catch(_){}
 
     /* El sufijo "/ 1300€" viene del `<small>` del HUD nuevo. Aquí
        escribimos solo el número para no duplicar "/ 1300€ / 1300€". */

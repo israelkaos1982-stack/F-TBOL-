@@ -9373,16 +9373,26 @@ window._showSimProgress = function(opts, onDone){
     cfg = cfg || {};
     cfg.id = id;
     cfg.updatedAt = new Date().toISOString();
+    /* Persistencia LOCAL (sync, siempre primero). Esto garantiza que
+       el sorteo no se pierde aunque la red falle o el server tarde. */
     try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
     /* Refresca cache sincrónico para `_tourMuInfoData` / `muTourInfo`. */
     window._TOUR_CACHE = window._TOUR_CACHE || {};
     window._TOUR_CACHE[id] = cfg;
+    /* Sync al servidor con HARD TIMEOUT de 8 s. Sin esto, en redes
+       lentas el `await fetch(...)` se quedaba colgado para siempre y
+       el editor mostraba "Sorteando y guardando…" sin avanzar (caso
+       reportado por el usuario 2026-05-09). */
     try {
+      var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var to = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(_){} }, 8000) : null;
       var res = await fetch('/api/kv/' + _key(id), {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ value: cfg })
+        body: JSON.stringify({ value: cfg }),
+        signal: ctl ? ctl.signal : undefined
       });
+      if (to) clearTimeout(to);
       var j = await res.json();
       return !!(j && j.ok);
     } catch(_) { return false; }
@@ -10900,13 +10910,20 @@ window._showSimProgress = function(opts, onDone){
         _open.cfg.teams = draw.teams;
         _setFeedback('Sorteando y guardando…');
         var ok = await window._tourSave(_open.id, _open.cfg);
+        /* En CUALQUIER caso (server OK o fallo de red) el sorteo está
+           ya guardado en localStorage por `_tourSave`. Renderizamos el
+           bracket y cerramos el editor aunque el server haya fallado —
+           el usuario no se queda colgado en "Sorteando y guardando…".
+           Si la red falló, mostramos un aviso pero seguimos avanzando. */
         if (ok) {
           _setFeedback('✅ Sorteo confirmado · '+draw.teams.length+' equipos', true);
-          window._tourRender(_open.id);
-          setTimeout(function(){ window._tourCloseEditor(); }, 900);
         } else {
-          _setFeedback('⚠ Guardado solo en local (sin red)', false);
+          _setFeedback('✅ Sorteo guardado en local (server sin red)', false);
         }
+        try { window._tourRender(_open.id); } catch(_){}
+        setTimeout(function(){
+          try { window._tourCloseEditor(); } catch(_){}
+        }, ok ? 900 : 1400);
       });
     }
     var reset = document.getElementById('tour-ed-reset');

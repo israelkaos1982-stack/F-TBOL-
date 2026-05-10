@@ -1298,7 +1298,7 @@
     } catch(_){}
   };
 
-  /* Patch one-shot de _ppResetFormStates: el reset interno de
+  /* Patch de _ppResetFormStates: el reset interno de
      showPrePartidoOverlay borra _ppDurationMin a null al abrir cada
      previa. Para Superliga (HvH) la duración por defecto debe ser 10 min
      en lugar de los 15:45 estándar de HvH. Esquema:
@@ -1307,10 +1307,19 @@
        3. nuestro patch lee _slPendingDur y vuelve a poner _ppDurationMin
        4. _buildItems / _renderPreviaMeta leen _ppDurationMin = 10
      El usuario sigue pudiendo editar la duración con ✏️ — al cambiarla
-     re-renderiza con el nuevo valor. */
-  (function(){
+     re-renderiza con el nuevo valor.
+
+     2026-05-10: el bundle se carga DESPUÉS de este script (orden:
+     misc_body_1 → misc_body_2 → bundle.js), así que `_ppResetFormStates`
+     no está definido cuando este IIFE corre. Antes el patch se
+     auto-skipea silenciosamente y _slPendingDur nunca se transfería —
+     duración Superliga salía "8 min" (HvIA) en lugar de "10 min" (HvH).
+     Ahora reintentamos cada 200 ms hasta 50 veces (10 s) hasta que el
+     bundle defina la función. */
+  function _slPatchPpReset(){
     var orig = window._ppResetFormStates;
-    if(typeof orig !== 'function' || orig._slPatched) return;
+    if(typeof orig !== 'function') return false;
+    if(orig._slPatched) return true;
     window._ppResetFormStates = function(){
       orig.apply(this, arguments);
       if(window._slPendingDur != null){
@@ -1319,7 +1328,14 @@
       }
     };
     window._ppResetFormStates._slPatched = true;
-  })();
+    return true;
+  }
+  if(!_slPatchPpReset()){
+    var _slPpT = 0, _slPpI = setInterval(function(){
+      _slPpT++;
+      if(_slPatchPpReset() || _slPpT > 50) clearInterval(_slPpI);
+    }, 200);
+  }
 
   /* Abre el flujo Previa → gmOpen para un partido HvH de Superliga. */
   window._openSuperligaMatch = function(j, home, away){

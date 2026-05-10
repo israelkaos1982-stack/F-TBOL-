@@ -14886,6 +14886,44 @@ window._showSimProgress = function(opts, onDone){
     /* Default: igual que dominio (esHumano). Conservador. */
     return _isLigaHuman(name);
   };
+  /* ── Patch `esHumano` para reconocer también equipos con humanIcon
+     o flag _LIGA_HUMAN_FLAGS (petición usuario 2026-05-10: "Bayern"
+     forma corta y "PSG" deben detectarse como humanos). El bundle
+     legacy usa esHumano() en `_renderPreviaMeta` para decidir HvH
+     y mostrar la duración (10 min HvH / 8 min HvIA / 45 s IAIA). Sin
+     este patch, Superliga PSG vs Bayern salía como HvIA → "8 min".
+     Tras el patch, esHumano('Bayern')/esHumano('PSG') devuelve true
+     vía humanIcon → HvH → "10 min". ────────────────────────────── */
+  function _patchEsHumano(){
+    var orig = window.esHumano;
+    if(typeof orig !== 'function' || orig._humanIconPatched) return false;
+    window.esHumano = function(t){
+      if(!t) return false;
+      try { if(orig.call(this, t)) return true; } catch(_){}
+      /* Cualquier team con humanIcon asignado pasa a humano global.
+         Cubre formas cortas ("Bayern", "PSG") y equipos secundarios
+         (Manchester United, Dortmund, City, RB Leipzig). PSG nunca
+         aparece en Liga doméstica/Copa, así que marcar PSG como
+         humano global no afecta esos flujos — solo arregla los
+         contextos eur/superliga donde SÍ aparece. */
+      if(_hasHumanIcon(t)) return true;
+      return false;
+    };
+    window.esHumano._humanIconPatched = true;
+    /* Mantener referencia a la versión original por si algún flujo
+       quiere humanidad estricta de Liga (ahora mismo no la hay). */
+    window._esHumanoStrict = orig;
+    return true;
+  }
+  /* esHumano puede definirse después de este script (en el bundle).
+     Reintentamos cada 200ms hasta que esté disponible y hayamos
+     parcheado. Tope 50 intentos = 10s. */
+  if(!_patchEsHumano()){
+    var _phT = 0, _phI = setInterval(function(){
+      _phT++;
+      if(_patchEsHumano() || _phT > 50) clearInterval(_phI);
+    }, 200);
+  }
 })();
 </script>
 

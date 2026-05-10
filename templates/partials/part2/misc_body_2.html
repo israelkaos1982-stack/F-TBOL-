@@ -27602,6 +27602,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /* Wrapper donde se reubica FINALIZAR (entre acta y Menu LIVE). */
 .gm-finalizar-slot{padding:6px 8px 4px;}
+
+/* ═══════════════════════════════════════════════════════════════
+   PREVIA · highlight del cuadro de estadio + clima
+   ───────────────────────────────────────────────────────────────
+   Foto 1/2 del usuario: en partidos donde el rival NO necesita
+   alias (porque es equipo real de eFootball), la primera acción
+   visible debe ser elegir / confirmar el estadio + clima. El
+   `#pp-env` recibe la clase `.is-pp-env-hint` cuando se abre la
+   previa, con borde amarillo pulsante (igual estilo que el
+   resalte de AÑADIR LESIONADOS).
+   ═══════════════════════════════════════════════════════════════ */
+#pp-env.is-pp-env-hint{
+  border:2px solid #f0c820 !important;
+  box-shadow:0 0 24px rgba(240,200,32,.6), inset 0 0 14px rgba(240,200,32,.08) !important;
+  animation:ppEnvHintPulse 1.6s ease-in-out infinite;
+  position:relative;
+}
+#pp-env.is-pp-env-hint::after{
+  content:'👆 ELIGE ESTADIO Y CLIMA';
+  position:absolute;top:-12px;right:8px;
+  font-family:'Bebas Neue',sans-serif;font-size:10px;letter-spacing:1.8px;
+  color:#ffd848;text-shadow:0 0 8px rgba(240,200,32,.7);
+  background:rgba(0,0,0,.78);
+  border:1px solid rgba(240,200,32,.65);
+  border-radius:5px;padding:2px 8px;white-space:nowrap;
+  pointer-events:none;
+  animation:ppEnvHintLabelPulse 1.6s ease-in-out infinite;
+}
+@keyframes ppEnvHintPulse{
+  0%,100%{box-shadow:0 0 20px rgba(240,200,32,.45), inset 0 0 12px rgba(240,200,32,.06);}
+  50%   {box-shadow:0 0 36px rgba(240,200,32,.85), inset 0 0 18px rgba(240,200,32,.16);}
+}
+@keyframes ppEnvHintLabelPulse{
+  0%,100%{opacity:.85;transform:translateY(0);}
+  50%   {opacity:1;transform:translateY(-3px);}
+}
 </style>
 <script>
 /* ════════════════════════════════════════════════════════════════
@@ -28069,6 +28105,47 @@ document.addEventListener('DOMContentLoaded', function() {
     try { _gmWireActaWatcher(); } catch(_){}
     try { _hookOverlayButtons(); } catch(_){}
   }
+
+  /* ── PREVIA · resaltar el estadio cuando el rival NO necesita
+        alias (es equipo real de eFootball). Foto 1/2 del usuario. ── */
+  function _ppHighlightStadium(){
+    var ov = document.getElementById('prepartido-overlay');
+    var env = document.getElementById('pp-env');
+    if (!ov || !env) return;
+    /* Solo cuando la previa está abierta. */
+    var open = ov.classList.contains('show');
+    if (!open){ env.classList.remove('is-pp-env-hint'); return; }
+    /* Detectar si algún equipo IA NECESITA alias.
+       Si EXISTE algún alias ya seteado (texto "🎮 ..." dentro del
+       pp-vs) significa que el rival ES de Resto de Ligas y ya
+       tiene alias asignado → no es "real eFootball". En ese caso
+       NO resaltamos el estadio (el siguiente paso visual es la
+       configuración del partido). En cambio, si ningún equipo
+       muestra alias → o bien son humanos vs humanos, o bien el
+       rival ES eFootball real → resaltamos el estadio. */
+    var vs = document.getElementById('pp-vs');
+    var hasAlias = false;
+    if (vs){
+      /* Buscar el span "🎮" en cualquier descendant text. */
+      var spans = vs.querySelectorAll('div, span');
+      for (var i = 0; i < spans.length; i++){
+        var t = (spans[i].textContent || '');
+        if (t.indexOf('🎮') !== -1 && t.length < 60){ hasAlias = true; break; }
+      }
+    }
+    /* Resaltado: cuando NO hay alias visible (equipo real eFootball
+       o HvH). */
+    if (!hasAlias) env.classList.add('is-pp-env-hint');
+    else env.classList.remove('is-pp-env-hint');
+  }
+  setInterval(_ppHighlightStadium, 400);
+  /* Quitar el highlight cuando el usuario interactúa con el #pp-env
+     (cualquier click dentro del cuadro). */
+  document.addEventListener('click', function(e){
+    var env = document.getElementById('pp-env');
+    if (!env) return;
+    if (env.contains(e.target)) env.classList.remove('is-pp-env-hint');
+  }, true);
 
   /* ── Boot ───────────────────────────────────────────────────────── */
   function _boot(){

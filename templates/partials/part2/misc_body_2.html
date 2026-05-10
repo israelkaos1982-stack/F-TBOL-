@@ -8228,15 +8228,13 @@
       }
     };
     if (finalOv) {
-      finalOv.classList.add('show');
-      /* Antes 3000 ms — petición usuario 2026-05-02: la espera era
-         "horrible" durante la transición a MVP/post. Reducido a
-         900 ms — sigue mostrando el overlay de FIN DEL PARTIDO con
-         marcador, pero no bloquea el flujo. */
-      setTimeout(function() {
-        finalOv.classList.remove('show');
-        _next();
-      }, 900);
+      /* Petición usuario 2026-05-09: eliminar el overlay "FINAL" que
+         tapaba la pantalla durante 900 ms entre el último evento y
+         el flujo MVP/post. Defensiva: nos aseguramos de que no quede
+         visible (por si una sesión cargada antes del fix lo dejó),
+         y saltamos directo a `_next()` sin esperar. */
+      finalOv.classList.remove('show');
+      _next();
     } else {
       _next();
     }

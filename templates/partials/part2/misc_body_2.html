@@ -1356,7 +1356,7 @@
      (overlay de sanciones) que ya tiene su propio botón compartir
      WhatsApp. ════════════════════════════════════════════════════ */
   (function(){
-    var pointer = null;
+    var comboBox = null;     /* div sintético con el borde dorado */
     var steps = null;
     var idx = -1;
     var clickHandler = null;
@@ -1364,77 +1364,69 @@
     var rafId = 0;
     var active = false;
 
-    function _gMakePointer(){
-      if(pointer) return pointer;
-      pointer = document.createElement('div');
-      pointer.className = 'pp-guide-pointer';
-      pointer.textContent = '👉';
-      document.body.appendChild(pointer);
-      return pointer;
+    function _gMakeComboBox(){
+      if(comboBox && comboBox.parentNode === document.body) return comboBox;
+      comboBox = document.createElement('div');
+      comboBox.className = 'pp-guide-combo';
+      document.body.appendChild(comboBox);
+      return comboBox;
     }
-    function _gKillPointer(){
-      try { if(pointer && pointer.parentNode) pointer.parentNode.removeChild(pointer); } catch(_){}
-      pointer = null;
+    function _gKillComboBox(){
+      try { if(comboBox && comboBox.parentNode) comboBox.parentNode.removeChild(comboBox); } catch(_){}
+      comboBox = null;
     }
-    function _gPositionPointer(target){
-      if(!target) return;
-      var p = _gMakePointer();
-      var r = target.getBoundingClientRect();
-      var vw = window.innerWidth || document.documentElement.clientWidth;
-      var vh = window.innerHeight || document.documentElement.clientHeight;
-      var pointerSize = 38;   /* aprox bbox de la manita 36px font-size */
-      var gap = 6;
-      /* Decisión de lado: PREFERIR derecha del target (que el dedo
-         apunte a la izquierda hacia el target — convención más
-         natural). Si no cabe a la derecha (target cerca del borde),
-         caemos a la izquierda. ──── REGLA CLAVE ────────────────
-         · Pointer a la DERECHA de target → emoji 👈 (apunta izquierda
-           hacia target), bounce hacia LA IZQUIERDA (translateX neg).
-         · Pointer a la IZQUIERDA de target → emoji 👉 (apunta derecha
-           hacia target), bounce hacia LA DERECHA (translateX pos). */
-      var spaceRight = vw - r.right;
-      var spaceLeft  = r.left;
-      var useRight = spaceRight >= (pointerSize + gap + 4);
-      if(!useRight && spaceLeft >= (pointerSize + gap + 4)){
-        useRight = false;  /* explicit: usar izquierda */
-      } else if(!useRight){
-        useRight = (spaceRight >= spaceLeft);  /* el más amplio */
+    function _gReResolve(step){
+      /* Re-resolver targets desconectados via selector CSS. */
+      var targets = step.targets || [step.target];
+      var selectors = step.selectors || [step.selector];
+      for(var i = 0; i < targets.length; i++){
+        var t = targets[i];
+        if(t && !document.contains(t) && selectors[i]){
+          var fresh = document.querySelector(selectors[i]);
+          if(fresh) targets[i] = fresh;
+        }
       }
-      var leftPx;
-      if(useRight){
-        p.textContent = '👈';
-        p.classList.add('flip');
-        leftPx = r.right + gap;
-      } else {
-        p.textContent = '👉';
-        p.classList.remove('flip');
-        leftPx = r.left - pointerSize - gap;
+      step.targets = targets;
+      if(targets.length === 1) step.target = targets[0];
+      return targets;
+    }
+    function _gUnionRect(targets){
+      if(!targets || !targets.length) return null;
+      var first = null;
+      for(var i = 0; i < targets.length; i++){
+        if(targets[i] && document.contains(targets[i])){ first = targets[i]; break; }
       }
-      /* Clamp horizontal a viewport. */
-      leftPx = Math.max(2, Math.min(leftPx, vw - pointerSize - 2));
-      /* Vertical: centrado en target, clamp a viewport. */
-      var topPx = r.top + (r.height/2) - (pointerSize/2);
-      topPx = Math.max(8, Math.min(topPx, vh - pointerSize - 8));
-      p.style.left = leftPx + 'px';
-      p.style.top  = topPx + 'px';
-      p.style.display = 'block';
+      if(!first) return null;
+      var r0 = first.getBoundingClientRect();
+      var l = r0.left, t = r0.top, r = r0.right, b = r0.bottom;
+      for(var j = 0; j < targets.length; j++){
+        var tg = targets[j];
+        if(!tg || !document.contains(tg)) continue;
+        var rr = tg.getBoundingClientRect();
+        if(rr.left   < l) l = rr.left;
+        if(rr.top    < t) t = rr.top;
+        if(rr.right  > r) r = rr.right;
+        if(rr.bottom > b) b = rr.bottom;
+      }
+      return { left:l, top:t, right:r, bottom:b, width:r-l, height:b-t };
+    }
+    function _gPositionCombo(step){
+      _gReResolve(step);
+      var pad = step.boxPad || 4;
+      var u = _gUnionRect(step.targets);
+      if(!u) return;
+      var box = _gMakeComboBox();
+      box.style.left   = (u.left   - pad) + 'px';
+      box.style.top    = (u.top    - pad) + 'px';
+      box.style.width  = (u.width  + pad*2) + 'px';
+      box.style.height = (u.height + pad*2) + 'px';
+      box.style.display = 'block';
     }
     function _gFollowTarget(){
       if(!active) return;
       var step = steps && steps[idx];
       if(!step) return;
-      /* Re-resolver target si fue desconectado del DOM (re-render). */
-      if(step.target && !document.contains(step.target) && step.selector){
-        var fresh = document.querySelector(step.selector);
-        if(fresh){
-          /* Mover la clase al elemento nuevo. */
-          try { step.target.classList.remove('pp-guide-active'); } catch(_){}
-          step.target = fresh;
-          step.click = fresh;
-          fresh.classList.add('pp-guide-active');
-        }
-      }
-      if(step.target) _gPositionPointer(step.target);
+      _gPositionCombo(step);
       rafId = requestAnimationFrame(_gFollowTarget);
     }
 
@@ -1446,89 +1438,77 @@
       var aliasBtn = document.querySelector('#pp-vs .copa-alias-help');
       if(aliasBtn){
         arr.push({
-          target: aliasBtn,
-          click: aliasBtn,
-          selector: '#pp-vs .copa-alias-help',
-          isAlias: true
+          targets: [aliasBtn],
+          selectors: ['#pp-vs .copa-alias-help'],
+          isAlias: true,
+          boxPad: 8
         });
       }
-      /* 2. Estadio — primera línea de #pp-env. */
-      var envEl = document.getElementById('pp-env');
-      if(envEl){
-        var stadiumLine = envEl.querySelector('.pp-env-line');
-        if(stadiumLine){
-          arr.push({ target: stadiumLine, click: stadiumLine,
-                     selector: '#pp-env .pp-env-line', soft:true });
-        }
+      /* 2. Estadio + Clima COMBINADOS en una sola caja (petición
+         usuario 2026-05-10: "lo vamos a dejar en un borde llamativo
+         para ambos"). Si el clima no está rendered todavía, solo
+         metemos el estadio. */
+      var stadiumLine = document.querySelector('#pp-env .pp-env-line');
+      var meteoLine   = document.getElementById('pp-env-meteo');
+      var stadeStep = [];
+      var stadeSel  = [];
+      if(stadiumLine){ stadeStep.push(stadiumLine); stadeSel.push('#pp-env .pp-env-line'); }
+      if(meteoLine)  { stadeStep.push(meteoLine);   stadeSel.push('#pp-env-meteo'); }
+      if(stadeStep.length){
+        arr.push({ targets: stadeStep, selectors: stadeSel, boxPad: 4 });
       }
-      /* 3. Clima (Verano · Soleado) — #pp-env-meteo. */
-      var meteoLine = document.getElementById('pp-env-meteo');
-      if(meteoLine){
-        arr.push({ target: meteoLine, click: meteoLine,
-                   selector: '#pp-env-meteo', soft:true });
-      }
-      /* 4. Twitch — botón con clase pp-twitch-btn. */
+      /* 3. Twitch — botón pp-twitch-btn. Avance por poll de
+         _ppSelectedTwitch (el dropdown no dispara click sobre el
+         botón al elegir canal). */
       var twitchBtn = document.getElementById('pp-twitch-btn');
       if(twitchBtn){
-        arr.push({ target: twitchBtn, click: twitchBtn,
-                   selector: '#pp-twitch-btn', isTwitch: true });
+        arr.push({ targets:[twitchBtn], selectors:['#pp-twitch-btn'],
+                   isTwitch:true, boxPad:4 });
       }
-      /* 5. Prórroga — solo en eliminatorias single-leg. */
+      /* 4. Prórroga + Penaltis COMBINADOS (solo si existen — copa-
+         engine los inyecta en eliminatorias single-leg). */
       var prorrogaRow = document.querySelector('#pp-list [data-ppid="prorroga"]');
-      if(prorrogaRow){
-        arr.push({ target: prorrogaRow, click: prorrogaRow,
-                   selector: '#pp-list [data-ppid="prorroga"]' });
-      }
-      /* 6. Penaltis. */
       var penaltisRow = document.querySelector('#pp-list [data-ppid="penaltis"]');
-      if(penaltisRow){
-        arr.push({ target: penaltisRow, click: penaltisRow,
-                   selector: '#pp-list [data-ppid="penaltis"]' });
+      if(prorrogaRow || penaltisRow){
+        var pp = [], ppSel = [];
+        if(prorrogaRow){ pp.push(prorrogaRow); ppSel.push('#pp-list [data-ppid="prorroga"]'); }
+        if(penaltisRow){ pp.push(penaltisRow); ppSel.push('#pp-list [data-ppid="penaltis"]'); }
+        arr.push({ targets: pp, selectors: ppSel, boxPad: 4 });
       }
-      /* 7. Balón. */
+      /* 5. Balón. */
       var ballRow = document.querySelector('#pp-list [data-ppid="balon"]');
       if(ballRow){
-        arr.push({ target: ballRow, click: ballRow,
-                   selector: '#pp-list [data-ppid="balon"]' });
-      }
-      /* 8. CONFIRMAR CONFIGURACIÓN. */
-      var confirmBtn = document.getElementById('pp-confirm-btn');
-      if(confirmBtn){
-        arr.push({ target: confirmBtn, click: confirmBtn,
-                   selector: '#pp-confirm-btn' });
+        arr.push({ targets:[ballRow], selectors:['#pp-list [data-ppid="balon"]'],
+                   boxPad: 4 });
       }
       return arr;
     }
 
     function _gHighlight(step){
-      if(!step || !step.target) return;
-      step.target.classList.add('pp-guide-active');
-      /* Asegurar que el target es visible — si está fuera del viewport
-         lo desplazamos al centro. Los elementos del overlay no scrollean
-         con la página principal, pero pp-list (Balón/Prórroga/Penaltis)
-         puede caer bajo el fold en pantallas pequeñas. */
+      if(!step) return;
+      _gReResolve(step);
+      /* scroll en el primer target si está fuera de viewport. */
       try {
-        var r0 = step.target.getBoundingClientRect();
-        var vh = window.innerHeight || document.documentElement.clientHeight;
-        if(r0.bottom > vh - 40 || r0.top < 40){
-          /* Scroll INSTANTÁNEO — el usuario quiere todo "al momento". */
-          step.target.scrollIntoView({ block: 'center', behavior: 'auto' });
+        var first = (step.targets||[])[0];
+        if(first){
+          var r0 = first.getBoundingClientRect();
+          var vh = window.innerHeight || document.documentElement.clientHeight;
+          if(r0.bottom > vh - 40 || r0.top < 40){
+            first.scrollIntoView({ block: 'center', behavior: 'auto' });
+          }
         }
       } catch(_){}
-      _gPositionPointer(step.target);
+      _gPositionCombo(step);
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(_gFollowTarget);
     }
-    function _gUnhighlight(step){
-      if(!step || !step.target) return;
-      step.target.classList.remove('pp-guide-active');
+    function _gUnhighlight(){
       cancelAnimationFrame(rafId);
       rafId = 0;
-      _gKillPointer();
+      _gKillComboBox();
     }
 
     function _gAdvance(){
-      /* Limpiar el paso actual. */
       if(idx >= 0 && steps && steps[idx]){
         var prev = steps[idx];
         if(clickHandler){
@@ -1540,11 +1520,14 @@
           clearInterval(prev._twitchPoll);
           prev._twitchPoll = null;
         }
-        _gUnhighlight(prev);
-        /* Caso especial alias: tras cerrar el overlay, eliminar el ❓
-           del DOM por completo (regla del usuario). */
+        _gUnhighlight();
         if(prev.isAlias){
-          _gWaitAliasCloseThenRemove(prev.target);
+          /* Tras cerrar overlay del alias, eliminar el ❓ por completo. */
+          try {
+            (prev.targets||[]).forEach(function(t){
+              if(t && t.parentNode) t.parentNode.removeChild(t);
+            });
+          } catch(_){}
         }
       }
       idx++;
@@ -1563,46 +1546,37 @@
             step._twitchPoll = null;
             setTimeout(_gAdvance, 0);
           }
-        }, 80);
+        }, 60);
         return;
       }
-      /* Listener a nivel DOCUMENT con detección GEOMÉTRICA. Más robusto
-         que listeners en el elemento porque:
-         (a) sobrevive a re-renders del DOM (`_renderPreviaMeta` llama
-             innerHTML= en #pp-env tras cada toggle, destruyendo
-             listeners en .pp-env-line / #pp-env-meteo).
-         (b) escucha pointerdown + touchstart para responder a taps
-             fast antes de que el click cumpla.
-         (c) detecta tap por coordenadas dentro del bounding box +
-             padding 18 px → tap zone más generoso (mejor para móvil
-             y elementos pequeños como el ❓ de 24 px). */
+      /* Listener DOCUMENT con detección geométrica — tap en cualquier
+         target del step (+ padding 18 px) avanza. */
       clickHandler = function(ev){
-        if(!step.target || !document.contains(step.target)){
-          /* Re-resolver via selector si está disponible (target detached). */
-          if(step.selector){
-            var fresh = document.querySelector(step.selector);
-            if(fresh) step.target = fresh;
-          }
-        }
-        var t = step.target;
-        if(!t || !document.contains(t)) return;
-        var r = t.getBoundingClientRect();
-        var pad = 18;
+        _gReResolve(step);
         var x = ev.clientX, y = ev.clientY;
-        if(typeof x !== 'number' && ev.touches && ev.touches[0]){
+        if((x == null || y == null) && ev.touches && ev.touches[0]){
           x = ev.touches[0].clientX; y = ev.touches[0].clientY;
         }
         if(x == null || y == null) return;
-        if(x < r.left - pad || x > r.right + pad ||
-           y < r.top  - pad || y > r.bottom + pad) return;
-        /* Hit. Remove all listeners y avanza. */
+        var pad = 18;
+        var hit = false;
+        var targets = step.targets || [];
+        for(var i = 0; i < targets.length; i++){
+          var t = targets[i];
+          if(!t || !document.contains(t)) continue;
+          var r = t.getBoundingClientRect();
+          if(x >= r.left - pad && x <= r.right + pad &&
+             y >= r.top  - pad && y <= r.bottom + pad){
+            hit = true; break;
+          }
+        }
+        if(!hit) return;
         try { document.removeEventListener('click', clickHandler, true); } catch(_){}
         try { document.removeEventListener('pointerdown', clickHandler, true); } catch(_){}
         try { document.removeEventListener('touchstart', clickHandler, true); } catch(_){}
         if(step.isAlias){
           _gWaitAliasCloseThenAdvance();
         } else {
-          /* Avance INMEDIATO. */
           setTimeout(_gAdvance, 0);
         }
       };
@@ -1612,56 +1586,47 @@
     }
 
     function _gWaitAliasCloseThenAdvance(){
-      /* Cuando el overlay #_copaAliasOv vuelve a display:none, avanzamos
-         al siguiente paso. */
+      /* Cuando el overlay #_copaAliasOv vuelve a display:none, avanzamos. */
       var ov = document.getElementById('_copaAliasOv');
-      if(!ov){ setTimeout(_gAdvance, 800); return; }
+      if(!ov){ setTimeout(_gAdvance, 200); return; }
       try { if(aliasObserver) aliasObserver.disconnect(); } catch(_){}
       aliasObserver = new MutationObserver(function(){
         if(ov.style.display === 'none'){
           try { aliasObserver.disconnect(); } catch(_){}
           aliasObserver = null;
-          setTimeout(_gAdvance, 200);
+          /* INMEDIATO: el usuario pidió "al darle a cerrar vamos
+             directamente a estadio y clima". */
+          setTimeout(_gAdvance, 0);
         }
       });
       aliasObserver.observe(ov, { attributes:true, attributeFilter:['style'] });
     }
-    function _gWaitAliasCloseThenRemove(aliasBtn){
-      /* Tras avanzar (post-cierre del overlay), eliminamos el botón ❓
-         para que no vuelva a verse. */
-      try {
-        var parent = aliasBtn && aliasBtn.parentNode;
-        if(parent) parent.removeChild(aliasBtn);
-      } catch(_){}
-    }
 
     function _gStart(){
       if(active) _gStop();
-      /* AL INSTANTE — el usuario reportó "tarda muchísimo en salir".
-         Política:
-         (a) Esperamos hasta 6 frames (≈100 ms a 60 Hz) a que el ❓
-             del alias aparezca (lo inyecta copa-engine vía
-             MutationObserver tras el render del bundle).
-         (b) En cuanto aparece (o se cumple el tope), arrancamos.
-         (c) Si pp-list / pp-env aún no están listos, retry rápido
-             cada 60 ms hasta 18 intentos. */
+      /* Tiempo MÍNIMO. Esperamos solo si:
+         (a) pp-env-meteo aún no rendered, o
+         (b) #pp-list aún no rendered con balón, o
+         (c) el alias ❓ no apareció todavía (copa-engine MutationObserver
+             tarda ~1-3 frames). Tope 4 × 40 ms = 160 ms — corto pero
+             suficiente para que copa-engine procese. */
       var attempts = 0;
       function tryStart(){
-        var aliasYet = !!document.querySelector('#pp-vs .copa-alias-help');
         var envReady = !!document.getElementById('pp-env-meteo');
         var listReady = !!document.querySelector('#pp-list [data-ppid="balon"]');
+        var aliasReady = !!document.querySelector('#pp-vs .copa-alias-help');
         var built = _gBuildSteps();
-        /* Esperar un poco al alias (hasta 6 intentos × 60 ms = 360 ms)
-           si el resto está listo. Tras eso, arrancar sin alias. */
-        var shouldWaitForAlias = !aliasYet && attempts < 6;
-        if((!envReady || !listReady) && attempts < 18){
+        var coreReady = envReady && listReady;
+        if(!coreReady && attempts < 18){
           attempts++;
-          setTimeout(tryStart, 60);
+          setTimeout(tryStart, 40);
           return;
         }
-        if(shouldWaitForAlias && envReady && listReady){
+        /* Si core está listo pero alias podría aparecer todavía:
+           esperamos hasta 4 intentos más (160 ms). */
+        if(coreReady && !aliasReady && attempts < 4){
           attempts++;
-          setTimeout(tryStart, 60);
+          setTimeout(tryStart, 40);
           return;
         }
         if(built && built.length){
@@ -1686,26 +1651,17 @@
           clearInterval(s._twitchPoll);
           s._twitchPoll = null;
         }
-        _gUnhighlight(s);
       }
       try { if(aliasObserver) aliasObserver.disconnect(); } catch(_){}
       aliasObserver = null;
       cancelAnimationFrame(rafId); rafId = 0;
-      _gKillPointer();
+      _gKillComboBox();
       steps = null; idx = -1; clickHandler = null;
     }
 
     window._ppGuide = { start: _gStart, stop: _gStop };
 
-    /* Hook a showPrePartidoOverlay: SIEMPRE lanzamos el guide. La
-       previa SOLO se abre para partidos con humano implicado (HvH /
-       HvIA) — los IA-vs-IA van por iaSimLive directamente sin previa.
-       No hay riesgo de mostrar el guide para partidos IA-only.
-       Antes filtrábamos con esHumano(home||away) pero la detección
-       fallaba para teams con humanIcon todavía no procesado, dejando
-       sin tutorial a UCL/UEL/UECL/Recopa con humanos secundarios
-       (PSG, Bayern, etc.). El usuario reportó "tiene que emerger en
-       todas las cards Humanos vs Humano e IA vs Humano" — 2026-05-10. */
+    /* Hook a showPrePartidoOverlay: SIEMPRE lanzamos el guide. */
     function _wrapPpForGuide(){
       var orig = window.showPrePartidoOverlay;
       if(typeof orig !== 'function' || orig._guidePatched) return false;
@@ -1814,49 +1770,28 @@
 <div class="sec-hdr"><span class="sec-emoji">📈</span><h2>Superliga · Estadísticas</h2></div>
 <style>
 /* ── PREVIA — modo TUTORIAL guiado (petición usuario 2026-05-10).
-   Glow dorado pulsante + manita 👉 animada al lado del elemento
-   activo. La manita es position:fixed y sigue el target (vía rAF).
-   z-index alto para sobreponerse al overlay (10010). Se ignora
-   pointer-events para no bloquear el click. ─────────────────── */
-.pp-guide-active{
-  position:relative;
-  z-index:10011 !important;
-  outline:3px solid #ffd54a !important;
-  outline-offset:4px;
-  border-radius:8px;
-  box-shadow:0 0 24px rgba(255,213,74,.95),0 0 48px rgba(255,213,74,.55) !important;
+   Borde dorado pulsante alrededor del elemento o GRUPO de elementos
+   activos. Sin manita/dedo (regla del usuario: "con marcado de los
+   bordes es suficiente"). El `pp-guide-combo` es un div sintético
+   `position:fixed` que envuelve el bounding box union de los
+   targets (un step puede tener 1 o varios: estadio+clima,
+   prórroga+penaltis). ──────────────────────────────────────── */
+.pp-guide-combo{
+  position:fixed;
+  pointer-events:none;
+  border:3px solid #ffd54a;
+  border-radius:12px;
+  z-index:10011;
+  background:transparent;
+  box-shadow:0 0 22px rgba(255,213,74,.85),0 0 44px rgba(255,213,74,.45);
   animation:ppGuidePulse 1.2s ease-in-out infinite;
-  transition:outline-color .2s ease, box-shadow .2s ease;
+  will-change:left,top,width,height;
 }
 @keyframes ppGuidePulse{
-  0%,100%{box-shadow:0 0 22px rgba(255,213,74,.85),0 0 44px rgba(255,213,74,.45);}
-  50%    {box-shadow:0 0 38px rgba(255,213,74,1.0),0 0 76px rgba(255,213,74,.70),0 0 110px rgba(255,213,74,.30);}
-}
-.pp-guide-pointer{
-  position:fixed;
-  font-size:38px;
-  z-index:10012;
-  pointer-events:none;
-  filter:drop-shadow(0 0 12px rgba(255,213,74,1)) drop-shadow(0 0 24px rgba(255,213,74,.7));
-  animation:ppGuideHand 0.7s ease-in-out infinite;
-  line-height:1;
-  user-select:none;
-  -webkit-user-select:none;
-  text-shadow:0 0 8px rgba(255,213,74,.5);
-  will-change:transform,left,top;
-}
-@keyframes ppGuideHand{
-  /* Default = 👉 (placed LEFT of target) → bounce RIGHT toward target. */
-  0%,100%{transform:translateX(0) scale(1);}
-  50%    {transform:translateX(10px) scale(1.18);}
-}
-/* .flip = 👈 (placed RIGHT of target) → bounce LEFT toward target. */
-.pp-guide-pointer.flip{
-  animation-name:ppGuideHandFlip;
-}
-@keyframes ppGuideHandFlip{
-  0%,100%{transform:translateX(0) scale(1);}
-  50%    {transform:translateX(-10px) scale(1.18);}
+  0%,100%{box-shadow:0 0 22px rgba(255,213,74,.85),0 0 44px rgba(255,213,74,.45);
+          border-color:#ffd54a;}
+  50%    {box-shadow:0 0 38px rgba(255,213,74,1.0),0 0 76px rgba(255,213,74,.70),0 0 110px rgba(255,213,74,.30);
+          border-color:#fff1a8;}
 }
 </style>
 <style>

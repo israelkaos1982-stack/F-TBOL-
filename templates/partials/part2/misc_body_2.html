@@ -1380,20 +1380,43 @@
       if(!target) return;
       var p = _gMakePointer();
       var r = target.getBoundingClientRect();
-      /* Si el target está cerca del borde derecho, ponemos la mano a la
-         IZQUIERDA con flecha 👈, si no a la DERECHA con 👉. */
       var vw = window.innerWidth || document.documentElement.clientWidth;
-      var preferLeft = (r.right + 50) > vw;
-      if(preferLeft){
+      var vh = window.innerHeight || document.documentElement.clientHeight;
+      var pointerSize = 38;   /* aprox bbox de la manita 36px font-size */
+      var gap = 6;
+      /* Decisión de lado: PREFERIR derecha del target (que el dedo
+         apunte a la izquierda hacia el target — convención más
+         natural). Si no cabe a la derecha (target cerca del borde),
+         caemos a la izquierda. ──── REGLA CLAVE ────────────────
+         · Pointer a la DERECHA de target → emoji 👈 (apunta izquierda
+           hacia target), bounce hacia LA IZQUIERDA (translateX neg).
+         · Pointer a la IZQUIERDA de target → emoji 👉 (apunta derecha
+           hacia target), bounce hacia LA DERECHA (translateX pos). */
+      var spaceRight = vw - r.right;
+      var spaceLeft  = r.left;
+      var useRight = spaceRight >= (pointerSize + gap + 4);
+      if(!useRight && spaceLeft >= (pointerSize + gap + 4)){
+        useRight = false;  /* explicit: usar izquierda */
+      } else if(!useRight){
+        useRight = (spaceRight >= spaceLeft);  /* el más amplio */
+      }
+      var leftPx;
+      if(useRight){
         p.textContent = '👈';
         p.classList.add('flip');
-        p.style.left = Math.max(4, r.left - 44) + 'px';
+        leftPx = r.right + gap;
       } else {
         p.textContent = '👉';
         p.classList.remove('flip');
-        p.style.left = Math.min(vw - 40, r.right + 6) + 'px';
+        leftPx = r.left - pointerSize - gap;
       }
-      p.style.top = (r.top + (r.height/2) - 18) + 'px';
+      /* Clamp horizontal a viewport. */
+      leftPx = Math.max(2, Math.min(leftPx, vw - pointerSize - 2));
+      /* Vertical: centrado en target, clamp a viewport. */
+      var topPx = r.top + (r.height/2) - (pointerSize/2);
+      topPx = Math.max(8, Math.min(topPx, vh - pointerSize - 8));
+      p.style.left = leftPx + 'px';
+      p.style.top  = topPx + 'px';
       p.style.display = 'block';
     }
     function _gFollowTarget(){
@@ -1466,6 +1489,17 @@
     function _gHighlight(step){
       if(!step || !step.target) return;
       step.target.classList.add('pp-guide-active');
+      /* Asegurar que el target es visible — si está fuera del viewport
+         lo desplazamos al centro. Los elementos del overlay no scrollean
+         con la página principal, pero pp-list (Balón/Prórroga/Penaltis)
+         puede caer bajo el fold en pantallas pequeñas. */
+      try {
+        var r0 = step.target.getBoundingClientRect();
+        var vh = window.innerHeight || document.documentElement.clientHeight;
+        if(r0.bottom > vh - 40 || r0.top < 40){
+          step.target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      } catch(_){}
       _gPositionPointer(step.target);
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(_gFollowTarget);
@@ -1538,17 +1572,37 @@
 
     function _gStart(){
       if(active) _gStop();
-      /* Esperar a que el overlay esté completamente renderizado. El
-         render de pp-list, pp-env y pp-twitch-btn ocurre tras varios
-         paint frames (incluye observers de copa-engine para el alias).
-         500 ms es seguro en mobile / tablet. */
-      setTimeout(function(){
-        steps = _gBuildSteps();
-        if(!steps || !steps.length) return;
-        active = true;
-        idx = -1;
-        _gAdvance();
-      }, 500);
+      /* Mostramos rápido (delay corto) y luego REINTENTAMOS construir
+         pasos si faltan elementos (alias se inyecta con observer
+         tardío de copa-engine, prórroga/penaltis idem). El usuario
+         pidió "que salga antes la mano/dedo, tarda muchísimo en
+         salir" → 150 ms inicial, luego retry hasta 8 intentos cada
+         200 ms si la lista de pasos es < 3 (siempre hay al menos
+         estadio + clima + balón + confirmar = 4 pasos esperados). */
+      var attempts = 0;
+      function tryStart(){
+        var built = _gBuildSteps();
+        var enough = built && built.length >= 3;
+        if(enough){
+          steps = built;
+          active = true;
+          idx = -1;
+          _gAdvance();
+          return;
+        }
+        attempts++;
+        if(attempts < 8){
+          setTimeout(tryStart, 200);
+        } else if(built && built.length){
+          /* Tras 8 intentos, arrancamos con lo que haya. Mejor un
+             tutorial parcial que ninguno. */
+          steps = built;
+          active = true;
+          idx = -1;
+          _gAdvance();
+        }
+      }
+      setTimeout(tryStart, 150);
     }
     function _gStop(){
       active = false;
@@ -1708,27 +1762,29 @@
 }
 .pp-guide-pointer{
   position:fixed;
-  font-size:36px;
+  font-size:38px;
   z-index:10012;
   pointer-events:none;
-  filter:drop-shadow(0 0 10px rgba(255,213,74,1)) drop-shadow(0 0 20px rgba(255,213,74,.6));
-  animation:ppGuideHand 0.8s ease-in-out infinite;
+  filter:drop-shadow(0 0 12px rgba(255,213,74,1)) drop-shadow(0 0 24px rgba(255,213,74,.7));
+  animation:ppGuideHand 0.7s ease-in-out infinite;
   line-height:1;
   user-select:none;
   -webkit-user-select:none;
+  text-shadow:0 0 8px rgba(255,213,74,.5);
+  will-change:transform,left,top;
 }
 @keyframes ppGuideHand{
+  /* Default = 👉 (placed LEFT of target) → bounce RIGHT toward target. */
   0%,100%{transform:translateX(0) scale(1);}
-  50%    {transform:translateX(-10px) scale(1.12);}
+  50%    {transform:translateX(10px) scale(1.18);}
 }
-/* Cuando la manita apunta hacia la izquierda (👈), invertimos la
-   dirección del bounce para que se mueva hacia el target (derecha). */
+/* .flip = 👈 (placed RIGHT of target) → bounce LEFT toward target. */
 .pp-guide-pointer.flip{
   animation-name:ppGuideHandFlip;
 }
 @keyframes ppGuideHandFlip{
   0%,100%{transform:translateX(0) scale(1);}
-  50%    {transform:translateX(10px) scale(1.12);}
+  50%    {transform:translateX(-10px) scale(1.18);}
 }
 </style>
 <style>

@@ -1865,9 +1865,108 @@
 </div>
 
 <div id="ucl-intro">
-<div id="ucl-ball-anim">🏆</div>
-<div id="ucl-stars">★ ★ ★ UEFA CHAMPIONS LEAGUE ★ ★ ★</div>
+<img id="ucl-logo-anim" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" alt="UCL"/>
 </div>
+<style>
+  /* Splash UEFA Champions: logo (mismo de la card "Champions" en
+     Competiciones) recorriendo la pantalla en diagonal durante 2 s.
+     Sustituye el splash anterior (🏆 + estrellas + texto "★ ★ ★ UEFA
+     CHAMPIONS LEAGUE ★ ★ ★") que parpadeaba y bloqueaba la vista al
+     abrir la caja Champions. Petición usuario 2026-05-09. */
+  #ucl-intro #ucl-logo-anim{
+    width:140px;height:140px;object-fit:contain;
+    animation:uclLogoDiagonal 2s ease-out both;
+    filter:drop-shadow(0 0 30px rgba(70,100,255,.65)) drop-shadow(0 0 50px rgba(255,255,255,.25));
+    will-change:transform,opacity;
+  }
+  @keyframes uclLogoDiagonal{
+    0%{transform:translate(-130vw,130vh) rotate(-45deg) scale(.4);opacity:0;}
+    25%{opacity:1;}
+    50%{transform:translate(0,0) rotate(0deg) scale(1.05);opacity:1;}
+    75%{opacity:1;}
+    100%{transform:translate(130vw,-130vh) rotate(45deg) scale(.4);opacity:0;}
+  }
+  /* Ocultar legacy del splash anterior por si el bundle re-inyecta. */
+  #ucl-intro #ucl-ball-anim, #ucl-intro #ucl-stars{ display:none !important; }
+</style>
+<script>
+  /* Guard: el splash + audio Champions sólo dispara cuando entras a
+     `s-champions` desde FUERA del cluster Champions. Si vienes de
+     una sub-pantalla (Wild Card, Open Qualifier, Previa, Estadísticas,
+     Fase de Grupos, Playoffs, Stats), NO se dispara nada. Antes el
+     bundle disparaba el splash en cada `go('s-champions')` —
+     incluyendo los `back-btn` de las sub-pantallas — bloqueando la
+     vista cada vez que volvías. Petición usuario 2026-05-09. */
+(function(){
+  var CHAMP_SUB_SCREENS = {
+    's-ucl-previa':1, 's-ucl-previa-clas':1,
+    's-ucl-grupos':1, 's-ucl-grupos-clas':1, 's-ucl-grupos-res':1, 's-ucl-grupos-jornada':1,
+    's-ucl-playoffs':1, 's-ucl-stats':1,
+    's-open-qualifier-clas':1, 's-open-qualifier-res':1, 's-open-qualifier-jornada':1,
+    's-wild-card':1
+  };
+  var _prevScreen = (function(){
+    var act = document.querySelector('.screen.active');
+    return act ? act.id : null;
+  })();
+  function _shouldFireChampions(prevId){
+    if(!prevId) return true;             /* primera vez en la sesión */
+    if(prevId === 's-champions') return false;
+    if(CHAMP_SUB_SCREENS[prevId]) return false;
+    return true;
+  }
+  /* Sobreescribir las dos funciones que el bundle expone (definidas
+     en index.bundle.js ~línea 2256-2259). Mantienen los nombres
+     originales para que los wraps del bundle sigan llamándolas. */
+  window.showChampionsIntro = function(){
+    if(!_shouldFireChampions(_prevScreen)) return;
+    var overlay = document.getElementById('ucl-intro');
+    if(!overlay) return;
+    overlay.classList.add('show');
+    setTimeout(function(){ overlay.classList.remove('show'); }, 2050);
+  };
+  /* `playCompSound` (bundle): baja volumen al 35% y corta a 2 s. Sólo
+     dispara si el guard lo permite. Mantiene la firma del original
+     para no romper nada. */
+  window.playCompSound = function(targetId){
+    if(targetId === 's-champions' && !_shouldFireChampions(_prevScreen)) return;
+    var sndId = (targetId === 's-champions') ? 'snd-ucl'
+              : (targetId === 's-superliga') ? 'snd-kdb' : null;
+    if(sndId){
+      var snd = document.getElementById(sndId);
+      if(snd){
+        try { snd.volume = 0.35; } catch(_){}
+        try { snd.currentTime = 0; snd.play().catch(function(){}); } catch(_){}
+        setTimeout(function(){
+          try { snd.pause(); snd.currentTime = 0; } catch(_){}
+        }, 2000);
+      }
+    }
+    /* Flash CSS del bundle: lo dejamos correr — es un overlay corto
+       que ya gestionaba el bundle en 950 ms. */
+    var fl = document.getElementById('comp-flash');
+    if(fl){
+      var flCls = (targetId === 's-champions') ? 'flash-ucl' : (targetId === 's-superliga') ? 'flash-kdb' : '';
+      if(flCls){
+        fl.className = '';
+        fl.style.display = 'block';
+        void fl.offsetWidth;
+        fl.className = flCls;
+        setTimeout(function(){ fl.style.display = 'none'; fl.className = ''; }, 950);
+      }
+    }
+  };
+  /* Wrap de window.go: rastrea el último screen para que el guard
+     funcione. Se monta DESPUÉS de los wraps del bundle, por lo que
+     todas las llamadas pasan por aquí primero. */
+  var _origGo = window.go;
+  window.go = function(id){
+    var ret = _origGo ? _origGo.apply(this, arguments) : null;
+    _prevScreen = id;
+    return ret;
+  };
+})();
+</script>
 <canvas id="fireworks-canvas"></canvas>
 <div class="celebracion-overlay" id="celebracion-overlay">
 <div class="celebracion-txt" id="celebracion-txt">🏆 OBJETIVO CONSEGUIDO 🏆</div>

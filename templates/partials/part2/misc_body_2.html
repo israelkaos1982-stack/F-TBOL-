@@ -27265,6 +27265,122 @@ document.addEventListener('DOMContentLoaded', function() {
   background:none;border:none;cursor:pointer;
 }
 .ml-evt-cd-skip:hover{color:rgba(255,255,255,.7);}
+
+/* ═══════════════════════════════════════════════════════════════
+   GM-MODAL (Humano vs Humano · Humano vs IA — la pantalla que ve
+   el usuario al jugar). Mismo lenguaje visual que match-live-wrap
+   pero con selectores específicos #gm-* porque son elementos
+   distintos.
+   ═══════════════════════════════════════════════════════════════ */
+#gm-modal{
+  --comp-color:#ff5060;
+  --comp-color-soft:rgba(255,80,96,.18);
+}
+#gm-modal #gm-inner{
+  border:1.5px solid var(--comp-color) !important;
+  box-shadow:0 0 24px var(--comp-color-soft), inset 0 0 16px rgba(0,0,0,.5) !important;
+  border-radius:14px;
+  position:relative;
+}
+/* Comp themes — sobreescriben las CSS variables. */
+#gm-modal.is-comp-liga   { --comp-color:#ff5060; --comp-color-soft:rgba(255,40,68,.20);}
+#gm-modal.is-comp-copa   { --comp-color:#ffb050; --comp-color-soft:rgba(255,144,40,.22);}
+#gm-modal.is-comp-super  ,
+#gm-modal.is-comp-usc    { --comp-color:#f0c820; --comp-color-soft:rgba(240,180,40,.22);}
+#gm-modal.is-comp-ucl    { --comp-color:#88aaff; --comp-color-soft:rgba(60,120,255,.22);}
+#gm-modal.is-comp-uel    { --comp-color:#ffaa55; --comp-color-soft:rgba(255,150,40,.22);}
+#gm-modal.is-comp-uecl   { --comp-color:#5fe08a; --comp-color-soft:rgba(60,200,110,.22);}
+#gm-modal.is-comp-recopa { --comp-color:#ff8060; --comp-color-soft:rgba(255,100,70,.22);}
+#gm-modal.is-comp-inter  { --comp-color:#f0a040; --comp-color-soft:rgba(240,140,40,.22);}
+
+/* JUGAR · highlight + flecha sobre #gm-timer cuando está en 0' parado. */
+#gm-timer.is-jugar-hint{
+  position:relative;
+  background:linear-gradient(135deg,#1a3a18,#2b6228 50%,#1a3a18) !important;
+  border:2px solid #f0c820 !important;
+  color:#ffe768 !important;
+  box-shadow:0 0 22px rgba(240,200,32,.7), inset 0 0 14px rgba(240,200,32,.35) !important;
+  animation:jugarPulse 1.2s ease-in-out infinite;
+  font-weight:900;
+}
+#gm-timer.is-jugar-hint::before{
+  content:'JUGAR';
+  position:absolute;left:50%;top:-28px;transform:translateX(-50%);
+  font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:4.5px;
+  color:#ffd848;text-shadow:0 0 14px rgba(240,200,32,.95);
+  background:rgba(0,0,0,.82);
+  border:1.5px solid #f0c820;border-radius:6px;
+  padding:2px 12px;white-space:nowrap;pointer-events:none;
+  animation:jugarLabelPulse 1.2s ease-in-out infinite;
+  z-index:100;
+}
+#gm-timer.is-jugar-hint::after{
+  content:'👇';
+  position:absolute;right:-34px;top:50%;transform:translateY(-50%);
+  font-size:24px;pointer-events:none;
+  animation:jugarArrowPulse 1.2s ease-in-out infinite;
+  filter:drop-shadow(0 0 8px rgba(240,200,32,.9));
+}
+
+/* AÑADIR EVENTO · gradiente bicolor (mitad local / mitad visitante). */
+#gm-modal[data-team-colors] #gm-add-btn{
+  background:linear-gradient(90deg,
+    var(--team-a-1, #2a0005) 0%,
+    var(--team-a-2, #6a0010) 48%,
+    var(--team-b-1, #6a0010) 52%,
+    var(--team-b-2, #2a0005) 100%
+  ) !important;
+  border:2px solid var(--comp-color) !important;
+  color:#fff !important;
+  text-shadow:0 1px 4px rgba(0,0,0,.75) !important;
+  font-weight:900 !important;
+  letter-spacing:2px;
+  box-shadow:0 0 14px var(--comp-color-soft), inset 0 1px 0 rgba(255,255,255,.15) !important;
+}
+
+/* ACTA · look videojuego HUD azul. */
+#gm-acta-section #gm-acta-toggle{
+  background:linear-gradient(135deg,#0d1530,#1a2a55 50%,#0d1530) !important;
+  border:1.5px solid rgba(120,180,255,.6) !important;
+  color:#a8cdff !important;
+  text-shadow:0 0 8px rgba(120,180,255,.6);
+  font-family:'Bebas Neue','Oswald',sans-serif !important;
+  letter-spacing:3px !important;
+  font-weight:700;
+  box-shadow:0 0 14px rgba(80,140,255,.22), inset 0 1px 0 rgba(255,255,255,.1);
+}
+
+/* PRÓRROGA · estilo coherente con el tema. */
+#gm-modal #gm-btn-et{
+  border:1.5px solid var(--comp-color) !important;
+  background:linear-gradient(135deg,rgba(0,0,0,.4), var(--comp-color-soft)) !important;
+  color:#fff !important;
+}
+
+/* FINALIZAR (cuando se mueva debajo del acta) — mismo tamaño que
+   Menu LIVE / Cancelar Partido. Se aplica vía clase `.gm-end-moved`. */
+#gm-btn-end.gm-end-moved{
+  width:100% !important;
+  padding:11px 8px !important;
+  border-radius:8px !important;
+  border:1px solid var(--comp-color) !important;
+  background:linear-gradient(135deg,rgba(180,30,30,.25),var(--comp-color-soft)) !important;
+  color:#ffd0d0 !important;
+  font-size:12px !important;
+  font-weight:700;
+  font-family:'Oswald',sans-serif;
+  letter-spacing:1.5px;
+  cursor:pointer;
+  box-shadow:0 0 12px var(--comp-color-soft) !important;
+  flex:none !important;
+}
+/* Cuando FINALIZAR se mueve, su contenedor original (el row con
+   PRÓRROGA) gana clase `.gm-row-end-removed` y PRÓRROGA pasa a
+   ancho completo. */
+.gm-row-end-removed #gm-btn-et{flex:1 1 100% !important;}
+
+/* Wrapper donde se reubica FINALIZAR (entre acta y Menu LIVE). */
+.gm-finalizar-slot{padding:6px 8px 4px;}
 </style>
 <script>
 /* ════════════════════════════════════════════════════════════════
@@ -27381,23 +27497,36 @@ document.addEventListener('DOMContentLoaded', function() {
     wrap._mlThemed = true;
   }
 
-  /* ── (1) JUGAR · highlight del botón cronómetro cuando está en 0' ── */
+  /* ── (1) JUGAR · highlight del botón cronómetro cuando está en 0' ──
+     Soporta tanto `.ml-timer` (legacy match-live-wrap) como
+     `#gm-timer` (gm-modal — lo que ve el usuario). */
+  function _isPausedAtZero(btn){
+    var txt = (btn.textContent || '').trim();
+    /* ▶ 0' o ▶ 0\'  con o sin espacio. */
+    var isAtZero = /\b0'/.test(txt) || /\s0'/.test(txt) || /^▶\s*0'/.test(txt);
+    /* Pausado = el botón muestra el icono ▶ (no ⏸). */
+    var isPaused = txt.indexOf('⏸') === -1 && txt.indexOf('▶') !== -1;
+    return isAtZero && isPaused;
+  }
   function _refreshJugarHints(){
-    var btns = document.querySelectorAll('.ml-timer');
+    /* match-live-wrap (HvH/HvIA in calendar cards). */
+    var btns = document.querySelectorAll('.match-live-wrap.hvh .ml-timer, .match-live-wrap.hvia .ml-timer');
     btns.forEach(function(btn){
       if (btn.style.display === 'none') return;
-      var wrap = btn.closest('.match-live-wrap');
-      if (!wrap) return;
-      /* Solo HvH y HvIA. */
-      if (!wrap.classList.contains('hvh') && !wrap.classList.contains('hvia')) return;
-      var txt = (btn.textContent || '').trim();
-      var isAtZero = /\b0'/.test(txt) || /^▶\s*0'/.test(txt);
-      var isPaused = /^▶/.test(txt) || /pause-fa/i.test(txt) === false;
-      if (isAtZero && isPaused) btn.classList.add('is-jugar-hint');
+      if (_isPausedAtZero(btn)) btn.classList.add('is-jugar-hint');
       else btn.classList.remove('is-jugar-hint');
     });
+    /* gm-modal — solo cuando el modal está abierto. */
+    var gm = document.getElementById('gm-modal');
+    var gmBtn = document.getElementById('gm-timer');
+    if (gm && gmBtn && gm.style.display !== 'none'){
+      if (_isPausedAtZero(gmBtn)) gmBtn.classList.add('is-jugar-hint');
+      else gmBtn.classList.remove('is-jugar-hint');
+    } else if (gmBtn) {
+      gmBtn.classList.remove('is-jugar-hint');
+    }
   }
-  setInterval(_refreshJugarHints, 400);
+  setInterval(_refreshJugarHints, 300);
 
   /* ── (5) Cuenta atrás post-evento ──────────────────────────────── */
   var _activeOverlay = null, _activeMk = null, _activeTimer = null,
@@ -27527,8 +27656,198 @@ document.addEventListener('DOMContentLoaded', function() {
       var actaList = document.getElementById('ml-acta-list-' + mk);
       if (actaList) _wireActaWatcher(actaList);
     });
+    /* gm-modal — la "card" que ve el usuario al jugar HvH/HvIA. */
+    _scanGmModal();
   }
   setInterval(_scanCards, 600);
+
+  /* ─────────────────────────────────────────────────────────────────
+     GM-MODAL · tema + colores de equipo + reubicación de FINALIZAR
+     + watcher de acta para countdown.
+     ─────────────────────────────────────────────────────────────── */
+  function _gmCompFromState(){
+    try {
+      var g = window._gm || {};
+      if (g._isCopa || g.comp === 'copa' || g.comp === 'copa-fin') return 'copa';
+      if (g._isSc   || g.comp === 'sc'   || g.comp === 'sc-final') return 'super';
+      if (g._isRecopa || g.comp === 'recopa') return 'recopa';
+      if (g._isSuperliga || g.comp === 'superliga') return ''; /* sin tema */
+      if (g.comp === 'liga' || g.comp === 'ea-sports' || g.comp === '' || g.comp == null) return 'liga';
+      /* Fallback: leer el badge en la venue bar. */
+      var b = document.getElementById('gm-jornada-badge');
+      var t = b ? (b.textContent || '').toLowerCase() : '';
+      if (t.indexOf('champions') !== -1 || t.indexOf('ucl') !== -1) return 'ucl';
+      if (t.indexOf('europa league') !== -1 || t.indexOf('uel') !== -1) return 'uel';
+      if (t.indexOf('conference') !== -1 || t.indexOf('uecl') !== -1) return 'uecl';
+      if (t.indexOf('recopa') !== -1) return 'recopa';
+      if (t.indexOf('supercopa') !== -1) return 'super';
+      if (t.indexOf('inter') !== -1) return 'inter';
+      if (t.indexOf('copa') !== -1) return 'copa';
+      return 'liga';
+    } catch(_){ return 'liga'; }
+  }
+  function _gmTeamNames(){
+    try {
+      var g = window._gm || {};
+      var home = g.home || (document.getElementById('gm-team-a-name')||{}).textContent || '';
+      var away = g.away || (document.getElementById('gm-team-b-name')||{}).textContent || '';
+      return { home:String(home).trim(), away:String(away).trim() };
+    } catch(_){ return { home:'', away:'' }; }
+  }
+  function _gmApplyTheme(modal){
+    if (!modal) return;
+    var comp = _gmCompFromState();
+    /* Limpia clases previas y añade la nueva. */
+    var prev = (modal.className || '').match(/is-comp-[a-z]+/g) || [];
+    prev.forEach(function(c){ modal.classList.remove(c); });
+    if (comp) modal.classList.add('is-comp-' + comp);
+    modal.setAttribute('data-comp', comp || '');
+    /* Colores de los equipos para el AÑADIR EVENTO bicolor. */
+    var t = _gmTeamNames();
+    var ca = _teamColors(t.home);
+    var cb = _teamColors(t.away);
+    var pa = (ca && (ca.bg || ca.primary)) || '#3a0008';
+    var pb = (cb && (cb.bg || cb.primary)) || '#3a0008';
+    modal.style.setProperty('--team-a-1', _hex2rgba(pa, .92));
+    modal.style.setProperty('--team-a-2', _hex2rgba(pa, .55));
+    modal.style.setProperty('--team-b-1', _hex2rgba(pb, .55));
+    modal.style.setProperty('--team-b-2', _hex2rgba(pb, .92));
+    modal.setAttribute('data-team-colors', '1');
+  }
+  function _gmMoveFinalizarBtn(){
+    var modal = document.getElementById('gm-modal');
+    if (!modal) return;
+    var endBtn = document.getElementById('gm-btn-end');
+    if (!endBtn) return;
+    /* Si ya hemos creado el slot, no rehacer. */
+    if (modal._gmEndMoved && document.querySelector('.gm-finalizar-slot')) return;
+    var actaSection = document.getElementById('gm-acta-section');
+    if (!actaSection) return;
+    /* Slot nuevo (mismo padding que Menu LIVE / Cancelar). */
+    var slot = document.createElement('div');
+    slot.className = 'gm-finalizar-slot';
+    /* Insertar después del acta. Si hay gm-aplazar-row, lo dejamos
+       antes de FINALIZAR para no romper el orden lógico. */
+    var aplazar = document.getElementById('gm-aplazar-row');
+    if (aplazar && aplazar.parentNode === actaSection.parentNode){
+      aplazar.parentNode.insertBefore(slot, aplazar.nextSibling);
+    } else {
+      actaSection.parentNode.insertBefore(slot, actaSection.nextSibling);
+    }
+    /* Marcar el contenedor de PRÓRROGA para que pase a ancho completo. */
+    var oldRow = endBtn.parentNode;
+    if (oldRow) oldRow.classList.add('gm-row-end-removed');
+    /* Mover el botón al slot nuevo. */
+    slot.appendChild(endBtn);
+    endBtn.classList.add('gm-end-moved');
+    modal._gmEndMoved = true;
+  }
+  /* Hook al observer del gm-acta-list para disparar la cuenta atrás. */
+  function _gmWireActaWatcher(){
+    var list = document.getElementById('gm-acta-list');
+    if (!list || list._gmEvtCdWired) return;
+    list._gmEvtCdWired = true;
+    new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++){
+        var m = muts[i];
+        for (var j = 0; j < m.addedNodes.length; j++){
+          var n = m.addedNodes[j];
+          if (n.nodeType !== 1) continue;
+          if (!n.classList || !n.classList.contains('ml-evt-item')) continue;
+          var g = window._gm || {};
+          /* Solo dispara si el reloj está corriendo y no es replay
+             (game state carga del localStorage también añade items).
+             Saltarse cualquier evento cuyo `data-type` no esté en
+             la tabla. */
+          if (!g.timerRunning) continue;
+          var type = n.getAttribute('data-type') || '';
+          /* Normalizar 'damarilla' → 'doble-amarilla'. */
+          if (type === 'damarilla') type = 'doble-amarilla';
+          if (type === 'propia')    type = 'autogol';
+          if (!EVT_CD_SEC[type]) continue;
+          setTimeout(function(t){ return function(){ _gmShowCd(t); }; }(type), 50);
+          return;
+        }
+      }
+    }).observe(list, { childList:true });
+  }
+  function _gmShowCd(evtType){
+    var sec = EVT_CD_SEC[evtType]; if (!sec) return;
+    var ov = _ensureOverlay();
+    /* Pausar el cronómetro del gm-modal si está corriendo. */
+    try {
+      var g = window._gm || {};
+      if (g.timerRunning && !g.finished && !g.inDescanso){
+        if (typeof window.gmTimerClick === 'function') window.gmTimerClick();
+      }
+    } catch(_){}
+    _activeMk = '__gm__';
+    _activeTotal = sec; _activeStartTs = Date.now();
+    var lbl = EVT_CD_LBL[evtType] || ('📌 ' + String(evtType).toUpperCase());
+    document.getElementById('ml-evt-cd-evt').textContent = lbl;
+    document.getElementById('ml-evt-cd-num').textContent = String(sec);
+    var fg = document.getElementById('ml-evt-cd-fg');
+    var circle = document.getElementById('ml-evt-cd-circle');
+    var R = 90, C = 2 * Math.PI * R;
+    fg.setAttribute('stroke-dasharray', String(C));
+    fg.setAttribute('stroke-dashoffset', '0');
+    circle.classList.remove('is-low');
+    ov.classList.add('show');
+    if (_activeTimer) clearInterval(_activeTimer);
+    _activeTimer = setInterval(function(){
+      var elapsed = (Date.now() - _activeStartTs) / 1000;
+      var remain  = Math.max(0, _activeTotal - elapsed);
+      var displaySec = Math.ceil(remain);
+      document.getElementById('ml-evt-cd-num').textContent = String(displaySec);
+      var pct = remain / _activeTotal;
+      fg.setAttribute('stroke-dashoffset', String(C * (1 - pct)));
+      if (displaySec <= 5) circle.classList.add('is-low');
+      else circle.classList.remove('is-low');
+      if (remain <= 0){ _gmCloseCd(true); }
+    }, 200);
+  }
+  function _gmCloseCd(resume){
+    if (_activeTimer) { clearInterval(_activeTimer); _activeTimer = null; }
+    var ov = document.getElementById('ml-evt-cd-overlay');
+    if (ov) ov.classList.remove('show');
+    _activeMk = null; _activeStartTs = 0; _activeTotal = 0;
+    if (resume){
+      try {
+        var g = window._gm || {};
+        if (!g.timerRunning && !g.finished && !g.inDescanso){
+          if (typeof window.gmTimerClick === 'function') window.gmTimerClick();
+        }
+      } catch(_){}
+    }
+  }
+  /* Re-routea el botón REANUDAR / SKIP del overlay para detectar
+     si el partido activo es gm-modal o legacy. */
+  function _hookOverlayButtons(){
+    var rb = document.getElementById('ml-evt-cd-resume');
+    var sb = document.getElementById('ml-evt-cd-skip');
+    if (rb && !rb._gmRouted){
+      rb._gmRouted = true;
+      rb.addEventListener('click', function(){
+        /* Si el contexto activo es gm-modal, usa _gmCloseCd. */
+        if (_activeMk === '__gm__'){ _gmCloseCd(true); }
+      }, true);
+    }
+    if (sb && !sb._gmRouted){
+      sb._gmRouted = true;
+      sb.addEventListener('click', function(){
+        if (_activeMk === '__gm__'){ _gmCloseCd(false); }
+      }, true);
+    }
+  }
+
+  function _scanGmModal(){
+    var modal = document.getElementById('gm-modal');
+    if (!modal || modal.style.display === 'none') return;
+    try { _gmApplyTheme(modal); } catch(_){}
+    try { _gmMoveFinalizarBtn(); } catch(_){}
+    try { _gmWireActaWatcher(); } catch(_){}
+    try { _hookOverlayButtons(); } catch(_){}
+  }
 
   /* ── Boot ───────────────────────────────────────────────────────── */
   function _boot(){

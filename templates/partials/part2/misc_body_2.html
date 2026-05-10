@@ -25923,3 +25923,379 @@ document.addEventListener('DOMContentLoaded', function() {
   window._compStateSyncSnapshot = _lastSnapshot;
 })();
 </script>
+
+<!-- ════════════════════════════════════════════════════════════════
+     FECHAS EN CAJAS DE RESULTADOS · post-procesador único
+     ───────────────────────────────────────────────────────────────
+     Petición usuario 2026-05-09: en cada Jornada / Eliminatoria de
+     todas las competiciones (Liga, Copa, Supercopa España, UCL, UEL,
+     UECL, Recopa, Supercopa Europa, Intercontinental, Mundialito —
+     excluye Superliga, Wild Card, Open Qualifier y Torneos de Verano),
+     añadir la FECHA a la derecha, leyéndola del calendario AGENDA
+     32-33 (DOM `#s-agenda` .ag-r).
+
+     Acortar nombres largos para que entre la fecha:
+       · "Dieciseisavos"      → "1/32"
+       · "Octavos de Final"   → "Octavos"
+       · "Cuartos de Final"   → "Cuartos"
+       · "Semifinales"        → "Semis"
+       · "Repesca Dieciseisavos" → "Repesca 1/32"
+
+     Implementación: un solo IIFE que escanea `.jbtn` con clase de
+     competición permitida, acorta el label y añade
+     `<span class="jor-date">DD MMM</span>` al final del botón. Se
+     re-ejecuta tras `window.go(id)` y vía MutationObserver. Idempo-
+     tente vía `window.__JOR_DATES_READY`.
+     ════════════════════════════════════════════════════════════════ -->
+<style>
+.jbtn .jor-date{
+  margin-left:auto;
+  font-family:'Bebas Neue','Oswald',sans-serif;
+  font-size:13px;
+  letter-spacing:1.4px;
+  padding:2px 8px;
+  border-radius:5px;
+  background:rgba(0,0,0,.32);
+  border:1px solid currentColor;
+  white-space:nowrap;
+  flex-shrink:0;
+  opacity:.95;
+  text-transform:uppercase;
+}
+.jbtn{display:flex;align-items:center;gap:6px;}
+.jbtn>b{flex-shrink:0;}
+/* Color de la fecha por competición. */
+.jbtn.c-liga    .jor-date{color:#ff5060;border-color:rgba(255,80,96,.55);}
+.jbtn.c-copa    .jor-date{color:#ffb050;border-color:rgba(255,176,80,.55);}
+.jbtn.c-super   .jor-date{color:#ffd55a;border-color:rgba(255,213,90,.55);}
+.jbtn.c-ucl     .jor-date{color:#88aaff;border-color:rgba(136,170,255,.6);}
+.jbtn.c-uel     .jor-date{color:#ffaa55;border-color:rgba(255,170,85,.6);}
+.jbtn.c-uecl    .jor-date{color:#5fe08a;border-color:rgba(95,224,138,.6);}
+.jbtn.c-recopa  .jor-date{color:#ff8060;border-color:rgba(255,128,96,.6);}
+.jbtn.c-usc     .jor-date{color:#e8e8e8;border-color:rgba(232,232,232,.55);}
+.jbtn.c-inter   .jor-date{color:#f0c040;border-color:rgba(240,192,64,.6);}
+.jbtn.c-mundial .jor-date{color:#5fe0d0;border-color:rgba(95,224,208,.6);}
+</style>
+<script>
+(function(){
+  if (window.__JOR_DATES_READY) return;
+  window.__JOR_DATES_READY = true;
+
+  /* Clases de competición que reciben fecha. Excluye:
+       · c-superliga (Superliga, excluida por usuario)
+       · c-other (Amistosos / Torneos de verano, excluidos)
+       · c-road  (Selecciones — ya tienen fecha inline en s-calendario) */
+  var COMP_CLASSES = ['c-liga','c-copa','c-super','c-ucl','c-uel','c-uecl',
+                      'c-recopa','c-usc','c-inter','c-mundial'];
+
+  /* Reglas de acortado del label, aplicadas siempre. */
+  var TRUNC_RULES = [
+    [/Repesca\s+Dieciseisavos/gi, 'Repesca 1/32'],
+    [/\bDieciseisavos\b/gi,       '1/32'],
+    [/1[ªa]?\s*Ronda\s+1\/128/gi, '1ª Ronda'],
+    [/2[ªa]?\s*Ronda\s+1\/64/gi,  '2ª Ronda'],
+    [/Octavos\s+de\s+Final/gi,    'Octavos'],
+    [/Cuartos\s+de\s+Final/gi,    'Cuartos'],
+    [/Semifinales/gi,             'Semis'],
+    [/\bSemifinal\b/gi,           'Semis']
+  ];
+
+  function _norm(s){
+    return String(s||'')
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/ª/g,'a').replace(/º/g,'o')
+      .replace(/[—–]/g,' ')
+      .replace(/\s+/g,' ').trim();
+  }
+  function _shorten(text){
+    var out = text;
+    for (var i = 0; i < TRUNC_RULES.length; i++){
+      out = out.replace(TRUNC_RULES[i][0], TRUNC_RULES[i][1]);
+    }
+    return out;
+  }
+
+  /* ── Cache del agenda (#s-agenda > .ag-r > .ag-date + .ag-lbl). */
+  var _agendaCache = null, _agendaCacheTs = 0;
+  function _readAgenda(){
+    var now = Date.now();
+    if (_agendaCache && (now - _agendaCacheTs) < 800) return _agendaCache;
+    var ag = document.getElementById('s-agenda');
+    var rows = ag ? ag.querySelectorAll('.ag-r') : [];
+    var arr = [];
+    rows.forEach(function(row){
+      var d = row.querySelector('.ag-date');
+      var l = row.querySelector('.ag-lbl');
+      if (!d || !l) return;
+      var date  = String(d.textContent || '').trim();
+      var label = String(l.textContent || '').trim();
+      if (!date || !label) return;
+      arr.push({ date: date, label: label, labN: _norm(label) });
+    });
+    _agendaCache = arr;
+    _agendaCacheTs = now;
+    return arr;
+  }
+
+  /* Profile por comp: tokens REQUIRED (todos deben aparecer) y
+     tokens BONUS (suman si aparecen). El score base es 1 si pasa
+     required. ANTI penaliza si aparecen los tokens contrarios. */
+  function _profileFor(compClass, btnN){
+    var p = { required: [], bonus: [], anti: [] };
+    /* Tokens jornada/ida/vuelta extraídos del botón. */
+    var jMatch = btnN.match(/jornada\s+(\d+)/) || btnN.match(/\bj\s*(\d+)\b/);
+    var jNum = jMatch ? jMatch[1] : '';
+    var hasIda = / ida\b|\bida\b/.test(' ' + btnN);
+    var hasVue = /\bvuelta\b/.test(btnN);
+    /* hasFin: solo si "final" no aparece como "de Final" (Octavos/Cuartos/Semifinales). */
+    var hasFin = /\bfinal\b/.test(btnN) && !/de\s+final/.test(btnN);
+    var hasSemis = /\bsemis\b|\bsemifin/.test(btnN);
+    var hasCuartos = /\bcuartos\b/.test(btnN);
+    var hasOctavos = /\boctavos\b/.test(btnN);
+    var has1_32 = /1\/32|dieciseisavos/.test(btnN);
+    var has1_64 = /1\/64/.test(btnN);
+    var hasRepesca = /\brepesca\b/.test(btnN);
+
+    if (compClass === 'c-liga'){
+      p.required = ['liga'];
+      p.anti = ['previa','europa','selecciones','copa','recopa','supercopa',
+                'intercontinental','final selecciones'];
+      if (jNum) p.bonus.push('j' + jNum);
+    } else if (compClass === 'c-copa'){
+      p.required = ['copa del rey'];
+      if (hasIda) p.bonus.push('ida');
+      if (hasVue) p.bonus.push('vuelta');
+      if (hasFin) p.bonus.push('final');
+      if (hasSemis) p.bonus.push('semis');
+      if (hasCuartos) p.bonus.push('cuartos');
+      if (hasOctavos) p.bonus.push('octavos');
+      if (has1_32) p.bonus.push('1/32');
+      if (has1_64) p.bonus.push('1/64');
+      if (/1a ronda/.test(btnN)) p.bonus.push('1a ronda');
+      if (/2a ronda/.test(btnN)) p.bonus.push('2a ronda');
+      if (hasIda) p.anti.push('vuelta');
+      if (hasVue) p.anti.push('ida');
+    } else if (compClass === 'c-super'){
+      p.required = ['supercopa espana'];
+      if (hasFin) p.bonus.push('final');
+      if (hasSemis) p.bonus.push('semis');
+    } else if (compClass === 'c-usc'){
+      p.required = ['supercopa europa'];
+      if (hasFin) p.bonus.push('final');
+      if (hasSemis) p.bonus.push('semis');
+    } else if (compClass === 'c-recopa'){
+      p.required = ['recopa'];
+      if (has1_64) p.bonus.push('1/64');
+      if (has1_32) p.bonus.push('dieciseisavos','1/32');
+      if (hasOctavos) p.bonus.push('octavos');
+      if (hasCuartos) p.bonus.push('cuartos');
+      if (hasSemis) p.bonus.push('semis');
+      if (hasFin) p.bonus.push('final');
+    } else if (compClass === 'c-inter'){
+      p.required = ['intercontinental'];
+      /* La agenda solo contiene cuartos/semis/final. Para Octavos
+         (pre-existente en la pantalla pero no en la agenda) no hay
+         fecha — `required` se vacía para que ningún row puntúe. */
+      if (hasOctavos && !hasCuartos && !hasSemis && !hasFin){
+        p.required = ['__no_match__'];
+      }
+      if (hasCuartos) p.bonus.push('cuartos');
+      if (hasSemis) p.bonus.push('semis');
+      if (hasFin) p.bonus.push('final');
+    } else if (compClass === 'c-ucl' || compClass === 'c-uel' || compClass === 'c-uecl'){
+      /* Las 3 comps comparten el mismo agenda slot
+         "Europa — Grupo J<N>" / "Europa — <ronda> Ida/Vuelta".
+         Excepto la FINAL — el agenda puede tenerla como
+         "FINALES EUROPA 🏆" (combinada) o por comp aparte
+         "🔵 FINAL Champions League" / "🟠 FINAL Europa League"
+         / "🟢 FINAL Conference League". */
+      if (jNum && !hasIda && !hasVue && !hasFin && !hasSemis &&
+          !hasCuartos && !hasOctavos && !hasRepesca){
+        p.required = ['grupo','j' + jNum];
+      } else if (hasFin && !hasSemis && !hasCuartos && !hasOctavos){
+        /* FINAL específica de la comp. */
+        p.required = ['final'];
+        var compName = (compClass === 'c-ucl')  ? 'champions' :
+                       (compClass === 'c-uel')  ? 'europa league' :
+                                                  'conference';
+        p.bonus = [compName, 'europa'];
+        if (compClass === 'c-ucl'){
+          p.anti = ['conference','europa league','copa','supercopa','recopa',
+                    'intercontinental','selecciones','liga'];
+        } else if (compClass === 'c-uel'){
+          p.anti = ['conference','champions','copa','supercopa','recopa',
+                    'intercontinental','selecciones','liga'];
+        } else {
+          p.anti = ['champions','europa league','copa','supercopa','recopa',
+                    'intercontinental','selecciones','liga'];
+        }
+      } else {
+        p.required = ['europa'];
+        p.anti = ['grupo','recopa','supercopa','liga','intercontinental'];
+        if (hasIda) p.bonus.push('ida');
+        if (hasVue) p.bonus.push('vuelta');
+        if (hasSemis) p.bonus.push('semis');
+        if (hasCuartos) p.bonus.push('cuartos');
+        if (hasOctavos) p.bonus.push('octavos');
+        if (hasRepesca) p.bonus.push('repesca');
+        if (hasIda) p.anti.push('vuelta');
+        if (hasVue) p.anti.push('ida');
+      }
+    } else if (compClass === 'c-mundial'){
+      /* Mundialito de Clubes — la agenda no lo lista en este JSON,
+         devolverá '' (sin fecha). No es un fallo, es esperado. */
+      p.required = ['mundialito clubes'];
+    }
+    return p;
+  }
+
+  function _findDate(btnText, compClass){
+    var rows = _readAgenda();
+    if (!rows.length) return '';
+    var btnN = _norm(btnText);
+    if (!btnN) return '';
+    var prof = _profileFor(compClass, btnN);
+    if (!prof.required.length) return '';
+
+    var bestScore = -1, bestDate = '';
+    for (var i = 0; i < rows.length; i++){
+      var lab = rows[i].labN;
+      var ok = true;
+      for (var k = 0; k < prof.required.length; k++){
+        if (lab.indexOf(prof.required[k]) === -1) { ok = false; break; }
+      }
+      if (!ok) continue;
+      var score = 1;
+      for (var b = 0; b < prof.bonus.length; b++){
+        if (lab.indexOf(prof.bonus[b]) !== -1) score += 3;
+      }
+      for (var a = 0; a < prof.anti.length; a++){
+        if (lab.indexOf(prof.anti[a]) !== -1) score -= 6;
+      }
+      if (score > bestScore) { bestScore = score; bestDate = rows[i].date; }
+    }
+    return bestDate;
+  }
+
+  function _formatDate(s){
+    return String(s||'').replace(/\s+/g,' ').trim();
+  }
+
+  function _processBtn(btn){
+    if (!btn || !btn.classList) return;
+    /* Saltar botones ocultos / non-clickable / cursor:default. */
+    var styleAttr = btn.getAttribute('style') || '';
+    if (styleAttr.indexOf('cursor:default') !== -1) return;
+    /* Saltar buttons en s-calendario (ya tienen fecha inline). */
+    if (btn.closest && btn.closest('#s-calendario')) return;
+    /* Detectar comp class. */
+    var compClass = '';
+    for (var ci = 0; ci < COMP_CLASSES.length; ci++){
+      if (btn.classList.contains(COMP_CLASSES[ci])) {
+        compClass = COMP_CLASSES[ci]; break;
+      }
+    }
+    if (!compClass) return;
+
+    /* Capturar texto ORIGINAL antes de acortar. */
+    var origText = '';
+    if (!btn._jorOrigText) {
+      origText = btn.textContent || '';
+      btn._jorOrigText = origText;
+    } else {
+      origText = btn._jorOrigText;
+    }
+
+    /* Acortar label en sus text-nodes. Recurse en <b>, <span> y otros
+       elementos del label, pero salta:
+         · `.jor-date` (nuestra propia fecha)
+         · `.pdot` (decorador ▶)
+         · spans contadores (clases que terminan en `-cnt`) */
+    function _shouldSkipChild(el){
+      if (!el || !el.classList) return false;
+      if (el.classList.contains('jor-date')) return true;
+      if (el.classList.contains('pdot')) return true;
+      var cls = el.className || '';
+      if (typeof cls !== 'string') cls = el.classList.value || '';
+      if (/(?:^|\s)[a-z0-9-]+-cnt(?:\s|$)/.test(cls)) return true;
+      return false;
+    }
+    function _shortenInPlace(el){
+      if (!el || !el.childNodes) return;
+      for (var ix = 0; ix < el.childNodes.length; ix++){
+        var n = el.childNodes[ix];
+        if (n.nodeType === 3) { /* Node.TEXT_NODE */
+          var t = n.nodeValue;
+          var s = _shorten(t);
+          if (s !== t) n.nodeValue = s;
+        } else if (n.nodeType === 1 && !_shouldSkipChild(n)) {
+          _shortenInPlace(n);
+        }
+      }
+    }
+    _shortenInPlace(btn);
+
+    /* Buscar la fecha. */
+    var date = _findDate(origText, compClass);
+    if (!date) return;
+
+    /* Inyectar / refrescar el `.jor-date` al final del botón. */
+    var existing = btn.querySelector(':scope > .jor-date');
+    if (!existing) {
+      existing = document.createElement('span');
+      existing.className = 'jor-date';
+      btn.appendChild(existing);
+    } else if (existing !== btn.lastElementChild) {
+      btn.appendChild(existing); /* mover al final si hay otros spans */
+    }
+    var formatted = _formatDate(date);
+    if (existing.textContent !== formatted) existing.textContent = formatted;
+  }
+
+  function _scan(){
+    try {
+      var btns = document.querySelectorAll('.jbtn');
+      btns.forEach(_processBtn);
+    } catch (e) {}
+  }
+
+  function _scanLater(){
+    setTimeout(_scan, 0);
+    setTimeout(_scan, 150);
+    setTimeout(_scan, 450);
+  }
+
+  function _wire(){
+    _scan();
+    /* Hook window.go() para re-escanear al cambiar de pantalla. */
+    var orig = window.go;
+    if (typeof orig === 'function' && !orig._jorDatesPatched) {
+      window.go = function(id){
+        var r = orig.apply(this, arguments);
+        _scanLater();
+        return r;
+      };
+      window.go._jorDatesPatched = true;
+    }
+    /* MutationObserver throttled (250 ms) sobre body. */
+    var pend = null;
+    try {
+      new MutationObserver(function(){
+        if (pend) return;
+        pend = setTimeout(function(){ pend = null; _scan(); }, 250);
+      }).observe(document.body, { childList: true, subtree: true });
+    } catch (e) {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _wire);
+  } else {
+    _wire();
+  }
+
+  /* Debug: window._jorDatesScan() / window._jorDatesProfile(btn). */
+  window._jorDatesScan = _scan;
+  window._jorDatesAgenda = _readAgenda;
+})();
+</script>

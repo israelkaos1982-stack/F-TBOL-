@@ -1990,6 +1990,49 @@
     _prevScreen = id;
     return ret;
   };
+  /* Audio Champions OFF de raíz: el bundle (`index.bundle.js` línea
+     2259) tiene una `playCompSound` LOCAL no expuesta en `window`,
+     así que mi override de `window.playCompSound` no la frenaba —
+     el bundle's wrap llamaba a la versión local que sigue
+     ejecutando `snd.play()`. La única forma robusta de pararla SIN
+     tocar el bundle es anular el método `play` del propio elemento
+     <audio>. Petición usuario 2026-05-09 (insiste): "elimina la
+     música por completo, hazlo ya". */
+  function _killAudioElement(id){
+    var el = document.getElementById(id);
+    if(!el) return false;
+    try {
+      el.muted = true;
+      el.volume = 0;
+      el.autoplay = false;
+      el.preload = 'none';
+      try { el.pause(); } catch(_){}
+      try { el.currentTime = 0; } catch(_){}
+      /* Reescribimos `play` para que devuelva una promesa resuelta
+         sin reproducir nada. El bundle hace `.play().catch(...)`
+         así que necesitamos una thenable válida. */
+      el.play = function(){ return Promise.resolve(); };
+      /* Por extra-defensa: si algo intenta `el.src = ...` o
+         `el.load()` y vuelve a habilitarlo, los listeners de
+         `loadeddata`/`canplay` re-aplican el silencio. */
+      el.addEventListener('loadeddata', function(){ try { el.muted = true; el.volume = 0; el.pause(); } catch(_){} });
+      el.addEventListener('canplay',     function(){ try { el.muted = true; el.volume = 0; el.pause(); } catch(_){} });
+      el.addEventListener('play',        function(){ try { el.pause(); el.currentTime = 0; } catch(_){} });
+    } catch(_){}
+    return true;
+  }
+  function _killChampionsAudio(){
+    /* Reintentos: el <audio> está estático en el DOM, debería
+       existir desde el inicio, pero blindamos por si el bundle
+       lo recreara. */
+    if(!_killAudioElement('snd-ucl')) setTimeout(_killChampionsAudio, 250);
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _killChampionsAudio);
+  } else {
+    _killChampionsAudio();
+  }
+  setTimeout(_killChampionsAudio, 600);   /* segunda pasada por blindaje */
 })();
 </script>
 <canvas id="fireworks-canvas"></canvas>

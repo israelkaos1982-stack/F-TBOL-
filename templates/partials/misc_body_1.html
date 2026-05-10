@@ -14718,6 +14718,35 @@ window._showSimProgress = function(opts, onDone){
      `{ teams, pairs[{home,away,jornada}], drawnAt }`.
      Sync server vía /api/kv para que sobreviva a borrados de
      localStorage / cambios de dispositivo. ═════════════════ -->
+<style>
+/* ── Cards de jornada UCL/UEL/UECL — estilo Copa del Rey con paleta
+   azul Champions (petición usuario 2026-05-10). HvH/HvIA con borde
+   ROSA llamativo + gradient azul; IA-vs-IA con borde gris sutil. */
+.eurfase-section{margin:8px 0 18px}
+.eurfase-section-hdr{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.5px;padding:10px 14px 6px;text-transform:uppercase;font-weight:700;}
+.eurfase-section-human .eurfase-section-hdr{color:#ff80b0;border-left:3px solid #ff5fb0;background:linear-gradient(90deg,rgba(255,95,176,.10),transparent);margin:8px 8px 0;border-radius:0 4px 4px 0;}
+.eurfase-section-ia .eurfase-section-hdr{color:#9fc8ff;border-left:3px solid #3a78d8;background:linear-gradient(90deg,rgba(58,120,216,.10),transparent);margin:8px 8px 0;border-radius:0 4px 4px 0;}
+.eurfase-card-rich{display:block;border-radius:10px;margin:6px 8px;padding:10px 8px;position:relative;overflow:hidden;}
+.eurfase-card-row{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+.eurfase-card-team{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;}
+.eurfase-card-shield{width:48px;height:48px;display:flex;align-items:center;justify-content:center;}
+.eurfase-card-shield img{width:100%;height:100%;object-fit:contain;}
+.eurfase-card-name{font-family:Rajdhani,sans-serif;font-size:12.5px;font-weight:700;color:#fff;text-align:center;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.eurfase-card-center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:90px;}
+.eurfase-card-score{display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:4px 12px;min-width:80px;text-align:center;}
+.eurfase-card-score-num{color:#9fc8ff;font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;line-height:1;}
+.eurfase-card-score-pending{color:rgba(255,255,255,.5);font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;line-height:1;}
+.eurfase-card-fin{display:inline-block;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1.5px;color:#9fc8ff;border:1px solid rgba(159,200,255,.45);border-radius:6px;padding:4px 12px;background:rgba(48,96,255,.10);}
+.eurfase-card-btn{margin-top:0;}
+.eurfase-btn-previa{display:inline-block;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.2px;color:#ff7a8a;background:rgba(255,40,80,.06);border:1px solid rgba(255,80,120,.55);border-radius:6px;padding:5px 14px;cursor:pointer;text-transform:uppercase;}
+.eurfase-btn-previa:active{background:rgba(255,40,80,.15);}
+.eurfase-btn-sim{display:inline-block;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:#5fe08a;background:rgba(60,210,120,.06);border:1px solid rgba(95,224,138,.55);border-radius:6px;padding:5px 14px;cursor:pointer;text-transform:uppercase;}
+.eurfase-btn-sim:active{background:rgba(60,210,120,.18);}
+.eurfase-btn-sim:disabled{opacity:.7;cursor:default;}
+.eurfase-card-acta{border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px;font-family:Rajdhani,sans-serif;font-size:12px;max-height:240px;overflow-y:auto;color:rgba(255,255,255,.85);}
+.eurfase-sim-all{padding:8px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;background:rgba(255,160,40,.15);color:#ffa050;border:1.5px solid rgba(255,160,40,.55);text-transform:uppercase;}
+.eurfase-sim-all:active{background:rgba(255,160,40,.28);}
+</style>
 <script>
 (function(){
   var COMPS = {
@@ -15242,9 +15271,121 @@ window._showSimProgress = function(opts, onDone){
     }
   };
 
-  /* ── Render de jornadas — sustituye los `Por definir` por las
-     parejas del sorteo. Si no hay sorteo, mantenemos el placeholder
-     antiguo para no romper la UI. */
+  /* ── Render de jornadas — estilo Copa del Rey (petición usuario
+     2026-05-10). Cards con escudos, humanos ARRIBA con gradient
+     azul Champions + borde rosa, IA-vs-IA DEBAJO en cards más
+     sobrias. Botón "📋 PREVIA" para HvH/HvIA, botón "▶ SIMULAR"
+     para IA-vs-IA (usa `iaSimLive` con prefijo `eurfase_`). NO se
+     muestra el "nivel"/power del equipo (regla del usuario:
+     "el nivel del equipo humano NO DEBE SALIR ahí"). */
+  function _resolveLogoFor(name, fallbackLogo){
+    if(fallbackLogo) return fallbackLogo;
+    try {
+      if(typeof window.getTeamLogoUrl === 'function'){
+        var l = window.getTeamLogoUrl(name);
+        if(l) return l;
+      }
+    } catch(_){}
+    return '';
+  }
+  function _humanIcoFor(name){
+    try {
+      if(typeof window.humanIcon === 'function'){
+        var i = window.humanIcon(name);
+        if(i) return i;
+      }
+    } catch(_){}
+    return '';
+  }
+  function _isHumanTeam(name){
+    if(!name) return false;
+    if(typeof window.isHumanTeam === 'function'){
+      try { return !!window.isHumanTeam(name); } catch(_){}
+    }
+    var H = window.HUMAN_TEAMS || ['Real Madrid','FC Barcelona','Atlético Madrid','Atletico Madrid','Arsenal','Bayern Munich','Bayern Munchen','Bayern Muenchen'];
+    var n = String(name||'').trim().toLowerCase();
+    for(var i = 0; i < H.length; i++){
+      if(String(H[i]||'').trim().toLowerCase() === n) return true;
+    }
+    return false;
+  }
+  function _renderEurMatchCard(comp, m, teamsByName){
+    var ha = teamsByName[m.home] || { name: m.home, logo: '' };
+    var aa = teamsByName[m.away] || { name: m.away, logo: '' };
+    var hHum = _isHumanTeam(m.home);
+    var vHum = _isHumanTeam(m.away);
+    var anyHum = hHum || vHum;
+    var bothIA = !hHum && !vHum;
+    var played = !!m.played;
+    var hLogo = _resolveLogoFor(m.home, ha.logo);
+    var vLogo = _resolveLogoFor(m.away, aa.logo);
+    var hHi = _humanIcoFor(m.home);
+    var vHi = _humanIcoFor(m.away);
+    /* Estilos: gradient AZUL Champions con bordes según tipo. */
+    var wrapStyle;
+    if(hHum && vHum){
+      wrapStyle = 'background:linear-gradient(120deg,rgba(48,96,255,.55) 0%,rgba(20,40,160,.40) 50%,rgba(48,96,255,.55) 100%);'
+                + 'border:2px solid #ff5fb0;'
+                + 'box-shadow:0 0 18px rgba(255,95,176,.55),0 0 36px rgba(48,96,255,.30),inset 0 0 0 1px rgba(255,95,176,.55);';
+    } else if(anyHum){
+      wrapStyle = 'background:linear-gradient(120deg,rgba(48,96,255,.50) 0%,rgba(15,35,140,.30) 50%,rgba(48,96,255,.30) 100%);'
+                + 'border:2px solid #ff5fb0;'
+                + 'box-shadow:0 0 14px rgba(255,95,176,.45),0 0 24px rgba(48,96,255,.20),inset 0 0 0 1px rgba(255,95,176,.55);';
+    } else {
+      wrapStyle = 'background:linear-gradient(180deg,rgba(20,40,90,.35),rgba(8,15,40,.55));'
+                + 'border:1px solid rgba(255,255,255,.18);'
+                + 'box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);';
+    }
+    var mk = 'eurfase_' + comp + '_' + m.jornada + '_' + m._origIdx;
+    var scoreTxt;
+    if(played){
+      scoreTxt = '<span class="eurfase-card-score-num">' + (Number(m.gh)||0) + ' – ' + (Number(m.ga)||0) + '</span>';
+    } else if(bothIA){
+      scoreTxt = '<span id="ia-sc-' + mk + '-a" class="eurfase-card-score-pending">–</span>'
+               + '<span class="eurfase-card-score-pending" style="margin:0 4px">–</span>'
+               + '<span id="ia-sc-' + mk + '-b" class="eurfase-card-score-pending">–</span>';
+    } else {
+      scoreTxt = '<span class="eurfase-card-score-pending">– – –</span>';
+    }
+    var btnHtml;
+    if(played){
+      btnHtml = '<div class="eurfase-card-fin">🏁 FIN</div>';
+    } else if(bothIA){
+      var hEsc = String(m.home).replace(/'/g,"\\'");
+      var aEsc = String(m.away).replace(/'/g,"\\'");
+      btnHtml = '<button id="ia-sim-btn-' + mk + '" class="eurfase-btn-sim" '
+              + 'onclick="window.iaSimLive(\'' + mk + '\',\'' + hEsc + '\',\'' + aEsc + '\',0)">▶ SIMULAR</button>';
+    } else {
+      btnHtml = '<button class="eurfase-btn-previa" '
+              + 'onclick="window._eurFaseAbrirPrevia(\'' + comp + '\',' + m.jornada + ',' + m._origIdx + ')">📋 PREVIA</button>';
+    }
+    var hShield = hLogo
+      ? '<img src="' + _esc(hLogo) + '" onerror="this.style.display=\'none\'">'
+      : '<span style="font-size:32px;color:rgba(159,200,255,.55);">🛡</span>';
+    var vShield = vLogo
+      ? '<img src="' + _esc(vLogo) + '" onerror="this.style.display=\'none\'">'
+      : '<span style="font-size:32px;color:rgba(159,200,255,.55);">🛡</span>';
+    var actaEl = (bothIA && !played)
+      ? '<div id="ia-acta-' + mk + '" class="eurfase-card-acta" style="display:none"></div>'
+      : '';
+    return '<div class="eurfase-card-rich" style="' + wrapStyle + '">'
+         + '<div class="eurfase-card-row">'
+         +   '<div class="eurfase-card-team">'
+         +     '<div class="eurfase-card-shield">' + hShield + '</div>'
+         +     '<div class="eurfase-card-name">' + hHi + _esc(m.home) + '</div>'
+         +   '</div>'
+         +   '<div class="eurfase-card-center">'
+         +     '<div class="eurfase-card-score ml-score">' + scoreTxt + '</div>'
+         +     '<div class="eurfase-card-btn">' + btnHtml + '</div>'
+         +   '</div>'
+         +   '<div class="eurfase-card-team">'
+         +     '<div class="eurfase-card-shield">' + vShield + '</div>'
+         +     '<div class="eurfase-card-name">' + vHi + _esc(m.away) + '</div>'
+         +   '</div>'
+         + '</div>'
+         + actaEl
+         + '</div>';
+  }
   function renderJornada(comp, jor){
     var c = COMPS[comp]; if(!c) return false;
     var titleEl = document.getElementById(c.titleId);
@@ -15252,40 +15393,152 @@ window._showSimProgress = function(opts, onDone){
     if(!titleEl || !bodyEl) return false;
     titleEl.textContent = c.jornTitleTpl.replace('%j%', jor);
     var state = loadState(comp);
-    var matches = (state && state.pairs)
-      ? state.pairs.filter(function(p){ return p.jornada === jor; })
-      : [];
     var teamsByName = {};
     if(state && state.teams){
       state.teams.forEach(function(t){ teamsByName[t.name] = t; });
     }
-    var html = '<div class="jlist"><div class="jmatches" style="display:block;">';
-    if(matches.length){
-      matches.forEach(function(m){
-        var ha = teamsByName[m.home] || { name: m.home, logo: '' };
-        var aa = teamsByName[m.away] || { name: m.away, logo: '' };
-        var logoH = ha.logo ? '<img src="' + _esc(ha.logo) + '" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:6px;" onerror="this.style.display=\'none\'">' : '';
-        var logoA = aa.logo ? '<img src="' + _esc(aa.logo) + '" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-left:6px;" onerror="this.style.display=\'none\'">' : '';
-        html += '<div class="mrow">'
-          +   '<div class="mn">' + logoH + _esc(ha.name) + '</div>'
-          +   '<div class="ms p">vs</div>'
-          +   '<div class="mn r">' + _esc(aa.name) + logoA + '</div>'
-          + '</div>';
+    /* matches con índice ORIGINAL en state.pairs (para persistencia
+       sin re-resolver al guardar resultado IA o humano). */
+    var matches = [];
+    if(state && state.pairs){
+      state.pairs.forEach(function(p, idx){
+        if(p && p.jornada === jor){
+          matches.push({
+            home: p.home, away: p.away, jornada: p.jornada,
+            gh: p.gh, ga: p.ga, played: !!p.played,
+            events: p.events || [], mvp: p.mvp || '', mvpTeam: p.mvpTeam || '',
+            _origIdx: idx
+          });
+        }
       });
-    } else {
-      for(var i = 0; i < 20; i++){
-        html += '<div class="mrow">'
-          +   '<div class="mn">Por definir</div>'
-          +   '<div class="ms p">vs</div>'
-          +   '<div class="mn r">Por definir</div>'
-          + '</div>';
-      }
     }
-    html += '</div></div>';
+    if(!matches.length){
+      bodyEl.innerHTML = '<div style="padding:18px 14px;text-align:center;color:rgba(255,255,255,.55);font-style:italic;font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.5;">'
+        + '⚠️ Esta jornada aún no se ha sorteado.<br>'
+        + 'Vuelve a la pantalla de Fase de Liga y pulsa <b>🎯 Sortear</b> '
+        + '(requiere PIN admin 747).</div>';
+      go(c.gotoId);
+      return true;
+    }
+    /* Clasificación: HvH → HvIA → IA-vs-IA. */
+    var hvhMatches = [], hviaMatches = [], iaiaMatches = [];
+    matches.forEach(function(m){
+      var hH = _isHumanTeam(m.home);
+      var aH = _isHumanTeam(m.away);
+      if(hH && aH) hvhMatches.push(m);
+      else if(hH || aH) hviaMatches.push(m);
+      else iaiaMatches.push(m);
+    });
+    var html = '';
+    if(hvhMatches.length || hviaMatches.length){
+      html += '<div class="eurfase-section eurfase-section-human">'
+            + '<div class="eurfase-section-hdr">⭐ Partidos Humanos</div>';
+      hvhMatches.forEach(function(m){ html += _renderEurMatchCard(comp, m, teamsByName); });
+      hviaMatches.forEach(function(m){ html += _renderEurMatchCard(comp, m, teamsByName); });
+      html += '</div>';
+    }
+    if(iaiaMatches.length){
+      var pendingIA = iaiaMatches.some(function(m){ return !m.played; });
+      html += '<div class="eurfase-section eurfase-section-ia">'
+            + '<div class="eurfase-section-hdr">🤖 Partidos IA vs IA</div>';
+      if(pendingIA){
+        html += '<div style="display:flex;justify-content:center;padding:6px 0 8px;">'
+              + '<button class="eurfase-sim-all" '
+              + 'onclick="window._eurFaseSimAllIA(\'' + comp + '\',' + jor + ')">'
+              + '⚡ Simular toda la jornada IA</button></div>';
+      }
+      iaiaMatches.forEach(function(m){ html += _renderEurMatchCard(comp, m, teamsByName); });
+      html += '</div>';
+    }
     bodyEl.innerHTML = html;
     go(c.gotoId);
     return true;
   }
+  /* ── Helpers expuestos: Previa (HvH/HvIA) + Sim All IA. ────────── */
+  window._eurFaseAbrirPrevia = function(comp, jor, idx){
+    var c = COMPS[comp]; if(!c) return;
+    var state = loadState(comp); if(!state || !state.pairs || !state.pairs[idx]) return;
+    var pair = state.pairs[idx];
+    var local = pair.home, visit = pair.away;
+    var isHvH = _isHumanTeam(local) && _isHumanTeam(visit);
+    var matchKey = 'eurfase_' + comp + '_' + jor + '_' + idx;
+    var duracion = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
+      : (isHvH ? '15 min 45 s' : '9 min 45 s');
+    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: comp,
+      eurFaseComp: comp, eurFaseJor: jor, eurFaseIdx: idx };
+    window._eurFasePending = { comp: comp, jor: jor, idx: idx, home: local, away: visit, isHvH: isHvH };
+    window._ppCustomCallback = function(){
+      window._ppPreviaTeams = null;
+      if(typeof window.gmOpen !== 'function') return;
+      try {
+        window.gmOpen(0, local, visit, isHvH, comp, false, false);
+        if(window.__GM_LIVE){
+          window.__GM_LIVE._isEurFase = true;
+          window.__GM_LIVE._eurFaseComp = comp;
+          window.__GM_LIVE._eurFaseJor = jor;
+          window.__GM_LIVE._eurFaseIdx = idx;
+        }
+      } catch(_){}
+    };
+    if(typeof window.showPrePartidoOverlay === 'function'){
+      /* Fase de liga = single-leg sin prórroga (regla UEFA Swiss).
+         duracion solo aplica si humano implicado. */
+      window.showPrePartidoOverlay(matchKey, comp, 'No', duracion, isHvH);
+    }
+  };
+  window._eurFaseSimAllIA = function(comp, jor){
+    var state = loadState(comp); if(!state || !state.pairs) return;
+    var pairs = state.pairs;
+    var queue = [];
+    pairs.forEach(function(m, i){
+      if(!m || m.jornada !== jor || m.played) return;
+      if(_isHumanTeam(m.home) || _isHumanTeam(m.away)) return;
+      queue.push(i);
+    });
+    var k = 0;
+    function next(){
+      if(k >= queue.length) return;
+      var i = queue[k++];
+      var btn = document.getElementById('ia-sim-btn-eurfase_' + comp + '_' + jor + '_' + i);
+      if(btn && !btn.disabled){
+        try { btn.click(); } catch(_){}
+      }
+      setTimeout(next, 220);
+    }
+    next();
+  };
+  /* ── Persistencia tras IA-vs-IA (callback de iaSimLive con prefijo
+     `eurfase_<comp>_<jor>_<idx>`). ─────────────────────────────── */
+  window._eurFasePersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam){
+    var m = /^eurfase_([a-z]+)_(\d+)_(\d+)$/.exec(String(mk||''));
+    if(!m) return;
+    var comp = m[1], jor = parseInt(m[2],10)|0, idx = parseInt(m[3],10)|0;
+    var state = loadState(comp); if(!state || !state.pairs || !state.pairs[idx]) return;
+    var pair = state.pairs[idx];
+    pair.gh = Number(scA)||0;
+    pair.ga = Number(scB)||0;
+    pair.played = true;
+    pair.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    pair.mvp = mvp || '';
+    pair.mvpTeam = mvpTeam || '';
+    saveState(comp, state);
+    setTimeout(function(){ try { renderJornada(comp, jor); } catch(_){} }, 600);
+  };
+  /* ── Persistencia tras humano (callback de gmEndMatch con
+     `_isEurFase`). ─────────────────────────────────────────────── */
+  window._eurFaseSaveHumanResult = function(comp, jor, idx, gh, ga, events, mvp, mvpTeam, home, away){
+    var state = loadState(comp); if(!state || !state.pairs || !state.pairs[idx]) return;
+    var pair = state.pairs[idx];
+    pair.gh = Number(gh)||0;
+    pair.ga = Number(ga)||0;
+    pair.played = true;
+    pair.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    pair.mvp = mvp || '';
+    pair.mvpTeam = mvpTeam || '';
+    saveState(comp, state);
+    setTimeout(function(){ try { renderJornada(comp, jor); } catch(_){} }, 200);
+  };
 
   /* Patch los openers existentes para que consuman el state. */
   Object.keys(COMPS).forEach(function(comp){

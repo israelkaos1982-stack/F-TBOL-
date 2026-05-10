@@ -23726,9 +23726,7 @@ Tottenham
   };
   window._bayernEditValuesSave = function(){
     /* Locale-tolerant parsers: aceptan coma como separador decimal (ES)
-       además de punto. Antes "8,8" → parseFloat → 8 → ratingTarget se
-       guardaba mal y al re-aplicar caía al default 9.10. Bug FOTO 1-3
-       reportado por el usuario 2026-05-09. */
+       además de punto. */
     function num(id){
       var raw = document.getElementById(id).value;
       if (raw == null) return null;
@@ -23752,9 +23750,8 @@ Tottenham
       moneyTarget:  intg('me-money-target'),
       pi:           intg('me-pi')
     };
-    /* Sanity check: si TODOS los campos son null (parser falló por
-       completo, p.ej. inputs vacíos), no machaques el override
-       previo — sería como hacer un Reset accidental. */
+    /* Sanity check: si TODOS los campos son null, no machaques el
+       override previo — sería un Reset accidental. */
     var allNull = Object.keys(o).every(function(k){ return o[k] == null; });
     if (allNull) {
       alert('⚠ No se ha podido leer ningún valor. Revisa los campos antes de guardar.');
@@ -23762,7 +23759,50 @@ Tottenham
     }
     var ok = save(o);
     if (!ok) return;  /* alert ya mostrado en save() */
-    apply();
+    /* Persistencia secundaria en sessionStorage como backup (por si
+       el localStorage tiene algún corrupting-event raro entre
+       sesiones). */
+    try { sessionStorage.setItem(KEY, JSON.stringify(o)); } catch(_){}
+    /* ESCRITURA DIRECTA al DOM (no esperamos a apply): aseguramos
+       feedback visual inmediato AUNQUE haya un MutationObserver
+       loop o un athObjCount async que se cuele. Petición usuario
+       2026-05-09 ("fuerzalo"). */
+    applying = true;
+    try {
+      if (o.rating != null) {
+        var rEl = document.getElementById('ath-pts-val');
+        if (rEl) rEl.textContent = Number(o.rating).toFixed(2);
+      }
+      if (o.money != null) {
+        var mEl = document.getElementById('ath-money-val');
+        if (mEl) mEl.textContent = String(parseInt(o.money,10)|0);
+      }
+      if (o.pi != null) {
+        var pEl = document.getElementById('ath-med-val');
+        if (pEl) pEl.textContent = String(parseInt(o.pi,10)|0);
+      }
+      if (o.ratingTarget != null) {
+        var rT = _smallTarget('.munich-hud-val');
+        if (rT) rT.textContent = '/ ' + Number(o.ratingTarget).toFixed(2);
+      }
+      if (o.moneyTarget != null) {
+        var mT = _smallTarget('.munich-hud-money');
+        if (mT) mT.textContent = '/ ' + (parseInt(o.moneyTarget,10)|0) + '€';
+      }
+    } finally { applying = false; }
+    apply();   /* segunda pasada por blindaje (idempotente) */
+    /* Toast verde de confirmación — el usuario reportó que "edito
+       y no se guarda" sin ver ningún cambio. Feedback explícito. */
+    try {
+      var prev = document.getElementById('bayern-hud-save-toast');
+      if (prev) prev.remove();
+      var t = document.createElement('div');
+      t.id = 'bayern-hud-save-toast';
+      t.textContent = '✓ HUD guardado';
+      t.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:rgba(60,200,120,.95);color:#0a1408;padding:10px 18px;border-radius:10px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;z-index:1000099;box-shadow:0 4px 18px rgba(0,0,0,.45);';
+      document.body.appendChild(t);
+      setTimeout(function(){ try { t.remove(); } catch(_){} }, 2200);
+    } catch(_){}
     window._bayernEditValuesClose();
   };
   window._bayernEditValuesReset = function(){
@@ -23784,11 +23824,42 @@ Tottenham
     if (typeof window.pG === 'function') window.pG(window._bayernEditValuesOpen);
     else window._bayernEditValuesOpen();
   };
-  function boot(){ apply(); setupObservers(); }
+  function boot(){ apply(); setupObservers(); _startGuardian(); }
   /* Expuesto para que otros módulos (athObjCount post-patch,
      activate de s-munich, etc.) puedan re-aplicar los overrides
      después de que el HUD haya sido reescrito por la cadena legacy. */
   window._bayernHudReapply = apply;
+  /* GUARDIAN: setInterval que cada 400 ms verifica si el DOM del
+     HUD coincide con el override de localStorage, y si no, lo
+     restaura. El usuario reportó "edito y no se guarda" incluso
+     tras los fixes anteriores — sospecha de que algún módulo del
+     bundle escribe asíncrono fuera del MutationObserver / del
+     wrap a athObjCount. El guardian es la red de seguridad
+     definitiva: max 400 ms entre que algo machaca el HUD y que
+     se restaura. Solo corre si HAY override (sin override no
+     hace nada — no rompe el flujo "auto" para usuarios sin
+     edición manual). Petición usuario 2026-05-09 ("fuerzalo").
+     Coste: ~5 µs por tick (5 getElementById + 5 textContent reads). */
+  var _guardianInterval = null;
+  function _startGuardian(){
+    if (_guardianInterval) return;
+    _guardianInterval = setInterval(function(){
+      var o;
+      try { o = load(); } catch(_){ return; }
+      if (!o || !Object.keys(o).length) return;
+      var dirty = false;
+      function _check(elId, expected){
+        var el = document.getElementById(elId);
+        if (!el) return;
+        var cur = String(el.textContent || '').trim();
+        if (cur !== String(expected)) dirty = true;
+      }
+      if (o.rating != null) _check('ath-pts-val', Number(o.rating).toFixed(2));
+      if (o.money != null)  _check('ath-money-val', String(parseInt(o.money,10)|0));
+      if (o.pi != null)     _check('ath-med-val', String(parseInt(o.pi,10)|0));
+      if (dirty) apply();
+    }, 400);
+  }
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 200); });
   } else {

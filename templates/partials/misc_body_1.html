@@ -5074,7 +5074,12 @@ window._showSimProgress = function(opts, onDone){
     if (comp === 'inter')     return 'ef_player_stats_inter_v1';
     if (comp === 'mundial')   return 'ef_player_stats_mundial_v1';
     if (comp === 'sel')       return 'ef_player_stats_sel_v1';
-    if (comp === 'amistoso')  return 'ef_player_stats_amistoso_v1';
+    /* Petición usuario 2026-05-09: amistosos y torneos de verano (SCT,
+       PSS, JG, Asia) comparten una sola caja de stats — la pantalla
+       `s-torneos-stats` que está debajo de los 4 torneos en el menú
+       de Competiciones — y NO se vuelcan a la plantilla global. */
+    if (comp === 'torneos' || comp === 'torneo' ||
+        comp === 'amistoso')  return 'ef_player_stats_torneos_v1';
     return PLAYER_STATS_KEY; /* liga + copa + sc (EA Sports) */
   };
 
@@ -5231,7 +5236,10 @@ window._showSimProgress = function(opts, onDone){
       inter:      {},   /* Intercontinental */
       mundial:    {},   /* Mundial de Clubes / Mundialito */
       sel:        {},
-      amistoso:   {}
+      /* `torneos` agrupa torneos de verano (SCT/PSS/JG/Asia) +
+         amistosos. Su key matchKey se infiere de `tour_*` o
+         `amistoso*`/`cal-ams*`. Petición usuario 2026-05-09. */
+      torneos:    {}
     };
     var teamPJByComp = {
       liga:       {},
@@ -5249,7 +5257,7 @@ window._showSimProgress = function(opts, onDone){
       inter:      {},
       mundial:    {},
       sel:        {},
-      amistoso:   {}
+      torneos:    {}
     };
 
     function getOrCreateInBucket(bucket, teamName, playerName){
@@ -5299,8 +5307,11 @@ window._showSimProgress = function(opts, onDone){
           || k.indexOf('|cwc|') !== -1) return 'mundial';
       if (k.indexOf('|sel|') !== -1 || k.indexOf('|sel-fin|') !== -1
           || k.indexOf('cal-sel') !== -1 || k.indexOf('cal-mf-') !== -1) return 'sel';
+      /* Torneos de verano + amistosos → bucket único `torneos`
+         (s-torneos-stats). Petición usuario 2026-05-09. */
+      if (k.indexOf('tour_') === 0 || k.indexOf('|torneo|') !== -1) return 'torneos';
       if (k.indexOf('|amistoso|') !== -1 || k.indexOf('cal-ams') !== -1
-          || k.indexOf('amistoso') === 0) return 'amistoso';
+          || k.indexOf('amistoso') === 0) return 'torneos';
       if (k.indexOf('sl-')  === 0 || k.indexOf('-sl')  !== -1
           || k.indexOf('|superliga|') !== -1
           || k.indexOf('superliga') !== -1) return 'superliga';
@@ -5633,7 +5644,9 @@ window._showSimProgress = function(opts, onDone){
     _persistBucket(buckets.inter,     teamPJByComp.inter,     'ef_player_stats_inter_v1');
     _persistBucket(buckets.mundial,   teamPJByComp.mundial,   'ef_player_stats_mundial_v1');
     _persistBucket(buckets.sel,       teamPJByComp.sel,       'ef_player_stats_sel_v1');
-    _persistBucket(buckets.amistoso,  teamPJByComp.amistoso,  'ef_player_stats_amistoso_v1');
+    /* `torneos` recoge torneos de verano + amistosos → la caja
+       `s-torneos-stats` debajo de los 4 torneos en el menú. */
+    _persistBucket(buckets.torneos,   teamPJByComp.torneos,   'ef_player_stats_torneos_v1');
     _persistBucket(buckets.sc,        teamPJByComp.sc,        'ef_player_stats_sc_v1');
     /* Cache AISLADO de Copa del Rey (2026-05-08): la pantalla
        `s-copa-stats` lee de aquí. La caja Liga EA Sports
@@ -6048,12 +6061,188 @@ window._showSimProgress = function(opts, onDone){
     <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openSimpleRules&&window.openSimpleRules('hypermotion')})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
   </div>
 </div>
+<!-- Banner de reparación: visible solo cuando ligaExt_liga-hypermotion
+     tiene MÁS de 22 equipos (regresión histórica de cross-slug imports
+     antes del commit 2afb997 — sigue afectando a usuarios que tenían
+     la base corrompida cuando se aplicó el fix). Pulsando se ejecuta
+     `_repairHypermotionToCanonical` que conserva los 22 canónicos
+     (DEFAULT_SEGUNDA_TEAMS, definidos en misc_body_2.html) y marca el
+     resto en `deletedTeamNames` para que no vuelvan. PIN-gated. -->
+<div id="hypermotion-repair-banner" style="display:none;margin:0 8px 8px;padding:10px 12px;background:linear-gradient(135deg,rgba(255,80,80,.18),rgba(160,30,30,.12));border:1px solid rgba(255,80,80,.55);border-radius:10px;color:#ffd0d0;font-family:Rajdhani,sans-serif;">
+  <div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#ff8080;margin-bottom:4px;">🚨 ESTADO INCONSISTENTE</div>
+  <div id="hypermotion-repair-count" style="font-size:12px;line-height:1.4;margin-bottom:8px;">Hay <b id="hypermotion-repair-num">?</b> equipos en Hypermotion (esperados <b>22</b>). Pulsa para volver a los 22 canónicos.</div>
+  <button type="button" onclick="window._repairHypermotionGated && window._repairHypermotionGated()" style="background:linear-gradient(145deg,#ff5050,#a00020);color:#fff;border:1px solid rgba(255,160,160,.65);border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;">🛠 REPARAR HYPERMOTION (X → 22)</button>
+</div>
 <div class="clas-wrap">
 <div id="clas-segunda-content">
 <div class="clas-empty">Pulsa <b>Simular</b> para generar la clasificación.</div>
 </div>
 </div>
 </div>
+
+<script>
+/* ── Hypermotion repair tool (regresión histórica) ─────────────
+   Bug 2026-05-09: la base de algunos usuarios tiene 61 equipos en
+   ligaExt_liga-hypermotion (corrupción acumulada de cross-slug
+   imports antes del fix 2afb997). El fix solo PREVINO crecimientos
+   nuevos pero no reparó la base ya corrompida. Este módulo:
+     1. Detecta si ligaExt_liga-hypermotion tiene >22 equipos.
+     2. Pinta un banner rojo en `s-segunda-clas` con el conteo real.
+     3. El botón llama a `_repairHypermotionGated` (PIN 747).
+     4. La reparación: conserva los teams cuyo nombre normalizado
+        coincide con DEFAULT_SEGUNDA_TEAMS (preservando players,
+        power, atk/mid/def, shield del admin), elimina el resto, y
+        añade los nombres eliminados a `deletedTeamNames` para
+        bloquear futuros cross-slug re-imports.
+   La función NO toca otras ligas. NO crea equipos canónicos que
+   falten — solo recorta excedentes.                              */
+(function(){
+  var HYPERMOTION_KEY = 'ligaExt_liga-hypermotion';
+  var EXPECTED = 22;
+
+  function _norm(s){
+    return String(s||'').trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/\s+/g,' ');
+  }
+
+  function _loadHypermotion(){
+    try {
+      var raw = localStorage.getItem(HYPERMOTION_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch(_) { return null; }
+  }
+
+  function _refreshBanner(){
+    var banner = document.getElementById('hypermotion-repair-banner');
+    if (!banner) return;
+    var data = _loadHypermotion();
+    var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+    var n = teams.length;
+    if (n <= EXPECTED) { banner.style.display = 'none'; return; }
+    banner.style.display = 'block';
+    var num = document.getElementById('hypermotion-repair-num');
+    if (num) num.textContent = String(n);
+    var btn = banner.querySelector('button');
+    if (btn) btn.textContent = '🛠 REPARAR HYPERMOTION (' + n + ' → ' + EXPECTED + ')';
+  }
+
+  /* Re-renderiza banner cuando se entra en s-segunda-clas. */
+  function _hookScreenWatch(){
+    var el = document.getElementById('s-segunda-clas');
+    if (!el || typeof MutationObserver !== 'function') return;
+    var wasActive = el.classList.contains('active');
+    if (wasActive) _refreshBanner();
+    try {
+      var obs = new MutationObserver(function(){
+        var nowActive = el.classList.contains('active');
+        if (nowActive && !wasActive) _refreshBanner();
+        wasActive = nowActive;
+      });
+      obs.observe(el, { attributes:true, attributeFilter:['class'] });
+    } catch(_){}
+  }
+
+  window._repairHypermotionToCanonical = function(){
+    var canonical = window.DEFAULT_SEGUNDA_TEAMS;
+    if (!Array.isArray(canonical) || !canonical.length) {
+      alert('⚠ DEFAULT_SEGUNDA_TEAMS no está disponible (espera a que cargue la liga y prueba de nuevo).');
+      return false;
+    }
+    var data = _loadHypermotion();
+    if (!data || !Array.isArray(data.teams)) {
+      alert('No hay datos de Hypermotion en localStorage.');
+      return false;
+    }
+    var canonicalNorms = {};
+    canonical.forEach(function(c){
+      var n = _norm(c.name);
+      if (n) canonicalNorms[n] = true;
+      var ns = _norm(c.short);
+      if (ns) canonicalNorms[ns] = true;
+    });
+
+    var keep = [], remove = [];
+    data.teams.forEach(function(t){
+      if (!t || !t.name) { remove.push(t); return; }
+      var n = _norm(t.name);
+      var ns = _norm(t.short);
+      if ((n && canonicalNorms[n]) || (ns && canonicalNorms[ns])) {
+        keep.push(t);
+      } else {
+        remove.push(t);
+      }
+    });
+
+    if (!remove.length) {
+      alert('No hay equipos no canónicos en Hypermotion. La base ya está limpia (' + keep.length + ' equipos).');
+      return false;
+    }
+
+    var sample = remove.slice(0, 10).map(function(t){ return '• ' + (t && t.name || '?'); }).join('\n');
+    var msg = 'Voy a quitar ' + remove.length + ' equipo' + (remove.length===1?'':'s') + ' de Hypermotion (no canónicos):\n\n'
+            + sample
+            + (remove.length > 10 ? '\n• … y ' + (remove.length - 10) + ' más' : '')
+            + '\n\nQuedarán ' + keep.length + ' equipo' + (keep.length===1?'':'s') + ' canónicos.\n\n¿Continuar?';
+    if (!confirm(msg)) return false;
+
+    /* Bloquear futuros re-imports cross-slug. */
+    if (!Array.isArray(data.deletedTeamNames)) data.deletedTeamNames = [];
+    remove.forEach(function(t){
+      if (!t || !t.name) return;
+      var n = _norm(t.name);
+      if (n && data.deletedTeamNames.indexOf(n) === -1) data.deletedTeamNames.push(n);
+    });
+    data.teams = keep;
+
+    var saved = false;
+    try {
+      if (typeof window.saveData === 'function' && typeof window.setHypermotionContext === 'function') {
+        window.setHypermotionContext();
+        window.saveData('liga-hypermotion', data);
+        saved = true;
+      } else {
+        localStorage.setItem(HYPERMOTION_KEY, JSON.stringify(data));
+        saved = true;
+      }
+    } catch(e) {
+      alert('⚠ No se pudo guardar:\n' + (e && e.message || ''));
+      return false;
+    }
+
+    if (saved) {
+      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-hypermotion'); } catch(_){}
+      try {
+        fetch('/api/liga-ext/liga-hypermotion', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({data: data})
+        }).catch(function(){});
+      } catch(_){}
+      alert('✅ Reparado · ' + keep.length + ' equipos en Hypermotion (' + remove.length + ' eliminados).');
+      _refreshBanner();
+      try { if (typeof window.buildLigaSegundaClas === 'function') window.buildLigaSegundaClas(); } catch(_){}
+    }
+    return saved;
+  };
+
+  window._repairHypermotionGated = function(){
+    if (typeof window.pG === 'function') window.pG(window._repairHypermotionToCanonical);
+    else window._repairHypermotionToCanonical();
+  };
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){
+      _hookScreenWatch();
+      _refreshBanner();
+    });
+  } else {
+    _hookScreenWatch();
+    _refreshBanner();
+  }
+})();
+</script>
 
 <div class="screen" id="s-segunda-stats">
 <button class="back-btn" onclick="go('s-segunda')">◀ Volver</button>
@@ -9792,8 +9981,18 @@ window._showSimProgress = function(opts, onDone){
       cfg.currentRound = (typeof cfg.currentRound === 'number') ? cfg.currentRound : 0;
       cfg.results = cfg.results || {};
       cfg.bracket = cfg.bracket || [teams.slice()];
-      /* Asegurar que el bracket tiene la ronda 0 con los teams iniciales. */
-      if (!cfg.bracket[0] || !cfg.bracket[0].length) cfg.bracket[0] = teams.slice();
+      /* Resincronizar siempre la ronda 0 con cfg.teams. Bug 2026-05-09:
+         tras un pick humano, cfg.teams[slot] cambia pero
+         cfg.bracket[0][slot] mantenía la referencia vieja
+         (PENDIENTE) → al re-renderizar el bracket seguía mostrando
+         PENDIENTE aunque el chip ya estuviera asignado. Como teams
+         no se reordena tras picks, resync por orden es seguro y no
+         destruye results (los keys son `roundIdx_matchIdx`). */
+      if (!cfg.bracket[0] || cfg.bracket[0].length !== teams.length) {
+        cfg.bracket[0] = teams.slice();
+      } else {
+        for (var _bs = 0; _bs < teams.length; _bs++) cfg.bracket[0][_bs] = teams[_bs];
+      }
       /* Fallback: si por alguna razón cfg.currentRound apunta a una
          ronda vacía/inexistente del bracket (bug histórico cuando se
          avanza con todos los partidos saltados como humanos no jugados),
@@ -9836,6 +10035,12 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs">vs</span>'
             + _bracketTeamHtml(b, id, i+1)
             + '</div>';
+          /* Botón 🤖 SIM IA: solo aparece si la pareja tiene humano y
+             el partido NO ha sido jugado. Permite saltarse la
+             obligación de jugarlo a mano cuando el usuario quiere. */
+          if (_tourPairHasHuman(curTeams, i)) {
+            html += _tourSimAiBtnHtml(id, 'match', matchKey);
+          }
         }
         pairCount++;
       }
@@ -9972,6 +10177,9 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs">vs</span>'
             + _bracketTeamHtml(ta, tourId, m.away)
             + '</div>';
+          if (isCurrent && _tourLeagueMatchHasHuman(teams, m)) {
+            html += _tourSimAiBtnHtml(tourId, 'league', key);
+          }
         }
       });
       if (isCurrent && !allPlayedJ) {
@@ -10147,6 +10355,9 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs">vs</span>'
             + _bracketTeamHtml(b, tourId, i+1)
             + '</div>';
+          if (_tourPairHasHuman(curT, i)) {
+            html += _tourSimAiBtnHtml(tourId, 'ko', kKey);
+          }
         }
         koPairCount++;
       }
@@ -10240,6 +10451,19 @@ window._showSimProgress = function(opts, onDone){
       + '<div id="'+actaId+'" class="tour-acta-body" style="display:none;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin:0 4px 6px;overflow:hidden;">'
       + inner + '</div>';
     return html;
+  }
+
+  /* Botón 🤖 SIM IA per-match. Permite forzar la simulación
+     automática de un partido con humano sin tener que activar el
+     override admin del torneo entero. Petición usuario 2026-05-09
+     punto 3: "haz que pueda simular humano como IA los partidos de
+     las rondas de los torneos como se quiera, individual". */
+  function _tourSimAiBtnHtml(tourId, kind, matchKey) {
+    return '<div style="display:flex;justify-content:center;margin-top:-2px;margin-bottom:6px;">'
+      + '<button type="button" class="tour-sim-ai-btn" '
+      + 'data-tour="'+tourId+'" data-kind="'+kind+'" data-key="'+matchKey+'" '
+      + 'style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.30);color:rgba(255,255,255,.80);border-radius:6px;padding:3px 10px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
+      + '🤖 SIM IA</button></div>';
   }
 
   function _championBoxHtml(champTeam) {
@@ -10525,6 +10749,15 @@ window._showSimProgress = function(opts, onDone){
       if (extra.away)    out.away = extra.away;
     }
     cfg.results[key] = out;
+    /* Acumular stats al store de torneos (s-torneos-stats), igual
+       que los partidos auto-simulados. NO toca la plantilla global. */
+    if (out.events && out.events.length && typeof window.registrarLigaPlayerStats === 'function') {
+      try {
+        window.registrarLigaPlayerStats('tour_' + tourId + '_' + key,
+          out.home || '', out.away || '',
+          out.events, out.mvp || '', out.mvpTeam || '', 'torneos');
+      } catch(_){}
+    }
     _tourSaveAndRender(tourId, cfg);
     /* Si esto cierra el torneo → acreditar premios a wallets humanas. */
     setTimeout(function(){ _tourMaybeCreditPrizes(tourId); }, 200);
@@ -10891,11 +11124,12 @@ window._showSimProgress = function(opts, onDone){
      Usa `window.genMatchEventsEnhanced` (definido en misc_body_2.html)
      que produce eventos minuto-a-minuto coherentes con el resto de
      competiciones (mismo formato que el visor `_iaEventsHtml` espera).
-     Si los goles del acta sintética no coinciden con el marcador
-     pasado, ajustamos los goles del result para que cuadren — la
-     fuente de verdad pasa a ser el acta porque es la que ven los
-     ojos del usuario. Petición usuario 2026-05-09 (FOTO 2). */
-  function _tourAttachActa(out, teamA, teamB, gh, ga) {
+     Si `tourId`+`matchKey` se pasan, también acumula stats al store
+     `ef_player_stats_torneos_v1` (visible en s-torneos-stats) vía
+     `registrarLigaPlayerStats(matchKey, ..., 'torneos')`. NO toca el
+     store global ef_player_stats_v1 (los torneos NO cuentan en
+     plantilla). Petición usuario 2026-05-09 (FOTO 2 + punto 2). */
+  function _tourAttachActa(out, teamA, teamB, gh, ga, tourId, matchKey) {
     if (!out || !teamA || !teamB) return;
     if (typeof window.genMatchEventsEnhanced !== 'function') return;
     var nameA = teamA.name || teamA;
@@ -10909,6 +11143,15 @@ window._showSimProgress = function(opts, onDone){
       if (ev.mvpTeam) out.mvpTeam = ev.mvpTeam;
       out.home = nameA;
       out.away = nameB;
+      /* Acumular stats al store de torneos. Pasamos competition
+         explícito para evitar la inferencia desde matchKey. */
+      if (tourId && matchKey && typeof window.registrarLigaPlayerStats === 'function') {
+        var statsKey = 'tour_' + tourId + '_' + matchKey;
+        try {
+          window.registrarLigaPlayerStats(statsKey, nameA, nameB,
+            out.events, out.mvp || '', out.mvpTeam || '', 'torneos');
+        } catch(_){}
+      }
     } catch(_){}
   }
 
@@ -11016,7 +11259,7 @@ window._showSimProgress = function(opts, onDone){
       var out2 = { a: totalA, b: totalB, winner: winner, played: true,
                    legs:[{a:leg1.gh,b:leg1.ga},{a:leg2.gh,b:leg2.ga}] };
       if (pens) out2.pens = pens;
-      _tourAttachActa(out2, teamA, teamB, totalA, totalB);
+      _tourAttachActa(out2, teamA, teamB, totalA, totalB, cfg.id, roundIdx + '_' + matchIdx);
       return out2;
     }
     /* Single leg (formato `ko` SIEMPRE, o `ko-2leg` con final
@@ -11035,7 +11278,7 @@ window._showSimProgress = function(opts, onDone){
     }
     var out1 = { a: ga, b: gb, winner: winner1, played: true };
     if (pens1) out1.pens = pens1;
-    _tourAttachActa(out1, teamA, teamB, ga, gb);
+    _tourAttachActa(out1, teamA, teamB, ga, gb, cfg.id, roundIdx + '_' + matchIdx);
     return out1;
   }
 
@@ -11129,7 +11372,7 @@ window._showSimProgress = function(opts, onDone){
      home siempre local, no hay ko-2leg. Sin penaltis (los empates son
      legítimos en liga/grupos).
      Fase 3: bloqueo de humanos a menos que cfg._adminAllowAutoSim. */
-  function _tourSimLeagueMatch(cfg, teams, m) {
+  function _tourSimLeagueMatch(cfg, teams, m, matchKey) {
     if (_tourLeagueMatchHasHuman(teams, m) && !cfg._adminAllowAutoSim) {
       return { blockedHuman: true };
     }
@@ -11140,7 +11383,7 @@ window._showSimProgress = function(opts, onDone){
     if (!simFn) return null;
     var r = simFn(home, away);
     var out = { a: r.gh, b: r.ga, played: true };
-    _tourAttachActa(out, home, away, r.gh, r.ga);
+    _tourAttachActa(out, home, away, r.gh, r.ga, cfg.id, matchKey);
     return out;
   }
 
@@ -11186,6 +11429,86 @@ window._showSimProgress = function(opts, onDone){
   document.addEventListener('click', function(ev){
     var target = ev.target;
     if (!target || typeof target.closest !== 'function') return;
+
+    /* a.-1) Botón 🤖 SIM IA per-match. Forza la simulación auto de un
+       partido con humano sin tener que activar el override admin del
+       torneo entero. Petición usuario 2026-05-09. */
+    var simAiBtn = target.closest('.tour-sim-ai-btn');
+    if (simAiBtn) {
+      var aitid = simAiBtn.getAttribute('data-tour');
+      var aikind = simAiBtn.getAttribute('data-kind');
+      var aikey  = simAiBtn.getAttribute('data-key');
+      if (!aitid || TOUR_IDS.indexOf(aitid) === -1) return;
+      if (!confirm('¿Simular este partido con la IA aunque haya humano? El resultado será automático.')) {
+        ev.stopPropagation();
+        return;
+      }
+      var aicfg = _tourLoadCachedSync(aitid);
+      if (!aicfg) return;
+      aicfg.results = aicfg.results || {};
+      if (aicfg.results[aikey] && aicfg.results[aikey].played) { ev.stopPropagation(); return; }
+      var aiOk = false;
+      if (aikind === 'match') {
+        /* KO directo (SCT/PSS). */
+        var aiParts = aikey.split('_');
+        var aiR = parseInt(aiParts[0],10), aiM = parseInt(aiParts[1],10);
+        if (!isNaN(aiR) && !isNaN(aiM)) {
+          var aiBackup = aicfg._adminAllowAutoSim;
+          aicfg._adminAllowAutoSim = true;
+          var aiR0 = _tourSimMatch(aicfg, aiR, aiM);
+          aicfg._adminAllowAutoSim = aiBackup;
+          if (aiR0 && !aiR0.blockedHuman) { aicfg.results[aikey] = aiR0; aiOk = true; }
+        }
+      } else if (aikind === 'league') {
+        /* Liga / jornada de grupo. */
+        var aiLast = aikey.lastIndexOf('_');
+        var aiMid  = aikey.lastIndexOf('_', aiLast - 1);
+        var aiPrefix = (aiMid >= 0) ? aikey.substring(0, aiMid + 1) : '';
+        var aiJ = parseInt(aikey.substring(aiMid + 1, aiLast), 10);
+        var aiMi = parseInt(aikey.substring(aiLast + 1), 10);
+        var aiTeams, aiFix;
+        if (aiPrefix.indexOf('g') === 0) {
+          var aiG = parseInt(aiPrefix.substring(1), 10);
+          var aiPg = (aicfg.formatConfig && aicfg.formatConfig.perGroup) || 5;
+          aiTeams = (aicfg.teams||[]).slice(aiG*aiPg, (aiG+1)*aiPg);
+          aiFix = aicfg.groupFixtures && aicfg.groupFixtures[aiG];
+        } else {
+          aiTeams = aicfg.teams || [];
+          aiFix = aicfg.fixture;
+        }
+        if (aiFix && aiFix[aiJ] && aiFix[aiJ][aiMi]) {
+          var aiBackup2 = aicfg._adminAllowAutoSim;
+          aicfg._adminAllowAutoSim = true;
+          var aiR1 = _tourSimLeagueMatch(aicfg, aiTeams, aiFix[aiJ][aiMi], aikey);
+          aicfg._adminAllowAutoSim = aiBackup2;
+          if (aiR1 && !aiR1.blockedHuman) { aicfg.results[aikey] = aiR1; aiOk = true; }
+        }
+      } else if (aikind === 'ko') {
+        /* KO de Grupos+KO. Same logic que el inline handler. */
+        var aiKp = aikey.split('_');
+        var aiKr = parseInt(aiKp[1],10), aiKm = parseInt(aiKp[2],10);
+        if (!isNaN(aiKr) && !isNaN(aiKm)) {
+          var aiKt = (aicfg.koBracket || [])[aiKr] || [];
+          var aiKa = _tourFindTeam(aiKt[aiKm*2]);
+          var aiKb = _tourFindTeam(aiKt[aiKm*2 + 1]);
+          if (aiKa && aiKb && window.simulateMatch) {
+            var aiR2 = window.simulateMatch(aiKa, aiKb);
+            var aiGa = aiR2.gh, aiGb = aiR2.ga, aiW, aiPens = null;
+            if (aiGa > aiGb) aiW = 'a';
+            else if (aiGb > aiGa) aiW = 'b';
+            else { aiPens = _tourSimPenalties(aiKa, aiKb); aiW = (aiPens.a > aiPens.b) ? 'a' : 'b'; }
+            var aiOut = { a:aiGa, b:aiGb, winner:aiW, played:true };
+            if (aiPens) aiOut.pens = aiPens;
+            _tourAttachActa(aiOut, aiKa, aiKb, aiGa, aiGb, aitid, aikey);
+            aicfg.results[aikey] = aiOut;
+            aiOk = true;
+          }
+        }
+      }
+      if (aiOk) _tourSaveAndRender(aitid, aicfg);
+      ev.stopPropagation();
+      return;
+    }
 
     /* a.0) Toggle del 📋 ACTA. Antes que el handler de la card para
        que un click en el botón no dispare también el modal del
@@ -11269,7 +11592,7 @@ window._showSimProgress = function(opts, onDone){
           ev.stopPropagation();
           return;
         }
-        var rL = _tourSimLeagueMatch(cfg, teamsForMatch, mObj);
+        var rL = _tourSimLeagueMatch(cfg, teamsForMatch, mObj, lk);
         if (!rL || rL.blockedHuman) return;
         cfg.results[lk] = rL;
         _tourSaveAndRender(tid, cfg);
@@ -11304,7 +11627,7 @@ window._showSimProgress = function(opts, onDone){
         }
         var koOut = { a:ga, b:gb, winner:winner, played:true };
         if (pens) koOut.pens = pens;
-        _tourAttachActa(koOut, ka, kb, ga, gb);
+        _tourAttachActa(koOut, ka, kb, ga, gb, tid, kk);
         cfg.results[kk] = koOut;
         _tourSaveAndRender(tid, cfg);
         ev.stopPropagation();
@@ -11365,7 +11688,7 @@ window._showSimProgress = function(opts, onDone){
       fixJ[jorIdx].forEach(function(m, mi){
         var key = prefixJ + jorIdx + '_' + mi;
         if (jcfg.results[key] && jcfg.results[key].played) return;
-        var rL = _tourSimLeagueMatch(jcfg, teamsJ, m);
+        var rL = _tourSimLeagueMatch(jcfg, teamsJ, m, key);
         if (!rL) return;
         if (rL.blockedHuman) { skippedJ++; return; }
         jcfg.results[key] = rL;
@@ -11402,7 +11725,7 @@ window._showSimProgress = function(opts, onDone){
         else { pens2 = _tourSimPenalties(ka2, kb2); w2 = (pens2.a > pens2.b) ? 'a' : 'b'; }
         var ko2 = { a:ga2, b:gb2, winner:w2, played:true };
         if (pens2) ko2.pens = pens2;
-        _tourAttachActa(ko2, ka2, kb2, ga2, gb2);
+        _tourAttachActa(ko2, ka2, kb2, ga2, gb2, ktid, koKey);
         kcfg.results[koKey] = ko2;
       }
       _tourSaveAndRender(ktid, kcfg);
@@ -14493,6 +14816,35 @@ window._showSimProgress = function(opts, onDone){
      `{ teams, pairs[{home,away,jornada}], drawnAt }`.
      Sync server vía /api/kv para que sobreviva a borrados de
      localStorage / cambios de dispositivo. ═════════════════ -->
+<style>
+/* ── Cards de jornada UCL/UEL/UECL — estilo Copa del Rey con paleta
+   azul Champions (petición usuario 2026-05-10). HvH/HvIA con borde
+   ROSA llamativo + gradient azul; IA-vs-IA con borde gris sutil. */
+.eurfase-section{margin:8px 0 18px}
+.eurfase-section-hdr{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.5px;padding:10px 14px 6px;text-transform:uppercase;font-weight:700;}
+.eurfase-section-human .eurfase-section-hdr{color:#ff80b0;border-left:3px solid #ff5fb0;background:linear-gradient(90deg,rgba(255,95,176,.10),transparent);margin:8px 8px 0;border-radius:0 4px 4px 0;}
+.eurfase-section-ia .eurfase-section-hdr{color:#9fc8ff;border-left:3px solid #3a78d8;background:linear-gradient(90deg,rgba(58,120,216,.10),transparent);margin:8px 8px 0;border-radius:0 4px 4px 0;}
+.eurfase-card-rich{display:block;border-radius:10px;margin:6px 8px;padding:10px 8px;position:relative;overflow:hidden;}
+.eurfase-card-row{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+.eurfase-card-team{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;}
+.eurfase-card-shield{width:48px;height:48px;display:flex;align-items:center;justify-content:center;}
+.eurfase-card-shield img{width:100%;height:100%;object-fit:contain;}
+.eurfase-card-name{font-family:Rajdhani,sans-serif;font-size:12.5px;font-weight:700;color:#fff;text-align:center;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+.eurfase-card-center{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:90px;}
+.eurfase-card-score{display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:4px 12px;min-width:80px;text-align:center;}
+.eurfase-card-score-num{color:#9fc8ff;font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;line-height:1;}
+.eurfase-card-score-pending{color:rgba(255,255,255,.5);font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;line-height:1;}
+.eurfase-card-fin{display:inline-block;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1.5px;color:#9fc8ff;border:1px solid rgba(159,200,255,.45);border-radius:6px;padding:4px 12px;background:rgba(48,96,255,.10);}
+.eurfase-card-btn{margin-top:0;}
+.eurfase-btn-previa{display:inline-block;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.2px;color:#ff7a8a;background:rgba(255,40,80,.06);border:1px solid rgba(255,80,120,.55);border-radius:6px;padding:5px 14px;cursor:pointer;text-transform:uppercase;}
+.eurfase-btn-previa:active{background:rgba(255,40,80,.15);}
+.eurfase-btn-sim{display:inline-block;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:#5fe08a;background:rgba(60,210,120,.06);border:1px solid rgba(95,224,138,.55);border-radius:6px;padding:5px 14px;cursor:pointer;text-transform:uppercase;}
+.eurfase-btn-sim:active{background:rgba(60,210,120,.18);}
+.eurfase-btn-sim:disabled{opacity:.7;cursor:default;}
+.eurfase-card-acta{border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px;font-family:Rajdhani,sans-serif;font-size:12px;max-height:240px;overflow-y:auto;color:rgba(255,255,255,.85);}
+.eurfase-sim-all{padding:8px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;background:rgba(255,160,40,.15);color:#ffa050;border:1.5px solid rgba(255,160,40,.55);text-transform:uppercase;}
+.eurfase-sim-all:active{background:rgba(255,160,40,.28);}
+</style>
 <script>
 (function(){
   var COMPS = {
@@ -14535,7 +14887,8 @@ window._showSimProgress = function(opts, onDone){
   var HOME_PER      = 4;       /* partidos como local */
   var AWAY_PER      = 4;       /* partidos como visitante */
   var JORNADAS      = 8;
-  var DRAW_ATTEMPTS = 220;     /* greedy + retries */
+  var DRAW_ATTEMPTS = 500;     /* greedy + retries (era 220 — subido 2026-05-09 tras fallos sistemáticos) */
+  var JORNADA_RETRIES = 40;    /* reintentos de UNA jornada antes de abortar el attempt completo */
   var JORN_ATTEMPTS = 60;
 
   function _esc(s){
@@ -14718,9 +15071,25 @@ window._showSimProgress = function(opts, onDone){
     var allPairs = [];
     var ok = true;
     for(var jor = 1; jor <= JORNADAS; jor++){
-      var jorTeams = teams.slice(); _shuffle(jorTeams);
-      var jorMatches = _buildJornada(jorTeams, paired, homeC, awayC);
-      if(!jorMatches || jorMatches.length !== teams.length / 2){ ok = false; break; }
+      /* Per-jornada retry (2026-05-09): si una jornada falla con un
+         shuffle desafortunado, reintentamos sólo esa jornada con
+         otro orden hasta JORNADA_RETRIES veces. Antes el attempt
+         entero se descartaba al fallar la jornada N — perdiendo
+         las N-1 anteriores. Ahora restauramos snapshot de
+         homeC/awayC/paired antes de reintentar. */
+      var jorMatches = null;
+      for(var jr = 0; jr < JORNADA_RETRIES && !jorMatches; jr++){
+        var jorTeams = teams.slice(); _shuffle(jorTeams);
+        var snapshotHome = {}, snapshotAway = {}, snapshotPaired = {};
+        for(var sk in homeC){ snapshotHome[sk] = homeC[sk]; snapshotAway[sk] = awayC[sk]; snapshotPaired[sk] = {}; for(var sp in paired[sk]) snapshotPaired[sk][sp] = paired[sk][sp]; }
+        var attempt_matches = _buildJornada(jorTeams, paired, homeC, awayC);
+        if(attempt_matches && attempt_matches.length === teams.length / 2){
+          jorMatches = attempt_matches;
+        } else {
+          for(var rk in homeC){ homeC[rk] = snapshotHome[rk]; awayC[rk] = snapshotAway[rk]; paired[rk] = snapshotPaired[rk]; }
+        }
+      }
+      if(!jorMatches){ ok = false; break; }
       jorMatches.forEach(function(m){ m.jornada = jor; allPairs.push(m); });
     }
     if(!ok) return null;
@@ -14778,7 +15147,20 @@ window._showSimProgress = function(opts, onDone){
       var k = String(t.league || '').trim();
       byLeague[k] = (byLeague[k] || 0) + 1;
     });
-    var capPerCountry = teams.length - MATCHES_PER; /* cada team de un país solo puede jugar contra teams.length-1 - (count_pais - 1) = teams.length - count_pais. Necesita >= MATCHES_PER → count_pais <= teams.length - MATCHES_PER. */
+    /* Cap correcto por país (2026-05-09 — antes era teams.length -
+       MATCHES_PER = 32, demasiado laxo). Dos restricciones:
+       1) Cada team de un país X juega 8 partidos, todos contra
+          los (teams.length - N_X) teams de otros países. Necesita
+          >= 8 oponentes → N_X <= teams.length - 8.
+       2) Balance global: total partidos X-¬X = N_X × 8. Pero los
+          ¬X teams sólo pueden jugar 8 partidos cada uno → capacidad
+          = (teams.length - N_X) × 8. Para que cuadre N_X × 8 <=
+          (teams.length - N_X) × 8 → N_X <= teams.length / 2.
+       La 2ª es la verdadera frontera: con 40 teams el cap es 20.
+       Sin este fix, pools con >20 teams del mismo país pasaban la
+       pre-validación y luego el solver fallaba 220 attempts seguidos
+       sin pista al usuario. */
+    var capPerCountry = Math.min(teams.length - MATCHES_PER, Math.floor(teams.length / 2));
     var blockers = [];
     Object.keys(byLeague).forEach(function(k){
       if(byLeague[k] > capPerCountry){
@@ -14791,10 +15173,62 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
 
+    /* Helper para construir un mensaje de fallo con desglose de
+       países — útil para que el usuario vea si algún país está
+       saturando el pool. 2026-05-09 (rev 2: muestra TODOS los países
+       y agrupa los teams por federación con sus nombres, hasta 25
+       teams para no rebosar el alert; también escribe todo a
+       console.log para inspección completa).
+       Petición usuario: "mira de qué país es cada equipo, vienen en
+       EA Sports y Resto de Ligas". */
+    function _failMsg(){
+      var counts = Object.keys(byLeague).map(function(k){
+        return [(k || '(sin país)'), byLeague[k]];
+      }).sort(function(a,b){ return b[1] - a[1]; });
+      /* Detallar cada país con sus teams. Marcamos con ⚠️ los que
+         exceden el cap (causa del fallo). */
+      var teamsByLeague = {};
+      teams.forEach(function(t){
+        var k = String(t.league || '').trim() || '(sin país)';
+        if(!teamsByLeague[k]) teamsByLeague[k] = [];
+        teamsByLeague[k].push(String(t.name || '?'));
+      });
+      var lines = [];
+      var shown = 0, MAX_LINES = 20;
+      counts.forEach(function(p){
+        if(shown >= MAX_LINES){ return; }
+        var n = p[1];
+        var marker = (n > capPerCountry) ? ' ⚠️ supera el máx' : '';
+        lines.push('  · ' + p[0] + ' · ' + n + ' equipo' + (n===1?'':'s') + marker);
+        shown++;
+      });
+      if(counts.length > MAX_LINES){
+        lines.push('  · … (+' + (counts.length - MAX_LINES) + ' federaciones más)');
+      }
+      /* Volcamos TODO al console para diagnóstico completo (DevTools
+         → Console). Útil para compartir con soporte. */
+      try {
+        console.group('[eur-fase] Pool diagnóstico (' + teams.length + ' equipos)');
+        counts.forEach(function(p){
+          var ts = (teamsByLeague[p[0]] || []).join(', ');
+          console.log(p[0] + ' (' + p[1] + '): ' + ts);
+        });
+        console.groupEnd();
+      } catch(_){}
+      var sat = counts.filter(function(p){ return p[1] > capPerCountry; });
+      var head = sat.length
+        ? '❌ Sorteo imposible: ' + sat.length + ' federación' + (sat.length===1?'':'es') + ' supera' + (sat.length===1?'':'n') + ' el límite de ' + capPerCountry + ' equipos por país.'
+        : '❌ El motor no logró cuadrar en ' + DRAW_ATTEMPTS + ' intentos.';
+      return head + '\n\n'
+           + 'Pool (' + teams.length + ' equipos, ' + counts.length + ' federaciones, máx ' + capPerCountry + '/país):\n'
+           + lines.join('\n')
+           + '\n\nDetalle completo en consola del navegador (F12 → Console).'
+           + (sat.length ? '\n\n👉 Reduce los equipos de las federaciones marcadas con ⚠️ para que el sorteo sea factible.' : '\n\nReintenta el sorteo (a veces el motor falla por mala suerte).');
+    }
     if(typeof window.ftbolLoaderRun !== 'function'){
       /* Sin loader → fallback simple, sin animación. */
       var sched = drawPairs(teams);
-      if(!sched){ alert('❌ No se ha podido cuadrar el sorteo. Reintenta.'); return; }
+      if(!sched){ alert(_failMsg()); return; }
       var st = { teams: teams.map(function(t){return {name:t.name,logo:t.logo||'',league:t.league||''};}), pairs: sched, drawnAt: Date.now() };
       if(!saveState(comp, st)) alert('⚠️ Sorteo OK pero no se pudo guardar.');
       return;
@@ -14815,7 +15249,8 @@ window._showSimProgress = function(opts, onDone){
            `drawPairsAsync` en chunks de 8 attempts + setTimeout(0)
            entre chunks → cede el thread, el loader respira y la
            barra avanza progresivamente. Hard timeout 25 s para que
-           NUNCA quede colgado: si no se cuadra antes, abort + alert. */
+           NUNCA quede colgado: si no se cuadra antes, abort + alert
+           con desglose por país (ver `_failMsg` arriba). */
         return new Promise(function(resolveOuter){
           /* Wrapper try/catch envuelve TODO el flujo y garantiza que
              `resolveOuter` se llama siempre, incluso ante excepciones,
@@ -14827,11 +15262,18 @@ window._showSimProgress = function(opts, onDone){
             try { resolveOuter(); } catch(_){}
           }
           /* Watchdog absoluto: tras 26 s desde el inicio, forzamos
-             cierre con error aunque drawPairsAsync no haya devuelto. */
+             cierre con error aunque drawPairsAsync no haya devuelto.
+             El alert usa `_failMsg` (con desglose por país) si está
+             definido — más informativo que el genérico. */
           var hardWatchdog = setTimeout(function(){
             if(resolved) return;
             try { ctx.progress(100, '⛔ Tiempo agotado'); } catch(_){}
-            try { alert('❌ El sorteo no se ha cuadrado en 25 s. Probable: hay demasiados equipos de un mismo país o la lista no es factible. Revisa el pool y reintenta.'); } catch(_){}
+            try {
+              var msg = (typeof _failMsg === 'function')
+                ? _failMsg()
+                : '❌ El sorteo no se ha cuadrado en 25 s. Probable: hay demasiados equipos de un mismo país o la lista no es factible. Revisa el pool y reintenta.';
+              alert(msg);
+            } catch(_){}
             safeResolve();
           }, 26000);
 
@@ -14849,7 +15291,7 @@ window._showSimProgress = function(opts, onDone){
               clearTimeout(hardWatchdog);
               if(!sched){
                 ctx.progress(100, 'Sin solución factible');
-                alert('❌ No se ha podido cuadrar el sorteo respetando "no mismo país" + balance 4+4 de local/visitante. La distribución de países del pool actual no permite solución. Reintenta o revisa qué federaciones tienen demasiados equipos.');
+                alert(_failMsg());
                 safeResolve();
                 return;
               }
@@ -14927,9 +15369,148 @@ window._showSimProgress = function(opts, onDone){
     }
   };
 
-  /* ── Render de jornadas — sustituye los `Por definir` por las
-     parejas del sorteo. Si no hay sorteo, mantenemos el placeholder
-     antiguo para no romper la UI. */
+  /* ── Render de jornadas — estilo Copa del Rey (petición usuario
+     2026-05-10). Cards con escudos, humanos ARRIBA con gradient
+     azul Champions + borde rosa, IA-vs-IA DEBAJO en cards más
+     sobrias. Botón "📋 PREVIA" para HvH/HvIA, botón "▶ SIMULAR"
+     para IA-vs-IA (usa `iaSimLive` con prefijo `eurfase_`). NO se
+     muestra el "nivel"/power del equipo (regla del usuario:
+     "el nivel del equipo humano NO DEBE SALIR ahí"). */
+  function _resolveLogoFor(name, fallbackLogo){
+    if(fallbackLogo) return fallbackLogo;
+    try {
+      if(typeof window.getTeamLogoUrl === 'function'){
+        var l = window.getTeamLogoUrl(name);
+        if(l) return l;
+      }
+    } catch(_){}
+    return '';
+  }
+  function _humanIcoFor(name){
+    try {
+      if(typeof window.humanIcon === 'function'){
+        var i = window.humanIcon(name);
+        if(i) return i;
+      }
+    } catch(_){}
+    return '';
+  }
+  function _isHumanTeam(name){
+    if(!name) return false;
+    if(typeof window.isHumanTeam === 'function'){
+      try { if(window.isHumanTeam(name)) return true; } catch(_){}
+    }
+    /* `humanIcon(name)` devuelve el emoji humano (🦆/💡/🐭/🐔/🦊…) que
+       el admin asignó en el editor de plantilla. Es la señal canónica
+       de "equipo humano" — cubre PSG, Bayern (sin "Munich"),
+       Manchester United, Borussia Dortmund, etc. que NO están en la
+       lista HUMAN_TEAMS hardcoded de Liga EA Sports. */
+    try {
+      if(typeof window.humanIcon === 'function'){
+        var ico = window.humanIcon(name);
+        if(ico) return true;
+      }
+    } catch(_){}
+    /* `_LIGA_HUMAN_FLAGS` mantiene { isHuman, humanEmoji } por nombre
+       canónico (lo rellena el editor de Liga EA Sports). Es otra
+       fuente fiable cuando humanIcon aún no está cargado. */
+    try {
+      var hf = window._LIGA_HUMAN_FLAGS || {};
+      if(hf[name] && hf[name].isHuman) return true;
+      var nLow = String(name||'').trim().toLowerCase();
+      for(var k in hf){
+        if(hf.hasOwnProperty(k) && String(k).trim().toLowerCase() === nLow && hf[k] && hf[k].isHuman) return true;
+      }
+    } catch(_){}
+    /* Fallback: lista canónica con variantes de "Bayern" / "PSG". */
+    var H = window.HUMAN_TEAMS || [
+      'Real Madrid','FC Barcelona','Atlético Madrid','Atletico Madrid',
+      'Arsenal','Bayern Munich','Bayern Munchen','Bayern Muenchen','Bayern',
+      'PSG','Paris Saint-Germain','Paris SG'
+    ];
+    var n = String(name||'').trim().toLowerCase();
+    for(var i = 0; i < H.length; i++){
+      if(String(H[i]||'').trim().toLowerCase() === n) return true;
+    }
+    return false;
+  }
+  function _renderEurMatchCard(comp, m, teamsByName){
+    var ha = teamsByName[m.home] || { name: m.home, logo: '' };
+    var aa = teamsByName[m.away] || { name: m.away, logo: '' };
+    var hHum = _isHumanTeam(m.home);
+    var vHum = _isHumanTeam(m.away);
+    var anyHum = hHum || vHum;
+    var bothIA = !hHum && !vHum;
+    var played = !!m.played;
+    var hLogo = _resolveLogoFor(m.home, ha.logo);
+    var vLogo = _resolveLogoFor(m.away, aa.logo);
+    var hHi = _humanIcoFor(m.home);
+    var vHi = _humanIcoFor(m.away);
+    /* Estilos: gradient AZUL Champions con bordes según tipo. */
+    var wrapStyle;
+    if(hHum && vHum){
+      wrapStyle = 'background:linear-gradient(120deg,rgba(48,96,255,.55) 0%,rgba(20,40,160,.40) 50%,rgba(48,96,255,.55) 100%);'
+                + 'border:2px solid #ff5fb0;'
+                + 'box-shadow:0 0 18px rgba(255,95,176,.55),0 0 36px rgba(48,96,255,.30),inset 0 0 0 1px rgba(255,95,176,.55);';
+    } else if(anyHum){
+      wrapStyle = 'background:linear-gradient(120deg,rgba(48,96,255,.50) 0%,rgba(15,35,140,.30) 50%,rgba(48,96,255,.30) 100%);'
+                + 'border:2px solid #ff5fb0;'
+                + 'box-shadow:0 0 14px rgba(255,95,176,.45),0 0 24px rgba(48,96,255,.20),inset 0 0 0 1px rgba(255,95,176,.55);';
+    } else {
+      wrapStyle = 'background:linear-gradient(180deg,rgba(20,40,90,.35),rgba(8,15,40,.55));'
+                + 'border:1px solid rgba(255,255,255,.18);'
+                + 'box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);';
+    }
+    var mk = 'eurfase_' + comp + '_' + m.jornada + '_' + m._origIdx;
+    var scoreTxt;
+    if(played){
+      scoreTxt = '<span class="eurfase-card-score-num">' + (Number(m.gh)||0) + ' – ' + (Number(m.ga)||0) + '</span>';
+    } else if(bothIA){
+      scoreTxt = '<span id="ia-sc-' + mk + '-a" class="eurfase-card-score-pending">–</span>'
+               + '<span class="eurfase-card-score-pending" style="margin:0 4px">–</span>'
+               + '<span id="ia-sc-' + mk + '-b" class="eurfase-card-score-pending">–</span>';
+    } else {
+      scoreTxt = '<span class="eurfase-card-score-pending">– – –</span>';
+    }
+    var btnHtml;
+    if(played){
+      btnHtml = '<div class="eurfase-card-fin">🏁 FIN</div>';
+    } else if(bothIA){
+      var hEsc = String(m.home).replace(/'/g,"\\'");
+      var aEsc = String(m.away).replace(/'/g,"\\'");
+      btnHtml = '<button id="ia-sim-btn-' + mk + '" class="eurfase-btn-sim" '
+              + 'onclick="window.iaSimLive(\'' + mk + '\',\'' + hEsc + '\',\'' + aEsc + '\',0)">▶ SIMULAR</button>';
+    } else {
+      btnHtml = '<button class="eurfase-btn-previa" '
+              + 'onclick="window._eurFaseAbrirPrevia(\'' + comp + '\',' + m.jornada + ',' + m._origIdx + ')">📋 PREVIA</button>';
+    }
+    var hShield = hLogo
+      ? '<img src="' + _esc(hLogo) + '" onerror="this.style.display=\'none\'">'
+      : '<span style="font-size:32px;color:rgba(159,200,255,.55);">🛡</span>';
+    var vShield = vLogo
+      ? '<img src="' + _esc(vLogo) + '" onerror="this.style.display=\'none\'">'
+      : '<span style="font-size:32px;color:rgba(159,200,255,.55);">🛡</span>';
+    var actaEl = (bothIA && !played)
+      ? '<div id="ia-acta-' + mk + '" class="eurfase-card-acta" style="display:none"></div>'
+      : '';
+    return '<div class="eurfase-card-rich" style="' + wrapStyle + '">'
+         + '<div class="eurfase-card-row">'
+         +   '<div class="eurfase-card-team">'
+         +     '<div class="eurfase-card-shield">' + hShield + '</div>'
+         +     '<div class="eurfase-card-name">' + hHi + _esc(m.home) + '</div>'
+         +   '</div>'
+         +   '<div class="eurfase-card-center">'
+         +     '<div class="eurfase-card-score ml-score">' + scoreTxt + '</div>'
+         +     '<div class="eurfase-card-btn">' + btnHtml + '</div>'
+         +   '</div>'
+         +   '<div class="eurfase-card-team">'
+         +     '<div class="eurfase-card-shield">' + vShield + '</div>'
+         +     '<div class="eurfase-card-name">' + vHi + _esc(m.away) + '</div>'
+         +   '</div>'
+         + '</div>'
+         + actaEl
+         + '</div>';
+  }
   function renderJornada(comp, jor){
     var c = COMPS[comp]; if(!c) return false;
     var titleEl = document.getElementById(c.titleId);
@@ -14937,40 +15518,152 @@ window._showSimProgress = function(opts, onDone){
     if(!titleEl || !bodyEl) return false;
     titleEl.textContent = c.jornTitleTpl.replace('%j%', jor);
     var state = loadState(comp);
-    var matches = (state && state.pairs)
-      ? state.pairs.filter(function(p){ return p.jornada === jor; })
-      : [];
     var teamsByName = {};
     if(state && state.teams){
       state.teams.forEach(function(t){ teamsByName[t.name] = t; });
     }
-    var html = '<div class="jlist"><div class="jmatches" style="display:block;">';
-    if(matches.length){
-      matches.forEach(function(m){
-        var ha = teamsByName[m.home] || { name: m.home, logo: '' };
-        var aa = teamsByName[m.away] || { name: m.away, logo: '' };
-        var logoH = ha.logo ? '<img src="' + _esc(ha.logo) + '" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:6px;" onerror="this.style.display=\'none\'">' : '';
-        var logoA = aa.logo ? '<img src="' + _esc(aa.logo) + '" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-left:6px;" onerror="this.style.display=\'none\'">' : '';
-        html += '<div class="mrow">'
-          +   '<div class="mn">' + logoH + _esc(ha.name) + '</div>'
-          +   '<div class="ms p">vs</div>'
-          +   '<div class="mn r">' + _esc(aa.name) + logoA + '</div>'
-          + '</div>';
+    /* matches con índice ORIGINAL en state.pairs (para persistencia
+       sin re-resolver al guardar resultado IA o humano). */
+    var matches = [];
+    if(state && state.pairs){
+      state.pairs.forEach(function(p, idx){
+        if(p && p.jornada === jor){
+          matches.push({
+            home: p.home, away: p.away, jornada: p.jornada,
+            gh: p.gh, ga: p.ga, played: !!p.played,
+            events: p.events || [], mvp: p.mvp || '', mvpTeam: p.mvpTeam || '',
+            _origIdx: idx
+          });
+        }
       });
-    } else {
-      for(var i = 0; i < 20; i++){
-        html += '<div class="mrow">'
-          +   '<div class="mn">Por definir</div>'
-          +   '<div class="ms p">vs</div>'
-          +   '<div class="mn r">Por definir</div>'
-          + '</div>';
-      }
     }
-    html += '</div></div>';
+    if(!matches.length){
+      bodyEl.innerHTML = '<div style="padding:18px 14px;text-align:center;color:rgba(255,255,255,.55);font-style:italic;font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.5;">'
+        + '⚠️ Esta jornada aún no se ha sorteado.<br>'
+        + 'Vuelve a la pantalla de Fase de Liga y pulsa <b>🎯 Sortear</b> '
+        + '(requiere PIN admin 747).</div>';
+      go(c.gotoId);
+      return true;
+    }
+    /* Clasificación: HvH → HvIA → IA-vs-IA. */
+    var hvhMatches = [], hviaMatches = [], iaiaMatches = [];
+    matches.forEach(function(m){
+      var hH = _isHumanTeam(m.home);
+      var aH = _isHumanTeam(m.away);
+      if(hH && aH) hvhMatches.push(m);
+      else if(hH || aH) hviaMatches.push(m);
+      else iaiaMatches.push(m);
+    });
+    var html = '';
+    if(hvhMatches.length || hviaMatches.length){
+      html += '<div class="eurfase-section eurfase-section-human">'
+            + '<div class="eurfase-section-hdr">⭐ Partidos Humanos</div>';
+      hvhMatches.forEach(function(m){ html += _renderEurMatchCard(comp, m, teamsByName); });
+      hviaMatches.forEach(function(m){ html += _renderEurMatchCard(comp, m, teamsByName); });
+      html += '</div>';
+    }
+    if(iaiaMatches.length){
+      var pendingIA = iaiaMatches.some(function(m){ return !m.played; });
+      html += '<div class="eurfase-section eurfase-section-ia">'
+            + '<div class="eurfase-section-hdr">🤖 Partidos IA vs IA</div>';
+      if(pendingIA){
+        html += '<div style="display:flex;justify-content:center;padding:6px 0 8px;">'
+              + '<button class="eurfase-sim-all" '
+              + 'onclick="window._eurFaseSimAllIA(\'' + comp + '\',' + jor + ')">'
+              + '⚡ Simular toda la jornada IA</button></div>';
+      }
+      iaiaMatches.forEach(function(m){ html += _renderEurMatchCard(comp, m, teamsByName); });
+      html += '</div>';
+    }
     bodyEl.innerHTML = html;
     go(c.gotoId);
     return true;
   }
+  /* ── Helpers expuestos: Previa (HvH/HvIA) + Sim All IA. ────────── */
+  window._eurFaseAbrirPrevia = function(comp, jor, idx){
+    var c = COMPS[comp]; if(!c) return;
+    var state = loadState(comp); if(!state || !state.pairs || !state.pairs[idx]) return;
+    var pair = state.pairs[idx];
+    var local = pair.home, visit = pair.away;
+    var isHvH = _isHumanTeam(local) && _isHumanTeam(visit);
+    var matchKey = 'eurfase_' + comp + '_' + jor + '_' + idx;
+    var duracion = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
+      : (isHvH ? '15 min 45 s' : '9 min 45 s');
+    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: comp,
+      eurFaseComp: comp, eurFaseJor: jor, eurFaseIdx: idx };
+    window._eurFasePending = { comp: comp, jor: jor, idx: idx, home: local, away: visit, isHvH: isHvH };
+    window._ppCustomCallback = function(){
+      window._ppPreviaTeams = null;
+      if(typeof window.gmOpen !== 'function') return;
+      try {
+        window.gmOpen(0, local, visit, isHvH, comp, false, false);
+        if(window.__GM_LIVE){
+          window.__GM_LIVE._isEurFase = true;
+          window.__GM_LIVE._eurFaseComp = comp;
+          window.__GM_LIVE._eurFaseJor = jor;
+          window.__GM_LIVE._eurFaseIdx = idx;
+        }
+      } catch(_){}
+    };
+    if(typeof window.showPrePartidoOverlay === 'function'){
+      /* Fase de liga = single-leg sin prórroga (regla UEFA Swiss).
+         duracion solo aplica si humano implicado. */
+      window.showPrePartidoOverlay(matchKey, comp, 'No', duracion, isHvH);
+    }
+  };
+  window._eurFaseSimAllIA = function(comp, jor){
+    var state = loadState(comp); if(!state || !state.pairs) return;
+    var pairs = state.pairs;
+    var queue = [];
+    pairs.forEach(function(m, i){
+      if(!m || m.jornada !== jor || m.played) return;
+      if(_isHumanTeam(m.home) || _isHumanTeam(m.away)) return;
+      queue.push(i);
+    });
+    var k = 0;
+    function next(){
+      if(k >= queue.length) return;
+      var i = queue[k++];
+      var btn = document.getElementById('ia-sim-btn-eurfase_' + comp + '_' + jor + '_' + i);
+      if(btn && !btn.disabled){
+        try { btn.click(); } catch(_){}
+      }
+      setTimeout(next, 220);
+    }
+    next();
+  };
+  /* ── Persistencia tras IA-vs-IA (callback de iaSimLive con prefijo
+     `eurfase_<comp>_<jor>_<idx>`). ─────────────────────────────── */
+  window._eurFasePersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam){
+    var m = /^eurfase_([a-z]+)_(\d+)_(\d+)$/.exec(String(mk||''));
+    if(!m) return;
+    var comp = m[1], jor = parseInt(m[2],10)|0, idx = parseInt(m[3],10)|0;
+    var state = loadState(comp); if(!state || !state.pairs || !state.pairs[idx]) return;
+    var pair = state.pairs[idx];
+    pair.gh = Number(scA)||0;
+    pair.ga = Number(scB)||0;
+    pair.played = true;
+    pair.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    pair.mvp = mvp || '';
+    pair.mvpTeam = mvpTeam || '';
+    saveState(comp, state);
+    setTimeout(function(){ try { renderJornada(comp, jor); } catch(_){} }, 600);
+  };
+  /* ── Persistencia tras humano (callback de gmEndMatch con
+     `_isEurFase`). ─────────────────────────────────────────────── */
+  window._eurFaseSaveHumanResult = function(comp, jor, idx, gh, ga, events, mvp, mvpTeam, home, away){
+    var state = loadState(comp); if(!state || !state.pairs || !state.pairs[idx]) return;
+    var pair = state.pairs[idx];
+    pair.gh = Number(gh)||0;
+    pair.ga = Number(ga)||0;
+    pair.played = true;
+    pair.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    pair.mvp = mvp || '';
+    pair.mvpTeam = mvpTeam || '';
+    saveState(comp, state);
+    setTimeout(function(){ try { renderJornada(comp, jor); } catch(_){} }, 200);
+  };
 
   /* Patch los openers existentes para que consuman el state. */
   Object.keys(COMPS).forEach(function(comp){
@@ -19198,8 +19891,334 @@ Tottenham
     return true;
   }
 
+  /* Parser de la "Plantilla Maestra" del usuario (2026-05-09):
+     extrae los campos de CABECERA cuando se pega un boceto entero
+     (no solo la lista de jugadores). El usuario quiere copiar el
+     mismo template para cada equipo y que el editor rellene name +
+     4 ejes + agresividad + presupuesto + estadio + alias eFootball
+     + escudo en los inputs correspondientes. La detección es
+     permisiva (acepta variaciones de capitalización, separadores
+     `/`, `·`, `,`, comas, espacios, paréntesis, markdown bold).
+
+     Devuelve un objeto con SOLO los campos detectados. Los campos no
+     encontrados no aparecen en el objeto — el caller decide si
+     pisar valores existentes o no.
+
+     Para no chocar con la lista de jugadores, la cabecera se asume
+     ANTES de la primera sección de plantilla (porteros / defensas /
+     etc.). Encontrada esa sección, deja de buscar cabecera. */
+  function parseMasterCabecera(text){
+    if(!text) return {};
+    var out = {};
+    var lines = String(text).split(/\r?\n/);
+    function strip(s){ return String(s||'').replace(/\*\*/g,'').replace(/__/g,'').replace(/^[\s*\-•·]+/,'').trim(); }
+    /* Etiquetas que NO son nombre de equipo aunque vengan en bold. */
+    var FIELD_LABELS = /^(VALORES?\s*(DE\s*PODER)?|NIVEL\s*(DE\s*ESTRELLAS)?|AGRESIVIDAD|PRESUPUESTO|ESTADIO(\s*LOCAL)?|EQUIPO\s*S[IÍ]MIL\s*EFOOTBALL|S[IÍ]MIL\s*EFOOTBALL|ALIAS|ESCUDO|GLOBAL|ATAQUE|MEDIO|DEFENSA|NOMBRE\s*(DEL\s*EQUIPO)?|11\s*IDEAL|9\s*MEJORES\s*RESERVAS|GOLEADOR\s*DE\s*ELITE\s*MUNDIAL|PORTEROS|DEFENSAS|CENTROCAMPISTAS|MEDIOS|DELANTEROS)$/i;
+    /* Marca el final de la cabecera: cualquier línea con encabezado
+       de sección de plantilla la frena. */
+    var SECTION_BOUNDARY = /(porter|goalkeep|\bgk\b|\bpor\b|🧤|defens|\bdef\b|\bdf\b|🛡|centrocamp|\bmedio?s?\b|midfi|\bmed\b|\bmid\b|\bmf\b|⚙|delante|forward|attack|stri|\bdel\b|\bfwd\b|\batt\b|⚽|⚡)/i;
+    for(var i = 0; i < lines.length; i++){
+      var raw = lines[i];
+      var s = strip(raw);
+      if(!s) continue;
+      /* ¿Frontera de plantilla? Para no interpretar "**🧤 PORTEROS**"
+         como nombre de equipo. La línea SOLO es frontera real si no
+         tiene dígitos (las líneas de jugadores y la de "Valores de
+         Poder: GLOBAL 76 / DEFENSA 77" tienen dígitos y mencionan
+         "MEDIO"/"DEFENSA" sin ser cabeceras de sección). Permitimos
+         conteos en paréntesis tipo "Defensas (15)" o "n=15". */
+      var probe = s.replace(/\(\s*\d+\s*\)/g,'').replace(/\bn\s*=\s*\d+\b/ig,'');
+      if(!/\d/.test(probe) && SECTION_BOUNDARY.test(probe)) break;
+      /* GLOBAL / ATAQUE / MEDIO / DEFENSA — formato combinado o suelto. */
+      var pwAll = s.match(/GLOBAL[\s:]*(\d{1,3})[\s\/.,·\-|]+ATAQUE[\s:]*(\d{1,3})[\s\/.,·\-|]+(?:MEDIO|MID)[\s:]*(\d{1,3})[\s\/.,·\-|]+DEFENSA[\s:]*(\d{1,3})/i);
+      if(pwAll){
+        out.power = +pwAll[1]; out.atk = +pwAll[2]; out.mid = +pwAll[3]; out.def = +pwAll[4];
+      } else {
+        var mG = s.match(/GLOBAL[\s:]+(\d{1,3})/i); if(mG && out.power == null) out.power = +mG[1];
+        var mA = s.match(/ATAQUE[\s:]+(\d{1,3})/i); if(mA && out.atk == null) out.atk = +mA[1];
+        var mM = s.match(/(?:MEDIO|MID)[\s:]+(\d{1,3})/i); if(mM && out.mid == null) out.mid = +mM[1];
+        var mD = s.match(/DEFENSA[\s:]+(\d{1,3})/i); if(mD && out.def == null) out.def = +mD[1];
+      }
+      /* Agresividad. */
+      var mAg = s.match(/agresivid[a-zñ]*[\s:]+(\d{1,3})/i);
+      if(mAg && out.aggr == null) out.aggr = +mAg[1];
+      /* Presupuesto: acepta números con puntos/comas como separador
+         de miles ("1.200.000" → 1200000). */
+      var mPr = s.match(/presupues?t[a-zñ]*[\s:€$]+([\d.,]+)/i);
+      if(mPr && out.budget == null){
+        var raw2 = mPr[1].replace(/[.,\s]/g,'');
+        if(raw2) out.budget = parseInt(raw2, 10);
+      }
+      /* Estadio (con o sin "Local"). */
+      var mEst = s.match(/estadio(?:\s+local)?[\s:]+(.+?)$/i);
+      if(mEst && out.stadium == null){
+        var v = mEst[1].replace(/^[\(\)]+|[\(\)]+$/g,'').trim();
+        if(v && !/recinto\s+asignado/i.test(v)) out.stadium = v;
+      }
+      /* Equipo Símil eFootball / Alias eFootball. */
+      var mAl = s.match(/(?:equipo\s+s[ií]mil\s+efootball|s[ií]mil\s+efootball|alias\s+(?:en\s+)?efootball)[\s:]+(.+?)$/i);
+      if(mAl && out.alias == null){
+        var av = mAl[1].replace(/^[\(\)]+|[\(\)]+$/g,'').trim();
+        if(av && !/equipo\s+base/i.test(av)) out.alias = av;
+      }
+      /* Escudo URL: en la misma línea o en la siguiente. */
+      var mShUrl = s.match(/escudo[\s\(\)A-Za-z]*[:\s]+(\S+\.\S+)$/i);
+      if(mShUrl && out.shield == null){
+        var u = mShUrl[1].trim();
+        if(/^https?:\/\//i.test(u) || /\.(png|jpg|jpeg|svg|webp)/i.test(u)) out.shield = u;
+      } else if(/^escudo/i.test(s) && out.shield == null && i + 1 < lines.length){
+        var next = strip(lines[i+1]);
+        if(/^https?:\/\//i.test(next)) out.shield = next;
+      }
+      /* Nombre del equipo: línea bold que NO sea una etiqueta. */
+      if(out.name == null){
+        var bold = raw.match(/\*\*([^*]+?)\*\*/);
+        if(bold){
+          var bv = bold[1].trim();
+          if(!FIELD_LABELS.test(bv) && /[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(bv) && bv.length >= 3 && bv.length <= 60){
+            /* Filtra "Valores de Poder:" etc. Las etiquetas con `:` final
+               las descartamos también. */
+            if(!/^[A-ZÁÉÍÓÚÑa-záéíóúñ\s]+:$/.test(bv)){
+              out.name = bv.replace(/\s+/g,' ').trim();
+            }
+          }
+        }
+        /* Forma alternativa: línea con prefijo "Nombre:" */
+        var mNm = s.match(/^nombre(?:\s+del\s+equipo)?[\s:]+(.+?)$/i);
+        if(mNm && out.name == null){
+          var nv = mNm[1].replace(/^[\(\)]+|[\(\)]+$/g,'').trim();
+          if(nv) out.name = nv;
+        }
+      }
+    }
+    return out;
+  }
+  window._parseMasterCabecera = parseMasterCabecera;
+
+  /* Cuando el admin pega la Plantilla Maestra entera (cabecera +
+     bloque de jugadores) en el textarea `lext-team-squad-paste`,
+     extraemos los campos de cabecera y rellenamos los inputs del
+     formulario que estén VACÍOS — nunca pisamos lo que el admin
+     haya escrito a mano. Petición usuario 2026-05-09. */
+  function _applyMasterCabeceraToForm(text, force){
+    if(!text) return false;
+    var c = parseMasterCabecera(text);
+    if(!c || !Object.keys(c).length) return false;
+    var filled = [];
+    function _setIfEmpty(id, v){
+      if(v == null || v === '') return;
+      var el = document.getElementById(id);
+      if(!el) return;
+      var cur = String(el.value||'').trim();
+      if(!force){
+        /* Modo conservador (typing manual): solo pisar si está vacío
+           o es un default conocido (75 ejes, 50 agresividad). Si el
+           admin ya escribió a mano otro valor, NO se pisa. */
+        var isDefaultPow = (id === 'lext-team-pw-glob' || id === 'lext-team-pw-atk' || id === 'lext-team-pw-mid' || id === 'lext-team-pw-def') && cur === '75';
+        var isDefaultAggr = (id === 'lext-team-aggr') && cur === '50';
+        if(cur && !isDefaultPow && !isDefaultAggr) return;
+      }
+      /* Modo `force=true` (paste explícito de master template): pisar
+         siempre. La intención del admin al pegar el template entero
+         es aplicarlo todo. */
+      el.value = String(v);
+      filled.push(id);
+    }
+    _setIfEmpty('lext-team-name', c.name);
+    _setIfEmpty('lext-team-pw-glob', c.power);
+    _setIfEmpty('lext-team-pw-atk', c.atk);
+    _setIfEmpty('lext-team-pw-mid', c.mid);
+    _setIfEmpty('lext-team-pw-def', c.def);
+    _setIfEmpty('lext-team-aggr', c.aggr);
+    _setIfEmpty('lext-team-budget', c.budget);
+    _setIfEmpty('lext-team-shield', c.shield);
+    _setIfEmpty('lext-team-efootball-alias', c.alias);
+    /* Estadio: el input es <select>. Solo lo seteamos si el valor
+       coincide con alguna option existente (case-insensitive). Si no
+       coincide, dejamos el select como está y el admin elige a mano. */
+    if(c.stadium){
+      var sel = document.getElementById('lext-team-stadium');
+      if(sel && sel.options){
+        var want = c.stadium.toLowerCase().replace(/\s+/g,' ').trim();
+        for(var oi = 0; oi < sel.options.length; oi++){
+          var optTxt = String(sel.options[oi].text || '').toLowerCase().replace(/\s+/g,' ').trim();
+          var optVal = String(sel.options[oi].value || '').toLowerCase().replace(/\s+/g,' ').trim();
+          if(optTxt === want || optVal === want || optTxt.indexOf(want) === 0 || want.indexOf(optTxt) === 0){
+            sel.selectedIndex = oi;
+            filled.push('lext-team-stadium');
+            break;
+          }
+        }
+      }
+    }
+    return filled.length > 0 ? filled : false;
+  }
+
+  /* Wire-up: input listener en el textarea de paste. Solo se monta
+     una vez (idempotente vía flag). Toast breve al detectar cabecera. */
+  function _wireMasterCabeceraListener(){
+    var ta = document.getElementById('lext-team-squad-paste');
+    if(!ta || ta.__masterWired) return;
+    ta.__masterWired = true;
+    /* PASTE explícito: el admin acaba de pegar (Ctrl+V o long-press →
+       Pegar). Tratamos este caso como "aplica el master template
+       entero": SÍ pisa los inputs (force=true) y reescribe el
+       textarea con SOLO la nómina filtrada para que el admin vea
+       qué se va a guardar. setTimeout 60ms porque el navegador
+       inserta el texto del clipboard de forma asíncrona. */
+    ta.addEventListener('paste', function(){
+      setTimeout(function(){
+        try {
+          var origText = ta.value;
+          var filled = _applyMasterCabeceraToForm(origText, true);
+          var cleanText = _filterMasterTemplate(origText);
+          var changed = (cleanText !== origText);
+          if(changed){
+            ta.value = cleanText.replace(/\n{3,}/g,'\n\n').replace(/^\s+/,'').replace(/\s+$/,'') + '\n';
+          }
+          if((filled && filled.length) || changed){
+            var n = (filled && filled.length) || 0;
+            _showMasterCabeceraToast('✓ Master Template · ' + n + ' campo' + (n===1?'':'s') + ' rellenado' + (n===1?'':'s') + (changed?' · plantilla limpia':''));
+          }
+        } catch(_){}
+      }, 60);
+    });
+    /* INPUT (typing manual o programático): no force, no reescribir
+       texto. Solo aplica cabecera si los inputs estaban vacíos.
+       Evita interferir con la escritura a mano. */
+    ta.addEventListener('input', function(){
+      try {
+        var filled = _applyMasterCabeceraToForm(ta.value, false);
+        if(filled && filled.length){
+          _showMasterCabeceraToast('✓ Cabecera detectada · ' + filled.length + ' campo' + (filled.length===1?'':'s') + ' rellenado' + (filled.length===1?'':'s'));
+        }
+      } catch(_){}
+    });
+  }
+  function _showMasterCabeceraToast(msg){
+    var prev = document.getElementById('lext-master-cab-toast');
+    if(prev) try { prev.remove(); } catch(_){}
+    var t = document.createElement('div');
+    t.id = 'lext-master-cab-toast';
+    t.textContent = msg;
+    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:rgba(60,200,120,.92);color:#0a1408;padding:8px 14px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;font-weight:700;z-index:1000099;box-shadow:0 4px 18px rgba(0,0,0,.45);';
+    document.body.appendChild(t);
+    setTimeout(function(){ try { t.remove(); } catch(_){} }, 2200);
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _wireMasterCabeceraListener);
+  } else {
+    _wireMasterCabeceraListener();
+  }
+  /* Re-intentar tras un pequeño delay por si el textarea aún no está
+     en el DOM cuando este IIFE corre (algunos rebuilds dinámicos). */
+  setTimeout(_wireMasterCabeceraListener, 600);
+
+  /* Filtra el texto de un Master Template para dejar SOLO la nómina
+     real (sin cabecera, sin "🏆 11 IDEAL", sin "🪑 9 MEJORES
+     RESERVAS", sin notas tipo "GOLEADOR DE ELITE MUNDIAL").
+     Bug 2026-05-09: el admin pegó la Plantilla Maestra entera y
+     `parseSquadPaste` interpretó "Valores de Poder: (GLOBAL 82 / …
+     DEFENSA 82)" como un jugador llamado "Valores de Poder: (GLOBAL"
+     con power 82 y flag F (la F de DEFENSA). También las líneas de
+     11 IDEAL ("🛡️ DEF: A. Gorosabel 79") y 9 RESERVAS entraban como
+     jugadores duplicados. Filtramos antes de parsear. */
+  function _filterMasterTemplate(text){
+    if(!text) return text || '';
+    var lines = String(text).split(/\r?\n/);
+    var keep = [];
+    var inSkipBlock = false;
+    function _stripDecor(s){
+      return String(s||'').replace(/\*\*/g,'').replace(/__/g,'')
+        .replace(/^[\s*\-•·#>]+/,'').trim();
+    }
+    /* ¿Línea de cabecera (campos del header del template)? */
+    function _isCabeceraLine(s){
+      var t = _stripDecor(s);
+      if(!t) return false;
+      /* Formato múltiple: "GLOBAL 82 / ATAQUE 83 / MEDIO 81 / DEFENSA 82". */
+      if(/GLOBAL[\s:]*\d/i.test(t) && /(ATAQUE|DEFENSA|MEDIO)/i.test(t)) return true;
+      /* Etiquetas de cabecera al inicio de la línea. */
+      var labels = [
+        /^valores?\s+de\s+poder\b/i,
+        /^nivel\s+de\s+estrellas\b/i,
+        /^agresivid[a-zñ]+\b/i,
+        /^presupues?to\b/i,
+        /^estadio(\s+local)?\b/i,
+        /^equipo\s+s[ií]mil\s+efootball\b/i,
+        /^s[ií]mil\s+efootball\b/i,
+        /^alias\s+(en\s+)?efootball\b/i,
+        /^escudo\s*(\(url\)|\b)/i,
+        /^nombre(\s+del\s+equipo)?\b/i
+      ];
+      for(var L = 0; L < labels.length; L++){ if(labels[L].test(t)) return true; }
+      return false;
+    }
+    /* ¿Header de bloque que se salta entero (nota, no nómina)?
+       Permisivo a propósito: detectamos "11 IDEAL" o "9 MEJORES
+       RESERVAS" en cualquier parte de la línea ya decorada. Antes
+       intentamos requerir emoji 🏆/🪑 al inicio con `[🏆]` pero
+       son surrogate pairs y los character classes sin flag `u`
+       no funcionan — el match fallaba en silencio. */
+    function _isSkipBlockStart(s){
+      var t = _stripDecor(s);
+      if(/\b11\s*ideal\b/i.test(t)) return true;
+      if(/\b9\s*(mejores\s*)?reservas?\b/i.test(t)) return true;
+      if(/goleador(es)?\s+de\s+elite\s+mundial/i.test(t)) return true;
+      return false;
+    }
+    /* ¿Header real de sección de plantilla (porteros/defensas/...)? */
+    function _isRealSectionHeader(s){
+      if(_isSkipBlockStart(s)) return false;
+      var t = _stripDecor(s);
+      /* Tiene emoji-cabecera al inicio o palabra clara de sección,
+         y NO contiene dígitos (descarta líneas de cabecera). */
+      if(/\d/.test(t.replace(/\(\s*\d+\s*\)/g,''))) return false;
+      if(/^(🧤|🛡|⚙|⚽|⚡)/.test(t)) return true;
+      if(/^(porteros|defensas|centrocampistas|medios|delanteros)\b/i.test(t)) return true;
+      return false;
+    }
+    /* ¿Línea de cabecera-only-name "# **NAME**"? Solo cuenta si el
+       contenido NO es una sección de plantilla (porteros/defensas/
+       etc.). Antes "### **🛡️ DEFENSAS**" matcheaba como team name
+       y se eliminaba el header de sección de la nómina. */
+    function _isHeadingNameLine(s){
+      if(!/^\s*#+\s*\*\*[^*]+\*\*\s*$/.test(s)) return false;
+      var content = s.replace(/^\s*#+\s*\*\*([^*]+)\*\*\s*$/, '$1').trim();
+      if(/^(🧤|🛡|⚙|⚽|⚡)/.test(content)) return false;
+      if(/^(porteros|defensas|centrocampistas|medios|delanteros)\b/i.test(content)) return false;
+      return true;
+    }
+    for(var i = 0; i < lines.length; i++){
+      var raw = lines[i];
+      var s = raw.trim();
+      if(!s){ keep.push(raw); continue; }
+      if(inSkipBlock){
+        if(_isRealSectionHeader(s)){
+          inSkipBlock = false;
+          keep.push(raw);
+        }
+        continue;
+      }
+      if(_isSkipBlockStart(s)){ inSkipBlock = true; continue; }
+      if(_isCabeceraLine(s)) continue;
+      if(_isHeadingNameLine(s)) continue;
+      keep.push(raw);
+    }
+    return keep.join('\n');
+  }
+  window._filterMasterTemplate = _filterMasterTemplate;
+
   function parseSquadPaste(text){
     if(!text) return [];
+    /* Limpieza previa: quita líneas de cabecera (Valores de Poder,
+       Agresividad, Presupuesto, Estadio, Alias eFootball, Escudo,
+       Nombre del equipo) y los bloques "🏆 11 IDEAL" / "🪑 9 MEJORES
+       RESERVAS" / "GOLEADOR DE ELITE MUNDIAL" que no son jugadores.
+       Bug 2026-05-09: sin esta limpieza, "Valores de Poder: (GLOBAL
+       82 / … / DEFENSA 82)" se interpretaba como jugador "Valores
+       de Poder: (GLOBAL" power 82 con flag F (la de DEFENSA). */
+    text = _filterMasterTemplate(text);
     var lines = String(text).split(/\r?\n/);
     var players = [];
     var currentPos = null;
@@ -23102,7 +24121,17 @@ Tottenham
     return {};
   }
   function save(o){
-    try { localStorage.setItem(KEY, JSON.stringify(o||{})); } catch(_){}
+    /* Detectar fallo de localStorage (quota / permission denied / safari
+       privacy mode) y avisar al usuario en vez de tragar el error. Es
+       lo que rompía el flujo "edito y no se queda guardado" — el setItem
+       fallaba en silencio. Petición usuario 2026-05-09. */
+    try {
+      localStorage.setItem(KEY, JSON.stringify(o||{}));
+      return true;
+    } catch(e) {
+      try { alert('⚠ No se pudieron guardar los valores del HUD.\nMotivo: ' + (e && e.message || 'error desconocido') + '\n(Quizá no queda espacio en el navegador. Cierra el editor del torneo o resetea torneos antiguos para liberar espacio.)'); } catch(_){}
+      return false;
+    }
   }
   function _smallTarget(parentSel){
     var p = document.querySelector(parentSel);
@@ -23218,8 +24247,24 @@ Tottenham
     if (ov) ov.classList.remove('show');
   };
   window._bayernEditValuesSave = function(){
-    function num(id){ var v = parseFloat(document.getElementById(id).value); return isNaN(v) ? null : v; }
-    function intg(id){ var v = parseInt(document.getElementById(id).value, 10); return isNaN(v) ? null : v; }
+    /* Locale-tolerant parsers: aceptan coma como separador decimal (ES)
+       además de punto. */
+    function num(id){
+      var raw = document.getElementById(id).value;
+      if (raw == null) return null;
+      var s = String(raw).replace(/,/g, '.').trim();
+      if (!s) return null;
+      var v = parseFloat(s);
+      return isNaN(v) ? null : v;
+    }
+    function intg(id){
+      var raw = document.getElementById(id).value;
+      if (raw == null) return null;
+      var s = String(raw).replace(/,/g, '.').trim();
+      if (!s) return null;
+      var v = parseInt(s, 10);
+      return isNaN(v) ? null : v;
+    }
     var o = {
       rating:       num('me-rating'),
       ratingTarget: num('me-rating-target'),
@@ -23227,8 +24272,59 @@ Tottenham
       moneyTarget:  intg('me-money-target'),
       pi:           intg('me-pi')
     };
-    save(o);
-    apply();
+    /* Sanity check: si TODOS los campos son null, no machaques el
+       override previo — sería un Reset accidental. */
+    var allNull = Object.keys(o).every(function(k){ return o[k] == null; });
+    if (allNull) {
+      alert('⚠ No se ha podido leer ningún valor. Revisa los campos antes de guardar.');
+      return;
+    }
+    var ok = save(o);
+    if (!ok) return;  /* alert ya mostrado en save() */
+    /* Persistencia secundaria en sessionStorage como backup (por si
+       el localStorage tiene algún corrupting-event raro entre
+       sesiones). */
+    try { sessionStorage.setItem(KEY, JSON.stringify(o)); } catch(_){}
+    /* ESCRITURA DIRECTA al DOM (no esperamos a apply): aseguramos
+       feedback visual inmediato AUNQUE haya un MutationObserver
+       loop o un athObjCount async que se cuele. Petición usuario
+       2026-05-09 ("fuerzalo"). */
+    applying = true;
+    try {
+      if (o.rating != null) {
+        var rEl = document.getElementById('ath-pts-val');
+        if (rEl) rEl.textContent = Number(o.rating).toFixed(2);
+      }
+      if (o.money != null) {
+        var mEl = document.getElementById('ath-money-val');
+        if (mEl) mEl.textContent = String(parseInt(o.money,10)|0);
+      }
+      if (o.pi != null) {
+        var pEl = document.getElementById('ath-med-val');
+        if (pEl) pEl.textContent = String(parseInt(o.pi,10)|0);
+      }
+      if (o.ratingTarget != null) {
+        var rT = _smallTarget('.munich-hud-val');
+        if (rT) rT.textContent = '/ ' + Number(o.ratingTarget).toFixed(2);
+      }
+      if (o.moneyTarget != null) {
+        var mT = _smallTarget('.munich-hud-money');
+        if (mT) mT.textContent = '/ ' + (parseInt(o.moneyTarget,10)|0) + '€';
+      }
+    } finally { applying = false; }
+    apply();   /* segunda pasada por blindaje (idempotente) */
+    /* Toast verde de confirmación — el usuario reportó que "edito
+       y no se guarda" sin ver ningún cambio. Feedback explícito. */
+    try {
+      var prev = document.getElementById('bayern-hud-save-toast');
+      if (prev) prev.remove();
+      var t = document.createElement('div');
+      t.id = 'bayern-hud-save-toast';
+      t.textContent = '✓ HUD guardado';
+      t.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:rgba(60,200,120,.95);color:#0a1408;padding:10px 18px;border-radius:10px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;z-index:1000099;box-shadow:0 4px 18px rgba(0,0,0,.45);';
+      document.body.appendChild(t);
+      setTimeout(function(){ try { t.remove(); } catch(_){} }, 2200);
+    } catch(_){}
     window._bayernEditValuesClose();
   };
   window._bayernEditValuesReset = function(){
@@ -23250,7 +24346,7 @@ Tottenham
     if (typeof window.pG === 'function') window.pG(window._bayernEditValuesOpen);
     else window._bayernEditValuesOpen();
   };
-  function boot(){ apply(); setupObservers(); }
+  function boot(){ apply(); setupObservers(); _startGuardian(); }
   /* Expuesto para que otros módulos (athObjCount post-patch,
      activate de s-munich, etc.) puedan re-aplicar los overrides
      después de que el HUD haya sido reescrito por la cadena legacy. */
@@ -23268,17 +24364,17 @@ Tottenham
 
      Solución triple para ser bulletproof:
 
-       (a) Polling cada 500 ms: re-aplicamos los overrides en
-           background. Si la cadena legacy escribe un valor distinto
-           al guardado, lo corregimos en menos de medio segundo.
+       (a) Polling cada 500 ms con dirty-check: re-aplicamos los
+           overrides en background SOLO si el DOM está fuera de
+           sync con el storage. Sin override → no-op. Con override
+           pero DOM correcto → no-op. Coste: ~5 µs/tick.
 
        (b) Hook a `window.go(s-munich)`: re-aplicamos en cuanto el
            usuario entra a la pantalla, antes de que la cadena
            legacy tenga tiempo de pisar.
 
-       (c) Hook a `next-day` / play / cualquier listener que
-           dispare updateHud — re-aplicamos justo después con un
-           pequeño retraso.
+       (c) MutationObserver existente sobre los 5 spans queda como
+           red de seguridad para escrituras síncronas inmediatas.
   */
   function _hasOverrides(){
     var o = load();
@@ -23286,12 +24382,23 @@ Tottenham
                  o.money != null  || o.moneyTarget != null ||
                  o.pi != null);
   }
-  /* Polling defensivo. 500 ms es lo bastante rápido para no notarse
-     visualmente cuando algún flujo legacy reescribe los spans, y lo
-     bastante lento para no comerse CPU. Si no hay ningún override,
-     el polling es no-op. */
+  /* Polling cada 500 ms con dirty-check. */
   setInterval(function(){
-    try { if (_hasOverrides()) apply(); } catch(_){}
+    try {
+      var o = load();
+      if (!o || !Object.keys(o).length) return;
+      var dirty = false;
+      function _check(elId, expected){
+        var el = document.getElementById(elId);
+        if (!el) return;
+        var cur = String(el.textContent || '').trim();
+        if (cur !== String(expected)) dirty = true;
+      }
+      if (o.rating != null) _check('ath-pts-val', Number(o.rating).toFixed(2));
+      if (o.money != null)  _check('ath-money-val', String(parseInt(o.money, 10) | 0));
+      if (o.pi != null)     _check('ath-med-val', String(parseInt(o.pi, 10) | 0));
+      if (dirty) apply();
+    } catch(_){}
   }, 500);
 
   /* Re-apply al entrar/salir de pantalla. */
@@ -23407,13 +24514,15 @@ Tottenham
   /* Icono del título — círculo incrustado en la caja, mismo estilo
      que las cajas de #s-competiciones. Fondo radial con sombra
      interior + borde dorado tenue. La <img> se centra dentro del
-     círculo manteniendo proporción (object-fit:contain). */
+     círculo manteniendo proporción (object-fit:contain).
+     2026-05-09: subido de 46x46 → 96x96 a petición del usuario,
+     que reportó "las fotos que subo las veo pequeñas". */
   #s-munich-trofeos .ath-titulo-icon{
-    flex-shrink:0;width:46px;height:46px;border-radius:50%;
+    flex-shrink:0;width:96px;height:96px;border-radius:50%;
     display:flex;align-items:center;justify-content:center;
     background:radial-gradient(circle at 35% 30%,rgba(80,30,5,.85) 0%,rgba(20,8,2,.95) 80%);
-    border:1.5px solid rgba(240,192,64,.55);
-    box-shadow:0 2px 6px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08),inset 0 -2px 6px rgba(0,0,0,.5);
+    border:2px solid rgba(240,192,64,.55);
+    box-shadow:0 4px 12px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08),inset 0 -2px 6px rgba(0,0,0,.5);
     overflow:hidden;
   }
   #s-munich-trofeos .ath-titulo-icon img{width:100%;height:100%;object-fit:contain;display:block;}
@@ -25124,6 +26233,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var ms = _matchesFor(seasonId);
     var pj=0, g=0, e=0, p=0;
     ms.forEach(function(m){
+      if (!_matchIsHvH(m)) return;          /* solo HvH (2026-05-09) */
       var o = _outcomeFor(m, team);
       if (!o) return;
       pj++;
@@ -25159,6 +26269,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         + '<div class="mderby-summary-cell"><div class="mderby-summary-num pct">' + stats.pct + '%</div><div class="mderby-summary-lbl">% VIC</div></div>';
     }
     var ms = _matchesFor(_curSeasonId);
+    /* Filtro HvH también en la lista visual: matches legacy donde
+       uno de los dos teams no es humano se ocultan (no se borran de
+       storage por seguridad — si el usuario marca el rival como
+       humano en el futuro, vuelven a aparecer). 2026-05-09. */
+    ms = (ms || []).filter(_matchIsHvH);
     if (!listEl) return;
     if (!ms.length){
       listEl.innerHTML = '<div class="mderby-empty">— Aún no has añadido ningún partido —<br><span style="font-size:11px;">Pulsa <b>➕ AÑADIR PARTIDO</b> para empezar.</span></div>';
@@ -25352,6 +26467,18 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var local = _stripLeadingIcon(opts.local || opts.home || '').toLowerCase();
     var visit = _stripLeadingIcon(opts.visitante || opts.away || '').toLowerCase();
     if (local !== t && visit !== t) return; /* el partido no involucra a este equipo */
+    /* FILTRO HvH (petición usuario 2026-05-09): el Histórico Derbys
+       solo registra partidos donde AMBOS equipos son humanos. Antes
+       cualquier partido que pasara por gmEndMatch se logueaba si
+       coincidía con el teamName de la temporada — incluso si el rival
+       era IA y el motor sólo tenía marcado uno como humano. Ahora
+       descartamos cualquier partido donde al menos una de las dos
+       cajas NO esté flageada como humano por `window.esHumano`. */
+    var _esHum = (typeof window.esHumano === 'function') ? window.esHumano : function(){ return false; };
+    var _humL = false, _humV = false;
+    try { _humL = !!_esHum(opts.local || opts.home || ''); } catch(_){}
+    try { _humV = !!_esHum(opts.visitante || opts.away || ''); } catch(_){}
+    if (!_humL || !_humV) return;
     var comp = String(opts.comp || 'liga').trim();
     var jornada = String(opts.jornada || opts.j || '').trim();
     var localName = _stripLeadingIcon(opts.local || opts.home || '');
@@ -25372,7 +26499,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (dup) return;
     all[current.id].push({
       id: _newId(), jornada: jornada, comp: comp,
-      local: localName, gl: gl, gv: gv, visitante: visitName
+      local: localName, gl: gl, gv: gv, visitante: visitName,
+      isHvH: true   /* marker explícito para distinguir de matches
+                      legacy (sin flag) en filtro de lectura */
     });
     _saveAll(all);
     /* Refrescar HUB inmediatamente. */
@@ -25383,8 +26512,27 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (_curSeasonId === current.id) _renderSeason();
   };
 
+  /* Filtro HvH aplicado en LECTURA: descarta matches donde alguno
+     de los dos equipos NO sea humano. Cubre matches LEGACY (saved
+     antes del fix del autolog) y partidos donde el flag isHuman
+     cambió desde que se guardó. Si el match tiene `isHvH:true`
+     explícito (saved tras el fix), confiamos en ese flag y
+     evitamos la consulta runtime. */
+  function _matchIsHvH(m){
+    if (!m) return false;
+    if (m.isHvH === true) return true;       /* explícito (post-fix) */
+    if (m.isHvH === false) return false;
+    var _esHum = (typeof window.esHumano === 'function') ? window.esHumano : null;
+    if (!_esHum) return true;                /* sin esHumano, no filtramos (defensiva) */
+    var lOk = false, vOk = false;
+    try { lOk = !!_esHum(_stripLeadingIcon(String(m.local||''))); } catch(_){}
+    try { vOk = !!_esHum(_stripLeadingIcon(String(m.visitante||''))); } catch(_){}
+    return lOk && vOk;
+  }
+
   /* Helper público para que el HUB de la pantalla principal sume todas
-     las temporadas. Devuelve {pj,g,e,p,pct} agregado. */
+     las temporadas. Devuelve {pj,g,e,p,pct} agregado.
+     Filtra solo HvH (petición usuario 2026-05-09). */
   window.munichDerbyAggregateAll = function(){
     var seasons = _loadSeasons();
     var all = _loadAll();
@@ -25393,6 +26541,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (!s || !s.teamName) return;
       var ms = Array.isArray(all[s.id]) ? all[s.id] : [];
       ms.forEach(function(m){
+        if (!_matchIsHvH(m)) return;       /* solo HvH */
         var o = _outcomeFor(m, s.teamName);
         if (!o) return;
         pj++;
@@ -25415,6 +26564,26 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             _serverPullAll(function(){ _renderSeason(); });
           }
         }).observe(screen, {attributes:true, attributeFilter:['class']});
+      } catch(_){}
+    }
+    /* Refresh del HUB cada vez que se activa s-munich. Antes el HUB
+       solo se hidrataba en el pull inicial al cargar la app — si el
+       autolog ocurría con s-munich cerrado, el HUB se quedaba con
+       contadores stale hasta el próximo refresh manual. Petición
+       usuario 2026-05-09 (FOTO 4: HUB en 0/0/0/0/0% pese a tener
+       matches en seasons). */
+    var hubScreen = document.getElementById('s-munich');
+    if (hubScreen){
+      try {
+        new MutationObserver(function(){
+          if (hubScreen.classList.contains('active')){
+            _serverPullAll(function(){
+              if (typeof window.refreshMunichDerbysHub === 'function'){
+                try { window.refreshMunichDerbysHub(); } catch(_){}
+              }
+            });
+          }
+        }).observe(hubScreen, {attributes:true, attributeFilter:['class']});
       } catch(_){}
     }
     /* Pull inicial para hidratar matches al cargar la app — así el

@@ -2977,16 +2977,23 @@ window._showSimProgress = function(opts, onDone){
         }
       }
 
-      /* 2.d) PROMOCIÓN DESDE `_protected` (2026-05-08): si la copia
-              `_protected` tiene este mismo equipo con MÁS jugadores
-              (o con mejor power) que `found`, la preferimos. `_protected`
-              se actualiza con cada saveData (línea ~12760), así que
-              si admin guardó la plantilla fresca y un fetchData
-              posterior pisó el main con la versión vieja del server,
-              la fresca sobrevive en `_protected`. Caso reportado:
-              "click en Bayern desde Liga EA Sports muestra plantilla
-              de hace semanas; pulsar 🖍 Edit y volver muestra fresca".
-              Esto cubre el caso base (sin esperar al fetch async). */
+      /* 2.d) PROMOCIÓN DESDE `_protected` (2026-05-08, revisado 2026-05-09):
+              SOLO se aplica si main está REALMENTE wipeado para este
+              equipo (0 jugadores). Antes el criterio era "_protected
+              tiene MÁS jugadores que main" — eso provocaba que cualquier
+              eliminación de un jugador (lextDeletePlayer) fuera
+              REVERTIDA al siguiente click, porque _protected aún
+              tenía la versión vieja con +1 jugador. Caso reportado por
+              el usuario 2026-05-09 con foto del Athletic Club: añadía
+              jugadores y al volver no aparecían, y no podía borrar
+              jugadores porque "rebrotaban" del _protected.
+
+              La regla correcta: si main tiene AL MENOS 1 jugador, el
+              admin lo gestiona y respetamos sus decisiones (incluyendo
+              borrar TODOS menos uno). Solo si main quedó completamente
+              vacío (caso anti-wipe original que motivó el _protected:
+              fetchData fallido / blacklist agresiva / saveData con
+              [] por bug) restauramos desde la copia. */
       try {
         var _protRaw = localStorage.getItem('ligaExt_'+slug+'_protected');
         if (_protRaw) {
@@ -3008,15 +3015,10 @@ window._showSimProgress = function(opts, onDone){
             }
             if (_protMatch && Array.isArray(_protMatch.players) && _protMatch.players.length) {
               var _foundPC = (found.players && found.players.length) || 0;
-              var _protPC = _protMatch.players.length;
-              /* Preferimos _protected si tiene MÁS players, o el mismo
-                 número pero el `power` total agregado es mayor (admin
-                 subió valoraciones sin cambiar la plantilla). */
-              var _foundPwSum = 0, _protPwSum = 0;
-              try { (found.players||[]).forEach(function(p){ _foundPwSum += Number(p.power)||0; }); } catch(_){}
-              try { _protMatch.players.forEach(function(p){ _protPwSum += Number(p.power)||0; }); } catch(_){}
-              if (_protPC > _foundPC || (_protPC === _foundPC && _protPwSum > _foundPwSum)) {
-                try { console.warn('[ligaExt] click→promoción desde _protected ('+slug+', '+(found.name||'?')+'): main='+_foundPC+'J/'+_foundPwSum+'pw vs prot='+_protPC+'J/'+_protPwSum+'pw'); } catch(_){}
+              /* Solo restauramos si main quedó vacío. Eliminaciones
+                 parciales se respetan (el admin sabe lo que hace). */
+              if (_foundPC === 0) {
+                try { console.warn('[ligaExt] click→promoción _protected ('+slug+', '+(found.name||'?')+'): main vacío, restaurando '+_protMatch.players.length+' jugadores.'); } catch(_){}
                 /* Adoptamos players y campos editables. Mantenemos id
                    del `found` para no romper navegación cruzada. */
                 found.players = _protMatch.players.slice();
@@ -3786,9 +3788,22 @@ window._showSimProgress = function(opts, onDone){
     });
   };
 
-  /* Watcher: si el lock está activo y algún flujo intenta escribir
-     un ligaExt_<slug> con MENOS jugadores que su versión _protected,
-     rechazamos la escritura restaurando la versión protegida. */
+  /* Watcher: si el lock está activo y algún flujo intenta WIPEAR un
+     ligaExt_<slug> (escribir teams=[] o dejar 0 jugadores cuando
+     `_protected` tenía cientos), rechazamos la escritura restaurando
+     la versión protegida.
+
+     2026-05-09: ANTES bloqueábamos cualquier write con `newP < protP`,
+     lo cual rompía CUALQUIER eliminación de jugador (lextDeletePlayer)
+     o equipo (lextDeleteTeam) iniciada por el admin — el guard no
+     distinguía entre "wipe accidental por bug" y "borrado consciente
+     del admin". Caso reportado: usuario no podía editar la plantilla
+     del Athletic Club ni borrar jugadores.
+
+     Nuevo umbral: solo bloqueamos cuando `newP === 0 && protP > 0`
+     (wipe total) ó cuando la pérdida es masiva (más de 80% de los
+     jugadores) — eso captura los wipes por bug sin pisar borrados
+     puntuales del admin. */
   (function(){
     var _origSet = null;
     try { _origSet = localStorage.setItem.bind(localStorage); } catch(_){ return; }
@@ -3814,10 +3829,15 @@ window._showSimProgress = function(opts, onDone){
                 if (t && Array.isArray(t.players)) newP += t.players.length;
               });
             } catch(_){}
-            if (protP > 0 && newP < protP) {
-              /* Intento de reducción: ignoramos la escritura y
-                 restauramos la versión protegida. */
-              try { console.warn('[lock] bloqueado write a '+key+': '+newP+' jugadores < '+protP+' protegidos. Restaurando.'); } catch(_){}
+            /* Solo bloquear wipes catastróficos:
+                 - newP === 0 con protP > 0 (vaciado total).
+                 - newP < 20% de protP (pérdida masiva).
+               Para borrados normales (1-2 jugadores menos) dejamos
+               que pase y se actualice _protected vía saveData. */
+            var isWipeTotal = (newP === 0 && protP > 0);
+            var isMassiveLoss = (protP >= 50 && newP < protP * 0.20);
+            if (isWipeTotal || isMassiveLoss) {
+              try { console.warn('[lock] bloqueado WIPE en '+key+': '+newP+' jugadores < '+protP+' protegidos. Restaurando.'); } catch(_){}
               return _origSet(key, prot);
             }
           }

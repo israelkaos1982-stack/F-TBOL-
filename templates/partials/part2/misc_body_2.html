@@ -27447,6 +27447,54 @@ document.addEventListener('DOMContentLoaded', function() {
     try { _hookOverlayButtons(); } catch(_){}
   }
 
+  /* ── PREVIA · TWITCH OPCIONAL (2026-05-10) ──────────────────────
+     Petición usuario: el selector de Twitch ya no es obligatorio.
+     Si el usuario lo ha ocultado del template, el botón
+     "CONFIRMAR CONFIGURACIÓN" se queda bloqueado en "🔒 SELECCIONA
+     CANAL TWITCH" y es imposible avanzar. Patch:
+       (a) Pre-rellena `window._ppSelectedTwitch = '__skip__'` cuando
+           el dropdown no está visible o no existe.
+       (b) Envuelve `_ppConfirm` para bypassear el alert obligatorio.
+       (c) Llama `_ppRefreshUnlock` tras setear el valor para que
+           el botón cambie de label inmediatamente.
+     ──────────────────────────────────────────────────────────── */
+  function _ppTwitchOptionalCheck(){
+    var ov = document.getElementById('prepartido-overlay');
+    if (!ov || !ov.classList.contains('show')) return;
+    var twitchSel = document.querySelector('.pp-twitch-sel');
+    var hidden = !twitchSel ||
+                 twitchSel.offsetParent === null ||
+                 (twitchSel.style && twitchSel.style.display === 'none');
+    if (hidden && (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length)){
+      window._ppSelectedTwitch = '__skip__';
+      try { if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock(); } catch(_){}
+    }
+  }
+  function _ppPatchConfirm(){
+    var orig = window._ppConfirm;
+    if (typeof orig !== 'function' || orig._twitchOptionalPatched) return;
+    window._ppConfirm = function(){
+      /* Si todo el resto está marcado pero el Twitch está vacío y
+         el selector está oculto, lo marcamos como skip antes de
+         ejecutar el confirm original. Así pasa la validación. */
+      try {
+        var twitchSel2 = document.querySelector('.pp-twitch-sel');
+        var hidden2 = !twitchSel2 ||
+                      twitchSel2.offsetParent === null ||
+                      (twitchSel2.style && twitchSel2.style.display === 'none');
+        if (hidden2 && (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length)){
+          window._ppSelectedTwitch = '__skip__';
+        }
+      } catch(_){}
+      return orig.apply(this, arguments);
+    };
+    window._ppConfirm._twitchOptionalPatched = true;
+  }
+  setTimeout(_ppPatchConfirm, 100);
+  setTimeout(_ppPatchConfirm, 800);
+  setTimeout(_ppPatchConfirm, 2500);
+  setInterval(_ppTwitchOptionalCheck, 400);
+
   /* ── PREVIA · resaltar el estadio cuando el rival NO necesita
         alias (es equipo real de eFootball). Foto 1/2 del usuario. ── */
   function _ppHighlightStadium(){

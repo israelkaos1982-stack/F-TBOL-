@@ -5986,12 +5986,49 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-liga-stats">
 <button class="back-btn" onclick="go('s-espana')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">📈</span><h2>Liga EA Sports · Estadísticas</h2></div>
+<div class="sec-hdr"><span class="sec-emoji">📈</span><h2>España · Estadísticas combinadas</h2></div>
+<div style="padding:0 18px 8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(240,192,64,.7);text-transform:uppercase;">
+  Suma de Liga EA Sports + Copa del Rey + Supercopa de España
+</div>
 
 <div class="liga-stats-wrap" id="liga-stats-dashboard">
-<div class="liga-stat-empty">Calculando estadísticas...</div>
+<div class="liga-stat-empty">Sin partidos todavía. Simula la Liga, la Copa o la Supercopa para ver el dashboard sumado.</div>
 </div>
 </div>
+
+<script>
+/* Refuerzo del rebuild del dashboard España · Estadísticas combinadas
+   (petición usuario 2026-05-09): la versión anterior se construía una
+   sola vez al click; si el LIGA_PLAYER_MATCH_STORE aún no estaba
+   hidratado en ese instante, el dashboard se quedaba con el placeholder
+   "Calculando estadísticas…" y el usuario lo percibía como "caja
+   desactivada".
+
+   Solución: al entrar a `s-liga-stats` lanzamos `rebuildLigaStats()`
+   (refresca el store agregando todas las plant-rows actuales) seguido
+   de `buildLigaStatsDashboard()`, y repetimos el ciclo en 0/150/400 ms
+   para tolerar latencias de hidratación. Si después del 3er rebuild el
+   container sigue con el placeholder, no hay datos reales — el empty
+   state ya orienta al usuario. */
+(function(){
+  function _refreshAndBuild(){
+    try { if (typeof window.rebuildLigaStats === 'function') window.rebuildLigaStats(); } catch(_){}
+    try { if (typeof window.buildLigaStatsDashboard === 'function') window.buildLigaStatsDashboard(); } catch(_){}
+  }
+  var _origGo = window.go;
+  if (typeof _origGo !== 'function' || _origGo._espStatsPatched) return;
+  window.go = function(id){
+    var r = _origGo.apply(this, arguments);
+    if (id === 's-liga-stats') {
+      setTimeout(_refreshAndBuild, 0);
+      setTimeout(_refreshAndBuild, 150);
+      setTimeout(_refreshAndBuild, 400);
+    }
+    return r;
+  };
+  window.go._espStatsPatched = true;
+})();
+</script>
 
 <div class="screen" id="s-segunda-clas">
 <button class="back-btn" onclick="go('s-segunda')">◀ Volver</button>
@@ -14840,45 +14877,84 @@ window._showSimProgress = function(opts, onDone){
   function drawPairs(teams){
     if(!teams || teams.length < 2 || teams.length % 2 !== 0) return null;
     for(var attempt = 0; attempt < DRAW_ATTEMPTS; attempt++){
-      var homeC = {}, awayC = {}, paired = {};
-      teams.forEach(function(t){ homeC[t.name] = 0; awayC[t.name] = 0; paired[t.name] = {}; });
-      var allPairs = [];
-      var ok = true;
-      for(var jor = 1; jor <= JORNADAS; jor++){
-        /* Per-jornada retry: si una jornada no cuadra con un orden, probamos
-           con varios shuffles antes de abortar el attempt entero. Esto
-           reduce drásticamente los falsos negativos (la jornada N suele
-           cuadrar si reintentas con otro shuffle inicial — sólo el orden
-           cambia, las restricciones acumuladas son las mismas). */
-        var jorMatches = null;
-        for(var jr = 0; jr < JORNADA_RETRIES && !jorMatches; jr++){
-          var jorTeams = teams.slice(); _shuffle(jorTeams);
-          /* Snapshot de homeC/awayC/paired POR SI esta jornada falla
-             a media construcción y los modifica parcialmente. Restauramos. */
-          var snapshotHome = {}, snapshotAway = {}, snapshotPaired = {};
-          for(var sk in homeC){ snapshotHome[sk] = homeC[sk]; snapshotAway[sk] = awayC[sk]; snapshotPaired[sk] = {}; for(var sp in paired[sk]) snapshotPaired[sk][sp] = paired[sk][sp]; }
-          var attempt_matches = _buildJornada(jorTeams, paired, homeC, awayC);
-          if(attempt_matches && attempt_matches.length === teams.length / 2){
-            jorMatches = attempt_matches;
-          } else {
-            /* Restaurar snapshot — _buildJornada pudo haber tocado paired/homeC/awayC. */
-            for(var rk in homeC){ homeC[rk] = snapshotHome[rk]; awayC[rk] = snapshotAway[rk]; paired[rk] = snapshotPaired[rk]; }
-          }
-        }
-        if(!jorMatches){ ok = false; break; }
-        jorMatches.forEach(function(m){ m.jornada = jor; allPairs.push(m); });
-      }
-      if(ok){
-        /* Validación final: balance 4+4. */
-        var balanceOk = true;
-        for(var ti = 0; ti < teams.length; ti++){
-          var nm = teams[ti].name;
-          if(homeC[nm] !== HOME_PER || awayC[nm] !== AWAY_PER){ balanceOk = false; break; }
-        }
-        if(balanceOk) return allPairs;
-      }
+      var res = _drawPairsAttempt(teams);
+      if(res) return res;
     }
     return null;
+  }
+
+  /* Versión asíncrona para integrarse con el loader: corre en chunks de
+     `chunkSize` attempts, cediendo el thread con setTimeout(0) entre
+     chunks para que la barra de progreso pueda repintarse y la animación
+     del balón siga viva. Acepta:
+       teams      → pool a sortear
+       onChunk    → callback(progressPct, attemptsTried) tras cada chunk
+       deadline   → Date.now() máximo; si lo cruza, devuelve null
+       chunkSize  → attempts por chunk (default 8)
+     Devuelve Promise con el schedule o null si no se cuadra. */
+  function drawPairsAsync(teams, onChunk, deadline, chunkSize){
+    chunkSize = chunkSize || 8;
+    deadline  = deadline  || (Date.now() + 25000);
+    return new Promise(function(resolve){
+      if(!teams || teams.length < 2 || teams.length % 2 !== 0){ resolve(null); return; }
+      var done = 0;
+      function nextChunk(){
+        if(done >= DRAW_ATTEMPTS){ resolve(null); return; }
+        if(Date.now() > deadline){ resolve(null); return; }
+        var stop = Math.min(DRAW_ATTEMPTS, done + chunkSize);
+        for(; done < stop; done++){
+          var res = _drawPairsAttempt(teams);
+          if(res){ resolve(res); return; }
+        }
+        try {
+          if(typeof onChunk === 'function'){
+            var pct = Math.min(85, Math.round(done / DRAW_ATTEMPTS * 85));
+            onChunk(pct, done);
+          }
+        } catch(_){}
+        setTimeout(nextChunk, 0);
+      }
+      setTimeout(nextChunk, 0);
+    });
+  }
+
+  /* Un solo attempt — la lógica antigua envuelta en función para que
+     drawPairs (sync) y drawPairsAsync (chunked) compartan el mismo
+     núcleo. */
+  function _drawPairsAttempt(teams){
+    var homeC = {}, awayC = {}, paired = {};
+    teams.forEach(function(t){ homeC[t.name] = 0; awayC[t.name] = 0; paired[t.name] = {}; });
+    var allPairs = [];
+    var ok = true;
+    for(var jor = 1; jor <= JORNADAS; jor++){
+      /* Per-jornada retry (2026-05-09): si una jornada falla con un
+         shuffle desafortunado, reintentamos sólo esa jornada con
+         otro orden hasta JORNADA_RETRIES veces. Antes el attempt
+         entero se descartaba al fallar la jornada N — perdiendo
+         las N-1 anteriores. Ahora restauramos snapshot de
+         homeC/awayC/paired antes de reintentar. */
+      var jorMatches = null;
+      for(var jr = 0; jr < JORNADA_RETRIES && !jorMatches; jr++){
+        var jorTeams = teams.slice(); _shuffle(jorTeams);
+        var snapshotHome = {}, snapshotAway = {}, snapshotPaired = {};
+        for(var sk in homeC){ snapshotHome[sk] = homeC[sk]; snapshotAway[sk] = awayC[sk]; snapshotPaired[sk] = {}; for(var sp in paired[sk]) snapshotPaired[sk][sp] = paired[sk][sp]; }
+        var attempt_matches = _buildJornada(jorTeams, paired, homeC, awayC);
+        if(attempt_matches && attempt_matches.length === teams.length / 2){
+          jorMatches = attempt_matches;
+        } else {
+          for(var rk in homeC){ homeC[rk] = snapshotHome[rk]; awayC[rk] = snapshotAway[rk]; paired[rk] = snapshotPaired[rk]; }
+        }
+      }
+      if(!jorMatches){ ok = false; break; }
+      jorMatches.forEach(function(m){ m.jornada = jor; allPairs.push(m); });
+    }
+    if(!ok) return null;
+    /* Validación final: balance 4+4. */
+    for(var ti = 0; ti < teams.length; ti++){
+      var nm = teams[ti].name;
+      if(homeC[nm] !== HOME_PER || awayC[nm] !== AWAY_PER) return null;
+    }
+    return allPairs;
   }
 
   /* `assignJornadas` queda como no-op porque drawPairs ya devuelve los
@@ -14983,65 +15059,111 @@ window._showSimProgress = function(opts, onDone){
         minMs: 600
       },
       function(ctx){
-        return new Promise(function(resolve){
-          /* PASO 1: dejar que el frame pinte la card del loader y
-             después correr el motor. */
-          setTimeout(function(){
-            var sched = drawPairs(teams);
-            if(!sched){
-              alert(_failMsg());
-              ctx.progress(100, 'Error');
-              resolve();
-              return;
-            }
-            var stateObj = {
-              teams: teams.map(function(t){
-                return { name: t.name, logo: t.logo || '', league: t.league || '' };
-              }),
-              pairs: sched,
-              drawnAt: Date.now()
-            };
-            if(!saveState(comp, stateObj)){
-              alert('⚠️ El sorteo se ha generado pero no se ha podido guardar (storage lleno).');
-            }
-            /* PASO 2: animación de reveals. Filtramos los partidos que
-               implican a un equipo humano y los soltamos uno a uno con
-               un pequeño retraso. Así el usuario "ve" el sorteo en
-               directo (4-5 s aprox.). Si no hay humanos en el pool,
-               hacemos una mini-pausa con "✓ Sorteo cerrado" y salimos. */
-            var humanReveals = sched.filter(function(p){
-              return HUMAN_TEAMS.indexOf(p.home) !== -1 || HUMAN_TEAMS.indexOf(p.away) !== -1;
-            });
-            /* Ordenamos por jornada (1→8) para que cada humano vea sus
-               rivales en el orden de los partidos, más natural. */
-            humanReveals.sort(function(a,b){ return a.jornada - b.jornada; });
+        /* 2026-05-09: drawPairs era SÍNCRONO y bloqueaba el JS thread
+           durante todos los attempts → la barra del loader no podía
+           pintarse y el usuario veía 0% colgado durante minutos
+           (reportado: 10+ min con barra estática). Ahora corre con
+           `drawPairsAsync` en chunks de 8 attempts + setTimeout(0)
+           entre chunks → cede el thread, el loader respira y la
+           barra avanza progresivamente. Hard timeout 25 s para que
+           NUNCA quede colgado: si no se cuadra antes, abort + alert
+           con desglose por país (ver `_failMsg` arriba). */
+        return new Promise(function(resolveOuter){
+          /* Wrapper try/catch envuelve TODO el flujo y garantiza que
+             `resolveOuter` se llama siempre, incluso ante excepciones,
+             evitando que el loader quede en 0% para siempre. */
+          var resolved = false;
+          function safeResolve(){
+            if(resolved) return;
+            resolved = true;
+            try { resolveOuter(); } catch(_){}
+          }
+          /* Watchdog absoluto: tras 26 s desde el inicio, forzamos
+             cierre con error aunque drawPairsAsync no haya devuelto.
+             El alert usa `_failMsg` (con desglose por país) si está
+             definido — más informativo que el genérico. */
+          var hardWatchdog = setTimeout(function(){
+            if(resolved) return;
+            try { ctx.progress(100, '⛔ Tiempo agotado'); } catch(_){}
+            try {
+              var msg = (typeof _failMsg === 'function')
+                ? _failMsg()
+                : '❌ El sorteo no se ha cuadrado en 25 s. Probable: hay demasiados equipos de un mismo país o la lista no es factible. Revisa el pool y reintenta.';
+              alert(msg);
+            } catch(_){}
+            safeResolve();
+          }, 26000);
 
-            if(!humanReveals.length){
-              ctx.progress(100, '✓ Sorteo cerrado · ' + sched.length + ' partidos');
-              setTimeout(resolve, 250);
-              return;
-            }
-            var totalReveals = humanReveals.length;
-            /* Tiempo total ~3.5s (animación legible pero no aburrida).
-               Si hay menos reveals, cada uno dura más; si hay más
-               (40 max para los 5 humanos × 8 jornadas), cada uno menos. */
-            var TOTAL_MS = 3500;
-            var stepMs = Math.max(60, Math.min(220, Math.round(TOTAL_MS / totalReveals)));
-            var i = 0;
-            function tick(){
-              if(i >= totalReveals){
-                ctx.progress(100, '✓ Sorteo cerrado · ' + sched.length + ' partidos');
-                setTimeout(resolve, 300);
+          var deadline = Date.now() + 25000;
+          ctx.progress(2, 'Preparando bombos…');
+          drawPairsAsync(
+            teams,
+            function(pct, attempts){
+              try { ctx.progress(pct || 5, 'Buscando combinación válida · intento ' + attempts + '/' + DRAW_ATTEMPTS); } catch(_){}
+            },
+            deadline,
+            6  /* chunkSize */
+          ).then(function(sched){
+            try {
+              clearTimeout(hardWatchdog);
+              if(!sched){
+                ctx.progress(100, 'Sin solución factible');
+                alert('❌ No se ha podido cuadrar el sorteo respetando "no mismo país" + balance 4+4 de local/visitante. La distribución de países del pool actual no permite solución. Reintenta o revisa qué federaciones tienen demasiados equipos.');
+                safeResolve();
                 return;
               }
-              var m = humanReveals[i++];
-              var pct = Math.round(i / totalReveals * 100);
-              /* Formato pedido por el usuario: "Local vs Visitante" */
-              ctx.progress(pct, m.home + ' vs ' + m.away);
-              setTimeout(tick, stepMs);
+              var stateObj = {
+                teams: teams.map(function(t){
+                  return { name: t.name, logo: t.logo || '', league: t.league || '' };
+                }),
+                pairs: sched,
+                drawnAt: Date.now()
+              };
+              try {
+                if(!saveState(comp, stateObj)){
+                  alert('⚠️ El sorteo se ha generado pero no se ha podido guardar (storage lleno).');
+                }
+              } catch(_){}
+              /* PASO 2: animación de reveals para los partidos de los
+                 humanos (formato "Atlético Madrid vs Como"). */
+              var humanReveals = sched.filter(function(p){
+                return HUMAN_TEAMS.indexOf(p.home) !== -1 || HUMAN_TEAMS.indexOf(p.away) !== -1;
+              });
+              humanReveals.sort(function(a,b){ return a.jornada - b.jornada; });
+
+              if(!humanReveals.length){
+                ctx.progress(100, '✓ Sorteo cerrado · ' + sched.length + ' partidos');
+                setTimeout(safeResolve, 250);
+                return;
+              }
+              var totalReveals = humanReveals.length;
+              var TOTAL_MS = 3500;
+              var stepMs = Math.max(60, Math.min(220, Math.round(TOTAL_MS / totalReveals)));
+              var i = 0;
+              function tick(){
+                if(i >= totalReveals){
+                  ctx.progress(100, '✓ Sorteo cerrado · ' + sched.length + ' partidos');
+                  setTimeout(safeResolve, 300);
+                  return;
+                }
+                var m = humanReveals[i++];
+                var pct = Math.round(85 + i / totalReveals * 15);
+                ctx.progress(pct, m.home + ' vs ' + m.away);
+                setTimeout(tick, stepMs);
+              }
+              tick();
+            } catch(_eRes){
+              try { console.error('[eur-fase] post-draw error', _eRes); } catch(__){}
+              try { alert('❌ Error al cerrar el sorteo: ' + (_eRes && _eRes.message || _eRes)); } catch(_){}
+              clearTimeout(hardWatchdog);
+              safeResolve();
             }
-            tick();
-          }, 60);
+          }, function(err){
+            clearTimeout(hardWatchdog);
+            try { console.error('[eur-fase] draw async err', err); } catch(_){}
+            try { alert('❌ Error en el sorteo: ' + (err && err.message || err)); } catch(_){}
+            safeResolve();
+          });
         });
       }
     );

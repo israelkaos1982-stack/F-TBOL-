@@ -23869,45 +23869,108 @@ Tottenham
 /* ═══════════════════════════════════════════════════════════════
    HUB · Histórico Derbys — contadores PJ / G / E / P
    ───────────────────────────────────────────────────────────────
-   La caja de la Home muestra cuatro contadores que se calculan a
-   partir de las filas reales del screen `s-munich-derbys`. Cada
-   `<div class="derby-match-row derby-X">` indica el resultado del
-   partido (g / e / p) y los `derby-pend` no se cuentan.
+   La caja de la Home muestra cinco contadores PJ/G/E/P/% que
+   AGREGAN los partidos de TODAS las temporadas del Histórico
+   Derbys del Bayern.
 
-       PJ = G + E + P  (los pendientes no suman PJ)
-       G  = nº de filas con clase derby-g
-       E  = nº de filas con clase derby-e
-       P  = nº de filas con clase derby-p
+   2026-05-09: rediseñado (la versión anterior contaba `.derby-match-row`
+   dentro de `s-munich-derbys`, pero la nueva vista no tiene esos
+   elementos — los matches viven dentro de `s-munich-derby-season`,
+   indexados por temporada en el storage `bayern_derbys_matches_v1`).
+   El contador siempre salía 0/0/0/0/0 aunque el usuario tuviese
+   partidos cargados (caso reportado con foto).
 
-   Un MutationObserver vigila cualquier cambio dentro del screen
-   (añadir/eliminar/modificar partidos) y refresca la HUB-card al
-   instante. Render inicial al cargar.
+   Algoritmo:
+     1. Lee `bayern_derbys_seasons_v1` → lista de temporadas
+        `{id, season, teamName}`.
+     2. Lee `bayern_derbys_matches_v1` → mapa seasonId → array de
+        `{local, visitante, gl, gv, comp, ...}`.
+     3. Para cada match de cada temporada, computa el outcome
+        contra `season.teamName` (mismo `_outcomeFor` que el
+        sub-screen `s-munich-derby-season`).
+     4. Suma PJ / G / E / P globales y % VIC = G / PJ.
+
+   Refresh listeners:
+     · MutationObserver en `s-munich-derbys` (cards de temporada).
+     · MutationObserver en `s-munich-derby-season` (cards por
+       partido — entrar/editar/borrar refresca la HUB sin esperar
+       a navegar de vuelta).
+     · Polling 1 s como red de seguridad cuando el usuario añade
+       una temporada o un partido y el render asíncrono.
    ─────────────────────────────────────────────────────────────── */
 (function(){
   if (window.__MUNICH_DERBYS_HUB_READY) return;
   window.__MUNICH_DERBYS_HUB_READY = true;
 
+  var SEASONS_KEY = 'bayern_derbys_seasons_v1';
+  var MATCHES_KEY = 'bayern_derbys_matches_v1';
+
   function _setNum(cls, val){
     var el = document.querySelector('#munich-derbys-stats .hub-derbys-num.' + cls);
     if (el) el.textContent = String(val|0);
   }
+  function _stripLeadingIcon(name){
+    if (!name) return '';
+    var s = String(name);
+    var m = s.match(/[A-Za-zÀ-ɏͰ-῿Ⰰ-퟿].*$/);
+    return m ? m[0].trim() : s.trim();
+  }
+  function _outcomeFor(match, teamName){
+    if (!teamName || !match) return null;
+    var t = _stripLeadingIcon(String(teamName)).toLowerCase();
+    var local = _stripLeadingIcon(String(match.local || '')).toLowerCase();
+    var visit = _stripLeadingIcon(String(match.visitante || '')).toLowerCase();
+    var gl = Number(match.gl || 0), gv = Number(match.gv || 0);
+    if (local === t){
+      if (gl > gv) return 'g';
+      if (gl < gv) return 'p';
+      return 'e';
+    }
+    if (visit === t){
+      if (gv > gl) return 'g';
+      if (gv < gl) return 'p';
+      return 'e';
+    }
+    return null;
+  }
+  function _loadSeasons(){
+    try {
+      var raw = localStorage.getItem(SEASONS_KEY);
+      if (raw){
+        var arr = JSON.parse(raw);
+        if (Array.isArray(arr)) return arr;
+      }
+    } catch(_){}
+    return [];
+  }
+  function _loadMatches(){
+    try {
+      var raw = localStorage.getItem(MATCHES_KEY);
+      if (raw){
+        var obj = JSON.parse(raw);
+        if (obj && typeof obj === 'object') return obj;
+      }
+    } catch(_){}
+    return {};
+  }
 
   function refresh(){
-    var screen = document.getElementById('s-munich-derbys');
-    if (!screen) return;
-    /* Contamos UNA vez por `.derby-match-row`, evitando ambigüedades
-       con filas que pudieran tener varias clases por error. */
-    var rows = screen.querySelectorAll('.derby-match-row');
-    var g = 0, e = 0, p = 0;
-    rows.forEach(function(row){
-      if (row.classList.contains('derby-g')) g++;
-      else if (row.classList.contains('derby-e')) e++;
-      else if (row.classList.contains('derby-p')) p++;
-      /* derby-pend → NO suma */
+    var seasons = _loadSeasons();
+    var matchesAll = _loadMatches();
+    var pj = 0, g = 0, e = 0, p = 0;
+    seasons.forEach(function(s){
+      if (!s || !s.teamName) return; /* sin equipo asignado → no cuenta */
+      var ms = (matchesAll && matchesAll[s.id]) || [];
+      if (!Array.isArray(ms) || !ms.length) return;
+      ms.forEach(function(m){
+        var o = _outcomeFor(m, s.teamName);
+        if (!o) return;
+        pj++;
+        if (o === 'g') g++;
+        else if (o === 'e') e++;
+        else if (o === 'p') p++;
+      });
     });
-    var pj = g + e + p;
-    /* % de victorias = G / PJ (redondeado). Si no hay partidos jugados
-       mostramos 0 para evitar NaN. */
     var pct = pj > 0 ? Math.round((g / pj) * 100) : 0;
     _setNum('pj',  pj);
     _setNum('g',   g);
@@ -23920,18 +23983,22 @@ Tottenham
 
   function _wire(){
     refresh();
-    var screen = document.getElementById('s-munich-derbys');
-    if (!screen) return;
-    try {
-      /* Observamos todo el subárbol del screen porque el admin/usuario
-         puede añadir filas en CUALQUIER bloque temporada. childList
-         para nuevas filas, attributes/class por si una fila pendiente
-         pasa a g/e/p al guardar el resultado. */
-      new MutationObserver(refresh).observe(screen, {
-        subtree: true, childList: true,
-        attributes: true, attributeFilter: ['class']
-      });
-    } catch(_){}
+    /* Observamos los dos screens — derbys (cards de temporada) y
+       derby-season (cards por partido). Cuando el render dinámico
+       pinta cards nuevas, refrescamos el HUB. */
+    ['s-munich-derbys','s-munich-derby-season'].forEach(function(id){
+      var screen = document.getElementById(id);
+      if (!screen) return;
+      try {
+        new MutationObserver(refresh).observe(screen, {
+          subtree: true, childList: true,
+          attributes: true, attributeFilter: ['class']
+        });
+      } catch(_){}
+    });
+    /* Polling cada 1 s — red de seguridad por si el usuario edita
+       directamente el localStorage o hay sync diferido del server. */
+    setInterval(refresh, 1000);
   }
 
   if (document.readyState === 'loading'){

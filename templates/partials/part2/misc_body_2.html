@@ -1865,6 +1865,22 @@
 </div>
 
 <div id="ucl-intro">
+<!-- FLASH UCL OFF — petición usuario 2026-05-09 (3ª iter): "el
+     flash es lo que bloquea la pantalla, no era la música". El
+     bundle (index.bundle.js línea 2259) tiene una `playCompSound`
+     LOCAL no expuesta en `window`, así que mi override de
+     `window.playCompSound` no la frena: aplica `.flash-ucl` al
+     `#comp-flash` y se ven 0.9 s de gradient azul tapando toda
+     la pantalla. Anulamos la clase con CSS — el elemento existe
+     y la clase se aplica, pero queda inerte. -->
+<style>
+  #comp-flash.flash-ucl{
+    display:none !important;
+    animation:none !important;
+    background:none !important;
+    opacity:0 !important;
+  }
+</style>
 <!-- SVG inline (sin red) — la URL externa de commons.wikimedia.org
      devuelve 403 (host_not_allowed) y dejaba la imagen rota. Inline
      siempre se renderiza. Petición usuario 2026-05-09. Diseño: 8

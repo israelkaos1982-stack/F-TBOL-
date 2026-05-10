@@ -1865,7 +1865,32 @@
 </div>
 
 <div id="ucl-intro">
-<img id="ucl-logo-anim" src="https://commons.wikimedia.org/wiki/Special:FilePath/UEFA_Champions_League_starball.svg" alt="UCL"/>
+<!-- SVG inline (sin red) — la URL externa de commons.wikimedia.org
+     devuelve 403 (host_not_allowed) y dejaba la imagen rota. Inline
+     siempre se renderiza. Petición usuario 2026-05-09. Diseño: 8
+     estrellas blancas en círculo + "UCL" dorado central sobre fondo
+     azul oscuro radial — coherente con la paleta UCL de la app. -->
+<svg id="ucl-logo-anim" viewBox="-100 -100 200 200" xmlns="http://www.w3.org/2000/svg" aria-label="UEFA Champions League">
+<defs>
+<radialGradient id="ucl-bg-grad" cx="0" cy="0" r="100" gradientUnits="userSpaceOnUse">
+<stop offset="0%" stop-color="#1a3a8a"/>
+<stop offset="60%" stop-color="#0a1f55"/>
+<stop offset="100%" stop-color="#000817"/>
+</radialGradient>
+</defs>
+<circle r="92" fill="url(#ucl-bg-grad)" stroke="#ffffff" stroke-width="3"/>
+<g fill="#ffffff">
+<polygon points="0,-72 4,-58 18,-58 7,-50 11,-37 0,-45 -11,-37 -7,-50 -18,-58 -4,-58" transform="rotate(0)"/>
+<polygon points="0,-72 4,-58 18,-58 7,-50 11,-37 0,-45 -11,-37 -7,-50 -18,-58 -4,-58" transform="rotate(45)"/>
+<polygon points="0,-72 4,-58 18,-58 7,-50 11,-37 0,-45 -11,-37 -7,-50 -18,-58 -4,-58" transform="rotate(90)"/>
+<polygon points="0,-72 4,-58 18,-58 7,-50 11,-37 0,-45 -11,-37 -7,-50 -18,-58 -4,-58" transform="rotate(135)"/>
+<polygon points="0,-72 4,-58 18,-58 7,-50 11,-37 0,-45 -11,-37 -7,-50 -18,-58 -4,-58" transform="rotate(180)"/>
+<polygon points="0,-72 4,-58 18,-58 7,-50 11,-37 0,-45 -11,-37 -7,-50 -18,-58 -4,-58" transform="rotate(225)"/>
+<polygon points="0,-72 4,-58 18,-58 7,-50 11,-37 0,-45 -11,-37 -7,-50 -18,-58 -4,-58" transform="rotate(270)"/>
+<polygon points="0,-72 4,-58 18,-58 7,-50 11,-37 0,-45 -11,-37 -7,-50 -18,-58 -4,-58" transform="rotate(315)"/>
+</g>
+<text x="0" y="14" text-anchor="middle" font-family="Bebas Neue,Oswald,Arial Black,sans-serif" font-size="42" font-weight="900" fill="#f0c040" letter-spacing="2">UCL</text>
+</svg>
 </div>
 <style>
   /* Splash UEFA Champions: logo (mismo de la card "Champions" en
@@ -1925,25 +1950,25 @@
     overlay.classList.add('show');
     setTimeout(function(){ overlay.classList.remove('show'); }, 2050);
   };
-  /* `playCompSound` (bundle): baja volumen al 35% y corta a 2 s. Sólo
-     dispara si el guard lo permite. Mantiene la firma del original
-     para no romper nada. */
+  /* `playCompSound` (bundle): el audio bloqueaba la pantalla — el
+     usuario lo pidió eliminar por completo (2026-05-09 segunda
+     iteración). Dejamos la función como NO-OP para audio: si el
+     bundle interno tiene un `snd-ucl.play()` intentamos pausarlo
+     defensivamente; el flash CSS corto del bundle se mantiene
+     porque NO bloquea pantalla (950 ms) y respeta el guard
+     `_shouldFireChampions`. */
   window.playCompSound = function(targetId){
     if(targetId === 's-champions' && !_shouldFireChampions(_prevScreen)) return;
+    /* Audio OFF — pausar y resetear si algo lo había arrancado. */
     var sndId = (targetId === 's-champions') ? 'snd-ucl'
               : (targetId === 's-superliga') ? 'snd-kdb' : null;
     if(sndId){
       var snd = document.getElementById(sndId);
       if(snd){
-        try { snd.volume = 0.35; } catch(_){}
-        try { snd.currentTime = 0; snd.play().catch(function(){}); } catch(_){}
-        setTimeout(function(){
-          try { snd.pause(); snd.currentTime = 0; } catch(_){}
-        }, 2000);
+        try { snd.pause(); snd.currentTime = 0; snd.volume = 0; } catch(_){}
       }
     }
-    /* Flash CSS del bundle: lo dejamos correr — es un overlay corto
-       que ya gestionaba el bundle en 950 ms. */
+    /* Flash CSS del bundle: corto (950 ms), no bloquea pantalla. */
     var fl = document.getElementById('comp-flash');
     if(fl){
       var flCls = (targetId === 's-champions') ? 'flash-ucl' : (targetId === 's-superliga') ? 'flash-kdb' : '';

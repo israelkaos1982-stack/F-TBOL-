@@ -24971,28 +24971,45 @@ Tottenham
     else window._bayernEditValuesOpen();
   };
   function boot(){
-    apply();
-    setupObservers();
-    _startGuardian();
+    /* Cada paso aislado en su propio try-catch: un fallo en uno NO
+       puede cancelar los demás (refuerzo 2026-05-10 — el bug real
+       de la décima vez del usuario era una llamada a un helper
+       inexistente `_startGuardian()` que lanzaba excepción y
+       saltaba `_serverPull`, dejando al usuario sin ninguna forma
+       de recuperar los valores tras "Borrar datos navegación"). */
+    try { apply(); } catch(e){ try { console.warn('[bayern-hud] apply boot:', e); } catch(_){} }
+    try { setupObservers(); } catch(e){ try { console.warn('[bayern-hud] observers boot:', e); } catch(_){} }
     /* Server-pull al arranque. Si el servidor tiene una versión
        guardada, la trae a localStorage y re-aplica. Esto cubre el
        caso "el navegador limpió localStorage entre sesiones" —
        siempre que el servidor tenga la versión, se recupera. */
-    _serverPull(function(srv){
-      apply();
-      /* También sincronizar el state del IIFE legacy en caliente
-         por si ya se inicializó con defaults. Esto es lo que el
-         usuario reportó la décima vez: localStorage tenía la
-         versión nueva, pero la legacy ya había escrito defaults. */
-      try {
-        var medEl = document.getElementById('ath-med-val');
-        var mEl = document.getElementById('ath-money-val');
-        var rEl = document.getElementById('ath-pts-val');
-        if (srv.pi    != null && medEl) medEl.textContent = String(parseInt(srv.pi,10)|0);
-        if (srv.money != null && mEl)   mEl.textContent   = String(parseInt(srv.money,10)|0);
-        if (srv.rating != null && rEl)  rEl.textContent   = Number(srv.rating).toFixed(2);
-      } catch(_){}
-    });
+    try {
+      _serverPull(function(srv){
+        try { apply(); } catch(_){}
+        /* También sincronizar el state del IIFE legacy en caliente
+           por si ya se inicializó con defaults. Esto es lo que el
+           usuario reportó la décima vez: localStorage tenía la
+           versión nueva, pero la legacy ya había escrito defaults. */
+        try {
+          var medEl = document.getElementById('ath-med-val');
+          var mEl = document.getElementById('ath-money-val');
+          var rEl = document.getElementById('ath-pts-val');
+          if (srv.pi    != null && medEl) medEl.textContent = String(parseInt(srv.pi,10)|0);
+          if (srv.money != null && mEl)   mEl.textContent   = String(parseInt(srv.money,10)|0);
+          if (srv.rating != null && rEl)  rEl.textContent   = Number(srv.rating).toFixed(2);
+        } catch(_){}
+        /* Sincronizar también `state` del IIFE de la agenda Bayern
+           para que el próximo updateHud no pinte defaults. */
+        try {
+          var st = window._bayernLegacyState;
+          if (st){
+            if (srv.pi     != null) st.pi          = parseInt(srv.pi, 10) || 0;
+            if (srv.money  != null) st.budgetSpent = parseInt(srv.money, 10) || 0;
+            if (srv.rating != null) st.rating      = parseFloat(srv.rating) || 0;
+          }
+        } catch(_){}
+      });
+    } catch(e){ try { console.warn('[bayern-hud] serverPull boot:', e); } catch(_){} }
   }
   /* Expuesto para que otros módulos (athObjCount post-patch,
      activate de s-munich, etc.) puedan re-aplicar los overrides
@@ -25113,10 +25130,31 @@ Tottenham
   }
   /* Reintentar el hook varias veces porque las dos funciones se
      declaran tarde en el bundle / IIFEs posteriores. */
-  setTimeout(_hookLegacyHud, 100);
-  setTimeout(_hookLegacyHud, 500);
-  setTimeout(_hookLegacyHud, 1500);
-  setTimeout(_hookLegacyHud, 3000);
+  setTimeout(function(){ try { _hookLegacyHud(); } catch(_){} }, 100);
+  setTimeout(function(){ try { _hookLegacyHud(); } catch(_){} }, 500);
+  setTimeout(function(){ try { _hookLegacyHud(); } catch(_){} }, 1500);
+  setTimeout(function(){ try { _hookLegacyHud(); } catch(_){} }, 3000);
+
+  /* ── REINTENTOS DE SERVER PULL (refuerzo 2026-05-10) ──────────
+     Railway puede tardar 1-3s en cold start (primera petición tras
+     periodo idle). Si el primer _serverPull en boot() falla por
+     timeout/network, reintentamos a +2s y +5s. Si la cache local
+     ya tiene datos, los retries son no-ops baratos (server-pull
+     skipea el overwrite si el JSON local coincide). */
+  setTimeout(function(){
+    try {
+      if (!window._BAYERN_HUD_CACHE || !Object.keys(window._BAYERN_HUD_CACHE).length){
+        _serverPull(function(){ try { apply(); } catch(_){} });
+      }
+    } catch(_){}
+  }, 2000);
+  setTimeout(function(){
+    try {
+      if (!window._BAYERN_HUD_CACHE || !Object.keys(window._BAYERN_HUD_CACHE).length){
+        _serverPull(function(){ try { apply(); } catch(_){} });
+      }
+    } catch(_){}
+  }, 5000);
 
   /* Polling más agresivo (200ms) — barato y cubre micro-races. */
   setInterval(function(){

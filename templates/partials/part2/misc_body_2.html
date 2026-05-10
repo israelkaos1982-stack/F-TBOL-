@@ -1454,10 +1454,13 @@
       if(meteoLine){
         arr.push({ target: meteoLine, click: meteoLine, soft:true });
       }
-      /* 4. Twitch — botón con clase pp-twitch-btn. */
+      /* 4. Twitch — botón con clase pp-twitch-btn. NOTA: no enviamos
+         click, sino que detectamos cuando _ppSelectedTwitch cambia
+         (el dropdown nativo dispara una callback distinta de un click
+         normal del botón). */
       var twitchBtn = document.getElementById('pp-twitch-btn');
       if(twitchBtn){
-        arr.push({ target: twitchBtn, click: twitchBtn });
+        arr.push({ target: twitchBtn, click: twitchBtn, isTwitch: true });
       }
       /* 5. Prórroga — solo en eliminatorias single-leg (Copa, Sc, USC,
          Recopa, finales europeas). Inyectado por copa-engine como
@@ -1497,7 +1500,8 @@
         var r0 = step.target.getBoundingClientRect();
         var vh = window.innerHeight || document.documentElement.clientHeight;
         if(r0.bottom > vh - 40 || r0.top < 40){
-          step.target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          /* Scroll INSTANTÁNEO — el usuario quiere todo "al momento". */
+          step.target.scrollIntoView({ block: 'center', behavior: 'auto' });
         }
       } catch(_){}
       _gPositionPointer(step.target);
@@ -1519,6 +1523,10 @@
         if(clickHandler && prev.click){
           try { prev.click.removeEventListener('click', clickHandler, true); } catch(_){}
         }
+        if(prev._twitchPoll){
+          clearInterval(prev._twitchPoll);
+          prev._twitchPoll = null;
+        }
         _gUnhighlight(prev);
         /* Caso especial alias: tras cerrar el overlay, eliminar el ❓
            del DOM por completo (regla del usuario). */
@@ -1533,14 +1541,33 @@
       }
       var step = steps[idx];
       _gHighlight(step);
+      if(step.isTwitch){
+        /* El dropdown de Twitch no dispara `click` en pp-twitch-btn
+           cuando el usuario selecciona un canal — la callback es
+           _ppTwitchChange y solo modifica window._ppSelectedTwitch.
+           Polleamos esa variable cada 80 ms hasta que tenga valor.
+           Snapshot del valor inicial para detectar CAMBIO (no presencia). */
+        var initialTwitch = window._ppSelectedTwitch || '';
+        step._twitchPoll = setInterval(function(){
+          var cur = window._ppSelectedTwitch || '';
+          if(cur && cur !== initialTwitch){
+            clearInterval(step._twitchPoll);
+            step._twitchPoll = null;
+            setTimeout(_gAdvance, 0);
+          }
+        }, 80);
+        return;
+      }
       clickHandler = function(){
         try { step.click.removeEventListener('click', clickHandler, true); } catch(_){}
         if(step.isAlias){
           /* No avanzamos hasta que el overlay del alias se cierre. */
           _gWaitAliasCloseThenAdvance();
         } else {
-          /* Pequeño retraso para que la animación de "click" se vea. */
-          setTimeout(_gAdvance, 150);
+          /* Avance INMEDIATO (era 150ms — el usuario reportó lag).
+             setTimeout(0) para que el click del bundle termine antes
+             de que des-resaltemos. */
+          setTimeout(_gAdvance, 0);
         }
       };
       step.click.addEventListener('click', clickHandler, true);
@@ -1572,13 +1599,11 @@
 
     function _gStart(){
       if(active) _gStop();
-      /* Mostramos rápido (delay corto) y luego REINTENTAMOS construir
-         pasos si faltan elementos (alias se inyecta con observer
-         tardío de copa-engine, prórroga/penaltis idem). El usuario
-         pidió "que salga antes la mano/dedo, tarda muchísimo en
-         salir" → 150 ms inicial, luego retry hasta 8 intentos cada
-         200 ms si la lista de pasos es < 3 (siempre hay al menos
-         estadio + clima + balón + confirmar = 4 pasos esperados). */
+      /* AL INSTANTE — el usuario reportó "tarda muchísimo en salir,
+         repito todo al momento". Iniciamos en el siguiente frame
+         (rAF) y reintentamos cada 80 ms (≈12 veces/s) si faltan
+         elementos. Tope 1.5 s = 18 intentos. Tras el tope, arrancamos
+         con lo que haya — mejor parcial que ninguno. */
       var attempts = 0;
       function tryStart(){
         var built = _gBuildSteps();
@@ -1591,18 +1616,16 @@
           return;
         }
         attempts++;
-        if(attempts < 8){
-          setTimeout(tryStart, 200);
+        if(attempts < 18){
+          setTimeout(tryStart, 80);
         } else if(built && built.length){
-          /* Tras 8 intentos, arrancamos con lo que haya. Mejor un
-             tutorial parcial que ninguno. */
           steps = built;
           active = true;
           idx = -1;
           _gAdvance();
         }
       }
-      setTimeout(tryStart, 150);
+      requestAnimationFrame(tryStart);
     }
     function _gStop(){
       active = false;
@@ -1610,6 +1633,10 @@
         var s = steps[idx];
         if(clickHandler && s.click){
           try { s.click.removeEventListener('click', clickHandler, true); } catch(_){}
+        }
+        if(s._twitchPoll){
+          clearInterval(s._twitchPoll);
+          s._twitchPoll = null;
         }
         _gUnhighlight(s);
       }
@@ -1622,25 +1649,22 @@
 
     window._ppGuide = { start: _gStart, stop: _gStop };
 
-    /* Hook a showPrePartidoOverlay: si hay humano implicado, lanzamos
-       el guide. Detección robusta de humano via esHumano (parcheado
-       arriba para reconocer humanIcon). */
+    /* Hook a showPrePartidoOverlay: SIEMPRE lanzamos el guide. La
+       previa SOLO se abre para partidos con humano implicado (HvH /
+       HvIA) — los IA-vs-IA van por iaSimLive directamente sin previa.
+       No hay riesgo de mostrar el guide para partidos IA-only.
+       Antes filtrábamos con esHumano(home||away) pero la detección
+       fallaba para teams con humanIcon todavía no procesado, dejando
+       sin tutorial a UCL/UEL/UECL/Recopa con humanos secundarios
+       (PSG, Bayern, etc.). El usuario reportó "tiene que emerger en
+       todas las cards Humanos vs Humano e IA vs Humano" — 2026-05-10. */
     function _wrapPpForGuide(){
       var orig = window.showPrePartidoOverlay;
       if(typeof orig !== 'function' || orig._guidePatched) return false;
       var wrapped = function(matchKey, compKey, prorroga, duracion, isHvH){
         var ret = orig.apply(this, arguments);
-        var humanInvolved = !!isHvH;
-        try {
-          if(!humanInvolved && typeof window.esHumano === 'function'){
-            var teams = window._ppPreviaTeams || {};
-            humanInvolved = !!(window.esHumano(teams.home) || window.esHumano(teams.away));
-          }
-        } catch(_){}
-        if(humanInvolved){
-          try { window._ppGuide.start(); } catch(e){
-            try { console.warn('[ppGuide] start falló', e); } catch(_){}
-          }
+        try { window._ppGuide.start(); } catch(e){
+          try { console.warn('[ppGuide] start falló', e); } catch(_){}
         }
         return ret;
       };

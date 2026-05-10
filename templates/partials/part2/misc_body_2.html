@@ -25965,19 +25965,21 @@ document.addEventListener('DOMContentLoaded', function() {
      ════════════════════════════════════════════════════════════════ -->
 <style>
 .jbtn .jor-date{
-  margin-left:auto;
   font-family:'Bebas Neue','Oswald',sans-serif;
-  font-size:13px;
-  letter-spacing:1.4px;
-  padding:2px 8px;
-  border-radius:5px;
+  font-size:10px;
+  letter-spacing:1.1px;
+  padding:1px 6px;
+  border-radius:4px;
   background:rgba(0,0,0,.32);
   border:1px solid currentColor;
   white-space:nowrap;
   flex-shrink:0;
-  opacity:.95;
+  opacity:.82;
   text-transform:uppercase;
+  line-height:1.4;
+  margin-left:6px;
 }
+.jbtn .jor-date.is-solo{margin-left:auto;}
 .jbtn{display:flex;align-items:center;gap:6px;}
 .jbtn>b{flex-shrink:0;}
 /* Color de la fecha por competición. */
@@ -26198,6 +26200,32 @@ document.addEventListener('DOMContentLoaded', function() {
     return String(s||'').replace(/\s+/g,' ').trim();
   }
 
+  /* Mapa screen-id → comp class. Para botones que no llevan
+     `c-*` en su clase pero están dentro de una pantalla de
+     resultados conocida (s-liga-resultados, s-ucl-grupos-res,
+     s-uel-grupos-res, s-uecl-grupos-res, s-mundialito, …).
+     Excluye s-superliga / s-wildcard / s-open-qualifier / verano. */
+  var SCREEN_TO_COMP = {
+    's-liga-resultados':    'c-liga',
+    's-liga-jornada':       'c-liga',
+    's-liga-cal':           'c-liga',
+    's-ucl-grupos-res':     'c-ucl',
+    's-ucl-grupos':         'c-ucl',
+    's-ucl-playoffs':       'c-ucl',
+    's-uel-grupos-res':     'c-uel',
+    's-uel-grupos':         'c-uel',
+    's-uel-playoffs':       'c-uel',
+    's-uecl-grupos-res':    'c-uecl',
+    's-uecl-grupos':        'c-uecl',
+    's-uecl-playoffs':      'c-uecl',
+    's-copa':               'c-copa',
+    's-recopa':             'c-recopa',
+    's-supercopa':          'c-super',
+    's-usc':                'c-usc',
+    's-intercontinental':   'c-inter',
+    's-mundial-clubes':     'c-mundial'
+  };
+
   function _processBtn(btn){
     if (!btn || !btn.classList) return;
     /* Saltar botones ocultos / non-clickable / cursor:default. */
@@ -26205,11 +26233,28 @@ document.addEventListener('DOMContentLoaded', function() {
     if (styleAttr.indexOf('cursor:default') !== -1) return;
     /* Saltar buttons en s-calendario (ya tienen fecha inline). */
     if (btn.closest && btn.closest('#s-calendario')) return;
-    /* Detectar comp class. */
+    /* Saltar superliga / wildcard / open qualifier / verano. */
+    if (btn.classList.contains('c-superliga')) return;
+    if (btn.classList.contains('c-other')) return;
+    if (btn.classList.contains('c-road')) return;
+    if (btn.closest){
+      var skipScreens = '#s-superliga,#s-superliga-resultados,#s-wildcard,'
+                      + '#s-open-qualifier,#s-oq,#s-verano,#s-pretemporada,'
+                      + '#s-tour-summer,#s-summer-tournament';
+      if (btn.closest(skipScreens)) return;
+    }
+    /* Detectar comp class — primero por classList. */
     var compClass = '';
     for (var ci = 0; ci < COMP_CLASSES.length; ci++){
       if (btn.classList.contains(COMP_CLASSES[ci])) {
         compClass = COMP_CLASSES[ci]; break;
+      }
+    }
+    /* Fallback: detectar por pantalla padre (botones sin `c-*`). */
+    if (!compClass && btn.closest){
+      var screen = btn.closest('.screen');
+      if (screen && screen.id && SCREEN_TO_COMP[screen.id]){
+        compClass = SCREEN_TO_COMP[screen.id];
       }
     }
     if (!compClass) return;
@@ -26267,6 +26312,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     var formatted = _formatDate(date);
     if (existing.textContent !== formatted) existing.textContent = formatted;
+    /* Si NO hay otro hijo con margin-left:auto antes del badge,
+       el badge se pega al extremo derecho via clase `.is-solo`.
+       Si ya hay un counter con ml:auto, el badge solo añade gap. */
+    var hasMlAutoSibling = false;
+    var sibs = btn.children;
+    for (var sx = 0; sx < sibs.length; sx++){
+      var sib = sibs[sx];
+      if (sib === existing) continue;
+      var st = sib.getAttribute && sib.getAttribute('style');
+      if (st && /margin-left\s*:\s*auto/i.test(st)) { hasMlAutoSibling = true; break; }
+    }
+    if (hasMlAutoSibling) existing.classList.remove('is-solo');
+    else existing.classList.add('is-solo');
   }
 
   function _scan(){

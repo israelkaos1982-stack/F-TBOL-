@@ -684,6 +684,14 @@
   function _inferCompetition(matchKey){
     var k = String(matchKey || '').toLowerCase();
     if (!k) return 'liga';
+    /* Fase de Liga UCL/UEL/UECL Swiss-format (mk = `eurfase_<comp>_<jor>_<idx>`).
+       Petición usuario 2026-05-10: rutear estadísticas por competición
+       correctamente. Evaluar ANTES de los catch-all 'uecl'/'uel'/'ucl'
+       para que los partidos de UEL/UECL fase de liga no caigan en el
+       bucket equivocado. */
+    if (k.indexOf('eurfase_uecl_') === 0) return 'uecl';
+    if (k.indexOf('eurfase_uel_')  === 0) return 'uel';
+    if (k.indexOf('eurfase_ucl_')  === 0) return 'ucl';
     if (k.indexOf('uecl') === 0 || k.indexOf('-uecl') !== -1 || k.indexOf('|uecl|') !== -1) return 'uecl';
     if (k.indexOf('uel')  === 0 || k.indexOf('-uel')  !== -1 || k.indexOf('|uel|')  !== -1) return 'uel';
     /* Sub-fases UCL: evaluar ANTES del catch-all 'ucl' para que el

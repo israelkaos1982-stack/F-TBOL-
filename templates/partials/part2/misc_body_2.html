@@ -1865,15 +1865,34 @@
 </div>
 
 <div id="ucl-intro">
-<!-- FLASH UCL OFF — petición usuario 2026-05-09 (3ª iter): "el
+<!-- ===========================================================
+     SPLASH UCL ELIMINADO (petición usuario 2026-05-09, 4ª iter):
+     "elimina cualquier cosa que interrumpa su apertura". El bundle
+     (index.bundle.js línea 2256) tiene una `showChampionsIntro`
+     LOCAL que aplica `.show` al `#ucl-intro` durante 1300 ms
+     tapando la pantalla con un overlay rgba(0,0,5,.92). Mi
+     override de `window.showChampionsIntro` no la frena (mismo
+     patrón que el flash y el audio). CSS override `display:none
+     !important` neutraliza el overlay sin importar quién aplique
+     la clase. El elemento sigue en el DOM por si algún módulo lo
+     busca (no se rompe con getElementById).
+     ============================================================= -->
+<style>
+  #ucl-intro,
+  #ucl-intro.show{
+    display:none !important;
+    opacity:0 !important;
+    pointer-events:none !important;
+    visibility:hidden !important;
+  }
+  /* FLASH UCL OFF — petición usuario 2026-05-09 (3ª iter): "el
      flash es lo que bloquea la pantalla, no era la música". El
      bundle (index.bundle.js línea 2259) tiene una `playCompSound`
      LOCAL no expuesta en `window`, así que mi override de
      `window.playCompSound` no la frena: aplica `.flash-ucl` al
      `#comp-flash` y se ven 0.9 s de gradient azul tapando toda
      la pantalla. Anulamos la clase con CSS — el elemento existe
-     y la clase se aplica, pero queda inerte. -->
-<style>
+     y la clase se aplica, pero queda inerte. */
   #comp-flash.flash-ucl{
     display:none !important;
     animation:none !important;

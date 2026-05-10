@@ -1520,6 +1520,10 @@
           clearInterval(prev._twitchPoll);
           prev._twitchPoll = null;
         }
+        if(prev._twitchOrigChange){
+          try { window._ppTwitchChange = prev._twitchOrigChange; } catch(_){}
+          prev._twitchOrigChange = null;
+        }
         _gUnhighlight();
         if(prev.isAlias){
           /* Tras cerrar overlay del alias, eliminar el ❓ por completo. */
@@ -1538,15 +1542,40 @@
       var step = steps[idx];
       _gHighlight(step);
       if(step.isTwitch){
+        /* HOOK DIRECTO a window._ppTwitchChange (más reliable que
+           polling). El bundle llama `_ppTwitchChange(val)` desde el
+           click handler de la opción del dropdown — se ejecuta en el
+           MISMO tick del tap → avance instantáneo.
+           Backup: poll cada 80 ms por si el hook se pierde. */
+        var advanced = false;
+        function doTwitchAdvance(){
+          if(advanced) return;
+          advanced = true;
+          if(step._twitchPoll){
+            clearInterval(step._twitchPoll);
+            step._twitchPoll = null;
+          }
+          if(step._twitchOrigChange){
+            try { window._ppTwitchChange = step._twitchOrigChange; } catch(_){}
+            step._twitchOrigChange = null;
+          }
+          setTimeout(_gAdvance, 0);
+        }
+        var origChange = window._ppTwitchChange;
+        if(typeof origChange === 'function'){
+          step._twitchOrigChange = origChange;
+          window._ppTwitchChange = function(val){
+            var ret;
+            try { ret = origChange.apply(this, arguments); } catch(_){}
+            if(val){ doTwitchAdvance(); }
+            return ret;
+          };
+        }
         var initialTwitch = window._ppSelectedTwitch || '';
         step._twitchPoll = setInterval(function(){
           var cur = window._ppSelectedTwitch || '';
-          if(cur && cur !== initialTwitch){
-            clearInterval(step._twitchPoll);
-            step._twitchPoll = null;
-            setTimeout(_gAdvance, 0);
-          }
-        }, 60);
+          if(cur && cur !== initialTwitch){ doTwitchAdvance(); }
+        }, 80);
         return;
       }
       /* Listener DOCUMENT con detección geométrica — tap en cualquier
@@ -1650,6 +1679,10 @@
         if(s._twitchPoll){
           clearInterval(s._twitchPoll);
           s._twitchPoll = null;
+        }
+        if(s._twitchOrigChange){
+          try { window._ppTwitchChange = s._twitchOrigChange; } catch(_){}
+          s._twitchOrigChange = null;
         }
       }
       try { if(aliasObserver) aliasObserver.disconnect(); } catch(_){}

@@ -15283,9 +15283,36 @@ window._showSimProgress = function(opts, onDone){
   function _isHumanTeam(name){
     if(!name) return false;
     if(typeof window.isHumanTeam === 'function'){
-      try { return !!window.isHumanTeam(name); } catch(_){}
+      try { if(window.isHumanTeam(name)) return true; } catch(_){}
     }
-    var H = window.HUMAN_TEAMS || ['Real Madrid','FC Barcelona','Atlético Madrid','Atletico Madrid','Arsenal','Bayern Munich','Bayern Munchen','Bayern Muenchen'];
+    /* `humanIcon(name)` devuelve el emoji humano (🦆/💡/🐭/🐔/🦊…) que
+       el admin asignó en el editor de plantilla. Es la señal canónica
+       de "equipo humano" — cubre PSG, Bayern (sin "Munich"),
+       Manchester United, Borussia Dortmund, etc. que NO están en la
+       lista HUMAN_TEAMS hardcoded de Liga EA Sports. */
+    try {
+      if(typeof window.humanIcon === 'function'){
+        var ico = window.humanIcon(name);
+        if(ico) return true;
+      }
+    } catch(_){}
+    /* `_LIGA_HUMAN_FLAGS` mantiene { isHuman, humanEmoji } por nombre
+       canónico (lo rellena el editor de Liga EA Sports). Es otra
+       fuente fiable cuando humanIcon aún no está cargado. */
+    try {
+      var hf = window._LIGA_HUMAN_FLAGS || {};
+      if(hf[name] && hf[name].isHuman) return true;
+      var nLow = String(name||'').trim().toLowerCase();
+      for(var k in hf){
+        if(hf.hasOwnProperty(k) && String(k).trim().toLowerCase() === nLow && hf[k] && hf[k].isHuman) return true;
+      }
+    } catch(_){}
+    /* Fallback: lista canónica con variantes de "Bayern" / "PSG". */
+    var H = window.HUMAN_TEAMS || [
+      'Real Madrid','FC Barcelona','Atlético Madrid','Atletico Madrid',
+      'Arsenal','Bayern Munich','Bayern Munchen','Bayern Muenchen','Bayern',
+      'PSG','Paris Saint-Germain','Paris SG'
+    ];
     var n = String(name||'').trim().toLowerCase();
     for(var i = 0; i < H.length; i++){
       if(String(H[i]||'').trim().toLowerCase() === n) return true;

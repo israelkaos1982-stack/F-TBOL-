@@ -1422,7 +1422,19 @@
     function _gFollowTarget(){
       if(!active) return;
       var step = steps && steps[idx];
-      if(step && step.target) _gPositionPointer(step.target);
+      if(!step) return;
+      /* Re-resolver target si fue desconectado del DOM (re-render). */
+      if(step.target && !document.contains(step.target) && step.selector){
+        var fresh = document.querySelector(step.selector);
+        if(fresh){
+          /* Mover la clase al elemento nuevo. */
+          try { step.target.classList.remove('pp-guide-active'); } catch(_){}
+          step.target = fresh;
+          step.click = fresh;
+          fresh.classList.add('pp-guide-active');
+        }
+      }
+      if(step.target) _gPositionPointer(step.target);
       rafId = requestAnimationFrame(_gFollowTarget);
     }
 
@@ -1436,55 +1448,54 @@
         arr.push({
           target: aliasBtn,
           click: aliasBtn,
+          selector: '#pp-vs .copa-alias-help',
           isAlias: true
         });
       }
-      /* 2. Estadio — primera línea de #pp-env. Marcamos el span
-         contenedor para destacarlo (no el #pp-env entero, sería
-         demasiado grande). */
+      /* 2. Estadio — primera línea de #pp-env. */
       var envEl = document.getElementById('pp-env');
       if(envEl){
         var stadiumLine = envEl.querySelector('.pp-env-line');
         if(stadiumLine){
-          arr.push({ target: stadiumLine, click: stadiumLine, soft:true });
+          arr.push({ target: stadiumLine, click: stadiumLine,
+                     selector: '#pp-env .pp-env-line', soft:true });
         }
       }
       /* 3. Clima (Verano · Soleado) — #pp-env-meteo. */
       var meteoLine = document.getElementById('pp-env-meteo');
       if(meteoLine){
-        arr.push({ target: meteoLine, click: meteoLine, soft:true });
+        arr.push({ target: meteoLine, click: meteoLine,
+                   selector: '#pp-env-meteo', soft:true });
       }
-      /* 4. Twitch — botón con clase pp-twitch-btn. NOTA: no enviamos
-         click, sino que detectamos cuando _ppSelectedTwitch cambia
-         (el dropdown nativo dispara una callback distinta de un click
-         normal del botón). */
+      /* 4. Twitch — botón con clase pp-twitch-btn. */
       var twitchBtn = document.getElementById('pp-twitch-btn');
       if(twitchBtn){
-        arr.push({ target: twitchBtn, click: twitchBtn, isTwitch: true });
+        arr.push({ target: twitchBtn, click: twitchBtn,
+                   selector: '#pp-twitch-btn', isTwitch: true });
       }
-      /* 5. Prórroga — solo en eliminatorias single-leg (Copa, Sc, USC,
-         Recopa, finales europeas). Inyectado por copa-engine como
-         [data-ppid="prorroga"] dentro de #pp-list. */
+      /* 5. Prórroga — solo en eliminatorias single-leg. */
       var prorrogaRow = document.querySelector('#pp-list [data-ppid="prorroga"]');
       if(prorrogaRow){
-        arr.push({ target: prorrogaRow, click: prorrogaRow });
+        arr.push({ target: prorrogaRow, click: prorrogaRow,
+                   selector: '#pp-list [data-ppid="prorroga"]' });
       }
-      /* 6. Penaltis — mismo patrón, [data-ppid="penaltis"]. */
+      /* 6. Penaltis. */
       var penaltisRow = document.querySelector('#pp-list [data-ppid="penaltis"]');
       if(penaltisRow){
-        arr.push({ target: penaltisRow, click: penaltisRow });
+        arr.push({ target: penaltisRow, click: penaltisRow,
+                   selector: '#pp-list [data-ppid="penaltis"]' });
       }
-      /* 7. Balón — fila del item con data-ppid="balon". Se evalúa
-         AL FINAL (re-querySelector) por si copa-engine reordena la
-         lista al inyectar prórroga/penaltis. */
+      /* 7. Balón. */
       var ballRow = document.querySelector('#pp-list [data-ppid="balon"]');
       if(ballRow){
-        arr.push({ target: ballRow, click: ballRow });
+        arr.push({ target: ballRow, click: ballRow,
+                   selector: '#pp-list [data-ppid="balon"]' });
       }
-      /* 8. CONFIRMAR CONFIGURACIÓN — el botón principal. */
+      /* 8. CONFIRMAR CONFIGURACIÓN. */
       var confirmBtn = document.getElementById('pp-confirm-btn');
       if(confirmBtn){
-        arr.push({ target: confirmBtn, click: confirmBtn });
+        arr.push({ target: confirmBtn, click: confirmBtn,
+                   selector: '#pp-confirm-btn' });
       }
       return arr;
     }
@@ -1520,8 +1531,10 @@
       /* Limpiar el paso actual. */
       if(idx >= 0 && steps && steps[idx]){
         var prev = steps[idx];
-        if(clickHandler && prev.click){
-          try { prev.click.removeEventListener('click', clickHandler, true); } catch(_){}
+        if(clickHandler){
+          try { document.removeEventListener('click', clickHandler, true); } catch(_){}
+          try { document.removeEventListener('pointerdown', clickHandler, true); } catch(_){}
+          try { document.removeEventListener('touchstart', clickHandler, true); } catch(_){}
         }
         if(prev._twitchPoll){
           clearInterval(prev._twitchPoll);
@@ -1542,11 +1555,6 @@
       var step = steps[idx];
       _gHighlight(step);
       if(step.isTwitch){
-        /* El dropdown de Twitch no dispara `click` en pp-twitch-btn
-           cuando el usuario selecciona un canal — la callback es
-           _ppTwitchChange y solo modifica window._ppSelectedTwitch.
-           Polleamos esa variable cada 80 ms hasta que tenga valor.
-           Snapshot del valor inicial para detectar CAMBIO (no presencia). */
         var initialTwitch = window._ppSelectedTwitch || '';
         step._twitchPoll = setInterval(function(){
           var cur = window._ppSelectedTwitch || '';
@@ -1558,19 +1566,49 @@
         }, 80);
         return;
       }
-      clickHandler = function(){
-        try { step.click.removeEventListener('click', clickHandler, true); } catch(_){}
+      /* Listener a nivel DOCUMENT con detección GEOMÉTRICA. Más robusto
+         que listeners en el elemento porque:
+         (a) sobrevive a re-renders del DOM (`_renderPreviaMeta` llama
+             innerHTML= en #pp-env tras cada toggle, destruyendo
+             listeners en .pp-env-line / #pp-env-meteo).
+         (b) escucha pointerdown + touchstart para responder a taps
+             fast antes de que el click cumpla.
+         (c) detecta tap por coordenadas dentro del bounding box +
+             padding 18 px → tap zone más generoso (mejor para móvil
+             y elementos pequeños como el ❓ de 24 px). */
+      clickHandler = function(ev){
+        if(!step.target || !document.contains(step.target)){
+          /* Re-resolver via selector si está disponible (target detached). */
+          if(step.selector){
+            var fresh = document.querySelector(step.selector);
+            if(fresh) step.target = fresh;
+          }
+        }
+        var t = step.target;
+        if(!t || !document.contains(t)) return;
+        var r = t.getBoundingClientRect();
+        var pad = 18;
+        var x = ev.clientX, y = ev.clientY;
+        if(typeof x !== 'number' && ev.touches && ev.touches[0]){
+          x = ev.touches[0].clientX; y = ev.touches[0].clientY;
+        }
+        if(x == null || y == null) return;
+        if(x < r.left - pad || x > r.right + pad ||
+           y < r.top  - pad || y > r.bottom + pad) return;
+        /* Hit. Remove all listeners y avanza. */
+        try { document.removeEventListener('click', clickHandler, true); } catch(_){}
+        try { document.removeEventListener('pointerdown', clickHandler, true); } catch(_){}
+        try { document.removeEventListener('touchstart', clickHandler, true); } catch(_){}
         if(step.isAlias){
-          /* No avanzamos hasta que el overlay del alias se cierre. */
           _gWaitAliasCloseThenAdvance();
         } else {
-          /* Avance INMEDIATO (era 150ms — el usuario reportó lag).
-             setTimeout(0) para que el click del bundle termine antes
-             de que des-resaltemos. */
+          /* Avance INMEDIATO. */
           setTimeout(_gAdvance, 0);
         }
       };
-      step.click.addEventListener('click', clickHandler, true);
+      document.addEventListener('click', clickHandler, true);
+      document.addEventListener('pointerdown', clickHandler, true);
+      document.addEventListener('touchstart', clickHandler, true);
     }
 
     function _gWaitAliasCloseThenAdvance(){
@@ -1599,26 +1637,34 @@
 
     function _gStart(){
       if(active) _gStop();
-      /* AL INSTANTE — el usuario reportó "tarda muchísimo en salir,
-         repito todo al momento". Iniciamos en el siguiente frame
-         (rAF) y reintentamos cada 80 ms (≈12 veces/s) si faltan
-         elementos. Tope 1.5 s = 18 intentos. Tras el tope, arrancamos
-         con lo que haya — mejor parcial que ninguno. */
+      /* AL INSTANTE — el usuario reportó "tarda muchísimo en salir".
+         Política:
+         (a) Esperamos hasta 6 frames (≈100 ms a 60 Hz) a que el ❓
+             del alias aparezca (lo inyecta copa-engine vía
+             MutationObserver tras el render del bundle).
+         (b) En cuanto aparece (o se cumple el tope), arrancamos.
+         (c) Si pp-list / pp-env aún no están listos, retry rápido
+             cada 60 ms hasta 18 intentos. */
       var attempts = 0;
       function tryStart(){
+        var aliasYet = !!document.querySelector('#pp-vs .copa-alias-help');
+        var envReady = !!document.getElementById('pp-env-meteo');
+        var listReady = !!document.querySelector('#pp-list [data-ppid="balon"]');
         var built = _gBuildSteps();
-        var enough = built && built.length >= 3;
-        if(enough){
-          steps = built;
-          active = true;
-          idx = -1;
-          _gAdvance();
+        /* Esperar un poco al alias (hasta 6 intentos × 60 ms = 360 ms)
+           si el resto está listo. Tras eso, arrancar sin alias. */
+        var shouldWaitForAlias = !aliasYet && attempts < 6;
+        if((!envReady || !listReady) && attempts < 18){
+          attempts++;
+          setTimeout(tryStart, 60);
           return;
         }
-        attempts++;
-        if(attempts < 18){
-          setTimeout(tryStart, 80);
-        } else if(built && built.length){
+        if(shouldWaitForAlias && envReady && listReady){
+          attempts++;
+          setTimeout(tryStart, 60);
+          return;
+        }
+        if(built && built.length){
           steps = built;
           active = true;
           idx = -1;
@@ -1629,11 +1675,13 @@
     }
     function _gStop(){
       active = false;
+      if(clickHandler){
+        try { document.removeEventListener('click', clickHandler, true); } catch(_){}
+        try { document.removeEventListener('pointerdown', clickHandler, true); } catch(_){}
+        try { document.removeEventListener('touchstart', clickHandler, true); } catch(_){}
+      }
       if(idx >= 0 && steps && steps[idx]){
         var s = steps[idx];
-        if(clickHandler && s.click){
-          try { s.click.removeEventListener('click', clickHandler, true); } catch(_){}
-        }
         if(s._twitchPoll){
           clearInterval(s._twitchPoll);
           s._twitchPoll = null;

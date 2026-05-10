@@ -14690,6 +14690,90 @@ window._showSimProgress = function(opts, onDone){
 })();
 </script>
 
+<!-- ════ HUMANIDAD POR COMPETICIÓN — helper canónico ═════════════════
+     Petición usuario 2026-05-10: "PSG🦆 es equipo humano en
+     Champions League y Superliga, en el resto es IA". El sistema
+     debe distinguir HUMANIDAD según contexto de comp.
+
+     Reglas:
+     · 'liga' / 'copa' / 'sc' → solo los 5 humanos canónicos de Liga
+       EA Sports (Real Madrid, FC Barcelona, Atlético, Arsenal,
+       Bayern Munich) — vía `esHumano()` global del bundle.
+     · 'ucl' / 'uel' / 'uecl' / 'recopa' / 'usc' / 'inter' / 'mundial'
+       → cualquier equipo con `humanIcon(name)` asignado en el editor
+       de plantilla (cubre PSG, Manchester United, Dortmund, etc.).
+     · 'superliga' → equipos seleccionados al configurar la Superliga
+       (todos humanos por definición — los 6 son humanos).
+     · 'amistoso' / 'torneo' / 'wprev' (Previa Champions) → cualquier
+       team con humanIcon (igual que eur).
+     · default → solo Liga EA humans (esHumano).
+
+     IMPORTANTE: este helper no sustituye a `esHumano()` (que sigue
+     siendo la verdad para Liga doméstica). Es una capa AÑADIDA que
+     consultan los flujos que necesitan saber "¿es humano EN ESTA
+     COMP?". Liga / Copa siguen usando esHumano sin cambios. ════ -->
+<script>
+(function(){
+  var EUR_COMPS = { ucl:1, uel:1, uecl:1, recopa:1, usc:1, 'usc-fin':1,
+                    inter:1, 'inter-fin':1, mundial:1, amistoso:1,
+                    torneo:1, wprev:1, 'ucl-prev':1, 'ucl-oq':1, 'ucl-wc':1 };
+  var DOM_COMPS = { liga:1, copa:1, 'copa-fin':1, sc:1, 'sc-final':1, '':1 };
+  function _hasHumanIcon(name){
+    try {
+      if(typeof window.humanIcon === 'function'){
+        var i = window.humanIcon(name);
+        if(i) return true;
+      }
+    } catch(_){}
+    try {
+      var hf = window._LIGA_HUMAN_FLAGS || {};
+      if(hf[name] && hf[name].isHuman) return true;
+      var nLow = String(name||'').trim().toLowerCase();
+      for(var k in hf){
+        if(hf.hasOwnProperty(k) && String(k).trim().toLowerCase() === nLow
+           && hf[k] && hf[k].isHuman) return true;
+      }
+    } catch(_){}
+    return false;
+  }
+  function _isLigaHuman(name){
+    try {
+      if(typeof window.esHumano === 'function') return !!window.esHumano(name);
+    } catch(_){}
+    return false;
+  }
+  function _isSuperligaHuman(name){
+    /* En Superliga TODOS los equipos seleccionados son humanos. Si el
+       name está en `loadTeams()` de superliga, es humano. Si la
+       función no existe (puede no estar cargada), caemos al check
+       genérico humanIcon. */
+    try {
+      var slKey = 'superliga_teams_v1';
+      var raw = localStorage.getItem(slKey);
+      if(raw){
+        var arr = JSON.parse(raw);
+        if(Array.isArray(arr)){
+          var nLow = String(name||'').trim().toLowerCase();
+          for(var i = 0; i < arr.length; i++){
+            if(String(arr[i]||'').trim().toLowerCase() === nLow) return true;
+          }
+        }
+      }
+    } catch(_){}
+    return _hasHumanIcon(name) || _isLigaHuman(name);
+  }
+  window.isHumanInComp = function(name, comp){
+    if(!name) return false;
+    var c = String(comp||'').toLowerCase();
+    if(c === 'superliga') return _isSuperligaHuman(name);
+    if(EUR_COMPS[c])      return _hasHumanIcon(name) || _isLigaHuman(name);
+    if(DOM_COMPS[c])      return _isLigaHuman(name);
+    /* Default: igual que dominio (esHumano). Conservador. */
+    return _isLigaHuman(name);
+  };
+})();
+</script>
+
 <!-- ════ FASE DE LIGA: UCL / UEL / UECL — sorteo Swiss-format ════
      Petición usuario 2026-05-09: cada equipo juega 8 partidos
      (4 local + 4 visitante) en 8 jornadas. Regla obligatoria:
@@ -15320,42 +15404,14 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     return '';
   }
+  /* `_isHumanTeam(name)` LOCAL al render de UCL/UEL/UECL — siempre
+     usa la rama 'eur' del helper canónico `window.isHumanInComp`
+     (cualquier team con humanIcon asignado). Independiente de la
+     humanidad en otras competiciones (CLAUDE.md → "Humanidad por
+     competición"): PSG es humano en Champions, en Liga es IA. */
   function _isHumanTeam(name){
-    if(!name) return false;
-    if(typeof window.isHumanTeam === 'function'){
-      try { if(window.isHumanTeam(name)) return true; } catch(_){}
-    }
-    /* `humanIcon(name)` devuelve el emoji humano (🦆/💡/🐭/🐔/🦊…) que
-       el admin asignó en el editor de plantilla. Es la señal canónica
-       de "equipo humano" — cubre PSG, Bayern (sin "Munich"),
-       Manchester United, Borussia Dortmund, etc. que NO están en la
-       lista HUMAN_TEAMS hardcoded de Liga EA Sports. */
-    try {
-      if(typeof window.humanIcon === 'function'){
-        var ico = window.humanIcon(name);
-        if(ico) return true;
-      }
-    } catch(_){}
-    /* `_LIGA_HUMAN_FLAGS` mantiene { isHuman, humanEmoji } por nombre
-       canónico (lo rellena el editor de Liga EA Sports). Es otra
-       fuente fiable cuando humanIcon aún no está cargado. */
-    try {
-      var hf = window._LIGA_HUMAN_FLAGS || {};
-      if(hf[name] && hf[name].isHuman) return true;
-      var nLow = String(name||'').trim().toLowerCase();
-      for(var k in hf){
-        if(hf.hasOwnProperty(k) && String(k).trim().toLowerCase() === nLow && hf[k] && hf[k].isHuman) return true;
-      }
-    } catch(_){}
-    /* Fallback: lista canónica con variantes de "Bayern" / "PSG". */
-    var H = window.HUMAN_TEAMS || [
-      'Real Madrid','FC Barcelona','Atlético Madrid','Atletico Madrid',
-      'Arsenal','Bayern Munich','Bayern Munchen','Bayern Muenchen','Bayern',
-      'PSG','Paris Saint-Germain','Paris SG'
-    ];
-    var n = String(name||'').trim().toLowerCase();
-    for(var i = 0; i < H.length; i++){
-      if(String(H[i]||'').trim().toLowerCase() === n) return true;
+    if(typeof window.isHumanInComp === 'function'){
+      try { return !!window.isHumanInComp(name, 'ucl'); } catch(_){}
     }
     return false;
   }

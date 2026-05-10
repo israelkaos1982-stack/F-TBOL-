@@ -5986,12 +5986,49 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="screen" id="s-liga-stats">
 <button class="back-btn" onclick="go('s-espana')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">📈</span><h2>Liga EA Sports · Estadísticas</h2></div>
+<div class="sec-hdr"><span class="sec-emoji">📈</span><h2>España · Estadísticas combinadas</h2></div>
+<div style="padding:0 18px 8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(240,192,64,.7);text-transform:uppercase;">
+  Suma de Liga EA Sports + Copa del Rey + Supercopa de España
+</div>
 
 <div class="liga-stats-wrap" id="liga-stats-dashboard">
-<div class="liga-stat-empty">Calculando estadísticas...</div>
+<div class="liga-stat-empty">Sin partidos todavía. Simula la Liga, la Copa o la Supercopa para ver el dashboard sumado.</div>
 </div>
 </div>
+
+<script>
+/* Refuerzo del rebuild del dashboard España · Estadísticas combinadas
+   (petición usuario 2026-05-09): la versión anterior se construía una
+   sola vez al click; si el LIGA_PLAYER_MATCH_STORE aún no estaba
+   hidratado en ese instante, el dashboard se quedaba con el placeholder
+   "Calculando estadísticas…" y el usuario lo percibía como "caja
+   desactivada".
+
+   Solución: al entrar a `s-liga-stats` lanzamos `rebuildLigaStats()`
+   (refresca el store agregando todas las plant-rows actuales) seguido
+   de `buildLigaStatsDashboard()`, y repetimos el ciclo en 0/150/400 ms
+   para tolerar latencias de hidratación. Si después del 3er rebuild el
+   container sigue con el placeholder, no hay datos reales — el empty
+   state ya orienta al usuario. */
+(function(){
+  function _refreshAndBuild(){
+    try { if (typeof window.rebuildLigaStats === 'function') window.rebuildLigaStats(); } catch(_){}
+    try { if (typeof window.buildLigaStatsDashboard === 'function') window.buildLigaStatsDashboard(); } catch(_){}
+  }
+  var _origGo = window.go;
+  if (typeof _origGo !== 'function' || _origGo._espStatsPatched) return;
+  window.go = function(id){
+    var r = _origGo.apply(this, arguments);
+    if (id === 's-liga-stats') {
+      setTimeout(_refreshAndBuild, 0);
+      setTimeout(_refreshAndBuild, 150);
+      setTimeout(_refreshAndBuild, 400);
+    }
+    return r;
+  };
+  window.go._espStatsPatched = true;
+})();
+</script>
 
 <div class="screen" id="s-segunda-clas">
 <button class="back-btn" onclick="go('s-segunda')">◀ Volver</button>

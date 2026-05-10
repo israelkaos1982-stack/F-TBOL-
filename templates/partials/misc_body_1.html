@@ -24351,23 +24351,41 @@ Tottenham
      activate de s-munich, etc.) puedan re-aplicar los overrides
      después de que el HUD haya sido reescrito por la cadena legacy. */
   window._bayernHudReapply = apply;
-  /* GUARDIAN: setInterval que cada 400 ms verifica si el DOM del
-     HUD coincide con el override de localStorage, y si no, lo
-     restaura. El usuario reportó "edito y no se guarda" incluso
-     tras los fixes anteriores — sospecha de que algún módulo del
-     bundle escribe asíncrono fuera del MutationObserver / del
-     wrap a athObjCount. El guardian es la red de seguridad
-     definitiva: max 400 ms entre que algo machaca el HUD y que
-     se restaura. Solo corre si HAY override (sin override no
-     hace nada — no rompe el flujo "auto" para usuarios sin
-     edición manual). Petición usuario 2026-05-09 ("fuerzalo").
-     Coste: ~5 µs por tick (5 getElementById + 5 textContent reads). */
-  var _guardianInterval = null;
-  function _startGuardian(){
-    if (_guardianInterval) return;
-    _guardianInterval = setInterval(function(){
-      var o;
-      try { o = load(); } catch(_){ return; }
+
+  /* ── REFUERZO 2026-05-09 ──────────────────────────────────────
+     El usuario reportó (con foto) que tras pulsar "Guardar" en el
+     editor del HUD, los valores volvían a los defaults. Hay un
+     SEGUNDO `updateHud` (línea ~25736 en el IIFE de la agenda
+     Bayern) que escribe state.rating / state.budgetSpent /
+     state.pi en los mismos elementos a los que apuntan nuestros
+     overrides. Cada vez que el usuario pulsa "SIGUIENTE DÍA",
+     juega un partido o navega de vuelta a s-munich, ese updateHud
+     se dispara y pisa los overrides.
+
+     Solución triple para ser bulletproof:
+
+       (a) Polling cada 500 ms con dirty-check: re-aplicamos los
+           overrides en background SOLO si el DOM está fuera de
+           sync con el storage. Sin override → no-op. Con override
+           pero DOM correcto → no-op. Coste: ~5 µs/tick.
+
+       (b) Hook a `window.go(s-munich)`: re-aplicamos en cuanto el
+           usuario entra a la pantalla, antes de que la cadena
+           legacy tenga tiempo de pisar.
+
+       (c) MutationObserver existente sobre los 5 spans queda como
+           red de seguridad para escrituras síncronas inmediatas.
+  */
+  function _hasOverrides(){
+    var o = load();
+    return o && (o.rating != null || o.ratingTarget != null ||
+                 o.money != null  || o.moneyTarget != null ||
+                 o.pi != null);
+  }
+  /* Polling cada 500 ms con dirty-check. */
+  setInterval(function(){
+    try {
+      var o = load();
       if (!o || !Object.keys(o).length) return;
       var dirty = false;
       function _check(elId, expected){
@@ -24377,11 +24395,32 @@ Tottenham
         if (cur !== String(expected)) dirty = true;
       }
       if (o.rating != null) _check('ath-pts-val', Number(o.rating).toFixed(2));
-      if (o.money != null)  _check('ath-money-val', String(parseInt(o.money,10)|0));
-      if (o.pi != null)     _check('ath-med-val', String(parseInt(o.pi,10)|0));
+      if (o.money != null)  _check('ath-money-val', String(parseInt(o.money, 10) | 0));
+      if (o.pi != null)     _check('ath-med-val', String(parseInt(o.pi, 10) | 0));
       if (dirty) apply();
-    }, 400);
-  }
+    } catch(_){}
+  }, 500);
+
+  /* Re-apply al entrar/salir de pantalla. */
+  (function(){
+    var origGo = window.go;
+    if (typeof origGo !== 'function' || origGo._bayernHudPatched) return;
+    window.go = function(id){
+      var r = origGo.apply(this, arguments);
+      if (id === 's-munich' || id === 's-munich-derbys' || id === 's-munich-trofeos' || id === 's-munich-objetivos'){
+        try {
+          /* Triple-fire 0/100/300 ms para ganar siempre la última
+             palabra contra la cadena legacy. */
+          setTimeout(apply, 0);
+          setTimeout(apply, 100);
+          setTimeout(apply, 300);
+        } catch(_){}
+      }
+      return r;
+    };
+    window.go._bayernHudPatched = true;
+  })();
+
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 200); });
   } else {

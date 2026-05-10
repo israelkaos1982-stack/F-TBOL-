@@ -23255,6 +23255,65 @@ Tottenham
      activate de s-munich, etc.) puedan re-aplicar los overrides
      después de que el HUD haya sido reescrito por la cadena legacy. */
   window._bayernHudReapply = apply;
+
+  /* ── REFUERZO 2026-05-09 ──────────────────────────────────────
+     El usuario reportó (con foto) que tras pulsar "Guardar" en el
+     editor del HUD, los valores volvían a los defaults. Hay un
+     SEGUNDO `updateHud` (línea ~25736 en el IIFE de la agenda
+     Bayern) que escribe state.rating / state.budgetSpent /
+     state.pi en los mismos elementos a los que apuntan nuestros
+     overrides. Cada vez que el usuario pulsa "SIGUIENTE DÍA",
+     juega un partido o navega de vuelta a s-munich, ese updateHud
+     se dispara y pisa los overrides.
+
+     Solución triple para ser bulletproof:
+
+       (a) Polling cada 500 ms: re-aplicamos los overrides en
+           background. Si la cadena legacy escribe un valor distinto
+           al guardado, lo corregimos en menos de medio segundo.
+
+       (b) Hook a `window.go(s-munich)`: re-aplicamos en cuanto el
+           usuario entra a la pantalla, antes de que la cadena
+           legacy tenga tiempo de pisar.
+
+       (c) Hook a `next-day` / play / cualquier listener que
+           dispare updateHud — re-aplicamos justo después con un
+           pequeño retraso.
+  */
+  function _hasOverrides(){
+    var o = load();
+    return o && (o.rating != null || o.ratingTarget != null ||
+                 o.money != null  || o.moneyTarget != null ||
+                 o.pi != null);
+  }
+  /* Polling defensivo. 500 ms es lo bastante rápido para no notarse
+     visualmente cuando algún flujo legacy reescribe los spans, y lo
+     bastante lento para no comerse CPU. Si no hay ningún override,
+     el polling es no-op. */
+  setInterval(function(){
+    try { if (_hasOverrides()) apply(); } catch(_){}
+  }, 500);
+
+  /* Re-apply al entrar/salir de pantalla. */
+  (function(){
+    var origGo = window.go;
+    if (typeof origGo !== 'function' || origGo._bayernHudPatched) return;
+    window.go = function(id){
+      var r = origGo.apply(this, arguments);
+      if (id === 's-munich' || id === 's-munich-derbys' || id === 's-munich-trofeos' || id === 's-munich-objetivos'){
+        try {
+          /* Triple-fire 0/100/300 ms para ganar siempre la última
+             palabra contra la cadena legacy. */
+          setTimeout(apply, 0);
+          setTimeout(apply, 100);
+          setTimeout(apply, 300);
+        } catch(_){}
+      }
+      return r;
+    };
+    window.go._bayernHudPatched = true;
+  })();
+
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 200); });
   } else {

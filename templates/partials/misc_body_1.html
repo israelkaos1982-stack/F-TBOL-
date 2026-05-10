@@ -15048,16 +15048,55 @@ window._showSimProgress = function(opts, onDone){
 
     /* Helper para construir un mensaje de fallo con desglose de
        países — útil para que el usuario vea si algún país está
-       saturando el pool. 2026-05-09. */
+       saturando el pool. 2026-05-09 (rev 2: muestra TODOS los países
+       y agrupa los teams por federación con sus nombres, hasta 25
+       teams para no rebosar el alert; también escribe todo a
+       console.log para inspección completa).
+       Petición usuario: "mira de qué país es cada equipo, vienen en
+       EA Sports y Resto de Ligas". */
     function _failMsg(){
       var counts = Object.keys(byLeague).map(function(k){
         return [(k || '(sin país)'), byLeague[k]];
       }).sort(function(a,b){ return b[1] - a[1]; });
-      var top = counts.slice(0, 8).map(function(p){ return '  · ' + p[0] + ': ' + p[1] + ' equipos'; }).join('\n');
-      return '❌ El motor no logró cuadrar el sorteo en ' + DRAW_ATTEMPTS + ' intentos respetando "no mismo país" + balance 4+4.\n\n'
-           + 'Desglose del pool (' + teams.length + ' equipos, máx ' + capPerCountry + ' por federación):\n'
-           + top + (counts.length > 8 ? '\n  · …' : '')
-           + '\n\nReintenta. Si vuelve a fallar, revisa qué federaciones tienen demasiados equipos clasificados.';
+      /* Detallar cada país con sus teams. Marcamos con ⚠️ los que
+         exceden el cap (causa del fallo). */
+      var teamsByLeague = {};
+      teams.forEach(function(t){
+        var k = String(t.league || '').trim() || '(sin país)';
+        if(!teamsByLeague[k]) teamsByLeague[k] = [];
+        teamsByLeague[k].push(String(t.name || '?'));
+      });
+      var lines = [];
+      var shown = 0, MAX_LINES = 20;
+      counts.forEach(function(p){
+        if(shown >= MAX_LINES){ return; }
+        var n = p[1];
+        var marker = (n > capPerCountry) ? ' ⚠️ supera el máx' : '';
+        lines.push('  · ' + p[0] + ' · ' + n + ' equipo' + (n===1?'':'s') + marker);
+        shown++;
+      });
+      if(counts.length > MAX_LINES){
+        lines.push('  · … (+' + (counts.length - MAX_LINES) + ' federaciones más)');
+      }
+      /* Volcamos TODO al console para diagnóstico completo (DevTools
+         → Console). Útil para compartir con soporte. */
+      try {
+        console.group('[eur-fase] Pool diagnóstico (' + teams.length + ' equipos)');
+        counts.forEach(function(p){
+          var ts = (teamsByLeague[p[0]] || []).join(', ');
+          console.log(p[0] + ' (' + p[1] + '): ' + ts);
+        });
+        console.groupEnd();
+      } catch(_){}
+      var sat = counts.filter(function(p){ return p[1] > capPerCountry; });
+      var head = sat.length
+        ? '❌ Sorteo imposible: ' + sat.length + ' federación' + (sat.length===1?'':'es') + ' supera' + (sat.length===1?'':'n') + ' el límite de ' + capPerCountry + ' equipos por país.'
+        : '❌ El motor no logró cuadrar en ' + DRAW_ATTEMPTS + ' intentos.';
+      return head + '\n\n'
+           + 'Pool (' + teams.length + ' equipos, ' + counts.length + ' federaciones, máx ' + capPerCountry + '/país):\n'
+           + lines.join('\n')
+           + '\n\nDetalle completo en consola del navegador (F12 → Console).'
+           + (sat.length ? '\n\n👉 Reduce los equipos de las federaciones marcadas con ⚠️ para que el sorteo sea factible.' : '\n\nReintenta el sorteo (a veces el motor falla por mala suerte).');
     }
     if(typeof window.ftbolLoaderRun !== 'function'){
       /* Sin loader → fallback simple, sin animación. */
@@ -15125,7 +15164,7 @@ window._showSimProgress = function(opts, onDone){
               clearTimeout(hardWatchdog);
               if(!sched){
                 ctx.progress(100, 'Sin solución factible');
-                alert('❌ No se ha podido cuadrar el sorteo respetando "no mismo país" + balance 4+4 de local/visitante. La distribución de países del pool actual no permite solución. Reintenta o revisa qué federaciones tienen demasiados equipos.');
+                alert(_failMsg());
                 safeResolve();
                 return;
               }

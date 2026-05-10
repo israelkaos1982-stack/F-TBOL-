@@ -26306,6 +26306,29 @@ document.addEventListener('DOMContentLoaded', function() {
   margin-left:6px;
 }
 .jbtn .jor-date.is-solo{margin-left:auto;}
+/* Badge dentro de los headers de Supercopa España (`.sc-rondhdr`).
+   El header NO es flex, así que el badge va inline después del texto. */
+.sc-rondhdr .jor-date{
+  display:inline-block;
+  margin-left:8px;
+  font-family:'Bebas Neue','Oswald',sans-serif;
+  font-size:10px;
+  letter-spacing:1.1px;
+  padding:1px 6px;
+  border-radius:4px;
+  background:rgba(0,0,0,.32);
+  border:1px solid rgba(255,213,90,.55);
+  color:#ffd55a;
+  white-space:nowrap;
+  opacity:.9;
+  text-transform:uppercase;
+  vertical-align:middle;
+  line-height:1.4;
+}
+.sc-group.is-final .sc-rondhdr .jor-date{
+  border-color:rgba(255,215,0,.7);
+  color:#ffd700;
+}
 .jbtn{display:flex;align-items:center;gap:6px;}
 .jbtn>b{flex-shrink:0;}
 /* Color de la fecha por competición. */
@@ -26653,10 +26676,54 @@ document.addEventListener('DOMContentLoaded', function() {
     else existing.classList.add('is-solo');
   }
 
+  /* Para los comps que usan headers (no `.jbtn`) — Supercopa España
+     usa `.sc-rondhdr` dentro de `#s-supercopa`. Aplicamos la misma
+     lógica que un .jbtn: acortar texto, encontrar fecha y inyectar
+     el badge `.jor-date` al final. */
+  function _processHeader(hdr, compClass){
+    if (!hdr || hdr._jorProcessed && hdr._jorProcessed === hdr.textContent) {
+      /* Ya tiene la fecha y el texto no ha cambiado. */
+    }
+    if (!hdr._jorOrigText) {
+      hdr._jorOrigText = hdr.textContent || '';
+    }
+    var origText = hdr._jorOrigText;
+    /* Acortar (Octavos de Final → Octavos, etc.) en text-nodes. */
+    function _shortenHdr(el){
+      if (!el || !el.childNodes) return;
+      for (var i = 0; i < el.childNodes.length; i++){
+        var n = el.childNodes[i];
+        if (n.nodeType === 3) {
+          var t = n.nodeValue;
+          var s = _shorten(t);
+          if (s !== t) n.nodeValue = s;
+        } else if (n.nodeType === 1 && !n.classList.contains('jor-date')) {
+          _shortenHdr(n);
+        }
+      }
+    }
+    _shortenHdr(hdr);
+    var date = _findDate(origText, compClass);
+    if (!date) return;
+    var existing = hdr.querySelector(':scope > .jor-date');
+    if (!existing) {
+      existing = document.createElement('span');
+      existing.className = 'jor-date jor-date-hdr';
+      hdr.appendChild(existing);
+    }
+    var formatted = _formatDate(date);
+    if (existing.textContent !== formatted) existing.textContent = formatted;
+    hdr._jorProcessed = hdr.textContent;
+  }
+
   function _scan(){
     try {
       var btns = document.querySelectorAll('.jbtn');
       btns.forEach(_processBtn);
+      /* Headers de Supercopa España (`.sc-rondhdr` dentro de
+         `#s-supercopa`). */
+      var supHdrs = document.querySelectorAll('#s-supercopa .sc-rondhdr');
+      supHdrs.forEach(function(h){ _processHeader(h, 'c-super'); });
     } catch (e) {}
   }
 

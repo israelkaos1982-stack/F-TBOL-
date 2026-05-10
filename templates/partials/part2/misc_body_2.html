@@ -7049,8 +7049,21 @@
       document.addEventListener('visibilitychange', st._visHandler);
     }
 
-    // Pre-generate AI events for HvIA matches
-    _mlPreGenAIEvents(mk);
+    // Pre-generate AI events for HvIA matches.
+    // 2026-05-09: wrap en try/catch — si _mlPreGenIAvsIAEvents lanza por
+    // cualquier motivo (team name corrupto, sqFromRegistry vacío, etc.)
+    // la excepción mataba `_mlStartIntervalGen` ANTES de crear el setInterval
+    // y el timer quedaba "running" pero estático en 0' (caso reportado por
+    // el usuario en amistosos IA-vs-IA). Si pre-gen falla, dejamos
+    // `pendingAIEvents=[]` (sin eventos) pero el reloj sigue funcionando
+    // hasta el final de partido — mejor un partido sin acta que un timer
+    // muerto.
+    try { _mlPreGenAIEvents(mk); }
+    catch(_e0) {
+      try { console.error('[ml] pre-gen AI events failed for', mk, _e0); } catch(__){}
+      st.pendingAIEvents = [];
+      st.aiEventsGenerated = true;
+    }
     /* Descuento dinámico (nuevo): NO hay stoppageSec fijo. Cada evento
        del acta añade 1 game-minute al tope de su parte (45 → 45+N o
        90 → 90+N). Se calcula vía _mlCountStoppageHalves en cada tick.
@@ -7073,13 +7086,25 @@
        mlSpeedUpGen / mlSpeedDownGen, que rebasen _wallStart antes de
        recrear el interval para que no haya saltos visuales. */
     var _speedMult = st.speedMult || 1;
-    var _tickMs = Math.max(1, Math.round(_mlTickMs(st) / _speedMult));
+    /* Resolución defensiva del tickMs — si _mlTickMs devolvió algo
+       inválido (Infinity, NaN, 0, undefined) caemos a tabla por tipo
+       en vez de quedarnos con un timer "muerto" (división entre Infinity
+       da `_gameSecPerMs=0` → timerSec siempre 0). */
+    var _rawTick = _mlTickMs(st);
+    if (!isFinite(_rawTick) || _rawTick <= 0) {
+      _rawTick = st.isIAvsIA ? 83 : (st.isHvH ? 875 : 542);
+    }
+    var _tickMs = Math.max(1, Math.round(_rawTick / _speedMult));
     var _gameSecPerMs = _ML_TICK_SEC / _tickMs;
+    /* Render inmediato 1× para que el botón aparezca con el estado
+       correcto (⏸) sin esperar al primer tick del setInterval. */
+    _mlRenderTimerGen(mk);
     st.timerInterval = setInterval(function(){
-      // Calcular tiempo real transcurrido desde el arranque
-      var elapsedMs = Date.now() - st._wallStart;
-      st.timerSec = st._gameSecAtStart + Math.round(elapsedMs * _gameSecPerMs);
-      var curMin = Math.floor(st.timerSec/60);
+      try {
+        // Calcular tiempo real transcurrido desde el arranque
+        var elapsedMs = Date.now() - st._wallStart;
+        st.timerSec = st._gameSecAtStart + Math.round(elapsedMs * _gameSecPerMs);
+        var curMin = Math.floor(st.timerSec/60);
       /* SLOWDOWN min ≥ 65 (petición usuario 2026-05-08). En cuanto se
          cruza el minuto 65, re-arm del interval con tickMs nuevo
          (~+42 ms = +0.5 s real por game-min) para dar tiempo a los
@@ -7193,7 +7218,13 @@
         }
       }
       _mlRenderTimerGen(mk);
-    }, Math.min(_mlTickMs(st), 500)); // render cada 500ms max para fluido + detectar vuelta de background
+      } catch(_eTick) {
+        /* 2026-05-09: protegemos cada tick contra excepciones para
+           que un evento defectuoso (gol, tarjeta, lesión…) no mate el
+           cronómetro entero. El tick siguiente lo intentará de nuevo. */
+        try { console.error('[ml] tick error for', mk, _eTick); } catch(__){}
+      }
+    }, Math.max(1, Math.min(_tickMs, 500))); // render cada 500ms max para fluido + detectar vuelta de background
   }
   /* ── helpers LIVE state + aplazar btn for calendar matches ── */
   function _mlSetLiveState(mk, state) {

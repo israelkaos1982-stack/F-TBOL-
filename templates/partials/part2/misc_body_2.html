@@ -1436,12 +1436,26 @@
       if(twitchBtn){
         arr.push({ target: twitchBtn, click: twitchBtn });
       }
-      /* 5. Balón — fila del item con data-ppid="balon". */
+      /* 5. Prórroga — solo en eliminatorias single-leg (Copa, Sc, USC,
+         Recopa, finales europeas). Inyectado por copa-engine como
+         [data-ppid="prorroga"] dentro de #pp-list. */
+      var prorrogaRow = document.querySelector('#pp-list [data-ppid="prorroga"]');
+      if(prorrogaRow){
+        arr.push({ target: prorrogaRow, click: prorrogaRow });
+      }
+      /* 6. Penaltis — mismo patrón, [data-ppid="penaltis"]. */
+      var penaltisRow = document.querySelector('#pp-list [data-ppid="penaltis"]');
+      if(penaltisRow){
+        arr.push({ target: penaltisRow, click: penaltisRow });
+      }
+      /* 7. Balón — fila del item con data-ppid="balon". Se evalúa
+         AL FINAL (re-querySelector) por si copa-engine reordena la
+         lista al inyectar prórroga/penaltis. */
       var ballRow = document.querySelector('#pp-list [data-ppid="balon"]');
       if(ballRow){
         arr.push({ target: ballRow, click: ballRow });
       }
-      /* 6. CONFIRMAR CONFIGURACIÓN — el botón principal. */
+      /* 8. CONFIRMAR CONFIGURACIÓN — el botón principal. */
       var confirmBtn = document.getElementById('pp-confirm-btn');
       if(confirmBtn){
         arr.push({ target: confirmBtn, click: confirmBtn });

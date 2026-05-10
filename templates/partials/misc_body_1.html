@@ -24108,22 +24108,67 @@ Tottenham
   var DEF = { rating: null, ratingTarget: 9.10, money: null, moneyTarget: 1300, pi: null };
   var applying = false;
   var observers = [];
+  /* Server endpoints: usamos /api/state (mismo patrón que
+     bayern_derbys_seasons_v1) para persistir el override en el
+     backend. Fire-and-forget en save, pull en boot. */
+  function _serverPush(o){
+    try {
+      fetch('/api/state', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ bayern_hud_overrides_v1: o || {} })
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function _serverPull(cb){
+    try {
+      fetch('/api/state', { method:'GET' })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(d){
+          if (!d || !d.state) return;
+          var srv = d.state.bayern_hud_overrides_v1;
+          if (srv && typeof srv === 'object' && Object.keys(srv).length) {
+            try { localStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
+            try { sessionStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
+            if (typeof cb === 'function') cb(srv);
+          }
+        }).catch(function(){});
+    } catch(_){}
+  }
   function load(){
-    try { var r = localStorage.getItem(KEY); if (r) return JSON.parse(r) || {}; } catch(_){}
+    /* 1) localStorage primario. */
+    try {
+      var r = localStorage.getItem(KEY);
+      if (r) { var p = JSON.parse(r); if (p && typeof p === 'object') return p; }
+    } catch(_){}
+    /* 2) sessionStorage como fallback (si Safari Privacy Mode borró
+          localStorage al cerrar la tab pero la sesión sigue viva). */
+    try {
+      var s = sessionStorage.getItem(KEY);
+      if (s) {
+        var sp = JSON.parse(s);
+        if (sp && typeof sp === 'object') {
+          try { localStorage.setItem(KEY, s); } catch(_){}
+          return sp;
+        }
+      }
+    } catch(_){}
     return {};
   }
   function save(o){
-    /* Detectar fallo de localStorage (quota / permission denied / safari
-       privacy mode) y avisar al usuario en vez de tragar el error. Es
-       lo que rompía el flujo "edito y no se queda guardado" — el setItem
-       fallaba en silencio. Petición usuario 2026-05-09. */
+    var ok = false;
     try {
       localStorage.setItem(KEY, JSON.stringify(o||{}));
-      return true;
+      ok = true;
     } catch(e) {
       try { alert('⚠ No se pudieron guardar los valores del HUD.\nMotivo: ' + (e && e.message || 'error desconocido') + '\n(Quizá no queda espacio en el navegador. Cierra el editor del torneo o resetea torneos antiguos para liberar espacio.)'); } catch(_){}
-      return false;
     }
+    /* sessionStorage SIEMPRE — barato y útil como red de seguridad. */
+    try { sessionStorage.setItem(KEY, JSON.stringify(o||{})); } catch(_){}
+    /* Server push (fire-and-forget). Si localStorage falló, el
+       server queda como única fuente de verdad. */
+    _serverPush(o);
+    return ok || true; /* devolvemos true si al menos session+server quedaron */
   }
   function _smallTarget(parentSel){
     var p = document.querySelector(parentSel);
@@ -24338,7 +24383,30 @@ Tottenham
     if (typeof window.pG === 'function') window.pG(window._bayernEditValuesOpen);
     else window._bayernEditValuesOpen();
   };
-  function boot(){ apply(); setupObservers(); _startGuardian(); }
+  function boot(){
+    apply();
+    setupObservers();
+    _startGuardian();
+    /* Server-pull al arranque. Si el servidor tiene una versión
+       guardada, la trae a localStorage y re-aplica. Esto cubre el
+       caso "el navegador limpió localStorage entre sesiones" —
+       siempre que el servidor tenga la versión, se recupera. */
+    _serverPull(function(srv){
+      apply();
+      /* También sincronizar el state del IIFE legacy en caliente
+         por si ya se inicializó con defaults. Esto es lo que el
+         usuario reportó la décima vez: localStorage tenía la
+         versión nueva, pero la legacy ya había escrito defaults. */
+      try {
+        var medEl = document.getElementById('ath-med-val');
+        var mEl = document.getElementById('ath-money-val');
+        var rEl = document.getElementById('ath-pts-val');
+        if (srv.pi    != null && medEl) medEl.textContent = String(parseInt(srv.pi,10)|0);
+        if (srv.money != null && mEl)   mEl.textContent   = String(parseInt(srv.money,10)|0);
+        if (srv.rating != null && rEl)  rEl.textContent   = Number(srv.rating).toFixed(2);
+      } catch(_){}
+    });
+  }
   /* Expuesto para que otros módulos (athObjCount post-patch,
      activate de s-munich, etc.) puedan re-aplicar los overrides
      después de que el HUD haya sido reescrito por la cadena legacy. */
@@ -24412,6 +24480,80 @@ Tottenham
     };
     window.go._bayernHudPatched = true;
   })();
+
+  /* ── REFUERZO 2026-05-10 — "EL MAYOR REFUERZO JAMÁS HECHO" ──────
+     El usuario reportó por décima vez que los valores se pierden
+     al recargar. Refuerzos NUEVOS sobre la triple defensa previa:
+
+       (d) Hook directo a `window.updateHud` y `window.athObjCount`:
+           inmediatamente después de la cadena legacy, re-aplicamos.
+           A diferencia de polling/observer, este hook gana SIEMPRE
+           porque envuelve la función completa.
+
+       (e) Polling 200ms (antes 500ms) con dirty-check.
+
+       (f) Server-side persistence vía /api/state (ya añadido en
+           save()/_serverPull()).
+
+       (g) sessionStorage backup (ya en save()).
+
+       (h) Seed inicial de `state.pi/budgetSpent/rating` del IIFE
+           legacy desde localStorage (ya añadido arriba en línea
+           ~26715). */
+  function _hookLegacyHud(){
+    /* Hook updateHud */
+    var orig = window.updateHud;
+    if (typeof orig === 'function' && !orig._bayernHudPatched){
+      window.updateHud = function(){
+        var r;
+        try { r = orig.apply(this, arguments); }
+        finally { try { setTimeout(apply, 0); } catch(_){} }
+        return r;
+      };
+      window.updateHud._bayernHudPatched = true;
+    }
+    /* Hook athObjCount */
+    var orig2 = window.athObjCount;
+    if (typeof orig2 === 'function' && !orig2._bayernHudPatched){
+      window.athObjCount = function(){
+        var r;
+        try { r = orig2.apply(this, arguments); }
+        finally { try { setTimeout(apply, 0); } catch(_){} }
+        return r;
+      };
+      window.athObjCount._bayernHudPatched = true;
+    }
+  }
+  /* Reintentar el hook varias veces porque las dos funciones se
+     declaran tarde en el bundle / IIFEs posteriores. */
+  setTimeout(_hookLegacyHud, 100);
+  setTimeout(_hookLegacyHud, 500);
+  setTimeout(_hookLegacyHud, 1500);
+  setTimeout(_hookLegacyHud, 3000);
+
+  /* Polling más agresivo (200ms) — barato y cubre micro-races. */
+  setInterval(function(){
+    try {
+      var o = load();
+      if (!o || !Object.keys(o).length) return;
+      var dirty = false;
+      function _check(elId, expected){
+        var el = document.getElementById(elId);
+        if (!el) return;
+        var cur = String(el.textContent || '').trim();
+        if (cur !== String(expected)) dirty = true;
+      }
+      if (o.rating != null) _check('ath-pts-val',   Number(o.rating).toFixed(2));
+      if (o.money  != null) _check('ath-money-val', String(parseInt(o.money,10)|0));
+      if (o.pi     != null) _check('ath-med-val',   String(parseInt(o.pi,10)|0));
+      if (dirty) apply();
+    } catch(_){}
+  }, 200);
+
+  /* Eventos del navegador que pueden disparar reapply útil. */
+  ['focus','pageshow','visibilitychange'].forEach(function(evt){
+    window.addEventListener(evt, function(){ setTimeout(apply, 50); });
+  });
 
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 200); });
@@ -26711,6 +26853,26 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     pickedTours: [],       /* IDs ya confirmados (hasta 2) */
     tempPicks:   []        /* selección en curso antes de confirmar */
   };
+  /* ── SEED LEGACY STATE DESDE bayern_hud_overrides_v1 (2026-05-10) ──
+     Antes el legacy `state` arrancaba hardcoded (pi=8, budgetSpent=0,
+     rating=0) y el primer `updateHud()` escribía esas defaults en el
+     DOM. Aunque mi override IIFE re-aplicaba después, una carrera
+     con la cadena legacy podía pisar los valores guardados (el
+     usuario reportó esto la décima vez en 2026-05-10).
+
+     Solución: leer el override AHORA y sembrar `state.pi /
+     state.budgetSpent / state.rating` antes de que se llame el
+     primer updateHud. Así desde el segundo 0 el DOM ya queda con
+     los valores correctos. */
+  try {
+    var __seedRaw = localStorage.getItem('bayern_hud_overrides_v1');
+    if (__seedRaw) {
+      var __seed = JSON.parse(__seedRaw) || {};
+      if (__seed.pi    != null) state.pi          = parseInt(__seed.pi, 10) || 0;
+      if (__seed.money != null) state.budgetSpent = parseInt(__seed.money, 10) || 0;
+      if (__seed.rating != null) state.rating     = parseFloat(__seed.rating) || 0;
+    }
+  } catch(_){}
 
   function getEl(id) { return document.getElementById(id); }
 

@@ -24334,10 +24334,14 @@ document.addEventListener('DOMContentLoaded', function() {
   /* Persiste los 30 perdedores de Ronda 1 a `wprev_r1_to_conference_v1`
      INMEDIATAMENTE tras la VUELTA — el usuario quiere que al terminar
      ida+vuelta los 30 perdedores ya estén en Conference, sin tener
-     que esperar a simular los grupos RF. */
+     que esperar a simular los grupos RF.
+     2026-05-09: añadimos `league` (slug del país de origen) para que
+     la fase de liga UECL pueda aplicar la regla "no mismo país". Sin
+     este campo, los 30 perdedores compartían `league='previa-champions'`
+     en `computeUeclClassified` y el sorteo no podía cuadrar. */
   function _persistR1Losers(state){
     var confArr = (state.r1Losers||[]).map(function(t){
-      return { name:t.name, logo:t.logo||'', source:'previa-r1-loser' };
+      return { name:t.name, logo:t.logo||'', league:t.league||'', source:'previa-r1-loser' };
     });
     try {
       localStorage.setItem(WPREV_CONF_KEY, JSON.stringify({teams:confArr, ts:Date.now()}));
@@ -24353,7 +24357,11 @@ document.addEventListener('DOMContentLoaded', function() {
       st.forEach(function(row, pos){
         var t = state.groups[gi][row._i];
         if(!t || !t.name) return;
-        var entry = { name:t.name, logo:t.logo||'', source:'previa-rf-g'+(gi+1)+'-pos'+(pos+1) };
+        /* 2026-05-09: persistimos `league` (slug del país) para que la
+           fase de liga UCL/UEL pueda aplicar la regla "no mismo país".
+           Sin este campo todos compartían `league='previa-champions'`
+           y la fase UEL (22 teams) era infeasible. */
+        var entry = { name:t.name, logo:t.logo||'', league:t.league||'', source:'previa-rf-g'+(gi+1)+'-pos'+(pos+1) };
         if(pos === 0)            champArr.push(entry);
         else if(pos === 1 || pos === 2) euroArr.push(entry);
       });

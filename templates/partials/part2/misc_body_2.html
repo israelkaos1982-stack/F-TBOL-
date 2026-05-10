@@ -6548,24 +6548,20 @@
   }
 
   function _mlShowEventFlash(text, cssClass) {
-    var ov = document.getElementById('ml-event-fx-overlay');
-    if (!ov) {
-      ov = document.createElement('div');
-      ov.id = 'ml-event-fx-overlay';
-      ov.innerHTML = '<div id="ml-event-fx-text"></div>';
-      document.body.appendChild(ov);
-    }
-    var tx = document.getElementById('ml-event-fx-text');
-    if (tx) tx.textContent = text;
-    ov.className = 'show ' + (cssClass || 'goal');
+    /* Petición usuario 2026-05-09 (FOTO): eliminar el overlay visual
+       "¡¡¡ GOOOOOL !!!" / "EXPULSIÓN" que tapa la pantalla durante
+       segundos en el hub LIVE — cuando hay varios partidos vivos
+       el overlay opaca el acta del que está mirando aunque el gol
+       sea en otro. El timer pausa real del cronómetro
+       (`_mlEventFreezeMs`, 10 s gol / 8 s roja) sigue activo en el
+       partido afectado, así que el feedback no se pierde.
+       Mantenemos el TONO de UI como confirmación auditiva. */
     if (cssClass === 'goal') _mlPlayUiTone('goal');
     if (cssClass === 'red')  _mlPlayUiTone('red');
-    /* Reducido de 5s → 2s (petición usuario 2026-05-08): el overlay
-       amarillo/rojo opaca el acta durante demasiado tiempo y si llega
-       otro evento la visualización es mínima. La pausa REAL del
-       cronómetro vive aparte (`_mlEventFreezeMs`) y NO está acoplada
-       a la duración visual del flash. */
-    setTimeout(function(){ ov.className = ''; }, 2000);
+    /* Defensiva: si existiera un overlay anterior con la clase
+       `show` (sesiones cargadas antes del fix), lo escondemos. */
+    var ov = document.getElementById('ml-event-fx-overlay');
+    if (ov) ov.className = '';
   }
 
   /* Cuánto tiempo (ms reales) debe pausarse el cronómetro tras el

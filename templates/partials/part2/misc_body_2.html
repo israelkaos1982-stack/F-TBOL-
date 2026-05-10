@@ -1457,14 +1457,10 @@
       if(stadeStep.length){
         arr.push({ targets: stadeStep, selectors: stadeSel, boxPad: 4 });
       }
-      /* 3. Twitch — botón pp-twitch-btn. Avance por poll de
-         _ppSelectedTwitch (el dropdown no dispara click sobre el
-         botón al elegir canal). */
-      var twitchBtn = document.getElementById('pp-twitch-btn');
-      if(twitchBtn){
-        arr.push({ targets:[twitchBtn], selectors:['#pp-twitch-btn'],
-                   isTwitch:true, boxPad:4 });
-      }
+      /* 3. Twitch ── REMOVIDO 2026-05-10: el selector de Canal Twitch
+         se movió a la card de BAJAS PARA EL PARTIDO (sanciones
+         overlay), antes del botón "Compartir Partido en WhatsApp".
+         Ya no es un paso del tutorial — el usuario lo elige ahí. */
       /* 4. Prórroga + Penaltis COMBINADOS (solo si existen — copa-
          engine los inyecta en eliminatorias single-leg). */
       var prorrogaRow = document.querySelector('#pp-list [data-ppid="prorroga"]');
@@ -1730,6 +1726,231 @@
       document.addEventListener('DOMContentLoaded', _hookOverlayClose);
     } else {
       _hookOverlayClose();
+    }
+  })();
+
+  /* ════════════════════════════════════════════════════════════════
+     PREVIA — TWITCH MOVIDO A "BAJAS PARA EL PARTIDO" (2026-05-10)
+     ───────────────────────────────────────────────────────────────
+     Petición usuario: el selector de Canal Twitch ya no va en la card
+     de PREVIA, sino en la card de BAJAS PARA EL PARTIDO (sanciones
+     overlay), justo encima del botón "Compartir Partido en WhatsApp".
+     Sin borde llamativo ni paso en el tutorial — solo estilo morado
+     que ya tiene.
+
+     Implementación:
+       1. CSS: ocultar `.pp-twitch-sel` dentro de #prepartido-overlay.
+       2. Al abrir sanciones overlay con `.show`, MOVER el nodo
+          `.pp-twitch-sel` a sanciones (insertBefore #sancion-ov-ok).
+          Cuando se cierra, MOVER de vuelta a #prepartido-overlay
+          (insertBefore #pp-alerts) para que la próxima previa lo
+          encuentre en su sitio.
+       3. Patchar `_ppConfirm` para SALTAR el check obligatorio de
+          Twitch (ya no se pide en la previa).
+       4. Patchar `_sancionConfirm` para EXIGIR Twitch antes de
+          compartir WhatsApp (ahora el check vive aquí).
+       5. El paso Twitch del tutorial del guide ya se quitó en otra
+          edición (regla del usuario "ya no tiene que merger ni tener
+          borde"). ════════════════════════════════════════════════ */
+  (function(){
+    /* CSS: ocultar Twitch dentro de PREVIA. Cuando se mueva al
+       sanciones overlay, no es descendiente de #prepartido-overlay,
+       así que esta regla NO aplica y se muestra normal. */
+    var st = document.createElement('style');
+    st.textContent =
+        '#prepartido-overlay .pp-twitch-sel{display:none !important;}'
+      + '#sancion-overlay .pp-twitch-sel{display:block !important;margin:8px 0 4px;background:rgba(168,85,247,.10);border:1px solid rgba(191,148,255,.45);border-radius:10px;padding:10px 12px;box-shadow:0 0 14px rgba(168,85,247,.20);}'
+      + '#sancion-overlay .pp-twitch-sel .pp-twitch-lbl{margin-bottom:6px;}';
+    document.head.appendChild(st);
+
+    /* Mover `.pp-twitch-sel` al sanciones overlay justo antes del
+       botón OK / "Compartir Partido en WhatsApp". */
+    function _moveTwitchToSanciones(){
+      var twitch = document.querySelector('.pp-twitch-sel');
+      var ov = document.getElementById('sancion-overlay');
+      if(!twitch || !ov) return false;
+      var okBtn = document.getElementById('sancion-ov-ok');
+      if(!okBtn || !okBtn.parentNode) return false;
+      if(twitch.parentNode === okBtn.parentNode
+         && twitch.nextElementSibling === okBtn){
+        return true; /* ya en sitio */
+      }
+      okBtn.parentNode.insertBefore(twitch, okBtn);
+      return true;
+    }
+    function _moveTwitchBackToPrevia(){
+      var twitch = document.querySelector('.pp-twitch-sel');
+      var ppInner = document.querySelector('#prepartido-overlay .pp-inner');
+      if(!twitch || !ppInner) return false;
+      if(twitch.parentNode === ppInner) return true;
+      var ppAlerts = document.getElementById('pp-alerts');
+      if(ppAlerts && ppAlerts.parentNode === ppInner){
+        ppInner.insertBefore(twitch, ppAlerts);
+      } else {
+        ppInner.appendChild(twitch);
+      }
+      return true;
+    }
+
+    /* MutationObserver: cuando #sancion-overlay recibe la clase
+       `show`, movemos Twitch a sanciones. Cuando la pierde, lo
+       movemos de vuelta al overlay de previa. */
+    function _hookSancion(){
+      var ov = document.getElementById('sancion-overlay');
+      if(!ov) return false;
+      if(ov._twitchHooked) return true;
+      ov._twitchHooked = true;
+      var mo = new MutationObserver(function(){
+        if(ov.classList.contains('show')){
+          _moveTwitchToSanciones();
+        } else {
+          _moveTwitchBackToPrevia();
+        }
+      });
+      mo.observe(ov, { attributes:true, attributeFilter:['class'] });
+      return true;
+    }
+    if(!_hookSancion()){
+      var t=0, i=setInterval(function(){
+        if(_hookSancion() || ++t > 50) clearInterval(i);
+      }, 200);
+    }
+
+    /* Patch `_ppConfirm` para saltar el check de Twitch (ahora vive
+       en sanciones). El bundle aborta con alert si _ppSelectedTwitch
+       está vacío — fooled con placeholder temporal mientras corre
+       la original, restaurado en finally. */
+    function _patchPpConfirm(){
+      var orig = window._ppConfirm;
+      if(typeof orig !== 'function' || orig._noTwitchReq) return false;
+      window._ppConfirm = function(){
+        var was = window._ppSelectedTwitch;
+        if(!was || !was.length) window._ppSelectedTwitch = ' '; /* nbsp */
+        try { return orig.apply(this, arguments); }
+        finally {
+          if(window._ppSelectedTwitch === ' '){
+            window._ppSelectedTwitch = was || '';
+          }
+        }
+      };
+      window._ppConfirm._noTwitchReq = true;
+      return true;
+    }
+    if(!_patchPpConfirm()){
+      var t2=0, i2=setInterval(function(){
+        if(_patchPpConfirm() || ++t2 > 50) clearInterval(i2);
+      }, 200);
+    }
+
+    /* Patch `_sancionConfirm` para EXIGIR Twitch en modo share. */
+    function _patchSancionConfirm(){
+      var orig = window._sancionConfirm;
+      if(typeof orig !== 'function' || orig._twitchEnforced) return false;
+      window._sancionConfirm = function(){
+        var okBtn = document.getElementById('sancion-ov-ok');
+        var isShare = okBtn && okBtn.getAttribute('data-share-mode') === '1';
+        if(isShare){
+          var tw = window._ppSelectedTwitch;
+          if(!tw || !tw.length || tw === ' '){
+            try { alert('⚠️ Selecciona un Canal de Twitch antes de compartir el partido.'); } catch(_){}
+            return;
+          }
+        }
+        return orig.apply(this, arguments);
+      };
+      window._sancionConfirm._twitchEnforced = true;
+      return true;
+    }
+    if(!_patchSancionConfirm()){
+      var t3=0, i3=setInterval(function(){
+        if(_patchSancionConfirm() || ++t3 > 50) clearInterval(i3);
+      }, 200);
+    }
+  })();
+
+  /* ════════════════════════════════════════════════════════════════
+     PREVIA — COLORES por COMPETICIÓN (2026-05-10)
+     ───────────────────────────────────────────────────────────────
+     Petición usuario: "los colores y detalles de la competición que
+     se juega en la card". Aplicamos data-comp en #prepartido-overlay
+     desde el wrapper de showPrePartidoOverlay y CSS targetea cada
+     comp con su paleta. ──────────────────────────────────────── */
+  (function(){
+    var st = document.createElement('style');
+    st.textContent =
+      /* Liga EA Sports — dorado (default ya) */
+        '#prepartido-overlay[data-comp="liga"] .pp-title{color:#f0c040;text-shadow:0 0 14px rgba(240,192,64,.6);}'
+      /* Copa del Rey — dorado intenso */
+      + '#prepartido-overlay[data-comp="copa"] .pp-title,'
+      + '#prepartido-overlay[data-comp="copa-fin"] .pp-title{color:#ffd54a;text-shadow:0 0 14px rgba(255,213,74,.7);}'
+      + '#prepartido-overlay[data-comp="copa"] .pp-env,'
+      + '#prepartido-overlay[data-comp="copa"] .pp-vs{border-color:rgba(255,213,74,.40)!important;box-shadow:0 0 12px rgba(255,213,74,.12) inset;}'
+      /* Supercopa España — rojo/dorado */
+      + '#prepartido-overlay[data-comp="sc"] .pp-title,'
+      + '#prepartido-overlay[data-comp="sc-final"] .pp-title{color:#ff7070;text-shadow:0 0 14px rgba(255,80,80,.6);}'
+      + '#prepartido-overlay[data-comp="sc"] .pp-env,'
+      + '#prepartido-overlay[data-comp="sc"] .pp-vs{border-color:rgba(255,80,80,.45)!important;box-shadow:0 0 12px rgba(255,80,80,.10) inset;}'
+      /* Champions League — azul */
+      + '#prepartido-overlay[data-comp="ucl"] .pp-title,'
+      + '#prepartido-overlay[data-comp="ucl-fin"] .pp-title{color:#9fc8ff;text-shadow:0 0 16px rgba(58,120,216,.75);}'
+      + '#prepartido-overlay[data-comp="ucl"] .pp-env,'
+      + '#prepartido-overlay[data-comp="ucl"] .pp-vs,'
+      + '#prepartido-overlay[data-comp="ucl-fin"] .pp-env,'
+      + '#prepartido-overlay[data-comp="ucl-fin"] .pp-vs{border-color:rgba(58,120,216,.55)!important;background:linear-gradient(180deg,rgba(20,40,90,.55),rgba(8,16,40,.85))!important;box-shadow:0 0 16px rgba(58,120,216,.20) inset;}'
+      /* Europa League — naranja */
+      + '#prepartido-overlay[data-comp="uel"] .pp-title,'
+      + '#prepartido-overlay[data-comp="uel-fin"] .pp-title{color:#ffa050;text-shadow:0 0 16px rgba(255,140,0,.75);}'
+      + '#prepartido-overlay[data-comp="uel"] .pp-env,'
+      + '#prepartido-overlay[data-comp="uel"] .pp-vs,'
+      + '#prepartido-overlay[data-comp="uel-fin"] .pp-env,'
+      + '#prepartido-overlay[data-comp="uel-fin"] .pp-vs{border-color:rgba(255,140,0,.55)!important;background:linear-gradient(180deg,rgba(70,40,10,.55),rgba(30,15,5,.85))!important;box-shadow:0 0 16px rgba(255,140,0,.20) inset;}'
+      /* Conference League — verde */
+      + '#prepartido-overlay[data-comp="uecl"] .pp-title,'
+      + '#prepartido-overlay[data-comp="uecl-fin"] .pp-title{color:#7df0a0;text-shadow:0 0 16px rgba(95,224,138,.75);}'
+      + '#prepartido-overlay[data-comp="uecl"] .pp-env,'
+      + '#prepartido-overlay[data-comp="uecl"] .pp-vs,'
+      + '#prepartido-overlay[data-comp="uecl-fin"] .pp-env,'
+      + '#prepartido-overlay[data-comp="uecl-fin"] .pp-vs{border-color:rgba(95,224,138,.55)!important;background:linear-gradient(180deg,rgba(10,50,30,.55),rgba(5,25,15,.85))!important;box-shadow:0 0 16px rgba(95,224,138,.20) inset;}'
+      /* Superliga — morado */
+      + '#prepartido-overlay[data-comp="superliga"] .pp-title{color:#c0a0ff;text-shadow:0 0 16px rgba(168,85,247,.75);}'
+      + '#prepartido-overlay[data-comp="superliga"] .pp-env,'
+      + '#prepartido-overlay[data-comp="superliga"] .pp-vs{border-color:rgba(168,85,247,.55)!important;background:linear-gradient(180deg,rgba(45,15,80,.55),rgba(20,5,40,.85))!important;box-shadow:0 0 16px rgba(168,85,247,.20) inset;}'
+      /* Recopa — rosa/granate */
+      + '#prepartido-overlay[data-comp="recopa"] .pp-title{color:#ff80b0;text-shadow:0 0 14px rgba(255,95,176,.7);}'
+      + '#prepartido-overlay[data-comp="recopa"] .pp-env,'
+      + '#prepartido-overlay[data-comp="recopa"] .pp-vs{border-color:rgba(255,95,176,.50)!important;box-shadow:0 0 12px rgba(255,95,176,.15) inset;}'
+      /* USC (Supercopa Europa) — plata/cyan */
+      + '#prepartido-overlay[data-comp="usc"] .pp-title,'
+      + '#prepartido-overlay[data-comp="usc-fin"] .pp-title{color:#a0e0ff;text-shadow:0 0 14px rgba(160,224,255,.7);}'
+      /* Intercontinental — oro intenso */
+      + '#prepartido-overlay[data-comp="inter"] .pp-title,'
+      + '#prepartido-overlay[data-comp="inter-fin"] .pp-title{color:#ffd700;text-shadow:0 0 16px rgba(255,215,0,.8);}'
+      /* Amistoso — gris suave */
+      + '#prepartido-overlay[data-comp="amistoso"] .pp-title{color:#bbb;}'
+      /* Mundial Clubes */
+      + '#prepartido-overlay[data-comp="mundial"] .pp-title{color:#ffd700;text-shadow:0 0 16px rgba(255,215,0,.8);}';
+    document.head.appendChild(st);
+
+    /* Wrapper para setear data-comp en el overlay al abrir la previa. */
+    function _patchCompStyle(){
+      var orig = window.showPrePartidoOverlay;
+      if(typeof orig !== 'function' || orig._compStylePatched) return false;
+      var wrapped = function(matchKey, compKey){
+        var ov = document.getElementById('prepartido-overlay');
+        if(ov) ov.setAttribute('data-comp', (compKey || '').toLowerCase());
+        return orig.apply(this, arguments);
+      };
+      wrapped._compStylePatched = true;
+      /* Preservar flags previos (guide, sl-dur) si los hubiera. */
+      if(orig._guidePatched) wrapped._guidePatched = orig._guidePatched;
+      if(orig._durPatched)   wrapped._durPatched   = orig._durPatched;
+      window.showPrePartidoOverlay = wrapped;
+      return true;
+    }
+    if(!_patchCompStyle()){
+      var t=0, i=setInterval(function(){
+        if(_patchCompStyle() || ++t > 50) clearInterval(i);
+      }, 200);
     }
   })();
 

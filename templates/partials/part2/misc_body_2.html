@@ -27076,3 +27076,472 @@ document.addEventListener('DOMContentLoaded', function() {
   window._jorDatesAgenda = _readAgenda;
 })();
 </script>
+
+<!-- ════════════════════════════════════════════════════════════════
+     CARDS DE PARTIDO HUMANO · UI VIDEOJUEGO (2026-05-10)
+     ───────────────────────────────────────────────────────────────
+     Petición usuario:
+       1. JUGAR llamativo encima del cronómetro con borde + flecha
+          señalando que hay que pulsar ahí. Solo cuando el reloj
+          está en 0' y aún no se ha arrancado el partido.
+       2. Caja AÑADIR EVENTO con gradiente bicolor (mitad local,
+          mitad visitante) usando los colores oficiales del escudo.
+       3. ACTA DEL PARTIDO con look videojuego (gradient + glow).
+       4. Cada card con colores de su competición (Liga = rojo).
+       5. Al añadir un evento, el cronómetro se PAUSA y aparece
+          una cuenta atrás divertida con botón REANUDAR PARTIDO.
+          Tiempos por evento (sincronización con eFootball):
+            · Gol / Gol de falta → 35 s
+            · Gol de penalti / Autogol → 20 s
+            · Tarjeta amarilla → 15 s
+            · Roja / Doble amarilla → 20 s
+          Si llega a 0 → cronómetro se reanuda solo. Si pulsa
+          "Continuar partido" → reanuda inmediatamente.
+     ════════════════════════════════════════════════════════════════ -->
+<style>
+/* ── (1) JUGAR · highlight + flecha sobre el botón del cronómetro ── */
+.ml-timer.is-jugar-hint{
+  position:relative;
+  background:linear-gradient(135deg,#1a3a18,#2b6228 50%,#1a3a18) !important;
+  border:2px solid #f0c820 !important;
+  color:#ffe768 !important;
+  box-shadow:0 0 22px rgba(240,200,32,.55), inset 0 0 12px rgba(240,200,32,.25) !important;
+  animation:jugarPulse 1.3s ease-in-out infinite;
+  font-weight:900;
+}
+.ml-timer.is-jugar-hint::before{
+  content:'JUGAR';
+  position:absolute;left:50%;top:-26px;transform:translateX(-50%);
+  font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:4px;
+  color:#ffd848;text-shadow:0 0 12px rgba(240,200,32,.85);
+  background:rgba(0,0,0,.78);
+  border:1.5px solid #f0c820;border-radius:6px;
+  padding:2px 12px;white-space:nowrap;pointer-events:none;
+  animation:jugarLabelPulse 1.3s ease-in-out infinite;
+}
+.ml-timer.is-jugar-hint::after{
+  content:'👇';
+  position:absolute;right:-32px;top:50%;transform:translateY(-50%);
+  font-size:22px;pointer-events:none;
+  animation:jugarArrowPulse 1.3s ease-in-out infinite;
+  filter:drop-shadow(0 0 6px rgba(240,200,32,.8));
+}
+@keyframes jugarPulse{
+  0%,100%{box-shadow:0 0 22px rgba(240,200,32,.55), inset 0 0 12px rgba(240,200,32,.25);}
+  50%   {box-shadow:0 0 36px rgba(240,200,32,.92), inset 0 0 18px rgba(240,200,32,.45);}
+}
+@keyframes jugarLabelPulse{
+  0%,100%{transform:translateX(-50%) translateY(0) scale(1);opacity:.9;}
+  50%   {transform:translateX(-50%) translateY(-3px) scale(1.06);opacity:1;}
+}
+@keyframes jugarArrowPulse{
+  0%,100%{transform:translateY(-50%) translateX(0);}
+  50%   {transform:translateY(-50%) translateX(-6px);}
+}
+
+/* ── (2) AÑADIR EVENTO bicolor (CSS variables seteadas por JS) ── */
+.match-live-wrap[data-team-colors] .ml-action-add{
+  background:linear-gradient(90deg,
+    var(--team-a-1, #2a0005) 0%,
+    var(--team-a-2, #6a0010) 48%,
+    var(--team-b-1, #6a0010) 52%,
+    var(--team-b-2, #2a0005) 100%
+  ) !important;
+  border:1.5px solid rgba(255,213,90,.55) !important;
+  color:#fff !important;
+  text-shadow:0 1px 3px rgba(0,0,0,.6);
+  font-weight:800;
+}
+
+/* ── (3) ACTA DEL PARTIDO videojuego ── */
+.ml-acta-toggle{
+  background:linear-gradient(135deg,#0d1530,#1a2a55 50%,#0d1530) !important;
+  border:1.5px solid rgba(120,180,255,.55) !important;
+  color:#a0c8ff !important;
+  text-shadow:0 0 8px rgba(120,180,255,.55);
+  font-family:'Bebas Neue','Oswald',sans-serif !important;
+  letter-spacing:3px !important;
+  box-shadow:0 0 12px rgba(80,140,255,.18), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.ml-acta-toggle:hover{
+  border-color:#88c4ff !important;
+  box-shadow:0 0 16px rgba(120,180,255,.35), inset 0 1px 0 rgba(255,255,255,.12);
+}
+
+/* ── (4) Tema Liga EA Sports — rojo dominante + glow ── */
+.match-live-wrap.is-comp-liga{
+  border:1.5px solid rgba(255,80,96,.55) !important;
+  box-shadow:0 0 22px rgba(255,40,68,.18), inset 0 0 14px rgba(255,40,68,.04);
+}
+.match-live-wrap.is-comp-liga .ml-divider{
+  background:linear-gradient(90deg, transparent, rgba(255,80,96,.5), transparent) !important;
+  height:1px;
+}
+.match-live-wrap.is-comp-liga .ml-action-end{
+  background:linear-gradient(135deg,#3a0008,#7a0018) !important;
+  border:1.5px solid rgba(255,80,96,.7) !important;
+  color:#ffb0b8 !important;
+}
+
+/* Tema Copa (naranja-dorado) */
+.match-live-wrap.is-comp-copa{border-color:rgba(255,176,80,.55) !important;box-shadow:0 0 22px rgba(255,144,40,.18), inset 0 0 14px rgba(255,144,40,.05);}
+/* Tema Champions (azul) */
+.match-live-wrap.is-comp-ucl{border-color:rgba(120,170,255,.55) !important;box-shadow:0 0 22px rgba(60,120,255,.20), inset 0 0 14px rgba(60,120,255,.05);}
+/* Tema Europa League (naranja) */
+.match-live-wrap.is-comp-uel{border-color:rgba(255,170,85,.55) !important;box-shadow:0 0 22px rgba(255,150,40,.20), inset 0 0 14px rgba(255,150,40,.05);}
+/* Tema Conference (verde) */
+.match-live-wrap.is-comp-uecl{border-color:rgba(95,224,138,.55) !important;box-shadow:0 0 22px rgba(60,200,110,.20), inset 0 0 14px rgba(60,200,110,.05);}
+/* Tema Recopa (rojo terracota) */
+.match-live-wrap.is-comp-recopa{border-color:rgba(255,128,96,.55) !important;box-shadow:0 0 22px rgba(255,100,70,.18), inset 0 0 14px rgba(255,100,70,.05);}
+/* Tema Supercopa (dorado) */
+.match-live-wrap.is-comp-super,
+.match-live-wrap.is-comp-usc{border-color:rgba(240,200,64,.55) !important;box-shadow:0 0 22px rgba(240,180,40,.18), inset 0 0 14px rgba(240,180,40,.05);}
+/* Tema Inter (dorado-naranja) */
+.match-live-wrap.is-comp-inter{border-color:rgba(240,160,40,.55) !important;box-shadow:0 0 22px rgba(240,140,40,.18), inset 0 0 14px rgba(240,140,40,.05);}
+
+/* ── (5) Overlay de cuenta atrás post-evento ────────────────────── */
+.ml-evt-cd-overlay{
+  position:fixed;inset:0;z-index:99980;
+  background:radial-gradient(circle at center, rgba(20,0,30,.92) 0%, rgba(0,0,0,.96) 75%);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  backdrop-filter:blur(4px);
+  font-family:'Bebas Neue','Oswald',sans-serif;
+  color:#fff;
+  padding:24px;
+}
+.ml-evt-cd-overlay.show{display:flex;animation:cdFadeIn .25s ease-out;}
+@keyframes cdFadeIn{from{opacity:0;}to{opacity:1;}}
+.ml-evt-cd-evt{
+  font-size:18px;letter-spacing:3px;color:#ffd848;
+  text-shadow:0 0 18px rgba(240,200,32,.7);
+  margin-bottom:14px;text-align:center;
+}
+.ml-evt-cd-circle{
+  position:relative;width:200px;height:200px;
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:24px;
+}
+.ml-evt-cd-circle svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);}
+.ml-evt-cd-circle svg circle{fill:none;stroke-width:8;}
+.ml-evt-cd-circle .cd-bg{stroke:rgba(255,255,255,.12);}
+.ml-evt-cd-circle .cd-fg{
+  stroke:#f0c820;stroke-linecap:round;
+  transition:stroke-dashoffset .3s linear, stroke .3s ease;
+  filter:drop-shadow(0 0 12px rgba(240,200,32,.7));
+}
+.ml-evt-cd-circle.is-low .cd-fg{stroke:#ff5050;filter:drop-shadow(0 0 14px rgba(255,80,80,.85));}
+.ml-evt-cd-num{
+  font-family:'Bebas Neue',sans-serif;font-size:84px;line-height:1;
+  color:#fff;text-shadow:0 0 26px rgba(240,200,32,.6);
+  z-index:1;
+}
+.ml-evt-cd-circle.is-low .ml-evt-cd-num{
+  color:#ffb0b0;text-shadow:0 0 22px rgba(255,80,80,.85);
+  animation:cdLowPulse .55s ease-in-out infinite;
+}
+@keyframes cdLowPulse{
+  0%,100%{transform:scale(1);}
+  50%   {transform:scale(1.08);}
+}
+.ml-evt-cd-sub{
+  font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.5px;
+  color:rgba(255,255,255,.55);margin-bottom:18px;text-align:center;
+}
+.ml-evt-cd-resume-btn{
+  background:linear-gradient(135deg,#1a3a18,#2b6228 50%,#1a3a18);
+  border:2px solid #f0c820;color:#ffe768;
+  font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:4px;
+  padding:14px 36px;border-radius:12px;cursor:pointer;
+  box-shadow:0 0 22px rgba(240,200,32,.55), inset 0 0 12px rgba(240,200,32,.25);
+  transition:transform .12s ease;
+  display:flex;align-items:center;gap:10px;
+}
+.ml-evt-cd-resume-btn:hover{transform:translateY(-2px);}
+.ml-evt-cd-resume-btn:active{transform:scale(.96);}
+.ml-evt-cd-resume-btn::before{content:'▶';font-size:24px;}
+.ml-evt-cd-skip{
+  font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;
+  color:rgba(255,255,255,.4);margin-top:14px;text-decoration:underline;
+  background:none;border:none;cursor:pointer;
+}
+.ml-evt-cd-skip:hover{color:rgba(255,255,255,.7);}
+</style>
+<script>
+/* ════════════════════════════════════════════════════════════════
+   IIFE post-procesador de cards de partido humano (HvH / HvIA).
+   No toca buildMatchCard — opera por hooks + observers + CSS.
+   ════════════════════════════════════════════════════════════════ */
+(function(){
+  if (window.__ML_CARD_UI_READY) return;
+  window.__ML_CARD_UI_READY = true;
+
+  /* Tabla de tiempos en segundos REALES por tipo de evento. */
+  var EVT_CD_SEC = {
+    'gol':           35,
+    'autogol':       20,
+    'pen-gol':       20,
+    'pen-fallo':     20,
+    'pen-prov':      20,
+    'pen-parado':    20,
+    'falta-gol':     35,
+    'amarilla':      15,
+    'roja':          20,
+    'doble-amarilla':20,
+    'lesion':        20
+  };
+  /* Etiquetas legibles para mostrar en el overlay. */
+  var EVT_CD_LBL = {
+    'gol':            '⚽ GOL',
+    'autogol':        '😱 AUTOGOL',
+    'pen-gol':        '⚽🥅 PENALTI · GOL',
+    'pen-fallo':      '❌🥅 PENALTI FALLADO',
+    'pen-prov':       '🤦🥅 PENALTI PROVOCADO',
+    'pen-parado':     '🖐🥅 PENALTI PARADO',
+    'falta-gol':      '⚽🎯 GOL DE FALTA',
+    'amarilla':       '🟨 TARJETA AMARILLA',
+    'roja':           '🟥 TARJETA ROJA',
+    'doble-amarilla': '🟨🟥 DOBLE AMARILLA',
+    'lesion':         '🚑 LESIÓN'
+  };
+
+  /* ── Detección de comp por mk ────────────────────────────────────
+     `mk` patterns conocidos:
+       · liga: "j<N>m<N>" → c-liga
+       · copa: "copa-<ronda>|<idx>" → c-copa
+       · prevcl/ucl/uel/uecl: "ucl-..." / "uel-..." / "uecl-..." / "prev-..."
+       · recopa: "recopa-..."
+       · supercopa: "sc-..."
+       · usc: "usc-..."
+       · inter: "inter-..."
+       · amistosos: "ams-..." / friendlies — no theme  */
+  function _compFromMk(mk){
+    if (!mk) return '';
+    var m = String(mk);
+    if (/^j\d+m\d+$/.test(m) || /^liga-/.test(m)) return 'liga';
+    if (/^copa[-|]/.test(m))  return 'copa';
+    if (/^ucl[-|]|^prev/.test(m))  return 'ucl';
+    if (/^uel[-|]/.test(m))   return 'uel';
+    if (/^uecl[-|]/.test(m))  return 'uecl';
+    if (/^recopa[-|]/.test(m))return 'recopa';
+    if (/^sc[-|]/.test(m))    return 'super';
+    if (/^usc[-|]/.test(m))   return 'usc';
+    if (/^inter[-|]/.test(m)) return 'inter';
+    return '';
+  }
+
+  /* ── Aplicar tema de comp + colores de equipo a una card ───────── */
+  var _COLOR_CACHE = {};
+  function _teamColors(name){
+    if (!name) return null;
+    if (_COLOR_CACHE[name]) return _COLOR_CACHE[name];
+    /* Lookup de paleta de colores. Intenta varios providers. */
+    try {
+      if (typeof window.getTeamColors === 'function'){
+        var c = window.getTeamColors(name);
+        if (c && c.primary){ _COLOR_CACHE[name] = c; return c; }
+      }
+    } catch(_){}
+    /* Fallback: paleta neutra (oscuro). */
+    var def = { primary:'#1a1a2a', secondary:'#0a0a14' };
+    _COLOR_CACHE[name] = def;
+    return def;
+  }
+  function _hex2rgba(h, a){
+    if (!h) return 'rgba(0,0,0,'+a+')';
+    var s = String(h).replace('#','');
+    if (s.length === 3) s = s.split('').map(function(c){return c+c;}).join('');
+    var r = parseInt(s.substr(0,2),16) || 0;
+    var g = parseInt(s.substr(2,2),16) || 0;
+    var b = parseInt(s.substr(4,2),16) || 0;
+    return 'rgba('+r+','+g+','+b+','+a+')';
+  }
+  function _applyCardTheme(wrap){
+    if (!wrap || wrap._mlThemed) return;
+    var mk = wrap.id.replace(/^mlw-/, '');
+    var comp = _compFromMk(mk);
+    if (comp){
+      wrap.classList.add('is-comp-' + comp);
+    }
+    /* Color del equipo local + visitante para AÑADIR EVENTO bicolor. */
+    var st = (typeof window._calMlSt === 'function') ? window._calMlSt(mk) : null;
+    var home = st && st.home, away = st && st.away;
+    if (home || away){
+      var ca = _teamColors(home);
+      var cb = _teamColors(away);
+      var p1 = (ca && ca.primary)   || '#3a0008';
+      var p2 = (ca && (ca.secondary || ca.primary)) || '#1a0004';
+      var q1 = (cb && cb.primary)   || '#3a0008';
+      var q2 = (cb && (cb.secondary || cb.primary)) || '#1a0004';
+      wrap.style.setProperty('--team-a-1', _hex2rgba(p1, .85));
+      wrap.style.setProperty('--team-a-2', _hex2rgba(p2, .55));
+      wrap.style.setProperty('--team-b-1', _hex2rgba(q2, .55));
+      wrap.style.setProperty('--team-b-2', _hex2rgba(q1, .85));
+      wrap.setAttribute('data-team-colors', '1');
+    }
+    wrap._mlThemed = true;
+  }
+
+  /* ── (1) JUGAR · highlight del botón cronómetro cuando está en 0' ── */
+  function _refreshJugarHints(){
+    var btns = document.querySelectorAll('.ml-timer');
+    btns.forEach(function(btn){
+      if (btn.style.display === 'none') return;
+      var wrap = btn.closest('.match-live-wrap');
+      if (!wrap) return;
+      /* Solo HvH y HvIA. */
+      if (!wrap.classList.contains('hvh') && !wrap.classList.contains('hvia')) return;
+      var txt = (btn.textContent || '').trim();
+      var isAtZero = /\b0'/.test(txt) || /^▶\s*0'/.test(txt);
+      var isPaused = /^▶/.test(txt) || /pause-fa/i.test(txt) === false;
+      if (isAtZero && isPaused) btn.classList.add('is-jugar-hint');
+      else btn.classList.remove('is-jugar-hint');
+    });
+  }
+  setInterval(_refreshJugarHints, 400);
+
+  /* ── (5) Cuenta atrás post-evento ──────────────────────────────── */
+  var _activeOverlay = null, _activeMk = null, _activeTimer = null,
+      _activeStartTs = 0, _activeTotal = 0;
+  function _ensureOverlay(){
+    var ov = document.getElementById('ml-evt-cd-overlay');
+    if (ov) return ov;
+    ov = document.createElement('div');
+    ov.id = 'ml-evt-cd-overlay';
+    ov.className = 'ml-evt-cd-overlay';
+    ov.innerHTML = ''
+      + '<div class="ml-evt-cd-evt" id="ml-evt-cd-evt">EVENTO</div>'
+      + '<div class="ml-evt-cd-circle" id="ml-evt-cd-circle">'
+      +   '<svg viewBox="0 0 200 200">'
+      +     '<circle class="cd-bg" cx="100" cy="100" r="90"/>'
+      +     '<circle class="cd-fg" id="ml-evt-cd-fg" cx="100" cy="100" r="90"'
+      +       ' stroke-dasharray="565.5" stroke-dashoffset="0"/>'
+      +   '</svg>'
+      +   '<div class="ml-evt-cd-num" id="ml-evt-cd-num">35</div>'
+      + '</div>'
+      + '<div class="ml-evt-cd-sub">REGISTRA EL EVENTO EN eFootball</div>'
+      + '<button type="button" class="ml-evt-cd-resume-btn" id="ml-evt-cd-resume">REANUDAR PARTIDO</button>'
+      + '<button type="button" class="ml-evt-cd-skip" id="ml-evt-cd-skip">Cerrar sin reanudar</button>';
+    document.body.appendChild(ov);
+    document.getElementById('ml-evt-cd-resume').addEventListener('click', function(){ _resumeAndClose(true); });
+    document.getElementById('ml-evt-cd-skip').addEventListener('click', function(){ _closeOverlay(false); });
+    return ov;
+  }
+  function _closeOverlay(resume){
+    if (_activeTimer) { clearInterval(_activeTimer); _activeTimer = null; }
+    var ov = document.getElementById('ml-evt-cd-overlay');
+    if (ov) ov.classList.remove('show');
+    var mk = _activeMk;
+    _activeMk = null; _activeStartTs = 0; _activeTotal = 0;
+    if (resume && mk){
+      try {
+        var st = window._calMlSt && window._calMlSt(mk);
+        if (st && !st.timerRunning && !st.finished && !st.inDescanso){
+          /* Re-arranca el cronómetro. */
+          if (typeof window.mlTimerClickGen === 'function') window.mlTimerClickGen(mk);
+        }
+      } catch(_){}
+    }
+  }
+  function _resumeAndClose(){ _closeOverlay(true); }
+  function _showOverlay(mk, evtType){
+    var sec = EVT_CD_SEC[evtType]; if (!sec) return;
+    var ov = _ensureOverlay();
+    /* Pausar el cronómetro si está corriendo. */
+    try {
+      var st = window._calMlSt && window._calMlSt(mk);
+      if (st && st.timerRunning && !st.finished && !st.inDescanso){
+        if (typeof window.mlTimerClickGen === 'function') window.mlTimerClickGen(mk);
+      }
+    } catch(_){}
+    _activeMk = mk; _activeTotal = sec; _activeStartTs = Date.now();
+    var lbl = EVT_CD_LBL[evtType] || ('📌 ' + String(evtType).toUpperCase());
+    document.getElementById('ml-evt-cd-evt').textContent = lbl;
+    document.getElementById('ml-evt-cd-num').textContent = String(sec);
+    var fg = document.getElementById('ml-evt-cd-fg');
+    var circle = document.getElementById('ml-evt-cd-circle');
+    var R = 90, C = 2 * Math.PI * R; /* circumference ≈ 565.5 */
+    fg.setAttribute('stroke-dasharray', String(C));
+    fg.setAttribute('stroke-dashoffset', '0');
+    circle.classList.remove('is-low');
+    ov.classList.add('show');
+    if (_activeTimer) clearInterval(_activeTimer);
+    _activeTimer = setInterval(function(){
+      var elapsed = (Date.now() - _activeStartTs) / 1000;
+      var remain  = Math.max(0, _activeTotal - elapsed);
+      var displaySec = Math.ceil(remain);
+      document.getElementById('ml-evt-cd-num').textContent = String(displaySec);
+      var pct = remain / _activeTotal;
+      fg.setAttribute('stroke-dashoffset', String(C * (1 - pct)));
+      if (displaySec <= 5) circle.classList.add('is-low');
+      else circle.classList.remove('is-low');
+      if (remain <= 0){ _resumeAndClose(); }
+    }, 200);
+  }
+
+  /* ── Hook al renderizador de filas del acta ──────────────────────
+     `_mlAddActaRow(mk, min, ico, name, num, teamLabel, type, id)`
+     no está expuesto en window — lo localizamos vía MutationObserver
+     sobre cada `#ml-acta-list-*`. Cada vez que se añade un nuevo
+     `.ml-evt-item`, leemos `data-type` y disparamos la cuenta atrás
+     SI:
+       · El partido es HvH o HvIA (humano involucrado).
+       · El tipo está en EVT_CD_SEC.
+       · El cronómetro está corriendo (st.timerRunning && !finished). */
+  function _wireActaWatcher(list){
+    if (!list || list._mlEvtCdWired) return;
+    list._mlEvtCdWired = true;
+    var mk = (list.id || '').replace(/^ml-acta-list-/, '');
+    if (!mk) return;
+    var wrap = document.getElementById('mlw-' + mk);
+    if (!wrap) return;
+    /* Solo HvH/HvIA. */
+    var isHumanMatch = wrap.classList.contains('hvh') || wrap.classList.contains('hvia');
+    if (!isHumanMatch) return;
+    new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++){
+        var m = muts[i];
+        for (var j = 0; j < m.addedNodes.length; j++){
+          var n = m.addedNodes[j];
+          if (n.nodeType !== 1) continue;
+          if (!n.classList || !n.classList.contains('ml-evt-item')) continue;
+          /* Skip si el evento se añadió antes de empezar (replay
+             de carga de localStorage). */
+          var st = window._calMlSt && window._calMlSt(mk);
+          if (!st || !st.timerRunning) continue;
+          var type = n.getAttribute('data-type') || '';
+          if (!EVT_CD_SEC[type]) continue;
+          /* Defer un tick para que el código que añadió el evento
+             termine su trabajo (p.ej. actualización del marcador). */
+          setTimeout(function(t){ return function(){ _showOverlay(mk, t); }; }(type), 50);
+          return;
+        }
+      }
+    }).observe(list, { childList:true });
+  }
+
+  /* ── Scanner global: aplica tema + watch acta a cada card. */
+  function _scanCards(){
+    document.querySelectorAll('.match-live-wrap').forEach(function(wrap){
+      try { _applyCardTheme(wrap); } catch(_){}
+      var mk = (wrap.id||'').replace(/^mlw-/, '');
+      var actaList = document.getElementById('ml-acta-list-' + mk);
+      if (actaList) _wireActaWatcher(actaList);
+    });
+  }
+  setInterval(_scanCards, 600);
+
+  /* ── Boot ───────────────────────────────────────────────────────── */
+  function _boot(){
+    _scanCards();
+    _refreshJugarHints();
+    /* MutationObserver global para nuevas cards. */
+    new MutationObserver(function(){ _scanCards(); }).observe(document.body, { childList:true, subtree:true });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _boot);
+  else _boot();
+
+  /* Expose para debug. */
+  window._mlCardUiScan = _scanCards;
+  window._mlCardUiShowCd = _showOverlay;
+})();
+</script>

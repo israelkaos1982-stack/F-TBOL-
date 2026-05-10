@@ -14706,7 +14706,8 @@ window._showSimProgress = function(opts, onDone){
   var HOME_PER      = 4;       /* partidos como local */
   var AWAY_PER      = 4;       /* partidos como visitante */
   var JORNADAS      = 8;
-  var DRAW_ATTEMPTS = 220;     /* greedy + retries */
+  var DRAW_ATTEMPTS = 500;     /* greedy + retries (era 220 — subido 2026-05-09 tras fallos sistemáticos) */
+  var JORNADA_RETRIES = 40;    /* reintentos de UNA jornada antes de abortar el attempt completo */
   var JORN_ATTEMPTS = 60;
 
   function _esc(s){
@@ -14844,10 +14845,27 @@ window._showSimProgress = function(opts, onDone){
       var allPairs = [];
       var ok = true;
       for(var jor = 1; jor <= JORNADAS; jor++){
-        /* Cada jornada: orden inicial aleatorio para variar entre attempts. */
-        var jorTeams = teams.slice(); _shuffle(jorTeams);
-        var jorMatches = _buildJornada(jorTeams, paired, homeC, awayC);
-        if(!jorMatches || jorMatches.length !== teams.length / 2){ ok = false; break; }
+        /* Per-jornada retry: si una jornada no cuadra con un orden, probamos
+           con varios shuffles antes de abortar el attempt entero. Esto
+           reduce drásticamente los falsos negativos (la jornada N suele
+           cuadrar si reintentas con otro shuffle inicial — sólo el orden
+           cambia, las restricciones acumuladas son las mismas). */
+        var jorMatches = null;
+        for(var jr = 0; jr < JORNADA_RETRIES && !jorMatches; jr++){
+          var jorTeams = teams.slice(); _shuffle(jorTeams);
+          /* Snapshot de homeC/awayC/paired POR SI esta jornada falla
+             a media construcción y los modifica parcialmente. Restauramos. */
+          var snapshotHome = {}, snapshotAway = {}, snapshotPaired = {};
+          for(var sk in homeC){ snapshotHome[sk] = homeC[sk]; snapshotAway[sk] = awayC[sk]; snapshotPaired[sk] = {}; for(var sp in paired[sk]) snapshotPaired[sk][sp] = paired[sk][sp]; }
+          var attempt_matches = _buildJornada(jorTeams, paired, homeC, awayC);
+          if(attempt_matches && attempt_matches.length === teams.length / 2){
+            jorMatches = attempt_matches;
+          } else {
+            /* Restaurar snapshot — _buildJornada pudo haber tocado paired/homeC/awayC. */
+            for(var rk in homeC){ homeC[rk] = snapshotHome[rk]; awayC[rk] = snapshotAway[rk]; paired[rk] = snapshotPaired[rk]; }
+          }
+        }
+        if(!jorMatches){ ok = false; break; }
         jorMatches.forEach(function(m){ m.jornada = jor; allPairs.push(m); });
       }
       if(ok){
@@ -14909,7 +14927,20 @@ window._showSimProgress = function(opts, onDone){
       var k = String(t.league || '').trim();
       byLeague[k] = (byLeague[k] || 0) + 1;
     });
-    var capPerCountry = teams.length - MATCHES_PER; /* cada team de un país solo puede jugar contra teams.length-1 - (count_pais - 1) = teams.length - count_pais. Necesita >= MATCHES_PER → count_pais <= teams.length - MATCHES_PER. */
+    /* Cap correcto por país (2026-05-09 — antes era teams.length -
+       MATCHES_PER = 32, demasiado laxo). Dos restricciones:
+       1) Cada team de un país X juega 8 partidos, todos contra
+          los (teams.length - N_X) teams de otros países. Necesita
+          >= 8 oponentes → N_X <= teams.length - 8.
+       2) Balance global: total partidos X-¬X = N_X × 8. Pero los
+          ¬X teams sólo pueden jugar 8 partidos cada uno → capacidad
+          = (teams.length - N_X) × 8. Para que cuadre N_X × 8 <=
+          (teams.length - N_X) × 8 → N_X <= teams.length / 2.
+       La 2ª es la verdadera frontera: con 40 teams el cap es 20.
+       Sin este fix, pools con >20 teams del mismo país pasaban la
+       pre-validación y luego el solver fallaba 220 attempts seguidos
+       sin pista al usuario. */
+    var capPerCountry = Math.min(teams.length - MATCHES_PER, Math.floor(teams.length / 2));
     var blockers = [];
     Object.keys(byLeague).forEach(function(k){
       if(byLeague[k] > capPerCountry){
@@ -14922,10 +14953,23 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
 
+    /* Helper para construir un mensaje de fallo con desglose de
+       países — útil para que el usuario vea si algún país está
+       saturando el pool. 2026-05-09. */
+    function _failMsg(){
+      var counts = Object.keys(byLeague).map(function(k){
+        return [(k || '(sin país)'), byLeague[k]];
+      }).sort(function(a,b){ return b[1] - a[1]; });
+      var top = counts.slice(0, 8).map(function(p){ return '  · ' + p[0] + ': ' + p[1] + ' equipos'; }).join('\n');
+      return '❌ El motor no logró cuadrar el sorteo en ' + DRAW_ATTEMPTS + ' intentos respetando "no mismo país" + balance 4+4.\n\n'
+           + 'Desglose del pool (' + teams.length + ' equipos, máx ' + capPerCountry + ' por federación):\n'
+           + top + (counts.length > 8 ? '\n  · …' : '')
+           + '\n\nReintenta. Si vuelve a fallar, revisa qué federaciones tienen demasiados equipos clasificados.';
+    }
     if(typeof window.ftbolLoaderRun !== 'function'){
       /* Sin loader → fallback simple, sin animación. */
       var sched = drawPairs(teams);
-      if(!sched){ alert('❌ No se ha podido cuadrar el sorteo. Reintenta.'); return; }
+      if(!sched){ alert(_failMsg()); return; }
       var st = { teams: teams.map(function(t){return {name:t.name,logo:t.logo||'',league:t.league||''};}), pairs: sched, drawnAt: Date.now() };
       if(!saveState(comp, st)) alert('⚠️ Sorteo OK pero no se pudo guardar.');
       return;
@@ -14945,7 +14989,7 @@ window._showSimProgress = function(opts, onDone){
           setTimeout(function(){
             var sched = drawPairs(teams);
             if(!sched){
-              alert('❌ No se ha podido cuadrar el sorteo respetando "no mismo país" y el balance 4+4 de local/visitante. Reintenta.');
+              alert(_failMsg());
               ctx.progress(100, 'Error');
               resolve();
               return;

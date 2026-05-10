@@ -2414,42 +2414,64 @@
        "completada" (oscurece la card). El contador cuenta partidos
        jugados / total. Para two-leg, total = matches.length * 2 (ida +
        vuelta) y jugados se acumula entre ambas. */
+    /* Helper: pinta el contador y el estado "done" de una card de
+       ronda. Se invoca tanto para single-leg (`copa-rd-r1-blk`) como
+       para los splits ida/vuelta de las rondas a doble partido
+       (`copa-rd-oct-ida-blk`, `copa-rd-oct-vta-blk`, etc., 2026-05-10
+       — el usuario quería ver fechas separadas por leg). */
+    function _paintRdCard(blkId, cntId, played, total, isFullyDone){
+      var blk = document.getElementById(blkId);
+      var cntEl = document.getElementById(cntId);
+      if (!blk || !cntEl) return;
+      var ico, txtCol;
+      if (total === 0) { ico = '○'; txtCol = 'rgba(255,255,255,.5)'; }
+      else if (played === 0) { ico = '○'; txtCol = 'rgba(255,255,255,.55)'; }
+      else if (played < total || !isFullyDone) { ico = '⏳'; txtCol = '#ffd54a'; }
+      else { ico = '✅'; txtCol = '#5fe08a'; }
+      cntEl.textContent = ico + ' ' + played + '/' + total;
+      cntEl.style.color = txtCol;
+      if (total > 0 && played >= total && isFullyDone) blk.classList.add('copa-rd-done');
+      else blk.classList.remove('copa-rd-done');
+    }
+
     ROUNDS.forEach(function (ronda) {
-      var blk = document.getElementById('copa-rd-' + ronda + '-blk');
-      var cntEl = document.getElementById('copa-rd-' + ronda + '-cnt');
-      if (!cntEl || !blk) return;
       var matches = sorteo[ronda] || [];
-      var total = 0, played = 0;
       var twoLegRd = !!TWO_LEG[ronda];
+      var clasifR = (clasificados[ronda] || []).length;
       if (twoLegRd) {
-        total = matches.length * 2;
+        /* Two-leg → dos cards (ida + vuelta), cada una con su contador. */
         var idaR = resultados[ronda + '_ida'] || [];
         var vtaR = resultados[ronda + '_vta'] || [];
+        var totalLeg = matches.length;
+        var playedIda = 0, playedVta = 0;
         for (var i = 0; i < matches.length; i++) {
-          if (idaR[i] && idaR[i].jugado) played++;
-          if (vtaR[i] && vtaR[i].jugado) played++;
+          if (idaR[i] && idaR[i].jugado) playedIda++;
+          if (vtaR[i] && vtaR[i].jugado) playedVta++;
         }
+        var idaDone = totalLeg > 0 && playedIda >= totalLeg;
+        var vtaDone = totalLeg > 0 && playedVta >= totalLeg && !!clasifR;
+        _paintRdCard('copa-rd-' + ronda + '-ida-blk',
+                     'copa-rd-' + ronda + '-ida-cnt',
+                     playedIda, totalLeg, idaDone);
+        _paintRdCard('copa-rd-' + ronda + '-vta-blk',
+                     'copa-rd-' + ronda + '-vta-cnt',
+                     playedVta, totalLeg, vtaDone);
+        /* Compat: si alguna instalación legacy aún tiene la card
+           combinada `copa-rd-oct-blk`, la actualizamos como antes. */
+        _paintRdCard('copa-rd-' + ronda + '-blk',
+                     'copa-rd-' + ronda + '-cnt',
+                     playedIda + playedVta, totalLeg * 2,
+                     (playedIda + playedVta) >= totalLeg * 2 && !!clasifR);
       } else {
-        total = matches.length;
+        var total = matches.length;
+        var played = 0;
         var rL = resultados[ronda] || [];
         for (var i2 = 0; i2 < matches.length; i2++) {
           if (rL[i2] && rL[i2].jugado) played++;
         }
-      }
-      var clasifR = (clasificados[ronda] || []).length;
-      var ico, txtCol;
-      if (total === 0) { ico = '○'; txtCol = 'rgba(255,255,255,.5)'; }
-      else if (played === 0) { ico = '○'; txtCol = 'rgba(255,255,255,.55)'; }
-      else if (played < total || !clasifR) { ico = '⏳'; txtCol = '#ffd54a'; }
-      else { ico = '✅'; txtCol = '#5fe08a'; }
-      cntEl.textContent = ico + ' ' + played + '/' + total;
-      cntEl.style.color = txtCol;
-      /* Card completada → modo "oscuro" (igual a las jornadas de
-         Liga EA terminadas: gris/atenuadas). */
-      if (total > 0 && played >= total && clasifR > 0) {
-        blk.classList.add('copa-rd-done');
-      } else {
-        blk.classList.remove('copa-rd-done');
+        _paintRdCard('copa-rd-' + ronda + '-blk',
+                     'copa-rd-' + ronda + '-cnt',
+                     played, total, !!clasifR);
       }
     });
 

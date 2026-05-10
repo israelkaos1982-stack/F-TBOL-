@@ -3388,40 +3388,36 @@
   ◀ VOLVER
 </button>
 <div class="sancion-ov-header">
-<div class="sancion-ov-icons-row">
-<span class="sancion-ico-anim" id="sov-ico-yel">🚫</span>
-<span class="sancion-ico-anim sancion-ico-delay1" id="sov-ico-red">🚫</span>
-<span class="sancion-ico-anim sancion-ico-delay2" id="sov-ico-inj">🚫</span>
-</div>
 <div class="sancion-ov-title">BAJAS PARA EL PARTIDO</div>
 <div class="sancion-ov-sub">ANTES DE COMENZAR</div>
 <div class="sancion-ov-comp" id="sancion-ov-comp-lbl">—</div>
 </div>
 <!-- SANCIONADOS -->
-<div class="sancion-section">
+<div class="sancion-section sancion-section-yel">
 <div class="sancion-section-hdr sancion-section-hdr-yel"><span class="sancion-hdr-ico">🟨</span> SANCIONADOS</div>
 <div class="sancion-list" id="sancion-ov-list-yel"></div>
 </div>
 <!-- EXPULSADOS -->
-<div class="sancion-section">
+<div class="sancion-section sancion-section-red">
 <div class="sancion-section-hdr sancion-section-hdr-red"><span class="sancion-hdr-ico d1">🟥</span> EXPULSADOS</div>
 <div class="sancion-list" id="sancion-ov-list-red"></div>
 </div>
 <!-- LESIONADOS -->
-<div class="sancion-section">
+<div class="sancion-section sancion-section-inj">
 <div class="sancion-section-hdr sancion-section-hdr-inj"><span class="sancion-hdr-ico d2">🚑</span> LESIONADOS</div>
 <div class="sancion-list" id="sancion-ov-list-inj"></div>
 </div>
-<!-- AÑADIR LESIONADOS (⬇️) — sección dedicada. Se rellena desde el
-     script inline de abajo, que no depende del bundle ni de caché. -->
-<div class="sancion-section" id="sancion-ov-forma-section" style="border:1px solid rgba(255,80,80,.35);border-radius:10px;background:rgba(255,80,80,.05);margin-top:10px;">
-<div class="sancion-section-hdr" style="color:#ff5050;">
+<!-- AÑADIR LESIONADOS (⬇️) — sección dedicada con borde amarillo
+     llamativo. El usuario marca los jugadores que se lesionan en
+     este partido. Si no hay ninguno con ⬇️, la siguiente acción
+     (Compartir Partido en WhatsApp en la PREVIA) se resaltará
+     también con borde amarillo pulsante. -->
+<div class="sancion-section sancion-section-forma" id="sancion-ov-forma-section">
+<div class="sancion-section-hdr sancion-section-hdr-forma">
   <span class="sancion-hdr-ico">🩹</span> AÑADIR LESIONADOS · EQUIPO HUMANO
 </div>
-<div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.65);margin:4px 10px 8px;letter-spacing:.3px;line-height:1.45;">
-  Pulsa ⬇️ para marcar al jugador como lesionado. Se asignará una lesión 💉 <b style="color:#ff8c00">MODERADA</b> o 🚑 <b style="color:#ff5050">GRAVE</b> automática y no jugará este partido.
-</div>
-<div class="sancion-list" id="sancion-ov-list-forma" style="padding:0 10px 10px;"></div>
+<div class="sancion-forma-help">Pulsa ⬇️ para marcar al jugador como lesionado. Se asignará una lesión 💉 <b>MODERADA</b> o 🚑 <b>GRAVE</b> automática y no jugará este partido.</div>
+<div class="sancion-list sancion-forma-list" id="sancion-ov-list-forma"></div>
 </div>
 <div class="sancion-ov-warn" id="sancion-ov-warn">⚠️ Estos jugadores NO pueden participar en este partido.</div>
 <button class="sancion-ov-btn" id="sancion-ov-ok" onclick="window._sancionConfirm()">✓ ENTENDIDO</button>
@@ -3610,7 +3606,7 @@
     if (!host) return;
     var humans = humansInMatch();
     if (!humans.length) {
-      host.innerHTML = '<div style="font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,80,80,.75);text-align:center;padding:10px;">Abre la PREVIA de un partido con equipo humano para añadir lesionados.</div>';
+      host.innerHTML = '<div class="sancion-forma-empty">Abre la PREVIA de un partido con equipo humano para añadir lesionados.</div>';
       return;
     }
     var states = window._FORMA_MATCH_STATES || {};
@@ -3618,11 +3614,11 @@
     humans.forEach(function(team){
       var roster = rosterFor(team);
       if (!roster.length) {
-        html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);margin:6px 0;padding:8px;background:rgba(255,255,255,.03);border-radius:6px;">⚔️ ' + team + ' — plantilla no cargada aún.</div>';
+        html += '<div class="sancion-forma-team-empty">⚔️ ' + team + ' — plantilla no cargada aún.</div>';
         return;
       }
-      html += '<div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#fff;margin:10px 0 6px;border-top:1px solid rgba(255,255,255,.1);padding-top:8px;">⚔️ ' + team + ' <span style="font-size:10px;color:rgba(255,255,255,.45);font-weight:400;margin-left:6px;">' + roster.length + ' jugadores</span></div>';
-      html += '<div style="display:flex;flex-direction:column;gap:5px;">';
+      html += '<div class="sancion-forma-team-hdr">⚔️ ' + team + ' <span class="sancion-forma-team-cnt">' + roster.length + '</span></div>';
+      html += '<div class="sancion-forma-grid">';
       roster.forEach(function(p){
         var name = p[1] || '?';
         var num  = p[0] || '';
@@ -3630,21 +3626,15 @@
         /* Si ya hay una lesión registrada de otro origen (no de este toggle),
            deshabilitamos el botón para no pisar la lesión existente. */
         var isLes = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && cur !== '⬇️');
+        var stateCls = (cur === '⬇️' ? ' is-injured' : '') + (isLes ? ' is-disabled' : '');
         var dis = isLes ? 'disabled' : '';
-        /* Fila con más padding vertical + fuente grande para los nombres,
-           según petición del usuario (plantilla más legible en móvil). */
-        var rowStyle = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:rgba(255,255,255,.04);border-radius:8px;' + (isLes ? 'opacity:.4;' : '');
         var esc = function(s){ return String(s).replace(/\\/g,'\\\\').replace(/\'/g,"\\'"); };
-        html += '<div style="' + rowStyle + '">'
-          + '<span style="font-family:Rajdhani,sans-serif;font-size:17px;font-weight:600;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.3px;">'
-          +   (num ? '<span style="color:rgba(255,255,255,.5);margin-right:10px;font-size:15px;font-weight:500;">' + num + '</span>' : '')
-          +   name
-          + '</span>'
-          + '<span style="display:flex;gap:6px;flex-shrink:0;">'
-          +   '<button type="button" ' + dis + ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\')" '
-          +     'style="background:' + (cur === '⬇️' ? 'rgba(255,80,80,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '⬇️' ? '#ff5050' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:8px;padding:7px 14px;font-size:18px;cursor:pointer;min-width:48px;">⬇️</button>'
-          + '</span>'
-          + '</div>';
+        html += '<button type="button" class="sancion-forma-chip' + stateCls + '" ' + dis
+          +     ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\')">'
+          +   (num ? '<span class="sancion-forma-chip-num">' + num + '</span>' : '')
+          +   '<span class="sancion-forma-chip-name">' + name + '</span>'
+          +   '<span class="sancion-forma-chip-ico">⬇️</span>'
+          + '</button>';
       });
       html += '</div>';
     });
@@ -3682,6 +3672,230 @@
   }
 })();
 </script>
+
+<!-- ════════════════════════════════════════════════════════════════
+     BAJAS PARA EL PARTIDO · estética videojuego (2026-05-10)
+     ───────────────────────────────────────────────────────────────
+     Petición del usuario: la pantalla original (3 🚫🚫🚫 + 3 secciones
+     sancionados/expulsados/lesionados + AÑADIR LESIONADOS con cards
+     grandes) era confusa. Cambios:
+
+     · Quitamos los 3 iconos 🚫 (ya no aparecen — HTML editado más arriba).
+     · Las 3 secciones (Sancionados / Expulsados / Lesionados) tienen
+       headers con gradient + glow estilo videojuego y bordes coloreados
+       por temática.
+     · AÑADIR LESIONADOS lleva borde AMARILLO llamativo y los jugadores
+       se renderizan en grid 2-col (chips compactos) — la plantilla
+       cabe en una pantalla.
+     · Si NO hay ningún jugador con ⬇️, el botón "Compartir Partido en
+       WhatsApp" de la PREVIA (#pp-wa-btn) se resalta con borde
+       amarillo pulsante para guiar la siguiente acción.
+     ════════════════════════════════════════════════════════════════ -->
+<style>
+/* Overrides del overlay BAJAS PARA EL PARTIDO. */
+#sancion-overlay .sancion-ov-inner{gap:8px;}
+
+/* Header simplificado (sin 3 🚫). El título "BAJAS PARA EL PARTIDO"
+   se queda como protagonista. */
+#sancion-overlay .sancion-ov-header{margin-bottom:10px;}
+#sancion-overlay .sancion-ov-title{
+  font-size:30px;letter-spacing:5px;
+  background:linear-gradient(90deg,#ff6060,#ff8040 50%,#ff6060);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;color:transparent;
+  text-shadow:none;
+  filter:drop-shadow(0 0 12px rgba(255,80,80,.55));
+}
+
+/* Secciones estilo videojuego — borde coloreado + glow. */
+.sancion-section{position:relative;border-radius:10px;overflow:hidden;}
+.sancion-section-yel{border:1px solid rgba(240,200,32,.55);box-shadow:0 0 14px rgba(240,200,32,.16),inset 0 0 12px rgba(240,200,32,.05);}
+.sancion-section-red{border:1px solid rgba(224,80,80,.55);box-shadow:0 0 14px rgba(255,60,60,.16),inset 0 0 12px rgba(255,60,60,.05);}
+.sancion-section-inj{border:1px solid rgba(80,200,255,.55);box-shadow:0 0 14px rgba(80,200,255,.16),inset 0 0 12px rgba(80,200,255,.05);}
+
+.sancion-section-hdr{
+  padding:8px 14px;border-radius:9px 9px 0 0;border:none !important;
+  font-family:'Bebas Neue','Oswald',sans-serif !important;
+  font-size:14px !important;letter-spacing:3px !important;font-weight:700;
+  display:flex;align-items:center;gap:9px;
+}
+.sancion-section-hdr-yel{background:linear-gradient(90deg,rgba(240,200,32,.30),rgba(240,200,32,.10)) !important;color:#ffd848 !important;text-shadow:0 0 8px rgba(240,200,32,.45);}
+.sancion-section-hdr-red{background:linear-gradient(90deg,rgba(255,60,60,.30),rgba(255,60,60,.10)) !important;color:#ff7676 !important;text-shadow:0 0 8px rgba(255,60,60,.45);}
+.sancion-section-hdr-inj{background:linear-gradient(90deg,rgba(80,200,255,.30),rgba(80,200,255,.10)) !important;color:#7ddcff !important;text-shadow:0 0 8px rgba(80,200,255,.45);}
+
+#sancion-overlay .sancion-section .sancion-list{
+  border:none !important;background:rgba(255,255,255,.02);
+  padding:8px;min-height:auto;
+}
+
+/* AÑADIR LESIONADOS — borde AMARILLO llamativo y pulsante. */
+.sancion-section-forma{
+  border:2px solid #f0c820 !important;
+  box-shadow:0 0 22px rgba(240,200,32,.32),inset 0 0 14px rgba(240,200,32,.06) !important;
+  background:linear-gradient(180deg,rgba(240,200,32,.06),transparent 80%);
+  margin-top:6px;
+  animation:formaPulse 2.2s ease-in-out infinite;
+}
+@keyframes formaPulse{
+  0%,100%{box-shadow:0 0 22px rgba(240,200,32,.32),inset 0 0 14px rgba(240,200,32,.06);}
+  50%   {box-shadow:0 0 32px rgba(240,200,32,.55),inset 0 0 18px rgba(240,200,32,.12);}
+}
+.sancion-section-hdr-forma{
+  background:linear-gradient(90deg,rgba(240,200,32,.35),rgba(240,200,32,.10)) !important;
+  color:#ffd848 !important;text-shadow:0 0 10px rgba(240,200,32,.55);
+}
+.sancion-forma-help{
+  font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;
+  color:rgba(255,255,255,.7);margin:6px 12px 8px;line-height:1.45;
+}
+.sancion-forma-help b{color:#ffd848;font-weight:700;}
+
+/* Grid de jugadores — chips compactos en 2 columnas. */
+.sancion-forma-team-hdr{
+  font-family:'Oswald',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:2px;color:#ffd848;
+  margin:8px 0 4px;padding:4px 10px 4px 12px;
+  border-left:3px solid #f0c820;text-transform:uppercase;
+}
+.sancion-forma-team-cnt{
+  font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:400;
+  color:rgba(255,255,255,.45);margin-left:6px;letter-spacing:.5px;
+}
+.sancion-forma-team-cnt::after{content:' jug.';}
+.sancion-forma-team-empty{
+  font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.5);
+  padding:6px 10px;background:rgba(255,255,255,.03);border-radius:6px;
+  margin:6px 8px;
+}
+.sancion-forma-empty{
+  font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,80,80,.75);
+  text-align:center;padding:10px;
+}
+.sancion-forma-list{padding:4px 10px 12px !important;}
+.sancion-forma-grid{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:5px;
+  margin-bottom:4px;
+}
+.sancion-forma-chip{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 8px;border-radius:7px;
+  background:rgba(255,255,255,.05);
+  border:1px solid rgba(240,200,32,.22);
+  cursor:pointer;
+  text-align:left;
+  font-family:'Rajdhani',sans-serif;
+  transition:transform .08s ease, background .12s ease, border-color .12s ease;
+}
+.sancion-forma-chip:active{transform:scale(.97);}
+.sancion-forma-chip:hover{background:rgba(255,255,255,.08);border-color:rgba(240,200,32,.4);}
+.sancion-forma-chip.is-injured{
+  background:rgba(255,80,80,.18);
+  border-color:#ff5050;
+  box-shadow:0 0 10px rgba(255,80,80,.4);
+}
+.sancion-forma-chip.is-disabled{
+  opacity:.35;pointer-events:none;
+}
+.sancion-forma-chip-num{
+  flex-shrink:0;width:22px;text-align:center;
+  font-family:'Bebas Neue',sans-serif;font-size:14px;
+  color:rgba(255,255,255,.55);letter-spacing:.5px;
+}
+.sancion-forma-chip-name{
+  flex:1;min-width:0;font-size:12px;font-weight:600;color:#fff;
+  letter-spacing:.2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.sancion-forma-chip-ico{
+  flex-shrink:0;font-size:14px;
+}
+@media (max-width:380px){
+  .sancion-forma-grid{grid-template-columns:1fr;}
+}
+
+/* Botón ENTENDIDO — un poco más prominente para que se vea como CTA. */
+#sancion-overlay .sancion-ov-btn{
+  background:linear-gradient(135deg,#1a3a18,#2b6228 50%,#1a3a18) !important;
+  border:1px solid #4dd86a !important;color:#bdf5c8 !important;
+  font-family:'Bebas Neue',sans-serif !important;font-size:18px !important;
+  letter-spacing:3px !important;
+}
+
+/* PREVIA · botón "Compartir Partido en WhatsApp" — highlight amarillo
+   pulsante cuando se llama desde la BAJAS sin lesionados (el wiring
+   lo hace el script de abajo, añadiendo la clase `is-wa-hint`). */
+#pp-wa-btn.is-wa-hint{
+  border:2px solid #f0c820 !important;
+  box-shadow:0 0 22px rgba(240,200,32,.55),0 0 8px rgba(240,200,32,.4) inset !important;
+  animation:waHintPulse 1.4s ease-in-out infinite;
+  position:relative;
+}
+#pp-wa-btn.is-wa-hint::after{
+  content:'👉 PULSA AQUÍ';
+  position:absolute;top:-22px;right:8px;
+  font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:2px;
+  color:#ffd848;text-shadow:0 0 8px rgba(240,200,32,.7);
+  background:rgba(0,0,0,.75);border:1px solid rgba(240,200,32,.6);
+  border-radius:6px;padding:2px 8px;
+  animation:waHintHintPulse 1.4s ease-in-out infinite;
+}
+@keyframes waHintPulse{
+  0%,100%{box-shadow:0 0 22px rgba(240,200,32,.5),inset 0 0 8px rgba(240,200,32,.3);}
+  50%   {box-shadow:0 0 38px rgba(240,200,32,.85),inset 0 0 14px rgba(240,200,32,.55);}
+}
+@keyframes waHintHintPulse{
+  0%,100%{opacity:.85;transform:translateY(0);}
+  50%   {opacity:1;transform:translateY(-2px);}
+}
+</style>
+<script>
+/* Highlight del botón "Compartir Partido en WhatsApp" en la PREVIA
+   cuando el usuario llega ahí sin lesionados marcados. Observa la
+   apertura de #prepartido-overlay y mira `window._FORMA_MATCH_STATES`
+   para decidir si añadir la clase `.is-wa-hint`. */
+(function(){
+  if (window.__WA_HINT_WIRED) return;
+  window.__WA_HINT_WIRED = true;
+  function checkAndHint(){
+    var btn = document.getElementById('pp-wa-btn');
+    if (!btn) return;
+    /* Cuenta lesionados marcados por el usuario en este partido. */
+    var states = window._FORMA_MATCH_STATES || {};
+    var anyMarked = false;
+    for (var k in states){ if (states[k] === '⬇️'){ anyMarked = true; break; } }
+    /* Si NO hay lesionados marcados → resaltamos el WA. Si SÍ, quita. */
+    if (anyMarked) btn.classList.remove('is-wa-hint');
+    else btn.classList.add('is-wa-hint');
+  }
+  function wire(){
+    var ov = document.getElementById('prepartido-overlay');
+    if (!ov){ setTimeout(wire, 300); return; }
+    if (ov.classList.contains('show')) setTimeout(checkAndHint, 80);
+    new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++){
+        if (muts[i].attributeName === 'class' && ov.classList.contains('show')){
+          setTimeout(checkAndHint, 80);
+          setTimeout(checkAndHint, 400);
+          break;
+        }
+      }
+    }).observe(ov, { attributes:true, attributeFilter:['class'] });
+    /* También revisar cada vez que el usuario toggle un ⬇️ en BAJAS. */
+    var orig = window._formaToggleInline;
+    if (typeof orig === 'function' && !orig.__waHintPatched){
+      window._formaToggleInline = function(){
+        var r = orig.apply(this, arguments);
+        setTimeout(checkAndHint, 50);
+        return r;
+      };
+      window._formaToggleInline.__waHintPatched = true;
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
+})();
+</script>
+
 <script>/* doc */</script>
 <div id="sancion-post-overlay">
 <div class="spost-icon" id="spost-icon">🟥</div>

@@ -7175,6 +7175,78 @@
   function _mlStartIntervalGen(mk) {
     var st = _mlSt(mk);
 
+    /* ════ IA vs IA: simulador dedicado garantizado (2026-05-09) ════
+       Petición usuario: TODA simulación IA-vs-IA debe avanzar el
+       cronómetro de 0 a 90 mostrando CADA minuto, a razón de
+       1 game-min = 1 segundo real. Total: 90 s reales.
+
+       Implementación dead-simple: `setInterval(callback, 1000)` que
+       hace `min++` cada segundo. Cero matemática Date.now() / tickMs /
+       _gameSecPerMs (origen del bug "stuck en 0'"). Si algún tick
+       lanza, lo capturamos y seguimos con el siguiente — el reloj
+       JAMÁS se detiene hasta llegar a 90.
+
+       Marcador HT al min 45 (sin descanso visible — IA-vs-IA es
+       continuo). Auto-finaliza al llegar a 90+stoppage. */
+    if (st.isIAvsIA && !st.etDone) {
+      if (st._iaiaInterval) { clearInterval(st._iaiaInterval); st._iaiaInterval = null; }
+      try { _mlPreGenAIEvents(mk); }
+      catch(_eIaPre){
+        try { console.error('[iaia pregen]', mk, _eIaPre); } catch(__){}
+        st.pendingAIEvents = [];
+        st.aiEventsGenerated = true;
+      }
+      st.stoppageSec = 0;
+      _mlRenderTimerGen(mk);
+      st._iaiaInterval = setInterval(function(){
+        try {
+          /* min++ en cada tick. Garantiza recorrido 1, 2, 3, … 90. */
+          var curMin = Math.floor(st.timerSec / 60) + 1;
+          st.timerSec = curMin * 60;
+
+          /* HT marker al cruzar el 45 (solo una vez). */
+          if (curMin === 45 && !st.htDone) {
+            st.htDone = true;
+            var listIA = document.getElementById('ml-acta-list-' + mk);
+            if (listIA) {
+              var mIA = document.createElement('div');
+              mIA.className = 'ml-ht';
+              mIA.textContent = '— DESCANSO (45 min) —';
+              listIA.appendChild(mIA);
+            }
+          }
+
+          /* Disparar eventos pendientes para este minuto. */
+          if (typeof _mlFirePendingEvents === 'function') {
+            _mlFirePendingEvents(mk, curMin);
+          }
+
+          /* Render del cronómetro con el nuevo minuto. */
+          _mlRenderTimerGen(mk);
+
+          /* End match al llegar a 90 (+ descuento dinámico si lo hay). */
+          var stops = (typeof _mlCountStoppageHalves === 'function')
+            ? _mlCountStoppageHalves(st)
+            : { first: 0, second: 0 };
+          var endMin = 90 + (stops.second || 0);
+          if (curMin >= endMin) {
+            clearInterval(st._iaiaInterval);
+            st._iaiaInterval = null;
+            st.timerInterval = null;
+            st.timerRunning = false;
+            if (typeof window.mlEndMatchGen === 'function') {
+              try { window.mlEndMatchGen(mk); } catch(_eEnd){ try{console.error('[iaia end]', _eEnd);}catch(__){} }
+            }
+          }
+        } catch(_eTickIa) {
+          try { console.error('[iaia tick]', mk, _eTickIa); } catch(__){}
+          /* Tick sigue vivo aunque uno falle. */
+        }
+      }, 1000);
+      st.timerInterval = st._iaiaInterval;
+      return;
+    }
+
     // ── AUTO-RESUME: cuando el móvil vuelve del background ──
     // El navegador congela setInterval al perder foco. Al volver,
     // este listener detecta que la pestaña es visible de nuevo y

@@ -1337,6 +1337,273 @@
     }, 200);
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     PREVIA — MODO TUTORIAL GUIADO (petición usuario 2026-05-10)
+     ───────────────────────────────────────────────────────────────
+     Cuando hay humano implicado (HvH o HvIA), guiamos al usuario
+     paso a paso por la previa. Cada paso destaca el elemento (glow
+     dorado + pulse) y muestra una manita 👉 animada al lado. Al
+     pulsar el elemento, vuelve a su estado normal y avanzamos al
+     siguiente. Pasos en orden:
+       1. ❓ alias eFootball  (solo si rival tiene alias)  → al cerrar
+          el overlay del alias, el ❓ desaparece (no vuelve)
+       2. 🏟️ estadio
+       3. ☀️ clima (estación + meteo)
+       4. 🟣 canal Twitch
+       5. ⚽ balón
+       6. ▶ CONFIRMAR CONFIGURACIÓN
+     Tras el último paso, el flujo entra en BAJAS PARA EL PARTIDO
+     (overlay de sanciones) que ya tiene su propio botón compartir
+     WhatsApp. ════════════════════════════════════════════════════ */
+  (function(){
+    var pointer = null;
+    var steps = null;
+    var idx = -1;
+    var clickHandler = null;
+    var aliasObserver = null;
+    var rafId = 0;
+    var active = false;
+
+    function _gMakePointer(){
+      if(pointer) return pointer;
+      pointer = document.createElement('div');
+      pointer.className = 'pp-guide-pointer';
+      pointer.textContent = '👉';
+      document.body.appendChild(pointer);
+      return pointer;
+    }
+    function _gKillPointer(){
+      try { if(pointer && pointer.parentNode) pointer.parentNode.removeChild(pointer); } catch(_){}
+      pointer = null;
+    }
+    function _gPositionPointer(target){
+      if(!target) return;
+      var p = _gMakePointer();
+      var r = target.getBoundingClientRect();
+      /* Si el target está cerca del borde derecho, ponemos la mano a la
+         IZQUIERDA con flecha 👈, si no a la DERECHA con 👉. */
+      var vw = window.innerWidth || document.documentElement.clientWidth;
+      var preferLeft = (r.right + 50) > vw;
+      if(preferLeft){
+        p.textContent = '👈';
+        p.classList.add('flip');
+        p.style.left = Math.max(4, r.left - 44) + 'px';
+      } else {
+        p.textContent = '👉';
+        p.classList.remove('flip');
+        p.style.left = Math.min(vw - 40, r.right + 6) + 'px';
+      }
+      p.style.top = (r.top + (r.height/2) - 18) + 'px';
+      p.style.display = 'block';
+    }
+    function _gFollowTarget(){
+      if(!active) return;
+      var step = steps && steps[idx];
+      if(step && step.target) _gPositionPointer(step.target);
+      rafId = requestAnimationFrame(_gFollowTarget);
+    }
+
+    function _gBuildSteps(){
+      var arr = [];
+      /* 1. Alias eFootball ❓ — solo si existe (renderizado por
+         copa-engine `_copaReplaceAliasText`). Tras cerrar overlay,
+         el ❓ se elimina por completo (regla del usuario). */
+      var aliasBtn = document.querySelector('#pp-vs .copa-alias-help');
+      if(aliasBtn){
+        arr.push({
+          target: aliasBtn,
+          click: aliasBtn,
+          isAlias: true
+        });
+      }
+      /* 2. Estadio — primera línea de #pp-env. Marcamos el span
+         contenedor para destacarlo (no el #pp-env entero, sería
+         demasiado grande). */
+      var envEl = document.getElementById('pp-env');
+      if(envEl){
+        var stadiumLine = envEl.querySelector('.pp-env-line');
+        if(stadiumLine){
+          arr.push({ target: stadiumLine, click: stadiumLine, soft:true });
+        }
+      }
+      /* 3. Clima (Verano · Soleado) — #pp-env-meteo. */
+      var meteoLine = document.getElementById('pp-env-meteo');
+      if(meteoLine){
+        arr.push({ target: meteoLine, click: meteoLine, soft:true });
+      }
+      /* 4. Twitch — botón con clase pp-twitch-btn. */
+      var twitchBtn = document.getElementById('pp-twitch-btn');
+      if(twitchBtn){
+        arr.push({ target: twitchBtn, click: twitchBtn });
+      }
+      /* 5. Balón — fila del item con data-ppid="balon". */
+      var ballRow = document.querySelector('#pp-list [data-ppid="balon"]');
+      if(ballRow){
+        arr.push({ target: ballRow, click: ballRow });
+      }
+      /* 6. CONFIRMAR CONFIGURACIÓN — el botón principal. */
+      var confirmBtn = document.getElementById('pp-confirm-btn');
+      if(confirmBtn){
+        arr.push({ target: confirmBtn, click: confirmBtn });
+      }
+      return arr;
+    }
+
+    function _gHighlight(step){
+      if(!step || !step.target) return;
+      step.target.classList.add('pp-guide-active');
+      _gPositionPointer(step.target);
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(_gFollowTarget);
+    }
+    function _gUnhighlight(step){
+      if(!step || !step.target) return;
+      step.target.classList.remove('pp-guide-active');
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+      _gKillPointer();
+    }
+
+    function _gAdvance(){
+      /* Limpiar el paso actual. */
+      if(idx >= 0 && steps && steps[idx]){
+        var prev = steps[idx];
+        if(clickHandler && prev.click){
+          try { prev.click.removeEventListener('click', clickHandler, true); } catch(_){}
+        }
+        _gUnhighlight(prev);
+        /* Caso especial alias: tras cerrar el overlay, eliminar el ❓
+           del DOM por completo (regla del usuario). */
+        if(prev.isAlias){
+          _gWaitAliasCloseThenRemove(prev.target);
+        }
+      }
+      idx++;
+      if(!steps || idx >= steps.length){
+        _gStop();
+        return;
+      }
+      var step = steps[idx];
+      _gHighlight(step);
+      clickHandler = function(){
+        try { step.click.removeEventListener('click', clickHandler, true); } catch(_){}
+        if(step.isAlias){
+          /* No avanzamos hasta que el overlay del alias se cierre. */
+          _gWaitAliasCloseThenAdvance();
+        } else {
+          /* Pequeño retraso para que la animación de "click" se vea. */
+          setTimeout(_gAdvance, 150);
+        }
+      };
+      step.click.addEventListener('click', clickHandler, true);
+    }
+
+    function _gWaitAliasCloseThenAdvance(){
+      /* Cuando el overlay #_copaAliasOv vuelve a display:none, avanzamos
+         al siguiente paso. */
+      var ov = document.getElementById('_copaAliasOv');
+      if(!ov){ setTimeout(_gAdvance, 800); return; }
+      try { if(aliasObserver) aliasObserver.disconnect(); } catch(_){}
+      aliasObserver = new MutationObserver(function(){
+        if(ov.style.display === 'none'){
+          try { aliasObserver.disconnect(); } catch(_){}
+          aliasObserver = null;
+          setTimeout(_gAdvance, 200);
+        }
+      });
+      aliasObserver.observe(ov, { attributes:true, attributeFilter:['style'] });
+    }
+    function _gWaitAliasCloseThenRemove(aliasBtn){
+      /* Tras avanzar (post-cierre del overlay), eliminamos el botón ❓
+         para que no vuelva a verse. */
+      try {
+        var parent = aliasBtn && aliasBtn.parentNode;
+        if(parent) parent.removeChild(aliasBtn);
+      } catch(_){}
+    }
+
+    function _gStart(){
+      if(active) _gStop();
+      /* Esperar a que el overlay esté completamente renderizado. El
+         render de pp-list, pp-env y pp-twitch-btn ocurre tras varios
+         paint frames (incluye observers de copa-engine para el alias).
+         500 ms es seguro en mobile / tablet. */
+      setTimeout(function(){
+        steps = _gBuildSteps();
+        if(!steps || !steps.length) return;
+        active = true;
+        idx = -1;
+        _gAdvance();
+      }, 500);
+    }
+    function _gStop(){
+      active = false;
+      if(idx >= 0 && steps && steps[idx]){
+        var s = steps[idx];
+        if(clickHandler && s.click){
+          try { s.click.removeEventListener('click', clickHandler, true); } catch(_){}
+        }
+        _gUnhighlight(s);
+      }
+      try { if(aliasObserver) aliasObserver.disconnect(); } catch(_){}
+      aliasObserver = null;
+      cancelAnimationFrame(rafId); rafId = 0;
+      _gKillPointer();
+      steps = null; idx = -1; clickHandler = null;
+    }
+
+    window._ppGuide = { start: _gStart, stop: _gStop };
+
+    /* Hook a showPrePartidoOverlay: si hay humano implicado, lanzamos
+       el guide. Detección robusta de humano via esHumano (parcheado
+       arriba para reconocer humanIcon). */
+    function _wrapPpForGuide(){
+      var orig = window.showPrePartidoOverlay;
+      if(typeof orig !== 'function' || orig._guidePatched) return false;
+      var wrapped = function(matchKey, compKey, prorroga, duracion, isHvH){
+        var ret = orig.apply(this, arguments);
+        var humanInvolved = !!isHvH;
+        try {
+          if(!humanInvolved && typeof window.esHumano === 'function'){
+            var teams = window._ppPreviaTeams || {};
+            humanInvolved = !!(window.esHumano(teams.home) || window.esHumano(teams.away));
+          }
+        } catch(_){}
+        if(humanInvolved){
+          try { window._ppGuide.start(); } catch(e){
+            try { console.warn('[ppGuide] start falló', e); } catch(_){}
+          }
+        }
+        return ret;
+      };
+      wrapped._guidePatched = true;
+      window.showPrePartidoOverlay = wrapped;
+      return true;
+    }
+    if(!_wrapPpForGuide()){
+      var _pgT = 0, _pgI = setInterval(function(){
+        _pgT++;
+        if(_wrapPpForGuide() || _pgT > 50) clearInterval(_pgI);
+      }, 200);
+    }
+    /* Hook al cierre del overlay → abortar guide. */
+    function _hookOverlayClose(){
+      var ov = document.getElementById('prepartido-overlay');
+      if(!ov) return;
+      var mo = new MutationObserver(function(){
+        if(active && !ov.classList.contains('show')){
+          try { window._ppGuide.stop(); } catch(_){}
+        }
+      });
+      mo.observe(ov, { attributes:true, attributeFilter:['class'] });
+    }
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', _hookOverlayClose);
+    } else {
+      _hookOverlayClose();
+    }
+  })();
+
   /* Abre el flujo Previa → gmOpen para un partido HvH de Superliga. */
   window._openSuperligaMatch = function(j, home, away){
     var cal = ensureCalendar();
@@ -1405,6 +1672,51 @@
 <div class="screen" id="s-superliga-stats">
 <button class="back-btn" onclick="go('s-superliga-clas')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">📈</span><h2>Superliga · Estadísticas</h2></div>
+<style>
+/* ── PREVIA — modo TUTORIAL guiado (petición usuario 2026-05-10).
+   Glow dorado pulsante + manita 👉 animada al lado del elemento
+   activo. La manita es position:fixed y sigue el target (vía rAF).
+   z-index alto para sobreponerse al overlay (10010). Se ignora
+   pointer-events para no bloquear el click. ─────────────────── */
+.pp-guide-active{
+  position:relative;
+  z-index:10011 !important;
+  outline:3px solid #ffd54a !important;
+  outline-offset:4px;
+  border-radius:8px;
+  box-shadow:0 0 24px rgba(255,213,74,.95),0 0 48px rgba(255,213,74,.55) !important;
+  animation:ppGuidePulse 1.2s ease-in-out infinite;
+  transition:outline-color .2s ease, box-shadow .2s ease;
+}
+@keyframes ppGuidePulse{
+  0%,100%{box-shadow:0 0 22px rgba(255,213,74,.85),0 0 44px rgba(255,213,74,.45);}
+  50%    {box-shadow:0 0 38px rgba(255,213,74,1.0),0 0 76px rgba(255,213,74,.70),0 0 110px rgba(255,213,74,.30);}
+}
+.pp-guide-pointer{
+  position:fixed;
+  font-size:36px;
+  z-index:10012;
+  pointer-events:none;
+  filter:drop-shadow(0 0 10px rgba(255,213,74,1)) drop-shadow(0 0 20px rgba(255,213,74,.6));
+  animation:ppGuideHand 0.8s ease-in-out infinite;
+  line-height:1;
+  user-select:none;
+  -webkit-user-select:none;
+}
+@keyframes ppGuideHand{
+  0%,100%{transform:translateX(0) scale(1);}
+  50%    {transform:translateX(-10px) scale(1.12);}
+}
+/* Cuando la manita apunta hacia la izquierda (👈), invertimos la
+   dirección del bounce para que se mueva hacia el target (derecha). */
+.pp-guide-pointer.flip{
+  animation-name:ppGuideHandFlip;
+}
+@keyframes ppGuideHandFlip{
+  0%,100%{transform:translateX(0) scale(1);}
+  50%    {transform:translateX(10px) scale(1.12);}
+}
+</style>
 <style>
 #s-superliga-stats .sl-stats-section-title{font-family:'Bebas Neue',Oswald,sans-serif;font-size:22px;letter-spacing:3px;color:#a855f7;text-shadow:0 0 18px rgba(168,85,247,.55);padding:14px 14px 6px;margin-top:6px;border-top:1px solid rgba(168,85,247,.20);}
 #s-superliga-stats .sl-stats-section-title.first{border-top:none;margin-top:0;}

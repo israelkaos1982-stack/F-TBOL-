@@ -25603,6 +25603,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var ms = _matchesFor(seasonId);
     var pj=0, g=0, e=0, p=0;
     ms.forEach(function(m){
+      if (!_matchIsHvH(m)) return;          /* solo HvH (2026-05-09) */
       var o = _outcomeFor(m, team);
       if (!o) return;
       pj++;
@@ -25638,6 +25639,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         + '<div class="mderby-summary-cell"><div class="mderby-summary-num pct">' + stats.pct + '%</div><div class="mderby-summary-lbl">% VIC</div></div>';
     }
     var ms = _matchesFor(_curSeasonId);
+    /* Filtro HvH también en la lista visual: matches legacy donde
+       uno de los dos teams no es humano se ocultan (no se borran de
+       storage por seguridad — si el usuario marca el rival como
+       humano en el futuro, vuelven a aparecer). 2026-05-09. */
+    ms = (ms || []).filter(_matchIsHvH);
     if (!listEl) return;
     if (!ms.length){
       listEl.innerHTML = '<div class="mderby-empty">— Aún no has añadido ningún partido —<br><span style="font-size:11px;">Pulsa <b>➕ AÑADIR PARTIDO</b> para empezar.</span></div>';
@@ -25831,6 +25837,18 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var local = _stripLeadingIcon(opts.local || opts.home || '').toLowerCase();
     var visit = _stripLeadingIcon(opts.visitante || opts.away || '').toLowerCase();
     if (local !== t && visit !== t) return; /* el partido no involucra a este equipo */
+    /* FILTRO HvH (petición usuario 2026-05-09): el Histórico Derbys
+       solo registra partidos donde AMBOS equipos son humanos. Antes
+       cualquier partido que pasara por gmEndMatch se logueaba si
+       coincidía con el teamName de la temporada — incluso si el rival
+       era IA y el motor sólo tenía marcado uno como humano. Ahora
+       descartamos cualquier partido donde al menos una de las dos
+       cajas NO esté flageada como humano por `window.esHumano`. */
+    var _esHum = (typeof window.esHumano === 'function') ? window.esHumano : function(){ return false; };
+    var _humL = false, _humV = false;
+    try { _humL = !!_esHum(opts.local || opts.home || ''); } catch(_){}
+    try { _humV = !!_esHum(opts.visitante || opts.away || ''); } catch(_){}
+    if (!_humL || !_humV) return;
     var comp = String(opts.comp || 'liga').trim();
     var jornada = String(opts.jornada || opts.j || '').trim();
     var localName = _stripLeadingIcon(opts.local || opts.home || '');
@@ -25851,7 +25869,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (dup) return;
     all[current.id].push({
       id: _newId(), jornada: jornada, comp: comp,
-      local: localName, gl: gl, gv: gv, visitante: visitName
+      local: localName, gl: gl, gv: gv, visitante: visitName,
+      isHvH: true   /* marker explícito para distinguir de matches
+                      legacy (sin flag) en filtro de lectura */
     });
     _saveAll(all);
     /* Refrescar HUB inmediatamente. */
@@ -25862,8 +25882,27 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (_curSeasonId === current.id) _renderSeason();
   };
 
+  /* Filtro HvH aplicado en LECTURA: descarta matches donde alguno
+     de los dos equipos NO sea humano. Cubre matches LEGACY (saved
+     antes del fix del autolog) y partidos donde el flag isHuman
+     cambió desde que se guardó. Si el match tiene `isHvH:true`
+     explícito (saved tras el fix), confiamos en ese flag y
+     evitamos la consulta runtime. */
+  function _matchIsHvH(m){
+    if (!m) return false;
+    if (m.isHvH === true) return true;       /* explícito (post-fix) */
+    if (m.isHvH === false) return false;
+    var _esHum = (typeof window.esHumano === 'function') ? window.esHumano : null;
+    if (!_esHum) return true;                /* sin esHumano, no filtramos (defensiva) */
+    var lOk = false, vOk = false;
+    try { lOk = !!_esHum(_stripLeadingIcon(String(m.local||''))); } catch(_){}
+    try { vOk = !!_esHum(_stripLeadingIcon(String(m.visitante||''))); } catch(_){}
+    return lOk && vOk;
+  }
+
   /* Helper público para que el HUB de la pantalla principal sume todas
-     las temporadas. Devuelve {pj,g,e,p,pct} agregado. */
+     las temporadas. Devuelve {pj,g,e,p,pct} agregado.
+     Filtra solo HvH (petición usuario 2026-05-09). */
   window.munichDerbyAggregateAll = function(){
     var seasons = _loadSeasons();
     var all = _loadAll();
@@ -25872,6 +25911,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (!s || !s.teamName) return;
       var ms = Array.isArray(all[s.id]) ? all[s.id] : [];
       ms.forEach(function(m){
+        if (!_matchIsHvH(m)) return;       /* solo HvH */
         var o = _outcomeFor(m, s.teamName);
         if (!o) return;
         pj++;
@@ -25894,6 +25934,26 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             _serverPullAll(function(){ _renderSeason(); });
           }
         }).observe(screen, {attributes:true, attributeFilter:['class']});
+      } catch(_){}
+    }
+    /* Refresh del HUB cada vez que se activa s-munich. Antes el HUB
+       solo se hidrataba en el pull inicial al cargar la app — si el
+       autolog ocurría con s-munich cerrado, el HUB se quedaba con
+       contadores stale hasta el próximo refresh manual. Petición
+       usuario 2026-05-09 (FOTO 4: HUB en 0/0/0/0/0% pese a tener
+       matches en seasons). */
+    var hubScreen = document.getElementById('s-munich');
+    if (hubScreen){
+      try {
+        new MutationObserver(function(){
+          if (hubScreen.classList.contains('active')){
+            _serverPullAll(function(){
+              if (typeof window.refreshMunichDerbysHub === 'function'){
+                try { window.refreshMunichDerbysHub(); } catch(_){}
+              }
+            });
+          }
+        }).observe(hubScreen, {attributes:true, attributeFilter:['class']});
       } catch(_){}
     }
     /* Pull inicial para hidratar matches al cargar la app — así el

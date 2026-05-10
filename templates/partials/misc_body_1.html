@@ -14805,6 +14805,90 @@ window._showSimProgress = function(opts, onDone){
 })();
 </script>
 
+<!-- ════ HUMANIDAD POR COMPETICIÓN — helper canónico ═════════════════
+     Petición usuario 2026-05-10: "PSG🦆 es equipo humano en
+     Champions League y Superliga, en el resto es IA". El sistema
+     debe distinguir HUMANIDAD según contexto de comp.
+
+     Reglas:
+     · 'liga' / 'copa' / 'sc' → solo los 5 humanos canónicos de Liga
+       EA Sports (Real Madrid, FC Barcelona, Atlético, Arsenal,
+       Bayern Munich) — vía `esHumano()` global del bundle.
+     · 'ucl' / 'uel' / 'uecl' / 'recopa' / 'usc' / 'inter' / 'mundial'
+       → cualquier equipo con `humanIcon(name)` asignado en el editor
+       de plantilla (cubre PSG, Manchester United, Dortmund, etc.).
+     · 'superliga' → equipos seleccionados al configurar la Superliga
+       (todos humanos por definición — los 6 son humanos).
+     · 'amistoso' / 'torneo' / 'wprev' (Previa Champions) → cualquier
+       team con humanIcon (igual que eur).
+     · default → solo Liga EA humans (esHumano).
+
+     IMPORTANTE: este helper no sustituye a `esHumano()` (que sigue
+     siendo la verdad para Liga doméstica). Es una capa AÑADIDA que
+     consultan los flujos que necesitan saber "¿es humano EN ESTA
+     COMP?". Liga / Copa siguen usando esHumano sin cambios. ════ -->
+<script>
+(function(){
+  var EUR_COMPS = { ucl:1, uel:1, uecl:1, recopa:1, usc:1, 'usc-fin':1,
+                    inter:1, 'inter-fin':1, mundial:1, amistoso:1,
+                    torneo:1, wprev:1, 'ucl-prev':1, 'ucl-oq':1, 'ucl-wc':1 };
+  var DOM_COMPS = { liga:1, copa:1, 'copa-fin':1, sc:1, 'sc-final':1, '':1 };
+  function _hasHumanIcon(name){
+    try {
+      if(typeof window.humanIcon === 'function'){
+        var i = window.humanIcon(name);
+        if(i) return true;
+      }
+    } catch(_){}
+    try {
+      var hf = window._LIGA_HUMAN_FLAGS || {};
+      if(hf[name] && hf[name].isHuman) return true;
+      var nLow = String(name||'').trim().toLowerCase();
+      for(var k in hf){
+        if(hf.hasOwnProperty(k) && String(k).trim().toLowerCase() === nLow
+           && hf[k] && hf[k].isHuman) return true;
+      }
+    } catch(_){}
+    return false;
+  }
+  function _isLigaHuman(name){
+    try {
+      if(typeof window.esHumano === 'function') return !!window.esHumano(name);
+    } catch(_){}
+    return false;
+  }
+  function _isSuperligaHuman(name){
+    /* En Superliga TODOS los equipos seleccionados son humanos. Si el
+       name está en `loadTeams()` de superliga, es humano. Si la
+       función no existe (puede no estar cargada), caemos al check
+       genérico humanIcon. */
+    try {
+      var slKey = 'superliga_teams_v1';
+      var raw = localStorage.getItem(slKey);
+      if(raw){
+        var arr = JSON.parse(raw);
+        if(Array.isArray(arr)){
+          var nLow = String(name||'').trim().toLowerCase();
+          for(var i = 0; i < arr.length; i++){
+            if(String(arr[i]||'').trim().toLowerCase() === nLow) return true;
+          }
+        }
+      }
+    } catch(_){}
+    return _hasHumanIcon(name) || _isLigaHuman(name);
+  }
+  window.isHumanInComp = function(name, comp){
+    if(!name) return false;
+    var c = String(comp||'').toLowerCase();
+    if(c === 'superliga') return _isSuperligaHuman(name);
+    if(EUR_COMPS[c])      return _hasHumanIcon(name) || _isLigaHuman(name);
+    if(DOM_COMPS[c])      return _isLigaHuman(name);
+    /* Default: igual que dominio (esHumano). Conservador. */
+    return _isLigaHuman(name);
+  };
+})();
+</script>
+
 <!-- ════ FASE DE LIGA: UCL / UEL / UECL — sorteo Swiss-format ════
      Petición usuario 2026-05-09: cada equipo juega 8 partidos
      (4 local + 4 visitante) en 8 jornadas. Regla obligatoria:
@@ -14844,6 +14928,46 @@ window._showSimProgress = function(opts, onDone){
 .eurfase-card-acta{border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px;font-family:Rajdhani,sans-serif;font-size:12px;max-height:240px;overflow-y:auto;color:rgba(255,255,255,.85);}
 .eurfase-sim-all{padding:8px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;background:rgba(255,160,40,.15);color:#ffa050;border:1.5px solid rgba(255,160,40,.55);text-transform:uppercase;}
 .eurfase-sim-all:active{background:rgba(255,160,40,.28);}
+/* Acta desplegable bajo cards finalizadas (petición usuario 2026-05-10). */
+.eurfase-acta-wrap{margin-top:8px;border-top:1px solid rgba(159,200,255,.18);padding-top:6px;}
+.eurfase-acta-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;padding:5px 8px;border-radius:6px;background:rgba(48,96,255,.10);border:1px solid rgba(159,200,255,.30);color:#9fc8ff;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;user-select:none;}
+.eurfase-acta-toggle:hover{background:rgba(48,96,255,.18);}
+.eurfase-acta-toggle-ico{font-size:10px;}
+.eurfase-acta-toggle-lbl{flex:1;}
+.eurfase-acta-list{margin-top:6px;padding:6px 4px;background:rgba(0,0,0,.30);border-radius:6px;max-height:280px;overflow-y:auto;}
+.eurfase-acta-row{display:grid;grid-template-columns:42px 26px 1fr auto;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;}
+.eurfase-acta-row:last-child{border-bottom:none;}
+.eurfase-acta-min{color:#9fc8ff;font-weight:700;font-size:11.5px;letter-spacing:.5px;}
+.eurfase-acta-ico{text-align:center;font-size:14px;}
+.eurfase-acta-player{color:#fff;line-height:1.2;}
+.eurfase-acta-team{color:rgba(255,255,255,.55);font-size:10.5px;letter-spacing:.3px;}
+.eurfase-acta-empty{padding:10px;text-align:center;color:rgba(255,255,255,.45);font-style:italic;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;}
+.eurfase-acta-mvp{padding:8px 10px;margin-top:4px;background:linear-gradient(90deg,rgba(255,213,74,.12),rgba(255,213,74,.04));border-left:2px solid rgba(255,213,74,.55);color:#ffe089;font-family:Rajdhani,sans-serif;font-size:12px;}
+.eurfase-acta-mvp b{color:#ffd54a;}
+/* Tabla de clasificación Swiss-format (UCL/UEL/UECL fase de liga). */
+.eurfase-clas-empty,.eurfase-clas-info{padding:14px;text-align:center;color:rgba(255,255,255,.55);font-style:italic;font-family:Rajdhani,sans-serif;font-size:12.5px;}
+.eurfase-clas-table{margin:4px 6px 8px;background:linear-gradient(180deg,rgba(20,40,90,.30),rgba(8,15,40,.55));border:1px solid rgba(159,200,255,.20);border-radius:8px;overflow:hidden;}
+.eurfase-clas-row{display:grid;grid-template-columns:28px 1fr 30px 26px 26px 26px 30px 30px 32px 36px;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.04);font-family:Rajdhani,sans-serif;font-size:11.5px;color:#fff;}
+.eurfase-clas-row:last-child{border-bottom:none;}
+.eurfase-clas-hdr{background:rgba(48,96,255,.20);color:#9fc8ff;font-family:Oswald,sans-serif;font-size:10.5px;letter-spacing:1.2px;font-weight:700;text-transform:uppercase;}
+.eurfase-clas-pos{text-align:center;color:#9fc8ff;font-weight:700;}
+.eurfase-clas-team{display:flex;align-items:center;gap:6px;min-width:0;}
+.eurfase-clas-shield{width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.eurfase-clas-shield img{width:100%;height:100%;object-fit:contain;}
+.eurfase-clas-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
+.eurfase-clas-num{text-align:center;color:rgba(255,255,255,.85);font-variant-numeric:tabular-nums;}
+.eurfase-clas-pts{color:#9fc8ff;font-weight:700;}
+.eurfase-clas-band-top{border-left:3px solid #5fe08a;}
+.eurfase-clas-band-top .eurfase-clas-pos{color:#5fe08a;}
+.eurfase-clas-band-mid{border-left:3px solid #f0c040;}
+.eurfase-clas-band-mid .eurfase-clas-pos{color:#f0c040;}
+.eurfase-clas-band-bot{border-left:3px solid rgba(255,80,80,.55);opacity:.78;}
+.eurfase-clas-band-bot .eurfase-clas-pos{color:#ff8080;}
+.eurfase-clas-legend{padding:8px 12px 12px;font-family:Rajdhani,sans-serif;font-size:10.5px;color:rgba(255,255,255,.6);line-height:1.7;}
+.eurfase-clas-leg-dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle;}
+.eurfase-clas-leg-dot.eurfase-clas-band-top{background:#5fe08a;border:none;}
+.eurfase-clas-leg-dot.eurfase-clas-band-mid{background:#f0c040;border:none;}
+.eurfase-clas-leg-dot.eurfase-clas-band-bot{background:rgba(255,80,80,.55);border:none;}
 </style>
 <script>
 (function(){
@@ -15395,42 +15519,14 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     return '';
   }
+  /* `_isHumanTeam(name)` LOCAL al render de UCL/UEL/UECL — siempre
+     usa la rama 'eur' del helper canónico `window.isHumanInComp`
+     (cualquier team con humanIcon asignado). Independiente de la
+     humanidad en otras competiciones (CLAUDE.md → "Humanidad por
+     competición"): PSG es humano en Champions, en Liga es IA. */
   function _isHumanTeam(name){
-    if(!name) return false;
-    if(typeof window.isHumanTeam === 'function'){
-      try { if(window.isHumanTeam(name)) return true; } catch(_){}
-    }
-    /* `humanIcon(name)` devuelve el emoji humano (🦆/💡/🐭/🐔/🦊…) que
-       el admin asignó en el editor de plantilla. Es la señal canónica
-       de "equipo humano" — cubre PSG, Bayern (sin "Munich"),
-       Manchester United, Borussia Dortmund, etc. que NO están en la
-       lista HUMAN_TEAMS hardcoded de Liga EA Sports. */
-    try {
-      if(typeof window.humanIcon === 'function'){
-        var ico = window.humanIcon(name);
-        if(ico) return true;
-      }
-    } catch(_){}
-    /* `_LIGA_HUMAN_FLAGS` mantiene { isHuman, humanEmoji } por nombre
-       canónico (lo rellena el editor de Liga EA Sports). Es otra
-       fuente fiable cuando humanIcon aún no está cargado. */
-    try {
-      var hf = window._LIGA_HUMAN_FLAGS || {};
-      if(hf[name] && hf[name].isHuman) return true;
-      var nLow = String(name||'').trim().toLowerCase();
-      for(var k in hf){
-        if(hf.hasOwnProperty(k) && String(k).trim().toLowerCase() === nLow && hf[k] && hf[k].isHuman) return true;
-      }
-    } catch(_){}
-    /* Fallback: lista canónica con variantes de "Bayern" / "PSG". */
-    var H = window.HUMAN_TEAMS || [
-      'Real Madrid','FC Barcelona','Atlético Madrid','Atletico Madrid',
-      'Arsenal','Bayern Munich','Bayern Munchen','Bayern Muenchen','Bayern',
-      'PSG','Paris Saint-Germain','Paris SG'
-    ];
-    var n = String(name||'').trim().toLowerCase();
-    for(var i = 0; i < H.length; i++){
-      if(String(H[i]||'').trim().toLowerCase() === n) return true;
+    if(typeof window.isHumanInComp === 'function'){
+      try { return !!window.isHumanInComp(name, 'ucl'); } catch(_){}
     }
     return false;
   }
@@ -15493,6 +15589,17 @@ window._showSimProgress = function(opts, onDone){
     var actaEl = (bothIA && !played)
       ? '<div id="ia-acta-' + mk + '" class="eurfase-card-acta" style="display:none"></div>'
       : '';
+    /* Panel ACTA DEL PARTIDO desplegable cuando played=true (petición
+       usuario 2026-05-10: "todos los partidos finalizados de Champions
+       League, Europa league y Conference tiene que tener la opción de
+       ver el acta del partido como desplegable"). Mismo patrón que
+       Copa del Rey / Liga EA Sports — toggle ▼/▲ + lista minuto-icono-
+       jugador-equipo + MVP destacado al final. */
+    var actaPanelHtml = '';
+    if(played){
+      var actaUid = 'eurfase-acta-' + comp + '-' + m.jornada + '-' + m._origIdx;
+      actaPanelHtml = _eurFaseRenderActaPanel(m, actaUid);
+    }
     return '<div class="eurfase-card-rich" style="' + wrapStyle + '">'
          + '<div class="eurfase-card-row">'
          +   '<div class="eurfase-card-team">'
@@ -15509,8 +15616,72 @@ window._showSimProgress = function(opts, onDone){
          +   '</div>'
          + '</div>'
          + actaEl
+         + actaPanelHtml
          + '</div>';
   }
+  /* Acta desplegable del partido finalizado. Similar a `_renderActaPanel`
+     de Copa del Rey: header clicable con minuto+icono+jugador+equipo y
+     MVP destacado debajo. Eventos vienen de m.events (persistido por
+     _eurFasePersistAfterIa o _eurFaseSaveHumanResult). */
+  var _EURFASE_EV_ICOS = {
+    'gol':'⚽','pen-gol':'⚽🥅','pen-prov':'🤦','pen-parado':'🖐','pen-fallo':'❌',
+    'falta-gol':'⚽🎯','propia':'⚽🚫','roja':'🟥','amarilla':'🟨',
+    'd-amarilla':'🟨🟥','sust':'🔄','imbat':'🧤','lesion':'🩹','mvp':'⭐'
+  };
+  function _eurFaseRenderActaPanel(m, uid){
+    var events = (m && m.events) || [];
+    /* Filtrar eventos relevantes para el acta (sin "played" interno
+       ni "sust" ocultos ni "mvp" — el MVP va aparte abajo). */
+    var sorted = events.slice()
+      .filter(function(e){ return e && e.type !== 'played' && e.type !== 'sust' && e.type !== 'mvp'; })
+      .sort(function(a,b){ return (Number(a.min)||0) - (Number(b.min)||0); });
+    var rows = '';
+    sorted.forEach(function(ev){
+      var ico = _EURFASE_EV_ICOS[ev.type] || '•';
+      if(ev.dbl) ico = '🟨🟥';
+      var pname = String(ev.player || ev.name || '').replace(/^\s*\d+\s*[.\-]?\s*/, '').trim();
+      var teamName = ev.team === 'a' ? m.home : (ev.team === 'b' ? m.away : '');
+      var minLabel = ev.min === 121 ? 'PEN' : (ev.min + '\'');
+      var extra = '';
+      if(ev._varAnulado) extra = ' <span style="font-size:10px;color:#ff5555;font-weight:700;letter-spacing:.4px">⛔ ANULADA POR 📺 VAR</span>';
+      else if(ev._varConfirmed) extra = ' <span style="font-size:10px;color:#4fd87a;font-weight:700">✓ Confirmado por 📺 VAR</span>';
+      rows += '<div class="eurfase-acta-row">'
+            + '<span class="eurfase-acta-min">' + _esc(minLabel) + '</span>'
+            + '<span class="eurfase-acta-ico">' + ico + '</span>'
+            + '<span class="eurfase-acta-player">' + _esc(pname || 'Jugador') + extra + '</span>'
+            + '<span class="eurfase-acta-team">' + _esc(teamName) + '</span>'
+            + '</div>';
+    });
+    if(!rows){
+      rows = '<div class="eurfase-acta-empty">Sin eventos registrados</div>';
+    }
+    var mvpRow = '';
+    if(m.mvp){
+      mvpRow = '<div class="eurfase-acta-mvp">⭐ MVP: <b>' + _esc(String(m.mvp).replace(/^\s*\d+\s*[.\-]?\s*/, '').trim()) + '</b>'
+             + (m.mvpTeam ? ' <span class="eurfase-acta-team">(' + _esc(m.mvpTeam) + ')</span>' : '')
+             + '</div>';
+    }
+    return '<div class="eurfase-acta-wrap">'
+         + '<div class="eurfase-acta-toggle" onclick="window._eurFaseToggleActa(\'' + uid + '\',this)">'
+         +   '<span class="eurfase-acta-toggle-ico">▼</span>'
+         +   '<span class="eurfase-acta-toggle-lbl">📋 Acta del partido</span>'
+         + '</div>'
+         + '<div id="' + uid + '" class="eurfase-acta-list" style="display:none">'
+         +   rows
+         +   mvpRow
+         + '</div>'
+         + '</div>';
+  }
+  window._eurFaseToggleActa = function(uid, btnEl){
+    var el = document.getElementById(uid);
+    if(!el) return;
+    var open = el.style.display !== 'none';
+    el.style.display = open ? 'none' : 'block';
+    if(btnEl){
+      var ico = btnEl.querySelector('.eurfase-acta-toggle-ico');
+      if(ico) ico.textContent = open ? '▼' : '▲';
+    }
+  };
   function renderJornada(comp, jor){
     var c = COMPS[comp]; if(!c) return false;
     var titleEl = document.getElementById(c.titleId);
@@ -15580,6 +15751,27 @@ window._showSimProgress = function(opts, onDone){
     return true;
   }
   /* ── Helpers expuestos: Previa (HvH/HvIA) + Sim All IA. ────────── */
+  /* Wrapper canónico: abre el gm-modal con los flags _isEurFase para
+     que gmEndMatch persista en {comp}_phase_v1. Mismo patrón que
+     `abrirRecopa` / `abrirSc`. Lo invoca tanto el callback de la
+     previa como cualquier "reabrir" futuro. */
+  window.abrirEurFase = function(comp, jor, idx, home, away){
+    var isHvH = _isHumanTeam(home) && _isHumanTeam(away);
+    if(typeof window.gmOpen !== 'function') return;
+    try { window.gmOpen(0, home, away, isHvH, comp, false, false); } catch(e){
+      try { console.error('[abrirEurFase] gmOpen falló', e); } catch(_){}
+      return;
+    }
+    try {
+      if(window.__GM_LIVE){
+        window.__GM_LIVE._isEurFase = true;
+        window.__GM_LIVE._eurFaseComp = comp;
+        window.__GM_LIVE._eurFaseJor = jor;
+        window.__GM_LIVE._eurFaseIdx = idx;
+        window.__GM_LIVE.comp = comp;
+      }
+    } catch(_){}
+  };
   window._eurFaseAbrirPrevia = function(comp, jor, idx){
     var c = COMPS[comp]; if(!c) return;
     var state = loadState(comp); if(!state || !state.pairs || !state.pairs[idx]) return;
@@ -15592,19 +15784,10 @@ window._showSimProgress = function(opts, onDone){
       : (isHvH ? '15 min 45 s' : '9 min 45 s');
     window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: comp,
       eurFaseComp: comp, eurFaseJor: jor, eurFaseIdx: idx };
-    window._eurFasePending = { comp: comp, jor: jor, idx: idx, home: local, away: visit, isHvH: isHvH };
     window._ppCustomCallback = function(){
       window._ppPreviaTeams = null;
-      if(typeof window.gmOpen !== 'function') return;
-      try {
-        window.gmOpen(0, local, visit, isHvH, comp, false, false);
-        if(window.__GM_LIVE){
-          window.__GM_LIVE._isEurFase = true;
-          window.__GM_LIVE._eurFaseComp = comp;
-          window.__GM_LIVE._eurFaseJor = jor;
-          window.__GM_LIVE._eurFaseIdx = idx;
-        }
-      } catch(_){}
+      try { window.abrirEurFase(comp, jor, idx, local, visit); }
+      catch(e){ try { console.error('[eurFase callback]', e); } catch(_){} }
     };
     if(typeof window.showPrePartidoOverlay === 'function'){
       /* Fase de liga = single-leg sin prórroga (regla UEFA Swiss).
@@ -15675,6 +15858,140 @@ window._showSimProgress = function(opts, onDone){
       }
     };
   });
+
+  /* ── CLASIFICACIÓN Swiss-format (petición usuario 2026-05-10:
+     "todos los resultados tienen que ir a la clasificación de su
+     competición"). Renderiza una tabla de 36 equipos con PJ/G/E/P/
+     GF/GC/DG/PTS, leyendo de `state.pairs[]` (3 pts por victoria,
+     1 punto por empate). Banda visual:
+       1-8   → verde (clasifica directo a Octavos)
+       9-24  → amarillo (playoff round)
+       25-36 → rojo (eliminados)
+     El render se dispara automáticamente al entrar en s-{comp}-previa
+     y al guardar resultados (tras IA o tras humano). ──────────── */
+  function _eurFaseComputeStandings(comp){
+    var state = loadState(comp); if(!state) return [];
+    var teams = (state.teams || []).slice();
+    var byName = {};
+    teams.forEach(function(t){
+      byName[t.name] = { name: t.name, logo: t.logo || '', league: t.league || '',
+        pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0 };
+    });
+    (state.pairs || []).forEach(function(m){
+      if(!m || !m.played) return;
+      var H = byName[m.home], V = byName[m.away];
+      if(!H || !V) return;
+      var gh = Number(m.gh)||0, ga = Number(m.ga)||0;
+      H.pj++; V.pj++;
+      H.gf += gh; H.gc += ga;
+      V.gf += ga; V.gc += gh;
+      if(gh > ga){ H.g++; V.p++; H.pts += 3; }
+      else if(gh < ga){ V.g++; H.p++; V.pts += 3; }
+      else { H.e++; V.e++; H.pts++; V.pts++; }
+    });
+    var arr = Object.keys(byName).map(function(k){ var x = byName[k]; x.dg = x.gf - x.gc; return x; });
+    arr.sort(function(a,b){
+      if(b.pts !== a.pts) return b.pts - a.pts;
+      if(b.dg !== a.dg)   return b.dg - a.dg;
+      if(b.gf !== a.gf)   return b.gf - a.gf;
+      return String(a.name).localeCompare(String(b.name), 'es');
+    });
+    return arr;
+  }
+  function _eurFaseRenderClas(comp){
+    var hostId = comp + '-p-clas';
+    var host = document.getElementById(hostId);
+    if(!host) return;
+    var rows = _eurFaseComputeStandings(comp);
+    if(!rows.length){
+      host.innerHTML = '<div class="eurfase-clas-empty">⚠️ Aún no se ha sorteado la fase de liga. Ve al botón <b>🎯 Sortear</b> para arrancar la competición.</div>';
+      return;
+    }
+    var anyPlayed = rows.some(function(r){ return r.pj > 0; });
+    var hdr = '<div class="eurfase-clas-row eurfase-clas-hdr">'
+            + '<span class="eurfase-clas-pos">#</span>'
+            + '<span class="eurfase-clas-team">Equipo</span>'
+            + '<span class="eurfase-clas-num">PJ</span>'
+            + '<span class="eurfase-clas-num">G</span>'
+            + '<span class="eurfase-clas-num">E</span>'
+            + '<span class="eurfase-clas-num">P</span>'
+            + '<span class="eurfase-clas-num">GF</span>'
+            + '<span class="eurfase-clas-num">GC</span>'
+            + '<span class="eurfase-clas-num">DG</span>'
+            + '<span class="eurfase-clas-num eurfase-clas-pts">PTS</span>'
+            + '</div>';
+    var html = '';
+    if(!anyPlayed){
+      html += '<div class="eurfase-clas-info">📊 Aún no hay partidos jugados — ranking inicial por sorteo.</div>';
+    }
+    html += '<div class="eurfase-clas-table">' + hdr;
+    rows.forEach(function(r, i){
+      var pos = i + 1;
+      var band = pos <= 8 ? 'top' : (pos <= 24 ? 'mid' : 'bot');
+      var logoHtml = r.logo
+        ? '<img src="' + _esc(r.logo) + '" onerror="this.style.display=\'none\'">'
+        : '<span style="color:rgba(159,200,255,.5);">🛡</span>';
+      var hi = _humanIcoFor(r.name);
+      var dgFmt = r.dg > 0 ? ('+' + r.dg) : String(r.dg);
+      html += '<div class="eurfase-clas-row eurfase-clas-band-' + band + '">'
+            + '<span class="eurfase-clas-pos">' + pos + '</span>'
+            + '<span class="eurfase-clas-team"><span class="eurfase-clas-shield">' + logoHtml + '</span><span class="eurfase-clas-name">' + hi + _esc(r.name) + '</span></span>'
+            + '<span class="eurfase-clas-num">' + r.pj + '</span>'
+            + '<span class="eurfase-clas-num">' + r.g + '</span>'
+            + '<span class="eurfase-clas-num">' + r.e + '</span>'
+            + '<span class="eurfase-clas-num">' + r.p + '</span>'
+            + '<span class="eurfase-clas-num">' + r.gf + '</span>'
+            + '<span class="eurfase-clas-num">' + r.gc + '</span>'
+            + '<span class="eurfase-clas-num">' + dgFmt + '</span>'
+            + '<span class="eurfase-clas-num eurfase-clas-pts">' + r.pts + '</span>'
+            + '</div>';
+    });
+    html += '</div>';
+    html += '<div class="eurfase-clas-legend">'
+          + '<span class="eurfase-clas-leg-dot eurfase-clas-band-top"></span>1–8 · Octavos directo  '
+          + '<span class="eurfase-clas-leg-dot eurfase-clas-band-mid"></span>9–24 · Playoff (Repesca Octavos)  '
+          + '<span class="eurfase-clas-leg-dot eurfase-clas-band-bot"></span>25–36 · Eliminados'
+          + '</div>';
+    host.innerHTML = html;
+  }
+  window._eurFaseRenderClas = _eurFaseRenderClas;
+  /* Re-render automático al saltar a las pantallas de previa. */
+  (function(){
+    var prevGo = window.go;
+    if(typeof prevGo !== 'function' || prevGo._eurFaseClasPatched) return;
+    window.go = function(id){
+      var ret = prevGo.apply(this, arguments);
+      try {
+        var s = String(id||'');
+        if(s === 's-ucl-previa')      _eurFaseRenderClas('ucl');
+        else if(s === 's-uel-previa') _eurFaseRenderClas('uel');
+        else if(s === 's-uecl-previa') _eurFaseRenderClas('uecl');
+      } catch(_){}
+      return ret;
+    };
+    window.go._eurFaseClasPatched = true;
+  })();
+  /* Re-rebuild standings tras guardar un resultado (IA o humano).
+     Lo enganchamos a las funciones de persistencia ya existentes. */
+  (function(){
+    var origIa = window._eurFasePersistAfterIa;
+    if(typeof origIa === 'function'){
+      window._eurFasePersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam){
+        try { origIa(mk, home, away, scA, scB, events, mvp, mvpTeam); } catch(_){}
+        try {
+          var m = /^eurfase_([a-z]+)_/.exec(String(mk||''));
+          if(m) _eurFaseRenderClas(m[1]);
+        } catch(_){}
+      };
+    }
+    var origHum = window._eurFaseSaveHumanResult;
+    if(typeof origHum === 'function'){
+      window._eurFaseSaveHumanResult = function(comp, jor, idx, gh, ga, events, mvp, mvpTeam, home, away){
+        try { origHum(comp, jor, idx, gh, ga, events, mvp, mvpTeam, home, away); } catch(_){}
+        try { _eurFaseRenderClas(comp); } catch(_){}
+      };
+    }
+  })();
 
   /* Hidratar desde server al cargar (best-effort). */
   function _hydrateAll(){

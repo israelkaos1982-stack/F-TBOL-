@@ -1,5 +1,38 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Humanidad por competición (obligatorio, 2026-05-10)
+
+**Un equipo puede ser HUMANO en una competición y IA en otra.** No
+hay una lista global de "equipos humanos del proyecto" — la humanidad
+depende del contexto. Helper canónico:
+`window.isHumanInComp(name, comp)` (definido en `misc_body_1.html`
+arriba del IIFE de UCL/UEL/UECL fase de liga).
+
+| Competición                                | Humanos                                                    |
+|--------------------------------------------|------------------------------------------------------------|
+| `liga` / `copa` / `sc`                     | Solo los **5 humanos canónicos** de Liga EA Sports         |
+| `ucl` / `uel` / `uecl` / `recopa` / `usc` / `inter` / `mundial` / `wprev` / `amistoso` / `torneo` | Cualquier equipo con `humanIcon(name)` asignado (por el editor de plantilla) |
+| `superliga`                                | Equipos seleccionados al configurar Superliga (los 6)      |
+
+Los **5 humanos canónicos** son: Real Madrid, FC Barcelona, Atlético
+Madrid, Arsenal, Bayern Munich. Vienen de `esHumano()` que lee
+`ligaExt_liga-ea-sports.teams[].isHuman`.
+
+Los **humanos extra** (PSG, Manchester United, Borussia Dortmund,
+Manchester City, RB Leipzig, etc.) tienen un `humanEmoji` asignado
+en el editor de plantilla (Resto de Ligas) que `humanIcon(name)`
+devuelve. Estos equipos son humanos SOLO en eur/superliga (donde
+juega un humano "secundario") y son IA en Liga doméstica.
+
+Reglas obligatorias:
+1. **No usar `esHumano(name)` directamente para flujos eur/superliga.**
+   Usar `window.isHumanInComp(name, comp)`.
+2. **No añadir teams a la lista global de Liga EA solo para forzarlos
+   a humano en otras comps.** Añade `humanEmoji` a su plantilla en el
+   editor — eso lo hace humano en eur/amistoso/torneo SIN romper Liga.
+3. **No hardcodear listas tipo `EUROPEAN_HUMANS = [...]`.** Cualquier
+   chequeo de humanidad va por `isHumanInComp`.
+
 ## Límites de almacenamiento por carpeta (obligatorio, 2026-05-02)
 
 Cada carpeta y subcarpeta del almacenamiento del navegador

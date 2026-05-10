@@ -12154,6 +12154,57 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
   })();
 
+  /* Recupera el `league` (slug país) original de un equipo, usado como
+     fallback cuando los datos persistidos en wprev_to_* o legacy no lo
+     traen. Escanea todos los `ligaExt_*` buscando por nombre — caro
+     pero solo se llama 30-40 veces por sorteo. Resultado cacheado en
+     `_eurLeagueCache` para evitar repetir el escaneo en el mismo
+     batch. La fase de liga UCL/UEL/UECL la usa para que dos teams del
+     mismo país real (aunque vinieran de la Previa) no se enfrenten. */
+  var _eurLeagueCache = null;
+  function _eurLookupTeamLeague(name){
+    if(!name) return '';
+    if(!_eurLeagueCache){
+      _eurLeagueCache = {};
+      try {
+        for(var i = 0; i < localStorage.length; i++){
+          var k = localStorage.key(i);
+          if(!k || k.indexOf('ligaExt_') !== 0) continue;
+          if(k.indexOf('_protected') >= 0 || k.indexOf('_snap_') >= 0 || k.indexOf('_backup') >= 0) continue;
+          var slug = k.substring('ligaExt_'.length);
+          if(/_v\d+$/.test(slug)) continue;
+          var raw = localStorage.getItem(k);
+          if(!raw) continue;
+          var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+          if(!data || !Array.isArray(data.teams)) continue;
+          data.teams.forEach(function(t){
+            var nm = String((t && t.name) || '').trim();
+            if(nm && !_eurLeagueCache[nm]) _eurLeagueCache[nm] = slug;
+          });
+        }
+      } catch(_){}
+    }
+    return _eurLeagueCache[name] || '';
+  }
+  /* Limpieza puntual del cache cuando la función pública la pide
+     explícitamente — el cache vive lo que tarda el sorteo, así que
+     normalmente no hace falta invalidarlo. */
+  window._eurInvalidateLeagueCache = function(){ _eurLeagueCache = null; };
+  /* Aplica el fallback `_eurLookupTeamLeague` a un array de teams
+     in-place: si un team viene sin `league` (legacy persisted) o con
+     un valor "fake" (`previa-champions`, `open-qualifier`,
+     `previa-rf`, etc.) intentamos recuperar el slug real. Si no
+     encontramos, dejamos el valor original (mejor que romper). */
+  function _eurFixupLeagues(arr){
+    var FAKE = { 'previa-champions':1, 'open-qualifier':1, 'previa-rf':1, '':1 };
+    (arr || []).forEach(function(t){
+      if(!t || !t.name) return;
+      if(!FAKE[t.league || '']) return;
+      var real = _eurLookupTeamLeague(t.name);
+      if(real) t.league = real;
+    });
+  }
+
   function computeUclClassified(){
     var frozen = _europeFrozenFor('ucl');
     if(frozen) return frozen.slice();
@@ -12176,11 +12227,18 @@ window._showSimProgress = function(opts, onDone){
         teams.forEach(function(t){
           if(!t || !t.name || seen[t.name]) return;
           seen[t.name] = true;
-          arr.push({name:t.name, logo:t.logo||'', league:'previa-champions'});
+          /* Preferimos el `league` real persistido (escrito desde
+             `_persistChampionsAndEuropa` 2026-05-09). Si el dato es
+             legacy (sin `league`), `_eurFixupLeagues` lo busca en
+             ligaExt_*. Si tampoco está, queda como 'previa-champions'
+             (fallback histórico). */
+          arr.push({name:t.name, logo:t.logo||'', league:t.league||'previa-champions'});
         });
       }
     } catch(_){}
-    return _prependManualEa(arr, 'ucl');
+    var out = _prependManualEa(arr, 'ucl');
+    _eurFixupLeagues(out);
+    return out;
   }
   function computeUclPrevTeams(){
     var frozen = _europeFrozenFor('uclPrev');
@@ -12225,11 +12283,13 @@ window._showSimProgress = function(opts, onDone){
         teams.forEach(function(t){
           if(!t || !t.name || seen[t.name]) return;
           seen[t.name] = true;
-          arr.push({name:t.name, logo:t.logo||'', league:'previa-champions'});
+          arr.push({name:t.name, logo:t.logo||'', league:t.league||'previa-champions'});
         });
       }
     } catch(_){}
-    return _prependManualEa(arr, 'uel');
+    var out = _prependManualEa(arr, 'uel');
+    _eurFixupLeagues(out);
+    return out;
   }
   function computeUeclClassified(){
     var frozen = _europeFrozenFor('uecl');
@@ -12253,7 +12313,7 @@ window._showSimProgress = function(opts, onDone){
         teamsW.forEach(function(t){
           if(!t || !t.name || seen[t.name]) return;
           seen[t.name] = true;
-          arr.push({name:t.name, logo:t.logo||'', league:'previa-champions'});
+          arr.push({name:t.name, logo:t.logo||'', league:t.league||'previa-champions'});
         });
       }
       /* Fallback legacy. */
@@ -12264,11 +12324,13 @@ window._showSimProgress = function(opts, onDone){
         teams.forEach(function(t){
           if(!t || !t.name || seen[t.name]) return;
           seen[t.name] = true;
-          arr.push({name:t.name, logo:t.logo||'', league:'open-qualifier'});
+          arr.push({name:t.name, logo:t.logo||'', league:t.league||'open-qualifier'});
         });
       }
     } catch(_){}
-    return _prependManualEa(arr, 'uecl');
+    var out = _prependManualEa(arr, 'uecl');
+    _eurFixupLeagues(out);
+    return out;
   }
   function computeOpenQualifierTeams(){
     var frozen = _europeFrozenFor('uclQual');
@@ -14486,9 +14548,28 @@ window._showSimProgress = function(opts, onDone){
       ? pairs.slice() : null;
   }
 
-  /* Loader + ejecución del sorteo (admin PIN 747). */
+  /* Lista de equipos humanos (cinco). Se usa para destacar SUS cruces
+     durante la animación del loader. Si en alguna temporada hay menos
+     humanos en el pool (no se han clasificado los 5) la animación
+     simplemente muestra los que sí estén. */
+  var HUMAN_TEAMS = ['Real Madrid','FC Barcelona','Atlético Madrid','Arsenal','Bayern Munich'];
+
+  /* Loader + ejecución del sorteo (admin PIN 747).
+     2026-05-09: rediseñado a 2 fases —
+       FASE 1 (rápida, ~10-50 ms síncrono): el motor `drawPairs` calcula
+              el sorteo completo (sin mostrar nada, JS thread libre tras
+              `setTimeout(0)` para que el loader pinte primero).
+       FASE 2 (animada, ~3-5 s): el loader REVELA uno a uno los 8 cruces
+              de cada equipo HUMANO, con el formato pedido por el usuario:
+                "Atlético Madrid vs Como"
+              avanzando la barra de progreso linealmente.
+     De este modo el sorteo no se queda "stuck" — si el motor falla, salta
+     el alert antes de iniciar la animación. */
   function _runSorteo(comp){
     var c = COMPS[comp]; if(!c) return;
+    /* Reset cache de fixup leagues por si entre sorteos cambió la
+       clasificación de alguna liga. */
+    try { if(typeof window._eurInvalidateLeagueCache === 'function') window._eurInvalidateLeagueCache(); } catch(_){}
     var raw = c.teamsFn() || [];
     if(raw.length < POOL_SIZE){
       alert('❌ Aún no hay ' + POOL_SIZE + ' equipos clasificados a ' + c.label + ' (hay ' + raw.length + '). Completa la clasificación antes de sortear.');
@@ -14496,63 +14577,107 @@ window._showSimProgress = function(opts, onDone){
     }
     var teams = raw.slice(0, POOL_SIZE);
 
-    function _doDraw(){
-      var sched = drawPairs(teams);
-      if(!sched){
-        alert('❌ No se ha podido cuadrar el sorteo respetando "no mismo país" y el balance 4+4 de local/visitante. Reintenta — si una federación tiene demasiados equipos en el pool puede no haber solución factible.');
-        return false;
+    /* Pre-validación de feasibilidad: si una "federación" (slug
+       `league`) tiene demasiados equipos, el sorteo "no mismo país"
+       no tiene solución. Detectarlo antes de lanzar 220 attempts
+       inútiles + animación — el usuario necesita saber qué arreglar. */
+    var byLeague = {};
+    teams.forEach(function(t){
+      var k = String(t.league || '').trim();
+      byLeague[k] = (byLeague[k] || 0) + 1;
+    });
+    var capPerCountry = teams.length - MATCHES_PER; /* cada team de un país solo puede jugar contra teams.length-1 - (count_pais - 1) = teams.length - count_pais. Necesita >= MATCHES_PER → count_pais <= teams.length - MATCHES_PER. */
+    var blockers = [];
+    Object.keys(byLeague).forEach(function(k){
+      if(byLeague[k] > capPerCountry){
+        blockers.push((k || '(sin país)') + ' tiene ' + byLeague[k] + ' equipos · máx ' + capPerCountry);
       }
-      var state = {
-        teams: teams.map(function(t){
-          return { name: t.name, logo: t.logo || '', league: t.league || '' };
-        }),
-        pairs: sched,
-        drawnAt: Date.now()
-      };
-      if(!saveState(comp, state)){
-        alert('⚠️ El sorteo se ha generado pero no se ha podido guardar (storage lleno). Inténtalo de nuevo.');
-        return false;
-      }
-      return true;
+    });
+    if(blockers.length){
+      alert('❌ El sorteo no puede cuadrar respetando "no mismo país":\n\n' +
+            blockers.join('\n') + '\n\nReduce equipos de esa federación o reparte la Previa entre más países.');
+      return;
     }
 
-    if(typeof window.ftbolLoaderRun === 'function'){
-      window.ftbolLoaderRun(
-        {
-          title: c.label.toUpperCase() + ' · SORTEO FASE DE LIGA',
-          sub:   'Preparando bombos…',
-          theme: comp === 'ucl' ? 'champions' : (comp === 'uel' ? 'eur-grupo' : 'uecl'),
-          minMs: 700,
-          phases: [
-            { pct: 25, sub: 'Generando parejas válidas (sin mismo país)…', ms: 120 },
-            { pct: 60, sub: 'Equilibrando local / visitante…',              ms: 140 },
-            { pct: 85, sub: 'Distribuyendo en 8 jornadas…',                  ms: 130 }
-          ]
-        },
-        function(ctx){
-          return new Promise(function(resolve){
-            var phaseIdx = 0;
-            var phaseList = [25, 60, 85];
-            function next(){
-              if(phaseIdx >= phaseList.length){
-                ctx.progress(95, 'Cuadrando cruces…');
-                setTimeout(function(){
-                  var ok = _doDraw();
-                  ctx.progress(100, ok ? 'Hecho' : 'Error');
-                  resolve();
-                }, 100);
+    if(typeof window.ftbolLoaderRun !== 'function'){
+      /* Sin loader → fallback simple, sin animación. */
+      var sched = drawPairs(teams);
+      if(!sched){ alert('❌ No se ha podido cuadrar el sorteo. Reintenta.'); return; }
+      var st = { teams: teams.map(function(t){return {name:t.name,logo:t.logo||'',league:t.league||''};}), pairs: sched, drawnAt: Date.now() };
+      if(!saveState(comp, st)) alert('⚠️ Sorteo OK pero no se pudo guardar.');
+      return;
+    }
+
+    window.ftbolLoaderRun(
+      {
+        title: c.label.toUpperCase() + ' · SORTEO FASE DE LIGA',
+        sub:   'Preparando bombos…',
+        theme: comp,  /* 'ucl' → azul · 'uel' → naranja · 'uecl' → verde */
+        minMs: 600
+      },
+      function(ctx){
+        return new Promise(function(resolve){
+          /* PASO 1: dejar que el frame pinte la card del loader y
+             después correr el motor. */
+          setTimeout(function(){
+            var sched = drawPairs(teams);
+            if(!sched){
+              alert('❌ No se ha podido cuadrar el sorteo respetando "no mismo país" y el balance 4+4 de local/visitante. Reintenta.');
+              ctx.progress(100, 'Error');
+              resolve();
+              return;
+            }
+            var stateObj = {
+              teams: teams.map(function(t){
+                return { name: t.name, logo: t.logo || '', league: t.league || '' };
+              }),
+              pairs: sched,
+              drawnAt: Date.now()
+            };
+            if(!saveState(comp, stateObj)){
+              alert('⚠️ El sorteo se ha generado pero no se ha podido guardar (storage lleno).');
+            }
+            /* PASO 2: animación de reveals. Filtramos los partidos que
+               implican a un equipo humano y los soltamos uno a uno con
+               un pequeño retraso. Así el usuario "ve" el sorteo en
+               directo (4-5 s aprox.). Si no hay humanos en el pool,
+               hacemos una mini-pausa con "✓ Sorteo cerrado" y salimos. */
+            var humanReveals = sched.filter(function(p){
+              return HUMAN_TEAMS.indexOf(p.home) !== -1 || HUMAN_TEAMS.indexOf(p.away) !== -1;
+            });
+            /* Ordenamos por jornada (1→8) para que cada humano vea sus
+               rivales en el orden de los partidos, más natural. */
+            humanReveals.sort(function(a,b){ return a.jornada - b.jornada; });
+
+            if(!humanReveals.length){
+              ctx.progress(100, '✓ Sorteo cerrado · ' + sched.length + ' partidos');
+              setTimeout(resolve, 250);
+              return;
+            }
+            var totalReveals = humanReveals.length;
+            /* Tiempo total ~3.5s (animación legible pero no aburrida).
+               Si hay menos reveals, cada uno dura más; si hay más
+               (40 max para los 5 humanos × 8 jornadas), cada uno menos. */
+            var TOTAL_MS = 3500;
+            var stepMs = Math.max(60, Math.min(220, Math.round(TOTAL_MS / totalReveals)));
+            var i = 0;
+            function tick(){
+              if(i >= totalReveals){
+                ctx.progress(100, '✓ Sorteo cerrado · ' + sched.length + ' partidos');
+                setTimeout(resolve, 300);
                 return;
               }
-              ctx.progress(phaseList[phaseIdx++]);
-              setTimeout(next, 130);
+              var m = humanReveals[i++];
+              var pct = Math.round(i / totalReveals * 100);
+              /* Formato pedido por el usuario: "Local vs Visitante" */
+              ctx.progress(pct, m.home + ' vs ' + m.away);
+              setTimeout(tick, stepMs);
             }
-            next();
-          });
-        }
-      );
-    } else {
-      _doDraw();
-    }
+            tick();
+          }, 60);
+        });
+      }
+    );
   }
 
   /* Hook público: el header pulsa esto. Pasa por `requireAdmin` (PIN 747). */

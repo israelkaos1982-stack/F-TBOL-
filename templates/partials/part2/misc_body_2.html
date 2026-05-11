@@ -11196,6 +11196,83 @@
     _gmEnterHalftime();
   };
 
+  /* ════════════════════════════════════════════════════════════════
+     DRIVER GLOBAL gm-modal — rAF + setInterval(50ms)
+     ───────────────────────────────────────────────────────────────
+     Petición usuario 2026-05-11: el cronómetro del gm-modal (HvH /
+     HvIA) se queda a "⏸ 0'" porque Chrome móvil con batería baja
+     throttea el setInterval del cronómetro (timer alignment).
+     Mismo patrón que iaSimLive — añadimos un driver dual rAF +
+     setInterval(50ms) que avanza `_gm.timerSec` y dispara
+     `gmRenderTimer` por su cuenta, inmune al alignment del setInterval
+     interno de gmStartTimer.
+
+     El driver es SOLO un avanzador visual: NO procesa halftime /
+     HTP / slowdown — esos quedan en el setInterval interno que sí
+     puede tardar más en disparar. Pero el cronómetro AVANZA y al
+     llegar al max se autoclausura.
+     ════════════════════════════════════════════════════════════════ */
+  (function _gmCronDriver(){
+    if (window._gmCronDriverStarted) return;
+    window._gmCronDriverStarted = true;
+    function _drive(){
+      try {
+        var g = window._gm;
+        if (!g) return;
+        if (!g.timerRunning) return;
+        if (g.finished) return;
+        if (g.inDescanso) return;
+        if (!g.kickoffDone) return;
+        /* Recompute _gameSecPerMs si quedó corrupto. */
+        if (!isFinite(g._gameSecPerMs) || g._gameSecPerMs <= 0) {
+          var fb = g._effTickMs;
+          if (!isFinite(fb) || fb <= 0) fb = g.isHvH ? 556 : 444;
+          g._gameSecPerMs = 5 / fb;
+          if (!isFinite(g._wallStart)) g._wallStart = Date.now();
+        }
+        var prevSec = g.timerSec || 0;
+        var elapsedMs = Date.now() - (g._wallStart || Date.now());
+        var newSec = (g._secAtStart || 0) + Math.round(elapsedMs * (g._gameSecPerMs || 0));
+        /* Solo renderizamos si timerSec cambió de SEGUNDO entero —
+           evita repintar 60 veces por segundo cuando el segundo no
+           ha cambiado todavía. */
+        var prevMin = Math.floor(prevSec / 60);
+        var newMin  = Math.floor(newSec / 60);
+        g.timerSec = newSec;
+        /* Solo render cuando cambió de minuto o cuando estamos justo
+           al arrancar (prevSec era 0 y newSec>0). */
+        if (newMin !== prevMin || (prevSec === 0 && newSec > 0)) {
+          if (typeof gmRenderTimer === 'function') gmRenderTimer();
+        }
+        /* Auto-clausura al alcanzar el max (mismo límite que el
+           setInterval interno computa). */
+        try {
+          var stops = (typeof _mlCountStoppageHalves === 'function')
+            ? _mlCountStoppageHalves(g) : { first: 0, second: 0 };
+          var maxSec = g.etDone
+            ? GM_MAX_ET
+            : (GM_MAX_NORMAL + (stops.second || 0) * 60);
+          if (g.timerSec >= maxSec) {
+            g.timerSec = maxSec;
+            if (g.timerInterval) { try { clearInterval(g.timerInterval); } catch(_){} g.timerInterval = null; }
+            g.timerRunning = false;
+            if (typeof gmRenderTimer === 'function') gmRenderTimer();
+          }
+        } catch(_){}
+      } catch(_){}
+    }
+    /* DRIVER 1 · requestAnimationFrame — inmune al timer alignment. */
+    function _rafLoop(){
+      try { _drive(); } catch(_){}
+      requestAnimationFrame(_rafLoop);
+    }
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(_rafLoop);
+    }
+    /* DRIVER 2 · setInterval(50ms) — backup si rAF se pausa. */
+    setInterval(_drive, 50);
+  })();
+
   function gmStartTimer() {
     /* Helper único (CLAUDE.md): honra _ppDurationMin y lee _MATCH_TICKS
        en cada arranque del reloj (no se cachea). Pasamos home/away para

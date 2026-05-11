@@ -14829,11 +14829,13 @@
     var aEsc = m.away.replace(/'/g,"\\'");
     var isManual = esHumano(m.home) || esHumano(m.away);
     var isDestacadoManual = isManual && esPartidoDestacado(m.home, m.away);
-    var cardStyle = isDestacadoManual
-      ? 'margin-bottom:10px;border:1px solid rgba(170,100,255,.6);box-shadow:0 0 0 1px rgba(170,100,255,.35) inset;background:linear-gradient(180deg,rgba(80,26,120,.28),rgba(20,12,35,.85));'
-      : isManual
-        ? 'margin-bottom:10px;border:1px solid rgba(60,210,120,.55);box-shadow:0 0 0 1px rgba(60,210,120,.25) inset;background:linear-gradient(180deg,rgba(18,68,35,.22),rgba(10,18,12,.85));'
-        : 'margin-bottom:10px;';
+    /* Cards de partidos con humano implicado (HvH o HvIA) en Liga
+       EA Sports llevan ahora borde rojo llamativo + glow, estilo
+       Champions pero en rojo (petición usuario 2026-05-10). El
+       gradient interno + dual-team se mantiene. */
+    var cardStyle = isManual
+      ? 'margin-bottom:10px;background:linear-gradient(180deg,rgba(60,8,16,.28),rgba(20,4,8,.85));'
+      : 'margin-bottom:10px;';
     var clickFn = m.fn
       ? 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ',\'' + m.fn + '\')'
       : 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ')';
@@ -14851,8 +14853,17 @@
     var bgShA2 = lAw2 ? '<img src="'+lAw2+'" alt="" style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:80px;height:80px;object-fit:contain;opacity:.11;pointer-events:none;z-index:0;">' : '';
     var gradAdd = 'background:linear-gradient(to right,'+tcH.bg+'2e 0%,transparent 44%,transparent 56%,'+tcAw.bg+'2e 100%);';
     var cardStyleClean = cardStyle.replace(/background:[^;]+;/g,'').replace(/border:[^;]+;/g,'').replace(/box-shadow:[^;]+;/g,'');
-    var hvhBorder = isHvH2 ? 'border:1px solid rgba(255,90,170,.75);box-shadow:0 0 14px rgba(255,80,160,.3),inset 0 0 0 1px rgba(255,90,170,.2);' : '';
-    var wrapStyle = 'position:relative;overflow:hidden;' + gradAdd + cardStyleClean + hvhBorder;
+    /* Borde rojo llamativo para HvH + HvIA (estilo Champions, color
+       de Liga EA Sports). HvH se intensifica un punto más. */
+    var humanBorder = '';
+    if (isHvH2) {
+      humanBorder = 'border:2px solid #ff3050;'
+                  + 'box-shadow:0 0 18px rgba(255,48,80,.60),0 0 36px rgba(200,20,40,.32),inset 0 0 0 1px rgba(255,80,96,.55);';
+    } else if (isManual) {
+      humanBorder = 'border:2px solid #ff3050;'
+                  + 'box-shadow:0 0 14px rgba(255,48,80,.48),0 0 28px rgba(200,20,40,.22),inset 0 0 0 1px rgba(255,80,96,.40);';
+    }
+    var wrapStyle = 'position:relative;overflow:hidden;' + gradAdd + cardStyleClean + humanBorder;
     /* Alias eFootball: bajo el nombre del IA cuando el rival es humano. */
     var _iapAliasFor = (typeof window.getTeamEfootballAlias === 'function')
       ? window.getTeamEfootballAlias : function(){ return ''; };

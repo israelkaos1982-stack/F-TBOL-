@@ -20542,15 +20542,23 @@ Tottenham
     function _isCabeceraLine(s){
       var t = _stripDecor(s);
       if(!t) return false;
-      /* Formato múltiple: "GLOBAL 82 / ATAQUE 83 / MEDIO 81 / DEFENSA 82". */
+      /* Formato múltiple: "GLOBAL 82 / ATAQUE 83 / MEDIO 81 / DEFENSA 82"
+         o sin separadores: "GLOBAL 83 ATAQUE 84 MEDIO 82 DEFENSA 80". */
       if(/GLOBAL[\s:]*\d/i.test(t) && /(ATAQUE|DEFENSA|MEDIO)/i.test(t)) return true;
-      /* Etiquetas de cabecera al inicio de la línea. */
+      /* Sub-header de la tabla de jugadores: "DORSAL NOMBRE VALOR ICONOS". */
+      if(/^dorsal\b.*nombre\b.*valor\b/i.test(t)) return true;
+      /* Línea solo entre paréntesis tipo "(Sin ⚾️ por regla del algoritmo)". */
+      if(/^\(.+\)$/.test(t)) return true;
+      /* "Goles MC: 7 / 2 / ..." y similares — bloque informativo
+         a nivel de línea (las sub-bullets se filtran por skip-block). */
+      if(/^goles?\s+(mc|dl|df|por|gk|fw)\b\s*:/i.test(t)) return true;
+      /* Etiquetas de cabecera al inicio de la línea (con `:` opcional). */
       var labels = [
         /^valores?\s+de\s+poder\b/i,
         /^nivel\s+de\s+estrellas\b/i,
         /^agresivid[a-zñ]+\b/i,
         /^presupues?to\b/i,
-        /^estadio(\s+local)?\b/i,
+        /^estadio(\s+(?:local|asignado))?\b/i,
         /^equipo\s+s[ií]mil\s+efootball\b/i,
         /^s[ií]mil\s+efootball\b/i,
         /^alias\s+(en\s+)?efootball\b/i,
@@ -20561,16 +20569,27 @@ Tottenham
       return false;
     }
     /* ¿Header de bloque que se salta entero (nota, no nómina)?
-       Permisivo a propósito: detectamos "11 IDEAL" o "9 MEJORES
-       RESERVAS" en cualquier parte de la línea ya decorada. Antes
-       intentamos requerir emoji 🏆/🪑 al inicio con `[🏆]` pero
-       son surrogate pairs y los character classes sin flag `u`
-       no funcionan — el match fallaba en silencio. */
+       Permisivo a propósito: detectamos "11 IDEAL", "9 RESERVAS",
+       "9 SUPLENTES", "Goles MC:", "GUÍA DE ICONOS", "ESCALA DE MEDIAS"
+       o secciones numeradas "3. GUÍA…" / "5. ESTADIO" en cualquier
+       parte de la línea decorada. Antes intentamos requerir emoji
+       🏆/🪑 al inicio con `[🏆]` pero son surrogate pairs y los
+       character classes sin flag `u` no funcionan — el match fallaba
+       en silencio. */
     function _isSkipBlockStart(s){
       var t = _stripDecor(s);
       if(/\b11\s*ideal\b/i.test(t)) return true;
-      if(/\b9\s*(mejores\s*)?reservas?\b/i.test(t)) return true;
+      if(/\b9\s*(mejores\s*)?(reservas?|suplentes?)\b/i.test(t)) return true;
       if(/goleador(es)?\s+de\s+elite\s+mundial/i.test(t)) return true;
+      if(/^gu[ií]a\s+de\s+iconos\b/i.test(t)) return true;
+      if(/^escala\s+de\s+medias\b/i.test(t)) return true;
+      /* "Goles MC:" / "Goles DL:" / "Goles POR:" — listas
+         informativas de goles con sub-bullets. Empieza skip block
+         hasta la siguiente sección de plantilla real. */
+      if(/^goles?\s+(mc|dl|df|por|gk|fw)\b\s*:?/i.test(t)) return true;
+      /* Secciones numeradas que vienen DESPUÉS de la nómina:
+         "3. GUÍA DE ICONOS", "4. ESCALA DE MEDIAS", "5. ESTADIO". */
+      if(/^\d+\.\s+(gu[ií]a\s+de\s+iconos|escala\s+de\s+medias|estadio)\b/i.test(t)) return true;
       return false;
     }
     /* ¿Header real de sección de plantilla (porteros/defensas/...)? */
@@ -20654,19 +20673,44 @@ Tottenham
       if (/pega\s+aqu[ií]/i.test(s)) return '';
       return s;
     }
-    /* Para el nombre del equipo aceptamos 2 fuentes (en orden):
+    /* Strip de comentarios entre paréntesis al final del valor:
+       "Estadio Banorte (por tamaño medio y estructura moderna)"
+       → "Estadio Banorte". El admin pone aclaraciones detrás. */
+    function _stripTrailingParen(v){
+      return String(v||'').replace(/\s*\([^()]*\)\s*$/, '').trim();
+    }
+    /* Para el nombre del equipo aceptamos 3 fuentes (en orden):
         1) Línea "Nombre del equipo: X" si la hay.
-        2) Primera línea "# **NOMBRE**" si no es un header de sección.
+        2) Primera línea "# **NOMBRE**" markdown.
+        3) Primera línea NO vacía que parezca un nombre de equipo
+           (en mayúsculas o con tildes/letras, sin dígitos, sin
+           emojis-cabecera de sección).
        Solo lo emitimos si parece un nombre real (con letras). */
     var headingName = null;
+    var firstLineCandidate = null;
+    var sawAnyContent = false;
     for (var i = 0; i < lines.length; i++) {
       var raw = lines[i];
       var s = _strip(raw);
+      /* Primera línea no vacía con letras → candidate de nombre si
+         nada mejor aparece. No tomamos cabeceras de campo conocidas. */
+      if (s && !sawAnyContent) {
+        sawAnyContent = true;
+        var maybeName = s.replace(/^[#\s\*]+/, '').replace(/[#\s\*]+$/, '').trim();
+        if (maybeName &&
+            !/^(?:valores?\s+de\s+poder|nivel\s+de\s+estrellas|agresivid|presupues?to|estadio|equipo\s+s[ií]mil|s[ií]mil\s+efootball|alias|escudo|nombre|global)/i.test(maybeName) &&
+            !/^(🧤|🛡|⚙|⚽|⚡|🏆|🪑)/.test(maybeName) &&
+            !/^(porteros|defensas|centrocampistas|medios|delanteros)\b/i.test(maybeName) &&
+            !/\d/.test(maybeName)) {
+          try { if (/\p{L}/u.test(maybeName)) firstLineCandidate = maybeName; }
+          catch(_){ if (/[A-Za-zÀ-ÿĀ-ɏ]/.test(maybeName)) firstLineCandidate = maybeName; }
+        }
+      }
       if (!s) continue;
 
       var m;
-      /* Nombre del equipo: */
-      m = s.match(/^nombre(?:\s+del\s+equipo)?\s*:\s*(.+)$/i);
+      /* Nombre del equipo (con o sin `:`). */
+      m = s.match(/^nombre(?:\s+del\s+equipo)?\s*:?\s*(.+)$/i);
       if (m && m[1]) {
         var nm = m[1].replace(/\*+/g, '').trim();
         try { if (/\p{L}/u.test(nm)) out.name = nm; }
@@ -20682,16 +20726,20 @@ Tottenham
           if (!/^(🧤|🛡|⚙|⚽|⚡)/.test(h) &&
               !/^(porteros|defensas|centrocampistas|medios|delanteros)\b/i.test(h) &&
               !/\b11\s*ideal\b/i.test(h) &&
-              !/\b9\s*(mejores\s*)?reservas?\b/i.test(h)) {
+              !/\b9\s*(mejores\s*)?(reservas?|suplentes?)\b/i.test(h)) {
             headingName = h;
           }
         }
       }
 
-      /* Valores de Poder: (GLOBAL N / ATAQUE N / MEDIO N / DEFENSA N).
-         Acepta separadores `/`, `·`, `|`, `,` o saltos de línea entre
-         claves. Capturamos cada par etiqueta-número independientemente. */
-      if (/^valores?\s+de\s+poder\b/i.test(s)) {
+      /* Valores 4-ejes — aceptamos 2 formatos:
+         a) Con prefijo "Valores de Poder:" (con o sin paréntesis).
+         b) Bare: la línea EMPIEZA por GLOBAL y trae al menos uno de
+            ATAQUE/MEDIO/DEFENSA. Capturamos pares etiqueta-número. */
+      var isPoderLine =
+        /^valores?\s+de\s+poder\b/i.test(s) ||
+        (/^global\b/i.test(s) && /(ATAQUE|DEFENSA|MEDIO)/i.test(s));
+      if (isPoderLine) {
         var glob = s.match(/GLOBAL[\s:]*(\d{1,3})/i);
         var atk  = s.match(/ATAQUE[\s:]*(\d{1,3})/i);
         var mid  = s.match(/(?:MEDIO|MEDIA)[\s:]*(\d{1,3})/i);
@@ -20702,38 +20750,37 @@ Tottenham
         if (def)  out.def   = _clamp99(def[1]);
         continue;
       }
-      /* Agresividad: 57/100  o  Agresividad: 57. */
-      m = s.match(/^agresivid[a-zñ]+\s*:\s*(\d{1,3})/i);
+      /* Agresividad: 57/100  o  Agresividad 77/99  o  Agresividad 57.
+         El `:` es opcional. El primer número se toma como valor base
+         (descartando "/99" y paréntesis de detalle como "(Natan 7, …)"). */
+      m = s.match(/^agresivid[a-zñ]+\s*:?\s*(\d{1,3})/i);
       if (m) {
         var a = _clamp99(m[1]);
         if (a !== null) out.aggressiveness = a;
         continue;
       }
-      /* Presupuesto: 1.450 €  →  cualquier dígito, descartamos puntos
-         y comas de miles. Si el usuario escribe "1.450 millones" → 1450
-         millones literales, no intentamos interpretar magnitud (el admin
-         decide el formato; el campo `budget` es un entero). */
-      m = s.match(/^presupues?to\s*:\s*([\d\.\,\s]+)/i);
+      /* Presupuesto: 1.450 €  /  Presupuesto €300M  /  Presupuesto 300.
+         Aceptamos cualquier orden de símbolos € / $ / M / mill. */
+      m = s.match(/^presupues?to\s*:?\s*(.+)$/i);
       if (m && m[1]) {
         var dig = m[1].replace(/[^\d]/g, '');
         if (dig) out.budget = parseInt(dig, 10);
         continue;
       }
-      /* Estadio Local: <nombre>. */
-      m = s.match(/^estadio(?:\s+local)?\s*:\s*(.+)$/i);
+      /* Estadio Local / Estadio asignado / Estadio: <nombre>. `:` opcional. */
+      m = s.match(/^estadio(?:\s+(?:local|asignado))?\s*:?\s*(.+)$/i);
       if (m && m[1]) {
-        out.stadium = m[1].replace(/\*+/g, '').trim();
+        out.stadium = _stripTrailingParen(m[1].replace(/\*+/g, ''));
         continue;
       }
-      /* Equipo Símil eFootball: <nombre>  o  Símil eFootball: <nombre>
-         o  Alias en eFootball: <nombre>. */
-      m = s.match(/^(?:equipo\s+s[ií]mil\s+efootball|s[ií]mil\s+efootball|alias\s+(?:en\s+)?efootball)\s*:\s*(.+)$/i);
+      /* Equipo Símil eFootball / Símil eFootball / Alias eFootball: <nombre>. */
+      m = s.match(/^(?:equipo\s+s[ií]mil\s+efootball|s[ií]mil\s+efootball|alias\s+(?:en\s+)?efootball)\s*:?\s*(.+)$/i);
       if (m && m[1]) {
-        out.efootballAlias = m[1].replace(/\*+/g, '').trim();
+        out.efootballAlias = _stripTrailingParen(m[1].replace(/\*+/g, ''));
         continue;
       }
       /* Escudo (URL): <url>  o  Escudo: <url>. */
-      m = s.match(/^escudo\s*(?:\(url\))?\s*:\s*(.+)$/i);
+      m = s.match(/^escudo\s*(?:\(url\))?\s*:?\s*(.+)$/i);
       if (m && m[1]) {
         var sh = _cleanShield(m[1]);
         if (sh) out.shield = sh;
@@ -20741,6 +20788,7 @@ Tottenham
       }
     }
     if (out.name == null && headingName) out.name = headingName;
+    if (out.name == null && firstLineCandidate) out.name = firstLineCandidate;
     return out;
   }
   window._parseMasterMetadata = _parseMasterMetadata;

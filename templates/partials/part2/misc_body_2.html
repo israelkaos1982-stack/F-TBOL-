@@ -27447,25 +27447,19 @@ document.addEventListener('DOMContentLoaded', function() {
     try { _hookOverlayButtons(); } catch(_){}
   }
 
-  /* ── PREVIA · TWITCH OPCIONAL (2026-05-10) ──────────────────────
-     Petición usuario: el selector de Twitch ya no es obligatorio.
-     Si el usuario lo ha ocultado del template, el botón
-     "CONFIRMAR CONFIGURACIÓN" se queda bloqueado en "🔒 SELECCIONA
-     CANAL TWITCH" y es imposible avanzar. Patch:
-       (a) Pre-rellena `window._ppSelectedTwitch = '__skip__'` cuando
-           el dropdown no está visible o no existe.
-       (b) Envuelve `_ppConfirm` para bypassear el alert obligatorio.
-       (c) Llama `_ppRefreshUnlock` tras setear el valor para que
-           el botón cambie de label inmediatamente.
+  /* ── PREVIA · TWITCH 100% OPCIONAL (2026-05-10) ─────────────────
+     El usuario ha movido el selector Twitch a otra pantalla. La
+     validación del bundle (`_updateBtn` requiere
+     `_ppSelectedTwitch` no-vacío y `_ppConfirm` muestra alert
+     bloqueante) impide avanzar en CUALQUIER partido de CUALQUIER
+     competición. Se elimina el requisito de Twitch
+     INCONDICIONALMENTE — si el usuario más adelante elige uno
+     real, el valor se sustituye sin problema.
      ──────────────────────────────────────────────────────────── */
-  function _ppTwitchOptionalCheck(){
+  function _ppTwitchAlwaysOptional(){
     var ov = document.getElementById('prepartido-overlay');
     if (!ov || !ov.classList.contains('show')) return;
-    var twitchSel = document.querySelector('.pp-twitch-sel');
-    var hidden = !twitchSel ||
-                 twitchSel.offsetParent === null ||
-                 (twitchSel.style && twitchSel.style.display === 'none');
-    if (hidden && (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length)){
+    if (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length){
       window._ppSelectedTwitch = '__skip__';
       try { if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock(); } catch(_){}
     }
@@ -27474,15 +27468,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var orig = window._ppConfirm;
     if (typeof orig !== 'function' || orig._twitchOptionalPatched) return;
     window._ppConfirm = function(){
-      /* Si todo el resto está marcado pero el Twitch está vacío y
-         el selector está oculto, lo marcamos como skip antes de
-         ejecutar el confirm original. Así pasa la validación. */
+      /* Garantizar Twitch no-vacío antes de delegar — bypassea el
+         alert obligatorio del bundle. */
       try {
-        var twitchSel2 = document.querySelector('.pp-twitch-sel');
-        var hidden2 = !twitchSel2 ||
-                      twitchSel2.offsetParent === null ||
-                      (twitchSel2.style && twitchSel2.style.display === 'none');
-        if (hidden2 && (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length)){
+        if (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length){
           window._ppSelectedTwitch = '__skip__';
         }
       } catch(_){}
@@ -27490,10 +27479,51 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     window._ppConfirm._twitchOptionalPatched = true;
   }
+  /* También parchear _updateBtn / _ppRefreshUnlock para forzar el
+     habilitado del botón cuando el resto está OK, ignorando Twitch.
+     (Doble defensa: si algún flujo deja el valor vacío entre
+     polls, el botón sigue desbloqueado.) */
+  function _ppPatchUpdateBtn(){
+    var orig = window._ppRefreshUnlock;
+    if (typeof orig !== 'function' || orig._twitchOptionalPatched) return;
+    window._ppRefreshUnlock = function(){
+      /* Pre-set Twitch a no-vacío antes de invocar el bundle. */
+      if (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length){
+        window._ppSelectedTwitch = '__skip__';
+      }
+      return orig.apply(this, arguments);
+    };
+    window._ppRefreshUnlock._twitchOptionalPatched = true;
+  }
   setTimeout(_ppPatchConfirm, 100);
   setTimeout(_ppPatchConfirm, 800);
   setTimeout(_ppPatchConfirm, 2500);
-  setInterval(_ppTwitchOptionalCheck, 400);
+  setTimeout(_ppPatchUpdateBtn, 100);
+  setTimeout(_ppPatchUpdateBtn, 800);
+  setTimeout(_ppPatchUpdateBtn, 2500);
+  setInterval(_ppTwitchAlwaysOptional, 250);
+  /* Cuando el overlay PREVIA cambia su clase `.show`, marcamos
+     el skip de inmediato para que el botón salga ya desbloqueado
+     desde el primer render (sin esperar al siguiente tick). */
+  (function(){
+    var ov = document.getElementById('prepartido-overlay');
+    if (!ov) {
+      var t = setInterval(function(){
+        var o = document.getElementById('prepartido-overlay');
+        if (o){ clearInterval(t); _wireOv(o); }
+      }, 200);
+    } else { _wireOv(ov); }
+    function _wireOv(o){
+      new MutationObserver(function(){
+        if (o.classList.contains('show')){
+          if (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length){
+            window._ppSelectedTwitch = '__skip__';
+          }
+          try { if (typeof window._ppRefreshUnlock === 'function') window._ppRefreshUnlock(); } catch(_){}
+        }
+      }).observe(o, { attributes:true, attributeFilter:['class'] });
+    }
+  })();
 
   /* ── PREVIA · resaltar el estadio cuando el rival NO necesita
         alias (es equipo real de eFootball). Foto 1/2 del usuario. ── */

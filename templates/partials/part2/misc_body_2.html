@@ -11217,7 +11217,10 @@
     window._gmCronDriverStarted = true;
     function _drive(){
       try {
-        var g = window._gm;
+        /* `_gm` es local al IIFE pero está en el closure de esta
+           función (declarada arriba en la misma IIFE). NO usar
+           `window._gm` — eso es undefined y rompía el driver. */
+        var g = _gm;
         if (!g) return;
         if (!g.timerRunning) return;
         if (g.finished) return;

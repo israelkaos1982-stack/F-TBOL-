@@ -1869,69 +1869,100 @@
   })();
 
   /* ════════════════════════════════════════════════════════════════
-     PREVIA — COLORES por COMPETICIÓN (2026-05-10)
+     PREVIA — COLORES por COMPETICIÓN (2026-05-10, v2)
      ───────────────────────────────────────────────────────────────
      Petición usuario: "los colores y detalles de la competición que
-     se juega en la card". Aplicamos data-comp en #prepartido-overlay
-     desde el wrapper de showPrePartidoOverlay y CSS targetea cada
-     comp con su paleta. ──────────────────────────────────────── */
+     se juega en la card". V1 era demasiado sutil — V2 aplica TINTE
+     fuerte a TODO (borde wrapper, bordes paneles, gradient fondo,
+     título coloreado, botón confirmar tintado).
+
+     13 competiciones cubiertas:
+        liga / copa / sc / ucl / uel / uecl / recopa / usc / inter
+        / superliga / mundial / torneo / amistoso
+
+     Fuente del comp:
+       (a) Wrapper sobre `showPrePartidoOverlay`: el primer paso es
+           setear `data-comp` antes de llamar al original.
+       (b) BACKUP: MutationObserver sobre `#prepartido-overlay`. Al
+           recibir clase `.show`, leemos `window._ppCompKey` y
+           sincronizamos `data-comp`. Esto cubre cualquier path
+           que bypassée mi wrapper (ej. wraps externos posteriores).
+     ─────────────────────────────────────────────────────────────── */
   (function(){
+    /* Mapa de comp → color principal (CSS custom property + reglas
+       generadas).  ─────────────────────────────────────────── */
+    var COMP_COLORS = {
+      liga:      { main:'#f0c040', accent:'#fff0a8', bg1:'rgba(60,45,5,.70)',  bg2:'rgba(20,15,2,.92)',   glow:'rgba(240,192,64,.55)' },
+      copa:      { main:'#ffd54a', accent:'#fff1a8', bg1:'rgba(70,40,5,.75)',  bg2:'rgba(25,15,3,.94)',   glow:'rgba(255,213,74,.65)' },
+      'copa-fin':{ main:'#ffd54a', accent:'#fff1a8', bg1:'rgba(70,40,5,.75)',  bg2:'rgba(25,15,3,.94)',   glow:'rgba(255,213,74,.65)' },
+      sc:        { main:'#ff7070', accent:'#ffd54a', bg1:'rgba(80,15,15,.75)', bg2:'rgba(28,5,5,.94)',    glow:'rgba(255,80,80,.60)'   },
+      'sc-final':{ main:'#ff7070', accent:'#ffd54a', bg1:'rgba(80,15,15,.75)', bg2:'rgba(28,5,5,.94)',    glow:'rgba(255,80,80,.60)'   },
+      ucl:       { main:'#9fc8ff', accent:'#eaf3ff', bg1:'rgba(15,35,90,.78)', bg2:'rgba(5,12,32,.96)',   glow:'rgba(58,120,216,.70)'  },
+      'ucl-fin': { main:'#9fc8ff', accent:'#eaf3ff', bg1:'rgba(15,35,90,.78)', bg2:'rgba(5,12,32,.96)',   glow:'rgba(58,120,216,.70)'  },
+      'ucl-prev':{ main:'#9fc8ff', accent:'#eaf3ff', bg1:'rgba(15,35,90,.78)', bg2:'rgba(5,12,32,.96)',   glow:'rgba(58,120,216,.70)'  },
+      uel:       { main:'#ffa050', accent:'#ffd9b0', bg1:'rgba(65,30,5,.78)',  bg2:'rgba(25,10,2,.96)',   glow:'rgba(255,140,0,.70)'   },
+      'uel-fin': { main:'#ffa050', accent:'#ffd9b0', bg1:'rgba(65,30,5,.78)',  bg2:'rgba(25,10,2,.96)',   glow:'rgba(255,140,0,.70)'   },
+      uecl:      { main:'#7df0a0', accent:'#caffd6', bg1:'rgba(5,55,30,.78)',  bg2:'rgba(2,20,12,.96)',   glow:'rgba(95,224,138,.70)'  },
+      'uecl-fin':{ main:'#7df0a0', accent:'#caffd6', bg1:'rgba(5,55,30,.78)',  bg2:'rgba(2,20,12,.96)',   glow:'rgba(95,224,138,.70)'  },
+      recopa:    { main:'#ff80b0', accent:'#ffd0e0', bg1:'rgba(60,10,30,.78)', bg2:'rgba(25,3,12,.96)',   glow:'rgba(255,95,176,.65)'  },
+      usc:       { main:'#a0e0ff', accent:'#e0f4ff', bg1:'rgba(15,40,55,.78)', bg2:'rgba(5,15,22,.96)',   glow:'rgba(160,224,255,.65)' },
+      'usc-fin': { main:'#a0e0ff', accent:'#e0f4ff', bg1:'rgba(15,40,55,.78)', bg2:'rgba(5,15,22,.96)',   glow:'rgba(160,224,255,.65)' },
+      inter:     { main:'#ffd700', accent:'#ffeb80', bg1:'rgba(70,50,5,.78)',  bg2:'rgba(25,18,2,.96)',   glow:'rgba(255,215,0,.75)'   },
+      'inter-fin':{ main:'#ffd700', accent:'#ffeb80', bg1:'rgba(70,50,5,.78)',bg2:'rgba(25,18,2,.96)',    glow:'rgba(255,215,0,.75)'   },
+      superliga: { main:'#c0a0ff', accent:'#e8d8ff', bg1:'rgba(45,15,80,.78)', bg2:'rgba(15,5,30,.96)',   glow:'rgba(168,85,247,.70)'  },
+      mundial:   { main:'#ffd700', accent:'#ffeb80', bg1:'rgba(50,45,5,.78)',  bg2:'rgba(20,18,2,.96)',   glow:'rgba(255,215,0,.75)'   },
+      cwc:       { main:'#ffd700', accent:'#ffeb80', bg1:'rgba(50,45,5,.78)',  bg2:'rgba(20,18,2,.96)',   glow:'rgba(255,215,0,.75)'   },
+      torneo:    { main:'#ff9070', accent:'#ffd0b0', bg1:'rgba(60,25,10,.78)', bg2:'rgba(22,10,4,.94)',   glow:'rgba(255,144,112,.65)' },
+      amistoso:  { main:'#bbb',    accent:'#e0e0e0', bg1:'rgba(35,35,40,.65)', bg2:'rgba(14,14,18,.92)',  glow:'rgba(200,200,200,.45)' }
+    };
+
+    /* Generar CSS para cada comp. Selectors con `[data-comp="X"]` y
+       `!important` para ganar specificity sobre el bundle. */
+    var css = '';
+    Object.keys(COMP_COLORS).forEach(function(comp){
+      var c = COMP_COLORS[comp];
+      var sel = '#prepartido-overlay[data-comp="'+comp+'"]';
+      css +=
+          /* Header título */
+          sel + ' .pp-title{color:'+c.main+' !important;text-shadow:0 0 18px '+c.glow+',0 0 32px '+c.glow+' !important;}'
+          /* Wrapper de la card (.pp-inner) — borde + glow exterior */
+        + sel + ' .pp-inner{position:relative;padding:0 16px 16px;}'
+          /* Panels de info: estadio, vs, alerts */
+        + sel + ' .pp-env,'
+        + sel + ' .pp-vs,'
+        + sel + ' .pp-alerts{'
+        +   'border:1.5px solid '+c.glow+' !important;'
+        +   'background:linear-gradient(180deg,'+c.bg1+','+c.bg2+') !important;'
+        +   'box-shadow:0 0 18px '+c.glow.replace(/\.\d+\)/, '.20)')+' inset,0 0 14px '+c.glow.replace(/\.\d+\)/, '.15)')+' !important;'
+        + '}'
+          /* Lista de items (balón, prórroga, penaltis) */
+        + sel + ' .pp-list .pp-item{'
+        +   'background:linear-gradient(180deg,'+c.bg1.replace(/,(\.\d+|0?\.\d+)\)/, ',.40)')+','+c.bg2.replace(/,(\.\d+|0?\.\d+)\)/, ',.60)')+') !important;'
+        +   'border:1px solid '+c.glow.replace(/\.\d+\)/, '.35)')+' !important;'
+        + '}'
+          /* Botón CONFIRMAR CONFIGURACIÓN */
+        + sel + ' .pp-confirm-btn:not([disabled]){'
+        +   'background:linear-gradient(135deg,'+c.glow.replace(/\.\d+\)/, '.30)')+','+c.glow.replace(/\.\d+\)/, '.18)')+') !important;'
+        +   'color:'+c.accent+' !important;'
+        +   'border-color:'+c.main+' !important;'
+        +   'box-shadow:0 0 24px '+c.glow+',inset 0 0 12px '+c.glow.replace(/\.\d+\)/, '.20)')+' !important;'
+        + '}';
+    });
+
+    /* Helper: comp 'inter-fin' usa color de 'inter', etc. — el mapa
+       ya lo cubre, así que no hace falta normalizar. */
+
     var st = document.createElement('style');
-    st.textContent =
-      /* Liga EA Sports — dorado (default ya) */
-        '#prepartido-overlay[data-comp="liga"] .pp-title{color:#f0c040;text-shadow:0 0 14px rgba(240,192,64,.6);}'
-      /* Copa del Rey — dorado intenso */
-      + '#prepartido-overlay[data-comp="copa"] .pp-title,'
-      + '#prepartido-overlay[data-comp="copa-fin"] .pp-title{color:#ffd54a;text-shadow:0 0 14px rgba(255,213,74,.7);}'
-      + '#prepartido-overlay[data-comp="copa"] .pp-env,'
-      + '#prepartido-overlay[data-comp="copa"] .pp-vs{border-color:rgba(255,213,74,.40)!important;box-shadow:0 0 12px rgba(255,213,74,.12) inset;}'
-      /* Supercopa España — rojo/dorado */
-      + '#prepartido-overlay[data-comp="sc"] .pp-title,'
-      + '#prepartido-overlay[data-comp="sc-final"] .pp-title{color:#ff7070;text-shadow:0 0 14px rgba(255,80,80,.6);}'
-      + '#prepartido-overlay[data-comp="sc"] .pp-env,'
-      + '#prepartido-overlay[data-comp="sc"] .pp-vs{border-color:rgba(255,80,80,.45)!important;box-shadow:0 0 12px rgba(255,80,80,.10) inset;}'
-      /* Champions League — azul */
-      + '#prepartido-overlay[data-comp="ucl"] .pp-title,'
-      + '#prepartido-overlay[data-comp="ucl-fin"] .pp-title{color:#9fc8ff;text-shadow:0 0 16px rgba(58,120,216,.75);}'
-      + '#prepartido-overlay[data-comp="ucl"] .pp-env,'
-      + '#prepartido-overlay[data-comp="ucl"] .pp-vs,'
-      + '#prepartido-overlay[data-comp="ucl-fin"] .pp-env,'
-      + '#prepartido-overlay[data-comp="ucl-fin"] .pp-vs{border-color:rgba(58,120,216,.55)!important;background:linear-gradient(180deg,rgba(20,40,90,.55),rgba(8,16,40,.85))!important;box-shadow:0 0 16px rgba(58,120,216,.20) inset;}'
-      /* Europa League — naranja */
-      + '#prepartido-overlay[data-comp="uel"] .pp-title,'
-      + '#prepartido-overlay[data-comp="uel-fin"] .pp-title{color:#ffa050;text-shadow:0 0 16px rgba(255,140,0,.75);}'
-      + '#prepartido-overlay[data-comp="uel"] .pp-env,'
-      + '#prepartido-overlay[data-comp="uel"] .pp-vs,'
-      + '#prepartido-overlay[data-comp="uel-fin"] .pp-env,'
-      + '#prepartido-overlay[data-comp="uel-fin"] .pp-vs{border-color:rgba(255,140,0,.55)!important;background:linear-gradient(180deg,rgba(70,40,10,.55),rgba(30,15,5,.85))!important;box-shadow:0 0 16px rgba(255,140,0,.20) inset;}'
-      /* Conference League — verde */
-      + '#prepartido-overlay[data-comp="uecl"] .pp-title,'
-      + '#prepartido-overlay[data-comp="uecl-fin"] .pp-title{color:#7df0a0;text-shadow:0 0 16px rgba(95,224,138,.75);}'
-      + '#prepartido-overlay[data-comp="uecl"] .pp-env,'
-      + '#prepartido-overlay[data-comp="uecl"] .pp-vs,'
-      + '#prepartido-overlay[data-comp="uecl-fin"] .pp-env,'
-      + '#prepartido-overlay[data-comp="uecl-fin"] .pp-vs{border-color:rgba(95,224,138,.55)!important;background:linear-gradient(180deg,rgba(10,50,30,.55),rgba(5,25,15,.85))!important;box-shadow:0 0 16px rgba(95,224,138,.20) inset;}'
-      /* Superliga — morado */
-      + '#prepartido-overlay[data-comp="superliga"] .pp-title{color:#c0a0ff;text-shadow:0 0 16px rgba(168,85,247,.75);}'
-      + '#prepartido-overlay[data-comp="superliga"] .pp-env,'
-      + '#prepartido-overlay[data-comp="superliga"] .pp-vs{border-color:rgba(168,85,247,.55)!important;background:linear-gradient(180deg,rgba(45,15,80,.55),rgba(20,5,40,.85))!important;box-shadow:0 0 16px rgba(168,85,247,.20) inset;}'
-      /* Recopa — rosa/granate */
-      + '#prepartido-overlay[data-comp="recopa"] .pp-title{color:#ff80b0;text-shadow:0 0 14px rgba(255,95,176,.7);}'
-      + '#prepartido-overlay[data-comp="recopa"] .pp-env,'
-      + '#prepartido-overlay[data-comp="recopa"] .pp-vs{border-color:rgba(255,95,176,.50)!important;box-shadow:0 0 12px rgba(255,95,176,.15) inset;}'
-      /* USC (Supercopa Europa) — plata/cyan */
-      + '#prepartido-overlay[data-comp="usc"] .pp-title,'
-      + '#prepartido-overlay[data-comp="usc-fin"] .pp-title{color:#a0e0ff;text-shadow:0 0 14px rgba(160,224,255,.7);}'
-      /* Intercontinental — oro intenso */
-      + '#prepartido-overlay[data-comp="inter"] .pp-title,'
-      + '#prepartido-overlay[data-comp="inter-fin"] .pp-title{color:#ffd700;text-shadow:0 0 16px rgba(255,215,0,.8);}'
-      /* Amistoso — gris suave */
-      + '#prepartido-overlay[data-comp="amistoso"] .pp-title{color:#bbb;}'
-      /* Mundial Clubes */
-      + '#prepartido-overlay[data-comp="mundial"] .pp-title{color:#ffd700;text-shadow:0 0 16px rgba(255,215,0,.8);}';
+    st.id = '_ppCompStyleSheet';
+    st.textContent = css;
     document.head.appendChild(st);
 
-    /* Wrapper para setear data-comp en el overlay al abrir la previa. */
+    /* ── Sincronización de data-comp ────────────────────────────
+       (a) Wrapper sobre showPrePartidoOverlay
+       (b) Backup: MutationObserver sobre #prepartido-overlay
+           dispara cuando se le añade clase 'show' — lee
+           window._ppCompKey y setea data-comp por si el wrapper
+           fue bypaseado. ─────────────────────────────────── */
     function _patchCompStyle(){
       var orig = window.showPrePartidoOverlay;
       if(typeof orig !== 'function' || orig._compStylePatched) return false;
@@ -1941,7 +1972,7 @@
         return orig.apply(this, arguments);
       };
       wrapped._compStylePatched = true;
-      /* Preservar flags previos (guide, sl-dur) si los hubiera. */
+      /* Preservar flags previos (guide, sl-dur). */
       if(orig._guidePatched) wrapped._guidePatched = orig._guidePatched;
       if(orig._durPatched)   wrapped._durPatched   = orig._durPatched;
       window.showPrePartidoOverlay = wrapped;
@@ -1950,6 +1981,34 @@
     if(!_patchCompStyle()){
       var t=0, i=setInterval(function(){
         if(_patchCompStyle() || ++t > 50) clearInterval(i);
+      }, 200);
+    }
+
+    /* BACKUP: MutationObserver. Si por cualquier razón el wrapper
+       no se aplicó (otro wrap externo posterior, race condition),
+       leemos _ppCompKey al detectar `.show` y seteamos data-comp. */
+    function _hookOverlayCompSync(){
+      var ov = document.getElementById('prepartido-overlay');
+      if(!ov || ov._compSyncHooked) return false;
+      ov._compSyncHooked = true;
+      var sync = function(){
+        if(!ov.classList.contains('show')) return;
+        var current = ov.getAttribute('data-comp') || '';
+        var ck = String(window._ppCompKey || '').toLowerCase();
+        if(ck && ck !== current){
+          ov.setAttribute('data-comp', ck);
+        }
+      };
+      var mo = new MutationObserver(sync);
+      mo.observe(ov, { attributes:true, attributeFilter:['class'] });
+      /* Sincronizar también inmediatamente por si la clase 'show'
+         ya estaba presente al colgar el observer. */
+      sync();
+      return true;
+    }
+    if(!_hookOverlayCompSync()){
+      var t2=0, i2=setInterval(function(){
+        if(_hookOverlayCompSync() || ++t2 > 50) clearInterval(i2);
       }, 200);
     }
   })();

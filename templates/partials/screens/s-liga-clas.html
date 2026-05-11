@@ -396,8 +396,52 @@
     if(leagueObserverBound || typeof MutationObserver === 'undefined') return;
     var root = document.getElementById('s-liga-cal');
     if(!root) return;
-    var observer = new MutationObserver(function(){ buildLigaClas(); });
-    observer.observe(root, {childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class']});
+    /* BUG CRÍTICO 2026-05-11: este observer NO tenía debounce y se
+       dispararaba en CADA mutación dentro de s-liga-cal. Las cards
+       IA-vs-IA viven aquí dentro, y _refreshJugarHints toggle-a la
+       clase `is-jugar-hint` en los .ml-timer cada 100ms. Además
+       iaSimLive mete eventos en el acta y actualiza el score → otra
+       cascada de mutaciones childList/characterData. Cada uno
+       disparaba buildLigaClas (rebuild completo de la clasificación
+       con sort, layout, render...) → JS thread saturado → setInterval
+       del cronómetro NO podía ejecutarse → todos los partidos se
+       quedaban a 0'. Causa raíz del bug "ninguna simulación funciona".
+
+       Fix: (a) Debounce 500ms — al menos 500ms entre rebuilds.
+            (b) Filtrar mutaciones puramente cosméticas (clases
+                `is-jugar-hint`, `running`, `finished`) que no afectan
+                a la clasificación. */
+    var _bldDeb = null;
+    var _IGNORE_CLASS_RE = /\b(is-jugar-hint|running|finished|is-pp-env-hint|state-playing|state-finished)\b/;
+    function _bldSchedule(){
+      if (_bldDeb) return; /* leading-edge throttle */
+      _bldDeb = setTimeout(function(){
+        _bldDeb = null;
+        try { buildLigaClas(); } catch(_){}
+      }, 500);
+    }
+    var observer = new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++){
+        var m = muts[i];
+        if (m.type === 'attributes' && m.attributeName === 'class'){
+          /* Solo nos interesan cambios de clase relevantes para la
+             clasificación (no clases puramente UI). Si la clase nueva
+             contiene SOLO toggles cosméticos, ignorar. */
+          var oldC = m.oldValue || '';
+          var newC = (m.target && m.target.className) || '';
+          /* Heurística simple: si las clases diferenciadas son SOLO
+             las cosméticas conocidas, skip. Comprobamos si AMBAS
+             listas comparten exactamente las mismas clases salvo las
+             cosméticas. */
+          var oldFiltered = oldC.replace(_IGNORE_CLASS_RE, '').replace(/\s+/g, ' ').trim();
+          var newFiltered = newC.replace(_IGNORE_CLASS_RE, '').replace(/\s+/g, ' ').trim();
+          if (oldFiltered === newFiltered) continue;
+        }
+        _bldSchedule();
+        return;
+      }
+    });
+    observer.observe(root, {childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class'], attributeOldValue:true});
     leagueObserverBound = true;
   }
   bindLeagueObserver();
@@ -1000,12 +1044,43 @@
 
     if(!targets.length) return;
 
-    var observer = new MutationObserver(function(){
-      buildLigaStatsDashboard();
+    /* BUG CRÍTICO 2026-05-11: sin debounce, este observer ejecutaba
+       buildLigaStatsDashboard (rebuild de stats heavy: top scorers,
+       MVPs, tarjetas...) en CADA mutación dentro de s-liga-cal +
+       plantillas. Las cards live IA-vs-IA viven en s-liga-cal y
+       generan dozens de mutaciones por segundo (clases is-jugar-hint
+       cada 100ms vía polling, eventos del acta cada game-minute via
+       iaSimLive, score updates...). El thread JS se saturaba y los
+       cronómetros se quedaban a 0'.
+
+       Fix: throttle leading-edge 500ms + skip mutaciones de classList
+       puramente cosméticas. Mismo patrón que bindLeagueObserver. */
+    var _statsDeb = null;
+    var _IGNORE_CLASS_RE2 = /\b(is-jugar-hint|running|finished|is-pp-env-hint|state-playing|state-finished)\b/;
+    function _statsSchedule(){
+      if (_statsDeb) return;
+      _statsDeb = setTimeout(function(){
+        _statsDeb = null;
+        try { buildLigaStatsDashboard(); } catch(_){}
+      }, 500);
+    }
+    var observer = new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++){
+        var m = muts[i];
+        if (m.type === 'attributes' && m.attributeName === 'class'){
+          var oldC = m.oldValue || '';
+          var newC = (m.target && m.target.className) || '';
+          var oldF = oldC.replace(_IGNORE_CLASS_RE2, '').replace(/\s+/g, ' ').trim();
+          var newF = newC.replace(_IGNORE_CLASS_RE2, '').replace(/\s+/g, ' ').trim();
+          if (oldF === newF) continue;
+        }
+        _statsSchedule();
+        return;
+      }
     });
 
     targets.forEach(function(t){
-      observer.observe(t, { childList:true, subtree:true, characterData:true, attributes:true });
+      observer.observe(t, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class','data-state','data-finished'], attributeOldValue:true });
     });
     ligaStatsObserverBound = true;
   }

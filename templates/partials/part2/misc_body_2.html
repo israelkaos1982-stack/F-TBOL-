@@ -14198,7 +14198,35 @@
     var _gameMinPerMs = 1 / TICK_MS;        /* 1 game-min por 1000 ms reales */
     var _varPauseMs = 0;                    /* total ms congelados por VAR */
     var _varPauseStart = 0;                 /* cuándo empezó la pausa actual */
+    /* Registro global de simulaciones IA-vs-IA vivas. Permite que
+       openIAJornada / buildIAresults sepan qué cards están corriendo
+       y NO rebuilden su DOM (lo cual detacharía el btn que el
+       setInterval referencia → "⏳ 0'" eterno). 2026-05-11. */
+    try {
+      window._iaSimLiveActive = window._iaSimLiveActive || {};
+      window._iaSimLiveActive[mk] = { startedAt: _wallStart };
+    } catch(_){}
     var interval = setInterval(function() {
+      /* Re-acquire DOM refs each tick. Si openIAJornada o cualquier
+         otro rebuilder ha regenerado los nodos, los refs `btn`,
+         `scAEl`, `scBEl`, `actaEl` capturados al inicio están
+         detached y `btn.textContent = ...` no se vería. Refrescamos
+         por id cada tick. Si el card desapareció del DOM (jornada
+         cambiada), abortamos la sim de forma limpia. */
+      var _bt  = document.getElementById('ia-sim-btn-' + mk);
+      var _sA  = document.getElementById('ia-sc-' + mk + '-a');
+      var _sB  = document.getElementById('ia-sc-' + mk + '-b');
+      var _ac  = document.getElementById('ia-acta-' + mk);
+      if (_bt)  btn    = _bt;
+      if (_sA)  scAEl  = _sA;
+      if (_sB)  scBEl  = _sB;
+      if (_ac)  actaEl = _ac;
+      if (!_bt) {
+        /* La card ya no existe — aborta el setInterval sin tocar nada. */
+        clearInterval(interval);
+        try { delete window._iaSimLiveActive[mk]; } catch(_){}
+        return;
+      }
       /* Watchdog: si _varActive lleva más de 5 s, lo forzamos a false.
          Antes, si la setTimeout del VAR fallaba (excepción al actualizar
          DOM, etc.) _varActive quedaba true PARA SIEMPRE y el partido se
@@ -14226,6 +14254,10 @@
         else if (!_etActive && curMin > 90 && curMin < _etTopMin) btn.textContent = '⏳ 90+' + (curMin - 90) + '\'';
         else if (!_etActive && curMin >= _etTopMin && curMin >= 90) btn.textContent = '🏁 FIN';
         else                                               btn.textContent = '⏳ ' + curMin + '\'';
+        /* Mantener el background verde si el rebuild reset los estilos. */
+        if (btn.style.background !== 'rgb(13, 42, 13)' && btn.style.background.indexOf('#0d2a0d') === -1) {
+          btn.style.background = '#0d2a0d'; btn.style.color = '#4aff4a';
+        }
       }
       try {
       /* Fire events that have reached curMin */
@@ -14512,6 +14544,7 @@
           }
         }
         clearInterval(interval);
+        try { delete window._iaSimLiveActive[mk]; } catch(_){}
         btn.style.background = '#0d0d3a';
         btn.style.color = '#4a8aff';
         if (scoreWrapEl) {
@@ -15328,15 +15361,32 @@
       if (window._currentIAJornada && typeof window.openIAJornada === 'function') {
         var iaScr = document.getElementById('s-liga-ia-jornada');
         if (iaScr && iaScr.classList.contains('active')) {
-          var _savedY = window.pageYOffset || document.documentElement.scrollTop || 0;
-          window._iaRefreshInPlace = true; /* flag para que go() no resetee scroll */
-          try { window.openIAJornada(window._currentIAJornada); }
-          finally { window._iaRefreshInPlace = false; }
-          /* Restaurar scroll tras el innerHTML + go(). Dos pasadas:
-             una inmediata y otra diferida porque algunos navegadores
-             normalizan el scroll después de reflow. */
-          window.scrollTo(0, _savedY);
-          setTimeout(function(){ window.scrollTo(0, _savedY); }, 0);
+          /* CRÍTICO 2026-05-11: si hay iaSimLive vivos en esta
+             jornada, el rebuild de bodyEl.innerHTML detacha los
+             btn/scAEl/scBEl/actaEl que los setIntervals referencian
+             → "⏳ 0'" eterno. SKIPPEAMOS el refresh mientras haya
+             sims corriendo. El próximo final-of-match disparará
+             buildIAresults otra vez con las sims YA cerradas. */
+          var _anyLive = false;
+          var _live = window._iaSimLiveActive || {};
+          for (var _kIA in _live){
+            if (!Object.prototype.hasOwnProperty.call(_live, _kIA)) continue;
+            /* mk patterns para esta jornada: iapnd-jN-... o iapnd-... */
+            if (_kIA && _kIA.indexOf('iapnd-j' + window._currentIAJornada + '-') === 0) {
+              _anyLive = true; break;
+            }
+          }
+          if (!_anyLive) {
+            var _savedY = window.pageYOffset || document.documentElement.scrollTop || 0;
+            window._iaRefreshInPlace = true; /* flag para que go() no resetee scroll */
+            try { window.openIAJornada(window._currentIAJornada); }
+            finally { window._iaRefreshInPlace = false; }
+            /* Restaurar scroll tras el innerHTML + go(). Dos pasadas:
+               una inmediata y otra diferida porque algunos navegadores
+               normalizan el scroll después de reflow. */
+            window.scrollTo(0, _savedY);
+            setTimeout(function(){ window.scrollTo(0, _savedY); }, 0);
+          }
         }
       }
     } catch(_) {}

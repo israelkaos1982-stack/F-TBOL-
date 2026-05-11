@@ -15859,6 +15859,19 @@ window._showSimProgress = function(opts, onDone){
   };
   /* ── Persistencia tras IA-vs-IA (callback de iaSimLive con prefijo
      `eurfase_<comp>_<jor>_<idx>`). ─────────────────────────────── */
+  function _anyEurFaseSimLive(comp, jor){
+    /* Detecta si hay iaSimLive vivos para esta jornada — si los hay
+       y rebuildamos bodyEl.innerHTML, los btn/scAEl/scBEl/actaEl que
+       los setIntervals referencian quedan detachados → "⏳ 0'"
+       eterno. 2026-05-11. */
+    var live = window._iaSimLiveActive || {};
+    var pref = 'eurfase_' + comp + '_' + jor + '_';
+    for(var k in live){
+      if(!Object.prototype.hasOwnProperty.call(live, k)) continue;
+      if(k && k.indexOf(pref) === 0) return true;
+    }
+    return false;
+  }
   window._eurFasePersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam){
     var m = /^eurfase_([a-z]+)_(\d+)_(\d+)$/.exec(String(mk||''));
     if(!m) return;
@@ -15872,7 +15885,20 @@ window._showSimProgress = function(opts, onDone){
     pair.mvp = mvp || '';
     pair.mvpTeam = mvpTeam || '';
     saveState(comp, state);
-    setTimeout(function(){ try { renderJornada(comp, jor); } catch(_){} }, 600);
+    /* Re-render con guard contra DOM-detach de live sims paralelas.
+       Reintenta cada 800 ms hasta que no haya sims vivas, hasta 3
+       reintentos (suficiente para esperar al último game-min en el
+       peor caso). 2026-05-11. */
+    var _try = 0;
+    function _doRender(){
+      _try++;
+      if(_anyEurFaseSimLive(comp, jor) && _try < 8){
+        setTimeout(_doRender, 1000);
+        return;
+      }
+      try { renderJornada(comp, jor); } catch(_){}
+    }
+    setTimeout(_doRender, 600);
   };
   /* ── Persistencia tras humano (callback de gmEndMatch con
      `_isEurFase`). ─────────────────────────────────────────────── */

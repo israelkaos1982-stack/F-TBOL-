@@ -27132,25 +27132,32 @@ document.addEventListener('DOMContentLoaded', function() {
     var isPaused = txt.indexOf('⏸') === -1 && txt.indexOf('▶') !== -1;
     return isAtZero && isPaused;
   }
+  function _setHintIfChanged(btn, want){
+    if (!btn) return;
+    var has = btn.classList.contains('is-jugar-hint');
+    if (want && !has) btn.classList.add('is-jugar-hint');
+    else if (!want && has) btn.classList.remove('is-jugar-hint');
+  }
   function _refreshJugarHints(){
     /* match-live-wrap (HvH/HvIA in calendar cards). */
     var btns = document.querySelectorAll('.match-live-wrap.hvh .ml-timer, .match-live-wrap.hvia .ml-timer');
     btns.forEach(function(btn){
       if (btn.style.display === 'none') return;
-      if (_isPausedAtZero(btn)) btn.classList.add('is-jugar-hint');
-      else btn.classList.remove('is-jugar-hint');
+      _setHintIfChanged(btn, _isPausedAtZero(btn));
     });
     /* gm-modal — solo cuando el modal está abierto. */
     var gm = document.getElementById('gm-modal');
     var gmBtn = document.getElementById('gm-timer');
     if (gm && gmBtn && gm.style.display !== 'none'){
-      if (_isPausedAtZero(gmBtn)) gmBtn.classList.add('is-jugar-hint');
-      else gmBtn.classList.remove('is-jugar-hint');
+      _setHintIfChanged(gmBtn, _isPausedAtZero(gmBtn));
     } else if (gmBtn) {
-      gmBtn.classList.remove('is-jugar-hint');
+      _setHintIfChanged(gmBtn, false);
     }
   }
-  setInterval(_refreshJugarHints, 50);
+  /* 100ms — instantáneo a ojo, sin saturar el thread JS ni competir
+     con el setInterval del cronómetro IA (1 sec/min). El guard de
+     `_setHintIfChanged` evita mutations innecesarias del classList. */
+  setInterval(_refreshJugarHints, 100);
 
   /* ── (5) Cuenta atrás post-evento ──────────────────────────────── */
   var _activeOverlay = null, _activeMk = null, _activeTimer = null,
@@ -27283,7 +27290,9 @@ document.addEventListener('DOMContentLoaded', function() {
     /* gm-modal — la "card" que ve el usuario al jugar HvH/HvIA. */
     _scanGmModal();
   }
-  setInterval(_scanCards, 100);
+  /* 300ms — fast enough to detect new cards, lento suficiente para
+     no competir con el setInterval del cronómetro de IA (1 sec/min). */
+  setInterval(_scanCards, 300);
 
   /* ─────────────────────────────────────────────────────────────────
      GM-MODAL · tema + colores de equipo + reubicación de FINALIZAR
@@ -27321,6 +27330,14 @@ document.addEventListener('DOMContentLoaded', function() {
   function _gmApplyTheme(modal){
     if (!modal) return;
     var comp = _gmCompFromState();
+    /* Guard idempotente: si la firma comp+equipos no ha cambiado
+       desde la última aplicación, no hacemos NADA — ni siquiera
+       setProperty (que cuenta como mutation y dispararía bucle
+       infinito con el MutationObserver del propio modal). */
+    var t = _gmTeamNames();
+    var sig = (comp||'') + '|' + (t.home||'') + '|' + (t.away||'');
+    if (modal._gmThemeSig === sig) return;
+    modal._gmThemeSig = sig;
     /* Limpia clases previas y añade la nueva. */
     var prev = (modal.className || '').match(/is-comp-[a-z]+/g) || [];
     prev.forEach(function(c){ modal.classList.remove(c); });
@@ -27329,7 +27346,6 @@ document.addEventListener('DOMContentLoaded', function() {
     /* Colores de los equipos para el AÑADIR EVENTO bicolor.
        Aplicamos los gradients INLINE al propio botón para evitar
        problemas de specificity con el CSS del bundle. */
-    var t = _gmTeamNames();
     var ca = _teamColors(t.home);
     var cb = _teamColors(t.away);
     var pa = (ca && (ca.bg || ca.primary)) || '#5a0010';
@@ -27697,8 +27713,13 @@ document.addEventListener('DOMContentLoaded', function() {
   function _boot(){
     _scanCards();
     _refreshJugarHints();
-    /* MutationObserver global para nuevas cards. */
-    new MutationObserver(function(){ _scanCards(); }).observe(document.body, { childList:true, subtree:true });
+    /* (Antes había un MutationObserver global sobre `document.body`
+       con subtree:true que disparaba _scanCards en CADA mutación.
+       Eso, combinado con el observer del propio gm-modal y las
+       setProperty/classList de _gmApplyTheme creaba un bucle
+       infinito que bloqueaba el thread JS y rompía el setInterval
+       del cronómetro. Eliminado — el polling 300ms + observer del
+       modal cubren todos los casos sin loop. 2026-05-10) */
     /* Observer dedicado al gm-modal — cuando su style.display cambia
        (de none a vacío), aplicamos tema + hint JUGAR de inmediato
        (sin esperar al setInterval 300ms). */
@@ -27706,15 +27727,25 @@ document.addEventListener('DOMContentLoaded', function() {
       function _wireGmObs(){
         var modal = document.getElementById('gm-modal');
         if (!modal){ setTimeout(_wireGmObs, 200); return; }
+        /* Detecta cambios SOLO de display:none ↔ block. Cuando se
+           cierra el modal limpia el guard `_gmThemeSig` para que
+           la próxima apertura vuelva a aplicar tema. Cuando se
+           abre, dispara 0/120/350ms para captar el _gm.home/away
+           poblado tarde. */
+        var prevDisplay = modal.style.display;
         new MutationObserver(function(){
-          if (modal.style.display !== 'none'){
-            /* Triple-fire 0/120/350ms — _gm.home/away pueden no estar
-               poblados aún en el primer tick. */
-            try { _scanGmModal(); _refreshJugarHints(); } catch(_){}
-            setTimeout(function(){ try { _scanGmModal(); _refreshJugarHints(); } catch(_){} }, 120);
-            setTimeout(function(){ try { _scanGmModal(); _refreshJugarHints(); } catch(_){} }, 350);
+          var disp = modal.style.display;
+          if (disp === prevDisplay) return;
+          prevDisplay = disp;
+          if (disp === 'none'){
+            modal._gmThemeSig = null;
+            modal._gmEndMoved = false;
+            return;
           }
-        }).observe(modal, { attributes:true, attributeFilter:['style','class'] });
+          try { _scanGmModal(); _refreshJugarHints(); } catch(_){}
+          setTimeout(function(){ try { _scanGmModal(); _refreshJugarHints(); } catch(_){} }, 120);
+          setTimeout(function(){ try { _scanGmModal(); _refreshJugarHints(); } catch(_){} }, 350);
+        }).observe(modal, { attributes:true, attributeFilter:['style'] });
       }
       _wireGmObs();
     })();

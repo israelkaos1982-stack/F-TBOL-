@@ -14110,60 +14110,61 @@
   })();
 
   /* ════════════════════════════════════════════════════════════════
-     WATCHDOG GLOBAL · iaSimLive · cronómetro 0→90 GARANTIZADO
+     ENGINE GLOBAL · iaSimLive · driver MIXTO rAF + setInterval
      ───────────────────────────────────────────────────────────────
-     Petición usuario 2026-05-11: "las simulaciones IA vs IA que
-     funcionaban perfectamente siguen totalmente inerte, desactivadas
-     y congeladas". Los rediseños de las cards (confirmación, bajas,
-     simulación) introdujeron observers/listeners que ocasionalmente
-     bloquean el thread JS, throttean los `setInterval` de iaSimLive
-     y dejan el botón clavado en "⏳ 0'".
+     Petición usuario 2026-05-11: el cronómetro daba saltos de 15s
+     porque Chrome móvil agrupa setIntervals (timer alignment) en
+     batería baja. Solución: usar TANTO requestAnimationFrame COMO
+     setInterval(50ms), cuyo combinado es muy difícil de throttear:
+       · rAF dispara cada repaint (~16ms a 60Hz, 33ms a 30Hz). NO
+         está sujeto al alignment de setInterval — el navegador lo
+         maneja como prioridad visual.
+       · setInterval(50ms) como backup por si rAF queda pausado
+         (pestaña en background o batería crítica).
+     Cualquiera de los dos basta para mantener el visual fluido.
 
-     Este watchdog corre en un único `setInterval(500ms)` GLOBAL
-     (uno solo, no uno por partido) que:
-
-       1. Itera `window._iaSimLiveActive` — el registro de sims vivas
-          que iaSimLive mantiene.
-       2. Para cada mk vivo, calcula curMin desde Date.now() vs
-          startedAt + gameMinPerMs cacheado al arrancar la sim.
-       3. Actualiza el `btn.textContent` DIRECTAMENTE — bypassea la
-          ruta del setInterval propio de iaSimLive si éste se ha
-          congelado.
-
-     No afecta a la lógica de la sim (eventos, acta, score) — esa
-     sigue exclusivamente en el setInterval interno de iaSimLive
-     cuando éste corre. El watchdog SOLO garantiza que el visual del
-     cronómetro avance, dándole pista al usuario de que el sistema
-     está vivo aunque algo más esté pisándole los ticks.
+     Funcionamiento:
+       1. iaSimLive registra su info en `_iaSimLiveActive[mk]`.
+       2. El driver mixto itera el registro en cada tick (rAF + int).
+       3. Para cada mk, calcula curMin desde Date.now() y actualiza
+          `btn.textContent` SOLO si el minuto cambió (guard
+          `lastCurMin`).
      ════════════════════════════════════════════════════════════════ */
-  (function _iaSimLiveWatchdog(){
-    if (window._iaSimLiveWatchdogStarted) return;
-    window._iaSimLiveWatchdogStarted = true;
-    /* 250 ms — fast enough para que el visual avance 1 game-min/sec
-       real con margen. Trabajo por tick muy barato (~10ns por entry
-       cuando lastCurMin no cambió). */
-    setInterval(function(){
+  (function _iaSimLiveDriver(){
+    if (window._iaSimLiveDriverStarted) return;
+    window._iaSimLiveDriverStarted = true;
+    function _drive(){
       var reg = window._iaSimLiveActive;
       if (!reg) return;
-      var now = Date.now();
       for (var mk in reg){
         if (!Object.prototype.hasOwnProperty.call(reg, mk)) continue;
         var st = reg[mk];
-        if (!st || !st.startedAt) continue;
+        if (!st) continue;
+        /* Si la sim expuso su tickFn (caso normal — iaSimLive lo
+           registra antes de devolver), la INVOCAMOS aquí. Cubre
+           visual + eventos + VAR + ET + FIN de forma idempotente
+           (sus guards internos `lastCurMin`/`evtIdx` evitan
+           duplicación). Esto es clave: si Chrome throttea el
+           setInterval per-card a un slot de 15s, esta llamada vía
+           rAF mantiene la sim avanzando. */
+        if (typeof st.tickFn === 'function') {
+          try { st.tickFn(); } catch(_){}
+          continue;
+        }
+        /* Fallback (sim sin tickFn expuesto): visual update directo
+           a partir del registry. */
+        if (!st.startedAt) continue;
         var gmpms = st.gameMinPerMs || (1 / 1000);
         var btn = document.getElementById('ia-sim-btn-' + mk);
         if (!btn) continue;
-        /* Si la sim ya marcó FIN o ET, no pisamos su estado. */
         var prevTxt = (btn.textContent || '');
         if (prevTxt.indexOf('FIN') !== -1) continue;
         if (prevTxt.indexOf('ET') !== -1) continue;
         if (prevTxt.indexOf('VAR') !== -1) continue;
         var topMin = st.etTopMin || 90;
-        var elapsedMs = now - st.startedAt;
+        var elapsedMs = Date.now() - st.startedAt - (st.varPauseMs || 0);
         var curMin = Math.min(Math.floor(elapsedMs * gmpms), topMin);
         if (curMin < 0) curMin = 0;
-        /* Solo actualizamos si el minuto cambió — evita mutaciones
-           innecesarias que disparen observers. */
         if (curMin === st.lastCurMin) continue;
         st.lastCurMin = curMin;
         var newTxt;
@@ -14171,13 +14172,20 @@
         else if (curMin >= topMin && curMin >= 90) newTxt = '🏁 FIN';
         else newTxt = '⏳ ' + curMin + '\'';
         if (btn.textContent !== newTxt) btn.textContent = newTxt;
-        /* Mantén el background verde si el rebuild lo limpió. */
-        if (btn.style && btn.style.background !== 'rgb(13, 42, 13)' &&
-            String(btn.style.background || '').indexOf('#0d2a0d') === -1) {
-          try { btn.style.background = '#0d2a0d'; btn.style.color = '#4aff4a'; } catch(_){}
-        }
       }
-    }, 250);
+    }
+    /* DRIVER 1 · requestAnimationFrame — corre al refresh rate del
+       browser. Inmune al timer alignment de setInterval. */
+    function _rafLoop(){
+      try { _drive(); } catch(_){}
+      requestAnimationFrame(_rafLoop);
+    }
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(_rafLoop);
+    }
+    /* DRIVER 2 · setInterval(50ms) — backup si rAF se pausa
+       (pestaña en background, battery saver agresivo). */
+    setInterval(_drive, 50);
   })();
 
   /* ── iaSimLive: cronómetro 30s en vivo por partido IA vs IA ── */
@@ -14337,7 +14345,16 @@
         window._iaSimLiveActive[mk].etTopMin = _etTopMin;
       }
     } catch(_){}
-    var interval = setInterval(function() {
+    /* Refactor 2026-05-11: extraemos el cuerpo del tick a una
+       función NOMBRADA `_tickFn` y la EXPONEMOS en el registro
+       global (`_iaSimLiveActive[mk].tickFn`). El driver global
+       (rAF + setInterval 50ms) la invoca también — así si Chrome
+       throttea el setInterval per-card, el driver rAF mantiene
+       la sim avanzando (rAF NO está sujeto a timer alignment de
+       Chrome). El cuerpo es idempotente (guards `evtIdx`,
+       `lastCurMin`) así que llamarlo más de lo necesario es seguro. */
+    var interval = null;
+    var _tickFn = function() {
       /* Re-acquire DOM refs each tick. Si openIAJornada o cualquier
          otro rebuilder ha regenerado los nodos, los refs `btn`,
          `scAEl`, `scBEl`, `actaEl` capturados al inicio están
@@ -14795,7 +14812,18 @@
           }
         }, 600);
       }
-    }, TICK_MS); /* setInterval cada 100ms — velocidad de juego sigue siendo 1 game-min/sec via _gameMinPerMs. Más invocaciones ≠ más trabajo (cada tick es barato). */
+    };
+    /* Per-card setInterval — driver primario. Si Chrome lo throttea
+       (timer alignment con batería baja), el driver rAF global
+       (definido arriba) sigue invocando _tickFn. */
+    interval = setInterval(_tickFn, TICK_MS);
+    /* Exponer _tickFn al driver global. */
+    try {
+      if (window._iaSimLiveActive && window._iaSimLiveActive[mk]) {
+        window._iaSimLiveActive[mk].tickFn = _tickFn;
+        window._iaSimLiveActive[mk].interval = interval;
+      }
+    } catch(_){}
   };
 
   /* ── PODER-VALOR: peso de gol por posición y poder individual ── */

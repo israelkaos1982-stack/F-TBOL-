@@ -15286,7 +15286,7 @@ window._showSimProgress = function(opts, onDone){
         title: c.label.toUpperCase() + ' · SORTEO FASE DE LIGA',
         sub:   'Preparando bombos…',
         theme: comp,  /* 'ucl' → azul · 'uel' → naranja · 'uecl' → verde */
-        minMs: 600
+        minMs: 300  /* Era 600 — usuario pidió reducir tiempo, 2026-05-10. */
       },
       function(ctx){
         /* 2026-05-09: drawPairs era SÍNCRONO y bloqueaba el JS thread
@@ -15367,8 +15367,11 @@ window._showSimProgress = function(opts, onDone){
                 return;
               }
               var totalReveals = humanReveals.length;
-              var TOTAL_MS = 3500;
-              var stepMs = Math.max(60, Math.min(220, Math.round(TOTAL_MS / totalReveals)));
+              /* Era 3500 ms — usuario pidió reducir el tiempo
+                 (2026-05-10). La animación de cruces humanos ahora
+                 cabe en ≈1.5 s total. */
+              var TOTAL_MS = 1500;
+              var stepMs = Math.max(40, Math.min(140, Math.round(TOTAL_MS / totalReveals)));
               var i = 0;
               function tick(){
                 if(i >= totalReveals){
@@ -16373,7 +16376,7 @@ window._showSimProgress = function(opts, onDone){
 
     if(typeof window.ftbolLoaderRun === 'function'){
       window.ftbolLoaderRun(
-        { title:'RESTO DE LIGAS · 51 LIGAS', sub:'Iniciando…', theme:'resto', minMs:600 },
+        { title:'RESTO DE LIGAS · 51 LIGAS', sub:'Iniciando…', theme:'resto', minMs:300 },
         function(ctx){ return simNext(ctx.progress); }
       ).then(_onDone);
     } else {

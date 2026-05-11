@@ -14078,6 +14078,68 @@
     document.head.appendChild(s);
   })();
 
+  /* ════════════════════════════════════════════════════════════════
+     WATCHDOG GLOBAL · iaSimLive · cronómetro 0→90 GARANTIZADO
+     ───────────────────────────────────────────────────────────────
+     Petición usuario 2026-05-11: "las simulaciones IA vs IA que
+     funcionaban perfectamente siguen totalmente inerte, desactivadas
+     y congeladas". Los rediseños de las cards (confirmación, bajas,
+     simulación) introdujeron observers/listeners que ocasionalmente
+     bloquean el thread JS, throttean los `setInterval` de iaSimLive
+     y dejan el botón clavado en "⏳ 0'".
+
+     Este watchdog corre en un único `setInterval(500ms)` GLOBAL
+     (uno solo, no uno por partido) que:
+
+       1. Itera `window._iaSimLiveActive` — el registro de sims vivas
+          que iaSimLive mantiene.
+       2. Para cada mk vivo, calcula curMin desde Date.now() vs
+          startedAt + gameMinPerMs cacheado al arrancar la sim.
+       3. Actualiza el `btn.textContent` DIRECTAMENTE — bypassea la
+          ruta del setInterval propio de iaSimLive si éste se ha
+          congelado.
+
+     No afecta a la lógica de la sim (eventos, acta, score) — esa
+     sigue exclusivamente en el setInterval interno de iaSimLive
+     cuando éste corre. El watchdog SOLO garantiza que el visual del
+     cronómetro avance, dándole pista al usuario de que el sistema
+     está vivo aunque algo más esté pisándole los ticks.
+     ════════════════════════════════════════════════════════════════ */
+  (function _iaSimLiveWatchdog(){
+    if (window._iaSimLiveWatchdogStarted) return;
+    window._iaSimLiveWatchdogStarted = true;
+    setInterval(function(){
+      var reg = window._iaSimLiveActive;
+      if (!reg) return;
+      var now = Date.now();
+      for (var mk in reg){
+        if (!Object.prototype.hasOwnProperty.call(reg, mk)) continue;
+        var st = reg[mk];
+        if (!st || !st.startedAt || !st.gameMinPerMs) continue;
+        var btn = document.getElementById('ia-sim-btn-' + mk);
+        if (!btn) continue;
+        /* Si la sim ya marcó FIN o ET, no pisamos su estado. */
+        var prevTxt = (btn.textContent || '');
+        if (prevTxt.indexOf('FIN') !== -1) continue;
+        if (prevTxt.indexOf('ET') !== -1) continue;
+        if (prevTxt.indexOf('VAR') !== -1) continue;
+        var topMin = st.etTopMin || 90;
+        var elapsedMs = now - st.startedAt;
+        var curMin = Math.min(Math.floor(elapsedMs * st.gameMinPerMs), topMin);
+        if (curMin < 0) curMin = 0;
+        /* Solo actualizamos si el minuto cambió — evita mutaciones
+           innecesarias que disparen observers. */
+        if (curMin === st.lastCurMin) continue;
+        st.lastCurMin = curMin;
+        var newTxt;
+        if (curMin > 90 && curMin < topMin) newTxt = '⏳ 90+' + (curMin - 90) + '\'';
+        else if (curMin >= topMin && curMin >= 90) newTxt = '🏁 FIN';
+        else newTxt = '⏳ ' + curMin + '\'';
+        if (btn.textContent !== newTxt) btn.textContent = newTxt;
+      }
+    }, 500);
+  })();
+
   /* ── iaSimLive: cronómetro 30s en vivo por partido IA vs IA ── */
   window.iaSimLive = function(mk, home, away, j, j1fn) {
     var btn   = document.getElementById('ia-sim-btn-' + mk);
@@ -14201,10 +14263,19 @@
     /* Registro global de simulaciones IA-vs-IA vivas. Permite que
        openIAJornada / buildIAresults sepan qué cards están corriendo
        y NO rebuilden su DOM (lo cual detacharía el btn que el
-       setInterval referencia → "⏳ 0'" eterno). 2026-05-11. */
+       setInterval referencia → "⏳ 0'" eterno). 2026-05-11.
+
+       Además guardamos toda la info que el watchdog global necesita
+       para forzar el visual aunque el setInterval propio quede
+       throttled por la pestaña en segundo plano o el thread saturado. */
     try {
       window._iaSimLiveActive = window._iaSimLiveActive || {};
-      window._iaSimLiveActive[mk] = { startedAt: _wallStart };
+      window._iaSimLiveActive[mk] = {
+        startedAt: _wallStart,
+        gameMinPerMs: _gameMinPerMs,
+        etTopMin: _etTopMin,
+        lastCurMin: -1
+      };
     } catch(_){}
     var interval = setInterval(function() {
       /* Re-acquire DOM refs each tick. Si openIAJornada o cualquier

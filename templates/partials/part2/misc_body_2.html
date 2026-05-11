@@ -6224,8 +6224,18 @@
       if (k.indexOf(prefix) !== 0) continue;
       if (fmap[k] && fmap[k].captain) return true;
     }
+    /* MEMOIZACIÓN CRÍTICA 2026-05-11: el fallback de abajo escanea
+       TODOS los `ligaExt_*` con JSON.parse — en una batch sim de
+       jornada (10 partidos × 2 equipos = 20 llamadas) esto bloqueaba
+       el thread JS durante segundos con localStorage grande. Causa
+       raíz REAL de "simular jornada DEAD" y de las cards IA-vs-IA
+       congeladas. Cacheamos el resultado por equipo: una sola
+       pasada de localStorage por equipo a lo largo de la sesión. */
+    var cache = window._HAS_CAPTAIN_CACHE = window._HAS_CAPTAIN_CACHE || {};
+    if (Object.prototype.hasOwnProperty.call(cache, teamName)) return cache[teamName];
     /* Fallback robusto: escanear ligaExt_* buscando el equipo por
        nombre (case-insensitive) y mirar sus players[].captain. */
+    var found = false;
     try {
       var target = String(teamName).trim().toLowerCase();
       for (var li = 0; li < localStorage.length; li++){
@@ -6242,15 +6252,24 @@
           if (String(t.name).trim().toLowerCase() !== target) continue;
           var players = Array.isArray(t.players) ? t.players : [];
           for (var pi = 0; pi < players.length; pi++){
-            if (players[pi] && players[pi].captain) return true;
+            if (players[pi] && players[pi].captain) { found = true; break; }
           }
+          if (found) break;
         }
+        if (found) break;
       }
     } catch(_){}
-    return false;
+    cache[teamName] = found;
+    return found;
   }
   function _captainBonus(teamName){ return _hasCaptain(teamName) ? 1.05 : 1.0; }
   window._captainBonus = _captainBonus;
+  /* Invalidador del cache cuando el admin guarda una plantilla
+     (capitanes pueden haber cambiado). Lo llaman applyEngineOverrides
+     y _importOtherLeaguesIntoEngine al refresh. */
+  window._clearCaptainCache = function(){
+    try { window._HAS_CAPTAIN_CACHE = {}; } catch(_){}
+  };
 
   /* ═══════════════════════════════════════════════════════════════
      HELPERS DE STATS DE EQUIPO (ATK / MID / DEF / AGRESIVIDAD)
@@ -6335,6 +6354,14 @@
      aunque la sim haya arrancado antes de applyEngineOverrides. */
   function _seedPlayerFlagsForTeam(teamName){
     if (!teamName) return;
+    /* MEMOIZACIÓN CRÍTICA 2026-05-11: cada llamada escaneaba TODO
+       localStorage parseando MBs de JSON. Llamado desde `pickSpecialist`
+       que corre por cada partido sim. En batch sim de 10 partidos con
+       penaltis/faltas = decenas de scans = thread JS muerto por
+       segundos. Marcamos cada team como seedeado para no re-scanear. */
+    var seeded = window._SEEDED_PLAYER_FLAGS = window._SEEDED_PLAYER_FLAGS || {};
+    if (seeded[teamName]) return;
+    seeded[teamName] = true;
     var target = String(teamName).trim().toLowerCase();
     try {
       for (var li = 0; li < localStorage.length; li++){
@@ -6370,6 +6397,10 @@
     } catch(_){}
   }
   window._seedPlayerFlagsForTeam = _seedPlayerFlagsForTeam;
+  /* Invalidador del marker de seed cuando el admin guarda una plantilla. */
+  window._clearSeededPlayerFlags = function(){
+    try { window._SEEDED_PLAYER_FLAGS = {}; } catch(_){}
+  };
 
   function _effectiveIARating(teamName, isHome, j, oppName) {
     /* Cumplimiento CLAUDE.md:

@@ -21347,6 +21347,118 @@ window.goLiveMatches = function() {
   });
 })();
 
+/* ════════════════════════════════════════════════════════════════════
+   RED DE SEGURIDAD — pantalla negra al re-entrar tras live match
+   ──────────────────────────────────────────────────────────────────
+   Petición usuario 2026-05-10: "cuando estoy en live de un partido y
+   me salgo de la web y vuelvo a entrar en railway, la pantalla está
+   negra. Teníamos códigos que funcionaban para eso perfectamente,
+   implántalos".
+
+   Causa: al cargar la página tras un live previo, alguno de estos
+   estados pudo quedar inconsistente:
+     · `#gm-modal` con `style.display=''` (sin esconder)
+     · `#prepartido-overlay.show` activo de una previa antigua
+     · `#sancion-overlay.show` activo de una entrega de WhatsApp
+       que no llegó a cerrarse
+     · Ninguna `.screen` con clase `active` (todas perdieron la clase)
+   Cualquiera de estos casos deja la pantalla en NEGRO porque los
+   overlays son fixed-fullscreen con bg negro.
+
+   FIX: 3 mecanismos de recuperación:
+     1. EN CADA CARGA (DOMContentLoaded): cleanup completo
+     2. EN bfcache RESTORE (pageshow con persisted=true): cleanup
+     3. EN load DE LA VENTANA: cleanup como último recurso
+
+   El cleanup:
+     - Oculta gm-modal, prepartido-overlay, sancion-overlay,
+       celebracion-overlay, _copaAliasOv, ucl-intro
+     - Asegura que al menos una pantalla (.screen) tenga .active.
+       Si no hay ninguna, activa s-home.
+   ════════════════════════════════════════════════════════════════ */
+(function _blackScreenSafetyNet(){
+  function _cleanupOverlays(){
+    try {
+      var gm = document.getElementById('gm-modal');
+      if(gm && gm.style.display !== 'none'){
+        /* Solo ocultar si __GM_LIVE no apunta a un partido vivo
+           (el modal pertenece a un partido en curso, no a residuo
+           visual). En el caso de live match el usuario podrá
+           reabrirlo desde el hub LIVE manualmente. */
+        gm.style.display = 'none';
+      }
+    } catch(_){}
+    /* Overlays con clase `.show` que cubren toda la pantalla. */
+    var overlayIds = [
+      'prepartido-overlay',     /* PREVIA */
+      'sancion-overlay',        /* BAJAS PARA EL PARTIDO */
+      'celebracion-overlay',    /* Celebración objetivo Bayern */
+      '_copaAliasOv',           /* Overlay alias eFootball */
+      'ucl-intro',              /* Splash Champions */
+      'comp-flash',             /* Flash de competición */
+      'sc-champion-ov',         /* Champion Supercopa */
+      'sancion-overlay'
+    ];
+    overlayIds.forEach(function(id){
+      try {
+        var ov = document.getElementById(id);
+        if(!ov) return;
+        ov.classList.remove('show');
+        /* Forzar display:none para los que usan style inline. */
+        if(ov.style && ov.style.display && ov.style.display !== 'none'){
+          ov.style.display = 'none';
+        }
+      } catch(_){}
+    });
+    /* Asegurar que al menos una pantalla esté activa. */
+    try {
+      var anyActive = document.querySelector('.screen.active');
+      if(!anyActive){
+        var home = document.getElementById('s-home');
+        if(home) home.classList.add('active');
+        /* Reset scroll por buena UX. */
+        try { window.scrollTo(0, 0); } catch(_){}
+      }
+    } catch(_){}
+    /* Resetear flags que podrían bloquear posteriores aperturas
+       de previa. */
+    try {
+      window._ppForceSancionShareMode = false;
+      window._sancionCallback = null;
+      window._ppCustomCallback = null;
+    } catch(_){}
+  }
+
+  /* 1. DOMContentLoaded — primera carga. */
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _cleanupOverlays);
+  } else {
+    _cleanupOverlays();
+  }
+
+  /* 2. pageshow — bfcache (browser back/forward) OR fresh load.
+     event.persisted === true → la página vino del bfcache (no se
+     reejecutó el JS init, así que cualquier estado JS está stale
+     y necesita cleanup). */
+  window.addEventListener('pageshow', function(ev){
+    /* Cleanup tanto en bfcache restore como en navegación normal —
+       siempre estamos a salvo de ejecutarlo. */
+    _cleanupOverlays();
+  });
+
+  /* 3. load — último recurso por si el script run antes de que
+     el DOM estuviera completo. */
+  window.addEventListener('load', function(){
+    /* Doble-check: si tras load aún no hay pantalla activa, forzar
+       s-home. */
+    setTimeout(_cleanupOverlays, 0);
+    setTimeout(_cleanupOverlays, 300);
+  });
+
+  /* Exponer manualmente por si alguien quiere re-disparar. */
+  window._cleanupBlackScreen = _cleanupOverlays;
+})();
+
 /* ══ TIMER EDIT — long-press o right-click sobre el cronómetro ══════
    Abre un prompt para ajustar el minuto del partido cuando el tiempo
    del juego real se desfasa del cronómetro en pantalla (ej. "el

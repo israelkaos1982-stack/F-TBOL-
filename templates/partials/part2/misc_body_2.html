@@ -7101,11 +7101,22 @@
        HvIA  tick ≈ 542 ms → 60 × 542/5 ≈ 6.5 s
        IAIA  tick ≈  83 ms → 60 ×  83/5 = 1 s  (90 s total) */
   var _ML_TICK_SEC = 5;
+  /* Tiempos reales del cronómetro (petición usuario 2026-05-10):
+     "el cronómetro de HvH y HvIA no funciona, recuerda los códigos
+     del tiempo que tenemos y arréglalo".
+     ALINEAR la duración REAL con la etiqueta MOSTRADA en la previa
+     (`displayMin`). Antes la etiqueta decía "10 min" pero el partido
+     duraba 15.75 min reales — discrepancia que confundía al usuario.
+     Ahora 1:1 → la previa muestra "10 min" y el partido dura 10 min.
+        HvH    → 10 min reales (era 15.75) → 6.67 s/game-min
+        HvH_ET → 5  min reales (sin cambio)
+        HvIA   → 8  min reales (era  9.75) → 5.33 s/game-min
+        IAIA   → 1.5 min reales (sin cambio) → 1 s/game-min */
   var _MATCH_RULE = {
-    HvH:    { gameMin: 90, realMin: 15.75, displayMin: 10 },
+    HvH:    { gameMin: 90, realMin: 10,   displayMin: 10 },
     HvH_ET: { gameMin: 30, realMin: 5                      },
-    HvIA:   { gameMin: 90, realMin: 9.75,  displayMin: 8  },
-    IAIA:   { gameMin: 90, realMin: 1.5,   displayLabel: '45 s/parte' }
+    HvIA:   { gameMin: 90, realMin: 8,    displayMin: 8  },
+    IAIA:   { gameMin: 90, realMin: 1.5,  displayLabel: '45 s/parte' }
   };
   function _tickMsFromRule(r) {
     /* regla de tres: tickMs = realMs / (ticksTotales) */
@@ -7114,10 +7125,10 @@
     return Math.max(1, Math.round(realMs / ticks));
   }
   var _MATCH_TICKS = {
-    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 875 ms (15.75 min reales) */
-    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5 min reales) */
-    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 542 ms ( 9.75 min reales) */
-    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  56 ms ( 1 min real = 30 s/parte) */
+    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 556 ms (10 min reales)   */
+    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5 min reales)   */
+    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 444 ms ( 8 min reales)   */
+    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  83 ms (90 s total)      */
   };
   /* Exponemos la regla para que TODOS los flujos (bundle legacy, campo 3D,
      previa, clock, live ticker, copa engine) lean de una única fuente.

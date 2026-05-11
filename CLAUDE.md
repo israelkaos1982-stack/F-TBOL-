@@ -338,19 +338,25 @@ forman las 30 eliminatorias de Ronda 1.
 
 | Modo  | gameMin | realMin | displayMin (previa) | ms/tick (5s juego) | s/game-min |
 |-------|---------|---------|---------------------|--------------------|------------|
-| HvH         | 90 | 15.75 | 10 | ≈ 875 ms | 10.5 s |
+| HvH         | 90 | 10    | 10 | ≈ 556 ms | 6.67 s |
 | HvH prórroga| 30 |  5    | —  | ≈ 833 ms | — |
-| HvIA        | 90 |  9.75 |  8 | ≈ 542 ms |  6.5 s |
+| HvIA        | 90 |  8    |  8 | ≈ 444 ms | 5.33 s |
 | IAIA        | 90 |  1.5  | "45 s/parte" | ≈ 83 ms | 1 s |
 
-- HvH = humano vs humano → **15 min 45 s reales**. Previa: "10 min". 1 game-min = 10.5 s reales.
-- HvIA = humano vs IA → **9 min 45 s reales**. Previa: "8 min". 1 game-min = 6.5 s reales.
+- HvH = humano vs humano → **10 min reales**. Previa: "10 min". 1 game-min = 6.67 s reales.
+- HvIA = humano vs IA → **8 min reales**. Previa: "8 min". 1 game-min = 5.33 s reales.
 - IAIA = IA vs IA → **1 min 30 s reales total** (45 s por parte). 1 game-min = 1 seg real.
 - HvH_ET = prórroga humana → 5 min reales.
 
+**REGLA DE ORO 2026-05-10**: la duración mostrada en la previa
+(`displayMin`) DEBE ser igual a la duración REAL (`realMin`). Antes
+discrepaban (display 10/8, real 15.75/9.75) lo que confundía al
+usuario — "el cronómetro no funciona, recuerda los códigos". Ahora
+1:1 → "10 min" = 10 minutos reales, "8 min" = 8 minutos reales.
+
 Estos valores los puede ajustar el usuario mediante petición explícita
-(historial: 2026-04-26 bajada de HvH 11→10.5 s y HvIA 9→6.5 s). No
-cambiar sin acuerdo.
+(historial: 2026-04-26 bajada de HvH 11→10.5 s y HvIA 9→6.5 s;
+2026-05-10 alineación display=real). No cambiar sin acuerdo.
 
 `realMin` controla el cronómetro real. `displayMin` / `displayLabel`
 controlan SOLO el label visible en la pantalla de PREVIA — están

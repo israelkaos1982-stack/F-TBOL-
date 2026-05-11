@@ -11179,12 +11179,24 @@
     } else {
       tickMs = _gm.isHvH ? GM_TICK_HVH : GM_TICK_HVIA;
     }
+    /* DEFENSIVO 2026-05-10: si _mlResolveClock devolvió algo no
+       válido (NaN, 0, undefined, > 5000 ms) caemos al default del
+       spec. El usuario reportó que el cronómetro se quedaba a 0'
+       después de 40 s reales — síntoma de _gameSecPerMs = 0. */
+    if (!isFinite(tickMs) || tickMs <= 0 || tickMs > 5000) {
+      try { console.warn('[gmStartTimer] tickMs inválido:', tickMs, '→ fallback'); } catch(_){}
+      tickMs = _gm.isHvH ? GM_TICK_HVH : GM_TICK_HVIA;
+      /* Si los constantes legacy también son raros, usar el default
+         hardcoded para HvIA del spec actual (444 ms / 8 min). */
+      if (!isFinite(tickMs) || tickMs <= 0) tickMs = _gm.isHvH ? 556 : 444;
+    }
     /* speedMult (⏪/⏩): acelera o ralentiza el ritmo real. Se aplica
        dividiendo el tickMs por el multiplicador, igual que en los ml-
        states. El mismo `_gameSecPerMs` resultante se usa para convertir
        ms reales → segundos de juego, manteniendo el anti-throttling
        con wall-clock. */
     var _speedMult = _gm.speedMult || 1;
+    if (!isFinite(_speedMult) || _speedMult <= 0) _speedMult = 1;
     var effTickMs = Math.max(1, Math.round(tickMs / _speedMult));
     /* Wall-clock anti-throttling: anclamos Date.now() al timerSec
        actual y cada tick calcula timerSec a partir del tiempo REAL
@@ -11197,11 +11209,32 @@
        en vez de los ~29' correctos — ese era el síntoma del throttling.
        Patrón espejo del _startInterval_j1m1 en el flujo ml. */
     _gm._wallStart = Date.now();
-    _gm._secAtStart = _gm.timerSec;
+    _gm._secAtStart = _gm.timerSec || 0;
     _gm._gameSecPerMs = 5 / effTickMs;  /* game-seconds por 1 ms real (con speedMult) */
+    _gm._effTickMs = effTickMs;          /* memo para recovery en el tick */
     _gm.timerRunning = true;
+    /* Diagnóstico — el usuario reportó que el cronómetro se quedaba
+       a 0' tras 40 s. Log de los valores resueltos para verificar. */
+    try {
+      console.log('[gmStartTimer]', {
+        isHvH: _gm.isHvH, comp: _gm.comp,
+        tickMs: tickMs, effTickMs: effTickMs,
+        gameSecPerMs: _gm._gameSecPerMs,
+        timerSec: _gm.timerSec, speedMult: _speedMult
+      });
+    } catch(_){}
     var _renderMs = Math.min(effTickMs, 500); /* refresco visual fluido */
+    if (!isFinite(_renderMs) || _renderMs <= 0) _renderMs = 500;
     _gm.timerInterval = setInterval(function () {
+      /* DEFENSIVO 2026-05-10: re-computar _gameSecPerMs si quedó
+         corrupto (=0, NaN, undefined). Antes el timer se quedaba
+         a 0' eternamente cuando alguna race lo dejaba inválido. */
+      if (!isFinite(_gm._gameSecPerMs) || _gm._gameSecPerMs <= 0){
+        var fb = _gm._effTickMs;
+        if (!isFinite(fb) || fb <= 0) fb = _gm.isHvH ? 556 : 444;
+        _gm._gameSecPerMs = 5 / fb;
+        if (!isFinite(_gm._wallStart)) _gm._wallStart = Date.now();
+      }
       /* Avanzar timerSec a partir del reloj de muralla, no sumando
          +5 por tick. `Date.now() - _wallStart` sigue siendo correcto
          aunque el browser haya pausado los ticks en segundo plano. */

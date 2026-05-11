@@ -5645,14 +5645,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var btn = document.getElementById('pp-confirm-btn');
     if (!btn) return;
     var done = _checkAllDone();
-    var hasTwitch = !!(window._ppSelectedTwitch && window._ppSelectedTwitch.length);
-    var ok = done && hasTwitch;
+    /* Twitch ELIMINADO como requisito obligatorio (2026-05-10
+       — petición usuario). El selector se ha movido a otra
+       pantalla y ya no debe bloquear el confirm. */
+    var ok = done;
     btn.disabled = !ok;
     /* Si ya estamos en etapa 2 (Comenzar Partido), no sobreescribir el label */
     if (btn.getAttribute('data-pp-stage') !== '2') {
       if (ok) btn.textContent = '🎮 CONFIRMAR CONFIGURACIÓN';
-      else if (!done) btn.textContent = '🔒 MARCA EL BALÓN';
-      else btn.textContent = '🔒 SELECCIONA CANAL TWITCH';
+      else btn.textContent = '🔒 MARCA EL BALÓN';
     }
     /* Hide pre-confirm WhatsApp button (now lives in sancion overlay) */
     var waBtn = document.getElementById('pp-wa-btn');
@@ -5727,11 +5728,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   window._ppConfirm = function() {
     if (!_checkAllDone()) return;
-    /* Twitch obligatorio para avanzar */
-    if (!window._ppSelectedTwitch || !window._ppSelectedTwitch.length) {
-      try { alert('⚠️ Debes seleccionar un Canal de Twitch antes de continuar.'); } catch(_){}
-      return;
-    }
+    /* Twitch ELIMINADO como requisito (2026-05-10 — petición usuario).
+       Se movió a otra pantalla y ya no debe bloquear el flujo. */
     /* ── Etapa 1 → Etapa 2: convertir el botón en "▶ COMENZAR PARTIDO" ── */
     var btn = document.getElementById('pp-confirm-btn');
     if (btn && btn.getAttribute('data-pp-stage') !== '2') {

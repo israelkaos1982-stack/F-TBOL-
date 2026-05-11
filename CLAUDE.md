@@ -298,6 +298,90 @@ Los otros 60 equipos del pool (los no-bye) se dividen en CABEZAS de
 serie (los 30 mejores por power) y NO CABEZAS (los 30 peores) y
 forman las 30 eliminatorias de Ronda 1.
 
+## Cronómetro del partido — BASE INMUTABLE (obligatorio, 2026-05-10)
+
+**PRECEDENTE PERMANENTE**: el cronómetro de simulación tiene que
+correr siempre del minuto 0 al minuto 90 (más descuento) en
+**TODAS** las competiciones (Liga EA Sports, Superliga, Copa del
+Rey, Champions League, Europa League, Conference League, Recopa,
+Supercopa España, Supercopa Europa, Intercontinental, Mundialito
+Clubes, Torneos de Verano, amistosos, Liga Hypermotion, Primera
+Federación, fases finales de Selecciones, eliminatorias únicas, y
+cualquier otra que se añada en el futuro), en los 3 modos:
+
+- **IA vs IA** (1 game-min = 1 sec real, total 1m 30s)
+- **HvH** (humano vs humano)
+- **HvIA** (humano vs IA / IA vs humano)
+
+Esta regla es **bloqueante absoluta** — ninguna PR puede dejar el
+cronómetro clavado en 0' en ninguna competición ni modo. Si un
+cambio rompe el avance del cronómetro, ese cambio se REVIERTE.
+
+### Anti-patrones prohibidos (que rompieron el cronómetro en 2026-05-10)
+
+1. **MutationObserver global sobre `document.body` con
+   `subtree:true`** que dispara funciones costosas en CADA
+   mutación del DOM. Crea bucles porque casi cualquier cosa
+   modifica el DOM. → Usa polling con `setInterval` o un observer
+   restringido a un nodo concreto.
+
+2. **Bucles `observer → setProperty/classList → observer`**
+   sin guard. Toda función que aplique estilos/clases debe ser
+   IDEMPOTENTE: cachear una firma (`comp|home|away` o similar) en
+   el elemento y `return` temprano si no cambió.
+
+3. **Polling agresivo (< 100ms) competiendo con el setInterval
+   del cronómetro**. El timer IAvsIA corre a 1 sec/min, HvH a
+   ~875ms/tick. Un `setInterval(fn, 50)` que llama a funciones
+   DOM-heavy puede bloquear el event loop y saltar ticks del
+   cronómetro. Mínimo recomendado: **100ms para hints visuales,
+   300ms para escaneos de cards**.
+
+4. **MutationObserver sobre el propio elemento que el observer
+   modifica** sin filtro de "cambió de verdad". Ejemplo: observer
+   sobre `#gm-modal[attributes]` que dispara `_gmApplyTheme` →
+   `_gmApplyTheme` hace `style.setProperty` → mutación → observer
+   → loop. → Filtrar por `prevDisplay !== disp` antes de actuar.
+
+### Patrón canónico para post-procesadores UI de las cards
+
+```js
+function _applyThing(el){
+  if (!el) return;
+  var sig = _computeSig();           // p.ej. comp|home|away
+  if (el._lastSig === sig) return;   // GUARD — sin mutations
+  el._lastSig = sig;
+  // … aplicar estilos / clases / atributos …
+}
+// Observer SOLO de cambios de display:
+var prevDisplay = el.style.display;
+new MutationObserver(function(){
+  if (el.style.display === prevDisplay) return;
+  prevDisplay = el.style.display;
+  if (el.style.display === 'none'){
+    el._lastSig = null;              // reset al cerrar
+    return;
+  }
+  _applyThing(el);
+}).observe(el, { attributes:true, attributeFilter:['style'] });
+// Polling de respaldo a ≥100ms con classList.contains() check
+// antes de add/remove para evitar mutations innecesarias.
+```
+
+Las funciones helper deben usar `_setHintIfChanged(btn, want)` —
+comprobar el estado actual antes de mutar.
+
+### Histórico
+
+- 2026-05-10: `MutationObserver` en `document.body[subtree:true]`
+  + observer en `#gm-modal[attributes]` + `_gmApplyTheme`
+  no-idempotente + polling 50/100ms bloquearon el thread JS y los
+  cronómetros de TODAS las competiciones se quedaron clavados en
+  0'. Fix: guards de idempotencia, observer restringido a `style`
+  con filtro `prevDisplay`, eliminado el observer global, polling
+  100/300ms con `_setHintIfChanged`. Documentado aquí como
+  precedente permanente.
+
 ## Duración del cronómetro del partido (obligatorio, siempre)
 
 **TIEMPOS OFICIALES** (definidos en

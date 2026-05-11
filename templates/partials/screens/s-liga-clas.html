@@ -382,7 +382,13 @@
 
   window.buildLigaClas = buildLigaClas;
   window.collectStandings = collectStandings;
-  window.rebuildLigaPlayerStats = rebuildLigaPlayerStats;
+  /* `rebuildLigaPlayerStats` se define en IIFE #2 (línea ~770).
+     Antes había un `window.rebuildLigaPlayerStats = rebuildLigaPlayerStats;`
+     aquí que disparaba ReferenceError porque la función NO está en
+     scope de este IIFE — y eso abortaba el resto del bloque (entre
+     otras cosas, el `addEventListener('DOMContentLoaded',
+     buildLigaClas)` y el `bindLeagueObserver()`). Exposición trasladada
+     a IIFE #2. 2026-05-10. */
   document.addEventListener('DOMContentLoaded', buildLigaClas);
 
   var leagueObserverBound = false;
@@ -1003,6 +1009,10 @@
     });
     ligaStatsObserverBound = true;
   }
+
+  /* Exposición global (movida desde IIFE #1 donde la función no
+     estaba en scope y disparaba ReferenceError). 2026-05-10. */
+  window.rebuildLigaPlayerStats = rebuildLigaPlayerStats;
 
   bindLigaStatsObserver();
 })();

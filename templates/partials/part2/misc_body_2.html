@@ -1702,6 +1702,10 @@
         return ret;
       };
       wrapped._guidePatched = true;
+      /* Preservar flags previos (sl-dur, comp-style) para que los
+         retries de otros patches no vuelvan a wrapearlos. 2026-05-10. */
+      if(orig._durPatched)       wrapped._durPatched       = orig._durPatched;
+      if(orig._compStylePatched) wrapped._compStylePatched = orig._compStylePatched;
       window.showPrePartidoOverlay = wrapped;
       return true;
     }
@@ -16252,7 +16256,8 @@
 
       /* ── Duración mostrada: SIEMPRE vía _mlRealDurationLabel (CLAUDE.md).
          Si el admin puso un override (_ppDurationMin), gana. Si no, sale
-         del spec (_MATCH_RULE): HvH=16.5 min, HvIA=13.5 min, IAIA=30 s. */
+         del spec (_MATCH_RULE): HvH=10 min, HvIA=8 min, IAIA=45 s/parte.
+         (Actualizado 2026-05-10: real = display label, regla de oro). */
       var _oSPP = window.showPrePartidoOverlay;
       if (typeof _oSPP === 'function' && !_oSPP._durPatched) {
         window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
@@ -16262,7 +16267,7 @@
           } else if (typeof window._mlRealDurationLabel === 'function') {
             newDur = window._mlRealDurationLabel({ isHvH: !!isHvH, humanInvolved: !isHvH });
           } else {
-            newDur = duracion || (isHvH ? '16.5 min' : '13.5 min');
+            newDur = duracion || (isHvH ? '10 min' : '8 min');
           }
           return _oSPP.call(this, matchKey, compKey, prorroga, newDur, isHvH);
         };

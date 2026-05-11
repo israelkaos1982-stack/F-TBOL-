@@ -881,8 +881,15 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
   };
 
   if (typeof MutationObserver !== 'undefined') {
+    /* Debounce 400ms — antes este observer agendaba setTimeout NUEVOS
+       en cada mutación. Las cards live IA generan dozens de mutaciones
+       por segundo → injectJornadaShields se ejecutaba decenas de veces
+       en paralelo, saturando el thread JS y parando los cronómetros.
+       Fix 2026-05-11. */
+    var _injShields = null;
     var obs = new MutationObserver(function(){
-      setTimeout(injectJornadaShields, 40);
+      if (_injShields) return;
+      _injShields = setTimeout(function(){ _injShields = null; try { injectJornadaShields(); } catch(_){} }, 400);
     });
     document.addEventListener('DOMContentLoaded', function(){
       obs.observe(document.body, { childList:true, subtree:true });
@@ -1561,8 +1568,29 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     if(leagueObserverBound || typeof MutationObserver === 'undefined') return;
     var root = document.getElementById('s-liga-cal');
     if(!root) return;
-    var observer = new MutationObserver(function(){ buildLigaClas(); });
-    observer.observe(root, {childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class']});
+    /* Debounce 500ms + filtrar mutaciones cosméticas (is-jugar-hint,
+       running, finished...). Sin esto, las cards live IA-vs-IA y el
+       polling de _refreshJugarHints saturaban el thread JS y los
+       cronómetros se quedaban a 0'. Fix crítico 2026-05-11. */
+    var _bldDeb = null;
+    var _IGN_CLS = /\b(is-jugar-hint|running|finished|is-pp-env-hint|state-playing|state-finished)\b/;
+    function _bldSched(){
+      if (_bldDeb) return;
+      _bldDeb = setTimeout(function(){ _bldDeb = null; try { buildLigaClas(); } catch(_){} }, 500);
+    }
+    var observer = new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++){
+        var m = muts[i];
+        if (m.type === 'attributes' && m.attributeName === 'class'){
+          var oC = (m.oldValue || '').replace(_IGN_CLS, '').replace(/\s+/g, ' ').trim();
+          var nC = ((m.target && m.target.className) || '').replace(_IGN_CLS, '').replace(/\s+/g, ' ').trim();
+          if (oC === nC) continue;
+        }
+        _bldSched();
+        return;
+      }
+    });
+    observer.observe(root, {childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class'], attributeOldValue:true});
     leagueObserverBound = true;
   }
   bindLeagueObserver();
@@ -2165,12 +2193,29 @@ var STAT_CLASS_MAP = {
 
     if(!targets.length) return;
 
-    var observer = new MutationObserver(function(){
-      buildLigaStatsDashboard();
+    /* Debounce 500ms + filtrar mutaciones cosméticas. Mismo patrón
+       que bindLeagueObserver. Fix crítico 2026-05-11. */
+    var _stDeb = null;
+    var _IGN2 = /\b(is-jugar-hint|running|finished|is-pp-env-hint|state-playing|state-finished)\b/;
+    function _stSched(){
+      if (_stDeb) return;
+      _stDeb = setTimeout(function(){ _stDeb = null; try { buildLigaStatsDashboard(); } catch(_){} }, 500);
+    }
+    var observer = new MutationObserver(function(muts){
+      for (var i = 0; i < muts.length; i++){
+        var m = muts[i];
+        if (m.type === 'attributes' && m.attributeName === 'class'){
+          var oC = (m.oldValue || '').replace(_IGN2, '').replace(/\s+/g, ' ').trim();
+          var nC = ((m.target && m.target.className) || '').replace(_IGN2, '').replace(/\s+/g, ' ').trim();
+          if (oC === nC) continue;
+        }
+        _stSched();
+        return;
+      }
     });
 
     targets.forEach(function(t){
-      observer.observe(t, { childList:true, subtree:true, characterData:true, attributes:true });
+      observer.observe(t, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['class','data-state','data-finished'], attributeOldValue:true });
     });
     ligaStatsObserverBound = true;
   }
@@ -7566,8 +7611,17 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   };
 
   if (typeof MutationObserver !== 'undefined') {
+    /* Debounce 400ms — antes este observer schedulaba un setTimeout
+       NUEVO en CADA mutación del body (childList:true, subtree:true).
+       Cada iaSimLive goal o classList toggle dejaba un setTimeout
+       pendiente → injectAllTeamPower (que querySelectorAll todo el
+       DOM con 3 funciones) corría decenas de veces por segundo,
+       saturando el thread JS y parando los cronómetros. Fix
+       2026-05-11. */
+    var _injPow = null;
     var _obs = new MutationObserver(function() {
-      setTimeout(injectAllTeamPower, 60);
+      if (_injPow) return;
+      _injPow = setTimeout(function(){ _injPow = null; try { injectAllTeamPower(); } catch(_){} }, 400);
     });
     document.addEventListener('DOMContentLoaded', function() {
       _obs.observe(document.body, { childList:true, subtree:true });

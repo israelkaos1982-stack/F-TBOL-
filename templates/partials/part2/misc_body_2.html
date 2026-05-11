@@ -26682,23 +26682,8 @@ document.addEventListener('DOMContentLoaded', function() {
   animation:jugarPulse 1.3s ease-in-out infinite;
   font-weight:900;
 }
-.ml-timer.is-jugar-hint::before{
-  content:'JUGAR';
-  position:absolute;left:50%;top:-26px;transform:translateX(-50%);
-  font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:4px;
-  color:#ffd848;text-shadow:0 0 12px rgba(240,200,32,.85);
-  background:rgba(0,0,0,.78);
-  border:1.5px solid #f0c820;border-radius:6px;
-  padding:2px 12px;white-space:nowrap;pointer-events:none;
-  animation:jugarLabelPulse 1.3s ease-in-out infinite;
-}
-.ml-timer.is-jugar-hint::after{
-  content:'👇';
-  position:absolute;right:-32px;top:50%;transform:translateY(-50%);
-  font-size:22px;pointer-events:none;
-  animation:jugarArrowPulse 1.3s ease-in-out infinite;
-  filter:drop-shadow(0 0 6px rgba(240,200,32,.8));
-}
+.ml-timer.is-jugar-hint::before,
+.ml-timer.is-jugar-hint::after{ content:none !important; display:none !important; }
 @keyframes jugarPulse{
   0%,100%{box-shadow:0 0 22px rgba(240,200,32,.55), inset 0 0 12px rgba(240,200,32,.25);}
   50%   {box-shadow:0 0 36px rgba(240,200,32,.92), inset 0 0 18px rgba(240,200,32,.45);}
@@ -26866,7 +26851,9 @@ document.addEventListener('DOMContentLoaded', function() {
 #gm-modal.is-comp-recopa { --comp-color:#ff8060; --comp-color-soft:rgba(255,100,70,.22);}
 #gm-modal.is-comp-inter  { --comp-color:#f0a040; --comp-color-soft:rgba(240,140,40,.22);}
 
-/* JUGAR · highlight + flecha sobre #gm-timer cuando está en 0' parado. */
+/* JUGAR · highlight (borde dorado pulsante) sobre #gm-timer cuando
+   está en 0' parado. Sin texto "JUGAR" ni flecha 👇 (petición
+   usuario 2026-05-10) — solo el borde llamativo. */
 #gm-timer.is-jugar-hint{
   position:relative;
   background:linear-gradient(135deg,#1a3a18,#2b6228 50%,#1a3a18) !important;
@@ -26876,24 +26863,8 @@ document.addEventListener('DOMContentLoaded', function() {
   animation:jugarPulse 1.2s ease-in-out infinite;
   font-weight:900;
 }
-#gm-timer.is-jugar-hint::before{
-  content:'JUGAR';
-  position:absolute;left:50%;top:-28px;transform:translateX(-50%);
-  font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:4.5px;
-  color:#ffd848;text-shadow:0 0 14px rgba(240,200,32,.95);
-  background:rgba(0,0,0,.82);
-  border:1.5px solid #f0c820;border-radius:6px;
-  padding:2px 12px;white-space:nowrap;pointer-events:none;
-  animation:jugarLabelPulse 1.2s ease-in-out infinite;
-  z-index:100;
-}
-#gm-timer.is-jugar-hint::after{
-  content:'👇';
-  position:absolute;right:-34px;top:50%;transform:translateY(-50%);
-  font-size:24px;pointer-events:none;
-  animation:jugarArrowPulse 1.2s ease-in-out infinite;
-  filter:drop-shadow(0 0 8px rgba(240,200,32,.9));
-}
+#gm-timer.is-jugar-hint::before,
+#gm-timer.is-jugar-hint::after{ content:none !important; display:none !important; }
 
 /* AÑADIR EVENTO · gradiente bicolor (mitad local / mitad visitante). */
 #gm-modal[data-team-colors] #gm-add-btn{
@@ -26934,18 +26905,23 @@ document.addEventListener('DOMContentLoaded', function() {
    Menu LIVE / Cancelar Partido. Se aplica vía clase `.gm-end-moved`. */
 #gm-btn-end.gm-end-moved{
   width:100% !important;
+  /* Mismo tamaño exacto que Menu LIVE / Cancelar Partido. El bundle
+     fija min-height:50px y padding:14px 8px con !important — los
+     forzamos al tamaño compacto correcto. */
+  min-height:0 !important;
   padding:11px 8px !important;
   border-radius:8px !important;
   border:1px solid var(--comp-color) !important;
   background:linear-gradient(135deg,rgba(180,30,30,.25),var(--comp-color-soft)) !important;
   color:#ffd0d0 !important;
   font-size:12px !important;
-  font-weight:700;
-  font-family:'Oswald',sans-serif;
-  letter-spacing:1.5px;
-  cursor:pointer;
+  font-weight:700 !important;
+  font-family:'Oswald',sans-serif !important;
+  letter-spacing:1.5px !important;
+  cursor:pointer !important;
   box-shadow:0 0 12px var(--comp-color-soft) !important;
   flex:none !important;
+  line-height:1.2 !important;
 }
 /* Cuando FINALIZAR se mueve, su contenedor original (el row con
    PRÓRROGA) gana clase `.gm-row-end-removed` y PRÓRROGA pasa a
@@ -27063,20 +27039,52 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* ── Aplicar tema de comp + colores de equipo a una card ───────── */
   var _COLOR_CACHE = {};
+  /* Color determinista a partir del nombre del equipo (hash → hue).
+     Sirve cuando `getTeamColors` no tiene entrada para un equipo
+     (p.ej. Racing Ferrol, Deportivo Alavés) y devuelve el placeholder
+     gris `#888`. Garantizamos colores distinguibles entre local y
+     visitante. */
+  function _hashColor(name){
+    var n = String(name||'');
+    var h = 0;
+    for (var i = 0; i < n.length; i++) h = ((h<<5) - h + n.charCodeAt(i)) | 0;
+    var hue = Math.abs(h) % 360;
+    /* HSL → hex. Saturación alta, luminancia oscura para que case con
+       el fondo oscuro del modal. */
+    var sat = 0.55, lum = 0.32;
+    function hsl2rgb(hh,s,l){
+      var c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((hh/60)%2-1)), m=l-c/2;
+      var r=0,g=0,b=0;
+      if(hh<60){r=c;g=x;}else if(hh<120){r=x;g=c;}else if(hh<180){g=c;b=x;}
+      else if(hh<240){g=x;b=c;}else if(hh<300){r=x;b=c;}else{r=c;b=x;}
+      return [Math.round((r+m)*255),Math.round((g+m)*255),Math.round((b+m)*255)];
+    }
+    var rgb = hsl2rgb(hue, sat, lum);
+    return '#'+rgb.map(function(v){return ('0'+v.toString(16)).slice(-2);}).join('');
+  }
   function _teamColors(name){
     if (!name) return null;
     if (_COLOR_CACHE[name]) return _COLOR_CACHE[name];
-    /* Lookup de paleta de colores. Intenta varios providers. */
+    var out = null;
     try {
       if (typeof window.getTeamColors === 'function'){
         var c = window.getTeamColors(name);
-        if (c && c.primary){ _COLOR_CACHE[name] = c; return c; }
+        if (c && c.bg){
+          var bg = String(c.bg).toLowerCase();
+          /* Si el bundle devolvió la paleta-placeholder (`#888`), la
+             ignoramos y caemos al hash determinista. */
+          if (bg !== '#888' && bg !== '#888888'){
+            out = { bg: c.bg, primary: c.bg, border: c.border || c.bg, fg: c.fg || '#fff' };
+          }
+        }
       }
     } catch(_){}
-    /* Fallback: paleta neutra (oscuro). */
-    var def = { primary:'#1a1a2a', secondary:'#0a0a14' };
-    _COLOR_CACHE[name] = def;
-    return def;
+    if (!out){
+      var hex = _hashColor(name);
+      out = { bg: hex, primary: hex, border: hex, fg: '#fff' };
+    }
+    _COLOR_CACHE[name] = out;
+    return out;
   }
   function _hex2rgba(h, a){
     if (!h) return 'rgba(0,0,0,'+a+')';
@@ -27691,6 +27699,25 @@ document.addEventListener('DOMContentLoaded', function() {
     _refreshJugarHints();
     /* MutationObserver global para nuevas cards. */
     new MutationObserver(function(){ _scanCards(); }).observe(document.body, { childList:true, subtree:true });
+    /* Observer dedicado al gm-modal — cuando su style.display cambia
+       (de none a vacío), aplicamos tema + hint JUGAR de inmediato
+       (sin esperar al setInterval 300ms). */
+    (function(){
+      function _wireGmObs(){
+        var modal = document.getElementById('gm-modal');
+        if (!modal){ setTimeout(_wireGmObs, 200); return; }
+        new MutationObserver(function(){
+          if (modal.style.display !== 'none'){
+            /* Triple-fire 0/120/350ms — _gm.home/away pueden no estar
+               poblados aún en el primer tick. */
+            try { _scanGmModal(); _refreshJugarHints(); } catch(_){}
+            setTimeout(function(){ try { _scanGmModal(); _refreshJugarHints(); } catch(_){} }, 120);
+            setTimeout(function(){ try { _scanGmModal(); _refreshJugarHints(); } catch(_){} }, 350);
+          }
+        }).observe(modal, { attributes:true, attributeFilter:['style','class'] });
+      }
+      _wireGmObs();
+    })();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _boot);
   else _boot();

@@ -14243,9 +14243,21 @@
     var _varActiveSince = 0; /* watchdog: si VAR tarda > 5 s, lo desbloqueamos */
     /* Spec usuario 2026-05-05: TODA simulación IA-vs-IA (Liga, Copa, UCL,
        UEL, UECL, Recopa, USC, Inter, Torneos verano, amistosos…) corre
-       a 1 game-minute = 1 segundo real. TICK_MS=1000 + curMin+=1 lo
-       garantiza para todas las competiciones que pasan por iaSimLive. */
-    var TICK_MS = 1000;
+       a 1 game-minute = 1 segundo real.
+
+       DESACOPLAMOS la frecuencia del setInterval (TICK_MS) de la
+       velocidad de juego (_gameMinPerMs). El user reportó que con
+       TICK_MS=1000 + muchas cards en paralelo, Chrome móvil agrupaba
+       los timers ("timer alignment") y los disparaba todos juntos cada
+       ~15 s → cronómetro saltaba 15 game-min de golpe y eventos
+       salían en lotes. Con TICK_MS=100 el setInterval fire 10x/sec y
+       Chrome no puede agrupar tantos timers en el mismo slot.
+
+       El tick es BARATO (Date.now() math + guards de mutation
+       innecesaria) — más invocaciones ≠ más trabajo. La velocidad
+       de juego sigue siendo 1 game-min/1000ms real. 2026-05-11. */
+    var TICK_MS = 100;
+    var GAME_MIN_REAL_MS = 1000;     /* 1 game-min = 1 real second */
     /* Stoppage dinámico — petición usuario: cada evento del acta suma
        1 game-minute (= 1 sec real) al tope de SU parte. Como iaSimLive
        no pausa en HT, aplicamos la suma agregada al final del partido:
@@ -14312,7 +14324,7 @@
        avanza 5 game-min de golpe — 1:1 garantizado. Mismo patrón
        que gmStartTimer del gm-modal. */
     var _wallStart = Date.now();
-    var _gameMinPerMs = 1 / TICK_MS;        /* 1 game-min por 1000 ms reales */
+    var _gameMinPerMs = 1 / GAME_MIN_REAL_MS;  /* 1 game-min por 1000 ms reales, DESACOPLADO de TICK_MS */
     var _varPauseMs = 0;                    /* total ms congelados por VAR */
     var _varPauseStart = 0;                 /* cuándo empezó la pausa actual */
     /* Actualizamos los valores reales del registro (registramos al
@@ -14783,7 +14795,7 @@
           }
         }, 600);
       }
-    }, TICK_MS); /* 1 game-min = 1 sec real → 90 s + stoppage + ET (Copa SL) */
+    }, TICK_MS); /* setInterval cada 100ms — velocidad de juego sigue siendo 1 game-min/sec via _gameMinPerMs. Más invocaciones ≠ más trabajo (cada tick es barato). */
   };
 
   /* ── PODER-VALOR: peso de gol por posición y poder individual ── */

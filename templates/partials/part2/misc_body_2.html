@@ -23915,10 +23915,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   /* SPEED: factor global (0..1) que escala los timings artificiales
      del fake-progress y del minMs de cada call. 0.5 = mitad de tiempo.
-     Si en el futuro queremos volver al ritmo anterior basta con
-     cambiar este valor a 1. Cualquier consumidor puede leer este
-     valor con window.ftbolLoaderSpeed. */
-  var SPEED = 0.5;
+     2026-05-10: bajado a 0.25 — el usuario reportó "las simulaciones
+     de las competiciones tardan muchísimo, reduce el tiempo". El
+     loader ahora dura ≈ 1/4 del tiempo nominal (150 ms para un
+     minMs:600), suficiente para que se vea el fade sin ser molesto. */
+  var SPEED = 0.25;
   function _scale(ms){ return Math.max(20, Math.round((ms||0) * SPEED)); }
 
   /* run(opts, runner) — runner recibe {progress(p,sub)} y devuelve void/Promise.

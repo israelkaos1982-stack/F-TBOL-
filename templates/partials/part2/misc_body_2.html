@@ -26952,8 +26952,21 @@ document.addEventListener('DOMContentLoaded', function() {
    ancho completo. */
 .gm-row-end-removed #gm-btn-et{flex:1 1 100% !important;}
 
-/* Wrapper donde se reubica FINALIZAR (entre acta y Menu LIVE). */
-.gm-finalizar-slot{padding:6px 8px 4px;}
+/* Wrapper donde se reubica FINALIZAR (entre acta y Menu LIVE).
+   Lleva un border-top del color de la competición para separarlo
+   visualmente del acta (petición usuario 2026-05-10). */
+.gm-finalizar-slot{
+  padding:10px 8px 4px;
+  border-top:2px solid var(--comp-color, #ff3050);
+  margin-top:6px;
+  box-shadow:0 -2px 12px var(--comp-color-soft, rgba(255,48,80,.25));
+  position:relative;
+}
+.gm-finalizar-slot::before{
+  content:'';position:absolute;top:-1px;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--comp-color,#ff3050) 50%,transparent);
+  filter:drop-shadow(0 0 6px var(--comp-color,#ff3050));
+}
 
 /* ═══════════════════════════════════════════════════════════════
    PREVIA · highlight del cuadro de estadio + clima
@@ -27305,17 +27318,34 @@ document.addEventListener('DOMContentLoaded', function() {
     prev.forEach(function(c){ modal.classList.remove(c); });
     if (comp) modal.classList.add('is-comp-' + comp);
     modal.setAttribute('data-comp', comp || '');
-    /* Colores de los equipos para el AÑADIR EVENTO bicolor. */
+    /* Colores de los equipos para el AÑADIR EVENTO bicolor.
+       Aplicamos los gradients INLINE al propio botón para evitar
+       problemas de specificity con el CSS del bundle. */
     var t = _gmTeamNames();
     var ca = _teamColors(t.home);
     var cb = _teamColors(t.away);
-    var pa = (ca && (ca.bg || ca.primary)) || '#3a0008';
-    var pb = (cb && (cb.bg || cb.primary)) || '#3a0008';
-    modal.style.setProperty('--team-a-1', _hex2rgba(pa, .92));
-    modal.style.setProperty('--team-a-2', _hex2rgba(pa, .55));
-    modal.style.setProperty('--team-b-1', _hex2rgba(pb, .55));
-    modal.style.setProperty('--team-b-2', _hex2rgba(pb, .92));
+    var pa = (ca && (ca.bg || ca.primary)) || '#5a0010';
+    var pb = (cb && (cb.bg || cb.primary)) || '#0a1a40';
+    modal.style.setProperty('--team-a-1', _hex2rgba(pa, .95));
+    modal.style.setProperty('--team-a-2', _hex2rgba(pa, .65));
+    modal.style.setProperty('--team-b-1', _hex2rgba(pb, .65));
+    modal.style.setProperty('--team-b-2', _hex2rgba(pb, .95));
     modal.setAttribute('data-team-colors', '1');
+    /* También inline en el #gm-add-btn — combate el `!important` del
+       bundle CSS (línea 2237). */
+    var addBtn = document.getElementById('gm-add-btn');
+    if (addBtn){
+      var grad = 'linear-gradient(90deg,'
+               + _hex2rgba(pa, .95) + ' 0%,'
+               + _hex2rgba(pa, .65) + ' 48%,'
+               + _hex2rgba(pb, .65) + ' 52%,'
+               + _hex2rgba(pb, .95) + ' 100%)';
+      addBtn.style.setProperty('background', grad, 'important');
+      addBtn.style.setProperty('border', '2px solid var(--comp-color, #ff3050)', 'important');
+      addBtn.style.setProperty('color', '#fff', 'important');
+      addBtn.style.setProperty('text-shadow', '0 1px 4px rgba(0,0,0,.85)', 'important');
+      addBtn.style.setProperty('font-weight', '900', 'important');
+    }
   }
   function _gmMoveFinalizarBtn(){
     var modal = document.getElementById('gm-modal');
@@ -27358,11 +27388,10 @@ document.addEventListener('DOMContentLoaded', function() {
           if (n.nodeType !== 1) continue;
           if (!n.classList || !n.classList.contains('ml-evt-item')) continue;
           var g = window._gm || {};
-          /* Solo dispara si el reloj está corriendo y no es replay
-             (game state carga del localStorage también añade items).
-             Saltarse cualquier evento cuyo `data-type` no esté en
-             la tabla. */
-          if (!g.timerRunning) continue;
+          /* Saltar replays del localStorage al ABRIR el modal (kickoff
+             aún no se ha pulsado): si el reloj no ha arrancado nunca,
+             es restauración, no acción del usuario. */
+          if (!g.kickoffDone) continue;
           var type = n.getAttribute('data-type') || '';
           /* Normalizar 'damarilla' → 'doble-amarilla'. */
           if (type === 'damarilla') type = 'doble-amarilla';

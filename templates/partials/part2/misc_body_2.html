@@ -26954,30 +26954,24 @@ document.addEventListener('DOMContentLoaded', function() {
    previa, con borde amarillo pulsante (igual estilo que el
    resalte de AÑADIR LESIONADOS).
    ═══════════════════════════════════════════════════════════════ */
-#pp-env.is-pp-env-hint{
+/* Highlight amarillo aplicable a cualquier elemento de la previa
+   en la secuencia (estadio, prórroga, penaltis, balón, alias). */
+#pp-env.is-pp-env-hint,
+.pp-item.is-pp-env-hint,
+.pp-alias-hint.is-pp-env-hint,
+.pp-vs .is-pp-env-hint{
   border:2px solid #f0c820 !important;
   box-shadow:0 0 24px rgba(240,200,32,.6), inset 0 0 14px rgba(240,200,32,.08) !important;
   animation:ppEnvHintPulse 1.6s ease-in-out infinite;
   position:relative;
+  border-radius:10px;
 }
-#pp-env.is-pp-env-hint::after{
-  content:'👆 ELIGE ESTADIO Y CLIMA';
-  position:absolute;top:-12px;right:8px;
-  font-family:'Bebas Neue',sans-serif;font-size:10px;letter-spacing:1.8px;
-  color:#ffd848;text-shadow:0 0 8px rgba(240,200,32,.7);
-  background:rgba(0,0,0,.78);
-  border:1px solid rgba(240,200,32,.65);
-  border-radius:5px;padding:2px 8px;white-space:nowrap;
-  pointer-events:none;
-  animation:ppEnvHintLabelPulse 1.6s ease-in-out infinite;
-}
+/* (tooltip "ELIGE ESTADIO Y CLIMA" eliminado — petición usuario
+   2026-05-10: el resalte visual es suficiente, el texto sobre el
+   estadio resultaba intrusivo y aparecía donde no debía.) */
 @keyframes ppEnvHintPulse{
   0%,100%{box-shadow:0 0 20px rgba(240,200,32,.45), inset 0 0 12px rgba(240,200,32,.06);}
   50%   {box-shadow:0 0 36px rgba(240,200,32,.85), inset 0 0 18px rgba(240,200,32,.16);}
-}
-@keyframes ppEnvHintLabelPulse{
-  0%,100%{opacity:.85;transform:translateY(0);}
-  50%   {opacity:1;transform:translateY(-3px);}
 }
 </style>
 <script>
@@ -27525,45 +27519,130 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   })();
 
-  /* ── PREVIA · resaltar el estadio cuando el rival NO necesita
-        alias (es equipo real de eFootball). Foto 1/2 del usuario. ── */
-  function _ppHighlightStadium(){
-    var ov = document.getElementById('prepartido-overlay');
+  /* ── PREVIA · secuencia auto de resaltado (2026-05-10) ──────────
+     Petición usuario: ya no hay que pulsar para "elegir estadio y
+     clima"; el resalte amarillo es solo orientativo y se mueve
+     SOLO por el flujo de la pantalla con timers:
+
+       Tipo A — HvH (sin aliases) / HvIA-sin-alias (Liga, Superliga,
+                Fases de grupos europeas):
+            t=0  → ESTADIO
+            t=3s → BALÓN
+            Click balón ✅ → confirm desbloqueado.
+
+       Tipo B — HvIA con alias necesario (Resto de Ligas):
+            t=0  → ❓ ALIAS picker
+            t=5s → ESTADIO
+            t=8s → BALÓN
+            Click balón ✅ → confirm desbloqueado.
+
+       Tipo C — Eliminatoria única (Copa r1/r2/r16/fin, Recopa
+                rounds tempranas, etc.): tras ESTADIO se intercalan
+                PRÓRROGA y PENALTIS antes del BALÓN, +3s cada uno.
+
+     El resalte se mueve solo. Si el usuario adelanta marcando un
+     item, el siguiente toma el foco enseguida. */
+  var _ppSeqTimer = null, _ppSeqIdx = 0, _ppSeqList = [];
+  function _ppClearAllHint(){
+    document.querySelectorAll('.is-pp-env-hint').forEach(function(el){
+      el.classList.remove('is-pp-env-hint');
+    });
+  }
+  function _ppBuildSequence(){
+    /* Detectar tipo de match para construir la secuencia de targets. */
+    var seq = [];
+    /* (1) Alias picker — visible solo cuando un IA-team de Resto de
+       Ligas necesita alias. Detectamos el badge "EQUIPO eFootball"
+       o un botón con clase pp-alias-hint, etc. Por ahora buscamos
+       cualquier elemento con clase `pp-alias-need` o un botón con
+       atributo data-pp-alias-needed. */
+    var aliasEl = document.querySelector('.pp-alias-need, [data-pp-alias-needed="1"]');
+    if (aliasEl) seq.push({ el: aliasEl, ms: 5000 });
+    /* (2) Estadio (siempre). */
     var env = document.getElementById('pp-env');
-    if (!ov || !env) return;
-    /* Solo cuando la previa está abierta. */
-    var open = ov.classList.contains('show');
-    if (!open){ env.classList.remove('is-pp-env-hint'); return; }
-    /* Detectar si algún equipo IA NECESITA alias.
-       Si EXISTE algún alias ya seteado (texto "🎮 ..." dentro del
-       pp-vs) significa que el rival ES de Resto de Ligas y ya
-       tiene alias asignado → no es "real eFootball". En ese caso
-       NO resaltamos el estadio (el siguiente paso visual es la
-       configuración del partido). En cambio, si ningún equipo
-       muestra alias → o bien son humanos vs humanos, o bien el
-       rival ES eFootball real → resaltamos el estadio. */
-    var vs = document.getElementById('pp-vs');
-    var hasAlias = false;
-    if (vs){
-      /* Buscar el span "🎮" en cualquier descendant text. */
-      var spans = vs.querySelectorAll('div, span');
-      for (var i = 0; i < spans.length; i++){
-        var t = (spans[i].textContent || '');
-        if (t.indexOf('🎮') !== -1 && t.length < 60){ hasAlias = true; break; }
+    if (env) seq.push({ el: env, ms: 3000 });
+    /* (3) Prórroga y Penaltis si son items en pp-list (eliminatoria
+       a partido único). */
+    var pro = document.querySelector('#pp-list .pp-item[data-ppid="prorroga"]');
+    if (pro) seq.push({ el: pro, ms: 3000 });
+    var pen = document.querySelector('#pp-list .pp-item[data-ppid="penaltis"]');
+    if (pen) seq.push({ el: pen, ms: 3000 });
+    /* (4) Balón (último — la confirmación llega cuando se marca). */
+    var balon = document.querySelector('#pp-list .pp-item[data-ppid="balon"]');
+    if (balon) seq.push({ el: balon, ms: 8000 }); /* el último permanece hasta que se marque */
+    return seq;
+  }
+  function _ppApplyStep(i){
+    _ppClearAllHint();
+    if (!_ppSeqList[i] || !_ppSeqList[i].el) return;
+    _ppSeqList[i].el.classList.add('is-pp-env-hint');
+    if (_ppSeqTimer) { clearTimeout(_ppSeqTimer); _ppSeqTimer = null; }
+    var step = _ppSeqList[i];
+    /* Si el item es el balón Y NO está marcado, NO avanzamos
+       automáticamente — esperamos al click del usuario. */
+    if (step.el.getAttribute('data-ppid') === 'balon' && !step.el.classList.contains('checked')){
+      return;
+    }
+    _ppSeqTimer = setTimeout(function(){
+      if (_ppSeqIdx >= _ppSeqList.length - 1){
+        _ppClearAllHint();
+        return;
+      }
+      _ppSeqIdx++;
+      _ppApplyStep(_ppSeqIdx);
+    }, step.ms);
+  }
+  function _ppStartSequence(){
+    if (_ppSeqTimer) { clearTimeout(_ppSeqTimer); _ppSeqTimer = null; }
+    _ppSeqIdx = 0;
+    _ppSeqList = _ppBuildSequence();
+    if (!_ppSeqList.length) return;
+    _ppApplyStep(0);
+  }
+  function _ppStopSequence(){
+    if (_ppSeqTimer) { clearTimeout(_ppSeqTimer); _ppSeqTimer = null; }
+    _ppSeqIdx = 0;
+    _ppSeqList = [];
+    _ppClearAllHint();
+  }
+  /* Observer: al abrir el overlay previa, arrancar la secuencia.
+     Al cerrar, parar. */
+  (function(){
+    var ov = document.getElementById('prepartido-overlay');
+    function _wire(o){
+      new MutationObserver(function(){
+        if (o.classList.contains('show')){
+          /* Pequeño defer para que `_renderList` haya pintado las
+             items (Balón, Prórroga, Penaltis). */
+          setTimeout(_ppStartSequence, 400);
+        } else {
+          _ppStopSequence();
+        }
+      }).observe(o, { attributes:true, attributeFilter:['class'] });
+    }
+    if (ov) _wire(ov);
+    else {
+      var t = setInterval(function(){
+        var o = document.getElementById('prepartido-overlay');
+        if (o){ clearInterval(t); _wire(o); }
+      }, 200);
+    }
+  })();
+  /* Adelantar la secuencia cuando el usuario marca un item. */
+  document.addEventListener('click', function(e){
+    if (!_ppSeqList.length) return;
+    var step = _ppSeqList[_ppSeqIdx];
+    if (!step || !step.el) return;
+    if (step.el.contains(e.target)){
+      /* Forzar avance al siguiente paso ya. */
+      if (_ppSeqTimer) { clearTimeout(_ppSeqTimer); _ppSeqTimer = null; }
+      if (_ppSeqIdx < _ppSeqList.length - 1){
+        _ppSeqIdx++;
+        setTimeout(function(){ _ppApplyStep(_ppSeqIdx); }, 200);
+      } else {
+        _ppClearAllHint();
       }
     }
-    /* Resaltado: cuando NO hay alias visible (equipo real eFootball
-       o HvH). */
-    if (!hasAlias) env.classList.add('is-pp-env-hint');
-    else env.classList.remove('is-pp-env-hint');
-  }
-  setInterval(_ppHighlightStadium, 400);
-  /* Quitar el highlight cuando el usuario interactúa con el #pp-env
-     (cualquier click dentro del cuadro). */
-  document.addEventListener('click', function(e){
-    var env = document.getElementById('pp-env');
-    if (!env) return;
-    if (env.contains(e.target)) env.classList.remove('is-pp-env-hint');
   }, true);
 
   /* ── Boot ───────────────────────────────────────────────────────── */

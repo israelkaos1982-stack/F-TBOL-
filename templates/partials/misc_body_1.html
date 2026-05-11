@@ -18198,9 +18198,68 @@ Tottenham
     if (t.isHuman) s += 50; /* humanos NUNCA deben perderse contra IAs sin editar */
     return s;
   }
+  /* ¿El "name" de un jugador es en realidad una línea-basura del
+     Master Template (cabecera, "11 IDEAL", "9 RESERVAS", "POR:/DEF:/
+     MED:/DEL: …") que parseSquadPaste interpretó como jugador antes
+     del filtro 2026-05-09? Usado por _sanitizeLigaTeamNames para
+     limpiar plantillas ya persistidas — sin esto el admin abría
+     `🛡 Plantilla` del Athletic Club (u otro equipo afectado) y veía
+     entradas como "Valores de Poder: (GLOBAL", "Nivel de Estrellas:",
+     "Presupuesto:", "Agresividad:" o "DEL: I. Williams" mezcladas con
+     los jugadores reales — y aunque renderSquadList sí pintaba los
+     botones 🖍/🗑, el ruido hacía la lista inusable (no se podía
+     localizar al jugador real para editarlo, los duplicados rompían
+     el flujo, y el power "11"/"9" de las líneas de bloque entraban
+     como jugadores fantasma con badges P/⭐). 2026-05-11. */
+  function _isJunkPlayerName(name){
+    if (typeof name !== 'string') return true;     /* sin nombre = basura */
+    var t = name.replace(/\*\*/g,'').replace(/__/g,'')
+                .replace(/^[\s*\-•·#>]+/, '').trim();
+    if (!t) return true;
+    /* Cabecera del Master Template (mismo set que _filterMasterTemplate). */
+    if (/GLOBAL[\s:]*\d/i.test(t) && /(ATAQUE|DEFENSA|MEDIO)/i.test(t)) return true;
+    if (/^valores?\s+de\s+poder\b/i.test(t)) return true;
+    if (/^nivel\s+de\s+estrellas\b/i.test(t)) return true;
+    if (/^agresivid[a-zñ]+\b/i.test(t)) return true;
+    if (/^presupues?to\b/i.test(t)) return true;
+    if (/^estadio(\s+local)?\b/i.test(t)) return true;
+    if (/^equipo\s+s[ií]mil\s+efootball\b/i.test(t)) return true;
+    if (/^s[ií]mil\s+efootball\b/i.test(t)) return true;
+    if (/^alias\s+(en\s+)?efootball\b/i.test(t)) return true;
+    if (/^escudo\s*(\(url\)|\b)/i.test(t)) return true;
+    if (/^nombre(\s+del\s+equipo)?\b/i.test(t)) return true;
+    /* Bloques skip ("🏆 11 IDEAL", "🪑 9 MEJORES RESERVAS", etc.). */
+    if (/\b11\s*ideal\b/i.test(t)) return true;
+    if (/\b9\s*(mejores\s*)?reservas?\b/i.test(t)) return true;
+    if (/goleador(es)?\s+de\s+elite\s+mundial/i.test(t)) return true;
+    /* Líneas del 11 IDEAL: "POR: Unai Simón", "DEF: A. Gorosabel",
+       "MED: I. Ruiz De Galarreta", "DEL: I. Williams". El jugador
+       real ya está en la nómina sin el prefijo "POR:/DEF:/…", así
+       que dropear estas entradas no pierde información. */
+    if (/^(por|gk|def|df|med|mid|mf|del|dl|fwd|att)\s*:/i.test(t)) return true;
+    /* Entradas sin texto real (solo emojis/símbolos tipo 🏆 / 🪑).
+       Usamos `\p{L}` (cualquier letra de cualquier script) para no
+       descartar nombres no-latinos por accidente. */
+    try { if (!/\p{L}/u.test(t)) return true; }
+    catch(_){ if (!/[A-Za-zÀ-ÿĀ-ɏ]/.test(t)) return true; }
+    return false;
+  }
+  window._isJunkPlayerName = _isJunkPlayerName;
   function _sanitizeLigaTeamNames(d){
     if (!d || !Array.isArray(d.teams)) return false;
     var dirty = false;
+    /* Phase 0: drop "jugadores basura" persistidos antes del filtro
+       2026-05-09 de parseSquadPaste. Cualquier player.name que match
+       una cabecera del Master Template o un bloque skip desaparece —
+       el editor 🛡 Plantilla vuelve a ser usable. */
+    d.teams.forEach(function(t){
+      if (!t || !Array.isArray(t.players)) return;
+      var before = t.players.length;
+      t.players = t.players.filter(function(p){
+        return p && !_isJunkPlayerName(p && p.name);
+      });
+      if (t.players.length !== before) dirty = true;
+    });
     /* Phase 1: strip `*` y espacios delante. */
     d.teams.forEach(function(t){
       if (!t || typeof t.name !== 'string') return;

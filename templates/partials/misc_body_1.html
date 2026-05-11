@@ -20615,6 +20615,136 @@ Tottenham
   }
   window._filterMasterTemplate = _filterMasterTemplate;
 
+  /* Extrae los METADATOS del Master Template (Valores de Poder,
+     Agresividad, Presupuesto, Estadio Local, Equipo Símil eFootball,
+     Escudo, Nombre del equipo) de un texto pegado. Devuelve un objeto
+     con solo las claves encontradas — los campos ausentes NO aparecen
+     para que el caller pueda hacer `Object.assign(team, meta)` sin
+     pisar valores existentes con undefined.
+
+     Bug 2026-05-11: el admin pega el Master Template entero esperando
+     que `lextApplySquadPaste` / `lextSaveTeam` apliquen TODO (no solo
+     los jugadores). Sin este parser los valores 4-ejes seguían
+     mostrando los valores antiguos del servidor aunque el paste
+     incluyera "Valores de Poder: (GLOBAL 84 / ATAQUE 86 / MEDIO 83 /
+     DEFENSA 82)". Ahora el paste manda — los datos pegados ganan a los
+     persistidos para CUALQUIER equipo. */
+  function _parseMasterMetadata(text){
+    var out = {};
+    if(!text) return out;
+    var lines = String(text).split(/\r?\n/);
+    function _strip(s){
+      return String(s||'')
+        .replace(/\*\*/g, '').replace(/__/g, '')
+        .replace(/^[\s*\-•·#>]+/, '')
+        .trim();
+    }
+    /* Valor numérico saneado a rango 1-99 (poder/agresividad). */
+    function _clamp99(n){
+      var v = parseInt(n, 10);
+      if (!isFinite(v)) return null;
+      return Math.max(1, Math.min(99, v));
+    }
+    /* Quita "(URL)" y similares del campo Escudo. */
+    function _cleanShield(v){
+      var s = String(v||'').trim();
+      /* Placeholders típicos del template — no son URLs reales. */
+      if (!s) return '';
+      if (/^\[.*\]$/.test(s)) return '';
+      if (/pega\s+aqu[ií]/i.test(s)) return '';
+      return s;
+    }
+    /* Para el nombre del equipo aceptamos 2 fuentes (en orden):
+        1) Línea "Nombre del equipo: X" si la hay.
+        2) Primera línea "# **NOMBRE**" si no es un header de sección.
+       Solo lo emitimos si parece un nombre real (con letras). */
+    var headingName = null;
+    for (var i = 0; i < lines.length; i++) {
+      var raw = lines[i];
+      var s = _strip(raw);
+      if (!s) continue;
+
+      var m;
+      /* Nombre del equipo: */
+      m = s.match(/^nombre(?:\s+del\s+equipo)?\s*:\s*(.+)$/i);
+      if (m && m[1]) {
+        var nm = m[1].replace(/\*+/g, '').trim();
+        try { if (/\p{L}/u.test(nm)) out.name = nm; }
+        catch(_){ if (/[A-Za-zÀ-ÿĀ-ɏ]/.test(nm)) out.name = nm; }
+        continue;
+      }
+      /* Heading "# **NOMBRE**" — guardamos como fallback. */
+      if (headingName == null) {
+        var hm = raw.match(/^\s*#+\s*\*\*([^*]+)\*\*\s*$/);
+        if (hm) {
+          var h = hm[1].trim();
+          /* Descartamos cabeceras de sección (porteros/defensas/...). */
+          if (!/^(🧤|🛡|⚙|⚽|⚡)/.test(h) &&
+              !/^(porteros|defensas|centrocampistas|medios|delanteros)\b/i.test(h) &&
+              !/\b11\s*ideal\b/i.test(h) &&
+              !/\b9\s*(mejores\s*)?reservas?\b/i.test(h)) {
+            headingName = h;
+          }
+        }
+      }
+
+      /* Valores de Poder: (GLOBAL N / ATAQUE N / MEDIO N / DEFENSA N).
+         Acepta separadores `/`, `·`, `|`, `,` o saltos de línea entre
+         claves. Capturamos cada par etiqueta-número independientemente. */
+      if (/^valores?\s+de\s+poder\b/i.test(s)) {
+        var glob = s.match(/GLOBAL[\s:]*(\d{1,3})/i);
+        var atk  = s.match(/ATAQUE[\s:]*(\d{1,3})/i);
+        var mid  = s.match(/(?:MEDIO|MEDIA)[\s:]*(\d{1,3})/i);
+        var def  = s.match(/DEFENSA[\s:]*(\d{1,3})/i);
+        if (glob) out.power = _clamp99(glob[1]);
+        if (atk)  out.atk   = _clamp99(atk[1]);
+        if (mid)  out.mid   = _clamp99(mid[1]);
+        if (def)  out.def   = _clamp99(def[1]);
+        continue;
+      }
+      /* Agresividad: 57/100  o  Agresividad: 57. */
+      m = s.match(/^agresivid[a-zñ]+\s*:\s*(\d{1,3})/i);
+      if (m) {
+        var a = _clamp99(m[1]);
+        if (a !== null) out.aggressiveness = a;
+        continue;
+      }
+      /* Presupuesto: 1.450 €  →  cualquier dígito, descartamos puntos
+         y comas de miles. Si el usuario escribe "1.450 millones" → 1450
+         millones literales, no intentamos interpretar magnitud (el admin
+         decide el formato; el campo `budget` es un entero). */
+      m = s.match(/^presupues?to\s*:\s*([\d\.\,\s]+)/i);
+      if (m && m[1]) {
+        var dig = m[1].replace(/[^\d]/g, '');
+        if (dig) out.budget = parseInt(dig, 10);
+        continue;
+      }
+      /* Estadio Local: <nombre>. */
+      m = s.match(/^estadio(?:\s+local)?\s*:\s*(.+)$/i);
+      if (m && m[1]) {
+        out.stadium = m[1].replace(/\*+/g, '').trim();
+        continue;
+      }
+      /* Equipo Símil eFootball: <nombre>  o  Símil eFootball: <nombre>
+         o  Alias en eFootball: <nombre>. */
+      m = s.match(/^(?:equipo\s+s[ií]mil\s+efootball|s[ií]mil\s+efootball|alias\s+(?:en\s+)?efootball)\s*:\s*(.+)$/i);
+      if (m && m[1]) {
+        out.efootballAlias = m[1].replace(/\*+/g, '').trim();
+        continue;
+      }
+      /* Escudo (URL): <url>  o  Escudo: <url>. */
+      m = s.match(/^escudo\s*(?:\(url\))?\s*:\s*(.+)$/i);
+      if (m && m[1]) {
+        var sh = _cleanShield(m[1]);
+        if (sh) out.shield = sh;
+        continue;
+      }
+    }
+    if (out.name == null && headingName) out.name = headingName;
+    return out;
+  }
+  window._parseMasterMetadata = _parseMasterMetadata;
+
   function parseSquadPaste(text){
     if(!text) return [];
     /* Limpieza previa: quita líneas de cabecera (Valores de Poder,
@@ -21280,6 +21410,27 @@ Tottenham
     var budget = budgetRaw ? parseInt(budgetRaw,10) : 0;
     var squadText = document.getElementById('lext-team-squad-paste').value;
     var parsed = parseSquadPaste(squadText);
+    /* Master Template completo pegado → el paste manda sobre el form:
+       extraemos Valores de Poder / Agresividad / Presupuesto / Estadio /
+       Alias eFootball / Escudo / Nombre del equipo del texto pegado y,
+       si están presentes, sobrescriben los valores del formulario para
+       que los datos pegados ganen a los antiguos (petición admin
+       2026-05-11). Para campos NO presentes en el paste mantenemos lo
+       que escribió el admin a mano en el form. */
+    var _pasteMeta = (typeof _parseMasterMetadata === 'function')
+      ? _parseMasterMetadata(squadText) : {};
+    if (_pasteMeta) {
+      if (typeof _pasteMeta.name === 'string' && _pasteMeta.name) name = _pasteMeta.name;
+      if (typeof _pasteMeta.power === 'number') pwGlob = _pasteMeta.power;
+      if (typeof _pasteMeta.atk   === 'number') pwAtk  = _pasteMeta.atk;
+      if (typeof _pasteMeta.mid   === 'number') pwMid  = _pasteMeta.mid;
+      if (typeof _pasteMeta.def   === 'number') pwDef  = _pasteMeta.def;
+      if (typeof _pasteMeta.aggressiveness === 'number') pwAggr = _pasteMeta.aggressiveness;
+      if (typeof _pasteMeta.stadium === 'string' && _pasteMeta.stadium) stadium = _pasteMeta.stadium;
+      if (typeof _pasteMeta.shield  === 'string' && _pasteMeta.shield)  shield  = _pasteMeta.shield;
+      if (typeof _pasteMeta.efootballAlias === 'string' && _pasteMeta.efootballAlias) efootballAlias = _pasteMeta.efootballAlias;
+      if (typeof _pasteMeta.budget  === 'number') budget = _pasteMeta.budget;
+    }
     var data = loadData(CURRENT_KEY);
     /* Si el admin re-crea un equipo con nombre que estaba en la
        blacklist (borrado previamente), quitarlo de la lista — la
@@ -22260,6 +22411,29 @@ Tottenham
     }
     if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
     t.players = t.players || [];
+    /* Master Template completo pegado desde la modal de plantilla →
+       los metadatos del paste (Valores de Poder / Agresividad /
+       Presupuesto / Estadio / Alias eFootball / Escudo / Nombre)
+       sobrescriben los campos persistidos del equipo. Petición admin
+       2026-05-11: "los datos actuales venzan a los antiguos" — el
+       paste es la fuente de verdad. Solo aplicamos los campos
+       presentes en el texto; el resto queda intacto. */
+    try {
+      var _pasteMetaMd = (typeof _parseMasterMetadata === 'function')
+        ? _parseMasterMetadata(txt) : {};
+      if (_pasteMetaMd) {
+        if (typeof _pasteMetaMd.name === 'string' && _pasteMetaMd.name) t.name = _pasteMetaMd.name;
+        if (typeof _pasteMetaMd.power === 'number') t.power = _pasteMetaMd.power;
+        if (typeof _pasteMetaMd.atk   === 'number') t.atk   = _pasteMetaMd.atk;
+        if (typeof _pasteMetaMd.mid   === 'number') t.mid   = _pasteMetaMd.mid;
+        if (typeof _pasteMetaMd.def   === 'number') t.def   = _pasteMetaMd.def;
+        if (typeof _pasteMetaMd.aggressiveness === 'number') t.aggressiveness = _pasteMetaMd.aggressiveness;
+        if (typeof _pasteMetaMd.stadium === 'string' && _pasteMetaMd.stadium) t.stadium = _pasteMetaMd.stadium;
+        if (typeof _pasteMetaMd.shield  === 'string' && _pasteMetaMd.shield)  t.shield  = _pasteMetaMd.shield;
+        if (typeof _pasteMetaMd.efootballAlias === 'string' && _pasteMetaMd.efootballAlias) t.efootballAlias = _pasteMetaMd.efootballAlias;
+        if (typeof _pasteMetaMd.budget  === 'number') t.budget = _pasteMetaMd.budget;
+      }
+    } catch(_){}
     if(t.players.length){
       var replace = confirm('Este equipo ya tiene '+t.players.length+' jugadores.\n\nOK = REEMPLAZAR toda la plantilla por los '+parsed.length+' pegados\nCancelar = AÑADIR los '+parsed.length+' a los existentes');
       if(replace) t.players = parsed;

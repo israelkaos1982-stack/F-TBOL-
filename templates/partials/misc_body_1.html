@@ -18657,20 +18657,59 @@ Tottenham
     var list = FORCED_BLACKLIST[k] || [];
     return list.map(function(n){ return _lextNormName(n); }).filter(Boolean);
   }
+  /* Slugs internos españoles (las 3 ligas de España dentro del
+     sistema de Resto de Ligas). Lista canónica usada como excepción:
+     en estas ligas, los equipos españoles upper-tier SÍ son válidos
+     (son su clasificación legítima); en cualquier OTRA liga del
+     sistema, los filtramos por defecto. 2026-05-12. */
+  var _SPANISH_UPPER_TIER_SLUGS = {
+    'liga-ea-sports': true,
+    'liga-hypermotion': true,
+    'liga-primera-federacion': true
+  };
   function _applyForcedBlacklist(k, data){
     if (!data || typeof data !== 'object') return data;
     var blk = _forcedBlacklistNormFor(k);
-    if (!blk.length) return data;
+    /* FILTRO UNIVERSAL (2026-05-12): para CUALQUIER liga externa
+       que NO sea una liga española de upper tier, añadimos al filtro
+       todos los equipos de Liga EA Sports / Hypermotion / 1ª RFEF.
+       Esto reemplaza los blacklists hardcoded por liga (Inglaterra,
+       Escocia, Polonia, Rusia, Dinamarca) que solo cubrían los
+       casos reportados — ahora cubrimos TODAS las ligas externas
+       a la vez. La fuente canónica para los clubes españoles
+       upper-tier es su liga española respectiva. */
+    var spanishBlk = [];
+    if (!_SPANISH_UPPER_TIER_SLUGS[k] && typeof _spanishUpperTierTeamNames === 'function') {
+      try {
+        var spanishSet = _spanishUpperTierTeamNames();
+        spanishBlk = Object.keys(spanishSet);
+      } catch(_){}
+    }
+    if (!blk.length && !spanishBlk.length) return data;
     var mutated = false;
     if (Array.isArray(data.teams)) {
       var before = data.teams.length;
       data.teams = data.teams.filter(function(t){
         if (!t || !t.name) return true;
-        return blk.indexOf(_lextNormName(t.name)) < 0;
+        var canon = _lextNormName(t.name);
+        if (blk.indexOf(canon) >= 0) return false;
+        /* Filtro universal: si el equipo está en el set canónico de
+           Liga EA / Hypermotion / 1ª RFEF, fuera. Usa el helper
+           ya existente que cubre name + tokens banned. */
+        if (typeof _isSpanishTeamBanned === 'function') {
+          try {
+            if (_isSpanishTeamBanned(t.name, _spanishUpperTierTeamNames())) return false;
+          } catch(_){}
+        }
+        return true;
       });
       if (data.teams.length !== before) mutated = true;
     }
     if (!Array.isArray(data.deletedTeamNames)) data.deletedTeamNames = [];
+    /* Marcamos como deleted los nombres del FORCED_BLACKLIST manual.
+       Los del filtro universal NO los añadimos a deletedTeamNames —
+       sería pesado escribir 60+ entries por liga, y el filtro
+       universal se re-aplica en cada loadData de todos modos. */
     blk.forEach(function(nm){
       if (data.deletedTeamNames.indexOf(nm) < 0) {
         data.deletedTeamNames.push(nm);
@@ -18700,11 +18739,24 @@ Tottenham
 
   /* Helper público: indica si un nombre está en la blacklist forzada
      para una liga concreta. Usado por lextSaveTeam para rechazar
-     re-creación manual. */
+     re-creación manual. Incluye:
+       1. El FORCED_BLACKLIST manual (Inglaterra: Arsenal, etc.)
+       2. El filtro universal: equipos de Liga EA / Hypermotion /
+          1ª RFEF están vetados en CUALQUIER liga que no sea su
+          propia liga española. 2026-05-12. */
   window._lextIsForcedBlacklisted = function(k, name){
     if (!k || !name) return false;
     var blk = _forcedBlacklistNormFor(k);
-    return blk.indexOf(_lextNormName(name)) >= 0;
+    if (blk.indexOf(_lextNormName(name)) >= 0) return true;
+    /* Filtro universal Liga EA / Hypermotion / 1ª RFEF. */
+    if (!_SPANISH_UPPER_TIER_SLUGS[k] &&
+        typeof _isSpanishTeamBanned === 'function' &&
+        typeof _spanishUpperTierTeamNames === 'function') {
+      try {
+        if (_isSpanishTeamBanned(name, _spanishUpperTierTeamNames())) return true;
+      } catch(_){}
+    }
+    return false;
   };
 
   /* Normaliza el nombre de un equipo para comparar entre el card del

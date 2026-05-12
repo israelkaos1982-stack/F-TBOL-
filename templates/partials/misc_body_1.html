@@ -15843,6 +15843,26 @@ window._showSimProgress = function(opts, onDone){
         window.__GM_LIVE.comp = comp;
       }
     } catch(_){}
+    /* GARANTÍA VISUAL 2026-05-12: cierra cualquier overlay-residuo
+       que pudiera estar tapando la card recién abierta + fuerza el
+       gm-modal a visible. Cubre el bug "tras compartir WhatsApp el
+       gm-modal no se ve y vuelve a la previa". */
+    try {
+      var gm = document.getElementById('gm-modal');
+      if (gm) gm.style.display = '';
+      ['prepartido-overlay','sancion-overlay','_copaAliasOv','ml-evt-cd-overlay','gm-evt-countdown-ov']
+        .forEach(function(id){
+          var el = document.getElementById(id);
+          if (el) {
+            el.classList.remove('show');
+            if (el.style && el.style.display && el.style.display !== 'none' && id !== 'gm-modal') {
+              el.style.display = 'none';
+            }
+          }
+        });
+      /* Scroll al top y enfocar el modal. */
+      try { window.scrollTo(0, 0); } catch(_){}
+    } catch(_){}
   };
   window._eurFaseAbrirPrevia = function(comp, jor, idx){
     var c = COMPS[comp]; if(!c) return;
@@ -15856,31 +15876,22 @@ window._showSimProgress = function(opts, onDone){
       : (isHvH ? '15 min 45 s' : '9 min 45 s');
     window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: comp,
       eurFaseComp: comp, eurFaseJor: jor, eurFaseIdx: idx };
-    /* Persistir el contexto en localStorage para que sobreviva a
-       cualquier interrupción (cleanup, pageshow, refresh) — al
-       volver de WhatsApp comprobamos esta clave y completamos el
-       flujo si el callback en memoria se perdió. 2026-05-12. */
-    try {
-      localStorage.setItem('_eurfase_pending_previa', JSON.stringify({
-        comp: comp, jor: jor, idx: idx, local: local, visit: visit,
-        ts: Date.now()
-      }));
-    } catch(_){}
-    function _openMatchCard(){
-      try { window.abrirEurFase(comp, jor, idx, local, visit); }
-      catch(e){ try { console.error('[eurFase callback]', e); } catch(_){} }
-      /* Limpiar la pendiente al abrir la card. */
-      try { localStorage.removeItem('_eurfase_pending_previa'); } catch(_){}
-    }
     window._ppCustomCallback = function(){
       window._ppPreviaTeams = null;
-      _openMatchCard();
-      /* Retry diferido en 250 ms — si por alguna razón el primer
-         intento NO abrió el gm-modal (DOM no listo, cleanup hideó
-         el modal recién abierto, etc.), reintentamos a los 250 ms.
-         abrirEurFase es idempotente (gmOpen early-returns si el
-         partido ya está vivo con esos teams). */
-      setTimeout(_openMatchCard, 250);
+      /* Cierre defensivo de TODOS los overlays de previa antes de
+         abrir el gm-modal — nos aseguramos de que no quede ningún
+         residuo (PREVIA, BAJAS, alias) tapando la card de
+         simulación. 2026-05-12. */
+      try {
+        var ov1 = document.getElementById('prepartido-overlay');
+        if (ov1) ov1.classList.remove('show');
+        var ov2 = document.getElementById('sancion-overlay');
+        if (ov2) ov2.classList.remove('show');
+        var ov3 = document.getElementById('_copaAliasOv');
+        if (ov3) ov3.classList.remove('show');
+      } catch(_){}
+      try { window.abrirEurFase(comp, jor, idx, local, visit); }
+      catch(e){ try { console.error('[eurFase callback]', e); } catch(_){} }
     };
     if(typeof window.showPrePartidoOverlay === 'function'){
       /* Fase de liga = single-leg sin prórroga (regla UEFA Swiss).
@@ -15888,35 +15899,6 @@ window._showSimProgress = function(opts, onDone){
       window.showPrePartidoOverlay(matchKey, comp, 'No', duracion, isHvH);
     }
   };
-  /* Auto-recovery al cargar página: si hay un _eurfase_pending_previa
-     reciente (< 5 min) y NO hay gm-modal abierto, lo abrimos. Cubre
-     el caso de que el usuario haya cerrado el browser desde WhatsApp
-     y vuelto a abrir. */
-  (function(){
-    try {
-      var raw = localStorage.getItem('_eurfase_pending_previa');
-      if (!raw) return;
-      var d = JSON.parse(raw);
-      if (!d || !d.comp || !d.local || !d.visit) return;
-      /* Caducar tras 5 min. */
-      if (Date.now() - (d.ts || 0) > 300000) {
-        localStorage.removeItem('_eurfase_pending_previa');
-        return;
-      }
-      /* Esperar a que gmOpen esté disponible. */
-      function _tryOpen(){
-        if (typeof window.gmOpen !== 'function') {
-          setTimeout(_tryOpen, 300);
-          return;
-        }
-        /* Si ya hay un partido activo en gm-modal, no interferimos. */
-        if (window.__GM_LIVE && !window.__GM_LIVE.finished) return;
-        try { window.abrirEurFase(d.comp, d.jor, d.idx, d.local, d.visit); } catch(_){}
-        try { localStorage.removeItem('_eurfase_pending_previa'); } catch(_){}
-      }
-      setTimeout(_tryOpen, 800);
-    } catch(_){}
-  })();
   window._eurFaseSimAllIA = function(comp, jor){
     var state = loadState(comp); if(!state || !state.pairs) return;
     var pairs = state.pairs;

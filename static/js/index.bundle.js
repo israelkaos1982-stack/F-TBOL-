@@ -454,8 +454,22 @@ window.sqFromRegistry = function(teamName, opts) {
        applyEngineOverrides haya corrido antes. */
     try {
       function _normAmSq(s){ return String(s||'').trim().toLowerCase(); }
+      /* Normalización agresiva: minúsculas, sin diacríticos, sin
+         sufijos comunes (FC, F.C., CF, AC, etc.), sin puntuación.
+         Para que "Liverpool" matchee "Liverpool FC", "Atlético"
+         matchee "Atletico", etc. Mejora encontrar plantillas de
+         equipos europeos en `ligaExt_*`. 2026-05-11. */
+      function _normAggro(s){
+        var x = String(s||'').trim().toLowerCase();
+        try { x = x.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch(_){}
+        x = x.replace(/\b(fc|f\.c\.|cf|c\.f\.|ac|a\.c\.|sc|s\.c\.|club|the)\b/gi, '');
+        x = x.replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim();
+        return x;
+      }
       var target = _normAmSq(teamName);
       var targetResolved = _normAmSq(resolved);
+      var targetAggro = _normAggro(teamName);
+      var targetAggroR = _normAggro(resolved);
       var match = null;
       for (var li = 0; li < localStorage.length && !match; li++) {
         var lk = localStorage.key(li);
@@ -480,6 +494,20 @@ window.sqFromRegistry = function(teamName, opts) {
             if (tn2.indexOf(target) !== -1 || target.indexOf(tn2) !== -1 ||
                 tn2.indexOf(targetResolved) !== -1 || targetResolved.indexOf(tn2) !== -1) {
               match = teams[ti2]; break;
+            }
+          }
+        }
+        /* Tercera pasada: match agresivo sin sufijos/diacríticos.
+           Cubre "Liverpool" ↔ "Liverpool FC", "Atletico" ↔ "Atlético",
+           "Bayern" ↔ "Bayern München", etc. */
+        if (!match) {
+          for (var ti3 = 0; ti3 < teams.length; ti3++) {
+            var tn3a = _normAggro(teams[ti3] && teams[ti3].name);
+            if (!tn3a) continue;
+            if (tn3a === targetAggro || tn3a === targetAggroR ||
+                tn3a.indexOf(targetAggro) !== -1 || targetAggro.indexOf(tn3a) !== -1 ||
+                tn3a.indexOf(targetAggroR) !== -1 || targetAggroR.indexOf(tn3a) !== -1) {
+              match = teams[ti3]; break;
             }
           }
         }

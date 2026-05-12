@@ -14960,6 +14960,37 @@ window._showSimProgress = function(opts, onDone){
 .eurfase-card-score-num{color:#9fc8ff;font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:2px;line-height:1;}
 .eurfase-card-score-pending{color:rgba(255,255,255,.5);font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;line-height:1;}
 .eurfase-card-fin{display:inline-block;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1.5px;color:#9fc8ff;border:1px solid rgba(159,200,255,.45);border-radius:6px;padding:4px 12px;background:rgba(48,96,255,.10);}
+/* OVERRIDES VISIBILIDAD 2026-05-11 — el `.ml-score.state-playing span`
+   del bundle (CSS línea 224) pinta los goles en rojo #ff4040 sin
+   text-shadow encima de un fondo casi negro → texto invisible. Lo
+   reforzamos con neon-glow y un poco más de tamaño para que se vea
+   claro en live + FIN. */
+.eurfase-card-score.ml-score.state-playing,
+.eurfase-card-score.ml-score.state-playing span,
+.eurfase-card-score.ml-score.state-playing .eurfase-card-score-num{
+  color:#ff7780!important;
+  text-shadow:0 0 6px rgba(255,80,96,.85), 0 0 14px rgba(255,40,68,.55)!important;
+  font-weight:900!important;
+}
+.eurfase-card-score.ml-score.state-finished,
+.eurfase-card-score.ml-score.state-finished span,
+.eurfase-card-score.ml-score.state-finished .eurfase-card-score-num{
+  color:#5eef8b!important;
+  text-shadow:0 0 6px rgba(94,239,139,.85), 0 0 14px rgba(54,214,107,.55)!important;
+  font-weight:900!important;
+}
+.eurfase-card-score.ml-score{
+  background:linear-gradient(180deg,rgba(0,0,0,.65) 0%,rgba(8,12,28,.85) 100%)!important;
+}
+.eurfase-card-score-num{
+  color:#9fc8ff!important;
+  text-shadow:0 0 6px rgba(159,200,255,.7), 0 0 12px rgba(96,140,255,.45)!important;
+  font-weight:800!important;
+}
+.eurfase-card-score-pending{
+  color:rgba(255,255,255,.75)!important;
+  text-shadow:0 0 4px rgba(255,255,255,.4)!important;
+}
 .eurfase-card-btn{margin-top:0;}
 .eurfase-btn-previa{display:inline-block;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.2px;color:#ff7a8a;background:rgba(255,40,80,.06);border:1px solid rgba(255,80,120,.55);border-radius:6px;padding:5px 14px;cursor:pointer;text-transform:uppercase;}
 .eurfase-btn-previa:active{background:rgba(255,40,80,.15);}

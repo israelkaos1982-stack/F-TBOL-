@@ -10851,6 +10851,13 @@
               htDone:false, inDescanso:false, stDone:false,
               timerWasRunning:false, comp:'', htShared:false, finalShared:false,
               noET:false, isFriendly:false };
+  /* CRÍTICO 2026-05-11: exponer `_gm` como `window._gm` para que
+     IIFEs SEPARADAS (countdown overlay post-evento, observer del
+     gm-acta-list, gmEndMatch persist callbacks) puedan accederlo.
+     Antes, esas IIFEs usaban `window._gm` que era undefined → la
+     cuenta atrás nunca se mostraba y el cronómetro quedaba pausado
+     al añadir un evento. */
+  try { window._gm = _gm; } catch(_){}
   var GM_MAX_NORMAL   = 5400; /* 90 min */
   var GM_MAX_ET       = 7200; /* 120 min */
   var GM_MAX_STOPPAGE = 5820; /* 90+7 min */
@@ -28153,18 +28160,30 @@ document.addEventListener('DOMContentLoaded', function() {
   window.__ML_CARD_UI_READY = true;
 
   /* Tabla de tiempos en segundos REALES por tipo de evento. */
+  /* Tiempos de cuenta atrás post-evento (segundos reales) — petición
+     usuario 2026-05-11: ajustados para sync con eFootball.
+       Gol             → 20 s
+       Gol de Falta    → 25 s
+       Autogol         → 10 s
+       Gol de Penalti  → 10 s
+       Penalti fallado/provocado/parado → 10 s (acompañan al penalti)
+       Tarjeta Amarilla → 15 s
+       Tarjeta Roja    → 15 s
+       Doble Amarilla  → 15 s (= roja)
+       Lesión          → 15 s
+  */
   var EVT_CD_SEC = {
-    'gol':           35,
-    'autogol':       20,
-    'pen-gol':       20,
-    'pen-fallo':     20,
-    'pen-prov':      20,
-    'pen-parado':    20,
-    'falta-gol':     35,
+    'gol':           20,
+    'autogol':       10,
+    'pen-gol':       10,
+    'pen-fallo':     10,
+    'pen-prov':      10,
+    'pen-parado':    10,
+    'falta-gol':     25,
     'amarilla':      15,
-    'roja':          20,
-    'doble-amarilla':20,
-    'lesion':        20
+    'roja':          15,
+    'doble-amarilla':15,
+    'lesion':        15
   };
   /* Etiquetas legibles para mostrar en el overlay. */
   var EVT_CD_LBL = {

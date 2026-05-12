@@ -11865,17 +11865,45 @@
     list.appendChild(li);
     var modal = document.getElementById('gm-modal');
     if (modal) modal.scrollTop = modal.scrollHeight;
-    /* Reanudar el cronómetro tras el evento. FREEZE 10/5/8 s real
-       según gol/amarilla/expulsión (petición usuario 2026-05-08).
-       gm-modal siempre tiene humano implicado (HvH o HvIA) → forzamos
-       isHumanMatch=true. Capturamos `wasRunning` aquí y reseteamos el
-       flag inmediatamente — el resume diferido lee la captura, no la
-       variable, para evitar carreras con otros eventos consecutivos. */
+    /* INVOCACIÓN DIRECTA del overlay de cuenta atrás post-evento
+       (2026-05-12). Antes solo dependíamos del MutationObserver del
+       gm-acta-list, que falla cuando el observer aún no se wired o
+       cuando el data-type del row no matchea EVT_CD_SEC. Llamamos
+       _gmShowCd EXPLÍCITAMENTE desde aquí. La función pausa el
+       cronómetro (si está corriendo), muestra el overlay con
+       Gol/Falta/Amarilla/etc + cuenta regresiva, y al llegar a 0
+       o al pulsar "Reanudar partido" auto-resume el cronómetro
+       vía gmTimerClick. */
+    try {
+      var _cdType = evt.type;
+      if (_cdType === 'damarilla' || _cdType === 'd-amarilla') _cdType = 'doble-amarilla';
+      if (_cdType === 'propia') _cdType = 'autogol';
+      if (typeof window._gmShowCd === 'function') {
+        /* Defer 50 ms para que el row se haya pintado antes del
+           overlay (mejor feel visual). */
+        setTimeout(function(){ try { window._gmShowCd(_cdType); } catch(_){} }, 50);
+      }
+    } catch(_){}
+    /* Legacy freeze + auto-resume — RED DE SEGURIDAD si por alguna
+       razón el overlay no llegara a dispararse (DOM detached, fallo
+       en _ensureOverlay, etc.). El overlay normalmente lleva el
+       resume; aquí solo intervenimos si el overlay falló. */
     var _gmFreezeMs = _mlEventFreezeMs(evt.type, true);
+    /* Alinear los tiempos del legacy freeze a los del overlay
+       (EVT_CD_SEC + 500 ms de margen) para que el resume legacy
+       solo dispare DESPUÉS del overlay, no antes. */
+    var _evtCd = {
+      'gol':20, 'autogol':10, 'propia':10, 'pen-gol':10,
+      'pen-fallo':10, 'pen-prov':10, 'pen-parado':10,
+      'falta-gol':25, 'amarilla':15, 'roja':15, 'd-amarilla':15,
+      'damarilla':15, 'lesion':15
+    };
+    if (_evtCd[evt.type] != null) _gmFreezeMs = (_evtCd[evt.type] * 1000) + 500;
     var _gmWasRunningSnapshot = !!_gm.timerWasRunning;
     _gm.timerWasRunning = false;
     var _gmDoResume = function(){
       if (_gm.finished || _gm.inDescanso || !_gm.kickoffDone) return;
+      if (_gm.timerRunning) return; /* el overlay ya reanudó. */
       if (_gmWasRunningSnapshot) gmStartTimer();
     };
     if (_gmFreezeMs > 0) setTimeout(_gmDoResume, _gmFreezeMs);
@@ -28357,6 +28385,9 @@ document.addEventListener('DOMContentLoaded', function() {
     ov.className = 'ml-evt-cd-overlay';
     ov.innerHTML = ''
       + '<div class="ml-evt-cd-evt" id="ml-evt-cd-evt">EVENTO</div>'
+      + '<div class="ml-evt-cd-player" id="ml-evt-cd-player" style="font-family:Rajdhani,sans-serif;font-size:clamp(16px,4vw,22px);color:#fff;letter-spacing:1.5px;text-align:center;margin:2px 0 8px;text-shadow:0 0 8px rgba(255,255,255,.5);font-weight:700;display:none;"></div>'
+      + '<div class="ml-evt-cd-team" id="ml-evt-cd-team" style="font-family:Oswald,sans-serif;font-size:clamp(11px,3vw,15px);color:rgba(255,255,255,.65);letter-spacing:2.5px;text-align:center;margin-bottom:14px;text-transform:uppercase;display:none;"></div>'
+      + '<div class="ml-evt-cd-score" id="ml-evt-cd-score" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(28px,7vw,40px);color:#f0c040;letter-spacing:6px;text-align:center;margin-bottom:14px;text-shadow:0 0 10px rgba(240,192,64,.7);display:none;"></div>'
       + '<div class="ml-evt-cd-circle" id="ml-evt-cd-circle">'
       +   '<svg viewBox="0 0 200 200">'
       +     '<circle class="cd-bg" cx="100" cy="100" r="90"/>'
@@ -28618,8 +28649,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var sec = EVT_CD_SEC[evtType]; if (!sec) return;
     var ov = _ensureOverlay();
     /* Pausar el cronómetro del gm-modal si está corriendo. */
+    var g = window._gm || {};
     try {
-      var g = window._gm || {};
       if (g.timerRunning && !g.finished && !g.inDescanso){
         if (typeof window.gmTimerClick === 'function') window.gmTimerClick();
       }
@@ -28628,6 +28659,21 @@ document.addEventListener('DOMContentLoaded', function() {
     _activeTotal = sec; _activeStartTs = Date.now();
     var lbl = EVT_CD_LBL[evtType] || ('📌 ' + String(evtType).toUpperCase());
     document.getElementById('ml-evt-cd-evt').textContent = lbl;
+    /* Player + team del último evento + marcador actual. Petición
+       usuario 2026-05-12: "Gol + equipo + jugador + resultado". */
+    try {
+      var lastEv = (g.events && g.events.length) ? g.events[g.events.length - 1] : null;
+      var pName = (lastEv && (lastEv.player || lastEv.name)) || '';
+      var pTeam = lastEv && (lastEv.team === 'a' ? (g.home||'') : lastEv.team === 'b' ? (g.away||'') : '');
+      var scoreA = (g.sc && g.sc.a) || 0;
+      var scoreB = (g.sc && g.sc.b) || 0;
+      var pEl = document.getElementById('ml-evt-cd-player');
+      var tEl = document.getElementById('ml-evt-cd-team');
+      var sEl = document.getElementById('ml-evt-cd-score');
+      if (pEl) { pEl.textContent = pName; pEl.style.display = pName ? 'block' : 'none'; }
+      if (tEl) { tEl.textContent = pTeam; tEl.style.display = pTeam ? 'block' : 'none'; }
+      if (sEl) { sEl.textContent = (g.home || 'LOCAL') + '  ' + scoreA + ' - ' + scoreB + '  ' + (g.away || 'VISITANTE'); sEl.style.display = 'block'; }
+    } catch(_){}
     document.getElementById('ml-evt-cd-num').textContent = String(sec);
     var fg = document.getElementById('ml-evt-cd-fg');
     var circle = document.getElementById('ml-evt-cd-circle');
@@ -28943,5 +28989,11 @@ document.addEventListener('DOMContentLoaded', function() {
   /* Expose para debug. */
   window._mlCardUiScan = _scanCards;
   window._mlCardUiShowCd = _showOverlay;
+  /* Expose para invocación directa desde el commit de eventos del
+     gm-modal (que vive en otra IIFE). Garantía de que el overlay
+     aparece sin depender del MutationObserver del gm-acta-list.
+     2026-05-12. */
+  window._gmShowCd = _gmShowCd;
+  window._gmCloseCd = _gmCloseCd;
 })();
 </script>

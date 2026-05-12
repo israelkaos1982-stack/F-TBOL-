@@ -11865,29 +11865,126 @@
     list.appendChild(li);
     var modal = document.getElementById('gm-modal');
     if (modal) modal.scrollTop = modal.scrollHeight;
-    /* INVOCACIÓN DIRECTA del overlay de cuenta atrás post-evento
-       (2026-05-12). Antes solo dependíamos del MutationObserver del
-       gm-acta-list, que falla cuando el observer aún no se wired o
-       cuando el data-type del row no matchea EVT_CD_SEC. Llamamos
-       _gmShowCd EXPLÍCITAMENTE desde aquí. La función pausa el
-       cronómetro (si está corriendo), muestra el overlay con
-       Gol/Falta/Amarilla/etc + cuenta regresiva, y al llegar a 0
-       o al pulsar "Reanudar partido" auto-resume el cronómetro
-       vía gmTimerClick. */
-    try {
-      var _cdType = evt.type;
-      if (_cdType === 'damarilla' || _cdType === 'd-amarilla') _cdType = 'doble-amarilla';
-      if (_cdType === 'propia') _cdType = 'autogol';
-      if (typeof window._gmShowCd === 'function') {
-        /* Defer 50 ms para que el row se haya pintado antes del
-           overlay (mejor feel visual). */
-        setTimeout(function(){ try { window._gmShowCd(_cdType); } catch(_){} }, 50);
+    /* OVERLAY DE CUENTA ATRÁS POST-EVENTO — IMPLEMENTACIÓN INLINE
+       (2026-05-12). Anteriormente delegábamos a `window._gmShowCd`
+       que vive en otra IIFE (al final del archivo). El usuario
+       reporta repetidamente que el overlay no aparece. Hacemos la
+       implementación INLINE aquí mismo, sin dependencias externas —
+       garantía 100% de que el overlay emerge al añadir un evento.
+       Tiempos según spec usuario:
+         · Gol             20 s
+         · Gol de Falta    25 s
+         · Autogol         10 s
+         · Gol de Penalti  10 s
+         · Pen fallado/prov/parado 10 s
+         · Tarjeta Amarilla 15 s
+         · Tarjeta Roja    15 s
+         · Doble Amarilla  15 s
+         · Lesión          15 s
+    */
+    (function _showGmEventCountdown(){
+      var _cdSec = {
+        'gol':20, 'autogol':10, 'propia':10, 'pen-gol':10,
+        'pen-fallo':10, 'pen-prov':10, 'pen-parado':10,
+        'falta-gol':25, 'amarilla':15, 'roja':15,
+        'd-amarilla':15, 'damarilla':15, 'doble-amarilla':15,
+        'lesion':15
+      };
+      var _cdLbl = {
+        'gol':'⚽ GOL', 'autogol':'😱 AUTOGOL', 'propia':'😱 AUTOGOL',
+        'pen-gol':'⚽🥅 GOL DE PENALTI', 'pen-fallo':'❌🥅 PENALTI FALLADO',
+        'pen-prov':'🤦🥅 PENALTI PROVOCADO', 'pen-parado':'🖐🥅 PENALTI PARADO',
+        'falta-gol':'⚽🎯 GOL DE FALTA',
+        'amarilla':'🟨 TARJETA AMARILLA',
+        'roja':'🟥 TARJETA ROJA',
+        'd-amarilla':'🟨🟥 DOBLE AMARILLA', 'damarilla':'🟨🟥 DOBLE AMARILLA',
+        'doble-amarilla':'🟨🟥 DOBLE AMARILLA',
+        'lesion':'🩹 LESIÓN'
+      };
+      var totalSec = _cdSec[evt.type];
+      if (!totalSec) return; /* tipo de evento sin countdown (mvp, sust...) */
+      /* Crear / obtener overlay. */
+      var ov = document.getElementById('gm-evt-countdown-ov');
+      if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'gm-evt-countdown-ov';
+        ov.style.cssText = 'position:fixed;inset:0;z-index:999999;'
+          + 'background:radial-gradient(circle at center,rgba(20,0,30,.95) 0%,rgba(0,0,0,.97) 75%);'
+          + 'display:none;flex-direction:column;align-items:center;justify-content:center;'
+          + 'padding:24px;font-family:\'Bebas Neue\',Oswald,sans-serif;color:#fff;text-align:center;';
+        ov.innerHTML = ''
+          + '<div id="gm-cd-lbl" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(28px,7vw,52px);letter-spacing:4px;color:#f0c040;text-shadow:0 0 14px rgba(240,192,64,.85),0 0 28px rgba(240,180,40,.55);margin-bottom:8px;line-height:1.15;">EVENTO</div>'
+          + '<div id="gm-cd-player" style="font-family:Rajdhani,sans-serif;font-size:clamp(18px,4.5vw,26px);font-weight:800;letter-spacing:1.5px;color:#fff;text-shadow:0 0 10px rgba(255,255,255,.55);margin:4px 0 6px;"></div>'
+          + '<div id="gm-cd-team" style="font-family:Oswald,sans-serif;font-size:clamp(11px,3vw,15px);font-weight:600;letter-spacing:3px;color:rgba(255,255,255,.7);text-transform:uppercase;margin-bottom:14px;"></div>'
+          + '<div id="gm-cd-score" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(24px,6vw,38px);letter-spacing:4px;color:#5eef8b;text-shadow:0 0 12px rgba(94,239,139,.75);margin-bottom:18px;"></div>'
+          + '<div style="position:relative;width:clamp(140px,40vw,220px);height:clamp(140px,40vw,220px);margin-bottom:14px;">'
+          +   '<svg viewBox="0 0 200 200" style="width:100%;height:100%;transform:rotate(-90deg);">'
+          +     '<circle cx="100" cy="100" r="90" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="12"/>'
+          +     '<circle id="gm-cd-ring" cx="100" cy="100" r="90" fill="none" stroke="#f0c040" stroke-width="12" stroke-linecap="round" stroke-dasharray="565.5" stroke-dashoffset="0" style="transition:stroke-dashoffset .2s linear,stroke .25s ease;"/>'
+          +   '</svg>'
+          +   '<div id="gm-cd-num" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:\'Bebas Neue\',sans-serif;font-size:clamp(56px,16vw,96px);color:#fff;letter-spacing:2px;line-height:1;text-shadow:0 0 16px rgba(255,255,255,.55);">0</div>'
+          + '</div>'
+          + '<div style="font-family:Oswald,sans-serif;font-size:clamp(10px,2.6vw,13px);letter-spacing:3px;color:rgba(255,255,255,.55);margin-bottom:18px;text-transform:uppercase;">Registra el evento en eFootball</div>'
+          + '<button type="button" id="gm-cd-resume" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(15px,4vw,20px);letter-spacing:3px;color:#fff;background:linear-gradient(135deg,#0a8a35,#3dcc6e);border:2px solid #5eef8b;border-radius:12px;padding:14px 36px;margin-bottom:10px;cursor:pointer;box-shadow:0 0 18px rgba(94,239,139,.55);">▶ REANUDAR PARTIDO</button>'
+          + '<button type="button" id="gm-cd-skip" style="font-family:Oswald,sans-serif;font-size:clamp(11px,2.8vw,13px);letter-spacing:2px;color:rgba(255,255,255,.5);background:transparent;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px 18px;cursor:pointer;">Cerrar sin reanudar</button>';
+        document.body.appendChild(ov);
       }
-    } catch(_){}
-    /* Legacy freeze + auto-resume — RED DE SEGURIDAD si por alguna
-       razón el overlay no llegara a dispararse (DOM detached, fallo
-       en _ensureOverlay, etc.). El overlay normalmente lleva el
-       resume; aquí solo intervenimos si el overlay falló. */
+      /* Contenido dinámico. */
+      var teamName = (team === 'a') ? (_gm.home || 'LOCAL') : (_gm.away || 'VISITANTE');
+      var pName = playerName || '';
+      var scA = (_gm.sc && _gm.sc.a) || 0;
+      var scB = (_gm.sc && _gm.sc.b) || 0;
+      var $ = function(id){ return document.getElementById(id); };
+      if ($('gm-cd-lbl'))    $('gm-cd-lbl').textContent    = _cdLbl[evt.type] || ('📌 ' + String(evt.type).toUpperCase());
+      if ($('gm-cd-player')) $('gm-cd-player').textContent = pName;
+      if ($('gm-cd-team'))   $('gm-cd-team').textContent   = teamName;
+      if ($('gm-cd-score'))  $('gm-cd-score').textContent  = (_gm.home || 'LOCAL') + '   ' + scA + ' - ' + scB + '   ' + (_gm.away || 'VISITANTE');
+      if ($('gm-cd-num'))    $('gm-cd-num').textContent    = String(totalSec);
+      var ring = $('gm-cd-ring');
+      var C = 2 * Math.PI * 90;
+      if (ring) { ring.setAttribute('stroke-dasharray', String(C)); ring.setAttribute('stroke-dashoffset', '0'); ring.setAttribute('stroke', '#f0c040'); }
+      /* Pausar cronómetro si está corriendo. */
+      try {
+        if (_gm.timerRunning && !_gm.finished && !_gm.inDescanso) {
+          if (typeof window.gmTimerClick === 'function') window.gmTimerClick();
+        }
+      } catch(_){}
+      /* Mostrar overlay. */
+      ov.style.display = 'flex';
+      /* Limpiar timer previo si lo hay (event chain rápido). */
+      if (window._gmCdTimer) { try { clearInterval(window._gmCdTimer); } catch(_){} window._gmCdTimer = null; }
+      var startTs = Date.now();
+      function _hideOv(resume){
+        if (window._gmCdTimer) { try { clearInterval(window._gmCdTimer); } catch(_){} window._gmCdTimer = null; }
+        ov.style.display = 'none';
+        if (resume) {
+          try {
+            if (!_gm.timerRunning && !_gm.finished && !_gm.inDescanso && _gm.kickoffDone) {
+              if (typeof window.gmTimerClick === 'function') window.gmTimerClick();
+            }
+          } catch(_){}
+        }
+      }
+      /* Bind buttons (re-bind para evitar handlers stale). */
+      var rb = $('gm-cd-resume');
+      var sb = $('gm-cd-skip');
+      if (rb) rb.onclick = function(){ _hideOv(true); };
+      if (sb) sb.onclick = function(){ _hideOv(false); };
+      /* Tick cada 100 ms. */
+      window._gmCdTimer = setInterval(function(){
+        var elapsed = (Date.now() - startTs) / 1000;
+        var remain = Math.max(0, totalSec - elapsed);
+        var dispSec = Math.ceil(remain);
+        if ($('gm-cd-num')) $('gm-cd-num').textContent = String(dispSec);
+        var pct = remain / totalSec;
+        if (ring) ring.setAttribute('stroke-dashoffset', String(C * (1 - pct)));
+        if (dispSec <= 5 && ring) ring.setAttribute('stroke', '#ff5050');
+        if (remain <= 0) _hideOv(true);
+      }, 100);
+    })();
+    /* Legacy freeze auto-resume — backstop por si el overlay inline
+       fallara. No interferirá con el resume del overlay (gmTimerClick
+       solo toggle si `timerRunning` no coincide). */
     var _gmFreezeMs = _mlEventFreezeMs(evt.type, true);
     /* Alinear los tiempos del legacy freeze a los del overlay
        (EVT_CD_SEC + 500 ms de margen) para que el resume legacy

@@ -11916,7 +11916,7 @@
           + '<div id="gm-cd-lbl" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(28px,7vw,52px);letter-spacing:4px;color:#f0c040;text-shadow:0 0 14px rgba(240,192,64,.85),0 0 28px rgba(240,180,40,.55);margin-bottom:8px;line-height:1.15;">EVENTO</div>'
           + '<div id="gm-cd-player" style="font-family:Rajdhani,sans-serif;font-size:clamp(18px,4.5vw,26px);font-weight:800;letter-spacing:1.5px;color:#fff;text-shadow:0 0 10px rgba(255,255,255,.55);margin:4px 0 6px;"></div>'
           + '<div id="gm-cd-team" style="font-family:Oswald,sans-serif;font-size:clamp(11px,3vw,15px);font-weight:600;letter-spacing:3px;color:rgba(255,255,255,.7);text-transform:uppercase;margin-bottom:14px;"></div>'
-          + '<div id="gm-cd-score" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(24px,6vw,38px);letter-spacing:4px;color:#5eef8b;text-shadow:0 0 12px rgba(94,239,139,.75);margin-bottom:18px;"></div>'
+          + '<div id="gm-cd-score" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(18px,4.6vw,28px);letter-spacing:2px;color:#5eef8b;text-shadow:0 0 12px rgba(94,239,139,.75);margin-bottom:18px;white-space:nowrap;max-width:96vw;overflow:hidden;"></div>'
           + '<div style="position:relative;width:clamp(140px,40vw,220px);height:clamp(140px,40vw,220px);margin-bottom:14px;">'
           +   '<svg viewBox="0 0 200 200" style="width:100%;height:100%;transform:rotate(-90deg);">'
           +     '<circle cx="100" cy="100" r="90" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="12"/>'
@@ -11930,15 +11930,42 @@
         document.body.appendChild(ov);
       }
       /* Contenido dinámico. */
+      /* Abreviar nombres de equipo largos para que el marcador entre
+         en una sola línea. Petición usuario 2026-05-12. Estrategia:
+           · Si <= 11 chars → tal cual.
+           · Si > 11 chars y multi-palabra → primera palabra completa +
+             iniciales del resto (ej "Manchester United" → "Manchester U.").
+           · Si aún > 13 chars → primera palabra recortada a 9 + . */
+      function _abbrevTeam(name){
+        var s = String(name || '').trim();
+        if (s.length <= 11) return s;
+        var parts = s.split(/\s+/);
+        if (parts.length === 1) return s.slice(0, 11) + '.';
+        var first = parts[0];
+        var rest = parts.slice(1).map(function(p){
+          if (!p) return '';
+          /* Si la palabra es un sufijo común corto (FC, CF, AC, SC,
+             II, B…) lo dejamos COMPLETO sin abreviar. */
+          if (/^(FC|CF|AC|SC|F\.C\.|C\.F\.|II|B)$/i.test(p)) return p;
+          return p[0].toUpperCase() + '.';
+        }).filter(Boolean).join(' ');
+        var out = first + ' ' + rest;
+        if (out.length > 13) {
+          out = (first.length > 9 ? first.slice(0, 9) + '.' : first) + ' ' + rest;
+        }
+        return out;
+      }
       var teamName = (team === 'a') ? (_gm.home || 'LOCAL') : (_gm.away || 'VISITANTE');
       var pName = playerName || '';
       var scA = (_gm.sc && _gm.sc.a) || 0;
       var scB = (_gm.sc && _gm.sc.b) || 0;
+      var hShort = _abbrevTeam(_gm.home || 'LOCAL');
+      var aShort = _abbrevTeam(_gm.away || 'VISITANTE');
       var $ = function(id){ return document.getElementById(id); };
       if ($('gm-cd-lbl'))    $('gm-cd-lbl').textContent    = _cdLbl[evt.type] || ('📌 ' + String(evt.type).toUpperCase());
       if ($('gm-cd-player')) $('gm-cd-player').textContent = pName;
       if ($('gm-cd-team'))   $('gm-cd-team').textContent   = teamName;
-      if ($('gm-cd-score'))  $('gm-cd-score').textContent  = (_gm.home || 'LOCAL') + '   ' + scA + ' - ' + scB + '   ' + (_gm.away || 'VISITANTE');
+      if ($('gm-cd-score'))  $('gm-cd-score').textContent  = hShort + '   ' + scA + ' - ' + scB + '   ' + aShort;
       if ($('gm-cd-num'))    $('gm-cd-num').textContent    = String(totalSec);
       var ring = $('gm-cd-ring');
       var C = 2 * Math.PI * 90;
@@ -11951,11 +11978,15 @@
       } catch(_){}
       /* Mostrar overlay. */
       ov.style.display = 'flex';
-      /* Limpiar timer previo si lo hay (event chain rápido). */
+      /* Limpiar timers/rAF previos (event chain rápido). */
       if (window._gmCdTimer) { try { clearInterval(window._gmCdTimer); } catch(_){} window._gmCdTimer = null; }
+      if (window._gmCdRaf) { try { cancelAnimationFrame(window._gmCdRaf); } catch(_){} window._gmCdRaf = null; }
       var startTs = Date.now();
+      var ended = false;
       function _hideOv(resume){
+        ended = true;
         if (window._gmCdTimer) { try { clearInterval(window._gmCdTimer); } catch(_){} window._gmCdTimer = null; }
+        if (window._gmCdRaf) { try { cancelAnimationFrame(window._gmCdRaf); } catch(_){} window._gmCdRaf = null; }
         ov.style.display = 'none';
         if (resume) {
           try {
@@ -11970,17 +12001,32 @@
       var sb = $('gm-cd-skip');
       if (rb) rb.onclick = function(){ _hideOv(true); };
       if (sb) sb.onclick = function(){ _hideOv(false); };
-      /* Tick cada 100 ms. */
-      window._gmCdTimer = setInterval(function(){
+      /* Tick MIXTO: requestAnimationFrame (rAF) + setInterval(50ms).
+         rAF es inmune al timer alignment de Chrome móvil (que afecta
+         a setInterval con batería baja). setInterval(50ms) sirve de
+         backup si rAF se pausa (tab en background). Cualquiera de los
+         dos basta para que el número descienda 20→19→18→...→0. */
+      function _tick(){
+        if (ended) return;
         var elapsed = (Date.now() - startTs) / 1000;
         var remain = Math.max(0, totalSec - elapsed);
         var dispSec = Math.ceil(remain);
-        if ($('gm-cd-num')) $('gm-cd-num').textContent = String(dispSec);
+        var numEl = $('gm-cd-num');
+        if (numEl && numEl.textContent !== String(dispSec)) numEl.textContent = String(dispSec);
         var pct = remain / totalSec;
         if (ring) ring.setAttribute('stroke-dashoffset', String(C * (1 - pct)));
         if (dispSec <= 5 && ring) ring.setAttribute('stroke', '#ff5050');
-        if (remain <= 0) _hideOv(true);
-      }, 100);
+        if (remain <= 0) { _hideOv(true); return; }
+      }
+      function _rafLoop(){
+        if (ended) return;
+        _tick();
+        window._gmCdRaf = requestAnimationFrame(_rafLoop);
+      }
+      if (typeof requestAnimationFrame === 'function') {
+        window._gmCdRaf = requestAnimationFrame(_rafLoop);
+      }
+      window._gmCdTimer = setInterval(_tick, 50);
     })();
     /* Legacy freeze auto-resume — backstop por si el overlay inline
        fallara. No interferirá con el resume del overlay (gmTimerClick

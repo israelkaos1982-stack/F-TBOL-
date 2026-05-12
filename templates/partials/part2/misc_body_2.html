@@ -22081,8 +22081,16 @@ window.goLiveMatches = function() {
         /* Solo ocultar si __GM_LIVE no apunta a un partido vivo
            (el modal pertenece a un partido en curso, no a residuo
            visual). En el caso de live match el usuario podrá
-           reabrirlo desde el hub LIVE manualmente. */
-        gm.style.display = 'none';
+           reabrirlo desde el hub LIVE manualmente.
+           Fix 2026-05-12: el comentario decía esto pero el código
+           hideaba INCONDICIONALMENTE → cualquier _cleanupOverlays
+           tras gmOpen (eurFase Champions etc.) escondía la card
+           de simulación recién abierta. */
+        var liveMatch = window.__GM_LIVE && !window.__GM_LIVE.finished && window.__GM_LIVE.kickoffDone === false;
+        var hasGm = window.__GM_LIVE && !window.__GM_LIVE.finished;
+        if (!hasGm) {
+          gm.style.display = 'none';
+        }
       }
     } catch(_){}
     /* Overlays con clase `.show` que cubren toda la pantalla. */
@@ -22096,8 +22104,18 @@ window.goLiveMatches = function() {
       'sc-champion-ov',         /* Champion Supercopa */
       'sancion-overlay'
     ];
+    /* Si hay una previa activa (.show), NO la cerremos — el usuario
+       está en mitad del flujo. La cleanup es para overlays HUÉRFANOS
+       tras un live match, no para interrumpir un flujo en curso. */
+    var previaShown = false;
+    try {
+      var pp = document.getElementById('prepartido-overlay');
+      var sn = document.getElementById('sancion-overlay');
+      previaShown = (pp && pp.classList.contains('show')) || (sn && sn.classList.contains('show'));
+    } catch(_){}
     overlayIds.forEach(function(id){
       try {
+        if (previaShown && (id === 'prepartido-overlay' || id === 'sancion-overlay')) return;
         var ov = document.getElementById(id);
         if(!ov) return;
         ov.classList.remove('show');
@@ -22118,11 +22136,19 @@ window.goLiveMatches = function() {
       }
     } catch(_){}
     /* Resetear flags que podrían bloquear posteriores aperturas
-       de previa. */
+       de previa. PERO solo si NO hay un flujo de previa activo —
+       Si la previa o sancion están visibles, conservamos los
+       callbacks para que el flujo pueda completarse. Fix
+       2026-05-12: antes se borraban incondicionalmente, lo que
+       rompía Champions previa → bajas → gm-modal: el callback
+       que abría el gm-modal se anulaba por la cleanup tras
+       cualquier reactivación de la pestaña. */
     try {
-      window._ppForceSancionShareMode = false;
-      window._sancionCallback = null;
-      window._ppCustomCallback = null;
+      if (!previaShown) {
+        window._ppForceSancionShareMode = false;
+        window._sancionCallback = null;
+        window._ppCustomCallback = null;
+      }
     } catch(_){}
   }
 

@@ -19457,6 +19457,43 @@ Tottenham
       body.innerHTML = '<div class="lext-empty">No hay equipos. Usa 🖍 Editar para añadir clubes.</div>';
       return;
     }
+    /* FILTRO 2026-05-12: NUNCA mostrar equipos de Liga EA Sports /
+       Hypermotion / Primera Federación en la clasificación de una
+       liga externa (Premier, Bundesliga, Serie A, etc.). Si por
+       sync accidental o import erróneo esos equipos aparecen en
+       `data.teams`, los excluimos del render. La fuente canónica
+       para esos clubes es su liga española respectiva.
+
+       Excepciones:
+         · Si CURRENT_KEY es la propia ligaExt_liga-ea-sports /
+           ligaExt_liga-hypermotion / ligaExt_liga-primera-federacion
+           (las ligas españolas dentro del sistema de Resto de Ligas),
+           NO filtramos — son su clasificación legítima. */
+    var ESP_LEAGUES = {
+      'ligaExt_liga-ea-sports': true,
+      'ligaExt_liga-hypermotion': true,
+      'ligaExt_liga-primera-federacion': true
+    };
+    if (!ESP_LEAGUES[CURRENT_KEY] && typeof _spanishUpperTierTeamNames === 'function') {
+      try {
+        var bannedSet = _spanishUpperTierTeamNames();
+        var origCount = data.teams.length;
+        data = {
+          /* Clonar shallow para no mutar la original. */
+          teams: data.teams.filter(function(t){
+            return !_isSpanishTeamBanned(t && t.name, bannedSet);
+          }),
+          results: (data.results || []).slice(),
+          /* Otros campos del state. */
+          maxJ: data.maxJ, jornadasGen: data.jornadasGen,
+          config: data.config
+        };
+        var filtered = origCount - data.teams.length;
+        if (filtered > 0) {
+          try { console.log('[lext] filtrados', filtered, 'equipos españoles de upper-tier de', CURRENT_KEY); } catch(_){}
+        }
+      } catch(_){}
+    }
     var rows = standings(data);
     var total = rows.length;
     var cfg = ensureConfig(data);

@@ -18613,7 +18613,15 @@ Tottenham
        mientras la fetch async responde. Mismo patrón que rosterFor
        (misc_body_2.html) y la rama de equipos editados de este mismo
        archivo. Si el sync falla (offline / timeout), caemos al objeto
-       vacío y la fetchData posterior repoblará. */
+       vacío y la fetchData posterior repoblará.
+
+       BULK 2026-05-12: durante la sim de las 51 ligas NO hacemos
+       estos 2 XHR síncronos sin timeout (main + protected). Eran la
+       causa REAL del "3 min por liga" — `_readLigaData` ya estaba
+       gateado pero `loadData` tenía SUS PROPIOS XHR sync. Sin cache
+       local la liga se salta limpiamente ("sin equipos suficientes")
+       y el usuario la abre individual luego para hidratarla. */
+    if (!window._restoSimBulkInProgress) {
     try {
       var xhr = new XMLHttpRequest();
       xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(k), false);
@@ -18686,6 +18694,7 @@ Tottenham
         }
       }
     } catch(_){}
+    } /* fin if(!window._restoSimBulkInProgress) — gate de los 2 XHR sync de loadData */
     LIGA_CACHE[k] = {teams:[], results:[]};
     return _applyForcedBlacklist(k, LIGA_CACHE[k]);
   }

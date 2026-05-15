@@ -12329,6 +12329,19 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     return s;
   }
+  /* EXPOSICIÓN GLOBAL CRÍTICA 2026-05-12: `_spanishUpperTierTeamNames`,
+     `_isSpanishTeamBanned` y `_canonTeamName` viven en ESTA IIFE
+     (12109-13022). `_applyForcedBlacklist` y `renderTable` viven en
+     OTRA IIFE (18120+) y las referenciaban SIN prefijo `window.` →
+     `typeof _spanishUpperTierTeamNames` daba 'undefined' (no están
+     en scope) → el filtro universal NUNCA se ejecutaba → los
+     equipos españoles seguían colándose en Premier/Bundesliga.
+     Exponerlas en window las hace accesibles cross-IIFE. */
+  try {
+    window._spanishUpperTierTeamNames = _spanishUpperTierTeamNames;
+    window._isSpanishTeamBanned       = _isSpanishTeamBanned;
+    window._canonTeamName             = _canonTeamName;
+  } catch(_){}
   /* Invalidador del cache — lo llama saveData cuando se guarda una
      de las 3 ligas españolas (sus rosters cambiaron). */
   window._invalidateSpanishUpperTierCache = function(){
@@ -18741,10 +18754,10 @@ Tottenham
        re-invocarlo dentro del filter — guardamos la referencia. */
     var spanishSet = null;
     var applySpanishFilter = (!_SPANISH_UPPER_TIER_SLUGS[k] &&
-        typeof _spanishUpperTierTeamNames === 'function' &&
-        typeof _isSpanishTeamBanned === 'function');
+        typeof window._spanishUpperTierTeamNames === 'function' &&
+        typeof window._isSpanishTeamBanned === 'function');
     if (applySpanishFilter) {
-      try { spanishSet = _spanishUpperTierTeamNames(); } catch(_){ spanishSet = null; }
+      try { spanishSet = window._spanishUpperTierTeamNames(); } catch(_){ spanishSet = null; }
       if (!spanishSet) applySpanishFilter = false;
     }
     if (!blk.length && !applySpanishFilter) return data;
@@ -18762,7 +18775,7 @@ Tottenham
            del freeze de 1 h reportado 2026-05-12). */
         if (applySpanishFilter) {
           try {
-            if (_isSpanishTeamBanned(t.name, spanishSet)) return false;
+            if (window._isSpanishTeamBanned(t.name, spanishSet)) return false;
           } catch(_){}
         }
         return true;
@@ -18812,12 +18825,13 @@ Tottenham
     if (!k || !name) return false;
     var blk = _forcedBlacklistNormFor(k);
     if (blk.indexOf(_lextNormName(name)) >= 0) return true;
-    /* Filtro universal Liga EA / Hypermotion / 1ª RFEF. */
+    /* Filtro universal Liga EA / Hypermotion / 1ª RFEF.
+       window.* — viven en otra IIFE (ver exposición en línea ~12331). */
     if (!_SPANISH_UPPER_TIER_SLUGS[k] &&
-        typeof _isSpanishTeamBanned === 'function' &&
-        typeof _spanishUpperTierTeamNames === 'function') {
+        typeof window._isSpanishTeamBanned === 'function' &&
+        typeof window._spanishUpperTierTeamNames === 'function') {
       try {
-        if (_isSpanishTeamBanned(name, _spanishUpperTierTeamNames())) return true;
+        if (window._isSpanishTeamBanned(name, window._spanishUpperTierTeamNames())) return true;
       } catch(_){}
     }
     return false;
@@ -19586,43 +19600,13 @@ Tottenham
       body.innerHTML = '<div class="lext-empty">No hay equipos. Usa 🖍 Editar para añadir clubes.</div>';
       return;
     }
-    /* FILTRO 2026-05-12: NUNCA mostrar equipos de Liga EA Sports /
-       Hypermotion / Primera Federación en la clasificación de una
-       liga externa (Premier, Bundesliga, Serie A, etc.). Si por
-       sync accidental o import erróneo esos equipos aparecen en
-       `data.teams`, los excluimos del render. La fuente canónica
-       para esos clubes es su liga española respectiva.
-
-       Excepciones:
-         · Si CURRENT_KEY es la propia ligaExt_liga-ea-sports /
-           ligaExt_liga-hypermotion / ligaExt_liga-primera-federacion
-           (las ligas españolas dentro del sistema de Resto de Ligas),
-           NO filtramos — son su clasificación legítima. */
-    var ESP_LEAGUES = {
-      'ligaExt_liga-ea-sports': true,
-      'ligaExt_liga-hypermotion': true,
-      'ligaExt_liga-primera-federacion': true
-    };
-    if (!ESP_LEAGUES[CURRENT_KEY] && typeof _spanishUpperTierTeamNames === 'function') {
-      try {
-        var bannedSet = _spanishUpperTierTeamNames();
-        var origCount = data.teams.length;
-        data = {
-          /* Clonar shallow para no mutar la original. */
-          teams: data.teams.filter(function(t){
-            return !_isSpanishTeamBanned(t && t.name, bannedSet);
-          }),
-          results: (data.results || []).slice(),
-          /* Otros campos del state. */
-          maxJ: data.maxJ, jornadasGen: data.jornadasGen,
-          config: data.config
-        };
-        var filtered = origCount - data.teams.length;
-        if (filtered > 0) {
-          try { console.log('[lext] filtrados', filtered, 'equipos españoles de upper-tier de', CURRENT_KEY); } catch(_){}
-        }
-      } catch(_){}
-    }
+    /* El filtro de equipos españoles upper-tier ahora se aplica en
+       `_applyForcedBlacklist` DENTRO de `loadData(CURRENT_KEY)`
+       (línea ~18725), con la clave de slug correcta (sin prefijo
+       `ligaExt_`). El filtro redundante que había aquí usaba claves
+       CON prefijo (`ligaExt_liga-ea-sports`) que NO matcheaban
+       `CURRENT_KEY` (slug sin prefijo) → filtraba por error equipos
+       de la propia Liga EA. Eliminado. 2026-05-12. */
     var rows = standings(data);
     var total = rows.length;
     var cfg = ensureConfig(data);

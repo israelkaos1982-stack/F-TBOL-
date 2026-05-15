@@ -4919,13 +4919,26 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   };
 
   window._sancionConfirm = function() {
+    /* REORDEN 2026-05-15: el share de WhatsApp dispara `window.open` a
+       una URL `https://chat.whatsapp.com/...` que en Android Chrome
+       lanza el intent → la app de WhatsApp toma el foco y la pestaña
+       original queda en background. Si la pestaña se pausa/throttlea
+       o (con memoria baja) se mata antes de que gmOpen marque el
+       gm-modal como `display:flex`, al volver el usuario NO ve la
+       card de simulación y aparece la pantalla anterior (Grupos de
+       UCL, etc.). Solución: abrir el gm-modal SÍNCRONAMENTE PRIMERO
+       (vía _sancionCallback → _afterShare → _ppCustomCallback →
+       abrirEurFase/abrirCopa/etc. → gmOpen) y SOLO DESPUÉS lanzar el
+       share. Así el DOM queda con el modal visible antes del switch
+       a WhatsApp y, al volver, el usuario sigue viendo la simulación. */
     var okBtn = document.getElementById('sancion-ov-ok');
-    if (okBtn && okBtn.getAttribute('data-share-mode') === '1') {
-      try { if (typeof window._ppShareWA === 'function') window._ppShareWA(); } catch(_){}
-    }
+    var shouldShare = !!(okBtn && okBtn.getAttribute('data-share-mode') === '1');
     window._ppForceSancionShareMode = false;
     document.getElementById('sancion-overlay').classList.remove('show');
-    if (window._sancionCallback) { window._sancionCallback(); window._sancionCallback = null; }
+    if (window._sancionCallback) { var _cb = window._sancionCallback; window._sancionCallback = null; try { _cb(); } catch(_){} }
+    if (shouldShare) {
+      try { if (typeof window._ppShareWA === 'function') window._ppShareWA(); } catch(_){}
+    }
   };
 
   /* Volver: cierra el overlay BAJAS PARA EL PARTIDO y cancela el

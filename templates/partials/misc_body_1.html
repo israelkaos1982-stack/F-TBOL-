@@ -15951,6 +15951,38 @@ window._showSimProgress = function(opts, onDone){
     pair.mvp = mvp || '';
     pair.mvpTeam = mvpTeam || '';
     saveState(comp, state);
+    /* Stats globales para que el dashboard Champions / Europa /
+       Conference · Estadísticas reciba goleadores, MVPs, tarjetas,
+       imbatibilidad, etc. del partido recién simulado. Sin esto las
+       cajas mostraban "Sin datos todavía" aunque hubiera 8 jornadas
+       jugadas. Petición usuario 2026-05-12. Mismo patrón que la
+       Recopa (línea 7964) y la Superliga (compKey='sc').
+
+       Flow completo:
+         1. `registrarLigaPlayerStats` añade el match a
+            LIGA_PLAYER_MATCH_STORE con tag comp='ucl'|'uel'|'uecl'.
+         2. `rebuildLigaPlayerStatsFixed` itera el store, bucketea
+            por comp y persiste a:
+              · ef_player_stats_ucl_main_v1
+              · ef_player_stats_uel_v1
+              · ef_player_stats_uecl_v1
+         3. El dashboard (`_lextBuildCompStatsDashboard`) lee de
+            esos keys. */
+    try {
+      if (typeof window.registrarLigaPlayerStats === 'function' &&
+          pair.events && pair.events.length) {
+        var statsEv = pair.events.filter(function(e){ return !e._varAnulado; });
+        window.registrarLigaPlayerStats(mk, home, away, statsEv, mvp, mvpTeam, comp);
+        /* Trigger rebuild para que las stats se persistan a los keys
+           que leen los dashboards. Sin esto el registro queda en el
+           store en memoria pero el dashboard no lo ve hasta el
+           próximo trigger (go() a s-liga-stats, save de plantilla,
+           etc.). */
+        if (typeof window.rebuildLigaPlayerStatsFixed === 'function') {
+          setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+        }
+      }
+    } catch(_){}
     /* Re-render con guard contra DOM-detach de live sims paralelas.
        Reintenta cada 800 ms hasta que no haya sims vivas, hasta 3
        reintentos (suficiente para esperar al último game-min en el

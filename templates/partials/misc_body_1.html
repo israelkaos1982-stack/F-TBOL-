@@ -16533,7 +16533,14 @@ window._showSimProgress = function(opts, onDone){
     if(!raw){
       try { raw = localStorage.getItem('ligaExt_' + slug + '_protected'); } catch(_){}
     }
-    if(!raw){
+    /* XHR SÍNCRONO a server — SOLO si NO estamos en el flujo de
+       simular las 51 ligas. Durante el bulk, 51 XHR sync sin
+       timeout contra Railway bloqueaban el thread > 1 h
+       (reportado: "0% INICIANDO" eterno). En bulk, una liga sin
+       cache local simplemente se salta ("sin equipos suficientes")
+       — el usuario puede abrirla individualmente luego para
+       hidratarla. 2026-05-12. */
+    if(!raw && !window._restoSimBulkInProgress){
       try {
         var xhr = new XMLHttpRequest();
         xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(slug), false);
@@ -16638,15 +16645,27 @@ window._showSimProgress = function(opts, onDone){
       alert(msg);
     }
 
+    /* FLAG BULK 2026-05-12: durante la sim de las 51 ligas,
+       `_readLigaData` NO debe hacer XHR síncrono por liga (51 XHR
+       sync sin timeout contra Railway = el thread bloqueado >1 h,
+       "0% INICIANDO" eterno). Y `_applyForcedBlacklist` NO debe
+       hacer su persist-mutado por liga (localStorage.setItem +
+       POST redundantes — `saveData` ya persiste al final de cada
+       liga). Se limpia en _onDone (éxito) y en el .catch (error). */
+    window._restoSimBulkInProgress = true;
+    function _clearBulkFlag(){ try { window._restoSimBulkInProgress = false; } catch(_){} }
+    var _onDoneOrig = _onDone;
+    _onDone = function(){ _clearBulkFlag(); try { _onDoneOrig(); } catch(_){} };
+
     if(typeof window.ftbolLoaderRun === 'function'){
       window.ftbolLoaderRun(
         { title:'RESTO DE LIGAS · 51 LIGAS', sub:'Iniciando…', theme:'resto', minMs:600 },
         function(ctx){ return simNext(ctx.progress); }
-      ).then(_onDone);
+      ).then(_onDone, function(e){ _clearBulkFlag(); try { console.error('[restoSim]', e); } catch(_){} });
     } else {
       /* Fallback sin overlay: mantener el comportamiento síncrono
          clásico (raro pero por seguridad). */
-      simNext(null).then(_onDone);
+      simNext(null).then(_onDone, _clearBulkFlag);
     }
   };
 
@@ -18794,8 +18813,16 @@ Tottenham
        persistimos quitados — así el próximo fetchData contra el
        server ya sube el estado limpio y no vuelven a aparecer en
        otros dispositivos. Solo si hay algo que persistir: evita
-       tocar localStorage/server cuando todo ya estaba bien. */
-    if (mutated) {
+       tocar localStorage/server cuando todo ya estaba bien.
+
+       BULK 2026-05-12: durante la sim de las 51 ligas NO hacemos
+       este persist (localStorage.setItem de ~1 MB + POST por
+       liga). `data` ya queda filtrado en memoria (el caller usa
+       la referencia mutada) y `saveData(slug, data)` al final de
+       cada `ligaExtSimularSlug` persiste el estado limpio de
+       todas formas. Hacerlo aquí TAMBIÉN multiplicaba x2 el coste
+       de I/O por liga → contribuía al freeze. */
+    if (mutated && !window._restoSimBulkInProgress) {
       try {
         LIGA_CACHE[k] = data;
         localStorage.setItem(storeKey(k), JSON.stringify(data));
@@ -18807,6 +18834,10 @@ Tottenham
           body:JSON.stringify({data:data})
         }).catch(function(){});
       } catch(_){}
+    } else if (mutated) {
+      /* En bulk: solo actualizamos la cache en memoria (barato) —
+         la persistencia la hace saveData al cerrar la liga. */
+      try { LIGA_CACHE[k] = data; } catch(_){}
     }
     return data;
   }

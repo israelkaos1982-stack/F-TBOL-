@@ -12266,6 +12266,20 @@ window._showSimProgress = function(opts, onDone){
      WC/OQ, ni siquiera por sync accidental hacia un slug de país
      pequeño (ej. "Europa FC" en `ligaExt_gibraltar`). */
   function _spanishUpperTierTeamNames(){
+    /* MEMOIZACIÓN CRÍTICA 2026-05-12: esta función parsea 3 keys
+       grandes de localStorage (ligaExt_liga-ea-sports /
+       -hypermotion / -primera-federacion, ~1-2 MB c/u). El filtro
+       universal de `_applyForcedBlacklist` la invocaba UNA VEZ POR
+       EQUIPO POR LIGA → 51 ligas × ~20 equipos = 1000+ llamadas ×
+       3-6 MB de JSON.parse = el thread JS muerto > 1 hora (bug
+       reportado: "todas las simulaciones de torneos tardan más de
+       1 hora"). Cacheamos el set 30 s; se invalida al guardar
+       cualquiera de las 3 ligas españolas (window._invalidateSpanishUpperTierCache). */
+    var now = Date.now();
+    if (window._spanishUpperTierCache &&
+        (now - window._spanishUpperTierCacheTs) < 30000) {
+      return window._spanishUpperTierCache;
+    }
     var s = Object.create(null);
     function _addByName(nm){
       var c = _canonTeamName(nm || '');
@@ -12309,8 +12323,20 @@ window._showSimProgress = function(opts, onDone){
      'At. Sanluqueño','Sanluqueño','Sanluqueno','CE Europa','Europa','Tarazona','SD Tarazona',
      'Teruel','CD Teruel','Torremolinos','Juventud Torremolinos','Estepona'
     ].forEach(_addByName);
+    try {
+      window._spanishUpperTierCache = s;
+      window._spanishUpperTierCacheTs = now;
+    } catch(_){}
     return s;
   }
+  /* Invalidador del cache — lo llama saveData cuando se guarda una
+     de las 3 ligas españolas (sus rosters cambiaron). */
+  window._invalidateSpanishUpperTierCache = function(){
+    try {
+      window._spanishUpperTierCache = null;
+      window._spanishUpperTierCacheTs = 0;
+    } catch(_){}
+  };
   /* Recorre localStorage y devuelve la lista de equipos que se
      han ganado plaza en su liga terminada. zoneKey ∈ 'ucl' | 'uel'
      | 'uecl'. Filtra backups (`_backup`), snapshots (`_snap_`) y
@@ -18710,14 +18736,18 @@ Tottenham
        casos reportados — ahora cubrimos TODAS las ligas externas
        a la vez. La fuente canónica para los clubes españoles
        upper-tier es su liga española respectiva. */
-    var spanishBlk = [];
-    if (!_SPANISH_UPPER_TIER_SLUGS[k] && typeof _spanishUpperTierTeamNames === 'function') {
-      try {
-        var spanishSet = _spanishUpperTierTeamNames();
-        spanishBlk = Object.keys(spanishSet);
-      } catch(_){}
+    /* Calcular el set UNA SOLA VEZ por liga (no por equipo). El
+       helper ya está memoizado 30 s, pero además evitamos
+       re-invocarlo dentro del filter — guardamos la referencia. */
+    var spanishSet = null;
+    var applySpanishFilter = (!_SPANISH_UPPER_TIER_SLUGS[k] &&
+        typeof _spanishUpperTierTeamNames === 'function' &&
+        typeof _isSpanishTeamBanned === 'function');
+    if (applySpanishFilter) {
+      try { spanishSet = _spanishUpperTierTeamNames(); } catch(_){ spanishSet = null; }
+      if (!spanishSet) applySpanishFilter = false;
     }
-    if (!blk.length && !spanishBlk.length) return data;
+    if (!blk.length && !applySpanishFilter) return data;
     var mutated = false;
     if (Array.isArray(data.teams)) {
       var before = data.teams.length;
@@ -18726,11 +18756,13 @@ Tottenham
         var canon = _lextNormName(t.name);
         if (blk.indexOf(canon) >= 0) return false;
         /* Filtro universal: si el equipo está en el set canónico de
-           Liga EA / Hypermotion / 1ª RFEF, fuera. Usa el helper
-           ya existente que cubre name + tokens banned. */
-        if (typeof _isSpanishTeamBanned === 'function') {
+           Liga EA / Hypermotion / 1ª RFEF, fuera. Reusamos el set
+           pre-computado `spanishSet` — NO re-invocamos
+           `_spanishUpperTierTeamNames()` por equipo (era el origen
+           del freeze de 1 h reportado 2026-05-12). */
+        if (applySpanishFilter) {
           try {
-            if (_isSpanishTeamBanned(t.name, _spanishUpperTierTeamNames())) return false;
+            if (_isSpanishTeamBanned(t.name, spanishSet)) return false;
           } catch(_){}
         }
         return true;
@@ -18946,6 +18978,16 @@ Tottenham
        liga para que el siguiente render lea el valor fresco. */
     if (typeof window._invalidateAliasCache === 'function') {
       try { window._invalidateAliasCache(); } catch(_){}
+    }
+    /* Si se guardó una de las 3 ligas españolas upper-tier, los
+       rosters cambiaron → invalidar el cache de
+       `_spanishUpperTierTeamNames` para que el filtro universal
+       recoja los nombres nuevos en el siguiente loadData.
+       2026-05-12. */
+    if ((k === 'liga-ea-sports' || k === 'liga-hypermotion' ||
+         k === 'liga-primera-federacion') &&
+        typeof window._invalidateSpanishUpperTierCache === 'function') {
+      try { window._invalidateSpanishUpperTierCache(); } catch(_){}
     }
     /* Hash de _importOtherLeaguesIntoEngine — forzar rebuild al
        siguiente applyEngineOverrides para que renames/edits se

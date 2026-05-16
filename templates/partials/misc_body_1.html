@@ -729,95 +729,86 @@ window._showSimProgress = function(opts, onDone){
 </div>
 
 <!-- ═══ PRETEMPORADA · CAJA BAYERN (Módulos 2-5) ═══════════════════
-     Pantalla dedicada que recorre el calendario Bayern día a día:
-       · Entrenamiento → barra 3s + 95/5 lesión (plantilla Bayern)
-       · Descanso      → continuar
-       · Partido       → previa (rival del torneo, estadio, clima)
-     El cursor de día (pDay) se comparte con el marcador rosa del
-     calendario vía localStorage `bayern_preseason_v1`. -->
-<div class="screen" id="s-bayern-preseason">
-  <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">🌞</span><h2>Pretemporada · Día a Día</h2></div>
-  <div id="ps-stage"></div>
-</div>
-
+     NO es pantalla aparte: la tarjeta día a día se renderiza dentro
+     del bloque "Próximo partido" del hub (#ps-stage en
+     .munich-next-visual). El cursor de día se comparte con el
+     marcador rosa del calendario vía `bayern_preseason_v1`. -->
 <style>
-  #s-bayern-preseason{padding-bottom:30px;}
-  #s-bayern-preseason .ps-card{
+  #ps-stage .ps-card{
     margin:14px 12px;border-radius:16px;padding:20px 16px 22px;
     background:radial-gradient(circle at 20% 0,#0066b255,#00162f 46%,#12000a 100%),
                linear-gradient(150deg,#dc052d,#8e001c 60%,#002f63);
     border:1px solid rgba(255,255,255,.16);
     box-shadow:0 14px 34px rgba(0,0,0,.5);text-align:center;color:#fff;
   }
-  #s-bayern-preseason .ps-date{
+  #ps-stage .ps-date{
     font-family:'Bebas Neue','Oswald',sans-serif;font-size:30px;letter-spacing:4px;
     color:#ffd750;text-shadow:0 0 14px rgba(255,215,80,.55);margin:0 0 4px;
   }
-  #s-bayern-preseason .ps-sub{
+  #ps-stage .ps-sub{
     font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2.4px;
     color:rgba(255,255,255,.7);margin:0 0 16px;text-transform:uppercase;
   }
-  #s-bayern-preseason .ps-shield{
+  #ps-stage .ps-shield{
     width:96px;height:96px;object-fit:contain;background:rgba(255,255,255,.92);
     border-radius:14px;padding:8px;margin:6px auto 14px;display:block;
     box-shadow:0 0 18px rgba(0,0,0,.4);
   }
-  #s-bayern-preseason .ps-vs{
+  #ps-stage .ps-vs{
     display:flex;align-items:center;justify-content:center;gap:14px;margin:10px 0 16px;
   }
-  #s-bayern-preseason .ps-vs .ps-team{flex:1;max-width:130px;}
-  #s-bayern-preseason .ps-vs .ps-shield{width:74px;height:74px;margin:0 auto 6px;}
-  #s-bayern-preseason .ps-vs .ps-tn{
+  #ps-stage .ps-vs .ps-team{flex:1;max-width:130px;}
+  #ps-stage .ps-vs .ps-shield{width:74px;height:74px;margin:0 auto 6px;}
+  #ps-stage .ps-vs .ps-tn{
     font-family:Oswald,sans-serif;font-size:13px;font-weight:700;color:#fff;
     letter-spacing:.5px;line-height:1.2;
   }
-  #s-bayern-preseason .ps-vs .ps-x{
+  #ps-stage .ps-vs .ps-x{
     font-family:'Bebas Neue',sans-serif;font-size:26px;color:#ffd750;flex:0 0 auto;
   }
-  #s-bayern-preseason .ps-btn{
+  #ps-stage .ps-btn{
     display:inline-block;border:none;border-radius:10px;cursor:pointer;
     padding:13px 30px;font-family:Oswald,sans-serif;font-size:15px;
     letter-spacing:2px;font-weight:700;color:#0d0310;
     background:linear-gradient(135deg,#ffe489,#f0c040);
     box-shadow:0 6px 16px rgba(240,192,64,.35);-webkit-tap-highlight-color:transparent;
   }
-  #s-bayern-preseason .ps-btn:disabled{opacity:.5;cursor:default;filter:grayscale(.4);}
-  #s-bayern-preseason .ps-btn.ghost{
+  #ps-stage .ps-btn:disabled{opacity:.5;cursor:default;filter:grayscale(.4);}
+  #ps-stage .ps-btn.ghost{
     background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.3);
     box-shadow:none;
   }
-  #s-bayern-preseason .ps-bar-wrap{
+  #ps-stage .ps-bar-wrap{
     height:14px;border-radius:8px;background:rgba(0,0,0,.45);overflow:hidden;
     margin:18px 6px 8px;border:1px solid rgba(255,255,255,.14);
   }
-  #s-bayern-preseason .ps-bar{
+  #ps-stage .ps-bar{
     height:100%;width:0%;border-radius:8px;
     background:linear-gradient(90deg,#36d27a,#9be15d,#ffe066);
     transition:width 3s linear;
   }
-  #s-bayern-preseason .ps-bar.injury{background:linear-gradient(90deg,#ff5c5c,#ff2d6f);}
-  #s-bayern-preseason .ps-result{
+  #ps-stage .ps-bar.injury{background:linear-gradient(90deg,#ff5c5c,#ff2d6f);}
+  #ps-stage .ps-result{
     margin-top:14px;font-family:Oswald,sans-serif;font-size:16px;letter-spacing:1.5px;
     min-height:22px;color:#bdf5c8;
   }
-  #s-bayern-preseason .ps-meta{
+  #ps-stage .ps-meta{
     font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.85);
     margin:4px 0;line-height:1.5;
   }
-  #s-bayern-preseason .ps-tag{
+  #ps-stage .ps-tag{
     display:inline-block;margin:3px 4px;padding:4px 10px;border-radius:999px;
     font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.4px;
     background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.18);color:#ffe4a8;
   }
-  #s-bayern-preseason .ps-bajas{
+  #ps-stage .ps-bajas{
     margin:12px 8px 0;padding:10px 12px;border-radius:10px;font-family:Rajdhani,sans-serif;
     font-size:13px;line-height:1.5;text-align:left;
   }
-  #s-bayern-preseason .ps-bajas.ok{background:rgba(40,160,80,.18);border:1px solid rgba(80,220,140,.4);color:#bff5cf;}
-  #s-bayern-preseason .ps-bajas.ko{background:rgba(200,40,60,.18);border:1px solid rgba(255,110,130,.45);color:#ffc7cf;}
-  #s-bayern-preseason .ps-opts{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0 4px;}
-  #s-bayern-preseason .ps-opt{
+  #ps-stage .ps-bajas.ok{background:rgba(40,160,80,.18);border:1px solid rgba(80,220,140,.4);color:#bff5cf;}
+  #ps-stage .ps-bajas.ko{background:rgba(200,40,60,.18);border:1px solid rgba(255,110,130,.45);color:#ffc7cf;}
+  #ps-stage .ps-opts{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0 4px;}
+  #ps-stage .ps-opt{
     font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;background:rgba(0,0,0,.3);
     border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:6px 10px;
   }
@@ -843,10 +834,9 @@ window._showSimProgress = function(opts, onDone){
   #ps-injury-ov .ps-inj-row b{color:#ffd0d6;font-weight:600;}
   #ps-injury-ov .ps-inj-row span{color:#fff;font-weight:700;text-align:right;}
   #ps-injury-ov .ps-btn{margin-top:16px;}
-  .hub-card-preseason{align-items:center !important;justify-content:center !important;text-align:center;background:radial-gradient(ellipse at center,rgba(255,196,64,.22),rgba(0,0,0,.30) 65%),linear-gradient(160deg,rgba(120,70,0,.6),rgba(0,0,0,.5)) !important;border:1px solid rgba(255,200,64,.55) !important;box-shadow:0 0 14px rgba(255,196,64,.18),inset 0 0 18px rgba(255,196,64,.06) !important;gap:4px !important;}
-  .hub-preseason-emoji{font-size:30px;line-height:1;filter:drop-shadow(0 0 10px rgba(255,196,64,.55));margin-bottom:2px;}
-  .hub-preseason-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:2px;color:#ffd750;text-shadow:0 0 8px rgba(255,215,80,.6),0 1px 0 rgba(0,0,0,.55);white-space:nowrap;}
-  .hub-preseason-sub{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,228,168,.85);text-transform:uppercase;}
+  /* El #ps-stage vive dentro del bloque "Próximo partido"; quitamos
+     el margen lateral del .ps-card para que encaje en esa caja. */
+  #ps-stage .ps-card{margin:0;}
 </style>
 
 <div id="ps-injury-ov" onclick="if(event.target===this)return;"></div>
@@ -966,6 +956,7 @@ window._showSimProgress = function(opts, onDone){
     var max = Math.max(0, rows.length - 1);
     d.dayIdx = Math.min((parseInt(d.dayIdx,10)||0) + 1, max);
     _save(d);
+    window.__psBusy = false;   /* el día se resolvió: liberar render */
     _syncMarker();
     _render();
   }
@@ -1050,6 +1041,7 @@ window._showSimProgress = function(opts, onDone){
     if (!btn) return;
     btn.onclick = function(){
       btn.disabled = true;
+      window.__psBusy = true;   /* bloquea re-render externo durante la barra */
       var inj = _rollInjury();              /* cálculo en el segundo 0 */
       if (inj) bar.classList.add('injury');
       /* fuerza reflow para que la transición 0→100% se vea */
@@ -1161,8 +1153,29 @@ window._showSimProgress = function(opts, onDone){
     if (skip) skip.onclick = function(){ _markDoneAndAdvance(); };
   }
 
+  function _dayLabel(day){
+    if (!day) return '';
+    if (day.type === 'train') return '🏃 Entrenamiento · ' + day.date;
+    if (day.type === 'rest')  return (/\bag-sel\b/.test(day.cls)?'🌍 ':'💤 ') + (day.label||'Descanso') + ' · ' + day.date;
+    return '🌞 ' + (day.label || 'Partido') + ' · ' + day.date;
+  }
+  window._psCurrentLabel = function(){
+    var rows = _calRows(); if (!rows.length) return '';
+    var d = _load();
+    var idx = Math.min(Math.max(0, parseInt(d.dayIdx,10)||0), rows.length-1);
+    return _dayLabel(rows[idx]);
+  };
+
   function _render(){
     var st = _stage(); if (!st) return;
+    /* No reconstruir mientras la barra de ENTRENAR corre / modal de
+       lesión abierto (un updateHud externo no debe pisar la animación
+       en curso). PERO solo si ya hay una tarjeta pintada: si el stage
+       está vacío (p.ej. se navegó fuera a mitad), un flag colgado no
+       debe dejarlo en blanco para siempre → renderizamos igualmente. */
+    if (window.__psBusy && st.querySelector('.ps-card')) return;
+    if (window.__psBusy) window.__psBusy = false;
+    var rows = _calRows();
     var rows = _calRows();
     if (!rows.length){
       st.innerHTML = '<div class="ps-card"><div class="ps-sub">Cargando calendario…</div></div>';
@@ -1175,30 +1188,25 @@ window._showSimProgress = function(opts, onDone){
     if (day.type === 'train')      _cardTraining(day);
     else if (day.type === 'rest')  _cardRest(day);
     else                           _cardMatch(day);
-    var sub = document.getElementById('munich-preseason-sub');
-    if (sub) sub.textContent = day.date;
+    /* Etiqueta "Próximo partido" del hub sincronizada con el día
+       (updateHud no se llama al avanzar desde la tarjeta). */
+    var mEl = document.getElementById('munich-next-match');
+    if (mEl) mEl.textContent = _dayLabel(day);
   }
 
-  window._bayernPreseasonOpen = function(){
-    try { if (typeof go === 'function') go('s-bayern-preseason'); } catch(_){}
-    [0, 120, 400, 900].forEach(function(t){ setTimeout(_render, t); });
-  };
-
-  /* Re-render al activarse la pantalla (cubre navegación por router). */
-  function _wire(){
-    var scr = document.getElementById('s-bayern-preseason');
-    if (!scr) return;
-    if (scr.classList.contains('active')) _render();
+  /* El render lo dispara updateHud() del hub (rama "torneo elegido")
+     y _advance() tras resolver cada día. Exponemos _render para el
+     hub y un pre-render por si el torneo ya estaba elegido al cargar. */
+  window._psRender = _render;
+  function _bootStage(){
     try {
-      new MutationObserver(function(m){
-        for (var i=0;i<m.length;i++){
-          if (m[i].attributeName === 'class' && scr.classList.contains('active')){ _render(); return; }
-        }
-      }).observe(scr, { attributes:true, attributeFilter:['class'] });
+      var d = _load();
+      if (d && d.tour) _render();
     } catch(_){}
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wire);
-  else _wire();
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', function(){ [0,400,1200].forEach(function(t){ setTimeout(_bootStage,t); }); });
+  else [0,400,1200].forEach(function(t){ setTimeout(_bootStage,t); });
 })();
 </script>
 
@@ -25428,11 +25436,6 @@ Tottenham
     <span class="hub-isramax-title">ISRAMAX</span>
     <span class="hub-isramax-sub" id="munich-isramax-bets">0</span>
   </button>
-  <button class="hub-card hub-card-preseason" onclick="window._bayernPreseasonOpen&&window._bayernPreseasonOpen()">
-    <span class="hub-preseason-emoji">🌞</span>
-    <span class="hub-preseason-title">PRETEMPORADA</span>
-    <span class="hub-preseason-sub" id="munich-preseason-sub">Día a día</span>
-  </button>
 </section>
 <section class="hub-match-engine">
   <div class="hub-fixture">
@@ -25494,6 +25497,12 @@ Tottenham
       <button type="button" class="munich-tour-confirm" id="munich-tour-confirm"
               onclick="window.muTourConfirm()">✅ CONFIRMAR 0/1</button>
     </div>
+
+    <!-- PRETEMPORADA día a día (Módulos 2-5). Tras elegir torneo,
+         updateHud() oculta el picker + los visuales/botones legacy
+         y muestra aquí la tarjeta del día (Entrenar/Descanso/Partido).
+         ENTRENAR/CONTINUAR/JUGAR avanzan al día siguiente in-place. -->
+    <div id="ps-stage" style="display:none;"></div>
 
     <div class="munich-training-visual" id="munich-visual-training">
       <div class="munich-training-bg"></div>
@@ -28974,6 +28983,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (state.pickedTours.length < 1) {
       if (visTraining) visTraining.style.display = 'none';
       if (visMatch)    visMatch.style.display    = 'none';
+      var _psHide = getEl('ps-stage');
+      if (_psHide) _psHide.style.display = 'none';
       renderTourPicker();
       if (matchEl) matchEl.textContent = '🌞 PRETEMPORADA · Elige 1 torneo';
       if (state.injured) {
@@ -28992,56 +29003,23 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var resetBtnEl = getEl('munich-tour-reset');
     if (resetBtnEl) resetBtnEl.classList.add('show');
 
-    var evt = state.events[state.eventIdx];
-    if (!evt) {
-      /* Temporada terminada: estado neutro. */
-      if (matchEl) matchEl.textContent = '🏁 Temporada finalizada';
-      if (visTraining) visTraining.style.display = '';
-      if (visMatch)    visMatch.style.display    = 'none';
-      if (trainLbl)    trainLbl.textContent      = '🏁 FIN DE TEMPORADA';
-    } else {
-      /* El HUD debe reflejar EXACTAMENTE lo que muestra la AGENDA
-         32-33 para esa fecha (la AGENDA es la única fuente de verdad).
-         Si el evento es `ag-torneo` y Bayern ha elegido el torneo que
-         cubre esa fecha, resolvemos la bandera + nombre reales del
-         torneo (p. ej. "🇬🇧 Premier Summer Series"). Si no está
-         picked, se queda con el label genérico "🌞 Torneo
-         Pretemporada · J1" — igual que la AGENDA. NO degradamos a
-         entrenamiento: si la agenda dice que hay partido, hay partido. */
-      var tourInfo = (evt.typeCls === 'ag-torneo') ? resolveTourEvent(evt.date) : null;
-      var evtIcon  = tourInfo ? tourInfo.flag : evt.type.icon;
-      var evtLabel = tourInfo ? (tourInfo.name + ' · ' + evt.label) : evt.label;
-      if (matchEl) matchEl.textContent = evtIcon + ' ' + evtLabel + ' · ' + evt.date;
-
-      if (!evt.type.bayernPlays) {
-        /* Selecciones / día de descanso del club → escena de
-           entrenamiento con etiqueta contextual. */
-        if (visTraining) visTraining.style.display = '';
-        if (visMatch)    visMatch.style.display    = 'none';
-        if (trainLbl)    trainLbl.textContent      = evtIcon + ' ' + evtLabel.toUpperCase();
-      } else {
-        /* Día de partido del Bayern → escudos + badge competición. */
-        if (visTraining) visTraining.style.display = 'none';
-        if (visMatch)    visMatch.style.display    = 'flex';
-        if (trainLbl)    trainLbl.textContent      = '🏋️ ENTRENAMIENTO';
-        var awayShieldEl = getEl('munich-away-shield');
-        var awayNameEl   = getEl('munich-away-name');
-        var compEl       = getEl('munich-match-comp');
-        var compText = tourInfo
-          ? (tourInfo.flag + ' ' + tourInfo.short)
-          : (evt.type.icon + ' ' + evt.type.compName.toUpperCase());
-        if (compEl) compEl.textContent = compText;
-        var oppName = null;
-        if (evt.type.lookupOpp === 'liga') {
-          var mJ = /J(\d+)/.exec(evt.label);
-          var jorn = mJ ? parseInt(mJ[1], 10) : 0;
-          var opp = getLigaOpponent(jorn);
-          if (opp && opp.opp) oppName = opp.opp;
-        }
-        if (!oppName) oppName = 'Rival por definir';
-        if (awayShieldEl) awayShieldEl.src = getShieldPath(oppName);
-        if (awayNameEl)   awayNameEl.textContent = oppName;
-      }
+    /* Torneo elegido → el bloque "Próximo partido" SE CONVIERTE en la
+       PRETEMPORADA día a día (#ps-stage). Ocultamos los visuales y
+       botones legacy (escena entrenamiento / partido + JUGAR /
+       SIGUIENTE DÍA); el avance de día lo gestionan las propias
+       tarjetas (Entrenar/Continuar/Jugar). */
+    if (visTraining) visTraining.style.display = 'none';
+    if (visMatch)    visMatch.style.display    = 'none';
+    var _hubActionsEl = document.querySelector('#s-munich .hub-actions');
+    if (_hubActionsEl) _hubActionsEl.style.display = 'none';
+    var _psStageEl = getEl('ps-stage');
+    if (_psStageEl) _psStageEl.style.display = 'block';
+    if (typeof window._psRender === 'function') {
+      try { window._psRender(); } catch(_){}
+    }
+    if (matchEl) {
+      var _psLbl = (typeof window._psCurrentLabel === 'function') ? window._psCurrentLabel() : '';
+      matchEl.textContent = _psLbl || '🌞 Pretemporada · Día a Día';
     }
 
     if (state.injured) {

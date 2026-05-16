@@ -28546,6 +28546,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var curEvt = state.events && state.events[state.eventIdx];
       calFechaEl.textContent = (curEvt && curEvt.date) ? curEvt.date : '01 Jul';
     }
+    /* Mueve el marcador rosa/morado del calendario a la fila del
+       día actual (SIGUIENTE DÍA → baja una fila). Idempotente. */
+    if (typeof window._bayernCalMarkToday === 'function') {
+      try { window._bayernCalMarkToday(); } catch(_){}
+    }
     /* PLANTILLA \u00b7 badge tirita: visible solo si hay >=1 jugador del
        Bayern con LESION_STORE activa (partidos > 0). LESION_STORE
        lo poblan los partidos al ocurrir una lesi\u00f3n (gen\u00e9rico, no

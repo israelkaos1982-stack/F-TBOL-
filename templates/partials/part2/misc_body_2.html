@@ -17887,22 +17887,20 @@
   }
 
   /* ── Marcador del día actual ───────────────────────────────────
-     Lee la fecha en curso del Bayern (state legacy del HUB s-munich,
-     fallback al chip #munich-cal-fecha) y pone .ag-today-marker en
-     la fila cuyo .ag-date coincide. La clase es única en toda la
-     pantalla: cada llamada limpia la anterior, así el marcador
-     "baja" solo al avanzar de día. */
-  function _currentBayernDate(){
+     El marcador rosa/morado se coloca por POSICIÓN, no por fecha:
+     la fila Nº = días transcurridos (state.eventIdx del HUB
+     s-munich, 0 = inicio de temporada → 1ª fila = "01 Jul").
+     Cada SIGUIENTE DÍA incrementa eventIdx y el borde "baja" una
+     fila. Posición > nº de filas → se ancla a la última. La clase
+     es única en toda la pantalla (cada llamada limpia la anterior). */
+  function _currentDayIdx(){
     try {
       var st = window._bayernLegacyState;
-      if (st && st.events && st.events.length){
-        var e = st.events[st.eventIdx || 0];
-        if (e && e.date) return String(e.date).trim();
-      }
+      var n = st && st.eventIdx;
+      n = parseInt(n, 10);
+      if (!isNaN(n) && n >= 0) return n;
     } catch(_){}
-    var f = document.getElementById('munich-cal-fecha');
-    if (f && f.textContent) return f.textContent.trim();
-    return null;
+    return 0;
   }
   window._bayernCalMarkToday = function(){
     var screen = document.getElementById('s-agenda');
@@ -17910,21 +17908,18 @@
     var bayOn = document.body.classList.contains('bayern-cal-on');
     var host  = document.getElementById(bayOn ? 'ag-content-bayern' : 'ag-content');
     if (!host) return;
-    var dateStr = _currentBayernDate();
     screen.querySelectorAll('.ag-r.ag-today-marker').forEach(function(r){
       r.classList.remove('ag-today-marker');
     });
-    if (!dateStr) return;
     var rows = host.querySelectorAll('.ag-r');
-    var target = null;
-    for (var i = 0; i < rows.length; i++){
-      var de = rows[i].querySelector('.ag-date');
-      if (de && de.textContent.trim() === dateStr){ target = rows[i]; break; }
-    }
+    if (!rows.length) return;
+    var idx = _currentDayIdx();
+    if (idx > rows.length - 1) idx = rows.length - 1;
+    var target = rows[idx];
     if (!target) return;
     target.classList.add('ag-today-marker');
-    if (screen.classList.contains('active') && host._agTodaySig !== dateStr){
-      host._agTodaySig = dateStr;
+    if (screen.classList.contains('active') && host._agTodaySig !== idx){
+      host._agTodaySig = idx;
       try { target.scrollIntoView({ block:'center', behavior:'smooth' }); }
       catch(_){ try { target.scrollIntoView(); } catch(__){} }
     }
@@ -18192,6 +18187,28 @@
        allí cuando NO estamos en modo Bayern. */
     var bb = document.querySelector('#s-agenda .back-btn');
     if (bb) bb.setAttribute('onclick', "go('s-home')");
+  };
+
+  /* ── Apertura robusta del calendario Bayern ────────────────────
+     El MutationObserver de .active a veces no dispara el render en
+     la PRIMERA entrada (cadena de wrappers de `go`, timing del
+     SPA) → la pantalla se veía vacía hasta salir y volver a entrar.
+     Este helper navega y FUERZA activate+render en cascada, sin
+     depender del observer. Idempotente (cada activate re-renderiza). */
+  window._bayernCalOpen = function(){
+    window._agendaBackTo = 's-munich';
+    window._bayernCalContext = true;
+    try { if (typeof go === 'function') go('s-agenda'); } catch(_){}
+    [0, 90, 250, 600, 1200].forEach(function(ms){
+      setTimeout(function(){
+        if (!window._bayernCalContext) return;
+        var bay = document.getElementById('ag-content-bayern');
+        /* Ya renderizado y en modo Bayern → no re-renderizar. */
+        if (document.body.classList.contains('bayern-cal-on') &&
+            bay && bay.querySelector('.ag-r')) return;
+        try { window._bayernCalActivate(); } catch(_){}
+      }, ms);
+    });
   };
 
   /* ── Hook: cuando s-agenda recibe .active y _bayernCalContext ── */

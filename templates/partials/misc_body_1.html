@@ -833,6 +833,14 @@ window._showSimProgress = function(opts, onDone){
   #ps-injury-ov .ps-inj-row:last-of-type{border-bottom:none;}
   #ps-injury-ov .ps-inj-row b{color:#ffd0d6;font-weight:600;}
   #ps-injury-ov .ps-inj-row span{color:#fff;font-weight:700;text-align:right;}
+  #ps-injury-ov .ps-inj-card{
+    margin:10px 0;padding:10px 12px;border-radius:10px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,110,130,.3);
+  }
+  #ps-injury-ov .ps-inj-name{
+    font-family:Oswald,sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;
+    color:#ff9aa6;margin-bottom:6px;text-align:left;
+  }
   #ps-injury-ov .ps-btn{margin-top:16px;}
   /* El #ps-stage vive dentro del bloque "Próximo partido"; quitamos
      el margen lateral del .ps-card para que encaje en esa caja. */
@@ -963,17 +971,13 @@ window._showSimProgress = function(opts, onDone){
 
   /* ── Módulo 3: lesión (sistema preexistente: LESION_STORE +
         BAJA_STORE, misma tabla de severidad que el resto del app) ─ */
-  function _rollInjury(){
-    if (Math.random() >= 0.05) return null;          /* 95% limpio */
-    var squad = _bayernSquad();
-    var pool = squad.filter(function(p){
-      var nm = p && p.name; if (!nm) return false;
-      if (window.BAJA_STORE && window.BAJA_STORE[nm]) return false;
-      if (window.LESION_STORE && window.LESION_STORE[nm] && Number(window.LESION_STORE[nm].partidos)>0) return false;
-      return true;
-    });
+  /* Crea UNA lesión sobre un jugador sacado (y eliminado) del pool,
+     escribe LESION_STORE/BAJA_STORE (sistema preexistente) y devuelve
+     el objeto para la ficha médica. */
+  function _injureOne(pool){
     if (!pool.length) return null;
-    var pl = pool[Math.floor(Math.random()*pool.length)];
+    var pi = Math.floor(Math.random()*pool.length);
+    var pl = pool.splice(pi,1)[0];
     var r = Math.random(), grado, gradoNombre, gradoEmoji, partidos, list;
     if (r < 0.55){ grado=1; gradoNombre='Leve'; gradoEmoji='🩹'; partidos=1+Math.floor(Math.random()*2);
       list=['Sobrecarga muscular','Contusión en el cuádriceps','Esguince de tobillo Grado I','Calambre persistente','Elongación del aductor']; }
@@ -998,16 +1002,46 @@ window._showSimProgress = function(opts, onDone){
     };
   }
 
-  function _showInjuryModal(inj){
+  /* Lesiones del entrenamiento (cálculo en el segundo 0):
+       · 2%  → 2 jugadores lesionados
+       · 5%  → 1 jugador lesionado
+       · 93% → ninguno  (≈95% "limpio")
+     Siempre de la plantilla del Bayern, sin repetir y sin tocar a
+     los que ya estén lesionados. Devuelve un array (0, 1 o 2). */
+  function _rollInjuries(){
+    var r = Math.random();
+    var count = r < 0.02 ? 2 : (r < 0.07 ? 1 : 0);
+    if (!count) return [];
+    var squad = _bayernSquad();
+    var pool = squad.filter(function(p){
+      var nm = p && p.name; if (!nm) return false;
+      if (window.BAJA_STORE && window.BAJA_STORE[nm]) return false;
+      if (window.LESION_STORE && window.LESION_STORE[nm] && Number(window.LESION_STORE[nm].partidos)>0) return false;
+      return true;
+    });
+    var out = [];
+    for (var i=0; i<count && pool.length; i++){
+      var inj = _injureOne(pool);
+      if (inj) out.push(inj);
+    }
+    return out;
+  }
+
+  function _showInjuryModal(injs){
     var ov = document.getElementById('ps-injury-ov');
-    if (!ov) return;
+    if (!ov || !injs || !injs.length) return;
+    var blocks = injs.map(function(inj){
+      return '<div class="ps-inj-card">'
+        + '<div class="ps-inj-name">' + (inj.emoji||'🚑') + ' ' + _esc(inj.name) + '</div>'
+        + '<div class="ps-inj-row"><b>Posición</b><span>' + _esc(inj.pos) + '</span></div>'
+        + '<div class="ps-inj-row"><b>Tipo de lesión</b><span>' + _esc(inj.tipo) + '</span></div>'
+        + '<div class="ps-inj-row"><b>Días lesionado</b><span>' + inj.partidos + ' partido(s)</span></div>'
+        + '</div>';
+    }).join('');
     ov.innerHTML =
       '<div class="ps-inj-box">'
-      + '<div class="ps-inj-title">' + (inj.emoji||'🚑') + ' PARTE MÉDICO</div>'
-      + '<div class="ps-inj-row"><b>Nombre</b><span>' + _esc(inj.name) + '</span></div>'
-      + '<div class="ps-inj-row"><b>Posición</b><span>' + _esc(inj.pos) + '</span></div>'
-      + '<div class="ps-inj-row"><b>Tipo de lesión</b><span>' + _esc(inj.tipo) + '</span></div>'
-      + '<div class="ps-inj-row"><b>Días lesionado</b><span>' + inj.partidos + ' partido(s)</span></div>'
+      + '<div class="ps-inj-title">🚑 PARTE MÉDICO · ' + injs.length + ' BAJA' + (injs.length>1?'S':'') + '</div>'
+      + blocks
       + '<button type="button" class="ps-btn" id="ps-inj-close">ACEPTAR Y CONTINUAR</button>'
       + '</div>';
     ov.classList.add('show');
@@ -1042,16 +1076,16 @@ window._showSimProgress = function(opts, onDone){
     btn.onclick = function(){
       btn.disabled = true;
       window.__psBusy = true;   /* bloquea re-render externo durante la barra */
-      var inj = _rollInjury();              /* cálculo en el segundo 0 */
-      if (inj) bar.classList.add('injury');
+      var injs = _rollInjuries();           /* cálculo en el segundo 0 */
+      if (injs.length) bar.classList.add('injury');
       /* fuerza reflow para que la transición 0→100% se vea */
       void bar.offsetWidth;
       bar.style.width = '100%';
       setTimeout(function(){
-        if (inj){
-          res.textContent = inj.emoji + ' Incidente en el entrenamiento';
+        if (injs.length){
+          res.textContent = '🚑 ' + injs.length + ' lesión(es) en el entrenamiento';
           res.style.color = '#ffb3b3';
-          _showInjuryModal(inj);
+          _showInjuryModal(injs);
         } else {
           res.textContent = '✅ No hay lesiones';
           res.style.color = '#bdf5c8';
@@ -1159,12 +1193,17 @@ window._showSimProgress = function(opts, onDone){
     if (day.type === 'rest')  return (/\bag-sel\b/.test(day.cls)?'🌍 ':'💤 ') + (day.label||'Descanso') + ' · ' + day.date;
     return '🌞 ' + (day.label || 'Partido') + ' · ' + day.date;
   }
-  window._psCurrentLabel = function(){
-    var rows = _calRows(); if (!rows.length) return '';
+  function _currentDay(){
+    var rows = _calRows(); if (!rows.length) return null;
     var d = _load();
     var idx = Math.min(Math.max(0, parseInt(d.dayIdx,10)||0), rows.length-1);
-    return _dayLabel(rows[idx]);
-  };
+    return rows[idx];
+  }
+  window._psCurrentLabel = function(){ var c=_currentDay(); return c?_dayLabel(c):''; };
+  /* Fecha del día actual de pretemporada (ej. "01 Jul") para que la
+     tarjeta CALENDARIO del hub muestre el día real, no el evento
+     legacy (que saltaba a "04 Jul"). */
+  window._psCurrentDate = function(){ var c=_currentDay(); return c?c.date:''; };
 
   function _render(){
     var st = _stage(); if (!st) return;
@@ -1192,6 +1231,10 @@ window._showSimProgress = function(opts, onDone){
        (updateHud no se llama al avanzar desde la tarjeta). */
     var mEl = document.getElementById('munich-next-match');
     if (mEl) mEl.textContent = _dayLabel(day);
+    /* La tarjeta CALENDARIO del hub muestra el día real (sincronizado
+       con el avance día a día), no el evento legacy. */
+    var cfEl = document.getElementById('munich-cal-fecha');
+    if (cfEl && day && day.date) cfEl.textContent = day.date;
   }
 
   /* El render lo dispara updateHud() del hub (rama "torneo elegido")
@@ -29038,8 +29081,16 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        no hay events, default "01 Jul" (inicio de temporada). */
     var calFechaEl = getEl('munich-cal-fecha');
     if (calFechaEl) {
-      var curEvt = state.events && state.events[state.eventIdx];
-      calFechaEl.textContent = (curEvt && curEvt.date) ? curEvt.date : '01 Jul';
+      /* Si la pretemporada está activa, la tarjeta CALENDARIO muestra
+         el DÍA real del cursor día a día (01 Jul, 02 Jul…), no el
+         evento legacy disperso (que saltaba a "04 Jul"). */
+      var psDate = (typeof window._psCurrentDate === 'function') ? window._psCurrentDate() : '';
+      if (psDate) {
+        calFechaEl.textContent = psDate;
+      } else {
+        var curEvt = state.events && state.events[state.eventIdx];
+        calFechaEl.textContent = (curEvt && curEvt.date) ? curEvt.date : '01 Jul';
+      }
     }
     /* Mueve el marcador rosa/morado del calendario a la fila del
        día actual (SIGUIENTE DÍA → baja una fila). Idempotente. */

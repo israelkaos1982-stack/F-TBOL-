@@ -221,10 +221,17 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 .ml-score{transition:color .3s,border-color .3s,box-shadow .3s;}
 .ml-score.state-pending span{color:#fff!important;}
 .ml-score.state-pending{border-color:rgba(255,255,255,.2)!important;box-shadow:none!important;color:#fff!important;text-shadow:none!important;}
-.ml-score.state-playing span{color:#ff4040!important;}
-.ml-score.state-playing{border-color:rgba(255,60,60,.5)!important;box-shadow:0 0 10px rgba(255,60,60,.2)!important;color:#ff4040!important;text-shadow:none!important;animation:scorePulse 2s ease-in-out infinite;}
-.ml-score.state-finished span{color:#36d66b!important;}
-.ml-score.state-finished{border-color:rgba(54,214,107,.5)!important;box-shadow:0 0 10px rgba(54,214,107,.2)!important;color:#36d66b!important;text-shadow:none!important;}
+/* VISIBILIDAD 2026-05-12: el rojo #ff4040 / verde #36d66b sin
+   text-shadow sobre el fondo casi negro de las cards IA-vs-IA
+   (Copa, Liga, Resto, eur-fase) era prácticamente invisible — el
+   usuario no veía el marcador en vivo mientras salían los eventos.
+   Subimos a colores más claros + neon glow + font-weight 900. */
+.ml-score.state-playing span{color:#ff8088!important;}
+.ml-score.state-playing{border-color:rgba(255,80,96,.7)!important;box-shadow:0 0 14px rgba(255,60,80,.45)!important;color:#ff8088!important;text-shadow:0 0 7px rgba(255,90,105,.95),0 0 15px rgba(255,50,70,.6)!important;font-weight:900!important;animation:scorePulse 2s ease-in-out infinite;}
+.ml-score.state-playing span,.ml-score.state-playing{text-shadow:0 0 7px rgba(255,90,105,.95),0 0 15px rgba(255,50,70,.6)!important;}
+.ml-score.state-finished span{color:#62f08e!important;}
+.ml-score.state-finished{border-color:rgba(94,239,139,.7)!important;box-shadow:0 0 14px rgba(54,214,107,.45)!important;color:#62f08e!important;text-shadow:0 0 7px rgba(98,240,142,.95),0 0 15px rgba(54,214,107,.6)!important;font-weight:900!important;}
+.ml-score.state-finished span{text-shadow:0 0 7px rgba(98,240,142,.95),0 0 15px rgba(54,214,107,.6)!important;}
 @keyframes scorePulse{0%,100%{box-shadow:0 0 8px rgba(255,60,60,.15)}50%{box-shadow:0 0 16px rgba(255,60,60,.35)}}
 @keyframes mlTimerLivePulse{0%,100%{transform:scale(1);box-shadow:0 0 8px rgba(255,70,70,.2);}50%{transform:scale(1.06);box-shadow:0 0 18px rgba(255,70,70,.45);}}
 /* GOOOOL flash text */

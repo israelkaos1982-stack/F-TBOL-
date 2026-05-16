@@ -17852,11 +17852,22 @@
      fila. Posición > nº de filas → se ancla a la última. La clase
      es única en toda la pantalla (cada llamada limpia la anterior). */
   function _currentDayIdx(){
+    /* Fuente única: el cursor de día de la Pretemporada
+       (bayern_preseason_v1.dayIdx) — índice sobre TODAS las filas
+       del calendario. Así el marcador rosa y la pantalla de
+       Pretemporada van siempre sincronizados día a día. */
+    try {
+      var raw = localStorage.getItem('bayern_preseason_v1');
+      if (raw){
+        var d = JSON.parse(raw);
+        var n = d && parseInt(d.dayIdx, 10);
+        if (!isNaN(n) && n >= 0) return n;
+      }
+    } catch(_){}
     try {
       var st = window._bayernLegacyState;
-      var n = st && st.eventIdx;
-      n = parseInt(n, 10);
-      if (!isNaN(n) && n >= 0) return n;
+      var e = st && parseInt(st.eventIdx, 10);
+      if (!isNaN(e) && e >= 0) return e;
     } catch(_){}
     return 0;
   }

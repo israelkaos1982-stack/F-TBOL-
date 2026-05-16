@@ -24329,6 +24329,60 @@ document.addEventListener('DOMContentLoaded', function() {
 (function(){
   function $(id){ return document.getElementById(id); }
   var _shown = false;
+  /* ── Barra de progreso REAL/animada (2026-05-12) ─────────────────
+     Petición usuario: la barra saltaba 0→30→60→88→95 y se congelaba
+     en 95 % varios minutos mientras el server respondía. Quiere que
+     vaya "real, 0-1-2-3…100 %" según el tiempo de espera. No podemos
+     conocer el progreso exacto de un fetch, así que aplicamos el
+     patrón "trickle" (estilo NProgress/YouTube):
+       · `progress(p)` fija un TARGET monotónico.
+       · Un loop rAF mueve la barra VISIBLE hacia el target con
+         easing; si el target no sube (espera larga del server), la
+         barra sigue avanzando lento y asintótico hacia ~99 % — el
+         usuario SIEMPRE ve movimiento, nunca un número congelado.
+       · `progress(100)` la lleva a 100 % rápido y termina. */
+  var _visPct = 0, _tgtPct = 0, _rafId = null, _animOn = false;
+  function _renderBar(){
+    var bar = $('ftbol-load-bar'); if (bar) bar.style.width = _visPct.toFixed(1) + '%';
+    var pct = $('ftbol-load-pct'); if (pct) pct.textContent = Math.floor(_visPct) + '%';
+  }
+  function _animStep(){
+    if (!_animOn) return;
+    if (_tgtPct >= 100) {
+      /* Cierre: acelera a 100. */
+      _visPct += Math.max(1.5, (100 - _visPct) * 0.34);
+      if (_visPct >= 100) { _visPct = 100; _renderBar(); _animOn = false; _rafId = null; return; }
+    } else if (_visPct < _tgtPct) {
+      /* Acercamiento al target con easing — rápido al principio. */
+      _visPct += Math.max(0.4, (_tgtPct - _visPct) * 0.16);
+      if (_visPct > _tgtPct) _visPct = _tgtPct;
+    } else {
+      /* Target alcanzado pero la tarea sigue (espera del server):
+         trickle asintótico hacia 99 — desacelera cuanto más alto. */
+      var cap = 99;
+      if (_visPct < cap) {
+        var room = cap - _visPct;
+        _visPct += Math.max(0.03, room * 0.012);
+        if (_visPct > cap) _visPct = cap;
+      }
+    }
+    _renderBar();
+    _rafId = (typeof requestAnimationFrame === 'function')
+      ? requestAnimationFrame(_animStep) : setTimeout(_animStep, 33);
+  }
+  function _startAnim(){
+    if (_animOn) return;
+    _animOn = true;
+    _rafId = (typeof requestAnimationFrame === 'function')
+      ? requestAnimationFrame(_animStep) : setTimeout(_animStep, 33);
+  }
+  function _stopAnim(){
+    _animOn = false;
+    if (_rafId != null) {
+      try { (typeof cancelAnimationFrame === 'function') ? cancelAnimationFrame(_rafId) : clearTimeout(_rafId); } catch(_){}
+      _rafId = null;
+    }
+  }
 
   /* Mapa de temas: cada uno define [primario, secundario, bg1, bg2]
      basado en los colores oficiales de cada competición (los mismos
@@ -24395,20 +24449,26 @@ document.addEventListener('DOMContentLoaded', function() {
     _setTheme(theme, title);
     if(title) { var t=$('ftbol-load-title'); if(t) t.textContent=title; }
     if(sub != null){ var s=$('ftbol-load-sub'); if(s) s.textContent=sub; }
+    _visPct = 0; _tgtPct = 0;
     var bar=$('ftbol-load-bar'); if(bar) bar.style.width='0%';
     var pct=$('ftbol-load-pct'); if(pct) pct.textContent='0%';
     ov.classList.add('show');
     ov.setAttribute('aria-hidden','false');
     _shown = true;
+    _startAnim();
   }
   function progress(percent, sub){
     if(!_shown) return;
     var p = Math.max(0, Math.min(100, Math.round(Number(percent)||0)));
-    var bar=$('ftbol-load-bar'); if(bar) bar.style.width=p+'%';
-    var pct=$('ftbol-load-pct'); if(pct) pct.textContent=p+'%';
+    /* Target monotónico — la barra visible la mueve `_animStep`
+       suavemente; aquí solo fijamos a dónde tiene que llegar. */
+    if (p > _tgtPct) _tgtPct = p;
+    if (p >= 100) _tgtPct = 100;
     if(sub != null){ var s=$('ftbol-load-sub'); if(s) s.textContent=sub; }
+    if (!_animOn) _startAnim();
   }
   function hide(){
+    _stopAnim();
     var ov = $('ftbol-load-ov'); if(!ov) return;
     ov.classList.remove('show');
     ov.setAttribute('aria-hidden','true');
@@ -24440,7 +24500,10 @@ document.addEventListener('DOMContentLoaded', function() {
           Promise.resolve(p).then(function(res){
             progress(100, 'Completado');
             var elapsed = Date.now() - t0;
-            var wait = Math.max(0, minMs - elapsed);
+            /* Mínimo 350 ms tras el 100 % para que la barra animada
+               llegue visiblemente a 100 antes de ocultar (antes con
+               wait=0 saltaba de ~95 a oculto sin verse el 100). */
+            var wait = Math.max(350, minMs - elapsed);
             setTimeout(function(){ hide(); resolve(res); }, wait);
           }, function(err){
             hide(); reject(err);

@@ -9503,7 +9503,24 @@ window._showSimProgress = function(opts, onDone){
     return Object.keys(leagues).sort().map(function(k){ return leagues[k]; });
   }
 
+  /* MEMOIZADO (petición usuario 2026-05-16: "crear un torneo tarda
+     >5 min"). `_allTeamsUncached` re-escanea TODO localStorage +
+     JSON.parse de cada ligaExt_* . Antes se llamaba en CADA pulsación
+     del editor (input → _updatePoolStat), en el sorteo, en el picker y
+     en la purga → con una BD grande eso eran segundos × decenas de
+     llamadas. Ahora cacheamos el resultado (TTL 20 s + invalidación
+     explícita al abrir el editor) y NO resolvemos escudo por equipo
+     aquí (sólo lo necesita el picker, y sólo para ≤20 filas). */
+  var _ALL_TEAMS_CACHE = null, _ALL_TEAMS_TS = 0;
+  window._invalidateTourTeamsCache = function(){ _ALL_TEAMS_CACHE = null; _ALL_TEAMS_TS = 0; };
   function _allTeams(){
+    var now = Date.now();
+    if (_ALL_TEAMS_CACHE && (now - _ALL_TEAMS_TS) < 20000) return _ALL_TEAMS_CACHE;
+    var res = _allTeamsUncached();
+    _ALL_TEAMS_CACHE = res; _ALL_TEAMS_TS = now;
+    return res;
+  }
+  function _allTeamsUncached(){
     var out = [], seen = {};
     /* Trackeamos TODAS las ligas en las que aparece cada equipo
        (2026-05-08, fix: el usuario excluyó Hypermotion + Primera
@@ -9523,16 +9540,21 @@ window._showSimProgress = function(opts, onDone){
       if (!isFinite(pw) || pw <= 0) pw = 70;
       if (seen[k]) {
         if (pw > seen[k].power) seen[k].power = pw;
+        if (shield && !seen[k].shield) seen[k].shield = shield;
         if (league && seen[k]._leagues.indexOf(league) === -1) {
           seen[k]._leagues.push(league);
           if (!seen[k]._league) seen[k]._league = league;
         }
         return;
       }
+      /* Escudo: usamos SOLO el que venga en los datos (t.shield). NO
+         llamamos a _shieldOf/getTeamLogoUrl por cada equipo aquí — eso
+         multiplicaba el coste por miles. El picker resuelve el escudo
+         de forma perezosa para las pocas filas visibles. */
       var leagues = league ? [league] : [];
       var entry = {
         name: clean, power: pw,
-        shield: shield || _shieldOf(clean),
+        shield: shield || '',
         _leagues: leagues,
         _league: league || ''
       };
@@ -9884,6 +9906,9 @@ window._showSimProgress = function(opts, onDone){
     /* Guard contra re-entrada: si el usuario tap-tap rápido, no
        reabrimos. */
     if (_open && _open.id === id) return;
+    /* Recalcula el pool 1 vez al abrir (por si se editaron plantillas);
+       las llamadas siguientes del editor reusan la cache → editor ágil. */
+    try { window._invalidateTourTeamsCache(); } catch(_){}
     var cached = _tourLoadCachedSync(id);
     var cfg = cached || _cloneDefault(id);
     _open = { id: id, cfg: cfg };
@@ -11061,7 +11086,7 @@ window._showSimProgress = function(opts, onDone){
        slots IA pedidos, abortamos con error visible. */
     var save = document.getElementById('tour-ed-save');
     if (save) {
-      save.addEventListener('click', async function(){
+      save.addEventListener('click', function(){
         if (!_open) return;
         _readForm(_open.cfg);
         var draw = _drawTeams(_open.cfg);
@@ -11070,22 +11095,22 @@ window._showSimProgress = function(opts, onDone){
           return;
         }
         _open.cfg.teams = draw.teams;
-        _setFeedback('Sorteando y guardando…');
-        var ok = await window._tourSave(_open.id, _open.cfg);
-        /* En CUALQUIER caso (server OK o fallo de red) el sorteo está
-           ya guardado en localStorage por `_tourSave`. Renderizamos el
-           bracket y cerramos el editor aunque el server haya fallado —
-           el usuario no se queda colgado en "Sorteando y guardando…".
-           Si la red falló, mostramos un aviso pero seguimos avanzando. */
-        if (ok) {
-          _setFeedback('✅ Sorteo confirmado · '+draw.teams.length+' equipos', true);
-        } else {
-          _setFeedback('✅ Sorteo guardado en local (server sin red)', false);
-        }
+        /* OPTIMISTA (petición usuario 2026-05-16: "crear un torneo
+           tarda >5 min"). El cuello de botella era el `await _tourSave`
+           bloqueando hasta 8 s por la red. `_tourSave` ya persiste en
+           localStorage + cache de forma SÍNCRONA antes de su primer
+           await, así que renderizamos y cerramos al instante; el sync
+           al server va en segundo plano. */
+        _setFeedback('✅ Sorteo confirmado · '+draw.teams.length+' equipos', true);
         try { window._tourRender(_open.id); } catch(_){}
+        try {
+          Promise.resolve(window._tourSave(_open.id, _open.cfg)).then(function(ok){
+            if (!ok) _setFeedback('✅ Sorteo guardado en local (server sin red)', false);
+          }).catch(function(){});
+        } catch(_){}
         setTimeout(function(){
           try { window._tourCloseEditor(); } catch(_){}
-        }, ok ? 900 : 1400);
+        }, 700);
       });
     }
     var reset = document.getElementById('tour-ed-reset');
@@ -11992,10 +12017,14 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     box.innerHTML = matches.map(function(t){
-      var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
+      /* Escudo perezoso: _allTeams ya no lo resuelve por equipo (coste
+         masivo). Aquí, sólo para las ≤20 filas visibles, caemos a
+         _shieldOf si el dato no traía escudo. */
+      var sh = t.shield || _shieldOf(t.name) || '';
+      var img = sh ? '<img src="'+sh+'" onerror="this.style.display=\'none\'">' : '';
       var isT = !!taken[t.name.toLowerCase()];
       var cls = isT ? 'tour-pick-row is-taken' : 'tour-pick-row';
-      return '<div class="'+cls+'" data-name="'+t.name.replace(/"/g,'&quot;')+'" data-s="'+(t.shield||'').replace(/"/g,'&quot;')+'" data-pw="'+t.power+'">'+
+      return '<div class="'+cls+'" data-name="'+t.name.replace(/"/g,'&quot;')+'" data-s="'+sh.replace(/"/g,'&quot;')+'" data-pw="'+t.power+'">'+
         img + '<span>'+t.name+'</span>' +
         '<span class="pw">'+t.power+'</span>' +
       '</div>';

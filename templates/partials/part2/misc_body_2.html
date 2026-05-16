@@ -17898,12 +17898,15 @@
   window._bayernCalMarkToday = function(){
     var screen = document.getElementById('s-agenda');
     if (!screen) return;
-    var bayOn = document.body.classList.contains('bayern-cal-on');
-    var host  = document.getElementById(bayOn ? 'ag-content-bayern' : 'ag-content');
-    if (!host) return;
+    /* El marcador es exclusivo del calendario del Bayern (la "caja
+       Bayern"). En el AGENDA global del resto de usuarios no se
+       pinta — solo limpiamos cualquier resto. */
     screen.querySelectorAll('.ag-r.ag-today-marker').forEach(function(r){
       r.classList.remove('ag-today-marker');
     });
+    if (!document.body.classList.contains('bayern-cal-on')) return;
+    var host = document.getElementById('ag-content-bayern');
+    if (!host) return;
     var rows = host.querySelectorAll('.ag-r');
     if (!rows.length) return;
     var idx = _currentDayIdx();
@@ -18243,6 +18246,19 @@
     document.addEventListener('DOMContentLoaded', _wireObserver);
   } else {
     _wireObserver();
+  }
+
+  /* PRE-RENDER al arrancar: _renderAll solo necesita el SSR
+     (#ag-content, siempre presente) + localStorage, así que
+     podemos construir #ag-content-bayern (oculto) ANTES de que
+     el humano pulse CALENDARIO. Al entrar se ve al instante en
+     lugar de quedar en blanco hasta salir y volver. Idempotente. */
+  function _bootCal(){ try { _renderAll(); } catch(_){} }
+  function _bootCalAll(){ [0,300,900,2000].forEach(function(t){ setTimeout(_bootCal,t); }); }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _bootCalAll);
+  } else {
+    _bootCalAll();
   }
 })();
 </script>

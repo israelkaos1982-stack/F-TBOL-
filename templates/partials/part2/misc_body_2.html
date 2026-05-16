@@ -10953,6 +10953,32 @@
       } else {
         _gmEndBtn.textContent = '🏁 FINALIZAR';
       }
+
+      /* ── PRÓRROGA (gm-btn-et): SOLO visible si realmente puede
+         haber prórroga — contexto eliminatoria + empate aún sin
+         resolver, ET no jugada, penaltis no jugados, no finalizado.
+         Si hay un ganador claro (p.ej. Copa del Rey 3-5) el botón
+         PRÓRROGA no tiene sentido: lo ocultamos y colapsamos su
+         fila para que FINALIZAR (ya migrado a su slot llamativo
+         bajo el acta) sea la ÚNICA acción del humano.
+         (2026-05-16 — foto usuario: Celta Fortuna 3-5 Atlético al
+         90+3' mostraba "PRÓRROGA" a pantalla completa pese a NO
+         haber empate). El botón vuelve a aparecer automáticamente
+         si el marcador se iguala antes del final de regulación. */
+      var _etBtnEl = document.getElementById('gm-btn-et');
+      if (_etBtnEl) {
+        var _showET = !!_shouldForceET && !_gm.etDone && !_gm.penDone && !_gm.finished;
+        _etBtnEl.style.display = _showET ? '' : 'none';
+        var _etRow = _etBtnEl.parentNode;
+        if (_etRow) {
+          if (_showET) {
+            _etRow.style.display = 'flex';
+          } else if (_etRow.classList && _etRow.classList.contains('gm-row-end-removed')) {
+            /* FINALIZAR ya migró a su slot → la fila quedó vacía. */
+            _etRow.style.display = 'none';
+          }
+        }
+      }
     }
     /* Botón ✎ de edición manual del minuto: solo cuando el cronómetro
        está pausado y el partido está en juego (no finalizado, no
@@ -23921,7 +23947,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </style>
 <script>
 (function(){
-  var ov, _safety, _anim, _newsAnim;
+  var ov, _safety, _anim, _animRaf, _animStop, _newsAnim;
   function _el(){ ov = ov || document.getElementById('ml-loading-ov'); return ov; }
 
   /* ── Generador de titulares post-partido (2026-05-08) ────────────
@@ -24063,21 +24089,61 @@ document.addEventListener('DOMContentLoaded', function() {
        sincronía con un tiempo realista de procesado. Si la siguiente
        pantalla aparece antes (vía MutationObserver _hide), la
        animación se interrumpe limpiamente. */
+    /* ── Driver dual rAF + setInterval con trickle (2026-05-16) ──────
+       FOTO 2 del usuario: "una vez finalizado el partido la pantalla
+       de carga no funciona, se queda en 0 %". Causa raíz: el
+       procesado post-partido (registro de stats, rebuild, saveData,
+       persistencias eur/copa) bloquea el hilo JS. Un único
+       `setInterval(50)` queda STARVED — su callback no corre hasta
+       que el hilo respira, y para entonces el MutationObserver ya
+       llamó `_hide()`, así que la barra nunca se despega del 0 %.
+
+       Fix canónico (mismo patrón que `ftbolLoaderRun`): rAF (exento
+       del throttling de timers y que repinta en cuanto el hilo
+       cede entre tareas largas) + setInterval de respaldo, con un
+       modelo TRICKLE: el valor visible SIEMPRE avanza hacia un
+       target basado en tiempo de pared, con un creep mínimo por
+       frame, de modo que en cuanto el hilo respira la barra salta
+       hacia adelante en lugar de quedarse clavada en 0 %. */
+    if (_animStop) { try { _animStop(); } catch(_){} _animStop = null; }
     if (_anim) { try { clearInterval(_anim); } catch(_){} _anim = null; }
+    try { if (_animRaf) cancelAnimationFrame(_animRaf); } catch(_){}
+    _animRaf = 0;
     if (_newsAnim) { try { clearInterval(_newsAnim); } catch(_){} _newsAnim = null; }
-    var pctVal = 0;
     var t0 = Date.now();
     var DURATION = 3000;
-    _anim = setInterval(function(){
+    var _vis = 0;        /* % visible (trickle, monótono) */
+    var _done = false;
+    function _frame(){
+      if (_done) return;
       var elapsed = Date.now() - t0;
-      pctVal = Math.min(100, Math.round((elapsed / DURATION) * 100));
-      if (bar) bar.style.width = pctVal + '%';
-      if (pct) pct.textContent = pctVal + '%';
-      if (pctVal >= 100) {
-        try { clearInterval(_anim); } catch(_){} _anim = null;
-        setTimeout(_hide, 80);
+      /* Target por tiempo: alcanza 92 % a DURATION y se queda ahí
+         esperando a que la siguiente pantalla / _hide lo cierre. */
+      var tgt = Math.min(92, (elapsed / DURATION) * 100);
+      if (_vis < tgt) {
+        /* Ease hacia el target con un mínimo de 0.6 %/frame para que
+           tras un bloqueo largo del hilo el salto sea visible. */
+        _vis = Math.min(tgt, _vis + Math.max(0.6, (tgt - _vis) * 0.18));
+      } else if (_vis < 92) {
+        /* Creep aunque el target aún no haya subido — nunca 0 %. */
+        _vis += 0.3;
       }
-    }, 50);
+      if (_vis > 99) _vis = 99;
+      var shown = Math.round(_vis);
+      if (bar) bar.style.width = shown + '%';
+      if (pct) pct.textContent = shown + '%';
+    }
+    (function _raf(){
+      _frame();
+      if (!_done) { try { _animRaf = requestAnimationFrame(_raf); } catch(_){ _animRaf = 0; } }
+    })();
+    _anim = setInterval(_frame, 60);
+    _animStop = function(){
+      _done = true;
+      try { if (_animRaf) cancelAnimationFrame(_animRaf); } catch(_){}
+      try { clearInterval(_anim); } catch(_){}
+      _anim = null; _animRaf = 0;
+    };
     /* Rotación de titulares cada 700 ms — solo si tenemos contexto
        suficiente (score). Sin ctx caemos a una secuencia neutra. */
     var lines = _mlGenNewsLines(ctx);
@@ -24097,10 +24163,22 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function _hide(){
     var e = _el(); if (!e) return;
-    e.classList.remove('show');
+    /* Snap a 100 % para cerrar con sensación de "completado" en vez
+       de desaparecer a medias (refuerza el fix de FOTO 2). */
+    try {
+      var _b = document.getElementById('ml-loading-bar');
+      var _p = document.getElementById('ml-loading-pct');
+      if (_b) _b.style.width = '100%';
+      if (_p) _p.textContent = '100%';
+    } catch(_){}
+    if (_animStop) { try { _animStop(); } catch(_){} _animStop = null; }
     if (_safety) { clearTimeout(_safety); _safety = null; }
     if (_anim) { try { clearInterval(_anim); } catch(_){} _anim = null; }
+    try { if (_animRaf) cancelAnimationFrame(_animRaf); } catch(_){}
+    _animRaf = 0;
     if (_newsAnim) { try { clearInterval(_newsAnim); } catch(_){} _newsAnim = null; }
+    /* Dejar el 100 % visible un instante antes de ocultar. */
+    setTimeout(function(){ try { e.classList.remove('show'); } catch(_){} }, 110);
   }
   window._mlShowLoading = _show;
   window._mlHideLoading = _hide;

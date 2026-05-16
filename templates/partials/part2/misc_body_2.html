@@ -11535,6 +11535,10 @@
       if (_firstKickoff) {
         _gm.kickoffDone = true;
         _gm.startedAt = _gm.startedAt || Date.now();
+        /* El partido ARRANCÓ → la recuperación pre-kickoff de eurFase
+           ya no aplica (reabrir en fresco perdería el progreso). Si el
+           tab muere ahora es un caso distinto fuera de alcance. */
+        try { if (typeof window._eurFaseClearPending === 'function') window._eurFaseClearPending(); } catch(_){}
       }
       gmStartTimer();
       gmRenderTimer(); /* feedback visual inmediato: botón → ⏸ */
@@ -12589,6 +12593,10 @@
                      + (_gm._eurFaseIdx || 0);
           window.registrarLigaPlayerStats(_efMk, _gm.home, _gm.away, _efStatsEv, _efMvpName, _efMvpTeam, _gm._eurFaseComp || 'ucl');
         }
+        /* Resultado guardado → ya no hay nada que recuperar. Limpia la
+           clave pre-kickoff por si el kickoff-clear no llegó a correr
+           (p.ej. auto-sim IA o flujos que saltan el ▶). 2026-05-16. */
+        try { if (typeof window._eurFaseClearPending === 'function') window._eurFaseClearPending(); } catch(_){}
       } catch(_e){}
     } else if (_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin') {
       /* Copa del Rey: persistimos en /api/copa/guardar_resultado vía

@@ -15869,9 +15869,31 @@ window._showSimProgress = function(opts, onDone){
      que gmEndMatch persista en {comp}_phase_v1. Mismo patrón que
      `abrirRecopa` / `abrirSc`. Lo invoca tanto el callback de la
      previa como cualquier "reabrir" futuro. */
+  /* Clave de recuperación: el partido pre-kickoff que estamos a punto
+     de abrir. En Android Chrome, compartir por WhatsApp manda la
+     pestaña a 2º plano y, con memoria baja, el SO la MATA — al volver
+     se recarga la página SIN estado JS (__GM_LIVE, _gm, callbacks
+     perdidos) y el usuario aterriza en el listado de Grupos sin la
+     card de simulación. Persistimos {comp,jor,idx,home,away,ts} en
+     localStorage ANTES de gmOpen para que un IIFE de boot pueda
+     reabrir el gm-modal tras la recarga. Se limpia en el kickoff
+     (el partido ya empezó → recuperación pre-kickoff ya no aplica) y
+     al guardar el resultado. 2026-05-16. */
+  var _EURFASE_PENDING_KEY = '_eurfase_pending_match';
+  window._eurFaseClearPending = function(){
+    try { localStorage.removeItem(_EURFASE_PENDING_KEY); } catch(_){}
+  };
   window.abrirEurFase = function(comp, jor, idx, home, away){
     var isHvH = _isHumanTeam(home) && _isHumanTeam(away);
     if(typeof window.gmOpen !== 'function') return;
+    /* Persistir ANTES de gmOpen — si gmOpen lanza o el tab muere
+       justo después, la clave ya está escrita y el boot la recupera. */
+    try {
+      localStorage.setItem(_EURFASE_PENDING_KEY, JSON.stringify({
+        comp: comp, jor: jor, idx: idx, home: home, away: away,
+        ts: Date.now()
+      }));
+    } catch(_){}
     try { window.gmOpen(0, home, away, isHvH, comp, false, false); } catch(e){
       try { console.error('[abrirEurFase] gmOpen falló', e); } catch(_){}
       return;
@@ -15941,6 +15963,53 @@ window._showSimProgress = function(opts, onDone){
       window.showPrePartidoOverlay(matchKey, comp, 'No', duracion, isHvH);
     }
   };
+  /* ── AUTO-RECOVERY DE BOOT ────────────────────────────────────────
+     Si la pestaña murió tras compartir por WhatsApp (Android, memoria
+     baja) y se recargó la página, recuperamos el partido pre-kickoff
+     reabriendo el gm-modal automáticamente. ONE-SHOT (un solo intento
+     por carga) + clave limpiada al recuperar → no puede entrar en
+     bucle. Si ya hay un partido vivo en __GM_LIVE no interferimos.
+     Espera ~900 ms para que `_cleanupOverlays` (pageshow/load) ya haya
+     corrido — así no nos pisa el modal recién abierto. 2026-05-16. */
+  (function _eurFaseBootRecovery(){
+    if (window.__EURFASE_BOOT_RECOVERED) return;
+    window.__EURFASE_BOOT_RECOVERED = true;
+    var raw;
+    try { raw = localStorage.getItem('_eurfase_pending_match'); } catch(_){ return; }
+    if (!raw) return;
+    var d;
+    try { d = JSON.parse(raw); } catch(_){ try { localStorage.removeItem('_eurfase_pending_match'); } catch(__){} return; }
+    if (!d || !d.comp || !d.home || !d.away) {
+      try { localStorage.removeItem('_eurfase_pending_match'); } catch(_){}
+      return;
+    }
+    /* Caducar tras 15 min — más allá de eso asumimos que el usuario
+       no va a volver a ese partido. */
+    if (Date.now() - (d.ts || 0) > 900000) {
+      try { localStorage.removeItem('_eurfase_pending_match'); } catch(_){}
+      return;
+    }
+    function _tryRecover(attempt){
+      attempt = attempt || 0;
+      if (typeof window.abrirEurFase !== 'function' || typeof window.gmOpen !== 'function') {
+        if (attempt < 30) { setTimeout(function(){ _tryRecover(attempt + 1); }, 300); }
+        return;
+      }
+      /* Si ya hay un partido vivo (mismo u otro) NO interferimos —
+         el usuario ya está jugando algo. */
+      try {
+        if (window.__GM_LIVE && !window.__GM_LIVE.finished) {
+          try { localStorage.removeItem('_eurfase_pending_match'); } catch(_){}
+          return;
+        }
+      } catch(_){}
+      /* Limpiar ANTES de reabrir → aunque el usuario recargue otra
+         vez no se vuelve a disparar (one-shot duro). */
+      try { localStorage.removeItem('_eurfase_pending_match'); } catch(_){}
+      try { window.abrirEurFase(d.comp, d.jor, d.idx, d.home, d.away); } catch(_){}
+    }
+    setTimeout(function(){ _tryRecover(0); }, 900);
+  })();
   window._eurFaseSimAllIA = function(comp, jor){
     var state = loadState(comp); if(!state || !state.pairs) return;
     var pairs = state.pairs;

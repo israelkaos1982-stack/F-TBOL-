@@ -872,11 +872,30 @@ window._showSimProgress = function(opts, onDone){
   var DIFFS = ['Duro','Crack','Leyenda'];
   var TOUR_NAMES = { sct:'Soccer Champions Tour', pss:'Premier Summer Series', jg:'Trofeo Joan Gamper', asia:'Asian Tournament' };
 
+  /* Estado en memoria como fuente de verdad de la sesión. El
+     localStorage es best-effort: en este proyecto puede fallar por
+     cuota (cap 2 MB/carpeta). Si _save fallara y _load releyera de
+     disco, dayIdx se quedaría en 0 y la card NO avanzaría (bug
+     reportado: "01 Jul cumplido pero no pasa a 02 Jul"). Con el
+     cache en memoria el cursor avanza siempre. */
+  var _MEM = null;
   function _load(){
-    try { var r = localStorage.getItem(KEY); if (r){ var d = JSON.parse(r); if (d && typeof d==='object') return d; } } catch(_){}
-    return { tour:null, dayIdx:0, rivals:{}, done:{} };
+    if (_MEM) return _MEM;
+    var d = null;
+    try { var r = localStorage.getItem(KEY); if (r){ var p = JSON.parse(r); if (p && typeof p==='object') d = p; } } catch(_){}
+    if (!d) d = { tour:null, dayIdx:0, rivals:{}, done:{} };
+    if (typeof d.dayIdx !== 'number') d.dayIdx = parseInt(d.dayIdx,10) || 0;
+    d.rivals = d.rivals || {};
+    d.done   = d.done   || {};
+    _MEM = d;
+    window.__psDayIdx = d.dayIdx;
+    return _MEM;
   }
-  function _save(d){ try { localStorage.setItem(KEY, JSON.stringify(d||{})); } catch(_){} }
+  function _save(d){
+    _MEM = d || _MEM || { tour:null, dayIdx:0, rivals:{}, done:{} };
+    try { window.__psDayIdx = _MEM.dayIdx; } catch(_){}
+    try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
+  }
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   function _shield(name){

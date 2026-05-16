@@ -17852,10 +17852,14 @@
      fila. Posición > nº de filas → se ancla a la última. La clase
      es única en toda la pantalla (cada llamada limpia la anterior). */
   function _currentDayIdx(){
-    /* Fuente única: el cursor de día de la Pretemporada
-       (bayern_preseason_v1.dayIdx) — índice sobre TODAS las filas
-       del calendario. Así el marcador rosa y la pantalla de
-       Pretemporada van siempre sincronizados día a día. */
+    /* Fuente única: el cursor de día de la Pretemporada — índice
+       sobre TODAS las filas del calendario. Preferimos el valor en
+       memoria (window.__psDayIdx, robusto si localStorage falla por
+       cuota) y caemos a localStorage / estado legacy. */
+    try {
+      var m = window.__psDayIdx;
+      if (typeof m === 'number' && m >= 0) return m;
+    } catch(_){}
     try {
       var raw = localStorage.getItem('bayern_preseason_v1');
       if (raw){

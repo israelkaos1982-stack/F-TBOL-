@@ -728,6 +728,480 @@ window._showSimProgress = function(opts, onDone){
   </script>
 </div>
 
+<!-- ═══ PRETEMPORADA · CAJA BAYERN (Módulos 2-5) ═══════════════════
+     Pantalla dedicada que recorre el calendario Bayern día a día:
+       · Entrenamiento → barra 3s + 95/5 lesión (plantilla Bayern)
+       · Descanso      → continuar
+       · Partido       → previa (rival del torneo, estadio, clima)
+     El cursor de día (pDay) se comparte con el marcador rosa del
+     calendario vía localStorage `bayern_preseason_v1`. -->
+<div class="screen" id="s-bayern-preseason">
+  <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">🌞</span><h2>Pretemporada · Día a Día</h2></div>
+  <div id="ps-stage"></div>
+</div>
+
+<style>
+  #s-bayern-preseason{padding-bottom:30px;}
+  #s-bayern-preseason .ps-card{
+    margin:14px 12px;border-radius:16px;padding:20px 16px 22px;
+    background:radial-gradient(circle at 20% 0,#0066b255,#00162f 46%,#12000a 100%),
+               linear-gradient(150deg,#dc052d,#8e001c 60%,#002f63);
+    border:1px solid rgba(255,255,255,.16);
+    box-shadow:0 14px 34px rgba(0,0,0,.5);text-align:center;color:#fff;
+  }
+  #s-bayern-preseason .ps-date{
+    font-family:'Bebas Neue','Oswald',sans-serif;font-size:30px;letter-spacing:4px;
+    color:#ffd750;text-shadow:0 0 14px rgba(255,215,80,.55);margin:0 0 4px;
+  }
+  #s-bayern-preseason .ps-sub{
+    font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2.4px;
+    color:rgba(255,255,255,.7);margin:0 0 16px;text-transform:uppercase;
+  }
+  #s-bayern-preseason .ps-shield{
+    width:96px;height:96px;object-fit:contain;background:rgba(255,255,255,.92);
+    border-radius:14px;padding:8px;margin:6px auto 14px;display:block;
+    box-shadow:0 0 18px rgba(0,0,0,.4);
+  }
+  #s-bayern-preseason .ps-vs{
+    display:flex;align-items:center;justify-content:center;gap:14px;margin:10px 0 16px;
+  }
+  #s-bayern-preseason .ps-vs .ps-team{flex:1;max-width:130px;}
+  #s-bayern-preseason .ps-vs .ps-shield{width:74px;height:74px;margin:0 auto 6px;}
+  #s-bayern-preseason .ps-vs .ps-tn{
+    font-family:Oswald,sans-serif;font-size:13px;font-weight:700;color:#fff;
+    letter-spacing:.5px;line-height:1.2;
+  }
+  #s-bayern-preseason .ps-vs .ps-x{
+    font-family:'Bebas Neue',sans-serif;font-size:26px;color:#ffd750;flex:0 0 auto;
+  }
+  #s-bayern-preseason .ps-btn{
+    display:inline-block;border:none;border-radius:10px;cursor:pointer;
+    padding:13px 30px;font-family:Oswald,sans-serif;font-size:15px;
+    letter-spacing:2px;font-weight:700;color:#0d0310;
+    background:linear-gradient(135deg,#ffe489,#f0c040);
+    box-shadow:0 6px 16px rgba(240,192,64,.35);-webkit-tap-highlight-color:transparent;
+  }
+  #s-bayern-preseason .ps-btn:disabled{opacity:.5;cursor:default;filter:grayscale(.4);}
+  #s-bayern-preseason .ps-btn.ghost{
+    background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.3);
+    box-shadow:none;
+  }
+  #s-bayern-preseason .ps-bar-wrap{
+    height:14px;border-radius:8px;background:rgba(0,0,0,.45);overflow:hidden;
+    margin:18px 6px 8px;border:1px solid rgba(255,255,255,.14);
+  }
+  #s-bayern-preseason .ps-bar{
+    height:100%;width:0%;border-radius:8px;
+    background:linear-gradient(90deg,#36d27a,#9be15d,#ffe066);
+    transition:width 3s linear;
+  }
+  #s-bayern-preseason .ps-bar.injury{background:linear-gradient(90deg,#ff5c5c,#ff2d6f);}
+  #s-bayern-preseason .ps-result{
+    margin-top:14px;font-family:Oswald,sans-serif;font-size:16px;letter-spacing:1.5px;
+    min-height:22px;color:#bdf5c8;
+  }
+  #s-bayern-preseason .ps-meta{
+    font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.85);
+    margin:4px 0;line-height:1.5;
+  }
+  #s-bayern-preseason .ps-tag{
+    display:inline-block;margin:3px 4px;padding:4px 10px;border-radius:999px;
+    font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.4px;
+    background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.18);color:#ffe4a8;
+  }
+  #s-bayern-preseason .ps-bajas{
+    margin:12px 8px 0;padding:10px 12px;border-radius:10px;font-family:Rajdhani,sans-serif;
+    font-size:13px;line-height:1.5;text-align:left;
+  }
+  #s-bayern-preseason .ps-bajas.ok{background:rgba(40,160,80,.18);border:1px solid rgba(80,220,140,.4);color:#bff5cf;}
+  #s-bayern-preseason .ps-bajas.ko{background:rgba(200,40,60,.18);border:1px solid rgba(255,110,130,.45);color:#ffc7cf;}
+  #s-bayern-preseason .ps-opts{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0 4px;}
+  #s-bayern-preseason .ps-opt{
+    font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;background:rgba(0,0,0,.3);
+    border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:6px 10px;
+  }
+  #ps-injury-ov{
+    display:none;position:fixed;inset:0;z-index:99997;background:rgba(5,2,10,.92);
+    align-items:center;justify-content:center;padding:18px;
+  }
+  #ps-injury-ov.show{display:flex;}
+  #ps-injury-ov .ps-inj-box{
+    width:min(380px,94vw);background:linear-gradient(160deg,#2a0a12,#3a0a1c);
+    border:1px solid rgba(255,110,130,.5);border-radius:16px;padding:22px 20px;
+    box-shadow:0 0 40px rgba(220,5,45,.4);color:#fff;text-align:center;
+  }
+  #ps-injury-ov .ps-inj-title{
+    font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:#ff8a8a;
+    margin:0 0 12px;text-shadow:0 0 12px rgba(255,60,60,.5);
+  }
+  #ps-injury-ov .ps-inj-row{
+    display:flex;justify-content:space-between;gap:10px;padding:7px 2px;
+    border-bottom:1px solid rgba(255,255,255,.08);font-family:Rajdhani,sans-serif;font-size:14px;
+  }
+  #ps-injury-ov .ps-inj-row:last-of-type{border-bottom:none;}
+  #ps-injury-ov .ps-inj-row b{color:#ffd0d6;font-weight:600;}
+  #ps-injury-ov .ps-inj-row span{color:#fff;font-weight:700;text-align:right;}
+  #ps-injury-ov .ps-btn{margin-top:16px;}
+  .hub-card-preseason{align-items:center !important;justify-content:center !important;text-align:center;background:radial-gradient(ellipse at center,rgba(255,196,64,.22),rgba(0,0,0,.30) 65%),linear-gradient(160deg,rgba(120,70,0,.6),rgba(0,0,0,.5)) !important;border:1px solid rgba(255,200,64,.55) !important;box-shadow:0 0 14px rgba(255,196,64,.18),inset 0 0 18px rgba(255,196,64,.06) !important;gap:4px !important;}
+  .hub-preseason-emoji{font-size:30px;line-height:1;filter:drop-shadow(0 0 10px rgba(255,196,64,.55));margin-bottom:2px;}
+  .hub-preseason-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:2px;color:#ffd750;text-shadow:0 0 8px rgba(255,215,80,.6),0 1px 0 rgba(0,0,0,.55);white-space:nowrap;}
+  .hub-preseason-sub{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,228,168,.85);text-transform:uppercase;}
+</style>
+
+<div id="ps-injury-ov" onclick="if(event.target===this)return;"></div>
+
+<script>
+/* ══ PRETEMPORADA · MOTOR DÍA A DÍA (Módulos 2-5) ════════════════ */
+(function(){
+  if (window.__PS_READY) return;
+  window.__PS_READY = true;
+
+  var KEY = 'bayern_preseason_v1';
+  var BAYERN_SHIELD = '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg';
+  var FALLBACK_SHIELD = '/static/img/escudos-fallback/estepona.svg';
+
+  /* Pools de rivales por torneo (pretemporada). El cuadro/bracket
+     completo no existe aún → al elegir torneo asignamos un rival a
+     cada fila "Torneo Verano - N Partido" del calendario Bayern. */
+  var RIVAL_POOLS = {
+    sct:  ['Inter Miami','LA Galaxy','Juventus','Manchester United','AC Milan','Real Madrid'],
+    pss:  ['Manchester City','Liverpool','Chelsea','Arsenal','Tottenham','Newcastle United'],
+    jg:   ['FC Barcelona','Sevilla FC','Valencia CF','Villarreal CF','Real Betis','Athletic Club'],
+    asia: ['Urawa Reds','Kawasaki Frontale','Vissel Kobe','Tottenham','Paris Saint-Germain','Celtic']
+  };
+  var STADIUMS = ['Allianz Arena','Estadio del Nuevo Triunfo','Grand Summer Park','National Arena','Pretemporada Stadium'];
+  var DIFFS = ['Duro','Crack','Leyenda'];
+  var TOUR_NAMES = { sct:'Soccer Champions Tour', pss:'Premier Summer Series', jg:'Trofeo Joan Gamper', asia:'Asian Tournament' };
+
+  function _load(){
+    try { var r = localStorage.getItem(KEY); if (r){ var d = JSON.parse(r); if (d && typeof d==='object') return d; } } catch(_){}
+    return { tour:null, dayIdx:0, rivals:{}, done:{} };
+  }
+  function _save(d){ try { localStorage.setItem(KEY, JSON.stringify(d||{})); } catch(_){} }
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function _shield(name){
+    var ESC = window.BACKEND_ESCUDOS || {};
+    var AL  = window.BACKEND_ESCUDOS_ALIASES || {};
+    if (/bayern/i.test(name||'')) return BAYERN_SHIELD;
+    var canon = AL[name] || name;
+    return ESC[canon] || ESC[name] || FALLBACK_SHIELD;
+  }
+
+  /* Plantilla Bayern desde ligaExt (misma fuente que la Caja
+     Plantilla). Devuelve [{name,pos,power}]. Prohibido usar listas
+     generales / otros equipos. */
+  function _bayernSquad(){
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (!raw) return [];
+      var data = JSON.parse(raw);
+      var teams = (data && data.teams) || [];
+      for (var i=0;i<teams.length;i++){
+        var t = teams[i];
+        if (t && t.name && /bayern/i.test(t.name) && Array.isArray(t.players)) return t.players;
+      }
+    } catch(_){}
+    return [];
+  }
+  var POS_ES = { POR:'Portero', DEF:'Defensa', MED:'Centrocampista', DEL:'Delantero' };
+
+  /* Filas del calendario Bayern (TODOS los días). Preferimos el
+     render Bayern (#ag-content-bayern, lo pre-construye el módulo
+     del calendario al arrancar); si no, el SSR global #ag-content. */
+  function _calRows(){
+    var host = document.getElementById('ag-content-bayern');
+    if (!host || !host.querySelector('.ag-r')) host = document.getElementById('ag-content');
+    if (!host) return [];
+    var out = [];
+    host.querySelectorAll('.ag-r').forEach(function(r){
+      var cls  = r.className || '';
+      var date = ((r.querySelector('.ag-date')||{}).textContent||'').trim();
+      var lbl  = ((r.querySelector('.ag-lbl') ||{}).textContent||'').trim();
+      var ico  = ((r.querySelector('.ag-ico') ||{}).textContent||'').trim();
+      var wx   = ((r.querySelector('.ag-wx')  ||{}).textContent||'').trim();
+      var type = /\bag-train\b/.test(cls) ? 'train'
+               : (/\bag-rest\b/.test(cls) || /\bag-sel\b/.test(cls)) ? 'rest'
+               : 'match';
+      out.push({ date:date, label:lbl, icon:ico, weather:wx||'☀️', type:type, cls:cls });
+    });
+    return out;
+  }
+
+  function _wxText(w){ return /🌧/.test(w)?'Lluvia':(/❄️/.test(w)?'Nieve':'Soleado'); }
+
+  /* ── Módulo 1.2: fusión del Bayern en el torneo elegido ───────── */
+  window._tourMergeBayern = function(tId){
+    var d = _load();
+    d.tour = tId;
+    d.rivals = d.rivals || {};
+    var pool = (RIVAL_POOLS[tId] || []).slice();
+    var rows = _calRows();
+    var pi = 0;
+    rows.forEach(function(row){
+      if (row.type !== 'match') return;
+      if (!/torneo/i.test(row.label) && !/\bag-torneo\b/.test(row.cls)) return;
+      if (d.rivals[row.date]) return; /* idempotente */
+      var rv = pool.length ? pool[pi % pool.length] : 'Rival Pretemporada';
+      pi++;
+      d.rivals[row.date] = {
+        name: rv,
+        stadium: STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
+        difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)]
+      };
+    });
+    _save(d);
+    if (typeof window._bayernCalMarkToday === 'function'){ try { window._bayernCalMarkToday(); } catch(_){} }
+  };
+
+  /* ── Sincroniza el cursor de día con el marcador del calendario ─ */
+  function _syncMarker(){
+    if (typeof window._bayernCalMarkToday === 'function'){ try { window._bayernCalMarkToday(); } catch(_){} }
+  }
+
+  function _advance(){
+    var d = _load();
+    var rows = _calRows();
+    var max = Math.max(0, rows.length - 1);
+    d.dayIdx = Math.min((parseInt(d.dayIdx,10)||0) + 1, max);
+    _save(d);
+    _syncMarker();
+    _render();
+  }
+
+  /* ── Módulo 3: lesión (sistema preexistente: LESION_STORE +
+        BAJA_STORE, misma tabla de severidad que el resto del app) ─ */
+  function _rollInjury(){
+    if (Math.random() >= 0.05) return null;          /* 95% limpio */
+    var squad = _bayernSquad();
+    var pool = squad.filter(function(p){
+      var nm = p && p.name; if (!nm) return false;
+      if (window.BAJA_STORE && window.BAJA_STORE[nm]) return false;
+      if (window.LESION_STORE && window.LESION_STORE[nm] && Number(window.LESION_STORE[nm].partidos)>0) return false;
+      return true;
+    });
+    if (!pool.length) return null;
+    var pl = pool[Math.floor(Math.random()*pool.length)];
+    var r = Math.random(), grado, gradoNombre, gradoEmoji, partidos, list;
+    if (r < 0.55){ grado=1; gradoNombre='Leve'; gradoEmoji='🩹'; partidos=1+Math.floor(Math.random()*2);
+      list=['Sobrecarga muscular','Contusión en el cuádriceps','Esguince de tobillo Grado I','Calambre persistente','Elongación del aductor']; }
+    else if (r < 0.85){ grado=2; gradoNombre='Moderada'; gradoEmoji='💉'; partidos=2+Math.floor(Math.random()*3);
+      list=['Microrrotura de fibras','Esguince de tobillo Grado II','Edema óseo','Contractura severa','Distensión del ligamento lateral']; }
+    else { grado=3; gradoNombre='Grave'; gradoEmoji='🚑'; partidos=5+Math.floor(Math.random()*6);
+      list=['Rotura fibrilar Grado III','Fisura en el metatarsiano','Rotura parcial del ligamento','Luxación de hombro','Rotura del tendón de Aquiles']; }
+    var descripcion = list[Math.floor(Math.random()*list.length)];
+    if (!window.LESION_STORE) window.LESION_STORE = {};
+    if (!window.BAJA_STORE)   window.BAJA_STORE = {};
+    window.LESION_STORE[pl.name] = {
+      equipo:'Bayern Munich', grado:grado, gradoNombre:gradoNombre, gradoEmoji:gradoEmoji,
+      descripcion:descripcion, partidos:partidos, timestamp:Date.now()
+    };
+    window.BAJA_STORE[pl.name] = { tipo:'lesion', liga:partidos, copa:partidos, europa:partidos };
+    return {
+      name: pl.name,
+      pos: POS_ES[pl.pos] || pl.pos || '—',
+      tipo: gradoNombre + ' · ' + descripcion,
+      emoji: gradoEmoji,
+      partidos: partidos
+    };
+  }
+
+  function _showInjuryModal(inj){
+    var ov = document.getElementById('ps-injury-ov');
+    if (!ov) return;
+    ov.innerHTML =
+      '<div class="ps-inj-box">'
+      + '<div class="ps-inj-title">' + (inj.emoji||'🚑') + ' PARTE MÉDICO</div>'
+      + '<div class="ps-inj-row"><b>Nombre</b><span>' + _esc(inj.name) + '</span></div>'
+      + '<div class="ps-inj-row"><b>Posición</b><span>' + _esc(inj.pos) + '</span></div>'
+      + '<div class="ps-inj-row"><b>Tipo de lesión</b><span>' + _esc(inj.tipo) + '</span></div>'
+      + '<div class="ps-inj-row"><b>Días lesionado</b><span>' + inj.partidos + ' partido(s)</span></div>'
+      + '<button type="button" class="ps-btn" id="ps-inj-close">ACEPTAR Y CONTINUAR</button>'
+      + '</div>';
+    ov.classList.add('show');
+    var btn = document.getElementById('ps-inj-close');
+    if (btn) btn.onclick = function(){ ov.classList.remove('show'); ov.innerHTML=''; _markDoneAndAdvance(); };
+  }
+
+  function _markDoneAndAdvance(){
+    var d = _load(); var rows = _calRows(); var cur = rows[Math.min(d.dayIdx, rows.length-1)];
+    if (cur){ d.done = d.done||{}; d.done[cur.date] = true; _save(d); }
+    _advance();
+  }
+
+  /* ── Render ───────────────────────────────────────────────────── */
+  function _stage(){ return document.getElementById('ps-stage'); }
+
+  function _cardTraining(day){
+    var st = _stage(); if (!st) return;
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
+      + '<div class="ps-sub">🏃 Entrenamiento · Bayern Múnich</div>'
+      + '<img class="ps-shield" src="' + BAYERN_SHIELD + '" alt="Bayern">'
+      + '<button type="button" class="ps-btn" id="ps-train-btn">ENTRENAR</button>'
+      + '<div class="ps-bar-wrap"><div class="ps-bar" id="ps-train-bar"></div></div>'
+      + '<div class="ps-result" id="ps-train-res"></div>'
+      + '</div>';
+    var btn = document.getElementById('ps-train-btn');
+    var bar = document.getElementById('ps-train-bar');
+    var res = document.getElementById('ps-train-res');
+    if (!btn) return;
+    btn.onclick = function(){
+      btn.disabled = true;
+      var inj = _rollInjury();              /* cálculo en el segundo 0 */
+      if (inj) bar.classList.add('injury');
+      /* fuerza reflow para que la transición 0→100% se vea */
+      void bar.offsetWidth;
+      bar.style.width = '100%';
+      setTimeout(function(){
+        if (inj){
+          res.textContent = inj.emoji + ' Incidente en el entrenamiento';
+          res.style.color = '#ffb3b3';
+          _showInjuryModal(inj);
+        } else {
+          res.textContent = '✅ No hay lesiones';
+          res.style.color = '#bdf5c8';
+          var advanced = false;
+          var go1 = function(){ if (advanced) return; advanced = true; _markDoneAndAdvance(); };
+          var to = setTimeout(go1, 1500);
+          st.querySelector('.ps-card').onclick = function(){ clearTimeout(to); go1(); };
+        }
+      }, 3000);
+    };
+  }
+
+  function _cardRest(day){
+    var st = _stage(); if (!st) return;
+    var isSel = /\bag-sel\b/.test(day.cls);
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + (isSel ? '🌍 Selecciones · jugadores fuera' : '💤 Día de descanso') + '</div>'
+      + '<div style="font-size:54px;line-height:1;margin:10px 0 6px;">' + (isSel?'🌍':'💤') + '</div>'
+      + '<div class="ps-meta">' + _esc(day.label || 'Descanso') + '</div>'
+      + '<button type="button" class="ps-btn ghost" id="ps-rest-btn" style="margin-top:16px;">CONTINUAR ▶</button>'
+      + '</div>';
+    var b = document.getElementById('ps-rest-btn');
+    if (b) b.onclick = function(){ _markDoneAndAdvance(); };
+  }
+
+  function _bajasBanner(){
+    var squad = _bayernSquad();
+    var names = {}; squad.forEach(function(p){ if (p&&p.name) names[p.name]=true; });
+    var ls = window.LESION_STORE || {};
+    var bajas = [];
+    Object.keys(ls).forEach(function(nm){
+      var l = ls[nm];
+      if (names[nm] && l && Number(l.partidos) > 0){
+        bajas.push((l.gradoEmoji||'🩹') + ' ' + nm + ' — ' + (l.gradoNombre||'Lesión') + ' (' + l.partidos + 'P)');
+      }
+    });
+    if (!bajas.length){
+      return '<div class="ps-bajas ok">✅ Plantilla al 100% — Sin bajas ni sanciones</div>';
+    }
+    return '<div class="ps-bajas ko"><b>🚑 Bajas para este partido:</b><br>' + bajas.map(_esc).join('<br>') + '</div>';
+  }
+
+  function _cardMatch(day){
+    var st = _stage(); if (!st) return;
+    var d = _load();
+    d.rivals = d.rivals || {};
+    var rv = d.rivals[day.date];
+    if (!rv){
+      /* Partido sin rival asignado (torneo no fusionado o partido
+         no-torneo): generamos uno al vuelo y lo persistimos. */
+      var pool = (RIVAL_POOLS[d.tour] || RIVAL_POOLS.jg).slice();
+      rv = { name: pool[Math.floor(Math.random()*pool.length)],
+             stadium: STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
+             difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)] };
+      d.rivals[day.date] = rv; _save(d);
+    }
+    var tourNm = d.tour ? (TOUR_NAMES[d.tour] || 'Torneo de Verano') : (day.label || 'Partido');
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
+      + '<div class="ps-vs">'
+      +   '<div class="ps-team"><img class="ps-shield" src="' + BAYERN_SHIELD + '"><div class="ps-tn">Bayern Múnich</div></div>'
+      +   '<div class="ps-x">VS</div>'
+      +   '<div class="ps-team"><img class="ps-shield" src="' + _esc(_shield(rv.name)) + '" onerror="this.src=\'' + FALLBACK_SHIELD + '\'"><div class="ps-tn">' + _esc(rv.name) + '</div></div>'
+      + '</div>'
+      + '<div>'
+      +   '<span class="ps-tag">🏟 ' + _esc(rv.stadium) + '</span>'
+      +   '<span class="ps-tag">' + _esc(day.weather) + ' ' + _wxText(day.weather) + '</span>'
+      +   '<span class="ps-tag">🎮 ' + _esc(rv.difficulty) + '</span>'
+      +   '<span class="ps-tag">⏱ 8 MIN</span>'
+      + '</div>'
+      + '<div class="ps-opts">'
+      +   '<span class="ps-opt">⚽ Balón: Estándar</span>'
+      +   '<span class="ps-opt">⏳ Prórroga: No</span>'
+      +   '<span class="ps-opt">🥅 Penaltis: No</span>'
+      + '</div>'
+      + _bajasBanner()
+      + '<div style="margin-top:18px;display:flex;gap:10px;justify-content:center;">'
+      +   '<button type="button" class="ps-btn" id="ps-match-play">⚽ JUGAR PARTIDO</button>'
+      +   '<button type="button" class="ps-btn ghost" id="ps-match-skip">Saltar ▶</button>'
+      + '</div>'
+      + '</div>';
+    var play = document.getElementById('ps-match-play');
+    var skip = document.getElementById('ps-match-skip');
+    if (play) play.onclick = function(){
+      var gf = prompt('⚽ ' + tourNm + ' · ' + day.date + '\n\nGoles Bayern:');
+      if (gf === null) return;
+      var gc = prompt('⚽ vs ' + rv.name + '\n\nGoles ' + rv.name + ':');
+      if (gc === null) return;
+      var a = parseInt(gf,10), b = parseInt(gc,10);
+      if (isNaN(a)||isNaN(b)||a<0||b<0){ alert('Marcador inválido.'); return; }
+      var res = a>b ? '🟢 Victoria' : (a<b ? '🔴 Derrota' : '🟡 Empate');
+      alert(res + ' · Bayern ' + a + ' - ' + b + ' ' + rv.name);
+      _markDoneAndAdvance();
+    };
+    if (skip) skip.onclick = function(){ _markDoneAndAdvance(); };
+  }
+
+  function _render(){
+    var st = _stage(); if (!st) return;
+    var rows = _calRows();
+    if (!rows.length){
+      st.innerHTML = '<div class="ps-card"><div class="ps-sub">Cargando calendario…</div></div>';
+      return;
+    }
+    var d = _load();
+    var idx = Math.min(Math.max(0, parseInt(d.dayIdx,10)||0), rows.length-1);
+    if (idx !== d.dayIdx){ d.dayIdx = idx; _save(d); }
+    var day = rows[idx];
+    if (day.type === 'train')      _cardTraining(day);
+    else if (day.type === 'rest')  _cardRest(day);
+    else                           _cardMatch(day);
+    var sub = document.getElementById('munich-preseason-sub');
+    if (sub) sub.textContent = day.date;
+  }
+
+  window._bayernPreseasonOpen = function(){
+    try { if (typeof go === 'function') go('s-bayern-preseason'); } catch(_){}
+    [0, 120, 400, 900].forEach(function(t){ setTimeout(_render, t); });
+  };
+
+  /* Re-render al activarse la pantalla (cubre navegación por router). */
+  function _wire(){
+    var scr = document.getElementById('s-bayern-preseason');
+    if (!scr) return;
+    if (scr.classList.contains('active')) _render();
+    try {
+      new MutationObserver(function(m){
+        for (var i=0;i<m.length;i++){
+          if (m[i].attributeName === 'class' && scr.classList.contains('active')){ _render(); return; }
+        }
+      }).observe(scr, { attributes:true, attributeFilter:['class'] });
+    } catch(_){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _wire);
+  else _wire();
+})();
+</script>
+
 <style>
   .bayern-hub{background:radial-gradient(circle at 20% 0,#0066b255,#00162f 46%,#12000a 100%),linear-gradient(145deg,#dc052d,#8e001c 58%,#002f63);padding:12px;border-radius:12px;display:flex;flex-direction:column;gap:12px}
   .bayern-hud{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;position:sticky;top:0;z-index:4}
@@ -24953,6 +25427,11 @@ Tottenham
     <span class="hub-isramax-i">I</span>
     <span class="hub-isramax-title">ISRAMAX</span>
     <span class="hub-isramax-sub" id="munich-isramax-bets">0</span>
+  </button>
+  <button class="hub-card hub-card-preseason" onclick="window._bayernPreseasonOpen&&window._bayernPreseasonOpen()">
+    <span class="hub-preseason-emoji">🌞</span>
+    <span class="hub-preseason-title">PRETEMPORADA</span>
+    <span class="hub-preseason-sub" id="munich-preseason-sub">Día a día</span>
   </button>
 </section>
 <section class="hub-match-engine">

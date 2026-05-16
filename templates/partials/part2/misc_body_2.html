@@ -24176,11 +24176,21 @@ document.addEventListener('DOMContentLoaded', function() {
     if (_newsAnim) { try { clearInterval(_newsAnim); } catch(_){} _newsAnim = null; }
     var t0 = Date.now();
     var DURATION = 3000;
+    /* Deadline DURO auto-aplicado dentro del propio loop de animación
+       (foto usuario 2026-05-16: la barra se quedaba clavada al 92 % y
+       "daba error"). El cierre dependía de un observer (que no cazaba
+       el picker de portería imbatida) y de un setTimeout de seguridad
+       que el procesado post-partido podía dejar starved. Ahora el
+       propio _frame (rAF + setInterval, que reanudan en cuanto el hilo
+       respira) fuerza el cierre pasado HARD_MS — el spinner NUNCA
+       puede quedarse pegado. */
+    var HARD_MS = 4500;
     var _vis = 0;        /* % visible (trickle, monótono) */
     var _done = false;
     function _frame(){
       if (_done) return;
       var elapsed = Date.now() - t0;
+      if (elapsed >= HARD_MS) { try { _hide(); } catch(_){ _done = true; } return; }
       /* Target por tiempo: alcanza 92 % a DURATION y se queda ahí
          esperando a que la siguiente pantalla / _hide lo cierre. */
       var tgt = Math.min(92, (elapsed / DURATION) * 100);
@@ -24285,7 +24295,13 @@ document.addEventListener('DOMContentLoaded', function() {
      spinner se quedará pegado hasta el timeout de seguridad.
      OJO: el MVP picker es id=gen-mvp-ov (su clase es mvp-force-overlay).
      Antes solo teníamos la clase y el observer no lo cazaba. */
-  var TARGETS = ['ml-stats-ov','ml-stats-entry-ov','ml-post-ov','gm-post-ov','gen-mvp-ov','mvp-force-overlay','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live','ml-final-ov','ml-descanso-ov','ml-injury-ov','prepartido-overlay'];
+  var TARGETS = ['ml-stats-ov','ml-stats-entry-ov','ml-post-ov','gm-post-ov','gen-mvp-ov','mvp-force-overlay','imbat-force-ov','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live','ml-final-ov','ml-descanso-ov','ml-injury-ov','prepartido-overlay'];
+  /* Clases (no id) cuyo `.show` también debe ocultar el spinner. El
+     picker de portería imbatida es id="imbat-force-ov" pero su clase
+     es `mvp-force-overlay` — antes el observer solo miraba el id y el
+     spinner se quedaba ENCIMA del picker tapándolo (foto usuario
+     2026-05-16: barra clavada al 92 % sobre "Elige el portero"). */
+  var TARGET_CLASSES = ['mvp-force-overlay'];
   /* IDs cuyo show es vía `style.display` en lugar de `.show` class.
      El MutationObserver de abajo no capta cambios de style, así que
      vigilamos estos por separado y forzamos _hide() cuando aparecen. */
@@ -24302,10 +24318,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var obs2 = new MutationObserver(function(muts){
       for (var i = 0; i < muts.length; i++) {
         var m = muts[i];
-        if (m.type === 'attributes' && m.target && m.target.id) {
-          var tid = m.target.id;
-          if (TARGETS.indexOf(tid) !== -1 && m.target.classList && m.target.classList.contains('show')) {
-            _hide(); return;
+        if (m.type === 'attributes' && m.target && m.target.nodeType === 1) {
+          var tid = m.target.id || '';
+          var cl  = m.target.classList;
+          if (cl && cl.contains('show')) {
+            if (tid && TARGETS.indexOf(tid) !== -1) { _hide(); return; }
+            for (var _tc = 0; _tc < TARGET_CLASSES.length; _tc++) {
+              if (cl.contains(TARGET_CLASSES[_tc])) { _hide(); return; }
+            }
           }
           /* gm-fin-ov / gm-event-panel / gm-team-pick se muestran con
              `style.display = 'flex'` (no `.show`), así que el watcher

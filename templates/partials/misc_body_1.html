@@ -9508,16 +9508,44 @@ window._showSimProgress = function(opts, onDone){
      JSON.parse de cada ligaExt_* . Antes se llamaba en CADA pulsación
      del editor (input → _updatePoolStat), en el sorteo, en el picker y
      en la purga → con una BD grande eso eran segundos × decenas de
-     llamadas. Ahora cacheamos el resultado (TTL 20 s + invalidación
-     explícita al abrir el editor) y NO resolvemos escudo por equipo
-     aquí (sólo lo necesita el picker, y sólo para ≤20 filas). */
-  var _ALL_TEAMS_CACHE = null, _ALL_TEAMS_TS = 0;
-  window._invalidateTourTeamsCache = function(){ _ALL_TEAMS_CACHE = null; _ALL_TEAMS_TS = 0; };
+     llamadas. Y NO resolvemos escudo por equipo aquí (sólo lo necesita
+     el picker, y sólo para ≤20 filas).
+
+     CACHE POR FIRMA (fix 2026-05-16 #2: "pone 84 equipos si hay >1000,
+     51 ligas"). Antes el cache era TTL 20 s: si el editor se abría
+     ANTES de que las ligas de "Resto de Ligas" terminaran de hidratarse
+     desde el server (/api/liga-ext/*), se cacheaba un pool incompleto
+     (solo `ligaExt_liga-ea-sports`) y se quedaba pegado 20 s aunque las
+     ligas llegaran al segundo siguiente. Ahora la clave del cache es
+     una FIRMA barata de localStorage (el conjunto de claves ligaExt_*,
+     SIN getItem ni JSON.parse). Si la firma no cambia → cache (sin
+     reparsear, se mantiene el arreglo de rendimiento). Si cambia
+     (llegan ligas nuevas) → recomputa al instante. */
+  var _ALL_TEAMS_CACHE = null, _ALL_TEAMS_SIG = null;
+  window._invalidateTourTeamsCache = function(){ _ALL_TEAMS_CACHE = null; _ALL_TEAMS_SIG = null; };
+  /* Firma BARATA: solo nombres de clave ligaExt_* (sin getItem, que
+     copiaría MB por clave en cada pulsación). Detecta el caso del bug
+     —ligas que LLEGAN por hidratación añaden claves nuevas—. Las
+     ediciones de contenido de una liga ya existente se recogen al
+     reabrir el editor (_invalidateTourTeamsCache en _doOpen). */
+  function _ligaExtSig(){
+    var keys = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1 || k.indexOf('_snap_') !== -1) continue;
+        keys.push(k);
+      }
+    } catch(_){}
+    keys.sort();
+    return keys.length + '|' + keys.join(',');
+  }
   function _allTeams(){
-    var now = Date.now();
-    if (_ALL_TEAMS_CACHE && (now - _ALL_TEAMS_TS) < 20000) return _ALL_TEAMS_CACHE;
+    var sig = _ligaExtSig();
+    if (_ALL_TEAMS_CACHE && _ALL_TEAMS_SIG === sig) return _ALL_TEAMS_CACHE;
     var res = _allTeamsUncached();
-    _ALL_TEAMS_CACHE = res; _ALL_TEAMS_TS = now;
+    _ALL_TEAMS_CACHE = res; _ALL_TEAMS_SIG = sig;
     return res;
   }
   function _allTeamsUncached(){
@@ -9916,6 +9944,27 @@ window._showSimProgress = function(opts, onDone){
     _populateForm(cfg);
     _setFeedback('');
     document.getElementById('tour-editor-overlay').style.display = 'flex';
+    /* Las ligas de "Resto de Ligas" se hidratan desde el server
+       (/api/liga-ext/*) de forma asíncrona. Si el editor se abre ANTES
+       de que terminen, el pool y la lista "Excluir ligas" salen
+       incompletos (solo LIGA EA SPORTS → "Solo hay 84 equipos…").
+       Reintentos acotados: si la firma de localStorage cambia (llegan
+       más ligas), refrescamos la lista de exclusión y el contador. Sin
+       polling continuo: 3 comprobaciones puntuales. 2026-05-16 #2. */
+    try {
+      var _openSig = _ligaExtSig();
+      [900, 2200, 4500].forEach(function(_ms){
+        setTimeout(function(){
+          if (!_open || _open.id !== id) return;
+          var _nowSig = _ligaExtSig();
+          if (_nowSig === _openSig) return;
+          _openSig = _nowSig;
+          try { window._invalidateTourTeamsCache(); } catch(_){}
+          try { _renderLeagueChecks(); } catch(_){}
+          try { _updatePoolStat(); } catch(_){}
+        }, _ms);
+      });
+    } catch(_){}
     /* Refresco en segundo plano: si el server tiene una versión más
        reciente y el usuario aún no ha tocado el formulario, repinta. */
     try {

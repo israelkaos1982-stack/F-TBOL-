@@ -14389,22 +14389,19 @@
 
   /* ── VAR: inject animation CSS once ── */
   (function(){
-    if (document.getElementById('var-anim-css')) return;
+    if (document.getElementById('ia-goal-anim-css')) return;
     var s=document.createElement('style');
-    s.id='var-anim-css';
-    s.textContent='@keyframes varBlink{0%,100%{opacity:1}50%{opacity:.15}}'
-      /* Celebración de gol SIN tapar el marcador (petición usuario
-         2026-05-16): el marcador debe estar SIEMPRE visible en live.
-         En vez de un overlay opaco que oculta el resultado, hacemos
-         un "pop" + glow dorado sobre la propia caja del marcador,
-         con los números siempre legibles. */
-      +'@keyframes iaGoalPulse{0%{transform:scale(1)}16%{transform:scale(1.24)}42%{transform:scale(.96)}66%{transform:scale(1.07)}100%{transform:scale(1)}}'
+    s.id='ia-goal-anim-css';
+    /* Celebración de gol SIN tapar el marcador (petición usuario
+       2026-05-16): el marcador debe estar SIEMPRE visible en live.
+       En vez de un overlay opaco que oculta el resultado, hacemos
+       un "pop" + glow dorado sobre la propia caja del marcador,
+       con los números siempre legibles. */
+    s.textContent='@keyframes iaGoalPulse{0%{transform:scale(1)}16%{transform:scale(1.24)}42%{transform:scale(.96)}66%{transform:scale(1.07)}100%{transform:scale(1)}}'
       +'.ml-score.ia-goal-celebrate{animation:iaGoalPulse 1.5s ease !important;border-color:#ffdd00!important;box-shadow:0 0 0 2px #ffdd00,0 0 22px 7px rgba(255,200,0,.6)!important;}'
       +'.ml-score.ia-goal-celebrate span,.ml-score.ia-goal-celebrate .ml-score-num{color:#fff!important;text-shadow:0 0 9px rgba(255,225,0,.95),0 0 20px rgba(255,170,0,.6)!important;}'
       +'.ml-score.ia-owngoal-celebrate{animation:iaGoalPulse 1.5s ease !important;border-color:#ff7755!important;box-shadow:0 0 0 2px #ff7755,0 0 20px 6px rgba(255,90,40,.55)!important;}'
-      +'.ml-score.ia-owngoal-celebrate span,.ml-score.ia-owngoal-celebrate .ml-score-num{color:#fff!important;text-shadow:0 0 9px rgba(255,140,90,.95),0 0 18px rgba(255,90,40,.55)!important;}'
-      +'.var-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);border-radius:inherit;pointer-events:none;}'
-      +'.var-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(15px,3vw,22px);font-weight:900;color:#f0c040;letter-spacing:3px;animation:varBlink .55s ease-in-out infinite;text-shadow:0 0 14px rgba(240,192,64,.9),0 0 28px rgba(240,192,64,.5);}';
+      +'.ml-score.ia-owngoal-celebrate span,.ml-score.ia-owngoal-celebrate .ml-score-num{color:#fff!important;text-shadow:0 0 9px rgba(255,140,90,.95),0 0 18px rgba(255,90,40,.55)!important;}';
     document.head.appendChild(s);
   })();
 
@@ -14564,8 +14561,6 @@
 
     var scA = 0, scB = 0, evtIdx = 0, curMin = 0;
     var halfAnnounced = false;
-    var _varActive = false; /* true while VAR 2-second review is playing */
-    var _varActiveSince = 0; /* watchdog: si VAR tarda > 3.5 s, lo desbloqueamos */
     /* Spec usuario 2026-05-05: TODA simulación IA-vs-IA (Liga, Copa, UCL,
        UEL, UECL, Recopa, USC, Inter, Torneos verano, amistosos…) corre
        a 1 game-minute = 1 segundo real.
@@ -14650,8 +14645,6 @@
        que gmStartTimer del gm-modal. */
     var _wallStart = Date.now();
     var _gameMinPerMs = 1 / GAME_MIN_REAL_MS;  /* 1 game-min por 1000 ms reales, DESACOPLADO de TICK_MS */
-    var _varPauseMs = 0;                    /* total ms congelados por VAR */
-    var _varPauseStart = 0;                 /* cuándo empezó la pausa actual */
     /* Actualizamos los valores reales del registro (registramos al
        entry de iaSimLive arriba con defaults; ahora pisamos con los
        reales calculados). 2026-05-11. */
@@ -14692,20 +14685,9 @@
         try { delete window._iaSimLiveActive[mk]; } catch(_){}
         return;
       }
-      /* Watchdog: si _varActive lleva más de 3.5 s, lo forzamos a false
-         (la revisión VAR dura 2 s; este es el failsafe). Antes, si la
-         setTimeout del VAR fallaba (excepción al actualizar DOM, etc.)
-         _varActive quedaba true PARA SIEMPRE y el partido se congelaba
-         en su minuto actual sin avanzar. */
-      if (_varActive && _varActiveSince && (Date.now() - _varActiveSince) > 3500) {
-        _varActive = false; _varActiveSince = 0;
-        if (_varPauseStart) { _varPauseMs += Date.now() - _varPauseStart; _varPauseStart = 0; }
-      }
-      if (_varActive) return; /* VAR review in progress – freeze tick */
-      /* curMin derivado del wall-clock REAL, descontando pausas VAR.
-         Inmune al throttling de setInterval cuando hay muchos
-         partidos en paralelo. */
-      var _elapsedMs = Date.now() - _wallStart - _varPauseMs;
+      /* curMin derivado del wall-clock REAL. Inmune al throttling de
+         setInterval cuando hay muchos partidos en paralelo. */
+      var _elapsedMs = Date.now() - _wallStart;
       curMin = Math.min(Math.floor(_elapsedMs * _gameMinPerMs), _etTopMin);
       if (curMin < 0) curMin = 0;
       /* Actualizar PRIMERO el label visible. Antes esto estaba al final
@@ -14746,86 +14728,61 @@
                 : ev.type === 'lesion'     ? (ev.lesIco || '🩹') : '•';
         if (ev.dbl) ico = '🟨🟥';
 
-        /* ── VAR SEQUENCE ─────────────────────────────────────────────── */
+        /* ── VAR (resuelto al instante, SIN overlay ni freeze) ──────────
+           Histórico: había un overlay opaco "📺 VAR" + congelación del
+           cronómetro 2-3 s. El overlay se quedaba pegado tapando el
+           marcador TODO el partido (e incluso tras el FIN) cuando el
+           watchdog reseteaba el flag sin borrar el DOM. Petición usuario
+           2026-05-16: el marcador SIEMPRE visible en live. El veredicto
+           ya viene decidido en genMatchEventsEnhanced
+           (ev._varConfirmed / ev._varAnulado); aquí solo aplicamos el
+           marcador si procede y anotamos el VAR en el acta. */
         if (ev.var) {
-          _varActive = true;
-          _varActiveSince = Date.now();
-          _varPauseStart = Date.now(); /* anti-throttling: descontamos los 2 s del VAR */
-          /* Veredicto ya decidido en genMatchEventsEnhanced. Si por
-             cualquier razón viene sin flag (p.ej. eventos antiguos en
-             localStorage) hacemos el 50/50 aquí como fallback. */
-          var _varConfirmed = ev._varConfirmed === true ? true
-                            : ev._varAnulado === true ? false
-                            : (Math.random() < 0.5);
-          (function(capturedEv, capturedIco, varConfirmed) {
-            /* Show VAR overlay on the score area */
-            var varOvl = document.createElement('div');
-            varOvl.className = 'var-overlay';
-            var varTxt = document.createElement('div');
-            varTxt.className = 'var-overlay-text';
-            varTxt.textContent = '📺 VAR';
-            varOvl.appendChild(varTxt);
-            if (scoreWrapEl) {
-              scoreWrapEl.style.position = 'relative';
-              scoreWrapEl.appendChild(varOvl);
+          var _varOk = ev._varConfirmed === true ? true
+                     : ev._varAnulado === true ? false
+                     : (Math.random() < 0.5);
+          if (_varOk) {
+            ev._varConfirmed = true;
+            if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
+              if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
+              else                 { scB++; if (scBEl) scBEl.textContent = scB; }
+              _iaGoalCelebrate(false);
+            } else if (ev.type === 'propia') {
+              if (ev.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
+              else                 { scA++; if (scAEl) scAEl.textContent = scA; }
+              _iaGoalCelebrate(true);
             }
-            var prevBtnText = btn.textContent;
-            btn.textContent = '📺 VAR';
-
-            setTimeout(function() {
-              /* Apply score update ONLY if VAR confirmed the event */
-              if (varConfirmed) {
-                capturedEv._varConfirmed = true;
-                if (capturedEv.type === 'gol' || capturedEv.type === 'pen-gol' || capturedEv.type === 'falta-gol') {
-                  if (capturedEv.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
-                  else                         { scB++; if (scBEl) scBEl.textContent = scB; }
-                  _iaGoalCelebrate(false);
-                } else if (capturedEv.type === 'propia') {
-                  if (capturedEv.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
-                  else                         { scA++; if (scAEl) scAEl.textContent = scA; }
-                  _iaGoalCelebrate(true);
-                }
-              } else {
-                /* VAR anuló el evento: marcar en el st.events para no contar en resultado final */
-                capturedEv._varAnulado = true;
-              }
-              /* Remove VAR overlay */
-              if (varOvl.parentNode) varOvl.parentNode.removeChild(varOvl);
-              btn.textContent = curMin >= 90 ? '🏁 FIN' : '⏳ ' + curMin + '\'';
-              /* Add acta row with VAR suffix */
-              if (actaEl) {
-                var varSfx = '';
-                if (varConfirmed) {
-                  if (['gol','pen-gol','falta-gol','propia'].indexOf(capturedEv.type) !== -1)
-                    varSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Confirmado por 📺 VAR)</span>';
-                  else if (['pen-prov','pen-parado','pen-fallo'].indexOf(capturedEv.type) !== -1)
-                    varSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Tras revisión 📺 VAR)</span>';
-                  else if (['amarilla','roja'].indexOf(capturedEv.type) !== -1 || capturedEv.dbl)
-                    varSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Validada por 📺 VAR)</span>';
-                } else {
-                  /* ANULADA: solo texto, SIN line-through */
-                  varSfx = ' <span style="font-size:10px;font-weight:700;color:#ff5555;letter-spacing:.5px;">⛔ ANULADA POR 📺 VAR</span>';
-                }
-                var lesExtraV = (capturedEv.type === 'lesion' && capturedEv.lesDesc)
-                  ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + capturedEv.lesDesc + ' · ' + capturedEv.lesPartidos + ' ptdos)</span>'
-                  : '';
-                var varRow = document.createElement('div');
-                var bgColor = varConfirmed ? 'rgba(80,200,100,.06)' : 'rgba(255,80,80,.08)';
-                varRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);background:' + bgColor + ';';
-                varRow.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + capturedEv.min + '\'</span>'
-                  + '<span style="font-size:14px;">' + capturedIco + '</span>'
-                  + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + capturedEv.player + lesExtraV + varSfx + '</span>'
-                  + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (capturedEv.team === 'a' ? home : away) + '</span>';
-                actaEl.appendChild(varRow);
-              }
-              _varActive = false;
-              _varActiveSince = 0;
-              if (_varPauseStart) { _varPauseMs += Date.now() - _varPauseStart; _varPauseStart = 0; }
-            }, 2000);
-          })(ev, ico, _varConfirmed);
-          break; /* Exit while loop – VAR is handling this event */
+          } else {
+            ev._varAnulado = true;
+          }
+          if (actaEl) {
+            var _vSfx = '';
+            if (_varOk) {
+              if (['gol','pen-gol','falta-gol','propia'].indexOf(ev.type) !== -1)
+                _vSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Confirmado por 📺 VAR)</span>';
+              else if (['pen-prov','pen-parado','pen-fallo'].indexOf(ev.type) !== -1)
+                _vSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Tras revisión 📺 VAR)</span>';
+              else if (['amarilla','roja'].indexOf(ev.type) !== -1 || ev.dbl)
+                _vSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Validada por 📺 VAR)</span>';
+              else
+                _vSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ 📺 VAR)</span>';
+            } else {
+              _vSfx = ' <span style="font-size:10px;font-weight:700;color:#ff5555;letter-spacing:.5px;">⛔ ANULADA POR 📺 VAR</span>';
+            }
+            var _vLesExtra = (ev.type === 'lesion' && ev.lesDesc)
+              ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + ' ptdos)</span>'
+              : '';
+            var _vRow = document.createElement('div');
+            var _vBg = _varOk ? 'rgba(80,200,100,.06)' : 'rgba(255,80,80,.08)';
+            _vRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);background:' + _vBg + ';';
+            _vRow.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
+              + '<span style="font-size:14px;">' + ico + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + ev.player + _vLesExtra + _vSfx + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team === 'a' ? home : away) + '</span>';
+            actaEl.appendChild(_vRow);
+          }
+          continue; /* VAR resuelto; sin overlay, sin congelar el reloj */
         }
-        /* ── END VAR SEQUENCE ─────────────────────────────────────────── */
 
         if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
           if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
@@ -14877,10 +14834,10 @@
          con el match aún sin ET activada y empate dispara la
          prórroga. _etTopMin se baja a 90 para que el bloque heredado
          de ET también lo capte. */
-      if (curMin >= 90 && _isCopaSingleLeg && !_etActive && scA === scB && !_varActive) {
+      if (curMin >= 90 && _isCopaSingleLeg && !_etActive && scA === scB) {
         _etTopMin = 90;
       }
-      if (curMin >= _etTopMin && !_varActive) {
+      if (curMin >= _etTopMin) {
         /* PRÓRROGA: si es Copa single-leg y empate al 90, extendemos
            a 120 (30 s extra a 1 game-min/sec) generando ET goals on-the-fly.
            Si sigue empate al 120, pre-rolleamos el ganador en penaltis

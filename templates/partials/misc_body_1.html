@@ -9588,6 +9588,50 @@ window._showSimProgress = function(opts, onDone){
     var n = String(name).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
     return HUMAN_ONLY_TEAMS.indexOf(n) !== -1;
   }
+  /* Petición usuario 2026-05-16: NINGÚN equipo humano puede jugar como
+     IA en un torneo. "Humano en torneo" = cualquier team con humanIcon
+     /humanEmoji asignado en el editor de plantilla, los 5 canónicos de
+     Liga EA, o la lista corta histórica (Bayern/Atlético). Se apoya en
+     `window.isHumanInComp(name,'torneo')` (regla canónica de
+     "Humanidad por competición" de CLAUDE.md). Fallback a la lista
+     corta si el helper aún no está cargado. */
+  function _isHumanTeamForTour(name){
+    if (!name) return false;
+    try {
+      if (typeof window.isHumanInComp === 'function' &&
+          window.isHumanInComp(name, 'torneo')) return true;
+    } catch(_){}
+    return _isHumanOnlyTeam(name);
+  }
+
+  /* Petición usuario 2026-05-16: al excluir una Liga, la regla tiene
+     que "surtir efecto" también sobre el bracket YA armado — si no,
+     equipos de esa Liga elegidos/sorteados antes seguían jugando la
+     simulación. Recorremos cfg.teams y reseteamos a PENDIENTE (slot
+     humano libre) cualquier equipo cuya liga esté ahora excluida. El
+     usuario lo vuelve a elegir (el picker ya filtra) o un re-sorteo lo
+     rellena. Devuelve el nº de slots purgados. */
+  function _purgeExcludedFromBracket(cfg){
+    if (!cfg || !Array.isArray(cfg.teams) || !cfg.teams.length) return 0;
+    var excluded = cfg.excludedLeagues || [];
+    if (!excluded.length) return 0;
+    var byName = {};
+    try {
+      _allTeams().forEach(function(t){
+        if (t && t.name) byName[_norm(t.name)] = t;
+      });
+    } catch(_){ return 0; }
+    var purged = 0;
+    cfg.teams.forEach(function(slot, i){
+      if (!slot || !slot.name || slot.name === 'PENDIENTE') return;
+      var ref = byName[_norm(slot.name)];
+      if (ref && _teamInExcludedLeagues(ref, excluded)) {
+        cfg.teams[i] = { name:'PENDIENTE', isHuman:true, shield:'', power:0 };
+        purged++;
+      }
+    });
+    return purged;
+  }
 
   /* Mezcla in-place tipo Fisher-Yates. */
   function _shuffle(arr){
@@ -9610,7 +9654,7 @@ window._showSimProgress = function(opts, onDone){
     var excluded = cfg.excludedLeagues || [];
     var pool = _allTeams().filter(function(t){
       if (_teamInExcludedLeagues(t, excluded)) return false;
-      if (_isHumanOnlyTeam(t.name)) return false;
+      if (_isHumanTeamForTour(t.name)) return false;   /* humano nunca como IA */
       return t.power >= aimin && t.power <= aimax;
     });
     var needed = Math.max(0, (cfg.numTeams || 0) - (cfg.numHumans || 0));
@@ -9699,6 +9743,23 @@ window._showSimProgress = function(opts, onDone){
         if (!this.checked && idx !== -1) _open.cfg.excludedLeagues.splice(idx, 1);
         this.parentElement.classList.toggle('is-excluded', this.checked);
         _updatePoolStat();
+        /* La exclusión tiene que SURTIR EFECTO en la simulación
+           (petición usuario 2026-05-16): purgamos del bracket ya armado
+           los equipos de la liga recién excluida y persistimos al
+           instante (local síncrono dentro de _tourSave + sync server en
+           segundo plano) para que el picker y la simulación usen ya la
+           config nueva, sin obligar a re-sortear (que borraría todas las
+           elecciones del usuario). */
+        var purged = this.checked ? _purgeExcludedFromBracket(_open.cfg) : 0;
+        /* _tourSave persiste local + actualiza window._TOUR_CACHE de
+           forma SÍNCRONA antes de su primer await; el sync server va en
+           segundo plano. Lo llamamos ANTES de render para que
+           _tourRender lea ya la config nueva desde la cache. */
+        try { Promise.resolve(window._tourSave(_open.id, _open.cfg)).catch(function(){}); } catch(_){}
+        if (purged > 0) {
+          _setFeedback('🚫 '+purged+' equipo'+(purged===1?'':'s')+' de esa liga quitado'+(purged===1?'':'s')+' del bracket (vuelve a elegir).', true);
+          try { window._tourRender(_open.id); } catch(_){}
+        }
       });
     });
   }
@@ -11195,17 +11256,24 @@ window._showSimProgress = function(opts, onDone){
     return { a: sA, b: sB };
   }
 
-  /* Devuelve true si AL MENOS UNO de los dos slots de una pareja del
-     bracket KO directo está marcado isHuman. */
+  /* Un slot cuenta como HUMANO si lo eligió el usuario (isHuman) O si
+     el equipo es "humano en torneo" por humanIcon/Liga EA (regla
+     usuario 2026-05-16: ningún equipo humano puede jugar como IA —
+     aunque por cualquier ruta acabara en un slot sin isHuman, su
+     partido NO se auto-simula como IA, se enruta al modal humano). */
+  function _tourSlotIsHuman(t) {
+    if (!t) return false;
+    if (t.isHuman) return true;
+    if (t.name && t.name !== 'PENDIENTE' && _isHumanTeamForTour(t.name)) return true;
+    return false;
+  }
   function _tourPairHasHuman(teams, i) {
-    var a = teams[i], b = teams[i+1];
-    return !!((a && a.isHuman) || (b && b.isHuman));
+    return _tourSlotIsHuman(teams[i]) || _tourSlotIsHuman(teams[i+1]);
   }
   /* Devuelve true si el partido m={home,away} en `teams` (índices)
      involucra al menos a un humano. */
   function _tourLeagueMatchHasHuman(teams, m) {
-    var h = teams[m.home], a = teams[m.away];
-    return !!((h && h.isHuman) || (a && a.isHuman));
+    return _tourSlotIsHuman(teams[m.home]) || _tourSlotIsHuman(teams[m.away]);
   }
 
   function _tourSimMatch(cfg, roundIdx, matchIdx) {
@@ -11933,7 +12001,7 @@ window._showSimProgress = function(opts, onDone){
       '</div>';
     }).join('');
     box.querySelectorAll('.tour-pick-row').forEach(function(row){
-      row.addEventListener('click', async function(){
+      row.addEventListener('click', function(){
         if (!_picker) return;
         if (this.classList.contains('is-taken')) return;
         var name = this.getAttribute('data-name');
@@ -11942,15 +12010,26 @@ window._showSimProgress = function(opts, onDone){
         var cfg2 = (window._TOUR_CACHE || {})[_picker.tourId];
         if (!cfg2 || !cfg2.teams || !cfg2.teams[_picker.slotIdx]) return;
         cfg2.teams[_picker.slotIdx] = { name: name, isHuman: true, shield: sh, power: pw };
-        _setPickFeedback('Guardando…');
-        var ok = await window._tourSave(_picker.tourId, cfg2);
-        if (ok) {
-          _setPickFeedback('✓ Equipo asignado', true);
-          window._tourRender(_picker.tourId);
-          setTimeout(function(){ window._tourClosePicker(); }, 500);
-        } else {
-          _setPickFeedback('⚠ Guardado solo en local (sin red)', false);
-        }
+        /* OPTIMISTA (petición usuario 2026-05-16: "tarda mucho").
+           `_tourSave` persiste en localStorage + cache de forma SÍNCRONA
+           antes de su primer await, así que el guardado local está
+           garantizado aunque no esperemos. Refrescamos y cerramos al
+           instante; el sync al server va en segundo plano sin bloquear
+           la UI. */
+        var tourId = _picker.tourId;
+        _setPickFeedback('✓ Equipo asignado', true);
+        try { window._tourRender(tourId); } catch(_){}
+        setTimeout(function(){ window._tourClosePicker(); }, 250);
+        try {
+          Promise.resolve(window._tourSave(tourId, cfg2)).then(function(ok){
+            if (!ok) {
+              try {
+                var fb = document.getElementById('tour-pick-feedback');
+                if (fb) { fb.textContent = '⚠ Guardado solo en local (sin red)'; fb.style.color = '#ff9090'; }
+              } catch(_){}
+            }
+          }).catch(function(){});
+        } catch(_){}
       });
     });
   }

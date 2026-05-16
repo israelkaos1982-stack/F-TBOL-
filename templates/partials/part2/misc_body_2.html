@@ -14393,11 +14393,18 @@
     var s=document.createElement('style');
     s.id='var-anim-css';
     s.textContent='@keyframes varBlink{0%,100%{opacity:1}50%{opacity:.15}}'
-      +'@keyframes golFlash{0%{opacity:0;transform:scale(.7)}15%{opacity:1;transform:scale(1.08)}85%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.9)}}'
+      /* Celebración de gol SIN tapar el marcador (petición usuario
+         2026-05-16): el marcador debe estar SIEMPRE visible en live.
+         En vez de un overlay opaco que oculta el resultado, hacemos
+         un "pop" + glow dorado sobre la propia caja del marcador,
+         con los números siempre legibles. */
+      +'@keyframes iaGoalPulse{0%{transform:scale(1)}16%{transform:scale(1.24)}42%{transform:scale(.96)}66%{transform:scale(1.07)}100%{transform:scale(1)}}'
+      +'.ml-score.ia-goal-celebrate{animation:iaGoalPulse 1.5s ease !important;border-color:#ffdd00!important;box-shadow:0 0 0 2px #ffdd00,0 0 22px 7px rgba(255,200,0,.6)!important;}'
+      +'.ml-score.ia-goal-celebrate span,.ml-score.ia-goal-celebrate .ml-score-num{color:#fff!important;text-shadow:0 0 9px rgba(255,225,0,.95),0 0 20px rgba(255,170,0,.6)!important;}'
+      +'.ml-score.ia-owngoal-celebrate{animation:iaGoalPulse 1.5s ease !important;border-color:#ff7755!important;box-shadow:0 0 0 2px #ff7755,0 0 20px 6px rgba(255,90,40,.55)!important;}'
+      +'.ml-score.ia-owngoal-celebrate span,.ml-score.ia-owngoal-celebrate .ml-score-num{color:#fff!important;text-shadow:0 0 9px rgba(255,140,90,.95),0 0 18px rgba(255,90,40,.55)!important;}'
       +'.var-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);border-radius:inherit;pointer-events:none;}'
-      +'.var-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(15px,3vw,22px);font-weight:900;color:#f0c040;letter-spacing:3px;animation:varBlink .55s ease-in-out infinite;text-shadow:0 0 14px rgba(240,192,64,.9),0 0 28px rgba(240,192,64,.5);}'
-      +'.gol-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(16px,3.5vw,26px);font-weight:900;color:#fff;letter-spacing:4px;animation:golFlash 1.6s ease forwards;text-shadow:0 0 16px rgba(255,220,0,.95),0 0 32px rgba(255,180,0,.6);}'
-      +'.propia-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(13px,2.8vw,20px);font-weight:900;color:#ff7755;letter-spacing:3px;animation:golFlash 1.6s ease forwards;text-shadow:0 0 14px rgba(255,100,0,.9);}';
+      +'.var-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(15px,3vw,22px);font-weight:900;color:#f0c040;letter-spacing:3px;animation:varBlink .55s ease-in-out infinite;text-shadow:0 0 14px rgba(240,192,64,.9),0 0 28px rgba(240,192,64,.5);}';
     document.head.appendChild(s);
   })();
 
@@ -14535,6 +14542,24 @@
     if (scoreWrapEl) {
       scoreWrapEl.classList.remove('state-finished');
       scoreWrapEl.classList.add('state-playing');
+    }
+
+    /* Celebración de gol que NO oculta el marcador (petición usuario
+       2026-05-16: "siempre el marcador presente en live"). Re-resolvemos
+       el `.ml-score` vivo desde scAEl en cada gol — si un rebuilder
+       regeneró la card, scAEl ya fue re-adquirido por id en el tick y
+       el scoreWrapEl capturado al inicio podría estar detached. */
+    function _iaGoalCelebrate(ownGoal) {
+      var _sw = (scAEl && scAEl.closest) ? scAEl.closest('.ml-score') : scoreWrapEl;
+      if (!_sw) return;
+      var cls = ownGoal ? 'ia-owngoal-celebrate' : 'ia-goal-celebrate';
+      _sw.classList.remove('ia-goal-celebrate', 'ia-owngoal-celebrate');
+      void _sw.offsetWidth; /* reinicia la animación si hay goles seguidos */
+      _sw.classList.add(cls);
+      clearTimeout(_sw._iaGolT);
+      _sw._iaGolT = setTimeout(function () {
+        _sw.classList.remove('ia-goal-celebrate', 'ia-owngoal-celebrate');
+      }, 1600);
     }
 
     var scA = 0, scB = 0, evtIdx = 0, curMin = 0;
@@ -14753,9 +14778,11 @@
                 if (capturedEv.type === 'gol' || capturedEv.type === 'pen-gol' || capturedEv.type === 'falta-gol') {
                   if (capturedEv.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
                   else                         { scB++; if (scBEl) scBEl.textContent = scB; }
+                  _iaGoalCelebrate(false);
                 } else if (capturedEv.type === 'propia') {
                   if (capturedEv.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
                   else                         { scA++; if (scAEl) scAEl.textContent = scA; }
+                  _iaGoalCelebrate(true);
                 }
               } else {
                 /* VAR anuló el evento: marcar en el st.events para no contar en resultado final */
@@ -14802,24 +14829,12 @@
         if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
           if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
           else                 { scB++; if (scBEl) scBEl.textContent = scB; }
-          (function(){
-            if (!scoreWrapEl) return;
-            var _ov=document.createElement('div'); _ov.className='var-overlay';
-            var _tx=document.createElement('div'); _tx.className='gol-overlay-text';
-            _tx.textContent='⚽ GOL'; _ov.appendChild(_tx); scoreWrapEl.appendChild(_ov);
-            setTimeout(function(){if(_ov.parentNode)_ov.parentNode.removeChild(_ov);},1700);
-          })();
+          _iaGoalCelebrate(false);
         } else if (ev.type === 'propia') {
           /* autogol: puntúa para el equipo CONTRARIO */
           if (ev.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
           else                 { scA++; if (scAEl) scAEl.textContent = scA; }
-          (function(){
-            if (!scoreWrapEl) return;
-            var _ov=document.createElement('div'); _ov.className='var-overlay';
-            var _tx=document.createElement('div'); _tx.className='propia-overlay-text';
-            _tx.textContent='⚽ EN PROPIA'; _ov.appendChild(_tx); scoreWrapEl.appendChild(_ov);
-            setTimeout(function(){if(_ov.parentNode)_ov.parentNode.removeChild(_ov);},1700);
-          })();
+          _iaGoalCelebrate(true);
         }
         if (actaEl) {
           var row = document.createElement('div');
@@ -14912,18 +14927,10 @@
             etHdr.textContent = '⏱ PRÓRROGA';
             actaEl.appendChild(etHdr);
           }
-          /* Overlay flash sobre el marcador */
-          if (scoreWrapEl) {
-            var _ovET = document.createElement('div');
-            _ovET.className = 'var-overlay';
-            var _txET = document.createElement('div');
-            _txET.className = 'gol-overlay-text';
-            _txET.textContent = '⏱ PRÓRROGA';
-            _ovET.appendChild(_txET);
-            scoreWrapEl.style.position = 'relative';
-            scoreWrapEl.appendChild(_ovET);
-            setTimeout(function(){ if (_ovET.parentNode) _ovET.parentNode.removeChild(_ovET); }, 1700);
-          }
+          /* Sin overlay opaco sobre el marcador (petición usuario
+             2026-05-16: el marcador SIEMPRE visible en live). El paso a
+             prórroga ya se comunica con la cabecera "⏱ PRÓRROGA" del
+             acta y con el botón-reloj "⏱ N' ET". */
           /* No clearInterval: el tick sigue hasta 120. */
           return;
         }

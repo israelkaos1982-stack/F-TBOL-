@@ -14564,8 +14564,8 @@
 
     var scA = 0, scB = 0, evtIdx = 0, curMin = 0;
     var halfAnnounced = false;
-    var _varActive = false; /* true while VAR 3-second review is playing */
-    var _varActiveSince = 0; /* watchdog: si VAR tarda > 5 s, lo desbloqueamos */
+    var _varActive = false; /* true while VAR 2-second review is playing */
+    var _varActiveSince = 0; /* watchdog: si VAR tarda > 3.5 s, lo desbloqueamos */
     /* Spec usuario 2026-05-05: TODA simulación IA-vs-IA (Liga, Copa, UCL,
        UEL, UECL, Recopa, USC, Inter, Torneos verano, amistosos…) corre
        a 1 game-minute = 1 segundo real.
@@ -14692,11 +14692,12 @@
         try { delete window._iaSimLiveActive[mk]; } catch(_){}
         return;
       }
-      /* Watchdog: si _varActive lleva más de 5 s, lo forzamos a false.
-         Antes, si la setTimeout del VAR fallaba (excepción al actualizar
-         DOM, etc.) _varActive quedaba true PARA SIEMPRE y el partido se
-         congelaba en su minuto actual sin avanzar. */
-      if (_varActive && _varActiveSince && (Date.now() - _varActiveSince) > 5000) {
+      /* Watchdog: si _varActive lleva más de 3.5 s, lo forzamos a false
+         (la revisión VAR dura 2 s; este es el failsafe). Antes, si la
+         setTimeout del VAR fallaba (excepción al actualizar DOM, etc.)
+         _varActive quedaba true PARA SIEMPRE y el partido se congelaba
+         en su minuto actual sin avanzar. */
+      if (_varActive && _varActiveSince && (Date.now() - _varActiveSince) > 3500) {
         _varActive = false; _varActiveSince = 0;
         if (_varPauseStart) { _varPauseMs += Date.now() - _varPauseStart; _varPauseStart = 0; }
       }
@@ -14749,7 +14750,7 @@
         if (ev.var) {
           _varActive = true;
           _varActiveSince = Date.now();
-          _varPauseStart = Date.now(); /* anti-throttling: descontamos los 3 s del VAR */
+          _varPauseStart = Date.now(); /* anti-throttling: descontamos los 2 s del VAR */
           /* Veredicto ya decidido en genMatchEventsEnhanced. Si por
              cualquier razón viene sin flag (p.ej. eventos antiguos en
              localStorage) hacemos el 50/50 aquí como fallback. */
@@ -14820,7 +14821,7 @@
               _varActive = false;
               _varActiveSince = 0;
               if (_varPauseStart) { _varPauseMs += Date.now() - _varPauseStart; _varPauseStart = 0; }
-            }, 3000);
+            }, 2000);
           })(ev, ico, _varConfirmed);
           break; /* Exit while loop – VAR is handling this event */
         }

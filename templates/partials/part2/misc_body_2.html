@@ -18219,6 +18219,25 @@
   function _wireObserver(){
     var screen = document.getElementById('s-agenda');
     if (!screen) return;
+    /* Enforcement del marcador: mientras la pantalla del calendario
+       esté abierta lo re-afirmamos cada 700 ms. Es idempotente
+       (quita y re-pone una sola clase) y se PARA en cuanto la
+       pantalla deja de estar activa, así nunca corre durante un
+       partido. Garantiza que el borde rosa aparezca aunque alguna
+       ruta de render no lo haya disparado por una carrera de timing. */
+    var _markTimer = null;
+    function _startMarkTimer(){
+      if (_markTimer) return;
+      _markTimer = setInterval(function(){
+        if (!screen.classList.contains('active')){
+          clearInterval(_markTimer); _markTimer = null; return;
+        }
+        try { window._bayernCalMarkToday(); } catch(_){}
+      }, 700);
+    }
+    function _stopMarkTimer(){
+      if (_markTimer){ clearInterval(_markTimer); _markTimer = null; }
+    }
     function _check(){
       if (screen.classList.contains('active')){
         if (window._bayernCalContext){
@@ -18226,14 +18245,14 @@
         } else {
           window._bayernCalDeactivate();
         }
-        /* Marca el día actual también en el SSR global (modo no
-           Bayern): _bayernCalActivate ya re-renderiza y marca el
-           contenedor Bayern, pero #ag-content es estático y solo
-           necesita la clase. setTimeout para esperar al render. */
-        setTimeout(function(){
-          try { window._bayernCalMarkToday(); } catch(_){}
-        }, 60);
+        /* Marca el día actual al entrar (varios intentos para cubrir
+           el render async + los pre-renders de arranque). */
+        [60, 200, 500, 1100, 2300].forEach(function(t){
+          setTimeout(function(){ try { window._bayernCalMarkToday(); } catch(_){} }, t);
+        });
+        _startMarkTimer();
       } else {
+        _stopMarkTimer();
         if (document.body.classList.contains('bayern-cal-on')){
           window._bayernCalDeactivate();
           window._bayernCalContext = false;

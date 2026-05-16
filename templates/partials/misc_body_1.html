@@ -711,6 +711,19 @@ window._showSimProgress = function(opts, onDone){
     } else {
       _wireObserver();
     }
+
+    /* PRE-RENDER al arrancar: construye la plantilla en su host
+       (oculto) ANTES de que el humano pulse PLANTILLA, así al
+       entrar se ve al instante. Reintentos espaciados porque los
+       datos del editor (ligaExt) cargan async; renderBayernPlantillaScreen
+       es idempotente y pinta "— Sin jugadores —" si aún no hay. */
+    function _bootPlant(){ try { window.renderBayernPlantillaScreen(); } catch(_){} }
+    function _bootPlantAll(){ [0,400,1200,2600,4500,7000].forEach(function(t){ setTimeout(_bootPlant,t); }); }
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', _bootPlantAll);
+    } else {
+      _bootPlantAll();
+    }
   })();
   </script>
 </div>

@@ -17449,6 +17449,44 @@
     color:#fff !important;
     box-shadow:0 0 14px rgba(220,5,45,.55);
   }
+
+  /* ── MARCADOR DE DÍA ACTUAL DEL CALENDARIO ─────────────────────
+     Borde rosa/morado brillante y llamativo sobre la fila del día
+     en curso del Bayern. Empieza en la 1ª fila (01 Jul / inicio
+     de temporada) y "baja" solo: cada SIGUIENTE DÍA mueve la clase
+     .ag-today-marker a la fila siguiente (window._bayernCalMarkToday).
+     Funciona tanto en el calendario Bayern (#ag-content-bayern)
+     como en el SSR global (#ag-content). */
+  @keyframes agTodayPulse{
+    0%,100%{box-shadow:0 0 0 2px rgba(255,80,220,.95) inset,
+                       0 0 16px 3px rgba(206,40,255,.55);}
+    50%{box-shadow:0 0 0 3px rgba(255,140,240,1) inset,
+                   0 0 30px 8px rgba(206,40,255,.95);}
+  }
+  #s-agenda .ag-r.ag-today-marker{
+    position:relative;
+    border-radius:9px;
+    background:linear-gradient(90deg,rgba(206,40,255,.30),
+               rgba(255,40,180,.16) 55%,rgba(0,0,0,0)) !important;
+    box-shadow:0 0 0 2px rgba(255,80,220,.95) inset,
+               0 0 22px 5px rgba(206,40,255,.70);
+    animation:agTodayPulse 1.25s ease-in-out infinite;
+    z-index:3;
+  }
+  #s-agenda .ag-r.ag-today-marker::before{
+    content:'';position:absolute;left:0;top:0;bottom:0;width:6px;
+    border-radius:9px 0 0 9px;
+    background:linear-gradient(180deg,#ff3cc8,#b13cff);
+    box-shadow:0 0 14px 3px rgba(255,70,210,.95);
+  }
+  #s-agenda .ag-r.ag-today-marker .ag-date{
+    color:#ffdcf6 !important;font-weight:800;
+    text-shadow:0 0 9px rgba(255,90,225,.95);
+  }
+  @media (prefers-reduced-motion:reduce){
+    #s-agenda .ag-r.ag-today-marker{animation:none;}
+  }
+
   /* Modal selector */
   #bayern-cal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:99998;align-items:center;justify-content:center;padding:18px;}
   #bayern-cal-ov.show{display:flex;}
@@ -17838,7 +17876,53 @@
     }
     bay.innerHTML = html;
     _patchCounters();
+    try { window._bayernCalMarkToday(); } catch(_){}
   }
+
+  /* ── Marcador del día actual ───────────────────────────────────
+     Lee la fecha en curso del Bayern (state legacy del HUB s-munich,
+     fallback al chip #munich-cal-fecha) y pone .ag-today-marker en
+     la fila cuyo .ag-date coincide. La clase es única en toda la
+     pantalla: cada llamada limpia la anterior, así el marcador
+     "baja" solo al avanzar de día. */
+  function _currentBayernDate(){
+    try {
+      var st = window._bayernLegacyState;
+      if (st && st.events && st.events.length){
+        var e = st.events[st.eventIdx || 0];
+        if (e && e.date) return String(e.date).trim();
+      }
+    } catch(_){}
+    var f = document.getElementById('munich-cal-fecha');
+    if (f && f.textContent) return f.textContent.trim();
+    return null;
+  }
+  window._bayernCalMarkToday = function(){
+    var screen = document.getElementById('s-agenda');
+    if (!screen) return;
+    var bayOn = document.body.classList.contains('bayern-cal-on');
+    var host  = document.getElementById(bayOn ? 'ag-content-bayern' : 'ag-content');
+    if (!host) return;
+    var dateStr = _currentBayernDate();
+    screen.querySelectorAll('.ag-r.ag-today-marker').forEach(function(r){
+      r.classList.remove('ag-today-marker');
+    });
+    if (!dateStr) return;
+    var rows = host.querySelectorAll('.ag-r');
+    var target = null;
+    for (var i = 0; i < rows.length; i++){
+      var de = rows[i].querySelector('.ag-date');
+      if (de && de.textContent.trim() === dateStr){ target = rows[i]; break; }
+    }
+    if (!target) return;
+    target.classList.add('ag-today-marker');
+    if (screen.classList.contains('active') && host._agTodaySig !== dateStr){
+      host._agTodaySig = dateStr;
+      try { target.scrollIntoView({ block:'center', behavior:'smooth' }); }
+      catch(_){ try { target.scrollIntoView(); } catch(__){} }
+    }
+  };
+
   function _patchCounters(){
     var host = document.getElementById('ag-content-bayern');
     if (!host) return;
@@ -18114,6 +18198,13 @@
         } else {
           window._bayernCalDeactivate();
         }
+        /* Marca el día actual también en el SSR global (modo no
+           Bayern): _bayernCalActivate ya re-renderiza y marca el
+           contenedor Bayern, pero #ag-content es estático y solo
+           necesita la clase. setTimeout para esperar al render. */
+        setTimeout(function(){
+          try { window._bayernCalMarkToday(); } catch(_){}
+        }, 60);
       } else {
         if (document.body.classList.contains('bayern-cal-on')){
           window._bayernCalDeactivate();

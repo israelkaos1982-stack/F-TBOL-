@@ -24968,7 +24968,7 @@ Tottenham
     <!-- PICKER DE TORNEOS DE VERANO (se muestra solo hasta que el
          usuario elige 2 de los 3). -->
     <div class="munich-tour-picker" id="munich-tour-picker">
-      <div class="munich-tour-title">🌞 PRETEMPORADA · ELIGE 2 TORNEOS</div>
+      <div class="munich-tour-title">🌞 PRETEMPORADA · ELIGE 1 TORNEO</div>
       <div class="munich-tour-sub">Participación: 40 🪙 por torneo</div>
       <div class="munich-tour-cards">
         <div class="munich-tour-card" data-tour="sct"
@@ -25013,7 +25013,7 @@ Tottenham
         </div>
       </div>
       <button type="button" class="munich-tour-confirm" id="munich-tour-confirm"
-              onclick="window.muTourConfirm()">✅ CONFIRMAR 0/2</button>
+              onclick="window.muTourConfirm()">✅ CONFIRMAR 0/1</button>
     </div>
 
     <div class="munich-training-visual" id="munich-visual-training">
@@ -28126,7 +28126,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (!raw) return [];
       var arr = JSON.parse(raw);
       if (!Array.isArray(arr)) return [];
-      return arr.filter(function(id){ return !!SUMMER_TOURS[id]; }).slice(0,2);
+      return arr.filter(function(id){ return !!SUMMER_TOURS[id]; }).slice(0,1);
     } catch(_){ return []; }
   }
   function savePickedTours(arr) {
@@ -28136,8 +28136,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   var state = {
     pi: 8, injured: null, budgetSpent: 0, rating: 0,
     eventIdx: 0, events: [],
-    pickedTours: [],       /* IDs ya confirmados (hasta 2) */
-    tempPicks:   []        /* selección en curso antes de confirmar */
+    pickedTours: [],       /* ID ya confirmado (1) */
+    tempPicks:   []        /* selección en curso antes de confirmar (máx 1) */
   };
   /* ── EXPONEMOS state PARA QUE EL EDITOR HUD LO SINCRONICE EN VIVO
      (refuerzo 2026-05-10). Antes el editor solo escribía localStorage;
@@ -28206,9 +28206,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var pk = getEl('munich-tour-picker');
     var resetBtn = getEl('munich-tour-reset');
     if (!pk) return;
-    /* Mostrar solo si aún no hay torneos confirmados. Una vez elegidos
-       2, ocultamos el picker y el flujo normal de la agenda continúa. */
-    if (state.pickedTours.length >= 2) {
+    /* Mostrar solo si aún no hay torneo confirmado. Una vez elegido
+       1, ocultamos el picker y el flujo normal de la agenda continúa. */
+    if (state.pickedTours.length >= 1) {
       pk.classList.remove('show');
       if (resetBtn) resetBtn.classList.add('show');
       return;
@@ -28222,8 +28222,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     });
     var btn = getEl('munich-tour-confirm');
     if (btn) {
-      btn.textContent = '✅ CONFIRMAR ' + state.tempPicks.length + '/2';
-      btn.classList.toggle('ready', state.tempPicks.length === 2);
+      btn.textContent = '✅ CONFIRMAR ' + state.tempPicks.length + '/1';
+      btn.classList.toggle('ready', state.tempPicks.length === 1);
     }
   }
 
@@ -28241,37 +28241,43 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var now = Date.now();
     if (_muTourLastTap[id] && (now - _muTourLastTap[id]) < 150) return;
     _muTourLastTap[id] = now;
-    var idx = state.tempPicks.indexOf(id);
-    if (idx !== -1) {
-      state.tempPicks.splice(idx, 1);
+    /* Selección de 1 solo torneo: si pulsas el ya marcado lo
+       deseleccionas; si pulsas otro, reemplaza al anterior. */
+    if (state.tempPicks.indexOf(id) !== -1) {
+      state.tempPicks = [];
     } else {
-      if (state.tempPicks.length >= 2) {
-        /* Ya hay 2: sustituimos el primero para que el nuevo entre. */
-        state.tempPicks.shift();
-      }
-      state.tempPicks.push(id);
+      state.tempPicks = [id];
     }
     renderTourPicker();
   };
 
   window.muTourConfirm = function() {
-    if (state.tempPicks.length !== 2) {
-      alert('Elige exactamente 2 torneos.');
+    if (state.tempPicks.length !== 1) {
+      alert('Elige 1 torneo de pretemporada.');
       return;
     }
     state.pickedTours = state.tempPicks.slice();
     savePickedTours(state.pickedTours);
     renderTourPicker();
     updateHud();
-    var names = state.pickedTours.map(function(id){ return SUMMER_TOURS[id].name; }).join(' + ');
-    alert('✅ Torneos de pretemporada: ' + names);
+    var tId = state.pickedTours[0];
+    var tName = (SUMMER_TOURS[tId] && SUMMER_TOURS[tId].name) || tId;
+    /* Fusiona el Bayern en el cuadro del torneo elegido y navega
+       a su pantalla. _tourMergeBayern es idempotente; si el módulo
+       de torneos aún no expone el merge, al menos confirmamos. */
+    try {
+      if (typeof window._tourMergeBayern === 'function') {
+        window._tourMergeBayern(tId);
+      }
+    } catch(_){}
+    alert('✅ Torneo de pretemporada: ' + tName);
   };
 
   /* Vuelve a abrir el picker: limpia picks confirmados (el localStorage
      también) y deja el estado como si fuera la primera vez, para que
-     el usuario pueda elegir otros 2 torneos. */
+     el usuario pueda elegir otro torneo. */
   window.muTourReset = function() {
-    if (!confirm('¿Volver a elegir los 2 torneos de pretemporada?\nSe perderá la selección actual.')) return;
+    if (!confirm('¿Volver a elegir el torneo de pretemporada?\nSe perderá la selección actual.')) return;
     state.pickedTours = [];
     state.tempPicks   = [];
     savePickedTours([]);
@@ -28483,14 +28489,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        el IIFE de Munich). */
     if (!state.events.length) state.events = parseAgenda();
 
-    /* Si todavía no hemos elegido los torneos de pretemporada, el
+    /* Si todavía no hemos elegido el torneo de pretemporada, el
        picker ocupa el bloque "Próximo partido" — ocultamos los otros
        dos visuales y salimos sin tocar el resto del HUD. */
-    if (state.pickedTours.length < 2) {
+    if (state.pickedTours.length < 1) {
       if (visTraining) visTraining.style.display = 'none';
       if (visMatch)    visMatch.style.display    = 'none';
       renderTourPicker();
-      if (matchEl) matchEl.textContent = '🌞 PRETEMPORADA · Elige 2 torneos';
+      if (matchEl) matchEl.textContent = '🌞 PRETEMPORADA · Elige 1 torneo';
       if (state.injured) {
         if (warnEl)  warnEl.textContent = '\u26a0\ufe0f BAJA CONFIRMADA: ' + state.injured.name + ' (' + state.injured.days + ' partidos)';
         if (medIcon) medIcon.classList.add('blink');

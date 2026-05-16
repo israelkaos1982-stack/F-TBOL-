@@ -785,11 +785,15 @@ window._showSimProgress = function(opts, onDone){
   #ps-stage .ps-bar{
     height:100%;width:0%;border-radius:8px;
     background:linear-gradient(90deg,#36d27a,#9be15d,#ffe066);
-    transition:width 3s linear;
+    transition:none;   /* el avance lo pinta requestAnimationFrame */
   }
   #ps-stage .ps-bar.injury{background:linear-gradient(90deg,#ff5c5c,#ff2d6f);}
+  #ps-stage .ps-pct{
+    margin-top:10px;font-family:'Bebas Neue','Oswald',sans-serif;
+    font-size:22px;letter-spacing:2px;color:#ffe9a8;min-height:24px;
+  }
   #ps-stage .ps-result{
-    margin-top:14px;font-family:Oswald,sans-serif;font-size:16px;letter-spacing:1.5px;
+    margin-top:8px;font-family:Oswald,sans-serif;font-size:16px;letter-spacing:1.5px;
     min-height:22px;color:#bdf5c8;
   }
   #ps-stage .ps-meta{
@@ -927,7 +931,12 @@ window._showSimProgress = function(opts, onDone){
   /* Filas del calendario Bayern (TODOS los días). Preferimos el
      render Bayern (#ag-content-bayern, lo pre-construye el módulo
      del calendario al arrancar); si no, el SSR global #ag-content. */
+  /* Memo: las filas del calendario son estáticas tras el arranque.
+     Cachear evita querySelectorAll sobre ~75 filas en cada _render /
+     _advance / label (lo llamaba muchas veces y cargaba el hilo). */
+  var _ROWS_CACHE = null;
   function _calRows(){
+    if (_ROWS_CACHE && _ROWS_CACHE.length) return _ROWS_CACHE;
     var host = document.getElementById('ag-content-bayern');
     if (!host || !host.querySelector('.ag-r')) host = document.getElementById('ag-content');
     if (!host) return [];
@@ -943,6 +952,7 @@ window._showSimProgress = function(opts, onDone){
                : 'match';
       out.push({ date:date, label:lbl, icon:ico, weather:wx||'☀️', type:type, cls:cls });
     });
+    if (out.length) _ROWS_CACHE = out;
     return out;
   }
 
@@ -1086,35 +1096,61 @@ window._showSimProgress = function(opts, onDone){
       + '<img class="ps-shield" src="' + BAYERN_SHIELD + '" alt="Bayern">'
       + '<button type="button" class="ps-btn" id="ps-train-btn">ENTRENAR</button>'
       + '<div class="ps-bar-wrap"><div class="ps-bar" id="ps-train-bar"></div></div>'
+      + '<div class="ps-pct" id="ps-train-pct"></div>'
       + '<div class="ps-result" id="ps-train-res"></div>'
       + '</div>';
     var btn = document.getElementById('ps-train-btn');
     var bar = document.getElementById('ps-train-bar');
+    var pct = document.getElementById('ps-train-pct');
     var res = document.getElementById('ps-train-res');
     if (!btn) return;
     btn.onclick = function(){
+      if (btn.disabled) return;
       btn.disabled = true;
       window.__psBusy = true;   /* bloquea re-render externo durante la barra */
       var injs = _rollInjuries();           /* cálculo en el segundo 0 */
       if (injs.length) bar.classList.add('injury');
-      /* fuerza reflow para que la transición 0→100% se vea */
-      void bar.offsetWidth;
-      bar.style.width = '100%';
-      setTimeout(function(){
-        if (injs.length){
-          res.textContent = '🚑 ' + injs.length + ' lesión(es) en el entrenamiento';
-          res.style.color = '#ffb3b3';
-          _showInjuryModal(injs);
-        } else {
-          res.textContent = '✅ No hay lesiones';
-          res.style.color = '#bdf5c8';
-          var advanced = false;
-          var go1 = function(){ if (advanced) return; advanced = true; _markDoneAndAdvance(); };
-          var to = setTimeout(go1, 1500);
-          st.querySelector('.ps-card').onclick = function(){ clearTimeout(to); go1(); };
-        }
-      }, 3000);
+      /* Barra 0→100% pintada por requestAnimationFrame (no setTimeout
+         ni transición CSS — inmune a starvation del event-loop, y con
+         porcentaje visible). Al llegar a 100% resuelve YA. */
+      var DUR = 3000, t0 = (window.performance&&performance.now)?performance.now():Date.now(), resolved=false;
+      function frame(){
+        var now = (window.performance&&performance.now)?performance.now():Date.now();
+        var p = Math.min(1, (now - t0) / DUR);
+        var n = Math.round(p*100);
+        bar.style.width = n + '%';
+        if (pct) pct.textContent = n + '%';
+        if (p < 1){ requestAnimationFrame(frame); return; }
+        if (resolved) return; resolved = true;
+        _resolveTraining(injs, st, res, pct);
+      }
+      requestAnimationFrame(frame);
     };
+  }
+
+  function _resolveTraining(injs, st, res, pct){
+    if (injs && injs.length){
+      if (pct) pct.textContent = '100%';
+      res.textContent = '🚑 ' + injs.length + ' lesión(es) en el entrenamiento';
+      res.style.color = '#ffb3b3';
+      _showInjuryModal(injs);
+      return;
+    }
+    if (pct) pct.textContent = '100%';
+    res.textContent = '✅ No hay lesiones';
+    res.style.color = '#bdf5c8';
+    /* Auto-avance ~1.2s después (o toque) — temporizado por rAF para
+       no depender de setTimeout si el hilo va cargado. */
+    var t1 = (window.performance&&performance.now)?performance.now():Date.now(), done=false;
+    function adv(){ if (done) return; done = true; _markDoneAndAdvance(); }
+    function wait(){
+      var now = (window.performance&&performance.now)?performance.now():Date.now();
+      if (now - t1 >= 1200){ adv(); return; }
+      requestAnimationFrame(wait);
+    }
+    requestAnimationFrame(wait);
+    var card = st.querySelector('.ps-card');
+    if (card) card.onclick = adv;
   }
 
   function _cardRest(day){
@@ -1224,36 +1260,45 @@ window._showSimProgress = function(opts, onDone){
      legacy (que saltaba a "04 Jul"). */
   window._psCurrentDate = function(){ var c=_currentDay(); return c?c.date:''; };
 
+  function _syncHubLabels(day){
+    if (!day) return;
+    var mEl = document.getElementById('munich-next-match');
+    if (mEl) mEl.textContent = _dayLabel(day);
+    var cfEl = document.getElementById('munich-cal-fecha');
+    if (cfEl && day.date) cfEl.textContent = day.date;
+  }
+
   function _render(){
     var st = _stage(); if (!st) return;
     /* No reconstruir mientras la barra de ENTRENAR corre / modal de
-       lesión abierto (un updateHud externo no debe pisar la animación
-       en curso). PERO solo si ya hay una tarjeta pintada: si el stage
-       está vacío (p.ej. se navegó fuera a mitad), un flag colgado no
-       debe dejarlo en blanco para siempre → renderizamos igualmente. */
+       lesión abierto. Solo si ya hay tarjeta pintada (si el stage
+       está vacío sí renderizamos para no dejarlo en blanco). */
     if (window.__psBusy && st.querySelector('.ps-card')) return;
     if (window.__psBusy) window.__psBusy = false;
     var rows = _calRows();
-    var rows = _calRows();
     if (!rows.length){
       st.innerHTML = '<div class="ps-card"><div class="ps-sub">Cargando calendario…</div></div>';
+      st._psSig = null;
       return;
     }
     var d = _load();
     var idx = Math.min(Math.max(0, parseInt(d.dayIdx,10)||0), rows.length-1);
     if (idx !== d.dayIdx){ d.dayIdx = idx; _save(d); }
     var day = rows[idx];
+    var sig = idx + '|' + day.type + '|' + day.date;
+    /* IDEMPOTENCIA: si el mismo día ya está pintado, NO reconstruir
+       (un updateHud externo no debe destruir la tarjeta/handlers ni
+       reiniciar la barra). Solo refrescamos las etiquetas baratas.
+       Esto arregla "02 Jul no resuelve / no avanza". */
+    if (st._psSig === sig && st.querySelector('.ps-card')){
+      _syncHubLabels(day);
+      return;
+    }
+    st._psSig = sig;
     if (day.type === 'train')      _cardTraining(day);
     else if (day.type === 'rest')  _cardRest(day);
     else                           _cardMatch(day);
-    /* Etiqueta "Próximo partido" del hub sincronizada con el día
-       (updateHud no se llama al avanzar desde la tarjeta). */
-    var mEl = document.getElementById('munich-next-match');
-    if (mEl) mEl.textContent = _dayLabel(day);
-    /* La tarjeta CALENDARIO del hub muestra el día real (sincronizado
-       con el avance día a día), no el evento legacy. */
-    var cfEl = document.getElementById('munich-cal-fecha');
-    if (cfEl && day && day.date) cfEl.textContent = day.date;
+    _syncHubLabels(day);
   }
 
   /* El render lo dispara updateHud() del hub (rama "torneo elegido")

@@ -24913,12 +24913,20 @@ document.addEventListener('DOMContentLoaded', function() {
       _visPct += Math.max(0.4, (_tgtPct - _visPct) * 0.16);
       if (_visPct > _tgtPct) _visPct = _tgtPct;
     } else {
-      /* Target alcanzado pero la tarea sigue (espera del server):
-         trickle asintótico hacia 99 — desacelera cuanto más alto. */
-      var cap = 99;
+      /* Target alcanzado pero la tarea sigue. ANTES el trickle subía
+         SIEMPRE hasta 99 → si el progreso REAL era bajo (p.ej. la
+         sim de 51 ligas reportando 6 % "Simulando Italia (3/51)")
+         la barra mentía mostrando 99 % y parecía "colgada en 99 %"
+         (foto usuario 2026-05-17). Ahora el trickle solo se adelanta
+         un MARGEN PEQUEÑO sobre el progreso real, así la barra
+         refleja la verdad: si la sim se atasca en la liga 3/51, se
+         ve ~12 %, no 99 %. Para tareas indeterminadas que igualmente
+         empujan el target alto (fake-progress 95 %) el margen las
+         deja cerca de 99 como antes. */
+      var cap = Math.min(99, _tgtPct + 8);
       if (_visPct < cap) {
         var room = cap - _visPct;
-        _visPct += Math.max(0.03, room * 0.012);
+        _visPct += Math.max(0.03, room * 0.05);
         if (_visPct > cap) _visPct = cap;
       }
     }

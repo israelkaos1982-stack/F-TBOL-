@@ -10450,42 +10450,63 @@ window._showSimProgress = function(opts, onDone){
     /* No interferir con el bulk-sim de Resto de Ligas (su propia
        hidratación XHR síncrona). */
     if (window._restoSimBulkInProgress) return;
-    var names = [];
+    if (typeof window.fetch !== 'function') return;
+    var _started = {};            /* slugs ya encolados (dedupe) */
+    var _queue = [], _active = 0, CONC = 5;
+    function _isCached(slug){
+      try { if (localStorage.getItem('ligaExt_' + slug)) return true; } catch(_){}
+      try { if (localStorage.getItem('ligaExt_' + slug + '_protected')) return true; } catch(_){}
+      return false;
+    }
+    function _drain(){
+      while (_active < CONC && _queue.length){
+        var slug = _queue.shift();
+        _active++;
+        window.fetch('/api/liga-ext/' + encodeURIComponent(slug))
+          .then(function(r){ return (r && r.ok) ? r.json() : null; })
+          .then(function(j){
+            if (j && j.data && Array.isArray(j.data.teams) && j.data.teams.length){
+              try { localStorage.setItem('ligaExt_' + this.slug, JSON.stringify(j.data)); } catch(_){}
+              if (typeof onEach === 'function') { try { onEach(); } catch(_){} }
+            }
+          }.bind({ slug: slug }))
+          .catch(function(){})
+          .then(function(){ _active--; _drain(); });
+      }
+    }
+    function _enqueue(slug){
+      if (!slug || _started[slug]) return;
+      _started[slug] = 1;
+      if (_isCached(slug)) return;
+      _queue.push(slug);
+      _drain();
+    }
+    /* 1) Slugs derivados del DOM de "Resto de Ligas" (síncrono;
+       conserva el comportamiento previo aunque el server sea antiguo
+       y no tenga el índice). */
     try {
       var els = document.querySelectorAll('#s-ligas .menu-card .mc-label');
       for (var i = 0; i < els.length; i++) {
         var n = (els[i].textContent || '').trim();
-        if (n) names.push(n);
+        if (n) _enqueue(_tourSlugify(n));
       }
     } catch(_){}
-    if (!names.length) return;
-    var missing = [];
-    names.forEach(function(n){
-      var slug = _tourSlugify(n);
-      if (!slug) return;
-      var has = false;
-      try { has = !!localStorage.getItem('ligaExt_' + slug); } catch(_){}
-      if (!has) { try { has = !!localStorage.getItem('ligaExt_' + slug + '_protected'); } catch(_){} }
-      if (!has && missing.indexOf(slug) === -1) missing.push(slug);
-    });
-    if (!missing.length) return;
-    if (typeof window.fetch !== 'function') return;
-    var idx = 0, CONC = 5;
-    function _pull(){
-      if (idx >= missing.length) return;
-      var slug = missing[idx++];
-      window.fetch('/api/liga-ext/' + encodeURIComponent(slug))
+    /* 2) Índice AUTORITATIVO del servidor: devuelve los slugs EXACTOS
+       de TODAS las ligas guardadas (51 Resto de Ligas + EA Sports +
+       Hypermotion + 1ª RFEF) sin depender de adivinar el slug desde
+       la etiqueta en español. Esto arregla el caso del usuario:
+       "no salen las 51 Resto de Ligas ni EA/Hyper/1ªRFEF" cuando el
+       slugify de la etiqueta no coincide con el slug del servidor.
+       2026-05-17. */
+    try {
+      window.fetch('/api/liga-ext')
         .then(function(r){ return (r && r.ok) ? r.json() : null; })
         .then(function(j){
-          if (j && j.data && Array.isArray(j.data.teams) && j.data.teams.length){
-            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(j.data)); } catch(_){}
-            if (typeof onEach === 'function') { try { onEach(); } catch(_){} }
-          }
+          if (!j || !Array.isArray(j.leagues)) return;
+          j.leagues.forEach(function(L){ if (L && L.slug) _enqueue(L.slug); });
         })
-        .catch(function(){})
-        .then(function(){ _pull(); });
-    }
-    for (var c = 0; c < CONC && c < missing.length; c++) _pull();
+        .catch(function(){});
+    } catch(_){}
   }
   function _allTeamsUncached(){
     var out = [], seen = {};

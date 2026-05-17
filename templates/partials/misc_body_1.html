@@ -1014,23 +1014,41 @@ window._showSimProgress = function(opts, onDone){
     else { grado=3; gradoNombre='Grave'; gradoEmoji='🚑'; partidos=5+Math.floor(Math.random()*6);
       list=['Rotura fibrilar Grado III','Fisura en el metatarsiano','Rotura parcial del ligamento','Luxación de hombro','Rotura del tendón de Aquiles']; }
     var descripcion = list[Math.floor(Math.random()*list.length)];
+    /* La baja es de N PARTIDOS: calculamos contra el CALENDARIO del
+       Bayern qué partidos se pierde y la fecha de reincorporación
+       (el día siguiente al N-ésimo partido tras la lesión). Ej.:
+       lesión 01 Jul · 4 partidos → pierde 04/08/12/16 Jul → vuelve
+       el 17 Jul. Todo automático desde el calendario. */
+    var pdRows = _calRows();
+    var injIdx = 0;
+    try { injIdx = Math.min(Math.max(0, parseInt(_load().dayIdx,10)||0), Math.max(0, pdRows.length-1)); } catch(_){}
+    var missed = [];
+    for (var mi = injIdx + 1; mi < pdRows.length && missed.length < partidos; mi++){
+      if (pdRows[mi] && pdRows[mi].type === 'match') missed.push(mi);
+    }
+    var returnIdx = missed.length ? (missed[missed.length-1] + 1) : pdRows.length;
+    var returnDate = (pdRows[returnIdx] && pdRows[returnIdx].date)
+      || (pdRows.length ? pdRows[pdRows.length-1].date : '');
     var rec = {
       equipo:'Bayern Munich', grado:grado, gradoNombre:gradoNombre, gradoEmoji:gradoEmoji,
-      descripcion:descripcion, partidos:partidos, timestamp:Date.now()
+      descripcion:descripcion, partidos:partidos, returnDate:returnDate, timestamp:Date.now()
     };
     if (!window.LESION_STORE) window.LESION_STORE = {};
     if (!window.BAJA_STORE)   window.BAJA_STORE = {};
     window.LESION_STORE[pl.name] = rec;
     window.BAJA_STORE[pl.name] = { tipo:'lesion', liga:partidos, copa:partidos, europa:partidos };
-    /* Persistimos la lesión en el estado de pretemporada para que
-       sobreviva a recargas y se REAPLIQUE a LESION_STORE/BAJA_STORE
-       (que son globales en memoria). Así el "💉 Menú de tratamiento"
-       (lee BAJA_STORE) y la Caja Plantilla (lee LESION_STORE) la ven. */
+    /* Persistimos la lesión (con los índices de partidos perdidos y
+       la fecha de vuelta) para reaplicarla/decrementarla en cada
+       render — sobrevive recargas y la ven el menú médico y la
+       Caja Plantilla. */
     try {
       var d = _load();
       d.injuries = d.injuries || {};
-      d.injuries[pl.name] = { name:pl.name, partidos:partidos, gradoNombre:gradoNombre,
-        gradoEmoji:gradoEmoji, descripcion:descripcion, grado:grado, timestamp:rec.timestamp };
+      d.injuries[pl.name] = {
+        name:pl.name, matches:partidos, injIdx:injIdx, missed:missed,
+        returnIdx:returnIdx, returnDate:returnDate, gradoNombre:gradoNombre,
+        gradoEmoji:gradoEmoji, descripcion:descripcion, grado:grado, ts:rec.timestamp
+      };
       _save(d);
     } catch(_){}
     return {
@@ -1038,33 +1056,53 @@ window._showSimProgress = function(opts, onDone){
       pos: POS_ES[pl.pos] || pl.pos || '—',
       tipo: gradoNombre + ' · ' + descripcion,
       emoji: gradoEmoji,
-      partidos: partidos
+      partidos: partidos,
+      returnDate: returnDate
     };
   }
 
-  /* Reaplica las lesiones de pretemporada a los stores globales en
-     cada render/arranque. Idempotente y respeta la curación: si el
-     jugador YA está en BAJA_STORE (aunque sea a 0 por tratamiento)
-     NO lo pisamos. Sin esto, una recarga (móvil / Railway) borraba
-     la lesión de memoria y desaparecía del menú médico y la plantilla. */
+  /* Reaplica/decrementa las lesiones de pretemporada en cada
+     render/arranque, contra el día actual del calendario:
+       · partidos restantes = nº de partidos perdidos aún por jugar.
+       · 0 restantes (pasó el último partido perdido) → RECUPERADO:
+         se borra de LESION_STORE/BAJA_STORE y del estado.
+       · Si el usuario lo CURÓ en el menú médico (BAJA_STORE a 0)
+         se respeta: se elimina la lesión persistida (no vuelve). */
   function _applyPersistedInjuries(){
     try {
-      var inj = (_load().injuries) || {};
+      var d = _load();
+      var inj = d.injuries || {};
+      var rows = _calRows();
+      var cur = Math.min(Math.max(0, parseInt(d.dayIdx,10)||0), Math.max(0, rows.length-1));
       if (!window.LESION_STORE) window.LESION_STORE = {};
       if (!window.BAJA_STORE)   window.BAJA_STORE = {};
+      var changed = false;
       Object.keys(inj).forEach(function(nm){
         var x = inj[nm]; if (!x) return;
-        if (!(nm in window.BAJA_STORE)){
-          window.BAJA_STORE[nm] = { tipo:'lesion', liga:x.partidos, copa:x.partidos, europa:x.partidos };
+        var b = window.BAJA_STORE[nm];
+        /* Curado en el menú médico (suma 0) → respetar y olvidar. */
+        if (b && b.tipo === 'lesion' &&
+            (parseInt(b.liga||0,10)+parseInt(b.copa||0,10)+parseInt(b.europa||0,10)) === 0 &&
+            !(window.LESION_STORE[nm] && Number(window.LESION_STORE[nm].partidos) > 0)){
+          delete inj[nm]; if (window.LESION_STORE) delete window.LESION_STORE[nm];
+          changed = true; return;
         }
-        if (!window.LESION_STORE[nm]){
-          window.LESION_STORE[nm] = {
-            equipo:'Bayern Munich', grado:x.grado||1, gradoNombre:x.gradoNombre||'Lesión',
-            gradoEmoji:x.gradoEmoji||'🩹', descripcion:x.descripcion||'', partidos:x.partidos,
-            timestamp:x.timestamp||Date.now()
-          };
+        var missed = Array.isArray(x.missed) ? x.missed : [];
+        var remaining = missed.filter(function(i){ return i >= cur; }).length;
+        if (remaining <= 0){
+          /* Pasó el último partido perdido → reincorporado. */
+          if (window.LESION_STORE) delete window.LESION_STORE[nm];
+          if (window.BAJA_STORE[nm] && window.BAJA_STORE[nm].tipo === 'lesion') delete window.BAJA_STORE[nm];
+          delete inj[nm]; changed = true; return;
         }
+        window.LESION_STORE[nm] = {
+          equipo:'Bayern Munich', grado:x.grado||1, gradoNombre:x.gradoNombre||'Lesión',
+          gradoEmoji:x.gradoEmoji||'🩹', descripcion:x.descripcion||'',
+          partidos:remaining, returnDate:x.returnDate||'', timestamp:x.ts||Date.now()
+        };
+        window.BAJA_STORE[nm] = { tipo:'lesion', liga:remaining, copa:remaining, europa:remaining };
       });
+      if (changed) _save(d);
     } catch(_){}
   }
 
@@ -1101,7 +1139,8 @@ window._showSimProgress = function(opts, onDone){
         + '<div class="ps-inj-name">' + (inj.emoji||'🚑') + ' ' + _esc(inj.name) + '</div>'
         + '<div class="ps-inj-row"><b>Posición</b><span>' + _esc(inj.pos) + '</span></div>'
         + '<div class="ps-inj-row"><b>Tipo de lesión</b><span>' + _esc(inj.tipo) + '</span></div>'
-        + '<div class="ps-inj-row"><b>Días lesionado</b><span>' + inj.partidos + ' partido(s)</span></div>'
+        + '<div class="ps-inj-row"><b>Baja</b><span>' + inj.partidos + ' partido(s)</span></div>'
+        + (inj.returnDate ? '<div class="ps-inj-row"><b>Vuelve el</b><span>' + _esc(inj.returnDate) + '</span></div>' : '')
         + '</div>';
     }).join('');
     ov.innerHTML =

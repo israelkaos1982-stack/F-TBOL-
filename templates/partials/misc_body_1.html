@@ -10166,6 +10166,72 @@ window._showSimProgress = function(opts, onDone){
   function _allTeams(){
     return _allTeamsUncached();
   }
+
+  /* ── PREFETCH PERMANENTE de las 51 "Resto de Ligas" ──────────────
+     Petición usuario 2026-05-16 #4: "otra vez no hay equipos · cuando
+     lo arregles guárdalo para siempre".
+
+     Causa raíz definitiva: las 51 ligas de Resto de Ligas viven en el
+     SERVER (/api/liga-ext/<slug>) y solo aterrizan en localStorage
+     cuando se abre/simula esa liga concreta. En un dispositivo donde
+     no se han abierto, localStorage solo tiene `liga-ea-sports` +
+     `liga-hypermotion` → el pool del torneo solo ve ~80 equipos.
+
+     Solución permanente: al abrir el editor lanzamos un prefetch
+     ASÍNCRONO (no bloquea, concurrencia 5) de TODAS las ligas que
+     falten y las guardamos en localStorage. Una vez bajadas quedan
+     ahí PARA SIEMPRE (localStorage persiste entre sesiones), así que
+     a partir de la 1ª vez el pool sale completo al instante. Mientras
+     bajan (1ª vez, 4G), el pool se va rellenando solo vía el callback.
+     La lista de ligas sale del MISMO DOM que usa "Resto de Ligas"
+     (#s-ligas .menu-card .mc-label) — sin duplicar la lista. */
+  function _tourSlugify(s){
+    return String(s||'').toLowerCase().normalize('NFD')
+      .replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9]+/g,'-')
+      .replace(/^-|-$/g,'');
+  }
+  function _tourPrefetchAllLeagues(onEach){
+    /* No interferir con el bulk-sim de Resto de Ligas (su propia
+       hidratación XHR síncrona). */
+    if (window._restoSimBulkInProgress) return;
+    var names = [];
+    try {
+      var els = document.querySelectorAll('#s-ligas .menu-card .mc-label');
+      for (var i = 0; i < els.length; i++) {
+        var n = (els[i].textContent || '').trim();
+        if (n) names.push(n);
+      }
+    } catch(_){}
+    if (!names.length) return;
+    var missing = [];
+    names.forEach(function(n){
+      var slug = _tourSlugify(n);
+      if (!slug) return;
+      var has = false;
+      try { has = !!localStorage.getItem('ligaExt_' + slug); } catch(_){}
+      if (!has) { try { has = !!localStorage.getItem('ligaExt_' + slug + '_protected'); } catch(_){} }
+      if (!has && missing.indexOf(slug) === -1) missing.push(slug);
+    });
+    if (!missing.length) return;
+    if (typeof window.fetch !== 'function') return;
+    var idx = 0, CONC = 5;
+    function _pull(){
+      if (idx >= missing.length) return;
+      var slug = missing[idx++];
+      window.fetch('/api/liga-ext/' + encodeURIComponent(slug))
+        .then(function(r){ return (r && r.ok) ? r.json() : null; })
+        .then(function(j){
+          if (j && j.data && Array.isArray(j.data.teams) && j.data.teams.length){
+            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(j.data)); } catch(_){}
+            if (typeof onEach === 'function') { try { onEach(); } catch(_){} }
+          }
+        })
+        .catch(function(){})
+        .then(function(){ _pull(); });
+    }
+    for (var c = 0; c < CONC && c < missing.length; c++) _pull();
+  }
   function _allTeamsUncached(){
     var out = [], seen = {};
     /* Trackeamos TODAS las ligas en las que aparece cada equipo
@@ -10562,6 +10628,23 @@ window._showSimProgress = function(opts, onDone){
     _populateForm(cfg);
     _setFeedback('');
     document.getElementById('tour-editor-overlay').style.display = 'flex';
+    /* PREFETCH PERMANENTE: bajamos a localStorage TODAS las ligas que
+       falten (async, no bloquea). Una vez guardadas persisten para
+       siempre → próximas aperturas, pool completo al instante. Mientras
+       bajan, repintamos lista de exclusión + contador con debounce. */
+    try {
+      var _pfDeb = 0;
+      _tourPrefetchAllLeagues(function(){
+        if (!_open || _open.id !== id) return;
+        if (_pfDeb) return;
+        _pfDeb = setTimeout(function(){
+          _pfDeb = 0;
+          if (!_open || _open.id !== id) return;
+          try { _renderLeagueChecks(); } catch(_){}
+          try { _updatePoolStat(); } catch(_){}
+        }, 350);
+      });
+    } catch(_){}
     /* Las ligas de "Resto de Ligas" se hidratan desde el server
        (/api/liga-ext/*) de forma asíncrona. Si el editor se abre ANTES
        de que terminen, el pool y la lista "Excluir ligas" salen
@@ -10569,11 +10652,11 @@ window._showSimProgress = function(opts, onDone){
        Reintentos acotados: en cuanto la firma de localStorage cambie
        (llegan más ligas) repintamos lista de exclusión + contador. Sin
        cache, además, cualquier interacción del usuario ya recomputa
-       fresco. Comprobaciones puntuales tempranas (300 ms) y hasta 8 s
-       para 4G lento. Sin polling continuo. 2026-05-16 #3. */
+       fresco. Comprobaciones puntuales tempranas (300 ms) y hasta 12 s
+       para 4G lento. Sin polling continuo. 2026-05-16 #3/#4. */
     try {
       var _openSig = _ligaExtSig();
-      [300, 800, 1600, 3000, 5000, 8000].forEach(function(_ms){
+      [300, 800, 1600, 3000, 5000, 8000, 12000].forEach(function(_ms){
         setTimeout(function(){
           if (!_open || _open.id !== id) return;
           var _nowSig = _ligaExtSig();

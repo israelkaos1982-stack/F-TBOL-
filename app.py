@@ -2384,11 +2384,14 @@ _KV_ALLOWED_EXACT = {
     "comp_icons_v1", "comp_cards_v1",
     "europe_committed_v1", "bayern_trofeos_v1",
     "ucl_phase_v1", "uel_phase_v1", "uecl_phase_v1",
+    # Registro de torneos visibles (añadir/eliminar · 2026-05-16 #5).
+    "tour_registry_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("
     r"manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)"
-    r"|tour_(sct|pss|jg|asia)"
+    # tx1..tx8 = 8 huecos pre-cableados para torneos añadidos por el admin.
+    r"|tour_(sct|pss|jg|asia|tx[1-8])"
     r")_v1$"
 )
 _KV_MAX_BYTES = 2 * 1024 * 1024  # 2 MB por clave (alineado con CLAUDE.md)

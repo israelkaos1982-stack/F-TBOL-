@@ -8801,40 +8801,13 @@ window._showSimProgress = function(opts, onDone){
      pretemporada con los colores de la bandera anfitriona. -->
 <div class="screen" id="s-torneos-verano">
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
+<!-- 🖍 admin (PIN 747): añadir / eliminar torneos. 2026-05-16 #5 -->
+<button class="tv-edit-btn" title="Gestionar torneos (admin)">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji">🌞</span><h2>Torneos de Verano</h2></div>
 <div class="submenu-list">
-  <div class="submenu-card sc-sct"
-       style="background:linear-gradient(135deg,#0a1a3a 0%,#b22234 35%,#ffffff 50%,#3c3b6e 65%,#0a1a3a 100%) !important;border-color:#b22234 !important;"
-       onclick="go('s-sct')">
-    <span class="sc-emoji">🇺🇸</span><span class="sc-label">Soccer Champions Tour</span>
-    <button type="button" class="sc-info-btn"
-            onclick="event.stopPropagation();window.muTourInfo('sct')" title="Info">i</button>
-    <span class="sc-arr">▶</span>
-  </div>
-  <div class="submenu-card sc-pss"
-       style="background:linear-gradient(135deg,#012169 0%,#ce1124 35%,#ffffff 50%,#ce1124 65%,#012169 100%) !important;border-color:#ce1124 !important;"
-       onclick="go('s-pss')">
-    <span class="sc-emoji">🇬🇧</span><span class="sc-label">Premier Summer Series</span>
-    <button type="button" class="sc-info-btn"
-            onclick="event.stopPropagation();window.muTourInfo('pss')" title="Info">i</button>
-    <span class="sc-arr">▶</span>
-  </div>
-  <div class="submenu-card sc-jg"
-       style="background:linear-gradient(135deg,#aa151b 0%,#f1bf00 35%,#ffffff 50%,#f1bf00 65%,#aa151b 100%) !important;border-color:#f1bf00 !important;"
-       onclick="go('s-jg')">
-    <span class="sc-emoji">🇪🇸</span><span class="sc-label">Trofeo Joan Gamper</span>
-    <button type="button" class="sc-info-btn"
-            onclick="event.stopPropagation();window.muTourInfo('jg')" title="Info">i</button>
-    <span class="sc-arr">▶</span>
-  </div>
-  <div class="submenu-card sc-asia"
-       style="background:linear-gradient(135deg,#1a0612 0%,#bc002d 35%,#ffffff 50%,#bc002d 65%,#1a0612 100%) !important;border-color:#bc002d !important;"
-       onclick="go('s-asia')">
-    <span class="sc-emoji">🇯🇵</span><span class="sc-label">Asian Tournament</span>
-    <button type="button" class="sc-info-btn"
-            onclick="event.stopPropagation();window.muTourInfo('asia')" title="Info">i</button>
-    <span class="sc-arr">▶</span>
-  </div>
+  <!-- Cards generadas dinámicamente desde el registro de torneos
+       (built-in + slots añadidos). Ver _tvRenderCards(). -->
+  <div id="tv-tour-cards"></div>
   <!-- Caja "📊 Estadísticas" Torneos de Verano (2026-05-08): paleta
        dorado/amarillo igual que la temática (la caja en s-competiciones
        es dorada). Lee de `ef_player_stats_torneos_v1` (cache aislado
@@ -8897,6 +8870,58 @@ window._showSimProgress = function(opts, onDone){
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-asia">🇯🇵</span><h2 id="tour-title-asia">Asian Tournament</h2></div>
 <div id="tour-info-asia" class="tour-info-box"></div>
 </div>
+<!-- ═══ 8 SLOTS PRE-CABLEADOS para torneos AÑADIDOS por el admin
+     (2026-05-16 #5). Mismo esqueleto que los 4 built-in: el observer
+     _watchScreens (itera TOUR_IDS) los pinta vía _tourRender al
+     navegar; el 🖍 abre _tourOpenEditor(tx*) igual que los demás. -->
+<div class="screen" id="s-tx1">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx1" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx1">🏆</span><h2 id="tour-title-tx1">Torneo Personalizado 1</h2></div>
+<div id="tour-info-tx1" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx2">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx2" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx2">🏆</span><h2 id="tour-title-tx2">Torneo Personalizado 2</h2></div>
+<div id="tour-info-tx2" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx3">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx3" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx3">🏆</span><h2 id="tour-title-tx3">Torneo Personalizado 3</h2></div>
+<div id="tour-info-tx3" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx4">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx4" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx4">🏆</span><h2 id="tour-title-tx4">Torneo Personalizado 4</h2></div>
+<div id="tour-info-tx4" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx5">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx5" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx5">🏆</span><h2 id="tour-title-tx5">Torneo Personalizado 5</h2></div>
+<div id="tour-info-tx5" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx6">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx6" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx6">🏆</span><h2 id="tour-title-tx6">Torneo Personalizado 6</h2></div>
+<div id="tour-info-tx6" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx7">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx7" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx7">🏆</span><h2 id="tour-title-tx7">Torneo Personalizado 7</h2></div>
+<div id="tour-info-tx7" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx8">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx8" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx8">🏆</span><h2 id="tour-title-tx8">Torneo Personalizado 8</h2></div>
+<div id="tour-info-tx8" class="tour-info-box"></div>
+</div>
 
 <!-- Wire-up del botón 🖍 — vive FUERA del IIFE grande para que el
      click siempre tenga respuesta. Si el módulo no se ha cargado
@@ -8905,6 +8930,19 @@ window._showSimProgress = function(opts, onDone){
 <script>
 (function(){
   document.addEventListener('click', function(ev){
+    /* 🖍 "Gestionar torneos" de s-torneos-verano (PIN 747 → modal
+       añadir/eliminar). 2026-05-16 #5. */
+    var mgBtn = ev.target && ev.target.closest && ev.target.closest('.tv-edit-btn');
+    if (mgBtn) {
+      ev.preventDefault(); ev.stopPropagation();
+      if (typeof window._tvOpenManage !== 'function') {
+        alert('⚠ La gestión de torneos no se ha cargado. Recarga la página.');
+        return;
+      }
+      if (typeof window.pG === 'function') window.pG(function(){ window._tvOpenManage(); });
+      else window._tvOpenManage();
+      return;
+    }
     var btn = ev.target && ev.target.closest && ev.target.closest('.tour-edit-btn');
     if (!btn) return;
     var id = btn.getAttribute('data-tour');
@@ -8922,7 +8960,11 @@ window._showSimProgress = function(opts, onDone){
   /* Botón 🖍 admin de cada torneo — esquina superior derecha de la
      pantalla, simétrico al ◀ Volver. PIN-gated; abre _tourOpenEditor. */
   #s-sct .tour-edit-btn,#s-pss .tour-edit-btn,
-  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn{
+  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn,
+  #s-tx1 .tour-edit-btn,#s-tx2 .tour-edit-btn,#s-tx3 .tour-edit-btn,
+  #s-tx4 .tour-edit-btn,#s-tx5 .tour-edit-btn,#s-tx6 .tour-edit-btn,
+  #s-tx7 .tour-edit-btn,#s-tx8 .tour-edit-btn,
+  #s-torneos-verano .tv-edit-btn{
     position:absolute;top:8px;right:10px;z-index:5;
     background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
     color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;
@@ -8931,9 +8973,40 @@ window._showSimProgress = function(opts, onDone){
     transition:background .15s;
   }
   #s-sct .tour-edit-btn:active,#s-pss .tour-edit-btn:active,
-  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active{
+  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active,
+  #s-tx1 .tour-edit-btn:active,#s-tx2 .tour-edit-btn:active,
+  #s-tx3 .tour-edit-btn:active,#s-tx4 .tour-edit-btn:active,
+  #s-tx5 .tour-edit-btn:active,#s-tx6 .tour-edit-btn:active,
+  #s-tx7 .tour-edit-btn:active,#s-tx8 .tour-edit-btn:active,
+  #s-torneos-verano .tv-edit-btn:active{
     background:rgba(240,192,64,.35);
   }
+  /* Modal "Gestionar torneos" (añadir/eliminar · PIN 747). */
+  #tv-manage-ov{position:fixed;inset:0;z-index:100030;display:none;
+    align-items:center;justify-content:center;padding:18px;
+    background:rgba(0,0,5,.85);}
+  #tv-manage-ov .tv-mg-card{width:min(440px,94vw);max-height:82vh;
+    display:flex;flex-direction:column;overflow:hidden;
+    background:linear-gradient(170deg,#11151f,#0a0d14);
+    border:1px solid rgba(240,192,64,.45);border-radius:14px;
+    box-shadow:0 22px 60px rgba(0,0,0,.7);}
+  #tv-manage-ov .tv-mg-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08);
+    font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#f0c040;}
+  #tv-manage-ov .tv-mg-x{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
+    color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;}
+  #tv-manage-ov .tv-mg-body{padding:10px 14px 16px;overflow-y:auto;}
+  #tv-manage-ov .tv-mg-sec{font-family:Oswald,sans-serif;font-size:11px;
+    letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.5);
+    margin:12px 0 6px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:4px;}
+  #tv-manage-ov .tv-mg-empty{font-size:12px;color:rgba(255,255,255,.4);font-style:italic;padding:4px 2px;}
+  #tv-manage-ov .tv-mg-row{display:flex;align-items:center;gap:10px;padding:7px 2px;}
+  #tv-manage-ov .tv-mg-nm{flex:1;font-family:Rajdhani,sans-serif;font-size:14px;color:#fff;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #tv-manage-ov .tv-mg-btn{flex-shrink:0;border-radius:7px;padding:6px 12px;cursor:pointer;
+    font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;border:1px solid;}
+  #tv-manage-ov .tv-mg-del{background:rgba(220,40,40,.14);border-color:rgba(255,90,90,.5);color:#ff9a9a;}
+  #tv-manage-ov .tv-mg-add{background:rgba(60,200,120,.14);border-color:rgba(95,224,138,.5);color:#9ee5a9;}
   /* Caja de info por defecto — antes era estilo inline en cada pantalla.
      Centralizada para que `_tourRender` pueda sobrescribir su contenido
      sin perder el aspecto. */
@@ -9307,7 +9380,15 @@ window._showSimProgress = function(opts, onDone){
      _TOUR_DEFAULTS       → defaults por torneo
    ══════════════════════════════════════════════════════════════════ */
 (function(){
-  var TOUR_IDS = ['sct','pss','jg','asia'];
+  /* Petición usuario 2026-05-16 #5: 🖍 (PIN 747) en la pantalla
+     "Torneos de Verano" para AÑADIR o ELIMINAR torneos. Modelo de
+     "huecos pre-cableados": 4 built-in + 8 slots tx1..tx8 ya cableados
+     (pantalla + DEFAULTS + observer). "Añadir" activa un slot libre;
+     "Eliminar" lo oculta CONSERVANDO sus datos (tour_<id>_v1). La
+     lista visible se persiste en `tour_registry_v1`. */
+  var TOUR_BUILTINS = ['sct','pss','jg','asia'];
+  var TOUR_SLOTS = ['tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'];
+  var TOUR_IDS = TOUR_BUILTINS.concat(TOUR_SLOTS);
 
   var DEFAULTS = {
     /* 1️⃣ Soccer Champions Tour — KO desde 1/64 hasta final.
@@ -9343,6 +9424,20 @@ window._showSimProgress = function(opts, onDone){
             prizes:{ perWin:15, perDraw:5, perLoss:0,
                      advCuartos:40, advSemis:60, advFinal:80, sub:50, champ:150 }, teams:[] }
   };
+  /* Slots pre-cableados para torneos AÑADIDOS por el admin. Config
+     por defecto razonable (KO 16 equipos, 1 humano); el admin la
+     ajusta en el editor (NOMBRE/BANDERA/formato/premios…). */
+  TOUR_SLOTS.forEach(function(_sid, _i){
+    DEFAULTS[_sid] = {
+      name:'Torneo Personalizado ' + (_i + 1), flag:'🏆', fee:40,
+      dateStart:'1 Jul', dateEnd:'31 Jul',
+      numTeams:16, numHumans:1, aiLevelMin:55, aiLevelMax:88,
+      format:'ko',
+      formatConfig:{ rounds:['Octavos','Cuartos','Semis','Final'], twoLegs:false },
+      prizes:{ r16:50, qf:120, sf:220, sub:270, champ:370 },
+      teams:[]
+    };
+  });
   window._TOUR_DEFAULTS = DEFAULTS;
 
   var PRIZE_LABELS = {
@@ -12237,6 +12332,199 @@ window._showSimProgress = function(opts, onDone){
   } else {
     _wirePicker();
   }
+
+  /* ════ GESTIÓN DE TORNEOS — añadir / eliminar (PIN 747) ════════════
+     Modelo "huecos pre-cableados": built-in (sct/pss/jg/asia) + slots
+     tx1..tx8. La lista visible se persiste en `tour_registry_v1`
+     (localStorage + sync server best-effort). "Eliminar" oculta
+     conservando datos; "Restaurar" lo vuelve a mostrar; "Nuevo"
+     activa un slot libre, pide nombre+bandera y abre el editor. */
+  var _TV_REG_KEY = 'tour_registry_v1';
+  var _TV_COLORS = {
+    sct:  ['linear-gradient(135deg,#0a1a3a 0%,#b22234 35%,#ffffff 50%,#3c3b6e 65%,#0a1a3a 100%)','#b22234'],
+    pss:  ['linear-gradient(135deg,#012169 0%,#ce1124 35%,#ffffff 50%,#ce1124 65%,#012169 100%)','#ce1124'],
+    jg:   ['linear-gradient(135deg,#aa151b 0%,#f1bf00 35%,#ffffff 50%,#f1bf00 65%,#aa151b 100%)','#f1bf00'],
+    asia: ['linear-gradient(135deg,#1a0612 0%,#bc002d 35%,#ffffff 50%,#bc002d 65%,#1a0612 100%)','#bc002d']
+  };
+  var _TV_DEF_COLOR = ['linear-gradient(135deg,#2a1f00 0%,#7a5a00 35%,#c89020 50%,#7a5a00 65%,#2a1f00 100%)','#f0c040'];
+  function _tvEsc(s){ return String(s == null ? '' : s).replace(/[<>"]/g, function(c){ return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;'; }); }
+  function _tvRegLoad(){
+    var reg = null;
+    try { var raw = localStorage.getItem(_TV_REG_KEY); if (raw) reg = JSON.parse(raw); } catch(_){}
+    if (!reg || !Array.isArray(reg.visible)) reg = { v:1, visible: TOUR_BUILTINS.slice() };
+    var seen = {}, vis = [];
+    reg.visible.forEach(function(id){
+      if (TOUR_IDS.indexOf(id) === -1 || seen[id]) return;
+      seen[id] = 1; vis.push(id);
+    });
+    reg.visible = vis.length ? vis : TOUR_BUILTINS.slice();
+    return reg;
+  }
+  function _tvRegSave(reg){
+    try { localStorage.setItem(_TV_REG_KEY, JSON.stringify(reg)); } catch(_){}
+    try {
+      if (typeof window.fetch === 'function') {
+        window.fetch('/api/kv/' + _TV_REG_KEY, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ value: reg })
+        }).catch(function(){});
+      }
+    } catch(_){}
+  }
+  function _tvCfgOf(id){
+    var c = null;
+    try { c = _tourLoadCachedSync(id); } catch(_){}
+    if (!c) { try { c = _cloneDefault(id); } catch(_){ c = {}; } }
+    return (c && typeof c === 'object') ? c : {};
+  }
+  function _tvName(id){ var c=_tvCfgOf(id); return (c.name) || (DEFAULTS[id] && DEFAULTS[id].name) || id; }
+  function _tvFlag(id){ var c=_tvCfgOf(id); return (c.flag) || (DEFAULTS[id] && DEFAULTS[id].flag) || '🏆'; }
+  function _tvRenderCards(){
+    var box = document.getElementById('tv-tour-cards');
+    if (!box) return;
+    var reg = _tvRegLoad();
+    var html = '';
+    reg.visible.forEach(function(id){
+      var col = _TV_COLORS[id] || _TV_DEF_COLOR;
+      html += '<div class="submenu-card sc-' + id + '" '
+        + 'style="background:' + col[0] + ' !important;border-color:' + col[1] + ' !important;" '
+        + 'onclick="go(\'s-' + id + '\')">'
+        + '<span class="sc-emoji">' + _tvEsc(_tvFlag(id)) + '</span>'
+        + '<span class="sc-label">' + _tvEsc(_tvName(id)) + '</span>'
+        + '<button type="button" class="sc-info-btn" onclick="event.stopPropagation();window.muTourInfo&&window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
+        + '<span class="sc-arr">▶</span>'
+        + '</div>';
+    });
+    box.innerHTML = html;
+  }
+  window._tvRenderCards = _tvRenderCards;
+  function _tvCloseManage(){
+    var ov = document.getElementById('tv-manage-ov');
+    if (ov) ov.style.display = 'none';
+  }
+  window._tvCloseManage = _tvCloseManage;
+  function _tvBuildManageBody(){
+    var reg = _tvRegLoad();
+    var visSet = {}; reg.visible.forEach(function(id){ visSet[id]=1; });
+    var h = '<div class="tv-mg-sec">Torneos activos</div>';
+    if (!reg.visible.length) h += '<div class="tv-mg-empty">Ninguno.</div>';
+    reg.visible.forEach(function(id){
+      h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tvEsc(_tvFlag(id)) + ' ' + _tvEsc(_tvName(id)) + '</span>'
+        + '<button class="tv-mg-btn tv-mg-del" data-act="del" data-id="' + id + '">🗑 Eliminar</button></div>';
+    });
+    var hiddenB = TOUR_BUILTINS.filter(function(id){ return !visSet[id]; });
+    if (hiddenB.length){
+      h += '<div class="tv-mg-sec">Restaurar built-in (datos conservados)</div>';
+      hiddenB.forEach(function(id){
+        h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tvEsc(_tvFlag(id)) + ' ' + _tvEsc(_tvName(id)) + '</span>'
+          + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button></div>';
+      });
+    }
+    var freeSlots = TOUR_SLOTS.filter(function(id){ return !visSet[id]; });
+    h += '<div class="tv-mg-sec">Añadir torneo nuevo</div>';
+    if (!freeSlots.length){
+      h += '<div class="tv-mg-empty">Sin huecos libres (máx. ' + TOUR_SLOTS.length + '). Elimina alguno para liberar uno.</div>';
+    } else {
+      h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + freeSlots.length + ' hueco' + (freeSlots.length===1?'':'s') + ' libre' + (freeSlots.length===1?'':'s') + '</span>'
+        + '<button class="tv-mg-btn tv-mg-add" data-act="new">➕ Nuevo torneo</button></div>';
+      freeSlots.forEach(function(id){
+        var saved = null; try { saved = localStorage.getItem(_key(id)); } catch(_){}
+        if (saved) h += '<div class="tv-mg-row"><span class="tv-mg-nm" style="opacity:.7;">↳ ' + _tvEsc(_tvFlag(id)) + ' ' + _tvEsc(_tvName(id)) + ' (guardado)</span>'
+          + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button></div>';
+      });
+    }
+    return h;
+  }
+  function _tvRefreshManage(){
+    var b = document.getElementById('tv-mg-body');
+    if (b) b.innerHTML = _tvBuildManageBody();
+  }
+  function _tvOpenManage(){
+    var ov = document.getElementById('tv-manage-ov');
+    if (!ov){
+      ov = document.createElement('div');
+      ov.id = 'tv-manage-ov';
+      ov.innerHTML = '<div class="tv-mg-card">'
+        + '<div class="tv-mg-hd"><span>🏆 Gestionar torneos</span>'
+        + '<button class="tv-mg-x" onclick="window._tvCloseManage()">✕</button></div>'
+        + '<div class="tv-mg-body" id="tv-mg-body"></div></div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if (e.target === ov) _tvCloseManage(); });
+      ov.addEventListener('click', function(e){
+        var b = e.target && e.target.closest && e.target.closest('.tv-mg-btn');
+        if (!b) return;
+        var act = b.getAttribute('data-act');
+        var id  = b.getAttribute('data-id');
+        var reg = _tvRegLoad();
+        if (act === 'del'){
+          if (!confirm('¿Eliminar este torneo de la lista? Se conservan sus datos por si lo restauras.')) return;
+          reg.visible = reg.visible.filter(function(x){ return x !== id; });
+          _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
+        } else if (act === 'restore'){
+          if (TOUR_IDS.indexOf(id) !== -1 && reg.visible.indexOf(id) === -1) reg.visible.push(id);
+          _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
+        } else if (act === 'new'){
+          var free = TOUR_SLOTS.filter(function(s){ return reg.visible.indexOf(s) === -1; });
+          if (!free.length){ alert('Sin huecos libres. Elimina algún torneo para liberar uno.'); return; }
+          var slot = free[0];
+          var nm = prompt('Nombre del torneo nuevo:', _tvName(slot));
+          if (nm === null) return;
+          nm = String(nm).trim() || _tvName(slot);
+          var fl = prompt('Bandera / emoji del torneo:', _tvFlag(slot));
+          if (fl === null) fl = _tvFlag(slot);
+          fl = String(fl).trim() || '🏆';
+          var cfg = _tvCfgOf(slot);
+          cfg.name = nm; cfg.flag = fl;
+          try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[slot] = cfg; } catch(_){}
+          try { if (typeof window._tourSave === 'function') window._tourSave(slot, cfg); } catch(_){}
+          if (reg.visible.indexOf(slot) === -1) reg.visible.push(slot);
+          _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
+          setTimeout(function(){
+            _tvCloseManage();
+            try { if (typeof window._tourOpenEditor === 'function') window._tourOpenEditor(slot); } catch(_){}
+          }, 250);
+        }
+      });
+    }
+    _tvRefreshManage();
+    ov.style.display = 'flex';
+  }
+  window._tvOpenManage = _tvOpenManage;
+  /* Hidrata el registro desde el server (best-effort, async). Hace
+     el registro cross-device y resistente a borrados de localStorage
+     ("guárdalo para siempre"). Solo pisa el local si el server trae
+     una lista válida. */
+  function _tvHydrateReg(){
+    try {
+      if (typeof window.fetch !== 'function') return;
+      window.fetch('/api/kv/' + _TV_REG_KEY).then(function(r){
+        return (r && r.ok) ? r.json() : null;
+      }).then(function(j){
+        if (!j || !j.value || !Array.isArray(j.value.visible)) return;
+        try { localStorage.setItem(_TV_REG_KEY, JSON.stringify(j.value)); } catch(_){}
+        _tvRenderCards();
+        if (document.getElementById('tv-mg-body')) _tvRefreshManage();
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function _tvWatch(){
+    _tvRenderCards();
+    _tvHydrateReg();
+    var el = document.getElementById('s-torneos-verano');
+    if (el && typeof MutationObserver === 'function'){
+      var wasA = el.classList.contains('active');
+      try {
+        new MutationObserver(function(){
+          var nowA = el.classList.contains('active');
+          if (nowA && !wasA) _tvRenderCards();
+          wasA = nowA;
+        }).observe(el, { attributes:true, attributeFilter:['class'] });
+      } catch(_){}
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _tvWatch);
+  } else { _tvWatch(); }
 })();
 </script>
 <div class="screen" id="s-champions">

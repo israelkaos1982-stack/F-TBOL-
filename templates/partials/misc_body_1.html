@@ -3122,14 +3122,23 @@ window._showSimProgress = function(opts, onDone){
        motivo — no quedamos callados. */
     try {
       /* 1. Establecer contexto y cargar data del slug correcto. */
+      /* Usar los setters expuestos en window — viven en OTRO IIFE
+         (script ~19002). Antes se referenciaban sin `window.` y el
+         `typeof` daba 'undefined' (otro scope) → el contexto nunca
+         se fijaba y la plantilla no se veía desde la clasificación
+         (solo tras ✏️ Edit). 2026-05-17. */
       var slugToCtx = {
-        'liga-ea-sports':          (typeof setLigaEaContext === 'function' ? setLigaEaContext : null),
-        'liga-hypermotion':        (typeof setHypermotionContext === 'function' ? setHypermotionContext : null),
-        'liga-primera-federacion': (typeof setPrimeraContext === 'function' ? setPrimeraContext : null)
+        'liga-ea-sports':          (typeof window.setLigaEaContext === 'function' ? window.setLigaEaContext : null),
+        'liga-hypermotion':        (typeof window.setHypermotionContext === 'function' ? window.setHypermotionContext : null),
+        'liga-primera-federacion': (typeof window.setPrimeraContext === 'function' ? window.setPrimeraContext : null)
       };
       var setCtx = slugToCtx[slug];
       if (setCtx) {
         setCtx();
+      } else if (typeof window._lextSetContextKey === 'function') {
+        /* Cualquier otro slug (ligas externas): fija la CURRENT_KEY
+           local del IIFE del editor + precarga. */
+        window._lextSetContextKey(slug);
       } else if (typeof window.CURRENT_KEY !== 'undefined') {
         try { window.CURRENT_KEY = slug; } catch(_){}
       }
@@ -3707,6 +3716,13 @@ window._showSimProgress = function(opts, onDone){
         }
 
         if (rebuilt.length) {
+          /* Saneamos el rebuild (sqFromRegistry / server / _protected
+             traen líneas-basura "MED:/DEF:" y duplicados): NUNCA
+             escribir basura en localStorage ni en el servidor.
+             2026-05-17. */
+          try {
+            if (typeof window._cleanSquadPlayers === 'function') rebuilt = window._cleanSquadPlayers(rebuilt);
+          } catch(_){}
           found.players = rebuilt;
           try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
@@ -3765,6 +3781,9 @@ window._showSimProgress = function(opts, onDone){
                 /* Adoptamos players y campos editables. Mantenemos id
                    del `found` para no romper navegación cruzada. */
                 found.players = _protMatch.players.slice();
+                try {
+                  if (typeof window._cleanSquadPlayers === 'function') found.players = window._cleanSquadPlayers(found.players);
+                } catch(_){}
                 ['power','atk','mid','def','shield','country','rules','isHuman','humanEmoji'].forEach(function(_fk){
                   if (_protMatch[_fk] != null) found[_fk] = _protMatch[_fk];
                 });
@@ -3794,6 +3813,11 @@ window._showSimProgress = function(opts, onDone){
             y europeas). */
       if (typeof window.lextOpenSquad === 'function') {
         try {
+          /* Última red: nómina SIEMPRE limpia al abrir el modal,
+             venga de donde venga (cache/server/_protected/registry). */
+          if (found && Array.isArray(found.players) && typeof window._cleanSquadPlayers === 'function') {
+            try { found.players = window._cleanSquadPlayers(found.players); } catch(_){}
+          }
           window.lextOpenSquad(found, { competitions: clickComps });
         } catch(errLs) {
           alert('⚠️ Error al abrir el editor de «' + found.name + '»:\n' + (errLs && errLs.message || errLs));
@@ -4581,6 +4605,22 @@ window._showSimProgress = function(opts, onDone){
             var isMassiveLoss = (protP >= 50 && newP < protP * 0.20);
             if (isWipeTotal || isMassiveLoss) {
               try { console.warn('[lock] bloqueado WIPE en '+key+': '+newP+' jugadores < '+protP+' protegidos. Restaurando.'); } catch(_){}
+              /* No restaurar el blob _protected EN CRUDO: una copia
+                 legacy podía traer plantillas triplicadas y el bug
+                 "vuelven los duplicados al reiniciar" resucitaba.
+                 Limpiamos (filtro basura + dedupe por nombre) ANTES
+                 de restaurar. 2026-05-17. */
+              try {
+                var _pj = JSON.parse(prot);
+                if (_pj && Array.isArray(_pj.teams) && typeof window._cleanSquadPlayers === 'function') {
+                  _pj.teams.forEach(function(t){
+                    if (t && Array.isArray(t.players)) t.players = window._cleanSquadPlayers(t.players);
+                  });
+                  var _pc = JSON.stringify(_pj);
+                  _origSet(key + '_protected', _pc);
+                  return _origSet(key, _pc);
+                }
+              } catch(_){}
               return _origSet(key, prot);
             }
           }
@@ -5170,6 +5210,14 @@ window._showSimProgress = function(opts, onDone){
     }
     return [trimmed];
   }
+  /* Exponer la tabla de alias + helper para que el dedup canónico de
+     `_sanitizeLigaTeamNames` / `_lextFindTeamRow` (otro IIFE) pueda
+     colapsar "Atl Madrid" ⇆ "Atlético Madrid" ⇆ "Atletico Madrid" a
+     una sola fila (bug usuario 2026-05-17: 2 Atlético Madrid). */
+  try {
+    window.TEAM_NAME_ALIASES = TEAM_NAME_ALIASES;
+    window._namesForAlias = _namesForAlias;
+  } catch(_){}
 
   function applyEngineOverrides(){
     if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
@@ -9544,40 +9592,13 @@ window._showSimProgress = function(opts, onDone){
      pretemporada con los colores de la bandera anfitriona. -->
 <div class="screen" id="s-torneos-verano">
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
+<!-- 🖍 admin (PIN 747): añadir / eliminar torneos. 2026-05-16 #5 -->
+<button class="tv-edit-btn" title="Gestionar torneos (admin)">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji">🌞</span><h2>Torneos de Verano</h2></div>
 <div class="submenu-list">
-  <div class="submenu-card sc-sct"
-       style="background:linear-gradient(135deg,#0a1a3a 0%,#b22234 35%,#ffffff 50%,#3c3b6e 65%,#0a1a3a 100%) !important;border-color:#b22234 !important;"
-       onclick="go('s-sct')">
-    <span class="sc-emoji">🇺🇸</span><span class="sc-label">Soccer Champions Tour</span>
-    <button type="button" class="sc-info-btn"
-            onclick="event.stopPropagation();window.muTourInfo('sct')" title="Info">i</button>
-    <span class="sc-arr">▶</span>
-  </div>
-  <div class="submenu-card sc-pss"
-       style="background:linear-gradient(135deg,#012169 0%,#ce1124 35%,#ffffff 50%,#ce1124 65%,#012169 100%) !important;border-color:#ce1124 !important;"
-       onclick="go('s-pss')">
-    <span class="sc-emoji">🇬🇧</span><span class="sc-label">Premier Summer Series</span>
-    <button type="button" class="sc-info-btn"
-            onclick="event.stopPropagation();window.muTourInfo('pss')" title="Info">i</button>
-    <span class="sc-arr">▶</span>
-  </div>
-  <div class="submenu-card sc-jg"
-       style="background:linear-gradient(135deg,#aa151b 0%,#f1bf00 35%,#ffffff 50%,#f1bf00 65%,#aa151b 100%) !important;border-color:#f1bf00 !important;"
-       onclick="go('s-jg')">
-    <span class="sc-emoji">🇪🇸</span><span class="sc-label">Trofeo Joan Gamper</span>
-    <button type="button" class="sc-info-btn"
-            onclick="event.stopPropagation();window.muTourInfo('jg')" title="Info">i</button>
-    <span class="sc-arr">▶</span>
-  </div>
-  <div class="submenu-card sc-asia"
-       style="background:linear-gradient(135deg,#1a0612 0%,#bc002d 35%,#ffffff 50%,#bc002d 65%,#1a0612 100%) !important;border-color:#bc002d !important;"
-       onclick="go('s-asia')">
-    <span class="sc-emoji">🇯🇵</span><span class="sc-label">Asian Tournament</span>
-    <button type="button" class="sc-info-btn"
-            onclick="event.stopPropagation();window.muTourInfo('asia')" title="Info">i</button>
-    <span class="sc-arr">▶</span>
-  </div>
+  <!-- Cards generadas dinámicamente desde el registro de torneos
+       (built-in + slots añadidos). Ver _tvRenderCards(). -->
+  <div id="tv-tour-cards"></div>
   <!-- Caja "📊 Estadísticas" Torneos de Verano (2026-05-08): paleta
        dorado/amarillo igual que la temática (la caja en s-competiciones
        es dorada). Lee de `ef_player_stats_torneos_v1` (cache aislado
@@ -9640,6 +9661,58 @@ window._showSimProgress = function(opts, onDone){
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-asia">🇯🇵</span><h2 id="tour-title-asia">Asian Tournament</h2></div>
 <div id="tour-info-asia" class="tour-info-box"></div>
 </div>
+<!-- ═══ 8 SLOTS PRE-CABLEADOS para torneos AÑADIDOS por el admin
+     (2026-05-16 #5). Mismo esqueleto que los 4 built-in: el observer
+     _watchScreens (itera TOUR_IDS) los pinta vía _tourRender al
+     navegar; el 🖍 abre _tourOpenEditor(tx*) igual que los demás. -->
+<div class="screen" id="s-tx1">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx1" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx1">🏆</span><h2 id="tour-title-tx1">Torneo Personalizado 1</h2></div>
+<div id="tour-info-tx1" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx2">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx2" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx2">🏆</span><h2 id="tour-title-tx2">Torneo Personalizado 2</h2></div>
+<div id="tour-info-tx2" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx3">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx3" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx3">🏆</span><h2 id="tour-title-tx3">Torneo Personalizado 3</h2></div>
+<div id="tour-info-tx3" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx4">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx4" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx4">🏆</span><h2 id="tour-title-tx4">Torneo Personalizado 4</h2></div>
+<div id="tour-info-tx4" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx5">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx5" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx5">🏆</span><h2 id="tour-title-tx5">Torneo Personalizado 5</h2></div>
+<div id="tour-info-tx5" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx6">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx6" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx6">🏆</span><h2 id="tour-title-tx6">Torneo Personalizado 6</h2></div>
+<div id="tour-info-tx6" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx7">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx7" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx7">🏆</span><h2 id="tour-title-tx7">Torneo Personalizado 7</h2></div>
+<div id="tour-info-tx7" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-tx8">
+<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="tx8" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-tx8">🏆</span><h2 id="tour-title-tx8">Torneo Personalizado 8</h2></div>
+<div id="tour-info-tx8" class="tour-info-box"></div>
+</div>
 
 <!-- Wire-up del botón 🖍 — vive FUERA del IIFE grande para que el
      click siempre tenga respuesta. Si el módulo no se ha cargado
@@ -9648,6 +9721,19 @@ window._showSimProgress = function(opts, onDone){
 <script>
 (function(){
   document.addEventListener('click', function(ev){
+    /* 🖍 "Gestionar torneos" de s-torneos-verano (PIN 747 → modal
+       añadir/eliminar). 2026-05-16 #5. */
+    var mgBtn = ev.target && ev.target.closest && ev.target.closest('.tv-edit-btn');
+    if (mgBtn) {
+      ev.preventDefault(); ev.stopPropagation();
+      if (typeof window._tvOpenManage !== 'function') {
+        alert('⚠ La gestión de torneos no se ha cargado. Recarga la página.');
+        return;
+      }
+      if (typeof window.pG === 'function') window.pG(function(){ window._tvOpenManage(); });
+      else window._tvOpenManage();
+      return;
+    }
     var btn = ev.target && ev.target.closest && ev.target.closest('.tour-edit-btn');
     if (!btn) return;
     var id = btn.getAttribute('data-tour');
@@ -9665,7 +9751,11 @@ window._showSimProgress = function(opts, onDone){
   /* Botón 🖍 admin de cada torneo — esquina superior derecha de la
      pantalla, simétrico al ◀ Volver. PIN-gated; abre _tourOpenEditor. */
   #s-sct .tour-edit-btn,#s-pss .tour-edit-btn,
-  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn{
+  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn,
+  #s-tx1 .tour-edit-btn,#s-tx2 .tour-edit-btn,#s-tx3 .tour-edit-btn,
+  #s-tx4 .tour-edit-btn,#s-tx5 .tour-edit-btn,#s-tx6 .tour-edit-btn,
+  #s-tx7 .tour-edit-btn,#s-tx8 .tour-edit-btn,
+  #s-torneos-verano .tv-edit-btn{
     position:absolute;top:8px;right:10px;z-index:5;
     background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
     color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;
@@ -9674,9 +9764,53 @@ window._showSimProgress = function(opts, onDone){
     transition:background .15s;
   }
   #s-sct .tour-edit-btn:active,#s-pss .tour-edit-btn:active,
-  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active{
+  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active,
+  #s-tx1 .tour-edit-btn:active,#s-tx2 .tour-edit-btn:active,
+  #s-tx3 .tour-edit-btn:active,#s-tx4 .tour-edit-btn:active,
+  #s-tx5 .tour-edit-btn:active,#s-tx6 .tour-edit-btn:active,
+  #s-tx7 .tour-edit-btn:active,#s-tx8 .tour-edit-btn:active,
+  #s-torneos-verano .tv-edit-btn:active{
     background:rgba(240,192,64,.35);
   }
+  /* 🖍 de Torneos de Verano MUCHO más pequeño (petición usuario
+     2026-05-17, foto 1). Misma especificidad, va después → gana. */
+  #s-torneos-verano .tv-edit-btn{
+    width:22px;height:22px;font-size:12px;top:10px;right:12px;
+  }
+  /* Trofeo Joan Gamper: fondo dorado muy claro → el texto blanco no
+     se lee. Letras en negro (petición usuario 2026-05-17, foto 1). */
+  #tv-tour-cards .sc-jg .sc-label,
+  #tv-tour-cards .sc-jg .sc-arr{ color:#1a1205 !important; text-shadow:none !important; }
+  #tv-tour-cards .sc-jg .sc-info-btn{
+    color:#1a1205 !important; border-color:rgba(0,0,0,.45) !important;
+    background:rgba(255,255,255,.30) !important;
+  }
+  /* Modal "Gestionar torneos" (añadir/eliminar · PIN 747). */
+  #tv-manage-ov{position:fixed;inset:0;z-index:100030;display:none;
+    align-items:center;justify-content:center;padding:18px;
+    background:rgba(0,0,5,.85);}
+  #tv-manage-ov .tv-mg-card{width:min(440px,94vw);max-height:82vh;
+    display:flex;flex-direction:column;overflow:hidden;
+    background:linear-gradient(170deg,#11151f,#0a0d14);
+    border:1px solid rgba(240,192,64,.45);border-radius:14px;
+    box-shadow:0 22px 60px rgba(0,0,0,.7);}
+  #tv-manage-ov .tv-mg-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08);
+    font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#f0c040;}
+  #tv-manage-ov .tv-mg-x{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
+    color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;}
+  #tv-manage-ov .tv-mg-body{padding:10px 14px 16px;overflow-y:auto;}
+  #tv-manage-ov .tv-mg-sec{font-family:Oswald,sans-serif;font-size:11px;
+    letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.5);
+    margin:12px 0 6px;border-bottom:1px solid rgba(255,255,255,.08);padding-bottom:4px;}
+  #tv-manage-ov .tv-mg-empty{font-size:12px;color:rgba(255,255,255,.4);font-style:italic;padding:4px 2px;}
+  #tv-manage-ov .tv-mg-row{display:flex;align-items:center;gap:10px;padding:7px 2px;}
+  #tv-manage-ov .tv-mg-nm{flex:1;font-family:Rajdhani,sans-serif;font-size:14px;color:#fff;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #tv-manage-ov .tv-mg-btn{flex-shrink:0;border-radius:7px;padding:6px 12px;cursor:pointer;
+    font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;border:1px solid;}
+  #tv-manage-ov .tv-mg-del{background:rgba(220,40,40,.14);border-color:rgba(255,90,90,.5);color:#ff9a9a;}
+  #tv-manage-ov .tv-mg-add{background:rgba(60,200,120,.14);border-color:rgba(95,224,138,.5);color:#9ee5a9;}
   /* Caja de info por defecto — antes era estilo inline en cada pantalla.
      Centralizada para que `_tourRender` pueda sobrescribir su contenido
      sin perder el aspecto. */
@@ -9759,7 +9893,7 @@ window._showSimProgress = function(opts, onDone){
     <!-- Formato -->
     <div class="tour-ed-row">
       <label>Formato</label>
-      <select id="tour-ed-fmt">
+      <select id="tour-ed-fmt" onchange="window._tourEdFmtChange&&window._tourEdFmtChange(this)">
         <option value="ko">Eliminatoria a un partido</option>
         <option value="ko-2leg">Eliminatoria a ida y vuelta</option>
         <option value="league">Liga (round-robin)</option>
@@ -10050,7 +10184,15 @@ window._showSimProgress = function(opts, onDone){
      _TOUR_DEFAULTS       → defaults por torneo
    ══════════════════════════════════════════════════════════════════ */
 (function(){
-  var TOUR_IDS = ['sct','pss','jg','asia'];
+  /* Petición usuario 2026-05-16 #5: 🖍 (PIN 747) en la pantalla
+     "Torneos de Verano" para AÑADIR o ELIMINAR torneos. Modelo de
+     "huecos pre-cableados": 4 built-in + 8 slots tx1..tx8 ya cableados
+     (pantalla + DEFAULTS + observer). "Añadir" activa un slot libre;
+     "Eliminar" lo oculta CONSERVANDO sus datos (tour_<id>_v1). La
+     lista visible se persiste en `tour_registry_v1`. */
+  var TOUR_BUILTINS = ['sct','pss','jg','asia'];
+  var TOUR_SLOTS = ['tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'];
+  var TOUR_IDS = TOUR_BUILTINS.concat(TOUR_SLOTS);
 
   var DEFAULTS = {
     /* 1️⃣ Soccer Champions Tour — KO desde 1/64 hasta final.
@@ -10086,6 +10228,20 @@ window._showSimProgress = function(opts, onDone){
             prizes:{ perWin:15, perDraw:5, perLoss:0,
                      advCuartos:40, advSemis:60, advFinal:80, sub:50, champ:150 }, teams:[] }
   };
+  /* Slots pre-cableados para torneos AÑADIDOS por el admin. Config
+     por defecto razonable (KO 16 equipos, 1 humano); el admin la
+     ajusta en el editor (NOMBRE/BANDERA/formato/premios…). */
+  TOUR_SLOTS.forEach(function(_sid, _i){
+    DEFAULTS[_sid] = {
+      name:'Torneo Personalizado ' + (_i + 1), flag:'🏆', fee:40,
+      dateStart:'1 Jul', dateEnd:'31 Jul',
+      numTeams:16, numHumans:1, aiLevelMin:55, aiLevelMax:88,
+      format:'ko',
+      formatConfig:{ rounds:['Octavos','Cuartos','Semis','Final'], twoLegs:false },
+      prizes:{ r16:50, qf:120, sf:220, sub:270, champ:370 },
+      teams:[]
+    };
+  });
   window._TOUR_DEFAULTS = DEFAULTS;
 
   var PRIZE_LABELS = {
@@ -10246,7 +10402,129 @@ window._showSimProgress = function(opts, onDone){
     return Object.keys(leagues).sort().map(function(k){ return leagues[k]; });
   }
 
+  /* SIN CACHE (petición usuario 2026-05-16 #3: "lo quiero EN EL
+     MOMENTO como estaba antes"). El cache (TTL y luego por firma)
+     mostraba un pool incompleto cuando el editor se abría antes de que
+     las ligas estuvieran en localStorage, y aunque se autocorregía,
+     el usuario exige el comportamiento original: el contador SIEMPRE
+     refleja el localStorage actual en el instante, sin ventana stale.
+
+     El coste real que disparaba "crear torneo >5 min" NO era este
+     escaneo: era (a) `_shieldOf`/getTeamLogoUrl por CADA equipo en cada
+     llamada (miles) y (b) el `await _tourSave` de hasta 8 s. Ambos
+     siguen arreglados (escudo perezoso solo en el picker; guardado
+     optimista). Un escaneo + JSON.parse de las ligas SIN resolver
+     escudos es de milisegundos, asumible en cada pulsación — es lo que
+     hacía el código original. Mantengo `_invalidateTourTeamsCache` y
+     `_ligaExtSig` como no-ops/helpers usados por el refresco diferido. */
+  window._invalidateTourTeamsCache = function(){ /* sin cache: no-op */ };
+  /* Firma BARATA de localStorage (solo nombres de clave ligaExt_*, sin
+     getItem). La usa el refresco diferido de `_doOpen` para detectar
+     si llegaron ligas nuevas por hidratación tardía y repintar. */
+  function _ligaExtSig(){
+    var keys = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1 || k.indexOf('_snap_') !== -1) continue;
+        keys.push(k);
+      }
+    } catch(_){}
+    keys.sort();
+    return keys.length + '|' + keys.join(',');
+  }
   function _allTeams(){
+    return _allTeamsUncached();
+  }
+
+  /* ── PREFETCH PERMANENTE de las 51 "Resto de Ligas" ──────────────
+     Petición usuario 2026-05-16 #4: "otra vez no hay equipos · cuando
+     lo arregles guárdalo para siempre".
+
+     Causa raíz definitiva: las 51 ligas de Resto de Ligas viven en el
+     SERVER (/api/liga-ext/<slug>) y solo aterrizan en localStorage
+     cuando se abre/simula esa liga concreta. En un dispositivo donde
+     no se han abierto, localStorage solo tiene `liga-ea-sports` +
+     `liga-hypermotion` → el pool del torneo solo ve ~80 equipos.
+
+     Solución permanente: al abrir el editor lanzamos un prefetch
+     ASÍNCRONO (no bloquea, concurrencia 5) de TODAS las ligas que
+     falten y las guardamos en localStorage. Una vez bajadas quedan
+     ahí PARA SIEMPRE (localStorage persiste entre sesiones), así que
+     a partir de la 1ª vez el pool sale completo al instante. Mientras
+     bajan (1ª vez, 4G), el pool se va rellenando solo vía el callback.
+     La lista de ligas sale del MISMO DOM que usa "Resto de Ligas"
+     (#s-ligas .menu-card .mc-label) — sin duplicar la lista. */
+  function _tourSlugify(s){
+    return String(s||'').toLowerCase().normalize('NFD')
+      .replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9]+/g,'-')
+      .replace(/^-|-$/g,'');
+  }
+  function _tourPrefetchAllLeagues(onEach){
+    /* No interferir con el bulk-sim de Resto de Ligas (su propia
+       hidratación XHR síncrona). */
+    if (window._restoSimBulkInProgress) return;
+    if (typeof window.fetch !== 'function') return;
+    var _started = {};            /* slugs ya encolados (dedupe) */
+    var _queue = [], _active = 0, CONC = 5;
+    function _isCached(slug){
+      try { if (localStorage.getItem('ligaExt_' + slug)) return true; } catch(_){}
+      try { if (localStorage.getItem('ligaExt_' + slug + '_protected')) return true; } catch(_){}
+      return false;
+    }
+    function _drain(){
+      while (_active < CONC && _queue.length){
+        var slug = _queue.shift();
+        _active++;
+        window.fetch('/api/liga-ext/' + encodeURIComponent(slug))
+          .then(function(r){ return (r && r.ok) ? r.json() : null; })
+          .then(function(j){
+            if (j && j.data && Array.isArray(j.data.teams) && j.data.teams.length){
+              try { localStorage.setItem('ligaExt_' + this.slug, JSON.stringify(j.data)); } catch(_){}
+              if (typeof onEach === 'function') { try { onEach(); } catch(_){} }
+            }
+          }.bind({ slug: slug }))
+          .catch(function(){})
+          .then(function(){ _active--; _drain(); });
+      }
+    }
+    function _enqueue(slug){
+      if (!slug || _started[slug]) return;
+      _started[slug] = 1;
+      if (_isCached(slug)) return;
+      _queue.push(slug);
+      _drain();
+    }
+    /* 1) Slugs derivados del DOM de "Resto de Ligas" (síncrono;
+       conserva el comportamiento previo aunque el server sea antiguo
+       y no tenga el índice). */
+    try {
+      var els = document.querySelectorAll('#s-ligas .menu-card .mc-label');
+      for (var i = 0; i < els.length; i++) {
+        var n = (els[i].textContent || '').trim();
+        if (n) _enqueue(_tourSlugify(n));
+      }
+    } catch(_){}
+    /* 2) Índice AUTORITATIVO del servidor: devuelve los slugs EXACTOS
+       de TODAS las ligas guardadas (51 Resto de Ligas + EA Sports +
+       Hypermotion + 1ª RFEF) sin depender de adivinar el slug desde
+       la etiqueta en español. Esto arregla el caso del usuario:
+       "no salen las 51 Resto de Ligas ni EA/Hyper/1ªRFEF" cuando el
+       slugify de la etiqueta no coincide con el slug del servidor.
+       2026-05-17. */
+    try {
+      window.fetch('/api/liga-ext')
+        .then(function(r){ return (r && r.ok) ? r.json() : null; })
+        .then(function(j){
+          if (!j || !Array.isArray(j.leagues)) return;
+          j.leagues.forEach(function(L){ if (L && L.slug) _enqueue(L.slug); });
+        })
+        .catch(function(){});
+    } catch(_){}
+  }
+  function _allTeamsUncached(){
     var out = [], seen = {};
     /* Trackeamos TODAS las ligas en las que aparece cada equipo
        (2026-05-08, fix: el usuario excluyó Hypermotion + Primera
@@ -10266,16 +10544,21 @@ window._showSimProgress = function(opts, onDone){
       if (!isFinite(pw) || pw <= 0) pw = 70;
       if (seen[k]) {
         if (pw > seen[k].power) seen[k].power = pw;
+        if (shield && !seen[k].shield) seen[k].shield = shield;
         if (league && seen[k]._leagues.indexOf(league) === -1) {
           seen[k]._leagues.push(league);
           if (!seen[k]._league) seen[k]._league = league;
         }
         return;
       }
+      /* Escudo: usamos SOLO el que venga en los datos (t.shield). NO
+         llamamos a _shieldOf/getTeamLogoUrl por cada equipo aquí — eso
+         multiplicaba el coste por miles. El picker resuelve el escudo
+         de forma perezosa para las pocas filas visibles. */
       var leagues = league ? [league] : [];
       var entry = {
         name: clean, power: pw,
-        shield: shield || _shieldOf(clean),
+        shield: shield || '',
         _leagues: leagues,
         _league: league || ''
       };
@@ -10331,6 +10614,50 @@ window._showSimProgress = function(opts, onDone){
     var n = String(name).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
     return HUMAN_ONLY_TEAMS.indexOf(n) !== -1;
   }
+  /* Petición usuario 2026-05-16: NINGÚN equipo humano puede jugar como
+     IA en un torneo. "Humano en torneo" = cualquier team con humanIcon
+     /humanEmoji asignado en el editor de plantilla, los 5 canónicos de
+     Liga EA, o la lista corta histórica (Bayern/Atlético). Se apoya en
+     `window.isHumanInComp(name,'torneo')` (regla canónica de
+     "Humanidad por competición" de CLAUDE.md). Fallback a la lista
+     corta si el helper aún no está cargado. */
+  function _isHumanTeamForTour(name){
+    if (!name) return false;
+    try {
+      if (typeof window.isHumanInComp === 'function' &&
+          window.isHumanInComp(name, 'torneo')) return true;
+    } catch(_){}
+    return _isHumanOnlyTeam(name);
+  }
+
+  /* Petición usuario 2026-05-16: al excluir una Liga, la regla tiene
+     que "surtir efecto" también sobre el bracket YA armado — si no,
+     equipos de esa Liga elegidos/sorteados antes seguían jugando la
+     simulación. Recorremos cfg.teams y reseteamos a PENDIENTE (slot
+     humano libre) cualquier equipo cuya liga esté ahora excluida. El
+     usuario lo vuelve a elegir (el picker ya filtra) o un re-sorteo lo
+     rellena. Devuelve el nº de slots purgados. */
+  function _purgeExcludedFromBracket(cfg){
+    if (!cfg || !Array.isArray(cfg.teams) || !cfg.teams.length) return 0;
+    var excluded = cfg.excludedLeagues || [];
+    if (!excluded.length) return 0;
+    var byName = {};
+    try {
+      _allTeams().forEach(function(t){
+        if (t && t.name) byName[_norm(t.name)] = t;
+      });
+    } catch(_){ return 0; }
+    var purged = 0;
+    cfg.teams.forEach(function(slot, i){
+      if (!slot || !slot.name || slot.name === 'PENDIENTE') return;
+      var ref = byName[_norm(slot.name)];
+      if (ref && _teamInExcludedLeagues(ref, excluded)) {
+        cfg.teams[i] = { name:'PENDIENTE', isHuman:true, shield:'', power:0 };
+        purged++;
+      }
+    });
+    return purged;
+  }
 
   /* Mezcla in-place tipo Fisher-Yates. */
   function _shuffle(arr){
@@ -10353,7 +10680,7 @@ window._showSimProgress = function(opts, onDone){
     var excluded = cfg.excludedLeagues || [];
     var pool = _allTeams().filter(function(t){
       if (_teamInExcludedLeagues(t, excluded)) return false;
-      if (_isHumanOnlyTeam(t.name)) return false;
+      if (_isHumanTeamForTour(t.name)) return false;   /* humano nunca como IA */
       return t.power >= aimin && t.power <= aimax;
     });
     var needed = Math.max(0, (cfg.numTeams || 0) - (cfg.numHumans || 0));
@@ -10442,6 +10769,23 @@ window._showSimProgress = function(opts, onDone){
         if (!this.checked && idx !== -1) _open.cfg.excludedLeagues.splice(idx, 1);
         this.parentElement.classList.toggle('is-excluded', this.checked);
         _updatePoolStat();
+        /* La exclusión tiene que SURTIR EFECTO en la simulación
+           (petición usuario 2026-05-16): purgamos del bracket ya armado
+           los equipos de la liga recién excluida y persistimos al
+           instante (local síncrono dentro de _tourSave + sync server en
+           segundo plano) para que el picker y la simulación usen ya la
+           config nueva, sin obligar a re-sortear (que borraría todas las
+           elecciones del usuario). */
+        var purged = this.checked ? _purgeExcludedFromBracket(_open.cfg) : 0;
+        /* _tourSave persiste local + actualiza window._TOUR_CACHE de
+           forma SÍNCRONA antes de su primer await; el sync server va en
+           segundo plano. Lo llamamos ANTES de render para que
+           _tourRender lea ya la config nueva desde la cache. */
+        try { Promise.resolve(window._tourSave(_open.id, _open.cfg)).catch(function(){}); } catch(_){}
+        if (purged > 0) {
+          _setFeedback('🚫 '+purged+' equipo'+(purged===1?'':'s')+' de esa liga quitado'+(purged===1?'':'s')+' del bracket (vuelve a elegir).', true);
+          try { window._tourRender(_open.id); } catch(_){}
+        }
       });
     });
   }
@@ -10479,6 +10823,25 @@ window._showSimProgress = function(opts, onDone){
         '<input id="tour-ed-rounds" type="text" value="'+(fc.koRounds||['SF','F']).join(',')+'" placeholder="QF,SF,F">';
     }
   }
+
+  /* Handler del desplegable "Formato" — inline onchange en el <select>
+     para que SIEMPRE responda en móvil (no depende de que el
+     addEventListener de _wire() se haya enganchado). Cambia el formato,
+     reinicia la subconfig y la repinta; hace scroll para que el usuario
+     VEA el cambio en el formulario largo. Bug usuario 2026-05-17:
+     "el desplegable de formato del torneo no funciona". */
+  window._tourEdFmtChange = function(sel){
+    if (!_open) return;
+    var el = sel || document.getElementById('tour-ed-fmt');
+    if (!el) return;
+    _open.cfg.format = el.value;
+    _open.cfg.formatConfig = {};
+    _renderFmtCfg();
+    var box = document.getElementById('tour-ed-fmt-cfg');
+    if (box && box.scrollIntoView) {
+      try { box.scrollIntoView({ block:'nearest' }); } catch(_){ }
+    }
+  };
 
   function _prizesToText(p){
     return Object.keys(p||{}).map(function(k){ return k+':'+p[k]; }).join('\n');
@@ -10566,6 +10929,9 @@ window._showSimProgress = function(opts, onDone){
     /* Guard contra re-entrada: si el usuario tap-tap rápido, no
        reabrimos. */
     if (_open && _open.id === id) return;
+    /* Recalcula el pool 1 vez al abrir (por si se editaron plantillas);
+       las llamadas siguientes del editor reusan la cache → editor ágil. */
+    try { window._invalidateTourTeamsCache(); } catch(_){}
     var cached = _tourLoadCachedSync(id);
     var cfg = cached || _cloneDefault(id);
     _open = { id: id, cfg: cfg };
@@ -10573,6 +10939,46 @@ window._showSimProgress = function(opts, onDone){
     _populateForm(cfg);
     _setFeedback('');
     document.getElementById('tour-editor-overlay').style.display = 'flex';
+    /* PREFETCH PERMANENTE: bajamos a localStorage TODAS las ligas que
+       falten (async, no bloquea). Una vez guardadas persisten para
+       siempre → próximas aperturas, pool completo al instante. Mientras
+       bajan, repintamos lista de exclusión + contador con debounce. */
+    try {
+      var _pfDeb = 0;
+      _tourPrefetchAllLeagues(function(){
+        if (!_open || _open.id !== id) return;
+        if (_pfDeb) return;
+        _pfDeb = setTimeout(function(){
+          _pfDeb = 0;
+          if (!_open || _open.id !== id) return;
+          try { _renderLeagueChecks(); } catch(_){}
+          try { _updatePoolStat(); } catch(_){}
+        }, 350);
+      });
+    } catch(_){}
+    /* Las ligas de "Resto de Ligas" se hidratan desde el server
+       (/api/liga-ext/*) de forma asíncrona. Si el editor se abre ANTES
+       de que terminen, el pool y la lista "Excluir ligas" salen
+       incompletos (solo LIGA EA SPORTS → "Solo hay 84 equipos…").
+       Reintentos acotados: en cuanto la firma de localStorage cambie
+       (llegan más ligas) repintamos lista de exclusión + contador. Sin
+       cache, además, cualquier interacción del usuario ya recomputa
+       fresco. Comprobaciones puntuales tempranas (300 ms) y hasta 12 s
+       para 4G lento. Sin polling continuo. 2026-05-16 #3/#4. */
+    try {
+      var _openSig = _ligaExtSig();
+      [300, 800, 1600, 3000, 5000, 8000, 12000].forEach(function(_ms){
+        setTimeout(function(){
+          if (!_open || _open.id !== id) return;
+          var _nowSig = _ligaExtSig();
+          if (_nowSig === _openSig) return;
+          _openSig = _nowSig;
+          try { window._invalidateTourTeamsCache(); } catch(_){}
+          try { _renderLeagueChecks(); } catch(_){}
+          try { _updatePoolStat(); } catch(_){}
+        }, _ms);
+      });
+    } catch(_){}
     /* Refresco en segundo plano: si el server tiene una versión más
        reciente y el usuario aún no ha tocado el formulario, repinta. */
     try {
@@ -11730,11 +12136,12 @@ window._showSimProgress = function(opts, onDone){
     });
     var fmt = document.getElementById('tour-ed-fmt');
     if (fmt) {
+      /* Backup del onchange inline (idempotente: vuelve a llamar al
+         mismo handler). El inline es el camino principal y fiable en
+         móvil; este addEventListener es una red por si el atributo
+         se perdiera en algún build. */
       fmt.addEventListener('change', function(){
-        if (!_open) return;
-        _open.cfg.format = this.value;
-        _open.cfg.formatConfig = {};
-        _renderFmtCfg();
+        if (typeof window._tourEdFmtChange === 'function') window._tourEdFmtChange(this);
       });
     }
     /* Botón principal: ✅ CONFIRMAR Y SORTEAR. Lee el formulario,
@@ -11743,7 +12150,7 @@ window._showSimProgress = function(opts, onDone){
        slots IA pedidos, abortamos con error visible. */
     var save = document.getElementById('tour-ed-save');
     if (save) {
-      save.addEventListener('click', async function(){
+      save.addEventListener('click', function(){
         if (!_open) return;
         _readForm(_open.cfg);
         var draw = _drawTeams(_open.cfg);
@@ -11752,22 +12159,22 @@ window._showSimProgress = function(opts, onDone){
           return;
         }
         _open.cfg.teams = draw.teams;
-        _setFeedback('Sorteando y guardando…');
-        var ok = await window._tourSave(_open.id, _open.cfg);
-        /* En CUALQUIER caso (server OK o fallo de red) el sorteo está
-           ya guardado en localStorage por `_tourSave`. Renderizamos el
-           bracket y cerramos el editor aunque el server haya fallado —
-           el usuario no se queda colgado en "Sorteando y guardando…".
-           Si la red falló, mostramos un aviso pero seguimos avanzando. */
-        if (ok) {
-          _setFeedback('✅ Sorteo confirmado · '+draw.teams.length+' equipos', true);
-        } else {
-          _setFeedback('✅ Sorteo guardado en local (server sin red)', false);
-        }
+        /* OPTIMISTA (petición usuario 2026-05-16: "crear un torneo
+           tarda >5 min"). El cuello de botella era el `await _tourSave`
+           bloqueando hasta 8 s por la red. `_tourSave` ya persiste en
+           localStorage + cache de forma SÍNCRONA antes de su primer
+           await, así que renderizamos y cerramos al instante; el sync
+           al server va en segundo plano. */
+        _setFeedback('✅ Sorteo confirmado · '+draw.teams.length+' equipos', true);
         try { window._tourRender(_open.id); } catch(_){}
+        try {
+          Promise.resolve(window._tourSave(_open.id, _open.cfg)).then(function(ok){
+            if (!ok) _setFeedback('✅ Sorteo guardado en local (server sin red)', false);
+          }).catch(function(){});
+        } catch(_){}
         setTimeout(function(){
           try { window._tourCloseEditor(); } catch(_){}
-        }, ok ? 900 : 1400);
+        }, 700);
       });
     }
     var reset = document.getElementById('tour-ed-reset');
@@ -11938,17 +12345,24 @@ window._showSimProgress = function(opts, onDone){
     return { a: sA, b: sB };
   }
 
-  /* Devuelve true si AL MENOS UNO de los dos slots de una pareja del
-     bracket KO directo está marcado isHuman. */
+  /* Un slot cuenta como HUMANO si lo eligió el usuario (isHuman) O si
+     el equipo es "humano en torneo" por humanIcon/Liga EA (regla
+     usuario 2026-05-16: ningún equipo humano puede jugar como IA —
+     aunque por cualquier ruta acabara en un slot sin isHuman, su
+     partido NO se auto-simula como IA, se enruta al modal humano). */
+  function _tourSlotIsHuman(t) {
+    if (!t) return false;
+    if (t.isHuman) return true;
+    if (t.name && t.name !== 'PENDIENTE' && _isHumanTeamForTour(t.name)) return true;
+    return false;
+  }
   function _tourPairHasHuman(teams, i) {
-    var a = teams[i], b = teams[i+1];
-    return !!((a && a.isHuman) || (b && b.isHuman));
+    return _tourSlotIsHuman(teams[i]) || _tourSlotIsHuman(teams[i+1]);
   }
   /* Devuelve true si el partido m={home,away} en `teams` (índices)
      involucra al menos a un humano. */
   function _tourLeagueMatchHasHuman(teams, m) {
-    var h = teams[m.home], a = teams[m.away];
-    return !!((h && h.isHuman) || (a && a.isHuman));
+    return _tourSlotIsHuman(teams[m.home]) || _tourSlotIsHuman(teams[m.away]);
   }
 
   function _tourSimMatch(cfg, roundIdx, matchIdx) {
@@ -12667,16 +13081,20 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     box.innerHTML = matches.map(function(t){
-      var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
+      /* Escudo perezoso: _allTeams ya no lo resuelve por equipo (coste
+         masivo). Aquí, sólo para las ≤20 filas visibles, caemos a
+         _shieldOf si el dato no traía escudo. */
+      var sh = t.shield || _shieldOf(t.name) || '';
+      var img = sh ? '<img src="'+sh+'" onerror="this.style.display=\'none\'">' : '';
       var isT = !!taken[t.name.toLowerCase()];
       var cls = isT ? 'tour-pick-row is-taken' : 'tour-pick-row';
-      return '<div class="'+cls+'" data-name="'+t.name.replace(/"/g,'&quot;')+'" data-s="'+(t.shield||'').replace(/"/g,'&quot;')+'" data-pw="'+t.power+'">'+
+      return '<div class="'+cls+'" data-name="'+t.name.replace(/"/g,'&quot;')+'" data-s="'+sh.replace(/"/g,'&quot;')+'" data-pw="'+t.power+'">'+
         img + '<span>'+t.name+'</span>' +
         '<span class="pw">'+t.power+'</span>' +
       '</div>';
     }).join('');
     box.querySelectorAll('.tour-pick-row').forEach(function(row){
-      row.addEventListener('click', async function(){
+      row.addEventListener('click', function(){
         if (!_picker) return;
         if (this.classList.contains('is-taken')) return;
         var name = this.getAttribute('data-name');
@@ -12685,15 +13103,26 @@ window._showSimProgress = function(opts, onDone){
         var cfg2 = (window._TOUR_CACHE || {})[_picker.tourId];
         if (!cfg2 || !cfg2.teams || !cfg2.teams[_picker.slotIdx]) return;
         cfg2.teams[_picker.slotIdx] = { name: name, isHuman: true, shield: sh, power: pw };
-        _setPickFeedback('Guardando…');
-        var ok = await window._tourSave(_picker.tourId, cfg2);
-        if (ok) {
-          _setPickFeedback('✓ Equipo asignado', true);
-          window._tourRender(_picker.tourId);
-          setTimeout(function(){ window._tourClosePicker(); }, 500);
-        } else {
-          _setPickFeedback('⚠ Guardado solo en local (sin red)', false);
-        }
+        /* OPTIMISTA (petición usuario 2026-05-16: "tarda mucho").
+           `_tourSave` persiste en localStorage + cache de forma SÍNCRONA
+           antes de su primer await, así que el guardado local está
+           garantizado aunque no esperemos. Refrescamos y cerramos al
+           instante; el sync al server va en segundo plano sin bloquear
+           la UI. */
+        var tourId = _picker.tourId;
+        _setPickFeedback('✓ Equipo asignado', true);
+        try { window._tourRender(tourId); } catch(_){}
+        setTimeout(function(){ window._tourClosePicker(); }, 250);
+        try {
+          Promise.resolve(window._tourSave(tourId, cfg2)).then(function(ok){
+            if (!ok) {
+              try {
+                var fb = document.getElementById('tour-pick-feedback');
+                if (fb) { fb.textContent = '⚠ Guardado solo en local (sin red)'; fb.style.color = '#ff9090'; }
+              } catch(_){}
+            }
+          }).catch(function(){});
+        } catch(_){}
       });
     });
   }
@@ -12748,6 +13177,208 @@ window._showSimProgress = function(opts, onDone){
   } else {
     _wirePicker();
   }
+
+  /* ════ GESTIÓN DE TORNEOS — añadir / eliminar (PIN 747) ════════════
+     Modelo "huecos pre-cableados": built-in (sct/pss/jg/asia) + slots
+     tx1..tx8. La lista visible se persiste en `tour_registry_v1`
+     (localStorage + sync server best-effort). "Eliminar" oculta
+     conservando datos; "Restaurar" lo vuelve a mostrar; "Nuevo"
+     activa un slot libre, pide nombre+bandera y abre el editor. */
+  var _TV_REG_KEY = 'tour_registry_v1';
+  var _TV_COLORS = {
+    sct:  ['linear-gradient(135deg,#0a1a3a 0%,#b22234 35%,#ffffff 50%,#3c3b6e 65%,#0a1a3a 100%)','#b22234'],
+    pss:  ['linear-gradient(135deg,#012169 0%,#ce1124 35%,#ffffff 50%,#ce1124 65%,#012169 100%)','#ce1124'],
+    jg:   ['linear-gradient(135deg,#aa151b 0%,#f1bf00 35%,#ffffff 50%,#f1bf00 65%,#aa151b 100%)','#f1bf00'],
+    asia: ['linear-gradient(135deg,#1a0612 0%,#bc002d 35%,#ffffff 50%,#bc002d 65%,#1a0612 100%)','#bc002d']
+  };
+  var _TV_DEF_COLOR = ['linear-gradient(135deg,#2a1f00 0%,#7a5a00 35%,#c89020 50%,#7a5a00 65%,#2a1f00 100%)','#f0c040'];
+  function _tvEsc(s){ return String(s == null ? '' : s).replace(/[<>"]/g, function(c){ return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;'; }); }
+  function _tvRegLoad(){
+    var reg = null;
+    try { var raw = localStorage.getItem(_TV_REG_KEY); if (raw) reg = JSON.parse(raw); } catch(_){}
+    if (!reg || !Array.isArray(reg.visible)) reg = { v:1, visible: TOUR_BUILTINS.slice() };
+    var seen = {}, vis = [];
+    reg.visible.forEach(function(id){
+      if (TOUR_IDS.indexOf(id) === -1 || seen[id]) return;
+      seen[id] = 1; vis.push(id);
+    });
+    reg.visible = vis.length ? vis : TOUR_BUILTINS.slice();
+    return reg;
+  }
+  function _tvRegSave(reg){
+    try { localStorage.setItem(_TV_REG_KEY, JSON.stringify(reg)); } catch(_){}
+    try {
+      if (typeof window.fetch === 'function') {
+        window.fetch('/api/kv/' + _TV_REG_KEY, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ value: reg })
+        }).catch(function(){});
+      }
+    } catch(_){}
+  }
+  function _tvCfgOf(id){
+    var c = null;
+    try { c = _tourLoadCachedSync(id); } catch(_){}
+    if (!c) { try { c = _cloneDefault(id); } catch(_){ c = {}; } }
+    return (c && typeof c === 'object') ? c : {};
+  }
+  function _tvName(id){ var c=_tvCfgOf(id); return (c.name) || (DEFAULTS[id] && DEFAULTS[id].name) || id; }
+  function _tvFlag(id){ var c=_tvCfgOf(id); return (c.flag) || (DEFAULTS[id] && DEFAULTS[id].flag) || '🏆'; }
+  function _tvRenderCards(){
+    var box = document.getElementById('tv-tour-cards');
+    if (!box) return;
+    var reg = _tvRegLoad();
+    var html = '';
+    reg.visible.forEach(function(id){
+      var col = _TV_COLORS[id] || _TV_DEF_COLOR;
+      html += '<div class="submenu-card sc-' + id + '" '
+        + 'style="background:' + col[0] + ' !important;border-color:' + col[1] + ' !important;" '
+        + 'onclick="go(\'s-' + id + '\')">'
+        + '<span class="sc-emoji">' + _tvEsc(_tvFlag(id)) + '</span>'
+        + '<span class="sc-label">' + _tvEsc(_tvName(id)) + '</span>'
+        + '<button type="button" class="sc-info-btn" onclick="event.stopPropagation();window.muTourInfo&&window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
+        + '<span class="sc-arr">▶</span>'
+        + '</div>';
+    });
+    box.innerHTML = html;
+  }
+  window._tvRenderCards = _tvRenderCards;
+  /* Accesores públicos para que OTRAS pantallas (p.ej. el picker de
+     pretemporada del Bayern) reflejen los mismos torneos visibles que
+     "Torneos de Verano". 2026-05-17. */
+  window._tourVisibleIds = function(){
+    try { return _tvRegLoad().visible.slice(); } catch(_){ return TOUR_BUILTINS.slice(); }
+  };
+  window._tourCardMeta = function(id){
+    return { flag: _tvFlag(id), name: _tvName(id) };
+  };
+  function _tvCloseManage(){
+    var ov = document.getElementById('tv-manage-ov');
+    if (ov) ov.style.display = 'none';
+  }
+  window._tvCloseManage = _tvCloseManage;
+  function _tvBuildManageBody(){
+    var reg = _tvRegLoad();
+    var visSet = {}; reg.visible.forEach(function(id){ visSet[id]=1; });
+    var h = '<div class="tv-mg-sec">Torneos activos</div>';
+    if (!reg.visible.length) h += '<div class="tv-mg-empty">Ninguno.</div>';
+    reg.visible.forEach(function(id){
+      h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tvEsc(_tvFlag(id)) + ' ' + _tvEsc(_tvName(id)) + '</span>'
+        + '<button class="tv-mg-btn tv-mg-del" data-act="del" data-id="' + id + '">🗑 Eliminar</button></div>';
+    });
+    var hiddenB = TOUR_BUILTINS.filter(function(id){ return !visSet[id]; });
+    if (hiddenB.length){
+      h += '<div class="tv-mg-sec">Restaurar built-in (datos conservados)</div>';
+      hiddenB.forEach(function(id){
+        h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tvEsc(_tvFlag(id)) + ' ' + _tvEsc(_tvName(id)) + '</span>'
+          + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button></div>';
+      });
+    }
+    var freeSlots = TOUR_SLOTS.filter(function(id){ return !visSet[id]; });
+    h += '<div class="tv-mg-sec">Añadir torneo nuevo</div>';
+    if (!freeSlots.length){
+      h += '<div class="tv-mg-empty">Sin huecos libres (máx. ' + TOUR_SLOTS.length + '). Elimina alguno para liberar uno.</div>';
+    } else {
+      h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + freeSlots.length + ' hueco' + (freeSlots.length===1?'':'s') + ' libre' + (freeSlots.length===1?'':'s') + '</span>'
+        + '<button class="tv-mg-btn tv-mg-add" data-act="new">➕ Nuevo torneo</button></div>';
+      freeSlots.forEach(function(id){
+        var saved = null; try { saved = localStorage.getItem(_key(id)); } catch(_){}
+        if (saved) h += '<div class="tv-mg-row"><span class="tv-mg-nm" style="opacity:.7;">↳ ' + _tvEsc(_tvFlag(id)) + ' ' + _tvEsc(_tvName(id)) + ' (guardado)</span>'
+          + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button></div>';
+      });
+    }
+    return h;
+  }
+  function _tvRefreshManage(){
+    var b = document.getElementById('tv-mg-body');
+    if (b) b.innerHTML = _tvBuildManageBody();
+  }
+  function _tvOpenManage(){
+    var ov = document.getElementById('tv-manage-ov');
+    if (!ov){
+      ov = document.createElement('div');
+      ov.id = 'tv-manage-ov';
+      ov.innerHTML = '<div class="tv-mg-card">'
+        + '<div class="tv-mg-hd"><span>🏆 Gestionar torneos</span>'
+        + '<button class="tv-mg-x" onclick="window._tvCloseManage()">✕</button></div>'
+        + '<div class="tv-mg-body" id="tv-mg-body"></div></div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if (e.target === ov) _tvCloseManage(); });
+      ov.addEventListener('click', function(e){
+        var b = e.target && e.target.closest && e.target.closest('.tv-mg-btn');
+        if (!b) return;
+        var act = b.getAttribute('data-act');
+        var id  = b.getAttribute('data-id');
+        var reg = _tvRegLoad();
+        if (act === 'del'){
+          if (!confirm('¿Eliminar este torneo de la lista? Se conservan sus datos por si lo restauras.')) return;
+          reg.visible = reg.visible.filter(function(x){ return x !== id; });
+          _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
+        } else if (act === 'restore'){
+          if (TOUR_IDS.indexOf(id) !== -1 && reg.visible.indexOf(id) === -1) reg.visible.push(id);
+          _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
+        } else if (act === 'new'){
+          var free = TOUR_SLOTS.filter(function(s){ return reg.visible.indexOf(s) === -1; });
+          if (!free.length){ alert('Sin huecos libres. Elimina algún torneo para liberar uno.'); return; }
+          var slot = free[0];
+          var nm = prompt('Nombre del torneo nuevo:', _tvName(slot));
+          if (nm === null) return;
+          nm = String(nm).trim() || _tvName(slot);
+          var fl = prompt('Bandera / emoji del torneo:', _tvFlag(slot));
+          if (fl === null) fl = _tvFlag(slot);
+          fl = String(fl).trim() || '🏆';
+          var cfg = _tvCfgOf(slot);
+          cfg.name = nm; cfg.flag = fl;
+          try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[slot] = cfg; } catch(_){}
+          try { if (typeof window._tourSave === 'function') window._tourSave(slot, cfg); } catch(_){}
+          if (reg.visible.indexOf(slot) === -1) reg.visible.push(slot);
+          _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
+          setTimeout(function(){
+            _tvCloseManage();
+            try { if (typeof window._tourOpenEditor === 'function') window._tourOpenEditor(slot); } catch(_){}
+          }, 250);
+        }
+      });
+    }
+    _tvRefreshManage();
+    ov.style.display = 'flex';
+  }
+  window._tvOpenManage = _tvOpenManage;
+  /* Hidrata el registro desde el server (best-effort, async). Hace
+     el registro cross-device y resistente a borrados de localStorage
+     ("guárdalo para siempre"). Solo pisa el local si el server trae
+     una lista válida. */
+  function _tvHydrateReg(){
+    try {
+      if (typeof window.fetch !== 'function') return;
+      window.fetch('/api/kv/' + _TV_REG_KEY).then(function(r){
+        return (r && r.ok) ? r.json() : null;
+      }).then(function(j){
+        if (!j || !j.value || !Array.isArray(j.value.visible)) return;
+        try { localStorage.setItem(_TV_REG_KEY, JSON.stringify(j.value)); } catch(_){}
+        _tvRenderCards();
+        if (document.getElementById('tv-mg-body')) _tvRefreshManage();
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function _tvWatch(){
+    _tvRenderCards();
+    _tvHydrateReg();
+    var el = document.getElementById('s-torneos-verano');
+    if (el && typeof MutationObserver === 'function'){
+      var wasA = el.classList.contains('active');
+      try {
+        new MutationObserver(function(){
+          var nowA = el.classList.contains('active');
+          if (nowA && !wasA) _tvRenderCards();
+          wasA = nowA;
+        }).observe(el, { attributes:true, attributeFilter:['class'] });
+      } catch(_){}
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _tvWatch);
+  } else { _tvWatch(); }
 })();
 </script>
 <div class="screen" id="s-champions">
@@ -18348,6 +18979,14 @@ window._showSimProgress = function(opts, onDone){
 .lext-ov-close{background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.65);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;}
 .lext-input,.lext-select{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;margin-bottom:8px;}
 .lext-input:focus,.lext-select:focus{outline:none;border-color:#f0c040;}
+/* Selector de posición por BOTONES (2026-05-17): el <select> nativo
+   se quedaba "bloqueado en Portero" en algunos navegadores móviles
+   (foto usuario). Botones tap = 100% fiables, sin depender del
+   picker nativo. */
+.lext-posseg{display:flex;gap:6px;margin-bottom:8px;}
+.lext-posseg button{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:9px 4px;color:rgba(255,255,255,.7);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;cursor:pointer;transition:background .14s,border-color .14s,color .14s;}
+.lext-posseg button.active{background:rgba(240,192,64,.18);border-color:#f0c040;color:#f0c040;}
+.lext-posseg button:active{transform:scale(.96);}
 .lext-label{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.5);display:block;margin:8px 0 3px;}
 .lext-btn{background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.45);color:#f0c040;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;transition:all .15s;}
 .lext-btn:hover{background:rgba(240,192,64,.25);}
@@ -18833,12 +19472,18 @@ Tottenham
       <label class="lext-label">Dorsal · opcional, autocalculado si lo dejas vacío</label>
       <input class="lext-input" id="lext-pl-num" type="number" min="1" max="99" placeholder="Ej. 9" />
       <label class="lext-label">Posición</label>
-      <select class="lext-select" id="lext-pl-pos">
-        <option value="POR">Portero</option>
-        <option value="DEF">Defensa</option>
-        <option value="MED">Medio</option>
-        <option value="DEL">Delantero</option>
-      </select>
+      <!-- Botones en vez de <select> nativo: en móvil el select se
+           quedaba clavado en "Portero" y no dejaba elegir (foto
+           usuario 2026-05-17). El valor vive en el hidden #lext-pl-pos
+           para no tocar lextSavePlayer/lextEditPlayer (siguen leyendo
+           .value). Default MED (lo más común al añadir). -->
+      <input type="hidden" id="lext-pl-pos" value="MED" />
+      <div class="lext-posseg" id="lext-pl-posseg">
+        <button type="button" data-pos="POR" onclick="window.lextSetPos('POR')">Portero</button>
+        <button type="button" data-pos="DEF" onclick="window.lextSetPos('DEF')">Defensa</button>
+        <button type="button" data-pos="MED" onclick="window.lextSetPos('MED')">Medio</button>
+        <button type="button" data-pos="DEL" onclick="window.lextSetPos('DEL')">Delantero</button>
+      </div>
       <label class="lext-label">🛡 Nivel / Poder (1-99)</label>
       <input class="lext-input" id="lext-pl-power" type="number" min="1" max="99" value="75" />
       <label class="lext-label">Roles especiales</label>
@@ -18848,11 +19493,14 @@ Tottenham
         <label class="lext-pl-role"><input type="checkbox" id="lext-pl-pk"/><span class="lext-pl-role-ico">🥅</span><span>Lanza penaltis</span></label>
         <label class="lext-pl-role"><input type="checkbox" id="lext-pl-star"/><span class="lext-pl-role-ico">⭐</span><span>Estrella</span></label>
         <label class="lext-pl-role"><input type="checkbox" id="lext-pl-scorer"/><span class="lext-pl-role-ico">⚾</span><span>Goleador nato</span></label>
+        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-scorer-pro"/><span class="lext-pl-role-ico">🏀</span><span>Goleador estrella</span></label>
       </div>
       <div class="lext-sub">
-        Solo <b>el capitán</b> es único por equipo. <b>F</b>, <b>P</b>, <b>⭐</b> y <b>⚾</b> pueden activarse en varios jugadores a la vez.
+        Solo <b>el capitán</b> es único por equipo. <b>F</b>, <b>P</b>, <b>⭐</b>, <b>⚾</b> y <b>🏀</b> pueden activarse en varios jugadores a la vez.
         <br>Efecto de cada rol en la simulación:
-        <br>· <b>⚾ Goleador nato</b> — prioridad MÁXIMA, ×3 en probabilidad de gol (marca 50%+ de los goles del equipo).
+        <br>· <b>🏀 Goleador estrella</b> — prioridad MÁXIMA, ×3.0 en probabilidad de gol (marca ≈48% de los goles del equipo).
+        <br>· <b>⚾ Goleador nato</b> — ×1.8 en probabilidad de gol (marca ≈30% de los goles del equipo).
+        <br><span style="opacity:.75;">⚠️ 🏀 y ⚾ NO se acumulan: si marcas 🏀, el ⚾ se ignora.</span>
         <br>· <b>P</b> / <b>F</b> — prioridad ALTA, el jugador marcado tira TODOS los penaltis / faltas (suma fija).
         <br>· <b>⭐ Estrella</b> — prioridad MEDIA, solo empuja la elección de MVP del partido, no cambia el resultado.
         <br>· <b>C Capitán</b> — soporte invisible, +5% al poder del equipo en la sim (mejor resultado global).
@@ -19039,6 +19687,83 @@ Tottenham
   /* Bridge global desde este bloque: si el IIFE del otro
      <script> no llegó a ejecutar, garantizamos window._normPS. */
   try { if (typeof window !== 'undefined' && !window._normPS) window._normPS = _normPS; } catch(_){}
+
+  /* ── Dedup de jugadores dentro de una plantilla (bug 2026-05-17) ──
+     El usuario reportó que la MAYORÍA de plantillas de Liga EA Sports
+     tienen los jugadores duplicados o triplicados (las copias incluso
+     con ratings distintos: "Lunin 82" y luego "Lunin 80"). Causa: las
+     ramas `t.players = t.players.concat(parsed)` ("Cancelar = añadir")
+     se ejecutaron repetidas veces y nadie deduplicaba. Este helper es
+     la red de seguridad universal: clave = nombre normalizado + dorsal
+     (o + posición si no hay dorsal). Conserva la PRIMERA aparición,
+     fusiona los flags (C/F/P/⭐/⚾/🏀) de las copias y se queda con el
+     power más alto para no degradar. Idempotente. */
+  /* Clave de dedupe = SOLO el nombre normalizado (2026-05-17).
+     ANTES la clave incluía el dorsal/posición, así que dos copias
+     del MISMO jugador con dorsal distinto o sin dorsal (caso real:
+     la copia editada tiene nº 7 y la copia inyectada por el
+     rebuild de la clasificación viene sin nº) NO se fusionaban y
+     los duplicados/triplicados volvían tras recargar por más que
+     el usuario los borrase. En una plantilla no hay dos jugadores
+     reales con el MISMO nombre completo, así que deduplicar por
+     nombre es seguro y elimina el rebrote de raíz. */
+  function _dedupePlayerKey(p){
+    return String(p && p.name || '').trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  }
+  function _dedupeSquadPlayers(arr){
+    if(!Array.isArray(arr)) return arr;
+    var seen = {}, out = [], changed = false;
+    for(var i=0;i<arr.length;i++){
+      var p = arr[i];
+      if(!p || !p.name){ changed = true; continue; }
+      var k = _dedupePlayerKey(p);
+      if(Object.prototype.hasOwnProperty.call(seen, k)){
+        changed = true;
+        var keep = out[seen[k]];
+        ['captain','freeKick','penalty','elite','natGoal','natGoalPro'].forEach(function(f){
+          if(p[f]) keep[f] = true;
+        });
+        if((Number(p.power)||0) > (Number(keep.power)||0)) keep.power = Number(p.power) || keep.power;
+        continue;
+      }
+      seen[k] = out.length;
+      out.push(p);
+    }
+    return changed ? out : arr;
+  }
+  /* Clave canónica de equipo consciente de alias: colapsa todas las
+     variantes de un mismo club ("Atl Madrid"/"Atlético Madrid"/…) a
+     una sola clave para dedupe de FILAS y para el lookup de plantilla
+     desde la clasificación (bug 2026-05-17: 2 Atlético Madrid + "no
+     encuentro el equipo"). */
+  function _teamCanonKey(name){
+    var raw = String(name == null ? '' : name).replace(/^\s*\*+\s*/,'').trim();
+    if(!raw) return '';
+    function canon(s){
+      try {
+        if (typeof window._canonTeamName === 'function') return window._canonTeamName(s);
+      } catch(_){}
+      return String(s||'').trim().toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+    }
+    var key = canon(raw);
+    try {
+      var groups = window.TEAM_NAME_ALIASES;
+      if (Array.isArray(groups)) {
+        for(var i=0;i<groups.length;i++){
+          var g = groups[i];
+          for(var j=0;j<g.length;j++){
+            if (canon(g[j]) === key) return canon(g[0]);
+          }
+        }
+      }
+    } catch(_){}
+    return key;
+  }
+  try { if (typeof window !== 'undefined') { window._dedupeSquadPlayers = _dedupeSquadPlayers; window._teamCanonKey = _teamCanonKey; } } catch(_){}
+
   function _lextFindTeamRow(data, id, fallbackName){
     if (!data || !Array.isArray(data.teams)) return null;
     if (id) {
@@ -19047,11 +19772,27 @@ Tottenham
       }
     }
     if (fallbackName) {
-      var nm = _lextNormName(fallbackName);
+      /* Limpia el nombre de adornos (escudo emoji 🛡, prefijo *,
+         espacios) antes de normalizar — la clasificación lo deriva
+         del título del modal y puede traer ruido. */
+      var _fbClean = String(fallbackName).replace(/🛡/g,'').replace(/^\s*\*+\s*/,'').trim();
+      var nm = _lextNormName(_fbClean);
       if (nm) {
         for (var j = 0; j < data.teams.length; j++) {
           var et = data.teams[j];
           if (et && _lextNormName(et.name) === nm) return et;
+        }
+      }
+      /* 2ª pasada CANÓNICA + ALIAS: "Athletic Club" ⇆ "Athletic
+         Bilbao", "Atl Madrid" ⇆ "Atlético Madrid", etc. Resuelve el
+         bug "No encuentro el equipo … ni por id ni por nombre"
+         (2026-05-17) cuando el id del bundle no casa con el de
+         localStorage y el nombre difiere por afijo/acento/alias. */
+      var ck = (typeof _teamCanonKey === 'function') ? _teamCanonKey(_fbClean) : '';
+      if (ck) {
+        for (var m = 0; m < data.teams.length; m++) {
+          var et2 = data.teams[m];
+          if (et2 && et2.name && _teamCanonKey(et2.name) === ck) return et2;
         }
       }
     }
@@ -19226,6 +19967,12 @@ Tottenham
     if (/\b11\s*ideal\b/i.test(t)) return true;
     if (/\b9\s*(mejores\s*)?reservas?\b/i.test(t)) return true;
     if (/goleador(es)?\s+de\s+elite\s+mundial/i.test(t)) return true;
+    /* Leyenda de iconos de goleador persistida como jugador en casi
+       todos los equipos (foto usuario 2026-05-17). Mismos tokens que
+       _isCabeceraLine — un jugador real nunca los contiene. */
+    if (/m[aá]ximo\s+goleador/i.test(t)) return true;
+    if (/[≥≤]\s*\d+\s*goles?/i.test(t)) return true;
+    if (/\bgoles?\s+y\s+top\b/i.test(t)) return true;
     /* Líneas del 11 IDEAL: "POR: Unai Simón", "DEF: A. Gorosabel",
        "MED: I. Ruiz De Galarreta", "DEL: I. Williams". El jugador
        real ya está en la nómina sin el prefijo "POR:/DEF:/…", así
@@ -19239,6 +19986,18 @@ Tottenham
     return false;
   }
   window._isJunkPlayerName = _isJunkPlayerName;
+  /* Limpiador universal de una nómina: quita líneas-basura
+     ("MED: …", "DEF: …", leyenda de iconos, cabeceras) y
+     deduplica jugadores. Lo usa el render de la plantilla y la
+     cadena de rebuild de la clasificación (otro IIFE) para que
+     NUNCA se muestren ni persistan jugadores antiguos/duplicados
+     (bug "este error es continuo" 2026-05-17). Idempotente. */
+  function _cleanSquadPlayers(arr){
+    if (!Array.isArray(arr)) return arr;
+    var filtered = arr.filter(function(p){ return p && !_isJunkPlayerName(p && p.name); });
+    return _dedupeSquadPlayers(filtered);
+  }
+  try { if (typeof window !== 'undefined') window._cleanSquadPlayers = _cleanSquadPlayers; } catch(_){}
   function _sanitizeLigaTeamNames(d){
     if (!d || !Array.isArray(d.teams)) return false;
     var dirty = false;
@@ -19253,6 +20012,20 @@ Tottenham
         return p && !_isJunkPlayerName(p && p.name);
       });
       if (t.players.length !== before) dirty = true;
+    });
+    /* Phase 0b: DEDUP de jugadores dentro de cada plantilla. Auto-cura
+       las plantillas ya corruptas (duplicadas/triplicadas) en la
+       PRIMERA carga y persiste (loadData guarda cuando dirty). Corre
+       ANTES del dedup de filas para que `_editScore` compare nóminas
+       limpias y no se quede con la copia "doble". (bug 2026-05-17) */
+    d.teams.forEach(function(t){
+      if (!t || !Array.isArray(t.players) || !t.players.length) return;
+      var n0 = t.players.length;
+      var dd = _dedupeSquadPlayers(t.players);
+      if (dd !== t.players || dd.length !== n0) {
+        t.players = dd;
+        if (dd.length !== n0) dirty = true;
+      }
     });
     /* Phase 1: strip `*` y espacios delante. */
     d.teams.forEach(function(t){
@@ -19273,7 +20046,13 @@ Tottenham
     for (var i = 0; i < d.teams.length; i++) {
       var t = d.teams[i];
       if (!t || !t.name) { keepIdx.push(i); continue; }
-      var key = String(t.name).toLowerCase().trim();
+      /* Clave CANÓNICA + ALIAS: colapsa "Atl Madrid" y "Atlético
+         Madrid" (y acentos / afijos FC-CF) a una sola fila. Antes la
+         clave era el nombre crudo en minúsculas y dejaba 2 Atlético
+         Madrid coexistiendo (bug usuario 2026-05-17). */
+      var key = (typeof _teamCanonKey === 'function')
+        ? _teamCanonKey(t.name)
+        : String(t.name).toLowerCase().trim();
       if (!key) { keepIdx.push(i); continue; }
       var prevIdx = byKey[key];
       if (prevIdx === undefined) {
@@ -19313,7 +20092,16 @@ Tottenham
          no se cuelen aunque la cache se llenase desde una ruta que
          no sanitiza (fetchData async, etc.). */
       if (_sanitizeLigaTeamNames(LIGA_CACHE[k])) {
-        try { localStorage.setItem(storeKey(k), JSON.stringify(LIGA_CACHE[k])); } catch(_){}
+        try {
+          var _csj = JSON.stringify(LIGA_CACHE[k]);
+          localStorage.setItem(storeKey(k), _csj);
+          /* Purga TAMBIÉN el _protected: si solo limpiamos main, una
+             copia _protected legacy triplicada resucitaba en el
+             siguiente restore/lock. 2026-05-17. */
+          if (localStorage.getItem(storeKey(k)+'_protected')) {
+            localStorage.setItem(storeKey(k)+'_protected', _csj);
+          }
+        } catch(_){}
       }
       return _applyForcedBlacklist(k, LIGA_CACHE[k]);
     }
@@ -19348,7 +20136,13 @@ Tottenham
         /* Sanitize pre-cache: si algún name tenía `*` prefijo, se
            limpia y persiste en main para que no vuelva a aparecer. */
         if (_sanitizeLigaTeamNames(parsed)) {
-          try { localStorage.setItem(storeKey(k), JSON.stringify(parsed)); } catch(_){}
+          try {
+            var _psj = JSON.stringify(parsed);
+            localStorage.setItem(storeKey(k), _psj);
+            if (localStorage.getItem(storeKey(k)+'_protected')) {
+              localStorage.setItem(storeKey(k)+'_protected', _psj);
+            }
+          } catch(_){}
         }
         LIGA_CACHE[k] = parsed;
         return _applyForcedBlacklist(k, LIGA_CACHE[k]);
@@ -21330,6 +22124,9 @@ Tottenham
      dorsales (si hay) y todos los flags (C/F/P/⭐/⚾/🏀). */
   function _squadToPasteText(players){
     if(!Array.isArray(players) || !players.length) return '';
+    /* Defensa en profundidad: nunca serializar duplicados al textarea
+       aunque alguna ruta dejara la nómina sucia (bug 2026-05-17). */
+    try { players = _dedupeSquadPlayers(players); } catch(_){}
     var SECTIONS = [
       { key:'POR', header:'### 🧤 Porteros' },
       { key:'DEF', header:'### 🛡️ Defensas' },
@@ -21640,6 +22437,15 @@ Tottenham
       if(/^dorsal\b.*nombre\b.*valor\b/i.test(t)) return true;
       /* Línea solo entre paréntesis tipo "(Sin ⚾️ por regla del algoritmo)". */
       if(/^\(.+\)$/.test(t)) return true;
+      /* Leyenda de iconos de goleador que se cuela bajo "Delanteros"
+         y se parsea como jugador (foto usuario 2026-05-17):
+         "(🥎 DL ≥10 goles / 🏀 máximo goleador / 🥎🏀 ≥16 goles y
+         top 2 ⭐". Empieza por "(" pero NO cierra paréntesis, así que
+         el patrón de arriba no la cazaba. Tokens que un jugador real
+         nunca tiene: "≥N goles", "máximo goleador", "goles y top". */
+      if(/m[aá]ximo\s+goleador/i.test(t)) return true;
+      if(/[≥≤]\s*\d+\s*goles?/i.test(t)) return true;
+      if(/\bgoles?\s+y\s+top\b/i.test(t)) return true;
       /* "Goles MC: 7 / 2 / ..." y similares — bloque informativo
          a nivel de línea (las sub-bullets se filtran por skip-block). */
       if(/^goles?\s+(mc|dl|df|por|gk|fw)\b\s*:/i.test(t)) return true;
@@ -22017,7 +22823,10 @@ Tottenham
        tocamos esas flags. El motor acepta múltiples goleadores con
        peso ×3, múltiples lanzadores de falta/penalti y múltiples
        estrellas. Sólo el capitán (C) es único por equipo. */
-    return players;
+    /* Red de seguridad: si el texto pegado ya traía la nómina
+       duplicada/triplicada (caso reportado 2026-05-17), la limpiamos
+       aquí — el resto del flujo recibe SIEMPRE una plantilla única. */
+    return _dedupeSquadPlayers(players);
   }
 
   function renderTeamsList(){
@@ -22635,7 +23444,7 @@ Tottenham
             if(_squadsEqual(parsed, t.players)){
               /* idempotente: nada que hacer */
             } else if(!confirm('Este equipo ya tiene '+t.players.length+' jugadores. ¿Reemplazar la plantilla con los '+parsed.length+' del textarea? (Cancelar = añadir a los existentes)')){
-              t.players = (t.players||[]).concat(parsed);
+              t.players = _dedupeSquadPlayers((t.players||[]).concat(parsed));
             } else {
               t.players = parsed;
             }
@@ -22890,6 +23699,10 @@ Tottenham
     if (plNameEl) plNameEl.value = '';
     var plPowerEl = document.getElementById('lext-pl-power');
     if (plPowerEl) plPowerEl.value = '75';
+    /* Reset del selector de posición (botones) + flag 🏀 al abrir. */
+    try { if (typeof window.lextSetPos === 'function') window.lextSetPos('MED'); } catch(_){}
+    var _plPro = document.getElementById('lext-pl-scorer-pro');
+    if (_plPro) _plPro.checked = false;
 
     /* Cabecera de stats del equipo en la competición actual + niveles
        4-ejes auto-derivados. */
@@ -23291,6 +24104,29 @@ Tottenham
         }
       } catch(_){}
     }
+    /* ── GUARD DURABLE anti-rebrote (2026-05-17) ──────────────────
+       El usuario edita la plantilla, la guarda limpia, pero al
+       reabrirla desde la clasificación reaparecían jugadores
+       antiguos / líneas basura ("MED: I. Ruiz De Galarreta",
+       "DEF: A. Gorosabel") y duplicados ("Álex Berenguer" ×2)
+       inyectados por la cadena de rebuild (sqFromRegistry / server
+       / _protected) que NO pasa por _sanitizeLigaTeamNames. Aquí,
+       en el ÚNICO punto donde se pinta la plantilla, filtramos la
+       basura + deduplicamos SIEMPRE y, si algo cambió, PERSISTIMOS
+       la versión limpia con saveData (que reescribe localStorage
+       main + _protected + servidor ya saneados). Así "lo que el
+       admin dejó se queda para siempre" y los restos antiguos no
+       vuelven en la siguiente apertura. */
+    if (t && Array.isArray(t.players) && t.players.length) {
+      try {
+        var _pn0 = t.players.length;
+        var _pclean = _cleanSquadPlayers(t.players);
+        if (_pclean !== t.players && _pclean.length !== _pn0) {
+          t.players = _pclean;
+          try { saveData(CURRENT_KEY, data); } catch(_){}
+        }
+      } catch(_){}
+    }
     if(!t || !t.players || !t.players.length){
       /* Diagnóstico: si no tenemos `t` no es lo mismo que tenerlo
          con 0 jugadores. Diferenciar ayuda al usuario a saber si el
@@ -23576,7 +24412,7 @@ Tottenham
     if(t.players.length){
       var replace = confirm('Este equipo ya tiene '+t.players.length+' jugadores.\n\nOK = REEMPLAZAR toda la plantilla por los '+parsed.length+' pegados\nCancelar = AÑADIR los '+parsed.length+' a los existentes');
       if(replace) t.players = parsed;
-      else t.players = t.players.concat(parsed);
+      else t.players = _dedupeSquadPlayers(t.players.concat(parsed));
     } else {
       t.players = parsed;
     }
@@ -23639,11 +24475,16 @@ Tottenham
     var pkChk     = document.getElementById('lext-pl-pk');
     var starChk   = document.getElementById('lext-pl-star');
     var scorerChk = document.getElementById('lext-pl-scorer');
+    var scorerProChk = document.getElementById('lext-pl-scorer-pro');
     var isCap    = !!(capChk    && capChk.checked);
     var isFk     = !!(fkChk     && fkChk.checked);
     var isPk     = !!(pkChk     && pkChk.checked);
     var isStar   = !!(starChk   && starChk.checked);
-    var isScorer = !!(scorerChk && scorerChk.checked);
+    var isScorer    = !!(scorerChk    && scorerChk.checked);
+    var isScorerPro = !!(scorerProChk && scorerProChk.checked);
+    /* CLAUDE.md: 🏀 y ⚾ NO se acumulan — si lleva 🏀 (estrella),
+       ⚾ (nato) se ignora. La estrella manda. */
+    if (isScorerPro) isScorer = false;
     var data = loadData(CURRENT_KEY);
     /* Fallback por nombre del título del overlay por si el id quedó
        desincronizado (ver helper _lextFindTeamRow). */
@@ -23674,6 +24515,7 @@ Tottenham
       target.penalty  = isPk;
       target.elite    = isStar;
       target.natGoal  = isScorer;
+      target.natGoalPro = isScorerPro;
     } else {
       if(isCap) t.players.forEach(function(p){ if(p.captain) p.captain = false; });
       var newP = {
@@ -23684,6 +24526,7 @@ Tottenham
         penalty:  isPk,
         elite:    isStar,
         natGoal:  isScorer,
+        natGoalPro: isScorerPro,
         pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
       };
       t.players.push(newP);
@@ -23699,6 +24542,8 @@ Tottenham
     if(pkChk)     pkChk.checked     = false;
     if(starChk)   starChk.checked   = false;
     if(scorerChk) scorerChk.checked = false;
+    if(scorerProChk) scorerProChk.checked = false;
+    try { window.lextSetPos('MED'); } catch(_){}
     _exitEditPlayerMode();
 
     renderSquadList();
@@ -23727,13 +24572,16 @@ Tottenham
     _editingPlayerId = pid;
     document.getElementById('lext-pl-name').value  = target.name || '';
     document.getElementById('lext-pl-num').value   = target.num  || '';
-    document.getElementById('lext-pl-pos').value   = target.pos  || 'MED';
+    try { window.lextSetPos(target.pos || 'MED'); }
+    catch(_){ document.getElementById('lext-pl-pos').value = target.pos || 'MED'; }
     document.getElementById('lext-pl-power').value = target.power|| 75;
     var capChk    = document.getElementById('lext-pl-cap');
     var fkChk     = document.getElementById('lext-pl-fk');
     var pkChk     = document.getElementById('lext-pl-pk');
     var starChk   = document.getElementById('lext-pl-star');
     var scorerChk = document.getElementById('lext-pl-scorer');
+    var scorerProChk = document.getElementById('lext-pl-scorer-pro');
+    if(scorerProChk) scorerProChk.checked = !!target.natGoalPro;
     if(capChk)    capChk.checked    = !!target.captain;
     if(fkChk)     fkChk.checked     = !!target.freeKick;
     if(pkChk)     pkChk.checked     = !!target.penalty;
@@ -23764,6 +24612,23 @@ Tottenham
     var cancel = document.getElementById('lext-pl-cancel-btn');
     if(cancel) cancel.style.display = 'none';
   }
+
+  /* Selector de posición por botones (reemplaza al <select> nativo
+     que se quedaba bloqueado en "Portero" en móvil — foto usuario
+     2026-05-17). Mantiene el valor en el hidden #lext-pl-pos para no
+     tocar la lógica de guardado/edición. Idempotente. */
+  window.lextSetPos = function(v){
+    v = (v === 'POR' || v === 'DEF' || v === 'MED' || v === 'DEL') ? v : 'MED';
+    var h = document.getElementById('lext-pl-pos');
+    if (h) h.value = v;
+    var seg = document.getElementById('lext-pl-posseg');
+    if (seg) {
+      var btns = seg.querySelectorAll('button');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle('active', btns[i].getAttribute('data-pos') === v);
+      }
+    }
+  };
 
   window.lextDeletePlayer = function(pid){
     var data = loadData(CURRENT_KEY);
@@ -23929,6 +24794,37 @@ Tottenham
     setPrimeraContext();
     window.ligaExtReglas();
   };
+
+  /* ── Bridge cross-IIFE de los setters de contexto (2026-05-17) ────
+     BUG (fotos usuario): al pulsar un equipo en la CLASIFICACIÓN de
+     Liga EA Sports salía "No encuentro el equipo … en ligaExt_? (ni
+     por id … ni por nombre)" y la plantilla solo se veía tras pulsar
+     ✏️ Edit. Causa raíz: el handler del click de la clasificación
+     vive en OTRO IIFE (script ~2699) y hacía
+     `typeof setLigaEaContext === 'function'` — pero estos setters son
+     locales a ESTE IIFE (script ~19002) y NO estaban en `window`,
+     así que el typeof daba 'undefined', el contexto NO se establecía
+     y la `CURRENT_KEY` local seguía null → loadData(null) → "ligaExt_?".
+     El flujo ✏️ Edit sí llamaba a setLigaEaContext() (mismo IIFE) y
+     por eso ahí sí funcionaba. Exponerlos en window arregla que la
+     plantilla se vea SIEMPRE directamente desde la clasificación. */
+  try {
+    window.setLigaEaContext     = setLigaEaContext;
+    window.setHypermotionContext = setHypermotionContext;
+    window.setPrimeraContext     = setPrimeraContext;
+    /* Fallback genérico para cualquier slug (ligas externas, etc.):
+       fija la CURRENT_KEY local + precarga, sin depender de un setter
+       dedicado. Lo usa el handler de la clasificación cuando el slug
+       no es una de las 3 ligas españolas. */
+    window._lextSetContextKey = function(slug){
+      if (!slug) return;
+      try {
+        CURRENT_KEY = slug;
+        if (!CURRENT_NAME) CURRENT_NAME = slug;
+        loadData(CURRENT_KEY);
+      } catch(_){}
+    };
+  } catch(_){}
 
   // Mapa de nombres cortos mostrados en la clasificación de Liga EA Sports,
   // para revertir el display name al nombre canónico que usa el editor.
@@ -28837,13 +29733,48 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   };
   var TOURS_STORAGE_KEY = 'munich_summer_tours_v1';
 
+  /* Meta corta de las cards built-in (texto histórico conservado). */
+  var TOUR_META = {
+    sct:  '16 👤 · 1-10 Julio · hasta 4 partidos',
+    pss:  '6 👤 · 12-24 Julio · 5 partidos',
+    jg:   '8 👤 · 24 Jul–1 Ago · grupos + playoffs',
+    asia: '4 👤 · 14-17 Junio · semis + final'
+  };
+  function _psEsc(s){ return String(s==null?'':s).replace(/[<>"]/g,function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';}); }
+  /* Un id es válido si es built-in o un slot tx1..tx8 (pre-cableado). */
+  function _isTourId(id){ return !!SUMMER_TOURS[id] || /^tx[1-8]$/.test(id); }
+  /* IDs de torneos VISIBLES — la misma lista (registro) que usa la
+     pantalla "Torneos de Verano". Si el helper aún no está cargado o
+     el registro está vacío, fallback a los 4 built-in (back-compat).
+     Petición usuario 2026-05-17 (foto 2): si solo hay 2 torneos no
+     pueden salir 4 en la caja del Bayern. */
+  function _psVisibleTourIds(){
+    try {
+      if (typeof window._tourVisibleIds === 'function') {
+        var v = window._tourVisibleIds();
+        if (Array.isArray(v) && v.length) return v.filter(_isTourId);
+      }
+    } catch(_){}
+    return ['sct','pss','jg','asia'];
+  }
+  function _psTourMeta(id){
+    var t = (typeof window._tourMuInfoData === 'function' && window._tourMuInfoData(id)) || SUMMER_TOURS[id] || null;
+    var flag = (t && t.flag) || (SUMMER_TOURS[id] && SUMMER_TOURS[id].flag) || '🏆';
+    var name = (t && t.name) || (SUMMER_TOURS[id] && SUMMER_TOURS[id].name) || id;
+    var meta = TOUR_META[id] || (t ? ((t.teams||'?') + ' 👤 · ' + (t.dates||'')) : 'Torneo personalizado');
+    if ((!t || !t.name) && typeof window._tourCardMeta === 'function') {
+      try { var m = window._tourCardMeta(id); if (m){ flag = m.flag || flag; name = m.name || name; } } catch(_){}
+    }
+    return { flag:flag, name:name, meta:meta };
+  }
+
   function loadPickedTours() {
     try {
       var raw = localStorage.getItem(TOURS_STORAGE_KEY);
       if (!raw) return [];
       var arr = JSON.parse(raw);
       if (!Array.isArray(arr)) return [];
-      return arr.filter(function(id){ return !!SUMMER_TOURS[id]; }).slice(0,1);
+      return arr.filter(_isTourId).slice(0,1);
     } catch(_){ return []; }
   }
   function savePickedTours(arr) {
@@ -28932,50 +29863,35 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
     pk.classList.add('show');
     if (resetBtn) resetBtn.classList.remove('show');
-    /* Solo son ELEGIBLES los torneos de verano que existen de verdad
-       (los que el admin configuró → tienen `tour_<id>_v1` o están en
-       _TOUR_CACHE). Antes el picker mostraba los 4 hardcodeados aunque
-       solo hubiera 2 torneos reales. */
-    function _tourElegible(id){
-      try {
-        if (window._TOUR_CACHE && window._TOUR_CACHE[id]) return true;
-        if (localStorage.getItem('tour_' + id + '_v1')) return true;
-      } catch(_){}
-      return false;
+    /* (Re)construye las cards desde el REGISTRO de torneos visibles
+       (mismo origen que la pantalla "Torneos de Verano"). Guard de
+       firma → solo reescribe el DOM si el conjunto cambió. */
+    var cont = pk.querySelector('.munich-tour-cards');
+    if (cont) {
+      var ids = _psVisibleTourIds();
+      var sig = ids.join(',');
+      if (cont._psSig !== sig) {
+        cont._psSig = sig;
+        cont.innerHTML = ids.map(function(id){
+          var m = _psTourMeta(id);
+          return '<div class="munich-tour-card" data-tour="' + id + '"'
+            + ' onclick="window.muTourToggle(\'' + id + '\', event)">'
+            + '<span class="munich-tour-flag">' + _psEsc(m.flag) + '</span>'
+            + '<div class="munich-tour-body">'
+            + '<div class="munich-tour-name">' + _psEsc(m.name) + '</div>'
+            + '<div class="munich-tour-meta">' + _psEsc(m.meta) + '</div>'
+            + '</div>'
+            + '<button type="button" class="munich-tour-info-btn"'
+            + ' onclick="event.stopPropagation();window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
+            + '</div>';
+        }).join('');
+      }
     }
     var cards = pk.querySelectorAll('.munich-tour-card');
-    var availIds = [];
     cards.forEach(function(c){
       var id = c.getAttribute('data-tour');
-      if (_tourElegible(id)) availIds.push(id);
-    });
-    /* Si no detectamos ninguno configurado (p.ej. configs solo en
-       servidor y aún sin cachear), NO dejamos el picker vacío:
-       mostramos todos como antes. */
-    var filtering = availIds.length > 0;
-    cards.forEach(function(c){
-      var id = c.getAttribute('data-tour');
-      var show = !filtering || availIds.indexOf(id) !== -1;
-      c.style.display = show ? '' : 'none';
-      if (show){
-        /* Refresca nombre/bandera con la config real si existe. */
-        try {
-          var info = (typeof window._tourMuInfoData === 'function') ? window._tourMuInfoData(id) : null;
-          if (info){
-            var nmEl = c.querySelector('.munich-tour-name');
-            var fgEl = c.querySelector('.munich-tour-flag');
-            if (nmEl && info.name) nmEl.textContent = info.name;
-            if (fgEl && info.flag) fgEl.textContent = info.flag;
-          }
-        } catch(_){}
-      }
       c.classList.toggle('picked', state.tempPicks.indexOf(id) !== -1);
     });
-    /* Si el torneo pre-seleccionado dejó de estar disponible, lo
-       quitamos de la selección en curso. */
-    if (filtering){
-      state.tempPicks = state.tempPicks.filter(function(id){ return availIds.indexOf(id) !== -1; });
-    }
     var btn = getEl('munich-tour-confirm');
     if (btn) {
       btn.textContent = '✅ CONFIRMAR ' + state.tempPicks.length + '/1';
@@ -28993,7 +29909,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   var _muTourLastTap = {};
   window.muTourToggle = function(id, ev) {
     if (ev && ev.target && ev.target.classList.contains('munich-tour-info-btn')) return;
-    if (!SUMMER_TOURS[id]) return;
+    if (!_isTourId(id)) return;
     var now = Date.now();
     if (_muTourLastTap[id] && (now - _muTourLastTap[id]) < 150) return;
     _muTourLastTap[id] = now;
@@ -29017,7 +29933,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     renderTourPicker();
     updateHud();
     var tId = state.pickedTours[0];
-    var tName = (SUMMER_TOURS[tId] && SUMMER_TOURS[tId].name) || tId;
+    var tName = _psTourMeta(tId).name || tId;
     /* Fusiona el Bayern en el cuadro del torneo elegido y navega
        a su pantalla. _tourMergeBayern es idempotente; si el módulo
        de torneos aún no expone el merge, al menos confirmamos. */

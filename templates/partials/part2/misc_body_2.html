@@ -7889,7 +7889,10 @@
     var endBtn = document.getElementById('ml-btn-end-'+mk);
     if (endBtn) {
       var matchOver = !!(st.matchFinished || st.finished || rawSec >= fullMax);
-      endBtn.classList.toggle('is-finishable', matchOver);
+      /* FOTO B1 (2026-05-16): empezar a brillar desde el min 85
+         (5100 s) también en las cards del calendario, no solo al
+         final exacto. */
+      endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 85 * 60);
     }
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
     if (st.inDescanso) { btn.textContent='⏸ HT'; btn.className='ml-timer running'; return; }
@@ -10476,6 +10479,37 @@
     }
   }
 
+  /* ── Reactivar la caja FINALIZAR cuando el partido ya terminó ─────
+     (foto usuario 2026-05-17): si tras cargar la barra el humano se
+     queda en el gm-modal con el partido finalizado, la caja
+     FINALIZAR no debe salir apagada/atascada. La reetiquetamos a
+     "🏁 VER RESUMEN", la dejamos habilitada y llamativa, y su
+     onclick re-abre la pantalla FINAL. Idempotente: se puede llamar
+     en cada render / scan sin efectos secundarios. Solo actúa si
+     el partido está finished y la pantalla FINAL no está abierta. */
+  window._gmReactivateFinishBtn = function () {
+    try {
+      if (!window._gm || !window._gm.finished) return;
+      var finOv = document.getElementById('gm-fin-ov');
+      if (finOv && finOv.style.display && finOv.style.display !== 'none') return;
+      var b = document.getElementById('gm-btn-end');
+      if (!b) return;
+      /* Idempotente: si ya está reactivado, no re-escribir el DOM
+         (este helper corre en el poll de 300 ms). */
+      if (b._gmFinReactivated && !b.disabled) return;
+      b._gmFinReactivated = true;
+      b.disabled = false;
+      b.style.opacity = '1';
+      b.style.pointerEvents = 'auto';
+      b.textContent = '🏁 VER RESUMEN';
+      b.classList.add('is-finishable');
+      b.onclick = function (ev) {
+        try { if (ev) { ev.preventDefault(); ev.stopPropagation(); } } catch(_){}
+        try { _gmShowFinalOv(); } catch(_){ if (window.gmShowPost) window.gmShowPost(); }
+      };
+    } catch(_){}
+  };
+
   window._gmShareFinal = function() {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
                   'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
@@ -10945,14 +10979,30 @@
       }
 
       var _baseClasses = 'is-finishable';
-      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmAction !== 'finalizar');
+      /* FOTO B1 (2026-05-16, petición usuario): la caja FINALIZAR
+         debe EMPEZAR a brillar y llamar la atención a partir del
+         game-minute 85 (no solo al final exacto), para avisar al
+         humano de que el partido está por terminar. 85' = 5100 s. */
+      var _gmNear85 = (Number(_gm.timerSec) || 0) >= 85 * 60;
+      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmNear85 || _gmAction !== 'finalizar');
       if (_gmAction === 'prorroga') {
         _gmEndBtn.textContent = '▶ PRÓRROGA';
       } else if (_gmAction === 'penaltis') {
         _gmEndBtn.textContent = '🥅 PENALTIS';
+      } else if (_matchOver) {
+        /* El partido YA acabó (cronómetro al FIN). El humano no sabía
+           qué botón pulsar para continuar — lo confundía con
+           Menú·LIVE / Cancelar. Lo renombramos a "VER RESUMEN"
+           (pulsarlo finaliza y abre el resumen + compartir) y el CSS
+           lo pinta brillante. Petición usuario 2026-05-17. */
+        _gmEndBtn.textContent = '🏁 VER RESUMEN';
       } else {
         _gmEndBtn.textContent = '🏁 FINALIZAR';
       }
+      /* Partido en juego → resetear el flag de "VER RESUMEN" para
+         que cuando ESTE partido termine, _gmReactivateFinishBtn
+         vuelva a reactivar la caja desde cero. */
+      if (!_gm.finished) _gmEndBtn._gmFinReactivated = false;
 
       /* ── PRÓRROGA (gm-btn-et): SOLO visible si realmente puede
          haber prórroga — contexto eliminatoria + empate aún sin
@@ -10990,6 +11040,10 @@
       btn.className = 'ml-timer finished';
       if (row) { row.classList.remove('running'); row.classList.add('finished'); }
       _setEditVis(false);
+      /* Partido FINALIZADO: reactivar la caja FINALIZAR ("VER
+         RESUMEN") para que el humano no se quede atascado en el
+         gm-modal. (foto usuario 2026-05-17). */
+      try { window._gmReactivateFinishBtn(); } catch(_){}
       return;
     }
     if (_gm.inDescanso) {
@@ -14389,15 +14443,19 @@
 
   /* ── VAR: inject animation CSS once ── */
   (function(){
-    if (document.getElementById('var-anim-css')) return;
+    if (document.getElementById('ia-goal-anim-css')) return;
     var s=document.createElement('style');
-    s.id='var-anim-css';
-    s.textContent='@keyframes varBlink{0%,100%{opacity:1}50%{opacity:.15}}'
-      +'@keyframes golFlash{0%{opacity:0;transform:scale(.7)}15%{opacity:1;transform:scale(1.08)}85%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.9)}}'
-      +'.var-overlay{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);border-radius:inherit;pointer-events:none;}'
-      +'.var-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(15px,3vw,22px);font-weight:900;color:#f0c040;letter-spacing:3px;animation:varBlink .55s ease-in-out infinite;text-shadow:0 0 14px rgba(240,192,64,.9),0 0 28px rgba(240,192,64,.5);}'
-      +'.gol-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(16px,3.5vw,26px);font-weight:900;color:#fff;letter-spacing:4px;animation:golFlash 1.6s ease forwards;text-shadow:0 0 16px rgba(255,220,0,.95),0 0 32px rgba(255,180,0,.6);}'
-      +'.propia-overlay-text{font-family:\'Bebas Neue\',sans-serif;font-size:clamp(13px,2.8vw,20px);font-weight:900;color:#ff7755;letter-spacing:3px;animation:golFlash 1.6s ease forwards;text-shadow:0 0 14px rgba(255,100,0,.9);}';
+    s.id='ia-goal-anim-css';
+    /* Celebración de gol SIN tapar el marcador (petición usuario
+       2026-05-16): el marcador debe estar SIEMPRE visible en live.
+       En vez de un overlay opaco que oculta el resultado, hacemos
+       un "pop" + glow dorado sobre la propia caja del marcador,
+       con los números siempre legibles. */
+    s.textContent='@keyframes iaGoalPulse{0%{transform:scale(1)}16%{transform:scale(1.24)}42%{transform:scale(.96)}66%{transform:scale(1.07)}100%{transform:scale(1)}}'
+      +'.ml-score.ia-goal-celebrate{animation:iaGoalPulse 1.5s ease !important;border-color:#ffdd00!important;box-shadow:0 0 0 2px #ffdd00,0 0 22px 7px rgba(255,200,0,.6)!important;}'
+      +'.ml-score.ia-goal-celebrate span,.ml-score.ia-goal-celebrate .ml-score-num{color:#fff!important;text-shadow:0 0 9px rgba(255,225,0,.95),0 0 20px rgba(255,170,0,.6)!important;}'
+      +'.ml-score.ia-owngoal-celebrate{animation:iaGoalPulse 1.5s ease !important;border-color:#ff7755!important;box-shadow:0 0 0 2px #ff7755,0 0 20px 6px rgba(255,90,40,.55)!important;}'
+      +'.ml-score.ia-owngoal-celebrate span,.ml-score.ia-owngoal-celebrate .ml-score-num{color:#fff!important;text-shadow:0 0 9px rgba(255,140,90,.95),0 0 18px rgba(255,90,40,.55)!important;}';
     document.head.appendChild(s);
   })();
 
@@ -14537,10 +14595,26 @@
       scoreWrapEl.classList.add('state-playing');
     }
 
+    /* Celebración de gol que NO oculta el marcador (petición usuario
+       2026-05-16: "siempre el marcador presente en live"). Re-resolvemos
+       el `.ml-score` vivo desde scAEl en cada gol — si un rebuilder
+       regeneró la card, scAEl ya fue re-adquirido por id en el tick y
+       el scoreWrapEl capturado al inicio podría estar detached. */
+    function _iaGoalCelebrate(ownGoal) {
+      var _sw = (scAEl && scAEl.closest) ? scAEl.closest('.ml-score') : scoreWrapEl;
+      if (!_sw) return;
+      var cls = ownGoal ? 'ia-owngoal-celebrate' : 'ia-goal-celebrate';
+      _sw.classList.remove('ia-goal-celebrate', 'ia-owngoal-celebrate');
+      void _sw.offsetWidth; /* reinicia la animación si hay goles seguidos */
+      _sw.classList.add(cls);
+      clearTimeout(_sw._iaGolT);
+      _sw._iaGolT = setTimeout(function () {
+        _sw.classList.remove('ia-goal-celebrate', 'ia-owngoal-celebrate');
+      }, 1600);
+    }
+
     var scA = 0, scB = 0, evtIdx = 0, curMin = 0;
     var halfAnnounced = false;
-    var _varActive = false; /* true while VAR 3-second review is playing */
-    var _varActiveSince = 0; /* watchdog: si VAR tarda > 5 s, lo desbloqueamos */
     /* Spec usuario 2026-05-05: TODA simulación IA-vs-IA (Liga, Copa, UCL,
        UEL, UECL, Recopa, USC, Inter, Torneos verano, amistosos…) corre
        a 1 game-minute = 1 segundo real.
@@ -14625,8 +14699,6 @@
        que gmStartTimer del gm-modal. */
     var _wallStart = Date.now();
     var _gameMinPerMs = 1 / GAME_MIN_REAL_MS;  /* 1 game-min por 1000 ms reales, DESACOPLADO de TICK_MS */
-    var _varPauseMs = 0;                    /* total ms congelados por VAR */
-    var _varPauseStart = 0;                 /* cuándo empezó la pausa actual */
     /* Actualizamos los valores reales del registro (registramos al
        entry de iaSimLive arriba con defaults; ahora pisamos con los
        reales calculados). 2026-05-11. */
@@ -14667,19 +14739,9 @@
         try { delete window._iaSimLiveActive[mk]; } catch(_){}
         return;
       }
-      /* Watchdog: si _varActive lleva más de 5 s, lo forzamos a false.
-         Antes, si la setTimeout del VAR fallaba (excepción al actualizar
-         DOM, etc.) _varActive quedaba true PARA SIEMPRE y el partido se
-         congelaba en su minuto actual sin avanzar. */
-      if (_varActive && _varActiveSince && (Date.now() - _varActiveSince) > 5000) {
-        _varActive = false; _varActiveSince = 0;
-        if (_varPauseStart) { _varPauseMs += Date.now() - _varPauseStart; _varPauseStart = 0; }
-      }
-      if (_varActive) return; /* VAR review in progress – freeze tick */
-      /* curMin derivado del wall-clock REAL, descontando pausas VAR.
-         Inmune al throttling de setInterval cuando hay muchos
-         partidos en paralelo. */
-      var _elapsedMs = Date.now() - _wallStart - _varPauseMs;
+      /* curMin derivado del wall-clock REAL. Inmune al throttling de
+         setInterval cuando hay muchos partidos en paralelo. */
+      var _elapsedMs = Date.now() - _wallStart;
       curMin = Math.min(Math.floor(_elapsedMs * _gameMinPerMs), _etTopMin);
       if (curMin < 0) curMin = 0;
       /* Actualizar PRIMERO el label visible. Antes esto estaba al final
@@ -14720,106 +14782,71 @@
                 : ev.type === 'lesion'     ? (ev.lesIco || '🩹') : '•';
         if (ev.dbl) ico = '🟨🟥';
 
-        /* ── VAR SEQUENCE ─────────────────────────────────────────────── */
+        /* ── VAR (resuelto al instante, SIN overlay ni freeze) ──────────
+           Histórico: había un overlay opaco "📺 VAR" + congelación del
+           cronómetro 2-3 s. El overlay se quedaba pegado tapando el
+           marcador TODO el partido (e incluso tras el FIN) cuando el
+           watchdog reseteaba el flag sin borrar el DOM. Petición usuario
+           2026-05-16: el marcador SIEMPRE visible en live. El veredicto
+           ya viene decidido en genMatchEventsEnhanced
+           (ev._varConfirmed / ev._varAnulado); aquí solo aplicamos el
+           marcador si procede y anotamos el VAR en el acta. */
         if (ev.var) {
-          _varActive = true;
-          _varActiveSince = Date.now();
-          _varPauseStart = Date.now(); /* anti-throttling: descontamos los 3 s del VAR */
-          /* Veredicto ya decidido en genMatchEventsEnhanced. Si por
-             cualquier razón viene sin flag (p.ej. eventos antiguos en
-             localStorage) hacemos el 50/50 aquí como fallback. */
-          var _varConfirmed = ev._varConfirmed === true ? true
-                            : ev._varAnulado === true ? false
-                            : (Math.random() < 0.5);
-          (function(capturedEv, capturedIco, varConfirmed) {
-            /* Show VAR overlay on the score area */
-            var varOvl = document.createElement('div');
-            varOvl.className = 'var-overlay';
-            var varTxt = document.createElement('div');
-            varTxt.className = 'var-overlay-text';
-            varTxt.textContent = '📺 VAR';
-            varOvl.appendChild(varTxt);
-            if (scoreWrapEl) {
-              scoreWrapEl.style.position = 'relative';
-              scoreWrapEl.appendChild(varOvl);
+          var _varOk = ev._varConfirmed === true ? true
+                     : ev._varAnulado === true ? false
+                     : (Math.random() < 0.5);
+          if (_varOk) {
+            ev._varConfirmed = true;
+            if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
+              if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
+              else                 { scB++; if (scBEl) scBEl.textContent = scB; }
+              _iaGoalCelebrate(false);
+            } else if (ev.type === 'propia') {
+              if (ev.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
+              else                 { scA++; if (scAEl) scAEl.textContent = scA; }
+              _iaGoalCelebrate(true);
             }
-            var prevBtnText = btn.textContent;
-            btn.textContent = '📺 VAR';
-
-            setTimeout(function() {
-              /* Apply score update ONLY if VAR confirmed the event */
-              if (varConfirmed) {
-                capturedEv._varConfirmed = true;
-                if (capturedEv.type === 'gol' || capturedEv.type === 'pen-gol' || capturedEv.type === 'falta-gol') {
-                  if (capturedEv.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
-                  else                         { scB++; if (scBEl) scBEl.textContent = scB; }
-                } else if (capturedEv.type === 'propia') {
-                  if (capturedEv.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
-                  else                         { scA++; if (scAEl) scAEl.textContent = scA; }
-                }
-              } else {
-                /* VAR anuló el evento: marcar en el st.events para no contar en resultado final */
-                capturedEv._varAnulado = true;
-              }
-              /* Remove VAR overlay */
-              if (varOvl.parentNode) varOvl.parentNode.removeChild(varOvl);
-              btn.textContent = curMin >= 90 ? '🏁 FIN' : '⏳ ' + curMin + '\'';
-              /* Add acta row with VAR suffix */
-              if (actaEl) {
-                var varSfx = '';
-                if (varConfirmed) {
-                  if (['gol','pen-gol','falta-gol','propia'].indexOf(capturedEv.type) !== -1)
-                    varSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Confirmado por 📺 VAR)</span>';
-                  else if (['pen-prov','pen-parado','pen-fallo'].indexOf(capturedEv.type) !== -1)
-                    varSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Tras revisión 📺 VAR)</span>';
-                  else if (['amarilla','roja'].indexOf(capturedEv.type) !== -1 || capturedEv.dbl)
-                    varSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Validada por 📺 VAR)</span>';
-                } else {
-                  /* ANULADA: solo texto, SIN line-through */
-                  varSfx = ' <span style="font-size:10px;font-weight:700;color:#ff5555;letter-spacing:.5px;">⛔ ANULADA POR 📺 VAR</span>';
-                }
-                var lesExtraV = (capturedEv.type === 'lesion' && capturedEv.lesDesc)
-                  ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + capturedEv.lesDesc + ' · ' + capturedEv.lesPartidos + ' ptdos)</span>'
-                  : '';
-                var varRow = document.createElement('div');
-                var bgColor = varConfirmed ? 'rgba(80,200,100,.06)' : 'rgba(255,80,80,.08)';
-                varRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);background:' + bgColor + ';';
-                varRow.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + capturedEv.min + '\'</span>'
-                  + '<span style="font-size:14px;">' + capturedIco + '</span>'
-                  + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + capturedEv.player + lesExtraV + varSfx + '</span>'
-                  + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (capturedEv.team === 'a' ? home : away) + '</span>';
-                actaEl.appendChild(varRow);
-              }
-              _varActive = false;
-              _varActiveSince = 0;
-              if (_varPauseStart) { _varPauseMs += Date.now() - _varPauseStart; _varPauseStart = 0; }
-            }, 3000);
-          })(ev, ico, _varConfirmed);
-          break; /* Exit while loop – VAR is handling this event */
+          } else {
+            ev._varAnulado = true;
+          }
+          if (actaEl) {
+            var _vSfx = '';
+            if (_varOk) {
+              if (['gol','pen-gol','falta-gol','propia'].indexOf(ev.type) !== -1)
+                _vSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Confirmado por 📺 VAR)</span>';
+              else if (['pen-prov','pen-parado','pen-fallo'].indexOf(ev.type) !== -1)
+                _vSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Tras revisión 📺 VAR)</span>';
+              else if (['amarilla','roja'].indexOf(ev.type) !== -1 || ev.dbl)
+                _vSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ Validada por 📺 VAR)</span>';
+              else
+                _vSfx = ' <span style="font-size:10px;color:#4fd87a;">(✓ 📺 VAR)</span>';
+            } else {
+              _vSfx = ' <span style="font-size:10px;font-weight:700;color:#ff5555;letter-spacing:.5px;">⛔ ANULADA POR 📺 VAR</span>';
+            }
+            var _vLesExtra = (ev.type === 'lesion' && ev.lesDesc)
+              ? ' <span style="font-size:10px;color:rgba(255,180,0,.75);font-family:Rajdhani,sans-serif;">(' + ev.lesDesc + ' · ' + ev.lesPartidos + ' ptdos)</span>'
+              : '';
+            var _vRow = document.createElement('div');
+            var _vBg = _varOk ? 'rgba(80,200,100,.06)' : 'rgba(255,80,80,.08)';
+            _vRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 12px;border-bottom:1px solid rgba(255,255,255,.05);background:' + _vBg + ';';
+            _vRow.innerHTML = '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
+              + '<span style="font-size:14px;">' + ico + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;flex:1;">' + ev.player + _vLesExtra + _vSfx + '</span>'
+              + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team === 'a' ? home : away) + '</span>';
+            actaEl.appendChild(_vRow);
+          }
+          continue; /* VAR resuelto; sin overlay, sin congelar el reloj */
         }
-        /* ── END VAR SEQUENCE ─────────────────────────────────────────── */
 
         if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
           if (ev.team === 'a') { scA++; if (scAEl) scAEl.textContent = scA; }
           else                 { scB++; if (scBEl) scBEl.textContent = scB; }
-          (function(){
-            if (!scoreWrapEl) return;
-            var _ov=document.createElement('div'); _ov.className='var-overlay';
-            var _tx=document.createElement('div'); _tx.className='gol-overlay-text';
-            _tx.textContent='⚽ GOL'; _ov.appendChild(_tx); scoreWrapEl.appendChild(_ov);
-            setTimeout(function(){if(_ov.parentNode)_ov.parentNode.removeChild(_ov);},1700);
-          })();
+          _iaGoalCelebrate(false);
         } else if (ev.type === 'propia') {
           /* autogol: puntúa para el equipo CONTRARIO */
           if (ev.team === 'a') { scB++; if (scBEl) scBEl.textContent = scB; }
           else                 { scA++; if (scAEl) scAEl.textContent = scA; }
-          (function(){
-            if (!scoreWrapEl) return;
-            var _ov=document.createElement('div'); _ov.className='var-overlay';
-            var _tx=document.createElement('div'); _tx.className='propia-overlay-text';
-            _tx.textContent='⚽ EN PROPIA'; _ov.appendChild(_tx); scoreWrapEl.appendChild(_ov);
-            setTimeout(function(){if(_ov.parentNode)_ov.parentNode.removeChild(_ov);},1700);
-          })();
+          _iaGoalCelebrate(true);
         }
         if (actaEl) {
           var row = document.createElement('div');
@@ -14861,10 +14888,10 @@
          con el match aún sin ET activada y empate dispara la
          prórroga. _etTopMin se baja a 90 para que el bloque heredado
          de ET también lo capte. */
-      if (curMin >= 90 && _isCopaSingleLeg && !_etActive && scA === scB && !_varActive) {
+      if (curMin >= 90 && _isCopaSingleLeg && !_etActive && scA === scB) {
         _etTopMin = 90;
       }
-      if (curMin >= _etTopMin && !_varActive) {
+      if (curMin >= _etTopMin) {
         /* PRÓRROGA: si es Copa single-leg y empate al 90, extendemos
            a 120 (30 s extra a 1 game-min/sec) generando ET goals on-the-fly.
            Si sigue empate al 120, pre-rolleamos el ganador en penaltis
@@ -14912,18 +14939,10 @@
             etHdr.textContent = '⏱ PRÓRROGA';
             actaEl.appendChild(etHdr);
           }
-          /* Overlay flash sobre el marcador */
-          if (scoreWrapEl) {
-            var _ovET = document.createElement('div');
-            _ovET.className = 'var-overlay';
-            var _txET = document.createElement('div');
-            _txET.className = 'gol-overlay-text';
-            _txET.textContent = '⏱ PRÓRROGA';
-            _ovET.appendChild(_txET);
-            scoreWrapEl.style.position = 'relative';
-            scoreWrapEl.appendChild(_ovET);
-            setTimeout(function(){ if (_ovET.parentNode) _ovET.parentNode.removeChild(_ovET); }, 1700);
-          }
+          /* Sin overlay opaco sobre el marcador (petición usuario
+             2026-05-16: el marcador SIEMPRE visible en live). El paso a
+             prórroga ya se comunica con la cabecera "⏱ PRÓRROGA" del
+             acta y con el botón-reloj "⏱ N' ET". */
           /* No clearInterval: el tick sigue hasta 120. */
           return;
         }
@@ -22968,19 +22987,61 @@ document.addEventListener('DOMContentLoaded', function() {
     }).join('');
   };
 
-  /* Ball Storage editable (petición usuario 2026-05-05).
+  /* Ball Storage editable (petición usuario 2026-05-05, reescrito
+     2026-05-17 para persistencia en servidor + competiciones custom).
      - Cada competición lleva un <select> con TODOS los balones
        guardados en el inventario. Cambiar el selector persiste
-       en localStorage `ball_by_comp_v1` y los partidos humanos
-       de esa comp pasan a usarlo automáticamente (vía override
-       en bundle COMP_BALL).
+       (localStorage + servidor) y los partidos humanos de esa comp
+       pasan a usarlo automáticamente (vía override en bundle
+       COMP_BALL, que ahora lee primero la clave RAW del partido).
      - Botón "+ Añadir balón" añade un balón al inventario.
-     - Botón "🗑" en cada balón del inventario lo elimina.
-     - El inventario inicial se siembra desde BALL_DB (los 14
-       balones del spec). El admin puede ampliarlo/reducirlo a
-       medida que eFootball publica balones nuevos. */
-  var _BALL_INV_KEY = 'ball_inventory_v1';
+     - Botón "+ Añadir Competición" añade una comp custom (nombre +
+       clave + balón) para torneos nuevos.
+     - Botón "🗑" elimina balones del inventario / comps custom.
+     - PERSISTENCIA SERVIDOR (2026-05-17): el bug "el balón no se
+       queda guardado" era el MISMO patrón que comp_icons_v1 /
+       bayern_trofeos_v1 — localStorage se vaciaba en silencio por
+       quota llena (montones de ligas/snapshots) y la siguiente
+       lectura caía a defaults. Ahora localStorage es solo cache
+       rápida (la lee el bundle de forma síncrona al construir la
+       card) y el servidor (/api/kv/*) es la fuente de verdad: los
+       balones sobreviven a wipes de navegador y a cambiar de móvil. */
+  var _BALL_INV_KEY      = 'ball_inventory_v1';
   var _BALL_OVERRIDE_KEY = 'ball_by_comp_v1';
+  var _BALL_COMPDB_KEY   = 'ball_comp_db_v1';
+
+  /* ── Sync con servidor (GlobalState vía /api/kv) ───────────────── */
+  function _ballKvPost(key, value){
+    try {
+      fetch('/api/kv/' + key, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({ value: value })
+      }).catch(function(){});
+    } catch(_){}
+  }
+  /* Hidrata localStorage desde el servidor (fuente de verdad). Se
+     llama en el boot (para que el bundle vea datos frescos al
+     construir cards) y al entrar en s-admin-balls. */
+  var _ballHydrated = false;
+  function _ballHydrateAll(cb){
+    var pending = 3;
+    function done(){ pending--; if (pending<=0 && typeof cb==='function') cb(); }
+    [_BALL_INV_KEY, _BALL_OVERRIDE_KEY, _BALL_COMPDB_KEY].forEach(function(key){
+      try {
+        fetch('/api/kv/' + key, { credentials:'same-origin', headers:{'Cache-Control':'no-store'} })
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(j){
+            if (j && j.ok && j.value != null) {
+              try { localStorage.setItem(key, JSON.stringify(j.value)); } catch(_){}
+            }
+            done();
+          }).catch(function(){ done(); });
+      } catch(_){ done(); }
+    });
+  }
+
   function _loadBallInventory(){
     try {
       var raw = localStorage.getItem(_BALL_INV_KEY);
@@ -22996,33 +23057,94 @@ document.addEventListener('DOMContentLoaded', function() {
       if (b && b.id && !seen[b.id]) { seen[b.id] = 1; seed.push(b.id); }
     });
     try { localStorage.setItem(_BALL_INV_KEY, JSON.stringify(seed)); } catch(_){}
+    /* Sube la semilla al server SOLO si el server aún no tiene nada
+       (no pisar un inventario real ya guardado en otro dispositivo). */
+    try {
+      fetch('/api/kv/' + _BALL_INV_KEY, { credentials:'same-origin' })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if (!j || !j.ok || !Array.isArray(j.value) || !j.value.length) {
+            _ballKvPost(_BALL_INV_KEY, seed);
+          }
+        }).catch(function(){});
+    } catch(_){}
     return seed;
   }
   function _saveBallInventory(arr){
-    /* Detecta fallo de quota/permission y avisa. Antes el setItem
-       fallaba en silencio si el localStorage estaba lleno → la UI
-       re-renderizaba leyendo del storage viejo y la entrada nueva
-       "se borraba". Bug FOTO 4 reportado 2026-05-09. */
+    /* localStorage = cache; servidor = fuente de verdad. Aunque el
+       setItem rebote por quota, el POST al server garantiza que el
+       inventario sobreviva (bug histórico "se borraba"). */
+    var localOk = true;
     try {
       localStorage.setItem(_BALL_INV_KEY, JSON.stringify(arr));
-      return true;
     } catch(e) {
-      try { alert('⚠ No se pudo guardar el inventario de balones.\nMotivo: ' + (e && e.message || 'error desconocido') + '\n(Quizá no queda espacio. Resetea torneos viejos para liberar localStorage.)'); } catch(_){}
-      return false;
+      localOk = false;
+      try { _ballToast('⚠ Caché llena — guardado en servidor.'); } catch(_){}
     }
+    _ballKvPost(_BALL_INV_KEY, arr || []);
+    return true; /* el server siempre recibe el POST */
   }
   function _loadBallOverride(){
     try { var raw = localStorage.getItem(_BALL_OVERRIDE_KEY); if (raw) return JSON.parse(raw)||{}; } catch(_){}
     return {};
   }
   function _saveBallOverride(map){
+    try { localStorage.setItem(_BALL_OVERRIDE_KEY, JSON.stringify(map||{})); } catch(_){}
+    _ballKvPost(_BALL_OVERRIDE_KEY, map || {});
+    return true;
+  }
+  /* Competiciones custom añadidas por el admin. Array de
+     {key, comp, id, cat, luz, _custom:true}. */
+  function _loadBallCompDb(){
+    try { var raw = localStorage.getItem(_BALL_COMPDB_KEY); if (raw) { var a = JSON.parse(raw); if (Array.isArray(a)) return a; } } catch(_){}
+    return [];
+  }
+  function _saveBallCompDb(arr){
+    try { localStorage.setItem(_BALL_COMPDB_KEY, JSON.stringify(arr||[])); } catch(_){}
+    _ballKvPost(_BALL_COMPDB_KEY, arr || []);
+    return true;
+  }
+
+  /* Competiciones reales que faltaban en la lista base (petición
+     usuario 2026-05-17: "hay que poder añadir torneo, campeonato").
+     Se enganchan por clave RAW del partido vía la resolución del
+     bundle (Superliga tiene compKey real `superliga`; Torneos de
+     Verano / Mundialito se listan a petición del usuario y se
+     enganchan automáticamente si su módulo pasa ese compKey). */
+  var _EXTRA_REAL_COMPS = [
+    { key:'superliga',  cat:'Europea 🔵', comp:'Superliga',            id:'PARADISE_Purple_Edition', luz:'🌙 Noche', _extra:true },
+    { key:'verano',     cat:'Especial 🤝', comp:'Torneos de Verano',   id:'eFootball_Origin',        luz:'☀️ Sol',  _extra:true },
+    { key:'mundialito', cat:'Internac. 🟡', comp:'Mundialito de Clubes', id:'Vantaggio_5000',        luz:'☀️ Sol',  _extra:true }
+  ];
+  /* Lista efectiva = 14 base + reales que faltaban + custom. Dedup
+     por key (gana la primera aparición → base manda). */
+  function _effectiveCompList(){
+    var out = [], seen = {};
+    function push(b){ if (b && b.key && !seen[b.key]) { seen[b.key]=1; out.push(b); } }
+    (window.BALL_DB || []).forEach(push);
+    _EXTRA_REAL_COMPS.forEach(push);
+    _loadBallCompDb().forEach(function(c){
+      if (c && c.key) push({ key:c.key, comp:c.comp||c.key, id:c.id||'', cat:c.cat||'Custom 🛠', luz:c.luz||'🌙 Noche', _custom:true });
+    });
+    return out;
+  }
+
+  /* Toast efímero de feedback (arregla "cuesta muchísimo conseguir
+     que cambie de balón" — antes no había confirmación visual). */
+  function _ballToast(msg){
     try {
-      localStorage.setItem(_BALL_OVERRIDE_KEY, JSON.stringify(map||{}));
-      return true;
-    } catch(e) {
-      try { alert('⚠ No se pudo guardar el balón por competición.\n' + (e && e.message || '')); } catch(_){}
-      return false;
-    }
+      var t = document.getElementById('_ball-toast');
+      if (!t) {
+        t = document.createElement('div');
+        t.id = '_ball-toast';
+        t.style.cssText = 'position:fixed;left:50%;bottom:78px;transform:translateX(-50%);background:linear-gradient(135deg,#16863c,#1ea14a);color:#fff;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:.5px;padding:10px 18px;border-radius:10px;z-index:100000;box-shadow:0 6px 24px rgba(0,0,0,.45);max-width:88vw;text-align:center;opacity:0;transition:opacity .18s;';
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      t.style.opacity = '1';
+      clearTimeout(window._ballToastT);
+      window._ballToastT = setTimeout(function(){ if (t) t.style.opacity = '0'; }, 2200);
+    } catch(_){}
   }
 
   window.adminBallSetForComp = function(compKey, ballId){
@@ -23030,6 +23152,84 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!ballId) delete ov[compKey];
     else ov[compKey] = ballId;
     _saveBallOverride(ov);
+    /* Feedback visible + re-render: el usuario reportó que "cuesta
+       muchísimo conseguir que cambie de balón" porque no había
+       ninguna confirmación de que el cambio se aplicó. */
+    var lbl = compKey;
+    try {
+      var found = _effectiveCompList().filter(function(b){ return b.key===compKey; })[0];
+      if (found) lbl = found.comp;
+    } catch(_){}
+    _ballToast('✅ Balón guardado: ' + lbl + ' → ' + (ballId || 'por defecto'));
+    try { window.adminRenderBalls(); } catch(_){}
+  };
+
+  /* + Añadir Competición — para torneos/campeonatos nuevos. Guarda
+     {key,comp,id} en ball_comp_db_v1 (server + cache). La clave debe
+     ser la del partido (compKey) para que el balón salga en sus
+     cards; el bundle resuelve primero por clave RAW. */
+  window.adminBallAddComp = function(){
+    var ovId = 'ballcomp-add-ov';
+    var prev = document.getElementById(ovId);
+    if (prev) prev.remove();
+    var inv = _loadBallInventory();
+    var opts = inv.map(function(it){ return '<option value="'+String(it).replace(/"/g,'&quot;')+'">'+String(it).replace(/</g,'&lt;')+'</option>'; }).join('');
+    var ov = document.createElement('div');
+    ov.id = ovId;
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.innerHTML = ''
+      + '<div style="background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(80,180,255,.45);border-radius:14px;padding:18px 18px 14px;width:100%;max-width:420px;color:#e8f0ff;font-family:Rajdhani,sans-serif;box-shadow:0 0 30px rgba(80,180,255,.20);">'
+      +   '<div style="font-family:Oswald,sans-serif;letter-spacing:2px;font-size:13px;color:#7db8ff;margin-bottom:8px;">＋ AÑADIR COMPETICIÓN</div>'
+      +   '<label style="font-size:11px;color:rgba(255,255,255,.6);">Nombre visible</label>'
+      +   '<input id="bc-name" type="text" autocomplete="off" style="width:100%;margin:3px 0 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:8px;padding:9px 11px;font-size:13px;box-sizing:border-box;" placeholder="Ej: Copa de la Liga">'
+      +   '<label style="font-size:11px;color:rgba(255,255,255,.6);">Clave del partido (compKey)</label>'
+      +   '<input id="bc-key" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%;margin:3px 0 2px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:8px;padding:9px 11px;font-family:\'Courier New\',monospace;font-size:12px;box-sizing:border-box;" placeholder="ej: superliga, verano, mundialito…">'
+      +   '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:10px;">Reales: superliga · verano · mundialito · sel · inter · recopa · usc. Mismo nombre que use el torneo internamente.</div>'
+      +   '<label style="font-size:11px;color:rgba(255,255,255,.6);">Balón por defecto</label>'
+      +   '<select id="bc-ball" style="width:100%;margin:3px 0 4px;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:8px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:12px;padding:8px 10px;box-sizing:border-box;">'+opts+'</select>'
+      +   '<div id="bc-err" style="font-size:11px;color:#ff8080;margin-top:6px;min-height:14px;"></div>'
+      +   '<div style="display:flex;gap:8px;margin-top:8px;">'
+      +     '<button type="button" id="bc-ok" style="flex:1;background:linear-gradient(90deg,#1d6fd6,#1558aa);color:#fff;border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;font-weight:700;cursor:pointer;">✅ AÑADIR</button>'
+      +     '<button type="button" id="bc-cancel" style="flex:0 0 auto;background:rgba(255,255,255,.06);color:rgba(255,255,255,.65);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:10px 14px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;cursor:pointer;">CANCELAR</button>'
+      +   '</div>'
+      + '</div>';
+    document.body.appendChild(ov);
+    function close(){ try { ov.remove(); } catch(_){} }
+    function submit(){
+      var nameEl = document.getElementById('bc-name');
+      var keyEl  = document.getElementById('bc-key');
+      var ballEl = document.getElementById('bc-ball');
+      var errEl  = document.getElementById('bc-err');
+      var name = String((nameEl&&nameEl.value)||'').trim();
+      var key  = String((keyEl&&keyEl.value)||'').trim().toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'');
+      var ball = (ballEl&&ballEl.value)||'';
+      if (!name) { errEl.textContent = 'Escribe un nombre.'; return; }
+      if (!key)  { errEl.textContent = 'Escribe una clave (compKey).'; return; }
+      var collide = _effectiveCompList().some(function(b){ return b.key===key && !b._custom; });
+      if (collide) { errEl.textContent = 'Esa clave ya existe en la lista base. Elige otra.'; return; }
+      var db = _loadBallCompDb();
+      db = db.filter(function(c){ return c && c.key !== key; });
+      db.push({ key:key, comp:name, id:ball, cat:'Custom 🛠', luz:'🌙 Noche', _custom:true });
+      _saveBallCompDb(db);
+      if (ball) { var ovm = _loadBallOverride(); ovm[key] = ball; _saveBallOverride(ovm); }
+      close();
+      _ballToast('✅ Competición añadida: ' + name);
+      try { window.adminRenderBalls(); } catch(_){}
+    }
+    document.getElementById('bc-ok').addEventListener('click', submit);
+    document.getElementById('bc-cancel').addEventListener('click', close);
+    ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
+    setTimeout(function(){ var n=document.getElementById('bc-name'); if(n) n.focus(); }, 50);
+  };
+  window.adminBallDeleteComp = function(key){
+    if (!key) return;
+    if (!confirm('¿Eliminar la competición custom "' + key + '"?\n\n(Solo se pueden borrar las añadidas por ti, no las del juego.)')) return;
+    var db = _loadBallCompDb().filter(function(c){ return c && c.key !== key; });
+    _saveBallCompDb(db);
+    var ov = _loadBallOverride();
+    if (ov[key] !== undefined) { delete ov[key]; _saveBallOverride(ov); }
+    _ballToast('🗑 Competición eliminada.');
+    try { window.adminRenderBalls(); } catch(_){}
   };
   window.adminBallAdd = function(){
     /* Modal en lugar de window.prompt(): el prompt nativo se bloquea
@@ -23094,10 +23294,19 @@ document.addEventListener('DOMContentLoaded', function() {
   window.adminRenderBalls = function () {
     var container = document.getElementById('balls-list');
     if (!container) return;
+    /* Hidratar desde el server UNA vez al entrar — render inmediato
+       con cache local (no bloquea) y re-render al llegar el server.
+       Garantiza que las ediciones de otro dispositivo aparezcan y
+       que el bundle lea datos frescos al construir las cards. */
+    if (!_ballHydrated) {
+      _ballHydrated = true;
+      _ballHydrateAll(function(){ try { window.adminRenderBalls(); } catch(_){} });
+    }
     var env = window.adminGetEnvironment();
     var snowActive = env.snow;
     var inv = _loadBallInventory();
     var ov  = _loadBallOverride();
+    var comps = _effectiveCompList();
 
     function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
@@ -23108,23 +23317,36 @@ document.addEventListener('DOMContentLoaded', function() {
       + (snowActive ? '<span class="admin-env-badge" style="color:#4de;border-color:rgba(40,200,220,.3);">Balón Override: eFootball_MAX_VIS_26</span>' : '')
       + '</div></div>';
 
+    /* Cabecera con botón "+ Añadir Competición". */
+    html += '<div style="display:flex;align-items:center;gap:10px;margin:0 0 8px;">';
+    html += '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#7db8ff;flex:1;">🏆 BALÓN OFICIAL POR COMPETICIÓN (' + comps.length + ')</div>';
+    html += '<button onclick="window.adminBallAddComp()" style="background:rgba(60,140,255,.18);border:1px solid rgba(80,180,255,.55);color:#7db8ff;border-radius:8px;padding:6px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;">＋ AÑADIR COMPETICIÓN</button>';
+    html += '</div>';
+
     /* Lista por competición — cada fila lleva su <select> con todo
        el inventario disponible. */
     html += '<div style="border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;">';
-    html += window.BALL_DB.map(function (b, i) {
+    html += comps.map(function (b, i) {
       var isSnow = snowActive && b.key === 'snow';
-      var bg = isSnow ? 'rgba(40,200,220,.1)' : (i%2===0?'rgba(255,255,255,.03)':'transparent');
-      var ballIco = b.cat.indexOf('❄️')!==-1?'❄️':b.cat.indexOf('🤝')!==-1?'🤝':'⚽';
-      var current = (ov[b.key] && inv.indexOf(ov[b.key]) !== -1) ? ov[b.key] : b.id;
-      var opts = inv.map(function(it){
+      var bg = isSnow ? 'rgba(40,200,220,.1)' : (b._custom ? 'rgba(80,180,255,.06)' : (i%2===0?'rgba(255,255,255,.03)':'transparent'));
+      var cat = b.cat || '';
+      var ballIco = cat.indexOf('❄️')!==-1?'❄️':cat.indexOf('🤝')!==-1?'🤝':(b._custom?'🛠':'⚽');
+      /* El override manda SIEMPRE si existe (aunque el balón no esté
+         ya en el inventario — se añade como opción para no perderlo).
+         Antes caía a b.id si no estaba en inv → parecía "no guardado". */
+      var current = ov[b.key] || b.id || (inv[0]||'');
+      var optList = inv.slice();
+      if (current && optList.indexOf(current) === -1) optList.unshift(current);
+      var opts = optList.map(function(it){
         var sel = (it === current) ? ' selected' : '';
         return '<option value="' + _esc(it) + '"' + sel + '>' + _esc(it) + '</option>';
       }).join('');
+      var keyJs = String(b.key).replace(/'/g,"\\'");
       return '<div style="display:flex;align-items:center;gap:0;background:' + bg + ';border-bottom:1px solid rgba(255,255,255,.05);">'
         + '<div style="padding:10px 10px 10px 12px;font-size:18px;flex-shrink:0;">' + ballIco + '</div>'
         + '<div style="flex:1;padding:8px 6px;border-left:1px solid rgba(255,255,255,.05);min-width:0;">'
-        +   '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.65);">' + _esc(b.comp) + '</div>'
-        +   '<select onchange="window.adminBallSetForComp(\'' + b.key + '\', this.value)" '
+        +   '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.65);">' + _esc(b.comp) + (b._custom?' <span style="color:#7db8ff;font-size:9px;">· custom</span>':(b._extra?' <span style="color:#9fd0ff;font-size:9px;">· extra</span>':'')) + '</div>'
+        +   '<select onchange="window.adminBallSetForComp(\'' + keyJs + '\', this.value)" '
         +          'style="margin-top:3px;width:100%;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:6px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:11px;padding:4px 6px;">'
         +     opts
         +   '</select>'
@@ -23132,6 +23354,7 @@ document.addEventListener('DOMContentLoaded', function() {
         + '<div style="flex-shrink:0;padding:8px 10px;border-left:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;text-align:right;">'
         +   _esc(b.luz)
         +   (isSnow ? ' <span style="color:#4de;font-weight:700;">●ACTIVO</span>' : '')
+        +   (b._custom ? ' <button onclick="window.adminBallDeleteComp(\'' + keyJs + '\')" style="margin-left:6px;background:rgba(255,90,90,.15);border:1px solid rgba(255,90,90,.5);color:#ff8080;border-radius:6px;padding:2px 7px;cursor:pointer;font-size:10px;">🗑</button>' : '')
         + '</div>'
         + '</div>';
     }).join('');
@@ -23197,6 +23420,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.addEventListener('DOMContentLoaded', function () {
     _adminRefreshEnvStatus();
+    /* Boot hydrate de Ball Storage: el bundle lee localStorage de
+       forma SÍNCRONA al construir cada card de partido. Si este
+       dispositivo nunca abrió s-admin-balls, su localStorage podría
+       estar en defaults mientras el server tiene el balón real que
+       el usuario configuró en otro sitio. Traemos el server al
+       arranque para que "el balón oficial salga siempre en las
+       cards" (HvIA / HvH). One-shot vía la flag _ballHydrated. */
+    if (!_ballHydrated) {
+      _ballHydrated = true;
+      _ballHydrateAll(function(){
+        var sc = document.querySelector('.screen.active');
+        if (sc && sc.id === 's-admin-balls') { try { window.adminRenderBalls(); } catch(_){} }
+      });
+    }
   });
 }());
 </script>
@@ -24113,7 +24350,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </style>
 <script>
 (function(){
-  var ov, _safety, _anim, _animRaf, _animStop, _newsAnim;
+  var ov, _safety, _anim, _animRaf, _animStop, _newsAnim, _gen = 0;
   function _el(){ ov = ov || document.getElementById('ml-loading-ov'); return ov; }
 
   /* ── Generador de titulares post-partido (2026-05-08) ────────────
@@ -24249,55 +24486,76 @@ document.addEventListener('DOMContentLoaded', function() {
     if (bar) bar.style.width = '0%';
     if (pct) pct.textContent = '0%';
     e.classList.add('show');
-    /* Animación de la barra: 0 → 100 % en 3000 ms (era 400) con
-       ticks cada 50 ms. Petición usuario 2026-05-08: la barra estaba
-       mucho tiempo en 0 % y luego saltaba a 100 %; ahora avanza en
-       sincronía con un tiempo realista de procesado. Si la siguiente
-       pantalla aparece antes (vía MutationObserver _hide), la
-       animación se interrumpe limpiamente. */
-    /* ── Driver dual rAF + setInterval con trickle (2026-05-16) ──────
-       FOTO 2 del usuario: "una vez finalizado el partido la pantalla
-       de carga no funciona, se queda en 0 %". Causa raíz: el
-       procesado post-partido (registro de stats, rebuild, saveData,
-       persistencias eur/copa) bloquea el hilo JS. Un único
-       `setInterval(50)` queda STARVED — su callback no corre hasta
-       que el hilo respira, y para entonces el MutationObserver ya
-       llamó `_hide()`, así que la barra nunca se despega del 0 %.
+    /* ── Splash post-partido AUTO-TERMINANTE (2026-05-16) ────────────
+       FOTOS 2 y 3 del usuario: "la pantalla sale con el 100 % pero se
+       queda fija siempre, no puedes avanzar". Causa raíz: la versión
+       anterior cambió la barra para que se quedara esperando al
+       MutationObserver / safety y QUITÓ el auto-cierre al 100 % que
+       tenía el código original. Si el observer no dispara (la pantalla
+       de stats ya estaba `.show` cuando se llamó `_show`, sin nueva
+       mutación) la barra se queda clavada en 100 % TAPANDO la pantalla
+       de stats y el humano no puede rellenarla.
 
-       Fix canónico (mismo patrón que `ftbolLoaderRun`): rAF (exento
-       del throttling de timers y que repinta en cuanto el hilo
-       cede entre tareas largas) + setInterval de respaldo, con un
-       modelo TRICKLE: el valor visible SIEMPRE avanza hacia un
-       target basado en tiempo de pared, con un creep mínimo por
-       frame, de modo que en cuanto el hilo respira la barra salta
-       hacia adelante en lugar de quedarse clavada en 0 %. */
+       Diseño correcto: el procesado post-partido YA corrió síncrono
+       antes de llegar aquí; este overlay es solo feedback visual
+       breve. Por tanto rellena 0→100 % en ~1100 ms con driver dual
+       rAF + setInterval (no se queda STARVED en 0 %) y al llegar al
+       100 % SE CIERRA SOLO, de forma GARANTIZADA, sin depender del
+       observer. El observer y el safety solo lo cierran ANTES si la
+       siguiente pantalla aparece muy rápido. Un token `_gen` evita
+       que un cierre diferido mate un overlay recién re-mostrado. */
+    var myGen = ++_gen;
     if (_animStop) { try { _animStop(); } catch(_){} _animStop = null; }
     if (_anim) { try { clearInterval(_anim); } catch(_){} _anim = null; }
     try { if (_animRaf) cancelAnimationFrame(_animRaf); } catch(_){}
     _animRaf = 0;
     if (_newsAnim) { try { clearInterval(_newsAnim); } catch(_){} _newsAnim = null; }
     var t0 = Date.now();
-    var DURATION = 3000;
+    var DURATION = 1100;
+    /* Deadline DURO auto-aplicado dentro del propio loop de animación
+       (foto usuario 2026-05-16: la barra se quedaba clavada y "daba
+       error"). El cierre no debe depender SOLO del observer (que no
+       cazaba el picker de portería imbatida) ni de un setTimeout de
+       seguridad que el procesado post-partido podía dejar starved.
+       Ahora el propio _frame (rAF + setInterval, que reanudan en
+       cuanto el hilo respira) fuerza el cierre pasado HARD_MS — el
+       spinner NUNCA puede quedarse pegado. DURATION corto (1100 ms)
+       hace que sea un splash breve que se auto-cierra al 100 %. */
+    var HARD_MS = 4500;
     var _vis = 0;        /* % visible (trickle, monótono) */
     var _done = false;
+    function _settle(){
+      if (_done) return;
+      _done = true;
+      try { if (_animRaf) cancelAnimationFrame(_animRaf); } catch(_){}
+      try { clearInterval(_anim); } catch(_){}
+      _anim = null; _animRaf = 0;
+      if (bar) bar.style.width = '100%';
+      if (pct) pct.textContent = '100%';
+      /* Cierre GARANTIZADO — independiente del observer. */
+      if (myGen === _gen) _hide();
+    }
     function _frame(){
       if (_done) return;
       var elapsed = Date.now() - t0;
-      /* Target por tiempo: alcanza 92 % a DURATION y se queda ahí
-         esperando a que la siguiente pantalla / _hide lo cierre. */
-      var tgt = Math.min(92, (elapsed / DURATION) * 100);
+      /* Backstop absoluto: si el hilo estuvo bloqueado > HARD_MS,
+         cerrar de inmediato (no depender del observer). */
+      if (elapsed >= HARD_MS) { try { _hide(); } catch(_){ _done = true; } return; }
+      /* Target por tiempo: llega al 100 % a DURATION (~1100 ms) para
+         que `_settle()` dispare el auto-cierre garantizado. */
+      var tgt = Math.min(100, (elapsed / DURATION) * 100);
       if (_vis < tgt) {
-        /* Ease hacia el target con un mínimo de 0.6 %/frame para que
-           tras un bloqueo largo del hilo el salto sea visible. */
-        _vis = Math.min(tgt, _vis + Math.max(0.6, (tgt - _vis) * 0.18));
-      } else if (_vis < 92) {
-        /* Creep aunque el target aún no haya subido — nunca 0 %. */
-        _vis += 0.3;
+        /* Ease hacia el target con mínimo 0.8 %/frame para que tras
+           un bloqueo largo del hilo el salto sea visible. */
+        _vis = Math.min(tgt, _vis + Math.max(0.8, (tgt - _vis) * 0.22));
+      } else {
+        _vis += 0.5;     /* creep — nunca clavado en 0 % */
       }
-      if (_vis > 99) _vis = 99;
-      var shown = Math.round(_vis);
+      if (_vis >= 100) _vis = 100;
+      var shown = Math.min(100, Math.round(_vis));
       if (bar) bar.style.width = shown + '%';
       if (pct) pct.textContent = shown + '%';
+      if (elapsed >= DURATION && _vis >= 100) { _settle(); }
     }
     (function _raf(){
       _frame();
@@ -24310,8 +24568,7 @@ document.addEventListener('DOMContentLoaded', function() {
       try { clearInterval(_anim); } catch(_){}
       _anim = null; _animRaf = 0;
     };
-    /* Rotación de titulares cada 700 ms — solo si tenemos contexto
-       suficiente (score). Sin ctx caemos a una secuencia neutra. */
+    /* Rotación de titulares (700 ms) mientras dura el splash. */
     var lines = _mlGenNewsLines(ctx);
     var idx = 0;
     if (tEl && lines.length) {
@@ -24321,16 +24578,14 @@ document.addEventListener('DOMContentLoaded', function() {
         tEl.textContent = lines[idx];
       }, 700);
     }
-    /* Timeout duro de seguridad: 3500 ms (antes 500). El observer
-       que vigila la apertura de la siguiente pantalla suele cerrar
-       este overlay mucho antes. */
+    /* Safety duro: si rAF Y setInterval quedaran ambos congelados por
+       un bloqueo extremo del hilo, esto cierra igualmente. */
     if (_safety) clearTimeout(_safety);
-    _safety = setTimeout(_hide, 3500);
+    _safety = setTimeout(function(){ if (myGen === _gen) _hide(); }, 2200);
   }
   function _hide(){
     var e = _el(); if (!e) return;
-    /* Snap a 100 % para cerrar con sensación de "completado" en vez
-       de desaparecer a medias (refuerza el fix de FOTO 2). */
+    _gen++;   /* invalida cierres / settles diferidos pendientes */
     try {
       var _b = document.getElementById('ml-loading-bar');
       var _p = document.getElementById('ml-loading-pct');
@@ -24343,8 +24598,9 @@ document.addEventListener('DOMContentLoaded', function() {
     try { if (_animRaf) cancelAnimationFrame(_animRaf); } catch(_){}
     _animRaf = 0;
     if (_newsAnim) { try { clearInterval(_newsAnim); } catch(_){} _newsAnim = null; }
-    /* Dejar el 100 % visible un instante antes de ocultar. */
-    setTimeout(function(){ try { e.classList.remove('show'); } catch(_){} }, 110);
+    /* Ocultar INMEDIATAMENTE — la prioridad es que el humano pueda
+       avanzar; el 100 % ya quedó pintado en este mismo tick. */
+    try { e.classList.remove('show'); } catch(_){}
   }
   window._mlShowLoading = _show;
   window._mlHideLoading = _hide;
@@ -24366,6 +24622,11 @@ document.addEventListener('DOMContentLoaded', function() {
     while (t && t !== document.body) {
       if (_isFinalizeBtn(t)) {
         if (t.id === 'ml-post-close-btn') { _hide(); return; }
+        /* Si el partido del gm-modal YA está finalizado, el botón
+           gm-btn-end fue reetiquetado a "VER RESUMEN" y su onclick
+           re-abre la pantalla FINAL — NO es un procesado: no mostrar
+           la barra "Procesando partido…". (foto usuario 2026-05-17) */
+        if (t.id === 'gm-btn-end' && window._gm && window._gm.finished) { _hide(); return; }
         /* Pasamos contexto (home/away/score) al modal para que rote
            titulares de prensa generados según el resultado. Lo
            guardamos también en `window._lastFinalizeCtx` porque
@@ -24387,7 +24648,13 @@ document.addEventListener('DOMContentLoaded', function() {
      spinner se quedará pegado hasta el timeout de seguridad.
      OJO: el MVP picker es id=gen-mvp-ov (su clase es mvp-force-overlay).
      Antes solo teníamos la clase y el observer no lo cazaba. */
-  var TARGETS = ['ml-stats-ov','ml-stats-entry-ov','ml-post-ov','gm-post-ov','gen-mvp-ov','mvp-force-overlay','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live','ml-final-ov','ml-descanso-ov','ml-injury-ov','prepartido-overlay'];
+  var TARGETS = ['ml-stats-ov','ml-stats-entry-ov','ml-post-ov','gm-post-ov','gen-mvp-ov','mvp-force-overlay','imbat-force-ov','sancion-overlay','sancion-post-overlay','lesion-post-overlay','ml-pen-panel','mm-sancion-live','ml-final-ov','ml-descanso-ov','ml-injury-ov','prepartido-overlay'];
+  /* Clases (no id) cuyo `.show` también debe ocultar el spinner. El
+     picker de portería imbatida es id="imbat-force-ov" pero su clase
+     es `mvp-force-overlay` — antes el observer solo miraba el id y el
+     spinner se quedaba ENCIMA del picker tapándolo (foto usuario
+     2026-05-16: barra clavada al 92 % sobre "Elige el portero"). */
+  var TARGET_CLASSES = ['mvp-force-overlay'];
   /* IDs cuyo show es vía `style.display` en lugar de `.show` class.
      El MutationObserver de abajo no capta cambios de style, así que
      vigilamos estos por separado y forzamos _hide() cuando aparecen. */
@@ -24404,10 +24671,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var obs2 = new MutationObserver(function(muts){
       for (var i = 0; i < muts.length; i++) {
         var m = muts[i];
-        if (m.type === 'attributes' && m.target && m.target.id) {
-          var tid = m.target.id;
-          if (TARGETS.indexOf(tid) !== -1 && m.target.classList && m.target.classList.contains('show')) {
-            _hide(); return;
+        if (m.type === 'attributes' && m.target && m.target.nodeType === 1) {
+          var tid = m.target.id || '';
+          var cl  = m.target.classList;
+          if (cl && cl.contains('show')) {
+            if (tid && TARGETS.indexOf(tid) !== -1) { _hide(); return; }
+            for (var _tc = 0; _tc < TARGET_CLASSES.length; _tc++) {
+              if (cl.contains(TARGET_CLASSES[_tc])) { _hide(); return; }
+            }
           }
           /* gm-fin-ov / gm-event-panel / gm-team-pick se muestran con
              `style.display = 'flex'` (no `.show`), así que el watcher
@@ -28603,6 +28874,45 @@ document.addEventListener('DOMContentLoaded', function() {
   flex:none !important;
   line-height:1.2 !important;
 }
+/* ── VER RESUMEN brillante (petición usuario 2026-05-17) ──────────
+   Cuando el partido acaba, el botón movido bajo el acta recibe
+   ADEMÁS `.is-finishable`. La regla `.gm-end-moved` de arriba lo
+   pintaba rojo apagado (igual que Menú·LIVE / Cancelar) y el humano
+   no sabía cuál pulsar para continuar. Esta regla tiene MÁS
+   especificidad (1 id + 2 clases) que `.gm-end-moved` (1 id + 1
+   clase), así que gana: verde→dorado vivo, texto grande, halo
+   pulsante y micro-zoom. Imposible no verlo. */
+#gm-btn-end.gm-end-moved.is-finishable{
+  background:linear-gradient(135deg,#15913f 0%,#27d967 42%,#ffd23f 100%) !important;
+  border:2px solid #ffe680 !important;
+  color:#06210f !important;
+  font-size:16px !important;
+  font-weight:900 !important;
+  letter-spacing:2px !important;
+  text-shadow:0 1px 2px rgba(255,255,255,.4) !important;
+  min-height:56px !important;
+  padding:14px 8px !important;
+  animation:gmVerResumenPulse 1.2s ease-in-out infinite !important;
+  position:relative;
+  z-index:3;
+}
+@keyframes gmVerResumenPulse{
+  0%,100%{
+    transform:scale(1);
+    box-shadow:0 0 0 0 rgba(39,217,103,.55),
+               0 0 16px 4px rgba(255,210,63,.65) !important;
+  }
+  50%{
+    transform:scale(1.04);
+    box-shadow:0 0 0 12px rgba(39,217,103,0),
+               0 0 36px 13px rgba(255,224,128,.98) !important;
+  }
+}
+#gm-btn-end.gm-end-moved.is-finishable:disabled{
+  animation:none !important;
+  filter:none !important;
+  transform:none !important;
+}
 /* Cuando FINALIZAR se mueve, su contenedor original (el row con
    PRÓRROGA) gana clase `.gm-row-end-removed` y PRÓRROGA pasa a
    ancho completo. */
@@ -29213,6 +29523,10 @@ document.addEventListener('DOMContentLoaded', function() {
     try { _gmMoveFinalizarBtn(); } catch(_){}
     try { _gmWireActaWatcher(); } catch(_){}
     try { _hookOverlayButtons(); } catch(_){}
+    /* Si el partido del modal ya terminó y la pantalla FINAL no
+       está abierta, mantener la caja FINALIZAR activa y llamativa
+       ("VER RESUMEN") — el humano no debe quedarse atascado. */
+    try { if (window._gmReactivateFinishBtn) window._gmReactivateFinishBtn(); } catch(_){}
   }
 
   /* ── PREVIA · TWITCH 100% OPCIONAL (2026-05-10) ─────────────────

@@ -2153,6 +2153,48 @@ def _load_player_flags_on_startup():
             continue
 
 
+@app.route("/api/liga-ext", methods=["GET"])
+def api_liga_ext_index():
+    """Índice de TODAS las ligas externas guardadas en el servidor.
+    Devuelve los slugs EXACTOS (tal cual están en GlobalState) + nombre
+    y nº de equipos. Lo usa el editor de torneos para prefetchear las
+    51 Resto de Ligas (+ EA/Hypermotion/1ªRFEF) sin tener que adivinar
+    el slug desde la etiqueta en español. 2026-05-17."""
+    out = []
+    try:
+        rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
+    except Exception:
+        rows = []
+    for row in rows or []:
+        clave = row.clave or ""
+        if not clave.startswith("liga_ext_"):
+            continue
+        rest = clave[len("liga_ext_"):]
+        # Excluir derivados (protected). Las claves canónicas son
+        # exactamente `liga_ext_<slug>`.
+        if not rest or rest.endswith("_protected"):
+            continue
+        try:
+            data = json.loads(row.valor_json or "{}")
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        teams = data.get("teams")
+        count = 0
+        if isinstance(teams, list):
+            count = sum(1 for t in teams if isinstance(t, dict) and t.get("name"))
+        if count == 0:
+            continue
+        out.append({
+            "slug": rest,
+            "name": data.get("name") or rest,
+            "count": count,
+        })
+    out.sort(key=lambda x: x["slug"])
+    return jsonify({"ok": True, "leagues": out})
+
+
 @app.route("/api/liga-ext/<slug>", methods=["GET"])
 def api_liga_ext_get(slug):
     data = _liga_ext_load(slug)
@@ -2384,11 +2426,20 @@ _KV_ALLOWED_EXACT = {
     "comp_icons_v1", "comp_cards_v1",
     "europe_committed_v1", "bayern_trofeos_v1",
     "ucl_phase_v1", "uel_phase_v1", "uecl_phase_v1",
+    # Registro de torneos visibles (añadir/eliminar · 2026-05-16 #5).
+    "tour_registry_v1",
+    # Ball Storage: inventario de balones, balón-por-competición y
+    # competiciones custom añadidas por el admin. localStorage es solo
+    # cache rápida — el server es la fuente de verdad para que
+    # sobrevivan a wipes de navegador / cambio de móvil (mismo patrón
+    # que comp_icons_v1 / bayern_trofeos_v1). 2026-05-17.
+    "ball_inventory_v1", "ball_by_comp_v1", "ball_comp_db_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("
     r"manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)"
-    r"|tour_(sct|pss|jg|asia)"
+    # tx1..tx8 = 8 huecos pre-cableados para torneos añadidos por el admin.
+    r"|tour_(sct|pss|jg|asia|tx[1-8])"
     r")_v1$"
 )
 _KV_MAX_BYTES = 2 * 1024 * 1024  # 2 MB por clave (alineado con CLAUDE.md)

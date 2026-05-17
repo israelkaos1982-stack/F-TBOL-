@@ -7889,7 +7889,10 @@
     var endBtn = document.getElementById('ml-btn-end-'+mk);
     if (endBtn) {
       var matchOver = !!(st.matchFinished || st.finished || rawSec >= fullMax);
-      endBtn.classList.toggle('is-finishable', matchOver);
+      /* FOTO B1 (2026-05-16): empezar a brillar desde el min 85
+         (5100 s) también en las cards del calendario, no solo al
+         final exacto. */
+      endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 85 * 60);
     }
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
     if (st.inDescanso) { btn.textContent='⏸ HT'; btn.className='ml-timer running'; return; }
@@ -10945,7 +10948,12 @@
       }
 
       var _baseClasses = 'is-finishable';
-      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmAction !== 'finalizar');
+      /* FOTO B1 (2026-05-16, petición usuario): la caja FINALIZAR
+         debe EMPEZAR a brillar y llamar la atención a partir del
+         game-minute 85 (no solo al final exacto), para avisar al
+         humano de que el partido está por terminar. 85' = 5100 s. */
+      var _gmNear85 = (Number(_gm.timerSec) || 0) >= 85 * 60;
+      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmNear85 || _gmAction !== 'finalizar');
       if (_gmAction === 'prorroga') {
         _gmEndBtn.textContent = '▶ PRÓRROGA';
       } else if (_gmAction === 'penaltis') {
@@ -23947,7 +23955,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </style>
 <script>
 (function(){
-  var ov, _safety, _anim, _animRaf, _animStop, _newsAnim;
+  var ov, _safety, _anim, _animRaf, _animStop, _newsAnim, _gen = 0;
   function _el(){ ov = ov || document.getElementById('ml-loading-ov'); return ov; }
 
   /* ── Generador de titulares post-partido (2026-05-08) ────────────
@@ -24083,55 +24091,61 @@ document.addEventListener('DOMContentLoaded', function() {
     if (bar) bar.style.width = '0%';
     if (pct) pct.textContent = '0%';
     e.classList.add('show');
-    /* Animación de la barra: 0 → 100 % en 3000 ms (era 400) con
-       ticks cada 50 ms. Petición usuario 2026-05-08: la barra estaba
-       mucho tiempo en 0 % y luego saltaba a 100 %; ahora avanza en
-       sincronía con un tiempo realista de procesado. Si la siguiente
-       pantalla aparece antes (vía MutationObserver _hide), la
-       animación se interrumpe limpiamente. */
-    /* ── Driver dual rAF + setInterval con trickle (2026-05-16) ──────
-       FOTO 2 del usuario: "una vez finalizado el partido la pantalla
-       de carga no funciona, se queda en 0 %". Causa raíz: el
-       procesado post-partido (registro de stats, rebuild, saveData,
-       persistencias eur/copa) bloquea el hilo JS. Un único
-       `setInterval(50)` queda STARVED — su callback no corre hasta
-       que el hilo respira, y para entonces el MutationObserver ya
-       llamó `_hide()`, así que la barra nunca se despega del 0 %.
+    /* ── Splash post-partido AUTO-TERMINANTE (2026-05-16) ────────────
+       FOTOS 2 y 3 del usuario: "la pantalla sale con el 100 % pero se
+       queda fija siempre, no puedes avanzar". Causa raíz: la versión
+       anterior cambió la barra para que se quedara esperando al
+       MutationObserver / safety y QUITÓ el auto-cierre al 100 % que
+       tenía el código original. Si el observer no dispara (la pantalla
+       de stats ya estaba `.show` cuando se llamó `_show`, sin nueva
+       mutación) la barra se queda clavada en 100 % TAPANDO la pantalla
+       de stats y el humano no puede rellenarla.
 
-       Fix canónico (mismo patrón que `ftbolLoaderRun`): rAF (exento
-       del throttling de timers y que repinta en cuanto el hilo
-       cede entre tareas largas) + setInterval de respaldo, con un
-       modelo TRICKLE: el valor visible SIEMPRE avanza hacia un
-       target basado en tiempo de pared, con un creep mínimo por
-       frame, de modo que en cuanto el hilo respira la barra salta
-       hacia adelante en lugar de quedarse clavada en 0 %. */
+       Diseño correcto: el procesado post-partido YA corrió síncrono
+       antes de llegar aquí; este overlay es solo feedback visual
+       breve. Por tanto rellena 0→100 % en ~1100 ms con driver dual
+       rAF + setInterval (no se queda STARVED en 0 %) y al llegar al
+       100 % SE CIERRA SOLO, de forma GARANTIZADA, sin depender del
+       observer. El observer y el safety solo lo cierran ANTES si la
+       siguiente pantalla aparece muy rápido. Un token `_gen` evita
+       que un cierre diferido mate un overlay recién re-mostrado. */
+    var myGen = ++_gen;
     if (_animStop) { try { _animStop(); } catch(_){} _animStop = null; }
     if (_anim) { try { clearInterval(_anim); } catch(_){} _anim = null; }
     try { if (_animRaf) cancelAnimationFrame(_animRaf); } catch(_){}
     _animRaf = 0;
     if (_newsAnim) { try { clearInterval(_newsAnim); } catch(_){} _newsAnim = null; }
     var t0 = Date.now();
-    var DURATION = 3000;
+    var DURATION = 1100;
     var _vis = 0;        /* % visible (trickle, monótono) */
     var _done = false;
+    function _settle(){
+      if (_done) return;
+      _done = true;
+      try { if (_animRaf) cancelAnimationFrame(_animRaf); } catch(_){}
+      try { clearInterval(_anim); } catch(_){}
+      _anim = null; _animRaf = 0;
+      if (bar) bar.style.width = '100%';
+      if (pct) pct.textContent = '100%';
+      /* Cierre GARANTIZADO — independiente del observer. */
+      if (myGen === _gen) _hide();
+    }
     function _frame(){
       if (_done) return;
       var elapsed = Date.now() - t0;
-      /* Target por tiempo: alcanza 92 % a DURATION y se queda ahí
-         esperando a que la siguiente pantalla / _hide lo cierre. */
-      var tgt = Math.min(92, (elapsed / DURATION) * 100);
+      var tgt = Math.min(100, (elapsed / DURATION) * 100);
       if (_vis < tgt) {
-        /* Ease hacia el target con un mínimo de 0.6 %/frame para que
-           tras un bloqueo largo del hilo el salto sea visible. */
-        _vis = Math.min(tgt, _vis + Math.max(0.6, (tgt - _vis) * 0.18));
-      } else if (_vis < 92) {
-        /* Creep aunque el target aún no haya subido — nunca 0 %. */
-        _vis += 0.3;
+        /* Ease hacia el target con mínimo 0.8 %/frame para que tras
+           un bloqueo largo del hilo el salto sea visible. */
+        _vis = Math.min(tgt, _vis + Math.max(0.8, (tgt - _vis) * 0.22));
+      } else {
+        _vis += 0.5;     /* creep — nunca clavado en 0 % */
       }
-      if (_vis > 99) _vis = 99;
-      var shown = Math.round(_vis);
+      if (_vis >= 100) _vis = 100;
+      var shown = Math.min(100, Math.round(_vis));
       if (bar) bar.style.width = shown + '%';
       if (pct) pct.textContent = shown + '%';
+      if (elapsed >= DURATION && _vis >= 100) { _settle(); }
     }
     (function _raf(){
       _frame();
@@ -24144,8 +24158,7 @@ document.addEventListener('DOMContentLoaded', function() {
       try { clearInterval(_anim); } catch(_){}
       _anim = null; _animRaf = 0;
     };
-    /* Rotación de titulares cada 700 ms — solo si tenemos contexto
-       suficiente (score). Sin ctx caemos a una secuencia neutra. */
+    /* Rotación de titulares (700 ms) mientras dura el splash. */
     var lines = _mlGenNewsLines(ctx);
     var idx = 0;
     if (tEl && lines.length) {
@@ -24155,16 +24168,14 @@ document.addEventListener('DOMContentLoaded', function() {
         tEl.textContent = lines[idx];
       }, 700);
     }
-    /* Timeout duro de seguridad: 3500 ms (antes 500). El observer
-       que vigila la apertura de la siguiente pantalla suele cerrar
-       este overlay mucho antes. */
+    /* Safety duro: si rAF Y setInterval quedaran ambos congelados por
+       un bloqueo extremo del hilo, esto cierra igualmente. */
     if (_safety) clearTimeout(_safety);
-    _safety = setTimeout(_hide, 3500);
+    _safety = setTimeout(function(){ if (myGen === _gen) _hide(); }, 2200);
   }
   function _hide(){
     var e = _el(); if (!e) return;
-    /* Snap a 100 % para cerrar con sensación de "completado" en vez
-       de desaparecer a medias (refuerza el fix de FOTO 2). */
+    _gen++;   /* invalida cierres / settles diferidos pendientes */
     try {
       var _b = document.getElementById('ml-loading-bar');
       var _p = document.getElementById('ml-loading-pct');
@@ -24177,8 +24188,9 @@ document.addEventListener('DOMContentLoaded', function() {
     try { if (_animRaf) cancelAnimationFrame(_animRaf); } catch(_){}
     _animRaf = 0;
     if (_newsAnim) { try { clearInterval(_newsAnim); } catch(_){} _newsAnim = null; }
-    /* Dejar el 100 % visible un instante antes de ocultar. */
-    setTimeout(function(){ try { e.classList.remove('show'); } catch(_){} }, 110);
+    /* Ocultar INMEDIATAMENTE — la prioridad es que el humano pueda
+       avanzar; el 100 % ya quedó pintado en este mismo tick. */
+    try { e.classList.remove('show'); } catch(_){}
   }
   window._mlShowLoading = _show;
   window._mlHideLoading = _hide;

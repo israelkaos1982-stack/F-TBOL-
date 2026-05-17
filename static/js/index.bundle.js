@@ -5459,7 +5459,12 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       if (_ovRaw) {
         var _ov = JSON.parse(_ovRaw) || {};
         var _bdbKey = _COMP_TO_BDB[compKey];
-        var _ovBall = _bdbKey && _ov[_bdbKey];
+        /* Resolución robusta (2026-05-17): primero la clave RAW del
+           partido (compKey) — así las competiciones extra/custom que
+           añade el admin en Ball Storage (Superliga, torneos nuevos…)
+           se enganchan sin tocar _COMP_TO_BDB. Si no hay, caemos a la
+           clave de BALL_DB (back-compat de las 14 comps base). */
+        var _ovBall = _ov[compKey] || (_bdbKey && _ov[_bdbKey]);
         if (_ovBall && typeof _ovBall === 'string') {
           /* El admin ha guardado un balón distinto para esta comp →
              gana sobre el default hardcoded. */

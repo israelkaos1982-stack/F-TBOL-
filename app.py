@@ -2384,6 +2384,12 @@ _KV_ALLOWED_EXACT = {
     "comp_icons_v1", "comp_cards_v1",
     "europe_committed_v1", "bayern_trofeos_v1",
     "ucl_phase_v1", "uel_phase_v1", "uecl_phase_v1",
+    # Ball Storage: inventario de balones, balón-por-competición y
+    # competiciones custom añadidas por el admin. localStorage es solo
+    # cache rápida — el server es la fuente de verdad para que
+    # sobrevivan a wipes de navegador / cambio de móvil (mismo patrón
+    # que comp_icons_v1 / bayern_trofeos_v1). 2026-05-17.
+    "ball_inventory_v1", "ball_by_comp_v1", "ball_comp_db_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

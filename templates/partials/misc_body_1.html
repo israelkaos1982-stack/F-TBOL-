@@ -3594,6 +3594,13 @@ window._showSimProgress = function(opts, onDone){
         }
 
         if (rebuilt.length) {
+          /* Saneamos el rebuild (sqFromRegistry / server / _protected
+             traen líneas-basura "MED:/DEF:" y duplicados): NUNCA
+             escribir basura en localStorage ni en el servidor.
+             2026-05-17. */
+          try {
+            if (typeof window._cleanSquadPlayers === 'function') rebuilt = window._cleanSquadPlayers(rebuilt);
+          } catch(_){}
           found.players = rebuilt;
           try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
@@ -3652,6 +3659,9 @@ window._showSimProgress = function(opts, onDone){
                 /* Adoptamos players y campos editables. Mantenemos id
                    del `found` para no romper navegación cruzada. */
                 found.players = _protMatch.players.slice();
+                try {
+                  if (typeof window._cleanSquadPlayers === 'function') found.players = window._cleanSquadPlayers(found.players);
+                } catch(_){}
                 ['power','atk','mid','def','shield','country','rules','isHuman','humanEmoji'].forEach(function(_fk){
                   if (_protMatch[_fk] != null) found[_fk] = _protMatch[_fk];
                 });
@@ -3681,6 +3691,11 @@ window._showSimProgress = function(opts, onDone){
             y europeas). */
       if (typeof window.lextOpenSquad === 'function') {
         try {
+          /* Última red: nómina SIEMPRE limpia al abrir el modal,
+             venga de donde venga (cache/server/_protected/registry). */
+          if (found && Array.isArray(found.players) && typeof window._cleanSquadPlayers === 'function') {
+            try { found.players = window._cleanSquadPlayers(found.players); } catch(_){}
+          }
           window.lextOpenSquad(found, { competitions: clickComps });
         } catch(errLs) {
           alert('⚠️ Error al abrir el editor de «' + found.name + '»:\n' + (errLs && errLs.message || errLs));
@@ -19392,6 +19407,18 @@ Tottenham
     return false;
   }
   window._isJunkPlayerName = _isJunkPlayerName;
+  /* Limpiador universal de una nómina: quita líneas-basura
+     ("MED: …", "DEF: …", leyenda de iconos, cabeceras) y
+     deduplica jugadores. Lo usa el render de la plantilla y la
+     cadena de rebuild de la clasificación (otro IIFE) para que
+     NUNCA se muestren ni persistan jugadores antiguos/duplicados
+     (bug "este error es continuo" 2026-05-17). Idempotente. */
+  function _cleanSquadPlayers(arr){
+    if (!Array.isArray(arr)) return arr;
+    var filtered = arr.filter(function(p){ return p && !_isJunkPlayerName(p && p.name); });
+    return _dedupeSquadPlayers(filtered);
+  }
+  try { if (typeof window !== 'undefined') window._cleanSquadPlayers = _cleanSquadPlayers; } catch(_){}
   function _sanitizeLigaTeamNames(d){
     if (!d || !Array.isArray(d.teams)) return false;
     var dirty = false;
@@ -23479,6 +23506,29 @@ Tottenham
         var _hydrated = _lextHydrateFromSquadRegistry(t.name);
         if (_hydrated && _hydrated.length) {
           t.players = _hydrated;
+          try { saveData(CURRENT_KEY, data); } catch(_){}
+        }
+      } catch(_){}
+    }
+    /* ── GUARD DURABLE anti-rebrote (2026-05-17) ──────────────────
+       El usuario edita la plantilla, la guarda limpia, pero al
+       reabrirla desde la clasificación reaparecían jugadores
+       antiguos / líneas basura ("MED: I. Ruiz De Galarreta",
+       "DEF: A. Gorosabel") y duplicados ("Álex Berenguer" ×2)
+       inyectados por la cadena de rebuild (sqFromRegistry / server
+       / _protected) que NO pasa por _sanitizeLigaTeamNames. Aquí,
+       en el ÚNICO punto donde se pinta la plantilla, filtramos la
+       basura + deduplicamos SIEMPRE y, si algo cambió, PERSISTIMOS
+       la versión limpia con saveData (que reescribe localStorage
+       main + _protected + servidor ya saneados). Así "lo que el
+       admin dejó se queda para siempre" y los restos antiguos no
+       vuelven en la siguiente apertura. */
+    if (t && Array.isArray(t.players) && t.players.length) {
+      try {
+        var _pn0 = t.players.length;
+        var _pclean = _cleanSquadPlayers(t.players);
+        if (_pclean !== t.players && _pclean.length !== _pn0) {
+          t.players = _pclean;
           try { saveData(CURRENT_KEY, data); } catch(_){}
         }
       } catch(_){}

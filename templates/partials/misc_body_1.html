@@ -992,6 +992,7 @@ window._showSimProgress = function(opts, onDone){
     d.dayIdx = Math.min((parseInt(d.dayIdx,10)||0) + 1, max);
     _save(d);
     window.__psBusy = false;   /* el día se resolvió: liberar render */
+    window.__psPreviaOpenedIdx = -1;  /* permite auto-abrir la previa del próximo partido */
     _syncMarker();
     _render();
   }
@@ -1207,10 +1208,10 @@ window._showSimProgress = function(opts, onDone){
     if (typeof window.showPrePartidoOverlay === 'function'){
       var mk = 'ps_' + String(day.date||'').replace(/\s+/g,'') + '_m0';
       window.showPrePartidoOverlay(mk, comp, 'No', dur, false);
-    } else {
-      /* Sin previa disponible → avanzar igualmente para no bloquear. */
-      window._ppCustomCallback();
     }
+    /* Si la previa aún no está cargada NO auto-avanzamos (saltaríamos
+       el partido en silencio): se queda el placeholder con el botón
+       ABRIR PREVIA para reintentar. */
   }
 
   function _cardMatch(day){
@@ -1228,18 +1229,16 @@ window._showSimProgress = function(opts, onDone){
       d.rivals[day.date] = rv; _save(d);
     }
     var tourNm = d.tour ? (TOUR_NAMES[d.tour] || 'Torneo de Verano') : (day.label || 'Partido');
+    /* En día de partido NO usamos card propia: se abre la PANTALLA DE
+       PREVIA estándar del proyecto (foto 2). El #ps-stage solo deja un
+       placeholder por si el usuario vuelve de la previa con ◀ Volver. */
     st.innerHTML =
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
-      + '<div class="ps-vs">'
-      +   '<div class="ps-team"><img class="ps-shield" src="' + BAYERN_SHIELD + '"><div class="ps-tn">Bayern Múnich</div></div>'
-      +   '<div class="ps-x">VS</div>'
-      +   '<div class="ps-team"><img class="ps-shield" src="' + _esc(_shield(rv.name)) + '" onerror="this.src=\'' + FALLBACK_SHIELD + '\'"><div class="ps-tn">' + _esc(rv.name) + '</div></div>'
-      + '</div>'
-      + _bajasBanner()
-      + '<div style="margin-top:18px;display:flex;gap:10px;justify-content:center;">'
-      +   '<button type="button" class="ps-btn" id="ps-match-play">⚽ JUGAR PARTIDO</button>'
+      + '<div class="ps-meta" style="margin:16px 0;">📋 Pantalla de previa<br><b>Bayern Múnich</b> vs <b>' + _esc(rv.name) + '</b></div>'
+      + '<div style="display:flex;gap:10px;justify-content:center;margin-top:8px;">'
+      +   '<button type="button" class="ps-btn" id="ps-match-play">📋 ABRIR PREVIA</button>'
       +   '<button type="button" class="ps-btn ghost" id="ps-match-skip">Saltar ▶</button>'
       + '</div>'
       + '</div>';
@@ -1247,6 +1246,14 @@ window._showSimProgress = function(opts, onDone){
     var skip = document.getElementById('ps-match-skip');
     if (play) play.onclick = function(){ _openPreseasonPrevia(day, rv, tourNm); };
     if (skip) skip.onclick = function(){ _markDoneAndAdvance(); };
+    /* AUTO-abrir la previa estándar al llegar al día de partido (una
+       sola vez por día — el guard de firma de _render evita re-render,
+       y este idx-guard cubre el caso de volver con ◀ Volver). */
+    var idx = parseInt(d.dayIdx,10)||0;
+    if (window.__psPreviaOpenedIdx !== idx){
+      window.__psPreviaOpenedIdx = idx;
+      setTimeout(function(){ _openPreseasonPrevia(day, rv, tourNm); }, 80);
+    }
   }
 
   function _dayLabel(day){

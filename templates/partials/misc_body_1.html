@@ -29748,14 +29748,30 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      el registro está vacío, fallback a los 4 built-in (back-compat).
      Petición usuario 2026-05-17 (foto 2): si solo hay 2 torneos no
      pueden salir 4 en la caja del Bayern. */
+  function _psConfigured(id){
+    /* Un torneo es REAL si tiene config guardada (el admin lo
+       configuró/sorteó): tour_<id>_v1 en localStorage o en
+       _TOUR_CACHE. Los built-in sin configurar (p.ej. Premier
+       Summer Series / Asian si nadie los montó) NO cuentan. */
+    try {
+      if (window._TOUR_CACHE && window._TOUR_CACHE[id]) return true;
+      if (localStorage.getItem('tour_' + id + '_v1')) return true;
+    } catch(_){}
+    return false;
+  }
   function _psVisibleTourIds(){
+    var base = ['sct','pss','jg','asia'];
     try {
       if (typeof window._tourVisibleIds === 'function') {
         var v = window._tourVisibleIds();
-        if (Array.isArray(v) && v.length) return v.filter(_isTourId);
+        if (Array.isArray(v) && v.length) base = v.filter(_isTourId);
       }
     } catch(_){}
-    return ['sct','pss','jg','asia'];
+    /* Solo los torneos que existen DE VERDAD (config guardada). Si
+       aún no hay ninguno cacheado (configs solo en servidor), se
+       devuelve `base` para no dejar el picker vacío. */
+    var real = base.filter(_psConfigured);
+    return real.length ? real : base;
   }
   function _psTourMeta(id){
     var t = (typeof window._tourMuInfoData === 'function' && window._tourMuInfoData(id)) || SUMMER_TOURS[id] || null;

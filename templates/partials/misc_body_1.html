@@ -19541,8 +19541,13 @@ Tottenham
           localStorage.setItem(storeKey(k), _csj);
           /* Purga TAMBIÉN el _protected: si solo limpiamos main, una
              copia _protected legacy triplicada resucitaba en el
-             siguiente restore/lock. 2026-05-17. */
-          if (localStorage.getItem(storeKey(k)+'_protected')) {
+             siguiente restore/lock. 2026-05-17.
+             NO durante la sim masiva de 51 ligas: saveData ya
+             persiste _protected limpio al final de CADA liga;
+             hacerlo aquí ADEMÁS = 51× JSON.stringify+setItem de
+             blobs multi-MB → la barra "se quedaba en 99%". */
+          if (!window._restoSimBulkInProgress &&
+              localStorage.getItem(storeKey(k)+'_protected')) {
             localStorage.setItem(storeKey(k)+'_protected', _csj);
           }
         } catch(_){}
@@ -19583,7 +19588,11 @@ Tottenham
           try {
             var _psj = JSON.stringify(parsed);
             localStorage.setItem(storeKey(k), _psj);
-            if (localStorage.getItem(storeKey(k)+'_protected')) {
+            /* _protected NO durante la sim masiva (saveData ya lo
+               persiste limpio por liga). Evita 51× stringify+setItem
+               multi-MB que clavaba la barra en 99%. */
+            if (!window._restoSimBulkInProgress &&
+                localStorage.getItem(storeKey(k)+'_protected')) {
               localStorage.setItem(storeKey(k)+'_protected', _psj);
             }
           } catch(_){}

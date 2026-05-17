@@ -9977,6 +9977,7 @@ window._showSimProgress = function(opts, onDone){
   .tour-tie-leg .tl-tm-r{text-align:right;}
   .tour-tie-leg .tl-sc{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:#fff;}
   .tour-tie-note{font-family:Rajdhani,sans-serif;font-size:10px;color:#f0c040;text-align:center;padding-top:2px;}
+  .tour-tie-leg-lbl{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#f0c040;text-align:center;padding:2px 0 1px;text-transform:uppercase;}
   .tour-match{
     display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;
     background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);
@@ -11194,6 +11195,16 @@ window._showSimProgress = function(opts, onDone){
     html += '</div>';
     return html;
   }
+  /* ¿Esta ronda se juega a IDA Y VUELTA? (ko-2leg salvo la final
+     single-leg). Define si una eliminatoria con humano necesita 2
+     partidos. */
+  function _tour2LegRound(cfg, rIdx){
+    if (!cfg || cfg.format !== 'ko-2leg') return false;
+    var rounds = (cfg.formatConfig && cfg.formatConfig.rounds) || [];
+    var isLast = rounds.length > 0 && rIdx === (rounds.length - 1);
+    var singleLast = !!(cfg.formatConfig && cfg.formatConfig.singleLegLastRound);
+    return !(isLast && singleLast);
+  }
   function _teamChipHtml(t, tourId, slotIdx){
     var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
     var classes = ['tour-team-chip'];
@@ -11299,6 +11310,33 @@ window._showSimProgress = function(opts, onDone){
             + '</div>';
           tie += _tourTieLegsHtml(cfg, a, b, res);
           tie += _tourActaPanelHtml(id, matchKey, res);
+        } else if (hasHuman && _tour2LegRound(cfg, curR)) {
+          /* Eliminatoria a ida y vuelta con humano: 2 partidos con su
+             propia card (petición usuario 2026-05-17). */
+          var L1 = cfg.results[matchKey + '|L1'];
+          if (!L1) {
+            tie += '<div class="tour-tie-leg-lbl">🟢 IDA · juega en su campo</div>';
+            tie += '<div class="'+rowClass+'"'+dataAttrs+'>'
+              + _bracketTeamHtml(a, id, i)
+              + '<span class="vs">vs</span>'
+              + _bracketTeamHtml(b, id, i+1)
+              + '</div>';
+            tie += _tourSimAiBtnHtml(id, 'match', matchKey);
+          } else {
+            var _e1 = function(s){ return String(s==null?'':s).replace(/[<>]/g,''); };
+            tie += '<div class="tour-tie-legs"><div class="tour-tie-leg">'
+              + '<span class="tl-lbl">IDA</span><span class="tl-row">'
+              + '<span class="tl-tm">'+_e1(a&&a.name)+'</span>'
+              + '<span class="tl-sc">'+(L1.a|0)+' - '+(L1.b|0)+'</span>'
+              + '<span class="tl-tm tl-tm-r">'+_e1(b&&b.name)+'</span></span></div></div>';
+            tie += '<div class="tour-tie-leg-lbl">🔁 VUELTA · el GLOBAL se decide al terminar</div>';
+            tie += '<div class="'+rowClass+'"'+dataAttrs+'>'
+              + _bracketTeamHtml(b, id, i+1)
+              + '<span class="vs">vs</span>'
+              + _bracketTeamHtml(a, id, i)
+              + '</div>';
+            tie += _tourSimAiBtnHtml(id, 'match', matchKey);
+          }
         } else {
           tie += '<div class="'+rowClass+'"'+dataAttrs+'>'
             + _bracketTeamHtml(a, id, i)
@@ -11953,14 +11991,30 @@ window._showSimProgress = function(opts, onDone){
 
   function _tourOpenHumanMatch(tourId, matchKey, teamAObj, teamBObj) {
     if (!teamAObj || !teamBObj) return;
-    var nameA = teamAObj.name || '?';
-    var nameB = teamBObj.name || '?';
-    if (nameA === 'PENDIENTE' || nameB === 'PENDIENTE') {
+    if ((teamAObj.name === 'PENDIENTE') || (teamBObj.name === 'PENDIENTE')) {
       alert('🎮 Hay un slot humano sin asignar (PENDIENTE). Tócalo primero para elegir tu equipo.');
       return;
     }
-    var isHvH = !!teamAObj.isHuman && !!teamBObj.isHuman;
-    var humanInvolved = !!teamAObj.isHuman || !!teamBObj.isHuman;
+    /* Eliminatoria a IDA Y VUELTA con humano (petición usuario
+       2026-05-17): el humano juega 2 partidos con su propia card.
+       IDA: teamA en su campo. VUELTA: teamB en su campo. El resultado
+       GLOBAL (suma) se calcula al guardar la vuelta. La pierna se
+       codifica en la tourKey como "<mk>|L1" / "<mk>|L2". */
+    var homeObj = teamAObj, awayObj = teamBObj, useKey = matchKey;
+    try {
+      var _cfgTL = _tourLoadCachedSync(tourId);
+      if (_cfgTL && _tour2LegRound(_cfgTL, parseInt(String(matchKey).split('_')[0], 10))
+          && !(_cfgTL.results && _cfgTL.results[matchKey] && _cfgTL.results[matchKey].played)) {
+        var _legDone1 = !!(_cfgTL.results && _cfgTL.results[matchKey + '|L1']);
+        if (!_legDone1) { homeObj = teamAObj; awayObj = teamBObj; useKey = matchKey + '|L1'; }
+        else            { homeObj = teamBObj; awayObj = teamAObj; useKey = matchKey + '|L2'; }
+      }
+    } catch(_){}
+    matchKey = useKey;
+    var nameA = homeObj.name || '?';
+    var nameB = awayObj.name || '?';
+    var isHvH = !!homeObj.isHuman && !!awayObj.isHuman;
+    var humanInvolved = !!homeObj.isHuman || !!awayObj.isHuman;
     var duracion = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: humanInvolved })
       : (isHvH ? '15 min 45 s' : '9 min 45 s');
@@ -12011,6 +12065,70 @@ window._showSimProgress = function(opts, onDone){
     var cfg = _tourLoadCachedSync(tourId);
     if (!cfg) return;
     cfg.results = cfg.results || {};
+    /* ── Eliminatoria a IDA Y VUELTA con humano ─────────────────
+       key = "<mk>|L1" (ida, teamA local) o "<mk>|L2" (vuelta, teamB
+       local). Guardamos cada partido y, al terminar la vuelta,
+       calculamos el GLOBAL (suma) con la misma regla que la IA
+       (global → gol de visitante → penaltis). 2026-05-17. */
+    var _legM = String(key).match(/^(.*)\|L([12])$/);
+    if (_legM) {
+      var _baseKey = _legM[1], _legN = _legM[2];
+      if (_legN === '1') {
+        cfg.results[_baseKey + '|L1'] = {
+          a: gh|0, b: ga|0,
+          events: (extra && extra.events && extra.events.length) ? extra.events.slice() : [],
+          mvp: extra && extra.mvp, mvpTeam: extra && extra.mvpTeam,
+          home: extra && extra.home, away: extra && extra.away
+        };
+        if (cfg.results[_baseKey + '|L1'].events.length && typeof window.registrarLigaPlayerStats === 'function') {
+          try { window.registrarLigaPlayerStats('tour_'+tourId+'_'+_baseKey+'_L1',
+            (extra&&extra.home)||'', (extra&&extra.away)||'',
+            cfg.results[_baseKey+'|L1'].events, (extra&&extra.mvp)||'', (extra&&extra.mvpTeam)||'', 'torneos'); } catch(_){}
+        }
+        _tourSaveAndRender(tourId, cfg);
+        return;
+      }
+      /* VUELTA jugada → calcular GLOBAL. */
+      var _L1 = cfg.results[_baseKey + '|L1'] || { a:0, b:0, events:[] };
+      /* legs[0] = IDA (A local): {a:golesA, b:golesB}
+         legs[1] = VUELTA (B local): {a:golesB, b:golesA} = {a:gh, b:ga} */
+      var _legs = [ { a:_L1.a|0, b:_L1.b|0 }, { a:gh|0, b:ga|0 } ];
+      var _tA = _legs[0].a + _legs[1].b;   /* total teamA */
+      var _tB = _legs[0].b + _legs[1].a;   /* total teamB */
+      var _win, _pens = null;
+      if (_tA > _tB) _win = 'a';
+      else if (_tB > _tA) _win = 'b';
+      else {
+        var _aAway = _legs[1].b, _bAway = _legs[0].b;   /* goles fuera */
+        if (_aAway > _bAway) _win = 'a';
+        else if (_bAway > _aAway) _win = 'b';
+        else if (penWinner === 'a' || penWinner === 'b') _win = penWinner;
+        else {
+          var _pp = String(_baseKey).split('_');
+          var _bt = (cfg.bracket && cfg.bracket[parseInt(_pp[0],10)]) || [];
+          var _iSlot = (parseInt(_pp[1],10)||0) * 2;
+          var _tmA = _tourFindTeam(_bt[_iSlot]) || { power:70 };
+          var _tmB = _tourFindTeam(_bt[_iSlot+1]) || { power:70 };
+          _pens = _tourSimPenalties(_tmA, _tmB);
+          _win = (_pens.a > _pens.b) ? 'a' : 'b';
+        }
+      }
+      var _evAll = (_L1.events || []).slice();
+      if (extra && extra.events && extra.events.length) _evAll = _evAll.concat(extra.events);
+      var _fin = { a:_tA, b:_tB, winner:_win, played:true, legs:_legs,
+                   events:_evAll, mvp:extra&&extra.mvp, mvpTeam:extra&&extra.mvpTeam,
+                   home:_L1.home, away:_L1.away };
+      if (_pens) _fin.pens = _pens;
+      cfg.results[_baseKey] = _fin;
+      try { delete cfg.results[_baseKey + '|L1']; } catch(_){}
+      if (_evAll.length && typeof window.registrarLigaPlayerStats === 'function') {
+        try { window.registrarLigaPlayerStats('tour_'+tourId+'_'+_baseKey,
+          _fin.home||'', _fin.away||'', _evAll, _fin.mvp||'', _fin.mvpTeam||'', 'torneos'); } catch(_){}
+      }
+      _tourSaveAndRender(tourId, cfg);
+      setTimeout(function(){ _tourMaybeCreditPrizes(tourId); }, 200);
+      return;
+    }
     var out = { a: gh|0, b: ga|0, played: true };
     /* Determinar si esta key es KO single-leg (necesita winner). */
     var isKO = (key.indexOf('_') === key.lastIndexOf('_'));   /* "0_2" → 1 underscore */

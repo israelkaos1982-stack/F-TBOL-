@@ -1014,13 +1014,25 @@ window._showSimProgress = function(opts, onDone){
     else { grado=3; gradoNombre='Grave'; gradoEmoji='🚑'; partidos=5+Math.floor(Math.random()*6);
       list=['Rotura fibrilar Grado III','Fisura en el metatarsiano','Rotura parcial del ligamento','Luxación de hombro','Rotura del tendón de Aquiles']; }
     var descripcion = list[Math.floor(Math.random()*list.length)];
-    if (!window.LESION_STORE) window.LESION_STORE = {};
-    if (!window.BAJA_STORE)   window.BAJA_STORE = {};
-    window.LESION_STORE[pl.name] = {
+    var rec = {
       equipo:'Bayern Munich', grado:grado, gradoNombre:gradoNombre, gradoEmoji:gradoEmoji,
       descripcion:descripcion, partidos:partidos, timestamp:Date.now()
     };
+    if (!window.LESION_STORE) window.LESION_STORE = {};
+    if (!window.BAJA_STORE)   window.BAJA_STORE = {};
+    window.LESION_STORE[pl.name] = rec;
     window.BAJA_STORE[pl.name] = { tipo:'lesion', liga:partidos, copa:partidos, europa:partidos };
+    /* Persistimos la lesión en el estado de pretemporada para que
+       sobreviva a recargas y se REAPLIQUE a LESION_STORE/BAJA_STORE
+       (que son globales en memoria). Así el "💉 Menú de tratamiento"
+       (lee BAJA_STORE) y la Caja Plantilla (lee LESION_STORE) la ven. */
+    try {
+      var d = _load();
+      d.injuries = d.injuries || {};
+      d.injuries[pl.name] = { name:pl.name, partidos:partidos, gradoNombre:gradoNombre,
+        gradoEmoji:gradoEmoji, descripcion:descripcion, grado:grado, timestamp:rec.timestamp };
+      _save(d);
+    } catch(_){}
     return {
       name: pl.name,
       pos: POS_ES[pl.pos] || pl.pos || '—',
@@ -1028,6 +1040,32 @@ window._showSimProgress = function(opts, onDone){
       emoji: gradoEmoji,
       partidos: partidos
     };
+  }
+
+  /* Reaplica las lesiones de pretemporada a los stores globales en
+     cada render/arranque. Idempotente y respeta la curación: si el
+     jugador YA está en BAJA_STORE (aunque sea a 0 por tratamiento)
+     NO lo pisamos. Sin esto, una recarga (móvil / Railway) borraba
+     la lesión de memoria y desaparecía del menú médico y la plantilla. */
+  function _applyPersistedInjuries(){
+    try {
+      var inj = (_load().injuries) || {};
+      if (!window.LESION_STORE) window.LESION_STORE = {};
+      if (!window.BAJA_STORE)   window.BAJA_STORE = {};
+      Object.keys(inj).forEach(function(nm){
+        var x = inj[nm]; if (!x) return;
+        if (!(nm in window.BAJA_STORE)){
+          window.BAJA_STORE[nm] = { tipo:'lesion', liga:x.partidos, copa:x.partidos, europa:x.partidos };
+        }
+        if (!window.LESION_STORE[nm]){
+          window.LESION_STORE[nm] = {
+            equipo:'Bayern Munich', grado:x.grado||1, gradoNombre:x.gradoNombre||'Lesión',
+            gradoEmoji:x.gradoEmoji||'🩹', descripcion:x.descripcion||'', partidos:x.partidos,
+            timestamp:x.timestamp||Date.now()
+          };
+        }
+      });
+    } catch(_){}
   }
 
   /* Lesiones del entrenamiento (cálculo en el segundo 0):
@@ -1167,23 +1205,6 @@ window._showSimProgress = function(opts, onDone){
     if (b) b.onclick = function(){ _markDoneAndAdvance(); };
   }
 
-  function _bajasBanner(){
-    var squad = _bayernSquad();
-    var names = {}; squad.forEach(function(p){ if (p&&p.name) names[p.name]=true; });
-    var ls = window.LESION_STORE || {};
-    var bajas = [];
-    Object.keys(ls).forEach(function(nm){
-      var l = ls[nm];
-      if (names[nm] && l && Number(l.partidos) > 0){
-        bajas.push((l.gradoEmoji||'🩹') + ' ' + nm + ' — ' + (l.gradoNombre||'Lesión') + ' (' + l.partidos + 'P)');
-      }
-    });
-    if (!bajas.length){
-      return '<div class="ps-bajas ok">✅ Plantilla al 100% — Sin bajas ni sanciones</div>';
-    }
-    return '<div class="ps-bajas ko"><b>🚑 Bajas para este partido:</b><br>' + bajas.map(_esc).join('<br>') + '</div>';
-  }
-
   /* Abre la PANTALLA DE PREVIA estándar del proyecto (la misma que
      usan Liga/Copa/Torneos: window.showPrePartidoOverlay tras fijar
      _ppPreviaTeams + _ppCustomCallback). Es el "cascarón único"
@@ -1214,41 +1235,65 @@ window._showSimProgress = function(opts, onDone){
        ABRIR PREVIA para reintentar. */
   }
 
+  /* Rival REAL del Bayern en el torneo elegido: lo leemos del bracket
+     del torneo (window._TOUR_CACHE[tourId].bracket) en lugar de
+     inventarlo. El rival es el compañero de pareja del Bayern en la
+     ronda actual. Si aún no hay bracket → null (cae al pool). */
+  function _realRival(){
+    try {
+      var tid = _load().tour;
+      var cfg = tid && window._TOUR_CACHE && window._TOUR_CACHE[tid];
+      if (!cfg || !cfg.bracket) return null;
+      var r = parseInt(cfg.currentRound,10) || 0;
+      var round = cfg.bracket[r] || cfg.bracket[0] || [];
+      var bi = -1;
+      for (var i=0;i<round.length;i++){
+        var nm = round[i] && round[i].name;
+        if (nm && /bayern/i.test(nm)){ bi = i; break; }
+      }
+      if (bi < 0) return null;
+      var pj = (bi % 2 === 0) ? bi + 1 : bi - 1;
+      var opp = round[pj] && round[pj].name;
+      if (opp && !/bayern/i.test(opp) && opp !== 'PENDIENTE') return opp;
+    } catch(_){}
+    return null;
+  }
+
   function _cardMatch(day){
     var st = _stage(); if (!st) return;
     var d = _load();
     d.rivals = d.rivals || {};
     var rv = d.rivals[day.date];
     if (!rv){
-      /* Partido sin rival asignado (torneo no fusionado o partido
-         no-torneo): generamos uno al vuelo y lo persistimos. */
       var pool = (RIVAL_POOLS[d.tour] || RIVAL_POOLS.jg).slice();
       rv = { name: pool[Math.floor(Math.random()*pool.length)],
              stadium: STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
              difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)] };
-      d.rivals[day.date] = rv; _save(d);
+      d.rivals[day.date] = rv;
     }
+    /* Preferimos SIEMPRE el rival real del bracket del torneo (puede
+       resolverse más tarde, cuando el torneo ya esté sorteado). */
+    var real = _realRival();
+    if (real && rv.name !== real){ rv.name = real; }
+    _save(d);
     var tourNm = d.tour ? (TOUR_NAMES[d.tour] || 'Torneo de Verano') : (day.label || 'Partido');
     /* En día de partido NO usamos card propia: se abre la PANTALLA DE
-       PREVIA estándar del proyecto (foto 2). El #ps-stage solo deja un
-       placeholder por si el usuario vuelve de la previa con ◀ Volver. */
+       PREVIA estándar del proyecto. El #ps-stage solo deja un acceso
+       mínimo por si el usuario vuelve de la previa con ◀ Volver. */
     st.innerHTML =
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
       + '<div class="ps-meta" style="margin:16px 0;">📋 Pantalla de previa<br><b>Bayern Múnich</b> vs <b>' + _esc(rv.name) + '</b></div>'
-      + '<div style="display:flex;gap:10px;justify-content:center;margin-top:8px;">'
+      + '<div style="display:flex;justify-content:center;margin-top:8px;">'
       +   '<button type="button" class="ps-btn" id="ps-match-play">📋 ABRIR PREVIA</button>'
-      +   '<button type="button" class="ps-btn ghost" id="ps-match-skip">Saltar ▶</button>'
       + '</div>'
       + '</div>';
     var play = document.getElementById('ps-match-play');
-    var skip = document.getElementById('ps-match-skip');
     if (play) play.onclick = function(){ _openPreseasonPrevia(day, rv, tourNm); };
-    if (skip) skip.onclick = function(){ _markDoneAndAdvance(); };
     /* AUTO-abrir la previa estándar al llegar al día de partido (una
-       sola vez por día — el guard de firma de _render evita re-render,
-       y este idx-guard cubre el caso de volver con ◀ Volver). */
+       sola vez por día — sig-guard de _render evita re-render; el
+       idx-guard cubre volver con ◀ Volver sin proceder). */
     var idx = parseInt(d.dayIdx,10)||0;
     if (window.__psPreviaOpenedIdx !== idx){
       window.__psPreviaOpenedIdx = idx;
@@ -1284,6 +1329,10 @@ window._showSimProgress = function(opts, onDone){
 
   function _render(){
     var st = _stage(); if (!st) return;
+    /* Reaplica lesiones de pretemporada a los stores globales en
+       CADA render (idempotente) — sobreviven recargas y las ven el
+       menú médico y la plantilla. */
+    _applyPersistedInjuries();
     /* No reconstruir mientras la barra de ENTRENAR corre / modal de
        lesión abierto. Solo si ya hay tarjeta pintada (si el stage
        está vacío sí renderizamos para no dejarlo en blanco). */
@@ -1321,6 +1370,9 @@ window._showSimProgress = function(opts, onDone){
   window._psRender = _render;
   function _bootStage(){
     try {
+      /* Reaplica lesiones de pretemporada aunque el usuario no abra
+         el hub aún (para que el menú médico / plantilla las vean). */
+      _applyPersistedInjuries();
       var d = _load();
       if (d && d.tour) _render();
     } catch(_){}

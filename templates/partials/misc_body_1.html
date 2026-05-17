@@ -659,6 +659,7 @@ window._showSimProgress = function(opts, onDone){
        wrappers de `go`. Pintamos también con un retry a 600ms para
        cubrir el caso en el que `applyEngineOverrides` aún no ha
        cargado los datos del editor. */
+    var _plantPoll = null;
     function _scheduleRender(){
       /* Cobertura ≤ 50 ms tras primer pintado (2026-05-08, petición
          usuario "todas las pantallas merge en 50 ms"). Antes era
@@ -667,6 +668,24 @@ window._showSimProgress = function(opts, onDone){
       setTimeout(window.renderBayernPlantillaScreen, 50);
       setTimeout(window.renderBayernPlantillaScreen, 200);
       setTimeout(window.renderBayernPlantillaScreen, 800);
+      /* Auto-curación: si los datos del editor cargan tarde, el
+         host quedaba vacío hasta salir y volver a entrar. Reintenta
+         cada 350 ms (máx ~9 s) hasta que aparezcan filas reales;
+         se detiene solo al pintar o al salir de la pantalla. */
+      if (_plantPoll) { clearInterval(_plantPoll); _plantPoll = null; }
+      var tries = 0;
+      _plantPoll = setInterval(function(){
+        tries++;
+        var scr  = document.getElementById('s-bayern-plantilla');
+        var host = document.getElementById('bayern-plantilla-host');
+        if (!scr || !scr.classList.contains('active') || tries > 26){
+          clearInterval(_plantPoll); _plantPoll = null; return;
+        }
+        if (host && host.querySelector('.lext-sq-row')){
+          clearInterval(_plantPoll); _plantPoll = null; return;
+        }
+        try { window.renderBayernPlantillaScreen(); } catch(_){}
+      }, 350);
     }
 
     function _wireObserver(){
@@ -692,9 +711,611 @@ window._showSimProgress = function(opts, onDone){
     } else {
       _wireObserver();
     }
+
+    /* PRE-RENDER al arrancar: construye la plantilla en su host
+       (oculto) ANTES de que el humano pulse PLANTILLA, así al
+       entrar se ve al instante. Reintentos espaciados porque los
+       datos del editor (ligaExt) cargan async; renderBayernPlantillaScreen
+       es idempotente y pinta "— Sin jugadores —" si aún no hay. */
+    function _bootPlant(){ try { window.renderBayernPlantillaScreen(); } catch(_){} }
+    function _bootPlantAll(){ [0,400,1200,2600,4500,7000].forEach(function(t){ setTimeout(_bootPlant,t); }); }
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', _bootPlantAll);
+    } else {
+      _bootPlantAll();
+    }
   })();
   </script>
 </div>
+
+<!-- ═══ PRETEMPORADA · CAJA BAYERN (Módulos 2-5) ═══════════════════
+     NO es pantalla aparte: la tarjeta día a día se renderiza dentro
+     del bloque "Próximo partido" del hub (#ps-stage en
+     .munich-next-visual). El cursor de día se comparte con el
+     marcador rosa del calendario vía `bayern_preseason_v1`. -->
+<style>
+  #ps-stage .ps-card{
+    margin:14px 12px;border-radius:16px;padding:20px 16px 22px;
+    background:radial-gradient(circle at 20% 0,#0066b255,#00162f 46%,#12000a 100%),
+               linear-gradient(150deg,#dc052d,#8e001c 60%,#002f63);
+    border:1px solid rgba(255,255,255,.16);
+    box-shadow:0 14px 34px rgba(0,0,0,.5);text-align:center;color:#fff;
+  }
+  #ps-stage .ps-date{
+    font-family:'Bebas Neue','Oswald',sans-serif;font-size:30px;letter-spacing:4px;
+    color:#ffd750;text-shadow:0 0 14px rgba(255,215,80,.55);margin:0 0 4px;
+  }
+  #ps-stage .ps-sub{
+    font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2.4px;
+    color:rgba(255,255,255,.7);margin:0 0 16px;text-transform:uppercase;
+  }
+  #ps-stage .ps-shield{
+    width:96px;height:96px;object-fit:contain;background:rgba(255,255,255,.92);
+    border-radius:14px;padding:8px;margin:6px auto 14px;display:block;
+    box-shadow:0 0 18px rgba(0,0,0,.4);
+  }
+  #ps-stage .ps-vs{
+    display:flex;align-items:center;justify-content:center;gap:14px;margin:10px 0 16px;
+  }
+  #ps-stage .ps-vs .ps-team{flex:1;max-width:130px;}
+  #ps-stage .ps-vs .ps-shield{width:74px;height:74px;margin:0 auto 6px;}
+  #ps-stage .ps-vs .ps-tn{
+    font-family:Oswald,sans-serif;font-size:13px;font-weight:700;color:#fff;
+    letter-spacing:.5px;line-height:1.2;
+  }
+  #ps-stage .ps-vs .ps-x{
+    font-family:'Bebas Neue',sans-serif;font-size:26px;color:#ffd750;flex:0 0 auto;
+  }
+  #ps-stage .ps-btn{
+    display:inline-block;border:none;border-radius:10px;cursor:pointer;
+    padding:13px 30px;font-family:Oswald,sans-serif;font-size:15px;
+    letter-spacing:2px;font-weight:700;color:#0d0310;
+    background:linear-gradient(135deg,#ffe489,#f0c040);
+    box-shadow:0 6px 16px rgba(240,192,64,.35);-webkit-tap-highlight-color:transparent;
+  }
+  #ps-stage .ps-btn:disabled{opacity:.5;cursor:default;filter:grayscale(.4);}
+  #ps-stage .ps-btn.ghost{
+    background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.3);
+    box-shadow:none;
+  }
+  #ps-stage .ps-bar-wrap{
+    height:14px;border-radius:8px;background:rgba(0,0,0,.45);overflow:hidden;
+    margin:18px 6px 8px;border:1px solid rgba(255,255,255,.14);
+  }
+  #ps-stage .ps-bar{
+    height:100%;width:0%;border-radius:8px;
+    background:linear-gradient(90deg,#36d27a,#9be15d,#ffe066);
+    transition:none;   /* el avance lo pinta requestAnimationFrame */
+  }
+  #ps-stage .ps-bar.injury{background:linear-gradient(90deg,#ff5c5c,#ff2d6f);}
+  #ps-stage .ps-pct{
+    margin-top:10px;font-family:'Bebas Neue','Oswald',sans-serif;
+    font-size:22px;letter-spacing:2px;color:#ffe9a8;min-height:24px;
+  }
+  #ps-stage .ps-result{
+    margin-top:8px;font-family:Oswald,sans-serif;font-size:16px;letter-spacing:1.5px;
+    min-height:22px;color:#bdf5c8;
+  }
+  #ps-stage .ps-meta{
+    font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.85);
+    margin:4px 0;line-height:1.5;
+  }
+  #ps-stage .ps-tag{
+    display:inline-block;margin:3px 4px;padding:4px 10px;border-radius:999px;
+    font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.4px;
+    background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.18);color:#ffe4a8;
+  }
+  #ps-stage .ps-bajas{
+    margin:12px 8px 0;padding:10px 12px;border-radius:10px;font-family:Rajdhani,sans-serif;
+    font-size:13px;line-height:1.5;text-align:left;
+  }
+  #ps-stage .ps-bajas.ok{background:rgba(40,160,80,.18);border:1px solid rgba(80,220,140,.4);color:#bff5cf;}
+  #ps-stage .ps-bajas.ko{background:rgba(200,40,60,.18);border:1px solid rgba(255,110,130,.45);color:#ffc7cf;}
+  #ps-stage .ps-opts{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0 4px;}
+  #ps-stage .ps-opt{
+    font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;background:rgba(0,0,0,.3);
+    border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:6px 10px;
+  }
+  #ps-injury-ov{
+    display:none;position:fixed;inset:0;z-index:99997;background:rgba(5,2,10,.92);
+    align-items:center;justify-content:center;padding:18px;
+  }
+  #ps-injury-ov.show{display:flex;}
+  #ps-injury-ov .ps-inj-box{
+    width:min(380px,94vw);background:linear-gradient(160deg,#2a0a12,#3a0a1c);
+    border:1px solid rgba(255,110,130,.5);border-radius:16px;padding:22px 20px;
+    box-shadow:0 0 40px rgba(220,5,45,.4);color:#fff;text-align:center;
+  }
+  #ps-injury-ov .ps-inj-title{
+    font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:3px;color:#ff8a8a;
+    margin:0 0 12px;text-shadow:0 0 12px rgba(255,60,60,.5);
+  }
+  #ps-injury-ov .ps-inj-row{
+    display:flex;justify-content:space-between;gap:10px;padding:7px 2px;
+    border-bottom:1px solid rgba(255,255,255,.08);font-family:Rajdhani,sans-serif;font-size:14px;
+  }
+  #ps-injury-ov .ps-inj-row:last-of-type{border-bottom:none;}
+  #ps-injury-ov .ps-inj-row b{color:#ffd0d6;font-weight:600;}
+  #ps-injury-ov .ps-inj-row span{color:#fff;font-weight:700;text-align:right;}
+  #ps-injury-ov .ps-inj-card{
+    margin:10px 0;padding:10px 12px;border-radius:10px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,110,130,.3);
+  }
+  #ps-injury-ov .ps-inj-name{
+    font-family:Oswald,sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;
+    color:#ff9aa6;margin-bottom:6px;text-align:left;
+  }
+  #ps-injury-ov .ps-btn{margin-top:16px;}
+  /* El #ps-stage vive dentro del bloque "Próximo partido"; quitamos
+     el margen lateral del .ps-card para que encaje en esa caja. */
+  #ps-stage .ps-card{margin:0;}
+</style>
+
+<div id="ps-injury-ov" onclick="if(event.target===this)return;"></div>
+
+<script>
+/* ══ PRETEMPORADA · MOTOR DÍA A DÍA (Módulos 2-5) ════════════════ */
+(function(){
+  if (window.__PS_READY) return;
+  window.__PS_READY = true;
+
+  var KEY = 'bayern_preseason_v1';
+  var BAYERN_SHIELD = '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg';
+  var FALLBACK_SHIELD = '/static/img/escudos-fallback/estepona.svg';
+
+  /* Pools de rivales por torneo (pretemporada). El cuadro/bracket
+     completo no existe aún → al elegir torneo asignamos un rival a
+     cada fila "Torneo Verano - N Partido" del calendario Bayern. */
+  var RIVAL_POOLS = {
+    sct:  ['Inter Miami','LA Galaxy','Juventus','Manchester United','AC Milan','Real Madrid'],
+    pss:  ['Manchester City','Liverpool','Chelsea','Arsenal','Tottenham','Newcastle United'],
+    jg:   ['FC Barcelona','Sevilla FC','Valencia CF','Villarreal CF','Real Betis','Athletic Club'],
+    asia: ['Urawa Reds','Kawasaki Frontale','Vissel Kobe','Tottenham','Paris Saint-Germain','Celtic']
+  };
+  var STADIUMS = ['Allianz Arena','Estadio del Nuevo Triunfo','Grand Summer Park','National Arena','Pretemporada Stadium'];
+  var DIFFS = ['Duro','Crack','Leyenda'];
+  var TOUR_NAMES = { sct:'Soccer Champions Tour', pss:'Premier Summer Series', jg:'Trofeo Joan Gamper', asia:'Asian Tournament' };
+
+  /* Estado en memoria como fuente de verdad de la sesión. El
+     localStorage es best-effort: en este proyecto puede fallar por
+     cuota (cap 2 MB/carpeta). Si _save fallara y _load releyera de
+     disco, dayIdx se quedaría en 0 y la card NO avanzaría (bug
+     reportado: "01 Jul cumplido pero no pasa a 02 Jul"). Con el
+     cache en memoria el cursor avanza siempre. */
+  var _MEM = null;
+  function _load(){
+    if (_MEM) return _MEM;
+    var d = null;
+    try { var r = localStorage.getItem(KEY); if (r){ var p = JSON.parse(r); if (p && typeof p==='object') d = p; } } catch(_){}
+    if (!d) d = { tour:null, dayIdx:0, rivals:{}, done:{} };
+    if (typeof d.dayIdx !== 'number') d.dayIdx = parseInt(d.dayIdx,10) || 0;
+    d.rivals = d.rivals || {};
+    d.done   = d.done   || {};
+    _MEM = d;
+    window.__psDayIdx = d.dayIdx;
+    return _MEM;
+  }
+  function _save(d){
+    _MEM = d || _MEM || { tour:null, dayIdx:0, rivals:{}, done:{} };
+    try { window.__psDayIdx = _MEM.dayIdx; } catch(_){}
+    try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
+  }
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function _shield(name){
+    var ESC = window.BACKEND_ESCUDOS || {};
+    var AL  = window.BACKEND_ESCUDOS_ALIASES || {};
+    if (/bayern/i.test(name||'')) return BAYERN_SHIELD;
+    var canon = AL[name] || name;
+    return ESC[canon] || ESC[name] || FALLBACK_SHIELD;
+  }
+
+  /* Plantilla Bayern desde ligaExt (misma fuente que la Caja
+     Plantilla). Devuelve [{name,pos,power}]. Prohibido usar listas
+     generales / otros equipos. */
+  function _bayernSquad(){
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (!raw) return [];
+      var data = JSON.parse(raw);
+      var teams = (data && data.teams) || [];
+      for (var i=0;i<teams.length;i++){
+        var t = teams[i];
+        if (t && t.name && /bayern/i.test(t.name) && Array.isArray(t.players)) return t.players;
+      }
+    } catch(_){}
+    return [];
+  }
+  var POS_ES = { POR:'Portero', DEF:'Defensa', MED:'Centrocampista', DEL:'Delantero' };
+
+  /* Filas del calendario Bayern (TODOS los días). Preferimos el
+     render Bayern (#ag-content-bayern, lo pre-construye el módulo
+     del calendario al arrancar); si no, el SSR global #ag-content. */
+  /* Memo: las filas del calendario son estáticas tras el arranque.
+     Cachear evita querySelectorAll sobre ~75 filas en cada _render /
+     _advance / label (lo llamaba muchas veces y cargaba el hilo). */
+  var _ROWS_CACHE = null;
+  function _calRows(){
+    if (_ROWS_CACHE && _ROWS_CACHE.length) return _ROWS_CACHE;
+    var host = document.getElementById('ag-content-bayern');
+    if (!host || !host.querySelector('.ag-r')) host = document.getElementById('ag-content');
+    if (!host) return [];
+    var out = [];
+    host.querySelectorAll('.ag-r').forEach(function(r){
+      var cls  = r.className || '';
+      var date = ((r.querySelector('.ag-date')||{}).textContent||'').trim();
+      var lbl  = ((r.querySelector('.ag-lbl') ||{}).textContent||'').trim();
+      var ico  = ((r.querySelector('.ag-ico') ||{}).textContent||'').trim();
+      var wx   = ((r.querySelector('.ag-wx')  ||{}).textContent||'').trim();
+      var type = /\bag-train\b/.test(cls) ? 'train'
+               : (/\bag-rest\b/.test(cls) || /\bag-sel\b/.test(cls)) ? 'rest'
+               : 'match';
+      out.push({ date:date, label:lbl, icon:ico, weather:wx||'☀️', type:type, cls:cls });
+    });
+    if (out.length) _ROWS_CACHE = out;
+    return out;
+  }
+
+  function _wxText(w){ return /🌧/.test(w)?'Lluvia':(/❄️/.test(w)?'Nieve':'Soleado'); }
+
+  /* ── Módulo 1.2: fusión del Bayern en el torneo elegido ───────── */
+  window._tourMergeBayern = function(tId){
+    var d = _load();
+    d.tour = tId;
+    d.rivals = d.rivals || {};
+    var pool = (RIVAL_POOLS[tId] || []).slice();
+    var rows = _calRows();
+    var pi = 0;
+    rows.forEach(function(row){
+      if (row.type !== 'match') return;
+      if (!/torneo/i.test(row.label) && !/\bag-torneo\b/.test(row.cls)) return;
+      if (d.rivals[row.date]) return; /* idempotente */
+      var rv = pool.length ? pool[pi % pool.length] : 'Rival Pretemporada';
+      pi++;
+      d.rivals[row.date] = {
+        name: rv,
+        stadium: STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
+        difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)]
+      };
+    });
+    _save(d);
+    if (typeof window._bayernCalMarkToday === 'function'){ try { window._bayernCalMarkToday(); } catch(_){} }
+  };
+
+  /* ── Sincroniza el cursor de día con el marcador del calendario ─ */
+  function _syncMarker(){
+    if (typeof window._bayernCalMarkToday === 'function'){ try { window._bayernCalMarkToday(); } catch(_){} }
+  }
+
+  function _advance(){
+    var d = _load();
+    var rows = _calRows();
+    var max = Math.max(0, rows.length - 1);
+    d.dayIdx = Math.min((parseInt(d.dayIdx,10)||0) + 1, max);
+    _save(d);
+    window.__psBusy = false;   /* el día se resolvió: liberar render */
+    _syncMarker();
+    _render();
+  }
+
+  /* ── Módulo 3: lesión (sistema preexistente: LESION_STORE +
+        BAJA_STORE, misma tabla de severidad que el resto del app) ─ */
+  /* Crea UNA lesión sobre un jugador sacado (y eliminado) del pool,
+     escribe LESION_STORE/BAJA_STORE (sistema preexistente) y devuelve
+     el objeto para la ficha médica. */
+  function _injureOne(pool){
+    if (!pool.length) return null;
+    var pi = Math.floor(Math.random()*pool.length);
+    var pl = pool.splice(pi,1)[0];
+    var r = Math.random(), grado, gradoNombre, gradoEmoji, partidos, list;
+    if (r < 0.55){ grado=1; gradoNombre='Leve'; gradoEmoji='🩹'; partidos=1+Math.floor(Math.random()*2);
+      list=['Sobrecarga muscular','Contusión en el cuádriceps','Esguince de tobillo Grado I','Calambre persistente','Elongación del aductor']; }
+    else if (r < 0.85){ grado=2; gradoNombre='Moderada'; gradoEmoji='💉'; partidos=2+Math.floor(Math.random()*3);
+      list=['Microrrotura de fibras','Esguince de tobillo Grado II','Edema óseo','Contractura severa','Distensión del ligamento lateral']; }
+    else { grado=3; gradoNombre='Grave'; gradoEmoji='🚑'; partidos=5+Math.floor(Math.random()*6);
+      list=['Rotura fibrilar Grado III','Fisura en el metatarsiano','Rotura parcial del ligamento','Luxación de hombro','Rotura del tendón de Aquiles']; }
+    var descripcion = list[Math.floor(Math.random()*list.length)];
+    if (!window.LESION_STORE) window.LESION_STORE = {};
+    if (!window.BAJA_STORE)   window.BAJA_STORE = {};
+    window.LESION_STORE[pl.name] = {
+      equipo:'Bayern Munich', grado:grado, gradoNombre:gradoNombre, gradoEmoji:gradoEmoji,
+      descripcion:descripcion, partidos:partidos, timestamp:Date.now()
+    };
+    window.BAJA_STORE[pl.name] = { tipo:'lesion', liga:partidos, copa:partidos, europa:partidos };
+    return {
+      name: pl.name,
+      pos: POS_ES[pl.pos] || pl.pos || '—',
+      tipo: gradoNombre + ' · ' + descripcion,
+      emoji: gradoEmoji,
+      partidos: partidos
+    };
+  }
+
+  /* Lesiones del entrenamiento (cálculo en el segundo 0):
+       · 2%  → 2 jugadores lesionados
+       · 5%  → 1 jugador lesionado
+       · 93% → ninguno  (≈95% "limpio")
+     Siempre de la plantilla del Bayern, sin repetir y sin tocar a
+     los que ya estén lesionados. Devuelve un array (0, 1 o 2). */
+  function _rollInjuries(){
+    var r = Math.random();
+    var count = r < 0.02 ? 2 : (r < 0.07 ? 1 : 0);
+    if (!count) return [];
+    var squad = _bayernSquad();
+    var pool = squad.filter(function(p){
+      var nm = p && p.name; if (!nm) return false;
+      if (window.BAJA_STORE && window.BAJA_STORE[nm]) return false;
+      if (window.LESION_STORE && window.LESION_STORE[nm] && Number(window.LESION_STORE[nm].partidos)>0) return false;
+      return true;
+    });
+    var out = [];
+    for (var i=0; i<count && pool.length; i++){
+      var inj = _injureOne(pool);
+      if (inj) out.push(inj);
+    }
+    return out;
+  }
+
+  function _showInjuryModal(injs){
+    var ov = document.getElementById('ps-injury-ov');
+    if (!ov || !injs || !injs.length) return;
+    var blocks = injs.map(function(inj){
+      return '<div class="ps-inj-card">'
+        + '<div class="ps-inj-name">' + (inj.emoji||'🚑') + ' ' + _esc(inj.name) + '</div>'
+        + '<div class="ps-inj-row"><b>Posición</b><span>' + _esc(inj.pos) + '</span></div>'
+        + '<div class="ps-inj-row"><b>Tipo de lesión</b><span>' + _esc(inj.tipo) + '</span></div>'
+        + '<div class="ps-inj-row"><b>Días lesionado</b><span>' + inj.partidos + ' partido(s)</span></div>'
+        + '</div>';
+    }).join('');
+    ov.innerHTML =
+      '<div class="ps-inj-box">'
+      + '<div class="ps-inj-title">🚑 PARTE MÉDICO · ' + injs.length + ' BAJA' + (injs.length>1?'S':'') + '</div>'
+      + blocks
+      + '<button type="button" class="ps-btn" id="ps-inj-close">ACEPTAR Y CONTINUAR</button>'
+      + '</div>';
+    ov.classList.add('show');
+    var btn = document.getElementById('ps-inj-close');
+    if (btn) btn.onclick = function(){ ov.classList.remove('show'); ov.innerHTML=''; _markDoneAndAdvance(); };
+  }
+
+  function _markDoneAndAdvance(){
+    var d = _load(); var rows = _calRows(); var cur = rows[Math.min(d.dayIdx, rows.length-1)];
+    if (cur){ d.done = d.done||{}; d.done[cur.date] = true; _save(d); }
+    _advance();
+  }
+
+  /* ── Render ───────────────────────────────────────────────────── */
+  function _stage(){ return document.getElementById('ps-stage'); }
+
+  function _cardTraining(day){
+    var st = _stage(); if (!st) return;
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
+      + '<div class="ps-sub">🏃 Entrenamiento · Bayern Múnich</div>'
+      + '<img class="ps-shield" src="' + BAYERN_SHIELD + '" alt="Bayern">'
+      + '<button type="button" class="ps-btn" id="ps-train-btn">ENTRENAR</button>'
+      + '<div class="ps-bar-wrap"><div class="ps-bar" id="ps-train-bar"></div></div>'
+      + '<div class="ps-pct" id="ps-train-pct"></div>'
+      + '<div class="ps-result" id="ps-train-res"></div>'
+      + '</div>';
+    var btn = document.getElementById('ps-train-btn');
+    var bar = document.getElementById('ps-train-bar');
+    var pct = document.getElementById('ps-train-pct');
+    var res = document.getElementById('ps-train-res');
+    if (!btn) return;
+    btn.onclick = function(){
+      if (btn.disabled) return;
+      btn.disabled = true;
+      window.__psBusy = true;   /* bloquea re-render externo durante la barra */
+      var injs = _rollInjuries();           /* cálculo en el segundo 0 */
+      if (injs.length) bar.classList.add('injury');
+      /* Barra 0→100% pintada por requestAnimationFrame (no setTimeout
+         ni transición CSS — inmune a starvation del event-loop, y con
+         porcentaje visible). Al llegar a 100% resuelve YA. */
+      var DUR = 3000, t0 = (window.performance&&performance.now)?performance.now():Date.now(), resolved=false;
+      function frame(){
+        var now = (window.performance&&performance.now)?performance.now():Date.now();
+        var p = Math.min(1, (now - t0) / DUR);
+        var n = Math.round(p*100);
+        bar.style.width = n + '%';
+        if (pct) pct.textContent = n + '%';
+        if (p < 1){ requestAnimationFrame(frame); return; }
+        if (resolved) return; resolved = true;
+        _resolveTraining(injs, st, res, pct);
+      }
+      requestAnimationFrame(frame);
+    };
+  }
+
+  function _resolveTraining(injs, st, res, pct){
+    if (injs && injs.length){
+      if (pct) pct.textContent = '100%';
+      res.textContent = '🚑 ' + injs.length + ' lesión(es) en el entrenamiento';
+      res.style.color = '#ffb3b3';
+      _showInjuryModal(injs);
+      return;
+    }
+    if (pct) pct.textContent = '100%';
+    res.textContent = '✅ No hay lesiones';
+    res.style.color = '#bdf5c8';
+    /* Auto-avance ~1.2s después (o toque) — temporizado por rAF para
+       no depender de setTimeout si el hilo va cargado. */
+    var t1 = (window.performance&&performance.now)?performance.now():Date.now(), done=false;
+    function adv(){ if (done) return; done = true; _markDoneAndAdvance(); }
+    function wait(){
+      var now = (window.performance&&performance.now)?performance.now():Date.now();
+      if (now - t1 >= 1200){ adv(); return; }
+      requestAnimationFrame(wait);
+    }
+    requestAnimationFrame(wait);
+    var card = st.querySelector('.ps-card');
+    if (card) card.onclick = adv;
+  }
+
+  function _cardRest(day){
+    var st = _stage(); if (!st) return;
+    var isSel = /\bag-sel\b/.test(day.cls);
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + (isSel ? '🌍 Selecciones · jugadores fuera' : '💤 Día de descanso') + '</div>'
+      + '<div style="font-size:54px;line-height:1;margin:10px 0 6px;">' + (isSel?'🌍':'💤') + '</div>'
+      + '<div class="ps-meta">' + _esc(day.label || 'Descanso') + '</div>'
+      + '<button type="button" class="ps-btn ghost" id="ps-rest-btn" style="margin-top:16px;">CONTINUAR ▶</button>'
+      + '</div>';
+    var b = document.getElementById('ps-rest-btn');
+    if (b) b.onclick = function(){ _markDoneAndAdvance(); };
+  }
+
+  function _bajasBanner(){
+    var squad = _bayernSquad();
+    var names = {}; squad.forEach(function(p){ if (p&&p.name) names[p.name]=true; });
+    var ls = window.LESION_STORE || {};
+    var bajas = [];
+    Object.keys(ls).forEach(function(nm){
+      var l = ls[nm];
+      if (names[nm] && l && Number(l.partidos) > 0){
+        bajas.push((l.gradoEmoji||'🩹') + ' ' + nm + ' — ' + (l.gradoNombre||'Lesión') + ' (' + l.partidos + 'P)');
+      }
+    });
+    if (!bajas.length){
+      return '<div class="ps-bajas ok">✅ Plantilla al 100% — Sin bajas ni sanciones</div>';
+    }
+    return '<div class="ps-bajas ko"><b>🚑 Bajas para este partido:</b><br>' + bajas.map(_esc).join('<br>') + '</div>';
+  }
+
+  function _cardMatch(day){
+    var st = _stage(); if (!st) return;
+    var d = _load();
+    d.rivals = d.rivals || {};
+    var rv = d.rivals[day.date];
+    if (!rv){
+      /* Partido sin rival asignado (torneo no fusionado o partido
+         no-torneo): generamos uno al vuelo y lo persistimos. */
+      var pool = (RIVAL_POOLS[d.tour] || RIVAL_POOLS.jg).slice();
+      rv = { name: pool[Math.floor(Math.random()*pool.length)],
+             stadium: STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
+             difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)] };
+      d.rivals[day.date] = rv; _save(d);
+    }
+    var tourNm = d.tour ? (TOUR_NAMES[d.tour] || 'Torneo de Verano') : (day.label || 'Partido');
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
+      + '<div class="ps-vs">'
+      +   '<div class="ps-team"><img class="ps-shield" src="' + BAYERN_SHIELD + '"><div class="ps-tn">Bayern Múnich</div></div>'
+      +   '<div class="ps-x">VS</div>'
+      +   '<div class="ps-team"><img class="ps-shield" src="' + _esc(_shield(rv.name)) + '" onerror="this.src=\'' + FALLBACK_SHIELD + '\'"><div class="ps-tn">' + _esc(rv.name) + '</div></div>'
+      + '</div>'
+      + '<div>'
+      +   '<span class="ps-tag">🏟 ' + _esc(rv.stadium) + '</span>'
+      +   '<span class="ps-tag">' + _esc(day.weather) + ' ' + _wxText(day.weather) + '</span>'
+      +   '<span class="ps-tag">🎮 ' + _esc(rv.difficulty) + '</span>'
+      +   '<span class="ps-tag">⏱ 8 MIN</span>'
+      + '</div>'
+      + '<div class="ps-opts">'
+      +   '<span class="ps-opt">⚽ Balón: Estándar</span>'
+      +   '<span class="ps-opt">⏳ Prórroga: No</span>'
+      +   '<span class="ps-opt">🥅 Penaltis: No</span>'
+      + '</div>'
+      + _bajasBanner()
+      + '<div style="margin-top:18px;display:flex;gap:10px;justify-content:center;">'
+      +   '<button type="button" class="ps-btn" id="ps-match-play">⚽ JUGAR PARTIDO</button>'
+      +   '<button type="button" class="ps-btn ghost" id="ps-match-skip">Saltar ▶</button>'
+      + '</div>'
+      + '</div>';
+    var play = document.getElementById('ps-match-play');
+    var skip = document.getElementById('ps-match-skip');
+    if (play) play.onclick = function(){
+      var gf = prompt('⚽ ' + tourNm + ' · ' + day.date + '\n\nGoles Bayern:');
+      if (gf === null) return;
+      var gc = prompt('⚽ vs ' + rv.name + '\n\nGoles ' + rv.name + ':');
+      if (gc === null) return;
+      var a = parseInt(gf,10), b = parseInt(gc,10);
+      if (isNaN(a)||isNaN(b)||a<0||b<0){ alert('Marcador inválido.'); return; }
+      var res = a>b ? '🟢 Victoria' : (a<b ? '🔴 Derrota' : '🟡 Empate');
+      alert(res + ' · Bayern ' + a + ' - ' + b + ' ' + rv.name);
+      _markDoneAndAdvance();
+    };
+    if (skip) skip.onclick = function(){ _markDoneAndAdvance(); };
+  }
+
+  function _dayLabel(day){
+    if (!day) return '';
+    if (day.type === 'train') return '🏃 Entrenamiento · ' + day.date;
+    if (day.type === 'rest')  return (/\bag-sel\b/.test(day.cls)?'🌍 ':'💤 ') + (day.label||'Descanso') + ' · ' + day.date;
+    return '🌞 ' + (day.label || 'Partido') + ' · ' + day.date;
+  }
+  function _currentDay(){
+    var rows = _calRows(); if (!rows.length) return null;
+    var d = _load();
+    var idx = Math.min(Math.max(0, parseInt(d.dayIdx,10)||0), rows.length-1);
+    return rows[idx];
+  }
+  window._psCurrentLabel = function(){ var c=_currentDay(); return c?_dayLabel(c):''; };
+  /* Fecha del día actual de pretemporada (ej. "01 Jul") para que la
+     tarjeta CALENDARIO del hub muestre el día real, no el evento
+     legacy (que saltaba a "04 Jul"). */
+  window._psCurrentDate = function(){ var c=_currentDay(); return c?c.date:''; };
+
+  function _syncHubLabels(day){
+    if (!day) return;
+    var mEl = document.getElementById('munich-next-match');
+    if (mEl) mEl.textContent = _dayLabel(day);
+    var cfEl = document.getElementById('munich-cal-fecha');
+    if (cfEl && day.date) cfEl.textContent = day.date;
+  }
+
+  function _render(){
+    var st = _stage(); if (!st) return;
+    /* No reconstruir mientras la barra de ENTRENAR corre / modal de
+       lesión abierto. Solo si ya hay tarjeta pintada (si el stage
+       está vacío sí renderizamos para no dejarlo en blanco). */
+    if (window.__psBusy && st.querySelector('.ps-card')) return;
+    if (window.__psBusy) window.__psBusy = false;
+    var rows = _calRows();
+    if (!rows.length){
+      st.innerHTML = '<div class="ps-card"><div class="ps-sub">Cargando calendario…</div></div>';
+      st._psSig = null;
+      return;
+    }
+    var d = _load();
+    var idx = Math.min(Math.max(0, parseInt(d.dayIdx,10)||0), rows.length-1);
+    if (idx !== d.dayIdx){ d.dayIdx = idx; _save(d); }
+    var day = rows[idx];
+    var sig = idx + '|' + day.type + '|' + day.date;
+    /* IDEMPOTENCIA: si el mismo día ya está pintado, NO reconstruir
+       (un updateHud externo no debe destruir la tarjeta/handlers ni
+       reiniciar la barra). Solo refrescamos las etiquetas baratas.
+       Esto arregla "02 Jul no resuelve / no avanza". */
+    if (st._psSig === sig && st.querySelector('.ps-card')){
+      _syncHubLabels(day);
+      return;
+    }
+    st._psSig = sig;
+    if (day.type === 'train')      _cardTraining(day);
+    else if (day.type === 'rest')  _cardRest(day);
+    else                           _cardMatch(day);
+    _syncHubLabels(day);
+  }
+
+  /* El render lo dispara updateHud() del hub (rama "torneo elegido")
+     y _advance() tras resolver cada día. Exponemos _render para el
+     hub y un pre-render por si el torneo ya estaba elegido al cargar. */
+  window._psRender = _render;
+  function _bootStage(){
+    try {
+      var d = _load();
+      if (d && d.tour) _render();
+    } catch(_){}
+  }
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', function(){ [0,400,1200].forEach(function(t){ setTimeout(_bootStage,t); }); });
+  else [0,400,1200].forEach(function(t){ setTimeout(_bootStage,t); });
+})();
+</script>
 
 <style>
   .bayern-hub{background:radial-gradient(circle at 20% 0,#0066b255,#00162f 46%,#12000a 100%),linear-gradient(145deg,#dc052d,#8e001c 58%,#002f63);padding:12px;border-radius:12px;display:flex;flex-direction:column;gap:12px}
@@ -9503,7 +10124,42 @@ window._showSimProgress = function(opts, onDone){
     return Object.keys(leagues).sort().map(function(k){ return leagues[k]; });
   }
 
+  /* SIN CACHE (petición usuario 2026-05-16 #3: "lo quiero EN EL
+     MOMENTO como estaba antes"). El cache (TTL y luego por firma)
+     mostraba un pool incompleto cuando el editor se abría antes de que
+     las ligas estuvieran en localStorage, y aunque se autocorregía,
+     el usuario exige el comportamiento original: el contador SIEMPRE
+     refleja el localStorage actual en el instante, sin ventana stale.
+
+     El coste real que disparaba "crear torneo >5 min" NO era este
+     escaneo: era (a) `_shieldOf`/getTeamLogoUrl por CADA equipo en cada
+     llamada (miles) y (b) el `await _tourSave` de hasta 8 s. Ambos
+     siguen arreglados (escudo perezoso solo en el picker; guardado
+     optimista). Un escaneo + JSON.parse de las ligas SIN resolver
+     escudos es de milisegundos, asumible en cada pulsación — es lo que
+     hacía el código original. Mantengo `_invalidateTourTeamsCache` y
+     `_ligaExtSig` como no-ops/helpers usados por el refresco diferido. */
+  window._invalidateTourTeamsCache = function(){ /* sin cache: no-op */ };
+  /* Firma BARATA de localStorage (solo nombres de clave ligaExt_*, sin
+     getItem). La usa el refresco diferido de `_doOpen` para detectar
+     si llegaron ligas nuevas por hidratación tardía y repintar. */
+  function _ligaExtSig(){
+    var keys = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1 || k.indexOf('_snap_') !== -1) continue;
+        keys.push(k);
+      }
+    } catch(_){}
+    keys.sort();
+    return keys.length + '|' + keys.join(',');
+  }
   function _allTeams(){
+    return _allTeamsUncached();
+  }
+  function _allTeamsUncached(){
     var out = [], seen = {};
     /* Trackeamos TODAS las ligas en las que aparece cada equipo
        (2026-05-08, fix: el usuario excluyó Hypermotion + Primera
@@ -9523,16 +10179,21 @@ window._showSimProgress = function(opts, onDone){
       if (!isFinite(pw) || pw <= 0) pw = 70;
       if (seen[k]) {
         if (pw > seen[k].power) seen[k].power = pw;
+        if (shield && !seen[k].shield) seen[k].shield = shield;
         if (league && seen[k]._leagues.indexOf(league) === -1) {
           seen[k]._leagues.push(league);
           if (!seen[k]._league) seen[k]._league = league;
         }
         return;
       }
+      /* Escudo: usamos SOLO el que venga en los datos (t.shield). NO
+         llamamos a _shieldOf/getTeamLogoUrl por cada equipo aquí — eso
+         multiplicaba el coste por miles. El picker resuelve el escudo
+         de forma perezosa para las pocas filas visibles. */
       var leagues = league ? [league] : [];
       var entry = {
         name: clean, power: pw,
-        shield: shield || _shieldOf(clean),
+        shield: shield || '',
         _leagues: leagues,
         _league: league || ''
       };
@@ -9588,6 +10249,50 @@ window._showSimProgress = function(opts, onDone){
     var n = String(name).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
     return HUMAN_ONLY_TEAMS.indexOf(n) !== -1;
   }
+  /* Petición usuario 2026-05-16: NINGÚN equipo humano puede jugar como
+     IA en un torneo. "Humano en torneo" = cualquier team con humanIcon
+     /humanEmoji asignado en el editor de plantilla, los 5 canónicos de
+     Liga EA, o la lista corta histórica (Bayern/Atlético). Se apoya en
+     `window.isHumanInComp(name,'torneo')` (regla canónica de
+     "Humanidad por competición" de CLAUDE.md). Fallback a la lista
+     corta si el helper aún no está cargado. */
+  function _isHumanTeamForTour(name){
+    if (!name) return false;
+    try {
+      if (typeof window.isHumanInComp === 'function' &&
+          window.isHumanInComp(name, 'torneo')) return true;
+    } catch(_){}
+    return _isHumanOnlyTeam(name);
+  }
+
+  /* Petición usuario 2026-05-16: al excluir una Liga, la regla tiene
+     que "surtir efecto" también sobre el bracket YA armado — si no,
+     equipos de esa Liga elegidos/sorteados antes seguían jugando la
+     simulación. Recorremos cfg.teams y reseteamos a PENDIENTE (slot
+     humano libre) cualquier equipo cuya liga esté ahora excluida. El
+     usuario lo vuelve a elegir (el picker ya filtra) o un re-sorteo lo
+     rellena. Devuelve el nº de slots purgados. */
+  function _purgeExcludedFromBracket(cfg){
+    if (!cfg || !Array.isArray(cfg.teams) || !cfg.teams.length) return 0;
+    var excluded = cfg.excludedLeagues || [];
+    if (!excluded.length) return 0;
+    var byName = {};
+    try {
+      _allTeams().forEach(function(t){
+        if (t && t.name) byName[_norm(t.name)] = t;
+      });
+    } catch(_){ return 0; }
+    var purged = 0;
+    cfg.teams.forEach(function(slot, i){
+      if (!slot || !slot.name || slot.name === 'PENDIENTE') return;
+      var ref = byName[_norm(slot.name)];
+      if (ref && _teamInExcludedLeagues(ref, excluded)) {
+        cfg.teams[i] = { name:'PENDIENTE', isHuman:true, shield:'', power:0 };
+        purged++;
+      }
+    });
+    return purged;
+  }
 
   /* Mezcla in-place tipo Fisher-Yates. */
   function _shuffle(arr){
@@ -9610,7 +10315,7 @@ window._showSimProgress = function(opts, onDone){
     var excluded = cfg.excludedLeagues || [];
     var pool = _allTeams().filter(function(t){
       if (_teamInExcludedLeagues(t, excluded)) return false;
-      if (_isHumanOnlyTeam(t.name)) return false;
+      if (_isHumanTeamForTour(t.name)) return false;   /* humano nunca como IA */
       return t.power >= aimin && t.power <= aimax;
     });
     var needed = Math.max(0, (cfg.numTeams || 0) - (cfg.numHumans || 0));
@@ -9699,6 +10404,23 @@ window._showSimProgress = function(opts, onDone){
         if (!this.checked && idx !== -1) _open.cfg.excludedLeagues.splice(idx, 1);
         this.parentElement.classList.toggle('is-excluded', this.checked);
         _updatePoolStat();
+        /* La exclusión tiene que SURTIR EFECTO en la simulación
+           (petición usuario 2026-05-16): purgamos del bracket ya armado
+           los equipos de la liga recién excluida y persistimos al
+           instante (local síncrono dentro de _tourSave + sync server en
+           segundo plano) para que el picker y la simulación usen ya la
+           config nueva, sin obligar a re-sortear (que borraría todas las
+           elecciones del usuario). */
+        var purged = this.checked ? _purgeExcludedFromBracket(_open.cfg) : 0;
+        /* _tourSave persiste local + actualiza window._TOUR_CACHE de
+           forma SÍNCRONA antes de su primer await; el sync server va en
+           segundo plano. Lo llamamos ANTES de render para que
+           _tourRender lea ya la config nueva desde la cache. */
+        try { Promise.resolve(window._tourSave(_open.id, _open.cfg)).catch(function(){}); } catch(_){}
+        if (purged > 0) {
+          _setFeedback('🚫 '+purged+' equipo'+(purged===1?'':'s')+' de esa liga quitado'+(purged===1?'':'s')+' del bracket (vuelve a elegir).', true);
+          try { window._tourRender(_open.id); } catch(_){}
+        }
       });
     });
   }
@@ -9823,6 +10545,9 @@ window._showSimProgress = function(opts, onDone){
     /* Guard contra re-entrada: si el usuario tap-tap rápido, no
        reabrimos. */
     if (_open && _open.id === id) return;
+    /* Recalcula el pool 1 vez al abrir (por si se editaron plantillas);
+       las llamadas siguientes del editor reusan la cache → editor ágil. */
+    try { window._invalidateTourTeamsCache(); } catch(_){}
     var cached = _tourLoadCachedSync(id);
     var cfg = cached || _cloneDefault(id);
     _open = { id: id, cfg: cfg };
@@ -9830,6 +10555,29 @@ window._showSimProgress = function(opts, onDone){
     _populateForm(cfg);
     _setFeedback('');
     document.getElementById('tour-editor-overlay').style.display = 'flex';
+    /* Las ligas de "Resto de Ligas" se hidratan desde el server
+       (/api/liga-ext/*) de forma asíncrona. Si el editor se abre ANTES
+       de que terminen, el pool y la lista "Excluir ligas" salen
+       incompletos (solo LIGA EA SPORTS → "Solo hay 84 equipos…").
+       Reintentos acotados: en cuanto la firma de localStorage cambie
+       (llegan más ligas) repintamos lista de exclusión + contador. Sin
+       cache, además, cualquier interacción del usuario ya recomputa
+       fresco. Comprobaciones puntuales tempranas (300 ms) y hasta 8 s
+       para 4G lento. Sin polling continuo. 2026-05-16 #3. */
+    try {
+      var _openSig = _ligaExtSig();
+      [300, 800, 1600, 3000, 5000, 8000].forEach(function(_ms){
+        setTimeout(function(){
+          if (!_open || _open.id !== id) return;
+          var _nowSig = _ligaExtSig();
+          if (_nowSig === _openSig) return;
+          _openSig = _nowSig;
+          try { window._invalidateTourTeamsCache(); } catch(_){}
+          try { _renderLeagueChecks(); } catch(_){}
+          try { _updatePoolStat(); } catch(_){}
+        }, _ms);
+      });
+    } catch(_){}
     /* Refresco en segundo plano: si el server tiene una versión más
        reciente y el usuario aún no ha tocado el formulario, repinta. */
     try {
@@ -11000,7 +11748,7 @@ window._showSimProgress = function(opts, onDone){
        slots IA pedidos, abortamos con error visible. */
     var save = document.getElementById('tour-ed-save');
     if (save) {
-      save.addEventListener('click', async function(){
+      save.addEventListener('click', function(){
         if (!_open) return;
         _readForm(_open.cfg);
         var draw = _drawTeams(_open.cfg);
@@ -11009,22 +11757,22 @@ window._showSimProgress = function(opts, onDone){
           return;
         }
         _open.cfg.teams = draw.teams;
-        _setFeedback('Sorteando y guardando…');
-        var ok = await window._tourSave(_open.id, _open.cfg);
-        /* En CUALQUIER caso (server OK o fallo de red) el sorteo está
-           ya guardado en localStorage por `_tourSave`. Renderizamos el
-           bracket y cerramos el editor aunque el server haya fallado —
-           el usuario no se queda colgado en "Sorteando y guardando…".
-           Si la red falló, mostramos un aviso pero seguimos avanzando. */
-        if (ok) {
-          _setFeedback('✅ Sorteo confirmado · '+draw.teams.length+' equipos', true);
-        } else {
-          _setFeedback('✅ Sorteo guardado en local (server sin red)', false);
-        }
+        /* OPTIMISTA (petición usuario 2026-05-16: "crear un torneo
+           tarda >5 min"). El cuello de botella era el `await _tourSave`
+           bloqueando hasta 8 s por la red. `_tourSave` ya persiste en
+           localStorage + cache de forma SÍNCRONA antes de su primer
+           await, así que renderizamos y cerramos al instante; el sync
+           al server va en segundo plano. */
+        _setFeedback('✅ Sorteo confirmado · '+draw.teams.length+' equipos', true);
         try { window._tourRender(_open.id); } catch(_){}
+        try {
+          Promise.resolve(window._tourSave(_open.id, _open.cfg)).then(function(ok){
+            if (!ok) _setFeedback('✅ Sorteo guardado en local (server sin red)', false);
+          }).catch(function(){});
+        } catch(_){}
         setTimeout(function(){
           try { window._tourCloseEditor(); } catch(_){}
-        }, ok ? 900 : 1400);
+        }, 700);
       });
     }
     var reset = document.getElementById('tour-ed-reset');
@@ -11195,17 +11943,24 @@ window._showSimProgress = function(opts, onDone){
     return { a: sA, b: sB };
   }
 
-  /* Devuelve true si AL MENOS UNO de los dos slots de una pareja del
-     bracket KO directo está marcado isHuman. */
+  /* Un slot cuenta como HUMANO si lo eligió el usuario (isHuman) O si
+     el equipo es "humano en torneo" por humanIcon/Liga EA (regla
+     usuario 2026-05-16: ningún equipo humano puede jugar como IA —
+     aunque por cualquier ruta acabara en un slot sin isHuman, su
+     partido NO se auto-simula como IA, se enruta al modal humano). */
+  function _tourSlotIsHuman(t) {
+    if (!t) return false;
+    if (t.isHuman) return true;
+    if (t.name && t.name !== 'PENDIENTE' && _isHumanTeamForTour(t.name)) return true;
+    return false;
+  }
   function _tourPairHasHuman(teams, i) {
-    var a = teams[i], b = teams[i+1];
-    return !!((a && a.isHuman) || (b && b.isHuman));
+    return _tourSlotIsHuman(teams[i]) || _tourSlotIsHuman(teams[i+1]);
   }
   /* Devuelve true si el partido m={home,away} en `teams` (índices)
      involucra al menos a un humano. */
   function _tourLeagueMatchHasHuman(teams, m) {
-    var h = teams[m.home], a = teams[m.away];
-    return !!((h && h.isHuman) || (a && a.isHuman));
+    return _tourSlotIsHuman(teams[m.home]) || _tourSlotIsHuman(teams[m.away]);
   }
 
   function _tourSimMatch(cfg, roundIdx, matchIdx) {
@@ -11924,16 +12679,20 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     box.innerHTML = matches.map(function(t){
-      var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
+      /* Escudo perezoso: _allTeams ya no lo resuelve por equipo (coste
+         masivo). Aquí, sólo para las ≤20 filas visibles, caemos a
+         _shieldOf si el dato no traía escudo. */
+      var sh = t.shield || _shieldOf(t.name) || '';
+      var img = sh ? '<img src="'+sh+'" onerror="this.style.display=\'none\'">' : '';
       var isT = !!taken[t.name.toLowerCase()];
       var cls = isT ? 'tour-pick-row is-taken' : 'tour-pick-row';
-      return '<div class="'+cls+'" data-name="'+t.name.replace(/"/g,'&quot;')+'" data-s="'+(t.shield||'').replace(/"/g,'&quot;')+'" data-pw="'+t.power+'">'+
+      return '<div class="'+cls+'" data-name="'+t.name.replace(/"/g,'&quot;')+'" data-s="'+sh.replace(/"/g,'&quot;')+'" data-pw="'+t.power+'">'+
         img + '<span>'+t.name+'</span>' +
         '<span class="pw">'+t.power+'</span>' +
       '</div>';
     }).join('');
     box.querySelectorAll('.tour-pick-row').forEach(function(row){
-      row.addEventListener('click', async function(){
+      row.addEventListener('click', function(){
         if (!_picker) return;
         if (this.classList.contains('is-taken')) return;
         var name = this.getAttribute('data-name');
@@ -11942,15 +12701,26 @@ window._showSimProgress = function(opts, onDone){
         var cfg2 = (window._TOUR_CACHE || {})[_picker.tourId];
         if (!cfg2 || !cfg2.teams || !cfg2.teams[_picker.slotIdx]) return;
         cfg2.teams[_picker.slotIdx] = { name: name, isHuman: true, shield: sh, power: pw };
-        _setPickFeedback('Guardando…');
-        var ok = await window._tourSave(_picker.tourId, cfg2);
-        if (ok) {
-          _setPickFeedback('✓ Equipo asignado', true);
-          window._tourRender(_picker.tourId);
-          setTimeout(function(){ window._tourClosePicker(); }, 500);
-        } else {
-          _setPickFeedback('⚠ Guardado solo en local (sin red)', false);
-        }
+        /* OPTIMISTA (petición usuario 2026-05-16: "tarda mucho").
+           `_tourSave` persiste en localStorage + cache de forma SÍNCRONA
+           antes de su primer await, así que el guardado local está
+           garantizado aunque no esperemos. Refrescamos y cerramos al
+           instante; el sync al server va en segundo plano sin bloquear
+           la UI. */
+        var tourId = _picker.tourId;
+        _setPickFeedback('✓ Equipo asignado', true);
+        try { window._tourRender(tourId); } catch(_){}
+        setTimeout(function(){ window._tourClosePicker(); }, 250);
+        try {
+          Promise.resolve(window._tourSave(tourId, cfg2)).then(function(ok){
+            if (!ok) {
+              try {
+                var fb = document.getElementById('tour-pick-feedback');
+                if (fb) { fb.textContent = '⚠ Guardado solo en local (sin red)'; fb.style.color = '#ff9090'; }
+              } catch(_){}
+            }
+          }).catch(function(){});
+        } catch(_){}
       });
     });
   }
@@ -15474,7 +16244,7 @@ window._showSimProgress = function(opts, onDone){
         title: c.label.toUpperCase() + ' · SORTEO FASE DE LIGA',
         sub:   'Preparando bombos…',
         theme: comp,  /* 'ucl' → azul · 'uel' → naranja · 'uecl' → verde */
-        minMs: 600
+        minMs: 300  /* Era 600 — usuario pidió reducir tiempo, 2026-05-10. */
       },
       function(ctx){
         /* 2026-05-09: drawPairs era SÍNCRONO y bloqueaba el JS thread
@@ -15555,8 +16325,11 @@ window._showSimProgress = function(opts, onDone){
                 return;
               }
               var totalReveals = humanReveals.length;
-              var TOTAL_MS = 3500;
-              var stepMs = Math.max(60, Math.min(220, Math.round(TOTAL_MS / totalReveals)));
+              /* Era 3500 ms — usuario pidió reducir el tiempo
+                 (2026-05-10). La animación de cruces humanos ahora
+                 cabe en ≈1.5 s total. */
+              var TOTAL_MS = 1500;
+              var stepMs = Math.max(40, Math.min(140, Math.round(TOTAL_MS / totalReveals)));
               var i = 0;
               function tick(){
                 if(i >= totalReveals){
@@ -15866,9 +16639,31 @@ window._showSimProgress = function(opts, onDone){
      que gmEndMatch persista en {comp}_phase_v1. Mismo patrón que
      `abrirRecopa` / `abrirSc`. Lo invoca tanto el callback de la
      previa como cualquier "reabrir" futuro. */
+  /* Clave de recuperación: el partido pre-kickoff que estamos a punto
+     de abrir. En Android Chrome, compartir por WhatsApp manda la
+     pestaña a 2º plano y, con memoria baja, el SO la MATA — al volver
+     se recarga la página SIN estado JS (__GM_LIVE, _gm, callbacks
+     perdidos) y el usuario aterriza en el listado de Grupos sin la
+     card de simulación. Persistimos {comp,jor,idx,home,away,ts} en
+     localStorage ANTES de gmOpen para que un IIFE de boot pueda
+     reabrir el gm-modal tras la recarga. Se limpia en el kickoff
+     (el partido ya empezó → recuperación pre-kickoff ya no aplica) y
+     al guardar el resultado. 2026-05-16. */
+  var _EURFASE_PENDING_KEY = '_eurfase_pending_match';
+  window._eurFaseClearPending = function(){
+    try { localStorage.removeItem(_EURFASE_PENDING_KEY); } catch(_){}
+  };
   window.abrirEurFase = function(comp, jor, idx, home, away){
     var isHvH = _isHumanTeam(home) && _isHumanTeam(away);
     if(typeof window.gmOpen !== 'function') return;
+    /* Persistir ANTES de gmOpen — si gmOpen lanza o el tab muere
+       justo después, la clave ya está escrita y el boot la recupera. */
+    try {
+      localStorage.setItem(_EURFASE_PENDING_KEY, JSON.stringify({
+        comp: comp, jor: jor, idx: idx, home: home, away: away,
+        ts: Date.now()
+      }));
+    } catch(_){}
     try { window.gmOpen(0, home, away, isHvH, comp, false, false); } catch(e){
       try { console.error('[abrirEurFase] gmOpen falló', e); } catch(_){}
       return;
@@ -15938,6 +16733,53 @@ window._showSimProgress = function(opts, onDone){
       window.showPrePartidoOverlay(matchKey, comp, 'No', duracion, isHvH);
     }
   };
+  /* ── AUTO-RECOVERY DE BOOT ────────────────────────────────────────
+     Si la pestaña murió tras compartir por WhatsApp (Android, memoria
+     baja) y se recargó la página, recuperamos el partido pre-kickoff
+     reabriendo el gm-modal automáticamente. ONE-SHOT (un solo intento
+     por carga) + clave limpiada al recuperar → no puede entrar en
+     bucle. Si ya hay un partido vivo en __GM_LIVE no interferimos.
+     Espera ~900 ms para que `_cleanupOverlays` (pageshow/load) ya haya
+     corrido — así no nos pisa el modal recién abierto. 2026-05-16. */
+  (function _eurFaseBootRecovery(){
+    if (window.__EURFASE_BOOT_RECOVERED) return;
+    window.__EURFASE_BOOT_RECOVERED = true;
+    var raw;
+    try { raw = localStorage.getItem('_eurfase_pending_match'); } catch(_){ return; }
+    if (!raw) return;
+    var d;
+    try { d = JSON.parse(raw); } catch(_){ try { localStorage.removeItem('_eurfase_pending_match'); } catch(__){} return; }
+    if (!d || !d.comp || !d.home || !d.away) {
+      try { localStorage.removeItem('_eurfase_pending_match'); } catch(_){}
+      return;
+    }
+    /* Caducar tras 15 min — más allá de eso asumimos que el usuario
+       no va a volver a ese partido. */
+    if (Date.now() - (d.ts || 0) > 900000) {
+      try { localStorage.removeItem('_eurfase_pending_match'); } catch(_){}
+      return;
+    }
+    function _tryRecover(attempt){
+      attempt = attempt || 0;
+      if (typeof window.abrirEurFase !== 'function' || typeof window.gmOpen !== 'function') {
+        if (attempt < 30) { setTimeout(function(){ _tryRecover(attempt + 1); }, 300); }
+        return;
+      }
+      /* Si ya hay un partido vivo (mismo u otro) NO interferimos —
+         el usuario ya está jugando algo. */
+      try {
+        if (window.__GM_LIVE && !window.__GM_LIVE.finished) {
+          try { localStorage.removeItem('_eurfase_pending_match'); } catch(_){}
+          return;
+        }
+      } catch(_){}
+      /* Limpiar ANTES de reabrir → aunque el usuario recargue otra
+         vez no se vuelve a disparar (one-shot duro). */
+      try { localStorage.removeItem('_eurfase_pending_match'); } catch(_){}
+      try { window.abrirEurFase(d.comp, d.jor, d.idx, d.home, d.away); } catch(_){}
+    }
+    setTimeout(function(){ _tryRecover(0); }, 900);
+  })();
   window._eurFaseSimAllIA = function(comp, jor){
     var state = loadState(comp); if(!state || !state.pairs) return;
     var pairs = state.pairs;
@@ -16659,7 +17501,7 @@ window._showSimProgress = function(opts, onDone){
 
     if(typeof window.ftbolLoaderRun === 'function'){
       window.ftbolLoaderRun(
-        { title:'RESTO DE LIGAS · 51 LIGAS', sub:'Iniciando…', theme:'resto', minMs:600 },
+        { title:'RESTO DE LIGAS · 51 LIGAS', sub:'Iniciando…', theme:'resto', minMs:300 },
         function(ctx){ return simNext(ctx.progress); }
       ).then(_onDone, function(e){ _clearBulkFlag(); try { console.error('[restoSim]', e); } catch(_){} });
     } else {
@@ -24835,12 +25677,12 @@ Tottenham
     <span class="hub-objetivos-title">OBJETIVOS DEL CLUB</span>
     <div class="hub-objetivos-progress" id="munich-obj-count-wrap"><span id="munich-obj-count">0 / 33</span></div>
   </button>
-  <button class="hub-card hub-card-plantilla" onclick="go('s-bayern-plantilla')">
+  <button class="hub-card hub-card-plantilla" onclick="go('s-bayern-plantilla');if(window.renderBayernPlantillaScreen){[0,120,400,900].forEach(function(t){setTimeout(window.renderBayernPlantillaScreen,t);});}">
     <span class="hub-plantilla-emoji">👕</span>
     <span class="hub-plantilla-title">PLANTILLA</span>
     <div class="hub-plantilla-count"><span id="munich-plantilla-count">31</span><span id="munich-plantilla-injury" class="hub-plantilla-injury" style="display:none;">🩹</span></div>
   </button>
-  <button class="hub-card hub-card-calendario" onclick="window._agendaBackTo='s-munich';window._bayernCalContext=true;go('s-agenda')">
+  <button class="hub-card hub-card-calendario" onclick="window._bayernCalOpen?window._bayernCalOpen():(function(){window._agendaBackTo='s-munich';window._bayernCalContext=true;go('s-agenda');})()">
     <span class="hub-calendario-emoji">📅</span>
     <span class="hub-calendario-title">CALENDARIO</span>
     <span class="hub-calendario-sub" id="munich-cal-fecha">01 Jul</span>
@@ -24864,7 +25706,7 @@ Tottenham
     <!-- PICKER DE TORNEOS DE VERANO (se muestra solo hasta que el
          usuario elige 2 de los 3). -->
     <div class="munich-tour-picker" id="munich-tour-picker">
-      <div class="munich-tour-title">🌞 PRETEMPORADA · ELIGE 2 TORNEOS</div>
+      <div class="munich-tour-title">🌞 PRETEMPORADA · ELIGE 1 TORNEO</div>
       <div class="munich-tour-sub">Participación: 40 🪙 por torneo</div>
       <div class="munich-tour-cards">
         <div class="munich-tour-card" data-tour="sct"
@@ -24909,8 +25751,14 @@ Tottenham
         </div>
       </div>
       <button type="button" class="munich-tour-confirm" id="munich-tour-confirm"
-              onclick="window.muTourConfirm()">✅ CONFIRMAR 0/2</button>
+              onclick="window.muTourConfirm()">✅ CONFIRMAR 0/1</button>
     </div>
+
+    <!-- PRETEMPORADA día a día (Módulos 2-5). Tras elegir torneo,
+         updateHud() oculta el picker + los visuales/botones legacy
+         y muestra aquí la tarjeta del día (Entrenar/Descanso/Partido).
+         ENTRENAR/CONTINUAR/JUGAR avanzan al día siguiente in-place. -->
+    <div id="ps-stage" style="display:none;"></div>
 
     <div class="munich-training-visual" id="munich-visual-training">
       <div class="munich-training-bg"></div>
@@ -28022,7 +28870,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (!raw) return [];
       var arr = JSON.parse(raw);
       if (!Array.isArray(arr)) return [];
-      return arr.filter(function(id){ return !!SUMMER_TOURS[id]; }).slice(0,2);
+      return arr.filter(function(id){ return !!SUMMER_TOURS[id]; }).slice(0,1);
     } catch(_){ return []; }
   }
   function savePickedTours(arr) {
@@ -28032,8 +28880,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   var state = {
     pi: 8, injured: null, budgetSpent: 0, rating: 0,
     eventIdx: 0, events: [],
-    pickedTours: [],       /* IDs ya confirmados (hasta 2) */
-    tempPicks:   []        /* selección en curso antes de confirmar */
+    pickedTours: [],       /* ID ya confirmado (1) */
+    tempPicks:   []        /* selección en curso antes de confirmar (máx 1) */
   };
   /* ── EXPONEMOS state PARA QUE EL EDITOR HUD LO SINCRONICE EN VIVO
      (refuerzo 2026-05-10). Antes el editor solo escribía localStorage;
@@ -28102,9 +28950,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var pk = getEl('munich-tour-picker');
     var resetBtn = getEl('munich-tour-reset');
     if (!pk) return;
-    /* Mostrar solo si aún no hay torneos confirmados. Una vez elegidos
-       2, ocultamos el picker y el flujo normal de la agenda continúa. */
-    if (state.pickedTours.length >= 2) {
+    /* Mostrar solo si aún no hay torneo confirmado. Una vez elegido
+       1, ocultamos el picker y el flujo normal de la agenda continúa. */
+    if (state.pickedTours.length >= 1) {
       pk.classList.remove('show');
       if (resetBtn) resetBtn.classList.add('show');
       return;
@@ -28118,8 +28966,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     });
     var btn = getEl('munich-tour-confirm');
     if (btn) {
-      btn.textContent = '✅ CONFIRMAR ' + state.tempPicks.length + '/2';
-      btn.classList.toggle('ready', state.tempPicks.length === 2);
+      btn.textContent = '✅ CONFIRMAR ' + state.tempPicks.length + '/1';
+      btn.classList.toggle('ready', state.tempPicks.length === 1);
     }
   }
 
@@ -28137,37 +28985,43 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var now = Date.now();
     if (_muTourLastTap[id] && (now - _muTourLastTap[id]) < 150) return;
     _muTourLastTap[id] = now;
-    var idx = state.tempPicks.indexOf(id);
-    if (idx !== -1) {
-      state.tempPicks.splice(idx, 1);
+    /* Selección de 1 solo torneo: si pulsas el ya marcado lo
+       deseleccionas; si pulsas otro, reemplaza al anterior. */
+    if (state.tempPicks.indexOf(id) !== -1) {
+      state.tempPicks = [];
     } else {
-      if (state.tempPicks.length >= 2) {
-        /* Ya hay 2: sustituimos el primero para que el nuevo entre. */
-        state.tempPicks.shift();
-      }
-      state.tempPicks.push(id);
+      state.tempPicks = [id];
     }
     renderTourPicker();
   };
 
   window.muTourConfirm = function() {
-    if (state.tempPicks.length !== 2) {
-      alert('Elige exactamente 2 torneos.');
+    if (state.tempPicks.length !== 1) {
+      alert('Elige 1 torneo de pretemporada.');
       return;
     }
     state.pickedTours = state.tempPicks.slice();
     savePickedTours(state.pickedTours);
     renderTourPicker();
     updateHud();
-    var names = state.pickedTours.map(function(id){ return SUMMER_TOURS[id].name; }).join(' + ');
-    alert('✅ Torneos de pretemporada: ' + names);
+    var tId = state.pickedTours[0];
+    var tName = (SUMMER_TOURS[tId] && SUMMER_TOURS[tId].name) || tId;
+    /* Fusiona el Bayern en el cuadro del torneo elegido y navega
+       a su pantalla. _tourMergeBayern es idempotente; si el módulo
+       de torneos aún no expone el merge, al menos confirmamos. */
+    try {
+      if (typeof window._tourMergeBayern === 'function') {
+        window._tourMergeBayern(tId);
+      }
+    } catch(_){}
+    alert('✅ Torneo de pretemporada: ' + tName);
   };
 
   /* Vuelve a abrir el picker: limpia picks confirmados (el localStorage
      también) y deja el estado como si fuera la primera vez, para que
-     el usuario pueda elegir otros 2 torneos. */
+     el usuario pueda elegir otro torneo. */
   window.muTourReset = function() {
-    if (!confirm('¿Volver a elegir los 2 torneos de pretemporada?\nSe perderá la selección actual.')) return;
+    if (!confirm('¿Volver a elegir el torneo de pretemporada?\nSe perderá la selección actual.')) return;
     state.pickedTours = [];
     state.tempPicks   = [];
     savePickedTours([]);
@@ -28379,14 +29233,16 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        el IIFE de Munich). */
     if (!state.events.length) state.events = parseAgenda();
 
-    /* Si todavía no hemos elegido los torneos de pretemporada, el
+    /* Si todavía no hemos elegido el torneo de pretemporada, el
        picker ocupa el bloque "Próximo partido" — ocultamos los otros
        dos visuales y salimos sin tocar el resto del HUD. */
-    if (state.pickedTours.length < 2) {
+    if (state.pickedTours.length < 1) {
       if (visTraining) visTraining.style.display = 'none';
       if (visMatch)    visMatch.style.display    = 'none';
+      var _psHide = getEl('ps-stage');
+      if (_psHide) _psHide.style.display = 'none';
       renderTourPicker();
-      if (matchEl) matchEl.textContent = '🌞 PRETEMPORADA · Elige 2 torneos';
+      if (matchEl) matchEl.textContent = '🌞 PRETEMPORADA · Elige 1 torneo';
       if (state.injured) {
         if (warnEl)  warnEl.textContent = '\u26a0\ufe0f BAJA CONFIRMADA: ' + state.injured.name + ' (' + state.injured.days + ' partidos)';
         if (medIcon) medIcon.classList.add('blink');
@@ -28403,56 +29259,23 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var resetBtnEl = getEl('munich-tour-reset');
     if (resetBtnEl) resetBtnEl.classList.add('show');
 
-    var evt = state.events[state.eventIdx];
-    if (!evt) {
-      /* Temporada terminada: estado neutro. */
-      if (matchEl) matchEl.textContent = '🏁 Temporada finalizada';
-      if (visTraining) visTraining.style.display = '';
-      if (visMatch)    visMatch.style.display    = 'none';
-      if (trainLbl)    trainLbl.textContent      = '🏁 FIN DE TEMPORADA';
-    } else {
-      /* El HUD debe reflejar EXACTAMENTE lo que muestra la AGENDA
-         32-33 para esa fecha (la AGENDA es la única fuente de verdad).
-         Si el evento es `ag-torneo` y Bayern ha elegido el torneo que
-         cubre esa fecha, resolvemos la bandera + nombre reales del
-         torneo (p. ej. "🇬🇧 Premier Summer Series"). Si no está
-         picked, se queda con el label genérico "🌞 Torneo
-         Pretemporada · J1" — igual que la AGENDA. NO degradamos a
-         entrenamiento: si la agenda dice que hay partido, hay partido. */
-      var tourInfo = (evt.typeCls === 'ag-torneo') ? resolveTourEvent(evt.date) : null;
-      var evtIcon  = tourInfo ? tourInfo.flag : evt.type.icon;
-      var evtLabel = tourInfo ? (tourInfo.name + ' · ' + evt.label) : evt.label;
-      if (matchEl) matchEl.textContent = evtIcon + ' ' + evtLabel + ' · ' + evt.date;
-
-      if (!evt.type.bayernPlays) {
-        /* Selecciones / día de descanso del club → escena de
-           entrenamiento con etiqueta contextual. */
-        if (visTraining) visTraining.style.display = '';
-        if (visMatch)    visMatch.style.display    = 'none';
-        if (trainLbl)    trainLbl.textContent      = evtIcon + ' ' + evtLabel.toUpperCase();
-      } else {
-        /* Día de partido del Bayern → escudos + badge competición. */
-        if (visTraining) visTraining.style.display = 'none';
-        if (visMatch)    visMatch.style.display    = 'flex';
-        if (trainLbl)    trainLbl.textContent      = '🏋️ ENTRENAMIENTO';
-        var awayShieldEl = getEl('munich-away-shield');
-        var awayNameEl   = getEl('munich-away-name');
-        var compEl       = getEl('munich-match-comp');
-        var compText = tourInfo
-          ? (tourInfo.flag + ' ' + tourInfo.short)
-          : (evt.type.icon + ' ' + evt.type.compName.toUpperCase());
-        if (compEl) compEl.textContent = compText;
-        var oppName = null;
-        if (evt.type.lookupOpp === 'liga') {
-          var mJ = /J(\d+)/.exec(evt.label);
-          var jorn = mJ ? parseInt(mJ[1], 10) : 0;
-          var opp = getLigaOpponent(jorn);
-          if (opp && opp.opp) oppName = opp.opp;
-        }
-        if (!oppName) oppName = 'Rival por definir';
-        if (awayShieldEl) awayShieldEl.src = getShieldPath(oppName);
-        if (awayNameEl)   awayNameEl.textContent = oppName;
-      }
+    /* Torneo elegido → el bloque "Próximo partido" SE CONVIERTE en la
+       PRETEMPORADA día a día (#ps-stage). Ocultamos los visuales y
+       botones legacy (escena entrenamiento / partido + JUGAR /
+       SIGUIENTE DÍA); el avance de día lo gestionan las propias
+       tarjetas (Entrenar/Continuar/Jugar). */
+    if (visTraining) visTraining.style.display = 'none';
+    if (visMatch)    visMatch.style.display    = 'none';
+    var _hubActionsEl = document.querySelector('#s-munich .hub-actions');
+    if (_hubActionsEl) _hubActionsEl.style.display = 'none';
+    var _psStageEl = getEl('ps-stage');
+    if (_psStageEl) _psStageEl.style.display = 'block';
+    if (typeof window._psRender === 'function') {
+      try { window._psRender(); } catch(_){}
+    }
+    if (matchEl) {
+      var _psLbl = (typeof window._psCurrentLabel === 'function') ? window._psCurrentLabel() : '';
+      matchEl.textContent = _psLbl || '🌞 Pretemporada · Día a Día';
     }
 
     if (state.injured) {
@@ -28471,8 +29294,21 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        no hay events, default "01 Jul" (inicio de temporada). */
     var calFechaEl = getEl('munich-cal-fecha');
     if (calFechaEl) {
-      var curEvt = state.events && state.events[state.eventIdx];
-      calFechaEl.textContent = (curEvt && curEvt.date) ? curEvt.date : '01 Jul';
+      /* Si la pretemporada está activa, la tarjeta CALENDARIO muestra
+         el DÍA real del cursor día a día (01 Jul, 02 Jul…), no el
+         evento legacy disperso (que saltaba a "04 Jul"). */
+      var psDate = (typeof window._psCurrentDate === 'function') ? window._psCurrentDate() : '';
+      if (psDate) {
+        calFechaEl.textContent = psDate;
+      } else {
+        var curEvt = state.events && state.events[state.eventIdx];
+        calFechaEl.textContent = (curEvt && curEvt.date) ? curEvt.date : '01 Jul';
+      }
+    }
+    /* Mueve el marcador rosa/morado del calendario a la fila del
+       día actual (SIGUIENTE DÍA → baja una fila). Idempotente. */
+    if (typeof window._bayernCalMarkToday === 'function') {
+      try { window._bayernCalMarkToday(); } catch(_){}
     }
     /* PLANTILLA \u00b7 badge tirita: visible solo si hay >=1 jugador del
        Bayern con LESION_STORE activa (partidos > 0). LESION_STORE

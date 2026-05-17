@@ -4605,6 +4605,22 @@ window._showSimProgress = function(opts, onDone){
             var isMassiveLoss = (protP >= 50 && newP < protP * 0.20);
             if (isWipeTotal || isMassiveLoss) {
               try { console.warn('[lock] bloqueado WIPE en '+key+': '+newP+' jugadores < '+protP+' protegidos. Restaurando.'); } catch(_){}
+              /* No restaurar el blob _protected EN CRUDO: una copia
+                 legacy podía traer plantillas triplicadas y el bug
+                 "vuelven los duplicados al reiniciar" resucitaba.
+                 Limpiamos (filtro basura + dedupe por nombre) ANTES
+                 de restaurar. 2026-05-17. */
+              try {
+                var _pj = JSON.parse(prot);
+                if (_pj && Array.isArray(_pj.teams) && typeof window._cleanSquadPlayers === 'function') {
+                  _pj.teams.forEach(function(t){
+                    if (t && Array.isArray(t.players)) t.players = window._cleanSquadPlayers(t.players);
+                  });
+                  var _pc = JSON.stringify(_pj);
+                  _origSet(key + '_protected', _pc);
+                  return _origSet(key, _pc);
+                }
+              } catch(_){}
               return _origSet(key, prot);
             }
           }
@@ -19682,12 +19698,19 @@ Tottenham
      (o + posición si no hay dorsal). Conserva la PRIMERA aparición,
      fusiona los flags (C/F/P/⭐/⚾/🏀) de las copias y se queda con el
      power más alto para no degradar. Idempotente. */
+  /* Clave de dedupe = SOLO el nombre normalizado (2026-05-17).
+     ANTES la clave incluía el dorsal/posición, así que dos copias
+     del MISMO jugador con dorsal distinto o sin dorsal (caso real:
+     la copia editada tiene nº 7 y la copia inyectada por el
+     rebuild de la clasificación viene sin nº) NO se fusionaban y
+     los duplicados/triplicados volvían tras recargar por más que
+     el usuario los borrase. En una plantilla no hay dos jugadores
+     reales con el MISMO nombre completo, así que deduplicar por
+     nombre es seguro y elimina el rebrote de raíz. */
   function _dedupePlayerKey(p){
-    var nm = String(p && p.name || '').trim().toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
-    var num = (p && p.num != null && Number(p.num) > 0) ? String(Number(p.num)) : '';
-    var pos = String(p && p.pos || '');
-    return nm + '#' + (num || ('p' + pos));
+    return String(p && p.name || '').trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
   }
   function _dedupeSquadPlayers(arr){
     if(!Array.isArray(arr)) return arr;
@@ -20069,7 +20092,16 @@ Tottenham
          no se cuelen aunque la cache se llenase desde una ruta que
          no sanitiza (fetchData async, etc.). */
       if (_sanitizeLigaTeamNames(LIGA_CACHE[k])) {
-        try { localStorage.setItem(storeKey(k), JSON.stringify(LIGA_CACHE[k])); } catch(_){}
+        try {
+          var _csj = JSON.stringify(LIGA_CACHE[k]);
+          localStorage.setItem(storeKey(k), _csj);
+          /* Purga TAMBIÉN el _protected: si solo limpiamos main, una
+             copia _protected legacy triplicada resucitaba en el
+             siguiente restore/lock. 2026-05-17. */
+          if (localStorage.getItem(storeKey(k)+'_protected')) {
+            localStorage.setItem(storeKey(k)+'_protected', _csj);
+          }
+        } catch(_){}
       }
       return _applyForcedBlacklist(k, LIGA_CACHE[k]);
     }
@@ -20104,7 +20136,13 @@ Tottenham
         /* Sanitize pre-cache: si algún name tenía `*` prefijo, se
            limpia y persiste en main para que no vuelva a aparecer. */
         if (_sanitizeLigaTeamNames(parsed)) {
-          try { localStorage.setItem(storeKey(k), JSON.stringify(parsed)); } catch(_){}
+          try {
+            var _psj = JSON.stringify(parsed);
+            localStorage.setItem(storeKey(k), _psj);
+            if (localStorage.getItem(storeKey(k)+'_protected')) {
+              localStorage.setItem(storeKey(k)+'_protected', _psj);
+            }
+          } catch(_){}
         }
         LIGA_CACHE[k] = parsed;
         return _applyForcedBlacklist(k, LIGA_CACHE[k]);

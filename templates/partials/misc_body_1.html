@@ -10523,12 +10523,27 @@ window._showSimProgress = function(opts, onDone){
     function _push(name, power, shield, league){
       var clean = String(name||'').trim();
       if (!clean) return;
-      var k = clean.toLowerCase();
+      /* Clave de dedup CANÓNICA (acentos + alias): "Atletico Madrid"
+         ⇆ "Atlético Madrid" y "Villarreal" ⇆ "Villarreal CF" colapsan
+         a un solo equipo; "Atlético Madrileño" / "Real Sociedad B" /
+         "Villarreal B" siguen separados (son equipos distintos).
+         Bug usuario 2026-05-17: el mismo equipo salía duplicado en el
+         picker del torneo. Nos quedamos con el de MAYOR nivel-poder. */
+      var k;
+      try { k = (typeof window._teamCanonKey === 'function') ? window._teamCanonKey(clean) : ''; } catch(_){ k = ''; }
+      if (!k) k = clean.toLowerCase();
       var pw = Number(power);
       if (!isFinite(pw) || pw <= 0) pw = 70;
       if (seen[k]) {
-        if (pw > seen[k].power) seen[k].power = pw;
-        if (shield && !seen[k].shield) seen[k].shield = shield;
+        /* El equipo "correcto" es el de mayor poder → adoptamos su
+           nombre y escudo cuando supera al guardado. */
+        if (pw > seen[k].power) {
+          seen[k].power = pw;
+          seen[k].name = clean;
+          if (shield) seen[k].shield = shield;
+        } else if (shield && !seen[k].shield) {
+          seen[k].shield = shield;
+        }
         if (league && seen[k]._leagues.indexOf(league) === -1) {
           seen[k]._leagues.push(league);
           if (!seen[k]._league) seen[k]._league = league;

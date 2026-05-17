@@ -9724,6 +9724,19 @@ window._showSimProgress = function(opts, onDone){
   #s-torneos-verano .tv-edit-btn:active{
     background:rgba(240,192,64,.35);
   }
+  /* 🖍 de Torneos de Verano MUCHO más pequeño (petición usuario
+     2026-05-17, foto 1). Misma especificidad, va después → gana. */
+  #s-torneos-verano .tv-edit-btn{
+    width:22px;height:22px;font-size:12px;top:10px;right:12px;
+  }
+  /* Trofeo Joan Gamper: fondo dorado muy claro → el texto blanco no
+     se lee. Letras en negro (petición usuario 2026-05-17, foto 1). */
+  #tv-tour-cards .sc-jg .sc-label,
+  #tv-tour-cards .sc-jg .sc-arr{ color:#1a1205 !important; text-shadow:none !important; }
+  #tv-tour-cards .sc-jg .sc-info-btn{
+    color:#1a1205 !important; border-color:rgba(0,0,0,.45) !important;
+    background:rgba(255,255,255,.30) !important;
+  }
   /* Modal "Gestionar torneos" (añadir/eliminar · PIN 747). */
   #tv-manage-ov{position:fixed;inset:0;z-index:100030;display:none;
     align-items:center;justify-content:center;padding:18px;
@@ -13141,6 +13154,15 @@ window._showSimProgress = function(opts, onDone){
     box.innerHTML = html;
   }
   window._tvRenderCards = _tvRenderCards;
+  /* Accesores públicos para que OTRAS pantallas (p.ej. el picker de
+     pretemporada del Bayern) reflejen los mismos torneos visibles que
+     "Torneos de Verano". 2026-05-17. */
+  window._tourVisibleIds = function(){
+    try { return _tvRegLoad().visible.slice(); } catch(_){ return TOUR_BUILTINS.slice(); }
+  };
+  window._tourCardMeta = function(id){
+    return { flag: _tvFlag(id), name: _tvName(id) };
+  };
   function _tvCloseManage(){
     var ov = document.getElementById('tv-manage-ov');
     if (ov) ov.style.display = 'none';
@@ -29515,13 +29537,48 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   };
   var TOURS_STORAGE_KEY = 'munich_summer_tours_v1';
 
+  /* Meta corta de las cards built-in (texto histórico conservado). */
+  var TOUR_META = {
+    sct:  '16 👤 · 1-10 Julio · hasta 4 partidos',
+    pss:  '6 👤 · 12-24 Julio · 5 partidos',
+    jg:   '8 👤 · 24 Jul–1 Ago · grupos + playoffs',
+    asia: '4 👤 · 14-17 Junio · semis + final'
+  };
+  function _psEsc(s){ return String(s==null?'':s).replace(/[<>"]/g,function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';}); }
+  /* Un id es válido si es built-in o un slot tx1..tx8 (pre-cableado). */
+  function _isTourId(id){ return !!SUMMER_TOURS[id] || /^tx[1-8]$/.test(id); }
+  /* IDs de torneos VISIBLES — la misma lista (registro) que usa la
+     pantalla "Torneos de Verano". Si el helper aún no está cargado o
+     el registro está vacío, fallback a los 4 built-in (back-compat).
+     Petición usuario 2026-05-17 (foto 2): si solo hay 2 torneos no
+     pueden salir 4 en la caja del Bayern. */
+  function _psVisibleTourIds(){
+    try {
+      if (typeof window._tourVisibleIds === 'function') {
+        var v = window._tourVisibleIds();
+        if (Array.isArray(v) && v.length) return v.filter(_isTourId);
+      }
+    } catch(_){}
+    return ['sct','pss','jg','asia'];
+  }
+  function _psTourMeta(id){
+    var t = (typeof window._tourMuInfoData === 'function' && window._tourMuInfoData(id)) || SUMMER_TOURS[id] || null;
+    var flag = (t && t.flag) || (SUMMER_TOURS[id] && SUMMER_TOURS[id].flag) || '🏆';
+    var name = (t && t.name) || (SUMMER_TOURS[id] && SUMMER_TOURS[id].name) || id;
+    var meta = TOUR_META[id] || (t ? ((t.teams||'?') + ' 👤 · ' + (t.dates||'')) : 'Torneo personalizado');
+    if ((!t || !t.name) && typeof window._tourCardMeta === 'function') {
+      try { var m = window._tourCardMeta(id); if (m){ flag = m.flag || flag; name = m.name || name; } } catch(_){}
+    }
+    return { flag:flag, name:name, meta:meta };
+  }
+
   function loadPickedTours() {
     try {
       var raw = localStorage.getItem(TOURS_STORAGE_KEY);
       if (!raw) return [];
       var arr = JSON.parse(raw);
       if (!Array.isArray(arr)) return [];
-      return arr.filter(function(id){ return !!SUMMER_TOURS[id]; }).slice(0,1);
+      return arr.filter(_isTourId).slice(0,1);
     } catch(_){ return []; }
   }
   function savePickedTours(arr) {
@@ -29610,6 +29667,30 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
     pk.classList.add('show');
     if (resetBtn) resetBtn.classList.remove('show');
+    /* (Re)construye las cards desde el REGISTRO de torneos visibles
+       (mismo origen que la pantalla "Torneos de Verano"). Guard de
+       firma → solo reescribe el DOM si el conjunto cambió. */
+    var cont = pk.querySelector('.munich-tour-cards');
+    if (cont) {
+      var ids = _psVisibleTourIds();
+      var sig = ids.join(',');
+      if (cont._psSig !== sig) {
+        cont._psSig = sig;
+        cont.innerHTML = ids.map(function(id){
+          var m = _psTourMeta(id);
+          return '<div class="munich-tour-card" data-tour="' + id + '"'
+            + ' onclick="window.muTourToggle(\'' + id + '\', event)">'
+            + '<span class="munich-tour-flag">' + _psEsc(m.flag) + '</span>'
+            + '<div class="munich-tour-body">'
+            + '<div class="munich-tour-name">' + _psEsc(m.name) + '</div>'
+            + '<div class="munich-tour-meta">' + _psEsc(m.meta) + '</div>'
+            + '</div>'
+            + '<button type="button" class="munich-tour-info-btn"'
+            + ' onclick="event.stopPropagation();window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
+            + '</div>';
+        }).join('');
+      }
+    }
     var cards = pk.querySelectorAll('.munich-tour-card');
     cards.forEach(function(c){
       var id = c.getAttribute('data-tour');
@@ -29632,7 +29713,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   var _muTourLastTap = {};
   window.muTourToggle = function(id, ev) {
     if (ev && ev.target && ev.target.classList.contains('munich-tour-info-btn')) return;
-    if (!SUMMER_TOURS[id]) return;
+    if (!_isTourId(id)) return;
     var now = Date.now();
     if (_muTourLastTap[id] && (now - _muTourLastTap[id]) < 150) return;
     _muTourLastTap[id] = now;
@@ -29656,7 +29737,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     renderTourPicker();
     updateHud();
     var tId = state.pickedTours[0];
-    var tName = (SUMMER_TOURS[tId] && SUMMER_TOURS[tId].name) || tId;
+    var tName = _psTourMeta(tId).name || tId;
     /* Fusiona el Bayern en el cuadro del torneo elegido y navega
        a su pantalla. _tourMergeBayern es idempotente; si el módulo
        de torneos aún no expone el merge, al menos confirmamos. */

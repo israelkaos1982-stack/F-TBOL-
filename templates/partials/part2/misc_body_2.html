@@ -10989,6 +10989,13 @@
         _gmEndBtn.textContent = '▶ PRÓRROGA';
       } else if (_gmAction === 'penaltis') {
         _gmEndBtn.textContent = '🥅 PENALTIS';
+      } else if (_matchOver) {
+        /* El partido YA acabó (cronómetro al FIN). El humano no sabía
+           qué botón pulsar para continuar — lo confundía con
+           Menú·LIVE / Cancelar. Lo renombramos a "VER RESUMEN"
+           (pulsarlo finaliza y abre el resumen + compartir) y el CSS
+           lo pinta brillante. Petición usuario 2026-05-17. */
+        _gmEndBtn.textContent = '🏁 VER RESUMEN';
       } else {
         _gmEndBtn.textContent = '🏁 FINALIZAR';
       }
@@ -28866,6 +28873,45 @@ document.addEventListener('DOMContentLoaded', function() {
   box-shadow:0 0 12px var(--comp-color-soft) !important;
   flex:none !important;
   line-height:1.2 !important;
+}
+/* ── VER RESUMEN brillante (petición usuario 2026-05-17) ──────────
+   Cuando el partido acaba, el botón movido bajo el acta recibe
+   ADEMÁS `.is-finishable`. La regla `.gm-end-moved` de arriba lo
+   pintaba rojo apagado (igual que Menú·LIVE / Cancelar) y el humano
+   no sabía cuál pulsar para continuar. Esta regla tiene MÁS
+   especificidad (1 id + 2 clases) que `.gm-end-moved` (1 id + 1
+   clase), así que gana: verde→dorado vivo, texto grande, halo
+   pulsante y micro-zoom. Imposible no verlo. */
+#gm-btn-end.gm-end-moved.is-finishable{
+  background:linear-gradient(135deg,#15913f 0%,#27d967 42%,#ffd23f 100%) !important;
+  border:2px solid #ffe680 !important;
+  color:#06210f !important;
+  font-size:16px !important;
+  font-weight:900 !important;
+  letter-spacing:2px !important;
+  text-shadow:0 1px 2px rgba(255,255,255,.4) !important;
+  min-height:56px !important;
+  padding:14px 8px !important;
+  animation:gmVerResumenPulse 1.2s ease-in-out infinite !important;
+  position:relative;
+  z-index:3;
+}
+@keyframes gmVerResumenPulse{
+  0%,100%{
+    transform:scale(1);
+    box-shadow:0 0 0 0 rgba(39,217,103,.55),
+               0 0 16px 4px rgba(255,210,63,.65) !important;
+  }
+  50%{
+    transform:scale(1.04);
+    box-shadow:0 0 0 12px rgba(39,217,103,0),
+               0 0 36px 13px rgba(255,224,128,.98) !important;
+  }
+}
+#gm-btn-end.gm-end-moved.is-finishable:disabled{
+  animation:none !important;
+  filter:none !important;
+  transform:none !important;
 }
 /* Cuando FINALIZAR se mueve, su contenedor original (el row con
    PRÓRROGA) gana clase `.gm-row-end-removed` y PRÓRROGA pasa a

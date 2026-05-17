@@ -5055,6 +5055,14 @@ window._showSimProgress = function(opts, onDone){
     }
     return [trimmed];
   }
+  /* Exponer la tabla de alias + helper para que el dedup canónico de
+     `_sanitizeLigaTeamNames` / `_lextFindTeamRow` (otro IIFE) pueda
+     colapsar "Atl Madrid" ⇆ "Atlético Madrid" ⇆ "Atletico Madrid" a
+     una sola fila (bug usuario 2026-05-17: 2 Atlético Madrid). */
+  try {
+    window.TEAM_NAME_ALIASES = TEAM_NAME_ALIASES;
+    window._namesForAlias = _namesForAlias;
+  } catch(_){}
 
   function applyEngineOverrides(){
     if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
@@ -19156,6 +19164,76 @@ Tottenham
   /* Bridge global desde este bloque: si el IIFE del otro
      <script> no llegó a ejecutar, garantizamos window._normPS. */
   try { if (typeof window !== 'undefined' && !window._normPS) window._normPS = _normPS; } catch(_){}
+
+  /* ── Dedup de jugadores dentro de una plantilla (bug 2026-05-17) ──
+     El usuario reportó que la MAYORÍA de plantillas de Liga EA Sports
+     tienen los jugadores duplicados o triplicados (las copias incluso
+     con ratings distintos: "Lunin 82" y luego "Lunin 80"). Causa: las
+     ramas `t.players = t.players.concat(parsed)` ("Cancelar = añadir")
+     se ejecutaron repetidas veces y nadie deduplicaba. Este helper es
+     la red de seguridad universal: clave = nombre normalizado + dorsal
+     (o + posición si no hay dorsal). Conserva la PRIMERA aparición,
+     fusiona los flags (C/F/P/⭐/⚾/🏀) de las copias y se queda con el
+     power más alto para no degradar. Idempotente. */
+  function _dedupePlayerKey(p){
+    var nm = String(p && p.name || '').trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+    var num = (p && p.num != null && Number(p.num) > 0) ? String(Number(p.num)) : '';
+    var pos = String(p && p.pos || '');
+    return nm + '#' + (num || ('p' + pos));
+  }
+  function _dedupeSquadPlayers(arr){
+    if(!Array.isArray(arr)) return arr;
+    var seen = {}, out = [], changed = false;
+    for(var i=0;i<arr.length;i++){
+      var p = arr[i];
+      if(!p || !p.name){ changed = true; continue; }
+      var k = _dedupePlayerKey(p);
+      if(Object.prototype.hasOwnProperty.call(seen, k)){
+        changed = true;
+        var keep = out[seen[k]];
+        ['captain','freeKick','penalty','elite','natGoal','natGoalPro'].forEach(function(f){
+          if(p[f]) keep[f] = true;
+        });
+        if((Number(p.power)||0) > (Number(keep.power)||0)) keep.power = Number(p.power) || keep.power;
+        continue;
+      }
+      seen[k] = out.length;
+      out.push(p);
+    }
+    return changed ? out : arr;
+  }
+  /* Clave canónica de equipo consciente de alias: colapsa todas las
+     variantes de un mismo club ("Atl Madrid"/"Atlético Madrid"/…) a
+     una sola clave para dedupe de FILAS y para el lookup de plantilla
+     desde la clasificación (bug 2026-05-17: 2 Atlético Madrid + "no
+     encuentro el equipo"). */
+  function _teamCanonKey(name){
+    var raw = String(name == null ? '' : name).replace(/^\s*\*+\s*/,'').trim();
+    if(!raw) return '';
+    function canon(s){
+      try {
+        if (typeof window._canonTeamName === 'function') return window._canonTeamName(s);
+      } catch(_){}
+      return String(s||'').trim().toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+    }
+    var key = canon(raw);
+    try {
+      var groups = window.TEAM_NAME_ALIASES;
+      if (Array.isArray(groups)) {
+        for(var i=0;i<groups.length;i++){
+          var g = groups[i];
+          for(var j=0;j<g.length;j++){
+            if (canon(g[j]) === key) return canon(g[0]);
+          }
+        }
+      }
+    } catch(_){}
+    return key;
+  }
+  try { if (typeof window !== 'undefined') { window._dedupeSquadPlayers = _dedupeSquadPlayers; window._teamCanonKey = _teamCanonKey; } } catch(_){}
+
   function _lextFindTeamRow(data, id, fallbackName){
     if (!data || !Array.isArray(data.teams)) return null;
     if (id) {
@@ -19164,11 +19242,27 @@ Tottenham
       }
     }
     if (fallbackName) {
-      var nm = _lextNormName(fallbackName);
+      /* Limpia el nombre de adornos (escudo emoji 🛡, prefijo *,
+         espacios) antes de normalizar — la clasificación lo deriva
+         del título del modal y puede traer ruido. */
+      var _fbClean = String(fallbackName).replace(/🛡/g,'').replace(/^\s*\*+\s*/,'').trim();
+      var nm = _lextNormName(_fbClean);
       if (nm) {
         for (var j = 0; j < data.teams.length; j++) {
           var et = data.teams[j];
           if (et && _lextNormName(et.name) === nm) return et;
+        }
+      }
+      /* 2ª pasada CANÓNICA + ALIAS: "Athletic Club" ⇆ "Athletic
+         Bilbao", "Atl Madrid" ⇆ "Atlético Madrid", etc. Resuelve el
+         bug "No encuentro el equipo … ni por id ni por nombre"
+         (2026-05-17) cuando el id del bundle no casa con el de
+         localStorage y el nombre difiere por afijo/acento/alias. */
+      var ck = (typeof _teamCanonKey === 'function') ? _teamCanonKey(_fbClean) : '';
+      if (ck) {
+        for (var m = 0; m < data.teams.length; m++) {
+          var et2 = data.teams[m];
+          if (et2 && et2.name && _teamCanonKey(et2.name) === ck) return et2;
         }
       }
     }
@@ -19371,6 +19465,20 @@ Tottenham
       });
       if (t.players.length !== before) dirty = true;
     });
+    /* Phase 0b: DEDUP de jugadores dentro de cada plantilla. Auto-cura
+       las plantillas ya corruptas (duplicadas/triplicadas) en la
+       PRIMERA carga y persiste (loadData guarda cuando dirty). Corre
+       ANTES del dedup de filas para que `_editScore` compare nóminas
+       limpias y no se quede con la copia "doble". (bug 2026-05-17) */
+    d.teams.forEach(function(t){
+      if (!t || !Array.isArray(t.players) || !t.players.length) return;
+      var n0 = t.players.length;
+      var dd = _dedupeSquadPlayers(t.players);
+      if (dd !== t.players || dd.length !== n0) {
+        t.players = dd;
+        if (dd.length !== n0) dirty = true;
+      }
+    });
     /* Phase 1: strip `*` y espacios delante. */
     d.teams.forEach(function(t){
       if (!t || typeof t.name !== 'string') return;
@@ -19390,7 +19498,13 @@ Tottenham
     for (var i = 0; i < d.teams.length; i++) {
       var t = d.teams[i];
       if (!t || !t.name) { keepIdx.push(i); continue; }
-      var key = String(t.name).toLowerCase().trim();
+      /* Clave CANÓNICA + ALIAS: colapsa "Atl Madrid" y "Atlético
+         Madrid" (y acentos / afijos FC-CF) a una sola fila. Antes la
+         clave era el nombre crudo en minúsculas y dejaba 2 Atlético
+         Madrid coexistiendo (bug usuario 2026-05-17). */
+      var key = (typeof _teamCanonKey === 'function')
+        ? _teamCanonKey(t.name)
+        : String(t.name).toLowerCase().trim();
       if (!key) { keepIdx.push(i); continue; }
       var prevIdx = byKey[key];
       if (prevIdx === undefined) {
@@ -21447,6 +21561,9 @@ Tottenham
      dorsales (si hay) y todos los flags (C/F/P/⭐/⚾/🏀). */
   function _squadToPasteText(players){
     if(!Array.isArray(players) || !players.length) return '';
+    /* Defensa en profundidad: nunca serializar duplicados al textarea
+       aunque alguna ruta dejara la nómina sucia (bug 2026-05-17). */
+    try { players = _dedupeSquadPlayers(players); } catch(_){}
     var SECTIONS = [
       { key:'POR', header:'### 🧤 Porteros' },
       { key:'DEF', header:'### 🛡️ Defensas' },
@@ -22134,7 +22251,10 @@ Tottenham
        tocamos esas flags. El motor acepta múltiples goleadores con
        peso ×3, múltiples lanzadores de falta/penalti y múltiples
        estrellas. Sólo el capitán (C) es único por equipo. */
-    return players;
+    /* Red de seguridad: si el texto pegado ya traía la nómina
+       duplicada/triplicada (caso reportado 2026-05-17), la limpiamos
+       aquí — el resto del flujo recibe SIEMPRE una plantilla única. */
+    return _dedupeSquadPlayers(players);
   }
 
   function renderTeamsList(){
@@ -22752,7 +22872,7 @@ Tottenham
             if(_squadsEqual(parsed, t.players)){
               /* idempotente: nada que hacer */
             } else if(!confirm('Este equipo ya tiene '+t.players.length+' jugadores. ¿Reemplazar la plantilla con los '+parsed.length+' del textarea? (Cancelar = añadir a los existentes)')){
-              t.players = (t.players||[]).concat(parsed);
+              t.players = _dedupeSquadPlayers((t.players||[]).concat(parsed));
             } else {
               t.players = parsed;
             }
@@ -23693,7 +23813,7 @@ Tottenham
     if(t.players.length){
       var replace = confirm('Este equipo ya tiene '+t.players.length+' jugadores.\n\nOK = REEMPLAZAR toda la plantilla por los '+parsed.length+' pegados\nCancelar = AÑADIR los '+parsed.length+' a los existentes');
       if(replace) t.players = parsed;
-      else t.players = t.players.concat(parsed);
+      else t.players = _dedupeSquadPlayers(t.players.concat(parsed));
     } else {
       t.players = parsed;
     }

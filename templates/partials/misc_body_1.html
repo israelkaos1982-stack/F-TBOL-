@@ -956,8 +956,6 @@ window._showSimProgress = function(opts, onDone){
     return out;
   }
 
-  function _wxText(w){ return /🌧/.test(w)?'Lluvia':(/❄️/.test(w)?'Nieve':'Soleado'); }
-
   /* ── Módulo 1.2: fusión del Bayern en el torneo elegido ───────── */
   window._tourMergeBayern = function(tId){
     var d = _load();
@@ -1185,6 +1183,36 @@ window._showSimProgress = function(opts, onDone){
     return '<div class="ps-bajas ko"><b>🚑 Bajas para este partido:</b><br>' + bajas.map(_esc).join('<br>') + '</div>';
   }
 
+  /* Abre la PANTALLA DE PREVIA estándar del proyecto (la misma que
+     usan Liga/Copa/Torneos: window.showPrePartidoOverlay tras fijar
+     _ppPreviaTeams + _ppCustomCallback). Es el "cascarón único"
+     pedido en el spec. Al proceder desde la previa avanzamos el día. */
+  function _openPreseasonPrevia(day, rv, tourNm){
+    var home = 'Bayern Munich', away = rv.name;
+    var comp = /amist/i.test(day.label || '') ? 'amistoso' : 'torneo';
+    var dur = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH:false, humanInvolved:true })
+      : '8 min';
+    window._ppPreviaTeams = {
+      home: home, away: away, j: 0, comp: comp,
+      stadium: rv.stadium || '', tourName: tourNm || ''
+    };
+    var advanced = false;
+    window._ppCustomCallback = function(){
+      window._ppPreviaTeams = null;
+      if (advanced) return; advanced = true;
+      try { if (typeof go === 'function') go('s-munich'); } catch(_){}
+      _markDoneAndAdvance();
+    };
+    if (typeof window.showPrePartidoOverlay === 'function'){
+      var mk = 'ps_' + String(day.date||'').replace(/\s+/g,'') + '_m0';
+      window.showPrePartidoOverlay(mk, comp, 'No', dur, false);
+    } else {
+      /* Sin previa disponible → avanzar igualmente para no bloquear. */
+      window._ppCustomCallback();
+    }
+  }
+
   function _cardMatch(day){
     var st = _stage(); if (!st) return;
     var d = _load();
@@ -1209,17 +1237,6 @@ window._showSimProgress = function(opts, onDone){
       +   '<div class="ps-x">VS</div>'
       +   '<div class="ps-team"><img class="ps-shield" src="' + _esc(_shield(rv.name)) + '" onerror="this.src=\'' + FALLBACK_SHIELD + '\'"><div class="ps-tn">' + _esc(rv.name) + '</div></div>'
       + '</div>'
-      + '<div>'
-      +   '<span class="ps-tag">🏟 ' + _esc(rv.stadium) + '</span>'
-      +   '<span class="ps-tag">' + _esc(day.weather) + ' ' + _wxText(day.weather) + '</span>'
-      +   '<span class="ps-tag">🎮 ' + _esc(rv.difficulty) + '</span>'
-      +   '<span class="ps-tag">⏱ 8 MIN</span>'
-      + '</div>'
-      + '<div class="ps-opts">'
-      +   '<span class="ps-opt">⚽ Balón: Estándar</span>'
-      +   '<span class="ps-opt">⏳ Prórroga: No</span>'
-      +   '<span class="ps-opt">🥅 Penaltis: No</span>'
-      + '</div>'
       + _bajasBanner()
       + '<div style="margin-top:18px;display:flex;gap:10px;justify-content:center;">'
       +   '<button type="button" class="ps-btn" id="ps-match-play">⚽ JUGAR PARTIDO</button>'
@@ -1228,17 +1245,7 @@ window._showSimProgress = function(opts, onDone){
       + '</div>';
     var play = document.getElementById('ps-match-play');
     var skip = document.getElementById('ps-match-skip');
-    if (play) play.onclick = function(){
-      var gf = prompt('⚽ ' + tourNm + ' · ' + day.date + '\n\nGoles Bayern:');
-      if (gf === null) return;
-      var gc = prompt('⚽ vs ' + rv.name + '\n\nGoles ' + rv.name + ':');
-      if (gc === null) return;
-      var a = parseInt(gf,10), b = parseInt(gc,10);
-      if (isNaN(a)||isNaN(b)||a<0||b<0){ alert('Marcador inválido.'); return; }
-      var res = a>b ? '🟢 Victoria' : (a<b ? '🔴 Derrota' : '🟡 Empate');
-      alert(res + ' · Bayern ' + a + ' - ' + b + ' ' + rv.name);
-      _markDoneAndAdvance();
-    };
+    if (play) play.onclick = function(){ _openPreseasonPrevia(day, rv, tourNm); };
     if (skip) skip.onclick = function(){ _markDoneAndAdvance(); };
   }
 

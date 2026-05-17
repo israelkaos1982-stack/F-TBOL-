@@ -18580,6 +18580,14 @@ window._showSimProgress = function(opts, onDone){
 .lext-ov-close{background:none;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.65);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px;letter-spacing:1px;}
 .lext-input,.lext-select{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;margin-bottom:8px;}
 .lext-input:focus,.lext-select:focus{outline:none;border-color:#f0c040;}
+/* Selector de posición por BOTONES (2026-05-17): el <select> nativo
+   se quedaba "bloqueado en Portero" en algunos navegadores móviles
+   (foto usuario). Botones tap = 100% fiables, sin depender del
+   picker nativo. */
+.lext-posseg{display:flex;gap:6px;margin-bottom:8px;}
+.lext-posseg button{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:9px 4px;color:rgba(255,255,255,.7);font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;cursor:pointer;transition:background .14s,border-color .14s,color .14s;}
+.lext-posseg button.active{background:rgba(240,192,64,.18);border-color:#f0c040;color:#f0c040;}
+.lext-posseg button:active{transform:scale(.96);}
 .lext-label{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.5);display:block;margin:8px 0 3px;}
 .lext-btn{background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.45);color:#f0c040;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;transition:all .15s;}
 .lext-btn:hover{background:rgba(240,192,64,.25);}
@@ -19065,12 +19073,18 @@ Tottenham
       <label class="lext-label">Dorsal · opcional, autocalculado si lo dejas vacío</label>
       <input class="lext-input" id="lext-pl-num" type="number" min="1" max="99" placeholder="Ej. 9" />
       <label class="lext-label">Posición</label>
-      <select class="lext-select" id="lext-pl-pos">
-        <option value="POR">Portero</option>
-        <option value="DEF">Defensa</option>
-        <option value="MED">Medio</option>
-        <option value="DEL">Delantero</option>
-      </select>
+      <!-- Botones en vez de <select> nativo: en móvil el select se
+           quedaba clavado en "Portero" y no dejaba elegir (foto
+           usuario 2026-05-17). El valor vive en el hidden #lext-pl-pos
+           para no tocar lextSavePlayer/lextEditPlayer (siguen leyendo
+           .value). Default MED (lo más común al añadir). -->
+      <input type="hidden" id="lext-pl-pos" value="MED" />
+      <div class="lext-posseg" id="lext-pl-posseg">
+        <button type="button" data-pos="POR" onclick="window.lextSetPos('POR')">Portero</button>
+        <button type="button" data-pos="DEF" onclick="window.lextSetPos('DEF')">Defensa</button>
+        <button type="button" data-pos="MED" onclick="window.lextSetPos('MED')">Medio</button>
+        <button type="button" data-pos="DEL" onclick="window.lextSetPos('DEL')">Delantero</button>
+      </div>
       <label class="lext-label">🛡 Nivel / Poder (1-99)</label>
       <input class="lext-input" id="lext-pl-power" type="number" min="1" max="99" value="75" />
       <label class="lext-label">Roles especiales</label>
@@ -19080,11 +19094,14 @@ Tottenham
         <label class="lext-pl-role"><input type="checkbox" id="lext-pl-pk"/><span class="lext-pl-role-ico">🥅</span><span>Lanza penaltis</span></label>
         <label class="lext-pl-role"><input type="checkbox" id="lext-pl-star"/><span class="lext-pl-role-ico">⭐</span><span>Estrella</span></label>
         <label class="lext-pl-role"><input type="checkbox" id="lext-pl-scorer"/><span class="lext-pl-role-ico">⚾</span><span>Goleador nato</span></label>
+        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-scorer-pro"/><span class="lext-pl-role-ico">🏀</span><span>Goleador estrella</span></label>
       </div>
       <div class="lext-sub">
-        Solo <b>el capitán</b> es único por equipo. <b>F</b>, <b>P</b>, <b>⭐</b> y <b>⚾</b> pueden activarse en varios jugadores a la vez.
+        Solo <b>el capitán</b> es único por equipo. <b>F</b>, <b>P</b>, <b>⭐</b>, <b>⚾</b> y <b>🏀</b> pueden activarse en varios jugadores a la vez.
         <br>Efecto de cada rol en la simulación:
-        <br>· <b>⚾ Goleador nato</b> — prioridad MÁXIMA, ×3 en probabilidad de gol (marca 50%+ de los goles del equipo).
+        <br>· <b>🏀 Goleador estrella</b> — prioridad MÁXIMA, ×3.0 en probabilidad de gol (marca ≈48% de los goles del equipo).
+        <br>· <b>⚾ Goleador nato</b> — ×1.8 en probabilidad de gol (marca ≈30% de los goles del equipo).
+        <br><span style="opacity:.75;">⚠️ 🏀 y ⚾ NO se acumulan: si marcas 🏀, el ⚾ se ignora.</span>
         <br>· <b>P</b> / <b>F</b> — prioridad ALTA, el jugador marcado tira TODOS los penaltis / faltas (suma fija).
         <br>· <b>⭐ Estrella</b> — prioridad MEDIA, solo empuja la elección de MVP del partido, no cambia el resultado.
         <br>· <b>C Capitán</b> — soporte invisible, +5% al poder del equipo en la sim (mejor resultado global).
@@ -23249,6 +23266,10 @@ Tottenham
     if (plNameEl) plNameEl.value = '';
     var plPowerEl = document.getElementById('lext-pl-power');
     if (plPowerEl) plPowerEl.value = '75';
+    /* Reset del selector de posición (botones) + flag 🏀 al abrir. */
+    try { if (typeof window.lextSetPos === 'function') window.lextSetPos('MED'); } catch(_){}
+    var _plPro = document.getElementById('lext-pl-scorer-pro');
+    if (_plPro) _plPro.checked = false;
 
     /* Cabecera de stats del equipo en la competición actual + niveles
        4-ejes auto-derivados. */
@@ -23998,11 +24019,16 @@ Tottenham
     var pkChk     = document.getElementById('lext-pl-pk');
     var starChk   = document.getElementById('lext-pl-star');
     var scorerChk = document.getElementById('lext-pl-scorer');
+    var scorerProChk = document.getElementById('lext-pl-scorer-pro');
     var isCap    = !!(capChk    && capChk.checked);
     var isFk     = !!(fkChk     && fkChk.checked);
     var isPk     = !!(pkChk     && pkChk.checked);
     var isStar   = !!(starChk   && starChk.checked);
-    var isScorer = !!(scorerChk && scorerChk.checked);
+    var isScorer    = !!(scorerChk    && scorerChk.checked);
+    var isScorerPro = !!(scorerProChk && scorerProChk.checked);
+    /* CLAUDE.md: 🏀 y ⚾ NO se acumulan — si lleva 🏀 (estrella),
+       ⚾ (nato) se ignora. La estrella manda. */
+    if (isScorerPro) isScorer = false;
     var data = loadData(CURRENT_KEY);
     /* Fallback por nombre del título del overlay por si el id quedó
        desincronizado (ver helper _lextFindTeamRow). */
@@ -24033,6 +24059,7 @@ Tottenham
       target.penalty  = isPk;
       target.elite    = isStar;
       target.natGoal  = isScorer;
+      target.natGoalPro = isScorerPro;
     } else {
       if(isCap) t.players.forEach(function(p){ if(p.captain) p.captain = false; });
       var newP = {
@@ -24043,6 +24070,7 @@ Tottenham
         penalty:  isPk,
         elite:    isStar,
         natGoal:  isScorer,
+        natGoalPro: isScorerPro,
         pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
       };
       t.players.push(newP);
@@ -24058,6 +24086,8 @@ Tottenham
     if(pkChk)     pkChk.checked     = false;
     if(starChk)   starChk.checked   = false;
     if(scorerChk) scorerChk.checked = false;
+    if(scorerProChk) scorerProChk.checked = false;
+    try { window.lextSetPos('MED'); } catch(_){}
     _exitEditPlayerMode();
 
     renderSquadList();
@@ -24086,13 +24116,16 @@ Tottenham
     _editingPlayerId = pid;
     document.getElementById('lext-pl-name').value  = target.name || '';
     document.getElementById('lext-pl-num').value   = target.num  || '';
-    document.getElementById('lext-pl-pos').value   = target.pos  || 'MED';
+    try { window.lextSetPos(target.pos || 'MED'); }
+    catch(_){ document.getElementById('lext-pl-pos').value = target.pos || 'MED'; }
     document.getElementById('lext-pl-power').value = target.power|| 75;
     var capChk    = document.getElementById('lext-pl-cap');
     var fkChk     = document.getElementById('lext-pl-fk');
     var pkChk     = document.getElementById('lext-pl-pk');
     var starChk   = document.getElementById('lext-pl-star');
     var scorerChk = document.getElementById('lext-pl-scorer');
+    var scorerProChk = document.getElementById('lext-pl-scorer-pro');
+    if(scorerProChk) scorerProChk.checked = !!target.natGoalPro;
     if(capChk)    capChk.checked    = !!target.captain;
     if(fkChk)     fkChk.checked     = !!target.freeKick;
     if(pkChk)     pkChk.checked     = !!target.penalty;
@@ -24123,6 +24156,23 @@ Tottenham
     var cancel = document.getElementById('lext-pl-cancel-btn');
     if(cancel) cancel.style.display = 'none';
   }
+
+  /* Selector de posición por botones (reemplaza al <select> nativo
+     que se quedaba bloqueado en "Portero" en móvil — foto usuario
+     2026-05-17). Mantiene el valor en el hidden #lext-pl-pos para no
+     tocar la lógica de guardado/edición. Idempotente. */
+  window.lextSetPos = function(v){
+    v = (v === 'POR' || v === 'DEF' || v === 'MED' || v === 'DEL') ? v : 'MED';
+    var h = document.getElementById('lext-pl-pos');
+    if (h) h.value = v;
+    var seg = document.getElementById('lext-pl-posseg');
+    if (seg) {
+      var btns = seg.querySelectorAll('button');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle('active', btns[i].getAttribute('data-pos') === v);
+      }
+    }
+  };
 
   window.lextDeletePlayer = function(pid){
     var data = loadData(CURRENT_KEY);

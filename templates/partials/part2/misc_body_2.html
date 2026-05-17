@@ -10479,6 +10479,37 @@
     }
   }
 
+  /* ── Reactivar la caja FINALIZAR cuando el partido ya terminó ─────
+     (foto usuario 2026-05-17): si tras cargar la barra el humano se
+     queda en el gm-modal con el partido finalizado, la caja
+     FINALIZAR no debe salir apagada/atascada. La reetiquetamos a
+     "🏁 VER RESUMEN", la dejamos habilitada y llamativa, y su
+     onclick re-abre la pantalla FINAL. Idempotente: se puede llamar
+     en cada render / scan sin efectos secundarios. Solo actúa si
+     el partido está finished y la pantalla FINAL no está abierta. */
+  window._gmReactivateFinishBtn = function () {
+    try {
+      if (!window._gm || !window._gm.finished) return;
+      var finOv = document.getElementById('gm-fin-ov');
+      if (finOv && finOv.style.display && finOv.style.display !== 'none') return;
+      var b = document.getElementById('gm-btn-end');
+      if (!b) return;
+      /* Idempotente: si ya está reactivado, no re-escribir el DOM
+         (este helper corre en el poll de 300 ms). */
+      if (b._gmFinReactivated && !b.disabled) return;
+      b._gmFinReactivated = true;
+      b.disabled = false;
+      b.style.opacity = '1';
+      b.style.pointerEvents = 'auto';
+      b.textContent = '🏁 VER RESUMEN';
+      b.classList.add('is-finishable');
+      b.onclick = function (ev) {
+        try { if (ev) { ev.preventDefault(); ev.stopPropagation(); } } catch(_){}
+        try { _gmShowFinalOv(); } catch(_){ if (window.gmShowPost) window.gmShowPost(); }
+      };
+    } catch(_){}
+  };
+
   window._gmShareFinal = function() {
     var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
                   'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
@@ -10961,6 +10992,10 @@
       } else {
         _gmEndBtn.textContent = '🏁 FINALIZAR';
       }
+      /* Partido en juego → resetear el flag de "VER RESUMEN" para
+         que cuando ESTE partido termine, _gmReactivateFinishBtn
+         vuelva a reactivar la caja desde cero. */
+      if (!_gm.finished) _gmEndBtn._gmFinReactivated = false;
 
       /* ── PRÓRROGA (gm-btn-et): SOLO visible si realmente puede
          haber prórroga — contexto eliminatoria + empate aún sin
@@ -10998,6 +11033,10 @@
       btn.className = 'ml-timer finished';
       if (row) { row.classList.remove('running'); row.classList.add('finished'); }
       _setEditVis(false);
+      /* Partido FINALIZADO: reactivar la caja FINALIZAR ("VER
+         RESUMEN") para que el humano no se quede atascado en el
+         gm-modal. (foto usuario 2026-05-17). */
+      try { window._gmReactivateFinishBtn(); } catch(_){}
       return;
     }
     if (_gm.inDescanso) {
@@ -24576,6 +24615,11 @@ document.addEventListener('DOMContentLoaded', function() {
     while (t && t !== document.body) {
       if (_isFinalizeBtn(t)) {
         if (t.id === 'ml-post-close-btn') { _hide(); return; }
+        /* Si el partido del gm-modal YA está finalizado, el botón
+           gm-btn-end fue reetiquetado a "VER RESUMEN" y su onclick
+           re-abre la pantalla FINAL — NO es un procesado: no mostrar
+           la barra "Procesando partido…". (foto usuario 2026-05-17) */
+        if (t.id === 'gm-btn-end' && window._gm && window._gm.finished) { _hide(); return; }
         /* Pasamos contexto (home/away/score) al modal para que rote
            titulares de prensa generados según el resultado. Lo
            guardamos también en `window._lastFinalizeCtx` porque
@@ -29433,6 +29477,10 @@ document.addEventListener('DOMContentLoaded', function() {
     try { _gmMoveFinalizarBtn(); } catch(_){}
     try { _gmWireActaWatcher(); } catch(_){}
     try { _hookOverlayButtons(); } catch(_){}
+    /* Si el partido del modal ya terminó y la pantalla FINAL no
+       está abierta, mantener la caja FINALIZAR activa y llamativa
+       ("VER RESUMEN") — el humano no debe quedarse atascado. */
+    try { if (window._gmReactivateFinishBtn) window._gmReactivateFinishBtn(); } catch(_){}
   }
 
   /* ── PREVIA · TWITCH 100% OPCIONAL (2026-05-10) ─────────────────

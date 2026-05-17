@@ -30169,6 +30169,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (visMatch)    visMatch.style.display    = 'none';
       var _psHide = getEl('ps-stage');
       if (_psHide) _psHide.style.display = 'none';
+      /* Sin torneo elegido NO se puede jugar ni pasar de día:
+         ocultamos JUGAR PARTIDO / SIGUIENTE DÍA (hay que elegir
+         un torneo sí o sí). */
+      var _hubActPick = document.querySelector('#s-munich .hub-actions');
+      if (_hubActPick) _hubActPick.style.display = 'none';
       renderTourPicker();
       if (matchEl) matchEl.textContent = '🌞 PRETEMPORADA · Elige 1 torneo';
       if (state.injured) {

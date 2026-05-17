@@ -9938,7 +9938,45 @@ window._showSimProgress = function(opts, onDone){
 <!-- CSS de bracket / lista de equipos sorteados (rendered en
      `_tourRender`, dentro de cada pantalla de torneo). -->
 <style>
-  .tour-bracket-list{display:flex;flex-direction:column;gap:6px;margin-top:4px;}
+  .tour-bracket-list{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
+  /* Caja por eliminatoria: borde claro que separa cada cruce
+     (petición usuario 2026-05-17). Envuelve fila + ida/vuelta/global
+     + ACTA. */
+  .tour-tie{
+    border:1px solid rgba(255,255,255,.18);border-radius:10px;
+    padding:8px 8px 6px;background:rgba(255,255,255,.022);
+    display:flex;flex-direction:column;gap:6px;
+  }
+  /* Eliminatoria con humano: borde dorado llamativo + pulso. Va
+     arriba del todo (el render la coloca primero). */
+  .tour-tie-human{
+    border:2px solid #f0c040;
+    box-shadow:0 0 16px rgba(240,192,64,.55),inset 0 0 8px rgba(240,192,64,.14);
+    background:rgba(240,192,64,.06);
+    animation:tourTiePulse 1.5s ease-in-out infinite;
+  }
+  @keyframes tourTiePulse{
+    0%,100%{box-shadow:0 0 14px rgba(240,192,64,.45),inset 0 0 6px rgba(240,192,64,.10);border-color:#f0c040;}
+    50%{box-shadow:0 0 26px rgba(255,213,74,.95),0 0 50px rgba(255,213,74,.40),inset 0 0 10px rgba(255,213,74,.22);border-color:#fff1a8;}
+  }
+  /* Dentro de la caja, la fila del partido pierde su borde propio
+     (la caja .tour-tie ya delimita). */
+  .tour-tie .tour-match{border-color:transparent;background:transparent;}
+  .tour-tie .tour-match.tour-match-has-human{box-shadow:none;background:transparent;}
+  .tour-tie-legs{
+    display:flex;flex-direction:column;gap:2px;
+    padding:5px 6px 2px;border-top:1px dashed rgba(255,255,255,.12);
+  }
+  .tour-tie-leg{display:flex;align-items:center;gap:8px;font-family:Rajdhani,sans-serif;font-size:11px;}
+  .tour-tie-leg .tl-lbl{
+    flex:0 0 52px;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;
+    color:rgba(255,255,255,.45);text-transform:uppercase;
+  }
+  .tour-tie-leg .tl-row{flex:1;display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;}
+  .tour-tie-leg .tl-tm{color:rgba(255,255,255,.7);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tour-tie-leg .tl-tm-r{text-align:right;}
+  .tour-tie-leg .tl-sc{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:#fff;}
+  .tour-tie-note{font-family:Rajdhani,sans-serif;font-size:10px;color:#f0c040;text-align:center;padding-top:2px;}
   .tour-match{
     display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;
     background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);
@@ -9982,7 +10020,9 @@ window._showSimProgress = function(opts, onDone){
     box-shadow:0 0 18px rgba(255,255,255,.55), inset 0 0 8px rgba(255,255,255,.18);
   }
   .tour-bracket-team.is-winner span{color:#5fe08a;font-weight:700;text-shadow:0 0 6px rgba(95,224,138,.4);}
-  .tour-bracket-team.is-loser span{color:rgba(255,92,112,.65);text-decoration:line-through;text-decoration-color:rgba(255,92,112,.4);}
+  /* Eliminado en ROJO pero SIN tachar el nombre (petición usuario
+     2026-05-17). */
+  .tour-bracket-team.is-loser span{color:#ff6b7d;}
   .tour-score{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;color:rgba(255,255,255,.75);}
   .tour-score-win{color:#5fe08a;text-shadow:0 0 8px rgba(95,224,138,.5);}
   .tour-score-wrap{display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:2px 8px;}
@@ -10366,6 +10406,7 @@ window._showSimProgress = function(opts, onDone){
      por el editor para renderizar los checkboxes de "Excluir ligas". */
   function _availableLeagues(){
     var leagues = {};
+    /* 1) Ligas con datos en localStorage (slug + recuento reales). */
     try {
       for (var i = 0; i < localStorage.length; i++){
         var key = localStorage.key(i);
@@ -10383,7 +10424,32 @@ window._showSimProgress = function(opts, onDone){
         leagues[slug] = { slug: slug, label: data.name || _humanizeSlug(slug), count: withTeams };
       }
     } catch(_){}
-    return Object.keys(leagues).sort().map(function(k){ return leagues[k]; });
+    /* 2) Las 3 Ligas de España SIEMPRE deben poder excluirse aunque
+       aún no estén cacheadas (petición usuario 2026-05-17). */
+    var SPAIN = [
+      { slug:'liga-ea-sports',          label:'Liga EA Sports' },
+      { slug:'liga-hypermotion',        label:'Liga Hypermotion' },
+      { slug:'liga-primera-federacion', label:'Primera Federación' }
+    ];
+    SPAIN.forEach(function(L){
+      if (!leagues[L.slug]) leagues[L.slug] = { slug:L.slug, label:L.label, count:0 };
+    });
+    /* 3) Las 51 "Resto de Ligas" del DOM estático (#s-ligas) como
+       placeholders, para que SIEMPRE aparezcan como opción de
+       exclusión aunque su data aún se esté prefetcheando. El recuento
+       real lo aporta el paso (1) cuando llega. */
+    try {
+      var els = document.querySelectorAll('#s-ligas .menu-card .mc-label');
+      for (var n = 0; n < els.length; n++) {
+        var nm = (els[n].textContent || '').trim();
+        if (!nm) continue;
+        var sl = _tourSlugify(nm);
+        if (sl && !leagues[sl]) leagues[sl] = { slug:sl, label:nm, count:0 };
+      }
+    } catch(_){}
+    return Object.keys(leagues)
+      .sort(function(x,y){ return leagues[x].label.localeCompare(leagues[y].label); })
+      .map(function(k){ return leagues[k]; });
   }
 
   /* SIN CACHE (petición usuario 2026-05-16 #3: "lo quiero EN EL
@@ -10804,9 +10870,12 @@ window._showSimProgress = function(opts, onDone){
         '<input id="tour-ed-rounds" type="text" value="'+(fc.rounds||['SF','F']).join(',')+'" placeholder="R16,QF,SF,F">' +
         '<div style="margin-top:8px;padding:8px 10px;background:rgba(60,200,120,.10);border:1px dashed rgba(60,200,120,.45);border-radius:6px;font-size:11px;color:#9ee5a9;line-height:1.4;text-transform:none;letter-spacing:0;">'+
           '<b>Ida y vuelta</b> · cada cruce se decide a doble partido. '+
-          'Se aplica la <b>regla de gol fuera × 2</b>: los goles marcados '+
-          'como visitante valen el doble en el global. '+
-          '<i>Ejemplo: ida 1-1, vuelta 2-2 → global 5-4 favorable al visitante.</i>'+
+          'Se aplica la <b>regla del gol de visitante</b>: si el global '+
+          'queda igualado, avanza quien haya marcado más goles como '+
+          'visitante. '+
+          '<i>Ejemplo: ida A 2-1 B, vuelta B 3-2 A → global 4-4; avanza A '+
+          'por marcar más fuera de casa. Si también empatan los goles de '+
+          'visitante, se decide por penaltis.</i>'+
         '</div>';
     } else if (fmt === 'league') {
       box.innerHTML =
@@ -11028,7 +11097,7 @@ window._showSimProgress = function(opts, onDone){
     if (cfg.format === 'ko') {
       fmtTxt += ': ' + (fc.rounds||[]).join(' → ');
     } else if (cfg.format === 'ko-2leg') {
-      fmtTxt += ': ' + (fc.rounds||[]).join(' → ') + ' · gol fuera × 2';
+      fmtTxt += ': ' + (fc.rounds||[]).join(' → ') + ' · regla del gol de visitante';
     } else if (cfg.format === 'league') {
       fmtTxt += ': '+(cfg.numTeams||'?')+' equipos'+(fc.twoLegs?' a doble vuelta':' a una vuelta');
     } else if (cfg.format === 'groups-ko') {
@@ -11078,7 +11147,43 @@ window._showSimProgress = function(opts, onDone){
     return '<div class="'+classes.join(' ')+'"'+data+'>'+img+'<span>'+(t.name||'?')+'</span></div>';
   }
 
-  /* Equivalente para la lista de Liga / Grupos (chip plano). */
+  /* Sub-bloque IDA / VUELTA / GLOBAL para una eliminatoria a doble
+     partido (ko-2leg). Petición usuario 2026-05-17: ver los 3
+     marcadores. Si no hay legs (final a partido único o partido
+     jugado a mano) devuelve '' — el marcador global ya se ve arriba.
+     legs[0] = IDA (A local): {a:goles A, b:goles B}
+     legs[1] = VUELTA (B local): {a:goles B, b:goles A}. */
+  function _tourTieLegsHtml(cfg, a, b, res){
+    if (!cfg || cfg.format !== 'ko-2leg') return '';
+    if (!res || !res.legs || res.legs.length < 2) return '';
+    var nA = (a && a.name) || '?', nB = (b && b.name) || '?';
+    var L1 = res.legs[0] || {}, L2 = res.legs[1] || {};
+    function esc(s){ return String(s==null?'':s).replace(/[<>]/g,''); }
+    function line(lbl, h, sh, sa, ah){
+      return '<div class="tour-tie-leg"><span class="tl-lbl">'+lbl+'</span>'
+        + '<span class="tl-row"><span class="tl-tm">'+esc(h)+'</span>'
+        + '<span class="tl-sc">'+(sh|0)+' - '+(sa|0)+'</span>'
+        + '<span class="tl-tm tl-tm-r">'+esc(ah)+'</span></span></div>';
+    }
+    var html = '<div class="tour-tie-legs">';
+    html += line('IDA', nA, L1.a, L1.b, nB);
+    html += line('VUELTA', nB, L2.a, L2.b, nA);
+    html += line('GLOBAL', nA, res.a, res.b, nB);
+    /* Nota de resolución cuando el global quedó igualado. */
+    if ((res.a|0) === (res.b|0)) {
+      var note;
+      if (res.pens) {
+        note = 'Penaltis ' + (res.pens.a|0) + '-' + (res.pens.b|0)
+             + ' · gana ' + esc(res.winner === 'a' ? nA : nB);
+      } else {
+        note = 'Global igualado → gana ' + esc(res.winner === 'a' ? nA : nB)
+             + ' por goles de visitante';
+      }
+      html += '<div class="tour-tie-note">'+note+'</div>';
+    }
+    html += '</div>';
+    return html;
+  }
   function _teamChipHtml(t, tourId, slotIdx){
     var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
     var classes = ['tour-team-chip'];
@@ -11155,11 +11260,12 @@ window._showSimProgress = function(opts, onDone){
       var curR = cfg.currentRound;
       var curTeams = cfg.bracket[curR] || [];
       var roundLbl = rounds[curR] || ('Ronda de '+curTeams.length);
-      var subtitle = (cfg.format === 'ko-2leg') ? 'IDA Y VUELTA · gol fuera × 2' : 'A UN PARTIDO';
+      var subtitle = (cfg.format === 'ko-2leg') ? 'IDA Y VUELTA · gol de visitante' : 'A UN PARTIDO';
       var html = hint + '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">'+roundLbl+' · <span style="color:rgba(255,255,255,.40);">'+subtitle+'</span></p>';
       html += '<div class="tour-bracket-list">';
       var allPlayed = true;
       var pairCount = 0;
+      var humanTies = '', restTies = '';   /* humanas arriba (petición usuario 2026-05-17) */
       for (var i = 0; i < curTeams.length; i += 2) {
         var a = curTeams[i], b = curTeams[i+1];
         if (!b) break;
@@ -11168,33 +11274,41 @@ window._showSimProgress = function(opts, onDone){
         var played = !!(res && res.played);
         if (!played) allPlayed = false;
         var dataAttrs = ' data-tour="'+id+'" data-match-key="'+matchKey+'"';
+        var hasHuman = _tourPairHasHuman(curTeams, i);
         var rowClass = played ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
-        if (_tourPairHasHuman(curTeams, i)) rowClass += ' tour-match-has-human';
+        if (hasHuman) rowClass += ' tour-match-has-human';
+        var tie = '';
         if (played) {
           var aWin = res.winner === 'a', bWin = res.winner === 'b';
           var sA = '<span class="tour-score'+(aWin?' tour-score-win':'')+'">'+res.a+'</span>';
           var sB = '<span class="tour-score'+(bWin?' tour-score-win':'')+'">'+res.b+'</span>';
-          html += '<div class="'+rowClass+'"'+dataAttrs+'>'
+          tie += '<div class="'+rowClass+'"'+dataAttrs+'>'
             + _bracketTeamHtml(a, id, i, aWin, bWin && !aWin)
             + '<span class="vs tour-score-wrap">'+sA+' - '+sB+'</span>'
             + _bracketTeamHtml(b, id, i+1, bWin, aWin && !bWin)
             + '</div>';
-          html += _tourActaPanelHtml(id, matchKey, res);
+          tie += _tourTieLegsHtml(cfg, a, b, res);
+          tie += _tourActaPanelHtml(id, matchKey, res);
         } else {
-          html += '<div class="'+rowClass+'"'+dataAttrs+'>'
+          tie += '<div class="'+rowClass+'"'+dataAttrs+'>'
             + _bracketTeamHtml(a, id, i)
             + '<span class="vs">vs</span>'
             + _bracketTeamHtml(b, id, i+1)
             + '</div>';
           /* Botón 🤖 SIM IA: solo aparece si la pareja tiene humano y
-             el partido NO ha sido jugado. Permite saltarse la
-             obligación de jugarlo a mano cuando el usuario quiere. */
-          if (_tourPairHasHuman(curTeams, i)) {
-            html += _tourSimAiBtnHtml(id, 'match', matchKey);
+             el partido NO ha sido jugado. */
+          if (hasHuman) {
+            tie += _tourSimAiBtnHtml(id, 'match', matchKey);
           }
         }
+        /* Cada eliminatoria en su propia caja con borde (petición
+           usuario 2026-05-17). Las que tienen humano van arriba con
+           borde llamativo. */
+        var tieBox = '<div class="tour-tie'+(hasHuman?' tour-tie-human':'')+'">'+tie+'</div>';
+        if (hasHuman) humanTies += tieBox; else restTies += tieBox;
         pairCount++;
       }
+      html += humanTies + restTies;
       html += '</div>';
       /* Botón "▶ Simular ronda" si quedan partidos por jugar; "Avanzar"
          si todos los de la ronda están jugados y aún no es final. */

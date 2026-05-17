@@ -28932,11 +28932,50 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
     pk.classList.add('show');
     if (resetBtn) resetBtn.classList.remove('show');
+    /* Solo son ELEGIBLES los torneos de verano que existen de verdad
+       (los que el admin configuró → tienen `tour_<id>_v1` o están en
+       _TOUR_CACHE). Antes el picker mostraba los 4 hardcodeados aunque
+       solo hubiera 2 torneos reales. */
+    function _tourElegible(id){
+      try {
+        if (window._TOUR_CACHE && window._TOUR_CACHE[id]) return true;
+        if (localStorage.getItem('tour_' + id + '_v1')) return true;
+      } catch(_){}
+      return false;
+    }
     var cards = pk.querySelectorAll('.munich-tour-card');
+    var availIds = [];
     cards.forEach(function(c){
       var id = c.getAttribute('data-tour');
+      if (_tourElegible(id)) availIds.push(id);
+    });
+    /* Si no detectamos ninguno configurado (p.ej. configs solo en
+       servidor y aún sin cachear), NO dejamos el picker vacío:
+       mostramos todos como antes. */
+    var filtering = availIds.length > 0;
+    cards.forEach(function(c){
+      var id = c.getAttribute('data-tour');
+      var show = !filtering || availIds.indexOf(id) !== -1;
+      c.style.display = show ? '' : 'none';
+      if (show){
+        /* Refresca nombre/bandera con la config real si existe. */
+        try {
+          var info = (typeof window._tourMuInfoData === 'function') ? window._tourMuInfoData(id) : null;
+          if (info){
+            var nmEl = c.querySelector('.munich-tour-name');
+            var fgEl = c.querySelector('.munich-tour-flag');
+            if (nmEl && info.name) nmEl.textContent = info.name;
+            if (fgEl && info.flag) fgEl.textContent = info.flag;
+          }
+        } catch(_){}
+      }
       c.classList.toggle('picked', state.tempPicks.indexOf(id) !== -1);
     });
+    /* Si el torneo pre-seleccionado dejó de estar disponible, lo
+       quitamos de la selección en curso. */
+    if (filtering){
+      state.tempPicks = state.tempPicks.filter(function(id){ return availIds.indexOf(id) !== -1; });
+    }
     var btn = getEl('munich-tour-confirm');
     if (btn) {
       btn.textContent = '✅ CONFIRMAR ' + state.tempPicks.length + '/1';

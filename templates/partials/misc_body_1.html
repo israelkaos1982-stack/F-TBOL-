@@ -9845,7 +9845,7 @@ window._showSimProgress = function(opts, onDone){
     <!-- Formato -->
     <div class="tour-ed-row">
       <label>Formato</label>
-      <select id="tour-ed-fmt">
+      <select id="tour-ed-fmt" onchange="window._tourEdFmtChange&&window._tourEdFmtChange(this)">
         <option value="ko">Eliminatoria a un partido</option>
         <option value="ko-2leg">Eliminatoria a ida y vuelta</option>
         <option value="league">Liga (round-robin)</option>
@@ -10754,6 +10754,25 @@ window._showSimProgress = function(opts, onDone){
         '<input id="tour-ed-rounds" type="text" value="'+(fc.koRounds||['SF','F']).join(',')+'" placeholder="QF,SF,F">';
     }
   }
+
+  /* Handler del desplegable "Formato" — inline onchange en el <select>
+     para que SIEMPRE responda en móvil (no depende de que el
+     addEventListener de _wire() se haya enganchado). Cambia el formato,
+     reinicia la subconfig y la repinta; hace scroll para que el usuario
+     VEA el cambio en el formulario largo. Bug usuario 2026-05-17:
+     "el desplegable de formato del torneo no funciona". */
+  window._tourEdFmtChange = function(sel){
+    if (!_open) return;
+    var el = sel || document.getElementById('tour-ed-fmt');
+    if (!el) return;
+    _open.cfg.format = el.value;
+    _open.cfg.formatConfig = {};
+    _renderFmtCfg();
+    var box = document.getElementById('tour-ed-fmt-cfg');
+    if (box && box.scrollIntoView) {
+      try { box.scrollIntoView({ block:'nearest' }); } catch(_){ }
+    }
+  };
 
   function _prizesToText(p){
     return Object.keys(p||{}).map(function(k){ return k+':'+p[k]; }).join('\n');
@@ -12048,11 +12067,12 @@ window._showSimProgress = function(opts, onDone){
     });
     var fmt = document.getElementById('tour-ed-fmt');
     if (fmt) {
+      /* Backup del onchange inline (idempotente: vuelve a llamar al
+         mismo handler). El inline es el camino principal y fiable en
+         móvil; este addEventListener es una red por si el atributo
+         se perdiera en algún build. */
       fmt.addEventListener('change', function(){
-        if (!_open) return;
-        _open.cfg.format = this.value;
-        _open.cfg.formatConfig = {};
-        _renderFmtCfg();
+        if (typeof window._tourEdFmtChange === 'function') window._tourEdFmtChange(this);
       });
     }
     /* Botón principal: ✅ CONFIRMAR Y SORTEAR. Lee el formulario,

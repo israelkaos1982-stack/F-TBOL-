@@ -9503,31 +9503,25 @@ window._showSimProgress = function(opts, onDone){
     return Object.keys(leagues).sort().map(function(k){ return leagues[k]; });
   }
 
-  /* MEMOIZADO (petición usuario 2026-05-16: "crear un torneo tarda
-     >5 min"). `_allTeamsUncached` re-escanea TODO localStorage +
-     JSON.parse de cada ligaExt_* . Antes se llamaba en CADA pulsación
-     del editor (input → _updatePoolStat), en el sorteo, en el picker y
-     en la purga → con una BD grande eso eran segundos × decenas de
-     llamadas. Y NO resolvemos escudo por equipo aquí (sólo lo necesita
-     el picker, y sólo para ≤20 filas).
+  /* SIN CACHE (petición usuario 2026-05-16 #3: "lo quiero EN EL
+     MOMENTO como estaba antes"). El cache (TTL y luego por firma)
+     mostraba un pool incompleto cuando el editor se abría antes de que
+     las ligas estuvieran en localStorage, y aunque se autocorregía,
+     el usuario exige el comportamiento original: el contador SIEMPRE
+     refleja el localStorage actual en el instante, sin ventana stale.
 
-     CACHE POR FIRMA (fix 2026-05-16 #2: "pone 84 equipos si hay >1000,
-     51 ligas"). Antes el cache era TTL 20 s: si el editor se abría
-     ANTES de que las ligas de "Resto de Ligas" terminaran de hidratarse
-     desde el server (/api/liga-ext/*), se cacheaba un pool incompleto
-     (solo `ligaExt_liga-ea-sports`) y se quedaba pegado 20 s aunque las
-     ligas llegaran al segundo siguiente. Ahora la clave del cache es
-     una FIRMA barata de localStorage (el conjunto de claves ligaExt_*,
-     SIN getItem ni JSON.parse). Si la firma no cambia → cache (sin
-     reparsear, se mantiene el arreglo de rendimiento). Si cambia
-     (llegan ligas nuevas) → recomputa al instante. */
-  var _ALL_TEAMS_CACHE = null, _ALL_TEAMS_SIG = null;
-  window._invalidateTourTeamsCache = function(){ _ALL_TEAMS_CACHE = null; _ALL_TEAMS_SIG = null; };
-  /* Firma BARATA: solo nombres de clave ligaExt_* (sin getItem, que
-     copiaría MB por clave en cada pulsación). Detecta el caso del bug
-     —ligas que LLEGAN por hidratación añaden claves nuevas—. Las
-     ediciones de contenido de una liga ya existente se recogen al
-     reabrir el editor (_invalidateTourTeamsCache en _doOpen). */
+     El coste real que disparaba "crear torneo >5 min" NO era este
+     escaneo: era (a) `_shieldOf`/getTeamLogoUrl por CADA equipo en cada
+     llamada (miles) y (b) el `await _tourSave` de hasta 8 s. Ambos
+     siguen arreglados (escudo perezoso solo en el picker; guardado
+     optimista). Un escaneo + JSON.parse de las ligas SIN resolver
+     escudos es de milisegundos, asumible en cada pulsación — es lo que
+     hacía el código original. Mantengo `_invalidateTourTeamsCache` y
+     `_ligaExtSig` como no-ops/helpers usados por el refresco diferido. */
+  window._invalidateTourTeamsCache = function(){ /* sin cache: no-op */ };
+  /* Firma BARATA de localStorage (solo nombres de clave ligaExt_*, sin
+     getItem). La usa el refresco diferido de `_doOpen` para detectar
+     si llegaron ligas nuevas por hidratación tardía y repintar. */
   function _ligaExtSig(){
     var keys = [];
     try {
@@ -9542,11 +9536,7 @@ window._showSimProgress = function(opts, onDone){
     return keys.length + '|' + keys.join(',');
   }
   function _allTeams(){
-    var sig = _ligaExtSig();
-    if (_ALL_TEAMS_CACHE && _ALL_TEAMS_SIG === sig) return _ALL_TEAMS_CACHE;
-    var res = _allTeamsUncached();
-    _ALL_TEAMS_CACHE = res; _ALL_TEAMS_SIG = sig;
-    return res;
+    return _allTeamsUncached();
   }
   function _allTeamsUncached(){
     var out = [], seen = {};
@@ -9948,12 +9938,14 @@ window._showSimProgress = function(opts, onDone){
        (/api/liga-ext/*) de forma asíncrona. Si el editor se abre ANTES
        de que terminen, el pool y la lista "Excluir ligas" salen
        incompletos (solo LIGA EA SPORTS → "Solo hay 84 equipos…").
-       Reintentos acotados: si la firma de localStorage cambia (llegan
-       más ligas), refrescamos la lista de exclusión y el contador. Sin
-       polling continuo: 3 comprobaciones puntuales. 2026-05-16 #2. */
+       Reintentos acotados: en cuanto la firma de localStorage cambie
+       (llegan más ligas) repintamos lista de exclusión + contador. Sin
+       cache, además, cualquier interacción del usuario ya recomputa
+       fresco. Comprobaciones puntuales tempranas (300 ms) y hasta 8 s
+       para 4G lento. Sin polling continuo. 2026-05-16 #3. */
     try {
       var _openSig = _ligaExtSig();
-      [900, 2200, 4500].forEach(function(_ms){
+      [300, 800, 1600, 3000, 5000, 8000].forEach(function(_ms){
         setTimeout(function(){
           if (!_open || _open.id !== id) return;
           var _nowSig = _ligaExtSig();

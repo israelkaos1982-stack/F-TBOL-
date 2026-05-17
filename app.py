@@ -2153,6 +2153,48 @@ def _load_player_flags_on_startup():
             continue
 
 
+@app.route("/api/liga-ext", methods=["GET"])
+def api_liga_ext_index():
+    """Índice de TODAS las ligas externas guardadas en el servidor.
+    Devuelve los slugs EXACTOS (tal cual están en GlobalState) + nombre
+    y nº de equipos. Lo usa el editor de torneos para prefetchear las
+    51 Resto de Ligas (+ EA/Hypermotion/1ªRFEF) sin tener que adivinar
+    el slug desde la etiqueta en español. 2026-05-17."""
+    out = []
+    try:
+        rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
+    except Exception:
+        rows = []
+    for row in rows or []:
+        clave = row.clave or ""
+        if not clave.startswith("liga_ext_"):
+            continue
+        rest = clave[len("liga_ext_"):]
+        # Excluir derivados (protected). Las claves canónicas son
+        # exactamente `liga_ext_<slug>`.
+        if not rest or rest.endswith("_protected"):
+            continue
+        try:
+            data = json.loads(row.valor_json or "{}")
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        teams = data.get("teams")
+        count = 0
+        if isinstance(teams, list):
+            count = sum(1 for t in teams if isinstance(t, dict) and t.get("name"))
+        if count == 0:
+            continue
+        out.append({
+            "slug": rest,
+            "name": data.get("name") or rest,
+            "count": count,
+        })
+    out.sort(key=lambda x: x["slug"])
+    return jsonify({"ok": True, "leagues": out})
+
+
 @app.route("/api/liga-ext/<slug>", methods=["GET"])
 def api_liga_ext_get(slug):
     data = _liga_ext_load(slug)

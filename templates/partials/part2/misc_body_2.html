@@ -24998,6 +24998,32 @@ document.addEventListener('DOMContentLoaded', function() {
     var minMs = _scale(opts.minMs != null ? opts.minMs : 600);
     var t0 = Date.now();
     return new Promise(function(resolve, reject){
+      var _settled = false;
+      function _finish(ok, val){
+        if (_settled) return;
+        _settled = true;
+        try { if (_wd) { clearTimeout(_wd); _wd = null; } } catch(_){}
+        try { hide(); } catch(_){}
+        if (ok) resolve(val); else reject(val);
+      }
+      /* ── WATCHDOG (2026-05-17) ───────────────────────────────────
+         FOTO usuario: la barra de "RESTO DE LIGAS / LIGA" se queda
+         clavada en 99 % "Generando jornadas…" y no avanza. Causa:
+         si el runner (sim de una liga) nunca resuelve su Promise
+         —por un cuelgue/excepción tragada en el trabajo síncrono—
+         el trickle sube a 99 (tope de diseño) y el overlay NO se
+         cierra JAMÁS, bloqueando toda la pantalla. Este watchdog
+         garantiza que el overlay SIEMPRE se cierra: pasado un tope
+         generoso, fuerza 100 % + hide + resolve para que la UI se
+         desbloquee y se vea lo que se haya simulado. El cierre real
+         del runner (si llega) queda neutralizado por `_settled`. */
+      var WATCHDOG_MS = Math.max(45000, (_scale(opts.minMs != null ? opts.minMs : 600)) + 90000);
+      var _wd = setTimeout(function(){
+        if (_settled) return;
+        try { console.warn('[ftbolLoader] watchdog: el runner no resolvió en '+WATCHDOG_MS+'ms — cerrando overlay para desbloquear la UI.'); } catch(_){}
+        try { progress(100, 'Completado'); } catch(_){}
+        setTimeout(function(){ _finish(true, undefined); }, 200);
+      }, WATCHDOG_MS);
       /* Damos un frame para que el overlay pinte ANTES del trabajo
          pesado — si no, navegadores que congelan el repaint dejarían
          la pantalla en blanco hasta el final. */
@@ -25005,20 +25031,21 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
           var p = runner({ progress: progress });
           Promise.resolve(p).then(function(res){
+            if (_settled) return;
             progress(100, 'Completado');
             var elapsed = Date.now() - t0;
             /* Mínimo 350 ms tras el 100 % para que la barra animada
                llegue visiblemente a 100 antes de ocultar (antes con
                wait=0 saltaba de ~95 a oculto sin verse el 100). */
             var wait = Math.max(350, minMs - elapsed);
-            setTimeout(function(){ hide(); resolve(res); }, wait);
+            setTimeout(function(){ _finish(true, res); }, wait);
           }, function(err){
-            hide(); reject(err);
+            try { console.error('[ftbolLoader]', err); } catch(_){}
+            _finish(false, err);
           });
         } catch(err){
-          hide();
           try { console.error('[ftbolLoader]', err); } catch(_){}
-          reject(err);
+          _finish(false, err);
         }
       }, 30);
     });

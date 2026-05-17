@@ -1262,8 +1262,25 @@ window._showSimProgress = function(opts, onDone){
     window._ppCustomCallback = function(){
       window._ppPreviaTeams = null;
       if (advanced) return; advanced = true;
-      try { if (typeof go === 'function') go('s-munich'); } catch(_){}
+      /* Al confirmar la previa (y compartir WhatsApp), abrimos la
+         CARD DE SIMULACIÓN del partido — el gm-modal estándar del
+         proyecto, vía window.abrirAmistoso (Bayern humano vs rival
+         IA). NO navegamos a la caja Bayern: la simulación queda en
+         primer plano. El cursor de pretemporada avanza al día
+         siguiente para que, al terminar el partido y volver a la
+         caja Bayern, se vea el día correcto. */
+      var opened = false;
+      try {
+        if (typeof window.abrirAmistoso === 'function'){
+          window.abrirAmistoso(home, away);
+          opened = true;
+        }
+      } catch(_){}
       _markDoneAndAdvance();
+      if (!opened){
+        /* Sin motor de partido disponible → al menos volver al hub. */
+        try { if (typeof go === 'function') go('s-munich'); } catch(_){}
+      }
     };
     if (typeof window.showPrePartidoOverlay === 'function'){
       var mk = 'ps_' + String(day.date||'').replace(/\s+/g,'') + '_m0';

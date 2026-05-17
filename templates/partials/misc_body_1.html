@@ -10088,13 +10088,23 @@ window._showSimProgress = function(opts, onDone){
   /* Bloque GRUPO X — borde dorado tipo videojuego, glow y padding
      interno para que la clasificación + jornadas queden visualmente
      "encajadas" en una caja propia (petición usuario 2026-05-09). */
+  /* Cada grupo en su caja con borde CLARO que lo separa del resto
+     (petición usuario 2026-05-17). Borde neutro por defecto. */
   .tour-group-block{
-    margin-top:14px;
+    margin-top:16px;
     padding:12px 12px 14px;
-    background:linear-gradient(180deg,rgba(240,192,64,.05),rgba(0,0,0,.30));
-    border:1.5px solid rgba(240,192,64,.55);
+    background:rgba(255,255,255,.022);
+    border:1.5px solid rgba(255,255,255,.20);
     border-radius:14px;
-    box-shadow:0 0 14px rgba(240,192,64,.15),inset 0 0 22px rgba(240,192,64,.05);
+    box-shadow:0 4px 16px rgba(0,0,0,.35);
+  }
+  /* Grupo con equipo(s) humano(s): borde dorado llamativo + pulso,
+     igual que las eliminatorias humanas. */
+  .tour-group-block.tour-group-human{
+    border:2px solid #f0c040;
+    background:rgba(240,192,64,.06);
+    box-shadow:0 0 16px rgba(240,192,64,.55),inset 0 0 8px rgba(240,192,64,.14);
+    animation:tourTiePulse 1.5s ease-in-out infinite;
   }
   .tour-group-block h4{
     font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2.5px;
@@ -11576,7 +11586,8 @@ window._showSimProgress = function(opts, onDone){
       var prog = _tourFixtureProgress(fix, cfg.results, gKey);
       if (!prog.allDone) allGroupsDone = false;
       var letter = String.fromCharCode(65+g);
-      html += '<div class="tour-group-block"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
+      var _grpHasHuman = slice.some(function(t){ return t && t.isHuman; });
+      html += '<div class="tour-group-block'+(_grpHasHuman?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
       html += _standingsTableHtml(rows, advancePerGroup);
       var curJg = cfg.currentJornadaByGroup[g];
       var jProg = (function(){

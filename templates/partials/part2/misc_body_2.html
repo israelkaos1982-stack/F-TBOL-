@@ -10507,6 +10507,11 @@
         try { if (ev) { ev.preventDefault(); ev.stopPropagation(); } } catch(_){}
         try { _gmShowFinalOv(); } catch(_){ if (window.gmShowPost) window.gmShowPost(); }
       };
+      /* Salida definitiva siempre disponible cuando el partido acabó. */
+      try {
+        var ex = document.getElementById('gm-btn-exit');
+        if (ex) ex.style.display = '';
+      } catch(_){}
     } catch(_){}
   };
 
@@ -10588,10 +10593,38 @@
   };
 
   window.gmExitFinal = function() {
+    /* Delegamos en la salida definitiva: cierra todos los overlays y,
+       si es torneo, vuelve al bracket (resultado ya persistido). Para
+       no-torneo conserva el flujo previo (gmShowPost). */
+    if (typeof window.gmForceExitMatch === 'function') { window.gmForceExitMatch(); return; }
     var ov = document.getElementById('gm-fin-ov');
     if (ov) ov.style.display = 'none';
     document.getElementById('gm-modal').style.display = 'none';
     window.gmShowPost && window.gmShowPost();
+  };
+
+  /* Salida DEFINITIVA del partido (botón "✖ SALIR DEL PARTIDO").
+     Cierra TODOS los overlays del partido sin depender del flujo
+     VER RESUMEN / FINAL / post, y devuelve al usuario al bracket del
+     torneo (resultado ya persistido por gmEndMatch). Bulletproof:
+     cada paso en su try para que nada deje al usuario atascado. */
+  window.gmForceExitMatch = function() {
+    ['gm-fin-ov','gm-post-ov','gm-event-panel','gm-modal'].forEach(function(idd){
+      try {
+        var el = document.getElementById(idd);
+        if (!el) return;
+        el.style.display = 'none';
+        if (el.classList) el.classList.remove('show');
+      } catch(_){}
+    });
+    try {
+      if (window._gm && window._gm._isTour && window._gm._tourId && typeof window.go === 'function') {
+        window.go('s-' + window._gm._tourId);
+        try { if (typeof window._tourRender === 'function') window._tourRender(window._gm._tourId); } catch(_){}
+        return;
+      }
+    } catch(_){}
+    try { if (window.gmShowPost) window.gmShowPost(); } catch(_){}
   };
 
   /* ── SELECCIÓN DE EVENTOS GENÉRICA (overlays globales) ── */
@@ -10999,6 +11032,12 @@
       } else {
         _gmEndBtn.textContent = '🏁 FINALIZAR';
       }
+      /* Botón "✖ SALIR DEL PARTIDO": visible solo cuando el partido
+         terminó (salida definitiva siempre disponible). */
+      try {
+        var _exitB = document.getElementById('gm-btn-exit');
+        if (_exitB) _exitB.style.display = (_matchOver || _gm.finished) ? '' : 'none';
+      } catch(_){}
       /* Partido en juego → resetear el flag de "VER RESUMEN" para
          que cuando ESTE partido termine, _gmReactivateFinishBtn
          vuelva a reactivar la caja desde cero. */
@@ -16390,6 +16429,16 @@
         🏁 FINALIZAR
       </button>
     </div>
+    <!-- Botón básico para SALIR del partido cuando ya terminó (petición
+         usuario 2026-05-17: tras "VER RESUMEN" había que forzar la
+         salida). Oculto en juego; visible al finalizar. Cierre
+         definitivo + vuelta al bracket del torneo si aplica. -->
+    <button id="gm-btn-exit" onclick="window.gmForceExitMatch()"
+      style="display:none;margin:0 8px 10px;width:calc(100% - 16px);padding:13px;border-radius:8px;
+             border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.07);color:#fff;
+             font-size:14px;font-weight:700;font-family:'Oswald',sans-serif;letter-spacing:2px;cursor:pointer;">
+      ✖ SALIR DEL PARTIDO
+    </button>
 
     <!-- Event panel (full-screen overlay, shown via display:flex) -->
     <div id="gm-event-panel">

@@ -3007,14 +3007,23 @@ window._showSimProgress = function(opts, onDone){
        motivo — no quedamos callados. */
     try {
       /* 1. Establecer contexto y cargar data del slug correcto. */
+      /* Usar los setters expuestos en window — viven en OTRO IIFE
+         (script ~19002). Antes se referenciaban sin `window.` y el
+         `typeof` daba 'undefined' (otro scope) → el contexto nunca
+         se fijaba y la plantilla no se veía desde la clasificación
+         (solo tras ✏️ Edit). 2026-05-17. */
       var slugToCtx = {
-        'liga-ea-sports':          (typeof setLigaEaContext === 'function' ? setLigaEaContext : null),
-        'liga-hypermotion':        (typeof setHypermotionContext === 'function' ? setHypermotionContext : null),
-        'liga-primera-federacion': (typeof setPrimeraContext === 'function' ? setPrimeraContext : null)
+        'liga-ea-sports':          (typeof window.setLigaEaContext === 'function' ? window.setLigaEaContext : null),
+        'liga-hypermotion':        (typeof window.setHypermotionContext === 'function' ? window.setHypermotionContext : null),
+        'liga-primera-federacion': (typeof window.setPrimeraContext === 'function' ? window.setPrimeraContext : null)
       };
       var setCtx = slugToCtx[slug];
       if (setCtx) {
         setCtx();
+      } else if (typeof window._lextSetContextKey === 'function') {
+        /* Cualquier otro slug (ligas externas): fija la CURRENT_KEY
+           local del IIFE del editor + precarga. */
+        window._lextSetContextKey(slug);
       } else if (typeof window.CURRENT_KEY !== 'undefined') {
         try { window.CURRENT_KEY = slug; } catch(_){}
       }
@@ -19437,6 +19446,12 @@ Tottenham
     if (/\b11\s*ideal\b/i.test(t)) return true;
     if (/\b9\s*(mejores\s*)?reservas?\b/i.test(t)) return true;
     if (/goleador(es)?\s+de\s+elite\s+mundial/i.test(t)) return true;
+    /* Leyenda de iconos de goleador persistida como jugador en casi
+       todos los equipos (foto usuario 2026-05-17). Mismos tokens que
+       _isCabeceraLine — un jugador real nunca los contiene. */
+    if (/m[aá]ximo\s+goleador/i.test(t)) return true;
+    if (/[≥≤]\s*\d+\s*goles?/i.test(t)) return true;
+    if (/\bgoles?\s+y\s+top\b/i.test(t)) return true;
     /* Líneas del 11 IDEAL: "POR: Unai Simón", "DEF: A. Gorosabel",
        "MED: I. Ruiz De Galarreta", "DEL: I. Williams". El jugador
        real ya está en la nómina sin el prefijo "POR:/DEF:/…", así
@@ -21874,6 +21889,15 @@ Tottenham
       if(/^dorsal\b.*nombre\b.*valor\b/i.test(t)) return true;
       /* Línea solo entre paréntesis tipo "(Sin ⚾️ por regla del algoritmo)". */
       if(/^\(.+\)$/.test(t)) return true;
+      /* Leyenda de iconos de goleador que se cuela bajo "Delanteros"
+         y se parsea como jugador (foto usuario 2026-05-17):
+         "(🥎 DL ≥10 goles / 🏀 máximo goleador / 🥎🏀 ≥16 goles y
+         top 2 ⭐". Empieza por "(" pero NO cierra paréntesis, así que
+         el patrón de arriba no la cazaba. Tokens que un jugador real
+         nunca tiene: "≥N goles", "máximo goleador", "goles y top". */
+      if(/m[aá]ximo\s+goleador/i.test(t)) return true;
+      if(/[≥≤]\s*\d+\s*goles?/i.test(t)) return true;
+      if(/\bgoles?\s+y\s+top\b/i.test(t)) return true;
       /* "Goles MC: 7 / 2 / ..." y similares — bloque informativo
          a nivel de línea (las sub-bullets se filtran por skip-block). */
       if(/^goles?\s+(mc|dl|df|por|gk|fw)\b\s*:/i.test(t)) return true;
@@ -24166,6 +24190,37 @@ Tottenham
     setPrimeraContext();
     window.ligaExtReglas();
   };
+
+  /* ── Bridge cross-IIFE de los setters de contexto (2026-05-17) ────
+     BUG (fotos usuario): al pulsar un equipo en la CLASIFICACIÓN de
+     Liga EA Sports salía "No encuentro el equipo … en ligaExt_? (ni
+     por id … ni por nombre)" y la plantilla solo se veía tras pulsar
+     ✏️ Edit. Causa raíz: el handler del click de la clasificación
+     vive en OTRO IIFE (script ~2699) y hacía
+     `typeof setLigaEaContext === 'function'` — pero estos setters son
+     locales a ESTE IIFE (script ~19002) y NO estaban en `window`,
+     así que el typeof daba 'undefined', el contexto NO se establecía
+     y la `CURRENT_KEY` local seguía null → loadData(null) → "ligaExt_?".
+     El flujo ✏️ Edit sí llamaba a setLigaEaContext() (mismo IIFE) y
+     por eso ahí sí funcionaba. Exponerlos en window arregla que la
+     plantilla se vea SIEMPRE directamente desde la clasificación. */
+  try {
+    window.setLigaEaContext     = setLigaEaContext;
+    window.setHypermotionContext = setHypermotionContext;
+    window.setPrimeraContext     = setPrimeraContext;
+    /* Fallback genérico para cualquier slug (ligas externas, etc.):
+       fija la CURRENT_KEY local + precarga, sin depender de un setter
+       dedicado. Lo usa el handler de la clasificación cuando el slug
+       no es una de las 3 ligas españolas. */
+    window._lextSetContextKey = function(slug){
+      if (!slug) return;
+      try {
+        CURRENT_KEY = slug;
+        if (!CURRENT_NAME) CURRENT_NAME = slug;
+        loadData(CURRENT_KEY);
+      } catch(_){}
+    };
+  } catch(_){}
 
   // Mapa de nombres cortos mostrados en la clasificación de Liga EA Sports,
   // para revertir el display name al nombre canónico que usa el editor.

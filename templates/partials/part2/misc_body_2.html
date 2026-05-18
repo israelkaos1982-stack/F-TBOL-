@@ -10723,6 +10723,49 @@
     if (plTeam) plTeam.textContent=teamName.toUpperCase();
     var sq=(typeof window.sqFromRegistryFull==='function'&&window.sqFromRegistryFull(teamName))||[];
     if(!sq.length) sq=(typeof window.sqFromRegistry==='function'&&window.sqFromRegistry(teamName))||[];
+    /* ── DEDUP DEL PICKER DE EVENTO (bug usuario 2026-05-18) ──────────
+       En el Betis (y otros equipos) salían jugadores DUPLICADOS al
+       añadir un evento: la entrada del editor con dorsal+nombre
+       completo ("6 Sergi Altimira", "24 Aitor Ruibal", "11 C.
+       Bakambu", "19 Cucho Hernández") Y una entrada legacy sin dorsal
+       con nombre corto ("Altimira", "Ruibal", "Bakambu", "Cucho",
+       "Abde", "Fornals"…) de la nómina antigua JUGADORES_DATA. El
+       dedup global del proyecto usa el nombre COMPLETO normalizado,
+       así que "Sergi Altimira" ≠ "Altimira" y nunca se fusionaban; y
+       como la versión corta no está en el editor, el usuario no podía
+       borrarla. Aquí, SOLO para pintar el picker (no toca el motor de
+       simulación ni el storage), colapsamos las parejas en las que el
+       conjunto de tokens de un nombre es subconjunto del otro
+       (p.ej. {altimira} ⊂ {sergi,altimira}), conservando la entrada
+       CON dorsal (la del editor) y, a igualdad, el nombre más
+       específico. Idempotente y local. */
+    sq = (function _dedupePickerSquad(arr){
+      if(!Array.isArray(arr)) return arr;
+      function _nrm(s){ return String(s==null?'':s).toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,'')
+        .replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
+      function _toks(s){ return _nrm(s).split(' ').filter(Boolean); }
+      function _subset(a,b){ if(!a.length||a.length>b.length) return false;
+        for(var i=0;i<a.length;i++){ if(b.indexOf(a[i])===-1) return false; } return true; }
+      var out=[], kept=[];
+      arr.forEach(function(p){
+        if(p && p.h){ out.push(p); return; }
+        if(!Array.isArray(p) || p[1]==null){ out.push(p); return; }
+        var nm=String(p[1]||''); var tk=_toks(nm); var hasNum=Number(p[0])>0;
+        var dup=-1;
+        for(var i=0;i<kept.length;i++){
+          var k=kept[i];
+          if(!tk.length || !k.tk.length) continue;
+          if(_subset(tk,k.tk) || _subset(k.tk,tk)){ dup=i; break; }
+        }
+        if(dup===-1){ kept.push({pos:out.length, tk:tk, hasNum:hasNum, len:nm.length}); out.push(p); return; }
+        var k2=kept[dup];
+        var better = (hasNum && !k2.hasNum) || (hasNum===k2.hasNum && nm.length>k2.len);
+        if(better){ out[k2.pos]=p; k2.tk=tk; k2.hasNum=hasNum; k2.len=nm.length; }
+        /* else: descartamos esta copia (duplicado) */
+      });
+      return out;
+    })(sq);
     var html='';
     var _genPosOrder=['P','D','M','F'];
     var _genPosLabels={'P':'PORTEROS','D':'DEFENSAS','M':'MEDIOS','F':'DELANTEROS'};

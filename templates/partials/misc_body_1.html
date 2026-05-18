@@ -20356,31 +20356,47 @@ Tottenham
     if (!d || !Array.isArray(d.teams)) return false;
     if (d._sanV === _SAN_VER) return false;   /* ya saneada → O(1) */
     var dirty = false;
-    /* Phase 0: drop "jugadores basura" persistidos antes del filtro
-       2026-05-09 de parseSquadPaste. Cualquier player.name que match
-       una cabecera del Master Template o un bloque skip desaparece —
-       el editor 🛡 Plantilla vuelve a ser usable. */
-    d.teams.forEach(function(t){
-      if (!t || !Array.isArray(t.players)) return;
-      var before = t.players.length;
-      t.players = t.players.filter(function(p){
-        return p && !_isJunkPlayerName(p && p.name);
-      });
-      if (t.players.length !== before) dirty = true;
-    });
-    /* Phase 0b: DEDUP de jugadores dentro de cada plantilla. Auto-cura
-       las plantillas ya corruptas (duplicadas/triplicadas) en la
-       PRIMERA carga y persiste (loadData guarda cuando dirty). Corre
-       ANTES del dedup de filas para que `_editScore` compare nóminas
-       limpias y no se quede con la copia "doble". (bug 2026-05-17) */
+    /* ── TOPE DURO de FILAS antes de los bucles por-jugador ──────────
+       (bug usuario 2026-05-18: "cualquier liga 2 min = 30% y no
+       avanza"). Una liga real tiene ≤ ~24 equipos. Si por corrupción
+       llegó con DECENAS/CIENTOS de filas, recorrer _isJunkPlayerName
+       + _dedupeSquadPlayers por CADA jugador de CADA equipo bloquea
+       el hilo MINUTOS — y ocurre solo con CARGAR la liga (render del
+       calendario / clasificación / sim). Recortamos a los mejores por
+       _editScore (conserva los reales: nómina + escudo + estadio +
+       humano) ANTES de tocar jugadores → el saneo pasa a ser O(40)
+       en vez de O(cientos). Tras esto la liga queda acotada y, con
+       el sello _sanV persistido, las siguientes cargas son O(1). */
+    var _HARD_TEAM_CAP = 40;
+    if (d.teams.length > _HARD_TEAM_CAP) {
+      try {
+        d.teams = d.teams.slice().sort(function(a,b){
+          return (_editScore(b) - _editScore(a));
+        }).slice(0, _HARD_TEAM_CAP);
+      } catch(_){ d.teams = d.teams.slice(0, _HARD_TEAM_CAP); }
+      dirty = true;
+      try { console.warn('[sanitize] liga con '+_HARD_TEAM_CAP+'+ filas (corrupción) — recortada a '+_HARD_TEAM_CAP+' antes del dedupe.'); } catch(_){}
+    }
+    /* Phase 0+0b FUSIONADAS (orden invertido por rendimiento,
+       2026-05-18): primero DEDUP (O(n) barato, una pasada por
+       nombre) y LUEGO el filtro de basura (_isJunkPlayerName es
+       regex-pesado). Antes el junk-filter corría sobre la nómina
+       CRUDA triplicada (p.ej. 600 entradas → 600× regex × 40
+       equipos = bloqueo de minutos). Ahora dedup colapsa a ~25
+       únicos y el regex solo corre sobre esos. Auto-cura las
+       plantillas duplicadas/triplicadas y persiste (loadData guarda
+       cuando dirty). */
     d.teams.forEach(function(t){
       if (!t || !Array.isArray(t.players) || !t.players.length) return;
       var n0 = t.players.length;
       var dd = _dedupeSquadPlayers(t.players);
+      var beforeJunk = dd.length;
+      dd = dd.filter(function(p){ return p && !_isJunkPlayerName(p && p.name); });
       if (dd !== t.players || dd.length !== n0) {
         t.players = dd;
         if (dd.length !== n0) dirty = true;
       }
+      if (dd.length !== beforeJunk) dirty = true;
     });
     /* Phase 1: strip `*` y espacios delante. */
     d.teams.forEach(function(t){

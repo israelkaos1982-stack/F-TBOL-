@@ -25022,7 +25022,16 @@ document.addEventListener('DOMContentLoaded', function() {
     _startAnim();
   }
   function progress(percent, sub){
-    if(!_shown) return;
+    /* NO dependas solo de `_shown`: si un run previo/duplicado dejó
+       `_shown=false` por desincronía pero el overlay sigue VISIBLE
+       (clase `show`), igual hay que registrar el progreso. Sin esto,
+       _tgtPct se quedaba en 0 y la barra clavada en el tope de trickle
+       (≈8 %) con el sub inicial PARA SIEMPRE — exactamente el bug
+       reportado ("se atasca en el 8%"). 2026-05-18. */
+    if(!_shown){
+      var _ovp = $('ftbol-load-ov');
+      if(!(_ovp && _ovp.classList && _ovp.classList.contains('show'))) return;
+    }
     var p = Math.max(0, Math.min(100, Math.round(Number(percent)||0)));
     /* Target monotónico — la barra visible la mueve `_animStep`
        suavemente; aquí solo fijamos a dónde tiene que llegar. */

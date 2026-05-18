@@ -18426,7 +18426,7 @@ window._showSimProgress = function(opts, onDone){
        cache local simplemente se salta ("sin equipos suficientes")
        — el usuario puede abrirla individualmente luego para
        hidratarla. 2026-05-12. */
-    if(!raw && !window._restoSimBulkInProgress){
+    if(!raw && !window._restoSimBulkInProgress && !window._ligaExtSimInProgress){
       try {
         var xhr = new XMLHttpRequest();
         xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(slug), false);
@@ -20830,7 +20830,7 @@ Tottenham
        gateado pero `loadData` tenía SUS PROPIOS XHR sync. Sin cache
        local la liga se salta limpiamente ("sin equipos suficientes")
        y el usuario la abre individual luego para hidratarla. */
-    if (!window._restoSimBulkInProgress) {
+    if (!window._restoSimBulkInProgress && !window._ligaExtSimInProgress) {
     try {
       var xhr = new XMLHttpRequest();
       xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(k), false);
@@ -20903,7 +20903,7 @@ Tottenham
         }
       }
     } catch(_){}
-    } /* fin if(!window._restoSimBulkInProgress) — gate de los 2 XHR sync de loadData */
+    } /* fin gate de los 2 XHR sync de loadData (bulk 51 ligas O sim individual — anti-cuelgue móvil) */
     LIGA_CACHE[k] = {teams:[], results:[]};
     return _applyForcedBlacklist(k, LIGA_CACHE[k]);
   }
@@ -22439,40 +22439,76 @@ Tottenham
 
   function ligaExtSimular(){
     if(!CURRENT_KEY) return;
-    var data = loadData(CURRENT_KEY);
-    if(data.teams.length < 2){ alert('Añade al menos 2 equipos.'); return; }
-    // Resetear stats de jugadores
-    data.teams.forEach(function(t){
-      (t.players||[]).forEach(resetPlayerStats);
-    });
-    data.results = [];
-    var ts = _capRoundRobin(data.teams.slice());
-    for(var i=0;i<ts.length;i++){
-      for(var j=0;j<ts.length;j++){
-        if(i===j) continue;
-        var r = simulateMatch(ts[i], ts[j]);
-        data.results.push({
-          h:ts[i].id, a:ts[j].id,
-          gh:r.gh, ga:r.ga,
-          tah:r.tah, taa:r.taa,
-          trh:r.trh, tra:r.tra
-        });
-        var infoI = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
-        var infoJ = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
-        if(r.gh > r.ga)      assignMVP(ts[i], infoI, ts[j], infoJ, false);
-        else if(r.ga > r.gh) assignMVP(ts[j], infoJ, ts[i], infoI, false);
-        else                 assignMVP(ts[i], infoI, ts[j], infoJ, true);
+    /* ANTI-CUELGUE MÓVIL (2026-05-18): mientras corre esta sim los
+       XHR SÍNCRONOS sin timeout de loadData/_readLigaData (contra
+       /api/liga-ext) quedan VETADOS. En 5G flaky colgaban el hilo
+       PARA SIEMPRE y ni el watchdog del loader podía cerrar el
+       overlay → barra clavada en "8% PREPARANDO". Si no hay datos
+       locales se hidrata en 2º plano y se reintenta (decisión del
+       usuario: "saltar y cargar en 2º plano"), nunca se bloquea. */
+    window._ligaExtSimInProgress = true;
+    try {
+      var data = loadData(CURRENT_KEY);
+      if(data.teams.length < 2){
+        window._ligaExtSimInProgress = false;
+        window._ligaExtHydrateRetry = window._ligaExtHydrateRetry || {};
+        var _hk = CURRENT_KEY;
+        if(!window._ligaExtHydrateRetry[_hk] && typeof fetchData === 'function'){
+          window._ligaExtHydrateRetry[_hk] = true;
+          try {
+            fetchData(_hk, function(d2){
+              try { delete window._ligaExtHydrateRetry[_hk]; } catch(_){}
+              var n = (d2 && Array.isArray(d2.teams)) ? d2.teams.length : 0;
+              if(n >= 2 && CURRENT_KEY === _hk && typeof window.ligaExtSimular === 'function'){
+                try { window.ligaExtSimular(); } catch(_){}
+              } else {
+                try { alert('Esta liga no tiene equipos suficientes para simular.'); } catch(_){}
+              }
+            });
+          } catch(_){
+            try { delete window._ligaExtHydrateRetry[_hk]; } catch(_){}
+            try { alert('Añade al menos 2 equipos.'); } catch(_){}
+          }
+        } else {
+          try { alert('Añade al menos 2 equipos.'); } catch(_){}
+        }
+        return;
       }
+      // Resetear stats de jugadores
+      data.teams.forEach(function(t){
+        (t.players||[]).forEach(resetPlayerStats);
+      });
+      data.results = [];
+      var ts = _capRoundRobin(data.teams.slice());
+      for(var i=0;i<ts.length;i++){
+        for(var j=0;j<ts.length;j++){
+          if(i===j) continue;
+          var r = simulateMatch(ts[i], ts[j]);
+          data.results.push({
+            h:ts[i].id, a:ts[j].id,
+            gh:r.gh, ga:r.ga,
+            tah:r.tah, taa:r.taa,
+            trh:r.trh, tra:r.tra
+          });
+          var infoI = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
+          var infoJ = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
+          if(r.gh > r.ga)      assignMVP(ts[i], infoI, ts[j], infoJ, false);
+          else if(r.ga > r.gh) assignMVP(ts[j], infoJ, ts[i], infoI, false);
+          else                 assignMVP(ts[i], infoI, ts[j], infoJ, true);
+        }
+      }
+      saveData(CURRENT_KEY, data);
+      /* Mantener ef_player_stats_v1 sincronizado tras Sim Liga.
+         Sin esto, si el usuario hizo SIM Copa antes y luego SIM Liga,
+         el cache quedaba con totales viejos (liga + old_cup) y la
+         plantilla mostraba stats stale. Ahora cada vez que se
+         resimula la liga, el cache se reescribe con `pj = leagueOnly +
+         cupAlreadyPlayed`. */
+      try { _lecSyncPlayerStatsCache(data); } catch(_){}
+      renderTable();
+    } finally {
+      window._ligaExtSimInProgress = false;
     }
-    saveData(CURRENT_KEY, data);
-    /* Mantener ef_player_stats_v1 sincronizado tras Sim Liga.
-       Sin esto, si el usuario hizo SIM Copa antes y luego SIM Liga,
-       el cache quedaba con totales viejos (liga + old_cup) y la
-       plantilla mostraba stats stale. Ahora cada vez que se
-       resimula la liga, el cache se reescribe con `pj = leagueOnly +
-       cupAlreadyPlayed`. */
-    try { _lecSyncPlayerStatsCache(data); } catch(_){}
-    renderTable();
   }
   window.ligaExtSimular = ligaExtSimular;
 

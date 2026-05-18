@@ -2669,6 +2669,8 @@ def calendario_view():
 def clasificacion():
     resp = make_response(render_template("index.html"))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
 
 @app.route("/estadisticas")
@@ -2732,7 +2734,18 @@ def reiniciar():
 def spa_fallback(path):
     if path.startswith("api/"):
         abort(404)
-    return render_template("index.html")
+    # CRÍTICO 2026-05-18: este catch-all sirve la SPA en CUALQUIER ruta
+    # (p.ej. /ligas/inglaterra). Antes NO mandaba cabeceras no-cache,
+    # así que el navegador/CDN servía un index.html CACHEADO con el JS
+    # VIEJO — ninguno de los fixes (watchdog, tope round-robin, sello
+    # _sanV…) llegaba al usuario y la sim seguía "rota" idéntica. El
+    # index.html incrusta server-side misc_body_1/2, así que DEBE ir
+    # siempre fresco.
+    resp = make_response(render_template("index.html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 with app.app_context():
     db.create_all()

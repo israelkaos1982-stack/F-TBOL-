@@ -20056,31 +20056,56 @@ Tottenham
      variantes de un mismo club ("Atl Madrid"/"Atlético Madrid"/…) a
      una sola clave para dedupe de FILAS y para el lookup de plantilla
      desde la clasificación (bug 2026-05-17: 2 Atlético Madrid + "no
-     encuentro el equipo"). */
-  function _teamCanonKey(name){
-    var raw = String(name == null ? '' : name).replace(/^\s*\*+\s*/,'').trim();
-    if(!raw) return '';
-    function canon(s){
-      try {
-        if (typeof window._canonTeamName === 'function') return window._canonTeamName(s);
-      } catch(_){}
-      return String(s||'').trim().toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
-    }
-    var key = canon(raw);
+     encuentro el equipo").
+     PERF 2026-05-17: ANTES recanonizaba TODAS las variantes de TODOS
+     los grupos de alias en CADA llamada (O(grupos×variantes) ·
+     _canonTeamName regex-heavy). _sanitizeLigaTeamNames lo invoca por
+     equipo y corre 2× por liga (loadData+saveData) × 51 ligas → era
+     el cuello de botella ("las globales tardan mucho / individuales
+     no se simulan"). Ahora se construye UNA vez un mapa
+     {canonVariante → canonCabecera} y cada clave es 1 _canonTeamName
+     + 1 lookup O(1). */
+  function _canonTN(s){
+    try {
+      if (typeof window._canonTeamName === 'function') return window._canonTeamName(s);
+    } catch(_){}
+    return String(s||'').trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+  }
+  var _aliasCanonMap = null;
+  function _buildAliasCanonMap(){
+    var m = Object.create(null);
     try {
       var groups = window.TEAM_NAME_ALIASES;
       if (Array.isArray(groups)) {
-        for(var i=0;i<groups.length;i++){
+        for (var i=0;i<groups.length;i++){
           var g = groups[i];
-          for(var j=0;j<g.length;j++){
-            if (canon(g[j]) === key) return canon(g[0]);
-          }
+          if (!g || !g.length) continue;
+          var head = _canonTN(g[0]);
+          for (var j=0;j<g.length;j++){ m[_canonTN(g[j])] = head; }
         }
       }
     } catch(_){}
-    return key;
+    return m;
   }
+  function _teamCanonKey(name){
+    var raw = String(name == null ? '' : name).replace(/^\s*\*+\s*/,'').trim();
+    if(!raw) return '';
+    var key = _canonTN(raw);
+    if (_aliasCanonMap === null) {
+      /* Construir el mapa solo cuando window.TEAM_NAME_ALIASES ya
+         existe (otro IIFE). Si aún no, no memoizamos para reintentar. */
+      if (typeof window !== 'undefined' && window.TEAM_NAME_ALIASES) {
+        _aliasCanonMap = _buildAliasCanonMap();
+      } else {
+        return key;
+      }
+    }
+    return _aliasCanonMap[key] || key;
+  }
+  /* Invalidar el mapa de alias si el editor recarga TEAM_NAME_ALIASES
+     (no debería cambiar, pero por seguridad lo exponemos). */
+  try { if (typeof window !== 'undefined') window._invalidateAliasCanonMap = function(){ _aliasCanonMap = null; }; } catch(_){}
   try { if (typeof window !== 'undefined') { window._dedupeSquadPlayers = _dedupeSquadPlayers; window._teamCanonKey = _teamCanonKey; } } catch(_){}
 
   function _lextFindTeamRow(data, id, fallbackName){

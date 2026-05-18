@@ -21460,45 +21460,71 @@ Tottenham
         }
       } catch(_){}
     }
-    /* Marcar el slug como "tengo cambios locales pendientes" — flag
-       que respeta `fetchData` para no sobreescribir local con server
-       hasta que el POST de abajo confirme (2026-05-08). */
+    /* ── PERSISTENCIA REFORZADA AL SERVIDOR (REFUERZO MÁXIMO 2026-05-17)
+       Bug crítico: "guardo la plantilla, reinicio y sale la primera /
+       NO ACTUALIZA NINGUNA". Causa: en Android el navegador (a)
+       desaloja localStorage de forma agresiva y (b) CANCELA los
+       fetch() en vuelo al recargar. El POST al server era
+       fire-and-forget → si el usuario guardaba y recargaba al
+       instante, el POST moría y el server conservaba la plantilla
+       vieja; al recargar, loadData caía al server (viejo) porque el
+       localStorage ya no estaba. Refuerzo:
+         · POST principal con REINTENTOS x5 (backoff) y promesa
+           expuesta en window._ligaExtSavePromise[k] para que
+           lextSaveTeam ESPERE la confirmación del server antes de
+           decir "guardado" (el usuario ya no recarga a ciegas).
+         · slug apuntado en set persistido `liga_ext_pending_v1`
+           hasta el ACK; el boot lo re-empuja si quedó pendiente.
+         · _backup / _protected siguen como red secundaria. */
     var _dirtyAt = Date.now();
     LIGA_LOCAL_DIRTY_AT[k] = _dirtyAt;
-    /* Write-back al servidor (async, best-effort). Ahora también
-       se sube a una KEY de backup en el server — si el server
-       wipea el main por alguna razón, queda el backup. */
-    try{
-      fetch('/api/liga-ext/'+encodeURIComponent(k), {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({data:d})
-      }).then(function(r){return r.ok?r.json():null;}).then(function(j){
-        if(j && j.updated_at) LIGA_UPDATED[k] = j.updated_at;
-        /* Solo limpiamos el flag dirty si NO hubo otro saveData mientras
-           el POST estaba en vuelo. Si hubo, el flag tendrá un timestamp
-           más nuevo y dejamos que el siguiente POST lo limpie. */
-        if (LIGA_LOCAL_DIRTY_AT[k] === _dirtyAt) {
-          delete LIGA_LOCAL_DIRTY_AT[k];
+    try { if (typeof window._ligaExtMarkPending === 'function') window._ligaExtMarkPending(k); } catch(_){}
+    window._ligaExtSavePromise = window._ligaExtSavePromise || {};
+    window._ligaExtSavePromise[k] = (function(slug, payload, dirtyStamp){
+      return new Promise(function(resolve){
+        var attempt = 0;
+        function ok2(j){
+          if (j && j.updated_at) LIGA_UPDATED[slug] = j.updated_at;
+          if (LIGA_LOCAL_DIRTY_AT[slug] === dirtyStamp) delete LIGA_LOCAL_DIRTY_AT[slug];
+          try { if (typeof window._ligaExtClearPending === 'function') window._ligaExtClearPending(slug); } catch(_){}
+          resolve(true);
         }
-      }).catch(function(){});
+        function fail(){
+          if (attempt >= 5) { resolve(false); return; }
+          setTimeout(go, Math.min(8000, 400 * Math.pow(2, attempt)));
+        }
+        function go(){
+          attempt++;
+          try {
+            var _r;
+            fetch('/api/liga-ext/'+encodeURIComponent(slug), {
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              credentials:'same-origin',
+              body:JSON.stringify({data:payload})
+            }).then(function(r){ _r=r; return (r && r.ok) ? r.json() : null; })
+              .then(function(j){ if (_r && _r.ok) ok2(j); else fail(); })
+              .catch(function(){ fail(); });
+          } catch(_){ fail(); }
+        }
+        go();
+      });
+    })(k, d, _dirtyAt);
+    try{
       /* Backup en server — sólo si hay jugadores, para no
          sobrescribir un backup válido con un d vacío accidental.
          Doble vía:
            1. /api/liga-ext/<slug>_backup  — legacy, ghost-slug.
            2. /api/liga-ext-protected/<slug>  — endpoint dedicado
               MONOTÓNICO (rechaza payloads con menos jugadores que
-              el actual; ver app.py). Es la red de seguridad fuerte
-              contra el bug "ediciones perdidas tras reload": si el
-              POST principal fue corrupto/parcial pero alguno de los
-              posteriores tiene el state completo, queda blindado
-              en `liga_ext_<slug>_protected` y `loadData` lo
-              recupera al día siguiente. */
+              el actual; ver app.py). Red de seguridad fuerte contra
+              "ediciones perdidas tras reload". */
       if (_countPlayers(d) > 0) {
         try{
           fetch('/api/liga-ext/'+encodeURIComponent(k+'_backup'), {
             method:'POST',
             headers:{'Content-Type':'application/json'},
+            credentials:'same-origin',
             body:JSON.stringify({data:d})
           }).catch(function(){});
         }catch(_){}
@@ -21506,11 +21532,11 @@ Tottenham
           fetch('/api/liga-ext-protected/'+encodeURIComponent(k), {
             method:'POST',
             headers:{'Content-Type':'application/json'},
+            credentials:'same-origin',
             body:JSON.stringify({data:d})
           }).then(function(r){
             /* 409 = el server tiene una versión protected con MÁS
-               jugadores. No es un error — es la salvaguarda actuando.
-               Logueamos para diagnóstico pero no rompemos nada. */
+               jugadores. No es un error — es la salvaguarda actuando. */
             if (r.status === 409) {
               try { console.warn('[saveData] '+k+': protected del server tiene más jugadores que el local — POST rechazado por anti-wipe.'); } catch(_){}
             }
@@ -21519,6 +21545,90 @@ Tottenham
       }
     }catch(_){}
   }
+
+  /* ── Set persistido de slugs con guardado PENDIENTE de ACK ───────
+     (REFUERZO MÁXIMO 2026-05-17). Guarda SOLO la lista de slugs
+     (diminuta — los datos viven en `ligaExt_<slug>` / LIGA_CACHE),
+     así no rozamos el cap de 2 MB. En el boot se re-empuja al server
+     cualquier slug que quedara pendiente (caso: el usuario recargó
+     antes de que el POST confirmara y localStorage SÍ sobrevivió).
+     Además, en pagehide/visibilitychange mandamos un sendBeacon
+     best-effort por si la liga es pequeña y cabe (<64 KB). */
+  var _LIGAEXT_PENDING_KEY = 'liga_ext_pending_v1';
+  function _ligaExtPendingSet(){
+    try { var r = localStorage.getItem(_LIGAEXT_PENDING_KEY); if (r){ var a = JSON.parse(r); if (Array.isArray(a)) return a; } } catch(_){}
+    return [];
+  }
+  window._ligaExtMarkPending = function(slug){
+    if (!slug) return;
+    try {
+      var s = _ligaExtPendingSet();
+      if (s.indexOf(slug) === -1) { s.push(slug); localStorage.setItem(_LIGAEXT_PENDING_KEY, JSON.stringify(s)); }
+    } catch(_){}
+  };
+  window._ligaExtClearPending = function(slug){
+    try {
+      var s = _ligaExtPendingSet().filter(function(x){ return x !== slug; });
+      if (s.length) localStorage.setItem(_LIGAEXT_PENDING_KEY, JSON.stringify(s));
+      else localStorage.removeItem(_LIGAEXT_PENDING_KEY);
+    } catch(_){}
+  };
+  /* Boot re-push: re-empuja al server lo que quedó pendiente. Espera
+     a que LIGA_CACHE/localStorage estén listos (DOMContentLoaded +
+     pequeño delay) y vuelve a llamar saveData (que reintenta x5). */
+  function _ligaExtBootRepush(){
+    var s = _ligaExtPendingSet();
+    if (!s.length) return;
+    s.forEach(function(slug){
+      var data = null;
+      try { data = LIGA_CACHE[slug]; } catch(_){}
+      if (!data) {
+        try { var raw = localStorage.getItem(storeKey(slug)); if (raw) data = JSON.parse(raw); } catch(_){}
+      }
+      if (!data) {
+        try { var rawP = localStorage.getItem(storeKey(slug)+'_protected'); if (rawP) data = JSON.parse(rawP); } catch(_){}
+      }
+      if (data && data.teams) {
+        try { saveData(slug, data); } catch(_){}
+      } else {
+        /* No queda copia local recuperable → limpiamos el pending
+           para no reintentar en bucle un dato que ya no existe. */
+        window._ligaExtClearPending(slug);
+      }
+    });
+  }
+  try {
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      setTimeout(_ligaExtBootRepush, 1500);
+    } else {
+      document.addEventListener('DOMContentLoaded', function(){ setTimeout(_ligaExtBootRepush, 1500); });
+    }
+  } catch(_){}
+  /* Flush en pagehide / pestaña oculta: sendBeacon NO se cancela al
+     descargar la página (a diferencia de fetch). Best-effort — si la
+     liga no cabe en el límite del beacon, queda el boot-repush. */
+  function _ligaExtBeaconFlush(){
+    try {
+      var s = _ligaExtPendingSet();
+      if (!s.length || !navigator.sendBeacon) return;
+      s.forEach(function(slug){
+        var data = null;
+        try { data = LIGA_CACHE[slug]; } catch(_){}
+        if (!data) { try { var raw = localStorage.getItem(storeKey(slug)); if (raw) data = JSON.parse(raw); } catch(_){} }
+        if (!data || !data.teams) return;
+        try {
+          var blob = new Blob([JSON.stringify({data:data})], {type:'application/json'});
+          navigator.sendBeacon('/api/liga-ext/'+encodeURIComponent(slug), blob);
+        } catch(_){}
+      });
+    } catch(_){}
+  }
+  try {
+    window.addEventListener('pagehide', _ligaExtBeaconFlush, false);
+    document.addEventListener('visibilitychange', function(){
+      if (document.visibilityState === 'hidden') _ligaExtBeaconFlush();
+    }, false);
+  } catch(_){}
 
   function fetchData(k, cb){
     try{
@@ -24004,6 +24114,48 @@ Tottenham
     else doMove();
   };
 
+  /* Banner ROJO persistente cuando el guardado NO llegó al server
+     tras 5 reintentos (refuerzo máximo 2026-05-17). El usuario DEBE
+     enterarse — antes salía "✅ guardado" en falso. Botón REINTENTAR
+     re-empuja desde la copia local (LIGA_CACHE / localStorage). */
+  function _lextHideSaveError(){
+    var b = document.getElementById('lext-save-error');
+    if (b) { try { b.remove(); } catch(_){} }
+  }
+  window._lextRetrySave = function(slug){
+    var data = null;
+    try { data = LIGA_CACHE[slug]; } catch(_){}
+    if (!data) { try { var raw = localStorage.getItem(storeKey(slug)); if (raw) data = JSON.parse(raw); } catch(_){} }
+    if (!data || !data.teams) { return; }
+    var b = document.getElementById('lext-save-error');
+    if (b) { var st = b.querySelector('[data-st]'); if (st) st.textContent = '💾 Reintentando…'; }
+    try { saveData(slug, data); } catch(_){}
+    var p = (window._ligaExtSavePromise && window._ligaExtSavePromise[slug]) || Promise.resolve(false);
+    Promise.resolve(p).then(function(ok){
+      if (ok) { _lextHideSaveError(); var t=document.getElementById('lext-ov-teams-title'); if(t) t.textContent='✅ Guardado y sincronizado'; }
+      else { _lextShowSaveError(slug); }
+    });
+  };
+  function _lextShowSaveError(slug){
+    _lextHideSaveError();
+    var b = document.createElement('div');
+    b.id = 'lext-save-error';
+    b.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:1000200;background:linear-gradient(135deg,#7a0b0b,#b71c1c);border:2px solid #ff6b6b;border-radius:12px;padding:12px 14px;max-width:92vw;width:420px;box-shadow:0 8px 30px rgba(0,0,0,.6);font-family:Rajdhani,sans-serif;color:#fff;';
+    b.innerHTML =
+      '<div data-st style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:.5px;color:#ffd0d0;margin-bottom:6px;">⚠ No se pudo guardar en el SERVIDOR</div>'
+      + '<div style="font-size:12px;color:rgba(255,255,255,.8);line-height:1.35;margin-bottom:10px;">La plantilla está en este dispositivo pero NO sincronizada. Si reinicias ahora podrías ver la versión anterior. Pulsa REINTENTAR (déjalo unos segundos).</div>'
+      + '<div style="display:flex;gap:8px;">'
+      +   '<button type="button" id="lext-save-retry" style="flex:1;background:linear-gradient(90deg,#1ea14a,#27d967);border:none;color:#06210f;font-weight:900;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;border-radius:8px;padding:11px;cursor:pointer;">🔄 REINTENTAR</button>'
+      +   '<button type="button" id="lext-save-dismiss" style="flex:0 0 auto;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#fff;font-family:Oswald,sans-serif;font-size:12px;border-radius:8px;padding:11px 14px;cursor:pointer;">Ocultar</button>'
+      + '</div>';
+    document.body.appendChild(b);
+    var rb = document.getElementById('lext-save-retry');
+    var db = document.getElementById('lext-save-dismiss');
+    if (rb) rb.addEventListener('click', function(){ window._lextRetrySave(slug); });
+    if (db) db.addEventListener('click', _lextHideSaveError);
+  }
+  try { window._lextShowSaveError = _lextShowSaveError; } catch(_){}
+
   window.lextSaveTeam = function(){
     var name = document.getElementById('lext-team-name').value.trim();
     if(!name){ alert('Falta el nombre del equipo.'); return; }
@@ -24144,13 +24296,36 @@ Tottenham
     }
     saveData(CURRENT_KEY,data);
     populateStadiumsDatalist();
-    var msg = parsed.length ? ('✅ Equipo guardado con '+parsed.length+' jugadores') : '✅ Equipo guardado';
+    /* Mensaje atado a la CONFIRMACIÓN del servidor (refuerzo máximo
+       2026-05-17). Antes salía "✅ guardado" al instante aunque el
+       POST al server nunca llegara → al reiniciar volvía la vieja.
+       Ahora: "💾 Guardando…" → "✅ Guardado y sincronizado" cuando el
+       server confirma; si falla tras 5 reintentos, banner ROJO
+       persistente con REINTENTAR (la copia local + cola de boot
+       siguen ahí, nada se pierde). */
+    var _nJug = parsed.length;
     var title = document.getElementById('lext-ov-teams-title');
-    if(title){
-      var old = title.textContent;
-      title.textContent = msg;
-      setTimeout(function(){ title.textContent = old; }, 1600);
-    }
+    var _oldTitle = title ? title.textContent : '';
+    if (title) title.textContent = '💾 Guardando en servidor…';
+    (function(slug, oldTitle, nJug){
+      var p = (window._ligaExtSavePromise && window._ligaExtSavePromise[slug]) || Promise.resolve(true);
+      Promise.resolve(p).then(function(okSrv){
+        var tEl = document.getElementById('lext-ov-teams-title');
+        if (okSrv) {
+          if (tEl) {
+            tEl.textContent = nJug ? ('✅ Guardado y sincronizado · '+nJug+' jug.') : '✅ Guardado y sincronizado';
+            setTimeout(function(){
+              var t2 = document.getElementById('lext-ov-teams-title');
+              if (t2 && t2.textContent.indexOf('✅ Guardado y sincronizado') === 0) t2.textContent = oldTitle;
+            }, 2200);
+          }
+          _lextHideSaveError();
+        } else {
+          if (tEl) tEl.textContent = '⚠ Guardado LOCAL · falta servidor';
+          _lextShowSaveError(slug);
+        }
+      });
+    })(CURRENT_KEY, _oldTitle, _nJug);
     lextClearTeamForm();
     renderTeamsList();
     renderTable();

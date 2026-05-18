@@ -22438,6 +22438,47 @@ window.goLiveMatches = function() {
     setTimeout(_cleanupOverlays, 300);
   });
 
+  /* 4. visibilitychange / focus / resume — RESUMEN DE PESTAÑA VIVA
+     ════════════════════════════════════════════════════════════════
+     Bug usuario 2026-05-18 (foto pantalla negra): "me salgo de la web
+     de railway e intento volver a la web que SIGUE ABIERTA y no me
+     abre, se queda oscuro; si recargo (F5) funciona pero no en la
+     pantalla que dejé antes de salir sin cerrar".
+
+     Causa: cuando sales a otra app / pantalla de inicio y vuelves a
+     una pestaña que el navegador mantuvo VIVA (no la descartó), NO se
+     dispara `pageshow` ni `DOMContentLoaded` ni `load` — solo
+     `visibilitychange` (hidden→visible) y `focus`. Los 3 mecanismos
+     de arriba no cubrían ese caso, así que un overlay fixed-fullscreen
+     huérfano (gm-modal/previa residual, o ninguna .screen .active)
+     se quedaba tapando todo → pantalla negra hasta recargar. F5
+     funcionaba porque dispara DOMContentLoaded → cleanup.
+
+     Fix: ejecutar el MISMO cleanup al volver a ser visible / recuperar
+     foco / resume del Page Lifecycle. El cleanup ya es idempotente y
+     PRESERVA el gm-modal de un live en curso (hasGm) y la previa
+     activa (previaShown) — ver _cleanupOverlays —, así que no
+     interfiere con el cronómetro ni con un flujo de partido vivo
+     (regla CLAUDE.md). Solo actúa sobre overlays HUÉRFANOS. */
+  function _cleanupOnResume(){
+    /* Solo al volver a estar VISIBLE (en hidden no hay nada que
+       arreglar y evitamos trabajo innecesario en background). */
+    try {
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+    } catch(_){}
+    setTimeout(_cleanupOverlays, 0);
+    setTimeout(_cleanupOverlays, 250);
+  }
+  try {
+    document.addEventListener('visibilitychange', function(){
+      if (document.visibilityState === 'visible') _cleanupOnResume();
+    }, false);
+    window.addEventListener('focus', _cleanupOnResume, false);
+    /* Page Lifecycle API: frozen → resume (Chrome móvil congela
+       pestañas en segundo plano y las "resucita" sin pageshow). */
+    document.addEventListener('resume', _cleanupOnResume, false);
+  } catch(_){}
+
   /* Exponer manualmente por si alguien quiere re-disparar. */
   window._cleanupBlackScreen = _cleanupOverlays;
 })();

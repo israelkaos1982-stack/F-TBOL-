@@ -14045,6 +14045,23 @@ window._showSimProgress = function(opts, onDone){
     var canon = _canonTeamName(teamName);
     if(!canon) return false;
     if(bannedSet[canon]) return true;
+    /* Forma EXPANDIDA: muchos equipos llegan abreviados ("R. Sociedad
+       B", "Atl. Madrid", "Dep. Alavés", "RC Celta", "RCD Espanyol")
+       y _canonTeamName deja "r sociedad b" ≠ "real sociedad b"
+       (banned) → se colaban en ligas extranjeras (foto usuario
+       2026-05-18: R. Sociedad B en la Premier). Expandimos las
+       abreviaturas españolas más comunes y reintentamos. */
+    var exp = ' ' + canon + ' ';
+    exp = exp
+      .replace(/ r /g, ' real ')
+      .replace(/ rc /g, ' real ')
+      .replace(/ rcd /g, ' real ')
+      .replace(/ atl /g, ' atletico ')
+      .replace(/ at /g, ' atletico ')
+      .replace(/ dep /g, ' deportivo ')
+      .replace(/ rs /g, ' real sociedad ')
+      .replace(/\s+/g, ' ').trim();
+    if(exp && exp !== canon && bannedSet[exp]) return true;
     var words = canon.split(/\s+/);
     for(var i=0; i<words.length; i++){
       if(_SPANISH_BANNED_TOKENS[words[i]]) return true;
@@ -20467,11 +20484,37 @@ Tottenham
        humano) ANTES de tocar jugadores → el saneo pasa a ser O(40)
        en vez de O(cientos). Tras esto la liga queda acotada y, con
        el sello _sanV persistido, las siguientes cargas son O(1). */
-    var _HARD_TEAM_CAP = 40;
+    /* Cap a 64 (no 40): una liga real tiene ≤24, pero una liga
+       "sucia pero no catastrófica" (20-50, con intrusos y juniors)
+       NO debe recortarse — el cap a 40 + orden por _editScore
+       (que prioriza nóminas grandes) DESCARTABA equipos ingleses
+       reales sin plantilla a favor de intrusos españoles rostered,
+       dejando "solo 11 equipos" (foto usuario 2026-05-18). Solo
+       recortamos en corrupción REAL (>64). Y al recortar, los
+       equipos español-baneados / sin nombre se van PRIMERO (no por
+       _editScore, que favorecía a los intrusos). */
+    var _HARD_TEAM_CAP = 64;
     if (d.teams.length > _HARD_TEAM_CAP) {
       try {
+        var _spSet = null;
+        try {
+          if (!_SPANISH_UPPER_TIER_SLUGS[d && d._slug] &&
+              typeof window._spanishUpperTierTeamNames === 'function')
+            _spSet = window._spanishUpperTierTeamNames();
+        } catch(_){}
+        function _keepRank(t){
+          var s = _editScore(t);
+          /* Penaliza fuerte a los que se irían igualmente (intrusos
+             españoles / sin nombre) para que caigan en el recorte. */
+          try {
+            if (!t || !t.name) return -1e9;
+            if (_spSet && typeof window._isSpanishTeamBanned === 'function' &&
+                window._isSpanishTeamBanned(t.name, _spSet)) s -= 1e6;
+          } catch(_){}
+          return s;
+        }
         d.teams = d.teams.slice().sort(function(a,b){
-          return (_editScore(b) - _editScore(a));
+          return (_keepRank(b) - _keepRank(a));
         }).slice(0, _HARD_TEAM_CAP);
       } catch(_){ d.teams = d.teams.slice(0, _HARD_TEAM_CAP); }
       dirty = true;
@@ -20827,7 +20870,14 @@ Tottenham
                       'Real Madrid Castilla', 'RM Castilla', 'Castilla',
                       'UD Ibiza', 'Ibiza',
                       'Sevilla At.', 'Sevilla At', 'Sevilla Atlético',
-                      'Sevilla Atletico'],
+                      'Sevilla Atletico',
+                      /* 2026-05-18 (foto usuario: colados en la Premier).
+                         Sporting (Gijón/CP) y la filial de la Real no
+                         tienen nada que hacer en Inglaterra. */
+                      'Sporting', 'Sporting Gijón', 'Sporting de Gijón',
+                      'Sporting Gijon', 'Real Sporting', 'Real Sporting de Gijón',
+                      'R. Sociedad', 'R. Sociedad B', 'Real Sociedad',
+                      'Real Sociedad B', 'RS Sociedad B'],
     'escocia':       ['Athletic Club'],
     /* Polonia: limpiar equipos españoles que se colaron por error
        (Getafe, Mallorca, Villarreal). El admin no puede re-crearlos
@@ -22148,7 +22198,8 @@ Tottenham
      40·39 = 1560 partidos (segundos). Las ligas legítimas (≤40)
      NO se tocan. Selección determinista: por power desc y nombre.
      2026-05-17. */
-  var _RR_TEAM_CAP = 40;
+  var _RR_TEAM_CAP = 64; /* alineado con _HARD_TEAM_CAP — solo acota
+     corrupción REAL; 64·63≈4032 partidos ≈ segundos. */
   function _capRoundRobin(teams){
     if (!Array.isArray(teams) || teams.length <= _RR_TEAM_CAP) return teams;
     var arr = teams.slice();

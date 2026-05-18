@@ -21479,8 +21479,52 @@ Tottenham
     var _dirtyAt = Date.now();
     LIGA_LOCAL_DIRTY_AT[k] = _dirtyAt;
     try { if (typeof window._ligaExtMarkPending === 'function') window._ligaExtMarkPending(k); } catch(_){}
+    /* ── CONFIRMACIÓN SÍNCRONA AL SERVIDOR (EL MAYOR ARREGLO 2026-05-18)
+       ════════════════════════════════════════════════════════════════
+       Bug usuario (4 capturas): edita "Joan García 82 → 85", guarda
+       (la modal muestra 85), pulsa "Borrar datos de navegación" y al
+       volver Joan García vuelve a 82. Al borrar datos de navegación se
+       VACÍA localStorage entero → la ÚNICA fuente que queda es el
+       SERVIDOR. El POST async con reintentos NO había llegado todavía
+       cuando el usuario borró/recargó (lo canceló la recarga) → el
+       servidor seguía con 82 → la edición se perdió DEFINITIVAMENTE.
+       El fix anterior (re-hidratar el dirty flag) sólo ayuda si
+       localStorage SOBREVIVE; aquí lo borran, así que no aplica.
+
+       Solución decisiva: un XHR POST SÍNCRONO y BLOQUEANTE al main
+       ANTES de devolver el control. Un XHR síncrono NO lo puede
+       cancelar una recarga/borrado posterior — bloquea el hilo hasta
+       que el servidor responde. Cuando saveData retorna (y la modal
+       pinta el cambio) el servidor YA tiene el dato de forma durable;
+       borrar datos de navegación después ya no puede perderlo.
+       Mismo patrón de XHR síncrono que ya usa loadData en este archivo.
+
+       · Se SALTA en la sim masiva (`_restoSimBulkInProgress`): 51
+         ligas × XHR síncrono reintroduciría el freeze documentado en
+         CLAUDE.md. En bulk sólo va el POST async de abajo.
+       · Si el síncrono falla (offline / server caído / bloqueado),
+         caemos al POST async x5 + cola pendiente + beacon de siempre
+         (red de seguridad intacta — no se regresiona el caso offline). */
+    var _syncConfirmed = false;
+    if (!window._restoSimBulkInProgress && serialized != null) {
+      try {
+        var _xhrSync = new XMLHttpRequest();
+        _xhrSync.open('POST', '/api/liga-ext/'+encodeURIComponent(k), false);
+        _xhrSync.setRequestHeader('Content-Type', 'application/json');
+        _xhrSync.send(JSON.stringify({data:d}));
+        if (_xhrSync.status === 200) {
+          _syncConfirmed = true;
+          try {
+            var _sjr = JSON.parse(_xhrSync.responseText || '{}');
+            if (_sjr && _sjr.updated_at) LIGA_UPDATED[k] = _sjr.updated_at;
+          } catch(_){}
+          if (LIGA_LOCAL_DIRTY_AT[k] === _dirtyAt) delete LIGA_LOCAL_DIRTY_AT[k];
+          try { if (typeof window._ligaExtClearPending === 'function') window._ligaExtClearPending(k); } catch(_){}
+        }
+      } catch(_){ /* offline / CSP / server down → fallback async abajo */ }
+    }
     window._ligaExtSavePromise = window._ligaExtSavePromise || {};
-    window._ligaExtSavePromise[k] = (function(slug, payload, dirtyStamp){
+    window._ligaExtSavePromise[k] = _syncConfirmed ? Promise.resolve(true) : (function(slug, payload, dirtyStamp){
       return new Promise(function(resolve){
         var attempt = 0;
         function ok2(j){

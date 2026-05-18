@@ -19467,8 +19467,19 @@ Tottenham
     return _dedupeSquadPlayers(filtered);
   }
   try { if (typeof window !== 'undefined') window._cleanSquadPlayers = _cleanSquadPlayers; } catch(_){}
+  /* Sello de versión: una vez saneada (sin basura, sin duplicados,
+     filas únicas) NO hay que volver a recorrer/deduplicar la liga en
+     CADA loadData/saveData. _sanitizeLigaTeamNames se invoca decenas
+     de veces por sim global → era puro coste repetido. Tras sanear se
+     marca d._sanV; si ya está, se sale en O(1). Cualquier ruta que
+     mute jugadores pasa por _dedupeSquadPlayers/_cleanSquadPlayers
+     (que NO ponen el sello) + saveData → saveData re-sanea (el objeto
+     mutado conserva el sello viejo solo si NADIE tocó players; las
+     ediciones reales del editor borran d._sanV antes de guardar). */
+  var _SAN_VER = 1;
   function _sanitizeLigaTeamNames(d){
     if (!d || !Array.isArray(d.teams)) return false;
+    if (d._sanV === _SAN_VER) return false;   /* ya saneada → O(1) */
     var dirty = false;
     /* Phase 0: drop "jugadores basura" persistidos antes del filtro
        2026-05-09 de parseSquadPaste. Cualquier player.name que match
@@ -19550,7 +19561,14 @@ Tottenham
     if (dirty) {
       d.teams = d.teams.filter(function(_, i){ return !dropMask[i]; });
     }
-    return dirty;
+    /* Marcar como saneada. Solo llegamos aquí si NO estaba sellada
+       (el early-out de arriba sale en O(1) si ya lo está). Devolvemos
+       SIEMPRE true para que loadData persista el JSON con el sello
+       UNA vez; a partir de ahí toda loadData/saveData de esta liga
+       sale en O(1) — fin del coste repetido que hacía que una sola
+       liga tardara 2 min. */
+    try { d._sanV = _SAN_VER; } catch(_){}
+    return true;
   }
 
   function loadData(k){
@@ -21130,6 +21148,28 @@ Tottenham
     if(sel) sel.mvp++;
   }
 
+  /* Acota el nº de equipos del round-robin. Una liga real tiene
+     ≤ ~24 equipos; si una liga llega con DECENAS por corrupción
+     (filas duplicadas con nombres distintos que el dedupe por alias
+     no fusiona), el doble round-robin es N·(N-1): 60 equipos =
+     3540 partidos, 150 = 22 350 → la sim de UNA liga tardaba
+     minutos ("2 min = 30%"). Con tope 40 el peor caso es
+     40·39 = 1560 partidos (segundos). Las ligas legítimas (≤40)
+     NO se tocan. Selección determinista: por power desc y nombre.
+     2026-05-17. */
+  var _RR_TEAM_CAP = 40;
+  function _capRoundRobin(teams){
+    if (!Array.isArray(teams) || teams.length <= _RR_TEAM_CAP) return teams;
+    var arr = teams.slice();
+    arr.sort(function(a,b){
+      var pa = Number(a && a.power) || 0, pb = Number(b && b.power) || 0;
+      if (pb !== pa) return pb - pa;
+      return String(a && a.name || '').localeCompare(String(b && b.name || ''));
+    });
+    try { console.warn('[sim] liga con '+teams.length+' equipos (corrupción) — round-robin acotado a '+_RR_TEAM_CAP+'.'); } catch(_){}
+    return arr.slice(0, _RR_TEAM_CAP);
+  }
+
   function ligaExtSimular(){
     if(!CURRENT_KEY) return;
     var data = loadData(CURRENT_KEY);
@@ -21139,7 +21179,7 @@ Tottenham
       (t.players||[]).forEach(resetPlayerStats);
     });
     data.results = [];
-    var ts = data.teams.slice();
+    var ts = _capRoundRobin(data.teams.slice());
     for(var i=0;i<ts.length;i++){
       for(var j=0;j<ts.length;j++){
         if(i===j) continue;
@@ -21180,7 +21220,7 @@ Tottenham
     if(!data || !Array.isArray(data.teams) || data.teams.length < 2) return false;
     data.teams.forEach(function(t){ (t.players||[]).forEach(resetPlayerStats); });
     data.results = [];
-    var ts = data.teams.slice();
+    var ts = _capRoundRobin(data.teams.slice());
     for(var i=0;i<ts.length;i++){
       for(var j=0;j<ts.length;j++){
         if(i===j) continue;

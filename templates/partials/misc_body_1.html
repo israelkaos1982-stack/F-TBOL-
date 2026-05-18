@@ -24517,6 +24517,12 @@ Tottenham
         t.aggressiveness=pwAggr;
         t.isHuman = (FORM_TIPO === 'human');
         t.humanEmoji = t.isHuman ? FORM_HUMAN_EMOJI : '';
+        /* Sello por equipo para la fusión multi-dispositivo (admin +
+           ayudantes, 2026-05-18): el servidor conserva la edición de
+           MAYOR updatedAt de cada equipo, así un re-push de documento
+           entero de otro dispositivo NO pisa este equipo recién
+           editado. Solo sellamos el equipo que el humano tocó. */
+        t.updatedAt = Date.now();
         if(parsed.length){
           if(t.players && t.players.length){
             /* Si el textarea ya venía prerrellenado con la plantilla
@@ -24541,6 +24547,7 @@ Tottenham
         var recoverTeam = {id:EDITING_TEAM_ID||uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,aggressiveness:pwAggr,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
         recoverTeam.isHuman   = (FORM_TIPO === 'human');
         recoverTeam.humanEmoji = recoverTeam.isHuman ? FORM_HUMAN_EMOJI : '';
+        recoverTeam.updatedAt = Date.now();
         data.teams.push(recoverTeam);
         EDITING_TEAM_ID = recoverTeam.id;
       }
@@ -24548,6 +24555,7 @@ Tottenham
       var newTeam = {id:uid(),name:name,power:pwGlob,atk:pwAtk,mid:pwMid,def:pwDef,aggressiveness:pwAggr,stadium:stadium,shield:shield,efootballAlias:efootballAlias,budget:budget,players:parsed};
       newTeam.isHuman   = (FORM_TIPO === 'human');
       newTeam.humanEmoji = newTeam.isHuman ? FORM_HUMAN_EMOJI : '';
+      newTeam.updatedAt = Date.now();
       data.teams.push(newTeam);
     }
     saveData(CURRENT_KEY,data);
@@ -25525,6 +25533,7 @@ Tottenham
     var _finalCount = t.players.length;
     // NO se recalcula el poder del equipo — los valores Global/ATK/MED/DEF
     // son los que el admin definió en el editor y se mantienen fijos.
+    t.updatedAt = Date.now();   /* sello por equipo → fusión multi-dispositivo */
     saveData(CURRENT_KEY, data);
     /* Invalidamos la cache por si alguna fetchData async la sobrescribe
        entre save y render — al recargar desde localStorage vemos SIEMPRE
@@ -25638,6 +25647,7 @@ Tottenham
       t.players.push(newP);
     }
     // El poder del equipo NO se recalcula — es fijo.
+    t.updatedAt = Date.now();   /* sello por equipo → fusión multi-dispositivo */
     saveData(CURRENT_KEY,data);
 
     // Limpiar form + salir de modo edición
@@ -25745,6 +25755,7 @@ Tottenham
     if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
     t.players = (t.players||[]).filter(function(p){return p.id!==pid;});
     // El poder del equipo NO se recalcula — es fijo.
+    t.updatedAt = Date.now();   /* sello por equipo → fusión multi-dispositivo */
     saveData(CURRENT_KEY,data);
     // Si estábamos editando al que se borra, salir del modo edición.
     if(_editingPlayerId === pid) _exitEditPlayerMode();

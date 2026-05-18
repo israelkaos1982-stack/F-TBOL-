@@ -21542,6 +21542,36 @@ Tottenham
           } catch(_){}
           if (LIGA_LOCAL_DIRTY_AT[k] === _dirtyAt) delete LIGA_LOCAL_DIRTY_AT[k];
           try { if (typeof window._ligaExtClearPending === 'function') window._ligaExtClearPending(k); } catch(_){}
+          /* ── PROTECTED FORZADO EN SAVE DELIBERADO (ARREGLO TOTAL
+             2026-05-18) ─────────────────────────────────────────────
+             El snapshot `_protected` del servidor es MONOTÓNICO:
+             rechaza (409) cualquier POST con menos jugadores que el
+             que ya tiene. Pensado contra wipes async/buggy. PERO si
+             el usuario edita la plantilla REEMPLAZÁNDOLA por una con
+             menos jugadores (botón "Reemplazar" del paste), el POST
+             normal a protected se RECHAZA → protected se queda con la
+             plantilla VIEJA (más jugadores). Al borrar datos de
+             navegación y recargar, loadData prefiere protected si
+             tiene MÁS jugadores → resucita la plantilla vieja. Por eso
+             "no funciona" aunque el main esté bien.
+
+             Como ESTE camino solo se alcanza desde un saveData
+             DELIBERADO del usuario (editor) y ya confirmado síncrono,
+             forzamos protected = la edición del usuario con
+             `force:true` (el endpoint salta el chequeo monotónico solo
+             cuando viene force — ver app.py). Síncrono para que esté
+             garantizado ANTES de que el usuario borre datos / recargue.
+             Los flujos async / boot / sim NO mandan force → la
+             protección monotónica contra wipes accidentales sigue
+             intacta para ellos. No se toca la precedencia de loadData. */
+          if (_countPlayers(d) > 0) {
+            try {
+              var _xhrProt = new XMLHttpRequest();
+              _xhrProt.open('POST', '/api/liga-ext-protected/'+encodeURIComponent(k), false);
+              _xhrProt.setRequestHeader('Content-Type', 'application/json');
+              _xhrProt.send(JSON.stringify({data:d, force:true}));
+            } catch(_){ /* best-effort; el async no-forzado de abajo cubre */ }
+          }
         }
       } catch(_){ /* offline / CSP / server down → fallback async abajo */ }
     }

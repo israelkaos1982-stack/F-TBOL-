@@ -9943,9 +9943,22 @@ window._showSimProgress = function(opts, onDone){
      (petición usuario 2026-05-17). Envuelve fila + ida/vuelta/global
      + ACTA. */
   .tour-tie{
+    position:relative;
     border:1px solid rgba(255,255,255,.18);border-radius:10px;
     padding:8px 8px 6px;background:rgba(255,255,255,.022);
     display:flex;flex-direction:column;gap:6px;
+  }
+  /* Fecha de la eliminatoria, arriba a la derecha (petición usuario
+     2026-05-17). Línea propia alineada a la derecha (sin solapar). */
+  .tour-tie-date{
+    align-self:flex-end;margin:-2px 0 0;
+    font-family:Rajdhani,sans-serif;font-size:10px;letter-spacing:.5px;
+    color:rgba(255,255,255,.6);white-space:nowrap;
+  }
+  .tour-tie-human .tour-tie-date{color:#ffe489;}
+  .tour-jor-date{
+    font-family:Rajdhani,sans-serif;font-size:9px;letter-spacing:.3px;
+    color:rgba(255,255,255,.5);font-weight:400;white-space:nowrap;
   }
   /* Eliminatoria con humano: borde dorado llamativo + pulso. Va
      arriba del todo (el render la coloca primero). */
@@ -10119,6 +10132,7 @@ window._showSimProgress = function(opts, onDone){
   }
   .tour-jor.is-future .tour-jor-h{color:rgba(180,200,230,.55);}
   .tour-jor-h{
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
     font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;
     color:rgba(255,255,255,.55);margin-bottom:6px;font-weight:700;
   }
@@ -11205,6 +11219,80 @@ window._showSimProgress = function(opts, onDone){
     var singleLast = !!(cfg.formatConfig && cfg.formatConfig.singleLegLastRound);
     return !(isLast && singleLast);
   }
+  /* ── Fechas de cada eliminatoria/jornada (petición usuario
+     2026-05-17: "arriba a la derecha la fecha de cada eliminatoria").
+     Fuente: las filas "Torneo Verano" del calendario Bayern
+     (#ag-content). Fallback: desde cfg.dateStart, 1 partido cada 4
+     días. */
+  var _TOUR_MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  function _tourMatchDates(cfg){
+    var arr = [];
+    try {
+      var host = document.getElementById('ag-content-bayern');
+      if (!host || !host.querySelector('.ag-r')) host = document.getElementById('ag-content');
+      if (host) {
+        host.querySelectorAll('.ag-r').forEach(function(r){
+          var cls = r.className || '';
+          if (/\bag-train\b/.test(cls) || /\bag-rest\b/.test(cls) || /\bag-sel\b/.test(cls)) return;
+          var lbl = ((r.querySelector('.ag-lbl') || {}).textContent || '').trim();
+          var dt  = ((r.querySelector('.ag-date') || {}).textContent || '').trim();
+          if (dt && (/torneo/i.test(lbl) || /\bag-torneo\b/.test(cls))) arr.push(dt);
+        });
+      }
+    } catch(_){}
+    if (arr.length) return arr;
+    /* Fallback: dateStart + 4 días por partido. */
+    var ds = String((cfg && cfg.dateStart) || '1 Jul').trim();
+    var m = ds.match(/(\d{1,2})\s*([A-Za-zñÑáéíóúÁÉÍÓÚ]+)/);
+    var day = m ? (parseInt(m[1], 10) || 1) : 1, mi = 6;
+    if (m) {
+      var mn = m[2].toLowerCase().slice(0, 3)
+        .replace('á','a').replace('é','e').replace('í','i').replace('ó','o').replace('ú','u');
+      for (var z = 0; z < _TOUR_MES.length; z++) {
+        if (_TOUR_MES[z].toLowerCase() === mn) { mi = z; break; }
+      }
+    }
+    var out = [];
+    for (var n = 0; n < 16; n++) {
+      out.push(day + ' ' + _TOUR_MES[mi]);
+      day += 4; if (day > 30) { day -= 30; mi = (mi + 1) % 12; }
+    }
+    return out;
+  }
+  /* Fechas de una ronda KO (ko / ko-2leg). Devuelve {ida,vta} si la
+     ronda es a doble partido, o {single} si es a partido único. */
+  function _tourKoRoundDates(cfg, rIdx){
+    var dts = _tourMatchDates(cfg);
+    if (cfg.format === 'ko-2leg') {
+      var rounds = (cfg.formatConfig && cfg.formatConfig.rounds) || [];
+      var lastIdx = rounds.length - 1;
+      var singleLast = !!(cfg.formatConfig && cfg.formatConfig.singleLegLastRound);
+      var consumed = 0;
+      for (var rr = 0; rr < rIdx; rr++) {
+        consumed += (rr === lastIdx && singleLast) ? 1 : 2;
+      }
+      if (!(rIdx === lastIdx && singleLast)) {
+        return { ida: dts[consumed] || '', vta: dts[consumed + 1] || '' };
+      }
+      return { single: dts[consumed] || '' };
+    }
+    return { single: dts[rIdx] || '' };
+  }
+  function _tourKoDateBadge(cfg, rIdx){
+    var d = _tourKoRoundDates(cfg, rIdx);
+    if (d.single) return '📅 ' + d.single;
+    if (d.ida || d.vta) return '📅 IDA ' + (d.ida||'?') + ' · VTA ' + (d.vta||'?');
+    return '';
+  }
+  /* Groups-KO: jornada de grupo j → idx j; ronda KO k → (perGroup-1)+k. */
+  function _tourGroupJorDate(cfg, jIdx){
+    return _tourMatchDates(cfg)[jIdx] || '';
+  }
+  function _tourGkoRoundDate(cfg, kIdx){
+    var pg = (cfg.formatConfig && cfg.formatConfig.perGroup) || 5;
+    var nj = Math.max(1, pg - 1);
+    return _tourMatchDates(cfg)[nj + kIdx] || '';
+  }
   function _teamChipHtml(t, tourId, slotIdx){
     var img = t.shield ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'">' : '';
     var classes = ['tour-team-chip'];
@@ -11287,6 +11375,7 @@ window._showSimProgress = function(opts, onDone){
       var allPlayed = true;
       var pairCount = 0;
       var humanTies = '', restTies = '';   /* humanas arriba (petición usuario 2026-05-17) */
+      var _koDateBadge = _tourKoDateBadge(cfg, curR);
       for (var i = 0; i < curTeams.length; i += 2) {
         var a = curTeams[i], b = curTeams[i+1];
         if (!b) break;
@@ -11352,7 +11441,9 @@ window._showSimProgress = function(opts, onDone){
         /* Cada eliminatoria en su propia caja con borde (petición
            usuario 2026-05-17). Las que tienen humano van arriba con
            borde llamativo. */
-        var tieBox = '<div class="tour-tie'+(hasHuman?' tour-tie-human':'')+'">'+tie+'</div>';
+        var tieBox = '<div class="tour-tie'+(hasHuman?' tour-tie-human':'')+'">'
+          + (_koDateBadge ? '<div class="tour-tie-date">'+_koDateBadge+'</div>' : '')
+          + tie + '</div>';
         if (hasHuman) humanTies += tieBox; else restTies += tieBox;
         pairCount++;
       }
@@ -11440,6 +11531,8 @@ window._showSimProgress = function(opts, onDone){
        JORNADA" → el usuario reportaba "J1 no deja simularla". */
     opts = opts || {};
     var prefix = keyPrefix || '';
+    var _cfgFC = null;
+    try { _cfgFC = _tourLoadCachedSync(tourId); } catch(_){}
     /* Recalcular la jornada actual REAL: la primera con algo sin jugar. */
     var actualCur = jornadaIdx;
     for (var ji = 0; ji < fixture.length; ji++) {
@@ -11460,7 +11553,10 @@ window._showSimProgress = function(opts, onDone){
       if (isCurrent) cls += ' is-current';
       if (isFuture) cls += ' is-future';
       if (isPast) cls += ' is-past';
-      html += '<div class="'+cls+'"><div class="tour-jor-h">'+lblTxt+'</div>';
+      var _jd = _cfgFC ? _tourGroupJorDate(_cfgFC, j) : '';
+      html += '<div class="'+cls+'"><div class="tour-jor-h"><span>'+lblTxt+'</span>'
+        + (_jd ? '<span class="tour-jor-date">📅 '+_jd+'</span>' : '')
+        + '</div>';
       var allPlayedJ = true;
       jor.forEach(function(m, mi){
         var key = prefix + j + '_' + mi;
@@ -11639,7 +11735,11 @@ window._showSimProgress = function(opts, onDone){
       var curT = cfg.koBracket[curR] || [];
       var roundLbl = koRounds[curR] || ('Ronda KO '+(curR+1));
       html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(240,192,64,.25);">';
-      html += '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:#f0c040;">FASE FINAL · '+roundLbl.toUpperCase()+'</p>';
+      var _gkoDate = _tourGkoRoundDate(cfg, curR);
+      html += '<p style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:#f0c040;">'
+        + '<span>FASE FINAL · '+roundLbl.toUpperCase()+'</span>'
+        + (_gkoDate ? '<span style="color:rgba(255,255,255,.6);letter-spacing:.5px;">📅 '+_gkoDate+'</span>' : '')
+        + '</p>';
       html += '<div class="tour-bracket-list">';
       var koAllPlayed = true, koPairCount = 0;
       for (var i = 0; i < curT.length; i += 2) {

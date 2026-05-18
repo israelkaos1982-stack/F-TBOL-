@@ -21223,17 +21223,93 @@ Tottenham
   };
 
   /* Override de getTeamStadium para PRIORIZAR el estadio que el admin
-     ha tipeado en el editor de cualquier ligaExt_* sobre el hardcoded
-     TEAM_STADIUMS del bundle. */
+     ha asignado en el editor de CUALQUIER liga (Liga EA Sports,
+     Hypermotion, 1ª RFEF y las 51 de Resto de Ligas) sobre el
+     hardcoded TEAM_STADIUMS del bundle.
+
+     ROBUSTEZ 2026-05-18 (petición usuario: "todos los equipos de
+     cualquier liga tienen un estadio local; cuando juega como LOCAL
+     ese estadio debe salir automatizado en la previa y en las cards
+     IA-vs-Humano / Humano-vs-Humano"):
+       1. Vía rápida: _aliasCache()[_aliasNormName] (TTL 3 s).
+       2. Si falla (p.ej. el equipo está como "Deportivo Alavés" en
+          el editor pero la card lo llama "Alavés", o la liga vino del
+          SERVIDOR y está en LIGA_CACHE pero no en localStorage), se
+          escanea por NOMBRE CANÓNICO (_canonTeamName, que colapsa
+          "Deportivo X"/"X CF"/acentos pero NO funde Real/Atlético)
+          tanto LIGA_CACHE (memoria, incluye copia del server) como
+          todas las claves ligaExt_*. Memoizado 5 s para no reescanear
+          en cada repintado de la previa.
+       3. Fallback final al TEAM_STADIUMS hardcoded del bundle. */
   (function(){
     var _origGetStadium = window.getTeamStadium;
+    var _stadMemo = Object.create(null);
+    var _stadMemoTs = 0;
+    function _canon(s){
+      try {
+        if (typeof window._canonTeamName === 'function') return window._canonTeamName(s);
+      } catch(_){}
+      return String(s==null?'':s).toLowerCase().trim()
+        .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+    }
+    function _scanStadiumByCanon(teamName){
+      var tgt = _canon(teamName);
+      if(!tgt) return '';
+      /* 1) LIGA_CACHE en memoria — incluye lo bajado del servidor
+         aunque localStorage local esté vacío (móvil nuevo / otra
+         sesión). */
+      try {
+        if (typeof LIGA_CACHE !== 'undefined' && LIGA_CACHE) {
+          for (var ck in LIGA_CACHE) {
+            var d = LIGA_CACHE[ck];
+            var ts = (d && Array.isArray(d.teams)) ? d.teams : [];
+            for (var i=0;i<ts.length;i++){
+              var t=ts[i]; if(!t||!t.name) continue;
+              var s=String(t.stadium||t.estadio||'').trim(); if(!s) continue;
+              if(_canon(t.name)===tgt) return s;
+            }
+          }
+        }
+      } catch(_){}
+      /* 2) Escaneo de todas las claves ligaExt_* en localStorage. */
+      try {
+        for (var li=0; li<localStorage.length; li++){
+          var lk=localStorage.key(li);
+          if(!lk||lk.indexOf('ligaExt_')!==0) continue;
+          if(lk.indexOf('_backup')!==-1||lk.indexOf('_protected')!==-1||lk.indexOf('_snap_')!==-1) continue;
+          var raw=localStorage.getItem(lk); if(!raw) continue;
+          var data; try{data=JSON.parse(raw);}catch(_){continue;}
+          var teams=(data&&Array.isArray(data.teams))?data.teams:[];
+          for (var ti=0;ti<teams.length;ti++){
+            var tt=teams[ti]; if(!tt||!tt.name) continue;
+            var ss=String(tt.stadium||tt.estadio||'').trim(); if(!ss) continue;
+            if(_canon(tt.name)===tgt) return ss;
+          }
+        }
+      } catch(_){}
+      return '';
+    }
     window.getTeamStadium = function(teamName){
       if(!teamName) return (typeof _origGetStadium === 'function') ? (_origGetStadium(teamName) || '') : '';
+      /* Vía rápida: cache alias/estadio (exacto por _aliasNormName). */
       var targetNorm = _aliasNormName(teamName);
       if(targetNorm){
         var entry = _aliasCache()[targetNorm];
         if(entry && entry.stadium) return entry.stadium;
       }
+      /* Escaneo robusto por canónico (memoizado 5 s). */
+      try {
+        var now = Date.now();
+        if ((now - _stadMemoTs) > 5000) { _stadMemo = Object.create(null); _stadMemoTs = now; }
+        var mk = String(teamName);
+        if (Object.prototype.hasOwnProperty.call(_stadMemo, mk)) {
+          if (_stadMemo[mk]) return _stadMemo[mk];
+        } else {
+          var found = _scanStadiumByCanon(teamName);
+          _stadMemo[mk] = found || '';
+          if (found) return found;
+        }
+      } catch(_){}
       /* Fallback a TEAM_STADIUMS hardcoded del bundle. */
       if(typeof _origGetStadium === 'function'){
         try { return _origGetStadium(teamName) || ''; } catch(_){}

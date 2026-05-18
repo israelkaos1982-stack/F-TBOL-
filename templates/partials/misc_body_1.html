@@ -14046,6 +14046,28 @@ window._showSimProgress = function(opts, onDone){
      (raíces que el usuario marcó como vetadas independientemente
      del sufijo). */
   function _isSpanishTeamBanned(teamName, bannedSet){
+    /* EXCEPCIÓN PORTUGAL (2026-05-18, petición explícita del usuario):
+       «Sporting CP» es el club de LISBOA (Portugal), NO el Sporting
+       de Gijón (España). `_canonTeamName` strippea el afijo "cp"
+       (Club Polideportivo, español) y deja "sporting", que colisiona
+       con la entrada española del bannedSet → el club portugués
+       salía «vetado en esta liga» al añadirlo a Portugal y, peor, el
+       filtro universal lo borraba en CADA loadData (no se quedaba
+       guardado, 24 h peleando con esto). Si el nombre contiene
+       "sporting" + (cp | portugal | lisboa) es el club luso: NUNCA es
+       español-baneado. El Sporting de Gijón real
+       ("Sporting Gijón" / "Real Sporting de Gijón") NO contiene esos
+       tokens, así que su veto en ligas extranjeras se mantiene. */
+    try {
+      var _n = String(teamName==null?'':teamName).toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,'')
+        .replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+      if (_n.indexOf('sporting') !== -1 &&
+          (/\bcp\b/.test(_n) || _n.indexOf('portugal') !== -1 ||
+           _n.indexOf('lisboa') !== -1 || _n.indexOf('lisbon') !== -1)) {
+        return false;
+      }
+    } catch(_){}
     var canon = _canonTeamName(teamName);
     if(!canon) return false;
     if(bannedSet[canon]) return true;

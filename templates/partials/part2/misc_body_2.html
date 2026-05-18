@@ -10434,9 +10434,16 @@
       }
     }
     var continueBtn = document.getElementById('gm-ht-continue-btn');
-    /* Reset del brillo: una nueva pantalla de descanso arranca SIN
-       glow (solo aparece tras compartir). */
-    if (continueBtn) { continueBtn.style.display = 'none'; continueBtn.classList.remove('gm-ht-glow'); }
+    /* "INICIAR SEGUNDA PARTE" SIEMPRE visible — compartir es OPCIONAL.
+       BUG CRÍTICO (foto usuario 2026-05-18): antes el botón estaba
+       display:none y SOLO lo revelaba _gmShareHalfTime (al compartir)
+       o el poll HvH. Si el usuario NO compartía, el partido se quedaba
+       PILLADO en el HT para siempre y había que meter los minutos a
+       mano → viola la regla BASE INMUTABLE del cronómetro (0→90, nunca
+       atascado). Ahora se muestra desde que aparece la pantalla de
+       DESCANSO; el glow solo se resetea aquí y se re-añade tras
+       compartir como énfasis (no como requisito). */
+    if (continueBtn) { continueBtn.style.display = ''; continueBtn.classList.remove('gm-ht-glow'); }
     var shareBtn = document.getElementById('gm-ht-share-btn');
     if (shareBtn) shareBtn.style.display = '';
     ov.style.display = 'flex';
@@ -11076,11 +11083,16 @@
       } else {
         _gmEndBtn.textContent = '🏁 FINALIZAR';
       }
-      /* Botón "✖ SALIR DEL PARTIDO": visible solo cuando el partido
-         terminó (salida definitiva siempre disponible). */
+      /* Botón "✖ SALIR DEL PARTIDO": visible SOLO cuando el partido
+         está FINALIZADO de verdad (_gm.finished), NO solo cuando el
+         cronómetro llegó al final (_matchOver). Antes salía al 85-90+'
+         (matchOver) compitiendo con FINALIZAR → el usuario no sabía a
+         qué botón dar (foto usuario 2026-05-18). Ahora, de 85' en
+         adelante, la ÚNICA acción es el botón FINALIZAR brillante
+         (.is-finishable); SALIR aparece después, ya finalizado. */
       try {
         var _exitB = document.getElementById('gm-btn-exit');
-        if (_exitB) _exitB.style.display = (_matchOver || _gm.finished) ? '' : 'none';
+        if (_exitB) _exitB.style.display = _gm.finished ? '' : 'none';
       } catch(_){}
       /* Partido en juego → resetear el flag de "VER RESUMEN" para
          que cuando ESTE partido termine, _gmReactivateFinishBtn

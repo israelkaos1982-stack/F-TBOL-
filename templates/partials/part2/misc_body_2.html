@@ -10052,7 +10052,8 @@
         text = text + '\n\n📺 Visto en el Twitch de ' + _twitch;
       }
     } catch(_){}
-    /* 1. Copiar al portapapeles (best-effort en ambas APIs). */
+    /* 1. Copiar al portapapeles (backup — si el share nativo se
+       cancela, el usuario puede pegar en el grupo manualmente). */
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).catch(function(){});
@@ -10067,7 +10068,31 @@
         document.body.removeChild(_ta);
       }
     } catch(_){}
-    /* 2. Abrir el grupo en pestaña nueva. */
+    /* 2. SHARE NATIVO (Web Share API) — REPARA "no se comparte nada"
+       (reportado 2026-05-18). Antes solo se abría el link de
+       INVITACIÓN del grupo (chat.whatsapp.com/<token>), que NO
+       redacta ningún mensaje → el usuario veía que no se compartía
+       nada. navigator.share abre el selector del sistema con el
+       texto ya escrito; el usuario elige WhatsApp (o el grupo) y se
+       envía DE VERDAD. Fallbacks robustos en cascada:
+         a) navigator.share({text})  — móvil (caso normal).
+         b) wa.me/?text=<txt>        — WhatsApp con el texto puesto.
+         c) grupo fijo               — última red (texto en portapapeles). */
+    try {
+      if (navigator.share) {
+        navigator.share({ text: text }).catch(function(err){
+          /* AbortError = el usuario cerró el selector a propósito →
+             NO hacemos fallback (no es un fallo). Cualquier otro
+             error sí cae a wa.me. */
+          if (err && err.name === 'AbortError') return;
+          try { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); } catch(_){}
+        });
+        return;
+      }
+    } catch(_){}
+    /* 3. Sin Web Share API (desktop): WhatsApp con el texto ya puesto. */
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); return; } catch(_){}
+    /* 4. Última red: abrir el grupo fijo (texto ya en portapapeles). */
     try { window.open(_WA_GROUP_URL, '_blank'); } catch(_){}
   }
   try {
@@ -10341,11 +10366,28 @@
     _waShareToGroup(lines.join('\n'));
     _gm.htShared = true;
     var continueBtn = document.getElementById('gm-ht-continue-btn');
-    if (continueBtn) continueBtn.style.display = '';
+    if (continueBtn) { continueBtn.style.display = ''; _gmGlowContinueBtn(continueBtn); }
     if (_gm.isHvH) {
       try { localStorage.setItem('gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
     }
   };
+  /* Resalta el botón "INICIAR SEGUNDA PARTE" con un brillo pulsante
+     tras compartir el descanso (petición usuario 2026-05-18: "que
+     brille para saber que hay que pulsarle"). Idempotente. */
+  function _gmGlowContinueBtn(btn){
+    if (!btn) return;
+    try {
+      if (!document.getElementById('gm-ht-glow-style')) {
+        var _gs = document.createElement('style');
+        _gs.id = 'gm-ht-glow-style';
+        _gs.textContent = '@keyframes gmHtGlowPulse{0%,100%{box-shadow:0 0 10px rgba(37,211,102,.55);transform:scale(1);}50%{box-shadow:0 0 26px rgba(37,211,102,.95),0 0 46px rgba(37,211,102,.5);transform:scale(1.02);}}'
+          + '.gm-ht-glow{background:linear-gradient(135deg,#1ea14a,#25d366 55%,#1ea14a)!important;border:1px solid #25d366!important;color:#fff!important;animation:gmHtGlowPulse 1.05s ease-in-out infinite!important;}';
+        (document.head||document.body).appendChild(_gs);
+      }
+      btn.classList.add('gm-ht-glow');
+    } catch(_){}
+  }
+  window._gmGlowContinueBtn = _gmGlowContinueBtn;
 
   function _gmLogoUrl(name) {
     var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
@@ -10392,7 +10434,9 @@
       }
     }
     var continueBtn = document.getElementById('gm-ht-continue-btn');
-    if (continueBtn) continueBtn.style.display = 'none';
+    /* Reset del brillo: una nueva pantalla de descanso arranca SIN
+       glow (solo aparece tras compartir). */
+    if (continueBtn) { continueBtn.style.display = 'none'; continueBtn.classList.remove('gm-ht-glow'); }
     var shareBtn = document.getElementById('gm-ht-share-btn');
     if (shareBtn) shareBtn.style.display = '';
     ov.style.display = 'flex';
@@ -10402,7 +10446,7 @@
           if (localStorage.getItem('gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away) === '1') {
             clearInterval(htPoll);
             var cb = document.getElementById('gm-ht-continue-btn');
-            if (cb) cb.style.display = '';
+            if (cb) { cb.style.display = ''; if (typeof _gmGlowContinueBtn === 'function') _gmGlowContinueBtn(cb); }
           }
         } catch(e) { clearInterval(htPoll); }
       }, 3000);
@@ -11181,12 +11225,12 @@
       m.className = 'ml-ht';
       m.textContent = '— DESCANSO (45 min) —';
       list.appendChild(m);
-      var _gmWaWrap = document.createElement('div');
-      _gmWaWrap.className = 'ml-ht-wa-wrap';
-      _gmWaWrap.innerHTML = '<button class="ml-ht-wa-btn" onclick="window._gmShareHalfTime()">'
-        +'<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
-        +' Compartir descanso</button>';
-      list.appendChild(_gmWaWrap);
+      /* 2026-05-18 (petición usuario): NO inyectar el botón
+         "Compartir descanso" dentro del acta. Ocupaba espacio y era
+         redundante — el compartir vive en la pantalla de DESCANSO
+         (overlay gm-ht-ov, botón 🟢 COMPARTIR DESCANSO). Antes este
+         CTA se quedaba clavado en el acta hasta el final del partido
+         (foto usuario: visible al 57'). */
     }
     gmRenderTimer();
     _gmShowHalftimeOv();

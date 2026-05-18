@@ -21573,6 +21573,37 @@ Tottenham
       else localStorage.removeItem(_LIGAEXT_PENDING_KEY);
     } catch(_){}
   };
+  /* ── RE-HIDRATAR EL GUARD "DIRTY" TRAS UN RELOAD ─────────────────
+     (FIX 2026-05-18, bug usuario "edito una plantilla de Liga EA
+     Sports y emerge la anterior" desde PC).
+
+     `LIGA_LOCAL_DIRTY_AT` es un objeto EN MEMORIA: se vacía en cada
+     recarga. Es el ÚNICO guard de `fetchData` que es consciente del
+     CONTENIDO — el resto del anti-wipe solo compara CANTIDADES
+     (nº de equipos / nº de jugadores). Una edición "count-neutral"
+     (GLOBAL/ATQ/MED/DEF, agresividad, presupuesto, estadio, rename de
+     jugador, toggles de flags) NO cambia esas cantidades, así que si
+     el usuario recarga antes de que el POST al server confirme:
+       1. loadData pinta el localStorage NUEVO (correcto, un instante).
+       2. fetchData GETea el server (aún VIEJO). teamsWipe/playersWipe/
+          perTeamWipe = false (cantidades iguales) y `localDirty` = false
+          (se perdió en el reload) → ACEPTA el server VIEJO y pisa el
+          local NUEVO. → "emerge la plantilla anterior".
+
+     El set persistido `liga_ext_pending_v1` SÍ sobrevive al reload y
+     contiene el slug mientras el POST de ESTE dispositivo no haya
+     confirmado. Re-sembramos `LIGA_LOCAL_DIRTY_AT` desde ese set,
+     SÍNCRONO en el parseo del IIFE (antes de que cualquier fetchData
+     se dispare por navegación/DOMContentLoaded). Así la rama
+     `localDirty` —ya probada— de fetchData conserva el local y lo
+     re-sube hasta que el server confirma (lo que limpia el pending
+     Y el dirty). No se toca la precedencia de loadData ni la lógica
+     de quota / _protected / snapshots. */
+  try {
+    _ligaExtPendingSet().forEach(function(slug){
+      if (slug && !LIGA_LOCAL_DIRTY_AT[slug]) LIGA_LOCAL_DIRTY_AT[slug] = Date.now();
+    });
+  } catch(_){}
   /* Boot re-push: re-empuja al server lo que quedó pendiente. Espera
      a que LIGA_CACHE/localStorage estén listos (DOMContentLoaded +
      pequeño delay) y vuelve a llamar saveData (que reintenta x5). */
@@ -21808,8 +21839,20 @@ Tottenham
            — el server puede estar devolviendo la versión PRE edit. Sin
            este flag los conteos podían cuadrar (admin renombra player
            sin cambiar nº total, o sube power) y el server pisaba el
-           local fresco silenciosamente. */
-        var localDirty = !!LIGA_LOCAL_DIRTY_AT[k];
+           local fresco silenciosamente.
+
+           Belt-and-suspenders (FIX 2026-05-18): además del flag en
+           memoria, consultamos el set PERSISTIDO `liga_ext_pending_v1`.
+           Si el slug sigue ahí, hay una edición de ESTE dispositivo que
+           el server aún no ha confirmado — aunque el flag en memoria se
+           haya limpiado por una ruta no relacionada (o se perdiera en
+           un reload y la re-hidratación de arriba no llegara a tiempo).
+           El pending solo se borra cuando el POST confirma, así que
+           esto NO bloquea updates legítimos de otros dispositivos más
+           allá de esa ventana corta. */
+        var _slugPending = false;
+        try { _slugPending = _ligaExtPendingSet().indexOf(k) !== -1; } catch(_){}
+        var localDirty = !!LIGA_LOCAL_DIRTY_AT[k] || _slugPending;
         if (teamsWipe || playersWipe || perTeamWipe || localDirty) {
           try{ console.warn('[ligaExt] anti-wipe activado ('+k+'): local='+localTeams.length+'T/'+localPlayerCount+'J vs server='+(data.teams||[]).length+'T/'+serverPlayerCount+'J'+(perTeamWipe?' (per-team)':'')+(localDirty?' (dirty)':'')+'. Conservando local y re-subiendo.'); }catch(_){}
           // Conservamos la versión local en memoria y disco.

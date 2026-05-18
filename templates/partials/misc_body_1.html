@@ -19730,7 +19730,8 @@ window._showSimProgress = function(opts, onDone){
       </div>
 
       <label class="lext-label">Estadio local</label>
-      <select class="lext-select" id="lext-team-stadium"><option value="">— Elegir estadio del Stadium Hub —</option></select>
+      <input class="lext-input" id="lext-team-stadium" list="lext-stadium-datalist" placeholder="— Elegir o escribir estadio del Stadium Hub —" autocomplete="off" />
+      <datalist id="lext-stadium-datalist"></datalist>
 
       <label class="lext-label">Escudo (URL — p.ej. sofascore)</label>
       <input class="lext-input" id="lext-team-shield" placeholder="https://api.sofascore.app/api/v1/team/17/image" />
@@ -22996,23 +22997,39 @@ Tottenham
     return n+' €';
   }
 
-  // ── Poblar el <select> de estadios desde Stadium Hub ──
+  // ── Poblar el <datalist> de estadios desde Stadium Hub ──
+  /* 2026-05-18: el <select> nativo "no dejaba elegir estadio" en móvil
+     (foto usuario) — MISMO patrón que el selector de posición que ya se
+     migró a botones el 2026-05-17 porque el <select> nativo se quedaba
+     bloqueado en Android. Ahora es un <input list> + <datalist>: el
+     admin puede ELEGIR de la lista o ESCRIBIR libremente, y no depende
+     del picker nativo que fallaba. El contrato de valor no cambia:
+     todo lo que lee/escribe estadio sigue usando
+     `#lext-team-stadium .value`, así que save/load/edit/clear/autofill
+     funcionan igual.
+
+     Idempotente (patrón canónico CLAUDE.md): si la firma del
+     STADIUM_DB no cambió, NO reconstruimos el <datalist> — así un
+     re-render de fondo (ligaExtEditar / lextEditTeam / tras save) no
+     reescribe el DOM mientras el admin está eligiendo/escribiendo. */
   function populateStadiumsDatalist(){
-    var sel = document.getElementById('lext-team-stadium');
-    if(!sel) return;
-    var current = sel.value || '';
+    var dl = document.getElementById('lext-stadium-datalist');
+    if(!dl) return;
     var db = (window.STADIUM_DB && window.STADIUM_DB.length) ? window.STADIUM_DB : [];
-    var opts = ['<option value="">— Elegir estadio del Stadium Hub —</option>'];
+    var sig = 'n=' + db.length + '|' + (db.length ? String(db[0] && db[0].name) + '|' + String(db[db.length-1] && db[db.length-1].name) : '');
+    if(dl._stadiumSig === sig) return;   // GUARD — sin mutación innecesaria
+    dl._stadiumSig = sig;
+    var opts = [];
     if(db.length){
-      // Ordenar por nombre
       var sorted = db.slice().sort(function(a,b){return (a.name||'').localeCompare(b.name||'','es');});
       sorted.forEach(function(s){
-        var label = s.name + (s.city?' · '+s.city:'') + (s.status?' · '+s.status:'');
-        opts.push('<option value="'+String(s.name).replace(/"/g,'&quot;')+'">'+label+'</option>');
+        var nm = String(s.name||'').replace(/"/g,'&quot;');
+        if(!nm) return;
+        var label = String(s.name||'') + (s.city?' · '+s.city:'') + (s.status?' · '+s.status:'');
+        opts.push('<option value="'+nm+'" label="'+label.replace(/"/g,'&quot;')+'">'+label+'</option>');
       });
     }
-    sel.innerHTML = opts.join('');
-    if(current) sel.value = current;
+    dl.innerHTML = opts.join('');
   }
 
   // ── Parser de plantilla pegada ─────────────────────
@@ -23229,24 +23246,12 @@ Tottenham
     _setIfEmpty('lext-team-budget', c.budget);
     _setIfEmpty('lext-team-shield', c.shield);
     _setIfEmpty('lext-team-efootball-alias', c.alias);
-    /* Estadio: el input es <select>. Solo lo seteamos si el valor
-       coincide con alguna option existente (case-insensitive). Si no
-       coincide, dejamos el select como está y el admin elige a mano. */
-    if(c.stadium){
-      var sel = document.getElementById('lext-team-stadium');
-      if(sel && sel.options){
-        var want = c.stadium.toLowerCase().replace(/\s+/g,' ').trim();
-        for(var oi = 0; oi < sel.options.length; oi++){
-          var optTxt = String(sel.options[oi].text || '').toLowerCase().replace(/\s+/g,' ').trim();
-          var optVal = String(sel.options[oi].value || '').toLowerCase().replace(/\s+/g,' ').trim();
-          if(optTxt === want || optVal === want || optTxt.indexOf(want) === 0 || want.indexOf(optTxt) === 0){
-            sel.selectedIndex = oi;
-            filled.push('lext-team-stadium');
-            break;
-          }
-        }
-      }
-    }
+    /* Estadio: ahora es <input list> (texto libre + datalist) — mismo
+       contrato .value que el resto, así que basta _setIfEmpty como en
+       los demás campos. (Antes era un <select> y se hacía un match de
+       options a mano; el <select> nativo daba problemas en móvil — ver
+       populateStadiumsDatalist.) */
+    _setIfEmpty('lext-team-stadium', c.stadium);
     return filled.length > 0 ? filled : false;
   }
 

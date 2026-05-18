@@ -20554,6 +20554,51 @@ Tottenham
         var data = (j && j.data) || {teams:[],results:[]};
         data.teams = data.teams || [];
         data.results = data.results || [];
+        /* ─── ADOPTAR COPIA MAYOR DEL SERVIDOR (2026-05-18) ──────────
+           Bug usuario: móvil = Liga Inglesa 20 equipos (correcto, ya
+           subido al servidor por su anti-wipe), PC = 9 (copia local
+           corrupta legacy). El PC NO mostraba los 20 porque (a) su
+           `deletedTeamNames` stale filtraba ~11 reales y (b) el
+           anti-wipe solo protege "local > server". Regla SEGURA:
+           si el servidor trae MUCHOS más equipos que el local
+           (≥16 y ≥ local+6) es la copia buena de OTRO dispositivo →
+           la ADOPTAMOS tal cual, IGNORAMOS y LIMPIAMOS el
+           deletedTeamNames local de esta liga (era el que borraba
+           los 11), y NO re-subimos (el servidor manda). Solo
+           RECUPERA equipos; nunca borra del servidor ni pisa una
+           copia local más rica (eso lo sigue cubriendo el anti-wipe
+           de abajo, que NO se toca). */
+        try {
+          var _srvN = data.teams.length;
+          if (_srvN >= 16) {
+            var _locForCmp = LIGA_CACHE[k];
+            if (!_locForCmp) {
+              try { var _lr = localStorage.getItem(storeKey(k)); if (_lr) _locForCmp = JSON.parse(_lr); } catch(_){}
+            }
+            var _locN = (_locForCmp && Array.isArray(_locForCmp.teams)) ? _locForCmp.teams.length : 0;
+            if (_srvN >= _locN + 6) {
+              try { console.warn('[ligaExt] '+k+': servidor tiene '+_srvN+' equipos vs local '+_locN+' — ADOPTANDO copia del servidor (otro dispositivo) y limpiando deletedTeamNames local.'); } catch(_){}
+              /* Quitar de deletedTeamNames local los nombres que el
+                 servidor SÍ trae (eran borrados "fantasma" por
+                 corrupción, no decisiones reales del admin). */
+              try {
+                if (_locForCmp && Array.isArray(_locForCmp.deletedTeamNames) && _locForCmp.deletedTeamNames.length) {
+                  var _srvNamesSet = {};
+                  data.teams.forEach(function(st){ if (st && st.name) _srvNamesSet[_lextNormName(st.name)] = true; });
+                  _locForCmp.deletedTeamNames = _locForCmp.deletedTeamNames.filter(function(nm){ return !_srvNamesSet[nm]; });
+                }
+              } catch(_){}
+              data.deletedTeamNames = (_locForCmp && Array.isArray(_locForCmp.deletedTeamNames))
+                ? _locForCmp.deletedTeamNames.slice() : [];
+              try { _sanitizeLigaTeamNames(data); } catch(_){}
+              LIGA_CACHE[k] = data;
+              try { localStorage.setItem(storeKey(k), JSON.stringify(data)); } catch(_){}
+              try { if (j && j.updated_at) LIGA_UPDATED[k] = j.updated_at; } catch(_){}
+              cb && cb(data, true);
+              return;
+            }
+          }
+        } catch(_){}
         /* ─── BLACKLIST DE EQUIPOS BORRADOS ─────────────────────
            Si el admin borró un equipo en esta sesión (o en alguna
            anterior cuya blacklist viaja en localStorage), NUNCA se

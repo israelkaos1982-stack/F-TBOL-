@@ -11376,6 +11376,7 @@ window._showSimProgress = function(opts, onDone){
       var pairCount = 0;
       var humanTies = '', restTies = '';   /* humanas arriba (petición usuario 2026-05-17) */
       var _koDateBadge = _tourKoDateBadge(cfg, curR);
+      var _kd = _tourKoRoundDates(cfg, curR);
       for (var i = 0; i < curTeams.length; i += 2) {
         var a = curTeams[i], b = curTeams[i+1];
         if (!b) break;
@@ -11404,7 +11405,8 @@ window._showSimProgress = function(opts, onDone){
              propia card (petición usuario 2026-05-17). */
           var L1 = cfg.results[matchKey + '|L1'];
           if (!L1) {
-            tie += '<div class="tour-tie-leg-lbl">🟢 IDA · juega en su campo</div>';
+            tie += '<div class="tour-tie-leg-lbl">🟢 IDA · juega en su campo'
+              + (_kd && _kd.ida ? ' · 📅 ' + _kd.ida : '') + '</div>';
             tie += '<div class="'+rowClass+'"'+dataAttrs+'>'
               + _bracketTeamHtml(a, id, i)
               + '<span class="vs">vs</span>'
@@ -11418,7 +11420,9 @@ window._showSimProgress = function(opts, onDone){
               + '<span class="tl-tm">'+_e1(a&&a.name)+'</span>'
               + '<span class="tl-sc">'+(L1.a|0)+' - '+(L1.b|0)+'</span>'
               + '<span class="tl-tm tl-tm-r">'+_e1(b&&b.name)+'</span></span></div></div>';
-            tie += '<div class="tour-tie-leg-lbl">🔁 VUELTA · el GLOBAL se decide al terminar</div>';
+            tie += '<div class="tour-tie-leg-lbl">🔁 VUELTA'
+              + (_kd && _kd.vta ? ' · 📅 ' + _kd.vta : '')
+              + ' · el GLOBAL se decide al terminar</div>';
             tie += '<div class="'+rowClass+'"'+dataAttrs+'>'
               + _bracketTeamHtml(b, id, i+1)
               + '<span class="vs">vs</span>'

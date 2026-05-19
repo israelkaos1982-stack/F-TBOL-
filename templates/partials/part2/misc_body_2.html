@@ -6089,8 +6089,86 @@
     SCHEDULE = generarCalendario(_rotarPorReloj(mezclarEquipos(TEAMS.slice())));
     try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(SCHEDULE)); } catch(_){}
   }
+
+  /* ── Sustitución de equipos en el calendario (decisión usuario
+     2026-05-18: "el reemplazo hereda el hueco de Bayern") ──
+     Si el admin sacó un equipo de Liga EA (queda en
+     `ligaExt_liga-ea-sports.deletedTeamNames`) y añadió otro NUEVO
+     en el editor (nombre que no está en la lista canónica `TEAMS`),
+     el calendario PERSISTIDO sigue teniendo al viejo. Aquí se
+     renombra in-place viejo→nuevo: Liverpool juega EXACTAMENTE los
+     partidos de Bayern, mismas jornadas, sin regenerar nada ni
+     perder resultados. Emparejamiento por orden removidos[i]←añadidos[i].
+     Gemelo self-contained de `_ligaEaSubMap` del bundle (usa la
+     lista local `TEAMS` para no depender del orden de carga). */
+  function _eaSubMapLocal(){
+    var m = Object.create(null);
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(!raw) return m;
+      var d = JSON.parse(raw) || {};
+      var del = Array.isArray(d.deletedTeamNames) ? d.deletedTeamNames : [];
+      if(!del.length) return m;
+      var nf = function(s){ return String(s==null?'':s).trim().toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,''); };
+      var delSet = Object.create(null);
+      del.forEach(function(n){ var k=nf(n); if(k) delSet[k]=true; });
+      var canon = Object.create(null);
+      TEAMS.forEach(function(n){ canon[nf(n)] = true; });
+      var removed = TEAMS.filter(function(n){ return delSet[nf(n)]; });
+      var added = [], seen = Object.create(null);
+      (Array.isArray(d.teams) ? d.teams : []).forEach(function(t){
+        var nm = t && t.name ? String(t.name).trim() : '';
+        if(!nm || nm === 'Por definir') return;
+        var k = nf(nm);
+        if(canon[k] || delSet[k] || seen[k]) return;
+        seen[k] = true; added.push(nm);
+      });
+      var p = Math.min(removed.length, added.length);
+      for(var i=0;i<p;i++){ m[nf(removed[i])] = added[i]; }
+    } catch(_){}
+    return m;
+  }
+  function _eaRemapSchedule(sch){
+    if(!Array.isArray(sch)) return sch;
+    var m = _eaSubMapLocal();
+    if(!Object.keys(m).length) return sch;
+    var nf = function(s){ return String(s==null?'':s).trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,''); };
+    var changed = false;
+    var out = sch.map(function(j){
+      return Array.isArray(j) ? j.map(function(p){
+        if(!Array.isArray(p)) return p;
+        var nh = m[nf(p[0])], na = m[nf(p[1])];
+        if(nh || na){ changed = true; return [nh || p[0], na || p[1]]; }
+        return p;
+      }) : j;
+    });
+    return changed ? out : sch;
+  }
+  function _eaApplyScheduleSub(persist){
+    try {
+      var rm = _eaRemapSchedule(window.LIGA_SCHEDULE || SCHEDULE);
+      if(rm && rm !== (window.LIGA_SCHEDULE || SCHEDULE)){
+        SCHEDULE = rm;
+        window.LIGA_SCHEDULE = rm;
+        if(persist !== false){
+          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(rm)); } catch(_){}
+        }
+      }
+    } catch(_){}
+  }
+
   window.LIGA_SCHEDULE = SCHEDULE;
+  _eaApplyScheduleSub(true);
   hydrateLigaStateFromBackend();
+  /* Reaplicar tras la posible carga diferida del editor / hidratación
+     backend (que pueden traer un calendario con el equipo viejo). */
+  try {
+    document.addEventListener('DOMContentLoaded', function(){
+      setTimeout(function(){ _eaApplyScheduleSub(true); }, 900);
+    });
+  } catch(_){}
 
   /* ── PERSISTENCIA ────────────────────────────────── */
   function loadResults() {

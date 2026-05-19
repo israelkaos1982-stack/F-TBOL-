@@ -700,10 +700,15 @@ window._showSimProgress = function(opts, onDone){
     if(entry.colors && entry.colors.length){
       var gr=gradientFrom(entry.colors);
       card.style.setProperty('background', gr.outer, 'important');
-      card.style.setProperty('border-color', gr.primary, 'important');
       var inn=card.querySelector('.mc-equipo-overlay,.mc-main-overlay');
       if(inn) inn.style.background=gr.inner;
     }
+    var _bc=_norm6(entry.bcolor
+      || (entry.colors&&entry.colors.length ? gradientFrom(entry.colors).primary : '#f0c040'));
+    var _gl=(entry.glow!=null ? entry.glow : 2);
+    card.style.setProperty('border-color', _bc, 'important');
+    card.style.setProperty('border-style', 'solid', 'important');
+    card.style.setProperty('box-shadow', glowShadow(_bc,_gl), 'important');
     return card;
   }
 
@@ -747,6 +752,7 @@ window._showSimProgress = function(opts, onDone){
       if(!rm){
         if(card.classList.contains('mc-espana')) fixEspana(card);
         else if(!card.classList.contains('equipo-card')) ensureBgEmoji(card);
+        ensureGlow(card, s.ov[key]);
       }
       if(!rm) ensureDelBtn(card);
     });
@@ -826,6 +832,30 @@ window._showSimProgress = function(opts, onDone){
   function findAddedById(id){
     var a=loadState().added; for(var i=0;i<a.length;i++){ if(a[i].id===id) return a[i]; } return null;
   }
+  /* Borde llamativo (brillo neón). Nivel 0=apagado … 4=intenso. */
+  function glowShadow(hex, lvl){
+    lvl=parseInt(lvl,10); if(isNaN(lvl)) lvl=2;
+    if(lvl<=0) return 'none';
+    var tbl={1:{b:7,oa:.35,ib:2,ia:.55,r:0},
+            2:{b:14,oa:.5,ib:3,ia:.72,r:0},
+            3:{b:22,oa:.66,ib:4,ia:.85,r:1},
+            4:{b:34,oa:.85,ib:6,ia:1,r:2} };
+    var sp=tbl[lvl] || tbl[2];
+    var p=['0 0 '+sp.b+'px '+_hexA(hex,sp.oa),
+           'inset 0 0 '+sp.ib+'px '+_hexA(hex,sp.ia)];
+    if(sp.r) p.push('0 0 0 '+sp.r+'px '+_hexA(hex,.9));
+    return p.join(',');
+  }
+  function _cssToHex(s){
+    s=String(s||'');
+    var m=s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if(m) return _toHex(+m[1],+m[2],+m[3]);
+    if(s.charAt(0)==='#') return _norm6(s);
+    return '#f0c040';
+  }
+  function _curBorderHex(card){
+    try{ return _cssToHex(getComputedStyle(card).borderTopColor); }catch(_){ return '#f0c040'; }
+  }
   /* ── selector táctil propio (sustituye a los <select> nativos que el
      navegador del usuario no deja desplegar — ver estadio d4a5540 /
      posición jugador). El valor real vive en un <input hidden> con el
@@ -845,7 +875,7 @@ window._showSimProgress = function(opts, onDone){
         '<div class="mk-choice-pop"></div>'+
       '</div>';
   }
-  function _mkChoiceFill(holderId, opts, cur){
+  function _mkChoiceFill(holderId, opts, cur, onPick){
     var inp=document.getElementById(holderId);
     var wrap=document.querySelector('.mk-choice[data-for="'+holderId+'"]');
     if(!inp||!wrap) return;
@@ -864,6 +894,7 @@ window._showSimProgress = function(opts, onDone){
         inp.value=o.value; curEl.textContent=o.label;
         pop.querySelectorAll('.mk-co').forEach(function(x){ x.classList.remove('sel'); });
         r.classList.add('sel'); wrap.classList.remove('open');
+        if(typeof onPick==='function') onPick(o.value);
       });
       pop.appendChild(r);
     });
@@ -895,11 +926,23 @@ window._showSimProgress = function(opts, onDone){
         '<div class="mk-bar" id="mk-bar"></div>'+
         '<input type="color" id="mk-cB" value="#3a4a66"/>'+
       '</div></div>'+
-      /* Paletas táctiles: en el navegador del usuario el selector de
-         color nativo tampoco se abre. Tocar una paleta fija el
-         degradado y, en cajas de equipo, activa "Colores manuales". */
-      '<div class="mk-sws" id="mk-sws"></div>';
+      /* Paletas táctiles: el selector de color nativo no se abre en el
+         navegador del usuario; tocar una paleta fija el degradado y,
+         en cajas de equipo, activa "Colores manuales". */
+      '<div class="mk-sws" id="mk-sws"></div>'+
+      /* Borde llamativo: color (paleta táctil) + tono del brillo
+         (dropdown propio, no <select> nativo). */
+      '<div class="mk-lbl">Borde llamativo (color + tono del brillo)</div>'+
+      '<input type="hidden" id="mk-bcolor" value="#f0c040"/>'+
+      '<div class="mk-sws" id="mk-bsws"></div>'+
+      _mkChoiceHtml('mk-glow');
   }
+  var _MK_BCOLORS = ['#f0c040','#ff3b30','#ff9500','#ffd60a','#34c759',
+    '#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ff2d92','#ffffff','#8e8e93'];
+  var _MK_GLOW_OPTS = [
+    {value:'0',label:'Apagado'}, {value:'1',label:'Suave'},
+    {value:'2',label:'Medio'},  {value:'3',label:'Fuerte'},
+    {value:'4',label:'Intenso'} ];
   var _MK_PALETTE = [
     ['#1c2230','#3a4a66'], ['#0d1117','#2a2f3a'], ['#7a1020','#c0392b'],
     ['#0b3d2e','#1f7a45'], ['#0a2540','#1f6feb'], ['#3a1a55','#8e44ad'],
@@ -912,13 +955,21 @@ window._showSimProgress = function(opts, onDone){
     if(team && !manual) return { manual:false, colors:null };
     return { manual:true, colors:[ _norm6(getVal('mk-cA')||'#1c2230'), _norm6(getVal('mk-cB')||'#3a4a66') ] };
   }
+  function readBorder(){
+    var g=parseInt(getVal('mk-glow'),10);
+    return { bcolor:_norm6(getVal('mk-bcolor')||'#f0c040'), glow:isNaN(g)?2:g };
+  }
   function bindColorUI(team){
     function paint(){
       var bar=document.getElementById('mk-bar'); if(!bar) return;
       var gr=gradientFrom([ _norm6(getVal('mk-cA')||'#1c2230'), _norm6(getVal('mk-cB')||'#3a4a66') ]);
       bar.style.background=gr.outer;
+      var bc=_norm6(getVal('mk-bcolor')||'#f0c040');
+      bar.style.border='1px solid '+bc;
+      bar.style.boxShadow=glowShadow(bc, getVal('mk-glow')||'2');
     }
-    ['mk-cA','mk-cB'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input',paint); });
+    ['mk-cA','mk-cB','mk-bcolor'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input',paint); });
+    var gs=document.getElementById('mk-glow'); if(gs) gs.addEventListener('change',paint);
     var cm=document.getElementById('mk-cmanual'), wrap=document.getElementById('mk-cwrap');
     function tog(){ if(cm&&wrap) wrap.classList.toggle('off', !cm.checked); }
     if(cm){ cm.addEventListener('change',tog); tog(); }
@@ -945,7 +996,46 @@ window._showSimProgress = function(opts, onDone){
         sws.appendChild(sw);
       });
     }
+    /* paleta táctil del color de borde */
+    var bsws=document.getElementById('mk-bsws');
+    if(bsws){
+      bsws.innerHTML='';
+      var curBC=_norm6(getVal('mk-bcolor')||'#f0c040');
+      _MK_BCOLORS.forEach(function(col){
+        var c=_norm6(col);
+        var sw=document.createElement('button');
+        sw.type='button'; sw.className='mk-sw';
+        sw.style.background=c; sw.title=c;
+        if(c===curBC) sw.classList.add('sel');
+        sw.addEventListener('click', function(e){
+          e.preventDefault(); e.stopPropagation();
+          setVal('mk-bcolor', c);
+          bsws.querySelectorAll('.mk-sw').forEach(function(x){ x.classList.remove('sel'); });
+          sw.classList.add('sel');
+          paint();
+        });
+        bsws.appendChild(sw);
+      });
+    }
+    /* tono del brillo (dropdown propio, con previsualización en vivo) */
+    _mkChoiceFill('mk-glow', _MK_GLOW_OPTS, getVal('mk-glow')||'2', paint);
     paint();
+  }
+  /* Aplica borde + brillo a una caja (idempotente). El color por
+     defecto sale del override, del degradado, o del borde actual. */
+  function ensureGlow(card, ov){
+    ov=ov||{};
+    var bc = ov.bcolor
+      || (ov.colors&&ov.colors.length ? gradientFrom(ov.colors).primary : null)
+      || _curBorderHex(card);
+    bc=_norm6(bc);
+    var gl = (ov.glow!=null ? ov.glow : 2);
+    var sig=bc+'|'+gl;
+    if(card._mkGlowSig===sig) return;
+    card._mkGlowSig=sig;
+    card.style.setProperty('border-color', bc, 'important');
+    card.style.setProperty('border-style', 'solid', 'important');
+    card.style.setProperty('box-shadow', glowShadow(bc, gl), 'important');
   }
   function cardOptions(excludeEl){
     var grid=document.querySelector(GRID_SEL), out=[];
@@ -1050,6 +1140,8 @@ window._showSimProgress = function(opts, onDone){
     if(cols[1]) setVal('mk-cB', _norm6(cols[1]));
     var cm=document.getElementById('mk-cmanual');
     if(cm) cm.checked = team ? !!src.manual : true;
+    setVal('mk-bcolor', _norm6(src.bcolor || _curBorderHex(card)));
+    setVal('mk-glow', String(src.glow!=null ? src.glow : 2));
     var nv=card.__mkNav; fillNavSel(nv&&nv.type==='go'?nv.id:'');
     if(added) fillPosWrap(entry?entry.after:'__end', card);
     bindColorUI(team);
@@ -1100,6 +1192,7 @@ window._showSimProgress = function(opts, onDone){
     var nav=navSel?navSel.value:'';
     var posSel=document.getElementById('mk-pos');
     var after=posSel?posSel.value:'__end';
+    var rb=readBorder();
 
     /* ── A) AÑADIR caja nueva ─────────────────────────────── */
     if(_ovAdd){
@@ -1111,6 +1204,7 @@ window._showSimProgress = function(opts, onDone){
         var rc=readColors(true);
         var en={ id:id, type:'team', label:_ovPick.name, escudo:_ovPick.escudo,
           coach:getVal('mk-coach').trim(), nav:nav, after:after,
+          bcolor:rb.bcolor, glow:rb.glow,
           manual:rc.manual, colors: rc.manual? rc.colors : [] };
         s.added.push(en);
         if(!saveState(s)) return;
@@ -1129,6 +1223,7 @@ window._showSimProgress = function(opts, onDone){
         var rcg=readColors(false);
         s.added.push({ id:id, type:'generic', label:lbl,
           emoji:(getVal('mk-emoji')||'⚽').trim(), nav:nav, after:after,
+          bcolor:rb.bcolor, glow:rb.glow,
           manual:true, colors:rcg.colors });
         if(saveState(s)) applyState();
         window._mkCloseOv(); return;
@@ -1151,7 +1246,7 @@ window._showSimProgress = function(opts, onDone){
       stA.added.forEach(function(x,i){ if(x.id===aid) idx=i; });
       if(idx<0){ window._mkCloseOv(); return; }
       var e=stA.added[idx];
-      e.nav=nav; e.after=after;
+      e.nav=nav; e.after=after; e.bcolor=rb.bcolor; e.glow=rb.glow;
       if(team){
         if(_ovPick){ e.label=_ovPick.name; e.escudo=_ovPick.escudo; }
         else { var qa=getVal('mk-q').trim(); if(qa) e.label=qa; }
@@ -1182,7 +1277,7 @@ window._showSimProgress = function(opts, onDone){
     var key=cardKey(_ovCard);
     var st=loadState();
     var o=st.ov[key]||{};
-    o.nav=nav;
+    o.nav=nav; o.bcolor=rb.bcolor; o.glow=rb.glow;
     if(team){
       if(_ovPick){ o.label=_ovPick.name; o.escudo=_ovPick.escudo; }
       else { var q=getVal('mk-q').trim(); if(q) o.label=q; }

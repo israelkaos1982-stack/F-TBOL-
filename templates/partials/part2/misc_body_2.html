@@ -29695,6 +29695,52 @@ document.addEventListener('DOMContentLoaded', function() {
     var b = parseInt(s.substr(4,2),16) || 0;
     return 'rgba('+r+','+g+','+b+','+a+')';
   }
+  /* ── Color REAL del escudo (local / visitante) ──────────────────
+     Para que la caja "AÑADIR EVENTO" tiña su mitad izquierda con el
+     color del escudo local y la derecha con el del visitante, leemos
+     el color dominante del propio escudo renderizado (no de una tabla
+     hardcodeada). Cache por nombre + URL: la extracción (fetch SVG /
+     canvas 24×24) corre como mucho 1 vez por equipo, sin observers ni
+     intervalos nuevos — respeta el precedente del cronómetro. */
+  var _CREST_COLOR_CACHE = {};
+  function _resolveShieldUrl(name, hintEl){
+    try {
+      if (hintEl){
+        var img = hintEl.tagName === 'IMG' ? hintEl : hintEl.querySelector('img');
+        if (img){
+          var s = img.getAttribute('src') || img.src || '';
+          if (s) return s;
+        }
+      }
+    } catch(_){}
+    try { if (typeof window.getTeamLogoUrl === 'function'){ var u = window.getTeamLogoUrl(name); if (u) return u; } } catch(_){}
+    try { if (typeof window.getLogoEquipo === 'function'){ var g = window.getLogoEquipo(name); if (g) return g; } } catch(_){}
+    return '';
+  }
+  function _crestPrimary(name, hintEl, cb){
+    if (!name){ cb(null); return; }
+    var cached = _CREST_COLOR_CACHE[name];
+    if (cached){ cb(cached); return; }
+    var tc = _teamColors(name);
+    var seed = (tc && (tc.bg || tc.primary)) || '#5a0010';
+    var url = _resolveShieldUrl(name, hintEl);
+    if (typeof window.extractColors !== 'function' || !url){
+      var fb = { primary: seed, secondary: seed };
+      _CREST_COLOR_CACHE[name] = fb; cb(fb); return;
+    }
+    try {
+      window.extractColors(url, seed, function(cols){
+        var p = (cols && cols[0]) || seed;
+        var s = (cols && cols[1]) || p;
+        var res = { primary: p, secondary: s };
+        _CREST_COLOR_CACHE[name] = res;
+        cb(res);
+      });
+    } catch(_){
+      var fb2 = { primary: seed, secondary: seed };
+      _CREST_COLOR_CACHE[name] = fb2; cb(fb2);
+    }
+  }
   function _applyCardTheme(wrap){
     if (!wrap || wrap._mlThemed) return;
     var mk = wrap.id.replace(/^mlw-/, '');
@@ -29702,21 +29748,37 @@ document.addEventListener('DOMContentLoaded', function() {
     if (comp){
       wrap.classList.add('is-comp-' + comp);
     }
-    /* Color del equipo local + visitante para AÑADIR EVENTO bicolor. */
+    /* AÑADIR EVENTO bicolor: izquierda = color del escudo LOCAL,
+       derecha = color del escudo VISITANTE. Color real del escudo
+       renderizado (no tabla hardcodeada). Pintamos con el seed y
+       repintamos al resolver la extracción del escudo. */
     var st = (typeof window._calMlSt === 'function') ? window._calMlSt(mk) : null;
     var home = st && st.home, away = st && st.away;
     if (home || away){
+      var shields = wrap.querySelectorAll('.ml-shield-wrap');
+      var hintH = shields[0] || null, hintA = shields[1] || null;
+      function _cardPaint(p1, p2, q1, q2){
+        wrap.style.setProperty('--team-a-1', _hex2rgba(p1, .92));
+        wrap.style.setProperty('--team-a-2', _hex2rgba(p2, .70));
+        wrap.style.setProperty('--team-b-1', _hex2rgba(q2, .70));
+        wrap.style.setProperty('--team-b-2', _hex2rgba(q1, .92));
+        wrap.setAttribute('data-team-colors', '1');
+      }
       var ca = _teamColors(home);
       var cb = _teamColors(away);
-      var p1 = (ca && ca.primary)   || '#3a0008';
-      var p2 = (ca && (ca.secondary || ca.primary)) || '#1a0004';
-      var q1 = (cb && cb.primary)   || '#3a0008';
-      var q2 = (cb && (cb.secondary || cb.primary)) || '#1a0004';
-      wrap.style.setProperty('--team-a-1', _hex2rgba(p1, .85));
-      wrap.style.setProperty('--team-a-2', _hex2rgba(p2, .55));
-      wrap.style.setProperty('--team-b-1', _hex2rgba(q2, .55));
-      wrap.style.setProperty('--team-b-2', _hex2rgba(q1, .85));
-      wrap.setAttribute('data-team-colors', '1');
+      _cardPaint((ca && (ca.bg || ca.primary)) || '#3a0008',
+                 (ca && (ca.secondary || ca.bg || ca.primary)) || '#1a0004',
+                 (cb && (cb.bg || cb.primary)) || '#3a0008',
+                 (cb && (cb.secondary || cb.bg || cb.primary)) || '#1a0004');
+      _crestPrimary(home, hintH, function(rh){
+        _crestPrimary(away, hintA, function(rA){
+          var ph = rh ? rh.primary : '#3a0008';
+          var ps = rh ? (rh.secondary || rh.primary) : '#1a0004';
+          var qh = rA ? rA.primary : '#3a0008';
+          var qs = rA ? (rA.secondary || rA.primary) : '#1a0004';
+          _cardPaint(ph, ps, qh, qs);
+        });
+      });
     }
     wrap._mlThemed = true;
   }
@@ -29946,33 +30008,46 @@ document.addEventListener('DOMContentLoaded', function() {
     prev.forEach(function(c){ modal.classList.remove(c); });
     if (comp) modal.classList.add('is-comp-' + comp);
     modal.setAttribute('data-comp', comp || '');
-    /* Colores de los equipos para el AÑADIR EVENTO bicolor.
-       Aplicamos los gradients INLINE al propio botón para evitar
-       problemas de specificity con el CSS del bundle. */
+    /* AÑADIR EVENTO bicolor: mitad IZQUIERDA = color del escudo
+       LOCAL, mitad DERECHA = color del escudo VISITANTE. Se lee el
+       color real del escudo renderizado (no de una tabla). Pintamos
+       primero con el seed para que nunca esté vacío y repintamos
+       cuando la extracción del escudo resuelve. INLINE en el botón
+       para vencer el `!important` del bundle CSS. */
+    function _gmPaint(pa, pb){
+      modal.style.setProperty('--team-a-1', _hex2rgba(pa, .95));
+      modal.style.setProperty('--team-a-2', _hex2rgba(pa, .72));
+      modal.style.setProperty('--team-b-1', _hex2rgba(pb, .72));
+      modal.style.setProperty('--team-b-2', _hex2rgba(pb, .95));
+      modal.setAttribute('data-team-colors', '1');
+      var addBtn = document.getElementById('gm-add-btn');
+      if (addBtn){
+        var grad = 'linear-gradient(90deg,'
+                 + _hex2rgba(pa, .95) + ' 0%,'
+                 + _hex2rgba(pa, .82) + ' 47%,'
+                 + _hex2rgba(pb, .82) + ' 53%,'
+                 + _hex2rgba(pb, .95) + ' 100%)';
+        addBtn.style.setProperty('background', grad, 'important');
+        addBtn.style.setProperty('border', '2px solid var(--comp-color, #ff3050)', 'important');
+        addBtn.style.setProperty('color', '#fff', 'important');
+        addBtn.style.setProperty('text-shadow', '0 1px 4px rgba(0,0,0,.85)', 'important');
+        addBtn.style.setProperty('font-weight', '900', 'important');
+      }
+    }
     var ca = _teamColors(t.home);
     var cb = _teamColors(t.away);
-    var pa = (ca && (ca.bg || ca.primary)) || '#5a0010';
-    var pb = (cb && (cb.bg || cb.primary)) || '#0a1a40';
-    modal.style.setProperty('--team-a-1', _hex2rgba(pa, .95));
-    modal.style.setProperty('--team-a-2', _hex2rgba(pa, .65));
-    modal.style.setProperty('--team-b-1', _hex2rgba(pb, .65));
-    modal.style.setProperty('--team-b-2', _hex2rgba(pb, .95));
-    modal.setAttribute('data-team-colors', '1');
-    /* También inline en el #gm-add-btn — combate el `!important` del
-       bundle CSS (línea 2237). */
-    var addBtn = document.getElementById('gm-add-btn');
-    if (addBtn){
-      var grad = 'linear-gradient(90deg,'
-               + _hex2rgba(pa, .95) + ' 0%,'
-               + _hex2rgba(pa, .65) + ' 48%,'
-               + _hex2rgba(pb, .65) + ' 52%,'
-               + _hex2rgba(pb, .95) + ' 100%)';
-      addBtn.style.setProperty('background', grad, 'important');
-      addBtn.style.setProperty('border', '2px solid var(--comp-color, #ff3050)', 'important');
-      addBtn.style.setProperty('color', '#fff', 'important');
-      addBtn.style.setProperty('text-shadow', '0 1px 4px rgba(0,0,0,.85)', 'important');
-      addBtn.style.setProperty('font-weight', '900', 'important');
-    }
+    _gmPaint((ca && (ca.bg || ca.primary)) || '#5a0010',
+             (cb && (cb.bg || cb.primary)) || '#0a1a40');
+    var hintA = document.getElementById('gm-team-a-name');
+    var hintB = document.getElementById('gm-team-b-name');
+    _crestPrimary(t.home, hintA, function(ra){
+      /* Si los equipos cambiaron antes de resolver, descartamos. */
+      if (modal._gmThemeSig !== sig) return;
+      _crestPrimary(t.away, hintB, function(rb){
+        if (modal._gmThemeSig !== sig) return;
+        _gmPaint(ra ? ra.primary : '#5a0010', rb ? rb.primary : '#0a1a40');
+      });
+    });
   }
   function _gmMoveFinalizarBtn(){
     var modal = document.getElementById('gm-modal');

@@ -19657,16 +19657,25 @@ window._showSimProgress = function(opts, onDone){
           });
         }
       } catch(_){}
-      var msg = 'Simuladas: ' + ok + ' liga' + (ok===1?'':'s');
-      if (skip) {
-        msg += ' · sin equipos suficientes: ' + skip + '.\n\n';
-        msg += 'Las saltadas (consulta window._lastSkippedLeagues en consola):\n';
-        msg += skippedSlugs.slice(0, 20).map(function(s){ return '  · ' + s.slug; }).join('\n');
-        if (skippedSlugs.length > 20) msg += '\n  · …(' + (skippedSlugs.length-20) + ' más)';
-      } else {
-        msg += '.';
-      }
-      alert(msg);
+      /* NO usar alert() (bloquea la UI y "congela" la pantalla al
+         terminar — justo lo que el usuario reportó). Aviso corto NO
+         bloqueante + detalle en consola, y refresco automático de
+         las clasificaciones. 2026-05-19. */
+      var msg = '✅ Simuladas ' + ok + ' liga' + (ok===1?'':'s')
+        + (skip ? ' · ' + skip + ' sin equipos (ver consola)' : '');
+      try {
+        if (typeof window._ftbolBgNotice === 'function') {
+          window._ftbolBgNotice(msg, 5000);
+        } else {
+          console.log('[restoLigas] ' + msg);
+        }
+      } catch(_){ try { console.log('[restoLigas] ' + msg); } catch(__){} }
+      /* Refresco automático: clasificación Liga EA + cualquier
+         pantalla de liga abierta, sin que el usuario tenga que
+         navegar ni recargar. */
+      try { if (typeof window.buildLigaClas === 'function') window.buildLigaClas(); } catch(_){}
+      try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
+      try { if (typeof window.buildIAresults === 'function') window.buildIAresults(); } catch(_){}
     }
 
     /* FLAG BULK 2026-05-12: durante la sim de las 51 ligas,
@@ -19681,8 +19690,15 @@ window._showSimProgress = function(opts, onDone){
     var _onDoneOrig = _onDone;
     _onDone = function(){ _clearBulkFlag(); try { _onDoneOrig(); } catch(_){} };
 
-    if(typeof window.ftbolLoaderRun === 'function'){
-      window.ftbolLoaderRun(
+    /* 2026-05-19: SIN overlay bloqueante. `_ftbolBgRun` muestra un
+       aviso pequeño no bloqueante y `simNext` ya cede el hilo entre
+       ligas (setTimeout 0) → la app NO se congela y la barra no
+       puede quedarse clavada en "8% INICIANDO". */
+    var _bgRunResto = (typeof window._ftbolBgRun === 'function')
+      ? window._ftbolBgRun
+      : (typeof window.ftbolLoaderRun === 'function' ? window.ftbolLoaderRun : null);
+    if(_bgRunResto){
+      _bgRunResto(
         { title:'RESTO DE LIGAS · 51 LIGAS', sub:'Iniciando…', theme:'resto', minMs:300 },
         function(ctx){ return simNext(ctx.progress); }
       ).then(_onDone, function(e){ _clearBulkFlag(); try { console.error('[restoSim]', e); } catch(_){} });

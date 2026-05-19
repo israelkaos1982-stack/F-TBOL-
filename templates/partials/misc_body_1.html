@@ -339,6 +339,9 @@ window._showSimProgress = function(opts, onDone){
   #s-home .menu-grid.mk-edit .mk-del{display:flex;}
   .mk-add-btn{grid-column:span 2;margin:8px auto 2px;display:none;background:linear-gradient(145deg,#3cc878,#1f7a45);color:#fff;border:none;border-radius:10px;padding:11px 22px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(60,200,120,.35);-webkit-tap-highlight-color:transparent;}
   #s-home .menu-grid.mk-edit .mk-add-btn{display:block;}
+  /* Marca de agua del icono a la derecha de la caja (mismo emoji,
+     grande y difuminado) — equivalente al escudo en cajas de equipo. */
+  #s-home .menu-card .mk-bg-emoji{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:52px;line-height:1;opacity:.20;pointer-events:none;z-index:1;filter:drop-shadow(0 2px 5px rgba(0,0,0,.45));}
   #mk-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999990;align-items:center;justify-content:center;padding:20px;}
   #mk-ov.show{display:flex;}
   #mk-ov .mk-box{background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(240,192,64,.35);border-radius:14px;padding:20px 18px 16px;width:380px;max-width:94vw;max-height:88vh;overflow:auto;box-shadow:0 0 40px rgba(0,0,0,.8);}
@@ -573,6 +576,44 @@ window._showSimProgress = function(opts, onDone){
   }
   function isTeamCard(card){ return card.classList.contains('equipo-card'); }
 
+  /* Marca de agua del icono a la derecha (mismo emoji, grande y
+     difuminado). El emoji efectivo = el de `.mc-emoji` (ya lo dejó
+     applyOverride si el admin lo editó). Si hay emoji, se muestra a
+     la derecha y se oculta el SVG decorativo original `.mc-main-bg`
+     para que no se solapen. Idempotente (firma cacheada). */
+  function ensureBgEmoji(card){
+    var emEl=card.querySelector('.mc-emoji');
+    var emoji=emEl?emEl.textContent.trim():'';
+    if(card._mkBgSig===emoji) return;
+    card._mkBgSig=emoji;
+    var bg=card.querySelector(':scope > .mk-bg-emoji');
+    var mb=card.querySelector('img.mc-main-bg');
+    if(emoji){
+      if(!bg){ bg=document.createElement('span'); bg.className='mk-bg-emoji'; card.appendChild(bg); }
+      bg.textContent=emoji;
+      if(mb) mb.style.display='none';
+    } else {
+      if(bg) bg.remove();
+      if(mb) mb.style.display='';
+    }
+  }
+  /* La caja ESPAÑA usa una imagen de fondo a pantalla completa que
+     tapa el centro. La recolocamos a la derecha, contenida y
+     difuminada como el resto de cajas, y le damos un degradado de
+     fondo (rojo/amarillo) si el admin no fijó colores propios. */
+  function fixEspana(card){
+    if(card._mkEsp) return; card._mkEsp=true;
+    var flag=card.querySelector('img.mc-espana-flag');
+    if(flag){
+      flag.style.cssText += ';position:absolute;inset:auto;left:auto;bottom:auto;right:-10px;top:50%;transform:translateY(-50%);width:auto;height:78px;max-height:78px;object-fit:contain;object-position:center;opacity:.42;mix-blend-mode:screen;';
+    }
+    var ov=(loadState().ov[cardKey(card)]||{});
+    if(!(ov.colors && ov.colors.length)){
+      card.style.setProperty('background','linear-gradient(135deg,#5a0006 0%,#c60b1e 42%,#ffc400 100%)','important');
+      card.style.setProperty('border-color','#c60b1e','important');
+    }
+  }
+
   /* ── apply override (idempotente vía firma) ──────────────── */
   function applyOverride(card,o){
     var sig=JSON.stringify(o||{});
@@ -626,12 +667,15 @@ window._showSimProgress = function(opts, onDone){
       card.className='menu-card full';
       card.setAttribute('style','background:linear-gradient(135deg,#101418 0%,#1c2230 55%,#101418 100%);'+common);
       card.innerHTML=
+        '<span class="mk-bg-emoji"></span>'+
         '<div class="mc-main-overlay"></div>'+
         '<div class="mc-main-content">'+
           '<span class="mc-emoji"></span>'+
           '<span class="mc-label"></span>'+
         '</div>';
-      card.querySelector('.mc-emoji').textContent=entry.emoji||'⚽';
+      var _ge=(entry.emoji||'⚽');
+      card.querySelector('.mk-bg-emoji').textContent=_ge;
+      card.querySelector('.mc-emoji').textContent=_ge;
       card.querySelector('.mc-label').textContent=entry.label||'Caja';
     }
     card.__mkNav = entry.nav ? { type:'go', id:entry.nav } : null;
@@ -682,6 +726,10 @@ window._showSimProgress = function(opts, onDone){
       if(rm){ card.style.display='none'; card.dataset.mkRm='1'; }
       else if(card.dataset.mkRm){ card.style.display=''; card.dataset.mkRm=''; }
       if(!rm) applyOverride(card, s.ov[key]);
+      if(!rm){
+        if(card.classList.contains('mc-espana')) fixEspana(card);
+        else if(!card.classList.contains('equipo-card')) ensureBgEmoji(card);
+      }
       if(!rm) ensureDelBtn(card);
     });
 

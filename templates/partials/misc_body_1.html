@@ -393,6 +393,7 @@ window._showSimProgress = function(opts, onDone){
   <div id="mk-ov-body"></div>
   <div class="mk-actions">
     <button class="mk-btn primary" id="mk-ov-save">GUARDAR</button>
+    <button class="mk-btn danger" id="mk-ov-reset" style="display:none;">↩ RESTABLECER</button>
     <button class="mk-btn ghost" onclick="window._mkCloseOv&&window._mkCloseOv()">CANCELAR</button>
   </div>
 </div></div>
@@ -627,8 +628,9 @@ window._showSimProgress = function(opts, onDone){
     }
     var ov=(loadState().ov[cardKey(card)]||{});
     if(!(ov.colors && ov.colors.length)){
-      card.style.setProperty('background','linear-gradient(135deg,#5a0006 0%,#c60b1e 42%,#ffc400 100%)','important');
-      card.style.setProperty('border-color','#c60b1e','important');
+      /* Dorado España (como la foto original) — NO rojo. */
+      card.style.setProperty('background','linear-gradient(135deg,#6e4e00 0%,#b88a08 34%,#e8b400 64%,#ffd84d 100%)','important');
+      card.style.setProperty('border-color','#e0b000','important');
     }
   }
 
@@ -743,6 +745,12 @@ window._showSimProgress = function(opts, onDone){
         card._mkOnclick=card.getAttribute('onclick')||'';
         if(card.getAttribute('onclick')) card.removeAttribute('onclick');
       }
+      /* Snapshot del estado ORIGINAL (foto 1) la 1ª vez que tocamos
+         la caja, ANTES de aplicar override/glow/emoji — para que
+         "↩ Restablecer" pueda devolverla a su aspecto original. */
+      if(card._mkOrig==null){
+        card._mkOrig={ html:card.innerHTML, style:card.getAttribute('style')||'', cls:card.className };
+      }
       var key=cardKey(card);
       if(!card.__mkNav) card.__mkNav=origNav(card);
       var rm=s.removed.indexOf(key)!==-1;
@@ -818,6 +826,29 @@ window._showSimProgress = function(opts, onDone){
   var _ovCard=null, _ovAdd=false, _ovPick=null;
   function ov(){ return document.getElementById('mk-ov'); }
   window._mkCloseOv=function(){ var o=ov(); if(o) o.classList.remove('show'); _ovCard=null; _ovAdd=false; _ovPick=null; };
+
+  /* Restablece una caja built-in a su aspecto ORIGINAL (foto 1):
+     borra su override de menu_home_v1, restaura el HTML/estilo/clase
+     originales y limpia los caches para que applyState la repinte
+     con sus colores de CSS originales (no toca otras cajas). */
+  function _mkResetCard(card){
+    if(!card || card._mkAdded) return;
+    var k=cardKey(card);
+    var st=loadState();
+    if(st.ov && st.ov[k]){ delete st.ov[k]; saveState(st); }
+    if(card._mkOrig){
+      card.className=card._mkOrig.cls;
+      card.setAttribute('style', card._mkOrig.style);
+      card.innerHTML=card._mkOrig.html;
+    } else {
+      card.style.removeProperty('background');
+      card.style.removeProperty('border-color');
+      card.style.removeProperty('border-style');
+      card.style.removeProperty('box-shadow');
+    }
+    card._mkSig=card._mkGlowSig=card._mkBgSig=card._mkEsp=card._lastSig=null;
+    applyState();
+  }
 
   function getVal(id){ var e=document.getElementById(id); return e?(e.value||''):''; }
   function setVal(id,v){ var e=document.getElementById(id); if(e) e.value=v; }
@@ -1145,6 +1176,8 @@ window._showSimProgress = function(opts, onDone){
     var nv=card.__mkNav; fillNavSel(nv&&nv.type==='go'?nv.id:'');
     if(added) fillPosWrap(entry?entry.after:'__end', card);
     bindColorUI(team);
+    var rstB=document.getElementById('mk-ov-reset');
+    if(rstB) rstB.style.display = added ? 'none' : '';
     ov().classList.add('show');
   }
   function openAdd(){
@@ -1187,6 +1220,12 @@ window._showSimProgress = function(opts, onDone){
   function _curEscudo(card){
     var im=card&&card.querySelector('img.mc-img'); return im?im.getAttribute('src')||'':'';
   }
+  document.getElementById('mk-ov-reset').addEventListener('click', function(){
+    if(!_ovCard || _ovCard._mkAdded) return;
+    if(!confirm('¿Restablecer esta caja a su aspecto original?')) return;
+    _mkResetCard(_ovCard);
+    window._mkCloseOv();
+  });
   document.getElementById('mk-ov-save').addEventListener('click', function(){
     var navSel=document.getElementById('mk-nav');
     var nav=navSel?navSel.value:'';

@@ -17748,17 +17748,26 @@
   function _saveTitle(s){
     try { localStorage.setItem(KEY_TITLE, String(s||'').trim() || DEFAULT_TITLE); } catch(_){}
   }
+  /* Espejo en memoria de los overrides del calendario Bayern. El
+     localStorage puede fallar por el cap de 2 MB/carpeta — si
+     _saveOverrides falla en silencio y _renderAll relee de disco, el
+     evento recién añadido (p.ej. Mundialito Clubes) "no se queda".
+     Con el espejo en memoria el evento persiste durante la sesión
+     aunque el disco esté lleno. */
+  var _MEM_OVR = null;
   function _loadOverrides(){
+    if (_MEM_OVR && typeof _MEM_OVR === 'object') return _MEM_OVR;
+    var d = {};
     try {
       var raw = localStorage.getItem(KEY_CAL);
-      if (!raw) return {};
-      var d = JSON.parse(raw);
-      if (d && typeof d === 'object') return d;
+      if (raw) { var p = JSON.parse(raw); if (p && typeof p === 'object') d = p; }
     } catch(_){}
-    return {};
+    _MEM_OVR = d;
+    return _MEM_OVR;
   }
   function _saveOverrides(d){
-    try { localStorage.setItem(KEY_CAL, JSON.stringify(d||{})); } catch(_){}
+    _MEM_OVR = (d && typeof d === 'object') ? d : (_MEM_OVR || {});
+    try { localStorage.setItem(KEY_CAL, JSON.stringify(_MEM_OVR)); } catch(_){}
   }
   function _esc(s){
     return String(s==null?'':s)

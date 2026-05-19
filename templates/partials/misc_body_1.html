@@ -339,6 +339,8 @@ window._showSimProgress = function(opts, onDone){
   #s-home .menu-grid.mk-edit .mk-del{display:flex;}
   .mk-add-btn{grid-column:span 2;margin:8px auto 2px;display:none;background:linear-gradient(145deg,#3cc878,#1f7a45);color:#fff;border:none;border-radius:10px;padding:11px 22px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(60,200,120,.35);-webkit-tap-highlight-color:transparent;}
   #s-home .menu-grid.mk-edit .mk-add-btn{display:block;}
+  .mk-reset-all-btn{grid-column:span 2;margin:0 auto 8px;display:none;background:rgba(255,80,80,.16);color:#ffb0b0;border:1px solid rgba(255,80,80,.45);border-radius:10px;padding:10px 20px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+  #s-home .menu-grid.mk-edit .mk-reset-all-btn{display:block;}
   /* Marca de agua del icono a la derecha de la caja (mismo emoji,
      grande y difuminado) — equivalente al escudo en cajas de equipo. */
   #s-home .menu-card .mk-bg-emoji{position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:52px;line-height:1;opacity:.20;pointer-events:none;z-index:1;filter:drop-shadow(0 2px 5px rgba(0,0,0,.45));}
@@ -800,6 +802,14 @@ window._showSimProgress = function(opts, onDone){
       ab.addEventListener('click', function(e){ e.stopPropagation(); openAdd(); });
       grid.appendChild(ab);
     } else { grid.appendChild(ab); }
+    var rab=grid.querySelector('.mk-reset-all-btn');
+    if(!rab){
+      rab=document.createElement('button');
+      rab.type='button'; rab.className='mk-reset-all-btn';
+      rab.textContent='↩ RESTABLECER TODO (menos las añadidas)';
+      rab.addEventListener('click', function(e){ e.stopPropagation(); window._mkResetAll&&window._mkResetAll(); });
+      grid.appendChild(rab);
+    } else { grid.appendChild(rab); }
   }
 
   function ensureDelBtn(card){
@@ -849,6 +859,37 @@ window._showSimProgress = function(opts, onDone){
     card._mkSig=card._mkGlowSig=card._mkBgSig=card._mkEsp=card._lastSig=null;
     applyState();
   }
+
+  /* Restablece TODAS las cajas del menú original a la foto 1 — borra
+     todos los overrides y des-oculta los built-in eliminados, pero
+     CONSERVA intactas las cajas añadidas (s.added). */
+  window._mkResetAll=function(){
+    if(!confirm('¿Restablecer TODAS las cajas del menú a su aspecto original?\n(Las cajas que añadiste tú se conservan.)')) return;
+    var st=loadState();
+    st.ov={}; st.removed=[];   /* s.added intacto */
+    saveState(st);
+    var grid=document.querySelector(GRID_SEL);
+    if(grid){
+      grid.querySelectorAll('.menu-card').forEach(function(card){
+        if(card._mkAdded) return;
+        if(card._mkOrig){
+          card.className=card._mkOrig.cls;
+          card.setAttribute('style', card._mkOrig.style);
+          card.innerHTML=card._mkOrig.html;
+        } else {
+          card.style.removeProperty('background');
+          card.style.removeProperty('border-color');
+          card.style.removeProperty('border-style');
+          card.style.removeProperty('box-shadow');
+          card.style.display='';
+        }
+        card._mkSig=card._mkGlowSig=card._mkBgSig=card._mkEsp=card._lastSig=null;
+        card.dataset.mkRm='';
+      });
+    }
+    applyState();
+    window._mkCloseOv && window._mkCloseOv();
+  };
 
   function getVal(id){ var e=document.getElementById(id); return e?(e.value||''):''; }
   function setVal(id,v){ var e=document.getElementById(id); if(e) e.value=v; }

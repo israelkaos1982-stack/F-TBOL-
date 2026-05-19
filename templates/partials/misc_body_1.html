@@ -34182,4 +34182,186 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 </div>
 </div>
 
+<style>
+  #mu-form-cluster{ display:flex; flex-direction:column; gap:4px; margin-left:auto; align-items:flex-end; }
+  #mu-form-cluster .mfc-row{ display:flex; align-items:center; gap:6px;
+    background:linear-gradient(135deg,#C8102E,#7d0a1d); border:1px solid rgba(246,235,97,.55);
+    border-radius:8px; padding:3px 8px; box-shadow:0 0 10px rgba(200,16,46,.35); }
+  #mu-form-cluster .mfc-lbl{ font-family:'Bebas Neue','Oswald',sans-serif; font-size:12px;
+    letter-spacing:1.5px; color:#F6EB61; }
+  #mu-form-cluster .mfc-ico{ font-size:16px; line-height:1; }
+  #munich-edit-ov .me-form-block{ border-top:1px solid rgba(255,120,140,.25); margin-top:10px; padding-top:8px; }
+  #munich-edit-ov .me-form-block .mfb-lbl{ font-family:Oswald,sans-serif; font-size:11px; letter-spacing:1.5px; color:#F6EB61; margin:8px 0 4px; }
+  #munich-edit-ov .mfb-opts{ display:flex; gap:6px; flex-wrap:wrap; }
+  #munich-edit-ov .mfb-b{ flex:1 1 auto; min-width:42px; padding:9px 6px; border-radius:8px;
+    border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.05); color:#fff;
+    font-size:18px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  #munich-edit-ov .mfb-b.sel{ border-color:#F6EB61;
+    background:linear-gradient(135deg,rgba(200,16,46,.6),rgba(246,235,97,.20));
+    box-shadow:0 0 10px rgba(246,235,97,.40); }
+</style>
+<script>
+/* ══ ESTADO DE FORMA DE TEMPORADA (YO / RIVAL) ════════════════════
+   Indicadores en la cabecera del hub + edición vía PIN 747 (modal
+   #munich-edit-ov) + se aplica a CADA partido de cualquier
+   competición reutilizando el motor de forma existente
+   (window._ppFormStates vía wrap permanente de _ppResetFormStates,
+   patrón ya usado por Superliga/amistoso). */
+(function(){
+  if (window.__SEASON_FORM_READY) return;
+  window.__SEASON_FORM_READY = true;
+  var KEY = 'team_season_form_v1';
+  var ICONS = ['⬆️','↗️','🎲','↘️','⬇️'];
+  var NAMES = {'⬆️':'Excelente','↗️':'Buena','🎲':'Al azar','↘️':'Mala','⬇️':'Pésima'};
+  var _MEM = null;
+  function _load(){
+    if (_MEM) return _MEM;
+    var d = { yo:'🎲', rival:'🎲' };
+    try {
+      var r = localStorage.getItem(KEY);
+      if (r){ var p = JSON.parse(r);
+        if (p && typeof p === 'object'){
+          if (ICONS.indexOf(p.yo)    >= 0) d.yo    = p.yo;
+          if (ICONS.indexOf(p.rival) >= 0) d.rival = p.rival;
+        }
+      }
+    } catch(_){}
+    _MEM = d; return _MEM;
+  }
+  function _save(d){
+    _MEM = (d && typeof d === 'object') ? d : (_MEM || { yo:'🎲', rival:'🎲' });
+    try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
+  }
+  window._teamSeasonForm = function(){ return _load(); };
+
+  /* ── Indicadores en la cabecera del hub (colores del Liverpool) ── */
+  function _renderHeader(){
+    var hdr = document.querySelector('#s-munich .sec-hdr');
+    if (!hdr) return;
+    var c = document.getElementById('mu-form-cluster');
+    if (!c){
+      c = document.createElement('div');
+      c.id = 'mu-form-cluster';
+      c.innerHTML =
+        '<div class="mfc-row"><span class="mfc-lbl">YO</span><span class="mfc-ico" id="mfc-yo">🎲</span></div>'
+      + '<div class="mfc-row"><span class="mfc-lbl">RIVAL</span><span class="mfc-ico" id="mfc-rival">🎲</span></div>';
+      hdr.appendChild(c);
+    }
+    var s = _load();
+    var y = document.getElementById('mfc-yo'), r = document.getElementById('mfc-rival');
+    if (y) y.textContent = s.yo;
+    if (r) r.textContent = s.rival;
+  }
+
+  /* ── Edición dentro del modal PIN 747 (#munich-edit-ov) ── */
+  function _syncModal(){
+    var s = _load();
+    document.querySelectorAll('#munich-edit-ov .mfb-opts').forEach(function(g){
+      var w = g.getAttribute('data-which'), cur = (w === 'yo') ? s.yo : s.rival;
+      g.querySelectorAll('.mfb-b').forEach(function(b){
+        b.classList.toggle('sel', b.getAttribute('data-ic') === cur);
+      });
+    });
+  }
+  function _injectModal(){
+    var box = document.querySelector('#munich-edit-ov .me-box');
+    if (!box) return;
+    if (box.querySelector('.me-form-block')){ _syncModal(); return; }
+    var acts = box.querySelector('.me-actions');
+    var blk = document.createElement('div');
+    blk.className = 'me-form-block';
+    function grp(which, label){
+      var h = '<div class="mfb-lbl">' + label + '</div><div class="mfb-opts" data-which="' + which + '">';
+      ICONS.forEach(function(ic){
+        h += '<button type="button" class="mfb-b" data-ic="' + ic + '" title="' + NAMES[ic] + '">' + ic + '</button>';
+      });
+      return h + '</div>';
+    }
+    blk.innerHTML =
+      '<div class="mfb-lbl" style="color:#ffb8c4;letter-spacing:2px;">⚡ ESTADO DE FORMA · TODA LA TEMPORADA</div>'
+    + grp('yo', '🟥 YO (mis jugadores)')
+    + grp('rival', '⬇️ RIVAL');
+    if (acts && acts.parentNode) acts.parentNode.insertBefore(blk, acts);
+    else box.appendChild(blk);
+    blk.addEventListener('click', function(ev){
+      var b = ev.target && ev.target.closest && ev.target.closest('.mfb-b');
+      if (!b) return;
+      ev.preventDefault();
+      var which = b.parentNode.getAttribute('data-which'), ic = b.getAttribute('data-ic');
+      var s = _load();
+      if (which === 'yo') s.yo = ic; else s.rival = ic;
+      _save(s);
+      _syncModal(); _renderHeader();
+    }, true);
+    _syncModal();
+  }
+
+  /* ── Aplicar a CADA partido (cualquier competición / local o
+     visitante). Wrap permanente de _ppResetFormStates (lo define
+     bundle.js, que carga después). El lado HUMANO usa la forma
+     "YO"; el rival usa "RIVAL". Reusa el motor de forma existente
+     → emerge en la card/previa de todos los partidos. ── */
+  function _wrapPRFS(){
+    if (window.__SEASON_FORM_PRFS_WRAPPED) return true;
+    if (typeof window._ppResetFormStates !== 'function') return false;
+    var orig = window._ppResetFormStates;
+    window._ppResetFormStates = function(){
+      try { orig.apply(this, arguments); } catch(_){}
+      try {
+        var s = _load();
+        var pt = window._ppPreviaTeams || {};
+        var home = pt.home, away = pt.away;
+        if ((!home || !away) && typeof window._ppGetCurrentMatchTeams === 'function'){
+          var t = window._ppGetCurrentMatchTeams() || {};
+          home = home || t.home; away = away || t.away;
+        }
+        var eH = (typeof window.esHumano === 'function') && home && window.esHumano(home);
+        var eA = (typeof window.esHumano === 'function') && away && window.esHumano(away);
+        var fs = { home: s.yo, away: s.rival };
+        if (eA && !eH) fs = { home: s.rival, away: s.yo };
+        window._ppFormStates = fs;
+      } catch(_){}
+    };
+    window.__SEASON_FORM_PRFS_WRAPPED = true;
+    return true;
+  }
+
+  function _wire(){
+    _renderHeader();
+    var scr = document.getElementById('s-munich');
+    if (scr){
+      try {
+        new MutationObserver(function(){
+          if (scr.classList.contains('active')) _renderHeader();
+        }).observe(scr, { attributes:true, attributeFilter:['class'] });
+      } catch(_){}
+    }
+    var ovHooked = false;
+    function _hookOv(){
+      var o = document.getElementById('munich-edit-ov');
+      if (!o || ovHooked) return;
+      ovHooked = true;
+      try {
+        new MutationObserver(function(){
+          if (o.classList.contains('show') || (o.style.display && o.style.display !== 'none')) _injectModal();
+        }).observe(o, { attributes:true, attributeFilter:['class','style'] });
+      } catch(_){}
+      _injectModal();
+    }
+    /* Interval acotado (sin observers sobre body/subtree): engancha
+       el overlay cuando exista, envuelve _ppResetFormStates cuando
+       bundle.js lo defina, y refresca la cabecera. Se detiene solo. */
+    var n = 0;
+    var iv = setInterval(function(){
+      _hookOv();
+      var done = _wrapPRFS();
+      _renderHeader();
+      if ((ovHooked && done) || ++n > 60) clearInterval(iv);
+    }, 200);
+  }
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', _wire);
+  else _wire();
+})();
+</script>
 

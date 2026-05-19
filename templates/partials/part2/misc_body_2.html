@@ -4353,7 +4353,7 @@
     DEFAULT_SEGUNDA_TEAMS.forEach(function(t){
       _spainPool.push({ name:t.name, tier:'Hypermotion' });
     });
-    /* Primera Federación (~40 equipos). */
+    /* Primera Federación (hasta 44 equipos = 2 grupos × 22). */
     DEFAULT_PRIMERA_G1.forEach(function(t){
       _spainPool.push({ name:t.name, tier:'Primera RFEF' });
     });
@@ -4418,10 +4418,13 @@
     return {g1:deepCopy(DEFAULT_PRIMERA_G1), g2:deepCopy(DEFAULT_PRIMERA_G2)};
   }
   function getPrimeraTeams(){
-    /* Reglas grabadas a fuego (usuario, 2026-05-02):
-       · 1ª RFEF tiene 41 equipos máximo. Estructura: 2 grupos × 20
-         equipos jugando ida+vuelta (38 partidos cada uno), tirando
-         al MÁS DÉBIL del 41 → 40 equipos repartidos.
+    /* Reglas grabadas a fuego (usuario, 2026-05-02 · ACTUALIZADO
+       2026-05-18):
+       · 1ª RFEF: 2 grupos × 22 equipos jugando ida+vuelta (42
+         partidos por equipo). Tope total = 44; si llegan más, se
+         descarta(n) el/los más débil(es). ANTES era 2×20 (cap 40):
+         el usuario añadió equipos por el editor y los sobrantes "no
+         se instalaban en ningún grupo" — ahora caben hasta 22/grupo.
        · NINGÚN equipo de Liga EA Sports (Primera) ni de Liga
          Hypermotion (Segunda) puede estar en 1ª RFEF en la misma
          temporada.
@@ -4440,7 +4443,7 @@
        conocidos de Primera + Segunda (`ligaExt_liga-ea-sports`,
        `ligaExt_liga-hypermotion`, DEFAULT_SEGUNDA_TEAMS), ordenamos
        por media descendente, descartamos al más débil si quedan
-       > 40, y partimos por snake (impares→g1, pares→g2) para que
+       > 44, y partimos por snake (impares→g1, pares→g2) para que
        los dos grupos queden balanceados en fuerza. */
     function _norm(s){
       return String(s||'').toLowerCase().normalize('NFD')
@@ -4495,7 +4498,16 @@
         return true;
       });
       clean.sort(function(a,b){ return (b.media||0) - (a.media||0); });
-      if(clean.length > 40) clean = clean.slice(0, 40);
+      /* TOPE 44 (regla usuario 2026-05-18, ANTES era 40): 1ª RFEF
+         pasa a 2 grupos × 22 equipos (ida+vuelta = 42 partidos por
+         equipo). El usuario añadió equipos por el editor y con el
+         cap viejo de 40 los 2+ más débiles se descartaban y "no se
+         instalaban en ningún grupo". Snake split balancea fuerza:
+         44 equipos → 22 g1 + 22 g2; con menos, reparte equilibrado
+         (p.ej. 42 → 21/21). simulateLeague es genérico (round-robin
+         de los equipos que reciba), así que 22/grupo funciona sin
+         más cambios. */
+      if(clean.length > 44) clean = clean.slice(0, 44);
       var g1 = [], g2 = [];
       clean.forEach(function(t, i){ (i % 2 === 0 ? g1 : g2).push(t); });
       return { g1: g1, g2: g2 };

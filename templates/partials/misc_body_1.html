@@ -7275,9 +7275,11 @@ window._showSimProgress = function(opts, onDone){
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Mundialito Clubes</h2></div>
 <div class="jlist">
-  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial-cuartos')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Cuartos de Final</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
-  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial-semis')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Semifinales</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
-  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial-final')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;FINAL</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Fase de Grupos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">8×4</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Octavos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Cuartos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Semis</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;FINAL</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○</span></button></div>
   <!-- 📊 Estadísticas -->
   <div class="submenu-card sc-mundial-stats" style="margin-top:10px;background:linear-gradient(135deg,#001f2a 0%,#003a52 25%,#006080 50%,#00bcd4 70%,#006080 85%,#001f2a 100%) !important;border:1.5px solid #4dd0e1 !important;box-shadow:0 4px 18px rgba(0,188,212,.32),inset 0 1px 0 rgba(255,255,255,.10) !important;" onclick="go('s-mundial-stats')">
     <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
@@ -7288,10 +7290,42 @@ window._showSimProgress = function(opts, onDone){
 /* Botones de ronda Mundialito Clubes — gradient cian/turquesa
    coherente con la caja principal en s-competiciones. */
 .c-mundial{background:linear-gradient(90deg,#001f2a,#003a52,#006080,#00bcd4,#006080,#003a52,#001f2a) !important;border:1.5px solid rgba(77,208,225,.55) !important;}
+#s-mundial .tour-edit-btn{position:absolute;top:8px;right:10px;z-index:5;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:26px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;}
+#s-mundial .tour-edit-btn:active{background:rgba(240,192,64,.35);}
+/* Editor de roster manual del Mundialito. */
+#mundial-roster-ov{position:fixed;inset:0;z-index:100040;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,6,.88);}
+#mundial-roster-ov .mr-card{width:min(460px,95vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#06141c,#0a1d28);border:1px solid rgba(77,208,225,.5);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
+#mundial-roster-ov .mr-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-bottom:1px solid rgba(255,255,255,.08);font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#4dd0e1;}
+#mundial-roster-ov .mr-x{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;}
+#mundial-roster-ov .mr-sub{padding:8px 15px;font-size:11px;color:rgba(255,255,255,.5);font-family:Rajdhani,sans-serif;}
+#mundial-roster-ov .mr-body{padding:6px 12px 10px;overflow-y:auto;}
+#mundial-roster-ov .mr-grp{margin:8px 0;border:1px solid rgba(77,208,225,.30);border-radius:10px;padding:6px 8px;}
+#mundial-roster-ov .mr-grp-h{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#4dd0e1;margin:2px 0 5px;}
+#mundial-roster-ov .mr-row{display:flex;align-items:center;gap:6px;padding:4px 2px;border-bottom:1px solid rgba(255,255,255,.05);}
+#mundial-roster-ov .mr-slot{flex:0 0 16px;font-family:'Bebas Neue',sans-serif;color:rgba(255,255,255,.4);font-size:13px;}
+#mundial-roster-ov .mr-name{flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#mundial-roster-ov .mr-b{flex:0 0 auto;width:30px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;cursor:pointer;font-size:14px;padding:0;}
+#mundial-roster-ov .mr-search{padding:8px 12px;border-top:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.3);}
+#mundial-roster-ov .mr-search input{width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(77,208,225,.4);color:#fff;border-radius:8px;padding:9px 11px;font-family:Rajdhani,sans-serif;font-size:14px;}
+#mundial-roster-ov #mr-results{max-height:34vh;overflow-y:auto;margin-top:6px;}
+#mundial-roster-ov .mr-res{display:flex;align-items:center;gap:8px;padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
+#mundial-roster-ov .mr-res:active{background:rgba(77,208,225,.18);}
+#mundial-roster-ov .mr-res img{width:18px;height:18px;object-fit:contain;}
+#mundial-roster-ov .mr-res span:first-of-type{flex:1;}
+#mundial-roster-ov .mr-pw{font-family:'Bebas Neue',sans-serif;color:#4dd0e1;font-size:14px;}
+#mundial-roster-ov .mr-hint{padding:8px;font-size:12px;color:rgba(255,255,255,.4);font-style:italic;}
+#mundial-roster-ov .mr-foot{padding:10px 14px;border-top:1px solid rgba(255,255,255,.08);}
+#mundial-roster-ov .mr-ok{width:100%;padding:13px;border:none;border-radius:9px;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;font-weight:700;cursor:pointer;}
 </style>
-<div class="screen" id="s-mundial-cuartos"><button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Mundialito · Cuartos de Final</h2></div><div style="padding:24px 18px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:2px;color:rgba(255,255,255,.5);">Sorteo pendiente</div></div>
-<div class="screen" id="s-mundial-semis"><button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Mundialito · Semifinales</h2></div><div style="padding:24px 18px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:2px;color:rgba(255,255,255,.5);">Sorteo pendiente</div></div>
-<div class="screen" id="s-mundial-final"><button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Mundialito · FINAL</h2></div><div style="padding:24px 18px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:2px;color:rgba(255,255,255,.5);">Sorteo pendiente</div></div>
+<!-- Pantalla única del Mundialito (motor de torneos): fase de grupos
+     + Octavos→Cuartos→Semis→Final progresivos. 🖍 PIN 747 abre el
+     editor de roster manual (8×4). 2026-05-17. -->
+<div class="screen" id="s-mundial">
+<button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="mundial" title="Editar roster (admin)">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-mundial">🌍</span><h2 id="tour-title-mundial">Mundialito de Clubes</h2></div>
+<div id="tour-info-mundial" class="tour-info-box"></div>
+</div>
 
 <!-- ═══ PANTALLAS DE ESTADÍSTICAS POR COMPETICIÓN ═══════════════════
      Cada una usa el mismo dashboard genérico
@@ -10207,7 +10241,7 @@ window._showSimProgress = function(opts, onDone){
      (pantalla + DEFAULTS + observer). "Añadir" activa un slot libre;
      "Eliminar" lo oculta CONSERVANDO sus datos (tour_<id>_v1). La
      lista visible se persiste en `tour_registry_v1`. */
-  var TOUR_BUILTINS = ['sct','pss','jg','asia'];
+  var TOUR_BUILTINS = ['sct','pss','jg','asia','mundial'];
   var TOUR_SLOTS = ['tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'];
   var TOUR_IDS = TOUR_BUILTINS.concat(TOUR_SLOTS);
 
@@ -10251,7 +10285,20 @@ window._showSimProgress = function(opts, onDone){
             format:'groups-ko', formatConfig:{ groups:4, perGroup:5, advancePerGroup:2,
                                                 koRounds:['Cuartos','Semis','Final'] },
             prizes:{ perWin:15, perDraw:5, perLoss:0,
-                     advCuartos:40, advSemis:60, advFinal:80, sub:50, champ:150 }, teams:[] }
+                     advCuartos:40, advSemis:60, advFinal:80, sub:50, champ:150 }, teams:[] },
+    /* 5️⃣ Mundialito de Clubes (spec usuario 2026-05-17): 8 grupos de
+       4 equipos (roster MANUAL vía editor 🖍 PIN 747, IA + humanos).
+       Top 2 de cada grupo → Octavos (8 elim.) → Cuartos → Semis →
+       Final, todo a PARTIDO ÚNICO con prórroga + penaltis. La FINAL
+       con humano dura 10 min (resto humano: estándar). */
+    mundial: { name:'Mundialito de Clubes', flag:'🌍', fee:0, dateStart:'1 Jul', dateEnd:'31 Jul',
+            numTeams:32, numHumans:0, aiLevelMin:1, aiLevelMax:100,
+            format:'groups-ko',
+            formatConfig:{ groups:8, perGroup:4, advancePerGroup:2,
+                           koRounds:['Octavos','Cuartos','Semis','Final'],
+                           prizeModel:'flat', koExtraTimePens:true,
+                           manualRoster:true, finalHuman10:true },
+            prizes:{ champ:0, sub:0, sf:0, qf:0 }, teams:[] }
   };
   /* Slots pre-cableados para torneos AÑADIDOS por el admin. Config
      por defecto razonable (KO 16 equipos, 1 humano); el admin la
@@ -11152,16 +11199,142 @@ window._showSimProgress = function(opts, onDone){
 
   window._tourOpenEditor = function(id){
     if (TOUR_IDS.indexOf(id) === -1) return;
-    if (typeof window.pG === 'function') {
-      window.pG(function(){ _doOpen(id); });
-    } else {
-      _doOpen(id);
-    }
+    /* Torneos de roster MANUAL (Mundialito): editor dedicado donde el
+       admin añade los 32 equipos uno a uno (IA + humanos). */
+    var _cfgOE = _tourLoadCachedSync(id) || _cloneDefault(id);
+    var _manual = !!(_cfgOE && _cfgOE.formatConfig && _cfgOE.formatConfig.manualRoster);
+    var _run = _manual
+      ? function(){ window._mundialRosterEditor(id); }
+      : function(){ _doOpen(id); };
+    if (typeof window.pG === 'function') window.pG(_run);
+    else _run();
   };
 
   window._tourCloseEditor = function(){
     document.getElementById('tour-editor-overlay').style.display = 'none';
     _open = null;
+  };
+
+  /* ── Editor de ROSTER MANUAL (Mundialito · spec usuario 2026-05-17)
+     8 grupos × 4: el admin asigna a cada slot un equipo IA concreto
+     (búsqueda) o 👤 Humano. PIN-gated por _tourOpenEditor. */
+  window._mundialRosterEditor = function(tourId){
+    var cfg = _tourLoadCachedSync(tourId) || _cloneDefault(tourId);
+    var fc = cfg.formatConfig || {};
+    var nG = fc.groups || 8, pg = fc.perGroup || 4, total = nG * pg;
+    var rost = new Array(total);
+    var src = (cfg.teams && cfg.teams.length === total) ? cfg.teams : null;
+    for (var i = 0; i < total; i++) {
+      if (src && src[i]) {
+        if (src[i].isHuman || src[i].name === 'PENDIENTE') rost[i] = { human:true };
+        else rost[i] = { name:src[i].name, shield:src[i].shield||'', power:src[i].power||70 };
+      } else rost[i] = null;
+    }
+    var activeSlot = -1;
+    function esc(s){ return String(s==null?'':s).replace(/[<>"]/g,function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';}); }
+    var ov = document.getElementById('mundial-roster-ov');
+    if (!ov) {
+      ov = document.createElement('div'); ov.id = 'mundial-roster-ov';
+      ov.innerHTML = '<div class="mr-card">'
+        + '<div class="mr-hd"><span>🌍 Mundialito · Roster</span>'
+        + '<button class="mr-x" onclick="document.getElementById(\'mundial-roster-ov\').style.display=\'none\'">✕</button></div>'
+        + '<div class="mr-sub">8 grupos × 4 equipos. A cada slot: 🤖 elegir IA (buscar) o 👤 Humano.</div>'
+        + '<div class="mr-body" id="mr-body"></div>'
+        + '<div class="mr-search" id="mr-search" style="display:none;">'
+        + '<input id="mr-q" type="text" placeholder="Buscar equipo IA…" autocomplete="off">'
+        + '<div id="mr-results"></div></div>'
+        + '<div class="mr-foot"><button class="mr-ok" id="mr-ok">✅ CONFIRMAR ROSTER</button></div></div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if (e.target === ov) ov.style.display='none'; });
+    }
+    var bodyEl = ov.querySelector('#mr-body');
+    var searchEl = ov.querySelector('#mr-search');
+    var qEl = ov.querySelector('#mr-q');
+    var resEl = ov.querySelector('#mr-results');
+    function renderBody(){
+      var h = '';
+      for (var g = 0; g < nG; g++) {
+        h += '<div class="mr-grp"><div class="mr-grp-h">GRUPO '+String.fromCharCode(65+g)+'</div>';
+        for (var s = 0; s < pg; s++) {
+          var idx = g*pg + s, v = rost[idx];
+          var lbl = v ? (v.human ? '👤 Humano' : esc(v.name)) : '<i style="opacity:.45">— vacío —</i>';
+          h += '<div class="mr-row"><span class="mr-slot">'+(s+1)+'</span>'
+            + '<span class="mr-name">'+lbl+'</span>'
+            + '<button class="mr-b" data-idx="'+idx+'" data-act="hum" title="Humano">👤</button>'
+            + '<button class="mr-b" data-idx="'+idx+'" data-act="ia" title="Elegir IA">🤖</button>'
+            + '<button class="mr-b" data-idx="'+idx+'" data-act="clr" title="Vaciar">✖</button></div>';
+        }
+        h += '</div>';
+      }
+      bodyEl.innerHTML = h;
+      var filled = rost.filter(Boolean).length;
+      var ok = ov.querySelector('#mr-ok');
+      ok.textContent = '✅ CONFIRMAR ROSTER ('+filled+'/'+total+')';
+      ok.disabled = filled !== total;
+      ok.style.opacity = filled === total ? '1' : '.5';
+    }
+    function doSearch(){
+      var q = _norm(qEl.value || '');
+      if (q.length < 2) { resEl.innerHTML = '<div class="mr-hint">Escribe ≥2 letras…</div>'; return; }
+      var all = []; try { all = _allTeams(); } catch(_){}
+      var seenNm = {}, m = [];
+      for (var x = 0; x < all.length && m.length < 40; x++) {
+        var t = all[x];
+        if (seenNm[t.name]) continue;
+        if (_norm(t.name).indexOf(q) === -1) continue;
+        seenNm[t.name] = 1; m.push(t);
+      }
+      if (!m.length) { resEl.innerHTML = '<div class="mr-hint">Sin resultados.</div>'; return; }
+      resEl.innerHTML = m.map(function(t){
+        return '<div class="mr-res" data-name="'+esc(t.name)+'" data-pw="'+(t.power||70)+'" data-sh="'+esc(t.shield||'')+'">'
+          + (t.shield ? '<img src="'+esc(t.shield)+'" onerror="this.style.display=\'none\'">' : '')
+          + '<span>'+esc(t.name)+'</span><span class="mr-pw">'+(t.power||70)+'</span></div>';
+      }).join('');
+    }
+    if (!ov._mrWired) {
+      ov._mrWired = true;
+      qEl.addEventListener('input', doSearch);
+      ov.addEventListener('click', function(e){
+        var b = e.target.closest && e.target.closest('.mr-b');
+        if (b) {
+          var idx = parseInt(b.getAttribute('data-idx'),10), act = b.getAttribute('data-act');
+          if (act === 'hum') { rost[idx] = { human:true }; renderBody(); }
+          else if (act === 'clr') { rost[idx] = null; renderBody(); }
+          else if (act === 'ia') { activeSlot = idx; searchEl.style.display='block'; qEl.value=''; resEl.innerHTML=''; try{qEl.focus();}catch(_){} }
+          return;
+        }
+        var r = e.target.closest && e.target.closest('.mr-res');
+        if (r && activeSlot >= 0) {
+          rost[activeSlot] = { name:r.getAttribute('data-name'), shield:r.getAttribute('data-sh'), power:parseInt(r.getAttribute('data-pw'),10)||70 };
+          searchEl.style.display = 'none'; activeSlot = -1; renderBody();
+          return;
+        }
+        if (e.target && e.target.id === 'mr-ok') {
+          var filled = rost.filter(Boolean).length;
+          if (filled !== total) { alert('Faltan equipos: '+filled+'/'+total); return; }
+          var teams = [];
+          for (var i2 = 0; i2 < total; i2++) {
+            var vv = rost[i2];
+            if (vv.human) teams.push({ name:'PENDIENTE', isHuman:true, shield:'', power:0 });
+            else teams.push({ name:vv.name, isHuman:false, shield:vv.shield||'', power:vv.power||70 });
+          }
+          cfg.teams = teams;
+          cfg.numTeams = total;
+          cfg.numHumans = teams.filter(function(t){ return t.isHuman; }).length;
+          /* Recomponer roster reinicia el progreso del torneo. */
+          cfg.results = {}; cfg.groupFixtures = {}; cfg.currentJornadaByGroup = {};
+          cfg.koBracket = null; cfg.koCurrentRound = 0; cfg._prizesPaid = false;
+          try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[tourId] = cfg; } catch(_){}
+          try { if (typeof window._tourSave === 'function') window._tourSave(tourId, cfg); } catch(_){}
+          try { if (typeof window._tourRender === 'function') window._tourRender(tourId); } catch(_){}
+          ov.style.display = 'none';
+          try { if (typeof window.go === 'function') window.go('s-' + tourId); } catch(_){}
+        }
+      });
+    }
+    renderBody();
+    searchEl.style.display = 'none';
+    ov.style.display = 'flex';
   };
 
   /* ── Render en pantalla del torneo ─────────────────────── */
@@ -11392,7 +11565,13 @@ window._showSimProgress = function(opts, onDone){
     if (flagEl  && cfg.flag) flagEl.textContent  = cfg.flag;
     if (!infoEl) return;
     var teams = cfg.teams || [];
-    if (!teams.length) { infoEl.innerHTML = ''; return; }
+    if (!teams.length) {
+      var _mr = cfg.formatConfig && cfg.formatConfig.manualRoster;
+      infoEl.innerHTML = _mr
+        ? '<div style="padding:22px 16px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.7;">Aún no hay equipos.<br>Pulsa el <b style="color:#4dd0e1;">🖍</b> (arriba dcha · PIN 747) para añadir los 32 equipos (8 grupos × 4).</div>'
+        : '';
+      return;
+    }
 
     /* Hint encima del listado para que el usuario vea cómo elegir
        su equipo antes de mirar el sorteo. */
@@ -12185,6 +12364,26 @@ window._showSimProgress = function(opts, onDone){
     var duracion = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: humanInvolved })
       : (isHvH ? '15 min 45 s' : '9 min 45 s');
+    /* Duración FINAL con humano = 10 min (spec Mundialito 2026-05-17).
+       Resto de rondas con humano: estándar. El tournament controla su
+       propia duración → reset a 0 cuando no es la final. */
+    try {
+      var _cfgD = _tourLoadCachedSync(tourId);
+      var _fcD = (_cfgD && _cfgD.formatConfig) || {};
+      var _isFinal = false;
+      if (_fcD.finalHuman10 && humanInvolved) {
+        var _mk0 = String(matchKey).replace(/\|L[12]$/, '');
+        if (_mk0.indexOf('ko_') === 0) {
+          var _kr = (_fcD.koRounds || []);
+          _isFinal = parseInt(_mk0.split('_')[1], 10) === (_kr.length - 1);
+        } else {
+          var _rr = (_fcD.rounds || []);
+          _isFinal = parseInt(_mk0.split('_')[0], 10) === (_rr.length - 1);
+        }
+      }
+      window._ppDurationMin = _isFinal ? 10 : 0;
+      if (_isFinal) duracion = '10 min';
+    } catch(_){ try { window._ppDurationMin = 0; } catch(__){} }
     var prePartidoKey = 'tour_' + tourId + '_' + matchKey;
     /* Marcamos el contexto previo a la previa para que `_ppCustomCallback`
        sepa abrir abrirTorneo con los datos correctos. */

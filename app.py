@@ -2439,7 +2439,7 @@ _KV_ALLOWED_REGEX = re.compile(
     r"^("
     r"manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)"
     # tx1..tx8 = 8 huecos pre-cableados para torneos añadidos por el admin.
-    r"|tour_(sct|pss|jg|asia|tx[1-8])"
+    r"|tour_(sct|pss|jg|asia|mundial|tx[1-8])"
     r")_v1$"
 )
 _KV_MAX_BYTES = 2 * 1024 * 1024  # 2 MB por clave (alineado con CLAUDE.md)

@@ -22738,11 +22738,22 @@ Tottenham
          (red de seguridad intacta — no se regresiona el caso offline). */
     var _syncConfirmed = false;
     if (!window._restoSimBulkInProgress && serialized != null) {
+      /* REINTENTOS SÍNCRONOS (2026-05-19): el usuario reporta "muchas
+         veces no se queda guardado" tras editar y borrar datos de
+         navegación, sobre todo en móvil/5G/Railway frío. La causa: el
+         POST síncrono fallaba en el 1er intento (server lento/red
+         intermitente) → _syncConfirmed=false → solo quedaba el async,
+         que la recarga/borrado cancela. Reintentamos el XHR síncrono
+         hasta 3 veces ANTES de caer al async; un intento extra absorbe
+         el fallo transitorio típico. Gateado fuera de la sim masiva
+         (igual que antes) para no reintroducir el freeze. */
+      var _sjBody = JSON.stringify({data:d});
+      for (var _sjTry = 0; _sjTry < 3 && !_syncConfirmed; _sjTry++) {
       try {
         var _xhrSync = new XMLHttpRequest();
         _xhrSync.open('POST', '/api/liga-ext/'+encodeURIComponent(k), false);
         _xhrSync.setRequestHeader('Content-Type', 'application/json');
-        _xhrSync.send(JSON.stringify({data:d}));
+        _xhrSync.send(_sjBody);
         if (_xhrSync.status === 200) {
           _syncConfirmed = true;
           try {
@@ -22774,16 +22785,28 @@ Tottenham
              protección monotónica contra wipes accidentales sigue
              intacta para ellos. No se toca la precedencia de loadData. */
           if (_countPlayers(d) > 0) {
-            try {
-              var _xhrProt = new XMLHttpRequest();
-              _xhrProt.open('POST', '/api/liga-ext-protected/'+encodeURIComponent(k), false);
-              _xhrProt.setRequestHeader('Content-Type', 'application/json');
-              _xhrProt.send(JSON.stringify({data:d, force:true}));
-            } catch(_){ /* best-effort; el async no-forzado de abajo cubre */ }
+            /* protected forzado CON reintentos + verificación de status
+               (2026-05-19): antes era 1 intento best-effort sin mirar el
+               código → si fallaba en silencio, el main quedaba nuevo pero
+               protected viejo y, al borrar datos, loadData podía resucitar
+               lo viejo. Reintentamos hasta 3 y solo damos por bueno con
+               200. */
+            var _protBody = JSON.stringify({data:d, force:true});
+            for (var _pjTry = 0; _pjTry < 3; _pjTry++) {
+              try {
+                var _xhrProt = new XMLHttpRequest();
+                _xhrProt.open('POST', '/api/liga-ext-protected/'+encodeURIComponent(k), false);
+                _xhrProt.setRequestHeader('Content-Type', 'application/json');
+                _xhrProt.send(_protBody);
+                if (_xhrProt.status === 200) break;
+              } catch(_){ /* reintenta; el async no-forzado de abajo cubre */ }
+            }
           }
         }
       } catch(_){ /* offline / CSP / server down → fallback async abajo */ }
+      } /* fin reintentos síncronos del POST main */
     }
+    try { (window._ligaExtSyncOK = window._ligaExtSyncOK || {})[k] = _syncConfirmed; } catch(_){}
     window._ligaExtSavePromise = window._ligaExtSavePromise || {};
     window._ligaExtSavePromise[k] = _syncConfirmed ? Promise.resolve(true) : (function(slug, payload, dirtyStamp){
       return new Promise(function(resolve){
@@ -25714,6 +25737,24 @@ Tottenham
       data.teams.push(newTeam);
     }
     saveData(CURRENT_KEY,data);
+    /* AVISO INMEDIATO SI EL SERVER NO CONFIRMÓ (2026-05-19) ──────────
+       Causa raíz de "muchas veces no se queda guardado": el POST
+       síncrono al server falló (móvil/5G/Railway frío) y el usuario,
+       creyendo que estaba guardado, pulsó "Borrar datos de navegación"
+       → al vaciarse localStorage la ÚNICA fuente es el server (viejo)
+       y la edición se pierde. saveData ya reintenta 3× síncrono; si AUN
+       ASÍ no confirmó, avisamos AQUÍ con un alert bloqueante (no un
+       texto que se desvanece) para que el usuario NO borre datos ni
+       cierre hasta que vuelva la conexión. La copia local + la cola de
+       reintentos siguen ahí: si no borra nada, no se pierde. */
+    try {
+      if (!(window._ligaExtSyncOK && window._ligaExtSyncOK[CURRENT_KEY])) {
+        alert('⚠️ GUARDADO LOCAL, PERO EL SERVIDOR NO LO HA CONFIRMADO (sin conexión o servidor lento).\n\n' +
+              'Tus cambios están guardados en este dispositivo y se reintenta enviarlos solos.\n\n' +
+              '❗ NO borres los datos de navegación NI cierres la página hasta que veas «✅ Guardado y sincronizado». ' +
+              'Si borras ahora, se perderá esta edición.');
+      }
+    } catch(_){}
     populateStadiumsDatalist();
     /* Mensaje atado a la CONFIRMACIÓN del servidor (refuerzo máximo
        2026-05-17). Antes salía "✅ guardado" al instante aunque el

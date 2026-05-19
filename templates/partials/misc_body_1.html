@@ -18570,7 +18570,15 @@ window._showSimProgress = function(opts, onDone){
        POST redundantes — `saveData` ya persiste al final de cada
        liga). Se limpia en _onDone (éxito) y en el .catch (error). */
     window._restoSimBulkInProgress = true;
-    function _clearBulkFlag(){ try { window._restoSimBulkInProgress = false; } catch(_){} }
+    function _clearBulkFlag(){
+      try { window._restoSimBulkInProgress = false; } catch(_){}
+      /* Flush diferido al servidor de lo simulado (no bloquea). */
+      try {
+        if (typeof window._ligaExtDrainBulkQ === 'function') {
+          setTimeout(window._ligaExtDrainBulkQ, 400);
+        }
+      } catch(_){}
+    }
     var _onDoneOrig = _onDone;
     _onDone = function(){ _clearBulkFlag(); try { _onDoneOrig(); } catch(_){} };
 
@@ -21348,6 +21356,24 @@ Tottenham
        _protected, _backup ni al server. */
     try { _sanitizeLigaTeamNames(d); } catch(_){}
     LIGA_CACHE[k] = d;
+    /* ── FAST-PATH SIM MASIVA (2026-05-19) ───────────────────────────
+       Reportado: simular las 51 ligas tarda > 8 min y no termina.
+       Causa: saveData se llama 51× y por liga hacía 3 escrituras
+       multi-MB a localStorage (main + _protected + _snap), un escaneo
+       COMPLETO de localStorage para podar snaps, y 3× JSON.stringify
+       de la plantilla para los POST (server + backup + protected).
+       En una re-sim de stats las PLANTILLAS NO cambian (solo
+       resultados/stats), así que durante el bulk:
+         · escribimos SOLO el main local (los standings se leen de ahí
+           + LIGA_CACHE; render inmediato),
+         · NO tocamos _protected/_snap (la plantilla protegida ya es
+           idéntica — sin riesgo anti-wipe; los snaps son históricos),
+         · NO hacemos POST por liga: encolamos el `serialized` ya
+           calculado y lo drenamos en 2º plano DESPUÉS del bulk
+           (1 POST/~60ms, sin bloquear ni re-stringify).
+       Resultado: de ~3 setItem-MB + full-scan + 3 stringify-MB +
+       3 fetch POR liga → 1 setItem-MB por liga. */
+    var _bulkSim = !!window._restoSimBulkInProgress;
     /* Invalidar cache de computeLineStats / roster — si admin editó
        una plantilla y mutó power de jugadores, los stats cacheados
        son obsoletos. La invalidación es barata (recrear WeakMap) y
@@ -21507,7 +21533,7 @@ Tottenham
          estado de 0 equipos. Una sim que devuelva data vacía por bug
          no debe destruir la copia de seguridad. */
       var nTeamsNew = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
-      if (nTeamsNew > 0) {
+      if (nTeamsNew > 0 && !_bulkSim) {
         _setItemSafe(storeKey(k) + '_protected', serialized);
       }
     }
@@ -21552,7 +21578,7 @@ Tottenham
            de cambios accidentales)
        loadData mantiene el fallback completo: main → _protected →
        _backup (legacy, se ignora si no existe) → snaps. */
-    if (serialized != null && _saveOk) {
+    if (serialized != null && _saveOk && !_bulkSim) {
       try {
         var nowMs = Date.now();
         if (_countPlayers(d) > 0) {
@@ -21590,6 +21616,20 @@ Tottenham
          · slug apuntado en set persistido `liga_ext_pending_v1`
            hasta el ACK; el boot lo re-empuja si quedó pendiente.
          · _backup / _protected siguen como red secundaria. */
+    /* SIM MASIVA: NO POST por liga (3× stringify-MB + 3 fetch +
+       markPending que escribe localStorage, ×51 = el cuelgue de
+       > 8 min). Encolamos el `serialized` ya calculado y drenamos en
+       2º plano tras el bulk. El resto de la función (server) se
+       omite — es lo único que queda. */
+    if (_bulkSim) {
+      try {
+        if (serialized != null && d && Array.isArray(d.teams) && d.teams.length) {
+          window._ligaExtBulkQ = window._ligaExtBulkQ || [];
+          window._ligaExtBulkQ.push({ slug:k, body:'{"data":'+serialized+'}' });
+        }
+      } catch(_){}
+      return;
+    }
     var _dirtyAt = Date.now();
     LIGA_LOCAL_DIRTY_AT[k] = _dirtyAt;
     try { if (typeof window._ligaExtMarkPending === 'function') window._ligaExtMarkPending(k); } catch(_){}
@@ -21659,6 +21699,31 @@ Tottenham
       }
     }catch(_){}
   }
+
+  /* Drena en 2º plano la cola de POSTs acumulada durante la sim
+     masiva (1 POST/~70ms, async, NO bloquea la UI). Idempotente y
+     reentrante: si llega más cola mientras drena, la sigue. Reusa
+     el body ya serializado (sin re-stringify). 2026-05-19. */
+  window._ligaExtDrainBulkQ = function(){
+    var q = window._ligaExtBulkQ;
+    if (!Array.isArray(q) || !q.length || window._ligaExtBulkDraining) return;
+    window._ligaExtBulkDraining = true;
+    function next(){
+      var item = (window._ligaExtBulkQ && window._ligaExtBulkQ.length)
+        ? window._ligaExtBulkQ.shift() : null;
+      if (!item){ window._ligaExtBulkDraining = false; return; }
+      var done = function(){ setTimeout(next, 70); };
+      try {
+        fetch('/api/liga-ext/'+encodeURIComponent(item.slug), {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',
+          body:item.body
+        }).then(done, done);
+      } catch(_){ done(); }
+    }
+    next();
+  };
 
   /* ── Set persistido de slugs con guardado PENDIENTE de ACK ───────
      (REFUERZO MÁXIMO 2026-05-17). Guarda SOLO la lista de slugs

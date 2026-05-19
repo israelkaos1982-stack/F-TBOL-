@@ -422,25 +422,32 @@ comprobar el estado actual antes de mutar.
 
 | Modo  | gameMin | realMin | displayMin (previa) | ms/tick (5s juego) | s/game-min |
 |-------|---------|---------|---------------------|--------------------|------------|
-| HvH         | 90 | 10    | 10 | ≈ 556 ms | 6.67 s |
-| HvH prórroga| 30 |  5    | —  | ≈ 833 ms | — |
-| HvIA        | 90 |  8    |  8 | ≈ 444 ms | 5.33 s |
+| HvH         | 90 | 16.5  | 10 | ≈ 917 ms | 11 s |
+| HvH prórroga| 30 |  5    | —  | ≈ 833 ms | 10 s |
+| HvIA        | 90 | 13.5  |  8 | ≈ 750 ms |  9 s |
 | IAIA        | 90 |  1.5  | "45 s/parte" | ≈ 83 ms | 1 s |
 
-- HvH = humano vs humano → **10 min reales**. Previa: "10 min". 1 game-min = 6.67 s reales.
-- HvIA = humano vs IA → **8 min reales**. Previa: "8 min". 1 game-min = 5.33 s reales.
+- HvH = humano vs humano → **16.5 min reales**. Previa: "10 min". 1 game-min = 11 s reales.
+- HvIA = humano vs IA → **13.5 min reales**. Previa: "8 min". 1 game-min = 9 s reales.
 - IAIA = IA vs IA → **1 min 30 s reales total** (45 s por parte). 1 game-min = 1 seg real.
 - HvH_ET = prórroga humana → 5 min reales.
 
-**REGLA DE ORO 2026-05-10**: la duración mostrada en la previa
-(`displayMin`) DEBE ser igual a la duración REAL (`realMin`). Antes
-discrepaban (display 10/8, real 15.75/9.75) lo que confundía al
-usuario — "el cronómetro no funciona, recuerda los códigos". Ahora
-1:1 → "10 min" = 10 minutos reales, "8 min" = 8 minutos reales.
+**REGLA DE ORO 2026-05-19**: `displayMin` (lo que la previa MUESTRA)
+y `realMin` (lo que el cron REALMENTE dura) están **DESACOPLADOS** por
+petición explícita del usuario. El cron va al ritmo eFootball (11 s/9 s
+por game-min) mientras la previa muestra "10 min" / "8 min" porque ese
+es el número "de referencia" en su memoria. La alineación display=real
+del 2026-05-10 (HvH 6.67 s, HvIA 5.33 s) quedó rescindida porque el
+cron iba más rápido que eFootball y la vida real.
 
-Estos valores los puede ajustar el usuario mediante petición explícita
-(historial: 2026-04-26 bajada de HvH 11→10.5 s y HvIA 9→6.5 s;
-2026-05-10 alineación display=real). No cambiar sin acuerdo.
+Historial:
+- Pre 2026-04-26 (=valores ACTUALES): HvH 11 s, HvIA 9 s.
+- 2026-04-26 (intermedio): HvH 10.5 s, HvIA 6.5 s.
+- 2026-05-10 (alineación display=real): HvH 6.67 s, HvIA 5.33 s.
+- 2026-05-19: vuelta al pre-mayo con display desacoplado.
+
+Estos valores los puede ajustar el usuario mediante petición explícita.
+No cambiar sin acuerdo.
 
 `realMin` controla el cronómetro real. `displayMin` / `displayLabel`
 controlan SOLO el label visible en la pantalla de PREVIA — están

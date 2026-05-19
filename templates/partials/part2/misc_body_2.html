@@ -7404,76 +7404,68 @@
   }
 
   /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 1-38, Copa y Europa) ──── */
-  /* Timer speeds per match type (5-second ticks, 1080 ticks = 90 game min):
-     AI vs AI  : 30s real  → 30000/1080  ≈   28ms/tick
-     HvIA      : 12m real  → 720000/1080 ≈  667ms/tick  (1 min juego = 8s reales)
-     HvH 90min : 16m real  → 960000/1080 ≈  889ms/tick  (1 min juego ≈ 10.67s reales)
-     HvH ET    : 5m real for 30 game min → 300000/360 ≈ 833ms/tick */
   /* ── DURACIÓN REAL DE PARTIDOS HUMANOS (regla de tres) ──────
      Fuente única de verdad para la velocidad del cronómetro. Cada
      "modo" (HvH / HvIA / IAIA / prórroga) declara:
         • gameMin  : minutos de juego simulados en un partido completo
         • realMin  : minutos de tiempo real que ese partido debe durar
+        • displayMin: lo que la previa MUESTRA al usuario (puede no
+                      coincidir con realMin — el usuario lo prefiere así
+                      desde 2026-05-19 para que el ritmo del cronómetro
+                      vaya al ritmo eFootball pero la previa muestre
+                      números cómodos).
      Y el tick del setInterval se calcula por regla de tres:
         tickMs = realMin * 60 000 / (gameMin * 60 / _ML_TICK_SEC)
 
-     Objetivo pedido:
-        HvH   : 10 min de juego  → 16-17 min reales  (pto medio 16.5)
-        HvIA  :  8 min de juego  → 12-13 min reales  (pto medio 12.5)
+     TIEMPOS OFICIALES (restaurados pre-mayo, 2026-05-19):
 
-     Escalado a nuestro reloj (90 game-min + descuento 1..7, media 4):
-     ══════════════════════════════════════════════════════════════
-     TIEMPOS OFICIALES (actualizados 2026-04-26):
-
-        IA vs IA   → 45s cada parte    → 1.5 min total (90 s reales)
+        IA vs IA   → 45 s cada parte   → 1.5  min total (90 s reales)
                      (1 sec real = 1 game-minute)
-        HvIA       → 4min 52.5s/parte  → 9.75 min total real
-                     (6.5 s/game-min)
-        HvH        → 7min 52.5s/parte  → 15.75 min total real
-                     (10.5 s/game-min)
+        HvIA       → 6 min 45 s/parte  → 13.5 min total real
+                     (9 s/game-min). Previa: "8 min".
+        HvH        → 8 min 15 s/parte  → 16.5 min total real
+                     (11 s/game-min). Previa: "10 min".
         HvH prórroga → 2.5 min/parte   → 5 min total real
 
-        Descuento: +1 minuto de juego por cada evento (gol, tarjeta,
-        lesión, penalti) que ocurra en la segunda parte. El cronómetro
-        del juego marca del 0 al 45 + desc / descanso / 45 al 90 + desc.
+     Descuento FIJO (2026-05-19): SIEMPRE 45+1..45+4 en 1ª parte y
+     90+1..90+9 en 2ª, independiente de eventos. El cron se CONGELA
+     en el tope hasta que el humano pulse DESCANSO / FINALIZAR.
+     Cada game-minute de descuento en tiempo REAL equivale a:
+        HvH:  11 segundos reales
+        HvIA:  9 segundos reales
+        IAIA:  1 segundo  real
 
-     ══════════════════════════════════════════════════════════════ */
-  /* Duración AUTORITATIVA de cada partido — FIJADA POR EL USUARIO:
-       HvH    → 15 min 45 s reales, label "10 min", 10.5 s/game-min
-       HvIA   →  9 min 45 s reales, label "8 min",   6.5 s/game-min
-       IAIA   →  1 min real total  (30 s por parte), label "30 s/parte"
-       HvH_ET →  5 min reales de prórroga
-
-     gameMin = 90 SIEMPRE (el reloj de juego va de 0 a 90). El
-     descuento NO se suma aquí — se añade dinámicamente en tiempo de
-     partido: +1 game-minute por cada evento del acta (gol, tarjeta,
-     penalti, falta, lesión). Se muestra como "45+1, 45+2…" en la 1ª
-     parte y "90+1, 90+2…" en la 2ª. Cada evento prolonga la parte:
-       HvH:  10.5 segundos reales
-       HvIA:  6.5 segundos reales
-       IAIA:  1 segundo real (90 game-min / 90 sec real = 1:1 tras
-              el ajuste 2026-04-21)
+     Histórico:
+       Pre 2026-04-26 (estos valores actuales): HvH 11s, HvIA 9s.
+       2026-04-26 (intermedio):                 HvH 10.5s, HvIA 6.5s.
+       2026-05-10 (alineación display=real):    HvH 6.67s, HvIA 5.33s.
+       2026-05-19: usuario pide volver al pre-mayo porque el cron iba
+       más rápido que eFootball / vida real. Display previa = 10/8
+       (no real) por preferencia explícita.
 
      Consecuencia matemática (verificada): 1 game-minute = tickMs × 12
-       HvH   tick ≈ 875 ms → 60 × 875/5 = 10.5 s
-       HvIA  tick ≈ 542 ms → 60 × 542/5 ≈ 6.5 s
-       IAIA  tick ≈  83 ms → 60 ×  83/5 = 1 s  (90 s total) */
+       HvH   tick ≈ 917 ms → 60 × 917/5 = 11 s
+       HvIA  tick ≈ 750 ms → 60 × 750/5 =  9 s
+       IAIA  tick ≈  83 ms → 60 ×  83/5 =  1 s  (90 s total) */
   var _ML_TICK_SEC = 5;
-  /* Tiempos reales del cronómetro (petición usuario 2026-05-10):
-     "el cronómetro de HvH y HvIA no funciona, recuerda los códigos
-     del tiempo que tenemos y arréglalo".
-     ALINEAR la duración REAL con la etiqueta MOSTRADA en la previa
-     (`displayMin`). Antes la etiqueta decía "10 min" pero el partido
-     duraba 15.75 min reales — discrepancia que confundía al usuario.
-     Ahora 1:1 → la previa muestra "10 min" y el partido dura 10 min.
-        HvH    → 10 min reales (era 15.75) → 6.67 s/game-min
-        HvH_ET → 5  min reales (sin cambio)
-        HvIA   → 8  min reales (era  9.75) → 5.33 s/game-min
-        IAIA   → 1.5 min reales (sin cambio) → 1 s/game-min */
+  /* Tiempos reales del cronómetro (petición usuario 2026-05-19):
+     "la simulación del cronómetro está yendo más rápido que el tiempo
+     del juego eFootball y más rápido que la vida real, vuelve a los
+     tiempos de antes". RESTAURADOS los valores pre-2026-04-26:
+        HvH    → 16.5 min reales → 11 s/game-min  (≈917 ms/tick)
+        HvH_ET → 5    min reales (sin cambio)
+        HvIA   → 13.5 min reales → 9  s/game-min  (≈750 ms/tick)
+        IAIA   → 1.5  min reales (sin cambio)     →   1 s/game-min
+     `displayMin` se mantiene en 10 / 8 (lo que la previa muestra al
+     usuario) por petición explícita: la previa dice "10 min" / "8 min"
+     aunque la duración real sea más larga, porque así estaba en su
+     memoria del juego. La regla de oro 2026-05-10 (display=real) queda
+     RESCINDIDA: el usuario prefiere display de referencia + cronómetro
+     a ritmo eFootball realista. */
   var _MATCH_RULE = {
-    HvH:    { gameMin: 90, realMin: 10,   displayMin: 10 },
-    HvH_ET: { gameMin: 30, realMin: 5                      },
-    HvIA:   { gameMin: 90, realMin: 8,    displayMin: 8  },
+    HvH:    { gameMin: 90, realMin: 16.5, displayMin: 10 },
+    HvH_ET: { gameMin: 30, realMin: 5                       },
+    HvIA:   { gameMin: 90, realMin: 13.5, displayMin: 8  },
     IAIA:   { gameMin: 90, realMin: 1.5,  displayLabel: '45 s/parte' }
   };
   function _tickMsFromRule(r) {
@@ -7483,10 +7475,10 @@
     return Math.max(1, Math.round(realMs / ticks));
   }
   var _MATCH_TICKS = {
-    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 556 ms (10 min reales)   */
-    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5 min reales)   */
-    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 444 ms ( 8 min reales)   */
-    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  83 ms (90 s total)      */
+    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 917 ms (16.5 min reales · 11 s/game-min) */
+    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5   min reales)               */
+    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 750 ms (13.5 min reales ·  9 s/game-min) */
+    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  83 ms (90 s total)                   */
   };
   /* Exponemos la regla para que TODOS los flujos (bundle legacy, campo 3D,
      previa, clock, live ticker, copa engine) lean de una única fuente.

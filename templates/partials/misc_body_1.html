@@ -10096,14 +10096,227 @@ window._showSimProgress = function(opts, onDone){
       card.className = 'submenu-card sc-user-added';
       card.setAttribute('data-added-id', ac.id);
       card.style.cssText = 'background:linear-gradient(135deg,#1a1a2a 0%,#3a3a55 30%,#5a5a80 55%,#3a3a55 80%,#1a1a2a 100%) !important;border:1.5px solid #8090b0 !important;box-shadow:0 4px 18px rgba(128,144,176,.30),inset 0 1px 0 rgba(255,255,255,.10) !important;';
-      var lblHtml = '<span class="sc-label">' + (ac.label || 'Sin nombre').replace(/[<>&]/g,'') + '</span>';
-      var icoHtml = ac.icon
-        ? '<img class="sc-comp-img" src="'+ac.icon+'" alt="" onerror="this.style.display=\'none\'"/>'
-        : '<span class="sc-emoji">🆕</span>';
+      var _safeAc = function(s){ return String(s==null?'':s).replace(/[<>&]/g,''); };
+      var isTeam = (ac.type === 'team');
+      var nameTxt = isTeam ? (ac.team || ac.label || 'Equipo') : (ac.label || 'Sin nombre');
+      /* icono: el icono subido a mano (📎 ICONO) SIEMPRE manda; si no,
+         para tipo equipo usamos el escudo guardado o el resuelto por
+         getTeamLogoUrl; para genérica, el emoji del texto. */
+      var shieldSrc = ac.icon || (isTeam
+        ? (ac.shield || ((typeof window.getTeamLogoUrl === 'function')
+            ? (function(){ try { return window.getTeamLogoUrl(ac.team) || ''; } catch(_){ return ''; } })() : ''))
+        : '');
+      var icoHtml = shieldSrc
+        ? '<img class="sc-comp-img" src="'+shieldSrc+'" alt="" onerror="this.style.display=\'none\'"/>'
+        : '<span class="sc-emoji">'+(isTeam ? '🛡' : '🆕')+'</span>';
+      var coachTxt = (isTeam && ac.coach) ? _safeAc(ac.coach) : '';
+      var lblHtml = '<span class="sc-label">' + _safeAc(nameTxt)
+        + (coachTxt ? '<span style="display:block;font-size:10px;opacity:.72;font-weight:500;letter-spacing:.3px;margin-top:2px;">'+coachTxt+'</span>' : '')
+        + '</span>';
       card.innerHTML = icoHtml + lblHtml + '<span class="sc-arr">▶</span>';
+      /* "Al pulsar (pantalla destino)": navega a esa pantalla salvo
+         que estemos en modo edición (entonces manda el overlay). */
+      if(ac.dest){
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', function(){
+          var scr = document.getElementById('s-competiciones');
+          if(scr && scr.classList.contains('comp-edit-on')) return;
+          if(typeof window.go === 'function') window.go(ac.dest);
+        });
+      }
       list.appendChild(card);
     });
   }
+
+  /* ── Modal "AÑADIR CAJA" (reemplaza al window.prompt, 2026-05-19) ──
+     El usuario reportó (foto) que el <select> nativo "TIPO DE CAJA"
+     NO dejaba elegir la opción Genérica en Android — mismo bug que ya
+     se arregló dos veces (estadio → input+datalist commit d4a5540;
+     posición → botones 2026-05-17). Aquí el TIPO se elige con DOS
+     BOTONES (sin <select> nativo) y la pantalla destino con
+     input+datalist (tampoco <select>). Tipos:
+       · Equipo (con escudo): escudo + nombre (+ entrenador opcional)
+       · Genérica (emoji + texto): texto libre con emoji
+     Se guarda en comp_cards_v1.added con el esquema extendido
+     {id,type,label,icon,team,shield,coach,dest,ts} que el render de
+     `applyCardsState` ya entiende. */
+  function _cabCollectTeams(){
+    var out = [], seen = {};
+    try {
+      for(var i=0;i<localStorage.length;i++){
+        var k = localStorage.key(i);
+        if(!k || k.indexOf('ligaExt_') !== 0) continue;
+        if(k.indexOf('_snap_') !== -1 || k.indexOf('_protected') !== -1 || k.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(k); if(!raw) continue;
+        var d; try { d = JSON.parse(raw); } catch(_){ continue; }
+        var ts = (d && d.teams) || [];
+        for(var j=0;j<ts.length;j++){
+          var t = ts[j]; if(!t || !t.name) continue;
+          var nm = String(t.name).trim();
+          var lk = nm.toLowerCase();
+          if(!lk || seen[lk]) continue;
+          seen[lk] = true;
+          var sh = t.shield || '';
+          if(!sh && typeof window.getTeamLogoUrl === 'function'){
+            try { sh = window.getTeamLogoUrl(nm) || ''; } catch(_){}
+          }
+          out.push({ name:nm, shield:sh });
+        }
+      }
+    } catch(_){}
+    out.sort(function(a,b){ return a.name.localeCompare(b.name,'es'); });
+    return out;
+  }
+  function _cabCollectScreens(){
+    var out = [], seen = {};
+    try {
+      var nodes = document.querySelectorAll('.screen[id]');
+      for(var i=0;i<nodes.length;i++){
+        var sc = nodes[i]; var id = sc.id; if(!id || seen[id]) continue;
+        seen[id] = true;
+        var h = sc.querySelector('.sec-hdr h2, .sec-hdr h1, h2, h1');
+        var title = (h && h.textContent ? h.textContent : id).replace(/\s+/g,' ').trim();
+        if(!title) title = id;
+        out.push({ id:id, title:title });
+      }
+    } catch(_){}
+    out.sort(function(a,b){ return a.title.localeCompare(b.title,'es'); });
+    return out;
+  }
+  function _compShowAddBoxModal(){
+    if(document.getElementById('cab-modal')) return;
+    var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+    var teams   = _cabCollectTeams();
+    var screens = _cabCollectScreens();
+    var screenByTitle = {};
+    var screenIds = {};
+    var dlOpts = '';
+    for(var si=0; si<screens.length; si++){
+      screenByTitle[screens[si].title.toLowerCase()] = screens[si].id;
+      screenIds[screens[si].id] = true;
+      dlOpts += '<option value="'+esc(screens[si].title)+'">'+esc(screens[si].id)+'</option>';
+    }
+
+    var kind = 'generic';      /* default seguro = comportamiento previo */
+    var selTeam = '', selShield = '';
+
+    var ov = document.createElement('div');
+    ov.id = 'cab-modal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.72);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 12px;';
+    var I = 'width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:8px;padding:11px 12px;font-size:15px;font-family:Rajdhani,sans-serif;';
+    var LBL = 'display:block;margin:16px 0 6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.6px;color:rgba(255,255,255,.55);';
+    ov.innerHTML =
+      '<div id="cab-panel" style="max-width:460px;width:100%;background:linear-gradient(160deg,#15151f,#0e0e16);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:20px 18px 18px;box-shadow:0 18px 50px rgba(0,0,0,.6);">'
+      +  '<div style="text-align:center;font-family:\'Bebas Neue\',Oswald,sans-serif;font-size:24px;letter-spacing:3px;color:#f0c040;margin-bottom:6px;">AÑADIR CAJA</div>'
+      +  '<div style="'+LBL+'">TIPO DE CAJA</div>'
+      +  '<div style="display:flex;gap:8px;">'
+      +    '<button type="button" id="cab-k-team"    style="flex:1;border:none;border-radius:9px;padding:13px 8px;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;cursor:pointer;">🛡 Equipo<br><span style="font-weight:400;font-size:11px;opacity:.8;">(con escudo)</span></button>'
+      +    '<button type="button" id="cab-k-generic" style="flex:1;border:none;border-radius:9px;padding:13px 8px;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;cursor:pointer;">🆕 Genérica<br><span style="font-weight:400;font-size:11px;opacity:.8;">(emoji + texto)</span></button>'
+      +  '</div>'
+      +  '<div id="cab-sec-generic">'
+      +    '<div style="'+LBL+'">TEXTO DE LA CAJA (PUEDES PONER EMOJI)</div>'
+      +    '<input id="cab-generic" type="text" placeholder="Ej: 🏆 Mi torneo" autocomplete="off" style="'+I+'"/>'
+      +  '</div>'
+      +  '<div id="cab-sec-team" style="display:none;">'
+      +    '<div style="'+LBL+'">BUSCAR EQUIPO</div>'
+      +    '<input id="cab-team-search" type="text" placeholder="Escribe un nombre…" autocomplete="off" style="'+I+'"/>'
+      +    '<div id="cab-team-list" style="margin-top:8px;max-height:230px;overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:8px;display:none;"></div>'
+      +    '<div id="cab-team-sel" style="margin-top:8px;font-size:13px;color:#5fe08a;font-family:Rajdhani,sans-serif;min-height:18px;"></div>'
+      +    '<div style="'+LBL+'">ENTRENADOR (TEXTO LIBRE, CON EMOJI)</div>'
+      +    '<input id="cab-coach" type="text" placeholder="Ej: Toñín💡" autocomplete="off" style="'+I+'"/>'
+      +  '</div>'
+      +  '<div style="'+LBL+'">AL PULSAR (PANTALLA DESTINO) — OPCIONAL</div>'
+      +  '<input id="cab-dest" type="text" list="cab-dest-dl" placeholder="(ninguna)" autocomplete="off" style="'+I+'"/>'
+      +  '<datalist id="cab-dest-dl">'+dlOpts+'</datalist>'
+      +  '<div style="display:flex;gap:10px;margin-top:20px;">'
+      +    '<button type="button" id="cab-cancel" style="flex:1;background:rgba(255,255,255,.10);color:#fff;border:none;border-radius:9px;padding:13px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;font-weight:700;cursor:pointer;">CANCELAR</button>'
+      +    '<button type="button" id="cab-save"   style="flex:1;background:linear-gradient(145deg,#3cc878,#1f7a45);color:#fff;border:none;border-radius:9px;padding:13px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;font-weight:700;cursor:pointer;">GUARDAR</button>'
+      +  '</div>'
+      + '</div>';
+    document.body.appendChild(ov);
+
+    var $ = function(id){ return ov.querySelector('#'+id); };
+    var btnTeam = $('cab-k-team'), btnGen = $('cab-k-generic');
+    function paintKind(){
+      var onCss = 'background:linear-gradient(145deg,#3cc878,#1f7a45);color:#fff;box-shadow:0 4px 14px rgba(60,200,120,.35);';
+      var offCss = 'background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);';
+      var base = 'flex:1;border:none;border-radius:9px;padding:13px 8px;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:.5px;cursor:pointer;';
+      btnTeam.style.cssText = base + (kind==='team'? onCss : offCss);
+      btnGen.style.cssText  = base + (kind==='generic'? onCss : offCss);
+      $('cab-sec-team').style.display    = (kind==='team')    ? '' : 'none';
+      $('cab-sec-generic').style.display = (kind==='generic') ? '' : 'none';
+    }
+    paintKind();
+    btnTeam.addEventListener('click', function(){ kind='team'; paintKind(); });
+    btnGen.addEventListener('click',  function(){ kind='generic'; paintKind(); });
+
+    var listBox = $('cab-team-list'), selBox = $('cab-team-sel');
+    function renderTeamList(q){
+      q = String(q||'').trim().toLowerCase();
+      if(!q){ listBox.style.display='none'; listBox.innerHTML=''; return; }
+      var hits = [];
+      for(var i=0;i<teams.length && hits.length<40;i++){
+        if(teams[i].name.toLowerCase().indexOf(q) !== -1) hits.push(teams[i]);
+      }
+      if(!hits.length){ listBox.style.display=''; listBox.innerHTML='<div style="padding:12px;color:rgba(255,255,255,.5);font-size:13px;">Sin resultados</div>'; return; }
+      var h='';
+      for(var j=0;j<hits.length;j++){
+        var t = hits[j];
+        var img = t.shield
+          ? '<img src="'+esc(t.shield)+'" alt="" onerror="this.style.visibility=\'hidden\'" style="width:26px;height:26px;object-fit:contain;flex-shrink:0;"/>'
+          : '<span style="width:26px;text-align:center;flex-shrink:0;">🛡</span>';
+        h += '<div class="cab-team-row" data-name="'+esc(t.name)+'" data-shield="'+esc(t.shield)+'" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px;color:#fff;">'+img+'<span>'+esc(t.name)+'</span></div>';
+      }
+      listBox.innerHTML = h;
+      listBox.style.display = '';
+      var rows = listBox.querySelectorAll('.cab-team-row');
+      for(var r=0;r<rows.length;r++){
+        rows[r].addEventListener('click', function(){
+          selTeam   = this.getAttribute('data-name') || '';
+          selShield = this.getAttribute('data-shield') || '';
+          selBox.textContent = '✓ ' + selTeam;
+          listBox.style.display='none';
+          $('cab-team-search').value = selTeam;
+        });
+      }
+    }
+    $('cab-team-search').addEventListener('input', function(){ selTeam=''; selShield=''; selBox.textContent=''; renderTeamList(this.value); });
+
+    function close(){ try { document.body.removeChild(ov); } catch(_){} }
+    $('cab-cancel').addEventListener('click', close);
+    ov.addEventListener('click', function(e){ if(e.target === ov) close(); });
+    $('cab-panel').addEventListener('click', function(e){ e.stopPropagation(); });
+
+    $('cab-save').addEventListener('click', function(){
+      var destRaw = String($('cab-dest').value||'').trim();
+      var dest = '';
+      if(destRaw){
+        if(screenIds[destRaw]) dest = destRaw;                                  /* tecleó el id */
+        else if(screenByTitle[destRaw.toLowerCase()]) dest = screenByTitle[destRaw.toLowerCase()]; /* tecleó el título */
+      }
+      var s = loadCards();
+      var id = 'u-' + Date.now() + '-' + Math.floor(Math.random()*999);
+      var entry;
+      if(kind === 'team'){
+        if(!selTeam){ alert('Elige un equipo de la lista (escribe y toca uno).'); return; }
+        entry = { id:id, type:'team', team:selTeam, shield:selShield||'', coach:String($('cab-coach').value||'').trim(), label:selTeam, icon:'', dest:dest, ts:Date.now() };
+      } else {
+        var lbl = String($('cab-generic').value||'').trim();
+        if(!lbl){ alert('El texto no puede quedar vacío.'); return; }
+        entry = { id:id, type:'generic', label:lbl, icon:'', dest:dest, ts:Date.now() };
+      }
+      s.added.push(entry);
+      if(saveCards(s)){
+        close();
+        applyCardsState();
+        /* Re-aplicar edit mode para que la nueva caja reciba su overlay. */
+        setTimeout(function(){ setEditMode(true); }, 30);
+      } else {
+        alert('No se pudo guardar la nueva caja.');
+      }
+    });
+  }
+  try { window._compShowAddBoxModal = _compShowAddBoxModal; } catch(_){}
 
   function setEditMode(on){
     var screen = document.getElementById('s-competiciones');
@@ -10260,20 +10473,7 @@ window._showSimProgress = function(opts, onDone){
         addBtn.style.cssText = 'margin:14px auto 4px;display:block;background:linear-gradient(145deg,#3cc878,#1f7a45);color:#fff;border:none;border-radius:10px;padding:10px 22px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(60,200,120,.35);';
         addBtn.addEventListener('click', function(e){
           e.stopPropagation();
-          var lbl = window.prompt('Texto de la nueva caja:');
-          if(lbl == null) return;
-          lbl = String(lbl).trim();
-          if(!lbl){ alert('El texto no puede quedar vacío.'); return; }
-          var s = loadCards();
-          var id = 'u-' + Date.now() + '-' + Math.floor(Math.random()*999);
-          s.added.push({ id:id, label:lbl, icon:'', ts:Date.now() });
-          if(saveCards(s)){
-            applyCardsState();
-            /* Re-aplicar edit mode para que la nueva caja reciba su overlay. */
-            setTimeout(function(){ setEditMode(true); }, 30);
-          } else {
-            alert('No se pudo guardar la nueva caja.');
-          }
+          _compShowAddBoxModal();
         });
         list.appendChild(addBtn);
       }

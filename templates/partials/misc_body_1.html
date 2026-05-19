@@ -355,6 +355,12 @@ window._showSimProgress = function(opts, onDone){
   #mk-ov .mk-prev{display:flex;align-items:center;gap:10px;margin-top:10px;height:54px;border-radius:9px;padding:0 12px;overflow:hidden;position:relative;}
   #mk-ov .mk-prev img{width:38px;height:38px;object-fit:contain;}
   #mk-ov .mk-prev b{font-family:Oswald,sans-serif;font-size:13px;color:#fff;letter-spacing:1px;text-shadow:1px 1px 2px #000;}
+  #mk-ov input[type=color]{width:56px;height:34px;border:1px solid rgba(240,192,64,.30);border-radius:7px;background:rgba(0,0,0,.4);padding:2px;cursor:pointer;}
+  #mk-ov .mk-ck{display:flex;align-items:center;gap:8px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;margin:14px 0 2px;cursor:pointer;}
+  #mk-ov .mk-ck input{width:16px;height:16px;accent-color:#3cc878;}
+  #mk-ov .mk-grad{display:flex;gap:10px;align-items:center;margin-top:6px;}
+  #mk-ov .mk-grad .mk-bar{flex:1;height:30px;border-radius:7px;border:1px solid rgba(255,255,255,.18);}
+  #mk-ov .mk-cwrap.off{opacity:.4;pointer-events:none;}
   #mk-ov .mk-actions{display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap;}
   #mk-ov .mk-btn{padding:9px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid;-webkit-tap-highlight-color:transparent;}
   #mk-ov .mk-btn.primary{background:linear-gradient(145deg,#3cc878,#1f7a45);color:#fff;border-color:#5fe08a;}
@@ -654,10 +660,24 @@ window._showSimProgress = function(opts, onDone){
       grid._mkAddSig=addSig;
       grid.querySelectorAll('.menu-card').forEach(function(c){ if(c._mkAdded) c.remove(); });
       var addBtn=grid.querySelector('.mk-add-btn');
+      function _anchor(k){
+        var f=null;
+        grid.querySelectorAll('.menu-card').forEach(function(c){ if(!f && c.dataset.mk===k) f=c; });
+        return f;
+      }
       s.added.forEach(function(en){
         var el=buildAdded(en);
         ensureDelBtn(el);
-        if(addBtn) grid.insertBefore(el, addBtn); else grid.appendChild(el);
+        var aft=en.after;
+        if(aft==='__start'){
+          grid.insertBefore(el, grid.firstChild);
+        } else if(aft && aft!=='__end'){
+          var an=_anchor(aft);
+          if(an){ if(an.nextSibling) grid.insertBefore(el, an.nextSibling); else grid.appendChild(el); }
+          else if(addBtn){ grid.insertBefore(el, addBtn); } else grid.appendChild(el);
+        } else {
+          if(addBtn){ grid.insertBefore(el, addBtn); } else grid.appendChild(el);
+        }
       });
     }
 
@@ -696,6 +716,69 @@ window._showSimProgress = function(opts, onDone){
   function ov(){ return document.getElementById('mk-ov'); }
   window._mkCloseOv=function(){ var o=ov(); if(o) o.classList.remove('show'); _ovCard=null; _ovAdd=false; _ovPick=null; };
 
+  function getVal(id){ var e=document.getElementById(id); return e?(e.value||''):''; }
+  function setVal(id,v){ var e=document.getElementById(id); if(e) e.value=v; }
+  function _norm6(h){
+    h=String(h||'').trim(); if(h[0]!=='#') h='#'+h; h=h.replace(/[^#0-9a-fA-F]/g,'');
+    var x=h.slice(1);
+    if(x.length===3) x=x[0]+x[0]+x[1]+x[1]+x[2]+x[2];
+    if(x.length<6) x=(x+'000000').slice(0,6);
+    return '#'+x.slice(0,6).toLowerCase();
+  }
+  function addedIdOf(card){ return String((card&&card.dataset&&card.dataset.mk)||'').replace('add:',''); }
+  function findAddedById(id){
+    var a=loadState().added; for(var i=0;i<a.length;i++){ if(a[i].id===id) return a[i]; } return null;
+  }
+  function colorRowHtml(team){
+    var head = team
+      ? '<label class="mk-ck"><input type="checkbox" id="mk-cmanual"/> 🎨 Colores manuales (si no, automático del escudo)</label>'
+      : '<div class="mk-lbl">Degradado de la caja (color inicio → color fin)</div>';
+    return head +
+      '<div id="mk-cwrap" class="mk-cwrap"><div class="mk-grad">'+
+        '<input type="color" id="mk-cA" value="#1c2230"/>'+
+        '<div class="mk-bar" id="mk-bar"></div>'+
+        '<input type="color" id="mk-cB" value="#3a4a66"/>'+
+      '</div></div>';
+  }
+  function readColors(team){
+    var cm=document.getElementById('mk-cmanual');
+    var manual = team ? !!(cm && cm.checked) : true;
+    if(team && !manual) return { manual:false, colors:null };
+    return { manual:true, colors:[ _norm6(getVal('mk-cA')||'#1c2230'), _norm6(getVal('mk-cB')||'#3a4a66') ] };
+  }
+  function bindColorUI(team){
+    function paint(){
+      var bar=document.getElementById('mk-bar'); if(!bar) return;
+      var gr=gradientFrom([ _norm6(getVal('mk-cA')||'#1c2230'), _norm6(getVal('mk-cB')||'#3a4a66') ]);
+      bar.style.background=gr.outer;
+    }
+    ['mk-cA','mk-cB'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input',paint); });
+    var cm=document.getElementById('mk-cmanual'), wrap=document.getElementById('mk-cwrap');
+    function tog(){ if(cm&&wrap) wrap.classList.toggle('off', !cm.checked); }
+    if(cm){ cm.addEventListener('change',tog); tog(); }
+    paint();
+  }
+  function cardOptions(excludeEl){
+    var grid=document.querySelector(GRID_SEL), out=[];
+    if(!grid) return out;
+    grid.querySelectorAll('.menu-card').forEach(function(c){
+      if(c===excludeEl || c.style.display==='none') return;
+      var key=c._mkAdded? c.dataset.mk : cardKey(c);
+      var ln=c.querySelector('.team-meta>span:first-child')||c.querySelector('.mc-label');
+      var label=(ln&&ln.textContent.trim())|| (c.querySelector('.mc-emoji')?'(caja)':key);
+      out.push({ key:key, label:label });
+    });
+    return out;
+  }
+  function fillPosSel(curAfter, excludeEl){
+    var sel=document.getElementById('mk-pos'); if(!sel) return;
+    sel.innerHTML='';
+    function add(v,t){ var o=document.createElement('option'); o.value=v; o.textContent=t;
+      if(v===(curAfter||'__end')) o.selected=true; sel.appendChild(o); }
+    add('__end','▼ Al final del menú');
+    add('__start','▲ Al principio del menú');
+    cardOptions(excludeEl).forEach(function(c){ add(c.key, 'Debajo de: '+c.label); });
+  }
   function teamSearchHtml(){
     return '<div class="mk-lbl">Buscar equipo</div>'+
       '<input type="text" id="mk-q" placeholder="Escribe un nombre…" autocomplete="off"/>'+
@@ -703,16 +786,25 @@ window._showSimProgress = function(opts, onDone){
       '<div class="mk-prev" id="mk-prev" style="background:#1c2230;"><b id="mk-prev-n">—</b></div>'+
       '<div class="mk-lbl">Entrenador (texto libre, con emoji)</div>'+
       '<input type="text" id="mk-coach" placeholder="Ej: Toñín💡"/>'+
+      colorRowHtml(true)+
       '<div class="mk-lbl">Al pulsar (pantalla destino)</div>'+
-      '<select id="mk-nav"></select>';
+      '<select id="mk-nav"></select>'+
+      '<div id="mk-pos-wrap"></div>';
   }
   function genericHtml(){
     return '<div class="mk-lbl">Texto de la caja</div>'+
       '<input type="text" id="mk-q" placeholder="Texto…" autocomplete="off"/>'+
       '<div class="mk-lbl">Icono / emoji</div>'+
       '<input type="text" id="mk-emoji" placeholder="Ej: ⚽" maxlength="4"/>'+
+      colorRowHtml(false)+
       '<div class="mk-lbl">Al pulsar (pantalla destino)</div>'+
-      '<select id="mk-nav"></select>';
+      '<select id="mk-nav"></select>'+
+      '<div id="mk-pos-wrap"></div>';
+  }
+  function fillPosWrap(curAfter, excludeEl){
+    var pw=document.getElementById('mk-pos-wrap'); if(!pw) return;
+    pw.innerHTML='<div class="mk-lbl">Posición en el menú</div><select id="mk-pos"></select>';
+    fillPosSel(curAfter, excludeEl);
   }
   function fillNavSel(cur){
     var sel=document.getElementById('mk-nav'); if(!sel) return;
@@ -755,21 +847,31 @@ window._showSimProgress = function(opts, onDone){
   function openEditor(card){
     _ovCard=card; _ovAdd=false; _ovPick=null;
     var team=isTeamCard(card);
+    var added=!!card._mkAdded;
+    var entry=added? findAddedById(addedIdOf(card)) : null;
+    var src=added&&entry? entry : (loadState().ov[cardKey(card)]||{});
     var body=document.getElementById('mk-ov-body');
     document.getElementById('mk-ov-title').textContent= team?'EDITAR EQUIPO':'EDITAR CAJA';
     body.innerHTML= team? teamSearchHtml() : genericHtml();
     var curLbl=(card.querySelector('.team-meta>span:first-child')||card.querySelector('.mc-label'));
-    document.getElementById('mk-q').value=curLbl?curLbl.textContent.trim():'';
+    setVal('mk-q', added&&entry? (entry.label||'') : (curLbl?curLbl.textContent.trim():''));
     if(team){
       var co=card.querySelector('.team-coach');
-      document.getElementById('mk-coach').value=co?co.textContent.trim():'';
+      setVal('mk-coach', added&&entry? (entry.coach||'') : (co?co.textContent.trim():''));
       renderResults('');
       document.getElementById('mk-q').addEventListener('input', function(){ renderResults(this.value); });
     } else {
       var em=card.querySelector('.mc-emoji');
-      document.getElementById('mk-emoji').value=em?em.textContent.trim():'';
+      setVal('mk-emoji', added&&entry? (entry.emoji||'') : (em?em.textContent.trim():''));
     }
+    var cols=src.colors||[];
+    if(cols[0]) setVal('mk-cA', _norm6(cols[0]));
+    if(cols[1]) setVal('mk-cB', _norm6(cols[1]));
+    var cm=document.getElementById('mk-cmanual');
+    if(cm) cm.checked = team ? !!src.manual : true;
     var nv=card.__mkNav; fillNavSel(nv&&nv.type==='go'?nv.id:'');
+    if(added) fillPosWrap(entry?entry.after:'__end', card);
+    bindColorUI(team);
     ov().classList.add('show');
   }
   function openAdd(){
@@ -785,73 +887,129 @@ window._showSimProgress = function(opts, onDone){
       var d=document.getElementById('mk-add-sub');
       d.innerHTML = t==='team'? teamSearchHtml() : genericHtml();
       fillNavSel('');
+      fillPosWrap('__end', null);
       if(t==='team'){
         renderResults('');
         document.getElementById('mk-q').addEventListener('input', function(){ renderResults(this.value); });
       }
+      bindColorUI(t==='team');
     }
     document.getElementById('mk-type').addEventListener('change', sub);
     sub();
     ov().classList.add('show');
   }
 
+  function _curEscudo(card){
+    var im=card&&card.querySelector('img.mc-img'); return im?im.getAttribute('src')||'':'';
+  }
   document.getElementById('mk-ov-save').addEventListener('click', function(){
     var navSel=document.getElementById('mk-nav');
     var nav=navSel?navSel.value:'';
+    var posSel=document.getElementById('mk-pos');
+    var after=posSel?posSel.value:'__end';
+
+    /* ── A) AÑADIR caja nueva ─────────────────────────────── */
     if(_ovAdd){
       var type=document.getElementById('mk-type').value;
       var s=loadState();
       var id=String(Date.now())+'-'+Math.floor(Math.random()*999);
       if(type==='team'){
         if(!_ovPick){ alert('Elige un equipo de la lista.'); return; }
+        var rc=readColors(true);
         var en={ id:id, type:'team', label:_ovPick.name, escudo:_ovPick.escudo,
-          coach:(document.getElementById('mk-coach').value||'').trim(), nav:nav, colors:[] };
+          coach:getVal('mk-coach').trim(), nav:nav, after:after,
+          manual:rc.manual, colors: rc.manual? rc.colors : [] };
         s.added.push(en);
         if(!saveState(s)) return;
         applyState(); window._mkCloseOv();
-        extractColors(_ovPick.escudo, _ovPick.color, function(cols){
-          var st=loadState();
-          st.added.forEach(function(x){ if(x.id===id) x.colors=cols; });
-          if(saveState(st)) applyState();
-        });
+        if(!rc.manual){
+          extractColors(_ovPick.escudo, _ovPick.color, function(cols){
+            var st=loadState();
+            st.added.forEach(function(x){ if(x.id===id) x.colors=cols; });
+            if(saveState(st)) applyState();
+          });
+        }
         return;
       } else {
-        var lbl=(document.getElementById('mk-q').value||'').trim();
+        var lbl=getVal('mk-q').trim();
         if(!lbl){ alert('Escribe un texto.'); return; }
+        var rcg=readColors(false);
         s.added.push({ id:id, type:'generic', label:lbl,
-          emoji:(document.getElementById('mk-emoji').value||'⚽').trim(), nav:nav });
+          emoji:(getVal('mk-emoji')||'⚽').trim(), nav:nav, after:after,
+          manual:true, colors:rcg.colors });
         if(saveState(s)) applyState();
         window._mkCloseOv(); return;
       }
     }
+
     if(!_ovCard) return;
+    var team=isTeamCard(_ovCard);
+    var rc2=readColors(team);
+    function doExtract(getEntry, setCols){
+      var escU=_ovPick? _ovPick.escudo : (getEntry().escudo || _curEscudo(_ovCard));
+      var seedC=_ovPick? _ovPick.color : null;
+      extractColors(escU, seedC, function(cols){ setCols(cols); });
+    }
+
+    /* ── B) EDITAR caja añadida (s.added) ─────────────────── */
+    if(_ovCard._mkAdded){
+      var aid=addedIdOf(_ovCard);
+      var stA=loadState(), idx=-1;
+      stA.added.forEach(function(x,i){ if(x.id===aid) idx=i; });
+      if(idx<0){ window._mkCloseOv(); return; }
+      var e=stA.added[idx];
+      e.nav=nav; e.after=after;
+      if(team){
+        if(_ovPick){ e.label=_ovPick.name; e.escudo=_ovPick.escudo; }
+        else { var qa=getVal('mk-q').trim(); if(qa) e.label=qa; }
+        e.coach=getVal('mk-coach').trim();
+        e.manual=rc2.manual;
+        if(rc2.manual) e.colors=rc2.colors;
+        stA.added[idx]=e;
+        if(!saveState(stA)) return;
+        applyState(); window._mkCloseOv();
+        if(!rc2.manual){
+          doExtract(function(){ return e; }, function(cols){
+            var s3=loadState(); s3.added.forEach(function(x){ if(x.id===aid) x.colors=cols; });
+            if(saveState(s3)) applyState();
+          });
+        }
+        return;
+      } else {
+        var q2=getVal('mk-q').trim(); if(q2) e.label=q2;
+        var em2=getVal('mk-emoji').trim(); if(em2) e.emoji=em2;
+        e.manual=true; e.colors=rc2.colors;
+        stA.added[idx]=e;
+        if(saveState(stA)) applyState();
+        window._mkCloseOv(); return;
+      }
+    }
+
+    /* ── C) EDITAR caja built-in (s.ov) ───────────────────── */
     var key=cardKey(_ovCard);
     var st=loadState();
     var o=st.ov[key]||{};
     o.nav=nav;
-    if(isTeamCard(_ovCard)){
-      if(_ovPick){
-        o.label=_ovPick.name; o.escudo=_ovPick.escudo;
-      } else {
-        var q=document.getElementById('mk-q');
-        if(q && q.value.trim()) o.label=q.value.trim();
-      }
-      var cv=document.getElementById('mk-coach');
-      if(cv) o.coach=cv.value.trim();
+    if(team){
+      if(_ovPick){ o.label=_ovPick.name; o.escudo=_ovPick.escudo; }
+      else { var q=getVal('mk-q').trim(); if(q) o.label=q; }
+      o.coach=getVal('mk-coach').trim();
+      o.manual=rc2.manual;
+      if(rc2.manual) o.colors=rc2.colors;
       st.ov[key]=o;
       if(!saveState(st)) return;
       applyState(); window._mkCloseOv();
-      if(_ovPick){
-        extractColors(_ovPick.escudo, _ovPick.color, function(cols){
-          var s2=loadState();
-          s2.ov[key]=s2.ov[key]||{}; s2.ov[key].colors=cols;
+      if(!rc2.manual){
+        doExtract(function(){ return o; }, function(cols){
+          var s2=loadState(); s2.ov[key]=s2.ov[key]||{}; s2.ov[key].colors=cols;
           if(saveState(s2)) applyState();
         });
       }
       return;
     } else {
-      var qg=document.getElementById('mk-q'); if(qg) o.label=qg.value.trim();
-      var eg=document.getElementById('mk-emoji'); if(eg) o.emoji=eg.value.trim();
+      var qg=getVal('mk-q').trim(); if(qg) o.label=qg;
+      var eg=getVal('mk-emoji').trim(); if(eg) o.emoji=eg;
+      o.manual=true; o.colors=rc2.colors;
       st.ov[key]=o;
       if(saveState(st)) applyState();
       window._mkCloseOv(); return;

@@ -6742,8 +6742,26 @@ window._showSimProgress = function(opts, onDone){
        el partido se guardaba como "Real|Bayern" en uno y "Bayern|Real"
        en el otro → dedupKey distinto → eventos contados 2 veces
        (Kane pen = 2 cuando real = 1, etc.). Sortear normaliza el par. */
+    /* DEDUP CROSS-FUENTE (fix 2026-05-19, bug "goles inflados en
+       plantilla"): el store (Source 1) guarda los equipos YA canónicos
+       (`canonicalTeamName` → "Alavés"), mientras que ef_liga38_v4
+       (Source 2) usa la grafía cruda del writer de Liga ("Deportivo
+       Alavés", "Valencia CF"…). Si la dedup normaliza solo con
+       `_normPS`, "deportivo alaves" ≠ "alaves" → distinto dedupKey →
+       el MISMO partido de Liga se contabiliza en LAS DOS fuentes y los
+       goles/tarjetas de cada jugador se DUPLICAN en la plantilla y en
+       el modal del equipo (no en el dashboard "Estadísticas", que solo
+       lee el store → por eso ese sí sumaba bien). `_canonTeamName`
+       colapsa afijos (fc/cf/cd/sd/ud/ad/deportivo/club…) SIN tocar
+       "real"/"atletico" (lista curada anti-colisión: Real Madrid ≠
+       Atlético Madrid), así el par colapsa y el dedup atrapa el
+       partido repetido. Solo afecta a la CLAVE de dedup — no cambia
+       los buckets ni lo que lee el dashboard. */
     function _mkPJ(hA, hB){
-      var a = _normPS(hA), b = _normPS(hB);
+      var _cn = (typeof window !== 'undefined' && typeof window._canonTeamName === 'function')
+        ? window._canonTeamName : null;
+      var a = _cn ? (_cn(hA) || _normPS(hA)) : _normPS(hA);
+      var b = _cn ? (_cn(hB) || _normPS(hB)) : _normPS(hB);
       return (a < b ? a + '||' + b : b + '||' + a);
     }
 

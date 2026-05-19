@@ -525,6 +525,9 @@ window._showSimProgress = function(opts, onDone){
       img.src=url;
     }catch(_){ done([]); }
   }
+  /* Expuesto para que la caja "AÑADIR EVENTO" (misc_body_2) tiña sus
+     mitades con el color real del escudo local/visitante. */
+  try{ window.extractColors = extractColors; }catch(_){}
   function _svgColors(txt){
     txt=String(txt||''); var tally={}, m;
     var re=/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g;

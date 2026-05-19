@@ -5535,6 +5535,25 @@
     for(var i=0;i<keys.length;i++){
       if(_humanNorm(keys[i]) === norm) return HUMAN_ICONS[keys[i]]+'\u00a0';
     }
+    /* Fallback DIN\u00c1MICO (2026-05-19): cualquier equipo marcado humano
+       en el editor de plantilla (Resto de Ligas) tiene su emoji en
+       window._LIGA_HUMAN_FLAGS (lo construye refreshLigaEaShields
+       escaneando todos los ligaExt_*, keyed por nombre exacto y
+       normalizado). HUMAN_ICONS solo trae los 6 can\u00f3nicos hardcodeados,
+       por eso un humano "extra" (p.ej. Liverpool\ud83d\udca1) no sacaba emoji en
+       Derbys/clasificaciones. CLAUDE.md: "humanIcon(name) devuelve el
+       humanEmoji del editor". Additivo: no toca los 5 can\u00f3nicos. */
+    try {
+      var fl = window._LIGA_HUMAN_FLAGS;
+      if (fl) {
+        if (fl[name] && fl[name].isHuman && fl[name].humanEmoji) return fl[name].humanEmoji+'\u00a0';
+        for (var fk in fl) {
+          if (!Object.prototype.hasOwnProperty.call(fl, fk)) continue;
+          var fv = fl[fk];
+          if (fv && fv.isHuman && fv.humanEmoji && _humanNorm(fk) === norm) return fv.humanEmoji+'\u00a0';
+        }
+      }
+    } catch(_){}
     return '';
   }
   window.humanIcon = humanIcon;
@@ -20502,6 +20521,52 @@ window.goLiveMatches = function() {
   var ISRAMAX_INITIAL_CASH = 1300;
   var _isramaxSession = null; /* {userId, isGuest} en memoria */
 
+  /* ── Equipo ACTUAL del humano (2026-05-19) ───────────────────────
+     ISRAMAX_USERS trae un `team` HARDCODEADO. Cuando un humano cambia
+     de equipo en el editor (p.ej. Toñín pasa de Bayern a Liverpool),
+     la tarjeta seguía mostrando el viejo. La identidad ESTABLE del
+     humano es su emoji (`u.icon`); el equipo real es el que tenga ese
+     humanEmoji marcado isHuman en los ligaExt_*. Resolvemos por emoji
+     y caemos a `u.team` si no se encuentra. Memo 3 s para no escanear
+     localStorage en cada uno de los ~5 renders por pantalla. */
+  var _isrTeamMapCache = null, _isrTeamMapTs = 0;
+  function _isramaxStripEmoji(s){ return String(s||'').replace(/[\s ️]/g,'').trim(); }
+  function _isramaxTeamMap(){
+    var now = Date.now();
+    if (_isrTeamMapCache && (now - _isrTeamMapTs) < 3000) return _isrTeamMapCache;
+    var map = {};
+    try {
+      var pri = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion'];
+      var slugs = pri.slice();
+      for (var i=0;i<localStorage.length;i++){
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup')!==-1 || k.indexOf('_snap_')!==-1 || k.indexOf('_protected')!==-1) continue;
+        var sg = k.substring('ligaExt_'.length);
+        if (pri.indexOf(sg) === -1) slugs.push(sg);
+      }
+      for (var s=0;s<slugs.length;s++){
+        var raw = localStorage.getItem('ligaExt_'+slugs[s]); if (!raw) continue;
+        var d; try { d = JSON.parse(raw); } catch(_){ continue; }
+        if (!d || !Array.isArray(d.teams)) continue;
+        for (var t=0;t<d.teams.length;t++){
+          var tm = d.teams[t];
+          if (!tm || !tm.isHuman || !tm.name) continue;
+          var em = _isramaxStripEmoji(tm.humanEmoji);
+          if (em && !map[em]) map[em] = String(tm.name).trim(); /* prioridad: primero gana */
+        }
+      }
+    } catch(_){}
+    _isrTeamMapCache = map; _isrTeamMapTs = now;
+    return map;
+  }
+  function _isramaxTeam(u){
+    if (!u) return '';
+    var ic = _isramaxStripEmoji(u.icon);
+    var m = _isramaxTeamMap();
+    return (ic && m[ic]) ? m[ic] : u.team;
+  }
+
   function _isramaxLoad(){
     try {
       var raw = localStorage.getItem(ISRAMAX_KEY);
@@ -20687,7 +20752,7 @@ window.goLiveMatches = function() {
             + ' onclick="window._isramaxLogin&&window._isramaxLogin(\'' + u.id + '\')">'
             +   '<div class="isr-user-icon">' + u.icon + '</div>'
             +   '<div class="isr-user-name">' + u.name + '</div>'
-            +   '<div class="isr-user-team">' + u.team + '</div>'
+            +   '<div class="isr-user-team">' + _isramaxTeam(u) + '</div>'
             + '</div>';
     });
     html += '</div>';
@@ -20721,7 +20786,7 @@ window.goLiveMatches = function() {
       + '<div class="isr-login-card" style="--isr-c1:'+c1+';--isr-c2:'+c2+';--isr-c3:'+c3+';">'
       +   '<div class="isr-login-icon">' + u.icon + '</div>'
       +   '<div class="isr-login-name">' + u.name + '</div>'
-      +   '<div class="isr-login-team">' + u.team + '</div>'
+      +   '<div class="isr-login-team">' + _isramaxTeam(u) + '</div>'
       +   '<input id="isramax-pin" class="isr-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="PIN"/>'
       +   '<div id="isramax-pin-err" class="isr-pin-err"></div>'
       +   '<div class="isr-btn-row">'
@@ -20788,7 +20853,7 @@ window.goLiveMatches = function() {
       +     '<span style="font-size:34px;">' + u.icon + '</span>'
       +     '<div>'
       +       '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:26px;letter-spacing:2px;color:#fff;line-height:1;">' + u.name + '</div>'
-      +       '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.85);">' + u.team
+      +       '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.85);">' + _isramaxTeam(u)
       +         (_isramaxSession.isGuest ? ' · INVITADO' : ' · ADMIN') + '</div>'
       +     '</div>'
       +   '</div>'
@@ -20848,7 +20913,7 @@ window.goLiveMatches = function() {
      ─────────────────────────────────────────────────────── */
   function _isramaxUserTeam(userId){
     var u = _isramaxFindUser(userId);
-    return u ? u.team : '';
+    return u ? _isramaxTeam(u) : '';
   }
   function _isramaxScanDerbys(){
     /* Reusa _scanAllDerbies del módulo Derbys: lista todos los
@@ -20864,7 +20929,7 @@ window.goLiveMatches = function() {
   function _isramaxRenderMatchPick(){
     var u = _isramaxFindUser(_isramaxSession.userId);
     if (!u) return _isramaxRenderUsers();
-    var myTeam = u.team;
+    var myTeam = _isramaxTeam(u);
     var all = _isramaxScanDerbys();
     /* Filtros: estado pending o playing (no apostar a finalizados),
        y excluir partidos donde el propio user juegue. */
@@ -20877,7 +20942,7 @@ window.goLiveMatches = function() {
     var html = ''
       + '<button class="isr-back" onclick="window._isramaxRenderDashboard&&window._isramaxRenderDashboard()">◀ Volver al dashboard</button>'
       + '<h2>🎰 Elegir partido</h2>'
-      + '<div class="isr-sub">No puedes apostar partidos donde juega ' + u.team + '</div>';
+      + '<div class="isr-sub">No puedes apostar partidos donde juega ' + _isramaxTeam(u) + '</div>';
     if (!pickable.length){
       html += '<div class="isr-empty">No hay partidos H-vs-H disponibles para apostar.<br><small>Aparecerán aquí cuando el calendario tenga enfrentamientos pendientes entre humanos (excluyendo los tuyos).</small></div>';
     } else {

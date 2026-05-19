@@ -2566,6 +2566,11 @@ _KV_ALLOWED_EXACT = {
     # sobrevivan a wipes de navegador / cambio de móvil (mismo patrón
     # que comp_icons_v1 / bayern_trofeos_v1). 2026-05-17.
     "ball_inventory_v1", "ball_by_comp_v1", "ball_comp_db_v1",
+    # Editor del menú principal: cajas creadas/editadas/eliminadas
+    # (overrides + added + removed). localStorage es solo cache; el
+    # server es la fuente de verdad para que sobrevivan a wipes de
+    # navegador / cambio de móvil (mismo patrón que comp_cards_v1).
+    "menu_home_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

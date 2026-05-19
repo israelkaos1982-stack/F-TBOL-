@@ -408,9 +408,40 @@ window._showSimProgress = function(opts, onDone){
       if(d&&typeof d==='object'){ d.ov=d.ov||{}; d.removed=d.removed||[]; d.added=d.added||[]; return d; } } }catch(_){}
     return { ov:{}, removed:[], added:[] };
   }
+  /* Sync con servidor (GlobalState) vía /api/kv/menu_home_v1 —
+     mismo patrón que comp_cards_v1. localStorage es solo cache; el
+     server es la fuente de verdad para que las cajas creadas /
+     editadas / eliminadas sobrevivan a un borrado de datos de
+     navegación o a un cambio de dispositivo. */
+  function _saveMenuServer(s){
+    try{
+      fetch('/api/kv/menu_home_v1', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        credentials:'same-origin', body:JSON.stringify({ value: s || {} })
+      }).catch(function(){});
+    }catch(_){}
+  }
   function saveState(s){
-    try{ localStorage.setItem(KEY, JSON.stringify(s)); return true; }
-    catch(e){ try{ alert('No se pudo guardar (almacenamiento lleno).'); }catch(__){} return false; }
+    var ok=true;
+    try{ localStorage.setItem(KEY, JSON.stringify(s)); }
+    catch(e){ ok=false; }
+    _saveMenuServer(s);
+    return ok;
+  }
+  function _hydrateMenuFromServer(cb){
+    var raw;
+    try{ raw=localStorage.getItem(KEY); }catch(_){}
+    if(raw && raw!=='{}' && raw!=='null'){ if(typeof cb==='function') cb(false); return; }
+    try{
+      fetch('/api/kv/menu_home_v1', {credentials:'same-origin'})
+        .then(function(r){ return r.ok? r.json() : null; })
+        .then(function(j){
+          if(j && j.ok && j.value && typeof j.value==='object'){
+            try{ localStorage.setItem(KEY, JSON.stringify(j.value)); }catch(_){}
+          }
+          if(typeof cb==='function') cb(true);
+        }).catch(function(){ if(typeof cb==='function') cb(false); });
+    }catch(_){ if(typeof cb==='function') cb(false); }
   }
 
   /* ── color helpers ───────────────────────────────────────── */
@@ -1161,14 +1192,19 @@ window._showSimProgress = function(opts, onDone){
      son DOM estático (las pantallas solo se muestran/ocultan), por lo
      que aplicar al cargar ya persiste; el wrap es para re-aplicar al
      volver a s-home tras una hidratación externa. */
+  function _applyTriple(){ setTimeout(applyState,0); setTimeout(applyState,60); setTimeout(applyState,220); }
   function init(){
-    setTimeout(applyState,0); setTimeout(applyState,60); setTimeout(applyState,220);
+    /* Si localStorage está vacío (primer arranque o tras borrar datos
+       de navegación) hidrata desde el server y luego aplica; si ya hay
+       datos locales, _hydrateMenuFromServer no pisa nada y aplica. */
+    _hydrateMenuFromServer(function(){ _applyTriple(); });
+    _applyTriple();
     if(!window.__mkGoWrapped && typeof window.go==='function'){
       window.__mkGoWrapped=true;
       var _origGo=window.go;
       window.go=function(id){
         var r=_origGo.apply(this,arguments);
-        if(id==='s-home'){ setTimeout(applyState,0); setTimeout(applyState,60); setTimeout(applyState,220); }
+        if(id==='s-home'){ _hydrateMenuFromServer(function(){ _applyTriple(); }); _applyTriple(); }
         return r;
       };
     }

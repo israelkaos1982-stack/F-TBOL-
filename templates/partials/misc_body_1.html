@@ -2043,6 +2043,27 @@ window._showSimProgress = function(opts, onDone){
   var KEY = 'bayern_preseason_v1';
   var BAYERN_SHIELD = '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg';
   var FALLBACK_SHIELD = '/static/img/escudos-fallback/estepona.svg';
+  /* Alias SOLO DE VISUALIZACIÓN del equipo humano (slot de Toñín).
+     La LÓGICA del motor/calendario sigue usando 'Bayern Munich'
+     (var home, sqFromRegistry…) → simulación y CLAUDE.md intactos.
+     Aquí solo cambiamos lo que se MUESTRA: nombre + escudo, según
+     (1) el reemplazo real de Liga EA (_ligaEaSubName) o (2) la caja
+     del menú (menu_home_v1 → go:s-munich). Fallback: Bayern. */
+  function _psHumanName(){
+    try{ if(window._ligaEaSubName){ var s=window._ligaEaSubName('Bayern Munich');
+      if(s && String(s).toLowerCase()!=='bayern munich') return String(s); } }catch(_){}
+    try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r);
+      var ov=d&&d.ov&&d.ov['go:s-munich']; if(ov&&ov.label) return String(ov.label); } }catch(_){}
+    return 'Bayern Múnich';
+  }
+  function _psHumanShield(){
+    try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r);
+      var ov=d&&d.ov&&d.ov['go:s-munich']; if(ov&&ov.escudo) return String(ov.escudo); } }catch(_){}
+    try{ if(window._ligaEaSubName){ var s=window._ligaEaSubName('Bayern Munich');
+      if(s && String(s).toLowerCase()!=='bayern munich' && window.getTeamLogoUrl){
+        var u=window.getTeamLogoUrl(String(s)); if(u) return u; } } }catch(_){}
+    return BAYERN_SHIELD;
+  }
 
   /* Pools de rivales por torneo (pretemporada). El cuadro/bracket
      completo no existe aún → al elegir torneo asignamos un rival a
@@ -2349,8 +2370,8 @@ window._showSimProgress = function(opts, onDone){
     st.innerHTML =
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
-      + '<div class="ps-sub">🏃 Entrenamiento · Bayern Múnich</div>'
-      + '<img class="ps-shield" src="' + BAYERN_SHIELD + '" alt="Bayern">'
+      + '<div class="ps-sub">🏃 Entrenamiento · ' + _esc(_psHumanName()) + '</div>'
+      + '<img class="ps-shield" src="' + _psHumanShield() + '" alt="' + _esc(_psHumanName()) + '">'
       + '<button type="button" class="ps-btn" id="ps-train-btn">ENTRENAR</button>'
       + '<div class="ps-bar-wrap"><div class="ps-bar" id="ps-train-bar"></div></div>'
       + '<div class="ps-pct" id="ps-train-pct"></div>'
@@ -2521,7 +2542,7 @@ window._showSimProgress = function(opts, onDone){
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
-      + '<div class="ps-meta" style="margin:16px 0;">📋 Pantalla de previa<br><b>Bayern Múnich</b> vs <b>' + _esc(rv.name) + '</b></div>'
+      + '<div class="ps-meta" style="margin:16px 0;">📋 Pantalla de previa<br><b>' + _esc(_psHumanName()) + '</b> vs <b>' + _esc(rv.name) + '</b></div>'
       + '<div style="display:flex;justify-content:center;margin-top:8px;">'
       +   '<button type="button" class="ps-btn" id="ps-match-play">📋 ABRIR PREVIA</button>'
       + '</div>'

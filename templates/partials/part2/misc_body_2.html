@@ -17360,37 +17360,33 @@
                   border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;
                   font-family:Rajdhani,sans-serif;font-size:14px;box-sizing:border-box;">
     <label style="display:block;font-size:10px;letter-spacing:2px;color:#b090ff;margin-bottom:4px;">ICONO</label>
-    <select id="ag-f-icon"
-            style="width:100%;padding:8px;margin-bottom:10px;background:rgba(255,255,255,.05);
-                   border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;
-                   font-family:Rajdhani,sans-serif;font-size:14px;box-sizing:border-box;">
-      <option value="⚽">⚽ Liga</option>
-      <option value="🏆">🏆 Copa / Supercopa</option>
-      <option value="🇪🇺">🇪🇺 Europa</option>
-      <option value="🌍">🌍 Selecciones</option>
-      <option value="🤝">🤝 Amistoso</option>
-      <option value="🌞">🌞 Torneo Pretemporada</option>
-      <option value="🔵">🔵 Previa Champions</option>
-      <option value="🟤">🟤 Recopa Europa</option>
-      <option value="🟡">🟡 Intercontinental</option>
-      <option value="🌐">🌐 Mundialito Clubes</option>
-      <option value="🏃">🏃 Entrenamiento</option>
-      <option value="💤">💤 Descanso</option>
-    </select>
+    <input type="hidden" id="ag-f-icon" value="⚽">
+    <div class="ag-pick" data-for="ag-f-icon" style="margin-bottom:10px;">
+      <button type="button" class="ag-pk-b" data-val="⚽">⚽ Liga</button>
+      <button type="button" class="ag-pk-b" data-val="🏆">🏆 Copa / Supercopa</button>
+      <button type="button" class="ag-pk-b" data-val="🇪🇺">🇪🇺 Europa</button>
+      <button type="button" class="ag-pk-b" data-val="🌍">🌍 Selecciones</button>
+      <button type="button" class="ag-pk-b" data-val="🤝">🤝 Amistoso</button>
+      <button type="button" class="ag-pk-b" data-val="🌞">🌞 Torneo Pretemporada</button>
+      <button type="button" class="ag-pk-b" data-val="🔵">🔵 Previa Champions</button>
+      <button type="button" class="ag-pk-b" data-val="🟤">🟤 Recopa Europa</button>
+      <button type="button" class="ag-pk-b" data-val="🟡">🟡 Intercontinental</button>
+      <button type="button" class="ag-pk-b" data-val="🌐">🌐 Mundialito Clubes</button>
+      <button type="button" class="ag-pk-b" data-val="🏃">🏃 Entrenamiento</button>
+      <button type="button" class="ag-pk-b" data-val="💤">💤 Descanso</button>
+    </div>
     <label style="display:block;font-size:10px;letter-spacing:2px;color:#b090ff;margin-bottom:4px;">NOMBRE</label>
     <input id="ag-f-name" type="text" placeholder="Liga — J1"
            style="width:100%;padding:8px;margin-bottom:10px;background:rgba(255,255,255,.05);
                   border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;
                   font-family:Rajdhani,sans-serif;font-size:14px;box-sizing:border-box;">
     <label style="display:block;font-size:10px;letter-spacing:2px;color:#b090ff;margin-bottom:4px;">CLIMA</label>
-    <select id="ag-f-weather"
-            style="width:100%;padding:8px;margin-bottom:14px;background:rgba(255,255,255,.05);
-                   border:1px solid rgba(255,255,255,.15);border-radius:6px;color:#fff;
-                   font-family:Rajdhani,sans-serif;font-size:14px;box-sizing:border-box;">
-      <option value="☀️">☀️ Sol</option>
-      <option value="🌧">🌧 Lluvia</option>
-      <option value="❄️">❄️ Nieve</option>
-    </select>
+    <input type="hidden" id="ag-f-weather" value="☀️">
+    <div class="ag-pick" data-for="ag-f-weather" style="margin-bottom:14px;">
+      <button type="button" class="ag-pk-b" data-val="☀️">☀️ Sol</button>
+      <button type="button" class="ag-pk-b" data-val="🌧">🌧 Lluvia</button>
+      <button type="button" class="ag-pk-b" data-val="❄️">❄️ Nieve</button>
+    </div>
     <div style="display:flex;gap:8px;">
       <button type="button" onclick="window.agHideForm()"
               style="flex:1;padding:10px;border:1px solid rgba(255,100,100,.4);
@@ -17404,6 +17400,66 @@
     </div>
   </div>
 </div>
+
+<style>
+  /* Picker por botones para ICONO/CLIMA del editor de calendario.
+     Reemplaza los <select> nativos: dentro del overlay fixed los
+     <select> de Android no aplicaban la selección (reportado por el
+     usuario). Mismo patrón que el editor de plantilla (botones). */
+  #ag-form-ov > div{ max-height:90vh; overflow:auto; }
+  #ag-form-ov .ag-pick{ display:flex; flex-wrap:wrap; gap:6px; }
+  #ag-form-ov .ag-pk-b{
+    flex:1 1 30%; min-width:30%; padding:10px 8px; border-radius:8px;
+    border:1px solid rgba(255,255,255,.15); background:rgba(255,255,255,.05);
+    color:#fff; font-family:Rajdhani,sans-serif; font-size:13px; cursor:pointer;
+    text-align:left; -webkit-tap-highlight-color:transparent; transition:background .12s;
+  }
+  #ag-form-ov .ag-pk-b:active{ transform:scale(.98); }
+  #ag-form-ov .ag-pk-b.sel{
+    border-color:#f0c040;
+    background:linear-gradient(135deg,rgba(240,192,64,.32),rgba(240,192,64,.12));
+    color:#ffe489; font-weight:700; box-shadow:0 0 10px rgba(240,192,64,.28);
+  }
+</style>
+<script>
+(function(){
+  if (window.__AG_PICK_READY) return;
+  window.__AG_PICK_READY = true;
+  function _syncOne(pick){
+    var inp = document.getElementById(pick.getAttribute('data-for'));
+    var val = inp ? (inp.value || '') : '';
+    pick.querySelectorAll('.ag-pk-b').forEach(function(b){
+      b.classList.toggle('sel', b.getAttribute('data-val') === val);
+    });
+  }
+  window._agSyncPickers = function(){
+    document.querySelectorAll('#ag-form-ov .ag-pick').forEach(_syncOne);
+  };
+  document.addEventListener('click', function(ev){
+    var b = ev.target && ev.target.closest && ev.target.closest('#ag-form-ov .ag-pk-b');
+    if (!b) return;
+    ev.preventDefault();
+    var pick = b.closest('.ag-pick');
+    if (!pick) return;
+    var inp = document.getElementById(pick.getAttribute('data-for'));
+    if (inp) inp.value = b.getAttribute('data-val') || '';
+    _syncOne(pick);
+  }, true);
+  function _wireObs(){
+    var ov = document.getElementById('ag-form-ov');
+    if (!ov) return;
+    try {
+      new MutationObserver(function(){
+        if (ov.style.display && ov.style.display !== 'none') window._agSyncPickers();
+      }).observe(ov, { attributes:true, attributeFilter:['style'] });
+    } catch(_){}
+    window._agSyncPickers();
+  }
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', _wireObs);
+  else _wireObs();
+})();
+</script>
 
 <style>
   /* Oculta los controles admin por defecto. Se revelan cuando

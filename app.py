@@ -1743,6 +1743,53 @@ def _sort_section_events(section):
 CALENDARIO_GLOBAL_KEY = "calendario_global_v1"
 
 
+def _build_june_pretemp_section():
+    """Bloque de PRETEMPORADA de JUNIO al inicio de la temporada.
+    Mismo patrón EXACTO que la parte de Julio (3 entrenamientos, 1
+    Torneo, 1 descanso, repetido), 01–30 Jun. Días 8 y 24 con lluvia,
+    el resto soleado. Petición usuario 2026-05-19."""
+    events = []
+    for day in range(1, 31):
+        date = "%02d Jun" % day
+        # 01-03: 3 entrenamientos. Desde el día 4 el ciclo es de 4
+        # días: Torneo (día%4==0) · Descanso (día%4==1) · Entreno ·
+        # Entreno. Idéntico al bloque de Julio.
+        if day <= 3:
+            icon, name = "🏃", "Entrenamiento"
+        elif day % 4 == 0:
+            icon, name = "🌞", ("Torneo Verano - 1 Partido"
+                                if day == 4 else
+                                "Torneo Verano - Partido %d" % (day // 4))
+        elif day % 4 == 1:
+            icon, name = "💤", "Descanso"
+        else:
+            icon, name = "🏃", "Entrenamiento"
+        weather = "🌧" if day in (8, 24) else "☀️"
+        events.append({
+            "id": "jun-%03d" % day,
+            "date": date, "icon": icon, "name": name, "weather": weather,
+        })
+    return {
+        "id": "verano-jun", "name": "VERANO · PARTE 1",
+        "icon": "☀️", "variant": "verano", "events": events,
+    }
+
+
+def _ensure_june_pretemp(data):
+    """Inserta (una sola vez, idempotente) el bloque de Junio al inicio
+    del calendario. Si ya existe una sección con id 'verano-jun' no
+    hace nada (respeta ediciones del admin sobre ese bloque)."""
+    if not isinstance(data, dict):
+        return data
+    secs = data.get("sections")
+    if not isinstance(secs, list):
+        return data
+    if any(isinstance(s, dict) and s.get("id") == "verano-jun" for s in secs):
+        return data
+    secs.insert(0, _build_june_pretemp_section())
+    return data
+
+
 def _calendario_normalize(data):
     """Asegura el esqueleto mínimo y los defaults de un dict de calendario."""
     if not isinstance(data, dict):
@@ -1751,6 +1798,7 @@ def _calendario_normalize(data):
     data.setdefault("season", "32-33")
     if not isinstance(data.get("sections"), list):
         data["sections"] = []
+    _ensure_june_pretemp(data)
     return data
 
 
@@ -1791,7 +1839,19 @@ def load_calendario():
         except (TypeError, ValueError):
             data = None
         if isinstance(data, dict):
-            return _calendario_normalize(data)
+            had_june = any(
+                isinstance(s, dict) and s.get("id") == "verano-jun"
+                for s in (data.get("sections") or [])
+            )
+            data = _calendario_normalize(data)
+            # Persistimos UNA vez el bloque de Junio en la BD para que
+            # sea parte permanente y editable del calendario.
+            if not had_june:
+                try:
+                    _calendario_save_to_db(data)
+                except Exception:
+                    pass
+            return data
     # No hay fila aún → sembramos desde el fichero y persistimos.
     seed = _calendario_load_from_file()
     try:

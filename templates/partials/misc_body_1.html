@@ -34183,13 +34183,15 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 </div>
 
 <style>
-  #mu-form-cluster{ display:flex; flex-direction:column; gap:4px; margin-left:auto; align-items:flex-end; }
-  #mu-form-cluster .mfc-row{ display:flex; align-items:center; gap:6px;
-    background:linear-gradient(135deg,#C8102E,#7d0a1d); border:1px solid rgba(246,235,97,.55);
-    border-radius:8px; padding:3px 8px; box-shadow:0 0 10px rgba(200,16,46,.35); }
-  #mu-form-cluster .mfc-lbl{ font-family:'Bebas Neue','Oswald',sans-serif; font-size:12px;
-    letter-spacing:1.5px; color:#F6EB61; }
-  #mu-form-cluster .mfc-ico{ font-size:16px; line-height:1; }
+  #s-munich .sec-hdr{ position:relative; }
+  #mu-form-cluster{ position:absolute; top:4px; right:14px; z-index:3;
+    display:flex; flex-direction:column; align-items:center; gap:0; }
+  #mu-form-cluster .mfc-t{ font-family:'Oswald',sans-serif; font-size:10px;
+    letter-spacing:1px; color:rgba(255,255,255,.82); line-height:1.25; }
+  #mu-form-cluster .mfc-c{ font-size:18px; line-height:1.2; }
+  #mu-nivel{ font-family:'Oswald',sans-serif; font-size:11px; font-weight:700;
+    letter-spacing:2px; color:#F6EB61; opacity:.92; margin-top:1px; cursor:default; }
+  #mu-nivel small{ font-size:9px; color:rgba(255,255,255,.45); letter-spacing:1px; }
   #munich-edit-ov .me-form-block{ border-top:1px solid rgba(255,120,140,.25); margin-top:10px; padding-top:8px; }
   #munich-edit-ov .me-form-block .mfb-lbl{ font-family:Oswald,sans-serif; font-size:11px; letter-spacing:1.5px; color:#F6EB61; margin:8px 0 4px; }
   #munich-edit-ov .mfb-opts{ display:flex; gap:6px; flex-wrap:wrap; }
@@ -34213,23 +34215,25 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   var KEY = 'team_season_form_v1';
   var ICONS = ['⬆️','↗️','🎲','↘️','⬇️'];
   var NAMES = {'⬆️':'Excelente','↗️':'Buena','🎲':'Al azar','↘️':'Mala','⬇️':'Pésima'};
+  var LEVELS = ['Normal','Duro','Crack','Leyenda'];
   var _MEM = null;
   function _load(){
     if (_MEM) return _MEM;
-    var d = { yo:'🎲', rival:'🎲' };
+    var d = { yo:'🎲', rival:'🎲', nivel:'Crack' };
     try {
       var r = localStorage.getItem(KEY);
       if (r){ var p = JSON.parse(r);
         if (p && typeof p === 'object'){
           if (ICONS.indexOf(p.yo)    >= 0) d.yo    = p.yo;
           if (ICONS.indexOf(p.rival) >= 0) d.rival = p.rival;
+          if (LEVELS.indexOf(p.nivel) >= 0) d.nivel = p.nivel;
         }
       }
     } catch(_){}
     _MEM = d; return _MEM;
   }
   function _save(d){
-    _MEM = (d && typeof d === 'object') ? d : (_MEM || { yo:'🎲', rival:'🎲' });
+    _MEM = (d && typeof d === 'object') ? d : (_MEM || { yo:'🎲', rival:'🎲', nivel:'Crack' });
     try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
   }
   window._teamSeasonForm = function(){ return _load(); };
@@ -34238,26 +34242,45 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _renderHeader(){
     var hdr = document.querySelector('#s-munich .sec-hdr');
     if (!hdr) return;
+    var s = _load();
     var c = document.getElementById('mu-form-cluster');
     if (!c){
       c = document.createElement('div');
       c.id = 'mu-form-cluster';
       c.innerHTML =
-        '<div class="mfc-row"><span class="mfc-lbl">YO</span><span class="mfc-ico" id="mfc-yo">🎲</span></div>'
-      + '<div class="mfc-row"><span class="mfc-lbl">RIVAL</span><span class="mfc-ico" id="mfc-rival">🎲</span></div>';
+        '<span class="mfc-t">Yo</span>'
+      + '<span class="mfc-c" id="mfc-yo">🎲</span>'
+      + '<span class="mfc-c" id="mfc-rival">⬇️</span>'
+      + '<span class="mfc-t">Rival</span>';
       hdr.appendChild(c);
     }
-    var s = _load();
     var y = document.getElementById('mfc-yo'), r = document.getElementById('mfc-rival');
     if (y) y.textContent = s.yo;
     if (r) r.textContent = s.rival;
+    /* NIVEL en pequeño, debajo del nombre · TOÑÍN. */
+    var col = null, ch = hdr.children;
+    for (var i = 0; i < ch.length; i++){
+      if (ch[i].tagName === 'DIV' && ch[i].id !== 'mu-form-cluster'){ col = ch[i]; break; }
+    }
+    if (col){
+      var nv = document.getElementById('mu-nivel');
+      if (!nv){
+        nv = document.createElement('div');
+        nv.id = 'mu-nivel';
+        var firstRow = col.children[0];
+        if (firstRow && firstRow.nextSibling) col.insertBefore(nv, firstRow.nextSibling);
+        else col.appendChild(nv);
+      }
+      nv.innerHTML = '🎮 ' + String(s.nivel || 'Crack').toUpperCase();
+    }
   }
 
   /* ── Edición dentro del modal PIN 747 (#munich-edit-ov) ── */
   function _syncModal(){
     var s = _load();
     document.querySelectorAll('#munich-edit-ov .mfb-opts').forEach(function(g){
-      var w = g.getAttribute('data-which'), cur = (w === 'yo') ? s.yo : s.rival;
+      var w = g.getAttribute('data-which');
+      var cur = (w === 'yo') ? s.yo : (w === 'rival') ? s.rival : s.nivel;
       g.querySelectorAll('.mfb-b').forEach(function(b){
         b.classList.toggle('sel', b.getAttribute('data-ic') === cur);
       });
@@ -34277,19 +34300,29 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       });
       return h + '</div>';
     }
+    function grpLv(){
+      var h = '<div class="mfb-lbl">🎮 NIVEL (dificultad)</div><div class="mfb-opts" data-which="nivel">';
+      LEVELS.forEach(function(lv){
+        h += '<button type="button" class="mfb-b" data-ic="' + lv + '" style="font-size:12px;font-family:Oswald,sans-serif;letter-spacing:1px;">' + lv + '</button>';
+      });
+      return h + '</div>';
+    }
     blk.innerHTML =
       '<div class="mfb-lbl" style="color:#ffb8c4;letter-spacing:2px;">⚡ ESTADO DE FORMA · TODA LA TEMPORADA</div>'
     + grp('yo', '🟥 YO (mis jugadores)')
-    + grp('rival', '⬇️ RIVAL');
+    + grp('rival', '⬇️ RIVAL')
+    + grpLv();
     if (acts && acts.parentNode) acts.parentNode.insertBefore(blk, acts);
     else box.appendChild(blk);
     blk.addEventListener('click', function(ev){
       var b = ev.target && ev.target.closest && ev.target.closest('.mfb-b');
       if (!b) return;
       ev.preventDefault();
-      var which = b.parentNode.getAttribute('data-which'), ic = b.getAttribute('data-ic');
+      var which = b.parentNode.getAttribute('data-which'), val = b.getAttribute('data-ic');
       var s = _load();
-      if (which === 'yo') s.yo = ic; else s.rival = ic;
+      if (which === 'yo') s.yo = val;
+      else if (which === 'rival') s.rival = val;
+      else if (which === 'nivel') s.nivel = val;
       _save(s);
       _syncModal(); _renderHeader();
     }, true);

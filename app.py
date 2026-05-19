@@ -1790,37 +1790,56 @@ def _ensure_june_pretemp(data):
     return data
 
 
-# Mundialito de Clubes — 7 eventos el 16 Jul (orden de torneo).
-# Petición usuario 2026-05-19: el editor no dejaba ponerlos, se
+# Mundialito de Clubes — 7 eventos (fechas corregidas por el usuario
+# 2026-05-19): J1 04 Jul, J2 08, J3 12, Octavos 16, Cuartos 20,
+# Semis 24, FINAL 28. icono 🌐. El editor no dejaba ponerlos → se
 # inyectan en el calendario global (y de ahí a las cajas de equipo).
+# Son SERVER-MANAGED (id 'mun-*'): se reescriben siempre a estos
+# valores para poder corregir fechas en sucesivos despliegues.
 _MUNDIALITO_EVENTS = [
-    ("mun-001", "Mundialito- J1"),
-    ("mun-002", "Mundialito- J2"),
-    ("mun-003", "Mundialito- J3"),
-    ("mun-004", "Mundialito- Octavos"),
-    ("mun-005", "Mundialito- Cuartos"),
-    ("mun-006", "Mundialito- Semis"),
-    ("mun-007", "Mundialito- FINAL"),
+    ("mun-001", "04 Jul", "Mundialito- J1"),
+    ("mun-002", "08 Jul", "Mundialito- J2"),
+    ("mun-003", "12 Jul", "Mundialito- J3"),
+    ("mun-004", "16 Jul", "Mundialito- Octavos"),
+    ("mun-005", "20 Jul", "Mundialito- Cuartos"),
+    ("mun-006", "24 Jul", "Mundialito- Semis"),
+    ("mun-007", "28 Jul", "Mundialito- FINAL"),
 ]
 
 
+def _mun_sig(data):
+    """Firma de los eventos Mundialito server-managed (id 'mun-*')
+    presentes: lista ordenada de (id, date, name)."""
+    out = []
+    if isinstance(data, dict):
+        for s in (data.get("sections") or []):
+            if not isinstance(s, dict):
+                continue
+            for ev in (s.get("events") or []):
+                if isinstance(ev, dict) and str(ev.get("id", "")).startswith("mun-"):
+                    out.append((ev.get("id"), ev.get("date"), ev.get("name")))
+    return sorted(out)
+
+
 def _ensure_mundialito(data):
-    """Inserta (idempotente) los 7 eventos del Mundialito de Clubes
-    (16 Jul, icono 🌐) en la sección que contiene Julio. Si ya hay
-    algún evento 'Mundialito' no hace nada (respeta ediciones)."""
+    """Reescribe (idempotente y autoritativo) los 7 eventos del
+    Mundialito de Clubes con sus fechas correctas. Elimina cualquier
+    evento server-managed previo (id 'mun-*') y reinserta el set
+    canónico en la sección que contiene Julio."""
     if not isinstance(data, dict):
         return data
     secs = data.get("sections")
     if not isinstance(secs, list) or not secs:
         return data
+    # 1. Purga los mun-* antiguos (corrige fechas mal puestas antes).
     for s in secs:
-        if not isinstance(s, dict):
-            continue
-        for ev in (s.get("events") or []):
-            if isinstance(ev, dict) and str(ev.get("name", "")).strip().lower().startswith("mundialito"):
-                return data  # ya están
-    # Sección destino: la que tenga eventos de Julio (mes 6); si no,
-    # la primera con eventos; si no, la primera.
+        if isinstance(s, dict) and isinstance(s.get("events"), list):
+            s["events"] = [
+                ev for ev in s["events"]
+                if not (isinstance(ev, dict) and str(ev.get("id", "")).startswith("mun-"))
+            ]
+    # 2. Sección destino: la que tenga eventos de Julio (mes 6); si
+    #    no, la primera con eventos; si no, la primera.
     target = None
     for s in secs:
         if not isinstance(s, dict):
@@ -1839,9 +1858,9 @@ def _ensure_mundialito(data):
     if target is None:
         return data
     target.setdefault("events", [])
-    for ev_id, name in _MUNDIALITO_EVENTS:
+    for ev_id, date, name in _MUNDIALITO_EVENTS:
         target["events"].append({
-            "id": ev_id, "date": "16 Jul", "icon": "🌐",
+            "id": ev_id, "date": date, "icon": "🌐",
             "name": name, "weather": "☀️",
         })
     _sort_section_events(target)
@@ -1903,16 +1922,12 @@ def load_calendario():
                 isinstance(s, dict) and s.get("id") == "verano-jun"
                 for s in _secs0
             )
-            had_mun = any(
-                isinstance(ev, dict)
-                and str(ev.get("name", "")).strip().lower().startswith("mundialito")
-                for s in _secs0 if isinstance(s, dict)
-                for ev in (s.get("events") or [])
-            )
+            _mun_before = _mun_sig(data)
             data = _calendario_normalize(data)
-            # Persistimos UNA vez los bloques inyectados (Junio /
-            # Mundialito) para que sean parte permanente y editable.
-            if not had_june or not had_mun:
+            # Persistimos cuando se inyectó Junio o cuando el set de
+            # Mundialito cambió (p.ej. corrección de fechas), para que
+            # quede permanente y corregido en la BD.
+            if not had_june or _mun_before != _mun_sig(data):
                 try:
                     _calendario_save_to_db(data)
                 except Exception:

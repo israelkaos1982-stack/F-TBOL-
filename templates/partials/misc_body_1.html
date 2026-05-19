@@ -682,10 +682,15 @@ window._showSimProgress = function(opts, onDone){
     if(entry.colors && entry.colors.length){
       var gr=gradientFrom(entry.colors);
       card.style.setProperty('background', gr.outer, 'important');
-      card.style.setProperty('border-color', gr.primary, 'important');
       var inn=card.querySelector('.mc-equipo-overlay,.mc-main-overlay');
       if(inn) inn.style.background=gr.inner;
     }
+    var _bc=_norm6(entry.bcolor
+      || (entry.colors&&entry.colors.length ? gradientFrom(entry.colors).primary : '#f0c040'));
+    var _gl=(entry.glow!=null ? entry.glow : 2);
+    card.style.setProperty('border-color', _bc, 'important');
+    card.style.setProperty('border-style', 'solid', 'important');
+    card.style.setProperty('box-shadow', glowShadow(_bc,_gl), 'important');
     return card;
   }
 
@@ -729,6 +734,7 @@ window._showSimProgress = function(opts, onDone){
       if(!rm){
         if(card.classList.contains('mc-espana')) fixEspana(card);
         else if(!card.classList.contains('equipo-card')) ensureBgEmoji(card);
+        ensureGlow(card, s.ov[key]);
       }
       if(!rm) ensureDelBtn(card);
     });
@@ -808,6 +814,30 @@ window._showSimProgress = function(opts, onDone){
   function findAddedById(id){
     var a=loadState().added; for(var i=0;i<a.length;i++){ if(a[i].id===id) return a[i]; } return null;
   }
+  /* Borde llamativo (brillo neón). Nivel 0=apagado … 4=intenso. */
+  function glowShadow(hex, lvl){
+    lvl=parseInt(lvl,10); if(isNaN(lvl)) lvl=2;
+    if(lvl<=0) return 'none';
+    var tbl={1:{b:7,oa:.35,ib:2,ia:.55,r:0},
+            2:{b:14,oa:.5,ib:3,ia:.72,r:0},
+            3:{b:22,oa:.66,ib:4,ia:.85,r:1},
+            4:{b:34,oa:.85,ib:6,ia:1,r:2} };
+    var sp=tbl[lvl] || tbl[2];
+    var p=['0 0 '+sp.b+'px '+_hexA(hex,sp.oa),
+           'inset 0 0 '+sp.ib+'px '+_hexA(hex,sp.ia)];
+    if(sp.r) p.push('0 0 0 '+sp.r+'px '+_hexA(hex,.9));
+    return p.join(',');
+  }
+  function _cssToHex(s){
+    s=String(s||'');
+    var m=s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if(m) return _toHex(+m[1],+m[2],+m[3]);
+    if(s.charAt(0)==='#') return _norm6(s);
+    return '#f0c040';
+  }
+  function _curBorderHex(card){
+    try{ return _cssToHex(getComputedStyle(card).borderTopColor); }catch(_){ return '#f0c040'; }
+  }
   function colorRowHtml(team){
     var head = team
       ? '<label class="mk-ck"><input type="checkbox" id="mk-cmanual"/> 🎨 Colores manuales (si no, automático del escudo)</label>'
@@ -817,7 +847,18 @@ window._showSimProgress = function(opts, onDone){
         '<input type="color" id="mk-cA" value="#1c2230"/>'+
         '<div class="mk-bar" id="mk-bar"></div>'+
         '<input type="color" id="mk-cB" value="#3a4a66"/>'+
-      '</div></div>';
+      '</div></div>'+
+      '<div class="mk-lbl">Borde llamativo (color + tono del brillo)</div>'+
+      '<div class="mk-grad">'+
+        '<input type="color" id="mk-bcolor" value="#f0c040"/>'+
+        '<select id="mk-glow" style="flex:1;">'+
+          '<option value="0">Apagado</option>'+
+          '<option value="1">Suave</option>'+
+          '<option value="2">Medio</option>'+
+          '<option value="3">Fuerte</option>'+
+          '<option value="4">Intenso</option>'+
+        '</select>'+
+      '</div>';
   }
   function readColors(team){
     var cm=document.getElementById('mk-cmanual');
@@ -825,17 +866,41 @@ window._showSimProgress = function(opts, onDone){
     if(team && !manual) return { manual:false, colors:null };
     return { manual:true, colors:[ _norm6(getVal('mk-cA')||'#1c2230'), _norm6(getVal('mk-cB')||'#3a4a66') ] };
   }
+  function readBorder(){
+    var g=parseInt(getVal('mk-glow'),10);
+    return { bcolor:_norm6(getVal('mk-bcolor')||'#f0c040'), glow:isNaN(g)?2:g };
+  }
   function bindColorUI(team){
     function paint(){
       var bar=document.getElementById('mk-bar'); if(!bar) return;
       var gr=gradientFrom([ _norm6(getVal('mk-cA')||'#1c2230'), _norm6(getVal('mk-cB')||'#3a4a66') ]);
       bar.style.background=gr.outer;
+      var bc=_norm6(getVal('mk-bcolor')||'#f0c040');
+      bar.style.border='1px solid '+bc;
+      bar.style.boxShadow=glowShadow(bc, getVal('mk-glow')||'2');
     }
-    ['mk-cA','mk-cB'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input',paint); });
+    ['mk-cA','mk-cB','mk-bcolor'].forEach(function(id){ var e=document.getElementById(id); if(e) e.addEventListener('input',paint); });
+    var gs=document.getElementById('mk-glow'); if(gs) gs.addEventListener('change',paint);
     var cm=document.getElementById('mk-cmanual'), wrap=document.getElementById('mk-cwrap');
     function tog(){ if(cm&&wrap) wrap.classList.toggle('off', !cm.checked); }
     if(cm){ cm.addEventListener('change',tog); tog(); }
     paint();
+  }
+  /* Aplica borde + brillo a una caja (idempotente). El color por
+     defecto sale del override, del degradado, o del borde actual. */
+  function ensureGlow(card, ov){
+    ov=ov||{};
+    var bc = ov.bcolor
+      || (ov.colors&&ov.colors.length ? gradientFrom(ov.colors).primary : null)
+      || _curBorderHex(card);
+    bc=_norm6(bc);
+    var gl = (ov.glow!=null ? ov.glow : 2);
+    var sig=bc+'|'+gl;
+    if(card._mkGlowSig===sig) return;
+    card._mkGlowSig=sig;
+    card.style.setProperty('border-color', bc, 'important');
+    card.style.setProperty('border-style', 'solid', 'important');
+    card.style.setProperty('box-shadow', glowShadow(bc, gl), 'important');
   }
   function cardOptions(excludeEl){
     var grid=document.querySelector(GRID_SEL), out=[];
@@ -948,6 +1013,8 @@ window._showSimProgress = function(opts, onDone){
     if(cols[1]) setVal('mk-cB', _norm6(cols[1]));
     var cm=document.getElementById('mk-cmanual');
     if(cm) cm.checked = team ? !!src.manual : true;
+    setVal('mk-bcolor', _norm6(src.bcolor || _curBorderHex(card)));
+    setVal('mk-glow', String(src.glow!=null ? src.glow : 2));
     var nv=card.__mkNav; fillNavSel(nv&&nv.type==='go'?nv.id:'');
     if(added) fillPosWrap(entry?entry.after:'__end', card);
     bindColorUI(team);
@@ -986,6 +1053,7 @@ window._showSimProgress = function(opts, onDone){
     var nav=navSel?navSel.value:'';
     var posSel=document.getElementById('mk-pos');
     var after=posSel?posSel.value:'__end';
+    var rb=readBorder();
 
     /* ── A) AÑADIR caja nueva ─────────────────────────────── */
     if(_ovAdd){
@@ -997,6 +1065,7 @@ window._showSimProgress = function(opts, onDone){
         var rc=readColors(true);
         var en={ id:id, type:'team', label:_ovPick.name, escudo:_ovPick.escudo,
           coach:getVal('mk-coach').trim(), nav:nav, after:after,
+          bcolor:rb.bcolor, glow:rb.glow,
           manual:rc.manual, colors: rc.manual? rc.colors : [] };
         s.added.push(en);
         if(!saveState(s)) return;
@@ -1015,6 +1084,7 @@ window._showSimProgress = function(opts, onDone){
         var rcg=readColors(false);
         s.added.push({ id:id, type:'generic', label:lbl,
           emoji:(getVal('mk-emoji')||'⚽').trim(), nav:nav, after:after,
+          bcolor:rb.bcolor, glow:rb.glow,
           manual:true, colors:rcg.colors });
         if(saveState(s)) applyState();
         window._mkCloseOv(); return;
@@ -1037,7 +1107,7 @@ window._showSimProgress = function(opts, onDone){
       stA.added.forEach(function(x,i){ if(x.id===aid) idx=i; });
       if(idx<0){ window._mkCloseOv(); return; }
       var e=stA.added[idx];
-      e.nav=nav; e.after=after;
+      e.nav=nav; e.after=after; e.bcolor=rb.bcolor; e.glow=rb.glow;
       if(team){
         if(_ovPick){ e.label=_ovPick.name; e.escudo=_ovPick.escudo; }
         else { var qa=getVal('mk-q').trim(); if(qa) e.label=qa; }
@@ -1068,7 +1138,7 @@ window._showSimProgress = function(opts, onDone){
     var key=cardKey(_ovCard);
     var st=loadState();
     var o=st.ov[key]||{};
-    o.nav=nav;
+    o.nav=nav; o.bcolor=rb.bcolor; o.glow=rb.glow;
     if(team){
       if(_ovPick){ o.label=_ovPick.name; o.escudo=_ovPick.escudo; }
       else { var q=getVal('mk-q').trim(); if(q) o.label=q; }

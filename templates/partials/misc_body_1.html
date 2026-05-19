@@ -29106,13 +29106,22 @@ Tottenham
     if(!esc){ try{ if(window.getTeamLogoUrl){ esc=window.getTeamLogoUrl(name)||''; } }catch(_){ } }
     if(!esc) esc=BAYERN_SVG;
     var stad=(ov&&ov.stadium)?ov.stadium:'';
-    return { name:name, esc:esc, stad:stad };
+    var cols=(ov && ov.colors && ov.colors.length)? ov.colors : null;
+    return { name:name, esc:esc, stad:stad, cols:cols };
   }
+  function _norm6(h){
+    h=String(h||'').trim(); if(h.charAt(0)!=='#') h='#'+h;
+    var x=h.replace(/[^0-9a-fA-F]/g,'');
+    if(x.length===3) x=x[0]+x[0]+x[1]+x[1]+x[2]+x[2];
+    if(x.length<6) x=(x+'000000').slice(0,6);
+    return '#'+x.slice(0,6).toLowerCase();
+  }
+  var _DIAMONDS="url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'><g fill='none' stroke='rgba(255,255,255,0.07)' stroke-width='1'><path d='M32 0 L64 32 L32 64 L0 32 Z'/><path d='M32 16 L48 32 L32 48 L16 32 Z' fill='rgba(255,255,255,0.035)'/></g></svg>\")";
   function _sync(){
     var b=document.getElementById('mk-hub-badge'), n=document.getElementById('mk-hub-name');
     if(!b&&!n) return;
     var host=document.getElementById('s-munich')||document.body;
-    var r=_resolve(), sig=r.name+'|'+r.esc+'|'+r.stad;
+    var r=_resolve(), sig=r.name+'|'+r.esc+'|'+r.stad+'|'+(r.cols?r.cols.join(','):'');
     if(host.__mkHubSig===sig) return; host.__mkHubSig=sig;
     if(n) n.textContent=r.name;
     if(b){ b.src=r.esc; b.alt=r.name; }
@@ -29123,6 +29132,18 @@ Tottenham
     if(hs) hs.src=r.esc;
     var hn=document.getElementById('munich-home-name');
     if(hn) hn.textContent=r.name;
+    /* Caja interior del hub con los colores del escudo elegido. */
+    var bg=document.getElementById('mk-hub-bg');
+    if(bg){
+      if(r.cols){
+        var c0=_norm6(r.cols[0]||'#dc052d'), c1=_norm6(r.cols[1]||r.cols[0]||'#3a0b3f');
+        bg.style.background=_DIAMONDS+",radial-gradient(ellipse at 50% 35%,"+c1+" 0%,"+c0+" 45%,#160a22 80%,#06101f 100%)";
+        bg.style.backgroundSize="64px 64px,100% 100%";
+        bg.style.backgroundRepeat="repeat,no-repeat";
+      } else {
+        bg.style.background=''; bg.style.backgroundSize=''; bg.style.backgroundRepeat='';
+      }
+    }
   }
   function run(){ setTimeout(_sync,0); setTimeout(_sync,80); setTimeout(_sync,240); }
   function _wrapGo(){
@@ -29137,7 +29158,7 @@ Tottenham
 })();
 </script>
 <div class="munich-arena-wrap">
-<div class="munich-arena-bg" aria-hidden="true"></div>
+<div class="munich-arena-bg" id="mk-hub-bg" aria-hidden="true"></div>
 <!-- HUD SUPERIOR · pop-on-tap ──────────────────────────────────── -->
 <div class="munich-hud">
   <div class="munich-hud-item munich-hud-val" onclick="muHudTap(this)">

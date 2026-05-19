@@ -9797,12 +9797,19 @@
       eventType: 'kickoff'
     }).forEach(function(l){ lines.push(l); });
     if (humanTeam) {
+      /* Abreviatura limpia (sin emojis 🎲/🖊️) para que la línea NO
+         parta en la preview de WhatsApp (petición usuario 2026-05-19:
+         cada cosa en una sola línea horizontal). */
+      var _htClean = String(humanTeam)
+        .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu,'')
+        .replace(/\s+/g,' ').trim();
+      var _htAbbr = (typeof window.getTeamAbbr === 'function' && window.getTeamAbbr(_htClean)) || _htClean;
       lines.push('');
       if (bajaLines.length) {
-        lines.push('🚑 Bajas de ' + humanTeam + ':');
+        lines.push('🚑 Bajas de ' + _htAbbr + ':');
         lines = lines.concat(bajaLines);
       } else {
-        lines.push('✅ ' + humanTeam + ' — Plantilla al 100%');
+        lines.push('✅ ' + _htAbbr + ' — Plantilla al 100%');
       }
     }
     var twitch = window._ppSelectedTwitch;
@@ -9819,9 +9826,13 @@
     var st = _mlSt(mk);
     if (!st) return;
     _mlBuildAndShareWA(mk, st, false);
-    /* Unlock the continue button in the descanso overlay */
+    /* Unlock the continue button in the descanso overlay + glow ROJO
+       llamativo (mismo énfasis que gm-ht-ov tras compartir). */
     var contBtn = document.getElementById('ml-descanso-continue-btn');
-    if (contBtn) { contBtn.disabled = false; contBtn.style.opacity = ''; }
+    if (contBtn) {
+      contBtn.disabled = false; contBtn.style.opacity = '';
+      if (typeof window._gmGlowContinueBtn === 'function') window._gmGlowContinueBtn(contBtn);
+    }
   };
 
   /* Helper compartido: construye el bloque de estadísticas para los
@@ -10123,7 +10134,25 @@
     if (hasScore) {
       lines.push(sH + ' ' + (opts.scA != null ? opts.scA : 0) + '-' + (opts.scB != null ? opts.scB : 0) + ' ' + sA);
     } else {
-      lines.push(sH + ' vs ' + sA);
+      /* INICIO (sin marcador): la previa de WhatsApp es estrecha y
+         "Athletic Club 🎲 vs 🖊️ Atlético Madrid" parte en 2-3 líneas.
+         Petición usuario 2026-05-19: que vaya TODO en una sola línea
+         horizontal → usamos ABREVIATURAS (getTeamAbbr) sobre el nombre
+         limpio (sin emojis 🎲/🖊️ ni selectores de variación). */
+      var _waClean = function(x){
+        return String(x||'')
+          .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu,'')
+          .replace(/\s+/g,' ').trim();
+      };
+      var _waAbbr = function(x){
+        var c = _waClean(x);
+        if (typeof window.getTeamAbbr === 'function'){
+          var a = window.getTeamAbbr(c);
+          if (a) return a;
+        }
+        return _waShortName(c) || c;
+      };
+      lines.push(_waAbbr(opts.home) + ' vs ' + _waAbbr(opts.away));
     }
     var evLine = _waEventLine(opts.eventType);
     if (evLine) lines.push(evLine);
@@ -10480,17 +10509,20 @@
       try { localStorage.setItem('gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
     }
   };
-  /* Resalta el botón "INICIAR SEGUNDA PARTE" con un brillo pulsante
-     tras compartir el descanso (petición usuario 2026-05-18: "que
-     brille para saber que hay que pulsarle"). Idempotente. */
+  /* Resalta el botón "INICIAR SEGUNDA PARTE" con un brillo ROJO
+     pulsante llamativo tras compartir el descanso (petición usuario
+     2026-05-19: una vez compartido por WhatsApp, el botón debe ir en
+     rojo brillante "como obligando a pulsar ahí para seguir" — antes
+     era verde y se confundía con COMPARTIR DESCANSO). Idempotente.
+     Fuente única: lo reusan gm-ht-ov y ml-descanso-ov. */
   function _gmGlowContinueBtn(btn){
     if (!btn) return;
     try {
       if (!document.getElementById('gm-ht-glow-style')) {
         var _gs = document.createElement('style');
         _gs.id = 'gm-ht-glow-style';
-        _gs.textContent = '@keyframes gmHtGlowPulse{0%,100%{box-shadow:0 0 10px rgba(37,211,102,.55);transform:scale(1);}50%{box-shadow:0 0 26px rgba(37,211,102,.95),0 0 46px rgba(37,211,102,.5);transform:scale(1.02);}}'
-          + '.gm-ht-glow{background:linear-gradient(135deg,#1ea14a,#25d366 55%,#1ea14a)!important;border:1px solid #25d366!important;color:#fff!important;animation:gmHtGlowPulse 1.05s ease-in-out infinite!important;}';
+        _gs.textContent = '@keyframes gmHtGlowPulse{0%,100%{box-shadow:0 0 12px rgba(255,40,52,.6);transform:scale(1);}50%{box-shadow:0 0 32px rgba(255,40,52,1),0 0 56px rgba(255,40,52,.55);transform:scale(1.03);}}'
+          + '.gm-ht-glow{background:linear-gradient(135deg,#c4001a,#ff2233 55%,#c4001a)!important;border:1px solid #ff5566!important;color:#fff!important;font-weight:900!important;animation:gmHtGlowPulse 1s ease-in-out infinite!important;}';
         (document.head||document.body).appendChild(_gs);
       }
       btn.classList.add('gm-ht-glow');

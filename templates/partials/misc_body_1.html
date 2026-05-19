@@ -650,8 +650,13 @@ window._showSimProgress = function(opts, onDone){
     if(o.coach!=null){
       var co=card.querySelector('.team-coach'); if(co) co.textContent=o.coach;
     }
-    if(o.escudo){
-      card.querySelectorAll('img.mc-img,img.mc-equipo-badge-bg').forEach(function(im){ im.src=o.escudo; });
+    if(o.escudo || o.label){
+      /* Escudo REAL: resolvemos por el nombre con el resolutor
+         canónico (mismo que la lista de equipos) y solo si no hay
+         caemos al escudo guardado — autosana cajas con escudo viejo. */
+      var _e=o.escudo||'';
+      try{ if(o.label && window.getTeamLogoUrl){ var _u=window.getTeamLogoUrl(o.label); if(_u) _e=_u; } }catch(_){ }
+      if(_e) card.querySelectorAll('img.mc-img,img.mc-equipo-badge-bg').forEach(function(im){ im.src=_e; });
     }
     if(o.emoji!=null){
       var em=card.querySelector('.mc-emoji'); if(em) em.textContent=o.emoji;
@@ -674,7 +679,9 @@ window._showSimProgress = function(opts, onDone){
     var common='height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;';
     if(entry.type==='team'){
       card.className='menu-card equipo-card';
-      var esc=entry.escudo||'';
+      var esc='';
+      try{ if(entry.label && window.getTeamLogoUrl){ esc=window.getTeamLogoUrl(entry.label)||''; } }catch(_){ }
+      if(!esc) esc=entry.escudo||'';
       card.setAttribute('style', common);
       card.innerHTML=
         '<img alt="" class="mc-equipo-badge-bg" src="'+esc+'"/>'+
@@ -2050,10 +2057,11 @@ window._showSimProgress = function(opts, onDone){
      (1) el reemplazo real de Liga EA (_ligaEaSubName) o (2) la caja
      del menú (menu_home_v1 → go:s-munich). Fallback: Bayern. */
   function _psHumanName(){
-    try{ if(window._ligaEaSubName){ var s=window._ligaEaSubName('Bayern Munich');
-      if(s && String(s).toLowerCase()!=='bayern munich') return String(s); } }catch(_){}
+    /* La caja del menú manda; si no, reemplazo real Liga EA; si no, Bayern. */
     try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r);
       var ov=d&&d.ov&&d.ov['go:s-munich']; if(ov&&ov.label) return String(ov.label); } }catch(_){}
+    try{ if(window._ligaEaSubName){ var s=window._ligaEaSubName('Bayern Munich');
+      if(s && String(s).toLowerCase()!=='bayern munich') return String(s); } }catch(_){}
     return 'Bayern Múnich';
   }
   function _psHumanShield(){
@@ -2103,6 +2111,21 @@ window._showSimProgress = function(opts, onDone){
     try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
   }
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  /* Relabel SOLO VISUAL de la pretemporada a un mes antes (Jul→Jun…),
+     petición usuario "que empiece el 1 de junio". NO toca el
+     calendario real ni las claves (done/rivals/mk/sig usan la fecha
+     real). Si no parsea, devuelve el texto original. */
+  var _PS_MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  function _psShowDate(s){
+    s=String(s==null?'':s);
+    var m=s.match(/(\d{1,2})\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]{3,})/);
+    if(!m) return s;
+    var mon=m[2].slice(0,3).toLowerCase(), i=-1;
+    for(var k=0;k<_PS_MES.length;k++){ if(_PS_MES[k].toLowerCase()===mon){ i=k; break; } }
+    if(i<0) return s;
+    return m[1]+' '+_PS_MES[(i-1+12)%12];
+  }
+  try{ window._psShowDate=_psShowDate; }catch(_){}
 
   function _shield(name){
     var ESC = window.BACKEND_ESCUDOS || {};
@@ -2369,7 +2392,7 @@ window._showSimProgress = function(opts, onDone){
     var st = _stage(); if (!st) return;
     st.innerHTML =
       '<div class="ps-card">'
-      + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">🏃 Entrenamiento · ' + _esc(_psHumanName()) + '</div>'
       + '<img class="ps-shield" src="' + _psHumanShield() + '" alt="' + _esc(_psHumanName()) + '">'
       + '<button type="button" class="ps-btn" id="ps-train-btn">ENTRENAR</button>'
@@ -2436,7 +2459,7 @@ window._showSimProgress = function(opts, onDone){
     var isSel = /\bag-sel\b/.test(day.cls);
     st.innerHTML =
       '<div class="ps-card">'
-      + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + (isSel ? '🌍 Selecciones · jugadores fuera' : '💤 Día de descanso') + '</div>'
       + '<div style="font-size:54px;line-height:1;margin:10px 0 6px;">' + (isSel?'🌍':'💤') + '</div>'
       + '<div class="ps-meta">' + _esc(day.label || 'Descanso') + '</div>'
@@ -2540,7 +2563,7 @@ window._showSimProgress = function(opts, onDone){
        mínimo por si el usuario vuelve de la previa con ◀ Volver. */
     st.innerHTML =
       '<div class="ps-card">'
-      + '<div class="ps-date">' + _esc(day.date.toUpperCase()) + '</div>'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
       + '<div class="ps-meta" style="margin:16px 0;">📋 Pantalla de previa<br><b>' + _esc(_psHumanName()) + '</b> vs <b>' + _esc(rv.name) + '</b></div>'
       + '<div style="display:flex;justify-content:center;margin-top:8px;">'
@@ -2561,9 +2584,9 @@ window._showSimProgress = function(opts, onDone){
 
   function _dayLabel(day){
     if (!day) return '';
-    if (day.type === 'train') return '🏃 Entrenamiento · ' + day.date;
-    if (day.type === 'rest')  return (/\bag-sel\b/.test(day.cls)?'🌍 ':'💤 ') + (day.label||'Descanso') + ' · ' + day.date;
-    return '🌞 ' + (day.label || 'Partido') + ' · ' + day.date;
+    if (day.type === 'train') return '🏃 Entrenamiento · ' + _psShowDate(day.date);
+    if (day.type === 'rest')  return (/\bag-sel\b/.test(day.cls)?'🌍 ':'💤 ') + (day.label||'Descanso') + ' · ' + _psShowDate(day.date);
+    return '🌞 ' + (day.label || 'Partido') + ' · ' + _psShowDate(day.date);
   }
   function _currentDay(){
     var rows = _calRows(); if (!rows.length) return null;
@@ -2582,7 +2605,7 @@ window._showSimProgress = function(opts, onDone){
     var mEl = document.getElementById('munich-next-match');
     if (mEl) mEl.textContent = _dayLabel(day);
     var cfEl = document.getElementById('munich-cal-fecha');
-    if (cfEl && day.date) cfEl.textContent = day.date;
+    if (cfEl && day.date) cfEl.textContent = _psShowDate(day.date);
   }
 
   function _render(){
@@ -29445,17 +29468,25 @@ Tottenham
     return null;
   }
   function _resolve(){
-    var t=_slot();
-    var name=(t&&t.name)||'Bayern Munich';
-    var esc=(t&&(t.escudo||t.shield))||'';
+    /* LA CAJA DEL MENÚ MANDA: si el admin puso un equipo en la caja
+       (menu_home_v1 → go:s-munich), el interior ES ese equipo. Solo
+       si no hay caja editada caemos al reemplazo real de Liga EA y,
+       por último, a Bayern. */
     var ov=_boxOv();
-    if(name==='Bayern Munich' && ov){
-      if(ov.label) name=ov.label; if(ov.escudo) esc=ov.escudo;
+    var name='', esc='', stad='', cols=null;
+    if(ov){
+      if(ov.label) name=String(ov.label);
+      if(ov.escudo) esc=String(ov.escudo);
+      if(ov.stadium) stad=String(ov.stadium);
+      if(ov.colors && ov.colors.length) cols=ov.colors;
+    }
+    if(!name){
+      var t=_slot();
+      name=(t&&t.name)||'Bayern Munich';
+      if(!esc) esc=(t&&(t.escudo||t.shield))||'';
     }
     if(!esc){ try{ if(window.getTeamLogoUrl){ esc=window.getTeamLogoUrl(name)||''; } }catch(_){ } }
     if(!esc) esc=BAYERN_SVG;
-    var stad=(ov&&ov.stadium)?ov.stadium:'';
-    var cols=(ov && ov.colors && ov.colors.length)? ov.colors : null;
     return { name:name, esc:esc, stad:stad, cols:cols };
   }
   function _norm6(h){
@@ -29583,7 +29614,7 @@ Tottenham
   <button class="hub-card hub-card-calendario" onclick="window._bayernCalOpen?window._bayernCalOpen():(function(){window._agendaBackTo='s-munich';window._bayernCalContext=true;go('s-agenda');})()">
     <span class="hub-calendario-emoji">📅</span>
     <span class="hub-calendario-title">CALENDARIO</span>
-    <span class="hub-calendario-sub" id="munich-cal-fecha">01 Jul</span>
+    <span class="hub-calendario-sub" id="munich-cal-fecha">01 Jun</span>
   </button>
   <button class="hub-card hub-card-isramax" onclick="window._isramaxOpen&&window._isramaxOpen()">
     <span class="hub-isramax-i">I</span>
@@ -32789,18 +32820,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     return false;
   }
   function _psVisibleTourIds(){
-    var base = ['sct','pss','jg','asia'];
-    try {
-      if (typeof window._tourVisibleIds === 'function') {
-        var v = window._tourVisibleIds();
-        if (Array.isArray(v) && v.length) base = v.filter(_isTourId);
-      }
-    } catch(_){}
-    /* Solo los torneos que existen DE VERDAD (config guardada). Si
-       aún no hay ninguno cacheado (configs solo en servidor), se
-       devuelve `base` para no dejar el picker vacío. */
-    var real = base.filter(_psConfigured);
-    return real.length ? real : base;
+    /* Petición usuario: solo hay UN torneo de pretemporada presente,
+       el Trofeo Joan Gamper. No se muestran los otros 3. */
+    return ['jg'];
   }
   function _psTourMeta(id){
     var t = (typeof window._tourMuInfoData === 'function' && window._tourMuInfoData(id)) || SUMMER_TOURS[id] || null;
@@ -32899,6 +32921,16 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var pk = getEl('munich-tour-picker');
     var resetBtn = getEl('munich-tour-reset');
     if (!pk) return;
+    /* Solo 1 torneo presente (Joan Gamper) → se autoselecciona sin
+       mostrar el selector (petición usuario "sin elegir"). */
+    if (state.pickedTours.length < 1) {
+      var _only = _psVisibleTourIds();
+      if (_only.length === 1) {
+        state.pickedTours = [_only[0]];
+        try { savePickedTours(state.pickedTours); } catch(_){}
+        try { if (typeof window._tourMergeBayern === 'function') window._tourMergeBayern(_only[0]); } catch(_){}
+      }
+    }
     /* Mostrar solo si aún no hay torneo confirmado. Una vez elegido
        1, ocultamos el picker y el flujo normal de la agenda continúa. */
     if (state.pickedTours.length >= 1) {
@@ -33280,7 +33312,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         calFechaEl.textContent = psDate;
       } else {
         var curEvt = state.events && state.events[state.eventIdx];
-        calFechaEl.textContent = (curEvt && curEvt.date) ? curEvt.date : '01 Jul';
+        calFechaEl.textContent = (curEvt && curEvt.date) ? (window._psShowDate ? window._psShowDate(curEvt.date) : curEvt.date) : '01 Jun';
       }
     }
     /* Mueve el marcador rosa/morado del calendario a la fila del

@@ -25263,10 +25263,143 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  /* ── MODO 2º PLANO (decisión usuario 2026-05-19) ──────────────────
+     El overlay del balón a pantalla completa se quedaba clavado en
+     "8 % INICIANDO/PREPARANDO" en las simulaciones de ligas (fotos
+     usuario; ver historial _MATCH/loader). Decisión: las SIMS DE
+     LIGAS ya NO usan el overlay bloqueante — corren en 2º plano con
+     un aviso pequeño NO bloqueante (pointer-events:none, no tapa la
+     UI, imposible que "atrape" la pantalla) y refrescan solas al
+     terminar. `bgRun` respeta el MISMO contrato que `run`
+     (opts {title,sub,theme,minMs}, runner({progress})→Promise|void,
+     devuelve Promise, watchdog, SIEMPRE resuelve) para poder
+     sustituirlo 1:1 en los wrappers de liga sin tocar su lógica.
+     Los SORTEOS de competición (Copa/Champions/Previa/WildCard)
+     siguen con el overlay clásico — son rápidos y ahí sí se quiere
+     el gesto visual. */
+  function _bgToastEl(){
+    var el = document.getElementById('ftbol-bg-toast');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'ftbol-bg-toast';
+      el.style.cssText = 'position:fixed;left:50%;bottom:22px;'
+        + 'transform:translateX(-50%);background:rgba(16,16,22,.94);'
+        + 'border:1px solid rgba(240,200,80,.45);border-radius:12px;'
+        + 'padding:10px 18px;color:#ffe2a0;'
+        + 'font-family:Rajdhani,system-ui,sans-serif;font-size:13px;'
+        + 'font-weight:600;letter-spacing:.4px;line-height:1.35;'
+        + 'max-width:86vw;text-align:center;'
+        + 'box-shadow:0 10px 30px rgba(0,0,0,.55);z-index:2147483630;'
+        + 'pointer-events:none;white-space:nowrap;overflow:hidden;'
+        + 'text-overflow:ellipsis;transition:opacity .25s;opacity:0;';
+      (document.body || document.documentElement).appendChild(el);
+      var _raf = (typeof requestAnimationFrame === 'function')
+        ? requestAnimationFrame : function(f){ return setTimeout(f,16); };
+      _raf(function(){ try { el.style.opacity = '1'; } catch(_){} });
+    }
+    return el;
+  }
+  function _bgToastSet(txt){
+    try { var e = _bgToastEl(); e.textContent = txt; } catch(_){}
+  }
+  function _bgToastDismiss(finalTxt, holdMs){
+    var e = document.getElementById('ftbol-bg-toast');
+    if(!e) return;
+    try { if(finalTxt != null) e.textContent = finalTxt; } catch(_){}
+    setTimeout(function(){
+      try {
+        e.style.opacity = '0';
+        setTimeout(function(){
+          try { if(e.parentNode) e.parentNode.removeChild(e); } catch(_){}
+        }, 320);
+      } catch(_){}
+    }, holdMs || 1500);
+  }
+  function bgRun(opts, runner){
+    opts = opts || {};
+    var title = String(opts.title || 'SIMULANDO');
+    var sub0  = String(opts.sub != null ? opts.sub : 'Preparando…');
+    var minMs = _scale(opts.minMs != null ? opts.minMs : 600);
+    var t0 = Date.now();
+    _bgToastSet('⚽ ' + title + ' · ' + sub0);
+    return new Promise(function(resolve, reject){
+      var settled = false, wd = null;
+      function _finish(ok, val){
+        if(settled) return;
+        settled = true;
+        try { if(wd){ clearTimeout(wd); wd = null; } } catch(_){}
+        if(ok){ _bgToastDismiss('✅ ' + title + ' · listo'); resolve(val); }
+        else  { _bgToastDismiss('⚠️ ' + title + ' · error (ver consola)'); reject(val); }
+      }
+      /* Watchdog: el aviso NO bloquea la UI, pero igualmente lo
+         retiramos solo si el runner nunca resolviera. */
+      var WD = Math.max(60000, minMs + 120000);
+      wd = setTimeout(function(){
+        if(settled) return;
+        try { console.warn('[ftbolBg] watchdog '+WD+'ms — el runner no resolvió; cierro aviso.'); } catch(_){}
+        _finish(true, undefined);
+      }, WD);
+      function prog(p, s){
+        p = Math.max(0, Math.min(100, Math.round(Number(p)||0)));
+        try { _bgToastSet('⚽ ' + title + ' · ' + String(s != null ? s : sub0) + '  ' + p + '%'); } catch(_){}
+      }
+      /* Un tick para que el aviso pinte antes del primer trabajo. */
+      setTimeout(function(){
+        try {
+          var r = runner({ progress: prog });
+          Promise.resolve(r).then(function(res){
+            if(settled) return;
+            prog(100, 'Hecho');
+            var wait = Math.max(250, minMs - (Date.now() - t0));
+            setTimeout(function(){ _finish(true, res); }, wait);
+          }, function(err){
+            try { console.error('[ftbolBg]', err); } catch(_){}
+            _finish(false, err);
+          });
+        } catch(err){
+          try { console.error('[ftbolBg]', err); } catch(_){}
+          _finish(false, err);
+        }
+      }, 20);
+    });
+  }
+
+  /* Aviso flotante independiente (id propio, NO colisiona con el
+     toast de `bgRun`). Para resúmenes tipo "✅ Simuladas 49 ligas". */
+  function bgNotice(text, holdMs){
+    try {
+      var el = document.createElement('div');
+      el.style.cssText = 'position:fixed;left:50%;bottom:64px;'
+        + 'transform:translateX(-50%);background:rgba(16,16,22,.95);'
+        + 'border:1px solid rgba(120,220,140,.5);border-radius:12px;'
+        + 'padding:11px 20px;color:#bff0c8;'
+        + 'font-family:Rajdhani,system-ui,sans-serif;font-size:13.5px;'
+        + 'font-weight:700;letter-spacing:.4px;line-height:1.35;'
+        + 'max-width:88vw;text-align:center;'
+        + 'box-shadow:0 10px 30px rgba(0,0,0,.55);z-index:2147483631;'
+        + 'pointer-events:none;transition:opacity .3s;opacity:0;';
+      el.textContent = String(text == null ? '' : text);
+      (document.body || document.documentElement).appendChild(el);
+      var _raf = (typeof requestAnimationFrame === 'function')
+        ? requestAnimationFrame : function(f){ return setTimeout(f,16); };
+      _raf(function(){ try { el.style.opacity = '1'; } catch(_){} });
+      setTimeout(function(){
+        try {
+          el.style.opacity = '0';
+          setTimeout(function(){
+            try { if(el.parentNode) el.parentNode.removeChild(el); } catch(_){}
+          }, 350);
+        } catch(_){}
+      }, holdMs || 4200);
+    } catch(_){}
+  }
+
   window.ftbolLoaderShow = show;
   window.ftbolLoaderProgress = progress;
   window.ftbolLoaderHide = hide;
   window.ftbolLoaderRun = run;
+  window._ftbolBgRun = bgRun;
+  window._ftbolBgNotice = bgNotice;
   window.ftbolLoaderSetTheme = _setTheme;
   window.ftbolLoaderSpeed = SPEED;
   /* Helper expuesto para que los wrappers escalen sus propios timings
@@ -25310,7 +25443,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var scale = (typeof window.ftbolLoaderScale === 'function')
       ? window.ftbolLoaderScale
       : function(x){ return x; };
-    return window.ftbolLoaderRun({
+    /* opts.bg → modo 2º plano NO bloqueante (sims de LIGAS). Sin él
+       → overlay clásico del balón (sorteos de competición). */
+    var _runner = (opts.bg && typeof window._ftbolBgRun === 'function')
+      ? window._ftbolBgRun
+      : window.ftbolLoaderRun;
+    return _runner({
       title: opts.title, sub: opts.sub || 'Inicializando equipos…',
       theme: opts.theme, minMs: opts.minMs||1200
     }, function(ctx){
@@ -25382,12 +25520,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     window.simularJ138ConOverlay = function(){
-      if(typeof window.ftbolLoaderRun !== 'function' ||
+      var _bgRun = (typeof window._ftbolBgRun === 'function')
+        ? window._ftbolBgRun : window.ftbolLoaderRun;
+      if(typeof _bgRun !== 'function' ||
          typeof window.simularTodasJornadasIAAsync !== 'function'){
         if(typeof origSjia === 'function') origSjia();
         return;
       }
-      return window.ftbolLoaderRun(
+      return _bgRun(
         { title:'LIGA EA SPORTS · J1 → J38', sub:'Iniciando simulación…', theme:'liga-ea', minMs: 700 },
         function(ctx){
           return window.simularTodasJornadasIAAsync(function(pct, sub){
@@ -25407,7 +25547,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'LIGA HYPERMOTION', sub:'Preparando…', theme:'hyper', minMs:1400 },
+        { title:'LIGA HYPERMOTION', sub:'Preparando…', theme:'hyper', minMs:1400, bg:true },
         function(){ if(typeof origSeg === 'function') origSeg(); }
       ).then(function(){ _refreshOpenSquadAfterSim('liga-hypermotion'); });
     };
@@ -25418,7 +25558,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'PRIMERA FEDERACIÓN · G'+(n||1), sub:'Preparando…', theme:'primf', minMs:1300 },
+        { title:'PRIMERA FEDERACIÓN · G'+(n||1), sub:'Preparando…', theme:'primf', minMs:1300, bg:true },
         function(){ if(typeof origPg === 'function') origPg(n); }
       ).then(function(){ _refreshOpenSquadAfterSim('liga-primera-federacion'); });
     };
@@ -25429,7 +25569,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'PRIMERA FEDERACIÓN · G1+G2', sub:'Preparando…', theme:'primf', minMs:1700,
+        { title:'PRIMERA FEDERACIÓN · G1+G2', sub:'Preparando…', theme:'primf', minMs:1700, bg:true,
           phases:[
             { pct:14, sub:'Cargando plantillas G1…', ms:140 },
             { pct:36, sub:'Simulando G1…',           ms:220 },
@@ -25449,12 +25589,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var origSjiaSingle = window.simularJornadaIA;
     if(typeof origSjiaSingle === 'function'){
       window.simularJornadaIA = function(j){
-        if(typeof window.ftbolLoaderRun !== 'function'){
+        var _bgRunJ = (typeof window._ftbolBgRun === 'function')
+          ? window._ftbolBgRun : window.ftbolLoaderRun;
+        if(typeof _bgRunJ !== 'function'){
           return origSjiaSingle(j);
         }
         var _scaleFn = (typeof window.ftbolLoaderScale === 'function')
           ? window.ftbolLoaderScale : function(x){ return x; };
-        return window.ftbolLoaderRun(
+        return _bgRunJ(
           { title:'LIGA EA SPORTS · JORNADA '+j, sub:'Simulando partidos…', theme:'liga-ea', minMs:600 },
           function(ctx){
             return new Promise(function(resolve){
@@ -25527,7 +25669,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if(ck) title = ck.replace(/-/g,' ').toUpperCase();
         } catch(_){}
         return _runFakeProgress(
-          { title: title, sub:'Preparando…', theme:'resto', minMs:1100,
+          { title: title, sub:'Preparando…', theme:'resto', minMs:1100, bg:true,
             phases:[
               { pct:22, sub:'Cargando plantillas…',     ms:130 },
               { pct:48, sub:'Generando jornadas…',      ms:180 },

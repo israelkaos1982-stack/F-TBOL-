@@ -11854,6 +11854,65 @@ window._showSimProgress = function(opts, onDone){
      este número fuerza la re-aplicación de DEFAULTS a un torneo NO
      sorteado todavía (ver _migrateCfg). 2026-05-17. */
   var _SPEC_V = 3;
+  /* Re-reparte HUMANOS en torneos groups-ko ya sorteados pero SIN
+     jugar todavía (petición usuario reiterada 2026-05-19: "cada
+     equipo humano en un grupo · con 5 humanos y 4 grupos, 2 van al
+     mismo grupo"). Determinista (mismo input → mismo output en todos
+     los dispositivos) e idempotente: si ya está bien repartido NO
+     toca nada (no borra fixtures). No aplica a manualRoster
+     (Mundialito: el admin coloca a mano) ni a torneos con partidos
+     ya jugados. */
+  function _respreadGroupsKoHumans(cfg){
+    try {
+      if (!cfg || cfg.format !== 'groups-ko') return cfg;
+      var fc = cfg.formatConfig || {};
+      if (fc.manualRoster) return cfg;
+      var teams = cfg.teams || [];
+      if (!teams.length) return cfg;
+      /* No tocar un torneo en curso (algún partido jugado / KO). */
+      var played = false;
+      if (cfg.results) {
+        var ks = Object.keys(cfg.results);
+        for (var i = 0; i < ks.length; i++) {
+          var rv = cfg.results[ks[i]];
+          if (rv && (rv.played || typeof rv.gh === 'number' || typeof rv.golesLocal === 'number')) { played = true; break; }
+        }
+      }
+      if (played || (cfg.koBracket && cfg.koBracket.length) || cfg.koCurrentRound) return cfg;
+      var nG = Math.max(1, fc.groups || 1);
+      var pg = fc.perGroup || Math.ceil(teams.length / nG);
+      var total = cfg.numTeams || teams.length;
+      var humans = teams.filter(function(t){ return t && t.isHuman; });
+      var ais    = teams.filter(function(t){ return t && !t.isHuman; });
+      var groups = [], gi;
+      for (gi = 0; gi < nG; gi++) groups.push([]);
+      for (var h = 0; h < humans.length; h++) groups[h % nG].push(humans[h]); /* 1/grupo */
+      var ap = 0;
+      for (gi = 0; gi < nG; gi++) {
+        while (groups[gi].length < pg && ap < ais.length) groups[gi].push(ais[ap++]);
+      }
+      var out = [];
+      groups.forEach(function(g){ out = out.concat(g); });
+      while (out.length < total && ap < ais.length) out.push(ais[ap++]);
+      /* ¿Cambia algo? Comparar secuencia nombre|isHuman. */
+      function sig(arr){ return arr.map(function(t){ return (t&&t.name)+'|'+!!(t&&t.isHuman); }).join('¬'); }
+      if (sig(out) === sig(teams)) return cfg;   /* ya bien repartido */
+      cfg.teams = out;
+      cfg.groupFixtures = {};
+      cfg.currentJornadaByGroup = {};
+      cfg.results = {};
+      cfg.koBracket = null;
+      cfg.koCurrentRound = 0;
+      cfg._prizesPaid = false;
+      /* Persistir el reparto corregido (durable + cross-device). */
+      try {
+        if (cfg.id && typeof window._tourSave === 'function') {
+          Promise.resolve().then(function(){ try { window._tourSave(cfg.id, cfg); } catch(_){} });
+        }
+      } catch(_){}
+    } catch(_){}
+    return cfg;
+  }
   function _migrateCfg(cfg){
     if (!cfg || typeof cfg !== 'object') return cfg;
     if (cfg.format === 'ko' && cfg.formatConfig && cfg.formatConfig.twoLegs) {
@@ -11886,6 +11945,7 @@ window._showSimProgress = function(opts, onDone){
       }
       cfg._specV = _SPEC_V;
     }
+    cfg = _respreadGroupsKoHumans(cfg);
     return cfg;
   }
 

@@ -457,28 +457,41 @@ reanudar. Se aplica tanto al flujo `_ml*` (calendar cards,
 ambos hacen `timerSec = 2700` y re-anclan `_wallStart` /
 `_secAtStart` antes de arrancar el interval.
 
-### Descuento dinámico por eventos (obligatorio)
+### Descuento FIJO en regulación (obligatorio, 2026-05-19)
 
 `gameMin = 90` significa que el reloj llega a 90:00 en "tiempo normal".
-El descuento NO se pre-calcula: cada evento del acta (gol, autogol,
-penalti provocado/gol/parado/fallado, gol de falta, amarilla, doble
-amarilla, roja, lesión) añade **1 game-minute** al tope de SU parte:
+El descuento de cada parte está **FIJADO** (petición usuario
+2026-05-19, no event-driven):
 
-- Evento en min < 45 → prolonga la 1ª parte. El reloj muestra `45+1`,
-  `45+2`, …, hasta `45+N` (N = eventos en 1ª parte) antes del descanso.
-- Evento en min ∈ [45, 90) → prolonga la 2ª parte. Reloj: `90+1`,
-  `90+2`, …, `90+N`.
-- Eventos con min ≥ 90 (ya en stoppage) no cuentan — no se pueden
-  prolongar a sí mismos.
+- **1ª parte**: SIEMPRE recorre `45+1, 45+2, 45+3, 45+4` y se **CONGELA
+  en 45+4** hasta que el humano pulse `🛌 DESCANSO`.
+- **2ª parte**: SIEMPRE recorre `90+1, 90+2, … 90+9` y se **CONGELA
+  en 90+9** hasta que el humano pulse `🏁 FINALIZAR`.
 
-En tiempo REAL, 1 game-minute de descuento equivale a:
-- HvH → 10.5 segundos reales por evento.
-- HvIA → 6.5 segundos reales por evento.
-- IAIA → 1 segundo real por evento.
+El botón `🛌 DESCANSO` emerge en el **min 40** (umbral
+`timerSec >= 2400`). El botón `🏁 FINALIZAR` cambia a **rojo
+brillante pulsante** (clase `.is-near-end`) desde el **min 80**
+(`timerSec >= 4800`) hasta que el humano la pulse — la fase
+`matchOver` (timerSec ≥ fullMax con cron congelado) sigue mostrando
+`🏁 VER RESUMEN` en verde-dorado (precedente 2026-05-17).
 
-Helper: `window._mlCountStoppageHalves(st)` → `{first, second}`.
-Se invoca en el tick del cronómetro y en cada render. NO cachear los
-valores — cambian con cada evento nuevo.
+Helper: `window._mlCountStoppageHalves(st)` →
+- `{first: 4, second: 9}` para regulación (`!st.etDone`).
+- Event-driven (cuenta eventos del acta) para prórroga (`st.etDone`).
+
+PRÓRROGA mantiene el modelo legacy event-driven (no tocado en
+2026-05-19). HvH y HvIA en gm-modal: cuando `timerSec ≥ gmHalfMax`
+con humano, el reloj se CONGELA en `gmHalfMax` (sin auto-halftime)
+— el cron sólo avanza tras pulsar DESCANSO. Misma regla en
+ml-cards. IA vs IA mantiene auto-descanso / auto-finalize.
+
+Histórico:
+- 2026-05-09: introducido descuento dinámico event-driven (+1
+  game-min por evento, sin tope).
+- 2026-05-19: usuario pide caps fijos +4 / +9 porque (a) partidos
+  con muchos eventos producían descuentos absurdos (90+12, 90+15) y
+  (b) partidos sin eventos no tenían descuento alguno. Ahora la
+  ventana es predecible y siempre la misma.
 
 ### Fuente única
 

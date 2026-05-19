@@ -7587,12 +7587,20 @@
     'pen-prov': 1, 'pen-parado': 1, 'falta-gol': 1,
     'amarilla': 1, 'd-amarilla': 1, 'roja': 1, 'lesion': 1
   };
-  /* Cuenta cuántos eventos del acta han ocurrido en cada parte del
-     partido, para calcular descuento dinámico. Retorna
-     {first, second}. Se considera "1ª parte" min < 45 y "2ª parte"
-     min ∈ [45, 90). Eventos ya en stoppage time (>= 90) no cuentan
-     — no se pueden prolongar a sí mismos. */
+  /* Stoppage time en regulación (petición usuario 2026-05-19):
+     - 1ª parte: SIEMPRE de 45+1 a 45+4 (cap +4).
+     - 2ª parte: SIEMPRE de 90+1 a 90+9 (cap +9).
+     El cronómetro recorre esos game-minutes y se CONGELA en el tope
+     hasta que el humano pulse DESCANSO / FINALIZAR. Independiente de
+     la cuenta de eventos del acta (antes era event-driven sin tope, lo
+     que producía descuentos absurdos en partidos con muchos eventos y
+     ninguno en partidos sin eventos).
+     En PRÓRROGA (etDone) se mantiene el modelo legacy event-driven —
+     el usuario no lo cambió y la prórroga tiene su propio flujo. */
   function _mlCountStoppageHalves(st) {
+    if (st && !st.etDone) {
+      return { first: 4, second: 9 };
+    }
     var fh = 0, sh = 0;
     var ev = (st && st.events) || [];
     for (var i = 0; i < ev.length; i++) {
@@ -7998,10 +8006,11 @@
     var endBtn = document.getElementById('ml-btn-end-'+mk);
     if (endBtn) {
       var matchOver = !!(st.matchFinished || st.finished || rawSec >= fullMax);
-      /* FOTO B1 (2026-05-16): empezar a brillar desde el min 85
-         (5100 s) también en las cards del calendario, no solo al
-         final exacto. */
-      endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 85 * 60);
+      /* Brillo rojo desde el min 80 también en las cards del calendario
+         (petición usuario 2026-05-19). En ml-card no hay verde-dorado
+         VER RESUMEN, así que `.is-finishable` ya pinta rojo brillante
+         con su keyframe — solo bajamos el umbral 85→80. */
+      endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 80 * 60);
     }
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
     if (st.inDescanso) { btn.textContent='⏸ HT'; btn.className='ml-timer running'; return; }
@@ -8532,7 +8541,9 @@
          amistosos usan los caminos de arriba. */
       if (!st.htDone && !st.etDone && !st.matchFinished && !st.isIAvsIA && !st.isFriendly) {
         var _htBtn = document.getElementById('ml-btn-ht-'+mk);
-        if (_htBtn) _htBtn.style.display = (st.timerSec >= 2220) ? '' : 'none';
+        /* Petición usuario 2026-05-19: emerge la caja DESCANSO desde
+           el minuto 40 (antes 37'). */
+        if (_htBtn) _htBtn.style.display = (st.timerSec >= 2400) ? '' : 'none';
       }
       // Stoppage time marker at 90' — muestra el nº de game-minutes
       // añadidos dinámicamente por los eventos de la 2ª parte.
@@ -11247,12 +11258,16 @@
       }
 
       var _baseClasses = 'is-finishable';
-      /* FOTO B1 (2026-05-16, petición usuario): la caja FINALIZAR
-         debe EMPEZAR a brillar y llamar la atención a partir del
-         game-minute 85 (no solo al final exacto), para avisar al
-         humano de que el partido está por terminar. 85' = 5100 s. */
-      var _gmNear85 = (Number(_gm.timerSec) || 0) >= 85 * 60;
-      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmNear85 || _gmAction !== 'finalizar');
+      /* Petición usuario 2026-05-19 (revisión foto): "al finalizar el
+         partido sobre el minuto 80 tiene que emerger la caja de
+         finalizar en color rojo brillante". `.is-near-end` (NUEVA)
+         es el rojo brillante en la fase 80'..90+9 ANTES de matchOver.
+         `.is-finishable` se mantiene para el VER RESUMEN (matchOver,
+         verde-dorado de 2026-05-17) y para PRÓRROGA / PENALTIS. */
+      var _gmNear80 = (Number(_gm.timerSec) || 0) >= 80 * 60;
+      _gmEndBtn.classList.toggle('is-near-end',
+        _gmNear80 && !_matchOver && !_gm.finished && _gmAction === 'finalizar');
+      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmAction !== 'finalizar');
       if (_gmAction === 'prorroga') {
         _gmEndBtn.textContent = '▶ PRÓRROGA';
       } else if (_gmAction === 'penaltis') {
@@ -11377,21 +11392,19 @@
       }
     } catch(_){}
     /* Botón "🛌 DESCANSO" — visible para que el usuario pueda forzar
-       el half-time desde el minuto 37 de la primera parte. Razón:
-       cuadrar el cronómetro real (TV / cronómetro del propio partido
-       eFootball) con el simulado es casi imposible — los goles, faltas
-       y pausas hacen que vayan desfasados. Permitiendo descanso
-       anticipado desde 37' el usuario salta al medio tiempo cuando
-       el partido REAL acaba la primera parte, sin importar lo que
-       marque el reloj de la app. Si NO pulsa el botón, el cronómetro
-       sigue subiendo (38, 39, ...) hasta llegar al auto-descanso en
-       45+descuento (gmHalfMax). Solo se muestra HvH/HvIA (gm-modal),
+       el half-time desde el minuto 40 (petición usuario 2026-05-19:
+       "en el minuto 40 emerge la caja de descanso"). Razón histórica:
+       cuadrar el cronómetro simulado con el real (TV/eFootball) es
+       casi imposible — los goles, faltas y pausas hacen que vayan
+       desfasados. Si NO pulsa el botón, el cronómetro sube 41, 42…
+       45+1, 45+2, 45+3, 45+4 y se CONGELA en 45+4 hasta que el
+       humano pulse DESCANSO. Solo se muestra HvH/HvIA (gm-modal),
        fuera de prórroga y antes del descanso. */
     try {
       var fhWrap = document.getElementById('gm-force-ht-wrap');
       if (fhWrap) {
         var canForce = !_gm.finished && !_gm.htDone && !_gm.etDone
-                       && !_gm.inDescanso && _gm.timerSec >= 2220;  /* 37' */
+                       && !_gm.inDescanso && _gm.timerSec >= 2400;  /* 40' */
         fhWrap.style.display = canForce ? '' : 'none';
       }
     } catch(_) {}
@@ -11738,15 +11751,22 @@
       var gmStops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
       var gmHalfMax = 2700 + (gmStops.first || 0) * 60;
       var max = _gm.etDone ? GM_MAX_ET : (GM_MAX_NORMAL + (gmStops.second || 0) * 60);
-      /* Descanso automático: SOLO si no hay humano implicado. En la
-         práctica gm-modal sólo se usa en HvH/HvIA (IAvIA va por el
-         flujo ml-wrap), así que esto es un no-op de seguridad: el
-         humano debe pulsar el botón "🛌 DESCANSO" (gm-btn-force-ht).
-         Petición usuario: la 1ª parte jamás termina sin pulsar el
-         botón en partidos con humano. */
+      /* 1ª parte: al llegar a 45+4 (gmHalfMax con stoppage fijo) se
+         CONGELA esperando al humano que pulse "🛌 DESCANSO". Sin esto
+         el cron seguía corriendo hacia 90+ sin esperar (foto usuario
+         2026-05-19). Para IA-vs-IA (caso teórico — gm-modal solo se
+         usa con humano) sí auto-descanso. */
       var _gmHasHuman = !!_gm.isHvH
         || (typeof esHumano === 'function' && (esHumano(_gm.home) || esHumano(_gm.away)));
-      if (!_gm.htDone && _gm.timerSec >= gmHalfMax && !_gmHasHuman) {
+      if (!_gm.htDone && _gm.timerSec >= gmHalfMax) {
+        if (_gmHasHuman) {
+          _gm.timerSec = gmHalfMax;
+          _gm._wallStart = Date.now();
+          _gm._secAtStart = gmHalfMax;
+          if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; }
+          gmRenderTimer();
+          return;
+        }
         _gmEnterHalftime();
         return;
       }
@@ -17242,7 +17262,32 @@
   border-color:rgba(255,200,64,.55) !important;
   text-shadow:0 1px 2px rgba(0,0,0,.5);
 }
-#gm-btn-end:disabled{animation:none !important;}
+/* ── FINALIZAR · rojo brillante llamativo desde el min 80 ─────────
+   (petición usuario 2026-05-19, foto). Marca la fase final del
+   partido (80'..90+9) ANTES del matchOver / VER RESUMEN. Más
+   intenso que `.is-finishable` y con animación más rápida. */
+#gm-btn-end.is-near-end,
+#gm-btn-end.gm-end-moved.is-near-end{
+  background:linear-gradient(135deg,#c4001a,#ff2233 55%,#c4001a) !important;
+  border:2px solid #ff5566 !important;
+  color:#fff !important;
+  font-weight:900 !important;
+  font-size:14px !important;
+  letter-spacing:2px !important;
+  text-shadow:0 1px 3px rgba(0,0,0,.75) !important;
+  animation:gmNearEndPulse 1s ease-in-out infinite !important;
+}
+@keyframes gmNearEndPulse{
+  0%,100%{ box-shadow:0 0 12px rgba(255,40,52,.65), inset 0 0 8px rgba(255,255,255,.08); transform:scale(1); }
+  50%   { box-shadow:0 0 32px rgba(255,40,52,1), 0 0 56px rgba(255,40,52,.5), inset 0 0 12px rgba(255,255,255,.12); transform:scale(1.025); }
+}
+.ml-action-end.is-near-end{
+  background:linear-gradient(135deg,#c4001a,#ff2233 55%,#c4001a) !important;
+  color:#fff !important;
+  font-weight:900 !important;
+  animation:gmNearEndPulse 1s ease-in-out infinite !important;
+}
+#gm-btn-end:disabled,#gm-btn-end.gm-end-moved.is-near-end:disabled{animation:none !important;}
 /* ── Eventos del acta ────────────────────────────────────────── */
 .ml-evt-item{padding-left:10px!important;}
 .ml-evt-team{font-size:11px;color:rgba(255,255,255,.45);font-family:"Rajdhani",sans-serif;white-space:nowrap;}

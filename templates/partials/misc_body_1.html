@@ -10758,12 +10758,78 @@ window._showSimProgress = function(opts, onDone){
     return arr;
   }
 
+  /* Coloca equipos sorteados separando a los HUMANOS (petición
+     usuario 2026-05-17):
+       · groups-ko → 1 humano por grupo (round-robin); nunca 2
+         humanos en el mismo grupo salvo que numHumans > nº grupos.
+       · ko / ko-2leg → cada humano en una pareja distinta y
+         repartidos por orden bit-reversal (mitades/cuartos), así el
+         primer HvH cae lo más tarde posible (≥ Cuartos, idealmente
+         Semis/Final). Nunca HvH en 1ª ronda salvo numHumans > nº de
+         eliminatorias.
+       · league/otros → mezcla simple. */
+  function _spreadOrder(P){
+    P = Math.max(1, P|0);
+    var bits = Math.ceil(Math.log(P) / Math.LN2) || 1;
+    var size = 1 << bits, seen = {}, order = [];
+    for (var i = 0; i < size; i++){
+      var r = 0;
+      for (var b = 0; b < bits; b++){ r = (r << 1) | ((i >> b) & 1); }
+      if (r < P && !seen[r]){ seen[r] = 1; order.push(r); }
+    }
+    for (var p = 0; p < P; p++){ if (!seen[p]) order.push(p); }
+    return order;
+  }
+  function _placeDrawnTeams(cfg, aiList, nH){
+    function H(){ return { name:'PENDIENTE', isHuman:true, shield:'', power:0 }; }
+    var ai = aiList.slice(); _shuffle(ai);
+    var total = cfg.numTeams || (ai.length + nH);
+    var fmt = cfg.format;
+    if (fmt === 'groups-ko') {
+      var fc = cfg.formatConfig || {};
+      var nG = Math.max(1, fc.groups || 1);
+      var pg = fc.perGroup || Math.ceil(total / nG);
+      var groups = [], gi;
+      for (gi = 0; gi < nG; gi++) groups.push([]);
+      for (var h = 0; h < nH; h++) groups[h % nG].push(H());   /* 1 humano/grupo */
+      var ap = 0;
+      for (gi = 0; gi < nG; gi++) {
+        while (groups[gi].length < pg && ap < ai.length) groups[gi].push(ai[ap++]);
+        _shuffle(groups[gi]);   /* posición dentro del grupo: aleatoria */
+      }
+      var outg = [];
+      groups.forEach(function(g){ outg = outg.concat(g); });
+      while (outg.length < total && ap < ai.length) outg.push(ai[ap++]);
+      return outg;
+    }
+    if (fmt === 'ko' || fmt === 'ko-2leg') {
+      var P = Math.floor(total / 2);
+      if (P < 1) { var t0 = ai.slice(0, total); _shuffle(t0); return t0; }
+      var ord = _spreadOrder(P);
+      var hcount = {};
+      for (var k = 0; k < nH; k++) {
+        var pidx = ord[k % ord.length];
+        hcount[pidx] = (hcount[pidx] || 0) + 1;
+      }
+      var slots = new Array(total), aiIdx = 0;
+      for (var pp = 0; pp < P; pp++) {
+        var c = hcount[pp] || 0;
+        slots[pp*2]   = (c >= 1) ? H() : (ai[aiIdx++] || H());
+        slots[pp*2+1] = (c >= 2) ? H() : (ai[aiIdx++] || H());
+      }
+      for (var s = 0; s < total; s++) if (!slots[s]) slots[s] = ai[aiIdx++] || H();
+      return slots;
+    }
+    var t = ai.slice(0, Math.max(0, total - nH));
+    for (var hh = 0; hh < nH; hh++) t.push(H());
+    _shuffle(t);
+    return t;
+  }
+
   /* Sortea equipos al azar dentro del rango [aiLevelMin, aiLevelMax].
      Devuelve {ok:true, teams:[...]} o {ok:false, error:'...'}.
-     `cfg.numHumans` placeholders "PENDIENTE" se añaden marcados con
-     `isHuman:true`; el resto son IA del pool. La lista final se
-     mezcla para distribuir humanos en posiciones aleatorias del
-     bracket / grupos. */
+     `cfg.numHumans` placeholders "PENDIENTE" se reparten separando a
+     los humanos (ver `_placeDrawnTeams`). */
   function _drawTeams(cfg){
     var aimin = cfg.aiLevelMin || 1;
     var aimax = cfg.aiLevelMax || 100;
@@ -10778,13 +10844,10 @@ window._showSimProgress = function(opts, onDone){
       return { ok:false, error: 'Solo hay '+pool.length+' equipos en el rango '+aimin+'–'+aimax+(excluded.length?' (excluyendo '+excluded.length+' liga'+(excluded.length===1?'':'s')+')':'')+'. Necesitas '+needed+'.' };
     }
     _shuffle(pool);
-    var teams = pool.slice(0, needed).map(function(t){
+    var aiTeams = pool.slice(0, needed).map(function(t){
       return { name: t.name, isHuman: false, shield: t.shield, power: t.power };
     });
-    for (var h = 0; h < (cfg.numHumans || 0); h++){
-      teams.push({ name: 'PENDIENTE', isHuman: true, shield: '', power: 0 });
-    }
-    _shuffle(teams);
+    var teams = _placeDrawnTeams(cfg, aiTeams, cfg.numHumans || 0);
     return { ok:true, teams: teams };
   }
 

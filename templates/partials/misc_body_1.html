@@ -993,22 +993,25 @@ window._showSimProgress = function(opts, onDone){
       ? '<label class="mk-ck"><input type="checkbox" id="mk-cmanual"/> 🎨 Colores manuales (si no, automático del escudo)</label>'
       : '<div class="mk-lbl">Degradado de la caja (color inicio → color fin)</div>';
     return head +
-      '<div id="mk-cwrap" class="mk-cwrap"><div class="mk-grad">'+
-        '<input type="color" id="mk-cA" value="#1c2230"/>'+
-        '<div class="mk-bar" id="mk-bar"></div>'+
-        '<input type="color" id="mk-cB" value="#3a4a66"/>'+
-      '</div></div>'+
-      /* Paletas táctiles: el selector de color nativo no se abre en el
-         navegador del usuario; tocar una paleta fija el degradado y,
-         en cajas de equipo, activa "Colores manuales". */
+      '<div id="mk-cwrap" class="mk-cwrap">'+
+        '<input type="hidden" id="mk-cA" value="#1c2230"/>'+
+        '<input type="hidden" id="mk-cB" value="#3a4a66"/>'+
+        '<div class="mk-bar" id="mk-bar" style="height:34px;width:100%;border-radius:8px;border:1px solid rgba(255,255,255,.18);"></div>'+
+      '</div>'+
+      /* Selector nativo de color quitado: en este navegador no aplica
+         el valor. Se usan paletas táctiles 100% fiables. */
+      '<div class="mk-lbl">Color de la caja (toca uno)</div>'+
+      '<div class="mk-sws" id="mk-solids"></div>'+
+      '<div class="mk-lbl">…o un degradado</div>'+
       '<div class="mk-sws" id="mk-sws"></div>'+
-      /* Borde llamativo: color (paleta táctil) + tono del brillo
-         (dropdown propio, no <select> nativo). */
       '<div class="mk-lbl">Borde llamativo (color + tono del brillo)</div>'+
       '<input type="hidden" id="mk-bcolor" value="#f0c040"/>'+
       '<div class="mk-sws" id="mk-bsws"></div>'+
       _mkChoiceHtml('mk-glow');
   }
+  var _MK_SOLIDS = ['#e23b3b','#ff7a18','#ffb000','#ffe600','#9ccc00',
+    '#2ecc40','#00b894','#00c7d6','#1f9bff','#2d6cdf','#7c4dff',
+    '#b14dff','#ff4d97','#8a5a2b','#ffffff','#11161f'];
   var _MK_BCOLORS = ['#f0c040','#ff3b30','#ff9500','#ffd60a','#34c759',
     '#00c7be','#0a84ff','#5e5ce6','#bf5af2','#ff2d92','#ffffff','#8e8e93'];
   var _MK_GLOW_OPTS = [
@@ -1045,6 +1048,30 @@ window._showSimProgress = function(opts, onDone){
     var cm=document.getElementById('mk-cmanual'), wrap=document.getElementById('mk-cwrap');
     function tog(){ if(cm&&wrap) wrap.classList.toggle('off', !cm.checked); }
     if(cm){ cm.addEventListener('change',tog); tog(); }
+    /* paleta de colores SÓLIDOS (toca uno → la caja es ese color) */
+    var sol=document.getElementById('mk-solids');
+    if(sol){
+      sol.innerHTML='';
+      _MK_SOLIDS.forEach(function(col){
+        var c=_norm6(col);
+        var sw=document.createElement('button');
+        sw.type='button'; sw.className='mk-sw';
+        sw.style.background=c; sw.title=c;
+        var cA=_norm6(getVal('mk-cA')||'#1c2230'), cB=_norm6(getVal('mk-cB')||'#3a4a66');
+        if(c===cA && c===cB) sw.classList.add('sel');
+        sw.addEventListener('click', function(e){
+          e.preventDefault(); e.stopPropagation();
+          setVal('mk-cA', c); setVal('mk-cB', c);
+          if(team && cm && !cm.checked){ cm.checked=true; tog(); }
+          sol.querySelectorAll('.mk-sw').forEach(function(x){ x.classList.remove('sel'); });
+          sw.classList.add('sel');
+          var sg=document.getElementById('mk-sws');
+          if(sg) sg.querySelectorAll('.mk-sw').forEach(function(x){ x.classList.remove('sel'); });
+          paint();
+        });
+        sol.appendChild(sw);
+      });
+    }
     /* paletas táctiles */
     var sws=document.getElementById('mk-sws');
     if(sws){
@@ -1063,6 +1090,8 @@ window._showSimProgress = function(opts, onDone){
           if(team && cm && !cm.checked){ cm.checked=true; tog(); }
           sws.querySelectorAll('.mk-sw').forEach(function(x){ x.classList.remove('sel'); });
           sw.classList.add('sel');
+          var sl=document.getElementById('mk-solids');
+          if(sl) sl.querySelectorAll('.mk-sw').forEach(function(x){ x.classList.remove('sel'); });
           paint();
         });
         sws.appendChild(sw);

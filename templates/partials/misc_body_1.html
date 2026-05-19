@@ -2588,10 +2588,31 @@ window._showSimProgress = function(opts, onDone){
     if (day.type === 'rest')  return (/\bag-sel\b/.test(day.cls)?'🌍 ':'💤 ') + (day.label||'Descanso') + ' · ' + _psShowDate(day.date);
     return '🌞 ' + (day.label || 'Partido') + ' · ' + _psShowDate(day.date);
   }
+  var _PS_MON = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
+  function _psMonth(dateStr){
+    var p = String(dateStr||'').trim().split(/\s+/);
+    if (p.length < 2) return -1;
+    var m = _PS_MON[p[1].toLowerCase().replace(/\./g,'').slice(0,3)];
+    return (m == null) ? -1 : m;
+  }
+  /* La temporada ARRANCA el 1 de junio (bloque de Junio al inicio
+     del calendario). Nunca empezamos antes de la primera fila de
+     Junio: si el cursor quedó en una fila pre-junio (estado viejo,
+     p.ej. "03 May") lo recolocamos al inicio de temporada. */
+  function _seasonStartIdx(rows){
+    for (var i=0;i<rows.length;i++){ if (_psMonth(rows[i].date) >= 5) return i; }
+    return 0;
+  }
+  function _clampDayIdx(rows, raw){
+    var idx = Math.min(Math.max(0, parseInt(raw,10)||0), rows.length-1);
+    var s = _seasonStartIdx(rows);
+    if (idx < s) idx = s;
+    return idx;
+  }
   function _currentDay(){
     var rows = _calRows(); if (!rows.length) return null;
     var d = _load();
-    var idx = Math.min(Math.max(0, parseInt(d.dayIdx,10)||0), rows.length-1);
+    var idx = _clampDayIdx(rows, d.dayIdx);
     return rows[idx];
   }
   window._psCurrentLabel = function(){ var c=_currentDay(); return c?_dayLabel(c):''; };
@@ -2626,7 +2647,7 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     var d = _load();
-    var idx = Math.min(Math.max(0, parseInt(d.dayIdx,10)||0), rows.length-1);
+    var idx = _clampDayIdx(rows, d.dayIdx);
     if (idx !== d.dayIdx){ d.dayIdx = idx; _save(d); }
     var day = rows[idx];
     var sig = idx + '|' + day.type + '|' + day.date;
@@ -29719,8 +29740,6 @@ Tottenham
     <button class="btn-play" id="munich-play-btn">⚽ JUGAR PARTIDO</button>
     <button class="btn-next" id="munich-next-day-btn">➡️ SIGUIENTE DÍA</button>
   </div>
-  <button type="button" class="munich-tour-reset" id="munich-tour-reset"
-          onclick="window.muTourReset()">🔄 Cambiar torneos de pretemporada</button>
 </section>
 </div>
 <script>

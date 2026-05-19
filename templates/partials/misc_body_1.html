@@ -32477,18 +32477,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     return false;
   }
   function _psVisibleTourIds(){
-    var base = ['sct','pss','jg','asia'];
-    try {
-      if (typeof window._tourVisibleIds === 'function') {
-        var v = window._tourVisibleIds();
-        if (Array.isArray(v) && v.length) base = v.filter(_isTourId);
-      }
-    } catch(_){}
-    /* Solo los torneos que existen DE VERDAD (config guardada). Si
-       aún no hay ninguno cacheado (configs solo en servidor), se
-       devuelve `base` para no dejar el picker vacío. */
-    var real = base.filter(_psConfigured);
-    return real.length ? real : base;
+    /* Petición usuario: solo hay UN torneo de pretemporada presente,
+       el Trofeo Joan Gamper. No se muestran los otros 3. */
+    return ['jg'];
   }
   function _psTourMeta(id){
     var t = (typeof window._tourMuInfoData === 'function' && window._tourMuInfoData(id)) || SUMMER_TOURS[id] || null;
@@ -32587,6 +32578,16 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var pk = getEl('munich-tour-picker');
     var resetBtn = getEl('munich-tour-reset');
     if (!pk) return;
+    /* Solo 1 torneo presente (Joan Gamper) → se autoselecciona sin
+       mostrar el selector (petición usuario "sin elegir"). */
+    if (state.pickedTours.length < 1) {
+      var _only = _psVisibleTourIds();
+      if (_only.length === 1) {
+        state.pickedTours = [_only[0]];
+        try { savePickedTours(state.pickedTours); } catch(_){}
+        try { if (typeof window._tourMergeBayern === 'function') window._tourMergeBayern(_only[0]); } catch(_){}
+      }
+    }
     /* Mostrar solo si aún no hay torneo confirmado. Una vez elegido
        1, ocultamos el picker y el flujo normal de la agenda continúa. */
     if (state.pickedTours.length >= 1) {

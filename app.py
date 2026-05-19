@@ -1790,6 +1790,64 @@ def _ensure_june_pretemp(data):
     return data
 
 
+# Mundialito de Clubes — 7 eventos el 16 Jul (orden de torneo).
+# Petición usuario 2026-05-19: el editor no dejaba ponerlos, se
+# inyectan en el calendario global (y de ahí a las cajas de equipo).
+_MUNDIALITO_EVENTS = [
+    ("mun-001", "Mundialito- J1"),
+    ("mun-002", "Mundialito- J2"),
+    ("mun-003", "Mundialito- J3"),
+    ("mun-004", "Mundialito- Octavos"),
+    ("mun-005", "Mundialito- Cuartos"),
+    ("mun-006", "Mundialito- Semis"),
+    ("mun-007", "Mundialito- FINAL"),
+]
+
+
+def _ensure_mundialito(data):
+    """Inserta (idempotente) los 7 eventos del Mundialito de Clubes
+    (16 Jul, icono 🌐) en la sección que contiene Julio. Si ya hay
+    algún evento 'Mundialito' no hace nada (respeta ediciones)."""
+    if not isinstance(data, dict):
+        return data
+    secs = data.get("sections")
+    if not isinstance(secs, list) or not secs:
+        return data
+    for s in secs:
+        if not isinstance(s, dict):
+            continue
+        for ev in (s.get("events") or []):
+            if isinstance(ev, dict) and str(ev.get("name", "")).strip().lower().startswith("mundialito"):
+                return data  # ya están
+    # Sección destino: la que tenga eventos de Julio (mes 6); si no,
+    # la primera con eventos; si no, la primera.
+    target = None
+    for s in secs:
+        if not isinstance(s, dict):
+            continue
+        for ev in (s.get("events") or []):
+            p = _parse_event_date((ev or {}).get("date"))
+            if p is not None and p[0] == 6:  # Julio
+                target = s
+                break
+        if target is not None:
+            break
+    if target is None:
+        target = next((s for s in secs if isinstance(s, dict) and s.get("events")), None)
+    if target is None:
+        target = secs[0] if isinstance(secs[0], dict) else None
+    if target is None:
+        return data
+    target.setdefault("events", [])
+    for ev_id, name in _MUNDIALITO_EVENTS:
+        target["events"].append({
+            "id": ev_id, "date": "16 Jul", "icon": "🌐",
+            "name": name, "weather": "☀️",
+        })
+    _sort_section_events(target)
+    return data
+
+
 def _calendario_normalize(data):
     """Asegura el esqueleto mínimo y los defaults de un dict de calendario."""
     if not isinstance(data, dict):
@@ -1799,6 +1857,7 @@ def _calendario_normalize(data):
     if not isinstance(data.get("sections"), list):
         data["sections"] = []
     _ensure_june_pretemp(data)
+    _ensure_mundialito(data)
     return data
 
 
@@ -1839,14 +1898,21 @@ def load_calendario():
         except (TypeError, ValueError):
             data = None
         if isinstance(data, dict):
+            _secs0 = data.get("sections") or []
             had_june = any(
                 isinstance(s, dict) and s.get("id") == "verano-jun"
-                for s in (data.get("sections") or [])
+                for s in _secs0
+            )
+            had_mun = any(
+                isinstance(ev, dict)
+                and str(ev.get("name", "")).strip().lower().startswith("mundialito")
+                for s in _secs0 if isinstance(s, dict)
+                for ev in (s.get("events") or [])
             )
             data = _calendario_normalize(data)
-            # Persistimos UNA vez el bloque de Junio en la BD para que
-            # sea parte permanente y editable del calendario.
-            if not had_june:
+            # Persistimos UNA vez los bloques inyectados (Junio /
+            # Mundialito) para que sean parte permanente y editable.
+            if not had_june or not had_mun:
                 try:
                     _calendario_save_to_db(data)
                 except Exception:

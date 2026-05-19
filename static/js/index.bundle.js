@@ -8652,21 +8652,110 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     }
     return false;
   }
+  /* ── Sustitución de equipos de Liga EA Sports (decisión usuario
+     2026-05-18: "editor manda" + "el reemplazo hereda el hueco") ──
+     Si el admin sacó un equipo de Liga EA (lo movió a otra liga o lo
+     borró → su nombre normalizado queda en
+     `ligaExt_liga-ea-sports.deletedTeamNames`) Y añadió otro equipo
+     NUEVO en el editor (un nombre que no está en la lista canónica
+     TEAM_ORDER), el nuevo OCUPA el hueco del borrado: misma posición
+     en la tabla y hereda TODOS sus partidos del calendario y sus
+     resultados ya jugados.
+
+     Ej.: Bayern movido a Liga Alemana + Liverpool añadido en el
+     editor ⇒ Liverpool juega los partidos de Bayern, la Liga sigue
+     con 20 equipos. Si se quitó un equipo SIN añadir reemplazo, ese
+     hueco se descarta y la Liga queda con 19.
+
+     El emparejamiento es por orden: removidos[i] ← añadidos[i]. */
+  function _ligaEaNorm(s){
+    return (typeof window._lextNormName === 'function')
+      ? window._lextNormName(s)
+      : String(s==null?'':s).trim().toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g,'');
+  }
+  function _ligaEaSubMap(){
+    var res = { map:Object.create(null), removed:Object.create(null) };
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(!raw) return res;
+      var d = JSON.parse(raw) || {};
+      var del = Array.isArray(d.deletedTeamNames) ? d.deletedTeamNames : [];
+      if(!del.length) return res;
+      var delSet = Object.create(null);
+      del.forEach(function(n){ var k=_ligaEaNorm(n); if(k) delSet[k]=true; });
+      var canon = Object.create(null);
+      TEAM_ORDER.forEach(function(n){ canon[_ligaEaNorm(n)] = true; });
+      var removed = TEAM_ORDER.filter(function(n){ return delSet[_ligaEaNorm(n)]; });
+      var added = [], seen = Object.create(null);
+      (Array.isArray(d.teams) ? d.teams : []).forEach(function(t){
+        var nm = t && t.name ? String(t.name).trim() : '';
+        if(!nm || nm === 'Por definir') return;
+        var k = _ligaEaNorm(nm);
+        if(canon[k] || delSet[k] || seen[k]) return;
+        seen[k] = true; added.push(nm);
+      });
+      var pairN = Math.min(removed.length, added.length);
+      for(var i=0;i<pairN;i++){ res.map[_ligaEaNorm(removed[i])] = added[i]; }
+      for(var j=pairN;j<removed.length;j++){ res.removed[_ligaEaNorm(removed[j])] = true; }
+    } catch(_){}
+    return res;
+  }
+  try {
+    window._ligaEaSubName = function(n){
+      var s = _ligaEaSubMap(); return s.map[_ligaEaNorm(n)] || n;
+    };
+    window._ligaEaSubInfo = _ligaEaSubMap;
+  } catch(_){}
+  /* ¿La jornada `j` del SCHEDULE contiene el cruce home/away? Acepta
+     tanto el nombre original como el sustituido (la ventana en que
+     el calendario aún tiene "Bayern" pero la tabla ya es "Liverpool",
+     o viceversa), así los resultados de Bayern cuentan para Liverpool. */
+  function _schedHasPair(j, hCands, aCands){
+    var sch = window.LIGA_SCHEDULE;
+    if(!sch || !Array.isArray(sch) || !sch.length) return true;
+    if(j < 1 || j > sch.length) return false;
+    var jArr = sch[j-1];
+    if(!Array.isArray(jArr)) return false;
+    for(var i=0;i<jArr.length;i++){
+      var p = jArr[i]; if(!p) continue;
+      var ph = canonicalTeamName(p[0]), pa = canonicalTeamName(p[1]);
+      for(var x=0;x<hCands.length;x++){
+        for(var y=0;y<aCands.length;y++){
+          if(ph === canonicalTeamName(hCands[x]) &&
+             pa === canonicalTeamName(aCands[y])) return true;
+        }
+      }
+    }
+    return false;
+  }
   function getSavedLigaTable(){
     var teams = {};
-    TEAM_ORDER.forEach(function(name){ ensureTeam(teams, name); });
+    var SUB = _ligaEaSubMap();
+    function _subName(n){ return SUB.map[_ligaEaNorm(n)] || n; }
+    TEAM_ORDER.forEach(function(name){
+      var k = _ligaEaNorm(name);
+      if(SUB.map[k]){ ensureTeam(teams, SUB.map[k]); return; } /* reemplazo hereda el hueco */
+      if(SUB.removed[k]) return; /* quitado sin reemplazo → Liga a 19 */
+      ensureTeam(teams, name);
+    });
     var results = parseSavedResults();
     Object.keys(results).forEach(function(key){
-      /* Saltar keys que no pertenecen al SCHEDULE actual (sims
-         antiguos de schedules reshuffled). Sin esto, los equipos
-         podían acumular 50+ PJ en una liga de 38 jornadas. */
-      if(!_resultKeyMatchesSchedule(key)) return;
       var meta = parseResultKey(key);
       var data = results[key] || {};
       if(!meta || typeof data !== 'object') return;
       if(data.gh == null || data.ga == null) return;
+      /* equipo quitado SIN reemplazo → su partido no cuenta */
+      if(SUB.removed[_ligaEaNorm(meta.home)] || SUB.removed[_ligaEaNorm(meta.away)]) return;
+      var h = _subName(meta.home), a = _subName(meta.away);
+      /* Saltar keys que no pertenecen al SCHEDULE actual (sims
+         antiguos de schedules reshuffled). Sin esto, los equipos
+         podían acumular 50+ PJ en una liga de 38 jornadas.
+         Aceptamos el cruce con el nombre original o el sustituido
+         para que los resultados de Bayern migren a Liverpool. */
+      if(!_schedHasPair(meta.jornada, [meta.home, h], [meta.away, a])) return;
       var extra = countEventExtras(meta.home, meta.away, data);
-      applyMatch(teams, meta.jornada, meta.home, meta.away, data.gh, data.ga, data.penWinner || null, extra);
+      applyMatch(teams, meta.jornada, h, a, data.gh, data.ga, data.penWinner || null, extra);
     });
     return Object.keys(teams).map(function(name){
       var team = teams[name];

@@ -4353,7 +4353,7 @@
     DEFAULT_SEGUNDA_TEAMS.forEach(function(t){
       _spainPool.push({ name:t.name, tier:'Hypermotion' });
     });
-    /* Primera Federación (~40 equipos). */
+    /* Primera Federación (hasta 44 equipos = 2 grupos × 22). */
     DEFAULT_PRIMERA_G1.forEach(function(t){
       _spainPool.push({ name:t.name, tier:'Primera RFEF' });
     });
@@ -4418,10 +4418,13 @@
     return {g1:deepCopy(DEFAULT_PRIMERA_G1), g2:deepCopy(DEFAULT_PRIMERA_G2)};
   }
   function getPrimeraTeams(){
-    /* Reglas grabadas a fuego (usuario, 2026-05-02):
-       · 1ª RFEF tiene 41 equipos máximo. Estructura: 2 grupos × 20
-         equipos jugando ida+vuelta (38 partidos cada uno), tirando
-         al MÁS DÉBIL del 41 → 40 equipos repartidos.
+    /* Reglas grabadas a fuego (usuario, 2026-05-02 · ACTUALIZADO
+       2026-05-18):
+       · 1ª RFEF: 2 grupos × 22 equipos jugando ida+vuelta (42
+         partidos por equipo). Tope total = 44; si llegan más, se
+         descarta(n) el/los más débil(es). ANTES era 2×20 (cap 40):
+         el usuario añadió equipos por el editor y los sobrantes "no
+         se instalaban en ningún grupo" — ahora caben hasta 22/grupo.
        · NINGÚN equipo de Liga EA Sports (Primera) ni de Liga
          Hypermotion (Segunda) puede estar en 1ª RFEF en la misma
          temporada.
@@ -4440,7 +4443,7 @@
        conocidos de Primera + Segunda (`ligaExt_liga-ea-sports`,
        `ligaExt_liga-hypermotion`, DEFAULT_SEGUNDA_TEAMS), ordenamos
        por media descendente, descartamos al más débil si quedan
-       > 40, y partimos por snake (impares→g1, pares→g2) para que
+       > 44, y partimos por snake (impares→g1, pares→g2) para que
        los dos grupos queden balanceados en fuerza. */
     function _norm(s){
       return String(s||'').toLowerCase().normalize('NFD')
@@ -4495,7 +4498,16 @@
         return true;
       });
       clean.sort(function(a,b){ return (b.media||0) - (a.media||0); });
-      if(clean.length > 40) clean = clean.slice(0, 40);
+      /* TOPE 44 (regla usuario 2026-05-18, ANTES era 40): 1ª RFEF
+         pasa a 2 grupos × 22 equipos (ida+vuelta = 42 partidos por
+         equipo). El usuario añadió equipos por el editor y con el
+         cap viejo de 40 los 2+ más débiles se descartaban y "no se
+         instalaban en ningún grupo". Snake split balancea fuerza:
+         44 equipos → 22 g1 + 22 g2; con menos, reparte equilibrado
+         (p.ej. 42 → 21/21). simulateLeague es genérico (round-robin
+         de los equipos que reciba), así que 22/grupo funciona sin
+         más cambios. */
+      if(clean.length > 44) clean = clean.slice(0, 44);
       var g1 = [], g2 = [];
       clean.forEach(function(t, i){ (i % 2 === 0 ? g1 : g2).push(t); });
       return { g1: g1, g2: g2 };
@@ -5523,6 +5535,25 @@
     for(var i=0;i<keys.length;i++){
       if(_humanNorm(keys[i]) === norm) return HUMAN_ICONS[keys[i]]+'\u00a0';
     }
+    /* Fallback DIN\u00c1MICO (2026-05-19): cualquier equipo marcado humano
+       en el editor de plantilla (Resto de Ligas) tiene su emoji en
+       window._LIGA_HUMAN_FLAGS (lo construye refreshLigaEaShields
+       escaneando todos los ligaExt_*, keyed por nombre exacto y
+       normalizado). HUMAN_ICONS solo trae los 6 can\u00f3nicos hardcodeados,
+       por eso un humano "extra" (p.ej. Liverpool\ud83d\udca1) no sacaba emoji en
+       Derbys/clasificaciones. CLAUDE.md: "humanIcon(name) devuelve el
+       humanEmoji del editor". Additivo: no toca los 5 can\u00f3nicos. */
+    try {
+      var fl = window._LIGA_HUMAN_FLAGS;
+      if (fl) {
+        if (fl[name] && fl[name].isHuman && fl[name].humanEmoji) return fl[name].humanEmoji+'\u00a0';
+        for (var fk in fl) {
+          if (!Object.prototype.hasOwnProperty.call(fl, fk)) continue;
+          var fv = fl[fk];
+          if (fv && fv.isHuman && fv.humanEmoji && _humanNorm(fk) === norm) return fv.humanEmoji+'\u00a0';
+        }
+      }
+    } catch(_){}
     return '';
   }
   window.humanIcon = humanIcon;
@@ -6077,8 +6108,86 @@
     SCHEDULE = generarCalendario(_rotarPorReloj(mezclarEquipos(TEAMS.slice())));
     try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(SCHEDULE)); } catch(_){}
   }
+
+  /* ── Sustitución de equipos en el calendario (decisión usuario
+     2026-05-18: "el reemplazo hereda el hueco de Bayern") ──
+     Si el admin sacó un equipo de Liga EA (queda en
+     `ligaExt_liga-ea-sports.deletedTeamNames`) y añadió otro NUEVO
+     en el editor (nombre que no está en la lista canónica `TEAMS`),
+     el calendario PERSISTIDO sigue teniendo al viejo. Aquí se
+     renombra in-place viejo→nuevo: Liverpool juega EXACTAMENTE los
+     partidos de Bayern, mismas jornadas, sin regenerar nada ni
+     perder resultados. Emparejamiento por orden removidos[i]←añadidos[i].
+     Gemelo self-contained de `_ligaEaSubMap` del bundle (usa la
+     lista local `TEAMS` para no depender del orden de carga). */
+  function _eaSubMapLocal(){
+    var m = Object.create(null);
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(!raw) return m;
+      var d = JSON.parse(raw) || {};
+      var del = Array.isArray(d.deletedTeamNames) ? d.deletedTeamNames : [];
+      if(!del.length) return m;
+      var nf = function(s){ return String(s==null?'':s).trim().toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,''); };
+      var delSet = Object.create(null);
+      del.forEach(function(n){ var k=nf(n); if(k) delSet[k]=true; });
+      var canon = Object.create(null);
+      TEAMS.forEach(function(n){ canon[nf(n)] = true; });
+      var removed = TEAMS.filter(function(n){ return delSet[nf(n)]; });
+      var added = [], seen = Object.create(null);
+      (Array.isArray(d.teams) ? d.teams : []).forEach(function(t){
+        var nm = t && t.name ? String(t.name).trim() : '';
+        if(!nm || nm === 'Por definir') return;
+        var k = nf(nm);
+        if(canon[k] || delSet[k] || seen[k]) return;
+        seen[k] = true; added.push(nm);
+      });
+      var p = Math.min(removed.length, added.length);
+      for(var i=0;i<p;i++){ m[nf(removed[i])] = added[i]; }
+    } catch(_){}
+    return m;
+  }
+  function _eaRemapSchedule(sch){
+    if(!Array.isArray(sch)) return sch;
+    var m = _eaSubMapLocal();
+    if(!Object.keys(m).length) return sch;
+    var nf = function(s){ return String(s==null?'':s).trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,''); };
+    var changed = false;
+    var out = sch.map(function(j){
+      return Array.isArray(j) ? j.map(function(p){
+        if(!Array.isArray(p)) return p;
+        var nh = m[nf(p[0])], na = m[nf(p[1])];
+        if(nh || na){ changed = true; return [nh || p[0], na || p[1]]; }
+        return p;
+      }) : j;
+    });
+    return changed ? out : sch;
+  }
+  function _eaApplyScheduleSub(persist){
+    try {
+      var rm = _eaRemapSchedule(window.LIGA_SCHEDULE || SCHEDULE);
+      if(rm && rm !== (window.LIGA_SCHEDULE || SCHEDULE)){
+        SCHEDULE = rm;
+        window.LIGA_SCHEDULE = rm;
+        if(persist !== false){
+          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(rm)); } catch(_){}
+        }
+      }
+    } catch(_){}
+  }
+
   window.LIGA_SCHEDULE = SCHEDULE;
+  _eaApplyScheduleSub(true);
   hydrateLigaStateFromBackend();
+  /* Reaplicar tras la posible carga diferida del editor / hidratación
+     backend (que pueden traer un calendario con el equipo viejo). */
+  try {
+    document.addEventListener('DOMContentLoaded', function(){
+      setTimeout(function(){ _eaApplyScheduleSub(true); }, 900);
+    });
+  } catch(_){}
 
   /* ── PERSISTENCIA ────────────────────────────────── */
   function loadResults() {
@@ -20490,6 +20599,52 @@ window.goLiveMatches = function() {
   var ISRAMAX_INITIAL_CASH = 1300;
   var _isramaxSession = null; /* {userId, isGuest} en memoria */
 
+  /* ── Equipo ACTUAL del humano (2026-05-19) ───────────────────────
+     ISRAMAX_USERS trae un `team` HARDCODEADO. Cuando un humano cambia
+     de equipo en el editor (p.ej. Toñín pasa de Bayern a Liverpool),
+     la tarjeta seguía mostrando el viejo. La identidad ESTABLE del
+     humano es su emoji (`u.icon`); el equipo real es el que tenga ese
+     humanEmoji marcado isHuman en los ligaExt_*. Resolvemos por emoji
+     y caemos a `u.team` si no se encuentra. Memo 3 s para no escanear
+     localStorage en cada uno de los ~5 renders por pantalla. */
+  var _isrTeamMapCache = null, _isrTeamMapTs = 0;
+  function _isramaxStripEmoji(s){ return String(s||'').replace(/[\s ️]/g,'').trim(); }
+  function _isramaxTeamMap(){
+    var now = Date.now();
+    if (_isrTeamMapCache && (now - _isrTeamMapTs) < 3000) return _isrTeamMapCache;
+    var map = {};
+    try {
+      var pri = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion'];
+      var slugs = pri.slice();
+      for (var i=0;i<localStorage.length;i++){
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup')!==-1 || k.indexOf('_snap_')!==-1 || k.indexOf('_protected')!==-1) continue;
+        var sg = k.substring('ligaExt_'.length);
+        if (pri.indexOf(sg) === -1) slugs.push(sg);
+      }
+      for (var s=0;s<slugs.length;s++){
+        var raw = localStorage.getItem('ligaExt_'+slugs[s]); if (!raw) continue;
+        var d; try { d = JSON.parse(raw); } catch(_){ continue; }
+        if (!d || !Array.isArray(d.teams)) continue;
+        for (var t=0;t<d.teams.length;t++){
+          var tm = d.teams[t];
+          if (!tm || !tm.isHuman || !tm.name) continue;
+          var em = _isramaxStripEmoji(tm.humanEmoji);
+          if (em && !map[em]) map[em] = String(tm.name).trim(); /* prioridad: primero gana */
+        }
+      }
+    } catch(_){}
+    _isrTeamMapCache = map; _isrTeamMapTs = now;
+    return map;
+  }
+  function _isramaxTeam(u){
+    if (!u) return '';
+    var ic = _isramaxStripEmoji(u.icon);
+    var m = _isramaxTeamMap();
+    return (ic && m[ic]) ? m[ic] : u.team;
+  }
+
   function _isramaxLoad(){
     try {
       var raw = localStorage.getItem(ISRAMAX_KEY);
@@ -20675,7 +20830,7 @@ window.goLiveMatches = function() {
             + ' onclick="window._isramaxLogin&&window._isramaxLogin(\'' + u.id + '\')">'
             +   '<div class="isr-user-icon">' + u.icon + '</div>'
             +   '<div class="isr-user-name">' + u.name + '</div>'
-            +   '<div class="isr-user-team">' + u.team + '</div>'
+            +   '<div class="isr-user-team">' + _isramaxTeam(u) + '</div>'
             + '</div>';
     });
     html += '</div>';
@@ -20709,7 +20864,7 @@ window.goLiveMatches = function() {
       + '<div class="isr-login-card" style="--isr-c1:'+c1+';--isr-c2:'+c2+';--isr-c3:'+c3+';">'
       +   '<div class="isr-login-icon">' + u.icon + '</div>'
       +   '<div class="isr-login-name">' + u.name + '</div>'
-      +   '<div class="isr-login-team">' + u.team + '</div>'
+      +   '<div class="isr-login-team">' + _isramaxTeam(u) + '</div>'
       +   '<input id="isramax-pin" class="isr-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="PIN"/>'
       +   '<div id="isramax-pin-err" class="isr-pin-err"></div>'
       +   '<div class="isr-btn-row">'
@@ -20776,7 +20931,7 @@ window.goLiveMatches = function() {
       +     '<span style="font-size:34px;">' + u.icon + '</span>'
       +     '<div>'
       +       '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:26px;letter-spacing:2px;color:#fff;line-height:1;">' + u.name + '</div>'
-      +       '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.85);">' + u.team
+      +       '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.85);">' + _isramaxTeam(u)
       +         (_isramaxSession.isGuest ? ' · INVITADO' : ' · ADMIN') + '</div>'
       +     '</div>'
       +   '</div>'
@@ -20836,7 +20991,7 @@ window.goLiveMatches = function() {
      ─────────────────────────────────────────────────────── */
   function _isramaxUserTeam(userId){
     var u = _isramaxFindUser(userId);
-    return u ? u.team : '';
+    return u ? _isramaxTeam(u) : '';
   }
   function _isramaxScanDerbys(){
     /* Reusa _scanAllDerbies del módulo Derbys: lista todos los
@@ -20852,7 +21007,7 @@ window.goLiveMatches = function() {
   function _isramaxRenderMatchPick(){
     var u = _isramaxFindUser(_isramaxSession.userId);
     if (!u) return _isramaxRenderUsers();
-    var myTeam = u.team;
+    var myTeam = _isramaxTeam(u);
     var all = _isramaxScanDerbys();
     /* Filtros: estado pending o playing (no apostar a finalizados),
        y excluir partidos donde el propio user juegue. */
@@ -20865,7 +21020,7 @@ window.goLiveMatches = function() {
     var html = ''
       + '<button class="isr-back" onclick="window._isramaxRenderDashboard&&window._isramaxRenderDashboard()">◀ Volver al dashboard</button>'
       + '<h2>🎰 Elegir partido</h2>'
-      + '<div class="isr-sub">No puedes apostar partidos donde juega ' + u.team + '</div>';
+      + '<div class="isr-sub">No puedes apostar partidos donde juega ' + _isramaxTeam(u) + '</div>';
     if (!pickable.length){
       html += '<div class="isr-empty">No hay partidos H-vs-H disponibles para apostar.<br><small>Aparecerán aquí cuando el calendario tenga enfrentamientos pendientes entre humanos (excluyendo los tuyos).</small></div>';
     } else {
@@ -25257,10 +25412,143 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  /* ── MODO 2º PLANO (decisión usuario 2026-05-19) ──────────────────
+     El overlay del balón a pantalla completa se quedaba clavado en
+     "8 % INICIANDO/PREPARANDO" en las simulaciones de ligas (fotos
+     usuario; ver historial _MATCH/loader). Decisión: las SIMS DE
+     LIGAS ya NO usan el overlay bloqueante — corren en 2º plano con
+     un aviso pequeño NO bloqueante (pointer-events:none, no tapa la
+     UI, imposible que "atrape" la pantalla) y refrescan solas al
+     terminar. `bgRun` respeta el MISMO contrato que `run`
+     (opts {title,sub,theme,minMs}, runner({progress})→Promise|void,
+     devuelve Promise, watchdog, SIEMPRE resuelve) para poder
+     sustituirlo 1:1 en los wrappers de liga sin tocar su lógica.
+     Los SORTEOS de competición (Copa/Champions/Previa/WildCard)
+     siguen con el overlay clásico — son rápidos y ahí sí se quiere
+     el gesto visual. */
+  function _bgToastEl(){
+    var el = document.getElementById('ftbol-bg-toast');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'ftbol-bg-toast';
+      el.style.cssText = 'position:fixed;left:50%;bottom:22px;'
+        + 'transform:translateX(-50%);background:rgba(16,16,22,.94);'
+        + 'border:1px solid rgba(240,200,80,.45);border-radius:12px;'
+        + 'padding:10px 18px;color:#ffe2a0;'
+        + 'font-family:Rajdhani,system-ui,sans-serif;font-size:13px;'
+        + 'font-weight:600;letter-spacing:.4px;line-height:1.35;'
+        + 'max-width:86vw;text-align:center;'
+        + 'box-shadow:0 10px 30px rgba(0,0,0,.55);z-index:2147483630;'
+        + 'pointer-events:none;white-space:nowrap;overflow:hidden;'
+        + 'text-overflow:ellipsis;transition:opacity .25s;opacity:0;';
+      (document.body || document.documentElement).appendChild(el);
+      var _raf = (typeof requestAnimationFrame === 'function')
+        ? requestAnimationFrame : function(f){ return setTimeout(f,16); };
+      _raf(function(){ try { el.style.opacity = '1'; } catch(_){} });
+    }
+    return el;
+  }
+  function _bgToastSet(txt){
+    try { var e = _bgToastEl(); e.textContent = txt; } catch(_){}
+  }
+  function _bgToastDismiss(finalTxt, holdMs){
+    var e = document.getElementById('ftbol-bg-toast');
+    if(!e) return;
+    try { if(finalTxt != null) e.textContent = finalTxt; } catch(_){}
+    setTimeout(function(){
+      try {
+        e.style.opacity = '0';
+        setTimeout(function(){
+          try { if(e.parentNode) e.parentNode.removeChild(e); } catch(_){}
+        }, 320);
+      } catch(_){}
+    }, holdMs || 1500);
+  }
+  function bgRun(opts, runner){
+    opts = opts || {};
+    var title = String(opts.title || 'SIMULANDO');
+    var sub0  = String(opts.sub != null ? opts.sub : 'Preparando…');
+    var minMs = _scale(opts.minMs != null ? opts.minMs : 600);
+    var t0 = Date.now();
+    _bgToastSet('⚽ ' + title + ' · ' + sub0);
+    return new Promise(function(resolve, reject){
+      var settled = false, wd = null;
+      function _finish(ok, val){
+        if(settled) return;
+        settled = true;
+        try { if(wd){ clearTimeout(wd); wd = null; } } catch(_){}
+        if(ok){ _bgToastDismiss('✅ ' + title + ' · listo'); resolve(val); }
+        else  { _bgToastDismiss('⚠️ ' + title + ' · error (ver consola)'); reject(val); }
+      }
+      /* Watchdog: el aviso NO bloquea la UI, pero igualmente lo
+         retiramos solo si el runner nunca resolviera. */
+      var WD = Math.max(60000, minMs + 120000);
+      wd = setTimeout(function(){
+        if(settled) return;
+        try { console.warn('[ftbolBg] watchdog '+WD+'ms — el runner no resolvió; cierro aviso.'); } catch(_){}
+        _finish(true, undefined);
+      }, WD);
+      function prog(p, s){
+        p = Math.max(0, Math.min(100, Math.round(Number(p)||0)));
+        try { _bgToastSet('⚽ ' + title + ' · ' + String(s != null ? s : sub0) + '  ' + p + '%'); } catch(_){}
+      }
+      /* Un tick para que el aviso pinte antes del primer trabajo. */
+      setTimeout(function(){
+        try {
+          var r = runner({ progress: prog });
+          Promise.resolve(r).then(function(res){
+            if(settled) return;
+            prog(100, 'Hecho');
+            var wait = Math.max(250, minMs - (Date.now() - t0));
+            setTimeout(function(){ _finish(true, res); }, wait);
+          }, function(err){
+            try { console.error('[ftbolBg]', err); } catch(_){}
+            _finish(false, err);
+          });
+        } catch(err){
+          try { console.error('[ftbolBg]', err); } catch(_){}
+          _finish(false, err);
+        }
+      }, 20);
+    });
+  }
+
+  /* Aviso flotante independiente (id propio, NO colisiona con el
+     toast de `bgRun`). Para resúmenes tipo "✅ Simuladas 49 ligas". */
+  function bgNotice(text, holdMs){
+    try {
+      var el = document.createElement('div');
+      el.style.cssText = 'position:fixed;left:50%;bottom:64px;'
+        + 'transform:translateX(-50%);background:rgba(16,16,22,.95);'
+        + 'border:1px solid rgba(120,220,140,.5);border-radius:12px;'
+        + 'padding:11px 20px;color:#bff0c8;'
+        + 'font-family:Rajdhani,system-ui,sans-serif;font-size:13.5px;'
+        + 'font-weight:700;letter-spacing:.4px;line-height:1.35;'
+        + 'max-width:88vw;text-align:center;'
+        + 'box-shadow:0 10px 30px rgba(0,0,0,.55);z-index:2147483631;'
+        + 'pointer-events:none;transition:opacity .3s;opacity:0;';
+      el.textContent = String(text == null ? '' : text);
+      (document.body || document.documentElement).appendChild(el);
+      var _raf = (typeof requestAnimationFrame === 'function')
+        ? requestAnimationFrame : function(f){ return setTimeout(f,16); };
+      _raf(function(){ try { el.style.opacity = '1'; } catch(_){} });
+      setTimeout(function(){
+        try {
+          el.style.opacity = '0';
+          setTimeout(function(){
+            try { if(el.parentNode) el.parentNode.removeChild(el); } catch(_){}
+          }, 350);
+        } catch(_){}
+      }, holdMs || 4200);
+    } catch(_){}
+  }
+
   window.ftbolLoaderShow = show;
   window.ftbolLoaderProgress = progress;
   window.ftbolLoaderHide = hide;
   window.ftbolLoaderRun = run;
+  window._ftbolBgRun = bgRun;
+  window._ftbolBgNotice = bgNotice;
   window.ftbolLoaderSetTheme = _setTheme;
   window.ftbolLoaderSpeed = SPEED;
   /* Helper expuesto para que los wrappers escalen sus propios timings
@@ -25304,7 +25592,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var scale = (typeof window.ftbolLoaderScale === 'function')
       ? window.ftbolLoaderScale
       : function(x){ return x; };
-    return window.ftbolLoaderRun({
+    /* opts.bg → modo 2º plano NO bloqueante (sims de LIGAS). Sin él
+       → overlay clásico del balón (sorteos de competición). */
+    var _runner = (opts.bg && typeof window._ftbolBgRun === 'function')
+      ? window._ftbolBgRun
+      : window.ftbolLoaderRun;
+    return _runner({
       title: opts.title, sub: opts.sub || 'Inicializando equipos…',
       theme: opts.theme, minMs: opts.minMs||1200
     }, function(ctx){
@@ -25376,12 +25669,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     window.simularJ138ConOverlay = function(){
-      if(typeof window.ftbolLoaderRun !== 'function' ||
+      var _bgRun = (typeof window._ftbolBgRun === 'function')
+        ? window._ftbolBgRun : window.ftbolLoaderRun;
+      if(typeof _bgRun !== 'function' ||
          typeof window.simularTodasJornadasIAAsync !== 'function'){
         if(typeof origSjia === 'function') origSjia();
         return;
       }
-      return window.ftbolLoaderRun(
+      return _bgRun(
         { title:'LIGA EA SPORTS · J1 → J38', sub:'Iniciando simulación…', theme:'liga-ea', minMs: 700 },
         function(ctx){
           return window.simularTodasJornadasIAAsync(function(pct, sub){
@@ -25401,7 +25696,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'LIGA HYPERMOTION', sub:'Preparando…', theme:'hyper', minMs:1400 },
+        { title:'LIGA HYPERMOTION', sub:'Preparando…', theme:'hyper', minMs:1400, bg:true },
         function(){ if(typeof origSeg === 'function') origSeg(); }
       ).then(function(){ _refreshOpenSquadAfterSim('liga-hypermotion'); });
     };
@@ -25412,7 +25707,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'PRIMERA FEDERACIÓN · G'+(n||1), sub:'Preparando…', theme:'primf', minMs:1300 },
+        { title:'PRIMERA FEDERACIÓN · G'+(n||1), sub:'Preparando…', theme:'primf', minMs:1300, bg:true },
         function(){ if(typeof origPg === 'function') origPg(n); }
       ).then(function(){ _refreshOpenSquadAfterSim('liga-primera-federacion'); });
     };
@@ -25423,7 +25718,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'PRIMERA FEDERACIÓN · G1+G2', sub:'Preparando…', theme:'primf', minMs:1700,
+        { title:'PRIMERA FEDERACIÓN · G1+G2', sub:'Preparando…', theme:'primf', minMs:1700, bg:true,
           phases:[
             { pct:14, sub:'Cargando plantillas G1…', ms:140 },
             { pct:36, sub:'Simulando G1…',           ms:220 },
@@ -25443,12 +25738,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var origSjiaSingle = window.simularJornadaIA;
     if(typeof origSjiaSingle === 'function'){
       window.simularJornadaIA = function(j){
-        if(typeof window.ftbolLoaderRun !== 'function'){
+        var _bgRunJ = (typeof window._ftbolBgRun === 'function')
+          ? window._ftbolBgRun : window.ftbolLoaderRun;
+        if(typeof _bgRunJ !== 'function'){
           return origSjiaSingle(j);
         }
         var _scaleFn = (typeof window.ftbolLoaderScale === 'function')
           ? window.ftbolLoaderScale : function(x){ return x; };
-        return window.ftbolLoaderRun(
+        return _bgRunJ(
           { title:'LIGA EA SPORTS · JORNADA '+j, sub:'Simulando partidos…', theme:'liga-ea', minMs:600 },
           function(ctx){
             return new Promise(function(resolve){
@@ -25521,7 +25818,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if(ck) title = ck.replace(/-/g,' ').toUpperCase();
         } catch(_){}
         return _runFakeProgress(
-          { title: title, sub:'Preparando…', theme:'resto', minMs:1100,
+          { title: title, sub:'Preparando…', theme:'resto', minMs:1100, bg:true,
             phases:[
               { pct:22, sub:'Cargando plantillas…',     ms:130 },
               { pct:48, sub:'Generando jornadas…',      ms:180 },

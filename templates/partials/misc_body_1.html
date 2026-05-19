@@ -280,7 +280,7 @@ window._showSimProgress = function(opts, onDone){
 </div>
 
 <div style="grid-column:span 2; border-top:1px solid rgba(240,192,64,.2); margin:4px 0; padding-top:10px;">
-<div style="font-family:Oswald,sans-serif;font-size:14px;font-weight:800;letter-spacing:3.6px;color:#ffe7a6;text-shadow:0 0 16px rgba(240,192,64,.55);padding:0 4px 8px;">👤 EQUIPOS</div>
+<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-family:Oswald,sans-serif;font-size:14px;font-weight:800;letter-spacing:3.6px;color:#ffe7a6;text-shadow:0 0 16px rgba(240,192,64,.55);padding:0 4px 8px;"><span>👤 EQUIPOS</span><button id="mk-edit-btn" type="button" class="mk-edit-pencil" onclick="window._mkToggleEditMode&&window._mkToggleEditMode()" title="Editar menú (admin · PIN 747)" aria-label="Editar menú">🖍</button></div>
 </div>
 
 <div class="menu-card equipo-card mc-athletic" onclick="go('s-munich')" style="background:linear-gradient(135deg,#8b001c 0%,#dc052d 55%,#ff5c7a 100%);height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
@@ -315,6 +315,596 @@ window._showSimProgress = function(opts, onDone){
 </div></div>
 </div>
 </div>
+
+<!-- ═══ EDITOR DE MENÚ PRINCIPAL — cajas editables (admin · PIN 747) ═══
+     El 🖍 junto al título "👤 EQUIPOS" abre `_mkToggleEditMode` →
+     requireAdmin (PIN 747, sistema admin compartido) → modo edición.
+     En modo edición cada `.menu-card` del `#s-home .menu-grid` se puede
+     editar (texto + icono), eliminar, y se pueden añadir cajas nuevas.
+     Las cajas de EQUIPO eligen un equipo de la lista del proyecto
+     (TEAM_RATINGS / getTeamLogoUrl): nombre + escudo real, nombre del
+     entrenador al lado, y los colores (degradado exterior + tinte
+     interior) se extraen automáticamente del escudo. El estado vive en
+     localStorage bajo `menu_home_v1` (config pequeña, muy por debajo
+     del cap de 2 MB) y se re-aplica al cargar y al volver a s-home,
+     con appliers IDEMPOTENTES (firma cacheada) y SIN MutationObserver
+     global — respeta el precedente del cronómetro. -->
+<style>
+  .mk-edit-pencil{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:rgba(240,192,64,.16);border:1px solid rgba(240,192,64,.55);border-radius:7px;font-size:14px;line-height:1;cursor:pointer;-webkit-tap-highlight-color:transparent;padding:0;color:#ffe7a6;transition:transform .15s,background .15s;flex-shrink:0;}
+  .mk-edit-pencil:hover{transform:scale(1.12);background:rgba(240,192,64,.30);}
+  .mk-edit-pencil:active{transform:scale(.94);}
+  #s-home .menu-grid.mk-edit .menu-card{outline:2px dashed rgba(240,192,64,.75);outline-offset:-3px;cursor:pointer;}
+  #s-home .menu-grid.mk-edit .menu-card:hover{outline-color:#3cc878;}
+  .mk-del{position:absolute;top:5px;right:5px;z-index:20;width:24px;height:24px;border-radius:6px;border:1px solid rgba(255,90,90,.6);background:rgba(40,0,0,.78);color:#ffb0b0;font-size:12px;line-height:1;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0;-webkit-tap-highlight-color:transparent;}
+  #s-home .menu-grid.mk-edit .mk-del{display:flex;}
+  .mk-add-btn{grid-column:span 2;margin:8px auto 2px;display:none;background:linear-gradient(145deg,#3cc878,#1f7a45);color:#fff;border:none;border-radius:10px;padding:11px 22px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(60,200,120,.35);-webkit-tap-highlight-color:transparent;}
+  #s-home .menu-grid.mk-edit .mk-add-btn{display:block;}
+  #mk-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999990;align-items:center;justify-content:center;padding:20px;}
+  #mk-ov.show{display:flex;}
+  #mk-ov .mk-box{background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(240,192,64,.35);border-radius:14px;padding:20px 18px 16px;width:380px;max-width:94vw;max-height:88vh;overflow:auto;box-shadow:0 0 40px rgba(0,0,0,.8);}
+  #mk-ov .mk-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:21px;letter-spacing:3px;color:#ffe7a6;text-align:center;margin:0 0 14px;text-shadow:0 0 12px rgba(240,192,64,.45);}
+  #mk-ov .mk-lbl{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);margin:12px 0 5px;text-transform:uppercase;}
+  #mk-ov input[type=text],#mk-ov select{width:100%;background:rgba(0,0,0,.5);border:1px solid rgba(240,192,64,.30);border-radius:7px;padding:9px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:14px;letter-spacing:.5px;box-sizing:border-box;}
+  #mk-ov input[type=text]:focus,#mk-ov select:focus{outline:none;border-color:#f0c040;box-shadow:0 0 10px rgba(240,192,64,.35);}
+  #mk-ov .mk-results{max-height:210px;overflow:auto;border:1px solid rgba(255,255,255,.10);border-radius:8px;margin-top:6px;}
+  #mk-ov .mk-tm{display:flex;align-items:center;gap:10px;padding:7px 9px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);}
+  #mk-ov .mk-tm:hover{background:rgba(240,192,64,.12);}
+  #mk-ov .mk-tm img{width:26px;height:26px;object-fit:contain;flex-shrink:0;}
+  #mk-ov .mk-tm span{font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
+  #mk-ov .mk-tm.sel{background:rgba(60,200,120,.20);}
+  #mk-ov .mk-prev{display:flex;align-items:center;gap:10px;margin-top:10px;height:54px;border-radius:9px;padding:0 12px;overflow:hidden;position:relative;}
+  #mk-ov .mk-prev img{width:38px;height:38px;object-fit:contain;}
+  #mk-ov .mk-prev b{font-family:Oswald,sans-serif;font-size:13px;color:#fff;letter-spacing:1px;text-shadow:1px 1px 2px #000;}
+  #mk-ov .mk-actions{display:flex;gap:8px;justify-content:center;margin-top:18px;flex-wrap:wrap;}
+  #mk-ov .mk-btn{padding:9px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid;-webkit-tap-highlight-color:transparent;}
+  #mk-ov .mk-btn.primary{background:linear-gradient(145deg,#3cc878,#1f7a45);color:#fff;border-color:#5fe08a;}
+  #mk-ov .mk-btn.ghost{background:transparent;color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25);}
+  #mk-ov .mk-btn.danger{background:rgba(255,80,80,.16);color:#ffb0b0;border-color:rgba(255,80,80,.45);}
+</style>
+<div id="mk-ov"><div class="mk-box">
+  <div class="mk-title" id="mk-ov-title">EDITAR CAJA</div>
+  <div id="mk-ov-body"></div>
+  <div class="mk-actions">
+    <button class="mk-btn primary" id="mk-ov-save">GUARDAR</button>
+    <button class="mk-btn ghost" onclick="window._mkCloseOv&&window._mkCloseOv()">CANCELAR</button>
+  </div>
+</div></div>
+<script>
+(function(){
+  var KEY = 'menu_home_v1';
+  var GRID_SEL = '#s-home .menu-grid';
+  var NAV_TARGETS = ['', 's-munich','s-arsenal','s-madrid','s-atletico','s-barca',
+    's-espana','s-competiciones','s-champions','s-uel','s-uecl','s-usc',
+    's-intercontinental','s-ligas','s-selecciones','s-pendientes',
+    's-liga','s-copa','s-segunda','s-home'];
+
+  /* ── state ───────────────────────────────────────────────── */
+  function loadState(){
+    try{ var r=localStorage.getItem(KEY); if(r){ var d=JSON.parse(r);
+      if(d&&typeof d==='object'){ d.ov=d.ov||{}; d.removed=d.removed||[]; d.added=d.added||[]; return d; } } }catch(_){}
+    return { ov:{}, removed:[], added:[] };
+  }
+  function saveState(s){
+    try{ localStorage.setItem(KEY, JSON.stringify(s)); return true; }
+    catch(e){ try{ alert('No se pudo guardar (almacenamiento lleno).'); }catch(__){} return false; }
+  }
+
+  /* ── color helpers ───────────────────────────────────────── */
+  function _toRgb(h){
+    h=String(h||'').trim().replace('#','');
+    if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    if(h.length<6) return null;
+    var n=parseInt(h.slice(0,6),16);
+    return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+  }
+  function _toHex(r,g,b){
+    function p(x){ x=Math.max(0,Math.min(255,Math.round(x))); var s=x.toString(16); return s.length<2?'0'+s:s; }
+    return '#'+p(r)+p(g)+p(b);
+  }
+  function _shade(hex,f){
+    var c=_toRgb(hex); if(!c) return hex;
+    if(f<=1) return _toHex(c.r*f, c.g*f, c.b*f);
+    var g=f-1;
+    return _toHex(c.r+(255-c.r)*g, c.g+(255-c.g)*g, c.b+(255-c.b)*g);
+  }
+  function _lum(c){ return (0.2126*c.r+0.7152*c.g+0.0722*c.b)/255; }
+  function _sat(c){
+    var mx=Math.max(c.r,c.g,c.b), mn=Math.min(c.r,c.g,c.b);
+    return mx===0?0:(mx-mn)/mx;
+  }
+  function _usable(hex){
+    var c=_toRgb(hex); if(!c) return false;
+    var l=_lum(c);
+    return l>0.07 && l<0.93 && _sat(c)>0.14;
+  }
+  /* Extrae los colores dominantes del escudo. SVG (same-origin o
+     data:) → parsea los hex del propio SVG (sin taint de canvas).
+     Raster/data → canvas. Si nada sirve → seed de TEAM_RATINGS. */
+  function extractColors(url, seed, cb){
+    function done(list){
+      var clean=[]; (list||[]).forEach(function(h){
+        h=h&&h.toLowerCase(); if(h&&_usable(h)&&clean.indexOf(h)===-1) clean.push(h);
+      });
+      if(!clean.length && seed && _usable(seed)) clean=[seed];
+      if(!clean.length) clean=['#1c2230'];
+      cb(clean.slice(0,3));
+    }
+    if(!url){ done([]); return; }
+    try{
+      var isSvg = /\.svg(\?|$)/i.test(url) || /^data:image\/svg\+xml/i.test(url);
+      if(isSvg){
+        var txt;
+        if(/^data:/i.test(url)){
+          var i=url.indexOf(','); var raw=url.slice(i+1);
+          txt = /;base64/i.test(url.slice(0,i)) ? atob(raw) : decodeURIComponent(raw);
+          return done(_svgColors(txt));
+        }
+        fetch(url).then(function(r){ return r.text(); }).then(function(t){ done(_svgColors(t)); })
+          .catch(function(){ done([]); });
+        return;
+      }
+      var img=new Image();
+      img.crossOrigin='anonymous';
+      img.onload=function(){
+        try{
+          var cv=document.createElement('canvas'); cv.width=24; cv.height=24;
+          var ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,24,24);
+          var d=ctx.getImageData(0,0,24,24).data, tally={};
+          for(var p=0;p<d.length;p+=4){
+            if(d[p+3]<128) continue;
+            var hex=_toHex(d[p],d[p+1],d[p+2]);
+            if(!_usable(hex)) continue;
+            tally[hex]=(tally[hex]||0)+1;
+          }
+          var keys=Object.keys(tally).sort(function(a,b){ return tally[b]-tally[a]; });
+          done(keys);
+        }catch(_){ done([]); }
+      };
+      img.onerror=function(){ done([]); };
+      img.src=url;
+    }catch(_){ done([]); }
+  }
+  function _svgColors(txt){
+    txt=String(txt||''); var tally={}, m;
+    var re=/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/g;
+    while((m=re.exec(txt))){
+      var h=m[1]; if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+      h='#'+h.toLowerCase(); tally[h]=(tally[h]||0)+1;
+    }
+    return Object.keys(tally).sort(function(a,b){ return tally[b]-tally[a]; });
+  }
+  function gradientFrom(colors){
+    var p=colors[0]||'#1c2230';
+    var s=colors[1]||p;
+    return {
+      outer:'linear-gradient(135deg,'+_shade(p,.32)+' 0%,'+p+' 52%,'+_shade(s,1.45)+' 100%)',
+      inner:'linear-gradient(90deg,'+_hexA(_shade(p,.4),.78)+' 0%,'+_hexA(s,.32)+' 55%,rgba(0,0,0,0) 100%)',
+      primary:p
+    };
+  }
+  function _hexA(hex,a){
+    var c=_toRgb(hex); if(!c) return 'rgba(0,0,0,'+a+')';
+    return 'rgba('+c.r+','+c.g+','+c.b+','+a+')';
+  }
+
+  /* ── team registry ───────────────────────────────────────── */
+  function teamList(){
+    var seen={}, out=[];
+    function add(n){
+      var k=String(n||'').trim(); if(!k||seen[k.toLowerCase()]) return;
+      seen[k.toLowerCase()]=1; out.push(k);
+    }
+    try{ Object.keys(window.TEAM_RATINGS||{}).forEach(add); }catch(_){}
+    try{ Object.keys(window.TEAM_LOGOS||{}).forEach(add); }catch(_){}
+    out.sort(function(a,b){ return a.localeCompare(b,'es'); });
+    return out;
+  }
+  function escudoOf(name){
+    try{ if(typeof window.getTeamLogoUrl==='function'){ var u=window.getTeamLogoUrl(name); if(u) return u; } }catch(_){}
+    try{ var m=(window.TEAM_RATINGS||{})[name]; if(m&&m.shield) return m.shield; }catch(_){}
+    return '';
+  }
+  function colorOf(name){
+    try{ var m=(window.TEAM_RATINGS||{})[name]; if(m&&m.color) return m.color; }catch(_){}
+    return '#1c2230';
+  }
+
+  /* ── card identity / nav ─────────────────────────────────── */
+  function cardKey(card){
+    if(card.dataset.mk) return card.dataset.mk;
+    var k=card.id||'';
+    if(!k){
+      var oc=card.getAttribute('onclick')||card._mkOnclick||'';
+      var g=oc.match(/go\(['"]([^'"]+)['"]\)/);
+      if(g) k='go:'+g[1];
+      else if(/goLiveMatches/.test(oc)) k='live';
+      else if(/goDerbys/.test(oc)) k='derbys';
+    }
+    if(!k){
+      var lbl=card.querySelector('.mc-label');
+      k='lbl:'+((lbl&&lbl.textContent)||'').trim().slice(0,28);
+    }
+    card.dataset.mk=k; return k;
+  }
+  function origNav(card){
+    var oc=card._mkOnclick!=null?card._mkOnclick:(card.getAttribute('onclick')||'');
+    var g=oc.match(/go\(['"]([^'"]+)['"]\)/);
+    if(g) return { type:'go', id:g[1] };
+    if(/goLiveMatches/.test(oc)) return { type:'fn', fn:'goLiveMatches' };
+    if(/goDerbys/.test(oc)) return { type:'fn', fn:'goDerbys' };
+    return null;
+  }
+  function isTeamCard(card){ return card.classList.contains('equipo-card'); }
+
+  /* ── apply override (idempotente vía firma) ──────────────── */
+  function applyOverride(card,o){
+    var sig=JSON.stringify(o||{});
+    if(card._mkSig===sig) return;
+    card._mkSig=sig;
+    if(!o) return;
+    if(o.label!=null){
+      var lbl=card.querySelector('.team-meta>span:first-child') || card.querySelector('.mc-label');
+      if(lbl && !card.querySelector('.team-meta')) lbl.textContent=o.label;
+      else if(lbl && card.querySelector('.team-meta')) lbl.textContent=o.label;
+    }
+    if(o.coach!=null){
+      var co=card.querySelector('.team-coach'); if(co) co.textContent=o.coach;
+    }
+    if(o.escudo){
+      card.querySelectorAll('img.mc-img,img.mc-equipo-badge-bg').forEach(function(im){ im.src=o.escudo; });
+    }
+    if(o.emoji!=null){
+      var em=card.querySelector('.mc-emoji'); if(em) em.textContent=o.emoji;
+    }
+    if(o.colors && o.colors.length){
+      var gr=gradientFrom(o.colors);
+      card.style.setProperty('background', gr.outer, 'important');
+      card.style.setProperty('border-color', gr.primary, 'important');
+      var inn=card.querySelector('.mc-equipo-overlay,.mc-main-overlay');
+      if(inn) inn.style.background=gr.inner;
+    }
+    if(o.nav!=null) card.__mkNav = o.nav ? { type:'go', id:o.nav } : null;
+  }
+
+  /* ── build an added card element ─────────────────────────── */
+  function buildAdded(entry){
+    var card=document.createElement('div');
+    card._mkAdded=true;
+    card.dataset.mk='add:'+entry.id;
+    var common='height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;';
+    if(entry.type==='team'){
+      card.className='menu-card equipo-card';
+      var esc=entry.escudo||'';
+      card.setAttribute('style', common);
+      card.innerHTML=
+        '<img alt="" class="mc-equipo-badge-bg" src="'+esc+'"/>'+
+        '<div class="mc-equipo-overlay"></div>'+
+        '<div class="mc-equipo-content">'+
+          '<img alt="" class="mc-img" src="'+esc+'" style="width:44px;height:44px;object-fit:contain;"/>'+
+          '<span class="mc-label team-meta"><span></span><span class="team-sep">·</span><span class="team-coach"></span></span>'+
+        '</div>';
+      card.querySelector('.team-meta>span:first-child').textContent=entry.label||'Equipo';
+      card.querySelector('.team-coach').textContent=entry.coach||'';
+    } else {
+      card.className='menu-card full';
+      card.setAttribute('style','background:linear-gradient(135deg,#101418 0%,#1c2230 55%,#101418 100%);'+common);
+      card.innerHTML=
+        '<div class="mc-main-overlay"></div>'+
+        '<div class="mc-main-content">'+
+          '<span class="mc-emoji"></span>'+
+          '<span class="mc-label"></span>'+
+        '</div>';
+      card.querySelector('.mc-emoji').textContent=entry.emoji||'⚽';
+      card.querySelector('.mc-label').textContent=entry.label||'Caja';
+    }
+    card.__mkNav = entry.nav ? { type:'go', id:entry.nav } : null;
+    if(entry.colors && entry.colors.length){
+      var gr=gradientFrom(entry.colors);
+      card.style.setProperty('background', gr.outer, 'important');
+      card.style.setProperty('border-color', gr.primary, 'important');
+      var inn=card.querySelector('.mc-equipo-overlay,.mc-main-overlay');
+      if(inn) inn.style.background=gr.inner;
+    }
+    return card;
+  }
+
+  /* ── apply full state ────────────────────────────────────── */
+  function applyState(){
+    var grid=document.querySelector(GRID_SEL);
+    if(!grid) return;
+    var s=loadState();
+
+    /* nav handlers once + strip inline onclick (delegamos en grid) */
+    if(!grid._mkWired){
+      grid._mkWired=true;
+      grid.addEventListener('click', function(e){
+        var card=e.target.closest('.menu-card');
+        if(!card||!grid.contains(card)) return;
+        if(e.target.closest('.mk-del')) return;
+        if(grid.classList.contains('mk-edit')){
+          e.preventDefault(); e.stopPropagation();
+          openEditor(card); return;
+        }
+        var nv=card.__mkNav;
+        if(!nv) return;
+        if(nv.type==='go' && typeof window.go==='function') window.go(nv.id);
+        else if(nv.type==='fn' && typeof window[nv.fn]==='function') window[nv.fn]();
+      }, false);
+    }
+
+    var built=grid.querySelectorAll('.menu-card');
+    built.forEach(function(card){
+      if(card._mkAdded) return;
+      if(card._mkOnclick==null){
+        card._mkOnclick=card.getAttribute('onclick')||'';
+        if(card.getAttribute('onclick')) card.removeAttribute('onclick');
+      }
+      var key=cardKey(card);
+      if(!card.__mkNav) card.__mkNav=origNav(card);
+      var rm=s.removed.indexOf(key)!==-1;
+      if(rm){ card.style.display='none'; card.dataset.mkRm='1'; }
+      else if(card.dataset.mkRm){ card.style.display=''; card.dataset.mkRm=''; }
+      if(!rm) applyOverride(card, s.ov[key]);
+      if(!rm) ensureDelBtn(card);
+    });
+
+    /* added cards — rebuild solo si cambió la firma */
+    var addSig=JSON.stringify(s.added);
+    if(grid._mkAddSig!==addSig){
+      grid._mkAddSig=addSig;
+      grid.querySelectorAll('.menu-card').forEach(function(c){ if(c._mkAdded) c.remove(); });
+      var addBtn=grid.querySelector('.mk-add-btn');
+      s.added.forEach(function(en){
+        var el=buildAdded(en);
+        ensureDelBtn(el);
+        if(addBtn) grid.insertBefore(el, addBtn); else grid.appendChild(el);
+      });
+    }
+
+    /* botón AÑADIR siempre al final */
+    var ab=grid.querySelector('.mk-add-btn');
+    if(!ab){
+      ab=document.createElement('button');
+      ab.type='button'; ab.className='mk-add-btn'; ab.textContent='➕ AÑADIR CAJA';
+      ab.addEventListener('click', function(e){ e.stopPropagation(); openAdd(); });
+      grid.appendChild(ab);
+    } else { grid.appendChild(ab); }
+  }
+
+  function ensureDelBtn(card){
+    if(card.querySelector(':scope > .mk-del')) return;
+    var b=document.createElement('button');
+    b.type='button'; b.className='mk-del'; b.textContent='🗑'; b.title='Eliminar caja';
+    b.addEventListener('click', function(e){
+      e.stopPropagation(); e.preventDefault();
+      if(!confirm('¿Eliminar esta caja del menú?')) return;
+      var s=loadState();
+      if(card._mkAdded){
+        var id=(card.dataset.mk||'').replace('add:','');
+        s.added=s.added.filter(function(x){ return x.id!==id; });
+      } else {
+        var k=cardKey(card);
+        if(s.removed.indexOf(k)===-1) s.removed.push(k);
+      }
+      if(saveState(s)) applyState();
+    });
+    card.appendChild(b);
+  }
+
+  /* ── editor modal ────────────────────────────────────────── */
+  var _ovCard=null, _ovAdd=false, _ovPick=null;
+  function ov(){ return document.getElementById('mk-ov'); }
+  window._mkCloseOv=function(){ var o=ov(); if(o) o.classList.remove('show'); _ovCard=null; _ovAdd=false; _ovPick=null; };
+
+  function teamSearchHtml(){
+    return '<div class="mk-lbl">Buscar equipo</div>'+
+      '<input type="text" id="mk-q" placeholder="Escribe un nombre…" autocomplete="off"/>'+
+      '<div class="mk-results" id="mk-res"></div>'+
+      '<div class="mk-prev" id="mk-prev" style="background:#1c2230;"><b id="mk-prev-n">—</b></div>'+
+      '<div class="mk-lbl">Entrenador (texto libre, con emoji)</div>'+
+      '<input type="text" id="mk-coach" placeholder="Ej: Toñín💡"/>'+
+      '<div class="mk-lbl">Al pulsar (pantalla destino)</div>'+
+      '<select id="mk-nav"></select>';
+  }
+  function genericHtml(){
+    return '<div class="mk-lbl">Texto de la caja</div>'+
+      '<input type="text" id="mk-q" placeholder="Texto…" autocomplete="off"/>'+
+      '<div class="mk-lbl">Icono / emoji</div>'+
+      '<input type="text" id="mk-emoji" placeholder="Ej: ⚽" maxlength="4"/>'+
+      '<div class="mk-lbl">Al pulsar (pantalla destino)</div>'+
+      '<select id="mk-nav"></select>';
+  }
+  function fillNavSel(cur){
+    var sel=document.getElementById('mk-nav'); if(!sel) return;
+    sel.innerHTML='';
+    NAV_TARGETS.forEach(function(t){
+      var op=document.createElement('option');
+      op.value=t; op.textContent=t?t:'(ninguna)';
+      if(t===(cur||'')) op.selected=true;
+      sel.appendChild(op);
+    });
+  }
+  function renderResults(q){
+    var box=document.getElementById('mk-res'); if(!box) return;
+    q=String(q||'').trim().toLowerCase();
+    var all=teamList(), out=[];
+    for(var i=0;i<all.length && out.length<60;i++){
+      if(!q || all[i].toLowerCase().indexOf(q)!==-1) out.push(all[i]);
+    }
+    box.innerHTML='';
+    out.forEach(function(nm){
+      var row=document.createElement('div'); row.className='mk-tm';
+      var esc=escudoOf(nm);
+      row.innerHTML='<img src="'+esc+'" onerror="this.style.visibility=\'hidden\'"/><span></span>';
+      row.querySelector('span').textContent=nm;
+      row.addEventListener('click', function(){
+        _ovPick={ name:nm, escudo:esc, color:colorOf(nm) };
+        box.querySelectorAll('.mk-tm').forEach(function(r){ r.classList.remove('sel'); });
+        row.classList.add('sel');
+        var pv=document.getElementById('mk-prev');
+        pv.style.background=_ovPick.color||'#1c2230';
+        document.getElementById('mk-prev-n').textContent=nm;
+        if(!pv.querySelector('img')){
+          var im=document.createElement('img'); pv.insertBefore(im, pv.firstChild);
+        }
+        pv.querySelector('img').src=esc;
+      });
+      box.appendChild(row);
+    });
+  }
+  function openEditor(card){
+    _ovCard=card; _ovAdd=false; _ovPick=null;
+    var team=isTeamCard(card);
+    var body=document.getElementById('mk-ov-body');
+    document.getElementById('mk-ov-title').textContent= team?'EDITAR EQUIPO':'EDITAR CAJA';
+    body.innerHTML= team? teamSearchHtml() : genericHtml();
+    var curLbl=(card.querySelector('.team-meta>span:first-child')||card.querySelector('.mc-label'));
+    document.getElementById('mk-q').value=curLbl?curLbl.textContent.trim():'';
+    if(team){
+      var co=card.querySelector('.team-coach');
+      document.getElementById('mk-coach').value=co?co.textContent.trim():'';
+      renderResults('');
+      document.getElementById('mk-q').addEventListener('input', function(){ renderResults(this.value); });
+    } else {
+      var em=card.querySelector('.mc-emoji');
+      document.getElementById('mk-emoji').value=em?em.textContent.trim():'';
+    }
+    var nv=card.__mkNav; fillNavSel(nv&&nv.type==='go'?nv.id:'');
+    ov().classList.add('show');
+  }
+  function openAdd(){
+    _ovCard=null; _ovAdd=true; _ovPick=null;
+    var body=document.getElementById('mk-ov-body');
+    document.getElementById('mk-ov-title').textContent='AÑADIR CAJA';
+    body.innerHTML='<div class="mk-lbl">Tipo de caja</div>'+
+      '<select id="mk-type"><option value="team">Equipo (con escudo)</option>'+
+      '<option value="generic">Genérica (emoji + texto)</option></select>'+
+      '<div id="mk-add-sub"></div>';
+    function sub(){
+      var t=document.getElementById('mk-type').value;
+      var d=document.getElementById('mk-add-sub');
+      d.innerHTML = t==='team'? teamSearchHtml() : genericHtml();
+      fillNavSel('');
+      if(t==='team'){
+        renderResults('');
+        document.getElementById('mk-q').addEventListener('input', function(){ renderResults(this.value); });
+      }
+    }
+    document.getElementById('mk-type').addEventListener('change', sub);
+    sub();
+    ov().classList.add('show');
+  }
+
+  document.getElementById('mk-ov-save').addEventListener('click', function(){
+    var navSel=document.getElementById('mk-nav');
+    var nav=navSel?navSel.value:'';
+    if(_ovAdd){
+      var type=document.getElementById('mk-type').value;
+      var s=loadState();
+      var id=String(Date.now())+'-'+Math.floor(Math.random()*999);
+      if(type==='team'){
+        if(!_ovPick){ alert('Elige un equipo de la lista.'); return; }
+        var en={ id:id, type:'team', label:_ovPick.name, escudo:_ovPick.escudo,
+          coach:(document.getElementById('mk-coach').value||'').trim(), nav:nav, colors:[] };
+        s.added.push(en);
+        if(!saveState(s)) return;
+        applyState(); window._mkCloseOv();
+        extractColors(_ovPick.escudo, _ovPick.color, function(cols){
+          var st=loadState();
+          st.added.forEach(function(x){ if(x.id===id) x.colors=cols; });
+          if(saveState(st)) applyState();
+        });
+        return;
+      } else {
+        var lbl=(document.getElementById('mk-q').value||'').trim();
+        if(!lbl){ alert('Escribe un texto.'); return; }
+        s.added.push({ id:id, type:'generic', label:lbl,
+          emoji:(document.getElementById('mk-emoji').value||'⚽').trim(), nav:nav });
+        if(saveState(s)) applyState();
+        window._mkCloseOv(); return;
+      }
+    }
+    if(!_ovCard) return;
+    var key=cardKey(_ovCard);
+    var st=loadState();
+    var o=st.ov[key]||{};
+    o.nav=nav;
+    if(isTeamCard(_ovCard)){
+      if(_ovPick){
+        o.label=_ovPick.name; o.escudo=_ovPick.escudo;
+      } else {
+        var q=document.getElementById('mk-q');
+        if(q && q.value.trim()) o.label=q.value.trim();
+      }
+      var cv=document.getElementById('mk-coach');
+      if(cv) o.coach=cv.value.trim();
+      st.ov[key]=o;
+      if(!saveState(st)) return;
+      applyState(); window._mkCloseOv();
+      if(_ovPick){
+        extractColors(_ovPick.escudo, _ovPick.color, function(cols){
+          var s2=loadState();
+          s2.ov[key]=s2.ov[key]||{}; s2.ov[key].colors=cols;
+          if(saveState(s2)) applyState();
+        });
+      }
+      return;
+    } else {
+      var qg=document.getElementById('mk-q'); if(qg) o.label=qg.value.trim();
+      var eg=document.getElementById('mk-emoji'); if(eg) o.emoji=eg.value.trim();
+      st.ov[key]=o;
+      if(saveState(st)) applyState();
+      window._mkCloseOv(); return;
+    }
+  });
+  ov().addEventListener('click', function(e){ if(e.target===ov()) window._mkCloseOv(); });
+
+  /* ── edit-mode toggle (PIN 747) ──────────────────────────── */
+  function setEdit(on){
+    var grid=document.querySelector(GRID_SEL); if(!grid) return;
+    grid.classList.toggle('mk-edit', !!on);
+    var btn=document.getElementById('mk-edit-btn');
+    if(btn){
+      btn.textContent= on?'✓':'🖍';
+      btn.title= on?'Salir del modo edición':'Editar menú (admin · PIN 747)';
+      btn.style.color= on?'#5fe08a':'#ffe7a6';
+    }
+  }
+  window._mkToggleEditMode=function(){
+    var grid=document.querySelector(GRID_SEL); if(!grid) return;
+    var on=!grid.classList.contains('mk-edit');
+    if(on && typeof window.requireAdmin==='function'){
+      window.requireAdmin(function(){ applyState(); setEdit(true); });
+    } else if(on && typeof window.pG==='function'){
+      window.pG(function(){ applyState(); setEdit(true); });
+    } else {
+      setEdit(on);
+    }
+  };
+
+  /* ── init + re-aplicar al volver a s-home (sin observers) ──
+     `index.bundle.js` (que define `go`) carga DESPUÉS de este partial,
+     así que el wrap de `go` se monta en init() (DOMContentLoaded, ya
+     con el bundle cargado), no en eval del IIFE. Las cards del menú
+     son DOM estático (las pantallas solo se muestran/ocultan), por lo
+     que aplicar al cargar ya persiste; el wrap es para re-aplicar al
+     volver a s-home tras una hidratación externa. */
+  function init(){
+    setTimeout(applyState,0); setTimeout(applyState,60); setTimeout(applyState,220);
+    if(!window.__mkGoWrapped && typeof window.go==='function'){
+      window.__mkGoWrapped=true;
+      var _origGo=window.go;
+      window.go=function(id){
+        var r=_origGo.apply(this,arguments);
+        if(id==='s-home'){ setTimeout(applyState,0); setTimeout(applyState,60); setTimeout(applyState,220); }
+        return r;
+      };
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
+  else init();
+})();
+</script>
 <div class="screen" id="s-bayern-trofeos">
   <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
   <div class="sec-hdr"><span class="sec-emoji">🏆</span><h2>Vitrina de Trofeos</h2></div>

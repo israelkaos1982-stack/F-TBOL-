@@ -1163,6 +1163,8 @@ window._showSimProgress = function(opts, onDone){
       '<div class="mk-prev" id="mk-prev" style="background:#1c2230;"><b id="mk-prev-n">—</b></div>'+
       '<div class="mk-lbl">Entrenador (texto libre, con emoji)</div>'+
       '<input type="text" id="mk-coach" placeholder="Ej: Toñín💡"/>'+
+      '<div class="mk-lbl">Estadio</div>'+
+      '<input type="text" id="mk-stadium" placeholder="Ej: Balaídos"/>'+
       colorRowHtml(true)+
       '<div class="mk-lbl">Al pulsar (pantalla destino)</div>'+
       _mkChoiceHtml('mk-nav')+
@@ -1212,6 +1214,18 @@ window._showSimProgress = function(opts, onDone){
           var im=document.createElement('img'); pv.insertBefore(im, pv.firstChild);
         }
         pv.querySelector('img').src=esc;
+        /* Auto-color: la caja toma los colores del escudo elegido
+           (modo automático; el admin puede sobreescribir tocando una
+           paleta, que activa "Colores manuales"). */
+        var _cm=document.getElementById('mk-cmanual');
+        if(_cm){ _cm.checked=false; var _w=document.getElementById('mk-cwrap'); if(_w) _w.classList.add('off'); }
+        extractColors(esc, colorOf(nm), function(cols){
+          if(!cols || !cols.length) return;
+          var a=_norm6(cols[0]), b=_norm6(cols[1]||cols[0]);
+          setVal('mk-cA', a); setVal('mk-cB', b);
+          var bar=document.getElementById('mk-bar');
+          if(bar){ var gr=gradientFrom([a,b]); bar.style.background=gr.outer; }
+        });
       });
       box.appendChild(row);
     });
@@ -1230,6 +1244,7 @@ window._showSimProgress = function(opts, onDone){
     if(team){
       var co=card.querySelector('.team-coach');
       setVal('mk-coach', added&&entry? (entry.coach||'') : (co?co.textContent.trim():''));
+      setVal('mk-stadium', src.stadium||'');
       renderResults('');
       document.getElementById('mk-q').addEventListener('input', function(){ renderResults(this.value); });
     } else {
@@ -1312,7 +1327,7 @@ window._showSimProgress = function(opts, onDone){
         if(!_ovPick){ alert('Elige un equipo de la lista.'); return; }
         var rc=readColors(true);
         var en={ id:id, type:'team', label:_ovPick.name, escudo:_ovPick.escudo,
-          coach:getVal('mk-coach').trim(), nav:nav, after:after,
+          coach:getVal('mk-coach').trim(), stadium:getVal('mk-stadium').trim(), nav:nav, after:after,
           bcolor:rb.bcolor, glow:rb.glow,
           manual:rc.manual, colors: rc.manual? rc.colors : [] };
         s.added.push(en);
@@ -1360,6 +1375,7 @@ window._showSimProgress = function(opts, onDone){
         if(_ovPick){ e.label=_ovPick.name; e.escudo=_ovPick.escudo; }
         else { var qa=getVal('mk-q').trim(); if(qa) e.label=qa; }
         e.coach=getVal('mk-coach').trim();
+        e.stadium=getVal('mk-stadium').trim();
         e.manual=rc2.manual;
         if(rc2.manual) e.colors=rc2.colors;
         stA.added[idx]=e;
@@ -1391,6 +1407,7 @@ window._showSimProgress = function(opts, onDone){
       if(_ovPick){ o.label=_ovPick.name; o.escudo=_ovPick.escudo; }
       else { var q=getVal('mk-q').trim(); if(q) o.label=q; }
       o.coach=getVal('mk-coach').trim();
+      o.stadium=getVal('mk-stadium').trim();
       o.manual=rc2.manual;
       if(rc2.manual) o.colors=rc2.colors;
       st.ov[key]=o;
@@ -29381,7 +29398,7 @@ Tottenham
 </div>
 <div style="display:flex;align-items:center;gap:5px;margin-top:1px;justify-content:space-between;">
 <span style="font-size:13px;">🏟</span>
-<span style="font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;color:#dc052d;opacity:0.6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">NEW BALANCE ARENA</span>
+<span id="mk-hub-stadium" style="font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;color:#dc052d;opacity:0.6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">NEW BALANCE ARENA</span>
 </div>
 </div></div>
 <script>
@@ -29410,22 +29427,30 @@ Tottenham
     var t=_slot();
     var name=(t&&t.name)||'Bayern Munich';
     var esc=(t&&(t.escudo||t.shield))||'';
-    if(name==='Bayern Munich'){
-      var ov=_boxOv();
-      if(ov){ if(ov.label) name=ov.label; if(ov.escudo) esc=ov.escudo; }
+    var ov=_boxOv();
+    if(name==='Bayern Munich' && ov){
+      if(ov.label) name=ov.label; if(ov.escudo) esc=ov.escudo;
     }
     if(!esc){ try{ if(window.getTeamLogoUrl){ esc=window.getTeamLogoUrl(name)||''; } }catch(_){ } }
     if(!esc) esc=BAYERN_SVG;
-    return { name:name, esc:esc };
+    var stad=(ov&&ov.stadium)?ov.stadium:'';
+    return { name:name, esc:esc, stad:stad };
   }
   function _sync(){
     var b=document.getElementById('mk-hub-badge'), n=document.getElementById('mk-hub-name');
     if(!b&&!n) return;
     var host=document.getElementById('s-munich')||document.body;
-    var r=_resolve(), sig=r.name+'|'+r.esc;
+    var r=_resolve(), sig=r.name+'|'+r.esc+'|'+r.stad;
     if(host.__mkHubSig===sig) return; host.__mkHubSig=sig;
     if(n) n.textContent=r.name;
     if(b){ b.src=r.esc; b.alt=r.name; }
+    var st=document.getElementById('mk-hub-stadium');
+    if(st && r.stad) st.textContent=r.stad.toUpperCase();
+    /* Bloque VS estático (no lo pinta JS): escudo/nombre local. */
+    var hs=document.getElementById('munich-home-shield');
+    if(hs) hs.src=r.esc;
+    var hn=document.getElementById('munich-home-name');
+    if(hn) hn.textContent=r.name;
   }
   function run(){ setTimeout(_sync,0); setTimeout(_sync,80); setTimeout(_sync,240); }
   function _wrapGo(){

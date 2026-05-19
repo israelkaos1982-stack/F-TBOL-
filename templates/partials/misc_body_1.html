@@ -1523,11 +1523,25 @@ window._showSimProgress = function(opts, onDone){
         if (!raw) return null;
         var data = JSON.parse(raw);
         var teams = (data && data.teams) || [];
-        for (var i=0; i<teams.length; i++){
-          var t = teams[i];
-          if (!t || !t.name) continue;
-          if (/bayern/i.test(t.name)) return t;
-        }
+        var i, t;
+        /* Nombre EFECTIVO del slot de Toñín: si el admin reemplazó
+           Bayern por otro equipo en el editor de Liga EA (mecanismo
+           sancionado, p.ej. "Liverpool ocupa el de Bayern"),
+           _ligaEaSubName devuelve el nombre nuevo. */
+        var want = 'Bayern Munich';
+        try {
+          if (typeof window._ligaEaSubName === 'function') {
+            var s = window._ligaEaSubName('Bayern Munich');
+            if (s) want = String(s);
+          }
+        } catch(_){}
+        var wl = want.toLowerCase();
+        for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.name.toLowerCase()===wl) return t; }
+        for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && /bayern/i.test(t.name)) return t; }
+        /* Último recurso: el humano que NO sea uno de los otros 4
+           canónicos (ese es el 5º slot, el de Toñín). */
+        var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+        for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.isHuman && !others[t.name.toLowerCase()]) return t; }
       } catch(_){}
       return null;
     }
@@ -29358,10 +29372,10 @@ Tottenham
     background:rgba(255,80,80,.18);border:1px solid rgba(255,120,120,.4);
   }
 </style>
-<div class="sec-hdr"><img alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
+<div class="sec-hdr"><img id="mk-hub-badge" alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
 <div style="display:flex;align-items:center;gap:6px;">
-<span style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;letter-spacing:2px;color:#dc052d;">Bayern Munich</span>
+<span id="mk-hub-name" style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;letter-spacing:2px;color:#dc052d;">Bayern Munich</span>
 <span style="font-family:'Oswald',sans-serif;font-size:15px;font-weight:400;letter-spacing:1px;color:#dc052d;opacity:0.75;">· TOÑÍN</span>
 <button type="button" class="munich-edit-pencil" onclick="window._bayernEditValuesGated&&window._bayernEditValuesGated()" title="Editar valores del HUD (admin PIN 747)" aria-label="Editar valores del HUD">🖍</button>
 </div>
@@ -29370,6 +29384,61 @@ Tottenham
 <span style="font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;color:#dc052d;opacity:0.6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">NEW BALANCE ARENA</span>
 </div>
 </div></div>
+<script>
+/* Hub dinámico: la cabecera (nombre + escudo) sigue al equipo REAL
+   del slot de Toñín. Si el admin reemplazó Bayern por otro equipo en
+   el editor de Liga EA (mecanismo sancionado _ligaEaSubName, "Liverpool
+   ocupa el de Bayern"), la cabecera lo refleja. Si solo se editó la
+   caja del menú (menu_home_v1), se usa eso para coherencia visual.
+   Fallback: Bayern Munich. Idempotente, sin observers. */
+(function(){
+  if(window.__mkHubSyncReady) return; window.__mkHubSyncReady=true;
+  var BAYERN_SVG='/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg';
+  function _teams(){ try{ var r=localStorage.getItem('ligaExt_liga-ea-sports'); if(r){ var d=JSON.parse(r); if(d&&d.teams) return d.teams; } }catch(_){ } return []; }
+  function _boxOv(){ try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r); if(d&&d.ov) return d.ov['go:s-munich']||null; } }catch(_){ } return null; }
+  function _slot(){
+    var teams=_teams(), want='Bayern Munich', i, t;
+    try{ if(typeof window._ligaEaSubName==='function'){ var s=window._ligaEaSubName('Bayern Munich'); if(s) want=String(s); } }catch(_){ }
+    var wl=want.toLowerCase();
+    for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.name.toLowerCase()===wl) return t; }
+    for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&/bayern/i.test(t.name)) return t; }
+    var o={'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+    for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.isHuman&&!o[t.name.toLowerCase()]) return t; }
+    return null;
+  }
+  function _resolve(){
+    var t=_slot();
+    var name=(t&&t.name)||'Bayern Munich';
+    var esc=(t&&(t.escudo||t.shield))||'';
+    if(name==='Bayern Munich'){
+      var ov=_boxOv();
+      if(ov){ if(ov.label) name=ov.label; if(ov.escudo) esc=ov.escudo; }
+    }
+    if(!esc){ try{ if(window.getTeamLogoUrl){ esc=window.getTeamLogoUrl(name)||''; } }catch(_){ } }
+    if(!esc) esc=BAYERN_SVG;
+    return { name:name, esc:esc };
+  }
+  function _sync(){
+    var b=document.getElementById('mk-hub-badge'), n=document.getElementById('mk-hub-name');
+    if(!b&&!n) return;
+    var host=document.getElementById('s-munich')||document.body;
+    var r=_resolve(), sig=r.name+'|'+r.esc;
+    if(host.__mkHubSig===sig) return; host.__mkHubSig=sig;
+    if(n) n.textContent=r.name;
+    if(b){ b.src=r.esc; b.alt=r.name; }
+  }
+  function run(){ setTimeout(_sync,0); setTimeout(_sync,80); setTimeout(_sync,240); }
+  function _wrapGo(){
+    if(window.__mkHubGoWrapped || typeof window.go!=='function') return;
+    window.__mkHubGoWrapped=true;
+    var g=window.go;
+    window.go=function(id){ var x=g.apply(this,arguments); if(id==='s-munich'||id==='s-bayern-plantilla') run(); return x; };
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', function(){ run(); _wrapGo(); });
+  } else { run(); _wrapGo(); }
+})();
+</script>
 <div class="munich-arena-wrap">
 <div class="munich-arena-bg" aria-hidden="true"></div>
 <!-- HUD SUPERIOR · pop-on-tap ──────────────────────────────────── -->

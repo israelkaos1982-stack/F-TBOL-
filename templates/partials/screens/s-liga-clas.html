@@ -937,6 +937,11 @@
       mvpTeam: canonicalTeamName(mvpTeam || ''),
       competition: comp
     };
+    /* 2026-05-20: durante un batch de Liga EA (simularTodasJornadasIAAsync)
+       NO rebuildeamos por partido — eran 380 rebuilds, cada uno iterando
+       todos los partidos previos del store. El wrapper del batch lo
+       hace UNA sola vez al final. */
+    if (window._ligaBatchInProgress) return;
     rebuildLigaPlayerStats();
     /* Persistir extras (no-Liga) para que sobrevivan a recarga. */
     if (typeof window._persistMatchStoreExtras === 'function') {

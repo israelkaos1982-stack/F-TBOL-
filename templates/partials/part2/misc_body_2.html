@@ -6125,8 +6125,16 @@
   function saveResults(r) {
     sharedLigaResultsCache = (r && typeof r === 'object') ? r : {};
     try { localStorage.setItem(LS_KEY, JSON.stringify(sharedLigaResultsCache)); } catch (e) {}
+    /* 2026-05-20: durante un batch (simularTodasJornadasIAAsync) NO
+       persistimos al server por jornada — eran 38 POSTs con un payload
+       que crece hasta varios MB y costaba minutos en 4G/5G. El wrapper
+       del batch hace UN solo POST al final con el resultado completo. */
+    if (window._ligaBatchInProgress) return;
     persistSharedLigaState({ liga_results: sharedLigaResultsCache });
   }
+  /* Expuesto para que el batch wrapper pueda hacer el flush final
+     sin haber expuesto persistSharedLigaState. */
+  try { window.saveResults = saveResults; } catch(_){}
   function rKey(j, h, a) { return j + '|' + h + '|' + a; }
   /* Exponer loadResults en window para que parseSavedResults
      (index.bundle.js, otra IIFE) pueda preferir la cache en memoria
@@ -15757,16 +15765,37 @@
     });
     if (dirty) {
       saveResults(results);
+      /* 2026-05-20: durante un batch saltamos los rebuilds pesados —
+         se hacen UNA sola vez al final del batch (ver wrapper async
+         más abajo). Antes se llamaban 38 veces, sumando minutos en
+         móvil porque cada rebuild itera los 380 partidos del store y
+         re-pinta tablas grandes. */
+      if (window._ligaBatchInProgress) return;
       if (typeof window.buildLigaClas  === 'function') window.buildLigaClas();
       if (typeof window.buildIAresults === 'function') window.buildIAresults();
       if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
     }
   };
 
-  /* botón "Simular TODAS las jornadas IA" */
+  /* botón "Simular TODAS las jornadas IA" (sync — kept for legacy
+     callers; el async wrapper de bgRun lo prefiere). */
   window.simularTodasJornadasIA = function () {
-    for (var j = 1; j <= 38; j++) window.simularJornadaIA(j);
-    // Forzar sync de stats al storage ligaExt al finalizar todo
+    window._ligaBatchInProgress = true;
+    try {
+      for (var j = 1; j <= 38; j++) window.simularJornadaIA(j);
+    } finally {
+      window._ligaBatchInProgress = false;
+    }
+    /* Flush al server + rebuilds pesados UNA sola vez. */
+    try {
+      if (typeof window.loadResults === 'function' && typeof window.saveResults === 'function') {
+        window.saveResults(window.loadResults());
+      }
+    } catch(_){}
+    try { if(typeof window.rebuildLigaPlayerStats === 'function') window.rebuildLigaPlayerStats(); } catch(_){}
+    try { if(typeof window.buildLigaClas === 'function') window.buildLigaClas(); } catch(_){}
+    try { if(typeof window.buildIAresults === 'function') window.buildIAresults(); } catch(_){}
+    try { if(typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed(); } catch(_){}
     if(typeof window.syncLigaEaPlayerStats === 'function'){
       try { window.syncLigaEaPlayerStats(); } catch(_){}
     }
@@ -25577,11 +25606,37 @@ document.addEventListener('DOMContentLoaded', function() {
     var anyFound = !!(origSjia || origSeg || origPg || origPa);
     if(!anyFound) return;
 
-    /* Liga EA Sports — recorre J1..J38 con yield para repintar la barra. */
+    /* Liga EA Sports — recorre J1..J38 con yield para repintar la barra.
+       2026-05-20: añadido flag `_ligaBatchInProgress` para suprimir los
+       rebuilds pesados y el POST /api/state por jornada (fix bottleneck
+       de "tarda 10+ min en simular una liga"). Antes:
+         · 38 × POST /api/state con liga_results creciendo a MB cada vez.
+         · 380 × rebuildLigaPlayerStats (por cada partido).
+         · 38 × buildLigaClas + buildIAresults + rebuildLigaPlayerStatsFixed.
+       Ahora todo eso se hace UNA sola vez al final del batch. */
     if(origSji){
       window.simularTodasJornadasIAAsync = function(onProgress){
         return new Promise(function(resolve){
+          window._ligaBatchInProgress = true;
           var j = 1;
+          function _finalFlush(){
+            window._ligaBatchInProgress = false;
+            /* Flush al server: vuelca el liga_results acumulado en UN
+               solo POST. saveResults respeta el flag aclarado y dispara
+               persistSharedLigaState. */
+            try {
+              if (typeof window.loadResults === 'function' && typeof window.saveResults === 'function') {
+                window.saveResults(window.loadResults());
+              }
+            } catch(_){}
+            /* Rebuilds pesados — UNA sola vez. */
+            try { if(typeof window.rebuildLigaPlayerStats === 'function') window.rebuildLigaPlayerStats(); } catch(_){}
+            try { if(typeof window._persistMatchStoreExtras === 'function') window._persistMatchStoreExtras(); } catch(_){}
+            try { if(typeof window.buildLigaClas === 'function') window.buildLigaClas(); } catch(_){}
+            try { if(typeof window.buildIAresults === 'function') window.buildIAresults(); } catch(_){}
+            try { if(typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed(); } catch(_){}
+            try { if(typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
+          }
           function step(){
             try { origSji(j); } catch(_){}
             if(typeof onProgress === 'function'){
@@ -25589,12 +25644,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             j++;
             if(j > 38){
-              if(typeof window.syncLigaEaPlayerStats === 'function'){
-                try { window.syncLigaEaPlayerStats(); } catch(_){}
-              }
-              if(typeof window.buildIAresults === 'function'){
-                try { window.buildIAresults(); } catch(_){}
-              }
+              _finalFlush();
               resolve();
             } else {
               setTimeout(step, 0);

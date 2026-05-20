@@ -1608,30 +1608,65 @@ window._showSimProgress = function(opts, onDone){
     window.__BAYERN_PLANT_HOST_READY = true;
 
     function _findBayernRow(){
+      /* Resolución por emoji estable del humano (Toñín 💡), no por nombre.
+         La identidad de Toñín es su emoji (mismo principio que
+         `_isramaxTeamMap` en misc_body_2). Si Toñín cambia de equipo en
+         el editor (p.ej. Bayern → Liverpool), basta con marcar el nuevo
+         equipo como Humano + 💡 en su plantilla y el hub seguirá
+         apuntando a su equipo actual automáticamente. Buscamos en TODAS
+         las ligaExt_* (Liverpool vive en `ligaExt_inglaterra-...`, no en
+         liga-ea-sports), priorizando liga-ea-sports cuando hay empate.
+         Fallback: equipo que contenga "bayern" en liga-ea-sports (legacy
+         por si una plantilla aún no tiene humanEmoji asignado). */
+      function _stripEmoji(s){ return String(s||'').replace(/[\s️]/g,'').trim(); }
+      var TONIN_EMOJI = '💡';
       try {
+        /* 1) Liga EA: sustitución sancionada del slot de Toñín
+              (_ligaEaSubName) → fallback name~=bayern → fallback "5º
+              slot humano" (el que no es Real/Barça/Atlético/Arsenal). */
         var raw = localStorage.getItem('ligaExt_liga-ea-sports');
-        if (!raw) return null;
-        var data = JSON.parse(raw);
-        var teams = (data && data.teams) || [];
-        var i, t;
-        /* Nombre EFECTIVO del slot de Toñín: si el admin reemplazó
-           Bayern por otro equipo en el editor de Liga EA (mecanismo
-           sancionado, p.ej. "Liverpool ocupa el de Bayern"),
-           _ligaEaSubName devuelve el nombre nuevo. */
-        var want = 'Bayern Munich';
-        try {
-          if (typeof window._ligaEaSubName === 'function') {
-            var s = window._ligaEaSubName('Bayern Munich');
-            if (s) want = String(s);
+        if (raw) {
+          var data = JSON.parse(raw);
+          var teams = (data && data.teams) || [];
+          var i, t;
+          /* Nombre EFECTIVO del slot de Toñín: si el admin reemplazó
+             Bayern por otro equipo en el editor de Liga EA (mecanismo
+             sancionado, p.ej. "Liverpool ocupa el de Bayern"),
+             _ligaEaSubName devuelve el nombre nuevo. */
+          var want = 'Bayern Munich';
+          try {
+            if (typeof window._ligaEaSubName === 'function') {
+              var s = window._ligaEaSubName('Bayern Munich');
+              if (s) want = String(s);
+            }
+          } catch(_){}
+          var wl = want.toLowerCase();
+          for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.name.toLowerCase()===wl) return t; }
+          for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && /bayern/i.test(t.name)) return t; }
+          /* Último recurso intra-EA: el humano que NO sea uno de los
+             otros 4 canónicos (ese es el 5º slot, el de Toñín). */
+          var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+          for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.isHuman && !others[t.name.toLowerCase()]) return t; }
+        }
+        /* 2) Cross-liga por emoji 💡: si Toñín se cambió a un equipo
+              que NO vive en Liga EA (Liverpool en ligaExt_inglaterra-*,
+              etc.), barremos todas las claves ligaExt_* y devolvemos el
+              primer team con isHuman=true + humanEmoji=💡. */
+        for (var ii=0; ii<localStorage.length; ii++){
+          var k = localStorage.key(ii);
+          if (!k || k.indexOf('ligaExt_') !== 0) continue;
+          if (k === 'ligaExt_liga-ea-sports') continue; /* ya intentado */
+          if (k.indexOf('_backup')!==-1 || k.indexOf('_protected')!==-1 || k.indexOf('_snap_')!==-1) continue;
+          var raw2 = localStorage.getItem(k);
+          if (!raw2) continue;
+          var data2; try { data2 = JSON.parse(raw2); } catch(_){ continue; }
+          var teams2 = (data2 && data2.teams) || [];
+          for (var j=0; j<teams2.length; j++){
+            var t2 = teams2[j];
+            if (!t2 || !t2.name || !t2.isHuman) continue;
+            if (_stripEmoji(t2.humanEmoji) === TONIN_EMOJI) return t2;
           }
-        } catch(_){}
-        var wl = want.toLowerCase();
-        for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.name.toLowerCase()===wl) return t; }
-        for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && /bayern/i.test(t.name)) return t; }
-        /* Último recurso: el humano que NO sea uno de los otros 4
-           canónicos (ese es el 5º slot, el de Toñín). */
-        var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
-        for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.isHuman && !others[t.name.toLowerCase()]) return t; }
+        }
       } catch(_){}
       return null;
     }

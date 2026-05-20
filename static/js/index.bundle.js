@@ -5596,8 +5596,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
               }
               if (!isHumanSide && normFn('Bayern Munich') === n) isHumanSide = true;
               if (isHumanSide) {
-                if (ovL.level === 'CRACK')   return { lbl: '⭐ CRACK',   color: '#a0e0ff', short: 'CRACK' };
-                if (ovL.level === 'LEYENDA') return { lbl: '🏅 LEYENDA', color: '#ffbb33', short: 'LEYENDA' };
+                if (ovL.level === 'CRACK')    return { lbl: '⭐ CRACK',    color: '#a0e0ff', short: 'CRACK' };
+                if (ovL.level === 'LEYENDA')  return { lbl: '🏅 LEYENDA',  color: '#ffbb33', short: 'LEYENDA' };
+                if (ovL.level === 'ESTRELLA') return { lbl: '🌟 ESTRELLA', color: '#ff77c2', short: 'ESTRELLA' };
                 if (ovL.level === '') return null; /* admin eligió "Ninguno" */
               }
             }
@@ -5641,20 +5642,26 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
           if (rawF && ico === '🎲') {
             var dF = JSON.parse(rawF);
             var ovF = dF && dF.ov && dF.ov['go:s-munich'];
-            if (ovF && ovF.formState) {
-              var teamSide = side === 'home' ? home : away;
+            if (ovF && (ovF.formState || ovF.formRival)) {
+              var teamSide  = side === 'home' ? home : away;
+              var otherSide = side === 'home' ? away : home;
               var normSF = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
-              var isH = false;
-              if (ovF.label && normSF(ovF.label) === normSF(teamSide)) isH = true;
-              if (!isH && typeof window._ligaEaSubName === 'function') {
-                var sSub = window._ligaEaSubName('Bayern Munich');
-                if (sSub && normSF(sSub) === normSF(teamSide)) isH = true;
+              function _isHumanT(t){
+                if (ovF.label && normSF(ovF.label) === normSF(t)) return true;
+                if (typeof window._ligaEaSubName === 'function') {
+                  var ss = window._ligaEaSubName('Bayern Munich');
+                  if (ss && normSF(ss) === normSF(t)) return true;
+                }
+                if (normSF('Bayern Munich') === normSF(t)) return true;
+                return false;
               }
-              if (!isH && normSF('Bayern Munich') === normSF(teamSide)) isH = true;
-              if (isH) {
+              if (_isHumanT(teamSide) && ovF.formState) {
                 ico = ovF.formState;
-                try { if (window._ppFormStates) window._ppFormStates[side] = ico; } catch(__){}
+              } else if (_isHumanT(otherSide) && ovF.formRival) {
+                /* Este lado es el rival del humano → forma del rival. */
+                ico = ovF.formRival;
               }
+              try { if (window._ppFormStates && ico !== '🎲') window._ppFormStates[side] = ico; } catch(__){}
             }
           }
         } catch(_){}

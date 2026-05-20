@@ -1127,6 +1127,49 @@ window._showSimProgress = function(opts, onDone){
     }
     /* tono del brillo (dropdown propio, con previsualización en vivo) */
     _mkChoiceFill('mk-glow', _MK_GLOW_OPTS, getVal('mk-glow')||'2', paint);
+    /* Estado de forma (solo cajas de equipo) — paleta táctil con los
+       mismos iconos que la previa (_ppFormVariants). Se aplica en la
+       previa de partido para el lado del equipo humano. */
+    var fsHost=document.getElementById('mk-formstates');
+    if(fsHost){
+      fsHost.innerHTML='';
+      var FS_FALLBACK=[
+        {ico:'',name:'(sin fijar)'},
+        {ico:'🎲',name:'Al azar'}, {ico:'⬆️',name:'Excelente'},
+        {ico:'↗️',name:'Buena'},  {ico:'➡️',name:'Normal'},
+        {ico:'↘️',name:'Mala'},   {ico:'⬇️',name:'Pésima'} ];
+      var FS = (window._ppFormVariants && window._ppFormVariants.length)
+        ? [{ico:'',name:'(sin fijar)'}].concat(window._ppFormVariants)
+        : FS_FALLBACK;
+      var curFS=String(getVal('mk-formstate')||'');
+      FS.forEach(function(v){
+        var sw=document.createElement('button');
+        sw.type='button'; sw.className='mk-sw';
+        sw.style.fontSize='18px';
+        sw.style.display='inline-flex';
+        sw.style.alignItems='center';
+        sw.style.justifyContent='center';
+        sw.style.background='rgba(0,0,0,.45)';
+        sw.textContent = v.ico || '∅';
+        sw.title = v.name || '';
+        if((v.ico||'')===curFS) sw.classList.add('sel');
+        sw.addEventListener('click', function(e){
+          e.preventDefault(); e.stopPropagation();
+          setVal('mk-formstate', v.ico||'');
+          fsHost.querySelectorAll('.mk-sw').forEach(function(x){ x.classList.remove('sel'); });
+          sw.classList.add('sel');
+        });
+        fsHost.appendChild(sw);
+      });
+    }
+    /* Nivel (CRACK / LEYENDA / Ninguno) — solo cajas de equipo */
+    if(document.querySelector('.mk-choice[data-for="mk-level"]')){
+      _mkChoiceFill('mk-level', [
+        {value:'',       label:'— Ninguno —'},
+        {value:'CRACK',  label:'⭐ CRACK'},
+        {value:'LEYENDA',label:'🏅 LEYENDA'}
+      ], getVal('mk-level')||'');
+    }
     paint();
   }
   /* Aplica borde + brillo a una caja (idempotente). El color por
@@ -1173,6 +1216,12 @@ window._showSimProgress = function(opts, onDone){
       '<div class="mk-lbl">Estadio</div>'+
       '<input type="text" id="mk-stadium" placeholder="Ej: Balaídos"/>'+
       colorRowHtml(true)+
+      /* Estado de forma + nivel (humano) — sembrado en la previa. */
+      '<div class="mk-lbl">Estado de forma</div>'+
+      '<input type="hidden" id="mk-formstate" value=""/>'+
+      '<div class="mk-sws" id="mk-formstates"></div>'+
+      '<div class="mk-lbl">Nivel</div>'+
+      _mkChoiceHtml('mk-level')+
       '<div class="mk-lbl">Al pulsar (pantalla destino)</div>'+
       _mkChoiceHtml('mk-nav')+
       '<div id="mk-pos-wrap"></div>';
@@ -1252,6 +1301,8 @@ window._showSimProgress = function(opts, onDone){
       var co=card.querySelector('.team-coach');
       setVal('mk-coach', added&&entry? (entry.coach||'') : (co?co.textContent.trim():''));
       setVal('mk-stadium', src.stadium||'');
+      setVal('mk-formstate', src.formState||'');
+      setVal('mk-level', src.level||'');
       renderResults('');
       document.getElementById('mk-q').addEventListener('input', function(){ renderResults(this.value); });
     } else {
@@ -1335,6 +1386,7 @@ window._showSimProgress = function(opts, onDone){
         var rc=readColors(true);
         var en={ id:id, type:'team', label:_ovPick.name, escudo:_ovPick.escudo,
           coach:getVal('mk-coach').trim(), stadium:getVal('mk-stadium').trim(), nav:nav, after:after,
+          formState:getVal('mk-formstate'), level:getVal('mk-level'),
           bcolor:rb.bcolor, glow:rb.glow,
           manual:rc.manual, colors: rc.manual? rc.colors : [] };
         s.added.push(en);
@@ -1383,6 +1435,8 @@ window._showSimProgress = function(opts, onDone){
         else { var qa=getVal('mk-q').trim(); if(qa) e.label=qa; }
         e.coach=getVal('mk-coach').trim();
         e.stadium=getVal('mk-stadium').trim();
+        e.formState=getVal('mk-formstate');
+        e.level=getVal('mk-level');
         e.manual=rc2.manual;
         if(rc2.manual) e.colors=rc2.colors;
         stA.added[idx]=e;
@@ -1415,6 +1469,8 @@ window._showSimProgress = function(opts, onDone){
       else { var q=getVal('mk-q').trim(); if(q) o.label=q; }
       o.coach=getVal('mk-coach').trim();
       o.stadium=getVal('mk-stadium').trim();
+      o.formState=getVal('mk-formstate');
+      o.level=getVal('mk-level');
       o.manual=rc2.manual;
       if(rc2.manual) o.colors=rc2.colors;
       st.ov[key]=o;

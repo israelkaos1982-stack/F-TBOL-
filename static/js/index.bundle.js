@@ -5579,6 +5579,30 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       function _teamLevel(name) {
         var normFn = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
         var n = normFn(name);
+        /* Override explícito del editor 🖍 para el equipo humano: si la
+           caja del menú fijó un nivel (CRACK / LEYENDA / vacío=ninguno)
+           Y `name` es el slot humano, ese override manda sobre todo. */
+        try {
+          var rawL = localStorage.getItem('menu_home_v1');
+          if (rawL) {
+            var dL = JSON.parse(rawL);
+            var ovL = dL && dL.ov && dL.ov['go:s-munich'];
+            if (ovL && Object.prototype.hasOwnProperty.call(ovL, 'level')) {
+              var isHumanSide = false;
+              if (ovL.label && normFn(ovL.label) === n) isHumanSide = true;
+              if (!isHumanSide && typeof window._ligaEaSubName === 'function') {
+                var subN = window._ligaEaSubName('Bayern Munich');
+                if (subN && normFn(subN) === n) isHumanSide = true;
+              }
+              if (!isHumanSide && normFn('Bayern Munich') === n) isHumanSide = true;
+              if (isHumanSide) {
+                if (ovL.level === 'CRACK')   return { lbl: '⭐ CRACK',   color: '#a0e0ff', short: 'CRACK' };
+                if (ovL.level === 'LEYENDA') return { lbl: '🏅 LEYENDA', color: '#ffbb33', short: 'LEYENDA' };
+                if (ovL.level === '') return null; /* admin eligió "Ninguno" */
+              }
+            }
+          }
+        } catch(_){}
         if (normFn('Atlético Madrid') === n || normFn('Atletico Madrid') === n) return { lbl: '🏅 LEYENDA', color: '#ffbb33', short: 'LEYENDA' };
         if (normFn('Real Madrid') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
         if (normFn('FC Barcelona') === n || normFn('Barcelona') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
@@ -5608,6 +5632,32 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       /* Form state buttons — bajo cada escudo */
       function _formBtnHtml(side) {
         var ico = (window._ppFormStates && window._ppFormStates[side]) || '🎲';
+        /* Si la caja del menú fijó un estado de forma para el humano,
+           sembrarlo como default cuando este lado es el humano y no
+           se ha tocado en esta sesión (aún en 🎲). El admin puede
+           seguir cambiándolo tocando el botón (PIN 747). */
+        try {
+          var rawF = localStorage.getItem('menu_home_v1');
+          if (rawF && ico === '🎲') {
+            var dF = JSON.parse(rawF);
+            var ovF = dF && dF.ov && dF.ov['go:s-munich'];
+            if (ovF && ovF.formState) {
+              var teamSide = side === 'home' ? home : away;
+              var normSF = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
+              var isH = false;
+              if (ovF.label && normSF(ovF.label) === normSF(teamSide)) isH = true;
+              if (!isH && typeof window._ligaEaSubName === 'function') {
+                var sSub = window._ligaEaSubName('Bayern Munich');
+                if (sSub && normSF(sSub) === normSF(teamSide)) isH = true;
+              }
+              if (!isH && normSF('Bayern Munich') === normSF(teamSide)) isH = true;
+              if (isH) {
+                ico = ovF.formState;
+                try { if (window._ppFormStates) window._ppFormStates[side] = ico; } catch(__){}
+              }
+            }
+          }
+        } catch(_){}
         var variants = window._ppFormVariants || [];
         var variant = null;
         for (var v = 0; v < variants.length; v++) { if (variants[v].ico === ico) { variant = variants[v]; break; } }

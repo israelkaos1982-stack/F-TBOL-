@@ -1894,6 +1894,88 @@ def _purge_pre_june(data):
     return data
 
 
+# PRE-VERANO en MAYO (01–31). Mundial de Selecciones: 8 partidos
+# (J1/J2/J3/Repesca/Octavos/Cuartos/Semis/Final) + 23 descansos.
+# Petición usuario 2026-05-20.
+_PREVERANO_MAY_MATCHES = [
+    (3,  "Mundial Grupo — J1",          "☀️"),
+    (7,  "Mundial Grupo — J2",          "🌧"),
+    (11, "Mundial Grupo — J3",          "☀️"),
+    (15, "Mundial Repesca J3",          "☀️"),
+    (19, "Mundial Octavos",             "☀️"),
+    (23, "Mundial Cuartos",             "☀️"),
+    (27, "Mundial Semis",               "☀️"),
+    (31, "MUNDIAL GRAN FINAL 🏆",        "☀️"),
+]
+def _build_preverano_may_events():
+    matches = {d: (n, w) for d, n, w in _PREVERANO_MAY_MATCHES}
+    out = []
+    for day in range(1, 32):
+        date = "%02d May" % day
+        if day in matches:
+            n, w = matches[day]
+            out.append({"id": "pvm-%02d" % day, "date": date,
+                        "icon": "🌍", "name": n, "weather": w})
+        else:
+            out.append({"id": "pvm-%02d" % day, "date": date,
+                        "icon": "💤", "name": "Descanso", "weather": "☀️"})
+    return out
+
+
+def _ensure_preverano_may(data):
+    """Garantiza la sección 'preverano' con los 31 días de Mayo
+    (Mundial de Selecciones + descansos) colocada antes del bloque
+    de Junio. Idempotente. Además depura eventos de Mayo (mes 4)
+    en CUALQUIER otra sección para evitar duplicación."""
+    if not isinstance(data, dict):
+        return data
+    secs = data.get("sections")
+    if not isinstance(secs, list):
+        return data
+    # 1) Depura cualquier evento "* May" en secciones que NO sean preverano.
+    for s in secs:
+        if not isinstance(s, dict):
+            continue
+        if s.get("id") == "preverano":
+            continue
+        evs = s.get("events")
+        if not isinstance(evs, list):
+            continue
+        kept = []
+        for ev in evs:
+            if not isinstance(ev, dict):
+                continue
+            p = _parse_event_date(ev.get("date"))
+            if p is None or p[0] != 4:
+                kept.append(ev)
+        s["events"] = kept
+    # 2) Localiza / crea la sección preverano.
+    target = None; idx = -1
+    for i, s in enumerate(secs):
+        if isinstance(s, dict) and s.get("id") == "preverano":
+            target = s; idx = i; break
+    if target is None:
+        target = {"id": "preverano",
+                  "name": "PRE-VERANO",
+                  "icon": "🌍", "variant": "preverano", "events": []}
+        secs.insert(0, target); idx = 0
+    canon = _build_preverano_may_events()
+    cur = target.get("events") or []
+    same = (len(cur) == len(canon) and all(
+        isinstance(a, dict) and a.get("date") == b["date"]
+        and a.get("name") == b["name"] and a.get("weather") == b["weather"]
+        for a, b in zip(cur, canon)))
+    if not same:
+        target["events"] = canon
+        target["name"] = "PRE-VERANO"
+        target["icon"] = "🌍"
+        target.setdefault("variant", "preverano")
+    if idx != 0:
+        secs.pop(idx)
+        secs.insert(0, target)
+    return data
+
+
 # Fase Final SELECCIONES en MAYO (01–31). 9 partidos + 22 descansos
 # (sin entrenamientos). Petición usuario 2026-05-20: como Mayo no se
 # elimina del calendario, lo rellenamos con las fases finales de
@@ -1970,6 +2052,7 @@ def _calendario_normalize(data):
     if not isinstance(data.get("sections"), list):
         data["sections"] = []
     _ensure_june_pretemp(data)
+    _ensure_preverano_may(data)
     _ensure_mundialito(data)
     return data
 

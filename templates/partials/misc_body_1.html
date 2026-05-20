@@ -6051,8 +6051,14 @@ window._showSimProgress = function(opts, onDone){
       if (k.indexOf('|sel|') !== -1 || k.indexOf('|sel-fin|') !== -1
           || k.indexOf('cal-sel') !== -1 || k.indexOf('cal-mf-') !== -1) return 'sel';
       /* Torneos de verano + amistosos → bucket único `torneos`
-         (s-torneos-stats). Petición usuario 2026-05-09. */
-      if (k.indexOf('tour_') === 0 || k.indexOf('|torneo|') !== -1) return 'torneos';
+         (s-torneos-stats). Petición usuario 2026-05-09.
+         storeKey real de tour matches = `canonA|canonB|torneos|tour_<id>_<key>`
+         (lo construye `registrarLigaPlayerStats` con el compKey). El
+         check `|torneo|` NO casa con `|torneos|` por la `s`. Añadido
+         `|torneos|` (2026-05-19, foto usuario: J1 jugada pero stats
+         vacías). Sin esto, los matches de torneo caían a 'liga'. */
+      if (k.indexOf('tour_') === 0 || k.indexOf('|torneo|') !== -1
+          || k.indexOf('|torneos|') !== -1) return 'torneos';
       if (k.indexOf('|amistoso|') !== -1 || k.indexOf('cal-ams') !== -1
           || k.indexOf('amistoso') === 0) return 'torneos';
       if (k.indexOf('sl-')  === 0 || k.indexOf('-sl')  !== -1
@@ -9583,12 +9589,12 @@ window._showSimProgress = function(opts, onDone){
   <!-- Cards generadas dinámicamente desde el registro de torneos
        (built-in + slots añadidos). Ver _tvRenderCards(). -->
   <div id="tv-tour-cards"></div>
-  <!-- Caja "📊 Estadísticas" Torneos de Verano (2026-05-08): paleta
-       dorado/amarillo igual que la temática (la caja en s-competiciones
-       es dorada). Lee de `ef_player_stats_torneos_v1` (cache aislado
-       que persistirá la suma de los 4 torneos individuales). -->
+  <!-- Caja "📊 Estadísticas" Torneos de Verano: paleta verdosa-azulada
+       (teal) para diferenciarla del dorado del Joan Gamper de arriba
+       (petición usuario 2026-05-19, foto 1). Lee de
+       `ef_player_stats_torneos_v1`. -->
   <div class="submenu-card sc-torneos-stats"
-       style="margin-top:6px;background:linear-gradient(135deg,#2a1f00 0%,#7a5a00 25%,#c89020 50%,#f0c040 70%,#c89020 85%,#2a1f00 100%) !important;border:1.5px solid #f0c040 !important;box-shadow:0 4px 18px rgba(240,192,64,.30),inset 0 1px 0 rgba(255,255,255,.12) !important;"
+       style="margin-top:6px;background:linear-gradient(135deg,#00221d 0%,#005c4e 25%,#008a76 50%,#2dd4bf 70%,#008a76 85%,#00221d 100%) !important;border:1.5px solid #2dd4bf !important;box-shadow:0 4px 18px rgba(45,212,191,.32),inset 0 1px 0 rgba(255,255,255,.12) !important;"
        onclick="go('s-torneos-stats')">
     <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span>
     <span class="sc-arr">▶</span>

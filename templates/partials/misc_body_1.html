@@ -23457,7 +23457,16 @@ Tottenham
          caemos al POST async x5 + cola pendiente + beacon de siempre
          (red de seguridad intacta — no se regresiona el caso offline). */
     var _syncConfirmed = false;
-    if (!window._restoSimBulkInProgress && serialized != null) {
+    /* 2026-05-20: gate ampliado a `_ligaExtSimInProgress` (sim de UNA
+       liga de Resto de Ligas). El XHR síncrono se diseñó para asegurar
+       que las EDICIONES MANUALES del editor sobreviven a "borrar datos
+       de navegación", pero en una SIM automatizada esa garantía no
+       hace falta — si el POST async falla, el admin re-simula. Con 5G
+       intermitente el sync XHR sin timeout hacía 3-6 calls bloqueantes
+       de 30s+ cada una ⇒ "la sim de una liga tarda 10 min" (reportado
+       con captura del overlay 'LIGA' clavado en 8%). Bulk-sim de 51
+       ligas ya estaba gateado. */
+    if (!window._restoSimBulkInProgress && !window._ligaExtSimInProgress && serialized != null) {
       /* REINTENTOS SÍNCRONOS (2026-05-19): el usuario reporta "muchas
          veces no se queda guardado" tras editar y borrar datos de
          navegación, sobre todo en móvil/5G/Railway frío. La causa: el

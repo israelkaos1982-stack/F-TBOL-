@@ -1586,7 +1586,7 @@ window._showSimProgress = function(opts, onDone){
 
 <div class="screen" id="s-bayern-plantilla">
   <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">👕</span><h2>Plantilla · Gestión de Jugadores</h2></div>
+  <div class="sec-hdr" style="gap:6px;align-items:center;"><span class="sec-emoji">👕</span><button type="button" id="bplant-edit-pencil" class="munich-edit-pencil" onclick="window._bplantPickOpenGated&amp;&amp;window._bplantPickOpenGated()" title="Cambiar plantilla del hub (admin PIN 747)" aria-label="Cambiar plantilla del hub">🖍</button></div>
   <!-- La caja del Bayern reusa EXACTAMENTE el mismo layout del modal
        del editor EA Sports (lext-sq-*) y se pinta a partir de la misma
        fuente de datos (`ligaExt_liga-ea-sports`). Los iconos por sección
@@ -2012,6 +2012,292 @@ window._showSimProgress = function(opts, onDone){
       document.addEventListener('DOMContentLoaded', _bootPlantAll);
     } else {
       _bootPlantAll();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PICKER 🖍 · Buscar plantilla de cualquier liga y mergear en el
+       hub. Petición usuario 2026-05-20: el hub Toñín (s-munich) tiene
+       un botón PLANTILLA que llevaba a un screen con "Plantilla ·
+       Gestión de Jugadores" pintado a partir de _findBayernRow. Si el
+       team resuelto no es el que el usuario quiere (Liverpool muestra
+       Celta porque alguien pegó la nómina del Celta), ahora puede
+       pulsar 🖍 (PIN 747) → buscar cualquier equipo → REEMPLAZA solo
+       los `players` (con sus flags C/F/P/⭐/⚾/🏀) en el team del hub.
+       La identidad del hub (name, shield, stadium, ATK/MED/DEF, alias
+       eFootball, isHuman, humanEmoji) se conserva — solo cambia la
+       nómina.
+       ══════════════════════════════════════════════════════════════ */
+    function _bplantFindHubRowWithSlug(){
+      /* Misma resolución que _findBayernRow pero devuelve {slug, data,
+         team} para poder llamar saveData(slug, data) tras mergear. */
+      function _stripEmoji(s){ return String(s||'').replace(/[\s️]/g,'').trim(); }
+      var TONIN_EMOJI = '💡';
+      try {
+        var keys = [];
+        for (var i=0; i<localStorage.length; i++){
+          var k = localStorage.key(i);
+          if (!k || k.indexOf('ligaExt_') !== 0) continue;
+          if (k.indexOf('_backup')!==-1 || k.indexOf('_protected')!==-1 || k.indexOf('_snap_')!==-1) continue;
+          keys.push(k);
+        }
+        keys.sort(function(a,b){
+          if (a === 'ligaExt_liga-ea-sports') return -1;
+          if (b === 'ligaExt_liga-ea-sports') return 1;
+          return 0;
+        });
+        /* 1) Liga EA: sustitución _ligaEaSubName + name~=bayern + 5º slot. */
+        var eaRaw = localStorage.getItem('ligaExt_liga-ea-sports');
+        if (eaRaw){
+          var eaData = JSON.parse(eaRaw);
+          var eaTeams = (eaData && eaData.teams) || [];
+          var want = 'Bayern Munich';
+          try {
+            if (typeof window._ligaEaSubName === 'function') {
+              var s = window._ligaEaSubName('Bayern Munich');
+              if (s) want = String(s);
+            }
+          } catch(_){}
+          var wl = want.toLowerCase(), i2, t2;
+          for (i2=0; i2<eaTeams.length; i2++){ t2=eaTeams[i2]; if (t2&&t2.name && t2.name.toLowerCase()===wl) return {slug:'liga-ea-sports', data:eaData, team:t2}; }
+          for (i2=0; i2<eaTeams.length; i2++){ t2=eaTeams[i2]; if (t2&&t2.name && /bayern/i.test(t2.name)) return {slug:'liga-ea-sports', data:eaData, team:t2}; }
+          var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+          for (i2=0; i2<eaTeams.length; i2++){ t2=eaTeams[i2]; if (t2&&t2.name && t2.isHuman && !others[t2.name.toLowerCase()]) return {slug:'liga-ea-sports', data:eaData, team:t2}; }
+        }
+        /* 2) Cross-liga por emoji 💡. */
+        for (var ii=0; ii<keys.length; ii++){
+          var key = keys[ii];
+          if (key === 'ligaExt_liga-ea-sports') continue;
+          var raw = localStorage.getItem(key);
+          if (!raw) continue;
+          var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+          var teams = (data && data.teams) || [];
+          for (var j=0; j<teams.length; j++){
+            var t = teams[j];
+            if (!t || !t.name || !t.isHuman) continue;
+            if (_stripEmoji(t.humanEmoji) === TONIN_EMOJI) {
+              return {slug:key.substring('ligaExt_'.length), data:data, team:t};
+            }
+          }
+        }
+      } catch(_){}
+      return null;
+    }
+
+    var _PRETTY_LEAGUE = {
+      'liga-ea-sports':'Liga EA Sports',
+      'liga-hypermotion':'Liga Hypermotion',
+      'liga-primera-federacion':'Primera Federación'
+    };
+    function _prettyLeagueName(slug){
+      if (_PRETTY_LEAGUE[slug]) return _PRETTY_LEAGUE[slug];
+      return String(slug||'').split('-').map(function(w){
+        return w ? (w[0].toUpperCase()+w.slice(1)) : '';
+      }).join(' ').trim() || slug;
+    }
+
+    function _bplantBuildIndex(){
+      /* Escanea TODAS las claves ligaExt_* y devuelve array de
+         {slug, leagueLabel, teamName, playersCount, shield} para
+         pintar el listado. Ordenado por nombre del equipo. */
+      var out = [];
+      try {
+        for (var i=0; i<localStorage.length; i++){
+          var key = localStorage.key(i);
+          if (!key || key.indexOf('ligaExt_') !== 0) continue;
+          if (key.indexOf('_backup')!==-1 || key.indexOf('_protected')!==-1 || key.indexOf('_snap_')!==-1) continue;
+          var raw = localStorage.getItem(key);
+          if (!raw) continue;
+          var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+          var teams = (data && data.teams) || [];
+          var slug = key.substring('ligaExt_'.length);
+          var label = _prettyLeagueName(slug);
+          for (var j=0; j<teams.length; j++){
+            var t = teams[j];
+            if (!t || !t.name) continue;
+            var nP = (Array.isArray(t.players) ? t.players.length : 0);
+            if (!nP) continue; /* sin plantilla no aporta nada */
+            out.push({
+              slug: slug, leagueLabel: label, teamName: String(t.name),
+              playersCount: nP, shield: String(t.shield||'')
+            });
+          }
+        }
+      } catch(_){}
+      out.sort(function(a,b){ return a.teamName.localeCompare(b.teamName, 'es', {sensitivity:'base'}); });
+      return out;
+    }
+
+    function _bplantNorm(s){
+      try { return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+      catch(_){ return String(s||'').toLowerCase(); }
+    }
+
+    function _bplantEnsureOv(){
+      var ov = document.getElementById('bplant-pick-ov');
+      if (ov) return ov;
+      ov = document.createElement('div');
+      ov.id = 'bplant-pick-ov';
+      ov.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999990;align-items:center;justify-content:center;padding:18px;';
+      ov.innerHTML =
+        '<div style="background:linear-gradient(160deg,#0d1117,#161b22);border:1px solid rgba(240,192,64,.35);border-radius:14px;padding:18px 16px 14px;width:420px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 0 40px rgba(0,0,0,.8);">'
+      +   '<div style="font-family:\'Bebas Neue\',\'Oswald\',sans-serif;font-size:19px;letter-spacing:2.5px;color:#ffe7a6;text-align:center;margin:0 0 12px;text-shadow:0 0 12px rgba(240,192,64,.45);">🖍 CAMBIAR PLANTILLA · BUSCAR EQUIPO</div>'
+      +   '<div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.5);border:1px solid rgba(240,192,64,.30);border-radius:7px;padding:9px 11px;margin-bottom:10px;">'
+      +     '<span style="font-size:16px;color:#ffd5aa;">🔍</span>'
+      +     '<input id="bplant-q" type="text" placeholder="Escribe un nombre…" autocomplete="off" style="flex:1;background:transparent;border:none;outline:none;color:#fff;font-family:Rajdhani,sans-serif;font-size:15px;letter-spacing:.5px;" />'
+      +   '</div>'
+      +   '<div id="bplant-res" style="overflow:auto;max-height:62vh;border:1px solid rgba(255,255,255,.10);border-radius:8px;background:rgba(0,0,0,.32);"></div>'
+      +   '<div style="display:flex;gap:8px;justify-content:center;margin-top:14px;">'
+      +     '<button type="button" id="bplant-cancel" style="padding:9px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.25);background:transparent;color:rgba(255,255,255,.78);">CANCELAR</button>'
+      +   '</div>'
+      + '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if (e.target === ov) _bplantPickClose(); });
+      ov.querySelector('#bplant-cancel').addEventListener('click', _bplantPickClose);
+      var q = ov.querySelector('#bplant-q');
+      var res = ov.querySelector('#bplant-res');
+      q.addEventListener('input', function(){ _bplantRenderList(q.value); });
+      res.addEventListener('click', function(ev){
+        var row = ev.target && ev.target.closest && ev.target.closest('.bplant-row');
+        if (!row) return;
+        var slug = row.getAttribute('data-slug');
+        var team = row.getAttribute('data-team');
+        if (slug && team) _bplantPickApply(slug, team);
+      });
+      return ov;
+    }
+
+    function _bplantRenderList(query){
+      var res = document.getElementById('bplant-res');
+      if (!res) return;
+      var idx = _BPLANT_INDEX || (_BPLANT_INDEX = _bplantBuildIndex());
+      var q = _bplantNorm(query || '');
+      var filtered = q ? idx.filter(function(it){
+        return _bplantNorm(it.teamName).indexOf(q) !== -1
+            || _bplantNorm(it.leagueLabel).indexOf(q) !== -1;
+      }) : idx;
+      if (!filtered.length){
+        res.innerHTML = '<div style="padding:24px 14px;text-align:center;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:14px;">Sin resultados.</div>';
+        return;
+      }
+      var html = '';
+      for (var i=0; i<filtered.length && i<400; i++){
+        var it = filtered[i];
+        var sh = it.shield
+          ? '<img src="'+String(it.shield).replace(/"/g,'&quot;')+'" alt="" style="width:26px;height:26px;object-fit:contain;flex-shrink:0;" onerror="this.style.display=\'none\';" />'
+          : '<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">🛡</span>';
+        html += '<div class="bplant-row" data-slug="'+it.slug+'" data-team="'+String(it.teamName).replace(/"/g,'&quot;')+'" '
+              + 'style="display:flex;align-items:center;gap:10px;padding:8px 11px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.06);-webkit-tap-highlight-color:rgba(240,192,64,.18);">'
+              + sh
+              + '<div style="flex:1;min-width:0;">'
+              +   '<div style="font-family:Oswald,sans-serif;font-size:13px;color:#fff;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+String(it.teamName)+'</div>'
+              +   '<div style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.55);letter-spacing:.3px;">'+String(it.leagueLabel)+' · '+it.playersCount+' jugadores</div>'
+              + '</div>'
+              + '<span style="font-size:15px;color:#ffe7a6;flex-shrink:0;">→</span>'
+              + '</div>';
+      }
+      if (filtered.length > 400) {
+        html += '<div style="padding:10px;text-align:center;color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;font-size:11px;">… ' + (filtered.length-400) + ' más. Refina la búsqueda.</div>';
+      }
+      res.innerHTML = html;
+    }
+
+    var _BPLANT_INDEX = null;
+
+    function _bplantPickOpen(){
+      _BPLANT_INDEX = _bplantBuildIndex();
+      var ov = _bplantEnsureOv();
+      var q = ov.querySelector('#bplant-q');
+      if (q) q.value = '';
+      _bplantRenderList('');
+      ov.style.display = 'flex';
+      setTimeout(function(){ try { q && q.focus(); } catch(_){} }, 30);
+    }
+    function _bplantPickClose(){
+      var ov = document.getElementById('bplant-pick-ov');
+      if (ov) ov.style.display = 'none';
+    }
+    window._bplantPickOpenGated = function(){
+      if (typeof window.pG === 'function') window.pG(_bplantPickOpen);
+      else _bplantPickOpen();
+    };
+
+    function _bplantClonePlayers(src){
+      /* Deep clone con nuevos ids para evitar choques de id entre el
+         hub y el equipo origen (que sigue existiendo en su liga). Los
+         flags C/F/P/⭐/⚾/🏀 y stats se preservan al pegarse tal cual.
+         Los stats de partidos (pj/gol/...) los pone el motor a 0 al
+         empezar, pero copiamos lo que venga por si el origen tenía. */
+      if (!Array.isArray(src)) return [];
+      var out = [];
+      for (var i=0; i<src.length; i++){
+        var p = src[i];
+        if (!p || typeof p !== 'object') continue;
+        var c = {};
+        for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) c[k] = p[k];
+        c.id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2,7) + i;
+        out.push(c);
+      }
+      return out;
+    }
+
+    function _bplantPickApply(srcSlug, srcTeamName){
+      var hub = _bplantFindHubRowWithSlug();
+      if (!hub || !hub.team){
+        alert('⚠ No encuentro el equipo del hub. Asegúrate de que tu equipo está marcado como Humano con tu emoji en el editor.');
+        return;
+      }
+      var srcKey = 'ligaExt_' + srcSlug;
+      var srcRaw = localStorage.getItem(srcKey);
+      if (!srcRaw){ alert('⚠ No encuentro la liga origen.'); return; }
+      var srcData; try { srcData = JSON.parse(srcRaw); } catch(_){ srcData = null; }
+      var srcTeams = (srcData && srcData.teams) || [];
+      var src = null;
+      var srcName = String(srcTeamName||'').toLowerCase();
+      for (var i=0; i<srcTeams.length; i++){
+        var t = srcTeams[i];
+        if (t && t.name && String(t.name).toLowerCase() === srcName){ src = t; break; }
+      }
+      if (!src || !Array.isArray(src.players) || !src.players.length){
+        alert('⚠ El equipo elegido no tiene plantilla.');
+        return;
+      }
+      /* REEMPLAZAR completamente los jugadores del hub, preservando el
+         resto de su identidad (name/shield/stadium/4-ejes/alias/etc). */
+      hub.team.players = _bplantClonePlayers(src.players);
+      hub.team.updatedAt = Date.now();
+      /* Persistir vía window.saveData (mismo flujo que el editor: 5
+         capas + POST al servidor + invalidación de caches). Si por
+         alguna razón no estuviera disponible, fallback a localStorage. */
+      var saved = false;
+      try {
+        if (typeof window.saveData === 'function'){
+          window.saveData(hub.slug, hub.data);
+          saved = true;
+        }
+      } catch(_){}
+      if (!saved){
+        try { localStorage.setItem('ligaExt_'+hub.slug, JSON.stringify(hub.data)); saved = true; } catch(_){}
+      }
+      if (!saved){
+        alert('⚠ No se pudo guardar (almacenamiento lleno?). Cierra y vuelve a intentarlo.');
+        return;
+      }
+      /* Invalidar cache de stats del hub para que el siguiente render
+         use la plantilla nueva. */
+      try { _LAST_SYNC_TS = 0; } catch(_){}
+      try { window._invalidateBayernStatsCache && window._invalidateBayernStatsCache(); } catch(_){}
+      try { window._invalidateLineStatsCache && window._invalidateLineStatsCache(); } catch(_){}
+      try { window._invalidateAliasCache && window._invalidateAliasCache(); } catch(_){}
+      _bplantPickClose();
+      try { window.renderBayernPlantillaScreen && window.renderBayernPlantillaScreen(); } catch(_){}
+      /* Pequeña confirmación visual no-bloqueante. */
+      try {
+        var toast = document.createElement('div');
+        toast.textContent = '✅ Plantilla cambiada a ' + srcTeamName;
+        toast.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(20,80,40,.96);color:#caffd0;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.2px;padding:10px 18px;border-radius:10px;border:1px solid rgba(120,255,160,.45);box-shadow:0 6px 24px rgba(0,0,0,.55);z-index:999991;';
+        document.body.appendChild(toast);
+        setTimeout(function(){ try { toast.parentNode && toast.parentNode.removeChild(toast); } catch(_){} }, 2400);
+      } catch(_){}
     }
   })();
   </script>
@@ -22925,6 +23211,10 @@ Tottenham
     LIGA_CACHE[k] = {teams:[], results:[]};
     return _applyForcedBlacklist(k, LIGA_CACHE[k]);
   }
+  /* Exponer en window para que IIFEs hermanos (p.ej. el host de
+     s-bayern-plantilla) puedan leer datos del editor sin tener que
+     parsear localStorage a pelo. 2026-05-20. */
+  window.loadData = loadData;
 
   /* ═══════════════════════════════════════════════════════════════
      FORCED_BLACKLIST — equipos vetados PERMANENTEMENTE por liga.
@@ -23787,6 +24077,8 @@ Tottenham
       }
     }catch(_){}
   }
+  /* Exponer en window — ver loadData arriba. 2026-05-20. */
+  window.saveData = saveData;
 
   /* Drena en 2º plano la cola de POSTs acumulada durante la sim
      masiva (1 POST/~70ms, async, NO bloquea la UI). Idempotente y

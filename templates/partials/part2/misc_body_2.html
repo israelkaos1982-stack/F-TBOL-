@@ -7404,76 +7404,68 @@
   }
 
   /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 1-38, Copa y Europa) ──── */
-  /* Timer speeds per match type (5-second ticks, 1080 ticks = 90 game min):
-     AI vs AI  : 30s real  → 30000/1080  ≈   28ms/tick
-     HvIA      : 12m real  → 720000/1080 ≈  667ms/tick  (1 min juego = 8s reales)
-     HvH 90min : 16m real  → 960000/1080 ≈  889ms/tick  (1 min juego ≈ 10.67s reales)
-     HvH ET    : 5m real for 30 game min → 300000/360 ≈ 833ms/tick */
   /* ── DURACIÓN REAL DE PARTIDOS HUMANOS (regla de tres) ──────
      Fuente única de verdad para la velocidad del cronómetro. Cada
      "modo" (HvH / HvIA / IAIA / prórroga) declara:
         • gameMin  : minutos de juego simulados en un partido completo
         • realMin  : minutos de tiempo real que ese partido debe durar
+        • displayMin: lo que la previa MUESTRA al usuario (puede no
+                      coincidir con realMin — el usuario lo prefiere así
+                      desde 2026-05-19 para que el ritmo del cronómetro
+                      vaya al ritmo eFootball pero la previa muestre
+                      números cómodos).
      Y el tick del setInterval se calcula por regla de tres:
         tickMs = realMin * 60 000 / (gameMin * 60 / _ML_TICK_SEC)
 
-     Objetivo pedido:
-        HvH   : 10 min de juego  → 16-17 min reales  (pto medio 16.5)
-        HvIA  :  8 min de juego  → 12-13 min reales  (pto medio 12.5)
+     TIEMPOS OFICIALES (restaurados pre-mayo, 2026-05-19):
 
-     Escalado a nuestro reloj (90 game-min + descuento 1..7, media 4):
-     ══════════════════════════════════════════════════════════════
-     TIEMPOS OFICIALES (actualizados 2026-04-26):
-
-        IA vs IA   → 45s cada parte    → 1.5 min total (90 s reales)
+        IA vs IA   → 45 s cada parte   → 1.5  min total (90 s reales)
                      (1 sec real = 1 game-minute)
-        HvIA       → 4min 52.5s/parte  → 9.75 min total real
-                     (6.5 s/game-min)
-        HvH        → 7min 52.5s/parte  → 15.75 min total real
-                     (10.5 s/game-min)
+        HvIA       → 6 min 45 s/parte  → 13.5 min total real
+                     (9 s/game-min). Previa: "8 min".
+        HvH        → 8 min 15 s/parte  → 16.5 min total real
+                     (11 s/game-min). Previa: "10 min".
         HvH prórroga → 2.5 min/parte   → 5 min total real
 
-        Descuento: +1 minuto de juego por cada evento (gol, tarjeta,
-        lesión, penalti) que ocurra en la segunda parte. El cronómetro
-        del juego marca del 0 al 45 + desc / descanso / 45 al 90 + desc.
+     Descuento FIJO (2026-05-19): SIEMPRE 45+1..45+4 en 1ª parte y
+     90+1..90+9 en 2ª, independiente de eventos. El cron se CONGELA
+     en el tope hasta que el humano pulse DESCANSO / FINALIZAR.
+     Cada game-minute de descuento en tiempo REAL equivale a:
+        HvH:  11 segundos reales
+        HvIA:  9 segundos reales
+        IAIA:  1 segundo  real
 
-     ══════════════════════════════════════════════════════════════ */
-  /* Duración AUTORITATIVA de cada partido — FIJADA POR EL USUARIO:
-       HvH    → 15 min 45 s reales, label "10 min", 10.5 s/game-min
-       HvIA   →  9 min 45 s reales, label "8 min",   6.5 s/game-min
-       IAIA   →  1 min real total  (30 s por parte), label "30 s/parte"
-       HvH_ET →  5 min reales de prórroga
-
-     gameMin = 90 SIEMPRE (el reloj de juego va de 0 a 90). El
-     descuento NO se suma aquí — se añade dinámicamente en tiempo de
-     partido: +1 game-minute por cada evento del acta (gol, tarjeta,
-     penalti, falta, lesión). Se muestra como "45+1, 45+2…" en la 1ª
-     parte y "90+1, 90+2…" en la 2ª. Cada evento prolonga la parte:
-       HvH:  10.5 segundos reales
-       HvIA:  6.5 segundos reales
-       IAIA:  1 segundo real (90 game-min / 90 sec real = 1:1 tras
-              el ajuste 2026-04-21)
+     Histórico:
+       Pre 2026-04-26 (estos valores actuales): HvH 11s, HvIA 9s.
+       2026-04-26 (intermedio):                 HvH 10.5s, HvIA 6.5s.
+       2026-05-10 (alineación display=real):    HvH 6.67s, HvIA 5.33s.
+       2026-05-19: usuario pide volver al pre-mayo porque el cron iba
+       más rápido que eFootball / vida real. Display previa = 10/8
+       (no real) por preferencia explícita.
 
      Consecuencia matemática (verificada): 1 game-minute = tickMs × 12
-       HvH   tick ≈ 875 ms → 60 × 875/5 = 10.5 s
-       HvIA  tick ≈ 542 ms → 60 × 542/5 ≈ 6.5 s
-       IAIA  tick ≈  83 ms → 60 ×  83/5 = 1 s  (90 s total) */
+       HvH   tick ≈ 917 ms → 60 × 917/5 = 11 s
+       HvIA  tick ≈ 750 ms → 60 × 750/5 =  9 s
+       IAIA  tick ≈  83 ms → 60 ×  83/5 =  1 s  (90 s total) */
   var _ML_TICK_SEC = 5;
-  /* Tiempos reales del cronómetro (petición usuario 2026-05-10):
-     "el cronómetro de HvH y HvIA no funciona, recuerda los códigos
-     del tiempo que tenemos y arréglalo".
-     ALINEAR la duración REAL con la etiqueta MOSTRADA en la previa
-     (`displayMin`). Antes la etiqueta decía "10 min" pero el partido
-     duraba 15.75 min reales — discrepancia que confundía al usuario.
-     Ahora 1:1 → la previa muestra "10 min" y el partido dura 10 min.
-        HvH    → 10 min reales (era 15.75) → 6.67 s/game-min
-        HvH_ET → 5  min reales (sin cambio)
-        HvIA   → 8  min reales (era  9.75) → 5.33 s/game-min
-        IAIA   → 1.5 min reales (sin cambio) → 1 s/game-min */
+  /* Tiempos reales del cronómetro (petición usuario 2026-05-19):
+     "la simulación del cronómetro está yendo más rápido que el tiempo
+     del juego eFootball y más rápido que la vida real, vuelve a los
+     tiempos de antes". RESTAURADOS los valores pre-2026-04-26:
+        HvH    → 16.5 min reales → 11 s/game-min  (≈917 ms/tick)
+        HvH_ET → 5    min reales (sin cambio)
+        HvIA   → 13.5 min reales → 9  s/game-min  (≈750 ms/tick)
+        IAIA   → 1.5  min reales (sin cambio)     →   1 s/game-min
+     `displayMin` se mantiene en 10 / 8 (lo que la previa muestra al
+     usuario) por petición explícita: la previa dice "10 min" / "8 min"
+     aunque la duración real sea más larga, porque así estaba en su
+     memoria del juego. La regla de oro 2026-05-10 (display=real) queda
+     RESCINDIDA: el usuario prefiere display de referencia + cronómetro
+     a ritmo eFootball realista. */
   var _MATCH_RULE = {
-    HvH:    { gameMin: 90, realMin: 10,   displayMin: 10 },
-    HvH_ET: { gameMin: 30, realMin: 5                      },
-    HvIA:   { gameMin: 90, realMin: 8,    displayMin: 8  },
+    HvH:    { gameMin: 90, realMin: 16.5, displayMin: 10 },
+    HvH_ET: { gameMin: 30, realMin: 5                       },
+    HvIA:   { gameMin: 90, realMin: 13.5, displayMin: 8  },
     IAIA:   { gameMin: 90, realMin: 1.5,  displayLabel: '45 s/parte' }
   };
   function _tickMsFromRule(r) {
@@ -7483,10 +7475,10 @@
     return Math.max(1, Math.round(realMs / ticks));
   }
   var _MATCH_TICKS = {
-    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 556 ms (10 min reales)   */
-    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5 min reales)   */
-    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 444 ms ( 8 min reales)   */
-    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  83 ms (90 s total)      */
+    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 917 ms (16.5 min reales · 11 s/game-min) */
+    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5   min reales)               */
+    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 750 ms (13.5 min reales ·  9 s/game-min) */
+    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  83 ms (90 s total)                   */
   };
   /* Exponemos la regla para que TODOS los flujos (bundle legacy, campo 3D,
      previa, clock, live ticker, copa engine) lean de una única fuente.
@@ -7587,12 +7579,20 @@
     'pen-prov': 1, 'pen-parado': 1, 'falta-gol': 1,
     'amarilla': 1, 'd-amarilla': 1, 'roja': 1, 'lesion': 1
   };
-  /* Cuenta cuántos eventos del acta han ocurrido en cada parte del
-     partido, para calcular descuento dinámico. Retorna
-     {first, second}. Se considera "1ª parte" min < 45 y "2ª parte"
-     min ∈ [45, 90). Eventos ya en stoppage time (>= 90) no cuentan
-     — no se pueden prolongar a sí mismos. */
+  /* Stoppage time en regulación (petición usuario 2026-05-19):
+     - 1ª parte: SIEMPRE de 45+1 a 45+4 (cap +4).
+     - 2ª parte: SIEMPRE de 90+1 a 90+9 (cap +9).
+     El cronómetro recorre esos game-minutes y se CONGELA en el tope
+     hasta que el humano pulse DESCANSO / FINALIZAR. Independiente de
+     la cuenta de eventos del acta (antes era event-driven sin tope, lo
+     que producía descuentos absurdos en partidos con muchos eventos y
+     ninguno en partidos sin eventos).
+     En PRÓRROGA (etDone) se mantiene el modelo legacy event-driven —
+     el usuario no lo cambió y la prórroga tiene su propio flujo. */
   function _mlCountStoppageHalves(st) {
+    if (st && !st.etDone) {
+      return { first: 4, second: 9 };
+    }
     var fh = 0, sh = 0;
     var ev = (st && st.events) || [];
     for (var i = 0; i < ev.length; i++) {
@@ -7998,10 +7998,11 @@
     var endBtn = document.getElementById('ml-btn-end-'+mk);
     if (endBtn) {
       var matchOver = !!(st.matchFinished || st.finished || rawSec >= fullMax);
-      /* FOTO B1 (2026-05-16): empezar a brillar desde el min 85
-         (5100 s) también en las cards del calendario, no solo al
-         final exacto. */
-      endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 85 * 60);
+      /* Brillo rojo desde el min 80 también en las cards del calendario
+         (petición usuario 2026-05-19). En ml-card no hay verde-dorado
+         VER RESUMEN, así que `.is-finishable` ya pinta rojo brillante
+         con su keyframe — solo bajamos el umbral 85→80. */
+      endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 80 * 60);
     }
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
     if (st.inDescanso) { btn.textContent='⏸ HT'; btn.className='ml-timer running'; return; }
@@ -8532,7 +8533,9 @@
          amistosos usan los caminos de arriba. */
       if (!st.htDone && !st.etDone && !st.matchFinished && !st.isIAvsIA && !st.isFriendly) {
         var _htBtn = document.getElementById('ml-btn-ht-'+mk);
-        if (_htBtn) _htBtn.style.display = (st.timerSec >= 2220) ? '' : 'none';
+        /* Petición usuario 2026-05-19: emerge la caja DESCANSO desde
+           el minuto 40 (antes 37'). */
+        if (_htBtn) _htBtn.style.display = (st.timerSec >= 2400) ? '' : 'none';
       }
       // Stoppage time marker at 90' — muestra el nº de game-minutes
       // añadidos dinámicamente por los eventos de la 2ª parte.
@@ -11247,12 +11250,16 @@
       }
 
       var _baseClasses = 'is-finishable';
-      /* FOTO B1 (2026-05-16, petición usuario): la caja FINALIZAR
-         debe EMPEZAR a brillar y llamar la atención a partir del
-         game-minute 85 (no solo al final exacto), para avisar al
-         humano de que el partido está por terminar. 85' = 5100 s. */
-      var _gmNear85 = (Number(_gm.timerSec) || 0) >= 85 * 60;
-      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmNear85 || _gmAction !== 'finalizar');
+      /* Petición usuario 2026-05-19 (revisión foto): "al finalizar el
+         partido sobre el minuto 80 tiene que emerger la caja de
+         finalizar en color rojo brillante". `.is-near-end` (NUEVA)
+         es el rojo brillante en la fase 80'..90+9 ANTES de matchOver.
+         `.is-finishable` se mantiene para el VER RESUMEN (matchOver,
+         verde-dorado de 2026-05-17) y para PRÓRROGA / PENALTIS. */
+      var _gmNear80 = (Number(_gm.timerSec) || 0) >= 80 * 60;
+      _gmEndBtn.classList.toggle('is-near-end',
+        _gmNear80 && !_matchOver && !_gm.finished && _gmAction === 'finalizar');
+      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmAction !== 'finalizar');
       if (_gmAction === 'prorroga') {
         _gmEndBtn.textContent = '▶ PRÓRROGA';
       } else if (_gmAction === 'penaltis') {
@@ -11377,21 +11384,19 @@
       }
     } catch(_){}
     /* Botón "🛌 DESCANSO" — visible para que el usuario pueda forzar
-       el half-time desde el minuto 37 de la primera parte. Razón:
-       cuadrar el cronómetro real (TV / cronómetro del propio partido
-       eFootball) con el simulado es casi imposible — los goles, faltas
-       y pausas hacen que vayan desfasados. Permitiendo descanso
-       anticipado desde 37' el usuario salta al medio tiempo cuando
-       el partido REAL acaba la primera parte, sin importar lo que
-       marque el reloj de la app. Si NO pulsa el botón, el cronómetro
-       sigue subiendo (38, 39, ...) hasta llegar al auto-descanso en
-       45+descuento (gmHalfMax). Solo se muestra HvH/HvIA (gm-modal),
+       el half-time desde el minuto 40 (petición usuario 2026-05-19:
+       "en el minuto 40 emerge la caja de descanso"). Razón histórica:
+       cuadrar el cronómetro simulado con el real (TV/eFootball) es
+       casi imposible — los goles, faltas y pausas hacen que vayan
+       desfasados. Si NO pulsa el botón, el cronómetro sube 41, 42…
+       45+1, 45+2, 45+3, 45+4 y se CONGELA en 45+4 hasta que el
+       humano pulse DESCANSO. Solo se muestra HvH/HvIA (gm-modal),
        fuera de prórroga y antes del descanso. */
     try {
       var fhWrap = document.getElementById('gm-force-ht-wrap');
       if (fhWrap) {
         var canForce = !_gm.finished && !_gm.htDone && !_gm.etDone
-                       && !_gm.inDescanso && _gm.timerSec >= 2220;  /* 37' */
+                       && !_gm.inDescanso && _gm.timerSec >= 2400;  /* 40' */
         fhWrap.style.display = canForce ? '' : 'none';
       }
     } catch(_) {}
@@ -11738,15 +11743,22 @@
       var gmStops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
       var gmHalfMax = 2700 + (gmStops.first || 0) * 60;
       var max = _gm.etDone ? GM_MAX_ET : (GM_MAX_NORMAL + (gmStops.second || 0) * 60);
-      /* Descanso automático: SOLO si no hay humano implicado. En la
-         práctica gm-modal sólo se usa en HvH/HvIA (IAvIA va por el
-         flujo ml-wrap), así que esto es un no-op de seguridad: el
-         humano debe pulsar el botón "🛌 DESCANSO" (gm-btn-force-ht).
-         Petición usuario: la 1ª parte jamás termina sin pulsar el
-         botón en partidos con humano. */
+      /* 1ª parte: al llegar a 45+4 (gmHalfMax con stoppage fijo) se
+         CONGELA esperando al humano que pulse "🛌 DESCANSO". Sin esto
+         el cron seguía corriendo hacia 90+ sin esperar (foto usuario
+         2026-05-19). Para IA-vs-IA (caso teórico — gm-modal solo se
+         usa con humano) sí auto-descanso. */
       var _gmHasHuman = !!_gm.isHvH
         || (typeof esHumano === 'function' && (esHumano(_gm.home) || esHumano(_gm.away)));
-      if (!_gm.htDone && _gm.timerSec >= gmHalfMax && !_gmHasHuman) {
+      if (!_gm.htDone && _gm.timerSec >= gmHalfMax) {
+        if (_gmHasHuman) {
+          _gm.timerSec = gmHalfMax;
+          _gm._wallStart = Date.now();
+          _gm._secAtStart = gmHalfMax;
+          if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; }
+          gmRenderTimer();
+          return;
+        }
         _gmEnterHalftime();
         return;
       }
@@ -17242,7 +17254,32 @@
   border-color:rgba(255,200,64,.55) !important;
   text-shadow:0 1px 2px rgba(0,0,0,.5);
 }
-#gm-btn-end:disabled{animation:none !important;}
+/* ── FINALIZAR · rojo brillante llamativo desde el min 80 ─────────
+   (petición usuario 2026-05-19, foto). Marca la fase final del
+   partido (80'..90+9) ANTES del matchOver / VER RESUMEN. Más
+   intenso que `.is-finishable` y con animación más rápida. */
+#gm-btn-end.is-near-end,
+#gm-btn-end.gm-end-moved.is-near-end{
+  background:linear-gradient(135deg,#c4001a,#ff2233 55%,#c4001a) !important;
+  border:2px solid #ff5566 !important;
+  color:#fff !important;
+  font-weight:900 !important;
+  font-size:14px !important;
+  letter-spacing:2px !important;
+  text-shadow:0 1px 3px rgba(0,0,0,.75) !important;
+  animation:gmNearEndPulse 1s ease-in-out infinite !important;
+}
+@keyframes gmNearEndPulse{
+  0%,100%{ box-shadow:0 0 12px rgba(255,40,52,.65), inset 0 0 8px rgba(255,255,255,.08); transform:scale(1); }
+  50%   { box-shadow:0 0 32px rgba(255,40,52,1), 0 0 56px rgba(255,40,52,.5), inset 0 0 12px rgba(255,255,255,.12); transform:scale(1.025); }
+}
+.ml-action-end.is-near-end{
+  background:linear-gradient(135deg,#c4001a,#ff2233 55%,#c4001a) !important;
+  color:#fff !important;
+  font-weight:900 !important;
+  animation:gmNearEndPulse 1s ease-in-out infinite !important;
+}
+#gm-btn-end:disabled,#gm-btn-end.gm-end-moved.is-near-end:disabled{animation:none !important;}
 /* ── Eventos del acta ────────────────────────────────────────── */
 .ml-evt-item{padding-left:10px!important;}
 .ml-evt-team{font-size:11px;color:rgba(255,255,255,.45);font-family:"Rajdhani",sans-serif;white-space:nowrap;}

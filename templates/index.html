@@ -118,15 +118,27 @@
   </style>
   <script>
     /* Splash auto-hide: cubre el flash localStorage→server hydration.
-       1800 ms es la ventana donde caen los primeros fetch /api/kv/*
-       y /api/liga-ext/* en la mayoría de cargas. */
+       2026-05-20: el timeout fijo de 1.8 s NO bastaba — el usuario
+       seguía viendo el escudo viejo (Bayern donde debe ir Liverpool,
+       PSG sin escudo) durante varios segundos tras ocultarse el
+       splash. La hidratación real ocurre cuando responde el primer
+       GET a /api/liga-ext/* (que devuelve el squad actualizado del
+       server). Patcheamos window.fetch ANTES de que cargue el bundle
+       para detectar la respuesta y esperar 900 ms extra a que el DOM
+       se re-renderice. Caps: mínimo 1500 ms (no flashear), máximo
+       5000 ms (no atascarse si no hay red). */
     (function(){
-      var BOOT_SPLASH_MS = (typeof window._BOOT_SPLASH_MS === 'number') ? window._BOOT_SPLASH_MS : 1800;
+      var MIN_MS    = (typeof window._BOOT_SPLASH_MIN_MS  === 'number') ? window._BOOT_SPLASH_MIN_MS  : 1500;
+      var GRACE_MS  = (typeof window._BOOT_SPLASH_GRACE_MS=== 'number') ? window._BOOT_SPLASH_GRACE_MS:  900;
+      var MAX_MS    = (typeof window._BOOT_SPLASH_MAX_MS  === 'number') ? window._BOOT_SPLASH_MAX_MS  : 5000;
       var el = document.getElementById('boot-splash');
       if (!el) return;
       var hidden = false;
+      var startedAt = Date.now();
       function hide(){
         if (hidden) return;
+        var elapsed = Date.now() - startedAt;
+        if (elapsed < MIN_MS) { setTimeout(hide, MIN_MS - elapsed); return; }
         hidden = true;
         el.classList.add('hide');
         setTimeout(function(){ if (el && el.parentNode) el.parentNode.removeChild(el); }, 380);
@@ -134,17 +146,31 @@
       /* Tap-to-close (para no atascar al usuario si la app va lenta). */
       el.addEventListener('click', hide, { once:true });
       el.addEventListener('touchend', hide, { once:true });
-      /* Hide automático en el primero de:
-         - window.load + 600ms grace (todo el HTML/JS parseado y los
-           primeros fetches en curso)
-         - timeout absoluto BOOT_SPLASH_MS desde el inicio */
-      var startedAt = Date.now();
-      window.addEventListener('load', function(){
-        var elapsed = Date.now() - startedAt;
-        var graceMs = Math.max(0, 600 - (elapsed > BOOT_SPLASH_MS ? BOOT_SPLASH_MS : 0));
-        setTimeout(hide, graceMs);
-      }, { once:true });
-      setTimeout(hide, BOOT_SPLASH_MS);
+
+      /* Monkey-patch fetch ANTES del bundle para detectar el primer
+         GET a /api/liga-ext/* (= el squad del server llegó). */
+      if (typeof window.fetch === 'function') {
+        var origFetch = window.fetch;
+        var hydrateScheduled = false;
+        window.fetch = function(input, init){
+          var url = (typeof input === 'string') ? input : (input && input.url) || '';
+          var method = (init && init.method) ? String(init.method).toUpperCase() : 'GET';
+          var p = origFetch.apply(this, arguments);
+          try {
+            if (!hydrateScheduled && method === 'GET'
+                && (url.indexOf('/api/liga-ext') !== -1
+                    || url.indexOf('/api/kv/menu_home_v1') !== -1
+                    || url.indexOf('/api/kv/comp_icons_v1') !== -1)) {
+              hydrateScheduled = true;
+              p.then(function(){ setTimeout(hide, GRACE_MS); })
+               .catch(function(){ hydrateScheduled = false; });
+            }
+          } catch(_){}
+          return p;
+        };
+      }
+      /* Backstop absoluto. */
+      setTimeout(hide, MAX_MS);
       /* Permite que cualquier flujo crítico (un partido live en marcha
          que se está restaurando) lo oculte antes via _bootSplashHide(). */
       window._bootSplashHide = hide;

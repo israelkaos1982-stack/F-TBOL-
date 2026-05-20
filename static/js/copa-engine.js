@@ -2730,23 +2730,55 @@
             else alert('❌ Error sorteo: ' + (d.error || ''));
           });
       }
-      /* SIN overlay bloqueante (decisión usuario 2026-05-19, foto
-         "8% PREPARANDO BOMBOS" del sorteo de Copa). El overlay del
-         balón se clava al 8% en el mismo patrón que las sims de liga.
-         Al pulsar Sortear se llama DIRECTO al backend (rápido — la
-         lógica de cruces vive en _pairTeamsConstrained / motor Copa y
-         NO cambia: respeta los códigos EA-vs-PF/Hyp hasta Dieciseisavos,
-         EA-vs-EA desde Octavos, etc., per CLAUDE.md). Un aviso no
-         bloqueante da feedback mientras llega la respuesta. */
-      var _lbl = ROUND_LABEL[ronda] || ronda;
-      /* Aviso breve no bloqueante (si está disponible) — el render
-         del cuadro al volver del fetch es el "ya está" definitivo. */
-      try {
-        if (typeof window._ftbolBgNotice === 'function') {
-          window._ftbolBgNotice('🎯 Copa del Rey · sorteando ' + _lbl + '…', 2500);
-        }
-      } catch(_){}
-      _doFetch();
+      /* Overlay del balón con tema Copa del Rey (naranja-marrón). El
+         usuario reportó (2026-05-10) que el sorteo tardaba "más de 3
+         minutos" — bottleneck era esperar a que las 3 fases de la
+         animación terminen ANTES de lanzar el fetch al backend. Ahora
+         lanzamos el fetch EN PARALELO con la animación: las fases
+         decoran el wait mientras el backend procesa. Si el fetch
+         termina antes que la animación, completamos al instante. */
+      if (typeof window.ftbolLoaderRun === 'function') {
+        var lbl = ROUND_LABEL[ronda] || ronda;
+        window.ftbolLoaderRun(
+          {
+            title: 'COPA DEL REY · SORTEO ' + String(lbl).toUpperCase(),
+            sub: 'Preparando bombos…', theme: 'copa', minMs: 300,
+            phases: [
+              { pct: 30, sub: 'Sembrando equipos por nivel…',         ms: 40 },
+              { pct: 60, sub: 'Aplicando restricciones humano vs IA…', ms: 40 },
+              { pct: 88, sub: 'Cuadrando cruces…',                    ms: 40 }
+            ]
+          },
+          function(ctx){
+            return new Promise(function(resolve){
+              /* Lanzar el fetch DESDE EL INICIO (paralelo con phases). */
+              var fetchPromise = _doFetch();
+              var i = 0;
+              var phases = [
+                { pct: 30 }, { pct: 60 }, { pct: 88 }
+              ];
+              function next(){
+                if (i >= phases.length){
+                  ctx.progress(95, 'Lanzando sorteo…');
+                  fetchPromise.then(function(){
+                    ctx.progress(100, 'Hecho');
+                    resolve();
+                  }).catch(function(){
+                    ctx.progress(100, 'Error');
+                    resolve();
+                  });
+                  return;
+                }
+                ctx.progress(phases[i++].pct);
+                setTimeout(next, 30);  /* era 80 ms */
+              }
+              next();
+            });
+          }
+        );
+      } else {
+        _doFetch();
+      }
     }
     if (window._adm === true) {
       _runSorteo();

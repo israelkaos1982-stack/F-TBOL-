@@ -23129,7 +23129,19 @@ Tottenham
           todas las claves ligaExt_*. Memoizado 5 s para no reescanear
           en cada repintado de la previa.
        3. Fallback final al TEAM_STADIUMS hardcoded del bundle. */
+  /* IMPORTANTE 2026-05-20: este override debe (re)instalarse DESPUÉS
+     de que `static/js/index.bundle.js` haya cargado, porque el bundle
+     define `window.getTeamStadium = function(name){...}` (versión
+     simple que solo consulta TEAM_STADIUMS hardcoded) en su línea ~423
+     y, al cargarse después de misc_body_1.html, PISA el override —
+     dejando la previa con el estadio hardcoded en vez del que el admin
+     puso en el editor. Diferimos a DOMContentLoaded (el bundle es
+     parser-blocking y por tanto está garantizado que ya corrió) y
+     marcamos la función con `__ftbol_override` para que sea
+     idempotente y no se re-envuelva si se llama más de una vez. */
   (function(){
+    function _install(){
+    if (window.getTeamStadium && window.getTeamStadium.__ftbol_override) return;
     var _origGetStadium = window.getTeamStadium;
     var _stadMemo = Object.create(null);
     var _stadMemoTs = 0;
@@ -23205,6 +23217,13 @@ Tottenham
       if(window.TEAM_STADIUMS) return window.TEAM_STADIUMS[teamName] || window.TEAM_STADIUMS[String(teamName).trim()] || '';
       return '';
     };
+    window.getTeamStadium.__ftbol_override = true;
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', _install);
+    } else {
+      _install();
+    }
   })();
 
   function _countPlayers(d){

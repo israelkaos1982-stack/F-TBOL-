@@ -1969,9 +1969,7 @@ def _calendario_normalize(data):
     data.setdefault("season", "32-33")
     if not isinstance(data.get("sections"), list):
         data["sections"] = []
-    # NO purgamos Mayo: lo rellenamos con la Fase Final de Selecciones.
     _ensure_june_pretemp(data)
-    _ensure_fase_final_may(data)
     _ensure_mundialito(data)
     return data
 
@@ -2013,14 +2011,25 @@ def load_calendario():
         except (TypeError, ValueError):
             data = None
         if isinstance(data, dict):
+            # Migración por schema-version: si el fichero git-baked declara
+            # una versión > que la persistida en BD, la BD está vieja y la
+            # reemplazamos por la semilla. Permite restaurar eventos
+            # borrados (Ene–May en v2) sin requerir reset manual.
+            db_ver = data.get("version") or 0
+            seed = _calendario_load_from_file()
+            seed_ver = seed.get("version") or 0
+            if seed_ver > db_ver:
+                try:
+                    _calendario_save_to_db(seed)
+                except Exception:
+                    pass
+                return seed
             _secs0 = data.get("sections") or []
             had_june = any(
                 isinstance(s, dict) and s.get("id") == "verano-jun"
                 for s in _secs0
             )
             _mun_before = _mun_sig(data)
-            # Conteo total de eventos antes/después para detectar si la
-            # purga pre-Junio cambió la BD (persistimos la corrección).
             _evs_before = sum(
                 len((s.get("events") or [])) for s in _secs0 if isinstance(s, dict)
             )
@@ -2029,9 +2038,6 @@ def load_calendario():
                 len((s.get("events") or []))
                 for s in (data.get("sections") or []) if isinstance(s, dict)
             )
-            # Persistimos cuando se inyectó Junio, cuando cambió el
-            # set Mundialito o cuando la purga pre-Junio recortó
-            # eventos — así la corrección queda permanente en la BD.
             if (not had_june
                     or _mun_before != _mun_sig(data)
                     or _evs_before != _evs_after):

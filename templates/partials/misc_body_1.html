@@ -6555,7 +6555,7 @@ window._showSimProgress = function(opts, onDone){
     'san-marino','gibraltar','bulgaria','hungria','gales','estonia',
     'finlandia','letonia','lituania','islandia','armenia','bielorrsa',
     'eslovaquia','eslovenia','is-feroe','georgia','luxembgo','moldavia',
-    'n-maced','malta','kosovo'
+    'n-maced','malta','kosovo','resto-mundo'
   ];
 
   window.lextDeepRecoverAll = function(opts){
@@ -16505,7 +16505,11 @@ window._showSimProgress = function(opts, onDone){
         var EUROPE_BLACKLIST = {
           'liga-hypermotion':        { all: true },
           'liga-primera-federacion': { all: true },
-          'liga-ea-sports':          { all: true }
+          'liga-ea-sports':          { all: true },
+          /* "Resto Mundo" agrupa equipos top de América + Asia (44).
+             Petición usuario 2026-05-20: NO van a ninguna competición
+             europea — son extra-UEFA por definición. */
+          'resto-mundo':             { all: true }
         };
         var blRule = EUROPE_BLACKLIST[slug];
         if(blRule && (blRule.all || blRule[zoneKey])){
@@ -20627,6 +20631,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce2028,#f7e117,#ce2028);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Maced.</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#cf0921,#fff,#cf0921);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Malta</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#244aa5,#e4aa3c,#244aa5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇽🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kosovo</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a4f8c,#2da651,#c83737);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🌎</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Resto Mundo</span></div>
 </div>
 <!-- Botón "Enviar a Europa" (PIN admin 747). Va al FINAL de la lista
      de ligas — debajo de Kosovo (la última) — para que el admin lo
@@ -20728,8 +20733,6 @@ window._showSimProgress = function(opts, onDone){
       alert('Motor de simulación no disponible. Recarga la página.');
       return;
     }
-    if(!confirm('¿Simular las 51 ligas? Reseteará los resultados y stats actuales antes de simular.')) return;
-
     /* Recogemos la lista de ligas ANTES de mostrar el overlay para
        saber el total y poder calcular el % real (1 liga = 1 step).
        Luego iteramos con setTimeout(0) entre ligas para que la barra
@@ -20739,6 +20742,7 @@ window._showSimProgress = function(opts, onDone){
     _eachLeagueCard(function(name){ leagues.push(name); });
     var total = leagues.length;
     if(!total){ alert('No hay ligas para simular.'); return; }
+    if(!confirm('¿Simular las ' + total + ' ligas? Reseteará los resultados y stats actuales antes de simular.')) return;
 
     var ok = 0, skip = 0, idx = 0;
     var skippedSlugs = [];
@@ -20863,7 +20867,8 @@ window._showSimProgress = function(opts, onDone){
       alert('Motor de reset no disponible. Recarga la página.');
       return;
     }
-    if(!confirm('¿Resetear las 51 ligas?\n\nLas plantillas (jugadores y escudos) se mantienen, pero las estadísticas vuelven a 0.\n\nTambién se reinician Wild Card, Open Qualifier y Previa de Champions (sus pools dependen de las ligas) y los huecos en UCL/UEL/UECL fase de grupos vuelven a "Por definir".')) return;
+    var _totalCnt = 0; try { _eachLeagueCard(function(){ _totalCnt++; }); } catch(_){}
+    if(!confirm('¿Resetear las ' + (_totalCnt || '') + ' ligas?\n\nLas plantillas (jugadores y escudos) se mantienen, pero las estadísticas vuelven a 0.\n\nTambién se reinician Wild Card, Open Qualifier y Previa de Champions (sus pools dependen de las ligas) y los huecos en UCL/UEL/UECL fase de grupos vuelven a "Por definir".')) return;
     var ok = 0;
     _eachLeagueCard(function(name){
       var slug = _slugify(name);
@@ -28832,6 +28837,122 @@ Tottenham
   } else {
     wireLigasExt();
   }
+
+  /* ═══════════════════════════════════════════════════════════════
+     "Resto Mundo" — 44 equipos top de fuera de Europa (América +
+     Asia), agrupados en una liga simulada a ida y vuelta. NO van
+     a ninguna competición europea (ver EUROPE_BLACKLIST, slug
+     `resto-mundo`). Pre-seed automático en primer load: si la
+     clave `ligaExt_resto-mundo` no existe (o está vacía), se crea
+     con los 44 equipos preconfigurados (nombre / alias eFootball +
+     poder GLOBAL/ATK/MED/DEF). Petición usuario 2026-05-20.
+     ═══════════════════════════════════════════════════════════════ */
+  var RESTO_MUNDO_TEAMS = [
+    /* ARGENTINA (11) — Boca/River con licencia; el resto, alias eFootball. */
+    {name:'CA River Plate',     power:80, atk:81, mid:80, def:79},
+    {name:'CA Boca Juniors',    power:80, atk:80, mid:80, def:80},
+    {name:'Avellaneda AB',      power:77, atk:77, mid:77, def:77},  /* Racing Club */
+    {name:'Liniers AB',         power:75, atk:76, mid:75, def:74},  /* Vélez Sarsfield */
+    {name:'Córdoba AB',         power:75, atk:75, mid:75, def:75},  /* CA Talleres */
+    {name:'Avellaneda R',       power:75, atk:75, mid:75, def:75},  /* CA Independiente */
+    {name:'Rosario AA',         power:73, atk:74, mid:73, def:72},  /* Rosario Central */
+    {name:'Buenos Aires RB',    power:73, atk:74, mid:73, def:72},  /* CA Huracán */
+    {name:'La Paternal RB',     power:72, atk:72, mid:72, def:72},  /* Argentinos Juniors */
+    {name:'Lanús M',            power:72, atk:72, mid:72, def:72},
+    {name:'Alberdi A',          power:71, atk:71, mid:71, def:71},  /* Belgrano de Córdoba */
+    /* BRASIL (13) — licencia oficial. */
+    {name:'CR Flamengo',        power:81, atk:82, mid:81, def:80},
+    {name:'SE Palmeiras',       power:81, atk:81, mid:81, def:81},
+    {name:'Botafogo FR',        power:79, atk:79, mid:79, def:79},
+    {name:'SC Corinthians',     power:78, atk:78, mid:78, def:78},
+    {name:'São Paulo FC',       power:78, atk:78, mid:78, def:78},
+    {name:'Fluminense FC',      power:77, atk:77, mid:77, def:77},
+    {name:'SC Internacional',   power:77, atk:77, mid:77, def:77},
+    {name:'Grêmio FBPA',        power:77, atk:77, mid:77, def:77},
+    {name:'Santos FC',          power:76, atk:76, mid:76, def:76},
+    {name:'Cruzeiro EC',        power:76, atk:76, mid:76, def:76},
+    {name:'CR Vasco da Gama',   power:75, atk:75, mid:75, def:75},
+    {name:'Red Bull Bragantino',power:75, atk:75, mid:75, def:75},
+    {name:'EC Bahia',           power:74, atk:74, mid:74, def:74},
+    /* CHILE (1) */
+    {name:'La Calera R',        power:73, atk:73, mid:73, def:73},  /* Colo-Colo */
+    /* COLOMBIA (2) */
+    {name:'Medellín V',         power:73, atk:73, mid:73, def:73},  /* Atlético Nacional */
+    {name:'Barranquilla RB',    power:71, atk:71, mid:71, def:71},  /* Junior de Barranquilla */
+    /* LIGA MX (4) — licencia oficial. */
+    {name:'Club América',       power:77, atk:77, mid:77, def:77},
+    {name:'Tigres UANL',        power:76, atk:76, mid:76, def:76},
+    {name:'CD Guadalajara',     power:73, atk:73, mid:73, def:73},
+    {name:'Pumas',              power:73, atk:73, mid:73, def:73},
+    /* MLS (7) — alias eFootball. */
+    {name:'Miami BP',           power:78, atk:79, mid:78, def:77},  /* Inter Miami */
+    {name:'Los Angeles BY',     power:76, atk:76, mid:76, def:76},  /* LAFC */
+    {name:'Los Angeles WB',     power:74, atk:74, mid:74, def:74},  /* LA Galaxy */
+    {name:'Seattle GB',         power:74, atk:74, mid:74, def:74},  /* Seattle Sounders */
+    {name:'Orlando PW',         power:72, atk:72, mid:72, def:72},  /* Orlando City */
+    {name:'Houston O',          power:71, atk:71, mid:71, def:71},  /* Houston Dynamo */
+    {name:'Chicago RW',         power:71, atk:71, mid:71, def:71},  /* Chicago Fire */
+    /* SAUDI PRO LEAGUE (4) — licencia oficial. */
+    {name:'Al Hilal SFC',       power:82, atk:83, mid:82, def:81},
+    {name:'Al Nassr FC',        power:81, atk:82, mid:81, def:80},
+    {name:'Al Ittihad Club',    power:80, atk:80, mid:80, def:80},
+    {name:'Al Ahli Saudi FC',   power:79, atk:79, mid:79, def:79},
+    /* QATAR STARS LEAGUE (2) — licencia oficial. */
+    {name:'Al Sadd SC',         power:74, atk:74, mid:74, def:74},
+    {name:'Al Duhail SC',       power:72, atk:72, mid:72, def:72}
+  ];
+  function _ensureRestoMundoSeed(){
+    var slug = 'resto-mundo';
+    var hasTeams = false;
+    try {
+      var raw = localStorage.getItem('ligaExt_' + slug);
+      if (raw) {
+        var d = JSON.parse(raw);
+        if (d && Array.isArray(d.teams) && d.teams.length > 0) hasTeams = true;
+      }
+    } catch(_){}
+    if (hasTeams) return;
+    var teams = RESTO_MUNDO_TEAMS.map(function(spec, idx){
+      return {
+        id: 'rm-' + (idx + 1),
+        name: spec.name,
+        power: spec.power, atk: spec.atk, mid: spec.mid, def: spec.def,
+        aggressiveness: 50,
+        shield: '', stadium: '', efootballAlias: '', budget: 0,
+        players: [],
+        isHuman: false, humanEmoji: ''
+      };
+    });
+    /* zones a 0 → la clasificación no muestra franjas europeas ni
+       descenso. Coherente con la regla "no va a ninguna competición
+       europea". */
+    var data = {
+      teams: teams,
+      results: [],
+      config: {
+        zones: { ucl:0, uclPrev:0, uclQual:0, uel:0, uecl:0, wildcard:0, desc:0 },
+        logo: '', cupName: '', cupLogo: ''
+      }
+    };
+    try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(data)); } catch(_){}
+    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+  }
+  /* Seed eager (al cargar) para que Sim All y aperturas directas vean
+     los 44 equipos sin abrir antes la pantalla. */
+  try { _ensureRestoMundoSeed(); } catch(_){}
+  /* Defensa adicional: si en algún momento el storage queda vacío
+     (reset / sync server que devuelve {teams:[]}), re-sembramos al
+     abrir la pantalla. */
+  (function(){
+    var _origOpen = window.openLigaExt;
+    if (typeof _origOpen !== 'function') return;
+    window.openLigaExt = function(name, emoji){
+      if (name === 'Resto Mundo') {
+        try { _ensureRestoMundoSeed(); } catch(_){}
+      }
+      return _origOpen.apply(this, arguments);
+    };
+  })();
 
   /* ═══════════════════════════════════════════════════════════════
      COPA NACIONAL · MOTOR + UI (petición usuario 2026-05-06)

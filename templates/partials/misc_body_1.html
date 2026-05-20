@@ -2783,18 +2783,64 @@ window._showSimProgress = function(opts, onDone){
      y _advance() tras resolver cada día. Exponemos _render para el
      hub y un pre-render por si el torneo ya estaba elegido al cargar. */
   window._psRender = _render;
+  /* Purga BRUTA pre-Junio en el DOM del calendario (cliente). Si el
+     servidor todavía sirve filas pre-junio (BD vieja sin migrar,
+     deploy retrasado), las eliminamos físicamente del #ag-content y
+     #ag-content-bayern para que NADIE (state.events, _calRows,
+     marcador, previa…) pueda mostrarlas. Idempotente, barato. */
+  function _purgePreJuneDOM(){
+    var hosts = ['ag-content','ag-content-bayern'];
+    hosts.forEach(function(id){
+      var h = document.getElementById(id);
+      if (!h) return;
+      h.querySelectorAll('.ag-r').forEach(function(r){
+        var de = r.querySelector('.ag-date');
+        var m  = _psMonth(de ? de.textContent : '');
+        if (m >= 0 && m < 5) r.parentNode && r.parentNode.removeChild(r);
+      });
+      /* Borra cabeceras de sección que se quedaron sin eventos. */
+      h.querySelectorAll('.ag-season[data-section-id]').forEach(function(hdr){
+        var sib = hdr.nextElementSibling, has = false;
+        while (sib && !sib.classList.contains('ag-season')){
+          if (sib.classList.contains('ag-r')){ has = true; break; }
+          sib = sib.nextElementSibling;
+        }
+        if (!has){
+          /* También quita el `.ag-add-row` que queda colgado. */
+          var nx = hdr.nextElementSibling;
+          while (nx && !nx.classList.contains('ag-season')){
+            var nn = nx.nextElementSibling;
+            nx.parentNode && nx.parentNode.removeChild(nx);
+            nx = nn;
+          }
+          hdr.parentNode && hdr.parentNode.removeChild(hdr);
+        }
+      });
+    });
+    /* Invalidamos el cache de _calRows para que relea el DOM purgado. */
+    try { _ROWS_CACHE = null; } catch(_){}
+  }
   function _bootStage(){
     try {
-      /* Reaplica lesiones de pretemporada aunque el usuario no abra
-         el hub aún (para que el menú médico / plantilla las vean). */
+      _purgePreJuneDOM();
       _applyPersistedInjuries();
       var d = _load();
+      /* Si el cursor persistido apunta a pre-Junio, recolocar a 0
+         (con el slice de _calRows ya es Junio). */
+      if (d && (parseInt(d.dayIdx,10)||0) !== 0){
+        var rows = _calRows();
+        if (rows.length){
+          var firstJun = 0;
+          for (var i=0;i<rows.length;i++){ if (_psMonth(rows[i].date)>=5){ firstJun=i; break; } }
+          if (parseInt(d.dayIdx,10) < firstJun){ d.dayIdx = 0; _save(d); }
+        }
+      }
       if (d && d.tour) _render();
     } catch(_){}
   }
   if (document.readyState === 'loading')
-    document.addEventListener('DOMContentLoaded', function(){ [0,400,1200].forEach(function(t){ setTimeout(_bootStage,t); }); });
-  else [0,400,1200].forEach(function(t){ setTimeout(_bootStage,t); });
+    document.addEventListener('DOMContentLoaded', function(){ [0,200,800,1800].forEach(function(t){ setTimeout(_bootStage,t); }); });
+  else [0,200,800,1800].forEach(function(t){ setTimeout(_bootStage,t); });
 })();
 </script>
 
@@ -33624,15 +33670,23 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        no hay events, default "01 Jul" (inicio de temporada). */
     var calFechaEl = getEl('munich-cal-fecha');
     if (calFechaEl) {
-      /* Si la pretemporada está activa, la tarjeta CALENDARIO muestra
-         el DÍA real del cursor día a día (01 Jul, 02 Jul…), no el
-         evento legacy disperso (que saltaba a "04 Jul"). */
+      /* La temporada arranca el 1 de Junio. Usamos SIEMPRE el cursor
+         de pretemporada; si por lo que sea retorna un valor pre-junio
+         o vacío, fijamos "01 Jun" (NO caer al evento legacy que puede
+         tener fechas viejas pre-junio cacheadas). */
       var psDate = (typeof window._psCurrentDate === 'function') ? window._psCurrentDate() : '';
-      if (psDate) {
+      var _SP = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
+      function _mo(s){ var p=String(s||'').trim().split(/\s+/); if(p.length<2) return -1;
+        var v=_SP[(p[1]||'').toLowerCase().replace(/\./g,'').slice(0,3)]; return (v==null)?-1:v; }
+      if (psDate && _mo(psDate) >= 5){
         calFechaEl.textContent = psDate;
       } else {
         var curEvt = state.events && state.events[state.eventIdx];
-        calFechaEl.textContent = (curEvt && curEvt.date) ? (window._psShowDate ? window._psShowDate(curEvt.date) : curEvt.date) : '01 Jun';
+        var fb = (curEvt && curEvt.date)
+          ? (window._psShowDate ? window._psShowDate(curEvt.date) : curEvt.date)
+          : '01 Jun';
+        /* Cinturón anti-Mayo: si el fallback es pre-Junio, forzamos 01 Jun. */
+        calFechaEl.textContent = (_mo(fb) >= 0 && _mo(fb) < 5) ? '01 Jun' : fb;
       }
     }
     /* Mueve el marcador rosa/morado del calendario a la fila del

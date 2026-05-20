@@ -2247,9 +2247,141 @@ def _liga_ext_load(slug):
     data.setdefault("results", [])
     return data
 
+def _lx_norm_name(raw):
+    """Normaliza un nombre de equipo para key/deletedTeamNames: sin
+    acentos, minúsculas, solo alfanumérico+espacio, espacios colapsados."""
+    s = unicodedata.normalize("NFD", str(raw or "")).encode("ascii", "ignore").decode("ascii")
+    s = s.lower()
+    s = _re_liga_ext.sub(r"[^a-z0-9]+", " ", s).strip()
+    s = _re_liga_ext.sub(r"\s+", " ", s)
+    return s
+
+
+def _lx_team_key(t):
+    """Clave estable de un equipo: id si existe, si no nombre normalizado."""
+    if not isinstance(t, dict):
+        return None
+    tid = t.get("id")
+    if isinstance(tid, str) and tid.strip():
+        return "id:" + tid.strip()
+    nm = _lx_norm_name(t.get("name"))
+    return ("nm:" + nm) if nm else None
+
+
+def _lx_updated_at(t):
+    """`updatedAt` del equipo (ms epoch) o None si no está sellado."""
+    if not isinstance(t, dict):
+        return None
+    v = t.get("updatedAt")
+    try:
+        return int(v) if v is not None and str(v) != "" else None
+    except Exception:
+        return None
+
+
+def _lx_merge_teams(old_data, new_data):
+    """Fusión POR EQUIPO (regla del usuario 2026-05-18: "última edición
+    de cada equipo gana, venga del dispositivo que venga").
+
+    Modelo: la liga es UN documento con los N equipos juntos. Con
+    "admin + ayudantes" en varios móviles/PC, un POST de documento
+    entero pisaba lo que otro acababa de editar (el anti-wipe del
+    dispositivo del admin re-subía su copia completa). Aquí, en el
+    ÚNICO chokepoint por el que pasan todos los dispositivos (el save
+    del servidor), fusionamos `teams[]` por equipo quedándonos con la
+    versión de mayor `updatedAt`:
+      · ambos con updatedAt  → gana el más reciente
+      · solo el entrante     → gana el entrante (edición explícita en
+                               cliente nuevo)
+      · solo el almacenado   → gana el almacenado (un cliente viejo /
+                               sin sellar NO debe pisar una edición
+                               sellada de otro)
+      · ninguno con updatedAt → gana el entrante (comportamiento
+                               actual; no regresiona single-user)
+    Los equipos que un dispositivo NO mandó se CONSERVAN (no encoge el
+    documento). Las bajas se propagan vía `deletedTeamNames` (unión) y
+    se eliminan del resultado para que la fusión no resucite equipos
+    borrados. Solo afecta a `teams`/`deletedTeamNames`; el resto de
+    claves (results, config…) se mantiene como en el entrante."""
+    if not isinstance(new_data, dict):
+        return new_data
+    new_teams = new_data.get("teams")
+    if not isinstance(new_teams, list):
+        return new_data
+    old_teams = old_data.get("teams") if isinstance(old_data, dict) else []
+    if not isinstance(old_teams, list):
+        old_teams = []
+
+    merged = {}      # key -> team dict
+    order = []        # keys en orden (entrantes primero, luego solo-viejos)
+
+    def _consider(team, is_incoming):
+        key = _lx_team_key(team)
+        if not key:
+            # Sin id ni nombre: lo dejamos pasar tal cual (no se puede
+            # fusionar de forma fiable) usando una clave única.
+            key = "anon:%d" % len(order)
+        if key not in merged:
+            merged[key] = team
+            order.append(key)
+            return
+        cur = merged[key]
+        cu = _lx_updated_at(cur)
+        nu = _lx_updated_at(team)
+        if cu is not None and nu is not None:
+            if nu >= cu:
+                merged[key] = team
+        elif nu is not None and cu is None:
+            merged[key] = team
+        elif nu is None and cu is None:
+            # Ninguno sellado: gana el entrante (comportamiento previo).
+            if is_incoming:
+                merged[key] = team
+        # (cu set, nu None) → conservamos el almacenado/sellado.
+
+    # Primero los viejos (base), luego los entrantes (pueden ganar).
+    for t in old_teams:
+        if isinstance(t, dict):
+            _consider(t, False)
+    for t in new_teams:
+        if isinstance(t, dict):
+            _consider(t, True)
+
+    # Unión de deletedTeamNames y poda de equipos borrados.
+    del_set = set()
+    for src in (old_data if isinstance(old_data, dict) else {},
+                new_data):
+        dn = src.get("deletedTeamNames") if isinstance(src, dict) else None
+        if isinstance(dn, list):
+            for nm in dn:
+                n = _lx_norm_name(nm)
+                if n:
+                    del_set.add(n)
+
+    out_teams = []
+    for key in order:
+        t = merged[key]
+        if _lx_norm_name(t.get("name")) in del_set:
+            continue
+        out_teams.append(t)
+
+    result = dict(new_data)
+    result["teams"] = out_teams
+    if del_set:
+        result["deletedTeamNames"] = sorted(del_set)
+    return result
+
+
 def _liga_ext_save(slug, data):
     key = _liga_ext_key(slug)
     row = GlobalState.query.filter_by(clave=key).first()
+    # Fusión por equipo contra lo ya almacenado para no perder las
+    # ediciones de otros dispositivos (admin + ayudantes).
+    try:
+        old = _liga_ext_load(slug)
+        data = _lx_merge_teams(old, data)
+    except Exception:
+        pass
     payload = json.dumps(data or {}, ensure_ascii=False)
     now = utc_now_iso()
     if row:
@@ -2615,12 +2747,17 @@ _KV_ALLOWED_EXACT = {
     # sobrevivan a wipes de navegador / cambio de móvil (mismo patrón
     # que comp_icons_v1 / bayern_trofeos_v1). 2026-05-17.
     "ball_inventory_v1", "ball_by_comp_v1", "ball_comp_db_v1",
+    # Editor del menú principal: cajas creadas/editadas/eliminadas
+    # (overrides + added + removed). localStorage es solo cache; el
+    # server es la fuente de verdad para que sobrevivan a wipes de
+    # navegador / cambio de móvil (mismo patrón que comp_cards_v1).
+    "menu_home_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("
     r"manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)"
     # tx1..tx8 = 8 huecos pre-cableados para torneos añadidos por el admin.
-    r"|tour_(sct|pss|jg|asia|tx[1-8])"
+    r"|tour_(sct|pss|jg|asia|mundial|tx[1-8])"
     r")_v1$"
 )
 _KV_MAX_BYTES = 2 * 1024 * 1024  # 2 MB por clave (alineado con CLAUDE.md)
@@ -2895,6 +3032,8 @@ def calendario_view():
 def clasificacion():
     resp = make_response(render_template("index.html"))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
     return resp
 
 @app.route("/estadisticas")
@@ -2958,7 +3097,18 @@ def reiniciar():
 def spa_fallback(path):
     if path.startswith("api/"):
         abort(404)
-    return render_template("index.html")
+    # CRÍTICO 2026-05-18: este catch-all sirve la SPA en CUALQUIER ruta
+    # (p.ej. /ligas/inglaterra). Antes NO mandaba cabeceras no-cache,
+    # así que el navegador/CDN servía un index.html CACHEADO con el JS
+    # VIEJO — ninguno de los fixes (watchdog, tope round-robin, sello
+    # _sanV…) llegaba al usuario y la sim seguía "rota" idéntica. El
+    # index.html incrusta server-side misc_body_1/2, así que DEBE ir
+    # siempre fresco.
+    resp = make_response(render_template("index.html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 with app.app_context():
     db.create_all()

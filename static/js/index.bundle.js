@@ -1276,8 +1276,8 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     'Arsenal':            '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
     'Deportivo Alavés': '/static/img/escudos-1/spain_deportivo-alaves.svg',
     'Sporting de Portugal':'/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
-    'PSG':                '/static/img/escudos-1/france_paris-saint-germain.svg',
-    'Paris Saint-Germain':'/static/img/escudos-1/france_paris-saint-germain.svg',
+    'PSG':                'https://cdn.resfu.com/img_data/equipos/1924.png?size=120x&lossy=1',
+    'Paris Saint-Germain':'https://cdn.resfu.com/img_data/equipos/1924.png?size=120x&lossy=1',
     'Elche CF':           '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
     'Elche':              '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
     'Levante UD':         '/static/img/escudos-2/spain_levante.football-logos.cc.svg',
@@ -5579,11 +5579,53 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       function _teamLevel(name) {
         var normFn = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
         var n = normFn(name);
+        /* Override explícito del editor 🖍 para el equipo humano: si la
+           caja del menú fijó un nivel (CRACK / LEYENDA / vacío=ninguno)
+           Y `name` es el slot humano, ese override manda sobre todo. */
+        try {
+          var rawL = localStorage.getItem('menu_home_v1');
+          if (rawL) {
+            var dL = JSON.parse(rawL);
+            var ovL = dL && dL.ov && dL.ov['go:s-munich'];
+            if (ovL && Object.prototype.hasOwnProperty.call(ovL, 'level')) {
+              var isHumanSide = false;
+              if (ovL.label && normFn(ovL.label) === n) isHumanSide = true;
+              if (!isHumanSide && typeof window._ligaEaSubName === 'function') {
+                var subN = window._ligaEaSubName('Bayern Munich');
+                if (subN && normFn(subN) === n) isHumanSide = true;
+              }
+              if (!isHumanSide && normFn('Bayern Munich') === n) isHumanSide = true;
+              if (isHumanSide) {
+                if (ovL.level === 'CRACK')    return { lbl: '⭐ CRACK',    color: '#a0e0ff', short: 'CRACK' };
+                if (ovL.level === 'LEYENDA')  return { lbl: '🏅 LEYENDA',  color: '#ffbb33', short: 'LEYENDA' };
+                if (ovL.level === 'ESTRELLA') return { lbl: '🌟 ESTRELLA', color: '#ff77c2', short: 'ESTRELLA' };
+                if (ovL.level === '') return null; /* admin eligió "Ninguno" */
+              }
+            }
+          }
+        } catch(_){}
         if (normFn('Atlético Madrid') === n || normFn('Atletico Madrid') === n) return { lbl: '🏅 LEYENDA', color: '#ffbb33', short: 'LEYENDA' };
         if (normFn('Real Madrid') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
         if (normFn('FC Barcelona') === n || normFn('Barcelona') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
         if (normFn('Bayern Munich') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
         if (normFn('Arsenal') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
+        /* Slot humano #5 (Bayern) renombrado: si la caja del menú o el
+           reemplazo de Liga EA apuntan a `name`, hereda el badge CRACK
+           del Bayern (es el mismo slot humano). */
+        try {
+          var humN = '';
+          var raw = localStorage.getItem('menu_home_v1');
+          if (raw) {
+            var d = JSON.parse(raw);
+            var ov = d && d.ov && d.ov['go:s-munich'];
+            if (ov && ov.label) humN = normFn(ov.label);
+          }
+          if (!humN && typeof window._ligaEaSubName === 'function') {
+            var s = window._ligaEaSubName('Bayern Munich');
+            if (s) humN = normFn(s);
+          }
+          if (humN && humN === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
+        } catch(_){}
         return null; /* IA teams → no badge */
       }
       var lvlA = _teamLevel(home);
@@ -5591,6 +5633,38 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       /* Form state buttons — bajo cada escudo */
       function _formBtnHtml(side) {
         var ico = (window._ppFormStates && window._ppFormStates[side]) || '🎲';
+        /* Si la caja del menú fijó un estado de forma para el humano,
+           sembrarlo como default cuando este lado es el humano y no
+           se ha tocado en esta sesión (aún en 🎲). El admin puede
+           seguir cambiándolo tocando el botón (PIN 747). */
+        try {
+          var rawF = localStorage.getItem('menu_home_v1');
+          if (rawF && ico === '🎲') {
+            var dF = JSON.parse(rawF);
+            var ovF = dF && dF.ov && dF.ov['go:s-munich'];
+            if (ovF && (ovF.formState || ovF.formRival)) {
+              var teamSide  = side === 'home' ? home : away;
+              var otherSide = side === 'home' ? away : home;
+              var normSF = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
+              function _isHumanT(t){
+                if (ovF.label && normSF(ovF.label) === normSF(t)) return true;
+                if (typeof window._ligaEaSubName === 'function') {
+                  var ss = window._ligaEaSubName('Bayern Munich');
+                  if (ss && normSF(ss) === normSF(t)) return true;
+                }
+                if (normSF('Bayern Munich') === normSF(t)) return true;
+                return false;
+              }
+              if (_isHumanT(teamSide) && ovF.formState) {
+                ico = ovF.formState;
+              } else if (_isHumanT(otherSide) && ovF.formRival) {
+                /* Este lado es el rival del humano → forma del rival. */
+                ico = ovF.formRival;
+              }
+              try { if (window._ppFormStates && ico !== '🎲') window._ppFormStates[side] = ico; } catch(__){}
+            }
+          }
+        } catch(_){}
         var variants = window._ppFormVariants || [];
         var variant = null;
         for (var v = 0; v < variants.length; v++) { if (variants[v].ico === ico) { variant = variants[v]; break; } }
@@ -8652,21 +8726,110 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     }
     return false;
   }
+  /* ── Sustitución de equipos de Liga EA Sports (decisión usuario
+     2026-05-18: "editor manda" + "el reemplazo hereda el hueco") ──
+     Si el admin sacó un equipo de Liga EA (lo movió a otra liga o lo
+     borró → su nombre normalizado queda en
+     `ligaExt_liga-ea-sports.deletedTeamNames`) Y añadió otro equipo
+     NUEVO en el editor (un nombre que no está en la lista canónica
+     TEAM_ORDER), el nuevo OCUPA el hueco del borrado: misma posición
+     en la tabla y hereda TODOS sus partidos del calendario y sus
+     resultados ya jugados.
+
+     Ej.: Bayern movido a Liga Alemana + Liverpool añadido en el
+     editor ⇒ Liverpool juega los partidos de Bayern, la Liga sigue
+     con 20 equipos. Si se quitó un equipo SIN añadir reemplazo, ese
+     hueco se descarta y la Liga queda con 19.
+
+     El emparejamiento es por orden: removidos[i] ← añadidos[i]. */
+  function _ligaEaNorm(s){
+    return (typeof window._lextNormName === 'function')
+      ? window._lextNormName(s)
+      : String(s==null?'':s).trim().toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g,'');
+  }
+  function _ligaEaSubMap(){
+    var res = { map:Object.create(null), removed:Object.create(null) };
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(!raw) return res;
+      var d = JSON.parse(raw) || {};
+      var del = Array.isArray(d.deletedTeamNames) ? d.deletedTeamNames : [];
+      if(!del.length) return res;
+      var delSet = Object.create(null);
+      del.forEach(function(n){ var k=_ligaEaNorm(n); if(k) delSet[k]=true; });
+      var canon = Object.create(null);
+      TEAM_ORDER.forEach(function(n){ canon[_ligaEaNorm(n)] = true; });
+      var removed = TEAM_ORDER.filter(function(n){ return delSet[_ligaEaNorm(n)]; });
+      var added = [], seen = Object.create(null);
+      (Array.isArray(d.teams) ? d.teams : []).forEach(function(t){
+        var nm = t && t.name ? String(t.name).trim() : '';
+        if(!nm || nm === 'Por definir') return;
+        var k = _ligaEaNorm(nm);
+        if(canon[k] || delSet[k] || seen[k]) return;
+        seen[k] = true; added.push(nm);
+      });
+      var pairN = Math.min(removed.length, added.length);
+      for(var i=0;i<pairN;i++){ res.map[_ligaEaNorm(removed[i])] = added[i]; }
+      for(var j=pairN;j<removed.length;j++){ res.removed[_ligaEaNorm(removed[j])] = true; }
+    } catch(_){}
+    return res;
+  }
+  try {
+    window._ligaEaSubName = function(n){
+      var s = _ligaEaSubMap(); return s.map[_ligaEaNorm(n)] || n;
+    };
+    window._ligaEaSubInfo = _ligaEaSubMap;
+  } catch(_){}
+  /* ¿La jornada `j` del SCHEDULE contiene el cruce home/away? Acepta
+     tanto el nombre original como el sustituido (la ventana en que
+     el calendario aún tiene "Bayern" pero la tabla ya es "Liverpool",
+     o viceversa), así los resultados de Bayern cuentan para Liverpool. */
+  function _schedHasPair(j, hCands, aCands){
+    var sch = window.LIGA_SCHEDULE;
+    if(!sch || !Array.isArray(sch) || !sch.length) return true;
+    if(j < 1 || j > sch.length) return false;
+    var jArr = sch[j-1];
+    if(!Array.isArray(jArr)) return false;
+    for(var i=0;i<jArr.length;i++){
+      var p = jArr[i]; if(!p) continue;
+      var ph = canonicalTeamName(p[0]), pa = canonicalTeamName(p[1]);
+      for(var x=0;x<hCands.length;x++){
+        for(var y=0;y<aCands.length;y++){
+          if(ph === canonicalTeamName(hCands[x]) &&
+             pa === canonicalTeamName(aCands[y])) return true;
+        }
+      }
+    }
+    return false;
+  }
   function getSavedLigaTable(){
     var teams = {};
-    TEAM_ORDER.forEach(function(name){ ensureTeam(teams, name); });
+    var SUB = _ligaEaSubMap();
+    function _subName(n){ return SUB.map[_ligaEaNorm(n)] || n; }
+    TEAM_ORDER.forEach(function(name){
+      var k = _ligaEaNorm(name);
+      if(SUB.map[k]){ ensureTeam(teams, SUB.map[k]); return; } /* reemplazo hereda el hueco */
+      if(SUB.removed[k]) return; /* quitado sin reemplazo → Liga a 19 */
+      ensureTeam(teams, name);
+    });
     var results = parseSavedResults();
     Object.keys(results).forEach(function(key){
-      /* Saltar keys que no pertenecen al SCHEDULE actual (sims
-         antiguos de schedules reshuffled). Sin esto, los equipos
-         podían acumular 50+ PJ en una liga de 38 jornadas. */
-      if(!_resultKeyMatchesSchedule(key)) return;
       var meta = parseResultKey(key);
       var data = results[key] || {};
       if(!meta || typeof data !== 'object') return;
       if(data.gh == null || data.ga == null) return;
+      /* equipo quitado SIN reemplazo → su partido no cuenta */
+      if(SUB.removed[_ligaEaNorm(meta.home)] || SUB.removed[_ligaEaNorm(meta.away)]) return;
+      var h = _subName(meta.home), a = _subName(meta.away);
+      /* Saltar keys que no pertenecen al SCHEDULE actual (sims
+         antiguos de schedules reshuffled). Sin esto, los equipos
+         podían acumular 50+ PJ en una liga de 38 jornadas.
+         Aceptamos el cruce con el nombre original o el sustituido
+         para que los resultados de Bayern migren a Liverpool. */
+      if(!_schedHasPair(meta.jornada, [meta.home, h], [meta.away, a])) return;
       var extra = countEventExtras(meta.home, meta.away, data);
-      applyMatch(teams, meta.jornada, meta.home, meta.away, data.gh, data.ga, data.penWinner || null, extra);
+      applyMatch(teams, meta.jornada, h, a, data.gh, data.ga, data.penWinner || null, extra);
     });
     return Object.keys(teams).map(function(name){
       var team = teams[name];

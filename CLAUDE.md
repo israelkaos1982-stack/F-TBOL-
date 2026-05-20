@@ -422,25 +422,32 @@ comprobar el estado actual antes de mutar.
 
 | Modo  | gameMin | realMin | displayMin (previa) | ms/tick (5s juego) | s/game-min |
 |-------|---------|---------|---------------------|--------------------|------------|
-| HvH         | 90 | 10    | 10 | ≈ 556 ms | 6.67 s |
-| HvH prórroga| 30 |  5    | —  | ≈ 833 ms | — |
-| HvIA        | 90 |  8    |  8 | ≈ 444 ms | 5.33 s |
+| HvH         | 90 | 16.5  | 10 | ≈ 917 ms | 11 s |
+| HvH prórroga| 30 |  5    | —  | ≈ 833 ms | 10 s |
+| HvIA        | 90 | 13.5  |  8 | ≈ 750 ms |  9 s |
 | IAIA        | 90 |  1.5  | "45 s/parte" | ≈ 83 ms | 1 s |
 
-- HvH = humano vs humano → **10 min reales**. Previa: "10 min". 1 game-min = 6.67 s reales.
-- HvIA = humano vs IA → **8 min reales**. Previa: "8 min". 1 game-min = 5.33 s reales.
+- HvH = humano vs humano → **16.5 min reales**. Previa: "10 min". 1 game-min = 11 s reales.
+- HvIA = humano vs IA → **13.5 min reales**. Previa: "8 min". 1 game-min = 9 s reales.
 - IAIA = IA vs IA → **1 min 30 s reales total** (45 s por parte). 1 game-min = 1 seg real.
 - HvH_ET = prórroga humana → 5 min reales.
 
-**REGLA DE ORO 2026-05-10**: la duración mostrada en la previa
-(`displayMin`) DEBE ser igual a la duración REAL (`realMin`). Antes
-discrepaban (display 10/8, real 15.75/9.75) lo que confundía al
-usuario — "el cronómetro no funciona, recuerda los códigos". Ahora
-1:1 → "10 min" = 10 minutos reales, "8 min" = 8 minutos reales.
+**REGLA DE ORO 2026-05-19**: `displayMin` (lo que la previa MUESTRA)
+y `realMin` (lo que el cron REALMENTE dura) están **DESACOPLADOS** por
+petición explícita del usuario. El cron va al ritmo eFootball (11 s/9 s
+por game-min) mientras la previa muestra "10 min" / "8 min" porque ese
+es el número "de referencia" en su memoria. La alineación display=real
+del 2026-05-10 (HvH 6.67 s, HvIA 5.33 s) quedó rescindida porque el
+cron iba más rápido que eFootball y la vida real.
 
-Estos valores los puede ajustar el usuario mediante petición explícita
-(historial: 2026-04-26 bajada de HvH 11→10.5 s y HvIA 9→6.5 s;
-2026-05-10 alineación display=real). No cambiar sin acuerdo.
+Historial:
+- Pre 2026-04-26 (=valores ACTUALES): HvH 11 s, HvIA 9 s.
+- 2026-04-26 (intermedio): HvH 10.5 s, HvIA 6.5 s.
+- 2026-05-10 (alineación display=real): HvH 6.67 s, HvIA 5.33 s.
+- 2026-05-19: vuelta al pre-mayo con display desacoplado.
+
+Estos valores los puede ajustar el usuario mediante petición explícita.
+No cambiar sin acuerdo.
 
 `realMin` controla el cronómetro real. `displayMin` / `displayLabel`
 controlan SOLO el label visible en la pantalla de PREVIA — están
@@ -457,28 +464,50 @@ reanudar. Se aplica tanto al flujo `_ml*` (calendar cards,
 ambos hacen `timerSec = 2700` y re-anclan `_wallStart` /
 `_secAtStart` antes de arrancar el interval.
 
-### Descuento dinámico por eventos (obligatorio)
+### Descuento FIJO en regulación (obligatorio, 2026-05-19)
 
 `gameMin = 90` significa que el reloj llega a 90:00 en "tiempo normal".
-El descuento NO se pre-calcula: cada evento del acta (gol, autogol,
-penalti provocado/gol/parado/fallado, gol de falta, amarilla, doble
-amarilla, roja, lesión) añade **1 game-minute** al tope de SU parte:
+El descuento de cada parte está **FIJADO** (petición usuario
+2026-05-19, no event-driven):
 
-- Evento en min < 45 → prolonga la 1ª parte. El reloj muestra `45+1`,
-  `45+2`, …, hasta `45+N` (N = eventos en 1ª parte) antes del descanso.
-- Evento en min ∈ [45, 90) → prolonga la 2ª parte. Reloj: `90+1`,
-  `90+2`, …, `90+N`.
-- Eventos con min ≥ 90 (ya en stoppage) no cuentan — no se pueden
-  prolongar a sí mismos.
+- **1ª parte**: SIEMPRE recorre `45+1, 45+2, 45+3, 45+4` y se **CONGELA
+  en 45+4** hasta que el humano pulse `🛌 DESCANSO`.
+- **2ª parte**: SIEMPRE recorre `90+1, 90+2, … 90+9` y se **CONGELA
+  en 90+9** hasta que el humano pulse `🏁 FINALIZAR`.
 
-En tiempo REAL, 1 game-minute de descuento equivale a:
-- HvH → 10.5 segundos reales por evento.
-- HvIA → 6.5 segundos reales por evento.
-- IAIA → 1 segundo real por evento.
+El botón `🛌 DESCANSO` emerge en el **min 40** (umbral
+`timerSec >= 2400`). El botón `🏁 FINALIZAR` cambia a **rojo
+brillante pulsante** (clase `.is-near-end`) desde el **min 80**
+(`timerSec >= 4800`) hasta que el humano la pulse — la fase
+`matchOver` (timerSec ≥ fullMax con cron congelado) sigue mostrando
+`🏁 VER RESUMEN` en verde-dorado (precedente 2026-05-17).
 
-Helper: `window._mlCountStoppageHalves(st)` → `{first, second}`.
-Se invoca en el tick del cronómetro y en cada render. NO cachear los
-valores — cambian con cada evento nuevo.
+Helper: `window._mlCountStoppageHalves(st)` →
+- `{first: 4, second: 9}` para HvH/HvIA en regulación
+  (`!st.etDone && !st.isIAvsIA`).
+- Event-driven (cuenta eventos del acta) para IA vs IA
+  (`st.isIAvsIA`) y para prórroga (`st.etDone`).
+
+**IA vs IA mantiene descuento event-driven** (petición usuario
+2026-05-19): cada gol/tarjeta/lesión/etc. en una parte añade
++1 game-min al tope de esa parte. Los partidos IA-vs-IA no tienen
+humano que pulse DESCANSO/FINALIZAR, así que el descuento "natural"
+por eventos sigue siendo útil para que partidos con muchos goles
+duren un poco más.
+
+PRÓRROGA mantiene el modelo legacy event-driven (no tocado en
+2026-05-19). HvH y HvIA en gm-modal: cuando `timerSec ≥ gmHalfMax`
+con humano, el reloj se CONGELA en `gmHalfMax` (sin auto-halftime)
+— el cron sólo avanza tras pulsar DESCANSO. Misma regla en
+ml-cards. IA vs IA mantiene auto-descanso / auto-finalize.
+
+Histórico:
+- 2026-05-09: introducido descuento dinámico event-driven (+1
+  game-min por evento, sin tope).
+- 2026-05-19: usuario pide caps fijos +4 / +9 porque (a) partidos
+  con muchos eventos producían descuentos absurdos (90+12, 90+15) y
+  (b) partidos sin eventos no tenían descuento alguno. Ahora la
+  ventana es predecible y siempre la misma.
 
 ### Fuente única
 

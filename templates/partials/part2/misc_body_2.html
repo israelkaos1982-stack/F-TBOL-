@@ -4353,7 +4353,7 @@
     DEFAULT_SEGUNDA_TEAMS.forEach(function(t){
       _spainPool.push({ name:t.name, tier:'Hypermotion' });
     });
-    /* Primera Federación (~40 equipos). */
+    /* Primera Federación (hasta 44 equipos = 2 grupos × 22). */
     DEFAULT_PRIMERA_G1.forEach(function(t){
       _spainPool.push({ name:t.name, tier:'Primera RFEF' });
     });
@@ -4418,10 +4418,13 @@
     return {g1:deepCopy(DEFAULT_PRIMERA_G1), g2:deepCopy(DEFAULT_PRIMERA_G2)};
   }
   function getPrimeraTeams(){
-    /* Reglas grabadas a fuego (usuario, 2026-05-02):
-       · 1ª RFEF tiene 41 equipos máximo. Estructura: 2 grupos × 20
-         equipos jugando ida+vuelta (38 partidos cada uno), tirando
-         al MÁS DÉBIL del 41 → 40 equipos repartidos.
+    /* Reglas grabadas a fuego (usuario, 2026-05-02 · ACTUALIZADO
+       2026-05-18):
+       · 1ª RFEF: 2 grupos × 22 equipos jugando ida+vuelta (42
+         partidos por equipo). Tope total = 44; si llegan más, se
+         descarta(n) el/los más débil(es). ANTES era 2×20 (cap 40):
+         el usuario añadió equipos por el editor y los sobrantes "no
+         se instalaban en ningún grupo" — ahora caben hasta 22/grupo.
        · NINGÚN equipo de Liga EA Sports (Primera) ni de Liga
          Hypermotion (Segunda) puede estar en 1ª RFEF en la misma
          temporada.
@@ -4440,7 +4443,7 @@
        conocidos de Primera + Segunda (`ligaExt_liga-ea-sports`,
        `ligaExt_liga-hypermotion`, DEFAULT_SEGUNDA_TEAMS), ordenamos
        por media descendente, descartamos al más débil si quedan
-       > 40, y partimos por snake (impares→g1, pares→g2) para que
+       > 44, y partimos por snake (impares→g1, pares→g2) para que
        los dos grupos queden balanceados en fuerza. */
     function _norm(s){
       return String(s||'').toLowerCase().normalize('NFD')
@@ -4495,7 +4498,16 @@
         return true;
       });
       clean.sort(function(a,b){ return (b.media||0) - (a.media||0); });
-      if(clean.length > 40) clean = clean.slice(0, 40);
+      /* TOPE 44 (regla usuario 2026-05-18, ANTES era 40): 1ª RFEF
+         pasa a 2 grupos × 22 equipos (ida+vuelta = 42 partidos por
+         equipo). El usuario añadió equipos por el editor y con el
+         cap viejo de 40 los 2+ más débiles se descartaban y "no se
+         instalaban en ningún grupo". Snake split balancea fuerza:
+         44 equipos → 22 g1 + 22 g2; con menos, reparte equilibrado
+         (p.ej. 42 → 21/21). simulateLeague es genérico (round-robin
+         de los equipos que reciba), así que 22/grupo funciona sin
+         más cambios. */
+      if(clean.length > 44) clean = clean.slice(0, 44);
       var g1 = [], g2 = [];
       clean.forEach(function(t, i){ (i % 2 === 0 ? g1 : g2).push(t); });
       return { g1: g1, g2: g2 };
@@ -5523,6 +5535,25 @@
     for(var i=0;i<keys.length;i++){
       if(_humanNorm(keys[i]) === norm) return HUMAN_ICONS[keys[i]]+'\u00a0';
     }
+    /* Fallback DIN\u00c1MICO (2026-05-19): cualquier equipo marcado humano
+       en el editor de plantilla (Resto de Ligas) tiene su emoji en
+       window._LIGA_HUMAN_FLAGS (lo construye refreshLigaEaShields
+       escaneando todos los ligaExt_*, keyed por nombre exacto y
+       normalizado). HUMAN_ICONS solo trae los 6 can\u00f3nicos hardcodeados,
+       por eso un humano "extra" (p.ej. Liverpool\ud83d\udca1) no sacaba emoji en
+       Derbys/clasificaciones. CLAUDE.md: "humanIcon(name) devuelve el
+       humanEmoji del editor". Additivo: no toca los 5 can\u00f3nicos. */
+    try {
+      var fl = window._LIGA_HUMAN_FLAGS;
+      if (fl) {
+        if (fl[name] && fl[name].isHuman && fl[name].humanEmoji) return fl[name].humanEmoji+'\u00a0';
+        for (var fk in fl) {
+          if (!Object.prototype.hasOwnProperty.call(fl, fk)) continue;
+          var fv = fl[fk];
+          if (fv && fv.isHuman && fv.humanEmoji && _humanNorm(fk) === norm) return fv.humanEmoji+'\u00a0';
+        }
+      }
+    } catch(_){}
     return '';
   }
   window.humanIcon = humanIcon;
@@ -6077,8 +6108,86 @@
     SCHEDULE = generarCalendario(_rotarPorReloj(mezclarEquipos(TEAMS.slice())));
     try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(SCHEDULE)); } catch(_){}
   }
+
+  /* ── Sustitución de equipos en el calendario (decisión usuario
+     2026-05-18: "el reemplazo hereda el hueco de Bayern") ──
+     Si el admin sacó un equipo de Liga EA (queda en
+     `ligaExt_liga-ea-sports.deletedTeamNames`) y añadió otro NUEVO
+     en el editor (nombre que no está en la lista canónica `TEAMS`),
+     el calendario PERSISTIDO sigue teniendo al viejo. Aquí se
+     renombra in-place viejo→nuevo: Liverpool juega EXACTAMENTE los
+     partidos de Bayern, mismas jornadas, sin regenerar nada ni
+     perder resultados. Emparejamiento por orden removidos[i]←añadidos[i].
+     Gemelo self-contained de `_ligaEaSubMap` del bundle (usa la
+     lista local `TEAMS` para no depender del orden de carga). */
+  function _eaSubMapLocal(){
+    var m = Object.create(null);
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if(!raw) return m;
+      var d = JSON.parse(raw) || {};
+      var del = Array.isArray(d.deletedTeamNames) ? d.deletedTeamNames : [];
+      if(!del.length) return m;
+      var nf = function(s){ return String(s==null?'':s).trim().toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,''); };
+      var delSet = Object.create(null);
+      del.forEach(function(n){ var k=nf(n); if(k) delSet[k]=true; });
+      var canon = Object.create(null);
+      TEAMS.forEach(function(n){ canon[nf(n)] = true; });
+      var removed = TEAMS.filter(function(n){ return delSet[nf(n)]; });
+      var added = [], seen = Object.create(null);
+      (Array.isArray(d.teams) ? d.teams : []).forEach(function(t){
+        var nm = t && t.name ? String(t.name).trim() : '';
+        if(!nm || nm === 'Por definir') return;
+        var k = nf(nm);
+        if(canon[k] || delSet[k] || seen[k]) return;
+        seen[k] = true; added.push(nm);
+      });
+      var p = Math.min(removed.length, added.length);
+      for(var i=0;i<p;i++){ m[nf(removed[i])] = added[i]; }
+    } catch(_){}
+    return m;
+  }
+  function _eaRemapSchedule(sch){
+    if(!Array.isArray(sch)) return sch;
+    var m = _eaSubMapLocal();
+    if(!Object.keys(m).length) return sch;
+    var nf = function(s){ return String(s==null?'':s).trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g,''); };
+    var changed = false;
+    var out = sch.map(function(j){
+      return Array.isArray(j) ? j.map(function(p){
+        if(!Array.isArray(p)) return p;
+        var nh = m[nf(p[0])], na = m[nf(p[1])];
+        if(nh || na){ changed = true; return [nh || p[0], na || p[1]]; }
+        return p;
+      }) : j;
+    });
+    return changed ? out : sch;
+  }
+  function _eaApplyScheduleSub(persist){
+    try {
+      var rm = _eaRemapSchedule(window.LIGA_SCHEDULE || SCHEDULE);
+      if(rm && rm !== (window.LIGA_SCHEDULE || SCHEDULE)){
+        SCHEDULE = rm;
+        window.LIGA_SCHEDULE = rm;
+        if(persist !== false){
+          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(rm)); } catch(_){}
+        }
+      }
+    } catch(_){}
+  }
+
   window.LIGA_SCHEDULE = SCHEDULE;
+  _eaApplyScheduleSub(true);
   hydrateLigaStateFromBackend();
+  /* Reaplicar tras la posible carga diferida del editor / hidratación
+     backend (que pueden traer un calendario con el equipo viejo). */
+  try {
+    document.addEventListener('DOMContentLoaded', function(){
+      setTimeout(function(){ _eaApplyScheduleSub(true); }, 900);
+    });
+  } catch(_){}
 
   /* ── PERSISTENCIA ────────────────────────────────── */
   function loadResults() {
@@ -7295,76 +7404,68 @@
   }
 
   /* ── FUNCIONES GENÉRICAS DE PARTIDO (jornadas 1-38, Copa y Europa) ──── */
-  /* Timer speeds per match type (5-second ticks, 1080 ticks = 90 game min):
-     AI vs AI  : 30s real  → 30000/1080  ≈   28ms/tick
-     HvIA      : 12m real  → 720000/1080 ≈  667ms/tick  (1 min juego = 8s reales)
-     HvH 90min : 16m real  → 960000/1080 ≈  889ms/tick  (1 min juego ≈ 10.67s reales)
-     HvH ET    : 5m real for 30 game min → 300000/360 ≈ 833ms/tick */
   /* ── DURACIÓN REAL DE PARTIDOS HUMANOS (regla de tres) ──────
      Fuente única de verdad para la velocidad del cronómetro. Cada
      "modo" (HvH / HvIA / IAIA / prórroga) declara:
         • gameMin  : minutos de juego simulados en un partido completo
         • realMin  : minutos de tiempo real que ese partido debe durar
+        • displayMin: lo que la previa MUESTRA al usuario (puede no
+                      coincidir con realMin — el usuario lo prefiere así
+                      desde 2026-05-19 para que el ritmo del cronómetro
+                      vaya al ritmo eFootball pero la previa muestre
+                      números cómodos).
      Y el tick del setInterval se calcula por regla de tres:
         tickMs = realMin * 60 000 / (gameMin * 60 / _ML_TICK_SEC)
 
-     Objetivo pedido:
-        HvH   : 10 min de juego  → 16-17 min reales  (pto medio 16.5)
-        HvIA  :  8 min de juego  → 12-13 min reales  (pto medio 12.5)
+     TIEMPOS OFICIALES (restaurados pre-mayo, 2026-05-19):
 
-     Escalado a nuestro reloj (90 game-min + descuento 1..7, media 4):
-     ══════════════════════════════════════════════════════════════
-     TIEMPOS OFICIALES (actualizados 2026-04-26):
-
-        IA vs IA   → 45s cada parte    → 1.5 min total (90 s reales)
+        IA vs IA   → 45 s cada parte   → 1.5  min total (90 s reales)
                      (1 sec real = 1 game-minute)
-        HvIA       → 4min 52.5s/parte  → 9.75 min total real
-                     (6.5 s/game-min)
-        HvH        → 7min 52.5s/parte  → 15.75 min total real
-                     (10.5 s/game-min)
+        HvIA       → 6 min 45 s/parte  → 13.5 min total real
+                     (9 s/game-min). Previa: "8 min".
+        HvH        → 8 min 15 s/parte  → 16.5 min total real
+                     (11 s/game-min). Previa: "10 min".
         HvH prórroga → 2.5 min/parte   → 5 min total real
 
-        Descuento: +1 minuto de juego por cada evento (gol, tarjeta,
-        lesión, penalti) que ocurra en la segunda parte. El cronómetro
-        del juego marca del 0 al 45 + desc / descanso / 45 al 90 + desc.
+     Descuento FIJO (2026-05-19): SIEMPRE 45+1..45+4 en 1ª parte y
+     90+1..90+9 en 2ª, independiente de eventos. El cron se CONGELA
+     en el tope hasta que el humano pulse DESCANSO / FINALIZAR.
+     Cada game-minute de descuento en tiempo REAL equivale a:
+        HvH:  11 segundos reales
+        HvIA:  9 segundos reales
+        IAIA:  1 segundo  real
 
-     ══════════════════════════════════════════════════════════════ */
-  /* Duración AUTORITATIVA de cada partido — FIJADA POR EL USUARIO:
-       HvH    → 15 min 45 s reales, label "10 min", 10.5 s/game-min
-       HvIA   →  9 min 45 s reales, label "8 min",   6.5 s/game-min
-       IAIA   →  1 min real total  (30 s por parte), label "30 s/parte"
-       HvH_ET →  5 min reales de prórroga
-
-     gameMin = 90 SIEMPRE (el reloj de juego va de 0 a 90). El
-     descuento NO se suma aquí — se añade dinámicamente en tiempo de
-     partido: +1 game-minute por cada evento del acta (gol, tarjeta,
-     penalti, falta, lesión). Se muestra como "45+1, 45+2…" en la 1ª
-     parte y "90+1, 90+2…" en la 2ª. Cada evento prolonga la parte:
-       HvH:  10.5 segundos reales
-       HvIA:  6.5 segundos reales
-       IAIA:  1 segundo real (90 game-min / 90 sec real = 1:1 tras
-              el ajuste 2026-04-21)
+     Histórico:
+       Pre 2026-04-26 (estos valores actuales): HvH 11s, HvIA 9s.
+       2026-04-26 (intermedio):                 HvH 10.5s, HvIA 6.5s.
+       2026-05-10 (alineación display=real):    HvH 6.67s, HvIA 5.33s.
+       2026-05-19: usuario pide volver al pre-mayo porque el cron iba
+       más rápido que eFootball / vida real. Display previa = 10/8
+       (no real) por preferencia explícita.
 
      Consecuencia matemática (verificada): 1 game-minute = tickMs × 12
-       HvH   tick ≈ 875 ms → 60 × 875/5 = 10.5 s
-       HvIA  tick ≈ 542 ms → 60 × 542/5 ≈ 6.5 s
-       IAIA  tick ≈  83 ms → 60 ×  83/5 = 1 s  (90 s total) */
+       HvH   tick ≈ 917 ms → 60 × 917/5 = 11 s
+       HvIA  tick ≈ 750 ms → 60 × 750/5 =  9 s
+       IAIA  tick ≈  83 ms → 60 ×  83/5 =  1 s  (90 s total) */
   var _ML_TICK_SEC = 5;
-  /* Tiempos reales del cronómetro (petición usuario 2026-05-10):
-     "el cronómetro de HvH y HvIA no funciona, recuerda los códigos
-     del tiempo que tenemos y arréglalo".
-     ALINEAR la duración REAL con la etiqueta MOSTRADA en la previa
-     (`displayMin`). Antes la etiqueta decía "10 min" pero el partido
-     duraba 15.75 min reales — discrepancia que confundía al usuario.
-     Ahora 1:1 → la previa muestra "10 min" y el partido dura 10 min.
-        HvH    → 10 min reales (era 15.75) → 6.67 s/game-min
-        HvH_ET → 5  min reales (sin cambio)
-        HvIA   → 8  min reales (era  9.75) → 5.33 s/game-min
-        IAIA   → 1.5 min reales (sin cambio) → 1 s/game-min */
+  /* Tiempos reales del cronómetro (petición usuario 2026-05-19):
+     "la simulación del cronómetro está yendo más rápido que el tiempo
+     del juego eFootball y más rápido que la vida real, vuelve a los
+     tiempos de antes". RESTAURADOS los valores pre-2026-04-26:
+        HvH    → 16.5 min reales → 11 s/game-min  (≈917 ms/tick)
+        HvH_ET → 5    min reales (sin cambio)
+        HvIA   → 13.5 min reales → 9  s/game-min  (≈750 ms/tick)
+        IAIA   → 1.5  min reales (sin cambio)     →   1 s/game-min
+     `displayMin` se mantiene en 10 / 8 (lo que la previa muestra al
+     usuario) por petición explícita: la previa dice "10 min" / "8 min"
+     aunque la duración real sea más larga, porque así estaba en su
+     memoria del juego. La regla de oro 2026-05-10 (display=real) queda
+     RESCINDIDA: el usuario prefiere display de referencia + cronómetro
+     a ritmo eFootball realista. */
   var _MATCH_RULE = {
-    HvH:    { gameMin: 90, realMin: 10,   displayMin: 10 },
-    HvH_ET: { gameMin: 30, realMin: 5                      },
-    HvIA:   { gameMin: 90, realMin: 8,    displayMin: 8  },
+    HvH:    { gameMin: 90, realMin: 16.5, displayMin: 10 },
+    HvH_ET: { gameMin: 30, realMin: 5                       },
+    HvIA:   { gameMin: 90, realMin: 13.5, displayMin: 8  },
     IAIA:   { gameMin: 90, realMin: 1.5,  displayLabel: '45 s/parte' }
   };
   function _tickMsFromRule(r) {
@@ -7374,10 +7475,10 @@
     return Math.max(1, Math.round(realMs / ticks));
   }
   var _MATCH_TICKS = {
-    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 556 ms (10 min reales)   */
-    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5 min reales)   */
-    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 444 ms ( 8 min reales)   */
-    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  83 ms (90 s total)      */
+    HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 917 ms (16.5 min reales · 11 s/game-min) */
+    HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5   min reales)               */
+    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 750 ms (13.5 min reales ·  9 s/game-min) */
+    IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  83 ms (90 s total)                   */
   };
   /* Exponemos la regla para que TODOS los flujos (bundle legacy, campo 3D,
      previa, clock, live ticker, copa engine) lean de una única fuente.
@@ -7478,12 +7579,22 @@
     'pen-prov': 1, 'pen-parado': 1, 'falta-gol': 1,
     'amarilla': 1, 'd-amarilla': 1, 'roja': 1, 'lesion': 1
   };
-  /* Cuenta cuántos eventos del acta han ocurrido en cada parte del
-     partido, para calcular descuento dinámico. Retorna
-     {first, second}. Se considera "1ª parte" min < 45 y "2ª parte"
-     min ∈ [45, 90). Eventos ya en stoppage time (>= 90) no cuentan
-     — no se pueden prolongar a sí mismos. */
+  /* Stoppage time (petición usuario 2026-05-19):
+     - HvH y HvIA en regulación: FIJO 1ª parte +4, 2ª parte +9. El
+       cron recorre 45+1..45+4 / 90+1..90+9 y se CONGELA en el tope
+       hasta que el humano pulse DESCANSO / FINALIZAR.
+     - IA vs IA simulación: EVENT-DRIVEN (cada gol/tarjeta/lesión/etc.
+       suma +1 game-min a su parte). Aquí no hay humano que pulse
+       nada — el descuento "natural" por eventos sigue siendo útil
+       para que partidos con muchos goles duren un poco más.
+     - PRÓRROGA (etDone): event-driven (legacy, sin cambio).
+
+     Detección IA vs IA: `st.isIAvsIA`. Para regulación con humano
+     (HvH/HvIA) el resultado es fijo {4, 9}. */
   function _mlCountStoppageHalves(st) {
+    if (st && !st.etDone && !st.isIAvsIA) {
+      return { first: 4, second: 9 };
+    }
     var fh = 0, sh = 0;
     var ev = (st && st.events) || [];
     for (var i = 0; i < ev.length; i++) {
@@ -7889,10 +8000,11 @@
     var endBtn = document.getElementById('ml-btn-end-'+mk);
     if (endBtn) {
       var matchOver = !!(st.matchFinished || st.finished || rawSec >= fullMax);
-      /* FOTO B1 (2026-05-16): empezar a brillar desde el min 85
-         (5100 s) también en las cards del calendario, no solo al
-         final exacto. */
-      endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 85 * 60);
+      /* Brillo rojo desde el min 80 también en las cards del calendario
+         (petición usuario 2026-05-19). En ml-card no hay verde-dorado
+         VER RESUMEN, así que `.is-finishable` ya pinta rojo brillante
+         con su keyframe — solo bajamos el umbral 85→80. */
+      endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 80 * 60);
     }
     if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
     if (st.inDescanso) { btn.textContent='⏸ HT'; btn.className='ml-timer running'; return; }
@@ -8423,7 +8535,9 @@
          amistosos usan los caminos de arriba. */
       if (!st.htDone && !st.etDone && !st.matchFinished && !st.isIAvsIA && !st.isFriendly) {
         var _htBtn = document.getElementById('ml-btn-ht-'+mk);
-        if (_htBtn) _htBtn.style.display = (st.timerSec >= 2220) ? '' : 'none';
+        /* Petición usuario 2026-05-19: emerge la caja DESCANSO desde
+           el minuto 40 (antes 37'). */
+        if (_htBtn) _htBtn.style.display = (st.timerSec >= 2400) ? '' : 'none';
       }
       // Stoppage time marker at 90' — muestra el nº de game-minutes
       // añadidos dinámicamente por los eventos de la 2ª parte.
@@ -9688,12 +9802,19 @@
       eventType: 'kickoff'
     }).forEach(function(l){ lines.push(l); });
     if (humanTeam) {
+      /* Abreviatura limpia (sin emojis 🎲/🖊️) para que la línea NO
+         parta en la preview de WhatsApp (petición usuario 2026-05-19:
+         cada cosa en una sola línea horizontal). */
+      var _htClean = String(humanTeam)
+        .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu,'')
+        .replace(/\s+/g,' ').trim();
+      var _htAbbr = (typeof window.getTeamAbbr === 'function' && window.getTeamAbbr(_htClean)) || _htClean;
       lines.push('');
       if (bajaLines.length) {
-        lines.push('🚑 Bajas de ' + humanTeam + ':');
+        lines.push('🚑 Bajas de ' + _htAbbr + ':');
         lines = lines.concat(bajaLines);
       } else {
-        lines.push('✅ ' + humanTeam + ' — Plantilla al 100%');
+        lines.push('✅ ' + _htAbbr + ' — Plantilla al 100%');
       }
     }
     var twitch = window._ppSelectedTwitch;
@@ -9710,9 +9831,13 @@
     var st = _mlSt(mk);
     if (!st) return;
     _mlBuildAndShareWA(mk, st, false);
-    /* Unlock the continue button in the descanso overlay */
+    /* Unlock the continue button in the descanso overlay + glow ROJO
+       llamativo (mismo énfasis que gm-ht-ov tras compartir). */
     var contBtn = document.getElementById('ml-descanso-continue-btn');
-    if (contBtn) { contBtn.disabled = false; contBtn.style.opacity = ''; }
+    if (contBtn) {
+      contBtn.disabled = false; contBtn.style.opacity = '';
+      if (typeof window._gmGlowContinueBtn === 'function') window._gmGlowContinueBtn(contBtn);
+    }
   };
 
   /* Helper compartido: construye el bloque de estadísticas para los
@@ -10014,7 +10139,25 @@
     if (hasScore) {
       lines.push(sH + ' ' + (opts.scA != null ? opts.scA : 0) + '-' + (opts.scB != null ? opts.scB : 0) + ' ' + sA);
     } else {
-      lines.push(sH + ' vs ' + sA);
+      /* INICIO (sin marcador): la previa de WhatsApp es estrecha y
+         "Athletic Club 🎲 vs 🖊️ Atlético Madrid" parte en 2-3 líneas.
+         Petición usuario 2026-05-19: que vaya TODO en una sola línea
+         horizontal → usamos ABREVIATURAS (getTeamAbbr) sobre el nombre
+         limpio (sin emojis 🎲/🖊️ ni selectores de variación). */
+      var _waClean = function(x){
+        return String(x||'')
+          .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu,'')
+          .replace(/\s+/g,' ').trim();
+      };
+      var _waAbbr = function(x){
+        var c = _waClean(x);
+        if (typeof window.getTeamAbbr === 'function'){
+          var a = window.getTeamAbbr(c);
+          if (a) return a;
+        }
+        return _waShortName(c) || c;
+      };
+      lines.push(_waAbbr(opts.home) + ' vs ' + _waAbbr(opts.away));
     }
     var evLine = _waEventLine(opts.eventType);
     if (evLine) lines.push(evLine);
@@ -10052,7 +10195,8 @@
         text = text + '\n\n📺 Visto en el Twitch de ' + _twitch;
       }
     } catch(_){}
-    /* 1. Copiar al portapapeles (best-effort en ambas APIs). */
+    /* 1. Copiar al portapapeles (backup — si el share nativo se
+       cancela, el usuario puede pegar en el grupo manualmente). */
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).catch(function(){});
@@ -10067,7 +10211,31 @@
         document.body.removeChild(_ta);
       }
     } catch(_){}
-    /* 2. Abrir el grupo en pestaña nueva. */
+    /* 2. SHARE NATIVO (Web Share API) — REPARA "no se comparte nada"
+       (reportado 2026-05-18). Antes solo se abría el link de
+       INVITACIÓN del grupo (chat.whatsapp.com/<token>), que NO
+       redacta ningún mensaje → el usuario veía que no se compartía
+       nada. navigator.share abre el selector del sistema con el
+       texto ya escrito; el usuario elige WhatsApp (o el grupo) y se
+       envía DE VERDAD. Fallbacks robustos en cascada:
+         a) navigator.share({text})  — móvil (caso normal).
+         b) wa.me/?text=<txt>        — WhatsApp con el texto puesto.
+         c) grupo fijo               — última red (texto en portapapeles). */
+    try {
+      if (navigator.share) {
+        navigator.share({ text: text }).catch(function(err){
+          /* AbortError = el usuario cerró el selector a propósito →
+             NO hacemos fallback (no es un fallo). Cualquier otro
+             error sí cae a wa.me. */
+          if (err && err.name === 'AbortError') return;
+          try { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); } catch(_){}
+        });
+        return;
+      }
+    } catch(_){}
+    /* 3. Sin Web Share API (desktop): WhatsApp con el texto ya puesto. */
+    try { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); return; } catch(_){}
+    /* 4. Última red: abrir el grupo fijo (texto ya en portapapeles). */
     try { window.open(_WA_GROUP_URL, '_blank'); } catch(_){}
   }
   try {
@@ -10341,11 +10509,31 @@
     _waShareToGroup(lines.join('\n'));
     _gm.htShared = true;
     var continueBtn = document.getElementById('gm-ht-continue-btn');
-    if (continueBtn) continueBtn.style.display = '';
+    if (continueBtn) { continueBtn.style.display = ''; _gmGlowContinueBtn(continueBtn); }
     if (_gm.isHvH) {
       try { localStorage.setItem('gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
     }
   };
+  /* Resalta el botón "INICIAR SEGUNDA PARTE" con un brillo ROJO
+     pulsante llamativo tras compartir el descanso (petición usuario
+     2026-05-19: una vez compartido por WhatsApp, el botón debe ir en
+     rojo brillante "como obligando a pulsar ahí para seguir" — antes
+     era verde y se confundía con COMPARTIR DESCANSO). Idempotente.
+     Fuente única: lo reusan gm-ht-ov y ml-descanso-ov. */
+  function _gmGlowContinueBtn(btn){
+    if (!btn) return;
+    try {
+      if (!document.getElementById('gm-ht-glow-style')) {
+        var _gs = document.createElement('style');
+        _gs.id = 'gm-ht-glow-style';
+        _gs.textContent = '@keyframes gmHtGlowPulse{0%,100%{box-shadow:0 0 12px rgba(255,40,52,.6);transform:scale(1);}50%{box-shadow:0 0 32px rgba(255,40,52,1),0 0 56px rgba(255,40,52,.55);transform:scale(1.03);}}'
+          + '.gm-ht-glow{background:linear-gradient(135deg,#c4001a,#ff2233 55%,#c4001a)!important;border:1px solid #ff5566!important;color:#fff!important;font-weight:900!important;animation:gmHtGlowPulse 1s ease-in-out infinite!important;}';
+        (document.head||document.body).appendChild(_gs);
+      }
+      btn.classList.add('gm-ht-glow');
+    } catch(_){}
+  }
+  window._gmGlowContinueBtn = _gmGlowContinueBtn;
 
   function _gmLogoUrl(name) {
     var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
@@ -10392,7 +10580,16 @@
       }
     }
     var continueBtn = document.getElementById('gm-ht-continue-btn');
-    if (continueBtn) continueBtn.style.display = 'none';
+    /* "INICIAR SEGUNDA PARTE" SIEMPRE visible — compartir es OPCIONAL.
+       BUG CRÍTICO (foto usuario 2026-05-18): antes el botón estaba
+       display:none y SOLO lo revelaba _gmShareHalfTime (al compartir)
+       o el poll HvH. Si el usuario NO compartía, el partido se quedaba
+       PILLADO en el HT para siempre y había que meter los minutos a
+       mano → viola la regla BASE INMUTABLE del cronómetro (0→90, nunca
+       atascado). Ahora se muestra desde que aparece la pantalla de
+       DESCANSO; el glow solo se resetea aquí y se re-añade tras
+       compartir como énfasis (no como requisito). */
+    if (continueBtn) { continueBtn.style.display = ''; continueBtn.classList.remove('gm-ht-glow'); }
     var shareBtn = document.getElementById('gm-ht-share-btn');
     if (shareBtn) shareBtn.style.display = '';
     ov.style.display = 'flex';
@@ -10402,7 +10599,7 @@
           if (localStorage.getItem('gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away) === '1') {
             clearInterval(htPoll);
             var cb = document.getElementById('gm-ht-continue-btn');
-            if (cb) cb.style.display = '';
+            if (cb) { cb.style.display = ''; if (typeof _gmGlowContinueBtn === 'function') _gmGlowContinueBtn(cb); }
           }
         } catch(e) { clearInterval(htPoll); }
       }, 3000);
@@ -10507,6 +10704,11 @@
         try { if (ev) { ev.preventDefault(); ev.stopPropagation(); } } catch(_){}
         try { _gmShowFinalOv(); } catch(_){ if (window.gmShowPost) window.gmShowPost(); }
       };
+      /* Salida definitiva siempre disponible cuando el partido acabó. */
+      try {
+        var ex = document.getElementById('gm-btn-exit');
+        if (ex) ex.style.display = '';
+      } catch(_){}
     } catch(_){}
   };
 
@@ -10588,10 +10790,38 @@
   };
 
   window.gmExitFinal = function() {
+    /* Delegamos en la salida definitiva: cierra todos los overlays y,
+       si es torneo, vuelve al bracket (resultado ya persistido). Para
+       no-torneo conserva el flujo previo (gmShowPost). */
+    if (typeof window.gmForceExitMatch === 'function') { window.gmForceExitMatch(); return; }
     var ov = document.getElementById('gm-fin-ov');
     if (ov) ov.style.display = 'none';
     document.getElementById('gm-modal').style.display = 'none';
     window.gmShowPost && window.gmShowPost();
+  };
+
+  /* Salida DEFINITIVA del partido (botón "✖ SALIR DEL PARTIDO").
+     Cierra TODOS los overlays del partido sin depender del flujo
+     VER RESUMEN / FINAL / post, y devuelve al usuario al bracket del
+     torneo (resultado ya persistido por gmEndMatch). Bulletproof:
+     cada paso en su try para que nada deje al usuario atascado. */
+  window.gmForceExitMatch = function() {
+    ['gm-fin-ov','gm-post-ov','gm-event-panel','gm-modal'].forEach(function(idd){
+      try {
+        var el = document.getElementById(idd);
+        if (!el) return;
+        el.style.display = 'none';
+        if (el.classList) el.classList.remove('show');
+      } catch(_){}
+    });
+    try {
+      if (window._gm && window._gm._isTour && window._gm._tourId && typeof window.go === 'function') {
+        window.go('s-' + window._gm._tourId);
+        try { if (typeof window._tourRender === 'function') window._tourRender(window._gm._tourId); } catch(_){}
+        return;
+      }
+    } catch(_){}
+    try { if (window.gmShowPost) window.gmShowPost(); } catch(_){}
   };
 
   /* ── SELECCIÓN DE EVENTOS GENÉRICA (overlays globales) ── */
@@ -10639,6 +10869,49 @@
     if (plTeam) plTeam.textContent=teamName.toUpperCase();
     var sq=(typeof window.sqFromRegistryFull==='function'&&window.sqFromRegistryFull(teamName))||[];
     if(!sq.length) sq=(typeof window.sqFromRegistry==='function'&&window.sqFromRegistry(teamName))||[];
+    /* ── DEDUP DEL PICKER DE EVENTO (bug usuario 2026-05-18) ──────────
+       En el Betis (y otros equipos) salían jugadores DUPLICADOS al
+       añadir un evento: la entrada del editor con dorsal+nombre
+       completo ("6 Sergi Altimira", "24 Aitor Ruibal", "11 C.
+       Bakambu", "19 Cucho Hernández") Y una entrada legacy sin dorsal
+       con nombre corto ("Altimira", "Ruibal", "Bakambu", "Cucho",
+       "Abde", "Fornals"…) de la nómina antigua JUGADORES_DATA. El
+       dedup global del proyecto usa el nombre COMPLETO normalizado,
+       así que "Sergi Altimira" ≠ "Altimira" y nunca se fusionaban; y
+       como la versión corta no está en el editor, el usuario no podía
+       borrarla. Aquí, SOLO para pintar el picker (no toca el motor de
+       simulación ni el storage), colapsamos las parejas en las que el
+       conjunto de tokens de un nombre es subconjunto del otro
+       (p.ej. {altimira} ⊂ {sergi,altimira}), conservando la entrada
+       CON dorsal (la del editor) y, a igualdad, el nombre más
+       específico. Idempotente y local. */
+    sq = (function _dedupePickerSquad(arr){
+      if(!Array.isArray(arr)) return arr;
+      function _nrm(s){ return String(s==null?'':s).toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,'')
+        .replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
+      function _toks(s){ return _nrm(s).split(' ').filter(Boolean); }
+      function _subset(a,b){ if(!a.length||a.length>b.length) return false;
+        for(var i=0;i<a.length;i++){ if(b.indexOf(a[i])===-1) return false; } return true; }
+      var out=[], kept=[];
+      arr.forEach(function(p){
+        if(p && p.h){ out.push(p); return; }
+        if(!Array.isArray(p) || p[1]==null){ out.push(p); return; }
+        var nm=String(p[1]||''); var tk=_toks(nm); var hasNum=Number(p[0])>0;
+        var dup=-1;
+        for(var i=0;i<kept.length;i++){
+          var k=kept[i];
+          if(!tk.length || !k.tk.length) continue;
+          if(_subset(tk,k.tk) || _subset(k.tk,tk)){ dup=i; break; }
+        }
+        if(dup===-1){ kept.push({pos:out.length, tk:tk, hasNum:hasNum, len:nm.length}); out.push(p); return; }
+        var k2=kept[dup];
+        var better = (hasNum && !k2.hasNum) || (hasNum===k2.hasNum && nm.length>k2.len);
+        if(better){ out[k2.pos]=p; k2.tk=tk; k2.hasNum=hasNum; k2.len=nm.length; }
+        /* else: descartamos esta copia (duplicado) */
+      });
+      return out;
+    })(sq);
     var html='';
     var _genPosOrder=['P','D','M','F'];
     var _genPosLabels={'P':'PORTEROS','D':'DEFENSAS','M':'MEDIOS','F':'DELANTEROS'};
@@ -10979,12 +11252,16 @@
       }
 
       var _baseClasses = 'is-finishable';
-      /* FOTO B1 (2026-05-16, petición usuario): la caja FINALIZAR
-         debe EMPEZAR a brillar y llamar la atención a partir del
-         game-minute 85 (no solo al final exacto), para avisar al
-         humano de que el partido está por terminar. 85' = 5100 s. */
-      var _gmNear85 = (Number(_gm.timerSec) || 0) >= 85 * 60;
-      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmNear85 || _gmAction !== 'finalizar');
+      /* Petición usuario 2026-05-19 (revisión foto): "al finalizar el
+         partido sobre el minuto 80 tiene que emerger la caja de
+         finalizar en color rojo brillante". `.is-near-end` (NUEVA)
+         es el rojo brillante en la fase 80'..90+9 ANTES de matchOver.
+         `.is-finishable` se mantiene para el VER RESUMEN (matchOver,
+         verde-dorado de 2026-05-17) y para PRÓRROGA / PENALTIS. */
+      var _gmNear80 = (Number(_gm.timerSec) || 0) >= 80 * 60;
+      _gmEndBtn.classList.toggle('is-near-end',
+        _gmNear80 && !_matchOver && !_gm.finished && _gmAction === 'finalizar');
+      _gmEndBtn.classList.toggle('is-finishable', _matchOver || _gmAction !== 'finalizar');
       if (_gmAction === 'prorroga') {
         _gmEndBtn.textContent = '▶ PRÓRROGA';
       } else if (_gmAction === 'penaltis') {
@@ -10999,6 +11276,17 @@
       } else {
         _gmEndBtn.textContent = '🏁 FINALIZAR';
       }
+      /* Botón "✖ SALIR DEL PARTIDO": visible SOLO cuando el partido
+         está FINALIZADO de verdad (_gm.finished), NO solo cuando el
+         cronómetro llegó al final (_matchOver). Antes salía al 85-90+'
+         (matchOver) compitiendo con FINALIZAR → el usuario no sabía a
+         qué botón dar (foto usuario 2026-05-18). Ahora, de 85' en
+         adelante, la ÚNICA acción es el botón FINALIZAR brillante
+         (.is-finishable); SALIR aparece después, ya finalizado. */
+      try {
+        var _exitB = document.getElementById('gm-btn-exit');
+        if (_exitB) _exitB.style.display = _gm.finished ? '' : 'none';
+      } catch(_){}
       /* Partido en juego → resetear el flag de "VER RESUMEN" para
          que cuando ESTE partido termine, _gmReactivateFinishBtn
          vuelva a reactivar la caja desde cero. */
@@ -11098,21 +11386,19 @@
       }
     } catch(_){}
     /* Botón "🛌 DESCANSO" — visible para que el usuario pueda forzar
-       el half-time desde el minuto 37 de la primera parte. Razón:
-       cuadrar el cronómetro real (TV / cronómetro del propio partido
-       eFootball) con el simulado es casi imposible — los goles, faltas
-       y pausas hacen que vayan desfasados. Permitiendo descanso
-       anticipado desde 37' el usuario salta al medio tiempo cuando
-       el partido REAL acaba la primera parte, sin importar lo que
-       marque el reloj de la app. Si NO pulsa el botón, el cronómetro
-       sigue subiendo (38, 39, ...) hasta llegar al auto-descanso en
-       45+descuento (gmHalfMax). Solo se muestra HvH/HvIA (gm-modal),
+       el half-time desde el minuto 40 (petición usuario 2026-05-19:
+       "en el minuto 40 emerge la caja de descanso"). Razón histórica:
+       cuadrar el cronómetro simulado con el real (TV/eFootball) es
+       casi imposible — los goles, faltas y pausas hacen que vayan
+       desfasados. Si NO pulsa el botón, el cronómetro sube 41, 42…
+       45+1, 45+2, 45+3, 45+4 y se CONGELA en 45+4 hasta que el
+       humano pulse DESCANSO. Solo se muestra HvH/HvIA (gm-modal),
        fuera de prórroga y antes del descanso. */
     try {
       var fhWrap = document.getElementById('gm-force-ht-wrap');
       if (fhWrap) {
         var canForce = !_gm.finished && !_gm.htDone && !_gm.etDone
-                       && !_gm.inDescanso && _gm.timerSec >= 2220;  /* 37' */
+                       && !_gm.inDescanso && _gm.timerSec >= 2400;  /* 40' */
         fhWrap.style.display = canForce ? '' : 'none';
       }
     } catch(_) {}
@@ -11142,12 +11428,12 @@
       m.className = 'ml-ht';
       m.textContent = '— DESCANSO (45 min) —';
       list.appendChild(m);
-      var _gmWaWrap = document.createElement('div');
-      _gmWaWrap.className = 'ml-ht-wa-wrap';
-      _gmWaWrap.innerHTML = '<button class="ml-ht-wa-btn" onclick="window._gmShareHalfTime()">'
-        +'<svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13" style="flex-shrink:0;display:block"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>'
-        +' Compartir descanso</button>';
-      list.appendChild(_gmWaWrap);
+      /* 2026-05-18 (petición usuario): NO inyectar el botón
+         "Compartir descanso" dentro del acta. Ocupaba espacio y era
+         redundante — el compartir vive en la pantalla de DESCANSO
+         (overlay gm-ht-ov, botón 🟢 COMPARTIR DESCANSO). Antes este
+         CTA se quedaba clavado en el acta hasta el final del partido
+         (foto usuario: visible al 57'). */
     }
     gmRenderTimer();
     _gmShowHalftimeOv();
@@ -11459,15 +11745,22 @@
       var gmStops = (typeof _mlCountStoppageHalves === 'function') ? _mlCountStoppageHalves(_gm) : { first: 0, second: 0 };
       var gmHalfMax = 2700 + (gmStops.first || 0) * 60;
       var max = _gm.etDone ? GM_MAX_ET : (GM_MAX_NORMAL + (gmStops.second || 0) * 60);
-      /* Descanso automático: SOLO si no hay humano implicado. En la
-         práctica gm-modal sólo se usa en HvH/HvIA (IAvIA va por el
-         flujo ml-wrap), así que esto es un no-op de seguridad: el
-         humano debe pulsar el botón "🛌 DESCANSO" (gm-btn-force-ht).
-         Petición usuario: la 1ª parte jamás termina sin pulsar el
-         botón en partidos con humano. */
+      /* 1ª parte: al llegar a 45+4 (gmHalfMax con stoppage fijo) se
+         CONGELA esperando al humano que pulse "🛌 DESCANSO". Sin esto
+         el cron seguía corriendo hacia 90+ sin esperar (foto usuario
+         2026-05-19). Para IA-vs-IA (caso teórico — gm-modal solo se
+         usa con humano) sí auto-descanso. */
       var _gmHasHuman = !!_gm.isHvH
         || (typeof esHumano === 'function' && (esHumano(_gm.home) || esHumano(_gm.away)));
-      if (!_gm.htDone && _gm.timerSec >= gmHalfMax && !_gmHasHuman) {
+      if (!_gm.htDone && _gm.timerSec >= gmHalfMax) {
+        if (_gmHasHuman) {
+          _gm.timerSec = gmHalfMax;
+          _gm._wallStart = Date.now();
+          _gm._secAtStart = gmHalfMax;
+          if (_gm.timerRunning) { clearInterval(_gm.timerInterval); _gm.timerRunning = false; }
+          gmRenderTimer();
+          return;
+        }
         _gmEnterHalftime();
         return;
       }
@@ -16390,6 +16683,16 @@
         🏁 FINALIZAR
       </button>
     </div>
+    <!-- Botón básico para SALIR del partido cuando ya terminó (petición
+         usuario 2026-05-17: tras "VER RESUMEN" había que forzar la
+         salida). Oculto en juego; visible al finalizar. Cierre
+         definitivo + vuelta al bracket del torneo si aplica. -->
+    <button id="gm-btn-exit" onclick="window.gmForceExitMatch()"
+      style="display:none;margin:0 8px 10px;width:calc(100% - 16px);padding:13px;border-radius:8px;
+             border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.07);color:#fff;
+             font-size:14px;font-weight:700;font-family:'Oswald',sans-serif;letter-spacing:2px;cursor:pointer;">
+      ✖ SALIR DEL PARTIDO
+    </button>
 
     <!-- Event panel (full-screen overlay, shown via display:flex) -->
     <div id="gm-event-panel">
@@ -16953,7 +17256,32 @@
   border-color:rgba(255,200,64,.55) !important;
   text-shadow:0 1px 2px rgba(0,0,0,.5);
 }
-#gm-btn-end:disabled{animation:none !important;}
+/* ── FINALIZAR · rojo brillante llamativo desde el min 80 ─────────
+   (petición usuario 2026-05-19, foto). Marca la fase final del
+   partido (80'..90+9) ANTES del matchOver / VER RESUMEN. Más
+   intenso que `.is-finishable` y con animación más rápida. */
+#gm-btn-end.is-near-end,
+#gm-btn-end.gm-end-moved.is-near-end{
+  background:linear-gradient(135deg,#c4001a,#ff2233 55%,#c4001a) !important;
+  border:2px solid #ff5566 !important;
+  color:#fff !important;
+  font-weight:900 !important;
+  font-size:14px !important;
+  letter-spacing:2px !important;
+  text-shadow:0 1px 3px rgba(0,0,0,.75) !important;
+  animation:gmNearEndPulse 1s ease-in-out infinite !important;
+}
+@keyframes gmNearEndPulse{
+  0%,100%{ box-shadow:0 0 12px rgba(255,40,52,.65), inset 0 0 8px rgba(255,255,255,.08); transform:scale(1); }
+  50%   { box-shadow:0 0 32px rgba(255,40,52,1), 0 0 56px rgba(255,40,52,.5), inset 0 0 12px rgba(255,255,255,.12); transform:scale(1.025); }
+}
+.ml-action-end.is-near-end{
+  background:linear-gradient(135deg,#c4001a,#ff2233 55%,#c4001a) !important;
+  color:#fff !important;
+  font-weight:900 !important;
+  animation:gmNearEndPulse 1s ease-in-out infinite !important;
+}
+#gm-btn-end:disabled,#gm-btn-end.gm-end-moved.is-near-end:disabled{animation:none !important;}
 /* ── Eventos del acta ────────────────────────────────────────── */
 .ml-evt-item{padding-left:10px!important;}
 .ml-evt-team{font-size:11px;color:rgba(255,255,255,.45);font-family:"Rajdhani",sans-serif;white-space:nowrap;}
@@ -20424,6 +20752,52 @@ window.goLiveMatches = function() {
   var ISRAMAX_INITIAL_CASH = 1300;
   var _isramaxSession = null; /* {userId, isGuest} en memoria */
 
+  /* ── Equipo ACTUAL del humano (2026-05-19) ───────────────────────
+     ISRAMAX_USERS trae un `team` HARDCODEADO. Cuando un humano cambia
+     de equipo en el editor (p.ej. Toñín pasa de Bayern a Liverpool),
+     la tarjeta seguía mostrando el viejo. La identidad ESTABLE del
+     humano es su emoji (`u.icon`); el equipo real es el que tenga ese
+     humanEmoji marcado isHuman en los ligaExt_*. Resolvemos por emoji
+     y caemos a `u.team` si no se encuentra. Memo 3 s para no escanear
+     localStorage en cada uno de los ~5 renders por pantalla. */
+  var _isrTeamMapCache = null, _isrTeamMapTs = 0;
+  function _isramaxStripEmoji(s){ return String(s||'').replace(/[\s ️]/g,'').trim(); }
+  function _isramaxTeamMap(){
+    var now = Date.now();
+    if (_isrTeamMapCache && (now - _isrTeamMapTs) < 3000) return _isrTeamMapCache;
+    var map = {};
+    try {
+      var pri = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion'];
+      var slugs = pri.slice();
+      for (var i=0;i<localStorage.length;i++){
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup')!==-1 || k.indexOf('_snap_')!==-1 || k.indexOf('_protected')!==-1) continue;
+        var sg = k.substring('ligaExt_'.length);
+        if (pri.indexOf(sg) === -1) slugs.push(sg);
+      }
+      for (var s=0;s<slugs.length;s++){
+        var raw = localStorage.getItem('ligaExt_'+slugs[s]); if (!raw) continue;
+        var d; try { d = JSON.parse(raw); } catch(_){ continue; }
+        if (!d || !Array.isArray(d.teams)) continue;
+        for (var t=0;t<d.teams.length;t++){
+          var tm = d.teams[t];
+          if (!tm || !tm.isHuman || !tm.name) continue;
+          var em = _isramaxStripEmoji(tm.humanEmoji);
+          if (em && !map[em]) map[em] = String(tm.name).trim(); /* prioridad: primero gana */
+        }
+      }
+    } catch(_){}
+    _isrTeamMapCache = map; _isrTeamMapTs = now;
+    return map;
+  }
+  function _isramaxTeam(u){
+    if (!u) return '';
+    var ic = _isramaxStripEmoji(u.icon);
+    var m = _isramaxTeamMap();
+    return (ic && m[ic]) ? m[ic] : u.team;
+  }
+
   function _isramaxLoad(){
     try {
       var raw = localStorage.getItem(ISRAMAX_KEY);
@@ -20609,7 +20983,7 @@ window.goLiveMatches = function() {
             + ' onclick="window._isramaxLogin&&window._isramaxLogin(\'' + u.id + '\')">'
             +   '<div class="isr-user-icon">' + u.icon + '</div>'
             +   '<div class="isr-user-name">' + u.name + '</div>'
-            +   '<div class="isr-user-team">' + u.team + '</div>'
+            +   '<div class="isr-user-team">' + _isramaxTeam(u) + '</div>'
             + '</div>';
     });
     html += '</div>';
@@ -20643,7 +21017,7 @@ window.goLiveMatches = function() {
       + '<div class="isr-login-card" style="--isr-c1:'+c1+';--isr-c2:'+c2+';--isr-c3:'+c3+';">'
       +   '<div class="isr-login-icon">' + u.icon + '</div>'
       +   '<div class="isr-login-name">' + u.name + '</div>'
-      +   '<div class="isr-login-team">' + u.team + '</div>'
+      +   '<div class="isr-login-team">' + _isramaxTeam(u) + '</div>'
       +   '<input id="isramax-pin" class="isr-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="PIN"/>'
       +   '<div id="isramax-pin-err" class="isr-pin-err"></div>'
       +   '<div class="isr-btn-row">'
@@ -20710,7 +21084,7 @@ window.goLiveMatches = function() {
       +     '<span style="font-size:34px;">' + u.icon + '</span>'
       +     '<div>'
       +       '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:26px;letter-spacing:2px;color:#fff;line-height:1;">' + u.name + '</div>'
-      +       '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.85);">' + u.team
+      +       '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.85);">' + _isramaxTeam(u)
       +         (_isramaxSession.isGuest ? ' · INVITADO' : ' · ADMIN') + '</div>'
       +     '</div>'
       +   '</div>'
@@ -20770,7 +21144,7 @@ window.goLiveMatches = function() {
      ─────────────────────────────────────────────────────── */
   function _isramaxUserTeam(userId){
     var u = _isramaxFindUser(userId);
-    return u ? u.team : '';
+    return u ? _isramaxTeam(u) : '';
   }
   function _isramaxScanDerbys(){
     /* Reusa _scanAllDerbies del módulo Derbys: lista todos los
@@ -20786,7 +21160,7 @@ window.goLiveMatches = function() {
   function _isramaxRenderMatchPick(){
     var u = _isramaxFindUser(_isramaxSession.userId);
     if (!u) return _isramaxRenderUsers();
-    var myTeam = u.team;
+    var myTeam = _isramaxTeam(u);
     var all = _isramaxScanDerbys();
     /* Filtros: estado pending o playing (no apostar a finalizados),
        y excluir partidos donde el propio user juegue. */
@@ -20799,7 +21173,7 @@ window.goLiveMatches = function() {
     var html = ''
       + '<button class="isr-back" onclick="window._isramaxRenderDashboard&&window._isramaxRenderDashboard()">◀ Volver al dashboard</button>'
       + '<h2>🎰 Elegir partido</h2>'
-      + '<div class="isr-sub">No puedes apostar partidos donde juega ' + u.team + '</div>';
+      + '<div class="isr-sub">No puedes apostar partidos donde juega ' + _isramaxTeam(u) + '</div>';
     if (!pickable.length){
       html += '<div class="isr-empty">No hay partidos H-vs-H disponibles para apostar.<br><small>Aparecerán aquí cuando el calendario tenga enfrentamientos pendientes entre humanos (excluyendo los tuyos).</small></div>';
     } else {
@@ -22470,6 +22844,47 @@ window.goLiveMatches = function() {
     setTimeout(_cleanupOverlays, 0);
     setTimeout(_cleanupOverlays, 300);
   });
+
+  /* 4. visibilitychange / focus / resume — RESUMEN DE PESTAÑA VIVA
+     ════════════════════════════════════════════════════════════════
+     Bug usuario 2026-05-18 (foto pantalla negra): "me salgo de la web
+     de railway e intento volver a la web que SIGUE ABIERTA y no me
+     abre, se queda oscuro; si recargo (F5) funciona pero no en la
+     pantalla que dejé antes de salir sin cerrar".
+
+     Causa: cuando sales a otra app / pantalla de inicio y vuelves a
+     una pestaña que el navegador mantuvo VIVA (no la descartó), NO se
+     dispara `pageshow` ni `DOMContentLoaded` ni `load` — solo
+     `visibilitychange` (hidden→visible) y `focus`. Los 3 mecanismos
+     de arriba no cubrían ese caso, así que un overlay fixed-fullscreen
+     huérfano (gm-modal/previa residual, o ninguna .screen .active)
+     se quedaba tapando todo → pantalla negra hasta recargar. F5
+     funcionaba porque dispara DOMContentLoaded → cleanup.
+
+     Fix: ejecutar el MISMO cleanup al volver a ser visible / recuperar
+     foco / resume del Page Lifecycle. El cleanup ya es idempotente y
+     PRESERVA el gm-modal de un live en curso (hasGm) y la previa
+     activa (previaShown) — ver _cleanupOverlays —, así que no
+     interfiere con el cronómetro ni con un flujo de partido vivo
+     (regla CLAUDE.md). Solo actúa sobre overlays HUÉRFANOS. */
+  function _cleanupOnResume(){
+    /* Solo al volver a estar VISIBLE (en hidden no hay nada que
+       arreglar y evitamos trabajo innecesario en background). */
+    try {
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+    } catch(_){}
+    setTimeout(_cleanupOverlays, 0);
+    setTimeout(_cleanupOverlays, 250);
+  }
+  try {
+    document.addEventListener('visibilitychange', function(){
+      if (document.visibilityState === 'visible') _cleanupOnResume();
+    }, false);
+    window.addEventListener('focus', _cleanupOnResume, false);
+    /* Page Lifecycle API: frozen → resume (Chrome móvil congela
+       pestañas en segundo plano y las "resucita" sin pageshow). */
+    document.addEventListener('resume', _cleanupOnResume, false);
+  } catch(_){}
 
   /* Exponer manualmente por si alguien quiere re-disparar. */
   window._cleanupBlackScreen = _cleanupOverlays;
@@ -24946,12 +25361,20 @@ document.addEventListener('DOMContentLoaded', function() {
       _visPct += Math.max(0.4, (_tgtPct - _visPct) * 0.16);
       if (_visPct > _tgtPct) _visPct = _tgtPct;
     } else {
-      /* Target alcanzado pero la tarea sigue (espera del server):
-         trickle asintótico hacia 99 — desacelera cuanto más alto. */
-      var cap = 99;
+      /* Target alcanzado pero la tarea sigue. ANTES el trickle subía
+         SIEMPRE hasta 99 → si el progreso REAL era bajo (p.ej. la
+         sim de 51 ligas reportando 6 % "Simulando Italia (3/51)")
+         la barra mentía mostrando 99 % y parecía "colgada en 99 %"
+         (foto usuario 2026-05-17). Ahora el trickle solo se adelanta
+         un MARGEN PEQUEÑO sobre el progreso real, así la barra
+         refleja la verdad: si la sim se atasca en la liga 3/51, se
+         ve ~12 %, no 99 %. Para tareas indeterminadas que igualmente
+         empujan el target alto (fake-progress 95 %) el margen las
+         deja cerca de 99 como antes. */
+      var cap = Math.min(99, _tgtPct + 8);
       if (_visPct < cap) {
         var room = cap - _visPct;
-        _visPct += Math.max(0.03, room * 0.012);
+        _visPct += Math.max(0.03, room * 0.05);
         if (_visPct > cap) _visPct = cap;
       }
     }
@@ -25047,7 +25470,16 @@ document.addEventListener('DOMContentLoaded', function() {
     _startAnim();
   }
   function progress(percent, sub){
-    if(!_shown) return;
+    /* NO dependas solo de `_shown`: si un run previo/duplicado dejó
+       `_shown=false` por desincronía pero el overlay sigue VISIBLE
+       (clase `show`), igual hay que registrar el progreso. Sin esto,
+       _tgtPct se quedaba en 0 y la barra clavada en el tope de trickle
+       (≈8 %) con el sub inicial PARA SIEMPRE — exactamente el bug
+       reportado ("se atasca en el 8%"). 2026-05-18. */
+    if(!_shown){
+      var _ovp = $('ftbol-load-ov');
+      if(!(_ovp && _ovp.classList && _ovp.classList.contains('show'))) return;
+    }
     var p = Math.max(0, Math.min(100, Math.round(Number(percent)||0)));
     /* Target monotónico — la barra visible la mueve `_animStep`
        suavemente; aquí solo fijamos a dónde tiene que llegar. */
@@ -25080,6 +25512,32 @@ document.addEventListener('DOMContentLoaded', function() {
     var minMs = _scale(opts.minMs != null ? opts.minMs : 600);
     var t0 = Date.now();
     return new Promise(function(resolve, reject){
+      var _settled = false;
+      function _finish(ok, val){
+        if (_settled) return;
+        _settled = true;
+        try { if (_wd) { clearTimeout(_wd); _wd = null; } } catch(_){}
+        try { hide(); } catch(_){}
+        if (ok) resolve(val); else reject(val);
+      }
+      /* ── WATCHDOG (2026-05-17) ───────────────────────────────────
+         FOTO usuario: la barra de "RESTO DE LIGAS / LIGA" se queda
+         clavada en 99 % "Generando jornadas…" y no avanza. Causa:
+         si el runner (sim de una liga) nunca resuelve su Promise
+         —por un cuelgue/excepción tragada en el trabajo síncrono—
+         el trickle sube a 99 (tope de diseño) y el overlay NO se
+         cierra JAMÁS, bloqueando toda la pantalla. Este watchdog
+         garantiza que el overlay SIEMPRE se cierra: pasado un tope
+         generoso, fuerza 100 % + hide + resolve para que la UI se
+         desbloquee y se vea lo que se haya simulado. El cierre real
+         del runner (si llega) queda neutralizado por `_settled`. */
+      var WATCHDOG_MS = Math.max(45000, (_scale(opts.minMs != null ? opts.minMs : 600)) + 90000);
+      var _wd = setTimeout(function(){
+        if (_settled) return;
+        try { console.warn('[ftbolLoader] watchdog: el runner no resolvió en '+WATCHDOG_MS+'ms — cerrando overlay para desbloquear la UI.'); } catch(_){}
+        try { progress(100, 'Completado'); } catch(_){}
+        setTimeout(function(){ _finish(true, undefined); }, 200);
+      }, WATCHDOG_MS);
       /* Damos un frame para que el overlay pinte ANTES del trabajo
          pesado — si no, navegadores que congelan el repaint dejarían
          la pantalla en blanco hasta el final. */
@@ -25087,29 +25545,163 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
           var p = runner({ progress: progress });
           Promise.resolve(p).then(function(res){
+            if (_settled) return;
             progress(100, 'Completado');
             var elapsed = Date.now() - t0;
             /* Mínimo 350 ms tras el 100 % para que la barra animada
                llegue visiblemente a 100 antes de ocultar (antes con
                wait=0 saltaba de ~95 a oculto sin verse el 100). */
             var wait = Math.max(350, minMs - elapsed);
-            setTimeout(function(){ hide(); resolve(res); }, wait);
+            setTimeout(function(){ _finish(true, res); }, wait);
           }, function(err){
-            hide(); reject(err);
+            try { console.error('[ftbolLoader]', err); } catch(_){}
+            _finish(false, err);
           });
         } catch(err){
-          hide();
           try { console.error('[ftbolLoader]', err); } catch(_){}
-          reject(err);
+          _finish(false, err);
         }
       }, 30);
     });
+  }
+
+  /* ── MODO 2º PLANO (decisión usuario 2026-05-19) ──────────────────
+     El overlay del balón a pantalla completa se quedaba clavado en
+     "8 % INICIANDO/PREPARANDO" en las simulaciones de ligas (fotos
+     usuario; ver historial _MATCH/loader). Decisión: las SIMS DE
+     LIGAS ya NO usan el overlay bloqueante — corren en 2º plano con
+     un aviso pequeño NO bloqueante (pointer-events:none, no tapa la
+     UI, imposible que "atrape" la pantalla) y refrescan solas al
+     terminar. `bgRun` respeta el MISMO contrato que `run`
+     (opts {title,sub,theme,minMs}, runner({progress})→Promise|void,
+     devuelve Promise, watchdog, SIEMPRE resuelve) para poder
+     sustituirlo 1:1 en los wrappers de liga sin tocar su lógica.
+     Los SORTEOS de competición (Copa/Champions/Previa/WildCard)
+     siguen con el overlay clásico — son rápidos y ahí sí se quiere
+     el gesto visual. */
+  function _bgToastEl(){
+    var el = document.getElementById('ftbol-bg-toast');
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'ftbol-bg-toast';
+      el.style.cssText = 'position:fixed;left:50%;bottom:22px;'
+        + 'transform:translateX(-50%);background:rgba(16,16,22,.94);'
+        + 'border:1px solid rgba(240,200,80,.45);border-radius:12px;'
+        + 'padding:10px 18px;color:#ffe2a0;'
+        + 'font-family:Rajdhani,system-ui,sans-serif;font-size:13px;'
+        + 'font-weight:600;letter-spacing:.4px;line-height:1.35;'
+        + 'max-width:86vw;text-align:center;'
+        + 'box-shadow:0 10px 30px rgba(0,0,0,.55);z-index:2147483630;'
+        + 'pointer-events:none;white-space:nowrap;overflow:hidden;'
+        + 'text-overflow:ellipsis;transition:opacity .25s;opacity:0;';
+      (document.body || document.documentElement).appendChild(el);
+      var _raf = (typeof requestAnimationFrame === 'function')
+        ? requestAnimationFrame : function(f){ return setTimeout(f,16); };
+      _raf(function(){ try { el.style.opacity = '1'; } catch(_){} });
+    }
+    return el;
+  }
+  function _bgToastSet(txt){
+    try { var e = _bgToastEl(); e.textContent = txt; } catch(_){}
+  }
+  function _bgToastDismiss(finalTxt, holdMs){
+    var e = document.getElementById('ftbol-bg-toast');
+    if(!e) return;
+    try { if(finalTxt != null) e.textContent = finalTxt; } catch(_){}
+    setTimeout(function(){
+      try {
+        e.style.opacity = '0';
+        setTimeout(function(){
+          try { if(e.parentNode) e.parentNode.removeChild(e); } catch(_){}
+        }, 320);
+      } catch(_){}
+    }, holdMs || 1500);
+  }
+  function bgRun(opts, runner){
+    opts = opts || {};
+    var title = String(opts.title || 'SIMULANDO');
+    var sub0  = String(opts.sub != null ? opts.sub : 'Preparando…');
+    var minMs = _scale(opts.minMs != null ? opts.minMs : 600);
+    var t0 = Date.now();
+    _bgToastSet('⚽ ' + title + ' · ' + sub0);
+    return new Promise(function(resolve, reject){
+      var settled = false, wd = null;
+      function _finish(ok, val){
+        if(settled) return;
+        settled = true;
+        try { if(wd){ clearTimeout(wd); wd = null; } } catch(_){}
+        if(ok){ _bgToastDismiss('✅ ' + title + ' · listo'); resolve(val); }
+        else  { _bgToastDismiss('⚠️ ' + title + ' · error (ver consola)'); reject(val); }
+      }
+      /* Watchdog: el aviso NO bloquea la UI, pero igualmente lo
+         retiramos solo si el runner nunca resolviera. */
+      var WD = Math.max(60000, minMs + 120000);
+      wd = setTimeout(function(){
+        if(settled) return;
+        try { console.warn('[ftbolBg] watchdog '+WD+'ms — el runner no resolvió; cierro aviso.'); } catch(_){}
+        _finish(true, undefined);
+      }, WD);
+      function prog(p, s){
+        p = Math.max(0, Math.min(100, Math.round(Number(p)||0)));
+        try { _bgToastSet('⚽ ' + title + ' · ' + String(s != null ? s : sub0) + '  ' + p + '%'); } catch(_){}
+      }
+      /* Un tick para que el aviso pinte antes del primer trabajo. */
+      setTimeout(function(){
+        try {
+          var r = runner({ progress: prog });
+          Promise.resolve(r).then(function(res){
+            if(settled) return;
+            prog(100, 'Hecho');
+            var wait = Math.max(250, minMs - (Date.now() - t0));
+            setTimeout(function(){ _finish(true, res); }, wait);
+          }, function(err){
+            try { console.error('[ftbolBg]', err); } catch(_){}
+            _finish(false, err);
+          });
+        } catch(err){
+          try { console.error('[ftbolBg]', err); } catch(_){}
+          _finish(false, err);
+        }
+      }, 20);
+    });
+  }
+
+  /* Aviso flotante independiente (id propio, NO colisiona con el
+     toast de `bgRun`). Para resúmenes tipo "✅ Simuladas 49 ligas". */
+  function bgNotice(text, holdMs){
+    try {
+      var el = document.createElement('div');
+      el.style.cssText = 'position:fixed;left:50%;bottom:64px;'
+        + 'transform:translateX(-50%);background:rgba(16,16,22,.95);'
+        + 'border:1px solid rgba(120,220,140,.5);border-radius:12px;'
+        + 'padding:11px 20px;color:#bff0c8;'
+        + 'font-family:Rajdhani,system-ui,sans-serif;font-size:13.5px;'
+        + 'font-weight:700;letter-spacing:.4px;line-height:1.35;'
+        + 'max-width:88vw;text-align:center;'
+        + 'box-shadow:0 10px 30px rgba(0,0,0,.55);z-index:2147483631;'
+        + 'pointer-events:none;transition:opacity .3s;opacity:0;';
+      el.textContent = String(text == null ? '' : text);
+      (document.body || document.documentElement).appendChild(el);
+      var _raf = (typeof requestAnimationFrame === 'function')
+        ? requestAnimationFrame : function(f){ return setTimeout(f,16); };
+      _raf(function(){ try { el.style.opacity = '1'; } catch(_){} });
+      setTimeout(function(){
+        try {
+          el.style.opacity = '0';
+          setTimeout(function(){
+            try { if(el.parentNode) el.parentNode.removeChild(el); } catch(_){}
+          }, 350);
+        } catch(_){}
+      }, holdMs || 4200);
+    } catch(_){}
   }
 
   window.ftbolLoaderShow = show;
   window.ftbolLoaderProgress = progress;
   window.ftbolLoaderHide = hide;
   window.ftbolLoaderRun = run;
+  window._ftbolBgRun = bgRun;
+  window._ftbolBgNotice = bgNotice;
   window.ftbolLoaderSetTheme = _setTheme;
   window.ftbolLoaderSpeed = SPEED;
   /* Helper expuesto para que los wrappers escalen sus propios timings
@@ -25153,7 +25745,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var scale = (typeof window.ftbolLoaderScale === 'function')
       ? window.ftbolLoaderScale
       : function(x){ return x; };
-    return window.ftbolLoaderRun({
+    /* opts.bg → modo 2º plano NO bloqueante (sims de LIGAS). Sin él
+       → overlay clásico del balón (sorteos de competición). */
+    var _runner = (opts.bg && typeof window._ftbolBgRun === 'function')
+      ? window._ftbolBgRun
+      : window.ftbolLoaderRun;
+    return _runner({
       title: opts.title, sub: opts.sub || 'Inicializando equipos…',
       theme: opts.theme, minMs: opts.minMs||1200
     }, function(ctx){
@@ -25225,12 +25822,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     window.simularJ138ConOverlay = function(){
-      if(typeof window.ftbolLoaderRun !== 'function' ||
+      var _bgRun = (typeof window._ftbolBgRun === 'function')
+        ? window._ftbolBgRun : window.ftbolLoaderRun;
+      if(typeof _bgRun !== 'function' ||
          typeof window.simularTodasJornadasIAAsync !== 'function'){
         if(typeof origSjia === 'function') origSjia();
         return;
       }
-      return window.ftbolLoaderRun(
+      return _bgRun(
         { title:'LIGA EA SPORTS · J1 → J38', sub:'Iniciando simulación…', theme:'liga-ea', minMs: 700 },
         function(ctx){
           return window.simularTodasJornadasIAAsync(function(pct, sub){
@@ -25250,7 +25849,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'LIGA HYPERMOTION', sub:'Preparando…', theme:'hyper', minMs:1400 },
+        { title:'LIGA HYPERMOTION', sub:'Preparando…', theme:'hyper', minMs:1400, bg:true },
         function(){ if(typeof origSeg === 'function') origSeg(); }
       ).then(function(){ _refreshOpenSquadAfterSim('liga-hypermotion'); });
     };
@@ -25261,7 +25860,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'PRIMERA FEDERACIÓN · G'+(n||1), sub:'Preparando…', theme:'primf', minMs:1300 },
+        { title:'PRIMERA FEDERACIÓN · G'+(n||1), sub:'Preparando…', theme:'primf', minMs:1300, bg:true },
         function(){ if(typeof origPg === 'function') origPg(n); }
       ).then(function(){ _refreshOpenSquadAfterSim('liga-primera-federacion'); });
     };
@@ -25272,7 +25871,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       return _runFakeProgress(
-        { title:'PRIMERA FEDERACIÓN · G1+G2', sub:'Preparando…', theme:'primf', minMs:1700,
+        { title:'PRIMERA FEDERACIÓN · G1+G2', sub:'Preparando…', theme:'primf', minMs:1700, bg:true,
           phases:[
             { pct:14, sub:'Cargando plantillas G1…', ms:140 },
             { pct:36, sub:'Simulando G1…',           ms:220 },
@@ -25292,12 +25891,14 @@ document.addEventListener('DOMContentLoaded', function() {
     var origSjiaSingle = window.simularJornadaIA;
     if(typeof origSjiaSingle === 'function'){
       window.simularJornadaIA = function(j){
-        if(typeof window.ftbolLoaderRun !== 'function'){
+        var _bgRunJ = (typeof window._ftbolBgRun === 'function')
+          ? window._ftbolBgRun : window.ftbolLoaderRun;
+        if(typeof _bgRunJ !== 'function'){
           return origSjiaSingle(j);
         }
         var _scaleFn = (typeof window.ftbolLoaderScale === 'function')
           ? window.ftbolLoaderScale : function(x){ return x; };
-        return window.ftbolLoaderRun(
+        return _bgRunJ(
           { title:'LIGA EA SPORTS · JORNADA '+j, sub:'Simulando partidos…', theme:'liga-ea', minMs:600 },
           function(ctx){
             return new Promise(function(resolve){
@@ -25370,7 +25971,7 @@ document.addEventListener('DOMContentLoaded', function() {
           if(ck) title = ck.replace(/-/g,' ').toUpperCase();
         } catch(_){}
         return _runFakeProgress(
-          { title: title, sub:'Preparando…', theme:'resto', minMs:1100,
+          { title: title, sub:'Preparando…', theme:'resto', minMs:1100, bg:true,
             phases:[
               { pct:22, sub:'Cargando plantillas…',     ms:130 },
               { pct:48, sub:'Generando jornadas…',      ms:180 },
@@ -29179,6 +29780,52 @@ document.addEventListener('DOMContentLoaded', function() {
     var b = parseInt(s.substr(4,2),16) || 0;
     return 'rgba('+r+','+g+','+b+','+a+')';
   }
+  /* ── Color REAL del escudo (local / visitante) ──────────────────
+     Para que la caja "AÑADIR EVENTO" tiña su mitad izquierda con el
+     color del escudo local y la derecha con el del visitante, leemos
+     el color dominante del propio escudo renderizado (no de una tabla
+     hardcodeada). Cache por nombre + URL: la extracción (fetch SVG /
+     canvas 24×24) corre como mucho 1 vez por equipo, sin observers ni
+     intervalos nuevos — respeta el precedente del cronómetro. */
+  var _CREST_COLOR_CACHE = {};
+  function _resolveShieldUrl(name, hintEl){
+    try {
+      if (hintEl){
+        var img = hintEl.tagName === 'IMG' ? hintEl : hintEl.querySelector('img');
+        if (img){
+          var s = img.getAttribute('src') || img.src || '';
+          if (s) return s;
+        }
+      }
+    } catch(_){}
+    try { if (typeof window.getTeamLogoUrl === 'function'){ var u = window.getTeamLogoUrl(name); if (u) return u; } } catch(_){}
+    try { if (typeof window.getLogoEquipo === 'function'){ var g = window.getLogoEquipo(name); if (g) return g; } } catch(_){}
+    return '';
+  }
+  function _crestPrimary(name, hintEl, cb){
+    if (!name){ cb(null); return; }
+    var cached = _CREST_COLOR_CACHE[name];
+    if (cached){ cb(cached); return; }
+    var tc = _teamColors(name);
+    var seed = (tc && (tc.bg || tc.primary)) || '#5a0010';
+    var url = _resolveShieldUrl(name, hintEl);
+    if (typeof window.extractColors !== 'function' || !url){
+      var fb = { primary: seed, secondary: seed };
+      _CREST_COLOR_CACHE[name] = fb; cb(fb); return;
+    }
+    try {
+      window.extractColors(url, seed, function(cols){
+        var p = (cols && cols[0]) || seed;
+        var s = (cols && cols[1]) || p;
+        var res = { primary: p, secondary: s };
+        _CREST_COLOR_CACHE[name] = res;
+        cb(res);
+      });
+    } catch(_){
+      var fb2 = { primary: seed, secondary: seed };
+      _CREST_COLOR_CACHE[name] = fb2; cb(fb2);
+    }
+  }
   function _applyCardTheme(wrap){
     if (!wrap || wrap._mlThemed) return;
     var mk = wrap.id.replace(/^mlw-/, '');
@@ -29186,21 +29833,37 @@ document.addEventListener('DOMContentLoaded', function() {
     if (comp){
       wrap.classList.add('is-comp-' + comp);
     }
-    /* Color del equipo local + visitante para AÑADIR EVENTO bicolor. */
+    /* AÑADIR EVENTO bicolor: izquierda = color del escudo LOCAL,
+       derecha = color del escudo VISITANTE. Color real del escudo
+       renderizado (no tabla hardcodeada). Pintamos con el seed y
+       repintamos al resolver la extracción del escudo. */
     var st = (typeof window._calMlSt === 'function') ? window._calMlSt(mk) : null;
     var home = st && st.home, away = st && st.away;
     if (home || away){
+      var shields = wrap.querySelectorAll('.ml-shield-wrap');
+      var hintH = shields[0] || null, hintA = shields[1] || null;
+      function _cardPaint(p1, p2, q1, q2){
+        wrap.style.setProperty('--team-a-1', _hex2rgba(p1, .92));
+        wrap.style.setProperty('--team-a-2', _hex2rgba(p2, .70));
+        wrap.style.setProperty('--team-b-1', _hex2rgba(q2, .70));
+        wrap.style.setProperty('--team-b-2', _hex2rgba(q1, .92));
+        wrap.setAttribute('data-team-colors', '1');
+      }
       var ca = _teamColors(home);
       var cb = _teamColors(away);
-      var p1 = (ca && ca.primary)   || '#3a0008';
-      var p2 = (ca && (ca.secondary || ca.primary)) || '#1a0004';
-      var q1 = (cb && cb.primary)   || '#3a0008';
-      var q2 = (cb && (cb.secondary || cb.primary)) || '#1a0004';
-      wrap.style.setProperty('--team-a-1', _hex2rgba(p1, .85));
-      wrap.style.setProperty('--team-a-2', _hex2rgba(p2, .55));
-      wrap.style.setProperty('--team-b-1', _hex2rgba(q2, .55));
-      wrap.style.setProperty('--team-b-2', _hex2rgba(q1, .85));
-      wrap.setAttribute('data-team-colors', '1');
+      _cardPaint((ca && (ca.bg || ca.primary)) || '#3a0008',
+                 (ca && (ca.secondary || ca.bg || ca.primary)) || '#1a0004',
+                 (cb && (cb.bg || cb.primary)) || '#3a0008',
+                 (cb && (cb.secondary || cb.bg || cb.primary)) || '#1a0004');
+      _crestPrimary(home, hintH, function(rh){
+        _crestPrimary(away, hintA, function(rA){
+          var ph = rh ? rh.primary : '#3a0008';
+          var ps = rh ? (rh.secondary || rh.primary) : '#1a0004';
+          var qh = rA ? rA.primary : '#3a0008';
+          var qs = rA ? (rA.secondary || rA.primary) : '#1a0004';
+          _cardPaint(ph, ps, qh, qs);
+        });
+      });
     }
     wrap._mlThemed = true;
   }
@@ -29430,33 +30093,46 @@ document.addEventListener('DOMContentLoaded', function() {
     prev.forEach(function(c){ modal.classList.remove(c); });
     if (comp) modal.classList.add('is-comp-' + comp);
     modal.setAttribute('data-comp', comp || '');
-    /* Colores de los equipos para el AÑADIR EVENTO bicolor.
-       Aplicamos los gradients INLINE al propio botón para evitar
-       problemas de specificity con el CSS del bundle. */
+    /* AÑADIR EVENTO bicolor: mitad IZQUIERDA = color del escudo
+       LOCAL, mitad DERECHA = color del escudo VISITANTE. Se lee el
+       color real del escudo renderizado (no de una tabla). Pintamos
+       primero con el seed para que nunca esté vacío y repintamos
+       cuando la extracción del escudo resuelve. INLINE en el botón
+       para vencer el `!important` del bundle CSS. */
+    function _gmPaint(pa, pb){
+      modal.style.setProperty('--team-a-1', _hex2rgba(pa, .95));
+      modal.style.setProperty('--team-a-2', _hex2rgba(pa, .72));
+      modal.style.setProperty('--team-b-1', _hex2rgba(pb, .72));
+      modal.style.setProperty('--team-b-2', _hex2rgba(pb, .95));
+      modal.setAttribute('data-team-colors', '1');
+      var addBtn = document.getElementById('gm-add-btn');
+      if (addBtn){
+        var grad = 'linear-gradient(90deg,'
+                 + _hex2rgba(pa, .95) + ' 0%,'
+                 + _hex2rgba(pa, .82) + ' 47%,'
+                 + _hex2rgba(pb, .82) + ' 53%,'
+                 + _hex2rgba(pb, .95) + ' 100%)';
+        addBtn.style.setProperty('background', grad, 'important');
+        addBtn.style.setProperty('border', '2px solid var(--comp-color, #ff3050)', 'important');
+        addBtn.style.setProperty('color', '#fff', 'important');
+        addBtn.style.setProperty('text-shadow', '0 1px 4px rgba(0,0,0,.85)', 'important');
+        addBtn.style.setProperty('font-weight', '900', 'important');
+      }
+    }
     var ca = _teamColors(t.home);
     var cb = _teamColors(t.away);
-    var pa = (ca && (ca.bg || ca.primary)) || '#5a0010';
-    var pb = (cb && (cb.bg || cb.primary)) || '#0a1a40';
-    modal.style.setProperty('--team-a-1', _hex2rgba(pa, .95));
-    modal.style.setProperty('--team-a-2', _hex2rgba(pa, .65));
-    modal.style.setProperty('--team-b-1', _hex2rgba(pb, .65));
-    modal.style.setProperty('--team-b-2', _hex2rgba(pb, .95));
-    modal.setAttribute('data-team-colors', '1');
-    /* También inline en el #gm-add-btn — combate el `!important` del
-       bundle CSS (línea 2237). */
-    var addBtn = document.getElementById('gm-add-btn');
-    if (addBtn){
-      var grad = 'linear-gradient(90deg,'
-               + _hex2rgba(pa, .95) + ' 0%,'
-               + _hex2rgba(pa, .65) + ' 48%,'
-               + _hex2rgba(pb, .65) + ' 52%,'
-               + _hex2rgba(pb, .95) + ' 100%)';
-      addBtn.style.setProperty('background', grad, 'important');
-      addBtn.style.setProperty('border', '2px solid var(--comp-color, #ff3050)', 'important');
-      addBtn.style.setProperty('color', '#fff', 'important');
-      addBtn.style.setProperty('text-shadow', '0 1px 4px rgba(0,0,0,.85)', 'important');
-      addBtn.style.setProperty('font-weight', '900', 'important');
-    }
+    _gmPaint((ca && (ca.bg || ca.primary)) || '#5a0010',
+             (cb && (cb.bg || cb.primary)) || '#0a1a40');
+    var hintA = document.getElementById('gm-team-a-name');
+    var hintB = document.getElementById('gm-team-b-name');
+    _crestPrimary(t.home, hintA, function(ra){
+      /* Si los equipos cambiaron antes de resolver, descartamos. */
+      if (modal._gmThemeSig !== sig) return;
+      _crestPrimary(t.away, hintB, function(rb){
+        if (modal._gmThemeSig !== sig) return;
+        _gmPaint(ra ? ra.primary : '#5a0010', rb ? rb.primary : '#0a1a40');
+      });
+    });
   }
   function _gmMoveFinalizarBtn(){
     var modal = document.getElementById('gm-modal');

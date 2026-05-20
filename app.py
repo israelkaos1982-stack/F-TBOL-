@@ -1867,6 +1867,33 @@ def _ensure_mundialito(data):
     return data
 
 
+def _purge_pre_june(data):
+    """La temporada arranca el 1 de Junio (regla del usuario, repetida
+    en varias iteraciones). Elimina del calendario CUALQUIER evento
+    cuya fecha parseable caiga antes de Junio (Ene–May). Idempotente."""
+    if not isinstance(data, dict):
+        return data
+    secs = data.get("sections")
+    if not isinstance(secs, list):
+        return data
+    for s in secs:
+        if not isinstance(s, dict):
+            continue
+        evs = s.get("events")
+        if not isinstance(evs, list):
+            continue
+        kept = []
+        for ev in evs:
+            if not isinstance(ev, dict):
+                continue
+            p = _parse_event_date(ev.get("date"))
+            # Si no parsea, lo mantenemos (no podemos saber el mes).
+            if p is None or p[0] >= 5:
+                kept.append(ev)
+        s["events"] = kept
+    return data
+
+
 def _calendario_normalize(data):
     """Asegura el esqueleto mínimo y los defaults de un dict de calendario."""
     if not isinstance(data, dict):
@@ -1875,6 +1902,7 @@ def _calendario_normalize(data):
     data.setdefault("season", "32-33")
     if not isinstance(data.get("sections"), list):
         data["sections"] = []
+    _purge_pre_june(data)
     _ensure_june_pretemp(data)
     _ensure_mundialito(data)
     return data
@@ -1923,11 +1951,22 @@ def load_calendario():
                 for s in _secs0
             )
             _mun_before = _mun_sig(data)
+            # Conteo total de eventos antes/después para detectar si la
+            # purga pre-Junio cambió la BD (persistimos la corrección).
+            _evs_before = sum(
+                len((s.get("events") or [])) for s in _secs0 if isinstance(s, dict)
+            )
             data = _calendario_normalize(data)
-            # Persistimos cuando se inyectó Junio o cuando el set de
-            # Mundialito cambió (p.ej. corrección de fechas), para que
-            # quede permanente y corregido en la BD.
-            if not had_june or _mun_before != _mun_sig(data):
+            _evs_after = sum(
+                len((s.get("events") or []))
+                for s in (data.get("sections") or []) if isinstance(s, dict)
+            )
+            # Persistimos cuando se inyectó Junio, cuando cambió el
+            # set Mundialito o cuando la purga pre-Junio recortó
+            # eventos — así la corrección queda permanente en la BD.
+            if (not had_june
+                    or _mun_before != _mun_sig(data)
+                    or _evs_before != _evs_after):
                 try:
                     _calendario_save_to_db(data)
                 except Exception:

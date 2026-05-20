@@ -1894,6 +1894,73 @@ def _purge_pre_june(data):
     return data
 
 
+# Fase Final SELECCIONES en MAYO (01–31). 9 partidos + 22 descansos
+# (sin entrenamientos). Petición usuario 2026-05-20: como Mayo no se
+# elimina del calendario, lo rellenamos con las fases finales de
+# selecciones. Días de partido cada 2 (01,03,05,…,17 May).
+_FASE_FINAL_MAY_MATCHES = [
+    (1,  "Grupo — J1",                 "🌧"),
+    (3,  "Grupo — J2",                 "☀️"),
+    (5,  "Grupo — J3",                 "☀️"),
+    (7,  "Grupo — J4",                 "☀️"),
+    (9,  "Repesca",                    "🌧"),
+    (11, "Octavos",                    "☀️"),
+    (13, "Cuartos",                    "☀️"),
+    (15, "Semifinal",                  "☀️"),
+    (17, "GRAN FINAL SELECCIONES 🏆",   "☀️"),
+]
+def _build_fase_final_may_events():
+    matches = {d: (n, w) for d, n, w in _FASE_FINAL_MAY_MATCHES}
+    out = []
+    for day in range(1, 32):
+        date = "%02d May" % day
+        if day in matches:
+            n, w = matches[day]
+            out.append({"id": "ffm-%02d" % day, "date": date,
+                        "icon": "🌍", "name": n, "weather": w})
+        else:
+            out.append({"id": "ffm-%02d" % day, "date": date,
+                        "icon": "💤", "name": "Descanso", "weather": "☀️"})
+    return out
+
+
+def _ensure_fase_final_may(data):
+    """Garantiza que la sección 'fase-final-sel' contiene EXACTAMENTE
+    los 31 eventos de Mayo (matches + descansos, sin entrenamientos)
+    y la coloca antes del bloque de Junio para que renderice primero
+    en el calendario. Idempotente."""
+    if not isinstance(data, dict):
+        return data
+    secs = data.get("sections")
+    if not isinstance(secs, list):
+        return data
+    target = None; idx = -1
+    for i, s in enumerate(secs):
+        if isinstance(s, dict) and s.get("id") == "fase-final-sel":
+            target = s; idx = i; break
+    if target is None:
+        target = {"id": "fase-final-sel",
+                  "name": "FASE FINAL SELECCIONES",
+                  "icon": "🌍", "variant": "selecciones", "events": []}
+        secs.insert(0, target); idx = 0
+    # Garantiza el set canónico de Mayo (idempotente por firma).
+    cur = target.get("events") or []
+    canon = _build_fase_final_may_events()
+    same = (len(cur) == len(canon) and all(
+        isinstance(a, dict) and a.get("date") == b["date"]
+        and a.get("name") == b["name"] for a, b in zip(cur, canon)))
+    if not same:
+        target["events"] = canon
+        target["name"] = "FASE FINAL SELECCIONES"
+        target["icon"] = "🌍"
+        target.setdefault("variant", "selecciones")
+    # Mueve la sección al inicio (antes de Junio) para orden cronológico.
+    if idx != 0:
+        secs.pop(idx)
+        secs.insert(0, target)
+    return data
+
+
 def _calendario_normalize(data):
     """Asegura el esqueleto mínimo y los defaults de un dict de calendario."""
     if not isinstance(data, dict):
@@ -1902,8 +1969,9 @@ def _calendario_normalize(data):
     data.setdefault("season", "32-33")
     if not isinstance(data.get("sections"), list):
         data["sections"] = []
-    _purge_pre_june(data)
+    # NO purgamos Mayo: lo rellenamos con la Fase Final de Selecciones.
     _ensure_june_pretemp(data)
+    _ensure_fase_final_may(data)
     _ensure_mundialito(data)
     return data
 

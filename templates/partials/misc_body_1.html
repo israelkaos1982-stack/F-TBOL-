@@ -2822,7 +2822,10 @@ window._showSimProgress = function(opts, onDone){
   }
   function _bootStage(){
     try {
-      _purgePreJuneDOM();
+      /* Ya NO purgamos Mayo: Mayo 01-31 está ocupado por la Fase
+         Final de Selecciones (matches + descansos, sin entrenamientos).
+         La pretemporada día-a-día sigue empezando el 1 de Junio
+         gracias al slice de _calRows / _clampDayIdx. */
       _applyPersistedInjuries();
       var d = _load();
       /* Si el cursor persistido apunta a pre-Junio, recolocar a 0

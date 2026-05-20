@@ -117,20 +117,27 @@
     }
   </style>
   <script>
-    /* Splash auto-hide: cubre el flash localStorage→server hydration.
-       2026-05-20: el timeout fijo de 1.8 s NO bastaba — el usuario
-       seguía viendo el escudo viejo (Bayern donde debe ir Liverpool,
-       PSG sin escudo) durante varios segundos tras ocultarse el
-       splash. La hidratación real ocurre cuando responde el primer
-       GET a /api/liga-ext/* (que devuelve el squad actualizado del
-       server). Patcheamos window.fetch ANTES de que cargue el bundle
-       para detectar la respuesta y esperar 900 ms extra a que el DOM
-       se re-renderice. Caps: mínimo 1500 ms (no flashear), máximo
-       5000 ms (no atascarse si no hay red). */
+    /* Splash auto-hide atado a window.load (= la barra azul de carga
+       del navegador desaparece). Petición usuario 2026-05-20: "que
+       salga todo el tiempo hasta que la barra azul de arriba esté
+       completa para que merja y esté hidratado todo lo actual".
+
+       Flujo:
+       - El splash se queda visible mientras la barra azul del browser
+         está activa (recursos cargando, fetches en vuelo, parsing).
+       - Cuando dispara window.load (todos los assets descargados) se
+         programa el hide() tras un grace de 1200 ms para que la
+         hidratación localStorage→server (los GET a /api/liga-ext/* y
+         /api/kv/*) tengan margen a re-renderizar el DOM con datos
+         frescos antes de quitar la cortina.
+       - Caps: mínimo 1500 ms (no flashear ultra rápido aunque todo
+         esté en caché) y máximo 25000 ms (backstop por si la red se
+         atasca o un asset no llega — no dejar al usuario clavado).
+       - Tap/click cierra antes (no atasca). */
     (function(){
-      var MIN_MS    = (typeof window._BOOT_SPLASH_MIN_MS  === 'number') ? window._BOOT_SPLASH_MIN_MS  : 1500;
-      var GRACE_MS  = (typeof window._BOOT_SPLASH_GRACE_MS=== 'number') ? window._BOOT_SPLASH_GRACE_MS:  900;
-      var MAX_MS    = (typeof window._BOOT_SPLASH_MAX_MS  === 'number') ? window._BOOT_SPLASH_MAX_MS  : 5000;
+      var MIN_MS   = (typeof window._BOOT_SPLASH_MIN_MS   === 'number') ? window._BOOT_SPLASH_MIN_MS   :  1500;
+      var GRACE_MS = (typeof window._BOOT_SPLASH_GRACE_MS === 'number') ? window._BOOT_SPLASH_GRACE_MS :  1200;
+      var MAX_MS   = (typeof window._BOOT_SPLASH_MAX_MS   === 'number') ? window._BOOT_SPLASH_MAX_MS   : 25000;
       var el = document.getElementById('boot-splash');
       if (!el) return;
       var hidden = false;
@@ -143,36 +150,21 @@
         el.classList.add('hide');
         setTimeout(function(){ if (el && el.parentNode) el.parentNode.removeChild(el); }, 380);
       }
-      /* Tap-to-close (para no atascar al usuario si la app va lenta). */
+      /* Tap-to-close (no atascar al usuario si la red va muy lenta). */
       el.addEventListener('click', hide, { once:true });
       el.addEventListener('touchend', hide, { once:true });
 
-      /* Monkey-patch fetch ANTES del bundle para detectar el primer
-         GET a /api/liga-ext/* (= el squad del server llegó). */
-      if (typeof window.fetch === 'function') {
-        var origFetch = window.fetch;
-        var hydrateScheduled = false;
-        window.fetch = function(input, init){
-          var url = (typeof input === 'string') ? input : (input && input.url) || '';
-          var method = (init && init.method) ? String(init.method).toUpperCase() : 'GET';
-          var p = origFetch.apply(this, arguments);
-          try {
-            if (!hydrateScheduled && method === 'GET'
-                && (url.indexOf('/api/liga-ext') !== -1
-                    || url.indexOf('/api/kv/menu_home_v1') !== -1
-                    || url.indexOf('/api/kv/comp_icons_v1') !== -1)) {
-              hydrateScheduled = true;
-              p.then(function(){ setTimeout(hide, GRACE_MS); })
-               .catch(function(){ hydrateScheduled = false; });
-            }
-          } catch(_){}
-          return p;
-        };
+      /* Trigger principal: window.load + GRACE_MS. */
+      function _scheduleAfterLoad(){ setTimeout(hide, GRACE_MS); }
+      if (document.readyState === 'complete') {
+        _scheduleAfterLoad();
+      } else {
+        window.addEventListener('load', _scheduleAfterLoad, { once:true });
       }
       /* Backstop absoluto. */
       setTimeout(hide, MAX_MS);
-      /* Permite que cualquier flujo crítico (un partido live en marcha
-         que se está restaurando) lo oculte antes via _bootSplashHide(). */
+      /* Hook por si un flujo crítico (ej. partido live restaurándose
+         del wprev_state_v1) quiere ocultarlo antes via _bootSplashHide(). */
       window._bootSplashHide = hide;
     })();
   </script>

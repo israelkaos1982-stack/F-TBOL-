@@ -30458,7 +30458,11 @@ Tottenham
     document.getElementById('me-money').value = (o.money != null) ? o.money : curM;
     document.getElementById('me-money-target').value = mTgt;
     document.getElementById('me-pi').value = (o.pi != null) ? o.pi : curP;
-    /* Prefill Nivel / Forma yo / Forma Rival desde menu_home_v1 */
+    /* Prefill Nivel / Forma yo / Forma Rival desde menu_home_v1 y, como
+       fallback, desde team_season_form_v1 (clave que en versiones
+       anteriores escribía el bloque duplicado inyectado en este modal,
+       hoy eliminado). Así un admin que ya había configurado la forma
+       por el bloque viejo no ve los selectores vacíos al reabrir. */
     try {
       var rawM = localStorage.getItem('menu_home_v1');
       var ovM = {};
@@ -30466,13 +30470,14 @@ Tottenham
         var dM = JSON.parse(rawM);
         ovM = (dM && dM.ov && dM.ov['go:s-munich']) || {};
       }
+      var sfM = (typeof window._teamSeasonForm === 'function') ? (window._teamSeasonForm() || {}) : {};
       function _markSel(gridId, value){
         var g = document.getElementById(gridId); if (!g) return;
         g.querySelectorAll('.me-pick-btn').forEach(function(b){ b.classList.toggle('sel', b.getAttribute('data-v') === String(value||'')); });
       }
-      _markSel('me-level-grid',  ovM.level || '');
-      _markSel('me-formyo-grid', ovM.formState || '');
-      _markSel('me-formriv-grid', ovM.formRival || '');
+      _markSel('me-level-grid',  ovM.level     || sfM.nivel  || '');
+      _markSel('me-formyo-grid', ovM.formState || sfM.yo     || '');
+      _markSel('me-formriv-grid', ovM.formRival || sfM.rival || '');
     } catch(_){}
     document.getElementById('munich-edit-ov').classList.add('show');
   };
@@ -30555,6 +30560,23 @@ Tottenham
             credentials:'same-origin', body: JSON.stringify({ value: dMH })
           }).catch(function(){});
         } catch(__){}
+      } catch(_){}
+      /* 2026-05-20: persistir ADEMÁS a `team_season_form_v1` para que el
+         motor de forma de cada partido (_wrapPRFS en el IIFE de SEASON
+         FORM) recoja los valores escogidos arriba. Antes existía un
+         bloque duplicado YO/RIVAL/NIVEL inyectado abajo que auto-guardaba
+         por click; ahora ese bloque se eliminó y ESTE save unifica
+         ambas paletas en un único ✅ Guardar. */
+      try {
+        var sf = (typeof window._teamSeasonForm === 'function')
+          ? (window._teamSeasonForm() || {})
+          : { yo:'🎲', rival:'🎲', nivel:'Crack' };
+        var ICONS_FORM = ['⬆️','↗️','🎲','↘️','⬇️'];
+        if (pickYo  !== null && ICONS_FORM.indexOf(pickYo)  >= 0) sf.yo    = pickYo;
+        if (pickRiv !== null && ICONS_FORM.indexOf(pickRiv) >= 0) sf.rival = pickRiv;
+        if (pickLvl !== null) sf.nivel = pickLvl || 'Crack';
+        if (typeof window._teamSeasonFormSave === 'function') window._teamSeasonFormSave(sf);
+        if (typeof window._teamSeasonFormRenderHeader === 'function') window._teamSeasonFormRenderHeader();
       } catch(_){}
     }
     /* Sanity check: si TODOS los campos del HUD son null Y no se tocó
@@ -34581,7 +34603,10 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         if (p && typeof p === 'object'){
           if (ICONS.indexOf(p.yo)    >= 0) d.yo    = p.yo;
           if (ICONS.indexOf(p.rival) >= 0) d.rival = p.rival;
-          if (LEVELS.indexOf(p.nivel) >= 0) d.nivel = p.nivel;
+          /* `nivel` acepta cualquier string no vacío — el editor 🖍 del
+             hub guarda 'CRACK' / 'LEYENDA' / 'ESTRELLA' (paleta del
+             "Nivel del equipo"), no solo Normal/Duro/Crack/Leyenda. */
+          if (p.nivel != null && String(p.nivel).trim()) d.nivel = String(p.nivel).trim();
         }
       }
     } catch(_){}
@@ -34592,6 +34617,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
   }
   window._teamSeasonForm = function(){ return _load(); };
+  /* Exponer save + render para que el ✅ Guardar del editor 🖍 (que
+     vive en otro IIFE en este mismo archivo) pueda persistir y
+     repintar la cabecera del hub en una sola operación. */
+  window._teamSeasonFormSave = function(d){ _save(d); };
+  window._teamSeasonFormRenderHeader = function(){ try { _renderHeader(); } catch(_){} };
 
   /* ── Indicadores en la cabecera del hub (colores del Liverpool) ── */
   function _renderHeader(){
@@ -34642,46 +34672,22 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     });
   }
   function _injectModal(){
-    var box = document.querySelector('#munich-edit-ov .me-box');
-    if (!box) return;
-    if (box.querySelector('.me-form-block')){ _syncModal(); return; }
-    var acts = box.querySelector('.me-actions');
-    var blk = document.createElement('div');
-    blk.className = 'me-form-block';
-    function grp(which, label){
-      var h = '<div class="mfb-lbl">' + label + '</div><div class="mfb-opts" data-which="' + which + '">';
-      ICONS.forEach(function(ic){
-        h += '<button type="button" class="mfb-b" data-ic="' + ic + '" title="' + NAMES[ic] + '">' + ic + '</button>';
-      });
-      return h + '</div>';
-    }
-    function grpLv(){
-      var h = '<div class="mfb-lbl">🎮 NIVEL (dificultad)</div><div class="mfb-opts" data-which="nivel">';
-      LEVELS.forEach(function(lv){
-        h += '<button type="button" class="mfb-b" data-ic="' + lv + '" style="font-size:12px;font-family:Oswald,sans-serif;letter-spacing:1px;">' + lv + '</button>';
-      });
-      return h + '</div>';
-    }
-    blk.innerHTML =
-      '<div class="mfb-lbl" style="color:#ffb8c4;letter-spacing:2px;">⚡ ESTADO DE FORMA · TODA LA TEMPORADA</div>'
-    + grp('yo', '🟥 YO (mis jugadores)')
-    + grp('rival', '⬇️ RIVAL')
-    + grpLv();
-    if (acts && acts.parentNode) acts.parentNode.insertBefore(blk, acts);
-    else box.appendChild(blk);
-    blk.addEventListener('click', function(ev){
-      var b = ev.target && ev.target.closest && ev.target.closest('.mfb-b');
-      if (!b) return;
-      ev.preventDefault();
-      var which = b.parentNode.getAttribute('data-which'), val = b.getAttribute('data-ic');
-      var s = _load();
-      if (which === 'yo') s.yo = val;
-      else if (which === 'rival') s.rival = val;
-      else if (which === 'nivel') s.nivel = val;
-      _save(s);
-      _syncModal(); _renderHeader();
-    }, true);
-    _syncModal();
+    /* 2026-05-20 (UX): el bloque "⚡ ESTADO DE FORMA · TODA LA TEMPORADA"
+       que esta función inyectaba (YO / RIVAL / NIVEL) duplicaba los
+       controles que el modal ya trae arriba ("Forma yo" / "Forma Rival"
+       / "Nivel del equipo") y, encima, auto-guardaba en cada click sin
+       botón visible — confuso para el usuario. Lo eliminamos: las
+       picks de arriba ahora persisten también a `team_season_form_v1`
+       cuando se pulsa el ✅ Guardar del modal, así que la forma
+       sigue aplicándose a cada partido vía _wrapPRFS sin necesidad
+       del bloque inyectado. Si una versión anterior dejó el bloque
+       en el DOM, lo borramos al pasar para que no se vea. */
+    try {
+      var box = document.querySelector('#munich-edit-ov .me-box');
+      if (!box) return;
+      var stale = box.querySelector('.me-form-block');
+      if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+    } catch(_){}
   }
 
   /* ── Aplicar a CADA partido (cualquier competición / local o

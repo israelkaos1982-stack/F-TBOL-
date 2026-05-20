@@ -18009,8 +18009,21 @@
     if (!host) return;
     var rows = host.querySelectorAll('.ag-r');
     if (!rows.length) return;
-    var idx = _currentDayIdx();
+    /* La temporada arranca el 1 de Junio: saltamos cualquier fila
+       pre-junio del DOM para que el índice del cursor de
+       pretemporada (que ya está recortado a Junio+) coincida con la
+       fila que pintamos. */
+    var _SP = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
+    function _mon(d){ var p=String(d||'').trim().split(/\s+/); if(p.length<2) return -1;
+      var m=_SP[(p[1]||'').toLowerCase().replace(/\./g,'').slice(0,3)]; return (m==null)?-1:m; }
+    var firstJun = 0;
+    for (var i = 0; i < rows.length; i++){
+      var de = rows[i].querySelector('.ag-date');
+      if (de && _mon(de.textContent) >= 5){ firstJun = i; break; }
+    }
+    var idx = _currentDayIdx() + firstJun;
     if (idx > rows.length - 1) idx = rows.length - 1;
+    if (idx < firstJun) idx = firstJun;
     var target = rows[idx];
     if (!target) return;
     target.classList.add('ag-today-marker');

@@ -2422,6 +2422,23 @@ def _lx_merge_teams(old_data, new_data):
             _consider(t, True)
 
     # Unión de deletedTeamNames y poda de equipos borrados.
+    #
+    # Regla "add trumps delete" (2026-05-20, petición usuario "fuerza
+    # que un equipo creado se hidrate y se quede para siempre excepto
+    # cuando lo elimine manualmente"): si un equipo aparece en el
+    # `teams` ENTRANTE, ese add explícito gana sobre cualquier registro
+    # de borrado previo. El cliente ya limpia `deletedTeamNames` al
+    # guardar un equipo (lextSaveTeam → `data.deletedTeamNames =
+    # ...filter(...)`), pero el servidor unía ambas listas y volvía a
+    # podar el equipo, haciéndolo desaparecer en cada sync — bug visto
+    # con Coventry City e Ipswich Town en la liga inglesa.
+    incoming_names = set()
+    if isinstance(new_teams, list):
+        for t in new_teams:
+            if isinstance(t, dict):
+                nm = _lx_norm_name(t.get("name"))
+                if nm:
+                    incoming_names.add(nm)
     del_set = set()
     for src in (old_data if isinstance(old_data, dict) else {},
                 new_data):
@@ -2429,7 +2446,7 @@ def _lx_merge_teams(old_data, new_data):
         if isinstance(dn, list):
             for nm in dn:
                 n = _lx_norm_name(nm)
-                if n:
+                if n and n not in incoming_names:
                     del_set.add(n)
 
     out_teams = []

@@ -18289,21 +18289,23 @@
     if (!host) return;
     var rows = host.querySelectorAll('.ag-r');
     if (!rows.length) return;
-    /* La temporada arranca el 1 de Junio: saltamos cualquier fila
-       pre-junio del DOM para que el índice del cursor de
-       pretemporada (que ya está recortado a Junio+) coincida con la
-       fila que pintamos. */
+    /* La temporada arranca el 1 de MAYO (sección PRE-VERANO con el
+       Mundial de Selecciones, añadida 2026-05-20). Saltamos cualquier
+       fila pre-mayo del DOM para que el índice del cursor de
+       pretemporada (que ya está recortado a Mayo+) coincida con la
+       fila que pintamos. Antes el ancla era Junio (`>= 5`); ahora
+       Mayo (`>= 4`) para que el borde rosa arranque en 01 May. */
     var _SP = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
     function _mon(d){ var p=String(d||'').trim().split(/\s+/); if(p.length<2) return -1;
       var m=_SP[(p[1]||'').toLowerCase().replace(/\./g,'').slice(0,3)]; return (m==null)?-1:m; }
-    var firstJun = 0;
+    var firstMay = 0;
     for (var i = 0; i < rows.length; i++){
       var de = rows[i].querySelector('.ag-date');
-      if (de && _mon(de.textContent) >= 5){ firstJun = i; break; }
+      if (de && _mon(de.textContent) >= 4){ firstMay = i; break; }
     }
-    var idx = _currentDayIdx() + firstJun;
+    var idx = _currentDayIdx() + firstMay;
     if (idx > rows.length - 1) idx = rows.length - 1;
-    if (idx < firstJun) idx = firstJun;
+    if (idx < firstMay) idx = firstMay;
     var target = rows[idx];
     if (!target) return;
     target.classList.add('ag-today-marker');
@@ -28458,7 +28460,17 @@ document.addEventListener('DOMContentLoaded', function() {
     'wprev_to_europa_v1',            /* 22 → Europa League */
     'wprev_r1_to_conference_v1',     /* 30 → Conference League */
     'oq_to_conference_v1',           /* legacy fallback */
-    'wc_to_conference_v1'            /* legacy fallback */
+    'wc_to_conference_v1',           /* legacy fallback */
+    /* 2026-05-20 (petición usuario): preferencias del calendario del
+       equipo humano deben persistir para siempre — solo cambian
+       cuando el admin las edita a mano. Antes vivían SOLO en
+       localStorage → se perdían al cambiar de dispositivo, limpiar
+       caché o pasar de incógnito. Ahora se replican al server igual
+       que el resto del estado compartido (last-write-wins, local
+       gana en empate). */
+    'bayern_calendar_comps_v1',      /* selección de competiciones del modal */
+    'bayern_calendar_title_v1',      /* título del calendario ("LIVERPOOL", etc.) */
+    'bayern_cal_v2'                  /* add/edit/delete de eventos del calendario */
   ];
 
   function _readLs(k){

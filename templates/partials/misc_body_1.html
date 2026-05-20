@@ -2434,9 +2434,9 @@ window._showSimProgress = function(opts, onDone){
   if (window.__PS_READY) return;
   window.__PS_READY = true;
 
-  var KEY = 'bayern_preseason_v2';   /* bump: temporada empieza 01 Jun */
+  var KEY = 'bayern_preseason_v2';   /* nombre legacy; temporada empieza 01 May (PRE-VERANO) 2026-05-20 */
   /* Limpieza one-shot del store viejo (apuntaba a un calendario con
-     filas pre-Junio). Así el cursor arranca limpio en 01 Jun. */
+     filas pre-Mayo). Así el cursor arranca limpio en 01 May. */
   try { localStorage.removeItem('bayern_preseason_v1'); } catch(_){}
   var BAYERN_SHIELD = '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg';
   var FALLBACK_SHIELD = '/static/img/escudos-fallback/estepona.svg';
@@ -2501,19 +2501,17 @@ window._showSimProgress = function(opts, onDone){
     try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
   }
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  /* Relabel SOLO VISUAL de la pretemporada a un mes antes (Jul→Jun…),
-     petición usuario "que empiece el 1 de junio". NO toca el
-     calendario real ni las claves (done/rivals/mk/sig usan la fecha
-     real). Si no parsea, devuelve el texto original. */
+  /* Antes (hist. 2026-04): relabel SOLO VISUAL de la pretemporada a un
+     mes antes (Jul→Jun…) porque el calendario almacenado arrancaba en
+     Julio pero el usuario quería verlo desde Junio. Tras añadir la
+     sección PRE-VERANO con eventos reales de Mayo (2026-05-20) el
+     calendario almacenado ya tiene la fecha que toca ("01 May", "01
+     Jun"…) — el shift sobra y, peor, restaba un mes extra (mostraba
+     "01 Abr" cuando el cursor estaba en "01 May"). Pass-through: si la
+     fecha está vacía devolvemos lo que llegue. */
   var _PS_MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   function _psShowDate(s){
-    s=String(s==null?'':s);
-    var m=s.match(/(\d{1,2})\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]{3,})/);
-    if(!m) return s;
-    var mon=m[2].slice(0,3).toLowerCase(), i=-1;
-    for(var k=0;k<_PS_MES.length;k++){ if(_PS_MES[k].toLowerCase()===mon){ i=k; break; } }
-    if(i<0) return s;
-    return m[1]+' '+_PS_MES[(i-1+12)%12];
+    return String(s == null ? '' : s);
   }
   try{ window._psShowDate=_psShowDate; }catch(_){}
 
@@ -2567,13 +2565,16 @@ window._showSimProgress = function(opts, onDone){
                : 'match';
       out.push({ date:date, label:lbl, icon:ico, weather:wx||'☀️', type:type, cls:cls });
     });
-    /* La temporada arranca el 1 de Junio: recortamos cualquier fila
-       pre-junio del calendario antes de exponerla al motor día a día,
-       así la card del hub nunca puede mostrar "01 May" aunque queden
-       eventos antiguos en el DOM. */
+    /* La temporada arranca el 1 de MAYO (sección PRE-VERANO con el
+       Mundial de Selecciones): recortamos cualquier fila pre-mayo del
+       calendario antes de exponerla al motor día a día, así la card
+       del hub nunca puede mostrar "01 Abr" aunque queden eventos
+       antiguos en el DOM. Antes el corte era en Junio (`>= 5`); tras
+       añadir Preverano-Mayo a la semilla (2026-05-20) lo bajamos a
+       Mayo (`>= 4`) para que el cursor arranque en 01 May. */
     var fj = 0;
     for (var i = 0; i < out.length; i++){
-      if (_psMonth(out[i].date) >= 5){ fj = i; break; }
+      if (_psMonth(out[i].date) >= 4){ fj = i; break; }
     }
     if (fj > 0) out = out.slice(fj);
     if (out.length) _ROWS_CACHE = out;
@@ -2994,12 +2995,13 @@ window._showSimProgress = function(opts, onDone){
     var m = _PS_MON[p[1].toLowerCase().replace(/\./g,'').slice(0,3)];
     return (m == null) ? -1 : m;
   }
-  /* La temporada ARRANCA el 1 de junio (bloque de Junio al inicio
-     del calendario). Nunca empezamos antes de la primera fila de
-     Junio: si el cursor quedó en una fila pre-junio (estado viejo,
-     p.ej. "03 May") lo recolocamos al inicio de temporada. */
+  /* La temporada ARRANCA el 1 de MAYO (sección PRE-VERANO con el
+     Mundial de Selecciones, añadida 2026-05-20). Nunca empezamos
+     antes de la primera fila de Mayo: si el cursor quedó en una fila
+     pre-mayo (estado viejo, p.ej. "29 Abr") lo recolocamos al inicio
+     de temporada. */
   function _seasonStartIdx(rows){
-    for (var i=0;i<rows.length;i++){ if (_psMonth(rows[i].date) >= 5) return i; }
+    for (var i=0;i<rows.length;i++){ if (_psMonth(rows[i].date) >= 4) return i; }
     return 0;
   }
   function _clampDayIdx(rows, raw){
@@ -3069,11 +3071,12 @@ window._showSimProgress = function(opts, onDone){
      y _advance() tras resolver cada día. Exponemos _render para el
      hub y un pre-render por si el torneo ya estaba elegido al cargar. */
   window._psRender = _render;
-  /* Purga BRUTA pre-Junio en el DOM del calendario (cliente). Si el
-     servidor todavía sirve filas pre-junio (BD vieja sin migrar,
+  /* Purga BRUTA pre-Mayo en el DOM del calendario (cliente). Si el
+     servidor todavía sirve filas pre-mayo (BD vieja sin migrar,
      deploy retrasado), las eliminamos físicamente del #ag-content y
      #ag-content-bayern para que NADIE (state.events, _calRows,
-     marcador, previa…) pueda mostrarlas. Idempotente, barato. */
+     marcador, previa…) pueda mostrarlas. Idempotente, barato.
+     2026-05-20: bajado de Junio a Mayo (sección PRE-VERANO). */
   function _purgePreJuneDOM(){
     var hosts = ['ag-content','ag-content-bayern'];
     hosts.forEach(function(id){
@@ -3082,7 +3085,7 @@ window._showSimProgress = function(opts, onDone){
       h.querySelectorAll('.ag-r').forEach(function(r){
         var de = r.querySelector('.ag-date');
         var m  = _psMonth(de ? de.textContent : '');
-        if (m >= 0 && m < 5) r.parentNode && r.parentNode.removeChild(r);
+        if (m >= 0 && m < 4) r.parentNode && r.parentNode.removeChild(r);
       });
       /* Borra cabeceras de sección que se quedaron sin eventos. */
       h.querySelectorAll('.ag-season[data-section-id]').forEach(function(hdr){
@@ -3108,20 +3111,20 @@ window._showSimProgress = function(opts, onDone){
   }
   function _bootStage(){
     try {
-      /* Ya NO purgamos Mayo: Mayo 01-31 está ocupado por la Fase
-         Final de Selecciones (matches + descansos, sin entrenamientos).
-         La pretemporada día-a-día sigue empezando el 1 de Junio
-         gracias al slice de _calRows / _clampDayIdx. */
+      /* Ya NO purgamos Mayo: Mayo 01-31 está ocupado por la sección
+         PRE-VERANO (Mundial de Selecciones + descansos). La
+         pretemporada día-a-día empieza el 1 de MAYO gracias al slice
+         de _calRows / _clampDayIdx (`>= 4`). 2026-05-20. */
       _applyPersistedInjuries();
       var d = _load();
-      /* Si el cursor persistido apunta a pre-Junio, recolocar a 0
-         (con el slice de _calRows ya es Junio). */
+      /* Si el cursor persistido apunta a pre-Mayo, recolocar a 0
+         (con el slice de _calRows ya es Mayo). */
       if (d && (parseInt(d.dayIdx,10)||0) !== 0){
         var rows = _calRows();
         if (rows.length){
-          var firstJun = 0;
-          for (var i=0;i<rows.length;i++){ if (_psMonth(rows[i].date)>=5){ firstJun=i; break; } }
-          if (parseInt(d.dayIdx,10) < firstJun){ d.dayIdx = 0; _save(d); }
+          var firstMay = 0;
+          for (var i=0;i<rows.length;i++){ if (_psMonth(rows[i].date)>=4){ firstMay=i; break; } }
+          if (parseInt(d.dayIdx,10) < firstMay){ d.dayIdx = 0; _save(d); }
         }
       }
       if (d && d.tour) _render();
@@ -30208,7 +30211,7 @@ Tottenham
   <button class="hub-card hub-card-calendario" onclick="window._bayernCalOpen?window._bayernCalOpen():(function(){window._agendaBackTo='s-munich';window._bayernCalContext=true;go('s-agenda');})()">
     <span class="hub-calendario-emoji">📅</span>
     <span class="hub-calendario-title">CALENDARIO</span>
-    <span class="hub-calendario-sub" id="munich-cal-fecha">01 Jun</span>
+    <span class="hub-calendario-sub" id="munich-cal-fecha">01 May</span>
   </button>
   <button class="hub-card hub-card-isramax" onclick="window._isramaxOpen&&window._isramaxOpen()">
     <span class="hub-isramax-i">I</span>
@@ -34004,23 +34007,24 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        no hay events, default "01 Jul" (inicio de temporada). */
     var calFechaEl = getEl('munich-cal-fecha');
     if (calFechaEl) {
-      /* La temporada arranca el 1 de Junio. Usamos SIEMPRE el cursor
-         de pretemporada; si por lo que sea retorna un valor pre-junio
-         o vacío, fijamos "01 Jun" (NO caer al evento legacy que puede
-         tener fechas viejas pre-junio cacheadas). */
+      /* La temporada arranca el 1 de MAYO (sección PRE-VERANO con
+         el Mundial de Selecciones, añadida 2026-05-20). Usamos
+         SIEMPRE el cursor de pretemporada; si retorna un valor
+         pre-mayo o vacío, fijamos "01 May" (NO caer al evento
+         legacy que puede tener fechas viejas pre-mayo cacheadas). */
       var psDate = (typeof window._psCurrentDate === 'function') ? window._psCurrentDate() : '';
       var _SP = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
       function _mo(s){ var p=String(s||'').trim().split(/\s+/); if(p.length<2) return -1;
         var v=_SP[(p[1]||'').toLowerCase().replace(/\./g,'').slice(0,3)]; return (v==null)?-1:v; }
-      if (psDate && _mo(psDate) >= 5){
+      if (psDate && _mo(psDate) >= 4){
         calFechaEl.textContent = psDate;
       } else {
         var curEvt = state.events && state.events[state.eventIdx];
         var fb = (curEvt && curEvt.date)
           ? (window._psShowDate ? window._psShowDate(curEvt.date) : curEvt.date)
-          : '01 Jun';
-        /* Cinturón anti-Mayo: si el fallback es pre-Junio, forzamos 01 Jun. */
-        calFechaEl.textContent = (_mo(fb) >= 0 && _mo(fb) < 5) ? '01 Jun' : fb;
+          : '01 May';
+        /* Cinturón anti-pre-mayo: si el fallback es pre-Mayo, forzamos 01 May. */
+        calFechaEl.textContent = (_mo(fb) >= 0 && _mo(fb) < 4) ? '01 May' : fb;
       }
     }
     /* Mueve el marcador rosa/morado del calendario a la fila del

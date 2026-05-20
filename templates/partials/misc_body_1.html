@@ -7290,8 +7290,6 @@ window._showSimProgress = function(opts, onDone){
 /* Botones de ronda Mundialito Clubes — gradient cian/turquesa
    coherente con la caja principal en s-competiciones. */
 .c-mundial{background:linear-gradient(90deg,#001f2a,#003a52,#006080,#00bcd4,#006080,#003a52,#001f2a) !important;border:1.5px solid rgba(77,208,225,.55) !important;}
-#s-mundial .tour-edit-btn{position:absolute;top:8px;right:10px;z-index:5;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:26px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;}
-#s-mundial .tour-edit-btn:active{background:rgba(240,192,64,.35);}
 /* Editor de roster manual del Mundialito. */
 #mundial-roster-ov{position:fixed;inset:0;z-index:100040;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,6,.88);}
 #mundial-roster-ov .mr-card{width:min(460px,95vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#06141c,#0a1d28);border:1px solid rgba(77,208,225,.5);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
@@ -9737,20 +9735,20 @@ window._showSimProgress = function(opts, onDone){
   /* Botón 🖍 admin de cada torneo — esquina superior derecha de la
      pantalla, simétrico al ◀ Volver. PIN-gated; abre _tourOpenEditor. */
   #s-sct .tour-edit-btn,#s-pss .tour-edit-btn,
-  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn,
+  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn,#s-mundial .tour-edit-btn,
   #s-tx1 .tour-edit-btn,#s-tx2 .tour-edit-btn,#s-tx3 .tour-edit-btn,
   #s-tx4 .tour-edit-btn,#s-tx5 .tour-edit-btn,#s-tx6 .tour-edit-btn,
   #s-tx7 .tour-edit-btn,#s-tx8 .tour-edit-btn,
   #s-torneos-verano .tv-edit-btn{
-    position:absolute;top:8px;right:10px;z-index:5;
+    position:absolute;top:10px;right:12px;z-index:5;
     background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
-    color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;
-    font-size:26px;line-height:1;padding:0;
+    color:#fff;width:22px;height:22px;border-radius:50%;cursor:pointer;
+    font-size:12px;line-height:1;padding:0;
     display:flex;align-items:center;justify-content:center;
     transition:background .15s;
   }
   #s-sct .tour-edit-btn:active,#s-pss .tour-edit-btn:active,
-  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active,
+  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active,#s-mundial .tour-edit-btn:active,
   #s-tx1 .tour-edit-btn:active,#s-tx2 .tour-edit-btn:active,
   #s-tx3 .tour-edit-btn:active,#s-tx4 .tour-edit-btn:active,
   #s-tx5 .tour-edit-btn:active,#s-tx6 .tour-edit-btn:active,
@@ -9758,6 +9756,19 @@ window._showSimProgress = function(opts, onDone){
   #s-torneos-verano .tv-edit-btn:active{
     background:rgba(240,192,64,.35);
   }
+  /* Cada grupo con un color de borde DISTINTO (petición usuario
+     2026-05-19, foto). 8 colores → cubre Mundialito (8 grupos)
+     y todos los demás torneos. Los grupos con humano conservan
+     el dorado llamativo (la regla .tour-group-human va después
+     y gana por orden, ver más abajo). */
+  .tour-group-block.tour-grp-A{border-color:#ff5252;box-shadow:0 0 14px rgba(255,82,82,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-B{border-color:#42a5f5;box-shadow:0 0 14px rgba(66,165,245,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-C{border-color:#66bb6a;box-shadow:0 0 14px rgba(102,187,106,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-D{border-color:#ab47bc;box-shadow:0 0 14px rgba(171,71,188,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-E{border-color:#ffa726;box-shadow:0 0 14px rgba(255,167,38,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-F{border-color:#26c6da;box-shadow:0 0 14px rgba(38,198,218,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-G{border-color:#ec407a;box-shadow:0 0 14px rgba(236,64,122,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-H{border-color:#9ccc65;box-shadow:0 0 14px rgba(156,204,101,.32),0 4px 16px rgba(0,0,0,.35);}
   /* 🖍 de Torneos de Verano MUCHO más pequeño (petición usuario
      2026-05-17, foto 1). Misma especificidad, va después → gana. */
   #s-torneos-verano .tv-edit-btn{
@@ -11979,7 +11990,7 @@ window._showSimProgress = function(opts, onDone){
       if (!prog.allDone) allGroupsDone = false;
       var letter = String.fromCharCode(65+g);
       var _grpHasHuman = slice.some(function(t){ return t && t.isHuman; });
-      html += '<div class="tour-group-block'+(_grpHasHuman?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
+      html += '<div class="tour-group-block tour-grp-'+letter+(_grpHasHuman?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
       html += _standingsTableHtml(rows, advancePerGroup);
       var curJg = cfg.currentJornadaByGroup[g];
       var jProg = (function(){

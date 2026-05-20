@@ -5584,6 +5584,23 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         if (normFn('FC Barcelona') === n || normFn('Barcelona') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
         if (normFn('Bayern Munich') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
         if (normFn('Arsenal') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
+        /* Slot humano #5 (Bayern) renombrado: si la caja del menú o el
+           reemplazo de Liga EA apuntan a `name`, hereda el badge CRACK
+           del Bayern (es el mismo slot humano). */
+        try {
+          var humN = '';
+          var raw = localStorage.getItem('menu_home_v1');
+          if (raw) {
+            var d = JSON.parse(raw);
+            var ov = d && d.ov && d.ov['go:s-munich'];
+            if (ov && ov.label) humN = normFn(ov.label);
+          }
+          if (!humN && typeof window._ligaEaSubName === 'function') {
+            var s = window._ligaEaSubName('Bayern Munich');
+            if (s) humN = normFn(s);
+          }
+          if (humN && humN === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
+        } catch(_){}
         return null; /* IA teams → no badge */
       }
       var lvlA = _teamLevel(home);

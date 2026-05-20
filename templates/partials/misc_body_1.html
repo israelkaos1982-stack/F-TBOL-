@@ -7429,8 +7429,14 @@ window._showSimProgress = function(opts, onDone){
       if (k.indexOf('|sel|') !== -1 || k.indexOf('|sel-fin|') !== -1
           || k.indexOf('cal-sel') !== -1 || k.indexOf('cal-mf-') !== -1) return 'sel';
       /* Torneos de verano + amistosos → bucket único `torneos`
-         (s-torneos-stats). Petición usuario 2026-05-09. */
-      if (k.indexOf('tour_') === 0 || k.indexOf('|torneo|') !== -1) return 'torneos';
+         (s-torneos-stats). Petición usuario 2026-05-09.
+         storeKey real de tour matches = `canonA|canonB|torneos|tour_<id>_<key>`
+         (lo construye `registrarLigaPlayerStats` con el compKey). El
+         check `|torneo|` NO casa con `|torneos|` por la `s`. Añadido
+         `|torneos|` (2026-05-19, foto usuario: J1 jugada pero stats
+         vacías). Sin esto, los matches de torneo caían a 'liga'. */
+      if (k.indexOf('tour_') === 0 || k.indexOf('|torneo|') !== -1
+          || k.indexOf('|torneos|') !== -1) return 'torneos';
       if (k.indexOf('|amistoso|') !== -1 || k.indexOf('cal-ams') !== -1
           || k.indexOf('amistoso') === 0) return 'torneos';
       if (k.indexOf('sl-')  === 0 || k.indexOf('-sl')  !== -1
@@ -8686,8 +8692,6 @@ window._showSimProgress = function(opts, onDone){
 /* Botones de ronda Mundialito Clubes — gradient cian/turquesa
    coherente con la caja principal en s-competiciones. */
 .c-mundial{background:linear-gradient(90deg,#001f2a,#003a52,#006080,#00bcd4,#006080,#003a52,#001f2a) !important;border:1.5px solid rgba(77,208,225,.55) !important;}
-#s-mundial .tour-edit-btn{position:absolute;top:8px;right:10px;z-index:5;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:26px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;}
-#s-mundial .tour-edit-btn:active{background:rgba(240,192,64,.35);}
 /* Editor de roster manual del Mundialito. */
 #mundial-roster-ov{position:fixed;inset:0;z-index:100040;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,6,.88);}
 #mundial-roster-ov .mr-card{width:min(460px,95vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#06141c,#0a1d28);border:1px solid rgba(77,208,225,.5);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
@@ -11181,12 +11185,12 @@ window._showSimProgress = function(opts, onDone){
   <!-- Cards generadas dinámicamente desde el registro de torneos
        (built-in + slots añadidos). Ver _tvRenderCards(). -->
   <div id="tv-tour-cards"></div>
-  <!-- Caja "📊 Estadísticas" Torneos de Verano (2026-05-08): paleta
-       dorado/amarillo igual que la temática (la caja en s-competiciones
-       es dorada). Lee de `ef_player_stats_torneos_v1` (cache aislado
-       que persistirá la suma de los 4 torneos individuales). -->
+  <!-- Caja "📊 Estadísticas" Torneos de Verano: paleta verdosa-azulada
+       (teal) para diferenciarla del dorado del Joan Gamper de arriba
+       (petición usuario 2026-05-19, foto 1). Lee de
+       `ef_player_stats_torneos_v1`. -->
   <div class="submenu-card sc-torneos-stats"
-       style="margin-top:6px;background:linear-gradient(135deg,#2a1f00 0%,#7a5a00 25%,#c89020 50%,#f0c040 70%,#c89020 85%,#2a1f00 100%) !important;border:1.5px solid #f0c040 !important;box-shadow:0 4px 18px rgba(240,192,64,.30),inset 0 1px 0 rgba(255,255,255,.12) !important;"
+       style="margin-top:6px;background:linear-gradient(135deg,#00221d 0%,#005c4e 25%,#008a76 50%,#2dd4bf 70%,#008a76 85%,#00221d 100%) !important;border:1.5px solid #2dd4bf !important;box-shadow:0 4px 18px rgba(45,212,191,.32),inset 0 1px 0 rgba(255,255,255,.12) !important;"
        onclick="go('s-torneos-stats')">
     <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span>
     <span class="sc-arr">▶</span>
@@ -11333,20 +11337,20 @@ window._showSimProgress = function(opts, onDone){
   /* Botón 🖍 admin de cada torneo — esquina superior derecha de la
      pantalla, simétrico al ◀ Volver. PIN-gated; abre _tourOpenEditor. */
   #s-sct .tour-edit-btn,#s-pss .tour-edit-btn,
-  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn,
+  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn,#s-mundial .tour-edit-btn,
   #s-tx1 .tour-edit-btn,#s-tx2 .tour-edit-btn,#s-tx3 .tour-edit-btn,
   #s-tx4 .tour-edit-btn,#s-tx5 .tour-edit-btn,#s-tx6 .tour-edit-btn,
   #s-tx7 .tour-edit-btn,#s-tx8 .tour-edit-btn,
   #s-torneos-verano .tv-edit-btn{
-    position:absolute;top:8px;right:10px;z-index:5;
+    position:absolute;top:10px;right:12px;z-index:5;
     background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
-    color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;
-    font-size:26px;line-height:1;padding:0;
+    color:#fff;width:22px;height:22px;border-radius:50%;cursor:pointer;
+    font-size:12px;line-height:1;padding:0;
     display:flex;align-items:center;justify-content:center;
     transition:background .15s;
   }
   #s-sct .tour-edit-btn:active,#s-pss .tour-edit-btn:active,
-  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active,
+  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active,#s-mundial .tour-edit-btn:active,
   #s-tx1 .tour-edit-btn:active,#s-tx2 .tour-edit-btn:active,
   #s-tx3 .tour-edit-btn:active,#s-tx4 .tour-edit-btn:active,
   #s-tx5 .tour-edit-btn:active,#s-tx6 .tour-edit-btn:active,
@@ -11354,6 +11358,19 @@ window._showSimProgress = function(opts, onDone){
   #s-torneos-verano .tv-edit-btn:active{
     background:rgba(240,192,64,.35);
   }
+  /* Cada grupo con un color de borde DISTINTO (petición usuario
+     2026-05-19, foto). 8 colores → cubre Mundialito (8 grupos)
+     y todos los demás torneos. Los grupos con humano conservan
+     el dorado llamativo (la regla .tour-group-human va después
+     y gana por orden, ver más abajo). */
+  .tour-group-block.tour-grp-A{border-color:#ff5252;box-shadow:0 0 14px rgba(255,82,82,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-B{border-color:#42a5f5;box-shadow:0 0 14px rgba(66,165,245,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-C{border-color:#66bb6a;box-shadow:0 0 14px rgba(102,187,106,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-D{border-color:#ab47bc;box-shadow:0 0 14px rgba(171,71,188,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-E{border-color:#ffa726;box-shadow:0 0 14px rgba(255,167,38,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-F{border-color:#26c6da;box-shadow:0 0 14px rgba(38,198,218,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-G{border-color:#ec407a;box-shadow:0 0 14px rgba(236,64,122,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-H{border-color:#9ccc65;box-shadow:0 0 14px rgba(156,204,101,.32),0 4px 16px rgba(0,0,0,.35);}
   /* 🖍 de Torneos de Verano MUCHO más pequeño (petición usuario
      2026-05-17, foto 1). Misma especificidad, va después → gana. */
   #s-torneos-verano .tv-edit-btn{
@@ -13575,7 +13592,7 @@ window._showSimProgress = function(opts, onDone){
       if (!prog.allDone) allGroupsDone = false;
       var letter = String.fromCharCode(65+g);
       var _grpHasHuman = slice.some(function(t){ return t && t.isHuman; });
-      html += '<div class="tour-group-block'+(_grpHasHuman?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
+      html += '<div class="tour-group-block tour-grp-'+letter+(_grpHasHuman?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
       html += _standingsTableHtml(rows, advancePerGroup);
       var curJg = cfg.currentJornadaByGroup[g];
       var jProg = (function(){

@@ -8652,41 +8652,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     }
     return false;
   }
-  /* Equipos que el admin sacó de Liga EA Sports (movidos a otra liga
-     o borrados desde el editor). "Editor manda" (decisión usuario
-     2026-05-18): la clasificación NO debe pintar la lista fija
-     TEAM_ORDER tal cual — si un equipo está en
-     `ligaExt_liga-ea-sports.deletedTeamNames` se excluye. Sin esto,
-     Bayern (movido a Liga Alemana) seguía saliendo en Liga EA y no
-     se podía quitar porque la tabla venía de TEAM_ORDER hardcodeado. */
-  function _ligaEaRemovedSet(){
-    var set = Object.create(null);
-    try {
-      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
-      if(!raw) return set;
-      var d = JSON.parse(raw);
-      var del = d && Array.isArray(d.deletedTeamNames) ? d.deletedTeamNames : [];
-      var nf = (typeof window._lextNormName === 'function')
-        ? window._lextNormName
-        : function(s){ return String(s==null?'':s).toLowerCase()
-            .normalize('NFD').replace(/[̀-ͯ]/g,'')
-            .replace(/[^a-z0-9]+/g,' ').trim(); };
-      del.forEach(function(nm){ var n = nf(nm); if(n) set[n] = true; });
-    } catch(_){}
-    return set;
-  }
   function getSavedLigaTable(){
     var teams = {};
-    var _removed = _ligaEaRemovedSet();
-    var _nf2 = (typeof window._lextNormName === 'function')
-      ? window._lextNormName
-      : function(s){ return String(s==null?'':s).toLowerCase()
-          .normalize('NFD').replace(/[̀-ͯ]/g,'')
-          .replace(/[^a-z0-9]+/g,' ').trim(); };
-    TEAM_ORDER.forEach(function(name){
-      if (_removed[_nf2(name)]) return; /* movido/eliminado vía editor */
-      ensureTeam(teams, name);
-    });
+    TEAM_ORDER.forEach(function(name){ ensureTeam(teams, name); });
     var results = parseSavedResults();
     Object.keys(results).forEach(function(key){
       /* Saltar keys que no pertenecen al SCHEDULE actual (sims
@@ -8700,13 +8668,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       var extra = countEventExtras(meta.home, meta.away, data);
       applyMatch(teams, meta.jornada, meta.home, meta.away, data.gh, data.ga, data.penWinner || null, extra);
     });
-    return Object.keys(teams).filter(function(name){
-      /* `applyMatch`→`ensureTeam` recrea equipos al volcar resultados
-         del calendario (que aún tiene fixtures del equipo movido).
-         Filtramos también aquí para que el movido NO reaparezca por
-         sus partidos. */
-      return !_removed[_nf2(name)];
-    }).map(function(name){
+    return Object.keys(teams).map(function(name){
       var team = teams[name];
       team.dg = team.gf - team.gc;
       team.formLog.sort(function(a,b){ return a.j - b.j; });

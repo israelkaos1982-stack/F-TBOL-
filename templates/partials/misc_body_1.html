@@ -24189,7 +24189,6 @@ Tottenham
 
       var moved = 0, skippedDup = 0;
       var newSrcTeams = [];
-      var movedNames = [];
       srcData.teams.forEach(function(t){
         if (!t) return;
         var keep = true;
@@ -24209,32 +24208,10 @@ Tottenham
             moved++;
             keep = false;
           }
-          if (!keep && t.name) movedNames.push(t.name);
         }
         if (keep) newSrcTeams.push(t);
       });
       srcData.teams = newSrcTeams;
-      /* CLAVE (2026-05-18): marcar los movidos en `deletedTeamNames`
-         del ORIGEN. Sin esto el equipo volvía a aparecer en la liga
-         de origen (p.ej. Bayern movido a Alemania seguía saliendo en
-         Liga EA Sports y no se podía eliminar): el anti-wipe / sync
-         del servidor lo resucitaba, y la clasificación de Liga EA
-         (que ahora también respeta esta lista) lo seguía pintando.
-         Mismo patrón que lextDeleteTeam. El destino NO lo bloquea. */
-      if (!Array.isArray(srcData.deletedTeamNames)) srcData.deletedTeamNames = [];
-      movedNames.forEach(function(nm){
-        var nn = _lextNormName(nm);
-        if (nn && srcData.deletedTeamNames.indexOf(nn) === -1) srcData.deletedTeamNames.push(nn);
-        /* Si por una sesión previa el nombre estaba marcado como
-           borrado en el DESTINO, lo desbloqueamos: el admin lo está
-           re-creando ahí explícitamente. */
-        try {
-          if (Array.isArray(dstData.deletedTeamNames)) {
-            var di = dstData.deletedTeamNames.indexOf(nn);
-            if (di !== -1) dstData.deletedTeamNames.splice(di, 1);
-          }
-        } catch(_){}
-      });
 
       /* Persistir ambos: localStorage + invalidate cache + POST async. */
       try { saveData(srcKey, srcData); } catch(_){}

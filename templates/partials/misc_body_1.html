@@ -165,11 +165,18 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div style="display:none;">
 <style>
-#home-live-card{background:linear-gradient(135deg,#cc0800 0%,#8b0000 35%,#380000 65%,#0a0000 100%);}
+/* PARTIDOS LIVE · estado APAGADO por defecto (gris-negro). Sólo se
+   enciende en rojo brillante cuando hay un partido HUMANO en directo
+   (.live-active la añade _refreshLiveCount al detectar un wrap
+   ticking con humano). Petición usuario 2026-05-19: "antes la caja
+   estaba apagada y se encendía llamativa cuando había un partido en
+   live de un humano — recuperar". */
+#home-live-card{background:linear-gradient(135deg,#1a1a1f 0%,#121215 50%,#0a0a0c 100%);border:1px solid rgba(255,255,255,.08);transition:background .35s ease,border-color .35s ease,box-shadow .35s ease;}
 .mc-derbys{background:linear-gradient(135deg,#0a0418 0%,#1c0640 30%,#38086a 55%,#5c0898 80%,#7a10c0 100%);border:1px solid rgba(140,40,220,0.42)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,0.10),0 0 22px rgba(90,8,150,0.50)!important;}
-#home-live-card .mc-live-icon{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:24px;padding:0 9px;border-radius:999px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.8px;font-weight:700;border:1px solid rgba(255,255,255,.28);background:rgba(148,163,184,.18);color:rgba(226,232,240,.86);box-shadow:inset 0 0 0 1px rgba(15,23,42,.28);transition:all .25s ease;}
-#home-live-card.live-active{box-shadow:0 0 0 1px rgba(255,82,82,.35),0 0 18px rgba(255,82,82,.32) inset;}
+#home-live-card .mc-live-icon{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:24px;padding:0 9px;border-radius:999px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.8px;font-weight:700;border:1px solid rgba(255,255,255,.18);background:rgba(60,60,68,.35);color:rgba(180,180,190,.65);box-shadow:inset 0 0 0 1px rgba(15,23,42,.28);transition:all .25s ease;}
+#home-live-card.live-active{background:linear-gradient(135deg,#cc0800 0%,#8b0000 35%,#380000 65%,#0a0000 100%)!important;border-color:rgba(255,82,82,.55)!important;box-shadow:0 0 0 1px rgba(255,82,82,.45),0 0 22px rgba(255,82,82,.55),0 0 18px rgba(255,82,82,.32) inset!important;animation:homeLiveCardPulse 1.4s ease-in-out infinite;}
 #home-live-card.live-active .mc-live-icon{background:linear-gradient(90deg,#ff2a2a,#ff6b3d,#ffe066);border-color:rgba(255,188,120,.95);color:#fff9d8;text-shadow:0 0 10px rgba(255,116,59,.95),0 0 16px rgba(255,212,59,.65);animation:homeLivePulse 1.05s ease-in-out infinite,homeLiveColorShift 1.2s linear infinite;}
+@keyframes homeLiveCardPulse{0%,100%{box-shadow:0 0 0 1px rgba(255,82,82,.4),0 0 22px rgba(255,82,82,.5),0 0 18px rgba(255,82,82,.28) inset;}50%{box-shadow:0 0 0 2px rgba(255,82,82,.65),0 0 36px rgba(255,82,82,.85),0 0 26px rgba(255,82,82,.45) inset;}}
 #s-home .menu-grid{gap:15px;}
 #s-home .menu-card.full,#s-home .equipo-card,#s-home .home-section-title{margin:0;}
 #s-home .menu-card.full{height:80px!important;min-height:80px!important;max-height:80px!important;overflow:hidden!important;box-sizing:border-box!important;}

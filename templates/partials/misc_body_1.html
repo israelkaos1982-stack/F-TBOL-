@@ -2113,7 +2113,10 @@ window._showSimProgress = function(opts, onDone){
   if (window.__PS_READY) return;
   window.__PS_READY = true;
 
-  var KEY = 'bayern_preseason_v1';
+  var KEY = 'bayern_preseason_v2';   /* bump: temporada empieza 01 Jun */
+  /* Limpieza one-shot del store viejo (apuntaba a un calendario con
+     filas pre-Junio). Así el cursor arranca limpio en 01 Jun. */
+  try { localStorage.removeItem('bayern_preseason_v1'); } catch(_){}
   var BAYERN_SHIELD = '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg';
   var FALLBACK_SHIELD = '/static/img/escudos-fallback/estepona.svg';
   /* Alias SOLO DE VISUALIZACIÓN del equipo humano (slot de Toñín).

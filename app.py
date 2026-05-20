@@ -2044,16 +2044,27 @@ def _ensure_fase_final_may(data):
 
 
 def _calendario_normalize(data):
-    """Asegura el esqueleto mínimo y los defaults de un dict de calendario."""
+    """Asegura el esqueleto mínimo y los defaults de un dict de calendario.
+
+    Las inyecciones `_ensure_*` (Junio, Preverano, Mundialito) crean
+    secciones SEMILLA pero NO machacan ediciones del usuario: solo
+    corren cuando `_normalized_v < version`. Una vez normalizado para
+    la versión actual, las cargas siguientes pasan por aquí sin tocar
+    las secciones — los renombrados, añadidos o borrados del editor
+    persisten para siempre."""
     if not isinstance(data, dict):
         return json.loads(json.dumps(CALENDARIO_DEFAULT))
     data.setdefault("version", 1)
     data.setdefault("season", "32-33")
     if not isinstance(data.get("sections"), list):
         data["sections"] = []
-    _ensure_june_pretemp(data)
-    _ensure_preverano_may(data)
-    _ensure_mundialito(data)
+    cur_ver = data.get("version") or 1
+    norm_ver = data.get("_normalized_v") or 0
+    if norm_ver < cur_ver:
+        _ensure_june_pretemp(data)
+        _ensure_preverano_may(data)
+        _ensure_mundialito(data)
+        data["_normalized_v"] = cur_ver
     return data
 
 
@@ -2140,7 +2151,15 @@ def load_calendario():
 
 def _calendario_save_to_db(data):
     """Persiste el calendario en GlobalState. Usa el mismo patrón que
-    `_liga_ext_save`: upsert por clave, commit transaccional."""
+    `_liga_ext_save`: upsert por clave, commit transaccional.
+
+    Marca `_normalized_v = version` en cada write para que las cargas
+    posteriores NO re-inyecten secciones semilla por encima de las
+    ediciones del usuario (renombres / borrados / añadidos persistentes)."""
+    if isinstance(data, dict):
+        ver = data.get("version") or 1
+        if (data.get("_normalized_v") or 0) < ver:
+            data["_normalized_v"] = ver
     payload = json.dumps(data or {}, ensure_ascii=False)
     now = utc_now_iso()
     row = GlobalState.query.filter_by(clave=CALENDARIO_GLOBAL_KEY).first()

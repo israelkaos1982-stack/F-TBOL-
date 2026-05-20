@@ -483,8 +483,17 @@ brillante pulsante** (clase `.is-near-end`) desde el **min 80**
 `🏁 VER RESUMEN` en verde-dorado (precedente 2026-05-17).
 
 Helper: `window._mlCountStoppageHalves(st)` →
-- `{first: 4, second: 9}` para regulación (`!st.etDone`).
-- Event-driven (cuenta eventos del acta) para prórroga (`st.etDone`).
+- `{first: 4, second: 9}` para HvH/HvIA en regulación
+  (`!st.etDone && !st.isIAvsIA`).
+- Event-driven (cuenta eventos del acta) para IA vs IA
+  (`st.isIAvsIA`) y para prórroga (`st.etDone`).
+
+**IA vs IA mantiene descuento event-driven** (petición usuario
+2026-05-19): cada gol/tarjeta/lesión/etc. en una parte añade
++1 game-min al tope de esa parte. Los partidos IA-vs-IA no tienen
+humano que pulse DESCANSO/FINALIZAR, así que el descuento "natural"
+por eventos sigue siendo útil para que partidos con muchos goles
+duren un poco más.
 
 PRÓRROGA mantiene el modelo legacy event-driven (no tocado en
 2026-05-19). HvH y HvIA en gm-modal: cuando `timerSec ≥ gmHalfMax`

@@ -7579,18 +7579,20 @@
     'pen-prov': 1, 'pen-parado': 1, 'falta-gol': 1,
     'amarilla': 1, 'd-amarilla': 1, 'roja': 1, 'lesion': 1
   };
-  /* Stoppage time en regulación (petición usuario 2026-05-19):
-     - 1ª parte: SIEMPRE de 45+1 a 45+4 (cap +4).
-     - 2ª parte: SIEMPRE de 90+1 a 90+9 (cap +9).
-     El cronómetro recorre esos game-minutes y se CONGELA en el tope
-     hasta que el humano pulse DESCANSO / FINALIZAR. Independiente de
-     la cuenta de eventos del acta (antes era event-driven sin tope, lo
-     que producía descuentos absurdos en partidos con muchos eventos y
-     ninguno en partidos sin eventos).
-     En PRÓRROGA (etDone) se mantiene el modelo legacy event-driven —
-     el usuario no lo cambió y la prórroga tiene su propio flujo. */
+  /* Stoppage time (petición usuario 2026-05-19):
+     - HvH y HvIA en regulación: FIJO 1ª parte +4, 2ª parte +9. El
+       cron recorre 45+1..45+4 / 90+1..90+9 y se CONGELA en el tope
+       hasta que el humano pulse DESCANSO / FINALIZAR.
+     - IA vs IA simulación: EVENT-DRIVEN (cada gol/tarjeta/lesión/etc.
+       suma +1 game-min a su parte). Aquí no hay humano que pulse
+       nada — el descuento "natural" por eventos sigue siendo útil
+       para que partidos con muchos goles duren un poco más.
+     - PRÓRROGA (etDone): event-driven (legacy, sin cambio).
+
+     Detección IA vs IA: `st.isIAvsIA`. Para regulación con humano
+     (HvH/HvIA) el resultado es fijo {4, 9}. */
   function _mlCountStoppageHalves(st) {
-    if (st && !st.etDone) {
+    if (st && !st.etDone && !st.isIAvsIA) {
       return { first: 4, second: 9 };
     }
     var fh = 0, sh = 0;

@@ -2187,6 +2187,15 @@ window._showSimProgress = function(opts, onDone){
                : 'match';
       out.push({ date:date, label:lbl, icon:ico, weather:wx||'☀️', type:type, cls:cls });
     });
+    /* La temporada arranca el 1 de Junio: recortamos cualquier fila
+       pre-junio del calendario antes de exponerla al motor día a día,
+       así la card del hub nunca puede mostrar "01 May" aunque queden
+       eventos antiguos en el DOM. */
+    var fj = 0;
+    for (var i = 0; i < out.length; i++){
+      if (_psMonth(out[i].date) >= 5){ fj = i; break; }
+    }
+    if (fj > 0) out = out.slice(fj);
     if (out.length) _ROWS_CACHE = out;
     return out;
   }

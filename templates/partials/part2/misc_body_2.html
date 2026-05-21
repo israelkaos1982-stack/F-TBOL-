@@ -7381,8 +7381,8 @@
 
         IA vs IA   → 45 s cada parte   → 1.5  min total (90 s reales)
                      (1 sec real = 1 game-minute)
-        HvIA       → 5 min 37.5 s/parte → 11.25 min total real
-                     (7.5 s/game-min). Previa: "8 min".
+        HvIA       → 5 min 33 s/parte  → 11.1 min total real
+                     (7.4 s/game-min). Previa: "8 min".
         HvH        → 8 min 15 s/parte  → 16.5 min total real
                      (11 s/game-min). Previa: "10 min".
         HvH prórroga → 2.5 min/parte   → 5 min total real
@@ -7392,7 +7392,7 @@
      en el tope hasta que el humano pulse DESCANSO / FINALIZAR.
      Cada game-minute de descuento en tiempo REAL equivale a:
         HvH:  11  segundos reales
-        HvIA: 7.5 segundos reales
+        HvIA: 7.4 segundos reales
         IAIA:  1  segundo  real
 
      Histórico:
@@ -7402,13 +7402,16 @@
        2026-05-19: usuario pide volver al pre-mayo porque el cron iba
        más rápido que eFootball / vida real. Display previa = 10/8
        (no real) por preferencia explícita.
-       2026-05-21: usuario pide HvIA a 7.5 s/game-min (antes 9 s) —
-       el cron HvIA iba más lento que su partido real de eFootball.
-       HvH se mantiene en 11 s. Display previa HvIA sigue en "8 min".
+       2026-05-21: HvIA recalibrado a 7.4 s/game-min (antes 9 s).
+       El usuario midió "min 45 del juego = min 37 del simulador"
+       con el cron a 9 s/game-min → 9 × 37/45 = 7.4 s/game-min es
+       el ritmo real de su eFootball. Con web y juego al mismo ritmo
+       el minuto del cron coincide con el del juego. HvH se mantiene
+       en 11 s. Display previa HvIA sigue en "8 min".
 
      Consecuencia matemática (verificada): 1 game-minute = tickMs × 12
        HvH   tick ≈ 917 ms → 60 × 917/5 = 11  s
-       HvIA  tick ≈ 625 ms → 60 × 625/5 =  7.5 s
+       HvIA  tick ≈ 617 ms → 60 × 617/5 =  7.4 s
        IAIA  tick ≈  83 ms → 60 ×  83/5 =  1  s  (90 s total) */
   var _ML_TICK_SEC = 5;
   /* Tiempos reales del cronómetro (petición usuario 2026-05-19):
@@ -7417,7 +7420,7 @@
      tiempos de antes". RESTAURADOS los valores pre-2026-04-26:
         HvH    → 16.5 min reales → 11 s/game-min  (≈917 ms/tick)
         HvH_ET → 5    min reales (sin cambio)
-        HvIA   → 11.25 min reales → 7.5 s/game-min (≈625 ms/tick)
+        HvIA   → 11.1 min reales → 7.4 s/game-min (≈617 ms/tick)
         IAIA   → 1.5  min reales (sin cambio)     →   1 s/game-min
      `displayMin` se mantiene en 10 / 8 (lo que la previa muestra al
      usuario) por petición explícita: la previa dice "10 min" / "8 min"
@@ -7428,7 +7431,7 @@
   var _MATCH_RULE = {
     HvH:    { gameMin: 90, realMin: 16.5,  displayMin: 10 },
     HvH_ET: { gameMin: 30, realMin: 5                       },
-    HvIA:   { gameMin: 90, realMin: 11.25, displayMin: 8  },
+    HvIA:   { gameMin: 90, realMin: 11.1,  displayMin: 8  },
     IAIA:   { gameMin: 90, realMin: 1.5,   displayLabel: '45 s/parte' }
   };
   function _tickMsFromRule(r) {
@@ -7440,7 +7443,7 @@
   var _MATCH_TICKS = {
     HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 917 ms (16.5 min reales · 11 s/game-min) */
     HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5   min reales)               */
-    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 625 ms (11.25 min reales · 7.5 s/game-min) */
+    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 617 ms (11.1 min reales · 7.4 s/game-min) */
     IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  83 ms (90 s total)                   */
   };
   /* Exponemos la regla para que TODOS los flujos (bundle legacy, campo 3D,

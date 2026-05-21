@@ -25993,8 +25993,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     /* Wrap de `ligaExtSimular()` — botón 🎮 Sim de cada liga del
        "Resto de Ligas" (s-liga-ext). Simula la temporada completa
-       round-robin de los equipos de la liga (sync, ~0.5-2s según
-       tamaño). Fake-progress corto. */
+       round-robin de los equipos de la liga.
+       2026-05-21: ligaExtSimular ahora es CHUNKED y devuelve Promise
+       con progreso REAL (pct, sub). Antes el wrap usaba _runFakeProgress
+       con fases FALSAS y llamaba al sim como trabajo SÍNCRONO al final
+       → el thread se bloqueaba minutos y la barra se "congelaba". Ahora
+       pasamos `ctx.progress` directo al sim: la barra refleja partidos
+       reales (N/total) y el overlay se cierra EXACTO al terminar. */
     var origSimLigaExt = window.ligaExtSimular;
     if(typeof origSimLigaExt === 'function'){
       window.ligaExtSimular = function(){
@@ -26006,16 +26011,16 @@ document.addEventListener('DOMContentLoaded', function() {
           var ck = (typeof window.CURRENT_KEY === 'string') ? window.CURRENT_KEY : '';
           if(ck) title = ck.replace(/-/g,' ').toUpperCase();
         } catch(_){}
-        return _runFakeProgress(
-          { title: title, sub:'Preparando…', theme:'resto', minMs:1100, bg:true,
-            phases:[
-              { pct:22, sub:'Cargando plantillas…',     ms:130 },
-              { pct:48, sub:'Generando jornadas…',      ms:180 },
-              { pct:72, sub:'Simulando partidos…',      ms:220 },
-              { pct:90, sub:'Calculando clasificación…',ms:140 }
-            ]
-          },
-          function(){ if(typeof origSimLigaExt === 'function') origSimLigaExt(); }
+        var _runner = (typeof window._ftbolBgRun === 'function')
+          ? window._ftbolBgRun : window.ftbolLoaderRun;
+        return _runner(
+          { title: title, sub:'Preparando…', theme:'resto', minMs:300 },
+          function(ctx){
+            ctx.progress(4, 'Cargando plantillas…');
+            /* origSimLigaExt (chunked) devuelve Promise y reporta
+               progreso real vía el callback. */
+            return Promise.resolve(origSimLigaExt(ctx.progress));
+          }
         );
       };
     }

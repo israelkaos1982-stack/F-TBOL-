@@ -24562,78 +24562,108 @@ Tottenham
     return arr.slice(0, _RR_TEAM_CAP);
   }
 
-  function ligaExtSimular(){
-    if(!CURRENT_KEY) return;
-    /* ANTI-CUELGUE MÓVIL (2026-05-18): mientras corre esta sim los
-       XHR SÍNCRONOS sin timeout de loadData/_readLigaData (contra
-       /api/liga-ext) quedan VETADOS. En 5G flaky colgaban el hilo
-       PARA SIEMPRE y ni el watchdog del loader podía cerrar el
-       overlay → barra clavada en "8% PREPARANDO". Si no hay datos
-       locales se hidrata en 2º plano y se reintenta (decisión del
-       usuario: "saltar y cargar en 2º plano"), nunca se bloquea. */
+  /* 2026-05-21: sim chunked. Antes el doble round-robin corría en un
+     bucle SÍNCRONO que bloqueaba el thread JS hasta acabar — con ligas
+     grandes (o el cap de 64 equipos = 4032 partidos) el overlay se
+     "congelaba" y parecía colgado minutos. Ahora se trocea en chunks
+     de 120 partidos con setTimeout(0) entre medias: el thread respira,
+     el overlay puede repintar la barra con progreso REAL y la UI no se
+     bloquea. `progressFn(pct, sub)` es opcional (la pasa el wrapper del
+     overlay). Devuelve SIEMPRE una Promise para que el loader pueda
+     esperar al final exacto de la sim. */
+  function ligaExtSimular(progressFn){
+    if(!CURRENT_KEY) return Promise.resolve();
     window._ligaExtSimInProgress = true;
-    try {
-      var data = loadData(CURRENT_KEY);
-      if(data.teams.length < 2){
-        window._ligaExtSimInProgress = false;
-        window._ligaExtHydrateRetry = window._ligaExtHydrateRetry || {};
-        var _hk = CURRENT_KEY;
-        if(!window._ligaExtHydrateRetry[_hk] && typeof fetchData === 'function'){
-          window._ligaExtHydrateRetry[_hk] = true;
-          try {
-            fetchData(_hk, function(d2){
-              try { delete window._ligaExtHydrateRetry[_hk]; } catch(_){}
-              var n = (d2 && Array.isArray(d2.teams)) ? d2.teams.length : 0;
-              if(n >= 2 && CURRENT_KEY === _hk && typeof window.ligaExtSimular === 'function'){
-                try { window.ligaExtSimular(); } catch(_){}
-              } else {
-                try { alert('Esta liga no tiene equipos suficientes para simular.'); } catch(_){}
-              }
-            });
-          } catch(_){
+    var data;
+    try { data = loadData(CURRENT_KEY); }
+    catch(_){ window._ligaExtSimInProgress = false; return Promise.resolve(); }
+    if(!data || !Array.isArray(data.teams) || data.teams.length < 2){
+      window._ligaExtSimInProgress = false;
+      window._ligaExtHydrateRetry = window._ligaExtHydrateRetry || {};
+      var _hk = CURRENT_KEY;
+      if(!window._ligaExtHydrateRetry[_hk] && typeof fetchData === 'function'){
+        window._ligaExtHydrateRetry[_hk] = true;
+        try {
+          fetchData(_hk, function(d2){
             try { delete window._ligaExtHydrateRetry[_hk]; } catch(_){}
-            try { alert('Añade al menos 2 equipos.'); } catch(_){}
-          }
-        } else {
+            var n = (d2 && Array.isArray(d2.teams)) ? d2.teams.length : 0;
+            if(n >= 2 && CURRENT_KEY === _hk && typeof window.ligaExtSimular === 'function'){
+              try { window.ligaExtSimular(); } catch(_){}
+            } else {
+              try { alert('Esta liga no tiene equipos suficientes para simular.'); } catch(_){}
+            }
+          });
+        } catch(_){
+          try { delete window._ligaExtHydrateRetry[_hk]; } catch(_){}
           try { alert('Añade al menos 2 equipos.'); } catch(_){}
         }
-        return;
+      } else {
+        try { alert('Añade al menos 2 equipos.'); } catch(_){}
       }
-      // Resetear stats de jugadores
-      data.teams.forEach(function(t){
-        (t.players||[]).forEach(resetPlayerStats);
-      });
-      data.results = [];
-      var ts = _capRoundRobin(data.teams.slice());
-      for(var i=0;i<ts.length;i++){
-        for(var j=0;j<ts.length;j++){
-          if(i===j) continue;
-          var r = simulateMatch(ts[i], ts[j]);
-          data.results.push({
-            h:ts[i].id, a:ts[j].id,
-            gh:r.gh, ga:r.ga,
-            tah:r.tah, taa:r.taa,
-            trh:r.trh, tra:r.tra
-          });
-          var infoI = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
-          var infoJ = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
-          if(r.gh > r.ga)      assignMVP(ts[i], infoI, ts[j], infoJ, false);
-          else if(r.ga > r.gh) assignMVP(ts[j], infoJ, ts[i], infoI, false);
-          else                 assignMVP(ts[i], infoI, ts[j], infoJ, true);
-        }
-      }
-      saveData(CURRENT_KEY, data);
-      /* Mantener ef_player_stats_v1 sincronizado tras Sim Liga.
-         Sin esto, si el usuario hizo SIM Copa antes y luego SIM Liga,
-         el cache quedaba con totales viejos (liga + old_cup) y la
-         plantilla mostraba stats stale. Ahora cada vez que se
-         resimula la liga, el cache se reescribe con `pj = leagueOnly +
-         cupAlreadyPlayed`. */
-      try { _lecSyncPlayerStatsCache(data); } catch(_){}
-      renderTable();
-    } finally {
-      window._ligaExtSimInProgress = false;
+      return Promise.resolve();
     }
+    // Resetear stats de jugadores
+    data.teams.forEach(function(t){
+      (t.players||[]).forEach(resetPlayerStats);
+    });
+    data.results = [];
+    var ts = _capRoundRobin(data.teams.slice());
+    /* Lista plana de cruces (i,j) con i≠j — doble round-robin. */
+    var pairs = [];
+    for(var pi=0; pi<ts.length; pi++){
+      for(var pj=0; pj<ts.length; pj++){
+        if(pi!==pj) pairs.push([pi,pj]);
+      }
+    }
+    var total = pairs.length;
+    var CHUNK = 120;
+    return new Promise(function(resolve){
+      var idx = 0;
+      function _finishSim(){
+        try { saveData(CURRENT_KEY, data); } catch(_){}
+        try { _lecSyncPlayerStatsCache(data); } catch(_){}
+        try { renderTable(); } catch(_){}
+        window._ligaExtSimInProgress = false;
+        if(typeof progressFn === 'function'){ try { progressFn(100, 'Hecho'); } catch(_){} }
+        resolve();
+      }
+      function step(){
+        var end = Math.min(total, idx + CHUNK);
+        try {
+          for(; idx<end; idx++){
+            var i = pairs[idx][0], j = pairs[idx][1];
+            var r = simulateMatch(ts[i], ts[j]);
+            data.results.push({
+              h:ts[i].id, a:ts[j].id,
+              gh:r.gh, ga:r.ga,
+              tah:r.tah, taa:r.taa,
+              trh:r.trh, tra:r.tra
+            });
+            var infoI = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
+            var infoJ = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
+            if(r.gh > r.ga)      assignMVP(ts[i], infoI, ts[j], infoJ, false);
+            else if(r.ga > r.gh) assignMVP(ts[j], infoJ, ts[i], infoI, false);
+            else                 assignMVP(ts[i], infoI, ts[j], infoJ, true);
+          }
+        } catch(err){
+          try { console.error('[ligaExtSimular]', err); } catch(_){}
+          window._ligaExtSimInProgress = false;
+          resolve();
+          return;
+        }
+        if(typeof progressFn === 'function' && total > 0){
+          try {
+            progressFn(
+              Math.min(96, Math.round(idx/total*96)),
+              'Simulando partidos · ' + idx + '/' + total
+            );
+          } catch(_){}
+        }
+        if(idx < total){ setTimeout(step, 0); return; }
+        _finishSim();
+      }
+      step();
+    });
   }
   window.ligaExtSimular = ligaExtSimular;
 

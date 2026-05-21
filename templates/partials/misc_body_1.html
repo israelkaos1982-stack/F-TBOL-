@@ -12015,15 +12015,31 @@ window._showSimProgress = function(opts, onDone){
       </div>
     </div>
 
-    <!-- Formato -->
+    <!-- Formato — CASILLAS marcables en vez de <select> nativo. El
+         desplegable nativo no respondía de forma fiable en algunos
+         móviles (bug usuario 2026-05-21: "el desplegable emerge pero
+         aunque elija una opción no funciona"). Selección EXCLUSIVA
+         (tipo radio): marcar una desmarca las demás. -->
     <div class="tour-ed-row">
       <label>Formato</label>
-      <select id="tour-ed-fmt" onchange="window._tourEdFmtChange&&window._tourEdFmtChange(this)">
-        <option value="ko">Eliminatoria a un partido</option>
-        <option value="ko-2leg">Eliminatoria a ida y vuelta</option>
-        <option value="league">Liga (round-robin)</option>
-        <option value="groups-ko">Grupos + Eliminatoria</option>
-      </select>
+      <div id="tour-ed-fmt" class="tour-ed-fmt-opts">
+        <div class="tour-ed-fmt-opt" data-fmt="ko" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('ko')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Eliminatoria a un partido</span>
+        </div>
+        <div class="tour-ed-fmt-opt" data-fmt="ko-2leg" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('ko-2leg')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Eliminatoria a ida y vuelta</span>
+        </div>
+        <div class="tour-ed-fmt-opt" data-fmt="league" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('league')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Liga (round-robin)</span>
+        </div>
+        <div class="tour-ed-fmt-opt" data-fmt="groups-ko" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('groups-ko')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Grupos + Eliminatoria</span>
+        </div>
+      </div>
     </div>
     <div class="tour-ed-row" id="tour-ed-fmt-cfg">
       <!-- subconfig dinámica según el formato -->
@@ -12084,6 +12100,34 @@ window._showSimProgress = function(opts, onDone){
   #tour-editor-overlay input:focus,#tour-editor-overlay select:focus,#tour-editor-overlay textarea:focus{
     outline:none;border-color:rgba(240,192,64,.55);
   }
+  /* Casillas de "Formato" (sustituyen al <select> nativo, que no
+     respondía en algunos móviles). Selección exclusiva tipo radio. */
+  .tour-ed-fmt-opts{display:flex;flex-direction:column;gap:6px;}
+  .tour-ed-fmt-opt{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 12px;border-radius:8px;cursor:pointer;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);
+    -webkit-tap-highlight-color:transparent;
+    transition:background .14s,border-color .14s;
+  }
+  .tour-ed-fmt-opt:active{filter:brightness(1.15);}
+  .tour-ed-fmt-box{
+    flex-shrink:0;width:22px;height:22px;border-radius:5px;
+    border:2px solid rgba(255,255,255,.30);background:rgba(0,0,0,.30);
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;line-height:1;color:transparent;
+  }
+  .tour-ed-fmt-lbl{
+    font-family:Rajdhani,sans-serif;font-size:14px;color:#e8f0ff;font-weight:600;
+  }
+  .tour-ed-fmt-opt.is-on{
+    background:rgba(240,192,64,.12);border-color:rgba(240,192,64,.65);
+  }
+  .tour-ed-fmt-opt.is-on .tour-ed-fmt-box{
+    background:linear-gradient(145deg,#f0c040,#caa028);
+    border-color:#f0c040;color:#0d1117;
+  }
+  .tour-ed-fmt-opt.is-on .tour-ed-fmt-lbl{color:#fff;}
   /* Stat box que muestra cuántos equipos hay en el rango de nivel IA. */
   .tour-ed-pool-stat{
     font-size:12px;line-height:1.4;
@@ -13276,23 +13320,56 @@ window._showSimProgress = function(opts, onDone){
     }
   }
 
-  /* Handler del desplegable "Formato" — inline onchange en el <select>
-     para que SIEMPRE responda en móvil (no depende de que el
-     addEventListener de _wire() se haya enganchado). Cambia el formato,
-     reinicia la subconfig y la repinta; hace scroll para que el usuario
-     VEA el cambio en el formulario largo. Bug usuario 2026-05-17:
-     "el desplegable de formato del torneo no funciona". */
-  window._tourEdFmtChange = function(sel){
+  /* CASILLAS de "Formato" (sustituyen al <select> nativo, que no
+     respondía de forma fiable en móvil — bug usuario 2026-05-17 y
+     2026-05-21). Selección EXCLUSIVA: marcar una desmarca las demás.
+     Los 4 valores válidos. */
+  var _TOUR_FMT_VALUES = ['ko','ko-2leg','league','groups-ko'];
+  /* Pinta la casilla activa según `fmt`. */
+  function _tourEdFmtPaint(fmt){
+    var host = document.getElementById('tour-ed-fmt');
+    if (!host) return;
+    if (_TOUR_FMT_VALUES.indexOf(fmt) === -1) fmt = 'ko';
+    var opts = host.querySelectorAll('.tour-ed-fmt-opt');
+    for (var i = 0; i < opts.length; i++) {
+      opts[i].classList.toggle('is-on', opts[i].getAttribute('data-fmt') === fmt);
+    }
+  }
+  /* Devuelve el formato marcado en las casillas (default 'ko'). */
+  function _tourEdFmtSelected(){
+    var host = document.getElementById('tour-ed-fmt');
+    if (host) {
+      var on = host.querySelector('.tour-ed-fmt-opt.is-on');
+      if (on) {
+        var v = on.getAttribute('data-fmt');
+        if (_TOUR_FMT_VALUES.indexOf(v) !== -1) return v;
+      }
+    }
+    return 'ko';
+  }
+  /* Handler al marcar una casilla de formato. Cambia el formato,
+     reinicia la subconfig y la repinta; marca el editor como `dirty`
+     (un click en <div> no dispara `input`/`change`, así que el
+     refresco async no se enteraría); hace scroll para que el usuario
+     VEA el cambio en el formulario largo. */
+  window._tourEdFmtPick = function(fmt){
     if (!_open) return;
-    var el = sel || document.getElementById('tour-ed-fmt');
-    if (!el) return;
-    _open.cfg.format = el.value;
+    if (_TOUR_FMT_VALUES.indexOf(fmt) === -1) return;
+    _open.cfg.format = fmt;
     _open.cfg.formatConfig = {};
+    _open.dirty = true;
+    _tourEdFmtPaint(fmt);
     _renderFmtCfg();
     var box = document.getElementById('tour-ed-fmt-cfg');
     if (box && box.scrollIntoView) {
       try { box.scrollIntoView({ block:'nearest' }); } catch(_){ }
     }
+  };
+  /* Alias legacy por si alguna ruta antigua aún llama a
+     `_tourEdFmtChange` — delega en la lógica de casillas. */
+  window._tourEdFmtChange = function(){
+    if (!_open) return;
+    window._tourEdFmtPick(_tourEdFmtSelected());
   };
 
   function _prizesToText(p){
@@ -13317,7 +13394,7 @@ window._showSimProgress = function(opts, onDone){
     document.getElementById('tour-ed-hum').value = cfg.numHumans || 0;
     document.getElementById('tour-ed-aimin').value = cfg.aiLevelMin || 70;
     document.getElementById('tour-ed-aimax').value = cfg.aiLevelMax || 95;
-    document.getElementById('tour-ed-fmt').value = cfg.format || 'ko';
+    _tourEdFmtPaint(cfg.format || 'ko');
     document.getElementById('tour-ed-prizes').value = _prizesToText(cfg.prizes);
     var asEl = document.getElementById('tour-ed-allow-autosim');
     if (asEl) asEl.checked = !!cfg._adminAllowAutoSim;
@@ -13336,7 +13413,7 @@ window._showSimProgress = function(opts, onDone){
     cfg.numHumans  = parseInt(document.getElementById('tour-ed-hum').value, 10) || 0;
     cfg.aiLevelMin = parseInt(document.getElementById('tour-ed-aimin').value, 10) || 70;
     cfg.aiLevelMax = parseInt(document.getElementById('tour-ed-aimax').value, 10) || 95;
-    cfg.format     = document.getElementById('tour-ed-fmt').value;
+    cfg.format     = _tourEdFmtSelected();
     cfg.formatConfig = cfg.formatConfig || {};
     if (cfg.format === 'ko') {
       var roundsEl = document.getElementById('tour-ed-rounds');
@@ -15052,16 +15129,8 @@ window._showSimProgress = function(opts, onDone){
       edBox.addEventListener('input', _markDirty);
       edBox.addEventListener('change', _markDirty);
     }
-    var fmt = document.getElementById('tour-ed-fmt');
-    if (fmt) {
-      /* Backup del onchange inline (idempotente: vuelve a llamar al
-         mismo handler). El inline es el camino principal y fiable en
-         móvil; este addEventListener es una red por si el atributo
-         se perdiera en algún build. */
-      fmt.addEventListener('change', function(){
-        if (typeof window._tourEdFmtChange === 'function') window._tourEdFmtChange(this);
-      });
-    }
+    /* El "Formato" ahora son CASILLAS (.tour-ed-fmt-opt) con onclick
+       inline → window._tourEdFmtPick. No hay <select> que cablear. */
     /* Botón principal: ✅ CONFIRMAR Y SORTEAR. Lee el formulario,
        sortea equipos en el rango de nivel pedido, mete los humanos
        como PENDIENTE y persiste todo. Si el pool no llega para los

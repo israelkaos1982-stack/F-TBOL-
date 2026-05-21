@@ -929,7 +929,7 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
 
 (function(){
   var LIGA_TEAMS = [
-    'Arsenal','Athatic__TEMP__', 'Athletic Club','Atlético Madrid','Bayern Munich','Celta de Vigo','Deportivo Alavés','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia CF','Villarreal'
+    'Arsenal','Athatic__TEMP__', 'Athletic Club','Atlético Madrid','Celta de Vigo','Deportivo Alavés','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Liverpool','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia CF','Villarreal'
   ].filter(function(t){ return t !== 'Athatic__TEMP__'; }).sort(function(a,b){ return a.localeCompare(b,'es'); });
 
   var LIGA_EXTRAS = {};
@@ -8544,7 +8544,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 (function(){
   var LS_KEY = 'ef_liga38_v4';
   var TEAM_ORDER = [
-    'Arsenal','Athletic Club','Atlético Madrid','Bayern Munich','Celta de Vigo','Deportivo Alavés','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia CF','Villarreal'
+    'Arsenal','Athletic Club','Atlético Madrid','Celta de Vigo','Deportivo Alavés','Elche CF','Espanyol','FC Barcelona','Getafe CF','Girona FC','Liverpool','Mallorca','Osasuna','Rayo Vallecano','Real Betis','Real Madrid','Real Sociedad','Sevilla','Valencia CF','Villarreal'
   ];
   var SHORT_NAMES = {
     'Bayern Munich':'Bayern',
@@ -8739,6 +8739,11 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       var data = results[key] || {};
       if(!meta || typeof data !== 'object') return;
       if(data.gh == null || data.ga == null) return;
+      /* Solo contamos partidos de equipos que siguen en la liga. Un
+         resultado guardado de un equipo retirado (p.ej. el Bayern,
+         que ya no juega la Liga EA Sports) no debe re-crear su fila
+         en la clasificación. */
+      if(!teams[meta.home] || !teams[meta.away]) return;
       var extra = countEventExtras(meta.home, meta.away, data);
       applyMatch(teams, meta.jornada, meta.home, meta.away, data.gh, data.ga, data.penWinner || null, extra);
     });

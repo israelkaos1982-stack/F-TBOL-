@@ -5468,9 +5468,13 @@
   'use strict';
 
   /* ── EQUIPOS ─────────────────────────────────────── */
+  /* Liga EA Sports: 20 equipos. El Bayern Munich NO juega esta liga
+     — se sustituyó por el Liverpool (el reemplazo que el admin ya
+     hizo en el editor de Liga EA). El Bayern compite en la
+     Bundesliga (Resto de Ligas). */
   var TEAMS = [
     'Real Madrid','Athletic Club','Real Sociedad','Sevilla','Villarreal',
-    'Mallorca','Valencia CF','Espanyol','Bayern Munich','Celta de Vigo',
+    'Mallorca','Valencia CF','Espanyol','Liverpool','Celta de Vigo',
     'Deportivo Alavés','Osasuna','Getafe CF','Arsenal','Girona FC',
     'Elche CF','Atlético Madrid','Rayo Vallecano','Real Betis','FC Barcelona'
   ];
@@ -5478,7 +5482,7 @@
   // HUMANOS ahora se lee dinámicamente del storage ligaExt.
   // Si el admin tiene equipos con isHuman=true, esos son los humanos.
   // Fallback a la lista clásica si no hay equipos en el editor.
-  var _HUMANOS_DEFAULT = ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'];
+  var _HUMANOS_DEFAULT = ['Real Madrid','FC Barcelona','Liverpool','Arsenal','Atlético Madrid'];
   var HUMANOS = _HUMANOS_DEFAULT.slice();
   function _refreshHumanosFromStorage(){
     try {
@@ -5496,7 +5500,7 @@
   // Re-check after DOMContentLoaded (applyEngineOverrides might have loaded data)
   document.addEventListener('DOMContentLoaded', function(){ setTimeout(_refreshHumanosFromStorage, 500); });
   var FEATURED_TEAMS = [
-    'Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid',
+    'Real Madrid','FC Barcelona','Liverpool','Arsenal','Atlético Madrid',
     'Athletic Club','Real Betis','Sevilla'
   ];
   var HUMAN_ICONS = {'Bayern Munich':'💡','Arsenal':'🐭','Atlético Madrid':'✏️','Real Madrid':'🔨','FC Barcelona':'👿','PSG':'🦆'};
@@ -5570,9 +5574,18 @@
 
   function isValidLigaSchedule(schedule) {
     if (!Array.isArray(schedule) || schedule.length !== 38) return false;
+    /* Equipos válidos de la liga actual. Un schedule guardado que
+       referencie un equipo que ya NO está en TEAMS (p.ej. uno creado
+       cuando el Bayern aún estaba en la Liga EA, antes de sustituirlo
+       por el Liverpool) se considera caducado → se devuelve false
+       para forzar su regeneración con la plantilla de liga actual. */
+    var valid = {};
+    for (var t = 0; t < TEAMS.length; t++) valid[TEAMS[t]] = true;
     return schedule.every(function(round) {
       return Array.isArray(round) && round.length === 10 && round.every(function(match) {
-        return Array.isArray(match) && match.length === 2 && match[0] && match[1];
+        return Array.isArray(match) && match.length === 2
+          && match[0] && match[1]
+          && valid[match[0]] && valid[match[1]];
       });
     });
   }
@@ -6106,7 +6119,12 @@
   var SCHEDULE = loadSchedule();
   if (!isValidLigaSchedule(SCHEDULE)) {
     SCHEDULE = generarCalendario(_rotarPorReloj(mezclarEquipos(TEAMS.slice())));
-    try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(SCHEDULE)); } catch(_){}
+    /* saveSchedule persiste en localStorage Y en el servidor. Lo
+       usamos (en vez de un setItem suelto) para que, cuando un
+       schedule caduca — p.ej. al quitar el Bayern de la liga —, el
+       calendario regenerado reemplace también al guardado en el
+       backend y no quede uno obsoleto rebotando en cada /api/state. */
+    saveSchedule(SCHEDULE);
   }
   window.LIGA_SCHEDULE = SCHEDULE;
   hydrateLigaStateFromBackend();

@@ -15053,7 +15053,16 @@ window._showSimProgress = function(opts, onDone){
         _readForm(_open.cfg);
         var draw = _drawTeams(_open.cfg);
         if (!draw.ok) {
-          _setFeedback('⚠ ' + draw.error, false);
+          /* El SORTEO falló (p.ej. faltan selecciones en la plantilla
+             para los slots IA pedidos), PERO los cambios de config
+             —nombre, bandera, formato, rondas, nº equipos, humanos—
+             SÍ se persisten. El sorteo es un paso aparte; abortar la
+             escritura entera hacía que renombrar o cambiar el formato
+             de un torneo de selecciones no se guardara nunca.
+             Bug usuario 2026-05-21. */
+          try { window._tourSave(_open.id, _open.cfg); } catch(_){}
+          try { window._tourRender(_open.id); } catch(_){}
+          _setFeedback('⚠ ' + draw.error + '  ·  Nombre y formato guardados igualmente.', false);
           return;
         }
         _open.cfg.teams = draw.teams;

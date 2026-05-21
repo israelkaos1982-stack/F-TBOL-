@@ -30144,6 +30144,8 @@ Tottenham
   #sel-sq-ov input:focus{outline:none;border-color:rgba(154,167,255,.6);}
   #sel-sq-ov .sel-sq-name{font-weight:600;}
   #sel-sq-ov .sel-sq-pw{width:58px;flex:0 0 58px;text-align:center;}
+  #sel-sq-ov .sel-sq-r3{display:flex;gap:4px;}
+  #sel-sq-ov .sel-sq-r3 input{flex:1;width:100%;text-align:center;padding:6px 2px;}
   #sel-sq-ov .sel-sq-del{background:rgba(255,80,80,.16);border:1px solid rgba(255,80,80,.4);
     color:#ff9a9a;width:30px;height:30px;border-radius:7px;cursor:pointer;flex-shrink:0;
     font-size:14px;line-height:1;padding:0;}
@@ -30192,6 +30194,12 @@ Tottenham
           body:JSON.stringify({value:d})}).catch(function(){});
     }catch(_){}
   }
+  /* Normaliza un número al rango 1-100; si no es válido cae a `fb`. */
+  function _clamp(n,fb){
+    n=parseInt(n,10);
+    if(isNaN(n)) return fb;
+    return Math.max(1,Math.min(100,n));
+  }
   /* Registra cada selección en TEAM_RATINGS (escudo + media) y en
      _LIGA_EA_TEAM_STATS (4 ejes; las líneas vacías caen a GLOBAL) para
      que escudos y el motor 4-ejes funcionen como con cualquier club. */
@@ -30201,10 +30209,13 @@ Tottenham
     window._LIGA_EA_TEAM_STATS = window._LIGA_EA_TEAM_STATS || {};
     d.teams.forEach(function(t){
       if(!t || !t.name) return;
-      var pw=parseInt(t.power,10); if(isNaN(pw)) pw=75;
-      pw=Math.max(1,Math.min(100,pw));
+      var pw=_clamp(t.power,75);
       window.TEAM_RATINGS[t.name]={ media:pw, shield:(t.img||'') };
-      window._LIGA_EA_TEAM_STATS[t.name]={ power:pw, atk:pw, mid:pw, def:pw, aggressiveness:50 };
+      window._LIGA_EA_TEAM_STATS[t.name]={
+        power:pw,
+        atk:_clamp(t.atk,pw), mid:_clamp(t.mid,pw), def:_clamp(t.def,pw),
+        aggressiveness:50
+      };
     });
   }
   window._selSquadLoad=_load;
@@ -30214,13 +30225,19 @@ Tottenham
   function _rowHtml(t){
     t=t||{};
     var img=String(t.img||'').trim();
+    function v(x){ return (x!=null && x!=='') ? _esc(x) : ''; }
     return '<div class="sel-sq-row">'
       +'<img src="'+_esc(img)+'" alt="" onerror="this.style.visibility=\'hidden\'">'
       +'<div class="sel-sq-fields">'
       +'<input class="sel-sq-name" type="text" placeholder="Nombre de la selección" value="'+_esc(t.name||'')+'">'
       +'<div class="sel-sq-r2">'
       +'<input class="sel-sq-img" type="text" placeholder="https://… escudo / bandera" value="'+_esc(img)+'">'
-      +'<input class="sel-sq-pw" type="number" min="1" max="100" placeholder="Niv" value="'+(t.power!=null?_esc(t.power):'')+'">'
+      +'</div>'
+      +'<div class="sel-sq-r3">'
+      +'<input class="sel-sq-g" type="number" min="1" max="100" placeholder="GLB" title="Global" value="'+v(t.power)+'">'
+      +'<input class="sel-sq-a" type="number" min="1" max="100" placeholder="ATQ" title="Ataque" value="'+v(t.atk)+'">'
+      +'<input class="sel-sq-m" type="number" min="1" max="100" placeholder="MED" title="Medio" value="'+v(t.mid)+'">'
+      +'<input class="sel-sq-d" type="number" min="1" max="100" placeholder="DEF" title="Defensa" value="'+v(t.def)+'">'
       +'</div></div>'
       +'<button type="button" class="sel-sq-del" title="Eliminar">🗑</button>'
       +'</div>';
@@ -30235,27 +30252,47 @@ Tottenham
       ? list.map(_rowHtml).join('')
       : '<div class="sel-sq-empty">Sin selecciones todavía. Pulsa «➕ Añadir» o «📋 Lista».</div>';
   }
-  /* Importación masiva: una selección por línea. Acepta «Nombre 88»,
-     «Nombre, 88» o «Nombre | 88 | https://…». Sin número → nivel 75. */
+  /* Importación masiva: una selección por línea. Acepta:
+       «Nombre 88»               → solo GLOBAL
+       «Nombre 86 87 85 84»      → GLOBAL ATAQUE MEDIO DEFENSA
+       «Nombre, 88»              → idem con comas
+       «Nombre | 86 87 85 84 | https://…»  → escudo inline
+     El escudo también puede ir en la línea SIGUIENTE (una URL sola se
+     asigna a la selección de la línea anterior). Sin números → nivel 75. */
+  function _parseNums(str){
+    return String(str||'').split(/[\s,;:]+/)
+      .filter(function(x){ return /^\d{1,3}$/.test(x); })
+      .map(function(x){ return parseInt(x,10); });
+  }
   function _parseBulk(text){
     var out=[];
     String(text==null?'':text).split(/\r?\n/).forEach(function(line){
       line=line.trim();
       if(!line) return;
-      var name='', power=75, img='';
+      /* Una URL sola → escudo de la selección de la línea anterior. */
+      if(/^https?:\/\//i.test(line)){
+        if(out.length) out[out.length-1].img=line;
+        return;
+      }
+      var name='', img='', nums=[];
       if(line.indexOf('|')!==-1){
         var parts=line.split('|');
         name=String(parts[0]||'').trim();
-        var p=parseInt(parts[1],10); if(!isNaN(p)) power=p;
+        nums=_parseNums(parts[1]);
         if(parts[2]) img=String(parts[2]).trim();
       } else {
-        var m=line.match(/^(.*?)[\s,;:]+(\d{1,3})\s*$/);
-        if(m){ name=m[1].trim(); power=parseInt(m[2],10); }
-        else name=line;
+        var toks=line.split(/[\s,;:]+/), trail=[];
+        while(toks.length && trail.length<4 && /^\d{1,3}$/.test(toks[toks.length-1]))
+          trail.unshift(parseInt(toks.pop(),10));
+        name=toks.join(' ').trim();
+        nums=trail;
       }
       if(!name) return;
-      power=Math.max(1,Math.min(100,power||75));
-      out.push({name:name,power:power,img:img});
+      var g=_clamp(nums[0],75);
+      out.push({
+        name:name, img:img, power:g,
+        atk:_clamp(nums[1],g), mid:_clamp(nums[2],g), def:_clamp(nums[3],g)
+      });
     });
     return out;
   }
@@ -30266,8 +30303,14 @@ Tottenham
     out.forEach(function(t,i){ idx[String(t.name).toLowerCase()]=i; });
     add.forEach(function(t){
       var k=t.name.toLowerCase();
-      if(idx[k]!=null){ out[idx[k]].power=t.power; if(t.img) out[idx[k]].img=t.img; }
-      else { idx[k]=out.length; out.push({name:t.name,power:t.power,img:t.img||''}); }
+      if(idx[k]!=null){
+        var o=out[idx[k]];
+        o.power=t.power; o.atk=t.atk; o.mid=t.mid; o.def=t.def;
+        if(t.img) o.img=t.img;
+      } else {
+        idx[k]=out.length;
+        out.push({name:t.name,power:t.power,atk:t.atk,mid:t.mid,def:t.def,img:t.img||''});
+      }
     });
     return out;
   }
@@ -30276,10 +30319,11 @@ Tottenham
     if(!body) return;
     _inBulk=true;
     body.innerHTML='<div class="sel-sq-bulk-tip">Una selección por línea — formato '
-      +'<b>Nombre&nbsp;88</b> (también vale <b>Nombre,&nbsp;88</b>). Escudo opcional: '
-      +'<b>Nombre&nbsp;|&nbsp;88&nbsp;|&nbsp;https://…</b>. Sin número → nivel 75. '
-      +'Los nombres ya existentes actualizan su nivel.</div>'
-      +'<textarea id="sel-sq-bulk-ta" rows="9" placeholder="España 88&#10;Francia 90&#10;Brasil 89&#10;Argentina 91&#10;Inglaterra 87"></textarea>'
+      +'<b>Nombre&nbsp;88</b> (solo Global) o <b>Nombre&nbsp;86&nbsp;87&nbsp;85&nbsp;84</b> '
+      +'(<b>Global&nbsp;Ataque&nbsp;Medio&nbsp;Defensa</b>). Escudo opcional: pon la '
+      +'<b>URL en la línea siguiente</b>, o usa <b>Nombre&nbsp;|&nbsp;86&nbsp;87&nbsp;85&nbsp;84&nbsp;|&nbsp;https://…</b>. '
+      +'Sin números → nivel 75. Los nombres ya existentes actualizan sus valores.</div>'
+      +'<textarea id="sel-sq-bulk-ta" rows="9" placeholder="Brasil 86 87 85 84&#10;https://…/brasil.png&#10;Francia 90&#10;Argentina 91 92 90 89"></textarea>'
       +'<div class="sel-sq-bulk-row">'
       +'<button type="button" class="sel-sq-bulk-cancel">✕ Cancelar</button>'
       +'<button type="button" class="sel-sq-bulk-ok">✓ Añadir a la lista</button>'
@@ -30296,9 +30340,12 @@ Tottenham
       var nm=String(((row.querySelector('.sel-sq-name')||{}).value)||'').trim();
       if(!nm) return;
       var img=String(((row.querySelector('.sel-sq-img')||{}).value)||'').trim();
-      var pw=parseInt((row.querySelector('.sel-sq-pw')||{}).value,10);
-      if(isNaN(pw)||pw<1) pw=75; if(pw>100) pw=100;
-      out.push({name:nm,img:img,power:pw});
+      function rd(sel,fb){ return _clamp((row.querySelector(sel)||{}).value,fb); }
+      var g=rd('.sel-sq-g',75);
+      out.push({
+        name:nm, img:img, power:g,
+        atk:rd('.sel-sq-a',g), mid:rd('.sel-sq-m',g), def:rd('.sel-sq-d',g)
+      });
     });
     var seen={},dedup=[];
     for(var i=out.length-1;i>=0;i--){ var k=out[i].name.toLowerCase(); if(seen[k])continue; seen[k]=1; dedup.unshift(out[i]); }

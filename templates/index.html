@@ -117,27 +117,35 @@
     }
   </style>
   <script>
-    /* Splash auto-hide atado a window.load (= la barra azul de carga
-       del navegador desaparece). Petición usuario 2026-05-20: "que
-       salga todo el tiempo hasta que la barra azul de arriba esté
-       completa para que merja y esté hidratado todo lo actual".
+    /* Splash auto-hide RÁPIDO atado a DOMContentLoaded (NO a
+       window.load). 2026-05-21 — el usuario reportó que la web
+       tardaba 45+ s en abrir (antes <5 s).
+
+       Causa: el commit 1dd5623 ató el splash a `window.load`, que
+       NO dispara hasta que el navegador descarga TODOS los assets
+       (cientos de escudos PNG/SVG). En móvil eso son 45+ s — la
+       "barra azul" del browser no se completa hasta entonces.
+
+       window.load ≠ "app hidratada". La app está USABLE en
+       DOMContentLoaded: el HTML está parseado y el bundle
+       (index.bundle.js, script bloqueante) ya ha ejecutado, así que
+       el render inicial + el arranque de los fetches de hidratación
+       (/api/liga-ext/*, /api/kv/*) ya ocurrieron. Los escudos
+       siguen bajando en segundo plano SIN bloquear nada.
 
        Flujo:
-       - El splash se queda visible mientras la barra azul del browser
-         está activa (recursos cargando, fetches en vuelo, parsing).
-       - Cuando dispara window.load (todos los assets descargados) se
-         programa el hide() tras un grace de 1200 ms para que la
-         hidratación localStorage→server (los GET a /api/liga-ext/* y
-         /api/kv/*) tengan margen a re-renderizar el DOM con datos
-         frescos antes de quitar la cortina.
-       - Caps: mínimo 1500 ms (no flashear ultra rápido aunque todo
-         esté en caché) y máximo 25000 ms (backstop por si la red se
-         atasca o un asset no llega — no dejar al usuario clavado).
-       - Tap/click cierra antes (no atasca). */
+       - hide() se programa en DOMContentLoaded + GRACE_MS. El grace
+         da un margen a que los fetches de hidratación más rápidos
+         (cache-hit / server caliente) re-rendericen antes de quitar
+         la cortina.
+       - Caps: MIN 1200 ms (no flashear ultra rápido) y MAX 8000 ms
+         (backstop si el bundle tarda mucho en parsear — nunca dejar
+         al usuario clavado).
+       - Tap/click cierra antes. */
     (function(){
-      var MIN_MS   = (typeof window._BOOT_SPLASH_MIN_MS   === 'number') ? window._BOOT_SPLASH_MIN_MS   :  1500;
-      var GRACE_MS = (typeof window._BOOT_SPLASH_GRACE_MS === 'number') ? window._BOOT_SPLASH_GRACE_MS :  1200;
-      var MAX_MS   = (typeof window._BOOT_SPLASH_MAX_MS   === 'number') ? window._BOOT_SPLASH_MAX_MS   : 25000;
+      var MIN_MS   = (typeof window._BOOT_SPLASH_MIN_MS   === 'number') ? window._BOOT_SPLASH_MIN_MS   : 1200;
+      var GRACE_MS = (typeof window._BOOT_SPLASH_GRACE_MS === 'number') ? window._BOOT_SPLASH_GRACE_MS :  700;
+      var MAX_MS   = (typeof window._BOOT_SPLASH_MAX_MS   === 'number') ? window._BOOT_SPLASH_MAX_MS   : 8000;
       var el = document.getElementById('boot-splash');
       if (!el) return;
       var hidden = false;
@@ -154,12 +162,14 @@
       el.addEventListener('click', hide, { once:true });
       el.addEventListener('touchend', hide, { once:true });
 
-      /* Trigger principal: window.load + GRACE_MS. */
-      function _scheduleAfterLoad(){ setTimeout(hide, GRACE_MS); }
-      if (document.readyState === 'complete') {
-        _scheduleAfterLoad();
+      /* Trigger principal: DOMContentLoaded + GRACE_MS (app usable,
+         el bundle ya ejecutó). NO window.load — eso espera a TODOS
+         los escudos y dispara los 45 s. */
+      function _scheduleAfterReady(){ setTimeout(hide, GRACE_MS); }
+      if (document.readyState === 'interactive' || document.readyState === 'complete') {
+        _scheduleAfterReady();
       } else {
-        window.addEventListener('load', _scheduleAfterLoad, { once:true });
+        document.addEventListener('DOMContentLoaded', _scheduleAfterReady, { once:true });
       }
       /* Backstop absoluto. */
       setTimeout(hide, MAX_MS);

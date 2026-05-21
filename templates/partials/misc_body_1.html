@@ -75,31 +75,11 @@ window.pG = function(fn) {
 /* Overlay reutilizable de "balón girando 0→100%" durante N ms.
    onDone se ejecuta al llegar a 100%. */
 window._showSimProgress = function(opts, onDone){
-  opts = opts || {};
-  var ms    = Number(opts.ms || 3000);
-  var label = String(opts.label || 'SIMULANDO');
-  var ov  = document.getElementById('oq-sim-overlay');
-  var pct = document.getElementById('oq-sim-pct');
-  var lab = document.getElementById('oq-sim-label');
-  var bar = document.getElementById('oq-sim-bar');
-  if(!ov || !pct || !bar){ if(typeof onDone === 'function') onDone(); return; }
-  if(lab) lab.textContent = label;
-  ov.style.display = 'flex';
-  pct.textContent  = '0%';
-  bar.style.width  = '0%';
-  var start = Date.now();
-  var tick  = function(){
-    var t = Math.min(1, (Date.now() - start) / ms);
-    var p = Math.round(t * 100);
-    pct.textContent  = p + '%';
-    bar.style.width  = p + '%';
-    if(t < 1){ requestAnimationFrame(tick); }
-    else {
-      ov.style.display = 'none';
-      if(typeof onDone === 'function') onDone();
-    }
-  };
-  requestAnimationFrame(tick);
+  /* OVERLAY DESHABILITADO — petición usuario 2026-05-21 ("quítame
+     todas esas pantallas de simulación"). Antes mostraba el overlay
+     #oq-sim-overlay con barra de 3 s. Ahora ejecuta onDone al
+     instante: la simulación corre directa, sin pantalla. */
+  if(typeof onDone === 'function') onDone();
 };
 </script>
 

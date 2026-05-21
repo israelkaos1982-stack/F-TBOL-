@@ -25460,61 +25460,37 @@ document.addEventListener('DOMContentLoaded', function() {
   /* run(opts, runner) — runner recibe {progress(p,sub)} y devuelve void/Promise.
      opts: { title, sub, theme, minMs (default 600) } */
   function run(opts, runner){
-    opts = opts || {};
-    show(opts.title || 'SIMULANDO…', opts.sub || 'Preparando…', opts.theme);
-    var minMs = _scale(opts.minMs != null ? opts.minMs : 600);
-    var t0 = Date.now();
-    return new Promise(function(resolve, reject){
-      var _settled = false;
-      function _finish(ok, val){
-        if (_settled) return;
-        _settled = true;
-        try { if (_wd) { clearTimeout(_wd); _wd = null; } } catch(_){}
-        try { hide(); } catch(_){}
-        if (ok) resolve(val); else reject(val);
-      }
-      /* ── WATCHDOG (2026-05-17) ───────────────────────────────────
-         FOTO usuario: la barra de "RESTO DE LIGAS / LIGA" se queda
-         clavada en 99 % "Generando jornadas…" y no avanza. Causa:
-         si el runner (sim de una liga) nunca resuelve su Promise
-         —por un cuelgue/excepción tragada en el trabajo síncrono—
-         el trickle sube a 99 (tope de diseño) y el overlay NO se
-         cierra JAMÁS, bloqueando toda la pantalla. Este watchdog
-         garantiza que el overlay SIEMPRE se cierra: pasado un tope
-         generoso, fuerza 100 % + hide + resolve para que la UI se
-         desbloquee y se vea lo que se haya simulado. El cierre real
-         del runner (si llega) queda neutralizado por `_settled`. */
-      var WATCHDOG_MS = Math.max(45000, (_scale(opts.minMs != null ? opts.minMs : 600)) + 90000);
-      var _wd = setTimeout(function(){
-        if (_settled) return;
-        try { console.warn('[ftbolLoader] watchdog: el runner no resolvió en '+WATCHDOG_MS+'ms — cerrando overlay para desbloquear la UI.'); } catch(_){}
-        try { progress(100, 'Completado'); } catch(_){}
-        setTimeout(function(){ _finish(true, undefined); }, 200);
-      }, WATCHDOG_MS);
-      /* Damos un frame para que el overlay pinte ANTES del trabajo
-         pesado — si no, navegadores que congelan el repaint dejarían
-         la pantalla en blanco hasta el final. */
+    /* OVERLAY DESHABILITADO — petición usuario 2026-05-21: "quítame
+       todas esas pantallas de simulación, no funcionan. Quiero que
+       todas las simulaciones de ligas o sorteos sean igual de rápidas
+       que Hypermotion / Primera Federación. Sin complicaciones."
+
+       Antes esta función mostraba el overlay del balón con barra de
+       progreso, fake-progress, watchdog, minMs, etc. Toda esa máquina
+       hacía que las sims lentas PARECIERAN colgadas (barra clavada).
+       Ahora `run` ejecuta el runner DIRECTAMENTE, sin pantalla: la sim
+       corre y refresca su propio screen al terminar, igual de directo
+       que Hypermotion. `ctx.progress` es un no-op para no romper a los
+       runners que lo invocan. */
+    return new Promise(function(resolve){
+      var _noop = function(){};
+      var done = false;
+      function fin(v){ if(done) return; done = true; resolve(v); }
+      /* setTimeout(0): deja que el evento de click termine antes del
+         trabajo (posiblemente síncrono) — el botón se "desactiva"
+         visualmente sin parecer congelado. */
       setTimeout(function(){
         try {
-          var p = runner({ progress: progress });
-          Promise.resolve(p).then(function(res){
-            if (_settled) return;
-            progress(100, 'Completado');
-            var elapsed = Date.now() - t0;
-            /* Mínimo 350 ms tras el 100 % para que la barra animada
-               llegue visiblemente a 100 antes de ocultar (antes con
-               wait=0 saltaba de ~95 a oculto sin verse el 100). */
-            var wait = Math.max(350, minMs - elapsed);
-            setTimeout(function(){ _finish(true, res); }, wait);
-          }, function(err){
-            try { console.error('[ftbolLoader]', err); } catch(_){}
-            _finish(false, err);
+          var p = (typeof runner === 'function') ? runner({ progress: _noop }) : null;
+          Promise.resolve(p).then(function(res){ fin(res); }, function(err){
+            try { console.error('[sim]', err); } catch(_){}
+            fin();
           });
         } catch(err){
-          try { console.error('[ftbolLoader]', err); } catch(_){}
-          _finish(false, err);
+          try { console.error('[sim]', err); } catch(_){}
+          fin();
         }
-      }, 30);
+      }, 0);
     });
   }
 
@@ -25558,43 +25534,16 @@ document.addEventListener('DOMContentLoaded', function() {
   window._ftbolRefreshOpenSquadAfterSim = _refreshOpenSquadAfterSim;
 
   function _runFakeProgress(opts, work){
-    /* Escalado por SPEED: las phases.ms también se acortan para que la
-       reducción global del minMs no quede desincronizada con la
-       progresión visual. Usamos window.ftbolLoaderScale para que un
-       único factor controle todo el sistema. */
-    var scale = (typeof window.ftbolLoaderScale === 'function')
-      ? window.ftbolLoaderScale
-      : function(x){ return x; };
-    return window.ftbolLoaderRun({
-      title: opts.title, sub: opts.sub || 'Inicializando equipos…',
-      theme: opts.theme, minMs: opts.minMs||1200
-    }, function(ctx){
-      return new Promise(function(resolve){
-        var phases = opts.phases || [
-          { pct:18, sub:'Cargando plantillas…',     ms:120 },
-          { pct:42, sub:'Generando jornadas…',      ms:180 },
-          { pct:68, sub:'Simulando partidos…',      ms:200 },
-          { pct:88, sub:'Calculando clasificación…',ms:160 }
-        ];
-        var i = 0;
-        function nextPhase(){
-          if(i >= phases.length){
-            ctx.progress(95, 'Volcando estadísticas…');
-            /* Cedemos un frame para que la barra pinte 95% antes del
-               trabajo síncrono (que congela el render). */
-            setTimeout(function(){
-              try { work(); } catch(e){ try{console.error(e);}catch(_){} }
-              ctx.progress(100, 'Hecho');
-              resolve();
-            }, scale(40));
-            return;
-          }
-          var ph = phases[i++];
-          ctx.progress(ph.pct, ph.sub);
-          setTimeout(nextPhase, scale(ph.ms));
-        }
-        nextPhase();
-      });
+    /* OVERLAY DESHABILITADO (2026-05-21). Antes mostraba el balón con
+       fases falsas (Cargando plantillas → Generando jornadas → …).
+       Ahora ejecuta el trabajo DIRECTAMENTE y resuelve. Sin pantalla,
+       sin fases, sin esperas artificiales. */
+    return new Promise(function(resolve){
+      setTimeout(function(){
+        try { if (typeof work === 'function') work(); }
+        catch(e){ try { console.error('[sim]', e); } catch(_){} }
+        resolve();
+      }, 0);
     });
   }
 

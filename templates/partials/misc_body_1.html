@@ -11971,11 +11971,11 @@ window._showSimProgress = function(opts, onDone){
       <label>Nombre</label>
       <input id="tour-ed-name" type="text" maxlength="40">
     </div>
-    <div class="tour-ed-row tour-ed-row-2">
-      <div><label>Bandera</label><input id="tour-ed-flag" type="text" maxlength="4" placeholder="🇺🇸"></div>
-      <div><label>Fee 🪙</label><input id="tour-ed-fee" type="number" min="0" max="999"></div>
+    <div class="tour-ed-row tour-ed-row-2" id="tour-ed-flagfee-row">
+      <div id="tour-ed-flag-cell"><label>Bandera / escudo</label><input id="tour-ed-flag" type="text" maxlength="300" placeholder="🇺🇸 o https://…"></div>
+      <div id="tour-ed-fee-cell"><label>Fee 🪙</label><input id="tour-ed-fee" type="number" min="0" max="999"></div>
     </div>
-    <div class="tour-ed-row tour-ed-row-2">
+    <div class="tour-ed-row tour-ed-row-2" id="tour-ed-dates-row">
       <div><label>Inicio</label><input id="tour-ed-dstart" type="text" maxlength="20" placeholder="1 Jul"></div>
       <div><label>Fin</label><input id="tour-ed-dend" type="text" maxlength="20" placeholder="10 Jul"></div>
     </div>
@@ -11985,7 +11985,7 @@ window._showSimProgress = function(opts, onDone){
       <div><label>Nº equipos</label><input id="tour-ed-num" type="number" min="2" max="128"></div>
       <div><label>Humanos 👤</label><input id="tour-ed-hum" type="number" min="0" max="128"></div>
     </div>
-    <div class="tour-ed-row tour-ed-row-2">
+    <div class="tour-ed-row tour-ed-row-2" id="tour-ed-ailevel-row">
       <div><label>Nivel IA mín.</label><input id="tour-ed-aimin" type="number" min="1" max="100"></div>
       <div><label>Nivel IA máx.</label><input id="tour-ed-aimax" type="number" min="1" max="100"></div>
     </div>
@@ -11993,16 +11993,25 @@ window._showSimProgress = function(opts, onDone){
     <!-- Excluir ligas del sorteo (multi-checkbox). Cada toggle marca
          una liga (`ligaExt_<slug>`) cuyos equipos quedan fuera del
          pool. Persiste en `cfg.excludedLeagues`. -->
-    <div class="tour-ed-row">
+    <div class="tour-ed-row" id="tour-ed-leagues-row">
       <label>Excluir ligas del sorteo</label>
       <div id="tour-ed-leagues" class="tour-ed-leagues"></div>
     </div>
 
     <!-- Pool de equipos disponibles (informativo, se actualiza al cambiar nivel) -->
-    <div class="tour-ed-row">
+    <div class="tour-ed-row" id="tour-ed-pool-row">
       <label>Pool de equipos en el rango</label>
       <div id="tour-ed-pool-stat" class="tour-ed-pool-stat">
         Define nivel IA mín./máx. para ver el pool disponible.
+      </div>
+    </div>
+
+    <!-- Aviso para torneos de Selecciones: los equipos salen de la
+         plantilla de selecciones, no del pool de clubes. -->
+    <div class="tour-ed-row" id="tour-ed-sel-note" style="display:none;">
+      <div class="tour-ed-pool-stat" style="border-color:rgba(45,212,191,.4);color:rgba(180,255,247,.85);">
+        🌐 Los equipos de este torneo son <b>selecciones</b>. Edítalas en
+        <b>«Plantilla de selecciones»</b> (pantalla Selecciones · 🖍).
       </div>
     </div>
 
@@ -12021,7 +12030,7 @@ window._showSimProgress = function(opts, onDone){
     </div>
 
     <!-- Premios -->
-    <div class="tour-ed-row">
+    <div class="tour-ed-row" id="tour-ed-prizes-row">
       <label>Premios 🪙 (uno por línea, formato `clave:valor`)</label>
       <textarea id="tour-ed-prizes" rows="5" placeholder="champ:100&#10;sub:80&#10;sf:60"></textarea>
     </div>
@@ -12051,6 +12060,21 @@ window._showSimProgress = function(opts, onDone){
 <style>
   #tour-editor-overlay .tour-ed-row{margin-bottom:10px;}
   #tour-editor-overlay .tour-ed-row-2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  /* Modo Selecciones (torneos spv / sfn): se ocultan fee, fechas,
+     nivel IA, exclusión de ligas, pool de clubes y premios. Los
+     equipos salen de la plantilla de selecciones. 2026-05-21. */
+  #tour-editor-overlay.is-sel #tour-ed-fee-cell,
+  #tour-editor-overlay.is-sel #tour-ed-dates-row,
+  #tour-editor-overlay.is-sel #tour-ed-ailevel-row,
+  #tour-editor-overlay.is-sel #tour-ed-leagues-row,
+  #tour-editor-overlay.is-sel #tour-ed-pool-row,
+  #tour-editor-overlay.is-sel #tour-ed-prizes-row{display:none !important;}
+  #tour-editor-overlay.is-sel #tour-ed-flagfee-row{grid-template-columns:1fr;}
+  #tour-editor-overlay.is-sel #tour-ed-sel-note{display:block !important;}
+  /* Imagen https usada como bandera del torneo. */
+  .sc-emoji img.sc-flag-img{width:26px;height:26px;object-fit:contain;border-radius:4px;vertical-align:middle;}
+  .sec-emoji img.sec-flag-img{width:30px;height:30px;object-fit:contain;border-radius:4px;vertical-align:middle;}
+  .tv-mg-nm img.tv-flag-img{width:20px;height:20px;object-fit:contain;border-radius:3px;vertical-align:middle;}
   #tour-editor-overlay label{display:block;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.55);text-transform:uppercase;margin-bottom:3px;font-family:Oswald,sans-serif;}
   #tour-editor-overlay input,#tour-editor-overlay select,#tour-editor-overlay textarea{
     width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
@@ -13085,6 +13109,24 @@ window._showSimProgress = function(opts, onDone){
      `cfg.numHumans` placeholders "PENDIENTE" se reparten separando a
      los humanos (ver `_placeDrawnTeams`). */
   function _drawTeams(cfg){
+    /* Torneos de Selecciones: el pool NO son clubes — son las
+       selecciones de la plantilla (selecciones_squad_v1). Sin rango
+       de nivel IA ni exclusión de ligas. 2026-05-21. */
+    var _board = _tvBoardOf(cfg.id);
+    if (_board === 'sel-previa' || _board === 'sel-final') {
+      try { if (window._selSquadHydrate) window._selSquadHydrate(); } catch(_){}
+      var selSrc = [];
+      try { selSrc = (window._selSquadLoad && window._selSquadLoad().teams) || []; } catch(_){}
+      var selPool = selSrc.filter(function(t){ return t && t.name; }).map(function(t){
+        return { name:t.name, isHuman:false, shield:t.img||'', power:(t.power||75) };
+      });
+      var selNeeded = Math.max(0, (cfg.numTeams || 0) - (cfg.numHumans || 0));
+      if (selPool.length < selNeeded) {
+        return { ok:false, error: 'Solo hay '+selPool.length+' selecciones en la plantilla. Necesitas '+selNeeded+'. Añádelas en «Plantilla de selecciones».' };
+      }
+      _shuffle(selPool);
+      return { ok:true, teams: _placeDrawnTeams(cfg, selPool.slice(0, selNeeded), cfg.numHumans || 0) };
+    }
     var aimin = cfg.aiLevelMin || 1;
     var aimax = cfg.aiLevelMax || 100;
     var excluded = cfg.excludedLeagues || [];
@@ -13325,6 +13367,17 @@ window._showSimProgress = function(opts, onDone){
     cfg.prizes = _prizesFromText(document.getElementById('tour-ed-prizes').value);
     var asEl2 = document.getElementById('tour-ed-allow-autosim');
     cfg._adminAllowAutoSim = !!(asEl2 && asEl2.checked);
+    /* Torneos de Selecciones: sin dinero, premios, fechas, nivel IA ni
+       exclusión de ligas (esos campos no se muestran). */
+    if (_tvBoardOf(cfg.id) !== 'verano') {
+      cfg.fee = 0;
+      cfg.prizes = {};
+      cfg.dateStart = '';
+      cfg.dateEnd = '';
+      cfg.aiLevelMin = 1;
+      cfg.aiLevelMax = 100;
+      cfg.excludedLeagues = [];
+    }
     return cfg;
   }
 
@@ -13344,9 +13397,13 @@ window._showSimProgress = function(opts, onDone){
     try { window._invalidateTourTeamsCache(); } catch(_){}
     var cached = _tourLoadCachedSync(id);
     var cfg = cached || _cloneDefault(id);
+    cfg.id = id;   /* necesario para _tvBoardOf en _readForm / _drawTeams */
     _open = { id: id, cfg: cfg };
     document.getElementById('tour-editor-title').textContent = 'EDITAR · ' + (cfg.name || id).toUpperCase();
     _populateForm(cfg);
+    /* Torneos de Selecciones (spv / sfn): editor simplificado. */
+    var _ovlSel = document.getElementById('tour-editor-overlay');
+    if (_ovlSel) _ovlSel.classList.toggle('is-sel', _tvBoardOf(id) !== 'verano');
     _setFeedback('');
     document.getElementById('tour-editor-overlay').style.display = 'flex';
     /* PREFETCH PERMANENTE: bajamos a localStorage TODAS las ligas que
@@ -13769,7 +13826,7 @@ window._showSimProgress = function(opts, onDone){
     var flagEl  = document.getElementById('tour-flag-'+id);
     var infoEl  = document.getElementById('tour-info-'+id);
     if (titleEl && cfg.name) titleEl.textContent = cfg.name;
-    if (flagEl  && cfg.flag) flagEl.textContent  = cfg.flag;
+    if (flagEl  && cfg.flag) flagEl.innerHTML    = _tourFlagHtml(cfg.flag, 'sec-flag-img');
     if (!infoEl) return;
     var teams = cfg.teams || [];
     if (!teams.length) {
@@ -15913,8 +15970,21 @@ window._showSimProgress = function(opts, onDone){
       if (i === _picker.slotIdx) return;
       if (t && t.name && t.name !== 'PENDIENTE') taken[t.name.toLowerCase()] = true;
     });
-    var matches = _allTeams().filter(function(t){
-      if (_teamInExcludedLeagues(t, excluded)) return false;
+    /* Torneos de Selecciones: el humano elige una selección de la
+       plantilla, no un club. */
+    var _pkBoard = _tvBoardOf(_picker.tourId);
+    var _pkSrc;
+    if (_pkBoard === 'sel-previa' || _pkBoard === 'sel-final') {
+      var _pkSel = [];
+      try { _pkSel = (window._selSquadLoad && window._selSquadLoad().teams) || []; } catch(_){}
+      _pkSrc = _pkSel.filter(function(t){ return t && t.name; }).map(function(t){
+        return { name:t.name, power:(t.power||75), shield:t.img||'' };
+      });
+    } else {
+      _pkSrc = _allTeams();
+    }
+    var matches = _pkSrc.filter(function(t){
+      if (_pkBoard === 'verano' && _teamInExcludedLeagues(t, excluded)) return false;
       /* Petición usuario 2026-05-09: el HUMANO puede elegir CUALQUIER
          equipo del pool, sin importar el rango de nivel IA. El rango
          solo aplica al sorteo automático de IAs. */
@@ -16043,6 +16113,18 @@ window._showSimProgress = function(opts, onDone){
     'sel-final':  ['linear-gradient(135deg,#2a1f00 0%,#7a5a00 35%,#c89020 50%,#7a5a00 65%,#2a1f00 100%)','#f0c040']
   };
   function _tvEsc(s){ return String(s == null ? '' : s).replace(/[<>"]/g, function(c){ return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;'; }); }
+  /* Una "bandera" de torneo puede ser un emoji O una URL https de
+     imagen (petición usuario 2026-05-21). Devuelve el HTML a pintar. */
+  function _tourIsImgFlag(f){ return /^https?:\/\//i.test(String(f == null ? '' : f).trim()); }
+  function _tourFlagHtml(flag, cls){
+    flag = String(flag == null ? '' : flag).trim();
+    if (_tourIsImgFlag(flag)) {
+      return '<img class="' + (cls || '') + '" src="' + _tvEsc(flag) + '" alt="" '
+        + 'onerror="this.style.display=\'none\'">';
+    }
+    return _tvEsc(flag);
+  }
+  window._tourFlagHtml = _tourFlagHtml;
   function _tvRegLoad(){
     var reg = null;
     try { var raw = localStorage.getItem(_TV_REG_KEY); if (raw) reg = JSON.parse(raw); } catch(_){}
@@ -16091,7 +16173,7 @@ window._showSimProgress = function(opts, onDone){
       slot.html += '<div class="submenu-card sc-' + id + '" '
         + 'style="background:' + col[0] + ' !important;border-color:' + col[1] + ' !important;" '
         + 'onclick="go(\'s-' + id + '\')">'
-        + '<span class="sc-emoji">' + _tvEsc(_tvFlag(id)) + '</span>'
+        + '<span class="sc-emoji">' + _tourFlagHtml(_tvFlag(id), 'sc-flag-img') + '</span>'
         + '<span class="sc-label">' + _tvEsc(_tvName(id)) + '</span>'
         + '<button type="button" class="sc-info-btn" onclick="event.stopPropagation();window.muTourInfo&&window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
         + '<span class="sc-arr">▶</span>'
@@ -16141,14 +16223,14 @@ window._showSimProgress = function(opts, onDone){
     var h = '<div class="tv-mg-sec">Torneos activos</div>';
     if (!active.length) h += '<div class="tv-mg-empty">Ninguno.</div>';
     active.forEach(function(id){
-      h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tvEsc(_tvFlag(id)) + ' ' + _tvEsc(_tvName(id)) + '</span>'
+      h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + '</span>'
         + '<button class="tv-mg-btn tv-mg-del" data-act="del" data-id="' + id + '">🗑 Eliminar</button></div>';
     });
     var hiddenB = builtins.filter(function(id){ return !visSet[id]; });
     if (hiddenB.length){
       h += '<div class="tv-mg-sec">Restaurar built-in (datos conservados)</div>';
       hiddenB.forEach(function(id){
-        h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tvEsc(_tvFlag(id)) + ' ' + _tvEsc(_tvName(id)) + '</span>'
+        h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + '</span>'
           + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button></div>';
       });
     }
@@ -16161,7 +16243,7 @@ window._showSimProgress = function(opts, onDone){
         + '<button class="tv-mg-btn tv-mg-add" data-act="new">➕ Nuevo torneo</button></div>';
       freeSlots.forEach(function(id){
         var saved = null; try { saved = localStorage.getItem(_key(id)); } catch(_){}
-        if (saved) h += '<div class="tv-mg-row"><span class="tv-mg-nm" style="opacity:.7;">↳ ' + _tvEsc(_tvFlag(id)) + ' ' + _tvEsc(_tvName(id)) + ' (guardado)</span>'
+        if (saved) h += '<div class="tv-mg-row"><span class="tv-mg-nm" style="opacity:.7;">↳ ' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + ' (guardado)</span>'
           + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button></div>';
       });
     }
@@ -29954,9 +30036,12 @@ Tottenham
   }
   #s-selecciones .sel-sec-title.is-previa{color:#2dd4bf;text-shadow:0 0 14px rgba(45,212,191,.45);}
   #s-selecciones .sel-sec-title.is-final{color:#f0c040;text-shadow:0 0 14px rgba(240,192,64,.45);}
+  #s-selecciones .sel-sec-title.is-squad{color:#9aa7ff;text-shadow:0 0 14px rgba(154,167,255,.4);}
   #s-selecciones .sel-sec-title .sel-sec-line{flex:1;height:1px;}
   #s-selecciones .sel-sec-title.is-previa .sel-sec-line{background:linear-gradient(90deg,rgba(45,212,191,.6),transparent);}
   #s-selecciones .sel-sec-title.is-final .sel-sec-line{background:linear-gradient(90deg,rgba(240,192,64,.6),transparent);}
+  #s-selecciones .sel-sec-title.is-squad .sel-sec-line{background:linear-gradient(90deg,rgba(154,167,255,.6),transparent);}
+  #s-selecciones .sel-sec-title.is-squad .sel-mg-btn{border:1px solid rgba(154,167,255,.55);}
   #s-selecciones .sel-mg-btn{
     background:rgba(0,0,0,.45);color:#fff;cursor:pointer;
     width:26px;height:26px;border-radius:7px;font-size:13px;line-height:1;
@@ -29979,6 +30064,10 @@ Tottenham
   #s-selecciones .submenu-card .sc-info-btn:active{background:rgba(255,255,255,.18);}
   #s-selecciones .submenu-card .sc-arr{margin-left:6px;}
 </style>
+<div class="sel-sec-title is-squad">
+  <span>👥 PLANTILLA DE SELECCIONES</span><span class="sel-sec-line"></span>
+  <button class="sel-mg-btn" data-squad="1" title="Editar plantilla de selecciones">🖍</button>
+</div>
 <div class="sel-sec-title is-previa">
   <span>🛡 RONDAS PREVIAS</span><span class="sel-sec-line"></span>
   <button class="sel-mg-btn" data-board="sel-previa" title="Gestionar Rondas Previas">🖍</button>
@@ -30004,6 +30093,16 @@ Tottenham
     var btn = ev.target && ev.target.closest && ev.target.closest('#s-selecciones .sel-mg-btn');
     if (!btn) return;
     ev.preventDefault(); ev.stopPropagation();
+    /* Botón 👥 → editor de la plantilla de selecciones. */
+    if (btn.getAttribute('data-squad')){
+      if (typeof window._selSquadOpenEditor !== 'function'){
+        alert('⚠ El editor de selecciones no se ha cargado. Recarga la página.');
+        return;
+      }
+      if (typeof window.pG === 'function') window.pG(function(){ window._selSquadOpenEditor(); });
+      else window._selSquadOpenEditor();
+      return;
+    }
     var board = btn.getAttribute('data-board') || 'sel-previa';
     if (typeof window._tvOpenManage !== 'function'){
       alert('⚠ La gestión de torneos no se ha cargado. Recarga la página.');
@@ -30012,6 +30111,203 @@ Tottenham
     if (typeof window.pG === 'function') window.pG(function(){ window._tvOpenManage(board); });
     else window._tvOpenManage(board);
   }, true);
+})();
+</script>
+
+<!-- ═══ PLANTILLA DE SELECCIONES (2026-05-21) ═══
+     Editor de las selecciones nacionales: nombre + escudo (URL https)
+     + nivel. Es el "pool" del que tiran los torneos de Selecciones
+     (spv* / sfn*). Se persiste en `selecciones_squad_v1` y se registra
+     en TEAM_RATINGS + _LIGA_EA_TEAM_STATS para que escudos y el motor
+     de simulación 4-ejes funcionen igual que con cualquier club. -->
+<style>
+  #sel-sq-ov{position:fixed;inset:0;z-index:100040;display:none;
+    align-items:center;justify-content:center;padding:18px;background:rgba(0,0,5,.85);}
+  #sel-sq-ov .sel-sq-card{width:min(480px,95vw);max-height:84vh;display:flex;
+    flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#11151f,#0a0d14);
+    border:1px solid rgba(154,167,255,.45);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
+  #sel-sq-ov .sel-sq-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08);font-family:Oswald,sans-serif;
+    letter-spacing:1.5px;font-size:14px;color:#9aa7ff;}
+  #sel-sq-ov .sel-sq-x{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
+    color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;}
+  #sel-sq-ov .sel-sq-body{padding:10px 14px;overflow-y:auto;flex:1;}
+  #sel-sq-ov .sel-sq-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:7px 8px;}
+  #sel-sq-ov .sel-sq-row img{width:30px;height:30px;object-fit:contain;border-radius:4px;
+    flex-shrink:0;background:rgba(255,255,255,.06);}
+  #sel-sq-ov .sel-sq-fields{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0;}
+  #sel-sq-ov .sel-sq-r2{display:flex;gap:4px;}
+  #sel-sq-ov input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
+    color:#fff;border-radius:6px;padding:6px 8px;font-size:12.5px;font-family:Rajdhani,sans-serif;
+    box-sizing:border-box;width:100%;}
+  #sel-sq-ov input:focus{outline:none;border-color:rgba(154,167,255,.6);}
+  #sel-sq-ov .sel-sq-name{font-weight:600;}
+  #sel-sq-ov .sel-sq-pw{width:58px;flex:0 0 58px;text-align:center;}
+  #sel-sq-ov .sel-sq-del{background:rgba(255,80,80,.16);border:1px solid rgba(255,80,80,.4);
+    color:#ff9a9a;width:30px;height:30px;border-radius:7px;cursor:pointer;flex-shrink:0;
+    font-size:14px;line-height:1;padding:0;}
+  #sel-sq-ov .sel-sq-foot{padding:10px 14px 14px;border-top:1px solid rgba(255,255,255,.08);
+    display:flex;gap:8px;}
+  #sel-sq-ov .sel-sq-add{flex:1;background:rgba(154,167,255,.16);border:1px solid rgba(154,167,255,.45);
+    color:#cdd4ff;border-radius:8px;padding:9px;font-family:Oswald,sans-serif;letter-spacing:1px;
+    font-size:12px;cursor:pointer;}
+  #sel-sq-ov .sel-sq-save{flex:1;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;
+    border:none;border-radius:8px;padding:9px;font-family:Oswald,sans-serif;letter-spacing:1px;
+    font-size:12px;font-weight:700;cursor:pointer;}
+  #sel-sq-ov .sel-sq-empty{padding:18px;text-align:center;font-size:12.5px;
+    color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;}
+</style>
+<script>
+(function(){
+  var KEY = 'selecciones_squad_v1';
+  function _load(){
+    var d=null;
+    try{ var raw=localStorage.getItem(KEY); if(raw) d=JSON.parse(raw); }catch(_){}
+    if(!d || !Array.isArray(d.teams)) d={v:1,teams:[]};
+    return d;
+  }
+  function _save(d){
+    try{ localStorage.setItem(KEY, JSON.stringify(d)); }catch(_){}
+    try{
+      if(typeof window.fetch==='function')
+        window.fetch('/api/kv/'+KEY,{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({value:d})}).catch(function(){});
+    }catch(_){}
+  }
+  /* Registra cada selección en TEAM_RATINGS (escudo + media) y en
+     _LIGA_EA_TEAM_STATS (4 ejes; las líneas vacías caen a GLOBAL) para
+     que escudos y el motor 4-ejes funcionen como con cualquier club. */
+  function _hydrate(){
+    var d=_load();
+    window.TEAM_RATINGS = window.TEAM_RATINGS || {};
+    window._LIGA_EA_TEAM_STATS = window._LIGA_EA_TEAM_STATS || {};
+    d.teams.forEach(function(t){
+      if(!t || !t.name) return;
+      var pw=parseInt(t.power,10); if(isNaN(pw)) pw=75;
+      pw=Math.max(1,Math.min(100,pw));
+      window.TEAM_RATINGS[t.name]={ media:pw, shield:(t.img||'') };
+      window._LIGA_EA_TEAM_STATS[t.name]={ power:pw, atk:pw, mid:pw, def:pw, aggressiveness:50 };
+    });
+  }
+  window._selSquadLoad=_load;
+  window._selSquadHydrate=_hydrate;
+
+  function _esc(s){ return String(s==null?'':s).replace(/[<>"]/g,function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';}); }
+  function _rowHtml(t){
+    t=t||{};
+    var img=String(t.img||'').trim();
+    return '<div class="sel-sq-row">'
+      +'<img src="'+_esc(img)+'" alt="" onerror="this.style.visibility=\'hidden\'">'
+      +'<div class="sel-sq-fields">'
+      +'<input class="sel-sq-name" type="text" placeholder="Nombre de la selección" value="'+_esc(t.name||'')+'">'
+      +'<div class="sel-sq-r2">'
+      +'<input class="sel-sq-img" type="text" placeholder="https://… escudo / bandera" value="'+_esc(img)+'">'
+      +'<input class="sel-sq-pw" type="number" min="1" max="100" placeholder="Niv" value="'+(t.power!=null?_esc(t.power):'')+'">'
+      +'</div></div>'
+      +'<button type="button" class="sel-sq-del" title="Eliminar">🗑</button>'
+      +'</div>';
+  }
+  function _renderBody(){
+    var body=document.getElementById('sel-sq-body');
+    if(!body) return;
+    var d=_load();
+    body.innerHTML = d.teams.length
+      ? d.teams.map(_rowHtml).join('')
+      : '<div class="sel-sq-empty">Sin selecciones todavía. Pulsa «➕ Añadir selección».</div>';
+  }
+  /* Lee las filas del DOM → array de selecciones (ignora filas sin
+     nombre, dedupea por nombre conservando la última). */
+  function _collect(){
+    var body=document.getElementById('sel-sq-body');
+    var out=[];
+    if(!body) return out;
+    body.querySelectorAll('.sel-sq-row').forEach(function(row){
+      var nm=String(((row.querySelector('.sel-sq-name')||{}).value)||'').trim();
+      if(!nm) return;
+      var img=String(((row.querySelector('.sel-sq-img')||{}).value)||'').trim();
+      var pw=parseInt((row.querySelector('.sel-sq-pw')||{}).value,10);
+      if(isNaN(pw)||pw<1) pw=75; if(pw>100) pw=100;
+      out.push({name:nm,img:img,power:pw});
+    });
+    var seen={},dedup=[];
+    for(var i=out.length-1;i>=0;i--){ var k=out[i].name.toLowerCase(); if(seen[k])continue; seen[k]=1; dedup.unshift(out[i]); }
+    return dedup;
+  }
+  function _close(){ var ov=document.getElementById('sel-sq-ov'); if(ov) ov.style.display='none'; }
+  window._selSquadCloseEditor=_close;
+
+  function _open(){
+    var ov=document.getElementById('sel-sq-ov');
+    if(!ov){
+      ov=document.createElement('div');
+      ov.id='sel-sq-ov';
+      ov.innerHTML='<div class="sel-sq-card">'
+        +'<div class="sel-sq-hd"><span>🌐 Plantilla de selecciones</span>'
+        +'<button class="sel-sq-x" type="button">✕</button></div>'
+        +'<div class="sel-sq-body" id="sel-sq-body"></div>'
+        +'<div class="sel-sq-foot">'
+        +'<button type="button" class="sel-sq-add">➕ Añadir selección</button>'
+        +'<button type="button" class="sel-sq-save">💾 Guardar</button>'
+        +'</div></div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click',function(e){ if(e.target===ov) _close(); });
+      ov.querySelector('.sel-sq-x').addEventListener('click',_close);
+      ov.querySelector('.sel-sq-add').addEventListener('click',function(){
+        var body=document.getElementById('sel-sq-body');
+        if(!body) return;
+        if(body.querySelector('.sel-sq-empty')) body.innerHTML='';
+        body.insertAdjacentHTML('beforeend',_rowHtml({name:'',img:'',power:75}));
+        var rows=body.querySelectorAll('.sel-sq-row');
+        var last=rows[rows.length-1];
+        if(last){ var ni=last.querySelector('.sel-sq-name'); if(ni) ni.focus(); }
+      });
+      ov.querySelector('.sel-sq-save').addEventListener('click',function(){
+        var d={v:1,teams:_collect()};
+        _save(d); _hydrate(); _renderBody();
+        var sv=ov.querySelector('.sel-sq-save');
+        if(sv){ var o=sv.textContent; sv.textContent='✓ Guardado'; setTimeout(function(){ sv.textContent=o; },1200); }
+      });
+      ov.addEventListener('click',function(e){
+        var del=e.target&&e.target.closest&&e.target.closest('.sel-sq-del');
+        if(!del) return;
+        var row=del.closest('.sel-sq-row');
+        if(row) row.parentNode.removeChild(row);
+        var body=document.getElementById('sel-sq-body');
+        if(body && !body.querySelector('.sel-sq-row'))
+          body.innerHTML='<div class="sel-sq-empty">Sin selecciones todavía. Pulsa «➕ Añadir selección».</div>';
+      });
+      /* Vista previa del escudo al teclear la URL. */
+      ov.addEventListener('input',function(e){
+        var inp=e.target;
+        if(inp&&inp.classList&&inp.classList.contains('sel-sq-img')){
+          var row=inp.closest('.sel-sq-row');
+          var img=row&&row.querySelector('img');
+          if(img){ img.src=String(inp.value||'').trim(); img.style.visibility=''; }
+        }
+      });
+    }
+    _renderBody();
+    ov.style.display='flex';
+  }
+  window._selSquadOpenEditor=_open;
+
+  /* Hidratación inicial: local + servidor (best-effort, cross-device). */
+  function _boot(){
+    _hydrate();
+    try{
+      if(typeof window.fetch==='function'){
+        window.fetch('/api/kv/'+KEY).then(function(r){return (r&&r.ok)?r.json():null;}).then(function(j){
+          if(!j||!j.value||!Array.isArray(j.value.teams)) return;
+          try{ localStorage.setItem(KEY,JSON.stringify(j.value)); }catch(_){}
+          _hydrate();
+          if(document.getElementById('sel-sq-body')) _renderBody();
+        }).catch(function(){});
+      }
+    }catch(_){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_boot);
+  else _boot();
 })();
 </script>
 <div class="screen" id="s-sel-cal">

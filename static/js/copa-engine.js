@@ -7,8 +7,34 @@
 (function () {
   /* 5 equipos humanos (los 5 del usuario, todos en Liga EA Sports).
      Real Madrid 🔨 / FC Barcelona 👿 / Atlético Madrid ✏️ / Arsenal 🐭
-     / Bayern Munich 💡. Estos 5 SIEMPRE juegan la 1ª Ronda de Copa. */
+     / Bayern Munich 💡. Estos 5 SIEMPRE juegan la 1ª Ronda de Copa.
+     Es un VALOR POR DEFECTO: `_refreshHumanTeams()` lo sincroniza con
+     la lista real de Liga EA Sports antes de cada sorteo/render. */
   var HUMAN_TEAMS = ['Real Madrid', 'FC Barcelona', 'Atlético Madrid', 'Arsenal', 'Bayern Munich'];
+
+  /* Sincroniza HUMAN_TEAMS con los equipos `isHuman` reales del editor
+     de Liga EA Sports (`ligaExt_liga-ea-sports`). Imprescindible: si el
+     admin renombró un humano (p.ej. Bayern Munich → Liverpool), la
+     fuente de verdad es el flag `isHuman` del storage — igual que
+     `esHumano()`. Sin esto la Copa seguía usando el nombre viejo
+     hardcodeado, marcaba al equipo renombrado como IA y metía un
+     equipo FANTASMA con el nombre antiguo. Solo refresca si encuentra
+     humanos; si el storage está vacío conserva los canónicos. */
+  function _refreshHumanTeams() {
+    try {
+      var d = (typeof window.loadData === 'function')
+        ? window.loadData('liga-ea-sports') : null;
+      if (!d || !Array.isArray(d.teams)) return;
+      var humans = [];
+      d.teams.forEach(function (t) {
+        if (t && t.isHuman && t.name) humans.push(String(t.name).trim());
+      });
+      if (humans.length) {
+        HUMAN_TEAMS.length = 0;
+        humans.forEach(function (n) { HUMAN_TEAMS.push(n); });
+      }
+    } catch (_) {}
+  }
   var ROUND_LABEL = {
     r1: '1ª Ronda',
     r2: '2ª Ronda',
@@ -144,6 +170,7 @@
   }
 
   function _collectCopaTeams() {
+    _refreshHumanTeams();
     var all = [];
     var seen = {};
     var FALLBACK = {
@@ -1371,6 +1398,7 @@
   }
 
   function renderBracket(copa) {
+    _refreshHumanTeams();
     var root = document.getElementById('copa-bracket-root');
     var summary = document.getElementById('copa-bracket-summary');
     if (!root) return;

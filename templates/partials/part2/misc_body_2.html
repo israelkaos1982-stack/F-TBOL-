@@ -17975,13 +17975,13 @@
      Incluye:
        · `ag-train` y `ag-rest` (entrenamientos y descansos del SSR
          son la base — siempre se respetan).
-       · `ag-sel` (Selecciones FIFA): pedido del usuario 2026-05-08 —
-         la sección final "🌐 FASE FINAL SELECCIONES" y las ventanas
-         FIFA aparecen tal cual aunque el toggle esté desmarcado. */
+     Los eventos de Selecciones (`ag-sel`) SÍ dependen de la casilla
+     🌐 «Selecciones FIFA» (petición usuario 2026-05-21): al marcarla
+     se muestran todos los eventos de selecciones, al desmarcarla se
+     transforman a Entrenamiento. Antes (2026-05-08) eran always-on. */
   function _isAlwaysOn(ev){
     return /\bag-train\b/.test(ev.rowClass)
-        || /\bag-rest\b/.test(ev.rowClass)
-        || /\bag-sel\b/.test(ev.rowClass);
+        || /\bag-rest\b/.test(ev.rowClass);
   }
   /* Detección de competición. Reglas evaluadas en orden de prioridad —
      específicas (Supercopa España, Previa Champions, Europa League,

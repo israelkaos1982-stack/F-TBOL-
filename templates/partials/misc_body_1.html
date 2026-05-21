@@ -31748,9 +31748,14 @@ Tottenham
         var sf = (typeof window._teamSeasonForm === 'function')
           ? (window._teamSeasonForm() || {})
           : { yo:'🎲', rival:'🎲', nivel:'Crack' };
-        var ICONS_FORM = ['⬆️','↗️','🎲','↘️','⬇️'];
-        if (pickYo  !== null && ICONS_FORM.indexOf(pickYo)  >= 0) sf.yo    = pickYo;
-        if (pickRiv !== null && ICONS_FORM.indexOf(pickRiv) >= 0) sf.rival = pickRiv;
+        /* Sin filtro por lista de iconos: `pickYo`/`pickRiv` salen del
+           `data-v` de un botón del propio grid, así que YA son iconos
+           válidos. El filtro previo, si fallaba, dejaba la Forma Rival
+           escrita en `menu_home_v1` pero NO en `team_season_form_v1`
+           (la fuente que lee la cabecera) → la forma rival "no se
+           guardaba". 2026-05-21. */
+        if (pickYo  !== null) sf.yo    = pickYo;
+        if (pickRiv !== null) sf.rival = pickRiv;
         if (pickLvl !== null) sf.nivel = pickLvl || 'Crack';
         if (typeof window._teamSeasonFormSave === 'function') window._teamSeasonFormSave(sf);
         if (typeof window._teamSeasonFormRenderHeader === 'function') window._teamSeasonFormRenderHeader();
@@ -35743,7 +35748,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     display:flex; flex-direction:column; align-items:center; gap:0; }
   #mu-form-cluster .mfc-t{ font-family:'Oswald',sans-serif; font-size:10px;
     letter-spacing:1px; color:rgba(255,255,255,.82); line-height:1.25; }
-  #mu-form-cluster .mfc-c{ font-size:18px; line-height:1.2; }
+  /* Iconos 🎲 / ⬇️ de Yo y Rival: más pequeños y recoloreados al rojo
+     del Liverpool (acordes a la caja). El `filter` convierte el emoji
+     en una silueta sólida del color del club. 2026-05-21. */
+  #mu-form-cluster .mfc-c{ font-size:13px; line-height:1.15;
+    filter: brightness(0) saturate(100%) invert(13%) sepia(94%) saturate(4759%)
+            hue-rotate(343deg) brightness(91%) contrast(95%); }
   #mu-nivel{ font-family:'Oswald',sans-serif; font-size:11px; font-weight:700;
     letter-spacing:2px; color:#F6EB61; opacity:.92; margin-top:1px; cursor:default; }
   #mu-nivel small{ font-size:9px; color:rgba(255,255,255,.45); letter-spacing:1px; }
@@ -35768,7 +35778,6 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   if (window.__SEASON_FORM_READY) return;
   window.__SEASON_FORM_READY = true;
   var KEY = 'team_season_form_v1';
-  var ICONS = ['⬆️','↗️','🎲','↘️','⬇️'];
   var NAMES = {'⬆️':'Excelente','↗️':'Buena','🎲':'Al azar','↘️':'Mala','⬇️':'Pésima'};
   var LEVELS = ['Normal','Duro','Crack','Leyenda'];
   var _MEM = null;
@@ -35779,8 +35788,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var r = localStorage.getItem(KEY);
       if (r){ var p = JSON.parse(r);
         if (p && typeof p === 'object'){
-          if (ICONS.indexOf(p.yo)    >= 0) d.yo    = p.yo;
-          if (ICONS.indexOf(p.rival) >= 0) d.rival = p.rival;
+          if (typeof p.yo    === 'string' && p.yo.trim())    d.yo    = p.yo;
+          if (typeof p.rival === 'string' && p.rival.trim()) d.rival = p.rival;
           /* `nivel` acepta cualquier string no vacío — el editor 🖍 del
              hub guarda 'CRACK' / 'LEYENDA' / 'ESTRELLA' (paleta del
              "Nivel del equipo"), no solo Normal/Duro/Crack/Leyenda. */

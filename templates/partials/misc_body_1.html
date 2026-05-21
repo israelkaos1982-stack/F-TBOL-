@@ -13451,6 +13451,12 @@ window._showSimProgress = function(opts, onDone){
     try {
       window._tourLoad(id).then(function(serverCfg){
         if (!serverCfg || !_open || _open.id !== id) return;
+        /* Si el usuario ya editó algún campo (nombre, formato, etc.) NO
+           repintamos: `_populateForm` machacaría sus cambios en curso.
+           Bug usuario 2026-05-21: "el desplegable de formato no funciona /
+           el nombre del torneo no se queda guardado" — el refresco async
+           reseteaba el formulario mientras se editaba. */
+        if (_open.dirty) return;
         var sUpd = serverCfg.updatedAt || '';
         var lUpd = (cached && cached.updatedAt) || '';
         if (sUpd && sUpd > lUpd) {
@@ -15035,6 +15041,17 @@ window._showSimProgress = function(opts, onDone){
       var el = document.getElementById(id);
       if (el) el.addEventListener('input', _updatePoolStat);
     });
+    /* En cuanto el usuario escribe o cambia CUALQUIER campo del editor,
+       marcamos `_open.dirty`. El refresco async del server comprueba
+       este flag y no repinta el formulario (no machaca los cambios en
+       curso). Delegado en el contenedor → cubre también los campos
+       dinámicos de la subconfig de formato. */
+    var edBox = document.getElementById('tour-editor-box');
+    if (edBox) {
+      var _markDirty = function(){ if (_open) _open.dirty = true; };
+      edBox.addEventListener('input', _markDirty);
+      edBox.addEventListener('change', _markDirty);
+    }
     var fmt = document.getElementById('tour-ed-fmt');
     if (fmt) {
       /* Backup del onchange inline (idempotente: vuelve a llamar al
@@ -15084,6 +15101,7 @@ window._showSimProgress = function(opts, onDone){
         if (!_open) return;
         if (!confirm('¿Resetear este torneo a sus valores por defecto?')) return;
         _open.cfg = _cloneDefault(_open.id);
+        _open.dirty = true;
         _populateForm(_open.cfg);
         _setFeedback('');
       });

@@ -6122,6 +6122,34 @@
     if (Array.isArray(teamList) && teamList.length) return generarCalendario(teamList);
     return generarCalendario(leerOrdenEquiposActual());
   };
+
+  /* ── RE-SORTEO DEL CALENDARIO ─────────────────────────────────
+     Regenera el calendario de Liga EA con un sorteo aleatorio NUEVO,
+     garantizando que sea distinto al actual. Lo usa el botón Simular
+     cuando la liga está fresca (sin ningún resultado) para que cada
+     arranque de liga reparta jornadas distintas — la J1 incluida.
+     Persiste en localStorage y en el servidor vía setLigaSchedule. */
+  function _rerollLigaSchedule() {
+    var prev = '';
+    try { prev = JSON.stringify(SCHEDULE); } catch (_) {}
+    var nuevo = null;
+    for (var t = 0; t < 12; t++) {
+      var cand = generarCalendario(
+        _rotarPorReloj(mezclarEquipos(mezclarEquipos(TEAMS.slice())))
+      );
+      if (isValidLigaSchedule(cand) && JSON.stringify(cand) !== prev) {
+        nuevo = cand;
+        break;
+      }
+    }
+    if (!isValidLigaSchedule(nuevo)) nuevo = generarCalendario(_rotarPorReloj(TEAMS.slice()));
+    if (isValidLigaSchedule(nuevo)) {
+      setLigaSchedule(nuevo);
+      try { window.LIGA_SCHEDULE = nuevo; } catch (_) {}
+    }
+    return nuevo;
+  }
+  window._rerollLigaSchedule = _rerollLigaSchedule;
   /* Carga inicial: si no hay schedule guardado (primer arranque o
      localStorage limpiada), generamos uno aleatorio en vez de caer a
      TEAMS (orden fijo). Si cayéramos a TEAMS, el usuario vería el
@@ -15744,6 +15772,21 @@
   }
 
   window.simularJornadaIA = function (j) {
+    /* ── NUEVO SORTEO al simular una liga fresca ──────────────────
+       Si la liga no tiene NINGÚN resultado todavía, regeneramos el
+       calendario con un sorteo aleatorio nuevo ANTES de simular. Así
+       cada vez que se arranca una liga limpia, las jornadas (J1
+       incluida) salen con emparejamientos distintos en lugar de
+       repetir siempre el mismo cuadro. En cuanto hay algún resultado
+       el calendario queda FIJO — una liga tiene un único calendario
+       por temporada. */
+    try {
+      var _r0 = loadResults();
+      var _j1 = window.LIGA_J1_RESULTS;
+      var _fresh = (!_r0 || Object.keys(_r0).length === 0) &&
+                   (!_j1 || !_j1.length);
+      if (_fresh) _rerollLigaSchedule();
+    } catch (_) {}
     if (!SCHEDULE[j - 1]) return;
     var results = loadResults();
     var dirty   = false;
@@ -15810,6 +15853,16 @@
       if (typeof window.buildLigaClas  === 'function') window.buildLigaClas();
       if (typeof window.buildIAresults === 'function') window.buildIAresults();
       if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
+      /* Si el usuario está mirando la pantalla de una jornada IA,
+         repíntala — tras un posible re-sorteo el cuadro ha cambiado y
+         hay que mostrar los emparejamientos nuevos ya simulados. */
+      try {
+        var _act = document.querySelector('.screen.active');
+        if (_act && _act.id === 's-liga-ia-jornada' && window._currentIAJornada &&
+            typeof window.openIAJornada === 'function') {
+          window.openIAJornada(window._currentIAJornada);
+        }
+      } catch (_) {}
     }
   };
 

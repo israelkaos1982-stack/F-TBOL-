@@ -1867,16 +1867,204 @@ def _ensure_mundialito(data):
     return data
 
 
+def _purge_pre_june(data):
+    """La temporada arranca el 1 de Junio (regla del usuario, repetida
+    en varias iteraciones). Elimina del calendario CUALQUIER evento
+    cuya fecha parseable caiga antes de Junio (Ene–May). Idempotente."""
+    if not isinstance(data, dict):
+        return data
+    secs = data.get("sections")
+    if not isinstance(secs, list):
+        return data
+    for s in secs:
+        if not isinstance(s, dict):
+            continue
+        evs = s.get("events")
+        if not isinstance(evs, list):
+            continue
+        kept = []
+        for ev in evs:
+            if not isinstance(ev, dict):
+                continue
+            p = _parse_event_date(ev.get("date"))
+            # Si no parsea, lo mantenemos (no podemos saber el mes).
+            if p is None or p[0] >= 5:
+                kept.append(ev)
+        s["events"] = kept
+    return data
+
+
+# PRE-VERANO en MAYO (01–31). Mundial de Selecciones: 8 partidos
+# (J1/J2/J3/Repesca/Octavos/Cuartos/Semis/Final) + 23 descansos.
+# Petición usuario 2026-05-20.
+_PREVERANO_MAY_MATCHES = [
+    (3,  "Mundial Grupo — J1",          "☀️"),
+    (7,  "Mundial Grupo — J2",          "🌧"),
+    (11, "Mundial Grupo — J3",          "☀️"),
+    (15, "Mundial Repesca J3",          "☀️"),
+    (19, "Mundial Octavos",             "☀️"),
+    (23, "Mundial Cuartos",             "☀️"),
+    (27, "Mundial Semis",               "☀️"),
+    (31, "MUNDIAL GRAN FINAL 🏆",        "☀️"),
+]
+def _build_preverano_may_events():
+    matches = {d: (n, w) for d, n, w in _PREVERANO_MAY_MATCHES}
+    out = []
+    for day in range(1, 32):
+        date = "%02d May" % day
+        if day in matches:
+            n, w = matches[day]
+            out.append({"id": "pvm-%02d" % day, "date": date,
+                        "icon": "🌍", "name": n, "weather": w})
+        else:
+            out.append({"id": "pvm-%02d" % day, "date": date,
+                        "icon": "💤", "name": "Descanso", "weather": "☀️"})
+    return out
+
+
+def _ensure_preverano_may(data):
+    """Garantiza la sección 'preverano' con los 31 días de Mayo
+    (Mundial de Selecciones + descansos) colocada antes del bloque
+    de Junio. Idempotente. Además depura eventos de Mayo (mes 4)
+    en CUALQUIER otra sección para evitar duplicación."""
+    if not isinstance(data, dict):
+        return data
+    secs = data.get("sections")
+    if not isinstance(secs, list):
+        return data
+    # 1) Depura cualquier evento "* May" en secciones que NO sean preverano.
+    for s in secs:
+        if not isinstance(s, dict):
+            continue
+        if s.get("id") == "preverano":
+            continue
+        evs = s.get("events")
+        if not isinstance(evs, list):
+            continue
+        kept = []
+        for ev in evs:
+            if not isinstance(ev, dict):
+                continue
+            p = _parse_event_date(ev.get("date"))
+            if p is None or p[0] != 4:
+                kept.append(ev)
+        s["events"] = kept
+    # 2) Localiza / crea la sección preverano.
+    target = None; idx = -1
+    for i, s in enumerate(secs):
+        if isinstance(s, dict) and s.get("id") == "preverano":
+            target = s; idx = i; break
+    if target is None:
+        target = {"id": "preverano",
+                  "name": "PRE-VERANO",
+                  "icon": "🌍", "variant": "preverano", "events": []}
+        secs.insert(0, target); idx = 0
+    canon = _build_preverano_may_events()
+    cur = target.get("events") or []
+    same = (len(cur) == len(canon) and all(
+        isinstance(a, dict) and a.get("date") == b["date"]
+        and a.get("name") == b["name"] and a.get("weather") == b["weather"]
+        for a, b in zip(cur, canon)))
+    if not same:
+        target["events"] = canon
+        target["name"] = "PRE-VERANO"
+        target["icon"] = "🌍"
+        target.setdefault("variant", "preverano")
+    if idx != 0:
+        secs.pop(idx)
+        secs.insert(0, target)
+    return data
+
+
+# Fase Final SELECCIONES en MAYO (01–31). 9 partidos + 22 descansos
+# (sin entrenamientos). Petición usuario 2026-05-20: como Mayo no se
+# elimina del calendario, lo rellenamos con las fases finales de
+# selecciones. Días de partido cada 2 (01,03,05,…,17 May).
+_FASE_FINAL_MAY_MATCHES = [
+    (1,  "Grupo — J1",                 "🌧"),
+    (3,  "Grupo — J2",                 "☀️"),
+    (5,  "Grupo — J3",                 "☀️"),
+    (7,  "Grupo — J4",                 "☀️"),
+    (9,  "Repesca",                    "🌧"),
+    (11, "Octavos",                    "☀️"),
+    (13, "Cuartos",                    "☀️"),
+    (15, "Semifinal",                  "☀️"),
+    (17, "GRAN FINAL SELECCIONES 🏆",   "☀️"),
+]
+def _build_fase_final_may_events():
+    matches = {d: (n, w) for d, n, w in _FASE_FINAL_MAY_MATCHES}
+    out = []
+    for day in range(1, 32):
+        date = "%02d May" % day
+        if day in matches:
+            n, w = matches[day]
+            out.append({"id": "ffm-%02d" % day, "date": date,
+                        "icon": "🌍", "name": n, "weather": w})
+        else:
+            out.append({"id": "ffm-%02d" % day, "date": date,
+                        "icon": "💤", "name": "Descanso", "weather": "☀️"})
+    return out
+
+
+def _ensure_fase_final_may(data):
+    """Garantiza que la sección 'fase-final-sel' contiene EXACTAMENTE
+    los 31 eventos de Mayo (matches + descansos, sin entrenamientos)
+    y la coloca antes del bloque de Junio para que renderice primero
+    en el calendario. Idempotente."""
+    if not isinstance(data, dict):
+        return data
+    secs = data.get("sections")
+    if not isinstance(secs, list):
+        return data
+    target = None; idx = -1
+    for i, s in enumerate(secs):
+        if isinstance(s, dict) and s.get("id") == "fase-final-sel":
+            target = s; idx = i; break
+    if target is None:
+        target = {"id": "fase-final-sel",
+                  "name": "FASE FINAL SELECCIONES",
+                  "icon": "🌍", "variant": "selecciones", "events": []}
+        secs.insert(0, target); idx = 0
+    # Garantiza el set canónico de Mayo (idempotente por firma).
+    cur = target.get("events") or []
+    canon = _build_fase_final_may_events()
+    same = (len(cur) == len(canon) and all(
+        isinstance(a, dict) and a.get("date") == b["date"]
+        and a.get("name") == b["name"] for a, b in zip(cur, canon)))
+    if not same:
+        target["events"] = canon
+        target["name"] = "FASE FINAL SELECCIONES"
+        target["icon"] = "🌍"
+        target.setdefault("variant", "selecciones")
+    # Mueve la sección al inicio (antes de Junio) para orden cronológico.
+    if idx != 0:
+        secs.pop(idx)
+        secs.insert(0, target)
+    return data
+
+
 def _calendario_normalize(data):
-    """Asegura el esqueleto mínimo y los defaults de un dict de calendario."""
+    """Asegura el esqueleto mínimo y los defaults de un dict de calendario.
+
+    Las inyecciones `_ensure_*` (Junio, Preverano, Mundialito) crean
+    secciones SEMILLA pero NO machacan ediciones del usuario: solo
+    corren cuando `_normalized_v < version`. Una vez normalizado para
+    la versión actual, las cargas siguientes pasan por aquí sin tocar
+    las secciones — los renombrados, añadidos o borrados del editor
+    persisten para siempre."""
     if not isinstance(data, dict):
         return json.loads(json.dumps(CALENDARIO_DEFAULT))
     data.setdefault("version", 1)
     data.setdefault("season", "32-33")
     if not isinstance(data.get("sections"), list):
         data["sections"] = []
-    _ensure_june_pretemp(data)
-    _ensure_mundialito(data)
+    cur_ver = data.get("version") or 1
+    norm_ver = data.get("_normalized_v") or 0
+    if norm_ver < cur_ver:
+        _ensure_june_pretemp(data)
+        _ensure_preverano_may(data)
+        _ensure_mundialito(data)
+        data["_normalized_v"] = cur_ver
     return data
 
 
@@ -1917,17 +2105,36 @@ def load_calendario():
         except (TypeError, ValueError):
             data = None
         if isinstance(data, dict):
+            # Migración por schema-version: si el fichero git-baked declara
+            # una versión > que la persistida en BD, la BD está vieja y la
+            # reemplazamos por la semilla. Permite restaurar eventos
+            # borrados (Ene–May en v2) sin requerir reset manual.
+            db_ver = data.get("version") or 0
+            seed = _calendario_load_from_file()
+            seed_ver = seed.get("version") or 0
+            if seed_ver > db_ver:
+                try:
+                    _calendario_save_to_db(seed)
+                except Exception:
+                    pass
+                return seed
             _secs0 = data.get("sections") or []
             had_june = any(
                 isinstance(s, dict) and s.get("id") == "verano-jun"
                 for s in _secs0
             )
             _mun_before = _mun_sig(data)
+            _evs_before = sum(
+                len((s.get("events") or [])) for s in _secs0 if isinstance(s, dict)
+            )
             data = _calendario_normalize(data)
-            # Persistimos cuando se inyectó Junio o cuando el set de
-            # Mundialito cambió (p.ej. corrección de fechas), para que
-            # quede permanente y corregido en la BD.
-            if not had_june or _mun_before != _mun_sig(data):
+            _evs_after = sum(
+                len((s.get("events") or []))
+                for s in (data.get("sections") or []) if isinstance(s, dict)
+            )
+            if (not had_june
+                    or _mun_before != _mun_sig(data)
+                    or _evs_before != _evs_after):
                 try:
                     _calendario_save_to_db(data)
                 except Exception:
@@ -1944,7 +2151,15 @@ def load_calendario():
 
 def _calendario_save_to_db(data):
     """Persiste el calendario en GlobalState. Usa el mismo patrón que
-    `_liga_ext_save`: upsert por clave, commit transaccional."""
+    `_liga_ext_save`: upsert por clave, commit transaccional.
+
+    Marca `_normalized_v = version` en cada write para que las cargas
+    posteriores NO re-inyecten secciones semilla por encima de las
+    ediciones del usuario (renombres / borrados / añadidos persistentes)."""
+    if isinstance(data, dict):
+        ver = data.get("version") or 1
+        if (data.get("_normalized_v") or 0) < ver:
+            data["_normalized_v"] = ver
     payload = json.dumps(data or {}, ensure_ascii=False)
     now = utc_now_iso()
     row = GlobalState.query.filter_by(clave=CALENDARIO_GLOBAL_KEY).first()
@@ -2309,6 +2524,23 @@ def _lx_merge_teams(old_data, new_data):
             _consider(t, True)
 
     # Unión de deletedTeamNames y poda de equipos borrados.
+    #
+    # Regla "add trumps delete" (2026-05-20, petición usuario "fuerza
+    # que un equipo creado se hidrate y se quede para siempre excepto
+    # cuando lo elimine manualmente"): si un equipo aparece en el
+    # `teams` ENTRANTE, ese add explícito gana sobre cualquier registro
+    # de borrado previo. El cliente ya limpia `deletedTeamNames` al
+    # guardar un equipo (lextSaveTeam → `data.deletedTeamNames =
+    # ...filter(...)`), pero el servidor unía ambas listas y volvía a
+    # podar el equipo, haciéndolo desaparecer en cada sync — bug visto
+    # con Coventry City e Ipswich Town en la liga inglesa.
+    incoming_names = set()
+    if isinstance(new_teams, list):
+        for t in new_teams:
+            if isinstance(t, dict):
+                nm = _lx_norm_name(t.get("name"))
+                if nm:
+                    incoming_names.add(nm)
     del_set = set()
     for src in (old_data if isinstance(old_data, dict) else {},
                 new_data):
@@ -2316,7 +2548,7 @@ def _lx_merge_teams(old_data, new_data):
         if isinstance(dn, list):
             for nm in dn:
                 n = _lx_norm_name(nm)
-                if n:
+                if n and n not in incoming_names:
                     del_set.add(n)
 
     out_teams = []

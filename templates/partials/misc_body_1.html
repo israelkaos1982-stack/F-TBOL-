@@ -1137,6 +1137,49 @@ window._showSimProgress = function(opts, onDone){
     }
     /* tono del brillo (dropdown propio, con previsualización en vivo) */
     _mkChoiceFill('mk-glow', _MK_GLOW_OPTS, getVal('mk-glow')||'2', paint);
+    /* Estado de forma (solo cajas de equipo) — paleta táctil con los
+       mismos iconos que la previa (_ppFormVariants). Se aplica en la
+       previa de partido para el lado del equipo humano. */
+    var fsHost=document.getElementById('mk-formstates');
+    if(fsHost){
+      fsHost.innerHTML='';
+      var FS_FALLBACK=[
+        {ico:'',name:'(sin fijar)'},
+        {ico:'🎲',name:'Al azar'}, {ico:'⬆️',name:'Excelente'},
+        {ico:'↗️',name:'Buena'},  {ico:'➡️',name:'Normal'},
+        {ico:'↘️',name:'Mala'},   {ico:'⬇️',name:'Pésima'} ];
+      var FS = (window._ppFormVariants && window._ppFormVariants.length)
+        ? [{ico:'',name:'(sin fijar)'}].concat(window._ppFormVariants)
+        : FS_FALLBACK;
+      var curFS=String(getVal('mk-formstate')||'');
+      FS.forEach(function(v){
+        var sw=document.createElement('button');
+        sw.type='button'; sw.className='mk-sw';
+        sw.style.fontSize='18px';
+        sw.style.display='inline-flex';
+        sw.style.alignItems='center';
+        sw.style.justifyContent='center';
+        sw.style.background='rgba(0,0,0,.45)';
+        sw.textContent = v.ico || '∅';
+        sw.title = v.name || '';
+        if((v.ico||'')===curFS) sw.classList.add('sel');
+        sw.addEventListener('click', function(e){
+          e.preventDefault(); e.stopPropagation();
+          setVal('mk-formstate', v.ico||'');
+          fsHost.querySelectorAll('.mk-sw').forEach(function(x){ x.classList.remove('sel'); });
+          sw.classList.add('sel');
+        });
+        fsHost.appendChild(sw);
+      });
+    }
+    /* Nivel (CRACK / LEYENDA / Ninguno) — solo cajas de equipo */
+    if(document.querySelector('.mk-choice[data-for="mk-level"]')){
+      _mkChoiceFill('mk-level', [
+        {value:'',       label:'— Ninguno —'},
+        {value:'CRACK',  label:'⭐ CRACK'},
+        {value:'LEYENDA',label:'🏅 LEYENDA'}
+      ], getVal('mk-level')||'');
+    }
     paint();
   }
   /* Aplica borde + brillo a una caja (idempotente). El color por
@@ -1183,6 +1226,12 @@ window._showSimProgress = function(opts, onDone){
       '<div class="mk-lbl">Estadio</div>'+
       '<input type="text" id="mk-stadium" placeholder="Ej: Balaídos"/>'+
       colorRowHtml(true)+
+      /* Estado de forma + nivel (humano) — sembrado en la previa. */
+      '<div class="mk-lbl">Estado de forma</div>'+
+      '<input type="hidden" id="mk-formstate" value=""/>'+
+      '<div class="mk-sws" id="mk-formstates"></div>'+
+      '<div class="mk-lbl">Nivel</div>'+
+      _mkChoiceHtml('mk-level')+
       '<div class="mk-lbl">Al pulsar (pantalla destino)</div>'+
       _mkChoiceHtml('mk-nav')+
       '<div id="mk-pos-wrap"></div>';
@@ -1262,6 +1311,8 @@ window._showSimProgress = function(opts, onDone){
       var co=card.querySelector('.team-coach');
       setVal('mk-coach', added&&entry? (entry.coach||'') : (co?co.textContent.trim():''));
       setVal('mk-stadium', src.stadium||'');
+      setVal('mk-formstate', src.formState||'');
+      setVal('mk-level', src.level||'');
       renderResults('');
       document.getElementById('mk-q').addEventListener('input', function(){ renderResults(this.value); });
     } else {
@@ -1345,6 +1396,7 @@ window._showSimProgress = function(opts, onDone){
         var rc=readColors(true);
         var en={ id:id, type:'team', label:_ovPick.name, escudo:_ovPick.escudo,
           coach:getVal('mk-coach').trim(), stadium:getVal('mk-stadium').trim(), nav:nav, after:after,
+          formState:getVal('mk-formstate'), level:getVal('mk-level'),
           bcolor:rb.bcolor, glow:rb.glow,
           manual:rc.manual, colors: rc.manual? rc.colors : [] };
         s.added.push(en);
@@ -1393,6 +1445,8 @@ window._showSimProgress = function(opts, onDone){
         else { var qa=getVal('mk-q').trim(); if(qa) e.label=qa; }
         e.coach=getVal('mk-coach').trim();
         e.stadium=getVal('mk-stadium').trim();
+        e.formState=getVal('mk-formstate');
+        e.level=getVal('mk-level');
         e.manual=rc2.manual;
         if(rc2.manual) e.colors=rc2.colors;
         stA.added[idx]=e;
@@ -1425,6 +1479,8 @@ window._showSimProgress = function(opts, onDone){
       else { var q=getVal('mk-q').trim(); if(q) o.label=q; }
       o.coach=getVal('mk-coach').trim();
       o.stadium=getVal('mk-stadium').trim();
+      o.formState=getVal('mk-formstate');
+      o.level=getVal('mk-level');
       o.manual=rc2.manual;
       if(rc2.manual) o.colors=rc2.colors;
       st.ov[key]=o;
@@ -1530,7 +1586,7 @@ window._showSimProgress = function(opts, onDone){
 
 <div class="screen" id="s-bayern-plantilla">
   <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">👕</span><h2>Plantilla · Gestión de Jugadores</h2></div>
+  <div class="sec-hdr" style="gap:6px;align-items:center;"><span class="sec-emoji">👕</span><button type="button" id="bplant-edit-pencil" class="munich-edit-pencil" onclick="window._bplantPickOpenGated&amp;&amp;window._bplantPickOpenGated()" title="Cambiar plantilla del hub (admin PIN 747)" aria-label="Cambiar plantilla del hub">🖍</button></div>
   <!-- La caja del Bayern reusa EXACTAMENTE el mismo layout del modal
        del editor EA Sports (lext-sq-*) y se pinta a partir de la misma
        fuente de datos (`ligaExt_liga-ea-sports`). Los iconos por sección
@@ -1552,30 +1608,65 @@ window._showSimProgress = function(opts, onDone){
     window.__BAYERN_PLANT_HOST_READY = true;
 
     function _findBayernRow(){
+      /* Resolución por emoji estable del humano (Toñín 💡), no por nombre.
+         La identidad de Toñín es su emoji (mismo principio que
+         `_isramaxTeamMap` en misc_body_2). Si Toñín cambia de equipo en
+         el editor (p.ej. Bayern → Liverpool), basta con marcar el nuevo
+         equipo como Humano + 💡 en su plantilla y el hub seguirá
+         apuntando a su equipo actual automáticamente. Buscamos en TODAS
+         las ligaExt_* (Liverpool vive en `ligaExt_inglaterra-...`, no en
+         liga-ea-sports), priorizando liga-ea-sports cuando hay empate.
+         Fallback: equipo que contenga "bayern" en liga-ea-sports (legacy
+         por si una plantilla aún no tiene humanEmoji asignado). */
+      function _stripEmoji(s){ return String(s||'').replace(/[\s️]/g,'').trim(); }
+      var TONIN_EMOJI = '💡';
       try {
+        /* 1) Liga EA: sustitución sancionada del slot de Toñín
+              (_ligaEaSubName) → fallback name~=bayern → fallback "5º
+              slot humano" (el que no es Real/Barça/Atlético/Arsenal). */
         var raw = localStorage.getItem('ligaExt_liga-ea-sports');
-        if (!raw) return null;
-        var data = JSON.parse(raw);
-        var teams = (data && data.teams) || [];
-        var i, t;
-        /* Nombre EFECTIVO del slot de Toñín: si el admin reemplazó
-           Bayern por otro equipo en el editor de Liga EA (mecanismo
-           sancionado, p.ej. "Liverpool ocupa el de Bayern"),
-           _ligaEaSubName devuelve el nombre nuevo. */
-        var want = 'Bayern Munich';
-        try {
-          if (typeof window._ligaEaSubName === 'function') {
-            var s = window._ligaEaSubName('Bayern Munich');
-            if (s) want = String(s);
+        if (raw) {
+          var data = JSON.parse(raw);
+          var teams = (data && data.teams) || [];
+          var i, t;
+          /* Nombre EFECTIVO del slot de Toñín: si el admin reemplazó
+             Bayern por otro equipo en el editor de Liga EA (mecanismo
+             sancionado, p.ej. "Liverpool ocupa el de Bayern"),
+             _ligaEaSubName devuelve el nombre nuevo. */
+          var want = 'Bayern Munich';
+          try {
+            if (typeof window._ligaEaSubName === 'function') {
+              var s = window._ligaEaSubName('Bayern Munich');
+              if (s) want = String(s);
+            }
+          } catch(_){}
+          var wl = want.toLowerCase();
+          for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.name.toLowerCase()===wl) return t; }
+          for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && /bayern/i.test(t.name)) return t; }
+          /* Último recurso intra-EA: el humano que NO sea uno de los
+             otros 4 canónicos (ese es el 5º slot, el de Toñín). */
+          var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+          for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.isHuman && !others[t.name.toLowerCase()]) return t; }
+        }
+        /* 2) Cross-liga por emoji 💡: si Toñín se cambió a un equipo
+              que NO vive en Liga EA (Liverpool en ligaExt_inglaterra-*,
+              etc.), barremos todas las claves ligaExt_* y devolvemos el
+              primer team con isHuman=true + humanEmoji=💡. */
+        for (var ii=0; ii<localStorage.length; ii++){
+          var k = localStorage.key(ii);
+          if (!k || k.indexOf('ligaExt_') !== 0) continue;
+          if (k === 'ligaExt_liga-ea-sports') continue; /* ya intentado */
+          if (k.indexOf('_backup')!==-1 || k.indexOf('_protected')!==-1 || k.indexOf('_snap_')!==-1) continue;
+          var raw2 = localStorage.getItem(k);
+          if (!raw2) continue;
+          var data2; try { data2 = JSON.parse(raw2); } catch(_){ continue; }
+          var teams2 = (data2 && data2.teams) || [];
+          for (var j=0; j<teams2.length; j++){
+            var t2 = teams2[j];
+            if (!t2 || !t2.name || !t2.isHuman) continue;
+            if (_stripEmoji(t2.humanEmoji) === TONIN_EMOJI) return t2;
           }
-        } catch(_){}
-        var wl = want.toLowerCase();
-        for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.name.toLowerCase()===wl) return t; }
-        for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && /bayern/i.test(t.name)) return t; }
-        /* Último recurso: el humano que NO sea uno de los otros 4
-           canónicos (ese es el 5º slot, el de Toñín). */
-        var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
-        for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.isHuman && !others[t.name.toLowerCase()]) return t; }
+        }
       } catch(_){}
       return null;
     }
@@ -1922,6 +2013,292 @@ window._showSimProgress = function(opts, onDone){
     } else {
       _bootPlantAll();
     }
+
+    /* ══════════════════════════════════════════════════════════════
+       PICKER 🖍 · Buscar plantilla de cualquier liga y mergear en el
+       hub. Petición usuario 2026-05-20: el hub Toñín (s-munich) tiene
+       un botón PLANTILLA que llevaba a un screen con "Plantilla ·
+       Gestión de Jugadores" pintado a partir de _findBayernRow. Si el
+       team resuelto no es el que el usuario quiere (Liverpool muestra
+       Celta porque alguien pegó la nómina del Celta), ahora puede
+       pulsar 🖍 (PIN 747) → buscar cualquier equipo → REEMPLAZA solo
+       los `players` (con sus flags C/F/P/⭐/⚾/🏀) en el team del hub.
+       La identidad del hub (name, shield, stadium, ATK/MED/DEF, alias
+       eFootball, isHuman, humanEmoji) se conserva — solo cambia la
+       nómina.
+       ══════════════════════════════════════════════════════════════ */
+    function _bplantFindHubRowWithSlug(){
+      /* Misma resolución que _findBayernRow pero devuelve {slug, data,
+         team} para poder llamar saveData(slug, data) tras mergear. */
+      function _stripEmoji(s){ return String(s||'').replace(/[\s️]/g,'').trim(); }
+      var TONIN_EMOJI = '💡';
+      try {
+        var keys = [];
+        for (var i=0; i<localStorage.length; i++){
+          var k = localStorage.key(i);
+          if (!k || k.indexOf('ligaExt_') !== 0) continue;
+          if (k.indexOf('_backup')!==-1 || k.indexOf('_protected')!==-1 || k.indexOf('_snap_')!==-1) continue;
+          keys.push(k);
+        }
+        keys.sort(function(a,b){
+          if (a === 'ligaExt_liga-ea-sports') return -1;
+          if (b === 'ligaExt_liga-ea-sports') return 1;
+          return 0;
+        });
+        /* 1) Liga EA: sustitución _ligaEaSubName + name~=bayern + 5º slot. */
+        var eaRaw = localStorage.getItem('ligaExt_liga-ea-sports');
+        if (eaRaw){
+          var eaData = JSON.parse(eaRaw);
+          var eaTeams = (eaData && eaData.teams) || [];
+          var want = 'Bayern Munich';
+          try {
+            if (typeof window._ligaEaSubName === 'function') {
+              var s = window._ligaEaSubName('Bayern Munich');
+              if (s) want = String(s);
+            }
+          } catch(_){}
+          var wl = want.toLowerCase(), i2, t2;
+          for (i2=0; i2<eaTeams.length; i2++){ t2=eaTeams[i2]; if (t2&&t2.name && t2.name.toLowerCase()===wl) return {slug:'liga-ea-sports', data:eaData, team:t2}; }
+          for (i2=0; i2<eaTeams.length; i2++){ t2=eaTeams[i2]; if (t2&&t2.name && /bayern/i.test(t2.name)) return {slug:'liga-ea-sports', data:eaData, team:t2}; }
+          var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+          for (i2=0; i2<eaTeams.length; i2++){ t2=eaTeams[i2]; if (t2&&t2.name && t2.isHuman && !others[t2.name.toLowerCase()]) return {slug:'liga-ea-sports', data:eaData, team:t2}; }
+        }
+        /* 2) Cross-liga por emoji 💡. */
+        for (var ii=0; ii<keys.length; ii++){
+          var key = keys[ii];
+          if (key === 'ligaExt_liga-ea-sports') continue;
+          var raw = localStorage.getItem(key);
+          if (!raw) continue;
+          var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+          var teams = (data && data.teams) || [];
+          for (var j=0; j<teams.length; j++){
+            var t = teams[j];
+            if (!t || !t.name || !t.isHuman) continue;
+            if (_stripEmoji(t.humanEmoji) === TONIN_EMOJI) {
+              return {slug:key.substring('ligaExt_'.length), data:data, team:t};
+            }
+          }
+        }
+      } catch(_){}
+      return null;
+    }
+
+    var _PRETTY_LEAGUE = {
+      'liga-ea-sports':'Liga EA Sports',
+      'liga-hypermotion':'Liga Hypermotion',
+      'liga-primera-federacion':'Primera Federación'
+    };
+    function _prettyLeagueName(slug){
+      if (_PRETTY_LEAGUE[slug]) return _PRETTY_LEAGUE[slug];
+      return String(slug||'').split('-').map(function(w){
+        return w ? (w[0].toUpperCase()+w.slice(1)) : '';
+      }).join(' ').trim() || slug;
+    }
+
+    function _bplantBuildIndex(){
+      /* Escanea TODAS las claves ligaExt_* y devuelve array de
+         {slug, leagueLabel, teamName, playersCount, shield} para
+         pintar el listado. Ordenado por nombre del equipo. */
+      var out = [];
+      try {
+        for (var i=0; i<localStorage.length; i++){
+          var key = localStorage.key(i);
+          if (!key || key.indexOf('ligaExt_') !== 0) continue;
+          if (key.indexOf('_backup')!==-1 || key.indexOf('_protected')!==-1 || key.indexOf('_snap_')!==-1) continue;
+          var raw = localStorage.getItem(key);
+          if (!raw) continue;
+          var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+          var teams = (data && data.teams) || [];
+          var slug = key.substring('ligaExt_'.length);
+          var label = _prettyLeagueName(slug);
+          for (var j=0; j<teams.length; j++){
+            var t = teams[j];
+            if (!t || !t.name) continue;
+            var nP = (Array.isArray(t.players) ? t.players.length : 0);
+            if (!nP) continue; /* sin plantilla no aporta nada */
+            out.push({
+              slug: slug, leagueLabel: label, teamName: String(t.name),
+              playersCount: nP, shield: String(t.shield||'')
+            });
+          }
+        }
+      } catch(_){}
+      out.sort(function(a,b){ return a.teamName.localeCompare(b.teamName, 'es', {sensitivity:'base'}); });
+      return out;
+    }
+
+    function _bplantNorm(s){
+      try { return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+      catch(_){ return String(s||'').toLowerCase(); }
+    }
+
+    function _bplantEnsureOv(){
+      var ov = document.getElementById('bplant-pick-ov');
+      if (ov) return ov;
+      ov = document.createElement('div');
+      ov.id = 'bplant-pick-ov';
+      ov.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999990;align-items:center;justify-content:center;padding:18px;';
+      ov.innerHTML =
+        '<div style="background:linear-gradient(160deg,#0d1117,#161b22);border:1px solid rgba(240,192,64,.35);border-radius:14px;padding:18px 16px 14px;width:420px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 0 40px rgba(0,0,0,.8);">'
+      +   '<div style="font-family:\'Bebas Neue\',\'Oswald\',sans-serif;font-size:19px;letter-spacing:2.5px;color:#ffe7a6;text-align:center;margin:0 0 12px;text-shadow:0 0 12px rgba(240,192,64,.45);">🖍 CAMBIAR PLANTILLA · BUSCAR EQUIPO</div>'
+      +   '<div style="display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.5);border:1px solid rgba(240,192,64,.30);border-radius:7px;padding:9px 11px;margin-bottom:10px;">'
+      +     '<span style="font-size:16px;color:#ffd5aa;">🔍</span>'
+      +     '<input id="bplant-q" type="text" placeholder="Escribe un nombre…" autocomplete="off" style="flex:1;background:transparent;border:none;outline:none;color:#fff;font-family:Rajdhani,sans-serif;font-size:15px;letter-spacing:.5px;" />'
+      +   '</div>'
+      +   '<div id="bplant-res" style="overflow:auto;max-height:62vh;border:1px solid rgba(255,255,255,.10);border-radius:8px;background:rgba(0,0,0,.32);"></div>'
+      +   '<div style="display:flex;gap:8px;justify-content:center;margin-top:14px;">'
+      +     '<button type="button" id="bplant-cancel" style="padding:9px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.25);background:transparent;color:rgba(255,255,255,.78);">CANCELAR</button>'
+      +   '</div>'
+      + '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if (e.target === ov) _bplantPickClose(); });
+      ov.querySelector('#bplant-cancel').addEventListener('click', _bplantPickClose);
+      var q = ov.querySelector('#bplant-q');
+      var res = ov.querySelector('#bplant-res');
+      q.addEventListener('input', function(){ _bplantRenderList(q.value); });
+      res.addEventListener('click', function(ev){
+        var row = ev.target && ev.target.closest && ev.target.closest('.bplant-row');
+        if (!row) return;
+        var slug = row.getAttribute('data-slug');
+        var team = row.getAttribute('data-team');
+        if (slug && team) _bplantPickApply(slug, team);
+      });
+      return ov;
+    }
+
+    function _bplantRenderList(query){
+      var res = document.getElementById('bplant-res');
+      if (!res) return;
+      var idx = _BPLANT_INDEX || (_BPLANT_INDEX = _bplantBuildIndex());
+      var q = _bplantNorm(query || '');
+      var filtered = q ? idx.filter(function(it){
+        return _bplantNorm(it.teamName).indexOf(q) !== -1
+            || _bplantNorm(it.leagueLabel).indexOf(q) !== -1;
+      }) : idx;
+      if (!filtered.length){
+        res.innerHTML = '<div style="padding:24px 14px;text-align:center;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:14px;">Sin resultados.</div>';
+        return;
+      }
+      var html = '';
+      for (var i=0; i<filtered.length && i<400; i++){
+        var it = filtered[i];
+        var sh = it.shield
+          ? '<img src="'+String(it.shield).replace(/"/g,'&quot;')+'" alt="" style="width:26px;height:26px;object-fit:contain;flex-shrink:0;" onerror="this.style.display=\'none\';" />'
+          : '<span style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">🛡</span>';
+        html += '<div class="bplant-row" data-slug="'+it.slug+'" data-team="'+String(it.teamName).replace(/"/g,'&quot;')+'" '
+              + 'style="display:flex;align-items:center;gap:10px;padding:8px 11px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.06);-webkit-tap-highlight-color:rgba(240,192,64,.18);">'
+              + sh
+              + '<div style="flex:1;min-width:0;">'
+              +   '<div style="font-family:Oswald,sans-serif;font-size:13px;color:#fff;letter-spacing:.4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+String(it.teamName)+'</div>'
+              +   '<div style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.55);letter-spacing:.3px;">'+String(it.leagueLabel)+' · '+it.playersCount+' jugadores</div>'
+              + '</div>'
+              + '<span style="font-size:15px;color:#ffe7a6;flex-shrink:0;">→</span>'
+              + '</div>';
+      }
+      if (filtered.length > 400) {
+        html += '<div style="padding:10px;text-align:center;color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;font-size:11px;">… ' + (filtered.length-400) + ' más. Refina la búsqueda.</div>';
+      }
+      res.innerHTML = html;
+    }
+
+    var _BPLANT_INDEX = null;
+
+    function _bplantPickOpen(){
+      _BPLANT_INDEX = _bplantBuildIndex();
+      var ov = _bplantEnsureOv();
+      var q = ov.querySelector('#bplant-q');
+      if (q) q.value = '';
+      _bplantRenderList('');
+      ov.style.display = 'flex';
+      setTimeout(function(){ try { q && q.focus(); } catch(_){} }, 30);
+    }
+    function _bplantPickClose(){
+      var ov = document.getElementById('bplant-pick-ov');
+      if (ov) ov.style.display = 'none';
+    }
+    window._bplantPickOpenGated = function(){
+      if (typeof window.pG === 'function') window.pG(_bplantPickOpen);
+      else _bplantPickOpen();
+    };
+
+    function _bplantClonePlayers(src){
+      /* Deep clone con nuevos ids para evitar choques de id entre el
+         hub y el equipo origen (que sigue existiendo en su liga). Los
+         flags C/F/P/⭐/⚾/🏀 y stats se preservan al pegarse tal cual.
+         Los stats de partidos (pj/gol/...) los pone el motor a 0 al
+         empezar, pero copiamos lo que venga por si el origen tenía. */
+      if (!Array.isArray(src)) return [];
+      var out = [];
+      for (var i=0; i<src.length; i++){
+        var p = src[i];
+        if (!p || typeof p !== 'object') continue;
+        var c = {};
+        for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) c[k] = p[k];
+        c.id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2,7) + i;
+        out.push(c);
+      }
+      return out;
+    }
+
+    function _bplantPickApply(srcSlug, srcTeamName){
+      var hub = _bplantFindHubRowWithSlug();
+      if (!hub || !hub.team){
+        alert('⚠ No encuentro el equipo del hub. Asegúrate de que tu equipo está marcado como Humano con tu emoji en el editor.');
+        return;
+      }
+      var srcKey = 'ligaExt_' + srcSlug;
+      var srcRaw = localStorage.getItem(srcKey);
+      if (!srcRaw){ alert('⚠ No encuentro la liga origen.'); return; }
+      var srcData; try { srcData = JSON.parse(srcRaw); } catch(_){ srcData = null; }
+      var srcTeams = (srcData && srcData.teams) || [];
+      var src = null;
+      var srcName = String(srcTeamName||'').toLowerCase();
+      for (var i=0; i<srcTeams.length; i++){
+        var t = srcTeams[i];
+        if (t && t.name && String(t.name).toLowerCase() === srcName){ src = t; break; }
+      }
+      if (!src || !Array.isArray(src.players) || !src.players.length){
+        alert('⚠ El equipo elegido no tiene plantilla.');
+        return;
+      }
+      /* REEMPLAZAR completamente los jugadores del hub, preservando el
+         resto de su identidad (name/shield/stadium/4-ejes/alias/etc). */
+      hub.team.players = _bplantClonePlayers(src.players);
+      hub.team.updatedAt = Date.now();
+      /* Persistir vía window.saveData (mismo flujo que el editor: 5
+         capas + POST al servidor + invalidación de caches). Si por
+         alguna razón no estuviera disponible, fallback a localStorage. */
+      var saved = false;
+      try {
+        if (typeof window.saveData === 'function'){
+          window.saveData(hub.slug, hub.data);
+          saved = true;
+        }
+      } catch(_){}
+      if (!saved){
+        try { localStorage.setItem('ligaExt_'+hub.slug, JSON.stringify(hub.data)); saved = true; } catch(_){}
+      }
+      if (!saved){
+        alert('⚠ No se pudo guardar (almacenamiento lleno?). Cierra y vuelve a intentarlo.');
+        return;
+      }
+      /* Invalidar cache de stats del hub para que el siguiente render
+         use la plantilla nueva. */
+      try { _LAST_SYNC_TS = 0; } catch(_){}
+      try { window._invalidateBayernStatsCache && window._invalidateBayernStatsCache(); } catch(_){}
+      try { window._invalidateLineStatsCache && window._invalidateLineStatsCache(); } catch(_){}
+      try { window._invalidateAliasCache && window._invalidateAliasCache(); } catch(_){}
+      _bplantPickClose();
+      try { window.renderBayernPlantillaScreen && window.renderBayernPlantillaScreen(); } catch(_){}
+      /* Pequeña confirmación visual no-bloqueante. */
+      try {
+        var toast = document.createElement('div');
+        toast.textContent = '✅ Plantilla cambiada a ' + srcTeamName;
+        toast.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(20,80,40,.96);color:#caffd0;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.2px;padding:10px 18px;border-radius:10px;border:1px solid rgba(120,255,160,.45);box-shadow:0 6px 24px rgba(0,0,0,.55);z-index:999991;';
+        document.body.appendChild(toast);
+        setTimeout(function(){ try { toast.parentNode && toast.parentNode.removeChild(toast); } catch(_){} }, 2400);
+      } catch(_){}
+    }
   })();
   </script>
 </div>
@@ -2057,7 +2434,10 @@ window._showSimProgress = function(opts, onDone){
   if (window.__PS_READY) return;
   window.__PS_READY = true;
 
-  var KEY = 'bayern_preseason_v1';
+  var KEY = 'bayern_preseason_v2';   /* nombre legacy; temporada empieza 01 May (PRE-VERANO) 2026-05-20 */
+  /* Limpieza one-shot del store viejo (apuntaba a un calendario con
+     filas pre-Mayo). Así el cursor arranca limpio en 01 May. */
+  try { localStorage.removeItem('bayern_preseason_v1'); } catch(_){}
   var BAYERN_SHIELD = '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg';
   var FALLBACK_SHIELD = '/static/img/escudos-fallback/estepona.svg';
   /* Alias SOLO DE VISUALIZACIÓN del equipo humano (slot de Toñín).
@@ -2121,19 +2501,17 @@ window._showSimProgress = function(opts, onDone){
     try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
   }
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  /* Relabel SOLO VISUAL de la pretemporada a un mes antes (Jul→Jun…),
-     petición usuario "que empiece el 1 de junio". NO toca el
-     calendario real ni las claves (done/rivals/mk/sig usan la fecha
-     real). Si no parsea, devuelve el texto original. */
+  /* Antes (hist. 2026-04): relabel SOLO VISUAL de la pretemporada a un
+     mes antes (Jul→Jun…) porque el calendario almacenado arrancaba en
+     Julio pero el usuario quería verlo desde Junio. Tras añadir la
+     sección PRE-VERANO con eventos reales de Mayo (2026-05-20) el
+     calendario almacenado ya tiene la fecha que toca ("01 May", "01
+     Jun"…) — el shift sobra y, peor, restaba un mes extra (mostraba
+     "01 Abr" cuando el cursor estaba en "01 May"). Pass-through: si la
+     fecha está vacía devolvemos lo que llegue. */
   var _PS_MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   function _psShowDate(s){
-    s=String(s==null?'':s);
-    var m=s.match(/(\d{1,2})\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]{3,})/);
-    if(!m) return s;
-    var mon=m[2].slice(0,3).toLowerCase(), i=-1;
-    for(var k=0;k<_PS_MES.length;k++){ if(_PS_MES[k].toLowerCase()===mon){ i=k; break; } }
-    if(i<0) return s;
-    return m[1]+' '+_PS_MES[(i-1+12)%12];
+    return String(s == null ? '' : s);
   }
   try{ window._psShowDate=_psShowDate; }catch(_){}
 
@@ -2187,6 +2565,18 @@ window._showSimProgress = function(opts, onDone){
                : 'match';
       out.push({ date:date, label:lbl, icon:ico, weather:wx||'☀️', type:type, cls:cls });
     });
+    /* La temporada arranca el 1 de MAYO (sección PRE-VERANO con el
+       Mundial de Selecciones): recortamos cualquier fila pre-mayo del
+       calendario antes de exponerla al motor día a día, así la card
+       del hub nunca puede mostrar "01 Abr" aunque queden eventos
+       antiguos en el DOM. Antes el corte era en Junio (`>= 5`); tras
+       añadir Preverano-Mayo a la semilla (2026-05-20) lo bajamos a
+       Mayo (`>= 4`) para que el cursor arranque en 01 May. */
+    var fj = 0;
+    for (var i = 0; i < out.length; i++){
+      if (_psMonth(out[i].date) >= 4){ fj = i; break; }
+    }
+    if (fj > 0) out = out.slice(fj);
     if (out.length) _ROWS_CACHE = out;
     return out;
   }
@@ -2605,12 +2995,13 @@ window._showSimProgress = function(opts, onDone){
     var m = _PS_MON[p[1].toLowerCase().replace(/\./g,'').slice(0,3)];
     return (m == null) ? -1 : m;
   }
-  /* La temporada ARRANCA el 1 de junio (bloque de Junio al inicio
-     del calendario). Nunca empezamos antes de la primera fila de
-     Junio: si el cursor quedó en una fila pre-junio (estado viejo,
-     p.ej. "03 May") lo recolocamos al inicio de temporada. */
+  /* La temporada ARRANCA el 1 de MAYO (sección PRE-VERANO con el
+     Mundial de Selecciones, añadida 2026-05-20). Nunca empezamos
+     antes de la primera fila de Mayo: si el cursor quedó en una fila
+     pre-mayo (estado viejo, p.ej. "29 Abr") lo recolocamos al inicio
+     de temporada. */
   function _seasonStartIdx(rows){
-    for (var i=0;i<rows.length;i++){ if (_psMonth(rows[i].date) >= 5) return i; }
+    for (var i=0;i<rows.length;i++){ if (_psMonth(rows[i].date) >= 4) return i; }
     return 0;
   }
   function _clampDayIdx(rows, raw){
@@ -2680,18 +3071,68 @@ window._showSimProgress = function(opts, onDone){
      y _advance() tras resolver cada día. Exponemos _render para el
      hub y un pre-render por si el torneo ya estaba elegido al cargar. */
   window._psRender = _render;
+  /* Purga BRUTA pre-Mayo en el DOM del calendario (cliente). Si el
+     servidor todavía sirve filas pre-mayo (BD vieja sin migrar,
+     deploy retrasado), las eliminamos físicamente del #ag-content y
+     #ag-content-bayern para que NADIE (state.events, _calRows,
+     marcador, previa…) pueda mostrarlas. Idempotente, barato.
+     2026-05-20: bajado de Junio a Mayo (sección PRE-VERANO). */
+  function _purgePreJuneDOM(){
+    var hosts = ['ag-content','ag-content-bayern'];
+    hosts.forEach(function(id){
+      var h = document.getElementById(id);
+      if (!h) return;
+      h.querySelectorAll('.ag-r').forEach(function(r){
+        var de = r.querySelector('.ag-date');
+        var m  = _psMonth(de ? de.textContent : '');
+        if (m >= 0 && m < 4) r.parentNode && r.parentNode.removeChild(r);
+      });
+      /* Borra cabeceras de sección que se quedaron sin eventos. */
+      h.querySelectorAll('.ag-season[data-section-id]').forEach(function(hdr){
+        var sib = hdr.nextElementSibling, has = false;
+        while (sib && !sib.classList.contains('ag-season')){
+          if (sib.classList.contains('ag-r')){ has = true; break; }
+          sib = sib.nextElementSibling;
+        }
+        if (!has){
+          /* También quita el `.ag-add-row` que queda colgado. */
+          var nx = hdr.nextElementSibling;
+          while (nx && !nx.classList.contains('ag-season')){
+            var nn = nx.nextElementSibling;
+            nx.parentNode && nx.parentNode.removeChild(nx);
+            nx = nn;
+          }
+          hdr.parentNode && hdr.parentNode.removeChild(hdr);
+        }
+      });
+    });
+    /* Invalidamos el cache de _calRows para que relea el DOM purgado. */
+    try { _ROWS_CACHE = null; } catch(_){}
+  }
   function _bootStage(){
     try {
-      /* Reaplica lesiones de pretemporada aunque el usuario no abra
-         el hub aún (para que el menú médico / plantilla las vean). */
+      /* Ya NO purgamos Mayo: Mayo 01-31 está ocupado por la sección
+         PRE-VERANO (Mundial de Selecciones + descansos). La
+         pretemporada día-a-día empieza el 1 de MAYO gracias al slice
+         de _calRows / _clampDayIdx (`>= 4`). 2026-05-20. */
       _applyPersistedInjuries();
       var d = _load();
+      /* Si el cursor persistido apunta a pre-Mayo, recolocar a 0
+         (con el slice de _calRows ya es Mayo). */
+      if (d && (parseInt(d.dayIdx,10)||0) !== 0){
+        var rows = _calRows();
+        if (rows.length){
+          var firstMay = 0;
+          for (var i=0;i<rows.length;i++){ if (_psMonth(rows[i].date)>=4){ firstMay=i; break; } }
+          if (parseInt(d.dayIdx,10) < firstMay){ d.dayIdx = 0; _save(d); }
+        }
+      }
       if (d && d.tour) _render();
     } catch(_){}
   }
   if (document.readyState === 'loading')
-    document.addEventListener('DOMContentLoaded', function(){ [0,400,1200].forEach(function(t){ setTimeout(_bootStage,t); }); });
-  else [0,400,1200].forEach(function(t){ setTimeout(_bootStage,t); });
+    document.addEventListener('DOMContentLoaded', function(){ [0,200,800,1800].forEach(function(t){ setTimeout(_bootStage,t); }); });
+  else [0,200,800,1800].forEach(function(t){ setTimeout(_bootStage,t); });
 })();
 </script>
 
@@ -2785,6 +3226,12 @@ window._showSimProgress = function(opts, onDone){
   #munich-edit-ov .me-btn.primary{background:linear-gradient(145deg,#dc052d,#8e001c);color:#fff;border-color:#ff5575;}
   #munich-edit-ov .me-btn.ghost{background:transparent;color:rgba(255,255,255,.70);border-color:rgba(255,255,255,.25);}
   #munich-edit-ov .me-btn.danger{background:rgba(255,80,80,.16);color:#ffb0b0;border-color:rgba(255,80,80,.45);}
+  /* Selectores táctiles (Nivel / Forma yo / Forma Rival) */
+  #munich-edit-ov .me-pick-row{padding:8px 0;}
+  #munich-edit-ov .me-pick-row .me-lbl{display:block;margin-bottom:6px;}
+  #munich-edit-ov .me-pick-grid{display:flex;flex-wrap:wrap;gap:6px;}
+  #munich-edit-ov .me-pick-btn{flex:0 0 auto;min-width:44px;padding:8px 12px;background:rgba(0,0,0,.45);border:1px solid rgba(255,120,140,.30);border-radius:8px;color:#ffe1e8;font-family:'Bebas Neue',sans-serif;font-size:18px;cursor:pointer;-webkit-tap-highlight-color:transparent;letter-spacing:1px;}
+  #munich-edit-ov .me-pick-btn.sel{background:rgba(220,5,45,.30);border-color:#ff5575;color:#fff;box-shadow:0 0 10px rgba(255,80,100,.40);}
   .hub-match-engine{background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:10px}
   .fixture-label{margin:0;font-size:11px;color:#f6f6f6}
   .fixture-value{margin:0;font-size:14px;color:#fff;font-weight:700}
@@ -6111,7 +6558,7 @@ window._showSimProgress = function(opts, onDone){
     'san-marino','gibraltar','bulgaria','hungria','gales','estonia',
     'finlandia','letonia','lituania','islandia','armenia','bielorrsa',
     'eslovaquia','eslovenia','is-feroe','georgia','luxembgo','moldavia',
-    'n-maced','malta','kosovo'
+    'n-maced','malta','kosovo','resto-mundo'
   ];
 
   window.lextDeepRecoverAll = function(opts){
@@ -7355,8 +7802,14 @@ window._showSimProgress = function(opts, onDone){
       if (k.indexOf('|sel|') !== -1 || k.indexOf('|sel-fin|') !== -1
           || k.indexOf('cal-sel') !== -1 || k.indexOf('cal-mf-') !== -1) return 'sel';
       /* Torneos de verano + amistosos → bucket único `torneos`
-         (s-torneos-stats). Petición usuario 2026-05-09. */
-      if (k.indexOf('tour_') === 0 || k.indexOf('|torneo|') !== -1) return 'torneos';
+         (s-torneos-stats). Petición usuario 2026-05-09.
+         storeKey real de tour matches = `canonA|canonB|torneos|tour_<id>_<key>`
+         (lo construye `registrarLigaPlayerStats` con el compKey). El
+         check `|torneo|` NO casa con `|torneos|` por la `s`. Añadido
+         `|torneos|` (2026-05-19, foto usuario: J1 jugada pero stats
+         vacías). Sin esto, los matches de torneo caían a 'liga'. */
+      if (k.indexOf('tour_') === 0 || k.indexOf('|torneo|') !== -1
+          || k.indexOf('|torneos|') !== -1) return 'torneos';
       if (k.indexOf('|amistoso|') !== -1 || k.indexOf('cal-ams') !== -1
           || k.indexOf('amistoso') === 0) return 'torneos';
       if (k.indexOf('sl-')  === 0 || k.indexOf('-sl')  !== -1
@@ -8612,8 +9065,6 @@ window._showSimProgress = function(opts, onDone){
 /* Botones de ronda Mundialito Clubes — gradient cian/turquesa
    coherente con la caja principal en s-competiciones. */
 .c-mundial{background:linear-gradient(90deg,#001f2a,#003a52,#006080,#00bcd4,#006080,#003a52,#001f2a) !important;border:1.5px solid rgba(77,208,225,.55) !important;}
-#s-mundial .tour-edit-btn{position:absolute;top:8px;right:10px;z-index:5;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:26px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;}
-#s-mundial .tour-edit-btn:active{background:rgba(240,192,64,.35);}
 /* Editor de roster manual del Mundialito. */
 #mundial-roster-ov{position:fixed;inset:0;z-index:100040;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,6,.88);}
 #mundial-roster-ov .mr-card{width:min(460px,95vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#06141c,#0a1d28);border:1px solid rgba(77,208,225,.5);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
@@ -11107,12 +11558,12 @@ window._showSimProgress = function(opts, onDone){
   <!-- Cards generadas dinámicamente desde el registro de torneos
        (built-in + slots añadidos). Ver _tvRenderCards(). -->
   <div id="tv-tour-cards"></div>
-  <!-- Caja "📊 Estadísticas" Torneos de Verano (2026-05-08): paleta
-       dorado/amarillo igual que la temática (la caja en s-competiciones
-       es dorada). Lee de `ef_player_stats_torneos_v1` (cache aislado
-       que persistirá la suma de los 4 torneos individuales). -->
+  <!-- Caja "📊 Estadísticas" Torneos de Verano: paleta verdosa-azulada
+       (teal) para diferenciarla del dorado del Joan Gamper de arriba
+       (petición usuario 2026-05-19, foto 1). Lee de
+       `ef_player_stats_torneos_v1`. -->
   <div class="submenu-card sc-torneos-stats"
-       style="margin-top:6px;background:linear-gradient(135deg,#2a1f00 0%,#7a5a00 25%,#c89020 50%,#f0c040 70%,#c89020 85%,#2a1f00 100%) !important;border:1.5px solid #f0c040 !important;box-shadow:0 4px 18px rgba(240,192,64,.30),inset 0 1px 0 rgba(255,255,255,.12) !important;"
+       style="margin-top:6px;background:linear-gradient(135deg,#00221d 0%,#005c4e 25%,#008a76 50%,#2dd4bf 70%,#008a76 85%,#00221d 100%) !important;border:1.5px solid #2dd4bf !important;box-shadow:0 4px 18px rgba(45,212,191,.32),inset 0 1px 0 rgba(255,255,255,.12) !important;"
        onclick="go('s-torneos-stats')">
     <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span>
     <span class="sc-arr">▶</span>
@@ -11222,6 +11673,149 @@ window._showSimProgress = function(opts, onDone){
 <div id="tour-info-tx8" class="tour-info-box"></div>
 </div>
 
+<!-- ═══ PANTALLAS DE TORNEOS DE SELECCIONES (2026-05-21) ═══
+     20 slots pre-cableados: 10 spv* (Rondas Previas) + 10 sfn*
+     (Rondas Finales). Mismo esqueleto que los slots tx* de Torneos
+     de Verano: el observer _watchScreens (itera TOUR_IDS) los pinta
+     vía _tourRender al navegar; el 🖍 abre _tourOpenEditor(id). -->
+<style>
+  #s-spv1 .tour-edit-btn,#s-spv2 .tour-edit-btn,#s-spv3 .tour-edit-btn,
+  #s-spv4 .tour-edit-btn,#s-spv5 .tour-edit-btn,#s-spv6 .tour-edit-btn,
+  #s-spv7 .tour-edit-btn,#s-spv8 .tour-edit-btn,#s-spv9 .tour-edit-btn,
+  #s-spv10 .tour-edit-btn,
+  #s-sfn1 .tour-edit-btn,#s-sfn2 .tour-edit-btn,#s-sfn3 .tour-edit-btn,
+  #s-sfn4 .tour-edit-btn,#s-sfn5 .tour-edit-btn,#s-sfn6 .tour-edit-btn,
+  #s-sfn7 .tour-edit-btn,#s-sfn8 .tour-edit-btn,#s-sfn9 .tour-edit-btn,
+  #s-sfn10 .tour-edit-btn{
+    position:absolute;top:10px;right:12px;z-index:5;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
+    color:#fff;width:22px;height:22px;border-radius:50%;cursor:pointer;
+    font-size:12px;line-height:1;padding:0;
+    display:flex;align-items:center;justify-content:center;
+    transition:background .15s;
+  }
+</style>
+<div class="screen" id="s-spv1">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="spv1" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-spv1">🌐</span><h2 id="tour-title-spv1">Ronda Previa 1</h2></div>
+<div id="tour-info-spv1" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-spv2">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="spv2" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-spv2">🌐</span><h2 id="tour-title-spv2">Ronda Previa 2</h2></div>
+<div id="tour-info-spv2" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-spv3">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="spv3" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-spv3">🌐</span><h2 id="tour-title-spv3">Ronda Previa 3</h2></div>
+<div id="tour-info-spv3" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-spv4">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="spv4" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-spv4">🌐</span><h2 id="tour-title-spv4">Ronda Previa 4</h2></div>
+<div id="tour-info-spv4" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-spv5">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="spv5" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-spv5">🌐</span><h2 id="tour-title-spv5">Ronda Previa 5</h2></div>
+<div id="tour-info-spv5" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-spv6">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="spv6" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-spv6">🌐</span><h2 id="tour-title-spv6">Ronda Previa 6</h2></div>
+<div id="tour-info-spv6" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-spv7">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="spv7" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-spv7">🌐</span><h2 id="tour-title-spv7">Ronda Previa 7</h2></div>
+<div id="tour-info-spv7" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-spv8">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="spv8" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-spv8">🌐</span><h2 id="tour-title-spv8">Ronda Previa 8</h2></div>
+<div id="tour-info-spv8" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-spv9">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="spv9" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-spv9">🌐</span><h2 id="tour-title-spv9">Ronda Previa 9</h2></div>
+<div id="tour-info-spv9" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-spv10">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="spv10" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-spv10">🌐</span><h2 id="tour-title-spv10">Ronda Previa 10</h2></div>
+<div id="tour-info-spv10" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-sfn1">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="sfn1" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sfn1">🏆</span><h2 id="tour-title-sfn1">Ronda Final 1</h2></div>
+<div id="tour-info-sfn1" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-sfn2">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="sfn2" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sfn2">🏆</span><h2 id="tour-title-sfn2">Ronda Final 2</h2></div>
+<div id="tour-info-sfn2" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-sfn3">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="sfn3" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sfn3">🏆</span><h2 id="tour-title-sfn3">Ronda Final 3</h2></div>
+<div id="tour-info-sfn3" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-sfn4">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="sfn4" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sfn4">🏆</span><h2 id="tour-title-sfn4">Ronda Final 4</h2></div>
+<div id="tour-info-sfn4" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-sfn5">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="sfn5" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sfn5">🏆</span><h2 id="tour-title-sfn5">Ronda Final 5</h2></div>
+<div id="tour-info-sfn5" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-sfn6">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="sfn6" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sfn6">🏆</span><h2 id="tour-title-sfn6">Ronda Final 6</h2></div>
+<div id="tour-info-sfn6" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-sfn7">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="sfn7" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sfn7">🏆</span><h2 id="tour-title-sfn7">Ronda Final 7</h2></div>
+<div id="tour-info-sfn7" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-sfn8">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="sfn8" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sfn8">🏆</span><h2 id="tour-title-sfn8">Ronda Final 8</h2></div>
+<div id="tour-info-sfn8" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-sfn9">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="sfn9" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sfn9">🏆</span><h2 id="tour-title-sfn9">Ronda Final 9</h2></div>
+<div id="tour-info-sfn9" class="tour-info-box"></div>
+</div>
+<div class="screen" id="s-sfn10">
+<button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
+<button class="tour-edit-btn" data-tour="sfn10" title="Editar torneo">🖍</button>
+<div class="sec-hdr"><span class="sec-emoji" id="tour-flag-sfn10">🏆</span><h2 id="tour-title-sfn10">Ronda Final 10</h2></div>
+<div id="tour-info-sfn10" class="tour-info-box"></div>
+</div>
+
 <!-- Wire-up del botón 🖍 — vive FUERA del IIFE grande para que el
      click siempre tenga respuesta. Si el módulo no se ha cargado
      todavía (por la razón que sea), mostramos alert visible al
@@ -11238,8 +11832,9 @@ window._showSimProgress = function(opts, onDone){
         alert('⚠ La gestión de torneos no se ha cargado. Recarga la página.');
         return;
       }
-      if (typeof window.pG === 'function') window.pG(function(){ window._tvOpenManage(); });
-      else window._tvOpenManage();
+      var _board = mgBtn.getAttribute('data-board') || 'verano';
+      if (typeof window.pG === 'function') window.pG(function(){ window._tvOpenManage(_board); });
+      else window._tvOpenManage(_board);
       return;
     }
     var btn = ev.target && ev.target.closest && ev.target.closest('.tour-edit-btn');
@@ -11259,20 +11854,20 @@ window._showSimProgress = function(opts, onDone){
   /* Botón 🖍 admin de cada torneo — esquina superior derecha de la
      pantalla, simétrico al ◀ Volver. PIN-gated; abre _tourOpenEditor. */
   #s-sct .tour-edit-btn,#s-pss .tour-edit-btn,
-  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn,
+  #s-jg  .tour-edit-btn,#s-asia .tour-edit-btn,#s-mundial .tour-edit-btn,
   #s-tx1 .tour-edit-btn,#s-tx2 .tour-edit-btn,#s-tx3 .tour-edit-btn,
   #s-tx4 .tour-edit-btn,#s-tx5 .tour-edit-btn,#s-tx6 .tour-edit-btn,
   #s-tx7 .tour-edit-btn,#s-tx8 .tour-edit-btn,
   #s-torneos-verano .tv-edit-btn{
-    position:absolute;top:8px;right:10px;z-index:5;
+    position:absolute;top:10px;right:12px;z-index:5;
     background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
-    color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;
-    font-size:26px;line-height:1;padding:0;
+    color:#fff;width:22px;height:22px;border-radius:50%;cursor:pointer;
+    font-size:12px;line-height:1;padding:0;
     display:flex;align-items:center;justify-content:center;
     transition:background .15s;
   }
   #s-sct .tour-edit-btn:active,#s-pss .tour-edit-btn:active,
-  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active,
+  #s-jg  .tour-edit-btn:active,#s-asia .tour-edit-btn:active,#s-mundial .tour-edit-btn:active,
   #s-tx1 .tour-edit-btn:active,#s-tx2 .tour-edit-btn:active,
   #s-tx3 .tour-edit-btn:active,#s-tx4 .tour-edit-btn:active,
   #s-tx5 .tour-edit-btn:active,#s-tx6 .tour-edit-btn:active,
@@ -11280,6 +11875,19 @@ window._showSimProgress = function(opts, onDone){
   #s-torneos-verano .tv-edit-btn:active{
     background:rgba(240,192,64,.35);
   }
+  /* Cada grupo con un color de borde DISTINTO (petición usuario
+     2026-05-19, foto). 8 colores → cubre Mundialito (8 grupos)
+     y todos los demás torneos. Los grupos con humano conservan
+     el dorado llamativo (la regla .tour-group-human va después
+     y gana por orden, ver más abajo). */
+  .tour-group-block.tour-grp-A{border-color:#ff5252;box-shadow:0 0 14px rgba(255,82,82,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-B{border-color:#42a5f5;box-shadow:0 0 14px rgba(66,165,245,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-C{border-color:#66bb6a;box-shadow:0 0 14px rgba(102,187,106,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-D{border-color:#ab47bc;box-shadow:0 0 14px rgba(171,71,188,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-E{border-color:#ffa726;box-shadow:0 0 14px rgba(255,167,38,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-F{border-color:#26c6da;box-shadow:0 0 14px rgba(38,198,218,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-G{border-color:#ec407a;box-shadow:0 0 14px rgba(236,64,122,.32),0 4px 16px rgba(0,0,0,.35);}
+  .tour-group-block.tour-grp-H{border-color:#9ccc65;box-shadow:0 0 14px rgba(156,204,101,.32),0 4px 16px rgba(0,0,0,.35);}
   /* 🖍 de Torneos de Verano MUCHO más pequeño (petición usuario
      2026-05-17, foto 1). Misma especificidad, va después → gana. */
   #s-torneos-verano .tv-edit-btn{
@@ -11764,8 +12372,21 @@ window._showSimProgress = function(opts, onDone){
      "Eliminar" lo oculta CONSERVANDO sus datos (tour_<id>_v1). La
      lista visible se persiste en `tour_registry_v1`. */
   var TOUR_BUILTINS = ['sct','pss','jg','asia','mundial'];
-  var TOUR_SLOTS = ['tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'];
+  var TOUR_SLOTS_VERANO = ['tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'];
+  /* Slots de Selecciones (2026-05-21): 10 para "Rondas Previas"
+     (spv*) y 10 para "Rondas Finales" (sfn*). Reutilizan el motor de
+     Torneos de Verano — mismo editor, formatos, sorteo y simulación. */
+  var TOUR_SLOTS_SELP = ['spv1','spv2','spv3','spv4','spv5','spv6','spv7','spv8','spv9','spv10'];
+  var TOUR_SLOTS_SELF = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
+  var TOUR_SLOTS = TOUR_SLOTS_VERANO.concat(TOUR_SLOTS_SELP, TOUR_SLOTS_SELF);
   var TOUR_IDS = TOUR_BUILTINS.concat(TOUR_SLOTS);
+  /* "Board" (tablero) al que pertenece cada torneo: 'verano' (Torneos
+     de Verano) o las dos secciones de Selecciones. */
+  function _tvBoardOf(id){
+    if (TOUR_SLOTS_SELP.indexOf(id) !== -1) return 'sel-previa';
+    if (TOUR_SLOTS_SELF.indexOf(id) !== -1) return 'sel-final';
+    return 'verano';
+  }
 
   var DEFAULTS = {
     /* 1️⃣ Soccer Champions Tour (spec usuario 2026-05-17): KO 16
@@ -11825,9 +12446,13 @@ window._showSimProgress = function(opts, onDone){
   /* Slots pre-cableados para torneos AÑADIDOS por el admin. Config
      por defecto razonable (KO 16 equipos, 1 humano); el admin la
      ajusta en el editor (NOMBRE/BANDERA/formato/premios…). */
-  TOUR_SLOTS.forEach(function(_sid, _i){
+  TOUR_SLOTS.forEach(function(_sid){
+    var _bd = _tvBoardOf(_sid), _nm, _fl;
+    if (_bd === 'sel-previa'){ _nm = 'Ronda Previa ' + (TOUR_SLOTS_SELP.indexOf(_sid)+1); _fl = '🌐'; }
+    else if (_bd === 'sel-final'){ _nm = 'Ronda Final ' + (TOUR_SLOTS_SELF.indexOf(_sid)+1); _fl = '🏆'; }
+    else { _nm = 'Torneo Personalizado ' + (TOUR_SLOTS_VERANO.indexOf(_sid)+1); _fl = '🏆'; }
     DEFAULTS[_sid] = {
-      name:'Torneo Personalizado ' + (_i + 1), flag:'🏆', fee:40,
+      name:_nm, flag:_fl, fee:40,
       dateStart:'1 Jul', dateEnd:'31 Jul',
       numTeams:16, numHumans:1, aiLevelMin:55, aiLevelMax:88,
       format:'ko',
@@ -13501,7 +14126,7 @@ window._showSimProgress = function(opts, onDone){
       if (!prog.allDone) allGroupsDone = false;
       var letter = String.fromCharCode(65+g);
       var _grpHasHuman = slice.some(function(t){ return t && t.isHuman; });
-      html += '<div class="tour-group-block'+(_grpHasHuman?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
+      html += '<div class="tour-group-block tour-grp-'+letter+(_grpHasHuman?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
       html += _standingsTableHtml(rows, advancePerGroup);
       var curJg = cfg.currentJornadaByGroup[g];
       var jProg = (function(){
@@ -15411,6 +16036,12 @@ window._showSimProgress = function(opts, onDone){
     asia: ['linear-gradient(135deg,#1a0612 0%,#bc002d 35%,#ffffff 50%,#bc002d 65%,#1a0612 100%)','#bc002d']
   };
   var _TV_DEF_COLOR = ['linear-gradient(135deg,#2a1f00 0%,#7a5a00 35%,#c89020 50%,#7a5a00 65%,#2a1f00 100%)','#f0c040'];
+  /* Color por defecto de las tarjetas de cada sección de Selecciones:
+     teal para "Rondas Previas", dorado para "Rondas Finales". */
+  var _TV_BOARD_COLOR = {
+    'sel-previa': ['linear-gradient(135deg,#001a26 0%,#004a5e 35%,#1a8aa0 50%,#004a5e 65%,#001a26 100%)','#2dd4bf'],
+    'sel-final':  ['linear-gradient(135deg,#2a1f00 0%,#7a5a00 35%,#c89020 50%,#7a5a00 65%,#2a1f00 100%)','#f0c040']
+  };
   function _tvEsc(s){ return String(s == null ? '' : s).replace(/[<>"]/g, function(c){ return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;'; }); }
   function _tvRegLoad(){
     var reg = null;
@@ -15444,13 +16075,20 @@ window._showSimProgress = function(opts, onDone){
   function _tvName(id){ var c=_tvCfgOf(id); return (c.name) || (DEFAULTS[id] && DEFAULTS[id].name) || id; }
   function _tvFlag(id){ var c=_tvCfgOf(id); return (c.flag) || (DEFAULTS[id] && DEFAULTS[id].flag) || '🏆'; }
   function _tvRenderCards(){
-    var box = document.getElementById('tv-tour-cards');
-    if (!box) return;
     var reg = _tvRegLoad();
-    var html = '';
+    /* Un contenedor por board: verano → s-torneos-verano; las dos
+       secciones de Selecciones → s-selecciones. */
+    var boards = {
+      'verano':     { box:'tv-tour-cards',    html:'' },
+      'sel-previa': { box:'sel-previa-cards', html:'' },
+      'sel-final':  { box:'sel-final-cards',  html:'' }
+    };
     reg.visible.forEach(function(id){
-      var col = _TV_COLORS[id] || _TV_DEF_COLOR;
-      html += '<div class="submenu-card sc-' + id + '" '
+      var bd = _tvBoardOf(id);
+      var slot = boards[bd];
+      if (!slot) return;
+      var col = _TV_COLORS[id] || _TV_BOARD_COLOR[bd] || _TV_DEF_COLOR;
+      slot.html += '<div class="submenu-card sc-' + id + '" '
         + 'style="background:' + col[0] + ' !important;border-color:' + col[1] + ' !important;" '
         + 'onclick="go(\'s-' + id + '\')">'
         + '<span class="sc-emoji">' + _tvEsc(_tvFlag(id)) + '</span>'
@@ -15459,7 +16097,15 @@ window._showSimProgress = function(opts, onDone){
         + '<span class="sc-arr">▶</span>'
         + '</div>';
     });
-    box.innerHTML = html;
+    Object.keys(boards).forEach(function(bd){
+      var box = document.getElementById(boards[bd].box);
+      if (box) box.innerHTML = boards[bd].html;
+    });
+    /* Mensaje "sin torneos" en las secciones de Selecciones. */
+    ['sel-previa','sel-final'].forEach(function(bd){
+      var empty = document.getElementById(bd + '-empty');
+      if (empty) empty.style.display = boards[bd].html ? 'none' : 'block';
+    });
   }
   window._tvRenderCards = _tvRenderCards;
   /* Accesores públicos para que OTRAS pantallas (p.ej. el picker de
@@ -15476,16 +16122,29 @@ window._showSimProgress = function(opts, onDone){
     if (ov) ov.style.display = 'none';
   }
   window._tvCloseManage = _tvCloseManage;
-  function _tvBuildManageBody(){
+  /* Slots pre-cableados de un board concreto. */
+  function _tvSlotsOf(board){
+    if (board === 'sel-previa') return TOUR_SLOTS_SELP;
+    if (board === 'sel-final')  return TOUR_SLOTS_SELF;
+    return TOUR_SLOTS_VERANO;
+  }
+  /* Board que gestiona el modal abierto actualmente. */
+  var _tvMgBoard = 'verano';
+  function _tvBuildManageBody(board){
+    board = board || 'verano';
     var reg = _tvRegLoad();
     var visSet = {}; reg.visible.forEach(function(id){ visSet[id]=1; });
+    var slots = _tvSlotsOf(board);
+    /* Los built-in (sct/pss/jg/asia/mundial) solo existen en verano. */
+    var builtins = (board === 'verano') ? TOUR_BUILTINS : [];
+    var active = reg.visible.filter(function(id){ return _tvBoardOf(id) === board; });
     var h = '<div class="tv-mg-sec">Torneos activos</div>';
-    if (!reg.visible.length) h += '<div class="tv-mg-empty">Ninguno.</div>';
-    reg.visible.forEach(function(id){
+    if (!active.length) h += '<div class="tv-mg-empty">Ninguno.</div>';
+    active.forEach(function(id){
       h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tvEsc(_tvFlag(id)) + ' ' + _tvEsc(_tvName(id)) + '</span>'
         + '<button class="tv-mg-btn tv-mg-del" data-act="del" data-id="' + id + '">🗑 Eliminar</button></div>';
     });
-    var hiddenB = TOUR_BUILTINS.filter(function(id){ return !visSet[id]; });
+    var hiddenB = builtins.filter(function(id){ return !visSet[id]; });
     if (hiddenB.length){
       h += '<div class="tv-mg-sec">Restaurar built-in (datos conservados)</div>';
       hiddenB.forEach(function(id){
@@ -15493,10 +16152,10 @@ window._showSimProgress = function(opts, onDone){
           + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button></div>';
       });
     }
-    var freeSlots = TOUR_SLOTS.filter(function(id){ return !visSet[id]; });
+    var freeSlots = slots.filter(function(id){ return !visSet[id]; });
     h += '<div class="tv-mg-sec">Añadir torneo nuevo</div>';
     if (!freeSlots.length){
-      h += '<div class="tv-mg-empty">Sin huecos libres (máx. ' + TOUR_SLOTS.length + '). Elimina alguno para liberar uno.</div>';
+      h += '<div class="tv-mg-empty">Sin huecos libres (máx. ' + slots.length + '). Elimina alguno para liberar uno.</div>';
     } else {
       h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + freeSlots.length + ' hueco' + (freeSlots.length===1?'':'s') + ' libre' + (freeSlots.length===1?'':'s') + '</span>'
         + '<button class="tv-mg-btn tv-mg-add" data-act="new">➕ Nuevo torneo</button></div>';
@@ -15510,15 +16169,16 @@ window._showSimProgress = function(opts, onDone){
   }
   function _tvRefreshManage(){
     var b = document.getElementById('tv-mg-body');
-    if (b) b.innerHTML = _tvBuildManageBody();
+    if (b) b.innerHTML = _tvBuildManageBody(_tvMgBoard);
   }
-  function _tvOpenManage(){
+  function _tvOpenManage(board){
+    _tvMgBoard = board || 'verano';
     var ov = document.getElementById('tv-manage-ov');
     if (!ov){
       ov = document.createElement('div');
       ov.id = 'tv-manage-ov';
       ov.innerHTML = '<div class="tv-mg-card">'
-        + '<div class="tv-mg-hd"><span>🏆 Gestionar torneos</span>'
+        + '<div class="tv-mg-hd"><span id="tv-mg-title">🏆 Gestionar torneos</span>'
         + '<button class="tv-mg-x" onclick="window._tvCloseManage()">✕</button></div>'
         + '<div class="tv-mg-body" id="tv-mg-body"></div></div>';
       document.body.appendChild(ov);
@@ -15537,7 +16197,7 @@ window._showSimProgress = function(opts, onDone){
           if (TOUR_IDS.indexOf(id) !== -1 && reg.visible.indexOf(id) === -1) reg.visible.push(id);
           _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
         } else if (act === 'new'){
-          var free = TOUR_SLOTS.filter(function(s){ return reg.visible.indexOf(s) === -1; });
+          var free = _tvSlotsOf(_tvMgBoard).filter(function(s){ return reg.visible.indexOf(s) === -1; });
           if (!free.length){ alert('Sin huecos libres. Elimina algún torneo para liberar uno.'); return; }
           var slot = free[0];
           var nm = prompt('Nombre del torneo nuevo:', _tvName(slot));
@@ -15558,6 +16218,12 @@ window._showSimProgress = function(opts, onDone){
           }, 250);
         }
       });
+    }
+    var titleEl = document.getElementById('tv-mg-title');
+    if (titleEl){
+      titleEl.textContent = _tvMgBoard === 'sel-previa' ? '🌐 Gestionar Rondas Previas'
+        : _tvMgBoard === 'sel-final' ? '🏆 Gestionar Rondas Finales'
+        : '🏆 Gestionar torneos';
     }
     _tvRefreshManage();
     ov.style.display = 'flex';
@@ -15583,17 +16249,19 @@ window._showSimProgress = function(opts, onDone){
   function _tvWatch(){
     _tvRenderCards();
     _tvHydrateReg();
-    var el = document.getElementById('s-torneos-verano');
-    if (el && typeof MutationObserver === 'function'){
-      var wasA = el.classList.contains('active');
-      try {
-        new MutationObserver(function(){
-          var nowA = el.classList.contains('active');
-          if (nowA && !wasA) _tvRenderCards();
-          wasA = nowA;
-        }).observe(el, { attributes:true, attributeFilter:['class'] });
-      } catch(_){}
-    }
+    ['s-torneos-verano','s-selecciones'].forEach(function(sid){
+      var el = document.getElementById(sid);
+      if (el && typeof MutationObserver === 'function'){
+        var wasA = el.classList.contains('active');
+        try {
+          new MutationObserver(function(){
+            var nowA = el.classList.contains('active');
+            if (nowA && !wasA) _tvRenderCards();
+            wasA = nowA;
+          }).observe(el, { attributes:true, attributeFilter:['class'] });
+        } catch(_){}
+      }
+    });
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', _tvWatch);
@@ -16044,7 +16712,11 @@ window._showSimProgress = function(opts, onDone){
         var EUROPE_BLACKLIST = {
           'liga-hypermotion':        { all: true },
           'liga-primera-federacion': { all: true },
-          'liga-ea-sports':          { all: true }
+          'liga-ea-sports':          { all: true },
+          /* "Resto Mundo" agrupa equipos top de América + Asia (44).
+             Petición usuario 2026-05-20: NO van a ninguna competición
+             europea — son extra-UEFA por definición. */
+          'resto-mundo':             { all: true }
         };
         var blRule = EUROPE_BLACKLIST[slug];
         if(blRule && (blRule.all || blRule[zoneKey])){
@@ -20166,6 +20838,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce2028,#f7e117,#ce2028);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Maced.</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#cf0921,#fff,#cf0921);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Malta</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#244aa5,#e4aa3c,#244aa5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇽🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kosovo</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a4f8c,#2da651,#c83737);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🌎</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Resto Mundo</span></div>
 </div>
 <!-- Botón "Enviar a Europa" (PIN admin 747). Va al FINAL de la lista
      de ligas — debajo de Kosovo (la última) — para que el admin lo
@@ -20267,8 +20940,6 @@ window._showSimProgress = function(opts, onDone){
       alert('Motor de simulación no disponible. Recarga la página.');
       return;
     }
-    if(!confirm('¿Simular las 51 ligas? Reseteará los resultados y stats actuales antes de simular.')) return;
-
     /* Recogemos la lista de ligas ANTES de mostrar el overlay para
        saber el total y poder calcular el % real (1 liga = 1 step).
        Luego iteramos con setTimeout(0) entre ligas para que la barra
@@ -20278,6 +20949,7 @@ window._showSimProgress = function(opts, onDone){
     _eachLeagueCard(function(name){ leagues.push(name); });
     var total = leagues.length;
     if(!total){ alert('No hay ligas para simular.'); return; }
+    if(!confirm('¿Simular las ' + total + ' ligas? Reseteará los resultados y stats actuales antes de simular.')) return;
 
     var ok = 0, skip = 0, idx = 0;
     var skippedSlugs = [];
@@ -20337,25 +21009,16 @@ window._showSimProgress = function(opts, onDone){
           });
         }
       } catch(_){}
-      /* NO usar alert() (bloquea la UI y "congela" la pantalla al
-         terminar — justo lo que el usuario reportó). Aviso corto NO
-         bloqueante + detalle en consola, y refresco automático de
-         las clasificaciones. 2026-05-19. */
-      var msg = '✅ Simuladas ' + ok + ' liga' + (ok===1?'':'s')
-        + (skip ? ' · ' + skip + ' sin equipos (ver consola)' : '');
-      try {
-        if (typeof window._ftbolBgNotice === 'function') {
-          window._ftbolBgNotice(msg, 5000);
-        } else {
-          console.log('[restoLigas] ' + msg);
-        }
-      } catch(_){ try { console.log('[restoLigas] ' + msg); } catch(__){} }
-      /* Refresco automático: clasificación Liga EA + cualquier
-         pantalla de liga abierta, sin que el usuario tenga que
-         navegar ni recargar. */
-      try { if (typeof window.buildLigaClas === 'function') window.buildLigaClas(); } catch(_){}
-      try { if (typeof window.renderTable === 'function') window.renderTable(); } catch(_){}
-      try { if (typeof window.buildIAresults === 'function') window.buildIAresults(); } catch(_){}
+      var msg = 'Simuladas: ' + ok + ' liga' + (ok===1?'':'s');
+      if (skip) {
+        msg += ' · sin equipos suficientes: ' + skip + '.\n\n';
+        msg += 'Las saltadas (consulta window._lastSkippedLeagues en consola):\n';
+        msg += skippedSlugs.slice(0, 20).map(function(s){ return '  · ' + s.slug; }).join('\n');
+        if (skippedSlugs.length > 20) msg += '\n  · …(' + (skippedSlugs.length-20) + ' más)';
+      } else {
+        msg += '.';
+      }
+      alert(msg);
     }
 
     /* FLAG BULK 2026-05-12: durante la sim de las 51 ligas,
@@ -20366,27 +21029,12 @@ window._showSimProgress = function(opts, onDone){
        POST redundantes — `saveData` ya persiste al final de cada
        liga). Se limpia en _onDone (éxito) y en el .catch (error). */
     window._restoSimBulkInProgress = true;
-    function _clearBulkFlag(){
-      try { window._restoSimBulkInProgress = false; } catch(_){}
-      /* Flush diferido al servidor de lo simulado (no bloquea). */
-      try {
-        if (typeof window._ligaExtDrainBulkQ === 'function') {
-          setTimeout(window._ligaExtDrainBulkQ, 400);
-        }
-      } catch(_){}
-    }
+    function _clearBulkFlag(){ try { window._restoSimBulkInProgress = false; } catch(_){} }
     var _onDoneOrig = _onDone;
     _onDone = function(){ _clearBulkFlag(); try { _onDoneOrig(); } catch(_){} };
 
-    /* 2026-05-19: SIN overlay bloqueante. `_ftbolBgRun` muestra un
-       aviso pequeño no bloqueante y `simNext` ya cede el hilo entre
-       ligas (setTimeout 0) → la app NO se congela y la barra no
-       puede quedarse clavada en "8% INICIANDO". */
-    var _bgRunResto = (typeof window._ftbolBgRun === 'function')
-      ? window._ftbolBgRun
-      : (typeof window.ftbolLoaderRun === 'function' ? window.ftbolLoaderRun : null);
-    if(_bgRunResto){
-      _bgRunResto(
+    if(typeof window.ftbolLoaderRun === 'function'){
+      window.ftbolLoaderRun(
         { title:'RESTO DE LIGAS · 51 LIGAS', sub:'Iniciando…', theme:'resto', minMs:300 },
         function(ctx){ return simNext(ctx.progress); }
       ).then(_onDone, function(e){ _clearBulkFlag(); try { console.error('[restoSim]', e); } catch(_){} });
@@ -20402,7 +21050,8 @@ window._showSimProgress = function(opts, onDone){
       alert('Motor de reset no disponible. Recarga la página.');
       return;
     }
-    if(!confirm('¿Resetear las 51 ligas?\n\nLas plantillas (jugadores y escudos) se mantienen, pero las estadísticas vuelven a 0.\n\nTambién se reinician Wild Card, Open Qualifier y Previa de Champions (sus pools dependen de las ligas) y los huecos en UCL/UEL/UECL fase de grupos vuelven a "Por definir".')) return;
+    var _totalCnt = 0; try { _eachLeagueCard(function(){ _totalCnt++; }); } catch(_){}
+    if(!confirm('¿Resetear las ' + (_totalCnt || '') + ' ligas?\n\nLas plantillas (jugadores y escudos) se mantienen, pero las estadísticas vuelven a 0.\n\nTambién se reinician Wild Card, Open Qualifier y Previa de Champions (sus pools dependen de las ligas) y los huecos en UCL/UEL/UECL fase de grupos vuelven a "Por definir".')) return;
     var ok = 0;
     _eachLeagueCard(function(name){
       var slug = _slugify(name);
@@ -22750,6 +23399,10 @@ Tottenham
     LIGA_CACHE[k] = {teams:[], results:[]};
     return _applyForcedBlacklist(k, LIGA_CACHE[k]);
   }
+  /* Exponer en window para que IIFEs hermanos (p.ej. el host de
+     s-bayern-plantilla) puedan leer datos del editor sin tener que
+     parsear localStorage a pelo. 2026-05-20. */
+  window.loadData = loadData;
 
   /* ═══════════════════════════════════════════════════════════════
      FORCED_BLACKLIST — equipos vetados PERMANENTEMENTE por liga.
@@ -23061,7 +23714,19 @@ Tottenham
           todas las claves ligaExt_*. Memoizado 5 s para no reescanear
           en cada repintado de la previa.
        3. Fallback final al TEAM_STADIUMS hardcoded del bundle. */
+  /* IMPORTANTE 2026-05-20: este override debe (re)instalarse DESPUÉS
+     de que `static/js/index.bundle.js` haya cargado, porque el bundle
+     define `window.getTeamStadium = function(name){...}` (versión
+     simple que solo consulta TEAM_STADIUMS hardcoded) en su línea ~423
+     y, al cargarse después de misc_body_1.html, PISA el override —
+     dejando la previa con el estadio hardcoded en vez del que el admin
+     puso en el editor. Diferimos a DOMContentLoaded (el bundle es
+     parser-blocking y por tanto está garantizado que ya corrió) y
+     marcamos la función con `__ftbol_override` para que sea
+     idempotente y no se re-envuelva si se llama más de una vez. */
   (function(){
+    function _install(){
+    if (window.getTeamStadium && window.getTeamStadium.__ftbol_override) return;
     var _origGetStadium = window.getTeamStadium;
     var _stadMemo = Object.create(null);
     var _stadMemoTs = 0;
@@ -23137,6 +23802,13 @@ Tottenham
       if(window.TEAM_STADIUMS) return window.TEAM_STADIUMS[teamName] || window.TEAM_STADIUMS[String(teamName).trim()] || '';
       return '';
     };
+    window.getTeamStadium.__ftbol_override = true;
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', _install);
+    } else {
+      _install();
+    }
   })();
 
   function _countPlayers(d){
@@ -23153,24 +23825,6 @@ Tottenham
        _protected, _backup ni al server. */
     try { _sanitizeLigaTeamNames(d); } catch(_){}
     LIGA_CACHE[k] = d;
-    /* ── FAST-PATH SIM MASIVA (2026-05-19) ───────────────────────────
-       Reportado: simular las 51 ligas tarda > 8 min y no termina.
-       Causa: saveData se llama 51× y por liga hacía 3 escrituras
-       multi-MB a localStorage (main + _protected + _snap), un escaneo
-       COMPLETO de localStorage para podar snaps, y 3× JSON.stringify
-       de la plantilla para los POST (server + backup + protected).
-       En una re-sim de stats las PLANTILLAS NO cambian (solo
-       resultados/stats), así que durante el bulk:
-         · escribimos SOLO el main local (los standings se leen de ahí
-           + LIGA_CACHE; render inmediato),
-         · NO tocamos _protected/_snap (la plantilla protegida ya es
-           idéntica — sin riesgo anti-wipe; los snaps son históricos),
-         · NO hacemos POST por liga: encolamos el `serialized` ya
-           calculado y lo drenamos en 2º plano DESPUÉS del bulk
-           (1 POST/~60ms, sin bloquear ni re-stringify).
-       Resultado: de ~3 setItem-MB + full-scan + 3 stringify-MB +
-       3 fetch POR liga → 1 setItem-MB por liga. */
-    var _bulkSim = !!window._restoSimBulkInProgress;
     /* Invalidar cache de computeLineStats / roster — si admin editó
        una plantilla y mutó power de jugadores, los stats cacheados
        son obsoletos. La invalidación es barata (recrear WeakMap) y
@@ -23330,7 +23984,7 @@ Tottenham
          estado de 0 equipos. Una sim que devuelva data vacía por bug
          no debe destruir la copia de seguridad. */
       var nTeamsNew = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
-      if (nTeamsNew > 0 && !_bulkSim) {
+      if (nTeamsNew > 0) {
         _setItemSafe(storeKey(k) + '_protected', serialized);
       }
     }
@@ -23375,7 +24029,7 @@ Tottenham
            de cambios accidentales)
        loadData mantiene el fallback completo: main → _protected →
        _backup (legacy, se ignora si no existe) → snaps. */
-    if (serialized != null && _saveOk && !_bulkSim) {
+    if (serialized != null && _saveOk) {
       try {
         var nowMs = Date.now();
         if (_countPlayers(d) > 0) {
@@ -23413,20 +24067,6 @@ Tottenham
          · slug apuntado en set persistido `liga_ext_pending_v1`
            hasta el ACK; el boot lo re-empuja si quedó pendiente.
          · _backup / _protected siguen como red secundaria. */
-    /* SIM MASIVA: NO POST por liga (3× stringify-MB + 3 fetch +
-       markPending que escribe localStorage, ×51 = el cuelgue de
-       > 8 min). Encolamos el `serialized` ya calculado y drenamos en
-       2º plano tras el bulk. El resto de la función (server) se
-       omite — es lo único que queda. */
-    if (_bulkSim) {
-      try {
-        if (serialized != null && d && Array.isArray(d.teams) && d.teams.length) {
-          window._ligaExtBulkQ = window._ligaExtBulkQ || [];
-          window._ligaExtBulkQ.push({ slug:k, body:'{"data":'+serialized+'}' });
-        }
-      } catch(_){}
-      return;
-    }
     var _dirtyAt = Date.now();
     LIGA_LOCAL_DIRTY_AT[k] = _dirtyAt;
     try { if (typeof window._ligaExtMarkPending === 'function') window._ligaExtMarkPending(k); } catch(_){}
@@ -23602,31 +24242,8 @@ Tottenham
       }
     }catch(_){}
   }
-
-  /* Drena en 2º plano la cola de POSTs acumulada durante la sim
-     masiva (1 POST/~70ms, async, NO bloquea la UI). Idempotente y
-     reentrante: si llega más cola mientras drena, la sigue. Reusa
-     el body ya serializado (sin re-stringify). 2026-05-19. */
-  window._ligaExtDrainBulkQ = function(){
-    var q = window._ligaExtBulkQ;
-    if (!Array.isArray(q) || !q.length || window._ligaExtBulkDraining) return;
-    window._ligaExtBulkDraining = true;
-    function next(){
-      var item = (window._ligaExtBulkQ && window._ligaExtBulkQ.length)
-        ? window._ligaExtBulkQ.shift() : null;
-      if (!item){ window._ligaExtBulkDraining = false; return; }
-      var done = function(){ setTimeout(next, 70); };
-      try {
-        fetch('/api/liga-ext/'+encodeURIComponent(item.slug), {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          credentials:'same-origin',
-          body:item.body
-        }).then(done, done);
-      } catch(_){ done(); }
-    }
-    next();
-  };
+  /* Exponer en window — ver loadData arriba. 2026-05-20. */
+  window.saveData = saveData;
 
   /* ── Set persistido de slugs con guardado PENDIENTE de ACK ───────
      (REFUERZO MÁXIMO 2026-05-17). Guarda SOLO la lista de slugs
@@ -26250,7 +26867,6 @@ Tottenham
 
       var moved = 0, skippedDup = 0;
       var newSrcTeams = [];
-      var movedNames = [];
       srcData.teams.forEach(function(t){
         if (!t) return;
         var keep = true;
@@ -26270,32 +26886,10 @@ Tottenham
             moved++;
             keep = false;
           }
-          if (!keep && t.name) movedNames.push(t.name);
         }
         if (keep) newSrcTeams.push(t);
       });
       srcData.teams = newSrcTeams;
-      /* CLAVE (2026-05-18): marcar los movidos en `deletedTeamNames`
-         del ORIGEN. Sin esto el equipo volvía a aparecer en la liga
-         de origen (p.ej. Bayern movido a Alemania seguía saliendo en
-         Liga EA Sports y no se podía eliminar): el anti-wipe / sync
-         del servidor lo resucitaba, y la clasificación de Liga EA
-         (que ahora también respeta esta lista) lo seguía pintando.
-         Mismo patrón que lextDeleteTeam. El destino NO lo bloquea. */
-      if (!Array.isArray(srcData.deletedTeamNames)) srcData.deletedTeamNames = [];
-      movedNames.forEach(function(nm){
-        var nn = _lextNormName(nm);
-        if (nn && srcData.deletedTeamNames.indexOf(nn) === -1) srcData.deletedTeamNames.push(nn);
-        /* Si por una sesión previa el nombre estaba marcado como
-           borrado en el DESTINO, lo desbloqueamos: el admin lo está
-           re-creando ahí explícitamente. */
-        try {
-          if (Array.isArray(dstData.deletedTeamNames)) {
-            var di = dstData.deletedTeamNames.indexOf(nn);
-            if (di !== -1) dstData.deletedTeamNames.splice(di, 1);
-          }
-        } catch(_){}
-      });
 
       /* Persistir ambos: localStorage + invalidate cache + POST async. */
       try { saveData(srcKey, srcData); } catch(_){}
@@ -28387,6 +28981,122 @@ Tottenham
   }
 
   /* ═══════════════════════════════════════════════════════════════
+     "Resto Mundo" — 44 equipos top de fuera de Europa (América +
+     Asia), agrupados en una liga simulada a ida y vuelta. NO van
+     a ninguna competición europea (ver EUROPE_BLACKLIST, slug
+     `resto-mundo`). Pre-seed automático en primer load: si la
+     clave `ligaExt_resto-mundo` no existe (o está vacía), se crea
+     con los 44 equipos preconfigurados (nombre / alias eFootball +
+     poder GLOBAL/ATK/MED/DEF). Petición usuario 2026-05-20.
+     ═══════════════════════════════════════════════════════════════ */
+  var RESTO_MUNDO_TEAMS = [
+    /* ARGENTINA (11) — Boca/River con licencia; el resto, alias eFootball. */
+    {name:'CA River Plate',     power:80, atk:81, mid:80, def:79},
+    {name:'CA Boca Juniors',    power:80, atk:80, mid:80, def:80},
+    {name:'Avellaneda AB',      power:77, atk:77, mid:77, def:77},  /* Racing Club */
+    {name:'Liniers AB',         power:75, atk:76, mid:75, def:74},  /* Vélez Sarsfield */
+    {name:'Córdoba AB',         power:75, atk:75, mid:75, def:75},  /* CA Talleres */
+    {name:'Avellaneda R',       power:75, atk:75, mid:75, def:75},  /* CA Independiente */
+    {name:'Rosario AA',         power:73, atk:74, mid:73, def:72},  /* Rosario Central */
+    {name:'Buenos Aires RB',    power:73, atk:74, mid:73, def:72},  /* CA Huracán */
+    {name:'La Paternal RB',     power:72, atk:72, mid:72, def:72},  /* Argentinos Juniors */
+    {name:'Lanús M',            power:72, atk:72, mid:72, def:72},
+    {name:'Alberdi A',          power:71, atk:71, mid:71, def:71},  /* Belgrano de Córdoba */
+    /* BRASIL (13) — licencia oficial. */
+    {name:'CR Flamengo',        power:81, atk:82, mid:81, def:80},
+    {name:'SE Palmeiras',       power:81, atk:81, mid:81, def:81},
+    {name:'Botafogo FR',        power:79, atk:79, mid:79, def:79},
+    {name:'SC Corinthians',     power:78, atk:78, mid:78, def:78},
+    {name:'São Paulo FC',       power:78, atk:78, mid:78, def:78},
+    {name:'Fluminense FC',      power:77, atk:77, mid:77, def:77},
+    {name:'SC Internacional',   power:77, atk:77, mid:77, def:77},
+    {name:'Grêmio FBPA',        power:77, atk:77, mid:77, def:77},
+    {name:'Santos FC',          power:76, atk:76, mid:76, def:76},
+    {name:'Cruzeiro EC',        power:76, atk:76, mid:76, def:76},
+    {name:'CR Vasco da Gama',   power:75, atk:75, mid:75, def:75},
+    {name:'Red Bull Bragantino',power:75, atk:75, mid:75, def:75},
+    {name:'EC Bahia',           power:74, atk:74, mid:74, def:74},
+    /* CHILE (1) */
+    {name:'La Calera R',        power:73, atk:73, mid:73, def:73},  /* Colo-Colo */
+    /* COLOMBIA (2) */
+    {name:'Medellín V',         power:73, atk:73, mid:73, def:73},  /* Atlético Nacional */
+    {name:'Barranquilla RB',    power:71, atk:71, mid:71, def:71},  /* Junior de Barranquilla */
+    /* LIGA MX (4) — licencia oficial. */
+    {name:'Club América',       power:77, atk:77, mid:77, def:77},
+    {name:'Tigres UANL',        power:76, atk:76, mid:76, def:76},
+    {name:'CD Guadalajara',     power:73, atk:73, mid:73, def:73},
+    {name:'Pumas',              power:73, atk:73, mid:73, def:73},
+    /* MLS (7) — alias eFootball. */
+    {name:'Miami BP',           power:78, atk:79, mid:78, def:77},  /* Inter Miami */
+    {name:'Los Angeles BY',     power:76, atk:76, mid:76, def:76},  /* LAFC */
+    {name:'Los Angeles WB',     power:74, atk:74, mid:74, def:74},  /* LA Galaxy */
+    {name:'Seattle GB',         power:74, atk:74, mid:74, def:74},  /* Seattle Sounders */
+    {name:'Orlando PW',         power:72, atk:72, mid:72, def:72},  /* Orlando City */
+    {name:'Houston O',          power:71, atk:71, mid:71, def:71},  /* Houston Dynamo */
+    {name:'Chicago RW',         power:71, atk:71, mid:71, def:71},  /* Chicago Fire */
+    /* SAUDI PRO LEAGUE (4) — licencia oficial. */
+    {name:'Al Hilal SFC',       power:82, atk:83, mid:82, def:81},
+    {name:'Al Nassr FC',        power:81, atk:82, mid:81, def:80},
+    {name:'Al Ittihad Club',    power:80, atk:80, mid:80, def:80},
+    {name:'Al Ahli Saudi FC',   power:79, atk:79, mid:79, def:79},
+    /* QATAR STARS LEAGUE (2) — licencia oficial. */
+    {name:'Al Sadd SC',         power:74, atk:74, mid:74, def:74},
+    {name:'Al Duhail SC',       power:72, atk:72, mid:72, def:72}
+  ];
+  function _ensureRestoMundoSeed(){
+    var slug = 'resto-mundo';
+    var hasTeams = false;
+    try {
+      var raw = localStorage.getItem('ligaExt_' + slug);
+      if (raw) {
+        var d = JSON.parse(raw);
+        if (d && Array.isArray(d.teams) && d.teams.length > 0) hasTeams = true;
+      }
+    } catch(_){}
+    if (hasTeams) return;
+    var teams = RESTO_MUNDO_TEAMS.map(function(spec, idx){
+      return {
+        id: 'rm-' + (idx + 1),
+        name: spec.name,
+        power: spec.power, atk: spec.atk, mid: spec.mid, def: spec.def,
+        aggressiveness: 50,
+        shield: '', stadium: '', efootballAlias: '', budget: 0,
+        players: [],
+        isHuman: false, humanEmoji: ''
+      };
+    });
+    /* zones a 0 → la clasificación no muestra franjas europeas ni
+       descenso. Coherente con la regla "no va a ninguna competición
+       europea". */
+    var data = {
+      teams: teams,
+      results: [],
+      config: {
+        zones: { ucl:0, uclPrev:0, uclQual:0, uel:0, uecl:0, wildcard:0, desc:0 },
+        logo: '', cupName: '', cupLogo: ''
+      }
+    };
+    try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(data)); } catch(_){}
+    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+  }
+  /* Seed eager (al cargar) para que Sim All y aperturas directas vean
+     los 44 equipos sin abrir antes la pantalla. */
+  try { _ensureRestoMundoSeed(); } catch(_){}
+  /* Defensa adicional: si en algún momento el storage queda vacío
+     (reset / sync server que devuelve {teams:[]}), re-sembramos al
+     abrir la pantalla. */
+  (function(){
+    var _origOpen = window.openLigaExt;
+    if (typeof _origOpen !== 'function') return;
+    window.openLigaExt = function(name, emoji){
+      if (name === 'Resto Mundo') {
+        try { _ensureRestoMundoSeed(); } catch(_){}
+      }
+      return _origOpen.apply(this, arguments);
+    };
+  })();
+
+  /* ═══════════════════════════════════════════════════════════════
      COPA NACIONAL · MOTOR + UI (petición usuario 2026-05-06)
      Estado por liga en `data.copa = {format,status,groups,cuartos,
      semis,final,champion,runnerUp}`. Persistencia: misma vía que el
@@ -29231,18 +29941,79 @@ Tottenham
 <div class="screen" id="s-selecciones">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🌐</span><h2>Selecciones</h2></div>
+<!-- Dos secciones de torneos (2026-05-21): "Rondas Previas" (fases
+     de clasificación) arriba y "Rondas Finales" debajo. Cada sección
+     tiene su propio 🖍 (PIN 747) que abre el gestor de torneos
+     board-aware (_tvOpenManage). Los torneos reutilizan el motor de
+     Torneos de Verano (editor / formatos / sorteo / simulación). -->
+<style>
+  #s-selecciones .sel-sec-title{
+    display:flex;align-items:center;gap:8px;
+    margin:16px 4px 7px;font-family:Oswald,sans-serif;
+    letter-spacing:2px;font-size:14px;
+  }
+  #s-selecciones .sel-sec-title.is-previa{color:#2dd4bf;text-shadow:0 0 14px rgba(45,212,191,.45);}
+  #s-selecciones .sel-sec-title.is-final{color:#f0c040;text-shadow:0 0 14px rgba(240,192,64,.45);}
+  #s-selecciones .sel-sec-title .sel-sec-line{flex:1;height:1px;}
+  #s-selecciones .sel-sec-title.is-previa .sel-sec-line{background:linear-gradient(90deg,rgba(45,212,191,.6),transparent);}
+  #s-selecciones .sel-sec-title.is-final .sel-sec-line{background:linear-gradient(90deg,rgba(240,192,64,.6),transparent);}
+  #s-selecciones .sel-mg-btn{
+    background:rgba(0,0,0,.45);color:#fff;cursor:pointer;
+    width:26px;height:26px;border-radius:7px;font-size:13px;line-height:1;
+    padding:0;display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  #s-selecciones .sel-sec-title.is-previa .sel-mg-btn{border:1px solid rgba(45,212,191,.55);}
+  #s-selecciones .sel-sec-title.is-final .sel-mg-btn{border:1px solid rgba(240,192,64,.55);}
+  #s-selecciones .sel-empty{
+    padding:14px;text-align:center;font-family:Rajdhani,sans-serif;
+    font-size:12.5px;color:rgba(255,255,255,.42);
+  }
+  #s-selecciones .submenu-card .sc-info-btn{
+    background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.35);
+    color:rgba(255,255,255,.85);width:28px;height:28px;border-radius:50%;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    font-family:'Bebas Neue','Georgia',serif;font-style:italic;font-weight:700;
+    font-size:16px;line-height:1;flex-shrink:0;padding:0;margin-left:auto;
+  }
+  #s-selecciones .submenu-card .sc-info-btn:active{background:rgba(255,255,255,.18);}
+  #s-selecciones .submenu-card .sc-arr{margin-left:6px;}
+</style>
+<div class="sel-sec-title is-previa">
+  <span>🛡 RONDAS PREVIAS</span><span class="sel-sec-line"></span>
+  <button class="sel-mg-btn" data-board="sel-previa" title="Gestionar Rondas Previas">🖍</button>
+</div>
 <div class="submenu-list">
-<div class="submenu-card sc-sel1" onclick="go('s-sel-cal')">
-<span class="sc-emoji">📅</span><span class="sc-label">Calendario</span><span class="sc-arr">▶</span>
+  <div id="sel-previa-cards"></div>
+  <div class="sel-empty" id="sel-previa-empty">Sin rondas previas. Pulsa 🖍 para crear una.</div>
 </div>
-<div class="submenu-card sc-sel2" onclick="go('s-sel-clas')">
-<span class="sc-emoji">📊</span><span class="sc-label">Clasificación</span><span class="sc-arr">▶</span>
+<div class="sel-sec-title is-final">
+  <span>🏆 RONDAS FINALES</span><span class="sel-sec-line"></span>
+  <button class="sel-mg-btn" data-board="sel-final" title="Gestionar Rondas Finales">🖍</button>
 </div>
-<div class="submenu-card sc-sel3" onclick="go('s-sel-stats')">
-<span class="sc-emoji">📈</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
+<div class="submenu-list">
+  <div id="sel-final-cards"></div>
+  <div class="sel-empty" id="sel-final-empty">Sin rondas finales. Pulsa 🖍 para crear una.</div>
 </div>
 </div>
-</div>
+<script>
+/* 🖍 de las secciones de Selecciones — abre el gestor de torneos
+   board-aware vía PIN 747 (mismo patrón que .tv-edit-btn). */
+(function(){
+  document.addEventListener('click', function(ev){
+    var btn = ev.target && ev.target.closest && ev.target.closest('#s-selecciones .sel-mg-btn');
+    if (!btn) return;
+    ev.preventDefault(); ev.stopPropagation();
+    var board = btn.getAttribute('data-board') || 'sel-previa';
+    if (typeof window._tvOpenManage !== 'function'){
+      alert('⚠ La gestión de torneos no se ha cargado. Recarga la página.');
+      return;
+    }
+    if (typeof window.pG === 'function') window.pG(function(){ window._tvOpenManage(board); });
+    else window._tvOpenManage(board);
+  }, true);
+})();
+</script>
 <div class="screen" id="s-sel-cal">
 <button class="back-btn" onclick="go('s-selecciones')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">📅</span><h2>Selecciones · Calendario</h2></div>
@@ -29570,8 +30341,8 @@ Tottenham
 <span style="font-family:'Oswald',sans-serif;font-size:15px;font-weight:400;letter-spacing:1px;color:#dc052d;opacity:0.75;">· TOÑÍN</span>
 <button type="button" class="munich-edit-pencil" onclick="window._bayernEditValuesGated&&window._bayernEditValuesGated()" title="Editar valores del HUD (admin PIN 747)" aria-label="Editar valores del HUD">🖍</button>
 </div>
-<div style="display:flex;align-items:center;gap:5px;margin-top:1px;justify-content:space-between;">
-<span style="font-size:13px;">🏟</span>
+<div style="display:flex;align-items:center;gap:5px;margin-top:1px;">
+<span style="font-size:13px;flex:0 0 auto;">🏟</span>
 <span id="mk-hub-stadium" style="font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;color:#dc052d;opacity:0.6;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">NEW BALANCE ARENA</span>
 </div>
 </div></div>
@@ -29744,7 +30515,7 @@ Tottenham
   <button class="hub-card hub-card-calendario" onclick="window._bayernCalOpen?window._bayernCalOpen():(function(){window._agendaBackTo='s-munich';window._bayernCalContext=true;go('s-agenda');})()">
     <span class="hub-calendario-emoji">📅</span>
     <span class="hub-calendario-title">CALENDARIO</span>
-    <span class="hub-calendario-sub" id="munich-cal-fecha">01 Jun</span>
+    <span class="hub-calendario-sub" id="munich-cal-fecha">01 May</span>
   </button>
   <button class="hub-card hub-card-isramax" onclick="window._isramaxOpen&&window._isramaxOpen()">
     <span class="hub-isramax-i">I</span>
@@ -30253,6 +31024,26 @@ Tottenham
       +   '<div class="me-row"><label class="me-lbl">🪙 Presupuesto actual (€)</label><input class="me-input" id="me-money" type="number" step="1" min="0"/></div>'
       +   '<div class="me-row"><label class="me-lbl">🪙 Presupuesto objetivo (€)</label><input class="me-input" id="me-money-target" type="number" step="1" min="1"/></div>'
       +   '<div class="me-row"><label class="me-lbl">💊 Puntos de Fisio</label><input class="me-input" id="me-pi" type="number" step="1" min="0"/></div>'
+      +   '<div class="me-pick-row"><div class="me-lbl">⭐ Nivel del equipo</div><div class="me-pick-grid" id="me-level-grid">'
+      +     '<button type="button" class="me-pick-btn" data-v="">— Ninguno —</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="CRACK">⭐ CRACK</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="LEYENDA">🏅 LEYENDA</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="ESTRELLA">🌟 ESTRELLA</button>'
+      +   '</div></div>'
+      +   '<div class="me-pick-row"><div class="me-lbl">🎮 Forma yo</div><div class="me-pick-grid" id="me-formyo-grid">'
+      +     '<button type="button" class="me-pick-btn" data-v="⬆️">⬆️</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="↗️">↗️</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="🎲">🎲</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="↘️">↘️</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="⬇️">⬇️</button>'
+      +   '</div></div>'
+      +   '<div class="me-pick-row"><div class="me-lbl">🥊 Forma Rival</div><div class="me-pick-grid" id="me-formriv-grid">'
+      +     '<button type="button" class="me-pick-btn" data-v="⬆️">⬆️</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="↗️">↗️</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="🎲">🎲</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="↘️">↘️</button>'
+      +     '<button type="button" class="me-pick-btn" data-v="⬇️">⬇️</button>'
+      +   '</div></div>'
       +   '<div class="me-actions">'
       +     '<button type="button" class="me-btn primary" onclick="window._bayernEditValuesSave()">✅ Guardar</button>'
       +     '<button type="button" class="me-btn ghost" onclick="window._bayernEditValuesClose()">Cancelar</button>'
@@ -30260,6 +31051,17 @@ Tottenham
       +   '</div>'
       + '</div>';
     ov.addEventListener('click', function(e){ if (e.target === ov) window._bayernEditValuesClose(); });
+    /* Toggle selección de las 3 paletas (nivel/forma yo/forma rival):
+       una sola opción seleccionada por grid. */
+    ov.addEventListener('click', function(e){
+      var btn = e.target && e.target.closest && e.target.closest('.me-pick-btn');
+      if (!btn) return;
+      var grid = btn.parentNode;
+      if (!grid || !grid.classList || !grid.classList.contains('me-pick-grid')) return;
+      e.preventDefault(); e.stopPropagation();
+      grid.querySelectorAll('.me-pick-btn').forEach(function(b){ b.classList.remove('sel'); });
+      btn.classList.add('sel');
+    });
     document.body.appendChild(ov);
   }
   window._bayernEditValuesOpen = function(){
@@ -30275,6 +31077,27 @@ Tottenham
     document.getElementById('me-money').value = (o.money != null) ? o.money : curM;
     document.getElementById('me-money-target').value = mTgt;
     document.getElementById('me-pi').value = (o.pi != null) ? o.pi : curP;
+    /* Prefill Nivel / Forma yo / Forma Rival desde menu_home_v1 y, como
+       fallback, desde team_season_form_v1 (clave que en versiones
+       anteriores escribía el bloque duplicado inyectado en este modal,
+       hoy eliminado). Así un admin que ya había configurado la forma
+       por el bloque viejo no ve los selectores vacíos al reabrir. */
+    try {
+      var rawM = localStorage.getItem('menu_home_v1');
+      var ovM = {};
+      if (rawM) {
+        var dM = JSON.parse(rawM);
+        ovM = (dM && dM.ov && dM.ov['go:s-munich']) || {};
+      }
+      var sfM = (typeof window._teamSeasonForm === 'function') ? (window._teamSeasonForm() || {}) : {};
+      function _markSel(gridId, value){
+        var g = document.getElementById(gridId); if (!g) return;
+        g.querySelectorAll('.me-pick-btn').forEach(function(b){ b.classList.toggle('sel', b.getAttribute('data-v') === String(value||'')); });
+      }
+      _markSel('me-level-grid',  ovM.level     || sfM.nivel  || '');
+      _markSel('me-formyo-grid', ovM.formState || sfM.yo     || '');
+      _markSel('me-formriv-grid', ovM.formRival || sfM.rival || '');
+    } catch(_){}
     document.getElementById('munich-edit-ov').classList.add('show');
   };
   window._bayernEditValuesClose = function(){
@@ -30326,11 +31149,67 @@ Tottenham
       moneyTarget:  intg('me-money-target'),
       pi:           intg('me-pi')
     };
-    /* Sanity check: si TODOS los campos son null, no machaques el
-       override previo — sería un Reset accidental. */
+    /* Persistir Nivel + Forma yo + Forma Rival en menu_home_v1 (mismo
+       almacén que el editor 🖍 del menú). Esto sincroniza ambos modales
+       y lo aplican _teamLevel y _formBtnHtml en la previa. */
+    function _selVal(gridId){
+      var s = document.querySelector('#'+gridId+' .me-pick-btn.sel');
+      return s ? (s.getAttribute('data-v')||'') : null;
+    }
+    var pickLvl = _selVal('me-level-grid');
+    var pickYo  = _selVal('me-formyo-grid');
+    var pickRiv = _selVal('me-formriv-grid');
+    var anyPick = (pickLvl!==null) || (pickYo!==null) || (pickRiv!==null);
+    if (anyPick) {
+      try {
+        var rawMH = localStorage.getItem('menu_home_v1');
+        var dMH = rawMH ? JSON.parse(rawMH) : {};
+        if (!dMH || typeof dMH !== 'object') dMH = {};
+        if (!dMH.ov) dMH.ov = {};
+        var ovMH = dMH.ov['go:s-munich'] || {};
+        if (pickLvl !== null) ovMH.level     = pickLvl;
+        if (pickYo  !== null) ovMH.formState = pickYo;
+        if (pickRiv !== null) ovMH.formRival = pickRiv;
+        dMH.ov['go:s-munich'] = ovMH;
+        try { localStorage.setItem('menu_home_v1', JSON.stringify(dMH)); } catch(__){}
+        /* Best-effort server push (mismo endpoint que el editor del menú). */
+        try {
+          fetch('/api/kv/menu_home_v1', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            credentials:'same-origin', body: JSON.stringify({ value: dMH })
+          }).catch(function(){});
+        } catch(__){}
+      } catch(_){}
+      /* 2026-05-20: persistir ADEMÁS a `team_season_form_v1` para que el
+         motor de forma de cada partido (_wrapPRFS en el IIFE de SEASON
+         FORM) recoja los valores escogidos arriba. Antes existía un
+         bloque duplicado YO/RIVAL/NIVEL inyectado abajo que auto-guardaba
+         por click; ahora ese bloque se eliminó y ESTE save unifica
+         ambas paletas en un único ✅ Guardar. */
+      try {
+        var sf = (typeof window._teamSeasonForm === 'function')
+          ? (window._teamSeasonForm() || {})
+          : { yo:'🎲', rival:'🎲', nivel:'Crack' };
+        var ICONS_FORM = ['⬆️','↗️','🎲','↘️','⬇️'];
+        if (pickYo  !== null && ICONS_FORM.indexOf(pickYo)  >= 0) sf.yo    = pickYo;
+        if (pickRiv !== null && ICONS_FORM.indexOf(pickRiv) >= 0) sf.rival = pickRiv;
+        if (pickLvl !== null) sf.nivel = pickLvl || 'Crack';
+        if (typeof window._teamSeasonFormSave === 'function') window._teamSeasonFormSave(sf);
+        if (typeof window._teamSeasonFormRenderHeader === 'function') window._teamSeasonFormRenderHeader();
+      } catch(_){}
+    }
+    /* Sanity check: si TODOS los campos del HUD son null Y no se tocó
+       ningún selector, no machaques el override previo. */
     var allNull = Object.keys(o).every(function(k){ return o[k] == null; });
-    if (allNull) {
+    if (allNull && !anyPick) {
       alert('⚠ No se ha podido leer ningún valor. Revisa los campos antes de guardar.');
+      return;
+    }
+    /* Si solo se tocaron los selectores (anyPick) sin tocar el HUD,
+       cerramos sin pasar por la cascada de guardado HUD. */
+    if (allNull && anyPick) {
+      _bayernHudToast('✅ Nivel / forma guardados', 'ok');
+      window._bayernEditValuesClose();
       return;
     }
     /* Toast "Guardando…" amarillo durante la fase async (server). */
@@ -33432,15 +34311,24 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        no hay events, default "01 Jul" (inicio de temporada). */
     var calFechaEl = getEl('munich-cal-fecha');
     if (calFechaEl) {
-      /* Si la pretemporada está activa, la tarjeta CALENDARIO muestra
-         el DÍA real del cursor día a día (01 Jul, 02 Jul…), no el
-         evento legacy disperso (que saltaba a "04 Jul"). */
+      /* La temporada arranca el 1 de MAYO (sección PRE-VERANO con
+         el Mundial de Selecciones, añadida 2026-05-20). Usamos
+         SIEMPRE el cursor de pretemporada; si retorna un valor
+         pre-mayo o vacío, fijamos "01 May" (NO caer al evento
+         legacy que puede tener fechas viejas pre-mayo cacheadas). */
       var psDate = (typeof window._psCurrentDate === 'function') ? window._psCurrentDate() : '';
-      if (psDate) {
+      var _SP = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
+      function _mo(s){ var p=String(s||'').trim().split(/\s+/); if(p.length<2) return -1;
+        var v=_SP[(p[1]||'').toLowerCase().replace(/\./g,'').slice(0,3)]; return (v==null)?-1:v; }
+      if (psDate && _mo(psDate) >= 4){
         calFechaEl.textContent = psDate;
       } else {
         var curEvt = state.events && state.events[state.eventIdx];
-        calFechaEl.textContent = (curEvt && curEvt.date) ? (window._psShowDate ? window._psShowDate(curEvt.date) : curEvt.date) : '01 Jun';
+        var fb = (curEvt && curEvt.date)
+          ? (window._psShowDate ? window._psShowDate(curEvt.date) : curEvt.date)
+          : '01 May';
+        /* Cinturón anti-pre-mayo: si el fallback es pre-Mayo, forzamos 01 May. */
+        calFechaEl.textContent = (_mo(fb) >= 0 && _mo(fb) < 4) ? '01 May' : fb;
       }
     }
     /* Mueve el marcador rosa/morado del calendario a la fila del
@@ -34335,7 +35223,10 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         if (p && typeof p === 'object'){
           if (ICONS.indexOf(p.yo)    >= 0) d.yo    = p.yo;
           if (ICONS.indexOf(p.rival) >= 0) d.rival = p.rival;
-          if (LEVELS.indexOf(p.nivel) >= 0) d.nivel = p.nivel;
+          /* `nivel` acepta cualquier string no vacío — el editor 🖍 del
+             hub guarda 'CRACK' / 'LEYENDA' / 'ESTRELLA' (paleta del
+             "Nivel del equipo"), no solo Normal/Duro/Crack/Leyenda. */
+          if (p.nivel != null && String(p.nivel).trim()) d.nivel = String(p.nivel).trim();
         }
       }
     } catch(_){}
@@ -34346,6 +35237,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
   }
   window._teamSeasonForm = function(){ return _load(); };
+  /* Exponer save + render para que el ✅ Guardar del editor 🖍 (que
+     vive en otro IIFE en este mismo archivo) pueda persistir y
+     repintar la cabecera del hub en una sola operación. */
+  window._teamSeasonFormSave = function(d){ _save(d); };
+  window._teamSeasonFormRenderHeader = function(){ try { _renderHeader(); } catch(_){} };
 
   /* ── Indicadores en la cabecera del hub (colores del Liverpool) ── */
   function _renderHeader(){
@@ -34396,46 +35292,22 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     });
   }
   function _injectModal(){
-    var box = document.querySelector('#munich-edit-ov .me-box');
-    if (!box) return;
-    if (box.querySelector('.me-form-block')){ _syncModal(); return; }
-    var acts = box.querySelector('.me-actions');
-    var blk = document.createElement('div');
-    blk.className = 'me-form-block';
-    function grp(which, label){
-      var h = '<div class="mfb-lbl">' + label + '</div><div class="mfb-opts" data-which="' + which + '">';
-      ICONS.forEach(function(ic){
-        h += '<button type="button" class="mfb-b" data-ic="' + ic + '" title="' + NAMES[ic] + '">' + ic + '</button>';
-      });
-      return h + '</div>';
-    }
-    function grpLv(){
-      var h = '<div class="mfb-lbl">🎮 NIVEL (dificultad)</div><div class="mfb-opts" data-which="nivel">';
-      LEVELS.forEach(function(lv){
-        h += '<button type="button" class="mfb-b" data-ic="' + lv + '" style="font-size:12px;font-family:Oswald,sans-serif;letter-spacing:1px;">' + lv + '</button>';
-      });
-      return h + '</div>';
-    }
-    blk.innerHTML =
-      '<div class="mfb-lbl" style="color:#ffb8c4;letter-spacing:2px;">⚡ ESTADO DE FORMA · TODA LA TEMPORADA</div>'
-    + grp('yo', '🟥 YO (mis jugadores)')
-    + grp('rival', '⬇️ RIVAL')
-    + grpLv();
-    if (acts && acts.parentNode) acts.parentNode.insertBefore(blk, acts);
-    else box.appendChild(blk);
-    blk.addEventListener('click', function(ev){
-      var b = ev.target && ev.target.closest && ev.target.closest('.mfb-b');
-      if (!b) return;
-      ev.preventDefault();
-      var which = b.parentNode.getAttribute('data-which'), val = b.getAttribute('data-ic');
-      var s = _load();
-      if (which === 'yo') s.yo = val;
-      else if (which === 'rival') s.rival = val;
-      else if (which === 'nivel') s.nivel = val;
-      _save(s);
-      _syncModal(); _renderHeader();
-    }, true);
-    _syncModal();
+    /* 2026-05-20 (UX): el bloque "⚡ ESTADO DE FORMA · TODA LA TEMPORADA"
+       que esta función inyectaba (YO / RIVAL / NIVEL) duplicaba los
+       controles que el modal ya trae arriba ("Forma yo" / "Forma Rival"
+       / "Nivel del equipo") y, encima, auto-guardaba en cada click sin
+       botón visible — confuso para el usuario. Lo eliminamos: las
+       picks de arriba ahora persisten también a `team_season_form_v1`
+       cuando se pulsa el ✅ Guardar del modal, así que la forma
+       sigue aplicándose a cada partido vía _wrapPRFS sin necesidad
+       del bloque inyectado. Si una versión anterior dejó el bloque
+       en el DOM, lo borramos al pasar para que no se vea. */
+    try {
+      var box = document.querySelector('#munich-edit-ov .me-box');
+      if (!box) return;
+      var stale = box.querySelector('.me-form-block');
+      if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+    } catch(_){}
   }
 
   /* ── Aplicar a CADA partido (cualquier competición / local o

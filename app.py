@@ -1228,7 +1228,7 @@ def api_state_reset_liga():
     data["liga_schedule"] = new_schedule
     save_global_state(data, replace=True)
     row = get_or_create_global_state()
-    return jsonify({
+    resp = jsonify({
         "ok": True,
         "state": {
             "liga_results": data["liga_results"],
@@ -1236,6 +1236,10 @@ def api_state_reset_liga():
         },
         "updated_at": row.updated_at or "",
     })
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 # --- SIMULACIÓN ---
 def _elegir_jugador_campo(equipo, es_local=False):
@@ -1585,11 +1589,20 @@ def api_get_state():
     since = request.args.get("since", "")
     if since and since == (row.updated_at or ""):
         return ("", 304)
-    return jsonify({
+    resp = jsonify({
         "ok": True,
         "state": data,
         "updated_at": row.updated_at or "",
     })
+    # CRÍTICO: estado MUTABLE compartido — nunca debe cachearse en el
+    # navegador ni en un proxy/CDN intermedio. Sin esto, tras pulsar
+    # «Reiniciar Liga» la recarga volvía a recibir un /api/state
+    # cacheado con el `liga_schedule` anterior y el usuario seguía
+    # viendo los mismos enfrentamientos en cada jornada.
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 @app.route("/api/state", methods=["POST"])
 def api_save_state():

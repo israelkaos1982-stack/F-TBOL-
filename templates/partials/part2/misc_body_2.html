@@ -5995,6 +5995,18 @@
         if (lr && typeof lr === 'object' && Object.keys(lr).length > 0) {
           throw new Error('POST respondió con resultados');
         }
+        /* Adoptar el calendario AUTORITATIVO recién generado por el
+           servidor. Antes el cliente dependía de que el hydrate
+           posterior a la recarga adoptara `liga_schedule`; si ese GET
+           venía de una caché intermedia, el usuario seguía viendo los
+           mismos enfrentamientos. Persistido a LS_SCHEDULE_KEY para que
+           el loadSchedule() de la página recargada lo lea directo. */
+        var srvSched = j && j.state && j.state.liga_schedule;
+        if (isValidLigaSchedule(srvSched)) {
+          newSchedule = srvSched;
+          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(srvSched)); } catch(_){}
+          try { setLigaSchedule(srvSched, false); } catch(_){}
+        }
         // Verificación adicional con GET por si hay cache o latencia.
         return _verifyCleanReset();
       }).catch(function(err){

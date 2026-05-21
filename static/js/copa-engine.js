@@ -2808,19 +2808,14 @@
         _doFetch();
       }
     }
-    if (window._adm === true) {
-      _runSorteo();
-      return;
-    }
-    var pass;
-    try { pass = window.prompt('🔐 Contraseña admin para sortear ' + (ROUND_LABEL[ronda] || ronda) + ':'); }
-    catch(_){ pass = null; }
-    if (pass === null) return; /* cancelado */
-    if (String(pass).trim() !== '747') {
-      alert('❌ Contraseña incorrecta.');
-      return;
-    }
-    _runSorteo();
+    /* PIN admin vía el teclado digital in-app (window.pG) en vez de
+       window.prompt: el prompt nativo está capado en muchos webviews
+       móviles (el sorteo "no hacía nada") y además no desbloqueaba la
+       sesión, así que re-pedía el PIN en cada ronda/click — el bucle
+       que reportó el usuario. pG abre el numpad, marca window._adm y
+       ejecuta _runSorteo; si ya está admin, lo ejecuta directo. */
+    if (typeof window.pG === 'function') window.pG(_runSorteo);
+    else _runSorteo();
   };
 
   window.copaSimIA = function (ronda, idx, esVuelta) {
@@ -2841,16 +2836,16 @@
   };
 
   window.copaSimTodosIA = function (ronda, esVuelta) {
-    /* Pedido del usuario: para evitar simulaciones en masa accidentales,
-       el botón "⚡ Simular IA" pide la contraseña admin '747'. */
-    var pass;
-    try { pass = window.prompt('🔐 Contraseña admin para simular la ronda:'); }
-    catch(_){ pass = null; }
-    if (pass === null) return;            /* cancelado */
-    if (String(pass).trim() !== '747') {
-      alert('❌ Contraseña incorrecta.');
-      return;
-    }
+    /* Para evitar simulaciones en masa accidentales, el botón
+       "⚡ Simular IA" pide el PIN admin 747. Se usa el teclado digital
+       in-app (window.pG) en vez de window.prompt — mismo motivo que en
+       copaSortear: el prompt nativo falla en móvil y re-pedía el PIN
+       en cada click. */
+    if (typeof window.pG === 'function') { window.pG(function(){ _runSimTodos(ronda, esVuelta); }); }
+    else { _runSimTodos(ronda, esVuelta); }
+  };
+
+  function _runSimTodos(ronda, esVuelta) {
     var matches = (_copa.sorteo || {})[ronda] || [];
     var resList = getResultList(ronda, !!esVuelta);
     var pending = [];

@@ -13325,6 +13325,30 @@ window._showSimProgress = function(opts, onDone){
      2026-05-21). Selección EXCLUSIVA: marcar una desmarca las demás.
      Los 4 valores válidos. */
   var _TOUR_FMT_VALUES = ['ko','ko-2leg','league','groups-ko'];
+  /* ── AUTO-GUARDADO del editor de torneo ──────────────────────────
+     Petición usuario 2026-05-21: "si pongo el nombre a una
+     competición de selecciones quiero que se guarde para siempre
+     hasta que lo edite manualmente". Cada edición del formulario
+     (nombre, bandera, formato, rondas, nº equipos/humanos…) se
+     persiste SOLA tras 600 ms de inactividad — sin depender del
+     botón ✅ CONFIRMAR Y SORTEAR (que aborta si el sorteo falla por
+     falta de selecciones en la plantilla). NO toca `teams`: el
+     sorteo sigue siendo un paso aparte. `_tourSave` escribe
+     localStorage + cache de forma SÍNCRONA y sincroniza al server en
+     2º plano, así el nombre queda grabado aunque la app se cierre. */
+  var _tourEdSaveTimer = 0;
+  function _tourEdScheduleSave(){
+    if (_tourEdSaveTimer) { clearTimeout(_tourEdSaveTimer); }
+    _tourEdSaveTimer = setTimeout(function(){
+      _tourEdSaveTimer = 0;
+      if (!_open) return;
+      /* Solo PERSISTE (localStorage sync + server async). El repintado
+         de cards/pantalla se hace al cerrar el editor — hacerlo aquí
+         en cada pulsación sería trabajo de más detrás del overlay. */
+      try { _readForm(_open.cfg); } catch(_){}
+      try { window._tourSave(_open.id, _open.cfg); } catch(_){}
+    }, 600);
+  }
   /* Pinta la casilla activa según `fmt`. */
   function _tourEdFmtPaint(fmt){
     var host = document.getElementById('tour-ed-fmt');
@@ -13360,6 +13384,10 @@ window._showSimProgress = function(opts, onDone){
     _open.dirty = true;
     _tourEdFmtPaint(fmt);
     _renderFmtCfg();
+    /* Persistir el cambio de formato (un click en <div> no dispara
+       `input`/`change`, así que el auto-guardado del editor-box no se
+       enteraría). */
+    _tourEdScheduleSave();
     var box = document.getElementById('tour-ed-fmt-cfg');
     if (box && box.scrollIntoView) {
       try { box.scrollIntoView({ block:'nearest' }); } catch(_){ }
@@ -13558,6 +13586,16 @@ window._showSimProgress = function(opts, onDone){
   };
 
   window._tourCloseEditor = function(){
+    /* FLUSH del auto-guardado: si el usuario cierra el editor antes
+       de que venza el debounce de 600 ms, persistimos AHORA mismo
+       para no perder el último cambio (nombre, formato…). 2026-05-21. */
+    if (_tourEdSaveTimer) { clearTimeout(_tourEdSaveTimer); _tourEdSaveTimer = 0; }
+    if (_open) {
+      try { _readForm(_open.cfg); } catch(_){}
+      try { window._tourSave(_open.id, _open.cfg); } catch(_){}
+      try { if (typeof window._tvRenderCards === 'function') window._tvRenderCards(); } catch(_){}
+      try { window._tourRender(_open.id); } catch(_){}
+    }
     document.getElementById('tour-editor-overlay').style.display = 'none';
     _open = null;
   };
@@ -15125,7 +15163,16 @@ window._showSimProgress = function(opts, onDone){
        dinámicos de la subconfig de formato. */
     var edBox = document.getElementById('tour-editor-box');
     if (edBox) {
-      var _markDirty = function(){ if (_open) _open.dirty = true; };
+      /* Marca `dirty` (el refresco async no machaca el formulario en
+         curso) Y programa el auto-guardado: cualquier edición —nombre,
+         bandera, formato, rondas…— se persiste sola tras 600 ms. Así
+         el nombre de un torneo se guarda para siempre sin tener que
+         pulsar CONFIRMAR Y SORTEAR. 2026-05-21. */
+      var _markDirty = function(){
+        if (!_open) return;
+        _open.dirty = true;
+        _tourEdScheduleSave();
+      };
       edBox.addEventListener('input', _markDirty);
       edBox.addEventListener('change', _markDirty);
     }

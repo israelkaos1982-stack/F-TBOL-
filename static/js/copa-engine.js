@@ -171,6 +171,7 @@
 
   function _collectCopaTeams() {
     _refreshHumanTeams();
+    _copaShieldCache = null;
     var all = [];
     var seen = {};
     var FALLBACK = {
@@ -1803,6 +1804,37 @@
      se vean igual que las de Liga EA, no como filas compactas con
      abreviaturas + números de power.
      ════════════════════════════════════════════════════════════════ */
+  /* Mapa nombre→escudo de las 3 ligas de Copa (EA / Hyp / PF) leído
+     vía `loadData` — la MISMA fuente que `_collectCopaTeams`.
+     Necesario porque `getTeamLogoUrl` resuelve escudos desde
+     `window._ligaEaShields`, que se construye con `localStorage.getItem`
+     directo del main key. Si la plantilla de una liga vive en
+     `LIGA_CACHE` / `_protected` / servidor (p.ej. Primera Federación,
+     demasiado grande para el cap de 2 MB del main key), su escudo NO
+     llega a `_ligaEaShields` y los equipos IA de esa liga salían con el
+     círculo de iniciales aunque el admin tuviera el escudo bien puesto. */
+  var _copaShieldCache = null;
+  function _copaShieldMap() {
+    if (_copaShieldCache) return _copaShieldCache;
+    var map = {};
+    if (typeof window.loadData === 'function') {
+      COPA_LEAGUE_SLUGS.forEach(function (slug) {
+        try {
+          var d = window.loadData(slug);
+          if (!d || !Array.isArray(d.teams)) return;
+          d.teams.forEach(function (t) {
+            if (!t || !t.name || !t.shield) return;
+            var nm = String(t.name).trim();
+            if (nm && !map[nm]) map[nm] = String(t.shield);
+          });
+        } catch (_) {}
+      });
+    }
+    _copaShieldCache = map;
+    return map;
+  }
+  window._copaInvalidateShieldCache = function () { _copaShieldCache = null; };
+
   function _shieldImg(name) {
     var url = '';
     if (typeof window.getTeamLogoUrl === 'function') {
@@ -1815,6 +1847,10 @@
       var ratings = window.TEAM_RATINGS || {};
       var entry = ratings[name];
       if (entry && typeof entry === 'object' && entry.shield) url = entry.shield;
+    }
+    if (!url) {
+      var _csm = _copaShieldMap();
+      url = _csm[name] || _csm[canonicalTeam(name)] || '';
     }
     if (url) {
       return '<img alt="" src="' + escapeHtml(url) + '" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;display:block">';

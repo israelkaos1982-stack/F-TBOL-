@@ -8891,19 +8891,12 @@ window._showSimProgress = function(opts, onDone){
 <div class="jblock" id="copa-rd-sf-ida-blk"><button class="jbtn c-copa" onclick="go('s-copa-rd-sf')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Copa</b>&nbsp;&nbsp;Semis · Ida</span><span class="copa-rd-cnt" id="copa-rd-sf-ida-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="copa-rd-sf-vta-blk"><button class="jbtn c-copa" onclick="go('s-copa-rd-sf')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Copa</b>&nbsp;&nbsp;Semis · Vuelta</span><span class="copa-rd-cnt" id="copa-rd-sf-vta-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="copa-rd-fin-blk"><button class="jbtn c-copa" onclick="go('s-copa-rd-fin')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Copa</b>&nbsp;&nbsp;FINAL</span><span class="copa-rd-cnt" id="copa-rd-fin-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
-<!-- Caja "📊 Estadísticas" de Copa del Rey (2026-05-08, sustituye al
-     antiguo "Cuadro de Eliminatorias" que el usuario decidió quitar).
-     Usa la misma paleta verde-esmeralda que `s-ucl-stats` para que
-     todas las pantallas de Estadísticas de competiciones tengan
-     identidad coherente. Lee de `ef_player_stats_copa_v1` (cache
-     AISLADO de Copa, persistido por `rebuildPlayerStatsStore`).
-     La caja Liga EA Sports stats SIGUE incluyendo Liga + Copa +
-     SupEsp en `ef_player_stats_v1` para que el dashboard EA Sports
-     muestre el total agregado; aquí mostramos SOLO Copa para
-     análisis aislado por competición. -->
-<div class="submenu-card sc-copa-stats" style="margin-top:10px;background:linear-gradient(135deg,#1a0f00 0%,#5a3a00 25%,#a86018 50%,#f0a020 70%,#a86018 85%,#1a0f00 100%) !important;border:1.5px solid #f0a020 !important;box-shadow:0 4px 18px rgba(240,160,32,.32),inset 0 1px 0 rgba(255,215,0,.15) !important;" onclick="go('s-copa-stats')">
-<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
-</div>
+<!-- Caja "📊 Estadísticas" de Copa del Rey ELIMINADA (2026-05-22):
+     petición del usuario — las estadísticas de Copa del Rey ya se
+     muestran agregadas en la caja de Estadísticas de España
+     (Liga EA Sports + Copa del Rey + Supercopa España), así que la
+     caja propia de Copa era redundante. Pantalla `s-copa-stats`
+     retirada igualmente más abajo. -->
 </div>
 </div>
 <div class="screen" id="s-copa-rd-r1">
@@ -8952,71 +8945,10 @@ window._showSimProgress = function(opts, onDone){
 </div>
 </div>
 
-<!-- ═══ COPA DEL REY · ESTADÍSTICAS (2026-05-08) ═══════════════════
-     Dashboard SOLO de Copa, mismo modelo que `s-liga-stats` /
-     `s-ucl-stats`: lo construye `_lextBuildCompStatsDashboard`
-     leyendo del cache aislado `ef_player_stats_copa_v1` que pobla
-     `rebuildPlayerStatsStore` en cada sync. Los partidos de Copa
-     SUMAN también en la caja Liga EA Sports (que merge Liga+Copa+
-     SupEsp en `ef_player_stats_v1`); aquí se ven AISLADOS para
-     análisis por competición. Paleta verde-esmeralda igual que
-     s-ucl-stats para coherencia visual entre todas las cajas
-     "Estadísticas" del proyecto. -->
-<div class="screen" id="s-copa-stats">
-<button class="back-btn" onclick="go('s-copa')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Copa del Rey · Estadísticas</h2></div>
-<div class="liga-stats-wrap" id="copa-stats-dashboard">
-<div class="liga-stat-empty">Calculando estadísticas...</div>
-</div>
-<script>
-(function(){
-  function _renderCopaStats(){
-    if (typeof window.syncLigaEaPlayerStats === 'function') {
-      try { window.syncLigaEaPlayerStats(); } catch(_){}
-    }
-    if (typeof window._lextBuildCompStatsDashboard === 'function') {
-      window._lextBuildCompStatsDashboard('copa-stats-dashboard', 'ef_player_stats_copa_v1');
-    }
-  }
-  window._renderCopaStats = _renderCopaStats;
-  /* Repintar al activar la pantalla — el sistema `go(id)` añade la
-     clase `.active`. Sin re-render al entrar, los stats quedaban
-     stale tras volver al hub y simular un partido. */
-  try {
-    var el = document.getElementById('s-copa-stats');
-    if (el && typeof MutationObserver !== 'undefined') {
-      /* Bug crítico 2026-05-08: el observer escuchaba class+style. Como
-         `_renderCopaStats` → `syncLigaEaPlayerStats` puede provocar
-         mutaciones de style en el árbol al renderizar, se generaba un
-         loop infinito que congelaba el navegador entero al pulsar
-         cualquier caja. Fix: solo escuchar `class` y disparar SOLO
-         cuando .active acaba de ser AÑADIDO (no en cada mutación). */
-      var _wasActive = el.classList.contains('active');
-      var mo = new MutationObserver(function(mutations){
-        var nowActive = el.classList.contains('active');
-        if (nowActive && !_wasActive) _renderCopaStats();
-        _wasActive = nowActive;
-      });
-      mo.observe(el, { attributes:true, attributeFilter:['class'] });
-    }
-  } catch(_){}
-  document.addEventListener('DOMContentLoaded', _renderCopaStats);
-})();
-</script>
-</div>
-
-<!-- ═══ COPA DEL REY stats — paleta naranja-dorado igual que la
-     temática de Copa (sustituye al verde esmeralda anterior, que
-     era genérico). Sobrescribe los defaults cyan de
-     `.liga-stat-card` / `.liga-stat-title` etc.            ═══ -->
-<style>
-#s-copa-stats .liga-stat-card{border-color:rgba(240,160,32,.45)!important;background:linear-gradient(145deg,#180c00 0%,#2c1a00 45%,#0d0600 100%)!important;}
-#s-copa-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(255,160,32,.7),rgba(255,215,100,1),rgba(255,160,32,.7),transparent)!important;}
-#s-copa-stats .liga-stat-card::after{border-color:rgba(255,200,80,.45)!important;}
-#s-copa-stats .liga-stat-head{background:linear-gradient(90deg,rgba(120,70,0,.55),rgba(220,140,20,.20),rgba(80,40,0,.12))!important;border-bottom:1px solid rgba(240,160,32,.40)!important;}
-#s-copa-stats .liga-stat-title{color:#ffc060!important;text-shadow:0 0 18px rgba(240,160,32,.65),0 0 6px rgba(240,200,80,.4)!important;}
-#s-copa-stats .liga-stat-rank{color:rgba(255,180,80,.85)!important;text-shadow:0 0 12px rgba(240,160,32,.55)!important;}
-</style>
+<!-- Pantalla `s-copa-stats` ELIMINADA (2026-05-22): la caja propia de
+     Estadísticas de Copa del Rey se retiró por petición del usuario —
+     las estadísticas de Copa ya van agregadas (Liga EA Sports + Copa
+     del Rey + Supercopa España) en la caja de Estadísticas de España. -->
 
 <!-- ═══ MUNDIALITO CLUBES · Pantalla principal + 3 sub-pantallas ═══
      Petición usuario 2026-05-08: 4 cajas (Cuartos, Semis, Final,

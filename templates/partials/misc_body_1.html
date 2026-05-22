@@ -9039,6 +9039,86 @@ window._showSimProgress = function(opts, onDone){
      + Octavos→Cuartos→Semis→Final progresivos. 🖍 PIN 747 abre el
      editor de roster manual (8×4). 2026-05-17. -->
 <div class="screen" id="s-mundial">
+<style>
+/* ═══ TEMA "MUNDIAL 2032" · azul cobalto + dorado ════════════════
+   Re-tematiza grupos, jornadas y tarjetas de partido del Mundialito
+   (fase de grupos + playoffs) en azul cobalto con acentos dorados.
+   Las tarjetas pasan a formato grande (escudo arriba, nombre debajo,
+   marcador en caja central + badge FIN/PREVIA). */
+#s-mundial .tour-group-block{
+  background:linear-gradient(160deg,#04132e 0%,#0a2a55 55%,#03102a 100%);
+  border:1.5px solid rgba(56,120,220,.55);
+  box-shadow:0 0 16px rgba(40,90,200,.30),0 4px 16px rgba(0,0,0,.45);
+}
+#s-mundial .tour-group-block.tour-group-human{
+  border:2px solid #f0c040;
+  background:linear-gradient(160deg,#0a1b3e 0%,#13346a 55%,#06122e 100%);
+  box-shadow:0 0 18px rgba(240,192,64,.5),inset 0 0 10px rgba(240,192,64,.10);
+}
+#s-mundial .tour-group-block h4{color:#f0c040;text-shadow:0 0 8px rgba(240,192,64,.5);}
+#s-mundial .tour-group-block .tour-st-table{border-bottom-color:rgba(120,170,255,.4);}
+#s-mundial .tour-st-row.is-hum td.nm{color:#ffd24a;}
+#s-mundial .tour-st-row.is-adv td.pos{color:#7fb0ff;}
+#s-mundial .tour-jor{
+  background:linear-gradient(180deg,rgba(30,80,180,.10),rgba(2,10,30,.5));
+  border:2px solid rgba(56,120,220,.30);
+}
+#s-mundial .tour-jor.is-current{
+  border-color:rgba(240,192,64,.7);
+  background:linear-gradient(180deg,rgba(240,192,64,.06),rgba(2,10,30,.5));
+}
+#s-mundial .tour-jor.is-past{
+  border-color:rgba(56,120,220,.5);
+  background:linear-gradient(180deg,rgba(40,100,210,.08),rgba(2,10,30,.5));
+}
+#s-mundial .tour-jor.is-past .tour-jor-h{color:#7fb0ff;}
+/* Tarjeta de partido — formato grande. */
+#s-mundial .tour-match{
+  background:linear-gradient(165deg,#071c3e 0%,#0d2f63 60%,#05132e 100%);
+  border:1.5px solid rgba(70,140,235,.55);
+  border-radius:12px;
+  padding:12px 10px 10px;
+  box-shadow:0 0 12px rgba(40,90,200,.25),inset 0 0 14px rgba(20,60,150,.20);
+}
+#s-mundial .tour-match.tour-match-has-human{
+  border:2px solid #f0c040;
+  box-shadow:0 0 16px rgba(240,192,64,.5),inset 0 0 8px rgba(240,192,64,.12);
+}
+#s-mundial .tour-match.tour-match-pickable:hover{
+  background:linear-gradient(165deg,#0a244e 0%,#103c7c 60%,#071a3a 100%);
+}
+#s-mundial .tour-match.tour-match-has-human.tour-match-pickable:hover{
+  box-shadow:0 0 22px rgba(240,192,64,.7),inset 0 0 10px rgba(240,192,64,.2);
+}
+#s-mundial .tour-bracket-team{
+  flex-direction:column;gap:5px;text-align:center;justify-content:flex-start;
+}
+#s-mundial .tour-bracket-team:last-child{justify-content:flex-start;text-align:center;}
+#s-mundial .tour-bracket-team img{width:44px;height:44px;}
+#s-mundial .tour-bracket-team span{white-space:normal;font-size:12px;line-height:1.15;}
+#s-mundial .tour-bracket-team.is-winner span{color:#ffd24a;text-shadow:0 0 6px rgba(255,210,74,.5);}
+/* Columna central: caja de marcador + badge FIN/PREVIA apilados. */
+#s-mundial .tour-score-wrap{
+  flex-direction:column;gap:3px;background:rgba(0,0,0,.55);
+  border:1px solid rgba(120,170,255,.35);border-radius:8px;padding:5px 12px;
+}
+#s-mundial .tour-score-line{display:inline-flex;align-items:center;gap:6px;}
+#s-mundial .tour-score{font-size:26px;color:#bcd6ff;}
+#s-mundial .tour-score-win{color:#ffd24a;text-shadow:0 0 10px rgba(255,210,74,.6);}
+#s-mundial .tour-score-empty{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;color:rgba(170,200,255,.4);}
+#s-mundial .tour-match .vs{color:rgba(170,200,255,.6);}
+#s-mundial .tour-fin-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-family:Oswald,sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;
+  border-radius:5px;padding:2px 8px;
+}
+#s-mundial .tour-fin-badge.is-fin{
+  color:#bcd6ff;border:1px solid rgba(120,170,255,.45);background:rgba(20,60,150,.4);
+}
+#s-mundial .tour-fin-badge.is-previa{
+  color:#f0c040;border:1px solid rgba(240,192,64,.5);background:rgba(240,192,64,.10);
+}
+</style>
 <button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button>
 <button class="tour-edit-btn" data-tour="mundial" title="Editar roster (admin)">🖍</button>
 <div class="sec-hdr"><span class="sec-emoji" id="tour-flag-mundial">🌍</span><h2 id="tour-title-mundial">Mundialito de Clubes</h2></div>
@@ -14387,7 +14467,20 @@ window._showSimProgress = function(opts, onDone){
         + (_jd ? '<span class="tour-jor-date">📅 '+_jd+'</span>' : '')
         + '</div>';
       var allPlayedJ = true;
-      jor.forEach(function(m, mi){
+      /* Orden de partidos: por defecto el del fixture; con
+         opts.humansFirst los partidos con equipo humano van arriba
+         (Mundialito). Reordenamos un array de ÍNDICES — la clave de
+         resultado sigue usando el índice original `mi`, así no se
+         desincronizan resultados. Array.sort es estable. */
+      var _mOrder = jor.map(function(_, i){ return i; });
+      if (opts.humansFirst) {
+        _mOrder.sort(function(x, y){
+          return (_tourLeagueMatchHasHuman(teams, jor[x]) ? 0 : 1)
+               - (_tourLeagueMatchHasHuman(teams, jor[y]) ? 0 : 1);
+        });
+      }
+      _mOrder.forEach(function(mi){
+        var m = jor[mi];
         var key = prefix + j + '_' + mi;
         var res = results[key];
         var played = !!(res && res.played);
@@ -14403,16 +14496,20 @@ window._showSimProgress = function(opts, onDone){
           var aWin = res.a > res.b, bWin = res.b > res.a;
           var sH = '<span class="tour-score'+(aWin?' tour-score-win':'')+'">'+res.a+'</span>';
           var sA = '<span class="tour-score'+(bWin?' tour-score-win':'')+'">'+res.b+'</span>';
+          var _finBadge = opts.finBadge ? '<span class="tour-fin-badge is-fin">🏁 FIN</span>' : '';
           html += '<div class="'+rowCls+'"'+dataAttrs+'>'
             + _bracketTeamHtml(th, tourId, m.home, aWin, bWin)
-            + '<span class="vs tour-score-wrap">'+sH+' - '+sA+'</span>'
+            + '<span class="vs tour-score-wrap"><span class="tour-score-line">'+sH+' - '+sA+'</span>'+_finBadge+'</span>'
             + _bracketTeamHtml(ta, tourId, m.away, bWin, aWin)
             + '</div>';
           html += _tourActaPanelHtml(tourId, key, res);
         } else {
+          var _midHtml = opts.finBadge
+            ? '<span class="vs tour-score-wrap"><span class="tour-score-line tour-score-empty">– – –</span><span class="tour-fin-badge is-previa">📋 PREVIA</span></span>'
+            : '<span class="vs">vs</span>';
           html += '<div class="'+rowCls+'"'+dataAttrs+'>'
             + _bracketTeamHtml(th, tourId, m.home)
-            + '<span class="vs">vs</span>'
+            + _midHtml
             + _bracketTeamHtml(ta, tourId, m.away)
             + '</div>';
           if (isCurrent && _tourLeagueMatchHasHuman(teams, m)) {
@@ -14781,7 +14878,7 @@ window._showSimProgress = function(opts, onDone){
           + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:7px;padding:5px 11px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
           + '🏆 J'+(curJg+2)+'</button></div>';
       }
-      html += _fixtureCardsHtml(slice, fix, cfg.results, gKey, tourId, curJg, {shortLabel:true});
+      html += _fixtureCardsHtml(slice, fix, cfg.results, gKey, tourId, curJg, {shortLabel:true, humansFirst:true, finBadge:true});
       html += '</div>';
     }
     if (gs.allGroupsDone) {
@@ -14834,14 +14931,14 @@ window._showSimProgress = function(opts, onDone){
         var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
         html += '<div class="'+kRowCls+'"'+kAttrs+'>'
           + _bracketTeamHtml(a, tourId, i, aW, bW)
-          + '<span class="vs tour-score-wrap">'+sA+' - '+sB+pensTxt+'</span>'
+          + '<span class="vs tour-score-wrap"><span class="tour-score-line">'+sA+' - '+sB+pensTxt+'</span><span class="tour-fin-badge is-fin">🏁 FIN</span></span>'
           + _bracketTeamHtml(b, tourId, i+1, bW, aW)
           + '</div>';
         html += _tourActaPanelHtml(tourId, kKey, kRes);
       } else {
         html += '<div class="'+kRowCls+'"'+kAttrs+'>'
           + _bracketTeamHtml(a, tourId, i)
-          + '<span class="vs">vs</span>'
+          + '<span class="vs tour-score-wrap"><span class="tour-score-line tour-score-empty">– – –</span><span class="tour-fin-badge is-previa">📋 PREVIA</span></span>'
           + _bracketTeamHtml(b, tourId, i+1)
           + '</div>';
         if (_tourPairHasHuman(curT, i)) html += _tourSimAiBtnHtml(tourId, 'ko', kKey);

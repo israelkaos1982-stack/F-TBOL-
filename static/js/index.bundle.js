@@ -9926,8 +9926,27 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var m = String(matchKey || '').match(/^lj(\d+)m/);
     var j = m ? parseInt(m[1]) : (String(matchKey || '').match(/^j1m/) ? 1 : 0);
     if (j > 0 && (!compKey || compKey === 'liga')) return 'Liga — J' + j;
+    /* Copa del Rey: el matchKey es `copa_<ronda>_<idx>_<i|v>`, así que
+       resolvemos la fila EXACTA de la agenda por ronda. Antes compKey
+       'copa' caía siempre a "1/128" → la fecha y el clima de la 1ª
+       Ronda se mostraban en TODAS las rondas de Copa. */
+    var cm = String(matchKey || '').match(/^copa_([a-z0-9]+)_\d+_([iv])$/i);
+    if (cm) {
+      var cr = cm[1].toLowerCase();
+      var legTxt = (cm[2].toLowerCase() === 'v') ? 'Vuelta' : 'Ida';
+      var COPA_RD = {
+        r1:  'Copa del Rey — 1/128',
+        r2:  'Copa del Rey — 1/64',
+        r16: 'Copa del Rey — 1/32',
+        oct: 'Copa del Rey — Octavos ' + legTxt,
+        cua: 'Copa del Rey — Cuartos ' + legTxt,
+        sf:  'Copa del Rey — Semis ' + legTxt,
+        fin: 'FINAL COPA DEL REY'
+      };
+      if (COPA_RD[cr]) return COPA_RD[cr];
+    }
     var MAP = {
-      'copa':'Copa del Rey — 1/128','copa-fin':'Final Copa del Rey',
+      'copa':'Copa del Rey — 1/128','copa-fin':'FINAL COPA DEL REY',
       'inter':'Intercontinental — Cuartos','inter-fin':'Intercontinental — FINAL 🏆',
       'ucl-fin':'Final Europa 🏆','uel-fin':'Final Europa 🏆',
       'usc':'Supercopa de Europa','usc-fin':'Supercopa de Europa'
@@ -9938,6 +9957,32 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var p = String(s || '').trim().split(' ');
     return { day: parseInt(p[0]) || 0, month: _MONTH_ABBR_ES[p[1]] || 0 };
   }
+
+  /* ── Clima del calendario → venue-bar de la card del partido ──────
+     _mmInjectEnv resuelve el clima del calendario global (.ag-wx) al
+     abrir la previa de CUALQUIER competición. Antes la venue-bar de la
+     card (`.ml-venue-weather`) hardcodeaba "☀️ Soleado" e ignoraba el
+     calendario. Guardamos el clima resuelto por matchKey y lo
+     aplicamos a la card; el patcher __ML_INLINE_PATCHES lo re-aplica
+     tras un re-render de la card. */
+  window._mmCardWeather = window._mmCardWeather || {};
+  window._mmApplyCardWeather = function(matchKey, weatherLabel) {
+    if (!matchKey) return;
+    var w = weatherLabel || window._mmCardWeather[matchKey];
+    if (!w) return;
+    var vb = document.getElementById('venue-bar-' + matchKey);
+    if (!vb) return;
+    var el = vb.querySelector('.ml-venue-weather');
+    if (!el) return;
+    var parts = String(w).trim().split(' ');
+    var emoji = parts[0] || '☀️';
+    var name  = parts.slice(1).join(' ') || 'Soleado';
+    /* La animación sunPulse (rotación) solo pega con el sol; lluvia y
+       nieve usan un icono estático (clase ml-wx-ico sin animación). */
+    var cls = (emoji.indexOf('☀') !== -1) ? 'ml-sun' : 'ml-wx-ico';
+    var html = '<span class="' + cls + '">' + emoji + '</span> ' + name;
+    if (el.innerHTML !== html) el.innerHTML = html;
+  };
 
   function _mmInjectEnv(compKey, matchKey) {
     var envEl = document.getElementById('pp-env');
@@ -9965,6 +10010,14 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     if (!weather) {
       weather = sc.weathers[0];  // fallback determinista: primer valor
     }
+    /* Sincronizar el clima resuelto con la venue-bar de la card del
+       partido humano (Liga, amistosos…) y dejarlo accesible para el
+       gm-modal (Copa, Supercopa…), que abre justo después de la previa. */
+    if (matchKey) {
+      window._mmCardWeather[matchKey] = weather;
+      window._mmApplyCardWeather(matchKey, weather);
+    }
+    window._mmLastWeather = weather;
     var compLabel = COMP_LABELS_MM[compKey] || compKey || 'Liga';
     /* Añadir jornada/ronda usando el mismo ROUND_MAP que la pantalla
        BAJAS. Ejemplo: "Liga EA Sports · J3" o "Copa del Rey · Octavos".

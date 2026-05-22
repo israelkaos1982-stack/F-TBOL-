@@ -7583,17 +7583,16 @@ window._showSimProgress = function(opts, onDone){
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
       .replace(/'/g,'&#39;');
   }
-  window._lextBuildCompStatsDashboard = function(rootId, statsKey){
-    var root = document.getElementById(rootId);
-    if (!root) return;
-    var raw = null;
-    try { raw = localStorage.getItem(statsKey); } catch(_){}
-    var stats = {};
-    if (raw) { try { stats = JSON.parse(raw) || {}; } catch(_){ stats = {}; } }
+  /* Renderiza el dashboard de estadísticas (8 categorías) a partir de
+     un objeto `stats` (`teamNorm::playerNorm` → counters) y devuelve
+     el HTML. Lo usan `_lextBuildCompStatsDashboard` (lee de
+     localStorage) y la caja «Estadísticas» del Mundial (calcula el
+     objeto en vivo desde los resultados del torneo). */
+  function _lextStatsDashHtml(stats){
+    stats = stats || {};
     var keys = Object.keys(stats);
     if (!keys.length) {
-      root.innerHTML = '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
-      return;
+      return '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
     }
     /* Convertir el cache (`teamNorm::playerNorm` → counters) a la
        lista de jugadores. Como los nombres están normalizados,
@@ -7671,7 +7670,18 @@ window._showSimProgress = function(opts, onDone){
       }
       html += '</div></div>';
     });
-    root.innerHTML = html;
+    return html;
+  }
+  window._lextStatsDashHtml = _lextStatsDashHtml;
+
+  window._lextBuildCompStatsDashboard = function(rootId, statsKey){
+    var root = document.getElementById(rootId);
+    if (!root) return;
+    var raw = null;
+    try { raw = localStorage.getItem(statsKey); } catch(_){}
+    var stats = {};
+    if (raw) { try { stats = JSON.parse(raw) || {}; } catch(_){ stats = {}; } }
+    root.innerHTML = _lextStatsDashHtml(stats);
   };
 
   function _normPS(s){
@@ -12501,11 +12511,11 @@ window._showSimProgress = function(opts, onDone){
     'mundial-48':'Mundial · 48 selecciones'
   };
   /* Config fija del formato Mundial 2032 (48 selecciones, 2026-05-22):
-     12 grupos de 4 → 1º+2º (24) + 8 mejores terceros = 32 → Repesca
-     (1/32) → Octavos → Cuartos → Semis → Final. */
+     12 grupos de 4 → 1º+2º (24) + 8 mejores terceros = 32 →
+     Dieciseisavos (1/32) → Octavos → Cuartos → Semis → Final. */
   function _mundialFormatConfig(){
     return { groups:12, perGroup:4, advancePerGroup:2,
-             koRounds:['Repesca','Octavos','Cuartos','Semis','Final'],
+             koRounds:['Dieciseisavos','Octavos','Cuartos','Semis','Final'],
              bestThirds:8, koExtraTimePens:true };
   }
   window._mundialFormatConfig = _mundialFormatConfig;
@@ -13282,7 +13292,7 @@ window._showSimProgress = function(opts, onDone){
         '<div style="padding:9px 11px;background:rgba(45,212,191,.10);border:1px dashed rgba(45,212,191,.45);border-radius:6px;font-size:11px;color:#2dd4bf;line-height:1.55;text-transform:none;letter-spacing:0;">'+
           '<b>Mundial · 48 selecciones</b> · formato fijo:<br>'+
           '12 grupos de 4 · clasifican 1º y 2º (24) + los 8 mejores terceros = <b>32</b>.<br>'+
-          'Cuadro: Repesca (1/32) → Octavos → Cuartos → Semis → Final.<br>'+
+          'Cuadro: Dieciseisavos (1/32) → Octavos → Cuartos → Semis → Final.<br>'+
           'Coloca las 48 selecciones con <b>✅ CONFIRMAR · COLOCAR EQUIPOS</b> (puedes rellenarlas al azar desde la plantilla).'+
         '</div>';
     }
@@ -14636,13 +14646,14 @@ window._showSimProgress = function(opts, onDone){
   }
 
   /* ═══ MUNDIAL · 48 SELECCIONES (formato dedicado, 2026-05-22) ═══
-     La pantalla del torneo muestra un menú de 2 cajas: «Fase de
-     Grupos» y «Playoffs / Finales». Cada caja abre su sub-vista
-     dentro del mismo contenedor (estado en `_mundialView`). Reutiliza
-     los sub-renderers de groups-ko (round-robin, standings, fixture
-     cards, bracket) y sus handlers de simulación; lo único propio es
-     la clasificación de 32 = 1º+2º de los 12 grupos + 8 mejores
-     terceros. */
+     La pantalla del torneo muestra un menú de 7 cajas (de arriba a
+     abajo): Final · Semifinales · Cuartos · Octavos · Dieciseisavos ·
+     Fase de Grupos · Estadísticas. Cada caja abre su sub-vista dentro
+     del mismo contenedor (estado en `_mundialView`). Reutiliza los
+     sub-renderers de groups-ko (round-robin, standings, fixture cards,
+     bracket) y sus handlers de simulación; lo propio es la
+     clasificación de 32 = 1º+2º de los 12 grupos + 8 mejores terceros
+     y el dashboard de estadísticas agregadas de todas las fases. */
   var _mundialView = {};
   window._mundialGo = function(id, view){
     _mundialView[id] = view;
@@ -14672,8 +14683,8 @@ window._showSimProgress = function(opts, onDone){
     }
     return { slices:slices, allGroupsDone:allDone };
   }
-  /* Clasificación de la Repesca (32): 1º y 2º de cada grupo (24) + los
-     8 mejores terceros. Empareja fuerte-vs-flojo de forma determinista
+  /* Clasificación de los Dieciseisavos (32): 1º y 2º de cada grupo (24)
+     + los 8 mejores terceros. Empareja fuerte-vs-flojo determinista
      (q[i] vs q[31-i]). */
   function _mundialQualifiers(cfg, slices){
     var winners = [], runners = [], thirds = [];
@@ -14709,6 +14720,12 @@ window._showSimProgress = function(opts, onDone){
       + 'style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
       + '↺ Reset Mundial</button></div>';
   }
+  /* Menú del Mundial 2032 — 7 cajas, de arriba a abajo:
+     Final · Semifinales · Cuartos · Octavos · Dieciseisavos ·
+     Fase de Grupos · Estadísticas. Cada caja KO abre SU ronda; las
+     rondas aún no sorteadas salen bloqueadas (🔒). La caja
+     «Estadísticas» suma los eventos de TODAS las fases del torneo.
+     (Layout pedido por el usuario 2026-05-22.) */
   function _mundialMenuHtml(cfg, tourId, gs){
     var gDone = 0, gTot = 0;
     for (var g = 0; g < gs.slices.length; g++) {
@@ -14716,24 +14733,22 @@ window._showSimProgress = function(opts, onDone){
       var p = _tourFixtureProgress(cfg.groupFixtures[g], cfg.results, 'g'+g+'_');
       gDone += p.done; gTot += p.tot;
     }
-    var koRounds = (cfg.formatConfig && cfg.formatConfig.koRounds) || [];
-    var champHtml = '';
-    if (cfg.koBracket && cfg.koBracket.length && koRounds.length) {
-      var lastR = koRounds.length - 1;
+    var koRounds = (cfg.formatConfig && cfg.formatConfig.koRounds)
+      || ['Dieciseisavos','Octavos','Cuartos','Semis','Final'];
+    var koBracket = cfg.koBracket || [];
+    var lastR = koRounds.length - 1;
+    var champTeam = null;
+    if (koBracket[lastR]) {
       var fin = cfg.results['ko_'+lastR+'_0'];
-      var lastT = cfg.koBracket[lastR];
-      if (fin && fin.played && lastT) {
-        champHtml = _championBoxHtml((fin.winner === 'a') ? lastT[0] : lastT[1]);
-      }
+      if (fin && fin.played) champTeam = (fin.winner === 'a') ? koBracket[lastR][0] : koBracket[lastR][1];
     }
-    var koSub = gs.allGroupsDone
-      ? (champHtml ? 'Mundial terminado' : 'Repesca → Octavos → Cuartos → Semis → Final')
-      : 'Termina antes la fase de grupos';
-    function box(view, emoji, title, sub, enabled){
+    function box(view, emoji, title, sub, enabled, accent){
       var grad = enabled
-        ? 'linear-gradient(135deg,#001a26 0%,#004a5e 38%,#1a8aa0 60%,#003543 100%)'
+        ? (accent === 'stats'
+            ? 'linear-gradient(135deg,#001f2a 0%,#003a52 25%,#006080 55%,#00bcd4 72%,#003a52 100%)'
+            : 'linear-gradient(135deg,#001a26 0%,#004a5e 38%,#1a8aa0 60%,#003543 100%)')
         : 'linear-gradient(135deg,#171717 0%,#262626 60%,#171717 100%)';
-      var brd = enabled ? '#2dd4bf' : 'rgba(255,255,255,.18)';
+      var brd = enabled ? (accent === 'stats' ? '#4dd0e1' : '#2dd4bf') : 'rgba(255,255,255,.18)';
       var click = enabled ? ' onclick="window._mundialGo(\''+tourId+'\',\''+view+'\')"' : '';
       var cur = enabled ? 'cursor:pointer;' : 'cursor:not-allowed;opacity:.6;';
       return '<div'+click+' style="display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:10px;'
@@ -14747,9 +14762,41 @@ window._showSimProgress = function(opts, onDone){
         + '<span style="font-size:16px;color:'+brd+';">'+(enabled?'▶':'🔒')+'</span>'
         + '</div>';
     }
-    return champHtml
-      + box('groups', '⚽', 'Fase de Grupos', (gTot ? gDone+' / '+gTot+' partidos jugados' : '12 grupos de 4 selecciones'), true)
-      + box('ko', '🏆', 'Playoffs / Finales', koSub, gs.allGroupsDone);
+    function koBox(r, emoji, title){
+      var enabled, sub;
+      if (!gs.allGroupsDone) {
+        enabled = false; sub = 'Termina antes la fase de grupos';
+      } else if (r === 0 || koBracket[r]) {
+        enabled = true;
+        var bt = koBracket[r];
+        if (bt && bt.length) {
+          var tot = Math.floor(bt.length/2), done = 0;
+          for (var i = 0; i < tot; i++) {
+            var rr = cfg.results['ko_'+r+'_'+i];
+            if (rr && rr.played) done++;
+          }
+          if (r === lastR && champTeam) sub = '🏆 Campeón: ' + ((champTeam && champTeam.name) || champTeam);
+          else sub = done + ' / ' + tot + ' partidos jugados';
+        } else {
+          sub = 'Sorteo pendiente · ábrelo para empezar';
+        }
+      } else {
+        enabled = false; sub = 'Disponible al avanzar la ronda anterior';
+      }
+      return box('ko'+r, emoji, title, sub, enabled);
+    }
+    var html = '';
+    if (champTeam) html += _championBoxHtml(champTeam);
+    html += koBox(4, '🏆', 'Final');
+    html += koBox(3, '🥈', 'Semifinales');
+    html += koBox(2, '🎖️', 'Cuartos de Final');
+    html += koBox(1, '🛡️', 'Octavos de Final');
+    html += koBox(0, '⚔️', 'Dieciseisavos');
+    html += box('groups', '⚽', 'Fase de Grupos',
+      (gTot ? gDone+' / '+gTot+' partidos jugados' : '12 grupos de 4 selecciones'), true);
+    html += box('stats', '📊', 'Estadísticas',
+      'Goleadores · tarjetas · MVP — todas las fases', true, 'stats');
+    return html;
   }
   function _mundialGroupsHtml(cfg, tourId, gs){
     var html = _mundialBackBtn(tourId)
@@ -14782,26 +14829,37 @@ window._showSimProgress = function(opts, onDone){
     if (gs.allGroupsDone) {
       html += '<div style="margin-top:12px;padding:10px 12px;text-align:center;background:rgba(45,212,191,.10);'
         + 'border:1px dashed rgba(45,212,191,.5);border-radius:8px;font-family:Oswald,sans-serif;font-size:12px;'
-        + 'letter-spacing:1px;color:#2dd4bf;cursor:pointer;" onclick="window._mundialGo(\''+tourId+'\',\'ko\')">'
+        + 'letter-spacing:1px;color:#2dd4bf;cursor:pointer;" onclick="window._mundialGo(\''+tourId+'\',\'ko'+(cfg.koCurrentRound||0)+'\')">'
         + '✅ Fase de grupos completa · ABRIR PLAYOFFS ▶</div>';
     }
     if (Object.keys(cfg.results).length > 0) html += _mundialResetBtnHtml(tourId);
     return html;
   }
-  function _mundialKoHtml(cfg, tourId, gs){
+  /* Vista de UNA ronda KO concreta. `viewRound` (opcional) fija la
+     ronda a mostrar; sin él se muestra la ronda en curso. Las rondas
+     futuras (todavía sin sortear) salen bloqueadas; las pasadas se
+     muestran en modo lectura (sin botones de simular/avanzar). */
+  function _mundialKoHtml(cfg, tourId, gs, viewRound){
     var html = _mundialBackBtn(tourId);
+    var koRounds = (cfg.formatConfig && cfg.formatConfig.koRounds) || ['Dieciseisavos','Octavos','Cuartos','Semis','Final'];
     if (!gs.allGroupsDone) {
       return html + '<div style="padding:24px 16px;text-align:center;font-family:Oswald,sans-serif;'
         + 'letter-spacing:1.2px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.7;">'
-        + '🔒 Termina la fase de grupos para sortear la <b>Repesca</b> (32 selecciones).</div>';
+        + '🔒 Termina la fase de grupos para sortear los <b>Dieciseisavos</b> (32 selecciones).</div>';
     }
     if (!cfg.koBracket || !cfg.koBracket.length) {
       cfg.koBracket = [ _mundialQualifiers(cfg, gs.slices) ];
       cfg.koCurrentRound = 0;
     }
     if (typeof cfg.koCurrentRound !== 'number') cfg.koCurrentRound = 0;
-    var koRounds = (cfg.formatConfig && cfg.formatConfig.koRounds) || ['Repesca','Octavos','Cuartos','Semis','Final'];
-    var curR = cfg.koCurrentRound;
+    var curR = (typeof viewRound === 'number' && viewRound >= 0) ? viewRound : cfg.koCurrentRound;
+    if (curR > cfg.koCurrentRound || !cfg.koBracket[curR]) {
+      var prevLbl = koRounds[cfg.koCurrentRound] || 'la ronda anterior';
+      return html + '<div style="padding:24px 16px;text-align:center;font-family:Oswald,sans-serif;'
+        + 'letter-spacing:1.2px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.7;">'
+        + '🔒 Esta ronda aún no se ha sorteado. Juega y avanza <b>'+prevLbl.toUpperCase()+'</b> primero.</div>';
+    }
+    var isCurrent = (curR === cfg.koCurrentRound);
     var curT = cfg.koBracket[curR] || [];
     var roundLbl = koRounds[curR] || ('Ronda '+(curR+1));
     var dt = _tourGkoRoundDate(cfg, curR);
@@ -14844,7 +14902,7 @@ window._showSimProgress = function(opts, onDone){
       koPairs++;
     }
     html += '</div>';
-    if (curT.length > 1) {
+    if (curT.length > 1 && isCurrent) {
       if (!koAllPlayed && koPairs > 0) {
         html += '<div style="display:flex;justify-content:center;margin-top:10px;">'
           + '<button type="button" class="tour-sim-ko-btn" data-tour="'+tourId+'" '
@@ -14865,11 +14923,115 @@ window._showSimProgress = function(opts, onDone){
     html += _mundialResetBtnHtml(tourId);
     return html;
   }
+  /* Suma los eventos del acta de TODOS los partidos del Mundial
+     (fase de grupos + cada ronda KO) en un objeto
+     `teamNorm::playerNorm` → counters, listo para
+     `_lextStatsDashHtml`. Mapea el lado a/b del evento al nombre
+     real vía el fixture de grupos / el bracket KO; si el resultado
+     ya guarda `home`/`away` (lo hace `_tourAttachActa`) los usa
+     como respaldo. */
+  function _mundialAggregateStats(cfg, teams){
+    var stats = {};
+    var norm = (typeof window._normPS === 'function')
+      ? window._normPS
+      : function(s){ return String(s||'').toLowerCase().trim(); };
+    function rec(teamName, playerName){
+      var key = norm(teamName) + '::' + norm(playerName);
+      if (!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+      return stats[key];
+    }
+    /* Índice clave-de-partido → { a, b } nombres reales. */
+    var idx = {};
+    for (var g = 0; g < 12; g++) {
+      var slice = teams.slice(g*4, g*4+4);
+      var fix = cfg.groupFixtures && cfg.groupFixtures[g];
+      if (!fix) continue;
+      for (var j = 0; j < fix.length; j++) {
+        for (var mi = 0; mi < fix[j].length; mi++) {
+          var pair = fix[j][mi];
+          var th = slice[pair.home], ta = slice[pair.away];
+          idx['g'+g+'_'+j+'_'+mi] = { a: th && th.name, b: ta && ta.name };
+        }
+      }
+    }
+    var kb = cfg.koBracket || [];
+    for (var r = 0; r < kb.length; r++) {
+      var rt = kb[r] || [];
+      for (var i = 0; i < rt.length; i += 2) {
+        if (!rt[i+1]) break;
+        idx['ko_'+r+'_'+(i/2)] = {
+          a: rt[i] && rt[i].name, b: rt[i+1] && rt[i+1].name
+        };
+      }
+    }
+    var results = cfg.results || {};
+    Object.keys(results).forEach(function(key){
+      var res = results[key];
+      if (!res || !res.played) return;
+      var info = idx[key] || {};
+      var nameA = info.a || res.home;
+      var nameB = info.b || res.away;
+      if (!nameA || !nameB) return;
+      (res.events || []).forEach(function(ev){
+        if (!ev) return;
+        var team = ev.team === 'a' ? nameA : ev.team === 'b' ? nameB : (ev.realTeam || '');
+        var player = '';
+        if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
+        else if (typeof ev.player === 'string') player = ev.player;
+        else player = ev.name || ev.playerName || '';
+        if (!team || !player) return;
+        var p = rec(team, player);
+        var type = ev.type || '';
+        var ico = String(ev.ico || '').replace(/️/g,'').trim();
+        if (type === 'amarilla') p.ta++;
+        else if (type === 'roja' || type === 'd-amarilla') p.tr++;
+        else if (type === 'card') {
+          if (ico === '🟨') p.ta++;
+          else if (ico === '🟥') p.tr++;
+          else if (ico === '🟨🟥') { p.ta++; p.tr++; }
+        }
+        else if (type === 'gol') p.gol++;
+        else if (type === 'falta-gol') p.fk++;
+        else if (type === 'pen-gol') p.pen++;
+        else if (type === 'pen-parado') p.penSaved++;
+        else if (type === 'mvp') p.mvp++;
+        else if (type === 'imbat') p.imbat++;
+      });
+      if (res.mvp && res.mvpTeam) {
+        var hasMvp = (res.events || []).some(function(e){ return e && e.type === 'mvp'; });
+        if (!hasMvp) rec(res.mvpTeam, res.mvp).mvp++;
+      }
+    });
+    return stats;
+  }
+  /* Caja «Estadísticas» del Mundial — dashboard de 8 categorías
+     calculado en vivo desde los eventos de todas las fases. */
+  function _mundialStatsHtml(cfg, tourId, teams){
+    var html = _mundialBackBtn(tourId)
+      + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;'
+      + 'font-size:11px;color:#4dd0e1;">📊 ESTADÍSTICAS · TODAS LAS FASES</p>';
+    var stats = _mundialAggregateStats(cfg, teams);
+    var inner = (typeof window._lextStatsDashHtml === 'function')
+      ? window._lextStatsDashHtml(stats)
+      : '<div class="liga-stat-empty">Estadísticas no disponibles.</div>';
+    html += '<div class="liga-stats-wrap">' + inner + '</div>';
+    return html;
+  }
   function _renderMundial(cfg, tourId, teams){
+    /* Migración del label de la 1ª ronda KO (2026-05-22):
+       «Repesca» → «Dieciseisavos» para torneos guardados antes. */
+    if (cfg.formatConfig && cfg.formatConfig.koRounds
+        && cfg.formatConfig.koRounds[0] === 'Repesca') {
+      cfg.formatConfig.koRounds[0] = 'Dieciseisavos';
+    }
     var view = _mundialView[tourId] || 'menu';
     var gs = _mundialGroupState(cfg, teams);
     if (view === 'groups') return _mundialGroupsHtml(cfg, tourId, gs);
-    if (view === 'ko')     return _mundialKoHtml(cfg, tourId, gs);
+    if (view === 'stats')  return _mundialStatsHtml(cfg, tourId, teams);
+    if (view.indexOf('ko') === 0) {
+      var r = parseInt(view.slice(2), 10);
+      return _mundialKoHtml(cfg, tourId, gs, isNaN(r) ? cfg.koCurrentRound : r);
+    }
     return _mundialMenuHtml(cfg, tourId, gs);
   }
 
@@ -16467,6 +16629,11 @@ window._showSimProgress = function(opts, onDone){
       }
       kcfg2.koBracket[curR3 + 1] = winners;
       kcfg2.koCurrentRound = curR3 + 1;
+      /* Mundial 48: si estábamos en la vista de la ronda KO recién
+         cerrada, saltar a la nueva ronda para no quedar en la pasada. */
+      if (kcfg2.format === 'mundial-48' && _mundialView[ktid2] === 'ko'+curR3) {
+        _mundialView[ktid2] = 'ko'+(curR3 + 1);
+      }
       _tourSaveAndRender(ktid2, kcfg2);
       ev.stopPropagation();
       return;

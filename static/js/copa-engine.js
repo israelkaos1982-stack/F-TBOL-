@@ -8,8 +8,34 @@
   /* 5 equipos humanos (los 5 del usuario, todos en Liga EA Sports).
      Real Madrid 🔨 / FC Barcelona 👿 / Atlético Madrid ✏️ / Arsenal 🐭
      / Liverpool 💡. Estos 5 SIEMPRE juegan la 1ª Ronda de Copa.
-     El Liverpool sustituyó al Bayern como 5º humano de la Liga EA. */
+     El Liverpool sustituyó al Bayern como 5º humano de la Liga EA.
+     Es un VALOR POR DEFECTO: `_refreshHumanTeams()` lo sincroniza con
+     la lista real de Liga EA Sports antes de cada sorteo/render. */
   var HUMAN_TEAMS = ['Real Madrid', 'FC Barcelona', 'Atlético Madrid', 'Arsenal', 'Liverpool'];
+
+  /* Sincroniza HUMAN_TEAMS con los equipos `isHuman` reales del editor
+     de Liga EA Sports (`ligaExt_liga-ea-sports`). Imprescindible: si el
+     admin renombró un humano (p.ej. Bayern Munich → Liverpool), la
+     fuente de verdad es el flag `isHuman` del storage — igual que
+     `esHumano()`. Sin esto la Copa seguía usando el nombre viejo
+     hardcodeado, marcaba al equipo renombrado como IA y metía un
+     equipo FANTASMA con el nombre antiguo. Solo refresca si encuentra
+     humanos; si el storage está vacío conserva los canónicos. */
+  function _refreshHumanTeams() {
+    try {
+      var d = (typeof window.loadData === 'function')
+        ? window.loadData('liga-ea-sports') : null;
+      if (!d || !Array.isArray(d.teams)) return;
+      var humans = [];
+      d.teams.forEach(function (t) {
+        if (t && t.isHuman && t.name) humans.push(String(t.name).trim());
+      });
+      if (humans.length) {
+        HUMAN_TEAMS.length = 0;
+        humans.forEach(function (n) { HUMAN_TEAMS.push(n); });
+      }
+    } catch (_) {}
+  }
   var ROUND_LABEL = {
     r1: '1ª Ronda',
     r2: '2ª Ronda',
@@ -145,6 +171,8 @@
   }
 
   function _collectCopaTeams() {
+    _refreshHumanTeams();
+    _copaShieldCache = null;
     var all = [];
     var seen = {};
     var FALLBACK = {
@@ -1372,6 +1400,7 @@
   }
 
   function renderBracket(copa) {
+    _refreshHumanTeams();
     var root = document.getElementById('copa-bracket-root');
     var summary = document.getElementById('copa-bracket-summary');
     if (!root) return;
@@ -1776,6 +1805,37 @@
      se vean igual que las de Liga EA, no como filas compactas con
      abreviaturas + números de power.
      ════════════════════════════════════════════════════════════════ */
+  /* Mapa nombre→escudo de las 3 ligas de Copa (EA / Hyp / PF) leído
+     vía `loadData` — la MISMA fuente que `_collectCopaTeams`.
+     Necesario porque `getTeamLogoUrl` resuelve escudos desde
+     `window._ligaEaShields`, que se construye con `localStorage.getItem`
+     directo del main key. Si la plantilla de una liga vive en
+     `LIGA_CACHE` / `_protected` / servidor (p.ej. Primera Federación,
+     demasiado grande para el cap de 2 MB del main key), su escudo NO
+     llega a `_ligaEaShields` y los equipos IA de esa liga salían con el
+     círculo de iniciales aunque el admin tuviera el escudo bien puesto. */
+  var _copaShieldCache = null;
+  function _copaShieldMap() {
+    if (_copaShieldCache) return _copaShieldCache;
+    var map = {};
+    if (typeof window.loadData === 'function') {
+      COPA_LEAGUE_SLUGS.forEach(function (slug) {
+        try {
+          var d = window.loadData(slug);
+          if (!d || !Array.isArray(d.teams)) return;
+          d.teams.forEach(function (t) {
+            if (!t || !t.name || !t.shield) return;
+            var nm = String(t.name).trim();
+            if (nm && !map[nm]) map[nm] = String(t.shield);
+          });
+        } catch (_) {}
+      });
+    }
+    _copaShieldCache = map;
+    return map;
+  }
+  window._copaInvalidateShieldCache = function () { _copaShieldCache = null; };
+
   function _shieldImg(name) {
     var url = '';
     if (typeof window.getTeamLogoUrl === 'function') {
@@ -1788,6 +1848,10 @@
       var ratings = window.TEAM_RATINGS || {};
       var entry = ratings[name];
       if (entry && typeof entry === 'object' && entry.shield) url = entry.shield;
+    }
+    if (!url) {
+      var _csm = _copaShieldMap();
+      url = _csm[name] || _csm[canonicalTeam(name)] || '';
     }
     if (url) {
       return '<img alt="" src="' + escapeHtml(url) + '" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;display:block">';

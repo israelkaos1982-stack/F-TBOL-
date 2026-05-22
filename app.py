@@ -1205,30 +1205,38 @@ def api_state_reset_liga():
     current_schedule = data.get("liga_schedule")
     client_schedule = body.get("liga_schedule")
 
-    # SIEMPRE generamos el calendario en el servidor. No nos fiamos de lo
-    # que mande el cliente porque:
-    #   - El JS puede estar cacheado (navegador móvil, PWA) y reenviar
-    #     exactamente el mismo calendario en cada Res → al usuario le
-    #     parece que "no pasa nada" al pulsar.
-    #   - El RNG del WebView puede devolver secuencias cuasi-iguales
-    #     entre recargas en algunos entornos.
-    # Usamos la lista de equipos del calendario actual (o del que
-    # proponga el cliente, o del default) como simple fuente de nombres
-    # y la barajamos con random.shuffle — entropía del sistema, fresca
-    # en cada request.
-    teams = (
-        _liga_extract_teams(current_schedule)
-        or _liga_extract_teams(client_schedule)
-        or list(LIGA_EA_TEAMS_DEFAULT)
-    )
-    if len(teams) != 20:
-        teams = list(LIGA_EA_TEAMS_DEFAULT)
-    new_schedule = _liga_calendario_aleatorio(teams, distinto_a=current_schedule)
+    # Si el cliente manda un calendario válido (38 jornadas no vacías)
+    # y DISTINTO del actual, lo aceptamos tal cual: así el dispositivo
+    # que ha hecho el sorteo y el resto de dispositivos ven exactamente
+    # el mismo cuadro, sin parpadeo. El recelo histórico al calendario
+    # del cliente era por el JS cacheado que reenviaba SIEMPRE el mismo;
+    # el chequeo «distinto del actual» ya cubre ese caso — si llega
+    # idéntico, lo genera el servidor con su propia entropía.
+    #
+    # Si no llega calendario válido (o es idéntico al actual), lo genera
+    # el servidor: barajamos los equipos con random.shuffle — entropía
+    # del sistema, fresca en cada request.
+    if (
+        isinstance(client_schedule, list)
+        and len(client_schedule) == 38
+        and all(isinstance(j, list) and j for j in client_schedule)
+        and client_schedule != current_schedule
+    ):
+        new_schedule = client_schedule
+    else:
+        teams = (
+            _liga_extract_teams(current_schedule)
+            or _liga_extract_teams(client_schedule)
+            or list(LIGA_EA_TEAMS_DEFAULT)
+        )
+        if len(teams) != 20:
+            teams = list(LIGA_EA_TEAMS_DEFAULT)
+        new_schedule = _liga_calendario_aleatorio(teams, distinto_a=current_schedule)
 
     data["liga_schedule"] = new_schedule
     save_global_state(data, replace=True)
     row = get_or_create_global_state()
-    return jsonify({
+    resp = jsonify({
         "ok": True,
         "state": {
             "liga_results": data["liga_results"],
@@ -1236,6 +1244,10 @@ def api_state_reset_liga():
         },
         "updated_at": row.updated_at or "",
     })
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 # --- SIMULACIÓN ---
 def _elegir_jugador_campo(equipo, es_local=False):
@@ -1585,11 +1597,20 @@ def api_get_state():
     since = request.args.get("since", "")
     if since and since == (row.updated_at or ""):
         return ("", 304)
-    return jsonify({
+    resp = jsonify({
         "ok": True,
         "state": data,
         "updated_at": row.updated_at or "",
     })
+    # CRÍTICO: estado MUTABLE compartido — nunca debe cachearse en el
+    # navegador ni en un proxy/CDN intermedio. Sin esto, tras pulsar
+    # «Reiniciar Liga» la recarga volvía a recibir un /api/state
+    # cacheado con el `liga_schedule` anterior y el usuario seguía
+    # viendo los mismos enfrentamientos en cada jornada.
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 @app.route("/api/state", methods=["POST"])
 def api_save_state():

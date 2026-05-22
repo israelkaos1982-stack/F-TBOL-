@@ -422,29 +422,35 @@ comprobar el estado actual antes de mutar.
 
 | Modo  | gameMin | realMin | displayMin (previa) | ms/tick (5s juego) | s/game-min |
 |-------|---------|---------|---------------------|--------------------|------------|
-| HvH         | 90 | 16.5  | 10 | ≈ 917 ms | 11 s |
-| HvH prórroga| 30 |  5    | —  | ≈ 833 ms | 10 s |
-| HvIA        | 90 | 13.5  |  8 | ≈ 750 ms |  9 s |
+| HvH         | 90 | 16.5  | 10 | ≈ 917 ms | 11 s  |
+| HvH prórroga| 30 |  5    | —  | ≈ 833 ms | 10 s  |
+| HvIA        | 90 | 11.1  |  8 | ≈ 617 ms |  7.4 s|
 | IAIA        | 90 |  1.5  | "45 s/parte" | ≈ 83 ms | 1 s |
 
 - HvH = humano vs humano → **16.5 min reales**. Previa: "10 min". 1 game-min = 11 s reales.
-- HvIA = humano vs IA → **13.5 min reales**. Previa: "8 min". 1 game-min = 9 s reales.
+- HvIA = humano vs IA → **11.1 min reales**. Previa: "8 min". 1 game-min = 7.4 s reales.
 - IAIA = IA vs IA → **1 min 30 s reales total** (45 s por parte). 1 game-min = 1 seg real.
 - HvH_ET = prórroga humana → 5 min reales.
 
 **REGLA DE ORO 2026-05-19**: `displayMin` (lo que la previa MUESTRA)
 y `realMin` (lo que el cron REALMENTE dura) están **DESACOPLADOS** por
-petición explícita del usuario. El cron va al ritmo eFootball (11 s/9 s
+petición explícita del usuario. El cron va al ritmo eFootball (11 s/7.4 s
 por game-min) mientras la previa muestra "10 min" / "8 min" porque ese
 es el número "de referencia" en su memoria. La alineación display=real
 del 2026-05-10 (HvH 6.67 s, HvIA 5.33 s) quedó rescindida porque el
 cron iba más rápido que eFootball y la vida real.
 
 Historial:
-- Pre 2026-04-26 (=valores ACTUALES): HvH 11 s, HvIA 9 s.
+- Pre 2026-04-26: HvH 11 s, HvIA 9 s.
 - 2026-04-26 (intermedio): HvH 10.5 s, HvIA 6.5 s.
 - 2026-05-10 (alineación display=real): HvH 6.67 s, HvIA 5.33 s.
-- 2026-05-19: vuelta al pre-mayo con display desacoplado.
+- 2026-05-19: vuelta al pre-mayo (HvH 11 s, HvIA 9 s) con display desacoplado.
+- 2026-05-21: HvIA recalibrado a **7.4 s/game-min** (11.1 min reales).
+  El usuario midió "min 45 del juego = min 37 del simulador" con el
+  cron a 9 s/game-min → `9 × 37/45 = 7.4 s/game-min` es el ritmo real
+  de su eFootball. Con web y juego al mismo ritmo, el minuto del cron
+  coincide con el del juego. HvH se mantiene en 11 s. Display previa
+  HvIA sigue en "8 min".
 
 Estos valores los puede ajustar el usuario mediante petición explícita.
 No cambiar sin acuerdo.

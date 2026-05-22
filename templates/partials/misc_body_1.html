@@ -4332,7 +4332,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Liga EA Sports · Clasificación</h2></div>
 <div class="btn-action-bar" style="flex-direction:column;gap:6px;">
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
-    <button class="btn-action btn-action-rst lext-btn-compact" onclick="pG(function(){window.reiniciarLigaEA&&window.reiniciarLigaEA()})"><span class="btn-action-ico">♻️</span>Res</button>
+    <button class="btn-action btn-action-rst lext-btn-compact" onclick="pG(function(){window.sortearCalendarioLiga&&window.sortearCalendarioLiga()})" title="Sortear calendario nuevo"><span class="btn-action-ico">🎲</span>Sorteo</button>
     <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openLigaEaEditor&&window.openLigaEaEditor()})" style="border-color:rgba(240,192,64,.4);color:#f0c040;background:rgba(240,192,64,.06);"><span class="btn-action-ico">🖍</span>Edit</button>
     <button class="btn-action lext-btn-compact" onclick="pG(function(){window.openLigaEaReglas&&window.openLigaEaReglas()})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
   </div>
@@ -8474,7 +8474,7 @@ window._showSimProgress = function(opts, onDone){
   <div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.4);">PARTIDOS</div>
   <div style="display:flex;gap:6px;">
     <button onclick="pG(function(){window.simularTodasJornadasIA&&window.simularTodasJornadasIA();setTimeout(window.buildIAresults,300)})" style="padding:4px 10px;background:#1a1a2e;color:#ccff00;border:1px solid #3a5a1a;border-radius:4px;font-size:11px;cursor:pointer;">⚡ Simular J1-38</button>
-    <button onclick="pG(function(){window.reiniciarLigaEA&&window.reiniciarLigaEA()})" style="padding:4px 10px;background:#2a0008;color:#ff7070;border:1px solid #ff3040;border-radius:4px;font-size:11px;cursor:pointer;">♻️ Res</button>
+    <button onclick="pG(function(){window.sortearCalendarioLiga&&window.sortearCalendarioLiga()})" style="padding:4px 12px;background:#2a0008;color:#ffd24a;border:1px solid #ff3040;border-radius:4px;font-size:14px;cursor:pointer;" title="Sortear calendario nuevo">🎲</button>
   </div>
 </div>
 <div class="jlist" id="ia-res-list">
@@ -8891,19 +8891,12 @@ window._showSimProgress = function(opts, onDone){
 <div class="jblock" id="copa-rd-sf-ida-blk"><button class="jbtn c-copa" onclick="go('s-copa-rd-sf')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Copa</b>&nbsp;&nbsp;Semis · Ida</span><span class="copa-rd-cnt" id="copa-rd-sf-ida-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="copa-rd-sf-vta-blk"><button class="jbtn c-copa" onclick="go('s-copa-rd-sf')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Copa</b>&nbsp;&nbsp;Semis · Vuelta</span><span class="copa-rd-cnt" id="copa-rd-sf-vta-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="copa-rd-fin-blk"><button class="jbtn c-copa" onclick="go('s-copa-rd-fin')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Copa</b>&nbsp;&nbsp;FINAL</span><span class="copa-rd-cnt" id="copa-rd-fin-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
-<!-- Caja "📊 Estadísticas" de Copa del Rey (2026-05-08, sustituye al
-     antiguo "Cuadro de Eliminatorias" que el usuario decidió quitar).
-     Usa la misma paleta verde-esmeralda que `s-ucl-stats` para que
-     todas las pantallas de Estadísticas de competiciones tengan
-     identidad coherente. Lee de `ef_player_stats_copa_v1` (cache
-     AISLADO de Copa, persistido por `rebuildPlayerStatsStore`).
-     La caja Liga EA Sports stats SIGUE incluyendo Liga + Copa +
-     SupEsp en `ef_player_stats_v1` para que el dashboard EA Sports
-     muestre el total agregado; aquí mostramos SOLO Copa para
-     análisis aislado por competición. -->
-<div class="submenu-card sc-copa-stats" style="margin-top:10px;background:linear-gradient(135deg,#1a0f00 0%,#5a3a00 25%,#a86018 50%,#f0a020 70%,#a86018 85%,#1a0f00 100%) !important;border:1.5px solid #f0a020 !important;box-shadow:0 4px 18px rgba(240,160,32,.32),inset 0 1px 0 rgba(255,215,0,.15) !important;" onclick="go('s-copa-stats')">
-<span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
-</div>
+<!-- Caja "📊 Estadísticas" de Copa del Rey ELIMINADA (2026-05-22):
+     petición del usuario — las estadísticas de Copa del Rey ya se
+     muestran agregadas en la caja de Estadísticas de España
+     (Liga EA Sports + Copa del Rey + Supercopa España), así que la
+     caja propia de Copa era redundante. Pantalla `s-copa-stats`
+     retirada igualmente más abajo. -->
 </div>
 </div>
 <div class="screen" id="s-copa-rd-r1">
@@ -8952,71 +8945,10 @@ window._showSimProgress = function(opts, onDone){
 </div>
 </div>
 
-<!-- ═══ COPA DEL REY · ESTADÍSTICAS (2026-05-08) ═══════════════════
-     Dashboard SOLO de Copa, mismo modelo que `s-liga-stats` /
-     `s-ucl-stats`: lo construye `_lextBuildCompStatsDashboard`
-     leyendo del cache aislado `ef_player_stats_copa_v1` que pobla
-     `rebuildPlayerStatsStore` en cada sync. Los partidos de Copa
-     SUMAN también en la caja Liga EA Sports (que merge Liga+Copa+
-     SupEsp en `ef_player_stats_v1`); aquí se ven AISLADOS para
-     análisis por competición. Paleta verde-esmeralda igual que
-     s-ucl-stats para coherencia visual entre todas las cajas
-     "Estadísticas" del proyecto. -->
-<div class="screen" id="s-copa-stats">
-<button class="back-btn" onclick="go('s-copa')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Copa del Rey · Estadísticas</h2></div>
-<div class="liga-stats-wrap" id="copa-stats-dashboard">
-<div class="liga-stat-empty">Calculando estadísticas...</div>
-</div>
-<script>
-(function(){
-  function _renderCopaStats(){
-    if (typeof window.syncLigaEaPlayerStats === 'function') {
-      try { window.syncLigaEaPlayerStats(); } catch(_){}
-    }
-    if (typeof window._lextBuildCompStatsDashboard === 'function') {
-      window._lextBuildCompStatsDashboard('copa-stats-dashboard', 'ef_player_stats_copa_v1');
-    }
-  }
-  window._renderCopaStats = _renderCopaStats;
-  /* Repintar al activar la pantalla — el sistema `go(id)` añade la
-     clase `.active`. Sin re-render al entrar, los stats quedaban
-     stale tras volver al hub y simular un partido. */
-  try {
-    var el = document.getElementById('s-copa-stats');
-    if (el && typeof MutationObserver !== 'undefined') {
-      /* Bug crítico 2026-05-08: el observer escuchaba class+style. Como
-         `_renderCopaStats` → `syncLigaEaPlayerStats` puede provocar
-         mutaciones de style en el árbol al renderizar, se generaba un
-         loop infinito que congelaba el navegador entero al pulsar
-         cualquier caja. Fix: solo escuchar `class` y disparar SOLO
-         cuando .active acaba de ser AÑADIDO (no en cada mutación). */
-      var _wasActive = el.classList.contains('active');
-      var mo = new MutationObserver(function(mutations){
-        var nowActive = el.classList.contains('active');
-        if (nowActive && !_wasActive) _renderCopaStats();
-        _wasActive = nowActive;
-      });
-      mo.observe(el, { attributes:true, attributeFilter:['class'] });
-    }
-  } catch(_){}
-  document.addEventListener('DOMContentLoaded', _renderCopaStats);
-})();
-</script>
-</div>
-
-<!-- ═══ COPA DEL REY stats — paleta naranja-dorado igual que la
-     temática de Copa (sustituye al verde esmeralda anterior, que
-     era genérico). Sobrescribe los defaults cyan de
-     `.liga-stat-card` / `.liga-stat-title` etc.            ═══ -->
-<style>
-#s-copa-stats .liga-stat-card{border-color:rgba(240,160,32,.45)!important;background:linear-gradient(145deg,#180c00 0%,#2c1a00 45%,#0d0600 100%)!important;}
-#s-copa-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(255,160,32,.7),rgba(255,215,100,1),rgba(255,160,32,.7),transparent)!important;}
-#s-copa-stats .liga-stat-card::after{border-color:rgba(255,200,80,.45)!important;}
-#s-copa-stats .liga-stat-head{background:linear-gradient(90deg,rgba(120,70,0,.55),rgba(220,140,20,.20),rgba(80,40,0,.12))!important;border-bottom:1px solid rgba(240,160,32,.40)!important;}
-#s-copa-stats .liga-stat-title{color:#ffc060!important;text-shadow:0 0 18px rgba(240,160,32,.65),0 0 6px rgba(240,200,80,.4)!important;}
-#s-copa-stats .liga-stat-rank{color:rgba(255,180,80,.85)!important;text-shadow:0 0 12px rgba(240,160,32,.55)!important;}
-</style>
+<!-- Pantalla `s-copa-stats` ELIMINADA (2026-05-22): la caja propia de
+     Estadísticas de Copa del Rey se retiró por petición del usuario —
+     las estadísticas de Copa ya van agregadas (Liga EA Sports + Copa
+     del Rey + Supercopa España) en la caja de Estadísticas de España. -->
 
 <!-- ═══ MUNDIALITO CLUBES · Pantalla principal + 3 sub-pantallas ═══
      Petición usuario 2026-05-08: 4 cajas (Cuartos, Semis, Final,
@@ -11995,15 +11927,31 @@ window._showSimProgress = function(opts, onDone){
       </div>
     </div>
 
-    <!-- Formato -->
+    <!-- Formato — CASILLAS marcables en vez de <select> nativo. El
+         desplegable nativo no respondía de forma fiable en algunos
+         móviles (bug usuario 2026-05-21: "el desplegable emerge pero
+         aunque elija una opción no funciona"). Selección EXCLUSIVA
+         (tipo radio): marcar una desmarca las demás. -->
     <div class="tour-ed-row">
       <label>Formato</label>
-      <select id="tour-ed-fmt" onchange="window._tourEdFmtChange&&window._tourEdFmtChange(this)">
-        <option value="ko">Eliminatoria a un partido</option>
-        <option value="ko-2leg">Eliminatoria a ida y vuelta</option>
-        <option value="league">Liga (round-robin)</option>
-        <option value="groups-ko">Grupos + Eliminatoria</option>
-      </select>
+      <div id="tour-ed-fmt" class="tour-ed-fmt-opts">
+        <div class="tour-ed-fmt-opt" data-fmt="ko" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('ko')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Eliminatoria a un partido</span>
+        </div>
+        <div class="tour-ed-fmt-opt" data-fmt="ko-2leg" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('ko-2leg')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Eliminatoria a ida y vuelta</span>
+        </div>
+        <div class="tour-ed-fmt-opt" data-fmt="league" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('league')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Liga (round-robin)</span>
+        </div>
+        <div class="tour-ed-fmt-opt" data-fmt="groups-ko" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('groups-ko')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Grupos + Eliminatoria</span>
+        </div>
+      </div>
     </div>
     <div class="tour-ed-row" id="tour-ed-fmt-cfg">
       <!-- subconfig dinámica según el formato -->
@@ -12064,6 +12012,34 @@ window._showSimProgress = function(opts, onDone){
   #tour-editor-overlay input:focus,#tour-editor-overlay select:focus,#tour-editor-overlay textarea:focus{
     outline:none;border-color:rgba(240,192,64,.55);
   }
+  /* Casillas de "Formato" (sustituyen al <select> nativo, que no
+     respondía en algunos móviles). Selección exclusiva tipo radio. */
+  .tour-ed-fmt-opts{display:flex;flex-direction:column;gap:6px;}
+  .tour-ed-fmt-opt{
+    display:flex;align-items:center;gap:10px;
+    padding:10px 12px;border-radius:8px;cursor:pointer;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);
+    -webkit-tap-highlight-color:transparent;
+    transition:background .14s,border-color .14s;
+  }
+  .tour-ed-fmt-opt:active{filter:brightness(1.15);}
+  .tour-ed-fmt-box{
+    flex-shrink:0;width:22px;height:22px;border-radius:5px;
+    border:2px solid rgba(255,255,255,.30);background:rgba(0,0,0,.30);
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;line-height:1;color:transparent;
+  }
+  .tour-ed-fmt-lbl{
+    font-family:Rajdhani,sans-serif;font-size:14px;color:#e8f0ff;font-weight:600;
+  }
+  .tour-ed-fmt-opt.is-on{
+    background:rgba(240,192,64,.12);border-color:rgba(240,192,64,.65);
+  }
+  .tour-ed-fmt-opt.is-on .tour-ed-fmt-box{
+    background:linear-gradient(145deg,#f0c040,#caa028);
+    border-color:#f0c040;color:#0d1117;
+  }
+  .tour-ed-fmt-opt.is-on .tour-ed-fmt-lbl{color:#fff;}
   /* Stat box que muestra cuántos equipos hay en el rango de nivel IA. */
   .tour-ed-pool-stat{
     font-size:12px;line-height:1.4;
@@ -13256,23 +13232,84 @@ window._showSimProgress = function(opts, onDone){
     }
   }
 
-  /* Handler del desplegable "Formato" — inline onchange en el <select>
-     para que SIEMPRE responda en móvil (no depende de que el
-     addEventListener de _wire() se haya enganchado). Cambia el formato,
-     reinicia la subconfig y la repinta; hace scroll para que el usuario
-     VEA el cambio en el formulario largo. Bug usuario 2026-05-17:
-     "el desplegable de formato del torneo no funciona". */
-  window._tourEdFmtChange = function(sel){
+  /* CASILLAS de "Formato" (sustituyen al <select> nativo, que no
+     respondía de forma fiable en móvil — bug usuario 2026-05-17 y
+     2026-05-21). Selección EXCLUSIVA: marcar una desmarca las demás.
+     Los 4 valores válidos. */
+  var _TOUR_FMT_VALUES = ['ko','ko-2leg','league','groups-ko'];
+  /* ── AUTO-GUARDADO del editor de torneo ──────────────────────────
+     Petición usuario 2026-05-21: "si pongo el nombre a una
+     competición de selecciones quiero que se guarde para siempre
+     hasta que lo edite manualmente". Cada edición del formulario
+     (nombre, bandera, formato, rondas, nº equipos/humanos…) se
+     persiste SOLA tras 600 ms de inactividad — sin depender del
+     botón ✅ CONFIRMAR Y SORTEAR (que aborta si el sorteo falla por
+     falta de selecciones en la plantilla). NO toca `teams`: el
+     sorteo sigue siendo un paso aparte. `_tourSave` escribe
+     localStorage + cache de forma SÍNCRONA y sincroniza al server en
+     2º plano, así el nombre queda grabado aunque la app se cierre. */
+  var _tourEdSaveTimer = 0;
+  function _tourEdScheduleSave(){
+    if (_tourEdSaveTimer) { clearTimeout(_tourEdSaveTimer); }
+    _tourEdSaveTimer = setTimeout(function(){
+      _tourEdSaveTimer = 0;
+      if (!_open) return;
+      /* Solo PERSISTE (localStorage sync + server async). El repintado
+         de cards/pantalla se hace al cerrar el editor — hacerlo aquí
+         en cada pulsación sería trabajo de más detrás del overlay. */
+      try { _readForm(_open.cfg); } catch(_){}
+      try { window._tourSave(_open.id, _open.cfg); } catch(_){}
+    }, 600);
+  }
+  /* Pinta la casilla activa según `fmt`. */
+  function _tourEdFmtPaint(fmt){
+    var host = document.getElementById('tour-ed-fmt');
+    if (!host) return;
+    if (_TOUR_FMT_VALUES.indexOf(fmt) === -1) fmt = 'ko';
+    var opts = host.querySelectorAll('.tour-ed-fmt-opt');
+    for (var i = 0; i < opts.length; i++) {
+      opts[i].classList.toggle('is-on', opts[i].getAttribute('data-fmt') === fmt);
+    }
+  }
+  /* Devuelve el formato marcado en las casillas (default 'ko'). */
+  function _tourEdFmtSelected(){
+    var host = document.getElementById('tour-ed-fmt');
+    if (host) {
+      var on = host.querySelector('.tour-ed-fmt-opt.is-on');
+      if (on) {
+        var v = on.getAttribute('data-fmt');
+        if (_TOUR_FMT_VALUES.indexOf(v) !== -1) return v;
+      }
+    }
+    return 'ko';
+  }
+  /* Handler al marcar una casilla de formato. Cambia el formato,
+     reinicia la subconfig y la repinta; marca el editor como `dirty`
+     (un click en <div> no dispara `input`/`change`, así que el
+     refresco async no se enteraría); hace scroll para que el usuario
+     VEA el cambio en el formulario largo. */
+  window._tourEdFmtPick = function(fmt){
     if (!_open) return;
-    var el = sel || document.getElementById('tour-ed-fmt');
-    if (!el) return;
-    _open.cfg.format = el.value;
+    if (_TOUR_FMT_VALUES.indexOf(fmt) === -1) return;
+    _open.cfg.format = fmt;
     _open.cfg.formatConfig = {};
+    _open.dirty = true;
+    _tourEdFmtPaint(fmt);
     _renderFmtCfg();
+    /* Persistir el cambio de formato (un click en <div> no dispara
+       `input`/`change`, así que el auto-guardado del editor-box no se
+       enteraría). */
+    _tourEdScheduleSave();
     var box = document.getElementById('tour-ed-fmt-cfg');
     if (box && box.scrollIntoView) {
       try { box.scrollIntoView({ block:'nearest' }); } catch(_){ }
     }
+  };
+  /* Alias legacy por si alguna ruta antigua aún llama a
+     `_tourEdFmtChange` — delega en la lógica de casillas. */
+  window._tourEdFmtChange = function(){
+    if (!_open) return;
+    window._tourEdFmtPick(_tourEdFmtSelected());
   };
 
   function _prizesToText(p){
@@ -13297,7 +13334,7 @@ window._showSimProgress = function(opts, onDone){
     document.getElementById('tour-ed-hum').value = cfg.numHumans || 0;
     document.getElementById('tour-ed-aimin').value = cfg.aiLevelMin || 70;
     document.getElementById('tour-ed-aimax').value = cfg.aiLevelMax || 95;
-    document.getElementById('tour-ed-fmt').value = cfg.format || 'ko';
+    _tourEdFmtPaint(cfg.format || 'ko');
     document.getElementById('tour-ed-prizes').value = _prizesToText(cfg.prizes);
     var asEl = document.getElementById('tour-ed-allow-autosim');
     if (asEl) asEl.checked = !!cfg._adminAllowAutoSim;
@@ -13316,7 +13353,7 @@ window._showSimProgress = function(opts, onDone){
     cfg.numHumans  = parseInt(document.getElementById('tour-ed-hum').value, 10) || 0;
     cfg.aiLevelMin = parseInt(document.getElementById('tour-ed-aimin').value, 10) || 70;
     cfg.aiLevelMax = parseInt(document.getElementById('tour-ed-aimax').value, 10) || 95;
-    cfg.format     = document.getElementById('tour-ed-fmt').value;
+    cfg.format     = _tourEdFmtSelected();
     cfg.formatConfig = cfg.formatConfig || {};
     if (cfg.format === 'ko') {
       var roundsEl = document.getElementById('tour-ed-rounds');
@@ -13461,6 +13498,16 @@ window._showSimProgress = function(opts, onDone){
   };
 
   window._tourCloseEditor = function(){
+    /* FLUSH del auto-guardado: si el usuario cierra el editor antes
+       de que venza el debounce de 600 ms, persistimos AHORA mismo
+       para no perder el último cambio (nombre, formato…). 2026-05-21. */
+    if (_tourEdSaveTimer) { clearTimeout(_tourEdSaveTimer); _tourEdSaveTimer = 0; }
+    if (_open) {
+      try { _readForm(_open.cfg); } catch(_){}
+      try { window._tourSave(_open.id, _open.cfg); } catch(_){}
+      try { if (typeof window._tvRenderCards === 'function') window._tvRenderCards(); } catch(_){}
+      try { window._tourRender(_open.id); } catch(_){}
+    }
     document.getElementById('tour-editor-overlay').style.display = 'none';
     _open = null;
   };
@@ -15028,20 +15075,21 @@ window._showSimProgress = function(opts, onDone){
        dinámicos de la subconfig de formato. */
     var edBox = document.getElementById('tour-editor-box');
     if (edBox) {
-      var _markDirty = function(){ if (_open) _open.dirty = true; };
+      /* Marca `dirty` (el refresco async no machaca el formulario en
+         curso) Y programa el auto-guardado: cualquier edición —nombre,
+         bandera, formato, rondas…— se persiste sola tras 600 ms. Así
+         el nombre de un torneo se guarda para siempre sin tener que
+         pulsar CONFIRMAR Y SORTEAR. 2026-05-21. */
+      var _markDirty = function(){
+        if (!_open) return;
+        _open.dirty = true;
+        _tourEdScheduleSave();
+      };
       edBox.addEventListener('input', _markDirty);
       edBox.addEventListener('change', _markDirty);
     }
-    var fmt = document.getElementById('tour-ed-fmt');
-    if (fmt) {
-      /* Backup del onchange inline (idempotente: vuelve a llamar al
-         mismo handler). El inline es el camino principal y fiable en
-         móvil; este addEventListener es una red por si el atributo
-         se perdiera en algún build. */
-      fmt.addEventListener('change', function(){
-        if (typeof window._tourEdFmtChange === 'function') window._tourEdFmtChange(this);
-      });
-    }
+    /* El "Formato" ahora son CASILLAS (.tour-ed-fmt-opt) con onclick
+       inline → window._tourEdFmtPick. No hay <select> que cablear. */
     /* Botón principal: ✅ CONFIRMAR Y SORTEAR. Lee el formulario,
        sortea equipos en el rango de nivel pedido, mete los humanos
        como PENDIENTE y persiste todo. Si el pool no llega para los
@@ -31632,9 +31680,14 @@ Tottenham
         var sf = (typeof window._teamSeasonForm === 'function')
           ? (window._teamSeasonForm() || {})
           : { yo:'🎲', rival:'🎲', nivel:'Crack' };
-        var ICONS_FORM = ['⬆️','↗️','🎲','↘️','⬇️'];
-        if (pickYo  !== null && ICONS_FORM.indexOf(pickYo)  >= 0) sf.yo    = pickYo;
-        if (pickRiv !== null && ICONS_FORM.indexOf(pickRiv) >= 0) sf.rival = pickRiv;
+        /* Sin filtro por lista de iconos: `pickYo`/`pickRiv` salen del
+           `data-v` de un botón del propio grid, así que YA son iconos
+           válidos. El filtro previo, si fallaba, dejaba la Forma Rival
+           escrita en `menu_home_v1` pero NO en `team_season_form_v1`
+           (la fuente que lee la cabecera) → la forma rival "no se
+           guardaba". 2026-05-21. */
+        if (pickYo  !== null) sf.yo    = pickYo;
+        if (pickRiv !== null) sf.rival = pickRiv;
         if (pickLvl !== null) sf.nivel = pickLvl || 'Crack';
         if (typeof window._teamSeasonFormSave === 'function') window._teamSeasonFormSave(sf);
         if (typeof window._teamSeasonFormRenderHeader === 'function') window._teamSeasonFormRenderHeader();
@@ -35627,7 +35680,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     display:flex; flex-direction:column; align-items:center; gap:0; }
   #mu-form-cluster .mfc-t{ font-family:'Oswald',sans-serif; font-size:10px;
     letter-spacing:1px; color:rgba(255,255,255,.82); line-height:1.25; }
-  #mu-form-cluster .mfc-c{ font-size:18px; line-height:1.2; }
+  /* Iconos 🎲 / ⬇️ de Yo y Rival: emoji normal (a todo color) dentro de
+     un recuadro pequeño cuyo BORDE va del rojo del escudo del Liverpool.
+     2026-05-21: se descartó recolorear el emoji (quedaba como una
+     silueta roja sólida) — solo el borde. */
+  #mu-form-cluster .mfc-c{ font-size:13px; line-height:1;
+    display:inline-flex; align-items:center; justify-content:center;
+    width:21px; height:21px; box-sizing:border-box; margin:1px 0;
+    border:1.5px solid #c8102e; border-radius:5px; }
   #mu-nivel{ font-family:'Oswald',sans-serif; font-size:11px; font-weight:700;
     letter-spacing:2px; color:#F6EB61; opacity:.92; margin-top:1px; cursor:default; }
   #mu-nivel small{ font-size:9px; color:rgba(255,255,255,.45); letter-spacing:1px; }
@@ -35652,7 +35712,6 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   if (window.__SEASON_FORM_READY) return;
   window.__SEASON_FORM_READY = true;
   var KEY = 'team_season_form_v1';
-  var ICONS = ['⬆️','↗️','🎲','↘️','⬇️'];
   var NAMES = {'⬆️':'Excelente','↗️':'Buena','🎲':'Al azar','↘️':'Mala','⬇️':'Pésima'};
   var LEVELS = ['Normal','Duro','Crack','Leyenda'];
   var _MEM = null;
@@ -35663,8 +35722,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var r = localStorage.getItem(KEY);
       if (r){ var p = JSON.parse(r);
         if (p && typeof p === 'object'){
-          if (ICONS.indexOf(p.yo)    >= 0) d.yo    = p.yo;
-          if (ICONS.indexOf(p.rival) >= 0) d.rival = p.rival;
+          if (typeof p.yo    === 'string' && p.yo.trim())    d.yo    = p.yo;
+          if (typeof p.rival === 'string' && p.rival.trim()) d.rival = p.rival;
           /* `nivel` acepta cualquier string no vacío — el editor 🖍 del
              hub guarda 'CRACK' / 'LEYENDA' / 'ESTRELLA' (paleta del
              "Nivel del equipo"), no solo Normal/Duro/Crack/Leyenda. */

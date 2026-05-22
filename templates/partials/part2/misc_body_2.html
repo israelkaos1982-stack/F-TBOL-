@@ -5995,6 +5995,18 @@
         if (lr && typeof lr === 'object' && Object.keys(lr).length > 0) {
           throw new Error('POST respondió con resultados');
         }
+        /* Adoptar el calendario AUTORITATIVO recién generado por el
+           servidor. Antes el cliente dependía de que el hydrate
+           posterior a la recarga adoptara `liga_schedule`; si ese GET
+           venía de una caché intermedia, el usuario seguía viendo los
+           mismos enfrentamientos. Persistido a LS_SCHEDULE_KEY para que
+           el loadSchedule() de la página recargada lo lea directo. */
+        var srvSched = j && j.state && j.state.liga_schedule;
+        if (isValidLigaSchedule(srvSched)) {
+          newSchedule = srvSched;
+          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(srvSched)); } catch(_){}
+          try { setLigaSchedule(srvSched, false); } catch(_){}
+        }
         // Verificación adicional con GET por si hay cache o latencia.
         return _verifyCleanReset();
       }).catch(function(err){
@@ -6051,6 +6063,129 @@
             'En cuanto se restablezca la conexión, vuelve a pulsar Res para sincronizar el resto de dispositivos.');
       _reloadConCacheBuster();
     });
+  };
+
+  /* ── SORTEO DEL CALENDARIO (botón 🎲) ──────────────────────────
+     Genera un calendario NUEVO de Liga EA Sports — las 38 jornadas
+     con emparejamientos distintos — y pone resultados y clasificación
+     a cero.
+
+     A diferencia de `reiniciarLigaEA`, esta función NO recarga la
+     página: aplica el calendario nuevo en memoria y repinta las
+     pantallas al instante. La recarga era el punto frágil del botón
+     «Res» — tras recargar, la hidratación desde el backend podía
+     volver a imponer el calendario anterior si el POST de reset aún
+     no había cuajado, y al usuario «no le funcionaba». Sin recarga no
+     hay carrera: lo que se ve es lo que se acaba de sortear. */
+  function _repintarTrasSorteo() {
+    var fns = [
+      'applyEngineOverrides', 'buildLigaClas', 'populateLigaCal',
+      'populateCalendar', 'buildIAresults', 'rebuildLigaPlayerStats',
+      'rebuildLigaPlayerStatsFixed', 'buildLigaStatsDashboard',
+      'syncLigaEaPlayerStats', 'renderLigaClasCalendar',
+      'refreshMainCalendarCards'
+    ];
+    fns.forEach(function (fn) {
+      try { if (typeof window[fn] === 'function') window[fn](); } catch (_) {}
+    });
+    /* Si hay una jornada IA abierta, repintarla con el cuadro nuevo. */
+    try {
+      var _act = document.querySelector('.screen.active');
+      if (_act && _act.id === 's-liga-ia-jornada' && window._currentIAJornada &&
+          typeof window.openIAJornada === 'function') {
+        window.openIAJornada(window._currentIAJornada);
+      }
+    } catch (_) {}
+  }
+
+  window.sortearCalendarioLiga = function () {
+    /* 1. Calendario nuevo, garantizado DISTINTO al actual. */
+    var prev = '';
+    try { prev = localStorage.getItem(LS_SCHEDULE_KEY) || ''; } catch (_) {}
+    if (!prev) { try { prev = JSON.stringify(SCHEDULE); } catch (_) {} }
+    var nuevo = null;
+    for (var t = 0; t < 16 && !nuevo; t++) {
+      var cand = generarCalendario(
+        _rotarPorReloj(mezclarEquipos(mezclarEquipos(TEAMS.slice())))
+      );
+      if (isValidLigaSchedule(cand) && JSON.stringify(cand) !== prev) nuevo = cand;
+    }
+    if (!isValidLigaSchedule(nuevo)) nuevo = generarCalendario(_rotarPorReloj(TEAMS.slice()));
+    if (!isValidLigaSchedule(nuevo)) {
+      alert('⚠️ No se pudo generar el calendario. Inténtalo de nuevo.');
+      return;
+    }
+
+    /* 2. Pausar el poll de /api/state para que no repueble con el
+       estado viejo mientras persistimos el reset. */
+    try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(20000); } catch (_) {}
+
+    /* 3. Borrar resultados / clasificación / stats locales. */
+    try { localStorage.removeItem(LS_KEY); } catch (_) {}
+    try { sharedLigaResultsCache = {}; } catch (_) {}
+    try { if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0; } catch (_) {}
+    try {
+      var _ex = window.LIGA_EXTRAS;
+      if (_ex) Object.keys(_ex).forEach(function (k) { delete _ex[k]; });
+    } catch (_) {}
+    try {
+      var _pm = window.LIGA_PLAYER_MATCH_STORE;
+      if (_pm) Object.keys(_pm).forEach(function (k) { delete _pm[k]; });
+    } catch (_) {}
+    try { localStorage.setItem('ef_player_stats_v1', '{}'); } catch (_) {}
+    try {
+      var _leaRaw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (_leaRaw) {
+        var _lea = JSON.parse(_leaRaw);
+        if (_lea && Array.isArray(_lea.teams)) {
+          _lea.teams.forEach(function (t) {
+            if (!t || !Array.isArray(t.players)) return;
+            t.players.forEach(function (p) {
+              if (!p) return;
+              p.pj = 0; p.gol = 0; p.pen = 0; p.fk = 0;
+              p.mvp = 0; p.ta = 0; p.tr = 0; p.imbat = 0; p.penSaved = 0;
+            });
+          });
+          localStorage.setItem('ligaExt_liga-ea-sports', JSON.stringify(_lea));
+        }
+      }
+    } catch (_) {}
+    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports'); } catch (_) {}
+
+    /* 4. Aplicar el calendario nuevo (memoria + localStorage + server). */
+    setLigaSchedule(nuevo);
+    try { window.LIGA_SCHEDULE = nuevo; } catch (_) {}
+
+    /* 5. Limpiar resultados también en el servidor. El POST normal con
+       {liga_results:{}} no vacía nada por el merge recursivo, así que
+       usamos /api/state/reset-liga (replace=True). Le mandamos el
+       calendario nuevo: el endpoint lo acepta si es válido y distinto
+       del actual, de modo que todos los dispositivos ven el MISMO
+       cuadro que acabamos de sortear, sin parpadeo. */
+    try {
+      fetch('/api/state/reset-liga', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ liga_schedule: nuevo }),
+        cache: 'no-store'
+      }).then(function (r) {
+        return r && r.ok ? r.json() : null;
+      }).then(function (j) {
+        var srv = j && j.state && j.state.liga_schedule;
+        if (isValidLigaSchedule(srv) && JSON.stringify(srv) !== JSON.stringify(nuevo)) {
+          /* El servidor generó uno propio: adoptarlo para no quedar
+             desincronizados con el resto de dispositivos. */
+          setLigaSchedule(srv, false);
+          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(srv)); } catch (_) {}
+          try { window.LIGA_SCHEDULE = srv; } catch (_) {}
+          _repintarTrasSorteo();
+        }
+      }).catch(function () {});
+    } catch (_) {}
+
+    /* 6. Repintar TODAS las pantallas de Liga ya — sin recargar. */
+    _repintarTrasSorteo();
+    alert('🎲 Calendario sorteado.\n\nLas 38 jornadas tienen emparejamientos nuevos. Resultados y clasificación a cero.');
   };
 
   /* ── TRIGGER POR URL (?reset=liga) ────────────────────────────
@@ -7369,8 +7504,8 @@
 
         IA vs IA   → 45 s cada parte   → 1.5  min total (90 s reales)
                      (1 sec real = 1 game-minute)
-        HvIA       → 6 min 45 s/parte  → 13.5 min total real
-                     (9 s/game-min). Previa: "8 min".
+        HvIA       → 5 min 33 s/parte  → 11.1 min total real
+                     (7.4 s/game-min). Previa: "8 min".
         HvH        → 8 min 15 s/parte  → 16.5 min total real
                      (11 s/game-min). Previa: "10 min".
         HvH prórroga → 2.5 min/parte   → 5 min total real
@@ -7379,22 +7514,28 @@
      90+1..90+9 en 2ª, independiente de eventos. El cron se CONGELA
      en el tope hasta que el humano pulse DESCANSO / FINALIZAR.
      Cada game-minute de descuento en tiempo REAL equivale a:
-        HvH:  11 segundos reales
-        HvIA:  9 segundos reales
-        IAIA:  1 segundo  real
+        HvH:  11  segundos reales
+        HvIA: 7.4 segundos reales
+        IAIA:  1  segundo  real
 
      Histórico:
-       Pre 2026-04-26 (estos valores actuales): HvH 11s, HvIA 9s.
+       Pre 2026-04-26:                          HvH 11s, HvIA 9s.
        2026-04-26 (intermedio):                 HvH 10.5s, HvIA 6.5s.
        2026-05-10 (alineación display=real):    HvH 6.67s, HvIA 5.33s.
        2026-05-19: usuario pide volver al pre-mayo porque el cron iba
        más rápido que eFootball / vida real. Display previa = 10/8
        (no real) por preferencia explícita.
+       2026-05-21: HvIA recalibrado a 7.4 s/game-min (antes 9 s).
+       El usuario midió "min 45 del juego = min 37 del simulador"
+       con el cron a 9 s/game-min → 9 × 37/45 = 7.4 s/game-min es
+       el ritmo real de su eFootball. Con web y juego al mismo ritmo
+       el minuto del cron coincide con el del juego. HvH se mantiene
+       en 11 s. Display previa HvIA sigue en "8 min".
 
      Consecuencia matemática (verificada): 1 game-minute = tickMs × 12
-       HvH   tick ≈ 917 ms → 60 × 917/5 = 11 s
-       HvIA  tick ≈ 750 ms → 60 × 750/5 =  9 s
-       IAIA  tick ≈  83 ms → 60 ×  83/5 =  1 s  (90 s total) */
+       HvH   tick ≈ 917 ms → 60 × 917/5 = 11  s
+       HvIA  tick ≈ 617 ms → 60 × 617/5 =  7.4 s
+       IAIA  tick ≈  83 ms → 60 ×  83/5 =  1  s  (90 s total) */
   var _ML_TICK_SEC = 5;
   /* Tiempos reales del cronómetro (petición usuario 2026-05-19):
      "la simulación del cronómetro está yendo más rápido que el tiempo
@@ -7402,7 +7543,7 @@
      tiempos de antes". RESTAURADOS los valores pre-2026-04-26:
         HvH    → 16.5 min reales → 11 s/game-min  (≈917 ms/tick)
         HvH_ET → 5    min reales (sin cambio)
-        HvIA   → 13.5 min reales → 9  s/game-min  (≈750 ms/tick)
+        HvIA   → 11.1 min reales → 7.4 s/game-min (≈617 ms/tick)
         IAIA   → 1.5  min reales (sin cambio)     →   1 s/game-min
      `displayMin` se mantiene en 10 / 8 (lo que la previa muestra al
      usuario) por petición explícita: la previa dice "10 min" / "8 min"
@@ -7411,10 +7552,10 @@
      RESCINDIDA: el usuario prefiere display de referencia + cronómetro
      a ritmo eFootball realista. */
   var _MATCH_RULE = {
-    HvH:    { gameMin: 90, realMin: 16.5, displayMin: 10 },
+    HvH:    { gameMin: 90, realMin: 16.5,  displayMin: 10 },
     HvH_ET: { gameMin: 30, realMin: 5                       },
-    HvIA:   { gameMin: 90, realMin: 13.5, displayMin: 8  },
-    IAIA:   { gameMin: 90, realMin: 1.5,  displayLabel: '45 s/parte' }
+    HvIA:   { gameMin: 90, realMin: 11.1,  displayMin: 8  },
+    IAIA:   { gameMin: 90, realMin: 1.5,   displayLabel: '45 s/parte' }
   };
   function _tickMsFromRule(r) {
     /* regla de tres: tickMs = realMs / (ticksTotales) */
@@ -7425,7 +7566,7 @@
   var _MATCH_TICKS = {
     HvH:    _tickMsFromRule(_MATCH_RULE.HvH),    /* ≈ 917 ms (16.5 min reales · 11 s/game-min) */
     HvH_ET: _tickMsFromRule(_MATCH_RULE.HvH_ET), /* ≈ 833 ms ( 5   min reales)               */
-    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 750 ms (13.5 min reales ·  9 s/game-min) */
+    HvIA:   _tickMsFromRule(_MATCH_RULE.HvIA),   /* ≈ 617 ms (11.1 min reales · 7.4 s/game-min) */
     IAIA:   _tickMsFromRule(_MATCH_RULE.IAIA)    /* ≈  83 ms (90 s total)                   */
   };
   /* Exponemos la regla para que TODOS los flujos (bundle legacy, campo 3D,
@@ -7954,7 +8095,7 @@
          con su keyframe — solo bajamos el umbral 85→80. */
       endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 80 * 60);
     }
-    if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
+    if (st.finished) { btn.textContent='🏁 Final'; btn.className='ml-timer finished'; return; }
     if (st.inDescanso) { btn.textContent='⏸ HT'; btn.className='ml-timer running'; return; }
     var lbl = st.timerRunning ? '⏸ ' : (rawSec>=fullMax ? '🔁 ' : '▶ ');
     var display;
@@ -10624,39 +10765,21 @@
     }
   }
 
-  /* ── Reactivar la caja FINALIZAR cuando el partido ya terminó ─────
-     (foto usuario 2026-05-17): si tras cargar la barra el humano se
-     queda en el gm-modal con el partido finalizado, la caja
-     FINALIZAR no debe salir apagada/atascada. La reetiquetamos a
-     "🏁 VER RESUMEN", la dejamos habilitada y llamativa, y su
-     onclick re-abre la pantalla FINAL. Idempotente: se puede llamar
-     en cada render / scan sin efectos secundarios. Solo actúa si
-     el partido está finished y la pantalla FINAL no está abierta. */
+  /* ── Estado del gm-modal cuando el partido ya terminó ─────────────
+     2026-05-21 (petición usuario): se elimina la caja "VER RESUMEN"
+     — el acta ya está a la vista y las stats se comparten por
+     WhatsApp. Cuando el partido está finished, ocultamos gm-btn-end y
+     dejamos visible "✖ SALIR DEL PARTIDO" (gm-btn-exit), que el CSS
+     pinta brillante para que el humano sepa cómo continuar (los
+     finales de partido eran confusos). Idempotente: corre en el poll
+     de 300 ms sin efectos secundarios. */
   window._gmReactivateFinishBtn = function () {
     try {
       if (!window._gm || !window._gm.finished) return;
-      var finOv = document.getElementById('gm-fin-ov');
-      if (finOv && finOv.style.display && finOv.style.display !== 'none') return;
       var b = document.getElementById('gm-btn-end');
-      if (!b) return;
-      /* Idempotente: si ya está reactivado, no re-escribir el DOM
-         (este helper corre en el poll de 300 ms). */
-      if (b._gmFinReactivated && !b.disabled) return;
-      b._gmFinReactivated = true;
-      b.disabled = false;
-      b.style.opacity = '1';
-      b.style.pointerEvents = 'auto';
-      b.textContent = '🏁 VER RESUMEN';
-      b.classList.add('is-finishable');
-      b.onclick = function (ev) {
-        try { if (ev) { ev.preventDefault(); ev.stopPropagation(); } } catch(_){}
-        try { _gmShowFinalOv(); } catch(_){ if (window.gmShowPost) window.gmShowPost(); }
-      };
-      /* Salida definitiva siempre disponible cuando el partido acabó. */
-      try {
-        var ex = document.getElementById('gm-btn-exit');
-        if (ex) ex.style.display = '';
-      } catch(_){}
+      if (b) b.style.display = 'none';
+      var ex = document.getElementById('gm-btn-exit');
+      if (ex) ex.style.display = '';
     } catch(_){}
   };
 
@@ -11214,15 +11337,18 @@
         _gmEndBtn.textContent = '▶ PRÓRROGA';
       } else if (_gmAction === 'penaltis') {
         _gmEndBtn.textContent = '🥅 PENALTIS';
-      } else if (_matchOver) {
-        /* El partido YA acabó (cronómetro al FIN). El humano no sabía
-           qué botón pulsar para continuar — lo confundía con
-           Menú·LIVE / Cancelar. Lo renombramos a "VER RESUMEN"
-           (pulsarlo finaliza y abre el resumen + compartir) y el CSS
-           lo pinta brillante. Petición usuario 2026-05-17. */
-        _gmEndBtn.textContent = '🏁 VER RESUMEN';
+      } else if (_gm.finished) {
+        /* Partido FINALIZADO: se elimina la caja "VER RESUMEN"
+           (petición usuario 2026-05-21: el acta ya está a la vista y
+           las estadísticas se comparten por WhatsApp — el resumen no
+           aporta nada). La única acción del humano es "SALIR DEL
+           PARTIDO" (gm-btn-exit, pintado brillante). */
+        _gmEndBtn.style.display = 'none';
       } else {
+        /* En juego — incluido el tramo 90+1…90+9: SIEMPRE "FINALIZAR"
+           para que el humano sepa que ese es el botón para acabar. */
         _gmEndBtn.textContent = '🏁 FINALIZAR';
+        _gmEndBtn.style.display = '';
       }
       /* Botón "✖ SALIR DEL PARTIDO": visible SOLO cuando el partido
          está FINALIZADO de verdad (_gm.finished), NO solo cuando el
@@ -11272,7 +11398,7 @@
     var editBtn = document.getElementById('gm-timer-edit');
     function _setEditVis(visible){ if (editBtn) editBtn.style.display = visible ? 'inline-flex' : 'none'; }
     if (_gm.finished) {
-      btn.textContent = '🏁 FIN';
+      btn.textContent = '🏁 Final';
       btn.className = 'ml-timer finished';
       if (row) { row.classList.remove('running'); row.classList.add('finished'); }
       _setEditVis(false);
@@ -14760,7 +14886,7 @@
         st.lastCurMin = curMin;
         var newTxt;
         if (curMin > 90 && curMin < topMin) newTxt = '⏳ 90+' + (curMin - 90) + '\'';
-        else if (curMin >= topMin && curMin >= 90) newTxt = '🏁 FIN';
+        else if (curMin >= topMin && curMin >= 90) newTxt = '🏁 Final';
         else newTxt = '⏳ ' + curMin + '\'';
         if (btn.textContent !== newTxt) btn.textContent = newTxt;
       }
@@ -14995,7 +15121,7 @@
         if (_etActive && curMin > 90 && curMin < 120)      btn.textContent = '⏱ ' + curMin + '\' ET';
         else if (_etActive && curMin >= 120)               btn.textContent = '🏁 FIN ET';
         else if (!_etActive && curMin > 90 && curMin < _etTopMin) btn.textContent = '⏳ 90+' + (curMin - 90) + '\'';
-        else if (!_etActive && curMin >= _etTopMin && curMin >= 90) btn.textContent = '🏁 FIN';
+        else if (!_etActive && curMin >= _etTopMin && curMin >= 90) btn.textContent = '🏁 Final';
         else                                               btn.textContent = '⏳ ' + curMin + '\'';
         /* Mantener el background verde si el rebuild reset los estilos. */
         if (btn.style.background !== 'rgb(13, 42, 13)' && btn.style.background.indexOf('#0d2a0d') === -1) {
@@ -17251,6 +17377,23 @@
   animation:gmNearEndPulse 1s ease-in-out infinite !important;
 }
 #gm-btn-end:disabled,#gm-btn-end.gm-end-moved.is-near-end:disabled{animation:none !important;}
+/* ── SALIR DEL PARTIDO · verde brillante pulsante ────────────────
+   (petición usuario 2026-05-21). Tras finalizar es la ÚNICA acción
+   del humano; los finales de partido eran confusos, así que el botón
+   debe destacar para que sepa cómo continuar. Solo se ve cuando el
+   partido ya terminó (display lo gobierna el JS). */
+#gm-btn-exit{
+  background:linear-gradient(135deg,#1ea14a,#33d06d 55%,#1ea14a) !important;
+  border:2px solid #7dffae !important;
+  color:#fff !important;
+  font-weight:900 !important;
+  text-shadow:0 1px 3px rgba(0,0,0,.65) !important;
+  animation:gmExitPulse 1.1s ease-in-out infinite !important;
+}
+@keyframes gmExitPulse{
+  0%,100%{ box-shadow:0 0 12px rgba(51,208,109,.6), inset 0 0 8px rgba(255,255,255,.08); transform:scale(1); }
+  50%   { box-shadow:0 0 30px rgba(51,208,109,1), 0 0 56px rgba(51,208,109,.5), inset 0 0 12px rgba(255,255,255,.14); transform:scale(1.02); }
+}
 /* ── Eventos del acta ────────────────────────────────────────── */
 .ml-evt-item{padding-left:10px!important;}
 .ml-evt-team{font-size:11px;color:rgba(255,255,255,.45);font-family:"Rajdhani",sans-serif;white-space:nowrap;}
@@ -17993,13 +18136,13 @@
      Incluye:
        · `ag-train` y `ag-rest` (entrenamientos y descansos del SSR
          son la base — siempre se respetan).
-       · `ag-sel` (Selecciones FIFA): pedido del usuario 2026-05-08 —
-         la sección final "🌐 FASE FINAL SELECCIONES" y las ventanas
-         FIFA aparecen tal cual aunque el toggle esté desmarcado. */
+     Los eventos de Selecciones (`ag-sel`) SÍ dependen de la casilla
+     🌐 «Selecciones FIFA» (petición usuario 2026-05-21): al marcarla
+     se muestran todos los eventos de selecciones, al desmarcarla se
+     transforman a Entrenamiento. Antes (2026-05-08) eran always-on. */
   function _isAlwaysOn(ev){
     return /\bag-train\b/.test(ev.rowClass)
-        || /\bag-rest\b/.test(ev.rowClass)
-        || /\bag-sel\b/.test(ev.rowClass);
+        || /\bag-rest\b/.test(ev.rowClass);
   }
   /* Detección de competición. Reglas evaluadas en orden de prioridad —
      específicas (Supercopa España, Previa Champions, Europa League,
@@ -19336,7 +19479,7 @@ window._mlForceFinishMatch = function(mk) {
   /* Limpiar el wrap visual: ocultar timer, marcar como finalizado.   */
   try {
     var btn = document.getElementById('ml-timer-' + mk);
-    if (btn) { btn.textContent = '🏁 FIN'; btn.className = 'ml-timer finished'; }
+    if (btn) { btn.textContent = '🏁 Final'; btn.className = 'ml-timer finished'; }
     var sc = document.querySelector('#mlw-' + mk + ' .ml-score');
     if (sc) { sc.classList.remove('state-playing'); sc.classList.add('state-finished'); }
     var actBar = document.getElementById('ml-actions-bar-' + mk);
@@ -19768,7 +19911,7 @@ function buildLiveScreen() {
       if (actBar) actBar.style.visibility = 'hidden';
       var btnTimer = w.querySelector('.ml-timer');
       if (btnTimer && !btnTimer.classList.contains('finished')) {
-        btnTimer.textContent = '🏁 FIN';
+        btnTimer.textContent = '🏁 Final';
         btnTimer.className = 'ml-timer finished';
       }
     } catch(_){}

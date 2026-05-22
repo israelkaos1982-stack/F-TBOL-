@@ -19414,8 +19414,8 @@
     'cal-usc-s':      'UEFA Supercup — Semis',
     'cal-usc-f':      'Supercopa de Europa',
     'cal-copa-1r':    'Copa del Rey — 1/128',
-    'cal-copa-2r':    'Copa del Rey — 1/32',
-    'cal-copa-16':    'Copa del Rey — Dieciseisavos',
+    'cal-copa-2r':    'Copa del Rey — 1/64',
+    'cal-copa-16':    'Copa del Rey — 1/32',
     'cal-copa-oct':   'Copa del Rey — Octavos Ida',
     'cal-copa-qt':    'Copa del Rey — Cuartos Ida',
     'cal-copa-sf':    'Copa del Rey — Semis Ida',
@@ -29253,8 +29253,13 @@ document.addEventListener('DOMContentLoaded', function() {
       if (hasOctavos) p.bonus.push('octavos');
       if (has1_32) p.bonus.push('1/32');
       if (has1_64) p.bonus.push('1/64');
-      if (/1a ronda/.test(btnN)) p.bonus.push('1a ronda');
-      if (/2a ronda/.test(btnN)) p.bonus.push('2a ronda');
+      /* La agenda etiqueta las dos primeras rondas como "1/128" y
+         "1/64", pero las cards de s-copa dicen "1ª Ronda" / "2ª Ronda".
+         Sin estos tokens puente ambas cards puntúan igual (score 1) en
+         TODAS las filas de Copa y se quedaban con la primera (1/128 =
+         12 Sep) → la 2ª Ronda mostraba 12 Sep en vez de 24 Sep. */
+      if (/1a ronda/.test(btnN)) p.bonus.push('1a ronda', '1/128');
+      if (/2a ronda/.test(btnN)) p.bonus.push('2a ronda', '1/64');
       if (hasIda) p.anti.push('vuelta');
       if (hasVue) p.anti.push('ida');
     } else if (compClass === 'c-super'){

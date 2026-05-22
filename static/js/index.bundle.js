@@ -9014,21 +9014,33 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   function hydrateStoreFromSavedResults(){
     var results = parseSavedResults();
     /* Reset PARCIAL del store: borramos solo las entradas de LIGA
-       (key formato `<j>|<home>|<away>`) para que una re-hidratación
-       no deje entradas antiguas de formatos distintos. PRESERVAMOS
-       las entradas de Copa/Recopa/SC/Champions/UEL/UECL/Superliga
-       (keys con prefijo `copa_`, `recopa_`, `sc_`, `wprev_`, `slu_`,
-       etc.) — esas no vienen de ef_liga38_v4 y se perderían si
-       hiciéramos un reset total. Reportado 2026-05-07: tras jugar
-       Copa del Rey la plantilla mostraba 0 stats al volver porque
-       hydrateStoreFromSavedResults wipeaba todos los copa_*. */
+       (que se reconstruyen desde ef_liga38_v4) y PRESERVAMOS las
+       entradas de Copa/Recopa/SC/Champions/UEL/UECL/Superliga —
+       esas no vienen de ef_liga38_v4 y se perderían si hiciéramos
+       un reset total.
+
+       Formato real de las claves (las crea registrarLigaPlayerStats):
+         · Liga EA Sports → "home|away"            → 1 pipe EXACTO.
+         · Comp-tagueadas → "home|away|<comp>|<mk>" → 3 pipes
+           (copa, sc, ucl, uel, uecl, recopa, superliga, …).
+         · Legacy / fallback por matchKey crudo     → 0 pipes.
+       Una entrada de Liga es por tanto la que tiene EXACTAMENTE 1
+       pipe; cualquier otra es NO-Liga y hay que conservarla.
+
+       Bug previo (la causa de que Copa y Supercopa no se sumaran en
+       "España · Estadísticas combinadas"): el filtro era
+       `pk.indexOf('|') === -1`, que solo conservaba las claves de 0
+       pipes. Las claves comp-tagueadas de Copa/SC tienen 3 pipes, así
+       que se borraban en cada rehidratación (buildIAresults,
+       simularTodasJornadasIA, rebuildLigaPlayerStatsFixed…) y el
+       dashboard acababa mostrando solo Liga. Reportado 2026-05-07
+       (copa_*) y 2026-05-22 (Copa + Supercopa). */
     var prevStore = window.LIGA_PLAYER_MATCH_STORE || {};
     var store = (window.LIGA_PLAYER_MATCH_STORE = {});
     Object.keys(prevStore).forEach(function(pk){
-      /* Liga key = "j|home|away" (al menos 2 pipes). Cualquier otra
-         (con prefijo ASCII + underscore) la consideramos NO-liga y
-         la conservamos. */
-      if (pk && pk.indexOf('|') === -1) store[pk] = prevStore[pk];
+      if (!pk) return;
+      var _pipes = (pk.match(/\|/g) || []).length;
+      if (_pipes !== 1) store[pk] = prevStore[pk];
     });
     var _dirtyMigration = false;
     Object.keys(results).forEach(function(key){

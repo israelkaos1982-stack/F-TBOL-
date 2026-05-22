@@ -13773,6 +13773,14 @@
       sc: { a: (_gm.sc && _gm.sc.a) || 0, b: (_gm.sc && _gm.sc.b) || 0 },
       events: (_gm.events || []).slice(),
       etDone: !!_gm.etDone, finished: !!_gm.finished,
+      /* Flags de prórroga / penaltis: imprescindibles para que un
+         partido backgrounded en ET / post-penaltis se reanude en su
+         fase correcta (sin re-disparar el descanso de prórroga ni la
+         tanda). Reset/restaurados en gmOpen. */
+      penDone: !!_gm.penDone, penWinner: _gm.penWinner || null,
+      penScore: _gm.penScore || null,
+      htpDone: !!_gm.htpDone, htpShared: !!_gm.htpShared,
+      inDescansoEt: !!_gm.inDescansoEt,
       timerSec: _gm.timerSec || 0,
       timerRunning: false,                 /* siempre pausado en segundo plano */
       isHvH: !!_gm.isHvH,
@@ -13891,6 +13899,26 @@
        herede stats de un partido anterior. */
     _gm.matchStats = saved && saved.matchStats ? saved.matchStats : null;
     _gm.etDone = saved ? !!saved.etDone : false;
+    /* Flags de prórroga / tanda de penaltis: reset para un partido
+       fresh, restaurar del snapshot si el partido fue backgrounded.
+       ERROR FATAL reportado 2026-05-22: sin este reset, un segundo
+       partido de eliminatoria jugado tras una tanda de penaltis
+       heredaba penDone=true → gmEndMatch evaluaba `_shouldForceET &&
+       !_gm.penDone` como false y SALTABA el bloque de prórroga +
+       penaltis, finalizando un empate (imposible en eliminatoria).
+       htpDone stale además se saltaba el descanso de la prórroga. */
+    _gm.penDone      = saved ? !!saved.penDone : false;
+    _gm.penWinner    = saved ? (saved.penWinner || null) : null;
+    _gm.penScore     = saved ? (saved.penScore || null) : null;
+    _gm.htpDone      = saved ? !!saved.htpDone : false;
+    _gm.htpShared    = saved ? !!saved.htpShared : false;
+    _gm.inDescansoEt = saved ? !!saved.inDescansoEt : false;
+    /* Limpieza defensiva: cerrar la puerta de compartir WhatsApp por si
+       quedó visible de un partido anterior (no debe heredarse). */
+    try {
+      var _wgOv = document.getElementById('wa-gate-ov');
+      if (_wgOv) { _wgOv.style.display = 'none'; _wgOv.innerHTML = ''; }
+    } catch(_){}
     _gm.finished = false;
     _gm.timerSec = saved ? (saved.timerSec || 0) : 0;
     _gm.timerRunning = false;

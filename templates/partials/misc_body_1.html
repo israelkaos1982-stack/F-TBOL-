@@ -11815,19 +11815,25 @@ window._showSimProgress = function(opts, onDone){
   #s-torneos-verano .tv-edit-btn:active{
     background:rgba(240,192,64,.35);
   }
-  /* Cada grupo con un color de borde DISTINTO (petición usuario
-     2026-05-19, foto). 8 colores → cubre Mundialito (8 grupos)
-     y todos los demás torneos. Los grupos con humano conservan
-     el dorado llamativo (la regla .tour-group-human va después
-     y gana por orden, ver más abajo). */
-  .tour-group-block.tour-grp-A{border-color:#ff5252;box-shadow:0 0 14px rgba(255,82,82,.32),0 4px 16px rgba(0,0,0,.35);}
-  .tour-group-block.tour-grp-B{border-color:#42a5f5;box-shadow:0 0 14px rgba(66,165,245,.32),0 4px 16px rgba(0,0,0,.35);}
-  .tour-group-block.tour-grp-C{border-color:#66bb6a;box-shadow:0 0 14px rgba(102,187,106,.32),0 4px 16px rgba(0,0,0,.35);}
-  .tour-group-block.tour-grp-D{border-color:#ab47bc;box-shadow:0 0 14px rgba(171,71,188,.32),0 4px 16px rgba(0,0,0,.35);}
-  .tour-group-block.tour-grp-E{border-color:#ffa726;box-shadow:0 0 14px rgba(255,167,38,.32),0 4px 16px rgba(0,0,0,.35);}
-  .tour-group-block.tour-grp-F{border-color:#26c6da;box-shadow:0 0 14px rgba(38,198,218,.32),0 4px 16px rgba(0,0,0,.35);}
-  .tour-group-block.tour-grp-G{border-color:#ec407a;box-shadow:0 0 14px rgba(236,64,122,.32),0 4px 16px rgba(0,0,0,.35);}
-  .tour-group-block.tour-grp-H{border-color:#9ccc65;box-shadow:0 0 14px rgba(156,204,101,.32),0 4px 16px rgba(0,0,0,.35);}
+  /* Cada grupo con un color DISTINTO (petición usuario 2026-05-19,
+     foto). 12 colores → cubren el Mundial (12 grupos A-L), el
+     Mundialito (8) y todos los demás torneos. Cada grupo expone
+     `--grp-color` / `--grp-rgb`; el resto de reglas
+     (.tour-group-block, h4, etc.) los consumen. Los grupos con
+     humano conservan el dorado llamativo (la regla
+     .tour-group-human va después y gana por orden). */
+  .tour-group-block.tour-grp-A{--grp-color:#ff5252;--grp-rgb:255,82,82;}
+  .tour-group-block.tour-grp-B{--grp-color:#42a5f5;--grp-rgb:66,165,245;}
+  .tour-group-block.tour-grp-C{--grp-color:#66bb6a;--grp-rgb:102,187,106;}
+  .tour-group-block.tour-grp-D{--grp-color:#ab47bc;--grp-rgb:171,71,188;}
+  .tour-group-block.tour-grp-E{--grp-color:#ffa726;--grp-rgb:255,167,38;}
+  .tour-group-block.tour-grp-F{--grp-color:#26c6da;--grp-rgb:38,198,218;}
+  .tour-group-block.tour-grp-G{--grp-color:#ec407a;--grp-rgb:236,64,122;}
+  .tour-group-block.tour-grp-H{--grp-color:#9ccc65;--grp-rgb:156,204,101;}
+  .tour-group-block.tour-grp-I{--grp-color:#5c6bc0;--grp-rgb:92,107,192;}
+  .tour-group-block.tour-grp-J{--grp-color:#ff7043;--grp-rgb:255,112,67;}
+  .tour-group-block.tour-grp-K{--grp-color:#26a69a;--grp-rgb:38,166,154;}
+  .tour-group-block.tour-grp-L{--grp-color:#c9a227;--grp-rgb:201,162,39;}
   /* 🖍 de Torneos de Verano MUCHO más pequeño (petición usuario
      2026-05-17, foto 1). Misma especificidad, va después → gana. */
   #s-torneos-verano .tv-edit-btn{
@@ -12239,25 +12245,39 @@ window._showSimProgress = function(opts, onDone){
   /* Cada grupo en su caja con borde CLARO que lo separa del resto
      (petición usuario 2026-05-17). Borde neutro por defecto. */
   .tour-group-block{
+    --grp-color:#8fa3c8;--grp-rgb:143,163,200;
     margin-top:16px;
-    padding:12px 12px 14px;
-    background:rgba(255,255,255,.022);
-    border:1.5px solid rgba(255,255,255,.20);
+    padding:0 12px 14px;
+    background:
+      linear-gradient(180deg,rgba(var(--grp-rgb),.12) 0%,rgba(var(--grp-rgb),.03) 64px,rgba(255,255,255,.022) 64px),
+      rgba(255,255,255,.022);
+    border:1.6px solid rgba(var(--grp-rgb),.55);
     border-radius:14px;
-    box-shadow:0 4px 16px rgba(0,0,0,.35);
+    box-shadow:0 0 16px rgba(var(--grp-rgb),.30),0 4px 16px rgba(0,0,0,.4);
   }
   /* Grupo con equipo(s) humano(s): borde dorado llamativo + pulso,
      igual que las eliminatorias humanas. */
   .tour-group-block.tour-group-human{
+    --grp-color:#f0c040;--grp-rgb:240,192,64;
     border:2px solid #f0c040;
-    background:rgba(240,192,64,.06);
     box-shadow:0 0 16px rgba(240,192,64,.55),inset 0 0 8px rgba(240,192,64,.14);
     animation:tourTiePulse 1.5s ease-in-out infinite;
   }
+  /* Cabecera del grupo: banner a sangre con el color del grupo +
+     barra de acento blanca a la izquierda. */
   .tour-group-block h4{
+    display:flex;align-items:center;gap:8px;
     font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2.5px;
-    color:#f0c040;margin:0 0 8px;
-    text-shadow:0 0 6px rgba(240,192,64,.40);
+    font-weight:700;color:#fff;
+    margin:0 -12px 12px;padding:9px 14px;
+    background:linear-gradient(135deg,var(--grp-color) 0%,rgba(var(--grp-rgb),.35) 100%);
+    border-bottom:1px solid rgba(var(--grp-rgb),.65);
+    border-radius:12px 12px 0 0;
+    text-shadow:0 1px 3px rgba(0,0,0,.55);
+  }
+  .tour-group-block h4::before{
+    content:'';flex:0 0 6px;height:18px;border-radius:3px;
+    background:#fff;box-shadow:0 0 8px rgba(255,255,255,.6);
   }
   /* Separador entre clasificación y bloque de jornadas. */
   .tour-group-block .tour-st-table{
@@ -12316,7 +12336,39 @@ window._showSimProgress = function(opts, onDone){
   .tour-jor-h{
     display:flex;justify-content:space-between;align-items:center;gap:8px;
     font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;
-    color:rgba(255,255,255,.55);margin-bottom:6px;font-weight:700;
+    color:rgba(255,255,255,.55);font-weight:700;
+    margin:-10px -12px 8px;padding:6px 12px;
+    background:rgba(255,255,255,.04);
+    border-bottom:1px solid rgba(255,255,255,.07);
+    border-radius:8px 8px 0 0;
+  }
+  .tour-jor.is-past .tour-jor-h{
+    background:rgba(95,224,138,.08);border-bottom-color:rgba(95,224,138,.30);
+  }
+  .tour-jor.is-current .tour-jor-h{
+    background:rgba(240,192,64,.10);border-bottom-color:rgba(240,192,64,.40);
+  }
+  /* Chip de la jornada (J1, J2…) — píldora con color de estado. */
+  .tour-jor-tag{
+    display:inline-block;padding:2px 10px;border-radius:20px;
+    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
+    letter-spacing:1.5px;
+  }
+  .tour-jor.is-past .tour-jor-tag{
+    background:rgba(95,224,138,.16);border-color:rgba(95,224,138,.5);color:#5fe08a;
+  }
+  .tour-jor.is-current .tour-jor-tag{
+    background:rgba(240,192,64,.20);border-color:rgba(240,192,64,.65);
+    color:#ffe7a6;box-shadow:0 0 8px rgba(240,192,64,.40);
+  }
+  .tour-jor.is-future .tour-jor-tag{
+    background:rgba(140,160,200,.10);border-color:rgba(140,160,200,.28);
+  }
+  /* Icono humano (selección / club) junto al nombre del equipo. */
+  .tour-hum-ic{
+    display:inline-flex;align-items:center;justify-content:center;
+    font-size:12px;line-height:1;flex-shrink:0;
+    filter:drop-shadow(0 0 3px rgba(95,224,138,.55));
   }
   .tour-match.is-locked{opacity:.55;cursor:not-allowed;}
 </style>
@@ -13887,7 +13939,7 @@ window._showSimProgress = function(opts, onDone){
         if (seen[k]) { alert('La selección «' + v.name + '» está repetida. Cada selección solo puede ir una vez.'); return; }
         seen[k] = 1;
         var ic = iconOf(v.name);
-        teams.push({ name:v.name, isHuman:!!ic, shield:v.shield||'', power:v.power||75 });
+        teams.push({ name:v.name, isHuman:!!ic, icon:ic||'', shield:v.shield||'', power:v.power||75 });
       }
       cfg.teams = teams;
       cfg.numTeams = total;
@@ -13977,7 +14029,9 @@ window._showSimProgress = function(opts, onDone){
     if (isWinner) classes.push('is-winner');
     if (isLoser)  classes.push('is-loser');
     var data = (t.isHuman && t.name === 'PENDIENTE') ? ' data-tour="'+tourId+'" data-slot="'+slotIdx+'"' : '';
-    return '<div class="'+classes.join(' ')+'"'+data+'>'+img+'<span>'+(t.name||'?')+'</span></div>';
+    var _ic = _tourTeamIcon(t);
+    var icHtml = _ic ? '<span class="tour-hum-ic">'+_ic+'</span>' : '';
+    return '<div class="'+classes.join(' ')+'"'+data+'>'+img+'<span>'+(t.name||'?')+'</span>'+icHtml+'</div>';
   }
 
   /* Sub-bloque IDA / VUELTA / GLOBAL para una eliminatoria a doble
@@ -14317,8 +14371,25 @@ window._showSimProgress = function(opts, onDone){
 
   /* ─── Renderers Liga / Grupos+KO ───────────────────────── */
 
+  /* Icono humano de un equipo/selección del torneo. Prioridad:
+     1) `t.icon` ya guardado en la config del torneo.
+     2) Lookup en vivo en la plantilla de selecciones (`_selSquadIcon`)
+        — cubre torneos antiguos guardados sin el campo `icon`.
+     3) Fallback genérico 👤 para humanos sin icono (clubes humanos).
+     PENDIENTE (placeholder sin equipo) nunca lleva icono. */
+  function _tourTeamIcon(t){
+    if (!t || !t.name || t.name === 'PENDIENTE') return '';
+    if (t.icon) return t.icon;
+    try {
+      var ic = window._selSquadIcon && window._selSquadIcon(t.name);
+      if (ic) return ic;
+    } catch(_){}
+    return t.isHuman ? '👤' : '';
+  }
+
   function _stTeamCellHtml(row) {
-    var humanTag = row.isHuman ? ' 👤' : '';
+    var ic = _tourTeamIcon(row);
+    var humanTag = ic ? ' <span class="tour-hum-ic">'+ic+'</span>' : '';
     var img = row.shield ? '<img src="'+row.shield+'" style="width:14px;height:14px;object-fit:contain;flex-shrink:0;">' : '';
     return '<span style="display:inline-flex;align-items:center;gap:5px;">'+img+row.name+humanTag+'</span>';
   }
@@ -14378,7 +14449,7 @@ window._showSimProgress = function(opts, onDone){
       if (isFuture) cls += ' is-future';
       if (isPast) cls += ' is-past';
       var _jd = _cfgFC ? _tourGroupJorDate(_cfgFC, j) : '';
-      html += '<div class="'+cls+'"><div class="tour-jor-h"><span>'+lblTxt+'</span>'
+      html += '<div class="'+cls+'"><div class="tour-jor-h"><span class="tour-jor-tag">'+lblTxt+'</span>'
         + (_jd ? '<span class="tour-jor-date">📅 '+_jd+'</span>' : '')
         + '</div>';
       var allPlayedJ = true;

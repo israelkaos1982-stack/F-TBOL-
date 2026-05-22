@@ -10365,6 +10365,36 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     _showStep(step);
   }
 
+  /* ── AUTO-PICK de jugador para equipos IA con alias eFootball ──
+     Si el equipo de un paso del asistente (provocador / tirador /
+     portero) es IA y tiene alias de eFootball, la web elige sola al
+     jugador idóneo y se salta el selector manual. Las DECISIONES del
+     penalti (equipo infractor, amonestación, resultado, tipo de
+     fallo) las sigue tomando el humano: no son un jugador del acta.
+     `teamSide` es 'a'/'b'; `evtType` lo entiende `_genAutoPickPlayer`. */
+  function _wizAutoPlayer(teamSide, evtType){
+    try {
+      var teams = _getTeams(_wiz.matchId);
+      var teamName = teamSide==='a'?teams.home:teams.away;
+      if(!teamName) return null;
+      var alias = (typeof window.getTeamEfootballAlias==='function')
+        ? window.getTeamEfootballAlias(teamName) : '';
+      if(!alias) return null;
+      var comp='';
+      if(typeof window._calMlSt==='function'){ var st=window._calMlSt(_wiz.matchId); if(st) comp=st.comp; }
+      var isHuman = (typeof window.isHumanInComp==='function')
+        ? window.isHumanInComp(teamName, comp) : false;
+      if(isHuman) return null;
+      var sq=(typeof window.sqFromRegistryFull==='function'&&window.sqFromRegistryFull(teamName))||[];
+      if(!sq.length) sq=(typeof window.sqFromRegistry==='function'&&window.sqFromRegistry(teamName))||[];
+      if(!sq.length) return null;
+      var pick = (typeof window._genAutoPickPlayer==='function')
+        ? window._genAutoPickPlayer(sq, evtType) : null;
+      if(!pick) return null;
+      return { num:String(pick[0]||''), name:String(pick[1]||'') };
+    } catch(_){ return null; }
+  }
+
   window.mlPenWizStart=function(matchId, minute){
     _wiz.matchId=matchId;_wiz.attackTeam=null;_wiz.defendTeam=null;_wiz.provocador=null;_wiz.sancion=null;_wiz.infractor=null;_wiz.tirador=null;_wiz.resultado=null;_wiz.falladoTipo=null;_wiz.portero=null;_wiz.stepHistory=[];_wiz.minute=minute||0;
     var ov=document.getElementById('ml-pen-wiz');if(ov)ov.classList.add('show');
@@ -10379,6 +10409,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   window.mlPenWizTeam=function(team){
     _wiz.attackTeam=team;_wiz.defendTeam=team==='a'?'b':'a';
+    var auto=_wizAutoPlayer(_wiz.attackTeam,'foul');
+    if(auto){ window.mlPenWizProvocador(auto.num,auto.name); return; }
     _goStep('s2b');_renderAndShow('s2b');
   };
 
@@ -10396,6 +10428,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     } else {
       _wiz.infractor = null;
     }
+    var auto=_wizAutoPlayer(_wiz.defendTeam,'pen-gol');
+    if(auto){ window.mlPenWizTirador(auto.num,auto.name); return; }
     _goStep('s4');_renderAndShow('s4');
   };
 
@@ -10417,7 +10451,11 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   window.mlPenWizFallo=function(tipo){
     _wiz.falladoTipo=tipo;
-    if(tipo==='parado'){_goStep('s6b');_renderAndShow('s6b');}
+    if(tipo==='parado'){
+      var auto=_wizAutoPlayer(_wiz.attackTeam,'porteria');
+      if(auto){ window.mlPenWizPortero(auto.num,auto.name); return; }
+      _goStep('s6b');_renderAndShow('s6b');
+    }
     else{_wiz.portero=null;_commit();}
   };
 

@@ -11030,8 +11030,8 @@
 
     /* Portería imbatida → el portero. */
     if(evtType==='porteria') return gks.length ? gks[0] : pool[0];
-    /* Autogol → un defensa (es quien suele meterla en propia). */
-    if(evtType==='propia'){
+    /* Autogol / provocador de penalti → un defensa. */
+    if(evtType==='propia'||evtType==='foul'){
       var defs = pool.filter(function(p){ return String(p[2])==='D'; });
       return rnd(defs.length?defs:(outfield.length?outfield:pool));
     }
@@ -11064,6 +11064,9 @@
     for(var i=0;i<goalPool.length;i++){ acc+=w(goalPool[i]); if(r<=acc) return goalPool[i]; }
     return goalPool[goalPool.length-1];
   }
+  /* Expuesto para el asistente de penaltis (index.bundle.js), que
+     necesita el mismo auto-pick para equipos IA con alias. */
+  try { window._genAutoPickPlayer = _genAutoPickPlayer; } catch(_){}
 
   window.genEvPick = function(label, type) {
     _genPendingEvt = {label:label, type:type};

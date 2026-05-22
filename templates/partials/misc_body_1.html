@@ -15531,21 +15531,52 @@ window._showSimProgress = function(opts, onDone){
     return n === 'bayern' || n === 'bayern munich' || n === 'bayern münchen' || n === 'bayern muenchen' || n === 'fc bayern' || n === 'fc bayern münchen';
   }
 
+  /* Nombre del equipo del HUB humano (slot de Toñín). El hub
+     `s-munich` ya no es siempre el Bayern: el admin pudo reemplazarlo
+     por el Liverpool. Misma resolución que `_resolve()` del mkHubSync:
+     manda la caja del menú; si no, el reemplazo de Liga EA. */
+  function _hubTeamName() {
+    try {
+      var r = localStorage.getItem('menu_home_v1');
+      if (r) {
+        var d = JSON.parse(r);
+        var ov = d && d.ov && d.ov['go:s-munich'];
+        if (ov && ov.label) return String(ov.label);
+      }
+    } catch(_){}
+    try {
+      if (typeof window._ligaEaSubName === 'function') {
+        var s = window._ligaEaSubName('Bayern Munich');
+        if (s) return String(s);
+      }
+    } catch(_){}
+    return 'Bayern Munich';
+  }
+  function _walletIsHubTeam(nm) {
+    return _walletNorm(nm) === _walletNorm(_hubTeamName());
+  }
+
   function _walletCredit(nm, coins) {
     if (!nm || !coins || coins <= 0) return;
-    if (_walletIsBayern(nm)) {
-      /* Sincroniza con la caja del Bayern (HUD del s-munich). Si
-         hay ya money en overrides, sumamos; si no, partimos de 0. */
+    if (_walletIsBayern(nm) || _walletIsHubTeam(nm)) {
+      /* Equipo del HUB humano (Bayern legacy o el reemplazo actual,
+         p.ej. Liverpool). Su premio va al 🪙 Presupuesto del HUD —
+         running total acumulado. Preferimos la API del módulo HUD
+         (actualiza memoria + repinta); raw write como fallback. */
+      if (typeof window._bayernHudCreditMoney === 'function') {
+        try { window._bayernHudCreditMoney(coins); return; } catch(_){}
+      }
       try {
         var raw = localStorage.getItem(BAYERN_HUD_KEY);
         var o = raw ? (JSON.parse(raw) || {}) : {};
         var prev = (o.money != null) ? (parseInt(o.money,10) || 0) : 0;
         o.money = prev + coins;
         localStorage.setItem(BAYERN_HUD_KEY, JSON.stringify(o));
+        if (window._BAYERN_HUD_CACHE) window._BAYERN_HUD_CACHE = o;
       } catch(_){}
       return;
     }
-    /* Otros teams: persistencia genérica. */
+    /* Otros teams humanos: persistencia genérica. */
     var all = _walletGetAll();
     var k = _walletNorm(nm);
     all[k] = (all[k] || 0) + coins;
@@ -32912,6 +32943,38 @@ Tottenham
      después de que el HUD haya sido reescrito por la cadena legacy. */
   window._bayernHudReapply = apply;
 
+  /* ── API de automatización del presupuesto del Liverpool ─────────
+     El 🪙 Presupuesto actual del hub es un TOTAL ACUMULADO: parte del
+     valor manual y se le SUMAN automáticamente las ganancias de
+     torneos de verano, objetivos del club y apuestas ISRAMAX de
+     Toñín. `o.money` es el running total que `apply()` pinta; cada
+     fuente lo incrementa de forma idempotente (los torneos vía el
+     guard `_prizesPaid`, las apuestas vía `b.hubCredited`, los
+     objetivos vía el memo `objMoney`/`objRating`). */
+  window._bayernHudGet = function(){
+    var o = load();
+    return (o && typeof o === 'object') ? o : {};
+  };
+  window._bayernHudMerge = function(patch){
+    if (!patch || typeof patch !== 'object') return;
+    var o = load() || {}, merged = {}, k;
+    for (k in o) if (Object.prototype.hasOwnProperty.call(o, k)) merged[k] = o[k];
+    for (k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) merged[k] = patch[k];
+    save(merged);
+    try { apply(); } catch(_){}
+  };
+  /* Suma `delta` € al presupuesto (running total). La idempotencia la
+     gestiona el llamador (torneo / apuesta), no esta función. */
+  window._bayernHudCreditMoney = function(delta){
+    delta = Number(delta) || 0;
+    if (!delta) return;
+    var o = load() || {};
+    var cur = (o.money != null) ? (parseFloat(o.money) || 0) : 0;
+    var next = cur + delta;
+    if (next < 0) next = 0;
+    window._bayernHudMerge({ money: next });
+  };
+
   /* ── REFUERZO 2026-05-09 ──────────────────────────────────────
      El usuario reportó (con foto) que tras pulsar "Guardar" en el
      editor del HUD, los valores volvían a los defaults. Hay un
@@ -34295,11 +34358,44 @@ Tottenham
      veces el span quedaba con el valor automático. Llamando a
      `_bayernHudReapply()` (apply de los overrides) directamente
      después de athObjCount aseguramos que el override siempre gana. */
+  /* ── Ganancias por objetivos del club ────────────────────────────
+     Cada objetivo del club cumplido suma 50🪙 al presupuesto y 0,33💼
+     a la valoración del hub. Idempotente: memoiza la aportación de
+     objetivos en `objMoney`/`objRating` del override del HUD, así que
+     al recalcular sólo aplica el DELTA — cubre marcar Y desmarcar, y
+     sobrevive a recargas sin doble-contar. */
+  function liverpoolObjEarnings(){
+    if (typeof window._bayernHudGet !== 'function'
+        || typeof window._bayernHudMerge !== 'function') return;
+    var items = document.querySelectorAll('#ath-obj-club .obj-item');
+    if (!items.length) return;   /* objetivos no renderizados todavía */
+    var done = 0;
+    items.forEach(function(lbl){
+      var cb = lbl.querySelector('input[type=checkbox]');
+      if (cb && cb.checked) done++;
+    });
+    var MONEY_PER_OBJ = 50, RATING_PER_OBJ = 0.33;
+    var o = window._bayernHudGet() || {};
+    var prevObjMoney  = parseFloat(o.objMoney)  || 0;
+    var prevObjRating = parseFloat(o.objRating) || 0;
+    var newObjMoney  = done * MONEY_PER_OBJ;
+    var newObjRating = Math.round(done * RATING_PER_OBJ * 100) / 100;
+    if (newObjMoney === prevObjMoney && newObjRating === prevObjRating) return;
+    var money  = ((o.money  != null) ? (parseFloat(o.money)  || 0) : 0) + (newObjMoney  - prevObjMoney);
+    var rating = ((o.rating != null) ? (parseFloat(o.rating) || 0) : 0) + (newObjRating - prevObjRating);
+    if (money  < 0) money  = 0;
+    if (rating < 0) rating = 0;
+    rating = Math.round(rating * 100) / 100;
+    window._bayernHudMerge({ money: money, rating: rating,
+                             objMoney: newObjMoney, objRating: newObjRating });
+  }
+
   function patchAthObjCount(){
     var orig = window.athObjCount;
     window.athObjCount = function(){
       if (orig) orig.apply(this, arguments);
       saveObjState();
+      try { liverpoolObjEarnings(); } catch(_){}
       if (typeof window._bayernHudReapply === 'function') {
         try { window._bayernHudReapply(); } catch(_){}
       }

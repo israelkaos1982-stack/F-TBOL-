@@ -21044,7 +21044,11 @@ window.goLiveMatches = function() {
         '#isramax-ov .isr-bet-row.lost{border-color:rgba(255,128,128,.40);background:rgba(255,128,128,.06);opacity:.85;}' +
         '#isramax-ov .isr-bet-meta{font-size:10px;color:rgba(255,255,255,.55);}' +
         '#isramax-ov .isr-bet-stake{font-family:"Bebas Neue",sans-serif;font-size:16px;color:#ffd54a;}' +
-        '#isramax-ov .isr-bet-cuota{font-family:Oswald,sans-serif;font-size:10px;color:#9fdcff;letter-spacing:1px;}';
+        '#isramax-ov .isr-bet-cuota{font-family:Oswald,sans-serif;font-size:10px;color:#9fdcff;letter-spacing:1px;}' +
+        '#isramax-ov .isr-bet-actions{display:flex;gap:6px;margin:-2px 0 8px;}' +
+        '#isramax-ov .isr-bet-act{flex:1;padding:6px;border-radius:6px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;font-weight:700;cursor:pointer;border:1px solid;background:rgba(255,255,255,.04);-webkit-tap-highlight-color:transparent;}' +
+        '#isramax-ov .isr-bet-act.won{color:#5fe08a;border-color:rgba(95,224,138,.45);}' +
+        '#isramax-ov .isr-bet-act.lost{color:#ff8080;border-color:rgba(255,128,128,.40);}';
       document.head.appendChild(css);
     }
     return wrap;
@@ -21156,6 +21160,15 @@ window.goLiveMatches = function() {
             +   '<span class="isr-bet-stake">' + (Number(b.stake)||0).toFixed(0) + '€</span>'
             +   '<span style="font-size:18px;">' + stIco + '</span>'
             + '</div>';
+      /* Botones de resolución manual para tus apuestas abiertas (los
+         mercados de córners/tarjetas/etc. no se liquidan solos). */
+      if (b.status === 'open' && _isramaxSession && !_isramaxSession.isGuest
+          && b.userId === _isramaxSession.userId){
+        html += '<div class="isr-bet-actions">'
+              +   '<button class="isr-bet-act won" onclick="window._isramaxMarkBet(\'' + b.id + '\',\'won\')">✅ Gané</button>'
+              +   '<button class="isr-bet-act lost" onclick="window._isramaxMarkBet(\'' + b.id + '\',\'lost\')">❌ Perdí</button>'
+              + '</div>';
+      }
     });
     return html;
   }
@@ -21166,6 +21179,7 @@ window.goLiveMatches = function() {
     var u = _isramaxFindUser(_isramaxSession.userId);
     if (!u) return _isramaxRenderUsers();
     _isramaxEnsureUser(u.id);
+    try { _isramaxSettleOpenBets(); } catch(_){}
     var stats = _isramaxStats(u.id);
     var balanceCls = stats.balance > 0 ? 'pos' : (stats.balance < 0 ? 'neg' : '');
     var balanceTxt = (stats.balance > 0 ? '+' : '') + stats.balance.toFixed(0) + '€';
@@ -21198,7 +21212,7 @@ window.goLiveMatches = function() {
   }
 
   /* ── API pública ──────────────────────────────────────────── */
-  window._isramaxOpen = function(){ _isramaxRenderUsers(); };
+  window._isramaxOpen = function(){ try { _isramaxSettleOpenBets(); } catch(_){} _isramaxRenderUsers(); };
   window._isramaxClose = _isramaxClose;
   window._isramaxBackToUsers = function(){ _isramaxSession = null; _isramaxRenderUsers(); };
   window._isramaxLogin = function(userId){ _isramaxRenderLogin(userId); };
@@ -21712,6 +21726,114 @@ window.goLiveMatches = function() {
     _isramaxCurrentMatch = null;
     _isramaxRenderDashboard();
   };
+
+  /* ═══════════════════════════════════════════════════════════════
+     LIQUIDACIÓN DE APUESTAS · automatiza el presupuesto del Liverpool
+     ───────────────────────────────────────────────────────────────
+     Las apuestas se guardan como `open`. Cuando el partido apostado
+     termina (lo detecta `_scanAllDerbies` con state 'finished' + su
+     marcador) se liquidan AUTOMÁTICAMENTE los mercados deducibles del
+     RESULTADO: 1X2, doble oportunidad, total goles y ambos marcan.
+     Los mercados que necesitan datos que el motor no persiste
+     (córners, tarjetas, rojas, tiros, goles 1ª parte) quedan `open` y
+     se resuelven con los botones manuales ✅/❌ del dashboard.
+
+     Cuando una apuesta de TOÑÍN (entrenador del Liverpool) resulta
+     GANADA, su ganancia neta (stake × (cuota−1)) se suma al 🪙
+     Presupuesto del hub vía `_bayernHudCreditMoney`. Idempotente:
+     cada apuesta acreditada queda marcada con `hubCredited`. */
+  function _isramaxSettleMarket(b, ga, gv){
+    ga = Number(ga)||0; gv = Number(gv)||0;
+    var tot = ga + gv;
+    switch (b.market){
+      case '1x2': {
+        var res = ga > gv ? 'home' : (ga < gv ? 'away' : 'draw');
+        return b.option === res ? 'won' : 'lost';
+      }
+      case 'dbl': {
+        var ok = b.option === 'homeE' ? (ga >= gv)
+               : b.option === 'awayE' ? (gv >= ga)
+               : b.option === 'homeA' ? (ga !== gv) : false;
+        return ok ? 'won' : 'lost';
+      }
+      case 'gtp': {
+        var line = (String(b.option).indexOf('45') !== -1) ? 4.5 : 3.5;
+        var over = String(b.option).indexOf('mas') === 0;
+        return (over ? (tot > line) : (tot < line)) ? 'won' : 'lost';
+      }
+      case 'amb': {
+        var btts = (ga > 0 && gv > 0);
+        return ((b.option === 'si') === btts) ? 'won' : 'lost';
+      }
+      default:
+        return null;   /* g1p / cor / tar / roj / tir → manual */
+    }
+  }
+  /* Acredita al presupuesto del Liverpool la ganancia neta de las
+     apuestas GANADAS de Toñín aún no acreditadas. Marca el objeto en
+     memoria (`hubCredited`); el caller persiste. Devuelve true si
+     marcó alguna. */
+  function _isramaxCreditHubFromBets(d){
+    var total = 0, marked = false;
+    (d.bets || []).forEach(function(b){
+      if (!b || b.userId !== 'tonin' || b.status !== 'won' || b.hubCredited) return;
+      var profit = (Number(b.stake)||0) * ((Number(b.cuota)||0) - 1);
+      if (profit > 0) total += profit;
+      b.hubCredited = true;
+      marked = true;
+    });
+    if (marked && total > 0 && typeof window._bayernHudCreditMoney === 'function'){
+      try { window._bayernHudCreditMoney(Math.round(total)); } catch(_){}
+    }
+    return marked;
+  }
+  /* Recorre las apuestas open, liquida las que tengan partido
+     finalizado + mercado deducible del marcador, y acredita al hub.
+     Pull-based, idempotente y barato. Devuelve true si algo cambió. */
+  function _isramaxSettleOpenBets(){
+    var d = _isramaxLoad();
+    if (!d || !Array.isArray(d.bets) || !d.bets.length) return false;
+    var changed = false;
+    if (d.bets.some(function(b){ return b && b.status === 'open'; })){
+      var byKey = {};
+      try {
+        _isramaxScanDerbys().forEach(function(it){ byKey[_isramaxMatchKey(it)] = it; });
+      } catch(_){}
+      d.bets.forEach(function(b){
+        if (!b || b.status !== 'open') return;
+        var it = byKey[b.matchKey];
+        if (!it || it.state !== 'finished' || !it.score) return;
+        var outcome = _isramaxSettleMarket(b, it.score.a, it.score.b);
+        if (!outcome) return;
+        b.status = outcome;
+        b.settledAt = new Date().toISOString();
+        b.settledScore = String(it.score.a) + '-' + String(it.score.b);
+        b.settledAuto = true;
+        changed = true;
+      });
+    }
+    /* Acreditar al hub las ganadas de Toñín pendientes (recién
+       liquidadas, manuales o de versiones previas). */
+    if (_isramaxCreditHubFromBets(d)) changed = true;
+    if (changed) _isramaxSave(d);
+    return changed;
+  }
+  /* Resolución MANUAL de una apuesta (botones ✅/❌ del dashboard).
+     Necesaria para mercados no deducibles del marcador. */
+  window._isramaxMarkBet = function(betId, outcome){
+    if (outcome !== 'won' && outcome !== 'lost') return;
+    if (!_isramaxSession || _isramaxSession.isGuest) return;
+    var d = _isramaxLoad();
+    var b = (d.bets||[]).filter(function(x){ return x && x.id === betId; })[0];
+    if (!b || b.status !== 'open' || b.userId !== _isramaxSession.userId) return;
+    b.status = outcome;
+    b.settledAt = new Date().toISOString();
+    b.settledManual = true;
+    _isramaxCreditHubFromBets(d);
+    _isramaxSave(d);
+    _isramaxRenderDashboard();
+  };
+  window._isramaxSettleOpenBets = _isramaxSettleOpenBets;
 
   /* Crea el div.screen#s-derbys en body si no existe. */
   function _ensureDerbysScreen() {

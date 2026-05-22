@@ -2972,12 +2972,20 @@ _KV_ALLOWED_EXACT = {
     # server es la fuente de verdad para que sobrevivan a wipes de
     # navegador / cambio de móvil (mismo patrón que comp_cards_v1).
     "menu_home_v1",
+    # Plantilla de selecciones nacionales (nombre + escudo + 4 ejes).
+    # Es el pool del que tiran los torneos de Selecciones. localStorage
+    # es solo cache; el server es la fuente de verdad para que la
+    # plantilla creada en PC aparezca en el móvil (2026-05-22).
+    "selecciones_squad_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("
     r"manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)"
     # tx1..tx8 = 8 huecos pre-cableados para torneos añadidos por el admin.
-    r"|tour_(sct|pss|jg|asia|mundial|tx[1-8])"
+    # spv1..spv10 / sfn1..sfn10 = Rondas Previas / Finales de Selecciones
+    # (mismo motor de torneos; sync server para que el Mundial creado en
+    # PC aparezca en el móvil — 2026-05-22).
+    r"|tour_(sct|pss|jg|asia|mundial|tx[1-8]|spv(10|[1-9])|sfn(10|[1-9]))"
     r")_v1$"
 )
 _KV_MAX_BYTES = 2 * 1024 * 1024  # 2 MB por clave (alineado con CLAUDE.md)

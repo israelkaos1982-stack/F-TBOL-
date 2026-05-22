@@ -7,8 +7,9 @@
 (function () {
   /* 5 equipos humanos (los 5 del usuario, todos en Liga EA Sports).
      Real Madrid 🔨 / FC Barcelona 👿 / Atlético Madrid ✏️ / Arsenal 🐭
-     / Bayern Munich 💡. Estos 5 SIEMPRE juegan la 1ª Ronda de Copa. */
-  var HUMAN_TEAMS = ['Real Madrid', 'FC Barcelona', 'Atlético Madrid', 'Arsenal', 'Bayern Munich'];
+     / Liverpool 💡. Estos 5 SIEMPRE juegan la 1ª Ronda de Copa.
+     El Liverpool sustituyó al Bayern como 5º humano de la Liga EA. */
+  var HUMAN_TEAMS = ['Real Madrid', 'FC Barcelona', 'Atlético Madrid', 'Arsenal', 'Liverpool'];
   var ROUND_LABEL = {
     r1: '1ª Ronda',
     r2: '2ª Ronda',
@@ -105,7 +106,7 @@
        aparecen en LIGA_EA_TEAMS_DEFAULT (app.py). */
     var EA20 = [
       'Real Madrid','Athletic Club','Real Sociedad','Sevilla','Villarreal',
-      'Mallorca','Valencia CF','Espanyol','Bayern Munich','Celta de Vigo',
+      'Mallorca','Valencia CF','Espanyol','Liverpool','Celta de Vigo',
       'Deportivo Alavés','Osasuna','Getafe CF','Arsenal','Girona FC',
       'Elche CF','Atlético Madrid','Rayo Vallecano','Real Betis','FC Barcelona'
     ];

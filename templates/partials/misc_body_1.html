@@ -9001,6 +9001,33 @@ window._showSimProgress = function(opts, onDone){
 #mundial-roster-ov .mr-hint{padding:8px;font-size:12px;color:rgba(255,255,255,.4);font-style:italic;}
 #mundial-roster-ov .mr-foot{padding:10px 14px;border-top:1px solid rgba(255,255,255,.08);}
 #mundial-roster-ov .mr-ok{width:100%;padding:13px;border:none;border-radius:9px;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;font-weight:700;cursor:pointer;}
+/* Editor de colocación manual de torneos de Selecciones (2026-05-22). */
+#sel-roster-ov{position:fixed;inset:0;z-index:100041;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,6,.88);}
+#sel-roster-ov .mr-card{width:min(460px,95vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#06141c,#0a1d28);border:1px solid rgba(77,208,225,.5);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
+#sel-roster-ov .mr-hd{display:flex;align-items:center;justify-content:space-between;padding:13px 15px;border-bottom:1px solid rgba(255,255,255,.08);font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#4dd0e1;}
+#sel-roster-ov .mr-x{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;}
+#sel-roster-ov .mr-sub{padding:8px 15px;font-size:11px;color:rgba(255,255,255,.5);font-family:Rajdhani,sans-serif;}
+#sel-roster-ov .mr-body{padding:6px 12px 10px;overflow-y:auto;}
+#sel-roster-ov .mr-grp{margin:8px 0;border:1px solid rgba(77,208,225,.30);border-radius:10px;padding:6px 8px;}
+#sel-roster-ov .mr-grp-h{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#4dd0e1;margin:2px 0 5px;}
+#sel-roster-ov .mr-row{display:flex;align-items:center;gap:6px;padding:4px 2px;border-bottom:1px solid rgba(255,255,255,.05);}
+#sel-roster-ov .mr-slot{flex:0 0 18px;font-family:'Bebas Neue',sans-serif;color:rgba(255,255,255,.4);font-size:13px;}
+#sel-roster-ov .mr-name{flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#sel-roster-ov .mr-name.is-hum{color:#9ee5ff;font-weight:700;}
+#sel-roster-ov .mr-b{flex:0 0 auto;width:30px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;cursor:pointer;font-size:14px;padding:0;}
+#sel-roster-ov .mr-search{padding:8px 12px;border-top:1px solid rgba(255,255,255,.1);background:rgba(0,0,0,.3);}
+#sel-roster-ov .mr-search input{width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(77,208,225,.4);color:#fff;border-radius:8px;padding:9px 11px;font-family:Rajdhani,sans-serif;font-size:14px;}
+#sel-roster-ov .mr-results{max-height:34vh;overflow-y:auto;margin-top:6px;}
+#sel-roster-ov .mr-res{display:flex;align-items:center;gap:8px;padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
+#sel-roster-ov .mr-res:active{background:rgba(77,208,225,.18);}
+#sel-roster-ov .mr-res.is-taken{opacity:.4;pointer-events:none;}
+#sel-roster-ov .mr-res img{width:18px;height:18px;object-fit:contain;}
+#sel-roster-ov .mr-res span:first-of-type{flex:1;}
+#sel-roster-ov .mr-pw{font-family:'Bebas Neue',sans-serif;color:#4dd0e1;font-size:14px;}
+#sel-roster-ov .mr-hint{padding:8px;font-size:12px;color:rgba(255,255,255,.4);font-style:italic;}
+#sel-roster-ov .mr-foot{padding:10px 14px;border-top:1px solid rgba(255,255,255,.08);}
+#sel-roster-ov .mr-ok{width:100%;padding:13px;border:none;border-radius:9px;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;font-weight:700;cursor:pointer;}
+#sel-roster-ov .mr-ok:disabled{opacity:.5;cursor:not-allowed;}
 </style>
 <!-- Pantalla única del Mundialito (motor de torneos): fase de grupos
      + Octavos→Cuartos→Semis→Final progresivos. 🖍 PIN 747 abre el
@@ -11893,9 +11920,9 @@ window._showSimProgress = function(opts, onDone){
     </div>
 
     <!-- Equipos -->
-    <div class="tour-ed-row tour-ed-row-2">
-      <div><label>Nº equipos</label><input id="tour-ed-num" type="number" min="2" max="128"></div>
-      <div><label>Humanos 👤</label><input id="tour-ed-hum" type="number" min="0" max="128"></div>
+    <div class="tour-ed-row tour-ed-row-2" id="tour-ed-numhum-row">
+      <div id="tour-ed-num-cell"><label>Nº equipos</label><input id="tour-ed-num" type="number" min="2" max="128"></div>
+      <div id="tour-ed-hum-cell"><label>Humanos 👤</label><input id="tour-ed-hum" type="number" min="0" max="128"></div>
     </div>
     <div class="tour-ed-row tour-ed-row-2" id="tour-ed-ailevel-row">
       <div><label>Nivel IA mín.</label><input id="tour-ed-aimin" type="number" min="1" max="100"></div>
@@ -11923,7 +11950,10 @@ window._showSimProgress = function(opts, onDone){
     <div class="tour-ed-row" id="tour-ed-sel-note" style="display:none;">
       <div class="tour-ed-pool-stat" style="border-color:rgba(45,212,191,.4);color:rgba(180,255,247,.85);">
         🌐 Los equipos de este torneo son <b>selecciones</b>. Edítalas en
-        <b>«Plantilla de selecciones»</b> (pantalla Selecciones · 🖍).
+        <b>«Plantilla de selecciones»</b> (pantalla Selecciones · 🖍).<br>
+        Al confirmar <b>colocarás cada selección en su grupo/eliminatoria</b>
+        a mano. Las selecciones con <b>icono</b> (👤✏️🦆💡…) son las
+        <b>humanas</b>; el resto son IA.
       </div>
     </div>
 
@@ -11996,8 +12026,10 @@ window._showSimProgress = function(opts, onDone){
   #tour-editor-overlay.is-sel #tour-ed-ailevel-row,
   #tour-editor-overlay.is-sel #tour-ed-leagues-row,
   #tour-editor-overlay.is-sel #tour-ed-pool-row,
+  #tour-editor-overlay.is-sel #tour-ed-hum-cell,
   #tour-editor-overlay.is-sel #tour-ed-prizes-row{display:none !important;}
-  #tour-editor-overlay.is-sel #tour-ed-flagfee-row{grid-template-columns:1fr;}
+  #tour-editor-overlay.is-sel #tour-ed-flagfee-row,
+  #tour-editor-overlay.is-sel #tour-ed-numhum-row{grid-template-columns:1fr;}
   #tour-editor-overlay.is-sel #tour-ed-sel-note{display:block !important;}
   /* Imagen https usada como bandera del torneo. */
   .sc-emoji img.sc-flag-img{width:26px;height:26px;object-fit:contain;border-radius:4px;vertical-align:middle;}
@@ -13420,7 +13452,11 @@ window._showSimProgress = function(opts, onDone){
     _populateForm(cfg);
     /* Torneos de Selecciones (spv / sfn): editor simplificado. */
     var _ovlSel = document.getElementById('tour-editor-overlay');
-    if (_ovlSel) _ovlSel.classList.toggle('is-sel', _tvBoardOf(id) !== 'verano');
+    var _isSelTour = _tvBoardOf(id) !== 'verano';
+    if (_ovlSel) _ovlSel.classList.toggle('is-sel', _isSelTour);
+    var _saveBtn = document.getElementById('tour-ed-save');
+    if (_saveBtn) _saveBtn.textContent = _isSelTour
+      ? '✅ CONFIRMAR · COLOCAR EQUIPOS' : '✅ CONFIRMAR Y SORTEAR';
     _setFeedback('');
     document.getElementById('tour-editor-overlay').style.display = 'flex';
     /* PREFETCH PERMANENTE: bajamos a localStorage TODAS las ligas que
@@ -13629,6 +13665,178 @@ window._showSimProgress = function(opts, onDone){
         }
       });
     }
+    renderBody();
+    searchEl.style.display = 'none';
+    ov.style.display = 'flex';
+  };
+
+  /* ── Editor de COLOCACIÓN MANUAL · Torneos de Selecciones ──────
+     (spec usuario 2026-05-22). El admin coloca cada selección en su
+     hueco — grupo (groups-ko), eliminatoria (ko/ko-2leg) o lista
+     (league/round-robin). Las selecciones con icono (campo `icon` de
+     la plantilla) son HUMANAS automáticamente; el resto IA. Sin
+     contador de humanos ni slots PENDIENTE. */
+  function _selRosterLayout(cfg){
+    var fc = cfg.formatConfig || {};
+    var fmt = cfg.format;
+    if (fmt === 'groups-ko') {
+      var nG = Math.max(1, fc.groups || 2);
+      var pg = Math.max(2, fc.perGroup || 4);
+      var groups = [];
+      for (var g = 0; g < nG; g++) {
+        var slots = [];
+        for (var s = 0; s < pg; s++) slots.push(g*pg + s);
+        groups.push({ label:'GRUPO ' + String.fromCharCode(65+g), slots:slots });
+      }
+      return { groups:groups, total:nG*pg };
+    }
+    var total = Math.max(2, cfg.numTeams || 2);
+    if (fmt === 'ko' || fmt === 'ko-2leg') {
+      var gs = [], pairs = Math.floor(total/2), i;
+      for (i = 0; i < pairs; i++) gs.push({ label:'ELIMINATORIA ' + (i+1), slots:[i*2, i*2+1] });
+      if (total % 2) gs.push({ label:'SIN RIVAL', slots:[total-1] });
+      return { groups:gs, total:total };
+    }
+    var all = []; for (var k = 0; k < total; k++) all.push(k);
+    return { groups:[{ label:'EQUIPOS', slots:all }], total:total };
+  }
+
+  window._selRosterEditor = function(tourId){
+    var cfg = _tourLoadCachedSync(tourId) || _cloneDefault(tourId);
+    cfg.id = tourId;
+    try { if (window._selSquadHydrate) window._selSquadHydrate(); } catch(_){}
+    function pool(){
+      var arr = [];
+      try { arr = (window._selSquadLoad && window._selSquadLoad().teams) || []; } catch(_){}
+      return arr.filter(function(t){ return t && t.name; });
+    }
+    function iconOf(name){
+      try { return (window._selSquadIcon && window._selSquadIcon(name)) || ''; } catch(_){ return ''; }
+    }
+    if (!pool().length) {
+      alert('No hay selecciones en la plantilla.\n\nAñádelas primero en «Plantilla de selecciones» (pantalla Selecciones · 🖍).');
+      return;
+    }
+    var lay = _selRosterLayout(cfg);
+    var total = lay.total;
+    var rost = new Array(total);
+    var src = (cfg.teams && cfg.teams.length === total) ? cfg.teams : null;
+    for (var i = 0; i < total; i++) {
+      if (src && src[i] && src[i].name && src[i].name !== 'PENDIENTE')
+        rost[i] = { name:src[i].name, shield:src[i].shield||'', power:src[i].power||75 };
+      else rost[i] = null;
+    }
+    var activeSlot = -1;
+    function escSafe(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    var ov = document.getElementById('sel-roster-ov');
+    if (!ov) {
+      ov = document.createElement('div'); ov.id = 'sel-roster-ov';
+      ov.innerHTML = '<div class="mr-card">'
+        + '<div class="mr-hd"><span id="sr-title">🌐 Colocar selecciones</span>'
+        + '<button class="mr-x" type="button" id="sr-x">✕</button></div>'
+        + '<div class="mr-sub" id="sr-sub"></div>'
+        + '<div class="mr-body" id="sr-body"></div>'
+        + '<div class="mr-search" id="sr-search" style="display:none;">'
+        + '<input id="sr-q" type="text" placeholder="Buscar selección…" autocomplete="off">'
+        + '<div class="mr-results" id="sr-results"></div></div>'
+        + '<div class="mr-foot"><button class="mr-ok" type="button" id="sr-ok">✅ CONFIRMAR</button></div></div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if (e.target === ov) ov.style.display='none'; });
+    }
+    var titleEl = ov.querySelector('#sr-title');
+    var subEl   = ov.querySelector('#sr-sub');
+    var bodyEl  = ov.querySelector('#sr-body');
+    var searchEl= ov.querySelector('#sr-search');
+    var qEl     = ov.querySelector('#sr-q');
+    var resEl   = ov.querySelector('#sr-results');
+    titleEl.textContent = '🌐 ' + (cfg.name || tourId);
+    subEl.textContent = 'Toca 🔍 en un hueco y elige la selección. Con icono = HUMANA · sin icono = IA.';
+
+    function renderBody(){
+      var h = '';
+      lay.groups.forEach(function(grp){
+        h += '<div class="mr-grp"><div class="mr-grp-h">' + escSafe(grp.label) + '</div>';
+        grp.slots.forEach(function(idx, n){
+          var v = rost[idx];
+          var lbl, cls = 'mr-name';
+          if (v) {
+            var ic = iconOf(v.name);
+            lbl = (ic ? escSafe(ic) + ' ' : '') + escSafe(v.name);
+            if (ic) cls += ' is-hum';
+          } else {
+            lbl = '<i style="opacity:.45">— vacío —</i>';
+          }
+          h += '<div class="mr-row"><span class="mr-slot">' + (n+1) + '</span>'
+            + '<span class="' + cls + '">' + lbl + '</span>'
+            + '<button class="mr-b" type="button" data-idx="' + idx + '" data-act="pick" title="Elegir selección">🔍</button>'
+            + '<button class="mr-b" type="button" data-idx="' + idx + '" data-act="clr" title="Vaciar">✖</button></div>';
+        });
+        h += '</div>';
+      });
+      bodyEl.innerHTML = h;
+      var filled = rost.filter(Boolean).length;
+      var ok = ov.querySelector('#sr-ok');
+      ok.textContent = '✅ CONFIRMAR (' + filled + '/' + total + ')';
+      ok.disabled = filled !== total;
+    }
+    function doSearch(){
+      var q = _norm(qEl.value || '');
+      if (q.length < 2) { resEl.innerHTML = '<div class="mr-hint">Escribe ≥2 letras…</div>'; return; }
+      var taken = {};
+      rost.forEach(function(v){ if (v && v.name) taken[_norm(v.name)] = 1; });
+      var m = pool().filter(function(t){ return _norm(t.name).indexOf(q) !== -1; }).slice(0, 50);
+      if (!m.length) { resEl.innerHTML = '<div class="mr-hint">Sin resultados en la plantilla de selecciones.</div>'; return; }
+      resEl.innerHTML = m.map(function(t){
+        var isT = !!taken[_norm(t.name)];
+        var ic = iconOf(t.name);
+        return '<div class="mr-res' + (isT?' is-taken':'') + '" data-name="' + escSafe(t.name) + '" data-pw="' + (t.power||75) + '" data-sh="' + escSafe(t.img||'') + '">'
+          + (t.img ? '<img src="' + escSafe(t.img) + '" onerror="this.style.display=\'none\'">' : '')
+          + '<span>' + (ic?escSafe(ic)+' ':'') + escSafe(t.name) + '</span><span class="mr-pw">' + (t.power||75) + '</span></div>';
+      }).join('');
+    }
+    /* Re-cableado en cada apertura (el overlay se reutiliza). */
+    ov.querySelector('#sr-x').onclick = function(){ ov.style.display='none'; };
+    qEl.oninput = doSearch;
+    bodyEl.onclick = function(e){
+      var b = e.target.closest && e.target.closest('.mr-b');
+      if (!b) return;
+      var idx = parseInt(b.getAttribute('data-idx'),10), act = b.getAttribute('data-act');
+      if (act === 'clr') { rost[idx] = null; renderBody(); }
+      else if (act === 'pick') {
+        activeSlot = idx; searchEl.style.display='block'; qEl.value=''; resEl.innerHTML='';
+        try { qEl.focus(); } catch(_){}
+      }
+    };
+    resEl.onclick = function(e){
+      var r = e.target.closest && e.target.closest('.mr-res');
+      if (!r || r.classList.contains('is-taken') || activeSlot < 0) return;
+      rost[activeSlot] = { name:r.getAttribute('data-name'), shield:r.getAttribute('data-sh'), power:parseInt(r.getAttribute('data-pw'),10)||75 };
+      searchEl.style.display='none'; activeSlot = -1; renderBody();
+    };
+    ov.querySelector('#sr-ok').onclick = function(){
+      var filled = rost.filter(Boolean).length;
+      if (filled !== total) { alert('Faltan selecciones: ' + filled + '/' + total); return; }
+      var teams = [], seen = {};
+      for (var j = 0; j < total; j++) {
+        var v = rost[j], k = _norm(v.name);
+        if (seen[k]) { alert('La selección «' + v.name + '» está repetida. Cada selección solo puede ir una vez.'); return; }
+        seen[k] = 1;
+        var ic = iconOf(v.name);
+        teams.push({ name:v.name, isHuman:!!ic, shield:v.shield||'', power:v.power||75 });
+      }
+      cfg.teams = teams;
+      cfg.numTeams = total;
+      cfg.numHumans = teams.filter(function(t){ return t.isHuman; }).length;
+      /* Recomponer el roster reinicia el progreso del torneo. */
+      cfg.results = {}; cfg.groupFixtures = {}; cfg.currentJornadaByGroup = {};
+      cfg.koBracket = null; cfg.koCurrentRound = 0; cfg._prizesPaid = false;
+      try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[tourId] = cfg; } catch(_){}
+      try { if (typeof window._tourSave === 'function') window._tourSave(tourId, cfg); } catch(_){}
+      try { if (typeof window._tourRender === 'function') window._tourRender(tourId); } catch(_){}
+      try { if (typeof window._tvRenderCards === 'function') window._tvRenderCards(); } catch(_){}
+      ov.style.display = 'none';
+      try { if (typeof window.go === 'function') window.go('s-' + tourId); } catch(_){}
+    };
     renderBody();
     searchEl.style.display = 'none';
     ov.style.display = 'flex';
@@ -15099,6 +15307,22 @@ window._showSimProgress = function(opts, onDone){
       save.addEventListener('click', function(){
         if (!_open) return;
         _readForm(_open.cfg);
+        /* Torneos de Selecciones: en vez de sorteo automático, el admin
+           coloca cada selección a mano. Guardamos la config y abrimos
+           el editor de colocación manual. 2026-05-22. */
+        var _selBoard = _tvBoardOf(_open.id);
+        if (_selBoard === 'sel-previa' || _selBoard === 'sel-final') {
+          var _sid = _open.id, _scfg = _open.cfg;
+          try { window._tourSave(_sid, _scfg); } catch(_){}
+          try { window._tourRender(_sid); } catch(_){}
+          try { if (typeof window._tvRenderCards === 'function') window._tvRenderCards(); } catch(_){}
+          if (_tourEdSaveTimer) { clearTimeout(_tourEdSaveTimer); _tourEdSaveTimer = 0; }
+          document.getElementById('tour-editor-overlay').style.display = 'none';
+          _open = null;
+          try { window._selRosterEditor(_sid); }
+          catch(e){ alert('⚠ No se pudo abrir el editor de colocación de selecciones.'); }
+          return;
+        }
         var draw = _drawTeams(_open.cfg);
         if (!draw.ok) {
           /* El SORTEO falló (p.ej. faltan selecciones en la plantilla
@@ -30193,6 +30417,7 @@ Tottenham
     flex-shrink:0;background:rgba(255,255,255,.06);}
   #sel-sq-ov .sel-sq-fields{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0;}
   #sel-sq-ov .sel-sq-r2{display:flex;gap:4px;}
+  #sel-sq-ov .sel-sq-icon{width:54px;flex:0 0 54px;text-align:center;font-size:14px;}
   #sel-sq-ov input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
     color:#fff;border-radius:6px;padding:6px 8px;font-size:12.5px;font-family:Rajdhani,sans-serif;
     box-sizing:border-box;width:100%;}
@@ -30255,13 +30480,36 @@ Tottenham
     if(isNaN(n)) return fb;
     return Math.max(1,Math.min(100,n));
   }
+  /* Parchea `window.humanIcon` para que también reconozca el icono de
+     una selección (campo `icon` de la plantilla). Así una selección con
+     icono pasa a HUMANA en los torneos vía `isHumanInComp(name,'torneo')`
+     → `_hasHumanIcon` → `humanIcon`. Idempotente: captura el original
+     una sola vez. El rebuild de `_LIGA_HUMAN_FLAGS` (ligaExt) no afecta
+     a este parche porque toca otra estructura. 2026-05-22. */
+  function _patchHumanIcon(){
+    if(window._selHumanIconPatched) return;
+    var orig=window.humanIcon;
+    window.humanIcon=function(name){
+      try{
+        var m=window._SEL_HUMAN_ICONS||{};
+        var k=String(name==null?'':name).trim().toLowerCase();
+        if(k && m[k]) return m[k];
+      }catch(_){}
+      try{ if(typeof orig==='function') return orig.call(this,name); }catch(_){}
+      return '';
+    };
+    window._selHumanIconPatched=true;
+  }
   /* Registra cada selección en TEAM_RATINGS (escudo + media) y en
      _LIGA_EA_TEAM_STATS (4 ejes; las líneas vacías caen a GLOBAL) para
-     que escudos y el motor 4-ejes funcionen como con cualquier club. */
+     que escudos y el motor 4-ejes funcionen como con cualquier club.
+     Además publica el mapa `_SEL_HUMAN_ICONS` (nombre→icono) para que
+     las selecciones con icono se detecten como humanas. */
   function _hydrate(){
     var d=_load();
     window.TEAM_RATINGS = window.TEAM_RATINGS || {};
     window._LIGA_EA_TEAM_STATS = window._LIGA_EA_TEAM_STATS || {};
+    var icons={};
     d.teams.forEach(function(t){
       if(!t || !t.name) return;
       var pw=_clamp(t.power,75);
@@ -30271,10 +30519,21 @@ Tottenham
         atk:_clamp(t.atk,pw), mid:_clamp(t.mid,pw), def:_clamp(t.def,pw),
         aggressiveness:50
       };
+      var ic=String(t.icon||'').trim();
+      if(ic) icons[String(t.name).trim().toLowerCase()]=ic;
     });
+    window._SEL_HUMAN_ICONS=icons;
+    _patchHumanIcon();
   }
   window._selSquadLoad=_load;
   window._selSquadHydrate=_hydrate;
+  /* Icono humano de una selección por nombre ('' si no tiene). */
+  window._selSquadIcon=function(name){
+    try{
+      var m=window._SEL_HUMAN_ICONS||{};
+      return m[String(name==null?'':name).trim().toLowerCase()]||'';
+    }catch(_){ return ''; }
+  };
 
   function _esc(s){ return String(s==null?'':s).replace(/[<>"]/g,function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';}); }
   function _rowHtml(t){
@@ -30286,6 +30545,7 @@ Tottenham
       +'<div class="sel-sq-fields">'
       +'<input class="sel-sq-name" type="text" placeholder="Nombre de la selección" value="'+_esc(t.name||'')+'">'
       +'<div class="sel-sq-r2">'
+      +'<input class="sel-sq-icon" type="text" maxlength="6" placeholder="👤" title="Icono de humano — una selección con icono es HUMANA en los torneos" value="'+_esc(t.icon||'')+'">'
       +'<input class="sel-sq-img" type="text" placeholder="https://… escudo / bandera" value="'+_esc(img)+'">'
       +'</div>'
       +'<div class="sel-sq-r3">'
@@ -30395,10 +30655,11 @@ Tottenham
       var nm=String(((row.querySelector('.sel-sq-name')||{}).value)||'').trim();
       if(!nm) return;
       var img=String(((row.querySelector('.sel-sq-img')||{}).value)||'').trim();
+      var icon=String(((row.querySelector('.sel-sq-icon')||{}).value)||'').trim();
       function rd(sel,fb){ return _clamp((row.querySelector(sel)||{}).value,fb); }
       var g=rd('.sel-sq-g',75);
       out.push({
-        name:nm, img:img, power:g,
+        name:nm, img:img, icon:icon, power:g,
         atk:rd('.sel-sq-a',g), mid:rd('.sel-sq-m',g), def:rd('.sel-sq-d',g)
       });
     });

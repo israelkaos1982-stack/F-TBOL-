@@ -14468,7 +14468,14 @@ window._showSimProgress = function(opts, onDone){
     } else if (cfg.format === 'groups-ko') {
       infoEl.innerHTML = hint + _renderGroupsKO(cfg, id, teams);
     } else if (cfg.format === 'mundial-48') {
-      infoEl.innerHTML = hint + _renderMundial(cfg, id, teams);
+      /* El menú de 7 cajas (Final · Semis · Cuartos · Octavos ·
+         Dieciseisavos · Fase de Grupos · Estadísticas) debe pintarse
+         SIEMPRE — aunque el render interno falle — para no dejar la
+         pantalla del Mundial 2032 en blanco. */
+      var _mBody = '';
+      try { _mBody = _renderMundial(cfg, id, teams) || ''; }
+      catch(_eM){ _mBody = ''; }
+      infoEl.innerHTML = hint + _mBody;
     } else {
       infoEl.innerHTML = '';
     }
@@ -15201,6 +15208,13 @@ window._showSimProgress = function(opts, onDone){
     return html;
   }
   function _renderMundial(cfg, tourId, teams){
+    /* Un torneo mundial-48 guardado sin formatConfig (o con uno
+       incompleto) dejaría las cajas KO sin sus etiquetas de ronda.
+       Lo restauramos para que el menú de 7 cajas salga siempre bien. */
+    if (!cfg.formatConfig || !cfg.formatConfig.koRounds
+        || !cfg.formatConfig.koRounds.length) {
+      cfg.formatConfig = _mundialFormatConfig();
+    }
     /* Migración del label de la 1ª ronda KO (2026-05-22):
        «Repesca» → «Dieciseisavos» para torneos guardados antes. */
     if (cfg.formatConfig && cfg.formatConfig.koRounds

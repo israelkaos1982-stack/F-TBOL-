@@ -7079,10 +7079,15 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       gradoEmoji:  tipo.emoji,
       descripcion: sortearEjemplo(tipo),
       partidos:    partidos,
-      timestamp:   Date.now()
+      timestamp:   Date.now(),
+      /* El partido en que se registra la lesión NO descuenta baja
+         (el jugador ya estaba fuera de ese partido). */
+      _skipFirstDecrement: true
     };
     // Actualizar visual en plantilla
     _actualizarPlantillaLesion(nombreJugador, partidos, tipo);
+    _persistInjuries();
+    try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch (_) {}
   }
 
   function _actualizarPlantillaLesion(nombre, partidos, tipo) {
@@ -7425,40 +7430,82 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var store = window.LESION_STORE || {};
     var target = String(teamName || '').trim().toLowerCase();
     if (!target) return;
-    var removed = [];
     Object.keys(store).forEach(function(name){
       var rec = store[name];
       if (!rec) return;
       var eq = String(rec.equipo || '').trim().toLowerCase();
       if (eq !== target) return;
       var n = Number(rec.partidos) || 0;
-      if (n <= 0) { removed.push(name); return; }
+      if (n <= 0) { return; }
+      if (rec._skipFirstDecrement) {
+        /* El partido en que se REGISTRÓ la lesión no descuenta: el
+           jugador ya estaba fuera de ESE partido. La baja de N
+           partidos se cumple con los N partidos SIGUIENTES. */
+        rec._skipFirstDecrement = false;
+        return;
+      }
       rec.partidos = n - 1;
       if (rec.partidos <= 0) {
         delete store[name];
-        removed.push(name);
       }
     });
-    /* Sincroniza BAJA_STORE si existe: restar 1 al contador de la
-       competición correspondiente, quitar la baja si todo 0. */
+    /* Sincroniza BAJA_STORE con LESION_STORE. La baja es una CUENTA
+       ÚNICA global (2026-05-22): los 3 contadores liga/copa/europa
+       reflejan los MISMOS partidos restantes (los de LESION_STORE) —
+       un partido jugado en cualquier competición consume 1. Si el
+       jugador ya cumplió la baja (partidos 0 → fuera de LESION_STORE)
+       se elimina también de BAJA_STORE. */
     try {
       var bs = window.BAJA_STORE || {};
       Object.keys(bs).forEach(function(nm){
         var b = bs[nm];
-        if (!b) return;
-        /* Si el jugador ya no está en LESION_STORE y la baja es de
-           tipo lesión, quitar la baja también. */
-        if (removed.indexOf(nm) >= 0 && b.tipo === 'lesion') {
-          delete bs[nm];
-          return;
-        }
-        /* Decrementar contador de la competición activa. */
-        if (typeof b[compKey] === 'number' && b[compKey] > 0) {
-          b[compKey] = b[compKey] - 1;
-        }
+        if (!b || b.tipo !== 'lesion') return;
+        var rec = store[nm];
+        var rem = rec ? (Number(rec.partidos) || 0) : 0;
+        if (rem <= 0) { delete bs[nm]; return; }
+        b.liga = rem; b.copa = rem; b.europa = rem;
       });
     } catch(_){}
+    _persistInjuries();
+    try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(_){}
   }
+
+  /* ── Persistencia de lesiones en localStorage (2026-05-22) ─────────
+     BAJA_STORE / LESION_STORE viven en memoria; sin esto una lesión se
+     pierde al recargar. Serializamos en `ftbol_lesiones_v1` — payload
+     diminuto (<1 KB), muy por debajo del cap de 2 MB por carpeta. */
+  var _LESION_LS_KEY = 'ftbol_lesiones_v1';
+  var _lesionLastSer = '';
+  function _persistInjuries() {
+    try {
+      var payload = JSON.stringify({
+        baja:   window.BAJA_STORE   || {},
+        lesion: window.LESION_STORE || {}
+      });
+      if (payload === _lesionLastSer) return;
+      _lesionLastSer = payload;
+      localStorage.setItem(_LESION_LS_KEY, payload);
+    } catch (_) {}
+  }
+  function _loadInjuries() {
+    try {
+      var raw = localStorage.getItem(_LESION_LS_KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (!d) return;
+      window.BAJA_STORE   = window.BAJA_STORE   || {};
+      window.LESION_STORE = window.LESION_STORE || {};
+      if (d.baja)   Object.keys(d.baja).forEach(function(k){   if (!window.BAJA_STORE[k])   window.BAJA_STORE[k]   = d.baja[k]; });
+      if (d.lesion) Object.keys(d.lesion).forEach(function(k){ if (!window.LESION_STORE[k]) window.LESION_STORE[k] = d.lesion[k]; });
+      _lesionLastSer = raw;
+    } catch (_) {}
+  }
+  window._persistInjuries = _persistInjuries;
+  _loadInjuries();
+  try {
+    setInterval(_persistInjuries, 5000);
+    window.addEventListener('beforeunload', _persistInjuries);
+  } catch (_) {}
 
   window.LESION_STORE_UTILS = {
     registrar: registrarLesion,
@@ -7518,7 +7565,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         gradoEmoji:  gEmoji,
         descripcion: desc,
         partidos:    partidos,
-        timestamp:   Date.now()
+        timestamp:   Date.now(),
+        /* El partido en que se registra la lesión NO descuenta baja. */
+        _skipFirstDecrement: true
       };
       window.BAJA_STORE[playerName] = {
         tipo:   'lesion',

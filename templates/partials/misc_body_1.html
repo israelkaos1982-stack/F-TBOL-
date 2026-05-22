@@ -32027,6 +32027,7 @@ Tottenham
   #s-munich .munich-hud-val .munich-hud-num{color:#f8fbff;}        /* Blanco nieve */
   #s-munich .munich-hud-money .munich-hud-num{color:#f0c040;}       /* Dorado */
   #s-munich .munich-hud-med .munich-hud-num{color:#49f3df;}         /* Turquesa */
+  #s-munich #ath-med-injury.has-injury{color:#ff6b6b;text-shadow:0 0 10px rgba(255,107,107,.55);}
 
   /* Etiqueta "pop-on-tap": oculta en reposo, aparece DEBAJO del item
      (antes iba encima, pero el nombre del equipo en `.sec-hdr` la
@@ -32324,6 +32325,10 @@ Tottenham
     if(!b&&!n) return;
     var host=document.getElementById('s-munich')||document.body;
     var r=_resolve(), sig=r.name+'|'+r.esc+'|'+r.stad+'|'+(r.cols?r.cols.join(','):'');
+    /* Nombre del equipo del hub → lo consume el icono 💊 del HUD para
+       saber de qué equipo contar los partidos de lesión pendientes. */
+    window._mkHubTeamName=r.name;
+    try{ if(window.athRefreshInjuryHud) window.athRefreshInjuryHud(); }catch(_){}
     if(host.__mkHubSig===sig) return; host.__mkHubSig=sig;
     if(n) n.textContent=r.name;
     if(b){ b.src=r.esc; b.alt=r.name; }
@@ -32374,11 +32379,11 @@ Tottenham
     <span class="munich-hud-num"><span id="ath-money-val">0</span><small>/ 1300€</small></span>
   </div>
   <div class="munich-hud-item munich-hud-med ath-med-item"
-       onclick="var o=document.getElementById('ath-med-ov');if(o)o.classList.add('show');"
-       title="Abrir menú de tratamiento rápido">
-    <span class="munich-hud-label">Puntos de Fisio · 1 PI = 1 partido de lesión</span>
+       onclick="window.athOpenMedicalMenu&&window.athOpenMedicalMenu();"
+       title="Partidos de lesión pendientes — abrir menú de tratamiento">
+    <span class="munich-hud-label">Partidos de lesión pendientes</span>
     <span class="munich-hud-icon" id="ath-med-icon">💊</span>
-    <span class="munich-hud-num"><span id="ath-med-val">00</span></span>
+    <span class="munich-hud-num"><span id="ath-med-injury">00</span><span id="ath-med-val" style="display:none;">00</span></span>
   </div>
 </div>
 

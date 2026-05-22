@@ -2899,11 +2899,19 @@ window._showSimProgress = function(opts, onDone){
   /* Rival REAL del Bayern en el torneo elegido: lo leemos del bracket
      del torneo (window._TOUR_CACHE[tourId].bracket) en lugar de
      inventarlo. El rival es el compañero de pareja del Bayern en la
-     ronda actual. Si aún no hay bracket → null (cae al pool). */
+     ronda actual. Si aún no hay bracket → null (cae al pool).
+     Fallback sync a localStorage vía _tourLoadCachedSync para evitar
+     race con la carga async del bracket — sin esto _cardMatch
+     mostraba un rival aleatorio del pool antes de que se hidratara
+     window._TOUR_CACHE. */
   function _realRival(){
     try {
       var tid = _load().tour;
-      var cfg = tid && window._TOUR_CACHE && window._TOUR_CACHE[tid];
+      if (!tid) return null;
+      var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tid]) || null;
+      if (!cfg && typeof window._tourLoadCachedSync === 'function'){
+        try { cfg = window._tourLoadCachedSync(tid); } catch(_){}
+      }
       if (!cfg || !cfg.bracket) return null;
       var r = parseInt(cfg.currentRound,10) || 0;
       var round = cfg.bracket[r] || cfg.bracket[0] || [];
@@ -2924,20 +2932,39 @@ window._showSimProgress = function(opts, onDone){
     var st = _stage(); if (!st) return;
     var d = _load();
     d.rivals = d.rivals || {};
+    var tourNm = d.tour ? (TOUR_NAMES[d.tour] || 'Torneo de Verano') : (day.label || 'Partido');
+    /* Bayern solo tiene partido REAL si el bracket del torneo le da
+       rival en la ronda actual. Sin torneo elegido, con torneo
+       terminado, o con Bayern eliminado, _realRival devuelve null.
+       En ese caso NO inventamos un rival aleatorio del pool ni
+       auto-abrimos la previa — antes, una calendar row con etiqueta
+       "torneo" sin bracket real disparaba una previa fantasma del
+       Bayern contra un equipo aleatorio (bug "sale partido sin
+       tocar" del 2026-05-22). */
+    var real = _realRival();
+    if (!real){
+      st.innerHTML =
+        '<div class="ps-card">'
+        + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+        + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
+        + '<div class="ps-meta" style="margin:16px 0;color:rgba(255,255,255,.7);">'
+        +   (d.tour
+              ? '⚠️ Sin partido del Bayern en este día.<br><span style="font-size:11px;opacity:.7;">El cuadro del torneo no programa rival aquí (eliminado o torneo terminado).</span>'
+              : '⚠️ Aún no has elegido torneo de verano.<br><span style="font-size:11px;opacity:.7;">Elige uno desde el hub para que se asigne un rival.</span>')
+        + '</div>'
+        + '</div>';
+      return;
+    }
     var rv = d.rivals[day.date];
     if (!rv){
-      var pool = (RIVAL_POOLS[d.tour] || RIVAL_POOLS.jg).slice();
-      rv = { name: pool[Math.floor(Math.random()*pool.length)],
+      rv = { name: real,
              stadium: STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
              difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)] };
       d.rivals[day.date] = rv;
+    } else if (rv.name !== real){
+      rv.name = real;
     }
-    /* Preferimos SIEMPRE el rival real del bracket del torneo (puede
-       resolverse más tarde, cuando el torneo ya esté sorteado). */
-    var real = _realRival();
-    if (real && rv.name !== real){ rv.name = real; }
     _save(d);
-    var tourNm = d.tour ? (TOUR_NAMES[d.tour] || 'Torneo de Verano') : (day.label || 'Partido');
     /* En día de partido NO usamos card propia: se abre la PANTALLA DE
        PREVIA estándar del proyecto. El #ps-stage solo deja un acceso
        mínimo por si el usuario vuelve de la previa con ◀ Volver. */
@@ -2954,7 +2981,8 @@ window._showSimProgress = function(opts, onDone){
     if (play) play.onclick = function(){ _openPreseasonPrevia(day, rv, tourNm); };
     /* AUTO-abrir la previa estándar al llegar al día de partido (una
        sola vez por día — sig-guard de _render evita re-render; el
-       idx-guard cubre volver con ◀ Volver sin proceder). */
+       idx-guard cubre volver con ◀ Volver sin proceder). Solo cuando
+       hay rival real del bracket. */
     var idx = parseInt(d.dayIdx,10)||0;
     if (window.__psPreviaOpenedIdx !== idx){
       window.__psPreviaOpenedIdx = idx;

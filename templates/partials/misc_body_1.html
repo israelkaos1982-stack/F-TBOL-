@@ -13417,10 +13417,22 @@ window._showSimProgress = function(opts, onDone){
         '<label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
         '<input id="tour-ed-twolegs" type="checkbox" style="width:auto;" '+(fc.twoLegs?'checked':'')+'> A doble vuelta</label>';
     } else if (fmt === 'groups-ko') {
+      var _tb = fc.tieBreak || 'dif';
       box.innerHTML =
         '<div class="tour-ed-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
         '<div><label>Nº grupos</label><input id="tour-ed-groups" type="number" min="1" max="16" value="'+(fc.groups||2)+'"></div>' +
         '<div><label>Equipos / grupo</label><input id="tour-ed-pergroup" type="number" min="2" max="16" value="'+(fc.perGroup||4)+'"></div>' +
+        '<div><label>Clasifican / grupo</label><input id="tour-ed-advance" type="number" min="1" max="15" value="'+(fc.advancePerGroup||2)+'"></div>' +
+        '<div><label>Desempate</label><select id="tour-ed-tiebreak" ' +
+          'style="width:100%;box-sizing:border-box;padding:7px;border-radius:6px;background:#1a1f29;color:#eee;border:1px solid rgba(255,255,255,.2);font-family:inherit;font-size:13px;">' +
+          '<option value="dif"'+(_tb==='dif'?' selected':'')+'>Dif. de goles</option>' +
+          '<option value="gf"'+(_tb==='gf'?' selected':'')+'>Goles a favor</option>' +
+          '<option value="pg"'+(_tb==='pg'?' selected':'')+'>Partidos ganados</option>' +
+        '</select></div>' +
+        '</div>' +
+        '<div style="margin-top:6px;font-size:11px;color:rgba(255,255,255,.5);text-transform:none;letter-spacing:0;line-height:1.4;">' +
+          'Tras los puntos, el orden de cada grupo se desempata por el criterio elegido. ' +
+          'Clasifican los <b>N primeros</b> de cada grupo a la fase final.' +
         '</div>' +
         '<label style="margin-top:8px;">Eliminatoria final (rondas)</label>' +
         '<input id="tour-ed-rounds" type="text" value="'+(fc.koRounds||['SF','F']).join(',')+'" placeholder="QF,SF,F">';
@@ -13578,9 +13590,18 @@ window._showSimProgress = function(opts, onDone){
       };
     } else if (cfg.format === 'groups-ko') {
       var rEl = document.getElementById('tour-ed-rounds');
+      var _pgEl  = document.getElementById('tour-ed-pergroup');
+      var _advEl = document.getElementById('tour-ed-advance');
+      var _tbEl  = document.getElementById('tour-ed-tiebreak');
+      var _pg  = parseInt(_pgEl ? _pgEl.value : '', 10) || 4;
+      var _adv = parseInt(_advEl ? _advEl.value : '', 10) || 2;
+      if (_adv < 1) _adv = 1;
+      if (_adv > _pg) _adv = _pg;   /* no pueden clasificar más de los que hay */
       cfg.formatConfig = {
         groups: parseInt(document.getElementById('tour-ed-groups').value, 10) || 2,
-        perGroup: parseInt(document.getElementById('tour-ed-pergroup').value, 10) || 4,
+        perGroup: _pg,
+        advancePerGroup: _adv,
+        tieBreak: (_tbEl && _tbEl.value) || 'dif',
         koRounds: rEl ? rEl.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F']
       };
     } else if (cfg.format === 'mundial-48') {
@@ -13622,6 +13643,11 @@ window._showSimProgress = function(opts, onDone){
     var cfg = cached || _cloneDefault(id);
     cfg.id = id;   /* necesario para _tvBoardOf en _readForm / _drawTeams */
     _open = { id: id, cfg: cfg };
+    /* Comparte el MISMO objeto cfg con la cache global. Sin esto, si
+       el torneo aún no estaba cacheado, el editor de torneo y el
+       editor de color (🎨) trabajaban sobre copias distintas y un
+       guardado pisaba al otro → el color/logo no se aplicaba. */
+    try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = cfg; } catch(_){}
     document.getElementById('tour-editor-title').textContent = 'EDITAR · ' + (cfg.name || id).toUpperCase();
     _populateForm(cfg);
     /* Torneos de Selecciones (spv / sfn): editor simplificado. */
@@ -14692,7 +14718,7 @@ window._showSimProgress = function(opts, onDone){
       }
       if (typeof cfg.currentJornadaByGroup[g] !== 'number') cfg.currentJornadaByGroup[g] = 0;
       var fix = cfg.groupFixtures[g];
-      var rows = _tourComputeStandings(slice, fix, cfg.results, gKey);
+      var rows = _tourComputeStandings(slice, fix, cfg.results, gKey, fc.tieBreak);
       var prog = _tourFixtureProgress(fix, cfg.results, gKey);
       if (!prog.allDone) allGroupsDone = false;
       var letter = String.fromCharCode(65+g);
@@ -14720,36 +14746,43 @@ window._showSimProgress = function(opts, onDone){
     /* Si todos los grupos terminaron, generar / renderizar fase KO. */
     if (allGroupsDone) {
       cfg.koBracket = cfg.koBracket || (function(){
-        /* Cruce clásico A1-B2, B1-A2, C1-D2, D1-C2... lo
-           generalizamos: groups par-impar se cruzan, dentro del par
-           el 1º del par par juega contra el 2º del impar y viceversa.
-           Para 4 grupos con advance=2: A1-B2, B1-A2, C1-D2, D1-C2. */
+        /* Clasificados de cada grupo (1º, 2º, … hasta advancePerGroup),
+           con el criterio de desempate elegido por el admin. */
         var qualifiers = [];
         for (var gi = 0; gi < slices.length; gi++) {
-          var rs = _tourComputeStandings(slices[gi], cfg.groupFixtures[gi], cfg.results, 'g'+gi+'_');
+          var rs = _tourComputeStandings(slices[gi], cfg.groupFixtures[gi], cfg.results, 'g'+gi+'_', fc.tieBreak);
           for (var p = 0; p < advancePerGroup; p++) {
-            qualifiers.push({ groupIdx: gi, pos: p+1, team: slices[gi][rs[p].idx] });
+            if (rs[p] && slices[gi][rs[p].idx]) {
+              qualifiers.push({ groupIdx: gi, pos: p+1, team: slices[gi][rs[p].idx] });
+            }
           }
         }
-        /* Construir round 0 con cross. Asumimos advancePerGroup=2 y
-           grupos par-impar (A-B, C-D). */
         var round0 = [];
-        for (var pair = 0; pair < slices.length; pair += 2) {
-          var gA = pair, gB = pair + 1;
-          if (gB >= slices.length) {
-            /* Grupo solitario: 1 vs 2 directo. */
-            var qs = qualifiers.filter(function(q){return q.groupIdx===gA;});
-            for (var x = 0; x < qs.length; x += 2) {
-              if (qs[x+1]) round0.push(qs[x].team, qs[x+1].team);
-            }
-            continue;
+        if (advancePerGroup === 2 && slices.length % 2 === 0) {
+          /* Cruce clásico A1-B2, B1-A2, C1-D2, D1-C2 (grupos par-impar).
+             Se conserva tal cual para los torneos de 2 clasificados. */
+          for (var pair = 0; pair < slices.length; pair += 2) {
+            var gA = pair, gB = pair + 1;
+            var qA1 = qualifiers.filter(function(q){return q.groupIdx===gA && q.pos===1;})[0];
+            var qA2 = qualifiers.filter(function(q){return q.groupIdx===gA && q.pos===2;})[0];
+            var qB1 = qualifiers.filter(function(q){return q.groupIdx===gB && q.pos===1;})[0];
+            var qB2 = qualifiers.filter(function(q){return q.groupIdx===gB && q.pos===2;})[0];
+            if (qA1 && qB2) round0.push(qA1.team, qB2.team);
+            if (qB1 && qA2) round0.push(qB1.team, qA2.team);
           }
-          var qA1 = qualifiers.filter(function(q){return q.groupIdx===gA && q.pos===1;})[0];
-          var qA2 = qualifiers.filter(function(q){return q.groupIdx===gA && q.pos===2;})[0];
-          var qB1 = qualifiers.filter(function(q){return q.groupIdx===gB && q.pos===1;})[0];
-          var qB2 = qualifiers.filter(function(q){return q.groupIdx===gB && q.pos===2;})[0];
-          if (qA1 && qB2) round0.push(qA1.team, qB2.team);
-          if (qB1 && qA2) round0.push(qB1.team, qA2.team);
+        } else {
+          /* Cruce general (cualquier nº de grupos / de clasificados):
+             se siembran por posición de grupo —primero todos los 1os,
+             luego los 2os…— y se empareja fuerte-vs-flojo q[i]–q[n-1-i].
+             Si el total es impar se descarta el peor sembrado. */
+          var seeded = [];
+          for (var pp = 0; pp < advancePerGroup; pp++) {
+            qualifiers.forEach(function(q){ if (q.pos === pp+1) seeded.push(q.team); });
+          }
+          if (seeded.length % 2) seeded.pop();
+          for (var si = 0; si < seeded.length/2; si++) {
+            round0.push(seeded[si], seeded[seeded.length-1-si]);
+          }
         }
         return [round0];
       })();
@@ -14933,23 +14966,29 @@ window._showSimProgress = function(opts, onDone){
       if (fin && fin.played) champTeam = (fin.winner === 'a') ? koBracket[lastR][0] : koBracket[lastR][1];
     }
     function box(view, emoji, title, sub, enabled, accent){
+      /* Cajas con la paleta cian/turquesa brillante del Mundialito
+         Clubes (petición usuario 2026-05-22): gradient horizontal
+         luminoso para las cajas activas, gris apagado para las
+         bloqueadas. */
       var grad = enabled
         ? (accent === 'stats'
-            ? 'linear-gradient(135deg,#001f2a 0%,#003a52 25%,#006080 55%,#00bcd4 72%,#003a52 100%)'
-            : 'linear-gradient(135deg,#001a26 0%,#004a5e 38%,#1a8aa0 60%,#003543 100%)')
+            ? 'linear-gradient(135deg,#001f2a 0%,#003a52 25%,#006080 50%,#00bcd4 70%,#006080 85%,#001f2a 100%)'
+            : 'linear-gradient(90deg,#001f2a,#003a52,#006080,#00bcd4,#006080,#003a52,#001f2a)')
         : 'linear-gradient(135deg,#171717 0%,#262626 60%,#171717 100%)';
-      var brd = enabled ? (accent === 'stats' ? '#4dd0e1' : '#2dd4bf') : 'rgba(255,255,255,.18)';
+      var brd = enabled ? '#4dd0e1' : 'rgba(255,255,255,.18)';
       var click = enabled ? ' onclick="window._mundialGo(\''+tourId+'\',\''+view+'\')"' : '';
       var cur = enabled ? 'cursor:pointer;' : 'cursor:not-allowed;opacity:.6;';
+      var shadow = enabled
+        ? 'box-shadow:0 4px 18px rgba(0,188,212,.32),inset 0 1px 0 rgba(255,255,255,.10);'
+        : 'box-shadow:0 4px 16px rgba(0,0,0,.35);';
       return '<div'+click+' style="display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:10px;'
-        + 'background:'+grad+';border:1.5px solid '+brd+';border-radius:12px;'+cur
-        + 'box-shadow:0 4px 16px rgba(0,0,0,.35);">'
+        + 'background:'+grad+';border:1.5px solid '+brd+';border-radius:12px;'+cur+shadow+'">'
         + '<span style="font-size:26px;line-height:1;">'+emoji+'</span>'
         + '<span style="flex:1;text-align:left;">'
         +   '<span style="display:block;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:1.5px;color:#fff;">'+title+'</span>'
-        +   '<span style="display:block;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.6);margin-top:2px;">'+sub+'</span>'
+        +   '<span style="display:block;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,'+(enabled?'.78':'.6')+');margin-top:2px;">'+sub+'</span>'
         + '</span>'
-        + '<span style="font-size:16px;color:'+brd+';">'+(enabled?'▶':'🔒')+'</span>'
+        + '<span style="font-size:16px;color:'+(enabled?'#fff':brd)+';">'+(enabled?'▶':'🔒')+'</span>'
         + '</div>';
     }
     function koBox(r, emoji, title){
@@ -16367,7 +16406,11 @@ window._showSimProgress = function(opts, onDone){
      Devuelve array ordenado de filas:
        {idx, name, pj, pg, pe, pp, gf, gc, dif, pts, isHuman}
      ordenado pts desc, dif desc, gf desc. */
-  function _tourComputeStandings(teams, fixture, results, keyPrefix) {
+  /* `tieBreak` (opcional) define el criterio de orden DESPUÉS de los
+     puntos: 'dif' (dif. de goles, por defecto), 'gf' (goles a favor)
+     o 'pg' (partidos ganados). El último corte es alfabético para que
+     sea determinista en todos los dispositivos. */
+  function _tourComputeStandings(teams, fixture, results, keyPrefix, tieBreak) {
     var rows = teams.map(function(t, idx){
       return { idx:idx, name:t.name, isHuman:!!t.isHuman, shield:t.shield||'',
                pj:0, pg:0, pe:0, pp:0, gf:0, gc:0, dif:0, pts:0 };
@@ -16390,8 +16433,18 @@ window._showSimProgress = function(opts, onDone){
     rows.forEach(function(r){ r.dif = r.gf - r.gc; });
     rows.sort(function(x,y){
       if (y.pts !== x.pts) return y.pts - x.pts;
-      if (y.dif !== x.dif) return y.dif - x.dif;
-      return y.gf - x.gf;
+      if (tieBreak === 'gf') {
+        if (y.gf  !== x.gf)  return y.gf  - x.gf;
+        if (y.dif !== x.dif) return y.dif - x.dif;
+      } else if (tieBreak === 'pg') {
+        if (y.pg  !== x.pg)  return y.pg  - x.pg;
+        if (y.dif !== x.dif) return y.dif - x.dif;
+        if (y.gf  !== x.gf)  return y.gf  - x.gf;
+      } else {   /* 'dif' (por defecto) */
+        if (y.dif !== x.dif) return y.dif - x.dif;
+        if (y.gf  !== x.gf)  return y.gf  - x.gf;
+      }
+      return String(x.name||'').localeCompare(String(y.name||''),'es');
     });
     return rows;
   }
@@ -17158,7 +17211,18 @@ window._showSimProgress = function(opts, onDone){
   function _tvCfgOf(id){
     var c = null;
     try { c = _tourLoadCachedSync(id); } catch(_){}
-    if (!c) { try { c = _cloneDefault(id); } catch(_){ c = {}; } }
+    if (!c) {
+      try { c = _cloneDefault(id); } catch(_){ c = {}; }
+      /* Cachea el clon: así el editor de color y el del torneo
+         comparten SIEMPRE el mismo objeto cfg y ningún guardado pisa
+         al otro (el color/logo dejaba de aplicarse si no). */
+      try {
+        if (c && typeof c === 'object' && id && TOUR_IDS.indexOf(id) !== -1) {
+          window._TOUR_CACHE = window._TOUR_CACHE || {};
+          window._TOUR_CACHE[id] = c;
+        }
+      } catch(_){}
+    }
     return (c && typeof c === 'object') ? c : {};
   }
   function _tvName(id){ var c=_tvCfgOf(id); return (c.name) || (DEFAULTS[id] && DEFAULTS[id].name) || id; }

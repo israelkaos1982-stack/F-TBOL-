@@ -1138,11 +1138,6 @@
       if(!l) return '';
       return '<img src="' + _esc(l) + '" alt="' + _esc(name) + '" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;">';
     }
-    function _humanSuffix(name){
-      var raw = (typeof window.humanIcon === 'function') ? window.humanIcon(name) : '';
-      var emoji = raw ? raw.replace(/ |\s/g,'').trim() : '';
-      return emoji ? ' <span class="clas-team-human-suffix" style="display:inline;font-size:11px;">' + emoji + '</span>' : '';
-    }
     var center = res
       ? '<div class="ml-score">' + res.gh + '–' + res.ga + '</div>'
       : '<div class="ml-score">–</div>'
@@ -1151,12 +1146,12 @@
       + '<div class="ml-header">'
       +   '<div class="ml-team">'
       +     '<div class="ml-shield-wrap">' + _shieldImg(home) + '</div>'
-      +     '<div class="ml-team-name">' + _esc(home) + _humanSuffix(home) + '</div>'
+      +     '<div class="ml-team-name">' + _esc(home) + '</div>'
       +   '</div>'
       +   '<div class="ml-score-wrap">' + center + '</div>'
       +   '<div class="ml-team">'
       +     '<div class="ml-shield-wrap">' + _shieldImg(away) + '</div>'
-      +     '<div class="ml-team-name">' + _esc(away) + _humanSuffix(away) + '</div>'
+      +     '<div class="ml-team-name">' + _esc(away) + '</div>'
       +   '</div>'
       + '</div>'
       + _superActaHtml(j, idx, home, away, res)

@@ -6106,29 +6106,32 @@
   }
 
   window.sortearCalendarioLiga = function () {
-   try {
-    /* 1. Calendario nuevo, garantizado DISTINTO al actual. */
-    var prev = '';
-    try { prev = localStorage.getItem(LS_SCHEDULE_KEY) || ''; } catch (_) {}
-    if (!prev) { try { prev = JSON.stringify(SCHEDULE); } catch (_) {} }
     var nuevo = null;
-    for (var t = 0; t < 16 && !nuevo; t++) {
-      var cand = generarCalendario(
-        _rotarPorReloj(mezclarEquipos(mezclarEquipos(TEAMS.slice())))
-      );
-      if (isValidLigaSchedule(cand) && JSON.stringify(cand) !== prev) nuevo = cand;
+    try {
+      /* 1. Calendario nuevo, garantizado DISTINTO al actual. */
+      var prev = '';
+      try { prev = localStorage.getItem(LS_SCHEDULE_KEY) || ''; } catch (_) {}
+      if (!prev) { try { prev = JSON.stringify(SCHEDULE); } catch (_) {} }
+      for (var t = 0; t < 16 && !nuevo; t++) {
+        var cand = generarCalendario(
+          _rotarPorReloj(mezclarEquipos(mezclarEquipos(TEAMS.slice())))
+        );
+        if (isValidLigaSchedule(cand) && JSON.stringify(cand) !== prev) nuevo = cand;
+      }
+      if (!isValidLigaSchedule(nuevo)) nuevo = generarCalendario(_rotarPorReloj(TEAMS.slice()));
+    } catch (err) {
+      alert('⚠️ Error generando el calendario:\n' + (err && err.message ? err.message : String(err)));
+      return;
     }
-    if (!isValidLigaSchedule(nuevo)) nuevo = generarCalendario(_rotarPorReloj(TEAMS.slice()));
     if (!isValidLigaSchedule(nuevo)) {
       alert('⚠️ No se pudo generar el calendario. Inténtalo de nuevo.');
       return;
     }
 
     /* 2. Marca de sorteo reciente: bloquea que el poll de /api/state
-       re-imponga el calendario viejo durante 30 s (el bug «pulso y
-       vuelve a salir el mismo»). Y pausa el poll del todo 20 s. */
+       re-imponga el calendario viejo durante 30 s. Pausa el poll 25 s. */
     window._ligaSorteoLock = Date.now();
-    try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(20000); } catch (_) {}
+    try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(25000); } catch (_) {}
 
     /* 3. Borrar resultados / clasificación / stats locales. */
     try { localStorage.removeItem(LS_KEY); } catch (_) {}
@@ -6162,16 +6165,42 @@
     } catch (_) {}
     try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports'); } catch (_) {}
 
-    /* 4. Aplicar el calendario nuevo (memoria + localStorage + server). */
+    /* 4. Aplicar el calendario nuevo en memoria + localStorage. */
     setLigaSchedule(nuevo);
     try { window.LIGA_SCHEDULE = nuevo; } catch (_) {}
     try { sharedLigaScheduleCache = nuevo; } catch (_) {}
     try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(nuevo)); } catch (_) {}
+    _repintarTrasSorteo();
 
-    /* 5. Limpiar resultados también en el servidor vía reset-liga
-       (replace=True). Le mandamos el calendario nuevo: el endpoint lo
-       acepta si es válido y distinto del actual, de modo que todos los
-       dispositivos ven el MISMO cuadro. */
+    /* 5. Guardar en el servidor vía reset-liga y ESPERAR la respuesta.
+       El diagnóstico final reporta si el servidor confirmó el guardado
+       — así sabemos si el problema es de persistencia. Adoptamos el
+       calendario que devuelva el servidor (fuente de verdad). */
+    function _finishSorteo(serverOk, srvSchedule) {
+      if (isValidLigaSchedule(srvSchedule)) {
+        setLigaSchedule(srvSchedule, false);
+        try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(srvSchedule)); } catch (_) {}
+        try { window.LIGA_SCHEDULE = srvSchedule; } catch (_) {}
+        try { sharedLigaScheduleCache = srvSchedule; } catch (_) {}
+      }
+      window._ligaSorteoLock = Date.now();
+      _repintarTrasSorteo();
+      var _final = (Array.isArray(SCHEDULE) && SCHEDULE[0]) ? SCHEDULE[0] : nuevo[0];
+      var _j1txt = '';
+      try {
+        _j1txt = _final.map(function (m, i) {
+          return (i + 1) + '. ' + m[0] + '  vs  ' + m[1];
+        }).join('\n');
+      } catch (_) {}
+      alert('🎲 CALENDARIO SORTEADO\n\nGuardado en el servidor: ' +
+            (serverOk ? 'SÍ ✅' : 'NO ⚠️') +
+            '\n\nJornada 1 nueva:\n' + _j1txt +
+            '\n\nResultados y clasificación a cero.');
+      /* Llevar al usuario directamente a la Jornada 1 para que vea el
+         cuadro nuevo sin tener que navegar. */
+      try { if (typeof window.openIAJornada === 'function') window.openIAJornada(1); } catch (_) {}
+    }
+
     try {
       fetch('/api/state/reset-liga', {
         method: 'POST',
@@ -6182,35 +6211,13 @@
         return r && r.ok ? r.json() : null;
       }).then(function (j) {
         var srv = j && j.state && j.state.liga_schedule;
-        if (isValidLigaSchedule(srv) && JSON.stringify(srv) !== JSON.stringify(nuevo)) {
-          setLigaSchedule(srv, false);
-          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(srv)); } catch (_) {}
-          try { window.LIGA_SCHEDULE = srv; } catch (_) {}
-          try { sharedLigaScheduleCache = srv; } catch (_) {}
-          window._ligaSorteoLock = Date.now();
-          _repintarTrasSorteo();
-        }
-      }).catch(function () {});
-    } catch (_) {}
-
-    /* 6. Repintar TODAS las pantallas de Liga ya — sin recargar. */
-    _repintarTrasSorteo();
-
-    /* 7. Diagnóstico VISIBLE: mostramos la Jornada 1 sorteada. Si el
-       usuario ve emparejamientos distintos aquí cada vez que pulsa,
-       el sorteo funciona; si ve siempre los mismos, el problema es la
-       generación. Es la prueba directa de que el botón hace algo. */
-    var _j1txt = '';
-    try {
-      _j1txt = nuevo[0].map(function (m, i) {
-        return (i + 1) + '. ' + m[0] + '  vs  ' + m[1];
-      }).join('\n');
-    } catch (_) {}
-    alert('🎲 CALENDARIO SORTEADO\n\nNueva Jornada 1:\n' + _j1txt +
-          '\n\nResultados y clasificación a cero.');
-   } catch (err) {
-    alert('⚠️ Error al sortear el calendario:\n' + (err && err.message ? err.message : String(err)));
-   }
+        _finishSorteo(isValidLigaSchedule(srv), srv);
+      }).catch(function () {
+        _finishSorteo(false, null);
+      });
+    } catch (_) {
+      _finishSorteo(false, null);
+    }
   };
 
   /* ── TRIGGER POR URL (?reset=liga) ────────────────────────────

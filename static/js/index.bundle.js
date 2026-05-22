@@ -5702,7 +5702,18 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var _ppAwayAliasTxt = (_humHome && !_humAway) ? _aliasFor(away) : '';
       function _ppAliasHtml(txt){
         if(!txt) return '';
-        return '<div style="font-family:Rajdhani,sans-serif;font-size:10px;font-weight:600;letter-spacing:.5px;color:rgba(255,255,255,.65);text-align:center;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;">🎮 '+String(txt).replace(/[<>]/g,'')+'</div>';
+        /* ❓ animado renderizado DIRECTAMENTE en el primer paint de la
+           previa — NO esperamos al swap async de copa-engine (que tardaba
+           hasta confirmar el balón). Así el rival eFootball es visible
+           desde que se abre la previa. El alias completo se ve al pulsar
+           → window._copaShowAlias. `data-copa-alias-replaced` evita que
+           copa-engine reprocese el bloque. */
+        var _aSafe = String(txt).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return '<div data-copa-alias-replaced="1" style="text-align:center;line-height:1;margin-top:3px;">'
+          + '<button type="button" class="copa-alias-help" onclick="window._copaShowAlias&&window._copaShowAlias(this)" '
+          + 'data-copa-alias-full="'+_aSafe+'" aria-label="Ver alias eFootball completo" '
+          + 'style="background:none;border:none;color:#ffd54a;font-size:20px;cursor:pointer;padding:2px 8px;line-height:1;animation:copaAliasPulse 1.4s ease-in-out infinite;">❓</button>'
+          + '</div>';
       }
       var _ppHomeAliasHtml = _ppAliasHtml(_ppHomeAliasTxt);
       var _ppAwayAliasHtml = _ppAliasHtml(_ppAwayAliasTxt);

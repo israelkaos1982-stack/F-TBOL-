@@ -30456,6 +30456,54 @@ Tottenham
   #sel-sq-ov .sel-sq-bulk-btn{flex:1;background:rgba(255,255,255,.06);
     border:1px solid rgba(255,255,255,.22);color:#dfe3ff;border-radius:8px;padding:9px;
     font-family:Oswald,sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer;}
+  #sel-sq-ov .sel-sq-players-btn{flex:0 0 auto;background:rgba(110,200,255,.14);
+    border:1px solid rgba(110,200,255,.4);color:#bfe4ff;border-radius:8px;
+    padding:6px 8px;font-size:12px;cursor:pointer;font-family:Oswald,sans-serif;
+    letter-spacing:.5px;white-space:nowrap;}
+  /* Editor de jugadores de una selección (2026-05-22). */
+  #sel-pl-ov{position:fixed;inset:0;z-index:100042;display:none;
+    align-items:center;justify-content:center;padding:14px;background:rgba(0,0,6,.9);}
+  #sel-pl-ov .pl-card{width:min(580px,97vw);max-height:88vh;display:flex;flex-direction:column;
+    overflow:hidden;background:linear-gradient(170deg,#0a1320,#11203a);
+    border:1px solid rgba(110,200,255,.5);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
+  #sel-pl-ov .pl-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:12px 15px;border-bottom:1px solid rgba(255,255,255,.08);
+    font-family:Oswald,sans-serif;letter-spacing:1px;font-size:14px;color:#bfe4ff;}
+  #sel-pl-ov .pl-x{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
+    color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;}
+  #sel-pl-ov .pl-tip{padding:7px 15px;font-size:10.5px;color:rgba(255,255,255,.55);
+    font-family:Rajdhani,sans-serif;border-bottom:1px solid rgba(255,255,255,.06);}
+  #sel-pl-ov .pl-tip b{color:#bfe4ff;}
+  #sel-pl-ov .pl-body{padding:8px 12px;overflow-y:auto;flex:1;}
+  #sel-pl-ov .pl-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap;
+    margin-bottom:7px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);
+    border-radius:9px;padding:6px;}
+  #sel-pl-ov .pl-row input,#sel-pl-ov .pl-row select{background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:6px;
+    padding:6px 5px;font-family:Rajdhani,sans-serif;font-size:13px;box-sizing:border-box;}
+  #sel-pl-ov .pl-row input:focus,#sel-pl-ov .pl-row select:focus{outline:none;border-color:rgba(110,200,255,.6);}
+  #sel-pl-ov .pl-num{width:40px;flex:0 0 40px;text-align:center;}
+  #sel-pl-ov .pl-name{flex:1;min-width:100px;}
+  #sel-pl-ov .pl-pos{width:64px;flex:0 0 64px;}
+  #sel-pl-ov .pl-pw{width:48px;flex:0 0 48px;text-align:center;}
+  #sel-pl-ov .pl-flags{display:flex;gap:3px;}
+  #sel-pl-ov .pl-flag{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);
+    color:rgba(255,255,255,.5);border-radius:6px;width:30px;height:28px;cursor:pointer;
+    font-size:13px;padding:0;}
+  #sel-pl-ov .pl-flag.is-on{background:rgba(110,200,255,.28);border-color:rgba(110,200,255,.7);
+    color:#fff;font-weight:700;}
+  #sel-pl-ov .pl-del{background:rgba(255,80,80,.16);border:1px solid rgba(255,80,80,.4);
+    color:#ff9a9a;border-radius:6px;width:30px;height:28px;cursor:pointer;font-size:13px;padding:0;}
+  #sel-pl-ov .pl-empty{padding:18px;text-align:center;font-size:12.5px;
+    color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;}
+  #sel-pl-ov .pl-foot{padding:10px 14px;border-top:1px solid rgba(255,255,255,.08);
+    display:flex;gap:8px;}
+  #sel-pl-ov .pl-add{flex:1;background:rgba(110,200,255,.16);border:1px solid rgba(110,200,255,.45);
+    color:#bfe4ff;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;
+    letter-spacing:1px;font-size:12px;cursor:pointer;}
+  #sel-pl-ov .pl-done{flex:1.4;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;
+    border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;
+    letter-spacing:1px;font-size:12px;font-weight:700;cursor:pointer;}
 </style>
 <script>
 (function(){
@@ -30554,6 +30602,7 @@ Tottenham
       +'<input class="sel-sq-m" type="number" min="1" max="100" placeholder="MED" title="Medio" value="'+v(t.mid)+'">'
       +'<input class="sel-sq-d" type="number" min="1" max="100" placeholder="DEF" title="Defensa" value="'+v(t.def)+'">'
       +'</div></div>'
+      +'<button type="button" class="sel-sq-players-btn" title="Editar jugadores de la selección">👥 <span class="sel-sq-pcount">'+((t.players&&t.players.length)||0)+'</span></button>'
       +'<button type="button" class="sel-sq-del" title="Eliminar">🗑</button>'
       +'</div>';
   }
@@ -30566,6 +30615,13 @@ Tottenham
     body.innerHTML = list.length
       ? list.map(_rowHtml).join('')
       : '<div class="sel-sq-empty">Sin selecciones todavía. Pulsa «➕ Añadir» o «📋 Lista».</div>';
+    /* La plantilla de jugadores no tiene representación en inputs del
+       DOM: se guarda en el propio elemento de la fila (`_players`) y
+       `_collect` la lee de ahí. */
+    var rows=body.querySelectorAll('.sel-sq-row');
+    list.forEach(function(t,i){
+      if(rows[i]) rows[i]._players = Array.isArray(t.players) ? t.players.slice() : [];
+    });
   }
   /* Importación masiva: una selección por línea. Acepta:
        «Nombre 88»               → solo GLOBAL
@@ -30622,9 +30678,10 @@ Tottenham
         var o=out[idx[k]];
         o.power=t.power; o.atk=t.atk; o.mid=t.mid; o.def=t.def;
         if(t.img) o.img=t.img;
+        /* La importación masiva NO toca la plantilla de jugadores. */
       } else {
         idx[k]=out.length;
-        out.push({name:t.name,power:t.power,atk:t.atk,mid:t.mid,def:t.def,img:t.img||''});
+        out.push({name:t.name,power:t.power,atk:t.atk,mid:t.mid,def:t.def,img:t.img||'',players:[]});
       }
     });
     return out;
@@ -30660,13 +30717,166 @@ Tottenham
       var g=rd('.sel-sq-g',75);
       out.push({
         name:nm, img:img, icon:icon, power:g,
-        atk:rd('.sel-sq-a',g), mid:rd('.sel-sq-m',g), def:rd('.sel-sq-d',g)
+        atk:rd('.sel-sq-a',g), mid:rd('.sel-sq-m',g), def:rd('.sel-sq-d',g),
+        players: Array.isArray(row._players) ? row._players : []
       });
     });
     var seen={},dedup=[];
     for(var i=out.length-1;i>=0;i--){ var k=out[i].name.toLowerCase(); if(seen[k])continue; seen[k]=1; dedup.unshift(out[i]); }
     return dedup;
   }
+  /* ════════════════════════════════════════════════════════════
+     EDITOR DE JUGADORES DE UNA SELECCIÓN (2026-05-22)
+     Mismo modelo de jugador que «Resto de Ligas»: nombre, dorsal,
+     posición, valor y los 6 flags (C/P/F/⭐/⚾/🏀). Se guarda en
+     `team.players[]` dentro de `selecciones_squad_v1`.
+     ════════════════════════════════════════════════════════════ */
+  var POS_LIST=['POR','DEF','MED','DEL'];
+  var PL_FLAGS=[
+    {k:'captain',   e:'C', t:'Capitán (×1.05 al valor del equipo)'},
+    {k:'penalty',   e:'P', t:'Lanzador de penaltis'},
+    {k:'freeKick',  e:'F', t:'Lanzador de faltas'},
+    {k:'elite',     e:'⭐',t:'Elite / estrella — solo premios (MVP)'},
+    {k:'natGoal',   e:'⚾',t:'Goleador nato (~30% de los goles)'},
+    {k:'natGoalPro',e:'🏀',t:'Goleador estrella (~48% de los goles)'}
+  ];
+  var _plOpenRow=null;
+  function _plUid(){ return 'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+  function _plRowHtml(p){
+    p=p||{};
+    var flags=PL_FLAGS.map(function(f){
+      return '<button type="button" class="pl-flag'+(p[f.k]?' is-on':'')
+        +'" data-flag="'+f.k+'" title="'+_esc(f.t)+'">'+f.e+'</button>';
+    }).join('');
+    var pos=p.pos||'MED';
+    var posOpts=POS_LIST.map(function(o){
+      return '<option value="'+o+'"'+(pos===o?' selected':'')+'>'+o+'</option>';
+    }).join('');
+    function v(x){ return (x!=null && x!=='') ? _esc(x) : ''; }
+    return '<div class="pl-row" data-id="'+_esc(p.id||'')+'">'
+      +'<input class="pl-num" type="number" min="1" max="99" placeholder="#" value="'+v(p.num)+'">'
+      +'<input class="pl-name" type="text" placeholder="Nombre del jugador" value="'+_esc(p.name||'')+'">'
+      +'<select class="pl-pos">'+posOpts+'</select>'
+      +'<input class="pl-pw" type="number" min="1" max="99" placeholder="VAL" title="Valor del jugador" value="'+v(p.power)+'">'
+      +'<div class="pl-flags">'+flags+'</div>'
+      +'<button type="button" class="pl-del" title="Eliminar jugador">🗑</button>'
+      +'</div>';
+  }
+  function _plRender(players){
+    var body=document.getElementById('sel-pl-body');
+    if(!body) return;
+    body.innerHTML = (players && players.length)
+      ? players.map(_plRowHtml).join('')
+      : '<div class="pl-empty">Sin jugadores todavía. Pulsa «➕ Añadir jugador».</div>';
+  }
+  /* Lee las filas de jugadores del DOM → array (ignora filas sin nombre). */
+  function _plCollect(){
+    var body=document.getElementById('sel-pl-body');
+    var out=[];
+    if(!body) return out;
+    body.querySelectorAll('.pl-row').forEach(function(row){
+      var nm=String(((row.querySelector('.pl-name')||{}).value)||'').trim();
+      if(!nm) return;
+      var p={
+        id: row.getAttribute('data-id') || _plUid(),
+        name: nm,
+        num: parseInt((row.querySelector('.pl-num')||{}).value,10) || 0,
+        pos: ((row.querySelector('.pl-pos')||{}).value) || 'MED',
+        power: _clamp((row.querySelector('.pl-pw')||{}).value,75)
+      };
+      row.querySelectorAll('.pl-flag').forEach(function(b){
+        p[b.getAttribute('data-flag')] = b.classList.contains('is-on');
+      });
+      out.push(p);
+    });
+    return out;
+  }
+  function _plClose(){ var ov=document.getElementById('sel-pl-ov'); if(ov) ov.style.display='none'; _plOpenRow=null; }
+  /* ✓ Hecho: vuelca los jugadores a la fila y persiste la plantilla. */
+  function _plCommit(){
+    if(!_plOpenRow){ _plClose(); return; }
+    var players=_plCollect();
+    _plOpenRow._players=players;
+    var cnt=_plOpenRow.querySelector('.sel-sq-pcount');
+    if(cnt) cnt.textContent=players.length;
+    var d={v:1,teams:_collect()};
+    _save(d); _hydrate();
+    _plClose();
+  }
+  function _plBuild(){
+    var ov=document.createElement('div');
+    ov.id='sel-pl-ov';
+    ov.innerHTML='<div class="pl-card">'
+      +'<div class="pl-hd"><span id="sel-pl-title">👥 Jugadores</span>'
+      +'<button class="pl-x" type="button">✕</button></div>'
+      +'<div class="pl-tip">Cada jugador: dorsal · nombre · posición · valor. Flags: '
+      +'<b>C</b> capitán · <b>P</b> penaltis · <b>F</b> faltas · <b>⭐</b> elite · '
+      +'<b>⚾</b> goleador nato · <b>🏀</b> goleador estrella. ⚾ y 🏀 no se acumulan.</div>'
+      +'<div class="pl-body" id="sel-pl-body"></div>'
+      +'<div class="pl-foot">'
+      +'<button type="button" class="pl-add">➕ Añadir jugador</button>'
+      +'<button type="button" class="pl-done">✓ Hecho</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){ if(e.target===ov) _plClose(); });
+    ov.querySelector('.pl-x').addEventListener('click',_plClose);
+    ov.querySelector('.pl-done').addEventListener('click',_plCommit);
+    ov.querySelector('.pl-add').addEventListener('click',function(){
+      var body=document.getElementById('sel-pl-body');
+      if(!body) return;
+      if(body.querySelector('.pl-empty')) body.innerHTML='';
+      body.insertAdjacentHTML('beforeend',_plRowHtml({id:_plUid(),pos:'MED'}));
+      var rows=body.querySelectorAll('.pl-row');
+      var last=rows[rows.length-1];
+      if(last){ var ni=last.querySelector('.pl-name'); if(ni) ni.focus(); }
+    });
+    /* Toggle de flags + borrar jugador (delegado). */
+    ov.addEventListener('click',function(e){
+      var t=e.target;
+      if(!t||!t.closest) return;
+      var fl=t.closest('.pl-flag');
+      if(fl){
+        var on=!fl.classList.contains('is-on');
+        fl.classList.toggle('is-on',on);
+        /* ⚾ y 🏀 son mutuamente excluyentes (regla CLAUDE.md). */
+        if(on){
+          var fk=fl.getAttribute('data-flag');
+          if(fk==='natGoal'||fk==='natGoalPro'){
+            var other=(fk==='natGoal')?'natGoalPro':'natGoal';
+            var ob=fl.parentNode.querySelector('.pl-flag[data-flag="'+other+'"]');
+            if(ob) ob.classList.remove('is-on');
+          }
+        }
+        return;
+      }
+      var del=t.closest('.pl-del');
+      if(del){
+        var row=del.closest('.pl-row');
+        if(row) row.parentNode.removeChild(row);
+        var body=document.getElementById('sel-pl-body');
+        if(body && !body.querySelector('.pl-row'))
+          body.innerHTML='<div class="pl-empty">Sin jugadores todavía. Pulsa «➕ Añadir jugador».</div>';
+        return;
+      }
+    });
+    return ov;
+  }
+  function _plOpen(rowEl){
+    if(!rowEl) return;
+    var teamName=String(((rowEl.querySelector('.sel-sq-name')||{}).value)||'').trim();
+    if(!teamName){
+      alert('Ponle nombre a la selección antes de editar sus jugadores.');
+      var ni=rowEl.querySelector('.sel-sq-name'); if(ni) ni.focus();
+      return;
+    }
+    _plOpenRow=rowEl;
+    var ov=document.getElementById('sel-pl-ov') || _plBuild();
+    var ttl=ov.querySelector('#sel-pl-title');
+    if(ttl) ttl.textContent='👥 '+teamName;
+    _plRender(Array.isArray(rowEl._players)?rowEl._players:[]);
+    ov.style.display='flex';
+  }
+
   function _close(){ var ov=document.getElementById('sel-sq-ov'); if(ov) ov.style.display='none'; }
   window._selSquadCloseEditor=_close;
 
@@ -30692,10 +30902,10 @@ Tottenham
         var body=document.getElementById('sel-sq-body');
         if(!body) return;
         if(body.querySelector('.sel-sq-empty')) body.innerHTML='';
-        body.insertAdjacentHTML('beforeend',_rowHtml({name:'',img:'',power:75}));
+        body.insertAdjacentHTML('beforeend',_rowHtml({name:'',img:'',power:75,players:[]}));
         var rows=body.querySelectorAll('.sel-sq-row');
         var last=rows[rows.length-1];
-        if(last){ var ni=last.querySelector('.sel-sq-name'); if(ni) ni.focus(); }
+        if(last){ last._players=[]; var ni=last.querySelector('.sel-sq-name'); if(ni) ni.focus(); }
       });
       ov.querySelector('.sel-sq-bulk-btn').addEventListener('click',function(){
         if(_inBulk) return;
@@ -30731,6 +30941,13 @@ Tottenham
         var body=document.getElementById('sel-sq-body');
         if(body && !body.querySelector('.sel-sq-row'))
           body.innerHTML='<div class="sel-sq-empty">Sin selecciones todavía. Pulsa «➕ Añadir selección».</div>';
+      });
+      /* 👥 Editar jugadores de una selección. */
+      ov.addEventListener('click',function(e){
+        var pb=e.target&&e.target.closest&&e.target.closest('.sel-sq-players-btn');
+        if(!pb || _inBulk) return;
+        var row=pb.closest('.sel-sq-row');
+        if(row) _plOpen(row);
       });
       /* Vista previa del escudo al teclear la URL. */
       ov.addEventListener('input',function(e){

@@ -1246,7 +1246,7 @@
     function _safeStatsSide(s){
       var out = {};
       if(!s || typeof s !== 'object') return out;
-      ['posesion','remates','tiros','corners','paradas','amar','roj'].forEach(function(k){
+      ['posesion','tiros','corners','paradas','amar','roj','faltas'].forEach(function(k){
         var v = Number(s[k]);
         if(isFinite(v) && v >= 0) out[k] = v;
       });
@@ -2144,7 +2144,6 @@
     { key:'amar',     title:'Tarjetas amarillas', icon:'🟨', mode:'sum' },
     { key:'roj',      title:'Tarjetas rojas',     icon:'🟥', mode:'sum' },
     { key:'posesion', title:'% posesión (media)', icon:'➗', mode:'avg', sfx:'%' },
-    { key:'remates',  title:'Remates realizados', icon:'👟', mode:'sum' },
     { key:'tiros',    title:'Tiros a puerta',     icon:'🚪', mode:'sum' },
     { key:'corners',  title:'Córners a favor',    icon:'⛳', mode:'sum' }
   ];
@@ -2191,11 +2190,11 @@
     var teams = {};
     if(cal && Array.isArray(cal.teams)){
       cal.teams.forEach(function(n){
-        teams[n] = { name:n, gf:0, amar:0, roj:0, posesion:0, posesionN:0, remates:0, tiros:0, corners:0 };
+        teams[n] = { name:n, gf:0, amar:0, roj:0, posesion:0, posesionN:0, tiros:0, corners:0 };
       });
     }
     function _ensure(name){
-      if(!teams[name]) teams[name] = { name:name, gf:0, amar:0, roj:0, posesion:0, posesionN:0, remates:0, tiros:0, corners:0 };
+      if(!teams[name]) teams[name] = { name:name, gf:0, amar:0, roj:0, posesion:0, posesionN:0, tiros:0, corners:0 };
       return teams[name];
     }
     Object.keys(results).forEach(function(k){
@@ -2217,7 +2216,6 @@
       });
       if(res.matchStats){
         var sa = res.matchStats.a || {}, sb = res.matchStats.b || {};
-        H.remates += Number(sa.remates)||0; A.remates += Number(sb.remates)||0;
         H.tiros   += Number(sa.tiros)  ||0; A.tiros   += Number(sb.tiros)  ||0;
         H.corners += Number(sa.corners)||0; A.corners += Number(sb.corners)||0;
         if(typeof sa.posesion === 'number'){ H.posesion += sa.posesion; H.posesionN++; }
@@ -9433,15 +9431,15 @@
      nativa, mucho más rápido que teclear. */
   var _STAT_DEFS_MANUAL = [
     { key: 'posesion', ico: '➗', lbl: 'POSESIÓN (%)',     min: 30, max: 70, def: 50, pairSum: 100 },
-    { key: 'remates',  ico: '👟', lbl: 'REMATES',          min: 0,  max: 30, def: 10 },
     { key: 'tiros',    ico: '🚪', lbl: 'TIROS A PUERTA',   min: 0,  max: 20, def: 7  },
-    { key: 'corners',  ico: '⛳', lbl: 'CÓRNERS',           min: 0,  max: 10, def: 3  },
-    /* FALTAS COMETIDAS por cada equipo. El humano las teclea; las
-       faltas que comete el RIVAL otorgan Puntos de Inyección (PI)
-       al equipo del hub vía athApplyMedicalFromActa. */
-    { key: 'faltas',   ico: '⚠️', lbl: 'FALTAS COMETIDAS',  min: 0,  max: 40, def: 8  }
-    /* PARADAS eliminado a petición usuario 2026-05-08 — ya no se
-       solicita al confirmar las estadísticas finales del partido. */
+    /* FALTAS COMETIDAS por cada equipo, justo debajo de Tiros a
+       puerta. El humano las teclea; las faltas que comete el RIVAL
+       otorgan Puntos de Inyección (PI) al equipo del hub vía
+       athApplyMedicalFromActa. */
+    { key: 'faltas',   ico: '⚠️', lbl: 'FALTAS COMETIDAS',  min: 0,  max: 40, def: 8  },
+    { key: 'corners',  ico: '⛳', lbl: 'CÓRNERS',           min: 0,  max: 10, def: 3  }
+    /* REMATES y PARADAS eliminados a petición del usuario — ya no se
+       solicitan al confirmar las estadísticas del partido. */
   ];
   var _STAT_DEFS_AUTO = [
     { key: 'penGol',   ico: '🥅', lbl: 'GOLES DE PENALTI', skipIfZero: true },
@@ -9658,18 +9656,17 @@
       row.appendChild(ia); row.appendChild(ico); row.appendChild(ib);
       grid.appendChild(row);
     }
-    /* Orden del usuario: Posesión, Remates, Tiros, Goles pen, Goles falta,
-       Amarillas, Rojas, Córners, Paradas. */
+    /* Orden del usuario: Posesión, Tiros a puerta, Faltas, Goles pen,
+       Goles falta, Amarillas, Rojas, Córners. */
     appendRow(_STAT_DEFS_MANUAL[0], 50, 50, false); // posesion default 50/50
-    appendRow(_STAT_DEFS_MANUAL[1], '', '', false); // remates
-    appendRow(_STAT_DEFS_MANUAL[2], '', '', false); // tiros
+    appendRow(_STAT_DEFS_MANUAL[1], '', '', false); // tiros a puerta
+    appendRow(_STAT_DEFS_MANUAL[2], '', '', false); // faltas cometidas → PI
     appendRow(_STAT_DEFS_AUTO[0], autos.a.penGol,    autos.b.penGol,    true); // goles penalti (auto, solo si >0)
     appendRow(_STAT_DEFS_AUTO[1], autos.a.faltaGol,  autos.b.faltaGol,  true); // goles falta
     appendRow(_STAT_DEFS_AUTO[2], autos.a.amarillas, autos.b.amarillas, true); // amarillas
     appendRow(_STAT_DEFS_AUTO[3], autos.a.rojas,     autos.b.rojas,     true); // rojas
     appendRow(_STAT_DEFS_MANUAL[3], '', '', false); // corners
-    appendRow(_STAT_DEFS_MANUAL[4], '', '', false); // faltas cometidas → PI
-    /* paradas removido 2026-05-08 — ya no es parte de _STAT_DEFS_MANUAL */
+    /* remates y paradas removidos — ya no forman parte de _STAT_DEFS_MANUAL */
     ov.classList.add('show');
   }
   window._mlStatsConfirm = function(){
@@ -10535,7 +10532,6 @@
       var sb = st.matchStats.b || {};
       var statRows = [
         ['posesion',  '➗', 'Posesión (%)',       false],
-        ['remates',   '👟', 'Remates',             false],
         ['tiros',     '🚪', 'Tiros a puerta',      false],
         ['penGol',    '🥅', 'Goles de penalti',    true],
         ['faltaGol',  '🎯', 'Goles de falta',      true],
@@ -10982,7 +10978,6 @@
       var _sb = _gm.matchStats.b || {};
       var statRows = [
         ['posesion',  '➗', 'Posesión (%)',       false],
-        ['remates',   '👟', 'Remates',             false],
         ['tiros',     '🚪', 'Tiros a puerta',      false],
         ['penGol',    '🥅', 'Goles de penalti',    true],
         ['faltaGol',  '🎯', 'Goles de falta',      true],

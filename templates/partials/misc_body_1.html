@@ -11866,6 +11866,7 @@ window._showSimProgress = function(opts, onDone){
     font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;border:1px solid;}
   #tv-manage-ov .tv-mg-del{background:rgba(220,40,40,.14);border-color:rgba(255,90,90,.5);color:#ff9a9a;}
   #tv-manage-ov .tv-mg-add{background:rgba(60,200,120,.14);border-color:rgba(95,224,138,.5);color:#9ee5a9;}
+  #tv-manage-ov .tv-mg-color{background:rgba(120,90,220,.16);border-color:rgba(170,140,255,.55);color:#cbb8ff;}
   /* Caja de info por defecto — antes era estilo inline en cada pantalla.
      Centralizada para que `_tourRender` pueda sobrescribir su contenido
      sin perder el aspecto. */
@@ -16391,6 +16392,28 @@ window._showSimProgress = function(opts, onDone){
     'sel-previa': ['linear-gradient(135deg,#001a26 0%,#004a5e 35%,#1a8aa0 50%,#004a5e 65%,#001a26 100%)','#2dd4bf'],
     'sel-final':  ['linear-gradient(135deg,#2a1f00 0%,#7a5a00 35%,#c89020 50%,#7a5a00 65%,#2a1f00 100%)','#f0c040']
   };
+  /* Editor de color libre por torneo (Parte A, 2026-05-22). El admin
+     elige color de caja + color de texto desde el modal "Gestionar
+     torneos"; se guardan en cfg.cardColor / cfg.cardText. El logo
+     reutiliza cfg.flag (emoji o URL). _tvRenderCards los prioriza
+     sobre los colores built-in / de board. */
+  function _tvHexClamp(h){
+    h = String(h == null ? '' : h).trim();
+    return /^#[0-9a-fA-F]{6}$/.test(h) ? h.toLowerCase() : '';
+  }
+  function _tvShade(hex, f){
+    hex = _tvHexClamp(hex) || '#888888';
+    function c(i){
+      var x = Math.round(parseInt(hex.slice(i, i+2), 16) * f);
+      return ('0' + Math.max(0, Math.min(255, x)).toString(16)).slice(-2);
+    }
+    return '#' + c(1) + c(3) + c(5);
+  }
+  function _tvCardGradient(hex){
+    var dark = _tvShade(hex, 0.32);
+    return 'linear-gradient(135deg,' + dark + ' 0%,' + hex + ' 50%,' + dark + ' 100%)';
+  }
+  window._tvCardGradient = _tvCardGradient;
   function _tvEsc(s){ return String(s == null ? '' : s).replace(/[<>"]/g, function(c){ return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;'; }); }
   /* Una "bandera" de torneo puede ser un emoji O una URL https de
      imagen (petición usuario 2026-05-21). Devuelve el HTML a pintar. */
@@ -16448,12 +16471,17 @@ window._showSimProgress = function(opts, onDone){
       var bd = _tvBoardOf(id);
       var slot = boards[bd];
       if (!slot) return;
-      var col = _TV_COLORS[id] || _TV_BOARD_COLOR[bd] || _TV_DEF_COLOR;
+      var _cc = _tvCfgOf(id);
+      var _ccBox = _tvHexClamp(_cc && _cc.cardColor);
+      var col = _ccBox
+        ? [_tvCardGradient(_ccBox), _tvHexClamp(_cc.cardText) || '#ffffff']
+        : (_TV_COLORS[id] || _TV_BOARD_COLOR[bd] || _TV_DEF_COLOR);
+      var _ccLabelStyle = _ccBox ? ' style="color:' + col[1] + ';"' : '';
       slot.html += '<div class="submenu-card sc-' + id + '" '
         + 'style="background:' + col[0] + ' !important;border-color:' + col[1] + ' !important;" '
         + 'onclick="go(\'s-' + id + '\')">'
         + '<span class="sc-emoji">' + _tourFlagHtml(_tvFlag(id), 'sc-flag-img') + '</span>'
-        + '<span class="sc-label">' + _tvEsc(_tvName(id)) + '</span>'
+        + '<span class="sc-label"' + _ccLabelStyle + '>' + _tvEsc(_tvName(id)) + '</span>'
         + '<button type="button" class="sc-info-btn" onclick="event.stopPropagation();window.muTourInfo&&window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
         + '<span class="sc-arr">▶</span>'
         + '</div>';
@@ -16503,6 +16531,7 @@ window._showSimProgress = function(opts, onDone){
     if (!active.length) h += '<div class="tv-mg-empty">Ninguno.</div>';
     active.forEach(function(id){
       h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + '</span>'
+        + '<button class="tv-mg-btn tv-mg-color" data-act="color" data-id="' + id + '">🎨 Color</button>'
         + '<button class="tv-mg-btn tv-mg-del" data-act="del" data-id="' + id + '">🗑 Eliminar</button></div>';
     });
     var hiddenB = builtins.filter(function(id){ return !visSet[id]; });
@@ -16550,7 +16579,9 @@ window._showSimProgress = function(opts, onDone){
         var act = b.getAttribute('data-act');
         var id  = b.getAttribute('data-id');
         var reg = _tvRegLoad();
-        if (act === 'del'){
+        if (act === 'color'){
+          _tvColorEditor(id);
+        } else if (act === 'del'){
           if (!confirm('¿Eliminar este torneo de la lista? Se conservan sus datos por si lo restauras.')) return;
           reg.visible = reg.visible.filter(function(x){ return x !== id; });
           _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
@@ -16590,6 +16621,74 @@ window._showSimProgress = function(opts, onDone){
     ov.style.display = 'flex';
   }
   window._tvOpenManage = _tvOpenManage;
+  /* Editor de color/logo de un torneo (Parte A, 2026-05-22). Overlay
+     con dos selectores de color (caja + texto), un campo de logo
+     (emoji o URL de imagen) y una previsualización en vivo de la
+     tarjeta. Guarda en cfg.cardColor / cfg.cardText / cfg.flag. */
+  function _tvColorEditor(id){
+    var cfg = _tvCfgOf(id);
+    var curBox  = _tvHexClamp(cfg && cfg.cardColor) || '#0a4d5a';
+    var curTxt  = _tvHexClamp(cfg && cfg.cardText)  || '#ffffff';
+    var curLogo = String((cfg && cfg.flag) || _tvFlag(id) || '🏆');
+    var old = document.getElementById('tv-color-ov');
+    if (old) old.remove();
+    var ov = document.createElement('div');
+    ov.id = 'tv-color-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.8);'
+      + 'display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.innerHTML = ''
+      + '<div style="background:#10141c;border:1.5px solid rgba(240,192,64,.4);border-radius:14px;'
+      +   'max-width:380px;width:100%;padding:18px;font-family:Oswald,sans-serif;color:#eee;box-sizing:border-box;">'
+      + '<div style="font-size:17px;letter-spacing:1.5px;color:#f0c040;text-align:center;margin-bottom:14px;">'
+      +   '🎨 COLOR Y LOGO</div>'
+      + '<div id="tvc-prev" style="margin-bottom:16px;"></div>'
+      + '<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;font-size:13px;">'
+      +   '<span>Color de caja</span>'
+      +   '<input type="color" id="tvc-box" value="' + curBox + '" style="width:54px;height:34px;border:none;background:none;cursor:pointer;"></label>'
+      + '<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;font-size:13px;">'
+      +   '<span>Color de texto</span>'
+      +   '<input type="color" id="tvc-txt" value="' + curTxt + '" style="width:54px;height:34px;border:none;background:none;cursor:pointer;"></label>'
+      + '<label style="display:block;font-size:13px;margin-bottom:6px;">Logo (emoji o URL de imagen)</label>'
+      + '<input type="text" id="tvc-logo" value="' + _tvEsc(curLogo) + '" placeholder="🏆 o https://…" '
+      +   'style="width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);'
+      +   'background:#1a1f29;color:#eee;font-size:14px;margin-bottom:14px;">'
+      + '<div style="display:flex;gap:8px;">'
+      +   '<button id="tvc-cancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);'
+      +     'background:transparent;color:#ccc;cursor:pointer;font-family:inherit;">Cancelar</button>'
+      +   '<button id="tvc-save" style="flex:1;padding:10px;border-radius:8px;border:none;'
+      +     'background:linear-gradient(135deg,#c89020,#f0c040);color:#1a1200;font-weight:700;cursor:pointer;font-family:inherit;">Guardar</button>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    var boxEl  = ov.querySelector('#tvc-box');
+    var txtEl  = ov.querySelector('#tvc-txt');
+    var logoEl = ov.querySelector('#tvc-logo');
+    var prevEl = ov.querySelector('#tvc-prev');
+    function paint(){
+      prevEl.innerHTML = '<div class="submenu-card" style="background:' + _tvCardGradient(boxEl.value)
+        + ' !important;border:1.5px solid ' + txtEl.value + ' !important;pointer-events:none;margin:0;">'
+        + '<span class="sc-emoji">' + _tourFlagHtml((logoEl.value || '').trim() || '🏆', 'sc-flag-img') + '</span>'
+        + '<span class="sc-label" style="color:' + txtEl.value + ';">' + _tvEsc(_tvName(id)) + '</span>'
+        + '<span class="sc-arr" style="color:' + txtEl.value + ';">▶</span></div>';
+    }
+    paint();
+    boxEl.addEventListener('input', paint);
+    txtEl.addEventListener('input', paint);
+    logoEl.addEventListener('input', paint);
+    ov.addEventListener('click', function(e){ if (e.target === ov) ov.remove(); });
+    ov.querySelector('#tvc-cancel').addEventListener('click', function(){ ov.remove(); });
+    ov.querySelector('#tvc-save').addEventListener('click', function(){
+      var c = _tvCfgOf(id);
+      c.cardColor = _tvHexClamp(boxEl.value) || c.cardColor || '';
+      c.cardText  = _tvHexClamp(txtEl.value) || c.cardText  || '';
+      c.flag      = String(logoEl.value || '').trim() || c.flag || '🏆';
+      try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = c; } catch(_){}
+      try { if (typeof window._tourSave === 'function') window._tourSave(id, c); } catch(_){}
+      ov.remove();
+      try { _tvRenderCards(); } catch(_){}
+      try { _tvRefreshManage(); } catch(_){}
+    });
+  }
+  window._tvColorEditor = _tvColorEditor;
   /* Hidrata el registro desde el server (best-effort, async). Hace
      el registro cross-device y resistente a borrados de localStorage
      ("guárdalo para siempre"). Solo pisa el local si el server trae

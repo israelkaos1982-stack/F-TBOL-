@@ -1836,13 +1836,28 @@
   }
   window._copaInvalidateShieldCache = function () { _copaShieldCache = null; };
 
-  function _shieldImg(name) {
+  /* Un resultado estepona-fallback se trata como "no encontrado" para
+     que la cadena de resolución llegue hasta `_copaShieldMap`, que es
+     la única fuente que conoce los escudos de PF / Hypermotion (sus
+     plantillas viven fuera del main key — ver `_copaShieldMap`). */
+  function _isFallbackShieldUrl(u) {
+    return !!u && /escudos-fallback\/estepona/.test(String(u));
+  }
+
+  /* Resolución URL-only del escudo de un equipo de Copa. Misma cadena
+     de fallbacks que `_shieldImg` pero devuelve sólo la URL. */
+  function _shieldUrl(name) {
+    if (!name) return '';
     var url = '';
     if (typeof window.getTeamLogoUrl === 'function') {
       try { url = window.getTeamLogoUrl(name) || ''; } catch(_){}
     }
+    if (_isFallbackShieldUrl(url)) url = '';
     if (!url && typeof window.getLogoEquipo === 'function') {
-      try { url = window.getLogoEquipo(name) || ''; } catch(_){}
+      try {
+        var g = window.getLogoEquipo(name) || '';
+        if (!_isFallbackShieldUrl(g)) url = g;
+      } catch(_){}
     }
     if (!url) {
       var ratings = window.TEAM_RATINGS || {};
@@ -1853,6 +1868,12 @@
       var _csm = _copaShieldMap();
       url = _csm[name] || _csm[canonicalTeam(name)] || '';
     }
+    return url;
+  }
+  window._copaResolveShield = _shieldUrl;
+
+  function _shieldImg(name) {
+    var url = _shieldUrl(name);
     if (url) {
       return '<img alt="" src="' + escapeHtml(url) + '" loading="lazy" decoding="async" style="width:100%;height:100%;object-fit:contain;display:block">';
     }
@@ -3232,7 +3253,12 @@
       : (isHvH ? '16.5 min' : '13.5 min');
     /* Memo para que showPrePartidoOverlay rellene el meta con los
        equipos correctos (igual que Liga EA hace con _ppPreviaTeams). */
-    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: compKey, ronda: ronda, idx: idx, esVuelta: !!esVuelta };
+    /* Resolvemos los escudos AQUÍ (vía la cadena de Copa, que sí
+       conoce PF / Hypermotion) y los pasamos como override. Sin esto
+       `_renderPreviaMeta` cae a `getTeamLogoUrl`/`getLogoEquipo`, que
+       no ven las plantillas fuera del main key, y los equipos de PF
+       (p.ej. Teruel) salían con el escudo genérico 🛡️ apagado. */
+    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: compKey, ronda: ronda, idx: idx, esVuelta: !!esVuelta, homeLogo: _shieldUrl(local), awayLogo: _shieldUrl(visit) };
     window._ppCustomCallback = function () {
       window._ppPreviaTeams = null;
       /* Tras "▶ COMENZAR PARTIDO" en la previa, abrimos el gm-modal de

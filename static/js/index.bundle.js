@@ -5571,8 +5571,16 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         if (tlu) return tlu;
         return (typeof getLogoEquipo === 'function') ? getLogoEquipo(name) : '';
       }
-      var lA = _pickLogo(_svgImgs[0], home);
-      var lB = _pickLogo(_svgImgs[1], away);
+      /* Override de escudo: el caller (p.ej. copaAbrirPrevia) puede
+         pre-resolver el escudo y pasarlo en _ppPreviaTeams.homeLogo/
+         awayLogo. Necesario para equipos de PF / Hypermotion, cuyas
+         plantillas viven fuera del main key y no llegan a
+         getTeamLogoUrl/getLogoEquipo — sin esto salían con el 🛡️
+         genérico apagado en la previa de Copa. */
+      var _ovLogoA = (window._ppPreviaTeams && window._ppPreviaTeams.homeLogo) || '';
+      var _ovLogoB = (window._ppPreviaTeams && window._ppPreviaTeams.awayLogo) || '';
+      var lA = _ovLogoA || _pickLogo(_svgImgs[0], home);
+      var lB = _ovLogoB || _pickLogo(_svgImgs[1], away);
       var imgA = lA ? '<img src="'+lA+'" alt="'+home+'" style="width:84px;height:84px;object-fit:contain;display:block;margin:0 auto;"/>' : '<span style="font-size:54px;">🛡️</span>';
       var imgB = lB ? '<img src="'+lB+'" alt="'+away+'" style="width:84px;height:84px;object-fit:contain;display:block;margin:0 auto;"/>' : '<span style="font-size:54px;">🛡️</span>';
       /* Nivel por equipo: Crack / Leyenda (solo humanos) */

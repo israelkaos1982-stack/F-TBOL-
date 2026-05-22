@@ -1122,9 +1122,14 @@ def copa_reiniciar():
 # para la Liga EA (p.ej. "Celta" vs "Celta de Vigo"). Si en el futuro
 # se hace configurable desde el editor, sustitúyase por la lectura del
 # estado; hoy basta con la constante.
+# Debe coincidir EXACTAMENTE con la lista `TEAMS` del cliente
+# (misc_body_2.html). Si el servidor genera un calendario con un equipo
+# que el cliente no reconoce (p.ej. "Bayern Munich" cuando el cliente ya
+# tiene "Liverpool"), `isValidLigaSchedule` lo rechaza y el calendario
+# nuevo nunca se adopta — el bug del calendario que «no cambia».
 LIGA_EA_TEAMS_DEFAULT = [
     "Real Madrid", "Athletic Club", "Real Sociedad", "Sevilla", "Villarreal",
-    "Mallorca", "Valencia CF", "Espanyol", "Bayern Munich", "Celta de Vigo",
+    "Mallorca", "Valencia CF", "Espanyol", "Liverpool", "Celta de Vigo",
     "Deportivo Alavés", "Osasuna", "Getafe CF", "Arsenal", "Girona FC",
     "Elche CF", "Atlético Madrid", "Rayo Vallecano", "Real Betis", "FC Barcelona",
 ]

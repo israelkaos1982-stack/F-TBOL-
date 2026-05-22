@@ -10062,6 +10062,8 @@
     if (eventType === 'final')        return '🔚 FINAL';
     if (eventType === 'prorroga-ht')  return '⏺️ DESCANSO PRÓRROGA';
     if (eventType === 'prorroga-fin') return '⏺️ FIN PRÓRROGA';
+    if (eventType === 'prorroga-ini') return '⏺️ PRÓRROGA';
+    if (eventType === 'pre-penaltis') return '🥅 A TANDA DE PENALTIS';
     if (eventType === 'penaltis')     return '🥅 FIN TANDA PENALTIS';
     return '';
   }
@@ -10310,6 +10312,101 @@
     window._WA_GROUP_URL  = _WA_GROUP_URL;
     window._waShareToGroup = _waShareToGroup;
   } catch(_){}
+
+  /* ════════════════════════════════════════════════════════════════
+     PUERTA DE COMPARTIR WHATSAPP — hitos de prórroga / penaltis
+     ════════════════════════════════════════════════════════════════
+     Petición usuario 2026-05-22: en los partidos con prórroga y
+     penaltis, además del compartir de INICIO / DESCANSO / FINAL, hay
+     que mostrar una pantalla OBLIGATORIA de compartir por WhatsApp en:
+       - el arranque de la PRÓRROGA (tras 90'+descuento con empate),
+       - el DESCANSO de la prórroga (105'),
+       - antes de la TANDA DE PENALTIS.
+     `_waShareGate` muestra un overlay bloqueante: el botón "continuar"
+     queda deshabilitado hasta que el usuario pulsa "compartir" al menos
+     una vez (mismo patrón que el descanso y la pantalla final). Es un
+     overlay estático (sin MutationObserver ni polling) — no afecta al
+     cronómetro (CLAUDE.md). */
+  function _waGateActaLines(events, home, away, maxMin) {
+    var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽',
+      'pen-fallo':'❌🥅','pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',
+      'd-amarilla':'🟨🟥',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',imbat:'🧤',sust:'🔁'};
+    var abbr = (typeof window.getTeamAbbr === 'function')
+      ? window.getTeamAbbr
+      : function(s){ return String(s||'').substring(0,3).toUpperCase(); };
+    var out = [];
+    (events || []).forEach(function(e){
+      if (!e || e.type === 'mvp' || e.type === 'pen-result') return;
+      if (!icoMap[e.type]) return;
+      if (maxMin != null && Number(e.min) > maxMin) return;
+      var tn = e.team === 'a' ? home : away;
+      out.push(e.min + "' " + icoMap[e.type] + ' ' + (e.player || e.name || 'Jugador') + ' (' + abbr(tn) + ')');
+    });
+    return out;
+  }
+  window._waShareGate = function(opts) {
+    opts = opts || {};
+    /* Si venimos de _mlConfirmEnd, el spinner "Procesando partido…"
+       puede seguir visible — lo ocultamos para que no tape la puerta. */
+    try { if (typeof window._mlHideLoading === 'function') window._mlHideLoading(); } catch(_){}
+    var ov = document.getElementById('wa-gate-ov');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'wa-gate-ov';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99996;background:rgba(0,0,8,.94);'
+        + 'display:none;flex-direction:column;align-items:center;justify-content:center;'
+        + 'padding:24px;text-align:center;font-family:Oswald,sans-serif;';
+      document.body.appendChild(ov);
+    }
+    var sH = (typeof window._waShortName === 'function' ? window._waShortName(opts.home) : opts.home) || 'Local';
+    var sA = (typeof window._waShortName === 'function' ? window._waShortName(opts.away) : opts.away) || 'Visitante';
+    var scoreLine = sH + '  ' + (opts.scA != null ? opts.scA : 0) + ' - ' + (opts.scB != null ? opts.scB : 0) + '  ' + sA;
+    var title = opts.title || 'COMPARTIR POR WHATSAPP';
+    var contLabel = opts.continueLabel || 'CONTINUAR';
+    ov.innerHTML = ''
+      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:32px;letter-spacing:3px;color:#f0c040;text-shadow:0 0 22px rgba(240,192,64,.55);line-height:1.1;">' + title + '</div>'
+      + '<div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:20px;color:#fff;margin-top:10px;">' + scoreLine + '</div>'
+      + '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.62);margin-top:14px;max-width:320px;line-height:1.45;">Comparte el resultado y las estadísticas por WhatsApp. Es obligatorio compartir para continuar.</div>'
+      + '<button id="wa-gate-share" style="margin-top:22px;width:100%;max-width:340px;padding:14px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;">🟢 COMPARTIR POR WHATSAPP</button>'
+      + '<button id="wa-gate-continue" disabled style="margin-top:12px;width:100%;max-width:340px;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:not-allowed;opacity:.4;">' + contLabel + '</button>';
+    ov.style.display = 'flex';
+    var shareBtn = document.getElementById('wa-gate-share');
+    var contBtn  = document.getElementById('wa-gate-continue');
+    var shared = false;
+    shareBtn.onclick = function() {
+      var lines = [];
+      _waBuildHeaderLines({
+        comp: opts.comp, j: opts.j,
+        copaRonda: opts.copaRonda, copaVuelta: opts.copaVuelta,
+        home: opts.home, away: opts.away,
+        scA: (opts.scA != null ? opts.scA : 0),
+        scB: (opts.scB != null ? opts.scB : 0),
+        eventType: opts.eventType
+      }).forEach(function(l){ lines.push(l); });
+      var acta = _waGateActaLines(opts.events, opts.home, opts.away, opts.maxMin);
+      if (acta.length) {
+        lines.push('');
+        lines.push('ACTA DEL PARTIDO:');
+        acta.forEach(function(l){ lines.push(l); });
+      }
+      _waShareToGroup(lines.join('\n'));
+      shared = true;
+      shareBtn.innerHTML = '✅ COMPARTIDO · PEGA EN EL GRUPO';
+      shareBtn.style.background = 'linear-gradient(135deg,#128c7e,#0a5d52)';
+      contBtn.disabled = false;
+      contBtn.style.cursor = 'pointer';
+      contBtn.style.opacity = '';
+      if (typeof window._gmGlowContinueBtn === 'function') window._gmGlowContinueBtn(contBtn);
+    };
+    contBtn.onclick = function() {
+      if (!shared) return;
+      ov.style.display = 'none';
+      ov.innerHTML = '';
+      if (typeof opts.onContinue === 'function') {
+        try { opts.onContinue(); } catch(_){}
+      }
+    };
+  };
 
   /* Build the standard WA message and open WhatsApp */
   function _mlBuildAndShareWA(mk, st, isFinal) {
@@ -10770,7 +10867,7 @@
        + marcador + 🔚 FINAL. Si el partido tuvo penaltis, el evento es
        🥅 FIN TANDA PENALTIS. Si terminó en prórroga, ⏺️ FIN PRÓRROGA. */
     var _evType = 'final';
-    if (_gm.penShootDone || _gm._penWinner != null) _evType = 'penaltis';
+    if (_gm.penDone || _gm.penShootDone || _gm._penWinner != null) _evType = 'penaltis';
     else if (_gm.etDone) _evType = 'prorroga-fin';
     _waBuildHeaderLines({
       comp: _gm.comp, j: _gm.j,
@@ -11598,42 +11695,21 @@
         + ' Compartir descanso prórroga';
       list.appendChild(waWrap);
     }
-    /* Overlay de cuenta atrás 10 s reales — al expirar, reanuda el
-       cron al 105'. El usuario puede compartir vía WhatsApp durante
-       esos 10 s. Si toca el botón share, el flujo no se interrumpe
-       (window.open en otro tab). */
-    var ov = document.getElementById('gm-htp-ov');
-    if (!ov) {
-      ov = document.createElement('div');
-      ov.id = 'gm-htp-ov';
-      ov.style.cssText = 'position:fixed;inset:0;z-index:99988;background:rgba(0,0,8,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:Oswald,sans-serif;padding:20px;text-align:center;';
-      document.body.appendChild(ov);
-    }
-    /* Duración HTP: 5 s reales (petición usuario 2026-05-08, antes
-       eran 10). Los humanos hacen los cambios en eFootball entre el
-       105 y el 120 sin parar el reloj — los 5 s son solo un breve
-       respiro visual + ventana para el WhatsApp. */
-    ov.innerHTML = ''
-      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:60px;color:#f0c040;letter-spacing:6px;text-shadow:0 0 22px rgba(240,192,64,.6);">HTP</div>'
-      + '<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2.5px;color:rgba(255,255,255,.75);margin-top:6px;">DESCANSO DE LA PRÓRROGA · 105\'</div>'
-      + '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.6);margin-top:18px;max-width:300px;">5 s de respiro. Comparte el acta del descanso por WhatsApp si quieres.</div>'
-      + '<button onclick="window._gmShareHtp()" style="margin-top:20px;padding:12px 22px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:14px;letter-spacing:2px;cursor:pointer;">🟢 COMPARTIR DESCANSO PRÓRROGA</button>'
-      + '<div id="gm-htp-cd" style="font-family:\'Bebas Neue\',sans-serif;font-size:48px;color:#5fe08a;letter-spacing:4px;margin-top:18px;">5</div>'
-      + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.45);margin-top:4px;">SEGUNDOS · auto-reanudar</div>';
-    ov.style.display = 'flex';
-    var cdEl = document.getElementById('gm-htp-cd');
-    var left = 5;
-    try { if (_gm.htpInterval) clearInterval(_gm.htpInterval); } catch(_){}
-    _gm.htpInterval = setInterval(function(){
-      left--;
-      if (cdEl) cdEl.textContent = String(Math.max(0, left));
-      if (left <= 0) {
-        try { clearInterval(_gm.htpInterval); } catch(_){}
-        _gm.htpInterval = null;
-        _gmResumeAfterHtp();
-      }
-    }, 1000);
     gmRenderTimer();
+    /* Pantalla OBLIGATORIA de compartir por WhatsApp en el descanso de
+       la prórroga (105'). BLOQUEANTE: hasta que el usuario comparte no
+       puede continuar. Al continuar se reanuda el cron en el 105'00"
+       exacto vía _gmResumeAfterHtp (petición usuario 2026-05-22 — antes
+       era una cuenta atrás de 5 s con auto-reanudación). */
+    window._waShareGate({
+      comp: _gm.comp, j: _gm.j,
+      copaRonda: _gm._copaRonda, copaVuelta: _gm._copaVuelta,
+      home: _gm.home, away: _gm.away, scA: _gm.sc.a, scB: _gm.sc.b,
+      eventType: 'prorroga-ht', events: _gm.events, maxMin: 105,
+      title: '⏺️ DESCANSO PRÓRROGA · 105\'',
+      continueLabel: '▶ CONTINUAR 2ª PARTE DE LA PRÓRROGA',
+      onContinue: _gmResumeAfterHtp
+    });
   }
   /* Reanuda el cronómetro tras los 10 s del HTP. Cierra el overlay
      y arranca el tick desde 105'. */
@@ -12790,10 +12866,13 @@
     };
   })();
 
-  window.gmActivateET = function () {
+  /* Núcleo de la activación de prórroga. CLAUDE.md / petición usuario
+     2026-05-22: cuando empieza la prórroga el cronómetro VUELVE al
+     minuto 90 exacto (descarta el descuento de la 2ª parte). */
+  function _gmActivateETCore() {
     if (_gm.etDone || _gm.finished) return;
     _gm.etDone = true;
-    if (_gm.timerSec < GM_MAX_NORMAL) _gm.timerSec = GM_MAX_NORMAL;
+    _gm.timerSec = GM_MAX_NORMAL; /* la prórroga arranca en el 90'00" */
     var marker = document.createElement('div');
     marker.style.cssText = 'text-align:center;color:#aaa;font-size:10px;padding:4px;border-bottom:1px solid rgba(255,255,255,.06);';
     marker.textContent = '— PRÓRROGA —';
@@ -12801,6 +12880,21 @@
     var etBtn = document.getElementById('gm-btn-et');
     if (etBtn) { etBtn.disabled = true; etBtn.style.opacity = '0.35'; }
     gmRenderTimer();
+  }
+  window.gmActivateET = function () {
+    if (_gm.etDone || _gm.finished) return;
+    /* Pantalla OBLIGATORIA de compartir por WhatsApp ANTES de arrancar
+       la prórroga (petición usuario 2026-05-22). Tras compartir, el
+       core activa la prórroga y deja el cronómetro anclado al min 90. */
+    window._waShareGate({
+      comp: _gm.comp, j: _gm.j,
+      copaRonda: _gm._copaRonda, copaVuelta: _gm._copaVuelta,
+      home: _gm.home, away: _gm.away, scA: _gm.sc.a, scB: _gm.sc.b,
+      eventType: 'prorroga-ini', events: _gm.events,
+      title: '⏺️ PRÓRROGA',
+      continueLabel: '▶ COMENZAR LA PRÓRROGA',
+      onContinue: _gmActivateETCore
+    });
   };
 
   window.gmEndMatch = function () {
@@ -12862,10 +12956,26 @@
          10 game-min para saltar a la tanda sin volver a esperar. */
       var _gmPenSkipMin = 110 * 60;
       if (_gm.timerSec >= _gmPenSkipMin) {
-        /* Empate persistente al 110+' → tanda de penaltis. */
-        if (typeof window._gmCopaShowPenShootout === 'function') {
-          window._gmCopaShowPenShootout();
-        }
+        /* Empate persistente al 110+' → la 2ª parte de la prórroga se
+           ha jugado; el humano decide ir a la tanda. Congelamos el
+           cronómetro y mostramos la pantalla OBLIGATORIA de compartir
+           por WhatsApp; al continuar se abre la tanda de penaltis
+           (petición usuario 2026-05-22). */
+        try { clearInterval(_gm.timerInterval); } catch(_){}
+        _gm.timerRunning = false;
+        window._waShareGate({
+          comp: _gm.comp, j: _gm.j,
+          copaRonda: _gm._copaRonda, copaVuelta: _gm._copaVuelta,
+          home: _gm.home, away: _gm.away, scA: _gm.sc.a, scB: _gm.sc.b,
+          eventType: 'pre-penaltis', events: _gm.events,
+          title: '🥅 A TANDA DE PENALTIS',
+          continueLabel: '🥅 IR A LA TANDA DE PENALTIS',
+          onContinue: function(){
+            if (typeof window._gmCopaShowPenShootout === 'function') {
+              window._gmCopaShowPenShootout();
+            }
+          }
+        });
         return;
       }
       /* ET activa pero aún no llegó al min 110 — bloqueo defensivo

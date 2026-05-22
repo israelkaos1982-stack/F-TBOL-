@@ -16359,13 +16359,20 @@
 
     var html = '';
 
-    /* SIM batch button (all jornadas including J1 since Fase 3) */
+    /* Barra de acciones: 🎲 Sortear (siempre) + SIM Jn (si hay IA
+       pendiente). El 🎲 va AQUÍ, en la propia pantalla de la jornada,
+       para que se pueda re-sortear el calendario y ver el cambio al
+       instante sin cambiar de pantalla. */
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 0 10px;padding:0 4px;gap:8px;">'
+      + '<button onclick="window.sortearCalendarioLiga&&window.sortearCalendarioLiga()"'
+      + ' style="padding:5px 16px;background:#2a0008;color:#ffd24a;border:1px solid #ff3040;border-radius:6px;font-size:13px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:1px;">🎲 SORTEAR CALENDARIO</button>';
     if (iaPending.length > 0) {
-      html += '<div style="display:flex;justify-content:flex-end;margin:0 0 10px;padding:0 4px;">'
-        + '<button onclick="window.simularJornadaIA(' + j + ');setTimeout(function(){ if(typeof window.buildIAresults===\'function\') window.buildIAresults(); },400);"'
-        + ' style="padding:5px 16px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:6px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:1px;">SIM J' + j + '</button>'
-        + '</div>';
+      html += '<button onclick="window.simularJornadaIA(' + j + ');setTimeout(function(){ if(typeof window.buildIAresults===\'function\') window.buildIAresults(); },400);"'
+        + ' style="padding:5px 16px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:6px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:1px;">SIM J' + j + '</button>';
+    } else {
+      html += '<span></span>';
     }
+    html += '</div>';
 
     /* ── Partidos Jugables (humanos) ── */
     var hasHuman = humanMatches.length + humanPending.length > 0;

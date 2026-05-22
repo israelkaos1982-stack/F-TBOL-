@@ -6065,6 +6065,129 @@
     });
   };
 
+  /* ── SORTEO DEL CALENDARIO (botón 🎲) ──────────────────────────
+     Genera un calendario NUEVO de Liga EA Sports — las 38 jornadas
+     con emparejamientos distintos — y pone resultados y clasificación
+     a cero.
+
+     A diferencia de `reiniciarLigaEA`, esta función NO recarga la
+     página: aplica el calendario nuevo en memoria y repinta las
+     pantallas al instante. La recarga era el punto frágil del botón
+     «Res» — tras recargar, la hidratación desde el backend podía
+     volver a imponer el calendario anterior si el POST de reset aún
+     no había cuajado, y al usuario «no le funcionaba». Sin recarga no
+     hay carrera: lo que se ve es lo que se acaba de sortear. */
+  function _repintarTrasSorteo() {
+    var fns = [
+      'applyEngineOverrides', 'buildLigaClas', 'populateLigaCal',
+      'populateCalendar', 'buildIAresults', 'rebuildLigaPlayerStats',
+      'rebuildLigaPlayerStatsFixed', 'buildLigaStatsDashboard',
+      'syncLigaEaPlayerStats', 'renderLigaClasCalendar',
+      'refreshMainCalendarCards'
+    ];
+    fns.forEach(function (fn) {
+      try { if (typeof window[fn] === 'function') window[fn](); } catch (_) {}
+    });
+    /* Si hay una jornada IA abierta, repintarla con el cuadro nuevo. */
+    try {
+      var _act = document.querySelector('.screen.active');
+      if (_act && _act.id === 's-liga-ia-jornada' && window._currentIAJornada &&
+          typeof window.openIAJornada === 'function') {
+        window.openIAJornada(window._currentIAJornada);
+      }
+    } catch (_) {}
+  }
+
+  window.sortearCalendarioLiga = function () {
+    /* 1. Calendario nuevo, garantizado DISTINTO al actual. */
+    var prev = '';
+    try { prev = localStorage.getItem(LS_SCHEDULE_KEY) || ''; } catch (_) {}
+    if (!prev) { try { prev = JSON.stringify(SCHEDULE); } catch (_) {} }
+    var nuevo = null;
+    for (var t = 0; t < 16 && !nuevo; t++) {
+      var cand = generarCalendario(
+        _rotarPorReloj(mezclarEquipos(mezclarEquipos(TEAMS.slice())))
+      );
+      if (isValidLigaSchedule(cand) && JSON.stringify(cand) !== prev) nuevo = cand;
+    }
+    if (!isValidLigaSchedule(nuevo)) nuevo = generarCalendario(_rotarPorReloj(TEAMS.slice()));
+    if (!isValidLigaSchedule(nuevo)) {
+      alert('⚠️ No se pudo generar el calendario. Inténtalo de nuevo.');
+      return;
+    }
+
+    /* 2. Pausar el poll de /api/state para que no repueble con el
+       estado viejo mientras persistimos el reset. */
+    try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(20000); } catch (_) {}
+
+    /* 3. Borrar resultados / clasificación / stats locales. */
+    try { localStorage.removeItem(LS_KEY); } catch (_) {}
+    try { sharedLigaResultsCache = {}; } catch (_) {}
+    try { if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0; } catch (_) {}
+    try {
+      var _ex = window.LIGA_EXTRAS;
+      if (_ex) Object.keys(_ex).forEach(function (k) { delete _ex[k]; });
+    } catch (_) {}
+    try {
+      var _pm = window.LIGA_PLAYER_MATCH_STORE;
+      if (_pm) Object.keys(_pm).forEach(function (k) { delete _pm[k]; });
+    } catch (_) {}
+    try { localStorage.setItem('ef_player_stats_v1', '{}'); } catch (_) {}
+    try {
+      var _leaRaw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (_leaRaw) {
+        var _lea = JSON.parse(_leaRaw);
+        if (_lea && Array.isArray(_lea.teams)) {
+          _lea.teams.forEach(function (t) {
+            if (!t || !Array.isArray(t.players)) return;
+            t.players.forEach(function (p) {
+              if (!p) return;
+              p.pj = 0; p.gol = 0; p.pen = 0; p.fk = 0;
+              p.mvp = 0; p.ta = 0; p.tr = 0; p.imbat = 0; p.penSaved = 0;
+            });
+          });
+          localStorage.setItem('ligaExt_liga-ea-sports', JSON.stringify(_lea));
+        }
+      }
+    } catch (_) {}
+    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports'); } catch (_) {}
+
+    /* 4. Aplicar el calendario nuevo (memoria + localStorage + server). */
+    setLigaSchedule(nuevo);
+    try { window.LIGA_SCHEDULE = nuevo; } catch (_) {}
+
+    /* 5. Limpiar resultados también en el servidor. El POST normal con
+       {liga_results:{}} no vacía nada por el merge recursivo, así que
+       usamos /api/state/reset-liga (replace=True). Le mandamos el
+       calendario nuevo: el endpoint lo acepta si es válido y distinto
+       del actual, de modo que todos los dispositivos ven el MISMO
+       cuadro que acabamos de sortear, sin parpadeo. */
+    try {
+      fetch('/api/state/reset-liga', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ liga_schedule: nuevo }),
+        cache: 'no-store'
+      }).then(function (r) {
+        return r && r.ok ? r.json() : null;
+      }).then(function (j) {
+        var srv = j && j.state && j.state.liga_schedule;
+        if (isValidLigaSchedule(srv) && JSON.stringify(srv) !== JSON.stringify(nuevo)) {
+          /* El servidor generó uno propio: adoptarlo para no quedar
+             desincronizados con el resto de dispositivos. */
+          setLigaSchedule(srv, false);
+          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(srv)); } catch (_) {}
+          try { window.LIGA_SCHEDULE = srv; } catch (_) {}
+          _repintarTrasSorteo();
+        }
+      }).catch(function () {});
+    } catch (_) {}
+
+    /* 6. Repintar TODAS las pantallas de Liga ya — sin recargar. */
+    _repintarTrasSorteo();
+    alert('🎲 Calendario sorteado.\n\nLas 38 jornadas tienen emparejamientos nuevos. Resultados y clasificación a cero.');
+  };
+
   /* ── TRIGGER POR URL (?reset=liga) ────────────────────────────
      Escotilla de emergencia: abrir cualquier URL de la app con el
      query `?reset=liga` dispara el reset nada más cargar la página,

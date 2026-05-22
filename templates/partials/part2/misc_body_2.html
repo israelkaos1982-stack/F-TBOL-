@@ -3823,8 +3823,10 @@
     var d = arr[Math.floor(Math.random()*arr.length)];
     window.LESION_STORE = window.LESION_STORE || {};
     window.BAJA_STORE   = window.BAJA_STORE   || {};
-    window.LESION_STORE[name] = { equipo:team, grado:grado, gradoNombre:gn, gradoEmoji:ge, descripcion:d, partidos:partidos, timestamp:Date.now() };
+    window.LESION_STORE[name] = { equipo:team, grado:grado, gradoNombre:gn, gradoEmoji:ge, descripcion:d, partidos:partidos, timestamp:Date.now(), _skipFirstDecrement:true };
     window.BAJA_STORE[name]   = { tipo:'lesion', liga:partidos, copa:partidos, europa:partidos };
+    try { if (window._persistInjuries) window._persistInjuries(); } catch(_){}
+    try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(_){}
     return {grado:grado, gradoNombre:gn, gradoEmoji:ge, descripcion:d, partidos:partidos};
   }
   window._formaToggleInline = function(team, name){
@@ -8340,7 +8342,8 @@
     window.BAJA_STORE = window.BAJA_STORE || {};
     window.BAJA_STORE[playerName] = { tipo:'lesion', liga:d.partidos, copa:d.partidos, europa:d.partidos };
     window.LESION_STORE = window.LESION_STORE || {};
-    window.LESION_STORE[playerName] = { equipo:teamName, grado:d.grado, gradoEmoji:d.ico, gradoNombre:grade, descripcion:desc };
+    window.LESION_STORE[playerName] = { equipo:teamName, grado:d.grado, gradoEmoji:d.ico, gradoNombre:grade, descripcion:desc, partidos:d.partidos, timestamp:Date.now(), _skipFirstDecrement:true };
+    try { if (window._persistInjuries) window._persistInjuries(); } catch(_){}
     /* Añadir evento al acta */
     var min = Math.floor(st.timerSec/60);
     var id = window._evtId();
@@ -8866,13 +8869,9 @@
     var n = Math.max(0, parseInt(v, 10) || 0);
     window.__ATH_MED_PI = n;
     try { localStorage.setItem(ATH_MED_KEY, String(n)); } catch(e){}
-    var el = document.getElementById('ath-med-val');
-    if (el) {
-      el.textContent = String(n).padStart(2,'0') + ' PI';
-      el.classList.remove('pulse');
-      void el.offsetWidth;
-      el.classList.add('pulse');
-    }
+    /* El icono 💊 del HUD muestra ahora los partidos de lesión
+       pendientes, no los PI. El saldo de PI se ve dentro del menú
+       de tratamiento (texto de ayuda). */
   }
   function athIsHumanTeam(name) {
     if (typeof window.esHumano === 'function') return !!window.esHumano(name);
@@ -8895,18 +8894,51 @@
     var red = st.events.filter(function(e){ return e.team === rivalSide && (e.type === 'roja' || e.type === 'd-amarilla'); }).length;
     athAddMedicalPI(athCardsToPI(yellow, red, athIsHumanTeam(rivalName)));
   }
-  function athGetInjuredList() {
-    var store = window.BAJA_STORE || {};
-    return Object.keys(store).filter(function(name){
-      var it = store[name];
-      if (!it || it.tipo !== 'lesion') return false;
-      return (parseInt(it.liga||0,10) + parseInt(it.copa||0,10) + parseInt(it.europa||0,10)) > 0;
-    }).map(function(name){
-      var it = store[name] || {};
-      var remain = Math.max(parseInt(it.liga||0,10)||0, parseInt(it.copa||0,10)||0, parseInt(it.europa||0,10)||0);
-      return { name:name, remain:remain };
-    });
+  /* Equipo del hub Toñín (s-munich). El icono 💊 y el menú médico se
+     refieren SIEMPRE a las lesiones de ESE equipo. */
+  function _athHubTeam() {
+    if (window._mkHubTeamName) return String(window._mkHubTeamName);
+    try {
+      var el = document.getElementById('mk-hub-name');
+      if (el) return String(el.textContent || '').split('·')[0].trim();
+    } catch(e){}
+    return '';
   }
+  /* Lesionados del equipo del hub. Fuente de verdad: LESION_STORE
+     (.partidos es la cuenta única global que decrementa 1 por cada
+     partido jugado en cualquier competición). */
+  function _athInjuredForHub() {
+    var team = _athHubTeam().trim().toLowerCase();
+    var store = window.LESION_STORE || {};
+    var out = [];
+    Object.keys(store).forEach(function(name){
+      var l = store[name];
+      if (!l) return;
+      var rem = parseInt(l.partidos || 0, 10) || 0;
+      if (rem <= 0) return;
+      if (team && String(l.equipo || '').trim().toLowerCase() !== team) return;
+      out.push({
+        name: name, remain: rem,
+        gradoEmoji: l.gradoEmoji, gradoNombre: l.gradoNombre,
+        descripcion: l.descripcion
+      });
+    });
+    return out;
+  }
+  function athGetInjuredList() {
+    return _athInjuredForHub().map(function(p){ return { name:p.name, remain:p.remain }; });
+  }
+  /* Refresca el número del icono 💊: partidos de lesión pendientes del
+     equipo del hub (el máximo restante → decrementa 1 por partido). */
+  window.athRefreshInjuryHud = function() {
+    var el = document.getElementById('ath-med-injury');
+    if (!el) return;
+    var inj = _athInjuredForHub();
+    var pend = inj.reduce(function(m,p){ return Math.max(m, p.remain); }, 0);
+    el.textContent = String(pend).padStart(2,'0');
+    if (pend > 0) el.classList.add('has-injury');
+    else el.classList.remove('has-injury');
+  };
   window.athOpenMedicalMenu = function() {
     var ov = document.getElementById('ath-med-ov');
     var list = document.getElementById('ath-med-ov-list');
@@ -8914,12 +8946,12 @@
     if (!ov || !list || !help) return;
     var injured = athGetInjuredList();
     if (!injured.length) {
-      help.textContent = 'No hay lesionados en la plantilla de 26.';
+      help.textContent = 'No hay lesionados en la plantilla. PI disponibles: ' + athGetMedicalPI() + '.';
       list.innerHTML = '';
       ov.classList.add('show');
       return;
     }
-    help.textContent = 'Selecciona jugadores: se consumen PI equivalentes a los partidos restantes de lesión.';
+    help.textContent = 'Tienes ' + athGetMedicalPI() + ' PI. Inyectar a un jugador consume PI = partidos de lesión restantes y lo deja disponible de inmediato.';
     list.innerHTML = injured.map(function(p){
       return '<label class="ath-med-row">'
         + '<span><b>🩹 ' + p.name + '</b><br><small>Lesión restante: ' + p.remain + ' partido(s)</small></span>'
@@ -8942,23 +8974,26 @@
       alert('PI insuficientes. Necesitas ' + need + ' PI y tienes ' + cur + ' PI.');
       return;
     }
-    if (!window.BAJA_STORE) return;
     chks.forEach(function(c){
       var name = c.getAttribute('data-player');
-      var it = window.BAJA_STORE[name];
-      if (!it) return;
-      it.liga = 0; it.copa = 0; it.europa = 0;
+      /* Inyección = curación total: el jugador queda disponible ya. */
+      if (window.BAJA_STORE && window.BAJA_STORE[name]) delete window.BAJA_STORE[name];
+      if (window.LESION_STORE && window.LESION_STORE[name]) delete window.LESION_STORE[name];
     });
     athSetMedicalPI(cur - need);
+    try { if (window._persistInjuries) window._persistInjuries(); } catch(e){}
+    try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(e){}
     try { if (typeof window._renderSancionOverlayList === 'function') window._renderSancionOverlayList(); } catch(e){}
     document.getElementById('ath-med-ov').classList.remove('show');
   };
 
   setTimeout(function(){
     athSetMedicalPI(athGetMedicalPI());
+    if (window.athRefreshInjuryHud) window.athRefreshInjuryHud();
     var medBtn = document.getElementById('ath-med-icon');
     if (medBtn) medBtn.addEventListener('click', function(ev){ ev.stopPropagation(); window.athOpenMedicalMenu(); });
   }, 30);
+  setTimeout(function(){ if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); }, 600);
 
   /* ── Confirmación antes de FINALIZAR ────────────────────────────
      Petición usuario 2026-05-04: por error pulsar 🏁 FINALIZAR
@@ -12893,6 +12928,23 @@
       } catch(_){}
     }
     _gm.finished = true;
+    /* Lesiones: registrar las generadas en este partido y decrementar
+       la baja de ambos equipos (1 partido jugado = 1 partido menos de
+       baja). Mismo criterio que _mlFinishMatchGen — necesario para que
+       las bajas se consuman también en gm-modal (Copa del Rey, Recopa,
+       Supercopa, amistosos, torneos…), no solo en las ml-cards. */
+    try {
+      if (typeof window._registrarLesionesDesdeEventos === 'function' && _gm.events) {
+        window._registrarLesionesDesdeEventos(_gm.events, _gm.home, _gm.away);
+      }
+    } catch(_){}
+    try {
+      if (window.LESION_STORE_UTILS && typeof window.LESION_STORE_UTILS.decrementarPorPartido === 'function') {
+        window.LESION_STORE_UTILS.decrementarPorPartido(_gm.home, 'liga');
+        window.LESION_STORE_UTILS.decrementarPorPartido(_gm.away, 'liga');
+      }
+      if (window.athRefreshInjuryHud) window.athRefreshInjuryHud();
+    } catch(_){}
     /* Arrancar el grace period de propagación: el snapshot seguirá
        incluyendo este partido con finished=true durante
        FINISHED_PROPAGATE_MS para que los otros dispositivos lo vean

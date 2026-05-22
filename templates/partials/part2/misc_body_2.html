@@ -10878,6 +10878,61 @@
   var _genActiveMk = null;
   var _genPendingEvt = null;
 
+  /* ── AUTO-PICK de jugador para equipos IA con alias eFootball ──
+     Cuando un equipo IA tiene un alias de eFootball asignado (p.ej.
+     Barakaldo → BG Pathum United), el usuario NO quiere elegir el
+     jugador a mano al añadir un evento en la card de simulación: la
+     web escoge sola al jugador del equipo (Barakaldo) con más opciones
+     de cumplir ese evento. Reutiliza la misma ponderación de goleador
+     del motor (posición + power + iconos C/F/P/⚾/🏀) documentada en
+     CLAUDE.md (×3.0 natGoalPro, ×1.8 natGoal, +P penalty, +F freeKick).
+     Las entradas de squad son arrays [num,name,pos,power] con flags
+     `elite/natGoal/natGoalPro/captain/freeKick/penalty` como props. */
+  function _genAutoPickPlayer(sq, evtType){
+    var pool = (sq||[]).filter(function(p){ return Array.isArray(p) && p[1]; });
+    if(!pool.length) return null;
+    function pw(p){ return Math.max(1, Number(p[3])||60); }
+    var outfield = pool.filter(function(p){ return String(p[2])!=='P'; });
+    var gks      = pool.filter(function(p){ return String(p[2])==='P'; });
+    function rnd(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+    /* Portería imbatida → el portero. */
+    if(evtType==='porteria') return gks.length ? gks[0] : pool[0];
+    /* Autogol → un defensa (es quien suele meterla en propia). */
+    if(evtType==='propia'){
+      var defs = pool.filter(function(p){ return String(p[2])==='D'; });
+      return rnd(defs.length?defs:(outfield.length?outfield:pool));
+    }
+    /* MVP → un jugador ⭐ elite si lo hay, si no el de mayor power. */
+    if(evtType==='mvp'){
+      var elites = pool.filter(function(p){ return p.elite; });
+      if(elites.length) return rnd(elites);
+      return pool.slice().sort(function(a,b){ return pw(b)-pw(a); })[0];
+    }
+    /* Tarjetas y lesión → jugador de campo al azar. */
+    if(evtType==='amarilla'||evtType==='d-amarilla'||evtType==='roja'||evtType==='lesion'){
+      return rnd(outfield.length?outfield:pool);
+    }
+    /* Goles (gol, falta-gol, pen-gol) → goleador ponderado. */
+    var goalPool = outfield.length?outfield:pool;
+    function w(p){
+      var pos = String(p[2]);
+      var posMul = pos==='F'?1.6 : pos==='M'?1.0 : pos==='D'?0.45 : 0.12;
+      var x = pw(p)*posMul;
+      if(p.natGoalPro)   x *= 3.0;
+      else if(p.natGoal) x *= 1.8;
+      if(p.captain)      x *= 1.08;
+      if(evtType==='falta-gol'){ if(p.freeKick) x *= 4.0; }
+      else if(evtType==='pen-gol'){ if(p.penalty) x *= 4.0; }
+      else { if(p.penalty) x += pw(p)*0.40; if(p.freeKick) x += pw(p)*0.30; }
+      return Math.max(0.01, x);
+    }
+    var total = goalPool.reduce(function(s,p){ return s+w(p); }, 0);
+    var r = Math.random()*total, acc=0;
+    for(var i=0;i<goalPool.length;i++){ acc+=w(goalPool[i]); if(r<=acc) return goalPool[i]; }
+    return goalPool[goalPool.length-1];
+  }
+
   window.genEvPick = function(label, type) {
     _genPendingEvt = {label:label, type:type};
     var ov=document.getElementById('gen-ev-ov'); if(ov)ov.classList.remove('show');
@@ -10911,6 +10966,26 @@
     evt.team=team;
     var st=_mlSt(mk);
     var teamName=team==='a'?st.home:st.away;
+    /* ── AUTO-PICK: equipo IA con alias eFootball ─────────────────
+       Si el equipo seleccionado tiene un alias de eFootball y NO es
+       humano en esta competición, no mostramos el selector de
+       jugador: la web escoge sola al jugador idóneo y confirma el
+       evento directamente. */
+    try {
+      var _alias = (typeof window.getTeamEfootballAlias==='function')
+        ? window.getTeamEfootballAlias(teamName) : '';
+      var _isHuman = (typeof window.isHumanInComp==='function')
+        ? window.isHumanInComp(teamName, st.comp) : false;
+      if (_alias && !_isHuman) {
+        var _autoSq=(typeof window.sqFromRegistryFull==='function'&&window.sqFromRegistryFull(teamName))||[];
+        if(!_autoSq.length) _autoSq=(typeof window.sqFromRegistry==='function'&&window.sqFromRegistry(teamName))||[];
+        var _autoPick=_genAutoPickPlayer(_autoSq, evt.type);
+        if(_autoPick){
+          window.genPlConfirm(mk, team, String(_autoPick[0]||''), String(_autoPick[1]||''));
+          return;
+        }
+      }
+    } catch(_){}
     var plOv=document.getElementById('gen-pl-ov');
     var plEvt=document.getElementById('gen-pl-evt');
     var plTeam=document.getElementById('gen-pl-team');

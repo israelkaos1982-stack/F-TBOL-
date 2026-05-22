@@ -12112,6 +12112,14 @@ window._showSimProgress = function(opts, onDone){
           <span class="tour-ed-fmt-box">✓</span>
           <span class="tour-ed-fmt-lbl">Grupos + Eliminatoria</span>
         </div>
+        <div class="tour-ed-fmt-opt" data-fmt="league-ko" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('league-ko')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Liga + Playoff</span>
+        </div>
+        <div class="tour-ed-fmt-opt" data-fmt="swiss" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('swiss')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Fase de Liga (suizo)</span>
+        </div>
         <div class="tour-ed-fmt-opt" data-fmt="mundial-48" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('mundial-48')">
           <span class="tour-ed-fmt-box">✓</span>
           <span class="tour-ed-fmt-lbl">Mundial · 48 selecciones</span>
@@ -12673,6 +12681,8 @@ window._showSimProgress = function(opts, onDone){
     'ko-2leg':'Eliminatoria a ida y vuelta',
     league:'Liga (round-robin)',
     'groups-ko':'Grupos + Eliminatoria',
+    'league-ko':'Liga + Playoff',
+    'swiss':'Fase de Liga (suizo)',
     'mundial-48':'Mundial · 48 selecciones'
   };
   /* Config fija del formato Mundial 2032 (48 selecciones, 2026-05-22):
@@ -13423,6 +13433,17 @@ window._showSimProgress = function(opts, onDone){
     if (!box || !_open) return;
     var fmt = _open.cfg.format;
     var fc = _open.cfg.formatConfig || {};
+    /* Selector de criterio de desempate, reutilizado por los formatos
+       con clasificación (grupos-ko · liga+playoff · suizo). */
+    function _tbSelectHtml(cur){
+      cur = cur || 'dif';
+      return '<select id="tour-ed-tiebreak" ' +
+        'style="width:100%;box-sizing:border-box;padding:7px;border-radius:6px;background:#1a1f29;color:#eee;border:1px solid rgba(255,255,255,.2);font-family:inherit;font-size:13px;">' +
+        '<option value="dif"'+(cur==='dif'?' selected':'')+'>Dif. de goles</option>' +
+        '<option value="gf"'+(cur==='gf'?' selected':'')+'>Goles a favor</option>' +
+        '<option value="pg"'+(cur==='pg'?' selected':'')+'>Partidos ganados</option>' +
+        '</select>';
+    }
     if (fmt === 'ko') {
       box.innerHTML =
         '<label>Rondas (separadas por coma)</label>' +
@@ -13445,22 +13466,44 @@ window._showSimProgress = function(opts, onDone){
         '<label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
         '<input id="tour-ed-twolegs" type="checkbox" style="width:auto;" '+(fc.twoLegs?'checked':'')+'> A doble vuelta</label>';
     } else if (fmt === 'groups-ko') {
-      var _tb = fc.tieBreak || 'dif';
       box.innerHTML =
         '<div class="tour-ed-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
         '<div><label>Nº grupos</label><input id="tour-ed-groups" type="number" min="1" max="16" value="'+(fc.groups||2)+'"></div>' +
         '<div><label>Equipos / grupo</label><input id="tour-ed-pergroup" type="number" min="2" max="16" value="'+(fc.perGroup||4)+'"></div>' +
         '<div><label>Clasifican / grupo</label><input id="tour-ed-advance" type="number" min="1" max="15" value="'+(fc.advancePerGroup||2)+'"></div>' +
-        '<div><label>Desempate</label><select id="tour-ed-tiebreak" ' +
-          'style="width:100%;box-sizing:border-box;padding:7px;border-radius:6px;background:#1a1f29;color:#eee;border:1px solid rgba(255,255,255,.2);font-family:inherit;font-size:13px;">' +
-          '<option value="dif"'+(_tb==='dif'?' selected':'')+'>Dif. de goles</option>' +
-          '<option value="gf"'+(_tb==='gf'?' selected':'')+'>Goles a favor</option>' +
-          '<option value="pg"'+(_tb==='pg'?' selected':'')+'>Partidos ganados</option>' +
-        '</select></div>' +
+        '<div><label>Desempate</label>'+_tbSelectHtml(fc.tieBreak)+'</div>' +
         '</div>' +
+        '<label style="margin-top:8px;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
+        '<input id="tour-ed-grpdouble" type="checkbox" style="width:auto;" '+(fc.groupDoubleLegs?'checked':'')+'> Grupos a doble vuelta (cada rival 2 veces)</label>' +
         '<div style="margin-top:6px;font-size:11px;color:rgba(255,255,255,.5);text-transform:none;letter-spacing:0;line-height:1.4;">' +
           'Tras los puntos, el orden de cada grupo se desempata por el criterio elegido. ' +
           'Clasifican los <b>N primeros</b> de cada grupo a la fase final.' +
+        '</div>' +
+        '<label style="margin-top:8px;">Eliminatoria final (rondas)</label>' +
+        '<input id="tour-ed-rounds" type="text" value="'+(fc.koRounds||['SF','F']).join(',')+'" placeholder="QF,SF,F">';
+    } else if (fmt === 'league-ko') {
+      box.innerHTML =
+        '<div class="tour-ed-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
+        '<div><label>Equipos a playoff</label><input id="tour-ed-advance" type="number" min="2" max="32" value="'+(fc.advancePerGroup||4)+'"></div>' +
+        '<div><label>Desempate</label>'+_tbSelectHtml(fc.tieBreak)+'</div>' +
+        '</div>' +
+        '<label style="margin-top:8px;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
+        '<input id="tour-ed-twolegs" type="checkbox" style="width:auto;" '+(fc.groupDoubleLegs?'checked':'')+'> Liga a doble vuelta</label>' +
+        '<div style="margin-top:6px;font-size:11px;color:rgba(255,255,255,.5);text-transform:none;letter-spacing:0;line-height:1.4;">' +
+          'Liguilla de todos contra todos; al terminar, los <b>N mejores</b> juegan una eliminatoria final por el título.' +
+        '</div>' +
+        '<label style="margin-top:8px;">Eliminatoria final (rondas)</label>' +
+        '<input id="tour-ed-rounds" type="text" value="'+(fc.koRounds||['SF','F']).join(',')+'" placeholder="QF,SF,F">';
+    } else if (fmt === 'swiss') {
+      box.innerHTML =
+        '<div class="tour-ed-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
+        '<div><label>Jornadas (partidos/equipo)</label><input id="tour-ed-swissrounds" type="number" min="1" max="20" value="'+(fc.swissRounds||6)+'"></div>' +
+        '<div><label>Equipos a fase final</label><input id="tour-ed-advance" type="number" min="2" max="32" value="'+(fc.advancePerGroup||8)+'"></div>' +
+        '<div><label>Desempate</label>'+_tbSelectHtml(fc.tieBreak)+'</div>' +
+        '</div>' +
+        '<div style="margin-top:6px;font-size:11px;color:rgba(255,255,255,.5);text-transform:none;letter-spacing:0;line-height:1.4;">' +
+          'Una sola tabla, sin grupos: cada equipo juega ese nº de partidos contra rivales <b>distintos</b>. ' +
+          'Al terminar, los <b>N mejores</b> de la clasificación pasan a la eliminatoria final.' +
         '</div>' +
         '<label style="margin-top:8px;">Eliminatoria final (rondas)</label>' +
         '<input id="tour-ed-rounds" type="text" value="'+(fc.koRounds||['SF','F']).join(',')+'" placeholder="QF,SF,F">';
@@ -13479,7 +13522,7 @@ window._showSimProgress = function(opts, onDone){
      respondía de forma fiable en móvil — bug usuario 2026-05-17 y
      2026-05-21). Selección EXCLUSIVA: marcar una desmarca las demás.
      Los 4 valores válidos. */
-  var _TOUR_FMT_VALUES = ['ko','ko-2leg','league','groups-ko','mundial-48'];
+  var _TOUR_FMT_VALUES = ['ko','ko-2leg','league','groups-ko','league-ko','swiss','mundial-48'];
   /* ── AUTO-GUARDADO del editor de torneo ──────────────────────────
      Petición usuario 2026-05-21: "si pongo el nombre a una
      competición de selecciones quiero que se guarde para siempre
@@ -13621,6 +13664,7 @@ window._showSimProgress = function(opts, onDone){
       var _pgEl  = document.getElementById('tour-ed-pergroup');
       var _advEl = document.getElementById('tour-ed-advance');
       var _tbEl  = document.getElementById('tour-ed-tiebreak');
+      var _gdEl  = document.getElementById('tour-ed-grpdouble');
       var _pg  = parseInt(_pgEl ? _pgEl.value : '', 10) || 4;
       var _adv = parseInt(_advEl ? _advEl.value : '', 10) || 2;
       if (_adv < 1) _adv = 1;
@@ -13630,7 +13674,40 @@ window._showSimProgress = function(opts, onDone){
         perGroup: _pg,
         advancePerGroup: _adv,
         tieBreak: (_tbEl && _tbEl.value) || 'dif',
+        groupDoubleLegs: !!(_gdEl && _gdEl.checked),
         koRounds: rEl ? rEl.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F']
+      };
+    } else if (cfg.format === 'league-ko') {
+      /* Liga + Playoff = 1 solo "grupo" con todos los equipos +
+         eliminatoria final de los N mejores. Se renderiza con el
+         motor de grupos-ko (groups:1). */
+      var rElLk = document.getElementById('tour-ed-rounds');
+      var _advLk = parseInt((document.getElementById('tour-ed-advance')||{}).value, 10) || 4;
+      var _tbLk  = document.getElementById('tour-ed-tiebreak');
+      if (_advLk < 2) _advLk = 2;
+      cfg.formatConfig = {
+        groups: 1,
+        advancePerGroup: _advLk,
+        tieBreak: (_tbLk && _tbLk.value) || 'dif',
+        groupDoubleLegs: !!(document.getElementById('tour-ed-twolegs') && document.getElementById('tour-ed-twolegs').checked),
+        koRounds: rElLk ? rElLk.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F']
+      };
+    } else if (cfg.format === 'swiss') {
+      /* Suizo = 1 sola tabla, fixture round-robin recortado a N
+         jornadas (cada equipo juega N rivales distintos) + KO de los
+         N mejores. También usa el motor de grupos-ko (groups:1). */
+      var rElSw = document.getElementById('tour-ed-rounds');
+      var _swR  = parseInt((document.getElementById('tour-ed-swissrounds')||{}).value, 10) || 6;
+      var _advSw = parseInt((document.getElementById('tour-ed-advance')||{}).value, 10) || 8;
+      var _tbSw  = document.getElementById('tour-ed-tiebreak');
+      if (_swR < 1) _swR = 1;
+      if (_advSw < 2) _advSw = 2;
+      cfg.formatConfig = {
+        groups: 1,
+        swissRounds: _swR,
+        advancePerGroup: _advSw,
+        tieBreak: (_tbSw && _tbSw.value) || 'dif',
+        koRounds: rElSw ? rElSw.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F']
       };
     } else if (cfg.format === 'mundial-48') {
       cfg.formatConfig = _mundialFormatConfig();
@@ -14134,6 +14211,10 @@ window._showSimProgress = function(opts, onDone){
       fmtTxt += ': '+(cfg.numTeams||'?')+' equipos'+(fc.twoLegs?' a doble vuelta':' a una vuelta');
     } else if (cfg.format === 'groups-ko') {
       fmtTxt += ': '+(fc.groups||'?')+' grupos de '+(fc.perGroup||'?')+' + '+(fc.koRounds||[]).join(' → ');
+    } else if (cfg.format === 'league-ko') {
+      fmtTxt += ': liguilla'+(fc.groupDoubleLegs?' (doble vuelta)':'')+' + playoff de '+(fc.advancePerGroup||'?')+' → '+(fc.koRounds||[]).join(' → ');
+    } else if (cfg.format === 'swiss') {
+      fmtTxt += ': '+(fc.swissRounds||'?')+' jornadas · '+(fc.advancePerGroup||'?')+' a la fase final → '+(fc.koRounds||[]).join(' → ');
     } else if (cfg.format === 'mundial-48') {
       fmtTxt += ': 12 grupos de 4 · 1º+2º+8 mejores 3os → '+(fc.koRounds||[]).join(' → ');
     }
@@ -14519,7 +14600,9 @@ window._showSimProgress = function(opts, onDone){
       infoEl.innerHTML = html;
     } else if (cfg.format === 'league') {
       infoEl.innerHTML = hint + _renderLeague(cfg, id, teams);
-    } else if (cfg.format === 'groups-ko') {
+    } else if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss') {
+      /* Liga+Playoff y Suizo reutilizan el motor de grupos-ko con
+         1 solo grupo (config normalizada en _readForm). */
       infoEl.innerHTML = hint + _renderGroupsKO(cfg, id, teams);
     } else if (cfg.format === 'mundial-48') {
       /* El menú de 7 cajas (Final · Semis · Cuartos · Octavos ·
@@ -14742,7 +14825,13 @@ window._showSimProgress = function(opts, onDone){
       slices.push(slice);
       var gKey = 'g'+g+'_';
       if (!cfg.groupFixtures[g]) {
-        cfg.groupFixtures[g] = _tourBuildRoundRobin(slice.map(function(_,i){return i;}));
+        var _gFix = _tourBuildRoundRobin(slice.map(function(_,i){return i;}));
+        /* Doble vuelta (grupos-ko / liga+playoff): cada rival 2 veces. */
+        if (fc.groupDoubleLegs) _gFix = _tourDoubleFixture(_gFix);
+        /* Suizo: se recorta el round-robin a N jornadas → cada equipo
+           juega N rivales distintos, sin repetir. */
+        if (fc.swissRounds && fc.swissRounds < _gFix.length) _gFix = _gFix.slice(0, fc.swissRounds);
+        cfg.groupFixtures[g] = _gFix;
       }
       if (typeof cfg.currentJornadaByGroup[g] !== 'number') cfg.currentJornadaByGroup[g] = 0;
       var fix = cfg.groupFixtures[g];
@@ -14751,7 +14840,10 @@ window._showSimProgress = function(opts, onDone){
       if (!prog.allDone) allGroupsDone = false;
       var letter = String.fromCharCode(65+g);
       var _grpHasHuman = slice.some(function(t){ return t && t.isHuman; });
-      html += '<div class="tour-group-block tour-grp-'+letter+(_grpHasHuman?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
+      /* Con 1 solo grupo (liga+playoff / suizo) la tabla no es un
+         "grupo": se titula CLASIFICACIÓN. */
+      var _grpTitle = (nGroups === 1) ? 'CLASIFICACIÓN' : ('GRUPO ' + letter);
+      html += '<div class="tour-group-block tour-grp-'+letter+(_grpHasHuman?' tour-group-human':'')+'"><h4>'+_grpTitle+' · '+prog.done+'/'+prog.tot+'</h4>';
       html += _standingsTableHtml(rows, advancePerGroup);
       var curJg = cfg.currentJornadaByGroup[g];
       var jProg = (function(){
@@ -15863,7 +15955,8 @@ window._showSimProgress = function(opts, onDone){
         coins += (prizes[posKey] || 0);
         _bumpByName(r.name, coins);
       });
-    } else if (cfg.format === 'groups-ko') {
+    } else if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss') {
+      /* Liga+Playoff y Suizo comparten el cuadro KO de grupos-ko. */
       var fc = cfg.formatConfig || {};
       var koRounds = fc.koRounds || ['Cuartos','Semis','Final'];
       var koLastIdx = koRounds.length - 1;
@@ -16106,6 +16199,20 @@ window._showSimProgress = function(opts, onDone){
           return;
         }
         _open.cfg.teams = draw.teams;
+        /* Un sorteo nuevo descarta el progreso anterior: los fixtures,
+           el cuadro KO y los resultados ya no corresponden a estos
+           equipos (y el formato puede haber cambiado). Sin esto, un
+           torneo re-sorteado reutilizaba fixtures viejos. */
+        _open.cfg.results = {};
+        _open.cfg.fixture = null;
+        _open.cfg.currentJornada = 0;
+        _open.cfg.groupFixtures = {};
+        _open.cfg.currentJornadaByGroup = {};
+        _open.cfg.bracket = null;
+        _open.cfg.currentRound = 0;
+        _open.cfg.koBracket = null;
+        _open.cfg.koCurrentRound = 0;
+        _open.cfg._prizesPaid = false;
         /* OPTIMISTA (petición usuario 2026-05-16: "crear un torneo
            tarda >5 min"). El cuello de botella era el `await _tourSave`
            bloqueando hasta 8 s por la red. `_tourSave` ya persiste en
@@ -16425,6 +16532,16 @@ window._showSimProgress = function(opts, onDone){
       arr = [fixed].concat(rest);
     }
     return fixture;
+  }
+
+  /* Duplica un fixture round-robin a IDA + VUELTA: añade las mismas
+     jornadas con local/visitante invertidos. Lo usan los formatos a
+     doble vuelta (liga+playoff, grupos a doble vuelta). */
+  function _tourDoubleFixture(fixture) {
+    var second = fixture.map(function(jor){
+      return jor.map(function(m){ return { home:m.away, away:m.home }; });
+    });
+    return fixture.concat(second);
   }
 
   /* ─── Standings de un grupo o liga ────────────────────────
@@ -16932,7 +17049,8 @@ window._showSimProgress = function(opts, onDone){
       } else if (cfg4.format === 'league') {
         cfg4.fixture = null;
         cfg4.currentJornada = 0;
-      } else if (cfg4.format === 'groups-ko' || cfg4.format === 'mundial-48') {
+      } else if (cfg4.format === 'groups-ko' || cfg4.format === 'mundial-48'
+                 || cfg4.format === 'league-ko' || cfg4.format === 'swiss') {
         cfg4.groupFixtures = {};
         cfg4.currentJornadaByGroup = {};
         cfg4.koBracket = null;

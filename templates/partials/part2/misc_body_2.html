@@ -13946,6 +13946,14 @@
         stadEl.textContent = stad;
       }
     } catch(_) {}
+    /* Clima del calendario global. La previa (showPrePartidoOverlay →
+       _mmInjectEnv) resuelve el clima de la agenda justo antes de abrir
+       este modal y lo deja en window._mmLastWeather. Antes el gm-modal
+       hardcodeaba "☀️ Soleado". */
+    try {
+      var gmWxEl = document.getElementById('gm-venue-weather');
+      if (gmWxEl && window._mmLastWeather) gmWxEl.textContent = window._mmLastWeather;
+    } catch(_) {}
     var postOv = document.getElementById('gm-post-ov');
     if (postOv) postOv.classList.remove('show');
     var aplazarRow = document.getElementById('gm-aplazar-row');
@@ -16703,7 +16711,7 @@
   <div id="gm-inner">
     <!-- Venue bar -->
     <div id="gm-venue">
-      <span id="gm-venue-info">🏟️ <span id="gm-venue-stadium">eFootball Stadium</span> · ☀️ Soleado</span>
+      <span id="gm-venue-info">🏟️ <span id="gm-venue-stadium">eFootball Stadium</span> · <span id="gm-venue-weather">☀️ Soleado</span></span>
       <span id="gm-jornada-badge" style="font-weight:700;color:#c8a0ff;">Liga</span>
     </div>
 
@@ -24824,6 +24832,21 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.match-live-wrap').forEach(patchStadiumIn);
   }
 
+  /* Re-aplica el clima del calendario global a la venue-bar de cada
+     card de partido humano. El clima lo resuelve `_mmInjectEnv`
+     (index.bundle.js) al abrir la previa, leyéndolo de la agenda
+     (.ag-wx); este patcher lo mantiene tras re-renders de la card. */
+  function patchWeatherIn(wrap) {
+    if (!wrap || !wrap.id) return;
+    var mk = wrap.id.replace(/^mlw-/, '');
+    if (mk && typeof window._mmApplyCardWeather === 'function') {
+      window._mmApplyCardWeather(mk);
+    }
+  }
+  function patchAllWeather() {
+    document.querySelectorAll('.match-live-wrap').forEach(patchWeatherIn);
+  }
+
   /* ── SPEED CONTROLS — inyectar ⏪/⏩ si faltan ──
      IMPORTANTE (petición del usuario): SOLO en HvH y HvIA. En IA vs IA
      NUNCA. El wrap del calendario lleva la clase `hvh` o `hvia`
@@ -24871,6 +24894,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function runAll() {
     try { patchAllStadiums(); } catch(_){}
+    try { patchAllWeather();  } catch(_){}
     try { patchAllSpeed();    } catch(_){}
   }
 

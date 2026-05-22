@@ -2709,16 +2709,42 @@
       /* 18 ganadores + 46 pre-clasificados (todo el resto que NO jugó r1) */
       var all = _collectCopaTeams();
       var r1Sorteo = ((_copa.sorteo || {}).r1 || []);
+      var r1Res = ((_copa.resultados || {}).r1 || []);
       var jugaronR1 = {};
       r1Sorteo.forEach(function (m) { jugaronR1[m.l] = true; jugaronR1[m.v] = true; });
       var preClasif = all.filter(function (t) { return !jugaronR1[t.name]; });
-      var winnersR1 = (clasificados.r1 || []).map(_resolve);
+      /* Ganadores de r1: la fuente AUTORITATIVA es `resultados.r1`
+         (mismo criterio que `_resolveTbdToWinner`). Derivar de ahí —
+         en vez de depender solo de `clasificados.r1` — hace que el
+         sorteo de 2ª Ronda funcione aunque la 1ª no se haya
+         "Confirmado" o `clasificados.r1` quedara stale tras una
+         escritura batched/asíncrona. Los partidos sin jugar entran
+         como TBD `@r1#idx` (rival "Esperando Rival"). */
+      var winnersR1;
+      if (r1Sorteo.length) {
+        winnersR1 = r1Sorteo.map(function (m, idx) {
+          var r = r1Res[idx];
+          return _resolve((r && r.winner) ? r.winner : ('@r1#' + idx));
+        });
+      } else {
+        winnersR1 = (clasificados.r1 || []).map(_resolve);
+      }
       teams = winnersR1.concat(preClasif);
     } else {
       var prev = { r16: 'r2', oct: 'r16', cua: 'oct', sf: 'cua', fin: 'sf' }[ronda];
       teams = (clasificados[prev] || []).map(_resolve);
       if (ronda === 'fin' && teams.length < 2) return null;
     }
+    /* Dedup defensivo por nombre: si `sorteo.r1` estuviera stale o
+       `clasificados` doblara una entrada, un mismo equipo podría
+       colarse 2 veces y descuadrar el bombo (nº impar, equipo en 2
+       cruces). Conservamos la primera aparición de cada nombre. */
+    var _seenTeam = {};
+    teams = teams.filter(function (t) {
+      if (!t || !t.name || _seenTeam[t.name]) return false;
+      _seenTeam[t.name] = true;
+      return true;
+    });
     if (!teams.length) return null;
     /* 2026-05-09 robustez paridad respetando reglas EA-vs-no-EA:
        el chequeo previo `teams.length % 2 !== 0 → return null` abortaba
@@ -2800,7 +2826,18 @@
        Si la sesión ya está desbloqueada (window._adm === true) saltamos
        el prompt — coherente con _ppAdminGate. */
     function _runSorteo(){
-      var payload = _computeSorteoPayload(ronda);
+      /* `_computeSorteoPayload` puede tirar (datos corruptos, liga sin
+         storage, etc.). Sin este try/catch la excepción se tragaba en
+         silencio dentro del setTimeout del PIN → el usuario "metía el
+         PIN y no pasaba nada". Ahora cualquier fallo se ve. */
+      var payload;
+      try {
+        payload = _computeSorteoPayload(ronda);
+      } catch (e) {
+        try { console.error('[copa] fallo al preparar el sorteo de ' + ronda, e); } catch (_) {}
+        alert('❌ No se pudo preparar el sorteo de ' + (ROUND_LABEL[ronda] || ronda) + ':\n' + ((e && e.message) || e));
+        return;
+      }
       if (!payload) {
         alert('❌ No hay equipos suficientes en las 3 ligas para sortear ' + (ROUND_LABEL[ronda] || ronda) + '.');
         return;
@@ -2810,11 +2847,25 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
-        }).then(function (r) { return r.json(); })
-          .then(function (d) {
-            if (d.ok) copaRender(d.copa);
-            else alert('❌ Error sorteo: ' + (d.error || ''));
+        }).then(function (r) {
+          /* Leer como texto y parsear a mano: si el backend devuelve un
+             500 (página HTML de error) `r.json()` rechaza y el fallo
+             desaparecía sin avisar. Así detectamos el error real. */
+          return r.text().then(function (txt) {
+            var d;
+            try { d = JSON.parse(txt); }
+            catch (_) {
+              throw new Error('El servidor respondió con un error (HTTP ' + r.status + ').');
+            }
+            return d;
           });
+        }).then(function (d) {
+          if (d && d.ok) copaRender(d.copa);
+          else throw new Error((d && d.error) || 'respuesta inválida del servidor');
+        }).catch(function (err) {
+          try { console.error('[copa] fallo al sortear ' + ronda, err); } catch (_) {}
+          alert('❌ No se pudo sortear ' + (ROUND_LABEL[ronda] || ronda) + ':\n' + ((err && err.message) || err));
+        });
       }
       /* Overlay del balón con tema Copa del Rey (naranja-marrón). El
          usuario reportó (2026-05-10) que el sorteo tardaba "más de 3

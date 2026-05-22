@@ -5381,6 +5381,58 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     }
   };
 
+  /* Líneas de baja (lesión / sanción / expulsión) de los jugadores
+     del equipo del hub que disputa la previa actual. Devuelve [] si
+     el hub no juega este partido o no tiene bajas. Lo consume la card
+     obligatoria de bajas en `_buildItems`. */
+  function _ppHubBajasLines() {
+    var hub = String(window._mkHubTeamName || '').trim().toLowerCase();
+    if (!hub) return [];
+    var teams = null;
+    if (window._ppPreviaTeams && window._ppPreviaTeams.home) teams = window._ppPreviaTeams;
+    else if (typeof window._ppGetCurrentMatchTeams === 'function') teams = window._ppGetCurrentMatchTeams();
+    if (!teams || !teams.home) return [];
+    var hL = String(teams.home || '').trim().toLowerCase();
+    var aL = String(teams.away || '').trim().toLowerCase();
+    if (hL !== hub && aL !== hub) return [];        /* el hub no juega aquí */
+    var lines = [], seen = {};
+    /* Lesionados: LESION_STORE.equipo === hub */
+    var LS = window.LESION_STORE || {};
+    Object.keys(LS).forEach(function(name){
+      var l = LS[name];
+      if (!l || String(l.equipo || '').trim().toLowerCase() !== hub) return;
+      var rem = parseInt(l.partidos || 0, 10) || 0;
+      if (rem <= 0) return;
+      seen[name] = true;
+      lines.push((l.gradoEmoji || '🩹') + ' ' + name + ' · ' + (l.gradoNombre || 'Lesión') + ' · ' + rem + 'P');
+    });
+    /* Sanción / expulsión: BAJA_STORE no guarda equipo → cruzamos con
+       SQUAD_REGISTRY del hub para saber si el jugador es de su plantilla. */
+    var BS = window.BAJA_STORE || {};
+    var hubSquad = {};
+    if (window.SQUAD_REGISTRY) {
+      Object.keys(window.SQUAD_REGISTRY).forEach(function(tn){
+        if (String(tn).trim().toLowerCase() !== hub) return;
+        (window.SQUAD_REGISTRY[tn] || []).forEach(function(p){
+          if (Array.isArray(p) && p[1]) hubSquad[p[1]] = true;
+          else if (p && p.nombre) hubSquad[p.nombre] = true;
+        });
+      });
+    }
+    Object.keys(BS).forEach(function(name){
+      if (seen[name]) return;
+      var b = BS[name];
+      if (!b) return;
+      var tipo = b.tipo || b;
+      if (tipo !== 'sancion' && tipo !== 'expulsion') return;
+      if (!hubSquad[name]) return;
+      var n = Math.max(parseInt(b.liga || 0, 10) || 0, parseInt(b.copa || 0, 10) || 0, parseInt(b.europa || 0, 10) || 0);
+      lines.push((tipo === 'expulsion' ? '🟥' : '🟨') + ' ' + name + ' · '
+        + (tipo === 'expulsion' ? 'Expulsado' : 'Sancionado') + ' · ' + n + 'P');
+    });
+    return lines;
+  }
+
   function _buildItems(matchKey, compKey, prorroga, duracion, isHvH) {
     // Fixed items for Liga Jornada 1
     var estadio  = 'eFootball Stadium'; // fallback — overwritten below from venue-bar or TEAM_STADIUMS
@@ -5517,6 +5569,18 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var items = [
       { id:'balon',   ico:'⚽️', lbl:'Balón',         val:balon }
     ];
+    /* ── Card de BAJAS (obligatoria) ──────────────────────────────
+       Si el equipo del hub juega este partido y tiene jugadores con
+       baja (lesión / sanción / expulsión), añadimos una card que el
+       humano DEBE marcar ✅ para poder avanzar a "COMENZAR PARTIDO".
+       Así confirma qué jugadores no pueden jugar — si alinea a uno en
+       un evento del acta, el partido se pierde 5-0. */
+    try {
+      var _bjLines = _ppHubBajasLines();
+      if (_bjLines.length) {
+        items.push({ id:'bajas', ico:'🏥', lbl:'Bajas — NO alinear', val:_bjLines.join('  ·  ') });
+      }
+    } catch(_){}
     return items;
   }
 
@@ -5837,7 +5901,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     /* Si ya estamos en etapa 2 (Comenzar Partido), no sobreescribir el label */
     if (btn.getAttribute('data-pp-stage') !== '2') {
       if (ok) btn.textContent = '🎮 CONFIRMAR CONFIGURACIÓN';
-      else btn.textContent = '🔒 MARCA EL BALÓN';
+      else btn.textContent = '🔒 MARCA TODAS LAS CASILLAS';
     }
     /* Hide pre-confirm WhatsApp button (now lives in sancion overlay) */
     var waBtn = document.getElementById('pp-wa-btn');

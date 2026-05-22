@@ -8862,37 +8862,73 @@
 
   var ATH_MED_KEY = 'athMedicalPI';
   function athGetMedicalPI() {
-    try { return Math.max(0, parseInt(localStorage.getItem(ATH_MED_KEY) || '0', 10) || 0); }
-    catch(e){ return window.__ATH_MED_PI || 0; }
+    try {
+      var n = parseFloat(localStorage.getItem(ATH_MED_KEY) || '0');
+      return Math.max(0, isFinite(n) ? n : 0);
+    } catch(e){ return window.__ATH_MED_PI || 0; }
   }
   function athSetMedicalPI(v) {
-    var n = Math.max(0, parseInt(v, 10) || 0);
+    var n = parseFloat(v); if (!isFinite(n) || n < 0) n = 0;
+    /* Los PI se acumulan en decimales (0,5 / 0,1…) — redondeo a 2
+       decimales para no arrastrar ruido de coma flotante. */
+    n = Math.round(n * 100) / 100;
     window.__ATH_MED_PI = n;
     try { localStorage.setItem(ATH_MED_KEY, String(n)); } catch(e){}
-    /* El icono 💊 del HUD muestra ahora los partidos de lesión
-       pendientes, no los PI. El saldo de PI se ve dentro del menú
-       de tratamiento (texto de ayuda). */
+    /* El icono 💊 del HUD muestra los partidos de lesión pendientes,
+       no los PI. El saldo de PI se ve dentro del menú de tratamiento. */
   }
-  function athIsHumanTeam(name) {
-    if (typeof window.esHumano === 'function') return !!window.esHumano(name);
-    return ['Real Madrid','FC Barcelona','Bayern Munich','Arsenal','Atlético Madrid'].indexOf(name) !== -1;
-  }
-  function athCardsToPI(yellow, red, rivalIsHuman) {
-    return (yellow * (rivalIsHuman ? 1 : 3)) + (red * (rivalIsHuman ? 3 : 6));
+  function _athFmtPI(n) {
+    n = Math.round((parseFloat(n) || 0) * 10) / 10;
+    return String(n).replace('.', ',');
   }
   function athAddMedicalPI(points) {
-    var p = parseInt(points, 10) || 0;
-    if (p <= 0) return;
+    var p = parseFloat(points); if (!isFinite(p) || p <= 0) return;
     athSetMedicalPI(athGetMedicalPI() + p);
   }
+  /* ¿El rival es humano? CLAUDE.md obliga a usar isHumanInComp. */
+  function athRivalIsHuman(name, comp) {
+    try {
+      if (typeof window.isHumanInComp === 'function') return !!window.isHumanInComp(name, comp || 'liga');
+    } catch(e){}
+    if (typeof window.esHumano === 'function') return !!window.esHumano(name);
+    return false;
+  }
+  /* PI ganados por las tarjetas y faltas que el rival comete contra
+     nuestro equipo (valores 2026-05-22, petición usuario):
+       rival IA:     falta 0,5 · amarilla 6 · roja 12
+       rival humano: falta 0,1 · amarilla 1,5 · roja 4            */
+  function athComputePI(yellow, red, fouls, rivalIsHuman) {
+    yellow = Number(yellow) || 0; red = Number(red) || 0; fouls = Number(fouls) || 0;
+    if (rivalIsHuman) return fouls*0.1 + yellow*1.5 + red*4;
+    return fouls*0.5 + yellow*6 + red*12;
+  }
+  /* Otorga PI al equipo del hub (Liverpool) por las tarjetas y faltas
+     que le hizo el rival en este partido. Tarjetas: del acta. Faltas:
+     del campo `faltas` de matchStats (lo teclea el humano en la
+     pantalla de estadísticas obligatorias). */
   function athApplyMedicalFromActa(st) {
-    if (!st || (st.home !== 'Bayern Munich' && st.away !== 'Bayern Munich')) return;
-    var bayernSide = st.home === 'Bayern Munich' ? 'a' : 'b';
-    var rivalSide  = bayernSide === 'a' ? 'b' : 'a';
-    var rivalName  = rivalSide === 'a' ? st.home : st.away;
-    var yellow = st.events.filter(function(e){ return e.team === rivalSide && e.type === 'amarilla'; }).length;
-    var red = st.events.filter(function(e){ return e.team === rivalSide && (e.type === 'roja' || e.type === 'd-amarilla'); }).length;
-    athAddMedicalPI(athCardsToPI(yellow, red, athIsHumanTeam(rivalName)));
+    if (!st) return;
+    var hub = (typeof _athHubTeam === 'function') ? _athHubTeam() : '';
+    if (!hub) return;
+    var hubL = hub.trim().toLowerCase();
+    var homeL = String(st.home || '').trim().toLowerCase();
+    var awayL = String(st.away || '').trim().toLowerCase();
+    var hubSide = homeL === hubL ? 'a' : awayL === hubL ? 'b' : null;
+    if (!hubSide) return;                /* el hub no juega este partido */
+    var rivalSide = hubSide === 'a' ? 'b' : 'a';
+    var rivalName = rivalSide === 'a' ? st.home : st.away;
+    var comp = st.comp || st.compKey || st._comp || 'liga';
+    var rivalIsHuman = athRivalIsHuman(rivalName, comp);
+    var evs = st.events || [];
+    var yellow = evs.filter(function(e){ return e && e.team === rivalSide && e.type === 'amarilla'; }).length;
+    var red = evs.filter(function(e){ return e && e.team === rivalSide && (e.type === 'roja' || e.type === 'd-amarilla' || e.type === 'damarilla'); }).length;
+    var fouls = 0;
+    try { if (st.matchStats && st.matchStats[rivalSide]) fouls = Number(st.matchStats[rivalSide].faltas) || 0; } catch(e){}
+    var pi = athComputePI(yellow, red, fouls, rivalIsHuman);
+    if (pi > 0) {
+      athAddMedicalPI(pi);
+      try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(e){}
+    }
   }
   /* Equipo del hub Toñín (s-munich). El icono 💊 y el menú médico se
      refieren SIEMPRE a las lesiones de ESE equipo. */
@@ -8939,6 +8975,17 @@
     if (pend > 0) el.classList.add('has-injury');
     else el.classList.remove('has-injury');
   };
+  /* Refresca el texto de ayuda del menú médico: PI disponibles y PI
+     repartidos en los steppers (1 PI = 1 partido de lesión). */
+  function _athMedRefreshHelp() {
+    var help = document.getElementById('ath-med-ov-help');
+    if (!help) return;
+    var cur = athGetMedicalPI();
+    var allocs = Array.prototype.slice.call(document.querySelectorAll('#ath-med-ov .ath-med-alloc'));
+    var used = allocs.reduce(function(a,inp){ return a + (parseInt(inp.value,10)||0); }, 0);
+    help.innerHTML = '💉 <b>' + _athFmtPI(cur) + ' PI</b> disponibles · usando <b>' + used + '</b>'
+      + ' &nbsp;|&nbsp; 1 PI = 1 partido de lesión.';
+  }
   window.athOpenMedicalMenu = function() {
     var ov = document.getElementById('ath-med-ov');
     var list = document.getElementById('ath-med-ov-list');
@@ -8946,45 +8993,140 @@
     if (!ov || !list || !help) return;
     var injured = athGetInjuredList();
     if (!injured.length) {
-      help.textContent = 'No hay lesionados en la plantilla. PI disponibles: ' + athGetMedicalPI() + '.';
+      help.innerHTML = 'No hay lesionados en la plantilla. 💉 <b>' + _athFmtPI(athGetMedicalPI()) + ' PI</b> disponibles.';
       list.innerHTML = '';
       ov.classList.add('show');
       return;
     }
-    help.textContent = 'Tienes ' + athGetMedicalPI() + ' PI. Inyectar a un jugador consume PI = partidos de lesión restantes y lo deja disponible de inmediato.';
+    /* Tope de inyecciones aplicables = parte entera de los PI (cada
+       partido de lesión cuesta 1 PI exacto). */
+    var maxPI = Math.floor(athGetMedicalPI() + 1e-9);
     list.innerHTML = injured.map(function(p){
-      return '<label class="ath-med-row">'
+      var nm = p.name.replace(/"/g,'&quot;');
+      return '<div class="ath-med-row">'
         + '<span><b>🩹 ' + p.name + '</b><br><small>Lesión restante: ' + p.remain + ' partido(s)</small></span>'
-        + '<input type="checkbox" class="ath-med-chk" data-player="' + p.name.replace(/"/g,'&quot;') + '" data-cost="' + p.remain + '"/>'
-        + '</label>';
+        + '<span class="ath-med-stepper">'
+        +   '<button type="button" class="ath-med-step" data-d="-1">−</button>'
+        +   '<input type="text" inputmode="numeric" readonly class="ath-med-alloc" value="0" '
+        +     'data-player="' + nm + '" data-max="' + p.remain + '"/>'
+        +   '<button type="button" class="ath-med-step" data-d="1">+</button>'
+        + '</span>'
+        + '</div>';
     }).join('');
+    /* Wire steppers: ± con tope por jugador (partidos restantes) y
+       tope global (PI enteros disponibles). */
+    list.querySelectorAll('.ath-med-step').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var row = btn.closest('.ath-med-row');
+        var inp = row && row.querySelector('.ath-med-alloc');
+        if (!inp) return;
+        var d = parseInt(btn.getAttribute('data-d'),10) || 0;
+        var cur = parseInt(inp.value,10) || 0;
+        var max = parseInt(inp.getAttribute('data-max'),10) || 0;
+        var allocs = Array.prototype.slice.call(list.querySelectorAll('.ath-med-alloc'));
+        var usedOther = allocs.reduce(function(a,x){ return a + (x===inp ? 0 : (parseInt(x.value,10)||0)); }, 0);
+        var n = cur + d;
+        if (n < 0) n = 0;
+        if (n > max) n = max;
+        if (n + usedOther > maxPI) n = Math.max(0, maxPI - usedOther);
+        inp.value = String(n);
+        _athMedRefreshHelp();
+      });
+    });
+    _athMedRefreshHelp();
     ov.classList.add('show');
   };
   window.athApplyMedicalTreatment = function() {
-    var chks = Array.from(document.querySelectorAll('#ath-med-ov .ath-med-chk:checked'));
-    if (!chks.length) return;
-    var need = chks.reduce(function(acc,c){ return acc + (parseInt(c.getAttribute('data-cost')||'0',10)||0); }, 0);
+    var allocs = Array.prototype.slice.call(document.querySelectorAll('#ath-med-ov .ath-med-alloc'));
+    var picks = [];
+    var total = 0;
+    allocs.forEach(function(inp){
+      var n = parseInt(inp.value,10) || 0;
+      var max = parseInt(inp.getAttribute('data-max'),10) || 0;
+      if (n < 0) n = 0; if (n > max) n = max;
+      if (n > 0) picks.push({ name: inp.getAttribute('data-player'), n: n });
+      total += n;
+    });
+    if (total <= 0) { document.getElementById('ath-med-ov').classList.remove('show'); return; }
     var cur = athGetMedicalPI();
-    if (cur < need) {
-      var el = document.getElementById('ath-med-val');
-      if (el) {
-        el.style.color = '#ff6262';
-        setTimeout(function(){ el.style.color = ''; }, 900);
-      }
-      alert('PI insuficientes. Necesitas ' + need + ' PI y tienes ' + cur + ' PI.');
+    if (total > Math.floor(cur + 1e-9)) {
+      alert('PI insuficientes. Necesitas ' + total + ' PI y tienes ' + _athFmtPI(cur) + ' PI.');
       return;
     }
-    chks.forEach(function(c){
-      var name = c.getAttribute('data-player');
-      /* Inyección = curación total: el jugador queda disponible ya. */
-      if (window.BAJA_STORE && window.BAJA_STORE[name]) delete window.BAJA_STORE[name];
-      if (window.LESION_STORE && window.LESION_STORE[name]) delete window.LESION_STORE[name];
+    /* Cada inyección reduce 1 partido de lesión del jugador. Si llega
+       a 0 queda curado (fuera de LESION_STORE / BAJA_STORE). */
+    picks.forEach(function(pk){
+      var l = window.LESION_STORE && window.LESION_STORE[pk.name];
+      if (!l) return;
+      var rem = (parseInt(l.partidos || 0, 10) || 0) - pk.n;
+      if (rem <= 0) {
+        delete window.LESION_STORE[pk.name];
+        if (window.BAJA_STORE && window.BAJA_STORE[pk.name]) delete window.BAJA_STORE[pk.name];
+      } else {
+        l.partidos = rem;
+        var b = window.BAJA_STORE && window.BAJA_STORE[pk.name];
+        if (b) { b.liga = rem; b.copa = rem; b.europa = rem; }
+      }
     });
-    athSetMedicalPI(cur - need);
+    athSetMedicalPI(cur - total);
     try { if (window._persistInjuries) window._persistInjuries(); } catch(e){}
     try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(e){}
     try { if (typeof window._renderSancionOverlayList === 'function') window._renderSancionOverlayList(); } catch(e){}
     document.getElementById('ath-med-ov').classList.remove('show');
+  };
+
+  /* ── FORFEIT 5-0 por alineación ilegal ──────────────────────────
+     Si un humano usa en un evento del acta a un jugador con baja
+     activa (lesión / sanción / expulsión) que no debía jugar este
+     partido, el partido se pierde 5-0 contra el rival. Aplica en
+     HvIA y HvH (petición usuario 2026-05-22). */
+  window._athPlayerInjuredThisMatch = function(events, playerName) {
+    /* true si el jugador se lesionó DENTRO de este partido (hay un
+       evento 'lesion' suyo) → estaba jugando legalmente, no es
+       trampa. Cubre los dos shapes de evento: .name y .player. */
+    if (!Array.isArray(events) || !playerName) return false;
+    return events.some(function(e){
+      return e && e.type === 'lesion' && (e.name === playerName || e.player === playerName);
+    });
+  };
+  function _athForfeitActaEvents(rivalSide, isGm) {
+    var evs = [];
+    for (var i = 1; i <= 5; i++) {
+      evs.push(isGm
+        ? { id:window._evtId(), type:'gol', label:'Gol', team:rivalSide, min:i*15, num:'', player:'—', ico:'⚽' }
+        : { id:window._evtId(), type:'gol', label:'Gol', team:rivalSide, min:i*15, num:'', name:'—', ico:'⚽' });
+    }
+    if (isGm) {
+      evs.push({ id:window._evtId(), type:'imbat', label:'🧤 Portería Imbatida', team:rivalSide, min:90, num:'', player:'—', ico:'🧤' });
+      evs.push({ id:window._evtId(), type:'mvp', label:'MVP del Partido', team:rivalSide, min:90, num:'', player:'—', ico:'⭐' });
+    } else {
+      evs.push({ id:window._evtId(), type:'mvp', label:'MVP del Partido', team:rivalSide, min:90, num:'', name:'—', ico:'⭐' });
+    }
+    return evs;
+  }
+  window._athForfeitMatch = function(st, systemKind, mk, cheatSide, playerName) {
+    if (!st) return;
+    var isGm = systemKind === 'gm';
+    var rivalSide = cheatSide === 'a' ? 'b' : 'a';
+    st.sc = st.sc || { a:0, b:0 };
+    st.sc[cheatSide] = 0;
+    st.sc[rivalSide] = 5;
+    /* Acta sintética coherente con el 5-0 + gates pre-satisfechos
+       (matchStats, imbat, mvp) para que el cierre no pida overlays. */
+    st.events = _athForfeitActaEvents(rivalSide, isGm);
+    st.matchStats = { a:{}, b:{} };
+    var rivalName = rivalSide === 'a' ? st.home : st.away;
+    alert('🚫 ALINEACIÓN ILEGAL\n\n' + playerName + ' tiene una baja activa (lesión / sanción / '
+        + 'expulsión) y no podía jugar este partido.\n\nEl partido se pierde 5-0. Gana ' + rivalName + '.');
+    if (isGm) {
+      var scEl = document.getElementById('gm-score');
+      if (scEl) scEl.textContent = st.sc.a + '-' + st.sc.b;
+      try { window.gmEndMatch(); } catch(_){}
+    } else {
+      var scA = document.getElementById('sc-' + mk + '-a'); if (scA) scA.textContent = st.sc.a;
+      var scB = document.getElementById('sc-' + mk + '-b'); if (scB) scB.textContent = st.sc.b;
+      try { window.mlEndMatchGen(mk, rivalSide); } catch(_){}
+    }
   };
 
   setTimeout(function(){
@@ -9293,7 +9435,11 @@
     { key: 'posesion', ico: '➗', lbl: 'POSESIÓN (%)',     min: 30, max: 70, def: 50, pairSum: 100 },
     { key: 'remates',  ico: '👟', lbl: 'REMATES',          min: 0,  max: 30, def: 10 },
     { key: 'tiros',    ico: '🚪', lbl: 'TIROS A PUERTA',   min: 0,  max: 20, def: 7  },
-    { key: 'corners',  ico: '⛳', lbl: 'CÓRNERS',           min: 0,  max: 10, def: 3  }
+    { key: 'corners',  ico: '⛳', lbl: 'CÓRNERS',           min: 0,  max: 10, def: 3  },
+    /* FALTAS COMETIDAS por cada equipo. El humano las teclea; las
+       faltas que comete el RIVAL otorgan Puntos de Inyección (PI)
+       al equipo del hub vía athApplyMedicalFromActa. */
+    { key: 'faltas',   ico: '⚠️', lbl: 'FALTAS COMETIDAS',  min: 0,  max: 40, def: 8  }
     /* PARADAS eliminado a petición usuario 2026-05-08 — ya no se
        solicita al confirmar las estadísticas finales del partido. */
   ];
@@ -9522,6 +9668,7 @@
     appendRow(_STAT_DEFS_AUTO[2], autos.a.amarillas, autos.b.amarillas, true); // amarillas
     appendRow(_STAT_DEFS_AUTO[3], autos.a.rojas,     autos.b.rojas,     true); // rojas
     appendRow(_STAT_DEFS_MANUAL[3], '', '', false); // corners
+    appendRow(_STAT_DEFS_MANUAL[4], '', '', false); // faltas cometidas → PI
     /* paradas removido 2026-05-08 — ya no es parte de _STAT_DEFS_MANUAL */
     ov.classList.add('show');
   }
@@ -11053,6 +11200,13 @@
     if (!_genPendingEvt) return;
     var evt=_genPendingEvt; _genPendingEvt=null;
     var st=_mlSt(mk);
+    /* FORFEIT 5-0: alinear a un jugador con baja activa en un evento
+       del acta es ilegal → el partido se pierde 5-0 (ver gmPickPlayer). */
+    if (name && evt.type !== 'lesion' && window.BAJA_STORE && window.BAJA_STORE[name]
+        && !window._athPlayerInjuredThisMatch(st.events, name)) {
+      window._athForfeitMatch(st, 'ml', mk, team, name);
+      return;
+    }
     var min=Math.min(st.etDone?120:90,Math.floor(st.timerSec/60));
     var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',porteria:'🧤'};
     var ico=icos[evt.type]||'📋';
@@ -12276,6 +12430,18 @@
   window.gmPickPlayer = function (team, num, playerName) {
     if (!_gm.pendingEvt) return;
     var evt = _gm.pendingEvt;
+    /* FORFEIT 5-0: alinear a un jugador con baja activa en un evento
+       del acta es ilegal → el partido se pierde 5-0. Excepción: el
+       propio evento de lesión (registra una baja nueva, el jugador
+       SÍ jugaba) o un jugador lesionado DENTRO de este partido. */
+    if (playerName && evt.type !== 'lesion' && window.BAJA_STORE && window.BAJA_STORE[playerName]
+        && !window._athPlayerInjuredThisMatch(_gm.events, playerName)) {
+      _gm.pendingEvt = null; _gm.pendingTeam = null;
+      var _addB = document.getElementById('gm-add-btn'); if (_addB) _addB.classList.remove('open');
+      var _pp0 = document.getElementById('gm-player-pick'); if (_pp0) _pp0.style.display = 'none';
+      window._athForfeitMatch(_gm, 'gm', null, team, playerName);
+      return;
+    }
     _gm.pendingEvt = null;
     _gm.pendingTeam = null;
     document.getElementById('gm-add-btn').classList.remove('open');
@@ -12945,6 +13111,10 @@
       }
       if (window.athRefreshInjuryHud) window.athRefreshInjuryHud();
     } catch(_){}
+    /* PI por las tarjetas/faltas que el rival le hizo al equipo del
+       hub. En ml-cards lo hace _mlFinishMatchGen; aquí cubrimos el
+       gm-modal (Copa, Recopa, Supercopa, amistosos, torneos…). */
+    try { athApplyMedicalFromActa(_gm); } catch(_){}
     /* Arrancar el grace period de propagación: el snapshot seguirá
        incluyendo este partido con finished=true durante
        FINISHED_PROPAGATE_MS para que los otros dispositivos lo vean

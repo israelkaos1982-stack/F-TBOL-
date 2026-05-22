@@ -30912,6 +30912,23 @@ Tottenham
   #sel-pl-ov .pl-done{flex:1.4;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;
     border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;
     letter-spacing:1px;font-size:12px;font-weight:700;cursor:pointer;}
+  #sel-pl-ov .pl-paste{flex:1;background:rgba(45,212,191,.16);border:1px solid rgba(45,212,191,.5);
+    color:#2dd4bf;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;
+    letter-spacing:1px;font-size:12px;cursor:pointer;}
+  #sel-pl-ov .pl-paste-panel{padding:10px 14px;border-top:1px solid rgba(255,255,255,.08);
+    background:rgba(45,212,191,.05);}
+  #sel-pl-ov .pl-paste-tip{font-family:Rajdhani,sans-serif;font-size:11.5px;
+    color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:6px;}
+  #sel-pl-ov #sel-pl-paste-ta{width:100%;box-sizing:border-box;resize:vertical;
+    background:rgba(0,0,0,.4);border:1px solid rgba(45,212,191,.4);border-radius:8px;
+    color:#fff;font-family:'Courier New',monospace;font-size:12px;padding:8px;}
+  #sel-pl-ov .pl-paste-row{display:flex;gap:8px;margin-top:8px;}
+  #sel-pl-ov .pl-paste-cancel{flex:1;background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.22);color:rgba(255,255,255,.7);border-radius:8px;
+    padding:9px;font-family:Oswald,sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer;}
+  #sel-pl-ov .pl-paste-ok{flex:1.4;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;
+    border:none;border-radius:8px;padding:9px;font-family:Oswald,sans-serif;
+    letter-spacing:1px;font-size:12px;font-weight:700;cursor:pointer;}
 </style>
 <script>
 (function(){
@@ -31031,6 +31048,100 @@ Tottenham
       if(rows[i]) rows[i]._players = Array.isArray(t.players) ? t.players.slice() : [];
     });
   }
+  /* ── Importación de PLANTILLAS con jugadores (pegado, 2026-05-22) ──
+     Formato aceptado (tolerante):
+
+       🇧🇷 BRASIL
+       ## 🧤 PORTEROS
+       * Alisson – 88 C⭐
+       * Ederson – 83
+       ## 🛡️ DEFENSAS
+       * Marquinhos – 87 ⭐
+       …
+
+     · Cabecera de selección: línea sin guión-número (el emoji de
+       bandera se descarta, queda el nombre).
+     · Cabecera de posición: «##» y/o 🧤/🛡/⚙/⚽ (o las palabras
+       PORTEROS / DEFENSAS / CENTROCAMPISTAS / DELANTEROS).
+     · Jugador: «* Nombre – 88 flags». Separador –, — o «-» con
+       espacios; sin guión vale «Nombre 88 flags». Flags al final:
+       C·P·F·⭐·⚾·🏀 (🏀 anula ⚾, regla CLAUDE.md). */
+  function _selPasteHasSquad(text){
+    text = String(text==null?'':text);
+    return /(^|\n)[ \t]*[*•·][ \t]+/.test(text)
+        || /(^|\n)[ \t]*#{1,3}[ \t]/.test(text)
+        || /[–—][ \t]*\d{1,3}/.test(text);
+  }
+  function _selPastePos(line){
+    var L = String(line||'').toUpperCase();
+    if (line.indexOf('🧤')!==-1 || /PORTERO/.test(L)) return 'POR';
+    if (line.indexOf('🛡')!==-1 || /DEFENS/.test(L)) return 'DEF';
+    if (line.indexOf('⚙')!==-1 || /CENTROCAMP|MEDIOCAMP|MEDIO|VOLANTE/.test(L)) return 'MED';
+    if (line.indexOf('⚽')!==-1 || /DELANTER|ATAQUE|FORWARD/.test(L)) return 'DEL';
+    return null;
+  }
+  function _selPasteFlags(s){
+    s = String(s||'');
+    var o = { captain:false, penalty:false, freeKick:false,
+              elite:false, natGoal:false, natGoalPro:false };
+    if (s.indexOf('C')!==-1) o.captain  = true;
+    if (s.indexOf('P')!==-1) o.penalty  = true;
+    if (s.indexOf('F')!==-1) o.freeKick = true;
+    if (s.indexOf('⭐')!==-1) o.elite    = true;
+    if (s.indexOf('⚾')!==-1) o.natGoal  = true;
+    if (s.indexOf('🏀')!==-1) o.natGoalPro = true;
+    if (o.natGoalPro) o.natGoal = false;
+    return o;
+  }
+  function _selParsePlayerLine(s, pos){
+    s = String(s||'').replace(/^[*•·–—\-]+[ \t]*/,'').trim();
+    if (!s) return null;
+    var m = s.match(/^(.+?)[ \t]*[–—][ \t]*(\d{1,3})\b[ \t]*(.*)$/)
+         || s.match(/^(.+?)[ \t]+-[ \t]+(\d{1,3})\b[ \t]*(.*)$/)
+         || s.match(/^(.+?)[ \t]+(\d{1,3})\b[ \t]*(.*)$/);
+    var name, power, flagStr;
+    if (m){ name=m[1].trim(); power=parseInt(m[2],10); flagStr=m[3]||''; }
+    else  { name=s; power=75; flagStr=''; }
+    name = name.replace(/[ \t–—]+$/,'').trim();
+    if (!name) return null;
+    var fl = _selPasteFlags(flagStr);
+    return {
+      id:_plUid(), name:name, num:'', pos:pos||'MED',
+      power:Math.max(1,Math.min(100,power||75)),
+      captain:fl.captain, penalty:fl.penalty, freeKick:fl.freeKick,
+      elite:fl.elite, natGoal:fl.natGoal, natGoalPro:fl.natGoalPro
+    };
+  }
+  /* Texto pegado → [{name, players:[...]}]. Acepta 1 o varias
+     selecciones (cada cabecera de selección abre un bloque nuevo). */
+  function _selParseSquads(text){
+    var teams = [], cur = null, pos = 'MED';
+    String(text==null?'':text).split(/\r?\n/).forEach(function(raw){
+      var line = String(raw||'').trim();
+      if (!line) return;
+      if (/^[*_=~-]{3,}$/.test(line)) return;          /* *** --- separadores */
+      var isBullet = /^[*•·]\s/.test(line);
+      var hasNum   = /[–—][ \t]*\d{1,3}/.test(line) || /\s\d{1,3}\b/.test(line);
+      var sp = _selPastePos(line);
+      /* Cabecera de posición: ## … o línea de posición sin jugador. */
+      if (sp && !isBullet && (/^#{1,3}\s/.test(line) || !hasNum)) { pos = sp; return; }
+      /* Línea de jugador. */
+      if (isBullet || (hasNum && /[–—][ \t]*\d{1,3}/.test(line))) {
+        if (!cur) { cur = { name:'', players:[] }; teams.push(cur); }
+        var pl = _selParsePlayerLine(line, pos);
+        if (pl) cur.players.push(pl);
+        return;
+      }
+      /* Cabecera de selección: descarta «##», emojis de bandera y
+         símbolos iniciales; deja el nombre. */
+      var nm = line.replace(/^#{1,3}\s*/,'')
+        .replace(/^(?:[\uD800-\uDBFF][\uDC00-\uDFFF]|[←-⯿☀-➿️‍\s])+/,'')
+        .trim();
+      if (nm) { cur = { name:nm, players:[] }; teams.push(cur); pos = 'MED'; }
+    });
+    return teams.filter(function(t){ return (t.players && t.players.length) || t.name; });
+  }
+
   /* Importación masiva: una selección por línea. Acepta:
        «Nombre 88»               → solo GLOBAL
        «Nombre 86 87 85 84»      → GLOBAL ATAQUE MEDIO DEFENSA
@@ -31044,6 +31155,14 @@ Tottenham
       .map(function(x){ return parseInt(x,10); });
   }
   function _parseBulk(text){
+    /* Si el texto trae jugadores (bullets / cabeceras / «– 88»), se
+       interpreta como una o varias PLANTILLAS completas. */
+    if (_selPasteHasSquad(text)) {
+      return _selParseSquads(text).map(function(t){
+        return { name:t.name, img:'', power:75, atk:75, mid:75, def:75,
+                 players:t.players||[], _squadMode:true };
+      }).filter(function(t){ return t.name; });
+    }
     var out=[];
     String(text==null?'':text).split(/\r?\n/).forEach(function(line){
       line=line.trim();
@@ -31084,12 +31203,19 @@ Tottenham
       var k=t.name.toLowerCase();
       if(idx[k]!=null){
         var o=out[idx[k]];
-        o.power=t.power; o.atk=t.atk; o.mid=t.mid; o.def=t.def;
-        if(t.img) o.img=t.img;
-        /* La importación masiva NO toca la plantilla de jugadores. */
+        if(t._squadMode){
+          /* Pegado de plantilla: SOLO reemplaza los jugadores; los 4
+             ejes y el escudo del equipo se conservan. */
+          if(Array.isArray(t.players)) o.players=t.players;
+        } else {
+          o.power=t.power; o.atk=t.atk; o.mid=t.mid; o.def=t.def;
+          if(t.img) o.img=t.img;
+          /* La importación de valores NO toca la plantilla de jugadores. */
+        }
       } else {
         idx[k]=out.length;
-        out.push({name:t.name,power:t.power,atk:t.atk,mid:t.mid,def:t.def,img:t.img||'',players:[]});
+        out.push({name:t.name,power:t.power,atk:t.atk,mid:t.mid,def:t.def,img:t.img||'',
+                  players:Array.isArray(t.players)?t.players:[]});
       }
     });
     return out;
@@ -31098,12 +31224,14 @@ Tottenham
     var body=document.getElementById('sel-sq-body');
     if(!body) return;
     _inBulk=true;
-    body.innerHTML='<div class="sel-sq-bulk-tip">Una selección por línea — formato '
-      +'<b>Nombre&nbsp;88</b> (solo Global) o <b>Nombre&nbsp;86&nbsp;87&nbsp;85&nbsp;84</b> '
-      +'(<b>Global&nbsp;Ataque&nbsp;Medio&nbsp;Defensa</b>). Escudo opcional: pon la '
-      +'<b>URL en la línea siguiente</b>, o usa <b>Nombre&nbsp;|&nbsp;86&nbsp;87&nbsp;85&nbsp;84&nbsp;|&nbsp;https://…</b>. '
-      +'Sin números → nivel 75. Los nombres ya existentes actualizan sus valores.</div>'
-      +'<textarea id="sel-sq-bulk-ta" rows="9" placeholder="Brasil 86 87 85 84&#10;https://…/brasil.png&#10;Francia 90&#10;Argentina 91 92 90 89"></textarea>'
+    body.innerHTML='<div class="sel-sq-bulk-tip">Dos usos:<br>'
+      +'<b>1) Valores</b> — una selección por línea: <b>Nombre&nbsp;88</b> o '
+      +'<b>Nombre&nbsp;86&nbsp;87&nbsp;85&nbsp;84</b> (Global Ataque Medio Defensa). '
+      +'Escudo: URL en la línea siguiente o <b>Nombre&nbsp;|&nbsp;86…&nbsp;|&nbsp;https://…</b>.<br>'
+      +'<b>2) Plantillas con jugadores</b> — pega uno o varios bloques con cabecera de '
+      +'selección y jugadores: <b>* Nombre&nbsp;–&nbsp;88 C⭐</b> bajo <b>## 🧤 PORTEROS</b> / '
+      +'🛡 / ⚙ / ⚽. Reemplaza la plantilla de jugadores de cada selección.</div>'
+      +'<textarea id="sel-sq-bulk-ta" rows="9" placeholder="🇧🇷 BRASIL&#10;## 🧤 PORTEROS&#10;* Alisson – 88 C⭐&#10;* Ederson – 83&#10;## 🛡️ DEFENSAS&#10;* Marquinhos – 87 ⭐&#10;…"></textarea>'
       +'<div class="sel-sq-bulk-row">'
       +'<button type="button" class="sel-sq-bulk-cancel">✕ Cancelar</button>'
       +'<button type="button" class="sel-sq-bulk-ok">✓ Añadir a la lista</button>'
@@ -31221,8 +31349,17 @@ Tottenham
       +'<b>C</b> capitán · <b>P</b> penaltis · <b>F</b> faltas · <b>⭐</b> elite · '
       +'<b>⚾</b> goleador nato · <b>🏀</b> goleador estrella. ⚾ y 🏀 no se acumulan.</div>'
       +'<div class="pl-body" id="sel-pl-body"></div>'
+      +'<div class="pl-paste-panel" id="sel-pl-paste" style="display:none;">'
+      +'<div class="pl-paste-tip">Pega la plantilla completa. Sustituye la lista actual. '
+      +'Formato: <b>* Nombre – 88 C⭐</b> bajo cabeceras <b>## 🧤/🛡/⚙/⚽</b>.</div>'
+      +'<textarea id="sel-pl-paste-ta" rows="8" placeholder="🇧🇷 BRASIL&#10;## 🧤 PORTEROS&#10;* Alisson – 88 C⭐&#10;* Ederson – 83&#10;## 🛡️ DEFENSAS&#10;* Marquinhos – 87 ⭐&#10;## ⚽ DELANTEROS&#10;* Vinícius Jr. – 89 ⭐⚾&#10;…"></textarea>'
+      +'<div class="pl-paste-row">'
+      +'<button type="button" class="pl-paste-cancel">✕ Cancelar</button>'
+      +'<button type="button" class="pl-paste-ok">✓ Cargar jugadores</button>'
+      +'</div></div>'
       +'<div class="pl-foot">'
-      +'<button type="button" class="pl-add">➕ Añadir jugador</button>'
+      +'<button type="button" class="pl-paste">📋 Pegar</button>'
+      +'<button type="button" class="pl-add">➕ Añadir</button>'
       +'<button type="button" class="pl-done">✓ Hecho</button>'
       +'</div></div>';
     document.body.appendChild(ov);
@@ -31237,6 +31374,42 @@ Tottenham
       var rows=body.querySelectorAll('.pl-row');
       var last=rows[rows.length-1];
       if(last){ var ni=last.querySelector('.pl-name'); if(ni) ni.focus(); }
+    });
+    /* 📋 Pegar plantilla: muestra/oculta el panel de pegado. */
+    ov.querySelector('.pl-paste').addEventListener('click',function(){
+      var panel=document.getElementById('sel-pl-paste');
+      if(!panel) return;
+      var show=panel.style.display==='none';
+      panel.style.display=show?'block':'none';
+      if(show){ var ta=document.getElementById('sel-pl-paste-ta'); if(ta) ta.focus(); }
+    });
+    ov.querySelector('.pl-paste-cancel').addEventListener('click',function(){
+      var panel=document.getElementById('sel-pl-paste');
+      if(panel) panel.style.display='none';
+    });
+    ov.querySelector('.pl-paste-ok').addEventListener('click',function(){
+      var ta=document.getElementById('sel-pl-paste-ta');
+      var teams=_selParseSquads(ta?ta.value:'');
+      var players=[];
+      teams.forEach(function(t){ players=players.concat(t.players||[]); });
+      if(!players.length){
+        alert('No se reconoció ningún jugador.\n\nFormato esperado:\n* Nombre – 88 C⭐\nbajo cabeceras 🧤/🛡/⚙/⚽.');
+        return;
+      }
+      _plRender(players);
+      /* Si el bloque trae nombre de selección y la fila aún no tiene
+         nombre, se lo ponemos (y al título del editor). */
+      if(teams[0] && teams[0].name && _plOpenRow){
+        var nmInp=_plOpenRow.querySelector('.sel-sq-name');
+        if(nmInp && !String(nmInp.value||'').trim()){
+          nmInp.value=teams[0].name;
+          var ttl=document.getElementById('sel-pl-title');
+          if(ttl) ttl.textContent='👥 '+teams[0].name;
+        }
+      }
+      var panel=document.getElementById('sel-pl-paste');
+      if(panel) panel.style.display='none';
+      if(ta) ta.value='';
     });
     /* Toggle de flags + borrar jugador (delegado). */
     ov.addEventListener('click',function(e){

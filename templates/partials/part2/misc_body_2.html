@@ -6072,43 +6072,20 @@
     });
   };
 
-  /* ── SORTEO DEL CALENDARIO (botón 🎲) ──────────────────────────
+  /* ── SORTEO DEL CALENDARIO (botón 🎲 de Resultados) ────────────
      Genera un calendario NUEVO de Liga EA Sports — las 38 jornadas
-     con emparejamientos distintos — y pone resultados y clasificación
-     a cero.
+     con emparejamientos distintos — pone resultados y clasificación
+     a cero, lo guarda en el servidor y RECARGA la página.
 
-     A diferencia de `reiniciarLigaEA`, esta función NO recarga la
-     página: aplica el calendario nuevo en memoria y repinta las
-     pantallas al instante. La recarga era el punto frágil del botón
-     «Res» — tras recargar, la hidratación desde el backend podía
-     volver a imponer el calendario anterior si el POST de reset aún
-     no había cuajado, y al usuario «no le funcionaba». Sin recarga no
-     hay carrera: lo que se ve es lo que se acaba de sortear. */
-  function _repintarTrasSorteo() {
-    var fns = [
-      'applyEngineOverrides', 'buildLigaClas', 'populateLigaCal',
-      'populateCalendar', 'buildIAresults', 'rebuildLigaPlayerStats',
-      'rebuildLigaPlayerStatsFixed', 'buildLigaStatsDashboard',
-      'syncLigaEaPlayerStats', 'renderLigaClasCalendar',
-      'refreshMainCalendarCards'
-    ];
-    fns.forEach(function (fn) {
-      try { if (typeof window[fn] === 'function') window[fn](); } catch (_) {}
-    });
-    /* Si hay una jornada IA abierta, repintarla con el cuadro nuevo. */
-    try {
-      var _act = document.querySelector('.screen.active');
-      if (_act && _act.id === 's-liga-ia-jornada' && window._currentIAJornada &&
-          typeof window.openIAJornada === 'function') {
-        window.openIAJornada(window._currentIAJornada);
-      }
-    } catch (_) {}
-  }
-
+     Por qué recarga: tras varios intentos sin recarga el calendario
+     "no cambiaba" para el usuario. La recarga garantiza que toda la
+     UI se reconstruye desde cero con el calendario nuevo, sin restos
+     en memoria. Solo recarga DESPUÉS de que el servidor confirme el
+     guardado (POST 200) — así la rehidratación post-recarga lee el
+     calendario nuevo y no el viejo. */
   window.sortearCalendarioLiga = function () {
     var nuevo = null;
     try {
-      /* 1. Calendario nuevo, garantizado DISTINTO al actual. */
       var prev = '';
       try { prev = localStorage.getItem(LS_SCHEDULE_KEY) || ''; } catch (_) {}
       if (!prev) { try { prev = JSON.stringify(SCHEDULE); } catch (_) {} }
@@ -6128,23 +6105,16 @@
       return;
     }
 
-    /* 2. Marca de sorteo reciente: bloquea que el poll de /api/state
-       re-imponga el calendario viejo durante 30 s. Pausa el poll 25 s. */
+    /* Pausar el poll para que no repueble durante el guardado. */
     window._ligaSorteoLock = Date.now();
-    try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(25000); } catch (_) {}
+    try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(20000); } catch (_) {}
 
-    /* 3. Borrar resultados / clasificación / stats locales. */
+    /* Borrar resultados / clasificación / stats locales + escribir el
+       calendario nuevo en localStorage (para que la recarga lo lea). */
+    try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(nuevo)); } catch (_) {}
     try { localStorage.removeItem(LS_KEY); } catch (_) {}
-    try { sharedLigaResultsCache = {}; } catch (_) {}
+    try { sharedLigaScheduleCache = nuevo; sharedLigaResultsCache = {}; } catch (_) {}
     try { if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0; } catch (_) {}
-    try {
-      var _ex = window.LIGA_EXTRAS;
-      if (_ex) Object.keys(_ex).forEach(function (k) { delete _ex[k]; });
-    } catch (_) {}
-    try {
-      var _pm = window.LIGA_PLAYER_MATCH_STORE;
-      if (_pm) Object.keys(_pm).forEach(function (k) { delete _pm[k]; });
-    } catch (_) {}
     try { localStorage.setItem('ef_player_stats_v1', '{}'); } catch (_) {}
     try {
       var _leaRaw = localStorage.getItem('ligaExt_liga-ea-sports');
@@ -6163,61 +6133,38 @@
         }
       }
     } catch (_) {}
-    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports'); } catch (_) {}
-
-    /* 4. Aplicar el calendario nuevo en memoria + localStorage. */
-    setLigaSchedule(nuevo);
+    try { setLigaSchedule(nuevo); } catch (_) {}
     try { window.LIGA_SCHEDULE = nuevo; } catch (_) {}
-    try { sharedLigaScheduleCache = nuevo; } catch (_) {}
-    try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(nuevo)); } catch (_) {}
-    _repintarTrasSorteo();
 
-    /* 5. Guardar en el servidor vía reset-liga y ESPERAR la respuesta.
-       El diagnóstico final reporta si el servidor confirmó el guardado
-       — así sabemos si el problema es de persistencia. Adoptamos el
-       calendario que devuelva el servidor (fuente de verdad). */
-    function _finishSorteo(serverOk, srvSchedule) {
-      if (isValidLigaSchedule(srvSchedule)) {
-        setLigaSchedule(srvSchedule, false);
-        try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(srvSchedule)); } catch (_) {}
-        try { window.LIGA_SCHEDULE = srvSchedule; } catch (_) {}
-        try { sharedLigaScheduleCache = srvSchedule; } catch (_) {}
-      }
-      window._ligaSorteoLock = Date.now();
-      _repintarTrasSorteo();
-      var _final = (Array.isArray(SCHEDULE) && SCHEDULE[0]) ? SCHEDULE[0] : nuevo[0];
-      var _j1txt = '';
+    function _recargar() {
       try {
-        _j1txt = _final.map(function (m, i) {
-          return (i + 1) + '. ' + m[0] + '  vs  ' + m[1];
-        }).join('\n');
-      } catch (_) {}
-      alert('🎲 CALENDARIO SORTEADO\n\nGuardado en el servidor: ' +
-            (serverOk ? 'SÍ ✅' : 'NO ⚠️') +
-            '\n\nJornada 1 nueva:\n' + _j1txt +
-            '\n\nResultados y clasificación a cero.');
-      /* Llevar al usuario directamente a la Jornada 1 para que vea el
-         cuadro nuevo sin tener que navegar. */
-      try { if (typeof window.openIAJornada === 'function') window.openIAJornada(1); } catch (_) {}
+        var url = new URL(location.href);
+        url.searchParams.set('_sorteo', String(Date.now()));
+        location.replace(url.toString());
+      } catch (_) {
+        try { location.reload(); } catch (__) {}
+      }
     }
 
-    try {
-      fetch('/api/state/reset-liga', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ liga_schedule: nuevo }),
-        cache: 'no-store'
-      }).then(function (r) {
-        return r && r.ok ? r.json() : null;
-      }).then(function (j) {
-        var srv = j && j.state && j.state.liga_schedule;
-        _finishSorteo(isValidLigaSchedule(srv), srv);
-      }).catch(function () {
-        _finishSorteo(false, null);
-      });
-    } catch (_) {
-      _finishSorteo(false, null);
-    }
+    /* Guardar en el servidor. Solo recargamos si el POST responde OK
+       — así, tras la recarga, la rehidratación recibe el calendario
+       nuevo. Si el servidor falla, NO recargamos (la recarga traería
+       el calendario viejo) y avisamos para reintentar. */
+    fetch('/api/state/reset-liga', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ liga_schedule: nuevo }),
+      cache: 'no-store'
+    }).then(function (r) {
+      if (r && r.ok) {
+        _recargar();
+      } else {
+        alert('⚠️ El servidor no pudo guardar el calendario (HTTP ' +
+              (r && r.status ? r.status : '?') + ').\nInténtalo otra vez.');
+      }
+    }).catch(function () {
+      alert('⚠️ Sin conexión con el servidor. No se pudo sortear.\nInténtalo otra vez.');
+    });
   };
 
   /* ── TRIGGER POR URL (?reset=liga) ────────────────────────────
@@ -16366,20 +16313,15 @@
 
     var html = '';
 
-    /* Barra de acciones: 🎲 Sortear (siempre) + SIM Jn (si hay IA
-       pendiente). El 🎲 va AQUÍ, en la propia pantalla de la jornada,
-       para que se pueda re-sortear el calendario y ver el cambio al
-       instante sin cambiar de pantalla. */
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin:0 0 10px;padding:0 4px;gap:8px;">'
-      + '<button onclick="window.sortearCalendarioLiga&&window.sortearCalendarioLiga()"'
-      + ' style="padding:5px 16px;background:#2a0008;color:#ffd24a;border:1px solid #ff3040;border-radius:6px;font-size:13px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:1px;">🎲 SORTEAR CALENDARIO</button>';
+    /* SIM batch button. El sorteo del calendario NO va aquí — vive solo
+       en la pantalla de Resultados (con PIN), para que el humano no
+       pueda re-sortear sin querer desde la pantalla de su partido. */
     if (iaPending.length > 0) {
-      html += '<button onclick="window.simularJornadaIA(' + j + ');setTimeout(function(){ if(typeof window.buildIAresults===\'function\') window.buildIAresults(); },400);"'
-        + ' style="padding:5px 16px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:6px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:1px;">SIM J' + j + '</button>';
-    } else {
-      html += '<span></span>';
+      html += '<div style="display:flex;justify-content:flex-end;margin:0 0 10px;padding:0 4px;">'
+        + '<button onclick="window.simularJornadaIA(' + j + ');setTimeout(function(){ if(typeof window.buildIAresults===\'function\') window.buildIAresults(); },400);"'
+        + ' style="padding:5px 16px;background:#1e4060;color:#6ab0d8;border:1px solid #2a5a80;border-radius:6px;font-size:12px;cursor:pointer;font-family:Rajdhani,sans-serif;font-weight:700;letter-spacing:1px;">SIM J' + j + '</button>'
+        + '</div>';
     }
-    html += '</div>';
 
     /* ── Partidos Jugables (humanos) ── */
     var hasHuman = humanMatches.length + humanPending.length > 0;

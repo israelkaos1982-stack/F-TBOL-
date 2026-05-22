@@ -11865,6 +11865,7 @@ window._showSimProgress = function(opts, onDone){
     font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;border:1px solid;}
   #tv-manage-ov .tv-mg-del{background:rgba(220,40,40,.14);border-color:rgba(255,90,90,.5);color:#ff9a9a;}
   #tv-manage-ov .tv-mg-add{background:rgba(60,200,120,.14);border-color:rgba(95,224,138,.5);color:#9ee5a9;}
+  #tv-manage-ov .tv-mg-color{background:rgba(120,90,220,.16);border-color:rgba(170,140,255,.55);color:#cbb8ff;}
   /* Caja de info por defecto — antes era estilo inline en cada pantalla.
      Centralizada para que `_tourRender` pueda sobrescribir su contenido
      sin perder el aspecto. */
@@ -11979,6 +11980,10 @@ window._showSimProgress = function(opts, onDone){
         <div class="tour-ed-fmt-opt" data-fmt="groups-ko" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('groups-ko')">
           <span class="tour-ed-fmt-box">✓</span>
           <span class="tour-ed-fmt-lbl">Grupos + Eliminatoria</span>
+        </div>
+        <div class="tour-ed-fmt-opt" data-fmt="mundial-48" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('mundial-48')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Mundial · 48 selecciones</span>
         </div>
       </div>
     </div>
@@ -12490,8 +12495,18 @@ window._showSimProgress = function(opts, onDone){
     ko:'Eliminatoria a un partido',
     'ko-2leg':'Eliminatoria a ida y vuelta',
     league:'Liga (round-robin)',
-    'groups-ko':'Grupos + Eliminatoria'
+    'groups-ko':'Grupos + Eliminatoria',
+    'mundial-48':'Mundial · 48 selecciones'
   };
+  /* Config fija del formato Mundial 2032 (48 selecciones, 2026-05-22):
+     12 grupos de 4 → 1º+2º (24) + 8 mejores terceros = 32 → Repesca
+     (1/32) → Octavos → Cuartos → Semis → Final. */
+  function _mundialFormatConfig(){
+    return { groups:12, perGroup:4, advancePerGroup:2,
+             koRounds:['Repesca','Octavos','Cuartos','Semis','Final'],
+             bestThirds:8, koExtraTimePens:true };
+  }
+  window._mundialFormatConfig = _mundialFormatConfig;
 
   /* Migración (2026-05-08): torneos guardados antes con
      `format='ko'` + `formatConfig.twoLegs=true` se convierten al
@@ -13260,6 +13275,14 @@ window._showSimProgress = function(opts, onDone){
         '</div>' +
         '<label style="margin-top:8px;">Eliminatoria final (rondas)</label>' +
         '<input id="tour-ed-rounds" type="text" value="'+(fc.koRounds||['SF','F']).join(',')+'" placeholder="QF,SF,F">';
+    } else if (fmt === 'mundial-48') {
+      box.innerHTML =
+        '<div style="padding:9px 11px;background:rgba(45,212,191,.10);border:1px dashed rgba(45,212,191,.45);border-radius:6px;font-size:11px;color:#2dd4bf;line-height:1.55;text-transform:none;letter-spacing:0;">'+
+          '<b>Mundial · 48 selecciones</b> · formato fijo:<br>'+
+          '12 grupos de 4 · clasifican 1º y 2º (24) + los 8 mejores terceros = <b>32</b>.<br>'+
+          'Cuadro: Repesca (1/32) → Octavos → Cuartos → Semis → Final.<br>'+
+          'Coloca las 48 selecciones con <b>✅ CONFIRMAR · COLOCAR EQUIPOS</b> (puedes rellenarlas al azar desde la plantilla).'+
+        '</div>';
     }
   }
 
@@ -13267,7 +13290,7 @@ window._showSimProgress = function(opts, onDone){
      respondía de forma fiable en móvil — bug usuario 2026-05-17 y
      2026-05-21). Selección EXCLUSIVA: marcar una desmarca las demás.
      Los 4 valores válidos. */
-  var _TOUR_FMT_VALUES = ['ko','ko-2leg','league','groups-ko'];
+  var _TOUR_FMT_VALUES = ['ko','ko-2leg','league','groups-ko','mundial-48'];
   /* ── AUTO-GUARDADO del editor de torneo ──────────────────────────
      Petición usuario 2026-05-21: "si pongo el nombre a una
      competición de selecciones quiero que se guarde para siempre
@@ -13411,6 +13434,9 @@ window._showSimProgress = function(opts, onDone){
         perGroup: parseInt(document.getElementById('tour-ed-pergroup').value, 10) || 4,
         koRounds: rEl ? rEl.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F']
       };
+    } else if (cfg.format === 'mundial-48') {
+      cfg.formatConfig = _mundialFormatConfig();
+      cfg.numTeams = 48;
     }
     cfg.prizes = _prizesFromText(document.getElementById('tour-ed-prizes').value);
     var asEl2 = document.getElementById('tour-ed-allow-autosim');
@@ -13678,6 +13704,15 @@ window._showSimProgress = function(opts, onDone){
   function _selRosterLayout(cfg){
     var fc = cfg.formatConfig || {};
     var fmt = cfg.format;
+    if (fmt === 'mundial-48') {
+      var mg = [];
+      for (var mgi = 0; mgi < 12; mgi++) {
+        var ms = [];
+        for (var msi = 0; msi < 4; msi++) ms.push(mgi*4 + msi);
+        mg.push({ label:'GRUPO ' + String.fromCharCode(65+mgi), slots:ms });
+      }
+      return { groups:mg, total:48 };
+    }
     if (fmt === 'groups-ko') {
       var nG = Math.max(1, fc.groups || 2);
       var pg = Math.max(2, fc.perGroup || 4);
@@ -13738,7 +13773,9 @@ window._showSimProgress = function(opts, onDone){
         + '<div class="mr-search" id="sr-search" style="display:none;">'
         + '<input id="sr-q" type="text" placeholder="Buscar selección…" autocomplete="off">'
         + '<div class="mr-results" id="sr-results"></div></div>'
-        + '<div class="mr-foot"><button class="mr-ok" type="button" id="sr-ok">✅ CONFIRMAR</button></div></div>';
+        + '<div class="mr-foot" style="display:flex;gap:8px;">'
+        + '<button class="mr-ok" type="button" id="sr-rand" style="flex:0 0 auto;background:rgba(45,212,191,.16);color:#2dd4bf;border:1px solid rgba(45,212,191,.5);">🎲 Al azar</button>'
+        + '<button class="mr-ok" type="button" id="sr-ok" style="flex:1;">✅ CONFIRMAR</button></div></div>';
       document.body.appendChild(ov);
       ov.addEventListener('click', function(e){ if (e.target === ov) ov.style.display='none'; });
     }
@@ -13795,6 +13832,33 @@ window._showSimProgress = function(opts, onDone){
     }
     /* Re-cableado en cada apertura (el overlay se reutiliza). */
     ov.querySelector('#sr-x').onclick = function(){ ov.style.display='none'; };
+    /* 🎲 Sorteo directo: rellena los huecos vacíos con selecciones al
+       azar de la plantilla (sin repetir). Útil para el Mundial · 48
+       sin colocar 48 a mano. */
+    var randBtn = ov.querySelector('#sr-rand');
+    if (randBtn) randBtn.onclick = function(){
+      var taken = {};
+      rost.forEach(function(v){ if (v && v.name) taken[_norm(v.name)] = 1; });
+      var avail = pool().filter(function(t){ return !taken[_norm(t.name)]; });
+      var empties = 0;
+      for (var ei = 0; ei < total; ei++) if (!rost[ei]) empties++;
+      if (!empties) { alert('No hay huecos vacíos que rellenar.'); return; }
+      if (avail.length < empties) {
+        alert('Faltan selecciones en la plantilla: ' + avail.length + ' libres para ' + empties + ' huecos.\nAñade más en «Plantilla de selecciones».');
+        return;
+      }
+      for (var si = avail.length - 1; si > 0; si--) {
+        var sj = Math.floor(Math.random() * (si + 1));
+        var tmp = avail[si]; avail[si] = avail[sj]; avail[sj] = tmp;
+      }
+      var pi = 0;
+      for (var ri = 0; ri < total; ri++) {
+        if (rost[ri]) continue;
+        var pick = avail[pi++];
+        rost[ri] = { name:pick.name, shield:pick.img||'', power:pick.power||75 };
+      }
+      renderBody();
+    };
     qEl.oninput = doSearch;
     bodyEl.onclick = function(e){
       var b = e.target.closest && e.target.closest('.mr-b');
@@ -13867,6 +13931,8 @@ window._showSimProgress = function(opts, onDone){
       fmtTxt += ': '+(cfg.numTeams||'?')+' equipos'+(fc.twoLegs?' a doble vuelta':' a una vuelta');
     } else if (cfg.format === 'groups-ko') {
       fmtTxt += ': '+(fc.groups||'?')+' grupos de '+(fc.perGroup||'?')+' + '+(fc.koRounds||[]).join(' → ');
+    } else if (cfg.format === 'mundial-48') {
+      fmtTxt += ': 12 grupos de 4 · 1º+2º+8 mejores 3os → '+(fc.koRounds||[]).join(' → ');
     }
     return {
       flag: cfg.flag || '',
@@ -14071,6 +14137,10 @@ window._showSimProgress = function(opts, onDone){
     var teams = cfg.teams || [];
     if (!teams.length) {
       var _mr = cfg.formatConfig && cfg.formatConfig.manualRoster;
+      if (cfg.format === 'mundial-48') {
+        infoEl.innerHTML = '<div style="padding:22px 16px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.7;">Aún no hay selecciones.<br>Pulsa el <b style="color:#4dd0e1;">🖍</b> (arriba dcha · PIN 747) → <b>✅ CONFIRMAR · COLOCAR EQUIPOS</b> y usa <b style="color:#2dd4bf;">🎲 Al azar</b> para repartir las 48.</div>';
+        return;
+      }
       infoEl.innerHTML = _mr
         ? '<div style="padding:22px 16px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.7;">Aún no hay equipos.<br>Pulsa el <b style="color:#4dd0e1;">🖍</b> (arriba dcha · PIN 747) para añadir los 32 equipos (8 grupos × 4).</div>'
         : '';
@@ -14236,6 +14306,8 @@ window._showSimProgress = function(opts, onDone){
       infoEl.innerHTML = hint + _renderLeague(cfg, id, teams);
     } else if (cfg.format === 'groups-ko') {
       infoEl.innerHTML = hint + _renderGroupsKO(cfg, id, teams);
+    } else if (cfg.format === 'mundial-48') {
+      infoEl.innerHTML = hint + _renderMundial(cfg, id, teams);
     } else {
       infoEl.innerHTML = '';
     }
@@ -14559,6 +14631,244 @@ window._showSimProgress = function(opts, onDone){
         + '</button></div>';
     }
     return html;
+  }
+
+  /* ═══ MUNDIAL · 48 SELECCIONES (formato dedicado, 2026-05-22) ═══
+     La pantalla del torneo muestra un menú de 2 cajas: «Fase de
+     Grupos» y «Playoffs / Finales». Cada caja abre su sub-vista
+     dentro del mismo contenedor (estado en `_mundialView`). Reutiliza
+     los sub-renderers de groups-ko (round-robin, standings, fixture
+     cards, bracket) y sus handlers de simulación; lo único propio es
+     la clasificación de 32 = 1º+2º de los 12 grupos + 8 mejores
+     terceros. */
+  var _mundialView = {};
+  window._mundialGo = function(id, view){
+    _mundialView[id] = view;
+    try { window._tourRender(id); } catch(_){}
+    try {
+      var sc = document.getElementById('s-' + id);
+      if (sc && sc.scrollIntoView) sc.scrollIntoView({ block:'start' });
+    } catch(_){}
+  };
+  /* Trocea los 48 equipos en 12 grupos de 4 y construye los fixtures
+     round-robin (lazy). Devuelve slices + si todos los grupos han
+     terminado su liguilla. */
+  function _mundialGroupState(cfg, teams){
+    cfg.results = cfg.results || {};
+    cfg.groupFixtures = cfg.groupFixtures || {};
+    cfg.currentJornadaByGroup = cfg.currentJornadaByGroup || {};
+    var slices = [], allDone = true;
+    for (var g = 0; g < 12; g++) {
+      var slice = teams.slice(g*4, g*4+4);
+      slices.push(slice);
+      if (slice.length < 2) { allDone = false; continue; }
+      if (!cfg.groupFixtures[g])
+        cfg.groupFixtures[g] = _tourBuildRoundRobin(slice.map(function(_,i){return i;}));
+      if (typeof cfg.currentJornadaByGroup[g] !== 'number') cfg.currentJornadaByGroup[g] = 0;
+      var prog = _tourFixtureProgress(cfg.groupFixtures[g], cfg.results, 'g'+g+'_');
+      if (!prog.allDone) allDone = false;
+    }
+    return { slices:slices, allGroupsDone:allDone };
+  }
+  /* Clasificación de la Repesca (32): 1º y 2º de cada grupo (24) + los
+     8 mejores terceros. Empareja fuerte-vs-flojo de forma determinista
+     (q[i] vs q[31-i]). */
+  function _mundialQualifiers(cfg, slices){
+    var winners = [], runners = [], thirds = [];
+    for (var g = 0; g < slices.length; g++) {
+      var sl = slices[g];
+      if (sl.length < 3) continue;
+      var rs = _tourComputeStandings(sl, cfg.groupFixtures[g], cfg.results, 'g'+g+'_');
+      if (rs[0]) winners.push(sl[rs[0].idx]);
+      if (rs[1]) runners.push(sl[rs[1].idx]);
+      if (rs[2]) thirds.push({ team:sl[rs[2].idx], pts:rs[2].pts, dif:rs[2].dif, gf:rs[2].gf });
+    }
+    thirds.sort(function(a,b){
+      return (b.pts-a.pts) || (b.dif-a.dif) || (b.gf-a.gf) ||
+             String((a.team&&a.team.name)||'').localeCompare(String((b.team&&b.team.name)||''));
+    });
+    var best8 = thirds.slice(0, 8).map(function(x){ return x.team; });
+    var q = winners.concat(best8).concat(runners);
+    if (q.length % 2) q.pop();
+    var round0 = [], n = q.length;
+    for (var i = 0; i < n/2; i++) { round0.push(q[i]); round0.push(q[n-1-i]); }
+    return round0;
+  }
+  function _mundialBackBtn(tourId){
+    return '<div style="margin-bottom:10px;"><button type="button" '
+      + 'onclick="window._mundialGo(\''+tourId+'\',\'menu\')" '
+      + 'style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.22);'
+      + 'color:rgba(255,255,255,.72);border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;'
+      + 'font-size:11px;letter-spacing:1.5px;cursor:pointer;">◀ Menú del Mundial</button></div>';
+  }
+  function _mundialResetBtnHtml(tourId){
+    return '<div style="display:flex;justify-content:center;margin-top:10px;">'
+      + '<button type="button" class="tour-reset-btn" data-tour="'+tourId+'" '
+      + 'style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
+      + '↺ Reset Mundial</button></div>';
+  }
+  function _mundialMenuHtml(cfg, tourId, gs){
+    var gDone = 0, gTot = 0;
+    for (var g = 0; g < gs.slices.length; g++) {
+      if (gs.slices[g].length < 2 || !cfg.groupFixtures[g]) continue;
+      var p = _tourFixtureProgress(cfg.groupFixtures[g], cfg.results, 'g'+g+'_');
+      gDone += p.done; gTot += p.tot;
+    }
+    var koRounds = (cfg.formatConfig && cfg.formatConfig.koRounds) || [];
+    var champHtml = '';
+    if (cfg.koBracket && cfg.koBracket.length && koRounds.length) {
+      var lastR = koRounds.length - 1;
+      var fin = cfg.results['ko_'+lastR+'_0'];
+      var lastT = cfg.koBracket[lastR];
+      if (fin && fin.played && lastT) {
+        champHtml = _championBoxHtml((fin.winner === 'a') ? lastT[0] : lastT[1]);
+      }
+    }
+    var koSub = gs.allGroupsDone
+      ? (champHtml ? 'Mundial terminado' : 'Repesca → Octavos → Cuartos → Semis → Final')
+      : 'Termina antes la fase de grupos';
+    function box(view, emoji, title, sub, enabled){
+      var grad = enabled
+        ? 'linear-gradient(135deg,#001a26 0%,#004a5e 38%,#1a8aa0 60%,#003543 100%)'
+        : 'linear-gradient(135deg,#171717 0%,#262626 60%,#171717 100%)';
+      var brd = enabled ? '#2dd4bf' : 'rgba(255,255,255,.18)';
+      var click = enabled ? ' onclick="window._mundialGo(\''+tourId+'\',\''+view+'\')"' : '';
+      var cur = enabled ? 'cursor:pointer;' : 'cursor:not-allowed;opacity:.6;';
+      return '<div'+click+' style="display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:10px;'
+        + 'background:'+grad+';border:1.5px solid '+brd+';border-radius:12px;'+cur
+        + 'box-shadow:0 4px 16px rgba(0,0,0,.35);">'
+        + '<span style="font-size:26px;line-height:1;">'+emoji+'</span>'
+        + '<span style="flex:1;text-align:left;">'
+        +   '<span style="display:block;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:1.5px;color:#fff;">'+title+'</span>'
+        +   '<span style="display:block;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.6);margin-top:2px;">'+sub+'</span>'
+        + '</span>'
+        + '<span style="font-size:16px;color:'+brd+';">'+(enabled?'▶':'🔒')+'</span>'
+        + '</div>';
+    }
+    return champHtml
+      + box('groups', '⚽', 'Fase de Grupos', (gTot ? gDone+' / '+gTot+' partidos jugados' : '12 grupos de 4 selecciones'), true)
+      + box('ko', '🏆', 'Playoffs / Finales', koSub, gs.allGroupsDone);
+  }
+  function _mundialGroupsHtml(cfg, tourId, gs){
+    var html = _mundialBackBtn(tourId)
+      + '<p style="margin:0 0 8px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:#2dd4bf;">FASE DE GRUPOS · 12 GRUPOS DE 4</p>';
+    for (var g = 0; g < gs.slices.length; g++) {
+      var slice = gs.slices[g];
+      if (slice.length < 2) continue;
+      var gKey = 'g'+g+'_';
+      var fix = cfg.groupFixtures[g];
+      var rows = _tourComputeStandings(slice, fix, cfg.results, gKey);
+      var prog = _tourFixtureProgress(fix, cfg.results, gKey);
+      var letter = String.fromCharCode(65+g);
+      var hasH = slice.some(function(t){ return t && t.isHuman; });
+      html += '<div class="tour-group-block tour-grp-'+letter+(hasH?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
+      html += _standingsTableHtml(rows, 2);
+      var curJg = cfg.currentJornadaByGroup[g] || 0;
+      var jDone = 0, jTot = 0;
+      (fix[curJg]||[]).forEach(function(_, mi){
+        jTot++; if ((cfg.results[gKey+curJg+'_'+mi]||{}).played) jDone++;
+      });
+      if (jTot > 0 && jDone === jTot && curJg < fix.length - 1) {
+        html += '<div style="display:flex;justify-content:center;margin:6px 0 4px;">'
+          + '<button type="button" class="tour-adv-jor-btn" data-tour="'+tourId+'" data-group="'+g+'" '
+          + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:7px;padding:5px 11px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
+          + '🏆 J'+(curJg+2)+'</button></div>';
+      }
+      html += _fixtureCardsHtml(slice, fix, cfg.results, gKey, tourId, curJg, {shortLabel:true});
+      html += '</div>';
+    }
+    if (gs.allGroupsDone) {
+      html += '<div style="margin-top:12px;padding:10px 12px;text-align:center;background:rgba(45,212,191,.10);'
+        + 'border:1px dashed rgba(45,212,191,.5);border-radius:8px;font-family:Oswald,sans-serif;font-size:12px;'
+        + 'letter-spacing:1px;color:#2dd4bf;cursor:pointer;" onclick="window._mundialGo(\''+tourId+'\',\'ko\')">'
+        + '✅ Fase de grupos completa · ABRIR PLAYOFFS ▶</div>';
+    }
+    if (Object.keys(cfg.results).length > 0) html += _mundialResetBtnHtml(tourId);
+    return html;
+  }
+  function _mundialKoHtml(cfg, tourId, gs){
+    var html = _mundialBackBtn(tourId);
+    if (!gs.allGroupsDone) {
+      return html + '<div style="padding:24px 16px;text-align:center;font-family:Oswald,sans-serif;'
+        + 'letter-spacing:1.2px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.7;">'
+        + '🔒 Termina la fase de grupos para sortear la <b>Repesca</b> (32 selecciones).</div>';
+    }
+    if (!cfg.koBracket || !cfg.koBracket.length) {
+      cfg.koBracket = [ _mundialQualifiers(cfg, gs.slices) ];
+      cfg.koCurrentRound = 0;
+    }
+    if (typeof cfg.koCurrentRound !== 'number') cfg.koCurrentRound = 0;
+    var koRounds = (cfg.formatConfig && cfg.formatConfig.koRounds) || ['Repesca','Octavos','Cuartos','Semis','Final'];
+    var curR = cfg.koCurrentRound;
+    var curT = cfg.koBracket[curR] || [];
+    var roundLbl = koRounds[curR] || ('Ronda '+(curR+1));
+    var dt = _tourGkoRoundDate(cfg, curR);
+    html += '<p style="margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;'
+      + 'font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:#f0c040;">'
+      + '<span>PLAYOFFS · '+roundLbl.toUpperCase()+' · '+curT.length+' selecciones</span>'
+      + (dt ? '<span style="color:rgba(255,255,255,.6);letter-spacing:.5px;">📅 '+dt+'</span>' : '')
+      + '</p>';
+    html += '<div class="tour-bracket-list">';
+    var koAllPlayed = true, koPairs = 0;
+    for (var i = 0; i < curT.length; i += 2) {
+      var a = curT[i], b = curT[i+1];
+      if (!b) break;
+      var kKey = 'ko_'+curR+'_'+(i/2);
+      var kRes = cfg.results[kKey];
+      var kPlayed = !!(kRes && kRes.played);
+      if (!kPlayed) koAllPlayed = false;
+      var kRowCls = kPlayed ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
+      if (_tourPairHasHuman(curT, i)) kRowCls += ' tour-match-has-human';
+      var kAttrs = ' data-tour="'+tourId+'" data-ko-key="'+kKey+'"';
+      if (kPlayed) {
+        var aW = kRes.winner === 'a', bW = kRes.winner === 'b';
+        var sA = '<span class="tour-score'+(aW?' tour-score-win':'')+'">'+kRes.a+'</span>';
+        var sB = '<span class="tour-score'+(bW?' tour-score-win':'')+'">'+kRes.b+'</span>';
+        var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
+        html += '<div class="'+kRowCls+'"'+kAttrs+'>'
+          + _bracketTeamHtml(a, tourId, i, aW, bW)
+          + '<span class="vs tour-score-wrap">'+sA+' - '+sB+pensTxt+'</span>'
+          + _bracketTeamHtml(b, tourId, i+1, bW, aW)
+          + '</div>';
+        html += _tourActaPanelHtml(tourId, kKey, kRes);
+      } else {
+        html += '<div class="'+kRowCls+'"'+kAttrs+'>'
+          + _bracketTeamHtml(a, tourId, i)
+          + '<span class="vs">vs</span>'
+          + _bracketTeamHtml(b, tourId, i+1)
+          + '</div>';
+        if (_tourPairHasHuman(curT, i)) html += _tourSimAiBtnHtml(tourId, 'ko', kKey);
+      }
+      koPairs++;
+    }
+    html += '</div>';
+    if (curT.length > 1) {
+      if (!koAllPlayed && koPairs > 0) {
+        html += '<div style="display:flex;justify-content:center;margin-top:10px;">'
+          + '<button type="button" class="tour-sim-ko-btn" data-tour="'+tourId+'" '
+          + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:10px;padding:9px 16px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
+          + '▶ SIMULAR '+roundLbl.toUpperCase()+'</button></div>';
+      } else if (koAllPlayed && curR < koRounds.length - 1) {
+        html += '<div style="display:flex;justify-content:center;margin-top:10px;">'
+          + '<button type="button" class="tour-adv-ko-btn" data-tour="'+tourId+'" '
+          + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:9px 16px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
+          + '🏆 AVANZAR A '+(koRounds[curR+1]||'').toUpperCase()+'</button></div>';
+      } else if (koAllPlayed && curR >= koRounds.length - 1) {
+        var finRes = cfg.results['ko_'+curR+'_0'];
+        if (finRes && finRes.played) {
+          html += _championBoxHtml((finRes.winner === 'a') ? curT[0] : curT[1]);
+        }
+      }
+    }
+    html += _mundialResetBtnHtml(tourId);
+    return html;
+  }
+  function _renderMundial(cfg, tourId, teams){
+    var view = _mundialView[tourId] || 'menu';
+    var gs = _mundialGroupState(cfg, teams);
+    if (view === 'groups') return _mundialGroupsHtml(cfg, tourId, gs);
+    if (view === 'ko')     return _mundialKoHtml(cfg, tourId, gs);
+    return _mundialMenuHtml(cfg, tourId, gs);
   }
 
   /* Acta expandible que cuelga de cada card de partido jugado. Si el
@@ -16144,7 +16454,7 @@ window._showSimProgress = function(opts, onDone){
       } else if (cfg4.format === 'league') {
         cfg4.fixture = null;
         cfg4.currentJornada = 0;
-      } else if (cfg4.format === 'groups-ko') {
+      } else if (cfg4.format === 'groups-ko' || cfg4.format === 'mundial-48') {
         cfg4.groupFixtures = {};
         cfg4.currentJornadaByGroup = {};
         cfg4.koBracket = null;
@@ -16390,6 +16700,28 @@ window._showSimProgress = function(opts, onDone){
     'sel-previa': ['linear-gradient(135deg,#001a26 0%,#004a5e 35%,#1a8aa0 50%,#004a5e 65%,#001a26 100%)','#2dd4bf'],
     'sel-final':  ['linear-gradient(135deg,#2a1f00 0%,#7a5a00 35%,#c89020 50%,#7a5a00 65%,#2a1f00 100%)','#f0c040']
   };
+  /* Editor de color libre por torneo (Parte A, 2026-05-22). El admin
+     elige color de caja + color de texto desde el modal "Gestionar
+     torneos"; se guardan en cfg.cardColor / cfg.cardText. El logo
+     reutiliza cfg.flag (emoji o URL). _tvRenderCards los prioriza
+     sobre los colores built-in / de board. */
+  function _tvHexClamp(h){
+    h = String(h == null ? '' : h).trim();
+    return /^#[0-9a-fA-F]{6}$/.test(h) ? h.toLowerCase() : '';
+  }
+  function _tvShade(hex, f){
+    hex = _tvHexClamp(hex) || '#888888';
+    function c(i){
+      var x = Math.round(parseInt(hex.slice(i, i+2), 16) * f);
+      return ('0' + Math.max(0, Math.min(255, x)).toString(16)).slice(-2);
+    }
+    return '#' + c(1) + c(3) + c(5);
+  }
+  function _tvCardGradient(hex){
+    var dark = _tvShade(hex, 0.32);
+    return 'linear-gradient(135deg,' + dark + ' 0%,' + hex + ' 50%,' + dark + ' 100%)';
+  }
+  window._tvCardGradient = _tvCardGradient;
   function _tvEsc(s){ return String(s == null ? '' : s).replace(/[<>"]/g, function(c){ return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;'; }); }
   /* Una "bandera" de torneo puede ser un emoji O una URL https de
      imagen (petición usuario 2026-05-21). Devuelve el HTML a pintar. */
@@ -16447,12 +16779,17 @@ window._showSimProgress = function(opts, onDone){
       var bd = _tvBoardOf(id);
       var slot = boards[bd];
       if (!slot) return;
-      var col = _TV_COLORS[id] || _TV_BOARD_COLOR[bd] || _TV_DEF_COLOR;
+      var _cc = _tvCfgOf(id);
+      var _ccBox = _tvHexClamp(_cc && _cc.cardColor);
+      var col = _ccBox
+        ? [_tvCardGradient(_ccBox), _tvHexClamp(_cc.cardText) || '#ffffff']
+        : (_TV_COLORS[id] || _TV_BOARD_COLOR[bd] || _TV_DEF_COLOR);
+      var _ccLabelStyle = _ccBox ? ' style="color:' + col[1] + ';"' : '';
       slot.html += '<div class="submenu-card sc-' + id + '" '
         + 'style="background:' + col[0] + ' !important;border-color:' + col[1] + ' !important;" '
         + 'onclick="go(\'s-' + id + '\')">'
         + '<span class="sc-emoji">' + _tourFlagHtml(_tvFlag(id), 'sc-flag-img') + '</span>'
-        + '<span class="sc-label">' + _tvEsc(_tvName(id)) + '</span>'
+        + '<span class="sc-label"' + _ccLabelStyle + '>' + _tvEsc(_tvName(id)) + '</span>'
         + '<button type="button" class="sc-info-btn" onclick="event.stopPropagation();window.muTourInfo&&window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
         + '<span class="sc-arr">▶</span>'
         + '</div>';
@@ -16502,6 +16839,7 @@ window._showSimProgress = function(opts, onDone){
     if (!active.length) h += '<div class="tv-mg-empty">Ninguno.</div>';
     active.forEach(function(id){
       h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + '</span>'
+        + '<button class="tv-mg-btn tv-mg-color" data-act="color" data-id="' + id + '">🎨 Color</button>'
         + '<button class="tv-mg-btn tv-mg-del" data-act="del" data-id="' + id + '">🗑 Eliminar</button></div>';
     });
     var hiddenB = builtins.filter(function(id){ return !visSet[id]; });
@@ -16549,7 +16887,9 @@ window._showSimProgress = function(opts, onDone){
         var act = b.getAttribute('data-act');
         var id  = b.getAttribute('data-id');
         var reg = _tvRegLoad();
-        if (act === 'del'){
+        if (act === 'color'){
+          _tvColorEditor(id);
+        } else if (act === 'del'){
           if (!confirm('¿Eliminar este torneo de la lista? Se conservan sus datos por si lo restauras.')) return;
           reg.visible = reg.visible.filter(function(x){ return x !== id; });
           _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
@@ -16589,6 +16929,74 @@ window._showSimProgress = function(opts, onDone){
     ov.style.display = 'flex';
   }
   window._tvOpenManage = _tvOpenManage;
+  /* Editor de color/logo de un torneo (Parte A, 2026-05-22). Overlay
+     con dos selectores de color (caja + texto), un campo de logo
+     (emoji o URL de imagen) y una previsualización en vivo de la
+     tarjeta. Guarda en cfg.cardColor / cfg.cardText / cfg.flag. */
+  function _tvColorEditor(id){
+    var cfg = _tvCfgOf(id);
+    var curBox  = _tvHexClamp(cfg && cfg.cardColor) || '#0a4d5a';
+    var curTxt  = _tvHexClamp(cfg && cfg.cardText)  || '#ffffff';
+    var curLogo = String((cfg && cfg.flag) || _tvFlag(id) || '🏆');
+    var old = document.getElementById('tv-color-ov');
+    if (old) old.remove();
+    var ov = document.createElement('div');
+    ov.id = 'tv-color-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.8);'
+      + 'display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.innerHTML = ''
+      + '<div style="background:#10141c;border:1.5px solid rgba(240,192,64,.4);border-radius:14px;'
+      +   'max-width:380px;width:100%;padding:18px;font-family:Oswald,sans-serif;color:#eee;box-sizing:border-box;">'
+      + '<div style="font-size:17px;letter-spacing:1.5px;color:#f0c040;text-align:center;margin-bottom:14px;">'
+      +   '🎨 COLOR Y LOGO</div>'
+      + '<div id="tvc-prev" style="margin-bottom:16px;"></div>'
+      + '<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;font-size:13px;">'
+      +   '<span>Color de caja</span>'
+      +   '<input type="color" id="tvc-box" value="' + curBox + '" style="width:54px;height:34px;border:none;background:none;cursor:pointer;"></label>'
+      + '<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;font-size:13px;">'
+      +   '<span>Color de texto</span>'
+      +   '<input type="color" id="tvc-txt" value="' + curTxt + '" style="width:54px;height:34px;border:none;background:none;cursor:pointer;"></label>'
+      + '<label style="display:block;font-size:13px;margin-bottom:6px;">Logo (emoji o URL de imagen)</label>'
+      + '<input type="text" id="tvc-logo" value="' + _tvEsc(curLogo) + '" placeholder="🏆 o https://…" '
+      +   'style="width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);'
+      +   'background:#1a1f29;color:#eee;font-size:14px;margin-bottom:14px;">'
+      + '<div style="display:flex;gap:8px;">'
+      +   '<button id="tvc-cancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);'
+      +     'background:transparent;color:#ccc;cursor:pointer;font-family:inherit;">Cancelar</button>'
+      +   '<button id="tvc-save" style="flex:1;padding:10px;border-radius:8px;border:none;'
+      +     'background:linear-gradient(135deg,#c89020,#f0c040);color:#1a1200;font-weight:700;cursor:pointer;font-family:inherit;">Guardar</button>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    var boxEl  = ov.querySelector('#tvc-box');
+    var txtEl  = ov.querySelector('#tvc-txt');
+    var logoEl = ov.querySelector('#tvc-logo');
+    var prevEl = ov.querySelector('#tvc-prev');
+    function paint(){
+      prevEl.innerHTML = '<div class="submenu-card" style="background:' + _tvCardGradient(boxEl.value)
+        + ' !important;border:1.5px solid ' + txtEl.value + ' !important;pointer-events:none;margin:0;">'
+        + '<span class="sc-emoji">' + _tourFlagHtml((logoEl.value || '').trim() || '🏆', 'sc-flag-img') + '</span>'
+        + '<span class="sc-label" style="color:' + txtEl.value + ';">' + _tvEsc(_tvName(id)) + '</span>'
+        + '<span class="sc-arr" style="color:' + txtEl.value + ';">▶</span></div>';
+    }
+    paint();
+    boxEl.addEventListener('input', paint);
+    txtEl.addEventListener('input', paint);
+    logoEl.addEventListener('input', paint);
+    ov.addEventListener('click', function(e){ if (e.target === ov) ov.remove(); });
+    ov.querySelector('#tvc-cancel').addEventListener('click', function(){ ov.remove(); });
+    ov.querySelector('#tvc-save').addEventListener('click', function(){
+      var c = _tvCfgOf(id);
+      c.cardColor = _tvHexClamp(boxEl.value) || c.cardColor || '';
+      c.cardText  = _tvHexClamp(txtEl.value) || c.cardText  || '';
+      c.flag      = String(logoEl.value || '').trim() || c.flag || '🏆';
+      try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = c; } catch(_){}
+      try { if (typeof window._tourSave === 'function') window._tourSave(id, c); } catch(_){}
+      ov.remove();
+      try { _tvRenderCards(); } catch(_){}
+      try { _tvRefreshManage(); } catch(_){}
+    });
+  }
+  window._tvColorEditor = _tvColorEditor;
   /* Hidrata el registro desde el server (best-effort, async). Hace
      el registro cross-device y resistente a borrados de localStorage
      ("guárdalo para siempre"). Solo pisa el local si el server trae

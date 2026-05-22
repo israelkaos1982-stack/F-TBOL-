@@ -36775,9 +36775,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   var NAMES = {'⬆️':'Excelente','↗️':'Buena','🎲':'Al azar','↘️':'Mala','⬇️':'Pésima'};
   var LEVELS = ['Normal','Duro','Crack','Leyenda'];
   var _MEM = null;
+  /* Lee SIEMPRE de almacenamiento (sin caché de lectura): así la
+     cabecera refleja al instante lo que el editor 🖍 acaba de guardar
+     y recoge un server-pull de `menu_home_v1` posterior al arranque. */
   function _load(){
-    if (_MEM) return _MEM;
     var d = { yo:'🎲', rival:'🎲', nivel:'Crack' };
+    /* Fuente 1: `team_season_form_v1` (clave propia — solo local). */
     try {
       var r = localStorage.getItem(KEY);
       if (r){ var p = JSON.parse(r);
@@ -36788,6 +36791,25 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
              hub guarda 'CRACK' / 'LEYENDA' / 'ESTRELLA' (paleta del
              "Nivel del equipo"), no solo Normal/Duro/Crack/Leyenda. */
           if (p.nivel != null && String(p.nivel).trim()) d.nivel = String(p.nivel).trim();
+        }
+      }
+    } catch(_){}
+    /* Fuente 2 (autoridad): `menu_home_v1` → ov['go:s-munich']. El
+       editor 🖍 del HUD persiste formState/formRival/level AQUÍ y, a
+       diferencia de `team_season_form_v1`, esta clave SÍ se sincroniza
+       con el servidor. Si la clave propia se perdió (localStorage
+       limpiado / quota llena / server-pull tardío), recuperamos los
+       valores manuales desde aquí para que la cabecera SIEMPRE muestre
+       lo que el admin fijó en "Forma yo" / "Forma Rival". */
+    try {
+      var rawMH = localStorage.getItem('menu_home_v1');
+      if (rawMH){
+        var dMH = JSON.parse(rawMH);
+        var ovMH = dMH && dMH.ov && dMH.ov['go:s-munich'];
+        if (ovMH && typeof ovMH === 'object'){
+          if (typeof ovMH.formState === 'string' && ovMH.formState.trim()) d.yo    = ovMH.formState;
+          if (typeof ovMH.formRival === 'string' && ovMH.formRival.trim()) d.rival = ovMH.formRival;
+          if (ovMH.level != null && String(ovMH.level).trim())             d.nivel = String(ovMH.level).trim();
         }
       }
     } catch(_){}

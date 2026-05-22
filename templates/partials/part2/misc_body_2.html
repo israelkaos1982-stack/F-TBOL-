@@ -7948,7 +7948,7 @@
          con su keyframe — solo bajamos el umbral 85→80. */
       endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 80 * 60);
     }
-    if (st.finished) { btn.textContent='🏁 FIN'; btn.className='ml-timer finished'; return; }
+    if (st.finished) { btn.textContent='🏁 Final'; btn.className='ml-timer finished'; return; }
     if (st.inDescanso) { btn.textContent='⏸ HT'; btn.className='ml-timer running'; return; }
     var lbl = st.timerRunning ? '⏸ ' : (rawSec>=fullMax ? '🔁 ' : '▶ ');
     var display;
@@ -10618,39 +10618,21 @@
     }
   }
 
-  /* ── Reactivar la caja FINALIZAR cuando el partido ya terminó ─────
-     (foto usuario 2026-05-17): si tras cargar la barra el humano se
-     queda en el gm-modal con el partido finalizado, la caja
-     FINALIZAR no debe salir apagada/atascada. La reetiquetamos a
-     "🏁 VER RESUMEN", la dejamos habilitada y llamativa, y su
-     onclick re-abre la pantalla FINAL. Idempotente: se puede llamar
-     en cada render / scan sin efectos secundarios. Solo actúa si
-     el partido está finished y la pantalla FINAL no está abierta. */
+  /* ── Estado del gm-modal cuando el partido ya terminó ─────────────
+     2026-05-21 (petición usuario): se elimina la caja "VER RESUMEN"
+     — el acta ya está a la vista y las stats se comparten por
+     WhatsApp. Cuando el partido está finished, ocultamos gm-btn-end y
+     dejamos visible "✖ SALIR DEL PARTIDO" (gm-btn-exit), que el CSS
+     pinta brillante para que el humano sepa cómo continuar (los
+     finales de partido eran confusos). Idempotente: corre en el poll
+     de 300 ms sin efectos secundarios. */
   window._gmReactivateFinishBtn = function () {
     try {
       if (!window._gm || !window._gm.finished) return;
-      var finOv = document.getElementById('gm-fin-ov');
-      if (finOv && finOv.style.display && finOv.style.display !== 'none') return;
       var b = document.getElementById('gm-btn-end');
-      if (!b) return;
-      /* Idempotente: si ya está reactivado, no re-escribir el DOM
-         (este helper corre en el poll de 300 ms). */
-      if (b._gmFinReactivated && !b.disabled) return;
-      b._gmFinReactivated = true;
-      b.disabled = false;
-      b.style.opacity = '1';
-      b.style.pointerEvents = 'auto';
-      b.textContent = '🏁 VER RESUMEN';
-      b.classList.add('is-finishable');
-      b.onclick = function (ev) {
-        try { if (ev) { ev.preventDefault(); ev.stopPropagation(); } } catch(_){}
-        try { _gmShowFinalOv(); } catch(_){ if (window.gmShowPost) window.gmShowPost(); }
-      };
-      /* Salida definitiva siempre disponible cuando el partido acabó. */
-      try {
-        var ex = document.getElementById('gm-btn-exit');
-        if (ex) ex.style.display = '';
-      } catch(_){}
+      if (b) b.style.display = 'none';
+      var ex = document.getElementById('gm-btn-exit');
+      if (ex) ex.style.display = '';
     } catch(_){}
   };
 
@@ -11208,15 +11190,18 @@
         _gmEndBtn.textContent = '▶ PRÓRROGA';
       } else if (_gmAction === 'penaltis') {
         _gmEndBtn.textContent = '🥅 PENALTIS';
-      } else if (_matchOver) {
-        /* El partido YA acabó (cronómetro al FIN). El humano no sabía
-           qué botón pulsar para continuar — lo confundía con
-           Menú·LIVE / Cancelar. Lo renombramos a "VER RESUMEN"
-           (pulsarlo finaliza y abre el resumen + compartir) y el CSS
-           lo pinta brillante. Petición usuario 2026-05-17. */
-        _gmEndBtn.textContent = '🏁 VER RESUMEN';
+      } else if (_gm.finished) {
+        /* Partido FINALIZADO: se elimina la caja "VER RESUMEN"
+           (petición usuario 2026-05-21: el acta ya está a la vista y
+           las estadísticas se comparten por WhatsApp — el resumen no
+           aporta nada). La única acción del humano es "SALIR DEL
+           PARTIDO" (gm-btn-exit, pintado brillante). */
+        _gmEndBtn.style.display = 'none';
       } else {
+        /* En juego — incluido el tramo 90+1…90+9: SIEMPRE "FINALIZAR"
+           para que el humano sepa que ese es el botón para acabar. */
         _gmEndBtn.textContent = '🏁 FINALIZAR';
+        _gmEndBtn.style.display = '';
       }
       /* Botón "✖ SALIR DEL PARTIDO": visible SOLO cuando el partido
          está FINALIZADO de verdad (_gm.finished), NO solo cuando el
@@ -11266,7 +11251,7 @@
     var editBtn = document.getElementById('gm-timer-edit');
     function _setEditVis(visible){ if (editBtn) editBtn.style.display = visible ? 'inline-flex' : 'none'; }
     if (_gm.finished) {
-      btn.textContent = '🏁 FIN';
+      btn.textContent = '🏁 Final';
       btn.className = 'ml-timer finished';
       if (row) { row.classList.remove('running'); row.classList.add('finished'); }
       _setEditVis(false);
@@ -14754,7 +14739,7 @@
         st.lastCurMin = curMin;
         var newTxt;
         if (curMin > 90 && curMin < topMin) newTxt = '⏳ 90+' + (curMin - 90) + '\'';
-        else if (curMin >= topMin && curMin >= 90) newTxt = '🏁 FIN';
+        else if (curMin >= topMin && curMin >= 90) newTxt = '🏁 Final';
         else newTxt = '⏳ ' + curMin + '\'';
         if (btn.textContent !== newTxt) btn.textContent = newTxt;
       }
@@ -14989,7 +14974,7 @@
         if (_etActive && curMin > 90 && curMin < 120)      btn.textContent = '⏱ ' + curMin + '\' ET';
         else if (_etActive && curMin >= 120)               btn.textContent = '🏁 FIN ET';
         else if (!_etActive && curMin > 90 && curMin < _etTopMin) btn.textContent = '⏳ 90+' + (curMin - 90) + '\'';
-        else if (!_etActive && curMin >= _etTopMin && curMin >= 90) btn.textContent = '🏁 FIN';
+        else if (!_etActive && curMin >= _etTopMin && curMin >= 90) btn.textContent = '🏁 Final';
         else                                               btn.textContent = '⏳ ' + curMin + '\'';
         /* Mantener el background verde si el rebuild reset los estilos. */
         if (btn.style.background !== 'rgb(13, 42, 13)' && btn.style.background.indexOf('#0d2a0d') === -1) {
@@ -17245,6 +17230,23 @@
   animation:gmNearEndPulse 1s ease-in-out infinite !important;
 }
 #gm-btn-end:disabled,#gm-btn-end.gm-end-moved.is-near-end:disabled{animation:none !important;}
+/* ── SALIR DEL PARTIDO · verde brillante pulsante ────────────────
+   (petición usuario 2026-05-21). Tras finalizar es la ÚNICA acción
+   del humano; los finales de partido eran confusos, así que el botón
+   debe destacar para que sepa cómo continuar. Solo se ve cuando el
+   partido ya terminó (display lo gobierna el JS). */
+#gm-btn-exit{
+  background:linear-gradient(135deg,#1ea14a,#33d06d 55%,#1ea14a) !important;
+  border:2px solid #7dffae !important;
+  color:#fff !important;
+  font-weight:900 !important;
+  text-shadow:0 1px 3px rgba(0,0,0,.65) !important;
+  animation:gmExitPulse 1.1s ease-in-out infinite !important;
+}
+@keyframes gmExitPulse{
+  0%,100%{ box-shadow:0 0 12px rgba(51,208,109,.6), inset 0 0 8px rgba(255,255,255,.08); transform:scale(1); }
+  50%   { box-shadow:0 0 30px rgba(51,208,109,1), 0 0 56px rgba(51,208,109,.5), inset 0 0 12px rgba(255,255,255,.14); transform:scale(1.02); }
+}
 /* ── Eventos del acta ────────────────────────────────────────── */
 .ml-evt-item{padding-left:10px!important;}
 .ml-evt-team{font-size:11px;color:rgba(255,255,255,.45);font-family:"Rajdhani",sans-serif;white-space:nowrap;}
@@ -19330,7 +19332,7 @@ window._mlForceFinishMatch = function(mk) {
   /* Limpiar el wrap visual: ocultar timer, marcar como finalizado.   */
   try {
     var btn = document.getElementById('ml-timer-' + mk);
-    if (btn) { btn.textContent = '🏁 FIN'; btn.className = 'ml-timer finished'; }
+    if (btn) { btn.textContent = '🏁 Final'; btn.className = 'ml-timer finished'; }
     var sc = document.querySelector('#mlw-' + mk + ' .ml-score');
     if (sc) { sc.classList.remove('state-playing'); sc.classList.add('state-finished'); }
     var actBar = document.getElementById('ml-actions-bar-' + mk);
@@ -19762,7 +19764,7 @@ function buildLiveScreen() {
       if (actBar) actBar.style.visibility = 'hidden';
       var btnTimer = w.querySelector('.ml-timer');
       if (btnTimer && !btnTimer.classList.contains('finished')) {
-        btnTimer.textContent = '🏁 FIN';
+        btnTimer.textContent = '🏁 Final';
         btnTimer.className = 'ml-timer finished';
       }
     } catch(_){}

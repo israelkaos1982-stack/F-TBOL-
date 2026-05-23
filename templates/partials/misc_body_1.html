@@ -32436,6 +32436,70 @@ Tottenham
     padding:14px;text-align:center;color:rgba(255,255,255,.55);
     font-family:Rajdhani,sans-serif;font-size:12px;
   }
+
+  /* ── Caja "Mensajes" (✉️) del hub ────────────────────────────────
+     Solo se muestra cuando hay avisos relevantes: jugadores con 2
+     amarillas (riesgo de sanción a la 3ª), lesionados activos,
+     sorteos con rival ya conocido, próximo partido HvH/oficial.
+     En días de descanso/entrenamiento sin nada relevante, el atributo
+     `hidden` la oculta por completo. */
+  #s-munich .munich-mailbox[hidden]{display:none !important;}
+  #s-munich .munich-mailbox{
+    margin:10px 12px 0;border-radius:14px;overflow:hidden;
+    background:linear-gradient(135deg,rgba(255,200,40,.18),rgba(20,8,0,.55) 55%,rgba(60,20,0,.65));
+    border:1px solid rgba(255,200,40,.45);
+    box-shadow:0 6px 18px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  #s-munich .munich-mailbox-hdr{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:13px 16px;background:transparent;border:none;width:100%;cursor:pointer;
+    color:#fff;font-family:Oswald,sans-serif;letter-spacing:2.2px;font-size:13px;
+    text-transform:uppercase;font-weight:700;-webkit-tap-highlight-color:transparent;
+  }
+  #s-munich .munich-mailbox-title{display:flex;align-items:center;gap:9px;text-align:left;}
+  #s-munich .munich-mailbox-emoji{
+    font-size:19px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));
+  }
+  #s-munich .munich-mailbox-badge{
+    display:inline-flex;align-items:center;justify-content:center;
+    min-width:22px;height:22px;padding:0 6px;border-radius:11px;
+    background:linear-gradient(135deg,#ff3060,#c00030);
+    color:#fff;font-family:'Bebas Neue',Oswald,sans-serif;font-size:13px;
+    letter-spacing:0;box-shadow:0 0 10px rgba(255,60,90,.55);
+  }
+  #s-munich .munich-mailbox-chev{
+    font-size:13px;color:#ffd750;transition:transform .25s ease;display:inline-block;
+  }
+  #s-munich .munich-mailbox.open .munich-mailbox-chev{transform:rotate(180deg);}
+  #s-munich .munich-mailbox-body{
+    max-height:0;overflow:hidden;transition:max-height .3s ease;
+    border-top:1px solid rgba(255,255,255,0);
+  }
+  #s-munich .munich-mailbox.open .munich-mailbox-body{
+    max-height:480px;border-top-color:rgba(255,255,255,.10);
+    overflow-y:auto;
+  }
+  #s-munich .munich-mailbox-list{
+    list-style:none;margin:0;padding:8px 10px 12px;display:flex;flex-direction:column;gap:7px;
+  }
+  #s-munich .munich-mail-item{
+    display:flex;align-items:flex-start;gap:10px;
+    padding:9px 11px;border-radius:10px;
+    background:rgba(0,0,0,.46);border-left:3px solid var(--mm-color,rgba(255,255,255,.3));
+    color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.35;
+  }
+  #s-munich .munich-mail-item.yellow{ --mm-color:#ffd54a; }
+  #s-munich .munich-mail-item.injury{ --mm-color:#ff5064; }
+  #s-munich .munich-mail-item.draw  { --mm-color:#5ad0ff; }
+  #s-munich .munich-mail-item.match { --mm-color:#5fe08a; }
+  #s-munich .munich-mail-ico{
+    font-size:18px;line-height:1.1;flex:0 0 auto;
+  }
+  #s-munich .munich-mail-txt{flex:1;min-width:0;}
+  #s-munich .munich-mail-txt b{color:#fff;font-weight:700;}
+  #s-munich .munich-mail-txt small{
+    display:block;font-size:11px;color:rgba(255,255,255,.65);margin-top:2px;letter-spacing:.3px;
+  }
 </style>
 <div class="sec-hdr"><img id="mk-hub-badge" alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
@@ -32728,6 +32792,26 @@ Tottenham
     <button class="btn-next" id="munich-next-day-btn">➡️ SIGUIENTE DÍA</button>
   </div>
 </section>
+<!-- ═══ MENSAJES (✉️) DEL HUB ═══════════════════════════════════════
+     Caja contextual de avisos: solo emerge cuando hay algo relevante
+     (2 amarillas, lesionados, sorteo con rival conocido, próximo
+     partido HvH/oficial). En descanso/entrenamiento sin avisos no se
+     muestra. -->
+<section class="munich-mailbox" id="munich-mailbox" hidden>
+  <button type="button" class="munich-mailbox-hdr"
+          onclick="window.muMailToggle&&window.muMailToggle(event)"
+          aria-expanded="false" aria-controls="munich-mailbox-body">
+    <span class="munich-mailbox-title">
+      <span class="munich-mailbox-emoji">✉️</span>
+      <span>Mensajes</span>
+      <span class="munich-mailbox-badge" id="munich-mailbox-badge">0</span>
+    </span>
+    <span class="munich-mailbox-chev" aria-hidden="true">▼</span>
+  </button>
+  <div class="munich-mailbox-body" id="munich-mailbox-body">
+    <ul class="munich-mailbox-list" id="munich-mailbox-list"></ul>
+  </div>
+</section>
 <!-- ═══ COMPETICIONES DEL HUB (caja desplegable) ════════════════════
      Lista horizontal con las competiciones en las que está el equipo
      del hub (Liverpool por defecto). Verde = sigue en juego, rojo =
@@ -32982,6 +33066,316 @@ Tottenham
     document.addEventListener('DOMContentLoaded', _hookGo);
   } else {
     _hookGo();
+  }
+})();
+</script>
+<script>
+/* ── Caja "Mensajes" (✉️) del hub ─────────────────────────────────
+   Compila avisos contextuales y, si hay al menos uno, muestra la
+   sección #munich-mailbox (oculta por defecto con [hidden]). Tipos:
+     · 🟨 Jugadores con 2 amarillas (riesgo de sanción a la 3ª)
+     · 🩹 Lesionados (con partidos restantes)
+     · 🎯 Sorteo con rival ya conocido (Copa, UCL/UEL/UECL KO)
+     · ⚽ Próximo partido HvH / oficial relevante
+   En descanso/entrenamiento sin nada relevante, no aparece. */
+(function(){
+  if (window.__MU_MAIL_READY) return;
+  window.__MU_MAIL_READY = true;
+
+  function _norm(s){
+    try{
+      return String(s||'').toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,'')
+        .replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+    }catch(_){ return String(s||'').toLowerCase().trim(); }
+  }
+  function _hubName(){
+    try{
+      var r = localStorage.getItem('menu_home_v1');
+      if (r){
+        var d = JSON.parse(r);
+        var ov = d && d.ov && d.ov['go:s-munich'];
+        if (ov && ov.label) return String(ov.label);
+      }
+    }catch(_){}
+    try{
+      if (typeof window._ligaEaSubName === 'function'){
+        var s = window._ligaEaSubName('Bayern Munich');
+        if (s) return String(s);
+      }
+    }catch(_){}
+    return 'Liverpool';
+  }
+  function _hubAliases(){
+    var raw = [_hubName(), 'Liverpool', 'Bayern Munich', 'Bayern Múnich', 'Bayern'];
+    var out = [], seen = {};
+    raw.forEach(function(x){
+      var n = _norm(x);
+      if (n && !seen[n]){ seen[n] = 1; out.push(n); }
+    });
+    return out;
+  }
+  function _matches(name, aliases){
+    var n = _norm(name);
+    if (!n) return false;
+    for (var i = 0; i < aliases.length; i++){
+      var a = aliases[i];
+      if (n === a) return true;
+      if (n.indexOf(a) !== -1 || a.indexOf(n) !== -1) return true;
+    }
+    return false;
+  }
+  function _loadJSON(key){
+    try{ return JSON.parse(localStorage.getItem(key)||'null'); }catch(_){ return null; }
+  }
+
+  /* Set de jugadores de la plantilla del hub (para filtrar
+     LESION_STORE — que es global por nombre). Best-effort: si no
+     podemos sacar plantilla, devolvemos null y el filtro se omite. */
+  function _hubSquadNames(aliases){
+    var names = {};
+    var found = false;
+    try{
+      for (var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1 || k.indexOf('_snap_') !== -1) continue;
+        var d = _loadJSON(k);
+        if (!d || !Array.isArray(d.teams)) continue;
+        d.teams.forEach(function(t){
+          if (!t || !_matches(t.name, aliases)) return;
+          (t.players||[]).forEach(function(p){
+            if (p && p.name){ names[_norm(p.name)] = p.name; found = true; }
+          });
+        });
+      }
+    }catch(_){}
+    return found ? names : null;
+  }
+
+  /* ── AVISO 1: jugadores con 2 amarillas (riesgo de 3ª) ───────── */
+  function _alertsYellows(aliases){
+    var out = [];
+    var sm = _loadJSON('ef_player_stats_v1');
+    if (!sm || typeof sm !== 'object') return out;
+    Object.keys(sm).forEach(function(k){
+      var sep = k.indexOf('::');
+      if (sep < 0) return;
+      var team = k.slice(0, sep);
+      var player = k.slice(sep + 2);
+      if (!_matches(team, aliases)) return;
+      var ps = sm[k] || {};
+      var ta = parseInt(ps.ta, 10) || 0;
+      if (ta === 2){
+        out.push({
+          kind:'yellow', icon:'🟨', cls:'yellow',
+          title: player + ' a una de sanción',
+          sub: '2 amarillas — la próxima causaría suspensión'
+        });
+      }
+    });
+    return out;
+  }
+
+  /* ── AVISO 2: lesionados ─────────────────────────────────────── */
+  function _alertsInjured(aliases){
+    var out = [];
+    var LS = window.LESION_STORE || {};
+    if (!LS || typeof LS !== 'object') return out;
+    var squad = _hubSquadNames(aliases); /* puede ser null */
+    Object.keys(LS).forEach(function(name){
+      var rec = LS[name];
+      if (!rec) return;
+      var n = parseInt(rec.partidos, 10) || 0;
+      if (n <= 0) return;
+      if (squad && !squad[_norm(name)]) return; /* no es de la plantilla */
+      var grado = rec.gradoNombre || 'Lesión';
+      var ico   = rec.gradoEmoji  || '🩹';
+      out.push({
+        kind:'injury', icon:ico, cls:'injury',
+        title: name + ' lesionado',
+        sub: grado + ' · ' + n + ' partido' + (n === 1 ? '' : 's') + ' restante' + (n === 1 ? '' : 's')
+      });
+    });
+    return out;
+  }
+
+  /* ── AVISO 3: sorteos con rival ya conocido ──────────────────── */
+  function _euroDrawAlert(comp, aliases){
+    var META = {
+      ucl:  { phase:'ucl_phase_v1',  label:'Champions',     emoji:'🏆' },
+      uel:  { phase:'uel_phase_v1',  label:'Europa League', emoji:'🟠' },
+      uecl: { phase:'uecl_phase_v1', label:'Conference',    emoji:'🟢' }
+    };
+    var m = META[comp]; if (!m) return null;
+    var s = _loadJSON(m.phase);
+    if (!s || !Array.isArray(s.pairs)) return null;
+    for (var i = 0; i < s.pairs.length; i++){
+      var p = s.pairs[i] || {};
+      if (p.played) continue;
+      var hH = _matches(p.home, aliases);
+      var hA = _matches(p.away, aliases);
+      if (!hH && !hA) continue;
+      var rival = hH ? p.away : p.home;
+      if (!rival || /^@[a-z0-9]+#\d+$/i.test(rival)) continue;
+      return {
+        kind:'draw', icon:m.emoji, cls:'draw',
+        title: 'Sorteo ' + m.label,
+        sub: 'Rival: ' + rival + (p.jornada ? ' · Jornada ' + p.jornada : '')
+      };
+    }
+    return null;
+  }
+  function _copaDrawAlert(aliases){
+    /* Best effort: si hay un cuadro de Copa expuesto en window con la
+       ronda actual + parejas, busca el rival del hub. */
+    var cuadro = window._copaCuadro || _loadJSON('copa_data_v1');
+    if (!cuadro) return null;
+    var rondas = cuadro.rondas || cuadro.rounds || cuadro.bracket;
+    if (!rondas) return null;
+    var keys = Object.keys(rondas);
+    for (var i = 0; i < keys.length; i++){
+      var matches = rondas[keys[i]] || [];
+      if (!Array.isArray(matches)) continue;
+      for (var j = 0; j < matches.length; j++){
+        var m = matches[j] || {};
+        var played = m.played || (m.gh != null && m.ga != null);
+        if (played) continue;
+        var hH = _matches(m.home || m.l, aliases);
+        var hA = _matches(m.away || m.v, aliases);
+        if (!hH && !hA) continue;
+        var rival = hH ? (m.away || m.v) : (m.home || m.l);
+        if (!rival || /^@/.test(rival) || /pendiente/i.test(rival)) continue;
+        return {
+          kind:'draw', icon:'👑', cls:'draw',
+          title: 'Sorteo Copa del Rey',
+          sub: 'Rival: ' + rival
+        };
+      }
+    }
+    return null;
+  }
+  function _alertsDraws(aliases){
+    var out = [];
+    ['ucl','uel','uecl'].forEach(function(c){
+      var a = _euroDrawAlert(c, aliases);
+      if (a) out.push(a);
+    });
+    var copa = _copaDrawAlert(aliases);
+    if (copa) out.push(copa);
+    return out;
+  }
+
+  /* ── AVISO 4: próximo partido HvH / oficial relevante ────────── */
+  function _alertsNextMatch(aliases){
+    var el = document.getElementById('munich-next-match');
+    if (!el) return [];
+    var txt = String(el.textContent || '').trim();
+    if (!txt) return [];
+    /* Saltamos descanso/entrenamiento/pretemporada (no son partido). */
+    if (/descanso|entrenamiento|pretemporada|elige/i.test(txt)) return [];
+    /* Detectamos rival como la palabra después de "vs". */
+    var m = txt.match(/vs\s+([^·]+?)(?:\s*·|$)/i);
+    if (!m) return [];
+    var rival = m[1].trim();
+    if (!rival) return [];
+    /* HvH si el rival es humano (esHumano patch ya cubre humanIcon).
+       Si no hay esHumano, hacemos heurística sobre 5 humanos. */
+    var isHvH = false;
+    try {
+      if (typeof window.esHumano === 'function') isHvH = !!window.esHumano(rival);
+    } catch(_){}
+    if (!isHvH){
+      var H = ['Real Madrid','FC Barcelona','Atlético Madrid','Arsenal','Liverpool','Bayern Munich'];
+      for (var i = 0; i < H.length; i++){
+        if (_norm(H[i]) === _norm(rival)){ isHvH = true; break; }
+      }
+    }
+    /* Comp "oficial relevante": final, semifinal, derbi. */
+    var isOficial = /\b(final|semifinal|derb)/i.test(txt);
+    if (!isHvH && !isOficial) return [];
+    return [{
+      kind:'match', icon:isHvH ? '🤝' : '⚽', cls:'match',
+      title: (isHvH ? 'Partido HvH' : 'Partido oficial') + ' vs ' + rival,
+      sub: txt
+    }];
+  }
+
+  function _collect(){
+    var aliases = _hubAliases();
+    var out = [];
+    try { out = out.concat(_alertsYellows(aliases));   } catch(_){}
+    try { out = out.concat(_alertsInjured(aliases));   } catch(_){}
+    try { out = out.concat(_alertsDraws(aliases));     } catch(_){}
+    try { out = out.concat(_alertsNextMatch(aliases)); } catch(_){}
+    return out;
+  }
+
+  function _esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function _render(){
+    var box = document.getElementById('munich-mailbox');
+    var list = document.getElementById('munich-mailbox-list');
+    var badge = document.getElementById('munich-mailbox-badge');
+    if (!box || !list || !badge) return;
+    var items = _collect();
+    if (!items.length){
+      box.hidden = true;
+      box.classList.remove('open');
+      list.innerHTML = '';
+      badge.textContent = '0';
+      return;
+    }
+    box.hidden = false;
+    badge.textContent = String(items.length);
+    list.innerHTML = items.map(function(it){
+      return ''
+        + '<li class="munich-mail-item ' + _esc(it.cls) + '">'
+        +   '<span class="munich-mail-ico">' + _esc(it.icon) + '</span>'
+        +   '<span class="munich-mail-txt"><b>' + _esc(it.title) + '</b>'
+        +     '<small>' + _esc(it.sub || '') + '</small>'
+        +   '</span>'
+        + '</li>';
+    }).join('');
+  }
+
+  window.muMailToggle = function(ev){
+    if (ev && ev.preventDefault) ev.preventDefault();
+    var box = document.getElementById('munich-mailbox');
+    if (!box || box.hidden) return;
+    var open = box.classList.toggle('open');
+    var btn = box.querySelector('.munich-mailbox-hdr');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  window.muMailRefresh = _render;
+
+  /* Refresca al entrar al hub. Reutiliza el mismo patrón que la caja
+     Competiciones: hook a window.go con poll si aún no existe. */
+  function _hookGo(){
+    var orig = window.go;
+    if (typeof orig !== 'function'){ setTimeout(_hookGo, 200); return; }
+    if (orig._muMailHooked) return;
+    var prev = window.go;
+    window.go = function(id){
+      var r = prev.apply(this, arguments);
+      if (id === 's-munich'){
+        /* Pequeño delay para dejar que updateHud pinte
+           #munich-next-match antes de leerlo. */
+        setTimeout(_render, 50);
+      }
+      return r;
+    };
+    window.go._muMailHooked = true;
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', function(){ _hookGo(); _render(); });
+  } else {
+    _hookGo();
+    setTimeout(_render, 300);
   }
 })();
 </script>

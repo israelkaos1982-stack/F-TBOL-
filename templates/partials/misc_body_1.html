@@ -2442,6 +2442,36 @@ window._showSimProgress = function(opts, onDone){
         var u=window.getTeamLogoUrl(String(s)); if(u) return u; } } }catch(_){}
     return BAYERN_SHIELD;
   }
+  /* Nombre LÓGICO del equipo humano del hub (slot Bayern Munich). Lo
+     usan _realRival (matching del bracket del torneo) y
+     _openPreseasonPrevia (home de la previa + lookup de plantilla en
+     showPrePartidoOverlay / abrirAmistoso). Priorizamos el reemplazo
+     real de Liga EA (_ligaEaSubName) porque eso garantiza que el
+     equipo VIVE en el registry de jugadores con ese nombre; un puro
+     alias visual (menu_home_v1) NO sirve para lógica porque el equipo
+     no existe en el registry. Petición usuario 2026-05-23: al renombrar
+     el hub a Liverpool, el bracket del Joan Gamper guarda "Liverpool"
+     y _realRival (regex /bayern/i hardcodeado) no lo encontraba → la
+     card del día decía "Sin partido del Bayern" en vez de Liverpool
+     vs Cruzeiro. */
+  function _psHumanLogicName(){
+    try{
+      if(window._ligaEaSubName){
+        var s = window._ligaEaSubName('Bayern Munich');
+        if (s && String(s).toLowerCase() !== 'bayern munich') return String(s);
+      }
+    }catch(_){}
+    return 'Bayern Munich';
+  }
+  function _psNameKey(s){
+    /* Normalización para comparar nombres de equipo entre el bracket
+       y el slot humano: minúsculas + strip de marcas combining (acentos)
+       + colapso de espacios. Usamos el rango ̀-ͯ (Combining
+       Diacritical Marks) en literales escapados para no depender del
+       editor que renderice los puntos de código. */
+    return String(s||'').toLowerCase().normalize('NFD')
+      .replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+  }
 
   /* Pools de rivales por torneo (pretemporada). El cuadro/bracket
      completo no existe aún → al elegir torneo asignamos un rival a
@@ -2865,7 +2895,14 @@ window._showSimProgress = function(opts, onDone){
      _ppPreviaTeams + _ppCustomCallback). Es el "cascarón único"
      pedido en el spec. Al proceder desde la previa avanzamos el día. */
   function _openPreseasonPrevia(day, rv, tourNm){
-    var home = 'Bayern Munich', away = rv.name;
+    /* `home` = nombre LÓGICO del equipo humano del hub. Antes era
+       'Bayern Munich' hardcodeado y la previa salía como Bayern vs
+       rival en el hub Liverpool. Ahora resolvemos vía
+       _psHumanLogicName (lee _ligaEaSubName), así la previa y el
+       gm-modal posteriores (abrirAmistoso) usan la plantilla del
+       equipo HUMANO real del hub (Liverpool en este setup) y la
+       simulación HvIA arranca con codigos correctos. */
+    var home = _psHumanLogicName(), away = rv.name;
     var comp = /amist/i.test(day.label || '') ? 'amistoso' : 'torneo';
     var dur = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH:false, humanInvolved:true })
@@ -2926,15 +2963,28 @@ window._showSimProgress = function(opts, onDone){
       if (!cfg || !cfg.bracket) return null;
       var r = parseInt(cfg.currentRound,10) || 0;
       var round = cfg.bracket[r] || cfg.bracket[0] || [];
+      /* Buscamos al equipo HUMANO del hub en el bracket. Antes era un
+         regex /bayern/i hardcodeado — al renombrar el hub a Liverpool
+         (vía _ligaEaSubName), el bracket guarda "Liverpool" y el
+         regex no encontraba nada, devolviendo null y haciendo que
+         _cardMatch mostrara "Sin partido del Bayern" en un día en
+         que Liverpool sí tiene partido. Aceptamos también los nombres
+         legacy Bayern/Bayern Múnich por si el bracket viejo aún los
+         guarda mezclados con la versión sub'da. */
+      var humanKeys = {};
+      humanKeys[_psNameKey(_psHumanLogicName())] = 1;
+      humanKeys[_psNameKey('Bayern Munich')]     = 1;
+      humanKeys[_psNameKey('Bayern Múnich')]     = 1;
+      humanKeys[_psNameKey('Bayern')]            = 1;
       var bi = -1;
       for (var i=0;i<round.length;i++){
         var nm = round[i] && round[i].name;
-        if (nm && /bayern/i.test(nm)){ bi = i; break; }
+        if (nm && humanKeys[_psNameKey(nm)]){ bi = i; break; }
       }
       if (bi < 0) return null;
       var pj = (bi % 2 === 0) ? bi + 1 : bi - 1;
       var opp = round[pj] && round[pj].name;
-      if (opp && !/bayern/i.test(opp) && opp !== 'PENDIENTE') return opp;
+      if (opp && !humanKeys[_psNameKey(opp)] && opp !== 'PENDIENTE') return opp;
     } catch(_){}
     return null;
   }
@@ -2960,7 +3010,7 @@ window._showSimProgress = function(opts, onDone){
         + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
         + '<div class="ps-meta" style="margin:16px 0;color:rgba(255,255,255,.7);">'
         +   (d.tour
-              ? '⚠️ Sin partido del Bayern en este día.<br><span style="font-size:11px;opacity:.7;">El cuadro del torneo no programa rival aquí (eliminado o torneo terminado).</span>'
+              ? '⚠️ Sin partido del ' + _esc(_psHumanName()) + ' en este día.<br><span style="font-size:11px;opacity:.7;">El cuadro del torneo no programa rival aquí (eliminado o torneo terminado).</span>'
               : '⚠️ Aún no has elegido torneo de verano.<br><span style="font-size:11px;opacity:.7;">Elige uno desde el hub para que se asigne un rival.</span>')
         + '</div>'
         + '</div>';

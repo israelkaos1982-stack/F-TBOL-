@@ -37900,21 +37900,40 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
 <style>
   #s-munich .sec-hdr{ position:relative; }
-  #mu-form-cluster{ position:absolute; top:4px; right:14px; z-index:3;
-    display:flex; flex-direction:column; align-items:center; gap:0; }
-  #mu-form-cluster .mfc-t{ font-family:'Oswald',sans-serif; font-size:10px;
-    letter-spacing:1px; color:rgba(255,255,255,.82); line-height:1.25; }
-  /* Iconos 🎲 / ⬇️ de Yo y Rival: emoji normal (a todo color) dentro de
-     un recuadro pequeño cuyo BORDE va del rojo del escudo del Liverpool.
-     2026-05-21: se descartó recolorear el emoji (quedaba como una
-     silueta roja sólida) — solo el borde. */
-  #mu-form-cluster .mfc-c{ font-size:13px; line-height:1;
-    display:inline-flex; align-items:center; justify-content:center;
-    width:21px; height:21px; box-sizing:border-box; margin:1px 0;
-    border:1.5px solid #c8102e; border-radius:5px; }
-  #mu-nivel{ font-family:'Oswald',sans-serif; font-size:11px; font-weight:700;
-    letter-spacing:2px; color:#F6EB61; opacity:.92; margin-top:1px; cursor:default; }
-  #mu-nivel small{ font-size:9px; color:rgba(255,255,255,.45); letter-spacing:1px; }
+  /* Botón ℹ️ rojo/negro arriba-derecha. Sustituye al badge 🎮 CRACK
+     (debajo de TOÑÍN) y al cluster Yo/🎲/⬇️/Rival que vivían sueltos
+     en la cabecera. Al pulsarlo emerge un popover con AMBOS datos
+     (Nivel + Forma). Petición usuario 2026-05-23. */
+  #mu-info-btn{ position:absolute; top:6px; right:10px; z-index:4;
+    width:22px; height:22px; padding:0; line-height:1;
+    border-radius:50%;
+    background:linear-gradient(135deg,#c8102e 0%,#9b0c23 55%,#1a1a1a 100%);
+    border:1px solid #1a1a1a;
+    color:#fff;
+    font-family:'Oswald',sans-serif; font-size:13px; font-weight:700; font-style:italic;
+    cursor:pointer; -webkit-tap-highlight-color:transparent;
+    box-shadow:0 1px 3px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.08); }
+  #mu-info-btn:active{ transform:scale(.94); }
+  #mu-info-pop{ position:absolute; top:34px; right:8px; z-index:5;
+    min-width:210px;
+    background:linear-gradient(180deg, rgba(20,8,12,.97), rgba(8,4,6,.97));
+    border:1px solid rgba(200,16,46,.55);
+    border-radius:8px;
+    padding:9px 11px;
+    box-shadow:0 6px 18px rgba(0,0,0,.55);
+    color:#fff; font-family:'Oswald',sans-serif; }
+  #mu-info-pop[hidden]{ display:none; }
+  #mu-info-pop .mip-row{ display:flex; align-items:center; gap:6px;
+    font-size:11px; letter-spacing:1px; margin:3px 0; }
+  #mu-info-pop .mip-lbl{ color:#F6EB61; }
+  #mu-info-pop .mip-sep{ color:rgba(255,255,255,.45); }
+  #mu-info-pop .mip-val{ color:#fff; text-transform:uppercase; }
+  #mu-info-pop .mip-form{ display:inline-flex; gap:4px; align-items:center;
+    text-transform:none; letter-spacing:0; font-size:11px; }
+  #mu-info-pop .mip-ico{ display:inline-flex; align-items:center; justify-content:center;
+    width:18px; height:18px; box-sizing:border-box;
+    border:1.5px solid #c8102e; border-radius:5px;
+    font-size:11px; line-height:1; }
   #munich-edit-ov .me-form-block{ border-top:1px solid rgba(255,120,140,.25); margin-top:10px; padding-top:8px; }
   #munich-edit-ov .me-form-block .mfb-lbl{ font-family:Oswald,sans-serif; font-size:11px; letter-spacing:1.5px; color:#F6EB61; margin:8px 0 4px; }
   #munich-edit-ov .mfb-opts{ display:flex; gap:6px; flex-wrap:wrap; }
@@ -37990,40 +38009,83 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   window._teamSeasonFormSave = function(d){ _save(d); };
   window._teamSeasonFormRenderHeader = function(){ try { _renderHeader(); } catch(_){} };
 
-  /* ── Indicadores en la cabecera del hub (colores del Liverpool) ── */
+  /* ── Indicadores en la cabecera del hub (colores del Liverpool) ──
+     2026-05-23: el badge 🎮 NIVEL (debajo de · TOÑÍN) y el cluster
+     Yo/🎲/⬇️/Rival (arriba-dcha) se han sustituido por un único
+     botón ℹ️ pequeño rojo/negro arriba-dcha. Al pulsarlo emerge un
+     popover con AMBOS datos (Nivel + Forma). Se limpia el DOM
+     legacy por si quedó cacheado de una versión anterior. */
+  var _infoDocClickWired = false;
   function _renderHeader(){
     var hdr = document.querySelector('#s-munich .sec-hdr');
     if (!hdr) return;
     var s = _load();
-    var c = document.getElementById('mu-form-cluster');
-    if (!c){
-      c = document.createElement('div');
-      c.id = 'mu-form-cluster';
-      c.innerHTML =
-        '<span class="mfc-t">Yo</span>'
-      + '<span class="mfc-c" id="mfc-yo">🎲</span>'
-      + '<span class="mfc-c" id="mfc-rival">⬇️</span>'
-      + '<span class="mfc-t">Rival</span>';
-      hdr.appendChild(c);
+    /* Limpieza legacy: badge 🎮 CRACK + cluster Yo/Rival sueltos. */
+    var stale1 = document.getElementById('mu-nivel');
+    if (stale1 && stale1.parentNode) stale1.parentNode.removeChild(stale1);
+    var stale2 = document.getElementById('mu-form-cluster');
+    if (stale2 && stale2.parentNode) stale2.parentNode.removeChild(stale2);
+    /* Botón ℹ️ rojo/negro arriba-derecha. */
+    var btn = document.getElementById('mu-info-btn');
+    if (!btn){
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = 'mu-info-btn';
+      btn.setAttribute('aria-label', 'Nivel y forma del equipo');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.textContent = 'i';
+      btn.onclick = function(ev){
+        ev.stopPropagation();
+        var p = document.getElementById('mu-info-pop');
+        if (!p) return;
+        var open = p.hasAttribute('hidden');
+        if (open){ p.removeAttribute('hidden'); btn.setAttribute('aria-expanded','true'); }
+        else     { p.setAttribute('hidden',''); btn.setAttribute('aria-expanded','false'); }
+      };
+      hdr.appendChild(btn);
     }
-    var y = document.getElementById('mfc-yo'), r = document.getElementById('mfc-rival');
-    if (y) y.textContent = s.yo;
-    if (r) r.textContent = s.rival;
-    /* NIVEL en pequeño, debajo del nombre · TOÑÍN. */
-    var col = null, ch = hdr.children;
-    for (var i = 0; i < ch.length; i++){
-      if (ch[i].tagName === 'DIV' && ch[i].id !== 'mu-form-cluster'){ col = ch[i]; break; }
+    /* Popover (Nivel + Forma) — escondido por defecto. */
+    var pop = document.getElementById('mu-info-pop');
+    if (!pop){
+      pop = document.createElement('div');
+      pop.id = 'mu-info-pop';
+      pop.setAttribute('hidden', '');
+      pop.innerHTML =
+        '<div class="mip-row">'
+      +   '<span class="mip-lbl">🎮 Nivel</span>'
+      +   '<span class="mip-sep">›</span>'
+      +   '<span class="mip-val" id="mip-level">Crack</span>'
+      + '</div>'
+      + '<div class="mip-row">'
+      +   '<span class="mip-lbl">🔋 Forma</span>'
+      +   '<span class="mip-sep">›</span>'
+      +   '<span class="mip-val mip-form">'
+      +     '<span>Yo</span>'
+      +     '<span class="mip-ico" id="mip-yo">🎲</span>'
+      +     '<span class="mip-ico" id="mip-rival">⬇️</span>'
+      +     '<span>Rival</span>'
+      +   '</span>'
+      + '</div>';
+      hdr.appendChild(pop);
     }
-    if (col){
-      var nv = document.getElementById('mu-nivel');
-      if (!nv){
-        nv = document.createElement('div');
-        nv.id = 'mu-nivel';
-        var firstRow = col.children[0];
-        if (firstRow && firstRow.nextSibling) col.insertBefore(nv, firstRow.nextSibling);
-        else col.appendChild(nv);
-      }
-      nv.innerHTML = '🎮 ' + String(s.nivel || 'Crack').toUpperCase();
+    var lv = document.getElementById('mip-level');
+    if (lv) lv.textContent = String(s.nivel || 'Crack');
+    var iy = document.getElementById('mip-yo');
+    if (iy) iy.textContent = s.yo;
+    var ir = document.getElementById('mip-rival');
+    if (ir) ir.textContent = s.rival;
+    /* Click fuera del popover → cerrar. Se engancha 1 sola vez. */
+    if (!_infoDocClickWired){
+      _infoDocClickWired = true;
+      document.addEventListener('click', function(ev){
+        var p = document.getElementById('mu-info-pop');
+        if (!p || p.hasAttribute('hidden')) return;
+        var b = document.getElementById('mu-info-btn');
+        if (p.contains(ev.target)) return;
+        if (b && b.contains(ev.target)) return;
+        p.setAttribute('hidden','');
+        if (b) b.setAttribute('aria-expanded','false');
+      });
     }
   }
 

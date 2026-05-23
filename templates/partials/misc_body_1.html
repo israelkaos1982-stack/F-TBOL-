@@ -15796,13 +15796,14 @@ window._showSimProgress = function(opts, onDone){
 
   function _renderLeagueChampionAndPayouts(cfg, rows) {
     /* Liga JG: bonus por posición + por partido (perWin/perDraw/perLoss).
-       rows ya viene ordenado por puntos. */
+       rows ya viene ordenado por puntos.
+       2026-05-23: el bloque "💰 PREMIOS · MONEDAS GANADAS" sólo
+       aparece si AL MENOS UN humano ha ganado monedas (coins > 0).
+       La caja de campeón se conserva siempre. */
     var prizes = cfg.prizes || {};
     var champTeam = rows[0];
     var html = _championBoxHtml(champTeam);
-    html += _payoutsHeaderHtml();
-    html += '<div style="background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;">';
-    rows.forEach(function(r, i){
+    var rendered = rows.map(function(r, i){
       var pos = i + 1;
       var perW = (prizes.perWin  || 0) * r.pg;
       var perE = (prizes.perDraw || 0) * r.pe;
@@ -15812,8 +15813,13 @@ window._showSimProgress = function(opts, onDone){
       var total = perW + perE + perL + posBonus;
       var detail = pos+'º · '+r.name+(r.isHuman?' 👤':'');
       var sub = ' <span style="font-size:10px;color:rgba(255,255,255,.45);">('+r.pg+'G+'+r.pe+'E+'+r.pp+'P · bonus '+posBonus+')</span>';
-      html += _payoutRow(detail+sub, total, r.isHuman);
+      return { html:_payoutRow(detail+sub, total, r.isHuman), coins:total, isHuman:!!r.isHuman };
     });
+    var anyHumanWonMoney = rendered.some(function(r){ return r.isHuman && r.coins > 0; });
+    if (!anyHumanWonMoney) return html;
+    html += _payoutsHeaderHtml();
+    html += '<div style="background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;">';
+    rendered.forEach(function(r){ html += r.html; });
     html += '</div>';
     return html;
   }
@@ -15850,10 +15856,10 @@ window._showSimProgress = function(opts, onDone){
         }
       });
     });
-    var html = _payoutsHeaderHtml();
-    html += '<div style="background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;">';
     /* Ordenar por monedas totales desc para mostrar los humanos
-       arriba si aplica. */
+       arriba si aplica.
+       2026-05-23: el bloque "💰 PREMIOS · MONEDAS GANADAS" sólo
+       aparece si AL MENOS UN humano ha ganado monedas (coins > 0). */
     var FLAT = (fc.prizeModel === 'flat');
     var rendered = allRows.map(function(r){
       var reached = (typeof maxRoundFor[r.team.name] === 'number') ? maxRoundFor[r.team.name] : -1;
@@ -15895,6 +15901,10 @@ window._showSimProgress = function(opts, onDone){
       var sub = ' <span style="font-size:10px;color:rgba(255,255,255,.45);">('+r.pg+'G+'+r.pe+'E+'+r.pp+'P'+(stages.length?' · '+stages.join(' '):'')+')</span>';
       return { html:_payoutRow(detail+sub, coins, r.isHuman), coins:coins, isHuman:r.isHuman };
     });
+    var anyHumanWonMoney = rendered.some(function(r){ return r.isHuman && r.coins > 0; });
+    if (!anyHumanWonMoney) return '';
+    var html = _payoutsHeaderHtml();
+    html += '<div style="background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;">';
     rendered.sort(function(x,y){
       if (x.isHuman !== y.isHuman) return x.isHuman ? -1 : 1;
       return y.coins - x.coins;
@@ -15943,9 +15953,9 @@ window._showSimProgress = function(opts, onDone){
     var finalTeams = bracket[lastRoundIdx] || [];
     var champ = (finalRes.winner === 'a') ? finalTeams[0] : finalTeams[1];
     var sub   = (finalRes.winner === 'a') ? finalTeams[1] : finalTeams[0];
-    var html = _payoutsHeaderHtml();
-    html += '<div style="background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;">';
-    /* Recolectar todos los teams del torneo (round 0). */
+    /* Recolectar todos los teams del torneo (round 0).
+       2026-05-23: el bloque "💰 PREMIOS · MONEDAS GANADAS" sólo
+       aparece si AL MENOS UN humano ha ganado monedas (coins > 0). */
     var rowsArr = (bracket[0] || []).map(function(t){
       var nm = t && t.name;
       var rMax = (typeof maxR[nm] === 'number') ? maxR[nm] : 0;
@@ -15961,6 +15971,10 @@ window._showSimProgress = function(opts, onDone){
       if (t && t.isHuman) label += ' 👤';
       return { html:_payoutRow(label, coins, !!(t && t.isHuman)), coins:coins, isHuman:!!(t && t.isHuman) };
     });
+    var anyHumanWonMoney = rowsArr.some(function(r){ return r.isHuman && r.coins > 0; });
+    if (!anyHumanWonMoney) return '';
+    var html = _payoutsHeaderHtml();
+    html += '<div style="background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:8px 12px;">';
     rowsArr.sort(function(x,y){
       if (x.isHuman !== y.isHuman) return x.isHuman ? -1 : 1;
       return y.coins - x.coins;

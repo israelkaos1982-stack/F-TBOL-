@@ -2895,14 +2895,18 @@ window._showSimProgress = function(opts, onDone){
      _ppPreviaTeams + _ppCustomCallback). Es el "cascarón único"
      pedido en el spec. Al proceder desde la previa avanzamos el día. */
   function _openPreseasonPrevia(day, rv, tourNm){
-    /* `home` = nombre LÓGICO del equipo humano del hub. Antes era
-       'Bayern Munich' hardcodeado y la previa salía como Bayern vs
-       rival en el hub Liverpool. Ahora resolvemos vía
-       _psHumanLogicName (lee _ligaEaSubName), así la previa y el
-       gm-modal posteriores (abrirAmistoso) usan la plantilla del
-       equipo HUMANO real del hub (Liverpool en este setup) y la
-       simulación HvIA arranca con codigos correctos. */
-    var home = _psHumanLogicName(), away = rv.name;
+    /* `home` = nombre EXACTO del slot humano en el bracket (lo
+       guarda _cardMatch desde _realPair().home). Antes era
+       'Bayern Munich' hardcodeado y luego _psHumanLogicName(), pero
+       ambos podían quedarse desincronizados con el bracket si
+       _ligaEaSubName no estaba inicializado al cargar. Cogiendo el
+       nombre del propio bracket garantizamos que la previa y el
+       gm-modal posteriores (abrirAmistoso) usan exactamente la
+       misma plantilla que el bracket validó. Fallback a
+       _psHumanLogicName y luego a 'Bayern Munich' por si rv es
+       data legacy sin .home. */
+    var home = (rv && rv.home) || _psHumanLogicName() || 'Bayern Munich';
+    var away = rv.name;
     var comp = /amist/i.test(day.label || '') ? 'amistoso' : 'torneo';
     var dur = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH:false, humanInvolved:true })
@@ -2952,7 +2956,21 @@ window._showSimProgress = function(opts, onDone){
      race con la carga async del bracket — sin esto _cardMatch
      mostraba un rival aleatorio del pool antes de que se hidratara
      window._TOUR_CACHE. */
-  function _realRival(){
+  /* Devuelve { home, rival } del partido del HUMANO en la ronda
+     actual del torneo elegido, o null si el bracket no programa
+     rival aquí. `home` es el NOMBRE EXACTO con el que el slot
+     humano está guardado en el bracket — eso garantiza que la
+     previa (showPrePartidoOverlay) y el gm-modal (abrirAmistoso)
+     lo encuentren en el registry de jugadores con el mismo nombre
+     que el bracket ya validó.
+
+     Antes era _realRival() que solo devolvía la string del rival;
+     _openPreseasonPrevia hardcodeaba home con _psHumanLogicName()
+     (que cae al fallback 'Bayern Munich' si _ligaEaSubName no está
+     inicializado al cargar). El bracket aquí guarda 'Liverpool' →
+     ahora cogemos ese nombre del propio bracket en lugar de
+     re-resolverlo, así no hay desincronización posible. */
+  function _realPair(){
     try {
       var tid = _load().tour;
       if (!tid) return null;
@@ -2963,30 +2981,42 @@ window._showSimProgress = function(opts, onDone){
       if (!cfg || !cfg.bracket) return null;
       var r = parseInt(cfg.currentRound,10) || 0;
       var round = cfg.bracket[r] || cfg.bracket[0] || [];
-      /* Buscamos al equipo HUMANO del hub en el bracket. Antes era un
-         regex /bayern/i hardcodeado — al renombrar el hub a Liverpool
-         (vía _ligaEaSubName), el bracket guarda "Liverpool" y el
-         regex no encontraba nada, devolviendo null y haciendo que
-         _cardMatch mostrara "Sin partido del Bayern" en un día en
-         que Liverpool sí tiene partido. Aceptamos también los nombres
-         legacy Bayern/Bayern Múnich por si el bracket viejo aún los
-         guarda mezclados con la versión sub'da. */
-      var humanKeys = {};
-      humanKeys[_psNameKey(_psHumanLogicName())] = 1;
-      humanKeys[_psNameKey('Bayern Munich')]     = 1;
-      humanKeys[_psNameKey('Bayern Múnich')]     = 1;
-      humanKeys[_psNameKey('Bayern')]            = 1;
+      /* Fuente de verdad del slot humano: la bandera .isHuman que el
+         módulo de torneos pone al asignar el slot PENDIENTE dorado
+         (la misma flag que renderiza 👤 en la UI). Fallback por
+         nombre para data legacy sin .isHuman. */
+      function _slotIsH(t){
+        if (!t) return false;
+        if (t.isHuman) return true;
+        var nm = t.name;
+        if (!nm || nm === 'PENDIENTE') return false;
+        var k = _psNameKey(nm);
+        if (k === _psNameKey(_psHumanLogicName())) return true;
+        if (k === _psNameKey('Bayern Munich'))     return true;
+        if (k === _psNameKey('Bayern Múnich'))     return true;
+        if (k === _psNameKey('Bayern'))            return true;
+        return false;
+      }
       var bi = -1;
       for (var i=0;i<round.length;i++){
-        var nm = round[i] && round[i].name;
-        if (nm && humanKeys[_psNameKey(nm)]){ bi = i; break; }
+        if (_slotIsH(round[i])){ bi = i; break; }
       }
       if (bi < 0) return null;
+      var homeName = round[bi] && round[bi].name;
+      if (!homeName || homeName === 'PENDIENTE') return null;
       var pj = (bi % 2 === 0) ? bi + 1 : bi - 1;
-      var opp = round[pj] && round[pj].name;
-      if (opp && !humanKeys[_psNameKey(opp)] && opp !== 'PENDIENTE') return opp;
+      var opp = round[pj];
+      var oppName = opp && opp.name;
+      if (!oppName || _slotIsH(opp) || oppName === 'PENDIENTE') return null;
+      return { home: String(homeName), rival: String(oppName) };
     } catch(_){}
     return null;
+  }
+  /* Wrapper retro-compat: devuelve solo el nombre del rival, como
+     antes. Si otro consumidor (callers viejos) lo invoca aún. */
+  function _realRival(){
+    var p = _realPair();
+    return p ? p.rival : null;
   }
 
   function _cardMatch(day){
@@ -3002,8 +3032,8 @@ window._showSimProgress = function(opts, onDone){
        "torneo" sin bracket real disparaba una previa fantasma del
        Bayern contra un equipo aleatorio (bug "sale partido sin
        tocar" del 2026-05-22). */
-    var real = _realRival();
-    if (!real){
+    var pair = _realPair();
+    if (!pair){
       st.innerHTML =
         '<div class="ps-card">'
         + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
@@ -3018,12 +3048,14 @@ window._showSimProgress = function(opts, onDone){
     }
     var rv = d.rivals[day.date];
     if (!rv){
-      rv = { name: real,
+      rv = { name: pair.rival, home: pair.home,
              stadium: STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
              difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)] };
       d.rivals[day.date] = rv;
-    } else if (rv.name !== real){
-      rv.name = real;
+    } else {
+      /* Resync con el bracket por si cambió en el editor (admin). */
+      if (rv.name !== pair.rival) rv.name = pair.rival;
+      if (rv.home !== pair.home)  rv.home = pair.home;
     }
     _save(d);
     /* En día de partido NO usamos card propia: se abre la PANTALLA DE

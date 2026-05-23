@@ -2939,6 +2939,178 @@ window._showSimProgress = function(opts, onDone){
     if (card) card.onclick = adv;
   }
 
+  /* Localiza el partido del HUMANO (Francia) en el Mundial 2032 para
+     una fila `ag-sel` de "Mundial Grupo — JN". Devuelve { tourId,
+     matchKey, home, away, rival } o `null` si el Mundial 2032 no está
+     cargado / no hay equipo humano / no hay fixture sorteado. El
+     mismo Toñín que dirige Liverpool dirige Francia, así que durante
+     un parón de selecciones la card del hub debe ofrecer el partido
+     de su selección en vez de "jugadores fuera". 2026-05-23. */
+  function _selPair(day){
+    try {
+      if (!day || !/\bag-sel\b/.test(day.cls)) return null;
+      var lbl = String(day.label || '');
+      if (!/mundial/i.test(lbl) || !/grupo/i.test(lbl)) return null;
+      var mJor = /j\s*(\d+)/i.exec(lbl);
+      if (!mJor) return null;
+      var jor = parseInt(mJor[1], 10) - 1;
+      if (isNaN(jor) || jor < 0) return null;
+      var cache = window._TOUR_CACHE || {};
+      var keys = Object.keys(cache);
+      var mundialId = null, mundialCfg = null;
+      for (var k = 0; k < keys.length; k++){
+        var c = cache[keys[k]];
+        if (c && c.format === 'mundial-48' && Array.isArray(c.teams) && c.teams.length){
+          mundialCfg = c; mundialId = keys[k]; break;
+        }
+      }
+      /* Fallback sync por localStorage: el cache en memoria puede estar
+         frío al cargar el hub antes de visitar la pantalla del Mundial.
+         Escaneamos los slots sfn* (Rondas Finales) para localizarlo. */
+      if (!mundialCfg && typeof window._tourLoadCachedSync === 'function'){
+        var SFN_SLOTS = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
+        for (var s = 0; s < SFN_SLOTS.length; s++){
+          try {
+            var sc = window._tourLoadCachedSync(SFN_SLOTS[s]);
+            if (sc && sc.format === 'mundial-48' && Array.isArray(sc.teams) && sc.teams.length){
+              mundialCfg = sc; mundialId = SFN_SLOTS[s]; break;
+            }
+          } catch(_){}
+        }
+      }
+      if (!mundialCfg) return null;
+      var teams = mundialCfg.teams || [];
+      var huIdx = -1;
+      /* Pase 1: flag isHuman explícito en cfg.teams (lo pone el editor
+         del Mundial al colocar el equipo). */
+      for (var ti = 0; ti < teams.length; ti++){
+        var t = teams[ti];
+        if (t && t.isHuman && t.name && t.name !== 'PENDIENTE'){ huIdx = ti; break; }
+      }
+      /* Pase 2: fallback canónico — cualquier selección con icono
+         humano asignado en la plantilla cuenta como humana en la comp
+         'mundial' (CLAUDE.md · 2026-05-10 · "Humanidad por
+         competición"). Cubre Mundiales guardados antes de que el
+         editor sellara `isHuman` en cfg.teams. */
+      if (huIdx < 0 && typeof window.isHumanInComp === 'function'){
+        for (var ti2 = 0; ti2 < teams.length; ti2++){
+          var t2 = teams[ti2];
+          if (!t2 || !t2.name || t2.name === 'PENDIENTE') continue;
+          try {
+            if (window.isHumanInComp(t2.name, 'mundial')){ huIdx = ti2; break; }
+          } catch(_){}
+        }
+      }
+      if (huIdx < 0) return null;
+      var pg = (mundialCfg.formatConfig && mundialCfg.formatConfig.perGroup) || 4;
+      var gIdx = Math.floor(huIdx / pg);
+      var gStart = gIdx * pg;
+      var slice = teams.slice(gStart, gStart + pg);
+      var huInSlice = huIdx - gStart;
+      var fixs = (mundialCfg.groupFixtures && mundialCfg.groupFixtures[gIdx]) || null;
+      if (!Array.isArray(fixs) || !fixs[jor]) return null;
+      var matchups = fixs[jor];
+      for (var mi = 0; mi < matchups.length; mi++){
+        var mm = matchups[mi];
+        if (!mm) continue;
+        if (mm.home === huInSlice || mm.away === huInSlice){
+          var hT = slice[mm.home], aT = slice[mm.away];
+          if (!hT || !aT || !hT.name || !aT.name) return null;
+          if (hT.name === 'PENDIENTE' || aT.name === 'PENDIENTE') return null;
+          return {
+            tourId: mundialId,
+            matchKey: 'g' + gIdx + '_' + jor + '_' + mi,
+            home: hT,
+            away: aT,
+            rival: (mm.home === huInSlice ? aT.name : hT.name),
+            jor: jor + 1
+          };
+        }
+      }
+    } catch(_){}
+    return null;
+  }
+
+  /* Card "India vs Francia" en el hub Toñín durante un parón de
+     selecciones. Reusa el dispatcher estándar del proyecto:
+     `_tourOpenHumanMatch` abre la previa + gm-modal y al confirmarla
+     avanzamos el día con `_markDoneAndAdvance`. Si el partido ya
+     está jugado (results[matchKey].played), mostramos el resultado
+     en lugar del botón PREVIA. 2026-05-23. */
+  function _cardSelMatch(day, pair){
+    var st = _stage(); if (!st) return;
+    var hN = pair.home.name, aN = pair.away.name;
+    var hS = pair.home.shield || '';
+    var aS = pair.away.shield || '';
+    var hHi = '';
+    var aHi = '';
+    try {
+      if (pair.home.isHuman && typeof window._tourTeamIcon === 'function') hHi = window._tourTeamIcon(pair.home) || '';
+      if (pair.away.isHuman && typeof window._tourTeamIcon === 'function') aHi = window._tourTeamIcon(pair.away) || '';
+    } catch(_){}
+    var cfg = null;
+    try { cfg = (window._TOUR_CACHE || {})[pair.tourId] || null; } catch(_){}
+    var res = (cfg && cfg.results) ? cfg.results[pair.matchKey] : null;
+    var played = !!(res && res.played);
+    var center;
+    if (played){
+      var aW = res.winner === 'a', bW = res.winner === 'b';
+      center = '<div class="ps-x" style="display:flex;flex-direction:column;align-items:center;gap:4px;font-family:\'Bebas Neue\',sans-serif;font-size:22px;letter-spacing:2px;color:#4dd0e1;">'
+        +   '<span'+(aW?' style="color:#fff;"':'')+'>'+res.a+'</span>'
+        +   '<span style="font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);">vs</span>'
+        +   '<span'+(bW?' style="color:#fff;"':'')+'>'+res.b+'</span>'
+        + '</div>';
+    } else {
+      center = '<div class="ps-x">VS</div>';
+    }
+    var btnHtml = played
+      ? '<button type="button" class="ps-btn ghost" id="ps-sel-btn" style="margin-top:16px;">CONTINUAR ▶</button>'
+      : '<button type="button" class="ps-btn" id="ps-sel-btn" style="margin-top:16px;">📋 PREVIA · JUGAR ▶</button>';
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+      + '<div class="ps-sub">🌍 ' + _esc(day.label || ('Mundial Grupo — J' + pair.jor)) + '</div>'
+      + '<div class="ps-vs" style="display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0;">'
+      +   '<div class="ps-team">'
+      +     (hS ? '<img class="ps-shield" src="'+_esc(hS)+'" onerror="this.style.display=\'none\'" alt="">' : '<div class="ps-shield"></div>')
+      +     '<div class="ps-tn">'+_esc(hN)+(hHi?' '+hHi:'')+'</div>'
+      +   '</div>'
+      +   center
+      +   '<div class="ps-team">'
+      +     (aS ? '<img class="ps-shield" src="'+_esc(aS)+'" onerror="this.style.display=\'none\'" alt="">' : '<div class="ps-shield"></div>')
+      +     '<div class="ps-tn">'+_esc(aN)+(aHi?' '+aHi:'')+'</div>'
+      +   '</div>'
+      + '</div>'
+      + btnHtml
+      + '</div>';
+    var b = document.getElementById('ps-sel-btn');
+    if (!b) return;
+    if (played){
+      b.onclick = function(){ _markDoneAndAdvance(); };
+      return;
+    }
+    b.onclick = function(){
+      try {
+        if (typeof window._tourOpenHumanMatch !== 'function'){
+          _markDoneAndAdvance();
+          return;
+        }
+        window._tourOpenHumanMatch(pair.tourId, pair.matchKey, pair.home, pair.away);
+        /* `_tourOpenHumanMatch` ya fijó `_ppCustomCallback` para abrir
+           el gm-modal vía abrirTorneo. Lo encadenamos para avanzar el
+           cursor de pretemporada después del partido — mismo patrón
+           que `_openPreseasonPrevia`. */
+        var prevCb = window._ppCustomCallback;
+        window._ppCustomCallback = function(){
+          try { if (typeof prevCb === 'function') prevCb(); } catch(_){}
+          _markDoneAndAdvance();
+        };
+      } catch(_){
+        _markDoneAndAdvance();
+      }
+    };
+  }
+
   function _cardRest(day){
     var st = _stage(); if (!st) return;
     var isSel = /\bag-sel\b/.test(day.cls);
@@ -3370,7 +3542,14 @@ window._showSimProgress = function(opts, onDone){
     }
     st._psSig = sig;
     if (day.type === 'train')      _cardTraining(day);
-    else if (day.type === 'rest')  _cardRest(day);
+    else if (day.type === 'rest')  {
+      /* Parón de selecciones (ag-sel) + Mundial 2032 con humano →
+         mostramos el partido de Francia (India vs Francia, etc.)
+         en vez de "jugadores fuera". 2026-05-23. */
+      var selPair = _selPair(day);
+      if (selPair) _cardSelMatch(day, selPair);
+      else         _cardRest(day);
+    }
     else                           _cardMatch(day);
     _syncHubLabels(day);
   }
@@ -15410,7 +15589,31 @@ window._showSimProgress = function(opts, onDone){
      eventos "Mundial …" y las cachea por roundKey
      (final · semis · cuartos · octavos · dieciseisavos · grupos).
      Devuelve '' si no la encuentra. Evita confundirse con
-     "Mundialito Clubes" (otro torneo distinto). 2026-05-22. */
+     "Mundialito Clubes" (otro torneo distinto). 2026-05-22.
+     2026-05-23: `grupos` agrupa las 3 jornadas (J1/J2/J3) en un rango
+     "3-11 May" para que la caja "Fase de Grupos" muestre toda la
+     ventana de la fase, no solo la fecha de J1. */
+  var _MONTH_ORDER_ES = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
+  function _mundialFormatDateRange(dates){
+    if (!dates || !dates.length) return '';
+    if (dates.length === 1) return dates[0];
+    var parsed = [];
+    for (var i = 0; i < dates.length; i++){
+      var p = String(dates[i] || '').trim().split(/\s+/);
+      if (p.length < 2) continue;
+      var d = parseInt(p[0], 10);
+      if (isNaN(d)) continue;
+      var mKey = String(p[1]).toLowerCase().replace(/\./g,'').slice(0,3);
+      var mIdx = _MONTH_ORDER_ES.hasOwnProperty(mKey) ? _MONTH_ORDER_ES[mKey] : 99;
+      parsed.push({ d: d, m: p[1], mIdx: mIdx });
+    }
+    if (!parsed.length) return dates[0];
+    parsed.sort(function(a, b){ return (a.mIdx - b.mIdx) || (a.d - b.d); });
+    var first = parsed[0], last = parsed[parsed.length - 1];
+    if (first.d === last.d && first.m === last.m) return first.d + ' ' + first.m;
+    if (first.m === last.m) return first.d + '-' + last.d + ' ' + first.m;
+    return first.d + ' ' + first.m + '-' + last.d + ' ' + last.m;
+  }
   var _mundialDateCache = { ts: 0, data: null };
   function _mundialRoundDateLookup(roundKey){
     if (!roundKey) return '';
@@ -15418,6 +15621,7 @@ window._showSimProgress = function(opts, onDone){
     var data = _mundialDateCache.data;
     if (!data || (now - _mundialDateCache.ts) > 4000) {
       data = {};
+      var gruposDates = [];
       try {
         var rows = document.querySelectorAll('#s-agenda .ag-r');
         for (var i = 0; i < rows.length; i++) {
@@ -15441,9 +15645,10 @@ window._showSimProgress = function(opts, onDone){
           } else if (/\brepesca\b|dieciseisav|1\s*\/\s*32/.test(lbl)) {
             if (!data.dieciseisavos) data.dieciseisavos = dt;
           } else if (/\bgrupos?\b/.test(lbl)) {
-            if (!data.grupos) data.grupos = dt;
+            gruposDates.push(dt);
           }
         }
+        if (gruposDates.length) data.grupos = _mundialFormatDateRange(gruposDates);
       } catch(_){}
       _mundialDateCache = { ts: now, data: data };
     }

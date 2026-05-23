@@ -2491,12 +2491,32 @@ window._showSimProgress = function(opts, onDone){
      cuota (cap 2 MB/carpeta). Si _save fallara y _load releyera de
      disco, dayIdx se quedaría en 0 y la card NO avanzaría (bug
      reportado: "01 Jul cumplido pero no pasa a 02 Jul"). Con el
-     cache en memoria el cursor avanza siempre. */
+     cache en memoria el cursor avanza siempre.
+
+     2026-05-23 (reload-survival): el cursor también vivía solo en
+     localStorage. Cuando el cap de 2 MB hacía petar el setItem
+     silenciosamente, el avance NO sobrevivía al recargar — el usuario
+     veía la caja Liverpool de vuelta en "01 May" (foto reportada con
+     "02 Jun" antes y "01 May" después de reiniciar). Fix de 3 capas:
+       1) sessionStorage como respaldo local cuando localStorage peta.
+       2) sello `ts` en el JSON para que el sync server↔local pueda
+          desempatar conflictos (last-write-wins).
+       3) `bayern_preseason_v2` añadido a SYNC_KEYS (misc_body_2.html)
+          + push directo a /api/state cuando localStorage falla, para
+          que el poller de 3 s (que compara contra localStorage y no
+          vería diff si el setItem petó) no se pierda el cambio. */
   var _MEM = null;
   function _load(){
     if (_MEM) return _MEM;
     var d = null;
     try { var r = localStorage.getItem(KEY); if (r){ var p = JSON.parse(r); if (p && typeof p==='object') d = p; } } catch(_){}
+    if (!d){
+      /* Fallback a sessionStorage: si localStorage petó por cuota en
+         la sesión anterior, el avance puede haberse guardado solo en
+         sessionStorage. Si el navegador conserva el tab abierto, lo
+         recuperamos aquí; si no, hydrateFromServer lo restaurará. */
+      try { var s = sessionStorage.getItem(KEY); if (s){ var sp = JSON.parse(s); if (sp && typeof sp === 'object') d = sp; } } catch(_){}
+    }
     if (!d) d = { tour:null, dayIdx:0, rivals:{}, done:{}, previaOpenedIdx:-1 };
     if (typeof d.dayIdx !== 'number') d.dayIdx = parseInt(d.dayIdx,10) || 0;
     d.rivals = d.rivals || {};
@@ -2514,9 +2534,44 @@ window._showSimProgress = function(opts, onDone){
   }
   function _save(d){
     _MEM = d || _MEM || { tour:null, dayIdx:0, rivals:{}, done:{} };
+    /* Sello de tiempo: lo lee `_ts` del sync (misc_body_2.html) para
+       desempatar conflictos local↔server (last-write-wins). Sin esto
+       el server siempre pierde contra un local stale (ts=0). */
+    _MEM.ts = Date.now();
     try { window.__psDayIdx = _MEM.dayIdx; } catch(_){}
-    try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
+    var _json = JSON.stringify(_MEM);
+    var _lsOk = false;
+    try { localStorage.setItem(KEY, _json); _lsOk = true; } catch(_){}
+    /* Respaldo en sessionStorage: incluso si localStorage falla por
+       cuota, el cursor sobrevive a navegaciones internas. */
+    try { sessionStorage.setItem(KEY, _json); } catch(_){}
+    if (!_lsOk){
+      /* localStorage falló → el poller del sync (compara contra disco)
+         no detectará el cambio. Push directo a /api/state con sendBeacon
+         (no bloquea, sobrevive a cierre de tab) para que el cursor
+         llegue al server y se restaure en el siguiente arranque. */
+      try {
+        var body = JSON.stringify({ competition_state: { 'bayern_preseason_v2': _json } });
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon){
+          navigator.sendBeacon('/api/state', new Blob([body], { type:'application/json' }));
+        } else if (typeof fetch === 'function'){
+          fetch('/api/state', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: body, keepalive: true }).catch(function(){});
+        }
+      } catch(_){}
+    }
   }
+  /* Invalidador expuesto: `hydrateFromServer` del sync (misc_body_2.html)
+     puede sobrescribir KEY en disco con un valor más reciente sin que
+     el cache `_MEM` de esta IIFE se entere (no hay storage event en el
+     mismo window). Esta función limpia el cache y re-renderiza para
+     que la caja Liverpool del hub muestre el dayIdx restaurado. */
+  window._psInvalidateCache = function(){
+    _MEM = null;
+    try { var d = _load(); window.__psDayIdx = d && d.dayIdx; } catch(_){}
+    try { if (typeof window._psRender === 'function') window._psRender(); } catch(_){}
+    try { if (typeof window._bayernCalMarkToday === 'function') window._bayernCalMarkToday(); } catch(_){}
+  };
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   /* Antes (hist. 2026-04): relabel SOLO VISUAL de la pretemporada a un
      mes antes (Jul→Jun…) porque el calendario almacenado arrancaba en

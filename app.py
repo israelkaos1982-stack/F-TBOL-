@@ -265,7 +265,22 @@ DEFAULT_GLOBAL_STATE = {
     #   - wprev_to_europa_v1        (22 → UEL)
     #   - wprev_r1_to_conference_v1 (30 → UECL)
     #   - oq_to_conference_v1       (legacy fallback)
+    #   - wc_to_conference_v1       (legacy fallback)
+    #   - bayern_calendar_comps_v1, bayern_calendar_title_v1, bayern_cal_v2
+    #                               (preferencias y eventos del calendario humano)
+    #   - sc_state_v1, usc_state_v1, recopa_state_v1
+    #                               (Supercopas / Recopa)
+    #   - mundial_state_v1, mundialito_state_v1
+    #   - seleccion_state_v1, selecciones_state_v1
+    #   - ucl_ko_state_v1, uel_ko_state_v1, uecl_ko_state_v1
+    #   - superliga_state_v1, superliga_teams_v1, superliga_calendar_v1,
+    #     superliga_results_v1
+    #   - partidos_aplazados        (array de aplazamientos)
+    #   - wc_champ_v1, wc_champion_v1
     # Cada valor es el JSON crudo (string) tal como vive en localStorage.
+    # La lista canónica vive en `SYNC_KEYS` de
+    # `templates/partials/part2/misc_body_2.html` — añadir nuevas
+    # competiciones allí.
     "competition_state": {}
 }
 

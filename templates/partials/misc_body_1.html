@@ -38685,6 +38685,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             if (mvp) body += ' ⭐ MVP: '+mvp+'.';
             push({ side:'liv', type:'result', icon:ic,
                    sender:'Liverpool FC', title:title, body:body });
+            /* Portería imbatida — comp: registrarResultadoLiga es de Liga. */
+            _checkCleanSheet(rg, 'liga');
           }
         }
       } catch(_){}
@@ -38746,6 +38748,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     /* Ciclo de 3 amarillas: lo procesa procesarSancionesPostPartido,
        leemos YELLOW_STORE un tick más tarde. */
     setTimeout(function(){ _checkYellowCycle(compKey); }, 80);
+    /* Hat-trick / pókerazo y racha goleadora del jugador */
+    _checkHatTrick(events, livSide);
+    _checkScoreStreak(events, livSide);
+    /* Agregados de liga (pichichi + MVP líder) — el store ya se
+       actualizó con esta acta por el `orig.apply` previo. */
+    if (compKey === 'liga'){
+      setTimeout(function(){ _checkPichichi(); _checkMvpLeader(); }, 120);
+    }
   }
   function _checkYellowCycle(compKey){
     try {
@@ -38878,6 +38888,269 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     } catch(_){}
   }
 
+  /* ── HOOK 6: hat-trick / pókerazo en un partido ───────── */
+  function _checkHatTrick(events, livSide){
+    if (!Array.isArray(events)) return;
+    var goalsP = {};
+    events.forEach(function(ev){
+      if (!ev || ev.team !== livSide) return;
+      if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
+        var nm = ev.name || ev.player;
+        if (nm) goalsP[nm] = (goalsP[nm] || 0) + 1;
+      }
+    });
+    Object.keys(goalsP).forEach(function(pl){
+      var n = goalsP[pl];
+      if (n < 3) return;
+      var lbl = (n === 3) ? 'Hat-trick' : (n === 4) ? '¡Cuádruple!' : '¡Pókerazo!';
+      var ic  = (n === 3) ? '🎩' : (n === 4) ? '🎩🎩' : '👑';
+      push({ side:'liv', type:'hat-trick', icon:ic,
+        sender:'LaLiga · Goleadores',
+        title: lbl+' de '+pl,
+        body : pl+' ha marcado '+n+' goles en un solo partido. ¡Noche histórica en el Liverpool!'
+      });
+    });
+  }
+
+  /* ── HOOK 7: racha goleadora multi-partido ────────────── */
+  function _checkScoreStreak(events, livSide){
+    if (!Array.isArray(events)) return;
+    var scored = {};
+    events.forEach(function(ev){
+      if (!ev || ev.team !== livSide) return;
+      if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
+        var nm = ev.name || ev.player;
+        if (nm) scored[nm] = true;
+      }
+    });
+    Object.keys(scored).forEach(function(pl){
+      var k = 'strk:'+pl;
+      var n = (_getCursor(k) || 0) + 1;
+      _setCursor(k, n);
+      if (n === 3 || n === 5 || n === 7 || n === 10){
+        push({ side:'liv', type:'streak', icon:'🔥',
+          sender:'LaLiga · Goleadores',
+          title: pl+' anota en '+n+' partidos seguidos',
+          body : pl+' encadena '+n+' partidos consecutivos viendo puerta. ¡Está en racha!'
+        });
+      }
+    });
+  }
+
+  /* ── HOOK 8: portería imbatida (clean sheet streak) ───── */
+  function _checkCleanSheet(rivalGoals, compKey){
+    var k = 'cs:'+(compKey || 'liga');
+    var n = _getCursor(k) || 0;
+    if (rivalGoals === 0){
+      n++;
+      _setCursor(k, n);
+      var compName = _compLabel(compKey);
+      if (n === 2){
+        push({ side:'liv', type:'cs', icon:'🧤',
+          sender:'Servicios Técnicos',
+          title:'Portería imbatida (2 partidos)',
+          body :'Nuestro portero encadena 2 partidos sin encajar en '+compName+'. Pared.'
+        });
+      } else if (n === 3 || n === 5 || n === 7 || n === 10){
+        push({ side:'liv', type:'cs', icon:'🧤',
+          sender:'Servicios Técnicos',
+          title:'¡'+n+' partidos imbatido!',
+          body :'Nuestro portero lleva '+n+' partidos consecutivos sin encajar en '+compName+'.'
+        });
+      }
+    } else if (n > 0){
+      _setCursor(k, 0);
+    }
+  }
+
+  /* ── HOOK 9: agregado de la liga (pichichi + MVP líder) ─ */
+  function _aggregateLiga(){
+    var store = window.LIGA_PLAYER_MATCH_STORE || {};
+    var goals = {}, mvps = {};
+    Object.keys(store).forEach(function(k){
+      var m = store[k];
+      if (!m) return;
+      var tA = m.teamA || '', tB = m.teamB || '';
+      if (Array.isArray(m.evts)){
+        m.evts.forEach(function(ev){
+          if (!ev || !ev.player) return;
+          if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
+            var team = ev.realTeam || (ev.team === 'a' ? tA : tB);
+            var key = ev.player+'|'+team;
+            goals[key] = (goals[key] || 0) + 1;
+          }
+        });
+      }
+      if (m.mvpName){
+        var team = (m.mvpTeam === 'a') ? tA : (m.mvpTeam === 'b') ? tB : (m.mvpTeam || '');
+        var mk = m.mvpName+'|'+team;
+        mvps[mk] = (mvps[mk] || 0) + 1;
+      }
+    });
+    return { goals: goals, mvps: mvps };
+  }
+  function _topOf(map){
+    var best = null, bn = 0;
+    Object.keys(map).forEach(function(k){
+      if (map[k] > bn){ best = k; bn = map[k]; }
+    });
+    return best ? { key:best, n:bn } : null;
+  }
+  function _checkPichichi(){
+    try {
+      var ag = _aggregateLiga();
+      var top = _topOf(ag.goals);
+      if (!top || top.n < 5) return;
+      var parts = top.key.split('|');
+      var pl = parts[0], team = parts[1] || '';
+      if (!_isLiv(team)) return;
+      var sig = pl+'@'+top.n;
+      if (_getCursor('liga:pichi') === sig) return;
+      _setCursor('liga:pichi', sig);
+      push({ side:'liv', type:'pichichi', icon:'🥇',
+        sender:'LaLiga · Trofeo Zarra',
+        title:'¡Pichichi! '+pl+' lidera con '+top.n+' goles',
+        body : pl+' es el máximo goleador de LaLiga con '+top.n+' goles. Una temporada de récord en Anfield.'
+      });
+    } catch(_){}
+  }
+  function _checkMvpLeader(){
+    try {
+      var ag = _aggregateLiga();
+      var top = _topOf(ag.mvps);
+      if (!top || top.n < 3) return;
+      var parts = top.key.split('|');
+      var pl = parts[0], team = parts[1] || '';
+      if (!_isLiv(team)) return;
+      var sig = pl+'@'+top.n;
+      if (_getCursor('liga:mvpLead') === sig) return;
+      _setCursor('liga:mvpLead', sig);
+      push({ side:'liv', type:'mvp', icon:'⭐',
+        sender:'LaLiga · MVPs',
+        title:pl+' lidera el ranking de MVPs ('+top.n+')',
+        body : pl+' es el jugador con más MVPs de LaLiga ('+top.n+' galardones). Imparable.'
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 10: apuestas ISRAMAX ──────────────────────────
+     localStorage 'isramax_v1' → { bets:[{id, status:'open'|'won'|'lost',
+     stake, cuota, home, away, comp, label, market, createdAt}], users:{} }
+  */
+  function _scanBets(){
+    try {
+      var raw = localStorage.getItem('isramax_v1');
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      var bets = (d && d.bets) || [];
+      bets.forEach(function(b){
+        if (!b || !b.id) return;
+        var seen  = _getCursor('bet:'+b.id);
+        var label = b.label || b.market || 'Apuesta';
+        var match = (b.home && b.away) ? (b.home+' vs '+b.away) : '';
+        if (b.status === 'open'){
+          if (seen !== 'open'){
+            _setCursor('bet:'+b.id, 'open');
+            var pot = Math.round((b.stake || 0) * (b.cuota || 1));
+            push({ side:'liv', type:'bet', icon:'🎲',
+              sender:'ISRAMAX · Apuestas',
+              title:'Tu apuesta acaba de empezar',
+              body :'Has apostado '+(b.stake||0)+'€ a "'+label+'"'+(match?' en '+match:'')+
+                    ' (cuota '+(b.cuota||1)+'). Ganancia potencial: '+pot+'€.'
+            });
+          }
+        } else if (b.status === 'won' && seen !== 'won'){
+          _setCursor('bet:'+b.id, 'won');
+          var win = Math.round((b.stake || 0) * (b.cuota || 1));
+          push({ side:'liv', type:'bet-won', icon:'🏆',
+            sender:'ISRAMAX · Apuestas',
+            title:'¡Apuesta ganada! +'+win+'€',
+            body :'Tu apuesta a "'+label+'"'+(match?' en '+match:'')+
+                  ' ha entrado. Ganancia neta: +'+win+'€.'
+          });
+        } else if (b.status === 'lost' && seen !== 'lost'){
+          _setCursor('bet:'+b.id, 'lost');
+          push({ side:'liv', type:'bet-lost', icon:'💸',
+            sender:'ISRAMAX · Apuestas',
+            title:'Apuesta perdida −'+(b.stake||0)+'€',
+            body :'Tu apuesta a "'+label+'"'+(match?' en '+match:'')+
+                  ' no ha entrado. Pérdida: '+(b.stake||0)+'€.'
+          });
+        }
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 11: objetivos del club (checkboxes DOM) ───────
+     0,40 puntos + 60 € por objetivo cumplido (constantes del juego).
+  */
+  function _scanObjectives(){
+    try {
+      var nodes = document.querySelectorAll(
+        'input[type=checkbox][id*="-obj"], input[type=checkbox][id^="obj-"]'
+      );
+      nodes.forEach(function(cb){
+        var id = cb.id || '';
+        if (!id) return;
+        if (!cb.checked){
+          _setCursor('obj:'+id, '0');
+          return;
+        }
+        if (_getCursor('obj:'+id) === '1') return;
+        _setCursor('obj:'+id, '1');
+        var lbl = '';
+        try {
+          var p = cb.closest('label');
+          if (p) lbl = (p.textContent || '').trim();
+          if (!lbl && cb.parentElement) lbl = (cb.parentElement.textContent || '').trim();
+        } catch(_){}
+        lbl = lbl.replace(/\s+/g,' ').slice(0, 80);
+        push({ side:'liv', type:'obj', icon:'🎯',
+          sender:'Dirección Deportiva',
+          title:'¡Objetivo cumplido!' + (lbl ? ' — '+lbl : ''),
+          body :'Has cumplido un objetivo del club. Recompensa: +0,40 puntos de prestigio y +60 € al presupuesto.'
+        });
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 12: eliminación de la Copa del Rey ───────────
+     Si Liverpool jugó en sorteo[r] pero NO aparece en clasificados[r]
+     (cuando esa ronda ya tiene ganadores), avisamos.
+  */
+  function _checkCupElim(){
+    try {
+      var raw = localStorage.getItem('copa_state_v1');
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      var copa = (d && d.copa) || d;
+      if (!copa) return;
+      var sort = copa.sorteo || {};
+      var clas = copa.clasificados || {};
+      var rondas = ['r1','r2','r16','oct','cua','sf','fin'];
+      rondas.forEach(function(r){
+        var mts = sort[r] || [];
+        var played = mts.some(function(m){ return m && (_isLiv(m.l) || _isLiv(m.v)); });
+        if (!played) return;
+        var cl = clas[r] || [];
+        if (!cl.length) return;             /* ronda aún sin completar */
+        var advanced = cl.some(function(t){
+          var n = (t && (t.name || t)) || '';
+          return _isLiv(n);
+        });
+        if (advanced) return;
+        var sig = 'copa:elim:'+r;
+        if (_getCursor(sig)) return;
+        _setCursor(sig, '1');
+        push({ side:'liv', type:'elim', icon:'💀',
+          sender:'RFEF · Copa del Rey',
+          title:'Eliminados de la Copa del Rey',
+          body :'El Liverpool queda eliminado en '+_ronLabel(r)+' de la Copa del Rey. Toca pensar en la Liga y Europa.'
+        });
+      });
+    } catch(_){}
+  }
+
   /* ── Semilla inicial ──────────────────────────────────── */
   function _seed(){
     var d = _read();
@@ -38924,10 +39197,29 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       _scanCopaSorteo();
       _scanStandings();
       _scanFrancia();
+      _scanBets();
+      _scanObjectives();
+      _checkCupElim();
+      _checkPichichi();
+      _checkMvpLeader();
       _refresh();
     };
     run();
     setInterval(run, 30000);
+    /* Disparador inmediato cuando el usuario marca un objetivo o
+       aparece una apuesta nueva (en otra pestaña). */
+    document.addEventListener('change', function(ev){
+      var t = ev.target;
+      if (!t || t.type !== 'checkbox' || !t.id) return;
+      if (/-obj|^obj-/.test(t.id))
+        setTimeout(function(){ _scanObjectives(); _refresh(); }, 30);
+    }, true);
+    window.addEventListener('storage', function(ev){
+      if (ev && ev.key === 'isramax_v1')
+        setTimeout(function(){ _scanBets(); _refresh(); }, 30);
+      if (ev && ev.key === 'copa_state_v1')
+        setTimeout(function(){ _scanCopaSorteo(); _checkCupElim(); _refresh(); }, 30);
+    });
     var scr = document.getElementById('s-munich');
     if (scr){
       try {

@@ -3029,6 +3029,11 @@ window._showSimProgress = function(opts, onDone){
      tarjeta CALENDARIO del hub muestre el día real, no el evento
      legacy (que saltaba a "04 Jul"). */
   window._psCurrentDate = function(){ var c=_currentDay(); return c?c.date:''; };
+  /* Tipo del día actual ('rest' / 'train' / 'match') — lo consume
+     updateHud() para auto-scrollear a la tarjeta de Descanso al
+     entrar al hub (petición 2026-05-23: el usuario abría la web en
+     un día de Descanso y la card quedaba debajo del pliegue). */
+  window._psCurrentType = function(){ var c=_currentDay(); return c?c.type:''; };
 
   function _syncHubLabels(day){
     if (!day) return;
@@ -37099,6 +37104,28 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var _psLbl = (typeof window._psCurrentLabel === 'function') ? window._psCurrentLabel() : '';
       matchEl.textContent = _psLbl || '🌞 Pretemporada · Día a Día';
     }
+
+    /* Hidratación → si el día actual es Descanso, auto-scroll a la
+       tarjeta del día (#ps-stage) para que el botón CONTINUAR ▶ quede
+       en viewport sin pedir scroll manual. Petición usuario 2026-05-23:
+       abría la web el 01 May y la card del Descanso quedaba debajo de
+       las cajas Vitrina/Plantilla/Calendario. La idempotencia la cubre
+       _render() (sig guard): re-scroll solo cuando hay re-paint del
+       día — al cambiar de día o al entrar al hub desde otra pantalla.
+       Tipo 'train' y 'match' NO auto-scrollean (en match la previa
+       auto-overlay tapa todo igualmente). */
+    try {
+      var _psType = (typeof window._psCurrentType === 'function') ? window._psCurrentType() : '';
+      if (_psType === 'rest' && _psStageEl) {
+        setTimeout(function(){
+          try {
+            if (typeof _psStageEl.scrollIntoView === 'function'){
+              _psStageEl.scrollIntoView({ behavior:'smooth', block:'center' });
+            }
+          } catch(_){}
+        }, 80);
+      }
+    } catch(_){}
 
     if (state.injured) {
       if (warnEl)  warnEl.textContent = '\u26a0\ufe0f BAJA CONFIRMADA: ' + state.injured.name + ' (' + state.injured.days + ' partidos)';

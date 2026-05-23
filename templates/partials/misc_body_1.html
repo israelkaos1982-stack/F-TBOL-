@@ -38527,6 +38527,24 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     cursor:pointer; -webkit-tap-highlight-color:transparent; }
   #mu-msg-ov .mmo-msg.is-unread{ border-color:rgba(246,235,97,.32);
     background:linear-gradient(180deg, rgba(246,235,97,.08), rgba(0,0,0,.10)); }
+  /* Mensaje ya leído: tono más apagado + sello "✓ LEÍDO" en la
+     cabecera para que de un vistazo se vea que está procesado. */
+  #mu-msg-ov .mmo-msg.is-read{ opacity:.78;
+    border-color:rgba(120,200,120,.30);
+    background:linear-gradient(180deg, rgba(120,200,120,.06), rgba(0,0,0,.18)); }
+  #mu-msg-ov .mmo-msg.is-read .mmo-msg-title,
+  #mu-msg-ov .mmo-msg.is-read .mmo-msg-body{ color:rgba(255,255,255,.62); }
+  #mu-msg-ov .mmo-read-stamp{
+    display:inline-flex; align-items:center; gap:3px;
+    padding:1px 6px 1px 4px; margin-right:6px;
+    border:1px solid rgba(120,200,120,.45);
+    background:rgba(120,200,120,.14);
+    color:#a3e6a3;
+    font-size:9px; letter-spacing:1px; font-weight:700;
+    border-radius:3px; text-transform:uppercase;
+    font-family:'Oswald',sans-serif; line-height:1;
+  }
+  #mu-msg-ov .mmo-read-stamp::before{ content:'✓'; font-size:10px; }
   #mu-msg-ov .mmo-msg-ico{ flex:0 0 28px; width:28px; height:28px;
     display:flex; align-items:center; justify-content:center;
     font-size:18px; line-height:1;
@@ -38914,12 +38932,13 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       return;
     }
     body.innerHTML = arr.map(function(m){
-      var unreadCls = m.read ? '' : ' is-unread';
-      return '<div class="mmo-msg'+unreadCls+'" data-id="'+_esc(m.id)+'">'
+      var stateCls = m.read ? ' is-read' : ' is-unread';
+      var stamp = m.read ? '<span class="mmo-read-stamp">leído</span>' : '';
+      return '<div class="mmo-msg'+stateCls+'" data-id="'+_esc(m.id)+'">'
         + '<div class="mmo-msg-ico">'+_esc(m.icon)+'</div>'
         + '<div class="mmo-msg-main">'
         +   '<div class="mmo-msg-hdr">'
-        +     '<span class="mmo-msg-sender">'+_esc(m.sender)+'</span>'
+        +     '<span class="mmo-msg-sender">'+stamp+_esc(m.sender)+'</span>'
         +     '<span class="mmo-msg-ts">'+_esc(_dateLabel(m.ts))+'</span>'
         +   '</div>'
         +   '<div class="mmo-msg-title">'+_esc(m.title)+'</div>'
@@ -39557,9 +39576,15 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var t = (el.textContent || '').replace(/\s+/g,' ').trim();
       if (!t || t === lastText) return;
       lastText = t;
-      /* Saltamos textos que no son partido: entrenamiento, descanso,
-         pretemporada genérica, días de selección, etc. */
-      if (/^(entrenamiento|descanso|pretemporada|libre|selecci|amistoso internac|d[íi]a de selec|d[íi]a libre)/i.test(t))
+      /* Saltamos textos que no son partido (descanso, entrenamiento,
+         pretemporada, día libre, selecciones, "elige torneo", etc.).
+         El texto de la card suele venir prefijado con un emoji y
+         espacio ("💤 Descanso · 01 May", "🌞 PRETEMPORADA · Elige
+         1 torneo"), así que primero limpiamos cualquier carácter
+         no alfabético del principio para que el `^` del regex case
+         con la palabra real. */
+      var head = String(t).replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/, '');
+      if (/^(entrenamiento|descanso|pretemporada|libre|selecci|amistoso\s+internac|d[íi]a\s+de\s+selec|d[íi]a\s+libre|elige)/i.test(head))
         return;
       var sig = 'pre:'+t;
       if (_getCursor(sig)) return;
@@ -39640,6 +39665,39 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       body:'No olvides que también diriges a Les Bleus. En esta pestaña verás convocatorias, amistosos y citas internacionales.' });
   }
 
+  /* ── Limpieza one-shot: avisos "Próximo partido — Descanso/
+     Pretemporada/Entrenamiento/Día libre" generados antes de
+     reforzar el filtro de `_observeNextMatch`. No aportan nada y
+     ensucian la bandeja. Se borran TODOS (leídos o no) y queda un
+     cursor para no volver a barrer cada arranque. */
+  function _purgeStaleRest(){
+    if (_getCursor('purged:rest_preview') === '1') return;
+    var d = _read();
+    if (!d.msgs || !d.msgs.length){
+      _setCursor('purged:rest_preview', '1');
+      return;
+    }
+    var rx = /(descanso|entrenamiento|pretemporada|d[íi]a\s+libre|d[íi]a\s+de\s+selec|elige(?:\s+1)?\s+torneo)/i;
+    var before = d.msgs.length;
+    d.msgs = d.msgs.filter(function(m){
+      if (!m || m.type !== 'preview') return true;
+      var blob = (m.title || '') + ' ' + (m.body || '');
+      return !rx.test(blob);
+    });
+    if (d.msgs.length !== before){
+      /* También limpiamos los cursores `pre:…` para que, si el texto
+         vuelve a aparecer mañana, no se quede en silencio por la
+         dedup. */
+      if (d.cursors){
+        Object.keys(d.cursors).forEach(function(k){
+          if (k.indexOf('pre:') === 0 && rx.test(k)) delete d.cursors[k];
+        });
+      }
+      _write(d);
+    }
+    _setCursor('purged:rest_preview', '1');
+  }
+
   /* ── Boot ─────────────────────────────────────────────── */
   function _boot(){
     if (!_ensureUI()){
@@ -39654,6 +39712,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   }
   function _bootStage2(){
     _seed();
+    _purgeStaleRest();
     _refresh();
     /* Engancha hooks tan pronto como las funciones existan. */
     var tries = 0;

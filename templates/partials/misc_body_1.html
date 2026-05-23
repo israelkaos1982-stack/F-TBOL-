@@ -37914,7 +37914,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     cursor:pointer; -webkit-tap-highlight-color:transparent;
     box-shadow:0 1px 3px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.08); }
   #mu-info-btn:active{ transform:scale(.94); }
-  #mu-info-pop{ position:absolute; top:34px; right:8px; z-index:5;
+  #mu-info-pop{ position:absolute; top:62px; right:8px; z-index:5;
     min-width:210px;
     background:linear-gradient(180deg, rgba(20,8,12,.97), rgba(8,4,6,.97));
     border:1px solid rgba(200,16,46,.55);
@@ -38185,6 +38185,779 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', _wire);
   else _wire();
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     MÓDULO DE MENSAJES DEL HUB (Liverpool + Francia · 2026-05-23)
+     ──────────────────────────────────────────────────────────────
+     Bandeja de entrada estilo videojuego. Botón ✉ azul/negro
+     apilado bajo el ℹ rojo/negro en la cabecera del hub
+     (#s-munich .sec-hdr). Al pulsarlo emerge un modal con 2
+     pestañas (Liverpool / Francia — Toñín dirige ambas) y dentro
+     de cada una: sub-pestañas 📩 Nuevos / 📭 Leídos. Cada mensaje
+     se puede marcar como leído (✓) o borrar (🗑). Botón "Limpiar
+     leídos" en la pestaña 📭.
+
+     Storage: localStorage 'mu_messages_v1' — cap 500 msgs por lado
+     (FIFO) → bien dentro del límite de 2 MB por carpeta del
+     CLAUDE.md (500 msgs × ~200 bytes ≈ 100 KB por lado).
+
+     Generadores (todos hookean código existente sin modificarlo):
+       • Resultado del partido  → wrap window.registrarResultadoLiga
+       • Lesiones / rojas / dobles → wrap window.registrarLigaPlayerStats
+       • Ciclo de amarillas       → cursor sobre window.YELLOW_STORE
+       • Sorteos Copa del Rey     → scan localStorage 'copa_state_v1'
+       • Posición en LaLiga       → window.collectStandings('liga')
+       • Selección Francia        → ambiental (no hay sim real)
+     ═══════════════════════════════════════════════════════════ -->
+<style>
+  /* Botón ✉ debajo del ℹ. Paleta azul Liverpool (away kit) → negro,
+     para diferenciarlo del rojo del ℹ. */
+  #mu-msg-btn{ position:absolute; top:34px; right:10px; z-index:4;
+    width:22px; height:22px; padding:0; line-height:1;
+    border-radius:50%;
+    background:linear-gradient(135deg,#1e6dc1 0%,#143f6d 55%,#0a0a0a 100%);
+    border:1px solid #0a0a0a;
+    color:#fff;
+    font-family:'Oswald',sans-serif; font-size:12px; font-weight:700;
+    cursor:pointer; -webkit-tap-highlight-color:transparent;
+    box-shadow:0 1px 3px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.08); }
+  #mu-msg-btn:active{ transform:scale(.94); }
+  #mu-msg-btn .mmb-ico{ display:block; line-height:1; }
+  #mu-msg-btn .mmb-count{ position:absolute; top:-4px; right:-4px;
+    min-width:14px; height:14px; padding:0 3px; box-sizing:border-box;
+    border-radius:7px; background:#F6EB61; color:#1a0a0d;
+    font-family:'Oswald',sans-serif; font-size:9px; font-weight:700;
+    line-height:14px; text-align:center;
+    box-shadow:0 1px 2px rgba(0,0,0,.5); pointer-events:none; }
+  #mu-msg-btn .mmb-count[hidden]{ display:none; }
+
+  /* Overlay modal */
+  #mu-msg-ov{ position:fixed; inset:0; z-index:10010;
+    display:flex; align-items:center; justify-content:center; }
+  #mu-msg-ov[hidden]{ display:none; }
+  #mu-msg-ov .mmo-bd{ position:absolute; inset:0;
+    background:rgba(0,0,0,.66); backdrop-filter:blur(2px); }
+  #mu-msg-ov .mmo-modal{ position:relative; z-index:2;
+    width:min(94vw, 460px); max-height:88vh;
+    display:flex; flex-direction:column;
+    background:linear-gradient(180deg,#160a0e 0%,#0a0507 100%);
+    border:1px solid rgba(200,16,46,.45);
+    border-radius:14px;
+    box-shadow:0 18px 48px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.04);
+    color:#fff; font-family:'Oswald',sans-serif;
+    overflow:hidden; }
+  #mu-msg-ov .mmo-hdr{ display:flex; align-items:center; justify-content:space-between;
+    padding:10px 14px;
+    background:linear-gradient(180deg, rgba(200,16,46,.32), rgba(200,16,46,.12));
+    border-bottom:1px solid rgba(200,16,46,.30); }
+  #mu-msg-ov .mmo-title{ font-size:14px; letter-spacing:2px; color:#F6EB61; }
+  #mu-msg-ov .mmo-x{ background:transparent; border:0; color:#fff;
+    font-size:18px; line-height:1; cursor:pointer; padding:4px 8px;
+    -webkit-tap-highlight-color:transparent; }
+  #mu-msg-ov .mmo-x:active{ transform:scale(.94); }
+
+  /* Pestañas Liverpool / Francia */
+  #mu-msg-ov .mmo-tabs{ display:flex; gap:0;
+    border-bottom:1px solid rgba(255,255,255,.08); }
+  #mu-msg-ov .mmo-tab{ flex:1 1 50%; padding:9px 6px;
+    background:transparent; border:0; border-bottom:2px solid transparent;
+    color:rgba(255,255,255,.55); font-family:'Oswald',sans-serif;
+    font-size:11px; letter-spacing:1.5px; cursor:pointer;
+    -webkit-tap-highlight-color:transparent; position:relative; }
+  #mu-msg-ov .mmo-tab.on{ color:#fff; border-bottom-color:#F6EB61; }
+  #mu-msg-ov .mmo-tab[data-side="liv"].on{ border-bottom-color:#c8102e;
+    background:linear-gradient(180deg, rgba(200,16,46,.12), transparent); }
+  #mu-msg-ov .mmo-tab[data-side="fra"].on{ border-bottom-color:#1e6dc1;
+    background:linear-gradient(180deg, rgba(30,109,193,.16), transparent); }
+  #mu-msg-ov .mmo-tab-bdg{ display:inline-block; min-width:16px; height:16px;
+    padding:0 4px; margin-left:6px; box-sizing:border-box;
+    border-radius:8px; background:#F6EB61; color:#1a0a0d;
+    font-style:normal; font-size:10px; line-height:16px; font-weight:700;
+    vertical-align:middle; }
+  #mu-msg-ov .mmo-tab-bdg[hidden]{ display:none; }
+
+  /* Sub-pestañas Nuevos / Leídos */
+  #mu-msg-ov .mmo-subtabs{ display:flex; gap:0; align-items:center;
+    padding:6px 10px;
+    border-bottom:1px solid rgba(255,255,255,.06);
+    background:rgba(0,0,0,.18); }
+  #mu-msg-ov .mmo-sub{ padding:5px 10px; margin-right:4px;
+    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+    border-radius:6px;
+    color:rgba(255,255,255,.7); font-family:'Oswald',sans-serif;
+    font-size:10.5px; letter-spacing:1px; cursor:pointer;
+    -webkit-tap-highlight-color:transparent; }
+  #mu-msg-ov .mmo-sub.on{ color:#fff; border-color:#F6EB61;
+    background:linear-gradient(135deg,rgba(200,16,46,.55),rgba(246,235,97,.16)); }
+  #mu-msg-ov .mmo-actions{ margin-left:auto;
+    padding:5px 10px; background:rgba(180,40,40,.18);
+    border:1px solid rgba(220,80,80,.40); border-radius:6px;
+    color:#ffd6d6; font-family:'Oswald',sans-serif;
+    font-size:10.5px; letter-spacing:1px; cursor:pointer;
+    -webkit-tap-highlight-color:transparent; }
+  #mu-msg-ov .mmo-actions[hidden]{ display:none; }
+
+  /* Lista de mensajes */
+  #mu-msg-ov .mmo-body{ flex:1 1 auto; overflow-y:auto;
+    padding:8px 10px 12px; -webkit-overflow-scrolling:touch; }
+  #mu-msg-ov .mmo-empty{ padding:32px 10px; text-align:center;
+    color:rgba(255,255,255,.45); font-size:12px; letter-spacing:1px; }
+  #mu-msg-ov .mmo-msg{ display:flex; gap:10px; align-items:flex-start;
+    padding:9px 10px; margin:6px 0;
+    background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.10));
+    border:1px solid rgba(255,255,255,.07); border-radius:9px;
+    cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  #mu-msg-ov .mmo-msg.is-unread{ border-color:rgba(246,235,97,.32);
+    background:linear-gradient(180deg, rgba(246,235,97,.08), rgba(0,0,0,.10)); }
+  #mu-msg-ov .mmo-msg-ico{ flex:0 0 28px; width:28px; height:28px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:18px; line-height:1;
+    background:rgba(0,0,0,.30); border-radius:7px; }
+  #mu-msg-ov .mmo-msg-main{ flex:1 1 auto; min-width:0; }
+  #mu-msg-ov .mmo-msg-hdr{ display:flex; gap:8px; align-items:baseline;
+    justify-content:space-between; }
+  #mu-msg-ov .mmo-msg-sender{ font-size:10.5px; letter-spacing:1px;
+    color:#F6EB61; text-transform:uppercase;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:65%; }
+  #mu-msg-ov .mmo-msg-ts{ font-size:9.5px; letter-spacing:.5px;
+    color:rgba(255,255,255,.45); white-space:nowrap; }
+  #mu-msg-ov .mmo-msg-title{ font-size:12.5px; line-height:1.25;
+    color:#fff; font-weight:600; margin-top:2px; }
+  #mu-msg-ov .mmo-msg-body{ font-size:11.5px; line-height:1.35;
+    color:rgba(255,255,255,.78); margin-top:3px;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  #mu-msg-ov .mmo-msg-acts{ flex:0 0 auto; display:flex; flex-direction:column;
+    gap:4px; align-items:flex-end; }
+  #mu-msg-ov .mmo-btn{ background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.12); color:#fff;
+    border-radius:6px; padding:3px 7px;
+    font-size:11px; cursor:pointer; line-height:1;
+    -webkit-tap-highlight-color:transparent; }
+  #mu-msg-ov .mmo-btn.mark{ color:#a3e6a3; border-color:rgba(120,200,120,.35); }
+  #mu-msg-ov .mmo-btn.del{ color:#ffb3b3; border-color:rgba(220,90,90,.40); }
+  #mu-msg-ov .mmo-btn:active{ transform:scale(.94); }
+</style>
+<script>
+/* ── Módulo de Mensajes del hub (Liverpool + Francia) ────────────
+   API pública: window._muMsg
+     .push(opts)            añade mensaje { side, type, icon, sender, title, body, ts? }
+     .markRead(id)
+     .markAllReadInSide(side)
+     .delete(id)
+     .clearReadInSide(side)
+     .list(side, kind)      kind = 'new' | 'read'
+     .unreadCount(side?)
+     .refresh()
+     .open(side?, kind?)
+*/
+(function(){
+  if (window.__MU_MSG_READY) return;
+  window.__MU_MSG_READY = true;
+
+  var KEY  = 'mu_messages_v1';
+  var CAP  = 500;     /* mensajes máx. por lado (FIFO) */
+  var TEAM = 'liverpool';
+
+  /* ── Storage ─────────────────────────────────────────────── */
+  function _read(){
+    try {
+      var r = localStorage.getItem(KEY);
+      if (!r) return { msgs:[], cursors:{} };
+      var d = JSON.parse(r);
+      return (d && typeof d === 'object' && Array.isArray(d.msgs))
+        ? { msgs:d.msgs, cursors:d.cursors || {} }
+        : { msgs:[], cursors:{} };
+    } catch(_){ return { msgs:[], cursors:{} }; }
+  }
+  function _write(d){
+    try {
+      ['liv','fra'].forEach(function(side){
+        var arr = d.msgs.filter(function(m){ return m.side === side; });
+        if (arr.length > CAP){
+          var keepIds = arr.slice(arr.length - CAP).map(function(m){ return m.id; });
+          d.msgs = d.msgs.filter(function(m){
+            return m.side !== side || keepIds.indexOf(m.id) >= 0;
+          });
+        }
+      });
+      localStorage.setItem(KEY, JSON.stringify(d));
+    } catch(_){}
+  }
+  function _uuid(){ return 'm_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36); }
+  function _now(){ return Date.now(); }
+  function _dateLabel(ts){
+    try {
+      var d = new Date(ts);
+      var p = function(n){ return (n < 10 ? '0' : '') + n; };
+      var M = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      return p(d.getDate())+' '+M[d.getMonth()]+' · '+p(d.getHours())+':'+p(d.getMinutes());
+    } catch(_){ return ''; }
+  }
+  function _esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c];
+    });
+  }
+  function _isLiv(name){
+    return !!name && String(name).toLowerCase().indexOf(TEAM) >= 0;
+  }
+  function _compLabel(c){
+    var m = {
+      liga:'la Liga EA Sports', copa:'la Copa del Rey', sc:'la Supercopa de España',
+      ucl:'la Champions League', uel:'la Europa League', uecl:'la Conference League',
+      superliga:'la Superliga', recopa:'la Recopa', usc:'la Supercopa de Europa',
+      inter:'la Intercontinental', mundial:'el Mundialito de Clubes',
+      amistoso:'el amistoso', torneo:'el torneo de pretemporada',
+      wprev:'la Previa de Champions'
+    };
+    return m[c] || (c ? 'la '+c : 'la competición');
+  }
+  function _ronLabel(r){
+    var m = { r1:'1ª Ronda', r2:'2ª Ronda', r16:'Dieciseisavos',
+      oct:'Octavos', cua:'Cuartos', sf:'Semifinales', fin:'la Final' };
+    return m[r] || r;
+  }
+
+  /* ── Estado UI ──────────────────────────────────────────── */
+  var _ui = { sideTab:'liv', readTab:'new' };
+
+  /* ── API pública ────────────────────────────────────────── */
+  function push(opts){
+    if (!opts || !opts.title) return;
+    var d = _read();
+    var msg = {
+      id:     opts.id || _uuid(),
+      side:   opts.side || 'liv',
+      type:   opts.type || 'info',
+      icon:   opts.icon || '📰',
+      sender: opts.sender || (opts.side === 'fra' ? 'FFF · Selección Francia' : 'Liverpool FC'),
+      title:  String(opts.title),
+      body:   String(opts.body || ''),
+      ts:     opts.ts || _now(),
+      read:   false
+    };
+    if (d.msgs.some(function(m){ return m.id === msg.id; })) return null;
+    d.msgs.push(msg);
+    _write(d);
+    _scheduleRefresh();
+    return msg;
+  }
+  function markRead(id){
+    var d = _read();
+    var m = d.msgs.find(function(x){ return x.id === id; });
+    if (m && !m.read){ m.read = true; _write(d); _scheduleRefresh(); }
+  }
+  function markAllReadInSide(side){
+    var d = _read(); var ch = false;
+    d.msgs.forEach(function(m){
+      if (m.side === side && !m.read){ m.read = true; ch = true; }
+    });
+    if (ch){ _write(d); _scheduleRefresh(); }
+  }
+  function del(id){
+    var d = _read();
+    d.msgs = d.msgs.filter(function(m){ return m.id !== id; });
+    _write(d); _scheduleRefresh();
+  }
+  function clearReadInSide(side){
+    var d = _read();
+    d.msgs = d.msgs.filter(function(m){ return !(m.side === side && m.read); });
+    _write(d); _scheduleRefresh();
+  }
+  function list(side, kind){
+    var d = _read();
+    return d.msgs
+      .filter(function(m){ return m.side === side && (kind === 'read' ? !!m.read : !m.read); })
+      .sort(function(a,b){ return (b.ts||0) - (a.ts||0); });
+  }
+  function unreadCount(side){
+    var d = _read();
+    return d.msgs.filter(function(m){
+      return (!side || m.side === side) && !m.read;
+    }).length;
+  }
+  function _setCursor(name, val){
+    var d = _read();
+    d.cursors = d.cursors || {};
+    d.cursors[name] = val;
+    _write(d);
+  }
+  function _getCursor(name){
+    var c = _read().cursors || {};
+    return c[name];
+  }
+
+  /* ── UI: botón + modal ──────────────────────────────────── */
+  function _ensureUI(){
+    var hdr = document.querySelector('#s-munich .sec-hdr');
+    if (!hdr) return false;
+    var btn = document.getElementById('mu-msg-btn');
+    if (!btn){
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = 'mu-msg-btn';
+      btn.setAttribute('aria-label', 'Mensajes');
+      btn.innerHTML =
+        '<span class="mmb-ico">✉</span>'
+      + '<span class="mmb-count" id="mu-msg-count" hidden>0</span>';
+      btn.onclick = function(ev){ ev.stopPropagation(); _openPop(); };
+      hdr.appendChild(btn);
+    }
+    if (!document.getElementById('mu-msg-ov')) _buildPop();
+    return true;
+  }
+  function _buildPop(){
+    var ov = document.createElement('div');
+    ov.id = 'mu-msg-ov';
+    ov.setAttribute('hidden','');
+    ov.innerHTML =
+      '<div class="mmo-bd"></div>'
+    + '<div class="mmo-modal" role="dialog" aria-label="Mensajes">'
+    +   '<div class="mmo-hdr">'
+    +     '<span class="mmo-title">✉️ MENSAJES</span>'
+    +     '<button type="button" class="mmo-x" aria-label="Cerrar">✕</button>'
+    +   '</div>'
+    +   '<div class="mmo-tabs">'
+    +     '<button type="button" class="mmo-tab" data-side="liv">🔴 LIVERPOOL'
+    +       ' <i class="mmo-tab-bdg" id="mu-msg-bdg-liv" hidden></i></button>'
+    +     '<button type="button" class="mmo-tab" data-side="fra">🇫🇷 FRANCIA'
+    +       ' <i class="mmo-tab-bdg" id="mu-msg-bdg-fra" hidden></i></button>'
+    +   '</div>'
+    +   '<div class="mmo-subtabs">'
+    +     '<button type="button" class="mmo-sub" data-kind="new">📩 NUEVOS</button>'
+    +     '<button type="button" class="mmo-sub" data-kind="read">📭 LEÍDOS</button>'
+    +     '<button type="button" class="mmo-actions" id="mu-msg-clear" hidden>🗑 LIMPIAR LEÍDOS</button>'
+    +   '</div>'
+    +   '<div class="mmo-body" id="mu-msg-body"></div>'
+    + '</div>';
+    document.body.appendChild(ov);
+    ov.querySelector('.mmo-x').onclick = _closePop;
+    ov.querySelector('.mmo-bd').onclick = _closePop;
+    ov.querySelectorAll('.mmo-tab').forEach(function(t){
+      t.onclick = function(){
+        _ui.sideTab = t.getAttribute('data-side');
+        _refresh();
+      };
+    });
+    ov.querySelectorAll('.mmo-sub').forEach(function(t){
+      t.onclick = function(){
+        _ui.readTab = t.getAttribute('data-kind');
+        _refresh();
+      };
+    });
+    document.getElementById('mu-msg-clear').onclick = function(){
+      var who = (_ui.sideTab === 'fra') ? 'Francia' : 'Liverpool';
+      if (confirm('¿Borrar todos los mensajes leídos de '+who+'?'))
+        clearReadInSide(_ui.sideTab);
+    };
+  }
+  function _openPop(){
+    _ensureUI();
+    var ov = document.getElementById('mu-msg-ov');
+    if (!ov) return;
+    ov.removeAttribute('hidden');
+    _refresh();
+  }
+  function _closePop(){
+    var ov = document.getElementById('mu-msg-ov');
+    if (ov) ov.setAttribute('hidden','');
+  }
+  function _scheduleRefresh(){
+    if (_scheduleRefresh._t) return;
+    _scheduleRefresh._t = setTimeout(function(){
+      _scheduleRefresh._t = null;
+      try { _refresh(); } catch(_){}
+    }, 60);
+  }
+  function _refresh(){
+    if (!_ensureUI()) return;
+    /* Badge en botón cabecera */
+    var total = unreadCount();
+    var cEl = document.getElementById('mu-msg-count');
+    if (cEl){
+      if (total > 0){
+        cEl.textContent = total > 99 ? '99+' : String(total);
+        cEl.removeAttribute('hidden');
+      } else {
+        cEl.setAttribute('hidden','');
+      }
+    }
+    var ov = document.getElementById('mu-msg-ov');
+    if (!ov || ov.hasAttribute('hidden')) return;
+    /* Badges de pestañas */
+    ['liv','fra'].forEach(function(side){
+      var b = document.getElementById('mu-msg-bdg-'+side);
+      if (!b) return;
+      var n = unreadCount(side);
+      if (n > 0){
+        b.textContent = n > 99 ? '99+' : String(n);
+        b.removeAttribute('hidden');
+      } else b.setAttribute('hidden','');
+    });
+    ov.querySelectorAll('.mmo-tab').forEach(function(t){
+      t.classList.toggle('on', t.getAttribute('data-side') === _ui.sideTab);
+    });
+    ov.querySelectorAll('.mmo-sub').forEach(function(t){
+      t.classList.toggle('on', t.getAttribute('data-kind') === _ui.readTab);
+    });
+    var clr = document.getElementById('mu-msg-clear');
+    if (clr){
+      if (_ui.readTab === 'read') clr.removeAttribute('hidden');
+      else clr.setAttribute('hidden','');
+    }
+    /* Lista */
+    var body = document.getElementById('mu-msg-body');
+    if (!body) return;
+    var arr = list(_ui.sideTab, _ui.readTab);
+    if (!arr.length){
+      body.innerHTML = '<div class="mmo-empty">' +
+        (_ui.readTab === 'new'
+          ? 'No tienes mensajes nuevos.'
+          : 'No hay mensajes leídos.') +
+        '</div>';
+      return;
+    }
+    body.innerHTML = arr.map(function(m){
+      var unreadCls = m.read ? '' : ' is-unread';
+      return '<div class="mmo-msg'+unreadCls+'" data-id="'+_esc(m.id)+'">'
+        + '<div class="mmo-msg-ico">'+_esc(m.icon)+'</div>'
+        + '<div class="mmo-msg-main">'
+        +   '<div class="mmo-msg-hdr">'
+        +     '<span class="mmo-msg-sender">'+_esc(m.sender)+'</span>'
+        +     '<span class="mmo-msg-ts">'+_esc(_dateLabel(m.ts))+'</span>'
+        +   '</div>'
+        +   '<div class="mmo-msg-title">'+_esc(m.title)+'</div>'
+        +   (m.body ? '<div class="mmo-msg-body">'+_esc(m.body)+'</div>' : '')
+        + '</div>'
+        + '<div class="mmo-msg-acts">'
+        +   (m.read ? '' : '<button type="button" class="mmo-btn mark" data-act="read" title="Marcar leído">✓</button>')
+        +   '<button type="button" class="mmo-btn del" data-act="del" title="Borrar">🗑</button>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+    body.querySelectorAll('.mmo-msg').forEach(function(row){
+      var id = row.getAttribute('data-id');
+      var act = row.querySelector('.mmo-btn.mark');
+      var dl  = row.querySelector('.mmo-btn.del');
+      if (act) act.onclick = function(ev){ ev.stopPropagation(); markRead(id); };
+      if (dl)  dl.onclick  = function(ev){ ev.stopPropagation();
+        if (confirm('¿Borrar este mensaje?')) del(id);
+      };
+      row.onclick = function(){ if (!row.classList.contains('is-unread')) return; markRead(id); };
+    });
+  }
+
+  /* ── HOOK 1: resultado del partido ──────────────────────── */
+  function _hookResultado(){
+    if (window.__MU_MSG_HOOKED_RES) return true;
+    if (typeof window.registrarResultadoLiga !== 'function') return false;
+    var orig = window.registrarResultadoLiga;
+    window.registrarResultadoLiga = function(mk, tA, tB, gA, gB, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, penWinner){
+      try {
+        if (_isLiv(tA) || _isLiv(tB)){
+          /* dedup por firma del partido */
+          var sig = 'res:'+mk+':'+tA+'-'+tB+':'+gA+'-'+gB;
+          if (!_getCursor(sig)){
+            _setCursor(sig, _now());
+            var livHome = _isLiv(tA);
+            var lg = livHome ? gA : gB;
+            var rg = livHome ? gB : gA;
+            var riv = livHome ? tB : tA;
+            var diff = lg - rg;
+            var ic, title, body;
+            if (diff > 0){
+              ic = '🏆';
+              title = 'Victoria '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
+              body  = '¡Tres puntos para el Liverpool! '+(livHome?'En Anfield':'Como visitante')+' por '+lg+'-'+rg+'.';
+            } else if (diff < 0){
+              ic = '❌';
+              title = 'Derrota '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
+              body  = 'Cae el Liverpool '+(livHome?'en Anfield':'como visitante')+' por '+lg+'-'+rg+'. Toca levantarse.';
+            } else {
+              ic = '🤝';
+              title = 'Empate '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
+              body  = 'Reparto de puntos '+(livHome?'en Anfield':'fuera de casa')+': '+lg+'-'+rg+'.';
+            }
+            var mvp = livHome ? mvp_a : mvp_b;
+            if (mvp) body += ' ⭐ MVP: '+mvp+'.';
+            push({ side:'liv', type:'result', icon:ic,
+                   sender:'Liverpool FC', title:title, body:body });
+          }
+        }
+      } catch(_){}
+      return orig.apply(this, arguments);
+    };
+    window.__MU_MSG_HOOKED_RES = true;
+    return true;
+  }
+
+  /* ── HOOK 2: stats / acta del partido (lesiones, rojas) ── */
+  function _hookStats(){
+    if (window.__MU_MSG_HOOKED_STATS) return true;
+    if (typeof window.registrarLigaPlayerStats !== 'function') return false;
+    var orig = window.registrarLigaPlayerStats;
+    window.registrarLigaPlayerStats = function(mk, tA, tB, events, mvpName, mvpTeam, compKey){
+      try { _processActa(tA, tB, events, compKey || 'liga'); } catch(_){}
+      return orig.apply(this, arguments);
+    };
+    window.__MU_MSG_HOOKED_STATS = true;
+    return true;
+  }
+  function _processActa(tA, tB, events, compKey){
+    var livIsA = _isLiv(tA), livIsB = _isLiv(tB);
+    if (!livIsA && !livIsB) return;
+    var livSide = livIsA ? 'a' : 'b';
+    var compName = _compLabel(compKey);
+    if (!Array.isArray(events)) return;
+    events.forEach(function(ev){
+      if (!ev || ev.team !== livSide) return;
+      var pl = ev.name || ev.player || 'Un jugador';
+      if (ev.type === 'lesion'){
+        var grade  = ev.lesGrado || 'leve';
+        var ng = Array.isArray(ev.lesPartidos) ? ev.lesPartidos[0] : (ev.lesPartidos || 2);
+        push({
+          side:'liv', type:'injury', icon:'🏥',
+          sender:'Servicios Médicos',
+          title:'Lesión '+grade+': '+pl,
+          body: pl+' se pierde aprox. '+ng+' partido'+(ng===1?'':'s')+
+                ' por una lesión '+grade+' sufrida en '+compName+'.'
+        });
+      } else if (ev.type === 'roja'){
+        push({
+          side:'liv', type:'red', icon:'🟥',
+          sender:'Comité de Competición',
+          title:'Expulsión: '+pl,
+          body: pl+' ha visto la roja directa en '+compName+'. '+
+                'La sanción (3–5 partidos) se confirmará en breve.'
+        });
+      } else if (ev.type === 'd-amarilla'){
+        push({
+          side:'liv', type:'red', icon:'🟨🟥',
+          sender:'Comité de Competición',
+          title:'Doble amarilla: '+pl,
+          body: pl+' se va expulsado por doble amarilla en '+compName+
+                '. Se perderá entre 2 y 5 partidos.'
+        });
+      }
+    });
+    /* Ciclo de 3 amarillas: lo procesa procesarSancionesPostPartido,
+       leemos YELLOW_STORE un tick más tarde. */
+    setTimeout(function(){ _checkYellowCycle(compKey); }, 80);
+  }
+  function _checkYellowCycle(compKey){
+    try {
+      var ys = (window.YELLOW_STORE && window.YELLOW_STORE[compKey]) || {};
+      var compName = _compLabel(compKey);
+      Object.keys(ys).forEach(function(k){
+        var rec = ys[k];
+        if (!rec) return;
+        var teamName = rec.team || rec.equipo || '';
+        if (!_isLiv(teamName)) return;
+        var count = rec.count || rec.amarillas || 0;
+        var name  = rec.name || rec.jugador || k;
+        var curK  = 'yel:'+compKey+':'+k;
+        var seen  = _getCursor(curK) || 0;
+        if (count <= seen) return;
+        _setCursor(curK, count);
+        if (count === 2){
+          push({
+            side:'liv', type:'card-warn', icon:'🟨',
+            sender:'Comité de Competición',
+            title:'Aviso amarillas: '+name,
+            body: name+' acumula 2 amarillas en '+compName+
+                  '. Una tercera supondría 1 partido de sanción.'
+          });
+        } else if (count >= 3 && (count % 3 === 0)){
+          push({
+            side:'liv', type:'card-susp', icon:'⛔',
+            sender:'Comité de Competición',
+            title:'Sanción amarillas: '+name,
+            body: name+' completa el ciclo de 3 amarillas en '+compName+
+                  '. Se pierde el próximo partido por acumulación.'
+          });
+        }
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 3: sorteos de Copa del Rey ────────────────────── */
+  function _scanCopaSorteo(){
+    try {
+      var raw = localStorage.getItem('copa_state_v1');
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      var s = (d && d.copa && d.copa.sorteo) || (d && d.sorteo) || {};
+      Object.keys(s).forEach(function(ronda){
+        var mts = s[ronda];
+        if (!Array.isArray(mts)) return;
+        mts.forEach(function(m, i){
+          if (!m) return;
+          var l = m.l, v = m.v;
+          var rival = _isLiv(l) ? v : _isLiv(v) ? l : null;
+          if (!rival) return;
+          var curK = 'copa:srt:'+ronda+':'+i;
+          if (_getCursor(curK) === rival) return;
+          _setCursor(curK, rival);
+          var local = _isLiv(l);
+          push({
+            side:'liv', type:'draw', icon:'🏆',
+            sender:'RFEF · Sorteo Copa',
+            title:'Copa del Rey · '+_ronLabel(ronda),
+            body:'El Liverpool se enfrenta a '+rival+' en '+_ronLabel(ronda)+
+                 ' de la Copa del Rey. '+(local?'Juega en Anfield.':'Juega como visitante.')
+          });
+        });
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 4: posición en LaLiga ─────────────────────────── */
+  function _scanStandings(){
+    try {
+      if (typeof window.collectStandings !== 'function') return;
+      var arr = window.collectStandings('liga') || [];
+      if (!arr.length) return;
+      var idx = -1;
+      for (var i = 0; i < arr.length; i++){
+        if (_isLiv(arr[i].name)){ idx = i; break; }
+      }
+      if (idx < 0) return;
+      var row = arr[idx];
+      var pos = idx + 1;
+      var pj = row.pj || 0;
+      if (pj < 3) return;
+      /* Notifica cuando cambia la "ventana" (cada 5 jornadas) y la posición
+         es estable a esa altura. */
+      var milestone = Math.floor(pj / 5) * 5;
+      if (milestone < 5) return;
+      var sig = pos+'@'+milestone;
+      if (_getCursor('liga:rank') === sig) return;
+      _setCursor('liga:rank', sig);
+      var ordin = pos+'º';
+      push({
+        side:'liv', type:'rank', icon:'📊',
+        sender:'LaLiga · Clasificación',
+        title:'Vamos '+ordin+' tras la jornada '+milestone,
+        body:'El Liverpool ocupa la '+ordin+' plaza con '+(row.pts||0)+
+             ' puntos (PJ '+pj+', GF '+(row.gf||0)+', GC '+(row.gc||0)+').'
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 5: Francia (procedural, la selección está skeleton) ── */
+  function _scanFrancia(){
+    try {
+      var now = _now();
+      var last = _getCursor('fra:last') || 0;
+      var WK = 7 * 24 * 60 * 60 * 1000;  /* 1 semana entre amistosos */
+      if (last && (now - last) < WK) return;
+      _setCursor('fra:last', now);
+      var rivales = ['Italia','Alemania','Brasil','Argentina','Inglaterra','España',
+        'Países Bajos','Portugal','Croacia','Bélgica','Suecia','Noruega','Marruecos',
+        'Uruguay','Senegal','Japón','Suiza','Polonia','Chile','Colombia'];
+      var rival = rivales[Math.floor(Math.random() * rivales.length)];
+      var tipos = [
+        { ic:'🇫🇷', tit:'Convocatoria de Francia',
+          body:'Toñín cita a 23 jugadores para el próximo amistoso de Francia ante '+rival+'.' },
+        { ic:'⚽',  tit:'Próximo amistoso',
+          body:'Francia se medirá a '+rival+' en el próximo parón internacional.' },
+        { ic:'📋', tit:'Lista provisional · Bleus',
+          body:'Toñín prepara una lista provisional de 30 jugadores; la definitiva se conocerá en días.' },
+        { ic:'🏟️', tit:'Sede del próximo partido',
+          body:'El próximo Francia-'+rival+' se disputará en el Stade de France.' }
+      ];
+      var t = tipos[Math.floor(Math.random() * tipos.length)];
+      push({
+        side:'fra', type:'callup', icon:t.ic,
+        sender:'FFF · Selección Francia',
+        title:t.tit, body:t.body
+      });
+    } catch(_){}
+  }
+
+  /* ── Semilla inicial ──────────────────────────────────── */
+  function _seed(){
+    var d = _read();
+    if (d.msgs && d.msgs.length) return;
+    push({ side:'liv', type:'welcome', icon:'✉️',
+      sender:'Liverpool FC',
+      title:'Bienvenido a Anfield, mister',
+      body:'Aquí recibirás todas las novedades del club: resultados de los partidos, sorteos de copa, lesiones, tarjetas y sanciones, y cómo vamos en LaLiga.' });
+    push({ side:'liv', type:'welcome', icon:'📋',
+      sender:'Secretaría Técnica',
+      title:'Plantilla a tu disposición',
+      body:'31 jugadores fichados y listos. Revisa la lista en el menú PLANTILLA.' });
+    push({ side:'fra', type:'welcome', icon:'🇫🇷',
+      sender:'FFF · Selección Francia',
+      title:'Doble compromiso, mister',
+      body:'No olvides que también diriges a Les Bleus. En esta pestaña verás convocatorias, amistosos y citas internacionales.' });
+  }
+
+  /* ── Boot ─────────────────────────────────────────────── */
+  function _boot(){
+    if (!_ensureUI()){
+      /* Reintenta hasta que la cabecera #s-munich .sec-hdr exista. */
+      var t = 0;
+      var iv0 = setInterval(function(){
+        if (_ensureUI() || ++t > 50){ clearInterval(iv0); _bootStage2(); }
+      }, 200);
+      return;
+    }
+    _bootStage2();
+  }
+  function _bootStage2(){
+    _seed();
+    _refresh();
+    /* Engancha hooks tan pronto como las funciones existan. */
+    var tries = 0;
+    var iv = setInterval(function(){
+      var a = _hookResultado();
+      var b = _hookStats();
+      if ((a && b) || ++tries > 120) clearInterval(iv);
+    }, 500);
+    /* Escaneos pasivos (idempotentes con cursors) cuando el hub se
+       activa y cada 30 s como respaldo. Sin observers globales. */
+    var run = function(){
+      _scanCopaSorteo();
+      _scanStandings();
+      _scanFrancia();
+      _refresh();
+    };
+    run();
+    setInterval(run, 30000);
+    var scr = document.getElementById('s-munich');
+    if (scr){
+      try {
+        new MutationObserver(function(){
+          if (scr.classList.contains('active')) run();
+        }).observe(scr, { attributes:true, attributeFilter:['class'] });
+      } catch(_){}
+    }
+  }
+
+  /* ── Expone API ────────────────────────────────────────── */
+  window._muMsg = {
+    push: push,
+    markRead: markRead,
+    markAllReadInSide: markAllReadInSide,
+    'delete': del,
+    clearReadInSide: clearReadInSide,
+    list: list,
+    unreadCount: unreadCount,
+    refresh: function(){ _refresh(); },
+    open: function(side, kind){
+      if (side) _ui.sideTab = side;
+      if (kind) _ui.readTab = kind;
+      _openPop();
+    },
+    close: _closePop
+  };
+
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', _boot);
+  else _boot();
 })();
 </script>
 

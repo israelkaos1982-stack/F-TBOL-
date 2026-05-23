@@ -15058,8 +15058,9 @@ window._showSimProgress = function(opts, onDone){
       if (fin && fin.played) champTeam = (fin.winner === 'a') ? koBracket[lastR][0] : koBracket[lastR][1];
     }
     /* Fila compacta estilo Mundialito Clubes (foto 2): .jblock + .jbtn
-       .c-mundial — emoji + "Mundial" + ronda + pequeño badge. Sin
-       subtítulos explicativos (petición usuario 2026-05-22). */
+       .c-mundial — emoji + "Mundial" + ronda + pequeño badge. Sin la
+       bolita .pdot a la izquierda (petición usuario 2026-05-22: "quítame
+       el icono de desplegable"). */
     function row(view, emoji, title, badge, locked){
       var lockStyle = locked
         ? 'opacity:.45;cursor:not-allowed;filter:grayscale(.55);'
@@ -15067,14 +15068,12 @@ window._showSimProgress = function(opts, onDone){
       var click = locked
         ? ''
         : ' onclick="window._mundialGo(\''+tourId+'\',\''+view+'\')"';
-      var dot = locked ? '🔒' : '▶';
       var bdg = badge
         ? '<span class="bdg" style="margin-left:auto;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.85);">'+badge+'</span>'
         : '';
       return '<div class="jblock">'
         + '<button type="button" class="jbtn c-mundial"'+click
         + (lockStyle ? ' style="'+lockStyle+'"' : '')+'>'
-        + '<div class="pdot">'+dot+'</div>'
         + emoji+' <b>Mundial</b>&nbsp;&nbsp;'+title
         + bdg
         + '</button></div>';
@@ -15103,14 +15102,16 @@ window._showSimProgress = function(opts, onDone){
       }
       return row('ko'+r, emoji, title, badge, locked);
     }
+    /* Todos los iconos del Mundial son 🌐 (excepto Estadísticas, que
+       conserva su 📊). Petición usuario 2026-05-22. */
     var html = '<div class="jlist" style="padding:6px 0 18px;">';
     if (champTeam) html += _championBoxHtml(champTeam);
-    html += koRow(4, '🏆', 'Final');
-    html += koRow(3, '🥈', 'Semifinales');
-    html += koRow(2, '🎖️', 'Cuartos');
-    html += koRow(1, '🛡️', 'Octavos');
-    html += koRow(0, '⚔️', 'Dieciseisavos');
-    html += row('groups', '⚽', 'Fase de Grupos', (gTot ? gDone+'/'+gTot : '12×4'), false);
+    html += koRow(4, '🌐', 'Final');
+    html += koRow(3, '🌐', 'Semifinales');
+    html += koRow(2, '🌐', 'Cuartos');
+    html += koRow(1, '🌐', 'Octavos');
+    html += koRow(0, '🌐', 'Dieciseisavos');
+    html += row('groups', '🌐', 'Fase de Grupos', (gTot ? gDone+'/'+gTot : '12×4'), false);
     html += row('stats',  '📊', 'Estadísticas',  '', false);
     html += '</div>';
     return html;

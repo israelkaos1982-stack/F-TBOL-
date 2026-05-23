@@ -15080,6 +15080,52 @@ window._showSimProgress = function(opts, onDone){
       + 'style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
       + '↺ Reset Mundial</button></div>';
   }
+  /* Lee del calendario global (#s-agenda · .ag-r) las fechas de los
+     eventos "Mundial …" y las cachea por roundKey
+     (final · semis · cuartos · octavos · dieciseisavos · grupos).
+     Devuelve '' si no la encuentra. Evita confundirse con
+     "Mundialito Clubes" (otro torneo distinto). 2026-05-22. */
+  var _mundialDateCache = { ts: 0, data: null };
+  function _mundialRoundDateLookup(roundKey){
+    if (!roundKey) return '';
+    var now = Date.now();
+    var data = _mundialDateCache.data;
+    if (!data || (now - _mundialDateCache.ts) > 4000) {
+      data = {};
+      try {
+        var rows = document.querySelectorAll('#s-agenda .ag-r');
+        for (var i = 0; i < rows.length; i++) {
+          var lblEl = rows[i].querySelector('.ag-lbl');
+          var dtEl  = rows[i].querySelector('.ag-date');
+          if (!lblEl || !dtEl) continue;
+          var lbl = (lblEl.textContent || '').toLowerCase();
+          var dt  = (dtEl.textContent || '').trim();
+          if (!lbl || !dt) continue;
+          if (lbl.indexOf('mundial') === -1) continue;
+          /* Mundialito Clubes es OTRO torneo (juega en Julio). */
+          if (lbl.indexOf('mundialito') !== -1) continue;
+          if (/\bgran\s+final\b/.test(lbl) || (/\bfinal\b/.test(lbl) && !/de\s+final/.test(lbl))) {
+            if (!data.final) data.final = dt;
+          } else if (/\bsemi(s|finales?|final)\b/.test(lbl)) {
+            if (!data.semis) data.semis = dt;
+          } else if (/\bcuartos?\b/.test(lbl)) {
+            if (!data.cuartos) data.cuartos = dt;
+          } else if (/\boctavos?\b/.test(lbl)) {
+            if (!data.octavos) data.octavos = dt;
+          } else if (/\brepesca\b|dieciseisav|1\s*\/\s*32/.test(lbl)) {
+            if (!data.dieciseisavos) data.dieciseisavos = dt;
+          } else if (/\bgrupos?\b/.test(lbl)) {
+            if (!data.grupos) data.grupos = dt;
+          }
+        }
+      } catch(_){}
+      _mundialDateCache = { ts: now, data: data };
+    }
+    return data[roundKey] || '';
+  }
+  /* Permite invalidar la cache cuando el calendario cambia (edición
+     desde s-agenda). */
+  window._mundialDateCacheInvalidate = function(){ _mundialDateCache = { ts: 0, data: null }; };
   /* Menú del Mundial 2032 — 7 cajas, de arriba a abajo:
      Final · Semifinales · Cuartos · Octavos · Dieciseisavos ·
      Fase de Grupos · Estadísticas. Cada caja KO abre SU ronda; las
@@ -15103,10 +15149,11 @@ window._showSimProgress = function(opts, onDone){
       if (fin && fin.played) champTeam = (fin.winner === 'a') ? koBracket[lastR][0] : koBracket[lastR][1];
     }
     /* Fila compacta estilo Mundialito Clubes (foto 2): .jblock + .jbtn
-       .c-mundial — emoji + "Mundial" + ronda + pequeño badge. Sin la
-       bolita .pdot a la izquierda (petición usuario 2026-05-22: "quítame
-       el icono de desplegable"). */
-    function row(view, emoji, title, badge, locked){
+       .c-mundial — emoji + "Mundial" + ronda + pequeño badge + fecha
+       sacada del calendario global (#s-agenda). data-jor-pinned hace
+       que el auto-injector de fechas (misc_body_2.html) NO toque el
+       texto ni la fecha. */
+    function row(view, emoji, title, badge, locked, roundKey){
       var lockStyle = locked
         ? 'opacity:.45;cursor:not-allowed;filter:grayscale(.55);'
         : '';
@@ -15116,14 +15163,19 @@ window._showSimProgress = function(opts, onDone){
       var bdg = badge
         ? '<span class="bdg" style="margin-left:auto;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.85);">'+badge+'</span>'
         : '';
+      var dt = roundKey ? _mundialRoundDateLookup(roundKey) : '';
+      var dateBadge = dt
+        ? '<span class="jor-date'+(badge?'':' is-solo')+'" style="margin-left:'+(badge?'6px':'auto')+';">'+dt+'</span>'
+        : '';
       return '<div class="jblock">'
-        + '<button type="button" class="jbtn c-mundial"'+click
+        + '<button type="button" class="jbtn c-mundial" data-jor-pinned="1"'+click
         + (lockStyle ? ' style="'+lockStyle+'"' : '')+'>'
         + emoji+' <b>Mundial</b>&nbsp;&nbsp;'+title
         + bdg
+        + dateBadge
         + '</button></div>';
     }
-    function koRow(r, emoji, title){
+    function koRow(r, emoji, title, roundKey){
       var locked, badge;
       if (!gs.allGroupsDone) {
         locked = true; badge = '🔒';
@@ -15145,19 +15197,19 @@ window._showSimProgress = function(opts, onDone){
       } else {
         locked = true; badge = '🔒';
       }
-      return row('ko'+r, emoji, title, badge, locked);
+      return row('ko'+r, emoji, title, badge, locked, roundKey);
     }
     /* Todos los iconos del Mundial son 🌐 (excepto Estadísticas, que
        conserva su 📊). Petición usuario 2026-05-22. */
     var html = '<div class="jlist" style="padding:6px 0 18px;">';
     if (champTeam) html += _championBoxHtml(champTeam);
-    html += koRow(4, '🌐', 'Final');
-    html += koRow(3, '🌐', 'Semifinales');
-    html += koRow(2, '🌐', 'Cuartos');
-    html += koRow(1, '🌐', 'Octavos');
-    html += koRow(0, '🌐', 'Dieciseisavos');
-    html += row('groups', '🌐', 'Fase de Grupos', (gTot ? gDone+'/'+gTot : '12×4'), false);
-    html += row('stats',  '📊', 'Estadísticas',  '', false);
+    html += koRow(4, '🌐', 'Final',         'final');
+    html += koRow(3, '🌐', 'Semifinales',   'semis');
+    html += koRow(2, '🌐', 'Cuartos',       'cuartos');
+    html += koRow(1, '🌐', 'Octavos',       'octavos');
+    html += koRow(0, '🌐', 'Dieciseisavos', 'dieciseisavos');
+    html += row('groups', '🌐', 'Fase de Grupos', (gTot ? gDone+'/'+gTot : '12×4'), false, 'grupos');
+    html += row('stats',  '📊', 'Estadísticas',  '', false, '');
     html += '</div>';
     return html;
   }

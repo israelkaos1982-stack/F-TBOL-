@@ -33324,104 +33324,122 @@ Tottenham
     try{ return JSON.parse(localStorage.getItem(key)||'null'); }catch(_){ return null; }
   }
 
-  /* Cada helper devuelve { status:'in'|'out', label, emoji, screen }
-     o null si la competición no aplica al equipo del hub. */
-  function _compLiga(_a){
-    return { status:'in', label:'Liga EA', emoji:'🇪🇸', screen:'s-liga' };
+  /* Fuente de verdad: la selección del calendario del hub
+     (`bayern_calendar_comps_v1`). Cada comp marcada en el modal del
+     calendario aparece como chip — independientemente de si el state
+     de esa competición ya está poblado en localStorage. Antes
+     (2026-05-23) sólo aparecían las que tenían state Y el equipo en
+     el pool — los usuarios reportaban "veo 3 chips pero juego 9
+     competiciones". Ahora rige el calendario.
+     Estado de cada chip: 'En juego' por defecto, 'Eliminado' sólo
+     cuando hay un campeón decidido en su state y NO es el hub. */
+  var _CAL_COMPS_KEY = 'bayern_calendar_comps_v1';
+  var _CAL_COMP_DEFAULTS = {
+    liga:true, copa:true, 'sup-esp':true, champ:true,
+    prevch:false, uel:false, uecl:false, recopa:false,
+    'sup-eur':false, inter:false, mundial:false,
+    sel:true, torneo:true, amist:true
+  };
+  function _loadCalSel(){
+    var sel = {};
+    Object.keys(_CAL_COMP_DEFAULTS).forEach(function(k){
+      sel[k] = _CAL_COMP_DEFAULTS[k];
+    });
+    try {
+      var raw = localStorage.getItem(_CAL_COMPS_KEY);
+      if (raw){
+        var d = JSON.parse(raw);
+        if (d && typeof d === 'object'){
+          Object.keys(d).forEach(function(k){
+            if (typeof d[k] === 'boolean') sel[k] = d[k];
+          });
+        }
+      }
+    } catch(_){}
+    return sel;
   }
-  function _compCopa(aliases){
-    var s = _loadJSON('copa_data_v1') || _loadJSON('copa_state_v1');
-    var champ = s && (s.champion || s.campeon);
-    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
-    return { status:st, label:'Copa Rey', emoji:'👑', screen:'s-copa' };
+  function _statusFromChamp(champ, aliases){
+    return (champ && !_matches(champ, aliases)) ? 'out' : 'in';
   }
-  function _compSc(aliases){
-    var s = _loadJSON('sc_state_v1');
-    if (!s) return null;
-    var teams = s.teams || s.pool || [];
-    if (teams.length && !_listIn(teams, aliases)) return null;
-    var champ = s.champion || s.campeon;
-    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
-    return { status:st, label:'Supercopa Esp.', emoji:'🥇', screen:'s-espana' };
+  function _statusEur(comp, aliases){
+    var KO = { ucl:'ucl_ko_state_v1', uel:'uel_ko_state_v1', uecl:'uecl_ko_state_v1' };
+    var ko = _loadJSON(KO[comp]);
+    return _statusFromChamp(ko && (ko.champion || ko.campeon), aliases);
   }
-  function _compEur(comp, aliases){
-    var META = {
-      ucl:  { phase:'ucl_phase_v1',  ko:'ucl_ko_state_v1',  label:'Champions',   emoji:'🏆', screen:'s-champions' },
-      uel:  { phase:'uel_phase_v1',  ko:'uel_ko_state_v1',  label:'Europa Lg.',  emoji:'🟠', screen:'s-uel'       },
-      uecl: { phase:'uecl_phase_v1', ko:'uecl_ko_state_v1', label:'Conference',  emoji:'🟢', screen:'s-uecl'      }
-    };
-    var m = META[comp]; if (!m) return null;
-    var s = _loadJSON(m.phase);
-    if (!s || !Array.isArray(s.teams)) return null;
-    if (!_listIn(s.teams, aliases)) return null;
-    var ko = _loadJSON(m.ko);
-    var champ = ko && (ko.champion || ko.campeon);
-    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
-    return { status:st, label:m.label, emoji:m.emoji, screen:m.screen };
-  }
-  function _compRecopa(aliases){
-    var s = _loadJSON('recopa_state_v1');
-    if (!s) return null;
-    var pool = s.pool || s.teams || [];
-    if (!_listIn(pool, aliases)) return null;
-    var champ = s.champion;
-    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
-    return { status:st, label:'Recopa', emoji:'🟤', screen:'s-recopa' };
-  }
-  function _compUsc(aliases){
-    var s = _loadJSON('usc_state_v1');
-    if (!s) return null;
-    var teams = s.teams || s.pool || [];
-    if (teams.length && !_listIn(teams, aliases)) return null;
-    var champ = s.champion;
-    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
-    return { status:st, label:'Supercopa Eur.', emoji:'⭐', screen:'s-usc' };
-  }
-  function _compInter(aliases){
-    var s = _loadJSON('inter_state_v1') || _loadJSON('intercontinental_state_v1');
-    if (!s) return null;
-    var teams = s.teams || s.pool || [];
-    if (teams.length && !_listIn(teams, aliases)) return null;
-    var champ = s.champion;
-    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
-    return { status:st, label:'Intercont.', emoji:'🌐', screen:'s-intercontinental' };
-  }
-  function _compMundial(aliases){
-    var s = _loadJSON('mundial_state_v1') || _loadJSON('mundialito_state_v1');
-    if (!s) return null;
-    var teams = s.teams || s.pool || [];
-    if (teams.length && !_listIn(teams, aliases)) return null;
-    var champ = s.champion;
-    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
-    return { status:st, label:'Mundialito', emoji:'🌍', screen:'s-intercontinental' };
-  }
-  function _compSuperliga(aliases){
-    var arr = _loadJSON('superliga_teams_v1');
-    if (!Array.isArray(arr)) return null;
-    if (!_listIn(arr, aliases)) return null;
-    var st = _loadJSON('superliga_state_v1');
-    var champ = st && (st.champion || st.campeon);
-    var s = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
-    return { status:s, label:'Superliga', emoji:'🌟', screen:'s-superliga-clas' };
-  }
+  /* Tabla canónica: orden visual de chips + label/emoji/screen +
+     resolución de estado. `statusFn` es opcional — sin él, default 'in'. */
+  var _CHIP_DEFS = [
+    { id:'liga',    label:'Liga EA',         emoji:'🇪🇸', screen:'s-liga' },
+    { id:'copa',    label:'Copa Rey',        emoji:'👑', screen:'s-copa',
+      statusFn:function(a){
+        var s = _loadJSON('copa_data_v1') || _loadJSON('copa_state_v1');
+        return _statusFromChamp(s && (s.champion || s.campeon), a);
+      }},
+    { id:'sup-esp', label:'Supercopa Esp.',  emoji:'🥇', screen:'s-espana',
+      statusFn:function(a){
+        var s = _loadJSON('sc_state_v1');
+        return _statusFromChamp(s && (s.champion || s.campeon), a);
+      }},
+    { id:'champ',   label:'Champions',       emoji:'🏆', screen:'s-champions',
+      statusFn:function(a){ return _statusEur('ucl', a); }},
+    { id:'prevch',  label:'Previa Champ.',   emoji:'🟣', screen:'s-champions' },
+    { id:'uel',     label:'Europa Lg.',      emoji:'🟠', screen:'s-uel',
+      statusFn:function(a){ return _statusEur('uel', a); }},
+    { id:'uecl',    label:'Conference',      emoji:'🟢', screen:'s-uecl',
+      statusFn:function(a){ return _statusEur('uecl', a); }},
+    { id:'recopa',  label:'Recopa',          emoji:'🟤', screen:'s-recopa',
+      statusFn:function(a){
+        var s = _loadJSON('recopa_state_v1');
+        return _statusFromChamp(s && s.champion, a);
+      }},
+    { id:'sup-eur', label:'Supercopa Eur.',  emoji:'⭐', screen:'s-usc',
+      statusFn:function(a){
+        var s = _loadJSON('usc_state_v1');
+        return _statusFromChamp(s && s.champion, a);
+      }},
+    { id:'inter',   label:'Intercont.',      emoji:'🌐', screen:'s-intercontinental',
+      statusFn:function(a){
+        var s = _loadJSON('inter_state_v1') || _loadJSON('intercontinental_state_v1');
+        return _statusFromChamp(s && s.champion, a);
+      }},
+    { id:'mundial', label:'Mundialito',      emoji:'🌍', screen:'s-intercontinental',
+      statusFn:function(a){
+        var s = _loadJSON('mundial_state_v1') || _loadJSON('mundialito_state_v1');
+        return _statusFromChamp(s && s.champion, a);
+      }},
+    { id:'sel',     label:'Selecciones',     emoji:'🌐', screen:'s-selecciones' },
+    { id:'torneo',  label:'Torneo Verano',   emoji:'🌞', screen:'s-torneos-verano' },
+    { id:'amist',   label:'Amistosos',       emoji:'🤝', screen:'s-amistosos' }
+  ];
 
   function _collect(){
     var aliases = _hubAliases();
+    var sel = _loadCalSel();
     var out = [];
-    var fns = [
-      _compLiga, _compCopa, _compSc,
-      function(a){ return _compEur('ucl',  a); },
-      function(a){ return _compEur('uel',  a); },
-      function(a){ return _compEur('uecl', a); },
-      _compRecopa, _compUsc, _compInter, _compMundial,
-      _compSuperliga
-    ];
-    fns.forEach(function(fn){
-      try{
-        var r = fn(aliases);
-        if (r && r.status) out.push(r);
-      }catch(_){}
+    _CHIP_DEFS.forEach(function(def){
+      if (!sel[def.id]) return;
+      var status = 'in';
+      if (typeof def.statusFn === 'function'){
+        try {
+          var r = def.statusFn(aliases);
+          if (r === 'out') status = 'out';
+        } catch(_){}
+      }
+      out.push({ status:status, label:def.label, emoji:def.emoji, screen:def.screen });
     });
+    /* Superliga vive fuera del modal del calendario — la añadimos
+       sólo si el equipo está inscrito en `superliga_teams_v1`. */
+    try {
+      var sl = _loadJSON('superliga_teams_v1');
+      if (Array.isArray(sl) && _listIn(sl, aliases)){
+        var slSt = _loadJSON('superliga_state_v1');
+        var slCh = slSt && (slSt.champion || slSt.campeon);
+        out.push({
+          status: _statusFromChamp(slCh, aliases),
+          label:'Superliga', emoji:'🌟', screen:'s-superliga-clas'
+        });
+      }
+    } catch(_){}
     return out;
   }
 

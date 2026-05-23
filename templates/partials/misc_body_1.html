@@ -33357,10 +33357,10 @@ Tottenham
   </div>
   <div class="munich-hud-item munich-hud-med ath-med-item"
        onclick="window.athOpenMedicalMenu&&window.athOpenMedicalMenu();"
-       title="Partidos de lesión pendientes — abrir menú de tratamiento">
-    <span class="munich-hud-label">Partidos de lesión pendientes</span>
+       title="Puntos de Fisio — abrir menú de tratamiento">
+    <span class="munich-hud-label">Puntos de Fisio · 1 PI = 1 partido de lesión</span>
     <span class="munich-hud-icon" id="ath-med-icon">💊</span>
-    <span class="munich-hud-num"><span id="ath-med-injury">00</span><span id="ath-med-val" style="display:none;">00</span></span>
+    <span class="munich-hud-num"><span id="ath-med-injury" style="display:none;">00</span><span id="ath-med-val">00</span></span>
   </div>
 </div>
 
@@ -34788,8 +34788,10 @@ Tottenham
       window._bayernEditValuesClose();
       return;
     }
-    /* Toast "Guardando…" amarillo durante la fase async (server). */
-    var waitToast = _bayernHudToast('⏳ Guardando HUD en 5 capas…', 'wait');
+    /* Sin toast intermedio: el usuario pidió ocultar el mensaje
+       "Guardando HUD en 5 capas…" — el feedback llega con el toast
+       final 'ok' / 'err'. */
+    var waitToast = null;
     /* save() escribe SÍNCRONAMENTE a las 4 capas locales (memoria,
        localStorage, sessionStorage, cookie) y devuelve una Promise
        que resuelve cuando el server confirma o falla. */
@@ -34836,9 +34838,9 @@ Tottenham
     Promise.resolve(serverPromise).then(function(serverOk){
       try { if (waitToast) waitToast.remove(); } catch(_){}
       if (serverOk) {
-        _bayernHudToast('✓ HUD guardado (5/5 capas + servidor)', 'ok');
+        _bayernHudToast('✓ HUD guardado', 'ok');
       } else {
-        _bayernHudToast('✓ HUD guardado local · ⚠ servidor no confirmó', 'wait');
+        _bayernHudToast('✓ HUD guardado · ⚠ servidor no confirmó', 'wait');
       }
     });
     window._bayernEditValuesClose();

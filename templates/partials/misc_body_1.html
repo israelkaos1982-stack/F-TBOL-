@@ -38472,6 +38472,36 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   #mu-msg-ov .mmo-btn.mark{ color:#a3e6a3; border-color:rgba(120,200,120,.35); }
   #mu-msg-ov .mmo-btn.del{ color:#ffb3b3; border-color:rgba(220,90,90,.40); }
   #mu-msg-ov .mmo-btn:active{ transform:scale(.94); }
+
+  /* Toast emergente cuando llega un mensaje importante con la
+     bandeja cerrada — desaparece solo en ~3.5 s. */
+  .mu-toast{ position:fixed; left:50%; bottom:18px;
+    transform:translate(-50%, 28px); z-index:10005;
+    max-width:88vw;
+    display:flex; align-items:center; gap:9px;
+    padding:9px 14px;
+    background:linear-gradient(180deg,#160a0e 0%,#0a0507 100%);
+    border:1px solid rgba(246,235,97,.42);
+    border-left:4px solid #F6EB61;
+    border-radius:9px;
+    color:#fff; font-family:'Oswald',sans-serif;
+    font-size:12px; letter-spacing:.5px;
+    box-shadow:0 6px 22px rgba(0,0,0,.55);
+    opacity:0; transition:opacity .28s, transform .28s;
+    pointer-events:none; }
+  .mu-toast.on{ opacity:1; transform:translate(-50%, 0); }
+  .mu-toast-ico{ font-size:16px; line-height:1; }
+  .mu-toast-txt{ flex:1 1 auto; min-width:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:12.5px; }
+  /* Pulso de aviso en el botón ✉ cuando llega algo importante */
+  #mu-msg-btn.is-alert{ animation:mu-msg-pulse 1.4s ease-out 2; }
+  @keyframes mu-msg-pulse{
+    0%   { box-shadow:0 1px 3px rgba(0,0,0,.5), 0 0 0 0 rgba(246,235,97,.7), inset 0 0 0 1px rgba(255,255,255,.08); }
+    70%  { box-shadow:0 1px 3px rgba(0,0,0,.5), 0 0 0 12px rgba(246,235,97,0), inset 0 0 0 1px rgba(255,255,255,.08); }
+    100% { box-shadow:0 1px 3px rgba(0,0,0,.5), 0 0 0 0 rgba(246,235,97,0), inset 0 0 0 1px rgba(255,255,255,.08); }
+  }
 </style>
 <script>
 /* ── Módulo de Mensajes del hub (Liverpool + Francia) ────────────
@@ -38492,7 +38522,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
   var KEY  = 'mu_messages_v1';
   var CAP  = 500;     /* mensajes máx. por lado (FIFO) */
-  var TEAM = 'liverpool';
+  /* El equipo del usuario es canónicamente "Bayern Munich" en todo el
+     motor (LIGA_SCHEDULE, LIGA_PLAYER_MATCH_STORE, registrar*, etc).
+     El editor de plantillas permite renombrarlo (en este save: Liverpool)
+     vía window._ligaEaSubName('Bayern Munich'). Para que los hooks
+     enganchen sin importar el alias, aceptamos AMBOS nombres. */
 
   /* ── Storage ─────────────────────────────────────────────── */
   function _read(){
@@ -38534,8 +38568,22 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c];
     });
   }
+  function _userTeamAlias(){
+    try {
+      if (typeof window._ligaEaSubName === 'function'){
+        var s = window._ligaEaSubName('Bayern Munich');
+        if (s) return String(s);
+      }
+    } catch(_){}
+    return '';
+  }
   function _isLiv(name){
-    return !!name && String(name).toLowerCase().indexOf(TEAM) >= 0;
+    if (!name) return false;
+    var n = String(name).toLowerCase();
+    if (n.indexOf('bayern') >= 0) return true;
+    if (n.indexOf('liverpool') >= 0) return true;
+    var alias = _userTeamAlias().toLowerCase();
+    return !!alias && n.indexOf(alias) >= 0;
   }
   function _compLabel(c){
     var m = {
@@ -38576,7 +38624,37 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     d.msgs.push(msg);
     _write(d);
     _scheduleRefresh();
+    /* Toast + pulso del botón cuando llega algo importante con la
+       bandeja cerrada. Se omiten tipos rutinarios (welcome, chatter). */
+    if (msg.type !== 'welcome' && msg.type !== 'callup'){
+      var ov = document.getElementById('mu-msg-ov');
+      var open = ov && !ov.hasAttribute('hidden');
+      if (!open) _toast(msg);
+    }
     return msg;
+  }
+  function _toast(msg){
+    try {
+      var el = document.createElement('div');
+      el.className = 'mu-toast';
+      el.innerHTML = '<span class="mu-toast-ico">'+_esc(msg.icon||'✉')+'</span>'+
+                     '<span class="mu-toast-txt">'+_esc(msg.title||'Nuevo mensaje')+'</span>';
+      el.onclick = function(){ _openPop(); };
+      el.style.pointerEvents = 'auto';
+      document.body.appendChild(el);
+      setTimeout(function(){ el.classList.add('on'); }, 10);
+      setTimeout(function(){
+        el.classList.remove('on');
+        setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 350);
+      }, 3500);
+      var btn = document.getElementById('mu-msg-btn');
+      if (btn){
+        btn.classList.remove('is-alert');
+        /* reflow para reiniciar la animación */
+        void btn.offsetWidth;
+        btn.classList.add('is-alert');
+      }
+    } catch(_){}
   }
   function markRead(id){
     var d = _read();
@@ -38818,6 +38896,10 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             if (mvp) body += ' ⭐ MVP: '+mvp+'.';
             push({ side:'liv', type:'result', icon:ic,
                    sender:'Liverpool FC', title:title, body:body });
+            /* Portería imbatida — comp: registrarResultadoLiga es de Liga. */
+            _checkCleanSheet(rg, 'liga');
+            /* Racha de resultados (V/D/E ≥3) en Liga */
+            _checkResultStreak(diff);
           }
         }
       } catch(_){}
@@ -38879,6 +38961,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     /* Ciclo de 3 amarillas: lo procesa procesarSancionesPostPartido,
        leemos YELLOW_STORE un tick más tarde. */
     setTimeout(function(){ _checkYellowCycle(compKey); }, 80);
+    /* Hat-trick / pókerazo y racha goleadora del jugador */
+    _checkHatTrick(events, livSide);
+    _checkScoreStreak(events, livSide);
+    /* Agregados de liga (pichichi + MVP líder) — el store ya se
+       actualizó con esta acta por el `orig.apply` previo. */
+    if (compKey === 'liga'){
+      setTimeout(function(){ _checkPichichi(); _checkMvpLeader(); }, 120);
+    }
   }
   function _checkYellowCycle(compKey){
     try {
@@ -39011,19 +39101,361 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     } catch(_){}
   }
 
-  /* ── Semilla inicial ──────────────────────────────────── */
+  /* ── HOOK 6: hat-trick / pókerazo en un partido ───────── */
+  function _checkHatTrick(events, livSide){
+    if (!Array.isArray(events)) return;
+    var goalsP = {};
+    events.forEach(function(ev){
+      if (!ev || ev.team !== livSide) return;
+      if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
+        var nm = ev.name || ev.player;
+        if (nm) goalsP[nm] = (goalsP[nm] || 0) + 1;
+      }
+    });
+    Object.keys(goalsP).forEach(function(pl){
+      var n = goalsP[pl];
+      if (n < 3) return;
+      var lbl = (n === 3) ? 'Hat-trick' : (n === 4) ? '¡Cuádruple!' : '¡Pókerazo!';
+      var ic  = (n === 3) ? '🎩' : (n === 4) ? '🎩🎩' : '👑';
+      push({ side:'liv', type:'hat-trick', icon:ic,
+        sender:'LaLiga · Goleadores',
+        title: lbl+' de '+pl,
+        body : pl+' ha marcado '+n+' goles en un solo partido. ¡Noche histórica en el Liverpool!'
+      });
+    });
+  }
+
+  /* ── HOOK 7: racha goleadora multi-partido ────────────── */
+  function _checkScoreStreak(events, livSide){
+    if (!Array.isArray(events)) return;
+    var scored = {};
+    events.forEach(function(ev){
+      if (!ev || ev.team !== livSide) return;
+      if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
+        var nm = ev.name || ev.player;
+        if (nm) scored[nm] = true;
+      }
+    });
+    Object.keys(scored).forEach(function(pl){
+      var k = 'strk:'+pl;
+      var n = (_getCursor(k) || 0) + 1;
+      _setCursor(k, n);
+      if (n === 3 || n === 5 || n === 7 || n === 10){
+        push({ side:'liv', type:'streak', icon:'🔥',
+          sender:'LaLiga · Goleadores',
+          title: pl+' anota en '+n+' partidos seguidos',
+          body : pl+' encadena '+n+' partidos consecutivos viendo puerta. ¡Está en racha!'
+        });
+      }
+    });
+  }
+
+  /* ── HOOK 8: portería imbatida (clean sheet streak) ───── */
+  function _checkCleanSheet(rivalGoals, compKey){
+    var k = 'cs:'+(compKey || 'liga');
+    var n = _getCursor(k) || 0;
+    if (rivalGoals === 0){
+      n++;
+      _setCursor(k, n);
+      var compName = _compLabel(compKey);
+      if (n === 2){
+        push({ side:'liv', type:'cs', icon:'🧤',
+          sender:'Servicios Técnicos',
+          title:'Portería imbatida (2 partidos)',
+          body :'Nuestro portero encadena 2 partidos sin encajar en '+compName+'. Pared.'
+        });
+      } else if (n === 3 || n === 5 || n === 7 || n === 10){
+        push({ side:'liv', type:'cs', icon:'🧤',
+          sender:'Servicios Técnicos',
+          title:'¡'+n+' partidos imbatido!',
+          body :'Nuestro portero lleva '+n+' partidos consecutivos sin encajar en '+compName+'.'
+        });
+      }
+    } else if (n > 0){
+      _setCursor(k, 0);
+    }
+  }
+
+  /* ── HOOK 9: agregado de la liga (pichichi + MVP líder) ─ */
+  function _aggregateLiga(){
+    var store = window.LIGA_PLAYER_MATCH_STORE || {};
+    var goals = {}, mvps = {};
+    Object.keys(store).forEach(function(k){
+      var m = store[k];
+      if (!m) return;
+      var tA = m.teamA || '', tB = m.teamB || '';
+      if (Array.isArray(m.evts)){
+        m.evts.forEach(function(ev){
+          if (!ev || !ev.player) return;
+          if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
+            var team = ev.realTeam || (ev.team === 'a' ? tA : tB);
+            var key = ev.player+'|'+team;
+            goals[key] = (goals[key] || 0) + 1;
+          }
+        });
+      }
+      if (m.mvpName){
+        var team = (m.mvpTeam === 'a') ? tA : (m.mvpTeam === 'b') ? tB : (m.mvpTeam || '');
+        var mk = m.mvpName+'|'+team;
+        mvps[mk] = (mvps[mk] || 0) + 1;
+      }
+    });
+    return { goals: goals, mvps: mvps };
+  }
+  function _topOf(map){
+    var best = null, bn = 0;
+    Object.keys(map).forEach(function(k){
+      if (map[k] > bn){ best = k; bn = map[k]; }
+    });
+    return best ? { key:best, n:bn } : null;
+  }
+  function _checkPichichi(){
+    try {
+      var ag = _aggregateLiga();
+      var top = _topOf(ag.goals);
+      if (!top || top.n < 5) return;
+      var parts = top.key.split('|');
+      var pl = parts[0], team = parts[1] || '';
+      if (!_isLiv(team)) return;
+      var sig = pl+'@'+top.n;
+      if (_getCursor('liga:pichi') === sig) return;
+      _setCursor('liga:pichi', sig);
+      push({ side:'liv', type:'pichichi', icon:'🥇',
+        sender:'LaLiga · Trofeo Zarra',
+        title:'¡Pichichi! '+pl+' lidera con '+top.n+' goles',
+        body : pl+' es el máximo goleador de LaLiga con '+top.n+' goles. Una temporada de récord en Anfield.'
+      });
+    } catch(_){}
+  }
+  function _checkMvpLeader(){
+    try {
+      var ag = _aggregateLiga();
+      var top = _topOf(ag.mvps);
+      if (!top || top.n < 3) return;
+      var parts = top.key.split('|');
+      var pl = parts[0], team = parts[1] || '';
+      if (!_isLiv(team)) return;
+      var sig = pl+'@'+top.n;
+      if (_getCursor('liga:mvpLead') === sig) return;
+      _setCursor('liga:mvpLead', sig);
+      push({ side:'liv', type:'mvp', icon:'⭐',
+        sender:'LaLiga · MVPs',
+        title:pl+' lidera el ranking de MVPs ('+top.n+')',
+        body : pl+' es el jugador con más MVPs de LaLiga ('+top.n+' galardones). Imparable.'
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 10: apuestas ISRAMAX ──────────────────────────
+     localStorage 'isramax_v1' → { bets:[{id, status:'open'|'won'|'lost',
+     stake, cuota, home, away, comp, label, market, createdAt}], users:{} }
+  */
+  function _scanBets(){
+    try {
+      var raw = localStorage.getItem('isramax_v1');
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      var bets = (d && d.bets) || [];
+      bets.forEach(function(b){
+        if (!b || !b.id) return;
+        var seen  = _getCursor('bet:'+b.id);
+        var label = b.label || b.market || 'Apuesta';
+        var match = (b.home && b.away) ? (b.home+' vs '+b.away) : '';
+        if (b.status === 'open'){
+          if (seen !== 'open'){
+            _setCursor('bet:'+b.id, 'open');
+            var pot = Math.round((b.stake || 0) * (b.cuota || 1));
+            push({ side:'liv', type:'bet', icon:'🎲',
+              sender:'ISRAMAX · Apuestas',
+              title:'Tu apuesta acaba de empezar',
+              body :'Has apostado '+(b.stake||0)+'€ a "'+label+'"'+(match?' en '+match:'')+
+                    ' (cuota '+(b.cuota||1)+'). Ganancia potencial: '+pot+'€.'
+            });
+          }
+        } else if (b.status === 'won' && seen !== 'won'){
+          _setCursor('bet:'+b.id, 'won');
+          var win = Math.round((b.stake || 0) * (b.cuota || 1));
+          push({ side:'liv', type:'bet-won', icon:'🏆',
+            sender:'ISRAMAX · Apuestas',
+            title:'¡Apuesta ganada! +'+win+'€',
+            body :'Tu apuesta a "'+label+'"'+(match?' en '+match:'')+
+                  ' ha entrado. Ganancia neta: +'+win+'€.'
+          });
+        } else if (b.status === 'lost' && seen !== 'lost'){
+          _setCursor('bet:'+b.id, 'lost');
+          push({ side:'liv', type:'bet-lost', icon:'💸',
+            sender:'ISRAMAX · Apuestas',
+            title:'Apuesta perdida −'+(b.stake||0)+'€',
+            body :'Tu apuesta a "'+label+'"'+(match?' en '+match:'')+
+                  ' no ha entrado. Pérdida: '+(b.stake||0)+'€.'
+          });
+        }
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 11: objetivos del club (checkboxes DOM) ───────
+     0,40 puntos + 60 € por objetivo cumplido (constantes del juego).
+  */
+  function _scanObjectives(){
+    try {
+      var nodes = document.querySelectorAll(
+        'input[type=checkbox][id*="-obj"], input[type=checkbox][id^="obj-"]'
+      );
+      nodes.forEach(function(cb){
+        var id = cb.id || '';
+        if (!id) return;
+        if (!cb.checked){
+          _setCursor('obj:'+id, '0');
+          return;
+        }
+        if (_getCursor('obj:'+id) === '1') return;
+        _setCursor('obj:'+id, '1');
+        var lbl = '';
+        try {
+          var p = cb.closest('label');
+          if (p) lbl = (p.textContent || '').trim();
+          if (!lbl && cb.parentElement) lbl = (cb.parentElement.textContent || '').trim();
+        } catch(_){}
+        lbl = lbl.replace(/\s+/g,' ').slice(0, 80);
+        push({ side:'liv', type:'obj', icon:'🎯',
+          sender:'Dirección Deportiva',
+          title:'¡Objetivo cumplido!' + (lbl ? ' — '+lbl : ''),
+          body :'Has cumplido un objetivo del club. Recompensa: +0,40 puntos de prestigio y +60 € al presupuesto.'
+        });
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 12: eliminación de la Copa del Rey ───────────
+     Si Liverpool jugó en sorteo[r] pero NO aparece en clasificados[r]
+     (cuando esa ronda ya tiene ganadores), avisamos.
+  */
+  function _checkCupElim(){
+    try {
+      var raw = localStorage.getItem('copa_state_v1');
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      var copa = (d && d.copa) || d;
+      if (!copa) return;
+      var sort = copa.sorteo || {};
+      var clas = copa.clasificados || {};
+      var rondas = ['r1','r2','r16','oct','cua','sf','fin'];
+      rondas.forEach(function(r){
+        var mts = sort[r] || [];
+        var played = mts.some(function(m){ return m && (_isLiv(m.l) || _isLiv(m.v)); });
+        if (!played) return;
+        var cl = clas[r] || [];
+        if (!cl.length) return;             /* ronda aún sin completar */
+        var advanced = cl.some(function(t){
+          var n = (t && (t.name || t)) || '';
+          return _isLiv(n);
+        });
+        if (advanced) return;
+        var sig = 'copa:elim:'+r;
+        if (_getCursor(sig)) return;
+        _setCursor(sig, '1');
+        push({ side:'liv', type:'elim', icon:'💀',
+          sender:'RFEF · Copa del Rey',
+          title:'Eliminados de la Copa del Rey',
+          body :'El Liverpool queda eliminado en '+_ronLabel(r)+' de la Copa del Rey. Toca pensar en la Liga y Europa.'
+        });
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 13: previa del próximo partido ──────────────
+     Observa #munich-next-match. Cuando el texto cambia y describe
+     un partido (no "Entrenamiento" ni "Descanso"), dispara una
+     previa con el rival y la fecha. */
+  function _observeNextMatch(){
+    if (window.__MU_MSG_OBS_NM) return;
+    var el = document.getElementById('munich-next-match');
+    if (!el) return;
+    window.__MU_MSG_OBS_NM = true;
+    var lastText = '';
+    var check = function(){
+      var t = (el.textContent || '').replace(/\s+/g,' ').trim();
+      if (!t || t === lastText) return;
+      lastText = t;
+      /* Saltamos textos que no son partido: entrenamiento, descanso,
+         pretemporada genérica, días de selección, etc. */
+      if (/^(entrenamiento|descanso|pretemporada|libre|selecci|amistoso internac|d[íi]a de selec|d[íi]a libre)/i.test(t))
+        return;
+      var sig = 'pre:'+t;
+      if (_getCursor(sig)) return;
+      _setCursor(sig, '1');
+      /* Intentamos extraer "vs RIVAL" o "@ RIVAL" si existe. */
+      var rivalMatch = t.match(/(?:\bvs\b|\bcontra\b|\@)\s*([^·•\-—\|]+?)(?:\s*[·•\-—\|]|$)/i);
+      var rival = rivalMatch ? rivalMatch[1].trim() : '';
+      var venue = /\@\s/.test(t) ? 'fuera de casa' : 'en Anfield';
+      var title = rival
+        ? 'Próximo partido — vs ' + rival
+        : 'Próximo partido — ' + t;
+      var body  = rival
+        ? 'Toca preparar el partido contra ' + rival + ' (' + venue + '). Revisa lesionados, sancionados y alineación. ¡A por ello!'
+        : 'Toca preparar el próximo partido: ' + t + '. Revisa la convocatoria y la alineación.';
+      push({ side:'liv', type:'preview', icon:'📋',
+        sender:'Cuerpo Técnico', title:title, body:body });
+    };
+    check();
+    try {
+      new MutationObserver(check).observe(el,
+        { childList:true, characterData:true, subtree:true });
+    } catch(_){}
+  }
+
+  /* ── HOOK 14: racha de resultados (post-partido) ──────
+     Añade un segundo mensaje con la racha actual de Liga si llega
+     a 3+ partidos del mismo signo (V/D/E). */
+  function _checkResultStreak(diff){
+    var key = 'liga:streak';
+    var prev = _getCursor(key) || 'X:0';
+    var pType = String(prev).split(':')[0];
+    var pN = parseInt(String(prev).split(':')[1] || '0', 10) || 0;
+    var t = (diff > 0) ? 'W' : (diff < 0) ? 'L' : 'D';
+    var n = (t === pType) ? pN + 1 : 1;
+    _setCursor(key, t + ':' + n);
+    if (n < 3) return;
+    var ic, title, body;
+    if (t === 'W'){
+      ic = '🚀';
+      title = n + ' victorias consecutivas en Liga';
+      body  = 'El Liverpool encadena ' + n + ' triunfos seguidos en LaLiga. ¡Anfield está en llamas!';
+    } else if (t === 'L'){
+      ic = '🚨';
+      title = n + ' derrotas seguidas en Liga';
+      body  = 'Mala racha: ' + n + ' partidos seguidos perdiendo en LaLiga. Hay que reaccionar.';
+    } else {
+      ic = '😐';
+      title = n + ' empates consecutivos en Liga';
+      body  = n + ' empates seguidos en LaLiga. Falta algo de pegada.';
+    }
+    push({ side:'liv', type:'res-streak', icon:ic,
+      sender:'LaLiga · Tendencias', title:title, body:body });
+  }
+
+  /* ── Semilla inicial ────────────────────────────────────
+     Usa un cursor persistente "seeded". Si el usuario borra TODOS
+     los mensajes de bienvenida, NO vuelven a aparecer (a diferencia
+     del check viejo basado en msgs.length que sí los re-sembraba). */
   function _seed(){
+    if (_getCursor('seeded') === '1') return;
+    /* Migración: si el usuario YA tiene welcomes del seeder antiguo
+       (random id), no volvemos a pushear — solo marcamos el flag. */
     var d = _read();
-    if (d.msgs && d.msgs.length) return;
-    push({ side:'liv', type:'welcome', icon:'✉️',
+    var hadWelcome = (d.msgs || []).some(function(m){ return m && m.type === 'welcome'; });
+    _setCursor('seeded', '1');
+    if (hadWelcome) return;
+    push({ id:'seed-liv-anfield', side:'liv', type:'welcome', icon:'✉️',
       sender:'Liverpool FC',
       title:'Bienvenido a Anfield, mister',
-      body:'Aquí recibirás todas las novedades del club: resultados de los partidos, sorteos de copa, lesiones, tarjetas y sanciones, y cómo vamos en LaLiga.' });
-    push({ side:'liv', type:'welcome', icon:'📋',
+      body:'Aquí recibirás todas las novedades del club: resultados de los partidos, sorteos de copa, lesiones, tarjetas y sanciones, hat-tricks, rachas, apuestas, objetivos y mucho más.' });
+    push({ id:'seed-liv-plantilla', side:'liv', type:'welcome', icon:'📋',
       sender:'Secretaría Técnica',
       title:'Plantilla a tu disposición',
       body:'31 jugadores fichados y listos. Revisa la lista en el menú PLANTILLA.' });
-    push({ side:'fra', type:'welcome', icon:'🇫🇷',
+    push({ id:'seed-fra-bleus', side:'fra', type:'welcome', icon:'🇫🇷',
       sender:'FFF · Selección Francia',
       title:'Doble compromiso, mister',
       body:'No olvides que también diriges a Les Bleus. En esta pestaña verás convocatorias, amistosos y citas internacionales.' });
@@ -39057,10 +39489,30 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       _scanCopaSorteo();
       _scanStandings();
       _scanFrancia();
+      _scanBets();
+      _scanObjectives();
+      _checkCupElim();
+      _checkPichichi();
+      _checkMvpLeader();
+      _observeNextMatch();
       _refresh();
     };
     run();
     setInterval(run, 30000);
+    /* Disparador inmediato cuando el usuario marca un objetivo o
+       aparece una apuesta nueva (en otra pestaña). */
+    document.addEventListener('change', function(ev){
+      var t = ev.target;
+      if (!t || t.type !== 'checkbox' || !t.id) return;
+      if (/-obj|^obj-/.test(t.id))
+        setTimeout(function(){ _scanObjectives(); _refresh(); }, 30);
+    }, true);
+    window.addEventListener('storage', function(ev){
+      if (ev && ev.key === 'isramax_v1')
+        setTimeout(function(){ _scanBets(); _refresh(); }, 30);
+      if (ev && ev.key === 'copa_state_v1')
+        setTimeout(function(){ _scanCopaSorteo(); _checkCupElim(); _refresh(); }, 30);
+    });
     var scr = document.getElementById('s-munich');
     if (scr){
       try {

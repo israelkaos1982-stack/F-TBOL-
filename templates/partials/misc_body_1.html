@@ -38339,6 +38339,36 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   #mu-msg-ov .mmo-btn.mark{ color:#a3e6a3; border-color:rgba(120,200,120,.35); }
   #mu-msg-ov .mmo-btn.del{ color:#ffb3b3; border-color:rgba(220,90,90,.40); }
   #mu-msg-ov .mmo-btn:active{ transform:scale(.94); }
+
+  /* Toast emergente cuando llega un mensaje importante con la
+     bandeja cerrada — desaparece solo en ~3.5 s. */
+  .mu-toast{ position:fixed; left:50%; bottom:18px;
+    transform:translate(-50%, 28px); z-index:10005;
+    max-width:88vw;
+    display:flex; align-items:center; gap:9px;
+    padding:9px 14px;
+    background:linear-gradient(180deg,#160a0e 0%,#0a0507 100%);
+    border:1px solid rgba(246,235,97,.42);
+    border-left:4px solid #F6EB61;
+    border-radius:9px;
+    color:#fff; font-family:'Oswald',sans-serif;
+    font-size:12px; letter-spacing:.5px;
+    box-shadow:0 6px 22px rgba(0,0,0,.55);
+    opacity:0; transition:opacity .28s, transform .28s;
+    pointer-events:none; }
+  .mu-toast.on{ opacity:1; transform:translate(-50%, 0); }
+  .mu-toast-ico{ font-size:16px; line-height:1; }
+  .mu-toast-txt{ flex:1 1 auto; min-width:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:12.5px; }
+  /* Pulso de aviso en el botón ✉ cuando llega algo importante */
+  #mu-msg-btn.is-alert{ animation:mu-msg-pulse 1.4s ease-out 2; }
+  @keyframes mu-msg-pulse{
+    0%   { box-shadow:0 1px 3px rgba(0,0,0,.5), 0 0 0 0 rgba(246,235,97,.7), inset 0 0 0 1px rgba(255,255,255,.08); }
+    70%  { box-shadow:0 1px 3px rgba(0,0,0,.5), 0 0 0 12px rgba(246,235,97,0), inset 0 0 0 1px rgba(255,255,255,.08); }
+    100% { box-shadow:0 1px 3px rgba(0,0,0,.5), 0 0 0 0 rgba(246,235,97,0), inset 0 0 0 1px rgba(255,255,255,.08); }
+  }
 </style>
 <script>
 /* ── Módulo de Mensajes del hub (Liverpool + Francia) ────────────
@@ -38359,7 +38389,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
   var KEY  = 'mu_messages_v1';
   var CAP  = 500;     /* mensajes máx. por lado (FIFO) */
-  var TEAM = 'liverpool';
+  /* El equipo del usuario es canónicamente "Bayern Munich" en todo el
+     motor (LIGA_SCHEDULE, LIGA_PLAYER_MATCH_STORE, registrar*, etc).
+     El editor de plantillas permite renombrarlo (en este save: Liverpool)
+     vía window._ligaEaSubName('Bayern Munich'). Para que los hooks
+     enganchen sin importar el alias, aceptamos AMBOS nombres. */
 
   /* ── Storage ─────────────────────────────────────────────── */
   function _read(){
@@ -38401,8 +38435,22 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c];
     });
   }
+  function _userTeamAlias(){
+    try {
+      if (typeof window._ligaEaSubName === 'function'){
+        var s = window._ligaEaSubName('Bayern Munich');
+        if (s) return String(s);
+      }
+    } catch(_){}
+    return '';
+  }
   function _isLiv(name){
-    return !!name && String(name).toLowerCase().indexOf(TEAM) >= 0;
+    if (!name) return false;
+    var n = String(name).toLowerCase();
+    if (n.indexOf('bayern') >= 0) return true;
+    if (n.indexOf('liverpool') >= 0) return true;
+    var alias = _userTeamAlias().toLowerCase();
+    return !!alias && n.indexOf(alias) >= 0;
   }
   function _compLabel(c){
     var m = {
@@ -38443,7 +38491,37 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     d.msgs.push(msg);
     _write(d);
     _scheduleRefresh();
+    /* Toast + pulso del botón cuando llega algo importante con la
+       bandeja cerrada. Se omiten tipos rutinarios (welcome, chatter). */
+    if (msg.type !== 'welcome' && msg.type !== 'callup'){
+      var ov = document.getElementById('mu-msg-ov');
+      var open = ov && !ov.hasAttribute('hidden');
+      if (!open) _toast(msg);
+    }
     return msg;
+  }
+  function _toast(msg){
+    try {
+      var el = document.createElement('div');
+      el.className = 'mu-toast';
+      el.innerHTML = '<span class="mu-toast-ico">'+_esc(msg.icon||'✉')+'</span>'+
+                     '<span class="mu-toast-txt">'+_esc(msg.title||'Nuevo mensaje')+'</span>';
+      el.onclick = function(){ _openPop(); };
+      el.style.pointerEvents = 'auto';
+      document.body.appendChild(el);
+      setTimeout(function(){ el.classList.add('on'); }, 10);
+      setTimeout(function(){
+        el.classList.remove('on');
+        setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 350);
+      }, 3500);
+      var btn = document.getElementById('mu-msg-btn');
+      if (btn){
+        btn.classList.remove('is-alert');
+        /* reflow para reiniciar la animación */
+        void btn.offsetWidth;
+        btn.classList.add('is-alert');
+      }
+    } catch(_){}
   }
   function markRead(id){
     var d = _read();
@@ -38687,6 +38765,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
                    sender:'Liverpool FC', title:title, body:body });
             /* Portería imbatida — comp: registrarResultadoLiga es de Liga. */
             _checkCleanSheet(rg, 'liga');
+            /* Racha de resultados (V/D/E ≥3) en Liga */
+            _checkResultStreak(diff);
           }
         }
       } catch(_){}
@@ -39151,19 +39231,98 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     } catch(_){}
   }
 
-  /* ── Semilla inicial ──────────────────────────────────── */
+  /* ── HOOK 13: previa del próximo partido ──────────────
+     Observa #munich-next-match. Cuando el texto cambia y describe
+     un partido (no "Entrenamiento" ni "Descanso"), dispara una
+     previa con el rival y la fecha. */
+  function _observeNextMatch(){
+    if (window.__MU_MSG_OBS_NM) return;
+    var el = document.getElementById('munich-next-match');
+    if (!el) return;
+    window.__MU_MSG_OBS_NM = true;
+    var lastText = '';
+    var check = function(){
+      var t = (el.textContent || '').replace(/\s+/g,' ').trim();
+      if (!t || t === lastText) return;
+      lastText = t;
+      /* Saltamos textos que no son partido: entrenamiento, descanso,
+         pretemporada genérica, días de selección, etc. */
+      if (/^(entrenamiento|descanso|pretemporada|libre|selecci|amistoso internac|d[íi]a de selec|d[íi]a libre)/i.test(t))
+        return;
+      var sig = 'pre:'+t;
+      if (_getCursor(sig)) return;
+      _setCursor(sig, '1');
+      /* Intentamos extraer "vs RIVAL" o "@ RIVAL" si existe. */
+      var rivalMatch = t.match(/(?:\bvs\b|\bcontra\b|\@)\s*([^·•\-—\|]+?)(?:\s*[·•\-—\|]|$)/i);
+      var rival = rivalMatch ? rivalMatch[1].trim() : '';
+      var venue = /\@\s/.test(t) ? 'fuera de casa' : 'en Anfield';
+      var title = rival
+        ? 'Próximo partido — vs ' + rival
+        : 'Próximo partido — ' + t;
+      var body  = rival
+        ? 'Toca preparar el partido contra ' + rival + ' (' + venue + '). Revisa lesionados, sancionados y alineación. ¡A por ello!'
+        : 'Toca preparar el próximo partido: ' + t + '. Revisa la convocatoria y la alineación.';
+      push({ side:'liv', type:'preview', icon:'📋',
+        sender:'Cuerpo Técnico', title:title, body:body });
+    };
+    check();
+    try {
+      new MutationObserver(check).observe(el,
+        { childList:true, characterData:true, subtree:true });
+    } catch(_){}
+  }
+
+  /* ── HOOK 14: racha de resultados (post-partido) ──────
+     Añade un segundo mensaje con la racha actual de Liga si llega
+     a 3+ partidos del mismo signo (V/D/E). */
+  function _checkResultStreak(diff){
+    var key = 'liga:streak';
+    var prev = _getCursor(key) || 'X:0';
+    var pType = String(prev).split(':')[0];
+    var pN = parseInt(String(prev).split(':')[1] || '0', 10) || 0;
+    var t = (diff > 0) ? 'W' : (diff < 0) ? 'L' : 'D';
+    var n = (t === pType) ? pN + 1 : 1;
+    _setCursor(key, t + ':' + n);
+    if (n < 3) return;
+    var ic, title, body;
+    if (t === 'W'){
+      ic = '🚀';
+      title = n + ' victorias consecutivas en Liga';
+      body  = 'El Liverpool encadena ' + n + ' triunfos seguidos en LaLiga. ¡Anfield está en llamas!';
+    } else if (t === 'L'){
+      ic = '🚨';
+      title = n + ' derrotas seguidas en Liga';
+      body  = 'Mala racha: ' + n + ' partidos seguidos perdiendo en LaLiga. Hay que reaccionar.';
+    } else {
+      ic = '😐';
+      title = n + ' empates consecutivos en Liga';
+      body  = n + ' empates seguidos en LaLiga. Falta algo de pegada.';
+    }
+    push({ side:'liv', type:'res-streak', icon:ic,
+      sender:'LaLiga · Tendencias', title:title, body:body });
+  }
+
+  /* ── Semilla inicial ────────────────────────────────────
+     Usa un cursor persistente "seeded". Si el usuario borra TODOS
+     los mensajes de bienvenida, NO vuelven a aparecer (a diferencia
+     del check viejo basado en msgs.length que sí los re-sembraba). */
   function _seed(){
+    if (_getCursor('seeded') === '1') return;
+    /* Migración: si el usuario YA tiene welcomes del seeder antiguo
+       (random id), no volvemos a pushear — solo marcamos el flag. */
     var d = _read();
-    if (d.msgs && d.msgs.length) return;
-    push({ side:'liv', type:'welcome', icon:'✉️',
+    var hadWelcome = (d.msgs || []).some(function(m){ return m && m.type === 'welcome'; });
+    _setCursor('seeded', '1');
+    if (hadWelcome) return;
+    push({ id:'seed-liv-anfield', side:'liv', type:'welcome', icon:'✉️',
       sender:'Liverpool FC',
       title:'Bienvenido a Anfield, mister',
-      body:'Aquí recibirás todas las novedades del club: resultados de los partidos, sorteos de copa, lesiones, tarjetas y sanciones, y cómo vamos en LaLiga.' });
-    push({ side:'liv', type:'welcome', icon:'📋',
+      body:'Aquí recibirás todas las novedades del club: resultados de los partidos, sorteos de copa, lesiones, tarjetas y sanciones, hat-tricks, rachas, apuestas, objetivos y mucho más.' });
+    push({ id:'seed-liv-plantilla', side:'liv', type:'welcome', icon:'📋',
       sender:'Secretaría Técnica',
       title:'Plantilla a tu disposición',
       body:'31 jugadores fichados y listos. Revisa la lista en el menú PLANTILLA.' });
-    push({ side:'fra', type:'welcome', icon:'🇫🇷',
+    push({ id:'seed-fra-bleus', side:'fra', type:'welcome', icon:'🇫🇷',
       sender:'FFF · Selección Francia',
       title:'Doble compromiso, mister',
       body:'No olvides que también diriges a Les Bleus. En esta pestaña verás convocatorias, amistosos y citas internacionales.' });
@@ -39202,6 +39361,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       _checkCupElim();
       _checkPichichi();
       _checkMvpLeader();
+      _observeNextMatch();
       _refresh();
     };
     run();

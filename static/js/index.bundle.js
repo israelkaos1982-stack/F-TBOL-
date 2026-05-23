@@ -3249,7 +3249,14 @@ function _renderSancionBanner(matchKey, bodyEl) {
     inter:{ label:'Copa Intercontinental', esFinal:false },'inter-fin':{ label:'Intercontinental · Final', esFinal:true }
   };
   var cfg = sancionCompConfig[compKey] || { label: compKey, esFinal: false };
-  var sanciones = (!cfg.esFinal && window.SANCION_STORE[compKey]) ? window.SANCION_STORE[compKey] : [];
+  /* 2026-05-23: el banner se alimenta del bucket __global cross-comp.
+     En finales las acumulaciones de amarillas no aplican (solo
+     expulsiones); torneos de verano / amistosos no se filtran aquí
+     porque este banner solo se renderiza para j1m1/j1m2/j1m3 (Liga). */
+  var globalQ = window.SANCION_STORE.__global || [];
+  var sanciones = cfg.esFinal
+    ? globalQ.filter(function(s){ return !/acumulad/i.test(s.reason || ''); })
+    : globalQ;
   /* Filtrar por los 2 equipos del partido en curso */
   var wrap = document.getElementById('mlw-' + matchKey);
   if (wrap) {
@@ -4569,30 +4576,69 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 (function(){
 
   // ══ STORES GLOBALES ══════════════════════════════════════════
-  window.YELLOW_STORE   = window.YELLOW_STORE   || {};  // acumulación amarillas
-  window.SANCION_STORE  = window.SANCION_STORE  || {};  // sanciones pendientes pre-partido
+  /* 2026-05-23 (cross-comp accumulation): YELLOW_STORE pasa a tener
+     un único bucket __global que acumula amarillas de TODAS las
+     competiciones (Liga + Copa + Europa + Mundialito + …). El ciclo
+     es siempre 3 amarillas → 1 partido de sanción. Las claves de comp
+     antiguas (YELLOW_STORE['liga'] etc.) ya no se escriben pero se
+     mantienen leíbles para no romper save-games existentes.
+
+     SANCION_STORE también pasa a tener un bucket único __global —
+     array de { name, team, reason, remaining } — para que una sanción
+     generada en Liga se vea (y se cumpla) en la próxima Copa o Champions.
+     Cada confirmación del overlay pre-partido (_sancionConfirm) decrementa
+     `remaining`; cuando llega a 0 la entrada se elimina.
+
+     Torneos de verano + amistosos NO suman amarillas ni consumen sanción
+     (ver EXCLUDED_COMPS más abajo). */
+  window.YELLOW_STORE   = window.YELLOW_STORE   || {};  // acumulación amarillas (__global)
+  window.SANCION_STORE  = window.SANCION_STORE  || {};  // sanciones pendientes pre-partido (__global)
   window._sancionShownFor = window._sancionShownFor || {};
+  window._sancionConsumedFor = window._sancionConsumedFor || {};
   window._sancionCallback = null;
   window._spostCallback   = null;
 
+  /* Competiciones EXCLUIDAS del sistema de sanciones (2026-05-23):
+     torneos de verano (Soccer Champions Tour, Premier Summer Series,
+     Trofeo Joan Gamper, Asian Tournament) + amistosos. No suman
+     amarillas al contador, no generan sanción y no consumen sanciones
+     pendientes — el jugador puede jugar aunque tenga sanción en Liga. */
+  var EXCLUDED_COMPS = {
+    'amistoso':1, 'torneo':1, 'torneos':1,
+    'sct':1, 'jg':1, 'pss':1, 'asia':1, 'verano':1
+  };
+
   // ══ CONFIG CICLOS POR COMPETICIÓN ════════════════════════════
+  /* 2026-05-23: ciclo = 3 amarillas → 1 partido de sanción para
+     TODAS las competiciones (antes era 3 en Liga y 2 en el resto).
+     La acumulación es ahora CROSS-COMP (ver YELLOW_STORE.__global). */
   var COMP_CONFIG = {
     'liga':       { label:'Liga EA Sports',            ciclo:3, esFinal:false },
-    'copa':       { label:'Copa del Rey',              ciclo:2, esFinal:false },
-    'copa-fin':   { label:'Copa del Rey · Final',      ciclo:2, esFinal:true  },
-    'sc':         { label:'Supercopa de España',       ciclo:2, esFinal:false },
-    'sc-final':   { label:'Supercopa · Final',         ciclo:2, esFinal:true  },
-    'usc':        { label:'UEFA Super Cup',            ciclo:2, esFinal:false },
-    'usc-fin':    { label:'UEFA Super Cup · Final',    ciclo:2, esFinal:true  },
-    'ucl':        { label:'Champions League',          ciclo:2, esFinal:false },
-    'ucl-fin':    { label:'Champions League · Final',  ciclo:2, esFinal:true  },
-    'uel':        { label:'Europa League',             ciclo:2, esFinal:false },
-    'uel-fin':    { label:'Europa League · Final',     ciclo:2, esFinal:true  },
-    'uecl':       { label:'Conference League',         ciclo:2, esFinal:false },
-    'uecl-fin':   { label:'Conference League · Final', ciclo:2, esFinal:true  },
-    'superliga':  { label:'Superliga',                 ciclo:2, esFinal:false },
-    'inter':      { label:'Copa Intercontinental',     ciclo:2, esFinal:false },
-    'inter-fin':  { label:'Intercontinental · Final',  ciclo:2, esFinal:true  },
+    'copa':       { label:'Copa del Rey',              ciclo:3, esFinal:false },
+    'copa-fin':   { label:'Copa del Rey · Final',      ciclo:3, esFinal:true  },
+    'sc':         { label:'Supercopa de España',       ciclo:3, esFinal:false },
+    'sc-final':   { label:'Supercopa · Final',         ciclo:3, esFinal:true  },
+    'usc':        { label:'UEFA Super Cup',            ciclo:3, esFinal:false },
+    'usc-fin':    { label:'UEFA Super Cup · Final',    ciclo:3, esFinal:true  },
+    'ucl':        { label:'Champions League',          ciclo:3, esFinal:false },
+    'ucl-fin':    { label:'Champions League · Final',  ciclo:3, esFinal:true  },
+    'uel':        { label:'Europa League',             ciclo:3, esFinal:false },
+    'uel-fin':    { label:'Europa League · Final',     ciclo:3, esFinal:true  },
+    'uecl':       { label:'Conference League',         ciclo:3, esFinal:false },
+    'uecl-fin':   { label:'Conference League · Final', ciclo:3, esFinal:true  },
+    'superliga':  { label:'Superliga',                 ciclo:3, esFinal:false },
+    'inter':      { label:'Copa Intercontinental',     ciclo:3, esFinal:false },
+    'inter-fin':  { label:'Intercontinental · Final',  ciclo:3, esFinal:true  },
+    /* Añadidos 2026-05-23 para que toda comp "no de verano" acumule */
+    'recopa':     { label:'Recopa',                    ciclo:3, esFinal:false },
+    'recopa-fin': { label:'Recopa · Final',            ciclo:3, esFinal:true  },
+    'mundial':    { label:'Mundialito de Clubes',      ciclo:3, esFinal:false },
+    'mundial-fin':{ label:'Mundialito · Final',        ciclo:3, esFinal:true  },
+    'eur-grupo':  { label:'Fase de grupos europea',    ciclo:3, esFinal:false },
+    'eur-ko':     { label:'Eliminatoria europea',      ciclo:3, esFinal:false },
+    'eur-fin':    { label:'Final europea',             ciclo:3, esFinal:true  },
+    'sel':        { label:'Selecciones',               ciclo:3, esFinal:false },
+    'sel-fin':    { label:'Selecciones · Final',       ciclo:3, esFinal:true  },
   };
 
   // ══ MAPEO BLOQUE-ID → COMP KEY ═══════════════════════════════
@@ -4619,21 +4665,22 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   }
 
   // ══ SORTEO DE PARTIDOS DE SUSPENSIÓN ════════════════════════
-  // Doble amarilla → 1 o 2 partidos (50/50)
+  /* 2026-05-23 (petición usuario):
+       · Doble amarilla → SIEMPRE 2 partidos (antes 1 ó 2 al 50%).
+       · Roja directa → 2-15 partidos con histograma de buckets:
+           60% → 2-3   (uniforme: 30% / 30%)
+           25% → 4-6   (uniforme: 8.33% / 8.33% / 8.33%)
+           10% → 7-10  (uniforme: 2.5% × 4)
+            5% → 11-15 (uniforme: 1% × 5) */
   function sorteoDobleAmarilla() {
-    return Math.random() < 0.5 ? 1 : 2;
+    return 2;
   }
-  // Roja directa → 2-8 partidos con pesos decrecientes
-  // 2:35% | 3:25% | 4:17% | 5:10% | 6:7% | 7:4% | 8:2%
   function sorteoRojaDirecta() {
     var r = Math.random();
-    if (r < 0.35) return 2;
-    if (r < 0.60) return 3;
-    if (r < 0.77) return 4;
-    if (r < 0.87) return 5;
-    if (r < 0.94) return 6;
-    if (r < 0.98) return 7;
-    return 8;
+    if (r < 0.60) return 2 + Math.floor(Math.random() * 2);   // 2-3
+    if (r < 0.85) return 4 + Math.floor(Math.random() * 3);   // 4-6
+    if (r < 0.95) return 7 + Math.floor(Math.random() * 4);   // 7-10
+    return 11 + Math.floor(Math.random() * 5);                // 11-15
   }
 
   // ══ MOTOR: calcular sanciones de un partido ══════════════════
@@ -4643,12 +4690,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   // compKey: clave de competición
   // Devuelve array de { name, team, reason, partidos, tipo }
   window.calcularSancionesPartido = function(events, humanTeam, teamName, compKey) {
-    var cfg   = COMP_CONFIG[compKey] || { label: compKey, ciclo: 3, esFinal: false };
     var result = [];
     if (!events || !events.length) return result;
+    /* Torneos de verano + amistosos: no suman amarillas ni generan
+       sanción (2026-05-23). */
+    if (EXCLUDED_COMPS[compKey]) return result;
 
-    // Yellows acumulados de este partido por jugador (solo equipo humano)
-    var yellowsEnPartido = {};
+    var cfg = COMP_CONFIG[compKey] || { label: compKey, ciclo: 3, esFinal: false };
+    /* Bucket global cross-comp para acumulación de amarillas. */
+    var globalYS = window.YELLOW_STORE.__global = window.YELLOW_STORE.__global || {};
     var processedExpulsion = {};
 
     events.forEach(function(ev) {
@@ -4657,16 +4707,13 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
       // ── Amarilla simple ──
       if (ev.type === 'amarilla') {
-        // Acumular en YELLOW_STORE para ciclo
-        var compStore = window.YELLOW_STORE[compKey] = window.YELLOW_STORE[compKey] || {};
         var playerKey = ev.name + '::' + teamName;
-        if (!compStore[playerKey]) compStore[playerKey] = { name: ev.name, team: teamName, count: 0 };
-        compStore[playerKey].count++;
+        if (!globalYS[playerKey]) globalYS[playerKey] = { name: ev.name, team: teamName, count: 0 };
+        globalYS[playerKey].count++;
 
-        // Comprobar si alcanzó ciclo
-        if (compStore[playerKey].count >= cfg.ciclo) {
-          compStore[playerKey].count = 0; // reset ciclo
-          // Calcular sorteo (acumulación = 1 partido siempre según reglamento)
+        // Comprobar si alcanzó ciclo (3 amarillas → 1 partido)
+        if (globalYS[playerKey].count >= cfg.ciclo) {
+          globalYS[playerKey].count = 0; // reset ciclo
           if (!processedExpulsion[key]) {
             processedExpulsion[key] = true;
             result.push({
@@ -4676,13 +4723,12 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
               reason: cfg.ciclo + ' 🟨 acumuladas (ciclo completado)',
               partidos: 1
             });
-            // Añadir a SANCION_STORE para próxima apertura de partido
-            _addSancion(ev.name, teamName, compKey, 'Ciclo de amarillas — 1 partido');
+            _addSancion(ev.name, teamName, compKey, 'Ciclo de amarillas — 1 partido', 1);
           }
         }
       }
 
-      // ── Doble amarilla (expulsión, NO suma ciclo) ──
+      // ── Doble amarilla (expulsión, NO suma ciclo) → SIEMPRE 2 partidos ──
       else if (ev.type === 'd-amarilla') {
         if (!processedExpulsion[key]) {
           processedExpulsion[key] = true;
@@ -4698,11 +4744,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
             reason: 'Doble amarilla — expulsión',
             partidos: partidos
           });
-          _addSancion(ev.name, teamName, compKey, 'Doble amarilla — ' + partidos + (partidos === 1 ? ' partido' : ' partidos'));
+          _addSancion(ev.name, teamName, compKey, 'Doble amarilla — ' + partidos + (partidos === 1 ? ' partido' : ' partidos'), partidos);
         }
       }
 
-      // ── Roja directa ──
+      // ── Roja directa → 2-15 partidos (sorteoRojaDirecta) ──
       else if (ev.type === 'roja') {
         if (!processedExpulsion[key]) {
           processedExpulsion[key] = true;
@@ -4715,7 +4761,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
             reason: 'Roja directa',
             partidos: pts
           });
-          _addSancion(ev.name, teamName, compKey, 'Roja directa — ' + pts + ' partido' + (pts > 1 ? 's' : ''));
+          _addSancion(ev.name, teamName, compKey, 'Roja directa — ' + pts + ' partido' + (pts > 1 ? 's' : ''), pts);
         }
       }
     });
@@ -4726,28 +4772,74 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     return result;
   };
 
-  function _addSancion(playerName, teamName, comp, reason) {
-    if (!window.SANCION_STORE[comp]) window.SANCION_STORE[comp] = [];
-    var exists = window.SANCION_STORE[comp].some(function(s) {
-      return s.name === playerName && s.team === teamName;
-    });
-    if (!exists) {
-      window.SANCION_STORE[comp].push({ name: playerName, team: teamName, reason: reason });
+  /* _addSancion(player, team, comp, reason, partidos)
+     Empuja la sanción a SANCION_STORE.__global con contador `remaining`.
+     Si ya había una entrada del mismo jugador (sanción acumulada sobre
+     otra sin cumplir), SUMA `partidos` al remaining para que cumpla
+     ambas en serie. `comp` se conserva como `srcComp` solo para
+     trazabilidad (la sanción se cumple en CUALQUIER comp no excluida). */
+  function _addSancion(playerName, teamName, comp, reason, partidos) {
+    var queue = window.SANCION_STORE.__global = window.SANCION_STORE.__global || [];
+    var n = Math.max(1, parseInt(partidos, 10) || 1);
+    var existing = null;
+    for (var i = 0; i < queue.length; i++) {
+      if (queue[i].name === playerName && queue[i].team === teamName) { existing = queue[i]; break; }
+    }
+    if (existing) {
+      existing.remaining = (existing.remaining || 0) + n;
+      existing.reason = reason;
+      existing.srcComp = comp;
+    } else {
+      queue.push({ name: playerName, team: teamName, reason: reason, remaining: n, srcComp: comp });
     }
   }
 
+  /* Decrementa la sanción de un jugador en 1 partido (lo "cumple").
+     Cuando llega a 0, se elimina del store. compKey se ignora (la
+     sanción es global cross-comp desde 2026-05-23) salvo que la comp
+     esté EXCLUIDA, en cuyo caso NO se descuenta (los amistosos /
+     torneos de verano no consumen sanción). */
   window.cumplirSancion = function(playerName, teamName, compKey) {
-    var comp = compKey || 'liga';
-    if (!window.SANCION_STORE[comp]) return;
-    window.SANCION_STORE[comp] = window.SANCION_STORE[comp].filter(function(s) {
-      return !(s.name === playerName && s.team === teamName);
+    if (EXCLUDED_COMPS[compKey]) return;
+    var queue = window.SANCION_STORE.__global || [];
+    for (var i = queue.length - 1; i >= 0; i--) {
+      var s = queue[i];
+      if (s.name === playerName && s.team === teamName) {
+        s.remaining = (s.remaining || 1) - 1;
+        if (s.remaining <= 0) queue.splice(i, 1);
+      }
+    }
+  };
+
+  /* Helper: lista de sanciones pendientes globales que aplican al
+     partido actual. Filtra por equipos en juego (home/away). */
+  window._sancionesPendientesPara = function(homeTeam, awayTeam) {
+    var queue = window.SANCION_STORE.__global || [];
+    if (!queue.length) return [];
+    var normFn = window._ppNormTeam || function(s){ return String(s||'').toLowerCase(); };
+    var nH = normFn(homeTeam || ''), nA = normFn(awayTeam || '');
+    return queue.filter(function(s) {
+      var nt = normFn(s.team || '');
+      return nt === nH || nt === nA;
     });
   };
 
   // ══ OVERLAY PRE-PARTIDO ══════════════════════════════════════
   window.showSancionOverlay = function(compKey, blockId, onConfirm) {
     var cfg = COMP_CONFIG[compKey] || { label: compKey, esFinal: false };
-    var sanciones = (!cfg.esFinal && window.SANCION_STORE[compKey]) ? window.SANCION_STORE[compKey] : [];
+    /* 2026-05-23: sanciones leídas del bucket __global (cross-comp).
+       En FINALES no se aplica acumulación de amarillas — solo expulsiones —
+       igual que antes. En torneos de verano / amistosos no se aplica
+       NADA: el overlay no muestra sanciones (EXCLUDED_COMPS). */
+    var isExcluded = !!EXCLUDED_COMPS[compKey];
+    var sanciones = (!cfg.esFinal && !isExcluded && window.SANCION_STORE.__global) ? window.SANCION_STORE.__global : [];
+    if (cfg.esFinal && !isExcluded && window.SANCION_STORE.__global) {
+      /* En finales: las expulsiones (d-amarilla, roja) sí cuentan; las
+         acumulaciones de amarillas NO. Filtramos por reason. */
+      sanciones = window.SANCION_STORE.__global.filter(function(s){
+        return !/acumulad/i.test(s.reason || '');
+      });
+    }
     var compLbl = document.getElementById('sancion-ov-comp-lbl');
     var warnEl  = document.getElementById('sancion-ov-warn');
     var listYel = document.getElementById('sancion-ov-list-yel');
@@ -4943,6 +5035,24 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var okBtn = document.getElementById('sancion-ov-ok');
     var shouldShare = !!(okBtn && okBtn.getAttribute('data-share-mode') === '1');
     window._ppForceSancionShareMode = false;
+    /* 2026-05-23: al confirmar el overlay, descontamos 1 partido a las
+       sanciones pendientes globales que aplican a los equipos del
+       partido actual. Idempotente por matchKey — si el usuario reabre
+       el overlay para el mismo partido, no se descuenta dos veces. */
+    try {
+      var mk = window._ppMatchKey || null;
+      var comp = window._ppCompKey || null;
+      if (mk && !window._sancionConsumedFor[mk] && !EXCLUDED_COMPS[comp]) {
+        window._sancionConsumedFor[mk] = true;
+        var teams = (typeof window._ppGetCurrentMatchTeams === 'function') ? window._ppGetCurrentMatchTeams() : null;
+        if (teams && teams.home && teams.away) {
+          var pend = window._sancionesPendientesPara(teams.home, teams.away);
+          pend.forEach(function(s) {
+            window.cumplirSancion(s.name, s.team, comp);
+          });
+        }
+      }
+    } catch(_){}
     document.getElementById('sancion-overlay').classList.remove('show');
     if (window._sancionCallback) { var _cb = window._sancionCallback; window._sancionCallback = null; try { _cb(); } catch(_){} }
     if (shouldShare) {
@@ -9813,19 +9923,18 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
   window._mmTriggerSancionLive = function(type, teamName, playerName) {
     /* Sorteo replicado aquí porque sorteoRojaDirecta /
-       sorteoDobleAmarilla viven en otra IIFE. Mismas distribuciones. */
+       sorteoDobleAmarilla viven en otra IIFE. Mismas distribuciones
+       (2026-05-23): doble amarilla SIEMPRE 2 partidos; roja directa
+       2-15 con histograma 60%·2-3 / 25%·4-6 / 10%·7-10 / 5%·11-15. */
     var partidos;
     if (type === 'd-amarilla') {
-      partidos = Math.random() < 0.5 ? 1 : 2;
+      partidos = 2;
     } else {
       var r = Math.random();
-      if      (r < 0.35) partidos = 2;
-      else if (r < 0.60) partidos = 3;
-      else if (r < 0.77) partidos = 4;
-      else if (r < 0.87) partidos = 5;
-      else if (r < 0.94) partidos = 6;
-      else if (r < 0.98) partidos = 7;
-      else               partidos = 8;
+      if      (r < 0.60) partidos = 2 + Math.floor(Math.random() * 2); // 2-3
+      else if (r < 0.85) partidos = 4 + Math.floor(Math.random() * 3); // 4-6
+      else if (r < 0.95) partidos = 7 + Math.floor(Math.random() * 4); // 7-10
+      else               partidos = 11 + Math.floor(Math.random() * 5); // 11-15
     }
     window._LIVE_SANCION_DRAW = window._LIVE_SANCION_DRAW || {};
     window._LIVE_SANCION_DRAW[playerName + '::' + teamName] = { type: type, partidos: partidos };

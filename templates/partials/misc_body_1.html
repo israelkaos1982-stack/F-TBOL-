@@ -32936,6 +32936,97 @@ Tottenham
     padding:14px;text-align:center;color:rgba(255,255,255,.55);
     font-family:Rajdhani,sans-serif;font-size:12px;
   }
+  /* ── Cajas "Partidos Pendientes" + "Partidos Temporada" ────────
+     Par horizontal debajo de la card "Próximo partido". Cada caja
+     es un desplegable independiente con el mismo look que la caja
+     Competiciones. Muestra partidos de Liverpool + Francia
+     (selección) — pendientes en una, jugados en la otra. */
+  #s-munich .munich-fixtures-pair{
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;
+    margin:10px 12px 14px;
+  }
+  #s-munich .munich-fix{
+    border-radius:14px;overflow:hidden;
+    background:linear-gradient(135deg,rgba(220,5,45,.20),rgba(10,0,30,.55) 55%,rgba(0,20,55,.65));
+    border:1px solid rgba(255,255,255,.18);
+    box-shadow:0 6px 18px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  #s-munich .munich-fix-hdr{
+    display:flex;align-items:center;justify-content:space-between;gap:6px;
+    padding:11px 12px;background:transparent;border:none;width:100%;cursor:pointer;
+    color:#fff;font-family:Oswald,sans-serif;letter-spacing:1.4px;font-size:11px;
+    text-transform:uppercase;font-weight:700;-webkit-tap-highlight-color:transparent;
+    text-align:left;
+  }
+  #s-munich .munich-fix-title{display:flex;align-items:center;gap:6px;flex:1;min-width:0;}
+  #s-munich .munich-fix-emoji{font-size:16px;line-height:1;flex:0 0 auto;}
+  #s-munich .munich-fix-lbl{
+    display:flex;flex-direction:column;line-height:1.1;min-width:0;
+  }
+  #s-munich .munich-fix-lbl b{font-weight:700;font-size:11px;letter-spacing:1.4px;}
+  #s-munich .munich-fix-lbl small{
+    font-family:Rajdhani,sans-serif;font-size:10px;font-weight:600;
+    letter-spacing:.6px;color:rgba(255,255,255,.6);text-transform:none;
+  }
+  #s-munich .munich-fix-chev{
+    font-size:11px;color:#ffd750;transition:transform .25s ease;flex:0 0 auto;
+  }
+  #s-munich .munich-fix.open .munich-fix-chev{transform:rotate(180deg);}
+  #s-munich .munich-fix-body{
+    max-height:0;overflow:hidden;transition:max-height .3s ease;
+    border-top:1px solid rgba(255,255,255,0);
+  }
+  #s-munich .munich-fix.open .munich-fix-body{
+    max-height:360px;border-top-color:rgba(255,255,255,.10);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+  }
+  #s-munich .munich-fix-list{padding:8px 10px 10px;display:flex;flex-direction:column;gap:6px;}
+  #s-munich .munich-fix-group{
+    font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.8px;
+    color:#ffd750;text-transform:uppercase;opacity:.85;
+    padding:6px 4px 2px;border-top:1px dashed rgba(255,255,255,.08);
+  }
+  #s-munich .munich-fix-group:first-child{border-top:0;padding-top:0;}
+  #s-munich .munich-fix-row{
+    display:flex;align-items:center;gap:6px;padding:7px 8px;
+    background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.08);
+    border-radius:8px;font-family:Rajdhani,sans-serif;color:#fff;
+  }
+  #s-munich .munich-fix-row .fr-comp{
+    font-size:13px;flex:0 0 auto;width:16px;text-align:center;
+  }
+  #s-munich .munich-fix-row .fr-teams{
+    flex:1;min-width:0;font-size:11px;line-height:1.2;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  #s-munich .munich-fix-row .fr-teams b{
+    font-weight:700;letter-spacing:.3px;
+  }
+  #s-munich .munich-fix-row .fr-score{
+    flex:0 0 auto;font-family:Oswald,sans-serif;font-size:12px;
+    font-weight:700;letter-spacing:1px;
+    padding:2px 7px;border-radius:5px;
+    background:rgba(255,255,255,.08);color:#fff;
+  }
+  #s-munich .munich-fix-row .fr-score.win{
+    background:rgba(74,220,120,.22);color:#bff5cf;
+  }
+  #s-munich .munich-fix-row .fr-score.loss{
+    background:rgba(255,80,100,.22);color:#ffc7cf;
+  }
+  #s-munich .munich-fix-row .fr-score.draw{
+    background:rgba(255,215,80,.18);color:#ffe49a;
+  }
+  #s-munich .munich-fix-row .fr-tag{
+    flex:0 0 auto;font-family:Oswald,sans-serif;font-size:9px;
+    letter-spacing:1.2px;color:rgba(255,255,255,.55);
+    padding:2px 6px;border-radius:4px;
+    background:rgba(255,255,255,.05);
+  }
+  #s-munich .munich-fix-empty{
+    padding:14px;text-align:center;color:rgba(255,255,255,.55);
+    font-family:Rajdhani,sans-serif;font-size:11px;
+  }
 </style>
 <div class="sec-hdr"><img id="mk-hub-badge" alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
@@ -33254,7 +33345,402 @@ Tottenham
     <button class="btn-next" id="munich-next-day-btn">➡️ SIGUIENTE DÍA</button>
   </div>
 </section>
+<!-- ═══ PARTIDOS PENDIENTES + PARTIDOS TEMPORADA (par horizontal) ═══
+     Dos cajas desplegables lado a lado debajo del "Próximo partido".
+     Liverpool + Francia agrupados. Pendientes = por jugar. Temporada
+     = ya jugados. Plegadas por defecto, abren independientemente. -->
+<section class="munich-fixtures-pair" id="munich-fixtures-pair">
+  <section class="munich-fix" id="munich-fix-pend" data-mode="pend">
+    <button type="button" class="munich-fix-hdr"
+            onclick="window.muFixToggle&&window.muFixToggle('pend',event)"
+            aria-expanded="false" aria-controls="munich-fix-pend-body">
+      <span class="munich-fix-title">
+        <span class="munich-fix-emoji">⏳</span>
+        <span class="munich-fix-lbl">
+          <b>Partidos</b><small>Pendientes</small>
+        </span>
+      </span>
+      <span class="munich-fix-chev" aria-hidden="true">▼</span>
+    </button>
+    <div class="munich-fix-body" id="munich-fix-pend-body">
+      <div class="munich-fix-list" id="munich-fix-pend-list">
+        <div class="munich-fix-empty">Cargando partidos…</div>
+      </div>
+    </div>
+  </section>
+  <section class="munich-fix" id="munich-fix-temp" data-mode="temp">
+    <button type="button" class="munich-fix-hdr"
+            onclick="window.muFixToggle&&window.muFixToggle('temp',event)"
+            aria-expanded="false" aria-controls="munich-fix-temp-body">
+      <span class="munich-fix-title">
+        <span class="munich-fix-emoji">📋</span>
+        <span class="munich-fix-lbl">
+          <b>Partidos</b><small>Temporada</small>
+        </span>
+      </span>
+      <span class="munich-fix-chev" aria-hidden="true">▼</span>
+    </button>
+    <div class="munich-fix-body" id="munich-fix-temp-body">
+      <div class="munich-fix-list" id="munich-fix-temp-list">
+        <div class="munich-fix-empty">Cargando partidos…</div>
+      </div>
+    </div>
+  </section>
+</section>
 </div>
+<script>
+/* ── Cajas "Partidos Pendientes" + "Partidos Temporada" ──────────────
+   Dos desplegables debajo del "Próximo partido". Listan partidos
+   PENDIENTES (por jugar) y TEMPORADA (ya jugados) de los dos equipos
+   que dirige Toñín: Liverpool (club) + Francia (selección).
+   La fuente principal de datos es `loadResults()` / `SCHEDULE` de
+   Liga EA + escaneo defensivo de otras competiciones que estén
+   pobladas en localStorage. */
+(function(){
+  if (window.__MU_FIX_READY) return;
+  window.__MU_FIX_READY = true;
+
+  function _norm(s){
+    try {
+      return String(s||'').toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,'')
+        .replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+    } catch(_){ return String(s||'').toLowerCase().trim(); }
+  }
+  function _esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function _hubName(){
+    try {
+      var r = localStorage.getItem('menu_home_v1');
+      if (r){
+        var d = JSON.parse(r);
+        var ov = d && d.ov && d.ov['go:s-munich'];
+        if (ov && ov.label) return String(ov.label);
+      }
+    } catch(_){}
+    try {
+      if (typeof window._ligaEaSubName === 'function'){
+        var s = window._ligaEaSubName('Bayern Munich');
+        if (s) return String(s);
+      }
+    } catch(_){}
+    return 'Liverpool';
+  }
+  function _aliases(name){
+    var raw = [name];
+    /* El equipo real del hub puede haber sustituido a Bayern por el
+       mecanismo `_ligaEaSubName`. Aliasamos ambos lados para que el
+       cruce con SCHEDULE (que usa el nombre "Bayern Munich" fijo en
+       la liga) localice partidos sin importar la sustitución. */
+    raw.push('Bayern Munich','Bayern Múnich','Bayern');
+    var out = [], seen = {};
+    raw.forEach(function(x){
+      var n = _norm(x);
+      if (n && !seen[n]){ seen[n] = 1; out.push(n); }
+    });
+    return out;
+  }
+  function _match(n, al){
+    var x = _norm(n); if (!x) return false;
+    for (var i=0;i<al.length;i++){ if (x === al[i]) return true; }
+    return false;
+  }
+
+  /* Display name corto para no romper el layout 2-col (50% ancho).
+     "FC Barcelona" → "Barcelona", "Real Sociedad" → "R. Sociedad". */
+  function _short(n){
+    var s = String(n||'').replace(/^(FC|CF|RC|CD|UD|AD|SD|CA|AC|AS|SC)\s+/i,'');
+    return s;
+  }
+
+  /* Tabla de competiciones que sabemos leer hoy. Cada entrada define:
+       - id        identificador interno (para agrupar en el desplegable)
+       - label     etiqueta visible del grupo
+       - emoji     icono compacto (1 char) que va en .fr-comp
+       - collect   función(aliases) → { pending:[], played:[] } */
+  var _COMPS = [];
+
+  /* Liga EA Sports — usa SCHEDULE + loadResults() */
+  _COMPS.push({
+    id:'liga', label:'Liga EA Sports', emoji:'🇪🇸',
+    collect:function(aliases){
+      var out = { pending:[], played:[] };
+      try {
+        var SCH = window.SCHEDULE; if (!Array.isArray(SCH)) return out;
+        var rfn = window.loadResults; if (typeof rfn !== 'function') return out;
+        var results = rfn() || {};
+        for (var j=1;j<=SCH.length;j++){
+          var jl = SCH[j-1]; if (!Array.isArray(jl)) continue;
+          for (var i=0;i<jl.length;i++){
+            var m = jl[i];
+            var home = m[0], away = m[1];
+            if (!_match(home, aliases) && !_match(away, aliases)) continue;
+            var key = j + '|' + home + '|' + away;
+            var r = results[key];
+            if (r && typeof r.gh === 'number' && typeof r.ga === 'number'){
+              out.played.push({ comp:'liga', emoji:'🇪🇸',
+                home:home, away:away,
+                gh:r.gh, ga:r.ga, label:'J'+j });
+            } else {
+              out.pending.push({ comp:'liga', emoji:'🇪🇸',
+                home:home, away:away, label:'J'+j });
+            }
+          }
+        }
+      } catch(_){}
+      return out;
+    }
+  });
+
+  /* Copa del Rey — `copa_data_v1` / `copa_state_v1` (estructura del
+     bracket con pairs por ronda y ganador/marcador cuando jugado). */
+  _COMPS.push({
+    id:'copa', label:'Copa del Rey', emoji:'👑',
+    collect:function(aliases){
+      var out = { pending:[], played:[] };
+      var st = null;
+      try { st = JSON.parse(localStorage.getItem('copa_data_v1')||'null'); } catch(_){}
+      if (!st){
+        try { st = JSON.parse(localStorage.getItem('copa_state_v1')||'null'); } catch(_){}
+      }
+      if (!st || !st.rounds) return out;
+      var rounds = Array.isArray(st.rounds) ? st.rounds : [];
+      rounds.forEach(function(rd, ri){
+        var rname = (rd && (rd.name || rd.label)) || ('R'+(ri+1));
+        var pairs = (rd && Array.isArray(rd.pairs)) ? rd.pairs : [];
+        pairs.forEach(function(p){
+          if (!p) return;
+          var h = p.home || p.l || p.local || p.a;
+          var a = p.away || p.v || p.visitante || p.b;
+          if (!h || !a) return;
+          if (!_match(h, aliases) && !_match(a, aliases)) return;
+          var gh = (p.gh != null) ? p.gh : (p.scoreH != null ? p.scoreH : null);
+          var ga = (p.ga != null) ? p.ga : (p.scoreA != null ? p.scoreA : null);
+          if (typeof gh === 'number' && typeof ga === 'number'){
+            out.played.push({ comp:'copa', emoji:'👑',
+              home:h, away:a, gh:gh, ga:ga, label:rname });
+          } else {
+            out.pending.push({ comp:'copa', emoji:'👑',
+              home:h, away:a, label:rname });
+          }
+        });
+      });
+      return out;
+    }
+  });
+
+  /* Champions / UEL / UECL (fase KO). La fase de liga vive en otro
+     store que aún no normalizamos aquí — el escaneo del KO ya cubre
+     los partidos de Liverpool en su recorrido europeo cuando llegue. */
+  ['ucl','uel','uecl'].forEach(function(comp){
+    var meta = {
+      ucl:  { label:'Champions',  emoji:'🏆', key:'ucl_ko_state_v1'  },
+      uel:  { label:'Europa Lg.', emoji:'🟠', key:'uel_ko_state_v1'  },
+      uecl: { label:'Conference', emoji:'🟢', key:'uecl_ko_state_v1' }
+    }[comp];
+    _COMPS.push({
+      id:comp, label:meta.label, emoji:meta.emoji,
+      collect:function(aliases){
+        var out = { pending:[], played:[] };
+        var st = null;
+        try { st = JSON.parse(localStorage.getItem(meta.key)||'null'); } catch(_){}
+        if (!st || !st.rounds) return out;
+        var rounds = Array.isArray(st.rounds) ? st.rounds : [];
+        rounds.forEach(function(rd, ri){
+          var rname = (rd && (rd.name || rd.label)) || ('R'+(ri+1));
+          var pairs = (rd && Array.isArray(rd.pairs)) ? rd.pairs : [];
+          pairs.forEach(function(p){
+            if (!p) return;
+            var h = p.home || p.l || p.a;
+            var a = p.away || p.v || p.b;
+            if (!h || !a) return;
+            if (!_match(h, aliases) && !_match(a, aliases)) return;
+            var gh = (p.gh != null) ? p.gh : (p.scoreH != null ? p.scoreH : null);
+            var ga = (p.ga != null) ? p.ga : (p.scoreA != null ? p.scoreA : null);
+            if (typeof gh === 'number' && typeof ga === 'number'){
+              out.played.push({ comp:comp, emoji:meta.emoji,
+                home:h, away:a, gh:gh, ga:ga, label:rname });
+            } else {
+              out.pending.push({ comp:comp, emoji:meta.emoji,
+                home:h, away:a, label:rname });
+            }
+          });
+        });
+        return out;
+      }
+    });
+  });
+
+  /* Mundial de Selecciones (donde juega Francia). El proyecto usa
+     `wc_state_v1` para Wild Card y otros stores para el Mundial.
+     Probamos varias keys y rondas hasta encontrar algo legible. */
+  _COMPS.push({
+    id:'sel', label:'Selecciones', emoji:'🌍',
+    collect:function(aliases){
+      var out = { pending:[], played:[] };
+      var keys = ['wc_state_v1','mundial_state_v1','mundialito_state_v1',
+                  'seleccion_state_v1','selecciones_state_v1'];
+      keys.forEach(function(k){
+        var st = null;
+        try { st = JSON.parse(localStorage.getItem(k)||'null'); } catch(_){}
+        if (!st) return;
+        var rounds = Array.isArray(st.rounds) ? st.rounds
+                    : Array.isArray(st.fixtures) ? [{name:'Mundial', pairs:st.fixtures}]
+                    : [];
+        rounds.forEach(function(rd, ri){
+          var rname = (rd && (rd.name || rd.label)) || ('R'+(ri+1));
+          var pairs = (rd && Array.isArray(rd.pairs)) ? rd.pairs
+                     : (rd && Array.isArray(rd.matches)) ? rd.matches : [];
+          pairs.forEach(function(p){
+            if (!p) return;
+            var h = p.home || p.l || p.a;
+            var a = p.away || p.v || p.b;
+            if (!h || !a) return;
+            if (!_match(h, aliases) && !_match(a, aliases)) return;
+            var gh = (p.gh != null) ? p.gh : (p.scoreH != null ? p.scoreH : null);
+            var ga = (p.ga != null) ? p.ga : (p.scoreA != null ? p.scoreA : null);
+            if (typeof gh === 'number' && typeof ga === 'number'){
+              out.played.push({ comp:'sel', emoji:'🌍',
+                home:h, away:a, gh:gh, ga:ga, label:rname });
+            } else {
+              out.pending.push({ comp:'sel', emoji:'🌍',
+                home:h, away:a, label:rname });
+            }
+          });
+        });
+      });
+      return out;
+    }
+  });
+
+  /* Agrega los partidos de Liverpool (club) + Francia (selección) y
+     los devuelve agrupados por competición. */
+  function _gather(){
+    var hub = _hubName();
+    var clubAlias = _aliases(hub);
+    var franceAlias = ['francia','france'];
+
+    var groups = {};
+    function ensure(id, label, emoji){
+      if (!groups[id]) groups[id] = { id:id, label:label, emoji:emoji, pending:[], played:[] };
+      return groups[id];
+    }
+
+    _COMPS.forEach(function(c){
+      try {
+        var rc = c.collect(clubAlias);
+        var rf = c.collect(franceAlias);
+        var g = ensure(c.id, c.label, c.emoji);
+        g.pending = g.pending.concat(rc.pending).concat(rf.pending);
+        g.played  = g.played.concat(rc.played).concat(rf.played);
+      } catch(_){}
+    });
+
+    /* Devolvemos en el orden canónico (liga > copa > euros > sel). */
+    var order = ['liga','copa','ucl','uel','uecl','sel'];
+    var out = [];
+    order.forEach(function(id){ if (groups[id]) out.push(groups[id]); });
+    return out;
+  }
+
+  function _renderRow(m, played){
+    var sc = '';
+    if (played){
+      var gh = m.gh, ga = m.ga;
+      var cls = (gh === ga) ? 'draw'
+              : (gh > ga ? 'win' : 'loss');
+      /* La clase win/loss se refiere al RESULTADO crudo (no a quién
+         es nuestro equipo) — para que el color refleje el marcador,
+         lo invertimos solo cuando NUESTRO equipo es visitante. */
+      var hubName = _hubName();
+      var ourHome = _match(m.home, _aliases(hubName)) ||
+                    _match(m.home, ['francia','france']);
+      var ourAway = _match(m.away, _aliases(hubName)) ||
+                    _match(m.away, ['francia','france']);
+      if (gh !== ga && ourAway && !ourHome){
+        cls = (gh > ga ? 'loss' : 'win');
+      }
+      sc = '<span class="fr-score ' + cls + '">'
+         + _esc(gh) + '-' + _esc(ga)
+         + '</span>';
+    } else {
+      sc = '<span class="fr-tag">' + _esc(m.label || '') + '</span>';
+    }
+    return ''
+      + '<div class="munich-fix-row">'
+      +   '<span class="fr-comp">' + _esc(m.emoji || '') + '</span>'
+      +   '<span class="fr-teams"><b>' + _esc(_short(m.home)) + '</b>'
+      +     ' <span style="opacity:.5">vs</span> <b>'
+      +     _esc(_short(m.away)) + '</b></span>'
+      +   sc
+      + '</div>';
+  }
+
+  function _render(mode){
+    var listEl = document.getElementById('munich-fix-' + mode + '-list');
+    if (!listEl) return;
+    var groups = _gather();
+    var html = '';
+    var total = 0;
+    groups.forEach(function(g){
+      var arr = (mode === 'pend') ? g.pending : g.played;
+      if (!arr || !arr.length) return;
+      html += '<div class="munich-fix-group">'
+            + _esc(g.emoji) + ' ' + _esc(g.label)
+            + ' <span style="opacity:.6">(' + arr.length + ')</span>'
+            + '</div>';
+      arr.forEach(function(m){ html += _renderRow(m, mode === 'temp'); });
+      total += arr.length;
+    });
+    if (!total){
+      listEl.innerHTML = '<div class="munich-fix-empty">'
+        + (mode === 'pend'
+            ? 'No hay partidos pendientes para Liverpool ni Francia.'
+            : 'Aún no se ha jugado ningún partido esta temporada.')
+        + '</div>';
+      return;
+    }
+    listEl.innerHTML = html;
+  }
+
+  window.muFixToggle = function(mode, ev){
+    if (ev && ev.preventDefault) ev.preventDefault();
+    var box = document.getElementById('munich-fix-' + mode);
+    if (!box) return;
+    var open = box.classList.toggle('open');
+    var btn = box.querySelector('.munich-fix-hdr');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) _render(mode);
+  };
+  window.muFixRefresh = function(){
+    ['pend','temp'].forEach(function(m){
+      var box = document.getElementById('munich-fix-' + m);
+      if (box && box.classList.contains('open')) _render(m);
+    });
+  };
+
+  /* Refresca al volver al hub (igual patrón que muCompsRefresh). */
+  function _hookGo(){
+    var orig = window.go;
+    if (typeof orig !== 'function'){ setTimeout(_hookGo, 200); return; }
+    if (orig._muFixHooked) return;
+    window.go = function(id){
+      var r = orig.apply(this, arguments);
+      if (id === 's-munich') window.muFixRefresh();
+      return r;
+    };
+    window.go._muFixHooked = true;
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _hookGo);
+  } else {
+    _hookGo();
+  }
+})();
+</script>
 <script>
 /* ── Caja "Competiciones" del hub ────────────────────────────────────
    Plegada por defecto. Al abrirla, escanea los stores conocidos para

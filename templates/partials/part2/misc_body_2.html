@@ -18150,7 +18150,7 @@
        humanos normales NO ven ✏️🗑 ni pueden editar título. -->
   <button id="bayern-cal-edit-toggle" type="button"
           onclick="window._bayernCalEditMode&&window._bayernCalEditMode()"
-          title="Modo edición Bayern (PIN 747)"
+          title="Modo edición (PIN 747)"
           style="position:absolute;top:50%;right:14px;transform:translateY(-50%);
                  background:rgba(220,5,45,0.16);border:1px solid rgba(255,120,140,0.50);
                  color:#ffd5dd;font-size:22px;line-height:1;width:30px;height:30px;border-radius:50%;
@@ -18473,8 +18473,8 @@
      y descansos NO son configurables (siempre se muestran). -->
 <div id="bayern-cal-ov">
   <div class="bc-box">
-    <div class="bc-title">🗓 COMPETICIONES BAYERN</div>
-    <div class="bc-sub">Marca lo que el Bayern juega esta temporada</div>
+    <div class="bc-title">🗓 COMPETICIONES <span id="bayern-cal-ov-team">BAYERN</span></div>
+    <div class="bc-sub">Marca lo que el <span id="bayern-cal-ov-team-sub">Bayern</span> juega esta temporada</div>
     <div id="bayern-cal-list"></div>
     <div class="bc-actions">
       <button type="button" class="bc-btn primary" onclick="window._bayernCalSave()">✅ Aplicar</button>
@@ -18634,25 +18634,88 @@
     COMPS.forEach(function(c){ o[c.id] = !!c.def; });
     return o;
   }
+  /* Espejo en memoria de la selección de competiciones del calendario.
+     Patrón idéntico al de `_MEM_OVR` para los overrides: si el
+     localStorage falla por el cap de 2 MB (CLAUDE.md), la selección
+     se conserva durante la sesión y no se "olvida" al re-renderizar.
+     Sin esto, _bayernCalSave guardaba en disco, _renderAll releía y
+     si el setItem había petado la marca (p.ej. Recopa) se perdía
+     instantáneamente — reportado por el usuario 2026-05-23. */
+  var _MEM_COMPS = null;
+  function _fillCompsDefaults(d){
+    COMPS.forEach(function(c){
+      if (typeof d[c.id] !== 'boolean') d[c.id] = !!c.def;
+    });
+    return d;
+  }
   function _loadComps(){
+    if (_MEM_COMPS && typeof _MEM_COMPS === 'object') {
+      return _fillCompsDefaults(_MEM_COMPS);
+    }
     try {
       var raw = localStorage.getItem(KEY_COMPS);
       if (raw){
         var d = JSON.parse(raw);
         if (d && typeof d === 'object'){
-          COMPS.forEach(function(c){
-            if (typeof d[c.id] !== 'boolean') d[c.id] = !!c.def;
-          });
-          return d;
+          _MEM_COMPS = _fillCompsDefaults(d);
+          return _MEM_COMPS;
         }
       }
     } catch(_){}
-    return _defaultsComps();
+    _MEM_COMPS = _defaultsComps();
+    return _MEM_COMPS;
   }
   function _saveComps(o){
-    try { localStorage.setItem(KEY_COMPS, JSON.stringify(o||{})); } catch(_){}
+    _MEM_COMPS = (o && typeof o === 'object')
+      ? _fillCompsDefaults(o)
+      : _defaultsComps();
+    try { localStorage.setItem(KEY_COMPS, JSON.stringify(_MEM_COMPS||{})); } catch(_){}
   }
-  function _loadTitle(){
+  /* Invalidador expuesto: el sync server→local en `hydrateFromServer`
+     puede sobrescribir KEY_COMPS o KEY_TITLE en disco sin que el cache
+     en memoria de esta IIFE se entere (mismo window, no dispara
+     `storage` event). Esta función limpia el cache y re-renderiza si
+     el calendario Bayern/Liverpool está activo. */
+  window._bayernCalInvalidateCache = function(){
+    _MEM_COMPS = null;
+    try { _applyTitle(); } catch(_){}
+    if (document.body.classList.contains('bayern-cal-on')) {
+      try { _renderAll(); } catch(_){}
+    }
+  };
+  /* Nombre del equipo del hub `s-munich`, derivado de:
+       1. La etiqueta del menú principal (`menu_home_v1.ov['go:s-munich'].label`)
+          — la fuente canónica que usa _psHumanName en misc_body_1.html.
+       2. El reemplazo "real" de Liga EA (`_ligaEaSubName('Bayern Munich')`).
+       3. null si no hay override (el caller decide el fallback).
+     Sin esto, un usuario que renombra el hub a Liverpool vía la caja
+     del menú veía "COMPETICIONES BAYERN" en el modal del calendario
+     porque éste se basaba sólo en KEY_TITLE (que no se actualiza
+     cuando se renombra el hub). Reportado por el usuario 2026-05-23. */
+  function _hubTeamName(){
+    try {
+      var r = localStorage.getItem('menu_home_v1');
+      if (r) {
+        var d = JSON.parse(r);
+        var ov = d && d.ov && d.ov['go:s-munich'];
+        if (ov && ov.label) {
+          var s = String(ov.label).trim();
+          if (s) return s;
+        }
+      }
+    } catch(_){}
+    try {
+      if (typeof window._ligaEaSubName === 'function') {
+        var sub = window._ligaEaSubName('Bayern Munich');
+        if (sub && String(sub).toLowerCase() !== 'bayern munich') {
+          var ss = String(sub).trim();
+          if (ss) return ss;
+        }
+      }
+    } catch(_){}
+    return null;
+  }
+  function _loadTitleRaw(){
     try {
       var raw = localStorage.getItem(KEY_TITLE);
       if (raw && typeof raw === 'string'){
@@ -18660,10 +18723,23 @@
         if (s.length) return s;
       }
     } catch(_){}
-    return DEFAULT_TITLE;
+    return null;
+  }
+  function _loadTitle(){
+    /* Prioridad: 1) lo que el admin guardó vía 🖍 editar título,
+       2) el nombre del equipo del hub (si se renombró el menú),
+       3) DEFAULT_TITLE ("BAYERN MUNICH") como red de seguridad. */
+    return _loadTitleRaw() || _hubTeamName() || DEFAULT_TITLE;
   }
   function _saveTitle(s){
-    try { localStorage.setItem(KEY_TITLE, String(s||'').trim() || DEFAULT_TITLE); } catch(_){}
+    /* Empty string → borrar el override para volver al auto-derivado
+       desde el hub. Antes guardaba DEFAULT_TITLE, lo que pisaba el
+       nombre del hub a "BAYERN MUNICH" para siempre. */
+    var v = String(s || '').trim();
+    try {
+      if (v) localStorage.setItem(KEY_TITLE, v);
+      else localStorage.removeItem(KEY_TITLE);
+    } catch(_){}
   }
   /* Espejo en memoria de los overrides del calendario Bayern. El
      localStorage puede fallar por el cap de 2 MB/carpeta — si
@@ -18997,7 +19073,7 @@
   function _$id(id){ return document.getElementById(id); }
   window.bayCalAddForm = function(sectionId){
     window._bayCalEditing = { mode:'add', sectionId: sectionId };
-    _$id('ag-form-title').textContent = '➕ NUEVO EVENTO (BAYERN)';
+    _$id('ag-form-title').textContent = '➕ NUEVO EVENTO (' + _displayName() + ')';
     _$id('ag-f-date').value = '';
     _$id('ag-f-icon').value = '⚽';
     _$id('ag-f-name').value = '';
@@ -19009,7 +19085,7 @@
     var ev = _eventCache[eventId];
     if (!ev) return;
     window._bayCalEditing = { mode:'edit', eventId: eventId };
-    _$id('ag-form-title').textContent = '🖍 EDITAR EVENTO (BAYERN)';
+    _$id('ag-form-title').textContent = '🖍 EDITAR EVENTO (' + _displayName() + ')';
     _$id('ag-f-date').value    = ev.date    || '';
     _$id('ag-f-icon').value    = ev.icon    || '⚽';
     _$id('ag-f-name').value    = ev.name    || '';
@@ -19020,7 +19096,7 @@
   window.bayCalDelEvt = function(eventId){
     var ev = _eventCache[eventId];
     if (!ev) return;
-    if (!confirm('¿Eliminar "' + (ev.name || eventId) + '" del calendario del Bayern?')) return;
+    if (!confirm('¿Eliminar "' + (ev.name || eventId) + '" del calendario del ' + _displayNameTitleCase() + '?')) return;
     window.bayCalDel(eventId);
   };
 
@@ -19028,19 +19104,51 @@
   window._bayernCalEditTitle = function(){
     function _doEdit(){
       var current = _loadTitle();
-      var nu = prompt('Editar título del calendario Bayern:', current);
+      var nu = prompt('Editar título del calendario (vacío = usar nombre del hub):', current);
       if (nu == null) return;
-      var s = String(nu).trim();
-      if (!s) s = DEFAULT_TITLE;
-      _saveTitle(s);
+      /* Empty input → borra el override y vuelve a auto-derivar
+         desde el hub (menu_home_v1 / _ligaEaSubName). */
+      _saveTitle(String(nu).trim());
       _applyTitle();
+      /* Push inmediato — la persistencia del título también se
+         beneficia del sync rápido al server (misma razón que comps). */
+      try {
+        if (typeof window._compStateSyncPush === 'function') {
+          window._compStateSyncPush();
+        }
+      } catch(_){}
     }
     if (typeof window.pG === 'function') window.pG(_doEdit);
     else _doEdit();
   };
+  /* Devuelve el nombre del equipo "humano" del hub para usarlo en
+     labels visibles. Hasta 2026-05-23 los textos hardcoded decían
+     "BAYERN" — el usuario renombró el hub a Liverpool y todos los
+     títulos (modal de competiciones, prompt de edición, confirms,
+     etc.) tienen que reflejar el nombre actual. */
+  function _displayName(){
+    var t = _loadTitle();
+    return (t && String(t).trim()) || DEFAULT_TITLE;
+  }
+  function _displayNameTitleCase(){
+    /* Mismo nombre pero con la 1ª letra de cada palabra en mayúscula —
+       para inline en frases (subtítulo, prompts). El título de la
+       cabecera y del modal lo dejamos en mayúsculas tal cual lo
+       editó el admin. */
+    return String(_displayName())
+      .toLowerCase()
+      .replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+  }
   function _applyTitle(){
     var el = document.getElementById('bayern-cal-title-text');
-    if (el) el.textContent = _loadTitle();
+    if (el) el.textContent = _displayName();
+    /* Sincroniza el título y el subtítulo del modal selector con el
+       nombre del equipo del hub. Llamado desde _bayernCalActivate y
+       _bayernCalEditTitle. */
+    var mt = document.getElementById('bayern-cal-ov-team');
+    if (mt) mt.textContent = _displayName();
+    var ms = document.getElementById('bayern-cal-ov-team-sub');
+    if (ms) ms.textContent = _displayNameTitleCase();
   }
 
   /* ── Modal selector de competiciones ──────────────────────────── */
@@ -19073,6 +19181,7 @@
     function _doOpen(){
       _modalSel = _loadComps();
       _renderModalRows();
+      _applyTitle(); /* refresca "COMPETICIONES <equipo>" del modal */
       var ov = document.getElementById('bayern-cal-ov');
       if (ov) ov.classList.add('show');
     }
@@ -19085,9 +19194,21 @@
     _modalSel = null;
   };
   window._bayernCalSave = function(){
-    if (_modalSel) _saveComps(_modalSel);
+    /* Snapshot ANTES de nullear: si el save al disco peta, el render
+       sigue viendo la selección recién aplicada vía _MEM_COMPS. */
+    var snap = _modalSel;
     _modalSel = null;
+    if (snap) _saveComps(snap);
     _renderAll();
+    /* Push inmediato al server: el polling normal tarda hasta 3 s y
+       el usuario podía salir antes, perdiendo el cambio si además el
+       localStorage había fallado. Force-push aquí garantiza que la
+       caja Liverpool/Bayern persiste entre dispositivos al instante. */
+    try {
+      if (typeof window._compStateSyncPush === 'function') {
+        window._compStateSyncPush();
+      }
+    } catch(_){}
     var ov = document.getElementById('bayern-cal-ov');
     if (ov) ov.classList.remove('show');
   };
@@ -19126,6 +19247,7 @@
   window._bayernCalOpenSelectorNoPin = function(){
     _modalSel = _loadComps();
     _renderModalRows();
+    _applyTitle(); /* refresca "COMPETICIONES <equipo>" del modal */
     var ov = document.getElementById('bayern-cal-ov');
     if (ov) ov.classList.add('show');
   };
@@ -29205,6 +29327,18 @@ document.addEventListener('DOMContentLoaded', function() {
           try { if(typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
           try { if(typeof window._wcRender === 'function') window._wcRender(); } catch(_){}
           try { if(typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
+          /* Si KEY_COMPS o KEY_TITLE del calendario Bayern/Liverpool
+             fueron restaurados, el cache en memoria de esa IIFE está
+             desincronizado con el disco. Le pedimos que se invalide
+             y re-renderice si la pantalla está abierta. */
+          if (restored.indexOf('bayern_calendar_comps_v1') !== -1
+              || restored.indexOf('bayern_calendar_title_v1') !== -1) {
+            try {
+              if (typeof window._bayernCalInvalidateCache === 'function') {
+                window._bayernCalInvalidateCache();
+              }
+            } catch(_){}
+          }
         }
       })
       .catch(function(){});

@@ -16531,6 +16531,11 @@
       + '<text fill="'+d[3]+'" font-family="Arial" font-size="11" font-weight="bold" text-anchor="middle" x="50" y="62">'+d[2]+'</text>'
       + '</svg>';
   }
+  /* Exponer a window: bundle.js usa este shield procedural como
+     fallback cuando un equipo no tiene URL hardcodeada ni admin-shield.
+     Antes la previa pintaba el 🛡️ emoji (Samsung lo renderiza como un
+     escudo plateado feo) — ahora cae a la insignia con iniciales. */
+  try { window.iaShieldSVG = iaShieldSVG; } catch(_){}
   window.iaActaTog = function(id) {
     var b = document.getElementById('ia-acta-' + id);
     var a = document.getElementById('ia-arr-' + id);

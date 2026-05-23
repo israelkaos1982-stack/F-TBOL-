@@ -3379,6 +3379,32 @@ window._showSimProgress = function(opts, onDone){
      y _advance() tras resolver cada día. Exponemos _render para el
      hub y un pre-render por si el torneo ya estaba elegido al cargar. */
   window._psRender = _render;
+
+  /* Reset del cursor del calendario a la primera fila de Mayo (inicio
+     de temporada). Usado por el botón "Reiniciar Calendario · 1 May"
+     del modal 🖍 (admin PIN 747). Limpia done/rivals/previaOpenedIdx
+     para que la temporada arranque limpia: sin partidos ya resueltos,
+     sin previas marcadas como ya abiertas. */
+  window._psResetCalendar = function(){
+    var d = { tour: null, dayIdx: 0, rivals: {}, done: {}, previaOpenedIdx: -1 };
+    _MEM = d;
+    try { localStorage.setItem(KEY, JSON.stringify(d)); } catch(_){}
+    try { window.__psDayIdx = 0; } catch(_){}
+    try { window.__psPreviaOpenedIdx = -1; } catch(_){}
+    try { window.__psBusy = false; } catch(_){}
+    /* Invalida el sig del stage para forzar re-paint completo
+       (sin esto, _render lo daría por ya pintado si el día actual
+       coincide con el destino). */
+    try { var _st = _stage(); if (_st) _st._psSig = null; } catch(_){}
+    _syncMarker();
+    _render();
+    try {
+      var rows = _calRows();
+      document.dispatchEvent(new CustomEvent('hub:day-changed', {
+        detail:{ dayIdx:0, date:(rows[0]||{}).date }
+      }));
+    } catch(_){}
+  };
   /* Purga BRUTA pre-Mayo en el DOM del calendario (cliente). Si el
      servidor todavía sirve filas pre-mayo (BD vieja sin migrar,
      deploy retrasado), las eliminamos físicamente del #ag-content y
@@ -34592,6 +34618,7 @@ Tottenham
       +     '<button type="button" class="me-btn primary" onclick="window._bayernEditValuesSave()">✅ Guardar</button>'
       +     '<button type="button" class="me-btn ghost" onclick="window._bayernEditValuesClose()">Cancelar</button>'
       +     '<button type="button" class="me-btn danger" onclick="window._bayernEditValuesReset()">♻ Restablecer</button>'
+      +     '<button type="button" class="me-btn danger" onclick="window._bayernEditValuesResetCal()">📅 Reiniciar Calendario · 1 May</button>'
       +   '</div>'
       + '</div>';
     ov.addEventListener('click', function(e){ if (e.target === ov) window._bayernEditValuesClose(); });
@@ -34838,6 +34865,17 @@ Tottenham
       if (mT) mT.textContent = '/ ' + DEF.moneyTarget + '€';
     } finally { applying = false; }
     if (typeof window.athObjCount === 'function') { try { window.athObjCount(); } catch(_){} }
+    window._bayernEditValuesClose();
+  };
+  /* Reinicia el cursor del calendario al 1 de Mayo (inicio de
+     temporada). Útil cuando el admin quiere replay-ear la temporada
+     completa: borra el cursor (dayIdx=0), los partidos resueltos
+     (done) y los rivales asignados (rivals) sin tocar los overrides
+     del HUD (valoración / presupuesto / PI). */
+  window._bayernEditValuesResetCal = function(){
+    if (!confirm('¿Reiniciar el calendario al 1 de Mayo?\n\nSe borrará el cursor del día y los partidos ya resueltos de la pretemporada. Los valores del HUD (valoración / presupuesto / PI) no se tocan.')) return;
+    try { if (typeof window._psResetCalendar === 'function') window._psResetCalendar(); } catch(_){}
+    try { if (typeof window.updateHud === 'function') window.updateHud(); } catch(_){}
     window._bayernEditValuesClose();
   };
   /* Helper público: sincroniza el `state` del IIFE de la agenda

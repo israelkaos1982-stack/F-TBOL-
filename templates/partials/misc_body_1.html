@@ -153,18 +153,21 @@ window._showSimProgress = function(opts, onDone){
    live de un humano — recuperar". */
 #home-live-card{background:linear-gradient(135deg,#1a1a1f 0%,#121215 50%,#0a0a0c 100%);border:1px solid rgba(255,255,255,.08);transition:background .35s ease,border-color .35s ease,box-shadow .35s ease;}
 .mc-derbys{background:linear-gradient(135deg,#0a0418 0%,#1c0640 30%,#38086a 55%,#5c0898 80%,#7a10c0 100%);border:1px solid rgba(140,40,220,0.42)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,0.10),0 0 22px rgba(90,8,150,0.50)!important;}
-.mc-premios{background:linear-gradient(135deg,#280010 0%,#5a0828 28%,#a01848 52%,#c8366a 72%,#e85a8a 92%,#f487b0 100%)!important;border:1px solid rgba(240,120,170,0.45)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,0.10),0 0 24px rgba(200,54,106,0.55)!important;}
-.mc-premios .mc-label{font-family:Oswald,sans-serif!important;font-style:italic;font-weight:800;letter-spacing:2.6px;color:#ffd060!important;text-shadow:0 0 10px rgba(255,200,80,.55),1px 1px 3px #2a000c!important;}
-.premios-box{grid-column:span 2;display:none;flex-direction:column;gap:8px;}
+.premios-box{position:fixed;inset:0;background:rgba(0,0,5,.86);z-index:9999;display:none;align-items:flex-start;justify-content:center;padding:18px;overflow-y:auto;}
 .premios-box.is-open{display:flex;}
+.premios-box-inner{max-width:560px;width:100%;display:flex;flex-direction:column;gap:10px;background:linear-gradient(135deg,#1a0010 0%,#3a1028 50%,#1a0010 100%);border:1px solid rgba(220,80,140,.45);border-radius:12px;padding:14px;margin-top:40px;margin-bottom:40px;box-shadow:0 0 32px rgba(200,54,106,.4);}
+.premios-box-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 4px 6px;border-bottom:1px solid rgba(220,80,140,.28);}
+.premios-box-title{font-family:Oswald,sans-serif;font-weight:800;letter-spacing:2.6px;color:#ffd060;font-size:14px;text-shadow:0 0 10px rgba(255,200,80,.55);}
+.premios-box-close{background:rgba(255,80,80,.18);color:#ffb0b0;border:1px solid rgba(255,80,80,.45);border-radius:8px;width:32px;height:32px;font-size:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.premios-box-close:hover{background:rgba(255,80,80,.32);}
 .premios-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.premios-tab{height:60px;min-height:60px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:1px solid rgba(255,200,80,.22);background:linear-gradient(135deg,#1a0010 0%,#3a1028 100%);color:#ffe7a6;font-family:Oswald,sans-serif;font-weight:800;font-size:14px;letter-spacing:2.4px;user-select:none;transition:all .2s ease;}
+.premios-tab{height:54px;min-height:54px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:1px solid rgba(255,200,80,.22);background:linear-gradient(135deg,#1a0010 0%,#3a1028 100%);color:#ffe7a6;font-family:Oswald,sans-serif;font-weight:800;font-size:13px;letter-spacing:2.2px;user-select:none;transition:all .2s ease;-webkit-tap-highlight-color:transparent;}
 .premios-tab:hover{border-color:rgba(255,200,80,.45);}
 .premios-tab.is-active{background:linear-gradient(135deg,#6a1840 0%,#c8366a 100%);color:#ffd060;box-shadow:0 0 16px rgba(200,54,106,.55) inset;border-color:rgba(255,200,80,.55);}
 .premios-panel{display:none;flex-direction:column;gap:10px;padding:12px;border:1px solid rgba(220,80,140,.28);border-radius:10px;background:rgba(20,4,14,.55);}
 .premios-panel.is-open{display:flex;}
 .premios-row{display:flex;flex-direction:column;gap:5px;}
-.premios-row label{font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.6px;color:#ffe7a6;text-shadow:0 0 8px rgba(240,192,64,.35);}
+.premios-row label{font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.4px;color:#ffe7a6;text-shadow:0 0 8px rgba(240,192,64,.35);}
 .premios-row select{width:100%;background:#1a0814;color:#fff;border:1px solid rgba(220,80,140,.45);border-radius:6px;padding:9px 8px;font-size:13px;font-family:inherit;}
 .premios-row select:focus{outline:none;border-color:rgba(255,200,80,.7);box-shadow:0 0 8px rgba(255,200,80,.35);}
 #home-live-card .mc-live-icon{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:24px;padding:0 9px;border-radius:999px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.8px;font-weight:700;border:1px solid rgba(255,255,255,.18);background:rgba(60,60,68,.35);color:rgba(180,180,190,.65);box-shadow:inset 0 0 0 1px rgba(15,23,42,.28);transition:all .25s ease;}
@@ -222,14 +225,42 @@ window._showSimProgress = function(opts, onDone){
     var isOpen = box.classList.contains('is-open');
     if (isOpen){
       box.classList.remove('is-open');
+      try { document.body.style.overflow=''; }catch(_){ }
       return;
     }
     box.classList.add('is-open');
+    try { document.body.style.overflow='hidden'; }catch(_){ }
     if (!window._premiosLoaded){
       try { window._populatePremios(); window._premiosLoaded = true; }
       catch(e){ try{ console.warn('[premios] populate fail', e); }catch(_){ } }
     }
   };
+  window._premiosBackdrop = function(e){
+    var box = document.getElementById('premios-box');
+    if (e && e.target === box) window.togglePremiosBox();
+  };
+  /* Captura clicks en cualquier .menu-card cuyo `.mc-label` sea
+     "PREMIOS TEMPORADA" — incluye tanto la card original como las
+     añadidas por el usuario vía el editor de menú (menu_home_v1).
+     Capturing phase (true) para correr ANTES del delegate del grid
+     que mira `__mkNav` (y que no tiene mapeo para esta función). */
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var card = t.closest('.menu-card');
+    if (!card) return;
+    var grid = card.closest('#s-home .menu-grid');
+    if (!grid) return;
+    if (grid.classList.contains('mk-edit')) return;
+    if (t.closest('.mk-del')) return;
+    var lbl = card.querySelector('.mc-label');
+    var text = lbl ? (lbl.textContent||'').replace(/\s+/g,' ').trim() : '';
+    if (/^premios\s+temporada$/i.test(text)){
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof window.togglePremiosBox === 'function') window.togglePremiosBox();
+    }
+  }, true);
   window.togglePremiosTab = function(which){
     ['jug','eq'].forEach(function(k){
       var tab = document.getElementById('premios-tab-' + k);
@@ -415,15 +446,12 @@ window._showSimProgress = function(opts, onDone){
 <span class="mc-emoji" style="font-size:28px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.7));display:inline-block;">🌍</span><span class="mc-label" style="color:#fff!important;text-shadow:1px 1px 3px #000,0 0 10px rgba(0,0,0,.8);">RESTO DE LIGAS</span>
 </div>
 </div>
-<div class="menu-card full mc-premios" style="grid-column:span 2;" onclick="window.togglePremiosBox && window.togglePremiosBox()">
-<div class="mc-main-overlay"></div>
-<div class="mc-main-content" style="display:flex;align-items:center;justify-content:space-between;padding:0 16px;">
-<span class="mc-emoji" style="font-size:30px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.7));display:inline-block;">🥇</span>
-<span class="mc-label">PREMIOS TEMPORADA</span>
-<span class="mc-emoji" style="font-size:30px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.7));display:inline-block;">🏅</span>
+<div id="premios-box" class="premios-box" onclick="window._premiosBackdrop && window._premiosBackdrop(event)">
+<div class="premios-box-inner" onclick="event.stopPropagation()">
+<div class="premios-box-head">
+<span class="premios-box-title">🥇 PREMIOS TEMPORADA 🏅</span>
+<button type="button" class="premios-box-close" onclick="window.togglePremiosBox && window.togglePremiosBox()">✕</button>
 </div>
-</div>
-<div id="premios-box" class="premios-box">
 <div class="premios-tabs">
 <div class="premios-tab" id="premios-tab-jug" onclick="window.togglePremiosTab && window.togglePremiosTab('jug')">⚽ JUGADORES</div>
 <div class="premios-tab" id="premios-tab-eq" onclick="window.togglePremiosTab && window.togglePremiosTab('eq')">🛡 EQUIPOS</div>
@@ -435,6 +463,7 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div id="premios-panel-eq" class="premios-panel">
 <div class="premios-row"><label>🌐 Ranking FIFA · Top 50 equipos</label><select id="premios-sel-fifa"><option>Cargando…</option></select></div>
+</div>
 </div>
 </div>
 <div style="grid-column:span 2; border-top:1px solid rgba(240,192,64,.2); margin:2px 0; padding-top:8px;">

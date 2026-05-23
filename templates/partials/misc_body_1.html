@@ -39364,6 +39364,103 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     } catch(_){}
   }
 
+  /* ── HOOK 15: cerca de cumplir un objetivo ─────────────
+     Cuando los checkboxes [id*="-obj"] están al ≥75 % marcados
+     (pero no al 100 %), avisamos del último empujón. */
+  function _checkObjectiveNear(){
+    try {
+      var nodes = document.querySelectorAll(
+        'input[type=checkbox][id*="-obj"], input[type=checkbox][id^="obj-"]'
+      );
+      var total = nodes.length;
+      if (total < 4) return;
+      var done = 0;
+      nodes.forEach(function(cb){ if (cb.checked) done++; });
+      var pct = done / total;
+      if (pct < 0.75 || pct >= 1.0) return;
+      var sig = done+'/'+total;
+      if (_getCursor('obj-near') === sig) return;
+      _setCursor('obj-near', sig);
+      var rem = total - done;
+      var eu  = rem * 60;
+      var pts = (rem * 0.40).toFixed(2);
+      push({ side:'liv', type:'obj-near', icon:'⏳',
+        sender:'Dirección Deportiva',
+        title:'Cerca de cumplir los objetivos ('+done+'/'+total+')',
+        body :'Solo te falta'+(rem===1?'':'n')+' '+rem+' objetivo'+(rem===1?'':'s')+
+              ' por cumplir. Un último esfuerzo y desbloqueas '+eu+' € y '+pts+
+              ' puntos de prestigio extra.'
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 16: líder/no-líder de LaLiga (transición) ───
+     Mensaje cuando el Liverpool ENTRA al primer puesto y otro
+     cuando lo PIERDE. Sólo en cambios de estado (no repetir
+     cada jornada). */
+  function _checkLeagueLeader(){
+    try {
+      if (typeof window.collectStandings !== 'function') return;
+      var arr = window.collectStandings('liga') || [];
+      if (!arr.length || !arr[0] || !(arr[0].pj > 0)) return;
+      var firstIsLiv = _isLiv(arr[0].name);
+      var prev = _getCursor('liga:leader-state') || '0';
+      if (firstIsLiv && prev !== '1'){
+        _setCursor('liga:leader-state', '1');
+        push({ side:'liv', type:'leader', icon:'👑',
+          sender:'LaLiga · Líder',
+          title:'¡Liderato de LaLiga!',
+          body :'El Liverpool ocupa la primera posición de LaLiga con '+(arr[0].pts||0)+
+                ' puntos. Anfield sueña con el título.'
+        });
+      } else if (!firstIsLiv && prev === '1'){
+        _setCursor('liga:leader-state', '0');
+        var idx = -1;
+        for (var i = 0; i < arr.length; i++){ if (_isLiv(arr[i].name)){ idx = i; break; } }
+        var pos = (idx >= 0) ? (idx + 1)+'º' : '';
+        push({ side:'liv', type:'leader-lost', icon:'📉',
+          sender:'LaLiga · Líder',
+          title:'Adiós al liderato',
+          body :'El Liverpool deja la primera posición'+(pos ? ' (ahora '+pos+')' : '')+
+                '. Toca pelearlo en la próxima jornada.'
+        });
+      }
+    } catch(_){}
+  }
+
+  /* ── HOOK 17: alta médica (recuperación de lesionado) ─
+     Comparamos LESION_STORE con la foto anterior. Si un jugador
+     del Liverpool estaba lesionado y ya no aparece → push. */
+  function _checkRecovery(){
+    try {
+      var store = window.LESION_STORE || {};
+      var cur = [];
+      Object.keys(store).forEach(function(pl){
+        var v = store[pl];
+        if (!v) return;
+        var equipo = v.equipo || v.team || '';
+        if (!_isLiv(equipo)) return;
+        if (v.partidos != null && v.partidos <= 0) return;
+        cur.push(pl);
+      });
+      cur.sort();
+      var prevStr = _getCursor('lesion:cur');
+      if (prevStr != null){
+        var prev = String(prevStr).split('|').filter(Boolean);
+        prev.forEach(function(pl){
+          if (cur.indexOf(pl) < 0){
+            push({ side:'liv', type:'recovery', icon:'🩹',
+              sender:'Servicios Médicos',
+              title: pl+' recibe el alta médica',
+              body : pl+' está recuperado de su lesión y vuelve a estar disponible para la convocatoria. ¡Bienvenido de vuelta!'
+            });
+          }
+        });
+      }
+      _setCursor('lesion:cur', cur.join('|'));
+    } catch(_){}
+  }
+
   /* ── HOOK 13: previa del próximo partido ──────────────
      Observa #munich-next-match. Cuando el texto cambia y describe
      un partido (no "Entrenamiento" ni "Descanso"), dispara una
@@ -39491,6 +39588,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       _scanFrancia();
       _scanBets();
       _scanObjectives();
+      _checkObjectiveNear();
+      _checkLeagueLeader();
+      _checkRecovery();
       _checkCupElim();
       _checkPichichi();
       _checkMvpLeader();
@@ -39505,7 +39605,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var t = ev.target;
       if (!t || t.type !== 'checkbox' || !t.id) return;
       if (/-obj|^obj-/.test(t.id))
-        setTimeout(function(){ _scanObjectives(); _refresh(); }, 30);
+        setTimeout(function(){ _scanObjectives(); _checkObjectiveNear(); _refresh(); }, 30);
     }, true);
     window.addEventListener('storage', function(ev){
       if (ev && ev.key === 'isramax_v1')

@@ -32493,6 +32493,95 @@ Tottenham
     font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;color:#fff;
     background:rgba(255,80,80,.18);border:1px solid rgba(255,120,120,.4);
   }
+
+  /* ── Caja "Competiciones" del hub (debajo del Próximo partido) ───
+     Plegada por defecto. Al abrirla, muestra una fila horizontal con
+     los iconos de las competiciones en las que está el equipo del hub
+     (Liverpool por defecto). Verde = en juego, rojo = eliminado. */
+  #s-munich .munich-comps{
+    margin:10px 12px 14px;border-radius:14px;overflow:hidden;
+    background:linear-gradient(135deg,rgba(220,5,45,.20),rgba(10,0,30,.55) 55%,rgba(0,20,55,.65));
+    border:1px solid rgba(255,255,255,.18);
+    box-shadow:0 6px 18px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  #s-munich .munich-comps-hdr{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:13px 16px;background:transparent;border:none;width:100%;cursor:pointer;
+    color:#fff;font-family:Oswald,sans-serif;letter-spacing:2.2px;font-size:13px;
+    text-transform:uppercase;font-weight:700;-webkit-tap-highlight-color:transparent;
+  }
+  #s-munich .munich-comps-title{display:flex;align-items:center;gap:9px;text-align:left;}
+  #s-munich .munich-comps-title .munich-comps-emoji{
+    font-size:19px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));
+  }
+  #s-munich .munich-comps-chev{
+    font-size:13px;color:#ffd750;transition:transform .25s ease;display:inline-block;
+  }
+  #s-munich .munich-comps.open .munich-comps-chev{transform:rotate(180deg);}
+  #s-munich .munich-comps-body{
+    max-height:0;overflow:hidden;transition:max-height .3s ease;
+    border-top:1px solid rgba(255,255,255,0);
+  }
+  #s-munich .munich-comps.open .munich-comps-body{
+    max-height:380px;border-top-color:rgba(255,255,255,.10);
+  }
+  #s-munich .munich-comps-row{
+    display:flex;flex-wrap:nowrap;gap:10px;padding:12px 12px 6px;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;
+  }
+  #s-munich .munich-comps-row::-webkit-scrollbar{height:6px;}
+  #s-munich .munich-comps-row::-webkit-scrollbar-thumb{
+    background:rgba(255,255,255,.18);border-radius:3px;
+  }
+  #s-munich .munich-comp-chip{
+    flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;
+    padding:10px 10px 8px;border-radius:12px;min-width:82px;max-width:100px;
+    background:rgba(0,0,0,.46);border:2px solid var(--mc-color,rgba(255,255,255,.25));
+    box-shadow:0 0 12px var(--mc-glow,transparent), inset 0 1px 0 rgba(255,255,255,.05);
+    cursor:pointer;-webkit-tap-highlight-color:transparent;
+    transition:transform .12s ease;
+  }
+  #s-munich .munich-comp-chip:active{transform:scale(.95);}
+  #s-munich .munich-comp-chip.in{
+    --mc-color:rgba(74,220,120,.85);
+    --mc-glow:rgba(74,220,120,.28);
+  }
+  #s-munich .munich-comp-chip.out{
+    --mc-color:rgba(255,80,100,.85);
+    --mc-glow:rgba(255,80,100,.22);
+    filter:grayscale(.25) opacity(.88);
+  }
+  #s-munich .munich-comp-chip .munich-comp-ico{
+    font-size:26px;line-height:1;height:32px;display:flex;align-items:center;justify-content:center;
+  }
+  #s-munich .munich-comp-chip .munich-comp-ico img{width:28px;height:28px;object-fit:contain;}
+  #s-munich .munich-comp-chip .munich-comp-lbl{
+    font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;
+    color:#fff;text-align:center;line-height:1.15;letter-spacing:.4px;
+    text-transform:uppercase;max-width:88px;
+  }
+  #s-munich .munich-comp-chip .munich-comp-status{
+    font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.4px;
+    color:var(--mc-color);text-transform:uppercase;
+  }
+  #s-munich .munich-comps-legend{
+    display:flex;justify-content:center;gap:18px;padding:6px 12px 12px;
+    font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.65);
+  }
+  #s-munich .munich-comps-legend .munich-leg-dot{
+    display:inline-block;width:8px;height:8px;border-radius:50%;
+    margin-right:5px;vertical-align:middle;
+  }
+  #s-munich .munich-comps-legend .munich-leg-dot.in{
+    background:#4adc78;box-shadow:0 0 6px rgba(74,220,120,.6);
+  }
+  #s-munich .munich-comps-legend .munich-leg-dot.out{
+    background:#ff5064;box-shadow:0 0 6px rgba(255,80,100,.5);
+  }
+  #s-munich .munich-comps-empty{
+    padding:14px;text-align:center;color:rgba(255,255,255,.55);
+    font-family:Rajdhani,sans-serif;font-size:12px;
+  }
 </style>
 <div class="sec-hdr"><img id="mk-hub-badge" alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
@@ -32785,7 +32874,263 @@ Tottenham
     <button class="btn-next" id="munich-next-day-btn">➡️ SIGUIENTE DÍA</button>
   </div>
 </section>
+<!-- ═══ COMPETICIONES DEL HUB (caja desplegable) ════════════════════
+     Lista horizontal con las competiciones en las que está el equipo
+     del hub (Liverpool por defecto). Verde = sigue en juego, rojo =
+     eliminado. Plegada por defecto; el chevron rota al abrir. -->
+<section class="munich-comps" id="munich-comps">
+  <button type="button" class="munich-comps-hdr"
+          onclick="window.muCompsToggle&&window.muCompsToggle(event)"
+          aria-expanded="false" aria-controls="munich-comps-body">
+    <span class="munich-comps-title">
+      <span class="munich-comps-emoji">🏆</span>
+      <span>Competiciones</span>
+    </span>
+    <span class="munich-comps-chev" aria-hidden="true">▼</span>
+  </button>
+  <div class="munich-comps-body" id="munich-comps-body">
+    <div class="munich-comps-row" id="munich-comps-row">
+      <div class="munich-comps-empty">Cargando competiciones…</div>
+    </div>
+    <div class="munich-comps-legend">
+      <span><i class="munich-leg-dot in"></i>En juego</span>
+      <span><i class="munich-leg-dot out"></i>Eliminado</span>
+    </div>
+  </div>
+</section>
 </div>
+<script>
+/* ── Caja "Competiciones" del hub ────────────────────────────────────
+   Plegada por defecto. Al abrirla, escanea los stores conocidos para
+   detectar en qué competiciones está el equipo del hub (Liverpool) y
+   pinta una fila horizontal de chips: verde = en juego, rojo =
+   eliminado. La detección de "eliminado" se basa en `state.champion`
+   ≠ hub cuando la competición tiene un campeón decidido — heurística
+   conservadora: ante la duda, marca como "en juego". */
+(function(){
+  if (window.__MU_COMPS_READY) return;
+  window.__MU_COMPS_READY = true;
+
+  function _norm(s){
+    try{
+      return String(s||'').toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g,'')
+        .replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+    }catch(_){ return String(s||'').toLowerCase().trim(); }
+  }
+  function _hubName(){
+    try{
+      var r = localStorage.getItem('menu_home_v1');
+      if (r){
+        var d = JSON.parse(r);
+        var ov = d && d.ov && d.ov['go:s-munich'];
+        if (ov && ov.label) return String(ov.label);
+      }
+    }catch(_){}
+    try{
+      if (typeof window._ligaEaSubName === 'function'){
+        var s = window._ligaEaSubName('Bayern Munich');
+        if (s) return String(s);
+      }
+    }catch(_){}
+    return 'Liverpool';
+  }
+  function _hubAliases(){
+    var nm = _hubName();
+    var raw = [nm, 'Liverpool', 'Bayern Munich', 'Bayern Múnich', 'Bayern'];
+    var out = [], seen = {};
+    raw.forEach(function(x){
+      var n = _norm(x);
+      if (n && !seen[n]){ seen[n] = 1; out.push(n); }
+    });
+    return out;
+  }
+  function _matches(name, aliases){
+    var n = _norm(name);
+    if (!n) return false;
+    for (var i = 0; i < aliases.length; i++){
+      var a = aliases[i];
+      if (n === a) return true;
+      if (n.indexOf(a) !== -1 || a.indexOf(n) !== -1) return true;
+    }
+    return false;
+  }
+  function _listIn(list, aliases){
+    if (!Array.isArray(list)) return false;
+    for (var i = 0; i < list.length; i++){
+      var v = list[i];
+      var name = (typeof v === 'string') ? v : (v && (v.name || v.team));
+      if (_matches(name, aliases)) return true;
+    }
+    return false;
+  }
+  function _loadJSON(key){
+    try{ return JSON.parse(localStorage.getItem(key)||'null'); }catch(_){ return null; }
+  }
+
+  /* Cada helper devuelve { status:'in'|'out', label, emoji, screen }
+     o null si la competición no aplica al equipo del hub. */
+  function _compLiga(_a){
+    return { status:'in', label:'Liga EA', emoji:'🇪🇸', screen:'s-liga' };
+  }
+  function _compCopa(aliases){
+    var s = _loadJSON('copa_data_v1') || _loadJSON('copa_state_v1');
+    var champ = s && (s.champion || s.campeon);
+    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
+    return { status:st, label:'Copa Rey', emoji:'👑', screen:'s-copa' };
+  }
+  function _compSc(aliases){
+    var s = _loadJSON('sc_state_v1');
+    if (!s) return null;
+    var teams = s.teams || s.pool || [];
+    if (teams.length && !_listIn(teams, aliases)) return null;
+    var champ = s.champion || s.campeon;
+    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
+    return { status:st, label:'Supercopa Esp.', emoji:'🥇', screen:'s-espana' };
+  }
+  function _compEur(comp, aliases){
+    var META = {
+      ucl:  { phase:'ucl_phase_v1',  ko:'ucl_ko_state_v1',  label:'Champions',   emoji:'🏆', screen:'s-champions' },
+      uel:  { phase:'uel_phase_v1',  ko:'uel_ko_state_v1',  label:'Europa Lg.',  emoji:'🟠', screen:'s-uel'       },
+      uecl: { phase:'uecl_phase_v1', ko:'uecl_ko_state_v1', label:'Conference',  emoji:'🟢', screen:'s-uecl'      }
+    };
+    var m = META[comp]; if (!m) return null;
+    var s = _loadJSON(m.phase);
+    if (!s || !Array.isArray(s.teams)) return null;
+    if (!_listIn(s.teams, aliases)) return null;
+    var ko = _loadJSON(m.ko);
+    var champ = ko && (ko.champion || ko.campeon);
+    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
+    return { status:st, label:m.label, emoji:m.emoji, screen:m.screen };
+  }
+  function _compRecopa(aliases){
+    var s = _loadJSON('recopa_state_v1');
+    if (!s) return null;
+    var pool = s.pool || s.teams || [];
+    if (!_listIn(pool, aliases)) return null;
+    var champ = s.champion;
+    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
+    return { status:st, label:'Recopa', emoji:'🟤', screen:'s-recopa' };
+  }
+  function _compUsc(aliases){
+    var s = _loadJSON('usc_state_v1');
+    if (!s) return null;
+    var teams = s.teams || s.pool || [];
+    if (teams.length && !_listIn(teams, aliases)) return null;
+    var champ = s.champion;
+    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
+    return { status:st, label:'Supercopa Eur.', emoji:'⭐', screen:'s-usc' };
+  }
+  function _compInter(aliases){
+    var s = _loadJSON('inter_state_v1') || _loadJSON('intercontinental_state_v1');
+    if (!s) return null;
+    var teams = s.teams || s.pool || [];
+    if (teams.length && !_listIn(teams, aliases)) return null;
+    var champ = s.champion;
+    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
+    return { status:st, label:'Intercont.', emoji:'🌐', screen:'s-intercontinental' };
+  }
+  function _compMundial(aliases){
+    var s = _loadJSON('mundial_state_v1') || _loadJSON('mundialito_state_v1');
+    if (!s) return null;
+    var teams = s.teams || s.pool || [];
+    if (teams.length && !_listIn(teams, aliases)) return null;
+    var champ = s.champion;
+    var st = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
+    return { status:st, label:'Mundialito', emoji:'🌍', screen:'s-intercontinental' };
+  }
+  function _compSuperliga(aliases){
+    var arr = _loadJSON('superliga_teams_v1');
+    if (!Array.isArray(arr)) return null;
+    if (!_listIn(arr, aliases)) return null;
+    var st = _loadJSON('superliga_state_v1');
+    var champ = st && (st.champion || st.campeon);
+    var s = (champ && !_matches(champ, aliases)) ? 'out' : 'in';
+    return { status:s, label:'Superliga', emoji:'🌟', screen:'s-superliga-clas' };
+  }
+
+  function _collect(){
+    var aliases = _hubAliases();
+    var out = [];
+    var fns = [
+      _compLiga, _compCopa, _compSc,
+      function(a){ return _compEur('ucl',  a); },
+      function(a){ return _compEur('uel',  a); },
+      function(a){ return _compEur('uecl', a); },
+      _compRecopa, _compUsc, _compInter, _compMundial,
+      _compSuperliga
+    ];
+    fns.forEach(function(fn){
+      try{
+        var r = fn(aliases);
+        if (r && r.status) out.push(r);
+      }catch(_){}
+    });
+    return out;
+  }
+
+  function _esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function _render(){
+    var row = document.getElementById('munich-comps-row');
+    if (!row) return;
+    var items = _collect();
+    if (!items.length){
+      row.innerHTML = '<div class="munich-comps-empty">Aún no se ha jugado nada.</div>';
+      return;
+    }
+    var html = items.map(function(it){
+      var screen = it.screen ? _esc(it.screen).replace(/'/g,'') : '';
+      var clk = screen ? ' onclick="try{go(\'' + screen + '\')}catch(_){}"' : '';
+      var stTxt = (it.status === 'out') ? 'Eliminado' : 'En juego';
+      return ''
+        + '<div class="munich-comp-chip ' + it.status + '"' + clk + ' role="button" tabindex="0">'
+        +   '<div class="munich-comp-ico">' + _esc(it.emoji) + '</div>'
+        +   '<div class="munich-comp-lbl">' + _esc(it.label) + '</div>'
+        +   '<div class="munich-comp-status">' + stTxt + '</div>'
+        + '</div>';
+    }).join('');
+    row.innerHTML = html;
+  }
+
+  window.muCompsToggle = function(ev){
+    if (ev && ev.preventDefault) ev.preventDefault();
+    var box = document.getElementById('munich-comps');
+    if (!box) return;
+    var open = box.classList.toggle('open');
+    var btn = box.querySelector('.munich-comps-hdr');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) _render();
+  };
+  window.muCompsRefresh = _render;
+
+  /* Hook a `go()` para refrescar la caja si está abierta al volver al
+     hub (ej. tras jugar un partido de Copa que elimina al equipo). */
+  function _hookGo(){
+    var orig = window.go;
+    if (typeof orig !== 'function'){ setTimeout(_hookGo, 200); return; }
+    if (orig._muCompsHooked) return;
+    window.go = function(id){
+      var r = orig.apply(this, arguments);
+      if (id === 's-munich'){
+        var box = document.getElementById('munich-comps');
+        if (box && box.classList.contains('open')) _render();
+      }
+      return r;
+    };
+    window.go._muCompsHooked = true;
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _hookGo);
+  } else {
+    _hookGo();
+  }
+})();
+</script>
 <script>
 /* HUD pop-on-tap: al tocar un indicador, desliza la etiqueta flotante
    encima durante 3 s. Varios taps seguidos reinician el temporizador

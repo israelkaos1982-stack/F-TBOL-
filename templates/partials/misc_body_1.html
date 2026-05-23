@@ -153,6 +153,20 @@ window._showSimProgress = function(opts, onDone){
    live de un humano — recuperar". */
 #home-live-card{background:linear-gradient(135deg,#1a1a1f 0%,#121215 50%,#0a0a0c 100%);border:1px solid rgba(255,255,255,.08);transition:background .35s ease,border-color .35s ease,box-shadow .35s ease;}
 .mc-derbys{background:linear-gradient(135deg,#0a0418 0%,#1c0640 30%,#38086a 55%,#5c0898 80%,#7a10c0 100%);border:1px solid rgba(140,40,220,0.42)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,0.10),0 0 22px rgba(90,8,150,0.50)!important;}
+.mc-premios{background:linear-gradient(135deg,#280010 0%,#5a0828 28%,#a01848 52%,#c8366a 72%,#e85a8a 92%,#f487b0 100%)!important;border:1px solid rgba(240,120,170,0.45)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,0.10),0 0 24px rgba(200,54,106,0.55)!important;}
+.mc-premios .mc-label{font-family:Oswald,sans-serif!important;font-style:italic;font-weight:800;letter-spacing:2.6px;color:#ffd060!important;text-shadow:0 0 10px rgba(255,200,80,.55),1px 1px 3px #2a000c!important;}
+.premios-box{grid-column:span 2;display:none;flex-direction:column;gap:8px;}
+.premios-box.is-open{display:flex;}
+.premios-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.premios-tab{height:60px;min-height:60px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;border:1px solid rgba(255,200,80,.22);background:linear-gradient(135deg,#1a0010 0%,#3a1028 100%);color:#ffe7a6;font-family:Oswald,sans-serif;font-weight:800;font-size:14px;letter-spacing:2.4px;user-select:none;transition:all .2s ease;}
+.premios-tab:hover{border-color:rgba(255,200,80,.45);}
+.premios-tab.is-active{background:linear-gradient(135deg,#6a1840 0%,#c8366a 100%);color:#ffd060;box-shadow:0 0 16px rgba(200,54,106,.55) inset;border-color:rgba(255,200,80,.55);}
+.premios-panel{display:none;flex-direction:column;gap:10px;padding:12px;border:1px solid rgba(220,80,140,.28);border-radius:10px;background:rgba(20,4,14,.55);}
+.premios-panel.is-open{display:flex;}
+.premios-row{display:flex;flex-direction:column;gap:5px;}
+.premios-row label{font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.6px;color:#ffe7a6;text-shadow:0 0 8px rgba(240,192,64,.35);}
+.premios-row select{width:100%;background:#1a0814;color:#fff;border:1px solid rgba(220,80,140,.45);border-radius:6px;padding:9px 8px;font-size:13px;font-family:inherit;}
+.premios-row select:focus{outline:none;border-color:rgba(255,200,80,.7);box-shadow:0 0 8px rgba(255,200,80,.35);}
 #home-live-card .mc-live-icon{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:24px;padding:0 9px;border-radius:999px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.8px;font-weight:700;border:1px solid rgba(255,255,255,.18);background:rgba(60,60,68,.35);color:rgba(180,180,190,.65);box-shadow:inset 0 0 0 1px rgba(15,23,42,.28);transition:all .25s ease;}
 #home-live-card.live-active{background:linear-gradient(135deg,#cc0800 0%,#8b0000 35%,#380000 65%,#0a0000 100%)!important;border-color:rgba(255,82,82,.55)!important;box-shadow:0 0 0 1px rgba(255,82,82,.45),0 0 22px rgba(255,82,82,.55),0 0 18px rgba(255,82,82,.32) inset!important;animation:homeLiveCardPulse 1.4s ease-in-out infinite;}
 #home-live-card.live-active .mc-live-icon{background:linear-gradient(90deg,#ff2a2a,#ff6b3d,#ffe066);border-color:rgba(255,188,120,.95);color:#fff9d8;text-shadow:0 0 10px rgba(255,116,59,.95),0 0 16px rgba(255,212,59,.65);animation:homeLivePulse 1.05s ease-in-out infinite,homeLiveColorShift 1.2s linear infinite;}
@@ -190,6 +204,161 @@ window._showSimProgress = function(opts, onDone){
   };
   window.goDerbys = window.goDerbys || function(){
     alert('Derbys — espacio reservado para próximas mejoras.');
+  };
+
+  /* ─── PREMIOS TEMPORADA ──────────────────────────────────────────
+     Pulsar la caja abre un box con 2 sub-cajas: JUGADORES y EQUIPOS.
+       • JUGADORES → 3 desplegables: Balón de Oro (top 50 MVPs),
+         Bota de Oro (top 50 goleadores), Guante de Oro (top 50
+         porteros por porterías a 0).
+       • EQUIPOS → Ranking FIFA (top 50 por nivel/power).
+     Datos: scan de localStorage `ligaExt_*` (no toca _protected /
+     _snap_ / _backup) + fallback de window.TEAM_RATINGS para
+     equipos sin liga simulada. */
+  window._premiosLoaded = false;
+  window.togglePremiosBox = function(){
+    var box = document.getElementById('premios-box');
+    if (!box) return;
+    var isOpen = box.classList.contains('is-open');
+    if (isOpen){
+      box.classList.remove('is-open');
+      return;
+    }
+    box.classList.add('is-open');
+    if (!window._premiosLoaded){
+      try { window._populatePremios(); window._premiosLoaded = true; }
+      catch(e){ try{ console.warn('[premios] populate fail', e); }catch(_){ } }
+    }
+  };
+  window.togglePremiosTab = function(which){
+    ['jug','eq'].forEach(function(k){
+      var tab = document.getElementById('premios-tab-' + k);
+      var panel = document.getElementById('premios-panel-' + k);
+      if (!tab || !panel) return;
+      if (k === which){
+        var on = panel.classList.contains('is-open');
+        panel.classList.toggle('is-open', !on);
+        tab.classList.toggle('is-active', !on);
+      } else {
+        panel.classList.remove('is-open');
+        tab.classList.remove('is-active');
+      }
+    });
+  };
+  window._populatePremios = function(){
+    var balonSel  = document.getElementById('premios-sel-balon');
+    var botaSel   = document.getElementById('premios-sel-bota');
+    var guanteSel = document.getElementById('premios-sel-guante');
+    var fifaSel   = document.getElementById('premios-sel-fifa');
+    if (!balonSel || !botaSel || !guanteSel || !fifaSel) return;
+
+    var byPlayer = {};
+    var teamRatings = {};
+    var posIsKeeper = function(pos){
+      var s = String(pos||'').toUpperCase();
+      return s === 'POR' || s === 'GK' || s === 'P' || /port/i.test(pos||'') || /goalk/i.test(pos||'');
+    };
+
+    for (var i = 0; i < localStorage.length; i++){
+      var key = localStorage.key(i);
+      if (!key || key.indexOf('ligaExt_') !== 0) continue;
+      if (key.indexOf('_protected') !== -1) continue;
+      if (key.indexOf('_snap_') !== -1) continue;
+      if (key.indexOf('_backup') !== -1) continue;
+      var raw; try { raw = localStorage.getItem(key); } catch(_){ continue; }
+      if (!raw) continue;
+      var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+      if (!data || !Array.isArray(data.teams)) continue;
+      data.teams.forEach(function(t){
+        if (!t || !t.name) return;
+        var power = Number(t.power || t.global || (t.lineStats && t.lineStats.global) || 0);
+        var cur = teamRatings[t.name];
+        if (!cur || (power > cur.power)){
+          teamRatings[t.name] = { name: t.name, power: power };
+        }
+        var players = Array.isArray(t.players) ? t.players : [];
+        players.forEach(function(p){
+          if (!p || !p.name) return;
+          var pkey = t.name + '::' + p.name;
+          if (!byPlayer[pkey]){
+            byPlayer[pkey] = { name:p.name, team:t.name, pos:p.pos||'',
+              gol:0, mvp:0, imbat:0 };
+          }
+          var e = byPlayer[pkey];
+          e.gol   += Number(p.gol||0);
+          e.mvp   += Number(p.mvp||0);
+          e.imbat += Number(p.imbat||0);
+          if (!e.pos && p.pos) e.pos = p.pos;
+        });
+      });
+    }
+
+    try {
+      var TR = window.TEAM_RATINGS || {};
+      Object.keys(TR).forEach(function(name){
+        var m = Number((TR[name]||{}).media || 0);
+        if (m > 0 && (!teamRatings[name] || !teamRatings[name].power)){
+          teamRatings[name] = { name: name, power: m };
+        }
+      });
+    } catch(_){}
+
+    var allPlayers = Object.keys(byPlayer).map(function(k){ return byPlayer[k]; });
+    function topBy(field, n, filterFn){
+      var list = allPlayers.slice();
+      if (filterFn) list = list.filter(filterFn);
+      list = list.filter(function(p){ return Number(p[field]||0) > 0; });
+      list.sort(function(a,b){
+        var d = Number(b[field]||0) - Number(a[field]||0);
+        if (d) return d;
+        return String(a.name||'').localeCompare(String(b.name||''),'es');
+      });
+      return list.slice(0, n);
+    }
+    var balon  = topBy('mvp',   50);
+    var bota   = topBy('gol',   50);
+    var guante = topBy('imbat', 50, function(p){
+      return posIsKeeper(p.pos) || Number(p.imbat||0) > 0;
+    });
+    var fifa = Object.keys(teamRatings).map(function(k){ return teamRatings[k]; })
+      .filter(function(t){ return Number(t.power||0) > 0; })
+      .sort(function(a,b){
+        var d = Number(b.power||0) - Number(a.power||0);
+        if (d) return d;
+        return String(a.name).localeCompare(String(b.name),'es');
+      }).slice(0, 50);
+
+    function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function fillPlayers(sel, items, vfield, label){
+      if (!sel) return;
+      if (!items.length){
+        sel.innerHTML = '<option>Sin datos todavía — simula partidos primero</option>';
+        return;
+      }
+      var html = '<option value="">— TOP ' + items.length + ' —</option>';
+      items.forEach(function(it, i){
+        var v = Number(it[vfield]||0);
+        html += '<option>' + esc((i+1) + '. ' + it.name + ' (' + it.team + ') · ' + v + ' ' + label) + '</option>';
+      });
+      sel.innerHTML = html;
+    }
+    function fillTeams(sel, items){
+      if (!sel) return;
+      if (!items.length){
+        sel.innerHTML = '<option>Sin datos todavía</option>';
+        return;
+      }
+      var html = '<option value="">— TOP ' + items.length + ' —</option>';
+      items.forEach(function(it, i){
+        var v = Number(it.power||0);
+        html += '<option>' + esc((i+1) + '. ' + it.name + ' · ' + v + ' pts') + '</option>';
+      });
+      sel.innerHTML = html;
+    }
+    fillPlayers(balonSel,  balon,  'mvp',   'MVP');
+    fillPlayers(botaSel,   bota,   'gol',   'goles');
+    fillPlayers(guanteSel, guante, 'imbat', 'porterías a 0');
+    fillTeams(fifaSel, fifa);
   };
   var liveCount = 0;
   try {
@@ -244,6 +413,28 @@ window._showSimProgress = function(opts, onDone){
 <div class="mc-main-overlay"></div>
 <div class="mc-main-content">
 <span class="mc-emoji" style="font-size:28px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.7));display:inline-block;">🌍</span><span class="mc-label" style="color:#fff!important;text-shadow:1px 1px 3px #000,0 0 10px rgba(0,0,0,.8);">RESTO DE LIGAS</span>
+</div>
+</div>
+<div class="menu-card full mc-premios" style="grid-column:span 2;" onclick="window.togglePremiosBox && window.togglePremiosBox()">
+<div class="mc-main-overlay"></div>
+<div class="mc-main-content" style="display:flex;align-items:center;justify-content:space-between;padding:0 16px;">
+<span class="mc-emoji" style="font-size:30px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.7));display:inline-block;">🥇</span>
+<span class="mc-label">PREMIOS TEMPORADA</span>
+<span class="mc-emoji" style="font-size:30px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.7));display:inline-block;">🏅</span>
+</div>
+</div>
+<div id="premios-box" class="premios-box">
+<div class="premios-tabs">
+<div class="premios-tab" id="premios-tab-jug" onclick="window.togglePremiosTab && window.togglePremiosTab('jug')">⚽ JUGADORES</div>
+<div class="premios-tab" id="premios-tab-eq" onclick="window.togglePremiosTab && window.togglePremiosTab('eq')">🛡 EQUIPOS</div>
+</div>
+<div id="premios-panel-jug" class="premios-panel">
+<div class="premios-row"><label>🏆 Balón de Oro · Top 50 mejores jugadores</label><select id="premios-sel-balon"><option>Cargando…</option></select></div>
+<div class="premios-row"><label>👟 Bota de Oro · Top 50 máximos goleadores</label><select id="premios-sel-bota"><option>Cargando…</option></select></div>
+<div class="premios-row"><label>🧤 Guante de Oro · Top 50 mejores porteros</label><select id="premios-sel-guante"><option>Cargando…</option></select></div>
+</div>
+<div id="premios-panel-eq" class="premios-panel">
+<div class="premios-row"><label>🌐 Ranking FIFA · Top 50 equipos</label><select id="premios-sel-fifa"><option>Cargando…</option></select></div>
 </div>
 </div>
 <div style="grid-column:span 2; border-top:1px solid rgba(240,192,64,.2); margin:2px 0; padding-top:8px;">

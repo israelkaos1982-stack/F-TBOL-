@@ -37804,6 +37804,28 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        el IIFE de Munich). */
     if (!state.events.length) state.events = parseAgenda();
 
+    /* Auto-pick del único torneo visible ANTES del check de la rama
+       picker. Petición usuario 2026-05-23: abría la web en un día de
+       Descanso y la card del día no aparecía — el botón CONTINUAR ▶
+       no estaba visible, así que el humano no podía avanzar. Causa:
+       _psVisibleTourIds() siempre devuelve ['jg'] (un único torneo
+       visible) y renderTourPicker() lo auto-selecciona, pero esa
+       auto-selección vivía DENTRO de la rama picker (línea siguiente),
+       que ya había decidido ocultar #ps-stage y devolver. Resultado:
+       en el primer updateHud post-load, pickedTours quedaba en
+       ['jg'] pero el #ps-stage seguía hidden hasta un updateHud
+       externo (navegar fuera y volver). Subiéndolo aquí, el check de
+       la rama picker ve pickedTours ya poblado y la rama normal pinta
+       la card del día desde el primer paint. */
+    if (state.pickedTours.length < 1) {
+      var _onlyVis = _psVisibleTourIds();
+      if (_onlyVis.length === 1) {
+        state.pickedTours = [_onlyVis[0]];
+        try { savePickedTours(state.pickedTours); } catch(_){}
+        try { if (typeof window._tourMergeBayern === 'function') window._tourMergeBayern(_onlyVis[0]); } catch(_){}
+      }
+    }
+
     /* Si todavía no hemos elegido el torneo de pretemporada, el
        picker ocupa el bloque "Próximo partido" — ocultamos los otros
        dos visuales y salimos sin tocar el resto del HUD. */

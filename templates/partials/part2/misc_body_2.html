@@ -29286,7 +29286,36 @@ document.addEventListener('DOMContentLoaded', function() {
        caja volvía al "01 May" aunque el usuario hubiese avanzado a
        "02 Jun". Replicado al server con last-write-wins por `ts`
        (sello que añade `_save` del IIFE de pretemporada). */
-    'bayern_preseason_v2'            /* cursor día (dayIdx) + tour elegido + rivales */
+    'bayern_preseason_v2',           /* cursor día (dayIdx) + tour elegido + rivales */
+    /* 2026-05-23 (petición usuario "todo igual en cualquier
+       móvil/PC"): el estado de TODAS las competiciones restantes
+       que aún vivían SOLO en localStorage del dispositivo admin.
+       Sin esto, al abrir la web desde un móvil o PC nuevo el
+       usuario veía Supercopa España vacía, Recopa sin cuadro,
+       Superliga sin calendario, KOs de UCL/UEL/UECL sin emparejar,
+       Mundial / Selecciones sin sortear y los partidos aplazados
+       no existían — aunque el admin los hubiera generado en su
+       móvil. Se sigue exactamente el mismo patrón que el resto:
+       push debounced cada 3 s, hidratación al cargar si la clave
+       falta o el server.ts > local.ts, last-write-wins con
+       desempate por timestamp. */
+    'sc_state_v1',                   /* Supercopa de España (cuadro 8 equipos) */
+    'usc_state_v1',                  /* Supercopa de Europa */
+    'recopa_state_v1',               /* Recopa */
+    'mundial_state_v1',              /* Mundial de Clubes */
+    'mundialito_state_v1',           /* Mundialito de Clubes (legacy) */
+    'seleccion_state_v1',            /* Selecciones (singular legacy) */
+    'selecciones_state_v1',          /* Selecciones (canónico) */
+    'ucl_ko_state_v1',               /* UCL fase eliminatoria */
+    'uel_ko_state_v1',               /* UEL fase eliminatoria */
+    'uecl_ko_state_v1',              /* UECL fase eliminatoria */
+    'superliga_state_v1',            /* Superliga estado global */
+    'superliga_teams_v1',            /* Superliga selección de 6 equipos */
+    'superliga_calendar_v1',         /* Superliga calendario 20 jornadas */
+    'superliga_results_v1',          /* Superliga resultados de cada jornada */
+    'partidos_aplazados',            /* Partidos aplazados (array) */
+    'wc_champ_v1',                   /* Wild Card · campeón (alias corto) */
+    'wc_champion_v1'                 /* Wild Card · campeón */
   ];
 
   function _readLs(k){
@@ -29344,8 +29373,12 @@ document.addEventListener('DOMContentLoaded', function() {
           try { console.log('[comp-sync] hidratado desde server:', restored.join(', ')); } catch(_){}
           try { if(typeof window.buildUclPrevClas === 'function') window.buildUclPrevClas(); } catch(_){}
           try { if(typeof window.buildUclGruposClas === 'function') window.buildUclGruposClas(); } catch(_){}
+          try { if(typeof window.buildUelGruposClas === 'function') window.buildUelGruposClas(); } catch(_){}
+          try { if(typeof window.buildUeclGruposClas === 'function') window.buildUeclGruposClas(); } catch(_){}
           try { if(typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
           try { if(typeof window._wcRender === 'function') window._wcRender(); } catch(_){}
+          try { if(typeof window._scRender === 'function') window._scRender(); } catch(_){}
+          try { if(typeof window._recopaInit === 'function') window._recopaInit(); } catch(_){}
           try { if(typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
           /* Si KEY_COMPS o KEY_TITLE del calendario Bayern/Liverpool
              fueron restaurados, el cache en memoria de esa IIFE está

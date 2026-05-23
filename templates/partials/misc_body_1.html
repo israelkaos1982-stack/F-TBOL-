@@ -2970,7 +2970,14 @@ window._showSimProgress = function(opts, onDone){
        _psHumanLogicName y luego a 'Bayern Munich' por si rv es
        data legacy sin .home. */
     var home = (rv && rv.home) || _psHumanLogicName() || 'Bayern Munich';
-    var away = rv.name;
+    /* `rv.away` (2026-05-23): contiene el visitante real del partido —
+       puede ser el humano cuando le toca jugar fuera (vuelta de
+       ida+vuelta, jornada con home/away invertido). Antes usábamos
+       `rv.name` (el "rival" desde la POV del humano) que en vuelta
+       coincidía con el propio humano y dejaba la previa como
+       "Liverpool vs Liverpool". Fallback a `rv.name` para data
+       legacy de torneos guardados antes del fix. */
+    var away = (rv && rv.away) || rv.name;
     var comp = /amist/i.test(day.label || '') ? 'amistoso' : 'torneo';
     var dur = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH:false, humanInvolved:true })
@@ -3042,9 +3049,7 @@ window._showSimProgress = function(opts, onDone){
       if (!cfg && typeof window._tourLoadCachedSync === 'function'){
         try { cfg = window._tourLoadCachedSync(tid); } catch(_){}
       }
-      if (!cfg || !cfg.bracket) return null;
-      var r = parseInt(cfg.currentRound,10) || 0;
-      var round = cfg.bracket[r] || cfg.bracket[0] || [];
+      if (!cfg) return null;
       /* Fuente de verdad del slot humano: la bandera .isHuman que el
          módulo de torneos pone al asignar el slot PENDIENTE dorado
          (la misma flag que renderiza 👤 en la UI). Fallback por
@@ -3061,18 +3066,134 @@ window._showSimProgress = function(opts, onDone){
         if (k === _psNameKey('Bayern'))            return true;
         return false;
       }
-      var bi = -1;
-      for (var i=0;i<round.length;i++){
-        if (_slotIsH(round[i])){ bi = i; break; }
+
+      /* ── KO (ida única) y KO-2LEG (ida + vuelta) ─────────────
+         La pareja vive en cfg.bracket[currentRound]. Por convenio,
+         el primer elemento del par (índice par dentro del round)
+         es LOCAL en la IDA. La VUELTA invierte ese rol — detectamos
+         que es vuelta cuando ya hay resultado guardado bajo la
+         clave `R_M|L1`. Antes esta función devolvía SIEMPRE al
+         humano como local, así que la previa de la vuelta seguía
+         poniendo Liverpool en casa cuando le tocaba visitante. */
+      if ((cfg.format === 'ko' || cfg.format === 'ko-2leg') && Array.isArray(cfg.bracket)){
+        var r = parseInt(cfg.currentRound,10) || 0;
+        var round = cfg.bracket[r] || cfg.bracket[0] || [];
+        var bi = -1;
+        for (var i=0;i<round.length;i++){
+          if (_slotIsH(round[i])){ bi = i; break; }
+        }
+        if (bi < 0) return null;
+        var humanSlot = round[bi];
+        var pj = (bi % 2 === 0) ? bi + 1 : bi - 1;
+        var oppSlot = round[pj];
+        if (!humanSlot || !oppSlot) return null;
+        var humanName = humanSlot.name;
+        var oppName   = oppSlot.name;
+        if (!humanName || humanName === 'PENDIENTE') return null;
+        if (!oppName   || _slotIsH(oppSlot) || oppName === 'PENDIENTE') return null;
+
+        var humanIsHomeL1 = (bi % 2 === 0);
+        var humanIsHome   = humanIsHomeL1;
+
+        if (cfg.format === 'ko-2leg'){
+          var fc = cfg.formatConfig || {};
+          var rounds = (fc.rounds) || [];
+          var isLast = rounds.length > 0 && r === (rounds.length - 1);
+          var singleLast = !!fc.singleLegLastRound;
+          var twoLeg = !(isLast && singleLast);
+          if (twoLeg){
+            var mk = r + '_' + Math.floor(bi/2);
+            var l1Done = !!(cfg.results && cfg.results[mk + '|L1']);
+            if (l1Done) humanIsHome = !humanIsHomeL1;
+          }
+        }
+
+        return humanIsHome
+          ? { home: String(humanName), away: String(oppName),   rival: String(oppName) }
+          : { home: String(oppName),   away: String(humanName), rival: String(oppName) };
       }
-      if (bi < 0) return null;
-      var homeName = round[bi] && round[bi].name;
-      if (!homeName || homeName === 'PENDIENTE') return null;
-      var pj = (bi % 2 === 0) ? bi + 1 : bi - 1;
-      var opp = round[pj];
-      var oppName = opp && opp.name;
-      if (!oppName || _slotIsH(opp) || oppName === 'PENDIENTE') return null;
-      return { home: String(homeName), rival: String(oppName) };
+
+      /* ── Groups + KO (Trofeo Joan Gamper, Asian, Mundialito…) ─
+         Si todos los grupos están terminados y ya hay koBracket,
+         el humano juega la fase KO — misma lógica que KO arriba.
+         Si la fase de grupos sigue activa, leemos el fixture
+         round-robin del grupo del humano para conocer el local/
+         visitante EXPLÍCITO de la jornada actual. Con
+         `groupDoubleLegs:true` la segunda mitad del fixture es el
+         espejo de la primera (home/away invertidos), así que la
+         vuelta cae automáticamente como visitante para el humano. */
+      if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss'){
+        /* Fase KO ya iniciada → tratar como KO de partido único. */
+        if (Array.isArray(cfg.koBracket) && cfg.koBracket.length){
+          var kr = parseInt(cfg.koCurrentRound,10) || 0;
+          var kround = cfg.koBracket[kr] || cfg.koBracket[0] || [];
+          var kbi = -1;
+          for (var ki=0; ki<kround.length; ki++){
+            if (_slotIsH(kround[ki])){ kbi = ki; break; }
+          }
+          if (kbi >= 0){
+            var khSlot = kround[kbi];
+            var kpj = (kbi % 2 === 0) ? kbi + 1 : kbi - 1;
+            var koSlot = kround[kpj];
+            if (khSlot && koSlot){
+              var khName = khSlot.name, koName = koSlot.name;
+              if (khName && khName !== 'PENDIENTE'
+                  && koName && !_slotIsH(koSlot) && koName !== 'PENDIENTE'){
+                var khIsHome = (kbi % 2 === 0);
+                return khIsHome
+                  ? { home: String(khName), away: String(koName), rival: String(koName) }
+                  : { home: String(koName), away: String(khName), rival: String(koName) };
+              }
+            }
+          }
+        }
+        /* Fase de grupos: localizar al humano en cfg.teams, su grupo
+           y su partido en la jornada actual del round-robin. */
+        var teams = Array.isArray(cfg.teams) ? cfg.teams : [];
+        if (!teams.length) return null;
+        var fc2 = cfg.formatConfig || {};
+        var nG  = fc2.groups   || 1;
+        var pg  = fc2.perGroup || Math.ceil(teams.length / nG);
+        var huIdx = -1;
+        for (var ti=0; ti<teams.length; ti++){
+          if (_slotIsH(teams[ti])){ huIdx = ti; break; }
+        }
+        if (huIdx < 0) return null;
+        var gIdx = Math.floor(huIdx / pg);
+        var gStart = gIdx * pg;
+        var slice = teams.slice(gStart, gStart + pg);
+        var huInSlice = huIdx - gStart;
+        var fixs = (cfg.groupFixtures && cfg.groupFixtures[gIdx]) || null;
+        if (!Array.isArray(fixs) || !fixs.length) return null;
+        var cj = (cfg.currentJornadaByGroup && cfg.currentJornadaByGroup[gIdx]) || 0;
+        if (cj >= fixs.length) cj = fixs.length - 1;
+        var jor = fixs[cj] || [];
+        for (var mi=0; mi<jor.length; mi++){
+          var mm = jor[mi];
+          if (!mm) continue;
+          if (mm.home === huInSlice || mm.away === huInSlice){
+            var hT = slice[mm.home], aT = slice[mm.away];
+            if (!hT || !aT) return null;
+            if (!hT.name || hT.name === 'PENDIENTE') return null;
+            if (!aT.name || aT.name === 'PENDIENTE') return null;
+            /* El rival NO puede ser humano (en JG numHumans:1 nunca
+               pasa; si en el futuro hay 2 humanos en el mismo grupo,
+               este partido lo gestiona HvH y NO entramos por aquí). */
+            if (mm.home === huInSlice){
+              if (_slotIsH(aT)) return null;
+              return { home: String(hT.name), away: String(aT.name), rival: String(aT.name) };
+            } else {
+              if (_slotIsH(hT)) return null;
+              return { home: String(hT.name), away: String(aT.name), rival: String(hT.name) };
+            }
+          }
+        }
+        return null;
+      }
+
+      /* Otros formatos (league, mundial-48…) — sin lógica específica
+         de pretemporada. Caemos al null y _cardMatch muestra el aviso. */
+      return null;
     } catch(_){}
     return null;
   }
@@ -3111,8 +3232,15 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     var rv = d.rivals[day.date];
+    /* `pair.away` lo añadió la refactorización de _realPair (2026-05-23):
+       en partidos donde el humano juega de visitante (vuelta de ida+vuelta
+       o jornada del round-robin con home/away invertido), `pair.home` es
+       el RIVAL y `pair.away` es el humano. Antes `rv.name` se usaba como
+       "el otro equipo", lo que en vuelta == humano (rompía el placeholder
+       y la previa que pintaban "Liverpool vs Liverpool"). */
+    var _pairAway = pair.away || pair.rival;
     if (!rv){
-      rv = { name: pair.rival, home: pair.home,
+      rv = { name: pair.rival, home: pair.home, away: _pairAway,
              stadium: STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
              difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)] };
       d.rivals[day.date] = rv;
@@ -3120,6 +3248,7 @@ window._showSimProgress = function(opts, onDone){
       /* Resync con el bracket por si cambió en el editor (admin). */
       if (rv.name !== pair.rival) rv.name = pair.rival;
       if (rv.home !== pair.home)  rv.home = pair.home;
+      if (rv.away !== _pairAway)  rv.away = _pairAway;
     }
     _save(d);
     /* En día de partido NO usamos card propia: se abre la PANTALLA DE
@@ -3129,7 +3258,7 @@ window._showSimProgress = function(opts, onDone){
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
-      + '<div class="ps-meta" style="margin:16px 0;">📋 Pantalla de previa<br><b>' + _esc(_psHumanName()) + '</b> vs <b>' + _esc(rv.name) + '</b></div>'
+      + '<div class="ps-meta" style="margin:16px 0;">📋 Pantalla de previa<br><b>' + _esc(rv.home) + '</b> vs <b>' + _esc(rv.away) + '</b></div>'
       + '<div style="display:flex;justify-content:center;margin-top:8px;">'
       +   '<button type="button" class="ps-btn" id="ps-match-play">📋 ABRIR PREVIA</button>'
       + '</div>'
@@ -32997,7 +33126,7 @@ Tottenham
      Competiciones. Muestra partidos de Liverpool + Francia
      (selección) — pendientes en una, jugados en la otra. */
   #s-munich .munich-fixtures-pair{
-    display:grid;grid-template-columns:1fr 1fr;gap:8px;
+    display:flex;flex-direction:column;gap:8px;
     margin:10px 12px 14px;
   }
   #s-munich .munich-fix{
@@ -33007,24 +33136,19 @@ Tottenham
     box-shadow:0 6px 18px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
   }
   #s-munich .munich-fix-hdr{
-    display:flex;align-items:center;justify-content:space-between;gap:6px;
-    padding:11px 12px;background:transparent;border:none;width:100%;cursor:pointer;
-    color:#fff;font-family:Oswald,sans-serif;letter-spacing:1.4px;font-size:11px;
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:13px 16px;background:transparent;border:none;width:100%;cursor:pointer;
+    color:#fff;font-family:Oswald,sans-serif;letter-spacing:2.2px;font-size:13px;
     text-transform:uppercase;font-weight:700;-webkit-tap-highlight-color:transparent;
     text-align:left;
   }
-  #s-munich .munich-fix-title{display:flex;align-items:center;gap:6px;flex:1;min-width:0;}
-  #s-munich .munich-fix-emoji{font-size:16px;line-height:1;flex:0 0 auto;}
-  #s-munich .munich-fix-lbl{
-    display:flex;flex-direction:column;line-height:1.1;min-width:0;
-  }
-  #s-munich .munich-fix-lbl b{font-weight:700;font-size:11px;letter-spacing:1.4px;}
-  #s-munich .munich-fix-lbl small{
-    font-family:Rajdhani,sans-serif;font-size:10px;font-weight:600;
-    letter-spacing:.6px;color:rgba(255,255,255,.6);text-transform:none;
+  #s-munich .munich-fix-title{display:flex;align-items:center;gap:9px;flex:1;min-width:0;}
+  #s-munich .munich-fix-emoji{
+    font-size:19px;line-height:1;flex:0 0 auto;
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));
   }
   #s-munich .munich-fix-chev{
-    font-size:11px;color:#ffd750;transition:transform .25s ease;flex:0 0 auto;
+    font-size:13px;color:#ffd750;transition:transform .25s ease;flex:0 0 auto;
   }
   #s-munich .munich-fix.open .munich-fix-chev{transform:rotate(180deg);}
   #s-munich .munich-fix-body{
@@ -33411,9 +33535,7 @@ Tottenham
             aria-expanded="false" aria-controls="munich-fix-pend-body">
       <span class="munich-fix-title">
         <span class="munich-fix-emoji">⏳</span>
-        <span class="munich-fix-lbl">
-          <b>Partidos</b><small>Pendientes</small>
-        </span>
+        <span>Partidos Pendientes</span>
       </span>
       <span class="munich-fix-chev" aria-hidden="true">▼</span>
     </button>
@@ -33429,9 +33551,7 @@ Tottenham
             aria-expanded="false" aria-controls="munich-fix-temp-body">
       <span class="munich-fix-title">
         <span class="munich-fix-emoji">📋</span>
-        <span class="munich-fix-lbl">
-          <b>Partidos</b><small>Temporada</small>
-        </span>
+        <span>Partidos Temporada</span>
       </span>
       <span class="munich-fix-chev" aria-hidden="true">▼</span>
     </button>
@@ -37738,6 +37858,28 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     /* Re-parseo perezoso de la agenda (por si se cargó después que
        el IIFE de Munich). */
     if (!state.events.length) state.events = parseAgenda();
+
+    /* Auto-pick del único torneo visible ANTES del check de la rama
+       picker. Petición usuario 2026-05-23: abría la web en un día de
+       Descanso y la card del día no aparecía — el botón CONTINUAR ▶
+       no estaba visible, así que el humano no podía avanzar. Causa:
+       _psVisibleTourIds() siempre devuelve ['jg'] (un único torneo
+       visible) y renderTourPicker() lo auto-selecciona, pero esa
+       auto-selección vivía DENTRO de la rama picker (línea siguiente),
+       que ya había decidido ocultar #ps-stage y devolver. Resultado:
+       en el primer updateHud post-load, pickedTours quedaba en
+       ['jg'] pero el #ps-stage seguía hidden hasta un updateHud
+       externo (navegar fuera y volver). Subiéndolo aquí, el check de
+       la rama picker ve pickedTours ya poblado y la rama normal pinta
+       la card del día desde el primer paint. */
+    if (state.pickedTours.length < 1) {
+      var _onlyVis = _psVisibleTourIds();
+      if (_onlyVis.length === 1) {
+        state.pickedTours = [_onlyVis[0]];
+        try { savePickedTours(state.pickedTours); } catch(_){}
+        try { if (typeof window._tourMergeBayern === 'function') window._tourMergeBayern(_onlyVis[0]); } catch(_){}
+      }
+    }
 
     /* Si todavía no hemos elegido el torneo de pretemporada, el
        picker ocupa el bloque "Próximo partido" — ocultamos los otros

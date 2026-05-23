@@ -19209,6 +19209,13 @@
         window._compStateSyncPush();
       }
     } catch(_){}
+    /* Caja "Competiciones" del hub: si está abierta, repintamos para
+       reflejar inmediatamente las casillas marcadas/desmarcadas. */
+    try {
+      if (typeof window.muCompsRefresh === 'function') {
+        window.muCompsRefresh();
+      }
+    } catch(_){}
     var ov = document.getElementById('bayern-cal-ov');
     if (ov) ov.classList.remove('show');
   };

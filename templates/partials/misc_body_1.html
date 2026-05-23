@@ -12826,12 +12826,29 @@ window._showSimProgress = function(opts, onDone){
   /* ── Persistencia ──────────────────────────────────────── */
   window._tourLoad = async function(id){
     if (TOUR_IDS.indexOf(id) === -1) return null;
+    /* Snapshot del local ANTES del fetch. Si el server responde con una
+       versión MÁS ANTIGUA que la que el usuario acaba de guardar (race
+       entre el POST del save y este GET en segundo plano), machacar
+       localStorage con esa versión vieja perdería los cambios recientes
+       (cardColor / cardText / flag / resultados…). 2026-05-22. */
+    var localCfg = null;
+    try {
+      var rawL = localStorage.getItem(_key(id));
+      if (rawL) localCfg = _migrateCfg(JSON.parse(rawL));
+    } catch(_){}
+    var localUpd = (localCfg && localCfg.updatedAt) || '';
     try {
       var res = await fetch('/api/kv/' + _key(id), { headers:{'Cache-Control':'no-store'} });
       if (res.ok) {
         var j = await res.json();
         if (j && j.ok && j.value) {
           var cfg = _migrateCfg(j.value);
+          var srvUpd = (cfg && cfg.updatedAt) || '';
+          /* Server más viejo que el local → no pisar (preserva los
+             cambios del usuario que aún no han subido al server). */
+          if (srvUpd && localUpd && srvUpd <= localUpd) {
+            return localCfg || cfg;
+          }
           try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
           try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = cfg; } catch(_){}
           return cfg;
@@ -17583,7 +17600,24 @@ window._showSimProgress = function(opts, onDone){
     var h = '<div class="tv-mg-sec">Torneos activos</div>';
     if (!active.length) h += '<div class="tv-mg-empty">Ninguno.</div>';
     active.forEach(function(id){
-      h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + '</span>'
+      /* Chip de color: pequeño cuadrado con el cardColor guardado (o el
+         color por defecto del board / del torneo built-in). Da feedback
+         INMEDIATO al usuario tras pulsar 🎨 Guardar — antes esta lista
+         solo mostraba el nombre y el botón, y al cerrar el modal no se
+         veía cambiar nada (el cambio solo era visible en la pantalla de
+         tarjetas detrás del overlay). 2026-05-22. */
+      var _ccM = _tvCfgOf(id);
+      var _chipHex = _tvHexClamp(_ccM && _ccM.cardColor);
+      var _chipBg;
+      if (_chipHex) {
+        _chipBg = _tvCardGradient(_chipHex);
+      } else {
+        var _bd = _tvBoardOf(id);
+        var _def = _TV_COLORS[id] || _TV_BOARD_COLOR[_bd] || _TV_DEF_COLOR;
+        _chipBg = _def[0];
+      }
+      var chip = '<span class="tv-mg-chip" style="display:inline-block;width:22px;height:22px;border-radius:5px;border:1px solid rgba(255,255,255,.25);background:'+_chipBg+';flex-shrink:0;margin-right:2px;box-shadow:0 0 0 1px rgba(0,0,0,.4) inset;"></span>';
+      h += '<div class="tv-mg-row">' + chip + '<span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + '</span>'
         + '<button class="tv-mg-btn tv-mg-color" data-act="color" data-id="' + id + '">🎨 Color</button>'
         + '<button class="tv-mg-btn tv-mg-del" data-act="del" data-id="' + id + '">🗑 Eliminar</button></div>';
     });

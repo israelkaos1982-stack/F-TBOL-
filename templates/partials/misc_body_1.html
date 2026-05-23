@@ -14053,9 +14053,9 @@ window._showSimProgress = function(opts, onDone){
         + '<div class="mr-search" id="sr-search" style="display:none;">'
         + '<input id="sr-q" type="text" placeholder="Buscar selección…" autocomplete="off">'
         + '<div class="mr-results" id="sr-results"></div></div>'
-        + '<div class="mr-foot" style="display:flex;gap:8px;">'
-        + '<button class="mr-ok" type="button" id="sr-rand" style="flex:0 0 auto;background:rgba(45,212,191,.16);color:#2dd4bf;border:1px solid rgba(45,212,191,.5);">🎲 Al azar</button>'
-        + '<button class="mr-ok" type="button" id="sr-ok" style="flex:1;">✅ CONFIRMAR</button></div></div>';
+        + '<div class="mr-foot" style="display:flex;gap:8px;align-items:stretch;">'
+        + '<button class="mr-ok" type="button" id="sr-rand" style="flex:1 1 0;width:auto;min-width:0;padding:13px 8px;background:rgba(45,212,191,.16);color:#2dd4bf;border:1px solid rgba(45,212,191,.5);font-size:12px;">🎲 Al azar</button>'
+        + '<button class="mr-ok" type="button" id="sr-ok" style="flex:1 1 0;width:auto;min-width:0;padding:13px 8px;font-size:12px;">✅ Confirmar</button></div></div>';
       document.body.appendChild(ov);
       ov.addEventListener('click', function(e){ if (e.target === ov) ov.style.display='none'; });
     }
@@ -15085,38 +15085,34 @@ window._showSimProgress = function(opts, onDone){
       var fin = cfg.results['ko_'+lastR+'_0'];
       if (fin && fin.played) champTeam = (fin.winner === 'a') ? koBracket[lastR][0] : koBracket[lastR][1];
     }
-    function box(view, emoji, title, sub, enabled, accent){
-      /* Cajas con la paleta cian/turquesa brillante del Mundialito
-         Clubes (petición usuario 2026-05-22): gradient horizontal
-         luminoso para las cajas activas, gris apagado para las
-         bloqueadas. */
-      var grad = enabled
-        ? (accent === 'stats'
-            ? 'linear-gradient(135deg,#001f2a 0%,#003a52 25%,#006080 50%,#00bcd4 70%,#006080 85%,#001f2a 100%)'
-            : 'linear-gradient(90deg,#001f2a,#003a52,#006080,#00bcd4,#006080,#003a52,#001f2a)')
-        : 'linear-gradient(135deg,#171717 0%,#262626 60%,#171717 100%)';
-      var brd = enabled ? '#4dd0e1' : 'rgba(255,255,255,.18)';
-      var click = enabled ? ' onclick="window._mundialGo(\''+tourId+'\',\''+view+'\')"' : '';
-      var cur = enabled ? 'cursor:pointer;' : 'cursor:not-allowed;opacity:.6;';
-      var shadow = enabled
-        ? 'box-shadow:0 4px 18px rgba(0,188,212,.32),inset 0 1px 0 rgba(255,255,255,.10);'
-        : 'box-shadow:0 4px 16px rgba(0,0,0,.35);';
-      return '<div'+click+' style="display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:10px;'
-        + 'background:'+grad+';border:1.5px solid '+brd+';border-radius:12px;'+cur+shadow+'">'
-        + '<span style="font-size:26px;line-height:1;">'+emoji+'</span>'
-        + '<span style="flex:1;text-align:left;">'
-        +   '<span style="display:block;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:1.5px;color:#fff;">'+title+'</span>'
-        +   '<span style="display:block;font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,'+(enabled?'.78':'.6')+');margin-top:2px;">'+sub+'</span>'
-        + '</span>'
-        + '<span style="font-size:16px;color:'+(enabled?'#fff':brd)+';">'+(enabled?'▶':'🔒')+'</span>'
-        + '</div>';
+    /* Fila compacta estilo Mundialito Clubes (foto 2): .jblock + .jbtn
+       .c-mundial — emoji + "Mundial" + ronda + pequeño badge. Sin
+       subtítulos explicativos (petición usuario 2026-05-22). */
+    function row(view, emoji, title, badge, locked){
+      var lockStyle = locked
+        ? 'opacity:.45;cursor:not-allowed;filter:grayscale(.55);'
+        : '';
+      var click = locked
+        ? ''
+        : ' onclick="window._mundialGo(\''+tourId+'\',\''+view+'\')"';
+      var dot = locked ? '🔒' : '▶';
+      var bdg = badge
+        ? '<span class="bdg" style="margin-left:auto;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.85);">'+badge+'</span>'
+        : '';
+      return '<div class="jblock">'
+        + '<button type="button" class="jbtn c-mundial"'+click
+        + (lockStyle ? ' style="'+lockStyle+'"' : '')+'>'
+        + '<div class="pdot">'+dot+'</div>'
+        + emoji+' <b>Mundial</b>&nbsp;&nbsp;'+title
+        + bdg
+        + '</button></div>';
     }
-    function koBox(r, emoji, title){
-      var enabled, sub;
+    function koRow(r, emoji, title){
+      var locked, badge;
       if (!gs.allGroupsDone) {
-        enabled = false; sub = 'Termina antes la fase de grupos';
+        locked = true; badge = '🔒';
       } else if (r === 0 || koBracket[r]) {
-        enabled = true;
+        locked = false;
         var bt = koBracket[r];
         if (bt && bt.length) {
           var tot = Math.floor(bt.length/2), done = 0;
@@ -15124,32 +15120,139 @@ window._showSimProgress = function(opts, onDone){
             var rr = cfg.results['ko_'+r+'_'+i];
             if (rr && rr.played) done++;
           }
-          if (r === lastR && champTeam) sub = '🏆 Campeón: ' + ((champTeam && champTeam.name) || champTeam);
-          else sub = done + ' / ' + tot + ' partidos jugados';
+          badge = (r === lastR && champTeam)
+            ? '🏆 ' + ((champTeam && champTeam.name) || '')
+            : (done + '/' + tot);
         } else {
-          sub = 'Sorteo pendiente · ábrelo para empezar';
+          badge = '○';
         }
       } else {
-        enabled = false; sub = 'Disponible al avanzar la ronda anterior';
+        locked = true; badge = '🔒';
       }
-      return box('ko'+r, emoji, title, sub, enabled);
+      return row('ko'+r, emoji, title, badge, locked);
     }
-    var html = '';
+    var html = '<div class="jlist" style="padding:6px 0 18px;">';
     if (champTeam) html += _championBoxHtml(champTeam);
-    html += koBox(4, '🏆', 'Final');
-    html += koBox(3, '🥈', 'Semifinales');
-    html += koBox(2, '🎖️', 'Cuartos de Final');
-    html += koBox(1, '🛡️', 'Octavos de Final');
-    html += koBox(0, '⚔️', 'Dieciseisavos');
-    html += box('groups', '⚽', 'Fase de Grupos',
-      (gTot ? gDone+' / '+gTot+' partidos jugados' : '12 grupos de 4 selecciones'), true);
-    html += box('stats', '📊', 'Estadísticas',
-      'Goleadores · tarjetas · MVP — todas las fases', true, 'stats');
+    html += koRow(4, '🏆', 'Final');
+    html += koRow(3, '🥈', 'Semifinales');
+    html += koRow(2, '🎖️', 'Cuartos');
+    html += koRow(1, '🛡️', 'Octavos');
+    html += koRow(0, '⚔️', 'Dieciseisavos');
+    html += row('groups', '⚽', 'Fase de Grupos', (gTot ? gDone+'/'+gTot : '12×4'), false);
+    html += row('stats',  '📊', 'Estadísticas',  '', false);
+    html += '</div>';
     return html;
   }
+  /* Tabla de clasificación de un grupo del Mundial, estilo Superliga
+     (foto 5 del usuario): cabecera Oswald, fila por equipo con
+     posición, escudo, nombre + icono humano, PTS destacado y
+     PJ/V/E/P/GF/GC. Los clasificados directos (top advancePerGroup)
+     llevan zona resaltada en cian. */
+  function _mundialClasTableHtml(rows, slice, advancePerGroup){
+    var cells = '<thead><tr style="background:linear-gradient(90deg,#001f2a,#003a52,#001f2a);border-bottom:1px solid rgba(77,208,225,.40);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:rgba(255,255,255,.7);">'
+      + '<th style="text-align:left;padding:8px 6px 8px 10px;">EQUIPO</th>'
+      + '<th style="padding:8px 4px;">PTS</th>'
+      + '<th style="padding:8px 4px;">PJ</th>'
+      + '<th style="padding:8px 4px;">V</th>'
+      + '<th style="padding:8px 4px;">E</th>'
+      + '<th style="padding:8px 4px;">P</th>'
+      + '<th style="padding:8px 4px;">GF</th>'
+      + '<th style="padding:8px 10px 8px 4px;">GC</th>'
+      + '</tr></thead><tbody>';
+    rows.forEach(function(r, idx){
+      var pos = idx + 1;
+      var t = slice[r.idx];
+      var nm = (t && t.name) || '?';
+      var shield = t && t.shield
+        ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'" style="width:22px;height:22px;object-fit:contain;flex-shrink:0;">'
+        : '';
+      var humanIc = '';
+      try {
+        if (t && t.isHuman && typeof window._tourTeamIcon === 'function') {
+          humanIc = window._tourTeamIcon(t);
+        }
+      } catch(_){}
+      var isAdv = (pos <= advancePerGroup);
+      var rowBg  = isAdv ? 'rgba(77,208,225,.10)' : 'transparent';
+      var rowBd  = isAdv ? '#4dd0e1' : 'transparent';
+      var posCol = isAdv ? '#4dd0e1' : 'rgba(255,255,255,.45)';
+      cells += '<tr style="background:'+rowBg+';border-left:3px solid '+rowBd+';border-bottom:1px solid rgba(255,255,255,.05);">'
+        + '<td style="padding:8px 6px 8px 7px;"><div style="display:flex;align-items:center;gap:6px;">'
+        +   '<span style="font-family:\'Bebas Neue\',sans-serif;color:'+posCol+';width:16px;text-align:center;font-size:15px;">'+pos+'</span>'
+        +   shield
+        +   '<span style="font-family:Rajdhani,sans-serif;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">'+nm+'</span>'
+        +   (humanIc ? '<span style="margin-left:2px;">'+humanIc+'</span>' : '')
+        + '</div></td>'
+        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;font-size:17px;color:#f0c040;font-weight:700;">'+r.pts+'</td>'
+        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pj+'</td>'
+        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pg+'</td>'
+        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pe+'</td>'
+        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pp+'</td>'
+        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:#80d0ff;">'+r.gf+'</td>'
+        + '<td style="padding:8px 10px 8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:#ff9090;">'+r.gc+'</td>'
+        + '</tr>';
+    });
+    cells += '</tbody>';
+    return '<div style="overflow-x:auto;">'
+      + '<table style="width:100%;border-collapse:collapse;min-width:340px;">'
+      + cells
+      + '</table></div>';
+  }
+
+  /* Tarjeta de UN partido estilo foto 5 (Superliga) — escudo arriba +
+     nombre debajo a cada lado, cuadradito central con marcador o
+     "PREVIA". Mantiene `tour-match` + `data-match-key` para que el
+     handler de click siga abriendo gm-modal / acta. */
+  function _mundialMatchCardHtml(tourId, matchKey, th, ta, res){
+    var played = !!(res && res.played);
+    var hasHuman = (th && th.isHuman) || (ta && ta.isHuman);
+    var rowCls = 'tour-match' + (played ? ' tour-match-played' : ' tour-match-pickable');
+    if (hasHuman) rowCls += ' tour-match-has-human';
+    function side(t, isRight){
+      var nm = (t && t.name) || '?';
+      var sh = t && t.shield
+        ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'" style="width:38px;height:38px;object-fit:contain;">'
+        : '<div style="width:38px;height:38px;"></div>';
+      var humanIc = '';
+      try {
+        if (t && t.isHuman && typeof window._tourTeamIcon === 'function') {
+          humanIc = window._tourTeamIcon(t);
+        }
+      } catch(_){}
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center;">'
+        + sh
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block;">'+nm
+        +   (humanIc ? ' '+humanIc : '')
+        + '</span></div>';
+    }
+    var center;
+    if (played) {
+      var aW = res.winner === 'a', bW = res.winner === 'b';
+      center = '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 6px;">'
+        + '<div style="background:rgba(0,0,0,.45);border:1px solid rgba(77,208,225,.5);border-radius:6px;padding:4px 10px;font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:2px;color:#4dd0e1;text-shadow:0 0 10px rgba(77,208,225,.55);min-width:60px;text-align:center;"><span'+(aW?' style="color:#fff;"':'')+'>'+res.a+'</span> - <span'+(bW?' style="color:#fff;"':'')+'>'+res.b+'</span></div>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);">🏁 FIN</div>'
+        + '</div>';
+    } else {
+      center = '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 6px;">'
+        + '<div style="background:transparent;border:1px solid rgba(255,255,255,.20);border-radius:6px;padding:4px 10px;font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:2px;color:rgba(255,255,255,.35);min-width:60px;text-align:center;">—</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#4dd0e1;border:1px solid rgba(77,208,225,.55);border-radius:5px;padding:2px 8px;">📋 PREVIA</div>'
+        + '</div>';
+    }
+    /* `data-league-key` (no -match-key): el handler global dispatcha
+       las jornadas de grupo de groups-ko / mundial por ese atributo. */
+    return '<div class="'+rowCls+'" data-tour="'+tourId+'" data-league-key="'+matchKey+'" '
+      + 'style="display:flex;align-items:center;gap:6px;padding:10px 10px;border-bottom:1px solid rgba(255,255,255,.05);background:rgba(0,0,0,.30);">'
+      + side(th, false)
+      + center
+      + side(ta, true)
+      + '</div>'
+      + _tourActaPanelHtml(tourId, matchKey, res);
+  }
+
   function _mundialGroupsHtml(cfg, tourId, gs){
-    var html = _mundialBackBtn(tourId)
-      + '<p style="margin:0 0 8px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:#2dd4bf;">FASE DE GRUPOS · 12 GRUPOS DE 4</p>';
+    var html = _mundialBackBtn(tourId);
+    var advancePerGroup = 2;   /* mundial: 1º+2º directos (los 8 mejores
+                                  3os se calculan al cerrar la fase). */
     for (var g = 0; g < gs.slices.length; g++) {
       var slice = gs.slices[g];
       if (slice.length < 2) continue;
@@ -15159,26 +15262,60 @@ window._showSimProgress = function(opts, onDone){
       var prog = _tourFixtureProgress(fix, cfg.results, gKey);
       var letter = String.fromCharCode(65+g);
       var hasH = slice.some(function(t){ return t && t.isHuman; });
-      html += '<div class="tour-group-block tour-grp-'+letter+(hasH?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
-      html += _standingsTableHtml(rows, 2);
       var curJg = cfg.currentJornadaByGroup[g] || 0;
-      var jDone = 0, jTot = 0;
-      (fix[curJg]||[]).forEach(function(_, mi){
-        jTot++; if ((cfg.results[gKey+curJg+'_'+mi]||{}).played) jDone++;
+      /* Card del grupo: cabecera cian + clasificación + jornadas. */
+      html += '<div style="margin:12px 0;background:linear-gradient(180deg,#06141c 0%,#08222b 100%);border:1px solid rgba(77,208,225,.35);border-radius:12px;overflow:hidden;'
+        + (hasH ? 'box-shadow:0 0 0 1px rgba(95,224,138,.35),0 4px 18px rgba(0,188,212,.25);' : 'box-shadow:0 4px 14px rgba(0,0,0,.4);')
+        + '">';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;'
+        + 'background:linear-gradient(90deg,#001f2a,#003a52,#006080,#003a52,#001f2a);'
+        + 'border-bottom:1px solid rgba(77,208,225,.45);font-family:Oswald,sans-serif;letter-spacing:2px;'
+        + 'font-size:13px;color:#4dd0e1;">'
+        +   '<span>GRUPO '+letter+'</span>'
+        +   '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.6);letter-spacing:.5px;">'+prog.done+' / '+prog.tot+'</span>'
+        + '</div>';
+      html += _mundialClasTableHtml(rows, slice, advancePerGroup);
+      html += '<div style="padding:10px 12px 12px;">';
+      html += '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(77,208,225,.85);margin:0 0 8px;padding:0 2px;">JORNADAS · GRUPO '+letter+'</div>';
+      fix.forEach(function(jor, ji){
+        var allDone = true, anyPlayed = false;
+        jor.forEach(function(_, mi){
+          var r = (cfg.results[gKey+ji+'_'+mi]||{});
+          if (!r.played) allDone = false;
+          else anyPlayed = true;
+        });
+        var isCurrent = (ji === curJg);
+        var jid = 'mn-j-' + tourId + '-' + g + '-' + ji;
+        html += '<div class="jblock" style="margin-bottom:6px;">';
+        html += '<button type="button" class="jbtn c-mundial' + (allDone ? ' done' : '') + '" '
+          + 'onclick="tog(\''+jid+'\')">'
+          + '<div class="pdot">' + (allDone ? '✅' : (isCurrent ? '▶' : '○')) + '</div>'
+          + '🌍 <b>Mundial</b>&nbsp;&nbsp;Jornada '+(ji+1)+'</button>';
+        html += '<div class="jmatches' + (isCurrent ? ' open' : '') + '" id="'+jid+'">';
+        jor.forEach(function(m, mi){
+          var key = gKey + ji + '_' + mi;
+          var res = cfg.results[key];
+          html += _mundialMatchCardHtml(tourId, key, slice[m.home], slice[m.away], res);
+        });
+        if (isCurrent && !allDone) {
+          html += '<div style="display:flex;justify-content:center;padding:10px;">'
+            + '<button type="button" class="tour-sim-jor-btn" data-tour="'+tourId+'" data-key-prefix="'+gKey+'" data-jor="'+ji+'" '
+            + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:8px;padding:8px 16px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
+            + '▶ SIMULAR JORNADA</button></div>';
+        } else if (isCurrent && allDone && ji < fix.length - 1) {
+          html += '<div style="display:flex;justify-content:center;padding:10px;">'
+            + '<button type="button" class="tour-adv-jor-btn" data-tour="'+tourId+'" data-group="'+g+'" '
+            + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
+            + '🏆 Pasar a J'+(ji+2)+'</button></div>';
+        }
+        html += '</div></div>';
       });
-      if (jTot > 0 && jDone === jTot && curJg < fix.length - 1) {
-        html += '<div style="display:flex;justify-content:center;margin:6px 0 4px;">'
-          + '<button type="button" class="tour-adv-jor-btn" data-tour="'+tourId+'" data-group="'+g+'" '
-          + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:7px;padding:5px 11px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
-          + '🏆 J'+(curJg+2)+'</button></div>';
-      }
-      html += _fixtureCardsHtml(slice, fix, cfg.results, gKey, tourId, curJg, {shortLabel:true, humansFirst:true, finBadge:true});
-      html += '</div>';
+      html += '</div></div>';
     }
     if (gs.allGroupsDone) {
-      html += '<div style="margin-top:12px;padding:10px 12px;text-align:center;background:rgba(45,212,191,.10);'
-        + 'border:1px dashed rgba(45,212,191,.5);border-radius:8px;font-family:Oswald,sans-serif;font-size:12px;'
-        + 'letter-spacing:1px;color:#2dd4bf;cursor:pointer;" onclick="window._mundialGo(\''+tourId+'\',\'ko'+(cfg.koCurrentRound||0)+'\')">'
+      html += '<div style="margin-top:14px;padding:12px 14px;text-align:center;background:linear-gradient(90deg,rgba(0,188,212,.10),rgba(77,208,225,.22),rgba(0,188,212,.10));'
+        + 'border:1px solid rgba(77,208,225,.55);border-radius:10px;font-family:Oswald,sans-serif;font-size:12px;'
+        + 'letter-spacing:2px;color:#4dd0e1;cursor:pointer;" onclick="window._mundialGo(\''+tourId+'\',\'ko'+(cfg.koCurrentRound||0)+'\')">'
         + '✅ Fase de grupos completa · ABRIR PLAYOFFS ▶</div>';
     }
     if (Object.keys(cfg.results).length > 0) html += _mundialResetBtnHtml(tourId);

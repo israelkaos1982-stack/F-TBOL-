@@ -193,6 +193,8 @@ ALIASES_ESCUDOS_RAW = {
     "Bayern Munich": "Bayern de Múnich",
     "Atletico de Madrid": "Atlético de Madrid",
     "Sporting CP": "Sporting de Portugal",
+    "Como 1907": "Como",
+    "Como Calcio": "Como",
 }
 
 ESCUDOS = {
@@ -204,6 +206,7 @@ ESCUDOS = {
     "Elche": "/static/img/escudos-1/spain_elche.football-logos.cc.svg",
     "Sporting de Portugal": "/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg",
     "Atlético de Madrid": "/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg",
+    "Como": "https://commons.wikimedia.org/wiki/Special:FilePath/Como_1907.svg",
 }
 
 ESCUDO_DEFAULT = "/static/img/escudos-fallback/estepona.svg"

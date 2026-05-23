@@ -1278,6 +1278,15 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     'Sporting de Portugal':'/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
     'PSG':                'https://cdn.resfu.com/img_data/equipos/1924.png?size=120x&lossy=1',
     'Paris Saint-Germain':'https://cdn.resfu.com/img_data/equipos/1924.png?size=120x&lossy=1',
+    // ── Serie A (Italia) — equipos extranjeros usados en torneos de
+    // verano / amistosos. Solo añadimos los que han salido en la previa
+    // con el 🛡️ silver (Samsung) por NO estar en ninguna ligaExt_*
+    // ni en TEAM_LOGOS. El resto de italianos comunes (Juventus, AC
+    // Milan, Inter, Napoli, Roma, Lazio) ya viven en plantillas
+    // editadas por el admin → window._ligaEaShields los resuelve.
+    'Como':               'https://commons.wikimedia.org/wiki/Special:FilePath/Como_1907.svg',
+    'Como 1907':          'https://commons.wikimedia.org/wiki/Special:FilePath/Como_1907.svg',
+    'Como Calcio':        'https://commons.wikimedia.org/wiki/Special:FilePath/Como_1907.svg',
     'Elche CF':           '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
     'Elche':              '/static/img/escudos-1/spain_elche.football-logos.cc.svg',
     'Levante UD':         '/static/img/escudos-2/spain_levante.football-logos.cc.svg',
@@ -5645,8 +5654,33 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var _ovLogoB = (window._ppPreviaTeams && window._ppPreviaTeams.awayLogo) || '';
       var lA = _ovLogoA || _pickLogo(_svgImgs[0], home);
       var lB = _ovLogoB || _pickLogo(_svgImgs[1], away);
-      var imgA = lA ? '<img src="'+lA+'" alt="'+home+'" style="width:84px;height:84px;object-fit:contain;display:block;margin:0 auto;"/>' : '<span style="font-size:54px;">🛡️</span>';
-      var imgB = lB ? '<img src="'+lB+'" alt="'+away+'" style="width:84px;height:84px;object-fit:contain;display:block;margin:0 auto;"/>' : '<span style="font-size:54px;">🛡️</span>';
+      /* Fallback procedural: insignia con iniciales del equipo (vía
+         iaShieldSVG de misc_body_2). Sustituye al antiguo `🛡️` emoji
+         que en Samsung One UI se renderizaba como un escudo plateado
+         con remaches feo (reportado 2026-05-23: el Como sin shield
+         hardcodeado salía así en la previa Liverpool vs Como). El
+         onerror llama a window._ppShieldFallback para cubrir también
+         las URLs hardcodeadas que fallen (404, red caída). */
+      function _ppShieldFallback(nm, size){
+        size = size || 84;
+        if (typeof window.iaShieldSVG === 'function') {
+          return '<span style="display:inline-block;width:'+size+'px;height:'+size+'px;">' + window.iaShieldSVG(nm) + '</span>';
+        }
+        return '<span style="font-size:54px;">🛡️</span>';
+      }
+      /* Helper expuesto a window para que el onerror del <img> pueda
+         hacer el swap sin necesidad de embeber comillas raras en el
+         atributo. Sobrescribe outerHTML por el SVG procedural. */
+      window._ppShieldFallbackSwap = window._ppShieldFallbackSwap || function(imgEl, nm, size){
+        try { imgEl.outerHTML = _ppShieldFallback(nm, size); } catch(_){ try { imgEl.style.display = 'none'; } catch(__){} }
+      };
+      function _ppImg(url, nm, size){
+        var safeNm = String(nm||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        var safeJs = String(nm||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        return '<img src="'+url+'" alt="'+safeNm+'" onerror="window._ppShieldFallbackSwap(this,\''+safeJs+'\','+size+')" style="width:'+size+'px;height:'+size+'px;object-fit:contain;display:block;margin:0 auto;"/>';
+      }
+      var imgA = lA ? _ppImg(lA, home, 84) : _ppShieldFallback(home, 84);
+      var imgB = lB ? _ppImg(lB, away, 84) : _ppShieldFallback(away, 84);
       /* Nivel por equipo: Crack / Leyenda (solo humanos) */
       function _teamLevel(name) {
         var normFn = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
@@ -10441,11 +10475,36 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var cardStyle = 'flex:1;display:flex;flex-direction:column;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.15);border-radius:14px;padding:24px 12px 20px;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:Oswald,sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;color:#fff;text-align:center;';
     var _hiTcA = (typeof window.humanIcon === 'function') ? (window.humanIcon(teams.home)||'') : '';
     var _hiTcB = (typeof window.humanIcon === 'function') ? (window.humanIcon(teams.away)||'') : '';
+    /* Mismo fallback que la previa: iaShieldSVG (insignia con
+       iniciales) en lugar del 🛡️ emoji silver de Samsung. Tanto si lA
+       sale vacío como si el <img> falla (404 / red), cae a la insignia.
+       Reusamos window._ppShieldFallbackSwap (definido en la previa) para
+       no embeber comillas raras en el atributo onerror. */
+    function _wizShieldFb(nm){
+      if (typeof window.iaShieldSVG === 'function') {
+        return '<span style="display:inline-block;width:72px;height:72px;">' + window.iaShieldSVG(nm) + '</span>';
+      }
+      return '<span style="font-size:54px;line-height:1;">🛡️</span>';
+    }
+    window._ppShieldFallbackSwap = window._ppShieldFallbackSwap || function(imgEl, nm, size){
+      try {
+        if (typeof window.iaShieldSVG === 'function') {
+          imgEl.outerHTML = '<span style="display:inline-block;width:'+size+'px;height:'+size+'px;">' + window.iaShieldSVG(nm) + '</span>';
+        } else {
+          imgEl.outerHTML = '<span style="font-size:54px;line-height:1;">🛡️</span>';
+        }
+      } catch(_){ try { imgEl.style.display = 'none'; } catch(__){} }
+    };
+    function _wizImg(url, nm){
+      var safeNm = String(nm||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      var safeJs = String(nm||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      return '<img src="'+url+'" alt="'+safeNm+'" onerror="window._ppShieldFallbackSwap(this,\''+safeJs+'\',72)" style="width:72px;height:72px;object-fit:contain;"/>';
+    }
     var teamCardA = '<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'a\')" style="'+cardStyle+'">'
-      + (lA ? '<img src="'+lA+'" alt="'+teams.home+'" style="width:72px;height:72px;object-fit:contain;"/>' : '<span style="font-size:54px;line-height:1;">🛡️</span>')
+      + (lA ? _wizImg(lA, teams.home) : _wizShieldFb(teams.home))
       + '<div>' + _hiTcA + teams.home.toUpperCase() + '</div></div>';
     var teamCardB = '<div class="ml-tp-ov-card" onclick="window.mlPenWizTeam(\'b\')" style="'+cardStyle+'">'
-      + (lB ? '<img src="'+lB+'" alt="'+teams.away+'" style="width:72px;height:72px;object-fit:contain;"/>' : '<span style="font-size:54px;line-height:1;">🛡️</span>')
+      + (lB ? _wizImg(lB, teams.away) : _wizShieldFb(teams.away))
       + '<div>' + _hiTcB + teams.away.toUpperCase() + '</div></div>';
     return teamCardA + teamCardB;
   }

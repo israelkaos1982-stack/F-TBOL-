@@ -2467,12 +2467,19 @@ window._showSimProgress = function(opts, onDone){
     if (_MEM) return _MEM;
     var d = null;
     try { var r = localStorage.getItem(KEY); if (r){ var p = JSON.parse(r); if (p && typeof p==='object') d = p; } } catch(_){}
-    if (!d) d = { tour:null, dayIdx:0, rivals:{}, done:{} };
+    if (!d) d = { tour:null, dayIdx:0, rivals:{}, done:{}, previaOpenedIdx:-1 };
     if (typeof d.dayIdx !== 'number') d.dayIdx = parseInt(d.dayIdx,10) || 0;
     d.rivals = d.rivals || {};
     d.done   = d.done   || {};
+    /* Cursor del último día cuyo previa-overlay ya se auto-abrió.
+       Persiste en disco para que NO se vuelva a abrir el previa al
+       recargar la web (petición usuario 2026-05-23: "recargo el hub
+       y me salta una previa de partido IA-vs-IA que no debería"). */
+    var _po = parseInt(d.previaOpenedIdx,10);
+    d.previaOpenedIdx = isNaN(_po) ? -1 : _po;
     _MEM = d;
     window.__psDayIdx = d.dayIdx;
+    window.__psPreviaOpenedIdx = d.previaOpenedIdx;
     return _MEM;
   }
   function _save(d){
@@ -2595,9 +2602,13 @@ window._showSimProgress = function(opts, onDone){
     var rows = _calRows();
     var max = Math.max(0, rows.length - 1);
     d.dayIdx = Math.min((parseInt(d.dayIdx,10)||0) + 1, max);
+    /* El día cambia → permitir auto-abrir la próxima previa. Se
+       persiste junto al cursor para que un reload entre días no la
+       dispare otra vez. */
+    d.previaOpenedIdx = -1;
     _save(d);
     window.__psBusy = false;   /* el día se resolvió: liberar render */
-    window.__psPreviaOpenedIdx = -1;  /* permite auto-abrir la previa del próximo partido */
+    window.__psPreviaOpenedIdx = -1;
     _syncMarker();
     _render();
   }
@@ -2981,10 +2992,19 @@ window._showSimProgress = function(opts, onDone){
     if (play) play.onclick = function(){ _openPreseasonPrevia(day, rv, tourNm); };
     /* AUTO-abrir la previa estándar al llegar al día de partido (una
        sola vez por día — sig-guard de _render evita re-render; el
-       idx-guard cubre volver con ◀ Volver sin proceder). Solo cuando
-       hay rival real del bracket. */
+       idx-guard cubre volver con ◀ Volver sin proceder). El guard
+       d.previaOpenedIdx se persiste en localStorage (no solo en
+       window) para que un reload del navegador NO vuelva a abrir la
+       previa de un día que ya la había auto-abierto antes (petición
+       usuario 2026-05-23: "recargo el hub Liverpool y salta una
+       previa Bayern vs Al Nassr que no debería"). Solo cuando hay
+       rival real del bracket. */
     var idx = parseInt(d.dayIdx,10)||0;
-    if (window.__psPreviaOpenedIdx !== idx){
+    var opened = parseInt(d.previaOpenedIdx,10);
+    if (isNaN(opened)) opened = -1;
+    if (opened !== idx){
+      d.previaOpenedIdx = idx;
+      _save(d);
       window.__psPreviaOpenedIdx = idx;
       setTimeout(function(){ _openPreseasonPrevia(day, rv, tourNm); }, 80);
     }

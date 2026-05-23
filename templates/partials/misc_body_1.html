@@ -2641,6 +2641,15 @@ window._showSimProgress = function(opts, onDone){
     window.__psPreviaOpenedIdx = -1;
     _syncMarker();
     _render();
+    /* Notifica al resto del hub (bandeja ✉️, etc.) que el día
+       cambió: el observer de #s-munich SOLO dispara en navegación
+       y aquí no navegamos, así que sin este evento el badge de
+       mensajes no se actualizaba hasta recargar la web. */
+    try {
+      document.dispatchEvent(new CustomEvent('hub:day-changed', {
+        detail:{ dayIdx:d.dayIdx, date:(rows[d.dayIdx]||{}).date }
+      }));
+    } catch(_){}
   }
 
   /* ── Módulo 3: lesión (sistema preexistente: LESION_STORE +
@@ -38527,24 +38536,34 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     cursor:pointer; -webkit-tap-highlight-color:transparent; }
   #mu-msg-ov .mmo-msg.is-unread{ border-color:rgba(246,235,97,.32);
     background:linear-gradient(180deg, rgba(246,235,97,.08), rgba(0,0,0,.10)); }
-  /* Mensaje ya leído: tono más apagado + sello "✓ LEÍDO" en la
-     cabecera para que de un vistazo se vea que está procesado. */
-  #mu-msg-ov .mmo-msg.is-read{ opacity:.78;
-    border-color:rgba(120,200,120,.30);
-    background:linear-gradient(180deg, rgba(120,200,120,.06), rgba(0,0,0,.18)); }
-  #mu-msg-ov .mmo-msg.is-read .mmo-msg-title,
-  #mu-msg-ov .mmo-msg.is-read .mmo-msg-body{ color:rgba(255,255,255,.62); }
+  /* Mensaje ya leído: fondo VERDE claro + borde verde sólido +
+     sello "✓ LEÍDO" para confirmar visualmente que el mensaje
+     se ha procesado. Sin esto, el usuario no distinguía claramente
+     un mensaje recién leído del resto (petición 2026-05-23). */
+  #mu-msg-ov .mmo-msg.is-read{
+    border:1px solid rgba(74,220,120,.65);
+    background:linear-gradient(180deg, rgba(74,220,120,.20), rgba(20,60,40,.32));
+    box-shadow:0 0 10px rgba(74,220,120,.20), inset 0 0 0 1px rgba(74,220,120,.10);
+  }
+  #mu-msg-ov .mmo-msg.is-read .mmo-msg-title{ color:#e8ffec; }
+  #mu-msg-ov .mmo-msg.is-read .mmo-msg-body { color:rgba(220,255,225,.82); }
+  #mu-msg-ov .mmo-msg.is-read .mmo-msg-ico  {
+    background:rgba(74,220,120,.18);
+    box-shadow:inset 0 0 0 1px rgba(74,220,120,.40);
+  }
   #mu-msg-ov .mmo-read-stamp{
     display:inline-flex; align-items:center; gap:3px;
-    padding:1px 6px 1px 4px; margin-right:6px;
-    border:1px solid rgba(120,200,120,.45);
-    background:rgba(120,200,120,.14);
-    color:#a3e6a3;
-    font-size:9px; letter-spacing:1px; font-weight:700;
-    border-radius:3px; text-transform:uppercase;
+    padding:2px 7px 2px 5px; margin-right:7px;
+    border:1px solid rgba(74,220,120,.85);
+    background:linear-gradient(135deg, rgba(74,220,120,.45), rgba(40,160,80,.55));
+    color:#ffffff;
+    font-size:9.5px; letter-spacing:1.3px; font-weight:700;
+    border-radius:4px; text-transform:uppercase;
     font-family:'Oswald',sans-serif; line-height:1;
+    box-shadow:0 0 6px rgba(74,220,120,.45);
+    text-shadow:0 1px 1px rgba(0,0,0,.45);
   }
-  #mu-msg-ov .mmo-read-stamp::before{ content:'✓'; font-size:10px; }
+  #mu-msg-ov .mmo-read-stamp::before{ content:'✓'; font-size:11px; font-weight:900; }
   #mu-msg-ov .mmo-msg-ico{ flex:0 0 28px; width:28px; height:28px;
     display:flex; align-items:center; justify-content:center;
     font-size:18px; line-height:1;
@@ -39172,8 +39191,42 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   }
 
   /* ── HOOK 5: Francia (procedural, la selección está skeleton) ── */
+  /* Detecta si el bloque de Selecciones / Mundial está "activo"
+     ahora mismo. Señales (cualquiera basta):
+       · El día actual del cursor de pretemporada está marcado como
+         día de selección (clase `ag-sel`) o su label contiene
+         "Mundial" / "Selecciones".
+       · Hay un estado guardado de Mundial/Selecciones con equipos.
+     Si NO está activo, no se pushean convocatorias / amistosos —
+     la pestaña 🇫🇷 se queda en silencio para no spamear cuando
+     Francia no juega nada. */
+  function _isMundialActive(){
+    try {
+      var lbl = (typeof window._psCurrentLabel === 'function') ? window._psCurrentLabel() : '';
+      if (lbl && /mundial|selecci/i.test(lbl)) return true;
+    } catch(_){}
+    try {
+      /* `_psCurrentDay` no está expuesto pero podemos mirar la card
+         de Descanso renderizada — si pone "Selecciones · jugadores
+         fuera" es señal directa de ag-sel. */
+      var ps = document.querySelector('#ps-stage .ps-sub');
+      if (ps && /selecci|mundial/i.test(ps.textContent || '')) return true;
+    } catch(_){}
+    try {
+      var keys = ['mundial_state_v1','mundialito_state_v1','seleccion_state_v1','selecciones_state_v1'];
+      for (var i = 0; i < keys.length; i++){
+        var raw = localStorage.getItem(keys[i]);
+        if (!raw) continue;
+        var s = JSON.parse(raw);
+        var teams = s && (s.teams || s.pool || s.equipos);
+        if (Array.isArray(teams) && teams.length) return true;
+      }
+    } catch(_){}
+    return false;
+  }
   function _scanFrancia(){
     try {
+      if (!_isMundialActive()) return;  /* gate: solo durante Mundial/Selecciones */
       var now = _now();
       var last = _getCursor('fra:last') || 0;
       var WK = 7 * 24 * 60 * 60 * 1000;  /* 1 semana entre amistosos */
@@ -39762,6 +39815,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         }).observe(scr, { attributes:true, attributeFilter:['class'] });
       } catch(_){}
     }
+    /* Cambio de día emitido por `_advance()` de la pretemporada.
+       El observer de clase no dispara aquí porque el usuario sigue
+       en s-munich, así que sin este listener el badge ✉️ no se
+       actualizaba hasta recargar la página (petición 2026-05-23). */
+    document.addEventListener('hub:day-changed', function(){
+      setTimeout(run, 60);
+      setTimeout(run, 400);
+    });
   }
 
   /* ── Expone API ────────────────────────────────────────── */

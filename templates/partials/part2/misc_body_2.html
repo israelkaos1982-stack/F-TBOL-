@@ -29625,6 +29625,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function _processBtn(btn){
     if (!btn || !btn.classList) return;
+    /* Botones que YA traen su fecha pinchada por el render (calendario
+       interno propio — p.ej. _mundialMenuHtml). No los tocamos: ni el
+       texto ni el badge .jor-date. 2026-05-22. */
+    if (btn.dataset && btn.dataset.jorPinned) return;
     /* Saltar botones ocultos / non-clickable / cursor:default. */
     var styleAttr = btn.getAttribute('style') || '';
     if (styleAttr.indexOf('cursor:default') !== -1) return;

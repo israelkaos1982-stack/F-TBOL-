@@ -13066,39 +13066,111 @@ window._showSimProgress = function(opts, onDone){
      "no es desplegable, es una caja que al pulsar se abre".         */
   .tour-stats-jbtn{
     width:100%;display:flex;align-items:center;gap:10px;
-    background:linear-gradient(135deg,#001f2a 0%,#003a52 25%,#006080 50%,#00bcd4 70%,#006080 85%,#001f2a 100%);
-    border:1.5px solid #4dd0e1;
-    box-shadow:0 4px 18px rgba(0,188,212,.32),inset 0 1px 0 rgba(255,255,255,.10);
+    background:linear-gradient(135deg,#28002e 0%,#54006a 22%,#a3009a 50%,#ff42b3 72%,#a3009a 85%,#28002e 100%);
+    border:1.5px solid #ff66c4;
+    box-shadow:0 4px 18px rgba(255,66,179,.40),inset 0 1px 0 rgba(255,255,255,.14);
     border-radius:10px;
     padding:13px 16px;cursor:pointer;
     font-family:Rajdhani,sans-serif;color:#fff;
     transition:transform .08s ease, box-shadow .15s ease;
   }
-  .tour-stats-jbtn:hover{box-shadow:0 6px 22px rgba(0,188,212,.50),inset 0 1px 0 rgba(255,255,255,.14);}
+  .tour-stats-jbtn:hover{box-shadow:0 6px 24px rgba(255,66,179,.65),inset 0 1px 0 rgba(255,255,255,.20);}
   .tour-stats-jbtn:active{transform:translateY(1px);}
-  .tour-stats-jbtn .tsb-emoji{font-size:20px;line-height:1;}
+  .tour-stats-jbtn .tsb-emoji{font-size:20px;line-height:1;filter:drop-shadow(0 0 6px rgba(255,255,255,.5));}
   .tour-stats-jbtn .tsb-label{
     flex:1;text-align:left;font-family:Oswald,sans-serif;font-weight:700;
     font-size:14px;letter-spacing:2px;text-transform:uppercase;
-    color:#ffd870;text-shadow:0 0 12px rgba(240,192,64,.45);
+    color:#ffffff;text-shadow:0 0 14px rgba(255,255,255,.55),0 1px 2px rgba(0,0,0,.7);
   }
   .tour-stats-jbtn .tsb-arr{
-    font-size:14px;color:#4dd0e1;text-shadow:0 0 8px rgba(77,208,225,.7);
+    font-size:14px;color:#ffeaff;text-shadow:0 0 10px rgba(255,180,235,.9);
   }
-  /* Pantalla dedicada s-tour-stats — paleta teal (como el tema de
-     Selecciones) + acento dorado en los valores. Mismo formato visual
-     que `s-liga-stats` / `s-mundial-stats`. */
+  /* Caja "📤 RAMIFICACIÓN" del formato qualifier-route. Marco morado/
+     magenta (tema Selecciones · destino) con sub-secciones por
+     posición (1ºs, 2ºs, … extras). Botón "Enviar clasificados" usa
+     gradient magenta. 2026-05-24.                                  */
+  .tour-qroute-box{
+    margin:16px 0 4px;padding:0 0 14px;position:relative;
+    background:linear-gradient(180deg,rgba(255,66,179,.10) 0%,rgba(255,66,179,.03) 56px,rgba(0,0,0,.18) 56px),rgba(255,255,255,.02);
+    border:2px solid rgba(255,102,196,.55);
+    border-radius:14px;
+    box-shadow:0 0 16px rgba(255,66,179,.32),0 4px 16px rgba(0,0,0,.4);
+  }
+  .tour-qroute-box::before{
+    content:'';position:absolute;top:-2px;left:18px;right:18px;height:2px;
+    background:linear-gradient(90deg,transparent,rgba(255,180,235,.85),#fff,rgba(255,180,235,.85),transparent);
+    border-radius:2px;opacity:.85;
+  }
+  .tour-qroute-hdr{
+    display:flex;align-items:center;gap:10px;
+    font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2.5px;
+    font-weight:700;color:#fff;text-transform:uppercase;
+    margin:0;padding:9px 14px;
+    background:linear-gradient(135deg,#28002e 0%,#54006a 35%,rgba(255,66,179,.32) 100%);
+    border-bottom:1px solid rgba(255,102,196,.55);
+    border-radius:12px 12px 0 0;
+    text-shadow:0 1px 3px rgba(0,0,0,.55);
+  }
+  .tour-qroute-hdr::before{
+    content:'';flex:0 0 6px;height:18px;border-radius:3px;
+    background:#fff;box-shadow:0 0 8px rgba(255,255,255,.6);
+  }
+  .tour-qroute-emoji{font-size:18px;line-height:1;}
+  .tour-qroute-title{flex:0 0 auto;}
+  .tour-qroute-target{
+    flex:1;text-align:right;font-family:Rajdhani,sans-serif;font-size:11px;
+    letter-spacing:1.2px;color:#ffd8ee;font-weight:500;text-transform:none;
+  }
+  .tour-qroute-pending{
+    padding:18px 16px;text-align:center;font-family:Oswald,sans-serif;
+    letter-spacing:1.5px;font-size:12px;color:rgba(255,170,230,.7);
+  }
+  .tour-qroute-list{padding:10px 12px 0;display:flex;flex-direction:column;gap:8px;}
+  .tour-qroute-section{
+    background:rgba(255,255,255,.03);border:1px solid rgba(255,102,196,.20);
+    border-radius:8px;padding:8px 10px;
+  }
+  .tour-qroute-section.is-extras{
+    border:1px dashed rgba(255,102,196,.50);
+    background:rgba(255,66,179,.06);
+  }
+  .tour-qroute-section-h{
+    font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;
+    color:#ffaadf;text-transform:uppercase;margin-bottom:6px;
+  }
+  .tour-qroute-chip{
+    display:flex;align-items:center;gap:8px;padding:6px 0;
+    border-bottom:1px solid rgba(255,255,255,.04);
+  }
+  .tour-qroute-chip:last-child{border-bottom:none;}
+  .tour-qroute-chip .tqc-grp{
+    flex:0 0 auto;font-family:'Bebas Neue',sans-serif;font-size:13px;
+    letter-spacing:1px;color:#ffd870;min-width:54px;
+  }
+  .tour-qroute-chip.is-extra .tqc-grp{color:#ff9ed5;}
+  .tour-qroute-chip .tqc-name{
+    flex:1;font-family:Rajdhani,sans-serif;font-weight:700;color:#fff;
+    font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .tour-qroute-chip .tqc-pts{
+    flex:0 0 auto;font-family:Oswald,sans-serif;font-size:10px;
+    letter-spacing:1px;color:rgba(255,216,238,.65);
+  }
+  /* Pantalla dedicada s-tour-stats — paleta magenta-púrpura (mismo
+     tono que el botón que la abre, contraste alto contra el amarillo
+     dorado del header de los torneos de Selecciones). Acento blanco
+     en valores para máxima legibilidad.                            */
   #s-tour-stats .liga-stat-card{
-    border-color:rgba(45,212,191,.45)!important;
-    background:linear-gradient(145deg,#06231f 0%,#0b3c34 45%,#04130f 100%)!important;
+    border-color:rgba(255,102,196,.45)!important;
+    background:linear-gradient(145deg,#1f0028 0%,#3a0048 45%,#0d0014 100%)!important;
   }
   #s-tour-stats .liga-stat-head{
-    background:linear-gradient(90deg,rgba(12,91,84,.7),rgba(10,138,127,.4),rgba(8,42,38,.2))!important;
-    border-bottom:1px solid rgba(45,212,191,.45)!important;
+    background:linear-gradient(90deg,rgba(84,0,106,.7),rgba(163,0,154,.35),rgba(40,0,46,.15))!important;
+    border-bottom:1px solid rgba(255,102,196,.50)!important;
   }
-  #s-tour-stats .liga-stat-title{color:#a8f0e0!important;text-shadow:0 0 18px rgba(45,212,191,.7)!important;}
-  #s-tour-stats .liga-stat-rank{color:rgba(168,240,224,.9)!important;text-shadow:0 0 12px rgba(45,212,191,.55)!important;}
-  #s-tour-stats .liga-stat-value{color:#ffd870!important;text-shadow:0 0 18px rgba(240,192,64,.6)!important;}
+  #s-tour-stats .liga-stat-title{color:#ffd8ee!important;text-shadow:0 0 18px rgba(255,66,179,.7)!important;}
+  #s-tour-stats .liga-stat-rank{color:rgba(255,216,238,.9)!important;text-shadow:0 0 12px rgba(255,66,179,.55)!important;}
+  #s-tour-stats .liga-stat-value{color:#ffffff!important;text-shadow:0 0 18px rgba(255,170,230,.7)!important;}
 </style>
 
 <!-- ═══ OVERLAY EDITOR DE TORNEO (compartido por los 4) ═══ -->
@@ -13192,6 +13264,10 @@ window._showSimProgress = function(opts, onDone){
         <div class="tour-ed-fmt-opt" data-fmt="swiss" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('swiss')">
           <span class="tour-ed-fmt-box">✓</span>
           <span class="tour-ed-fmt-lbl">Fase de Liga (suizo)</span>
+        </div>
+        <div class="tour-ed-fmt-opt tour-ed-fmt-sel-only" data-fmt="qualifier-route" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('qualifier-route')">
+          <span class="tour-ed-fmt-box">✓</span>
+          <span class="tour-ed-fmt-lbl">Ronda Clasificatoria · Ramificación</span>
         </div>
         <div class="tour-ed-fmt-opt" data-fmt="mundial-48" onclick="window._tourEdFmtPick&&window._tourEdFmtPick('mundial-48')">
           <span class="tour-ed-fmt-box">✓</span>
@@ -13288,6 +13364,10 @@ window._showSimProgress = function(opts, onDone){
     border-color:#f0c040;color:#0d1117;
   }
   .tour-ed-fmt-opt.is-on .tour-ed-fmt-lbl{color:#fff;}
+  /* "Ronda Clasificatoria" solo tiene sentido en torneos de Selecciones
+     (la ramificación apunta a una caja sfn* / Ronda Final). En tours de
+     Verano (sct/pss/jg/asia/tx*) la opción queda oculta. */
+  #tour-editor-overlay:not(.is-sel) .tour-ed-fmt-sel-only{display:none;}
   /* Stat box que muestra cuántos equipos hay en el rango de nivel IA. */
   .tour-ed-pool-stat{
     font-size:12px;line-height:1.4;
@@ -13807,6 +13887,7 @@ window._showSimProgress = function(opts, onDone){
     'groups-ko':'Grupos + Eliminatoria',
     'league-ko':'Liga + Playoff',
     'swiss':'Fase de Liga (suizo)',
+    'qualifier-route':'Ronda Clasificatoria · Ramificación',
     'mundial-48':'Mundial · 48 selecciones'
   };
   /* Config fija del formato Mundial 2032 (48 selecciones, 2026-05-22):
@@ -14655,6 +14736,31 @@ window._showSimProgress = function(opts, onDone){
         '</div>' +
         '<label style="margin-top:8px;">Eliminatoria final (rondas)</label>' +
         '<input id="tour-ed-rounds" type="text" value="'+(fc.koRounds||['SF','F']).join(',')+'" placeholder="QF,SF,F">';
+    } else if (fmt === 'qualifier-route') {
+      /* Ronda Clasificatoria con ramificación a una Ronda Final
+         (caja sfn*). Solo grupos + clasificados; NO genera KO en
+         este mismo torneo. Los clasificados se envían manualmente
+         al torneo destino con un botón. Petición usuario 2026-05-24. */
+      var _targets = _qualifierTargetOptionsHtml(fc.targetTour, _open && _open.id);
+      box.innerHTML =
+        '<div class="tour-ed-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
+        '<div><label>Nº grupos</label><input id="tour-ed-groups" type="number" min="1" max="16" value="'+(fc.groups||4)+'"></div>' +
+        '<div><label>Equipos / grupo</label><input id="tour-ed-pergroup" type="number" min="2" max="16" value="'+(fc.perGroup||4)+'"></div>' +
+        '<div><label>Clasifican / grupo</label><input id="tour-ed-advance" type="number" min="1" max="15" value="'+(fc.advancePerGroup||2)+'"></div>' +
+        '<div><label>Clasificados extras</label><input id="tour-ed-extras" type="number" min="0" max="32" value="'+(fc.extraQualifiers||0)+'" title="Ej: 2 = los 2 mejores 3os de todos los grupos"></div>' +
+        '<div><label>Desempate</label>'+_tbSelectHtml(fc.tieBreak)+'</div>' +
+        '<div><label>Doble vuelta</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;text-transform:none;letter-spacing:0;padding-top:8px;"><input id="tour-ed-grpdouble" type="checkbox" style="width:auto;" '+(fc.groupDoubleLegs?'checked':'')+'> cada rival 2 veces</label></div>' +
+        '</div>' +
+        '<label style="margin-top:10px;">📤 Ramificación · Ronda Final destino</label>' +
+        '<select id="tour-ed-target" style="width:100%;box-sizing:border-box;padding:7px;border-radius:6px;background:#1a1f29;color:#eee;border:1px solid rgba(255,102,196,.45);font-family:inherit;font-size:13px;">' +
+          _targets +
+        '</select>' +
+        '<div style="margin-top:8px;padding:8px 10px;background:rgba(255,66,179,.10);border:1px dashed rgba(255,66,179,.45);border-radius:6px;font-size:11px;color:#ffaadf;line-height:1.45;text-transform:none;letter-spacing:0;">'+
+          '<b>Cómo funciona</b>: este torneo es solo una <b>fase de grupos</b> — no genera cuadro KO propio. '+
+          'Al terminar los grupos, los <b>N primeros</b> + los <b>X mejores '+(((fc.advancePerGroup||2)+1))+'ºs</b> '+
+          'aparecen en la sección <b>RAMIFICACIÓN</b> con un botón <b>📤 Enviar clasificados</b> que copia las '+
+          'selecciones a la <b>Ronda Final</b> elegida arriba (sustituye su roster actual).'+
+        '</div>';
     } else if (fmt === 'mundial-48') {
       box.innerHTML =
         '<div style="padding:9px 11px;background:rgba(45,212,191,.10);border:1px dashed rgba(45,212,191,.45);border-radius:6px;font-size:11px;color:#2dd4bf;line-height:1.55;text-transform:none;letter-spacing:0;">'+
@@ -14666,11 +14772,31 @@ window._showSimProgress = function(opts, onDone){
     }
   }
 
+  /* Lista de opciones <option> para el <select> de Ramificación —
+     enumera los 10 slots sfn* (Rondas Finales) con su nombre
+     personalizado (cache + localStorage) y un placeholder. Excluye
+     el propio torneo si por alguna razón coincide (no debería). */
+  function _qualifierTargetOptionsHtml(cur, selfId){
+    var opts = '<option value="">— seleccionar Ronda Final —</option>';
+    function _name(id){
+      var c = (window._TOUR_CACHE && window._TOUR_CACHE[id]) || null;
+      if (!c) { try { c = _tourLoadCachedSync(id); } catch(_){} }
+      if (!c) c = DEFAULTS[id] || {};
+      return c.name || id;
+    }
+    TOUR_SLOTS_SELF.forEach(function(id){
+      if (id === selfId) return;
+      var sel = (cur === id) ? ' selected' : '';
+      opts += '<option value="'+id+'"'+sel+'>'+_tvEsc(_name(id))+'</option>';
+    });
+    return opts;
+  }
+
   /* CASILLAS de "Formato" (sustituyen al <select> nativo, que no
      respondía de forma fiable en móvil — bug usuario 2026-05-17 y
      2026-05-21). Selección EXCLUSIVA: marcar una desmarca las demás.
      Los 4 valores válidos. */
-  var _TOUR_FMT_VALUES = ['ko','ko-2leg','league','groups-ko','league-ko','swiss','mundial-48'];
+  var _TOUR_FMT_VALUES = ['ko','ko-2leg','league','groups-ko','league-ko','swiss','qualifier-route','mundial-48'];
   /* ── AUTO-GUARDADO del editor de torneo ──────────────────────────
      Petición usuario 2026-05-21: "si pongo el nombre a una
      competición de selecciones quiero que se guarde para siempre
@@ -14857,6 +14983,32 @@ window._showSimProgress = function(opts, onDone){
         tieBreak: (_tbSw && _tbSw.value) || 'dif',
         koRounds: rElSw ? rElSw.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F']
       };
+    } else if (cfg.format === 'qualifier-route') {
+      /* Ronda Clasificatoria · Ramificación — fase de grupos sin
+         cuadro KO propio; los clasificados se envían a una caja
+         sfn* destino con un botón manual. 2026-05-24. */
+      var _pgQ  = parseInt((document.getElementById('tour-ed-pergroup')||{}).value, 10) || 4;
+      var _advQ = parseInt((document.getElementById('tour-ed-advance')||{}).value, 10) || 2;
+      var _xQ   = parseInt((document.getElementById('tour-ed-extras')||{}).value, 10) || 0;
+      var _gpQ  = parseInt((document.getElementById('tour-ed-groups')||{}).value, 10) || 4;
+      var _tbQ  = document.getElementById('tour-ed-tiebreak');
+      var _gdQ  = document.getElementById('tour-ed-grpdouble');
+      var _tgQ  = document.getElementById('tour-ed-target');
+      if (_advQ < 1) _advQ = 1;
+      if (_advQ > _pgQ) _advQ = _pgQ;
+      if (_xQ < 0) _xQ = 0;
+      cfg.formatConfig = {
+        groups: _gpQ,
+        perGroup: _pgQ,
+        advancePerGroup: _advQ,
+        extraQualifiers: _xQ,
+        targetTour: (_tgQ && _tgQ.value) || '',
+        tieBreak: (_tbQ && _tbQ.value) || 'dif',
+        groupDoubleLegs: !!(_gdQ && _gdQ.checked)
+      };
+      /* Auto-cuadrar numTeams = groups × perGroup para que el roster
+         editor (que usa _selRosterLayout) muestre el grid completo. */
+      cfg.numTeams = _gpQ * _pgQ;
     } else if (cfg.format === 'mundial-48') {
       cfg.formatConfig = _mundialFormatConfig();
       cfg.numTeams = 48;
@@ -15141,7 +15293,7 @@ window._showSimProgress = function(opts, onDone){
       }
       return { groups:mg, total:48 };
     }
-    if (fmt === 'groups-ko') {
+    if (fmt === 'groups-ko' || fmt === 'qualifier-route') {
       var nG = Math.max(1, fc.groups || 2);
       var pg = Math.max(2, fc.perGroup || 4);
       var groups = [];
@@ -15899,6 +16051,8 @@ window._showSimProgress = function(opts, onDone){
       /* Liga+Playoff y Suizo reutilizan el motor de grupos-ko con
          1 solo grupo (config normalizada en _readForm). */
       infoEl.innerHTML = _statsBoxHtml + hint + _renderGroupsKO(cfg, id, teams);
+    } else if (cfg.format === 'qualifier-route') {
+      infoEl.innerHTML = _statsBoxHtml + hint + _renderQualifierRoute(cfg, id, teams);
     } else if (cfg.format === 'mundial-48') {
       /* El menú de 7 cajas (Final · Semis · Cuartos · Octavos ·
          Dieciseisavos · Fase de Grupos · Estadísticas) debe pintarse
@@ -16285,6 +16439,164 @@ window._showSimProgress = function(opts, onDone){
       }
       html += '</div>';  /* fin fase final */
     }
+    if (Object.keys(cfg.results).length > 0) {
+      html += '<div style="display:flex;justify-content:center;margin-top:10px;">'
+        + '<button type="button" class="tour-reset-btn" data-tour="'+tourId+'" '
+        + 'style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
+        + '↺ Reset torneo'
+        + '</button></div>';
+    }
+    return html;
+  }
+
+  /* ═══ RONDA CLASIFICATORIA · RAMIFICACIÓN (2026-05-24) ═══════════
+     Fase de grupos pura — sin cuadro KO propio. Los X primeros de
+     cada grupo + los Y mejores [advancePerGroup+1]ºs se listan en
+     la sección "RAMIFICACIÓN" con un botón "📤 Enviar clasificados"
+     que copia esas selecciones a la teams[] del torneo destino
+     (sfn* / Ronda Final) elegido en el editor.                   */
+  function _renderQualifierRoute(cfg, tourId, teams) {
+    var fc = cfg.formatConfig || {};
+    var nGroups = fc.groups || 4;
+    var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
+    var advancePerGroup = fc.advancePerGroup || 2;
+    var extraQualifiers = fc.extraQualifiers || 0;
+    cfg.results = cfg.results || {};
+    cfg.groupFixtures = cfg.groupFixtures || {};
+    cfg.currentJornadaByGroup = cfg.currentJornadaByGroup || {};
+    var html = '';
+    var allGroupsDone = true;
+    var slices = [];
+    /* ── Render de cada grupo (mismo motor que groups-ko) ── */
+    for (var g = 0; g < nGroups; g++) {
+      var slice = teams.slice(g*perGroup, (g+1)*perGroup);
+      if (!slice.length) break;
+      slices.push(slice);
+      var gKey = 'g'+g+'_';
+      if (!cfg.groupFixtures[g]) {
+        var _gFix = _tourBuildRoundRobin(slice.map(function(_,i){return i;}));
+        if (fc.groupDoubleLegs) _gFix = _tourDoubleFixture(_gFix);
+        cfg.groupFixtures[g] = _gFix;
+      }
+      if (typeof cfg.currentJornadaByGroup[g] !== 'number') cfg.currentJornadaByGroup[g] = 0;
+      var fix = cfg.groupFixtures[g];
+      var rows = _tourComputeStandings(slice, fix, cfg.results, gKey, fc.tieBreak);
+      var prog = _tourFixtureProgress(fix, cfg.results, gKey);
+      if (!prog.allDone) allGroupsDone = false;
+      var letter = String.fromCharCode(65+g);
+      var _grpHasHuman = slice.some(function(t){ return t && t.isHuman; });
+      html += '<div class="tour-group-block tour-grp-'+letter+(_grpHasHuman?' tour-group-human':'')+'"><h4>GRUPO '+letter+' · '+prog.done+'/'+prog.tot+'</h4>';
+      html += _standingsTableHtml(rows, advancePerGroup);
+      var curJg = cfg.currentJornadaByGroup[g];
+      var jProg = (function(){
+        var done=0, tot=0;
+        (fix[curJg]||[]).forEach(function(_, mi){
+          tot++; if ((cfg.results[gKey+curJg+'_'+mi]||{}).played) done++;
+        });
+        return { done:done, tot:tot, allDone: done===tot && tot>0 };
+      })();
+      if (jProg.allDone && curJg < fix.length - 1) {
+        html += '<div style="display:flex;justify-content:center;margin:6px 0 4px;">'
+          + '<button type="button" class="tour-adv-jor-btn" data-tour="'+tourId+'" data-group="'+g+'" '
+          + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:7px;padding:5px 11px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
+          + '🏆 J'+(curJg+2)
+          + '</button></div>';
+      }
+      html += _fixtureCardsHtml(slice, fix, cfg.results, gKey, tourId, curJg, {shortLabel:true});
+      html += '</div>';
+    }
+    /* ── Sección RAMIFICACIÓN ── */
+    var targetId = fc.targetTour || '';
+    var targetCfg = null;
+    if (targetId) {
+      try { targetCfg = (window._TOUR_CACHE && window._TOUR_CACHE[targetId]) || _tourLoadCachedSync(targetId); } catch(_){}
+      if (!targetCfg) targetCfg = DEFAULTS[targetId] || null;
+    }
+    var targetName = targetCfg ? (targetCfg.name || targetId) : '(no configurada)';
+
+    html += '<div class="tour-qroute-box">'
+         +   '<div class="tour-qroute-hdr">'
+         +     '<span class="tour-qroute-emoji">📤</span>'
+         +     '<span class="tour-qroute-title">Ramificación</span>'
+         +     '<span class="tour-qroute-target">→ '+_tvEsc(targetName)+'</span>'
+         +   '</div>';
+
+    if (!allGroupsDone) {
+      html += '<div class="tour-qroute-pending">Termina todos los grupos para ver los clasificados.</div>';
+    } else {
+      /* Clasificados directos (1..advancePerGroup de cada grupo) */
+      var direct = [];
+      var extrasPool = [];
+      for (var gi = 0; gi < slices.length; gi++) {
+        var rs = _tourComputeStandings(slices[gi], cfg.groupFixtures[gi], cfg.results, 'g'+gi+'_', fc.tieBreak);
+        for (var p = 0; p < advancePerGroup; p++) {
+          if (rs[p] && slices[gi][rs[p].idx]) {
+            direct.push({ groupIdx:gi, pos:p+1, team:slices[gi][rs[p].idx] });
+          }
+        }
+        /* Pool de extras: posición advancePerGroup+1 (= "[advancePerGroup+1]º") */
+        if (extraQualifiers > 0 && rs[advancePerGroup] && slices[gi][rs[advancePerGroup].idx]) {
+          extrasPool.push({
+            groupIdx:gi, team:slices[gi][rs[advancePerGroup].idx],
+            pts:rs[advancePerGroup].pts, dif:rs[advancePerGroup].dif, gf:rs[advancePerGroup].gf
+          });
+        }
+      }
+      /* Ranking de extras por PTS → DIF → GF (criterio elegido por el
+         usuario). En empate total, desempate alfabético determinista. */
+      extrasPool.sort(function(a,b){
+        return (b.pts-a.pts) || (b.dif-a.dif) || (b.gf-a.gf) ||
+               String((a.team&&a.team.name)||'').localeCompare(String((b.team&&b.team.name)||''));
+      });
+      var extras = extrasPool.slice(0, extraQualifiers);
+
+      /* Pinta los clasificados directos primero (agrupados por posición:
+         todos los 1ºs, luego 2ºs, etc.) y luego los extras. */
+      html += '<div class="tour-qroute-list">';
+      for (var pp = 0; pp < advancePerGroup; pp++) {
+        var rowItems = direct.filter(function(d){ return d.pos === pp+1; });
+        if (!rowItems.length) continue;
+        var posLabel = (pp === 0) ? '1ºs de grupo' : (pp === 1) ? '2ºs de grupo' : ((pp+1)+'ºs de grupo');
+        html += '<div class="tour-qroute-section"><div class="tour-qroute-section-h">'+posLabel+'</div>';
+        rowItems.forEach(function(d){
+          html += '<div class="tour-qroute-chip">'
+            +    '<span class="tqc-grp">G'+String.fromCharCode(65+d.groupIdx)+'·'+d.pos+'º</span>'
+            +    '<span class="tqc-name">'+_tvEsc((d.team&&d.team.name)||'?')+'</span>'
+            +  '</div>';
+        });
+        html += '</div>';
+      }
+      if (extras.length) {
+        var exLbl = extras.length + ' mejores ' + (advancePerGroup+1) + 'ºs';
+        html += '<div class="tour-qroute-section is-extras"><div class="tour-qroute-section-h">'+exLbl+'</div>';
+        extras.forEach(function(d){
+          html += '<div class="tour-qroute-chip is-extra">'
+            +    '<span class="tqc-grp">G'+String.fromCharCode(65+d.groupIdx)+'·'+(advancePerGroup+1)+'º</span>'
+            +    '<span class="tqc-name">'+_tvEsc((d.team&&d.team.name)||'?')+'</span>'
+            +    '<span class="tqc-pts">'+d.pts+' pts · DIF '+(d.dif>=0?'+':'')+d.dif+'</span>'
+            +  '</div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+
+      var totalQ = direct.length + extras.length;
+      var hasTarget = !!targetId;
+      var btnDisabled = !hasTarget;
+      var btnStyle = btnDisabled
+        ? 'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.4);cursor:not-allowed;'
+        : 'background:linear-gradient(145deg,#ff66c4,#a3009a);border:1px solid #ff66c4;color:#fff;box-shadow:0 4px 18px rgba(255,66,179,.40);cursor:pointer;';
+      html += '<div style="display:flex;justify-content:center;margin-top:12px;">'
+           +   '<button type="button" class="tour-qroute-send-btn" data-tour="'+tourId+'" '+(btnDisabled?'disabled':'')+' '
+           +     'style="'+btnStyle+'border-radius:10px;padding:11px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">'
+           +     '📤 Enviar '+totalQ+' clasificados a '+_tvEsc(targetName)
+           +   '</button></div>';
+      if (!hasTarget) {
+        html += '<div style="margin-top:6px;text-align:center;font-size:10px;color:rgba(255,170,230,.7);letter-spacing:1px;text-transform:uppercase;">Configura la Ronda Final destino en el editor 🖍</div>';
+      }
+    }
+    html += '</div>';
+
     if (Object.keys(cfg.results).length > 0) {
       html += '<div style="display:flex;justify-content:center;margin-top:10px;">'
         + '<button type="button" class="tour-reset-btn" data-tour="'+tourId+'" '
@@ -18614,13 +18926,100 @@ window._showSimProgress = function(opts, onDone){
         cfg4.fixture = null;
         cfg4.currentJornada = 0;
       } else if (cfg4.format === 'groups-ko' || cfg4.format === 'mundial-48'
-                 || cfg4.format === 'league-ko' || cfg4.format === 'swiss') {
+                 || cfg4.format === 'league-ko' || cfg4.format === 'swiss'
+                 || cfg4.format === 'qualifier-route') {
         cfg4.groupFixtures = {};
         cfg4.currentJornadaByGroup = {};
         cfg4.koBracket = null;
         cfg4.koCurrentRound = 0;
       }
       _tourSaveAndRender(tid4, cfg4);
+      ev.stopPropagation();
+      return;
+    }
+
+    /* e) Botón "📤 Enviar clasificados" — formato qualifier-route.
+       Copia las selecciones clasificadas (top N de cada grupo +
+       X mejores [N+1]ºs) al teams[] del torneo destino (sfn*),
+       resetea su progreso y refresca ambas pantallas. */
+    var qroSend = target.closest('.tour-qroute-send-btn');
+    if (qroSend && !qroSend.disabled) {
+      var qSrcId = qroSend.getAttribute('data-tour');
+      if (!qSrcId || TOUR_IDS.indexOf(qSrcId) === -1) return;
+      var qSrc = (window._TOUR_CACHE && window._TOUR_CACHE[qSrcId]) || _tourLoadCachedSync(qSrcId);
+      if (!qSrc || qSrc.format !== 'qualifier-route') return;
+      var qFc = qSrc.formatConfig || {};
+      var qTid = qFc.targetTour || '';
+      if (!qTid || TOUR_IDS.indexOf(qTid) === -1) {
+        alert('⚠ Configura la Ronda Final destino en el editor 🖍 del torneo.');
+        return;
+      }
+      /* Recalcula clasificados (mismo criterio que el renderer). */
+      var qN  = qFc.advancePerGroup || 2;
+      var qX  = qFc.extraQualifiers || 0;
+      var qPg = qFc.perGroup || 4;
+      var qNg = qFc.groups || 4;
+      var qTeams = qSrc.teams || [];
+      var qDirect = [], qExPool = [];
+      for (var qg = 0; qg < qNg; qg++) {
+        var qSlice = qTeams.slice(qg*qPg, (qg+1)*qPg);
+        if (!qSlice.length) break;
+        var qFix = (qSrc.groupFixtures||{})[qg];
+        if (!qFix) continue;
+        var qRs = _tourComputeStandings(qSlice, qFix, qSrc.results||{}, 'g'+qg+'_', qFc.tieBreak);
+        for (var qp = 0; qp < qN; qp++) {
+          if (qRs[qp] && qSlice[qRs[qp].idx]) {
+            qDirect.push({ pos:qp+1, team:qSlice[qRs[qp].idx] });
+          }
+        }
+        if (qX > 0 && qRs[qN] && qSlice[qRs[qN].idx]) {
+          qExPool.push({
+            team:qSlice[qRs[qN].idx],
+            pts:qRs[qN].pts, dif:qRs[qN].dif, gf:qRs[qN].gf
+          });
+        }
+      }
+      qExPool.sort(function(a,b){
+        return (b.pts-a.pts) || (b.dif-a.dif) || (b.gf-a.gf) ||
+               String((a.team&&a.team.name)||'').localeCompare(String((b.team&&b.team.name)||''));
+      });
+      var qExtras = qExPool.slice(0, qX);
+      var qAll = qDirect.map(function(d){return d.team;})
+                       .concat(qExtras.map(function(e){return e.team;}));
+      if (!qAll.length) {
+        alert('⚠ No hay clasificados todavía. Termina los grupos.');
+        return;
+      }
+      /* Carga config destino y prepara overwrite. */
+      var qDst = (window._TOUR_CACHE && window._TOUR_CACHE[qTid]) || _tourLoadCachedSync(qTid) || _cloneDefault(qTid);
+      qDst.id = qTid;
+      var qDstHasTeams = Array.isArray(qDst.teams) && qDst.teams.filter(function(t){return t && t.name && t.name!=='PENDIENTE';}).length > 0;
+      var qConfirm = qDstHasTeams
+        ? ('⚠ La Ronda Final "'+(qDst.name||qTid)+'" ya tiene equipos colocados. ¿Sobrescribir con los '+qAll.length+' clasificados?')
+        : ('¿Enviar los '+qAll.length+' clasificados a "'+(qDst.name||qTid)+'"?');
+      if (!confirm(qConfirm)) return;
+      /* Sustituye teams[] + resetea progreso + numTeams. */
+      qDst.teams = qAll.map(function(t){
+        return { name:(t&&t.name)||'?', isHuman:!!(t&&t.isHuman),
+                 shield:(t&&t.shield)||'', power:(t&&t.power)||75,
+                 icon:(t&&t.icon)||'' };
+      });
+      qDst.numTeams = qAll.length;
+      qDst.results = {};
+      qDst.fixture = null;
+      qDst.currentJornada = 0;
+      qDst.groupFixtures = {};
+      qDst.currentJornadaByGroup = {};
+      qDst.bracket = null;
+      qDst.currentRound = 0;
+      qDst.koBracket = null;
+      qDst.koCurrentRound = 0;
+      qDst._prizesPaid = false;
+      try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[qTid] = qDst; } catch(_){}
+      try { window._tourSave(qTid, qDst); } catch(_){}
+      try { window._tourRender(qTid); } catch(_){}
+      try { if (typeof window._tvRenderCards === 'function') window._tvRenderCards(); } catch(_){}
+      alert('✅ '+qAll.length+' clasificados enviados a "'+(qDst.name||qTid)+'".');
       ev.stopPropagation();
       return;
     }

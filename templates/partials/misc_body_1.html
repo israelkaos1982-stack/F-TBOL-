@@ -33514,17 +33514,41 @@ Tottenham
   #s-munich .munich-comps.open .munich-comps-body{
     max-height:380px;border-top-color:rgba(255,255,255,.10);
   }
+  /* Wrapper relativo para anclar el indicador de scroll derecho. */
+  #s-munich .munich-comps-row-wrap{position:relative;}
   #s-munich .munich-comps-row{
-    display:flex;flex-wrap:nowrap;gap:10px;padding:12px 12px 6px;
+    display:flex;flex-wrap:nowrap;gap:8px;padding:10px 10px 4px;
     overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;
   }
   #s-munich .munich-comps-row::-webkit-scrollbar{height:6px;}
   #s-munich .munich-comps-row::-webkit-scrollbar-thumb{
     background:rgba(255,255,255,.18);border-radius:3px;
   }
+  /* Indicador "hay más a la derecha" — flecha animada con fade del
+     fondo. Pointer-events none para que no bloquee el scroll/tap.
+     Se muestra sólo cuando `.has-more` está activa (calculado en JS
+     al renderizar y al hacer scroll). */
+  #s-munich .munich-comps-more{
+    position:absolute;right:0;top:0;bottom:14px;width:34px;
+    display:none;align-items:center;justify-content:flex-end;
+    padding-right:6px;pointer-events:none;
+    background:linear-gradient(to right,
+      rgba(0,0,0,0) 0%,
+      rgba(0,0,0,.55) 45%,
+      rgba(0,0,0,.85) 100%);
+    border-top-right-radius:12px;border-bottom-right-radius:12px;
+    color:#ffd750;font-size:22px;font-weight:900;line-height:1;
+    text-shadow:0 1px 4px rgba(0,0,0,.7);
+    animation:munichMoreNudge 1.4s ease-in-out infinite;
+  }
+  #s-munich .munich-comps-row-wrap.has-more .munich-comps-more{display:flex;}
+  @keyframes munichMoreNudge{
+    0%,100%{transform:translateX(0);opacity:.85;}
+    50%    {transform:translateX(3px);opacity:1;}
+  }
   #s-munich .munich-comp-chip{
-    flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;
-    padding:10px 10px 8px;border-radius:12px;min-width:82px;max-width:100px;
+    flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:5px;
+    padding:8px 8px 6px;border-radius:10px;min-width:68px;max-width:84px;
     background:rgba(0,0,0,.46);border:2px solid var(--mc-color,rgba(255,255,255,.25));
     box-shadow:0 0 12px var(--mc-glow,transparent), inset 0 1px 0 rgba(255,255,255,.05);
     cursor:pointer;-webkit-tap-highlight-color:transparent;
@@ -33541,16 +33565,16 @@ Tottenham
     filter:grayscale(.25) opacity(.88);
   }
   #s-munich .munich-comp-chip .munich-comp-ico{
-    font-size:26px;line-height:1;height:32px;display:flex;align-items:center;justify-content:center;
+    font-size:22px;line-height:1;height:28px;display:flex;align-items:center;justify-content:center;
   }
-  #s-munich .munich-comp-chip .munich-comp-ico img{width:28px;height:28px;object-fit:contain;}
+  #s-munich .munich-comp-chip .munich-comp-ico img{width:24px;height:24px;object-fit:contain;}
   #s-munich .munich-comp-chip .munich-comp-lbl{
-    font-family:Rajdhani,sans-serif;font-size:11px;font-weight:700;
-    color:#fff;text-align:center;line-height:1.15;letter-spacing:.4px;
-    text-transform:uppercase;max-width:88px;
+    font-family:Rajdhani,sans-serif;font-size:10px;font-weight:700;
+    color:#fff;text-align:center;line-height:1.12;letter-spacing:.3px;
+    text-transform:uppercase;max-width:74px;
   }
   #s-munich .munich-comp-chip .munich-comp-status{
-    font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.4px;
+    font-family:Oswald,sans-serif;font-size:8px;letter-spacing:1.2px;
     color:var(--mc-color);text-transform:uppercase;
   }
   #s-munich .munich-comps-legend{
@@ -33868,8 +33892,11 @@ Tottenham
     <span class="munich-comps-chev" aria-hidden="true">▼</span>
   </button>
   <div class="munich-comps-body" id="munich-comps-body">
-    <div class="munich-comps-row" id="munich-comps-row">
-      <div class="munich-comps-empty">Cargando competiciones…</div>
+    <div class="munich-comps-row-wrap" id="munich-comps-row-wrap">
+      <div class="munich-comps-row" id="munich-comps-row">
+        <div class="munich-comps-empty">Cargando competiciones…</div>
+      </div>
+      <div class="munich-comps-more" aria-hidden="true">›</div>
     </div>
     <div class="munich-comps-legend">
       <span><i class="munich-leg-dot in"></i>En juego</span>
@@ -34619,17 +34646,59 @@ Tottenham
     });
   }
 
+  /* Hint visual de scroll horizontal: añadimos `.has-more` al wrapper
+     mientras quede contenido oculto a la derecha del row, para que el
+     CSS muestre la flecha animada. Se recalcula al render y al scroll. */
+  function _updateScrollHint(){
+    var row  = document.getElementById('munich-comps-row');
+    var wrap = document.getElementById('munich-comps-row-wrap');
+    if (!row || !wrap) return;
+    var max  = row.scrollWidth - row.clientWidth;
+    var hasMore = max > 4 && (row.scrollLeft + 4) < max;
+    wrap.classList.toggle('has-more', hasMore);
+  }
+
+  /* Override del botón "Volver" para que las screens a las que se
+     entra desde un chip del hub vuelvan al hub (s-munich), no al
+     menú principal (s-home). Se registra la screen destino cuando se
+     hace click en un chip; un listener global de `.back-btn` en
+     fase de captura intercepta el back si el override coincide con
+     la screen activa. Se limpia tras usar o tras navegar a otra. */
+  window._munichBackOverride = null;
+  window._munichChipNav = function(screen){
+    if (!screen) return;
+    try { window._munichBackOverride = screen; } catch(_){}
+    try { go(screen); } catch(_){}
+  };
+  (function _installBackInterceptor(){
+    if (window.__MU_BACK_HOOKED) return;
+    window.__MU_BACK_HOOKED = true;
+    document.addEventListener('click', function(ev){
+      if (!window._munichBackOverride) return;
+      var backBtn = ev.target && ev.target.closest && ev.target.closest('.back-btn');
+      if (!backBtn) return;
+      var screenEl = backBtn.closest('.screen[id]');
+      if (!screenEl || screenEl.id !== window._munichBackOverride) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+      window._munichBackOverride = null;
+      try { window.go('s-munich'); } catch(_){}
+    }, true);
+  })();
+
   function _render(){
     var row = document.getElementById('munich-comps-row');
     if (!row) return;
     var items = _collect();
     if (!items.length){
       row.innerHTML = '<div class="munich-comps-empty">Aún no se ha jugado nada.</div>';
+      _updateScrollHint();
       return;
     }
     var html = items.map(function(it){
       var screen = it.screen ? _esc(it.screen).replace(/'/g,'') : '';
-      var clk = screen ? ' onclick="try{go(\'' + screen + '\')}catch(_){}"' : '';
+      var clk = screen ? ' onclick="try{window._munichChipNav(\'' + screen + '\')}catch(_){}"' : '';
       var stTxt = (it.status === 'out') ? 'Eliminado' : 'En juego';
       return ''
         + '<div class="munich-comp-chip ' + it.status + '"' + clk + ' role="button" tabindex="0">'
@@ -34639,6 +34708,14 @@ Tottenham
         + '</div>';
     }).join('');
     row.innerHTML = html;
+    if (!row.__muScrollHook){
+      row.addEventListener('scroll', _updateScrollHint, { passive:true });
+      row.__muScrollHook = true;
+    }
+    /* doble RAF para que el layout esté listo y scrollWidth sea fiable. */
+    requestAnimationFrame(function(){
+      requestAnimationFrame(_updateScrollHint);
+    });
   }
 
   window.muCompsToggle = function(ev){

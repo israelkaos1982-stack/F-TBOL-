@@ -24451,11 +24451,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* Ball Storage editable (petición usuario 2026-05-05, reescrito
      2026-05-17 para persistencia en servidor + competiciones custom).
-     - Cada competición lleva un <select> con TODOS los balones
-       guardados en el inventario. Cambiar el selector persiste
-       (localStorage + servidor) y los partidos humanos de esa comp
-       pasan a usarlo automáticamente (vía override en bundle
-       COMP_BALL, que ahora lee primero la clave RAW del partido).
+     - Cada competición lleva un botón "▾ ELEGIR" que abre un picker
+       overlay con TODOS los balones guardados en el inventario; el
+       actual se marca con ✅ (antes era un <select> nativo que en
+       algunos móviles no abría / cancelaba la elección al primer
+       toque). Elegir persiste (localStorage + servidor) y los
+       partidos humanos de esa comp pasan a usarlo automáticamente
+       (vía override en bundle COMP_BALL, que lee primero la clave
+       RAW del partido).
      - Botón "+ Añadir balón" añade un balón al inventario.
      - Botón "+ Añadir Competición" añade una comp custom (nombre +
        clave + balón) para torneos nuevos.
@@ -24473,15 +24476,36 @@ document.addEventListener('DOMContentLoaded', function() {
   var _BALL_COMPDB_KEY   = 'ball_comp_db_v1';
 
   /* ── Sync con servidor (GlobalState vía /api/kv) ───────────────── */
+  /* Marca timestamp por clave cuando el usuario escribe localmente;
+     `_ballHydrateAll` la respeta y NO pisa la cache local mientras la
+     ventana de gracia esté activa. Arregla bug 2026-05-24: el hydrate
+     en boot/entrar a la pantalla a veces respondía DESPUÉS del POST
+     del usuario, devolvía valor viejo y sobrescribía el balón / la
+     competición que acababa de añadir. */
+  var _ballLocalWriteAt = {};
+  var _BALL_LOCAL_GRACE_MS = 5 * 60 * 1000; /* 5 min */
+  function _ballMarkLocalWrite(key){ _ballLocalWriteAt[key] = Date.now(); }
+  function _ballRecentLocalWrite(key){
+    var t = _ballLocalWriteAt[key];
+    return !!(t && (Date.now() - t) < _BALL_LOCAL_GRACE_MS);
+  }
+  /* POST con promesa: resuelve a true si el servidor confirmó OK.
+     Lo usan los flujos de añadir/asignar para avisar si la escritura
+     no llegó al servidor (antes era fire-and-forget silencioso). */
   function _ballKvPost(key, value){
-    try {
-      fetch('/api/kv/' + key, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        credentials: 'same-origin',
-        body: JSON.stringify({ value: value })
-      }).catch(function(){});
-    } catch(_){}
+    return new Promise(function(resolve){
+      try {
+        fetch('/api/kv/' + key, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({ value: value })
+        })
+        .then(function(r){ return r.ok ? r.json().catch(function(){ return null; }) : null; })
+        .then(function(j){ resolve(!!(j && j.ok)); })
+        .catch(function(){ resolve(false); });
+      } catch(_){ resolve(false); }
+    });
   }
   /* Hidrata localStorage desde el servidor (fuente de verdad). Se
      llama en el boot (para que el bundle vea datos frescos al
@@ -24495,7 +24519,9 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/api/kv/' + key, { credentials:'same-origin', headers:{'Cache-Control':'no-store'} })
           .then(function(r){ return r.ok ? r.json() : null; })
           .then(function(j){
-            if (j && j.ok && j.value != null) {
+            /* Si el usuario ha escrito esta clave hace poco, NO pisar
+               su cache local con la respuesta (que puede ser stale). */
+            if (j && j.ok && j.value != null && !_ballRecentLocalWrite(key)) {
               try { localStorage.setItem(key, JSON.stringify(j.value)); } catch(_){}
             }
             done();
@@ -24536,15 +24562,13 @@ document.addEventListener('DOMContentLoaded', function() {
     /* localStorage = cache; servidor = fuente de verdad. Aunque el
        setItem rebote por quota, el POST al server garantiza que el
        inventario sobreviva (bug histórico "se borraba"). */
-    var localOk = true;
     try {
       localStorage.setItem(_BALL_INV_KEY, JSON.stringify(arr));
     } catch(e) {
-      localOk = false;
       try { _ballToast('⚠ Caché llena — guardado en servidor.'); } catch(_){}
     }
-    _ballKvPost(_BALL_INV_KEY, arr || []);
-    return true; /* el server siempre recibe el POST */
+    _ballMarkLocalWrite(_BALL_INV_KEY);
+    return _ballKvPost(_BALL_INV_KEY, arr || []);
   }
   function _loadBallOverride(){
     try { var raw = localStorage.getItem(_BALL_OVERRIDE_KEY); if (raw) return JSON.parse(raw)||{}; } catch(_){}
@@ -24552,8 +24576,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function _saveBallOverride(map){
     try { localStorage.setItem(_BALL_OVERRIDE_KEY, JSON.stringify(map||{})); } catch(_){}
-    _ballKvPost(_BALL_OVERRIDE_KEY, map || {});
-    return true;
+    _ballMarkLocalWrite(_BALL_OVERRIDE_KEY);
+    return _ballKvPost(_BALL_OVERRIDE_KEY, map || {});
   }
   /* Competiciones custom añadidas por el admin. Array de
      {key, comp, id, cat, luz, _custom:true}. */
@@ -24563,8 +24587,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function _saveBallCompDb(arr){
     try { localStorage.setItem(_BALL_COMPDB_KEY, JSON.stringify(arr||[])); } catch(_){}
-    _ballKvPost(_BALL_COMPDB_KEY, arr || []);
-    return true;
+    _ballMarkLocalWrite(_BALL_COMPDB_KEY);
+    return _ballKvPost(_BALL_COMPDB_KEY, arr || []);
   }
 
   /* Competiciones reales que faltaban en la lista base (petición
@@ -24609,11 +24633,77 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch(_){}
   }
 
+  /* Picker overlay con ✅ — reemplaza el <select> nativo (en algunos
+     móviles no abría, cancelaba la selección al primer toque o el
+     onchange no llegaba a disparar). El usuario marca con un toque.
+     Llamadores: `adminBallPickForComp` y el botón "Balón por defecto"
+     del modal "+ Añadir Competición". */
+  function _ballOpenPicker(opts){
+    opts = opts || {};
+    var ovId = '_ball-picker-ov';
+    var prev = document.getElementById(ovId);
+    if (prev) prev.remove();
+    function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+    var current = opts.current || '';
+    var balls = (opts.balls || []).slice();
+    if (current && balls.indexOf(current) === -1) balls.unshift(current);
+    var rows = balls.map(function(it){
+      var isSel = (it === current);
+      var icon  = isSel
+        ? '<span style="font-size:15px;color:#7df0a0;flex-shrink:0;width:18px;text-align:center;">✅</span>'
+        : '<span style="display:inline-block;width:18px;flex-shrink:0;"></span>';
+      return '<button type="button" data-bid="' + _esc(it) + '" '
+           +   'style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;'
+           +     'background:' + (isSel?'rgba(60,200,120,.10)':'rgba(255,255,255,.03)') + ';'
+           +     'border:1px solid ' + (isSel?'rgba(60,200,120,.45)':'rgba(255,255,255,.08)') + ';'
+           +     'border-radius:8px;padding:10px 11px;color:#e8f0ff;'
+           +     'font-family:\'Courier New\',monospace;font-size:12px;cursor:pointer;">'
+           + icon
+           + '<span style="flex:1;word-break:break-all;">' + _esc(it) + '</span>'
+           + '</button>';
+    }).join('');
+    var ov = document.createElement('div');
+    ov.id = ovId;
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100001;display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.innerHTML = ''
+      + '<div style="background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(80,180,255,.45);border-radius:14px;padding:14px;width:100%;max-width:420px;max-height:80vh;display:flex;flex-direction:column;color:#e8f0ff;font-family:Rajdhani,sans-serif;box-shadow:0 0 30px rgba(80,180,255,.20);">'
+      +   '<div style="font-family:Oswald,sans-serif;letter-spacing:2px;font-size:13px;color:#7db8ff;margin-bottom:10px;">' + _esc(opts.title || '⚽ ELEGIR BALÓN') + '</div>'
+      +   '<div id="_ball-picker-list" style="overflow-y:auto;display:flex;flex-direction:column;gap:6px;flex:1;-webkit-overflow-scrolling:touch;">' + rows + '</div>'
+      +   '<button type="button" id="_ball-picker-cancel" style="margin-top:10px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;cursor:pointer;">CERRAR</button>'
+      + '</div>';
+    document.body.appendChild(ov);
+    function close(){ try { ov.remove(); } catch(_){} }
+    document.getElementById('_ball-picker-list').addEventListener('click', function(e){
+      var btn = e.target.closest ? e.target.closest('button[data-bid]') : null;
+      if (!btn) { var p = e.target; while (p && p !== this) { if (p.getAttribute && p.getAttribute('data-bid') != null) { btn = p; break; } p = p.parentNode; } }
+      if (!btn) return;
+      var id = btn.getAttribute('data-bid');
+      close();
+      if (typeof opts.onPick === 'function') opts.onPick(id);
+    });
+    document.getElementById('_ball-picker-cancel').addEventListener('click', close);
+    ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
+  }
+  window._ballOpenPicker = _ballOpenPicker;
+
+  /* Abre el picker para una competición concreta y guarda al elegir. */
+  window.adminBallPickForComp = function(compKey){
+    var inv = _loadBallInventory();
+    var ov  = _loadBallOverride();
+    var found = _effectiveCompList().filter(function(b){ return b.key===compKey; })[0];
+    var current = ov[compKey] || (found && found.id) || (inv[0]||'');
+    _ballOpenPicker({
+      title: '⚽ BALÓN · ' + (found ? found.comp : compKey),
+      current: current,
+      balls: inv,
+      onPick: function(ballId){ window.adminBallSetForComp(compKey, ballId); }
+    });
+  };
+
   window.adminBallSetForComp = function(compKey, ballId){
     var ov = _loadBallOverride();
     if (!ballId) delete ov[compKey];
     else ov[compKey] = ballId;
-    _saveBallOverride(ov);
     /* Feedback visible + re-render: el usuario reportó que "cuesta
        muchísimo conseguir que cambie de balón" porque no había
        ninguna confirmación de que el cambio se aplicó. */
@@ -24622,8 +24712,12 @@ document.addEventListener('DOMContentLoaded', function() {
       var found = _effectiveCompList().filter(function(b){ return b.key===compKey; })[0];
       if (found) lbl = found.comp;
     } catch(_){}
-    _ballToast('✅ Balón guardado: ' + lbl + ' → ' + (ballId || 'por defecto'));
+    _ballToast('💾 Guardando: ' + lbl + '…');
     try { window.adminRenderBalls(); } catch(_){}
+    _saveBallOverride(ov).then(function(serverOk){
+      if (serverOk) _ballToast('✅ Balón guardado: ' + lbl + ' → ' + (ballId || 'por defecto'));
+      else          _ballToast('⚠ Guardado local. El servidor no respondió.');
+    });
   };
 
   /* + Añadir Competición — para torneos/campeonatos nuevos. Guarda
@@ -24635,7 +24729,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var prev = document.getElementById(ovId);
     if (prev) prev.remove();
     var inv = _loadBallInventory();
-    var opts = inv.map(function(it){ return '<option value="'+String(it).replace(/"/g,'&quot;')+'">'+String(it).replace(/</g,'&lt;')+'</option>'; }).join('');
+    /* Selección actual del balón por defecto — se mantiene en closure
+       y se sincroniza con el botón (en lugar de un <select> nativo). */
+    var pickedBall = inv[0] || '';
+    function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
     var ov = document.createElement('div');
     ov.id = ovId;
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;';
@@ -24648,7 +24745,10 @@ document.addEventListener('DOMContentLoaded', function() {
       +   '<input id="bc-key" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%;margin:3px 0 2px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:8px;padding:9px 11px;font-family:\'Courier New\',monospace;font-size:12px;box-sizing:border-box;" placeholder="ej: superliga, verano, mundialito…">'
       +   '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:10px;">Reales: superliga · verano · mundialito · sel · inter · recopa · usc. Mismo nombre que use el torneo internamente.</div>'
       +   '<label style="font-size:11px;color:rgba(255,255,255,.6);">Balón por defecto</label>'
-      +   '<select id="bc-ball" style="width:100%;margin:3px 0 4px;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:8px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:12px;padding:8px 10px;box-sizing:border-box;">'+opts+'</select>'
+      +   '<button type="button" id="bc-ball-btn" style="width:100%;margin:3px 0 4px;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:8px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:12px;padding:9px 11px;box-sizing:border-box;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;">'
+      +     '<span id="bc-ball-label" style="flex:1;word-break:break-all;">'+_esc(pickedBall)+'</span>'
+      +     '<span style="color:rgba(255,255,255,.4);font-size:11px;">▾ ELEGIR</span>'
+      +   '</button>'
       +   '<div id="bc-err" style="font-size:11px;color:#ff8080;margin-top:6px;min-height:14px;"></div>'
       +   '<div style="display:flex;gap:8px;margin-top:8px;">'
       +     '<button type="button" id="bc-ok" style="flex:1;background:linear-gradient(90deg,#1d6fd6,#1558aa);color:#fff;border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;font-weight:700;cursor:pointer;">✅ AÑADIR</button>'
@@ -24657,14 +24757,26 @@ document.addEventListener('DOMContentLoaded', function() {
       + '</div>';
     document.body.appendChild(ov);
     function close(){ try { ov.remove(); } catch(_){} }
+    document.getElementById('bc-ball-btn').addEventListener('click', function(){
+      _ballOpenPicker({
+        title: '⚽ BALÓN POR DEFECTO',
+        current: pickedBall,
+        balls: _loadBallInventory(),
+        onPick: function(id){
+          pickedBall = id || '';
+          var lbl = document.getElementById('bc-ball-label');
+          if (lbl) lbl.textContent = pickedBall;
+        }
+      });
+    });
     function submit(){
       var nameEl = document.getElementById('bc-name');
       var keyEl  = document.getElementById('bc-key');
-      var ballEl = document.getElementById('bc-ball');
+      var okBtn  = document.getElementById('bc-ok');
       var errEl  = document.getElementById('bc-err');
       var name = String((nameEl&&nameEl.value)||'').trim();
       var key  = String((keyEl&&keyEl.value)||'').trim().toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'');
-      var ball = (ballEl&&ballEl.value)||'';
+      var ball = pickedBall || '';
       if (!name) { errEl.textContent = 'Escribe un nombre.'; return; }
       if (!key)  { errEl.textContent = 'Escribe una clave (compKey).'; return; }
       var collide = _effectiveCompList().some(function(b){ return b.key===key && !b._custom; });
@@ -24672,11 +24784,17 @@ document.addEventListener('DOMContentLoaded', function() {
       var db = _loadBallCompDb();
       db = db.filter(function(c){ return c && c.key !== key; });
       db.push({ key:key, comp:name, id:ball, cat:'Custom 🛠', luz:'🌙 Noche', _custom:true });
-      _saveBallCompDb(db);
-      if (ball) { var ovm = _loadBallOverride(); ovm[key] = ball; _saveBallOverride(ovm); }
-      close();
-      _ballToast('✅ Competición añadida: ' + name);
-      try { window.adminRenderBalls(); } catch(_){}
+      if (okBtn){ okBtn.disabled = true; okBtn.textContent = 'GUARDANDO…'; }
+      errEl.textContent = '';
+      var savesP = [ _saveBallCompDb(db) ];
+      if (ball) { var ovm = _loadBallOverride(); ovm[key] = ball; savesP.push(_saveBallOverride(ovm)); }
+      Promise.all(savesP).then(function(results){
+        var allOk = results.every(function(r){ return r === true; });
+        close();
+        _ballToast(allOk ? ('✅ Competición añadida: ' + name)
+                         : ('⚠ Añadida en local — el servidor no respondió.'));
+        try { window.adminRenderBalls(); } catch(_){}
+      });
     }
     document.getElementById('bc-ok').addEventListener('click', submit);
     document.getElementById('bc-cancel').addEventListener('click', close);
@@ -24728,10 +24846,15 @@ document.addEventListener('DOMContentLoaded', function() {
       var inv = _loadBallInventory();
       if (inv.indexOf(name) !== -1) { errEl.textContent = 'Ese balón ya está en el inventario.'; return; }
       inv.push(name);
-      var ok = _saveBallInventory(inv);
-      if (!ok) { return; }  /* alert ya mostrado en _saveBallInventory */
-      close();
-      window.adminRenderBalls();
+      var okBtn = document.getElementById('ball-add-ok');
+      if (okBtn){ okBtn.disabled = true; okBtn.textContent = 'GUARDANDO…'; }
+      errEl.textContent = '';
+      _saveBallInventory(inv).then(function(serverOk){
+        close();
+        _ballToast(serverOk ? ('✅ Balón añadido: ' + name)
+                            : ('⚠ Añadido en local — el servidor no respondió.'));
+        window.adminRenderBalls();
+      });
     }
     document.getElementById('ball-add-ok').addEventListener('click', submit);
     document.getElementById('ball-add-cancel').addEventListener('click', close);
@@ -24785,8 +24908,9 @@ document.addEventListener('DOMContentLoaded', function() {
     html += '<button onclick="window.adminBallAddComp()" style="background:rgba(60,140,255,.18);border:1px solid rgba(80,180,255,.55);color:#7db8ff;border-radius:8px;padding:6px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;">＋ AÑADIR COMPETICIÓN</button>';
     html += '</div>';
 
-    /* Lista por competición — cada fila lleva su <select> con todo
-       el inventario disponible. */
+    /* Lista por competición — cada fila lleva un botón que abre el
+       picker con ✅ (antes era un <select> nativo que en algunos
+       móviles no abría / cancelaba la elección al primer toque). */
     html += '<div style="border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;">';
     html += comps.map(function (b, i) {
       var isSnow = snowActive && b.key === 'snow';
@@ -24797,21 +24921,16 @@ document.addEventListener('DOMContentLoaded', function() {
          ya en el inventario — se añade como opción para no perderlo).
          Antes caía a b.id si no estaba en inv → parecía "no guardado". */
       var current = ov[b.key] || b.id || (inv[0]||'');
-      var optList = inv.slice();
-      if (current && optList.indexOf(current) === -1) optList.unshift(current);
-      var opts = optList.map(function(it){
-        var sel = (it === current) ? ' selected' : '';
-        return '<option value="' + _esc(it) + '"' + sel + '>' + _esc(it) + '</option>';
-      }).join('');
       var keyJs = String(b.key).replace(/'/g,"\\'");
       return '<div style="display:flex;align-items:center;gap:0;background:' + bg + ';border-bottom:1px solid rgba(255,255,255,.05);">'
         + '<div style="padding:10px 10px 10px 12px;font-size:18px;flex-shrink:0;">' + ballIco + '</div>'
         + '<div style="flex:1;padding:8px 6px;border-left:1px solid rgba(255,255,255,.05);min-width:0;">'
         +   '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.65);">' + _esc(b.comp) + (b._custom?' <span style="color:#7db8ff;font-size:9px;">· custom</span>':(b._extra?' <span style="color:#9fd0ff;font-size:9px;">· extra</span>':'')) + '</div>'
-        +   '<select onchange="window.adminBallSetForComp(\'' + keyJs + '\', this.value)" '
-        +          'style="margin-top:3px;width:100%;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:6px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:11px;padding:4px 6px;">'
-        +     opts
-        +   '</select>'
+        +   '<button type="button" onclick="window.adminBallPickForComp(\'' + keyJs + '\')" '
+        +          'style="margin-top:3px;width:100%;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:6px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:11px;padding:6px 8px;cursor:pointer;display:flex;align-items:center;gap:6px;text-align:left;">'
+        +     '<span style="flex:1;word-break:break-all;">' + _esc(current) + '</span>'
+        +     '<span style="color:rgba(255,255,255,.4);font-size:10px;flex-shrink:0;">▾ ELEGIR</span>'
+        +   '</button>'
         + '</div>'
         + '<div style="flex-shrink:0;padding:8px 10px;border-left:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;text-align:right;">'
         +   _esc(b.luz)

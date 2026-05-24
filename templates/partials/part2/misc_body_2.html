@@ -15705,11 +15705,11 @@
             var newEv = [];
             for (var i = 0; i < et_gh; i++){
               var p = _pickScorer(outA);
-              newEv.push({type:'gol', min:_rndETMin(), num:p[0]||'', player:p[1]||'?', team:'a', _et:true});
+              newEv.push({type:'gol', ico:'⚽', min:_rndETMin(), num:p[0]||'', player:p[1]||'?', team:'a', _et:true});
             }
             for (var j2 = 0; j2 < et_gv; j2++){
               var p2 = _pickScorer(outB);
-              newEv.push({type:'gol', min:_rndETMin(), num:p2[0]||'', player:p2[1]||'?', team:'b', _et:true});
+              newEv.push({type:'gol', ico:'⚽', min:_rndETMin(), num:p2[0]||'', player:p2[1]||'?', team:'b', _et:true});
             }
             /* Insertar al final del array de eventos manteniendo orden
                por minuto. Como evtIdx ya está en evts.length, los
@@ -16170,7 +16170,7 @@
         var pl = _weightedScorerPick(eligibleGol, slot.team === 'a', goalsPerPlayer) || eligibleGol[0];
         if (!pl) return;
         goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
-        events.push({ type:'gol', min:slot.min, num:pl[0]||'', player:pl[1]||'?', team:slot.team });
+        events.push({ type:'gol', ico:'⚽', min:slot.min, num:pl[0]||'', player:pl[1]||'?', team:slot.team });
       }
     });
 
@@ -16878,6 +16878,15 @@
     }
     return h;
   }
+  /* Exponer _iaEventsHtml a window — fix 2026-05-24: el visor del
+     acta en torneos (_tourActaPanelHtml, Selecciones · spv/sfn,
+     verano · sct/pss/jg/asia, Mundialito, Mundial 48) y el de
+     Superliga (_superActaHtml) consultan window._iaEventsHtml para
+     pintar los eventos minuto-a-minuto. Sin exponer, caían al
+     fallback inline que solo usa `ev.ico` (sin derivar del `type`),
+     así que los eventos 'gol' generados por genMatchEvents (que NO
+     traen `ico`, ver línea ~16173) salían SIN el ⚽ en el acta. */
+  try { window._iaEventsHtml = _iaEventsHtml; } catch(_){}
   function _iaCompletedCard(m, cid, evHtml) {
     var cHomeHuman = esHumano(m.home), cAwayHuman = esHumano(m.away);
     var tcH2 = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};

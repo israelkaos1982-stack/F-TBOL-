@@ -3403,13 +3403,19 @@ window._showSimProgress = function(opts, onDone){
         }
         return null;
       }
-      /* KO: cfg.bracket[koRoundIdx] es la lista ordenada de equipos
-         que llegan a esa ronda (pos 0 vs 1, 2 vs 3, ...). El sorteo
-         lo hace _renderMundial al cerrar la ronda anterior. Si la
-         ronda aún no se ha sorteado, bracket[koRoundIdx] no existe
-         o no contiene al humano → null y la card cae a JUGADORES
-         FUERA, que es lo correcto en ese estado. */
-      var bracket = (mundialCfg.bracket || [])[koRoundIdx];
+      /* KO: cfg.koBracket[koRoundIdx] (formato mundial-48) o
+         cfg.bracket[koRoundIdx] (formatos legacy ko/ko-2leg) es la
+         lista ordenada de equipos que llegan a esa ronda (pos 0 vs 1,
+         2 vs 3, ...). El sorteo lo hace _renderMundial al cerrar la
+         ronda anterior. Si la ronda aún no se ha sorteado, el array
+         no existe o no contiene al humano → null y la card cae a
+         JUGADORES FUERA, que es lo correcto en ese estado.
+         2026-05-24: añadido fallback a `koBracket` — sin esto los
+         días marcados como "Mundial - Dieciseisavos / Octavos /
+         Cuartos / Semis / Final" en el calendario del hub Liverpool
+         caían a JUGADORES FUERA aunque el bracket ya estuviera
+         sorteado, porque mundial-48 NO usa `bracket` sino `koBracket`. */
+      var bracket = (mundialCfg.koBracket || mundialCfg.bracket || [])[koRoundIdx];
       if (!Array.isArray(bracket) || !bracket.length) return null;
       var humanName = (teams[huIdx] && teams[huIdx].name) || '';
       if (!humanName) return null;

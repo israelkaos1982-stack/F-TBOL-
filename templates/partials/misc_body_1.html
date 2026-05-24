@@ -13332,15 +13332,15 @@ window._showSimProgress = function(opts, onDone){
      "no es desplegable, es una caja que al pulsar se abre".         */
   .tour-stats-jbtn{
     width:100%;display:flex;align-items:center;gap:10px;
-    background:linear-gradient(135deg,#28002e 0%,#54006a 22%,#a3009a 50%,#ff42b3 72%,#a3009a 85%,#28002e 100%);
-    border:1.5px solid #ff66c4;
-    box-shadow:0 4px 18px rgba(255,66,179,.40),inset 0 1px 0 rgba(255,255,255,.14);
+    background:linear-gradient(135deg,#00221d 0%,#005c4e 22%,#008a76 50%,#2dd4bf 72%,#008a76 85%,#00221d 100%);
+    border:1.5px solid #2dd4bf;
+    box-shadow:0 4px 18px rgba(45,212,191,.40),inset 0 1px 0 rgba(255,255,255,.14);
     border-radius:10px;
     padding:13px 16px;cursor:pointer;
     font-family:Rajdhani,sans-serif;color:#fff;
     transition:transform .08s ease, box-shadow .15s ease;
   }
-  .tour-stats-jbtn:hover{box-shadow:0 6px 24px rgba(255,66,179,.65),inset 0 1px 0 rgba(255,255,255,.20);}
+  .tour-stats-jbtn:hover{box-shadow:0 6px 24px rgba(45,212,191,.65),inset 0 1px 0 rgba(255,255,255,.20);}
   .tour-stats-jbtn:active{transform:translateY(1px);}
   .tour-stats-jbtn .tsb-emoji{font-size:20px;line-height:1;filter:drop-shadow(0 0 6px rgba(255,255,255,.5));}
   .tour-stats-jbtn .tsb-label{
@@ -13349,7 +13349,7 @@ window._showSimProgress = function(opts, onDone){
     color:#ffffff;text-shadow:0 0 14px rgba(255,255,255,.55),0 1px 2px rgba(0,0,0,.7);
   }
   .tour-stats-jbtn .tsb-arr{
-    font-size:14px;color:#ffeaff;text-shadow:0 0 10px rgba(255,180,235,.9);
+    font-size:14px;color:#d6fff5;text-shadow:0 0 10px rgba(120,240,210,.9);
   }
   /* Caja "📤 RAMIFICACIÓN" del formato qualifier-route. Marco morado/
      magenta (tema Selecciones · destino) con sub-secciones por
@@ -13422,21 +13422,21 @@ window._showSimProgress = function(opts, onDone){
     flex:0 0 auto;font-family:Oswald,sans-serif;font-size:10px;
     letter-spacing:1px;color:rgba(255,216,238,.65);
   }
-  /* Pantalla dedicada s-tour-stats — paleta magenta-púrpura (mismo
-     tono que el botón que la abre, contraste alto contra el amarillo
-     dorado del header de los torneos de Selecciones). Acento blanco
-     en valores para máxima legibilidad.                            */
+  /* Pantalla dedicada s-tour-stats — paleta verde-teal esmeralda
+     (mismo tono que el botón que la abre y que la caja de Estadísticas
+     de Torneos de Verano, uniforma todas las cajas de stats del
+     proyecto). Acento blanco en valores para máxima legibilidad.   */
   #s-tour-stats .liga-stat-card{
-    border-color:rgba(255,102,196,.45)!important;
-    background:linear-gradient(145deg,#1f0028 0%,#3a0048 45%,#0d0014 100%)!important;
+    border-color:rgba(45,212,191,.45)!important;
+    background:linear-gradient(145deg,#00221d 0%,#003a32 45%,#000d0b 100%)!important;
   }
   #s-tour-stats .liga-stat-head{
-    background:linear-gradient(90deg,rgba(84,0,106,.7),rgba(163,0,154,.35),rgba(40,0,46,.15))!important;
-    border-bottom:1px solid rgba(255,102,196,.50)!important;
+    background:linear-gradient(90deg,rgba(0,92,78,.7),rgba(0,138,118,.35),rgba(0,34,29,.15))!important;
+    border-bottom:1px solid rgba(45,212,191,.50)!important;
   }
-  #s-tour-stats .liga-stat-title{color:#ffd8ee!important;text-shadow:0 0 18px rgba(255,66,179,.7)!important;}
-  #s-tour-stats .liga-stat-rank{color:rgba(255,216,238,.9)!important;text-shadow:0 0 12px rgba(255,66,179,.55)!important;}
-  #s-tour-stats .liga-stat-value{color:#ffffff!important;text-shadow:0 0 18px rgba(255,170,230,.7)!important;}
+  #s-tour-stats .liga-stat-title{color:#d6fff5!important;text-shadow:0 0 18px rgba(45,212,191,.7)!important;}
+  #s-tour-stats .liga-stat-rank{color:rgba(214,255,245,.9)!important;text-shadow:0 0 12px rgba(45,212,191,.55)!important;}
+  #s-tour-stats .liga-stat-value{color:#ffffff!important;text-shadow:0 0 18px rgba(150,240,210,.7)!important;}
 </style>
 
 <!-- ═══ OVERLAY EDITOR DE TORNEO (compartido por los 4) ═══ -->
@@ -16058,12 +16058,34 @@ window._showSimProgress = function(opts, onDone){
 
   /* Abre la pantalla compartida `s-tour-stats` rellenándola con los
      datos del torneo indicado. La pantalla queda asociada al torneo
-     activo para que `_tourStatsBack` sepa a dónde volver.          */
+     activo para que `_tourStatsBack` sepa a dónde volver.
+
+     Cuando NO hay aún partidos jugados, renderizamos igualmente las 8
+     cajas de categorías (Goleadores, Portería imbatida, Tarjetas …,
+     MVP) cada una con su propio "Sin datos todavía". Antes salía una
+     única línea vacía y el usuario no veía la estructura de stats
+     (petición 2026-05-24: "que salgan las estadísticas de los eventos
+     goleadores mvp etc"). */
   window._tourStatsOpen = function(tourId){
     var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tourId]) || null;
     if (!cfg) { try { cfg = _tourLoadCachedSync(tourId); } catch(_){} }
     if (!cfg) cfg = {};
-    window._tourStatsActive = { tourId: tourId, name: cfg.name || tourId, flag: cfg.flag || '🌐' };
+    /* Guardar la pantalla activa ANTES de navegar a s-tour-stats para
+       que `_tourStatsBack` vuelva exactamente ahí (los grupos del
+       torneo) y no al hub de Selecciones. Petición usuario 2026-05-24:
+       "al volver te manda al menú principal, te debería mandar a los
+       grupos, pantalla anterior". */
+    var _fromId = '';
+    try {
+      var _act = document.querySelector('.screen.active');
+      if (_act && _act.id && _act.id !== 's-tour-stats') _fromId = _act.id;
+    } catch(_){}
+    window._tourStatsActive = {
+      tourId: tourId,
+      name: cfg.name || tourId,
+      flag: cfg.flag || '🌐',
+      from: _fromId
+    };
     var titleEl = document.getElementById('s-tour-stats-title');
     var emojiEl = document.getElementById('s-tour-stats-emoji');
     var dashEl  = document.getElementById('tour-stats-dashboard');
@@ -16074,18 +16096,52 @@ window._showSimProgress = function(opts, onDone){
     }
     if (dashEl) {
       var stats = _tourCollectStatsForTour(tourId);
-      dashEl.innerHTML = (typeof window._lextStatsDashHtml === 'function')
-        ? window._lextStatsDashHtml(stats)
-        : '<div class="liga-stat-empty">Sin datos todavía</div>';
+      var _hasData = stats && Object.keys(stats).length > 0;
+      if (_hasData && typeof window._lextStatsDashHtml === 'function') {
+        dashEl.innerHTML = window._lextStatsDashHtml(stats);
+      } else {
+        dashEl.innerHTML = _tourStatsEmptyCardsHtml();
+      }
     }
     try { window.go('s-tour-stats'); } catch(_){}
   };
 
-  /* Vuelve a la pantalla del torneo que abrió las estadísticas. Si no
-     hay torneo activo guardado, cae al hub de Selecciones.          */
+  /* HTML de las 8 cajas vacías (mismas categorías que `_lextStatsDashHtml`)
+     para que el usuario vea la estructura de stats antes de jugar
+     ningún partido del torneo. */
+  function _tourStatsEmptyCardsHtml(){
+    var CATS = (typeof window.COMP_STATS_CATEGORIES === 'object' && window.COMP_STATS_CATEGORIES)
+      ? window.COMP_STATS_CATEGORIES
+      : [
+          { key:'goles-total', title:'Goleadores',          icon:'⚽️' },
+          { key:'cs',          title:'Portería imbatida',   icon:'🧤' },
+          { key:'yel',         title:'Tarjetas amarillas',  icon:'🟨' },
+          { key:'red',         title:'Tarjetas rojas',      icon:'🟥' },
+          { key:'pen-gol',     title:'Goles de penalti',    icon:'🥅' },
+          { key:'pen-parado',  title:'Penaltis parados',    icon:'🖐' },
+          { key:'falta-gol',   title:'Goles de falta',      icon:'🎯' },
+          { key:'mvp',         title:'MVP',                 icon:'⭐️' }
+        ];
+    return CATS.map(function(cat){
+      return '<div class="liga-stat-card">'
+           +   '<div class="liga-stat-head">'
+           +     '<div class="liga-stat-ico">' + cat.icon + '</div>'
+           +     '<div class="liga-stat-title">' + cat.title + '</div>'
+           +   '</div>'
+           +   '<div class="liga-stat-body">'
+           +     '<div class="liga-stat-empty">Sin datos todavía</div>'
+           +   '</div>'
+           + '</div>';
+    }).join('');
+  }
+
+  /* Vuelve a la pantalla DESDE LA QUE se abrió `s-tour-stats`. Si
+     `from` no está disponible, cae a la pantalla del torneo
+     (`s-<tourId>`) o, en último recurso, al hub de Selecciones. */
   window._tourStatsBack = function(){
     var a = window._tourStatsActive;
-    var dst = (a && a.tourId) ? ('s-' + a.tourId) : 's-selecciones';
+    var dst = (a && a.from)
+              || ((a && a.tourId) ? ('s-' + a.tourId) : 's-selecciones');
     try { window.go(dst); } catch(_){}
   };
 

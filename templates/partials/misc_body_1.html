@@ -13052,6 +13052,14 @@ window._showSimProgress = function(opts, onDone){
     border-top:1px dashed rgba(240,192,64,.25);margin-top:2px;
   }
   .tour-tie-leg-lbl:first-child{border-top:none;margin-top:0;padding-top:2px;}
+  /* Label IDA/VUELTA: nombre a la izquierda, fecha a la derecha. */
+  .tour-tie-leg-lbl.tour-tie-leg-lbl-split{
+    display:flex;justify-content:space-between;align-items:center;
+    padding-left:6px;padding-right:6px;text-align:left;
+  }
+  .tour-tie-leg-lbl.tour-tie-leg-lbl-split > span:last-child{
+    color:rgba(255,255,255,.75);font-weight:600;letter-spacing:1px;
+  }
   .tour-match{
     display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;
     background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);
@@ -15258,8 +15266,10 @@ window._showSimProgress = function(opts, onDone){
       var curR = cfg.currentRound;
       var curTeams = cfg.bracket[curR] || [];
       var roundLbl = rounds[curR] || ('Ronda de '+curTeams.length);
-      var subtitle = (cfg.format === 'ko-2leg') ? 'IDA Y VUELTA · gol de visitante' : 'A UN PARTIDO';
-      var html = hint + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:2.5px;font-size:14px;font-weight:700;color:#f0c040;text-shadow:0 0 8px rgba(240,192,64,.45);text-transform:uppercase;">'+roundLbl+' <span style="color:rgba(255,255,255,.85);text-shadow:0 0 6px rgba(255,255,255,.3);">· '+subtitle+'</span></p>';
+      var subtitle = (cfg.format === 'ko-2leg') ? 'Ida/Vuelta - Gol visita doble' : 'A un partido';
+      var html = hint + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:2px;font-size:14px;font-weight:700;color:#f0c040;text-shadow:0 0 8px rgba(240,192,64,.45);">'
+        + '<span style="text-transform:uppercase;">'+roundLbl+'</span>'
+        + ' <span style="color:rgba(255,255,255,.85);text-shadow:0 0 6px rgba(255,255,255,.3);">- '+subtitle+'</span></p>';
       html += '<div class="tour-bracket-list">';
       var allPlayed = true;
       var pairCount = 0;
@@ -15302,8 +15312,9 @@ window._showSimProgress = function(opts, onDone){
           var vtaCls = 'tour-match'
             + (vtaPickable ? ' tour-match-pickable tour-match-has-human' : ' tour-match-locked');
           /* IDA */
-          tie += '<div class="tour-tie-leg-lbl">🟢 IDA'
-            + (_kd && _kd.ida ? ' · 📅 ' + _kd.ida : '') + '</div>';
+          tie += '<div class="tour-tie-leg-lbl tour-tie-leg-lbl-split"><span>IDA</span>'
+            + (_kd && _kd.ida ? '<span>📅 ' + _kd.ida + '</span>' : '<span></span>')
+            + '</div>';
           if (L1) {
             var aWin1 = (L1.a|0) > (L1.b|0), bWin1 = (L1.b|0) > (L1.a|0);
             var sA1 = '<span class="tour-score'+(aWin1?' tour-score-win':'')+'">'+(L1.a|0)+'</span>';
@@ -15321,8 +15332,9 @@ window._showSimProgress = function(opts, onDone){
               + '</div>';
           }
           /* VUELTA (campo invertido) */
-          tie += '<div class="tour-tie-leg-lbl">🔁 VUELTA'
-            + (_kd && _kd.vta ? ' · 📅 ' + _kd.vta : '') + '</div>';
+          tie += '<div class="tour-tie-leg-lbl tour-tie-leg-lbl-split"><span>VUELTA</span>'
+            + (_kd && _kd.vta ? '<span>📅 ' + _kd.vta + '</span>' : '<span></span>')
+            + '</div>';
           tie += '<div class="'+vtaCls+'"'+(vtaPickable?dataAttrs:'')+'>'
             + _bracketTeamHtml(b, id, i+1)
             + '<span class="vs">vs</span>'

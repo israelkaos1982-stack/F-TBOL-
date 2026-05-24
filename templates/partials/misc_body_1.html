@@ -17790,7 +17790,14 @@ window._showSimProgress = function(opts, onDone){
         + '</div>';
       html += _mundialClasTableHtml(rows, slice, advancePerGroup, bestThirdNames);
       html += '<div style="padding:10px 12px 12px;">';
-      html += '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(77,208,225,.85);margin:0 0 8px;padding:0 2px;">JORNADAS · GRUPO '+letter+'</div>';
+      var _grpPend = (prog.tot - prog.done) > 0;
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;padding:0 2px;">'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(77,208,225,.85);">JORNADAS · GRUPO '+letter+'</div>'
+        + (_grpPend
+            ? '<button type="button" class="tour-sim-grp-btn" data-tour="'+tourId+'" data-group="'+g+'" '
+              + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:6px;padding:4px 10px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">▶ SIM</button>'
+            : '')
+        + '</div>';
       fix.forEach(function(jor, ji){
         var allDone = true, anyPlayed = false;
         jor.forEach(function(_, mi){
@@ -19668,6 +19675,41 @@ window._showSimProgress = function(opts, onDone){
       });
       _tourSaveAndRender(jtid, jcfg);
       if (skippedJ) _tourFlashHumanNotice(jtid, skippedJ);
+      ev.stopPropagation();
+      return;
+    }
+
+    /* b.2b) Botón ▶ SIM junto al nombre del grupo (Mundial fase
+       de grupos): simula las 3 jornadas del grupo de una vez.
+       Los partidos con humano se saltan (_tourSimLeagueMatch
+       devuelve blockedHuman). */
+    var simGrpBtn = target.closest('.tour-sim-grp-btn');
+    if (simGrpBtn) {
+      var gtid = simGrpBtn.getAttribute('data-tour');
+      if (!gtid || TOUR_IDS.indexOf(gtid) === -1) return;
+      var gcfg = _tourLoadCachedSync(gtid);
+      if (!gcfg) return;
+      gcfg.results = gcfg.results || {};
+      var gIdx3 = parseInt(simGrpBtn.getAttribute('data-group'), 10);
+      if (isNaN(gIdx3)) return;
+      var slLenG = (gcfg.formatConfig && gcfg.formatConfig.perGroup) || 5;
+      var teamsG = (gcfg.teams||[]).slice(gIdx3*slLenG, (gIdx3+1)*slLenG);
+      var fixG = gcfg.groupFixtures && gcfg.groupFixtures[gIdx3];
+      if (!fixG) return;
+      var prefixG = 'g'+gIdx3+'_';
+      var skippedG = 0;
+      fixG.forEach(function(jor, ji){
+        jor.forEach(function(m, mi){
+          var key = prefixG + ji + '_' + mi;
+          if (gcfg.results[key] && gcfg.results[key].played) return;
+          var rG = _tourSimLeagueMatch(gcfg, teamsG, m, key);
+          if (!rG) return;
+          if (rG.blockedHuman) { skippedG++; return; }
+          gcfg.results[key] = rG;
+        });
+      });
+      _tourSaveAndRender(gtid, gcfg);
+      if (skippedG) _tourFlashHumanNotice(gtid, skippedG);
       ev.stopPropagation();
       return;
     }

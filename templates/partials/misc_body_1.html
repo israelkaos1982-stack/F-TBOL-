@@ -40589,27 +40589,103 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     } catch(_){}
     return false;
   }
+  /* Localiza el próximo partido NO jugado de Francia en el Mundial 2032
+     leyendo el config del torneo (`_TOUR_CACHE` o sfn* en localStorage).
+     Devuelve { jor, rival, isHome, franceName } o null si no hay
+     Mundial cargado / no hay equipo humano / todas las jornadas ya
+     jugadas. Es la fuente de verdad para los mensajes de la selección
+     — no se inventan rivales aleatorios (petición usuario 2026-05-24
+     "los mensajes tienen que tener coherencia y ser la realidad del
+     calendario del Liverpool-Francia"). */
+  function _franciaNextMatch(){
+    try {
+      var cache = window._TOUR_CACHE || {};
+      var mundialCfg = null;
+      for (var k in cache){
+        var c = cache[k];
+        if (c && c.format === 'mundial-48' && Array.isArray(c.teams) && c.teams.length){
+          mundialCfg = c; break;
+        }
+      }
+      if (!mundialCfg && typeof window._tourLoadCachedSync === 'function'){
+        var SFN = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
+        for (var s = 0; s < SFN.length; s++){
+          try {
+            var sc = window._tourLoadCachedSync(SFN[s]);
+            if (sc && sc.format === 'mundial-48' && Array.isArray(sc.teams) && sc.teams.length){
+              mundialCfg = sc; break;
+            }
+          } catch(_){}
+        }
+      }
+      if (!mundialCfg) return null;
+      var teams = mundialCfg.teams || [];
+      var huIdx = -1;
+      for (var ti = 0; ti < teams.length; ti++){
+        var t = teams[ti];
+        if (t && t.isHuman && t.name && t.name !== 'PENDIENTE'){ huIdx = ti; break; }
+      }
+      if (huIdx < 0 && typeof window.isHumanInComp === 'function'){
+        for (var ti2 = 0; ti2 < teams.length; ti2++){
+          var t2 = teams[ti2];
+          if (!t2 || !t2.name || t2.name === 'PENDIENTE') continue;
+          try {
+            if (window.isHumanInComp(t2.name, 'mundial')){ huIdx = ti2; break; }
+          } catch(_){}
+        }
+      }
+      if (huIdx < 0) return null;
+      var pg = (mundialCfg.formatConfig && mundialCfg.formatConfig.perGroup) || 4;
+      var gIdx  = Math.floor(huIdx / pg);
+      var gStart = gIdx * pg;
+      var slice = teams.slice(gStart, gStart + pg);
+      var huInSlice = huIdx - gStart;
+      var fixs = (mundialCfg.groupFixtures && mundialCfg.groupFixtures[gIdx]) || null;
+      if (!Array.isArray(fixs)) return null;
+      var results = mundialCfg.groupResults && mundialCfg.groupResults[gIdx];
+      for (var j = 0; j < fixs.length; j++){
+        var matchups = fixs[j];
+        if (!Array.isArray(matchups)) continue;
+        for (var mi = 0; mi < matchups.length; mi++){
+          var mm = matchups[mi];
+          if (!mm) continue;
+          if (mm.home !== huInSlice && mm.away !== huInSlice) continue;
+          var r = results && results[j] && results[j][mi];
+          if (r && (r.played || r.done)) continue;
+          var hT = slice[mm.home], aT = slice[mm.away];
+          if (!hT || !aT || !hT.name || hT.name === 'PENDIENTE'
+              || !aT.name || aT.name === 'PENDIENTE') continue;
+          return {
+            jor: j + 1,
+            isHome: (mm.home === huInSlice),
+            rival: (mm.home === huInSlice ? aT.name : hT.name),
+            franceName: (mm.home === huInSlice ? hT.name : aT.name)
+          };
+        }
+      }
+    } catch(_){}
+    return null;
+  }
   function _scanFrancia(){
     try {
       if (!_isMundialActive()) return;  /* gate: solo durante Mundial/Selecciones */
-      var now = _now();
-      var last = _getCursor('fra:last') || 0;
-      var WK = 7 * 24 * 60 * 60 * 1000;  /* 1 semana entre amistosos */
-      if (last && (now - last) < WK) return;
-      _setCursor('fra:last', now);
-      var rivales = ['Italia','Alemania','Brasil','Argentina','Inglaterra','España',
-        'Países Bajos','Portugal','Croacia','Bélgica','Suecia','Noruega','Marruecos',
-        'Uruguay','Senegal','Japón','Suiza','Polonia','Chile','Colombia'];
-      var rival = rivales[Math.floor(Math.random() * rivales.length)];
+      var nxt = _franciaNextMatch();
+      if (!nxt) return;  /* sin partido conocido → silencio (no inventar) */
+      var sig = 'fra:mundial:j' + nxt.jor + ':' + nxt.rival;
+      if (_getCursor(sig)) return;  /* ya avisamos este partido concreto */
+      _setCursor(sig, _now());
+      _setCursor('fra:last', _now());
+      var rival = nxt.rival;
+      var jor   = nxt.jor;
+      var franceName = nxt.franceName || 'Francia';
+      var hostTxt = nxt.isHome ? 'en casa' : 'fuera de casa';
       var tipos = [
-        { ic:'🇫🇷', tit:'Convocatoria de Francia',
-          body:'Toñín cita a 23 jugadores para el próximo amistoso de Francia ante '+rival+'.' },
-        { ic:'⚽',  tit:'Próximo amistoso',
-          body:'Francia se medirá a '+rival+' en el próximo parón internacional.' },
+        { ic:'🌍', tit:'Mundial · J'+jor+' · '+franceName+' vs '+rival,
+          body:'Próxima jornada del Mundial: '+franceName+' se medirá a '+rival+' ('+hostTxt+').' },
+        { ic:'🇫🇷', tit:'Convocatoria · Bleus · J'+jor,
+          body:'Toñín cita a 23 jugadores para la jornada '+jor+' del Mundial frente a '+rival+'.' },
         { ic:'📋', tit:'Lista provisional · Bleus',
-          body:'Toñín prepara una lista provisional de 30 jugadores; la definitiva se conocerá en días.' },
-        { ic:'🏟️', tit:'Sede del próximo partido',
-          body:'El próximo Francia-'+rival+' se disputará en el Stade de France.' }
+          body:'Toñín prepara la lista provisional de '+franceName+' para la jornada '+jor+' del Mundial frente a '+rival+'.' }
       ];
       var t = tipos[Math.floor(Math.random() * tipos.length)];
       push({
@@ -41080,7 +41156,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     push({ id:'seed-fra-bleus', side:'fra', type:'welcome', icon:'🇫🇷',
       sender:'FFF · Selección Francia',
       title:'Doble compromiso, mister',
-      body:'No olvides que también diriges a Les Bleus. En esta pestaña verás convocatorias, amistosos y citas internacionales.' });
+      body:'No olvides que también diriges a Les Bleus en el Mundial 2032. Aquí verás las jornadas de Francia, las convocatorias y los resultados de la selección.' });
   }
 
   /* ── Limpieza one-shot: avisos "Próximo partido — Descanso/
@@ -41116,6 +41192,45 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     _setCursor('purged:rest_preview', '1');
   }
 
+  /* Limpieza one-shot 2026-05-24: el seed antiguo de Francia y los
+     "amistosos vs rival aleatorio" generados por `_scanFrancia` antes
+     de migrar a la fuente real del Mundial. Borramos:
+       · seed `seed-fra-bleus` legacy (texto con "amistosos") — el
+         nuevo se reinjecta justo después con el cuerpo del Mundial.
+       · mensajes `type:'callup'` con texto "amistoso" (el callup nuevo
+         habla de "Mundial · J{N}" y nunca de amistosos).
+       · cursor `fra:last` para que el siguiente scan pueda pushear
+         el aviso real de la próxima jornada del Mundial. */
+  function _purgeStaleFrancia(){
+    if (_getCursor('purged:fra_legacy') === '1') return;
+    var d = _read();
+    if (!d || !d.msgs){
+      _setCursor('purged:fra_legacy', '1');
+      return;
+    }
+    var rxAmist = /amistoso/i;
+    var before = d.msgs.length;
+    d.msgs = d.msgs.filter(function(m){
+      if (!m) return true;
+      if (m.id === 'seed-fra-bleus') return false;
+      if (m.side === 'fra' && m.type === 'callup'){
+        var blob = (m.title || '') + ' ' + (m.body || '');
+        if (rxAmist.test(blob)) return false;
+      }
+      return true;
+    });
+    if (d.msgs.length !== before){
+      if (d.cursors){
+        delete d.cursors['fra:last'];
+        Object.keys(d.cursors).forEach(function(k){
+          if (k.indexOf('fra:mundial:') === 0) delete d.cursors[k];
+        });
+      }
+      _write(d);
+    }
+    _setCursor('purged:fra_legacy', '1');
+  }
+
   /* ── Boot ─────────────────────────────────────────────── */
   function _boot(){
     if (!_ensureUI()){
@@ -41129,6 +41244,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     _bootStage2();
   }
   function _bootStage2(){
+    _purgeStaleFrancia();  /* borra seed legacy + callups con "amistoso" antes del seed nuevo */
     _seed();
     _purgeStaleRest();
     _refresh();

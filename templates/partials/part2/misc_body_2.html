@@ -29756,9 +29756,37 @@ document.addEventListener('DOMContentLoaded', function() {
         if (hasVue) p.anti.push('ida');
       }
     } else if (compClass === 'c-mundial'){
-      /* Mundialito de Clubes — la agenda no lo lista en este JSON,
-         devolverá '' (sin fecha). No es un fallo, es esperado. */
-      p.required = ['mundialito clubes'];
+      /* Mundialito de Clubes — s-mundial-clubes tiene 5 cajas:
+         Fase de Grupos · Octavos · Cuartos · Semis · FINAL. La agenda
+         las lista como "Mundialito Clubes - J1/J2/J3/Octavos/Cuartos/
+         Semis/FINAL". Discriminamos por ronda con bonus tokens; sin
+         estos todos los botones puntuaban igual y se quedaban con la
+         primera fila (J1 = 04 Jul) → todos mostraban "04 JUL".
+         2026-05-24. NB: `required = ['mundialito']` (sin "clubes")
+         para no romper el match con "Mundialito - FINAL" (entrada
+         legacy sin la palabra "Clubes"). Las filas del Mundial de
+         Selecciones empiezan por "Mundial " sin "ito" y quedan
+         filtradas. */
+      p.required = ['mundialito'];
+      if (hasFin && !hasSemis && !hasCuartos && !hasOctavos){
+        p.bonus = ['final'];
+        p.anti  = ['cuartos','semis','octavos','j1','j2','j3'];
+      } else if (hasSemis){
+        p.bonus = ['semis'];
+        p.anti  = ['cuartos','final','octavos','j1','j2','j3'];
+      } else if (hasCuartos){
+        p.bonus = ['cuartos'];
+        p.anti  = ['semis','final','octavos','j1','j2','j3'];
+      } else if (hasOctavos){
+        p.bonus = ['octavos'];
+        p.anti  = ['cuartos','semis','final','j1','j2','j3'];
+      } else if (/\bgrupos?\b/.test(btnN) || /\bfase\b/.test(btnN)){
+        /* Fase de Grupos: J1 como ancla de inicio de fase. El badge
+           muestra "DD Mmm" de la primera jornada; el rango completo
+           (J1-J3) lo ve el usuario al abrir el calendario global. */
+        p.bonus = ['j1'];
+        p.anti  = ['cuartos','semis','final','octavos','j2','j3'];
+      }
     }
     return p;
   }

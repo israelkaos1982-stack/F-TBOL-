@@ -24534,6 +24534,7 @@ document.addEventListener('DOMContentLoaded', function() {
     { key:'usc',           cat:'Europea 🇪🇺', comp:'Supercopa de Europa',         id:'eFootball_Contact_26',          luz:'☀️ Sol'   },
     { key:'ucl-previa',    cat:'Europea 🛰',  comp:'Fase Previa Champions',       id:'Derbystar_Globall_25-26',       luz:'🌙 Noche' },
     { key:'selecciones',   cat:'Internac.',   comp:'Fase Final Selecciones',      id:'NIKE_CONTROL_CBF',              luz:'☀️ Sol'   },
+    { key:'sel-clasif',    cat:'Internac.',   comp:'Selecciones · Clasif. (J1-J8)', id:'Orbita_Africa',               luz:'☀️ Sol'   },
     { key:'intercontinental',cat:'Internac. 🟡',comp:'Copa Intercontinental',    id:'Vantaggio_5000',                luz:'☀️ Sol'   },
     { key:'clasif',        cat:'Internac.',   comp:'Clasificatorias / Repesca',   id:'Ligue_2_BKT_Official',          luz:'🌙 Noche' },
     { key:'amistosos',     cat:'Especial 🤝', comp:'Amistosos Pretemporada',      id:'eFootball_Origin',              luz:'🌙 Noche' },
@@ -24741,12 +24742,31 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  /* Balones que SIEMPRE deben estar en el inventario (regla CLAUDE.md
+     "Balón fijo Selecciones por jornada" 2026-05-24). Si el usuario
+     tiene un `ball_inventory_v1` previo sin estos ids, los añadimos
+     de forma silenciosa para que aparezcan en el picker del admin. */
+  var _BALL_INV_REQUIRED = ['Orbita_Africa'];
+  function _ensureRequiredBalls(arr){
+    if (!Array.isArray(arr)) return arr;
+    var changed = false;
+    _BALL_INV_REQUIRED.forEach(function(id){
+      if (arr.indexOf(id) === -1) { arr.push(id); changed = true; }
+    });
+    if (changed) {
+      try { localStorage.setItem(_BALL_INV_KEY, JSON.stringify(arr)); } catch(_){}
+      _ballMarkLocalWrite(_BALL_INV_KEY);
+      _ballKvPost(_BALL_INV_KEY, arr);
+    }
+    return arr;
+  }
+
   function _loadBallInventory(){
     try {
       var raw = localStorage.getItem(_BALL_INV_KEY);
       if (raw) {
         var arr = JSON.parse(raw);
-        if (Array.isArray(arr) && arr.length) return arr;
+        if (Array.isArray(arr) && arr.length) return _ensureRequiredBalls(arr);
       }
     } catch(_){}
     /* Semilla: ids únicos de BALL_DB. */

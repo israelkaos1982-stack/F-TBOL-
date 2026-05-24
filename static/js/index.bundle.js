@@ -5680,6 +5680,25 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     if (COMP_BALL[compKey]) {
       balon = COMP_BALL[compKey];
     }
+    /* Selecciones por jornada (regla obligatoria CLAUDE.md 2026-05-24):
+       J1-J8 = "Orbita Africa" (fase clasificatoria).
+       J9+   = "NIKE CONTROL CBF" (en mayo).
+       Gana SOBRE el override del admin para mantener la regla "siempre".
+       Solo nieve (más abajo) puede sobrescribirla. */
+    if (compKey === 'sel') {
+      var _selJor = 0;
+      try {
+        var _bidSel = String(window._ppBlockId || '');
+        var _mSel = /cal-sel(\d+)/.exec(_bidSel);
+        if (_mSel) _selJor = parseInt(_mSel[1], 10) || 0;
+        if (!_selJor) {
+          var _mSel2 = /sel[^\d]*?(\d+)/i.exec(String(matchKey || ''));
+          if (_mSel2) _selJor = parseInt(_mSel2[1], 10) || 0;
+        }
+      } catch(_){}
+      if (_selJor >= 1 && _selJor <= 8) balon = 'Orbita Africa';
+      else if (_selJor >= 9)             balon = 'NIKE CONTROL CBF';
+    }
     /* Liga/partido en nieve → balón amarillo especial "eFootball MAX VIS 26".
        Antes solo se comprobaba `tiempo` (parte 0 del texto del venue-bar),
        pero la UI guarda "Invierno · ❄ Nieve" donde "Invierno" es el

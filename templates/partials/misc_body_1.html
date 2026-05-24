@@ -3353,16 +3353,19 @@ window._showSimProgress = function(opts, onDone){
     try { if (typeof window._tourRender === 'function') window._tourRender(tourId); } catch(_){}
     return true;
   }
-  /* Cobra 50🪙 del presupuesto, auto-simula con el motor 4-ejes y
-     avanza el día. Devuelve false si no hay fondos suficientes o
-     falta algún helper. */
+  /* Cobra 50🪙 del presupuesto y auto-simula con el motor 4-ejes.
+     NO avanza el día: redibuja la card para que muestre el resultado
+     (played:true → score + CONTINUAR ▶), igual que el flujo de
+     jugar. El usuario pulsa CONTINUAR para pasar al día siguiente.
+     Devuelve false si no hay fondos suficientes o falta algún
+     helper. */
   function _psPayAndSimSelMatch(pair){
     if (!pair) return false;
     if (_psGetHubMoney() < PS_PAY_SIM_COST) return false;
     if (typeof window._bayernHudCreditMoney !== 'function') return false;
     if (!_psSimAndSaveTourMatch(pair.tourId, pair.matchKey, pair.home, pair.away)) return false;
     try { window._bayernHudCreditMoney(-PS_PAY_SIM_COST); } catch(_){}
-    _markDoneAndAdvance();
+    _render();
     return true;
   }
 

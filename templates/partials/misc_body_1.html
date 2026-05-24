@@ -40153,7 +40153,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function del(id){
     var d = _read();
     d.msgs = d.msgs.filter(function(m){ return m.id !== id; });
-    _write(d); _scheduleRefresh();
+    _write(d);
+    /* Refresh inmediato (no scheduled) — el usuario reportó 2026-05-24
+       que tras pulsar 🗑 tenía que cerrar y reabrir el modal para ver
+       el mensaje borrado. El setTimeout de 60 ms de _scheduleRefresh
+       no era suficientemente fiable cuando el confirm() recién había
+       liberado el thread. Refresh directo + el remove() del row en el
+       onclick → desaparición instantánea. */
+    try { _refresh(); } catch(_){}
   }
   function clearReadInSide(side){
     var d = _read();
@@ -40360,8 +40367,15 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     body.querySelectorAll('.mmo-msg').forEach(function(row){
       var id = row.getAttribute('data-id');
       var dl = row.querySelector('.mmo-btn.del');
-      if (dl) dl.onclick = function(ev){ ev.stopPropagation();
-        if (confirm('¿Borrar este mensaje?')) del(id);
+      if (dl) dl.onclick = function(ev){
+        ev.stopPropagation();
+        if (!confirm('¿Borrar este mensaje?')) return;
+        /* Quitamos el row del DOM antes de persistir para que el
+           usuario vea el mensaje desaparecer al instante, sin
+           depender del rerender que en algunos navegadores tardaba
+           y obligaba a cerrar/reabrir el modal. */
+        try { row.parentNode && row.parentNode.removeChild(row); } catch(_){}
+        try { del(id); } catch(_){}
       };
       row.onclick = function(){
         if (!row.classList.contains('is-unread')) return;
@@ -40721,6 +40735,73 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         side:'fra', type:'callup', icon:t.ic,
         sender:'FFF · Selección Francia',
         title:t.tit, body:t.body
+      });
+    } catch(_){}
+  }
+
+  /* ── HOOK 5b: eliminación del Liverpool / Francia en un torneo ──
+     Detecta el final de un torneo (campeón decidido en su state) y,
+     si NO es el equipo humano, push mensaje decepcionante/sorpresa.
+     Dedup por (compId, champion) → un mensaje por torneo terminado.
+     Petición usuario 2026-05-24 "cuando un club o selección humana
+     es eliminada de un torneo un mensaje decepcionante o de sorpresa". */
+  function _scanEliminations(){
+    try {
+      var aliases = _userTeamAlias ? [String(_userTeamAlias()).toLowerCase()].filter(Boolean) : [];
+      ['bayern','liverpool','bayern munich','bayern múnich'].forEach(function(a){
+        if (aliases.indexOf(a) < 0) aliases.push(a);
+      });
+      function _ch(key){
+        try {
+          var raw = localStorage.getItem(key);
+          if (!raw) return null;
+          var s = JSON.parse(raw);
+          return s && (s.champion || s.campeon) || null;
+        } catch(_){ return null; }
+      }
+      var COMPS = [
+        { id:'copa',    label:'Copa del Rey',         keys:['copa_data_v1','copa_state_v1'],   side:'liv' },
+        { id:'sup-esp', label:'Supercopa de España',  keys:['sc_state_v1'],                    side:'liv' },
+        { id:'champ',   label:'Champions League',     keys:['ucl_ko_state_v1'],                side:'liv' },
+        { id:'uel',     label:'Europa League',        keys:['uel_ko_state_v1'],                side:'liv' },
+        { id:'uecl',    label:'Conference League',    keys:['uecl_ko_state_v1'],               side:'liv' },
+        { id:'recopa',  label:'Recopa de Europa',     keys:['recopa_state_v1'],                side:'liv' },
+        { id:'sup-eur', label:'Supercopa de Europa',  keys:['usc_state_v1'],                   side:'liv' },
+        { id:'inter',   label:'Intercontinental',     keys:['inter_state_v1','intercontinental_state_v1'], side:'liv' },
+        { id:'mundialc',label:'Mundial de Clubes',    keys:['mundial_state_v1','mundialito_state_v1'],     side:'liv' },
+        { id:'mundialn',label:'Mundial de Selecciones', keys:['selecciones_state_v1','seleccion_state_v1'], side:'fra' }
+      ];
+      var bodiesElim = [
+        '%CAMP% se proclama campeón. Toca asimilar la decepción y centrarse en lo que viene.',
+        '%CAMP% levanta el trofeo. Nos quedamos sin opciones — habrá revancha la temporada que viene.',
+        'El %CAMP% gana el título. Ahora a recuperar moral en el resto de competiciones.'
+      ];
+      var bodiesSurp = [
+        '¡Sorpresa! %CAMP% se lleva el trofeo. Nadie lo esperaba — toca asimilarlo.',
+        'Final con sorpresa: %CAMP% campeón. Habrá que analizarlo en el vestuario.'
+      ];
+      COMPS.forEach(function(c){
+        var ch = null;
+        for (var i = 0; i < c.keys.length && !ch; i++) ch = _ch(c.keys[i]);
+        if (!ch) return; /* torneo aún sin campeón */
+        var sig = 'elim:' + c.id + ':' + ch;
+        if (_getCursor(sig)) return;
+        _setCursor(sig, _now());
+        var chLower = String(ch).toLowerCase();
+        var ours = aliases.some(function(a){ return chLower.indexOf(a) !== -1; })
+                || (c.side === 'fra' && /francia|france/.test(chLower));
+        if (ours) return; /* somos campeones — lo cubre otro hook */
+        var pool = (Math.random() < 0.25) ? bodiesSurp : bodiesElim;
+        var body = pool[Math.floor(Math.random() * pool.length)].replace('%CAMP%', ch);
+        var icon = (pool === bodiesSurp) ? '😮' : '😞';
+        push({
+          side: c.side,
+          type: 'eliminacion',
+          icon: icon,
+          sender: (c.side === 'fra') ? 'FFF · Selección Francia' : 'Liverpool FC',
+          title: 'Fuera de la ' + c.label,
+          body : body
+        });
       });
     } catch(_){}
   }
@@ -41089,6 +41170,66 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      Observa #munich-next-match. Cuando el texto cambia y describe
      un partido (no "Entrenamiento" ni "Descanso"), dispara una
      previa con el rival y la fecha. */
+  /* Convierte "03 May" → día absoluto del año (1..366) para poder
+     restar contra el día actual. Acepta español ("ene/feb/.../dic").
+     Devuelve null si el formato no se reconoce. */
+  var _MES_NUM = { ene:1, feb:2, mar:3, abr:4, may:5, jun:6, jul:7, ago:8, sep:9, oct:10, nov:11, dic:12 };
+  function _absDayOfYear(dateStr){
+    var m = String(dateStr||'').match(/(\d{1,2})\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{3,})/);
+    if (!m) return null;
+    var dy = parseInt(m[1], 10);
+    var mo = _MES_NUM[m[2].toLowerCase().slice(0,3)];
+    if (!dy || !mo) return null;
+    var ds = [31,28,31,30,31,30,31,31,30,31,30,31];
+    var n = 0;
+    for (var k = 0; k < mo - 1; k++) n += ds[k];
+    return n + dy;
+  }
+  function _daysFromTodayTo(dateStr){
+    var aT = _absDayOfYear((typeof window._psCurrentDate === 'function') ? window._psCurrentDate() : '');
+    var aM = _absDayOfYear(dateStr);
+    if (aT == null || aM == null) return null;
+    return aM - aT;
+  }
+  /* HOOK 13: previa del próximo partido (con anticipación 2-3 días).
+     Observa #munich-next-match y, además, push manualmente cada vez
+     que el cursor de día cambia ('hub:day-changed'). El mensaje
+     ahora indica los días restantes ("en 2 días — vs Real Madrid")
+     para que el aviso tenga sentido cuando se ve durante el
+     descanso/entrenamiento previo. Dedup por (rival, fecha) en
+     vez de por texto completo — evita perder el mensaje si el
+     formato del texto cambia y evita duplicarlo si solo cambia un
+     espacio en blanco. */
+  function _pushPreviewFromText(t){
+    if (!t) return;
+    var head = String(t).replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/, '');
+    if (/^(entrenamiento|descanso|pretemporada|libre|selecci|amistoso\s+internac|d[íi]a\s+de\s+selec|d[íi]a\s+libre|elige)/i.test(head))
+      return;
+    var rivalMatch = t.match(/(?:\bvs\b|\bcontra\b|\@)\s*([^·•\-—\|]+?)(?:\s*[·•\-—\|]|$)/i);
+    var rival = rivalMatch ? rivalMatch[1].trim() : '';
+    var dateMatch = t.match(/(\d{1,2})\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{3,})/);
+    var dateStr = dateMatch ? dateMatch[0] : '';
+    var sig = 'pre:' + (rival || head.slice(0,30)) + ':' + dateStr;
+    if (_getCursor(sig)) return;
+    _setCursor(sig, '1');
+    var days = dateStr ? _daysFromTodayTo(dateStr) : null;
+    var when = '';
+    if (days === 0) when = 'hoy';
+    else if (days === 1) when = 'mañana';
+    else if (days != null && days >= 2 && days <= 7) when = 'en ' + days + ' días';
+    var venue = /\@\s/.test(t) ? 'fuera de casa' : 'en Anfield';
+    var title = rival
+      ? (when ? 'Próximo partido ' + when + ' — vs ' + rival
+              : 'Próximo partido — vs ' + rival)
+      : 'Próximo partido — ' + t;
+    var body  = rival
+      ? 'Toca preparar el partido contra ' + rival + ' (' + venue
+        + (when ? ', ' + when : '')
+        + '). Revisa lesionados, sancionados y alineación. ¡A por ello!'
+      : 'Toca preparar el próximo partido: ' + t + '. Revisa la convocatoria y la alineación.';
+    push({ side:'liv', type:'preview', icon:'📋',
+      sender:'Cuerpo Técnico', title:title, body:body });
+  }
   function _observeNextMatch(){
     if (window.__MU_MSG_OBS_NM) return;
     var el = document.getElementById('munich-next-match');
@@ -41099,36 +41240,25 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var t = (el.textContent || '').replace(/\s+/g,' ').trim();
       if (!t || t === lastText) return;
       lastText = t;
-      /* Saltamos textos que no son partido (descanso, entrenamiento,
-         pretemporada, día libre, selecciones, "elige torneo", etc.).
-         El texto de la card suele venir prefijado con un emoji y
-         espacio ("💤 Descanso · 01 May", "🌞 PRETEMPORADA · Elige
-         1 torneo"), así que primero limpiamos cualquier carácter
-         no alfabético del principio para que el `^` del regex case
-         con la palabra real. */
-      var head = String(t).replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/, '');
-      if (/^(entrenamiento|descanso|pretemporada|libre|selecci|amistoso\s+internac|d[íi]a\s+de\s+selec|d[íi]a\s+libre|elige)/i.test(head))
-        return;
-      var sig = 'pre:'+t;
-      if (_getCursor(sig)) return;
-      _setCursor(sig, '1');
-      /* Intentamos extraer "vs RIVAL" o "@ RIVAL" si existe. */
-      var rivalMatch = t.match(/(?:\bvs\b|\bcontra\b|\@)\s*([^·•\-—\|]+?)(?:\s*[·•\-—\|]|$)/i);
-      var rival = rivalMatch ? rivalMatch[1].trim() : '';
-      var venue = /\@\s/.test(t) ? 'fuera de casa' : 'en Anfield';
-      var title = rival
-        ? 'Próximo partido — vs ' + rival
-        : 'Próximo partido — ' + t;
-      var body  = rival
-        ? 'Toca preparar el partido contra ' + rival + ' (' + venue + '). Revisa lesionados, sancionados y alineación. ¡A por ello!'
-        : 'Toca preparar el próximo partido: ' + t + '. Revisa la convocatoria y la alineación.';
-      push({ side:'liv', type:'preview', icon:'📋',
-        sender:'Cuerpo Técnico', title:title, body:body });
+      _pushPreviewFromText(t);
     };
     check();
     try {
       new MutationObserver(check).observe(el,
         { childList:true, characterData:true, subtree:true });
+    } catch(_){}
+    /* Cada cambio de día en el hub recheck inmediato — el observer
+       no dispara si el texto no muta entre días, pero al cambiar
+       el cursor del calendario los "días restantes" varían y queremos
+       que se evalúe el push. Como el sig incluye la fecha del rival
+       (no los días restantes), no genera duplicados. */
+    try {
+      window.addEventListener('hub:day-changed', function(){
+        try {
+          var t = (el.textContent || '').replace(/\s+/g,' ').trim();
+          _pushPreviewFromText(t);
+        } catch(_){}
+      });
     } catch(_){}
   }
 
@@ -41290,6 +41420,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       _scanCopaSorteo();
       _scanStandings();
       _scanFrancia();
+      _scanEliminations();
       _scanBets();
       _scanObjectives();
       _checkObjectiveNear();

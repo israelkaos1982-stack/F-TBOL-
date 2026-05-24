@@ -10396,6 +10396,42 @@ window._showSimProgress = function(opts, onDone){
   color:#bcd6ff !important;border:1px solid rgba(120,170,255,.55) !important;
   background:rgba(20,60,150,.4) !important;
 }
+/* Frame que contiene card jugada + acta. El borde + glow pasan a
+   este wrapper para que la card y su acta queden visualmente
+   dentro del mismo recuadro (petición usuario 2026-05-24). */
+.mn-card-frame{
+  border-radius:14px !important;
+  margin:0 0 12px !important;
+  overflow:hidden !important;
+  background:linear-gradient(165deg,#06152d 0%,#0a2350 60%,#04112a 100%) !important;
+  border:1.5px solid rgba(95,150,235,.45) !important;
+  box-shadow:0 0 12px rgba(40,90,200,.22),inset 0 0 12px rgba(20,60,150,.16) !important;
+}
+.mn-card-frame-human{
+  background:linear-gradient(165deg,#1a0820 0%,#2a0a3e 55%,#1a0420 100%) !important;
+  border:2px solid #ff3d8a !important;
+  box-shadow:0 0 22px rgba(255,61,138,.55),0 0 48px rgba(255,61,138,.22),inset 0 0 12px rgba(255,80,150,.14) !important;
+  animation:mnCardPulse 2.2s ease-in-out infinite !important;
+}
+.mn-card-frame .mn-card-in-frame{
+  background:transparent !important;
+  border:0 !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  margin:0 !important;
+  animation:none !important;
+}
+.mn-card-frame .tour-acta-toggle{
+  margin:0 auto 8px !important;
+}
+.mn-card-frame .tour-acta-body{
+  margin:0 10px 10px !important;
+  background:rgba(0,0,0,.28) !important;
+  border:1px solid rgba(120,170,255,.18) !important;
+}
+.mn-card-frame-human .tour-acta-body{
+  border-color:rgba(255,120,180,.25) !important;
+}
 /* Separador «🤖 PARTIDOS IA VS IA» entre humano y IA. */
 .mn-ia-sep{
   display:flex !important;align-items:center !important;gap:10px !important;
@@ -17388,12 +17424,21 @@ window._showSimProgress = function(opts, onDone){
         var sA = '<span class="tour-score'+(aW?' tour-score-win':'')+'">'+kRes.a+'</span>';
         var sB = '<span class="tour-score'+(bW?' tour-score-win':'')+'">'+kRes.b+'</span>';
         var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
-        return '<div class="'+kRowCls+'"'+kAttrs+'>'
+        var actaHtml = _tourActaPanelHtml(tourId, kKey, kRes);
+        /* Wrap card + acta en un único frame para que el acta
+           (toggle 📋 ACTA + body de eventos) quede VISUALMENTE
+           dentro de la card de su partido y no flote entre dos
+           cards. Petición usuario 2026-05-24. */
+        var frameCls = 'mn-card-frame' + (hasHuman ? ' mn-card-frame-human' : ' mn-card-frame-ia');
+        if (actaHtml) frameCls += ' mn-card-frame-has-acta';
+        return '<div class="'+frameCls+'">'
+          + '<div class="'+kRowCls+' mn-card-in-frame"'+kAttrs+'>'
           + _bracketTeamHtml(a, tourId, slotI, aW, bW)
           + '<span class="vs tour-score-wrap"><span class="tour-score-line">'+sA+' - '+sB+pensTxt+'</span><span class="tour-fin-badge is-fin">🏁 FIN</span></span>'
           + _bracketTeamHtml(b, tourId, slotI+1, bW, aW)
           + '</div>'
-          + _tourActaPanelHtml(tourId, kKey, kRes);
+          + actaHtml
+          + '</div>';
       }
       var badgeCls = hasHuman ? 'is-previa' : 'is-sim';
       var badgeTxt = hasHuman ? '📋 PREVIA' : '🤖 SIMULAR';

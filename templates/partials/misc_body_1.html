@@ -34436,13 +34436,22 @@ Tottenham
     try{ return JSON.parse(localStorage.getItem(key)||'null'); }catch(_){ return null; }
   }
 
-  /* Fuente de verdad: la selección del calendario del hub
-     (`bayern_calendar_comps_v1`). Cada comp marcada en el modal del
-     calendario aparece como chip — independientemente de si el state
-     de esa competición ya está poblado en localStorage. Antes
-     (2026-05-23) sólo aparecían las que tenían state Y el equipo en
-     el pool — los usuarios reportaban "veo 3 chips pero juego 9
-     competiciones". Ahora rige el calendario.
+  /* Fuente de verdad: UNIÓN entre (a) la selección del calendario del
+     hub (`bayern_calendar_comps_v1`) y (b) la detección automática del
+     equipo en los stores de cada competición. Aparece chip si el
+     calendario lo marca O si el equipo está presente en el state.
+     Histórico:
+       · Pre-2026-05-23: sólo se mostraban las comps con state Y equipo
+         en el pool → "veo 3 chips pero juego 9 competiciones".
+       · 2026-05-23: pasó a "rige el calendario" exclusivamente.
+       · 2026-05-24: el usuario reportó que pulsaba ✅ Aplicar marcando
+         8 comps oficiales del Liverpool pero el hub sólo mostraba 3
+         chips. Probablemente el localStorage de su navegador no
+         persiste bien la selección (cap 2 MB / hidratación server) o
+         hay race conditions. Solución: UNIÓN — si el equipo aparece
+         en el state de Champions/Recopa/SC Europa/Mundialito/etc.,
+         se muestra el chip aunque el calendario no lo marque. Esto
+         garantiza las 8 comps oficiales sin depender del calendario.
      Estado de cada chip: 'En juego' por defecto, 'Eliminado' sólo
      cuando hay un campeón decidido en su state y NO es el hub. */
   var _CAL_COMPS_KEY = 'bayern_calendar_comps_v1';
@@ -34478,6 +34487,49 @@ Tottenham
     var ko = _loadJSON(KO[comp]);
     return _statusFromChamp(ko && (ko.champion || ko.campeon), aliases);
   }
+  /* Detección heurística: el equipo está en una competición si su
+     nombre (cualquier alias normalizado) aparece dentro del JSON raw
+     de los stores asociados. Más barato que parsear estructuras y
+     suficiente porque las claves son específicas (recopa_state_v1,
+     usc_state_v1, etc.) — un alias que matchee aquí es prácticamente
+     siempre presencia real. */
+  function _rawContainsAlias(raw, aliases){
+    if (!raw) return false;
+    var lower;
+    try { lower = String(raw).toLowerCase(); } catch(_){ return false; }
+    for (var i = 0; i < aliases.length; i++){
+      var a = aliases[i];
+      if (a && lower.indexOf(a) !== -1) return true;
+    }
+    return false;
+  }
+  function _detectTeamInStores(keys, aliases){
+    if (!keys || !keys.length) return false;
+    for (var i = 0; i < keys.length; i++){
+      try {
+        var raw = localStorage.getItem(keys[i]);
+        if (_rawContainsAlias(raw, aliases)) return true;
+      } catch(_){}
+    }
+    return false;
+  }
+  /* Mapping chipId → stores donde puede detectarse presencia. La liga
+     EA Sports siempre tiene a sus humanos canónicos, así que `liga`
+     se asume true. `torneo`/`amist` son efímeros (no persisten un
+     pool global), se dejan al calendario. */
+  var _STORE_KEYS_BY_CHIP = {
+    copa:     ['copa_data_v1', 'copa_state_v1'],
+    'sup-esp':['sc_state_v1'],
+    champ:    ['ucl_ko_state_v1', 'wprev_to_fase_grupos_v1'],
+    prevch:   ['wprev_state_v1'],
+    uel:      ['uel_ko_state_v1', 'wprev_to_europa_v1'],
+    uecl:     ['uecl_ko_state_v1', 'wprev_r1_to_conference_v1'],
+    recopa:   ['recopa_state_v1'],
+    'sup-eur':['usc_state_v1'],
+    inter:    ['inter_state_v1', 'intercontinental_state_v1'],
+    mundial:  ['mundial_state_v1', 'mundialito_state_v1'],
+    sel:      ['selecciones_state_v1', 'seleccion_state_v1']
+  };
   /* Tabla canónica: orden visual de chips + label/emoji/screen +
      resolución de estado. `statusFn` es opcional — sin él, default 'in'. */
   var _CHIP_DEFS = [
@@ -34529,7 +34581,13 @@ Tottenham
     var sel = _loadCalSel();
     var out = [];
     _CHIP_DEFS.forEach(function(def){
-      if (!sel[def.id]) return;
+      var inCal = !!sel[def.id];
+      var inStore = false;
+      if (!inCal){
+        var keys = _STORE_KEYS_BY_CHIP[def.id];
+        if (keys) inStore = _detectTeamInStores(keys, aliases);
+      }
+      if (!inCal && !inStore) return;
       var status = 'in';
       if (typeof def.statusFn === 'function'){
         try {

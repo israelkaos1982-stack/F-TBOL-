@@ -35782,13 +35782,23 @@ Tottenham
     window._bayernEditValuesClose();
   };
   /* Reinicia el cursor del calendario al 1 de Mayo (inicio de
-     temporada). Útil cuando el admin quiere replay-ear la temporada
-     completa: borra el cursor (dayIdx=0), los partidos resueltos
-     (done) y los rivales asignados (rivals) sin tocar los overrides
-     del HUD (valoración / presupuesto / PI). */
+     temporada). Borra el cursor (dayIdx=0), los partidos resueltos
+     (done) y los rivales asignados (rivals). 2026-05-24: además
+     pone a 0 la valoración 💼 y el presupuesto 🪙 del HUD, y limpia
+     los memos `objRating`/`objMoney` de aportación por objetivos —
+     sin esto, las ganancias de la temporada anterior (0,33💼 + 50€
+     por objetivo) quedaban grabadas en el override y aparecían en
+     el HUD del 1 May aunque los checkboxes ya estuviesen a 0.
+     `ratingTarget` / `moneyTarget` / `pi` son config del admin → se
+     conservan. */
   window._bayernEditValuesResetCal = function(){
-    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día y los partidos ya resueltos de la pretemporada. Los valores del HUD (valoración / presupuesto / PI) no se tocan.')) return;
+    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día y los partidos ya resueltos, y se pondrán a 0 la valoración 💼 y el presupuesto 🪙 (los objetivos suman desde 0 en la nueva temporada). Los Puntos de Fisio 💊 y los objetivos del club se conservan.')) return;
     try { if (typeof window._psResetCalendar === 'function') window._psResetCalendar(); } catch(_){}
+    try {
+      if (typeof window._bayernHudMerge === 'function') {
+        window._bayernHudMerge({ rating: 0, money: 0, objRating: 0, objMoney: 0 });
+      }
+    } catch(_){}
     try { if (typeof window.updateHud === 'function') window.updateHud(); } catch(_){}
     window._bayernEditValuesClose();
   };

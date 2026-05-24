@@ -10885,6 +10885,31 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
 })();
 
+/* Fallback de 11 jugadores (A-K) con formación 4-3-3 para equipos IA
+   sin plantilla creada en `ligaExt_*` / SQUAD_REGISTRY / selecciones.
+   Lo usa el picker de eventos del gm-modal (_gmGetSquad) y el wizard
+   del penalti (_getSquads) — antes mostraban 3 placeholders o lista
+   vacía respectivamente y no se podía añadir un evento. 2026-05-24. */
+window._fallbackSq11 = function(){
+  return [
+    {h:'🧤 PORTEROS'},
+    ['1','Jugador A','P'],
+    {h:'🛡 DEFENSAS'},
+    ['2','Jugador B','D'],
+    ['3','Jugador C','D'],
+    ['4','Jugador D','D'],
+    ['5','Jugador E','D'],
+    {h:'⚙️ MEDIOS'},
+    ['6','Jugador F','M'],
+    ['7','Jugador G','M'],
+    ['8','Jugador H','M'],
+    {h:'⚡ DELANTEROS'},
+    ['9','Jugador I','F'],
+    ['10','Jugador J','F'],
+    ['11','Jugador K','F']
+  ];
+};
+
 /* ══ PENALTY WIZARD — flujo guiado paso a paso ══════════════════════════ */
 (function(){
   var _wiz={matchId:null,attackTeam:null,defendTeam:null,provocador:null,sancion:null,infractor:null,tirador:null,resultado:null,falladoTipo:null,portero:null,stepHistory:[],minute:0};
@@ -10903,6 +10928,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         if (!sqB.length) sqB = window.SQUAD_REGISTRY[st.away] || [];
       }
     }
+    if (!sqA.length && typeof window._fallbackSq11 === 'function') sqA = window._fallbackSq11();
+    if (!sqB.length && typeof window._fallbackSq11 === 'function') sqB = window._fallbackSq11();
     return { sqA: sqA, sqB: sqB };
   }
 

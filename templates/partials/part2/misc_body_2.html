@@ -12039,6 +12039,48 @@
     setInterval(_drive, 50);
   })();
 
+  /* Detección robusta de "hay humano en _gm". `esHumano()` solo
+     conoce los clubes humanos canónicos (Liga EA) + los marcados con
+     humanIcon/humanEmoji en el editor de Resto de Ligas. Las
+     SELECCIONES NACIONALES (Bélgica / Francia / Argelia / …) no
+     tienen humanIcon — su humanidad vive en la cfg del torneo:
+     `cfg.teams[].isHuman` queda a `true` cuando el usuario eligió esa
+     selección como SUYA. Sin este check, `_mlResolveClock` caía a
+     IAIA (≈ 83 ms tick · 1 s real = 1 game-min) en partidos como
+     Bélgica-IA vs Francia-Humana de los torneos sfn* / mundial /
+     selecciones — el cronómetro corría 10× más rápido que el spec
+     HvIA. Bug reportado 2026-05-24. */
+  function _gmHumanInvolved(){
+    if (_gm.isHvH) return true;
+    try {
+      if (_gm._isTour && _gm._tourId && typeof window._tourLoadCachedSync === 'function') {
+        var cfg = window._tourLoadCachedSync(_gm._tourId);
+        if (cfg && Array.isArray(cfg.teams)) {
+          var nh = String(_gm.home || '').trim().toLowerCase();
+          var na = String(_gm.away || '').trim().toLowerCase();
+          for (var i = 0; i < cfg.teams.length; i++) {
+            var t = cfg.teams[i];
+            if (!t || !t.isHuman || !t.name) continue;
+            var n = String(t.name).trim().toLowerCase();
+            if (n === nh || n === na) return true;
+          }
+        }
+      }
+    } catch(_){}
+    try {
+      if (typeof window.isHumanInComp === 'function' && _gm.comp) {
+        if (window.isHumanInComp(_gm.home, _gm.comp)) return true;
+        if (window.isHumanInComp(_gm.away, _gm.comp)) return true;
+      }
+    } catch(_){}
+    try {
+      if (typeof esHumano === 'function') {
+        if (esHumano(_gm.home) || esHumano(_gm.away)) return true;
+      }
+    } catch(_){}
+    return false;
+  }
+
   function gmStartTimer() {
     /* Helper único (CLAUDE.md): honra _ppDurationMin y lee _MATCH_TICKS
        en cada arranque del reloj (no se cachea). Pasamos home/away para
@@ -12048,10 +12090,14 @@
     var tickMs;
     if (typeof window._mlResolveClock === 'function') {
       /* Pasar `currentMin` para que aplique el slowdown +0.5 s/min
-         desde el min 65 (petición usuario 2026-05-08). */
+         desde el min 65 (petición usuario 2026-05-08).
+         `humanInvolved` explícito vía `_gmHumanInvolved()` para que
+         partidos de selecciones (Bélgica-IA vs Francia-Humana) NO
+         caigan al motor IAIA. */
       tickMs = window._mlResolveClock({
         isHvH: !!_gm.isHvH, etDone: !!_gm.etDone,
         home: _gm.home, away: _gm.away,
+        humanInvolved: _gmHumanInvolved(),
         currentMin: Math.floor((_gm.timerSec || 0) / 60)
       }).tickMs;
     } else {
@@ -12139,9 +12185,9 @@
          CONGELA esperando al humano que pulse "🛌 DESCANSO". Sin esto
          el cron seguía corriendo hacia 90+ sin esperar (foto usuario
          2026-05-19). Para IA-vs-IA (caso teórico — gm-modal solo se
-         usa con humano) sí auto-descanso. */
-      var _gmHasHuman = !!_gm.isHvH
-        || (typeof esHumano === 'function' && (esHumano(_gm.home) || esHumano(_gm.away)));
+         usa con humano) sí auto-descanso. Usa el detector que cubre
+         también selecciones nacionales (cfg del torneo). */
+      var _gmHasHuman = _gmHumanInvolved();
       if (!_gm.htDone && _gm.timerSec >= gmHalfMax) {
         if (_gmHasHuman) {
           _gm.timerSec = gmHalfMax;

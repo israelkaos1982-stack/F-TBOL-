@@ -2672,9 +2672,14 @@ window._showSimProgress = function(opts, onDone){
   if (window.__PS_READY) return;
   window.__PS_READY = true;
 
-  var KEY = 'bayern_preseason_v2';   /* nombre legacy; temporada empieza 01 May (PRE-VERANO) 2026-05-20 */
-  /* Limpieza one-shot del store viejo (apuntaba a un calendario con
-     filas pre-Mayo). Así el cursor arranca limpio en 01 May. */
+  var KEY = 'liverpool_preseason_v1';   /* rebrand 2026-05-24: caja Liverpool en el hub (antes nombre legacy 'bayern_preseason_v2'). */
+  /* Clave legacy: si el usuario tiene su temporada bajo el nombre viejo,
+     `_load` la lee como fallback y el primer `_save` la migra al nombre
+     nuevo. No la borramos — mientras coexista, el cursor sobrevive a
+     cualquier hueco entre lecturas/escrituras. */
+  var KEY_LEGACY = 'bayern_preseason_v2';
+  /* Limpieza one-shot del store v1 muy viejo (apuntaba a un calendario
+     con filas pre-Mayo). Así el cursor arranca limpio en 01 May. */
   try { localStorage.removeItem('bayern_preseason_v1'); } catch(_){}
   var BAYERN_SHIELD = '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg';
   var FALLBACK_SHIELD = '/static/img/escudos-fallback/estepona.svg';
@@ -2784,10 +2789,17 @@ window._showSimProgress = function(opts, onDone){
      en móvil aunque el usuario hubiera avanzado. Con el payload
      minimal (~80 bytes) la cookie siempre cabe; rivals/done/
      injuries se restauran de localStorage/server. */
-  var COOKIE_KEY = 'bayps';
+  var COOKIE_KEY = 'livps';
+  /* Cookie legacy (rebrand 2026-05-24): si el navegador todavía guarda
+     'bayps' del nombre viejo, la leemos como fallback. La nueva
+     'livps' se escribe en el siguiente _save y desde ese momento gana.
+     No borramos 'bayps' explícitamente — expira sola en 1 año. */
+  var COOKIE_KEY_LEGACY = 'bayps';
   function _cookieRead(){
     try {
-      var m = (document.cookie || '').match(new RegExp('(?:^|; )' + COOKIE_KEY + '=([^;]*)'));
+      var ck = (document.cookie || '');
+      var m = ck.match(new RegExp('(?:^|; )' + COOKIE_KEY + '=([^;]*)'));
+      if (!m) m = ck.match(new RegExp('(?:^|; )' + COOKIE_KEY_LEGACY + '=([^;]*)'));
       if (!m) return null;
       var raw = decodeURIComponent(m[1] || '');
       if (!raw) return null;
@@ -2818,6 +2830,10 @@ window._showSimProgress = function(opts, onDone){
   }
   function _cookieClear(){
     try { document.cookie = COOKIE_KEY + '=; max-age=0; path=/; SameSite=Lax'; } catch(_){}
+    /* Limpiamos también la cookie legacy (rebrand 2026-05-24): sin esto,
+       tras un reset desde PIN 747, _cookieRead la resucitaría desde
+       'bayps' y reaparecería la temporada vieja. */
+    try { document.cookie = COOKIE_KEY_LEGACY + '=; max-age=0; path=/; SameSite=Lax'; } catch(_){}
   }
 
   function _load(){
@@ -2825,11 +2841,20 @@ window._showSimProgress = function(opts, onDone){
     var d = null;
     try { var r = localStorage.getItem(KEY); if (r){ var p = JSON.parse(r); if (p && typeof p==='object') d = p; } } catch(_){}
     if (!d){
+      /* Fallback a KEY_LEGACY (rebrand 2026-05-24): si el usuario tenía
+         su temporada bajo el nombre viejo, la usamos. El siguiente
+         _save la migra escribiendo bajo el nombre nuevo. */
+      try { var rL = localStorage.getItem(KEY_LEGACY); if (rL){ var pL = JSON.parse(rL); if (pL && typeof pL==='object') d = pL; } } catch(_){}
+    }
+    if (!d){
       /* Fallback a sessionStorage: si localStorage petó por cuota en
          la sesión anterior, el avance puede haberse guardado solo en
          sessionStorage. Si el navegador conserva el tab abierto, lo
          recuperamos aquí; si no, hydrateFromServer lo restaurará. */
       try { var s = sessionStorage.getItem(KEY); if (s){ var sp = JSON.parse(s); if (sp && typeof sp === 'object') d = sp; } } catch(_){}
+      if (!d){
+        try { var sL = sessionStorage.getItem(KEY_LEGACY); if (sL){ var spL = JSON.parse(sL); if (spL && typeof spL === 'object') d = spL; } } catch(_){}
+      }
     }
     if (!d){
       /* Fallback a cookie (sobrevive a purgas de localStorage en
@@ -2914,7 +2939,7 @@ window._showSimProgress = function(opts, onDone){
        localStorage falla) — el coste es 1 fetch por avance de día
        (puntual, no en loop) y el sync de 3 s actúa como respaldo. */
     try {
-      var body = JSON.stringify({ competition_state: { 'bayern_preseason_v2': _json } });
+      var body = JSON.stringify({ competition_state: { 'liverpool_preseason_v1': _json } });
       if (typeof navigator !== 'undefined' && navigator.sendBeacon){
         navigator.sendBeacon('/api/state', new Blob([body], { type:'application/json' }));
       } else if (typeof fetch === 'function'){
@@ -4310,8 +4335,13 @@ window._showSimProgress = function(opts, onDone){
     var _resetJson = JSON.stringify(d);
     try { localStorage.setItem(KEY, _resetJson); } catch(_){}
     try { sessionStorage.setItem(KEY, _resetJson); } catch(_){}
-    /* Limpiar la cookie de respaldo del cursor: sin esto, _load la
-       resucitaría desde la cookie en la próxima recarga. */
+    /* Limpiar también el namespace legacy (rebrand 2026-05-24): sin
+       esto, tras un reset desde PIN 747, _load resucitaría la temporada
+       vieja desde 'bayern_preseason_v2' / 'bayps' al recargar. */
+    try { localStorage.removeItem(KEY_LEGACY); } catch(_){}
+    try { sessionStorage.removeItem(KEY_LEGACY); } catch(_){}
+    /* Limpiar la cookie de respaldo del cursor (nueva + legacy): sin
+       esto, _load la resucitaría desde la cookie en la próxima recarga. */
     try { _cookieClear(); } catch(_){}
     /* Push inmediato del reset al server (mismo refuerzo Opción A
        2026-05-24 que _save): si el usuario pulsa PIN 747 → Reiniciar
@@ -4320,7 +4350,7 @@ window._showSimProgress = function(opts, onDone){
        arranque restauraría el cursor pre-reset. ts=Date.now() ya
        garantiza last-write-wins contra cualquier estado stale. */
     try {
-      var _resetBody = JSON.stringify({ competition_state: { 'bayern_preseason_v2': _resetJson } });
+      var _resetBody = JSON.stringify({ competition_state: { 'liverpool_preseason_v1': _resetJson } });
       if (typeof navigator !== 'undefined' && navigator.sendBeacon){
         navigator.sendBeacon('/api/state', new Blob([_resetBody], { type:'application/json' }));
       } else if (typeof fetch === 'function'){

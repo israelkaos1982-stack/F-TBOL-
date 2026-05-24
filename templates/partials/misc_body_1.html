@@ -9746,6 +9746,17 @@ window._showSimProgress = function(opts, onDone){
 /* Botones de ronda Mundialito Clubes — gradient cian/turquesa
    coherente con la caja principal en s-competiciones. */
 .c-mundial{background:linear-gradient(90deg,#001f2a,#003a52,#006080,#00bcd4,#006080,#003a52,#001f2a) !important;border:1.5px solid rgba(77,208,225,.55) !important;}
+/* Jornada YA JUGADA → botón gris para distinguirlo de la actual y
+   las futuras (petición usuario 2026-05-24, foto 3). El `.done` lo
+   añade `_mundialGroupsHtml` cuando todos los partidos de la
+   jornada están con `played:true`. */
+.jbtn.c-mundial.done{
+  background:linear-gradient(90deg,#1a1d22,#2a2e36,#3a3e48,#2a2e36,#1a1d22) !important;
+  border:1.5px solid rgba(170,180,195,.45) !important;
+  filter:grayscale(.5) brightness(.85);
+  color:rgba(255,255,255,.55) !important;
+}
+.jbtn.c-mundial.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
 /* Editor de roster manual del Mundialito. */
 #mundial-roster-ov{position:fixed;inset:0;z-index:100040;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,6,.88);}
 #mundial-roster-ov .mr-card{width:min(460px,95vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#06141c,#0a1d28);border:1px solid rgba(77,208,225,.5);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
@@ -13123,8 +13134,11 @@ window._showSimProgress = function(opts, onDone){
   /* Bloque GRUPO X — borde dorado tipo videojuego, glow y padding
      interno para que la clasificación + jornadas queden visualmente
      "encajadas" en una caja propia (petición usuario 2026-05-09). */
-  /* Cada grupo en su caja con borde CLARO que lo separa del resto
-     (petición usuario 2026-05-17). Borde neutro por defecto. */
+  /* Cada grupo en su caja con borde CLARO que lo separa del resto.
+     Borde BLANCO neutro por defecto (petición usuario 2026-05-24:
+     "cada grupo tenga el borde de color blanco para saber
+     diferenciarlos"). Los `--grp-color`/`--grp-rgb` por letra (A..L)
+     siguen vivos para colorear la barra del header h4. */
   .tour-group-block{
     --grp-color:#8fa3c8;--grp-rgb:143,163,200;
     margin-top:16px;
@@ -13132,16 +13146,18 @@ window._showSimProgress = function(opts, onDone){
     background:
       linear-gradient(180deg,rgba(var(--grp-rgb),.12) 0%,rgba(var(--grp-rgb),.03) 64px,rgba(255,255,255,.022) 64px),
       rgba(255,255,255,.022);
-    border:1.6px solid rgba(var(--grp-rgb),.55);
+    border:2px solid rgba(255,255,255,.85);
     border-radius:14px;
-    box-shadow:0 0 16px rgba(var(--grp-rgb),.30),0 4px 16px rgba(0,0,0,.4);
+    box-shadow:0 0 14px rgba(255,255,255,.18),0 4px 16px rgba(0,0,0,.4);
   }
-  /* Grupo con equipo(s) humano(s): borde dorado llamativo + pulso,
-     igual que las eliminatorias humanas. */
+  /* Grupo con equipo(s) humano(s): borde ROSA llamativo + pulso
+     (petición usuario 2026-05-24: "en el grupo de selecciones … en
+     el grupo que esté un equipo humano este borde será rosa
+     llamativo para encontrarlo rápido"). */
   .tour-group-block.tour-group-human{
-    --grp-color:#f0c040;--grp-rgb:240,192,64;
-    border:2px solid #f0c040;
-    box-shadow:0 0 16px rgba(240,192,64,.55),inset 0 0 8px rgba(240,192,64,.14);
+    --grp-color:#ec4899;--grp-rgb:236,72,153;
+    border:2.5px solid #ff3d99;
+    box-shadow:0 0 20px rgba(255,61,153,.70),inset 0 0 10px rgba(255,61,153,.18);
     animation:tourTiePulse 1.5s ease-in-out infinite;
   }
   /* Cabecera del grupo: banner a sangre con el color del grupo +
@@ -13194,13 +13210,16 @@ window._showSimProgress = function(opts, onDone){
     box-shadow:0 2px 8px rgba(0,0,0,.30);
     position:relative;
   }
-  /* Past (jornadas ya jugadas): borde verde. */
+  /* Past (jornadas ya jugadas): GRIS — petición usuario 2026-05-24
+     ("si la jornada se ha jugado el desplegable pasa a color gris
+     para saber que esa jornada ya se ha jugado"). */
   .tour-jor.is-past{
-    border-color:rgba(95,224,138,.45);
-    background:linear-gradient(180deg,rgba(95,224,138,.03),rgba(0,0,0,.30));
-    box-shadow:0 2px 8px rgba(95,224,138,.10);
+    border-color:rgba(170,180,195,.55);
+    background:linear-gradient(180deg,rgba(170,180,195,.05),rgba(0,0,0,.30));
+    box-shadow:0 2px 8px rgba(0,0,0,.30);
+    filter:grayscale(.5) brightness(.88);
   }
-  .tour-jor.is-past .tour-jor-h{color:#5fe08a;}
+  .tour-jor.is-past .tour-jor-h{color:rgba(255,255,255,.55);}
   /* Current: gold neon — la jornada activa destaca. */
   .tour-jor.is-current{
     border-color:rgba(240,192,64,.75);
@@ -13236,7 +13255,7 @@ window._showSimProgress = function(opts, onDone){
     letter-spacing:1.5px;
   }
   .tour-jor.is-past .tour-jor-tag{
-    background:rgba(95,224,138,.16);border-color:rgba(95,224,138,.5);color:#5fe08a;
+    background:rgba(170,180,195,.18);border-color:rgba(170,180,195,.55);color:rgba(255,255,255,.7);
   }
   .tour-jor.is-current .tour-jor-tag{
     background:rgba(240,192,64,.20);border-color:rgba(240,192,64,.65);
@@ -15507,12 +15526,12 @@ window._showSimProgress = function(opts, onDone){
       var isPast = (j < actualCur);
       var lblTxt = (opts.shortLabel ? 'J' : 'Jornada ') + (j+1);
       /* Cada jornada es desplegable (foto 2, 2026-05-24): header
-         clicable + body con los partidos. La actual se abre por
-         defecto; el resto cerrada. El estado lo persiste `_jorToggle`
-         para que sobreviva a re-renders. */
+         clicable + body con los partidos. Por petición del usuario
+         (2026-05-24) TODAS las jornadas arrancan plegadas al entrar
+         en el torneo; el usuario expande la que quiera con un click.
+         No se persiste el estado: re-entrar = todo plegado de nuevo. */
       var jid = 'tour-jm-' + tourId + '-' + (prefix||'') + j;
-      var collapsed = window._jorIsCollapsed && window._jorIsCollapsed(jid);
-      var jOpen = isCurrent && !collapsed;
+      var jOpen = false;
       var cls = 'tour-jor';
       if (isCurrent) cls += ' is-current';
       if (isFuture) cls += ' is-future';
@@ -16167,10 +16186,14 @@ window._showSimProgress = function(opts, onDone){
       var letter = String.fromCharCode(65+g);
       var hasH = slice.some(function(t){ return t && t.isHuman; });
       var curJg = cfg.currentJornadaByGroup[g] || 0;
-      /* Card del grupo: cabecera cian + clasificación + jornadas. */
-      html += '<div style="margin:12px 0;background:linear-gradient(180deg,#06141c 0%,#08222b 100%);border:1px solid rgba(77,208,225,.35);border-radius:12px;overflow:hidden;'
-        + (hasH ? 'box-shadow:0 0 0 1px rgba(95,224,138,.35),0 4px 18px rgba(0,188,212,.25);' : 'box-shadow:0 4px 14px rgba(0,0,0,.4);')
-        + '">';
+      /* Card del grupo: cabecera cian + clasificación + jornadas.
+         Borde BLANCO por defecto y ROSA llamativo si el grupo tiene
+         algún humano (petición usuario 2026-05-24 — para encontrar
+         rápido tu grupo en cualquier torneo de selecciones). */
+      var _grpBorder = hasH
+        ? 'border:2.5px solid #ff3d99;box-shadow:0 0 20px rgba(255,61,153,.70),inset 0 0 10px rgba(255,61,153,.18);'
+        : 'border:2px solid rgba(255,255,255,.85);box-shadow:0 0 12px rgba(255,255,255,.18),0 4px 14px rgba(0,0,0,.4);';
+      html += '<div style="margin:12px 0;background:linear-gradient(180deg,#06141c 0%,#08222b 100%);border-radius:12px;overflow:hidden;' + _grpBorder + '">';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;'
         + 'background:linear-gradient(90deg,#001f2a,#003a52,#006080,#003a52,#001f2a);'
         + 'border-bottom:1px solid rgba(77,208,225,.45);font-family:Oswald,sans-serif;letter-spacing:2px;'
@@ -16190,11 +16213,12 @@ window._showSimProgress = function(opts, onDone){
         });
         var isCurrent = (ji === curJg);
         var jid = 'mn-j-' + tourId + '-' + g + '-' + ji;
-        /* La jornada actual se abre por defecto, salvo que el usuario
-           la haya colapsado a mano (persistido en `jor_collapse_v1`).
-           Sin esto, simular un partido re-pintaba la pantalla y la
-           jornada actual volvía a abrirse sola — foto 1, 2026-05-24. */
-        var jOpen = isCurrent && !window._jorIsCollapsed(jid);
+        /* Todas las jornadas arrancan PLEGADAS al entrar (foto-req
+           2026-05-24: "al abrir Mundial o cualquier caja de Selecciones
+           los desplegables tienen que salir plegados, solo cuando se
+           pulse se despliega"). El usuario expande con click; el
+           estado no se persiste — al re-entrar empieza todo plegado. */
+        var jOpen = false;
         html += '<div class="jblock" style="margin-bottom:6px;">';
         html += '<button type="button" class="jbtn c-mundial' + (allDone ? ' done' : '') + '" '
           + 'onclick="_jorToggle(\''+jid+'\')">'
@@ -18378,42 +18402,30 @@ window._showSimProgress = function(opts, onDone){
     return 'linear-gradient(135deg,' + dark + ' 0%,' + hex + ' 50%,' + dark + ' 100%)';
   }
   window._tvCardGradient = _tvCardGradient;
-  /* ── Persistencia de jornadas colapsadas (foto 1+2, 2026-05-24) ──
-     El usuario puede colapsar/expandir cada jornada y la elección
-     sobrevive a re-renders (al simular un partido, navegar y volver,
-     etc.). Sin esto, las jornadas se re-abrían solas porque el render
-     siempre marcaba "current" con la clase `open`. Lista de IDs
-     colapsados en `jor_collapse_v1` (localStorage, sólo strings). */
-  (function(){
-    var KEY = 'jor_collapse_v1';
-    function load(){
-      try { var raw = localStorage.getItem(KEY); var a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; }
-      catch(_){ return []; }
-    }
-    function save(arr){ try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch(_){} }
-    window._jorIsCollapsed = function(id){ return load().indexOf(String(id)) !== -1; };
-    window._jorSetCollapsed = function(id, collapsed){
-      id = String(id);
-      var a = load(), i = a.indexOf(id);
-      if (collapsed && i === -1) { a.push(id); save(a); }
-      else if (!collapsed && i !== -1) { a.splice(i, 1); save(a); }
-    };
-    window._jorToggle = function(id){
-      var el = document.getElementById(id);
-      if (!el) return;
-      var nowOpen = el.classList.toggle('open');
-      window._jorSetCollapsed(id, !nowOpen);
-      /* Si el padre es una `.tour-jor` (qualifier de Selecciones,
-         Mundial, etc.), reflejar la apertura en el padre para que el
-         CSS muestre/oculte el body y rote el chevron. */
-      try {
-        var par = el.parentElement;
-        if (par && par.classList && par.classList.contains('tour-jor')){
-          par.classList.toggle('is-open', nowOpen);
-        }
-      } catch(_){}
-    };
-  })();
+  /* ── Toggle de jornadas (foto 2026-05-24) ──
+     Por petición del usuario, NO se persiste el estado abierto/cerrado:
+     al abrir Mundial o cualquier caja de Selecciones todas las
+     jornadas arrancan plegadas; el click expande, otro click colapsa,
+     y al re-entrar todo vuelve a plegado. Helper expuesto como
+     `window._jorToggle` para que las llamadas inline desde
+     `onclick="_jorToggle('...')"` lo encuentren. */
+  window._jorToggle = function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    var nowOpen = el.classList.toggle('open');
+    /* Si el padre es una `.tour-jor` (qualifier de Selecciones,
+       Mundial, etc.), reflejar la apertura en el padre para que el
+       CSS muestre/oculte el body y rote el chevron. */
+    try {
+      var par = el.parentElement;
+      if (par && par.classList && par.classList.contains('tour-jor')){
+        par.classList.toggle('is-open', nowOpen);
+      }
+    } catch(_){}
+  };
+  /* Stubs por compatibilidad con código antiguo (no-op). */
+  window._jorIsCollapsed = function(){ return false; };
+  window._jorSetCollapsed = function(){};
   function _tvEsc(s){ return String(s == null ? '' : s).replace(/[<>"]/g, function(c){ return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;'; }); }
   /* Una "bandera" de torneo puede ser un emoji O una URL https de
      imagen (petición usuario 2026-05-21). Devuelve el HTML a pintar. */
@@ -18649,10 +18661,34 @@ window._showSimProgress = function(opts, onDone){
     ov.style.display = 'flex';
   }
   window._tvOpenManage = _tvOpenManage;
-  /* Editor de color/logo de un torneo (Parte A, 2026-05-22). Overlay
-     con dos selectores de color (caja + texto), un campo de logo
-     (emoji o URL de imagen) y una previsualización en vivo de la
-     tarjeta. Guarda en cfg.cardColor / cfg.cardText / cfg.flag. */
+  /* Editor de color/logo de un torneo (rediseñado 2026-05-24).
+     Antes usábamos `<input type="color">` (picker nativo); en Android
+     el diálogo nativo era poco fiable — el usuario pulsaba "Establecer"
+     y la caja no cambiaba nunca. Ahora usamos una PALETA de botones
+     fijos: al pulsar uno se aplica al instante y se guarda. Sin
+     diálogos nativos de por medio. Guarda en cfg.cardColor /
+     cfg.cardText / cfg.flag. */
+  var _TVC_BOX_PALETTE = [
+    '#dc2626','#ea580c','#f59e0b','#facc15','#65a30d','#16a34a','#10b981','#0d9488',
+    '#06b6d4','#0284c7','#2563eb','#4f46e5','#7c3aed','#9333ea','#c026d3','#db2777',
+    '#e11d48','#ec4899','#f0c040','#0a4d5a','#1e3a8a','#475569','#1f2937','#18181b'
+  ];
+  var _TVC_TXT_PALETTE = [
+    '#ffffff','#f0c040','#facc15','#fb7185','#86efac','#67e8f9','#a5b4fc','#f0abfc',
+    '#18181b','#475569','#dc2626','#16a34a'
+  ];
+  function _tvcSwatchGrid(palette, type, current){
+    var cur = String(current||'').toLowerCase();
+    var h = '<div class="tvc-grid" data-type="' + type + '">';
+    palette.forEach(function(c){
+      var isSel = (c.toLowerCase() === cur);
+      h += '<button type="button" class="tvc-sw' + (isSel ? ' is-sel' : '') + '" '
+        +    'data-type="' + type + '" data-color="' + c + '" '
+        +    'style="background:' + c + ';"></button>';
+    });
+    h += '</div>';
+    return h;
+  }
   function _tvColorEditor(id){
     var cfg = _tvCfgOf(id);
     var curBox  = _tvHexClamp(cfg && cfg.cardColor) || '#0a4d5a';
@@ -18662,79 +18698,120 @@ window._showSimProgress = function(opts, onDone){
     if (old) old.remove();
     var ov = document.createElement('div');
     ov.id = 'tv-color-ov';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.8);'
-      + 'display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.85);'
+      + 'display:flex;align-items:flex-start;justify-content:center;padding:18px;overflow-y:auto;';
     ov.innerHTML = ''
+      + '<style>'
+      +   '#tv-color-ov .tvc-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:0 0 10px;}'
+      +   '#tv-color-ov .tvc-sw{aspect-ratio:1;border:2px solid rgba(255,255,255,.18);border-radius:8px;cursor:pointer;padding:0;transition:transform .1s ease, border-color .12s ease;-webkit-tap-highlight-color:transparent;}'
+      +   '#tv-color-ov .tvc-sw:active{transform:scale(.92);}'
+      +   '#tv-color-ov .tvc-sw.is-sel{border:3px solid #fff;box-shadow:0 0 0 2px rgba(240,192,64,.55),0 0 12px rgba(240,192,64,.55);}'
+      +   '#tv-color-ov .tvc-row{display:flex;gap:6px;margin-bottom:14px;align-items:center;}'
+      +   '#tv-color-ov .tvc-hex{flex:1;box-sizing:border-box;padding:8px 10px;border-radius:7px;border:1px solid rgba(255,255,255,.2);background:#1a1f29;color:#eee;font-size:13px;font-family:monospace;text-transform:uppercase;letter-spacing:1px;}'
+      +   '#tv-color-ov .tvc-hex:focus{outline:none;border-color:rgba(240,192,64,.55);}'
+      +   '#tv-color-ov .tvc-sec{font-size:13px;letter-spacing:1px;color:#cbd5e1;margin:4px 0 6px;font-weight:600;}'
+      + '</style>'
       + '<div style="background:#10141c;border:1.5px solid rgba(240,192,64,.4);border-radius:14px;'
-      +   'max-width:380px;width:100%;padding:18px;font-family:Oswald,sans-serif;color:#eee;box-sizing:border-box;">'
+      +   'max-width:430px;width:100%;padding:18px;font-family:Oswald,sans-serif;color:#eee;box-sizing:border-box;">'
       + '<div style="font-size:17px;letter-spacing:1.5px;color:#f0c040;text-align:center;margin-bottom:14px;">'
       +   '🎨 COLOR Y LOGO</div>'
-      + '<div id="tvc-prev" style="margin-bottom:16px;"></div>'
-      + '<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;font-size:13px;">'
-      +   '<span>Color de caja</span>'
-      +   '<input type="color" id="tvc-box" value="' + curBox + '" style="width:54px;height:34px;border:none;background:none;cursor:pointer;"></label>'
-      + '<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;font-size:13px;">'
-      +   '<span>Color de texto</span>'
-      +   '<input type="color" id="tvc-txt" value="' + curTxt + '" style="width:54px;height:34px;border:none;background:none;cursor:pointer;"></label>'
-      + '<label style="display:block;font-size:13px;margin-bottom:6px;">Logo (emoji o URL de imagen)</label>'
+      + '<div id="tvc-prev" style="margin-bottom:14px;"></div>'
+      + '<div class="tvc-sec">Color de caja</div>'
+      + _tvcSwatchGrid(_TVC_BOX_PALETTE, 'box', curBox)
+      + '<div class="tvc-row">'
+      +   '<input type="text" id="tvc-box-hex" class="tvc-hex" value="' + curBox + '" placeholder="#aabbcc" maxlength="7">'
+      + '</div>'
+      + '<div class="tvc-sec">Color de texto</div>'
+      + _tvcSwatchGrid(_TVC_TXT_PALETTE, 'txt', curTxt)
+      + '<div class="tvc-row">'
+      +   '<input type="text" id="tvc-txt-hex" class="tvc-hex" value="' + curTxt + '" placeholder="#aabbcc" maxlength="7">'
+      + '</div>'
+      + '<label style="display:block;font-size:13px;margin-bottom:6px;color:#cbd5e1;font-weight:600;">Logo (emoji o URL de imagen)</label>'
       + '<input type="text" id="tvc-logo" value="' + _tvEsc(curLogo) + '" placeholder="🏆 o https://…" '
-      +   'style="width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.2);'
+      +   'style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.2);'
       +   'background:#1a1f29;color:#eee;font-size:14px;margin-bottom:14px;">'
       + '<div style="display:flex;gap:8px;">'
       +   '<button id="tvc-cancel" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);'
-      +     'background:transparent;color:#ccc;cursor:pointer;font-family:inherit;">Cancelar</button>'
-      +   '<button id="tvc-save" style="flex:1;padding:10px;border-radius:8px;border:none;'
-      +     'background:linear-gradient(135deg,#c89020,#f0c040);color:#1a1200;font-weight:700;cursor:pointer;font-family:inherit;">Guardar</button>'
+      +     'background:transparent;color:#ccc;cursor:pointer;font-family:inherit;">Cerrar</button>'
       + '</div></div>';
     document.body.appendChild(ov);
-    var boxEl  = ov.querySelector('#tvc-box');
-    var txtEl  = ov.querySelector('#tvc-txt');
-    var logoEl = ov.querySelector('#tvc-logo');
-    var prevEl = ov.querySelector('#tvc-prev');
+    var boxHexEl = ov.querySelector('#tvc-box-hex');
+    var txtHexEl = ov.querySelector('#tvc-txt-hex');
+    var logoEl   = ov.querySelector('#tvc-logo');
+    var prevEl   = ov.querySelector('#tvc-prev');
+    /* Estado local del editor: valores aplicados actualmente. */
+    var state = { box: curBox, txt: curTxt, logo: curLogo };
     function paint(){
-      prevEl.innerHTML = '<div class="submenu-card" style="background:' + _tvCardGradient(boxEl.value)
-        + ' !important;border:1.5px solid ' + txtEl.value + ' !important;pointer-events:none;margin:0;">'
-        + '<span class="sc-emoji">' + _tourFlagHtml((logoEl.value || '').trim() || '🏆', 'sc-flag-img') + '</span>'
-        + '<span class="sc-label" style="color:' + txtEl.value + ';">' + _tvEsc(_tvName(id)) + '</span>'
-        + '<span class="sc-arr" style="color:' + txtEl.value + ';">▶</span></div>';
+      prevEl.innerHTML = '<div class="submenu-card" style="background:' + _tvCardGradient(state.box)
+        + ' !important;border:1.5px solid ' + state.txt + ' !important;pointer-events:none;margin:0;">'
+        + '<span class="sc-emoji">' + _tourFlagHtml((state.logo || '').trim() || '🏆', 'sc-flag-img') + '</span>'
+        + '<span class="sc-label" style="color:' + state.txt + ';">' + _tvEsc(_tvName(id)) + '</span>'
+        + '<span class="sc-arr" style="color:' + state.txt + ';">▶</span></div>';
     }
-    /* Auto-guardado en cada cambio de color/logo (foto 3-5, 2026-05-24).
-       Antes: el color sólo se persistía al pulsar Guardar; en Android
-       el `<input type=color>` es un diálogo a pantalla completa y
-       muchos usuarios pulsaban "Establecer" en el diálogo creyendo
-       que ya estaba guardado, sin llegar a Guardar — la caja se
-       quedaba sin cambiar. Ahora cada `input`/`change` persiste y
-       repinta las cards al instante; Guardar sólo cierra el modal. */
     function persistAndRender(){
       var c = _tvCfgOf(id);
-      c.cardColor = _tvHexClamp(boxEl.value) || c.cardColor || '';
-      c.cardText  = _tvHexClamp(txtEl.value) || c.cardText  || '';
-      c.flag      = String(logoEl.value || '').trim() || c.flag || '🏆';
+      c.cardColor = _tvHexClamp(state.box) || c.cardColor || '';
+      c.cardText  = _tvHexClamp(state.txt) || c.cardText  || '';
+      c.flag      = String(state.logo || '').trim() || c.flag || '🏆';
       try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = c; } catch(_){}
       try { if (typeof window._tourSave === 'function') window._tourSave(id, c); } catch(_){}
       try { _tvRenderCards(); } catch(_){}
       try { _tvRefreshManage(); } catch(_){}
     }
-    function onChange(){ paint(); persistAndRender(); }
-    paint();
-    /* `input` cubre desktop (cambia en vivo al arrastrar el cursor);
-       `change` cubre Android, donde el diálogo nativo sólo dispara
-       el evento al pulsar "Establecer". Escuchamos ambos para que
-       cualquier picker — sea cual sea — guarde el color al confirmar. */
-    boxEl.addEventListener('input',  onChange);
-    boxEl.addEventListener('change', onChange);
-    txtEl.addEventListener('input',  onChange);
-    txtEl.addEventListener('change', onChange);
-    logoEl.addEventListener('input', onChange);
-    logoEl.addEventListener('change',onChange);
-    ov.addEventListener('click', function(e){ if (e.target === ov) ov.remove(); });
-    ov.querySelector('#tvc-cancel').addEventListener('click', function(){ ov.remove(); });
-    ov.querySelector('#tvc-save').addEventListener('click', function(){
-      /* Por si llegan aquí sin que haya disparado `change` (picker exótico
-         que sólo dispare `input` y se cierre raro), volvemos a persistir. */
-      persistAndRender();
-      ov.remove();
+    function refreshSwatches(type){
+      var grid = ov.querySelector('.tvc-grid[data-type="' + type + '"]');
+      if (!grid) return;
+      var cur = String(type === 'box' ? state.box : state.txt).toLowerCase();
+      grid.querySelectorAll('.tvc-sw').forEach(function(sw){
+        sw.classList.toggle('is-sel', (sw.getAttribute('data-color')||'').toLowerCase() === cur);
+      });
+    }
+    function applyBox(c){
+      c = _tvHexClamp(c); if (!c) return;
+      state.box = c;
+      if (boxHexEl) boxHexEl.value = c.toUpperCase();
+      refreshSwatches('box');
+      paint(); persistAndRender();
+    }
+    function applyTxt(c){
+      c = _tvHexClamp(c); if (!c) return;
+      state.txt = c;
+      if (txtHexEl) txtHexEl.value = c.toUpperCase();
+      refreshSwatches('txt');
+      paint(); persistAndRender();
+    }
+    /* Click en cualquier swatch → aplica + guarda al instante.
+       Click en backdrop (target == ov) cierra. */
+    ov.addEventListener('click', function(e){
+      var sw = e.target && e.target.closest && e.target.closest('.tvc-sw');
+      if (sw) {
+        e.preventDefault(); e.stopPropagation();
+        var type = sw.getAttribute('data-type');
+        var c = sw.getAttribute('data-color');
+        if (type === 'box') applyBox(c);
+        else if (type === 'txt') applyTxt(c);
+        return;
+      }
+      if (e.target === ov) ov.remove();
     });
+    /* Hex inputs: aplican al teclear (cuando el hex es válido). */
+    if (boxHexEl) boxHexEl.addEventListener('input', function(){
+      var c = _tvHexClamp(boxHexEl.value);
+      if (c) applyBox(c);
+    });
+    if (txtHexEl) txtHexEl.addEventListener('input', function(){
+      var c = _tvHexClamp(txtHexEl.value);
+      if (c) applyTxt(c);
+    });
+    if (logoEl) logoEl.addEventListener('input', function(){
+      state.logo = logoEl.value || '';
+      paint(); persistAndRender();
+    });
+    ov.querySelector('#tvc-cancel').addEventListener('click', function(){ ov.remove(); });
+    /* Inicial. */
+    if (boxHexEl) boxHexEl.value = state.box.toUpperCase();
+    if (txtHexEl) txtHexEl.value = state.txt.toUpperCase();
+    paint();
   }
   window._tvColorEditor = _tvColorEditor;
   /* Hidrata el registro desde el server (best-effort, async). Hace

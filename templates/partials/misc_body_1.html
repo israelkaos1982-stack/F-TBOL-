@@ -3780,7 +3780,7 @@ window._showSimProgress = function(opts, onDone){
   window._psRender = _render;
 
   /* Reset del cursor del calendario a la primera fila de Mayo (inicio
-     de temporada). Usado por el botón "Reiniciar Calendario · 1 May"
+     de temporada). Usado por el botón "Reiniciar Temporada"
      del modal 🖍 (admin PIN 747). Limpia done/rivals/previaOpenedIdx
      para que la temporada arranque limpia: sin partidos ya resueltos,
      sin previas marcadas como ya abiertas. */
@@ -35245,7 +35245,7 @@ Tottenham
       +     '<button type="button" class="me-btn primary" onclick="window._bayernEditValuesSave()">✅ Guardar</button>'
       +     '<button type="button" class="me-btn ghost" onclick="window._bayernEditValuesClose()">Cancelar</button>'
       +     '<button type="button" class="me-btn danger" onclick="window._bayernEditValuesReset()">♻ Restablecer</button>'
-      +     '<button type="button" class="me-btn danger" onclick="window._bayernEditValuesResetCal()">📅 Reiniciar Calendario · 1 May</button>'
+      +     '<button type="button" class="me-btn danger" onclick="window._bayernEditValuesResetCal()">📅 Reiniciar Temporada</button>'
       +   '</div>'
       + '</div>';
     ov.addEventListener('click', function(e){ if (e.target === ov) window._bayernEditValuesClose(); });
@@ -35502,7 +35502,7 @@ Tottenham
      (done) y los rivales asignados (rivals) sin tocar los overrides
      del HUD (valoración / presupuesto / PI). */
   window._bayernEditValuesResetCal = function(){
-    if (!confirm('¿Reiniciar el calendario al 1 de Mayo?\n\nSe borrará el cursor del día y los partidos ya resueltos de la pretemporada. Los valores del HUD (valoración / presupuesto / PI) no se tocan.')) return;
+    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día y los partidos ya resueltos de la pretemporada. Los valores del HUD (valoración / presupuesto / PI) no se tocan.')) return;
     try { if (typeof window._psResetCalendar === 'function') window._psResetCalendar(); } catch(_){}
     try { if (typeof window.updateHud === 'function') window.updateHud(); } catch(_){}
     window._bayernEditValuesClose();

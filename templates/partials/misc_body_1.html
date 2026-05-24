@@ -35285,6 +35285,97 @@ Tottenham
     padding:14px;text-align:center;color:rgba(255,255,255,.55);
     font-family:Rajdhani,sans-serif;font-size:11px;
   }
+  /* ── Card de partido jugado (PARTIDOS TEMPORADA) ─────────
+     Layout estilo histórico derbys (`s-munich-derby-season`,
+     petición usuario 2026-05-24): cabecera con emoji + label
+     comp + jornada coloreado, body con team-score-team, y panel
+     ACTA DEL PARTIDO desplegable cuando hay eventos. */
+  #s-munich .munich-fix-card{
+    margin:0;padding:10px 12px 8px;
+    background:linear-gradient(180deg,rgba(96,180,255,.06),rgba(8,16,40,.30));
+    border:1px solid rgba(96,180,255,.25);border-radius:10px;
+  }
+  #s-munich .munich-fix-card.win{border-color:rgba(95,224,138,.55);}
+  #s-munich .munich-fix-card.loss{border-color:rgba(255,128,128,.55);}
+  #s-munich .munich-fix-card.draw{border-color:rgba(240,192,64,.55);}
+  #s-munich .munich-fix-card .mfc-top{
+    display:flex;align-items:center;gap:6px;
+    font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;
+    text-transform:uppercase;margin-bottom:8px;padding-bottom:6px;
+    border-bottom:1px dashed rgba(255,255,255,.10);
+  }
+  #s-munich .munich-fix-card .mfc-comp-ico{font-size:14px;line-height:1;flex-shrink:0;}
+  #s-munich .munich-fix-card .mfc-comp-label{color:#9fdcff;font-weight:700;letter-spacing:1.6px;}
+  #s-munich .munich-fix-card .mfc-comp-sep{color:rgba(255,255,255,.30);}
+  #s-munich .munich-fix-card .mfc-comp-jor{color:rgba(255,255,255,.65);font-weight:600;}
+  #s-munich .munich-fix-card .mfc-body{
+    display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;
+    font-family:Rajdhani,sans-serif;font-size:14px;
+  }
+  #s-munich .munich-fix-card .mfc-team{
+    font-weight:700;color:#fff;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;
+  }
+  #s-munich .munich-fix-card .mfc-team.local{text-align:right;}
+  #s-munich .munich-fix-card .mfc-team.visit{text-align:left;}
+  #s-munich .munich-fix-card .mfc-hi{font-size:14px;margin:0 3px;}
+  #s-munich .munich-fix-card .mfc-score{
+    font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;
+    background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.10);
+    border-radius:6px;padding:3px 12px;color:#f0c040;
+    text-align:center;line-height:1;min-width:64px;
+  }
+  #s-munich .munich-fix-card .mfc-score.win{
+    color:#5fe08a;border-color:rgba(95,224,138,.45);
+  }
+  #s-munich .munich-fix-card .mfc-score.loss{
+    color:#ff8080;border-color:rgba(255,128,128,.45);
+  }
+  #s-munich .munich-fix-card .mfc-score.draw{
+    color:#f0c040;border-color:rgba(240,192,64,.40);
+  }
+  /* Override de los estilos del acta (panelEurFase) para que respete
+     el ancho del card del dropdown sin desbordar. */
+  #s-munich .munich-fix-card .eurfase-acta-wrap{margin-top:8px;}
+  #s-munich .munich-fix-card .eurfase-acta-toggle{
+    cursor:pointer;display:flex;align-items:center;gap:6px;
+    padding:5px 8px;background:rgba(0,0,0,.30);
+    border:1px solid rgba(159,220,255,.20);border-radius:6px;
+    font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;
+    color:#9fdcff;text-transform:uppercase;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #s-munich .munich-fix-card .eurfase-acta-toggle-ico{font-size:10px;}
+  #s-munich .munich-fix-card .eurfase-acta-list{
+    margin-top:6px;padding:8px 6px;background:rgba(0,0,0,.40);
+    border:1px solid rgba(255,255,255,.08);border-radius:6px;
+    max-height:240px;overflow-y:auto;
+  }
+  #s-munich .munich-fix-card .eurfase-acta-row{
+    display:grid;grid-template-columns:38px 24px 1fr auto;
+    gap:6px;align-items:center;padding:3px 4px;
+    font-family:Rajdhani,sans-serif;font-size:12px;color:#eaf3ff;
+    border-bottom:1px dashed rgba(255,255,255,.06);
+  }
+  #s-munich .munich-fix-card .eurfase-acta-row:last-child{border-bottom:0;}
+  #s-munich .munich-fix-card .eurfase-acta-min{
+    font-family:Oswald,sans-serif;font-size:11px;color:#ffd750;
+    letter-spacing:.5px;text-align:right;
+  }
+  #s-munich .munich-fix-card .eurfase-acta-ico{font-size:13px;text-align:center;}
+  #s-munich .munich-fix-card .eurfase-acta-player{font-weight:600;}
+  #s-munich .munich-fix-card .eurfase-acta-team{
+    font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.4px;
+  }
+  #s-munich .munich-fix-card .eurfase-acta-empty{
+    padding:10px;text-align:center;color:rgba(255,255,255,.45);
+    font-style:italic;font-size:11px;
+  }
+  #s-munich .munich-fix-card .eurfase-acta-mvp{
+    margin-top:6px;padding:6px 8px;background:rgba(240,192,64,.10);
+    border:1px solid rgba(240,192,64,.30);border-radius:5px;
+    font-family:Rajdhani,sans-serif;font-size:12px;color:#ffe49a;
+  }
 </style>
 <div class="sec-hdr"><img id="mk-hub-badge" alt="Bayern Munich" src="/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
@@ -35740,7 +35831,9 @@ Tottenham
             if (r && typeof r.gh === 'number' && typeof r.ga === 'number'){
               out.played.push({ comp:'liga', emoji:'🇪🇸',
                 home:home, away:away,
-                gh:r.gh, ga:r.ga, label:'J'+j });
+                gh:r.gh, ga:r.ga, label:'J'+j,
+                uid:'liga-'+j+'-'+i,
+                events:r.events||[], mvp:r.mvp||'', mvpTeam:r.mvpTeam||'' });
             } else {
               out.pending.push({ comp:'liga', emoji:'🇪🇸',
                 home:home, away:away, label:'J'+j });
@@ -35778,7 +35871,9 @@ Tottenham
           var ga = (p.ga != null) ? p.ga : (p.scoreA != null ? p.scoreA : null);
           if (typeof gh === 'number' && typeof ga === 'number'){
             out.played.push({ comp:'copa', emoji:'👑',
-              home:h, away:a, gh:gh, ga:ga, label:rname });
+              home:h, away:a, gh:gh, ga:ga, label:rname,
+              uid:'copa-'+ri+'-'+(p.id||(h+'-'+a)),
+              events:p.events||[], mvp:p.mvp||'', mvpTeam:p.mvpTeam||'' });
           } else {
             out.pending.push({ comp:'copa', emoji:'👑',
               home:h, away:a, label:rname });
@@ -35819,7 +35914,9 @@ Tottenham
             var ga = (p.ga != null) ? p.ga : (p.scoreA != null ? p.scoreA : null);
             if (typeof gh === 'number' && typeof ga === 'number'){
               out.played.push({ comp:comp, emoji:meta.emoji,
-                home:h, away:a, gh:gh, ga:ga, label:rname });
+                home:h, away:a, gh:gh, ga:ga, label:rname,
+                uid:comp+'-'+ri+'-'+(p.id||(h+'-'+a)),
+                events:p.events||[], mvp:p.mvp||'', mvpTeam:p.mvpTeam||'' });
             } else {
               out.pending.push({ comp:comp, emoji:meta.emoji,
                 home:h, away:a, label:rname });
@@ -35831,13 +35928,116 @@ Tottenham
     });
   });
 
-  /* Mundial de Selecciones (donde juega Francia). El proyecto usa
-     `wc_state_v1` para Wild Card y otros stores para el Mundial.
-     Probamos varias keys y rondas hasta encontrar algo legible. */
+  /* Mundial de Selecciones (donde juega Francia). Tres fuentes:
+       1. Cache `_TOUR_CACHE` / `_tourLoadCachedSync('sfn1'..'sfn10')`
+          con `format === 'mundial-48'`. Es el formato canónico que
+          usan los Mundiales actuales: grupos en `groupFixtures[gIdx]`
+          + `groupResults[gIdx][jor][mi]`, KO en `koBracket[round]` +
+          `results['ko_<round>_<pairIdx>']`. Aquí están los partidos
+          que el usuario juega desde la card del hub (cal-sel*).
+       2. Legacy stores (`wc_state_v1`, `mundial_state_v1`, …) que
+          escaneamos por compat con saves antiguos.
+     2026-05-24: añadido (1) para que los partidos de Mundial Grupo
+     y KO que el usuario juega como Francia aparezcan en PARTIDOS
+     TEMPORADA — antes el colector solo leía los legacy y el
+     dropdown se quedaba en "Aún no se ha jugado ningún partido". */
+  function _collectMundial48(aliases){
+    var out = { pending:[], played:[] };
+    var seenCfg = {};
+    function _walkCfg(tourId, cfg){
+      if (!cfg || cfg.format !== 'mundial-48') return;
+      if (!Array.isArray(cfg.teams) || !cfg.teams.length) return;
+      if (seenCfg[tourId]) return; seenCfg[tourId] = 1;
+      var pg = (cfg.formatConfig && cfg.formatConfig.perGroup) || 4;
+      var teams = cfg.teams || [];
+      /* ── Fase de grupos ─────────────────────────────────── */
+      var gFix = cfg.groupFixtures || [];
+      var gRes = cfg.groupResults || [];
+      for (var gi = 0; gi < gFix.length; gi++){
+        var fixs = gFix[gi]; if (!Array.isArray(fixs)) continue;
+        var slice = teams.slice(gi*pg, gi*pg + pg);
+        var grRes = gRes[gi] || [];
+        for (var jj = 0; jj < fixs.length; jj++){
+          var matchups = fixs[jj]; if (!Array.isArray(matchups)) continue;
+          for (var mi = 0; mi < matchups.length; mi++){
+            var mm = matchups[mi]; if (!mm) continue;
+            var hT = slice[mm.home], aT = slice[mm.away];
+            if (!hT || !aT) continue;
+            var hN = hT.name || '', aN = aT.name || '';
+            if (!hN || hN === 'PENDIENTE' || !aN || aN === 'PENDIENTE') continue;
+            if (!_match(hN, aliases) && !_match(aN, aliases)) continue;
+            var rr = (grRes[jj] && grRes[jj][mi]) || null;
+            var played = !!(rr && (rr.played || rr.done));
+            var uidBase = String(tourId) + '-g' + gi + '-' + jj + '-' + mi;
+            if (played){
+              out.played.push({ comp:'sel', emoji:'🌍',
+                home:hN, away:aN,
+                gh:(rr.a|0), ga:(rr.b|0),
+                label:'Grupo · J'+(jj+1),
+                uid:uidBase,
+                events:rr.events||[], mvp:rr.mvp||'', mvpTeam:rr.mvpTeam||'' });
+            } else {
+              out.pending.push({ comp:'sel', emoji:'🌍',
+                home:hN, away:aN, label:'Grupo · J'+(jj+1) });
+            }
+          }
+        }
+      }
+      /* ── Rondas KO (Dieciseisavos → Final) ──────────────── */
+      var koLabels = ['Dieciseisavos','Octavos','Cuartos','Semis','Final'];
+      var bracketAll = cfg.koBracket || cfg.bracket || [];
+      var kRes = (cfg.results || {});
+      for (var ri = 0; ri < bracketAll.length; ri++){
+        var br = bracketAll[ri]; if (!Array.isArray(br) || !br.length) continue;
+        var nPairs = Math.floor(br.length / 2);
+        for (var pi = 0; pi < nPairs; pi++){
+          var hKo = br[pi*2], aKo = br[pi*2+1];
+          if (!hKo || !aKo) continue;
+          var hN2 = hKo.name || '', aN2 = aKo.name || '';
+          if (!hN2 || hN2 === 'PENDIENTE' || !aN2 || aN2 === 'PENDIENTE') continue;
+          if (!_match(hN2, aliases) && !_match(aN2, aliases)) continue;
+          var mk = 'ko_' + ri + '_' + pi;
+          var kr = kRes[mk];
+          var lbl = koLabels[ri] || ('Ronda ' + (ri+1));
+          var uidK = String(tourId) + '-' + mk;
+          if (kr && (kr.played || kr.done)){
+            out.played.push({ comp:'sel', emoji:'🌍',
+              home:hN2, away:aN2,
+              gh:(kr.a|0), ga:(kr.b|0),
+              label:lbl, uid:uidK,
+              events:kr.events||[], mvp:kr.mvp||'', mvpTeam:kr.mvpTeam||'' });
+          } else {
+            out.pending.push({ comp:'sel', emoji:'🌍',
+              home:hN2, away:aN2, label:lbl });
+          }
+        }
+      }
+    }
+    try {
+      var cache = window._TOUR_CACHE || {};
+      for (var k in cache){ _walkCfg(k, cache[k]); }
+    } catch(_){}
+    /* Fallback sync por localStorage para sfn slots no hidratados aún
+       (el cache puede estar frío al cargar el hub antes de visitar la
+       pantalla del Mundial). */
+    try {
+      if (typeof window._tourLoadCachedSync === 'function'){
+        var SFN = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
+        for (var s = 0; s < SFN.length; s++){
+          try {
+            var sc = window._tourLoadCachedSync(SFN[s]);
+            if (sc) _walkCfg(SFN[s], sc);
+          } catch(_){}
+        }
+      }
+    } catch(_){}
+    return out;
+  }
   _COMPS.push({
     id:'sel', label:'Selecciones', emoji:'🌍',
     collect:function(aliases){
-      var out = { pending:[], played:[] };
+      var out = _collectMundial48(aliases);
+      /* Legacy stores — escaneo por compat con saves antiguos. */
       var keys = ['wc_state_v1','mundial_state_v1','mundialito_state_v1',
                   'seleccion_state_v1','selecciones_state_v1'];
       keys.forEach(function(k){
@@ -35851,7 +36051,7 @@ Tottenham
           var rname = (rd && (rd.name || rd.label)) || ('R'+(ri+1));
           var pairs = (rd && Array.isArray(rd.pairs)) ? rd.pairs
                      : (rd && Array.isArray(rd.matches)) ? rd.matches : [];
-          pairs.forEach(function(p){
+          pairs.forEach(function(p, pi){
             if (!p) return;
             var h = p.home || p.l || p.a;
             var a = p.away || p.v || p.b;
@@ -35861,7 +36061,9 @@ Tottenham
             var ga = (p.ga != null) ? p.ga : (p.scoreA != null ? p.scoreA : null);
             if (typeof gh === 'number' && typeof ga === 'number'){
               out.played.push({ comp:'sel', emoji:'🌍',
-                home:h, away:a, gh:gh, ga:ga, label:rname });
+                home:h, away:a, gh:gh, ga:ga, label:rname,
+                uid:'sel-legacy-'+k+'-'+ri+'-'+pi,
+                events:p.events||[], mvp:p.mvp||'', mvpTeam:p.mvpTeam||'' });
             } else {
               out.pending.push({ comp:'sel', emoji:'🌍',
                 home:h, away:a, label:rname });
@@ -35903,29 +36105,98 @@ Tottenham
     return out;
   }
 
-  function _renderRow(m, played){
-    var sc = '';
-    if (played){
-      var gh = m.gh, ga = m.ga;
-      var cls = (gh === ga) ? 'draw'
-              : (gh > ga ? 'win' : 'loss');
-      /* La clase win/loss se refiere al RESULTADO crudo (no a quién
-         es nuestro equipo) — para que el color refleje el marcador,
-         lo invertimos solo cuando NUESTRO equipo es visitante. */
-      var hubName = _hubName();
-      var ourHome = _match(m.home, _aliases(hubName)) ||
-                    _match(m.home, ['francia','france']);
-      var ourAway = _match(m.away, _aliases(hubName)) ||
-                    _match(m.away, ['francia','france']);
-      if (gh !== ga && ourAway && !ourHome){
-        cls = (gh > ga ? 'loss' : 'win');
-      }
-      sc = '<span class="fr-score ' + cls + '">'
-         + _esc(gh) + '-' + _esc(ga)
-         + '</span>';
-    } else {
-      sc = '<span class="fr-tag">' + _esc(m.label || '') + '</span>';
+  /* Mapas de etiqueta / color por comp — clonan los del histórico
+     derbys (`s-munich-derby-season`) para que la card del dropdown
+     PARTIDOS TEMPORADA tenga EL MISMO look que la foto 4 del usuario
+     (cabecera comp con borde de color + body team-score-team).
+     2026-05-24. */
+  var _MFC_LABEL = {
+    liga:'Liga EA Sports', copa:'Copa del Rey', sc:'Supercopa España',
+    ucl:'Champions League', uel:'Europa League', uecl:'Conference League',
+    recopa:'Recopa Europa', usc:'Supercopa Europa', inter:'Intercontinental',
+    superliga:'Superliga', amistoso:'Amistoso', torneo:'Torneo Verano',
+    sel:'Selecciones'
+  };
+  var _MFC_COLOR = {
+    liga:'#22c55e', copa:'#e07000', sc:'#f0c040',
+    ucl:'#3160ff', uel:'#ff8214', uecl:'#3cc878',
+    recopa:'#c01a1a', usc:'#c0c0c0', inter:'#ff9020',
+    superliga:'#b040ff', amistoso:'#9fdcff', torneo:'#f0c040',
+    sel:'#0078c8'
+  };
+  function _hasLeadingIcon(s){
+    if (!s) return false;
+    var first = String(s).trim().charAt(0);
+    if (!first) return false;
+    return !/[A-Za-zÀ-ɏ]/.test(first);
+  }
+  function _teamWithIcon(name){
+    var raw = String(name || '?');
+    var ico = '';
+    if (!_hasLeadingIcon(raw) && typeof window.humanIcon === 'function'){
+      try { var h = window.humanIcon(raw); if (h) ico = h.replace(/ /g,''); } catch(_){}
     }
+    return { name: raw, ico: ico };
+  }
+  function _outcomeCls(m){
+    if (typeof m.gh !== 'number' || typeof m.ga !== 'number') return '';
+    var hubName = _hubName();
+    var ourHome = _match(m.home, _aliases(hubName)) ||
+                  _match(m.home, ['francia','france']);
+    var ourAway = _match(m.away, _aliases(hubName)) ||
+                  _match(m.away, ['francia','france']);
+    if (m.gh === m.ga) return 'draw';
+    var homeWin = m.gh > m.ga;
+    if (ourHome && !ourAway) return homeWin ? 'win' : 'loss';
+    if (ourAway && !ourHome) return homeWin ? 'loss' : 'win';
+    return homeWin ? 'win' : 'loss';
+  }
+  function _renderPlayedCard(m){
+    var cls   = _outcomeCls(m);
+    var color = _MFC_COLOR[m.comp] || '#9fdcff';
+    var lbl   = _MFC_LABEL[m.comp] || (m.label || '');
+    var ico   = m.emoji || '🌍';
+    var jorPretty = String(m.label || '').trim();
+    var hT = _teamWithIcon(m.home);
+    var aT = _teamWithIcon(m.away);
+    var localHtml = _esc(_short(hT.name))
+                  + (hT.ico ? ' <span class="mfc-hi">' + hT.ico + '</span>' : '');
+    var visitHtml = (aT.ico ? '<span class="mfc-hi">' + aT.ico + '</span> ' : '')
+                  + _esc(_short(aT.name));
+    var actaHtml = '';
+    if (typeof window._eurFaseRenderActaPanel === 'function'
+        && Array.isArray(m.events) && m.events.length){
+      var uid = 'mfc-acta-' + String(m.uid || (m.comp+'-'+m.home+'-'+m.away))
+                  .replace(/[^A-Za-z0-9_-]/g,'_');
+      try {
+        actaHtml = window._eurFaseRenderActaPanel({
+          home: m.home, away: m.away,
+          events: m.events, mvp: m.mvp || '', mvpTeam: m.mvpTeam || ''
+        }, uid);
+      } catch(_){}
+    }
+    var styleAttr = 'border-color:' + color + ';box-shadow:0 0 12px ' + color + '30;';
+    return ''
+      + '<div class="munich-fix-card ' + cls + '" style="' + styleAttr + '">'
+      +   '<div class="mfc-top">'
+      +     '<span class="mfc-comp-ico">' + _esc(ico) + '</span>'
+      +     '<span class="mfc-comp-label" style="color:' + color + ';">' + _esc(lbl) + '</span>'
+      +     (jorPretty
+            ? '<span class="mfc-comp-sep">·</span><span class="mfc-comp-jor">' + _esc(jorPretty) + '</span>'
+            : '')
+      +   '</div>'
+      +   '<div class="mfc-body">'
+      +     '<span class="mfc-team local">' + localHtml + '</span>'
+      +     '<span class="mfc-score ' + cls + '">' + _esc(m.gh) + '–' + _esc(m.ga) + '</span>'
+      +     '<span class="mfc-team visit">' + visitHtml + '</span>'
+      +   '</div>'
+      +   actaHtml
+      + '</div>';
+  }
+  function _renderRow(m, played){
+    if (played) return _renderPlayedCard(m);
+    /* Pendiente — fila pequeña (sin cambios, formato pre-existente). */
+    var sc = '<span class="fr-tag">' + _esc(m.label || '') + '</span>';
     return ''
       + '<div class="munich-fix-row">'
       +   '<span class="fr-comp">' + _esc(m.emoji || '') + '</span>'

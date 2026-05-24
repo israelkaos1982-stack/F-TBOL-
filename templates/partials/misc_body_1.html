@@ -10193,51 +10193,144 @@ window._showSimProgress = function(opts, onDone){
   background:linear-gradient(180deg,rgba(40,100,210,.08),rgba(2,10,30,.5));
 }
 #s-mundial .tour-jor.is-past .tour-jor-h{color:#7fb0ff;}
-/* Tarjeta de partido — formato grande. */
+/* Tarjeta de partido — formato grande tipo FOTO 2 (UCL eliminatoria).
+   Escudo arriba · nombre debajo · caja central con marcador + badge.
+   2026-05-24: aplicado a Dieciseisavos/Octavos/Cuartos/Semis/Final
+   del Mundial 2032. */
+#s-mundial .tour-bracket-list{gap:12px;}
 #s-mundial .tour-match{
   background:linear-gradient(165deg,#071c3e 0%,#0d2f63 60%,#05132e 100%);
   border:1.5px solid rgba(70,140,235,.55);
-  border-radius:12px;
-  padding:12px 10px 10px;
-  box-shadow:0 0 12px rgba(40,90,200,.25),inset 0 0 14px rgba(20,60,150,.20);
+  border-radius:14px;
+  padding:14px 12px 12px;
+  box-shadow:0 0 14px rgba(40,90,200,.28),inset 0 0 14px rgba(20,60,150,.18);
+  grid-template-columns:1fr auto 1fr;
+  gap:10px;align-items:center;
 }
+/* Tarjeta CON HUMANO: borde rosa-magenta con glow pulsante (foto 2). */
 #s-mundial .tour-match.tour-match-has-human{
-  border:2px solid #f0c040;
-  box-shadow:0 0 16px rgba(240,192,64,.5),inset 0 0 8px rgba(240,192,64,.12);
+  border:2px solid #ff3d8a;
+  background:linear-gradient(165deg,#1a0820 0%,#2a0a3e 55%,#1a0420 100%);
+  box-shadow:0 0 22px rgba(255,61,138,.55),
+             0 0 48px rgba(255,61,138,.22),
+             inset 0 0 12px rgba(255,80,150,.14);
+  animation:mundialHumanPulse 2.2s ease-in-out infinite;
+}
+@keyframes mundialHumanPulse{
+  0%,100%{box-shadow:0 0 20px rgba(255,61,138,.5),0 0 42px rgba(255,61,138,.20),inset 0 0 10px rgba(255,80,150,.12);border-color:#ff3d8a;}
+  50%   {box-shadow:0 0 28px rgba(255,90,170,.85),0 0 60px rgba(255,90,170,.35),inset 0 0 14px rgba(255,120,180,.22);border-color:#ff7ab0;}
+}
+/* Tarjeta IA-vs-IA: borde azul neutro, sin pulso. */
+#s-mundial .tour-match.tour-match-ia{
+  border:1.5px solid rgba(95,150,235,.45);
+  background:linear-gradient(165deg,#06152d 0%,#0a2350 60%,#04112a 100%);
+  box-shadow:0 0 10px rgba(40,90,200,.22),inset 0 0 12px rgba(20,60,150,.16);
 }
 #s-mundial .tour-match.tour-match-pickable:hover{
   background:linear-gradient(165deg,#0a244e 0%,#103c7c 60%,#071a3a 100%);
 }
 #s-mundial .tour-match.tour-match-has-human.tour-match-pickable:hover{
-  box-shadow:0 0 22px rgba(240,192,64,.7),inset 0 0 10px rgba(240,192,64,.2);
+  box-shadow:0 0 30px rgba(255,90,170,.9),0 0 60px rgba(255,90,170,.40),inset 0 0 14px rgba(255,120,180,.25);
 }
+/* Equipos: escudo GRANDE arriba · nombre debajo (col layout). */
 #s-mundial .tour-bracket-team{
-  flex-direction:column;gap:5px;text-align:center;justify-content:flex-start;
+  display:flex;flex-direction:column;gap:7px;
+  text-align:center;justify-content:flex-start;align-items:center;
+  min-width:0;padding:2px 4px;
 }
 #s-mundial .tour-bracket-team:last-child{justify-content:flex-start;text-align:center;}
-#s-mundial .tour-bracket-team img{width:44px;height:44px;}
-#s-mundial .tour-bracket-team span{white-space:normal;font-size:12px;line-height:1.15;}
-#s-mundial .tour-bracket-team.is-winner span{color:#ffd24a;text-shadow:0 0 6px rgba(255,210,74,.5);}
-/* Columna central: caja de marcador + badge FIN/PREVIA apilados. */
-#s-mundial .tour-score-wrap{
-  flex-direction:column;gap:3px;background:rgba(0,0,0,.55);
-  border:1px solid rgba(120,170,255,.35);border-radius:8px;padding:5px 12px;
+#s-mundial .tour-bracket-team img{
+  width:60px;height:60px;object-fit:contain;
+  filter:drop-shadow(0 2px 6px rgba(0,0,0,.5));
 }
-#s-mundial .tour-score-line{display:inline-flex;align-items:center;gap:6px;}
-#s-mundial .tour-score{font-size:26px;color:#bcd6ff;}
+#s-mundial .tour-bracket-team span{
+  white-space:normal;font-family:Oswald,sans-serif;
+  font-size:13px;font-weight:600;line-height:1.15;color:#e8efff;
+  letter-spacing:.5px;
+}
+#s-mundial .tour-match.tour-match-has-human .tour-bracket-team span{
+  color:#ffd9ec;text-shadow:0 0 8px rgba(255,90,170,.4);
+}
+#s-mundial .tour-bracket-team.is-winner span{color:#ffd24a;text-shadow:0 0 6px rgba(255,210,74,.5);}
+/* Columna central: caja de marcador + badge FIN/PREVIA/SIMULAR. */
+#s-mundial .tour-score-wrap{
+  display:flex;flex-direction:column;gap:6px;
+  background:rgba(0,0,0,.6);
+  border:1.5px solid rgba(120,170,255,.4);border-radius:10px;
+  padding:8px 14px;min-width:88px;align-items:center;
+}
+#s-mundial .tour-match.tour-match-has-human .tour-score-wrap{
+  border-color:rgba(255,120,180,.55);
+  background:rgba(20,4,16,.78);
+}
+#s-mundial .tour-score-line{display:inline-flex;align-items:center;gap:8px;}
+#s-mundial .tour-score{
+  font-family:'Bebas Neue',sans-serif;font-size:30px;
+  letter-spacing:1.5px;color:#bcd6ff;line-height:1;
+}
 #s-mundial .tour-score-win{color:#ffd24a;text-shadow:0 0 10px rgba(255,210,74,.6);}
-#s-mundial .tour-score-empty{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;color:rgba(170,200,255,.4);}
+#s-mundial .tour-score-empty{
+  font-family:'Bebas Neue',sans-serif;font-size:24px;
+  letter-spacing:4px;color:rgba(170,200,255,.45);
+}
 #s-mundial .tour-match .vs{color:rgba(170,200,255,.6);}
 #s-mundial .tour-fin-badge{
-  display:inline-flex;align-items:center;gap:4px;
-  font-family:Oswald,sans-serif;font-size:9px;font-weight:700;letter-spacing:1.5px;
-  border-radius:5px;padding:2px 8px;
+  display:inline-flex;align-items:center;gap:5px;
+  font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.6px;
+  border-radius:7px;padding:5px 12px;
 }
 #s-mundial .tour-fin-badge.is-fin{
-  color:#bcd6ff;border:1px solid rgba(120,170,255,.45);background:rgba(20,60,150,.4);
+  color:#bcd6ff;border:1px solid rgba(120,170,255,.55);background:rgba(20,60,150,.5);
 }
 #s-mundial .tour-fin-badge.is-previa{
-  color:#f0c040;border:1px solid rgba(240,192,64,.5);background:rgba(240,192,64,.10);
+  color:#ffd9ec;border:1.5px solid #ff3d8a;
+  background:rgba(255,61,138,.18);
+  text-shadow:0 0 8px rgba(255,61,138,.6);
+  box-shadow:0 0 10px rgba(255,61,138,.35),inset 0 0 6px rgba(255,61,138,.18);
+}
+#s-mundial .tour-fin-badge.is-sim{
+  color:#bcd6ff;border:1px solid rgba(120,170,255,.55);
+  background:rgba(20,60,150,.35);
+}
+/* Separador «🤖 PARTIDOS IA VS IA» entre la sección humana y la IA. */
+#s-mundial .tour-mundial-ia-sep{
+  display:flex;align-items:center;gap:10px;
+  margin:6px 2px 2px;
+  font-family:Oswald,sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:2.4px;color:rgba(170,210,255,.85);
+  text-transform:uppercase;
+  text-shadow:0 0 8px rgba(80,140,255,.4);
+}
+#s-mundial .tour-mundial-ia-sep-line{
+  flex:1;height:1px;
+  background:linear-gradient(90deg, transparent, rgba(120,170,255,.5), transparent);
+}
+#s-mundial .tour-mundial-ia-sep-lbl{
+  padding:3px 10px;border:1px solid rgba(120,170,255,.45);
+  background:rgba(20,60,150,.30);border-radius:6px;
+  box-shadow:0 0 10px rgba(80,140,255,.18);
+}
+/* Botón SIMULAR per-match (IA-vs-IA): más visible que el legacy. */
+#s-mundial .tour-sim-ai-btn{
+  background:linear-gradient(145deg,rgba(40,90,200,.45),rgba(20,50,140,.65)) !important;
+  border:1px solid rgba(120,170,255,.55) !important;
+  color:#dbe8ff !important;
+  font-family:Oswald,sans-serif !important;font-size:10px !important;
+  letter-spacing:1.8px !important;padding:4px 14px !important;border-radius:7px !important;
+  text-shadow:0 0 6px rgba(120,170,255,.4);
+  box-shadow:0 0 10px rgba(40,90,200,.25),inset 0 1px 0 rgba(255,255,255,.06);
+}
+#s-mundial .tour-sim-ai-btn:hover{
+  background:linear-gradient(145deg,rgba(60,130,240,.6),rgba(30,70,170,.8)) !important;
+  box-shadow:0 0 16px rgba(80,140,255,.5),inset 0 1px 0 rgba(255,255,255,.10);
+}
+/* Cuando el match tiene humano, el botón SIM IA es más discreto
+   (es un atajo de emergencia, no la acción principal). */
+#s-mundial .tour-match.tour-match-has-human + div .tour-sim-ai-btn{
+  background:rgba(255,255,255,.06) !important;
+  border:1px solid rgba(255,120,180,.40) !important;
+  color:rgba(255,200,220,.85) !important;
+  box-shadow:none;
 }
 </style>
 <button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button>
@@ -17132,8 +17225,46 @@ window._showSimProgress = function(opts, onDone){
       + '<span>PLAYOFFS · '+roundLbl.toUpperCase()+' · '+curT.length+' selecciones</span>'
       + (dt ? '<span style="color:rgba(255,255,255,.6);letter-spacing:.5px;">📅 '+dt+'</span>' : '')
       + '</p>';
-    html += '<div class="tour-bracket-list">';
+    /* Layout estilo FOTO 2 (UCL fase eliminatoria): primero los
+       cruces con humano (borde rosa + glow), separador
+       «PARTIDOS IA VS IA», y debajo los cruces IA-vs-IA cada uno con
+       su propio botón 🤖 SIMULAR. 2026-05-24 (Mundial 2032). */
+    function _koRowHtml(a, b, kKey, kRes, kPlayed, hasHuman, slotI){
+      var kRowCls = kPlayed ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
+      if (hasHuman) kRowCls += ' tour-match-has-human';
+      else kRowCls += ' tour-match-ia';
+      var kAttrs = ' data-tour="'+tourId+'" data-ko-key="'+kKey+'"';
+      if (kPlayed) {
+        var aW = kRes.winner === 'a', bW = kRes.winner === 'b';
+        var sA = '<span class="tour-score'+(aW?' tour-score-win':'')+'">'+kRes.a+'</span>';
+        var sB = '<span class="tour-score'+(bW?' tour-score-win':'')+'">'+kRes.b+'</span>';
+        var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
+        return '<div class="'+kRowCls+'"'+kAttrs+'>'
+          + _bracketTeamHtml(a, tourId, slotI, aW, bW)
+          + '<span class="vs tour-score-wrap"><span class="tour-score-line">'+sA+' - '+sB+pensTxt+'</span><span class="tour-fin-badge is-fin">🏁 FIN</span></span>'
+          + _bracketTeamHtml(b, tourId, slotI+1, bW, aW)
+          + '</div>'
+          + _tourActaPanelHtml(tourId, kKey, kRes);
+      }
+      var badgeCls = hasHuman ? 'is-previa' : 'is-sim';
+      var badgeTxt = hasHuman ? '📋 PREVIA' : '🤖 SIMULAR';
+      var row = '<div class="'+kRowCls+'"'+kAttrs+'>'
+        + _bracketTeamHtml(a, tourId, slotI)
+        + '<span class="vs tour-score-wrap"><span class="tour-score-line tour-score-empty">– – –</span><span class="tour-fin-badge '+badgeCls+'">'+badgeTxt+'</span></span>'
+        + _bracketTeamHtml(b, tourId, slotI+1)
+        + '</div>';
+      if (hasHuman) {
+        row += _tourSimAiBtnHtml(tourId, 'ko', kKey);
+      } else {
+        row += _tourSimAiBtnHtml(tourId, 'ko', kKey, {
+          label:'🤖 SIMULAR PARTIDO', noConfirm:true, cls:'tour-sim-ai-btn-solo'
+        });
+      }
+      return row;
+    }
+    var humanRows = '', iaRows = '';
     var koAllPlayed = true, koPairs = 0;
+    var hasAnyHuman = false, hasAnyIa = false;
     for (var i = 0; i < curT.length; i += 2) {
       var a = curT[i], b = curT[i+1];
       if (!b) break;
@@ -17141,30 +17272,22 @@ window._showSimProgress = function(opts, onDone){
       var kRes = cfg.results[kKey];
       var kPlayed = !!(kRes && kRes.played);
       if (!kPlayed) koAllPlayed = false;
-      var kRowCls = kPlayed ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
-      if (_tourPairHasHuman(curT, i)) kRowCls += ' tour-match-has-human';
-      var kAttrs = ' data-tour="'+tourId+'" data-ko-key="'+kKey+'"';
-      if (kPlayed) {
-        var aW = kRes.winner === 'a', bW = kRes.winner === 'b';
-        var sA = '<span class="tour-score'+(aW?' tour-score-win':'')+'">'+kRes.a+'</span>';
-        var sB = '<span class="tour-score'+(bW?' tour-score-win':'')+'">'+kRes.b+'</span>';
-        var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
-        html += '<div class="'+kRowCls+'"'+kAttrs+'>'
-          + _bracketTeamHtml(a, tourId, i, aW, bW)
-          + '<span class="vs tour-score-wrap"><span class="tour-score-line">'+sA+' - '+sB+pensTxt+'</span><span class="tour-fin-badge is-fin">🏁 FIN</span></span>'
-          + _bracketTeamHtml(b, tourId, i+1, bW, aW)
-          + '</div>';
-        html += _tourActaPanelHtml(tourId, kKey, kRes);
-      } else {
-        html += '<div class="'+kRowCls+'"'+kAttrs+'>'
-          + _bracketTeamHtml(a, tourId, i)
-          + '<span class="vs tour-score-wrap"><span class="tour-score-line tour-score-empty">– – –</span><span class="tour-fin-badge is-previa">📋 PREVIA</span></span>'
-          + _bracketTeamHtml(b, tourId, i+1)
-          + '</div>';
-        if (_tourPairHasHuman(curT, i)) html += _tourSimAiBtnHtml(tourId, 'ko', kKey);
-      }
+      var pairHuman = _tourPairHasHuman(curT, i);
+      var rowHtml = _koRowHtml(a, b, kKey, kRes, kPlayed, pairHuman, i);
+      if (pairHuman){ humanRows += rowHtml; hasAnyHuman = true; }
+      else          { iaRows    += rowHtml; hasAnyIa    = true; }
       koPairs++;
     }
+    html += '<div class="tour-bracket-list">';
+    html += humanRows;
+    if (hasAnyHuman && hasAnyIa) {
+      html += '<div class="tour-mundial-ia-sep">'
+        +     '<span class="tour-mundial-ia-sep-line"></span>'
+        +     '<span class="tour-mundial-ia-sep-lbl">🤖 PARTIDOS IA VS IA</span>'
+        +     '<span class="tour-mundial-ia-sep-line"></span>'
+        + '</div>';
+    }
+    html += iaRows;
     html += '</div>';
     if (curT.length > 1 && isCurrent) {
       if (!koAllPlayed && koPairs > 0) {
@@ -17367,12 +17490,16 @@ window._showSimProgress = function(opts, onDone){
      override admin del torneo entero. Petición usuario 2026-05-09
      punto 3: "haz que pueda simular humano como IA los partidos de
      las rondas de los torneos como se quiera, individual". */
-  function _tourSimAiBtnHtml(tourId, kind, matchKey) {
+  function _tourSimAiBtnHtml(tourId, kind, matchKey, opts) {
+    var o = opts || {};
+    var lbl = o.label || '🤖 SIM IA';
+    var extraCls = o.cls ? ' ' + o.cls : '';
+    var noConf = o.noConfirm ? ' data-no-confirm="1"' : '';
     return '<div style="display:flex;justify-content:center;margin-top:-2px;margin-bottom:6px;">'
-      + '<button type="button" class="tour-sim-ai-btn" '
-      + 'data-tour="'+tourId+'" data-kind="'+kind+'" data-key="'+matchKey+'" '
+      + '<button type="button" class="tour-sim-ai-btn'+extraCls+'" '
+      + 'data-tour="'+tourId+'" data-kind="'+kind+'" data-key="'+matchKey+'"'+noConf+' '
       + 'style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.30);color:rgba(255,255,255,.80);border-radius:6px;padding:3px 10px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
-      + '🤖 SIM IA</button></div>';
+      + lbl + '</button></div>';
   }
 
   function _championBoxHtml(champTeam) {
@@ -18617,8 +18744,12 @@ window._showSimProgress = function(opts, onDone){
       var aitid = simAiBtn.getAttribute('data-tour');
       var aikind = simAiBtn.getAttribute('data-kind');
       var aikey  = simAiBtn.getAttribute('data-key');
+      var aiNoConf = simAiBtn.getAttribute('data-no-confirm') === '1';
       if (!aitid || TOUR_IDS.indexOf(aitid) === -1) return;
-      if (!confirm('¿Simular este partido con la IA aunque haya humano? El resultado será automático.')) {
+      /* IA-vs-IA puro (data-no-confirm="1"): sim directo, sin prompt.
+         Para humanos sí pedimos confirmación porque el resultado
+         puede no ser el que el jugador quería al jugarlo en vivo. */
+      if (!aiNoConf && !confirm('¿Simular este partido con la IA aunque haya humano? El resultado será automático.')) {
         ev.stopPropagation();
         return;
       }

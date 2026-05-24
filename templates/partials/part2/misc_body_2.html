@@ -21675,8 +21675,11 @@ window.goLiveMatches = function() {
         '#isramax-ov .isr-empty{padding:24px 14px;text-align:center;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;font-style:italic;}' +
         /* Match pick (lista de partidos) */
         '#isramax-ov .isr-pick-comp-hdr{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.55);text-transform:uppercase;padding:14px 4px 6px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:6px;}' +
-        '#isramax-ov .isr-pick-card{display:grid;grid-template-columns:50px 1fr;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .15s;}' +
+        '#isramax-ov .isr-pick-card{display:grid;grid-template-columns:50px 1fr auto;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .15s;}' +
         '#isramax-ov .isr-pick-card:hover{border-color:rgba(96,180,255,.5);background:rgba(96,180,255,.08);}' +
+        '#isramax-ov .isr-pick-edit{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.75);font-size:14px;width:30px;height:30px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:all .15s;padding:0;line-height:1;}' +
+        '#isramax-ov .isr-pick-edit:hover{background:rgba(96,180,255,.18);border-color:rgba(96,180,255,.55);color:#fff;}' +
+        '#isramax-ov .isr-pick-edit:active{transform:scale(.92);}' +
         '#isramax-ov .isr-pick-jor{font-family:"Bebas Neue",sans-serif;font-size:18px;color:#9fdcff;text-align:center;}' +
         '#isramax-ov .isr-pick-teams{display:flex;align-items:center;gap:6px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:#fff;flex-wrap:wrap;}' +
         '#isramax-ov .isr-pick-vs{color:rgba(255,255,255,.40);font-family:Oswald,sans-serif;font-size:11px;}' +
@@ -21716,7 +21719,18 @@ window.goLiveMatches = function() {
         '#isramax-ov .isr-bet-actions{display:flex;gap:6px;margin:-2px 0 8px;}' +
         '#isramax-ov .isr-bet-act{flex:1;padding:6px;border-radius:6px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;font-weight:700;cursor:pointer;border:1px solid;background:rgba(255,255,255,.04);-webkit-tap-highlight-color:transparent;}' +
         '#isramax-ov .isr-bet-act.won{color:#5fe08a;border-color:rgba(95,224,138,.45);}' +
-        '#isramax-ov .isr-bet-act.lost{color:#ff8080;border-color:rgba(255,128,128,.40);}';
+        '#isramax-ov .isr-bet-act.lost{color:#ff8080;border-color:rgba(255,128,128,.40);}' +
+        /* Editor de cuotas (PIN 7477) */
+        '#isramax-ov .isr-edit-info{padding:10px 12px;margin:8px 0 14px;background:rgba(127,208,255,.08);border:1px solid rgba(127,208,255,.25);border-radius:8px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.78);line-height:1.4;}' +
+        '#isramax-ov .isr-edit-mk{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:10px 12px;margin-bottom:10px;}' +
+        '#isramax-ov .isr-edit-mk-hdr{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.75);text-transform:uppercase;padding-bottom:6px;border-bottom:1px dashed rgba(255,255,255,.10);margin-bottom:8px;}' +
+        '#isramax-ov .isr-edit-row{display:grid;grid-template-columns:1fr 90px;align-items:center;gap:10px;padding:5px 0;}' +
+        '#isramax-ov .isr-edit-row label{font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}' +
+        '#isramax-ov .isr-edit-row input{background:rgba(0,0,0,.40);border:1px solid rgba(255,255,255,.20);border-radius:6px;padding:6px 8px;color:#fff;font-family:"Bebas Neue",sans-serif;font-size:16px;text-align:center;letter-spacing:1px;}' +
+        '#isramax-ov .isr-edit-row input:focus{outline:none;border-color:#9fdcff;box-shadow:0 0 8px rgba(96,180,255,.30);}' +
+        '#isramax-ov .isr-edit-actions{display:flex;gap:8px;align-items:center;margin-top:10px;}' +
+        '#isramax-ov .isr-edit-actions .isr-btn{flex:0 0 auto;}' +
+        '#isramax-ov .isr-edit-actions .isr-add-bet{flex:1;margin-bottom:0;}';
       document.head.appendChild(css);
     }
     return wrap;
@@ -21970,13 +21984,15 @@ window.goLiveMatches = function() {
           var hi2 = (typeof window.humanIcon === 'function' ? (window.humanIcon(it.away)||'').replace(/ /g,'') : '');
           var jLbl = it.j ? 'J' + it.j : '';
           var mk = _isramaxMatchKey(it);
-          html += '<div class="isr-pick-card" onclick="window._isramaxPickMatch&&window._isramaxPickMatch(\'' + _escHtml(mk).replace(/'/g,'&#39;') + '\')">'
+          var mkEsc = _escHtml(mk).replace(/'/g,'&#39;');
+          html += '<div class="isr-pick-card" onclick="window._isramaxPickMatch&&window._isramaxPickMatch(\'' + mkEsc + '\')">'
                 +   '<div class="isr-pick-jor">' + jLbl + '</div>'
                 +   '<div class="isr-pick-teams">'
                 +     '<span>' + _escHtml(it.home) + (hi1 ? ' <span class="isr-pick-hi">' + hi1 + '</span>' : '') + '</span>'
                 +     '<span class="isr-pick-vs">vs</span>'
                 +     '<span>' + (hi2 ? '<span class="isr-pick-hi">' + hi2 + '</span> ' : '') + _escHtml(it.away) + '</span>'
                 +   '</div>'
+                +   '<button class="isr-pick-edit" title="Editar cuotas (PIN)" onclick="event.stopPropagation();window._isramaxEditCuotasAsk&&window._isramaxEditCuotasAsk(\'' + mkEsc + '\')">🖍</button>'
                 + '</div>';
         });
       });
@@ -22209,6 +22225,34 @@ window.goLiveMatches = function() {
       tirospuerta: { maslocal:'1.60', masvisit:'1.95' }
     };
   }
+  /* ── Overrides de cuotas por partido (2026-05-24) ─────────────
+     Si el admin (vía PIN 7477 → icono 🖍) edita las cuotas de un
+     partido concreto, se guardan en `d.cuotasOverride[matchKey]` con
+     la misma estructura que devuelve `_isramaxBuildOdds`. El merge
+     respeta la forma { categoria: { campo: '1.85' } } — cualquier
+     campo no especificado cae al default. */
+  function _isramaxApplyOddsOverride(matchKey, baseOdds){
+    if (!matchKey || !baseOdds) return baseOdds;
+    var d = _isramaxLoad();
+    var ov = d.cuotasOverride && d.cuotasOverride[matchKey];
+    if (!ov) return baseOdds;
+    var out = {};
+    Object.keys(baseOdds).forEach(function(cat){
+      var src = baseOdds[cat];
+      if (!src || typeof src !== 'object'){ out[cat] = src; return; }
+      var dst = {};
+      Object.keys(src).forEach(function(k){ dst[k] = src[k]; });
+      if (ov[cat] && typeof ov[cat] === 'object'){
+        Object.keys(ov[cat]).forEach(function(k){ dst[k] = String(ov[cat][k]); });
+      }
+      out[cat] = dst;
+    });
+    return out;
+  }
+  function _isramaxOddsForMatch(m){
+    var base = _isramaxBuildOdds(m.home, m.away);
+    return _isramaxApplyOddsOverride(_isramaxMatchKey(m), base);
+  }
   var _isramaxCurrentMatch = null;
   window._isramaxPickMatch = function(matchKey){
     var all = _isramaxScanDerbys();
@@ -22226,7 +22270,7 @@ window.goLiveMatches = function() {
     var u = _isramaxFindUser(_isramaxSession.userId);
     var hi1 = (typeof window.humanIcon === 'function' ? (window.humanIcon(m.home)||'').replace(/ /g,'') : '');
     var hi2 = (typeof window.humanIcon === 'function' ? (window.humanIcon(m.away)||'').replace(/ /g,'') : '');
-    var od = _isramaxBuildOdds(m.home, m.away);
+    var od = _isramaxOddsForMatch(m);
     var compName = (m.comp && m.comp.name) || 'Partido';
     var jLbl = m.j ? 'Jornada ' + m.j : '';
     function _btn(market, option, label, odd, color){
@@ -22396,6 +22440,173 @@ window.goLiveMatches = function() {
     _isramaxPendingBet = null;
     _isramaxCurrentMatch = null;
     _isramaxRenderDashboard();
+  };
+
+  /* ═══════════════════════════════════════════════════════════════
+     EDITOR DE CUOTAS POR PARTIDO · PIN 7477 (admin, 2026-05-24)
+     ───────────────────────────────────────────────────────────────
+     Cada partido del match-pick lleva un icono 🖍. Al pulsarlo se
+     pide PIN; con 7477 correcto se abre un formulario con todas las
+     cuotas de TODOS los mercados de ese partido editables. Las
+     ediciones se persisten en `d.cuotasOverride[matchKey]` y
+     sobrescriben las cuotas por defecto del Poisson / matriz H2H.
+     ─────────────────────────────────────────────────────────────── */
+  var ISRAMAX_EDIT_PIN = '7477';
+  var _isramaxEditingMatchKey = null;
+
+  function _isramaxFindMatchByKey(matchKey){
+    var all = _isramaxScanDerbys();
+    for (var i=0; i<all.length; i++){
+      if (_isramaxMatchKey(all[i]) === matchKey) return all[i];
+    }
+    return null;
+  }
+
+  window._isramaxEditCuotasAsk = function(matchKey){
+    if (!matchKey) return;
+    _isramaxEditingMatchKey = matchKey;
+    var m = _isramaxFindMatchByKey(matchKey);
+    if (!m){ alert('Partido no encontrado'); return; }
+    var html = ''
+      + '<button class="isr-back" onclick="window._isramaxEditCuotasCancel&&window._isramaxEditCuotasCancel()">◀ Cancelar</button>'
+      + '<h2>🖍 EDITAR CUOTAS</h2>'
+      + '<div class="isr-sub">' + _escHtml(m.home) + ' vs ' + _escHtml(m.away) + '</div>'
+      + '<div class="isr-login-card" style="--isr-c1:#3a3a4a;--isr-c2:#1a1a26;--isr-c3:#7fd0ff;">'
+      +   '<div class="isr-login-icon">🔐</div>'
+      +   '<div class="isr-login-name">PIN ADMIN</div>'
+      +   '<div class="isr-login-team">Acceso al editor de cuotas</div>'
+      +   '<input id="isramax-edit-pin" class="isr-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="••••"/>'
+      +   '<div id="isramax-edit-pin-err" class="isr-pin-err"></div>'
+      +   '<div class="isr-btn-row">'
+      +     '<button class="isr-btn primary" onclick="window._isramaxEditCuotasVerify&&window._isramaxEditCuotasVerify()">🔓 Entrar</button>'
+      +   '</div>'
+      + '</div>';
+    _isramaxRender(html);
+    setTimeout(function(){
+      var inp = document.getElementById('isramax-edit-pin');
+      if (inp){
+        inp.focus();
+        inp.addEventListener('keydown', function(e){
+          if (e.key === 'Enter') window._isramaxEditCuotasVerify && window._isramaxEditCuotasVerify();
+        });
+      }
+    }, 60);
+  };
+
+  window._isramaxEditCuotasCancel = function(){
+    _isramaxEditingMatchKey = null;
+    _isramaxRenderMatchPick();
+  };
+
+  window._isramaxEditCuotasVerify = function(){
+    var inp = document.getElementById('isramax-edit-pin');
+    var err = document.getElementById('isramax-edit-pin-err');
+    if (!inp) return;
+    var pin = String(inp.value||'').trim();
+    if (pin !== ISRAMAX_EDIT_PIN){
+      if (err) err.textContent = '❌ PIN incorrecto';
+      inp.value = '';
+      inp.focus();
+      return;
+    }
+    _isramaxEditCuotasOpen(_isramaxEditingMatchKey);
+  };
+
+  /* Definición de mercados editables. Cada uno con su categoría
+     ('cat' = clave en el objeto odds) y un array de campos:
+     [optionKey, etiqueta]. Las etiquetas usan placeholders {home}/{away}
+     que se sustituyen por los nombres del partido. */
+  var _ISRAMAX_MK_DEF = [
+    { cat:'onex2',      title:'🏆 1X2 GANADOR',          fields:[['home','{home}'],['draw','Empate'],['away','{away}']] },
+    { cat:'doble',      title:'👥 DOBLE OPORTUNIDAD',    fields:[['homeE','{home} o E'],['awayE','{away} o E'],['homeA','{home} o {away}']] },
+    { cat:'goles1p',    title:'⚽ GOLES 1ª PARTE',       fields:[['masm15','Más 1.5'],['masm25','Más 2.5'],['menos15','Menos 1.5'],['menos25','Menos 2.5']] },
+    { cat:'golespart',  title:'⚽ TOTAL GOLES PARTIDO',  fields:[['mas35','Más 3.5'],['mas45','Más 4.5'],['menos35','Menos 3.5'],['menos45','Menos 4.5']] },
+    { cat:'ambosmarcan',title:'⚽ AMBOS MARCAN',         fields:[['si','Sí'],['no','No']] },
+    { cat:'corners',    title:'⛳ CÓRNERS',              fields:[['mas35','Más 3.5'],['menos45','Menos 4.5'],['maslocal','Más {home}'],['masvisit','Más {away}']] },
+    { cat:'tarjetas',   title:'🟨 TARJETAS AMARILLAS',   fields:[['masLow','Más línea baja'],['menosLow','Menos línea baja'],['masHigh','Más línea alta'],['menosHigh','Menos línea alta']] },
+    { cat:'rojas',      title:'🟥 TARJETAS ROJAS',       fields:[['si','Sí hay roja'],['no','No hay roja']] },
+    { cat:'tirospuerta',title:'👟 TIROS A PUERTA',       fields:[['maslocal','Más {home}'],['masvisit','Más {away}']] }
+  ];
+
+  function _isramaxEditCuotasOpen(matchKey){
+    var m = _isramaxFindMatchByKey(matchKey);
+    if (!m){ _isramaxRenderMatchPick(); return; }
+    var od = _isramaxOddsForMatch(m);
+    var html = ''
+      + '<button class="isr-back" onclick="window._isramaxEditCuotasCancel&&window._isramaxEditCuotasCancel()">◀ Cancelar</button>'
+      + '<h2>🖍 EDITAR CUOTAS</h2>'
+      + '<div class="isr-sub">' + _escHtml(m.home) + ' vs ' + _escHtml(m.away) + '</div>'
+      + '<div class="isr-edit-info">Modifica las cuotas y pulsa <b>GUARDAR</b>. Los valores se aplican solo a este partido.</div>';
+    _ISRAMAX_MK_DEF.forEach(function(def){
+      var src = od[def.cat] || {};
+      html += '<div class="isr-edit-mk"><div class="isr-edit-mk-hdr">' + def.title + '</div>';
+      def.fields.forEach(function(f){
+        var key = f[0];
+        var lbl = String(f[1]).replace('{home}', _escHtml(m.home)).replace('{away}', _escHtml(m.away));
+        var val = src[key] != null ? String(src[key]) : '';
+        html += '<div class="isr-edit-row">'
+              +   '<label>' + lbl + '</label>'
+              +   '<input type="number" step="0.01" min="1" data-cat="' + def.cat + '" data-key="' + key + '" value="' + _escHtml(val) + '"/>'
+              + '</div>';
+      });
+      /* Para tarjetas, exponer también las líneas low/high (no son cuotas
+         pero sí parte del mercado y conviene poder ajustarlas). */
+      if (def.cat === 'tarjetas'){
+        var ll = src.lineLow != null ? String(src.lineLow) : '1.5';
+        var lh = src.lineHigh != null ? String(src.lineHigh) : '2.5';
+        html += '<div class="isr-edit-row">'
+              +   '<label>Línea baja</label>'
+              +   '<input type="number" step="0.5" min="0" data-cat="tarjetas" data-key="lineLow" value="' + _escHtml(ll) + '"/>'
+              + '</div>'
+              + '<div class="isr-edit-row">'
+              +   '<label>Línea alta</label>'
+              +   '<input type="number" step="0.5" min="0" data-cat="tarjetas" data-key="lineHigh" value="' + _escHtml(lh) + '"/>'
+              + '</div>';
+      }
+      html += '</div>';
+    });
+    html += '<div class="isr-edit-actions">'
+         +    '<button class="isr-btn ghost" onclick="window._isramaxEditCuotasReset&&window._isramaxEditCuotasReset()">↺ Restaurar defaults</button>'
+         +    '<button class="isr-add-bet" onclick="window._isramaxEditCuotasSave&&window._isramaxEditCuotasSave()">💾 GUARDAR</button>'
+         + '</div>';
+    _isramaxRender(html);
+  }
+
+  window._isramaxEditCuotasSave = function(){
+    var mk = _isramaxEditingMatchKey;
+    if (!mk) return;
+    var inputs = document.querySelectorAll('#isramax-ov-inner input[data-cat][data-key]');
+    if (!inputs.length) return;
+    var ov = {};
+    inputs.forEach(function(inp){
+      var cat = inp.getAttribute('data-cat');
+      var key = inp.getAttribute('data-key');
+      var raw = String(inp.value||'').replace(',','.').trim();
+      if (!cat || !key || !raw) return;
+      var n = parseFloat(raw);
+      if (!isFinite(n) || n <= 0) return;
+      if (!ov[cat]) ov[cat] = {};
+      /* Línea de tarjetas guardada como '1.5' (no se formatea como cuota). */
+      ov[cat][key] = (key === 'lineLow' || key === 'lineHigh') ? n.toFixed(1) : n.toFixed(2);
+    });
+    var d = _isramaxLoad();
+    if (!d.cuotasOverride) d.cuotasOverride = {};
+    d.cuotasOverride[mk] = ov;
+    _isramaxSave(d);
+    _isramaxEditingMatchKey = null;
+    _isramaxRenderMatchPick();
+  };
+
+  window._isramaxEditCuotasReset = function(){
+    var mk = _isramaxEditingMatchKey;
+    if (!mk) return;
+    if (!confirm('¿Restaurar las cuotas por defecto de este partido?')) return;
+    var d = _isramaxLoad();
+    if (d.cuotasOverride && d.cuotasOverride[mk]){
+      delete d.cuotasOverride[mk];
+      _isramaxSave(d);
+    }
+    _isramaxEditCuotasOpen(mk);
   };
 
   /* ═══════════════════════════════════════════════════════════════

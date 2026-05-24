@@ -2553,6 +2553,44 @@ window._showSimProgress = function(opts, onDone){
     background:rgba(255,255,255,.10);color:#fff;border:1px solid rgba(255,255,255,.3);
     box-shadow:none;
   }
+  /* ── Botón videojuego "PAGAR SIMULACIÓN 50🪙" (2026-05-24) ──
+     Vive debajo del PREVIA·JUGAR en _cardSelMatch / _cardMatch.
+     Cobra del presupuesto del hub (Liverpool, _bayernHudGet) y
+     auto-simula el partido con el motor 4-ejes. */
+  #ps-stage .ps-btn-pay{
+    display:inline-flex;align-items:center;justify-content:center;gap:7px;
+    margin-top:10px;border:1px solid rgba(96,200,255,.55);border-radius:10px;
+    cursor:pointer;padding:11px 22px;
+    font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2.2px;font-weight:700;
+    color:#0a1622;text-transform:uppercase;
+    background:linear-gradient(135deg,#9ee9ff 0%,#3eb8f7 55%,#1a7ec8 100%);
+    box-shadow:0 4px 14px rgba(60,180,250,.45),inset 0 1px 0 rgba(255,255,255,.55);
+    text-shadow:0 1px 0 rgba(255,255,255,.35);
+    -webkit-tap-highlight-color:transparent;
+    transition:transform .12s ease,box-shadow .12s ease,filter .12s ease;
+  }
+  #ps-stage .ps-btn-pay:hover{
+    transform:translateY(-1px);
+    box-shadow:0 6px 18px rgba(60,180,250,.6),inset 0 1px 0 rgba(255,255,255,.6);
+    filter:brightness(1.06);
+  }
+  #ps-stage .ps-btn-pay:active{transform:translateY(0);filter:brightness(.95);}
+  #ps-stage .ps-btn-pay .pay-coin{
+    display:inline-flex;align-items:center;gap:3px;
+    background:rgba(255,225,80,.92);color:#3a2400;
+    border-radius:999px;padding:2px 9px;font-size:12px;font-weight:800;letter-spacing:.5px;
+    box-shadow:inset 0 -1px 0 rgba(0,0,0,.18),0 1px 2px rgba(0,0,0,.18);
+  }
+  #ps-stage .ps-btn-pay:disabled{
+    cursor:not-allowed;
+    background:linear-gradient(135deg,#5a6770,#3b4650);
+    color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.15);
+    box-shadow:none;filter:grayscale(.4);text-shadow:none;
+  }
+  #ps-stage .ps-btn-pay:disabled .pay-coin{
+    background:rgba(255,255,255,.18);color:rgba(255,255,255,.55);
+    box-shadow:none;
+  }
   #ps-stage .ps-bar-wrap{
     height:14px;border-radius:8px;background:rgba(0,0,0,.45);overflow:hidden;
     margin:18px 6px 8px;border:1px solid rgba(255,255,255,.14);
@@ -3251,6 +3289,83 @@ window._showSimProgress = function(opts, onDone){
     return null;
   }
 
+  /* ── PAGAR SIMULACIÓN 50🪙 (2026-05-24) ───────────────────────
+     Cobra del presupuesto del hub (Liverpool) y auto-simula el
+     partido con el motor 4-ejes (`simulateMatch` global). Usado por
+     los botones "🪙 PAGAR SIMULACIÓN · 50" debajo de PREVIA·JUGAR
+     en las cards del #ps-stage. El precio vive en una sola
+     constante para que el admin pueda subirlo de un sitio. */
+  var PS_PAY_SIM_COST = 50;
+  function _psGetHubMoney(){
+    try {
+      if (typeof window._bayernHudGet !== 'function') return 0;
+      var o = window._bayernHudGet() || {};
+      return (o.money != null) ? (parseFloat(o.money) || 0) : 0;
+    } catch(_){ return 0; }
+  }
+  function _psPayBtnHtml(disabled){
+    return '<button type="button" class="ps-btn-pay" id="ps-pay-sim-btn"'
+      + (disabled ? ' disabled aria-disabled="true" title="Sin fondos suficientes en la caja"' : '')
+      + '>🤖 PAGAR SIMULACIÓN <span class="pay-coin">' + PS_PAY_SIM_COST + ' 🪙</span></button>';
+  }
+  /* Auto-simula un partido del torneo con el motor 4-ejes y persiste
+     el resultado en cfg.results[matchKey]. Sirve para selecciones
+     (India vs Francia) y para el partido del propio Liverpool/Bayern
+     en pretemporada. Devuelve true si simuló y guardó. */
+  function _psSimAndSaveTourMatch(tourId, matchKey, homeObj, awayObj){
+    if (!tourId || !matchKey || !homeObj || !awayObj) return false;
+    if (typeof window.simulateMatch !== 'function') return false;
+    if (typeof window._tourLoadCachedSync !== 'function') return false;
+    var cfg = window._tourLoadCachedSync(tourId);
+    if (!cfg) return false;
+    var r = window.simulateMatch(homeObj, awayObj);
+    var ga = r.gh|0, gb = r.ga|0;
+    var out = { a: ga, b: gb, played: true };
+    /* KO single-leg (key con 2 segmentos) requiere `winner`; los de
+       grupo (gN_J_M, 3 segmentos) no lo necesitan. Mismo criterio que
+       _tourSaveHumanResult. */
+    var isKO = (matchKey.indexOf('_') === matchKey.lastIndexOf('_'));
+    var isKoG = (matchKey.indexOf('ko_') === 0);
+    if (isKO || isKoG){
+      if (ga > gb) out.winner = 'a';
+      else if (gb > ga) out.winner = 'b';
+      else {
+        if (typeof window._tourSimPenalties === 'function'){
+          var pens = window._tourSimPenalties(homeObj, awayObj);
+          out.winner = (pens.a > pens.b) ? 'a' : 'b';
+          out.pens = pens;
+        } else {
+          out.winner = (Math.random() < 0.5) ? 'a' : 'b';
+        }
+      }
+    }
+    try {
+      if (typeof window._tourAttachActa === 'function'){
+        window._tourAttachActa(out, homeObj, awayObj, ga, gb, tourId, matchKey);
+      }
+    } catch(_){}
+    cfg.results = cfg.results || {};
+    cfg.results[matchKey] = out;
+    /* Persist: `_tourSave` ya hace localStorage.setItem síncrono
+       primero + push al servidor async + actualiza _TOUR_CACHE.
+       Después repintamos la pantalla del torneo si está abierta. */
+    try { if (typeof window._tourSave === 'function') window._tourSave(tourId, cfg); } catch(_){}
+    try { if (typeof window._tourRender === 'function') window._tourRender(tourId); } catch(_){}
+    return true;
+  }
+  /* Cobra 50🪙 del presupuesto, auto-simula con el motor 4-ejes y
+     avanza el día. Devuelve false si no hay fondos suficientes o
+     falta algún helper. */
+  function _psPayAndSimSelMatch(pair){
+    if (!pair) return false;
+    if (_psGetHubMoney() < PS_PAY_SIM_COST) return false;
+    if (typeof window._bayernHudCreditMoney !== 'function') return false;
+    if (!_psSimAndSaveTourMatch(pair.tourId, pair.matchKey, pair.home, pair.away)) return false;
+    try { window._bayernHudCreditMoney(-PS_PAY_SIM_COST); } catch(_){}
+    _markDoneAndAdvance();
+    return true;
+  }
+
   /* Card "India vs Francia" en el hub Toñín durante un parón de
      selecciones. Reusa el dispatcher estándar del proyecto:
      `_tourOpenHumanMatch` abre la previa + gm-modal y al confirmarla
@@ -3286,6 +3401,13 @@ window._showSimProgress = function(opts, onDone){
     var btnHtml = played
       ? '<button type="button" class="ps-btn ghost" id="ps-sel-btn" style="margin-top:16px;">CONTINUAR ▶</button>'
       : '<button type="button" class="ps-btn" id="ps-sel-btn" style="margin-top:16px;">📋 PREVIA · JUGAR ▶</button>';
+    /* Pay-to-sim: solo si el partido está sin jugar. Disabled gris si
+       el presupuesto del hub < 50🪙. 2026-05-24. */
+    var payHtml = '';
+    if (!played){
+      var canPay = _psGetHubMoney() >= PS_PAY_SIM_COST;
+      payHtml = '<div style="margin-top:6px;">' + _psPayBtnHtml(!canPay) + '</div>';
+    }
     st.innerHTML =
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
@@ -3302,6 +3424,7 @@ window._showSimProgress = function(opts, onDone){
       +   '</div>'
       + '</div>'
       + btnHtml
+      + payHtml
       + '</div>';
     var b = document.getElementById('ps-sel-btn');
     if (!b) return;
@@ -3329,6 +3452,14 @@ window._showSimProgress = function(opts, onDone){
         _markDoneAndAdvance();
       }
     };
+    var payBtn = document.getElementById('ps-pay-sim-btn');
+    if (payBtn){
+      payBtn.onclick = function(){
+        if (payBtn.disabled) return;
+        payBtn.disabled = true;
+        if (!_psPayAndSimSelMatch(pair)) payBtn.disabled = false;
+      };
+    }
   }
 
   function _cardRest(day){

@@ -16497,9 +16497,15 @@ window._showSimProgress = function(opts, onDone){
         + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);">🏁 FIN</div>'
         + '</div>';
     } else {
+      /* Badge según el tipo de partido: humano → 📋 PREVIA (abre
+         pantalla de PREVIA estándar para jugar). IA vs IA → ▶ SIMULAR
+         (al pulsar la fila se auto-simula sin pasar por previa,
+         comportamiento consistente con el resto del proyecto).
+         Petición usuario 2026-05-24. */
+      var _badgeLbl = hasHuman ? '📋 PREVIA' : '▶ SIMULAR';
       center = '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 6px;">'
         + '<div style="background:transparent;border:1px solid rgba(255,255,255,.20);border-radius:6px;padding:4px 10px;font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:2px;color:rgba(255,255,255,.35);min-width:60px;text-align:center;">—</div>'
-        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#4dd0e1;border:1px solid rgba(77,208,225,.55);border-radius:5px;padding:2px 8px;">📋 PREVIA</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#4dd0e1;border:1px solid rgba(77,208,225,.55);border-radius:5px;padding:2px 8px;">'+_badgeLbl+'</div>'
         + '</div>';
     }
     /* `data-league-key` (no -match-key): el handler global dispatcha

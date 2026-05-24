@@ -2897,21 +2897,31 @@ window._showSimProgress = function(opts, onDone){
     /* Respaldo en cookie: sobrevive a purgas de localStorage del
        navegador móvil tras horas de inactividad. */
     try { _cookieWrite(_MEM); } catch(_){}
-    if (!_lsOk){
-      /* localStorage falló → el poller del sync (compara contra disco)
-         no detectará el cambio. Push directo a /api/state con sendBeacon
-         (no bloquea, sobrevive a cierre de tab) para que el cursor
-         llegue al server y se restaure en el siguiente arranque. */
-      try {
-        var body = JSON.stringify({ competition_state: { 'bayern_preseason_v2': _json } });
-        if (typeof navigator !== 'undefined' && navigator.sendBeacon){
-          navigator.sendBeacon('/api/state', new Blob([body], { type:'application/json' }));
-        } else if (typeof fetch === 'function'){
-          fetch('/api/state', { method:'POST', headers:{'Content-Type':'application/json'},
-            body: body, keepalive: true }).catch(function(){});
-        }
-      } catch(_){}
-    }
+    /* PUSH INMEDIATO al server (refuerzo 2026-05-24, Opción A):
+       cerramos la ventana de 3 s del poller del sync. Sin esto, si
+       el usuario avanza día y cierra el navegador antes de los 3 s
+       siguientes, el server queda con el cursor anterior; y si el
+       móvil purga localStorage + cookie en las horas siguientes
+       (Storage Pressure de Chrome Android / ITP de Safari), al
+       reabrir la web `hydrateFromServer` restaura el cursor stale
+       y la caja Liverpool vuelve al 01 May.
+       sendBeacon / fetch keepalive sobreviven al cierre del tab,
+       así que el cursor llega siempre al server aunque el usuario
+       mate la app inmediatamente después de avanzar. Solo
+       _psResetCalendar (botón PIN 747) puede bajar el dayIdx, y
+       ese flujo también escribe ts=Date.now() así que su push gana
+       por last-write-wins. Se hace SIEMPRE (no sólo cuando
+       localStorage falla) — el coste es 1 fetch por avance de día
+       (puntual, no en loop) y el sync de 3 s actúa como respaldo. */
+    try {
+      var body = JSON.stringify({ competition_state: { 'bayern_preseason_v2': _json } });
+      if (typeof navigator !== 'undefined' && navigator.sendBeacon){
+        navigator.sendBeacon('/api/state', new Blob([body], { type:'application/json' }));
+      } else if (typeof fetch === 'function'){
+        fetch('/api/state', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: body, keepalive: true }).catch(function(){});
+      }
+    } catch(_){}
   }
   /* Expuesto para que _psResetCalendar (y cualquier futuro reset)
      pueda limpiar también la cookie de respaldo. */
@@ -4293,11 +4303,27 @@ window._showSimProgress = function(opts, onDone){
   window._psResetCalendar = function(){
     var d = { tour: null, dayIdx: 0, rivals: {}, done: {}, previaOpenedIdx: -1, ts: Date.now() };
     _MEM = d;
-    try { localStorage.setItem(KEY, JSON.stringify(d)); } catch(_){}
-    try { sessionStorage.setItem(KEY, JSON.stringify(d)); } catch(_){}
+    var _resetJson = JSON.stringify(d);
+    try { localStorage.setItem(KEY, _resetJson); } catch(_){}
+    try { sessionStorage.setItem(KEY, _resetJson); } catch(_){}
     /* Limpiar la cookie de respaldo del cursor: sin esto, _load la
        resucitaría desde la cookie en la próxima recarga. */
     try { _cookieClear(); } catch(_){}
+    /* Push inmediato del reset al server (mismo refuerzo Opción A
+       2026-05-24 que _save): si el usuario pulsa PIN 747 → Reiniciar
+       Temporada y cierra la pestaña antes de los 3 s del poller, sin
+       este push el server mantendría el dayIdx viejo y el siguiente
+       arranque restauraría el cursor pre-reset. ts=Date.now() ya
+       garantiza last-write-wins contra cualquier estado stale. */
+    try {
+      var _resetBody = JSON.stringify({ competition_state: { 'bayern_preseason_v2': _resetJson } });
+      if (typeof navigator !== 'undefined' && navigator.sendBeacon){
+        navigator.sendBeacon('/api/state', new Blob([_resetBody], { type:'application/json' }));
+      } else if (typeof fetch === 'function'){
+        fetch('/api/state', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: _resetBody, keepalive: true }).catch(function(){});
+      }
+    } catch(_){}
     try { window.__psDayIdx = 0; } catch(_){}
     try { window.__psPreviaOpenedIdx = -1; } catch(_){}
     try { window.__psBusy = false; } catch(_){}

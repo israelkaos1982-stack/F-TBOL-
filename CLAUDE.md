@@ -84,6 +84,133 @@ alpha alto (0.82-0.95) para que sea bien visible. El borde es
    `var(--comp-color, #88a0c0)` con fallback neutro, NUNCA hardcodear
    rojo.
 
+## Sanciones y lesiones — SELECCIONES NACIONALES (obligatorio, 2026-05-24)
+
+Sistema PARALELO al de clubes (`calcularSancionesPartido` /
+`YELLOW_STORE` / `SANCION_STORE` / `LESION_STORE`). **NO se cruzan**:
+un jugador sancionado en su selección puede jugar con su club, y
+viceversa. Cada selección tiene su propio contador.
+
+### Selecciones humanas (6, canónicas)
+
+Francia💡, Brasil🐭, Inglaterra🔨, Noruega✏️, Argentina😈, España🦆.
+
+La lista vive en `SEL_HUMANAS` en el bloque IIFE
+`SANCIONES + LESIONES — SELECCIONES NACIONALES` al final de
+`static/js/index.bundle.js`. Helper canónico:
+`window._esSelHumana(name)` (también acepta selecciones marcadas
+como humanas en el editor vía `selecciones_squad_v1.teams[].icon` →
+`_SEL_HUMAN_ICONS`).
+
+### Detección de partido de selección
+
+`window._esCompSel(compKey)` devuelve `true` para:
+- `compKey === 'sel'` (clasificación J1-J10, calendario `cal-sel1..10`).
+- `compKey === 'sel-fin'` (Mundial fase final, `cal-mf-*`).
+- `compKey === 'torneo'` cuando el `_TOUR_CACHE[tourId].format` es
+  `'mundial-48'` (partidos del Mundial 2032 abiertos desde el hub).
+
+### Reglas (distintas a clubes)
+
+| Evento                          | Selecciones humanas         | Clubes (referencia)       |
+|---------------------------------|-----------------------------|---------------------------|
+| Lesión "natural" del motor      | 1 partido (el siguiente)    | 1-7 según grado           |
+| ⬇️ marcado por usuario          | 2 partidos (este + siguiente) | 2-10 según roll Mod/Grave |
+| Doble amarilla (expulsión)      | **1 partido siguiente**     | SIEMPRE 2 partidos        |
+| Roja directa                    | **2 partidos siguientes**   | 2-15 con buckets          |
+| Acumulación de amarillas        | **Cada 2 = 1 partido (ciclo 2)** | Cada 3 = 1 partido    |
+
+Notas:
+- **Sanciones simultáneas → solo se aplica la MAYOR** (no se suman
+  como en clubes). Si llega una sanción menor mientras hay una mayor
+  pendiente, se descarta.
+- **Reset entre torneos automático**: los stores se anidan por
+  `torneoKey` (`'sel-clasif'` para J1-J10, `'sel-mundial'` para la
+  fase final). Las amarillas de la clasificación NO viajan al
+  Mundial y viceversa. Helper manual:
+  `window._selResetTorneo('sel-clasif' | 'sel-mundial')`.
+- **No hay amistosos de selección** — el sistema solo aplica a
+  partidos oficiales. Si en el futuro se añaden amistosos de
+  selección, irán por `compKey='amistoso'` (ya excluido por
+  `EXCLUDED_COMPS` del sistema de clubes), no sumarán nada.
+
+### Stores y persistencia
+
+- `window.YELLOW_STORE_SEL[torneoKey][selName][playerName] = { count }`
+- `window.SANCION_STORE_SEL[torneoKey][selName] = [ { name, remaining, reason, tipo } ]`
+- `window.LESION_STORE_SEL[selName][playerName] = { remaining, reason, timestamp }`
+  (NO se anida por torneo — una lesión "sobrevive" entre clasif y
+  Mundial; se decrementa partido a partido independientemente).
+- `window._FORMA_MATCH_STATES_SEL[selName::playerName] = '⬇️'`
+
+Persistencia en `localStorage` clave `ftbol_sel_sanciones_v1`
+(autosave cada 5 s + beforeunload). Separada del store de clubes
+(`ftbol_lesiones_v1`).
+
+### Helpers públicos
+
+```
+window._esSelHumana(name)
+window._canonSelHumana(name)        // 'francia' → 'Francia'
+window._esCompSel(compKey)
+window._selTorneoKey(compKey)        // 'sel-clasif' | 'sel-mundial' | null
+window._selCalcularSancionesPartido(events, humanTeam, teamName, compKey)
+window._selAddSancion(torneoKey, selName, playerName, reason, partidos, tipo)
+window._selCumplirSancion(torneoKey, selName, playerName)
+window._selAddLesion(selName, playerName, partidos, reason)
+window._selCumplirLesion(selName, playerName)
+window._selResetTorneo(torneoKey)
+window._selPendientesPara(home, away, compKey)    // { sanciones, lesiones }
+window._selConsumirParaPartido(home, away, compKey)
+```
+
+### Hooks instalados sobre el sistema de clubes
+
+El bloque al final de `index.bundle.js` envuelve estas funciones del
+sistema de clubes para enrutar al motor SEL cuando `esCompSel(comp)
+&& esSelHumana(teamName)`:
+
+- `window.calcularSancionesPartido` — delega a
+  `_selCalcularSancionesPartido` en partidos de selección.
+- `window._sancionConfirm` — además de la decrementación de clubes,
+  llama a `_selConsumirParaPartido` (idempotente por
+  `_sancionConsumedFor['SEL_' + mk]`).
+- `window._formaToggle` — ⬇️ en selección registra 2 partidos en
+  `LESION_STORE_SEL` (no en `LESION_STORE` global como hace en
+  clubes), evitando contaminación al club del jugador.
+- `window._renderFormaChecklist` — render propio en partidos de
+  selección con los rosters de las 6 selecciones humanas.
+- `window.showSancionOverlay` — render self-contained desde
+  `SANCION_STORE_SEL` + `LESION_STORE_SEL` (el original hace
+  early-return si los stores globales están vacíos, que SIEMPRE lo
+  están en selección).
+- `window._refreshSancionInjList` — en selección re-renderiza desde
+  `LESION_STORE_SEL` para no pisar la lista con "Sin lesionados" al
+  togglear ⬇️.
+- `window._registrarLesionesDesdeEventos` — particiona los eventos
+  por equipo: lesiones de selección humana → `LESION_STORE_SEL`
+  (1 partido), resto → motor original.
+
+### Reglas a respetar
+
+1. **No mezclar stores de clubes y selecciones.** Las stores SEL son
+   independientes. Cualquier código que añada/lea sanciones de
+   selección debe usar `*_SEL` o los helpers `_sel*`.
+2. **No hardcodear más selecciones en `SEL_HUMANAS`** sin avisar al
+   usuario. Las 6 son canónicas (2026-05-24). Selecciones marcadas
+   como humanas en el editor (`_SEL_HUMAN_ICONS`) se reconocen
+   adicionalmente por el fallback en `esSelHumana`.
+3. **No cambiar los partidos de sanción** (1 d-amarilla, 2 roja,
+   ciclo 2 amarillas, 2 ⬇️, 1 lesión natural) sin acordarlo con el
+   usuario. Son las reglas explícitas pedidas el 2026-05-24.
+4. **No introducir amistosos de selección** sin acordarlo. El
+   usuario explícitamente dijo "no hay amistosos de selecciones, y
+   en el caso de haber no cuentan" — quedan excluidos del cómputo.
+5. **No olvidar el reset por torneo.** La separación por
+   `torneoKey` es lo que hace que un nuevo torneo arranque en cero.
+   Si se añade un nuevo torneo de selecciones (ej. Eurocopa),
+   `_selTorneoKey` debe devolver una key distinta para él.
+
 ## Balón fijo Selecciones por jornada (obligatorio, 2026-05-24)
 
 Regla "siempre" pedida por el usuario el 2026-05-24:

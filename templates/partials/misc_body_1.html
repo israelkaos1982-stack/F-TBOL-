@@ -3220,21 +3220,39 @@ window._showSimProgress = function(opts, onDone){
   }
 
   /* Localiza el partido del HUMANO (Francia) en el Mundial 2032 para
-     una fila `ag-sel` de "Mundial Grupo — JN". Devuelve { tourId,
-     matchKey, home, away, rival } o `null` si el Mundial 2032 no está
-     cargado / no hay equipo humano / no hay fixture sorteado. El
-     mismo Toñín que dirige Liverpool dirige Francia, así que durante
-     un parón de selecciones la card del hub debe ofrecer el partido
-     de su selección en vez de "jugadores fuera". 2026-05-23. */
+     una fila `ag-sel` del calendario:
+       - "Mundial Grupo — JN"  → busca en cfg.groupFixtures[gIdx][jor]
+       - "Mundial Dieciseisavos" → cfg.bracket[0]
+       - "Mundial Octavos"       → cfg.bracket[1]
+       - "Mundial Cuartos"       → cfg.bracket[2]
+       - "Mundial Semis"         → cfg.bracket[3]
+       - "MUNDIAL GRAN FINAL"    → cfg.bracket[4]
+     Devuelve { tourId, matchKey, home, away, rival, jor? } o null si no
+     hay Mundial 2032 cargado / no hay humano / no hay fixture o bracket
+     sorteado para esa ronda. El mismo Toñín que dirige Liverpool dirige
+     Francia, así que durante un parón de selecciones la card del hub
+     debe ofrecer el partido de su selección en vez de "jugadores fuera".
+     2026-05-23 (grupos). 2026-05-24 (rondas KO). */
   function _selPair(day){
     try {
       if (!day || !/\bag-sel\b/.test(day.cls)) return null;
       var lbl = String(day.label || '');
-      if (!/mundial/i.test(lbl) || !/grupo/i.test(lbl)) return null;
-      var mJor = /j\s*(\d+)/i.exec(lbl);
-      if (!mJor) return null;
-      var jor = parseInt(mJor[1], 10) - 1;
-      if (isNaN(jor) || jor < 0) return null;
+      if (!/mundial/i.test(lbl)) return null;
+      var isGroup = /grupo/i.test(lbl);
+      var jor = -1, koRoundIdx = -1;
+      if (isGroup) {
+        var mJor = /j\s*(\d+)/i.exec(lbl);
+        if (!mJor) return null;
+        jor = parseInt(mJor[1], 10) - 1;
+        if (isNaN(jor) || jor < 0) return null;
+      } else {
+        if      (/dieciseisav|repesca|1\s*\/\s*32/i.test(lbl)) koRoundIdx = 0;
+        else if (/octavos/i.test(lbl))                          koRoundIdx = 1;
+        else if (/cuartos/i.test(lbl))                          koRoundIdx = 2;
+        else if (/semis|semifinal/i.test(lbl))                  koRoundIdx = 3;
+        else if (/final/i.test(lbl))                            koRoundIdx = 4;
+        else return null;
+      }
       var cache = window._TOUR_CACHE || {};
       var keys = Object.keys(cache);
       var mundialId = null, mundialCfg = null;
@@ -3246,7 +3264,7 @@ window._showSimProgress = function(opts, onDone){
       }
       /* Fallback sync por localStorage: el cache en memoria puede estar
          frío al cargar el hub antes de visitar la pantalla del Mundial.
-         Escaneamos los slots sfn* (Rondas Finales) para localizarlo. */
+         Escaneamos los slots sfn-N (Rondas Finales) para localizarlo. */
       if (!mundialCfg && typeof window._tourLoadCachedSync === 'function'){
         var SFN_SLOTS = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
         for (var s = 0; s < SFN_SLOTS.length; s++){
@@ -3282,31 +3300,61 @@ window._showSimProgress = function(opts, onDone){
         }
       }
       if (huIdx < 0) return null;
-      var pg = (mundialCfg.formatConfig && mundialCfg.formatConfig.perGroup) || 4;
-      var gIdx = Math.floor(huIdx / pg);
-      var gStart = gIdx * pg;
-      var slice = teams.slice(gStart, gStart + pg);
-      var huInSlice = huIdx - gStart;
-      var fixs = (mundialCfg.groupFixtures && mundialCfg.groupFixtures[gIdx]) || null;
-      if (!Array.isArray(fixs) || !fixs[jor]) return null;
-      var matchups = fixs[jor];
-      for (var mi = 0; mi < matchups.length; mi++){
-        var mm = matchups[mi];
-        if (!mm) continue;
-        if (mm.home === huInSlice || mm.away === huInSlice){
-          var hT = slice[mm.home], aT = slice[mm.away];
-          if (!hT || !aT || !hT.name || !aT.name) return null;
-          if (hT.name === 'PENDIENTE' || aT.name === 'PENDIENTE') return null;
-          return {
-            tourId: mundialId,
-            matchKey: 'g' + gIdx + '_' + jor + '_' + mi,
-            home: hT,
-            away: aT,
-            rival: (mm.home === huInSlice ? aT.name : hT.name),
-            jor: jor + 1
-          };
+      if (isGroup) {
+        var pg = (mundialCfg.formatConfig && mundialCfg.formatConfig.perGroup) || 4;
+        var gIdx = Math.floor(huIdx / pg);
+        var gStart = gIdx * pg;
+        var slice = teams.slice(gStart, gStart + pg);
+        var huInSlice = huIdx - gStart;
+        var fixs = (mundialCfg.groupFixtures && mundialCfg.groupFixtures[gIdx]) || null;
+        if (!Array.isArray(fixs) || !fixs[jor]) return null;
+        var matchups = fixs[jor];
+        for (var mi = 0; mi < matchups.length; mi++){
+          var mm = matchups[mi];
+          if (!mm) continue;
+          if (mm.home === huInSlice || mm.away === huInSlice){
+            var hT = slice[mm.home], aT = slice[mm.away];
+            if (!hT || !aT || !hT.name || !aT.name) return null;
+            if (hT.name === 'PENDIENTE' || aT.name === 'PENDIENTE') return null;
+            return {
+              tourId: mundialId,
+              matchKey: 'g' + gIdx + '_' + jor + '_' + mi,
+              home: hT,
+              away: aT,
+              rival: (mm.home === huInSlice ? aT.name : hT.name),
+              jor: jor + 1
+            };
+          }
         }
+        return null;
       }
+      /* KO: cfg.bracket[koRoundIdx] es la lista ordenada de equipos
+         que llegan a esa ronda (pos 0 vs 1, 2 vs 3, ...). El sorteo
+         lo hace _renderMundial al cerrar la ronda anterior. Si la
+         ronda aún no se ha sorteado, bracket[koRoundIdx] no existe
+         o no contiene al humano → null y la card cae a JUGADORES
+         FUERA, que es lo correcto en ese estado. */
+      var bracket = (mundialCfg.bracket || [])[koRoundIdx];
+      if (!Array.isArray(bracket) || !bracket.length) return null;
+      var humanName = (teams[huIdx] && teams[huIdx].name) || '';
+      if (!humanName) return null;
+      var huKoIdx = -1;
+      for (var bi = 0; bi < bracket.length; bi++){
+        var bt = bracket[bi];
+        if (bt && bt.name === humanName){ huKoIdx = bi; break; }
+      }
+      if (huKoIdx < 0) return null;
+      var pairIdx = Math.floor(huKoIdx / 2);
+      var hKo = bracket[pairIdx*2], aKo = bracket[pairIdx*2 + 1];
+      if (!hKo || !aKo || !hKo.name || !aKo.name) return null;
+      if (hKo.name === 'PENDIENTE' || aKo.name === 'PENDIENTE') return null;
+      return {
+        tourId: mundialId,
+        matchKey: 'ko_' + koRoundIdx + '_' + pairIdx,
+        home: hKo,
+        away: aKo,
+        rival: (huKoIdx === pairIdx*2 ? aKo.name : hKo.name)
+      };
     } catch(_){}
     return null;
   }

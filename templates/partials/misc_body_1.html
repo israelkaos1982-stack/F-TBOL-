@@ -13721,6 +13721,13 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     return null;
   }
+  /* Expuesto a window porque varias rutas externas al IIFE necesitan
+     el cfg sincrónico (pretemporada `_selPair`/`_realPair` para
+     localizar el Mundial 2032 sin abrir la pantalla, y el helper
+     `_psSimAndSaveTourMatch` del botón "Pagar Simulación" del hub).
+     Antes los checks `typeof window._tourLoadCachedSync === 'function'`
+     siempre fallaban y caían al return null (dead code). 2026-05-24. */
+  try { window._tourLoadCachedSync = _tourLoadCachedSync; } catch(_){}
 
   /* ── Persistencia ──────────────────────────────────────── */
   window._tourLoad = async function(id){
@@ -17553,6 +17560,12 @@ window._showSimProgress = function(opts, onDone){
       }
     } catch(_){}
   }
+  /* Expuesto a window para que el botón "Pagar Simulación" del hub
+     (`_psSimAndSaveTourMatch` en pretemporada) pueda generar el acta
+     + stats con la MISMA función que usa el motor IA del torneo —
+     sin duplicar la lógica de genMatchEventsEnhanced + el registro
+     a 'torneos'. 2026-05-24. */
+  try { window._tourAttachActa = _tourAttachActa; } catch(_){}
 
   function _tourSimPenalties(teamA, teamB) {
     function _pProb(atk, defOpp) {
@@ -17590,6 +17603,11 @@ window._showSimProgress = function(opts, onDone){
     }
     return { a: sA, b: sB };
   }
+  /* Expuesto a window para el botón "Pagar Simulación" del hub
+     (`_psSimAndSaveTourMatch` necesita resolver empates en KO
+     single-leg con la MISMA tanda de penaltis que el motor IA).
+     2026-05-24. */
+  try { window._tourSimPenalties = _tourSimPenalties; } catch(_){}
 
   /* Un slot cuenta como HUMANO si lo eligió el usuario (isHuman) O si
      el equipo es "humano en torneo" por humanIcon/Liga EA (regla

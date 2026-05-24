@@ -4169,7 +4169,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     return { sqA: sqA, sqB: sqB, nameA: nameA, nameB: nameB };
   }
 
-  /* Build optgroup options for a squad array */
+  /* Build optgroup options for a squad array (legacy <select>, kept para
+     back-compat). El picker actual (overlay #_editPlOv) usa
+     _editBuildPickerList directamente. */
   function buildSquadOptions(sq, teamName) {
     var html = '<optgroup label="——  ' + teamName + '  ——">';
     sq.forEach(function(p) {
@@ -4183,13 +4185,176 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     return html;
   }
 
-  /* When player selected from selector, fill manual field */
+  /* When player selected from legacy <select>, fill manual field */
   window._onEditPlayerSel = function(val) {
     if (!val) return;
     var parts = val.split('|');
     var num = parts[0] || '';
     var name = parts.slice(1).join('|') || '';
     document.getElementById('_editManual').value = num + '. ' + name;
+  };
+
+  /* ───────────────────────────────────────────────────────────────────
+     Picker overlay para «JUGADOR DE PLANTILLA» del modal EDITAR EVENTO.
+     Reemplaza al <select> nativo (que en Samsung Internet descartaba la
+     elección al primer toque, dejando el goleador erróneo — bug
+     reportado 2026-05-24 con capturas Francia vs UAE).
+     - Solo muestra los jugadores del equipo actualmente seleccionado
+       en #_editTeam.
+     - Soporta selecciones nacionales (los teams se buscan en
+       SQUAD_REGISTRY o se hidratan desde selecciones_squad_v1 via
+       sqFromRegistry).
+     - Incluye «➕ AÑADIR JUGADOR NUEVO A LA PLANTILLA» con dorsal,
+       nombre y valor-poder. El alta persiste vía
+       _addManualPlayerToRoster (ligaExt o selecciones).
+     ─────────────────────────────────────────────────────────────────── */
+  window._editPickerCtx = {
+    teamA: { name: '', sq: [] },
+    teamB: { name: '', sq: [] },
+    current: 'a'
+  };
+
+  function _editBuildPickerList() {
+    var ctx = window._editPickerCtx || { teamA:{}, teamB:{}, current:'a' };
+    var team = (ctx.current === 'b') ? ctx.teamB : ctx.teamA;
+    var teamEl = document.getElementById('_editPlOv-team');
+    if (teamEl) teamEl.textContent = team && team.name ? team.name : (ctx.current === 'b' ? 'Visitante' : 'Local');
+    var listEl = document.getElementById('_editPlOv-list');
+    if (!listEl) return;
+    var sq = (team && team.sq) ? team.sq : [];
+    var html = '';
+    for (var i = 0; i < sq.length; i++) {
+      var p = sq[i];
+      if (!p) continue;
+      if (p.h) {
+        html += '<div class="ml-pl-ov-sec">' + p.h + '</div>';
+      } else if (Array.isArray(p) && p.length >= 2) {
+        var n = String(p[0] == null ? '' : p[0]).replace(/'/g, "\\'");
+        var nmEsc = String(p[1] == null ? '' : p[1]).replace(/'/g, "\\'");
+        var nDisp = String(p[0] == null ? '' : p[0]);
+        var nmDisp = String(p[1] == null ? '' : p[1])
+          .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        html += '<button class="ml-pl-ov-btn" type="button" onclick="window._editPickPl(\'' + n + '\',\'' + nmEsc + '\')">'
+          + '<span class="ml-pl-ov-num">' + nDisp + '</span>'
+          + '<span class="ml-pl-ov-name">' + nmDisp + '</span>'
+          + '</button>';
+      }
+    }
+    if (!html) {
+      html = '<div style="text-align:center;color:rgba(255,255,255,.5);padding:30px 12px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;">⚠️ Sin jugadores en la plantilla de este equipo.<br><br>Cierra y usa «➕ AÑADIR JUGADOR NUEVO» en el modal para sembrar la plantilla.</div>';
+    }
+    listEl.innerHTML = html;
+  }
+
+  window._editOpenPlOv = function() {
+    _editBuildPickerList();
+    var ov = document.getElementById('_editPlOv');
+    if (ov) ov.classList.add('show');
+  };
+  window._editClosePlOv = function() {
+    var ov = document.getElementById('_editPlOv');
+    if (ov) ov.classList.remove('show');
+  };
+  window._editPickPl = function(num, name) {
+    var n = String(num == null ? '' : num).trim();
+    var nm = String(name == null ? '' : name).trim();
+    var manual = n ? (n + '. ' + nm) : nm;
+    var mEl = document.getElementById('_editManual');
+    if (mEl) mEl.value = manual;
+    var btn = document.getElementById('_editPlPick');
+    if (btn) btn.textContent = '✓ ' + manual;
+    /* También actualizamos el <select> oculto para que el workaround
+       de _saveEditModal (que prefiere _editPlayerSel.value sobre el
+       campo manual) siga funcionando si quedara código que lo lea. */
+    var sel = document.getElementById('_editPlayerSel');
+    if (sel) {
+      var v = n + '|' + nm;
+      sel.innerHTML = '<option value="' + v.replace(/"/g,'&quot;') + '" selected>' + (n ? (n + '. ') : '') + nm + '</option>';
+      try { sel.value = v; } catch(_){}
+    }
+    window._editClosePlOv();
+  };
+
+  /* Si el usuario escribe en #_editManual, la elección previa del picker
+     queda obsoleta — limpiamos _editPlayerSel.value (el workaround de
+     _saveEditModal lo prefiere sobre manualVal cuando tiene valor) y
+     reseteamos el botón. Sin esto, una edición manual posterior a un
+     pick del picker se ignoraba al guardar. */
+  window._onEditManualInput = function() {
+    var sel = document.getElementById('_editPlayerSel');
+    if (sel) {
+      sel.innerHTML = '<option value=""></option>';
+      try { sel.value = ''; } catch(_){}
+    }
+    var btn = document.getElementById('_editPlPick');
+    if (btn) btn.textContent = '— Toca para elegir jugador —';
+  };
+
+  /* Cambio de equipo en el modal → repobla el picker con el roster del
+     nuevo equipo y resetea el botón. NO limpia _editManual (el usuario
+     puede haber escrito a mano). */
+  window._onEditTeamChange = function(val) {
+    var ctx = window._editPickerCtx || {};
+    ctx.current = (val === 'b') ? 'b' : 'a';
+    var btn = document.getElementById('_editPlPick');
+    if (btn) btn.textContent = '— Toca para elegir jugador —';
+    var sel = document.getElementById('_editPlayerSel');
+    if (sel) { sel.innerHTML = '<option value=""></option>'; try { sel.value = ''; } catch(_){} }
+    /* Si el overlay está abierto, refrescar la lista al vuelo. */
+    var ov = document.getElementById('_editPlOv');
+    if (ov && ov.classList.contains('show')) _editBuildPickerList();
+  };
+
+  /* Toggle del formulario «➕ AÑADIR JUGADOR NUEVO». */
+  window._editAddNewToggle = function() {
+    var form = document.getElementById('_editAddNewForm');
+    if (!form) return;
+    var isHidden = form.style.display === 'none' || !form.style.display;
+    form.style.display = isHidden ? '' : 'none';
+    if (isHidden) {
+      var n = document.getElementById('_editNewNum'); if (n) n.value = '';
+      var nm = document.getElementById('_editNewName'); if (nm) nm.value = '';
+      var pw = document.getElementById('_editNewPw'); if (pw) pw.value = '';
+      try { (document.getElementById('_editNewName') || {}).focus && document.getElementById('_editNewName').focus(); } catch(_){}
+    }
+  };
+
+  /* Confirmar el alta del jugador nuevo → persiste en la plantilla del
+     equipo (ligaExt o selecciones) y auto-selecciona en el picker. */
+  window._editAddNewConfirm = function() {
+    var ctx = window._editPickerCtx || {};
+    var team = (ctx.current === 'b') ? ctx.teamB : ctx.teamA;
+    if (!team || !team.name) { alert('⚠️ Selecciona primero el equipo del evento.'); return; }
+    var num  = (document.getElementById('_editNewNum').value || '').trim();
+    var name = (document.getElementById('_editNewName').value || '').trim();
+    var pw   = (document.getElementById('_editNewPw').value || '').trim();
+    if (!name) { alert('⚠️ Escribe el nombre del jugador.'); return; }
+    var ok = window._addManualPlayerToRoster(team.name, name, num, pw);
+    if (!ok) {
+      alert('⚠️ Ese jugador ya existe en la plantilla, o el equipo «' + team.name + '» no se encontró en ligaExt ni en selecciones_squad_v1. Revísalo.');
+      return;
+    }
+    /* Refrescar el roster cacheado del equipo desde el registry (que ya
+       lee de selecciones_squad_v1 / ligaExt). Si no hay datos, append
+       manual para feedback inmediato. */
+    var refreshed = null;
+    try {
+      if (typeof window.sqFromRegistry === 'function') {
+        refreshed = window.sqFromRegistry(team.name) || null;
+      }
+    } catch(_){}
+    if (refreshed && refreshed.length) {
+      team.sq = refreshed;
+    } else {
+      var arr = (team.sq || []).slice();
+      arr.push([num || '', name]);
+      team.sq = arr;
+    }
+    /* Auto-seleccionar al jugador recién creado. */
+    window._editPickPl(num || '', name);
+    /* Cerrar el form. */
+    var form = document.getElementById('_editAddNewForm');
+    if (form) form.style.display = 'none';
   };
 
   window._openEditModal = function(mid, evId) {
@@ -4211,13 +4376,22 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     selTeam.options[1].text = (sq.nameB || 'Visitante') + ' (visitante)';
     selTeam.value = ev.team || 'a';
 
-    // Populate squad selector
-    var selPl = document.getElementById('_editPlayerSel');
-    var optHTML = '<option value="">— seleccionar jugador —</option>';
-    optHTML += buildSquadOptions(sq.sqA, sq.nameA || 'Local');
-    optHTML += buildSquadOptions(sq.sqB, sq.nameB || 'Visitante');
-    selPl.innerHTML = optHTML;
-    selPl.value = '';
+    /* Configurar el picker overlay (filtrado por equipo del evento). El
+       <select> nativo se mantiene oculto solo por back-compat. */
+    window._editPickerCtx = {
+      teamA: { name: sq.nameA || 'Local',     sq: sq.sqA || [] },
+      teamB: { name: sq.nameB || 'Visitante', sq: sq.sqB || [] },
+      current: ev.team || 'a'
+    };
+    var pkBtn = document.getElementById('_editPlPick');
+    if (pkBtn) pkBtn.textContent = '— Toca para elegir jugador —';
+    var legacySel = document.getElementById('_editPlayerSel');
+    if (legacySel) {
+      legacySel.innerHTML = '<option value="">— seleccionar jugador —</option>';
+      try { legacySel.value = ''; } catch(_){}
+    }
+    var addForm = document.getElementById('_editAddNewForm');
+    if (addForm) addForm.style.display = 'none';
 
     // Fill manual field with current num. name
     var manual = ev.num ? (ev.num + '. ' + ev.name) : ev.name;
@@ -4240,16 +4414,23 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   };
 
   /* Añade un jugador escrito manualmente en el acta (campo #_editManual)
-     a la plantilla del equipo correspondiente (`ligaExt_<slug>.teams[i].players`).
-     El jugador queda sin dorsal / posición / valor-nivel — el admin completa
-     esos campos luego desde el editor de plantilla. Si ya existe un jugador
-     con el mismo nombre normalizado, no se duplica. Persiste en localStorage
-     y POSTea al servidor (best-effort). */
-  window._addManualPlayerToRoster = function(teamName, playerName, dorsal) {
+     a la plantilla del equipo correspondiente. Busca primero en
+     `ligaExt_<slug>.teams[i].players`; si no lo encuentra, intenta en
+     `selecciones_squad_v1.teams[i].players` (selecciones nacionales —
+     Francia, UAE, etc. usan ese store, NO ligaExt). Si ya existe un
+     jugador con el mismo nombre normalizado, no se duplica. Persiste en
+     localStorage y POSTea al servidor (best-effort).
+     2026-05-24: añadido `power` (1-99) y fallback a selecciones_squad_v1
+     para que el "+ AÑADIR JUGADOR NUEVO" del overlay de editar evento
+     funcione también con selecciones nacionales. */
+  window._addManualPlayerToRoster = function(teamName, playerName, dorsal, power) {
     if (!teamName || !playerName) return false;
     var nm = String(playerName).trim();
     if (!nm) return false;
     var dnum = String(dorsal == null ? '' : dorsal).trim();
+    var pwNum = parseInt(power, 10);
+    if (isNaN(pwNum) || pwNum < 1) pwNum = 0;
+    if (pwNum > 99) pwNum = 99;
     function _norm(s){
       try {
         return String(s||'').toLowerCase()
@@ -4289,11 +4470,37 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
       if (foundTeam) break;
     }
-    if (!foundTeam) return false;
-    if (!Array.isArray(foundTeam.players)) foundTeam.players = [];
+    /* Fallback: buscar en selecciones_squad_v1 (selecciones nacionales).
+       2026-05-24. Sin esto, añadir jugador desde el overlay editar evento
+       en partidos de Selecciones (Francia vs UAE, etc.) fallaba en
+       silencio porque esos equipos no están en ligaExt_*. */
+    var selData = null, selTeam = null;
+    if (!foundTeam) {
+      try {
+        var selRaw = localStorage.getItem('selecciones_squad_v1');
+        if (selRaw) {
+          selData = JSON.parse(selRaw);
+          if (selData && Array.isArray(selData.teams)) {
+            for (var si = 0; si < selData.teams.length; si++) {
+              var st = selData.teams[si];
+              if (!st || !st.name) continue;
+              var sn = _norm(st.name);
+              var snCanon = (typeof window.canonicalTeamName === 'function')
+                ? _norm(window.canonicalTeamName(st.name)) : sn;
+              if (targets.indexOf(sn) !== -1 || targets.indexOf(snCanon) !== -1) {
+                selTeam = st; break;
+              }
+            }
+          }
+        }
+      } catch(_){}
+    }
+    var targetTeam = foundTeam || selTeam;
+    if (!targetTeam) return false;
+    if (!Array.isArray(targetTeam.players)) targetTeam.players = [];
     var nName = _norm(nm);
-    for (var pi = 0; pi < foundTeam.players.length; pi++) {
-      var p = foundTeam.players[pi];
+    for (var pi = 0; pi < targetTeam.players.length; pi++) {
+      var p = targetTeam.players[pi];
       if (p && _norm(p.name) === nName) return false;
     }
     var newPlayer = {
@@ -4301,7 +4508,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       name: nm,
       num: dnum,
       pos: '',
-      power: 0,
+      power: pwNum,
       captain: false,
       freeKick: false,
       penalty: false,
@@ -4311,23 +4518,37 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       pj: 0, gol: 0, pen: 0, fk: 0, mvp: 0, ta: 0, tr: 0, imbat: 0, penSaved: 0,
       manualFromActa: true
     };
-    foundTeam.players.push(newPlayer);
-    try { localStorage.setItem('ligaExt_' + foundSlug, JSON.stringify(foundData)); } catch(_){}
-    if (foundData.teams && foundData.teams.length > 0) {
-      try { localStorage.setItem('ligaExt_' + foundSlug + '_protected', JSON.stringify(foundData)); } catch(_){}
+    targetTeam.players.push(newPlayer);
+    if (foundTeam) {
+      try { localStorage.setItem('ligaExt_' + foundSlug, JSON.stringify(foundData)); } catch(_){}
+      if (foundData.teams && foundData.teams.length > 0) {
+        try { localStorage.setItem('ligaExt_' + foundSlug + '_protected', JSON.stringify(foundData)); } catch(_){}
+      }
+      try {
+        if (typeof fetch === 'function') {
+          fetch('/api/liga-ext/' + encodeURIComponent(foundSlug), {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({data: foundData})
+          }).catch(function(){});
+        }
+      } catch(_){}
+    } else if (selTeam && selData) {
+      try { localStorage.setItem('selecciones_squad_v1', JSON.stringify(selData)); } catch(_){}
+      try {
+        if (typeof fetch === 'function') {
+          fetch('/api/kv/selecciones_squad_v1', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({value: selData})
+          }).catch(function(){});
+        }
+      } catch(_){}
+      try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
     }
     try {
-      if (typeof fetch === 'function') {
-        fetch('/api/liga-ext/' + encodeURIComponent(foundSlug), {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({data: foundData})
-        }).catch(function(){});
-      }
-    } catch(_){}
-    try {
       if (window.SQUAD_REGISTRY) {
-        delete window.SQUAD_REGISTRY[foundTeam.name];
+        delete window.SQUAD_REGISTRY[targetTeam.name];
         if (canon) delete window.SQUAD_REGISTRY[canon];
         delete window.SQUAD_REGISTRY[teamName];
       }

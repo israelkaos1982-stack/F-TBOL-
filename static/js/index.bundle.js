@@ -4350,7 +4350,21 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var newType   = document.getElementById('_editType').value;
     var newTeam   = document.getElementById('_editTeam').value;
     var newMin    = parseInt(document.getElementById('_editMin').value) || 1;
+    /* Bug 2026-05-24: en algunos navegadores móviles (Samsung Internet)
+       el onchange del <select id="_editPlayerSel"> no dispara al elegir
+       un jugador → _onEditPlayerSel no rellena _editManual → el guardado
+       leía el nombre antiguo y el cambio "se quedaba" en el goleador
+       erróneo. Fix: si el dropdown tiene un valor (no placeholder) lo
+       usamos como verdad por encima del campo manual. */
+    var _selPlEl = document.getElementById('_editPlayerSel');
+    var _pickedVal = (_selPlEl && _selPlEl.value) ? String(_selPlEl.value) : '';
     var manualVal = document.getElementById('_editManual').value.trim();
+    if (_pickedVal) {
+      var _pParts = _pickedVal.split('|');
+      var _pNum = _pParts[0] || '';
+      var _pName = _pParts.slice(1).join('|') || '';
+      if (_pName) manualVal = (_pNum ? (_pNum + '. ' + _pName) : _pName);
+    }
 
     if (!manualVal) { alert('⚠️ Escribe el jugador manualmente o selecciónalo de la plantilla.'); return; }
 

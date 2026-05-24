@@ -4272,22 +4272,26 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     st._psSig = sig;
+    /* `effDay` = day efectivo que se renderiza y se propaga al hub.
+       Por defecto = day. Si el humano está eliminado del Mundial y la
+       fila era ag-sel, lo convertimos a un day "ag-rest" para que tanto
+       la card como la subtítulo "Próximo partido" del hub digan
+       «💤 Descanso» en vez de «🌍 Mundial Octavos · JUGADORES FUERA».
+       Regla obligatoria 2026-05-24: "cuando un equipo o selección es
+       eliminada ese día de partido pasará a ser día de descanso". */
+    var effDay = day;
     if (day.type === 'train')      _cardTraining(day);
     else if (day.type === 'rest')  {
-      /* Parón de selecciones (ag-sel) + Mundial 2032 con humano →
-         mostramos el partido de Francia (India vs Francia, etc.)
-         en vez de "jugadores fuera". 2026-05-23.
-         2026-05-24: si _selPair devuelve { eliminated: true } el
-         humano está fuera del Mundial → día de ENTRENAMIENTO
-         (petición usuario: "si es eliminado de una competición esa
-         card será día de entrenamiento"). */
       var selPair = _selPair(day);
-      if (selPair && selPair.eliminated) _cardTraining(day);
-      else if (selPair)                  _cardSelMatch(day, selPair);
-      else                               _cardRest(day);
+      if (selPair && selPair.eliminated){
+        effDay = { date: day.date, label: 'Descanso', type: 'rest', cls: 'ag-r ag-rest' };
+        _cardRest(effDay);
+      }
+      else if (selPair) _cardSelMatch(day, selPair);
+      else              _cardRest(day);
     }
     else                           _cardMatch(day);
-    _syncHubLabels(day);
+    _syncHubLabels(effDay);
   }
 
   /* El render lo dispara updateHud() del hub (rama "torneo elegido")

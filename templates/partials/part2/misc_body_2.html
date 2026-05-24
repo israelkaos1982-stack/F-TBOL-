@@ -3723,6 +3723,11 @@
   function humansInMatch(){
     var t = getMatchTeams();
     if (!t) return [];
+    /* Hidratar selecciones (rellena `_SEL_HUMAN_ICONS` para que
+       `humanIcon('Francia')` devuelva el 💡 y la 3ª pasada de abajo
+       reconozca la selección como humana aunque el usuario no haya
+       entrado al editor de plantillas en esta sesión). */
+    try { if (window._selSquadHydrate) window._selSquadHydrate(); } catch(_){}
     var HUMS = getHumanList();
     var found = [];
     [t.home, t.away].forEach(function(tn){
@@ -3734,6 +3739,17 @@
         var nh = normTeam(HUMS[j]);
         if (nh && nt && (nh.indexOf(nt) !== -1 || nt.indexOf(nh) !== -1)) { found.push(HUMS[j]); return; }
       }
+      /* Fallback humanIcon: cualquier team con icono de humano asignado
+         (selecciones con icono en `selecciones_squad_v1`, o equipos no-EA
+         con `humanEmoji` en el editor de plantilla) cuenta como humano
+         a efectos de añadir lesionados. Cubre el caso "Francia vs UAE":
+         Francia tiene 💡 en su plantilla de selección, debe permitir
+         marcar lesionados aunque no esté en `ligaExt_liga-ea-sports`. */
+      try {
+        if (typeof window.humanIcon === 'function' && window.humanIcon(tn)) {
+          found.push(tn);
+        }
+      } catch(_){}
     });
     return found;
   }

@@ -171,26 +171,50 @@
   }
 
   function _collectCopaTeams() {
-    _refreshHumanTeams();
-    _copaShieldCache = null;
+    /* 2026-05-24: gate `_ligaExtSimInProgress` durante TODA la
+       recolección. Sin él, la primera vez que el usuario abre Copa
+       del Rey en un dispositivo sin cache local de Liga Hypermotion
+       o Primera Federación, cada `loadData(slug)` dispara hasta 3
+       XHR SÍNCRONAS al backend (`/api/liga-ext/<slug>` + 2
+       `/api/liga-ext-protected/<slug>`). En móvil con red lenta
+       (Railway cold start) cada XHR puede colgarse 30+ segundos →
+       el botón "🎯 Iniciar Copa — Sortear 1ª Ronda" se queda sin
+       respuesta varios minutos (bug reportado 2026-05-24 — usuario
+       "le pulso y no hace absolutamente nada pese a esperar varios
+       minutos"). Con el gate, loadData() salta los XHR sync y
+       devuelve {teams:[], results:[]} al instante; caemos a los
+       fallbacks estáticos (_ligaEaFallback / _hypermotionFallback /
+       _primeraFedFallback) que ya contienen los 20 + 22 + 40
+       equipos con nombre y power suficientes para el sorteo. La
+       hidratación real sigue ocurriendo en segundo plano vía las
+       fetch ASYNC del bundle (refreshLigaEaShields, etc.) sin
+       bloquear el thread JS. */
+    var _prevGate = window._ligaExtSimInProgress;
+    window._ligaExtSimInProgress = true;
     var all = [];
     var seen = {};
-    var FALLBACK = {
-      'liga-ea-sports':          _ligaEaFallback,
-      'liga-hypermotion':        _hypermotionFallback,
-      'liga-primera-federacion': _primeraFedFallback
-    };
-    COPA_LEAGUE_SLUGS.forEach(function (slug) {
-      var teams = _readLigaTeams(slug);
-      if (!teams.length && typeof FALLBACK[slug] === 'function') {
-        teams = FALLBACK[slug]();
-      }
-      teams.forEach(function (t) {
-        if (!t.name || seen[t.name]) return;
-        seen[t.name] = true;
-        all.push(t);
+    try {
+      _refreshHumanTeams();
+      _copaShieldCache = null;
+      var FALLBACK = {
+        'liga-ea-sports':          _ligaEaFallback,
+        'liga-hypermotion':        _hypermotionFallback,
+        'liga-primera-federacion': _primeraFedFallback
+      };
+      COPA_LEAGUE_SLUGS.forEach(function (slug) {
+        var teams = _readLigaTeams(slug);
+        if (!teams.length && typeof FALLBACK[slug] === 'function') {
+          teams = FALLBACK[slug]();
+        }
+        teams.forEach(function (t) {
+          if (!t.name || seen[t.name]) return;
+          seen[t.name] = true;
+          all.push(t);
+        });
       });
-    });
+    } finally {
+      window._ligaExtSimInProgress = _prevGate;
+    }
     /* Garantizar que los 5 humanos estén presentes aunque ninguno de
        los storages los traiga (caso raro: el editor de Liga EA quedó
        sin guardar). Sin esto, el filtro `humanos = all.filter(isHuman)`

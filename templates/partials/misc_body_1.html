@@ -13046,7 +13046,12 @@ window._showSimProgress = function(opts, onDone){
   .tour-tie-leg .tl-tm-r{text-align:right;}
   .tour-tie-leg .tl-sc{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;color:#fff;}
   .tour-tie-note{font-family:Rajdhani,sans-serif;font-size:10px;color:#f0c040;text-align:center;padding-top:2px;}
-  .tour-tie-leg-lbl{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#f0c040;text-align:center;padding:2px 0 1px;text-transform:uppercase;}
+  .tour-tie-leg-lbl{
+    font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;
+    color:#f0c040;text-align:center;padding:4px 0 2px;text-transform:uppercase;
+    border-top:1px dashed rgba(240,192,64,.25);margin-top:2px;
+  }
+  .tour-tie-leg-lbl:first-child{border-top:none;margin-top:0;padding-top:2px;}
   .tour-match{
     display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;
     background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);
@@ -15236,7 +15241,7 @@ window._showSimProgress = function(opts, onDone){
       var curTeams = cfg.bracket[curR] || [];
       var roundLbl = rounds[curR] || ('Ronda de '+curTeams.length);
       var subtitle = (cfg.format === 'ko-2leg') ? 'IDA Y VUELTA · gol de visitante' : 'A UN PARTIDO';
-      var html = hint + '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">'+roundLbl+' · <span style="color:rgba(255,255,255,.40);">'+subtitle+'</span></p>';
+      var html = hint + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:2.5px;font-size:14px;font-weight:700;color:#f0c040;text-shadow:0 0 8px rgba(240,192,64,.45);text-transform:uppercase;">'+roundLbl+' <span style="color:rgba(255,255,255,.85);text-shadow:0 0 6px rgba(255,255,255,.3);">· '+subtitle+'</span></p>';
       html += '<div class="tour-bracket-list">';
       var allPlayed = true;
       var pairCount = 0;
@@ -15279,7 +15284,7 @@ window._showSimProgress = function(opts, onDone){
           var vtaCls = 'tour-match'
             + (vtaPickable ? ' tour-match-pickable tour-match-has-human' : ' tour-match-locked');
           /* IDA */
-          tie += '<div class="tour-tie-leg-lbl">🟢 IDA · juega en su campo'
+          tie += '<div class="tour-tie-leg-lbl">🟢 IDA'
             + (_kd && _kd.ida ? ' · 📅 ' + _kd.ida : '') + '</div>';
           if (L1) {
             var aWin1 = (L1.a|0) > (L1.b|0), bWin1 = (L1.b|0) > (L1.a|0);
@@ -15299,8 +15304,7 @@ window._showSimProgress = function(opts, onDone){
           }
           /* VUELTA (campo invertido) */
           tie += '<div class="tour-tie-leg-lbl">🔁 VUELTA'
-            + (_kd && _kd.vta ? ' · 📅 ' + _kd.vta : '')
-            + (!L1 ? ' · (se desbloquea tras la IDA)' : '') + '</div>';
+            + (_kd && _kd.vta ? ' · 📅 ' + _kd.vta : '') + '</div>';
           tie += '<div class="'+vtaCls+'"'+(vtaPickable?dataAttrs:'')+'>'
             + _bracketTeamHtml(b, id, i+1)
             + '<span class="vs">vs</span>'
@@ -15332,9 +15336,12 @@ window._showSimProgress = function(opts, onDone){
         }
         /* Cada eliminatoria en su propia caja con borde (petición
            usuario 2026-05-17). Las que tienen humano van arriba con
-           borde llamativo. */
+           borde llamativo. La fecha de cabecera se omite cuando los
+           sub-labels IDA/VUELTA ya muestran su fecha (caso humano 2-leg)
+           para no duplicar (petición usuario 2026-05-24). */
+        var _skipTopDate = (hasHuman && _tour2LegRound(cfg, curR) && !played);
         var tieBox = '<div class="tour-tie'+(hasHuman?' tour-tie-human':'')+'">'
-          + (_koDateBadge ? '<div class="tour-tie-date">'+_koDateBadge+'</div>' : '')
+          + ((_koDateBadge && !_skipTopDate) ? '<div class="tour-tie-date">'+_koDateBadge+'</div>' : '')
           + tie + '</div>';
         if (hasHuman) humanTies += tieBox; else restTies += tieBox;
         pairCount++;

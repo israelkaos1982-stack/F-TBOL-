@@ -3414,17 +3414,84 @@ window._showSimProgress = function(opts, onDone){
          días marcados como "Mundial - Dieciseisavos / Octavos /
          Cuartos / Semis / Final" en el calendario del hub Liverpool
          caían a JUGADORES FUERA aunque el bracket ya estuviera
-         sorteado, porque mundial-48 NO usa `bracket` sino `koBracket`. */
-      var bracket = (mundialCfg.koBracket || mundialCfg.bracket || [])[koRoundIdx];
-      if (!Array.isArray(bracket) || !bracket.length) return null;
+         sorteado, porque mundial-48 NO usa `bracket` sino `koBracket`.
+         2026-05-24 (b): si el bracket está sorteado y el humano NO
+         está en él, devolvemos { eliminated: true } para que el
+         caller renderice día de ENTRENAMIENTO en lugar de JUGADORES
+         FUERA. También detecta eliminación retro-activa cuando el
+         humano perdió en una ronda anterior y la actual aún no se
+         sorteó. Petición usuario: "sincroniza el calendario con sus
+         partidos … si es eliminado de una competición esa card será
+         día de entrenamiento". */
+      var bracketAll = mundialCfg.koBracket || mundialCfg.bracket || [];
       var humanName = (teams[huIdx] && teams[huIdx].name) || '';
       if (!humanName) return null;
+      var bracket = bracketAll[koRoundIdx];
+      if (!Array.isArray(bracket) || !bracket.length){
+        /* Ronda actual sin sortear. ¿El humano ya perdió en una
+           ronda anterior? Recorremos los rounds previos buscándole:
+           si lo encontramos jugando y NO ganó esa pareja, está
+           eliminado para siempre. */
+        for (var pr = 0; pr < koRoundIdx; pr++){
+          var prevBr = bracketAll[pr];
+          if (!Array.isArray(prevBr) || !prevBr.length) continue;
+          for (var pi = 0; pi < prevBr.length; pi++){
+            var pt = prevBr[pi];
+            if (!pt || pt.name !== humanName) continue;
+            var pPairIdx = Math.floor(pi / 2);
+            var pRes = mundialCfg.results && mundialCfg.results['ko_'+pr+'_'+pPairIdx];
+            if (pRes && pRes.played){
+              var winSlot = (pRes.winner === 'a') ? pPairIdx*2 : pPairIdx*2 + 1;
+              if (winSlot !== pi) return { eliminated: true };
+            }
+            break;
+          }
+        }
+        /* Caso especial round 0 (Dieciseisavos): la fase de grupos
+           puede estar terminada pero koBracket[0] aún sin construir
+           (el usuario no ha pulsado «ABRIR PLAYOFFS»). Si todos los
+           partidos del grupo del humano están jugados Y el humano
+           NO está entre los clasificados, ya está eliminado. */
+        if (koRoundIdx === 0 && typeof window._mundialQualifiers === 'function'){
+          try {
+            var pg2 = (mundialCfg.formatConfig && mundialCfg.formatConfig.perGroup) || 4;
+            var gIdx2 = Math.floor(huIdx / pg2);
+            var fixs2 = (mundialCfg.groupFixtures || [])[gIdx2] || [];
+            var results2 = (mundialCfg.groupResults || [])[gIdx2] || [];
+            var allDone = fixs2.length > 0;
+            for (var jj = 0; jj < fixs2.length && allDone; jj++){
+              var mu2 = fixs2[jj] || [];
+              for (var mii = 0; mii < mu2.length; mii++){
+                var rr2 = results2[jj] && results2[jj][mii];
+                if (!rr2 || !(rr2.played || rr2.done)){ allDone = false; break; }
+              }
+            }
+            if (allDone){
+              var slices2 = [];
+              for (var gg = 0; gg < (mundialCfg.teams.length / pg2); gg++){
+                slices2.push(mundialCfg.teams.slice(gg*pg2, gg*pg2+pg2));
+              }
+              var quals = window._mundialQualifiers(mundialCfg, slices2) || [];
+              var inQuals = false;
+              for (var qi = 0; qi < quals.length; qi++){
+                if (quals[qi] && quals[qi].name === humanName){ inQuals = true; break; }
+              }
+              if (!inQuals) return { eliminated: true };
+            }
+          } catch(_){}
+        }
+        return null;
+      }
       var huKoIdx = -1;
       for (var bi = 0; bi < bracket.length; bi++){
         var bt = bracket[bi];
         if (bt && bt.name === humanName){ huKoIdx = bi; break; }
       }
-      if (huKoIdx < 0) return null;
+      /* Bracket sorteado pero el humano NO aparece → eliminado.
+         Para round 0 esto cubre que no clasificara desde la fase de
+         grupos; para rounds > 0 cubre que perdió en la ronda
+         anterior y el bracket nuevo ya se generó sin él. */
+      if (huKoIdx < 0) return { eliminated: true };
       var pairIdx = Math.floor(huKoIdx / 2);
       var hKo = bracket[pairIdx*2], aKo = bracket[pairIdx*2 + 1];
       if (!hKo || !aKo || !hKo.name || !aKo.name) return null;
@@ -4199,10 +4266,15 @@ window._showSimProgress = function(opts, onDone){
     else if (day.type === 'rest')  {
       /* Parón de selecciones (ag-sel) + Mundial 2032 con humano →
          mostramos el partido de Francia (India vs Francia, etc.)
-         en vez de "jugadores fuera". 2026-05-23. */
+         en vez de "jugadores fuera". 2026-05-23.
+         2026-05-24: si _selPair devuelve { eliminated: true } el
+         humano está fuera del Mundial → día de ENTRENAMIENTO
+         (petición usuario: "si es eliminado de una competición esa
+         card será día de entrenamiento"). */
       var selPair = _selPair(day);
-      if (selPair) _cardSelMatch(day, selPair);
-      else         _cardRest(day);
+      if (selPair && selPair.eliminated) _cardTraining(day);
+      else if (selPair)                  _cardSelMatch(day, selPair);
+      else                               _cardRest(day);
     }
     else                           _cardMatch(day);
     _syncHubLabels(day);
@@ -16997,6 +17069,14 @@ window._showSimProgress = function(opts, onDone){
     for (var i = 0; i < n/2; i++) { round0.push(q[i]); round0.push(q[n-1-i]); }
     return round0;
   }
+  /* Expuesto a window para que `_selPair` (caja Liverpool) pueda
+     detectar si Francia clasificó a Dieciseisavos antes de que el
+     usuario abra la pantalla del Mundial — sin esto, mientras
+     `cfg.koBracket[0]` siga sin construir, el card no sabe si
+     Francia está eliminada o si la ronda simplemente no se ha
+     sorteado, y muestra «JUGADORES FUERA» en lugar de un día de
+     ENTRENAMIENTO. */
+  try { window._mundialQualifiers = _mundialQualifiers; } catch(_){}
   function _mundialBackBtn(tourId){
     return '<div style="margin-bottom:10px;"><button type="button" '
       + 'onclick="window._mundialGo(\''+tourId+'\',\'menu\')" '

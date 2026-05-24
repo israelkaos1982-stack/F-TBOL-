@@ -3392,11 +3392,19 @@ window._showSimProgress = function(opts, onDone){
     var played = !!(res && res.played);
     var center;
     if (played){
-      var aW = res.winner === 'a', bW = res.winner === 'b';
-      center = '<div class="ps-x" style="display:flex;flex-direction:column;align-items:center;gap:4px;font-family:\'Bebas Neue\',sans-serif;font-size:22px;letter-spacing:2px;color:#4dd0e1;">'
-        +   '<span'+(aW?' style="color:#fff;"':'')+'>'+res.a+'</span>'
-        +   '<span style="font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);">vs</span>'
-        +   '<span'+(bW?' style="color:#fff;"':'')+'>'+res.b+'</span>'
+      /* Score horizontal "X - Y" + badge 🏁 FIN, mismo estilo que
+         las cards finalizadas de Champions / Mundial (foto 3 del
+         usuario 2026-05-24). El ganador en blanco brillante, el
+         perdedor en cian apagado. */
+      var aW = res.winner === 'a' || (res.winner == null && res.a > res.b);
+      var bW = res.winner === 'b' || (res.winner == null && res.b > res.a);
+      var aClr = aW ? '#fff' : '#4dd0e1';
+      var bClr = bW ? '#fff' : '#4dd0e1';
+      center = '<div class="ps-x" style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;padding:0 4px;">'
+        + '<div style="background:rgba(0,0,0,.45);border:1px solid rgba(77,208,225,.5);border-radius:8px;padding:5px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:26px;letter-spacing:2px;color:#4dd0e1;text-shadow:0 0 10px rgba(77,208,225,.45);min-width:78px;text-align:center;line-height:1.05;">'
+        +   '<span style="color:'+aClr+';">'+res.a+'</span> - <span style="color:'+bClr+';">'+res.b+'</span>'
+        + '</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:1px 8px;">🏁 FIN</div>'
         + '</div>';
     } else {
       center = '<div class="ps-x">VS</div>';
@@ -3410,6 +3418,24 @@ window._showSimProgress = function(opts, onDone){
     if (!played){
       var canPay = _psGetHubMoney() >= PS_PAY_SIM_COST;
       payHtml = '<div style="margin-top:6px;">' + _psPayBtnHtml(!canPay) + '</div>';
+    }
+    /* Acta del partido (desplegable) cuando played=true. Reusa el
+       renderer canónico de Champions/EL/UECL para que el estilo
+       coincida 1:1 con la foto 3 del usuario (📋 ACTA DEL PARTIDO
+       con toggle ▼/▲, lista minuto-ícono-jugador-equipo, MVP
+       destacado al final). 2026-05-24. */
+    var actaHtml = '';
+    if (played && typeof window._eurFaseRenderActaPanel === 'function'){
+      var actaUid = 'ps-acta-' + String(pair.tourId).replace(/[^A-Za-z0-9_-]/g,'_')
+                  + '-' + String(pair.matchKey).replace(/[^A-Za-z0-9_-]/g,'_');
+      var actaM = {
+        home: res.home || hN,
+        away: res.away || aN,
+        events: (res.events || []),
+        mvp: res.mvp || '',
+        mvpTeam: res.mvpTeam || ''
+      };
+      try { actaHtml = window._eurFaseRenderActaPanel(actaM, actaUid); } catch(_){ actaHtml = ''; }
     }
     st.innerHTML =
       '<div class="ps-card">'
@@ -3426,6 +3452,7 @@ window._showSimProgress = function(opts, onDone){
       +     '<div class="ps-tn">'+_esc(aN)+(aHi?' '+aHi:'')+'</div>'
       +   '</div>'
       + '</div>'
+      + actaHtml
       + btnHtml
       + payHtml
       + '</div>';
@@ -22976,6 +23003,11 @@ window._showSimProgress = function(opts, onDone){
       if(ico) ico.textContent = open ? '▼' : '▲';
     }
   };
+  /* Expuesto a window para que el botón "Pagar Simulación" del hub
+     (pretemporada IIFE) renderice el acta desplegable del partido
+     auto-simulado con EL MISMO formato visual que Champions / EL /
+     UECL (foto 3 del usuario 2026-05-24). 2026-05-24. */
+  try { window._eurFaseRenderActaPanel = _eurFaseRenderActaPanel; } catch(_){}
   function renderJornada(comp, jor){
     var c = COMPS[comp]; if(!c) return false;
     var titleEl = document.getElementById(c.titleId);

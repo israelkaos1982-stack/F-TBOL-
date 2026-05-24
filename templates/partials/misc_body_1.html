@@ -2764,6 +2764,42 @@ window._showSimProgress = function(opts, onDone){
           que el poller de 3 s (que compara contra localStorage y no
           vería diff si el setItem petó) no se pierda el cambio. */
   var _MEM = null;
+
+  /* ── CAPA 3: cookie de respaldo (2026-05-24) ─────────────────────
+     Algunos navegadores móviles purgan localStorage tras horas de
+     inactividad (políticas de Storage Pressure de Chrome Android,
+     ITP de Safari). Cuando eso pasa y la hidratación del server
+     trae datos viejos (porque el push del último _save no llegó),
+     el cursor se queda en 01 May. La cookie sobrevive a esa purga
+     y se usa como tercer fallback en _load. Codificada como
+     base64(JSON), max-age 1 año, SameSite=Lax. */
+  var COOKIE_KEY = 'bayps';
+  function _cookieRead(){
+    try {
+      var m = (document.cookie || '').match(new RegExp('(?:^|; )' + COOKIE_KEY + '=([^;]*)'));
+      if (!m) return null;
+      var raw = decodeURIComponent(m[1] || '');
+      if (!raw) return null;
+      var json = raw;
+      try { json = decodeURIComponent(escape(atob(raw))); } catch(_){}
+      var p = JSON.parse(json);
+      return (p && typeof p === 'object') ? p : null;
+    } catch(_){ return null; }
+  }
+  function _cookieWrite(o){
+    try {
+      var json = JSON.stringify(o || {});
+      var b64 = '';
+      try { b64 = btoa(unescape(encodeURIComponent(json))); } catch(_){ b64 = json; }
+      var oneYear = 60*60*24*365;
+      document.cookie = COOKIE_KEY + '=' + encodeURIComponent(b64) +
+        '; max-age=' + oneYear + '; path=/; SameSite=Lax';
+    } catch(_){}
+  }
+  function _cookieClear(){
+    try { document.cookie = COOKIE_KEY + '=; max-age=0; path=/; SameSite=Lax'; } catch(_){}
+  }
+
   function _load(){
     if (_MEM) return _MEM;
     var d = null;
@@ -2774,6 +2810,24 @@ window._showSimProgress = function(opts, onDone){
          sessionStorage. Si el navegador conserva el tab abierto, lo
          recuperamos aquí; si no, hydrateFromServer lo restaurará. */
       try { var s = sessionStorage.getItem(KEY); if (s){ var sp = JSON.parse(s); if (sp && typeof sp === 'object') d = sp; } } catch(_){}
+    }
+    if (!d){
+      /* Fallback a cookie (sobrevive a purgas de localStorage en
+         móviles tras horas de inactividad). */
+      var ck = _cookieRead();
+      if (ck && typeof ck === 'object') d = ck;
+    }
+    /* ALTO RIESGO: si el server-hidratado trajo dayIdx=0 pero la
+       cookie tiene un cursor más avanzado con ts más reciente, la
+       cookie gana (el server tenía un valor stale del último reset
+       y el push del avance posterior no llegó). */
+    if (d && (parseInt(d.dayIdx,10)||0) === 0){
+      var ck2 = _cookieRead();
+      if (ck2 && (parseInt(ck2.dayIdx,10)||0) > 0){
+        var dTs = parseInt(d.ts,10) || 0;
+        var ckTs = parseInt(ck2.ts,10) || 0;
+        if (ckTs >= dTs) d = ck2;
+      }
     }
     if (!d) d = { tour:null, dayIdx:0, rivals:{}, done:{}, previaOpenedIdx:-1 };
     if (typeof d.dayIdx !== 'number') d.dayIdx = parseInt(d.dayIdx,10) || 0;
@@ -2803,6 +2857,9 @@ window._showSimProgress = function(opts, onDone){
     /* Respaldo en sessionStorage: incluso si localStorage falla por
        cuota, el cursor sobrevive a navegaciones internas. */
     try { sessionStorage.setItem(KEY, _json); } catch(_){}
+    /* Respaldo en cookie: sobrevive a purgas de localStorage del
+       navegador móvil tras horas de inactividad. */
+    try { _cookieWrite(_MEM); } catch(_){}
     if (!_lsOk){
       /* localStorage falló → el poller del sync (compara contra disco)
          no detectará el cambio. Push directo a /api/state con sendBeacon
@@ -2819,6 +2876,9 @@ window._showSimProgress = function(opts, onDone){
       } catch(_){}
     }
   }
+  /* Expuesto para que _psResetCalendar (y cualquier futuro reset)
+     pueda limpiar también la cookie de respaldo. */
+  window._psCookieClear = _cookieClear;
   /* Invalidador expuesto: `hydrateFromServer` del sync (misc_body_2.html)
      puede sobrescribir KEY en disco con un valor más reciente sin que
      el cache `_MEM` de esta IIFE se entere (no hay storage event en el
@@ -4068,9 +4128,13 @@ window._showSimProgress = function(opts, onDone){
      para que la temporada arranque limpia: sin partidos ya resueltos,
      sin previas marcadas como ya abiertas. */
   window._psResetCalendar = function(){
-    var d = { tour: null, dayIdx: 0, rivals: {}, done: {}, previaOpenedIdx: -1 };
+    var d = { tour: null, dayIdx: 0, rivals: {}, done: {}, previaOpenedIdx: -1, ts: Date.now() };
     _MEM = d;
     try { localStorage.setItem(KEY, JSON.stringify(d)); } catch(_){}
+    try { sessionStorage.setItem(KEY, JSON.stringify(d)); } catch(_){}
+    /* Limpiar la cookie de respaldo del cursor: sin esto, _load la
+       resucitaría desde la cookie en la próxima recarga. */
+    try { _cookieClear(); } catch(_){}
     try { window.__psDayIdx = 0; } catch(_){}
     try { window.__psPreviaOpenedIdx = -1; } catch(_){}
     try { window.__psBusy = false; } catch(_){}

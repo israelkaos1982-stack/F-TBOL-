@@ -3349,18 +3349,24 @@ window._showSimProgress = function(opts, onDone){
       var lbl = String(day.label || '');
       if (!/mundial/i.test(lbl)) return null;
       var isGroup = /grupo/i.test(lbl);
-      var jor = -1, koRoundIdx = -1;
+      var jor = -1, koRoundIdx = -1, koLabelKind = '';
       if (isGroup) {
         var mJor = /j\s*(\d+)/i.exec(lbl);
         if (!mJor) return null;
         jor = parseInt(mJor[1], 10) - 1;
         if (isNaN(jor) || jor < 0) return null;
       } else {
-        if      (/dieciseisav|repesca|1\s*\/\s*32/i.test(lbl)) koRoundIdx = 0;
-        else if (/octavos/i.test(lbl))                          koRoundIdx = 1;
-        else if (/cuartos/i.test(lbl))                          koRoundIdx = 2;
-        else if (/semis|semifinal/i.test(lbl))                  koRoundIdx = 3;
-        else if (/final/i.test(lbl))                            koRoundIdx = 4;
+        /* Determinamos el «tipo» de ronda por la etiqueta del día; el
+           índice real en koBracket se resuelve más abajo, una vez
+           cargada la cfg del Mundial, porque la posición de Final
+           depende del formato (5 ó 6 rondas — el formato nuevo añade
+           «Tercer Puesto» antes de la Final). 2026-05-24. */
+        if      (/dieciseisav|repesca|1\s*\/\s*32/i.test(lbl)) koLabelKind = 'd16';
+        else if (/octavos/i.test(lbl))                          koLabelKind = 'oct';
+        else if (/cuartos/i.test(lbl))                          koLabelKind = 'cua';
+        else if (/semis|semifinal/i.test(lbl))                  koLabelKind = 'sem';
+        else if (/tercer\s*puesto|3er?\s*puesto|3\s*y\s*4|3\s*\/\s*4/i.test(lbl)) koLabelKind = '3p';
+        else if (/final/i.test(lbl))                            koLabelKind = 'fin';
         else return null;
       }
       var cache = window._TOUR_CACHE || {};
@@ -3387,6 +3393,21 @@ window._showSimProgress = function(opts, onDone){
         }
       }
       if (!mundialCfg) return null;
+      /* Resolver el índice KO según el formato real del torneo:
+         antiguo (5 rondas, Final = 4) o nuevo con 3er puesto
+         (6 rondas, 3er Puesto = 4, Final = 5). 2026-05-24. */
+      if (!isGroup) {
+        var _krSel = (mundialCfg.formatConfig && mundialCfg.formatConfig.koRounds)
+          || ['Dieciseisavos','Octavos','Cuartos','Semis','Final'];
+        var _has3rdSel = (_krSel.length >= 6 && _krSel[_krSel.length - 2] === 'Tercer Puesto');
+        if      (koLabelKind === 'd16') koRoundIdx = 0;
+        else if (koLabelKind === 'oct') koRoundIdx = 1;
+        else if (koLabelKind === 'cua') koRoundIdx = 2;
+        else if (koLabelKind === 'sem') koRoundIdx = 3;
+        else if (koLabelKind === '3p')  koRoundIdx = _has3rdSel ? 4 : -1;
+        else if (koLabelKind === 'fin') koRoundIdx = _krSel.length - 1;
+        if (koRoundIdx < 0) return null;
+      }
       var teams = mundialCfg.teams || [];
       var huIdx = -1;
       /* Pase 1: flag isHuman explícito en cfg.teams (lo pone el editor
@@ -14333,10 +14354,15 @@ window._showSimProgress = function(opts, onDone){
   };
   /* Config fija del formato Mundial 2032 (48 selecciones, 2026-05-22):
      12 grupos de 4 → 1º+2º (24) + 8 mejores terceros = 32 →
-     Dieciseisavos (1/32) → Octavos → Cuartos → Semis → Final. */
+     Dieciseisavos (1/32) → Octavos → Cuartos → Semis → Tercer Puesto + Final.
+     2026-05-24: añadido «Tercer Puesto» entre Semis y Final. Lo
+     juegan los 2 perdedores de Semifinales en paralelo con la Final;
+     ambos quedan desbloqueados al avanzar Semis. Para Mundiales
+     guardados con el formato antiguo (5 rondas KO) NO se aplica
+     retroactivamente: solo torneos nuevos lo reciben. */
   function _mundialFormatConfig(){
     return { groups:12, perGroup:4, advancePerGroup:2,
-             koRounds:['Dieciseisavos','Octavos','Cuartos','Semis','Final'],
+             koRounds:['Dieciseisavos','Octavos','Cuartos','Semis','Tercer Puesto','Final'],
              bestThirds:8, koExtraTimePens:true };
   }
   window._mundialFormatConfig = _mundialFormatConfig;
@@ -15714,7 +15740,18 @@ window._showSimProgress = function(opts, onDone){
          editor (que usa _selRosterLayout) muestre el grid completo. */
       cfg.numTeams = _gpQ * _pgQ;
     } else if (cfg.format === 'mundial-48') {
-      cfg.formatConfig = _mundialFormatConfig();
+      /* 2026-05-24: «Tercer Puesto» se añadió a koRounds para
+         Mundiales nuevos. Si el torneo ya tiene fase KO sorteada
+         (koBracket poblado), respetamos el formatConfig actual para
+         no inconsistir los índices kb[N] con la nueva longitud
+         (6 vs 5). Mundiales nuevos / sin KO aún reciben el formato
+         actualizado con 3er puesto. */
+      var _hadKo = !!(cfg.koBracket && cfg.koBracket.length);
+      if (!_hadKo || !cfg.formatConfig
+          || !cfg.formatConfig.koRounds
+          || !cfg.formatConfig.koRounds.length) {
+        cfg.formatConfig = _mundialFormatConfig();
+      }
       cfg.numTeams = 48;
     }
     cfg.prizes = _prizesFromText(document.getElementById('tour-ed-prizes').value);
@@ -17523,7 +17560,9 @@ window._showSimProgress = function(opts, onDone){
           if (lbl.indexOf('mundial') === -1) continue;
           /* Mundialito Clubes es OTRO torneo (juega en Julio). */
           if (lbl.indexOf('mundialito') !== -1) continue;
-          if (/\bgran\s+final\b/.test(lbl) || (/\bfinal\b/.test(lbl) && !/de\s+final/.test(lbl))) {
+          if (/\btercer\s*puesto\b|\b3er?\s*puesto\b|\b3\s*\/\s*4\b|\b3\s*y\s*4\b/.test(lbl)) {
+            if (!data['tercer-puesto']) data['tercer-puesto'] = dt;
+          } else if (/\bgran\s+final\b/.test(lbl) || (/\bfinal\b/.test(lbl) && !/de\s+final/.test(lbl))) {
             if (!data.final) data.final = dt;
           } else if (/\bsemi(s|finales?|final)\b/.test(lbl)) {
             if (!data.semis) data.semis = dt;
@@ -17625,7 +17664,14 @@ window._showSimProgress = function(opts, onDone){
        conserva su 📊). Petición usuario 2026-05-22. */
     var html = '<div class="jlist" style="padding:6px 0 18px;">';
     if (champTeam) html += _championBoxHtml(champTeam);
-    html += koRow(4, '🌐', 'Final',         'final');
+    /* Final + Tercer Puesto: detectamos el formato por longitud de
+       koRounds (6 = nuevo con 3er puesto, 5 = antiguo sin él). El
+       3er puesto va justo debajo de la Final en el menú, igual que la
+       captura del usuario (2026-05-24): Final arriba, 3er puesto
+       intermedio, luego Semifinales. */
+    var _has3rd = (koRounds.length >= 6 && koRounds[koRounds.length - 2] === 'Tercer Puesto');
+    html += koRow(lastR, '🌐', 'Final', 'final');
+    if (_has3rd) html += koRow(lastR - 1, '🌐', 'Tercer Puesto', 'tercer-puesto');
     html += koRow(3, '🌐', 'Semifinales',   'semis');
     html += koRow(2, '🌐', 'Cuartos',       'cuartos');
     html += koRow(1, '🌐', 'Octavos',       'octavos');
@@ -17866,13 +17912,32 @@ window._showSimProgress = function(opts, onDone){
     }
     if (typeof cfg.koCurrentRound !== 'number') cfg.koCurrentRound = 0;
     var curR = (typeof viewRound === 'number' && viewRound >= 0) ? viewRound : cfg.koCurrentRound;
-    if (curR > cfg.koCurrentRound || !cfg.koBracket[curR]) {
+    /* Mundial-48 con 3er Puesto (2026-05-24): tras Semis quedan
+       poblados kb[4] (Tercer Puesto) y kb[5] (Final) a la vez aunque
+       koCurrentRound siga en 4. La existencia del bracket es
+       suficiente para abrir la vista — no exigimos también que
+       koCurrentRound haya llegado a esta ronda, o si no la Final se
+       bloquearía mientras el cursor está en el 3er puesto. */
+    var _bracketReadyHere = !!cfg.koBracket[curR];
+    if (!_bracketReadyHere) {
       var prevLbl = koRounds[cfg.koCurrentRound] || 'la ronda anterior';
       return html + '<div style="padding:24px 16px;text-align:center;font-family:Oswald,sans-serif;'
         + 'letter-spacing:1.2px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.7;">'
         + '🔒 Esta ronda aún no se ha sorteado. Juega y avanza <b>'+prevLbl.toUpperCase()+'</b> primero.</div>';
     }
     var isCurrent = (curR === cfg.koCurrentRound);
+    /* Mundial-48 con 3er Puesto (2026-05-24): tras avanzar Semis,
+       las dos últimas rondas (kb[4]=Tercer Puesto, kb[5]=Final) son
+       partidos paralelos disponibles a la vez. Ambas tienen que
+       comportarse como «ronda actual» para que cada una muestre su
+       botón ▶ SIMULAR RONDA / 🏆 AVANZAR / caja Campeón aunque
+       cfg.koCurrentRound apunte a la otra. */
+    var _krCur = cfg.formatConfig && cfg.formatConfig.koRounds;
+    if (!isCurrent && cfg.format === 'mundial-48' && _krCur && _krCur.length >= 6
+        && _krCur[_krCur.length - 2] === 'Tercer Puesto'
+        && (curR === 4 || curR === 5) && (cfg.koCurrentRound || 0) >= 4) {
+      isCurrent = true;
+    }
     var curT = cfg.koBracket[curR] || [];
     var roundLbl = koRounds[curR] || ('Ronda '+(curR+1));
     var dt = _tourGkoRoundDate(cfg, curR);
@@ -17962,12 +18027,12 @@ window._showSimProgress = function(opts, onDone){
     if (curT.length > 1 && isCurrent) {
       if (!koAllPlayed && koPairs > 0) {
         html += '<div style="display:flex;justify-content:center;margin-top:10px;">'
-          + '<button type="button" class="tour-sim-ko-btn" data-tour="'+tourId+'" '
+          + '<button type="button" class="tour-sim-ko-btn" data-tour="'+tourId+'" data-ko-round="'+curR+'" '
           + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:10px;padding:9px 16px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
           + '▶ SIMULAR '+roundLbl.toUpperCase()+'</button></div>';
       } else if (koAllPlayed && curR < koRounds.length - 1) {
         html += '<div style="display:flex;justify-content:center;margin-top:10px;">'
-          + '<button type="button" class="tour-adv-ko-btn" data-tour="'+tourId+'" '
+          + '<button type="button" class="tour-adv-ko-btn" data-tour="'+tourId+'" data-ko-round="'+curR+'" '
           + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:9px 16px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
           + '🏆 AVANZAR A '+(koRounds[curR+1]||'').toUpperCase()+'</button></div>';
       } else if (koAllPlayed && curR >= koRounds.length - 1) {
@@ -19722,7 +19787,14 @@ window._showSimProgress = function(opts, onDone){
       var kcfg = _tourLoadCachedSync(ktid);
       if (!kcfg) return;
       kcfg.results = kcfg.results || {};
-      var kCurR = kcfg.koCurrentRound || 0;
+      /* `data-ko-round` (2026-05-24): el render escribe ahí el índice
+         de la ronda que se está viendo para que Mundial-48 con 3er
+         Puesto pueda simular kb[4] o kb[5] según donde esté el
+         usuario, no la que marque koCurrentRound (que tras Semis
+         apunta solo a una de las dos). Fallback a koCurrentRound
+         para el resto de torneos. */
+      var _rAttr = simKoBtn.getAttribute('data-ko-round');
+      var kCurR = (_rAttr !== null && _rAttr !== '') ? (parseInt(_rAttr, 10) || 0) : (kcfg.koCurrentRound || 0);
       var kCurT = (kcfg.koBracket || [])[kCurR] || [];
       var skippedK = 0;
       for (var kk2 = 0; kk2 < kCurT.length; kk2 += 2) {
@@ -19789,21 +19861,60 @@ window._showSimProgress = function(opts, onDone){
       if (!ktid2 || TOUR_IDS.indexOf(ktid2) === -1) return;
       var kcfg2 = _tourLoadCachedSync(ktid2);
       if (!kcfg2) return;
-      var curR3 = kcfg2.koCurrentRound || 0;
+      /* `data-ko-round` (2026-05-24, mismo motivo que tour-sim-ko-btn):
+         en Mundial-48 con 3er Puesto, kb[4] y kb[5] coexisten tras
+         Semis y el AVANZAR puede dispararse desde la vista del 3er
+         puesto aunque koCurrentRound siga en otro valor. */
+      var _rAttrAdv = advKoBtn.getAttribute('data-ko-round');
+      var curR3 = (_rAttrAdv !== null && _rAttrAdv !== '')
+        ? (parseInt(_rAttrAdv, 10) || 0)
+        : (kcfg2.koCurrentRound || 0);
       var curT3 = (kcfg2.koBracket || [])[curR3] || [];
-      var winners = [];
-      for (var w0 = 0; w0 < curT3.length; w0 += 2) {
-        var k3 = 'ko_' + curR3 + '_' + (w0/2);
-        var r3 = kcfg2.results[k3];
-        if (!r3 || !r3.played) continue;
-        winners.push(r3.winner === 'a' ? curT3[w0] : curT3[w0+1]);
-      }
-      kcfg2.koBracket[curR3 + 1] = winners;
-      kcfg2.koCurrentRound = curR3 + 1;
-      /* Mundial 48: si estábamos en la vista de la ronda KO recién
-         cerrada, saltar a la nueva ronda para no quedar en la pasada. */
-      if (kcfg2.format === 'mundial-48' && _mundialView[ktid2] === 'ko'+curR3) {
-        _mundialView[ktid2] = 'ko'+(curR3 + 1);
+      /* Mundial 48 con «Tercer Puesto» (2026-05-24): al avanzar
+         Semis (curR3=3) escribimos DOS brackets a la vez — los
+         perdedores van al 3er puesto (kb[4]) y los ganadores a la
+         Final (kb[5]). Al avanzar el 3er puesto (curR3=4) NO
+         sobrescribimos kb[5] (ya tiene los finalistas): solo
+         bumpeamos el cursor a la Final. Detección por longitud de
+         koRounds (6 = nuevo formato) — torneos guardados con 5
+         rondas siguen el path estándar. */
+      var _kr3 = (kcfg2.formatConfig && kcfg2.formatConfig.koRounds) || [];
+      var _has3rd = (kcfg2.format === 'mundial-48'
+                     && _kr3.length >= 6
+                     && _kr3[_kr3.length - 2] === 'Tercer Puesto');
+      if (_has3rd && curR3 === 3) {
+        var winnersSemis = [], losersSemis = [];
+        for (var w0 = 0; w0 < curT3.length; w0 += 2) {
+          var k3 = 'ko_' + curR3 + '_' + (w0/2);
+          var r3 = kcfg2.results[k3];
+          if (!r3 || !r3.played) continue;
+          winnersSemis.push(r3.winner === 'a' ? curT3[w0]   : curT3[w0+1]);
+          losersSemis .push(r3.winner === 'a' ? curT3[w0+1] : curT3[w0]  );
+        }
+        kcfg2.koBracket[4] = losersSemis;
+        kcfg2.koBracket[5] = winnersSemis;
+        kcfg2.koCurrentRound = 4;
+        if (_mundialView[ktid2] === 'ko3') _mundialView[ktid2] = 'ko4';
+      } else if (_has3rd && curR3 === 4) {
+        /* 3er puesto jugado → solo avanzar el cursor a la Final.
+           kb[5] ya está poblado desde el avance de Semis. */
+        kcfg2.koCurrentRound = 5;
+        if (_mundialView[ktid2] === 'ko4') _mundialView[ktid2] = 'ko5';
+      } else {
+        var winners = [];
+        for (var w0b = 0; w0b < curT3.length; w0b += 2) {
+          var k3b = 'ko_' + curR3 + '_' + (w0b/2);
+          var r3b = kcfg2.results[k3b];
+          if (!r3b || !r3b.played) continue;
+          winners.push(r3b.winner === 'a' ? curT3[w0b] : curT3[w0b+1]);
+        }
+        kcfg2.koBracket[curR3 + 1] = winners;
+        kcfg2.koCurrentRound = curR3 + 1;
+        /* Mundial 48: si estábamos en la vista de la ronda KO recién
+           cerrada, saltar a la nueva ronda para no quedar en la pasada. */
+        if (kcfg2.format === 'mundial-48' && _mundialView[ktid2] === 'ko'+curR3) {
+          _mundialView[ktid2] = 'ko'+(curR3 + 1);
+        }
       }
       _tourSaveAndRender(ktid2, kcfg2);
       ev.stopPropagation();

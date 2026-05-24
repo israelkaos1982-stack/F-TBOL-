@@ -40380,6 +40380,42 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     text-shadow:0 1px 1px rgba(0,0,0,.45);
   }
   #mu-msg-ov .mmo-read-stamp::before{ content:'✓'; font-size:11px; font-weight:900; }
+  /* Chip 🇫🇷 SELECCIÓN — identifica mensajes de la selección de Francia
+     dentro de la bandeja unificada del Liverpool. Va antes del sender. */
+  #mu-msg-ov .mmo-fra-chip{
+    display:inline-flex; align-items:center; gap:3px;
+    padding:2px 6px 2px 4px; margin-right:6px;
+    border:1px solid rgba(30,109,193,.85);
+    background:linear-gradient(135deg, rgba(30,109,193,.45), rgba(220,30,40,.30));
+    color:#ffffff;
+    font-size:9px; letter-spacing:1.1px; font-weight:700;
+    border-radius:4px; text-transform:uppercase;
+    font-family:'Oswald',sans-serif; line-height:1;
+    box-shadow:0 0 5px rgba(30,109,193,.35);
+    text-shadow:0 1px 1px rgba(0,0,0,.5);
+    vertical-align:baseline;
+  }
+  /* Subtítulo "LIVERPOOL" del header del modal, junto al ✉️ MENSAJES. */
+  #mu-msg-ov .mmo-title-sub{
+    margin-left:8px; padding:2px 8px;
+    border-radius:4px;
+    background:linear-gradient(135deg, rgba(200,16,46,.45), rgba(246,235,97,.18));
+    border:1px solid rgba(200,16,46,.65);
+    font-size:10.5px; letter-spacing:1.5px; font-weight:700;
+    color:#fff; vertical-align:middle;
+  }
+  /* Animación al pulsar ✅: el row se desvanece + colapsa antes de
+     que `markRead` persista y rerenderice → el usuario VE el mensaje
+     salir de NUEVOS (y aparecerá en LEÍDOS al pulsar esa sub-pestaña). */
+  @keyframes mmoMsgFadeOut{
+    0%   { opacity:1; transform:translateX(0);   max-height:200px; margin-top:6px; margin-bottom:6px; padding-top:9px; padding-bottom:9px; }
+    60%  { opacity:0; transform:translateX(40px); max-height:200px; }
+    100% { opacity:0; transform:translateX(40px); max-height:0;   margin-top:0;     margin-bottom:0;     padding-top:0;     padding-bottom:0;     border-width:0; }
+  }
+  #mu-msg-ov .mmo-msg.is-fading-out{
+    animation:mmoMsgFadeOut .22s ease forwards;
+    pointer-events:none; overflow:hidden;
+  }
   #mu-msg-ov .mmo-msg-ico{ flex:0 0 28px; width:28px; height:28px;
     display:flex; align-items:center; justify-content:center;
     font-size:18px; line-height:1;
@@ -40613,17 +40649,27 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     d.msgs = d.msgs.filter(function(m){ return !(m.side === side && m.read); });
     _write(d); _scheduleRefresh();
   }
+  /* 2026-05-24: una única bandeja unificada Liverpool + Selección Francia
+     (petición usuario "vamos a dejar solo Liverpool, pero también saldrán
+     mensajes de la selección de Francia"). El parámetro `side` de `list`
+     y `unreadCount` queda ignorado en la UI — todos los mensajes salen
+     en la misma lista, con un chip 🇫🇷 SELECCIÓN cuando `m.side === 'fra'`.
+     Las funciones legacy `clearReadInSide` / `markAllReadInSide` se
+     conservan por compatibilidad con código que aún las llama. */
+  function clearReadAll(){
+    var d = _read();
+    d.msgs = d.msgs.filter(function(m){ return !m.read; });
+    _write(d); _scheduleRefresh();
+  }
   function list(side, kind){
     var d = _read();
     return d.msgs
-      .filter(function(m){ return m.side === side && (kind === 'read' ? !!m.read : !m.read); })
+      .filter(function(m){ return kind === 'read' ? !!m.read : !m.read; })
       .sort(function(a,b){ return (b.ts||0) - (a.ts||0); });
   }
   function unreadCount(side){
     var d = _read();
-    return d.msgs.filter(function(m){
-      return (!side || m.side === side) && !m.read;
-    }).length;
+    return d.msgs.filter(function(m){ return !m.read; }).length;
   }
   function _setCursor(name, val){
     var d = _read();
@@ -40663,14 +40709,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       '<div class="mmo-bd"></div>'
     + '<div class="mmo-modal" role="dialog" aria-label="Mensajes">'
     +   '<div class="mmo-hdr">'
-    +     '<span class="mmo-title">✉️ MENSAJES</span>'
+    +     '<span class="mmo-title">✉️ MENSAJES <span class="mmo-title-sub">LIVERPOOL</span>'
+    +       ' <i class="mmo-tab-bdg" id="mu-msg-bdg-all" hidden></i></span>'
     +     '<button type="button" class="mmo-x" aria-label="Cerrar">✕</button>'
-    +   '</div>'
-    +   '<div class="mmo-tabs">'
-    +     '<button type="button" class="mmo-tab" data-side="liv">🔴 LIVERPOOL'
-    +       ' <i class="mmo-tab-bdg" id="mu-msg-bdg-liv" hidden></i></button>'
-    +     '<button type="button" class="mmo-tab" data-side="fra">🇫🇷 FRANCIA'
-    +       ' <i class="mmo-tab-bdg" id="mu-msg-bdg-fra" hidden></i></button>'
     +   '</div>'
     +   '<div class="mmo-subtabs">'
     +     '<button type="button" class="mmo-sub" data-kind="new">📩 NUEVOS</button>'
@@ -40682,12 +40723,6 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     document.body.appendChild(ov);
     ov.querySelector('.mmo-x').onclick = _closePop;
     ov.querySelector('.mmo-bd').onclick = _closePop;
-    ov.querySelectorAll('.mmo-tab').forEach(function(t){
-      t.onclick = function(){
-        _ui.sideTab = t.getAttribute('data-side');
-        _refresh();
-      };
-    });
     ov.querySelectorAll('.mmo-sub').forEach(function(t){
       t.onclick = function(){
         _ui.readTab = t.getAttribute('data-kind');
@@ -40695,9 +40730,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       };
     });
     document.getElementById('mu-msg-clear').onclick = function(){
-      var who = (_ui.sideTab === 'fra') ? 'Francia' : 'Liverpool';
-      if (confirm('¿Borrar todos los mensajes leídos de '+who+'?'))
-        clearReadInSide(_ui.sideTab);
+      if (confirm('¿Borrar todos los mensajes leídos?'))
+        clearReadAll();
     };
   }
   function _openPop(){
@@ -40718,6 +40752,16 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       try { _refresh(); } catch(_){}
     }, 60);
   }
+  /* Marca leído con transición visual: aplica `.is-fading-out` al row
+     y espera el fade-out (220 ms) antes de persistir + rerender. Así
+     el usuario VE el mensaje desaparecer de NUEVOS y al rerender ya
+     aparece en LEÍDOS si esa sub-pestaña está activa. */
+  function _markReadAnimated(row, id){
+    if (!row || row.__fading) { markRead(id); return; }
+    row.__fading = true;
+    row.classList.add('is-fading-out');
+    setTimeout(function(){ try { markRead(id); } catch(_){} }, 220);
+  }
   function _refresh(){
     if (!_ensureUI()) return;
     /* Badge en botón cabecera */
@@ -40733,19 +40777,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
     var ov = document.getElementById('mu-msg-ov');
     if (!ov || ov.hasAttribute('hidden')) return;
-    /* Badges de pestañas */
-    ['liv','fra'].forEach(function(side){
-      var b = document.getElementById('mu-msg-bdg-'+side);
-      if (!b) return;
-      var n = unreadCount(side);
-      if (n > 0){
-        b.textContent = n > 99 ? '99+' : String(n);
-        b.removeAttribute('hidden');
-      } else b.setAttribute('hidden','');
-    });
-    ov.querySelectorAll('.mmo-tab').forEach(function(t){
-      t.classList.toggle('on', t.getAttribute('data-side') === _ui.sideTab);
-    });
+    /* Badge unificado en el título */
+    var bdgAll = document.getElementById('mu-msg-bdg-all');
+    if (bdgAll){
+      if (total > 0){
+        bdgAll.textContent = total > 99 ? '99+' : String(total);
+        bdgAll.removeAttribute('hidden');
+      } else bdgAll.setAttribute('hidden','');
+    }
     ov.querySelectorAll('.mmo-sub').forEach(function(t){
       t.classList.toggle('on', t.getAttribute('data-kind') === _ui.readTab);
     });
@@ -40754,10 +40793,10 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (_ui.readTab === 'read') clr.removeAttribute('hidden');
       else clr.setAttribute('hidden','');
     }
-    /* Lista */
+    /* Lista (unificada Liverpool + Selección Francia) */
     var body = document.getElementById('mu-msg-body');
     if (!body) return;
-    var arr = list(_ui.sideTab, _ui.readTab);
+    var arr = list(null, _ui.readTab);
     if (!arr.length){
       body.innerHTML = '<div class="mmo-empty">' +
         (_ui.readTab === 'new'
@@ -40769,11 +40808,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     body.innerHTML = arr.map(function(m){
       var stateCls = m.read ? ' is-read' : ' is-unread';
       var stamp = m.read ? '<span class="mmo-read-stamp">leído</span>' : '';
+      var fraChip = (m.side === 'fra')
+        ? '<span class="mmo-fra-chip" title="Selección Francia">🇫🇷 SELECCIÓN</span>'
+        : '';
       return '<div class="mmo-msg'+stateCls+'" data-id="'+_esc(m.id)+'">'
         + '<div class="mmo-msg-ico">'+_esc(m.icon)+'</div>'
         + '<div class="mmo-msg-main">'
         +   '<div class="mmo-msg-hdr">'
-        +     '<span class="mmo-msg-sender">'+stamp+_esc(m.sender)+'</span>'
+        +     '<span class="mmo-msg-sender">'+stamp+fraChip+_esc(m.sender)+'</span>'
         +     '<span class="mmo-msg-ts">'+_esc(_dateLabel(m.ts))+'</span>'
         +   '</div>'
         +   '<div class="mmo-msg-title">'+_esc(m.title)+'</div>'
@@ -40789,11 +40831,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var id = row.getAttribute('data-id');
       var act = row.querySelector('.mmo-btn.mark');
       var dl  = row.querySelector('.mmo-btn.del');
-      if (act) act.onclick = function(ev){ ev.stopPropagation(); markRead(id); };
+      if (act) act.onclick = function(ev){ ev.stopPropagation(); _markReadAnimated(row, id); };
       if (dl)  dl.onclick  = function(ev){ ev.stopPropagation();
         if (confirm('¿Borrar este mensaje?')) del(id);
       };
-      row.onclick = function(){ if (!row.classList.contains('is-unread')) return; markRead(id); };
+      row.onclick = function(){
+        if (!row.classList.contains('is-unread')) return;
+        _markReadAnimated(row, id);
+      };
     });
   }
 

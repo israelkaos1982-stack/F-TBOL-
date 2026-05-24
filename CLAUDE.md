@@ -1,5 +1,57 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Balón fijo Selecciones por jornada (obligatorio, 2026-05-24)
+
+Regla "siempre" pedida por el usuario el 2026-05-24:
+
+- **Selecciones J1 a J8** (`cal-sel1`..`cal-sel8`, fase clasificatoria
+  africana, septiembre–marzo) → **`Orbita Africa`** SIEMPRE.
+- **Selecciones J9 en adelante** (`cal-sel9`, `cal-sel10`, fase de
+  mayo) → **`NIKE CONTROL CBF`** SIEMPRE.
+- **Mundial fase final** (`cal-mf-g1`..`cal-mf-fin`, compKey
+  `sel-fin`) → **`NIKE CONTROL CBF`** (default existente).
+
+Esta regla GANA sobre el override del admin
+(`ball_by_comp_v1['sel']`). Solo el balón de nieve
+(`eFootball MAX VIS 26`) puede sobrescribirla, igual que para el
+resto de comps.
+
+### Resolución
+
+En `_buildItems(matchKey, compKey, …)` de
+`static/js/index.bundle.js`, después de aplicar el override del
+admin sobre `COMP_BALL[compKey]`, se inyecta un bloque que detecta
+`compKey === 'sel'` + jornada (vía `window._ppBlockId` con regex
+`cal-sel(\d+)`, fallback al `matchKey`) y reescribe `balon` a
+`'Orbita Africa'` o `'NIKE CONTROL CBF'` según la jornada.
+
+En la pantalla `s-calendario.html`, los placeholders `<div class=
+"minfo">⚽️ …</div>` de `cal-sel1`..`cal-sel8` muestran "Orbita
+Africa"; los de `cal-sel9`..`cal-sel10` y `cal-mf-*` mantienen "NIKE
+CONTROL CBF".
+
+### Inventario
+
+El balón `Orbita_Africa` está sembrado en `BALL_DB` (entrada
+`{key:'sel-clasif', comp:'Selecciones · Clasif. (J1-J8)',
+id:'Orbita_Africa'}` en `misc_body_2.html`), así que aparece en
+"INVENTARIO DE BALONES" sin que el admin tenga que añadirlo a mano.
+`NIKE_CONTROL_CBF` ya estaba sembrado por la entrada
+`{key:'selecciones', comp:'Fase Final Selecciones'}`.
+
+### Reglas a respetar
+
+1. **No cambiar el balón hardcoded** sin acuerdo con el usuario:
+   J1-J8 = `Orbita Africa`, J9+ = `NIKE CONTROL CBF`.
+2. **No quitar el bloque jornada-aware** de `_buildItems`. Aunque
+   el admin asigne otro balón vía `s-admin-balls`, esta regla
+   debe ganar (es "siempre" por petición explícita).
+3. **Si se añaden más jornadas de Selecciones** (J11, J12, …), la
+   rama `_selJor >= 9` ya las cubre; no hay que tocar nada.
+4. **No borrar `Orbita_Africa` de `BALL_DB`** — si desaparece de
+   `BALL_DB` y el inventario no se ha sembrado nunca en el navegador
+   del usuario, el picker del admin no lo tendrá disponible.
+
 ## Balón asignado por competición (obligatorio, 2026-05-24)
 
 **Cuando el admin asigna un balón a una competición desde "INVENTARIO

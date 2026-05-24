@@ -18456,6 +18456,25 @@ window._showSimProgress = function(opts, onDone){
     };
     if (typeof window.showPrePartidoOverlay === 'function') {
       window.showPrePartidoOverlay(prePartidoKey, 'torneo', 'Sí', duracion, isHvH);
+      /* Eliminatoria a partido único con ET+penaltis (Mundial 2032
+         fase final: Dieciseisavos, Octavos, Cuartos, Semis, Final, y
+         cualquier otro torneo con `koExtraTimePens:true`): añadir los
+         2 toggles obligatorios PRÓRROGA + PENALTIS a la previa, igual
+         que en Copa del Rey single-leg. Petición usuario 2026-05-24.
+         Reutilizamos el helper público que ya expone copa-engine. */
+      try {
+        var _cfgETP = _tourLoadCachedSync(tourId);
+        var _fcETP = (_cfgETP && _cfgETP.formatConfig) || {};
+        var _mkETP = String(matchKey).replace(/\|L[12]$/, '');
+        var _isKoETP = _mkETP.indexOf('ko_') === 0;
+        var _rIdxETP = _isKoETP ? parseInt(_mkETP.split('_')[1], 10) : -1;
+        var _is2LegETP = _isKoETP && _tour2LegRound(_cfgETP, _rIdxETP);
+        if (_isKoETP && _fcETP.koExtraTimePens && !_is2LegETP) {
+          if (typeof window._injectProrrogaPenaltisConfirms === 'function') {
+            window._injectProrrogaPenaltisConfirms();
+          }
+        }
+      } catch(_){}
     } else {
       /* Fallback: si no hay previa, abrir directo. */
       if (typeof window.abrirTorneo === 'function') {

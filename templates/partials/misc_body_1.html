@@ -10168,6 +10168,18 @@ window._showSimProgress = function(opts, onDone){
 <div class="liga-stats-wrap" id="sc-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
 </div>
 
+<!-- Pantalla genérica de Estadísticas para torneos de Selecciones
+     (spv*/sfn*). Una sola pantalla compartida; la activa el botón
+     "📊 ESTADÍSTICAS" inyectado por _paintTourScreen y la rellena al
+     vuelo `window._tourStatsOpen(tourId)` desde el contenido de
+     LIGA_PLAYER_MATCH_STORE filtrado por torneo. Mismo look-and-feel
+     que la Caja España (s-liga-stats). Petición usuario 2026-05-24. -->
+<div class="screen" id="s-tour-stats">
+<button class="back-btn" id="s-tour-stats-back" onclick="window._tourStatsBack&&window._tourStatsBack()">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji" id="s-tour-stats-emoji">📊</span><h2 id="s-tour-stats-title">Estadísticas</h2></div>
+<div class="liga-stats-wrap" id="tour-stats-dashboard"><div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div></div>
+</div>
+
 <script>
 /* Re-render genérico para las pantallas de estadísticas por
    competición. Mismo patrón que `s-copa-stats` arriba: sync los
@@ -12923,60 +12935,48 @@ window._showSimProgress = function(opts, onDone){
     background:rgba(255,255,255,.18);color:#ddd;font-size:9px;padding:1px 4px;border-radius:3px;
     margin-left:auto;letter-spacing:.5px;
   }
-  /* Caja "📊 Estadísticas" en torneos de Selecciones (Rondas Previas
-     y Finales). Mismo look-and-feel videojuego que el bloque GRUPO X
-     (borde teal+gold con glow + barra blanca de acento + shine bar)
-     pero con tema teal-gold para distinguir de la clasificación.
-     Petición usuario 2026-05-24: caja "Estadísticas" entre el header
-     y GRUPO A, sumando los eventos de los partidos del torneo igual
-     que la Caja España (s-liga-stats).                              */
-  .tour-stats-box{
-    margin:14px 0 4px;padding:0 0 12px;position:relative;
-    background:
-      linear-gradient(180deg,rgba(45,212,191,.12) 0%,rgba(45,212,191,.03) 64px,rgba(255,255,255,.022) 64px),
-      rgba(255,255,255,.022);
-    border:2px solid rgba(45,212,191,.55);
-    border-radius:14px;
-    box-shadow:0 0 16px rgba(45,212,191,.30),0 4px 16px rgba(0,0,0,.4);
+  /* Botón "📊 Estadísticas" inyectado por `_paintTourScreen` en
+     los torneos de Selecciones (spv*/sfn*) excepto formato
+     `mundial-48` (ese formato ya incluye la entrada de Estadísticas
+     en su propio menú de 7 cajas). Al pulsar abre la pantalla
+     dedicada `s-tour-stats` con el dashboard completo (mismo look
+     que la Caja España / s-liga-stats). Petición usuario 2026-05-24:
+     "no es desplegable, es una caja que al pulsar se abre".         */
+  .tour-stats-jbtn{
+    width:100%;display:flex;align-items:center;gap:10px;
+    background:linear-gradient(135deg,#001f2a 0%,#003a52 25%,#006080 50%,#00bcd4 70%,#006080 85%,#001f2a 100%);
+    border:1.5px solid #4dd0e1;
+    box-shadow:0 4px 18px rgba(0,188,212,.32),inset 0 1px 0 rgba(255,255,255,.10);
+    border-radius:10px;
+    padding:13px 16px;cursor:pointer;
+    font-family:Rajdhani,sans-serif;color:#fff;
+    transition:transform .08s ease, box-shadow .15s ease;
   }
-  .tour-stats-box::before{
-    content:'';position:absolute;top:-2px;left:18px;right:18px;height:2px;
-    background:linear-gradient(90deg,transparent,rgba(120,255,230,.85),#fff,rgba(120,255,230,.85),transparent);
-    border-radius:2px;opacity:.85;
+  .tour-stats-jbtn:hover{box-shadow:0 6px 22px rgba(0,188,212,.50),inset 0 1px 0 rgba(255,255,255,.14);}
+  .tour-stats-jbtn:active{transform:translateY(1px);}
+  .tour-stats-jbtn .tsb-emoji{font-size:20px;line-height:1;}
+  .tour-stats-jbtn .tsb-label{
+    flex:1;text-align:left;font-family:Oswald,sans-serif;font-weight:700;
+    font-size:14px;letter-spacing:2px;text-transform:uppercase;
+    color:#ffd870;text-shadow:0 0 12px rgba(240,192,64,.45);
   }
-  .tour-stats-hdr{
-    display:flex;align-items:center;gap:10px;
-    font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2.5px;
-    font-weight:700;color:#fff;text-transform:uppercase;
-    margin:0;padding:9px 14px;
-    background:linear-gradient(135deg,#0c5b54 0%,#0a8a7f 45%,rgba(45,212,191,.32) 100%);
-    border-bottom:1px solid rgba(45,212,191,.65);
-    border-radius:12px 12px 0 0;
-    text-shadow:0 1px 3px rgba(0,0,0,.55);
+  .tour-stats-jbtn .tsb-arr{
+    font-size:14px;color:#4dd0e1;text-shadow:0 0 8px rgba(77,208,225,.7);
   }
-  .tour-stats-hdr::before{
-    content:'';flex:0 0 6px;height:18px;border-radius:3px;
-    background:#fff;box-shadow:0 0 8px rgba(255,255,255,.6);
+  /* Pantalla dedicada s-tour-stats — paleta teal (como el tema de
+     Selecciones) + acento dorado en los valores. Mismo formato visual
+     que `s-liga-stats` / `s-mundial-stats`. */
+  #s-tour-stats .liga-stat-card{
+    border-color:rgba(45,212,191,.45)!important;
+    background:linear-gradient(145deg,#06231f 0%,#0b3c34 45%,#04130f 100%)!important;
   }
-  .tour-stats-hdr .tour-stats-emoji{font-size:18px;line-height:1;}
-  .tour-stats-hdr .tour-stats-title{flex:1;}
-  .tour-stats-wrap{
-    padding:12px 10px 2px!important;display:grid!important;
-    grid-template-columns:repeat(auto-fit,minmax(240px,1fr))!important;
-    gap:10px!important;
+  #s-tour-stats .liga-stat-head{
+    background:linear-gradient(90deg,rgba(12,91,84,.7),rgba(10,138,127,.4),rgba(8,42,38,.2))!important;
+    border-bottom:1px solid rgba(45,212,191,.45)!important;
   }
-  .tour-stats-wrap .liga-stat-card{
-    border-color:rgba(45,212,191,.40);
-    background:linear-gradient(180deg,#0a1a18 0%,#070f0d 100%);
-    box-shadow:0 4px 14px rgba(0,0,0,.45),inset 0 0 8px rgba(45,212,191,.06);
-  }
-  .tour-stats-wrap .liga-stat-head{
-    background:linear-gradient(90deg,rgba(12,91,84,.7),rgba(10,138,127,.4),rgba(8,42,38,.2));
-    border-bottom:1px solid rgba(45,212,191,.45);
-  }
-  .tour-stats-wrap .liga-stat-title{color:#a8f0e0;text-shadow:0 0 10px rgba(45,212,191,.5);}
-  .tour-stats-wrap .liga-stat-rank{color:rgba(168,240,224,.85);text-shadow:0 0 8px rgba(45,212,191,.5);}
-  .tour-stats-wrap .liga-stat-value{color:#ffd870;text-shadow:0 0 10px rgba(240,192,64,.5);}
+  #s-tour-stats .liga-stat-title{color:#a8f0e0!important;text-shadow:0 0 18px rgba(45,212,191,.7)!important;}
+  #s-tour-stats .liga-stat-rank{color:rgba(168,240,224,.9)!important;text-shadow:0 0 12px rgba(45,212,191,.55)!important;}
+  #s-tour-stats .liga-stat-value{color:#ffd870!important;text-shadow:0 0 18px rgba(240,192,64,.6)!important;}
 </style>
 
 <!-- ═══ OVERLAY EDITOR DE TORNEO (compartido por los 4) ═══ -->
@@ -15499,23 +15499,55 @@ window._showSimProgress = function(opts, onDone){
     return stats;
   }
 
-  /* Devuelve el HTML completo de la caja "📊 ESTADÍSTICAS" para un
-     torneo. Reutiliza `_lextStatsDashHtml` (mismas 8 categorías y
-     mismos componentes visuales que la Caja España / s-liga-stats)
-     envuelto en `.tour-stats-box` con CSS propio (teal + gold). */
-  function _tourBuildStatsBoxHtml(tourId){
-    var stats = _tourCollectStatsForTour(tourId);
-    var inner = (typeof window._lextStatsDashHtml === 'function')
-      ? window._lextStatsDashHtml(stats)
-      : '<div class="liga-stat-empty">Sin datos todavía</div>';
-    return '<div class="tour-stats-box" id="tour-stats-box-' + tourId + '">'
-         +   '<div class="tour-stats-hdr">'
-         +     '<span class="tour-stats-emoji">📊</span>'
-         +     '<span class="tour-stats-title">Estadísticas</span>'
-         +   '</div>'
-         +   '<div class="liga-stats-wrap tour-stats-wrap">' + inner + '</div>'
+  /* Devuelve el HTML del BOTÓN "📊 Estadísticas" para un torneo. No
+     expande contenido in-place: al pulsar dispara `_tourStatsOpen`
+     que navega a la pantalla dedicada `s-tour-stats` con el dashboard
+     completo (mismas 8 categorías que la Caja España / s-liga-stats).
+     Petición usuario 2026-05-24: "no es desplegable, es una caja que
+     al pulsar se abre parecido a la foto 2".                       */
+  function _tourStatsBtnHtml(tourId){
+    return '<div style="padding:0 12px;margin:8px 0 10px;">'
+         +   '<button type="button" class="tour-stats-jbtn" '
+         +     'onclick="window._tourStatsOpen&amp;&amp;window._tourStatsOpen(\''+tourId+'\')">'
+         +     '<span class="tsb-emoji">📊</span>'
+         +     '<span class="tsb-label">Estadísticas</span>'
+         +     '<span class="tsb-arr">▶</span>'
+         +   '</button>'
          + '</div>';
   }
+
+  /* Abre la pantalla compartida `s-tour-stats` rellenándola con los
+     datos del torneo indicado. La pantalla queda asociada al torneo
+     activo para que `_tourStatsBack` sepa a dónde volver.          */
+  window._tourStatsOpen = function(tourId){
+    var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tourId]) || null;
+    if (!cfg) { try { cfg = _tourLoadCachedSync(tourId); } catch(_){} }
+    if (!cfg) cfg = {};
+    window._tourStatsActive = { tourId: tourId, name: cfg.name || tourId, flag: cfg.flag || '🌐' };
+    var titleEl = document.getElementById('s-tour-stats-title');
+    var emojiEl = document.getElementById('s-tour-stats-emoji');
+    var dashEl  = document.getElementById('tour-stats-dashboard');
+    if (titleEl) titleEl.textContent = (cfg.name || tourId) + ' · Estadísticas';
+    if (emojiEl) {
+      try { emojiEl.innerHTML = _tourFlagHtml(cfg.flag || '📊', 'sec-flag-img'); }
+      catch(_){ emojiEl.textContent = '📊'; }
+    }
+    if (dashEl) {
+      var stats = _tourCollectStatsForTour(tourId);
+      dashEl.innerHTML = (typeof window._lextStatsDashHtml === 'function')
+        ? window._lextStatsDashHtml(stats)
+        : '<div class="liga-stat-empty">Sin datos todavía</div>';
+    }
+    try { window.go('s-tour-stats'); } catch(_){}
+  };
+
+  /* Vuelve a la pantalla del torneo que abrió las estadísticas. Si no
+     hay torneo activo guardado, cae al hub de Selecciones.          */
+  window._tourStatsBack = function(){
+    var a = window._tourStatsActive;
+    var dst = (a && a.tourId) ? ('s-' + a.tourId) : 's-selecciones';
+    try { window.go(dst); } catch(_){}
+  };
 
   function _paintTourScreen(id, cfg){
     var titleEl = document.getElementById('tour-title-'+id);
@@ -15524,13 +15556,15 @@ window._showSimProgress = function(opts, onDone){
     if (titleEl && cfg.name) titleEl.textContent = cfg.name;
     if (flagEl  && cfg.flag) flagEl.innerHTML    = _tourFlagHtml(cfg.flag, 'sec-flag-img');
     if (!infoEl) return;
-    /* Caja "📊 Estadísticas" solo en torneos de Selecciones (spv* /
-       sfn*). Verano + Mundial tienen sus propias pantallas dedicadas
-       (s-torneos-stats, s-mundial-stats), no duplicar ahí. */
+    /* Botón "📊 Estadísticas" sólo en torneos de Selecciones (spv* /
+       sfn*) — y NO para `mundial-48`, que ya incluye la entrada de
+       Estadísticas en su propio menú de 7 cajas. Verano + Mundialito
+       tienen sus propias pantallas dedicadas (s-torneos-stats,
+       s-mundial-stats), no añadir botón ahí.                       */
     var _statsBoard = (typeof _tvBoardOf === 'function') ? _tvBoardOf(id) : null;
-    var _statsBoxHtml = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final')
-      ? _tourBuildStatsBoxHtml(id)
-      : '';
+    var _statsAllowed = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final')
+                        && (cfg.format !== 'mundial-48');
+    var _statsBoxHtml = _statsAllowed ? _tourStatsBtnHtml(id) : '';
     var teams = cfg.teams || [];
     if (!teams.length) {
       var _mr = cfg.formatConfig && cfg.formatConfig.manualRoster;

@@ -25,6 +25,16 @@ admin sobre `COMP_BALL[compKey]`, se inyecta un bloque que detecta
 `cal-sel(\d+)`, fallback al `matchKey`) y reescribe `balon` a
 `'Orbita Africa'` o `'NIKE CONTROL CBF'` según la jornada.
 
+**Mundial 2032 vía `_tourOpenHumanMatch`** (compKey `'torneo'`): el
+flujo de torneo NO pasa `'sel'`, pasa `'torneo'`. Para que la regla
+también se aplique a partidos de Selecciones lanzados desde la card
+del hub (Francia-UAE en May, etc.), el bloque comprueba además
+`window._TOUR_CACHE[_ppPreviaTeams.tourId].format === 'mundial-48'`
+y, si coincide, fuerza `'NIKE CONTROL CBF'` (Mundial fase final).
+Sin esto, `COMP_BALL['torneo']` no existe y `balon` caía al default
+inicial `"Ligue 1 McDonald's"` (bug reportado por usuario 2026-05-24
+con captura: Francia vs UAE mostraba balón de Liga EA).
+
 En la pantalla `s-calendario.html`, los placeholders `<div class=
 "minfo">⚽️ …</div>` de `cal-sel1`..`cal-sel8` muestran "Orbita
 Africa"; los de `cal-sel9`..`cal-sel10` y `cal-mf-*` mantienen "NIKE

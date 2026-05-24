@@ -5684,8 +5684,27 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
        J1-J8 = "Orbita Africa" (fase clasificatoria).
        J9+   = "NIKE CONTROL CBF" (en mayo).
        Gana SOBRE el override del admin para mantener la regla "siempre".
-       Solo nieve (más abajo) puede sobrescribirla. */
-    if (compKey === 'sel') {
+       Solo nieve (más abajo) puede sobrescribirla.
+
+       Aplica también a partidos lanzados vía `_tourOpenHumanMatch`
+       (compKey='torneo') cuando el torneo es una competición de
+       Selecciones (formato `mundial-48`) — sin esto el partido
+       Francia-UAE de Mundial 2032 caía al default "Ligue 1
+       McDonald's". Reportado por el usuario 2026-05-24 con captura. */
+    var _isSelCtx = (compKey === 'sel');
+    var _selFromTour = false;
+    if (!_isSelCtx && compKey === 'torneo') {
+      try {
+        var _ppPT = window._ppPreviaTeams;
+        var _tcfg = (_ppPT && _ppPT.tourId && window._TOUR_CACHE)
+          ? window._TOUR_CACHE[_ppPT.tourId] : null;
+        if (_tcfg && _tcfg.format === 'mundial-48') {
+          _isSelCtx = true;
+          _selFromTour = true;
+        }
+      } catch(_){}
+    }
+    if (_isSelCtx) {
       var _selJor = 0;
       try {
         var _bidSel = String(window._ppBlockId || '');
@@ -5696,8 +5715,20 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
           if (_mSel2) _selJor = parseInt(_mSel2[1], 10) || 0;
         }
       } catch(_){}
-      if (_selJor >= 1 && _selJor <= 8) balon = 'Orbita Africa';
-      else if (_selJor >= 9)             balon = 'NIKE CONTROL CBF';
+      if (_selFromTour) {
+        /* Mundial 2032 fase final → siempre NIKE CONTROL CBF (no hay
+           subdivisión J1-J8 dentro del bracket de Mundial-48). */
+        balon = 'NIKE CONTROL CBF';
+      } else if (_selJor >= 1 && _selJor <= 8) {
+        balon = 'Orbita Africa';
+      } else if (_selJor >= 9) {
+        balon = 'NIKE CONTROL CBF';
+      } else {
+        /* Selecciones sin jornada detectable (p.ej. ruta nueva sin
+           `_ppBlockId`): usar el default `sel` ya aplicado por
+           COMP_BALL — NO caemos al "Ligue 1 McDonald's" inicial. */
+        if (!COMP_BALL[compKey]) balon = 'NIKE CONTROL CBF';
+      }
     }
     /* Liga/partido en nieve → balón amarillo especial "eFootball MAX VIS 26".
        Antes solo se comprobaba `tiempo` (parte 0 del texto del venue-bar),

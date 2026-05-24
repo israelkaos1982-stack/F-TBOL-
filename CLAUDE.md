@@ -1,5 +1,68 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Balón asignado por competición (obligatorio, 2026-05-24)
+
+**Cuando el admin asigna un balón a una competición desde "INVENTARIO
+DE BALONES" (pantalla `s-admin-balls`, override
+`ball_by_comp_v1[compKey] = ballId`), ese balón DEBE aparecer en
+TODAS las cards de partidos donde haya un humano implicado en esa
+competición.** Aplica a CUALQUIER tipo de torneo: Liga EA Sports,
+Copa del Rey, Supercopa de España, Champions League, Europa League,
+Conference League, Recopa, Supercopa de Europa, Intercontinental,
+Mundialito de Clubes, Selecciones, Superliga, Torneos de Verano,
+amistosos, y cualquier competición custom que el admin añada vía
+"+ AÑADIR COMPETICIÓN".
+
+### Resolver canónico
+
+El bundle resuelve el balón en `_buildItems(matchKey, compKey, …)`
+de `static/js/index.bundle.js` con esta cadena (NO modificar el
+orden):
+
+1. `ball_by_comp_v1[compKey]` — **clave RAW del partido**. Cubre
+   las 14 comps base + las 3 extras (`superliga`, `verano`,
+   `mundialito`) + cualquier comp custom añadida por el admin.
+2. `ball_by_comp_v1[_COMP_TO_BDB[compKey]]` — fallback al alias de
+   `BALL_DB` (back-compat de las 14 comps base que históricamente
+   se guardaban por la clave `champions`/`uel`/etc. en vez de
+   `ucl`/`uel`).
+3. `COMP_BALL[compKey]` — default hardcoded por comp.
+4. Override por clima: nieve → `eFootball MAX VIS 26`.
+5. Fallback `ml-ball-name` del DOM (`ball-wrap-<matchKey>`).
+
+### Reglas a respetar
+
+1. **Toda card de partido humano** (HvH, HvIA, IAvH) DEBE construir
+   sus items vía `_buildItems(matchKey, compKey, …)`. No reimplementar
+   la resolución del balón en una nueva ruta.
+2. **Toda nueva competición humana** que se añada al juego DEBE
+   pasar su `compKey` real al builder de la card, para que el
+   override del admin se aplique automáticamente sin tocar
+   `_COMP_TO_BDB`.
+3. **No hardcodear nombres de balón** en builders nuevos. El balón
+   por defecto va en `COMP_BALL`; el override del usuario gana
+   siempre.
+4. **No romper `ball_by_comp_v1`** en wipes ni migraciones. La clave
+   se persiste en localStorage + servidor (`/api/kv/ball_by_comp_v1`,
+   ver sección "Inventario de Balones").
+5. **El admin elige el balón con un picker ✅** (overlay) en
+   `s-admin-balls`. Prohibido reintroducir `<select>` nativo para
+   esta selección (bug 2026-05-24: en algunos móviles el `<select>`
+   cancelaba la elección al primer toque).
+
+### Persistencia del inventario
+
+- Cache local: `localStorage` (3 claves: `ball_inventory_v1`,
+  `ball_by_comp_v1`, `ball_comp_db_v1`).
+- Fuente de verdad: servidor (`/api/kv/<key>` en `app.py`).
+- Las escrituras locales se marcan con `_ballMarkLocalWrite(key)` y
+  durante 5 min `_ballHydrateAll()` NO pisa la cache con la
+  respuesta del servidor (evita race con un GET stale anterior al
+  POST del usuario).
+- Los flujos `adminBallAdd` / `adminBallAddComp` /
+  `adminBallSetForComp` esperan la confirmación del POST y muestran
+  toast distinto si el servidor no respondió.
+
 ## Sanciones por tarjetas (obligatorio, 2026-05-23)
 
 Sistema único cross-competición en `static/js/index.bundle.js`:

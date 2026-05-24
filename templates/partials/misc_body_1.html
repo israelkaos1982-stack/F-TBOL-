@@ -42533,8 +42533,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     _write(d);
     _scheduleRefresh();
     /* Toast + pulso del botón cuando llega algo importante con la
-       bandeja cerrada. Se omiten tipos rutinarios (welcome, chatter). */
-    if (msg.type !== 'welcome' && msg.type !== 'callup'){
+       bandeja cerrada. Se omiten tipos rutinarios (welcome, chatter)
+       y los avisos `preview` (Próximo partido) — por petición del
+       usuario 2026-05-24: ese aviso vive SOLO dentro de la bandeja
+       Liverpool/Francia, no salta como toast en ninguna pantalla. */
+    if (msg.type !== 'welcome' && msg.type !== 'callup'
+        && msg.type !== 'preview'){
       var ov = document.getElementById('mu-msg-ov');
       var open = ov && !ov.hasAttribute('hidden');
       if (!open) _toast(msg);

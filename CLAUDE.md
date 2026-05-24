@@ -215,6 +215,14 @@ Reglas obligatorias:
    editor — eso lo hace humano en eur/amistoso/torneo SIN romper Liga.
 3. **No hardcodear listas tipo `EUROPEAN_HUMANS = [...]`.** Cualquier
    chequeo de humanidad va por `isHumanInComp`.
+4. **Pantalla obligatoria de estadísticas (posesión/tiros/faltas) tras
+   FINALIZAR**: en gm-modal usar `_gmHumanInvolved()` (que cubre
+   selecciones nacionales vía `cfg.teams[].isHuman`); en ml-card usar
+   el helper local `_mlTeamIsHuman*` que respeta `st.homeIsHuman /
+   awayIsHuman` y cae a `isHumanInComp(name, st.comp)` → `esHumano`.
+   Bug 2026-05-24: `gmEndMatch` y `mlEndMatchGen` usaban `esHumano()`
+   directo → Francia (humano) vs UAE (IA) en el Mundial se finalizaba
+   sin pedir las stats obligatorias.
 
 ## Límites de almacenamiento por carpeta (obligatorio, 2026-05-02)
 
@@ -691,6 +699,25 @@ Helper: `window._mlCountStoppageHalves(st)` →
   (`!st.etDone && !st.isIAvsIA`).
 - Event-driven (cuenta eventos del acta) para IA vs IA
   (`st.isIAvsIA`) y para prórroga (`st.etDone`).
+
+**HvIA — slowdown ×1.5 durante el descuento** (petición usuario
+2026-05-24). En HvIA / IAvH (un humano contra IA), cada game-minute
+del descuento dura **1.5× lo que duraría con el ritmo actual**:
+
+- 1ª parte (`45+1..45+4`): rearm del interval al cruzar `timerSec
+  >= 2700` con `tickMs *= 1.5`. Solo HvIA, no HvH ni IAIA.
+- 2ª parte (`90+1..90+9`): rearm al cruzar `timerSec >= 5400` con
+  `tickMs *= 1.5`. Se aplica **encima** del slowdown +0.5 s/min del
+  min 65 (multiplicativo).
+
+Flags persistidos en `st` (ml-card) / `_gm` (gm-modal):
+`_stop1Applied`, `_stop2Applied`. Se setean al rearmar para evitar
+re-arms en cada tick. La detección vive en `_mlResolveClock` cuando
+recibe `timerSec`, `htDone`, `etDone`:
+- `inStop1 = !htDone && timerSec >= 2700 && timerSec < 5400`
+- `inStop2 = htDone && timerSec >= 5400 && timerSec < 7200`
+
+HvH y IAIA NO se ralentizan en el descuento — solo HvIA.
 
 **IA vs IA mantiene descuento event-driven** (petición usuario
 2026-05-19): cada gol/tarjeta/lesión/etc. en una parte añade

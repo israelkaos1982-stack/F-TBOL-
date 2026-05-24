@@ -7627,6 +7627,26 @@
         typeof opts.currentMin === 'number' && opts.currentMin >= 65) {
       tickMs = tickMs + Math.round(500 / 12);
     }
+    /* STOPPAGE SLOWDOWN HvIA (petición usuario 2026-05-24): durante
+       el descuento de la 1ª parte (45+1..45+4) y de la 2ª parte
+       (90+1..90+9), cada game-minute dura 1.5× lo que durara con el
+       ritmo actual. Se aplica multiplicativamente ENCIMA del slowdown
+       del min 65+. Solo HvIA — el usuario quiere darse margen para
+       reaccionar a goles tardíos cuando juega contra la IA. No se
+       aplica a HvH (los humanos juegan al ritmo natural) ni a IAIA
+       (ritmo fijo simulación) ni a prórroga.
+       Detección por timerSec + htDone/etDone:
+         · 1ª stoppage: !htDone && timerSec >= 2700 (45:00)
+         · 2ª stoppage: htDone && !etDone && timerSec >= 5400 (90:00) */
+    if (!override && type === 'HvIA' && !etDone &&
+        typeof opts.timerSec === 'number') {
+      var _ts = opts.timerSec;
+      var _inStop1 = !opts.htDone && _ts >= 2700 && _ts < 5400;
+      var _inStop2 = !!opts.htDone && _ts >= 5400 && _ts < 7200;
+      if (_inStop1 || _inStop2) {
+        tickMs = Math.round(tickMs * 1.5);
+      }
+    }
     return { type: type, rule: r, tickMs: tickMs, realMs: realMs };
   };
 
@@ -8550,6 +8570,31 @@
         _mlStartIntervalGen(mk);
         return;
       }
+      /* STOPPAGE SLOWDOWN HvIA (petición usuario 2026-05-24): re-arm
+         del interval al cruzar 45:00 (entra 45+1..45+4) y 90:00 (entra
+         90+1..90+9) para que `_mlResolveClock` aplique el 1.5×. Solo
+         HvIA (no HvH ni IAIA). Re-anclamos _wallStart / _gameSecAtStart
+         antes del rearm para que el tiempo no salte. El propio resolver
+         vuelve al ritmo normal en la 2ª parte tras el descanso (cuando
+         timerSec=2700 pero htDone=true, no entra en stop1). */
+      if (!st.isIAvsIA && !st.isHvH && !st.etDone) {
+        if (!st.htDone && !st._stop1Applied && st.timerSec >= 2700) {
+          st._stop1Applied = true;
+          st._wallStart = Date.now();
+          st._gameSecAtStart = st.timerSec;
+          clearInterval(st.timerInterval);
+          _mlStartIntervalGen(mk);
+          return;
+        }
+        if (st.htDone && !st._stop2Applied && st.timerSec >= 5400) {
+          st._stop2Applied = true;
+          st._wallStart = Date.now();
+          st._gameSecAtStart = st.timerSec;
+          clearInterval(st.timerInterval);
+          _mlStartIntervalGen(mk);
+          return;
+        }
+      }
       // Fire pending AI events ANTES de comprobar el half-time, así los
       // eventos recién disparados en min 44 ya cuentan para el stoppage
       // de la 1ª parte en esta misma iteración.
@@ -9217,12 +9262,29 @@
        NO el flag global del editor. Si no, un Atlético "humano de
        Liga" pero marcado como IA en el toggle del amistoso entraba
        al overlay de stats y rompía el cierre del partido. */
-    var _humAEnd = st.isFriendly
-      ? !!st.homeIsHuman
-      : (typeof esHumano === 'function' && esHumano(st.home));
-    var _humBEnd = st.isFriendly
-      ? !!st.awayIsHuman
-      : (typeof esHumano === 'function' && esHumano(st.away));
+    /* Bug 2026-05-24: igual que en _mlFinishMatchGen, antes usábamos
+       esHumano() directo que NO detecta selecciones nacionales como
+       humanas → partidos como Francia (humano) vs UAE (IA) en el
+       Mundial saltaban al final sin pedir posesión/tiros/faltas.
+       Helper local que respeta st.homeIsHuman/awayIsHuman si vienen
+       explícitos y cae a isHumanInComp + esHumano. */
+    function _mlTeamIsHumanEnd(side){
+      var explicit = (side === 'a') ? st.homeIsHuman : st.awayIsHuman;
+      if (explicit === true) return true;
+      if (explicit === false) return false;
+      var nm = (side === 'a') ? st.home : st.away;
+      var compK = st.comp || st.compKey || st._comp || 'liga';
+      try {
+        if (typeof window.isHumanInComp === 'function' &&
+            window.isHumanInComp(nm, compK)) return true;
+      } catch(_){}
+      try {
+        if (typeof esHumano === 'function' && esHumano(nm)) return true;
+      } catch(_){}
+      return false;
+    }
+    var _humAEnd = _mlTeamIsHumanEnd('a');
+    var _humBEnd = _mlTeamIsHumanEnd('b');
     if ((_humAEnd || _humBEnd) && !st.matchStats && typeof _mlShowStatsOverlay === 'function') {
       _mlShowStatsOverlay(mk, function(){ window.mlEndMatchGen(mk, winner); });
       return;
@@ -9414,12 +9476,31 @@
        fallback si el flujo entró por otra ruta (p. ej. tanda de penaltis
        directa) y un humano está involucrado. Amistosos: usar el toggle
        per-partido (st.homeIsHuman / st.awayIsHuman). */
-    var _humA = st.isFriendly
-      ? !!st.homeIsHuman
-      : (typeof esHumano === 'function' && esHumano(st.home));
-    var _humB = st.isFriendly
-      ? !!st.awayIsHuman
-      : (typeof esHumano === 'function' && esHumano(st.away));
+    /* Bug 2026-05-24: antes usábamos solo esHumano() para los flujos
+       no-amistosos, que NO reconoce las selecciones nacionales (Francia,
+       Argelia, …) — su humanidad vive en cfg.teams[].isHuman del torneo
+       o en humanIcon. Sin este fallback, partidos como Francia (humano)
+       vs UAE (IA) en el Mundial saltaban directamente al final sin
+       pedir posesión/tiros/faltas. Ahora respetamos st.homeIsHuman /
+       awayIsHuman si están explícitamente seteados (true/false) y
+       caemos a isHumanInComp(name, st.comp) → esHumano() después. */
+    function _mlTeamIsHuman(side){
+      var explicit = (side === 'a') ? st.homeIsHuman : st.awayIsHuman;
+      if (explicit === true) return true;
+      if (explicit === false) return false;
+      var nm = (side === 'a') ? st.home : st.away;
+      var compK = st.comp || st.compKey || st._comp || 'liga';
+      try {
+        if (typeof window.isHumanInComp === 'function' &&
+            window.isHumanInComp(nm, compK)) return true;
+      } catch(_){}
+      try {
+        if (typeof esHumano === 'function' && esHumano(nm)) return true;
+      } catch(_){}
+      return false;
+    }
+    var _humA = _mlTeamIsHuman('a');
+    var _humB = _mlTeamIsHuman('b');
     if ((_humA || _humB) && !st.matchStats) {
       _mlShowStatsOverlay(mk, function(){ _mlShowFinalThenPost(mk); });
     } else {
@@ -12112,6 +12193,8 @@
          caigan al motor IAIA. */
       tickMs = window._mlResolveClock({
         isHvH: !!_gm.isHvH, etDone: !!_gm.etDone,
+        htDone: !!_gm.htDone,
+        timerSec: (_gm.timerSec || 0),
         home: _gm.home, away: _gm.away,
         humanInvolved: _gmHumanInvolved(),
         currentMin: Math.floor((_gm.timerSec || 0) / 60)
@@ -12190,6 +12273,33 @@
         _gm.timerInterval = null;
         gmStartTimer();
         return;
+      }
+      /* STOPPAGE SLOWDOWN HvIA (petición usuario 2026-05-24): re-arm
+         del interval al cruzar 45:00 (entra 45+1..45+4) y 90:00 (entra
+         90+1..90+9) para que `_mlResolveClock` aplique el 1.5×. Solo
+         HvIA — `gmStartTimer` ya descarta el slowdown para HvH/IAIA
+         vía la lógica del propio resolver, pero rearmamos solo si hay
+         humano contra IA. Re-anclamos _wallStart / _secAtStart antes
+         del rearm para que el tiempo no salte. */
+      if (!_gm.isHvH && !_gm.etDone && _gmHumanInvolved()) {
+        if (!_gm.htDone && !_gm._stop1Applied && _gm.timerSec >= 2700) {
+          _gm._stop1Applied = true;
+          _gm._wallStart = Date.now();
+          _gm._secAtStart = _gm.timerSec;
+          clearInterval(_gm.timerInterval);
+          _gm.timerInterval = null;
+          gmStartTimer();
+          return;
+        }
+        if (_gm.htDone && !_gm._stop2Applied && _gm.timerSec >= 5400) {
+          _gm._stop2Applied = true;
+          _gm._wallStart = Date.now();
+          _gm._secAtStart = _gm.timerSec;
+          clearInterval(_gm.timerInterval);
+          _gm.timerInterval = null;
+          gmStartTimer();
+          return;
+        }
       }
       /* Descuento dinámico en ambas partes (igual que el flujo ml-…).
          Se recalcula cada tick por si un evento recién añadido lo ha
@@ -13007,7 +13117,21 @@
       var newType = document.getElementById('_editType').value;
       var newTeam = document.getElementById('_editTeam').value;
       var newMin  = parseInt(document.getElementById('_editMin').value, 10) || 1;
+      /* Bug 2026-05-24: en algunos navegadores móviles (Samsung Internet)
+         el onchange de #_editPlayerSel no dispara al elegir un jugador
+         del desplegable → _editManual no se actualiza → al guardar se
+         persistía el goleador antiguo (el que el usuario quería cambiar).
+         Fix: si la dropdown tiene un valor seleccionado lo usamos como
+         verdad por encima del campo manual. */
+      var _selPlEl = document.getElementById('_editPlayerSel');
+      var _pickedVal = (_selPlEl && _selPlEl.value) ? String(_selPlEl.value) : '';
       var manualVal = (document.getElementById('_editManual').value || '').trim();
+      if (_pickedVal) {
+        var _pParts = _pickedVal.split('|');
+        var _pNum = _pParts[0] || '';
+        var _pName = _pParts.slice(1).join('|') || '';
+        if (_pName) manualVal = (_pNum ? (_pNum + '. ' + _pName) : _pName);
+      }
       if (!manualVal) { alert('⚠️ Escribe el jugador manualmente o selecciónalo de la plantilla.'); return; }
 
       var newNum = '', newName = '';
@@ -13284,10 +13408,14 @@
        Tras imbatida (si aplica) y antes de elegir MVP, el usuario debe
        rellenar las estadísticas del partido (posesión, remates, etc.).
        Cuando confirma, _mlStatsConfirm guarda en _gm.matchStats y
-       re-llamamos a gmEndMatch para continuar con MVP y final. */
-    var _gmHumA = typeof esHumano === 'function' && esHumano(_gm.home);
-    var _gmHumB = typeof esHumano === 'function' && esHumano(_gm.away);
-    if ((_gmHumA || _gmHumB) && !_gm.matchStats && typeof _mlShowStatsOverlay === 'function') {
+       re-llamamos a gmEndMatch para continuar con MVP y final.
+       Bug 2026-05-24: antes usábamos esHumano() directo, que NO
+       reconoce las selecciones nacionales (Francia, Argelia, …) cuyo
+       humano vive en cfg.teams[].isHuman del torneo. Resultado: en
+       Francia (humano) vs UAE (IA) el match se finalizaba sin pedir
+       posesión/tiros/faltas. Ahora usamos _gmHumanInvolved() (mismo
+       helper que ya usan gmStartTimer y la pausa de descanso). */
+    if (!_gm.matchStats && typeof _mlShowStatsOverlay === 'function' && _gmHumanInvolved()) {
       _mlShowStatsOverlay(_gm, function(){ window.gmEndMatch(); });
       return;
     }

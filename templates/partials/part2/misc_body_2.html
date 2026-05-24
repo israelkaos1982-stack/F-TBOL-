@@ -10913,14 +10913,122 @@
     ov.classList.add('show');
   }
 
+  /* Cuenta atrás de 20 s antes de arrancar la 2ª parte (petición
+     usuario 2026-05-24). Mismo estilo y mecánica que el overlay de
+     eventos (gol/tarjeta/lesión): círculo SVG, número grande, botón
+     ▶ INICIAR YA y auto-resume al llegar a 0. Reutilizado por
+     `_mlResumeFromDescanso` (calendar cards) y `gmContinueSecondHalf`
+     (gm-modal). El cronómetro permanece congelado (st.inDescanso /
+     _gm.inDescanso siguen true) durante la cuenta atrás — sólo se
+     anclan los timers al disparar `onResume`. */
+  window._showHalftimeCountdown = function(opts){
+    opts = opts || {};
+    var totalSec = 20;
+    var ov = document.getElementById('ml-htcd-ov');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'ml-htcd-ov';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:999999;'
+        + 'background:radial-gradient(circle at center,rgba(20,0,30,.95) 0%,rgba(0,0,0,.97) 75%);'
+        + 'display:none;flex-direction:column;align-items:center;justify-content:center;'
+        + 'padding:24px;font-family:\'Bebas Neue\',Oswald,sans-serif;color:#fff;text-align:center;';
+      ov.innerHTML = ''
+        + '<div id="ml-htcd-lbl" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(28px,7vw,52px);letter-spacing:4px;color:#f0c040;text-shadow:0 0 14px rgba(240,192,64,.85),0 0 28px rgba(240,180,40,.55);margin-bottom:8px;line-height:1.15;">▶ INICIO 2ª PARTE</div>'
+        + '<div id="ml-htcd-score" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(18px,4.6vw,28px);letter-spacing:2px;color:#5eef8b;text-shadow:0 0 12px rgba(94,239,139,.75);margin-bottom:18px;white-space:nowrap;max-width:96vw;overflow:hidden;"></div>'
+        + '<div style="position:relative;width:clamp(140px,40vw,220px);height:clamp(140px,40vw,220px);margin-bottom:14px;">'
+        +   '<svg viewBox="0 0 200 200" style="width:100%;height:100%;transform:rotate(-90deg);">'
+        +     '<circle cx="100" cy="100" r="90" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="12"/>'
+        +     '<circle id="ml-htcd-ring" cx="100" cy="100" r="90" fill="none" stroke="#f0c040" stroke-width="12" stroke-linecap="round" stroke-dasharray="565.5" stroke-dashoffset="0" style="transition:stroke-dashoffset .2s linear,stroke .25s ease;"/>'
+        +   '</svg>'
+        +   '<div id="ml-htcd-num" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:\'Bebas Neue\',sans-serif;font-size:clamp(56px,16vw,96px);color:#fff;letter-spacing:2px;line-height:1;text-shadow:0 0 16px rgba(255,255,255,.55);">20</div>'
+        + '</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:clamp(10px,2.6vw,13px);letter-spacing:3px;color:rgba(255,255,255,.55);margin-bottom:18px;text-transform:uppercase;">Inicia la 2ª parte en eFootball</div>'
+        + '<button type="button" id="ml-htcd-resume" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(15px,4vw,20px);letter-spacing:3px;color:#fff;background:linear-gradient(135deg,#0a8a35,#3dcc6e);border:2px solid #5eef8b;border-radius:12px;padding:14px 36px;margin-bottom:10px;cursor:pointer;box-shadow:0 0 18px rgba(94,239,139,.55);">▶ INICIAR YA</button>';
+      document.body.appendChild(ov);
+    }
+    /* Contenido dinámico — marcador con nombres abreviados, igual
+       que el overlay de eventos. */
+    function _abbrevTeam(name){
+      var s = String(name || '').trim();
+      if (s.length <= 11) return s;
+      var parts = s.split(/\s+/);
+      if (parts.length === 1) return s.slice(0, 11) + '.';
+      var first = parts[0];
+      var rest = parts.slice(1).map(function(p){
+        if (!p) return '';
+        if (/^(FC|CF|AC|SC|F\.C\.|C\.F\.|II|B)$/i.test(p)) return p;
+        return p[0].toUpperCase() + '.';
+      }).filter(Boolean).join(' ');
+      var out = first + ' ' + rest;
+      if (out.length > 13) out = (first.length > 9 ? first.slice(0, 9) + '.' : first) + ' ' + rest;
+      return out;
+    }
+    var hShort = _abbrevTeam(opts.home || 'LOCAL');
+    var aShort = _abbrevTeam(opts.away || 'VISITANTE');
+    var scA = (opts.scA != null) ? opts.scA : 0;
+    var scB = (opts.scB != null) ? opts.scB : 0;
+    var $ = function(id){ return document.getElementById(id); };
+    if ($('ml-htcd-score')) $('ml-htcd-score').textContent = hShort + '   ' + scA + ' - ' + scB + '   ' + aShort;
+    if ($('ml-htcd-num'))   $('ml-htcd-num').textContent   = String(totalSec);
+    var ring = $('ml-htcd-ring');
+    var C = 2 * Math.PI * 90;
+    if (ring) { ring.setAttribute('stroke-dasharray', String(C)); ring.setAttribute('stroke-dashoffset', '0'); ring.setAttribute('stroke', '#f0c040'); }
+    ov.style.display = 'flex';
+    /* Limpiar timers previos por si se relanza la cuenta atrás. */
+    if (window._mlHtCdTimer) { try { clearInterval(window._mlHtCdTimer); } catch(_){} window._mlHtCdTimer = null; }
+    if (window._mlHtCdRaf)   { try { cancelAnimationFrame(window._mlHtCdRaf); } catch(_){} window._mlHtCdRaf = null; }
+    var startTs = Date.now();
+    var ended = false;
+    function _finish(){
+      if (ended) return;
+      ended = true;
+      if (window._mlHtCdTimer) { try { clearInterval(window._mlHtCdTimer); } catch(_){} window._mlHtCdTimer = null; }
+      if (window._mlHtCdRaf)   { try { cancelAnimationFrame(window._mlHtCdRaf); } catch(_){} window._mlHtCdRaf = null; }
+      ov.style.display = 'none';
+      if (typeof opts.onResume === 'function') { try { opts.onResume(); } catch(_){} }
+    }
+    var rb = $('ml-htcd-resume');
+    if (rb) rb.onclick = function(){ _finish(); };
+    /* Tick mixto rAF + setInterval(50ms), igual que el overlay de
+       eventos (inmune al timer alignment de Chrome móvil). */
+    function _tick(){
+      if (ended) return;
+      var elapsed = (Date.now() - startTs) / 1000;
+      var remain = Math.max(0, totalSec - elapsed);
+      var dispSec = Math.ceil(remain);
+      var numEl = $('ml-htcd-num');
+      if (numEl && numEl.textContent !== String(dispSec)) numEl.textContent = String(dispSec);
+      var pct = remain / totalSec;
+      if (ring) ring.setAttribute('stroke-dashoffset', String(C * (1 - pct)));
+      if (dispSec <= 5 && ring) ring.setAttribute('stroke', '#ff5050');
+      if (remain <= 0) { _finish(); return; }
+    }
+    function _rafLoop(){
+      if (ended) return;
+      _tick();
+      window._mlHtCdRaf = requestAnimationFrame(_rafLoop);
+    }
+    if (typeof requestAnimationFrame === 'function') window._mlHtCdRaf = requestAnimationFrame(_rafLoop);
+    window._mlHtCdTimer = setInterval(_tick, 50);
+  };
+
   window._mlResumeFromDescanso = function() {
     var ov = document.getElementById('ml-descanso-ov');
     if (!ov) return;
     var mk = ov.getAttribute('data-mk');
     ov.classList.remove('show');
-    if (mk) {
-      var st = _mlSt(mk);
-      if (st && !st.finished) {
+    if (!mk) return;
+    var st = _mlSt(mk);
+    if (!st || st.finished) return;
+    /* Cuenta atrás de 20 s antes de arrancar (petición usuario
+       2026-05-24). Al terminar (o al pulsar ▶ INICIAR YA), se ejecuta
+       el resume real: anclar timer en 45:00 y reanudar interval. */
+    var scA = (st.sc && st.sc.a) || 0;
+    var scB = (st.sc && st.sc.b) || 0;
+    window._showHalftimeCountdown({
+      home: st.home, away: st.away, scA: scA, scB: scB,
+      onResume: function(){
+        if (st.finished) return;
         /* Petición usuario: la 2ª parte arranca SIEMPRE en 45:00 exacto.
            El descuento de la 1ª parte (que llevó timerSec hasta halfMax)
            ya se mostró durante el cronómetro de descuento "45+N", así
@@ -10932,19 +11040,19 @@
         st._gameSecAtStart = 2700;
         st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk);
         _mlUpdateAplazarBtn(mk);
+        /* Quitar el botón "Compartir descanso" del acta — la 2ª parte
+           ya empezó y ese CTA pertenece al medio tiempo. Si no lo
+           retiramos, sigue visible hasta el final del partido. */
+        try {
+          var acta = document.getElementById('ml-acta-list-' + mk);
+          if (acta) {
+            acta.querySelectorAll('.ml-ht-wa-wrap').forEach(function(n){
+              try { n.parentNode.removeChild(n); } catch(_){}
+            });
+          }
+        } catch(_){}
       }
-      /* Quitar el botón "Compartir descanso" del acta — la 2ª parte
-         ya empezó y ese CTA pertenece al medio tiempo. Si no lo
-         retiramos, sigue visible hasta el final del partido. */
-      try {
-        var acta = document.getElementById('ml-acta-list-' + mk);
-        if (acta) {
-          acta.querySelectorAll('.ml-ht-wa-wrap').forEach(function(n){
-            try { n.parentNode.removeChild(n); } catch(_){}
-          });
-        }
-      } catch(_){}
-    }
+    });
   };
 
   // Compartir marcador en el DESCANSO del modo espectador (gm)
@@ -11076,11 +11184,22 @@
   window.gmContinueSecondHalf = function() {
     var ov = document.getElementById('gm-ht-ov');
     if (ov) ov.style.display = 'none';
-    /* Petición usuario: la 2ª parte arranca SIEMPRE en 45:00 exacto. */
-    _gm.timerSec = 2700;
-    _gm.inDescanso = false;
-    gmStartTimer();
-    gmUpdateAplazarBtn();
+    /* Cuenta atrás de 20 s antes de arrancar la 2ª parte (petición
+       usuario 2026-05-24). Mismo overlay/estilo que el de eventos.
+       _gm.inDescanso sigue `true` durante la cuenta atrás → el
+       cronómetro permanece congelado hasta el resume real. */
+    var scA = (_gm.sc && _gm.sc.a) || 0;
+    var scB = (_gm.sc && _gm.sc.b) || 0;
+    window._showHalftimeCountdown({
+      home: _gm.home, away: _gm.away, scA: scA, scB: scB,
+      onResume: function(){
+        /* Petición usuario: la 2ª parte arranca SIEMPRE en 45:00 exacto. */
+        _gm.timerSec = 2700;
+        _gm.inDescanso = false;
+        gmStartTimer();
+        gmUpdateAplazarBtn();
+      }
+    });
   };
 
   function _gmShowFinalOv() {

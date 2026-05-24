@@ -2772,7 +2772,18 @@ window._showSimProgress = function(opts, onDone){
      trae datos viejos (porque el push del último _save no llegó),
      el cursor se queda en 01 May. La cookie sobrevive a esa purga
      y se usa como tercer fallback en _load. Codificada como
-     base64(JSON), max-age 1 año, SameSite=Lax. */
+     base64(JSON), max-age 1 año, SameSite=Lax.
+
+     2026-05-24 (refuerzo): SOLO persistimos los esenciales del CURSOR
+     (dayIdx, tour, previaOpenedIdx, ts). El estado completo
+     (rivals + done + injuries) puede crecer a 3-5 KB y los
+     navegadores rechazan SILENCIOSAMENTE cookies de >4 KB → la
+     cookie se quedaba con su valor viejo (a menudo dayIdx=0 del
+     primer _save tras pulsar el torneo, cuando todavía cabía).
+     Resultado: caja Liverpool volvía siempre al 01 May tras reload
+     en móvil aunque el usuario hubiera avanzado. Con el payload
+     minimal (~80 bytes) la cookie siempre cabe; rivals/done/
+     injuries se restauran de localStorage/server. */
   var COOKIE_KEY = 'bayps';
   function _cookieRead(){
     try {
@@ -2788,7 +2799,16 @@ window._showSimProgress = function(opts, onDone){
   }
   function _cookieWrite(o){
     try {
-      var json = JSON.stringify(o || {});
+      /* Payload minimal — sólo el cursor. Garantiza que la cookie
+         quepa siempre bajo el cap de 4 KB del navegador. */
+      var _po = parseInt(o && o.previaOpenedIdx, 10);
+      var minimal = {
+        dayIdx: parseInt(o && o.dayIdx, 10) || 0,
+        tour: (o && o.tour) || null,
+        previaOpenedIdx: isNaN(_po) ? -1 : _po,
+        ts: parseInt(o && o.ts, 10) || 0
+      };
+      var json = JSON.stringify(minimal);
       var b64 = '';
       try { b64 = btoa(unescape(encodeURIComponent(json))); } catch(_){ b64 = json; }
       var oneYear = 60*60*24*365;
@@ -2818,15 +2838,32 @@ window._showSimProgress = function(opts, onDone){
       if (ck && typeof ck === 'object') d = ck;
     }
     /* ALTO RIESGO: si el server-hidratado trajo dayIdx=0 pero la
-       cookie tiene un cursor más avanzado con ts más reciente, la
-       cookie gana (el server tenía un valor stale del último reset
-       y el push del avance posterior no llegó). */
+       cookie tiene un cursor más avanzado, la cookie gana (el server
+       tenía un valor stale del último reset y el push del avance
+       posterior no llegó).
+
+       2026-05-24 (refuerzo): la cookie es MINIMAL (sólo dayIdx + tour
+       + previaOpenedIdx + ts). Si gana el desempate, SOLO sobreescribe
+       esos campos en d — el resto (rivals/done/injuries) se conserva
+       de localStorage/sessionStorage para no perder estado ya
+       restaurado. El desempate por ts sigue siendo válido: el único
+       camino oficial para que dayIdx vuelva a 0 es _psResetCalendar,
+       que escribe ts=Date.now() y limpia la cookie a la vez — sin esa
+       limpieza, un reset legítimo perdería contra la cookie. Con la
+       limpieza, cookie.ts queda en 0 y `ckTs >= dTs` es false, así
+       que el reset cross-device gana. */
     if (d && (parseInt(d.dayIdx,10)||0) === 0){
       var ck2 = _cookieRead();
       if (ck2 && (parseInt(ck2.dayIdx,10)||0) > 0){
         var dTs = parseInt(d.ts,10) || 0;
         var ckTs = parseInt(ck2.ts,10) || 0;
-        if (ckTs >= dTs) d = ck2;
+        if (ckTs >= dTs){
+          d.dayIdx = parseInt(ck2.dayIdx, 10) || 0;
+          if (ck2.tour) d.tour = ck2.tour;
+          var _po2 = parseInt(ck2.previaOpenedIdx, 10);
+          if (!isNaN(_po2)) d.previaOpenedIdx = _po2;
+          d.ts = ckTs;
+        }
       }
     }
     if (!d) d = { tour:null, dayIdx:0, rivals:{}, done:{}, previaOpenedIdx:-1 };

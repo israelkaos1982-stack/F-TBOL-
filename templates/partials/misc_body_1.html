@@ -40246,7 +40246,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           sender:'Comité de Competición',
           title:'Expulsión: '+pl,
           body: pl+' ha visto la roja directa en '+compName+'. '+
-                'La sanción (3–5 partidos) se confirmará en breve.'
+                'La sanción (2–15 partidos) se confirmará en breve.'
         });
       } else if (ev.type === 'd-amarilla'){
         push({
@@ -40254,7 +40254,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           sender:'Comité de Competición',
           title:'Doble amarilla: '+pl,
           body: pl+' se va expulsado por doble amarilla en '+compName+
-                '. Se perderá entre 2 y 5 partidos.'
+                '. Se perderá los 2 próximos partidos.'
         });
       }
     });
@@ -40272,7 +40272,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   }
   function _checkYellowCycle(compKey){
     try {
-      var ys = (window.YELLOW_STORE && window.YELLOW_STORE[compKey]) || {};
+      /* 2026-05-23: YELLOW_STORE pasó a tener un único bucket __global
+         cross-comp. El compKey se ignora a efectos de lectura, pero lo
+         seguimos usando para mostrar el nombre de la comp en el aviso
+         (el cursor por (comp, jugador) sigue funcionando bien aunque el
+         contador sea único — solo dispara el push una vez por incremento). */
+      var ys = (window.YELLOW_STORE && (window.YELLOW_STORE.__global || window.YELLOW_STORE[compKey])) || {};
       var compName = _compLabel(compKey);
       Object.keys(ys).forEach(function(k){
         var rec = ys[k];

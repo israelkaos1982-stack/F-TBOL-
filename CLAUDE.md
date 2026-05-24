@@ -1,5 +1,63 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Sanciones por tarjetas (obligatorio, 2026-05-23)
+
+Sistema único cross-competición en `static/js/index.bundle.js`:
+`window.calcularSancionesPartido(events, humanTeam, teamName, compKey)`.
+
+### Reglas
+
+1. **Acumulación de amarillas**: **3 amarillas** → el jugador se
+   pierde el próximo partido del calendario. El contador se acumula
+   GLOBALMENTE entre TODAS las competiciones (Liga + Copa + UCL +
+   UEL + UECL + Recopa + USC + Intercontinental + Mundialito Clubes
+   + Selecciones + Superliga + …). Al alcanzar 3 → sanción y reset
+   del contador a 0.
+2. **Doble amarilla** (expulsión en el mismo partido) → **SIEMPRE 2
+   partidos** de sanción. No suma al ciclo de amarillas.
+3. **Roja directa** → sorteo 2-15 partidos con buckets:
+   - 60% → 2–3 partidos (uniforme: 30%/30%)
+   - 25% → 4–6 partidos (uniforme: 8.33%/×3)
+   - 10% → 7–10 partidos (uniforme: 2.5%/×4)
+   -  5% → 11–15 partidos (uniforme: 1%/×5)
+4. **Cumplimiento**: la sanción se cumple en el **PRÓXIMO partido
+   del calendario sea de la comp que sea** (excepto excluidas).
+   `_sancionConfirm` descuenta 1 al confirmar el overlay BAJAS PARA
+   EL PARTIDO; al llegar a 0, la entrada se elimina.
+5. **Finales** no aplican acumulación de amarillas (se mantiene la
+   regla antigua de no sancionar en una final por amarillas);
+   expulsiones (d-amarilla, roja) sí.
+
+### Competiciones EXCLUIDAS
+
+Los **torneos de verano** (Soccer Champions Tour, Premier Summer
+Series, Trofeo Joan Gamper, Asian Tournament) + amistosos NO suman
+amarillas, NO generan sanción y NO consumen sanción. CompKeys:
+`amistoso`, `torneo`, `torneos`, `sct`, `jg`, `pss`, `asia`,
+`verano`. Set canónico: `EXCLUDED_COMPS` en `index.bundle.js`.
+
+### Stores
+
+- `window.YELLOW_STORE.__global[player::team] = { count }` —
+  contador único cross-comp. Las claves legacy
+  `YELLOW_STORE[compKey]` quedan ignoradas en escritura pero se leen
+  para no romper save-games.
+- `window.SANCION_STORE.__global = [ { name, team, reason, remaining,
+  srcComp } ]` — cola única cross-comp. `_addSancion` suma a
+  `remaining` si ya hay entrada del mismo jugador (acumulación de
+  sanciones).
+
+### Reglas a respetar
+
+- Toda nueva ruta que genere amarillas/expulsiones para un humano
+  debe pasar por `calcularSancionesPartido` (no escribir
+  directamente en YELLOW_STORE / SANCION_STORE).
+- Toda nueva competición HUMANA que se añada debe tener entrada en
+  `COMP_CONFIG` con `ciclo:3` (o quedar en `EXCLUDED_COMPS` si es de
+  verano/amistosa).
+- No reintroducir sorteos `0.5 ? 1 : 2` o rangos 2-8 — están
+  obsoletos desde 2026-05-23.
+
 ## Humanidad por competición (obligatorio, 2026-05-10)
 
 **Un equipo puede ser HUMANO en una competición y IA en otra.** No

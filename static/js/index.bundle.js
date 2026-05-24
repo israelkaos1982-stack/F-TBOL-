@@ -512,6 +512,40 @@ window.sqFromRegistry = function(teamName, opts) {
           }
         }
       }
+      /* Fallback adicional: plantilla de Selecciones (`selecciones_squad_v1`).
+         Los torneos de Selecciones (spv-/sfn-, formato mundial-48) guardan
+         sus equipos ahí, NO en `ligaExt_`. Sin este lookup la sim auto
+         IA-vs-IA caía a placeholders "Jugador A/B" en el acta y stats.
+         Solo se consulta si el scan de `ligaExt_` no devolvió match — así
+         no afecta a clubs con nombres coincidentes. El team `players[]`
+         viene en el mismo formato {name,num,pos,power,captain,penalty,
+         freeKick,elite,natGoal,natGoalPro}, así que el parser de abajo
+         lo digiere igual. 2026-05-24. */
+      if (!match) {
+        try {
+          var _selRaw = localStorage.getItem('selecciones_squad_v1');
+          if (_selRaw) {
+            var _selData = JSON.parse(_selRaw);
+            var _selTeams = (_selData && Array.isArray(_selData.teams)) ? _selData.teams : [];
+            for (var si = 0; si < _selTeams.length && !match; si++) {
+              var _sn = _normAmSq(_selTeams[si] && _selTeams[si].name);
+              if (!_sn) continue;
+              if (_sn === target || _sn === targetResolved) match = _selTeams[si];
+            }
+            if (!match) {
+              for (var si2 = 0; si2 < _selTeams.length && !match; si2++) {
+                var _sn2 = _normAggro(_selTeams[si2] && _selTeams[si2].name);
+                if (!_sn2) continue;
+                if (_sn2 === targetAggro || _sn2 === targetAggroR ||
+                    _sn2.indexOf(targetAggro) !== -1 || targetAggro.indexOf(_sn2) !== -1 ||
+                    _sn2.indexOf(targetAggroR) !== -1 || targetAggroR.indexOf(_sn2) !== -1) {
+                  match = _selTeams[si2];
+                }
+              }
+            }
+          }
+        } catch(_){}
+      }
       if (match && Array.isArray(match.players) && match.players.length) {
         var POS_HEADER_DIRECT = {P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS'};
         var POS_MAP_DIRECT = {POR:'P', DEF:'D', MED:'M', DEL:'F'};

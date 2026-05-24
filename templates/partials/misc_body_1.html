@@ -10412,35 +10412,6 @@ window._showSimProgress = function(opts, onDone){
   border-radius:6px !important;
   box-shadow:0 0 10px rgba(80,140,255,.20);
 }
-/* Botón SIMULAR PARTIDO per-match (IA-vs-IA): gradiente azul. */
-.mn-sim-btn-ia{
-  background:linear-gradient(145deg,rgba(40,90,200,.55),rgba(20,50,140,.75)) !important;
-  border:1px solid rgba(120,170,255,.6) !important;
-  color:#dbe8ff !important;
-  font-family:Oswald,sans-serif !important;
-  font-size:11px !important;letter-spacing:2px !important;
-  padding:6px 16px !important;border-radius:8px !important;
-  text-shadow:0 0 6px rgba(120,170,255,.45) !important;
-  box-shadow:0 0 12px rgba(40,90,200,.30),inset 0 1px 0 rgba(255,255,255,.06) !important;
-}
-.mn-sim-btn-ia:hover{
-  background:linear-gradient(145deg,rgba(60,130,240,.7),rgba(30,70,170,.9)) !important;
-  box-shadow:0 0 18px rgba(80,140,255,.55),inset 0 1px 0 rgba(255,255,255,.10) !important;
-}
-/* Botón SIM IA discreto sobre el match con humano (atajo de emergencia). */
-.mn-sim-btn-human{
-  background:rgba(255,255,255,.06) !important;
-  border:1px solid rgba(255,120,180,.45) !important;
-  color:rgba(255,200,220,.85) !important;
-  font-family:Oswald,sans-serif !important;
-  font-size:10px !important;letter-spacing:1.5px !important;
-  padding:3px 12px !important;border-radius:7px !important;
-}
-.mn-sim-btn-human:hover{
-  background:rgba(255,120,180,.18) !important;
-  border-color:#ff3d8a !important;
-  color:#fff !important;
-}
 </style>
 <button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button>
 <button class="tour-edit-btn" data-tour="mundial" title="Editar roster (admin)">🖍</button>
@@ -17420,18 +17391,18 @@ window._showSimProgress = function(opts, onDone){
       }
       var badgeCls = hasHuman ? 'is-previa' : 'is-sim';
       var badgeTxt = hasHuman ? '📋 PREVIA' : '🤖 SIMULAR';
+      /* Sin botón extra debajo de la card: la propia card es
+         `.tour-match-pickable` (humano → abre PREVIA / gm-modal;
+         IA-vs-IA → auto-sim con un toque sobre el badge `🤖 SIMULAR`).
+         Mantenemos solo el botón verde global "▶ SIMULAR <RONDA>" al
+         pie del bracket (petición usuario 2026-05-24: ahorrar
+         espacio entre partidos; cada caja IA vs IA se simula desde
+         dentro y la del humano no necesita atajo SIM IA). */
       var row = '<div class="'+kRowCls+'"'+kAttrs+'>'
         + _bracketTeamHtml(a, tourId, slotI)
         + '<span class="vs tour-score-wrap"><span class="tour-score-line tour-score-empty">– – –</span><span class="tour-fin-badge '+badgeCls+'">'+badgeTxt+'</span></span>'
         + _bracketTeamHtml(b, tourId, slotI+1)
         + '</div>';
-      if (hasHuman) {
-        row += _tourSimAiBtnHtml(tourId, 'ko', kKey, { cls:'mn-sim-btn mn-sim-btn-human' });
-      } else {
-        row += _tourSimAiBtnHtml(tourId, 'ko', kKey, {
-          label:'🤖 SIMULAR PARTIDO', noConfirm:true, cls:'mn-sim-btn mn-sim-btn-ia'
-        });
-      }
       return row;
     }
     var humanRows = '', iaRows = '';

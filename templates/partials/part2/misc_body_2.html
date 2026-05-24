@@ -3601,21 +3601,54 @@
 <option value="mvp">⭐ MVP del Partido</option>
 </select>
 <label>EQUIPO</label>
-<select id="_editTeam">
+<select id="_editTeam" onchange="window._onEditTeamChange &amp;&amp; window._onEditTeamChange(this.value)">
 <option value="a">Equipo Local (A)</option>
 <option value="b">Equipo Visitante (B)</option>
 </select>
 <label>JUGADOR DE PLANTILLA</label>
-<select id="_editPlayerSel" onchange="window._onEditPlayerSel(this.value)">
+<!-- Picker button (CLAUDE.md 2026-05-24: prohibido <select> nativo para
+     elegir jugador en móviles — el picker dismiss-on-touch del nativo
+     descartaba la elección y el goleador erróneo se quedaba). -->
+<button id="_editPlPick" type="button" onclick="window._editOpenPlOv()" style="width:100%;background:#0e1118;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:'Oswald',sans-serif;font-size:13px;padding:8px 10px;text-align:left;cursor:pointer;">— Toca para elegir jugador —</button>
+<!-- Hidden legacy select kept para back-compat con el workaround
+     2026-05-24 que leía _editPlayerSel.value en _saveEditModal. -->
+<select id="_editPlayerSel" onchange="window._onEditPlayerSel(this.value)" style="display:none">
 <option value="">— seleccionar jugador —</option>
 </select>
 <label>O ESCRIBIR MANUALMENTE (Nº. Nombre)</label>
-<input id="_editManual" placeholder="Ej: 23. F. Mendy" type="text"/>
+<!-- oninput limpia _editPlayerSel para que la edición manual gane sobre
+     una elección anterior del picker (2026-05-24 ver _saveEditModal). -->
+<input id="_editManual" oninput="window._onEditManualInput &amp;&amp; window._onEditManualInput()" placeholder="Ej: 23. F. Mendy" type="text"/>
+<button id="_editAddNewBtn" type="button" onclick="window._editAddNewToggle()" style="width:100%;margin-top:8px;background:rgba(240,192,64,.1);border:1px dashed rgba(240,192,64,.5);border-radius:4px;color:#f0c040;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1px;padding:7px 10px;cursor:pointer;">➕ AÑADIR JUGADOR NUEVO A LA PLANTILLA</button>
+<div id="_editAddNewForm" style="display:none;margin-top:8px;padding:8px;background:rgba(0,0,0,.3);border:1px solid rgba(240,192,64,.25);border-radius:4px;">
+<div style="display:flex;gap:6px;margin-bottom:6px;">
+<input id="_editNewNum" max="99" min="1" placeholder="Dorsal" style="flex:1;background:#0e1118;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:'Oswald',sans-serif;font-size:13px;padding:7px 10px;" type="number"/>
+<input id="_editNewPw" max="99" min="1" placeholder="Valor 1-99" style="flex:1;background:#0e1118;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:'Oswald',sans-serif;font-size:13px;padding:7px 10px;" type="number"/>
+</div>
+<input id="_editNewName" placeholder="Nombre completo del jugador" style="width:100%;background:#0e1118;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:'Oswald',sans-serif;font-size:13px;padding:7px 10px;margin-bottom:6px;" type="text"/>
+<button id="_editNewSave" type="button" onclick="window._editAddNewConfirm()" style="width:100%;background:linear-gradient(135deg,#1a4a1a,#286028);border:none;border-radius:4px;color:#8aff8a;font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:1.5px;padding:8px 0;cursor:pointer;">✓ GUARDAR EN LA PLANTILLA</button>
+</div>
 <div id="_editModal-btns">
 <button id="_editModal-cancel" onclick="window._closeEditModal()">✕ Cancelar</button>
 <button id="_editModal-save" onclick="window._saveEditModal()">✓ Guardar</button>
 </div>
 </div>
+</div>
+
+<!-- Fullscreen player picker overlay (reemplaza al <select> nativo).
+     Lo abre el botón #_editPlPick y se cierra al elegir un jugador,
+     o con el botón de Cancelar. Reutiliza las clases ml-pl-overlay* que
+     ya están en index.bundle.css. -->
+<div class="ml-pl-overlay" id="_editPlOv">
+<div class="ml-pl-ov-header">
+<button class="ml-pl-ov-back" onclick="window._editClosePlOv()" type="button">&#8592;</button>
+<div>
+<div class="ml-pl-ov-evt">SELECCIONAR JUGADOR</div>
+<div class="ml-pl-ov-team" id="_editPlOv-team">EQUIPO</div>
+</div>
+</div>
+<div class="ml-pl-ov-list" id="_editPlOv-list"></div>
+<button class="ml-pl-ov-close" onclick="window._editClosePlOv()" type="button">✕ Cancelar</button>
 </div>
 
 <script>/* doc */</script>
@@ -13048,15 +13081,25 @@
         selTeam.value = ev.team || 'a';
       }
 
+      /* Configurar el picker overlay (filtrado por equipo del evento).
+         El <select> oculto se sigue rellenando como fallback de
+         back-compat, pero ya no es la fuente de verdad. */
+      var sqA = (typeof window.sqFromRegistry === 'function') ? (window.sqFromRegistry(_gm.home) || []) : [];
+      var sqB = (typeof window.sqFromRegistry === 'function') ? (window.sqFromRegistry(_gm.away) || []) : [];
+      window._editPickerCtx = {
+        teamA: { name: _gm.home || 'Local',     sq: sqA },
+        teamB: { name: _gm.away || 'Visitante', sq: sqB },
+        current: ev.team || 'a'
+      };
+      var pkBtn = document.getElementById('_editPlPick');
+      if (pkBtn) pkBtn.textContent = '— Toca para elegir jugador —';
       var selPl = document.getElementById('_editPlayerSel');
       if (selPl) {
-        var sqA = (typeof window.sqFromRegistry === 'function') ? (window.sqFromRegistry(_gm.home) || []) : [];
-        var sqB = (typeof window.sqFromRegistry === 'function') ? (window.sqFromRegistry(_gm.away) || []) : [];
-        selPl.innerHTML = '<option value="">— seleccionar jugador —</option>'
-          + _gmMkSquadOpts(sqA, _gm.home || 'Local')
-          + _gmMkSquadOpts(sqB, _gm.away || 'Visitante');
-        selPl.value = '';
+        selPl.innerHTML = '<option value="">— seleccionar jugador —</option>';
+        try { selPl.value = ''; } catch(_){}
       }
+      var addForm = document.getElementById('_editAddNewForm');
+      if (addForm) addForm.style.display = 'none';
 
       var playerName = ev.player || ev.name || '';
       var manual = ev.num ? (ev.num + '. ' + playerName) : playerName;

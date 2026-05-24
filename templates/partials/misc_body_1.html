@@ -41534,6 +41534,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             body :'Tu apuesta a "'+label+'"'+(match?' en '+match:'')+
                   ' no ha entrado. Pérdida: '+(b.stake||0)+'€.'
           });
+        } else if (b.status === 'void' && seen !== 'void'){
+          _setCursor('bet:'+b.id, 'void');
+          push({ side:'liv', type:'bet-void', icon:'↩️',
+            sender:'ISRAMAX · Apuestas',
+            title:'Apuesta anulada · stake devuelto',
+            body :'Tu apuesta a "'+label+'"'+(match?' en '+match:'')+
+                  ' no se ha podido verificar con el acta del partido. Te devolvemos los '+(b.stake||0)+'€ al cash.'
+          });
         }
       });
     } catch(_){}

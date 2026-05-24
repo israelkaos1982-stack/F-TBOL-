@@ -12893,6 +12893,60 @@ window._showSimProgress = function(opts, onDone){
     background:rgba(255,255,255,.18);color:#ddd;font-size:9px;padding:1px 4px;border-radius:3px;
     margin-left:auto;letter-spacing:.5px;
   }
+  /* Caja "📊 Estadísticas" en torneos de Selecciones (Rondas Previas
+     y Finales). Mismo look-and-feel videojuego que el bloque GRUPO X
+     (borde teal+gold con glow + barra blanca de acento + shine bar)
+     pero con tema teal-gold para distinguir de la clasificación.
+     Petición usuario 2026-05-24: caja "Estadísticas" entre el header
+     y GRUPO A, sumando los eventos de los partidos del torneo igual
+     que la Caja España (s-liga-stats).                              */
+  .tour-stats-box{
+    margin:14px 0 4px;padding:0 0 12px;position:relative;
+    background:
+      linear-gradient(180deg,rgba(45,212,191,.12) 0%,rgba(45,212,191,.03) 64px,rgba(255,255,255,.022) 64px),
+      rgba(255,255,255,.022);
+    border:2px solid rgba(45,212,191,.55);
+    border-radius:14px;
+    box-shadow:0 0 16px rgba(45,212,191,.30),0 4px 16px rgba(0,0,0,.4);
+  }
+  .tour-stats-box::before{
+    content:'';position:absolute;top:-2px;left:18px;right:18px;height:2px;
+    background:linear-gradient(90deg,transparent,rgba(120,255,230,.85),#fff,rgba(120,255,230,.85),transparent);
+    border-radius:2px;opacity:.85;
+  }
+  .tour-stats-hdr{
+    display:flex;align-items:center;gap:10px;
+    font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2.5px;
+    font-weight:700;color:#fff;text-transform:uppercase;
+    margin:0;padding:9px 14px;
+    background:linear-gradient(135deg,#0c5b54 0%,#0a8a7f 45%,rgba(45,212,191,.32) 100%);
+    border-bottom:1px solid rgba(45,212,191,.65);
+    border-radius:12px 12px 0 0;
+    text-shadow:0 1px 3px rgba(0,0,0,.55);
+  }
+  .tour-stats-hdr::before{
+    content:'';flex:0 0 6px;height:18px;border-radius:3px;
+    background:#fff;box-shadow:0 0 8px rgba(255,255,255,.6);
+  }
+  .tour-stats-hdr .tour-stats-emoji{font-size:18px;line-height:1;}
+  .tour-stats-hdr .tour-stats-title{flex:1;}
+  .tour-stats-wrap{
+    padding:12px 10px 2px!important;display:grid!important;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr))!important;
+    gap:10px!important;
+  }
+  .tour-stats-wrap .liga-stat-card{
+    border-color:rgba(45,212,191,.40);
+    background:linear-gradient(180deg,#0a1a18 0%,#070f0d 100%);
+    box-shadow:0 4px 14px rgba(0,0,0,.45),inset 0 0 8px rgba(45,212,191,.06);
+  }
+  .tour-stats-wrap .liga-stat-head{
+    background:linear-gradient(90deg,rgba(12,91,84,.7),rgba(10,138,127,.4),rgba(8,42,38,.2));
+    border-bottom:1px solid rgba(45,212,191,.45);
+  }
+  .tour-stats-wrap .liga-stat-title{color:#a8f0e0;text-shadow:0 0 10px rgba(45,212,191,.5);}
+  .tour-stats-wrap .liga-stat-rank{color:rgba(168,240,224,.85);text-shadow:0 0 8px rgba(45,212,191,.5);}
+  .tour-stats-wrap .liga-stat-value{color:#ffd870;text-shadow:0 0 10px rgba(240,192,64,.5);}
 </style>
 
 <!-- ═══ OVERLAY EDITOR DE TORNEO (compartido por los 4) ═══ -->
@@ -15348,6 +15402,84 @@ window._showSimProgress = function(opts, onDone){
      al servidor antes de pintar nada. Ahora pintamos con la cache
      local INSTANTÁNEAMENTE y refrescamos en bg si el server tiene
      una versión más nueva. */
+  /* Recolecta los eventos del store global filtrando por torneo
+     concreto (matchKey contiene `|torneos|tour_<tourId>_`, que es lo
+     que escribe `registrarLigaPlayerStats` con compKey='torneos').
+     Devuelve un objeto {teamNorm::playerNorm → counters} que el
+     renderer `_lextStatsDashHtml` consume tal cual. */
+  function _tourCollectStatsForTour(tourId){
+    var stats = {};
+    var _nm = (typeof window._normPS === 'function')
+      ? window._normPS
+      : function(s){ return String(s||'').trim().toLowerCase(); };
+    function _ensure(team, player){
+      var tk = _nm(team), pk = _nm(player);
+      if (!tk || !pk) return null;
+      var key = tk + '::' + pk;
+      if (!stats[key]) stats[key] = { gol:0, fk:0, pen:0, penSaved:0, ta:0, tr:0, mvp:0, imbat:0 };
+      return stats[key];
+    }
+    var store = window.LIGA_PLAYER_MATCH_STORE || {};
+    var marker = '|torneos|tour_' + tourId + '_';
+    Object.keys(store).forEach(function(mk){
+      if (mk.indexOf(marker) === -1) return;
+      var m = store[mk] || {};
+      var tA = m.teamA || '', tB = m.teamB || '';
+      (m.evts || []).forEach(function(ev){
+        if (!ev) return;
+        var team = ev.realTeam || (ev.team === 'a' ? tA : ev.team === 'b' ? tB : '');
+        var player = '';
+        if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
+        else if (typeof ev.player === 'string') player = ev.player;
+        else player = ev.name || ev.playerName || '';
+        if (!team || !player) return;
+        var rec = _ensure(team, player);
+        if (!rec) return;
+        var t = ev.type || '';
+        var ico = String(ev.ico || '').replace(/️/g, '').trim();
+        if (t === 'amarilla') rec.ta++;
+        else if (t === 'roja' || t === 'd-amarilla') rec.tr++;
+        else if (t === 'card') {
+          if (ico === '🟨') rec.ta++;
+          else if (ico === '🟥') rec.tr++;
+          else if (ico === '🟨🟥') { rec.ta++; rec.tr++; }
+        }
+        else if (t === 'gol') rec.gol++;
+        else if (t === 'falta-gol') rec.fk++;
+        else if (t === 'pen-gol') rec.pen++;
+        else if (t === 'pen-parado') rec.penSaved++;
+        else if (t === 'mvp') rec.mvp++;
+        else if (t === 'imbat') rec.imbat++;
+      });
+      if (m.mvpName && m.mvpTeam) {
+        var hasEvt = (m.evts || []).some(function(e){ return e && e.type === 'mvp'; });
+        if (!hasEvt) {
+          var r = _ensure(m.mvpTeam, m.mvpName);
+          if (r) r.mvp++;
+        }
+      }
+    });
+    return stats;
+  }
+
+  /* Devuelve el HTML completo de la caja "📊 ESTADÍSTICAS" para un
+     torneo. Reutiliza `_lextStatsDashHtml` (mismas 8 categorías y
+     mismos componentes visuales que la Caja España / s-liga-stats)
+     envuelto en `.tour-stats-box` con CSS propio (teal + gold). */
+  function _tourBuildStatsBoxHtml(tourId){
+    var stats = _tourCollectStatsForTour(tourId);
+    var inner = (typeof window._lextStatsDashHtml === 'function')
+      ? window._lextStatsDashHtml(stats)
+      : '<div class="liga-stat-empty">Sin datos todavía</div>';
+    return '<div class="tour-stats-box" id="tour-stats-box-' + tourId + '">'
+         +   '<div class="tour-stats-hdr">'
+         +     '<span class="tour-stats-emoji">📊</span>'
+         +     '<span class="tour-stats-title">Estadísticas</span>'
+         +   '</div>'
+         +   '<div class="liga-stats-wrap tour-stats-wrap">' + inner + '</div>'
+         + '</div>';
+  }
+
   function _paintTourScreen(id, cfg){
     var titleEl = document.getElementById('tour-title-'+id);
     var flagEl  = document.getElementById('tour-flag-'+id);
@@ -15355,6 +15487,13 @@ window._showSimProgress = function(opts, onDone){
     if (titleEl && cfg.name) titleEl.textContent = cfg.name;
     if (flagEl  && cfg.flag) flagEl.innerHTML    = _tourFlagHtml(cfg.flag, 'sec-flag-img');
     if (!infoEl) return;
+    /* Caja "📊 Estadísticas" solo en torneos de Selecciones (spv* /
+       sfn*). Verano + Mundial tienen sus propias pantallas dedicadas
+       (s-torneos-stats, s-mundial-stats), no duplicar ahí. */
+    var _statsBoard = (typeof _tvBoardOf === 'function') ? _tvBoardOf(id) : null;
+    var _statsBoxHtml = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final')
+      ? _tourBuildStatsBoxHtml(id)
+      : '';
     var teams = cfg.teams || [];
     if (!teams.length) {
       var _mr = cfg.formatConfig && cfg.formatConfig.manualRoster;
@@ -15560,13 +15699,13 @@ window._showSimProgress = function(opts, onDone){
             + '</button></div>';
         }
       }
-      infoEl.innerHTML = html;
+      infoEl.innerHTML = _statsBoxHtml + html;
     } else if (cfg.format === 'league') {
-      infoEl.innerHTML = hint + _renderLeague(cfg, id, teams);
+      infoEl.innerHTML = _statsBoxHtml + hint + _renderLeague(cfg, id, teams);
     } else if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss') {
       /* Liga+Playoff y Suizo reutilizan el motor de grupos-ko con
          1 solo grupo (config normalizada en _readForm). */
-      infoEl.innerHTML = hint + _renderGroupsKO(cfg, id, teams);
+      infoEl.innerHTML = _statsBoxHtml + hint + _renderGroupsKO(cfg, id, teams);
     } else if (cfg.format === 'mundial-48') {
       /* El menú de 7 cajas (Final · Semis · Cuartos · Octavos ·
          Dieciseisavos · Fase de Grupos · Estadísticas) debe pintarse
@@ -15575,7 +15714,7 @@ window._showSimProgress = function(opts, onDone){
       var _mBody = '';
       try { _mBody = _renderMundial(cfg, id, teams) || ''; }
       catch(_eM){ _mBody = ''; }
-      infoEl.innerHTML = hint + _mBody;
+      infoEl.innerHTML = _statsBoxHtml + hint + _mBody;
     } else {
       infoEl.innerHTML = '';
     }

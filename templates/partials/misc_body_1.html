@@ -10316,6 +10316,9 @@ window._showSimProgress = function(opts, onDone){
 /* Botones de ronda Mundialito Clubes — gradient cian/turquesa
    coherente con la caja principal en s-competiciones. */
 .c-mundial{background:linear-gradient(90deg,#001f2a,#003a52,#006080,#00bcd4,#006080,#003a52,#001f2a) !important;border:1.5px solid rgba(77,208,225,.55) !important;}
+/* Caja de Estadísticas del Mundial — gradient violeta/púrpura para
+   diferenciarla de las rondas (petición usuario 2026-05-24). */
+.jbtn.c-mundial.c-mundial-stats{background:linear-gradient(90deg,#1a0033,#2d0b52,#4a1380,#7c3aed,#4a1380,#2d0b52,#1a0033) !important;border:1.5px solid rgba(167,139,250,.6) !important;}
 /* Jornada YA JUGADA → botón gris para distinguirlo de la actual y
    las futuras (petición usuario 2026-05-24, foto 3). El `.done` lo
    añade `_mundialGroupsHtml` cuando todos los partidos de la
@@ -17570,8 +17573,8 @@ window._showSimProgress = function(opts, onDone){
        sacada del calendario global (#s-agenda). data-jor-pinned hace
        que el auto-injector de fechas (misc_body_2.html) NO toque el
        texto ni la fecha. */
-    function row(view, emoji, title, badge, locked, roundKey, done){
-      var cls = 'jbtn c-mundial' + (done ? ' done' : '');
+    function row(view, emoji, title, badge, locked, roundKey, done, extraCls){
+      var cls = 'jbtn c-mundial' + (done ? ' done' : '') + (extraCls ? ' ' + extraCls : '');
       var lockStyle = locked
         ? 'opacity:.45;cursor:not-allowed;filter:grayscale(.55);'
         : '';
@@ -17628,7 +17631,7 @@ window._showSimProgress = function(opts, onDone){
     html += koRow(1, '🌐', 'Octavos',       'octavos');
     html += koRow(0, '🌐', 'Dieciseisavos', 'dieciseisavos');
     html += row('groups', '🌐', 'Fase de Grupos', (gTot ? gDone+'/'+gTot : '12×4'), false, 'grupos', (gTot > 0 && gDone === gTot));
-    html += row('stats',  '📊', 'Estadísticas',  '', false, '');
+    html += row('stats',  '📊', 'Estadísticas',  '', false, '', false, 'c-mundial-stats');
     html += '</div>';
     return html;
   }

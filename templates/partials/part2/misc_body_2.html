@@ -18978,7 +18978,8 @@
       if (typeof m === 'number' && m >= 0) return m;
     } catch(_){}
     try {
-      var raw = localStorage.getItem('bayern_preseason_v2')
+      var raw = localStorage.getItem('liverpool_preseason_v1')
+              || localStorage.getItem('bayern_preseason_v2')
               || localStorage.getItem('bayern_preseason_v1');
       if (raw){
         var d = JSON.parse(raw);
@@ -29810,7 +29811,14 @@ document.addEventListener('DOMContentLoaded', function() {
        caja volvía al "01 May" aunque el usuario hubiese avanzado a
        "02 Jun". Replicado al server con last-write-wins por `ts`
        (sello que añade `_save` del IIFE de pretemporada). */
-    'bayern_preseason_v2',           /* cursor día (dayIdx) + tour elegido + rivales */
+    /* Rebrand 2026-05-24: la clave del cursor pasó a 'liverpool_preseason_v1'.
+       Mantenemos también 'bayern_preseason_v2' durante la transición para
+       que `hydrateFromServer` recupere el progreso de usuarios cuyo
+       server todavía tiene los datos bajo el nombre viejo. El cliente
+       _save escribe solo bajo el nombre nuevo, así que el legacy queda
+       congelado y el nuevo gana por last-write-wins (ts). */
+    'liverpool_preseason_v1',        /* cursor día (dayIdx) + tour elegido + rivales */
+    'bayern_preseason_v2',           /* legacy — solo lectura para migración */
     /* 2026-05-23 (petición usuario "todo igual en cualquier
        móvil/PC"): el estado de TODAS las competiciones restantes
        que aún vivían SOLO en localStorage del dispositivo admin.
@@ -29916,12 +29924,13 @@ document.addEventListener('DOMContentLoaded', function() {
               }
             } catch(_){}
           }
-          /* Si bayern_preseason_v2 (cursor de día de la pretemporada)
+          /* Si liverpool_preseason_v1 (o su legacy bayern_preseason_v2)
              fue restaurado desde server, el IIFE de pretemporada en
              misc_body_1.html tiene su _MEM cacheado con el dayIdx
              stale → la caja del hub mostraría el día viejo. Le
              pedimos que invalide y re-renderice. */
-          if (restored.indexOf('bayern_preseason_v2') !== -1) {
+          if (restored.indexOf('liverpool_preseason_v1') !== -1
+              || restored.indexOf('bayern_preseason_v2') !== -1) {
             try {
               if (typeof window._psInvalidateCache === 'function') {
                 window._psInvalidateCache();

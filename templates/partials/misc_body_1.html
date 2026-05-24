@@ -3365,6 +3365,15 @@ window._showSimProgress = function(opts, onDone){
     if (typeof window._bayernHudCreditMoney !== 'function') return false;
     if (!_psSimAndSaveTourMatch(pair.tourId, pair.matchKey, pair.home, pair.away)) return false;
     try { window._bayernHudCreditMoney(-PS_PAY_SIM_COST); } catch(_){}
+    /* Invalida la sig de idempotencia de `_render` (idx|type|date no
+       cambia tras pagar pero cfg.results[matchKey] SÍ) — sin esto el
+       guard `st._psSig === sig` bloquea el repintado y la card sigue
+       mostrando PREVIA·JUGAR + PAGAR SIMULACIÓN hasta recargar la
+       web. 2026-05-24 (reportado por usuario con foto). */
+    try {
+      var st = _stage();
+      if (st) st._psSig = null;
+    } catch(_){}
     _render();
     return true;
   }
